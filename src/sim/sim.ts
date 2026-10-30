@@ -1,0 +1,135 @@
+import { World } from '../world/world';
+import { AGES, KINDS, KindId, KIND_LABEL } from '../build/catalog';
+
+export interface Need { cap: number; demand: number; ok: boolean }
+
+export interface AgeProgress {
+  next: number;
+  ratio: number;
+  items: { label: string; have: number; need: number }[];
+}
+
+/** Simulation légère : besoins par présence, population, passage d'âge */
+export class Sim {
+  pop = 0;
+  age = 0;
+  housing: Need = { cap: 0, demand: 0, ok: true };
+  food: Need = { cap: 0, demand: 0, ok: true };
+  water: Need = { cap: 0, demand: 0, ok: true };
+  jobs: Need = { cap: 0, demand: 0, ok: true };
+  joy: Need = { cap: 0, demand: 0, ok: true };
+  message = '';
+  counts: Record<string, number> = {};
+  private grow = 0;
+  private lastVersion = -1;
+  private recalcTimer = 0;
+  onAgeUp: ((age: number) => void) | null = null;
+
+  constructor(private world: World) {}
+
+  recalc() {
+    const w = this.world;
+    let H = 0, F = 0, W = 0, J = 0, Jy = 0;
+    const counts: Record<string, number> = {};
+    for (const b of w.buildings.values()) {
+      const k = KINDS[b.kind];
+      const a = b.age;
+      counts[b.kind] = (counts[b.kind] ?? 0) + 1;
+      H += k.housing?.[a] ?? 0;
+      F += k.food?.[a] ?? 0;
+      W += k.water?.[a] ?? 0;
+      J += k.jobs?.[a] ?? 0;
+      Jy += k.joy?.[a] ?? 0;
+      if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += k.housing?.[a] ?? 0;
+    }
+    let fields = 0, gardens = 0, forests = 0;
+    for (let i = 0; i < w.veg.length; i++) {
+      const v = w.veg[i];
+      if (v === 2) fields++; else if (v === 3) gardens++; else if (v === 1) forests++;
+    }
+    F += fields * 3;
+    J += fields * 0.5;
+    Jy += gardens * 0.8 + forests * 0.08;
+    this.counts = counts;
+    this.housing.cap = H;
+    this.food.cap = F;
+    this.water.cap = W;
+    this.jobs.cap = J;
+    this.joy.cap = Jy;
+  }
+
+  private evaluate() {
+    const p = this.pop;
+    this.housing.demand = p;
+    this.food.demand = p + 1;
+    this.water.demand = p + 1;
+    this.jobs.demand = p >= 6 ? p * 0.5 : 0;
+    this.joy.demand = p >= 6 ? p * 0.3 : 0;
+    this.housing.ok = this.housing.cap > p;
+    this.food.ok = this.food.cap >= this.food.demand;
+    this.water.ok = this.water.cap >= this.water.demand;
+    this.jobs.ok = this.jobs.cap >= this.jobs.demand;
+    this.joy.ok = this.joy.cap >= this.joy.demand;
+  }
+
+  get canGrow() {
+    return this.housing.ok && this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok;
+  }
+
+  ageProgress(): AgeProgress | null {
+    const n = this.age + 1;
+    if (n >= AGES.length) return null;
+    const req = AGES[n];
+    const items = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
+    for (const [k, c] of Object.entries(req.reqKinds)) items.push({ label: KIND_LABEL[k as KindId], have: this.counts[k] ?? 0, need: c as number });
+    let sum = 0;
+    for (const it of items) sum += Math.min(1, it.have / it.need);
+    return { next: n, ratio: sum / items.length, items };
+  }
+
+  private computeMessage() {
+    const w = this.world;
+    const p = this.pop;
+    if (w.buildings.size === 0) return 'Posez une hutte, une ferme et un point d’eau pour commencer.';
+    if (!this.counts.house) return 'Construisez une maison pour accueillir des habitants.';
+    if (!this.housing.ok) return 'Il manque des logements pour accueillir de nouveaux habitants.';
+    if (!this.food.ok) return 'Il manque une ferme (ou un champ) pour nourrir tout le monde.';
+    if (!this.water.ok) return 'Il manque un puits pour abreuver tout le monde.';
+    if (!this.jobs.ok) return 'Les habitants cherchent du travail : construisez un atelier.';
+    if (!this.joy.ok) return 'Les habitants aimeraient un lieu de rencontre : feu, place, jardin ou temple.';
+    const ap = this.ageProgress();
+    if (ap) {
+      if (p < AGES[ap.next].reqPop) return `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
+      const miss = ap.items.find((i) => i.have < i.need);
+      if (miss) return `Pour l’âge suivant : il manque ${miss.need - miss.have} ${miss.label}.`;
+    }
+    return 'Le village est paisible et prospère.';
+  }
+
+  update(dt: number, realDt: number) {
+    this.recalcTimer -= realDt;
+    if (this.world.version !== this.lastVersion && this.recalcTimer <= 0) {
+      this.lastVersion = this.world.version;
+      this.recalcTimer = 0.25;
+      this.recalc();
+    }
+    if (this.pop > this.housing.cap) this.pop = Math.max(this.housing.cap, 0);
+    this.evaluate();
+    if (dt > 0 && this.canGrow) {
+      this.grow += dt * 0.55;
+      while (this.grow >= 1) {
+        this.grow -= 1;
+        if (this.pop + 1 <= this.housing.cap) this.pop++;
+        this.evaluate();
+        if (!this.canGrow) break;
+      }
+    }
+    // passage d'âge
+    const ap = this.ageProgress();
+    if (ap && ap.items.every((i) => i.have >= i.need)) {
+      this.age = ap.next;
+      this.onAgeUp?.(this.age);
+    }
+    this.message = this.computeMessage();
+  }
+}
