@@ -1,4 +1,4 @@
-import { ToolController, ToolId } from '../build/tools';
+import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, SEASONS } from '../build/catalog';
 import { Sim } from '../sim/sim';
 import { GameTime } from '../core/time';
@@ -33,9 +33,14 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
   flatten: { icon: '➖', label: 'Aplanir', key: '3' },
   cliff: { icon: '🧱', label: 'Falaise', key: '4' },
   dig: { icon: '🌊', label: 'Eau', key: '5' },
+  mountain: { icon: '🏔️', label: 'Montagne', key: '0' },
+  volcano: { icon: '🌋', label: 'Volcan' },
   forest: { icon: '🌲', label: 'Forêt', key: '6' },
   field: { icon: '🌾', label: 'Champ', key: '7' },
   garden: { icon: '🌷', label: 'Jardin', key: '8' },
+  // 🪨 n'existe pas dans les polices emoji de Windows 10
+  rocks: { icon: '🗿', label: 'Rochers' },
+  cave: { icon: '🕳️', label: 'Grotte' },
   erase: { icon: '🧽', label: 'Gomme', key: '9' },
   road: { icon: '🛤️', label: 'Route', key: 'R' },
   bulldoze: { icon: '💥', label: 'Démolir', key: 'X' },
@@ -43,8 +48,8 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
 };
 
 const TABS = [
-  { id: 'relief', icon: '⛰️', label: 'Relief', tools: ['none', 'raise', 'lower', 'flatten', 'cliff', 'dig'] },
-  { id: 'nature', icon: '🌳', label: 'Nature', tools: ['none', 'forest', 'field', 'garden', 'erase'] },
+  { id: 'relief', icon: '⛰️', label: 'Relief', tools: ['none', 'raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
+  { id: 'nature', icon: '🌳', label: 'Nature', tools: ['none', 'forest', 'field', 'garden', 'rocks', 'cave', 'erase'] },
   { id: 'build', icon: '🏘️', label: 'Bâtir', tools: ['none', 'road', 'bulldoze', 'move'] },
 ];
 
@@ -52,6 +57,25 @@ const SEASON_ICON = ['🌸', '☀️', '🍂', '❄️'];
 const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: '🌧️', snow: '🌨️', fog: '🌫️' };
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
+
+/** Confirmation dans le jeu (le confirm() natif est bloqué dans certains navigateurs intégrés) */
+export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer'): Promise<boolean> {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.className = 'overlay';
+    ov.style.zIndex = '40';
+    ov.innerHTML = `<div class="modal panel" style="max-width:380px"><p></p><div class="row"><span class="grow"></span><button data-r="0">Annuler</button><button data-r="1" class="active">${ok}</button></div></div>`;
+    $('p', ov).textContent = message;
+    const done = (r: boolean) => { ov.remove(); resolve(r); };
+    ov.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => done(b.dataset.r === '1')));
+    ov.addEventListener('pointerdown', (e) => { if (e.target === ov) done(false); });
+    root.appendChild(ov);
+  });
+}
+
+/** Onglet auquel appartient un outil ('none' reste dans l'onglet courant) */
+const tabOfTool = (tool: ToolId, current: string) =>
+  SCULPT_TOOLS.includes(tool) ? 'relief' : VEG_TOOLS.includes(tool) ? 'nature' : tool === 'none' ? current : 'build';
 
 export class UI {
   root: HTMLElement;
@@ -120,7 +144,12 @@ export class UI {
   private renderCats() {
     const c = $('#cats');
     c.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}">${t.icon} ${t.label}</button>`).join('');
-    c.querySelectorAll('button').forEach((b) => (b.onclick = () => { this.tab = (b as HTMLElement).dataset.t!; this.renderCats(); this.renderItems(); this.host.audio.sfxClick(); }));
+    c.querySelectorAll('button').forEach((b) => (b.onclick = () => {
+      this.tab = (b as HTMLElement).dataset.t!;
+      // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
+      if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
+      this.renderCats(); this.renderItems(); this.host.audio.sfxClick();
+    }));
   }
 
   renderItems() {
@@ -155,10 +184,10 @@ export class UI {
       const on = b.dataset.tool ? b.dataset.tool === tl.tool : tl.tool === 'build' && b.dataset.kind === tl.kind;
       b.classList.toggle('active', on);
     });
-    const brush = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'forest', 'field', 'garden', 'erase'].includes(tl.tool);
+    const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && tl.tool !== 'cave');
     $('#brush').style.display = brush ? 'flex' : 'none';
     // l'onglet suit l'outil
-    const tabOf = (['raise', 'lower', 'flatten', 'cliff', 'dig'].includes(tl.tool) ? 'relief' : ['forest', 'field', 'garden', 'erase'].includes(tl.tool) ? 'nature' : tl.tool === 'none' ? this.tab : 'build');
+    const tabOf = tabOfTool(tl.tool, this.tab);
     if (tabOf !== this.tab) { this.tab = tabOf; this.renderCats(); this.renderItems(); }
     $<HTMLInputElement>('#rad').value = String(tl.radius);
     $('#radv').textContent = String(tl.radius);
@@ -278,7 +307,7 @@ export class UI {
     const fi = q<HTMLInputElement>('#fImport');
     q('#gImport').onclick = () => fi.click();
     fi.onchange = () => { if (fi.files?.[0]) h.importFile(fi.files[0]); };
-    q('#gNew').onclick = () => { if (confirm('Recommencer cette carte ? La sauvegarde actuelle sera remplacée.')) h.newGame(); };
+    q('#gNew').onclick = async () => { if (await confirmBox(this.root, 'Recommencer cette carte ? La sauvegarde actuelle sera remplacée.', 'Recommencer')) h.newGame(); };
     q('#gMenu').onclick = () => h.toMenu();
   }
 }
@@ -336,9 +365,9 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     if (save) {
       btns.innerHTML = `<button class="active" data-m="continue">Continuer</button><button data-m="new">Nouvelle</button>`;
     } else btns.innerHTML = `<button class="active" data-m="new">Jouer</button>`;
-    btns.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
+    btns.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = async () => {
       const mode = b.dataset.m as 'continue' | 'new';
-      if (mode === 'new' && save && !confirm('Écraser la sauvegarde de cette carte ?')) return;
+      if (mode === 'new' && save && !(await confirmBox(root, 'Écraser la sauvegarde de cette carte ?', 'Écraser'))) return;
       host.start(m.id, mode);
     }));
     maps.appendChild(card);

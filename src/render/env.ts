@@ -178,7 +178,7 @@ export class Environment {
 
     // ---- soleil / lune
     const ang = ((time.hour - 6) / 24) * Math.PI * 2;
-    const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0.38).normalize();
+    const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0.62).normalize();
     const elev = Math.sin(ang);
     const day = smoothstep(-0.12, 0.28, elev);
     this.daylight = day;
@@ -197,14 +197,14 @@ export class Environment {
     this.fog.near = lerp(lerp(85, 40, Math.max(rainK, snowK)), 8, fogK);
     this.fog.far = lerp(lerp(220, 120, Math.max(rainK, snowK)), 70, fogK);
 
-    const sunI = smoothstep(0.0, 0.18, elev) * 2.3 * (1 - overcast * 0.6);
+    const sunI = smoothstep(0.0, 0.18, elev) * 2.75 * (1 - overcast * 0.6);
     const moonI = smoothstep(0.0, 0.18, -elev) * 0.95 * (1 - overcast * 0.4);
     const useSun = elev > 0;
     const ld = useSun ? dir : dir.clone().negate();
     this.sun.position.copy(this.center).addScaledVector(ld, 130);
     this.sun.intensity = useSun ? sunI : moonI;
-    this.sun.color.setHex(useSun ? 0xfff1d6 : 0x9fb2ff).lerp(new THREE.Color(0xffb27a), useSun ? twi * 0.7 : 0);
-    this.hemi.intensity = lerp(0.5, 0.95, day) * (1 - overcast * 0.2);
+    this.sun.color.setHex(useSun ? 0xffe9c8 : 0x9fb2ff).lerp(new THREE.Color(0xffb27a), useSun ? twi * 0.7 : 0);
+    this.hemi.intensity = lerp(0.45, 0.72, day) * (1 + overcast * 0.25);
     this.hemi.color.copy(top).lerp(new THREE.Color(0xffffff), 0.45);
     this.hemi.groundColor.setHex(0xd9c6a8).lerp(new THREE.Color(0x3b3f5c), 1 - day);
     this.sunMesh.position.copy(this.center).addScaledVector(dir, 400);

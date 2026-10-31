@@ -1,6 +1,6 @@
 # Village Lowpoly
 
-Jeu de construction contemplatif en navigateur : on sculpte le terrain, on bâtit un village et on le regarde traverser **5 âges** (Préhistoire → Moderne) et **4 saisons**. Tout est procédural (géométrie low-poly, flat shading, sons Web Audio), aucun asset externe.
+Jeu de construction contemplatif en navigateur : on sculpte le terrain, on bâtit un village et on le regarde traverser **5 âges** (Préhistoire → Moderne) et **4 saisons**. Bâtiments, relief, cultures et sons sont procéduraux (géométrie low-poly, sons Web Audio) ; arbres, buissons, rochers et animaux de ferme ou sauvages sont des modèles Quaternius (voir Crédits).
 
 ## Installation et lancement
 
@@ -21,8 +21,8 @@ Le dossier `dist/` est 100 % statique (déployable tel quel).
 | Tourner la caméra | clic droit + glisser, ou Q / E | deux doigts (rotation) |
 | Déplacer la caméra | clic milieu ou Maj + clic droit, ou WASD / flèches | deux doigts (glisser) |
 | Zoom | molette, ou + / - | pincement |
-| Relief | 1 monter, 2 baisser, 3 aplanir, 4 falaise, 5 creuser (eau) | onglet Relief |
-| Nature | 6 forêt, 7 champ, 8 jardin, 9 gomme | onglet Nature |
+| Relief | 1 monter, 2 baisser, 3 aplanir, 4 falaise, 5 creuser (eau), 0 montagne ; volcan (un clic) depuis l'onglet | onglet Relief |
+| Nature | 6 forêt, 7 champ, 8 jardin, 9 gomme ; rochers et grotte (dans une pente raide) depuis l'onglet | onglet Nature |
 | Bâtir | B bâtiment, R route, X démolir, M déplacer, T tourner | onglet Bâtir (le bâtiment est posé au relâchement du doigt) |
 | Taille du pinceau | [ et ] | curseur « Taille » |
 | Annuler / rétablir | Ctrl+Z / Ctrl+Y | boutons ↩️ ↪️ |
@@ -34,6 +34,10 @@ Réglages (⚙️) : vitesse, durée du jour et des saisons, choix manuel de la 
 ## Principe de jeu
 
 Pas de ressources : le village a des **besoins** (nourriture, eau, logement, travail, bien-être) satisfaits par la présence de bâtiments, de champs, de jardins ou d'une rivière proche. Si un besoin manque, la population cesse simplement de croître (message doux dans le HUD). Quand la population et les bâtiments requis sont atteints, le village passe à l'âge suivant et les bâtiments « évoluent » avec une animation.
+
+## Crédits
+
+Modèles 3D de [Quaternius](https://quaternius.com), licence **CC0** (domaine public), récupérés sur [Poly Pizza](https://poly.pizza/u/Quaternius) et placés dans `public/models/` : bouleau, sapins, buisson, rochers, mouton, vache, cochon, poule, biche et cerf, ainsi que les habitants (aventurier, fermier, homme à capuche, ouvrier, homme et femmes), dont la tenue change avec l'âge du village. Chaque modèle absent ou illisible est remplacé par sa version procédurale.
 
 ## Sauvegarde
 

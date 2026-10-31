@@ -1,0 +1,572 @@
+import * as THREE from 'three';
+import { World, N, SEA } from '../world/world';
+import { KINDS } from '../build/catalog';
+import { hash2, mulberry32 } from '../core/rng';
+import { Parts } from './parts';
+import { makeActor, play, hasModel, Actor, ModelName } from './assets';
+
+type Kind = 'sheep' | 'cow' | 'pig' | 'hen' | 'rabbit' | 'deer' | 'duck' | 'duckling' | 'bird' | 'butterfly' | 'bat' | 'fish' | 'dolphin';
+
+interface Spec {
+  geo: () => THREE.BufferGeometry;
+  max: number;
+  colors: number[];
+  /** vitesse de marche (cases/s) et pause entre deux déplacements (s) */
+  speed: number;
+  idle: [number, number];
+  /** case praticable */
+  ok: (w: World, cx: number, cz: number) => boolean;
+  /** hauteur des bonds (lapins), inclinaison pour brouter, picorage rapide */
+  hop?: number;
+  graze?: number;
+  peck?: boolean;
+  /** battement d'ailes : fréquence, amplitude, demi-largeur du corps */
+  flap?: [number, number, number];
+  scale?: number;
+}
+
+interface Critter {
+  kind: Kind;
+  key: string;
+  x: number; y: number; z: number;
+  heading: number;
+  pitch: number;
+  tx: number; tz: number;
+  moving: boolean;
+  timer: number;
+  phase: number;
+  /** domaine : centre et rayon d'errance */
+  hx: number; hz: number; radius: number;
+  col: number;
+  size: number;
+  hidden: boolean;
+  sleeping: boolean;
+  /** caneton : suit la cane ou le caneton devant lui */
+  leader: Critter | null;
+  /** vol : rang dans la nuée */
+  slot: number;
+  /** modèle animé importé (sinon rendu instancié procédural) */
+  actor: Actor | null;
+}
+
+/** Modèles animés Quaternius par espèce : longueur du corps visée, variante pour le premier du groupe (le cerf), correction de cap */
+const MODELS: Partial<Record<Kind, { name: ModelName; length: number; lead?: ModelName; yaw?: number }>> = {
+  sheep: { name: 'sheep', length: 0.2 },
+  cow: { name: 'cow', length: 0.3 },
+  pig: { name: 'pig', length: 0.17 },
+  hen: { name: 'chicken', length: 0.085, yaw: Math.PI },
+  deer: { name: 'deer', length: 0.3, lead: 'stag' },
+};
+
+interface Source { key: string; kind: Kind; hx: number; hz: number; n: number; radius: number }
+
+const blocked = (w: World, cx: number, cz: number) => !w.inCells(cx, cz) || !!w.occ[w.ci(cx, cz)];
+const land = (w: World, cx: number, cz: number) => !blocked(w, cx, cz) && w.cellAvg(cx, cz) >= 0.2 && w.cellSlope(cx, cz) < 1.1;
+const water = (w: World, cx: number, cz: number) => w.inCells(cx, cz) && w.cellAvg(cx, cz) < -0.12;
+const pasture = (w: World, cx: number, cz: number) => land(w, cx, cz) && w.veg[w.ci(cx, cz)] !== 2 && w.veg[w.ci(cx, cz)] !== 3;
+const wild = (w: World, cx: number, cz: number) => land(w, cx, cz) && !w.road[w.ci(cx, cz)] && w.veg[w.ci(cx, cz)] <= 1;
+
+const ico = (r: number, sx: number, sy: number, sz: number, d = 1) => new THREE.IcosahedronGeometry(r, d).scale(sx, sy, sz);
+const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
+const leg = (w: number, h: number) => new THREE.BoxGeometry(w, h, w).translate(0, h / 2, 0);
+const tri = (pts: number[]) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); return g; };
+const DARK = 0x3a3335;
+/** façade des bâtiments selon leur rotation (comme BuildingView) */
+const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+
+function sheepGeo() {
+  const p = new Parts();
+  p.add(ico(0.07, 0.85, 0.72, 1.15), 0, 0.085, 0, 0xf6f3ec);
+  p.add(ico(0.04, 1, 0.8, 1), 0, 0.125, 0.0, 0xffffff);
+  p.add(ico(0.03, 0.85, 1, 1.25, 0), 0, 0.1, 0.085, DARK);
+  for (const s of [-1, 1]) p.add(box(0.03, 0.012, 0.016), s * 0.028, 0.112, 0.072, DARK);
+  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.014, 0.05), x * 0.03, 0, z * 0.045, DARK);
+  return p.build(false).body;
+}
+
+function cowGeo() {
+  const p = new Parts();
+  p.add(box(0.09, 0.075, 0.17), 0, 0.085, 0, 0xffffff);
+  p.add(box(0.094, 0.045, 0.05), 0, 0.09, -0.03, DARK);
+  p.add(box(0.05, 0.03, 0.045), 0.012, 0.11, 0.045, DARK);
+  p.add(box(0.06, 0.058, 0.065), 0, 0.12, 0.105, 0xffffff);
+  p.add(box(0.05, 0.028, 0.025), 0, 0.104, 0.145, 0xe8a9a0);
+  for (const s of [-1, 1]) {
+    p.add(box(0.012, 0.026, 0.012), s * 0.024, 0.155, 0.098, 0xefe6cf);
+    p.add(box(0.03, 0.012, 0.016), s * 0.042, 0.135, 0.092, 0xffffff);
+  }
+  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.02, 0.05), x * 0.03, 0, z * 0.06, 0x5a4a42);
+  p.add(box(0.008, 0.06, 0.008), 0, 0.09, -0.09, DARK, 0, false, 0, 0.25);
+  return p.build(false).body;
+}
+
+function henGeo() {
+  const p = new Parts();
+  p.add(ico(0.03, 0.85, 0.85, 1.1), 0, 0.04, 0, 0xffffff);
+  p.add(ico(0.018, 0.8, 1.2, 0.9, 0), 0, 0.058, -0.03, 0xffffff, 0, false, 0, -0.4);
+  p.add(ico(0.017, 1, 1, 1), 0, 0.072, 0.024, 0xffffff);
+  p.add(box(0.006, 0.014, 0.018), 0, 0.09, 0.024, 0xe0453a);
+  p.add(new THREE.ConeGeometry(0.007, 0.016, 4).rotateX(Math.PI / 2), 0, 0.07, 0.045, 0xf0a030);
+  for (const s of [-1, 1]) p.add(leg(0.004, 0.016), s * 0.01, 0, 0, 0xf0a030);
+  return p.build(false).body;
+}
+
+function rabbitGeo() {
+  const p = new Parts();
+  p.add(ico(0.032, 0.8, 0.75, 1.1), 0, 0.03, 0, 0xffffff);
+  p.add(ico(0.021, 1, 1, 1), 0, 0.055, 0.032, 0xffffff);
+  for (const s of [-1, 1]) p.add(box(0.008, 0.04, 0.013).translate(0, 0.02, 0), s * 0.008, 0.066, 0.028, 0xffffff, 0, false, s * 0.18);
+  p.add(ico(0.011, 1, 1, 1, 0), 0, 0.036, -0.036, 0xfaf8f4);
+  return p.build(false).body;
+}
+
+function deerGeo() {
+  const p = new Parts();
+  p.add(box(0.07, 0.07, 0.16), 0, 0.13, 0, 0xffffff);
+  p.add(box(0.064, 0.02, 0.12), 0, 0.095, 0, 0xf4e6d2);
+  p.add(box(0.034, 0.09, 0.034), 0, 0.19, 0.07, 0xffffff, 0, false, 0, -0.45);
+  p.add(box(0.04, 0.04, 0.07), 0, 0.235, 0.1, 0xffffff);
+  p.add(box(0.02, 0.016, 0.02), 0, 0.226, 0.138, DARK);
+  for (const s of [-1, 1]) p.add(box(0.026, 0.012, 0.01), s * 0.03, 0.258, 0.088, 0xffffff, 0, false, s * 0.4);
+  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.015, 0.1), x * 0.024, 0, z * 0.06, 0x6a5040);
+  p.add(ico(0.014, 1, 1, 1, 0), 0, 0.15, -0.084, 0xf8f4ee);
+  return p.build(false).body;
+}
+
+function duckGeo() {
+  const p = new Parts();
+  p.add(ico(0.036, 0.8, 0.55, 1.2), 0, 0.012, 0, 0xffffff);
+  p.add(ico(0.014, 0.8, 1.2, 0.9, 0), 0, 0.022, -0.038, 0xffffff, 0, false, 0, -0.5);
+  p.add(ico(0.018, 1, 1, 1), 0, 0.045, 0.03, 0xffffff);
+  p.add(box(0.014, 0.006, 0.02), 0, 0.042, 0.052, 0xf09a30);
+  return p.build(false).body;
+}
+
+function birdGeo() {
+  const p = new Parts();
+  p.add(ico(0.022, 0.75, 0.65, 1.7, 0), 0, 0, 0, 0xffffff);
+  p.add(ico(0.014, 1, 1, 1, 0), 0, 0.01, 0.04, 0xffffff);
+  p.add(new THREE.ConeGeometry(0.006, 0.018, 4).rotateX(Math.PI / 2), 0, 0.008, 0.058, 0xf0a030);
+  for (const s of [-1, 1]) {
+    const rf = [s * 0.01, 0, 0.02], tip = [s * 0.15, 0, -0.01], tr = [s * 0.12, 0, -0.035], rb = [s * 0.01, 0, -0.02];
+    p.add(tri([...rf, ...tip, ...tr, ...rf, ...tr, ...rb]), 0, 0, 0, 0xf2f2f2);
+  }
+  p.add(tri([0, 0, -0.03, -0.022, 0, -0.068, 0.022, 0, -0.068]), 0, 0, 0, 0xe6e6e6);
+  return p.build(false).body;
+}
+
+function batGeo() {
+  const p = new Parts();
+  p.add(ico(0.016, 0.9, 0.8, 1.3, 0), 0, 0, 0, 0xffffff);
+  for (const s of [-1, 1]) {
+    p.add(new THREE.ConeGeometry(0.005, 0.014, 3), s * 0.007, 0.014, 0.012, 0xffffff);
+    // aile en membrane festonnée
+    p.add(tri([s * 0.008, 0, 0.012, s * 0.09, 0, 0.004, s * 0.055, 0, -0.016, s * 0.008, 0, 0.012, s * 0.055, 0, -0.016, s * 0.008, 0, -0.012,
+      s * 0.055, 0, -0.016, s * 0.09, 0, 0.004, s * 0.08, 0, -0.022]), 0, 0, 0, 0xd8d0d8);
+  }
+  return p.build(false).body;
+}
+
+function fishGeo() {
+  const p = new Parts();
+  p.add(ico(0.03, 0.55, 0.8, 1.6, 0), 0, 0, 0, 0xffffff);
+  p.add(tri([0, 0, -0.04, 0, 0.025, -0.075, 0, -0.025, -0.075]), 0, 0, 0, 0xe0e0e0);
+  p.add(tri([0, 0.02, 0.01, 0, 0.042, -0.02, 0, 0.018, -0.03]), 0, 0, 0, 0xe0e0e0);
+  return p.build(false).body;
+}
+
+function dolphinGeo() {
+  const p = new Parts();
+  p.add(ico(0.07, 0.62, 0.6, 2.3, 1), 0, 0, 0, 0xffffff);
+  p.add(ico(0.06, 0.55, 0.35, 2, 1), 0, -0.018, 0.01, 0xe8eef2);
+  p.add(new THREE.ConeGeometry(0.018, 0.08, 5).rotateX(Math.PI / 2), 0, -0.005, 0.19, 0xffffff);
+  p.add(tri([0, 0.035, 0.03, 0, 0.1, -0.06, 0, 0.035, -0.07]), 0, 0, 0, 0xd0d6dc);
+  p.add(tri([0, 0, -0.14, -0.07, 0.01, -0.2, 0, 0, -0.17, 0, 0, -0.14, 0, 0, -0.17, 0.07, 0.01, -0.2]), 0, 0, 0, 0xd0d6dc);
+  for (const s of [-1, 1]) p.add(tri([s * 0.03, -0.02, 0.05, s * 0.08, -0.04, 0.0, s * 0.03, -0.02, 0.0]), 0, 0, 0, 0xd0d6dc);
+  return p.build(false).body;
+}
+
+function butterflyGeo() {
+  const p = new Parts();
+  p.add(box(0.006, 0.006, 0.03), 0, 0, 0, DARK);
+  for (const s of [-1, 1]) {
+    p.add(tri([s * 0.003, 0, 0.004, s * 0.036, 0, 0.024, s * 0.03, 0, -0.003]), 0, 0, 0, 0xffffff);
+    p.add(tri([s * 0.003, 0, -0.002, s * 0.027, 0, -0.012, s * 0.012, 0, -0.024]), 0, 0, 0, 0xf2f2f2);
+  }
+  return p.build(false).body;
+}
+
+const SPECS: Record<Kind, Spec> = {
+  sheep: { geo: sheepGeo, max: 32, colors: [0xffffff, 0xf3ece0, 0xffffff, 0xe9e2d6, 0x5a5052], speed: 0.35, idle: [3, 9], ok: pasture, graze: 0.14 },
+  cow: { geo: cowGeo, max: 48, colors: [0xffffff, 0xb07850, 0xe8d8b8, 0x8a5a3a], speed: 0.3, idle: [4, 12], ok: pasture, graze: 0.1 },
+  pig: { geo: sheepGeo, max: 32, colors: [0xf2b3b3], speed: 0.3, idle: [3, 8], ok: pasture, graze: 0.1 },
+  hen: { geo: henGeo, max: 96, colors: [0xffffff, 0xc8763c, 0xe8d0a0, 0x4a4446], speed: 0.45, idle: [1, 4], ok: land, peck: true },
+  rabbit: { geo: rabbitGeo, max: 16, colors: [0xb08a68, 0x9a9690, 0xf2efe8, 0x8a6a4e], speed: 0.9, idle: [2, 6], ok: land, hop: 0.05 },
+  deer: { geo: deerGeo, max: 16, colors: [0xb87a48, 0xa86c40, 0xc48a58], speed: 0.5, idle: [4, 10], ok: wild, graze: 0.2 },
+  duck: { geo: duckGeo, max: 8, colors: [0xffffff], speed: 0.25, idle: [2, 6], ok: water },
+  duckling: { geo: duckGeo, max: 24, colors: [0xf8dc6a], speed: 0.25, idle: [1, 1], ok: water, scale: 0.55 },
+  bird: { geo: birdGeo, max: 16, colors: [0xffffff, 0xdfe4ea], speed: 0, idle: [1, 1], ok: () => true, flap: [9, 0.9, 0.012], scale: 2.3 },
+  bat: { geo: batGeo, max: 24, colors: [0x3a3238, 0x2e282e, 0x4a3e3e], speed: 0, idle: [1, 1], ok: () => true, flap: [17, 1.4, 0.008], scale: 1.7 },
+  fish: { geo: fishGeo, max: 48, colors: [0xf28c38, 0xc8d4dc, 0x5fa8d8, 0xf2d04a], speed: 0, idle: [1, 1], ok: water },
+  dolphin: { geo: dolphinGeo, max: 6, colors: [0x7f97ab, 0x8ea3b4], speed: 0, idle: [1, 1], ok: water, scale: 1.5 },
+  butterfly: { geo: butterflyGeo, max: 24, colors: [0xf7d24c, 0xf29ab4, 0xffffff, 0x9fc8f0, 0xf09a50], speed: 0, idle: [1, 1], ok: () => true, flap: [26, 1.3, 0.003] },
+};
+const KIND_LIST = Object.keys(SPECS) as Kind[];
+
+/** Petite faune décorative : troupeaux, basse-cour, lapins, cerfs, canards, oiseaux et papillons */
+export class Fauna {
+  group = new THREE.Group();
+  private meshes = {} as Record<Kind, THREE.InstancedMesh>;
+  private phases = {} as Record<Kind, THREE.InstancedBufferAttribute | undefined>;
+  private critters: Critter[] = [];
+  private homes = new Map<string, number>();
+  private lastVersion = -1;
+  private lastAge = -1;
+  private t = 0;
+  private uTime = { value: 0 };
+  private rnd = mulberry32(4242);
+  private d = new THREE.Object3D();
+  private col = new THREE.Color();
+
+  constructor(private world: World) {
+    for (const k of KIND_LIST) {
+      const sp = SPECS[k];
+      const g = sp.geo();
+      let mat: THREE.MeshStandardMaterial;
+      if (sp.flap) {
+        const ph = new THREE.InstancedBufferAttribute(new Float32Array(sp.max), 1);
+        g.setAttribute('aPhase', ph);
+        this.phases[k] = ph;
+        mat = flapMaterial(this.uTime, sp.flap);
+      } else mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 0.9 });
+      const m = new THREE.InstancedMesh(g, mat, sp.max);
+      m.count = 0;
+      m.frustumCulled = false;
+      m.castShadow = k !== 'butterfly';
+      m.receiveShadow = true;
+      this.meshes[k] = m;
+      this.group.add(m);
+    }
+  }
+
+  // ---------- Population ----------
+
+  /** Cellule de domaine stable : on garde l'ancienne tant qu'elle reste valable */
+  private home(key: string, list: number[], set: Set<number>, salt: number) {
+    const prev = this.homes.get(key);
+    if (prev !== undefined && set.has(prev)) return prev;
+    const c = list[Math.floor(hash2(salt, list.length, 17) * list.length)];
+    this.homes.set(key, c);
+    return c;
+  }
+
+  /** Case libre la plus proche autour d'un bâtiment, de préférence devant sa façade, pour y loger ses bêtes */
+  private near(x0: number, z0: number, s: number, rot: number, ok: Spec['ok']): [number, number] | null {
+    const [fx, fz] = FRONT[rot], mx = x0 + s / 2, mz = z0 + s / 2;
+    for (let r = 1; r <= 2; r++) {
+      let best: [number, number] | null = null, score = -Infinity;
+      for (let dz = -r; dz < s + r; dz++)
+        for (let dx = -r; dx < s + r; dx++) {
+          const cx = x0 + dx, cz = z0 + dz;
+          if (!ok(this.world, cx, cz)) continue;
+          const sc = (cx + 0.5 - mx) * fx + (cz + 0.5 - mz) * fz;
+          if (sc > score) { score = sc; best = [cx + 0.5, cz + 0.5]; }
+        }
+      if (best) return best;
+    }
+    return null;
+  }
+
+  private refresh() {
+    const w = this.world;
+    const src: Source[] = [];
+    const meadow: number[] = [], edge: number[] = [], shore: number[] = [], gardens: number[] = [], caves: number[] = [];
+    /** mer : hauts-fonds pour les bancs de poissons, large pour les dauphins */
+    const shallows: number[] = [], deep: number[] = [];
+    let forest = 0;
+    for (let cz = 0; cz < N; cz++)
+      for (let cx = 0; cx < N; cx++) {
+        const k = w.ci(cx, cz), v = w.veg[k];
+        if (v === 1) {
+          forest++;
+          if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => wild(w, cx + dx, cz + dz) && w.veg[w.ci(cx + dx, cz + dz)] === 0)) edge.push(k);
+        } else if (v === 3) gardens.push(k);
+        else if (v === 5) caves.push(k);
+        else if (v === 0 && pasture(w, cx, cz) && !w.road[k]) meadow.push(k);
+        if (water(w, cx, cz)) {
+          const a = w.cellAvg(cx, cz);
+          if (a < -0.35 && a > -1.6) shallows.push(k);
+          else if (a <= -1.6) deep.push(k);
+          let shoreline = false;
+          for (let dz = -2; dz <= 2 && !shoreline; dz++) for (let dx = -2; dx <= 2; dx++) if (w.inCells(cx + dx, cz + dz) && w.cellAvg(cx + dx, cz + dz) > 0.1) { shoreline = true; break; }
+          if (shoreline) shore.push(k);
+        }
+      }
+    for (const b of w.buildings.values()) {
+      const s = KINDS[b.kind].size;
+      const hens = b.kind === 'farm' ? (b.age < 4 ? 3 : 0) : b.kind === 'house' && b.age <= 2 && hash2(b.x, b.z, 41) < 0.3 ? 2 : 0;
+      if (hens) { const h = this.near(b.x, b.z, s, b.rot, land); if (h) src.push({ key: `hen${b.id}`, kind: 'hen', hx: h[0], hz: h[1], n: hens, radius: 0.9 }); }
+      if (b.kind === 'farm' && b.age >= 1) {
+        const h = this.near(b.x, b.z, s, b.rot, pasture);
+        if (h) src.push({ key: `cow${b.id}`, kind: 'cow', hx: h[0], hz: h[1], n: 2, radius: 1.8 });
+        // cochons seulement avec le modèle importé
+        if (h && hasModel('pig') && b.age <= 3) src.push({ key: `pig${b.id}`, kind: 'pig', hx: h[0], hz: h[1], n: 2, radius: 1.2 });
+      }
+    }
+    const at = (c: number) => [(c % N) + 0.5, Math.floor(c / N) + 0.5];
+    const mset = new Set(meadow), eset = new Set(edge), sset = new Set(shore), gset = new Set(gardens);
+    const herds = Math.min(4, Math.floor(meadow.length / 120));
+    for (let i = 0; i < herds; i++) { const [x, z] = at(this.home(`sheep${i}`, meadow, mset, i)); src.push({ key: `sheep${i}`, kind: 'sheep', hx: x, hz: z, n: 3 + (i % 3), radius: 2.2 }); }
+    const rabbits = Math.min(8, Math.floor(meadow.length / 60));
+    for (let i = 0; i < rabbits; i++) { const [x, z] = at(this.home(`rabbit${i}`, meadow, mset, 50 + i)); src.push({ key: `rabbit${i}`, kind: 'rabbit', hx: x, hz: z, n: 1, radius: 1.6 }); }
+    const deer = edge.length ? Math.min(4, Math.floor(forest / 40)) : 0;
+    for (let i = 0; i < deer; i++) { const [x, z] = at(this.home(`deer${i}`, edge, eset, 80 + i)); src.push({ key: `deer${i}`, kind: 'deer', hx: x, hz: z, n: 2, radius: 2.5 }); }
+    const ducks = Math.min(3, Math.floor(shore.length / 50));
+    for (let i = 0; i < ducks; i++) { const [x, z] = at(this.home(`duck${i}`, shore, sset, 120 + i)); src.push({ key: `duck${i}`, kind: 'duck', hx: x, hz: z, n: 4, radius: 2.5 }); }
+    const flies = Math.min(16, gardens.length + Math.floor(meadow.length / 160));
+    for (let i = 0; i < flies; i++) {
+      const fromGarden = i < gardens.length;
+      const [x, z] = at(this.home(`fly${i}`, fromGarden ? gardens : meadow, fromGarden ? gset : mset, 160 + i));
+      src.push({ key: `fly${i}`, kind: 'butterfly', hx: x, hz: z, n: 1, radius: 0.4 });
+    }
+    const schools = Math.min(5, Math.floor(shallows.length / 40));
+    const fset = new Set(shallows), dset = new Set(deep);
+    for (let i = 0; i < schools; i++) { const [x, z] = at(this.home(`fish${i}`, shallows, fset, 200 + i)); src.push({ key: `fish${i}`, kind: 'fish', hx: x, hz: z, n: 5 + (i % 3), radius: 1.3 }); }
+    if (deep.length > 80) { const [x, z] = at(this.home('dolphins', deep, dset, 230)); src.push({ key: 'dolphins', kind: 'dolphin', hx: x, hz: z, n: 3, radius: 3.2 }); }
+    // chauves-souris : trois par grotte, de sortie la nuit
+    for (const k of caves.slice(0, 6)) { const [x, z] = at(k); src.push({ key: `bat${k}`, kind: 'bat', hx: x, hz: z, n: 3, radius: 0.8 }); }
+    for (let i = 0; i < 2; i++) src.push({ key: `birds${i}`, kind: 'bird', hx: N / 2, hz: N / 2, n: 5 + i, radius: 12 + i * 6 });
+
+    // réconciliation : on garde les bêtes existantes, on ajoute ou retire l'écart
+    const want = new Map(src.map((s) => [s.key, s]));
+    for (const c of this.critters) if (!want.has(c.key) && c.actor) { c.actor.mixer.stopAllAction(); this.group.remove(c.actor.root); }
+    this.critters = this.critters.filter((c) => want.has(c.key));
+    const have = new Map<string, Critter[]>();
+    for (const c of this.critters) { const l = have.get(c.key) ?? []; l.push(c); have.set(c.key, l); }
+    for (const s of src) {
+      const list = have.get(s.key) ?? [];
+      for (const c of list) { c.hx = s.hx; c.hz = s.hz; c.radius = s.radius; }
+      for (let i = list.length; i < s.n; i++) {
+        const kind: Kind = s.kind === 'duck' && i > 0 ? 'duckling' : s.kind;
+        const sp = SPECS[kind];
+        const c: Critter = {
+          kind, key: s.key, x: s.hx, y: 0, z: s.hz, heading: this.rnd() * 6.28, pitch: 0, tx: s.hx, tz: s.hz,
+          moving: false, timer: this.rnd() * 3, phase: this.rnd() * 10, hx: s.hx, hz: s.hz, radius: s.radius,
+          col: sp.colors[Math.floor(this.rnd() * sp.colors.length)], size: (sp.scale ?? 1) * (0.9 + this.rnd() * 0.2),
+          hidden: false, sleeping: false, leader: kind === 'duckling' ? list[i - 1] : null, slot: i, actor: null,
+        };
+        const md = MODELS[kind];
+        if (md) {
+          c.actor = makeActor(i === 0 && md.lead ? md.lead : md.name, md.length * (0.9 + this.rnd() * 0.2));
+          if (c.actor) { this.group.add(c.actor.root); c.actor.mixer.setTime(this.rnd() * 3); }
+        }
+        // apparition dispersée autour du domaine
+        for (let k = 0; k < 6 && kind !== 'duckling' && kind !== 'bird'; k++) {
+          const a = this.rnd() * 6.28, r = this.rnd() * s.radius * 0.6;
+          const x = s.hx + Math.cos(a) * r, z = s.hz + Math.sin(a) * r;
+          if (sp.ok(this.world, Math.floor(x), Math.floor(z))) { c.x = c.tx = x; c.z = c.tz = z; break; }
+        }
+        if (c.leader) { c.x = c.leader.x - Math.sin(c.leader.heading) * 0.07; c.z = c.leader.z - Math.cos(c.leader.heading) * 0.07; }
+        list.push(c);
+        this.critters.push(c);
+      }
+    }
+  }
+
+  // ---------- Comportements ----------
+
+  update(dt: number, elapsed: number, hour: number, season: number, rain: number, age: number) {
+    const w = this.world;
+    if (w.version !== this.lastVersion || age !== this.lastAge) { this.lastVersion = w.version; this.lastAge = age; this.refresh(); }
+    this.t += dt;
+    this.uTime.value = this.t;
+    const night = hour < 6 || hour > 21;
+    for (const c of this.critters) {
+      if (c.kind === 'bird') this.fly(c, night || rain > 0.6);
+      else if (c.kind === 'butterfly') this.flutter(c, night || season > 1 || rain > 0.3);
+      else if (c.kind === 'bat') this.flutter(c, !night, 0.6, 1.9);
+      else if (c.kind === 'fish' || c.kind === 'dolphin') this.swim(c, dt, season);
+      else if (c.kind === 'duckling') this.follow(c, dt);
+      else this.walk(c, dt, night, season);
+    }
+    this.render(elapsed, dt);
+  }
+
+  private walk(c: Critter, dt: number, night: boolean, season: number) {
+    const w = this.world, sp = SPECS[c.kind];
+    c.hidden = (c.kind === 'hen' && night) || (c.kind === 'duck' && season === 3);
+    c.sleeping = night && c.kind !== 'duck';
+    // un bâtiment ou de l'eau sous les pattes : retour au domaine
+    if (!sp.ok(w, Math.floor(c.x), Math.floor(c.z))) { c.x = c.tx = c.hx; c.z = c.tz = c.hz; c.moving = false; }
+    if (c.sleeping) { c.moving = false; c.pitch = 0; return; }
+    c.phase += dt * (c.moving ? 11 : 2.5);
+    if (!c.moving) {
+      c.timer -= dt;
+      if (c.timer <= 0) {
+        c.timer = 1;
+        for (let k = 0; k < 6; k++) {
+          const a = this.rnd() * 6.28, r = (0.3 + this.rnd() * 0.7) * c.radius;
+          const tx = c.hx + Math.cos(a) * r, tz = c.hz + Math.sin(a) * r;
+          if (sp.ok(w, Math.floor(tx), Math.floor(tz))) { c.tx = tx; c.tz = tz; c.moving = true; break; }
+        }
+      }
+    } else {
+      const dx = c.tx - c.x, dz = c.tz - c.z, dist = Math.hypot(dx, dz), step = sp.speed * dt;
+      if (dist <= step) { c.x = c.tx; c.z = c.tz; c.moving = false; c.timer = sp.idle[0] + this.rnd() * (sp.idle[1] - sp.idle[0]); }
+      else {
+        const nx = c.x + (dx / dist) * step, nz = c.z + (dz / dist) * step;
+        if (sp.ok(w, Math.floor(nx), Math.floor(nz))) { c.x = nx; c.z = nz; } else { c.moving = false; c.timer = 0.5 + this.rnd(); }
+        turn(c, Math.atan2(dx, dz), dt * 6);
+      }
+    }
+    // broute ou picore à l'arrêt
+    const target = c.moving ? 0 : sp.peck ? Math.max(0, Math.sin(c.phase * 3)) * 0.6 : sp.graze ? sp.graze * (Math.sin(c.phase * 0.5) > -0.3 ? 1 : 0) : 0;
+    c.pitch += (target - c.pitch) * Math.min(1, dt * 6);
+  }
+
+  /** Les canetons suivent en file indienne */
+  private follow(c: Critter, dt: number) {
+    const L = c.leader!;
+    c.hidden = L.hidden;
+    const fx = L.x - Math.sin(L.heading) * 0.065, fz = L.z - Math.cos(L.heading) * 0.065;
+    const dx = fx - c.x, dz = fz - c.z;
+    const k = Math.min(1, dt * 3);
+    c.x += dx * k; c.z += dz * k;
+    if (Math.hypot(dx, dz) > 0.004) turn(c, Math.atan2(dx, dz), dt * 6);
+    c.phase += dt * 3;
+  }
+
+  /** Nuée en V qui tourne au-dessus de la carte */
+  private fly(c: Critter, hide: boolean) {
+    c.hidden = hide;
+    const f = c.key === 'birds0' ? 0 : 1;
+    const om = (f ? -1 : 1) * 0.07, th = this.t * om + f * 2.5;
+    const R = c.radius;
+    const dx = -Math.sin(th) * R * om, dz = Math.cos(th) * R * 0.8 * om;
+    const h = Math.atan2(dx, dz);
+    const side = c.slot === 0 ? 0 : (c.slot % 2 ? 1 : -1), rank = Math.ceil(c.slot / 2);
+    const ox = side * rank * 0.55 + Math.sin(this.t * 1.1 + c.slot) * 0.08, oz = -rank * 0.45;
+    c.x = N / 2 + Math.cos(th) * R + ox * Math.cos(h) + oz * Math.sin(h);
+    c.z = N / 2 + Math.sin(th) * R * 0.8 - ox * Math.sin(h) + oz * Math.cos(h);
+    c.y = 5.5 + f * 1.2 + Math.sin(this.t * 0.8 + c.slot * 0.7) * 0.15;
+    c.heading = h;
+    c.pitch = 0;
+  }
+
+  /**
+   * Nage : le banc (ou le groupe de dauphins) tourne autour de son domaine en formation ;
+   * de temps en temps un poisson saute hors de l'eau, les dauphins font des bonds réguliers
+   */
+  private swim(c: Critter, dt: number, season: number) {
+    const dolphin = c.kind === 'dolphin';
+    const om = (dolphin ? 0.16 : 0.32) * (hash2(Math.floor(c.hx), Math.floor(c.hz), 3) < 0.5 ? 1 : -1);
+    const th = this.t * om + hash2(Math.floor(c.hx), Math.floor(c.hz), 4) * 6.28;
+    const dx = -Math.sin(th) * om, dz = Math.cos(th) * om * 0.8;
+    const h = Math.atan2(dx, dz);
+    const lat = (c.slot % 2 ? 1 : -1) * Math.ceil(c.slot / 2) * (dolphin ? 0.35 : 0.12), back = -Math.ceil(c.slot / 2) * (dolphin ? 0.3 : 0.1);
+    const wob = Math.sin(this.t * 2.3 + c.slot * 1.7) * (dolphin ? 0.05 : 0.04);
+    c.x = c.hx + Math.cos(th) * c.radius + (lat + wob) * Math.cos(h) + back * Math.sin(h);
+    c.z = c.hz + Math.sin(th) * c.radius * 0.8 - (lat + wob) * Math.sin(h) + back * Math.cos(h);
+    c.heading = h + Math.sin(this.t * 6 + c.slot) * (dolphin ? 0.04 : 0.15);
+    // hors de l'eau (rive, île) : on ne l'affiche pas
+    c.hidden = !water(this.world, Math.floor(c.x), Math.floor(c.z)) || (dolphin && season === 3);
+    if (dolphin) {
+      const leap = Math.sin(this.t * 1.1 + c.slot * 0.9);
+      c.y = SEA - 0.18 + Math.max(0, leap) * 0.55;
+      c.pitch = -Math.cos(this.t * 1.1 + c.slot * 0.9) * (leap > 0 ? 0.9 : 0);
+    } else {
+      c.timer -= dt;
+      if (c.timer < -0.7) c.timer = 4 + this.rnd() * 14;
+      const jump = c.timer < 0 ? Math.sin((-c.timer / 0.7) * Math.PI) : 0;
+      c.y = SEA - 0.14 - Math.sin(this.t + c.slot) * 0.03 + jump * 0.4;
+      c.pitch = c.timer < 0 ? -Math.cos((-c.timer / 0.7) * Math.PI) * 1.1 : 0;
+    }
+  }
+
+  /** Papillon (ou chauve-souris) : boucles irrégulières autour de son point d'attache */
+  private flutter(c: Critter, hide: boolean, alt = 0.2, pace = 1) {
+    c.hidden = hide;
+    const p = c.phase, t = this.t * pace;
+    const x = c.hx + Math.sin(t * 0.9 + p) * c.radius + Math.sin(t * 2.3 + p * 2) * 0.1;
+    const z = c.hz + Math.cos(t * 0.7 + p * 1.7) * c.radius + Math.cos(t * 2.9 + p) * 0.1;
+    if (Math.hypot(x - c.x, z - c.z) > 1e-4) c.heading = Math.atan2(x - c.x, z - c.z);
+    c.x = x; c.z = z;
+    c.y = this.world.hAt(x, z) + alt + Math.sin(t * 3.1 + p) * 0.07 * pace;
+  }
+
+  // ---------- Rendu ----------
+
+  /** Animal importé : position, cap et animation selon ce qu'il fait (marche, broute, dort) */
+  private animateActor(c: Critter, a: Actor, dt: number) {
+    a.root.visible = !c.hidden;
+    if (c.hidden) return;
+    a.root.position.set(c.x, this.world.hAt(c.x, c.z), c.z);
+    a.root.rotation.y = c.heading + (MODELS[c.kind]?.yaw ?? 0);
+    if (c.moving) play(a, ['Walk', 'WalkSlow', 'Idle']);
+    else if (c.sleeping) play(a, ['Idle_Headlow', 'Idle']);
+    else if (c.pitch > 0.05) play(a, ['Eating', 'Bite_Front', 'Idle_Headlow', 'Idle']);
+    else play(a, ['Idle', 'Idle_2']);
+    a.mixer.update(dt);
+  }
+
+  private render(elapsed: number, dt: number) {
+    const w = this.world, d = this.d;
+    const counts = {} as Record<Kind, number>;
+    for (const k of KIND_LIST) counts[k] = 0;
+    for (const c of this.critters) {
+      if (c.actor) { this.animateActor(c, c.actor, dt); continue; }
+      if (c.hidden) continue;
+      const sp = SPECS[c.kind], m = this.meshes[c.kind];
+      const n = counts[c.kind];
+      if (n >= sp.max) continue;
+      let y: number;
+      if (c.kind === 'duck' || c.kind === 'duckling') {
+        // même houle que la surface de l'eau
+        y = SEA + (Math.sin(c.x * 0.9 + elapsed * 1.3) + Math.sin(c.z * 1.1 + elapsed * 1.1) + Math.sin((c.x + c.z) * 0.5 + elapsed * 0.7)) * 0.018;
+      } else if (c.kind === 'bird' || c.kind === 'butterfly' || c.kind === 'bat' || c.kind === 'fish' || c.kind === 'dolphin') y = c.y;
+      else {
+        y = w.hAt(c.x, c.z);
+        if (c.moving) y += sp.hop ? Math.abs(Math.sin(c.phase * 0.7)) * sp.hop : Math.abs(Math.sin(c.phase)) * 0.006;
+      }
+      d.position.set(c.x, y, c.z);
+      d.rotation.set(c.pitch, c.heading, c.moving && !sp.hop ? Math.sin(c.phase) * 0.05 : 0, 'YXZ');
+      // couché la nuit
+      d.scale.set(c.size, c.size * (c.sleeping ? 0.78 : 1), c.size);
+      d.updateMatrix();
+      m.setMatrixAt(n, d.matrix);
+      m.setColorAt(n, this.col.setHex(c.col));
+      const ph = this.phases[c.kind];
+      if (ph) ph.setX(n, c.phase + c.slot * 1.3);
+      counts[c.kind] = n + 1;
+    }
+    for (const k of KIND_LIST) {
+      const m = this.meshes[k];
+      m.count = counts[k];
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      const ph = this.phases[k];
+      if (ph) ph.needsUpdate = true;
+    }
+  }
+}
+
+function turn(c: Critter, target: number, k: number) {
+  let dh = target - c.heading;
+  while (dh > Math.PI) dh -= Math.PI * 2;
+  while (dh < -Math.PI) dh += Math.PI * 2;
+  c.heading += dh * Math.min(1, k);
+}
+
+/** Matériau à ailes battantes : les sommets loin du corps montent et descendent, avec des phases de plané */
+function flapMaterial(uTime: { value: number }, [freq, amp, body]: [number, number, number]) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 0.9, side: THREE.DoubleSide });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = 'uniform float uTime;\nattribute float aPhase;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  float span = max(abs(transformed.x) - ${body.toFixed(4)}, 0.0);
+  float glide = clamp(sin(uTime * 0.6 + aPhase) * 1.5 + 0.6, 0.15, 1.0);
+  transformed.y += sin(uTime * ${freq.toFixed(1)} + aPhase) * span * ${amp.toFixed(2)} * glide;`);
+  };
+  m.customProgramCacheKey = () => `flap${freq}|${amp}|${body}`;
+  return m;
+}

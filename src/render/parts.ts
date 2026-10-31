@@ -58,8 +58,16 @@ export class Parts {
     this.add(geo, x, y, z, color, ry);
   }
 
-  build(): { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null } {
+  /** ao : occlusion ambiante factice (inutile pour les petits objets mobiles) */
+  build(ao = true): { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null } {
     const body = mergeGeometries(this.body, false)!;
+    // occlusion ambiante factice : le pied des murs et des objets s'assombrit au contact du sol
+    const py = body.attributes.position, col = body.attributes.color;
+    for (let i = 0; i < (ao ? py.count : 0); i++) {
+      const t = Math.min(1, Math.max(0, py.getY(i) / 0.22));
+      const f = 0.72 + 0.28 * t * t * (3 - 2 * t);
+      col.setXYZ(i, col.getX(i) * f, col.getY(i) * f, col.getZ(i) * f);
+    }
     const glow = this.glow.length ? mergeGeometries(this.glow, false) : null;
     for (const g of this.body) g.dispose();
     for (const g of this.glow) g.dispose();

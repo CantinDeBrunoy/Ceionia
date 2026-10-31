@@ -4,8 +4,9 @@ export interface Settings {
   speed: number;
   musicVol: number;
   sfxVol: number;
-  muteMusic: boolean;
-  muteSfx: boolean;
+  /** son activé : coupé par défaut tant que le joueur ne l'a pas allumé dans les réglages */
+  music?: boolean;
+  sfx?: boolean;
 }
 
 export interface SaveData {

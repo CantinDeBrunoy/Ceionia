@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, Snapshot } from '../world/world';
-import { sculpt, SculptTool } from '../world/terraform';
+import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, Snapshot } from '../world/world';
+import { sculpt, raiseVolcano, SculptTool } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
 import { KINDS, KindId } from './catalog';
@@ -10,10 +10,10 @@ import { facingRoadRot, footprintOrigin } from './placement';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 
-export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
+export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'rocks' | 'cave' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
-export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'dig'];
-export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'erase'];
+export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'];
+export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'rocks', 'cave', 'erase'];
 
 export interface ToolHost {
   world: World;
@@ -138,7 +138,10 @@ export class ToolController implements ToolInput {
     if (!this.hit) return;
     const t = this.tool;
     this.beginStroke();
-    if (SCULPT_TOOLS.includes(t)) this.ctx.target = this.hit.y;
+    if (t === 'volcano') {
+      // le volcan se pose d'un seul clic
+      if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) { this.mark(); this.h.audio.sfxPlace(); }
+    } else if (SCULPT_TOOLS.includes(t)) this.ctx.target = this.hit.y;
     else if (VEG_TOOLS.includes(t)) this.applyVeg();
     else if (t === 'road') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
@@ -152,7 +155,7 @@ export class ToolController implements ToolInput {
     this.refreshVisuals();
     if (!this.pressed || !this.hit) return;
     const t = this.tool;
-    if (VEG_TOOLS.includes(t)) this.applyVeg();
+    if (VEG_TOOLS.includes(t) && t !== 'cave') this.applyVeg();
     else if (t === 'road') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
   }
@@ -170,11 +173,11 @@ export class ToolController implements ToolInput {
   update(dt: number) {
     if (!this.pressed || !this.hit) return;
     const t = this.tool;
-    if (SCULPT_TOOLS.includes(t)) {
+    if (SCULPT_TOOLS.includes(t) && t !== 'volcano') {
       const w = this.h.world;
       const changed = sculpt(w, t as SculptTool, this.hit.x, this.hit.z, this.radius, Math.min(dt, 0.05), this.ctx);
       if (changed) this.mark();
-    } else if (VEG_TOOLS.includes(t)) {
+    } else if (VEG_TOOLS.includes(t) && t !== 'cave') {
       this.vegTimer -= dt;
       if (this.vegTimer <= 0) { this.vegTimer = 0.15; this.applyVeg(); }
     }
@@ -190,8 +193,15 @@ export class ToolController implements ToolInput {
     const hit = this.hit;
     if (!hit) return;
     const w = this.h.world;
+    if (this.tool === 'cave') {
+      // une seule entrée, creusée dans la pente sous le curseur
+      const cx = Math.floor(hit.x), cz = Math.floor(hit.z);
+      if (w.setVeg(cx, cz, VEG_CAVE)) { this.mark(); this.h.audio.sfxPlace(); }
+      else this.h.toast('Une grotte se creuse dans une pente raide (falaise, montagne).');
+      return;
+    }
     const r = Math.max(0.6, this.radius * 0.8);
-    const type = this.tool === 'forest' ? VEG_FOREST : this.tool === 'field' ? VEG_FIELD : this.tool === 'garden' ? VEG_GARDEN : 0;
+    const type = this.tool === 'forest' ? VEG_FOREST : this.tool === 'field' ? VEG_FIELD : this.tool === 'garden' ? VEG_GARDEN : this.tool === 'rocks' ? VEG_ROCKS : 0;
     for (let cz = Math.floor(hit.z - r); cz <= Math.ceil(hit.z + r); cz++)
       for (let cx = Math.floor(hit.x - r); cx <= Math.ceil(hit.x + r); cx++) {
         if (!w.inCells(cx, cz)) continue;

@@ -1,7 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { World } from './world/world';
-import { newWorld, MAPS } from './world/mapgen';
+import { newWorld, addDefaultDecor, MAPS } from './world/mapgen';
 import { TerrainView } from './render/terrainView';
 import { BuildingView } from './render/buildings';
 import { RoadView } from './render/roads';
@@ -12,6 +12,8 @@ import { CameraRig } from './core/camera';
 import { GameTime } from './core/time';
 import { Sim } from './sim/sim';
 import { Agents } from './sim/agents';
+import { Fauna } from './render/fauna';
+import { loadModels } from './render/assets';
 import { ToolController, ToolId } from './build/tools';
 import { AudioEngine } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
@@ -43,12 +45,14 @@ class Game implements UIHost {
   veg: VegView;
   env: Environment;
   agents: Agents;
+  fauna: Fauna;
   tools: ToolController;
   ui: UI;
   audio = audio;
   season = makeSeasonState();
   private lastTime = performance.now();
   private elapsed = 0;
+  private windT = 0;
   private seasonKey = -1;
   private terrainTimer = 0;
   private propsTimer = 0;
@@ -68,6 +72,7 @@ class Game implements UIHost {
         w.fromJSON(save.world);
         this.sim.age = save.age; this.sim.pop = save.pop;
         this.time.seasonT = save.seasonT; this.time.hour = save.hour;
+        addDefaultDecor(w, save.seed);
       } catch (e) {
         console.warn(e);
         newWorld(w, mapId, MAPS[mapId].defaultSeed);
@@ -76,7 +81,7 @@ class Game implements UIHost {
       newWorld(w, mapId, fresh ? Math.floor(Math.random() * 100000) + 1 : MAPS[mapId].defaultSeed);
     }
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
-    Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: !!settings.muteMusic, muteSfx: !!settings.muteSfx });
+    Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
 
     this.terrain = new TerrainView(w);
     this.roads = new RoadView(w);
@@ -84,7 +89,8 @@ class Game implements UIHost {
     this.buildings = new BuildingView(w);
     this.env = new Environment(this.scene, renderer, coarse);
     this.agents = new Agents(w);
-    this.scene.add(this.terrain.group, this.roads.mesh, this.veg.group, this.buildings.group, this.agents.group);
+    this.fauna = new Fauna(w);
+    this.scene.add(this.terrain.group, this.roads.mesh, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group);
 
     const host = this;
     this.tools = new ToolController({
@@ -127,7 +133,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, muteMusic: audio.muteMusic, muteSfx: audio.muteSfx };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx };
   }
   buildSave(): SaveData {
     return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, seasonT: this.time.seasonT, hour: this.time.hour, settings: this.settings(), savedAt: Date.now() };
@@ -165,7 +171,7 @@ class Game implements UIHost {
 
   // ---------- Entrées clavier ----------
   private bindKeys() {
-    const map: Record<string, ToolId> = { '1': 'raise', '2': 'lower', '3': 'flatten', '4': 'cliff', '5': 'dig', '6': 'forest', '7': 'field', '8': 'garden', '9': 'erase', r: 'road', x: 'bulldoze', m: 'move' };
+    const map: Record<string, ToolId> = { '0': 'mountain', '1': 'raise', '2': 'lower', '3': 'flatten', '4': 'cliff', '5': 'dig', '6': 'forest', '7': 'field', '8': 'garden', '9': 'erase', r: 'road', x: 'bulldoze', m: 'move' };
     window.addEventListener('keydown', (e) => {
       const t = e.target as HTMLElement;
       if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement) return;
@@ -230,8 +236,15 @@ class Game implements UIHost {
     this.propsTimer -= dt;
     if ((this.propsDirty || w.roadsDirty || w.vegDirty) && this.propsTimer <= 0) {
       this.propsTimer = 0.12;
+      const roadsChanged = w.roadsDirty;
       if (w.roadsDirty || this.propsDirty) { w.roadsDirty = false; this.roads.rebuild(this.sim.age, this.season.snow); this.buildings.refreshAll(); }
-      if (w.vegDirty || this.propsDirty) { w.vegDirty = false; this.veg.rebuild(this.season); }
+      // l'herbe des prairies dépend aussi des routes
+      if (w.vegDirty || roadsChanged || this.propsDirty) {
+        // le sol se teinte sous les champs, jardins et forêts
+        if (w.vegDirty) this.terrain.update(this.season);
+        w.vegDirty = false;
+        this.veg.rebuild(this.season);
+      }
       this.propsDirty = false;
     }
     this.refreshSeason();
@@ -240,7 +253,10 @@ class Game implements UIHost {
     this.buildings.update(dt, this.sim.age);
     this.sim.update(gdt, dt);
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night);
+    this.fauna.update(gdt, this.elapsed, this.time.hour, this.time.season, this.env.rainK, this.sim.age);
     this.terrain.animateWater(this.elapsed, 1 - this.env.weatherK * 0.3);
+    this.windT += dt * (1 + this.env.weatherK * 0.6);
+    this.veg.animate(this.windT);
     audio.update(dt, {
       age: this.sim.age, season: this.time.season, daylight: this.env.daylight,
       rain: this.env.rainK, snow: this.env.weatherKind === 'snow' ? this.env.weatherK : 0, fog: this.env.weatherKind === 'fog' ? this.env.weatherK : 0,
@@ -257,7 +273,14 @@ class Game implements UIHost {
 }
 
 // ---------- Boot ----------
-function boot() {
+async function boot() {
+  // modèles 3D chargés avant tout : la végétation et la faune les lisent à la construction
+  const loading = document.createElement('div');
+  loading.className = 'loading';
+  uiRoot.appendChild(loading);
+  await loadModels((done, total) => { loading.textContent = `Chargement des modèles… ${done}/${total}`; });
+  loading.remove();
+
   let started = false;
   const start = (map: number, mode: 'continue' | 'new', fresh = false) => {
     if (started) return;
@@ -282,4 +305,4 @@ function boot() {
   });
   void KINDS;
 }
-boot();
+void boot();

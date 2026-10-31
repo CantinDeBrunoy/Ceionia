@@ -2,8 +2,18 @@ import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { Building, KINDS, KindId } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
+import { makeActor, play, hasModel, Actor, ModelName } from '../render/assets';
 
 const MAX_AGENTS = 90;
+/** Habitants modélisés (Quaternius, CC0) : deux silhouettes par âge, la tenue change avec l'époque */
+const AGE_MODELS: ModelName[][] = [
+  ['adventurer', 'woman_dress'],
+  ['farmer', 'woman_dress'],
+  ['hooded', 'farmer'],
+  ['worker', 'woman'],
+  ['woman_casual', 'man'],
+];
+const HUMAN_HEIGHT = 0.3;
 
 const BODY_COLS = [
   [0xb98a5e, 0xa07850, 0xc9a070],
@@ -33,6 +43,9 @@ interface Agent {
   targetHidden: boolean;
   skin: number; col: number;
   off: number;
+  /** modèle animé de l'époque courante (sinon silhouette instanciée) */
+  actor: Actor | null;
+  actorKey: string;
 }
 
 class Heap {
@@ -86,7 +99,15 @@ export class Agents {
     for (const m of [this.body, this.head, this.tool]) { m.frustumCulled = false; m.castShadow = true; m.count = 0; this.group.add(m); }
   }
 
-  reset() { this.agents = []; this.lastVersion = -1; }
+  reset() { for (const a of this.agents) this.dropActor(a); this.agents = []; this.lastVersion = -1; }
+
+  private dropActor(a: Agent) {
+    if (!a.actor) return;
+    a.actor.mixer.stopAllAction();
+    this.group.remove(a.actor.root);
+    a.actor = null;
+    a.actorKey = '';
+  }
 
   private refreshTargets() {
     const w = this.world;
@@ -176,7 +197,7 @@ export class Agents {
     const id = this.nextId++;
     this.agents.push({
       id, home: h.id, x: h.x + 0.5, z: h.z + 0.5, state: 'inside', path: [], pi: 0, timer: this.rnd() * 4, hidden: true, speed: 0.9 + this.rnd() * 0.5,
-      heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28,
+      heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, actor: null, actorKey: '',
     });
   }
 
@@ -207,7 +228,7 @@ export class Agents {
     if (w.version !== this.lastVersion) { this.lastVersion = w.version; this.refreshTargets(); }
     const want = Math.min(MAX_AGENTS, Math.floor(popTarget * 0.85));
     while (this.agents.length < want) { const n = this.agents.length; this.addAgent(); if (this.agents.length === n) break; }
-    while (this.agents.length > want) this.agents.pop();
+    while (this.agents.length > want) this.dropActor(this.agents.pop()!);
 
     const night = hour >= 20.5 || hour < 5.5 || sheltering;
     this.pathBudget = 4;
@@ -248,7 +269,7 @@ export class Agents {
         }
       }
     }
-    this.render(age);
+    this.render(age, dt);
   }
 
   private arrive(a: Agent, night: boolean) {
@@ -258,11 +279,39 @@ export class Agents {
     a.hidden = a.targetHidden;
   }
 
-  private render(age: number) {
+  /** Habitant modélisé : clone de l'époque, cap, animation selon l'activité */
+  private animateActor(a: Agent, age: number, dt: number): boolean {
+    const name = AGE_MODELS[Math.min(age, 4)][a.col % 2];
+    if (!hasModel(name)) return false;
+    const key = `${name}|${a.id}`;
+    if (a.actorKey !== key) {
+      this.dropActor(a);
+      a.actor = makeActor(name, HUMAN_HEIGHT * (0.92 + (a.id % 5) * 0.04), 'height');
+      if (!a.actor) return false;
+      a.actorKey = key;
+      // le pas des modèles est lent pour la vitesse de marche du jeu
+      for (const n of ['Walk', 'Man_Walk', 'Female_Walk']) a.actor.actions.get(n)?.setEffectiveTimeScale(1.6);
+      a.actor.mixer.setTime(this.rnd() * 2);
+      this.group.add(a.actor.root);
+    }
+    const act = a.actor!;
+    act.root.visible = !a.hidden;
+    if (a.hidden) return true;
+    act.root.position.set(a.x, this.world.hAt(a.x, a.z), a.z);
+    act.root.rotation.y = a.heading;
+    if (a.state === 'walking') play(act, ['Walk', 'Man_Walk', 'Female_Walk']);
+    else if (a.state === 'doing') play(act, ['Interact', 'Man_Clapping', 'Female_Clapping', 'Wave', 'Idle']);
+    else play(act, ['Idle', 'Man_Idle', 'Female_Idle']);
+    act.mixer.update(dt);
+    return true;
+  }
+
+  private render(age: number, dt: number) {
     const w = this.world, d = this.d;
     const palette = BODY_COLS[Math.min(age, 4)];
     let n = 0;
     for (const a of this.agents) {
+      if (this.animateActor(a, age, dt)) continue;
       if (a.hidden) continue;
       const bob = a.state === 'walking' ? Math.abs(Math.sin(a.phase)) * 0.025 : a.state === 'doing' ? Math.abs(Math.sin(a.phase * 0.6)) * 0.012 : 0;
       d.position.set(a.x, w.hAt(a.x, a.z) + 0.02 + bob, a.z);

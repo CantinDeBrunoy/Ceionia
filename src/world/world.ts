@@ -4,6 +4,10 @@ export const N = 48;
 export const SEA = 0;
 export const MAX_H = 9;
 export const MIN_H = -2.4;
+/** Relief affiché : VR sous-sommets par case, lissé (la grille de jeu reste N×N) */
+export const VR = 2;
+export const VS = N * VR + 1;
+const VIS_PASSES = 3;
 
 export interface Snapshot {
   heights: Float32Array;
@@ -20,8 +24,10 @@ export interface WorldListener {
   onReset(): void;
 }
 
-/** Vegetation: 0 rien, 1 forêt, 2 champ, 3 jardin */
-export const VEG_FOREST = 1, VEG_FIELD = 2, VEG_GARDEN = 3;
+/** Vegetation: 0 rien, 1 forêt, 2 champ, 3 jardin ; décors sans effet sur la simulation : 4 rocaille, 5 entrée de grotte, 6 épave, 7 cratère de volcan */
+export const VEG_FOREST = 1, VEG_FIELD = 2, VEG_GARDEN = 3, VEG_ROCKS = 4, VEG_CAVE = 5, VEG_WRECK = 6, VEG_VOLCANO = 7;
+/** Taille de l'ouverture des grottes (rayon et hauteur de l'arche, profondeur du tunnel), partagée par le relief qui s'y creuse */
+export const CAVE = { r: 0.3, h: 0.36, depth: 0.75 };
 
 export class World {
   readonly n = N;
@@ -39,6 +45,11 @@ export class World {
   /** Incrémenté à chaque modification structurelle (pour la simulation) */
   version = 0;
   listeners: WorldListener[] = [];
+  /** Hauteurs affichées (grille VS×VS) : relief adouci, emprises des bâtiments gardées à plat */
+  vis = new Float32Array(VS * VS);
+  private visTmp = new Float32Array(VS * VS);
+  private visUp = new Float32Array(VS * VS);
+  private visPin = new Uint8Array(VS * VS);
 
   vi(x: number, z: number) { return z * (N + 1) + x; }
   ci(x: number, z: number) { return z * N + x; }
@@ -58,14 +69,69 @@ export class World {
     return Math.max(...c) - Math.min(...c);
   }
 
-  /** Hauteur exacte (mêmes triangles que le maillage) */
+  /** Hauteur affichée exacte (mêmes triangles que le maillage du relief) */
   hAt(wx: number, wz: number): number {
-    const x = Math.min(Math.max(wx, 0), N - 1e-4), z = Math.min(Math.max(wz, 0), N - 1e-4);
+    const x = Math.min(Math.max(wx, 0), N - 1e-4) * VR, z = Math.min(Math.max(wz, 0), N - 1e-4) * VR;
     const cx = Math.floor(x), cz = Math.floor(z);
     const u = x - cx, v = z - cz;
-    const h00 = this.h(cx, cz), h10 = this.h(cx + 1, cz), h01 = this.h(cx, cz + 1), h11 = this.h(cx + 1, cz + 1);
+    const i = cz * VS + cx, vis = this.vis;
+    const h00 = vis[i], h10 = vis[i + 1], h01 = vis[i + VS], h11 = vis[i + VS + 1];
     if (u >= v) return h00 + u * (h10 - h00) + v * (h11 - h10);
     return h00 + u * (h11 - h01) + v * (h01 - h00);
+  }
+
+  /** Repère d'une entrée de grotte : pied de l'ouverture au centre de la case, tournée vers l'aval (cap = atan2(dx, dz)) */
+  caveFrame(cx: number, cz: number) {
+    const x = cx + 0.5, z = cz + 0.5, e = 0.35;
+    const gx = this.hAt(x + e, z) - this.hAt(x - e, z), gz = this.hAt(x, z + e) - this.hAt(x, z - e);
+    return { x, y: this.hAt(x, z), z, yaw: Math.atan2(-gx, -gz) };
+  }
+
+  /** Recalcule le relief affiché : suréchantillonnage puis flou binomial, sauf sous les bâtiments ; sommets et falaises gardent leurs arêtes */
+  updateVis() {
+    const vis = this.vis, tmp = this.visTmp, pin = this.visPin;
+    for (let z = 0; z < VS; z++)
+      for (let x = 0; x < VS; x++) {
+        const ix = Math.min(N - 1, Math.floor(x / VR)), iz = Math.min(N - 1, Math.floor(z / VR));
+        const u = x / VR - ix, v = z / VR - iz;
+        const a = this.h(ix, iz) + (this.h(ix + 1, iz) - this.h(ix, iz)) * u;
+        const b = this.h(ix, iz + 1) + (this.h(ix + 1, iz + 1) - this.h(ix, iz + 1)) * u;
+        vis[z * VS + x] = a + (b - a) * v;
+      }
+    this.visUp.set(vis);
+    pin.fill(0);
+    for (let cz = 0; cz < N; cz++)
+      for (let cx = 0; cx < N; cx++) {
+        if (!this.occ[this.ci(cx, cz)]) continue;
+        for (let z = cz * VR; z <= (cz + 1) * VR; z++) for (let x = cx * VR; x <= (cx + 1) * VR; x++) pin[z * VS + x] = 1;
+      }
+    for (let pass = 0; pass < VIS_PASSES; pass++) {
+      tmp.set(vis);
+      for (let z = 0; z < VS; z++)
+        for (let x = 0; x < VS; x++) {
+          const i = z * VS + x;
+          if (pin[i]) continue;
+          const xl = x > 0 ? i - 1 : i, xr = x < VS - 1 ? i + 1 : i;
+          const zu = z > 0 ? -VS : 0, zd = z < VS - 1 ? VS : 0;
+          vis[i] = (4 * tmp[i] + 2 * (tmp[xl] + tmp[xr] + tmp[i + zu] + tmp[i + zd])
+            + tmp[xl + zu] + tmp[xr + zu] + tmp[xl + zd] + tmp[xr + zd]) / 16;
+        }
+    }
+    // le lissage s'estompe en altitude (crêtes franches) et au bord des à-pics (falaises verticales)
+    const up = this.visUp;
+    for (let z = 0; z < VS; z++)
+      for (let x = 0; x < VS; x++) {
+        const i = z * VS + x;
+        if (pin[i]) continue;
+        let drop = 0;
+        if (x > 0) drop = Math.max(drop, Math.abs(up[i] - up[i - 1]));
+        if (x < VS - 1) drop = Math.max(drop, Math.abs(up[i] - up[i + 1]));
+        if (z > 0) drop = Math.max(drop, Math.abs(up[i] - up[i - VS]));
+        if (z < VS - 1) drop = Math.max(drop, Math.abs(up[i] - up[i + VS]));
+        const a = Math.min(1, Math.max(0, (up[i] - 3) / 3)), c = Math.min(1, Math.max(0, (drop - 0.35) / 0.35));
+        const k = Math.max(a * a * (3 - 2 * a) * 0.7, c * c * (3 - 2 * c) * 0.9);
+        if (k > 0) vis[i] += (up[i] - vis[i]) * k;
+      }
   }
 
   isWaterCell(cx: number, cz: number) { return this.cellAvg(cx, cz) < 0.08; }
@@ -146,6 +212,7 @@ export class World {
     const s = KINDS[b.kind].size;
     for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) this.occ[this.ci(b.x + i, b.z + j)] = 0;
     this.buildings.delete(id);
+    this.terrainDirty = this.vegDirty = true;
     this.version++;
     for (const l of this.listeners) l.onRemove(b);
   }
@@ -178,8 +245,8 @@ export class World {
     if (!this.inCells(cx, cz)) return false;
     const k = this.ci(cx, cz);
     if (type !== 0) {
-      if (this.occ[k] || this.road[k] || this.cellAvg(cx, cz) < 0.2) return false;
-      if (this.cellSlope(cx, cz) > (type === VEG_FOREST ? 1.4 : 0.6)) return false;
+      if (this.occ[k] || this.road[k]) return false;
+      if (!this.vegFits(type, this.cellAvg(cx, cz), this.cellSlope(cx, cz), true)) return false;
     }
     if (this.veg[k] === type) return false;
     this.veg[k] = type;
@@ -189,11 +256,24 @@ export class World {
   }
 
   /** Après sculpture : supprime routes/végétation devenues invalides */
+  /** Terrain compatible avec un type de végétation (pose stricte, ou maintien plus tolérant après sculpture) */
+  vegFits(type: number, avg: number, slope: number, placing: boolean) {
+    // une grotte se creuse dans une pente raide, les rochers tiennent partout hors de l'eau
+    if (type === VEG_CAVE) return avg >= 0.3 && slope >= (placing ? 0.7 : 0.5);
+    // épave : eau peu profonde ou plage mouillée ; cratère : n'importe où hors de la mer
+    if (type === VEG_WRECK) return avg >= -1 && avg <= 0.3;
+    if (type === VEG_VOLCANO) return avg >= 0;
+    // rien ne tient sur une paroi trop raide
+    if (type === VEG_ROCKS) return avg >= (placing ? 0.12 : 0.08) && slope <= (placing ? 1 : 1.4);
+    if (avg < (placing ? 0.2 : 0.1)) return false;
+    return slope <= (type === VEG_FOREST ? (placing ? 1.4 : 1.8) : placing ? 0.6 : 0.9);
+  }
+
   sanitize(x0: number, z0: number, x1: number, z1: number) {
     for (let cz = Math.max(0, z0); cz <= Math.min(N - 1, z1); cz++)
       for (let cx = Math.max(0, x0); cx <= Math.min(N - 1, x1); cx++) {
         const k = this.ci(cx, cz);
-        if (this.veg[k] && (this.cellAvg(cx, cz) < 0.1 || this.cellSlope(cx, cz) > (this.veg[k] === VEG_FOREST ? 1.8 : 0.9))) { this.veg[k] = 0; this.vegDirty = true; }
+        if (this.veg[k] && !this.vegFits(this.veg[k], this.cellAvg(cx, cz), this.cellSlope(cx, cz), false)) { this.veg[k] = 0; this.vegDirty = true; }
         if (this.road[k] && !this.canRoad(cx, cz)) { this.road[k] = 0; this.roadsDirty = true; }
       }
     this.version++;

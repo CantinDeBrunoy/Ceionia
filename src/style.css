@@ -106,6 +106,7 @@ button:disabled, button.locked { opacity: 0.45; cursor: not-allowed; }
 .card .stat { font-size: 12px; color: #5d9a55; font-weight: 700; min-height: 16px; }
 .card .btns { display: flex; gap: 6px; width: 100%; }
 .card .btns button { flex: 1; padding: 6px 4px; }
+.loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--ink2); font-weight: 700; }
 .hint { font-size: 12px; color: var(--ink2); max-width: 640px; line-height: 1.5; }
 
 @media (max-width: 760px) {

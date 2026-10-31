@@ -26,8 +26,8 @@ export class AudioEngine {
   ctx: AudioContext | null = null;
   musicVol = 0.5;
   sfxVol = 0.7;
-  muteMusic = false;
-  muteSfx = false;
+  muteMusic = true;
+  muteSfx = true;
   private master!: GainNode;
   private musicG!: GainNode;
   private sfxG!: GainNode;
