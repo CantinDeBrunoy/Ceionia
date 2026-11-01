@@ -7,7 +7,7 @@ const MAX_FLAMES = 120, FLAMES_PER_FIRE = 7;
 /** Délai avant que les habitants éteignent un feu (un point d'eau tout près), durée au bout de laquelle le bâtiment est perdu */
 const PUT_OUT = 14, BURN_DOWN = 32;
 /** Avec une caserne à portée : les secours arrivent vite, eau ou pas */
-const CREW = 5, CREW_RANGE = 12;
+const CREW = 5, CREW_RANGE = 14;
 const SMOKE = new THREE.Color(0.22, 0.2, 0.2);
 
 interface Fire { b: Building; t: number; seed: number }

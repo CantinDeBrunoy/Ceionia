@@ -356,6 +356,9 @@ const B: Record<string, Builder> = {
   },
   tree: (c, it) => {
     c.p.cyl(0.02, 0.03, 0.2, 5, 0, 0, 0, C.wood);
+    // branches nues, cachées par le feuillage à la belle saison
+    stick(c.p, 0.16, 0.012, 0.05, 0.27, 0.01, C.wood, -0.65); stick(c.p, 0.15, 0.012, -0.045, 0.27, -0.03, C.wood, 0.6, -0.3);
+    stick(c.p, 0.13, 0.01, 0.0, 0.31, 0.0, C.wood, 0.1, 0.2);
     const sh = [0xffffff, 0xe2ecd8, 0xf2f7ea][it.v % 3];
     blob(c.leaf, 0.14, 0, 0.3, 0, sh, 0.9); blob(c.leaf, 0.1, 0.09, 0.25, 0.03, sh, 0.85);
     blob(c.leaf, 0.1, -0.07, 0.27, -0.05, sh, 0.85); blob(c.leaf, 0.08, 0.02, 0.41, -0.02, sh, 0.9);
@@ -499,6 +502,10 @@ export class GardenView {
   private entries = new Map<number, Entry>();
   /** feuillage caduc : teinte de la saison */
   private leafMat = new THREE.MeshStandardMaterial({ color: 0x8fc070, roughness: 0.95, vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0 });
+  /** part du feuillage caduc encore aux branches (1 l'été, un petit reste neigeux l'hiver) */
+  private uLeaf = { value: 1 };
+  /** son ombre suit le feuillage */
+  private leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   /** buis, cyprès, oliviers : toujours verts */
   private everMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0 });
   private waterMat = new THREE.MeshStandardMaterial({ color: 0x7cc6dc, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.88 });
@@ -511,6 +518,14 @@ export class GardenView {
   private dummy = new THREE.Object3D();
 
   constructor(private world: World) {
+    // les touffes de feuillage se resserrent sur leur centre selon la saison (ombre comprise)
+    for (const m of [this.leafMat, this.leafDepth]) {
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.uLeaf = this.uLeaf;
+        sh.vertexShader = 'attribute vec3 aCenter;\nuniform float uLeaf;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed = aCenter + (transformed - aCenter) * uLeaf;');
+      };
+      m.customProgramCacheKey = () => 'gardenLeaf';
+    }
     this.flames = new THREE.InstancedMesh(flameGeo(), new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.25, 1.25, 1.25) }), MAX_FLAMES);
     this.flames.count = 0;
     this.flames.frustumCulled = false;
@@ -566,6 +581,13 @@ export class GardenView {
       const take = (src: THREE.BufferGeometry[], dst: THREE.BufferGeometry[], ao: boolean) => { for (const geo of src) { if (ao) shade(geo); geo.applyMatrix4(m); dst.push(geo); } };
       take(ch.p.body, out.p, true); take(ch.p.glow, out.glow, false);
       take(ch.leaf.body, out.leaf, true); take(ch.ever.body, out.ever, true);
+      // chaque touffe de feuillage retient son centre : l'hiver, elle se resserre sur sa branche
+      for (const geo of ch.leaf.body) {
+        geo.computeBoundingBox();
+        const c = geo.boundingBox!.getCenter(v), n = geo.attributes.position.count, a = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) a.set([c.x, c.y, c.z], i * 3);
+        geo.setAttribute('aCenter', new THREE.BufferAttribute(a, 3));
+      }
       take(ch.fl.body, out.fl, false); take(ch.water.body, out.water, false);
       for (let i = 0; i < ch.fires.length; i += 4) { v.set(ch.fires[i], ch.fires[i + 1], ch.fires[i + 2]).applyMatrix4(m); fires.push(v.x + g.cx, v.y + y0, v.z + g.cz, ch.fires[i + 3] * it.s); }
       for (const d of ch.dyn) {
@@ -604,7 +626,9 @@ export class GardenView {
       group.add(mesh);
       return mesh;
     };
-    mk(out.p, mats.body); mk(out.glow, mats.glow, false); mk(out.leaf, this.leafMat); mk(out.ever, this.everMat);
+    mk(out.p, mats.body); mk(out.glow, mats.glow, false); mk(out.ever, this.everMat);
+    const leaves = mk(out.leaf, this.leafMat);
+    if (leaves) leaves.customDepthMaterial = this.leafDepth;
     const flowers = mk(out.fl, mats.body, false);
     if (flowers) flowers.visible = this.flowersOn;
     mk(out.water, this.waterMat, false);
@@ -712,6 +736,8 @@ export class GardenView {
 
   /** Teintes de la saison : feuillage, neige, fleurs (pas l'hiver), eau gelée */
   applySeason(s: SeasonState) {
+    // comme les arbres de la forêt : branches nues l'hiver, une touffe de neige au bout
+    this.uLeaf.value = Math.max(0.25, s.leaf);
     this.leafMat.color.copy(s.foliage2);
     this.leafMat.emissiveIntensity = this.everMat.emissiveIntensity = s.snow * 0.3;
     this.flowersOn = s.leaf > 0.5 && s.snow < 0.3;

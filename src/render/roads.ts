@@ -18,7 +18,7 @@ const SUB = 6;
 const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 /** Bâtiments devant lesquels la terre est battue (une cour, une place) */
-const YARD: Partial<Record<KindId, number>> = { workshop: 0.45, gather: 0.5, farm: 0.42, mill: 0.42, landmark: 0.5, temple: 0.4 };
+const YARD: Partial<Record<KindId, number>> = { workshop: 0.45, gather: 0.5, farm: 0.42, mill: 0.42, landmark: 0.5, temple: 0.4, health: 0.42, school: 0.42, fire: 0.5 };
 /** Bâtiments au pied desquels traînent tonneaux, caisses et sacs */
 const CLUTTER: KindId[] = ['house', 'workshop', 'farm', 'mill', 'gather'];
 const BARREL = 0x9a6a44, HOOP = 0x6f5640, CRATE = 0xb48a5e, SACK = 0xd9c4a0;

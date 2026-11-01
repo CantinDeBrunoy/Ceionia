@@ -2,6 +2,9 @@ import { Building, KINDS, KindId } from '../build/catalog';
 import { Simplex } from './noise';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 
+/** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place */
+const GREW: KindId[] = ['health', 'school', 'fire'];
+
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
 export const SEA = 0;
@@ -801,6 +804,38 @@ export class World {
     };
   }
 
+  /**
+   * Bâtiments devenus plus grands depuis la sauvegarde (soins, école, secours, passés en 2 × 2) : chacun s'étend sur l'une des
+   * quatre places de 2 × 2 qui contiennent sa case, libre d'autres bâtiments et hors de l'eau (la route dessous s'efface,
+   * le sol s'aplanit) ; sans place, il disparaît et un message invite à le rebâtir
+   */
+  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array) {
+    const owner = new Int32Array(N * N);
+    const mark = (b: Building, x: number, z: number, v: number) => { const s = KINDS[b.kind].size; for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) if (this.inCells(x + i, z + j)) owner[this.ci(x + i, z + j)] = v; };
+    for (const b of buildings) if (KINDS[b.kind].size === 1) mark(b, b.x, b.z, b.id);
+    const avg = (x: number, z: number) => (heights[this.vi(x, z)] + heights[this.vi(x + 1, z)] + heights[this.vi(x, z + 1)] + heights[this.vi(x + 1, z + 1)]) / 4;
+    // à sa place d'origine, il suffit que rien ne le chevauche ; ailleurs, il faut aussi de la terre ferme
+    const fits = (x: number, z: number, dry: boolean) => {
+      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+        if (!this.inCells(x + i, z + j) || owner[this.ci(x + i, z + j)] || (dry && avg(x + i, z + j) < 0.05)) return false;
+      }
+      return true;
+    };
+    for (const b of buildings) if (KINDS[b.kind].size === 2 && !GREW.includes(b.kind)) mark(b, b.x, b.z, b.id);
+    for (let k = buildings.length - 1; k >= 0; k--) {
+      const b = buildings[k];
+      if (!GREW.includes(b.kind)) continue;
+      const spot = [[b.x, b.z], [b.x - 1, b.z], [b.x, b.z - 1], [b.x - 1, b.z - 1]].find(([x, z], i) => fits(x, z, i > 0));
+      if (!spot) { buildings.splice(k, 1); this.losses.push(`🏗️ ${KINDS[b.kind].names[b.age]} n’avait pas la place de s’agrandir : rebâtissez-le ailleurs.`); continue; }
+      [b.x, b.z] = spot;
+      mark(b, b.x, b.z, b.id);
+      let h = 0;
+      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) h += heights[this.vi(b.x + i, b.z + j)] / 9;
+      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) heights[this.vi(b.x + i, b.z + j)] = h;
+      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) road[this.ci(b.x + i, b.z + j)] = 0;
+    }
+  }
+
   fromJSON(d: any) {
     if (!d || d.n !== N || !Array.isArray(d.heights) || d.heights.length !== this.heights.length) throw new Error('Sauvegarde incompatible');
     const heights = new Float32Array(d.heights.length);
@@ -814,6 +849,7 @@ export class World {
       if (!KINDS[r[0] as KindId]) continue;
       buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0 });
     }
+    this.growLarge(buildings, heights, road);
     this.restore({ heights, road, veg, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.basalt.fill(0);

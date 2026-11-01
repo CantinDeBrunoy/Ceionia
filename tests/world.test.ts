@@ -230,6 +230,22 @@ describe('façades et ponts', () => {
     expect(facingRoadRot(w, 'house', x, z, 2)).toBe(2);
   });
 
+  it('un service posé en 1 × 1 dans une ancienne sauvegarde grandit en 2 × 2 sur une place libre voisine', () => {
+    const w = island();
+    const [x, z] = flatLand(w);
+    // une maison à l'est empêche de grandir vers l'est : la caserne s'étend vers l'ouest ou le nord
+    w.place('house', x + 1, z, 0, true, 0, false);
+    const d = w.toJSON();
+    d.buildings.push(['fire', x, z, 0, 1, 0]);
+    const w2 = new World();
+    w2.fromJSON(d);
+    const f = [...w2.buildings.values()].find((b) => b.kind === 'fire')!;
+    expect(f).toBeTruthy();
+    expect(f.x <= x && x <= f.x + 1 && f.z <= z && z <= f.z + 1).toBe(true);
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) expect(w2.occ[w2.ci(f.x + i, f.z + j)]).toBe(f.id);
+    expect(w2.losses).toEqual([]);
+  });
+
   it('sur un pont, on coupe les virages ; ailleurs, on passe au centre des cases', () => {
     const w = island();
     let L: number[] | null = null;

@@ -71,11 +71,26 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
   move: { icon: '✋', label: 'Déplacer', key: 'M' },
 };
 
-/** Modes de la barre du bas ; « Voir » est toujours en tête */
+/** À quoi sert chaque outil (fiche au survol) */
+const TOOL_DESC: Record<string, string> = {
+  none: 'Regarder le village. Un clic sur un volcan le réveille, sur une grotte ou une faille on descend sous terre.',
+  raise: 'Monter le terrain sous le pinceau.', lower: 'Baisser le terrain sous le pinceau.', flatten: 'Aplanir à la hauteur du premier clic.',
+  cliff: 'Tailler des falaises nettes, en gradins.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
+  mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut.',
+  forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: 'Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille.',
+  rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte vers le monde souterrain (un clic).', fissure: 'Ouvrir une faille vers le monde souterrain (un clic).',
+  erase: 'Effacer forêts, champs, jardins et rochers.', road: 'Tracer une route en glissant ; sur l’eau peu profonde, elle devient un pont.',
+  bulldoze: 'Démolir un bâtiment, une route ou un décor.', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
+};
+
+/** Outils rapides, toujours à portée en haut à gauche de la barre */
+const QUICK = ['none', 'road', 'bulldoze', 'move'];
+
+/** Grands onglets de la barre du bas */
 const TABS = [
   { id: 'relief', icon: '⛰️', label: 'Relief', hint: 'Sculptez le terrain', tools: ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
   { id: 'nature', icon: '🌳', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'] },
-  { id: 'build', icon: '🏘️', label: 'Bâtir', hint: '', tools: ['road', 'bulldoze', 'move'] },
+  { id: 'build', icon: '🏘️', label: 'Bâtir', hint: '', tools: [] as string[] },
 ];
 
 /** Besoins du village, dans l'ordre de la barre du haut */
@@ -136,8 +151,8 @@ export class UI {
   private lastAge = -1;
   private toastTimer = 0;
   private bannerTimer = 0;
-  /** bâtiment survolé dans la barre (sa fiche s'affiche) */
-  private hover: KindId | null = null;
+  /** bâtiment ou outil survolé dans la barre (sa fiche s'affiche) */
+  private hover: { kind?: KindId; tool?: string } | null = null;
   /** cartes des expéditions en cours, par numéro */
   private expCards = new Map<number, HTMLElement>();
 
@@ -166,14 +181,6 @@ export class UI {
         </nav>
       </header>
       <div id="expList"></div>
-      <aside id="side" class="panel">
-        <button id="bUndo" title="Annuler (Ctrl+Z)">↩️</button>
-        <button id="bRedo" title="Rétablir (Ctrl+Y)">↪️</button>
-        <button id="bRot" title="Tourner le bâtiment (R)">🔄</button>
-        <i class="sep"></i>
-        <button id="bHome" title="Vue d'ensemble">🎯</button>
-        <button id="bUnder" title="Explorer le monde souterrain (U)">⛏️</button>
-      </aside>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="bTorch" title="Poser ou retirer des torches (T)">🔥 Torches</button>
@@ -183,13 +190,21 @@ export class UI {
       <footer id="dock">
         <div id="info" class="panel"></div>
         <div id="dockMain" class="panel">
-          <div id="modes"></div>
-          <div id="dockBody">
-            <div id="dockHead">
-              <div id="subcats"></div>
-              <div id="brush"><span>Taille</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
+          <div id="dockTop">
+            <div class="quick" id="quickL"></div>
+            <div id="modes"></div>
+            <div class="quick" id="quickR">
+              <button id="bUndo" class="glyph" title="Annuler (Ctrl+Z)">↶</button>
+              <button id="bRedo" class="glyph" title="Rétablir (Ctrl+Y)">↷</button>
+              <button id="bRot" class="glyph" title="Tourner le bâtiment (R)">⟳</button>
+              <button id="bHome" title="Vue d'ensemble">🎯</button>
+              <button id="bUnder" title="Explorer le monde souterrain (U)">⛏️</button>
             </div>
-            <div id="items"></div>
+          </div>
+          <div id="items"></div>
+          <div id="dockBottom">
+            <div id="subcats"></div>
+            <div id="brush"><span>Taille du pinceau</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
           </div>
         </div>
       </footer>
@@ -225,41 +240,56 @@ export class UI {
     this.renderDock();
   }
 
-  // ---------------- Barre du bas ----------------
-  /** Modes (Relief, Nature, Bâtir), rayons de construction et outils ou bâtiments du mode ouvert */
+  // ---------------- Barre du bas (façon Anno 1800) ----------------
+  /**
+   * En haut, les outils rapides (voir, route, démolir, déplacer), les grands onglets (Relief, Nature, Bâtir) en relief au
+   * milieu, l'historique et la vue à droite ; au centre, les vignettes ; en bas, les rayons de construction ou le pinceau
+   */
   private renderDock() {
     const modes = $('#modes');
-    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}"><b>${t.icon}</b><span>${t.label}</span></button>`).join('');
+    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${t.label}"><b>${t.icon}</b><span>${t.label}</span></button>`).join('');
     modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
       this.tab = b.dataset.t!;
       // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
       if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
       this.renderDock(); this.host.audio.sfxClick();
     }));
+    const quick = $('#quickL');
+    quick.innerHTML = QUICK.map((id) => { const i = TOOL_INFO[id]; return `<button data-tool="${id}" title="${i.label}${i.key ? ` (${i.key})` : ''}">${i.icon}</button>`; }).join('');
+    this.bindTools(quick);
     this.renderItems();
+  }
+
+  /** Les boutons d'outil d'un conteneur : choisir l'outil, sa fiche au survol */
+  private bindTools(root: HTMLElement) {
+    root.querySelectorAll<HTMLButtonElement>('button[data-tool]').forEach((b) => {
+      const id = b.dataset.tool!;
+      b.onclick = () => { this.host.tools.setTool(id as ToolId); this.host.audio.sfxClick(); };
+      b.onpointerenter = (e) => { if (e.pointerType === 'mouse') { this.hover = { tool: id }; this.renderInfo(); } };
+      b.onpointerleave = () => { this.hover = null; this.renderInfo(); };
+    });
   }
 
   renderItems() {
     const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}">${c.icon} ${c.label}</button>`).join('')
-      : `<span class="mhint">${t.hint}</span>`;
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}"><b>${c.icon}</b>${c.label}</button>`).join('')
+      : `<span class="mhint"><b>${t.icon}</b>${t.hint}</span>`;
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => { this.cat = b.dataset.c as BuildCat; this.renderItems(); this.host.audio.sfxClick(); }));
-    // « Voir » et les outils : grandes vignettes en Relief et Nature, petites à côté des bâtiments
-    const tool = (id: string) => { const i = TOOL_INFO[id]; return `<button class="${build ? 'mini' : 'tile'}" data-tool="${id}" title="${i.label}${i.key ? ` (${i.key})` : ''}"><b>${i.icon}</b><span>${i.label}</span>${i.key && !build ? `<kbd>${i.key}</kbd>` : ''}</button>`; };
-    let html = `<div class="tools ${build ? 'stack' : ''}">${['none', ...t.tools].map(tool).join('')}</div>`;
+    let html: string;
     if (build) {
-      html += '<i class="vsep"></i><div class="kinds">' + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => {
-        const d = KINDS[k], locked = d.minAge > age, a = Math.max(age, d.minAge);
-        const main = MAIN.find((g) => (d[g]?.[a] ?? 0) >= 1), give = GIVES.find((g) => g.k === main);
-        const sub = locked ? `🔒 ${AGES[d.minAge].name}` : give ? `+${num(d[give.k]![a])} ${give.icon}` : d.size === 2 ? '2 × 2' : '';
-        return `<button class="tile kind ${locked ? 'locked' : ''}" data-kind="${k}"><b>${d.icon}</b><span>${d.names[a]}</span><small>${sub}</small></button>`;
-      }).join('') + '</div>';
+      html = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => {
+        const d = KINDS[k], locked = d.minAge > age, a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
+        const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
+        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : ''}" data-kind="${k}"><b>${d.icon}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
+      }).join('');
+    } else {
+      html = t.tools.map((id) => { const i = TOOL_INFO[id]; return `<button class="tile" data-tool="${id}"><b>${i.icon}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
     }
     const items = $('#items');
     items.innerHTML = html;
-    items.querySelectorAll<HTMLButtonElement>('button[data-tool]').forEach((b) => (b.onclick = () => { this.host.tools.setTool(b.dataset.tool as ToolId); this.host.audio.sfxClick(); }));
+    this.bindTools(items);
     items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {
       const k = b.dataset.kind as KindId;
       b.onclick = () => {
@@ -267,30 +297,36 @@ export class UI {
         this.host.tools.setTool('build', k);
         this.host.audio.sfxClick();
       };
-      b.onpointerenter = (e) => { if (e.pointerType === 'mouse') { this.hover = k; this.renderInfo(); } };
+      b.onpointerenter = (e) => { if (e.pointerType === 'mouse') { this.hover = { kind: k }; this.renderInfo(); } };
       b.onpointerleave = () => { this.hover = null; this.renderInfo(); };
     });
     this.refreshTools();
   }
 
-  /** Fiche du bâtiment survolé, ou de celui qu'on s'apprête à poser */
+  /** Fiche de l'outil ou du bâtiment survolé, sinon du bâtiment qu'on s'apprête à poser */
   private renderInfo() {
-    const tl = this.host.tools, k = this.hover ?? (tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null);
-    const box = $('#info');
-    box.classList.toggle('show', !!k && this.tab === 'build');
+    const tl = this.host.tools, box = $('#info');
+    const held = tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null;
+    const k = this.hover ? this.hover.kind ?? null : held, tool = this.hover?.tool;
+    box.classList.toggle('show', !!(k || tool));
+    if (tool) {
+      const i = TOOL_INFO[tool];
+      box.innerHTML = `<div class="ihead"><b>${i.icon}</b><div class="grow"><h4>${i.label}</h4>${i.key ? `<small>Raccourci : ${i.key}</small>` : ''}</div></div><p>${TOOL_DESC[tool] ?? ''}</p>`;
+      return;
+    }
     if (!k) return;
     const d: KindDef = KINDS[k], age = this.host.sim.age, locked = d.minAge > age, a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${g.icon} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
     box.innerHTML = `<div class="ihead"><b>${d.icon}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size === 2 ? 'Grand bâtiment (2 × 2) · ' : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
-      <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✨ ${d.perk}</p>` : ''}
+      <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}
       ${locked ? `<p class="lock">🔒 Disponible à l’âge : ${AGES[d.minAge].name}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
   refreshTools() {
     const tl = this.host.tools;
-    this.root.querySelectorAll<HTMLButtonElement>('#items button').forEach((b) => {
+    this.root.querySelectorAll<HTMLButtonElement>('#dock button[data-tool], #items button[data-kind]').forEach((b) => {
       const on = b.dataset.tool ? b.dataset.tool === tl.tool : tl.tool === 'build' && b.dataset.kind === tl.kind;
       b.classList.toggle('active', on);
     });
@@ -302,7 +338,7 @@ export class UI {
     if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) { this.cat = KINDS[tl.kind].cat; this.renderItems(); return; }
     $<HTMLInputElement>('#rad').value = String(tl.radius);
     $('#radv').textContent = String(tl.radius);
-    $('#bRot').style.display = tl.holding() ? '' : 'none';
+    ($('#bRot') as HTMLButtonElement).disabled = !tl.holding();
     this.renderInfo();
   }
 
