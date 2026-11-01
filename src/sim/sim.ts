@@ -134,14 +134,14 @@ export class Sim {
     if (!this.water.ok) return 'Il manque un puits pour abreuver tout le monde.';
     if (!this.jobs.ok) return 'Les habitants cherchent du travail : construisez un atelier.';
     if (!this.joy.ok) return 'Les habitants aimeraient un lieu de rencontre : feu, place, jardin ou temple.';
-    if (!this.health.ok) return 'Les habitants tombent malades : il faut un lieu de soins (🏥 Services).';
+    if (!this.health.ok) return 'Les habitants tombent malades : il faut un lieu de soins (Bâtir › Services).';
     if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
     const ap = this.ageProgress();
     if (ap) {
       if (p < AGES[ap.next].reqPop) return `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
       const miss = ap.items.find((i) => i.have < i.need);
-      if (miss?.label.startsWith('expédition')) return `Pour l’âge suivant : réussissez l’${miss.label} (🧭 Expéditions).`;
-      if (miss) return miss.label.startsWith('minerai') ? `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain (⛏️).` : `Pour l’âge suivant : il manque ${miss.need - miss.have} ${miss.label}.`;
+      if (miss?.label.startsWith('expédition')) return `Pour l’âge suivant : réussissez l’${miss.label} (menu Expéditions).`;
+      if (miss) return miss.label.startsWith('minerai') ? `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.` : `Pour l’âge suivant : il manque ${miss.need - miss.have} ${miss.label}.`;
     }
     return 'Le village est paisible et prospère.';
   }

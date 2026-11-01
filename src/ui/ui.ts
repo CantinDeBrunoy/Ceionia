@@ -10,6 +10,7 @@ import { MAPS, genHeights } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import { effectSummary, mandatoryFor, DestKind } from '../sim/missions';
 import { TEAM_COLORS } from '../render/expeditionView';
+import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
 
 export interface UIHost {
   tools: ToolController;
@@ -50,25 +51,24 @@ const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'lo
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
 const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> = {
-  none: { icon: '👆', label: 'Voir', key: 'Échap' },
-  raise: { icon: '⛰️', label: 'Monter', key: '1' },
-  lower: { icon: '⬇️', label: 'Baisser', key: '2' },
-  flatten: { icon: '➖', label: 'Aplanir', key: '3' },
-  cliff: { icon: '🧱', label: 'Falaise', key: '4' },
-  dig: { icon: '🌊', label: 'Eau', key: '5' },
-  mountain: { icon: '🏔️', label: 'Montagne', key: '0' },
-  volcano: { icon: '🌋', label: 'Volcan' },
-  forest: { icon: '🌲', label: 'Forêt', key: '6' },
-  field: { icon: '🌾', label: 'Champ', key: '7' },
-  garden: { icon: '🌷', label: 'Jardin', key: '8' },
-  // 🪨 n'existe pas dans les polices emoji de Windows 10
-  rocks: { icon: '🗿', label: 'Rochers' },
-  cave: { icon: '🕳️', label: 'Grotte' },
-  fissure: { icon: '⚡', label: 'Faille' },
-  erase: { icon: '🧽', label: 'Gomme', key: '9' },
-  road: { icon: '🛤️', label: 'Route', key: 'R' },
-  bulldoze: { icon: '💥', label: 'Démolir', key: 'X' },
-  move: { icon: '✋', label: 'Déplacer', key: 'M' },
+  none: { icon: 'pointer', label: 'Voir', key: 'Échap' },
+  raise: { icon: 'raise', label: 'Monter', key: '1' },
+  lower: { icon: 'lower', label: 'Baisser', key: '2' },
+  flatten: { icon: 'level', label: 'Aplanir', key: '3' },
+  cliff: { icon: 'stairs', label: 'Falaise', key: '4' },
+  dig: { icon: 'waves', label: 'Eau', key: '5' },
+  mountain: { icon: 'peaks', label: 'Montagne', key: '0' },
+  volcano: { icon: 'volcano', label: 'Volcan' },
+  forest: { icon: 'forest', label: 'Forêt', key: '6' },
+  field: { icon: 'wheat', label: 'Champ', key: '7' },
+  garden: { icon: 'spring', label: 'Jardin', key: '8' },
+  rocks: { icon: 'rock', label: 'Rochers' },
+  cave: { icon: 'cave', label: 'Grotte' },
+  fissure: { icon: 'crack', label: 'Faille' },
+  erase: { icon: 'eraser', label: 'Gomme', key: '9' },
+  road: { icon: 'road', label: 'Route', key: 'R' },
+  bulldoze: { icon: 'demolish', label: 'Démolir', key: 'X' },
+  move: { icon: 'hand', label: 'Déplacer', key: 'M' },
 };
 
 /** À quoi sert chaque outil (fiche au survol) */
@@ -88,27 +88,26 @@ const QUICK = ['none', 'road', 'bulldoze', 'move'];
 
 /** Grands onglets de la barre du bas */
 const TABS = [
-  { id: 'relief', icon: '⛰️', label: 'Relief', hint: 'Sculptez le terrain', tools: ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
-  { id: 'nature', icon: '🌳', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'] },
-  { id: 'build', icon: '🏘️', label: 'Bâtir', hint: '', tools: [] as string[] },
+  { id: 'relief', icon: 'relief', label: 'Relief', hint: 'Sculptez le terrain', tools: ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
+  { id: 'nature', icon: 'tree', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'] },
+  { id: 'build', icon: 'houses', label: 'Bâtir', hint: '', tools: [] as string[] },
 ];
 
 /** Besoins du village, dans l'ordre de la barre du haut */
 const NEEDS: { k: 'food' | 'water' | 'housing' | 'jobs' | 'joy' | 'health'; icon: string; label: string }[] = [
-  { k: 'food', icon: '🍞', label: 'Nourriture' }, { k: 'water', icon: '💧', label: 'Eau' }, { k: 'housing', icon: '🏠', label: 'Logement' },
-  { k: 'jobs', icon: '🔨', label: 'Travail' }, { k: 'joy', icon: '😊', label: 'Bien-être' }, { k: 'health', icon: '❤️', label: 'Santé' },
+  { k: 'food', icon: 'bread', label: 'Nourriture' }, { k: 'water', icon: 'drop', label: 'Eau' }, { k: 'housing', icon: 'house', label: 'Logement' },
+  { k: 'jobs', icon: 'hammer', label: 'Travail' }, { k: 'joy', icon: 'smile', label: 'Bien-être' }, { k: 'health', icon: 'heart', label: 'Santé' },
 ];
 /** Ce qu'un bâtiment apporte, pour sa fiche et sa vignette */
 const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string }[] = [
-  { k: 'housing', icon: '🏠', label: 'logements' }, { k: 'food', icon: '🍞', label: 'nourriture' }, { k: 'water', icon: '💧', label: 'eau' },
-  { k: 'jobs', icon: '🔨', label: 'emplois' }, { k: 'joy', icon: '😊', label: 'bien-être' }, { k: 'health', icon: '❤️', label: 'santé' },
+  { k: 'housing', icon: 'house', label: 'logements' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
+  { k: 'jobs', icon: 'hammer', label: 'emplois' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
 ];
 const num = (v: number) => (v < 1 ? v.toFixed(1) : String(Math.round(v)));
 /** Apport principal d'un bâtiment, sur sa vignette */
 const MAIN: (typeof GIVES)[number]['k'][] = ['housing', 'food', 'water', 'health', 'joy', 'jobs'];
 
-const SEASON_ICON = ['🌸', '☀️', '🍂', '❄️'];
-const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: '🌧️', snow: '🌨️', fog: '🌫️' };
+const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: 'rain', snow: 'snow', fog: 'fog' };
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
@@ -131,7 +130,7 @@ export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer')
 function modal(root: HTMLElement, cls: string, title: string, body: string): { ov: HTMLElement; close: () => void } {
   const ov = document.createElement('div');
   ov.className = 'overlay';
-  ov.innerHTML = `<div class="modal panel ${cls}"><div class="mtitle"><h3>${title}</h3><button class="x" title="Fermer">✕</button></div>${body}</div>`;
+  ov.innerHTML = `<div class="modal panel ${cls}"><div class="mtitle"><h3>${title}</h3><button class="x" title="Fermer" aria-label="Fermer">${ic('close', 16, 2)}</button></div>${body}</div>`;
   root.appendChild(ov);
   const close = () => ov.remove();
   ov.addEventListener('pointerdown', (e) => { if (e.target === ov) close(); });
@@ -171,20 +170,20 @@ export class UI {
         </div>
         <div id="timePanel" class="panel">
           <div id="clock"></div>
-          <button id="bPause" title="Pause (Espace)">⏸</button>
+          <button id="bPause" title="Pause (Espace)" aria-label="Pause">${ic('pause', 18, 2.2)}</button>
           <button id="bSpeed" title="Vitesse">×1</button>
         </div>
         <nav id="menuBtns" class="panel">
-          <button id="bExp" title="Expéditions">🧭<span id="expBadge"></span></button>
-          <button id="bPhoto" title="Mode photo (P)">📷</button>
-          <button id="bSettings" title="Réglages">⚙️</button>
+          <button id="bExp" title="Expéditions" aria-label="Expéditions">${ic('compass')}<span id="expBadge"></span></button>
+          <button id="bPhoto" title="Mode photo (P)" aria-label="Mode photo">${ic('camera')}</button>
+          <button id="bSettings" title="Réglages" aria-label="Réglages">${ic('gear')}</button>
         </nav>
       </header>
       <div id="expList"></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
-        <button id="bTorch" title="Poser ou retirer des torches (T)">🔥 Torches</button>
-        <button id="bUp" title="Remonter à la surface (U)">⬆️ Remonter</button>
+        <button id="bTorch" title="Poser ou retirer des torches (T)">${ic('flame', 18)} Torches</button>
+        <button id="bUp" title="Remonter à la surface (U)">${ic('up', 18)} Remonter</button>
       </div>
       <div id="fade"></div>
       <footer id="dock">
@@ -194,11 +193,11 @@ export class UI {
             <div class="quick" id="quickL"></div>
             <div id="modes"></div>
             <div class="quick" id="quickR">
-              <button id="bUndo" class="glyph" title="Annuler (Ctrl+Z)">↶</button>
-              <button id="bRedo" class="glyph" title="Rétablir (Ctrl+Y)">↷</button>
-              <button id="bRot" class="glyph" title="Tourner le bâtiment (R)">⟳</button>
-              <button id="bHome" title="Vue d'ensemble">🎯</button>
-              <button id="bUnder" title="Explorer le monde souterrain (U)">⛏️</button>
+              <button id="bUndo" title="Annuler (Ctrl+Z)" aria-label="Annuler">${ic('undo', 17, 2)}</button>
+              <button id="bRedo" title="Rétablir (Ctrl+Y)" aria-label="Rétablir">${ic('redo', 17, 2)}</button>
+              <button id="bRot" title="Tourner le bâtiment (R)" aria-label="Tourner le bâtiment">${ic('rotate', 17, 2)}</button>
+              <button id="bHome" title="Vue d'ensemble" aria-label="Vue d'ensemble">${ic('target', 17, 2)}</button>
+              <button id="bUnder" title="Explorer le monde souterrain (U)" aria-label="Monde souterrain">${ic('pickaxe', 17, 2)}</button>
             </div>
           </div>
           <div id="items"></div>
@@ -210,9 +209,9 @@ export class UI {
       </footer>
       <div id="toast"></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
-      <div id="photoBar" class="panel"><button id="pCap">📷 Capturer</button><button id="pExit">Quitter</button></div>
+      <div id="photoBar" class="panel"><button id="pCap">${ic('camera', 18)} Capturer</button><button id="pExit">Quitter</button></div>
     `;
-    $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${n.icon}</b><div class="bar"><i></i></div><span>${n.label}</span></div>`).join('')
+    $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${ic(n.icon, 20)}</b><div class="bar"><i></i></div><span>${n.label}</span></div>`).join('')
       + `<div class="pop" id="pop">0<small>habitants</small></div>`;
 
     $('#agePanel').onclick = () => $('#agePanel').classList.toggle('open');
@@ -247,7 +246,7 @@ export class UI {
    */
   private renderDock() {
     const modes = $('#modes');
-    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${t.label}"><b>${t.icon}</b><span>${t.label}</span></button>`).join('');
+    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${t.label}"><b>${ic(t.icon, 20)}</b><span>${t.label}</span></button>`).join('');
     modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
       this.tab = b.dataset.t!;
       // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
@@ -255,7 +254,7 @@ export class UI {
       this.renderDock(); this.host.audio.sfxClick();
     }));
     const quick = $('#quickL');
-    quick.innerHTML = QUICK.map((id) => { const i = TOOL_INFO[id]; return `<button data-tool="${id}" title="${i.label}${i.key ? ` (${i.key})` : ''}">${i.icon}</button>`; }).join('');
+    quick.innerHTML = QUICK.map((id) => { const i = TOOL_INFO[id]; return `<button data-tool="${id}" title="${i.label}${i.key ? ` (${i.key})` : ''}" aria-label="${i.label}">${ic(i.icon, 17, 2)}</button>`; }).join('');
     this.bindTools(quick);
     this.renderItems();
   }
@@ -274,18 +273,18 @@ export class UI {
     const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}"><b>${c.icon}</b>${c.label}</button>`).join('')
-      : `<span class="mhint"><b>${t.icon}</b>${t.hint}</span>`;
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
+      : `<span class="mhint">${ic(t.icon, 16, 2)}${t.hint}</span>`;
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => { this.cat = b.dataset.c as BuildCat; this.renderItems(); this.host.audio.sfxClick(); }));
     let html: string;
     if (build) {
       html = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => {
         const d = KINDS[k], locked = d.minAge > age, a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
-        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : ''}" data-kind="${k}"><b>${d.icon}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
+        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
       }).join('');
     } else {
-      html = t.tools.map((id) => { const i = TOOL_INFO[id]; return `<button class="tile" data-tool="${id}"><b>${i.icon}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
+      html = t.tools.map((id) => { const i = TOOL_INFO[id]; return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
     }
     const items = $('#items');
     items.innerHTML = html;
@@ -311,14 +310,14 @@ export class UI {
     box.classList.toggle('show', !!(k || tool));
     if (tool) {
       const i = TOOL_INFO[tool];
-      box.innerHTML = `<div class="ihead"><b>${i.icon}</b><div class="grow"><h4>${i.label}</h4>${i.key ? `<small>Raccourci : ${i.key}</small>` : ''}</div></div><p>${TOOL_DESC[tool] ?? ''}</p>`;
+      box.innerHTML = `<div class="ihead"><b>${ic(i.icon, 28, 1.6)}</b><div class="grow"><h4>${i.label}</h4>${i.key ? `<small>Raccourci : ${i.key}</small>` : ''}</div></div><p>${TOOL_DESC[tool] ?? ''}</p>`;
       return;
     }
     if (!k) return;
     const d: KindDef = KINDS[k], age = this.host.sim.age, locked = d.minAge > age, a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
-    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${g.icon} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
-    box.innerHTML = `<div class="ihead"><b>${d.icon}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size === 2 ? 'Grand bâtiment (2 × 2) · ' : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
+    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
+    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size === 2 ? 'Grand bâtiment (2 × 2) · ' : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}
       ${locked ? `<p class="lock">🔒 Disponible à l’âge : ${AGES[d.minAge].name}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
   }
@@ -379,8 +378,11 @@ export class UI {
     $('#pop').innerHTML = `${Math.floor(sim.pop)}<small>habitants</small>`;
     $('#msg').textContent = sim.message;
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
-    $('#clock').innerHTML = `${SEASON_ICON[time.season]} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${SEASONS[time.season]} ${WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? WEATHER_ICON[env.weatherKind] : ''}</small>`;
-    $('#bPause').textContent = time.paused ? '▶️' : '⏸';
+    const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
+    const clock = `${ic(SEASON_ICONS[time.season], 18)}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${SEASONS[time.season]} ${wk}</small></span>`;
+    // le contenu ne change que si l'heure, la saison ou la météo changent (on évite de recréer les icônes à chaque mise à jour)
+    if ($('#clock').dataset.v !== clock) { $('#clock').innerHTML = clock; $('#clock').dataset.v = clock; }
+    if ($('#bPause').dataset.p !== String(time.paused)) { $('#bPause').innerHTML = ic(time.paused ? 'play' : 'pause', 18, 2.2); $('#bPause').dataset.p = String(time.paused); }
     $('#bSpeed').textContent = `×${time.speed}`;
     const zone = this.host.underZone();
     if (zone) {
@@ -405,9 +407,9 @@ export class UI {
       if (!card) {
         card = document.createElement('div');
         card.className = 'expCard panel';
-        card.innerHTML = `<i class="team"></i><b class="ic"></b><div class="grow"><div class="t"></div><small></small><div class="bar"><i></i></div></div><button title="La caméra suit l'équipe">👁</button>`;
+        card.innerHTML = `<i class="team"></i><b class="mi"></b><div class="grow"><div class="t"></div><small></small><div class="bar"><i></i></div></div><button title="La caméra suit l'équipe" aria-label="Suivre l'équipe à la caméra">${ic('eye', 18)}</button>`;
         ($('.team', card) as HTMLElement).style.background = hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length]);
-        $('.ic', card).textContent = a.m.icon;
+        $('.mi', card).textContent = a.m.icon;
         $('.t', card).textContent = a.m.title;
         const id = a.id;
         $('button', card).onclick = () => { h.follow(h.following === id ? null : id); this.update(); };
@@ -443,7 +445,7 @@ export class UI {
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${done || run ? '' : `<p>${m.intro}</p>${choices}`}</div>`;
     }).join('');
-    const { ov, close } = modal(this.root, 'expModal', '🧭 Expéditions', `
+    const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} Expéditions`, `
       <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
       <p class="hint">Envoyez de petites équipes chercher ce qui manque au village : vous les verrez partir, travailler sur place et revenir. Chaque âge a son expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. Une école rend les expéditions plus sûres, un lieu de soins guérit plus vite les blessés.</p>
       <div class="missions">${cards}</div>`);
@@ -474,37 +476,37 @@ export class UI {
   // ---------------- Réglages ----------------
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
-    const tabs = [['time', '🕰️ Temps et météo'], ['look', '🎨 Image et son'], ['game', '🏘️ Partie']];
-    const { ov, close } = modal(this.root, 'settings', '⚙️ Réglages', `
-      <div class="tabs">${tabs.map(([k, l], i) => `<button data-tab="${k}" class="${i ? '' : 'on'}">${l}</button>`).join('')}</div>
+    const tabs = [['time', 'clock', 'Temps et météo'], ['look', 'palette', 'Image et son'], ['game', 'houses', 'Partie']];
+    const { ov, close } = modal(this.root, 'settings', `${ic('gear', 22)} Réglages`, `
+      <div class="tabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 16, 2)}${l}</button>`).join('')}</div>
       <section data-sec="time">
         <h4>Vitesse</h4>
-        <div class="row"><button data-sp="0">⏸ Pause</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button></div>
+        <div class="row"><button data-sp="0">${ic('pause', 16, 2.2)} Pause</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button></div>
         <div class="row"><label>Durée du jour</label><input id="sDay" type="range" min="30" max="400" step="10" value="${t.dayLen}"><span id="vDay">${t.dayLen}s</span></div>
         <div class="row"><label>Durée saison</label><input id="sSeason" type="range" min="30" max="600" step="10" value="${t.seasonLen}"><span id="vSeason">${t.seasonLen}s</span></div>
         <h4>Saison et heure</h4>
-        <div class="row">${SEASONS.map((s, i) => `<button data-season="${i}" class="${t.season === i ? 'active' : ''}">${SEASON_ICON[i]} ${s}</button>`).join('')}</div>
+        <div class="row">${SEASONS.map((s, i) => `<button data-season="${i}" class="${t.season === i ? 'active' : ''}">${ic(SEASON_ICONS[i], 16)} ${s}</button>`).join('')}</div>
         <div class="row"><label>Heure</label><input id="sHour" type="range" min="0" max="23.9" step="0.1" value="${t.hour.toFixed(1)}"><span id="vHour">${Math.floor(t.hour)}h</span></div>
         <h4>Météo</h4>
-        <div class="row">${[['auto', 'Auto'], ['clear', '☀️ Clair'], ['rain', '🌧️ Pluie'], ['snow', '🌨️ Neige'], ['fog', '🌫️ Brume']].map(([k, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+        <div class="row">${[['auto', '', 'Auto'], ['clear', 'sun', 'Clair'], ['rain', 'rain', 'Pluie'], ['snow', 'snow', 'Neige'], ['fog', 'fog', 'Brume']].map(([k, i, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${i ? ic(i, 16) + ' ' : ''}${l}</button>`).join('')}</div>
       </section>
       <section data-sec="look" hidden>
         <h4>Graphismes</h4>
         <div class="row">${[['high', 'Haute (halo de nuit)'], ['medium', 'Normale'], ['low', 'Réduite']].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}">${l}</button>`).join('')}</div>
         <h4>Audio</h4>
-        <div class="row"><label>Musique</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" class="${a.muteMusic ? 'active' : ''}">${a.muteMusic ? '🔇' : '🔊'}</button></div>
-        <div class="row"><label>Sons</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" class="${a.muteSfx ? 'active' : ''}">${a.muteSfx ? '🔇' : '🔊'}</button></div>
+        <div class="row"><label>Musique</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" aria-label="Couper la musique" class="${a.muteMusic ? 'active' : ''}">${ic(a.muteMusic ? 'mute' : 'volume', 18)}</button></div>
+        <div class="row"><label>Sons</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" aria-label="Couper les sons" class="${a.muteSfx ? 'active' : ''}">${ic(a.muteSfx ? 'mute' : 'volume', 18)}</button></div>
       </section>
       <section data-sec="game" hidden>
         <h4>Règles</h4>
-        <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? '🌋 Activées' : 'Désactivées'}</button></div>
+        <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments.</p>
-        <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? '🛤️ Activées' : 'Désactivées'}</button></div>
+        <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
         <h4>Sauvegarde</h4>
-        <div class="row"><button id="gSave">💾 Sauvegarder</button><button id="gExport">⬇️ Exporter</button><button id="gImport">⬆️ Importer</button></div>
+        <div class="row"><button id="gSave">${ic('save', 16)} Sauvegarder</button><button id="gExport">${ic('download', 16)} Exporter</button><button id="gImport">${ic('upload', 16)} Importer</button></div>
         <h4>Quitter</h4>
-        <div class="row"><button id="gNew">🆕 Recommencer cette carte</button><button id="gMenu">🏠 Menu principal</button></div>
+        <div class="row"><button id="gNew">${ic('restart', 16)} Recommencer cette carte</button><button id="gMenu">${ic('house', 16)} Menu principal</button></div>
         <input type="file" id="fImport" accept="application/json,.json" style="display:none">
       </section>
       <div class="row foot"><span class="grow"></span><button id="gClose" class="active">Fermer</button></div>`);
@@ -543,18 +545,18 @@ export class UI {
     }));
     q('#gDisasters').onclick = () => {
       h.setDisasters(!h.disasters);
-      q('#gDisasters').textContent = h.disasters ? '🌋 Activées' : 'Désactivées';
+      q('#gDisasters').textContent = h.disasters ? 'Activées' : 'Désactivées';
       q('#gDisasters').classList.toggle('active', h.disasters);
     };
     q('#gRoads').onclick = () => {
       h.setAutoRoads(!h.autoRoads);
-      q('#gRoads').textContent = h.autoRoads ? '🛤️ Activées' : 'Désactivées';
+      q('#gRoads').textContent = h.autoRoads ? 'Activées' : 'Désactivées';
       q('#gRoads').classList.toggle('active', h.autoRoads);
     };
     rng('#sMusic', (v) => (a.musicVol = v));
     rng('#sSfx', (v) => (a.sfxVol = v));
-    q('#mMusic').onclick = () => { a.muteMusic = !a.muteMusic; q('#mMusic').textContent = a.muteMusic ? '🔇' : '🔊'; q('#mMusic').classList.toggle('active', a.muteMusic); h.applySettings(); };
-    q('#mSfx').onclick = () => { a.muteSfx = !a.muteSfx; q('#mSfx').textContent = a.muteSfx ? '🔇' : '🔊'; q('#mSfx').classList.toggle('active', a.muteSfx); h.applySettings(); };
+    q('#mMusic').onclick = () => { a.muteMusic = !a.muteMusic; q('#mMusic').innerHTML = ic(a.muteMusic ? 'mute' : 'volume', 18); q('#mMusic').classList.toggle('active', a.muteMusic); h.applySettings(); };
+    q('#mSfx').onclick = () => { a.muteSfx = !a.muteSfx; q('#mSfx').innerHTML = ic(a.muteSfx ? 'mute' : 'volume', 18); q('#mSfx').classList.toggle('active', a.muteSfx); h.applySettings(); };
     q('#gSave').onclick = () => { h.saveNow(); this.toast('Partie sauvegardée'); };
     q('#gExport').onclick = () => h.exportSave();
     const fi = q<HTMLInputElement>('#fImport');
@@ -607,7 +609,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     <h1>Village Lowpoly</h1>
     <p class="sub">Bâtissez, sculptez et regardez votre village traverser cinq âges et quatre saisons.</p>
     <div class="maps"></div>
-    <div class="row" style="justify-content:center"><button id="mImport">⬆️ Importer une sauvegarde (JSON)</button></div>
+    <div class="row" style="justify-content:center"><button id="mImport">${ic('upload', 16)} Importer une sauvegarde (JSON)</button></div>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">
     <p class="hint">Souris : clic gauche = outil, clic droit + glisser = tourner, molette = zoom, clic milieu ou Maj + clic droit = déplacer, ZQSD/flèches = déplacement, A/E = rotation (WASD et Q/E en QWERTY).<br>Tactile : un doigt = outil, deux doigts = déplacer / zoomer / tourner.</p>`;
   const maps = $('.maps', ov);
