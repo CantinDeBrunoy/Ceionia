@@ -23,7 +23,9 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   'b_castle_blue', 'b_castle_red', 'b_well_blue', 'b_well_red',
   'b_flat_a', 'b_flat_b', 'b_flat_d', 'b_flat_h', 'b_office_c', 'b_office_e', 'b_office_f', 'b_office_g',
   'b_factory_c', 'b_factory_e', 'b_factory_m', 'b_plant_h', 'b_plant_n', 'b_turbine',
-  'b_brick_c', 'b_brick_d', 'b_brick_j', 'b_brick_o', 'b_brick_u', 'b_station_s'] as const;
+  'b_brick_c', 'b_brick_d', 'b_brick_j', 'b_brick_o', 'b_brick_u', 'b_station_s',
+  // tour de guet de KayKit Medieval Hexagon
+  'b_tower_blue', 'b_tower_red'] as const;
 export type ModelName = (typeof NAMES)[number];
 
 /**

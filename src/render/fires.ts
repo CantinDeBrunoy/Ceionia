@@ -6,13 +6,15 @@ import { Puffs } from './particles';
 const MAX_FLAMES = 120, FLAMES_PER_FIRE = 7;
 /** Délai avant que les habitants éteignent un feu (un point d'eau tout près), durée au bout de laquelle le bâtiment est perdu */
 const PUT_OUT = 14, BURN_DOWN = 32;
+/** Avec une caserne à portée : les secours arrivent vite, eau ou pas */
+const CREW = 5, CREW_RANGE = 12;
 const SMOKE = new THREE.Color(0.22, 0.2, 0.2);
 
 interface Fire { b: Building; t: number; seed: number }
 
 /**
  * Incendies : la foudre ou une bombe de lave enflamme un bâtiment. Les habitants accourent ; avec un puits ou de l'eau à
- * proximité ils l'éteignent, sinon (catastrophes activées) le bâtiment finit par brûler
+ * proximité ils l'éteignent, sinon (catastrophes activées) le bâtiment finit par brûler ; une caserne proche l'éteint très vite
  */
 export class Fires {
   group = new THREE.Group();
@@ -58,7 +60,8 @@ export class Fires {
       // bâtiment démoli entre-temps
       if (!w.buildings.has(b.id)) { this.list.splice(i, 1); continue; }
       f.t += dt;
-      const water = this.waterNear(b);
+      const crew = this.crewNear(b), water = crew || this.waterNear(b), out = crew ? CREW : PUT_OUT;
+      if (crew && f.t > CREW) { this.news.push(`🚒 Les secours ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
       if (water && f.t > PUT_OUT) { this.news.push(`💧 Les habitants ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
       if (f.t > BURN_DOWN) {
         this.list.splice(i, 1);
@@ -66,7 +69,7 @@ export class Fires {
         else this.news.push(`💧 L’incendie s’est éteint : ${KINDS[b.kind].names[b.age]}`);
         continue;
       }
-      const s = KINDS[b.kind].size, base = w.h(b.x, b.z), k = Math.min(1, f.t / 3) * (water ? Math.max(0.3, 1 - f.t / PUT_OUT) : 1);
+      const s = KINDS[b.kind].size, base = w.h(b.x, b.z), k = Math.min(1, f.t / 3) * (water ? Math.max(0.3, 1 - f.t / out) : 1);
       for (let j = 0; j < FLAMES_PER_FIRE && n < MAX_FLAMES; j++) {
         const ph = f.seed + j * 2.3, flick = 0.65 + 0.35 * Math.sin(this.t * (9 + j) + ph);
         d.position.set(b.x + s / 2 + Math.sin(ph * 3.1) * 0.28 * s, base + 0.25 + (j % 3) * 0.12, b.z + s / 2 + Math.cos(ph * 2.3) * 0.28 * s);
@@ -81,6 +84,12 @@ export class Fires {
     this.flames.count = n;
     this.flames.instanceMatrix.needsUpdate = true;
     this.smoke.update(dt);
+  }
+
+  /** Une caserne (guetteur, tour de guet, pompiers…) à portée */
+  private crewNear(b: Building) {
+    for (const o of this.world.buildings.values()) if (o.kind === 'fire' && o.id !== b.id && Math.hypot(o.x - b.x, o.z - b.z) <= CREW_RANGE) return true;
+    return false;
   }
 
   /** Un puits ou de l'eau à quelques cases : on fait la chaîne avec des seaux */

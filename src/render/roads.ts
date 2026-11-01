@@ -16,6 +16,7 @@ const PEBBLE = [0xb3aba1, 0x9d9890, 0xc8c2b8].map((c) => new THREE.Color(c));
 /** Finesse de la grille du chemin (sous-cases par case) */
 const SUB = 6;
 const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 /** Bâtiments devant lesquels la terre est battue (une cour, une place) */
 const YARD: Partial<Record<KindId, number>> = { workshop: 0.45, gather: 0.5, farm: 0.42, mill: 0.42, landmark: 0.5, temple: 0.4 };
 /** Bâtiments au pied desquels traînent tonneaux, caisses et sacs */
@@ -26,7 +27,8 @@ const BARREL = 0x9a6a44, HOOP = 0x6f5640, CRATE = 0xb48a5e, SACK = 0xd9c4a0;
  * Routes : de vrais chemins de terre. Chaque case de route est un point (un peu décalé, d'une case à l'autre) relié à ses
  * voisines par des courbes ; un virage s'arrondit, un escalier de cases devient un chemin qui serpente. Le chemin est un
  * décalque posé sur le relief, aux bords doux et irréguliers, liseré d'une terre plus sombre et semé de cailloux ;
- * plus droit et plus large à partir de l'âge industriel. Les ponts restent des ouvrages (tablier, rampes, piles, garde-corps)
+ * plus droit et plus large à partir de l'âge industriel. Les ponts sont des ouvrages (tablier, rampes, piles, garde-corps) :
+ * un pont simple suit une courbe douce d'une rive à l'autre, même tracé en escalier
  */
 export class RoadView {
   group = new THREE.Group();
@@ -72,6 +74,30 @@ export class RoadView {
     return dx ? [ax + 1, cz + 0.5 + t] : [cx + 0.5 + t, az + 1];
   }
 
+  /**
+   * Un pont d'un seul tenant (cases de route sur l'eau, `comp`) mis en file d'une rive à l'autre : la case de la rive de départ
+   * (s'il y en a une), les cases du pont dans l'ordre, celle de la rive d'arrivée ; null pour un carrefour ou une boucle sur l'eau
+   */
+  private bridgeChain(comp: number[]): { cells: number[]; head: boolean; tail: boolean } | null {
+    const w = this.world, set = new Set(comp);
+    const at = (c: number, dx: number, dz: number) => { const x = (c % N) + dx, z = Math.floor(c / N) + dz; return w.inCells(x, z) ? w.ci(x, z) : -1; };
+    const roads = (c: number) => D4.map(([dx, dz]) => at(c, dx, dz)).filter((n) => n >= 0 && w.road[n] === 1);
+    if (comp.some((c) => roads(c).length > 2)) return null;
+    const end = comp.find((c) => roads(c).filter((n) => set.has(n)).length <= 1);
+    if (end === undefined) return null;
+    const order = [end], seen = new Set(order);
+    for (;;) {
+      const next = roads(order[order.length - 1]).find((n) => set.has(n) && !seen.has(n));
+      if (next === undefined) break;
+      order.push(next); seen.add(next);
+    }
+    if (order.length !== comp.length) return null;
+    const banks = (c: number) => roads(c).filter((n) => !set.has(n));
+    const head = banks(order[0])[0], tail = order.length > 1 ? banks(order[order.length - 1])[0] : banks(order[0])[1];
+    if (head === undefined && tail === undefined && order.length === 1) return null;
+    return { cells: [...(head !== undefined ? [head] : []), ...order, ...(tail !== undefined ? [tail] : [])], head: head !== undefined, tail: tail !== undefined };
+  }
+
   /** Cours en terre battue devant les ateliers, places, fermes : (x, z, rayon) rangés par case */
   private yards() {
     const w = this.world, out = new Map<number, number[]>();
@@ -94,6 +120,28 @@ export class RoadView {
         l.push(cx + 1, cz + 1, 0.45);
         out.set(k, l);
       }
+    return out;
+  }
+
+  /**
+   * Cases de route qui reçoivent une lumière : d'abord les carrefours, puis les abords des portes et les virages, puis le reste,
+   * chacune à au moins un peu plus de trois cases de la plus proche — un éclairage régulier, sans en mettre partout
+   */
+  private lightCells(lines: Map<number, number[][]>) {
+    const w = this.world, GAP = 3.2, out: number[] = [];
+    const score = (k: number) => {
+      const cx = k % N, cz = Math.floor(k / N);
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1);
+      const door = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => { const b = w.buildingAt(cx + dx, cz + dz); return !!b && b.kind !== 'lamp'; });
+      const bend = dirs.length === 2 && dirs[0][0] !== -dirs[1][0];
+      return (dirs.length >= 3 ? 3 : 0) + (door ? 2 : 0) + (bend ? 1 : 0) + hash2(cx, cz, 61) * 0.5;
+    };
+    const cand = [...lines.keys()].map((k) => [k, score(k)]).sort((a, b) => b[1] - a[1]);
+    for (const [k] of cand) {
+      const x = k % N, z = Math.floor(k / N);
+      if (out.some((o) => Math.hypot((o % N) - x, Math.floor(o / N) - z) < GAP)) continue;
+      out.push(k);
+    }
     return out;
   }
 
@@ -246,11 +294,121 @@ export class RoadView {
       if (ew && !ns) for (const z of [z0 + 0.015, z1 - 0.015]) { box(x0, y + 0.1, z - 0.012, x1, y + 0.13, z + 0.012, rail); for (let x = x0 + 0.05; x < x1; x += 0.3) box(x - 0.012, y, z - 0.012, x + 0.012, y + 0.1, z + 0.012, rail); }
       if (ns && !ew) for (const x of [x0 + 0.015, x1 - 0.015]) { box(x - 0.012, y + 0.1, z0, x + 0.012, y + 0.13, z1, rail); for (let z = z0 + 0.05; z < z1; z += 0.3) box(x - 0.012, y, z - 0.012, x + 0.012, y + 0.1, z + 0.012, rail); }
     };
+    /** Pavé orienté : centre (x, z), axe (ux, uz) sur ±hu, en travers sur ±hv, de y0 à y1 */
+    const obox = (x: number, z: number, ux: number, uz: number, hu: number, hv: number, y0: number, y1: number, cl: THREE.Color) => {
+      const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([p, q]) => [x + ux * hu * p - uz * hv * q, z + uz * hu * p + ux * hv * q]);
+      const v = [...c.map(([px, pz]) => [px, y0, pz]), ...c.map(([px, pz]) => [px, y1, pz])];
+      for (const f of [[0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [1, 5, 6, 2], [2, 6, 7, 3], [3, 7, 4, 0]])
+        for (const i of [f[0], f[1], f[2], f[0], f[2], f[3]]) { sp.push(...v[i]); sc.push(cl.r, cl.g, cl.b); }
+    };
+    const quad = (q: number[][], cl: THREE.Color) => { for (const i of [0, 1, 2, 0, 2, 3]) { sp.push(...q[i]); sc.push(cl.r, cl.g, cl.b); } };
+    const plank = new THREE.Color();
+    /**
+     * Pont simple : un axe qui part du pied de la rampe, sur le chemin de la rive, coupe les virages comme les habitants
+     * (diagonale d'un tracé en escalier), rejoint l'autre rive ; adouci, puis tablier en ruban, garde-corps et piles
+     */
+    const smoothBridge = (ch: { cells: number[]; head: boolean; tail: boolean }) => {
+      const cells = ch.cells, jit = age >= 3 ? 0.06 : 0.22, hw = age >= 4 ? 0.34 : 0.32, th = 0.055;
+      const xz = (c: number) => [c % N, Math.floor(c / N)];
+      const i0 = ch.head ? 1 : 0, i1 = cells.length - (ch.tail ? 2 : 1);
+      const deckY = w.bridgeY(xz(cells[i0])[0], xz(cells[i0])[1])!;
+      const pts: number[][] = [];
+      for (let i = i0; i <= i1; i++) { const [px, pz] = w.passPoint(cells, i); pts.push([px, deckY, pz]); }
+      // aux deux bouts : rampe jusqu'au chemin de la rive, ou tablier qui s'arrête au-dessus de l'eau
+      const cap = (bank: number | undefined, first: number, toward: number[], atStart: boolean) => {
+        const [fx, fz] = xz(first);
+        if (bank !== undefined) {
+          const [bx, bz] = xz(bank), dx = fx - bx, dz = fz - bz, e = this.edgeMid(bx, bz, dx, dz, jit);
+          // la rampe descend tout droit du tablier sur le chemin de la rive (sans coude au bord, où le ruban se replierait)
+          const px = e[0] - dx * 0.45, pz = e[1] - dz * 0.45, foot = [px, w.hAt(px, pz) + 0.04, pz];
+          if (atStart) pts.unshift(foot); else pts.push(foot);
+        } else {
+          const ox = fx + 0.5 - toward[0], oz = fz + 0.5 - toward[2], l = Math.hypot(ox, oz) || 1;
+          const p = [fx + 0.5 + (ox / l) * 0.32, deckY, fz + 0.5 + (oz / l) * 0.32];
+          if (atStart) pts.unshift(p); else pts.push(p);
+        }
+      };
+      const [ex, ez] = xz(cells[cells.length - 1]);
+      cap(ch.head ? cells[0] : undefined, cells[i0], pts.length > 1 ? pts[1] : [ex + 0.5, 0, ez + 0.5], true);
+      cap(ch.tail ? cells[cells.length - 1] : undefined, cells[i1], pts[pts.length - 2], false);
+      // adoucir l'axe (deux passes de Chaikin, bouts fixes)
+      let line = pts;
+      for (let it = 0; it < 2; it++) {
+        const out = [line[0]];
+        for (let i = 0; i + 1 < line.length; i++) {
+          const p = line[i], q = line[i + 1];
+          out.push(p.map((v, k) => v * 0.75 + q[k] * 0.25), p.map((v, k) => v * 0.25 + q[k] * 0.75));
+        }
+        out.push(line[line.length - 1]);
+        line = out;
+      }
+      // côtés du ruban ; au-dessus de l'eau (pas sur les rampes) : garde-corps et piles
+      const n = line.length, L: number[][] = [], R: number[][] = [], wet: boolean[] = [];
+      for (let i = 0; i < n; i++) {
+        const p = line[Math.max(0, i - 1)], q = line[Math.min(n - 1, i + 1)], tx = q[0] - p[0], tz = q[2] - p[2], tl = Math.hypot(tx, tz) || 1;
+        const nx = -tz / tl, nz = tx / tl, c = line[i];
+        L.push([c[0] + nx * hw, c[1], c[2] + nz * hw]); R.push([c[0] - nx * hw, c[1], c[2] - nz * hw]);
+        wet.push(w.isWet(Math.floor(c[0]), Math.floor(c[2])) && c[1] > deckY - 0.05);
+      }
+      const rail = age >= 4 ? deck : pile;
+      let run = 0, nextPost = 0.05, nextPile = 0.35;
+      for (let i = 0; i + 1 < n; i++) {
+        // tablier : planches de bois à la teinte qui varie, dalles de pierre, chaussée d'acier
+        plank.copy(deck).multiplyScalar(a <= 2 ? 0.88 + 0.16 * hash2(i, cells[0], 81) : 0.96 + 0.06 * hash2(i, cells[0], 81));
+        const l0 = L[i], l1 = L[i + 1], r0 = R[i], r1 = R[i + 1], down = (v: number[]) => [v[0], v[1] - th, v[2]];
+        quad([l0, l1, r1, r0], plank);
+        quad([down(l0), down(r0), down(r1), down(l1)], pile);
+        quad([l0, down(l0), down(l1), l1], deck);
+        quad([r0, r1, down(r1), down(r0)], deck);
+        const p = line[i], q = line[i + 1], seg = Math.hypot(q[0] - p[0], q[2] - p[2]);
+        if (!seg) continue;
+        const ux = (q[0] - p[0]) / seg, uz = (q[2] - p[2]) / seg;
+        if (wet[i] && wet[i + 1]) {
+          // main courante continue et poteaux réguliers, des deux côtés, un peu en retrait du bord
+          for (const s of [L, R]) {
+            const s0 = s[i], s1 = s[i + 1], ml = Math.hypot(s1[0] - s0[0], s1[2] - s0[2]);
+            const ix = ((p[0] - s0[0]) / hw) * 0.015, iz = ((p[2] - s0[2]) / hw) * 0.015;
+            obox((s0[0] + s1[0]) / 2 + ix, (s0[2] + s1[2]) / 2 + iz, ux, uz, ml / 2 + 0.006, 0.012, p[1] + 0.1, p[1] + 0.13, rail);
+          }
+          for (; nextPost < run + seg; nextPost += 0.3) {
+            const t = (nextPost - run) / seg, cx = p[0] + (q[0] - p[0]) * t, cz = p[2] + (q[2] - p[2]) * t;
+            for (const s of [L, R]) {
+              const x = s[i][0] + (s[i + 1][0] - s[i][0]) * t, z = s[i][2] + (s[i + 1][2] - s[i][2]) * t;
+              obox(x + ((cx - x) / hw) * 0.015, z + ((cz - z) / hw) * 0.015, ux, uz, 0.012, 0.012, p[1], p[1] + 0.1, rail);
+            }
+          }
+          // piles plantées dans l'eau : poteaux de bois par paires, piles de pierre en travers, fûts d'acier
+          for (; nextPile < run + seg; nextPile += 0.8) {
+            const t = (nextPile - run) / seg, x = p[0] + (q[0] - p[0]) * t, z = p[2] + (q[2] - p[2]) * t, y = p[1], foot = Math.min(y - 0.6, w.hAt(x, z));
+            if (a === 2 || a === 3) obox(x, z, -uz, ux, hw * 0.82, 0.07, foot, y - th, pile);
+            else for (const o of [-1, 1]) obox(x - uz * o * (hw - 0.07), z + ux * o * (hw - 0.07), ux, uz, a >= 4 ? 0.035 : 0.05, a >= 4 ? 0.035 : 0.05, foot, y - th, pile);
+          }
+        } else {
+          nextPost = run + seg + 0.05;
+          nextPile = Math.max(nextPile, run + seg + 0.2);
+        }
+        run += seg;
+      }
+    };
+    // ponts : un pont simple suit sa courbe ; un carrefour ou une boucle sur l'eau reste un ouvrage case par case
+    const isBridge = (cx: number, cz: number) => w.inCells(cx, cz) && w.road[w.ci(cx, cz)] === 1 && w.bridgeY(cx, cz) !== null;
+    const done = new Set<number>();
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
-        if (!w.road[w.ci(cx, cz)]) continue;
-        const by = w.bridgeY(cx, cz);
-        if (by !== null) bridge(cx, cz, by, (dx, dz) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1);
+        const k = w.ci(cx, cz);
+        if (done.has(k) || !isBridge(cx, cz)) continue;
+        const comp = [k];
+        done.add(k);
+        for (let i = 0; i < comp.length; i++) {
+          const x = comp[i] % N, z = Math.floor(comp[i] / N);
+          for (const [dx, dz] of D4) { if (!isBridge(x + dx, z + dz)) continue; const nk = w.ci(x + dx, z + dz); if (!done.has(nk)) { done.add(nk); comp.push(nk); } }
+        }
+        const ch = this.bridgeChain(comp);
+        if (ch) { smoothBridge(ch); continue; }
+        for (const c of comp) {
+          const x = c % N, z = Math.floor(c / N);
+          bridge(x, z, w.bridgeY(x, z)!, (dx, dz) => w.inCells(x + dx, z + dz) && w.road[w.ci(x + dx, z + dz)] === 1);
+        }
       }
     // cailloux au bord des chemins de terre (et quelques-uns dessus), pas sur l'asphalte ni sous la neige
     if (age < 4 && snow < 0.5) {
@@ -276,11 +434,10 @@ export class RoadView {
         Cc.push(col.r, col.g, col.b);
       }
     };
-    // lanternes le long des chemins, à partir de l'Antiquité : poteau de bois et lanterne pendue, puis réverbère à gaz, puis lampadaire
+    // éclairage automatique des chemins : torches à la Préhistoire, puis lanternes pendues, réverbères à gaz, lampadaires
     this.lights = [];
-    if (age >= 1) for (const k of lines.keys()) {
+    for (const k of this.lightCells(lines)) {
       const cx = k % N, cz = Math.floor(k / N);
-      if (hash2(cx, cz, 61) > 0.16) continue;
       const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
       // du côté d'une case libre (ni route, ni bâtiment, ni eau)
       const side = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dz]) => !roadAt(dx, dz) && w.inCells(cx + dx, cz + dz) && !w.occ[w.ci(cx + dx, cz + dz)] && w.cellAvg(cx + dx, cz + dz) > 0.1);
@@ -289,7 +446,12 @@ export class RoadView {
       // le bras de la lanterne se tend vers le chemin
       const ry = Math.atan2(-side[0], -side[1]) - Math.PI / 2;
       this.lights.push(x - side[0] * 0.08, z - side[1] * 0.08);
-      if (age <= 2) {
+      if (age === 0) {
+        // torche : pieu de bois, tête de paille ficelée, flamme
+        put(this.cube, x, y, z, 0.022, 0.3, 0.022, ry, 0x7a5a3e);
+        put(this.cyl, x, y + 0.28, z, 0.026, 0.05, 0.026, 0, 0xc9a46a);
+        put(this.ico, x, y + 0.36, z, 0.026, 0.045, 0.026, ry, 0xffb15c, true);
+      } else if (age <= 2) {
         put(this.cube, x, y, z, 0.026, 0.36, 0.026, ry, 0x7a6355);
         put(this.cube, x + -side[0] * 0.05, y + 0.34, z + -side[1] * 0.05, side[0] ? 0.11 : 0.02, 0.018, side[0] ? 0.02 : 0.11, 0, 0x7a6355);
         put(this.cube, x + -side[0] * 0.09, y + 0.24, z + -side[1] * 0.09, 0.038, 0.05, 0.038, ry, 0xffd27a, true);

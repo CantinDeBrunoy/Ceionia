@@ -1,5 +1,6 @@
 import { World } from '../world/world';
 import { AGES, KINDS, KindId, KIND_LABEL } from '../build/catalog';
+import { mandatoryFor, needBonus } from './missions';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -18,6 +19,7 @@ export class Sim {
   water: Need = { cap: 0, demand: 0, ok: true };
   jobs: Need = { cap: 0, demand: 0, ok: true };
   joy: Need = { cap: 0, demand: 0, ok: true };
+  health: Need = { cap: 0, demand: 0, ok: true };
   message = '';
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
@@ -27,6 +29,9 @@ export class Sim {
   season = 0;
   private baseFood = 0;
   private fieldFood = 0;
+  private baseWater = 0;
+  private baseJobs = 0;
+  private baseJoy = 0;
   private grow = 0;
   private lastVersion = -1;
   private recalcTimer = 0;
@@ -36,7 +41,7 @@ export class Sim {
 
   recalc() {
     const w = this.world;
-    let H = 0, F = 0, W = 0, J = 0, Jy = 0;
+    let H = 0, F = 0, W = 0, J = 0, Jy = 0, He = 0;
     const counts: Record<string, number> = {};
     for (const b of w.buildings.values()) {
       const k = KINDS[b.kind];
@@ -47,6 +52,7 @@ export class Sim {
       W += k.water?.[a] ?? 0;
       J += k.jobs?.[a] ?? 0;
       Jy += k.joy?.[a] ?? 0;
+      He += k.health?.[a] ?? 0;
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += k.housing?.[a] ?? 0;
     }
     let fields = 0, fertile = 0, gardens = 0, forests = 0;
@@ -62,24 +68,36 @@ export class Sim {
     this.counts = counts;
     this.housing.cap = H;
     this.food.cap = F;
+    this.baseWater = W;
+    this.baseJobs = J;
+    this.baseJoy = Jy;
     this.water.cap = W;
     this.jobs.cap = J;
     this.joy.cap = Jy;
+    this.health.cap = He;
   }
 
   private evaluate() {
-    const p = this.pop;
-    this.food.cap = this.baseFood + this.fieldFood * this.yieldK;
+    const p = this.pop, e = this.world.exp;
+    // les expéditions ajoutent (ou retirent pour un temps) de quoi satisfaire les besoins ; le blé des collines enrichit les champs
+    const seeds = e.perks.includes('seeds') ? 1.3 : 1;
+    this.food.cap = Math.max(0, this.baseFood + this.fieldFood * this.yieldK * seeds + needBonus(e, 'food'));
+    this.water.cap = Math.max(0, this.baseWater + needBonus(e, 'water'));
+    this.jobs.cap = Math.max(0, this.baseJobs + needBonus(e, 'jobs'));
+    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy'));
     this.housing.demand = p;
     this.food.demand = p + 1;
     this.water.demand = p + 1;
     this.jobs.demand = p >= 6 ? p * 0.5 : 0;
     this.joy.demand = p >= 6 ? p * 0.3 : 0;
+    // un village de plus de quinze habitants a besoin de soins
+    this.health.demand = p >= 15 ? p * 0.2 : 0;
     this.housing.ok = this.housing.cap > p;
     this.food.ok = this.food.cap >= this.food.demand;
     this.water.ok = this.water.cap >= this.water.demand;
     this.jobs.ok = this.jobs.cap >= this.jobs.demand;
     this.joy.ok = this.joy.cap >= this.joy.demand;
+    this.health.ok = this.health.cap >= this.health.demand;
   }
 
   /** Rendement des champs selon l'humidité des sols : 55 % en pleine sécheresse, 110 % après la pluie */
@@ -88,7 +106,7 @@ export class Sim {
   get drought() { return this.moisture < 0.25 && this.fieldFood > 0; }
 
   get canGrow() {
-    return this.housing.ok && this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok;
+    return this.housing.ok && this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok && this.health.ok;
   }
 
   ageProgress(): AgeProgress | null {
@@ -98,6 +116,9 @@ export class Sim {
     const items = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
     for (const [k, c] of Object.entries(req.reqKinds)) items.push({ label: KIND_LABEL[k as KindId], have: this.counts[k] ?? 0, need: c as number });
     if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: Math.floor(this.world.ore), need: req.reqOre });
+    // l'expédition obligatoire de l'âge en cours
+    const m = mandatoryFor(this.age);
+    if (m) items.push({ label: `expédition « ${m.title} »`, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
     let sum = 0;
     for (const it of items) sum += Math.min(1, it.have / it.need);
     return { next: n, ratio: sum / items.length, items };
@@ -113,11 +134,13 @@ export class Sim {
     if (!this.water.ok) return 'Il manque un puits pour abreuver tout le monde.';
     if (!this.jobs.ok) return 'Les habitants cherchent du travail : construisez un atelier.';
     if (!this.joy.ok) return 'Les habitants aimeraient un lieu de rencontre : feu, place, jardin ou temple.';
+    if (!this.health.ok) return 'Les habitants tombent malades : il faut un lieu de soins (🏥 Services).';
     if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
     const ap = this.ageProgress();
     if (ap) {
       if (p < AGES[ap.next].reqPop) return `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
       const miss = ap.items.find((i) => i.have < i.need);
+      if (miss?.label.startsWith('expédition')) return `Pour l’âge suivant : réussissez l’${miss.label} (🧭 Expéditions).`;
       if (miss) return miss.label.startsWith('minerai') ? `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain (⛏️).` : `Pour l’âge suivant : il manque ${miss.need - miss.have} ${miss.label}.`;
     }
     return 'Le village est paisible et prospère.';
@@ -131,6 +154,10 @@ export class Sim {
       this.recalc();
     }
     if (this.pop > this.housing.cap) this.pop = Math.max(this.housing.cap, 0);
+    // horloge des expéditions : les effets passagers s'éteignent
+    const e = this.world.exp;
+    e.clock += dt;
+    if (e.temp.length && e.temp.some((t) => t.until <= e.clock)) e.temp = e.temp.filter((t) => t.until > e.clock);
     // la pluie humidifie les sols ; ils sèchent vite l'été, lentement au printemps et en automne, pas l'hiver
     if (dt > 0) {
       if (this.rain > 0.3) this.moisture = Math.min(1, this.moisture + dt * 0.05 * this.rain);

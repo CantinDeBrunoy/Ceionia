@@ -4,6 +4,10 @@ import { findGardens, layoutGarden } from '../src/world/gardens';
 import { genHeights, newWorld, MAPS } from '../src/world/mapgen';
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
+import { facingRoadRot } from '../src/build/placement';
+import { MISSIONS, mandatoryFor, applyEffects, needBonus } from '../src/sim/missions';
+import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
+import { Agents } from '../src/sim/agents';
 
 /** Carte de l'île, toujours la même graine : les tests ne dépendent pas du hasard */
 function island() {
@@ -203,6 +207,45 @@ describe('routes automatiques', () => {
   });
 });
 
+describe('façades et ponts', () => {
+  it('la façade regarde le côté qui longe le plus la route, sinon la route la plus proche', () => {
+    const w = island();
+    const [x, z] = flatLand(w);
+    const road = (cx: number, cz: number) => { w.road[w.ci(cx, cz)] = 1; };
+    w.road.fill(0);
+    // gare ou château (2 × 2) : une case de route devant (+z), deux à l'ouest (-x) : il se tourne vers l'ouest
+    road(x, z + 2); road(x - 1, z); road(x - 1, z + 1);
+    expect(facingRoadRot(w, 'landmark', x, z, 0)).toBe(3);
+    // à égalité, il garde son orientation
+    w.road.fill(0);
+    road(x, z + 2); road(x + 2, z);
+    expect(facingRoadRot(w, 'landmark', x, z, 1)).toBe(1);
+    expect(facingRoadRot(w, 'landmark', x, z, 0)).toBe(0);
+    // aucune route contre la maison : la plus proche, à l'est, décide ; trop loin, rien ne change
+    w.road.fill(0);
+    road(x + 3, z);
+    expect(facingRoadRot(w, 'house', x, z, 2)).toBe(1);
+    w.road.fill(0);
+    road(x + 7, z);
+    expect(facingRoadRot(w, 'house', x, z, 2)).toBe(2);
+  });
+
+  it('sur un pont, on coupe les virages ; ailleurs, on passe au centre des cases', () => {
+    const w = island();
+    let L: number[] | null = null;
+    for (let z = 2; z < N - 3 && !L; z++) for (let x = 2; x < N - 3 && !L; x++) if (w.isWet(x, z) && w.isWet(x + 1, z) && w.isWet(x + 1, z + 1)) L = [x, z];
+    const [x, z] = L!;
+    const path = [w.ci(x, z), w.ci(x + 1, z), w.ci(x + 1, z + 1)];
+    expect(w.passPoint(path, 1)).toEqual([x + 1.5, z + 0.5]);
+    for (const c of path) w.road[c] = 1;
+    expect(w.bridgeY(x + 1, z)).not.toBeNull();
+    expect(w.passPoint(path, 1)).toEqual([x + 1.25, z + 0.75]);
+    // tout droit ou au bout du trajet : le centre
+    expect(w.passPoint(path, 0)).toEqual([x + 0.5, z + 0.5]);
+    expect(w.passPoint(path, 2)).toEqual([x + 1.5, z + 1.5]);
+  });
+});
+
 describe('jardins', () => {
   /** Un jardin rectangulaire de w × d cases peint sur de la terre plate et dégagée */
   function garden(w: World, gw: number, gd: number) {
@@ -248,5 +291,100 @@ describe('jardins', () => {
     expect(t.lanes.length).toBe(4);
     expect(t.spots.some((s) => s.act === 'cheer')).toBe(true);
     expect(layoutGarden(w, small, 2).style).toBe('lices');
+  });
+});
+
+describe('expéditions', () => {
+  it('chaque âge a une expédition obligatoire, et des choix bien formés', () => {
+    for (let age = 0; age < 5; age++) {
+      expect(MISSIONS.filter((m) => m.age === age && m.mandatory).length).toBe(1);
+      expect(mandatoryFor(age)).not.toBeNull();
+    }
+    for (const m of MISSIONS) {
+      expect(m.choices.length).toBeGreaterThan(0);
+      for (const c of m.choices) {
+        expect(c.party).toBeGreaterThanOrEqual(2);
+        expect(c.risk).toBeGreaterThanOrEqual(0);
+        expect(c.risk).toBeLessThan(1);
+        expect(c.win.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('l’expédition obligatoire conditionne l’âge suivant', () => {
+    const w = island(), sim = new Sim(w);
+    const item = () => sim.ageProgress()!.items.find((i) => i.label.startsWith('expédition'))!;
+    expect(item().have).toBe(0);
+    w.exp.done.push(mandatoryFor(0)!.id);
+    expect(item().have).toBe(1);
+  });
+
+  it('les effets s’appliquent : bêtes, minerai, savoir-faire, bonus durables et passagers', () => {
+    const w = island(), sim = new Sim(w);
+    const [x, z] = flatLand(w);
+    w.place('farm', x, z, 0, true, 0, false);
+    sim.recalc(); sim.update(0, 1);
+    const before = sim.food.cap;
+    const r = applyEffects(w, [{ t: 'herd', kinds: ['sheep', 'sheep'] }, { t: 'ore', n: 5 }, { t: 'need', need: 'food', n: 3 }, { t: 'need', need: 'joy', n: 2, days: 1 }, { t: 'injured', n: 1, days: 2 }], 100);
+    expect(w.exp.herd).toEqual(['sheep', 'sheep']);
+    expect(w.ore).toBe(5);
+    expect(r).toEqual({ injured: 1, days: 2 });
+    sim.update(0, 1);
+    expect(sim.food.cap).toBeCloseTo(before + 3, 5);
+    expect(needBonus(w.exp, 'joy')).toBe(2);
+    // un jour plus tard, l'effet passager s'est éteint
+    sim.update(101, 1);
+    expect(needBonus(w.exp, 'joy')).toBe(0);
+    // et tout se retrouve à la relecture de la sauvegarde
+    const w2 = new World();
+    w2.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(w2.exp.herd.length).toBe(2);
+    expect(w2.exp.bonus.food).toBe(3);
+  });
+
+  it('une équipe part, revient, et l’issue s’applique', () => {
+    const w = island();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 0, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 0, false, 12, 0);
+    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
+    const m = mandatoryFor(0)!;
+    expect(ex.start(m, 0)).not.toBeNull();
+    let report: Report | null = null;
+    ex.onReport = (r) => (report = r);
+    const phases = new Set<string>();
+    for (let i = 0; i < 40000 && !report; i++) { agents.update(0.05, 10, 0, false, 12, 0); ex.update(0.05); if (ex.active[0]) phases.add(ex.active[0].phase); }
+    expect([...phases]).toEqual(['gather', 'out', 'work', 'back', 'home']);
+    expect(report!.ok).toBe(true);
+    expect(w.exp.done).toContain(m.id);
+    expect(w.exp.herd.length).toBeGreaterThan(0);
+    expect(agents.available()).toBeGreaterThanOrEqual(m.choices[0].party);
+  });
+
+  it('plus le village est peuplé, plus il mène d’expéditions de front', () => {
+    expect([0, 29, 30, 59, 60, 90, 500].map(partyLimit)).toEqual([1, 1, 2, 2, 3, 4, 4]);
+    const w = island();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 0, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 0, false, 14, 0);
+    const ex = new Expeditions(w, agents, () => 100, () => 0.5);
+    const [a, b] = MISSIONS.filter((q) => q.age === 0);
+    // une seule équipe à moins de trente habitants
+    ex.pop = () => 12;
+    expect(ex.start(a, 0)).not.toBeNull();
+    expect(ex.why(b, b.choices[0])).toMatch(/équipes sont en route/);
+    // la même mission ne part pas deux fois ; à trente habitants, une deuxième équipe peut partir
+    ex.pop = () => 30;
+    expect(ex.why(a, a.choices[1])).toMatch(/déjà en route/);
+    const second = ex.start(b, 0);
+    expect(second).not.toBeNull();
+    expect(ex.active.map((e) => e.id)).toEqual([1, 2]);
+    // une école rend les choix plus sûrs
+    const risk = ex.riskOf(a.choices[2]);
+    const [sx, sz] = flatLand(w);
+    w.place('school', sx, sz, 0, true, 0, false);
+    expect(ex.riskOf(a.choices[2])).toBeCloseTo(risk * 0.7);
   });
 });

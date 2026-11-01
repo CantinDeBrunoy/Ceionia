@@ -1,5 +1,6 @@
 import { Building, KINDS, KindId } from '../build/catalog';
 import { Simplex } from './noise';
+import { ExpState, newExpState, readExpState } from '../sim/missions';
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
@@ -142,6 +143,8 @@ export class World {
   losses: string[] = [];
   /** Minerai extrait du monde souterrain, et filons déjà exploités (cases du souterrain) */
   ore = 0;
+  /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
+  exp: ExpState = newExpState();
   mined = new Set<number>();
 
   /**
@@ -581,6 +584,16 @@ export class World {
     return (this.lake[k] ? this.lakeLevel[k] : SEA) + 0.32;
   }
 
+  /**
+   * Point de passage d'un trajet (suite de cases voisines) à sa i-ième case : le centre de la case, sauf dans un virage
+   * sur un pont, où l'on coupe au plus court comme le tablier (un pont en escalier devient une diagonale)
+   */
+  passPoint(path: number[], i: number): [number, number] {
+    const c = path[i], x = (c % N) + 0.5, z = Math.floor(c / N) + 0.5, p = path[i - 1], n = path[i + 1];
+    if (p === undefined || n === undefined || n - c === c - p || this.bridgeY(c % N, Math.floor(c / N)) === null) return [x, z];
+    return [x * 0.5 + ((p % N) + (n % N) + 1) * 0.25, z * 0.5 + (Math.floor(p / N) + Math.floor(n / N) + 1) * 0.25];
+  }
+
   /** Sol où l'on marche : tablier des ponts, sinon le relief affiché */
   surfaceAt(x: number, z: number) {
     const b = this.bridgeY(Math.floor(x), Math.floor(z));
@@ -784,6 +797,7 @@ export class World {
       ash: [...this.ash.keys()].filter((k) => this.ash[k]),
       ore: this.ore,
       mined: [...this.mined],
+      exp: this.exp,
     };
   }
 
@@ -809,6 +823,7 @@ export class World {
     for (const k of d.ash ?? []) if (k >= 0 && k < N * N) this.ash[k] = 1;
     this.ore = Math.max(0, +d.ore || 0);
     this.mined = new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
+    this.exp = readExpState(d.exp);
   }
 }
 

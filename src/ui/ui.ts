@@ -1,5 +1,5 @@
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS } from '../build/tools';
-import { KINDS, KIND_ORDER, AGES, KindId, SEASONS } from '../build/catalog';
+import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BuildCat } from '../build/catalog';
 import { Sim } from '../sim/sim';
 import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
@@ -7,6 +7,9 @@ import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights } from '../world/mapgen';
+import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
+import { effectSummary, mandatoryFor, DestKind } from '../sim/missions';
+import { TEAM_COLORS } from '../render/expeditionView';
 
 export interface UIHost {
   tools: ToolController;
@@ -35,7 +38,16 @@ export interface UIHost {
   setDisasters(on: boolean): void;
   autoRoads: boolean;
   setAutoRoads(on: boolean): void;
+  /** expéditions, et celle que la caméra suit (son numéro) */
+  expeditions: Expeditions;
+  following: number | null;
+  follow(id: number | null): void;
 }
+
+const DEST_ICON: Record<DestKind, string> = { plain: '🌾 plaine', forest: '🌲 forêt', river: '🏞️ rivière', mountain: '⛰️ montagne', cave: '🕳️ grotte', far: '🧭 au loin' };
+const riskLabel = (r: number) => (r <= 0.12 ? 'très sûr' : r <= 0.22 ? 'sûr' : r <= 0.32 ? 'risqué' : 'très risqué');
+const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
+const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
 const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> = {
   none: { icon: '👆', label: 'Voir', key: 'Échap' },
@@ -59,11 +71,26 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
   move: { icon: '✋', label: 'Déplacer', key: 'M' },
 };
 
+/** Modes de la barre du bas ; « Voir » est toujours en tête */
 const TABS = [
-  { id: 'relief', icon: '⛰️', label: 'Relief', tools: ['none', 'raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
-  { id: 'nature', icon: '🌳', label: 'Nature', tools: ['none', 'forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'] },
-  { id: 'build', icon: '🏘️', label: 'Bâtir', tools: ['none', 'road', 'bulldoze', 'move'] },
+  { id: 'relief', icon: '⛰️', label: 'Relief', hint: 'Sculptez le terrain', tools: ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
+  { id: 'nature', icon: '🌳', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'] },
+  { id: 'build', icon: '🏘️', label: 'Bâtir', hint: '', tools: ['road', 'bulldoze', 'move'] },
 ];
+
+/** Besoins du village, dans l'ordre de la barre du haut */
+const NEEDS: { k: 'food' | 'water' | 'housing' | 'jobs' | 'joy' | 'health'; icon: string; label: string }[] = [
+  { k: 'food', icon: '🍞', label: 'Nourriture' }, { k: 'water', icon: '💧', label: 'Eau' }, { k: 'housing', icon: '🏠', label: 'Logement' },
+  { k: 'jobs', icon: '🔨', label: 'Travail' }, { k: 'joy', icon: '😊', label: 'Bien-être' }, { k: 'health', icon: '❤️', label: 'Santé' },
+];
+/** Ce qu'un bâtiment apporte, pour sa fiche et sa vignette */
+const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string }[] = [
+  { k: 'housing', icon: '🏠', label: 'logements' }, { k: 'food', icon: '🍞', label: 'nourriture' }, { k: 'water', icon: '💧', label: 'eau' },
+  { k: 'jobs', icon: '🔨', label: 'emplois' }, { k: 'joy', icon: '😊', label: 'bien-être' }, { k: 'health', icon: '❤️', label: 'santé' },
+];
+const num = (v: number) => (v < 1 ? v.toFixed(1) : String(Math.round(v)));
+/** Apport principal d'un bâtiment, sur sa vignette */
+const MAIN: (typeof GIVES)[number]['k'][] = ['housing', 'food', 'water', 'health', 'joy', 'jobs'];
 
 const SEASON_ICON = ['🌸', '☀️', '🍂', '❄️'];
 const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: '🌧️', snow: '🌨️', fog: '🌫️' };
@@ -85,6 +112,18 @@ export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer')
   });
 }
 
+/** Fenêtre du jeu : titre, contenu, bouton de fermeture ; se ferme aussi d'un clic à côté */
+function modal(root: HTMLElement, cls: string, title: string, body: string): { ov: HTMLElement; close: () => void } {
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal panel ${cls}"><div class="mtitle"><h3>${title}</h3><button class="x" title="Fermer">✕</button></div>${body}</div>`;
+  root.appendChild(ov);
+  const close = () => ov.remove();
+  ov.addEventListener('pointerdown', (e) => { if (e.target === ov) close(); });
+  $('.x', ov).onclick = close;
+  return { ov, close };
+}
+
 /** Onglet auquel appartient un outil ('none' reste dans l'onglet courant) */
 const tabOfTool = (tool: ToolId, current: string) =>
   SCULPT_TOOLS.includes(tool) ? 'relief' : VEG_TOOLS.includes(tool) ? 'nature' : tool === 'none' ? current : 'build';
@@ -92,53 +131,76 @@ const tabOfTool = (tool: ToolId, current: string) =>
 export class UI {
   root: HTMLElement;
   tab = 'build';
+  /** rayon ouvert de la barre de construction */
+  cat: BuildCat = 'home';
   private lastAge = -1;
   private toastTimer = 0;
   private bannerTimer = 0;
-  private openReq = false;
+  /** bâtiment survolé dans la barre (sa fiche s'affiche) */
+  private hover: KindId | null = null;
+  /** cartes des expéditions en cours, par numéro */
+  private expCards = new Map<number, HTMLElement>();
 
   constructor(root: HTMLElement, private host: UIHost) {
     this.root = root;
     root.innerHTML = `
-      <div id="topbar">
-        <div id="agePanel" class="panel"><div id="ageName"></div><div id="ageSub"></div><div class="bar"><i id="ageBar"></i></div><div id="ageReq"></div></div>
-        <div id="needs" class="panel"></div>
+      <header id="hud">
+        <div id="agePanel" class="panel" title="Voir ce qu'il faut pour l'âge suivant">
+          <div class="ageTop"><b id="ageName"></b><small id="ageSub"></small></div>
+          <div class="bar"><i id="ageBar"></i></div>
+          <div id="ageReq"></div>
+        </div>
+        <div id="needsPanel" class="panel">
+          <div id="needs"></div>
+          <div id="msg"></div>
+        </div>
         <div id="timePanel" class="panel">
           <div id="clock"></div>
           <button id="bPause" title="Pause (Espace)">⏸</button>
           <button id="bSpeed" title="Vitesse">×1</button>
+        </div>
+        <nav id="menuBtns" class="panel">
+          <button id="bExp" title="Expéditions">🧭<span id="expBadge"></span></button>
           <button id="bPhoto" title="Mode photo (P)">📷</button>
           <button id="bSettings" title="Réglages">⚙️</button>
-        </div>
-        <div id="msg" class="panel"></div>
-      </div>
-      <div id="side" class="panel">
+        </nav>
+      </header>
+      <div id="expList"></div>
+      <aside id="side" class="panel">
         <button id="bUndo" title="Annuler (Ctrl+Z)">↩️</button>
         <button id="bRedo" title="Rétablir (Ctrl+Y)">↪️</button>
-        <button id="bRot" title="Tourner le bâtiment (T)">🔄</button>
+        <button id="bRot" title="Tourner le bâtiment (R)">🔄</button>
+        <i class="sep"></i>
         <button id="bHome" title="Vue d'ensemble">🎯</button>
         <button id="bUnder" title="Explorer le monde souterrain (U)">⛏️</button>
-      </div>
+      </aside>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="bTorch" title="Poser ou retirer des torches (T)">🔥 Torches</button>
         <button id="bUp" title="Remonter à la surface (U)">⬆️ Remonter</button>
       </div>
       <div id="fade"></div>
-      <div id="bottom">
-        <div id="brush" class="panel"><span>Taille</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><span id="radv">3</span></div>
-        <div id="items" class="panel"></div>
-        <div id="cats" class="panel"></div>
-      </div>
+      <footer id="dock">
+        <div id="info" class="panel"></div>
+        <div id="dockMain" class="panel">
+          <div id="modes"></div>
+          <div id="dockBody">
+            <div id="dockHead">
+              <div id="subcats"></div>
+              <div id="brush"><span>Taille</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
+            </div>
+            <div id="items"></div>
+          </div>
+        </div>
+      </footer>
       <div id="toast"></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
       <div id="photoBar" class="panel"><button id="pCap">📷 Capturer</button><button id="pExit">Quitter</button></div>
     `;
-    const needs = $('#needs');
-    needs.innerHTML = ['🍞|food|Nourriture', '💧|water|Eau', '🏠|housing|Logement', '🔨|jobs|Travail', '😊|joy|Bien-être']
-      .map((s) => { const [i, k, l] = s.split('|'); return `<div class="need" id="n-${k}" title="${l}"><b>${i}</b><div class="bar"><i></i></div><span>${l}</span></div>`; }).join('') + `<div class="pop" id="pop">0<small>habitants</small></div>`;
+    $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${n.icon}</b><div class="bar"><i></i></div><span>${n.label}</span></div>`).join('')
+      + `<div class="pop" id="pop">0<small>habitants</small></div>`;
 
-    $('#agePanel').onclick = () => { this.openReq = !this.openReq; $('#agePanel').classList.toggle('open', this.openReq); };
+    $('#agePanel').onclick = () => $('#agePanel').classList.toggle('open');
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bSpeed').onclick = () => {
       const seq = [1, 2, 4];
@@ -146,6 +208,7 @@ export class UI {
       host.time.paused = false; host.applySettings();
     };
     $('#bSettings').onclick = () => this.openSettings();
+    $('#bExp').onclick = () => this.openExpeditions();
     $('#bPhoto').onclick = () => host.setPhoto(true);
     $('#pExit').onclick = () => host.setPhoto(false);
     $('#pCap').onclick = () => host.capture();
@@ -159,44 +222,69 @@ export class UI {
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
-    this.renderCats();
+    this.renderDock();
+  }
+
+  // ---------------- Barre du bas ----------------
+  /** Modes (Relief, Nature, Bâtir), rayons de construction et outils ou bâtiments du mode ouvert */
+  private renderDock() {
+    const modes = $('#modes');
+    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}"><b>${t.icon}</b><span>${t.label}</span></button>`).join('');
+    modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
+      this.tab = b.dataset.t!;
+      // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
+      if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
+      this.renderDock(); this.host.audio.sfxClick();
+    }));
     this.renderItems();
   }
 
-  private renderCats() {
-    const c = $('#cats');
-    c.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}">${t.icon} ${t.label}</button>`).join('');
-    c.querySelectorAll('button').forEach((b) => (b.onclick = () => {
-      this.tab = (b as HTMLElement).dataset.t!;
-      // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
-      if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
-      this.renderCats(); this.renderItems(); this.host.audio.sfxClick();
-    }));
-  }
-
   renderItems() {
-    const t = TABS.find((x) => x.id === this.tab)!;
-    const age = this.host.sim.age;
-    let html = t.tools.map((id) => { const i = TOOL_INFO[id]; return `<button data-tool="${id}"><b>${i.icon}</b>${i.label}<kbd>${i.key ?? ''}</kbd></button>`; }).join('');
-    if (t.id === 'build') {
-      html += KIND_ORDER.map((k) => {
-        const d = KINDS[k];
-        const locked = d.minAge > age;
-        const name = d.names[Math.max(age, d.minAge)];
-        return `<button data-kind="${k}" class="${locked ? 'locked' : ''}" title="${d.desc}"><b>${d.icon}</b>${locked ? '???' : name}${locked ? `<small>${AGES[d.minAge].name}</small>` : `<kbd>${d.size === 2 ? '2×2' : ''}</kbd>`}</button>`;
-      }).join('');
+    const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
+    const sub = $('#subcats');
+    sub.innerHTML = build
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}">${c.icon} ${c.label}</button>`).join('')
+      : `<span class="mhint">${t.hint}</span>`;
+    sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => { this.cat = b.dataset.c as BuildCat; this.renderItems(); this.host.audio.sfxClick(); }));
+    // « Voir » et les outils : grandes vignettes en Relief et Nature, petites à côté des bâtiments
+    const tool = (id: string) => { const i = TOOL_INFO[id]; return `<button class="${build ? 'mini' : 'tile'}" data-tool="${id}" title="${i.label}${i.key ? ` (${i.key})` : ''}"><b>${i.icon}</b><span>${i.label}</span>${i.key && !build ? `<kbd>${i.key}</kbd>` : ''}</button>`; };
+    let html = `<div class="tools ${build ? 'stack' : ''}">${['none', ...t.tools].map(tool).join('')}</div>`;
+    if (build) {
+      html += '<i class="vsep"></i><div class="kinds">' + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => {
+        const d = KINDS[k], locked = d.minAge > age, a = Math.max(age, d.minAge);
+        const main = MAIN.find((g) => (d[g]?.[a] ?? 0) >= 1), give = GIVES.find((g) => g.k === main);
+        const sub = locked ? `🔒 ${AGES[d.minAge].name}` : give ? `+${num(d[give.k]![a])} ${give.icon}` : d.size === 2 ? '2 × 2' : '';
+        return `<button class="tile kind ${locked ? 'locked' : ''}" data-kind="${k}"><b>${d.icon}</b><span>${d.names[a]}</span><small>${sub}</small></button>`;
+      }).join('') + '</div>';
     }
     const items = $('#items');
     items.innerHTML = html;
     items.querySelectorAll<HTMLButtonElement>('button[data-tool]').forEach((b) => (b.onclick = () => { this.host.tools.setTool(b.dataset.tool as ToolId); this.host.audio.sfxClick(); }));
-    items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => (b.onclick = () => {
+    items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {
       const k = b.dataset.kind as KindId;
-      if (KINDS[k].minAge > this.host.sim.age) { this.toast(`Disponible à l'âge : ${AGES[KINDS[k].minAge].name}`); return; }
-      this.host.tools.rotManual = false;
-      this.host.tools.setTool('build', k);
-      this.host.audio.sfxClick();
-    }));
+      b.onclick = () => {
+        if (KINDS[k].minAge > this.host.sim.age) { this.toast(`Disponible à l'âge : ${AGES[KINDS[k].minAge].name}`); return; }
+        this.host.tools.setTool('build', k);
+        this.host.audio.sfxClick();
+      };
+      b.onpointerenter = (e) => { if (e.pointerType === 'mouse') { this.hover = k; this.renderInfo(); } };
+      b.onpointerleave = () => { this.hover = null; this.renderInfo(); };
+    });
     this.refreshTools();
+  }
+
+  /** Fiche du bâtiment survolé, ou de celui qu'on s'apprête à poser */
+  private renderInfo() {
+    const tl = this.host.tools, k = this.hover ?? (tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null);
+    const box = $('#info');
+    box.classList.toggle('show', !!k && this.tab === 'build');
+    if (!k) return;
+    const d: KindDef = KINDS[k], age = this.host.sim.age, locked = d.minAge > age, a = Math.max(age, d.minAge);
+    const n = this.host.sim.counts[k] ?? 0;
+    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${g.icon} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
+    box.innerHTML = `<div class="ihead"><b>${d.icon}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size === 2 ? 'Grand bâtiment (2 × 2) · ' : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
+      <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✨ ${d.perk}</p>` : ''}
+      ${locked ? `<p class="lock">🔒 Disponible à l’âge : ${AGES[d.minAge].name}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -207,13 +295,15 @@ export class UI {
       b.classList.toggle('active', on);
     });
     const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && !SINGLE_TOOLS.includes(tl.tool));
-    $('#brush').style.display = brush ? 'flex' : 'none';
-    // l'onglet suit l'outil
+    $('#brush').classList.toggle('show', brush);
+    // l'onglet suit l'outil ; le rayon suit le bâtiment choisi
     const tabOf = tabOfTool(tl.tool, this.tab);
-    if (tabOf !== this.tab) { this.tab = tabOf; this.renderCats(); this.renderItems(); }
+    if (tabOf !== this.tab) { this.tab = tabOf; this.renderDock(); return; }
+    if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) { this.cat = KINDS[tl.kind].cat; this.renderItems(); return; }
     $<HTMLInputElement>('#rad').value = String(tl.radius);
     $('#radv').textContent = String(tl.radius);
-    $('#bRot').style.display = tl.tool === 'build' || tl.tool === 'move' ? '' : 'none';
+    $('#bRot').style.display = tl.holding() ? '' : 'none';
+    this.renderInfo();
   }
 
   toast(msg: string) {
@@ -241,16 +331,15 @@ export class UI {
     const ap = sim.ageProgress();
     $('#ageBar').style.width = ap ? `${Math.round(ap.ratio * 100)}%` : '100%';
     $('#ageReq').innerHTML = ap
-      ? `<b>Vers : ${AGES[ap.next].name}</b><br>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''}">${i.have >= i.need ? '✓' : '•'} ${i.label} ${Math.min(i.have, 999)}/${i.need}</span>`).join('<br>')
+      ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''}">${i.have >= i.need ? '✓' : '•'} ${i.label} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
       : 'Dernier âge atteint : profitez de votre village !';
-    const set = (k: string, n: { cap: number; demand: number; ok: boolean }, housing = false) => {
-      const el = $('#n-' + k);
-      const fill = housing ? (n.cap > 0 ? Math.min(1, sim.pop / n.cap) : 0) : n.demand <= 0 ? 1 : Math.min(1, n.cap / n.demand);
+    for (const n of NEEDS) {
+      const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
+      const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);
       $('i', el).style.width = `${Math.round(fill * 100)}%`;
-      el.classList.toggle('warn', !n.ok);
-      el.title = housing ? `Logements : ${Math.floor(sim.pop)} / ${n.cap}` : `Capacité ${Math.floor(n.cap * 10) / 10} / besoin ${Math.ceil(n.demand * 10) / 10}`;
-    };
-    set('food', sim.food); set('water', sim.water); set('housing', sim.housing, true); set('jobs', sim.jobs); set('joy', sim.joy);
+      el.classList.toggle('warn', !need.ok);
+      el.title = housing ? `${n.label} : ${Math.floor(sim.pop)} habitants pour ${need.cap} places` : `${n.label} : ${num(need.cap)} pour un besoin de ${num(need.demand)}`;
+    }
     $('#pop').innerHTML = `${Math.floor(sim.pop)}<small>habitants</small>`;
     $('#msg').textContent = sim.message;
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
@@ -262,54 +351,133 @@ export class UI {
       $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Cliquez sur un filon pour l’extraire, sur un puits de lumière pour remonter'}</small>`;
       $('#bTorch').classList.toggle('active', this.host.torchMode);
     }
+    this.updateExpeditions();
     ($('#bUndo') as HTMLButtonElement).disabled = !this.host.tools.undoStack.length;
     ($('#bRedo') as HTMLButtonElement).disabled = !this.host.tools.redoStack.length;
+  }
+
+  // ---------------- Expéditions ----------------
+  /** Cartes des équipes en route (à gauche), compteur du bouton 🧭, signal de l'expédition obligatoire */
+  private updateExpeditions() {
+    const h = this.host, ex = h.expeditions, list = $('#expList');
+    // juste sous la barre du haut, quelle que soit sa hauteur (elle passe sur plusieurs lignes sur un téléphone)
+    list.style.top = `${Math.round($('#hud').getBoundingClientRect().bottom + 8)}px`;
+    const live = new Set<number>();
+    for (const a of ex.active) {
+      live.add(a.id);
+      let card = this.expCards.get(a.id);
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'expCard panel';
+        card.innerHTML = `<i class="team"></i><b class="ic"></b><div class="grow"><div class="t"></div><small></small><div class="bar"><i></i></div></div><button title="La caméra suit l'équipe">👁</button>`;
+        ($('.team', card) as HTMLElement).style.background = hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length]);
+        $('.ic', card).textContent = a.m.icon;
+        $('.t', card).textContent = a.m.title;
+        const id = a.id;
+        $('button', card).onclick = () => { h.follow(h.following === id ? null : id); this.update(); };
+        list.appendChild(card);
+        this.expCards.set(a.id, card);
+      }
+      $('small', card).textContent = ex.status(a);
+      ($('.bar i', card) as HTMLElement).style.width = `${Math.round(ex.progress(a) * 100)}%`;
+      $('button', card).classList.toggle('active', h.following === a.id);
+    }
+    for (const [id, card] of this.expCards) if (!live.has(id)) { card.remove(); this.expCards.delete(id); }
+    const max = ex.slots();
+    $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
+    const must = mandatoryFor(h.sim.age);
+    $('#bExp').classList.toggle('ping', !!must && !ex.done(must) && !ex.running(must));
+  }
+
+  openExpeditions() {
+    const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
+    const next = max < partyLimit(1e9) ? `Une équipe de plus à ${max * 30} habitants (le village en compte ${pop}).` : 'Le village envoie autant d’équipes qu’il le peut.';
+    const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
+    const cards = ex.list(age).map((m) => {
+      const done = ex.done(m), run = ex.running(m);
+      const choices = done || run ? '' : m.choices.map((c, i) => {
+        const why = ex.why(m, c);
+        return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
+          <b>${c.label}</b><span>${c.text}</span>
+          <small>👥 ${c.party} · ⏳ ${workLabel(c.work)} · 🎲 ${riskLabel(ex.riskOf(c))} · ${DEST_ICON[c.dest]}</small>
+          <small class="gain">Si tout va bien : ${effectSummary(c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
+          ${why ? `<small class="why">${why}</small>` : ''}</button>`;
+      }).join('');
+      return `<div class="mission ${done ? 'done' : ''}">
+        <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
+        ${done || run ? '' : `<p>${m.intro}</p>${choices}`}</div>`;
+    }).join('');
+    const { ov, close } = modal(this.root, 'expModal', '🧭 Expéditions', `
+      <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
+      <p class="hint">Envoyez de petites équipes chercher ce qui manque au village : vous les verrez partir, travailler sur place et revenir. Chaque âge a son expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. Une école rend les expéditions plus sûres, un lieu de soins guérit plus vite les blessés.</p>
+      <div class="missions">${cards}</div>`);
+    ov.querySelectorAll<HTMLButtonElement>('button.choice').forEach((b) => (b.onclick = () => {
+      const m = ex.list(age).find((x) => x.id === b.dataset.m)!, ci = +b.dataset.c!;
+      const a = ex.start(m, ci);
+      if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? 'Aucun chemin praticable vers cette destination.'); return; }
+      close();
+      h.audio.sfxClick();
+      h.follow(a.id);
+      this.toast(`${m.icon} L’équipe se rassemble au village…`);
+      this.update();
+    }));
+  }
+
+  /** Récit du retour d'une expédition */
+  showReport(r: Report) {
+    const { ov, close } = modal(this.root, `report ${r.ok ? 'win' : 'lose'}`, `${r.m.icon} ${r.m.title}`, `
+      <h2>${r.ok ? 'Réussite !' : 'Échec…'}</h2>
+      <p class="story"></p>
+      <p class="sum">${r.summary === 'rien' ? 'Rien de gagné, rien de perdu.' : r.summary}</p>
+      ${r.ok && r.m.mandatory ? '<p class="hint">Expédition obligatoire réussie : l’âge suivant se rapproche.</p>' : !r.ok && r.m.mandatory ? '<p class="hint">On pourra retenter l’expédition, avec le même choix ou un autre.</p>' : ''}
+      <div class="row"><span class="grow"></span><button class="active ok">Fermer</button></div>`);
+    $('.story', ov).textContent = `« ${r.c.label} » : ${r.text}`;
+    $('.ok', ov).onclick = close;
   }
 
   // ---------------- Réglages ----------------
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
-    const ov = document.createElement('div');
-    ov.className = 'overlay';
-    ov.innerHTML = `
-      <div class="modal panel">
-        <h3>Réglages</h3>
-        <h4>Temps</h4>
-        <div class="row"><label>Vitesse</label>
-          <button data-sp="0">⏸ Pause</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button></div>
+    const tabs = [['time', '🕰️ Temps et météo'], ['look', '🎨 Image et son'], ['game', '🏘️ Partie']];
+    const { ov, close } = modal(this.root, 'settings', '⚙️ Réglages', `
+      <div class="tabs">${tabs.map(([k, l], i) => `<button data-tab="${k}" class="${i ? '' : 'on'}">${l}</button>`).join('')}</div>
+      <section data-sec="time">
+        <h4>Vitesse</h4>
+        <div class="row"><button data-sp="0">⏸ Pause</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button></div>
         <div class="row"><label>Durée du jour</label><input id="sDay" type="range" min="30" max="400" step="10" value="${t.dayLen}"><span id="vDay">${t.dayLen}s</span></div>
         <div class="row"><label>Durée saison</label><input id="sSeason" type="range" min="30" max="600" step="10" value="${t.seasonLen}"><span id="vSeason">${t.seasonLen}s</span></div>
-        <h4>Saison et heure (mode photo)</h4>
+        <h4>Saison et heure</h4>
         <div class="row">${SEASONS.map((s, i) => `<button data-season="${i}" class="${t.season === i ? 'active' : ''}">${SEASON_ICON[i]} ${s}</button>`).join('')}</div>
         <div class="row"><label>Heure</label><input id="sHour" type="range" min="0" max="23.9" step="0.1" value="${t.hour.toFixed(1)}"><span id="vHour">${Math.floor(t.hour)}h</span></div>
         <h4>Météo</h4>
-        <div class="row">
-          ${[['auto', 'Auto'], ['clear', '☀️ Clair'], ['rain', '🌧️ Pluie'], ['snow', '🌨️ Neige'], ['fog', '🌫️ Brume']].map(([k, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${l}</button>`).join('')}
-        </div>
+        <div class="row">${[['auto', 'Auto'], ['clear', '☀️ Clair'], ['rain', '🌧️ Pluie'], ['snow', '🌨️ Neige'], ['fog', '🌫️ Brume']].map(([k, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+      </section>
+      <section data-sec="look" hidden>
         <h4>Graphismes</h4>
         <div class="row">${[['high', 'Haute (halo de nuit)'], ['medium', 'Normale'], ['low', 'Réduite']].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}">${l}</button>`).join('')}</div>
-        <h4>Nature</h4>
-        <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? '🌋 Activées' : 'Désactivées'}</button></div>
-        <div class="row"><small>Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments.</small></div>
-        <h4>Construction</h4>
-        <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? '🛤️ Activées' : 'Désactivées'}</button></div>
-        <div class="row"><small>Un chemin relie chaque nouveau bâtiment à la route la plus proche, s'il n'y touche pas déjà.</small></div>
         <h4>Audio</h4>
         <div class="row"><label>Musique</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" class="${a.muteMusic ? 'active' : ''}">${a.muteMusic ? '🔇' : '🔊'}</button></div>
         <div class="row"><label>Sons</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" class="${a.muteSfx ? 'active' : ''}">${a.muteSfx ? '🔇' : '🔊'}</button></div>
-        <h4>Partie</h4>
-        <div class="row">
-          <button id="gSave">💾 Sauvegarder</button><button id="gExport">⬇️ Exporter JSON</button><button id="gImport">⬆️ Importer JSON</button>
-        </div>
-        <div class="row"><button id="gNew">🆕 Nouvelle partie (cette carte)</button><button id="gMenu">🏠 Menu principal</button></div>
-        <div class="row"><span class="grow"></span><button id="gClose" class="active">Fermer</button></div>
+      </section>
+      <section data-sec="game" hidden>
+        <h4>Règles</h4>
+        <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? '🌋 Activées' : 'Désactivées'}</button></div>
+        <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments.</p>
+        <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? '🛤️ Activées' : 'Désactivées'}</button></div>
+        <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
+        <h4>Sauvegarde</h4>
+        <div class="row"><button id="gSave">💾 Sauvegarder</button><button id="gExport">⬇️ Exporter</button><button id="gImport">⬆️ Importer</button></div>
+        <h4>Quitter</h4>
+        <div class="row"><button id="gNew">🆕 Recommencer cette carte</button><button id="gMenu">🏠 Menu principal</button></div>
         <input type="file" id="fImport" accept="application/json,.json" style="display:none">
-      </div>`;
-    this.root.appendChild(ov);
+      </section>
+      <div class="row foot"><span class="grow"></span><button id="gClose" class="active">Fermer</button></div>`);
     const q = <T extends HTMLElement>(s: string) => $(s, ov) as T;
-    const close = () => { ov.remove(); };
-    ov.addEventListener('pointerdown', (e) => { if (e.target === ov) close(); });
     q('#gClose').onclick = close;
+    ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
+      ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
+      ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((s) => (s.hidden = s.dataset.sec !== b.dataset.tab));
+    }));
     ov.querySelectorAll<HTMLButtonElement>('[data-sp]').forEach((b) => (b.onclick = () => {
       const v = +b.dataset.sp!;
       if (v === 0) t.paused = true; else { t.paused = false; t.speed = v; }

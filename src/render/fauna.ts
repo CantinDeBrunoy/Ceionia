@@ -451,6 +451,23 @@ export class Fauna {
         if (h && hasModel('pig') && b.age <= 3) src.push({ key: `pig${b.id}`, kind: 'pig', hx: h[0], hz: h[1], n: 2, radius: 1.2 });
       }
     }
+    // bêtes ramenées par les expéditions : elles paissent en petits groupes près des fermes (des maisons, faute de ferme)
+    if (w.exp.herd.length) {
+      const all = [...w.buildings.values()], farms = all.filter((b) => b.kind === 'farm');
+      const hosts = farms.length ? farms : all.filter((b) => b.kind === 'house').slice(0, 3);
+      const byKind = new Map<Kind, number>();
+      for (const k of w.exp.herd) byKind.set(k, (byKind.get(k) ?? 0) + 1);
+      let i = 0;
+      for (const [kind, n] of byKind) {
+        for (let left = n, j = 0; left > 0 && hosts.length; j++) {
+          const b = hosts[(i + j) % hosts.length], take = Math.min(left, 4);
+          const h = this.near(b.x, b.z, KINDS[b.kind].size, b.rot, pasture);
+          if (h) src.push({ key: `herd-${kind}-${j}`, kind, hx: h[0], hz: h[1], n: take, radius: 1.6 });
+          left -= take;
+        }
+        i++;
+      }
+    }
     const at = (c: number) => [(c % N) + 0.5, Math.floor(c / N) + 0.5];
     /** groupes d'une espèce répartis sur une liste de cases */
     const group = (prefix: string, kind: Kind, list: number[], count: number, n: (i: number) => number, radius: number, salt: number) => {

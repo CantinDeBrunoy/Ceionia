@@ -179,7 +179,7 @@ export class Traffic {
       }
       const c = v.path[v.i];
       if (c === undefined) { this.place(v, n++); continue; }
-      const cx = (c % N) + 0.5, cz = Math.floor(c / N) + 0.5;
+      const [cx, cz] = this.world.passPoint(v.path, v.i);
       // tenir sa droite : décalage perpendiculaire au sens de marche
       const hx = Math.sin(v.heading), hz = Math.cos(v.heading), tx = cx - hz * 0.14, tz = cz + hx * 0.14;
       const dx = tx - v.x, dz = tz - v.z, dist = Math.hypot(dx, dz), step = dt * (this.builtAge >= 4 ? 1.6 : 0.8);

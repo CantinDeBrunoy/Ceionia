@@ -81,6 +81,8 @@ export class ToolController implements ToolInput {
   // ---------- API ----------
   setTool(t: ToolId, kind?: KindId) {
     if (this.moveOrigin && (t !== 'move' && !(t === 'build'))) this.cancelMove();
+    // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route
+    if (t !== this.tool || (kind && kind !== this.kind)) this.rotManual = false;
     this.tool = t;
     if (kind) this.kind = kind;
     this.ghostKey = '';
@@ -88,7 +90,16 @@ export class ToolController implements ToolInput {
     this.h.changed();
   }
 
+  /** Un bâtiment en main : à poser, ou ramassé pour le déplacer */
+  holding() { return this.tool === 'build' || (this.tool === 'move' && !!this.moveOrigin); }
+
+  /** Quart de tour du bâtiment en main, à partir de l'orientation affichée */
   rotate() {
+    const hit = this.hit;
+    if (!this.rotManual && hit) {
+      const o = footprintOrigin(this.kind, hit.x, hit.z);
+      this.ghostRot = facingRoadRot(this.h.world, this.kind, o.x, o.z, this.ghostRot);
+    }
     this.ghostRot = (this.ghostRot + 1) % 4;
     this.rotManual = true;
     this.refreshVisuals();

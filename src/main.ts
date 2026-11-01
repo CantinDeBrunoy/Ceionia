@@ -32,6 +32,8 @@ import { Fires } from './render/fires';
 import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
+import { Expeditions } from './sim/expeditions';
+import { ExpeditionView } from './render/expeditionView';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -74,6 +76,11 @@ class Game implements UIHost {
   traffic: Traffic;
   gardens: GardenView;
   halos: Halos;
+  expeditions: Expeditions;
+  expView: ExpeditionView;
+  /** la caméra suit l'expédition */
+  /** expédition que la caméra suit (son numéro), ou null */
+  following: number | null = null;
   /** réveil spontané d'un volcan : délai (secondes de jeu) et secousses annonciatrices en cours */
   private quakeTimer = 0;
   private quake: { cell: number; t: number } | null = null;
@@ -159,13 +166,17 @@ class Game implements UIHost {
     this.gardens = new GardenView(w);
     // halos de lumière des feux et des lanternes, la nuit
     this.halos = new Halos(w);
+    // expéditions : une équipe d'habitants part chercher bêtes, minerai, semences… et revient raconter
+    this.expeditions = new Expeditions(w, this.agents, () => this.time.dayLen);
+    this.expeditions.pop = () => this.sim.pop;
+    this.expView = new ExpeditionView(w, this.agents, this.expeditions);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
     this.atmosphere.onStrike = (x, z) => ignite(w.buildingAt(Math.floor(x), Math.floor(z)));
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.gardens.group, this.halos.mesh);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.gardens.group, this.halos.mesh, this.expView.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -182,6 +193,12 @@ class Game implements UIHost {
     });
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
+    this.expeditions.onNews = (m) => this.ui.toast(m);
+    this.expeditions.onReport = (r) => {
+      if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
+      this.ui.showReport(r);
+      this.ui.update();
+    };
     this.sim.onAgeUp = (age) => {
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
       audio.sfxAgeUp();
@@ -282,6 +299,12 @@ class Game implements UIHost {
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
+  /** La caméra suit l'expédition donnée (null : elle redevient libre) */
+  follow(id: number | null) {
+    const a = this.expeditions.active.find((e) => e.id === id);
+    this.following = a ? a.id : null;
+    if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 16); }
+  }
   get disasters() { return this.world.disasters; }
 
   /** Qualité graphique : halo (haute), brume (haute et normale), densité des particules */
@@ -428,6 +451,8 @@ class Game implements UIHost {
         return;
       }
       if (k === 'u') { this.enterNearest(); return; }
+      // R tourne le bâtiment en main ; sinon c'est l'outil Route
+      if (k === 'r' && this.tools.holding()) { this.tools.rotate(); return; }
       const tool = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) ? undefined : map[k];
       if (tool) { this.tools.setTool(tool); audio.sfxClick(); }
       else if (k === 'b') { this.tools.setTool('build', this.tools.kind); }
@@ -563,6 +588,15 @@ class Game implements UIHost {
     for (const m of this.fires.news.splice(0)) this.ui.toast(m);
     for (const m of w.losses.splice(0)) this.ui.toast(m);
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night);
+    this.expeditions.update(gdt);
+    this.expView.update(gdt);
+    // la caméra accompagne l'équipe
+    const followed = this.following === null ? null : this.expeditions.active.find((e) => e.id === this.following);
+    if (!followed) this.following = null;
+    else if (!uv) {
+      const pos = this.agents.partyPositions(followed.party);
+      if (pos.length) this.cam.follow(pos.reduce((s, p) => s + p[0], 0) / pos.length, pos.reduce((s, p) => s + p[1], 0) / pos.length);
+    }
     // la surface ne s'anime que lorsqu'on la regarde
     if (uv) uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
     else {

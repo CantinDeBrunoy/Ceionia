@@ -149,6 +149,11 @@ export class CameraRig {
     this.goal.z = clamp(this.goal.z, 2, N - 2);
   }
 
+  /** Suit un point (une expédition) : la caméra glisse jusqu'à lui ; dist : la rapprocher au besoin */
+  follow(x: number, z: number, dist?: number) {
+    this.goal.x = x; this.goal.z = z;
+    if (dist !== undefined) this.goal.dist = clamp(Math.min(this.goal.dist, dist), this.minDist, this.maxDist);
+  }
   zoom(f: number) { this.goal.dist = clamp(this.goal.dist * f, this.minDist, this.maxDist); }
 
   /** Vue courante (pour y revenir) */
