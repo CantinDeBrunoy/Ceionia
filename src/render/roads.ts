@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
-import { KINDS, KindId } from '../build/catalog';
+import { KINDS, KindId, sizeOf } from '../build/catalog';
 import { mats } from './materials';
 
 const AGE_COL = [0xe6d0a4, 0xead8b2, 0xdccdb0, 0xb5aea6, 0x9ea3ac].map((c) => new THREE.Color(c));
@@ -104,31 +104,63 @@ export class RoadView {
     for (const b of w.buildings.values()) {
       const r = YARD[b.kind];
       if (!r) continue;
-      const s = KINDS[b.kind].size, f = FRONT[b.rot], x = b.x + s / 2 + f[0] * (s / 2 + 0.3), z = b.z + s / 2 + f[1] * (s / 2 + 0.3);
+      const s = sizeOf(b), f = FRONT[b.rot], x = b.x + s / 2 + f[0] * (s / 2 + 0.3), z = b.z + s / 2 + f[1] * (s / 2 + 0.3);
       const cx = Math.floor(x), cz = Math.floor(z);
       if (!w.inCells(cx, cz) || w.occ[w.ci(cx, cz)] || w.cellAvg(cx, cz) < 0.1) continue;
       const k = w.ci(cx, cz), l = out.get(k) ?? [];
       l.push(x, z, r * (s > 1 ? 1.4 : 1));
       out.set(k, l);
     }
+    const add = (k: number, x: number, z: number, r: number) => { const l = out.get(k) ?? []; l.push(x, z, r); out.set(k, l); };
     // un carré de 2 × 2 cases de route (ou une route de deux cases de large) : une placette pleine, sans trou d'herbe au milieu
     const plain = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1 && w.bridgeY(x, z) === null;
     for (let cz = 0; cz < N - 1; cz++)
       for (let cx = 0; cx < N - 1; cx++) {
         if (!plain(cx, cz) || !plain(cx + 1, cz) || !plain(cx, cz + 1) || !plain(cx + 1, cz + 1)) continue;
-        const k = w.ci(cx, cz), l = out.get(k) ?? [];
-        l.push(cx + 1, cz + 1, 0.45);
-        out.set(k, l);
+        add(w.ci(cx, cz), cx + 1, cz + 1, 0.45);
+      }
+    // la terre battue va de la rue jusqu'au mur des bâtiments qui la bordent : plus de liseré d'herbe entre les deux
+    for (const b of w.buildings.values()) {
+      if (b.kind === 'lamp' || b.kind === 'pier') continue;
+      const s = sizeOf(b);
+      for (const [dx, dz] of D4)
+        for (let i = 0; i < s; i++) {
+          const cx = dx === 0 ? b.x + i : dx > 0 ? b.x + s : b.x - 1, cz = dz === 0 ? b.z + i : dz > 0 ? b.z + s : b.z - 1;
+          if (!plain(cx, cz)) continue;
+          const ex = dx === 0 ? b.x + i + 0.5 : dx > 0 ? b.x + s : b.x, ez = dz === 0 ? b.z + i + 0.5 : dz > 0 ? b.z + s : b.z;
+          add(w.ci(cx, cz), ex, ez, 0.24);
+        }
+    }
+    // les poches d'herbe enclavées dans le village (entre routes et bâtiments) sont comblées
+    const urban = (x: number, z: number) => {
+      if (!w.inCells(x, z)) return false;
+      const k = w.ci(x, z);
+      return plain(x, z) || (!!w.occ[k] && w.buildingAt(x, z)?.kind !== 'lamp');
+    };
+    for (let cz = 0; cz < N; cz++)
+      for (let cx = 0; cx < N; cx++) {
+        const k = w.ci(cx, cz);
+        if (w.road[k] || w.occ[k] || w.veg[k] || w.lake[k] || w.cellAvg(cx, cz) < 0.1) continue;
+        const e = urban(cx + 1, cz), o = urban(cx - 1, cz), s = urban(cx, cz + 1), n = urban(cx, cz - 1);
+        if (!(plain(cx + 1, cz) || plain(cx - 1, cz) || plain(cx, cz + 1) || plain(cx, cz - 1))) continue;
+        const c = +e + +o + +s + +n;
+        // enclavée sur trois côtés, ou prise entre deux rues : toute la case
+        if (c >= 3 || (e && o) || (n && s)) { add(k, cx + 0.5, cz + 0.5, 0.42); continue; }
+        // un coin rentrant (deux côtés et la diagonale bâtis ou en rue) : le quart de case qui les rejoint
+        if (c === 2) {
+          const dx = e ? 1 : -1, dz = s ? 1 : -1;
+          if (urban(cx + dx, cz + dz)) add(k, cx + (dx > 0 ? 1 : 0), cz + (dz > 0 ? 1 : 0), 0.3);
+        }
       }
     return out;
   }
 
   /**
    * Cases de route qui reçoivent une lumière : d'abord les carrefours, puis les abords des portes et les virages, puis le reste,
-   * chacune à au moins un peu plus de trois cases de la plus proche — un éclairage régulier, sans en mettre partout
+   * une case sur deux environ le long des rues — des rues bien éclairées, sans en mettre sur chaque case
    */
   private lightCells(lines: Map<number, number[][]>) {
-    const w = this.world, GAP = 3.2, out: number[] = [];
+    const w = this.world, GAP = 1.75, out: number[] = [];
     const score = (k: number) => {
       const cx = k % N, cz = Math.floor(k / N);
       const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1);
@@ -439,8 +471,12 @@ export class RoadView {
     for (const k of this.lightCells(lines)) {
       const cx = k % N, cz = Math.floor(k / N);
       const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
-      // du côté d'une case libre (ni route, ni bâtiment, ni eau)
-      const side = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dz]) => !roadAt(dx, dz) && w.inCells(cx + dx, cz + dz) && !w.occ[w.ci(cx + dx, cz + dz)] && w.cellAvg(cx + dx, cz + dz) > 0.1);
+      const dry = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && !w.isWet(cx + dx, cz + dz);
+      // au bord du chemin, de préférence du côté d'une case libre, sinon le long d'un bâtiment (la lanterne reste sur la
+      // case de la route) ; à un carrefour en croix, dans l'angle entre deux rues
+      const side = D4.find(([dx, dz]) => !roadAt(dx, dz) && dry(dx, dz) && !w.occ[w.ci(cx + dx, cz + dz)])
+        ?? D4.find(([dx, dz]) => !roadAt(dx, dz) && dry(dx, dz))
+        ?? [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([dx, dz]) => [dx * 0.72, dz * 0.72, dx, dz]).find(([, , dx, dz]) => !roadAt(dx, dz) && dry(dx, dz));
       if (!side) continue;
       const n = this.node(cx, cz, age >= 3 ? 0.06 : 0.22), off = hw0 + 0.09, x = n[0] + side[0] * off, z = n[1] + side[1] * off, y = w.hAt(x, z);
       // le bras de la lanterne se tend vers le chemin
@@ -469,7 +505,7 @@ export class RoadView {
     // tonneaux, caisses, sacs (ou bacs à fleurs) au pied des maisons et des ateliers, à côté de la porte
     if (age >= 1 && snow < 0.6) for (const b of w.buildings.values()) {
       if (!CLUTTER.includes(b.kind) || hash2(b.x, b.z, 71) > 0.6) continue;
-      const s = KINDS[b.kind].size, f = FRONT[b.rot], t = [f[1], -f[0]], side = hash2(b.x, b.z, 72) < 0.5 ? 1 : -1;
+      const s = sizeOf(b), f = FRONT[b.rot], t = [f[1], -f[0]], side = hash2(b.x, b.z, 72) < 0.5 ? 1 : -1;
       const n = 1 + Math.floor(hash2(b.x, b.z, 73) * 3);
       for (let i = 0; i < n; i++) {
         const lat = side * (0.3 + i * 0.09), fw = s / 2 + 0.1 + (i % 2) * 0.07;

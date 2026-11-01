@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World } from '../world/world';
-import { Building, KINDS } from '../build/catalog';
+import { Building, KINDS, sizeOf } from '../build/catalog';
 import { Puffs } from './particles';
 
 const MAX_FLAMES = 120, FLAMES_PER_FIRE = 7;
@@ -69,7 +69,7 @@ export class Fires {
         else this.news.push(`💧 L’incendie s’est éteint : ${KINDS[b.kind].names[b.age]}`);
         continue;
       }
-      const s = KINDS[b.kind].size, base = w.h(b.x, b.z), k = Math.min(1, f.t / 3) * (water ? Math.max(0.3, 1 - f.t / out) : 1);
+      const s = sizeOf(b), base = w.h(b.x, b.z), k = Math.min(1, f.t / 3) * (water ? Math.max(0.3, 1 - f.t / out) : 1);
       for (let j = 0; j < FLAMES_PER_FIRE && n < MAX_FLAMES; j++) {
         const ph = f.seed + j * 2.3, flick = 0.65 + 0.35 * Math.sin(this.t * (9 + j) + ph);
         d.position.set(b.x + s / 2 + Math.sin(ph * 3.1) * 0.28 * s, base + 0.25 + (j % 3) * 0.12, b.z + s / 2 + Math.cos(ph * 2.3) * 0.28 * s);

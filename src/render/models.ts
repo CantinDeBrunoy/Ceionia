@@ -38,13 +38,13 @@ const BACKWARD = new Set<ModelName>(['b_factory_c', 'b_factory_e', 'b_plant_n', 
 const FIT: Partial<Record<KindId, number>> = { well: 0.62, mill: 0.9, landmark: 0.95, house: 0.84 };
 
 /** Modèle importé de la sorte et de l'âge, s'il y en a : façade vers +z, à l'échelle de la case ; fumée au sommet des ateliers */
-function importedModel(kind: KindId, age: number, v: number): Model | null {
+function importedModel(kind: KindId, age: number, v: number, size: number): Model | null {
   const names = IMPORTED[kind]?.[age]?.filter(hasModel);
   if (!names?.length) return null;
-  const name = names[v % names.length], key = `m|${kind}|${age}|${name}`;
+  const name = names[v % names.length], key = `m|${kind}|${age}|${name}|${size}`;
   const known = cache.get(key);
   if (known) return known;
-  const body = bakeFit(name, KINDS[kind].size * (FIT[kind] ?? 0.92), BACKWARD.has(name) ? Math.PI : 0, name.startsWith('b_brick_') ? brickRemap(names.indexOf(name)) : undefined);
+  const body = bakeFit(name, size * (FIT[kind] ?? 0.92), BACKWARD.has(name) ? Math.PI : 0, name.startsWith('b_brick_') ? brickRemap(names.indexOf(name)) : undefined);
   if (!body) return null;
   // la forge et les usines fument par leur plus haute cheminée (le sommet du modèle)
   const smokeAt: number[] = [];
@@ -69,7 +69,11 @@ export const C = {
 const WALLS = [C.cream, C.pink, C.mint, C.sky, C.butter, C.lav];
 const ROOFS = [C.terracotta, C.teal, C.red, C.slate, C.brown, C.thatch];
 
-export interface ModelOpts { v: number; L: boolean; R: boolean; F: boolean }
+export interface ModelOpts { v: number; L: boolean; R: boolean; F: boolean; /** resté en 1 × 1 (ancienne partie) */ small?: boolean }
+
+/** Bâtiments passés en 2 × 2 dont le modèle procédural est dessiné pour une case : on l'agrandit d'autant */
+const UPSCALE: KindId[] = ['temple', 'workshop', 'mill'];
+const UP = 1.85;
 /** Géométries d'un bâtiment, et sommets de ses cheminées (x, y, z, sorte : 0 foyer, 1 feu de bois, 2 forge ou usine) */
 export interface Model { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; smoke: number[] }
 
@@ -1059,9 +1063,10 @@ function towers(): Model | null {
 }
 
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
-  const imported = kind === 'landmark' && age >= 4 ? towers() : importedModel(kind, age, o.v);
+  const size = o.small ? 1 : KINDS[kind].size;
+  const imported = kind === 'landmark' && age >= 4 ? towers() : importedModel(kind, age, o.v, size);
   if (imported) return imported;
-  const key = kind === 'house' ? `${kind}|${age}|${o.v}|${+o.L}${+o.R}${+o.F}` : `${kind}|${age}|${o.v % 3}`;
+  const key = kind === 'house' ? `${kind}|${age}|${o.v}|${+o.L}${+o.R}${+o.F}` : `${kind}|${age}|${o.v % 3}|${size}`;
   let m = cache.get(key);
   if (m) return m;
   const p = new Parts();
@@ -1084,6 +1089,12 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   }
   m = { ...p.build(), smoke: smokeOut };
   if (attachOut.length) m.body = mergeGeometries([m.body, ...attachOut], false)!;
+  // dessiné pour une case, posé sur quatre : tout s'agrandit, cheminées comprises
+  if (size === 2 && UPSCALE.includes(kind)) {
+    m.body.scale(UP, UP, UP);
+    m.glow?.scale(UP, UP, UP);
+    m.smoke = m.smoke.map((v, i) => (i % 4 === 3 ? v : v * UP));
+  }
   cache.set(key, m);
   return m;
 }

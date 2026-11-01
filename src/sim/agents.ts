@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N } from '../world/world';
-import { Building, KINDS, KindId } from '../build/catalog';
+import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT } from '../render/assets';
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
@@ -231,7 +231,7 @@ export class Agents {
    * modèle ni sur quelqu'un d'autre (null si tout est pris)
    */
   private beside(b: Building, approach = 0.25): Dest | null {
-    const w = this.world, s = KINDS[b.kind].size, f = [[0, 1], [1, 0], [0, -1], [-1, 0]][b.rot];
+    const w = this.world, s = sizeOf(b), f = [[0, 1], [1, 0], [0, -1], [-1, 0]][b.rot];
     const cx = b.x + s / 2, cz = b.z + s / 2, free: Dest[] = [], front: Dest[] = [];
     for (let i = 0; i < s; i++) for (const [x, z] of [[b.x + i, b.z - 1], [b.x + i, b.z + s], [b.x - 1, b.z + i], [b.x + s, b.z + i]]) {
       if (!w.inCells(x, z)) continue;

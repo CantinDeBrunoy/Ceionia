@@ -49,10 +49,10 @@ export const KINDS: Record<KindId, KindDef> = {
     water: [8, 12, 18, 28, 40],
   },
   workshop: {
-    id: 'workshop', size: 1, minAge: 0, icon: '🔨', cat: 'prod',
+    id: 'workshop', size: 2, minAge: 0, icon: '🔨', cat: 'prod',
     names: ['Atelier de pierre', 'Atelier de poterie', 'Forge', 'Usine', 'Bureaux'],
     desc: 'Offre du travail.',
-    jobs: [3, 4, 5, 8, 10],
+    jobs: [4, 6, 8, 12, 16],
   },
   gather: {
     id: 'gather', size: 1, minAge: 0, icon: '🔥', cat: 'life',
@@ -61,16 +61,16 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [4, 6, 8, 10, 12],
   },
   temple: {
-    id: 'temple', size: 1, minAge: 1, icon: '⛪', cat: 'life',
+    id: 'temple', size: 2, minAge: 1, icon: '⛪', cat: 'life',
     names: ['Autel', 'Temple', 'Église', 'Cathédrale', 'Centre culturel'],
     desc: 'Lieu de culte : beaucoup de bien-être.',
-    joy: [4, 10, 14, 18, 22], jobs: [0, 1, 1, 2, 2],
+    joy: [6, 14, 20, 26, 32], jobs: [0, 1, 2, 3, 4],
   },
   mill: {
-    id: 'mill', size: 1, minAge: 2, icon: '🌬️', cat: 'prod',
+    id: 'mill', size: 2, minAge: 2, icon: '🌬️', cat: 'prod',
     names: ['', '', 'Moulin', 'Usine à cheminée', 'Éolienne'],
     desc: 'Travail et un peu de nourriture.',
-    jobs: [0, 0, 5, 10, 12], food: [0, 0, 4, 4, 6],
+    jobs: [0, 0, 7, 14, 18], food: [0, 0, 6, 6, 8],
   },
   landmark: {
     id: 'landmark', size: 2, minAge: 2, icon: '🏰', cat: 'life',
@@ -151,6 +151,11 @@ export interface Building {
   auto: boolean;
   /** Âge du modèle actuellement affiché */
   age: number;
+  /** resté en 1 × 1 (ancienne partie, pas la place de grandir) : il grandira s'il en trouve, ou si on le déplace */
+  small?: boolean;
 }
+
+/** Côté de l'emprise d'un bâtiment posé */
+export const sizeOf = (b: Building) => (b.small ? 1 : KINDS[b.kind].size);
 
 export const SEASONS = ['Printemps', 'Été', 'Automne', 'Hiver'];

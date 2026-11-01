@@ -1,5 +1,5 @@
 import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS } from '../world/world';
-import { Building, KINDS } from './catalog';
+import { Building, KINDS, sizeOf } from './catalog';
 import { FRONT } from './placement';
 
 /** Longueur maximale d'un chemin d'accès, et d'une jonction entre un hameau et le village */
@@ -19,7 +19,7 @@ export function autoRoad(w: World, b: Building): number {
   const ring = ringCells(w, b);
   if (ring.some((k) => w.road[k])) return 0;
   // départ : devant la porte si possible, sinon tout autour
-  const f = FRONT[b.rot], s = KINDS[b.kind].size;
+  const f = FRONT[b.rot], s = sizeOf(b);
   const front = ring.filter((k) => {
     const x = k % N, z = Math.floor(k / N);
     return f[0] ? x === (f[0] > 0 ? b.x + s : b.x - 1) : z === (f[1] > 0 ? b.z + s : b.z - 1);
@@ -39,7 +39,7 @@ export function autoRoad(w: World, b: Building): number {
 
 /** Cases qui bordent l'emprise d'un bâtiment (4-voisinage) */
 function ringCells(w: World, b: Building) {
-  const s = KINDS[b.kind].size, out: number[] = [];
+  const s = sizeOf(b), out: number[] = [];
   for (let i = 0; i < s; i++) for (const [x, z] of [[b.x + i, b.z - 1], [b.x + i, b.z + s], [b.x - 1, b.z + i], [b.x + s, b.z + i]]) if (w.inCells(x, z)) out.push(w.ci(x, z));
   return out;
 }

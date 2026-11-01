@@ -52,7 +52,7 @@ export class ToolController implements ToolInput {
   private ctx = { target: 0 };
   private lastRoad: { x: number; z: number } | null = null;
   private vegTimer = 0;
-  private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean } | null = null;
+  private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean } | null = null;
   private lastToast = 0;
 
   private ring: THREE.LineLoop;
@@ -296,7 +296,7 @@ export class ToolController implements ToolInput {
     const b = w.buildingAt(c.x, c.z);
     if (!b) return;
     this.mark();
-    this.moveOrigin = { kind: b.kind, x: b.x, z: b.z, rot: b.rot, auto: b.auto };
+    this.moveOrigin = { kind: b.kind, x: b.x, z: b.z, rot: b.rot, auto: b.auto, small: !!b.small };
     this.kind = b.kind;
     this.ghostRot = b.rot;
     this.rotManual = !b.auto;
@@ -310,8 +310,7 @@ export class ToolController implements ToolInput {
     this.moveOrigin = null;
     if (!o) return;
     const w = this.h.world;
-    if (!w.canPlace(o.kind, o.x, o.z)) return;
-    w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false);
+    if (w.canPlace(o.kind, o.x, o.z, o.small ? 1 : undefined)) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
   }
 
   private tryPlace() {

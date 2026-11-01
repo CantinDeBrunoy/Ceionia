@@ -230,6 +230,51 @@ describe('façades et ponts', () => {
     expect(facingRoadRot(w, 'house', x, z, 2)).toBe(2);
   });
 
+  it('un atelier sans place pour grandir reste en 1 × 1, puis grandit quand la place se libère', () => {
+    const w = island();
+    const [x, z] = flatLand(w);
+    // l'atelier d'une ancienne partie (1 × 1), cerné de maisons sur ses quatre places possibles
+    const ring = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+    const houses = ring.filter(([dx, dz]) => w.canPlace('house', x + dx, z + dz) === null).map(([dx, dz]) => w.place('house', x + dx, z + dz, 0, true, 0, false));
+    expect(houses.length).toBe(8);
+    const d = w.toJSON();
+    d.buildings.push(['workshop', x, z, 0, 1, 0]);
+    const w2 = new World();
+    w2.fromJSON(d);
+    const ws = [...w2.buildings.values()].find((b) => b.kind === 'workshop')!;
+    expect(ws.small).toBe(true);
+    expect([ws.x, ws.z]).toEqual([x, z]);
+    expect(w2.occ[w2.ci(x, z)]).toBe(ws.id);
+    // il reste petit d'une sauvegarde à l'autre, puis grandit quand on retire la maison de l'est et celles du coin
+    const d2 = w2.toJSON();
+    expect(d2.buildings.find((r: unknown[]) => r[0] === 'workshop')[6]).toBe(1);
+    d2.buildings = d2.buildings.filter((r: number[]) => !(r[0] === ('house' as unknown) && ((r[1] === x + 1 && r[2] === z) || (r[1] === x + 1 && r[2] === z + 1) || (r[1] === x && r[2] === z + 1))));
+    const w3 = new World();
+    w3.fromJSON(d2);
+    const big = [...w3.buildings.values()].find((b) => b.kind === 'workshop')!;
+    expect(big.small).toBeUndefined();
+    expect([big.x, big.z]).toEqual([x, z]);
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) expect(w3.occ[w3.ci(x + i, z + j)]).toBe(big.id);
+  });
+
+  it('poser un bâtiment entre deux voisins ne les soulève ni ne les enfonce', () => {
+    const w = island();
+    let spot: number[] | null = null;
+    for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 12 && !spot; x++)
+      if ([0, 1, 2].every((i) => w.canPlace('house', x + i, z) === null && w.cellSlope(x + i, z) < 0.3)) spot = [x, z];
+    const [x, z] = spot!;
+    const corners = (bx: number) => [w.h(bx, z), w.h(bx + 1, z), w.h(bx, z + 1), w.h(bx + 1, z + 1)];
+    w.place('house', x, z, 0, true, 0, false);
+    // un voisin plus haut, deux cases plus loin
+    for (const [i, j] of [[2, 0], [3, 0], [2, 1], [3, 1]]) w.heights[w.vi(x + i, z + j)] += 0.4;
+    w.place('house', x + 2, z, 0, true, 0, false);
+    const a = corners(x), c = corners(x + 2);
+    // la maison du milieu partage ses coins avec les deux : ni l'une ni l'autre ne bouge
+    w.place('house', x + 1, z, 0, true, 0, false);
+    expect(corners(x)).toEqual(a);
+    expect(corners(x + 2)).toEqual(c);
+  });
+
   it('un service posé en 1 × 1 dans une ancienne sauvegarde grandit en 2 × 2 sur une place libre voisine', () => {
     const w = island();
     const [x, z] = flatLand(w);

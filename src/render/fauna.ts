@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO } from '../world/world';
-import { KINDS } from '../build/catalog';
+import { KINDS, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { Parts } from './parts';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
@@ -441,7 +441,7 @@ export class Fauna {
         }
       }
     for (const b of w.buildings.values()) {
-      const s = KINDS[b.kind].size;
+      const s = sizeOf(b);
       const hens = b.kind === 'farm' ? (b.age < 4 ? 3 : 0) : b.kind === 'house' && b.age <= 2 && hash2(b.x, b.z, 41) < 0.3 ? 2 : 0;
       if (hens) { const h = this.near(b.x, b.z, s, b.rot, land); if (h) src.push({ key: `hen${b.id}`, kind: 'hen', hx: h[0], hz: h[1], n: hens, radius: 0.9 }); }
       if (b.kind === 'farm' && b.age >= 1) {
@@ -461,7 +461,7 @@ export class Fauna {
       for (const [kind, n] of byKind) {
         for (let left = n, j = 0; left > 0 && hosts.length; j++) {
           const b = hosts[(i + j) % hosts.length], take = Math.min(left, 4);
-          const h = this.near(b.x, b.z, KINDS[b.kind].size, b.rot, pasture);
+          const h = this.near(b.x, b.z, sizeOf(b), b.rot, pasture);
           if (h) src.push({ key: `herd-${kind}-${j}`, kind, hx: h[0], hz: h[1], n: take, radius: 1.6 });
           left -= take;
         }

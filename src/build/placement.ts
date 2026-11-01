@@ -7,7 +7,7 @@ export const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
  * Rotation qui tourne la façade vers la route : le côté qui la longe le plus (à égalité, la rotation actuelle) ;
  * sans route contre le bâtiment, vers la plus proche à quelques cases ; sinon rot inchangée
  */
-export function facingRoadRot(world: World, kind: KindId, x: number, z: number, rot: number): number {
+export function facingRoadRot(world: World, kind: KindId, x: number, z: number, rot: number, size = KINDS[kind].size): number {
   if (kind === 'lamp') return rot;
   // le ponton s'avance vers l'eau
   if (kind === 'pier') {
@@ -17,7 +17,7 @@ export function facingRoadRot(world: World, kind: KindId, x: number, z: number, 
     }
     return rot;
   }
-  const s = KINDS[kind].size;
+  const s = size;
   const roadAt = (cx: number, cz: number) => world.inCells(cx, cz) && world.road[world.ci(cx, cz)] === 1;
   // cases de route le long de chaque côté
   const along = (r: number) => {

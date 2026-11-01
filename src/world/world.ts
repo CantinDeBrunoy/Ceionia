@@ -1,9 +1,9 @@
-import { Building, KINDS, KindId } from '../build/catalog';
+import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { Simplex } from './noise';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 
-/** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place */
-const GREW: KindId[] = ['health', 'school', 'fire'];
+/** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
+const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill'];
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
@@ -604,8 +604,8 @@ export class World {
   }
 
   // ---------- Constructions ----------
-  canPlace(kind: KindId, x: number, z: number): string | null {
-    const s = KINDS[kind].size;
+  canPlace(kind: KindId, x: number, z: number, size = KINDS[kind].size): string | null {
+    const s = size;
     if (!this.inCells(x, z) || !this.inCells(x + s - 1, z + s - 1)) return 'Hors de la carte';
     let mn = 99, mx = -99;
     for (let j = 0; j < s; j++)
@@ -631,24 +631,51 @@ export class World {
     return null;
   }
 
-  /** Hauteur de nivellement : celle d'un bâtiment voisin (pour rester raccordé) sinon la moyenne */
+  /** Hauteur de nivellement : celle des coins déjà tenus par des voisins (pour rester raccordé), sinon la moyenne */
   flatTarget(x: number, z: number, s: number): number {
-    for (let dz = -1; dz <= s; dz++)
-      for (let dx = -1; dx <= s; dx++) {
-        const nb = this.buildingAt(x + dx, z + dz);
-        if (nb) return this.h(nb.x, nb.z);
-      }
+    let held = 0, nh = 0;
+    for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) if (this.vertexHeld(x + i, z + j)) { held += this.h(x + i, z + j); nh++; }
+    if (nh) return held / nh;
     let sum = 0, cnt = 0;
     for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) { sum += this.h(x + i, z + j); cnt++; }
     return sum / cnt;
   }
 
-  place(kind: KindId, x: number, z: number, rot: number, auto: boolean, age: number, animate = true): Building {
-    const s = KINDS[kind].size;
-    // Aplanit l'empreinte
+  /**
+   * Emprises qui ne sont plus planes (un voisin posé plus tard a tiré sur leurs coins communs, dans d'anciennes parties) :
+   * leurs coins libres rejoignent la hauteur des coins tenus par les voisins, et le bâtiment retrouve un sol plat
+   */
+  private repairFootprints() {
+    for (const b of this.buildings.values()) {
+      const s = sizeOf(b);
+      let mn = Infinity, mx = -Infinity, held = 0, nh = 0;
+      const others = (vx: number, vz: number) => {
+        for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) { const cx = vx + dx, cz = vz + dz; if (this.inCells(cx, cz) && this.occ[this.ci(cx, cz)] && this.occ[this.ci(cx, cz)] !== b.id) return true; }
+        return false;
+      };
+      for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) {
+        const h = this.h(b.x + i, b.z + j);
+        mn = Math.min(mn, h); mx = Math.max(mx, h);
+        if (others(b.x + i, b.z + j)) { held += h; nh++; }
+      }
+      if (mx - mn < 0.01 || !nh) continue;
+      const target = held / nh;
+      for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) if (!others(b.x + i, b.z + j)) this.heights[this.vi(b.x + i, b.z + j)] = target;
+    }
+  }
+
+  /** Sommet de la grille partagé avec l'emprise d'un autre bâtiment (on n'y touche pas : ce voisin resterait en l'air) */
+  private vertexHeld(vx: number, vz: number) {
+    for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) if (this.inCells(vx + dx, vz + dz) && this.occ[this.ci(vx + dx, vz + dz)]) return true;
+    return false;
+  }
+
+  place(kind: KindId, x: number, z: number, rot: number, auto: boolean, age: number, animate = true, small = false): Building {
+    const s = small ? 1 : KINDS[kind].size;
+    // Aplanit l'empreinte, sans toucher aux coins partagés avec les voisins
     const avg = this.flatTarget(x, z, s);
-    for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) this.heights[this.vi(x + i, z + j)] = avg;
-    const b: Building = { id: this.nextId++, kind, x, z, rot, auto, age };
+    for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) if (!this.vertexHeld(x + i, z + j)) this.heights[this.vi(x + i, z + j)] = avg;
+    const b: Building = { id: this.nextId++, kind, x, z, rot, auto, age, ...(small ? { small: true } : {}) };
     for (let j = 0; j < s; j++)
       for (let i = 0; i < s; i++) {
         const k = this.ci(x + i, z + j);
@@ -667,7 +694,7 @@ export class World {
   removeBuilding(id: number) {
     const b = this.buildings.get(id);
     if (!b) return;
-    const s = KINDS[b.kind].size;
+    const s = sizeOf(b);
     for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) this.occ[this.ci(b.x + i, b.z + j)] = 0;
     this.buildings.delete(id);
     this.vegDirty = true;
@@ -770,9 +797,10 @@ export class World {
     for (const b0 of s.buildings) {
       const b = { ...b0 };
       this.buildings.set(b.id, b);
-      const sz = KINDS[b.kind].size;
+      const sz = sizeOf(b);
       for (let j = 0; j < sz; j++) for (let i = 0; i < sz; i++) this.occ[this.ci(b.x + i, b.z + j)] = b.id;
     }
+    this.repairFootprints();
     this.nextId = s.nextId;
     this.roadsDirty = this.vegDirty = true;
     this.markTerrainAll();
@@ -793,7 +821,7 @@ export class World {
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
       roads,
       veg,
-      buildings: [...this.buildings.values()].map((b) => [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age]),
+      buildings: [...this.buildings.values()].map((b) => (b.small ? [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age, 1] : [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age])),
       nextId: this.nextId,
       torches: [...this.torches],
       basalt: lavaFields(this.basalt),
@@ -805,34 +833,43 @@ export class World {
   }
 
   /**
-   * Bâtiments devenus plus grands depuis la sauvegarde (soins, école, secours, passés en 2 × 2) : chacun s'étend sur l'une des
-   * quatre places de 2 × 2 qui contiennent sa case, libre d'autres bâtiments et hors de l'eau (la route dessous s'efface,
-   * le sol s'aplanit) ; sans place, il disparaît et un message invite à le rebâtir
+   * Bâtiments devenus plus grands depuis la sauvegarde (soins, école, secours, lieux de culte, ateliers, moulins, passés en
+   * 2 × 2) : chacun s'étend sur l'une des quatre places de 2 × 2 qui contiennent sa case, libre d'autres bâtiments et de routes,
+   * hors de l'eau (de préférence sans champ ni forêt, qui s'effacent) ; le sol s'aplanit. Sans place, il reste en 1 × 1
+   * (`small`) et réessaie au prochain chargement
    */
-  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array) {
+  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array, veg: Uint8Array) {
     const owner = new Int32Array(N * N);
-    const mark = (b: Building, x: number, z: number, v: number) => { const s = KINDS[b.kind].size; for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) if (this.inCells(x + i, z + j)) owner[this.ci(x + i, z + j)] = v; };
-    for (const b of buildings) if (KINDS[b.kind].size === 1) mark(b, b.x, b.z, b.id);
+    const mark = (b: Building) => { const s = sizeOf(b); for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) if (this.inCells(b.x + i, b.z + j)) owner[this.ci(b.x + i, b.z + j)] = b.id; };
+    const grow = buildings.filter((b) => GREW.includes(b.kind));
+    for (const b of buildings) if (!GREW.includes(b.kind)) mark(b);
+    // la case d'origine de chacun lui appartient d'office : un voisin qui grandit ne la prend pas
+    for (const b of grow) if (this.inCells(b.x, b.z)) owner[this.ci(b.x, b.z)] = b.id;
     const avg = (x: number, z: number) => (heights[this.vi(x, z)] + heights[this.vi(x + 1, z)] + heights[this.vi(x, z + 1)] + heights[this.vi(x + 1, z + 1)]) / 4;
-    // à sa place d'origine, il suffit que rien ne le chevauche ; ailleurs, il faut aussi de la terre ferme
-    const fits = (x: number, z: number, dry: boolean) => {
+    const fits = (b: Building, x: number, z: number) => {
       for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
-        if (!this.inCells(x + i, z + j) || owner[this.ci(x + i, z + j)] || (dry && avg(x + i, z + j) < 0.05)) return false;
+        const cx = x + i, cz = z + j;
+        if (!this.inCells(cx, cz)) return false;
+        const k = this.ci(cx, cz);
+        if ((owner[k] && owner[k] !== b.id) || road[k] || avg(cx, cz) < 0.05) return false;
       }
       return true;
     };
-    for (const b of buildings) if (KINDS[b.kind].size === 2 && !GREW.includes(b.kind)) mark(b, b.x, b.z, b.id);
-    for (let k = buildings.length - 1; k >= 0; k--) {
-      const b = buildings[k];
-      if (!GREW.includes(b.kind)) continue;
-      const spot = [[b.x, b.z], [b.x - 1, b.z], [b.x, b.z - 1], [b.x - 1, b.z - 1]].find(([x, z], i) => fits(x, z, i > 0));
-      if (!spot) { buildings.splice(k, 1); this.losses.push(`🏗️ ${KINDS[b.kind].names[b.age]} n’avait pas la place de s’agrandir : rebâtissez-le ailleurs.`); continue; }
-      [b.x, b.z] = spot;
-      mark(b, b.x, b.z, b.id);
+    const vegIn = (x: number, z: number) => { let n = 0; for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) if (veg[this.ci(x + i, z + j)]) n++; return n; };
+    // d'abord ceux qui n'ont jamais été marqués « petits » (dont les vrais 2 × 2, en place), puis les petits qui réessaient
+    for (const b of [...grow.filter((q) => !q.small), ...grow.filter((q) => q.small)]) {
+      const spots = [[b.x, b.z], [b.x - 1, b.z], [b.x, b.z - 1], [b.x - 1, b.z - 1]].filter(([x, z]) => fits(b, x, z));
+      if (!spots.length) { b.small = true; mark(b); continue; }
+      const [x, z] = spots.reduce((best, s) => (vegIn(s[0], s[1]) < vegIn(best[0], best[1]) ? s : best));
+      delete b.small;
+      b.x = x; b.z = z;
+      mark(b);
+      // aplanir sans toucher aux coins partagés avec un voisin ; les champs et les arbres de l'emprise s'effacent
+      const held = (vx: number, vz: number) => { for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) { const cx = vx + dx, cz = vz + dz; if (this.inCells(cx, cz) && owner[this.ci(cx, cz)] && owner[this.ci(cx, cz)] !== b.id) return true; } return false; };
       let h = 0;
-      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) h += heights[this.vi(b.x + i, b.z + j)] / 9;
-      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) heights[this.vi(b.x + i, b.z + j)] = h;
-      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) road[this.ci(b.x + i, b.z + j)] = 0;
+      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) h += heights[this.vi(x + i, z + j)] / 9;
+      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) if (!held(x + i, z + j)) heights[this.vi(x + i, z + j)] = h;
+      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) veg[this.ci(x + i, z + j)] = 0;
     }
   }
 
@@ -847,9 +884,9 @@ export class World {
     let id = 1;
     for (const r of d.buildings ?? []) {
       if (!KINDS[r[0] as KindId]) continue;
-      buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0 });
+      buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0, ...(r[6] ? { small: true } : {}) });
     }
-    this.growLarge(buildings, heights, road);
+    this.growLarge(buildings, heights, road, veg);
     this.restore({ heights, road, veg, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.basalt.fill(0);

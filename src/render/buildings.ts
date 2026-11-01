@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, WorldListener } from '../world/world';
-import { Building, KINDS } from '../build/catalog';
+import { Building, KINDS, sizeOf } from '../build/catalog';
 import { getModel, ModelOpts } from './models';
 import { mats } from './materials';
 import { hash2 } from '../core/rng';
@@ -18,7 +18,13 @@ interface Entry {
   /** cheminées du modèle affiché (repère du bâtiment) */
   smoke: number[];
   anim: null | { type: 'pop' | 'evolve'; t: number; swapped: boolean; to: number };
+  /** soubassement de pierre quand le sol de l'emprise n'est pas plat, et sa hauteur */
+  plinth: THREE.Mesh | null;
+  plinthH: number;
 }
+
+/** Pierre des soubassements */
+const PLINTH_MAT = new THREE.MeshStandardMaterial({ color: 0xa39d93, roughness: 1, flatShading: true });
 
 const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
@@ -33,7 +39,7 @@ export class BuildingView implements WorldListener {
     this.onReset();
   }
 
-  private disposeEntry(e: Entry) { this.group.remove(e.group); }
+  private disposeEntry(e: Entry) { this.group.remove(e.group); e.plinth?.geometry.dispose(); }
 
   onReset() {
     for (const e of this.entries.values()) this.disposeEntry(e);
@@ -61,7 +67,7 @@ export class BuildingView implements WorldListener {
     const body = new THREE.Mesh(new THREE.BufferGeometry(), mats.body);
     body.castShadow = true; body.receiveShadow = true;
     group.add(body);
-    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null };
+    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0 };
     if (animate) group.scale.setScalar(0.001);
     this.group.add(group);
     this.entries.set(b.id, e);
@@ -69,7 +75,7 @@ export class BuildingView implements WorldListener {
   }
 
   private opts(b: Building): ModelOpts {
-    const o: ModelOpts = { v: Math.floor(hash2(b.x, b.z, 7) * 6), L: false, R: false, F: false };
+    const o: ModelOpts = { v: Math.floor(hash2(b.x, b.z, 7) * 6), L: false, R: false, F: false, small: !!b.small };
     if (b.kind !== 'house') return o;
     const w = this.world;
     const f = FRONT[b.rot], r = RIGHT[b.rot];
@@ -84,7 +90,7 @@ export class BuildingView implements WorldListener {
   /** Oriente automatiquement vers la route voisine */
   private autoRot(b: Building) {
     if (!b.auto) return;
-    b.rot = facingRoadRot(this.world, b.kind, b.x, b.z, b.rot);
+    b.rot = facingRoadRot(this.world, b.kind, b.x, b.z, b.rot, sizeOf(b));
   }
 
   refresh(b: Building) {
@@ -104,8 +110,21 @@ export class BuildingView implements WorldListener {
         e.glow.visible = true;
       } else if (e.glow) e.glow.visible = false;
     }
-    const s = KINDS[b.kind].size;
-    e.group.position.set(b.x + s / 2, this.world.h(b.x, b.z), b.z + s / 2);
+    const s = sizeOf(b), w = this.world;
+    // posé sur le coin le plus haut de son emprise : jamais en l'air ; un soubassement rattrape le sol s'il n'est pas plat
+    let hi = -Infinity, lo = Infinity;
+    for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) { const h = w.h(b.x + i, b.z + j); hi = Math.max(hi, h); lo = Math.min(lo, h); }
+    e.group.position.set(b.x + s / 2, hi, b.z + s / 2);
+    const ph = b.kind === 'lamp' || b.kind === 'pier' || hi - lo < 0.03 ? 0 : hi - lo + 0.08;
+    if (Math.abs(ph - e.plinthH) > 1e-3) {
+      e.plinthH = ph;
+      if (e.plinth) { e.group.remove(e.plinth); e.plinth.geometry.dispose(); e.plinth = null; }
+      if (ph > 0) {
+        e.plinth = new THREE.Mesh(new THREE.BoxGeometry(s * 0.94, ph, s * 0.94).translate(0, 0.02 - ph / 2, 0), PLINTH_MAT);
+        e.plinth.receiveShadow = e.plinth.castShadow = true;
+        e.group.add(e.plinth);
+      }
+    }
     e.group.rotation.y = b.rot * Math.PI / 2;
     const off = b.kind === 'lamp' ? 0.32 : 0;
     e.body.position.set(off, 0, off);
@@ -113,7 +132,7 @@ export class BuildingView implements WorldListener {
   }
 
   refreshNear(b: Building) {
-    const s = KINDS[b.kind].size;
+    const s = sizeOf(b);
     for (let dz = -1; dz <= s; dz++)
       for (let dx = -1; dx <= s; dx++) {
         const n = this.world.buildingAt(b.x + dx, b.z + dz);
