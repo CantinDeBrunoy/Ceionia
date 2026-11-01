@@ -2,13 +2,10 @@ import * as THREE from 'three';
 import { World } from '../world/world';
 import { Agents } from '../sim/agents';
 import { Expeditions, ActiveExpedition } from '../sim/expeditions';
-import { HerdKind } from '../sim/missions';
-import { makeActor, play, hasModel, Actor, ModelName } from './assets';
+import { makeActor, play, hasModel, Actor } from './assets';
 import { Parts } from './parts';
 import { mats } from './materials';
-
-/** Modèle et taille (longueur du corps) des bêtes qui suivent l'équipe au retour */
-const ANIMAL: Record<HerdKind, [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34] };
+import { ExpeditionScene, ANIMAL } from './expeditionScenes';
 
 interface Follower { obj: THREE.Object3D; actor: Actor | null; gap: number; x: number; z: number; heading: number }
 
@@ -42,11 +39,11 @@ function sackGeo() {
 }
 
 /** Ce qu'une expédition montre sur la carte */
-interface Show { key: string; pennant: THREE.Mesh; followers: Follower[]; sacks: THREE.Mesh[]; trail: number[] }
+interface Show { key: string; pennant: THREE.Mesh; followers: Follower[]; sacks: THREE.Mesh[]; trail: number[]; scene: ExpeditionScene | null }
 
 /**
- * Les expéditions sur la carte : un fanion au-dessus de chaque chef ; au retour, ce qu'elle rapporte suit l'équipe — les bêtes
- * en file, le chariot de minerai, des sacs sur le dos des porteurs
+ * Les expéditions sur la carte : un fanion au-dessus de chaque chef ; sur place, l'équipe fait vraiment son travail (voir
+ * ExpeditionScene) ; au retour, ce qu'elle rapporte suit l'équipe — les bêtes en file, le chariot de minerai, des sacs sur le dos
  */
 export class ExpeditionView {
   group = new THREE.Group();
@@ -65,11 +62,15 @@ export class ExpeditionView {
         const pennant = new THREE.Mesh(this.pennantGeos[(a.id - 1) % TEAM_COLORS.length], mats.body);
         pennant.castShadow = true;
         this.group.add(pennant);
-        sh = { key: '', pennant, followers: [], sacks: [], trail: [] };
+        sh = { key: '', pennant, followers: [], sacks: [], trail: [], scene: null };
         this.shows.set(a.id, sh);
       }
       const key = `${a.phase === 'back' || a.phase === 'home' ? 'back' : 'out'}|${a.ok}`;
       if (key !== sh.key) { sh.key = key; this.rebuild(a, sh); }
+      // sur place : la scène du travail, rangée au départ du retour
+      if (a.phase === 'work' && !sh.scene) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a);
+      else if (a.phase !== 'work' && sh.scene) { sh.scene.dispose(a); sh.scene = null; }
+      sh.scene?.update(dt, a);
       this.step(a, sh, dt);
     }
     // expéditions terminées : on range leurs objets

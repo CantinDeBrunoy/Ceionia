@@ -9,6 +9,7 @@ import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import { effectSummary, mandatoryFor, DestKind } from '../sim/missions';
+import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
 
@@ -47,6 +48,7 @@ export interface UIHost {
 
 const DEST_ICON: Record<DestKind, string> = { plain: '🌾 plaine', forest: '🌲 forêt', river: '🏞️ rivière', mountain: '⛰️ montagne', cave: '🕳️ grotte', far: '🧭 au loin' };
 const riskLabel = (r: number) => (r <= 0.12 ? 'très sûr' : r <= 0.22 ? 'sûr' : r <= 0.32 ? 'risqué' : 'très risqué');
+const pct = (r: number) => `${Math.round(r * 100)} %`;
 const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
@@ -341,12 +343,15 @@ export class UI {
     this.renderInfo();
   }
 
-  toast(msg: string) {
+  /** Message bref en haut de l'écran ; avec `act`, un clic dessus y mène (il reste alors affiché plus longtemps) */
+  toast(msg: string, act?: () => void) {
     const t = $('#toast');
     t.textContent = msg;
     t.classList.add('show');
+    t.classList.toggle('act', !!act);
+    t.onclick = act ? () => { t.classList.remove('show'); act(); } : null;
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => t.classList.remove('show'), 2600);
+    this.toastTimer = window.setTimeout(() => t.classList.remove('show'), act ? 6000 : 2600);
   }
 
   banner(title: string, sub: string) {
@@ -407,18 +412,26 @@ export class UI {
       if (!card) {
         card = document.createElement('div');
         card.className = 'expCard panel';
-        card.innerHTML = `<i class="team"></i><b class="mi"></b><div class="grow"><div class="t"></div><small></small><div class="bar"><i></i></div></div><button title="La caméra suit l'équipe" aria-label="Suivre l'équipe à la caméra">${ic('eye', 18)}</button>`;
+        card.innerHTML = `<i class="team"></i><b class="mi"></b><div class="grow"><div class="t"></div><small></small><div class="bar"><i></i></div></div><button class="dec" hidden title="Une décision vous attend" aria-label="Prendre la décision">${ic('alert', 18)}</button><button class="cam" title="La caméra suit l'équipe" aria-label="Suivre l'équipe à la caméra">${ic('eye', 18)}</button>`;
         ($('.team', card) as HTMLElement).style.background = hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length]);
         $('.mi', card).textContent = a.m.icon;
         $('.t', card).textContent = a.m.title;
         const id = a.id;
-        $('button', card).onclick = () => { h.follow(h.following === id ? null : id); this.update(); };
+        $('.cam', card).onclick = () => { h.follow(h.following === id ? null : id); this.update(); };
+        // une équipe qui attend : un clic n'importe où sur sa carte ouvre la décision (sauf l'œil, qui la suit à la caméra)
+        card.onclick = (ev) => {
+          if ((ev.target as HTMLElement).closest('.cam')) return;
+          const e = ex.active.find((x) => x.id === id);
+          if (e?.wait) this.showDecision(e);
+        };
         list.appendChild(card);
         this.expCards.set(a.id, card);
       }
       $('small', card).textContent = ex.status(a);
       ($('.bar i', card) as HTMLElement).style.width = `${Math.round(ex.progress(a) * 100)}%`;
-      $('button', card).classList.toggle('active', h.following === a.id);
+      $('.cam', card).classList.toggle('active', h.following === a.id);
+      ($('.dec', card) as HTMLElement).hidden = !a.wait;
+      card.classList.toggle('ask', !!a.wait);
     }
     for (const [id, card] of this.expCards) if (!live.has(id)) { card.remove(); this.expCards.delete(id); }
     const max = ex.slots();
@@ -427,17 +440,18 @@ export class UI {
     $('#bExp').classList.toggle('ping', !!must && !ex.done(must) && !ex.running(must));
   }
 
-  openExpeditions() {
+  openExpeditions(tab: 'missions' | 'gear' = 'missions') {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
     const next = max < partyLimit(1e9) ? `Une équipe de plus à ${max * 30} habitants (le village en compte ${pop}).` : 'Le village envoie autant d’équipes qu’il le peut.';
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     const cards = ex.list(age).map((m) => {
       const done = ex.done(m), run = ex.running(m);
       const choices = done || run ? '' : m.choices.map((c, i) => {
-        const why = ex.why(m, c);
+        const why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
         return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
           <b>${c.label}</b><span>${c.text}</span>
-          <small>👥 ${c.party} · ⏳ ${workLabel(c.work)} · 🎲 ${riskLabel(ex.riskOf(c))} · ${DEST_ICON[c.dest]}</small>
+          <small>👥 ${c.party} · ⏳ ${workLabel(c.work)} · 🎲 ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} ${riskLabel(pv.risk)} · ${DEST_ICON[c.dest]}</small>
+          <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')} — ${pv.label ? `on emporte ${pv.label}` : 'aucun équipement en réserve'}</small>
           <small class="gain">Si tout va bien : ${effectSummary(c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
           ${why ? `<small class="why">${why}</small>` : ''}</button>`;
       }).join('');
@@ -446,9 +460,28 @@ export class UI {
         ${done || run ? '' : `<p>${m.intro}</p>${choices}`}</div>`;
     }).join('');
     const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} Expéditions`, `
-      <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
-      <p class="hint">Envoyez de petites équipes chercher ce qui manque au village : vous les verrez partir, travailler sur place et revenir. Chaque âge a son expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. Une école rend les expéditions plus sûres, un lieu de soins guérit plus vite les blessés.</p>
-      <div class="missions">${cards}</div>`);
+      <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button></div>
+      <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
+        <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
+        <p class="hint">Envoyez de petites équipes chercher ce qui manque au village : vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a son expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p>
+        <div class="missions">${cards}</div>
+      </section>
+      <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>`);
+    ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
+      ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
+      ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((sec) => (sec.hidden = sec.dataset.sec !== b.dataset.tab));
+    }));
+    // l'arsenal se redessine quand la réserve ou la file changent ; la barre de fabrication avance en continu
+    let key = '';
+    const arsenal = () => {
+      if (!ov.isConnected) { clearInterval(iv); return; }
+      const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${ex.active.length}`;
+      if (k !== key) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
+      const bar = ov.querySelector<HTMLElement>('.queue .bar i');
+      if (bar) bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`;
+    };
+    const iv = setInterval(arsenal, 300);
+    arsenal();
     ov.querySelectorAll<HTMLButtonElement>('button.choice').forEach((b) => (b.onclick = () => {
       const m = ex.list(age).find((x) => x.id === b.dataset.m)!, ci = +b.dataset.c!;
       const a = ex.start(m, ci);
@@ -461,11 +494,73 @@ export class UI {
     }));
   }
 
+  /** Équipement : réserve, fabrication et file d'attente */
+  private renderArsenal(el: HTMLElement, changed: () => void) {
+    const h = this.host, ex = h.expeditions, age = h.sim.age, st = ex.state;
+    const away = (id: GearId) => ex.active.reduce((n, a) => n + (a.gear[id] ?? 0), 0);
+    const per = (id: GearId) => ({ spear: 'une par membre', bow: 'un par membre', sword: 'une par membre', rifle: 'un par membre', rope: 'une pour deux', torch: 'une pour deux', boat: 'une pour trois', kit: 'une par équipe' }[id]);
+    el.innerHTML = `
+      <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Minerai : <b>${Math.floor(ex.ore)}</b>.</p>
+      <div class="gearGrid">${GEAR.map((g) => {
+        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age;
+        return `<div class="gear ${locked ? 'locked' : ''}">
+          <div class="gi">${ic(g.icon, 26, 1.8)}</div>
+          <div class="grow"><b>${g.name}</b> <span class="cnt">${n} en réserve${out ? ` · ${out} en route` : ''}</span>
+            <small>${g.desc}</small>
+            <small class="gd">${g.guards ? DANGER_VS[g.guards] : 'Utile partout'} : −${Math.round(g.cut * 100)} % de risque · ${per(g.id)}</small>
+            ${why ? `<small class="why">${why}</small>` : ''}</div>
+          <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${g.ore ? `, ${g.ore} minerai` : ''}`}">${ic('hammer', 16, 2)} ${g.ore ? `${g.ore} minerai` : 'Fabriquer'}</button>
+        </div>`;
+      }).join('')}</div>
+      <h4>Fabrication</h4>
+      <div class="queue">${st.craft.length ? st.craft.map((id, i) => `<span class="qi">${ic(GEAR_BY[id].icon, 16, 2)} ${GEAR_BY[id].name}${i === 0 ? '<i class="bar"><i></i></i>' : ''}<button data-cancel="${i}" title="Annuler" aria-label="Annuler">${ic('close', 14, 2)}</button></span>`).join('') : '<small>Rien en cours.</small>'}</div>`;
+    el.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => (b.onclick = () => {
+      if (ex.craft(b.dataset.craft as GearId, age)) { h.audio.sfxClick(); changed(); }
+    }));
+    el.querySelectorAll<HTMLButtonElement>('[data-cancel]').forEach((b) => (b.onclick = () => { ex.cancelCraft(+b.dataset.cancel!); changed(); }));
+  }
+
+  /** Imprévu d'une équipe : la fenêtre s'ouvre d'elle-même si rien d'autre n'est ouvert */
+  expEvent(a: ActiveExpedition) {
+    this.toast(`${a.m.icon} « ${a.m.title} » : ${a.wait?.title.toLowerCase()} — une décision vous attend.`, () => this.showDecision(a));
+    if (!this.root.querySelector('.overlay')) this.showDecision(a);
+    this.update();
+  }
+
+  /** Décision à prendre sur l'imprévu en cours d'une équipe */
+  showDecision(a: ActiveExpedition) {
+    const h = this.host, ex = h.expeditions, ev = a.wait;
+    if (!ev) return;
+    this.root.querySelector('.decide')?.closest('.overlay')?.remove();
+    const opts = ev.options.map((o, i) => {
+      const ok = ex.canTake(a, i), hints: string[] = [];
+      // « des armes » plutôt que la liste de toutes les armes possibles
+      const names = (gs: GearId[]) => (gs.length > 2 ? 'des armes' : gs.map((g) => GEAR_BY[g].plural.toLowerCase()).join(' ou '));
+      if (o.needs) hints.push(ok ? `avec ${names(o.needs.filter((g) => (a.gear[g] ?? 0) > 0))}` : `demande ${names(o.needs)}, non emportées`);
+      if (o.risk < 0.98) hints.push(o.risk <= 0.7 ? 'bien plus sûr' : 'plus sûr');
+      else if (o.risk > 1.02) hints.push(o.risk >= 1.25 ? 'bien plus risqué' : 'plus risqué');
+      if (o.work) hints.push(o.work > 0 ? 'plus long' : 'plus rapide');
+      if (o.bonus) hints.push(`si tout va bien : ${effectSummary(o.bonus)}`);
+      return `<button class="choice opt" data-o="${i}" ${ok ? '' : 'disabled'}><b>${o.label}</b><small>${hints.join(' · ') || 'sans effet particulier'}</small></button>`;
+    }).join('');
+    const { ov, close } = modal(this.root, 'decide', `${a.m.icon} ${a.m.title}`, `
+      <h4 class="evt">${ic('alert', 18, 2)} ${ev.title}</h4>
+      <p class="story">${ev.text}</p>
+      ${opts}
+      <p class="hint">Risque de l’expédition pour l’instant : ${pct(ex.chance(a))}. Sans réponse, l’équipe choisira d’elle-même la voie la plus sûre.</p>`);
+    ov.querySelectorAll<HTMLButtonElement>('button.opt').forEach((b) => (b.onclick = () => {
+      if (a.wait === ev && ex.decide(a, +b.dataset.o!)) { h.audio.sfxClick(); this.toast(`${a.m.icon} ${ev.options[+b.dataset.o!].label}.`); }
+      close();
+      this.update();
+    }));
+  }
+
   /** Récit du retour d'une expédition */
   showReport(r: Report) {
     const { ov, close } = modal(this.root, `report ${r.ok ? 'win' : 'lose'}`, `${r.m.icon} ${r.m.title}`, `
       <h2>${r.ok ? 'Réussite !' : 'Échec…'}</h2>
       <p class="story"></p>
+      ${r.notes.length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}
       <p class="sum">${r.summary === 'rien' ? 'Rien de gagné, rien de perdu.' : r.summary}</p>
       ${r.ok && r.m.mandatory ? '<p class="hint">Expédition obligatoire réussie : l’âge suivant se rapproche.</p>' : !r.ok && r.m.mandatory ? '<p class="hint">On pourra retenter l’expédition, avec le même choix ou un autre.</p>' : ''}
       <div class="row"><span class="grow"></span><button class="active ok">Fermer</button></div>`);

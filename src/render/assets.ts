@@ -11,6 +11,8 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   'ship_wreck', 'dolphin', 'whale', 'manta', 'clownfish', 'yellow_tang', 'fish', 'coral_set', 'seaweed',
   // biomes : essences, plantes d'eau et faune sauvage
   'palm', 'palm2', 'palm3', 'cactus', 'cactus2', 'cactus_flowers', 'willow', 'dead_tree', 'lilypad',
+  // arbres des forêts tempérées (Ultimate Nature) : bouleau, arbre commun, arbre rond, bouleau nu, sapins, sapin enneigé
+  'birch', 'tree_common', 'tree_round', 'birch_bare', 'pines', 'pine_snow',
   'fox', 'wolf', 'horse', 'llama', 'frog',
   // sous-bois et détails des prairies
   'log', 'stump', 'fern', 'flowers', 'mushroom', 'skull', 'ribcage', 'bone',
@@ -121,7 +123,7 @@ function texelsOf(tex: THREE.Texture) {
  * Modèle statique ramené à `height`, posé à y = 0 et centré en x/z, couleurs des matériaux (et de leur texture, lue au
  * point UV de chaque sommet : les atlas low-poly sont des palettes) cuites en couleurs de sommets ; `skip` écarte des matériaux (un pot…)
  */
-export function bakeStatic(name: ModelName, height: number, tintRe: RegExp, skip?: RegExp): StaticModel | null {
+export function bakeStatic(name: ModelName, height: number, tintRe: RegExp, skip?: RegExp, only?: (o: THREE.Object3D) => boolean): StaticModel | null {
   const gltf = loaded.get(name);
   if (!gltf) return null;
   const root = gltf.scene;
@@ -135,7 +137,7 @@ export function bakeStatic(name: ModelName, height: number, tintRe: RegExp, skip
   const meshes: { mat: THREE.MeshStandardMaterial; geo: THREE.BufferGeometry; world: THREE.Matrix4 }[] = [];
   root.traverse((o) => {
     const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
+    if (!m.isMesh || (only && !only(m))) return;
     const list = Array.isArray(m.material) ? m.material : [m.material];
     if (list.length === 1 || !m.geometry.groups.length) { meshes.push({ mat: list[0] as THREE.MeshStandardMaterial, geo: m.geometry, world: m.matrixWorld }); return; }
     for (const gr of m.geometry.groups) {
@@ -214,6 +216,38 @@ export function bakeFit(name: ModelName, width: number, rot = 0, remap?: (c: THR
   g.computeBoundingBox();
   const b = g.boundingBox!, s = width / Math.max(1e-6, b.max.x - b.min.x, b.max.z - b.min.z);
   return g.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2).scale(s, s, s);
+}
+
+/**
+ * Comme bakeFit, mais la pièce mobile (les nœuds dont le nom répond à `part` : ailes d'un moulin, pales d'une éolienne) est
+ * mise à part, centrée sur son moyeu (l'origine de son nœud) ; renvoie aussi le moyeu et l'axe de rotation dans le repère du corps
+ */
+export function bakeFitSplit(name: ModelName, width: number, rot: number, part: RegExp) {
+  const gltf = loaded.get(name);
+  if (!gltf) return null;
+  const root = gltf.scene;
+  root.updateMatrixWorld(true);
+  let node: THREE.Object3D | null = null;
+  root.traverse((o) => { if (!node && part.test(o.name)) node = o; });
+  if (!node) return null;
+  const hub: THREE.Object3D = node;
+  const inPart = (o: THREE.Object3D) => { for (let n: THREE.Object3D | null = o; n; n = n.parent) if (n === hub) return true; return false; };
+  const all = bakeStatic(name, 1, /^$/), body = bakeStatic(name, 1, /^$/, undefined, (o) => !inPart(o)), mov = bakeStatic(name, 1, /^$/, undefined, inPart);
+  if (!all?.rest || !body?.rest || !mov?.rest) return null;
+  // la mise à l'échelle de bakeStatic (hauteur 1), puis celle de bakeFit, calculées sur le modèle entier
+  const box = new THREE.Box3().setFromObject(root), s0 = 1 / Math.max(1e-6, box.max.y - box.min.y);
+  const norm = new THREE.Matrix4().makeScale(s0, s0, s0).multiply(new THREE.Matrix4().makeTranslation(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2));
+  const g = all.rest.rotateY(rot);
+  g.computeBoundingBox();
+  const b = g.boundingBox!, s = width / Math.max(1e-6, b.max.x - b.min.x, b.max.z - b.min.z);
+  const fit = new THREE.Matrix4().makeScale(s, s, s)
+    .multiply(new THREE.Matrix4().makeTranslation(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2))
+    .multiply(new THREE.Matrix4().makeRotationY(rot));
+  body.rest.applyMatrix4(fit);
+  mov.rest.applyMatrix4(fit);
+  const pivot = new THREE.Vector3().setFromMatrixPosition(hub.matrixWorld).applyMatrix4(norm).applyMatrix4(fit);
+  mov.rest.translate(-pivot.x, -pivot.y, -pivot.z);
+  return { body: body.rest, part: mov.rest, pivot, quat: new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeRotationY(rot)).multiply(hub.getWorldQuaternion(new THREE.Quaternion())) };
 }
 
 /** Morceaux connexes d'une géométrie non indexée (sommets confondus par position) : triangles, centre x/z et pied de chacun */

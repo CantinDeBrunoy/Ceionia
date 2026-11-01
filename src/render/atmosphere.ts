@@ -7,9 +7,65 @@ import { Environment } from './env';
 import { SeasonState } from './season';
 import { AudioEngine } from '../audio/audio';
 
-/** Couches de brume (hauteur au-dessus de la mer) : elles ne se voient que là où le sol est plus bas qu'elles */
-const MIST_LAYERS = [0.5, 1.1, 1.8, 2.6];
-const MIST_DAY = new THREE.Color(0xf2f5f8), MIST_NIGHT = new THREE.Color(0x3a4258), MIST_DAWN = new THREE.Color(0xf7d6cf);
+const MIST_DAY = new THREE.Color(0xf4f7fa), MIST_NIGHT = new THREE.Color(0x4e5a78), MIST_DAWN = new THREE.Color(0xffe4d4);
+/** Brume : densité, hauteur de son dessus (au-dessus de la mer), épaisseur du fondu sous le dessus, temps (dérive) */
+const MIST = { x: 0, y: 2.1, z: 0.9, w: 0 };
+/** couleur de la brume (espace de travail, convertie dans le shader) et taille de la carte (la brume s'efface au bord) */
+const MIST_COL = { x: 1, y: 1, z: 1, w: 192 };
+
+/**
+ * Brume au ras du sol, calculée dans tous les matériaux qui reçoivent le brouillard : épaisse au fond des vallées et sur
+ * l'eau, elle s'éclaircit vers le haut selon l'épaisseur traversée par le regard ; son dessus ondule et dérive, les toits et
+ * les cimes en sortent doucement (aucun plan ne coupe les maisons). Uniformes partagés : des objets simples, que three ne
+ * recopie pas d'un matériau à l'autre
+ */
+function patchMist() {
+  const C = THREE.ShaderChunk;
+  C.fog_pars_vertex += `
+#ifdef USE_FOG
+  varying vec3 vMistW;
+#endif
+`;
+  C.fog_vertex += `
+#ifdef USE_FOG
+  vMistW = cameraPosition + transpose(mat3(viewMatrix)) * mvPosition.xyz;
+#endif
+`;
+  C.fog_pars_fragment += `
+#ifdef USE_FOG
+  varying vec3 vMistW;
+  uniform vec4 uMist;
+  uniform vec4 uMistColor;
+  float mistHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float mistNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mistHash(i), mistHash(i + vec2(1.0, 0.0)), f.x), mix(mistHash(i + vec2(0.0, 1.0)), mistHash(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+#endif
+`;
+  C.fog_fragment = `
+#ifdef USE_FOG
+  if (uMist.x > 0.003) {
+    vec2 mq = vMistW.xz;
+    float mn = mistNoise(mq * 0.06 + uMist.w * vec2(0.03, 0.017)) * 0.7 + mistNoise(mq * 0.17 - uMist.w * vec2(0.045, 0.02)) * 0.3;
+    float mh = uMist.y + (mn - 0.5) * 1.2 - vMistW.y;
+    if (mh > 0.0) {
+      vec3 toCam = cameraPosition - vMistW;
+      float path = min(8.0, length(toCam) * (toCam.y > mh ? mh / toCam.y : 1.0));
+      float edge = smoothstep(0.0, 6.0, min(min(mq.x, mq.y), min(uMistColor.w - mq.x, uMistColor.w - mq.y)));
+      // nappe laiteuse : vite opaque là où elle est épaisse (on n'y voit plus les ombres du sol), transparente sur ses bords
+      float m = 1.0 - exp(-path * uMist.x * smoothstep(0.0, uMist.z, mh) * (0.55 + 0.45 * mn) * 1.6);
+      gl_FragColor.rgb = mix(gl_FragColor.rgb, linearToOutputTexel(vec4(uMistColor.rgb, 1.0)).rgb, m * edge * 0.9);
+    }
+  }
+#endif
+` + C.fog_fragment;
+  const u = { uMist: { value: MIST }, uMistColor: { value: MIST_COL } };
+  Object.assign(THREE.UniformsLib.fog, u);
+  for (const lib of Object.values(THREE.ShaderLib)) if (lib.uniforms.fogColor) Object.assign(lib.uniforms, u);
+}
+patchMist();
 /** Nuages accrochés aux sommets : bouffées par pic */
 const CAP_PUFFS = 7;
 /** Distance des rideaux d'aurore à la caméra */
@@ -23,8 +79,8 @@ export class Atmosphere {
   group = new THREE.Group();
   /** la foudre tombe en (x, z) */
   onStrike: ((x: number, z: number) => void) | null = null;
-  private mistU = { uTime: { value: 0 }, uDensity: { value: 0 }, uColor: { value: new THREE.Color() }, uHeight: { value: null as THREE.Texture | null }, uNoise: { value: noiseTexture() } };
-  private mists: THREE.Mesh[] = [];
+  /** densité de la brume, qui suit lentement l'heure, la saison et le temps */
+  private mistK = 0;
   /** brume affichée (coupée en qualité réduite) */
   mistEnabled = true;
   private caps: THREE.InstancedMesh;
@@ -48,33 +104,11 @@ export class Atmosphere {
   private rainState = false;
   private rnd = mulberry32(Date.now() & 0xffff);
   private dummy = new THREE.Object3D();
+  private mistColor = new THREE.Color();
   private t = 0;
 
-  constructor(private world: World, heightTex: THREE.Texture, private audio: AudioEngine) {
-    this.mistU.uHeight.value = heightTex;
-    // ---- brume : plans transparents, épais là où le sol passe sous la couche
-    for (const [li, y] of MIST_LAYERS.entries()) {
-      const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false });
-      m.onBeforeCompile = (sh) => {
-        Object.assign(sh.uniforms, this.mistU, { uLayer: { value: li } });
-        sh.vertexShader = 'varying vec3 vMist;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vMist = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-        sh.fragmentShader = `uniform float uTime;\nuniform float uDensity;\nuniform float uLayer;\nuniform vec3 uColor;\nuniform sampler2D uHeight;\nuniform sampler2D uNoise;\nvarying vec3 vMist;\n`
-          + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-  float ground = texture2D(uHeight, (vMist.xz * ${VR.toFixed(1)} + 0.5) / ${VS.toFixed(1)}).r;
-  float thick = clamp((vMist.y - ground) / 1.3, 0.0, 1.0);
-  vec2 q = vMist.xz + uLayer * 17.0;
-  float n = texture2D(uNoise, q * 0.022 + uTime * vec2(0.0035, 0.0018)).r * 0.6 + texture2D(uNoise, q * 0.07 - uTime * vec2(0.006, 0.002)).r * 0.4;
-  float edge = smoothstep(0.0, 5.0, min(min(vMist.x, vMist.z), min(${N.toFixed(1)} - vMist.x, ${N.toFixed(1)} - vMist.z)));
-  float a = uDensity * thick * smoothstep(0.3, 0.8, n) * edge * (ground < 0.0 ? 0.45 : 1.0);
-  diffuseColor = vec4(uColor, a * 0.7);`);
-      };
-      m.customProgramCacheKey = () => 'mist';
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(N, N).rotateX(-Math.PI / 2).translate(N / 2, y, N / 2), m);
-      mesh.renderOrder = 4;
-      mesh.frustumCulled = false;
-      this.mists.push(mesh);
-      this.group.add(mesh);
-    }
+  constructor(private world: World, private audio: AudioEngine) {
+    MIST_COL.w = N;
     // ---- nuages accrochés aux sommets
     this.capMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1, transparent: true, opacity: 0.8, depthWrite: false, emissive: 0xffffff, emissiveIntensity: 0 });
     this.caps = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), this.capMat, 24 * CAP_PUFFS);
@@ -128,6 +162,9 @@ void main(){
     this.group.add(this.caps, this.bow, this.aurora, this.bolt);
   }
 
+  /** Sous terre : pas de brume */
+  hideMist() { MIST.x = 0; }
+
   update(dt: number, time: GameTime, s: SeasonState, env: Environment, camera: THREE.Camera, focus: THREE.Vector3) {
     const w = this.world, h = time.hour, season = time.season;
     this.t += dt;
@@ -139,12 +176,16 @@ void main(){
     const dawn = smoothstep(3.5, 6, h) * (1 - smoothstep(8.5, 11, h));
     const dusk = smoothstep(18.5, 22, h) * 0.45 + (h < 4 || h > 22 ? 0.3 : 0);
     const seasonK = [1.1, 0.55, 1.45, 0.85][season];
-    const density = clamp((dawn + dusk) * seasonK + fog * 0.7, 0, 1) * (1 - rain * 0.6);
-    this.mistU.uTime.value += dt;
-    this.mistU.uDensity.value += (density - this.mistU.uDensity.value) * Math.min(1, dt * 0.3);
-    for (const m of this.mists) m.visible = this.mistEnabled && this.mistU.uDensity.value > 0.02;
+    const density = clamp((dawn + dusk) * seasonK + fog * 0.45, 0, 1) * (1 - rain * 0.6) * (1 - fog * 0.35);
+    this.mistK += (density - this.mistK) * Math.min(1, dt * 0.3);
+    MIST.x = this.mistEnabled ? this.mistK : 0;
+    // par temps de brouillard, la nappe monte et noie les collines basses
+    MIST.y = 2.1 + fog * 0.6;
+    MIST.w = (MIST.w + dt) % 4000;
     const tw = clamp(1 - Math.abs(env.daylight - 0.5) * 2.5, 0, 1);
-    this.mistU.uColor.value.copy(MIST_NIGHT).lerp(MIST_DAY, env.daylight).lerp(MIST_DAWN, tw * 0.45);
+    // la brume diffuse la lumière : claire dès l'aube, bleutée la nuit, rosée au lever et au coucher
+    const c = this.mistColor.copy(MIST_NIGHT).lerp(MIST_DAY, smoothstep(0.05, 0.55, env.daylight)).lerp(MIST_DAWN, tw * 0.5);
+    MIST_COL.x = c.r; MIST_COL.y = c.g; MIST_COL.z = c.b;
 
     // ---- nuages des sommets : toujours un peu, épais par temps couvert et au petit matin
     // nuages cotonneux : presque opaques, éclairés aussi par en dessous (pas de bulles translucides)
@@ -292,28 +333,4 @@ void main(){
       if (this.peaks.length >= Math.round(N / 12)) break;
     }
   }
-}
-
-/** Bruit doux répétable (valeurs sur une grille, interpolées) pour la brume */
-function noiseTexture() {
-  const S = 128, data = new Uint8Array(S * S * 4), rnd = mulberry32(91);
-  const octaves = [8, 16, 32].map((g) => ({ g, v: Array.from({ length: g * g }, () => rnd()) }));
-  for (let y = 0; y < S; y++)
-    for (let x = 0; x < S; x++) {
-      let v = 0, amp = 0.55;
-      for (const o of octaves) {
-        const fx = (x / S) * o.g, fy = (y / S) * o.g, ix = Math.floor(fx), iy = Math.floor(fy);
-        const tx = smoothstep(0, 1, fx - ix), ty = smoothstep(0, 1, fy - iy);
-        const at = (a: number, b: number) => o.v[((b + o.g) % o.g) * o.g + ((a + o.g) % o.g)];
-        v += amp * lerp(lerp(at(ix, iy), at(ix + 1, iy), tx), lerp(at(ix, iy + 1), at(ix + 1, iy + 1), tx), ty);
-        amp *= 0.5;
-      }
-      const c = Math.round(clamp(v / 0.9625, 0, 1) * 255), i = (y * S + x) * 4;
-      data[i] = data[i + 1] = data[i + 2] = c; data[i + 3] = 255;
-    }
-  const t = new THREE.DataTexture(data, S, S);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.magFilter = t.minFilter = THREE.LinearFilter;
-  t.needsUpdate = true;
-  return t;
 }

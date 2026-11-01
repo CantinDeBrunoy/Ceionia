@@ -17,6 +17,8 @@ export interface AudioState {
   coast?: number;
   fire?: number;
   alt?: number;
+  /** grenouilles autour du point visé (0 … 1) */
+  frogs?: number;
 }
 
 const SCALES = [
@@ -56,6 +58,7 @@ export class AudioEngine {
   private nextPad = 0;
   private lastDegree = 2;
   private birdTimer = 0;
+  private frogTimer = 2;
 
   /** À appeler depuis un geste utilisateur */
   start() {
@@ -176,6 +179,13 @@ export class AudioEngine {
       this.crackleTimer = (0.04 + Math.random() * 0.25) / s.fire!;
       this.burst(T + 0.01, 0.025 + Math.random() * 0.03, 2500 + Math.random() * 3000, 0.12 * s.fire! * (0.4 + Math.random()));
     }
+    // grenouilles : un concert au crépuscule et la nuit, plus fourni après la pluie
+    this.frogTimer -= dt;
+    if (this.frogTimer <= 0) {
+      const k = (s.frogs ?? 0) * (0.25 + 0.75 * night) * (1 + s.rain) * out;
+      this.frogTimer = k > 0.05 ? (0.4 + Math.random() * 1.8) / Math.min(1.5, k + 0.3) : 2;
+      if (k > 0.05 && s.season !== 3) this.croak(T + 0.02, Math.min(1, k));
+    }
     // oiseaux
     this.birdTimer -= dt;
     if (this.birdTimer <= 0 && s.daylight > 0.5 && s.rain < 0.3 && s.season !== 3 && s.under < 0.5) {
@@ -268,6 +278,31 @@ export class AudioEngine {
     const t = this.ctx.currentTime;
     this.burst(t, 0.18, 1400, 0.18 * k);
     this.tone(520 + Math.random() * 200, t, 0.12, 'sine', 0.05 * k, this.sfxG, 0, 0.004);
+  }
+
+  /** « Croâ » de grenouille : deux ou trois pulsations rauques, la voix varie d'une grenouille à l'autre */
+  private croak(t: number, k: number) {
+    const ctx = this.ctx!;
+    const f0 = 240 + Math.random() * 260, pulses = Math.random() < 0.4 ? 3 : 2, vol = 0.05 * k * (0.5 + Math.random() * 0.5);
+    for (let i = 0; i < pulses; i++) {
+      const t0 = t + i * (0.13 + Math.random() * 0.03), dur = 0.09 + Math.random() * 0.04;
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0 * 0.85, t0);
+      o.frequency.linearRampToValueAtTime(f0 * 1.15, t0 + dur * 0.4);
+      o.frequency.linearRampToValueAtTime(f0, t0 + dur);
+      // grain rauque : modulation rapide de l'amplitude
+      const am = ctx.createOscillator(); am.frequency.value = 38 + Math.random() * 20;
+      const amg = ctx.createGain(); amg.gain.value = 0.5;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      const vca = ctx.createGain(); vca.gain.value = 0.5;
+      am.connect(amg); amg.connect(vca.gain);
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = f0 * 2.2; f.Q.value = 2.5;
+      o.connect(f); f.connect(vca); vca.connect(g); g.connect(this.sfxG);
+      o.start(t0); am.start(t0); o.stop(t0 + dur + 0.05); am.stop(t0 + dur + 0.05);
+    }
   }
 
   private chirp(t: number) {

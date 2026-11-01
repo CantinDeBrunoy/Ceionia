@@ -9,7 +9,7 @@ import { SeasonState } from './season';
 import { Parts } from './parts';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
-import { bakeStatic, meshVariants, MeshPart, ModelName } from './assets';
+import { bakeStatic, splitTrees, meshVariants, MeshPart, ModelName } from './assets';
 import { broadleafShape, pineShape, bushShape, rockShapes } from './treeShapes';
 
 /**
@@ -59,6 +59,8 @@ interface LayerOpts {
   small?: boolean;
   /** arbres : version simplifiée au loin (calculée en tâche de fond) */
   lod?: boolean;
+  /** triangles au plus, même de près : les parties plus détaillées (branches de certains arbres importés) sont allégées */
+  max?: number;
 }
 
 /**
@@ -133,6 +135,12 @@ class Layer {
     this.near[ch] = []; this.far[ch] = [];
   }
 
+  /** Remplace la géométrie d'une partie (allégée), aussi dans les tuiles déjà construites */
+  setPart(i: number, geo: THREE.BufferGeometry) {
+    this.parts[i].geo = geo;
+    for (const near of this.near) if (near[i]) near[i].geometry = geo;
+  }
+
   /** Version simplifiée des parties, pour les tuiles lointaines */
   setLod(geos: THREE.BufferGeometry[]) {
     this.lodGeo = geos;
@@ -167,6 +175,16 @@ interface Species {
   height: number;
 }
 
+/** Feuillu : tronc, feuillage fleuri et feuillage vert (teintés par la saison) ; le feuillage rétrécit autour de leafY */
+interface Leafy {
+  trunk: Layer;
+  blob: Layer;
+  blob2: Layer;
+  leafY: number;
+  /** cime du feuillage (perchoir) */
+  leafTop: number;
+}
+
 /** Végétation instanciée : forêts par biome, blé, prairies, marais, déserts et fonds marins (les jardins : GardenView) */
 export class VegView {
   group = new THREE.Group();
@@ -174,10 +192,11 @@ export class VegView {
   perches: number[][] = Array.from({ length: NC * NC }, () => []);
   flowers: number[][] = Array.from({ length: NC * NC }, () => []);
   private layers: Layer[] = [];
-  // feuillus (bouleaux) : tronc, feuillage fleuri, feuillage vert
+  /** feuillus : une essence par variante (bouleau, arbre commun, arbre rond…) */
+  private leafy: Leafy[] = [];
+  /** bouleau nu : les feuillus en plein hiver */
+  private bare: Species | null = null;
   private trunk: Layer;
-  private blob: Layer;
-  private blob2: Layer;
   private pine: Layer;
   private pineVars: Species[] = [];
   private snowPines: Species[] = [];
@@ -224,9 +243,6 @@ export class VegView {
   private blob2Mat: THREE.MeshStandardMaterial;
   private pineMat: THREE.MeshStandardMaterial;
   private willowMat: THREE.MeshStandardMaterial;
-  private leafY = 0;
-  /** cime du feuillage des bouleaux (perchoir) */
-  private leafTop = 0.72;
   private imported = false;
   private wheatMat: THREE.MeshStandardMaterial;
   private season: SeasonState | null = null;
@@ -262,16 +278,33 @@ export class VegView {
     addWind(this.tuftMat, this.uTime, 1.3);
     const wood = std(0xffffff, true);
 
-    // feuillus ronds et touffus, sapins à étages, buissons ronds et rochers facettés, façon diorama (voir treeShapes)
-    const leafy = broadleafShape();
+    // arbres modélisés (Quaternius, Ultimate Nature) : bouleaux, arbres communs et ronds, sapins ; leur feuillage garde ses
+    // nuances mais prend la couleur de la saison. Sans modèles : feuillus ronds et sapins à étages procéduraux (treeShapes)
     this.imported = true;
-    this.leafY = leafy.bottom;
-    this.leafTop = leafy.top;
-    this.trunk = layer([{ geo: leafy.trunk, mat: wood }], { lod: true });
-    this.blob = layer([{ geo: leafy.canopy, mat: this.blobMat }], { lod: true });
-    this.blob2 = layer([{ geo: leafy.canopy, mat: this.blob2Mat }], { lod: true });
+    const leafyOf = (trunk: THREE.BufferGeometry, canopy: THREE.BufferGeometry, leafY: number): Leafy => {
+      canopy.computeBoundingBox();
+      return {
+        trunk: layer([{ geo: trunk, mat: wood }], { lod: true, max: 1200 }),
+        blob: layer([{ geo: canopy, mat: this.blobMat }], { lod: true }),
+        blob2: layer([{ geo: canopy, mat: this.blob2Mat }], { lod: true }),
+        leafY, leafTop: canopy.boundingBox!.max.y,
+      };
+    };
+    const round = bakeStatic('tree_round', 1.1, /green/i);
+    for (const m of [bakeStatic('birch', 1.1, /green/i), bakeStatic('tree_common', 1.2, /orange/i), ...(round ? splitTrees(round) : [])])
+      if (m?.tint && m.rest) this.leafy.push(leafyOf(m.rest, m.tint, m.tintY));
+    if (!this.leafy.length) { const t = broadleafShape(); this.leafy.push(leafyOf(t.trunk, t.canopy, t.bottom)); }
+    this.trunk = this.leafy[0].trunk;
+    const bare = bakeStatic('birch_bare', 1.05, /^$/);
+    if (bare?.rest) this.bare = { layer: layer([{ geo: bare.rest, mat: wood }], { lod: true }), height: 1.05 };
     this.pine = layer([{ geo: pineGeo(), mat: this.pineMat }]);
-    for (const v of [0, 1, 2]) { const t = pineShape(v); this.pineVars.push({ layer: layer([{ geo: t.green, mat: this.pineMat }, { geo: t.trunk, mat: wood }], { lod: true }), height: t.top }); }
+    const pines = bakeStatic('pines', 1.2, /green/i);
+    for (const t of pines ? splitTrees(pines) : []) {
+      if (!t.tint || !t.rest) continue;
+      t.tint.computeBoundingBox();
+      this.pineVars.push({ layer: layer([{ geo: t.tint, mat: this.pineMat }, { geo: t.rest, mat: wood }], { lod: true }), height: t.tint.boundingBox!.max.y });
+    }
+    if (!this.pineVars.length) for (const v of [0, 1, 2]) { const t = pineShape(v); this.pineVars.push({ layer: layer([{ geo: t.green, mat: this.pineMat }, { geo: t.trunk, mat: wood }], { lod: true }), height: t.top }); }
     // essences des autres biomes
     const species = (name: ModelName, height: number, tintRe: RegExp, tintMat: THREE.Material, restMat: THREE.Material, skip?: RegExp): Species | null => {
       const m = bakeStatic(name, height, tintRe, skip);
@@ -284,9 +317,12 @@ export class VegView {
     const keep = <T,>(list: (T | null)[]) => list.filter((x): x is T => !!x);
     const palmMat = soft(true);
     addWind(palmMat, this.uTime, 0.03);
-    // sapins enneigés : calottes de neige sur chaque étage
-    const sp = pineShape(0, true);
-    this.snowPines = [{ layer: layer([{ geo: sp.green, mat: this.pineMat }, { geo: sp.snow!, mat: std(0xf4f8fb, true) }, { geo: sp.trunk, mat: wood }], { lod: true }), height: sp.top }];
+    // sapins enneigés : le modèle (neige sur les branches), sinon des calottes de neige sur chaque étage
+    this.snowPines = keep([species('pine_snow', 1.15, /green/i, this.pineMat, wood)]);
+    if (!this.snowPines.length) {
+      const sp = pineShape(0, true);
+      this.snowPines = [{ layer: layer([{ geo: sp.green, mat: this.pineMat }, { geo: sp.snow!, mat: std(0xf4f8fb, true) }, { geo: sp.trunk, mat: wood }], { lod: true }), height: sp.top }];
+    }
     this.palms = keep([species('palm', 1.3, /^$/, palmMat, palmMat), species('palm2', 1.6, /^$/, palmMat, palmMat), species('palm3', 1.25, /^$/, palmMat, palmMat)]);
     this.cacti = keep([species('cactus2', 0.95, /^$/, wood, wood), species('cactus_flowers', 0.72, /^$/, wood, wood), species('cactus', 0.42, /^$/, wood, wood, /black|brown/i)]);
     this.willows = keep([species('willow', 1.2, /green/i, this.willowMat, wood)]);
@@ -367,23 +403,27 @@ export class VegView {
     void this.makeLods();
   }
 
-  /** Arbres simplifiés pour le lointain (meshoptimizer, en tâche de fond) */
+  /** Arbres simplifiés pour le lointain (meshoptimizer, en tâche de fond) ; les parties trop détaillées allégées d'abord */
   private async makeLods() {
     const mod = new SimplifyModifier();
+    const simplify = async (geo: THREE.BufferGeometry, keep: number) => {
+      const src = new THREE.BufferGeometry();
+      src.setAttribute('position', geo.attributes.position);
+      if (geo.attributes.color) src.setAttribute('color', geo.attributes.color);
+      const merged = mergeVertices(src, 1e-3);
+      const n = merged.attributes.position.count;
+      const flat = (await mod.modify(merged, Math.floor(n * (1 - keep)))).toNonIndexed();
+      flat.computeVertexNormals();
+      return flat;
+    };
     for (const l of this.layers) {
       if (!l.o.lod) continue;
       try {
         const geos: THREE.BufferGeometry[] = [];
-        for (const p of l.parts) {
-          const src = new THREE.BufferGeometry();
-          src.setAttribute('position', p.geo.attributes.position);
-          if (p.geo.attributes.color) src.setAttribute('color', p.geo.attributes.color);
-          const merged = mergeVertices(src, 1e-3);
-          const n = merged.attributes.position.count;
-          const out = await mod.modify(merged, Math.floor(n * 0.72));
-          const flat = out.toNonIndexed();
-          flat.computeVertexNormals();
-          geos.push(flat);
+        for (const [i, p] of l.parts.entries()) {
+          const tris = p.geo.attributes.position.count / 3;
+          if (l.o.max && tris > l.o.max) l.setPart(i, await simplify(p.geo, l.o.max / tris));
+          geos.push(await simplify(l.parts[i].geo, 0.28));
         }
         l.setLod(geos);
       } catch (e) {
@@ -603,13 +643,18 @@ export class VegView {
     }
   }
 
-  /** Feuillu : tronc et feuillage qui rétrécit en hiver autour de son centre ; 40 % fleurissent (rose au printemps, orange en automne) */
+  /**
+   * Feuillu, d'une essence tirée selon sa place : tronc et feuillage qui rétrécit à l'automne autour de son centre, branches nues
+   * en plein hiver ; 40 % fleurissent (rose au printemps, orange en automne)
+   */
   private broadleaf(px: number, y: number, pz: number, rot: number, sc: number, col: THREE.Color, s: SeasonState, blossom: boolean) {
-    this.trunk.put(this.at(px, y, pz, rot, sc), col);
+    if (s.leaf < 0.5 && this.bare) { this.tree(this.bare, px, y, pz, rot, sc, col); return; }
+    const t = this.leafy[Math.floor(hash2(Math.floor(px * 7), Math.floor(pz * 7), 77) * this.leafy.length)];
+    t.trunk.put(this.at(px, y, pz, rot, sc), col);
     const ls = Math.max(0.25, s.leaf) * sc, lsy = ls * (0.8 + 0.2 * s.leaf);
-    const m = this.at(px, y + this.leafY * (sc - lsy), pz, rot, ls, lsy, ls);
-    (blossom ? this.blob : this.blob2).put(m, col);
-    this.perch(px, y + this.leafTop * lsy + this.leafY * (sc - lsy) + 0.01, pz);
+    const m = this.at(px, y + t.leafY * (sc - lsy), pz, rot, ls, lsy, ls);
+    (blossom ? t.blob : t.blob2).put(m, col);
+    this.perch(px, y + t.leafTop * lsy + t.leafY * (sc - lsy) + 0.01, pz);
   }
 
   /** Sol de la forêt : fougères, champignons (surtout l'automne), souches et troncs moussus couchés */

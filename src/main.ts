@@ -158,7 +158,7 @@ class Game implements UIHost {
     this.fauna.people = () => this.agents.agents;
     this.eruptions = new Eruptions(w);
     this.streams = new Streams(w, this.terrain.waterMat.normalMap);
-    this.atmosphere = new Atmosphere(w, this.terrain.heightTexture, audio);
+    this.atmosphere = new Atmosphere(w, audio);
     this.life = new AmbientLife(w, this.buildings);
     this.fires = new Fires(w);
     this.traffic = new Traffic(w);
@@ -194,6 +194,7 @@ class Game implements UIHost {
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
     this.expeditions.onNews = (m) => this.ui.toast(m);
+    this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
     this.expeditions.onReport = (r) => {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       this.ui.showReport(r);
@@ -321,7 +322,7 @@ class Game implements UIHost {
     const [stream, cascade] = this.streams.nearness(f);
     const cx = Math.min(N - 1, Math.max(0, Math.floor(f.x))), cz = Math.min(N - 1, Math.max(0, Math.floor(f.z)));
     const coast = 1 - Math.min(1, Math.max(0, (w.waterDist[w.ci(cx, cz)] - 1) / 6));
-    return { stream: stream * zoom, cascade: cascade * zoom, coast: coast * zoom, fire: Math.max(this.life.fireNear(f), this.fires.nearness(f.x, f.z)) * zoom, alt: Math.max(0, w.hAt(f.x, f.z)) };
+    return { stream: stream * zoom, cascade: cascade * zoom, coast: coast * zoom, fire: Math.max(this.life.fireNear(f), this.fires.nearness(f.x, f.z)) * zoom, alt: Math.max(0, w.hAt(f.x, f.z)), frogs: this.fauna.frogsNear(f.x, f.z, 9) * zoom };
   }
 
   /** Réveille le volcan de la case donnée : éruption, grondement et animaux qui détalent */
@@ -577,6 +578,7 @@ class Game implements UIHost {
 
     this.env.update(dt, this.time, this.season, this.cam.target, gdt, this.cam.dist);
     if (!uv) this.atmosphere.update(dt, this.time, this.season, this.env, this.cam.camera, this.cam.target);
+    else this.atmosphere.hideMist();
     this.sim.rain = this.env.rainK;
     this.sim.season = this.time.season;
     this.sim.update(gdt, dt);

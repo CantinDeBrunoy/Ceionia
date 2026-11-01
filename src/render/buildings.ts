@@ -18,13 +18,16 @@ interface Entry {
   /** cheminées du modèle affiché (repère du bâtiment) */
   smoke: number[];
   anim: null | { type: 'pop' | 'evolve'; t: number; swapped: boolean; to: number };
-  /** soubassement de pierre quand le sol de l'emprise n'est pas plat, et sa hauteur */
+  /** fondation sous les murs quand le sol de l'emprise n'est pas plat, et sa hauteur */
   plinth: THREE.Mesh | null;
   plinthH: number;
+  /** ailes du moulin, pales de l'éolienne, qui tournent autour de leur moyeu */
+  rotor: THREE.Mesh | null;
+  spin: { axis: THREE.Vector3; speed: number; phase: number } | null;
 }
 
-/** Pierre des soubassements */
-const PLINTH_MAT = new THREE.MeshStandardMaterial({ color: 0xa39d93, roughness: 1, flatShading: true });
+/** Pierre sombre des fondations */
+const PLINTH_MAT = new THREE.MeshStandardMaterial({ color: 0x7d766c, roughness: 1, flatShading: true });
 
 const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
@@ -32,6 +35,8 @@ export class BuildingView implements WorldListener {
   group = new THREE.Group();
   entries = new Map<number, Entry>();
   private evoTimer = 0;
+  private spinT = 0;
+  private q = new THREE.Quaternion();
   onPlaced: ((b: Building) => void) | null = null;
 
   constructor(private world: World) {
@@ -67,7 +72,7 @@ export class BuildingView implements WorldListener {
     const body = new THREE.Mesh(new THREE.BufferGeometry(), mats.body);
     body.castShadow = true; body.receiveShadow = true;
     group.add(body);
-    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0 };
+    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null };
     if (animate) group.scale.setScalar(0.001);
     this.group.add(group);
     this.entries.set(b.id, e);
@@ -109,18 +114,31 @@ export class BuildingView implements WorldListener {
         e.glow.geometry = m.glow;
         e.glow.visible = true;
       } else if (e.glow) e.glow.visible = false;
+      if (m.rotor) {
+        if (!e.rotor) { e.rotor = new THREE.Mesh(m.rotor.geo, mats.body); e.rotor.castShadow = true; e.group.add(e.rotor); }
+        e.rotor.geometry = m.rotor.geo;
+        e.rotor.position.set(...m.rotor.pivot);
+        e.rotor.visible = true;
+        e.spin = { axis: new THREE.Vector3(...m.rotor.axis), speed: m.rotor.speed * (0.85 + hash2(b.x, b.z, 11) * 0.3), phase: hash2(b.x, b.z, 12) * 6.28 };
+      } else if (e.rotor) { e.rotor.visible = false; e.spin = null; }
     }
     const s = sizeOf(b), w = this.world;
-    // posé sur le coin le plus haut de son emprise : jamais en l'air ; un soubassement rattrape le sol s'il n'est pas plat
-    let hi = -Infinity, lo = Infinity;
-    for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) { const h = w.h(b.x + i, b.z + j); hi = Math.max(hi, h); lo = Math.min(lo, h); }
-    e.group.position.set(b.x + s / 2, hi, b.z + s / 2);
-    const ph = b.kind === 'lamp' || b.kind === 'pier' || hi - lo < 0.03 ? 0 : hi - lo + 0.08;
+    // les lieux à ciel ouvert (place, feu, lampadaire, ponton) se posent au plus bas de leur emprise, sans socle : leurs
+    // petits objets s'enfoncent à peine du côté haut. Les bâtiments à murs se posent à la hauteur médiane (un coin isolé plus
+    // bas, tenu par un voisin, ne les soulève pas tout entiers) ; là où le sol descend, une fondation en retrait sous les murs
+    const hs: number[] = [];
+    for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) hs.push(w.h(b.x + i, b.z + j));
+    hs.sort((p, q) => p - q);
+    const open = b.kind === 'gather' || b.kind === 'lamp' || b.kind === 'pier';
+    const mid = hs.length >> 1, lo = hs[0], base = open ? lo : hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2;
+    e.group.position.set(b.x + s / 2, base, b.z + s / 2);
+    const ph = open || base - lo < 0.03 ? 0 : base - lo + 0.05;
     if (Math.abs(ph - e.plinthH) > 1e-3) {
       e.plinthH = ph;
       if (e.plinth) { e.group.remove(e.plinth); e.plinth.geometry.dispose(); e.plinth = null; }
       if (ph > 0) {
-        e.plinth = new THREE.Mesh(new THREE.BoxGeometry(s * 0.94, ph, s * 0.94).translate(0, 0.02 - ph / 2, 0), PLINTH_MAT);
+        const geo = new THREE.BoxGeometry(s * 0.8, ph, s * 0.8).translate(0, 0.01 - ph / 2, 0);
+        e.plinth = new THREE.Mesh(geo, PLINTH_MAT);
         e.plinth.receiveShadow = e.plinth.castShadow = true;
         e.group.add(e.plinth);
       }
@@ -163,6 +181,9 @@ export class BuildingView implements WorldListener {
   }
 
   update(dt: number, worldAge: number) {
+    // les ailes et les pales tournent, chaque moulin à son rythme
+    this.spinT += dt;
+    for (const e of this.entries.values()) if (e.rotor && e.spin) e.rotor.quaternion.copy(this.q.setFromAxisAngle(e.spin.axis, e.spin.phase + this.spinT * e.spin.speed));
     this.evoTimer -= dt;
     if (this.evoTimer <= 0) {
       this.evoTimer = 0.06;

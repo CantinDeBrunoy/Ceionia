@@ -6,6 +6,10 @@ import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT } from '../render/
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
 
 const MAX_AGENTS = 90;
+/** Part de la population qu'on voit dehors (un passant pour quatre à cinq habitants), et leur nombre au plus */
+const SHOWN = 0.85 / 4, MAX_SHOWN = Math.floor(MAX_AGENTS / 4);
+/** Part de la population en âge et en état de partir en expédition */
+const ABLE = 0.6;
 /** Animations des habitants, quel que soit le pack (premier nom disponible) */
 const WALK = ['Walking_A', 'walk', 'Walk', 'Man_Walk', 'Female_Walk'];
 const RUN = ['Running_A', 'sprint', 'Run', 'Man_Run', 'Female_Run'];
@@ -70,7 +74,13 @@ interface Agent {
   delay: number;
   /** blessé : il se repose chez lui (secondes de jeu restantes) */
   rest: number;
+  /** porté (assis dans une barque…) : position et cap imposés ; et l'endroit de la berge où il est monté */
+  ride: Ride | null;
+  shore: [number, number] | null;
 }
+
+/** Place imposée à un membre d'expédition : il y est assis, sans marcher */
+export interface Ride { x: number; z: number; y: number; heading: number }
 
 class Heap {
   keys: number[] = []; vals: number[] = [];
@@ -121,6 +131,8 @@ export class Agents {
   private lastAge = -1;
   private d = new THREE.Object3D();
   private col = new THREE.Color();
+  /** population du village (donnée à chaque image) */
+  private popTarget = 0;
   private pathBudget = 0;
 
   constructor(private world: World) {
@@ -325,7 +337,7 @@ export class Agents {
     this.agents.push({
       id, home: h.id, x: h.x + 0.5, z: h.z + 0.5, state: 'inside', path: [], pi: 0, timer: this.rnd() * 4, hidden: true, speed: 0.9 + this.rnd() * 0.5,
       heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, actor: null, actorKey: '',
-      spot: null, face: null, deck: null, child: this.rnd() < 0.22, ax: 0, az: 0, act: null, hold: null, mission: false, delay: 0, rest: 0,
+      spot: null, face: null, deck: null, child: this.rnd() < 0.22, ax: 0, az: 0, act: null, hold: null, mission: false, delay: 0, rest: 0, ride: null, shore: null,
     });
   }
 
@@ -363,17 +375,31 @@ export class Agents {
   private byId(id: number) { return this.agents.find((a) => a.id === id); }
 
   /** Habitants adultes libres (ni en expédition, ni blessés) */
-  available() { return this.agents.filter((a) => !a.child && !a.mission && a.rest <= 0).length; }
+  available() {
+    const busy = this.agents.reduce((n, a) => n + (a.mission || a.rest > 0 ? 1 : 0), 0);
+    return Math.max(0, Math.floor(this.popTarget * ABLE) - busy);
+  }
 
-  /** Enrôle une équipe : d'abord ceux qui sont dehors, puis ceux qui sortent de chez eux ; null s'il n'y a pas assez de monde */
+  /**
+   * Enrôle une équipe : d'abord les passants qu'on voit, puis d'autres habitants qui sortent de chez eux (on n'en montre
+   * qu'une partie) ; null s'il n'y a pas assez de monde
+   */
   recruit(n: number): number[] | null {
+    if (this.available() < n) return null;
     const free = this.agents.filter((a) => !a.child && !a.mission && a.rest <= 0).sort((a, b) => +a.hidden - +b.hidden);
-    if (free.length < n) return null;
+    while (free.length < n) {
+      const before = this.agents.length;
+      this.addAgent();
+      if (this.agents.length === before) return null;
+      const a = this.agents[this.agents.length - 1];
+      a.child = false;
+      free.push(a);
+    }
     const team = free.slice(0, n);
     for (const a of team) {
       this.release(a);
       if (a.hidden) { const hb = this.world.buildings.get(a.home); if (hb) { a.x = hb.x + 0.5; a.z = hb.z + 0.5; } }
-      a.mission = true; a.goingHome = false; a.hidden = false; a.delay = 0;
+      a.mission = true; a.goingHome = false; a.hidden = false; a.delay = 0; a.ride = null; a.shore = null;
       a.state = 'doing'; a.timer = 1e9; a.act = null; a.path = []; a.spot = null; a.face = null; a.deck = null;
     }
     return team.map((a) => a.id);
@@ -385,6 +411,7 @@ export class Agents {
     ids.forEach((id, i) => {
       const a = this.byId(id);
       if (!a) return;
+      this.ride(id, null);
       this.startPath(a, cz * N + cx, false);
       a.act = null;
       if (a.state !== 'walking') return;
@@ -401,6 +428,34 @@ export class Agents {
   /** L'équipe, sur place : au travail, en fête… */
   partyAct(ids: number[], act: Act | null) { for (const id of ids) { const a = this.byId(id); if (a) a.act = act; } }
 
+  /** Un membre de l'équipe se rend seul en (x, z) sur place (approcher une bête, passer d'un buisson à l'autre), tourné vers `face` */
+  memberGo(id: number, x: number, z: number, face: number | null = null) {
+    const a = this.byId(id);
+    if (!a || a.ride || !a.mission) return;
+    const cx = Math.min(N - 1, Math.max(0, Math.floor(x))), cz = Math.min(N - 1, Math.max(0, Math.floor(z)));
+    this.startPath(a, cz * N + cx, false);
+    a.act = null;
+    if (a.state === 'walking') { a.spot = [x, z]; a.face = face; a.delay = 0; }
+  }
+
+  /** Ce membre est arrivé (ou ne marche pas) */
+  memberDone(id: number) { const a = this.byId(id); return !a || a.state !== 'walking'; }
+
+  /** Membre porté (assis dans une barque…) à la place donnée ; null le repose sur la berge, là où il est monté */
+  ride(id: number, r: Ride | null) {
+    const a = this.byId(id);
+    if (!a) return;
+    if (r) {
+      if (!a.ride) a.shore = [a.x, a.z];
+      a.ride = r; a.x = r.x; a.z = r.z; a.heading = r.heading;
+      a.state = 'doing'; a.path = []; a.act = 'sit';
+    } else if (a.ride) {
+      a.ride = null;
+      if (a.shore) { a.x = a.shore[0]; a.z = a.shore[1]; a.shore = null; }
+      a.act = 'work';
+    }
+  }
+
   /** Positions des membres de l'équipe, dans l'ordre de marche */
   partyPositions(ids: number[]) { return ids.map((id) => this.byId(id)).filter((a): a is Agent => !!a && !a.hidden).map((a) => [a.x, a.z, a.heading] as [number, number, number]); }
 
@@ -409,6 +464,7 @@ export class Agents {
     ids.forEach((id, i) => {
       const a = this.byId(id);
       if (!a) return;
+      this.ride(id, null);
       a.mission = false; a.act = null; a.delay = 0;
       if (i < injured) a.rest = rest;
       this.sendHome(a);
@@ -450,15 +506,18 @@ export class Agents {
 
   update(dt: number, hour: number, age: number, sheltering: boolean, popTarget: number, glowNight: number) {
     const w = this.world;
+    this.popTarget = popTarget;
     if (w.version !== this.lastVersion) { this.lastVersion = w.version; this.refreshTargets(); }
     const key = `${w.version}|${age}`;
     if (key !== this.spotKey) { this.spotKey = key; this.refreshGardens(age); }
-    const want = Math.min(MAX_AGENTS, Math.floor(popTarget * 0.85));
+    // les passants qu'on voit, plus les membres des expéditions en cours
+    const away = this.agents.reduce((n, a) => n + (a.mission ? 1 : 0), 0);
+    const want = Math.min(MAX_AGENTS, Math.min(MAX_SHOWN, Math.floor(popTarget * SHOWN)) + away);
     while (this.agents.length < want) { const n = this.agents.length; this.addAgent(); if (this.agents.length === n) break; }
-    // moins d'habitants : on retire d'abord ceux qui ne sont pas en expédition
+    // trop de monde dehors : on retire d'abord ceux qui sont chez eux, jamais ceux qui sont en expédition
     while (this.agents.length > want) {
-      let i = this.agents.length - 1;
-      while (i >= 0 && this.agents[i].mission) i--;
+      let i = this.agents.findIndex((a) => !a.mission && a.hidden);
+      if (i < 0) { i = this.agents.length - 1; while (i >= 0 && this.agents[i].mission) i--; }
       if (i < 0) break;
       const [a] = this.agents.splice(i, 1);
       this.release(a); this.dropActor(a);
@@ -541,6 +600,7 @@ export class Agents {
 
   /** Sol sous l'habitant : platelage du ponton une fois sorti de la route, tablier des ponts, sinon le relief */
   private groundY(a: Agent) {
+    if (a.ride) return a.ride.y;
     return a.deck !== null && a.state !== 'inside' && a.pi >= a.path.length ? a.deck : this.world.surfaceAt(a.x, a.z);
   }
 

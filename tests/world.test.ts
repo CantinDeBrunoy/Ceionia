@@ -8,6 +8,7 @@ import { facingRoadRot } from '../src/build/placement';
 import { MISSIONS, mandatoryFor, applyEffects, needBonus } from '../src/sim/missions';
 import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
+import { EVENTS } from '../src/sim/events';
 
 /** Carte de l'île, toujours la même graine : les tests ne dépendent pas du hasard */
 function island() {
@@ -447,5 +448,47 @@ describe('expéditions', () => {
     const [sx, sz] = flatLand(w);
     w.place('school', sx, sz, 0, true, 0, false);
     expect(ex.riskOf(a.choices[2])).toBeCloseTo(risk * 0.7);
+  });
+
+  it('l’équipement rend une expédition plus sûre, part avec l’équipe et revient', () => {
+    const w = island();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 0, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 0, false, 12, 0);
+    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
+    const m = mandatoryFor(0)!, c = m.choices[2];
+    const bare = ex.preview(c).risk;
+    // fabrication : des lances (sans minerai) ; les épées attendent le Moyen Âge et un atelier
+    expect(ex.craft('spear', 0)).toBe(true);
+    expect(ex.craft('spear', 0)).toBe(true);
+    expect(ex.craft('sword', 0)).toBe(false);
+    for (let i = 0; i < 400; i++) ex.update(0.1);
+    expect(w.exp.gear.spear).toBe(2);
+    expect(ex.preview(c).risk).toBeLessThan(bare);
+    // la réserve se relit avec la sauvegarde
+    const w2 = new World();
+    w2.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(w2.exp.gear.spear).toBe(2);
+    // l'équipe emporte les lances : la réserve est vide le temps du voyage
+    const a = ex.start(m, 2)!;
+    expect(a.gear.spear).toBe(2);
+    expect(w.exp.gear.spear).toBe(0);
+    // une option qui demande une barque n'est pas possible sans barque ; les autres changent le risque et le temps
+    a.wait = EVENTS.find((e) => e.id === 'flood')!;
+    expect(ex.canTake(a, 1)).toBe(false);
+    expect(ex.decide(a, 1)).toBe(false);
+    const k = a.riskK;
+    expect(ex.decide(a, 0)).toBe(true);
+    expect(a.riskK).toBeCloseTo(k * 0.85);
+    expect(a.extra).toBe(8);
+    // sur place, un imprévu attend une décision ; sans réponse, l'équipe tranche seule et rentre avec ses lances
+    let report: Report | null = null, asked = 0;
+    ex.onReport = (r) => (report = r);
+    ex.onEvent = () => asked++;
+    for (let i = 0; i < 40000 && !report; i++) { agents.update(0.05, 10, 0, false, 12, 0); ex.update(0.05); }
+    expect(asked).toBeGreaterThan(0);
+    expect(report!.notes.length).toBe(asked + 1);
+    expect(w.exp.gear.spear).toBe(2);
   });
 });

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Parts } from './parts';
 import { KindId, KINDS } from '../build/catalog';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { bakeFit, hasModel, ModelName } from './assets';
+import { bakeFit, bakeFitSplit, hasModel, ModelName } from './assets';
 
 /**
  * Bâtiments importés (CC0), par sorte puis par âge : leurs variantes ; null ou absent, le modèle procédural.
@@ -36,6 +36,12 @@ function brickRemap(i: number) {
 const BACKWARD = new Set<ModelName>(['b_factory_c', 'b_factory_e', 'b_plant_n', 'b_plant_h', 'b_station_s']);
 /** Part de la case occupée par un modèle importé (sa plus grande largeur) ; les maisons laissent une ruelle entre voisines */
 const FIT: Partial<Record<KindId, number>> = { well: 0.62, mill: 0.9, landmark: 0.95, house: 0.84 };
+/** Pièces qui tournent : ailes des moulins à vent (autour de leur axe z), pales de l'éolienne (axe x) ; tours par seconde */
+const ROTORS: Partial<Record<ModelName, { part: RegExp; axis: [number, number, number]; speed: number }>> = {
+  b_windmill_blue: { part: /_fan_/, axis: [0, 0, 1], speed: 0.12 },
+  b_windmill_red: { part: /_fan_/, axis: [0, 0, 1], speed: 0.12 },
+  b_turbine: { part: /^blades$/, axis: [1, 0, 0], speed: 0.3 },
+};
 
 /** Modèle importé de la sorte et de l'âge, s'il y en a : façade vers +z, à l'échelle de la case ; fumée au sommet des ateliers */
 function importedModel(kind: KindId, age: number, v: number, size: number): Model | null {
@@ -44,17 +50,21 @@ function importedModel(kind: KindId, age: number, v: number, size: number): Mode
   const name = names[v % names.length], key = `m|${kind}|${age}|${name}|${size}`;
   const known = cache.get(key);
   if (known) return known;
-  const body = bakeFit(name, size * (FIT[kind] ?? 0.92), BACKWARD.has(name) ? Math.PI : 0, name.startsWith('b_brick_') ? brickRemap(names.indexOf(name)) : undefined);
+  const width = size * (FIT[kind] ?? 0.92), rot = BACKWARD.has(name) ? Math.PI : 0, spin = ROTORS[name];
+  // un moulin à vent, une éolienne : les ailes à part, pour les faire tourner
+  const split = spin ? bakeFitSplit(name, width, rot, spin.part) : null;
+  const body = split ? split.body : bakeFit(name, width, rot, name.startsWith('b_brick_') ? brickRemap(names.indexOf(name)) : undefined);
   if (!body) return null;
-  // la forge et les usines fument par leur plus haute cheminée (le sommet du modèle)
+  const rotor = split && spin ? { geo: split.part, pivot: split.pivot.toArray() as [number, number, number], axis: new THREE.Vector3(...spin.axis).applyQuaternion(split.quat).toArray() as [number, number, number], speed: spin.speed * Math.PI * 2 } : null;
+  // la forge, les usines et les centrales fument par leur plus haute cheminée (le sommet du modèle) ; pas les moulins à vent
   const smokeAt: number[] = [];
-  if ((kind === 'workshop' || kind === 'mill') && age >= 2 && age <= 3) {
+  if ((kind === 'workshop' && age >= 2 && age <= 3) || (kind === 'mill' && age === 3)) {
     const p = body.attributes.position;
     let top = 0;
     for (let i = 1; i < p.count; i++) if (p.getY(i) > p.getY(top)) top = i;
     smokeAt.push(p.getX(top), p.getY(top) + 0.02, p.getZ(top), age === 2 ? 1 : 2);
   }
-  const m: Model = { body, glow: null, smoke: smokeAt };
+  const m: Model = { body, glow: null, smoke: smokeAt, rotor };
   cache.set(key, m);
   return m;
 }
@@ -75,7 +85,11 @@ export interface ModelOpts { v: number; L: boolean; R: boolean; F: boolean; /** 
 const UPSCALE: KindId[] = ['temple', 'workshop', 'mill'];
 const UP = 1.85;
 /** Géométries d'un bâtiment, et sommets de ses cheminées (x, y, z, sorte : 0 foyer, 1 feu de bois, 2 forge ou usine) */
-export interface Model { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; smoke: number[] }
+export interface Model {
+  body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; smoke: number[];
+  /** pièce qui tourne (ailes, pales) : centrée sur son moyeu `pivot`, autour de `axis`, à `speed` radians par seconde */
+  rotor?: { geo: THREE.BufferGeometry; pivot: [number, number, number]; axis: [number, number, number]; speed: number } | null;
+}
 
 /** Cheminées du modèle en cours de construction */
 let smokeOut: number[] = [];
