@@ -20,6 +20,13 @@ export class Sim {
   joy: Need = { cap: 0, demand: 0, ok: true };
   message = '';
   counts: Record<string, number> = {};
+  /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
+  moisture = 0.7;
+  /** pluie (0 … 1) et saison courantes, données par le jeu */
+  rain = 0;
+  season = 0;
+  private baseFood = 0;
+  private fieldFood = 0;
   private grow = 0;
   private lastVersion = -1;
   private recalcTimer = 0;
@@ -42,12 +49,14 @@ export class Sim {
       Jy += k.joy?.[a] ?? 0;
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += k.housing?.[a] ?? 0;
     }
-    let fields = 0, gardens = 0, forests = 0;
+    let fields = 0, fertile = 0, gardens = 0, forests = 0;
     for (let i = 0; i < w.veg.length; i++) {
       const v = w.veg[i];
-      if (v === 2) fields++; else if (v === 3) gardens++; else if (v === 1) forests++;
+      if (v === 2) { fields++; if (w.ash[i]) fertile++; } else if (v === 3) gardens++; else if (v === 1) forests++;
     }
-    F += fields * 3;
+    // les champs semés sur les cendres d'une coulée donnent double récolte
+    this.baseFood = F;
+    this.fieldFood = (fields + fertile) * 3;
     J += fields * 0.5;
     Jy += gardens * 0.8 + forests * 0.08;
     this.counts = counts;
@@ -60,6 +69,7 @@ export class Sim {
 
   private evaluate() {
     const p = this.pop;
+    this.food.cap = this.baseFood + this.fieldFood * this.yieldK;
     this.housing.demand = p;
     this.food.demand = p + 1;
     this.water.demand = p + 1;
@@ -72,6 +82,11 @@ export class Sim {
     this.joy.ok = this.joy.cap >= this.joy.demand;
   }
 
+  /** Rendement des champs selon l'humidité des sols : 55 % en pleine sécheresse, 110 % après la pluie */
+  get yieldK() { return 0.55 + 0.55 * this.moisture; }
+
+  get drought() { return this.moisture < 0.25 && this.fieldFood > 0; }
+
   get canGrow() {
     return this.housing.ok && this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok;
   }
@@ -82,6 +97,7 @@ export class Sim {
     const req = AGES[n];
     const items = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
     for (const [k, c] of Object.entries(req.reqKinds)) items.push({ label: KIND_LABEL[k as KindId], have: this.counts[k] ?? 0, need: c as number });
+    if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: Math.floor(this.world.ore), need: req.reqOre });
     let sum = 0;
     for (const it of items) sum += Math.min(1, it.have / it.need);
     return { next: n, ratio: sum / items.length, items };
@@ -93,15 +109,16 @@ export class Sim {
     if (w.buildings.size === 0) return 'Posez une hutte, une ferme et un point d’eau pour commencer.';
     if (!this.counts.house) return 'Construisez une maison pour accueillir des habitants.';
     if (!this.housing.ok) return 'Il manque des logements pour accueillir de nouveaux habitants.';
-    if (!this.food.ok) return 'Il manque une ferme (ou un champ) pour nourrir tout le monde.';
+    if (!this.food.ok) return this.drought ? 'Sécheresse : les champs donnent moins. Un ponton de pêche ou une ferme de plus aiderait.' : 'Il manque une ferme (ou un champ) pour nourrir tout le monde.';
     if (!this.water.ok) return 'Il manque un puits pour abreuver tout le monde.';
     if (!this.jobs.ok) return 'Les habitants cherchent du travail : construisez un atelier.';
     if (!this.joy.ok) return 'Les habitants aimeraient un lieu de rencontre : feu, place, jardin ou temple.';
+    if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
     const ap = this.ageProgress();
     if (ap) {
       if (p < AGES[ap.next].reqPop) return `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
       const miss = ap.items.find((i) => i.have < i.need);
-      if (miss) return `Pour l’âge suivant : il manque ${miss.need - miss.have} ${miss.label}.`;
+      if (miss) return miss.label.startsWith('minerai') ? `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain (⛏️).` : `Pour l’âge suivant : il manque ${miss.need - miss.have} ${miss.label}.`;
     }
     return 'Le village est paisible et prospère.';
   }
@@ -114,6 +131,11 @@ export class Sim {
       this.recalc();
     }
     if (this.pop > this.housing.cap) this.pop = Math.max(this.housing.cap, 0);
+    // la pluie humidifie les sols ; ils sèchent vite l'été, lentement au printemps et en automne, pas l'hiver
+    if (dt > 0) {
+      if (this.rain > 0.3) this.moisture = Math.min(1, this.moisture + dt * 0.05 * this.rain);
+      else this.moisture = Math.max(0, this.moisture - dt * [0.0015, 0.004, 0.0015, 0][this.season]);
+    }
     this.evaluate();
     if (dt > 0 && this.canGrow) {
       this.grow += dt * 0.55;

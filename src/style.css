@@ -124,5 +124,14 @@ button:disabled, button.locked { opacity: 0.45; cursor: not-allowed; }
   #clock { min-width: 62px; font-size: 13px; }
 }
 body.photo #topbar, body.photo #msg, body.photo #bottom, body.photo #side { display: none; }
+/* monde souterrain : barre dédiée à la place des outils de surface */
+#underBar { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; padding: 8px 10px; align-items: center; }
+#underZone { font-weight: 800; padding: 0 8px; line-height: 1.2; }
+#underZone small { display: block; font-size: 11px; font-weight: 600; color: var(--ink2); }
+body.under #underBar { display: flex; }
+body.under #bottom, body.under #side, body.under #fx-tilt-top, body.under #fx-tilt-bottom { display: none; }
+body.under #fx-vignette { background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(8, 6, 12, 0.55) 100%); }
+#fade { position: absolute; inset: 0; background: #09070c; opacity: 0; transition: opacity 0.35s; pointer-events: none !important; }
+#fade.on { opacity: 1; }
 #photoBar { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; padding: 8px; }
 body.photo #photoBar { display: flex; }

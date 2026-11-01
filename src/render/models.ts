@@ -13,7 +13,12 @@ const WALLS = [C.cream, C.pink, C.mint, C.sky, C.butter, C.lav];
 const ROOFS = [C.terracotta, C.teal, C.red, C.slate, C.brown, C.thatch];
 
 export interface ModelOpts { v: number; L: boolean; R: boolean; F: boolean }
-export interface Model { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null }
+/** Géométries d'un bâtiment, et sommets de ses cheminées (x, y, z, sorte : 0 foyer, 1 feu de bois, 2 forge ou usine) */
+export interface Model { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; smoke: number[] }
+
+/** Cheminées du modèle en cours de construction */
+let smokeOut: number[] = [];
+function smoke(x: number, y: number, z: number, kind: number) { smokeOut.push(x, y, z, kind); }
 
 /** Assombrit une couleur (sous-faces, bordures) */
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
@@ -58,6 +63,8 @@ function house(p: Parts, age: number, o: ModelOpts) {
     p.box(0.14, 0.2, 0.04, 0, 0, 0.29, C.door);
     p.box(0.08, 0.12, 0.03, 0, 0.03, 0.31, C.win, 0, true);
     for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.24, 4), s * 0.03, 0.8, -0.02, C.darkwood, 0, false, s * 0.35);
+    // le foyer fume par le trou du faîte
+    smoke(0, 0.84, -0.02, 1);
     log(p, 0.2, 0.028, 0.31, 0, 0.27, 0.5); log(p, 0.2, 0.028, 0.35, 0, 0.21, 0.5); log(p, 0.2, 0.028, 0.33, 0.048, 0.24, 0.5);
     p.sphere(0.035, -0.13, 0.01, 0.35, C.darkstone, 0, 0.6); p.sphere(0.03, 0.14, 0.01, 0.37, C.stone, 0, 0.6);
     return;
@@ -103,9 +110,11 @@ function house(p: Parts, age: number, o: ModelOpts) {
   if (age === 3) {
     p.box(0.09, 0.32, 0.09, rcx + rw * 0.25, h + 0.05, zc, C.darkbrick);
     p.box(0.11, 0.03, 0.11, rcx + rw * 0.25, h + 0.37, zc, C.darkstone);
+    smoke(rcx + rw * 0.25, h + 0.42, zc, 0);
   } else if (o.v % 2 === 0) {
     p.box(0.08, roofH + 0.1, 0.08, rcx + rw * 0.27, h, zc - 0.1, C.stone);
     p.box(0.1, 0.025, 0.1, rcx + rw * 0.27, h + roofH + 0.1, zc - 0.1, C.darkstone);
+    smoke(rcx + rw * 0.27, h + roofH + 0.15, zc - 0.1, 0);
   }
   // porte : encadrement, battant, marche
   p.box(0.155, 0.215, 0.014, cx, 0, zf - 0.003, frame);
@@ -277,12 +286,14 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
   } else if (age === 2) {
     p.box(0.66, 0.04, 0.52, 0, 0, -0.04, C.darkstone); p.box(0.64, 0.3, 0.5, 0, 0.04, -0.04, C.stone); roof(p, 0, 0.34, -0.04, { w: 0.64, d: 0.5, h: 0.26, color: C.slate, wall: C.stone });
     p.box(0.1, 0.5, 0.1, 0.22, 0.2, -0.1, C.darkstone);
+    smoke(0.22, 0.72, -0.1, 2);
     p.box(0.16, 0.16, 0.02, -0.1, 0.02, 0.215, C.flame, 0, true);
     p.box(0.14, 0.08, 0.1, 0.3, 0, 0.36, C.darkstone); p.box(0.08, 0.05, 0.06, 0.3, 0.08, 0.36, C.metal);
   } else if (age === 3) {
     p.box(0.8, 0.36, 0.6, 0, 0, 0.02, C.brick);
     for (const x of [-0.27, 0, 0.27]) p.gable(0.27, 0.13, 0.62, x, 0.36, 0.02, C.slate);
     p.cyl(0.06, 0.08, 0.75, 8, 0.3, 0.3, -0.18, C.darkbrick); p.cyl(0.07, 0.07, 0.04, 8, 0.3, 1.0, -0.18, C.darkstone);
+    smoke(0.3, 1.06, -0.18, 2);
     for (const x of [-0.26, 0, 0.26]) p.box(0.14, 0.12, 0.02, x, 0.12, 0.33, C.win, 0, true);
   } else {
     p.box(0.72, 0.78, 0.52, 0, 0, 0, 0xc9dde8);
@@ -298,6 +309,7 @@ function gather(p: Parts, age: number, o: ModelOpts) {
     for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; p.sphere(0.055, Math.cos(a) * 0.19, 0.02, Math.sin(a) * 0.19, i % 2 ? C.darkstone : C.stone, 0, 0.7); }
     p.box(0.3, 0.05, 0.05, 0, 0.02, 0, C.darkwood, 0.6); p.box(0.3, 0.05, 0.05, 0, 0.02, 0, C.wood, -0.6);
     p.cone(0.1, 0.28, 5, 0, 0.05, 0, C.flame, true);
+    smoke(0, 0.36, 0, 1);
     log(p, 0.32, 0.04, 0, 0, -0.38); log(p, 0.32, 0.04, -0.34, 0, 0.17, 1.1); log(p, 0.32, 0.04, 0.34, 0, 0.17, -1.1);
   } else if (age === 1) {
     p.cyl(0.46, 0.46, 0.04, 12, 0, 0, 0, 0xe6dccb);
@@ -370,6 +382,7 @@ function mill(p: Parts, age: number) {
     p.box(0.74, 0.4, 0.56, 0, 0, 0.0, C.brick); p.box(0.78, 0.05, 0.6, 0, 0.4, 0, C.roofdark);
     p.cyl(0.08, 0.1, 0.95, 8, -0.22, 0.4, -0.12, C.darkbrick); p.cyl(0.09, 0.09, 0.05, 8, -0.22, 1.3, -0.12, C.darkstone);
     p.cyl(0.06, 0.07, 0.6, 8, 0.1, 0.4, -0.12, C.darkbrick);
+    smoke(-0.22, 1.37, -0.12, 2); smoke(0.1, 1.02, -0.12, 2);
     for (const x of [-0.22, 0.0, 0.22]) p.box(0.12, 0.14, 0.02, x, 0.12, 0.285, C.win, 0, true);
     p.sphere(0.14, -0.22, 1.4, -0.12, 0xe6e6e6, 0, 0.6); p.sphere(0.12, -0.14, 1.55, -0.1, 0xefefef, 0, 0.6);
   } else {
@@ -420,6 +433,38 @@ function lamp(p: Parts, age: number) {
   else { p.cyl(0.02, 0.03, 0.65, 6, 0, 0, 0, C.metal); p.box(0.18, 0.025, 0.04, 0.07, 0.65, 0, C.metal); p.box(0.1, 0.02, 0.05, 0.14, 0.64, 0, 0xfaf6e6, 0, true); }
 }
 
+/**
+ * Ponton de pêche : la façade (+z) donne sur l'eau ; le platelage s'avance au-delà de la case, sur pilotis.
+ * Séchoir à poissons à la préhistoire, cabane de pêcheur, conserverie de brique, port moderne
+ */
+function pier(p: Parts, age: number, o: ModelOpts) {
+  const deck = age >= 4 ? C.metal : age === 3 ? C.darkstone : C.wood, post = age >= 3 ? C.darkstone : C.darkwood;
+  const len = age === 0 ? 0.55 : 0.85, w = age === 0 ? 0.22 : 0.3;
+  p.box(w, 0.035, len, 0, 0.0, 0.1 + len / 2, deck);
+  for (let z = 0.2; z <= 0.1 + len; z += 0.28) for (const s of [-1, 1]) p.cyl(0.018, 0.02, 0.6, 5, s * (w / 2 - 0.02), -0.58, z, post);
+  if (age === 0) {
+    // séchoir : deux perches, une traverse, des poissons pendus ; une pirogue tirée sur la berge
+    for (const s of [-1, 1]) p.cyl(0.012, 0.014, 0.42, 4, s * 0.2, 0, -0.18, C.wood);
+    p.box(0.44, 0.02, 0.02, 0, 0.4, -0.18, C.darkwood);
+    for (let i = 0; i < 4; i++) p.box(0.03, 0.09, 0.012, -0.13 + i * 0.09, 0.3, -0.18, i % 2 ? 0xc8d4dc : 0xd8b28c);
+    p.box(0.1, 0.05, 0.42, -0.26, 0.0, 0.0, C.darkwood, 0.2);
+    return;
+  }
+  // cabane, entrepôt ou hangar à l'arrière de la case
+  const wall = age === 4 ? C.white : age === 3 ? C.brick : WALLS[o.v % 6], roof = age === 4 ? C.sky : age === 3 ? C.slate : C.thatch;
+  const sw = age >= 3 ? 0.6 : 0.42, sd = age >= 3 ? 0.34 : 0.3, sh = age >= 3 ? 0.34 : 0.26;
+  p.box(sw, sh, sd, 0, 0, -0.22, wall);
+  if (age >= 4) p.box(sw + 0.04, 0.04, sd + 0.04, 0, sh, -0.22, roof);
+  else p.gable(sw + 0.06, 0.14, sd + 0.06, 0, sh, -0.22, roof);
+  p.box(0.1, 0.16, 0.012, 0, 0, -0.22 + sd / 2 + 0.004, C.door);
+  if (age >= 2) p.box(0.1, 0.08, 0.012, sw * 0.3, 0.12, -0.22 + sd / 2 + 0.004, C.win, 0, true);
+  // filets, casiers et bitte d'amarrage
+  p.box(0.12, 0.06, 0.08, w / 2 - 0.02, 0.035, 0.75, age >= 3 ? C.metal : C.darkwood);
+  p.cyl(0.02, 0.02, 0.08, 6, -w / 2 + 0.03, 0.035, 0.9, C.darkstone);
+  if (age === 3) { p.cyl(0.04, 0.05, 0.5, 6, -0.22, sh, -0.3, C.darkbrick); smoke(-0.22, sh + 0.52, -0.3, 2); }
+  if (age === 4) { p.cyl(0.015, 0.015, 0.7, 5, w / 2, 0, 0.5, C.red); p.box(0.4, 0.02, 0.02, w / 2 - 0.18, 0.7, 0.5, C.red); }
+}
+
 const cache = new Map<string, Model>();
 
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
@@ -427,6 +472,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   let m = cache.get(key);
   if (m) return m;
   const p = new Parts();
+  smokeOut = [];
   switch (kind) {
     case 'house': house(p, age, o); break;
     case 'farm': farm(p, age); break;
@@ -437,8 +483,9 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'mill': mill(p, Math.max(2, age)); break;
     case 'landmark': landmark(p, Math.max(2, age)); break;
     case 'lamp': lamp(p, age); break;
+    case 'pier': pier(p, age, o); break;
   }
-  m = p.build();
+  m = { ...p.build(), smoke: smokeOut };
   cache.set(key, m);
   return m;
 }

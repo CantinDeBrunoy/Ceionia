@@ -15,6 +15,8 @@ interface Entry {
   body: THREE.Mesh;
   glow: THREE.Mesh | null;
   key: string;
+  /** cheminées du modèle affiché (repère du bâtiment) */
+  smoke: number[];
   anim: null | { type: 'pop' | 'evolve'; t: number; swapped: boolean; to: number };
 }
 
@@ -59,7 +61,7 @@ export class BuildingView implements WorldListener {
     const body = new THREE.Mesh(new THREE.BufferGeometry(), mats.body);
     body.castShadow = true; body.receiveShadow = true;
     group.add(body);
-    const e: Entry = { b, group, body, glow: null, key: '', anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null };
+    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null };
     if (animate) group.scale.setScalar(0.001);
     this.group.add(group);
     this.entries.set(b.id, e);
@@ -95,6 +97,7 @@ export class BuildingView implements WorldListener {
     if (key !== e.key) {
       e.key = key;
       e.body.geometry = m.body;
+      e.smoke = m.smoke;
       if (m.glow) {
         if (!e.glow) { e.glow = new THREE.Mesh(m.glow, mats.glow); e.glow.castShadow = false; e.group.add(e.glow); }
         e.glow.geometry = m.glow;
@@ -119,6 +122,21 @@ export class BuildingView implements WorldListener {
   }
 
   refreshAll() { for (const e of this.entries.values()) this.refresh(e.b); }
+
+  /** Cheminées de tous les bâtiments en monde : (x, y, z, sorte) à la suite */
+  chimneys(out: number[]) {
+    out.length = 0;
+    const v = new THREE.Vector3();
+    for (const e of this.entries.values()) {
+      if (!e.smoke.length || e.anim) continue;
+      e.group.updateMatrixWorld();
+      for (let i = 0; i < e.smoke.length; i += 4) {
+        v.set(e.smoke[i] + e.body.position.x, e.smoke[i + 1], e.smoke[i + 2] + e.body.position.z).applyMatrix4(e.group.matrixWorld);
+        out.push(v.x, v.y, v.z, e.smoke[i + 3]);
+      }
+    }
+    return out;
+  }
 
   /** Appelé quand le relief change : replace verticalement */
   syncHeights() {

@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { clamp } from './rng';
 import { N } from '../world/world';
 
+/** Distances de caméra (zoom maximal, vue d'ensemble) à l'échelle de la carte */
+const maxDistFor = () => 150 * (N / 48) * 0.8;
+const homeFor = () => 62 * (N / 48) * 0.8;
+
 export interface PointerInfo { x: number; y: number; touch: boolean; button: number }
 
 export interface ToolInput {
@@ -18,8 +22,8 @@ export class CameraRig {
   target = new THREE.Vector3(N / 2, 0, N / 2);
   yaw = 0.75;
   pitch = 0.85;
-  dist = 62;
-  private goal = { yaw: 0.75, pitch: 0.85, dist: 62, x: N / 2, z: N / 2 };
+  dist = homeFor();
+  private goal = { yaw: 0.75, pitch: 0.85, dist: homeFor(), x: N / 2, z: N / 2 };
   private pointers = new Map<number, { x: number; y: number; touch: boolean; button: number }>();
   private mode: 'none' | 'tool' | 'rotate' | 'pan' | 'gesture' = 'none';
   private gest = { d: 0, a: 0, mx: 0, my: 0 };
@@ -27,16 +31,21 @@ export class CameraRig {
   keys = new Set<string>();
   handler: ToolInput | null = null;
   enabled = true;
+  /** bornes du zoom (resserrées sous terre) */
+  minDist = 10;
+  maxDist = maxDistFor();
+  /** inclinaison minimale (vue plus plongeante sous terre, pour voir par-dessus les parois) */
+  minPitch = 0.25;
 
   constructor(private el: HTMLElement) {
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.5, 1400);
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.5, 1800);
     el.style.touchAction = 'none';
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('pointerdown', (e) => this.onDown(e));
     window.addEventListener('pointermove', (e) => this.onMove(e));
     window.addEventListener('pointerup', (e) => this.onUp(e));
     window.addEventListener('pointercancel', (e) => this.onUp(e, true));
-    el.addEventListener('wheel', (e) => { e.preventDefault(); this.goal.dist = clamp(this.goal.dist * Math.exp(e.deltaY * 0.0012), 10, 150); }, { passive: false });
+    el.addEventListener('wheel', (e) => { e.preventDefault(); this.goal.dist = clamp(this.goal.dist * Math.exp(e.deltaY * 0.0012), this.minDist, this.maxDist); }, { passive: false });
     window.addEventListener('keydown', (e) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) this.keys.add(e.key.toLowerCase()); });
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener('blur', () => this.keys.clear());
@@ -90,7 +99,7 @@ export class CameraRig {
       const a = t[0], b = t[1];
       const d = Math.hypot(a.x - b.x, a.y - b.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      if (this.gest.d > 10) this.goal.dist = clamp(this.goal.dist * (this.gest.d / Math.max(d, 10)), 10, 150);
+      if (this.gest.d > 10) this.goal.dist = clamp(this.goal.dist * (this.gest.d / Math.max(d, 10)), this.minDist, this.maxDist);
       let da = ang - this.gest.a;
       if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
       this.goal.yaw += da;
@@ -103,7 +112,7 @@ export class CameraRig {
     this.last = { x: i.x, y: i.y };
     if (this.mode === 'rotate') {
       this.goal.yaw -= dx * 0.006;
-      this.goal.pitch = clamp(this.goal.pitch + dy * 0.005, 0.25, 1.5);
+      this.goal.pitch = clamp(this.goal.pitch + dy * 0.005, this.minPitch, 1.5);
     } else if (this.mode === 'pan') this.panScreen(dx, dy);
     else if (this.mode === 'tool') this.handler?.move(i);
   }
@@ -136,13 +145,26 @@ export class CameraRig {
     this.goal.z = clamp(this.goal.z, 2, N - 2);
   }
 
-  zoom(f: number) { this.goal.dist = clamp(this.goal.dist * f, 10, 150); }
+  zoom(f: number) { this.goal.dist = clamp(this.goal.dist * f, this.minDist, this.maxDist); }
+
+  /** Vue courante (pour y revenir) */
+  view() { return { ...this.goal }; }
+
+  /** Saute à une vue : position, angle et distance (sans glissement depuis la vue précédente) */
+  jump(v: { x: number; z: number; yaw?: number; pitch?: number; dist?: number }, y = 0) {
+    Object.assign(this.goal, v);
+    this.goal.dist = clamp(this.goal.dist, this.minDist, this.maxDist);
+    this.goal.pitch = clamp(this.goal.pitch, this.minPitch, 1.5);
+    this.target.set(this.goal.x, y, this.goal.z);
+    this.yaw = this.goal.yaw; this.pitch = this.goal.pitch; this.dist = this.goal.dist;
+    this.apply(1);
+  }
   rotate(d: number) { this.goal.yaw += d; }
 
   /** Vue d'ensemble */
   reset() { this.goal = { yaw: 0.75, pitch: 0.85, dist: this.homeDist(), x: N / 2, z: N / 2 }; }
 
-  homeDist() { return clamp(62 * Math.max(1, 1.05 / Math.max(0.3, this.camera.aspect)), 62, 140); }
+  homeDist() { const home = homeFor(); return clamp(home * Math.max(1, 1.05 / Math.max(0.3, this.camera.aspect)), home, maxDistFor() * 0.93); }
 
   update(dt: number, groundY: (x: number, z: number) => number) {
     const k = this.keys;
@@ -160,8 +182,8 @@ export class CameraRig {
     }
     if (k.has('q')) this.goal.yaw += dt * 1.4;
     if (k.has('e')) this.goal.yaw -= dt * 1.4;
-    if (k.has('+') || k.has('=')) this.goal.dist = clamp(this.goal.dist * (1 - dt * 1.2), 10, 150);
-    if (k.has('-')) this.goal.dist = clamp(this.goal.dist * (1 + dt * 1.2), 10, 150);
+    if (k.has('+') || k.has('=')) this.goal.dist = clamp(this.goal.dist * (1 - dt * 1.2), this.minDist, this.maxDist);
+    if (k.has('-')) this.goal.dist = clamp(this.goal.dist * (1 + dt * 1.2), this.minDist, this.maxDist);
     const f = 1 - Math.exp(-dt * 10);
     this.yaw += (this.goal.yaw - this.yaw) * f;
     this.pitch += (this.goal.pitch - this.pitch) * f;
@@ -170,6 +192,9 @@ export class CameraRig {
     this.target.z += (this.goal.z - this.target.z) * f;
     this.target.y += (Math.max(0, groundY(this.target.x, this.target.z)) - this.target.y) * f;
     this.apply(1);
+    // la caméra passe par-dessus les sommets au lieu de les traverser
+    const p = this.camera.position, floor = groundY(p.x, p.z) + 1.5;
+    if (p.y < floor) { p.y = floor; this.camera.lookAt(this.target); }
   }
 
   apply(_: number) {

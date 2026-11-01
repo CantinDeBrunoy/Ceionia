@@ -1,4 +1,4 @@
-import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS } from '../build/tools';
+import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, SEASONS } from '../build/catalog';
 import { Sim } from '../sim/sim';
 import { GameTime } from '../core/time';
@@ -7,7 +7,6 @@ import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights } from '../world/mapgen';
-import { N } from '../world/world';
 
 export interface UIHost {
   tools: ToolController;
@@ -24,6 +23,16 @@ export interface UIHost {
   toMenu(): void;
   setPhoto(on: boolean): void;
   capture(): void;
+  /** monde souterrain : descendre par l'entrée la plus proche, remonter, poser des torches */
+  enterNearest(): void;
+  exitUnder(): void;
+  torchMode: boolean;
+  underZone(): string | null;
+  /** qualité graphique et catastrophes naturelles */
+  quality: 'high' | 'medium' | 'low';
+  setQuality(q: 'high' | 'medium' | 'low'): void;
+  disasters: boolean;
+  setDisasters(on: boolean): void;
 }
 
 const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> = {
@@ -41,6 +50,7 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
   // 🪨 n'existe pas dans les polices emoji de Windows 10
   rocks: { icon: '🗿', label: 'Rochers' },
   cave: { icon: '🕳️', label: 'Grotte' },
+  fissure: { icon: '⚡', label: 'Faille' },
   erase: { icon: '🧽', label: 'Gomme', key: '9' },
   road: { icon: '🛤️', label: 'Route', key: 'R' },
   bulldoze: { icon: '💥', label: 'Démolir', key: 'X' },
@@ -49,7 +59,7 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
 
 const TABS = [
   { id: 'relief', icon: '⛰️', label: 'Relief', tools: ['none', 'raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
-  { id: 'nature', icon: '🌳', label: 'Nature', tools: ['none', 'forest', 'field', 'garden', 'rocks', 'cave', 'erase'] },
+  { id: 'nature', icon: '🌳', label: 'Nature', tools: ['none', 'forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'] },
   { id: 'build', icon: '🏘️', label: 'Bâtir', tools: ['none', 'road', 'bulldoze', 'move'] },
 ];
 
@@ -105,7 +115,14 @@ export class UI {
         <button id="bRedo" title="Rétablir (Ctrl+Y)">↪️</button>
         <button id="bRot" title="Tourner le bâtiment (T)">🔄</button>
         <button id="bHome" title="Vue d'ensemble">🎯</button>
+        <button id="bUnder" title="Explorer le monde souterrain (U)">⛏️</button>
       </div>
+      <div id="underBar" class="panel">
+        <div id="underZone"></div>
+        <button id="bTorch" title="Poser ou retirer des torches (T)">🔥 Torches</button>
+        <button id="bUp" title="Remonter à la surface (U)">⬆️ Remonter</button>
+      </div>
+      <div id="fade"></div>
       <div id="bottom">
         <div id="brush" class="panel"><span>Taille</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><span id="radv">3</span></div>
         <div id="items" class="panel"></div>
@@ -134,6 +151,9 @@ export class UI {
     $('#bRedo').onclick = () => host.tools.redo();
     $('#bRot').onclick = () => host.tools.rotate();
     $('#bHome').onclick = () => host.cam.reset();
+    $('#bUnder').onclick = () => host.enterNearest();
+    $('#bUp').onclick = () => host.exitUnder();
+    $('#bTorch').onclick = () => { host.torchMode = !host.torchMode; host.audio.sfxClick(); this.update(); };
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
@@ -184,7 +204,7 @@ export class UI {
       const on = b.dataset.tool ? b.dataset.tool === tl.tool : tl.tool === 'build' && b.dataset.kind === tl.kind;
       b.classList.toggle('active', on);
     });
-    const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && tl.tool !== 'cave');
+    const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && !SINGLE_TOOLS.includes(tl.tool));
     $('#brush').style.display = brush ? 'flex' : 'none';
     // l'onglet suit l'outil
     const tabOf = tabOfTool(tl.tool, this.tab);
@@ -235,6 +255,11 @@ export class UI {
     $('#clock').innerHTML = `${SEASON_ICON[time.season]} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${SEASONS[time.season]} ${WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? WEATHER_ICON[env.weatherKind] : ''}</small>`;
     $('#bPause').textContent = time.paused ? '▶️' : '⏸';
     $('#bSpeed').textContent = `×${time.speed}`;
+    const zone = this.host.underZone();
+    if (zone) {
+      $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Cliquez sur un filon pour l’extraire, sur un puits de lumière pour remonter'}</small>`;
+      $('#bTorch').classList.toggle('active', this.host.torchMode);
+    }
     ($('#bUndo') as HTMLButtonElement).disabled = !this.host.tools.undoStack.length;
     ($('#bRedo') as HTMLButtonElement).disabled = !this.host.tools.redoStack.length;
   }
@@ -259,6 +284,11 @@ export class UI {
         <div class="row">
           ${[['auto', 'Auto'], ['clear', '☀️ Clair'], ['rain', '🌧️ Pluie'], ['snow', '🌨️ Neige'], ['fog', '🌫️ Brume']].map(([k, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${l}</button>`).join('')}
         </div>
+        <h4>Graphismes</h4>
+        <div class="row">${[['high', 'Haute (halo de nuit)'], ['medium', 'Normale'], ['low', 'Réduite']].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+        <h4>Nature</h4>
+        <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? '🌋 Activées' : 'Désactivées'}</button></div>
+        <div class="row"><small>Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments.</small></div>
         <h4>Audio</h4>
         <div class="row"><label>Musique</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" class="${a.muteMusic ? 'active' : ''}">${a.muteMusic ? '🔇' : '🔊'}</button></div>
         <div class="row"><label>Sons</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" class="${a.muteSfx ? 'active' : ''}">${a.muteSfx ? '🔇' : '🔊'}</button></div>
@@ -298,6 +328,15 @@ export class UI {
       if (k === 'auto') h.env.wantKind = 'clear';
       ov.querySelectorAll('[data-w]').forEach((x) => x.classList.toggle('active', x === b));
     }));
+    ov.querySelectorAll<HTMLButtonElement>('[data-q]').forEach((b) => (b.onclick = () => {
+      h.setQuality(b.dataset.q as 'high' | 'medium' | 'low');
+      ov.querySelectorAll('[data-q]').forEach((x) => x.classList.toggle('active', x === b));
+    }));
+    q('#gDisasters').onclick = () => {
+      h.setDisasters(!h.disasters);
+      q('#gDisasters').textContent = h.disasters ? '🌋 Activées' : 'Désactivées';
+      q('#gDisasters').classList.toggle('active', h.disasters);
+    };
     rng('#sMusic', (v) => (a.musicVol = v));
     rng('#sSfx', (v) => (a.sfxVol = v));
     q('#mMusic').onclick = () => { a.muteMusic = !a.muteMusic; q('#mMusic').textContent = a.muteMusic ? '🔇' : '🔊'; q('#mMusic').classList.toggle('active', a.muteMusic); h.applySettings(); };
@@ -319,13 +358,14 @@ export interface MenuHost {
 }
 
 export function drawPreview(canvas: HTMLCanvasElement, heights: ArrayLike<number>) {
-  const S = N + 1;
-  canvas.width = canvas.height = S * 3;
+  // côté de la grille (chaque carte a sa taille), aperçu d'environ 290 pixels
+  const S = Math.round(Math.sqrt(heights.length)), K = Math.max(1, Math.round(290 / S)), P = S * K;
+  canvas.width = canvas.height = P;
   const g = canvas.getContext('2d')!;
-  const img = g.createImageData(S * 3, S * 3);
-  for (let y = 0; y < S * 3; y++)
-    for (let x = 0; x < S * 3; x++) {
-      const fx = Math.min(S - 1.001, x / 3), fz = Math.min(S - 1.001, y / 3);
+  const img = g.createImageData(P, P);
+  for (let y = 0; y < P; y++)
+    for (let x = 0; x < P; x++) {
+      const fx = Math.min(S - 1.001, x / K), fz = Math.min(S - 1.001, y / K);
       const ix = Math.floor(fx), iz = Math.floor(fz);
       const at = (a: number, b: number) => heights[Math.min(S - 1, b) * S + Math.min(S - 1, a)];
       const h = at(ix, iz);
@@ -334,8 +374,12 @@ export function drawPreview(canvas: HTMLCanvasElement, heights: ArrayLike<number
       let r: number, gg: number, b: number;
       if (h < 0) { const d = Math.min(1, -h / 1.5); r = 170 - 80 * d; gg = 214 - 50 * d; b = 215 - 20 * d; }
       else if (h < 0.3) { r = 238; gg = 220; b = 170; }
-      else { const k = Math.min(1, h / 5); r = 150 + 60 * k; gg = 207 - 20 * k; b = 126 + 30 * k; }
-      const i = (y * S * 3 + x) * 4;
+      else {
+        // herbe → roche, puis neiges éternelles sur les sommets
+        const k = Math.min(1, h / 5), sn = Math.min(1, Math.max(0, (h - 7) / 1.2));
+        r = 150 + 60 * k + 40 * sn; gg = 207 - 20 * k + 50 * sn; b = 126 + 30 * k + 80 * sn;
+      }
+      const i = (y * P + x) * 4;
       img.data[i] = Math.min(255, r * shade); img.data[i + 1] = Math.min(255, gg * shade); img.data[i + 2] = Math.min(255, b * shade); img.data[i + 3] = 255;
     }
   g.putImageData(img, 0, 0);

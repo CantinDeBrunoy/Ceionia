@@ -1,4 +1,4 @@
-export type KindId = 'house' | 'farm' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp';
+export type KindId = 'house' | 'farm' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp';
 
 export interface KindDef {
   id: KindId;
@@ -27,6 +27,12 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['Séchoir à grains', 'Ferme', 'Grange', 'Ferme à silo', 'Serre'],
     desc: 'Nourrit les habitants.',
     food: [6, 9, 13, 20, 30], jobs: [1, 2, 2, 3, 3],
+  },
+  pier: {
+    id: 'pier', size: 1, minAge: 0, icon: '🎣',
+    names: ['Coin de pêche', 'Ponton de pêche', 'Pêcherie', 'Conserverie', 'Port de pêche'],
+    desc: 'Nourrit grâce aux poissons. À poser au bord de l’eau : mer, rivière ou lac.',
+    food: [4, 6, 9, 13, 18], jobs: [1, 1, 2, 3, 3],
   },
   well: {
     id: 'well', size: 1, minAge: 0, icon: '💧',
@@ -72,7 +78,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'farm', 'well', 'workshop', 'gather', 'temple', 'mill', 'landmark', 'lamp'];
+export const KIND_ORDER: KindId[] = ['house', 'farm', 'pier', 'well', 'workshop', 'gather', 'temple', 'mill', 'landmark', 'lamp'];
 
 export interface AgeDef {
   name: string;
@@ -80,18 +86,20 @@ export interface AgeDef {
   /** Prérequis pour ATTEINDRE cet âge */
   reqPop: number;
   reqKinds: Partial<Record<KindId, number>>;
+  /** minerai tiré du monde souterrain */
+  reqOre?: number;
 }
 
 export const AGES: AgeDef[] = [
   { name: 'Préhistoire', tagline: 'Feux de camp et huttes', reqPop: 0, reqKinds: {} },
   { name: 'Antiquité', tagline: 'Cabanes, temples et agoras', reqPop: 12, reqKinds: { house: 4, farm: 1, well: 1, workshop: 1 } },
   { name: 'Médiéval', tagline: 'Colombages, églises et châteaux', reqPop: 30, reqKinds: { house: 8, temple: 1, workshop: 2, gather: 1 } },
-  { name: 'Industriel', tagline: 'Briques, cheminées et gares', reqPop: 60, reqKinds: { house: 12, temple: 1, mill: 1, landmark: 1, gather: 2 } },
-  { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2 } },
+  { name: 'Industriel', tagline: 'Briques, cheminées et gares', reqPop: 60, reqKinds: { house: 12, temple: 1, mill: 1, landmark: 1, gather: 2 }, reqOre: 12 },
+  { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2 }, reqOre: 30 },
 ];
 
 export const KIND_LABEL: Record<KindId, string> = {
-  house: 'maisons', farm: 'fermes', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
+  house: 'maisons', farm: 'fermes', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
 };
 

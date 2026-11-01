@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, Snapshot } from '../world/world';
+import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, VEG_FISSURE, Snapshot } from '../world/world';
 import { sculpt, raiseVolcano, SculptTool } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
@@ -10,10 +10,12 @@ import { facingRoadRot, footprintOrigin } from './placement';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 
-export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'rocks' | 'cave' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
+export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
 export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'];
-export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'rocks', 'cave', 'erase'];
+export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'];
+/** Décors posés d'un clic, sans pinceau */
+export const SINGLE_TOOLS: ToolId[] = ['cave', 'fissure'];
 
 export interface ToolHost {
   world: World;
@@ -25,6 +27,10 @@ export interface ToolHost {
   getAge(): number;
   toast(msg: string): void;
   changed(): void;
+  /** descend dans le monde souterrain par l'entrée (case) donnée */
+  enterUnder(cell: number): void;
+  /** fait entrer en éruption le volcan posé sur la case */
+  erupt(cell: number): void;
 }
 
 export class ToolController implements ToolInput {
@@ -128,7 +134,13 @@ export class ToolController implements ToolInput {
     this.hit = this.h.terrain.pick(ray);
   }
 
-  hover(e: PointerInfo) { this.pickAt(e); this.refreshVisuals(); }
+  hover(e: PointerInfo) {
+    this.pickAt(e);
+    this.refreshVisuals();
+    // une grotte ou une faille sous le curseur : on peut y descendre ; un volcan : on peut le réveiller
+    const w = this.h.world, hit = this.hit;
+    this.h.canvas.style.cursor = this.tool === 'none' && hit && (w.entranceAt(hit.x, hit.z) >= 0 || w.volcanoAt(hit.x, hit.z) >= 0) ? 'pointer' : '';
+  }
 
   down(e: PointerInfo) {
     this.pickAt(e);
@@ -137,6 +149,14 @@ export class ToolController implements ToolInput {
     this.refreshVisuals();
     if (!this.hit) return;
     const t = this.tool;
+    // outil « Voir » : un clic sur une grotte ou une faille fait descendre sous terre, un clic sur un volcan le fait entrer en éruption
+    if (t === 'none') {
+      const cell = this.h.world.entranceAt(this.hit.x, this.hit.z);
+      if (cell >= 0) { this.pressed = false; this.h.enterUnder(cell); return; }
+      const vol = this.h.world.volcanoAt(this.hit.x, this.hit.z);
+      if (vol >= 0) { this.pressed = false; this.h.erupt(vol); }
+      return;
+    }
     this.beginStroke();
     if (t === 'volcano') {
       // le volcan se pose d'un seul clic
@@ -155,7 +175,7 @@ export class ToolController implements ToolInput {
     this.refreshVisuals();
     if (!this.pressed || !this.hit) return;
     const t = this.tool;
-    if (VEG_TOOLS.includes(t) && t !== 'cave') this.applyVeg();
+    if (VEG_TOOLS.includes(t) && !SINGLE_TOOLS.includes(t)) this.applyVeg();
     else if (t === 'road') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
   }
@@ -177,7 +197,7 @@ export class ToolController implements ToolInput {
       const w = this.h.world;
       const changed = sculpt(w, t as SculptTool, this.hit.x, this.hit.z, this.radius, Math.min(dt, 0.05), this.ctx);
       if (changed) this.mark();
-    } else if (VEG_TOOLS.includes(t) && t !== 'cave') {
+    } else if (VEG_TOOLS.includes(t) && !SINGLE_TOOLS.includes(t)) {
       this.vegTimer -= dt;
       if (this.vegTimer <= 0) { this.vegTimer = 0.15; this.applyVeg(); }
     }
@@ -193,11 +213,12 @@ export class ToolController implements ToolInput {
     const hit = this.hit;
     if (!hit) return;
     const w = this.h.world;
-    if (this.tool === 'cave') {
-      // une seule entrée, creusée dans la pente sous le curseur
-      const cx = Math.floor(hit.x), cz = Math.floor(hit.z);
-      if (w.setVeg(cx, cz, VEG_CAVE)) { this.mark(); this.h.audio.sfxPlace(); }
-      else this.h.toast('Une grotte se creuse dans une pente raide (falaise, montagne).');
+    if (SINGLE_TOOLS.includes(this.tool)) {
+      // une seule entrée du souterrain sous le curseur
+      const cx = Math.floor(hit.x), cz = Math.floor(hit.z), cave = this.tool === 'cave';
+      if (w.setVeg(cx, cz, cave ? VEG_CAVE : VEG_FISSURE)) { this.mark(); this.h.audio.sfxPlace(); }
+      else this.h.toast(cave ? 'Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.'
+        : 'Une faille fend un sol assez plat, à l’écart des bâtiments, des routes et des autres entrées.');
       return;
     }
     const r = Math.max(0.6, this.radius * 0.8);
@@ -247,7 +268,11 @@ export class ToolController implements ToolInput {
     const k = w.inCells(c.x, c.z) ? w.ci(c.x, c.z) : -1;
     if (k < 0) return;
     if (w.road[k]) { this.mark(); w.setRoad(c.x, c.z, false); this.h.audio.sfxDestroy(); }
-    else if (w.veg[k]) { this.mark(); w.setVeg(c.x, c.z, 0); }
+    else if (w.decor[k]) {
+      // n'importe quelle case de l'emprise d'une grotte ou d'une faille la fait disparaître
+      const e = w.entranceAt(c.x + 0.5, c.z + 0.5);
+      if (e >= 0) { this.mark(); w.setVeg(e % N, Math.floor(e / N), 0); this.h.audio.sfxDestroy(); }
+    } else if (w.veg[k]) { this.mark(); w.setVeg(c.x, c.z, 0); }
   }
 
   private pickUp() {

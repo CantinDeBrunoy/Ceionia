@@ -6,6 +6,14 @@ export const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 /** Retourne la rotation qui oriente la façade vers une route adjacente (sinon rot inchangée) */
 export function facingRoadRot(world: World, kind: KindId, x: number, z: number, rot: number): number {
   if (kind === 'lamp') return rot;
+  // le ponton s'avance vers l'eau
+  if (kind === 'pier') {
+    for (let k = 0; k < 4; k++) {
+      const f = FRONT[(rot + k) % 4], cx = x + f[0], cz = z + f[1];
+      if (world.inCells(cx, cz) && (world.cellAvg(cx, cz) < -0.05 || world.lake[world.ci(cx, cz)])) return (rot + k) % 4;
+    }
+    return rot;
+  }
   const s = KINDS[kind].size;
   const facing = (r: number) => {
     const f = FRONT[r];
