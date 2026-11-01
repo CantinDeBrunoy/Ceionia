@@ -2,17 +2,16 @@ import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { Building, KINDS, KindId } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
-import { makeActor, play, hasModel, Actor, ModelName } from '../render/assets';
+import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT } from '../render/assets';
+import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
 
 const MAX_AGENTS = 90;
-/** Habitants modélisés (Quaternius, CC0) : deux silhouettes par âge, la tenue change avec l'époque */
-const AGE_MODELS: ModelName[][] = [
-  ['adventurer', 'woman_dress'],
-  ['farmer', 'woman_dress'],
-  ['hooded', 'farmer'],
-  ['worker', 'woman'],
-  ['woman_casual', 'man'],
-];
+/** Animations des habitants, quel que soit le pack (premier nom disponible) */
+const WALK = ['Walking_A', 'walk', 'Walk', 'Man_Walk', 'Female_Walk'];
+const RUN = ['Running_A', 'sprint', 'Run', 'Man_Run', 'Female_Run'];
+const IDLE = ['Idle', 'idle', 'Man_Idle', 'Female_Idle'];
+const WORK = ['Interact', 'interact-right', 'Use_Item', 'pick-up', 'Man_Clapping', 'Female_Clapping', 'Wave', 'Idle'];
+const CHEER = ['Cheer', 'emote-yes', 'Wave', 'Idle', 'idle'];
 const HUMAN_HEIGHT = 0.3;
 
 const BODY_COLS = [
@@ -26,8 +25,13 @@ const SKIN = [0xf2cfb3, 0xe3b894, 0xc99973, 0x8d6445];
 const TOOL_SCALE = [1.5, 0.9, 0.9, 0.5, 0];
 
 type State = 'inside' | 'walking' | 'doing';
-/** Destination d'une sortie : case, caché à l'arrivée (dans un bâtiment), dernier pas hors de la route et cap, platelage */
-interface Dest { cell: number; hidden: boolean; spot?: [number, number]; face?: number; deck?: number }
+/**
+ * Destination d'une sortie : case, caché à l'arrivée (dans un bâtiment), dernier pas hors de la route et cap, platelage ou assise ;
+ * activité sur place et place prise dans un jardin
+ */
+interface Dest { cell: number; hidden: boolean; spot?: [number, number]; face?: number; deck?: number; act?: Act; hold?: string }
+/** Places des pêcheurs sur le ponton (repère du bâtiment : x en travers, z vers l'eau) : radeau de la Préhistoire, platelage ensuite */
+const RAFT_SPOTS = [[-0.03, 0.74], [0.02, 0.42]], DECK_SPOTS = [[-0.03, 0.66], [0.06, 0.46]];
 
 interface Agent {
   id: number;
@@ -56,6 +60,10 @@ interface Agent {
   /** enfant : plus petit, sans outil, il joue en courant autour de l'endroit où il s'arrête */
   child: boolean;
   ax: number; az: number;
+  /** ce qu'il fait une fois arrivé (assis au feu, à l'ouvrage, il acclame les jouteurs…) */
+  act: Act | null;
+  /** place qu'il occupe (bout du ponton, abords d'un puits, banc d'un jardin…) : personne d'autre ne la prend */
+  hold: string | null;
 }
 
 class Heap {
@@ -98,6 +106,11 @@ export class Agents {
   private socials: Building[] = [];
   private fields: number[] = [];
   private roads: number[] = [];
+  /** places des jardins (pour l'âge courant) et qui les occupe */
+  private gspots: Spot[] = [];
+  /** places occupées : clé → habitant */
+  private held = new Map<string, number>();
+  private spotKey = '';
   private lastVersion = -1;
   private lastAge = -1;
   private d = new THREE.Object3D();
@@ -111,7 +124,7 @@ export class Agents {
     for (const m of [this.body, this.head, this.tool]) { m.frustumCulled = false; m.castShadow = true; m.count = 0; this.group.add(m); }
   }
 
-  reset() { for (const a of this.agents) this.dropActor(a); this.agents = []; this.lastVersion = -1; }
+  reset() { for (const a of this.agents) this.dropActor(a); this.agents = []; this.held.clear(); this.lastVersion = -1; }
 
   private dropActor(a: Agent) {
     if (!a.actor) return;
@@ -196,9 +209,67 @@ export class Agents {
 
   /** Un incendie : les habitants proches accourent avec des seaux */
   alert(cell: number) {
-    const cx = cell % N + 0.5, cz = Math.floor(cell / N) + 0.5;
+    const cx = cell % N + 0.5, cz = Math.floor(cell / N) + 0.5, b = this.world.buildings.get(this.world.occ[cell]);
     const near = this.agents.filter((a) => !a.hidden && Math.hypot(a.x - cx, a.z - cz) < 16).slice(0, 5);
-    for (const a of near) { a.goingHome = false; this.startPath(a, cell, false); }
+    for (const a of near) {
+      a.goingHome = false;
+      if (!b) { this.startPath(a, cell, false); continue; }
+      const d = this.beside(b);
+      if (d) this.go(a, d);
+    }
+  }
+
+  /**
+   * Place à côté d'un bâtiment où l'on ne rentre pas (puits, feu de camp, ferme, bâtiment en feu) : les deux quarts de chaque
+   * case qui le borde, du côté du bâtiment, de préférence devant ; le dernier pas vers lui, face à lui. Jamais au milieu du
+   * modèle ni sur quelqu'un d'autre (null si tout est pris)
+   */
+  private beside(b: Building, approach = 0.25): Dest | null {
+    const w = this.world, s = KINDS[b.kind].size, f = [[0, 1], [1, 0], [0, -1], [-1, 0]][b.rot];
+    const cx = b.x + s / 2, cz = b.z + s / 2, free: Dest[] = [], front: Dest[] = [];
+    for (let i = 0; i < s; i++) for (const [x, z] of [[b.x + i, b.z - 1], [b.x + i, b.z + s], [b.x - 1, b.z + i], [b.x + s, b.z + i]]) {
+      if (!w.inCells(x, z)) continue;
+      const k = w.ci(x, z);
+      if (w.occ[k] || w.decor[k] || w.lake[k] || (!w.road[k] && w.cellAvg(x, z) < 0.08)) continue;
+      // quarts tournés vers le bâtiment : au sud de la case s'il est au sud, etc.
+      const qs = z === b.z - 1 ? [2, 3] : z === b.z + s ? [0, 1] : x === b.x - 1 ? [1, 3] : [0, 2];
+      for (const q of qs) {
+        const key = `c${k}:${q}`;
+        if (this.held.has(key)) continue;
+        const [x0, z0] = this.quarter(k, q), px = x0 + (cx - x0) * approach, pz = z0 + (cz - z0) * approach;
+        const d: Dest = { cell: k, hidden: false, spot: [px, pz], face: Math.atan2(cx - px, cz - pz), hold: key };
+        free.push(d);
+        if ((f[0] ? x + 0.5 - cx : z + 0.5 - cz) * (f[0] || f[1]) > 0) front.push(d);
+      }
+    }
+    // devant une fois sur deux, sinon n'importe quel côté
+    return (front.length && this.rnd() < 0.5 ? this.pick(front) : this.pick(free)) ?? null;
+  }
+
+  /** Centre d'un quart de case (0 : coin x-, z- ; 1 : x+ ; 2 : z+ ; 3 : x+, z+) */
+  private quarter(k: number, q: number): [number, number] { return [(k % N) + 0.28 + (q % 2) * 0.44, Math.floor(k / N) + 0.28 + (q >> 1) * 0.44]; }
+
+  /** Un quart de case libre parmi des cases (champ, lisière, chemin), un peu décalé ; null si celles tirées sont pleines */
+  private cellDest(cells: number[]): Dest | null {
+    for (let n = 0; n < 4; n++) {
+      const k = this.pick(cells);
+      if (k === undefined) return null;
+      const q = this.pick([0, 1, 2, 3].filter((i) => !this.held.has(`c${k}:${i}`)));
+      if (q === undefined) continue;
+      const [x, z] = this.quarter(k, q);
+      return { cell: k, hidden: false, spot: [x + (this.rnd() - 0.5) * 0.08, z + (this.rnd() - 0.5) * 0.08], hold: `c${k}:${q}` };
+    }
+    return null;
+  }
+
+  /** Le pêcheur va sur le ponton et regarde l'eau : deux places, au bout et un peu en retrait (null si elles sont prises) */
+  private onPier(b: Building): Dest | null {
+    const th = (b.rot * Math.PI) / 2, ca = Math.cos(th), sa = Math.sin(th), spots = b.age === 0 ? RAFT_SPOTS : DECK_SPOTS;
+    const free = spots.map((_, i) => i).filter((i) => !this.held.has(`p${b.id}:${i}`));
+    const i = this.pick(free);
+    if (i === undefined) return null;
+    const [lx, lz] = spots[i], x = b.x + 0.5 + lx * ca + lz * sa, z = b.z + 0.5 - lx * sa + lz * ca;
+    return { cell: this.cellOf(b), hidden: false, spot: [x, z], face: th, deck: this.world.h(b.x, b.z) + (b.age === 0 ? 0.06 : 0.04), hold: `p${b.id}:${i}` };
   }
 
   private pick<T>(a: T[]): T | undefined { return a.length ? a[Math.floor(this.rnd() * a.length)] : undefined; }
@@ -209,30 +280,35 @@ export class Agents {
     const r = this.rnd();
     // les enfants vont jouer près des lieux de rencontre, des champs ou au bord des chemins
     if (child) {
+      // aire de jeux, pelouse du jardin
+      if (this.rnd() < 0.5) { const d = this.gardenDest(true); if (d) return d; }
       const play = this.socials.filter((b) => b.kind !== 'temple');
-      if (play.length && r < 0.5) return { cell: this.cellOf(this.pick(play)!), hidden: false };
-      if (this.fields.length && r < 0.7) return { cell: this.pick(this.fields)!, hidden: false };
-      if (this.roads.length) return { cell: this.pick(this.roads)!, hidden: false };
+      // à côté du puits ou du feu, sans s'en approcher : ils courent en rond autour de leur place
+      if (play.length && r < 0.5) { const d = this.beside(this.pick(play)!, 0); if (d) return d; }
+      if (r < 0.7) { const d = this.cellDest(this.fields); if (d) return d; }
+      const d = this.cellDest(this.roads);
+      if (d) return d;
     }
     // bûcherons à la lisière
-    if (this.woods.length && r > 0.86) return { cell: this.pick(this.woods)!, hidden: false };
+    if (r > 0.86) { const d = this.cellDest(this.woods); if (d) return d; }
     const socialBias = hour >= 12 && hour < 14.5 ? 0.7 : hour >= 17 ? 0.65 : 0.3;
-    if (r < socialBias && this.socials.length) {
-      const b = this.pick(this.socials)!;
-      return { cell: this.cellOf(b), hidden: b.kind === 'temple' };
+    if (r < socialBias && (this.socials.length || this.gspots.length)) {
+      // le jardin : une place libre (autour du feu, à l'ouvrage, dans les gradins, sur un banc…)
+      if (!this.socials.length || this.rnd() < 0.55) { const d = this.gardenDest(false); if (d) return d; }
+      const b = this.pick(this.socials);
+      // on entre au temple ; au puits, au feu de camp ou sur la place, on reste à côté
+      if (b?.kind === 'temple') return { cell: this.cellOf(b), hidden: true };
+      const d = b && this.beside(b);
+      if (d) return d;
     }
-    if (r < socialBias + 0.4 && this.fields.length && this.rnd() < 0.5) return { cell: this.pick(this.fields)!, hidden: false };
+    if (r < socialBias + 0.4 && this.rnd() < 0.5) { const d = this.cellDest(this.fields); if (d) return d; }
     if (this.works.length && this.rnd() < 0.8) {
       const b = this.pick(this.works)!;
-      // le pêcheur va au bout du ponton et regarde l'eau
-      if (b.kind === 'pier') {
-        const f = [[0, 1], [1, 0], [0, -1], [-1, 0]][b.rot];
-        return { cell: this.cellOf(b), hidden: false, spot: [b.x + 0.5 + f[0] * 0.75, b.z + 0.5 + f[1] * 0.75], face: Math.atan2(f[0], f[1]), deck: this.world.h(b.x, b.z) + 0.04 };
-      }
-      return { cell: this.cellOf(b), hidden: b.kind !== 'farm' };
+      // pêcheurs sur le ponton, fermiers devant la ferme (s'il reste de la place), les autres entrent
+      const d = b.kind === 'pier' ? this.onPier(b) : b.kind === 'farm' ? this.beside(b) : { cell: this.cellOf(b), hidden: true };
+      if (d) return d;
     }
-    if (this.roads.length) return { cell: this.pick(this.roads)!, hidden: false };
-    return null;
+    return this.cellDest(this.roads);
   }
 
   private addAgent() {
@@ -243,7 +319,7 @@ export class Agents {
     this.agents.push({
       id, home: h.id, x: h.x + 0.5, z: h.z + 0.5, state: 'inside', path: [], pi: 0, timer: this.rnd() * 4, hidden: true, speed: 0.9 + this.rnd() * 0.5,
       heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, actor: null, actorKey: '',
-      spot: null, face: null, deck: null, child: this.rnd() < 0.22, ax: 0, az: 0,
+      spot: null, face: null, deck: null, child: this.rnd() < 0.22, ax: 0, az: 0, act: null, hold: null,
     });
   }
 
@@ -258,20 +334,50 @@ export class Agents {
       return;
     }
     a.goingHome = true;
+    this.release(a);
     this.startPath(a, this.cellOf(hb), true);
   }
 
   private go(a: Agent, d: Dest) {
+    this.release(a);
     this.startPath(a, d.cell, d.hidden);
     // pas de chemin : il reste où il est, à terre
     if (a.state !== 'walking') return;
     a.spot = d.spot ?? null;
     a.face = d.face ?? null;
     a.deck = d.deck ?? null;
+    a.act = d.act ?? null;
+    if (d.hold) { a.hold = d.hold; this.held.set(d.hold, a.id); }
+    // champ, lisière, chemin : pas tous au milieu de la case
+    if (!d.spot && !d.hidden) { const cx = (d.cell % N) + 0.5, cz = Math.floor(d.cell / N) + 0.5; a.spot = [cx + (this.rnd() - 0.5) * 0.5, cz + (this.rnd() - 0.5) * 0.5]; }
+  }
+
+  /** Une place libre dans un jardin, pour un enfant ou un adulte */
+  private gardenDest(kid: boolean): Dest | null {
+    const free: number[] = [];
+    for (let i = 0; i < this.gspots.length; i++) if (!!this.gspots[i].kid === kid && !this.held.has(`g${i}`)) free.push(i);
+    const i = this.pick(free);
+    if (i === undefined) return null;
+    const s = this.gspots[i];
+    return { cell: Math.floor(s.z) * N + Math.floor(s.x), hidden: false, spot: [s.x, s.z], face: s.face, deck: s.seat ? this.world.hAt(s.x, s.z) + s.seat : undefined, act: s.act, hold: `g${i}` };
+  }
+
+  private release(a: Agent) {
+    if (a.hold && this.held.get(a.hold) === a.id) this.held.delete(a.hold);
+    a.hold = null;
+  }
+
+  /** Places des jardins : refaites quand le monde ou l'âge change */
+  private refreshGardens(age: number) {
+    this.gspots = [];
+    for (const g of findGardens(this.world)) this.gspots.push(...layoutGarden(this.world, g, age).spots);
+    // les places des jardins sont refaites : on les libère toutes
+    for (const k of this.held.keys()) if (k[0] === 'g') this.held.delete(k);
+    for (const a of this.agents) if (a.hold?.[0] === 'g') a.hold = null;
   }
 
   private startPath(a: Agent, goal: number, hiddenAtEnd: boolean) {
-    a.spot = null; a.face = null; a.deck = null;
+    a.spot = null; a.face = null; a.deck = null; a.act = null;
     const start = Math.min(N - 1, Math.max(0, Math.floor(a.z))) * N + Math.min(N - 1, Math.max(0, Math.floor(a.x)));
     const p = this.findPath(start, goal);
     this.pathBudget--;
@@ -282,9 +388,11 @@ export class Agents {
   update(dt: number, hour: number, age: number, sheltering: boolean, popTarget: number, glowNight: number) {
     const w = this.world;
     if (w.version !== this.lastVersion) { this.lastVersion = w.version; this.refreshTargets(); }
+    const key = `${w.version}|${age}`;
+    if (key !== this.spotKey) { this.spotKey = key; this.refreshGardens(age); }
     const want = Math.min(MAX_AGENTS, Math.floor(popTarget * 0.85));
     while (this.agents.length < want) { const n = this.agents.length; this.addAgent(); if (this.agents.length === n) break; }
-    while (this.agents.length > want) this.dropActor(this.agents.pop()!);
+    while (this.agents.length > want) { const a = this.agents.pop()!; this.release(a); this.dropActor(a); }
 
     const night = hour >= 20.5 || hour < 5.5 || sheltering;
     this.pathBudget = 4;
@@ -327,10 +435,10 @@ export class Agents {
         if (night && !a.goingHome && this.pathBudget > 0) this.sendHome(a);
       } else if (a.state === 'doing') {
         a.timer -= dt;
-        // l'enfant court en rond autour de l'endroit où il joue
-        if (a.child && !a.hidden) {
+        // l'enfant court en rond autour de l'endroit où il joue (sauf aux jeux, où il reste devant)
+        if (a.child && !a.hidden && (!a.act || a.act === 'run')) {
           const t = a.phase * 0.18;
-          a.x = a.ax + Math.cos(t) * 0.35; a.z = a.az + Math.sin(t) * 0.35;
+          a.x = a.ax + Math.cos(t) * 0.22; a.z = a.az + Math.sin(t) * 0.22;
           a.heading = Math.atan2(-Math.sin(t), Math.cos(t));
         }
         if (night && !a.goingHome) { if (this.pathBudget > 0) this.sendHome(a); }
@@ -347,7 +455,8 @@ export class Agents {
   private arrive(a: Agent, night: boolean) {
     if (a.goingHome) { a.goingHome = false; a.state = 'inside'; a.hidden = true; a.timer = 1 + this.rnd() * 5; return; }
     a.state = 'doing';
-    a.timer = 4 + this.rnd() * 8;
+    // on s'attarde au coin du feu, sur un banc ou dans les gradins
+    a.timer = (a.act === 'sit' || a.act === 'cheer' ? 10 : 4) + this.rnd() * 8;
     a.hidden = a.targetHidden;
     a.ax = a.x; a.az = a.z;
   }
@@ -359,7 +468,7 @@ export class Agents {
 
   /** Habitant modélisé : clone de l'époque, cap, animation selon l'activité */
   private animateActor(a: Agent, age: number, dt: number): boolean {
-    const name = AGE_MODELS[Math.min(age, 4)][a.col % 2];
+    const set = AGE_VILLAGERS[Math.min(age, 4)], name = set[(a.col + a.id) % set.length];
     if (!hasModel(name)) return false;
     const key = `${name}|${a.id}`;
     if (a.actorKey !== key) {
@@ -368,7 +477,7 @@ export class Agents {
       if (!a.actor) return false;
       a.actorKey = key;
       // le pas des modèles est lent pour la vitesse de marche du jeu
-      for (const n of ['Walk', 'Man_Walk', 'Female_Walk']) a.actor.actions.get(n)?.setEffectiveTimeScale(1.6);
+      for (const n of WALK) a.actor.actions.get(n)?.setEffectiveTimeScale(1.4);
       a.actor.mixer.setTime(this.rnd() * 2);
       this.group.add(a.actor.root);
     }
@@ -377,9 +486,10 @@ export class Agents {
     if (a.hidden) return true;
     act.root.position.set(a.x, this.groundY(a), a.z);
     act.root.rotation.y = a.heading;
-    if (a.state === 'walking' || (a.child && a.state === 'doing')) play(act, a.child && a.state === 'doing' ? ['Run', 'Man_Run', 'Female_Run', 'Walk'] : ['Walk', 'Man_Walk', 'Female_Walk']);
-    else if (a.state === 'doing') play(act, ['Interact', 'Man_Clapping', 'Female_Clapping', 'Wave', 'Idle']);
-    else play(act, ['Idle', 'Man_Idle', 'Female_Idle']);
+    const running = a.child && (!a.act || a.act === 'run');
+    if (a.state === 'walking' || (running && a.state === 'doing')) play(act, running && a.state === 'doing' ? [...RUN, ...WALK] : WALK);
+    else if (a.state === 'doing') play(act, a.act === 'sit' ? SIT : a.act === 'cheer' || a.act === 'play' ? CHEER : a.act === 'stroll' ? IDLE : WORK);
+    else play(act, IDLE);
     act.mixer.update(dt);
     return true;
   }

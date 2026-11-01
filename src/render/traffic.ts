@@ -2,11 +2,18 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { World, N, SEA } from '../world/world';
 import { Building } from '../build/catalog';
+import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT } from './assets';
 
 const MAX_CARTS = 10, MAX_BOATS = 16, MAX_SAILS = 5;
 
 interface Vehicle { path: number[]; i: number; x: number; z: number; heading: number; wait: number }
-interface Boat { home: Building | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; mx: number; mz: number; seed: number }
+interface Boat {
+  home: Building | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; mx: number; mz: number; seed: number;
+  /** le pêcheur assis dans la barque (habitant de l'époque) */
+  actor?: Actor | null; actorKey?: string;
+}
+/** Place du pêcheur dans la barque : assis à l'arrière, tourné vers l'avant (repère de la barque) */
+const SEAT = new THREE.Matrix4().makeTranslation(0, 0.02, -0.07);
 
 /** Cap qui tourne vers `want` (par le plus court), d'au plus la fraction `k` de l'écart */
 function turn(heading: number, want: number, k: number) {
@@ -51,15 +58,14 @@ function vehicleGeo(age: number) {
   ]);
 }
 
-/** Barque de pêche avec son pêcheur ; avant = +z */
+/** Barque de pêche (le pêcheur est un habitant modélisé, assis dedans) et sa canne qui pointe vers l'avant ; avant = +z */
 function rowboatGeo() {
   return colored([
     [new THREE.BoxGeometry(0.16, 0.05, 0.36).translate(0, 0.0, 0), 0x9a7452],
     [new THREE.ConeGeometry(0.08, 0.1, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4).scale(1, 0.6, 1).translate(0, 0, 0.22), 0x9a7452],
     [new THREE.BoxGeometry(0.13, 0.012, 0.3).translate(0, 0.026, 0), 0xc9a27a],
-    [new THREE.ConeGeometry(0.035, 0.1, 6).translate(0, 0.08, -0.06), 0x6f9f78],
-    [new THREE.IcosahedronGeometry(0.025, 0).translate(0, 0.15, -0.06), 0xf2cfb3],
-    [new THREE.CylinderGeometry(0.004, 0.004, 0.3, 4).rotateX(-0.9).translate(0.04, 0.12, 0.06), 0x5a3e2e],
+    [new THREE.BoxGeometry(0.14, 0.02, 0.04).translate(0, 0.04, 0.08), 0x7a5a42],
+    [new THREE.CylinderGeometry(0.004, 0.004, 0.32, 4).rotateX(-0.95).translate(0.05, 0.13, 0.04), 0x5a3e2e],
   ]);
 }
 
@@ -94,6 +100,7 @@ export class Traffic {
   private builtPop = -1;
   private dummy = new THREE.Object3D();
   private t = 0;
+  private age = 0;
 
   constructor(private world: World) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8, side: THREE.DoubleSide });
@@ -122,7 +129,7 @@ export class Traffic {
       this.carts.geometry.dispose();
       this.carts.geometry = vehicleGeo(age);
     }
-    this.builtVersion = w.version; this.builtAge = age;
+    this.builtVersion = w.version; this.builtAge = age; this.age = age;
     this.roads = [];
     for (let k = 0; k < N * N; k++) if (w.road[k]) this.roads.push(k);
     const nCarts = age >= 1 && pop >= 8 ? Math.min(MAX_CARTS, Math.floor(this.roads.length / 18)) : 0;
@@ -134,6 +141,7 @@ export class Traffic {
     }
     // une barque par ponton qui donne sur la mer ou une rivière
     const piers = [...w.buildings.values()].filter((b) => b.kind === 'pier');
+    for (const bt of this.boats) if (!bt.home || !w.buildings.has(bt.home.id)) this.dropFisher(bt);
     this.boats = this.boats.filter((bt) => bt.home && w.buildings.has(bt.home.id));
     for (const p of piers.slice(0, MAX_BOATS)) {
       if (this.boats.some((bt) => bt.home!.id === p.id)) continue;
@@ -240,9 +248,39 @@ export class Traffic {
       d.scale.setScalar(1);
       d.updateMatrix();
       this.boatsMesh.setMatrixAt(n++, d.matrix);
+      // la nuit, revenu au ponton, le pêcheur rentre chez lui
+      this.fisher(b, d.matrix, dt, day || dist > 0.05);
     }
     this.boatsMesh.count = n;
     this.boatsMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Pêcheur assis dans la barque : un habitant de l'époque, qui suit la barque et son roulis */
+  private fisher(b: Boat, m: THREE.Matrix4, dt: number, visible: boolean) {
+    const set = AGE_VILLAGERS[Math.min(this.age, 4)], name = set[Math.floor(b.seed * 7) % set.length];
+    if (b.actorKey !== name) {
+      this.dropFisher(b);
+      b.actorKey = name;
+      b.actor = hasModel(name) ? makeActor(name, 0.27, 'height') : null;
+      if (b.actor) {
+        b.actor.root.matrixAutoUpdate = false;
+        b.actor.mixer.setTime(b.seed);
+        this.group.add(b.actor.root);
+      }
+    }
+    const a = b.actor;
+    if (!a) return;
+    a.root.visible = visible;
+    if (!visible) return;
+    a.root.matrix.copy(m).multiply(SEAT);
+    a.root.matrixWorldNeedsUpdate = true;
+    play(a, SIT);
+    a.mixer.update(dt);
+  }
+
+  private dropFisher(b: Boat) {
+    if (b.actor) { b.actor.mixer.stopAllAction(); this.group.remove(b.actor.root); }
+    b.actor = null; b.actorKey = '';
   }
 
   /** Voiliers : longues bordées d'un point du large à l'autre */

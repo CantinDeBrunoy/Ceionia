@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { World, N, MAX_H, MIN_H, setMapSize, VEG_FIELD } from '../src/world/world';
+import { World, N, MAX_H, MIN_H, setMapSize, VEG_FIELD, VEG_GARDEN } from '../src/world/world';
+import { findGardens, layoutGarden } from '../src/world/gardens';
 import { genHeights, newWorld, MAPS } from '../src/world/mapgen';
 import { Sim } from '../src/sim/sim';
+import { autoRoad } from '../src/build/autoroads';
 
 /** Carte de l'île, toujours la même graine : les tests ne dépendent pas du hasard */
 function island() {
@@ -155,5 +157,96 @@ describe('volcans et récoltes', () => {
     expect(ore().need).toBeGreaterThan(0);
     w.ore = 99;
     expect(ore().have).toBe(99);
+  });
+});
+
+describe('routes automatiques', () => {
+  /** Une bande de terre plate de `len` cases vers l'est (sur trois de large), débroussaillée pour y bâtir */
+  function strip(w: World, len: number, from = 10) {
+    for (let z = from; z < N - 10; z++)
+      for (let x = 10; x < N - 10 - len; x++) {
+        let ok = true;
+        for (let i = 0; i <= len && ok; i++) for (let j = -1; j <= 1 && ok; j++)
+          ok = w.cellAvg(x + i, z + j) > 0.5 && w.cellSlope(x + i, z + j) < 0.6 && !w.occ[w.ci(x + i, z + j)] && !w.road[w.ci(x + i, z + j)] && !w.isWet(x + i, z + j);
+        if (!ok) continue;
+        for (let i = 0; i <= len; i++) for (let j = -1; j <= 1; j++) { w.veg[w.ci(x + i, z + j)] = 0; w.decor[w.ci(x + i, z + j)] = 0; }
+        return [x, z];
+      }
+    throw new Error('pas de bande plate');
+  }
+  const roads = (w: World) => w.road.reduce((n, v) => n + (v ? 1 : 0), 0);
+
+  it('relie un bâtiment au voisin par un chemin court, rien de plus', () => {
+    const w = island();
+    const [x, z] = strip(w, 8);
+    // le tout premier bâtiment n'a personne à rejoindre
+    expect(autoRoad(w, w.place('house', x, z, 0, true, 0, false))).toBe(0);
+    const n = autoRoad(w, w.place('house', x + 6, z, 0, true, 0, false));
+    expect(n).toBeGreaterThan(0);
+    expect(n).toBeLessThanOrEqual(7);
+    // un bâtiment qui touche déjà la route n'en pose pas
+    const r = w.road.findIndex((v) => v === 1);
+    const spot = [[0, 1], [0, -1], [1, 0], [-1, 0]].map(([a, b]) => [r % N + a, Math.floor(r / N) + b]).find(([a, b]) => w.canPlace('house', a, b) === null)!;
+    const before = roads(w);
+    expect(autoRoad(w, w.place('house', spot[0], spot[1], 0, true, 0, false))).toBe(0);
+    expect(roads(w)).toBe(before);
+  });
+
+  it('ne trace rien pour un lampadaire ni vers un bâtiment trop loin', () => {
+    const w = island();
+    const [x, z] = strip(w, 8);
+    w.place('house', x, z, 0, true, 0, false);
+    expect(autoRoad(w, w.place('lamp', x + 4, z, 0, true, 0, false))).toBe(0);
+    const [fx, fz] = strip(w, 2, z + 25);
+    expect(autoRoad(w, w.place('house', fx, fz, 0, true, 0, false))).toBe(0);
+    expect(roads(w)).toBe(0);
+  });
+});
+
+describe('jardins', () => {
+  /** Un jardin rectangulaire de w × d cases peint sur de la terre plate et dégagée */
+  function garden(w: World, gw: number, gd: number) {
+    for (let z = 8; z < N - 8 - gd; z++)
+      for (let x = 8; x < N - 8 - gw; x++) {
+        let ok = true;
+        for (let i = 0; i < gw && ok; i++) for (let j = 0; j < gd && ok; j++) ok = w.cellAvg(x + i, z + j) > 0.5 && w.cellSlope(x + i, z + j) < 0.6 && !w.occ[w.ci(x + i, z + j)] && !w.road[w.ci(x + i, z + j)] && !w.isWet(x + i, z + j);
+        if (!ok) continue;
+        for (let i = 0; i < gw; i++) for (let j = 0; j < gd; j++) { w.veg[w.ci(x + i, z + j)] = VEG_GARDEN; w.decor[w.ci(x + i, z + j)] = 0; }
+        return findGardens(w).find((g) => g.set.has(w.ci(x, z)))!;
+      }
+    throw new Error('pas de place pour un jardin');
+  }
+
+  it('change de visage à chaque âge, toujours le même pour une zone donnée', () => {
+    const w = island(), g = garden(w, 4, 3);
+    const styles = [0, 1, 2, 3, 4].map((a) => layoutGarden(w, g, a).style);
+    expect(styles[0]).toBe('camp');
+    expect(styles[1]).toBe('antique');
+    expect(styles[4]).toBe('parc');
+    expect(new Set(styles).size).toBe(5);
+    expect(layoutGarden(w, g, 2)).toEqual(layoutGarden(w, g, 2));
+  });
+
+  it('se remplit selon la taille et reste dans la zone', () => {
+    const w = island(), small = garden(w, 2, 1), big = garden(w, 6, 5);
+    for (let a = 0; a <= 4; a++) {
+      const s = layoutGarden(w, small, a), b = layoutGarden(w, big, a);
+      expect(b.items.length).toBeGreaterThan(s.items.length);
+      for (const l of [s, b]) for (const it of l.items) expect(l.g.set.has(w.ci(Math.floor(it.x), Math.floor(it.z)))).toBe(true);
+      expect(b.spots.length).toBeGreaterThan(0);
+    }
+    // préhistoire : des feux et des places assises autour ; époque moderne : des jeux pour les enfants
+    expect(layoutGarden(w, big, 0).items.filter((i) => i.k === 'fire').length).toBeGreaterThan(0);
+    expect(layoutGarden(w, big, 0).spots.some((s) => s.act === 'sit')).toBe(true);
+    expect(layoutGarden(w, big, 4).spots.some((s) => s.kid && s.act === 'play')).toBe(true);
+  });
+
+  it('un jardin long accueille un tournoi au Moyen Âge, un petit des lices d’entraînement', () => {
+    const w = island(), long = garden(w, 8, 3), small = garden(w, 2, 2);
+    const t = layoutGarden(w, long, 2);
+    expect(t.style).toBe('tournoi');
+    expect(t.lanes.length).toBe(4);
+    expect(t.spots.some((s) => s.act === 'cheer')).toBe(true);
+    expect(layoutGarden(w, small, 2).style).toBe('lices');
   });
 });

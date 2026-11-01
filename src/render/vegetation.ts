@@ -1,14 +1,16 @@
 import * as THREE from 'three';
 import {
-  World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
+  World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
   BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, FissureFrame, fissureAt, SNOW_LINE,
 } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
+import { Simplex } from '../world/noise';
 import { SeasonState } from './season';
 import { Parts } from './parts';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
-import { bakeStatic, splitTrees, splitPieces, meshVariants, MeshPart, ModelName } from './assets';
+import { bakeStatic, meshVariants, MeshPart, ModelName } from './assets';
+import { broadleafShape, pineShape, bushShape, rockShapes } from './treeShapes';
 
 /**
  * Tuiles de CH×CH cases : un maillage instancié par tuile et par couche (élagage hors champ, reconstruction partielle) ;
@@ -29,8 +31,6 @@ const SNOWC = new THREE.Color(0xf1f5f9);
 const WHITE = new THREE.Color(1, 1, 1);
 /** Blé : 4 sillons par case, 4 touffes par sillon (grille monde continue d'une case à l'autre) */
 const WHEAT_DIV = 4;
-/** Jardin : 3 rangs de 4 plants par case */
-const GARDEN_ROWS = 3, GARDEN_COLS = 4;
 const MAX_SPECIAL = 64;
 const CORAL_COLORS = [0xf28fa0, 0xf6a65a, 0xb48ae0, 0xf4d35e, 0xff7f6e].map((c) => new THREE.Color(c));
 const SMOKE_PER_VOLCANO = 8;
@@ -42,9 +42,6 @@ const CAVE_TOP = [0x76a05e, 0x5f8f6a, 0xe6cf9a, 0x5aa850, 0x7d9a58].map((c) => n
 const FERN_TINT = [[1, 1, 1], [0.8, 0.95, 0.9], [1, 1, 0.8], [0.85, 1.1, 0.8], [0.9, 1, 0.8]].map(([r, g, b]) => new THREE.Color(r, g, b));
 const BOLETE = new THREE.Color(0.82, 0.62, 0.44);
 
-const VEG_COLORS = [0x9fd46c, 0x7fb89c, 0xb5d975, 0x8ccf6a].map((c) => new THREE.Color(c));
-const PUMPKIN = new THREE.Color(0xe8913a);
-const FLOWER_HUES = [0.95, 0.13, 0.78, 0.02, 0.58];
 /** Fleurs sauvages par biome (teintes ; 0.58 = blanc) */
 const WILD_HUES = [[0.13, 0.58, 0.75, 0.13, 0.58], [0.58, 0.62, 0.58, 0.75], [0.92], [0.92, 0.05, 0.85, 0.11, 0.0], [0.15, 0.58, 0.7]];
 /** Teinte des touffes d'herbe par biome (multiplie la couleur de saison) */
@@ -170,7 +167,7 @@ interface Species {
   height: number;
 }
 
-/** Végétation instanciée : forêts par biome, blé, potagers fleuris, prairies, marais, déserts et fonds marins */
+/** Végétation instanciée : forêts par biome, blé, prairies, marais, déserts et fonds marins (les jardins : GardenView) */
 export class VegView {
   group = new THREE.Group();
   /** perchoirs (cimes) et fleurs de chaque tuile, [x, y, z, …] : la faune s'y pose et les butine */
@@ -265,24 +262,16 @@ export class VegView {
     addWind(this.tuftMat, this.uTime, 1.3);
     const wood = std(0xffffff, true);
 
-    // bouleaux, sapins, buissons et rochers Quaternius si chargés, formes procédurales sinon
-    const birch = bakeStatic('birch', 1.05, /green/i), pines = bakeStatic('pines', 1.15, /green/i);
-    const bush = bakeStatic('bush', 0.17, /green/i), rocks = bakeStatic('rocks', 0.1, /stone/i);
-    this.imported = !!(birch?.tint && birch.rest);
-    this.leafY = this.imported ? birch!.tintY : 0;
-    if (birch?.tint) { birch.tint.computeBoundingBox(); this.leafTop = birch.tint.boundingBox!.max.y; }
-    const trunkG = new THREE.CylinderGeometry(0.035, 0.055, 0.3, 5).translate(0, 0.15, 0);
-    this.trunk = layer([{ geo: this.imported ? birch!.rest! : trunkG, mat: this.imported ? wood : std(0x9a7b62) }], { lod: true });
-    const canopy = this.imported ? birch!.tint! : canopyGeo();
-    this.blob = layer([{ geo: canopy, mat: this.blobMat }], { lod: true });
-    this.blob2 = layer([{ geo: canopy, mat: this.blob2Mat }], { lod: true });
+    // feuillus ronds et touffus, sapins à étages, buissons ronds et rochers facettés, façon diorama (voir treeShapes)
+    const leafy = broadleafShape();
+    this.imported = true;
+    this.leafY = leafy.bottom;
+    this.leafTop = leafy.top;
+    this.trunk = layer([{ geo: leafy.trunk, mat: wood }], { lod: true });
+    this.blob = layer([{ geo: leafy.canopy, mat: this.blobMat }], { lod: true });
+    this.blob2 = layer([{ geo: leafy.canopy, mat: this.blob2Mat }], { lod: true });
     this.pine = layer([{ geo: pineGeo(), mat: this.pineMat }]);
-    // le modèle « Pine Trees » est un bosquet : chaque sapin devient une variante posée à sa propre hauteur
-    for (const t of pines ? splitTrees(pines) : []) {
-      if (!t.tint || !t.rest) continue;
-      t.rest.computeBoundingBox();
-      this.pineVars.push({ layer: layer([{ geo: t.tint, mat: this.pineMat }, { geo: t.rest, mat: wood }], { lod: true }), height: t.rest.boundingBox!.max.y });
-    }
+    for (const v of [0, 1, 2]) { const t = pineShape(v); this.pineVars.push({ layer: layer([{ geo: t.green, mat: this.pineMat }, { geo: t.trunk, mat: wood }], { lod: true }), height: t.top }); }
     // essences des autres biomes
     const species = (name: ModelName, height: number, tintRe: RegExp, tintMat: THREE.Material, restMat: THREE.Material, skip?: RegExp): Species | null => {
       const m = bakeStatic(name, height, tintRe, skip);
@@ -295,12 +284,14 @@ export class VegView {
     const keep = <T,>(list: (T | null)[]) => list.filter((x): x is T => !!x);
     const palmMat = soft(true);
     addWind(palmMat, this.uTime, 0.03);
-    this.snowPines = keep([species('pine_snow', 1.25, /green/i, this.pineMat, wood)]);
+    // sapins enneigés : calottes de neige sur chaque étage
+    const sp = pineShape(0, true);
+    this.snowPines = [{ layer: layer([{ geo: sp.green, mat: this.pineMat }, { geo: sp.snow!, mat: std(0xf4f8fb, true) }, { geo: sp.trunk, mat: wood }], { lod: true }), height: sp.top }];
     this.palms = keep([species('palm', 1.3, /^$/, palmMat, palmMat), species('palm2', 1.6, /^$/, palmMat, palmMat), species('palm3', 1.25, /^$/, palmMat, palmMat)]);
     this.cacti = keep([species('cactus2', 0.95, /^$/, wood, wood), species('cactus_flowers', 0.72, /^$/, wood, wood), species('cactus', 0.42, /^$/, wood, wood, /black|brown/i)]);
     this.willows = keep([species('willow', 1.2, /green/i, this.willowMat, wood)]);
     this.deadTrees = keep([species('dead_tree', 0.95, /^$/, wood, wood)]);
-    if (bush?.tint) this.shrub = layer([{ geo: bush.tint, mat: soft(true) }], { detail: true });
+    this.shrub = layer([{ geo: bushShape(), mat: soft(true) }], { detail: true });
     this.wheat = layer([{ geo: wheatClumpGeo(), mat: this.wheatMat }], { shadow: false, detail: true });
     this.plant = layer([{ geo: smoothBlobs([[0.07, 0, 0.045, 0, 0.72, 1]], false), mat: soft(false) }], { detail: true });
     this.blossom = layer([{ geo: new THREE.IcosahedronGeometry(0.035, 0).translate(0, 0.085, 0), mat: std(0xffffff) }], { shadow: false, detail: true });
@@ -313,10 +304,8 @@ export class VegView {
     const lilyMat = std(0xffffff, true);
     addSwell(lilyMat, this.uWater, this.uCalm);
     this.lily = layer([{ geo: lilyModel?.rest ?? new THREE.CircleGeometry(0.12, 7).rotateX(-Math.PI / 2), mat: lilyMat }], { shadow: false, detail: true });
-    // le modèle « Rocks » est un tas : chaque rocher devient une variante posée à sa propre hauteur
-    const rockMat = std(0xb3aba1, !!rocks?.tint);
-    const rockPieces = rocks?.tint ? splitPieces(rocks.tint) : [{ geometry: new THREE.IcosahedronGeometry(0.06, 1).scale(1, 0.55, 0.85).translate(0, 0.012, 0), radius: 0.06 }];
-    this.rocks = rockPieces.map((r) => ({ layer: layer([{ geo: r.geometry, mat: rockMat }], { small: true }), radius: r.radius }));
+    const rockMat = std(0xbabcbd, true);
+    this.rocks = rockShapes().map((r) => ({ layer: layer([{ geo: r.geometry, mat: rockMat }], { small: true }), radius: r.radius }));
     // fonds marins importés : algues (qui ondulent dans le courant) et lot de coraux, textures conservées
     const weed = meshVariants('seaweed', 1, false), corals = meshVariants('coral_set', 0.22, true);
     const variant = (parts: MeshPart[], prep?: (m: THREE.Material) => THREE.Material) => layer(parts.map((p) => ({ geo: p.geometry, mat: prep ? prep(p.material) : p.material })), { shadow: false, detail: true });
@@ -416,7 +405,7 @@ export class VegView {
     this.blobMat.color.copy(s.foliage);
     this.blob2Mat.color.copy(s.foliage2);
     this.willowMat.color.copy(s.foliage2).lerp(new THREE.Color(0x7fae6a), 0.35);
-    this.pineMat.color.setHex(0x7fba86).lerp(new THREE.Color(0xe8f0f4), s.snow * 0.7);
+    this.pineMat.color.setHex(0x4f9a68).lerp(new THREE.Color(0xe8f0f4), s.snow * 0.7);
     this.wheatMat.color.copy(s.crop);
     this.tuftMat.color.copy(s.grass);
     this.fernMat.color.copy(s.foliage2).lerp(s.grass, 0.4).lerp(new THREE.Color(0x5f9a4e), 0.45);
@@ -452,6 +441,8 @@ export class VegView {
     const w = this.world, r = w.vegRect;
     if (!r) return;
     w.vegRect = null;
+    // les parcelles ont pu changer : leurs sillons seront recalculés
+    this.plotAngle.clear();
     this.rebuildSpecial();
     const urgent: number[] = [];
     for (let cz = Math.floor(r[1] / CH); cz <= Math.floor(r[3] / CH); cz++)
@@ -507,7 +498,7 @@ export class VegView {
         if (!t) this.meadow(cx, cz, s);
         else if (t === VEG_FOREST) this.forest(cx, cz, s);
         else if (t === VEG_FIELD) this.field(cx, cz, s);
-        else if (t === VEG_GARDEN) this.garden(cx, cz, s);
+        // les jardins ont leur propre décor, qui change avec les âges (GardenView)
         else if (t === VEG_ROCKS) this.rockery(cx, cz, s);
       }
     for (const l of this.layers) l.end(ch);
@@ -651,46 +642,66 @@ export class VegView {
     }
   }
 
-  private field(cx: number, cz: number, s: SeasonState) {
-    if (s.growth < 0.12) return;
-    const w = this.world, edgeDist = this.edge(cx, cz);
-    for (let r = 0; r < WHEAT_DIV; r++)
-      for (let c = 0; c < WHEAT_DIV; c++) {
-        const gx = cx * WHEAT_DIV + c, gz = cz * WHEAT_DIV + r;
-        const px = cx + (c + 0.5 + (hash2(gx, gz, 101) - 0.5) * 0.5) / WHEAT_DIV;
-        const pz = cz + (r + 0.5 + (hash2(gx, gz, 102) - 0.5) * 0.18) / WHEAT_DIV;
-        const sc = s.growth * (0.82 + hash2(gx, gz, 103) * 0.3) * (0.65 + 0.35 * smoothstep(0, 0.3, edgeDist(px, pz)));
-        this.wheat.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(gx, gz, 104) * 6.28, 0.9 + hash2(gx, gz, 105) * 0.3, sc, 0.9 + hash2(gx, gz, 106) * 0.3), this.col.setScalar(0.88 + hash2(gx, gz, 107) * 0.2));
+  /**
+   * Parcelle (champ ou jardin) contenant la case : sens de ses sillons, le même sur toute la parcelle mais propre à chacune,
+   * comme dans un bocage
+   */
+  private plotAngle = new Map<number, number>();
+  private plotNoise = new Simplex(4242);
+  private angleOf(cx: number, cz: number) {
+    const w = this.world, k0 = w.ci(cx, cz), known = this.plotAngle.get(k0);
+    if (known !== undefined) return known;
+    const t = w.veg[k0], cells = [k0], seen = new Set(cells);
+    for (let i = 0; i < cells.length && cells.length < 400; i++) {
+      const x = cells[i] % N, z = Math.floor(cells[i] / N);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, nz = z + dz, k = nz * N + nx;
+        if (w.inCells(nx, nz) && w.veg[k] === t && !seen.has(k)) { seen.add(k); cells.push(k); }
+      }
+    }
+    const first = Math.min(...cells), a = (hash2(first % N, Math.floor(first / N), 77) - 0.5) * Math.PI;
+    for (const k of cells) this.plotAngle.set(k, a);
+    return a;
+  }
+
+  /**
+   * Couverture organique d'une culture au point : part des cases de la même culture alentour (interpolée, coins arrondis),
+   * bordure ondulée par un bruit ; on plante là où elle dépasse ½
+   */
+  private cover(t: number, px: number, pz: number) {
+    const w = this.world, fx = px - 0.5, fz = pz - 0.5, ix = Math.floor(fx), iz = Math.floor(fz), u = fx - ix, v = fz - iz;
+    const at = (x: number, z: number) => (w.inCells(x, z) && w.veg[w.ci(x, z)] === t ? 1 : 0);
+    const c = (at(ix, iz) * (1 - u) + at(ix + 1, iz) * u) * (1 - v) + (at(ix, iz + 1) * (1 - u) + at(ix + 1, iz + 1) * u) * v;
+    return c + this.plotNoise.noise2(px * 0.8, pz * 0.8) * 0.2 + this.plotNoise.noise2(px * 2.1 + 9, pz * 2.1) * 0.08;
+  }
+
+  /** Points d'une case le long des sillons de sa parcelle : (x, z, rang, place dans le rang), espacements en cases */
+  private furrows(cx: number, cz: number, rowGap: number, step: number, cb: (px: number, pz: number, row: number, col: number) => void) {
+    const a = this.angleOf(cx, cz), ca = Math.cos(a), sa = Math.sin(a);
+    // repère tourné commun à toute la parcelle : u le long des sillons, v en travers
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const [x, z] of [[cx, cz], [cx + 1, cz], [cx, cz + 1], [cx + 1, cz + 1]]) {
+      const u = x * ca + z * sa, v = -x * sa + z * ca;
+      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+    }
+    for (let r = Math.floor(v0 / rowGap); r * rowGap <= v1; r++)
+      for (let c = Math.floor(u0 / step); c * step <= u1; c++) {
+        const v = (r + 0.5) * rowGap, u = (c + 0.5 + (hash2(r, c, 131) - 0.5) * 0.45) * step;
+        const px = u * ca - v * sa, pz = u * sa + v * ca;
+        if (px < cx || px >= cx + 1 || pz < cz || pz >= cz + 1) continue;
+        cb(px, pz, r, c);
       }
   }
 
-  /** Potager : rangs de légumes et de fleurs ; les lapins y grignotent des plants */
-  private garden(cx: number, cz: number, s: SeasonState) {
+  private field(cx: number, cz: number, s: SeasonState) {
     if (s.growth < 0.12) return;
-    const w = this.world, col = this.col;
-    const g = 0.4 + 0.6 * s.growth, eaten = w.grazed[w.ci(cx, cz)];
-    for (let r = 0; r < GARDEN_ROWS; r++)
-      for (let c = 0; c < GARDEN_COLS; c++) {
-        const gx = cx * GARDEN_COLS + c, gz = cz * GARDEN_ROWS + r;
-        if (hash2(gx, gz, 208) < eaten * 0.75) continue;
-        const px = cx + (c + 0.5 + (hash2(gx, gz, 201) - 0.5) * 0.3) / GARDEN_COLS;
-        const pz = cz + (r + 0.5 + (hash2(gx, gz, 202) - 0.5) * 0.15) / GARDEN_ROWS;
-        const h = hash2(gx, gz, 203);
-        const rot = hash2(gx, gz, 204) * 6.28;
-        const shade = 0.88 + hash2(gx, gz, 205) * 0.22;
-        // un rang sur trois est fleuri, les autres sont des légumes (citrouilles en automne)
-        if ((gz % 3 === 1 && h < 0.85) || h < 0.12) {
-          this.plantAt(px, pz, 0.7 * g, 0.9, rot, col.setHex(0x78b862).multiplyScalar(shade));
-          if (s.leaf > 0.5) {
-            const hue = FLOWER_HUES[Math.floor(hash2(gx, gz, 206) * FLOWER_HUES.length)];
-            this.flower(px, w.hAt(px, pz), pz, g, hue, hue === 0.58 ? 0.15 : 0.75, hue === 0.58 ? 0.95 : 0.72);
-          }
-        } else {
-          const pumpkin = h > 0.8 && s.foliage2.r > s.foliage2.g;
-          col.copy(pumpkin ? PUMPKIN : VEG_COLORS[Math.floor(hash2(gx, gz, 207) * VEG_COLORS.length)]).lerp(SNOWC, s.snow * 0.7).multiplyScalar(shade);
-          this.plantAt(px, pz, (pumpkin ? 1.05 : 0.95) * g * (1 - eaten * 0.4), pumpkin ? 0.85 : 1, rot, col);
-        }
-      }
+    const w = this.world, t = w.veg[w.ci(cx, cz)];
+    this.furrows(cx, cz, 1 / WHEAT_DIV, 1 / WHEAT_DIV, (px, pz, gx, gz) => {
+      const cov = this.cover(t, px, pz);
+      if (cov < 0.5) return;
+      const sc = s.growth * (0.82 + hash2(gx, gz, 103) * 0.3) * (0.65 + 0.35 * smoothstep(0.5, 0.8, cov));
+      this.wheat.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(gx, gz, 104) * 6.28, 0.9 + hash2(gx, gz, 105) * 0.3, sc, 0.9 + hash2(gx, gz, 106) * 0.3), this.col.setScalar(0.88 + hash2(gx, gz, 107) * 0.2));
+    });
   }
 
   /** Rocaille : deux à quatre blocs, dont au moins un gros, et des cailloux */
@@ -1060,10 +1071,6 @@ function wheatClumpGeo(): THREE.BufferGeometry {
 }
 
 /** Houppier : trois boules fusionnées, plus touffu qu'une seule */
-function canopyGeo(): THREE.BufferGeometry {
-  return smoothBlobs([[0.23, 0, 0.48, 0, 0.9, 1], [0.15, 0.14, 0.4, 0.07, 0.9, 0], [0.14, -0.12, 0.42, -0.08, 0.9, 0], [0.12, -0.02, 0.63, 0.05, 1, 0]]);
-}
-
 /**
  * Boules lissées fusionnées [rayon, x, y, z, aplatissement, détail] : normales radiales,
  * assombries vers le bas pour donner du volume (ou unies si shade = false)

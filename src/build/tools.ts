@@ -7,6 +7,7 @@ import { KINDS, KindId } from './catalog';
 import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin } from './placement';
+import { autoRoad } from './autoroads';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 
@@ -31,6 +32,8 @@ export interface ToolHost {
   enterUnder(cell: number): void;
   /** fait entrer en éruption le volcan posé sur la case */
   erupt(cell: number): void;
+  /** routes automatiques jusqu'aux nouveaux bâtiments (réglage) */
+  autoRoads: boolean;
 }
 
 export class ToolController implements ToolInput {
@@ -313,7 +316,9 @@ export class ToolController implements ToolInput {
     }
     this.mark();
     const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, this.kind, o.x, o.z, this.ghostRot);
-    w.place(this.kind, o.x, o.z, rot, !this.rotManual, this.h.getAge(), true);
+    const b = w.place(this.kind, o.x, o.z, rot, !this.rotManual, this.h.getAge(), true);
+    // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
+    if (this.h.autoRoads) autoRoad(w, b);
     this.moveOrigin = null;
     if (this.tool === 'move') { this.tool = 'none'; this.h.changed(); }
     this.h.audio.sfxPlace();

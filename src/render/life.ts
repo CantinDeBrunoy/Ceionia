@@ -28,6 +28,8 @@ export class AmbientLife {
   density = 1;
   /** un poisson retombe dans l'eau (pour le son) */
   onSplash: ((x: number, z: number) => void) | null = null;
+  /** autres feux de bois à faire fumer (jardins) : ajoutés à la suite des cheminées, (x, y, z, sorte) */
+  extraChimneys: ((out: number[]) => void) | null = null;
   private puffs = new Puffs(320, 0);
   private chim: number[] = [];
   private chimTimer = 0;
@@ -153,7 +155,7 @@ void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.
   /** Fumée des cheminées proches : un filet le reste du temps, plus épaisse l'hiver, au lever et à l'heure du dîner */
   private chimneySmoke(dt: number, h: number, season: number, focus: THREE.Vector3) {
     this.chimTimer -= dt;
-    if (this.chimTimer <= 0) { this.chimTimer = 1; this.buildings.chimneys(this.chim); }
+    if (this.chimTimer <= 0) { this.chimTimer = 1; this.buildings.chimneys(this.chim); this.extraChimneys?.(this.chim); }
     const cook = (h > 6.5 && h < 8.5) || (h > 18 && h < 21) ? 0.6 : 0, cold = season === 3 ? 1.1 : season === 2 ? 0.4 : 0;
     const c = this.chim;
     for (let i = 0; i < c.length; i += 4) {

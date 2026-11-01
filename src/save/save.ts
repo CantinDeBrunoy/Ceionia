@@ -13,6 +13,8 @@ export interface Settings {
   quality?: Quality;
   /** catastrophes naturelles : lave et incendies détruisent les bâtiments, le volcan se réveille de lui-même */
   disasters?: boolean;
+  /** routes posées d'elles-mêmes jusqu'aux nouveaux bâtiments */
+  autoRoads?: boolean;
 }
 
 export type Quality = 'high' | 'medium' | 'low';

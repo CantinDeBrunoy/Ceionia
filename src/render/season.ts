@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { GameTime } from '../core/time';
 
 const P = {
-  grass: [0xa6d98a, 0x8fcf7e, 0xd0b862, 0xdfe8ee].map((c) => new THREE.Color(c)),
-  foliage: [0xf3bccf, 0x86cf84, 0xefaa55, 0xcdc4bb].map((c) => new THREE.Color(c)),
+  // herbe d'un vert franc et tendre, feuillages jaune-vert, eau turquoise (comme un diorama)
+  grass: [0xa6dc7a, 0x92d266, 0xd0b862, 0xdfe8ee].map((c) => new THREE.Color(c)),
+  foliage: [0xf3bccf, 0x8ad25e, 0xefaa55, 0xcdc4bb].map((c) => new THREE.Color(c)),
   /** feuillage des arbres non fleuris (vert tendre au printemps, jaune en automne) */
-  foliage2: [0xa9d87c, 0x7cc47a, 0xe6c45a, 0xc9c0b6].map((c) => new THREE.Color(c)),
+  foliage2: [0xa6d866, 0x7ec552, 0xe6c45a, 0xc9c0b6].map((c) => new THREE.Color(c)),
   crop: [0xb4dc86, 0xe3cf6e, 0xc9a266, 0xf1f5f9].map((c) => new THREE.Color(c)),
-  water: [0x9fd8e4, 0x8fd6e2, 0x8fbfc9, 0xbcd9e6].map((c) => new THREE.Color(c)),
+  water: [0x7cdbe8, 0x6ad7e6, 0x86c4cf, 0xbcd9e6].map((c) => new THREE.Color(c)),
   tint: [0xfff0f4, 0xfffbe8, 0xffe6c4, 0xeaf2ff].map((c) => new THREE.Color(c)),
   snow: [0, 0, 0.05, 1],
   leaf: [0.95, 1, 0.9, 0.3],

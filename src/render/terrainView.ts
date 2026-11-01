@@ -27,6 +27,9 @@ const WHITE = new THREE.Color(0xf4f7fb);
 const HIGH = new THREE.Color(0xc9d79a);
 const TILLED = new THREE.Color(0xa47b52);
 const BEDS = new THREE.Color(0x8a6548);
+/** Sol des jardins : terre battue du camp préhistorique, sable des lices du Moyen Âge ; pelouse aux autres âges */
+const CAMP_GROUND = new THREE.Color(0xb49a76), LISTS_GROUND = new THREE.Color(0xcdb48c);
+const LAWN = new THREE.Color(0x74c060);
 const UNDERGROWTH = new THREE.Color(0x6f9c5c);
 const MEADOW = new THREE.Color(0xc9da8e);
 const YARD = new THREE.Color(0xcdb791);
@@ -101,11 +104,15 @@ export class TerrainView {
   /** Par sous-sommet : part des cases voisines en forêt / champ / jardin / rocaille (zones à bords doux) */
   private vegW = new Float32Array(VS * VS * 4);
   private vegCol = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
+  /** âge du village : le sol des jardins en dépend (terre battue, gravier, sable, pelouse) */
+  gardenAge = 0;
   /** Par sous-sommet : terre battue autour des bâtiments, champs de lave refroidie */
   private yardW = new Float32Array(VS * VS);
   private lavaW = new Float32Array(VS * VS);
   /** Par sous-sommet : grandes taches de prairie (-1 herbe sombre … 1 herbe claire) */
   private patch = new Float32Array(VS * VS);
+  /** Par sous-sommet : bruit fin qui fait onduler les bords des champs et des jardins */
+  private wobble = new Float32Array(VS * VS);
   /** Par case : part de chaque biome alentour (transitions douces), et couleur de sol de chaque biome */
   private biomeW = new Float32Array(N * N * NB);
   private biomeTmp = new Float32Array(N * N * NB);
@@ -247,6 +254,7 @@ vec3 tri(vec3 p, vec3 w, float s) {
     this.group.add(this.top, this.skirt, this.water, this.makeWaterSides(), this.makeRock());
     const sx = new Simplex(77);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.patch[z * VS + x] = clamp(sx.fbm((x / VR) * 0.085, (z / VR) * 0.085, 3) * 1.6, -1, 1);
+    for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.wobble[z * VS + x] = sx.noise2((x / VR) * 0.8 + 50, (z / VR) * 0.8);
     this.update({ grass: new THREE.Color(0x8fcf7e), crop: new THREE.Color(0xe3cf6e), foliage: new THREE.Color(0x86cf84), snow: 0, water: new THREE.Color(0x9fd8e0), waterOpacity: 0.72 });
   }
 
@@ -424,6 +432,8 @@ vec3 tri(vec3 p, vec3 w, float s) {
           }
         const i = z * VS + x;
         for (let q = 0; q < 4; q++) vw[i * 4 + q] = n ? f[q] / n : 0;
+        // champs et jardins : bords ondulés et coins arrondis, plutôt que des carrés
+        for (const q of [1, 2]) { const v = vw[i * 4 + q]; if (v > 0 && v < 1) vw[i * 4 + q] = smoothstep(0.3, 0.7, v + this.wobble[i] * 0.28); }
         yw[i] = n ? y / n : 0;
         this.lavaW[i] = n ? lava / n : 0;
       }
@@ -437,7 +447,10 @@ vec3 tri(vec3 p, vec3 w, float s) {
     const [cForest, cField, cGarden, cRocks] = this.vegCol;
     cForest.copy(pal.grass).lerp(UNDERGROWTH, 0.55).lerp(pal.foliage, 0.12);
     cField.copy(TILLED).lerp(pal.crop, 0.55);
-    cGarden.copy(BEDS).lerp(pal.grass, 0.12);
+    const gAge = Math.min(this.gardenAge, 4);
+    const bare = gAge === 0 || gAge === 2;
+    if (bare) cGarden.copy(gAge ? LISTS_GROUND : CAMP_GROUND).lerp(pal.grass, gAge ? 0.12 : 0.22);
+    else cGarden.copy(pal.grass).lerp(LAWN, 0.45);
     cRocks.copy(GRAVEL).lerp(pal.grass, 0.15);
 
     // couleur et motif par sous-sommet : dégradés continus fond marin → sable → herbe → roche → neiges éternelles
@@ -482,7 +495,8 @@ vec3 tri(vec3 p, vec3 w, float s) {
           }
           if (lava > 0) tmp.lerp(VOLCANO_BROWN, lava * 0.95).lerp(BASALT, top * lava * 0.65);
         }
-        const soil = Math.min(1, yw[i] * 0.55 + vw[i * 4 + 1] + vw[i * 4 + 2]);
+        // terre battue et sable des jardins nus ; la pelouse garde le motif de l'herbe
+        const soil = Math.min(1, yw[i] * 0.55 + vw[i * 4 + 1] + (bare ? vw[i * 4 + 2] : 0));
         if (yw[i] > 0) tmp.lerp(YARD, yw[i] * 0.55 * flat);
         // pas de sous-bois vert sous les cactus
         for (let q = 0; q < 4; q++) if (vw[i * 4 + q] > 0) tmp.lerp(this.vegCol[q], vw[i * 4 + q] * (q === 3 ? 1 : flat) * (q === 0 ? 1 - dry : 1));

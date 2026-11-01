@@ -33,6 +33,8 @@ export interface UIHost {
   setQuality(q: 'high' | 'medium' | 'low'): void;
   disasters: boolean;
   setDisasters(on: boolean): void;
+  autoRoads: boolean;
+  setAutoRoads(on: boolean): void;
 }
 
 const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> = {
@@ -289,6 +291,9 @@ export class UI {
         <h4>Nature</h4>
         <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? '🌋 Activées' : 'Désactivées'}</button></div>
         <div class="row"><small>Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments.</small></div>
+        <h4>Construction</h4>
+        <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? '🛤️ Activées' : 'Désactivées'}</button></div>
+        <div class="row"><small>Un chemin relie chaque nouveau bâtiment à la route la plus proche, s'il n'y touche pas déjà.</small></div>
         <h4>Audio</h4>
         <div class="row"><label>Musique</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" class="${a.muteMusic ? 'active' : ''}">${a.muteMusic ? '🔇' : '🔊'}</button></div>
         <div class="row"><label>Sons</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" class="${a.muteSfx ? 'active' : ''}">${a.muteSfx ? '🔇' : '🔊'}</button></div>
@@ -336,6 +341,11 @@ export class UI {
       h.setDisasters(!h.disasters);
       q('#gDisasters').textContent = h.disasters ? '🌋 Activées' : 'Désactivées';
       q('#gDisasters').classList.toggle('active', h.disasters);
+    };
+    q('#gRoads').onclick = () => {
+      h.setAutoRoads(!h.autoRoads);
+      q('#gRoads').textContent = h.autoRoads ? '🛤️ Activées' : 'Désactivées';
+      q('#gRoads').classList.toggle('active', h.autoRoads);
     };
     rng('#sMusic', (v) => (a.musicVol = v));
     rng('#sSfx', (v) => (a.sfxVol = v));
@@ -395,7 +405,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     <div class="maps"></div>
     <div class="row" style="justify-content:center"><button id="mImport">⬆️ Importer une sauvegarde (JSON)</button></div>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">
-    <p class="hint">Souris : clic gauche = outil, clic droit + glisser = tourner, molette = zoom, clic milieu ou Maj + clic droit = déplacer, WASD/flèches = déplacement, Q/E = rotation.<br>Tactile : un doigt = outil, deux doigts = déplacer / zoomer / tourner.</p>`;
+    <p class="hint">Souris : clic gauche = outil, clic droit + glisser = tourner, molette = zoom, clic milieu ou Maj + clic droit = déplacer, ZQSD/flèches = déplacement, A/E = rotation (WASD et Q/E en QWERTY).<br>Tactile : un doigt = outil, deux doigts = déplacer / zoomer / tourner.</p>`;
   const maps = $('.maps', ov);
   for (const m of MAPS) {
     const save = loadSlot(m.id);

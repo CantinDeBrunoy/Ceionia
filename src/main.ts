@@ -30,6 +30,8 @@ import { UI, showMenu, UIHost } from './ui/ui';
 import { AGES, KINDS, Building } from './build/catalog';
 import { Fires } from './render/fires';
 import { Traffic } from './render/traffic';
+import { GardenView } from './render/gardens';
+import { Halos } from './render/halos';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -66,8 +68,12 @@ class Game implements UIHost {
   private glow = coarse ? null : new Glow(renderer);
   /** qualité graphique choisie dans les réglages */
   quality: Quality = coarse ? 'low' : 'high';
+  /** routes automatiques jusqu'aux nouveaux bâtiments */
+  autoRoads = true;
   fires: Fires;
   traffic: Traffic;
+  gardens: GardenView;
+  halos: Halos;
   /** réveil spontané d'un volcan : délai (secondes de jeu) et secousses annonciatrices en cours */
   private quakeTimer = 0;
   private quake: { cell: number; t: number } | null = null;
@@ -130,10 +136,12 @@ class Game implements UIHost {
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
     if (settings.quality) this.quality = settings.quality;
+    this.autoRoads = settings.autoRoads ?? true;
     w.disasters = settings.disasters ?? true;
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 4);
 
     this.terrain = new TerrainView(w);
+    this.terrain.gardenAge = this.sim.age;
     this.roads = new RoadView(w);
     this.veg = new VegView(w);
     this.buildings = new BuildingView(w);
@@ -147,12 +155,17 @@ class Game implements UIHost {
     this.life = new AmbientLife(w, this.buildings);
     this.fires = new Fires(w);
     this.traffic = new Traffic(w);
+    // jardins : lieux qui changent avec les âges ; leurs feux fument et crépitent comme les foyers
+    this.gardens = new GardenView(w);
+    // halos de lumière des feux et des lanternes, la nuit
+    this.halos = new Halos(w);
+    this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
     this.atmosphere.onStrike = (x, z) => ignite(w.buildingAt(Math.floor(x), Math.floor(z)));
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.mesh, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.gardens.group, this.halos.mesh);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -165,12 +178,16 @@ class Game implements UIHost {
       changed: () => { this.propsDirty = true; this.ui?.refreshTools(); },
       enterUnder: (cell) => this.enterUnder(cell),
       erupt: (cell) => this.erupt(cell),
+      get autoRoads() { return host.autoRoads; },
     });
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
     this.sim.onAgeUp = (age) => {
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
       audio.sfxAgeUp();
+      // le sol des jardins change avec eux
+      this.terrain.gardenAge = age;
+      this.terrain.recolor(this.season);
       this.propsDirty = true;
     };
     this.buildings.onPlaced = () => { this.propsDirty = true; };
@@ -189,6 +206,8 @@ class Game implements UIHost {
     window.addEventListener('pagehide', () => this.saveNow());
 
     this.refreshSeason(true);
+    this.gardens.sync(this.sim.age);
+    this.refreshHalos();
     this.ui.update();
     this.ui.toast(save ? 'Bon retour dans votre village !' : 'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.');
     requestAnimationFrame(() => this.frame());
@@ -200,7 +219,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters, autoRoads: this.autoRoads };
   }
   buildSave(): SaveData {
     return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, seasonT: this.time.seasonT, hour: this.time.hour, settings: this.settings(), savedAt: Date.now() };
@@ -262,6 +281,7 @@ class Game implements UIHost {
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
+  setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   get disasters() { return this.world.disasters; }
 
   /** Qualité graphique : halo (haute), brume (haute et normale), densité des particules */
@@ -395,6 +415,8 @@ class Game implements UIHost {
       const t = e.target as HTMLElement;
       if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement) return;
       const k = e.key.toLowerCase();
+      // chiffres par touche physique : en AZERTY, la rangée du haut marche sans Maj
+      const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code)?.[1];
       if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? this.tools.redo() : this.tools.undo(); return; }
       if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); this.tools.redo(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -406,15 +428,16 @@ class Game implements UIHost {
         return;
       }
       if (k === 'u') { this.enterNearest(); return; }
-      if (map[k]) { this.tools.setTool(map[k]); audio.sfxClick(); }
+      const tool = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) ? undefined : map[k];
+      if (tool) { this.tools.setTool(tool); audio.sfxClick(); }
       else if (k === 'b') { this.tools.setTool('build', this.tools.kind); }
       else if (k === 't') this.tools.rotate();
       else if (k === 'escape') { this.tools.escape(); this.setPhoto(false); }
       else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
       else if (k === 'p') this.setPhoto(!document.body.classList.contains('photo'));
       else if (k === 'h') document.body.classList.toggle('photo');
-      else if (k === '[') { this.tools.radius = Math.max(1, this.tools.radius - 0.5); this.ui.refreshTools(); }
-      else if (k === ']') { this.tools.radius = Math.min(8, this.tools.radius + 0.5); this.ui.refreshTools(); }
+      else if (k === '[' || e.code === 'BracketLeft') { this.tools.radius = Math.max(1, this.tools.radius - 0.5); this.ui.refreshTools(); }
+      else if (k === ']' || e.code === 'BracketRight') { this.tools.radius = Math.min(8, this.tools.radius + 0.5); this.ui.refreshTools(); }
     });
   }
 
@@ -425,6 +448,23 @@ class Game implements UIHost {
     this.cam.resize(w, h);
   }
 
+  /** Sources de lumière la nuit : feux de camp et braseros, lampadaires, feux des jardins, lanternes des chemins */
+  private refreshHalos() {
+    const pts: number[] = [];
+    for (const b of this.world.buildings.values()) {
+      if (b.kind === 'gather' && b.age === 0) pts.push(b.x + 0.5, b.z + 0.5, 1.5, 0.8);
+      else if (b.kind === 'lamp') {
+        // le lampadaire est dans un coin de sa case (décalé de 0,32, tourné avec elle)
+        const t = (b.rot * Math.PI) / 2, c = Math.cos(t), s = Math.sin(t);
+        pts.push(b.x + 0.5 + 0.32 * (c + s), b.z + 0.5 + 0.32 * (c - s), b.age <= 1 ? 1.1 : 0.95, 0.65);
+      }
+      else if (b.kind === 'workshop' && b.age === 2) pts.push(b.x + 0.5, b.z + 0.5, 0.75, 0.45);
+    }
+    this.gardens.lights(pts);
+    for (let i = 0; i < this.roads.lights.length; i += 2) pts.push(this.roads.lights[i], this.roads.lights[i + 1], 0.75, 0.5);
+    this.halos.set(pts);
+  }
+
   private refreshSeason(force = false) {
     computeSeason(this.time, this.season);
     const key = Math.floor(this.time.seasonT * 120);
@@ -433,6 +473,7 @@ class Game implements UIHost {
       // les teintes du sol changent par bandes, sur quelques images
       if (force) this.terrain.update(this.season); else this.terrain.recolor(this.season);
       this.veg.applySeason(this.season);
+      this.gardens.applySeason(this.season);
       this.roads.rebuild(this.sim.age, this.season.snow);
       this.propsDirty = false;
     }
@@ -492,6 +533,8 @@ class Game implements UIHost {
         if (w.vegDirty && w.vegRect) this.terrain.update(this.season, w.vegRect);
         w.vegDirty = false;
         this.veg.rebuild(this.season);
+        this.gardens.sync(this.sim.age);
+        this.refreshHalos();
       }
       this.propsDirty = false;
     }
@@ -529,6 +572,8 @@ class Game implements UIHost {
       this.streams.update(dt, this.season.snow, this.cam.target);
       this.life.update(dt, this.time, this.season, this.env, this.cam.target);
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
+      this.gardens.update(dt, this.time.hour);
+      this.halos.update(dt, this.env.night);
       this.windT += dt * (1 + this.env.weatherK * 0.6);
       this.veg.animate(this.windT, this.elapsed, 1 - this.env.weatherK * 0.3);
       this.veg.update(dt, this.cam.camera.position);

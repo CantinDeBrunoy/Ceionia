@@ -46,8 +46,12 @@ export class CameraRig {
     window.addEventListener('pointerup', (e) => this.onUp(e));
     window.addEventListener('pointercancel', (e) => this.onUp(e, true));
     el.addEventListener('wheel', (e) => { e.preventDefault(); this.goal.dist = clamp(this.goal.dist * Math.exp(e.deltaY * 0.0012), this.minDist, this.maxDist); }, { passive: false });
-    window.addEventListener('keydown', (e) => { if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) this.keys.add(e.key.toLowerCase()); });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
+    // touches physiques (e.code) : ZQSD + A/E en AZERTY, WASD + Q/E en QWERTY, sans rien régler ; rien avec Ctrl (Ctrl+Z)
+    window.addEventListener('keydown', (e) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.ctrlKey || e.metaKey || e.altKey) return;
+      this.keys.add(e.code);
+    });
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
     this.apply(1);
   }
@@ -170,20 +174,20 @@ export class CameraRig {
     const k = this.keys;
     const sp = this.goal.dist * 0.7 * dt;
     let fx = 0, fz = 0;
-    if (k.has('w') || k.has('arrowup')) fz -= 1;
-    if (k.has('s') || k.has('arrowdown')) fz += 1;
-    if (k.has('a') || k.has('arrowleft')) fx -= 1;
-    if (k.has('d') || k.has('arrowright')) fx += 1;
+    if (k.has('KeyW') || k.has('ArrowUp')) fz -= 1;
+    if (k.has('KeyS') || k.has('ArrowDown')) fz += 1;
+    if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
+    if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
     if (fx || fz) {
       const c = Math.cos(this.goal.yaw), s = Math.sin(this.goal.yaw);
       this.goal.x += (fx * c + fz * s) * sp * 0.6;
       this.goal.z += (-fx * s + fz * c) * sp * 0.6;
       this.clampGoal();
     }
-    if (k.has('q')) this.goal.yaw += dt * 1.4;
-    if (k.has('e')) this.goal.yaw -= dt * 1.4;
-    if (k.has('+') || k.has('=')) this.goal.dist = clamp(this.goal.dist * (1 - dt * 1.2), this.minDist, this.maxDist);
-    if (k.has('-')) this.goal.dist = clamp(this.goal.dist * (1 + dt * 1.2), this.minDist, this.maxDist);
+    if (k.has('KeyQ')) this.goal.yaw += dt * 1.4;
+    if (k.has('KeyE')) this.goal.yaw -= dt * 1.4;
+    if (k.has('Equal') || k.has('NumpadAdd')) this.goal.dist = clamp(this.goal.dist * (1 - dt * 1.2), this.minDist, this.maxDist);
+    if (k.has('Minus') || k.has('NumpadSubtract')) this.goal.dist = clamp(this.goal.dist * (1 + dt * 1.2), this.minDist, this.maxDist);
     const f = 1 - Math.exp(-dt * 10);
     this.yaw += (this.goal.yaw - this.yaw) * f;
     this.pitch += (this.goal.pitch - this.pitch) * f;

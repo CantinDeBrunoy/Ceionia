@@ -4,17 +4,41 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 /** Modèles Quaternius (CC0, via poly.pizza) servis depuis public/models ; chaque modèle absent retombe sur sa version procédurale */
-const NAMES = ['birch', 'pines', 'bush', 'rocks', 'sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
-  'adventurer', 'woman_dress', 'farmer', 'hooded', 'worker', 'woman', 'woman_casual', 'man',
+const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
+  // habitants : aventuriers trapus de KayKit (Préhistoire → Médiéval), petits personnages de Kenney (Industriel, Moderne)
+  'villager_barbarian', 'villager_hooded_rogue', 'villager_rogue', 'villager_mage', 'villager_knight',
+  'mini_male_a', 'mini_male_c', 'mini_male_e', 'mini_female_a', 'mini_female_c', 'mini_female_f',
   'ship_wreck', 'dolphin', 'whale', 'manta', 'clownfish', 'yellow_tang', 'fish', 'coral_set', 'seaweed',
   // biomes : essences, plantes d'eau et faune sauvage
-  'palm', 'palm2', 'palm3', 'cactus', 'cactus2', 'cactus_flowers', 'willow', 'pine_snow', 'dead_tree', 'lilypad',
+  'palm', 'palm2', 'palm3', 'cactus', 'cactus2', 'cactus_flowers', 'willow', 'dead_tree', 'lilypad',
   'fox', 'wolf', 'horse', 'llama', 'frog',
   // sous-bois et détails des prairies
   'log', 'stump', 'fern', 'flowers', 'mushroom', 'skull', 'ribcage', 'bone',
   // monde souterrain : cristaux, toiles et créatures
-  'crystal', 'crystal2', 'mineral', 'cobweb', 'zombie', 'skeleton', 'spider', 'slime', 'mushnub', 'ghost'] as const;
+  'crystal', 'crystal2', 'mineral', 'cobweb', 'zombie', 'skeleton', 'spider', 'slime', 'mushnub', 'ghost',
+  // bâtiments (CC0) : Moyen Âge et chaumières de KayKit Medieval Hexagon, résidences et bureaux de KayKit City Builder Bits,
+  // usines, éolienne et maisons de brique des City Kits de Kenney
+  'b_cottage_blue', 'b_cottage_green', 'b_cottage_red', 'b_cottage_yellow', 'b_house_blue', 'b_house_green', 'b_house_red', 'b_house_yellow',
+  'b_forge_blue', 'b_forge_red', 'b_market_blue', 'b_market_red', 'b_church_blue', 'b_church_red', 'b_windmill_blue', 'b_windmill_red',
+  'b_castle_blue', 'b_castle_red', 'b_well_blue', 'b_well_red',
+  'b_flat_a', 'b_flat_b', 'b_flat_d', 'b_flat_h', 'b_office_c', 'b_office_e', 'b_office_f', 'b_office_g',
+  'b_factory_c', 'b_factory_e', 'b_factory_m', 'b_plant_h', 'b_plant_n', 'b_turbine',
+  'b_brick_c', 'b_brick_d', 'b_brick_j', 'b_brick_o', 'b_brick_u', 'b_station_s'] as const;
 export type ModelName = (typeof NAMES)[number];
+
+/**
+ * Habitants modélisés (CC0) : plusieurs silhouettes par âge, la tenue change avec l'époque. Aventuriers trapus de KayKit
+ * (Kay Lousberg) jusqu'au Moyen Âge, petits personnages de Kenney ensuite
+ */
+export const AGE_VILLAGERS: ModelName[][] = [
+  ['villager_barbarian', 'villager_hooded_rogue', 'villager_barbarian'],
+  ['villager_hooded_rogue', 'villager_mage', 'villager_rogue'],
+  ['villager_knight', 'villager_rogue', 'villager_mage', 'villager_hooded_rogue'],
+  ['mini_male_c', 'mini_female_c', 'mini_male_a', 'mini_female_a'],
+  ['mini_male_e', 'mini_female_f', 'mini_male_a', 'mini_female_c'],
+];
+/** Animation assise, quel que soit le pack (premier nom disponible) */
+export const SIT = ['Sit_Floor_Idle', 'sit', 'Sit_Chair_Idle', 'Idle', 'idle'];
 
 const loaded = new Map<ModelName, GLTF>();
 
@@ -126,13 +150,18 @@ export function bakeStatic(name: ModelName, height: number, tintRe: RegExp, skip
     if (!g.attributes.normal) g.computeVertexNormals();
     const pos = g.attributes.position, vc = g.attributes.color, uv = g.attributes.uv;
     const px = mat.map?.image && uv ? texelsOf(mat.map) : null;
+    // transformation de texture (KHR_texture_transform des modèles Kenney) : appliquée aux UV avant lecture
+    let te: number[] | null = null;
+    if (px && mat.map && (mat.map.offset.x || mat.map.offset.y || mat.map.repeat.x !== 1 || mat.map.repeat.y !== 1 || mat.map.rotation)) { mat.map.updateMatrix(); te = mat.map.matrix.elements; }
     const col = new Float32Array(pos.count * 3);
     for (let i = 0; i < pos.count; i++) {
       _c.copy(mat.color ?? _v.setRGB(1, 1, 1));
       if (vc) _c.multiply(_v.setRGB(vc.getX(i), vc.getY(i), vc.getZ(i)));
       if (px) {
         // glTF : origine des UV en haut à gauche de l'image
-        const u = uv.getX(i) - Math.floor(uv.getX(i)), v = uv.getY(i) - Math.floor(uv.getY(i));
+        let u0 = uv.getX(i), v0 = uv.getY(i);
+        if (te) { const tu = te[0] * u0 + te[3] * v0 + te[6]; v0 = te[1] * u0 + te[4] * v0 + te[7]; u0 = tu; }
+        const u = u0 - Math.floor(u0), v = v0 - Math.floor(v0);
         const o = (Math.min(px.height - 1, Math.floor(v * px.height)) * px.width + Math.min(px.width - 1, Math.floor(u * px.width))) * 4;
         _c.multiply(_v.setRGB(px.data[o] / 255, px.data[o + 1] / 255, px.data[o + 2] / 255, THREE.SRGBColorSpace));
       }
@@ -165,6 +194,24 @@ export function bakeStatic(name: ModelName, height: number, tintRe: RegExp, skip
     for (let i = 0; i < c.count; i++) { const l = Math.min(1.4, lum(i) / avg); c.setXYZ(i, l, l, l); }
   }
   return { tint: t, rest: r, tintY };
+}
+
+/**
+ * Bâtiment importé : couleurs cuites en sommets, posé à y = 0, centré, tourné de `rot` (sa façade vers +z) et mis à l'échelle
+ * pour tenir dans `width` (la plus grande de ses deux largeurs)
+ */
+export function bakeFit(name: ModelName, width: number, rot = 0, remap?: (c: THREE.Color) => void): THREE.BufferGeometry | null {
+  const m = bakeStatic(name, 1, /^$/);
+  if (!m?.rest) return null;
+  const g = m.rest.rotateY(rot);
+  // recoloration (des murs de brique sur une maison de banlieue…)
+  if (remap) {
+    const c = g.attributes.color;
+    for (let i = 0; i < c.count; i++) { _c.setRGB(c.getX(i), c.getY(i), c.getZ(i)); remap(_c); c.setXYZ(i, _c.r, _c.g, _c.b); }
+  }
+  g.computeBoundingBox();
+  const b = g.boundingBox!, s = width / Math.max(1e-6, b.max.x - b.min.x, b.max.z - b.min.z);
+  return g.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2).scale(s, s, s);
 }
 
 /** Morceaux connexes d'une géométrie non indexée (sommets confondus par position) : triangles, centre x/z et pied de chacun */

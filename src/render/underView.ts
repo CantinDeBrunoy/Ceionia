@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { World, N, VR, VS } from '../world/world';
 import { Underground, Entrance, UWALL, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA, POOL_WATER, POOL_LAVA, POOL_Y } from '../world/underground';
-import { bakeStatic, splitPieces, StaticModel } from './assets';
+import { bakeStatic, StaticModel } from './assets';
+import { rockShapes } from './treeShapes';
 import { groundDetailTexture } from './textures';
 import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight';
 import { UnderMobs } from './mobs';
@@ -102,8 +103,7 @@ export class UnderView {
       mushroom: bakeStatic('mushroom', 0.08, /red/i), fern: bakeStatic('fern', 0.16, /./), cobweb: bakeStatic('cobweb', 0.42, /^$/),
       skull: bakeStatic('skull', 0.07, /^$/), ribcage: bakeStatic('ribcage', 0.12, /^$/), bone: bakeStatic('bone', 0.024, /^$/),
     };
-    const rocks = bakeStatic('rocks', 0.1, /stone/i);
-    this.rockPieces = rocks?.tint ? splitPieces(rocks.tint).map((p) => p.geometry) : [new THREE.IcosahedronGeometry(0.06, 1).scale(1, 0.6, 0.85)];
+    this.rockPieces = rockShapes().map((p) => p.geometry);
   }
 
   /** Hauteur où pose la caméra : le sol, jamais le haut des parois */
