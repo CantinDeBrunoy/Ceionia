@@ -1,5 +1,6 @@
 import { World, N, VR, VS, VEG_CAVE, VEG_FISSURE, VEG_VOLCANO, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
 import { Simplex } from './noise';
+import { hash2 } from '../core/rng';
 
 /**
  * Zones du monde souterrain, tirées du biome de surface : galeries de pierre à minerais (tempéré), glace (taïga),
@@ -14,6 +15,28 @@ export const POOL_WATER = 1, POOL_LAVA = 2;
 export const POOL_Y = [0, -0.2, -0.16];
 
 export interface Entrance { x: number; z: number; cell: number; kind: 'cave' | 'fissure' }
+
+/** Minerais des filons, du plus commun au plus rare : nom, rendement (unités de minerai) et poids du tirage */
+export const ORE_KINDS: { name: string; amount: number; w: number }[] = [
+  { name: 'charbon', amount: 1, w: 40 }, { name: 'fer', amount: 2, w: 28 }, { name: 'or', amount: 3, w: 10 }, { name: 'rubis', amount: 3, w: 8 },
+  { name: 'lapis-lazuli', amount: 2, w: 7 }, { name: 'diamant', amount: 5, w: 5 }, { name: 'émeraude', amount: 5, w: 2 },
+];
+const ORE_W = ORE_KINDS.reduce((s, o) => s + o.w, 0);
+
+/** Filons incrustés dans les parois (cases de galerie au pied de la roche ; plus précieux dans le magma), sauf ceux exploités */
+export function oreVeins(u: Underground, mined: Set<number>): { k: number; ore: number }[] {
+  const out: { k: number; ore: number }[] = [];
+  for (let k = 0; k < N * N; k++) {
+    if (!u.open[k] || u.wallDist[k] !== 1 || mined.has(k)) continue;
+    const cx = k % N, cz = Math.floor(k / N), zone = u.zone[k];
+    if (hash2(cx, cz, 200) > (zone === UZ_STONE ? 0.2 : 0.06)) continue;
+    let r = hash2(cx, cz, 201) * ORE_W, ore = 0;
+    if (zone === UZ_MAGMA) r = Math.min(ORE_W - 1, r + ORE_W * 0.3);
+    for (let i = 0; i < ORE_KINDS.length; i++) { if (r < ORE_KINDS[i].w) { ore = i; break; } r -= ORE_KINDS[i].w; }
+    out.push({ k, ore });
+  }
+  return out;
+}
 
 /** Bord de carte toujours rocheux */
 const BORDER = 2;
@@ -74,6 +97,45 @@ export class Underground {
     const h00 = vis[i], h10 = vis[i + 1], h01 = vis[i + VS], h11 = vis[i + VS + 1];
     if (u >= v) return h00 + u * (h10 - h00) + v * (h11 - h10);
     return h00 + u * (h11 - h01) + v * (h01 - h00);
+  }
+
+  /** Distance en pas (cases où l'on marche) depuis une case, -1 hors d'atteinte */
+  distances(from: number) {
+    const d = new Int32Array(N * N).fill(-1), q = new Int32Array(N * N);
+    let h = 0, t = 0;
+    d[from] = 0; q[t++] = from;
+    while (h < t) {
+      const k = q[h++], x = k % N, z = (k - x) / N;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, nz = z + dz, n = nz * N + nx;
+        if (!this.walkable(nx, nz) || d[n] >= 0) continue;
+        d[n] = d[k] + 1; q[t++] = n;
+      }
+    }
+    return d;
+  }
+
+  /** Chemin de case en case entre deux cases où l'on marche (bornes comprises), ou null */
+  route(from: number, to: number): number[] | null {
+    const d = this.distances(to);
+    if (d[from] < 0) return null;
+    const out = [from];
+    for (let k = from; k !== to;) {
+      const x = k % N, z = (k - x) / N;
+      let next = -1;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = (z + dz) * N + x + dx; if (this.walkable(x + dx, z + dz) && d[n] === d[k] - 1) { next = n; break; } }
+      if (next < 0) return null;
+      out.push(next); k = next;
+    }
+    return out;
+  }
+
+  /** Case de galerie la plus proche d'une entrée (sous son puits de jour) */
+  under(e: Entrance) {
+    let best = -1, bd = 1e9;
+    const cx = Math.floor(e.x), cz = Math.floor(e.z);
+    for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) if (this.walkable(cx + dx, cz + dz) && dx * dx + dz * dz < bd) { bd = dx * dx + dz * dz; best = (cz + dz) * N + cx + dx; }
+    return best;
   }
 
   zoneAt(x: number, z: number) {

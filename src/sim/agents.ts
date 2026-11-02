@@ -425,6 +425,9 @@ export class Agents {
     });
   }
 
+  /** L'équipe disparaît de la surface (descendue sous terre) ; elle réapparaît dès qu'elle se remet en route */
+  partyHide(ids: number[], hidden: boolean) { for (const id of ids) { const a = this.byId(id); if (a) { a.hidden = hidden; a.targetHidden = hidden; } } }
+
   /** Toute l'équipe est arrivée (ou s'est arrêtée faute de chemin) */
   partyDone(ids: number[]) { return ids.every((id) => { const a = this.byId(id); return !a || a.state !== 'walking'; }); }
 

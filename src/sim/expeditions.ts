@@ -1,6 +1,7 @@
 import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN } from '../world/world';
 import { Agents } from './agents';
-import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary } from './missions';
+import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds } from './missions';
+import { Underground, ORE_KINDS, oreVeins } from '../world/underground';
 import { AGES, KINDS } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
 import { ExpEvent, pickEvent } from './events';
@@ -38,6 +39,9 @@ export interface ActiveExpedition {
   extra: number;
   bonus: Effect[];
   hurt: number;
+  /** expédition armée : filons visés sous terre (dans l'ordre où la troupe les abat) et case de galerie où elle descend */
+  targets: number[];
+  entry: number;
 }
 
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[] }
@@ -61,6 +65,9 @@ export const partyLimit = (pop: number) => Math.min(MAX_TEAMS, 1 + Math.floor(po
  * plus il peut envoyer d'équipes à la fois ; une école les rend plus sûres, un lieu de soins guérit plus vite les blessés.
  * L'équipe emporte l'équipement du village contre les dangers du voyage, et sur place un imprévu demande une décision
  */
+/** Minerai par jour d'une mine, selon son âge */
+const MINE_ORE = [0, 0, 1, 2, 3];
+
 export class Expeditions {
   active: ActiveExpedition[] = [];
   onReport: ((r: Report) => void) | null = null;
@@ -70,6 +77,8 @@ export class Expeditions {
   /** population du village, donnée par le jeu */
   pop: () => number = () => 0;
   private nextId = 1;
+  /** le monde souterrain, où descendent les troupes armées (donné par le jeu) */
+  under: Underground | null = null;
   constructor(private world: World, private agents: Agents, private dayLen: () => number, private rnd: () => number = Math.random) {}
 
   /** état sauvegardé des expéditions (réserve d'équipement, fabrication…) et minerai du village */
@@ -81,8 +90,8 @@ export class Expeditions {
   slots() { return partyLimit(this.pop()); }
   private has(kind: string) { for (const b of this.world.buildings.values()) if (b.kind === kind) return true; return false; }
 
-  /** Risque réel d'un choix : une école prépare mieux les équipes */
-  riskOf(c: Choice) { return c.risk * (this.has('school') ? 0.7 : 1); }
+  /** Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel */
+  riskOf(c: Choice) { return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1); }
 
   /** Ce qu'une équipe partant maintenant emporterait, et son risque avec cet équipement */
   preview(c: Choice) {
@@ -93,13 +102,47 @@ export class Expeditions {
   /** Risque d'une équipe en route : celui du choix, équipement et décisions compris */
   chance(a: ActiveExpedition) { return Math.min(0.95, Math.max(0.02, this.riskOf(a.c) * a.riskK)); }
 
-  /** Missions proposées : celles de l'âge, puis les facultatives des âges passés pas encore réussies */
-  list(age: number) { return MISSIONS.filter((m) => m.age === age || (m.age < age && !this.done(m))); }
+  /** Missions proposées : celles de l'âge, puis les facultatives des âges passés pas encore réussies (ou à refaire) */
+  list(age: number) { return MISSIONS.filter((m) => m.age === age || (m.age < age && (!this.done(m) || m.repeat))); }
+
+  /** Ce qui manque avant de pouvoir tenter la mission : missions à réussir, bâtiments à bâtir (vide : rien) */
+  missing(m: Mission): string[] {
+    const out: string[] = [];
+    for (const id of m.requires?.missions ?? []) if (!this.world.exp.done.includes(id)) out.push(`réussir « ${MISSIONS.find((x) => x.id === id)?.title ?? id} »`);
+    for (const k of m.requires?.kinds ?? []) if (!this.has(k)) out.push(`bâtir : ${KINDS[k].names.find((n) => n)!.toLowerCase()}`);
+    return out;
+  }
+
+  /** Chevaux à l'écurie, prêts à partir */
+  horsesHome() { let n = 0; for (const h of penHerds(this.world).stables.values()) n += h.length; return n; }
+
+  /** Filons qu'une troupe descendue par l'entrée la plus proche de `dest` irait abattre, du plus proche au plus loin */
+  private pickVeins(dest: [number, number], n: number): { targets: number[]; entry: number } {
+    const u = this.under;
+    if (!u || n <= 0) return { targets: [], entry: -1 };
+    u.sync();
+    // l'entrée la plus proche dont les galeries mènent à assez de filons (certaines ne donnent que sur une petite salle)
+    const all = oreVeins(u, this.world.mined);
+    let best = { targets: [] as number[], entry: -1 };
+    for (const ent of [...u.entrances].sort((a, b) => Math.hypot(a.x - dest[0], a.z - dest[1]) - Math.hypot(b.x - dest[0], b.z - dest[1]))) {
+      const entry = u.under(ent);
+      if (entry < 0) continue;
+      const d = u.distances(entry);
+      const veins = all.filter((v) => d[v.k] >= 0).sort((a, b) => d[a.k] - d[b.k]);
+      if (veins.length > best.targets.length) best = { targets: veins.slice(0, n).map((v) => v.k), entry };
+      if (best.targets.length >= n) break;
+    }
+    return best;
+  }
 
   /** Pourquoi l'on ne peut pas partir (ou null) */
   why(m: Mission, c: Choice): string | null {
-    if (this.done(m)) return 'Mission déjà réussie.';
+    if (this.done(m) && !m.repeat) return 'Mission déjà réussie.';
     if (this.running(m)) return 'Cette expédition est déjà en route.';
+    const miss = this.missing(m);
+    if (miss.length) return `Il faut d’abord ${miss.join(', ')}.`;
+    if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return `Il faut ${c.mounts} chevaux à l’écurie (${n} pour l’instant).`; }
+    if (c.win.some((e) => e.t === 'veins') && this.under && (this.under.sync(), !oreVeins(this.under, this.world.mined).length)) return 'Il ne reste plus aucun filon dans les galeries.';
     const max = this.slots();
     if (this.active.length >= max) {
       return max < MAX_TEAMS
@@ -119,14 +162,19 @@ export class Expeditions {
     let kind: DestKind | null = c.dest, dest: [number, number] | null = null;
     while (kind && !dest) { dest = this.findDest(kind, base); kind = dest ? kind : FALLBACK[kind]; }
     if (!dest) return null;
+    const veins = c.win.find((e) => e.t === 'veins');
+    const { targets, entry } = veins?.t === 'veins' ? this.pickVeins(dest, veins.n) : { targets: [], entry: -1 };
+    if (veins && !targets.length) return null;
     const party = this.agents.recruit(c.party);
     if (!party) return null;
+    this.world.exp.riding += c.mounts ?? 0;
     // l'équipe emporte le meilleur équipement en réserve contre les dangers du voyage
     const { take, k } = loadout(c, this.world.exp.gear);
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
     const a: ActiveExpedition = {
       id: this.nextId++, m, c, phase: 'gather', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
       wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], notes: [], extra: 0, bonus: [], hurt: 0,
+      targets, entry,
     };
     this.active.push(a);
     this.agents.partyGo(party, base[0], base[1], 0.15);
@@ -136,6 +184,7 @@ export class Expeditions {
   update(dt: number) {
     const ag = this.agents;
     this.craftStep(dt);
+    this.mineStep(dt);
     for (const a of [...this.active]) {
       // une décision attendue : l'équipe patiente, puis tranche d'elle-même
       if (a.wait) {
@@ -143,7 +192,8 @@ export class Expeditions {
         if (a.waitT >= AUTO_DECIDE) this.decide(a, this.safest(a));
         continue;
       }
-      a.t += dt;
+      // avec une écurie, les équipes vont à cheval : le travail sur place avance plus vite
+      a.t += dt * (a.phase === 'work' && this.has('stable') ? 1.25 : 1);
       if (a.phase === 'gather' && (ag.partyDone(a.party) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
@@ -151,6 +201,8 @@ export class Expeditions {
       } else if (a.phase === 'out' && (ag.partyDone(a.party) || a.t > 240)) {
         a.phase = 'work'; a.t = 0;
         ag.partyAct(a.party, 'work');
+        // la troupe armée descend dans les galeries : on ne la voit plus en surface, mais sous terre
+        if (a.targets.length) ag.partyHide(a.party, true);
         this.raise(a);
       } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * 0.55) {
         this.raise(a);
@@ -207,6 +259,22 @@ export class Expeditions {
   private finish(a: ActiveExpedition) {
     const eff = a.ok ? [...a.c.win, ...a.bonus] : a.c.lose;
     const res = applyEffects(this.world, eff, this.dayLen());
+    // la troupe a abattu ses filons : ils disparaissent des parois, leur minerai rentre au village
+    let veins = '';
+    if (a.ok && a.targets.length && this.under) {
+      const kinds = new Map(oreVeins(this.under, this.world.mined).map((v) => [v.k, v.ore])), got = new Map<string, number>();
+      let ore = 0;
+      for (const k of a.targets) {
+        const o = kinds.get(k);
+        if (o === undefined) continue;
+        this.world.mined.add(k);
+        ore += ORE_KINDS[o].amount;
+        got.set(ORE_KINDS[o].name, (got.get(ORE_KINDS[o].name) ?? 0) + 1);
+      }
+      this.world.ore += ore;
+      veins = `+${ore} minerai (${[...got].map(([name, n]) => `${n} ${name}`).join(', ')})`;
+    }
+    this.world.exp.riding = Math.max(0, this.world.exp.riding - (a.c.mounts ?? 0));
     if (a.ok && !this.done(a.m)) this.world.exp.done.push(a.m.id);
     // l'équipement revient en réserve ; un échec en coûte parfois une pièce
     const gear = this.world.exp.gear, carried = (Object.keys(a.gear) as GearId[]).filter((g) => (a.gear[g] ?? 0) > 0);
@@ -222,7 +290,7 @@ export class Expeditions {
     this.agents.dismiss(a.party, injured, days * this.dayLen() * (this.has('health') ? 0.5 : 1) * (a.gear.kit ? 0.5 : 1));
     this.active.splice(this.active.indexOf(a), 1);
     this.world.version++;
-    const summary = [effectSummary(eff), lost].filter((x) => x && x !== 'rien').join(' · ') || 'rien';
+    const summary = [veins || effectSummary(eff.filter((e) => e.t !== 'veins')), veins ? effectSummary(eff.filter((e) => e.t !== 'veins')) : '', lost].filter((x) => x && x !== 'rien').join(' · ') || 'rien';
     this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text: a.ok ? a.c.winText : a.c.loseText, summary, notes: a.notes });
   }
 
@@ -258,6 +326,19 @@ export class Expeditions {
   craftProgress() { const s = this.world.exp; return s.craft.length ? Math.min(1, s.craftT / GEAR_BY[s.craft[0]].time) : 0; }
 
   /** Le village fabrique une pièce après l'autre, plus vite avec un atelier */
+  /** Minerai tiré des mines, au fil des jours (1 par mine et par jour au Moyen Âge, 2 à l'âge industriel, 3 ensuite) */
+  private mineT = 0;
+  private mineStep(dt: number) {
+    let rate = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'mine') rate += MINE_ORE[b.age] ?? 0;
+    if (!rate) return;
+    this.mineT += (dt / this.dayLen()) * rate;
+    if (this.mineT < 1) return;
+    const n = Math.floor(this.mineT);
+    this.mineT -= n;
+    this.world.ore += n;
+  }
+
   private craftStep(dt: number) {
     const s = this.world.exp;
     if (!s.craft.length) return;

@@ -134,7 +134,7 @@ export class BuildingView implements WorldListener {
     const open = b.kind === 'gather' || b.kind === 'lamp' || b.kind === 'pier';
     // l'enclos a un sol continu (son pré) : il se pose au plus haut de son emprise pour que le terrain ne le traverse pas,
     // sur une butte de terre à sa largeur
-    const raised = b.kind === 'pen';
+    const raised = b.kind === 'pen' || b.kind === 'stable';
     const mid = hs.length >> 1, lo = hs[0], base = open ? lo : raised ? hs[hs.length - 1] : hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2;
     e.group.position.set(b.x + s / 2, base, b.z + s / 2);
     const ph = open || base - lo < 0.03 ? 0 : base - lo + 0.05;

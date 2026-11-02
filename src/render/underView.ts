@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, N, VR, VS } from '../world/world';
-import { Underground, Entrance, UWALL, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA, POOL_WATER, POOL_LAVA, POOL_Y } from '../world/underground';
-import { bakeStatic, StaticModel } from './assets';
+import { Underground, Entrance, UWALL, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA, POOL_WATER, POOL_LAVA, POOL_Y, ORE_KINDS, oreVeins } from '../world/underground';
+import { bakeStatic, StaticModel, makeActor, play, hasModel, Actor, AGE_VILLAGERS, ModelName } from './assets';
 import { rockShapes } from './treeShapes';
 import { groundDetailTexture } from './textures';
 import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight';
@@ -19,13 +19,19 @@ const MUD = new THREE.Color(0x2b2622);
 const CRYSTAL = [0x8fd0ff, 0xc77dff, 0xa6ecff, 0x7dffb6, 0xff7a3a].map((c) => new THREE.Color(c));
 const SHROOM = [0x3fe0cf, 0x9b7dff, 0x5fc8ff, 0xffa24a].map((c) => new THREE.Color(c));
 const STALAG = [0xb0a28f, 0x8d7fae, 0xe2f4ff, 0x7f8f6a, 0x3e322e].map((c) => new THREE.Color(c));
-/** Minerais, façon Minecraft : charbon, fer, or, redstone, lapis, diamant, émeraude */
-const ORES: { col: THREE.Color; glow: boolean; w: number }[] = [
-  [0x2c2c30, false, 40], [0xd8b28c, false, 28], [0xf5cf45, false, 10], [0xe3352d, true, 8], [0x2f58d4, false, 7], [0x5ef0e4, true, 5], [0x36d468, true, 2],
-].map(([c, glow, w]) => ({ col: new THREE.Color(c as number), glow: glow as boolean, w: w as number }));
-const ORE_W = ORES.reduce((s, o) => s + o.w, 0);
-/** Nom et rendement (unités de minerai) de chaque minerai, dans l'ordre de ORES */
-const ORE_INFO: [string, number][] = [['charbon', 1], ['fer', 2], ['or', 3], ['rubis', 3], ['lapis-lazuli', 2], ['diamant', 5], ['émeraude', 5]];
+/** Minerais, façon Minecraft, dans l'ordre de ORE_KINDS : charbon, fer, or, redstone, lapis, diamant, émeraude */
+const ORES: { col: THREE.Color; glow: boolean }[] = [
+  [0x2c2c30, false], [0xd8b28c, false], [0xf5cf45, false], [0xe3352d, true], [0x2f58d4, false], [0x5ef0e4, true], [0x36d468, true],
+].map(([c, glow]) => ({ col: new THREE.Color(c as number), glow: glow as boolean }));
+
+/** Troupe d'une expédition armée, telle que le jeu la décrit : descendue par `entry`, elle va de filon en filon */
+export interface Troop { id: number; kind: 'cavalry' | 'armor' | 'miners'; n: number; entry: number; targets: number[]; progress: number; age: number }
+interface TroopMember { actor: Actor; mount: Actor | null }
+interface TroopShow { path: [number, number][]; legs: { from: number; to: number; mine: boolean }[]; total: number; members: TroopMember[]; light: Source; scareT: number }
+/** Temps passé à abattre un filon, compté en longueur de chemin (cases) */
+const MINE_LEN = 6;
+const T_WALK = ['Walking_A', 'Walk'], T_IDLE = ['Idle'], T_HACK = ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', 'Interact', 'Use_Item', 'Idle'];
+const T_RIDE = ['Sit_Chair_Idle', 'Sit_Floor_Idle', 'Idle'];
 /** Bassins : remontés d'une case autour pour que la rive coupe la pente du sol */
 const MAX_TORCHES = 64;
 /** Hauteur des colonnes de jour sous les entrées */
@@ -47,6 +53,9 @@ export class UnderView {
   private content = new THREE.Group();
   /** filons de minerai : case du souterrain → maillage, instances et sorte de minerai */
   private veins = new Map<number, { mesh: string; idx: number[]; ore: number }>();
+  private minedN = -1;
+  /** troupes des expéditions armées en train de parcourir les galeries */
+  private troops = new Map<number, TroopShow>();
   private oreMeshes: Record<string, THREE.InstancedMesh> = {};
   private sources: Source[] = [];
   private torchSources: Source[] = [];
@@ -300,15 +309,10 @@ export class UnderView {
     }
     // minerais incrustés dans les parois, façon Minecraft (plus précieux dans le magma) ; les filons exploités ont disparu
     this.veins.clear();
-    for (let k = 0; k < N * N; k++) {
-      if (!u.open[k] || u.wallDist[k] !== 1 || this.world.mined.has(k)) continue;
-      const cx = k % N, cz = Math.floor(k / N), zone = u.zone[k];
-      if (hash2(cx, cz, 200) > (zone === UZ_STONE ? 0.2 : 0.06)) continue;
-      let r = hash2(cx, cz, 201) * ORE_W;
-      if (zone === UZ_MAGMA) r = Math.min(ORE_W - 1, r + ORE_W * 0.3);
-      let ore = ORES[0];
-      for (const o of ORES) { if (r < o.w) { ore = o; break; } r -= o.w; }
-      const vein = { mesh: ore.glow ? 'oreGlow' : 'ore', idx: [] as number[], ore: ORES.indexOf(ore) };
+    this.minedN = this.world.mined.size;
+    for (const { k, ore: oi } of oreVeins(u, this.world.mined)) {
+      const cx = k % N, cz = Math.floor(k / N), ore = ORES[oi];
+      const vein = { mesh: ore.glow ? 'oreGlow' : 'ore', idx: [] as number[], ore: oi };
       this.veins.set(k, vein);
       const n = 3 + Math.floor(hash2(cx, cz, 202) * 3), y0 = 0.35 + hash2(cx, cz, 203) * 0.8;
       for (let i = 0; i < n; i++) {
@@ -361,20 +365,121 @@ export class UnderView {
     }
   }
 
-  /** Extrait le filon de minerai le plus proche du point cliqué : il disparaît de la paroi ; sorte et quantité, ou null */
-  mineAt(x: number, z: number): { name: string; amount: number } | null {
+  /** Filon de minerai le plus proche du point cliqué : sa sorte et son rendement, ou null (on ne l'extrait qu'en expédition armée) */
+  veinAt(x: number, z: number): { name: string; amount: number } | null {
     let best = -1, bd = 1.4;
     for (const k of this.veins.keys()) {
       const d = Math.hypot((k % N) + 0.5 - x, Math.floor(k / N) + 0.5 - z);
       if (d < bd) { bd = d; best = k; }
     }
-    if (best < 0) return null;
-    const v = this.veins.get(best)!, im = this.oreMeshes[v.mesh], zero = new THREE.Matrix4().makeScale(0, 0, 0);
-    if (im) { for (const i of v.idx) im.setMatrixAt(i, zero); im.instanceMatrix.needsUpdate = true; }
-    this.veins.delete(best);
-    this.world.mined.add(best);
-    const [name, amount] = ORE_INFO[v.ore] ?? ORE_INFO[0];
-    return { name, amount };
+    return best < 0 ? null : ORE_KINDS[this.veins.get(best)!.ore];
+  }
+
+  /** Les filons abattus par une troupe disparaissent des parois */
+  private dropMined() {
+    if (this.world.mined.size === this.minedN) return;
+    this.minedN = this.world.mined.size;
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (const [k, v] of this.veins) {
+      if (!this.world.mined.has(k)) continue;
+      const im = this.oreMeshes[v.mesh];
+      if (im) { for (const i of v.idx) im.setMatrixAt(i, zero); im.instanceMatrix.needsUpdate = true; }
+      this.veins.delete(k);
+    }
+  }
+
+  // ---------- Troupes armées ----------
+
+  /** Les troupes en expédition sous terre, à chaque image : elles marchent de filon en filon, torche au poing */
+  setTroops(list: Troop[], dt: number) {
+    const live = new Set<number>();
+    for (const t of list) {
+      live.add(t.id);
+      let s = this.troops.get(t.id) ?? null;
+      if (!s) { s = this.makeTroop(t); if (!s) continue; this.troops.set(t.id, s); }
+      this.moveTroop(s, t, dt);
+    }
+    for (const [id, s] of this.troops) if (!live.has(id)) {
+      for (const m of s.members) { this.scene.remove(m.actor.root); if (m.mount) this.scene.remove(m.mount.root); }
+      this.troops.delete(id);
+    }
+  }
+
+  private makeTroop(t: Troop): TroopShow | null {
+    const u = this.under, path: [number, number][] = [], legs: TroopShow['legs'] = [];
+    let at = t.entry, len = 0;
+    const center = (k: number): [number, number] => [(k % N) + 0.5, Math.floor(k / N) + 0.5];
+    path.push(center(at));
+    for (const v of t.targets) {
+      const r = u.route(at, v);
+      if (!r) continue;
+      const from = len;
+      for (let i = 1; i < r.length; i++) { path.push(center(r[i])); len += 1; }
+      legs.push({ from, to: len, mine: false }, { from: len, to: len, mine: true });
+      at = v;
+    }
+    if (path.length < 2) return null;
+    // chevaliers en armure, cavaliers montés, ou mineurs de l'époque et leur garde
+    const members: TroopMember[] = [];
+    const folk = AGE_VILLAGERS[Math.min(t.age, 4)];
+    for (let i = 0; i < t.n; i++) {
+      const name: ModelName = t.kind === 'miners' && i > 0 ? folk[i % folk.length] : 'villager_knight';
+      const actor = hasModel(name) ? makeActor(name, 0.3, 'height') : null;
+      if (!actor) continue;
+      actor.mixer.setTime(i * 0.37);
+      this.scene.add(actor.root);
+      let mount: Actor | null = null;
+      if (t.kind === 'cavalry' && i < 3 && hasModel('horse')) { mount = makeActor('horse', 0.34); if (mount) this.scene.add(mount.root); }
+      members.push({ actor, mount });
+    }
+    if (!members.length) return null;
+    const light: Source = { x: path[0][0], y: 0, z: path[0][1], r: 5, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(2), flicker: 0.25 };
+    return { path, legs, total: len + legs.filter((l) => l.mine).length * MINE_LEN, members, light, scareT: 0 };
+  }
+
+  /** Point du chemin à la distance s (en cases) et cap de marche */
+  private along(path: [number, number][], s: number): [number, number, number] {
+    const i = Math.max(0, Math.min(path.length - 2, Math.floor(s))), f = Math.max(0, Math.min(1, s - i));
+    const a = path[i], b = path[i + 1];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, Math.atan2(b[0] - a[0], b[1] - a[1])];
+  }
+
+  private moveTroop(s: TroopShow, t: Troop, dt: number) {
+    // l'avancement de l'expédition se lit en chemin parcouru, avec une halte à chaque filon
+    let time = t.progress * s.total, pos = 0, mining = false;
+    for (const l of s.legs) {
+      const d = l.mine ? MINE_LEN : l.to - l.from;
+      if (time <= d) { pos = l.mine ? l.to : l.from + time; mining = l.mine; break; }
+      time -= d; pos = l.to;
+    }
+    const lead = this.along(s.path, pos);
+    s.members.forEach((m, i) => {
+      let x: number, z: number, h: number;
+      if (mining) {
+        // autour du filon : les uns frappent la paroi, les autres montent la garde
+        const a = i * 2.1 + 0.5;
+        x = lead[0] + Math.cos(a) * 0.32 * (i ? 1 : 0.3); z = lead[1] + Math.sin(a) * 0.32 * (i ? 1 : 0.3); h = Math.atan2(lead[0] - x, lead[1] - z) + (i % 2 ? Math.PI : 0);
+      } else {
+        const p = this.along(s.path, Math.max(0, pos - i * 0.45));
+        const side = (i % 2 ? 1 : -1) * 0.12;
+        x = p[0] + Math.cos(p[2]) * side; z = p[1] - Math.sin(p[2]) * side; h = p[2];
+      }
+      const y = this.under.heightAt(x, z);
+      if (m.mount) {
+        m.mount.root.position.set(x, y, z); m.mount.root.rotation.y = h;
+        play(m.mount, mining ? ['Idle', 'Idle_Eating'] : ['Walk', 'Gallop', 'Idle']);
+        m.mount.mixer.update(dt);
+        m.actor.root.position.set(x, y + 0.11, z); m.actor.root.rotation.y = h;
+        play(m.actor, T_RIDE);
+      } else {
+        m.actor.root.position.set(x, y, z); m.actor.root.rotation.y = h;
+        play(m.actor, mining ? (i % 2 ? T_IDLE : T_HACK) : T_WALK);
+      }
+      m.actor.mixer.update(dt);
+    });
+    // la torche du chef éclaire la troupe ; les créatures s'enfuient devant elle
+    Object.assign(s.light, { x: lead[0], y: this.under.heightAt(lead[0], lead[1]) + 0.55, z: lead[1] });
+    if ((s.scareT -= dt) <= 0) { s.scareT = 1; this.mobs.scare(lead[0], lead[1], 2.6); }
   }
 
   /** Un filon sous le point (pour le curseur) */
@@ -492,7 +597,7 @@ export class UnderView {
     this.lightTimer -= dt;
     if (this.lightTimer <= 0) {
       this.lightTimer = LIGHT_PICK;
-      const all = this.sources.concat(this.torchSources, this.shaftSources);
+      const all = this.sources.concat(this.torchSources, this.shaftSources, [...this.troops.values()].map((s) => s.light));
       const dd = (s: Source) => Math.hypot(s.x - target.x, s.z - target.z) - s.r;
       this.active = [this.lantern, ...all.filter((s) => dd(s) < dist * 1.2).sort((a, b) => dd(a) - dd(b)).slice(0, MAX_CAVE_LIGHTS - 1)];
     }
@@ -504,7 +609,8 @@ export class UnderView {
     });
     caveLights.uLN.value = this.active.length;
     for (const c of this.content.children) if (c.userData.pulse) ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.25 + Math.sin(t * 2.4) * 0.12;
-    this.mobs.update(dt, camera, this.lantern, this.torchPoints());
+    this.dropMined();
+    this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z }))]);
   }
 
   /** Sortie du souterrain : la surface ne reçoit plus ces lumières */

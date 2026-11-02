@@ -1,4 +1,5 @@
-export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire';
+export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
+  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -45,6 +46,30 @@ export const KINDS: Record<KindId, KindDef> = {
     food: [6, 9, 12, 16, 22], jobs: [1, 1, 2, 2, 3],
     perk: 'Débloqué par l’expédition « Apprivoiser des bêtes ».',
     reqMission: 'herd',
+  },
+  stable: {
+    id: 'stable', size: 2, minAge: 1, icon: '🐎', cat: 'prod',
+    names: ['', 'Écurie', 'Écurie', 'Haras', 'Centre équestre'],
+    desc: 'Les chevaux ramenés par les expéditions y vivent (quatre par écurie) et s’y font dresser dans le paddock.',
+    jobs: [0, 2, 3, 4, 5], joy: [0, 2, 3, 4, 5],
+    perk: 'Débloquée par l’expédition « Les chevaux sauvages ». Les équipes partent à cheval : le travail sur place va 25 % plus vite.',
+    reqMission: 'horses',
+  },
+  apiary: {
+    id: 'apiary', size: 1, minAge: 0, icon: '🐝', cat: 'prod',
+    names: ['Ruches de troncs', 'Ruches d’argile', 'Rucher', 'Rucher', 'Miellerie'],
+    desc: 'Du miel et de la cire pour le village ; les abeilles butinent les champs et les jardins voisins.',
+    food: [2, 3, 4, 6, 8], joy: [1, 1, 2, 2, 3], jobs: [0, 1, 1, 1, 2],
+    perk: 'Débloqué par l’expédition « Le miel sauvage ».',
+    reqMission: 'honey',
+  },
+  mine: {
+    id: 'mine', size: 2, minAge: 2, icon: '⛏️', cat: 'prod',
+    names: ['', '', 'Mine', 'Mine de charbon', 'Carrière'],
+    desc: 'Tire du minerai de la terre, jour après jour.',
+    jobs: [0, 0, 3, 6, 8],
+    perk: 'Débloquée par l’expédition « Le filon de la montagne ». Rapporte du minerai chaque jour : 1 au Moyen Âge, 2 à l’âge industriel, 3 ensuite.',
+    reqMission: 'mine',
   },
   pier: {
     id: 'pier', size: 1, minAge: 0, icon: '🎣', cat: 'prod',
@@ -110,6 +135,30 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [3, 4, 6, 8, 10], jobs: [1, 2, 3, 5, 8],
     perk: 'Les expéditions sont plus sûres (risque −30 %).',
   },
+  observatory: {
+    id: 'observatory', size: 1, minAge: 4, icon: '🔭', cat: 'service',
+    names: ['', '', '', '', 'Observatoire'],
+    desc: 'Scrute le ciel ; les nuits d’étoiles filantes, tout le village y monte.',
+    joy: [0, 0, 0, 0, 8], jobs: [0, 0, 0, 0, 3],
+    perk: 'Débloqué par l’expédition « La pluie d’étoiles ». Les expéditions sont plus sûres (risque −15 %).',
+    reqMission: 'stars',
+  },
+  tavern: {
+    id: 'tavern', size: 1, minAge: 2, icon: '🍺', cat: 'life',
+    names: ['', '', 'Taverne', 'Brasserie', 'Café'],
+    desc: 'On y boit, on y chante et on y refait le monde.',
+    joy: [0, 0, 5, 7, 9], jobs: [0, 0, 2, 3, 3],
+    perk: 'Débloquée par l’expédition « Le maître brasseur ».',
+    reqMission: 'brewer',
+  },
+  baths: {
+    id: 'baths', size: 2, minAge: 1, icon: '♨️', cat: 'life',
+    names: ['', 'Thermes', 'Étuves', 'Bains publics', 'Centre aquatique'],
+    desc: 'On s’y lave, on s’y soigne et on s’y retrouve.',
+    joy: [0, 6, 8, 10, 13], health: [0, 10, 14, 20, 28], jobs: [0, 2, 2, 3, 5],
+    perk: 'Débloqués par l’expédition « Les sources chaudes ».',
+    reqMission: 'springs',
+  },
   fire: {
     id: 'fire', size: 2, minAge: 0, icon: '🚒', cat: 'service',
     names: ['Guetteurs', 'Poste des vigiles', 'Tour de guet', 'Caserne de pompiers', 'Centre de secours'],
@@ -119,7 +168,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'pier', 'workshop', 'mill', 'health', 'school', 'fire', 'gather', 'temple', 'landmark'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'workshop', 'mine', 'mill', 'health', 'school', 'fire', 'observatory', 'gather', 'tavern', 'baths', 'temple', 'landmark'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -150,6 +199,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   house: 'maisons', farm: 'fermes', pen: 'enclos', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
   health: 'lieux de soins', school: 'écoles', fire: 'casernes',
+  stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires',
 };
 
 export interface Building {

@@ -29,6 +29,7 @@ import { ToolController, ToolId } from './build/tools';
 import { AudioEngine } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { AGES, KINDS, Building } from './build/catalog';
+import { MISSIONS } from './sim/missions';
 import { Fires } from './render/fires';
 import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
@@ -172,6 +173,7 @@ class Game implements UIHost {
     // expéditions : une équipe d'habitants part chercher bêtes, minerai, semences… et revient raconter
     this.expeditions = new Expeditions(w, this.agents, () => this.time.dayLen);
     this.expeditions.pop = () => this.sim.pop;
+    this.expeditions.under = this.under;
     this.expView = new ExpeditionView(w, this.agents, this.expeditions);
     this.pens = new PenView(w);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
@@ -413,13 +415,14 @@ class Game implements UIHost {
     if (!p) return;
     const ent = uv.entranceAt(p.x, p.z);
     if (ent) { this.exitUnder(ent.cell); return; }
-    // un filon dans la paroi : on l'extrait (le minerai sert aux âges industriel et moderne)
-    const ore = uv.mineAt(p.x, p.z);
+    // un filon dans la paroi : seule une expédition armée peut l'abattre (créatures, galeries profondes)
+    const ore = uv.veinAt(p.x, p.z);
     if (ore) {
-      this.world.ore += ore.amount;
-      audio.sfxMine();
-      this.ui.toast(`⛏️ +${ore.amount} minerai (${ore.name}) — ${this.world.ore} en réserve`);
-      this.world.version++;
+      const deep = MISSIONS.find((m) => m.id === 'deep')!, miss = this.expeditions.missing(deep);
+      audio.sfxClick();
+      if (this.sim.age < deep.age) this.ui.toast(`⛏️ Filon de ${ore.name} (${ore.amount} minerai) : il faudra une expédition armée, à l’âge ${AGES[deep.age].name}.`);
+      else if (miss.length) this.ui.toast(`⛏️ Filon de ${ore.name} : seule une expédition armée peut l’abattre. Il faut d’abord ${miss.join(', ')}.`);
+      else this.ui.toast(`⛏️ Filon de ${ore.name} (${ore.amount} minerai) : envoyez une expédition armée pour l’abattre.`, () => this.ui.openExpeditions());
       return;
     }
     if (uv.mobs.scare(p.x, p.z)) audio.sfxClick();
@@ -609,7 +612,13 @@ class Game implements UIHost {
       if (pos.length) this.cam.follow(pos.reduce((s, p) => s + p[0], 0) / pos.length, pos.reduce((s, p) => s + p[1], 0) / pos.length);
     }
     // la surface ne s'anime que lorsqu'on la regarde
-    if (uv) uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
+    if (uv) {
+      // les troupes armées en train de parcourir les galeries
+      uv.setTroops(this.expeditions.active.filter((a) => a.targets.length && a.phase === 'work').map((a) => ({
+        id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
+      })), dt);
+      uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
+    }
     else {
       this.buildings.update(dt, this.sim.age);
       this.fauna.update(gdt, this.elapsed, this.time.hour, this.time.season, this.env.rainK, this.sim.age, this.cam.camera);

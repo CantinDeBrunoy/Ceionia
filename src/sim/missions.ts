@@ -29,7 +29,11 @@ export type Effect =
   /** savoir-faire durable (« seeds » : les champs donnent davantage) */
   | { t: 'perk'; id: string }
   /** habitants blessés, qui se reposent chez eux quelques jours */
-  | { t: 'injured'; n: number; days: number };
+  | { t: 'injured'; n: number; days: number }
+  /** filons du monde souterrain abattus par la troupe (les plus proches de l'entrée) */
+  | { t: 'veins'; n: number }
+  /** bêtes perdues en route */
+  | { t: 'unherd'; kind: HerdKind; n: number };
 
 export interface Choice {
   label: string;
@@ -47,6 +51,10 @@ export interface Choice {
   scene: Scene;
   /** dangers rencontrés (sinon ceux de la destination) : l'équipement qui les pare rend le choix plus sûr */
   danger?: Danger[];
+  /** chevaux de l'écurie qu'emmène la troupe (ils reviennent avec elle) */
+  mounts?: number;
+  /** troupe de l'expédition armée, telle qu'on la voit sous terre */
+  troop?: 'cavalry' | 'armor' | 'miners';
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -64,6 +72,10 @@ export interface Mission {
   choices: Choice[];
   /** bâtiment que sa réussite permet de construire */
   unlocks?: KindId;
+  /** se refait autant de fois qu'on veut (l'expédition armée dans les profondeurs) */
+  repeat?: boolean;
+  /** ce qu'il faut avant de partir : missions réussies, bâtiments bâtis */
+  requires?: { missions?: string[]; kinds?: KindId[] };
 }
 
 const food = (n: number, days?: number): Effect => ({ t: 'need', need: 'food', n, days });
@@ -140,6 +152,26 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    id: 'honey', age: 0, mandatory: false, icon: '🍯', title: 'Le miel sauvage', unlocks: 'apiary',
+    intro: 'Un essaim bourdonne dans un vieux chêne creux. Si l’on savait garder les abeilles près du camp, on aurait du miel et de la cire toute l’année.',
+    choices: [
+      {
+        label: 'Enfumer le vieux chêne', text: 'Un feu d’herbes humides endort l’essaim… pas toujours assez.',
+        dest: 'forest', scene: 'gather', danger: ['beast'], party: 2, work: 14, risk: 0.3, carry: 'sacks',
+        win: [food(2), joy(1)], lose: [hurt(1, 1)],
+        winText: 'L’essaim, endormi par la fumée, a été rapporté dans un tronc creux : les premières ruches bourdonnent près du camp.',
+        loseText: 'Les abeilles se sont réveillées : des piqûres en pagaille, un cueilleur gonflé comme une outre.',
+      },
+      {
+        label: 'Suivre les abeilles jusqu’à leur essaim', text: 'Patient : on suit leur vol de fleur en fleur, jusqu’à un essaim posé dans la plaine.',
+        dest: 'plain', scene: 'gather', party: 3, work: 22, risk: 0.12, carry: 'sacks',
+        win: [food(3, 4)], lose: [],
+        winText: 'Au bout de la piste, un essaim tout neuf accroché à une branche basse : on l’a cueilli sans une piqûre.',
+        loseText: 'Les abeilles volaient trop haut : on les a perdues de vue.',
+      },
+    ],
+  },
   // ---------------- Antiquité ----------------
   {
     id: 'seeds', age: 1, mandatory: true, icon: '🌾', title: 'Le blé des collines',
@@ -169,7 +201,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'horses', age: 1, mandatory: false, icon: '🐎', title: 'Les chevaux sauvages',
+    id: 'horses', age: 1, mandatory: false, icon: '🐎', title: 'Les chevaux sauvages', unlocks: 'stable',
     intro: 'Une harde de chevaux galope dans la plaine. Montés ou attelés, ils changeraient la vie du village.',
     choices: [
       {
@@ -208,9 +240,29 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    id: 'springs', age: 1, mandatory: false, icon: '♨️', title: 'Les sources chaudes', unlocks: 'baths',
+    intro: 'Des bergers parlent d’une eau fumante qui jaillit de la montagne et guérit les douleurs. Il faudrait trouver la source et apprendre à y bâtir des bains.',
+    choices: [
+      {
+        label: 'Suivre la vapeur dans la montagne', text: 'La source est là-haut, au bout d’un sentier escarpé.',
+        dest: 'mountain', scene: 'camp', danger: ['fall', 'weather'], party: 3, work: 20, risk: 0.25,
+        win: [joy(2)], lose: [hurt(1, 2)],
+        winText: 'Au creux de la montagne, un bassin d’eau chaude fume dans le froid : les bâtisseurs savent maintenant faire des thermes.',
+        loseText: 'Le sentier s’est effondré sous un porteur : il redescend sur une civière.',
+      },
+      {
+        label: 'Remonter la rivière tiède', text: 'Là où l’eau devient tiède, la source n’est pas loin.',
+        dest: 'river', scene: 'gather', party: 2, work: 16, risk: 0.15,
+        win: [joy(1), food(1)], lose: [],
+        winText: 'La rivière tiède menait à une source chaude au milieu des roseaux : on y a pris un bain, et des idées.',
+        loseText: 'L’eau était tiède… à cause du soleil. Pas de source.',
+      },
+    ],
+  },
   // ---------------- Moyen Âge ----------------
   {
-    id: 'mine', age: 2, mandatory: true, icon: '⚒️', title: 'Le filon de la montagne',
+    id: 'mine', age: 2, mandatory: true, icon: '⚒️', title: 'Le filon de la montagne', unlocks: 'mine',
     intro: 'Les forgerons manquent de fer. Au cœur de la montagne, dit-on, un filon brille dans le noir.',
     choices: [
       {
@@ -233,6 +285,34 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'ore', n: 6 }, food(-2, 3)], lose: [],
         winText: 'Les nomades ont échangé leur minerai contre des vivres : il faudra se serrer un peu la ceinture.',
         loseText: 'Les nomades avaient déjà levé le camp.',
+      },
+    ],
+  },
+  {
+    id: 'deep', age: 2, mandatory: false, repeat: true, icon: '⚔️', title: 'Expédition armée dans les profondeurs',
+    requires: { missions: ['horses', 'mine'], kinds: ['stable'] },
+    intro: 'Sous les grottes et les failles, les galeries regorgent de minerai… et de créatures. Seule une troupe armée peut y descendre, tenir les galeries le temps d’abattre les filons, et en revenir. Longue et dangereuse ; on peut y retourner tant qu’il reste des filons.',
+    choices: [
+      {
+        label: 'Charge de cavalerie', text: 'Trois chevaux de l’écurie et leurs cavaliers foncent dans les grandes galeries : rapides, mais les bêtes craignent le noir.',
+        dest: 'cave', scene: 'mine', troop: 'cavalry', mounts: 3, danger: ['monster', 'dark'], party: 4, work: 34, risk: 0.5, carry: 'cart',
+        win: [{ t: 'veins', n: 4 }], lose: [hurt(2, 3), { t: 'unherd', kind: 'horse', n: 1 }],
+        winText: 'Les cavaliers ont chargé la horde de squelettes, tenu la grande galerie et remonté les filons dans leurs sacoches !',
+        loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cavaliers rentrent blessés, les sacoches vides.',
+      },
+      {
+        label: 'Hommes d’armes en armure', text: 'Lents et lourds : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
+        dest: 'cave', scene: 'mine', troop: 'armor', danger: ['monster', 'dark', 'fall'], party: 5, work: 48, risk: 0.45, carry: 'cart',
+        win: [{ t: 'veins', n: 6 }], lose: [hurt(2, 4)],
+        winText: 'Pas un monstre n’a percé le mur de boucliers : six filons abattus, le chariot ploie sous le minerai.',
+        loseText: 'Les araignées géantes ont attaqué par le plafond : la troupe a reculé, deux blessés sous leurs armures cabossées.',
+      },
+      {
+        label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches : on file droit aux premiers filons et on remonte ce qu’on peut.',
+        dest: 'cave', scene: 'mine', troop: 'miners', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.55, carry: 'cart',
+        win: [{ t: 'veins', n: 3 }], lose: [hurt(2, 3)],
+        winText: 'Les gardes ont tenu bon pendant que les pioches chantaient : trois filons remontés à la lumière.',
+        loseText: 'Des zombies ont surgi d’une galerie latérale : les mineurs ont tout lâché pour fuir, deux blessés.',
       },
     ],
   },
@@ -266,6 +346,26 @@ export const MISSIONS: Mission[] = [
         win: [joy(5, 5)], lose: [],
         winText: 'La troupe est arrivée en musique : fête au village pendant des jours !',
         loseText: 'Ils étaient déjà partis vers une autre ville…',
+      },
+    ],
+  },
+  {
+    id: 'brewer', age: 2, mandatory: false, icon: '🍺', title: 'Le maître brasseur', unlocks: 'tavern',
+    intro: 'À l’abbaye voisine, un frère brasse une bière dont on parle jusqu’au château. S’il nous apprenait son secret, le village aurait sa taverne.',
+    choices: [
+      {
+        label: 'Aller l’écouter à l’abbaye', text: 'Une longue route, et des moines qui aiment qu’on les écoute.',
+        dest: 'far', scene: 'camp', danger: ['weather'], party: 2, work: 16, risk: 0.1,
+        win: [joy(2)], lose: [],
+        winText: 'Le frère a tout expliqué, de l’orge germée au houblon : la première taverne du village peut ouvrir.',
+        loseText: 'Le frère était en retraite, et l’abbaye fermée aux visiteurs.',
+      },
+      {
+        label: 'Cueillir le houblon sauvage au bord de l’eau', text: 'On rapporte le houblon d’abord ; le frère viendra goûter.',
+        dest: 'river', scene: 'gather', party: 3, work: 18, risk: 0.2, carry: 'sacks',
+        win: [joy(1), food(1)], lose: [hurt(1, 1)],
+        winText: 'Des sacs de houblon embaumé : le frère est venu en personne, et la taverne a ouvert le soir même.',
+        loseText: 'Une glissade dans les orties : un cueilleur blessé, le houblon perdu.',
       },
     ],
   },
@@ -351,18 +451,45 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    id: 'stars', age: 4, mandatory: false, icon: '🔭', title: 'La pluie d’étoiles', unlocks: 'observatory',
+    intro: 'Les astronomes annoncent une pluie d’étoiles filantes. Si le village les aide à monter leurs instruments au bon endroit, ils y bâtiront un observatoire.',
+    choices: [
+      {
+        label: 'Monter les lunettes au sommet', text: 'Le ciel le plus pur… et le plus long portage.',
+        dest: 'mountain', scene: 'camp', danger: ['fall', 'weather'], party: 3, work: 20, risk: 0.25, carry: 'sacks',
+        win: [joy(3)], lose: [hurt(1, 2)],
+        winText: 'Toute la nuit, le ciel a plu des étoiles : les astronomes ont choisi la place de leur observatoire.',
+        loseText: 'Un faux pas dans les éboulis : une lunette brisée et un porteur blessé.',
+      },
+      {
+        label: 'Chercher la météorite tombée dans la plaine', text: 'Elle est tombée la nuit dernière, quelque part par là.',
+        dest: 'far', scene: 'gather', party: 2, work: 16, risk: 0.15, carry: 'cart',
+        win: [joy(2), { t: 'ore', n: 4 }], lose: [],
+        winText: 'La météorite fumait encore au fond de son trou : du fer tombé du ciel, et un observatoire promis au village !',
+        loseText: 'Rien qu’un rocher ordinaire… la météorite est tombée ailleurs.',
+      },
+    ],
+  },
 ];
 
-/** Bêtes par enclos, au plus */
+/** Bêtes par enclos, chevaux par écurie, au plus */
 export const PEN_CAP = 6;
+export const STABLE_CAP = 4;
 
-/** Bêtes de chaque enclos (dans l'ordre où ils ont été bâtis), et celles qui, faute de place, paissent près des fermes */
+/**
+ * Bêtes de chaque écurie et de chaque enclos (dans l'ordre où ils ont été bâtis) : les chevaux vont d'abord à l'écurie, le
+ * reste du troupeau (et les chevaux en trop) dans les enclos ; celles qui, faute de place, paissent près des fermes
+ */
 export function penHerds(w: World) {
-  const pens = [...w.buildings.values()].filter((b) => b.kind === 'pen').sort((a, b) => a.id - b.id);
-  const out = new Map<number, HerdKind[]>();
+  const all = (k: KindId) => [...w.buildings.values()].filter((b) => b.kind === k).sort((a, b) => a.id - b.id);
+  const horses = w.exp.herd.filter((k) => k === 'horse').slice(w.exp.riding), stables = new Map<number, HerdKind[]>(), pens = new Map<number, HerdKind[]>();
+  let h = 0;
+  for (const s of all('stable')) { stables.set(s.id, horses.slice(h, h + STABLE_CAP)); h += STABLE_CAP; }
+  const herd = [...w.exp.herd.filter((k) => k !== 'horse'), ...horses.slice(h)];
   let i = 0;
-  for (const p of pens) { out.set(p.id, w.exp.herd.slice(i, i + PEN_CAP)); i += PEN_CAP; }
-  return { pens: out, rest: w.exp.herd.slice(i) };
+  for (const p of all('pen')) { pens.set(p.id, herd.slice(i, i + PEN_CAP)); i += PEN_CAP; }
+  return { pens, stables, rest: herd.slice(i) };
 }
 
 /** La mission obligatoire de l'âge (celle qui ouvre l'âge suivant) */
@@ -387,9 +514,11 @@ export interface ExpState {
   /** fabrication en cours, dans l'ordre, et avancement de la première pièce (secondes de jeu) */
   craft: GearId[];
   craftT: number;
+  /** chevaux partis avec une troupe (pas sauvegardé : une expédition en route ne l'est pas) */
+  riding: number;
 }
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0 });
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0 });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
@@ -425,6 +554,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
     else if (e.t === 'perk') { if (!s.perks.includes(e.id)) s.perks.push(e.id); }
     else if (e.t === 'need') { if (e.days) s.temp.push({ need: e.need, n: e.n, until: s.clock + e.days * dayLen }); else s.bonus[e.need] += e.n; }
     else if (e.t === 'injured') { injured += e.n; days = Math.max(days, e.days); }
+    else if (e.t === 'unherd') for (let i = 0; i < e.n; i++) { const j = s.herd.lastIndexOf(e.kind); if (j >= 0) s.herd.splice(j, 1); }
   }
   w.version++;
   return { injured, days };
@@ -446,6 +576,8 @@ export function effectSummary(effects: Effect[]) {
     else if (e.t === 'need') out.push(`${e.n > 0 ? '+' : '−'}${Math.abs(e.n)} ${NEED_ICON[e.need]}${e.days ? ` (${e.days} j)` : ''}`);
     else if (e.t === 'perk') out.push(PERK_NAME[e.id] ?? e.id);
     else if (e.t === 'injured') out.push(`${e.n} blessé${e.n > 1 ? 's' : ''} (${e.days} j)`);
+    else if (e.t === 'veins') out.push(`${e.n} filons du souterrain`);
+    else if (e.t === 'unherd') out.push(`−${e.n} ${HERD_NAME[e.kind][e.n > 1 ? 1 : 0]}`);
   }
   return out.join(' · ') || 'rien';
 }

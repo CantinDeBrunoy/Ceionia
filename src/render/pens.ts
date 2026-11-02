@@ -6,12 +6,14 @@ import { ANIMAL } from './expeditionScenes';
 import { mats } from './materials';
 
 interface PenBeast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; speed: number; yaw: number; idle: string[] }
-/** centre, orientation et plancher de l'enclos (posé au plus haut de son emprise) */
-interface Pen { cx: number; cz: number; rot: number; floor: number; beasts: PenBeast[] }
+/** centre, orientation et plancher de l'enclos (posé au plus haut de son emprise), et où ses bêtes peuvent aller */
+interface Pen { cx: number; cz: number; rot: number; floor: number; beasts: PenBeast[]; free: (x: number, z: number) => boolean }
 
 /** Pré intérieur d'un enclos (repère de l'enclos, 2 × 2 centré) : l'abri occupe le coin du fond à gauche, le foin et le
  * poulailler celui du fond à droite */
-const free = (x: number, z: number) => Math.abs(x) < 0.7 && Math.abs(z) < 0.7 && !(x < -0.12 && z < -0.22) && !(x > 0.05 && z < -0.36);
+const penFree = (x: number, z: number) => Math.abs(x) < 0.7 && Math.abs(z) < 0.7 && !(x < -0.12 && z < -0.22) && !(x > 0.05 && z < -0.36);
+/** Paddock d'une écurie : devant la bâtisse, hors de l'auge (devant à droite) et du râtelier (à gauche) */
+const paddockFree = (x: number, z: number) => Math.abs(x) < 0.7 && z > -0.1 && z < 0.74 && !(x > 0.42 && z > 0.5) && !(x < -0.62 && z > 0.08 && z < 0.5);
 
 /**
  * Les bêtes ramenées par les expéditions vivent dans les enclos (six au plus par enclos) : elles broutent, flânent d'un bout
@@ -25,14 +27,23 @@ export class PenView {
   constructor(private world: World) {}
 
   private rebuild() {
-    const w = this.world, { pens } = penHerds(w);
+    const w = this.world, { pens, stables } = penHerds(w);
     for (const p of this.pens.values()) for (const b of p.beasts) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
     this.pens.clear();
-    for (const [id, herd] of pens) {
+    const open = (id: number, free: Pen['free']): Pen => {
       const b = w.buildings.get(id)!;
       let floor = -1e9;
       for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) floor = Math.max(floor, w.h(b.x + i, b.z + j));
-      const pen: Pen = { cx: b.x + 1, cz: b.z + 1, rot: b.rot * Math.PI / 2, floor: floor + 0.014, beasts: [] };
+      return { cx: b.x + 1, cz: b.z + 1, rot: b.rot * Math.PI / 2, floor: floor + 0.014, beasts: [], free };
+    };
+    // les chevaux de l'écurie dans le paddock, devant les stalles
+    for (const [id, herd] of stables) {
+      const pen = open(id, paddockFree);
+      herd.forEach((k, i) => { const h = this.beast(k, i); h.x = h.tx = -0.45 + (i % 2) * 0.7; h.z = h.tz = i < 2 ? 0.15 : 0.5; pen.beasts.push(h); });
+      this.pens.set(id, pen);
+    }
+    for (const [id, herd] of pens) {
+      const b = w.buildings.get(id)!, pen = open(id, penFree);
       herd.forEach((k, i) => pen.beasts.push(this.beast(k, i)));
       // le chien de berger garde l'enclos ; les poules picorent dans le pré (dès l'Antiquité, avec le poulailler)
       const dog = this.extra('dog', 0.17, 0, 0.12, ['Idle', 'Idle_Eating'], 0.15, 0.62);
@@ -81,7 +92,7 @@ export class PenView {
           b.wait = 3 + Math.random() * 6;
           for (let k = 0; k < 8; k++) {
             const x = (Math.random() - 0.5) * 1.4, z = (Math.random() - 0.5) * 1.4;
-            if (free(x, z)) { b.tx = x; b.tz = z; break; }
+            if (pen.free(x, z)) { b.tx = x; b.tz = z; break; }
           }
         }
         // du repère de l'enclos (tourné comme le bâtiment) au monde

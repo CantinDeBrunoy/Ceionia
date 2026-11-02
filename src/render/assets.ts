@@ -39,7 +39,9 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   // poste des vigiles et académie (Quaternius, CC0) : tour de pierre au toit de tuiles, statue sur son socle
   'a_tower', 'a_statue',
   // abri ouvert sur poteaux de l'enclos antique (Quaternius, CC0)
-  'f_hut'] as const;
+  'f_hut',
+  // taverne et mine du Moyen Âge (KayKit Medieval Hexagon, CC0)
+  'b_tavern_blue', 'b_tavern_red', 'b_mine_blue'] as const;
 export type ModelName = (typeof NAMES)[number];
 
 /**

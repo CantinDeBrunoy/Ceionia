@@ -1461,6 +1461,488 @@ function firehouse(p: Parts, age: number, v: number) {
   }
 }
 
+/** Pièce qui tourne du modèle en cours (roues d'un chevalement, coupole, abeilles) : ses pièces, posées autour de son moyeu */
+interface Spin { p: Parts; pivot: [number, number, number]; axis: [number, number, number]; speed: number }
+let spinOut: Spin | null = null;
+function spinner(pivot: [number, number, number], axis: [number, number, number], speed: number) {
+  spinOut = { p: new Parts(), pivot, axis, speed };
+  return spinOut.p;
+}
+
+/** Abeilles qui tournent autour des ruches, centrées en (x, y, z) */
+function bees(x: number, y: number, z: number, n = 12) {
+  const b = spinner([x, y, z], [0, 1, 0], 1.3);
+  for (let i = 0; i < n; i++) {
+    const a = i * 2.39, r = 0.1 + (i % 4) * 0.06, h = Math.sin(i * 1.7) * 0.07;
+    b.sphere(0.013, Math.cos(a) * r, h, Math.sin(a) * r, 0xf0c040);
+    b.box(0.006, 0.014, 0.014, Math.cos(a) * r, h - 0.007, Math.sin(a) * r, 0x3c3028);
+  }
+}
+
+/** Clôture de paddock : piquets et lisses entre deux points */
+function rails(p: Parts, x0: number, z0: number, x1: number, z1: number, color: number, n = 2) {
+  const len = Math.hypot(x1 - x0, z1 - z0), ry = -Math.atan2(z1 - z0, x1 - x0), k = Math.max(1, Math.round(len / 0.22));
+  for (let i = 0; i <= k; i++) p.box(0.026, 0.16, 0.026, x0 + ((x1 - x0) * i) / k, 0, z0 + ((z1 - z0) * i) / k, color);
+  for (let j = 0; j < n; j++) p.box(len, 0.018, 0.014, (x0 + x1) / 2, 0.06 + j * (0.08 / Math.max(1, n - 1)), (z0 + z1) / 2, color, ry);
+}
+
+/**
+ * Écurie (2 × 2) : la longue bâtisse des stalles au fond, et devant le paddock où vivent les chevaux ramenés (voir PenView) :
+ * auge, râtelier, selle sur la lisse, obstacles au centre équestre
+ */
+function stable(p: Parts, age: number) {
+  const R = 0.88, grass = 0x8cbf6c, sand = age >= 4 ? 0xe8d6ad : dark(C.dirt, 0.96);
+  p.box(1.84, 0.012, 1.84, 0, 0, 0, grass);
+  p.box(1.7, 0.006, 1.1, 0, 0.012, 0.32, sand);
+  for (let i = 0; i < 10; i++) {
+    const r = 0.04 + hash2(i, 1, 71) * 0.06;
+    p.cyl(r, r + 0.01, 0.003, 7, -0.72 + hash2(i, 2, 71) * 1.44, 0.018, -0.12 + hash2(i, 3, 71) * 0.86, dark(sand, 0.88 + hash2(i, 4, 71) * 0.16));
+  }
+  for (let i = 0; i < 22; i++) p.cone(0.016, 0.06, 4, -0.86 + i * 0.082, 0.012, -0.86 + (i % 3) * 0.02, dark(grass, 0.78));
+  // paddock : lisses de bois, blanches au haras ; portail entrouvert
+  const post = age >= 3 ? C.white : C.wood, nr = age === 1 ? 2 : 3;
+  rails(p, -R, -0.26, -R, R, post, nr); rails(p, R, -0.26, R, R, post, nr);
+  rails(p, -R, R, -0.24, R, post, nr); rails(p, 0.24, R, R, R, post, nr);
+  for (const s of [-1, 1]) p.box(0.04, 0.24, 0.04, s * 0.24, 0, R, age >= 3 ? C.white : C.darkwood);
+  // le battant, ouvert vers l'intérieur autour de son gond
+  const ga = 1.2, gl = 0.44, gc = Math.cos(ga), gs = Math.sin(ga);
+  for (const y of [0.06, 0.14]) p.box(gl, 0.018, 0.014, 0.24 - (gl / 2) * gc, y, R - (gl / 2) * gs, post, -ga);
+  for (const t of [0.02, gl - 0.02]) p.box(0.02, 0.12, 0.02, 0.24 - t * gc, 0.04, R - t * gs, post);
+  p.add(new THREE.BoxGeometry(Math.hypot(gl, 0.08) * 0.95, 0.014, 0.012), 0.24 - (gl / 2) * gc, 0.1, R - (gl / 2) * gs, post, -ga, false, 0.18);
+  // la bâtisse : soubassement, murs selon l'âge, portes de stalles, toit
+  const H = [0, 0.34, 0.42, 0.4, 0.38][age], bz = -0.56, W = 1.5, D = 0.5, zf = bz + D / 2;
+  const wall = age === 1 ? C.wood : age === 2 ? C.cream : age === 3 ? C.brick : 0xc9a27a;
+  const roofC = age === 1 ? C.thatch : age === 2 ? 0x8a5a44 : age === 3 ? C.slate : 0x5d6878;
+  p.box(W + 0.04, 0.05, D + 0.04, 0, 0, bz, age >= 3 ? C.darkstone : C.stone);
+  p.box(W, H - 0.05, D, 0, 0.05, bz, wall);
+  if (age === 1 || age === 4) {
+    // planches à couvre-joints
+    for (let u = -W / 2 + 0.03; u < W / 2; u += 0.05) for (const s of [-1, 1]) p.box(0.012, H - 0.05, 0.008, u, 0.05, bz + s * (D / 2 + 0.003), dark(wall, 0.84));
+  } else if (age === 2) {
+    stones(p, 0, zf, W, 0.05, 0.27, 0, C.stone, 0.75, 81);
+    p.box(W + 0.02, 0.02, D + 0.02, 0, 0.26, bz, C.darkwood);
+    timbers(p, 0, zf + 0.002, W, 0.27, H, 0, 10, (i) => i % 3 !== 1);
+    for (const s of [-1, 1]) timbers(p, s * (W / 2 + 0.002), bz, D, 0.27, H, s * Math.PI / 2, 3);
+  } else {
+    stones(p, 0, zf, W, 0.05, H, 0, dark(C.brick, 0.9), 0.4, 82);
+    for (const s of [-1, 1]) quoins(p, s * W / 2, zf, 0.05, H, s, 1);
+    p.box(W + 0.03, 0.025, D + 0.03, 0, H - 0.03, bz, C.white);
+  }
+  roof(p, 0, H, bz, { w: W, d: D, h: 0.26, color: roofC, wall, len: W + 0.12, ov: 0.08, courses: true });
+  const door = age === 3 ? 0x3f7a5a : age === 4 ? 0x5a6470 : C.darkwood, frame = age >= 3 ? C.white : dark(C.wood, 0.75);
+  for (const x of [-0.6, -0.3, 0.3, 0.6]) {
+    // porte de stalle en deux : le bas fermé en croix, le haut ouvert sur la pénombre, une barre de fer
+    p.box(0.19, 0.23, 0.012, x, 0.04, zf + 0.002, frame);
+    p.box(0.16, 0.2, 0.012, x, 0.05, zf + 0.005, 0x2e2620);
+    p.box(0.16, 0.1, 0.014, x, 0.05, zf + 0.009, door);
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.17, 0.01, 0.006), x, 0.1, zf + 0.017, frame, 0, false, s * 0.55);
+    for (const d of [-0.04, 0, 0.04]) p.box(0.006, 0.09, 0.006, x + d, 0.155, zf + 0.008, C.metal);
+  }
+  // porte de l'allée, fer à cheval, lanternes
+  p.box(0.24, 0.29, 0.012, 0, 0.04, zf + 0.002, frame);
+  p.box(0.21, 0.26, 0.016, 0, 0.05, zf + 0.006, door);
+  p.box(0.006, 0.26, 0.02, 0, 0.05, zf + 0.008, frame);
+  p.add(new THREE.TorusGeometry(0.026, 0.007, 4, 10, Math.PI * 1.5).rotateZ(Math.PI * 0.75), 0, 0.31, zf + 0.012, C.gold);
+  for (const s of [-1, 1]) { p.box(0.012, 0.012, 0.04, s * 0.15, 0.27, zf + 0.02, C.darkwood); p.box(0.03, 0.04, 0.03, s * 0.15, 0.22, zf + 0.035, C.flame, 0, true); }
+  if (age === 1) p.box(W + 0.14, 0.035, 0.07, 0, H + 0.26, bz, dark(C.thatch, 0.82));
+  if (age >= 2 && age <= 3) {
+    // lanternon d'aération sur le faîte, horloge au haras, girouette
+    p.box(0.13, 0.12, 0.13, 0, H + 0.24, bz, age === 3 ? C.white : C.wood);
+    for (const s of [-1, 1]) p.box(0.006, 0.08, 0.1, s * 0.068, H + 0.26, bz, 0x3c3530);
+    p.pyramid(0.19, 0.11, 0.19, 0, H + 0.36, bz, roofC);
+    if (age === 3) { p.cyl(0.04, 0.04, 0.01, 12, 0, H + 0.3, bz + 0.07, C.white); p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 12).rotateX(Math.PI / 2), 0, H + 0.3, bz + 0.07, C.white); p.box(0.004, 0.025, 0.004, 0, H + 0.3, bz + 0.078, 0x3c3530); }
+    p.box(0.008, 0.1, 0.008, 0, H + 0.47, bz, C.darkwood); p.box(0.09, 0.03, 0.006, 0, H + 0.53, bz, 0x3c3530);
+  }
+  if (age === 4) {
+    // panneaux solaires sur le pan avant, bandeau de fenêtres hautes
+    const a = Math.atan2(0.26, D / 2);
+    for (const x of [-0.5, -0.25, 0.25, 0.5]) p.add(new THREE.BoxGeometry(0.2, 0.012, 0.16), x, H + 0.155, bz + 0.12, 0x2c3e66, 0, false, 0, a);
+    windows(p, [-0.45, -0.15, 0.15, 0.45], 0.27, zf + 0.01, 0.09, 0.05, C.white);
+  }
+  // auge, râtelier à foin contre la lisse, selle sur la barrière, montoir, bottes
+  const trough = age === 1 ? C.darkwood : age === 2 ? C.stone : C.metal;
+  p.box(0.34, 0.07, 0.11, 0.6, 0.012, 0.66, trough); p.box(0.3, 0.01, 0.08, 0.6, 0.075, 0.66, C.water);
+  for (const z of [0.14, 0.44]) p.box(0.022, 0.22, 0.022, -0.8, 0.012, z, C.darkwood);
+  p.box(0.06, 0.02, 0.32, -0.8, 0.2, 0.29, C.darkwood);
+  for (let i = 0; i < 6; i++) p.box(0.012, 0.13, 0.012, -0.78, 0.08, 0.16 + i * 0.05, C.wood, 0, false, -0.3);
+  p.box(0.07, 0.1, 0.26, -0.79, 0.1, 0.29, C.gold);
+  p.box(0.09, 0.035, 0.07, -0.55, 0.15, R, 0x7a4a2e); p.box(0.07, 0.012, 0.08, -0.55, 0.185, R, 0x5e3a24);
+  for (const s of [-1, 1]) p.box(0.008, 0.06, 0.008, -0.55 + s * 0.035, 0.09, R + 0.03, C.metal);
+  if (age >= 2) { p.box(0.1, 0.05, 0.1, 0.26, 0.012, zf + 0.09, C.stone); p.box(0.1, 0.05, 0.05, 0.26, 0.06, zf + 0.065, C.stone); }
+  bale(p, -0.62, -0.2, 0.2); bale(p, 0.72, -0.2, 1.5);
+  if (age === 4) {
+    // obstacles du manège : chandeliers blancs, barres rayées, bacs de fleurs
+    for (const [x, z, ry] of [[-0.42, 0.44, 0], [0.22, 0.1, 0.6]] as number[][]) {
+      for (const s of [-1, 1]) p.box(0.03, 0.16, 0.03, x + Math.cos(ry) * s * 0.15, 0.012, z - Math.sin(ry) * s * 0.15, C.white, ry);
+      for (let k = 0; k < 4; k++) p.box(0.075, 0.018, 0.018, x + Math.cos(ry) * (-0.11 + k * 0.075), 0.11, z - Math.sin(ry) * (-0.11 + k * 0.075), k % 2 ? C.white : 0xd84a3e, ry);
+      for (const s of [-1, 1]) { p.box(0.06, 0.03, 0.04, x + Math.cos(ry) * s * 0.2, 0.012, z - Math.sin(ry) * s * 0.2, C.darkgreen, ry); p.sphere(0.014, x + Math.cos(ry) * s * 0.2, 0.05, z - Math.sin(ry) * s * 0.2, C.pink); }
+    }
+  }
+}
+
+/** Ruche de paille (panier tressé) posée en (x, y, z), son trou de vol vers +z */
+function skep(p: Parts, x: number, y: number, z: number, r = 0.06) {
+  p.add(new THREE.SphereGeometry(r, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.3, 1), x, y, z, C.thatch);
+  for (const h of [0.25, 0.5, 0.72]) p.add(new THREE.TorusGeometry(r * Math.sqrt(1 - h * h) + 0.002, 0.006, 3, 10).rotateX(Math.PI / 2), x, y + h * r * 1.3, z, dark(C.thatch, 0.78));
+  p.box(0.024, 0.014, 0.01, x, y, z + r - 0.004, 0x2a2018);
+}
+
+/** Ruche à cadres : pieds, corps, hausse, toit de tôle, planche d'envol */
+function boxHive(p: Parts, x: number, z: number, body: number, ry = 0) {
+  const c = Math.cos(ry), s = Math.sin(ry), at = (u: number, v: number): [number, number] => [x + u * c + v * s, z - u * s + v * c];
+  for (const u of [-0.045, 0.045]) { const [a, b] = at(u, 0); p.box(0.02, 0.05, 0.14, a, 0, b, C.darkwood, ry); }
+  p.box(0.13, 0.1, 0.15, x, 0.05, z, body, ry);
+  p.box(0.13, 0.055, 0.15, x, 0.15, z, dark(body, 0.9), ry);
+  p.box(0.15, 0.02, 0.17, x, 0.205, z, C.metal, ry);
+  const [ex, ez] = at(0, 0.077), [lx, lz] = at(0, 0.09);
+  p.box(0.08, 0.012, 0.006, ex, 0.06, ez, 0x2a2018, ry);
+  p.box(0.1, 0.008, 0.03, lx, 0.052, lz, C.wood, ry);
+}
+
+/** Rucher (1 × 1) : des ruches dans un pré fleuri, et leurs abeilles qui tournent autour */
+function apiary(p: Parts, age: number) {
+  const grass = age === 0 ? 0x9cb86a : 0x8cbf6c, FL = [0xf2e27a, 0xffffff, 0xd88ab8, 0xb9a6e6, 0xf29a6a];
+  p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, grass);
+  for (let i = 0; i < 30; i++) {
+    const a = i * 2.4, r = 0.2 + (i % 7) * 0.035, x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (z < 0.05 && Math.abs(x) < 0.34 && r < 0.36) continue;
+    p.cone(0.012, 0.05, 4, x, 0.012, z, dark(grass, 0.8));
+    p.sphere(0.014, x, 0.06, z, FL[i % 5]);
+  }
+  if (age === 0) {
+    // troncs creux posés sur des pierres plates, couverts d'une lauze
+    for (const [x, z] of [[-0.2, -0.12], [0.05, -0.22], [0.25, -0.06]]) {
+      p.cyl(0.09, 0.1, 0.03, 7, x, 0, z, C.stone);
+      p.cyl(0.065, 0.07, 0.22, 8, x, 0.03, z, C.darkwood);
+      for (const y of [0.08, 0.17]) p.cyl(0.072, 0.072, 0.012, 8, x, y, z, dark(C.darkwood, 0.8));
+      p.cyl(0.085, 0.08, 0.025, 7, x, 0.25, z, C.darkstone);
+      p.box(0.025, 0.02, 0.01, x, 0.1, z + 0.066, 0x2a2018);
+    }
+    log(p, 0.3, 0.035, -0.12, 0, 0.22, 0.4);
+    p.cyl(0.04, 0.035, 0.05, 7, 0.2, 0.012, 0.2, C.brown); p.cyl(0.03, 0.03, 0.006, 7, 0.2, 0.06, 0.2, C.gold);
+    bees(0.03, 0.2, -0.12);
+  } else if (age === 1) {
+    // ruches d'argile couchées en pyramide sur un banc de terre, sous un auvent de roseaux
+    p.box(0.62, 0.08, 0.24, 0, 0.012, -0.2, 0xc9a77c);
+    for (const [x, y] of [[-0.11, 0.142], [0, 0.142], [0.11, 0.142], [-0.055, 0.236], [0.055, 0.236], [0, 0.33]]) {
+      p.add(new THREE.CylinderGeometry(0.048, 0.048, 0.22, 9).rotateX(Math.PI / 2), x, y, -0.2, C.terracotta);
+      p.add(new THREE.CylinderGeometry(0.042, 0.042, 0.012, 9).rotateX(Math.PI / 2), x, y, -0.085, dark(C.terracotta, 0.78));
+      p.box(0.016, 0.012, 0.006, x, y - 0.02, -0.078, 0x2a2018);
+    }
+    for (const x of [-0.3, 0.3]) for (const z of [-0.34, -0.04]) p.box(0.022, z < -0.2 ? 0.48 : 0.42, 0.022, x, 0, z, C.wood);
+    p.add(new THREE.BoxGeometry(0.7, 0.025, 0.4), 0, 0.44, -0.19, C.thatch, 0, false, 0, 0.15);
+    for (let k = 0; k < 7; k++) p.add(new THREE.BoxGeometry(0.7, 0.008, 0.014).translate(0, 0.016, -0.17 + k * 0.055), 0, 0.44, -0.19, dark(C.thatch, k % 2 ? 0.86 : 0.94), 0, false, 0, 0.15);
+    attach(['a_amphora'], 0, 0.07, 0.3, 0.18); attach(['a_pot'], 0, 0.06, 0.2, 0.26, 0.6);
+    bees(0, 0.24, -0.05);
+  } else if (age === 2) {
+    // paniers de paille sur leur banc, à l'abri d'un auvent de chaume adossé à une palissade
+    p.box(0.66, 0.36, 0.02, 0, 0.012, -0.34, C.wood);
+    for (let u = -0.3; u < 0.33; u += 0.06) p.box(0.012, 0.36, 0.006, u, 0.012, -0.328, dark(C.wood, 0.85));
+    p.add(new THREE.BoxGeometry(0.74, 0.03, 0.16), 0, 0.36, -0.29, C.thatch, 0, false, 0, 0.35);
+    for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.74, 0.008, 0.012), 0, 0.38 - k * 0.018, -0.34 + k * 0.04, dark(C.thatch, 0.82), 0, false, 0, 0.35);
+    for (const x of [-0.33, 0.33]) p.box(0.022, 0.38, 0.03, x, 0.012, -0.32, C.darkwood);
+    p.box(0.62, 0.02, 0.16, 0, 0.11, -0.2, C.wood);
+    for (const x of [-0.27, 0.27]) p.box(0.02, 0.1, 0.12, x, 0.012, -0.2, C.darkwood);
+    for (const x of [-0.21, -0.07, 0.07, 0.21]) skep(p, x, 0.13, -0.2);
+    for (const [x, z] of [[-0.3, 0.22], [-0.2, 0.3], [0.32, 0.2]]) p.sphere(0.05, x, 0.05, z, C.lav, 0, 0.8);
+    p.box(0.12, 0.06, 0.08, 0.18, 0.012, 0.22, C.wood); for (const d of [-0.03, 0.03]) p.cyl(0.018, 0.016, 0.035, 7, 0.18 + d, 0.072, 0.22, C.gold);
+    bees(0, 0.22, -0.04);
+  } else if (age === 3) {
+    // ruches à cadres blanches en rang, enfumoir sur son tabouret, tournesols contre la clôture
+    for (const x of [-0.27, 0, 0.27]) boxHive(p, x, -0.12, C.white);
+    for (let i = 0; i < 9; i++) p.box(0.022, 0.16, 0.022, -0.4 + i * 0.1, 0.012, -0.4, C.white);
+    p.box(0.84, 0.018, 0.014, 0, 0.12, -0.4, C.white);
+    for (const x of [-0.32, -0.18, 0.2, 0.34]) { p.box(0.01, 0.3, 0.01, x, 0.012, -0.34, 0x6a9a4a); p.cyl(0.035, 0.035, 0.012, 9, x, 0.31, -0.33, 0xf2c84b); p.cyl(0.016, 0.016, 0.014, 7, x, 0.312, -0.326, 0x6a4a2e); }
+    p.cyl(0.035, 0.035, 0.07, 6, 0.22, 0.012, 0.22, C.darkwood); p.cyl(0.022, 0.022, 0.06, 8, 0.22, 0.082, 0.22, C.metal); p.cone(0.022, 0.03, 8, 0.22, 0.142, 0.22, C.metal);
+    smoke(0.22, 0.18, 0.22, 0);
+    bees(0, 0.24, -0.1);
+  } else {
+    // ruches de toutes les couleurs dans la prairie, petite miellerie au bardage de bois et son enseigne
+    [[-0.28, 0.06, 0xf2c84b, 0.3], [-0.06, 0.16, 0x8cc4e8, 0.1], [0.16, 0.2, 0x9fd8b8, -0.1], [0.32, 0.06, 0xf0a8b8, -0.3]].forEach(([x, z, c, r]) => boxHive(p, x, z, c, r));
+    p.box(0.38, 0.26, 0.24, -0.04, 0.012, -0.3, C.white);
+    for (let u = -0.17; u < 0.16; u += 0.04) p.box(0.012, 0.26, 0.006, -0.04 + u, 0.012, -0.177, C.wood);
+    p.box(0.42, 0.025, 0.28, -0.04, 0.27, -0.3, 0x5d6878);
+    p.box(0.08, 0.16, 0.012, 0.06, 0.012, -0.172, C.glass, 0, true);
+    windows(p, [-0.13], 0.12, -0.172, 0.08, 0.07, C.white);
+    p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.012, 6).rotateX(Math.PI / 2), -0.04, 0.225, -0.17, C.gold);
+    bees(0.02, 0.22, 0.1);
+  }
+}
+
+/**
+ * Thermes (2 × 2) : bassin romain fumant entre deux portiques, caldarium à coupole ; étuves à colombages et cuves de bois ;
+ * bains publics de brique à verrière et haute cheminée ; centre aquatique vitré, bassin à lignes et toboggan
+ */
+function baths(p: Parts, age: number) {
+  if (age <= 1) {
+    const marble = 0xf2ead8;
+    p.box(1.84, 0.03, 1.84, 0, 0, 0, 0xe9e2d4);
+    for (let i = 0; i < 16; i++) p.box(0.2, 0.004, 0.2, -0.75 + (i % 4) * 0.5 + (Math.floor(i / 4) % 2) * 0.25, 0.03, -0.1 + Math.floor(i / 4) * 0.3, dark(0xe9e2d4, 0.93));
+    // natatio : margelle de marbre, fond de mosaïque, eau qui fume, marches
+    const pz = 0.34, pw = 0.86, pd = 0.54;
+    for (const s of [-1, 1]) { p.box(pw + 0.1, 0.07, 0.05, 0, 0.03, pz + s * (pd / 2 + 0.025), marble); p.box(0.05, 0.07, pd, s * (pw / 2 + 0.025), 0.03, pz, marble); }
+    p.box(pw, 0.01, pd, 0, 0.03, pz, 0x4f9fb4);
+    p.box(pw, 0.008, pd, 0, 0.085, pz, 0x7fd0dc);
+    for (let k = 0; k < 2; k++) p.box(0.22, 0.02, 0.05, 0, 0.04 + k * 0.022, pz + pd / 2 - 0.03 - k * 0.04, marble);
+    smoke(-0.2, 0.12, pz, 0); smoke(0.22, 0.12, pz - 0.1, 0);
+    // portiques de part et d'autre, toits de tuiles penchés vers le bassin
+    for (const s of [-1, 1]) {
+      for (const z of [0.0, 0.25, 0.5, 0.75]) column(p, s * 0.62, z, 0.32, 0.03);
+      tiledShed(p, s * 0.68, 0.37, 0.38, 0.3, 0.92, s * 0.25, true);
+      p.box(0.24, 0.035, 0.07, s * 0.62, 0.03, 0.38, marble, Math.PI / 2);
+    }
+    // caldarium : murs de brique, corniche de marbre, toit de tuiles, coupole sur son tambour, porche à fronton
+    const bz = -0.6;
+    p.box(1.5, 0.42, 0.46, 0, 0.03, bz, C.brick);
+    stones(p, 0, bz + 0.23, 1.5, 0.03, 0.45, 0, dark(C.brick, 0.88), 0.45, 91);
+    p.box(1.54, 0.03, 0.5, 0, 0.42, bz, marble);
+    roof(p, 0, 0.45, bz, { w: 1.5, d: 0.46, h: 0.16, color: C.terracotta, wall: C.brick, tiles: true });
+    p.cyl(0.3, 0.3, 0.16, 16, 0, 0.45, bz, C.cream);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; p.box(0.05, 0.08, 0.012, Math.sin(a) * 0.302, 0.48, bz + Math.cos(a) * 0.302, C.win, a, true); }
+    p.add(new THREE.SphereGeometry(0.3, 16, 7, 0, Math.PI * 2, 0, Math.PI / 2), 0, 0.61, bz, 0xd9d2c4);
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; p.add(new THREE.TorusGeometry(0.302, 0.008, 3, 8, Math.PI / 2).rotateY(a), 0, 0.61, bz, dark(0xd9d2c4, 0.86)); }
+    p.cyl(0.05, 0.05, 0.03, 8, 0, 0.9, bz, C.stone);
+    windows(p, [-0.55, -0.32, 0.32, 0.55], 0.15, bz + 0.235, 0.07, 0.13, marble);
+    for (const s of [-1, 1]) column(p, s * 0.13, bz + 0.3, 0.3, 0.03, 0.028);
+    p.box(0.36, 0.035, 0.12, 0, 0.33, bz + 0.29, marble); p.gable(0.38, 0.08, 0.12, 0, 0.365, bz + 0.29, marble);
+    p.box(0.14, 0.22, 0.02, 0, 0.03, bz + 0.235, 0x6a4a3a);
+    p.box(0.08, 0.62, 0.08, 0.66, 0.03, -0.8, C.brick); smoke(0.66, 0.68, -0.8, 1);
+    for (const s of [-1, 1]) { if (attach(['a_statue'], 0, 0.13, s * 0.44, 0.74, Math.PI)) lift(0.03); cypress(p, s * 0.82, 0.82, 0.3); }
+  } else if (age === 2) {
+    p.box(1.84, 0.03, 1.84, 0, 0, 0, 0xd9cdb8);
+    // la maison des étuves : pierre au rez-de-chaussée, colombages, tuiles, cheminée qui fume
+    const bz = -0.58, W = 1.2, zf = bz + 0.25;
+    p.box(W, 0.26, 0.5, -0.2, 0.03, bz, C.stone);
+    stones(p, -0.2, zf, W, 0.03, 0.29, 0, C.stone, 0.6, 92);
+    p.box(W + 0.04, 0.24, 0.54, -0.2, 0.29, bz, C.cream);
+    timbers(p, -0.2, zf + 0.022, W + 0.04, 0.3, 0.53, 0, 7, (i) => i % 2 === 0);
+    roof(p, -0.2, 0.53, bz, { w: W + 0.04, d: 0.54, h: 0.32, color: 0x8a5a44, wall: C.cream, courses: true });
+    p.box(0.1, 0.36, 0.1, 0.18, 0.62, bz - 0.12, C.stone); smoke(0.18, 1.0, bz - 0.12, 1);
+    p.box(0.14, 0.2, 0.02, -0.2, 0.03, zf + 0.01, C.door);
+    windows(p, [-0.62, 0.22], 0.12, zf + 0.01, 0.08, 0.09); windows(p, [-0.6, -0.35, -0.05, 0.22], 0.36, zf + 0.032, 0.06, 0.08, C.darkwood);
+    // la cour : trois cuves de bois fumantes sous un auvent rayé
+    for (const [x, z] of [[-0.45, 0.28], [0, 0.42], [0.42, 0.24]]) {
+      p.cyl(0.13, 0.12, 0.1, 12, x, 0.03, z, C.wood);
+      for (const y of [0.05, 0.11]) p.cyl(0.133, 0.133, 0.01, 12, x, y, z, C.darkwood);
+      p.cyl(0.115, 0.115, 0.01, 12, x, 0.124, z, C.water);
+      p.add(new THREE.TorusGeometry(0.122, 0.012, 4, 14).rotateX(Math.PI / 2), x, 0.135, z, C.wood);
+      smoke(x, 0.16, z, 0);
+    }
+    for (const x of [-0.72, -0.2, 0.32]) p.box(0.022, 0.25, 0.022, x, 0.03, -0.1, C.darkwood);
+    for (let k = 0; k < 8; k++) p.add(new THREE.BoxGeometry(0.135, 0.012, 0.26), -0.72 + 0.068 + k * 0.13, 0.29, -0.2, k % 2 ? C.white : 0xc85a4e, 0, false, 0, 0.3);
+    for (let k = 0; k < 8; k++) for (const t of [-0.03, 0.03]) p.add(new THREE.ConeGeometry(0.03, 0.04, 3).rotateZ(Math.PI), -0.72 + 0.068 + k * 0.13 + t, 0.23, -0.07, k % 2 ? C.white : 0xc85a4e);
+    p.box(0.4, 0.03, 0.08, -0.46, 0.08, -0.22, C.wood); for (const s of [-1, 1]) p.box(0.02, 0.05, 0.06, -0.46 + s * 0.16, 0.03, -0.22, C.darkwood);
+    // bois de chauffe, seaux, linges qui sèchent
+    for (let k = 0; k < 6; k++) log(p, 0.22, 0.026, 0.62, 0.03 + (k > 3 ? 0.048 : 0), -0.25 + (k % 4) * 0.055, Math.PI / 2);
+    for (const x of [0.62, 0.76]) p.cyl(0.03, 0.025, 0.05, 7, x, 0.03, 0.82, C.wood);
+    for (const x of [-0.82, -0.3]) p.box(0.016, 0.3, 0.016, x, 0.03, 0.84, C.darkwood);
+    p.box(0.52, 0.006, 0.006, -0.56, 0.32, 0.84, 0xc9b48a);
+    for (const [x, c] of [[-0.7, C.white], [-0.56, 0xa8c8e8], [-0.42, C.white]] as [number, number][]) p.box(0.09, 0.1, 0.008, x, 0.22, 0.84, c);
+  } else if (age === 3) {
+    p.box(1.84, 0.025, 1.84, 0, 0, 0, 0xddd3bf);
+    // établissement de bains : brique, cordons blancs, hautes fenêtres, verrière sur le faîte, cheminée de la chaufferie
+    const bz = -0.5, W = 1.56, D = 0.6, H = 0.52, zf = bz + D / 2, brick = 0xb86a58;
+    p.box(W, H, D, 0, 0.025, bz, brick);
+    stones(p, 0, zf, W, 0.025, H + 0.025, 0, dark(brick, 0.86), 0.45, 93);
+    for (const y of [0.025, 0.28, H]) p.box(W + 0.02, 0.03, D + 0.02, 0, y, bz, C.cream);
+    roof(p, 0, H + 0.025, bz, { w: W, d: D, h: 0.2, color: C.slate, wall: brick, courses: true });
+    p.box(0.7, 0.07, 0.2, 0, H + 0.2, bz, C.glass, 0, true);
+    for (let k = 0; k < 8; k++) p.box(0.012, 0.075, 0.21, -0.33 + k * 0.094, H + 0.2, bz, C.metal);
+    p.box(0.72, 0.012, 0.012, 0, H + 0.275, bz, C.metal);
+    for (const y of [0.08, 0.33]) windows(p, [-0.62, -0.4, -0.18, 0.18, 0.4, 0.62], y, zf + 0.01, 0.08, 0.15, C.cream);
+    p.box(0.22, 0.26, 0.03, 0, 0.025, zf + 0.012, C.cream); p.box(0.16, 0.22, 0.02, 0, 0.025, zf + 0.025, 0x3f5a4a);
+    p.box(0.42, 0.06, 0.012, 0, 0.42, zf + 0.012, C.cream); for (let k = 0; k < 7; k++) p.box(0.035, 0.03, 0.006, -0.15 + k * 0.05, 0.435, zf + 0.02, 0x3c3530);
+    p.cyl(0.05, 0.05, 0.01, 12, 0, 0.54, zf + 0.01, C.white); p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.012, 12).rotateX(Math.PI / 2), 0, 0.5, zf + 0.012, C.white);
+    p.cyl(0.06, 0.075, 1.1, 8, 0.66, 0.025, bz - 0.2, 0xa85e50); p.cyl(0.07, 0.07, 0.04, 8, 0.66, 1.1, bz - 0.2, C.darkstone); smoke(0.66, 1.16, bz - 0.2, 2);
+    // square : haies, fontaine, bancs, réverbères
+    for (const s of [-1, 1]) { hedge(p, s * 0.55, 0.42, 0.5, 0.06); hedge(p, s * 0.55, 0.78, 0.5, 0.06); p.box(0.24, 0.03, 0.08, s * 0.55, 0.06, 0.6, 0x3f6a4a); for (const d of [-0.09, 0.09]) p.box(0.02, 0.05, 0.06, s * 0.55 + d, 0.025, 0.6, C.metal); }
+    p.cyl(0.16, 0.17, 0.08, 12, 0, 0.025, 0.55, C.stone); p.cyl(0.13, 0.13, 0.01, 12, 0, 0.1, 0.55, C.water);
+    p.cyl(0.02, 0.03, 0.18, 6, 0, 0.1, 0.55, C.stone); p.cyl(0.07, 0.04, 0.03, 8, 0, 0.27, 0.55, C.stone);
+    for (const s of [-1, 1]) { p.cyl(0.012, 0.016, 0.42, 6, s * 0.2, 0.025, 0.86, 0x3c4a44); p.box(0.05, 0.06, 0.05, s * 0.2, 0.44, 0.86, 0xffe2a0, 0, true); }
+  } else {
+    p.box(1.84, 0.025, 1.84, 0, 0, 0, 0xe4e0d8);
+    // le centre aquatique : grande façade vitrée, auvent, enseigne bleue
+    const bz = -0.56, W = 1.5, D = 0.52, H = 0.44, zf = bz + D / 2;
+    p.box(W, H, D, 0, 0.025, bz, C.white);
+    for (let k = 0; k < 9; k++) for (const y of [0.06, 0.25]) p.box(0.14, 0.16, 0.012, -0.6 + k * 0.15, y, zf + 0.004, C.glass, 0, true);
+    for (let k = 0; k < 10; k++) p.box(0.012, 0.38, 0.016, -0.675 + k * 0.15, 0.045, zf + 0.01, C.metal);
+    p.box(W + 0.1, 0.035, D + 0.14, 0, H + 0.025, bz + 0.04, C.white);
+    p.box(0.5, 0.07, 0.012, -0.3, H - 0.06, zf + 0.08, 0x3f8fd8); for (let k = 0; k < 4; k++) p.box(0.06, 0.012, 0.006, -0.45 + k * 0.1, H - 0.03, zf + 0.088, C.white);
+    // bassin extérieur : plage de dalles, lignes d'eau, échelle ; toboggan qui tourne en descendant depuis sa tour
+    const pz = 0.32, pw = 1.1, pd = 0.66;
+    for (const s of [-1, 1]) { p.box(pw + 0.08, 0.06, 0.04, 0, 0.025, pz + s * (pd / 2 + 0.02), C.white); p.box(0.04, 0.06, pd, s * (pw / 2 + 0.02), 0.025, pz, C.white); }
+    p.box(pw, 0.01, pd, 0, 0.025, pz, 0x3fa8c8); p.box(pw, 0.008, pd, 0, 0.07, pz, 0x6cd0e8);
+    for (let k = 1; k < 5; k++) p.box(0.012, 0.004, pd - 0.06, -pw / 2 + k * (pw / 5), 0.079, pz, 0x2a5aa0);
+    for (const s of [-1, 1]) p.box(0.006, 0.08, 0.006, 0.4 + s * 0.03, 0.06, pz - pd / 2 + 0.01, C.metal);
+    for (const [x, z] of [[0.72, -0.12], [0.86, -0.12], [0.72, 0.02], [0.86, 0.02]]) p.box(0.02, 0.5, 0.02, x, 0.025, z, 0xf2c84b);
+    p.box(0.18, 0.02, 0.18, 0.79, 0.5, -0.05, 0xf2c84b);
+    for (let k = 0; k < 3; k++) p.add(new THREE.TorusGeometry(0.15, 0.03, 6, 12, Math.PI).rotateX(Math.PI / 2).rotateY(k * 1.3), 0.7, 0.42 - k * 0.13, 0.12 + k * 0.06, k % 2 ? 0x4fa3e0 : 0xf2785a);
+    // chaises longues, parasols, arbres
+    for (const x of [-0.6, -0.42, -0.24]) { p.add(new THREE.BoxGeometry(0.08, 0.012, 0.16), x, 0.05, 0.8, C.white, 0, false, 0, 0); p.add(new THREE.BoxGeometry(0.08, 0.012, 0.07), x, 0.08, 0.7, C.white, 0, false, 0, -0.7); }
+    for (const [x, c] of [[-0.51, 0xf2785a], [0.3, 0x4fa3e0]] as [number, number][]) { p.cyl(0.006, 0.006, 0.26, 4, x, 0.025, 0.8, C.metal); p.cone(0.13, 0.06, 8, x, 0.25, 0.8, c); }
+    tree(p, -0.82, 0.82, 1.2); tree(p, 0.84, 0.82, 1.1);
+  }
+}
+
+/** Taverne (1 × 1) : la taverne à colombages de KayKit et sa terrasse ; brasserie de brique ; café vitré */
+function tavern(p: Parts, age: number, o: ModelOpts) {
+  p.box(0.98, 0.012, 0.98, 0, 0, 0, age >= 4 ? 0xe4e0d8 : 0xd9cdb8);
+  if (age <= 2) {
+    if (!attach(['b_tavern_blue', 'b_tavern_red'], o.v, 0.78, 0, -0.08)) {
+      p.box(0.6, 0.26, 0.46, 0, 0.012, -0.12, C.stone); p.box(0.62, 0.22, 0.48, 0, 0.27, -0.12, C.cream);
+      timbers(p, 0, 0.122, 0.62, 0.28, 0.49, 0, 4);
+      roof(p, 0, 0.49, -0.12, { w: 0.62, d: 0.48, h: 0.26, color: 0x8a5a44, wall: C.cream, courses: true });
+      windows(p, [-0.18, 0.18], 0.1, 0.112, 0.08, 0.09); p.box(0.12, 0.2, 0.02, 0, 0.012, 0.112, C.door);
+    }
+    // lanterne, tonneaux, table et bancs devant
+    p.box(0.03, 0.04, 0.03, -0.22, 0.24, 0.33, C.flame, 0, true); p.box(0.012, 0.012, 0.05, -0.22, 0.29, 0.31, C.darkwood);
+    for (const [x, z] of [[0.36, 0.28], [0.42, 0.38]]) { p.cyl(0.04, 0.04, 0.09, 8, x, 0.012, z, 0x9a6a44); for (const y of [0.03, 0.08]) p.cyl(0.042, 0.042, 0.008, 8, x, y, z, 0x6f5640); }
+    p.box(0.22, 0.02, 0.1, -0.2, 0.08, 0.4, C.wood); for (const s of [-1, 1]) p.box(0.22, 0.02, 0.04, -0.2, 0.05, 0.4 + s * 0.09, C.darkwood);
+    for (const s of [-1, 1]) p.box(0.02, 0.07, 0.08, -0.2 + s * 0.09, 0.012, 0.4, C.darkwood);
+    p.cyl(0.012, 0.012, 0.025, 6, -0.25, 0.1, 0.39, C.gold); p.cyl(0.012, 0.012, 0.025, 6, -0.15, 0.1, 0.41, C.gold);
+  } else if (age === 3) {
+    // brasserie : brique sur deux niveaux, grandes vitrines, store rayé sur la terrasse, enseigne
+    const brick = 0xb4685c;
+    p.box(0.7, 0.5, 0.5, 0, 0.012, -0.16, brick);
+    stones(p, 0, 0.09, 0.7, 0.012, 0.51, 0, dark(brick, 0.86), 0.45, 94);
+    for (const y of [0.26, 0.5]) p.box(0.72, 0.025, 0.52, 0, y, -0.16, C.cream);
+    roof(p, 0, 0.51, -0.16, { w: 0.7, d: 0.5, h: 0.18, color: C.slate, wall: brick, courses: true });
+    p.box(0.07, 0.2, 0.07, 0.22, 0.62, -0.28, brick); smoke(0.22, 0.84, -0.28, 0);
+    windows(p, [-0.2, 0.2], 0.05, 0.1, 0.18, 0.16, C.cream); windows(p, [-0.2, 0, 0.2], 0.31, 0.1, 0.08, 0.12, C.cream);
+    p.box(0.1, 0.2, 0.02, 0, 0.012, 0.1, 0x3f5a4a);
+    p.box(0.4, 0.05, 0.012, 0, 0.42, 0.1, C.cream); for (let k = 0; k < 6; k++) p.box(0.03, 0.025, 0.006, -0.125 + k * 0.05, 0.433, 0.108, 0x3c3530);
+    for (let k = 0; k < 8; k++) {
+      p.add(new THREE.BoxGeometry(0.09, 0.01, 0.14), -0.315 + k * 0.09, 0.27, 0.165, k % 2 ? C.white : 0xc85a4e, 0, false, 0, 0.45);
+      for (const t of [-0.025, 0.025]) p.add(new THREE.ConeGeometry(0.022, 0.035, 3).rotateZ(Math.PI), -0.315 + k * 0.09 + t, 0.225, 0.23, k % 2 ? C.white : 0xc85a4e);
+    }
+    for (const x of [-0.24, 0.24]) { p.cyl(0.05, 0.05, 0.01, 10, x, 0.1, 0.34, C.white); p.cyl(0.008, 0.012, 0.09, 5, x, 0.012, 0.34, 0x3c4a44); for (const s of [-1, 1]) p.box(0.04, 0.06, 0.04, x + s * 0.08, 0.012, 0.34, 0x3c4a44); }
+    for (const [x, z] of [[0.42, 0.04], [0.42, -0.06]]) { p.cyl(0.04, 0.04, 0.09, 8, x, 0.012, z, 0x9a6a44); p.cyl(0.042, 0.042, 0.008, 8, x, 0.05, z, 0x6f5640); }
+  } else {
+    // café : façade vitrée, toit plat et enseigne, terrasse de tables rondes sous les parasols, pots de plantes
+    p.box(0.66, 0.34, 0.46, 0, 0.012, -0.18, 0xe8dccb);
+    p.box(0.7, 0.03, 0.5, 0, 0.35, -0.18, 0x5d6878);
+    for (const x of [-0.22, 0, 0.22]) p.box(0.2, 0.24, 0.012, x, 0.04, 0.054, C.glass, 0, true);
+    for (const x of [-0.33, -0.11, 0.11, 0.33]) p.box(0.016, 0.26, 0.018, x, 0.03, 0.058, C.darkwood);
+    p.box(0.66, 0.06, 0.016, 0, 0.29, 0.06, C.darkwood); for (let k = 0; k < 4; k++) p.box(0.04, 0.03, 0.006, -0.09 + k * 0.06, 0.305, 0.07, C.cream);
+    p.add(new THREE.BoxGeometry(0.66, 0.012, 0.14), 0, 0.31, 0.12, 0x3f7a5a, 0, false, 0, 0.4);
+    for (const [x, z, c] of [[-0.26, 0.3, 0xf2c84b], [0.06, 0.36, 0xf2785a], [0.32, 0.28, 0x8cc4e8]] as [number, number, number][]) {
+      p.cyl(0.04, 0.04, 0.008, 10, x, 0.08, z, C.white); p.cyl(0.006, 0.01, 0.07, 5, x, 0.012, z, C.metal);
+      for (const s of [-1, 1]) p.box(0.035, 0.05, 0.035, x + s * 0.065, 0.012, z, 0x3c4a44);
+      p.cyl(0.004, 0.004, 0.24, 4, x, 0.012, z, C.metal); p.cone(0.1, 0.05, 8, x, 0.24, z, c);
+    }
+    for (const x of [-0.42, 0.42]) { p.cyl(0.035, 0.03, 0.06, 7, x, 0.012, 0.12, C.terracotta); p.sphere(0.045, x, 0.1, 0.12, C.darkgreen, 0, 0.9); }
+  }
+}
+
+/**
+ * Mine (2 × 2) : l'entrée de KayKit dans sa butte, rails, wagonnet de minerai et tas de pierres ; chevalement d'acier dont
+ * les molettes tournent, salle des machines et terril ; carrière moderne : tapis roulant, concasseur, tas de gravier, engins
+ */
+function mine(p: Parts, age: number) {
+  const ore = (x: number, y: number, z: number, s = 1) => {
+    for (let k = 0; k < 6; k++) p.sphere(0.03 * s, x + Math.sin(k * 2.1) * 0.035 * s, y + (k > 3 ? 0.03 * s : 0), z + Math.cos(k * 1.7) * 0.03 * s, k % 3 ? C.darkstone : 0xb87a4a, 0, 0.8);
+  };
+  const cart = (x: number, z: number, ry: number) => {
+    p.box(0.12, 0.07, 0.09, x, 0.04, z, 0x6f5640, ry);
+    for (const s of [-1, 1]) for (const t of [-1, 1]) p.add(new THREE.CylinderGeometry(0.022, 0.022, 0.012, 8).rotateX(Math.PI / 2), x + Math.cos(ry) * s * 0.04 + Math.sin(ry) * t * 0.05, 0.03, z - Math.sin(ry) * s * 0.04 + Math.cos(ry) * t * 0.05, C.metal);
+    ore(x, 0.11, z, 0.9);
+  };
+  const track = (x0: number, z0: number, x1: number, z1: number) => {
+    const len = Math.hypot(x1 - x0, z1 - z0), ry = -Math.atan2(z1 - z0, x1 - x0), n = Math.round(len / 0.07);
+    for (let i = 0; i <= n; i++) p.box(0.03, 0.012, 0.12, x0 + ((x1 - x0) * i) / n, 0.012, z0 + ((z1 - z0) * i) / n, C.darkwood, ry);
+    for (const s of [-1, 1]) p.box(len, 0.014, 0.012, (x0 + x1) / 2 - Math.sin(ry) * s * 0.04, 0.024, (z0 + z1) / 2 - Math.cos(ry) * s * 0.04, C.metal, ry);
+  };
+  if (age <= 2) {
+    p.box(1.84, 0.012, 1.84, 0, 0, 0, 0xa89a80);
+    if (!attach(['b_mine_blue'], 0, 1.25, -0.12, -0.3)) {
+      p.sphere(0.6, -0.12, 0, -0.4, C.darkstone, 1, 0.7);
+      p.box(0.26, 0.3, 0.1, -0.12, 0, 0.12, 0x2a2018);
+      for (const s of [-1, 1]) p.box(0.04, 0.32, 0.04, -0.12 + s * 0.14, 0, 0.14, C.wood);
+      p.box(0.34, 0.04, 0.05, -0.12, 0.32, 0.14, C.wood);
+    }
+    track(-0.12, 0.3, 0.5, 0.75);
+    cart(0.22, 0.53, -0.62);
+    for (const [x, z, s] of [[0.62, 0.32, 1.6], [0.74, 0.12, 1.2]]) ore(x, 0.012, z, s);
+    for (const [x, z] of [[-0.62, 0.52], [-0.5, 0.62]]) p.box(0.1, 0.08, 0.1, x, 0.012, z, 0xb48a5e, x * 3);
+    for (const d of [0, 0.05]) { p.box(0.01, 0.2, 0.01, -0.72 + d, 0.012, 0.3, C.wood, 0, false, 0.15); p.box(0.07, 0.014, 0.014, -0.7 + d, 0.2, 0.3, C.metal); }
+    for (const [x, z] of [[0.3, 0.86], [-0.42, 0.24]]) { p.box(0.016, 0.28, 0.016, x, 0.012, z, C.darkwood); p.box(0.034, 0.042, 0.034, x, 0.28, z, C.flame, 0, true); }
+  } else if (age === 3) {
+    p.box(1.84, 0.012, 1.84, 0, 0, 0, 0x8a8478);
+    // chevalement : quatre montants d'acier entretoisés, plateforme, deux molettes qui tournent
+    const hx = -0.3, hz = 0.0, top = 1.02;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(new THREE.BoxGeometry(0.03, top, 0.03).translate(0, top / 2, 0), hx + sx * 0.14, 0.012, hz + sz * 0.14, 0x4a5560, 0, false, -sx * 0.05, sz * 0.05);
+    for (let y = 0.2; y < top; y += 0.2) for (const s of [-1, 1]) { p.box(0.28, 0.016, 0.016, hx, y, hz + s * 0.14 * (1 - y / 3), 0x4a5560); p.box(0.016, 0.016, 0.28, hx + s * 0.14 * (1 - y / 3), y, hz, 0x4a5560); }
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.02, 0.6, 0.02), hx + s * 0.1, 0.5, hz + 0.3, 0x4a5560, 0, false, 0, -0.6);
+    p.box(0.3, 0.025, 0.3, hx, top, hz, 0x3c4650);
+    const w = spinner([hx, top + 0.11, hz], [1, 0, 0], 1.6);
+    for (const dx of [-0.06, 0.06]) {
+      w.add(new THREE.TorusGeometry(0.1, 0.012, 4, 16).rotateY(Math.PI / 2), dx, 0, 0, 0xc84a3e);
+      for (let k = 0; k < 4; k++) w.add(new THREE.BoxGeometry(0.008, 0.2, 0.012).rotateX((k * Math.PI) / 4), dx, 0, 0, 0xc84a3e);
+    }
+    w.add(new THREE.CylinderGeometry(0.015, 0.015, 0.16, 6).rotateZ(Math.PI / 2), 0, 0, 0, C.metal);
+    for (const s of [-1, 1]) p.box(0.02, 0.12, 0.02, hx + s * 0.1, top, hz, 0x3c4650);
+    p.box(0.2, 0.2, 0.2, hx, 0.012, hz, 0x5a4a40);
+    // salle des machines de brique, haute cheminée qui fume, câbles vers les molettes
+    const brick = 0xa85e50;
+    p.box(0.6, 0.38, 0.4, 0.42, 0.012, -0.5, brick);
+    stones(p, 0.42, -0.3, 0.6, 0.012, 0.39, 0, dark(brick, 0.86), 0.45, 95);
+    roof(p, 0.42, 0.39, -0.5, { w: 0.6, d: 0.4, h: 0.14, color: C.slate, wall: brick, courses: true });
+    windows(p, [0.27, 0.57], 0.12, -0.29, 0.08, 0.14, C.cream);
+    p.cyl(0.05, 0.065, 1.0, 8, 0.72, 0.012, -0.72, brick); smoke(0.72, 1.04, -0.72, 2);
+    for (const dx of [-0.06, 0.06]) {
+      const a = new THREE.Vector3(0.3 + dx, 0.4, -0.32), b = new THREE.Vector3(hx + dx, top + 0.11, hz + 0.1), d = b.clone().sub(a), L = d.length();
+      p.add(new THREE.CylinderGeometry(0.004, 0.004, L, 4).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())), (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, 0x2a2a2a);
+    }
+    // terril strié, wagonnets, rails
+    p.cone(0.36, 0.44, 8, 0.5, 0.012, 0.48, 0x3a3634);
+    for (const [y, r] of [[0.1, 0.285], [0.22, 0.19]]) p.cyl(r - 0.03, r + 0.005, 0.03, 8, 0.5, y, 0.48, 0x4a4440);
+    track(-0.3, 0.18, -0.3, 0.86); cart(-0.3, 0.5, Math.PI / 2); cart(-0.3, 0.72, Math.PI / 2);
+    for (const [x, z] of [[-0.75, -0.5], [0.0, 0.84]]) { p.cyl(0.012, 0.016, 0.42, 6, x, 0.012, z, 0x3c4a44); p.box(0.05, 0.06, 0.05, x, 0.43, z, 0xffe2a0, 0, true); }
+  } else {
+    p.box(1.84, 0.012, 1.84, 0, 0, 0, 0xb8b0a0);
+    // carrière : gradins de roche taillée au fond, concasseur, tapis roulant vers le tas de gravier, pelleteuse et camion
+    for (let k = 0; k < 3; k++) p.box(1.7 - k * 0.3, 0.16, 0.36 - k * 0.04, 0, 0.012 + k * 0.16, -0.72 + k * 0.04, dark(0xb0a898, 1 - k * 0.06));
+    stones(p, 0, -0.54, 1.7, 0.012, 0.17, 0, 0xb0a898, 0.5, 96);
+    p.box(0.3, 0.3, 0.26, -0.45, 0.012, -0.08, 0xd8b84a); p.box(0.18, 0.12, 0.18, -0.45, 0.31, -0.08, 0x8a8478);
+    p.add(new THREE.BoxGeometry(0.7, 0.03, 0.08), -0.02, 0.26, 0.04, 0x3c3c3c, 0, false, -0.4);
+    for (const x of [-0.2, 0.15]) p.box(0.02, x < 0 ? 0.24 : 0.12, 0.02, x, 0.012, 0.04, C.metal);
+    p.cone(0.3, 0.3, 9, 0.42, 0.012, 0.2, 0xa8a090); p.cone(0.2, 0.2, 8, 0.66, 0.012, 0.66, 0xc89a6a);
+    p.box(0.22, 0.08, 0.14, -0.3, 0.04, 0.6, 0xf2c84b); p.box(0.1, 0.08, 0.12, -0.36, 0.12, 0.6, 0x3c4a54);
+    p.add(new THREE.BoxGeometry(0.24, 0.025, 0.03), -0.14, 0.2, 0.6, 0xf2c84b, 0, false, 0.5);
+    p.box(0.07, 0.05, 0.06, -0.02, 0.2, 0.6, 0x5a5a5a);
+    for (const s of [-1, 1]) p.box(0.24, 0.04, 0.03, -0.3, 0.012, 0.6 + s * 0.06, 0x2a2a2a);
+    p.box(0.3, 0.1, 0.16, 0.2, 0.06, 0.82, 0xf2c84b); p.box(0.1, 0.1, 0.15, 0.4, 0.06, 0.82, 0xe8a83a);
+    for (const x of [0.12, 0.3, 0.42]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.02, 8).rotateX(Math.PI / 2), x, 0.04, 0.82 + s * 0.08, 0x2a2a2a);
+    ore(0.2, 0.16, 0.82, 1.3);
+    p.box(0.32, 0.18, 0.16, 0.66, 0.012, -0.12, C.white); p.box(0.08, 0.06, 0.01, 0.6, 0.08, -0.039, C.glass, 0, true);
+  }
+}
+
+/** Observatoire (1 × 1) : tour blanche à coupole d'argent qui tourne lentement, fente ouverte sur la lunette ; annexe et antenne */
+function observatory(p: Parts) {
+  p.box(0.98, 0.012, 0.98, 0, 0, 0, 0xe4e0d8);
+  p.cyl(0.3, 0.32, 0.06, 16, 0, 0.012, -0.08, C.stone);
+  p.cyl(0.26, 0.26, 0.3, 16, 0, 0.07, -0.08, C.white);
+  p.cyl(0.275, 0.275, 0.02, 16, 0, 0.36, -0.08, C.metal);
+  windows(p, [0], 0.16, 0.18, 0.06, 0.08, C.metal);
+  const d = spinner([0, 0.37, -0.08], [0, 1, 0], 0.08);
+  d.add(new THREE.SphereGeometry(0.26, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0, 0, 0, 0xc8ced6);
+  for (let k = 0; k < 6; k++) {
+    const e = 0.12 + k * 0.25;
+    d.add(new THREE.BoxGeometry(0.08, 0.075, 0.02).rotateX(-e), 0, 0.262 * Math.sin(e), 0.262 * Math.cos(e), 0x2a2e38);
+  }
+  d.add(new THREE.CylinderGeometry(0.032, 0.04, 0.42, 8).rotateX(Math.PI / 2 - 0.75), 0, 0.2 * Math.sin(0.75), 0.2 * Math.cos(0.75), C.white);
+  d.add(new THREE.CylinderGeometry(0.036, 0.036, 0.02, 8).rotateX(Math.PI / 2 - 0.75), 0, 0.41 * Math.sin(0.75), 0.41 * Math.cos(0.75), 0x2a2e38);
+  // annexe, antenne parabolique, banc, allée
+  p.box(0.3, 0.2, 0.22, 0.28, 0.012, 0.26, C.white); p.box(0.32, 0.02, 0.24, 0.28, 0.21, 0.26, C.metal);
+  p.box(0.07, 0.14, 0.012, 0.2, 0.012, 0.372, 0x3f5a6a); windows(p, [0.34], 0.08, 0.372, 0.06, 0.06, C.metal);
+  p.cyl(0.008, 0.01, 0.12, 5, 0.28, 0.23, 0.22, C.metal);
+  p.add(new THREE.SphereGeometry(0.07, 10, 4, 0, Math.PI * 2, 0, Math.PI / 3).rotateX(-0.9), 0.28, 0.36, 0.24, C.white);
+  p.box(0.12, 0.004, 0.36, -0.1, 0.014, 0.3, 0xd2ccc0);
+  p.box(0.16, 0.025, 0.05, -0.32, 0.06, 0.3, C.wood); for (const s of [-1, 1]) p.box(0.02, 0.06, 0.05, -0.32 + s * 0.06, 0.012, 0.3, C.metal);
+  tree(p, -0.36, -0.36, 0.9);
+}
+
 function lamp(p: Parts, age: number) {
   if (age === 0) { p.cyl(0.02, 0.03, 0.42, 5, 0, 0, 0, C.wood); p.cone(0.06, 0.14, 5, 0, 0.4, 0, C.flame, true); }
   else if (age === 1) { p.cyl(0.04, 0.06, 0.2, 6, 0, 0, 0, C.stone); p.cyl(0.1, 0.06, 0.06, 7, 0, 0.2, 0, C.darkstone); p.cone(0.07, 0.14, 5, 0, 0.26, 0, C.flame, true); }
@@ -1564,6 +2046,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const p = new Parts();
   smokeOut = [];
   attachOut = [];
+  spinOut = null;
   switch (kind) {
     case 'house': house(p, age, o); break;
     case 'farm': farm(p, age); break;
@@ -1579,6 +2062,12 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'health': health(p, age); break;
     case 'school': school(p, age); break;
     case 'fire': firehouse(p, age, o.v); break;
+    case 'stable': stable(p, Math.max(1, age)); break;
+    case 'apiary': apiary(p, age); break;
+    case 'baths': baths(p, Math.max(1, age)); break;
+    case 'tavern': tavern(p, Math.max(2, age), o); break;
+    case 'mine': mine(p, Math.max(2, age)); break;
+    case 'observatory': observatory(p); break;
   }
   // un modèle fait seulement de pièces importées (le point d'eau préhistorique) n'a pas de partie procédurale
   if (!p.body.length && attachOut.length) m = { body: mergeGeometries(attachOut, false)!, glow: null, smoke: smokeOut };
@@ -1586,6 +2075,9 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     m = { ...p.build(), smoke: smokeOut };
     if (attachOut.length) m.body = mergeGeometries([m.body, ...attachOut], false)!;
   }
+  // roues d'un chevalement, coupole d'un observatoire, abeilles d'un rucher
+  const spin = spinOut as Spin | null;
+  if (spin) m.rotor = { geo: spin.p.build(false).body, pivot: spin.pivot, axis: spin.axis, speed: spin.speed };
   // dessiné pour une case, posé sur quatre : tout s'agrandit, cheminées comprises
   if (size === 2 && UPSCALE.includes(kind)) {
     m.body.scale(UP, UP, UP);

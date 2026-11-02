@@ -28,6 +28,7 @@ const P: Record<string, string> = {
   torch: '<path d="M10 22l2-10 2 10z"/><path d="M12 9c-2.5-1.5-2.5-4 0-7 2.5 3 2.5 5.5 0 7z"/>',
   boat: '<path d="M2 15h20l-3 5H5z"/><path d="M12 15V3l6 9h-6"/>',
   kit: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M12 10v7M8.5 13.5h7"/>',
+  shield: '<path d="M12 3l8 3v6c0 4.8-3.4 7.9-8 9-4.6-1.1-8-4.2-8-9V6z"/><path d="M12 7.5v10M8 11.5h8"/>',
   alert: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>',
   pen: '<path d="M3 20V9M9 20V9M15 20V9M21 20V9"/><path d="M2 12h20M2 17h20"/><path d="M3 9l0-2M9 9V7M15 9V7M21 9V7"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
@@ -76,6 +77,11 @@ const P: Record<string, string> = {
   flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1-2.1-.2-4.1 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
   campfire: '<path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-4 0-7z"/><path d="M4 21l16-4M4 17l16 4"/>',
   castle: '<path d="M3 21V9h3V6h3v3h2V6h2v3h2V6h3v3h3v12z"/><path d="M10 21v-5a2 2 0 0 1 4 0v5"/>',
+  horse: '<path d="M8 21v-5.5L4.5 13a1.6 1.6 0 0 1 .3-2.6L10 7l1-4 2.2 3C17 7 19.5 10.5 19.5 15v6"/><path d="M11 6.5c1.5-.5 2.6 0 3 1"/><circle cx="9.5" cy="10" r=".6"/>',
+  hive: '<path d="M3 20h18"/><path d="M6 20c0-8.5 2.7-15 6-15s6 6.5 6 15"/><path d="M6.6 15.5h10.8M7.8 10.5h8.4"/><path d="M11 20v-2.2a1 1 0 0 1 2 0V20"/>',
+  bath: '<path d="M3 12h18v2.5A5.5 5.5 0 0 1 15.5 20h-7A5.5 5.5 0 0 1 3 14.5z"/><path d="M6 12V6a2 2 0 0 1 3.8-.9"/><path d="M13 9c-1-1.2 1-2 0-3.5M17 9c-1-1.2 1-2 0-3.5"/><path d="M7 20l-1 2M17 20l1 2"/>',
+  mug: '<path d="M5 9h10v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M15 12h2a2.5 2.5 0 0 1 0 5h-2"/><path d="M5 9a2.5 2.5 0 0 1 3-3 3 3 0 0 1 5 0 2.3 2.3 0 0 1 2 3"/><path d="M9 13v4M11.5 13v4"/>',
+  telescope: '<path d="M4 14.5l12-6 2 4-12 6z"/><path d="M16 8.5l3-1.5 2 4-3 1.5"/><path d="M2.5 15.3l1.5 3"/><path d="M11 15l-3.5 7M12 14.5l3.5 7.5"/>',
   // outils de terrain et de nature
   raise: '<path d="M3 20h18"/><path d="M5 20l7-9 7 9"/><path d="M12 3v5M9.5 5.5L12 3l2.5 2.5"/>',
   lower: '<path d="M3 14h4l5 6 5-6h4"/><path d="M12 3v8M9.5 8.5L12 11l2.5-2.5"/>',
@@ -99,6 +105,7 @@ export function ic(name: string, size = 20, stroke = 1.8): string {
 export const KIND_ICON: Record<KindId, string> = {
   house: 'house', well: 'well', lamp: 'lamp', farm: 'barn', pen: 'pen', pier: 'fish', workshop: 'anvil', mill: 'windmill',
   health: 'hospital', school: 'book', fire: 'flame', gather: 'campfire', temple: 'columns', landmark: 'castle',
+  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

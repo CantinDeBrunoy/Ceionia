@@ -5,7 +5,9 @@ import { genHeights, newWorld, MAPS } from '../src/world/mapgen';
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
-import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP } from '../src/sim/missions';
+import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP } from '../src/sim/missions';
+import { KINDS, KindId } from '../src/build/catalog';
+import { Underground } from '../src/world/underground';
 import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { EVENTS } from '../src/sim/events';
@@ -514,5 +516,77 @@ describe('expéditions', () => {
     const r = penHerds(w);
     expect(r.pens.get(pen.id)!.length).toBe(PEN_CAP);
     expect(r.rest).toEqual(['cow', 'cow']);
+  });
+
+  it('chaque bâtiment à débloquer a son expédition, du même âge ou d’avant', () => {
+    for (const k of Object.keys(KINDS) as KindId[]) {
+      const d = KINDS[k];
+      if (!d.reqMission) continue;
+      const m = MISSIONS.find((x) => x.id === d.reqMission);
+      expect(m?.unlocks).toBe(k);
+      expect(m!.age).toBeLessThanOrEqual(d.minAge);
+    }
+    expect(MISSIONS.filter((m) => m.unlocks).length).toBeGreaterThanOrEqual(7);
+  });
+
+  it('les chevaux vivent à l’écurie (quatre par écurie), les autres bêtes à l’enclos', () => {
+    const w = island();
+    w.exp.herd.push('horse', 'horse', 'horse', 'horse', 'horse', 'sheep', 'sheep');
+    const free = (k: 'stable' | 'pen') => { for (let z = 10; z < N - 10; z++) for (let x = 10; x < N - 10; x++) if (w.canPlace(k, x, z) === null) return [x, z]; throw new Error('pas de place'); };
+    const [sx, sz] = free('stable');
+    const st = w.place('stable', sx, sz, 0, true, 1, false)!;
+    const [px, pz] = free('pen');
+    const pen = w.place('pen', px, pz, 0, true, 1, false)!;
+    const r = penHerds(w);
+    expect(r.stables.get(st.id)).toEqual(Array(STABLE_CAP).fill('horse'));
+    expect(r.pens.get(pen.id)).toEqual(['sheep', 'sheep', 'horse']);
+    expect(r.rest).toEqual([]);
+  });
+
+  it('l’expédition armée descend sous terre après l’écurie et le filon : elle abat des filons et rapporte leur minerai', () => {
+    const w = island();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 30, 0);
+    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
+    ex.under = new Underground(w);
+    const deep = MISSIONS.find((m) => m.id === 'deep')!;
+    const cav = deep.choices.findIndex((c) => c.troop === 'cavalry'), armor = deep.choices[deep.choices.findIndex((c) => c.troop === 'armor')];
+    expect(deep.repeat).toBe(true);
+    expect(ex.why(deep, armor)).toMatch(/Les chevaux sauvages.*Le filon de la montagne.*écurie/);
+    w.exp.done.push('horses', 'mine');
+    let spot: number[] | null = null;
+    for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
+    w.place('stable', spot![0], spot![1], 0, true, 2, false);
+    expect(ex.why(deep, deep.choices[cav])).toMatch(/3 chevaux/);
+    w.exp.herd.push('horse', 'horse', 'horse');
+    expect(ex.why(deep, deep.choices[cav])).toBeNull();
+    const ore = w.ore, mined = w.mined.size;
+    const a = ex.start(deep, cav)!;
+    expect(a.targets.length).toBe(4);
+    // les chevaux partent avec la troupe, et reviennent avec elle
+    expect([...penHerds(w).stables.values()].flat().length).toBe(0);
+    let report: Report | null = null;
+    ex.onReport = (r) => (report = r);
+    for (let i = 0; i < 60000 && !report; i++) { agents.update(0.05, 10, 2, false, 30, 0); ex.update(0.05); }
+    expect(report!.ok).toBe(true);
+    expect(w.mined.size - mined).toBe(4);
+    expect(w.ore).toBeGreaterThan(ore);
+    expect(report!.summary).toMatch(/minerai/);
+    expect([...penHerds(w).stables.values()].flat().length).toBe(3);
+    // on peut y retourner
+    expect(ex.list(2)).toContain(deep);
+  });
+
+  it('une mine rapporte du minerai chaque jour', () => {
+    const w = island();
+    let spot: number[] | null = null;
+    for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 10 && !spot; x++) if (w.canPlace('mine', x, z) === null) spot = [x, z];
+    w.place('mine', spot![0], spot![1], 0, true, 2, false);
+    const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
+    const ore = w.ore;
+    for (let t = 0; t < 300; t++) ex.update(1);
+    expect(w.ore - ore).toBe(3);
   });
 });
