@@ -6,7 +6,7 @@ import type { UnderView } from './render/underView';
 /** Le monde souterrain (décor, créatures) est chargé à part, en arrière-plan après le démarrage */
 let underModule: Promise<typeof import('./render/underView')> | null = null;
 const loadUnder = () => (underModule ??= import('./render/underView'));
-import { newWorld, addDefaultDecor, MAPS } from './world/mapgen';
+import { newWorld, addDefaultDecor, mapDef, CONTINENT } from './world/mapgen';
 import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
 import { RoadView } from './render/roads';
@@ -139,10 +139,10 @@ class Game implements UIHost {
         addDefaultDecor(w, save.seed);
       } catch (e) {
         console.warn(e);
-        newWorld(w, mapId, MAPS[mapId].defaultSeed);
+        newWorld(w, mapId, mapDef(mapId)!.defaultSeed);
       }
     } else {
-      newWorld(w, mapId, fresh ? Math.floor(Math.random() * 100000) + 1 : MAPS[mapId].defaultSeed);
+      newWorld(w, mapId, fresh ? Math.floor(Math.random() * 100000) + 1 : mapDef(mapId)!.defaultSeed);
     }
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
@@ -661,9 +661,11 @@ async function boot() {
   const start = (map: number, mode: 'continue' | 'new', fresh = false) => {
     if (started) return;
     started = true;
+    // les anciennes cartes (île, vallée, plateaux) n'existent plus : on joue sur le continent
+    if (!mapDef(map)) map = CONTINENT;
     menu?.remove();
     // tailles des tableaux du monde, des vues et de la caméra
-    setMapSize(MAPS[map].size);
+    setMapSize(mapDef(map)!.size);
     syncChunks();
     (window as any).__game = new Game(map, mode, fresh);
   };

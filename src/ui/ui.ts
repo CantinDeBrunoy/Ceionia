@@ -9,7 +9,7 @@ import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
-import { effectSummary, mandatoryFor, DestKind, MISSIONS } from '../sim/missions';
+import { effectSummary, mandatoryFor, DestKind, MISSIONS, redoEffects, REDO_DAYS } from '../sim/missions';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
@@ -544,22 +544,23 @@ export class UI {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
     const next = max < partyLimit(1e9) ? `Une équipe de plus à ${max * 30} habitants (le village en compte ${pop}).` : 'Le village envoie autant d’équipes qu’il le peut.';
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
-    const cards = ex.list(age).map((m) => {
-      const done = ex.done(m), run = ex.running(m);
-      const choices = (done && !m.repeat) || run ? '' : m.choices.map((c, i) => {
+    // d'abord ce qui reste à faire, puis ce qu'on peut refaire
+    const cards = ex.list(age).sort((a, b) => +(ex.done(a) && !a.repeat) - +(ex.done(b) && !b.repeat)).map((m) => {
+      const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
+      const choices = run ? '' : m.choices.map((c, i) => {
         const why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
         return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
           <b>${c.label}</b><span>${c.text}</span>
           <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''} · ⏳ ${workLabel(c.work)} · 🎲 ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} ${riskLabel(pv.risk)} · ${DEST_ICON[c.dest]}</small>
           <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')} — ${pv.label ? `on emporte ${pv.label}` : 'aucun équipement en réserve'}</small>
-          <small class="gain">Si tout va bien : ${effectSummary(c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
+          <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
           ${why ? `<small class="why">${why}</small>` : ''}</button>`;
       }).join('');
       return `<div class="mission ${done ? 'done' : ''}">
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${m.unlocks ? `<p class="unlock">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})</p>` : ''}
         ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).map((id) => [ex.state.done.includes(id), `« ${MISSIONS.find((x) => x.id === id)?.title} »`] as const), ...(m.requires.kinds ?? []).map((k) => [(h.sim.counts[k] ?? 0) > 0, KINDS[k].names[Math.max(age, KINDS[k].minAge)]] as const)].map(([ok, t]) => `<span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${t}</span>`).join('')}</p>` : ''}
-        ${(done && !m.repeat) || run ? '' : `<p>${m.intro}</p>${choices}`}</div>`;
+        ${run ? '' : redo ? `<details class="redo"><summary>${ic('restart', 14, 2)} Refaire cette expédition</summary><p>${m.intro}</p><p class="hint">Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>${choices}</details>` : `<p>${m.intro}</p>${choices}`}</div>`;
     }).join('');
     const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} Expéditions`, `
       <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button></div>
@@ -664,7 +665,7 @@ export class UI {
       <p class="story"></p>
       ${r.notes.length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}
       <p class="sum">${r.summary === 'rien' ? 'Rien de gagné, rien de perdu.' : r.summary}</p>
-      ${r.ok && r.m.unlocks ? `<p class="unlock">${ic(KIND_ICON[r.m.unlocks], 18, 2)} Nouveau : vous pouvez bâtir <b>${KINDS[r.m.unlocks].names[this.host.sim.age].toLowerCase()}</b> (rayon ${BUILD_CATS.find((c) => c.id === KINDS[r.m.unlocks!].cat)!.label}).${UNLOCK_NOTE[r.m.unlocks] ?? ''}</p>` : ''}
+      ${r.ok && r.m.unlocks && !r.redo ? `<p class="unlock">${ic(KIND_ICON[r.m.unlocks], 18, 2)} Nouveau : vous pouvez bâtir <b>${KINDS[r.m.unlocks].names[this.host.sim.age].toLowerCase()}</b> (rayon ${BUILD_CATS.find((c) => c.id === KINDS[r.m.unlocks!].cat)!.label}).${UNLOCK_NOTE[r.m.unlocks] ?? ''}</p>` : ''}
       ${r.ok && r.m.mandatory ? '<p class="hint">Expédition obligatoire réussie : l’âge suivant se rapproche.</p>' : !r.ok && r.m.mandatory ? '<p class="hint">On pourra retenter l’expédition, avec le même choix ou un autre.</p>' : ''}
       <div class="row"><span class="grow"></span><button class="active ok">Fermer</button></div>`);
     $('.story', ov).textContent = `« ${r.c.label} » : ${r.text}`;

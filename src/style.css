@@ -266,6 +266,9 @@ body.photo #photoBar { display: flex; }
 .missions { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 10px; }
 .mission { background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
 .mission.done { opacity: 0.6; }
+.mission.done:has(details[open]) { opacity: 1; }
+.mission details.redo summary { display: flex; align-items: center; gap: 6px; margin-top: 6px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--accent, #2b6cd8); list-style: none; }
+.mission details.redo summary::-webkit-details-marker { display: none; }
 .mission p { font-size: 13px; margin: 6px 0; line-height: 1.45; color: var(--ink2); }
 .mhead { display: flex; gap: 10px; align-items: center; }
 .mhead > b { font-size: 30px; }

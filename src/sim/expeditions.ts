@@ -1,6 +1,6 @@
 import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN } from '../world/world';
-import { Agents } from './agents';
-import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds } from './missions';
+import { Agents, Kit } from './agents';
+import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects } from './missions';
 import { Underground, ORE_KINDS, oreVeins } from '../world/underground';
 import { AGES, KINDS } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
@@ -42,9 +42,13 @@ export interface ActiveExpedition {
   /** expédition armée : filons visés sous terre (dans l'ordre où la troupe les abat) et case de galerie où elle descend */
   targets: number[];
   entry: number;
+  /** chevaux de l'écurie partis avec l'équipe */
+  mounts: number;
+  /** la mission avait déjà été réussie : on la refait (bêtes, minerai, vivres ; bonus durables seulement passagers) */
+  redo: boolean;
 }
 
-export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[] }
+export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
 const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'au-delà des collines' };
 /** Repli quand le village n'a pas de tel endroit à portée */
@@ -93,17 +97,20 @@ export class Expeditions {
   /** Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel */
   riskOf(c: Choice) { return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1); }
 
-  /** Ce qu'une équipe partant maintenant emporterait, et son risque avec cet équipement */
+  /** Chevaux qui partiraient avec l'équipe : ceux qu'exige la cavalerie, sinon un par membre tant que l'écurie en a */
+  mountsFor(c: Choice) { return c.mounts ?? Math.min(c.party, this.horsesHome()); }
+
+  /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux), et son risque avec cet équipement */
   preview(c: Choice) {
-    const l = loadout(c, this.world.exp.gear);
-    return { take: l.take, label: packLabel(l.take), risk: this.riskOf(c) * l.k };
+    const l = loadout(c, this.world.exp.gear), n = this.mountsFor(c);
+    return { take: l.take, label: [packLabel(l.take), n ? `${n} cheva${n > 1 ? 'ux' : 'l'}` : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
   }
 
   /** Risque d'une équipe en route : celui du choix, équipement et décisions compris */
   chance(a: ActiveExpedition) { return Math.min(0.95, Math.max(0.02, this.riskOf(a.c) * a.riskK)); }
 
-  /** Missions proposées : celles de l'âge, puis les facultatives des âges passés pas encore réussies (ou à refaire) */
-  list(age: number) { return MISSIONS.filter((m) => m.age === age || (m.age < age && (!this.done(m) || m.repeat))); }
+  /** Missions proposées : celles de l'âge et des âges passés ; celles déjà réussies peuvent se refaire */
+  list(age: number) { return MISSIONS.filter((m) => m.age <= age); }
 
   /** Ce qui manque avant de pouvoir tenter la mission : missions à réussir, bâtiments à bâtir (vide : rien) */
   missing(m: Mission): string[] {
@@ -137,7 +144,6 @@ export class Expeditions {
 
   /** Pourquoi l'on ne peut pas partir (ou null) */
   why(m: Mission, c: Choice): string | null {
-    if (this.done(m) && !m.repeat) return 'Mission déjà réussie.';
     if (this.running(m)) return 'Cette expédition est déjà en route.';
     const miss = this.missing(m);
     if (miss.length) return `Il faut d’abord ${miss.join(', ')}.`;
@@ -165,17 +171,28 @@ export class Expeditions {
     const veins = c.win.find((e) => e.t === 'veins');
     const { targets, entry } = veins?.t === 'veins' ? this.pickVeins(dest, veins.n) : { targets: [], entry: -1 };
     if (veins && !targets.length) return null;
+    const mounts = this.mountsFor(c);
     const party = this.agents.recruit(c.party);
     if (!party) return null;
-    this.world.exp.riding += c.mounts ?? 0;
+    this.world.exp.riding += mounts;
     // l'équipe emporte le meilleur équipement en réserve contre les dangers du voyage
     const { take, k } = loadout(c, this.world.exp.gear);
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
     const a: ActiveExpedition = {
       id: this.nextId++, m, c, phase: 'gather', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
       wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], notes: [], extra: 0, bonus: [], hurt: 0,
-      targets, entry,
+      targets, entry, redo: this.done(m), mounts,
     };
+    // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval s'il y en a assez ; on part en selle
+    const kits = party.map((): Kit => ({}));
+    for (const g of ['rifle', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
+    kits.forEach((kt, i) => {
+      if (i < (take.armor ?? 0)) kt.armor = true;
+      if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
+      if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
+      if (i < mounts) kt.horse = true;
+    });
+    party.forEach((id, i) => this.agents.equip(id, kits[i]));
     this.active.push(a);
     this.agents.partyGo(party, base[0], base[1], 0.15);
     return a;
@@ -201,6 +218,7 @@ export class Expeditions {
       } else if (a.phase === 'out' && (ag.partyDone(a.party) || a.t > 240)) {
         a.phase = 'work'; a.t = 0;
         ag.partyAct(a.party, 'work');
+        ag.mountParty(a.party, false);
         // la troupe armée descend dans les galeries : on ne la voit plus en surface, mais sous terre
         if (a.targets.length) ag.partyHide(a.party, true);
         this.raise(a);
@@ -209,6 +227,7 @@ export class Expeditions {
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra) {
         a.ok = this.rnd() >= this.chance(a);
         a.phase = 'back'; a.t = 0;
+        ag.mountParty(a.party, true);
         ag.partyGo(a.party, a.base[0], a.base[1]);
         this.onNews?.(a.ok ? `${a.m.icon} « ${a.m.title} » : l’équipe rentre… et elle n’a pas l’air bredouille !` : `${a.m.icon} « ${a.m.title} » : l’équipe rentre, la mine basse.`);
       } else if (a.phase === 'back' && (ag.partyDone(a.party) || a.t > 240)) {
@@ -257,7 +276,7 @@ export class Expeditions {
   }
 
   private finish(a: ActiveExpedition) {
-    const eff = a.ok ? [...a.c.win, ...a.bonus] : a.c.lose;
+    const eff = a.ok ? [...(a.redo ? redoEffects(a.c.win) : a.c.win), ...a.bonus] : a.c.lose;
     const res = applyEffects(this.world, eff, this.dayLen());
     // la troupe a abattu ses filons : ils disparaissent des parois, leur minerai rentre au village
     let veins = '';
@@ -274,7 +293,7 @@ export class Expeditions {
       this.world.ore += ore;
       veins = `+${ore} minerai (${[...got].map(([name, n]) => `${n} ${name}`).join(', ')})`;
     }
-    this.world.exp.riding = Math.max(0, this.world.exp.riding - (a.c.mounts ?? 0));
+    this.world.exp.riding = Math.max(0, this.world.exp.riding - a.mounts);
     if (a.ok && !this.done(a.m)) this.world.exp.done.push(a.m.id);
     // l'équipement revient en réserve ; un échec en coûte parfois une pièce
     const gear = this.world.exp.gear, carried = (Object.keys(a.gear) as GearId[]).filter((g) => (a.gear[g] ?? 0) > 0);
@@ -291,7 +310,7 @@ export class Expeditions {
     this.active.splice(this.active.indexOf(a), 1);
     this.world.version++;
     const summary = [veins || effectSummary(eff.filter((e) => e.t !== 'veins')), veins ? effectSummary(eff.filter((e) => e.t !== 'veins')) : '', lost].filter((x) => x && x !== 'rien').join(' · ') || 'rien';
-    this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text: a.ok ? a.c.winText : a.c.loseText, summary, notes: a.notes });
+    this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text: a.ok ? a.c.winText : a.c.loseText, summary, notes: a.notes, redo: a.redo });
   }
 
   // ---------------- Fabrication de l'équipement ----------------
@@ -362,7 +381,7 @@ export class Expeditions {
     return {
       gather: 'Rassemblement au village…',
       out: `En route vers ${DEST_NAME[a.c.dest]}…`,
-      work: a.wait ? `Décision à prendre : ${a.wait.title.toLowerCase()}` : `Sur place : ${a.c.label.toLowerCase()}…`,
+      work: a.wait ? `Décision à prendre : ${a.wait.title.toLowerCase()}` : `Sur place, l’équipe ${a.c.doing ?? a.c.label.toLowerCase()}…`,
       back: 'Retour au village…',
       home: a.ok ? 'De retour : le village fait la fête !' : 'De retour, bredouilles.',
     }[a.phase];

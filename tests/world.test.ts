@@ -5,18 +5,18 @@ import { genHeights, newWorld, MAPS } from '../src/world/mapgen';
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
-import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP } from '../src/sim/missions';
+import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS } from '../src/sim/missions';
 import { KINDS, KindId } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { EVENTS } from '../src/sim/events';
 
-/** Carte de l'île, toujours la même graine : les tests ne dépendent pas du hasard */
-function island() {
-  setMapSize(96);
+/** Le continent, toujours la même graine : les tests ne dépendent pas du hasard */
+function continent() {
+  setMapSize(192);
   const w = new World();
-  newWorld(w, 0, 1234);
+  newWorld(w, 3, 2026);
   w.updateVis();
   return w;
 }
@@ -55,7 +55,7 @@ describe('génération des cartes', () => {
 
 describe('sauvegarde', () => {
   let w: World;
-  beforeAll(() => { w = island(); });
+  beforeAll(() => { w = continent(); });
 
   it('relit exactement ce qu’elle a écrit (relief, végétation, bâtiments, lave, cendres, minerai)', () => {
     const [x, z] = flatLand(w);
@@ -93,7 +93,7 @@ describe('sauvegarde', () => {
 
 describe('eau', () => {
   let w: World;
-  beforeAll(() => { w = island(); });
+  beforeAll(() => { w = continent(); });
 
   const findCell = (test: (x: number, z: number) => boolean) => {
     for (let z = 2; z < N - 2; z++) for (let x = 2; x < N - 2; x++) if (test(x, z)) return [x, z];
@@ -106,7 +106,9 @@ describe('eau', () => {
     expect(w.setRoad(sx, sz, true)).toBe(true);
     expect(w.bridgeY(sx, sz)).toBeGreaterThan(0.2);
     expect(w.surfaceAt(sx + 0.5, sz + 0.5)).toBeGreaterThan(0.2);
-    const [dx, dz] = findCell((x, z) => w.cellAvg(x, z) < -1.9);
+    // le large : la mer du continent reste peu profonde, on y creuse une fosse
+    const [dx, dz] = findCell((x, z) => w.cellAvg(x, z) < -0.95 && !w.lake[w.ci(x, z)]);
+    for (const [i, j] of [[0, 0], [1, 0], [0, 1], [1, 1]]) w.heights[(dz + j) * (N + 1) + dx + i] = -2.2;
     expect(w.canRoad(dx, dz)).toBe(false);
   });
 
@@ -132,14 +134,14 @@ describe('eau', () => {
     expect(i).toBeGreaterThanOrEqual(0);
     const x = (i % VS) / VR, z = Math.floor(i / VS) / VR;
     expect(w.seaAt(x, z, MAX_H)).toBe(false);
-    const [sx, sz] = findCell((cx, cz) => w.cellAvg(cx, cz) < -1.9);
-    expect(w.seaAt(sx + 0.5, sz + 0.5, -1.2)).toBe(true);
+    const [sx, sz] = findCell((cx, cz) => w.cellAvg(cx, cz) < -0.95 && !w.lake[w.ci(cx, cz)]);
+    expect(w.seaAt(sx + 0.5, sz + 0.5, -0.6)).toBe(true);
   });
 });
 
 describe('volcans et récoltes', () => {
   it('la lave détruit un bâtiment seulement si les catastrophes sont activées', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     const b = w.place('house', x, z, 0, true, 1, false);
     w.disasters = false;
@@ -153,7 +155,7 @@ describe('volcans et récoltes', () => {
   });
 
   it('un champ sur des cendres donne double récolte, la sécheresse la réduit', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     w.veg[w.ci(x, z)] = VEG_FIELD;
     const sim = new Sim(w);
@@ -166,7 +168,7 @@ describe('volcans et récoltes', () => {
   });
 
   it('l’âge industriel demande du minerai', () => {
-    const w = island();
+    const w = continent();
     const sim = new Sim(w);
     sim.age = 2;
     const ore = () => sim.ageProgress()!.items.find((i) => i.label.startsWith('minerai'))!;
@@ -193,7 +195,7 @@ describe('routes automatiques', () => {
   const roads = (w: World) => w.road.reduce((n, v) => n + (v ? 1 : 0), 0);
 
   it('relie un bâtiment au voisin par un chemin court, rien de plus', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = strip(w, 8);
     // le tout premier bâtiment n'a personne à rejoindre
     expect(autoRoad(w, w.place('house', x, z, 0, true, 0, false))).toBe(0);
@@ -209,7 +211,7 @@ describe('routes automatiques', () => {
   });
 
   it('ne trace rien pour un lampadaire ni vers un bâtiment trop loin', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = strip(w, 8);
     w.place('house', x, z, 0, true, 0, false);
     expect(autoRoad(w, w.place('lamp', x + 4, z, 0, true, 0, false))).toBe(0);
@@ -221,7 +223,7 @@ describe('routes automatiques', () => {
 
 describe('façades et ponts', () => {
   it('la façade regarde le côté qui longe le plus la route, sinon la route la plus proche', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     const road = (cx: number, cz: number) => { w.road[w.ci(cx, cz)] = 1; };
     w.road.fill(0);
@@ -243,7 +245,7 @@ describe('façades et ponts', () => {
   });
 
   it('un atelier sans place pour grandir reste en 1 × 1, puis grandit quand la place se libère', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     // l'atelier d'une ancienne partie (1 × 1), cerné de maisons sur ses quatre places possibles
     const ring = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
@@ -270,7 +272,7 @@ describe('façades et ponts', () => {
   });
 
   it('poser un bâtiment entre deux voisins ne les soulève ni ne les enfonce', () => {
-    const w = island();
+    const w = continent();
     let spot: number[] | null = null;
     for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 12 && !spot; x++)
       if ([0, 1, 2].every((i) => w.canPlace('house', x + i, z) === null && w.cellSlope(x + i, z) < 0.3)) spot = [x, z];
@@ -288,7 +290,7 @@ describe('façades et ponts', () => {
   });
 
   it('un service posé en 1 × 1 dans une ancienne sauvegarde grandit en 2 × 2 sur une place libre voisine', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     // une maison à l'est empêche de grandir vers l'est : la caserne s'étend vers l'ouest ou le nord
     w.place('house', x + 1, z, 0, true, 0, false);
@@ -304,7 +306,7 @@ describe('façades et ponts', () => {
   });
 
   it('sur un pont, on coupe les virages ; ailleurs, on passe au centre des cases', () => {
-    const w = island();
+    const w = continent();
     let L: number[] | null = null;
     for (let z = 2; z < N - 3 && !L; z++) for (let x = 2; x < N - 3 && !L; x++) if (w.isWet(x, z) && w.isWet(x + 1, z) && w.isWet(x + 1, z + 1)) L = [x, z];
     const [x, z] = L!;
@@ -334,7 +336,7 @@ describe('jardins', () => {
   }
 
   it('change de visage à chaque âge, toujours le même pour une zone donnée', () => {
-    const w = island(), g = garden(w, 4, 3);
+    const w = continent(), g = garden(w, 4, 3);
     const styles = [0, 1, 2, 3, 4].map((a) => layoutGarden(w, g, a).style);
     expect(styles[0]).toBe('camp');
     expect(styles[1]).toBe('antique');
@@ -344,7 +346,7 @@ describe('jardins', () => {
   });
 
   it('se remplit selon la taille et reste dans la zone', () => {
-    const w = island(), small = garden(w, 2, 1), big = garden(w, 6, 5);
+    const w = continent(), small = garden(w, 2, 1), big = garden(w, 6, 5);
     for (let a = 0; a <= 4; a++) {
       const s = layoutGarden(w, small, a), b = layoutGarden(w, big, a);
       expect(b.items.length).toBeGreaterThan(s.items.length);
@@ -358,7 +360,7 @@ describe('jardins', () => {
   });
 
   it('un jardin long accueille un tournoi au Moyen Âge, un petit des lices d’entraînement', () => {
-    const w = island(), long = garden(w, 8, 3), small = garden(w, 2, 2);
+    const w = continent(), long = garden(w, 8, 3), small = garden(w, 2, 2);
     const t = layoutGarden(w, long, 2);
     expect(t.style).toBe('tournoi');
     expect(t.lanes.length).toBe(4);
@@ -385,7 +387,7 @@ describe('expéditions', () => {
   });
 
   it('l’expédition obligatoire conditionne l’âge suivant', () => {
-    const w = island(), sim = new Sim(w);
+    const w = continent(), sim = new Sim(w);
     const item = () => sim.ageProgress()!.items.find((i) => i.label.startsWith('expédition'))!;
     expect(item().have).toBe(0);
     w.exp.done.push(mandatoryFor(0)!.id);
@@ -393,7 +395,7 @@ describe('expéditions', () => {
   });
 
   it('les effets s’appliquent : bêtes, minerai, savoir-faire, bonus durables et passagers', () => {
-    const w = island(), sim = new Sim(w);
+    const w = continent(), sim = new Sim(w);
     const [x, z] = flatLand(w);
     w.place('farm', x, z, 0, true, 0, false);
     sim.recalc(); sim.update(0, 1);
@@ -416,7 +418,7 @@ describe('expéditions', () => {
   });
 
   it('une équipe part, revient, et l’issue s’applique', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 0, false);
     const agents = new Agents(w);
@@ -437,7 +439,7 @@ describe('expéditions', () => {
 
   it('plus le village est peuplé, plus il mène d’expéditions de front', () => {
     expect([0, 29, 30, 59, 60, 90, 500].map(partyLimit)).toEqual([1, 1, 2, 2, 3, 4, 4]);
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 0, false);
     const agents = new Agents(w);
@@ -462,7 +464,7 @@ describe('expéditions', () => {
   });
 
   it('l’équipement rend une expédition plus sûre, part avec l’équipe et revient', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 0, false);
     const agents = new Agents(w);
@@ -504,7 +506,7 @@ describe('expéditions', () => {
   });
 
   it('l’expédition des bêtes débloque l’enclos, où elles vivent (six par enclos)', () => {
-    const w = island();
+    const w = continent();
     const herd = MISSIONS.find((m) => m.id === 'herd')!;
     expect(herd.unlocks).toBe('pen');
     w.exp.herd.push('sheep', 'sheep', 'sheep', 'sheep', 'pig', 'pig', 'cow', 'cow');
@@ -530,7 +532,7 @@ describe('expéditions', () => {
   });
 
   it('les chevaux vivent à l’écurie (quatre par écurie), les autres bêtes à l’enclos', () => {
-    const w = island();
+    const w = continent();
     w.exp.herd.push('horse', 'horse', 'horse', 'horse', 'horse', 'sheep', 'sheep');
     const free = (k: 'stable' | 'pen') => { for (let z = 10; z < N - 10; z++) for (let x = 10; x < N - 10; x++) if (w.canPlace(k, x, z) === null) return [x, z]; throw new Error('pas de place'); };
     const [sx, sz] = free('stable');
@@ -544,7 +546,7 @@ describe('expéditions', () => {
   });
 
   it('l’expédition armée descend sous terre après l’écurie et le filon : elle abat des filons et rapporte leur minerai', () => {
-    const w = island();
+    const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
     const agents = new Agents(w);
@@ -579,8 +581,43 @@ describe('expéditions', () => {
     expect(ex.list(2)).toContain(deep);
   });
 
+  it('une mission réussie se refait : de nouveau des bêtes, mais ses bonus durables ne durent que quelques jours', () => {
+    const w = continent();
+    const ex = new Expeditions(w, new Agents(w), () => 100);
+    const horses = MISSIONS.find((m) => m.id === 'horses')!, c = horses.choices[0];
+    w.exp.done.push('horses');
+    expect(ex.list(2)).toContain(horses);
+    expect(ex.why(horses, c) ?? '').not.toMatch(/déjà/);
+    const eff = redoEffects(c.win);
+    expect(eff.filter((e) => e.t === 'herd')).toEqual(c.win.filter((e) => e.t === 'herd'));
+    expect(eff.filter((e) => e.t === 'need').every((e) => e.t === 'need' && e.days === REDO_DAYS)).toBe(true);
+    expect(redoEffects(MISSIONS.find((m) => m.id === 'seeds')!.choices[0].win).some((e) => e.t === 'perk')).toBe(false);
+  });
+
+  it('les chevaux de l’écurie partent avec chaque expédition, et chacun porte ce qu’on lui confie', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 30, 0);
+    let spot: number[] | null = null;
+    for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
+    w.place('stable', spot![0], spot![1], 0, true, 2, false);
+    w.exp.herd.push('horse', 'horse');
+    w.exp.gear.sword = 3;
+    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
+    const wolf = MISSIONS.find((m) => m.id === 'wolf')!;
+    expect(ex.preview(wolf.choices[0]).label).toMatch(/3 épées · 2 chevaux/);
+    const a = ex.start(wolf, 0)!;
+    expect(a.mounts).toBe(2);
+    expect(w.exp.riding).toBe(2);
+    const kits = a.party.map((id) => agents.agents.find((g) => g.id === id)!.kit!);
+    expect(kits.filter((k) => k.horse).length).toBe(2);
+    expect(kits.every((k) => k.weapon === 'sword')).toBe(true);
+  });
+
   it('une mine rapporte du minerai chaque jour', () => {
-    const w = island();
+    const w = continent();
     let spot: number[] | null = null;
     for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 10 && !spot; x++) if (w.canPlace('mine', x, z) === null) spot = [x, z];
     w.place('mine', spot![0], spot![1], 0, true, 2, false);

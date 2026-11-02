@@ -72,9 +72,6 @@ const smooth01 = (a: number, b: number, v: number) => { const t = Math.min(1, Ma
 /** Biomes, déduits du climat (température, humidité) et du relief : ils choisissent les essences, le sol et la faune */
 export const BIOME_TEMPERATE = 0, BIOME_TAIGA = 1, BIOME_DESERT = 2, BIOME_TROPICAL = 3, BIOME_MARSH = 4;
 export const BIOME_NAMES = ['Tempéré', 'Taïga', 'Désert', 'Tropical', 'Marais'];
-/** Climat de chaque carte : axe froid → chaud (unitaire) et décalage de température ; le continent a son propre climat */
-const CLIMATE: [number, number, number][] = [[0.33, 0.94, 0.02], [0, 1, 0], [0.96, -0.28, 0.04]];
-const CONTINENT = 3;
 
 /** Hash 0..1 d'une case (orientation des décors) */
 const hashCell = (x: number, z: number) => {
@@ -85,7 +82,7 @@ const hashCell = (x: number, z: number) => {
 
 export class World {
   readonly n = N;
-  mapId = 0;
+  mapId = 3;
   seed = 1;
   heights = new Float32Array((N + 1) * (N + 1));
   occ = new Int32Array(N * N);
@@ -502,7 +499,7 @@ export class World {
   }
 
   /**
-   * Biomes : la température suit un axe propre à chaque carte et baisse avec l'altitude (taïga sur les sommets),
+   * Biomes : la température monte du nord au sud et vers l'est, et baisse avec l'altitude (taïga sur les sommets),
    * l'humidité monte près de l'eau ; le côté chaud se partage entre désert (sec) et tropiques (humide),
    * les basses terres humides au bord de l'eau deviennent des marais
    */
@@ -511,12 +508,11 @@ export class World {
     if (key !== this.climateKey) {
       this.climateKey = key;
       const st = new Simplex(this.seed * 13 + 5), sm = new Simplex(this.seed * 17 + 9);
-      const [ax, az, bias] = CLIMATE[this.mapId] ?? CLIMATE[0];
       for (let cz = 0; cz < N; cz++)
         for (let cx = 0; cx < N; cx++) {
           const u = (cx + 0.5) / N - 0.5, v = (cz + 0.5) / N - 0.5;
-          // continent : froid au nord, chaud au sud et à l'est (mesas du désert, archipel tropical)
-          const base = this.mapId === CONTINENT ? v * 1.5 + Math.max(0, u) * 1.1 - 0.05 : (u * ax + v * az) * 1.7 + bias;
+          // froid au nord, chaud au sud et à l'est (mesas du désert, archipel tropical)
+          const base = v * 1.5 + Math.max(0, u) * 1.1 - 0.05;
           this.temp[cz * N + cx] = base + st.fbm(cx * 0.03, cz * 0.03, 3) * 0.45;
           this.wet[cz * N + cx] = sm.fbm(cx * 0.04 + 50, cz * 0.04, 3) * 0.8;
         }

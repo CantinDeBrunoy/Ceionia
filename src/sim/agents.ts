@@ -4,6 +4,31 @@ import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT } from '../render/assets';
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
+import { Parts } from '../render/parts';
+import { mats } from '../render/materials';
+
+/** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
+export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'rifle'; torch?: boolean; rope?: boolean; armor?: boolean; horse?: boolean }
+
+/** Objets tenus en main (géométries partagées, en unités du monde ; le long de +y, la poignée à l'origine) */
+const propCache = new Map<string, THREE.BufferGeometry>();
+function propGeo(key: string, make: (p: Parts) => void) {
+  let g = propCache.get(key);
+  if (!g) { const p = new Parts(); make(p); g = p.build(false).body; propCache.set(key, g); }
+  return g;
+}
+const PROPS = {
+  sword: () => propGeo('sword', (p) => { p.box(0.01, 0.035, 0.01, 0, -0.012, 0, 0x6a4a34); p.box(0.045, 0.008, 0.012, 0, 0.022, 0, 0x8a8f96); p.box(0.014, 0.12, 0.005, 0, 0.03, 0, 0xd8dde2); p.box(0.006, 0.01, 0.006, 0, 0.15, 0, 0xd8dde2); }),
+  spear: () => propGeo('spear', (p) => { p.cyl(0.005, 0.006, 0.34, 5, 0, -0.12, 0, 0x8a6a4a); p.cone(0.014, 0.05, 4, 0, 0.22, 0, 0xb8bec6); }),
+  bow: () => propGeo('bow', (p) => { p.add(new THREE.TorusGeometry(0.1, 0.006, 4, 12, Math.PI).rotateZ(-Math.PI / 2), 0.02, 0.02, 0, 0x8a5a34); p.box(0.002, 0.2, 0.002, 0.02, -0.08, 0, 0xf2f2e8); }),
+  rifle: () => propGeo('rifle', (p) => { p.box(0.018, 0.08, 0.022, 0, -0.04, 0, 0x6a4a34); p.box(0.01, 0.16, 0.01, 0, 0.04, 0, 0x3c3c40); }),
+  torch: () => propGeo('torch', (p) => { p.box(0.009, 0.1, 0.009, 0, -0.03, 0, 0x6a4a34); p.cyl(0.013, 0.01, 0.02, 6, 0, 0.065, 0, 0x4a3a2e); }),
+  shield: () => propGeo('shield', (p) => { p.add(new THREE.CylinderGeometry(0.055, 0.055, 0.01, 10).rotateZ(Math.PI / 2), 0, 0.02, 0, 0x4a6aa8); p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.014, 8).rotateZ(Math.PI / 2), 0, 0.02, 0, 0xe8c66a); }),
+  rope: () => propGeo('rope', (p) => { for (const r of [0.034, 0.028]) p.add(new THREE.TorusGeometry(r, 0.006, 4, 12), 0, 0, 0, 0xc9b48a); }),
+};
+const PROP_FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
+/** hauteur de la selle (le cavalier y est assis) et allure à cheval */
+const SADDLE = 0.12, RIDE_SPEED = 1.9;
 
 const MAX_AGENTS = 90;
 /** Part de la population qu'on voit dehors (un passant pour quatre à cinq habitants), et leur nombre au plus */
@@ -77,6 +102,13 @@ interface Agent {
   /** porté (assis dans une barque…) : position et cap imposés ; et l'endroit de la berge où il est monté */
   ride: Ride | null;
   shore: [number, number] | null;
+  /** équipement d'expédition porté ; objets accrochés au modèle ; son cheval (monté en route, à brouter sur place) */
+  kit: Kit | null;
+  kitKey: string;
+  props: THREE.Object3D[];
+  mount: Actor | null;
+  mounted: boolean;
+  parked: [number, number, number] | null;
 }
 
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
@@ -338,6 +370,7 @@ export class Agents {
       id, home: h.id, x: h.x + 0.5, z: h.z + 0.5, state: 'inside', path: [], pi: 0, timer: this.rnd() * 4, hidden: true, speed: 0.9 + this.rnd() * 0.5,
       heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, actor: null, actorKey: '',
       spot: null, face: null, deck: null, child: this.rnd() < 0.22, ax: 0, az: 0, act: null, hold: null, mission: false, delay: 0, rest: 0, ride: null, shore: null,
+      kit: null, kitKey: '', props: [], mount: null, mounted: false, parked: null,
     });
   }
 
@@ -425,6 +458,18 @@ export class Agents {
     });
   }
 
+  /** Équipe un membre d'expédition (null : il rend tout, et son cheval rentre à l'écurie) */
+  equip(id: number, kit: Kit | null) {
+    const a = this.byId(id);
+    if (!a) return;
+    a.kit = kit;
+    a.mounted = !!kit?.horse;
+    if (!kit?.horse && a.mount) { a.mount.mixer.stopAllAction(); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
+  }
+
+  /** En selle (en route) ou pied à terre (sur place, le cheval broute à côté) */
+  mountParty(ids: number[], on: boolean) { for (const id of ids) { const a = this.byId(id); if (a?.kit?.horse) a.mounted = on; } }
+
   /** L'équipe disparaît de la surface (descendue sous terre) ; elle réapparaît dès qu'elle se remet en route */
   partyHide(ids: number[], hidden: boolean) { for (const id of ids) { const a = this.byId(id); if (a) { a.hidden = hidden; a.targetHidden = hidden; } } }
 
@@ -471,6 +516,7 @@ export class Agents {
       const a = this.byId(id);
       if (!a) return;
       this.ride(id, null);
+      this.equip(id, null);
       a.mission = false; a.act = null; a.delay = 0;
       if (i < injured) a.rest = rest;
       this.sendHome(a);
@@ -564,7 +610,7 @@ export class Agents {
         const [px, pz] = w.passPoint(a.path, a.pi), tx = px + (last ? 0 : a.off), tz = pz + (last ? 0 : a.off * 0.7);
         const dx = tx - a.x, dz = tz - a.z, dist = Math.hypot(dx, dz);
         // l'équipe d'une expédition marche du même pas
-        const step = dt * (a.mission ? 1.05 : a.speed) * (w.road[c] ? 1.1 : 0.8);
+        const step = dt * (a.mission ? (a.mounted ? RIDE_SPEED : 1.05) : a.speed) * (w.road[c] ? 1.1 : 0.8);
         if (dist <= step) { a.x = tx; a.z = tz; a.pi++; }
         else { a.x += (dx / dist) * step; a.z += (dz / dist) * step; a.heading = Math.atan2(dx, dz); }
         // le bâtiment visé cache l'habitant dès qu'il en atteint la case
@@ -612,7 +658,8 @@ export class Agents {
 
   /** Habitant modélisé : clone de l'époque, cap, animation selon l'activité */
   private animateActor(a: Agent, age: number, dt: number): boolean {
-    const set = AGE_VILLAGERS[Math.min(age, 4)], name = set[(a.col + a.id) % set.length];
+    // en armure, il devient chevalier
+    const set = AGE_VILLAGERS[Math.min(age, 4)], name = a.kit?.armor && hasModel('villager_knight') ? 'villager_knight' : set[(a.col + a.id) % set.length];
     if (!hasModel(name)) return false;
     const key = `${name}|${a.id}`;
     if (a.actorKey !== key) {
@@ -626,16 +673,79 @@ export class Agents {
       this.group.add(a.actor.root);
     }
     const act = a.actor!;
+    const kitKey = `${a.actorKey}|${JSON.stringify(a.kit)}`;
+    if (a.kitKey !== kitKey) { a.kitKey = kitKey; this.dress(a); }
+    const riding = this.stepMount(a, dt);
     act.root.visible = !a.hidden;
     if (a.hidden) return true;
-    act.root.position.set(a.x, this.groundY(a), a.z);
+    act.root.position.set(a.x, this.groundY(a) + (riding ? SADDLE : 0), a.z);
     act.root.rotation.y = a.heading;
     const running = a.child && (!a.act || a.act === 'run');
-    if (a.state === 'walking' || (running && a.state === 'doing')) play(act, running && a.state === 'doing' ? [...RUN, ...WALK] : WALK);
+    if (riding) play(act, SIT);
+    else if (a.state === 'walking' || (running && a.state === 'doing')) play(act, running && a.state === 'doing' ? [...RUN, ...WALK] : WALK);
     else if (a.state === 'doing') play(act, a.act === 'sit' ? SIT : a.act === 'cheer' || a.act === 'play' ? CHEER : a.act === 'stroll' || (a.mission && !a.act) ? IDLE : WORK);
     else play(act, IDLE);
     act.mixer.update(dt);
     return true;
+  }
+
+  /**
+   * Accroche au modèle ce que porte le membre : l'arme dans la main droite, la torche ou le bouclier dans la gauche, la corde
+   * en bandoulière (main des aventuriers de KayKit, bout du bras des petits personnages de Kenney)
+   */
+  private dress(a: Agent) {
+    for (const o of a.props) o.parent?.remove(o);
+    a.props = [];
+    const k = a.kit, act = a.actor;
+    if (!k || !act) return;
+    act.root.updateMatrixWorld(true);
+    // le chargeur glTF retire les points des noms : « handslot.r » devient « handslotr »
+    const find = (...names: string[]) => { let f: THREE.Object3D | null = null; act.root.traverse((o) => { if (!f && names.includes(o.name)) f = o; }); return f as THREE.Object3D | null; };
+    const hold = (geo: THREE.BufferGeometry, side: 'r' | 'l', flame = false) => {
+      const slot = find(`handslot.${side}`, `handslot${side}`), arm = find(side === 'r' ? 'arm-right' : 'arm-left'), node = slot ?? arm;
+      if (!node) return;
+      const m = new THREE.Mesh(geo, mats.body);
+      m.castShadow = true;
+      const s = new THREE.Vector3();
+      node.getWorldScale(s);
+      m.scale.setScalar(1 / Math.max(1e-6, s.x));
+      // au bout du bras des petits personnages (repère du modèle), pointé vers l'avant comme dans la main des aventuriers (la torche reste droite)
+      if (!slot) { m.position.set(side === 'r' ? -0.03 : 0.03, -0.15, 0.05); if (!flame) m.rotation.x = Math.PI / 2 - 0.3; }
+      if (flame) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.045, 5).translate(0, 0.095, 0), PROP_FLAME); m.add(f); }
+      node.add(m);
+      a.props.push(m);
+    };
+    if (k.weapon) hold(PROPS[k.weapon](), 'r');
+    if (k.torch) hold(PROPS.torch(), 'l', true);
+    else if (k.armor) hold(PROPS.shield(), 'l');
+    if (k.rope) {
+      const r = new THREE.Mesh(PROPS.rope(), mats.body);
+      r.position.set(0, HUMAN_HEIGHT * 0.55, -0.045);
+      r.rotation.z = 0.5;
+      act.root.add(r);
+      a.props.push(r);
+    }
+  }
+
+  /** Son cheval : sous lui en route ; sur place, il broute là où il a mis pied à terre. Renvoie vrai s'il est en selle */
+  private stepMount(a: Agent, dt: number) {
+    if (!a.kit?.horse || !hasModel('horse')) return false;
+    if (!a.mount) { a.mount = makeActor('horse', 0.34); if (!a.mount) return false; a.mount.mixer.setTime(a.id * 0.7); this.group.add(a.mount.root); }
+    const m = a.mount, riding = a.mounted && !a.ride && !a.hidden;
+    m.root.visible = !a.hidden;
+    if (riding) {
+      m.root.position.set(a.x, this.groundY(a), a.z);
+      m.root.rotation.y = a.heading;
+      a.parked = [a.x + Math.cos(a.heading) * 0.2, a.z - Math.sin(a.heading) * 0.2, a.heading + 0.6];
+      play(m, a.state === 'walking' ? ['Run', 'Walk', 'Idle'] : ['Idle', 'Idle_Eating']);
+    } else if (a.parked) {
+      const [x, z, h] = a.parked;
+      m.root.position.set(x, this.world.surfaceAt(x, z), z);
+      m.root.rotation.y = h;
+      play(m, ['Idle_Eating', 'Idle']);
+    }
+    m.mixer.update(dt);
+    return riding;
   }
 
   private render(age: number, dt: number) {
