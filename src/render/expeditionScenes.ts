@@ -4,7 +4,7 @@ import { Agents } from '../sim/agents';
 import { ActiveExpedition } from '../sim/expeditions';
 import { HerdKind, Scene } from '../sim/missions';
 import { Act } from '../world/gardens';
-import { makeActor, play, hasModel, Actor, ModelName, AGE_VILLAGERS } from './assets';
+import { makeActor, play, hasModel, Actor, ModelName, AGE_VILLAGERS, HUMAN } from './assets';
 import { Parts } from './parts';
 import { mats } from './materials';
 
@@ -577,7 +577,7 @@ export class ExpeditionScene {
 
   /** Un habitant d'ailleurs (voisin, nomade, moine, jongleur, astronome) qui reste à sa place et fait son geste */
   private npc(name: ModelName, x: number, z: number, face: number, anims: string[]) {
-    const actor = hasModel(name) ? makeActor(name, 0.3, 'height') : null;
+    const actor = hasModel(name) ? makeActor(name, HUMAN, 'height') : null;
     if (!actor) return null;
     actor.root.position.set(x, this.world.surfaceAt(x, z), z);
     actor.root.rotation.y = face;

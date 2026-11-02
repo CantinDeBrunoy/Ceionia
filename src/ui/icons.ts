@@ -11,6 +11,7 @@ const P: Record<string, string> = {
   demolish: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>',
   hand: '<path d="M18 11V7a2 2 0 0 0-4 0v4"/><path d="M14 10V5a2 2 0 0 0-4 0v5"/><path d="M10 10.5V7a2 2 0 0 0-4 0v7"/><path d="M18 9a2 2 0 1 1 4 0v5a8 8 0 0 1-8 8h-1c-2.6 0-4.3-.9-5.8-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15"/>',
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  check: '<path d="M5 12l5 5L20 7"/>',
   redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
   rotate: '<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
@@ -108,7 +109,7 @@ export function ic(name: string, size = 20, stroke = 1.8): string {
 export const KIND_ICON: Record<KindId, string> = {
   house: 'house', well: 'well', lamp: 'lamp', farm: 'barn', pen: 'pen', pier: 'fish', workshop: 'anvil', mill: 'windmill',
   health: 'hospital', school: 'book', fire: 'flame', gather: 'campfire', temple: 'columns', landmark: 'castle',
-  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost', lumber: 'axe', quarry: 'rock',
+  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost', lumber: 'axe', quarry: 'rock', station: 'train',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

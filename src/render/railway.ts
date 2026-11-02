@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { World, N } from '../world/world';
-import { Railway, Line, TRAIN_LEN } from '../sim/railway';
+import type { Streams } from './streams';
+import { Building, sizeOf } from '../build/catalog';
+import { Railway, Train, Stop, Seg, Leg, TRAIN_LEN, OVER } from '../sim/railway';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { Puffs } from './particles';
@@ -8,9 +10,9 @@ import { hash2 } from '../core/rng';
 
 /** pas d'échantillonnage de la voie (en cases) */
 const STEP = 0.15;
-/** voitures du train, du côté de la gare à celui de l'avant-poste : centre (cases depuis le bout du train) et demi-entraxe */
-const CARS: { kind: 'loco' | 'coach' | 'wagon'; at: number; half: number; flip?: boolean }[] = [
-  { kind: 'loco', at: 0.22, half: 0.14, flip: true },
+/** voitures du train, d'un bout à l'autre : centre (cases depuis le bout du train) et demi-entraxe */
+const CARS: { kind: 'loco' | 'coach' | 'wagon'; at: number; half: number }[] = [
+  { kind: 'loco', at: 0.22, half: 0.14 },
   { kind: 'coach', at: 0.71, half: 0.13 },
   { kind: 'wagon', at: 1.16, half: 0.1 },
   { kind: 'wagon', at: 1.58, half: 0.1 },
@@ -46,11 +48,11 @@ class Mesher {
   }
 }
 
-/** Locomotive (avant = +z) : à vapeur, chaudière noire et roues rouges, à l'âge industriel ; diesel jaune ensuite */
-function locoGeo(age: number) {
+/** Locomotive (avant = +z) : à vapeur, chaudière noire et roues rouges, à l'âge industriel ; diesel jaune ensuite ; bandeau à la couleur de la ligne */
+function locoGeo(age: number, line: number) {
   const p = new Parts();
   if (age >= 4) {
-    const body = 0xf2c84b, band = 0xd8553c;
+    const body = 0xf2f2ee, band = line;
     p.box(0.17, 0.035, 0.42, 0, 0.05, 0, 0x3c3c40);
     p.box(0.15, 0.16, 0.4, 0, 0.085, -0.01, body);
     p.box(0.152, 0.03, 0.402, 0, 0.13, -0.01, band);
@@ -71,7 +73,8 @@ function locoGeo(age: number) {
   p.sphere(0.03, 0, 0.215, 0.04, brass, 1, 0.8);
   // réservoirs latéraux et cabine
   for (const s of [-1, 1]) p.box(0.04, 0.08, 0.2, s * 0.06, 0.08, 0.04, 0x3f6a4a);
-  p.box(0.16, 0.17, 0.13, 0, 0.08, -0.14, 0x3f6a4a); p.box(0.18, 0.02, 0.16, 0, 0.25, -0.14, 0x8a2a2a);
+  p.box(0.16, 0.17, 0.13, 0, 0.08, -0.14, 0x3f6a4a); p.box(0.18, 0.02, 0.16, 0, 0.25, -0.14, line);
+  p.box(0.162, 0.02, 0.132, 0, 0.13, -0.14, line);
   for (const s of [-1, 1]) p.box(0.004, 0.045, 0.06, s * 0.081, 0.18, -0.13, 0xffe2a0, 0, true);
   for (const z of [-0.12, 0.0, 0.12]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.012, 10).rotateZ(Math.PI / 2), s * 0.075, 0.045, z, red);
   p.box(0.17, 0.035, 0.02, 0, 0.04, 0.205, red);
@@ -80,9 +83,9 @@ function locoGeo(age: number) {
   return p.build(false);
 }
 
-/** Voiture des mineurs : banquettes sous un auvent ; `riders` mineurs casqués assis dedans */
-function coachGeo(age: number, riders: number) {
-  const p = new Parts(), wood = age >= 4 ? 0x4a6a8a : 0x7a5a42, roofC = age >= 4 ? 0xd8dde2 : 0x5a4a3a;
+/** Voiture des voyageurs et des mineurs : banquettes sous un auvent à la couleur de la ligne ; `riders` passagers casqués assis dedans */
+function coachGeo(age: number, riders: number, line: number) {
+  const p = new Parts(), wood = age >= 4 ? 0x4a6a8a : 0x7a5a42, roofC = line;
   p.box(0.16, 0.03, 0.4, 0, 0.05, 0, 0x3c3c40);
   p.box(0.16, 0.012, 0.38, 0, 0.08, 0, dark(wood, 1.15));
   for (const s of [-1, 1]) p.box(0.012, 0.07, 0.38, s * 0.074, 0.08, 0, wood);
@@ -121,154 +124,344 @@ function wagonGeo(age: number, loaded: boolean) {
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
 interface Car { group: THREE.Group; meshes: THREE.Mesh[]; variants: { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null }[]; shown: number }
+interface TrainShow { group: THREE.Group; cars: Car[]; key: string; puffT: number }
+
+/** Point d'une polyligne à la distance s, et cap */
+function along(pts: [number, number][], cum: number[], s: number): [number, number, number] {
+  s = Math.max(0, Math.min(cum[cum.length - 1], s));
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+  const a = pts[lo], b = pts[hi], f = (s - cum[lo]) / Math.max(1e-6, cum[hi] - cum[lo]);
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, Math.atan2(b[0] - a[0], b[1] - a[1])];
+}
 
 /**
- * Voie ferrée et train : ballast, traverses et rails posés sur le relief de la gare à l'avant-poste, quai de chargement au
- * pied de la grotte, et le train qui fait la navette (mineurs à l'aller, minerai au retour), fumée de la locomotive
+ * Chemin de fer : les voies de chaque ligne (ballast, traverses et rails posés sur le relief adouci, platelage aux routes),
+ * l'embranchement et le quai de chargement au pied des avant-postes, des butoirs aux bouts de quai sans suite, un train par
+ * ligne à ses couleurs (fumée de la locomotive de tête), et l'aperçu de la ligne qu'on est en train de tracer
  */
 export class RailView {
   group = new THREE.Group();
   private track: THREE.Mesh | null = null;
-  private line: Line | null = null;
-  private vis = -1;
+  private built = '';
   private age = -1;
-  private ys: Float32Array = new Float32Array(0);
-  private cars: Car[] = [];
-  private train = new THREE.Group();
-  private puffs = new Puffs(160, 0);
-  private puffT = 0;
+  private stopY = new Map<number, number>();
+  private segY = new WeakMap<Seg, Float32Array>();
+  private shows = new Map<number, TrainShow>();
+  private geos = new Map<string, { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null }>();
+  private puffs = new Puffs(240, 0);
+  private preview = new THREE.Group();
+  private previewKey = '';
   private v = new THREE.Vector3();
 
+  /** torrents du relief (donnés par le jeu) : la voie les enjambe sur un ponceau */
+  streams: Streams | null = null;
+
   constructor(private world: World, private rail: Railway) {
-    this.group.add(this.train, this.puffs.mesh);
+    this.group.add(this.puffs.mesh, this.preview);
   }
 
   update(dt: number, age: number) {
-    const l = this.rail.line, w = this.world;
-    if (l !== this.line || w.visVersion !== this.vis || Math.min(age, 4) !== this.age) this.rebuild(l, Math.min(age, 4));
-    this.train.visible = !!l;
-    if (l) this.place(dt);
+    const w = this.world, a = Math.min(age, 4), key = `${this.rail.version}|${w.visVersion}|${a}|${this.streams?.version ?? 0}`;
+    if (key !== this.built) this.rebuild(key, a);
+    const live = new Set<number>();
+    for (const tr of this.rail.trains.values()) {
+      if (tr.why || !tr.leg) continue;
+      live.add(tr.line.id);
+      this.place(tr, dt);
+    }
+    for (const [id, sh] of this.shows) if (!live.has(id)) { this.group.remove(sh.group); this.shows.delete(id); }
     this.puffs.update(dt);
   }
 
-  /** Hauteur des rails à la distance s le long de la ligne */
-  private yAt(s: number) {
-    const ys = this.ys, f = Math.max(0, Math.min(ys.length - 1.001, s / STEP)), i = Math.floor(f);
-    return ys[i] + (ys[i + 1] - ys[i]) * (f - i);
+  /** Aperçu de la ligne en cours de tracé : un fil de sa couleur d'arrêt en arrêt, une borne à chaque arrêt */
+  setPreview(stops: Building[], color: number) {
+    const key = `${stops.map((b) => b.id).join('.')}|${color}`;
+    if (key === this.previewKey) return;
+    this.previewKey = key;
+    for (const o of [...this.preview.children]) { this.preview.remove(o); (o as THREE.Mesh).geometry?.dispose(); }
+    if (!stops.length) return;
+    const w = this.world, mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthTest: false });
+    const pts = stops.map((b) => { const s = sizeOf(b), x = b.x + s / 2, z = b.z + s / 2; return new THREE.Vector3(x, w.hAt(x, z) + 1.1, z); });
+    pts.forEach((p, i) => {
+      const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.02, 0.5, 8).translate(0, -0.2, 0), mat);
+      pin.position.copy(p); pin.renderOrder = 5; this.preview.add(pin);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.14 + (i === 0 ? 0.05 : 0), 10, 8), mat);
+      knob.position.copy(p).setY(p.y + 0.1); knob.renderOrder = 5; this.preview.add(knob);
+      const q = pts[i + 1];
+      if (!q) return;
+      const len = p.distanceTo(q), tube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, len, 6).rotateX(Math.PI / 2), mat);
+      tube.position.copy(p).add(q).multiplyScalar(0.5); tube.lookAt(q); tube.renderOrder = 5;
+      this.preview.add(tube);
+    });
   }
 
-  private rebuild(l: Line | null, age: number) {
-    const w = this.world, rail = this.rail;
-    this.line = l; this.vis = w.visVersion;
-    if (this.track) { this.group.remove(this.track); this.track.geometry.dispose(); this.track = null; }
-    if (age !== this.age) {
-      this.age = age;
-      for (const c of this.cars) { this.train.remove(c.group); for (const v of c.variants) { v.body.dispose(); v.glow?.dispose(); } }
-      this.cars = CARS.map((d) => {
-        const variants = d.kind === 'loco' ? [locoGeo(age)] : d.kind === 'coach' ? [coachGeo(age, 0), coachGeo(age, 6)] : [wagonGeo(age, false), wagonGeo(age, true)];
-        const group = new THREE.Group(), body = new THREE.Mesh(variants[0].body, mats.body), glow = new THREE.Mesh(variants[0].glow ?? new THREE.BufferGeometry(), mats.glow);
-        body.castShadow = true;
-        if (d.flip) { body.rotation.y = Math.PI; glow.rotation.y = Math.PI; }
-        group.add(body, glow);
-        this.train.add(group);
-        return { group, meshes: [body, glow], variants, shown: 0 };
-      });
+  // ---------- Hauteurs ----------
+
+  /** Tablier d'un pont en ce point : au-dessus de l'eau qui couvre vraiment le sol (rivière, lac, mer), ou d'un torrent ; null ailleurs (la plage reste à terre) */
+  private deckAt(x: number, z: number): number | null {
+    const w = this.world, cx = Math.floor(x), cz = Math.floor(z), d = w.deckY(cx, cz);
+    if (d !== null && w.hAt(x, z) < d - 0.35) return d;
+    if (this.streams?.covers(cz * N + cx)) return w.hAt(x, z) + 0.15;
+    return null;
+  }
+
+  /** Hauteur des rails à quai : la dalle d'une gare ; le relief adouci le long de l'embranchement d'un avant-poste */
+  private yOfStop(s: Stop) {
+    const w = this.world;
+    if (!s.post) {
+      // comme la vue des bâtiments : le bâtiment se pose à la médiane des hauteurs des coins de son emprise
+      const hs: number[] = [];
+      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) hs.push(w.h(s.b.x + i, s.b.z + j));
+      hs.sort((p, q) => p - q);
+      return hs[4] + 0.044;
     }
-    if (!l) return;
-    // hauteur des rails : le relief adouci (la voie ne suit pas chaque bosse), jamais sous le sol
-    const n = Math.max(2, Math.ceil(l.len / STEP) + 1), raw = new Float32Array(n), P: [number, number, number][] = [];
-    for (let i = 0; i < n; i++) { const p = rail.at(i * STEP); P.push(p); raw[i] = w.hAt(p[0], p[1]); }
-    this.ys = new Float32Array(n);
+    let y = -Infinity;
+    for (let t = -s.half - OVER; t <= s.half + OVER + 1e-6; t += 0.2) y = Math.max(y, w.hAt(s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t));
+    return y + 0.04;
+  }
+
+  /** Hauteurs d'un tronçon au pas STEP : relief adouci, jamais sous le sol, raccordé à la hauteur des quais à ses bouts */
+  private heights(g: Seg) {
+    const known = this.segY.get(g);
+    if (known) return known;
+    const w = this.world, n = Math.max(2, Math.ceil(g.len / STEP) + 1), raw = new Float32Array(n), ys = new Float32Array(n);
+    // sur l'eau, la voie passe sur le tablier d'un pont
+    const deck: (number | null)[] = [];
+    for (let i = 0; i < n; i++) { const p = along(g.pts, g.cum, i * STEP); deck.push(this.deckAt(p[0], p[1])); raw[i] = Math.max(w.hAt(p[0], p[1]), deck[i] ?? -Infinity); }
+    // le tablier est tendu d'une rive à l'autre, à la hauteur des berges (le plus haut à une case et demie de l'eau), jamais
+    // plus bas que le niveau d'un pont : la voie ne plonge pas vers l'eau pour remonter de l'autre côté
+    const reach = Math.round(1.5 / STEP);
+    for (let i = 0; i < n;) {
+      if (deck[i] === null) { i++; continue; }
+      let j = i;
+      while (j + 1 < n && deck[j + 1] !== null) j++;
+      let hl = -Infinity, hr = -Infinity;
+      for (let k = Math.max(0, i - reach); k < i; k++) hl = Math.max(hl, raw[k]);
+      for (let k = j + 1; k <= Math.min(n - 1, j + reach); k++) hr = Math.max(hr, raw[k]);
+      if (!isFinite(hl)) hl = hr;
+      if (!isFinite(hr)) hr = hl;
+      if (isFinite(hl)) for (let k = i; k <= j; k++) raw[k] = Math.max(raw[k], hl + ((hr - hl) * (k - i + 1)) / (j - i + 2));
+      // les abords montent au niveau du tablier en remblai
+      for (let k = Math.max(0, i - reach); k < i; k++) raw[k] = Math.max(raw[k], raw[i] - (i - k) * STEP * 0.18);
+      for (let k = j + 1; k <= Math.min(n - 1, j + reach); k++) raw[k] = Math.max(raw[k], raw[j] - (k - j) * STEP * 0.18);
+      i = j + 1;
+    }
+    const ya = this.stopY.get(g.a) ?? raw[0] + 0.04, yb = this.stopY.get(g.b) ?? raw[n - 1] + 0.04;
     for (let i = 0; i < n; i++) {
       let s = 0, c = 0;
       for (let j = Math.max(0, i - 5); j <= Math.min(n - 1, i + 5); j++) { s += raw[j]; c++; }
-      this.ys[i] = Math.max(s / c, raw[i]) + 0.04;
+      let y = Math.max(s / c, raw[i]) + 0.04;
+      const da = i * STEP, db = g.len - i * STEP;
+      if (da < 1.2) y = ya + (y - ya) * smooth(da / 1.2);
+      if (db < 1.2) y = yb + (y - yb) * smooth(db / 1.2);
+      ys[i] = y;
     }
-    const m = new Mesher(), ys = this.ys, nx = (h: number) => [Math.cos(h), -Math.sin(h)];
-    const sleeper = age >= 4 ? 0xb8b4ac : 0x6e5a4a, gravel = 0xa39a8e, steel = 0x8a8e96, shine = 0xc8ccd2;
-    for (let i = 0; i < n - 1; i++) {
-      const [x0, z0, h0] = P[i], [x1, z1, h1] = P[i + 1], [ax, az] = nx(h0), [bx, bz] = nx(h1), y0 = ys[i], y1 = ys[i + 1];
-      // point à `o` du milieu de la voie (vers la droite du sens de marche), `dy` au-dessus des rails, à l'échantillon i ou i + 1
-      const A = (o: number, dy: number) => [x0 + ax * o, y0 + dy, z0 + az * o], B = (o: number, dy: number) => [x1 + bx * o, y1 + dy, z1 + bz * o];
-      // ballast : dessus et talus jusque sous le sol (faces tournées vers le dehors)
-      const g = hash2(i, 0, 93) > 0.5 ? gravel : dark(gravel, 0.94);
-      m.quad(A(-0.2, -0.02), B(-0.2, -0.02), B(0.2, -0.02), A(0.2, -0.02), g);
-      m.quad(A(-0.2, -0.02), A(-0.32, -0.16), B(-0.32, -0.16), B(-0.2, -0.02), dark(g, 0.86));
-      m.quad(A(0.2, -0.02), B(0.2, -0.02), B(0.32, -0.16), A(0.32, -0.16), dark(g, 0.86));
-      // rails : deux barres d'acier, dessus brillant
-      for (const sd of [-0.075, 0.075]) {
-        m.quad(A(sd - 0.01, 0.022), B(sd - 0.01, 0.022), B(sd + 0.01, 0.022), A(sd + 0.01, 0.022), shine);
-        m.quad(A(sd + 0.01, -0.005), A(sd + 0.01, 0.022), B(sd + 0.01, 0.022), B(sd + 0.01, -0.005), steel);
-        m.quad(A(sd - 0.01, -0.005), B(sd - 0.01, -0.005), B(sd - 0.01, 0.022), A(sd - 0.01, 0.022), steel);
+    this.segY.set(g, ys);
+    return ys;
+  }
+
+  private segAt(g: Seg, u: number) {
+    const ys = this.heights(g), f = Math.max(0, Math.min(ys.length - 1.001, u / STEP)), i = Math.floor(f);
+    return ys[i] + (ys[i + 1] - ys[i]) * (f - i);
+  }
+
+  /** Hauteur des rails à la distance s d'un trajet */
+  private legY(l: Leg, s: number) {
+    const u = s - l.segAt;
+    if (u <= 0) return this.stopY.get(l.from.b.id) ?? 0;
+    if (u >= l.seg.len) return this.stopY.get(l.to.b.id) ?? 0;
+    return this.segAt(l.seg, l.rev ? l.seg.len - u : u);
+  }
+
+  // ---------- Les voies ----------
+
+  private rebuild(key: string, age: number) {
+    this.built = key;
+    if (this.age !== age) {
+      this.age = age;
+      for (const sh of this.shows.values()) this.group.remove(sh.group);
+      this.shows.clear();
+    }
+    if (this.track) { this.group.remove(this.track); this.track.geometry.dispose(); this.track = null; }
+    const net = this.rail.network(), w = this.world;
+    this.stopY.clear();
+    this.segY = new WeakMap();
+    for (const s of net.stops) this.stopY.set(s.b.id, this.yOfStop(s));
+    if (!net.segs.length) return;
+    const m = new Mesher(), sleeper = age >= 4 ? 0xb8b4ac : 0x6e5a4a;
+    // une voie : ballast et talus, rails, traverses, platelage aux routes, d'un point à l'autre de `at` (de a à b)
+    const lay = (at: (s: number) => [number, number, number], yAt: (s: number) => number, a: number, b: number) => {
+      const n = Math.max(1, Math.ceil((b - a) / STEP));
+      for (let i = 0; i < n; i++) {
+        const s0 = a + ((b - a) * i) / n, s1 = a + ((b - a) * (i + 1)) / n;
+        const [x0, z0, h0] = at(s0), [x1, z1, h1] = at(s1), y0 = yAt(s0), y1 = yAt(s1);
+        const ax = Math.cos(h0), az = -Math.sin(h0), bx = Math.cos(h1), bz = -Math.sin(h1);
+        // point à `o` du milieu de la voie (vers la droite du sens de marche), `dy` au-dessus des rails, au début ou à la fin du pas
+        const A = (o: number, dy: number) => [x0 + ax * o, y0 + dy, z0 + az * o], B = (o: number, dy: number) => [x1 + bx * o, y1 + dy, z1 + bz * o];
+        const xm = (x0 + x1) / 2, zm = (z0 + z1) / 2, ym = (y0 + y1) / 2, hm = Math.atan2(x1 - x0, z1 - z0), len = Math.hypot(x1 - x0, z1 - z0) + 0.006;
+        const bridge = this.deckAt(xm, zm) !== null;
+        if (bridge) {
+          // pont : tablier, poutres latérales (treillis d'acier à l'âge industriel, parapets de béton ensuite), piles plantées
+          // dans le lit de la rivière ou le fond du lac
+          const deck = age >= 4 ? 0xc8c4bc : 0x6a5a4c, beam = age >= 4 ? 0xd2cec6 : 0x3c4450, pier = age >= 4 ? 0xbab6ae : 0x9a958c;
+          // tablier continu, qui suit les courbes : dessus, rives, dessous
+          m.quad(A(-0.23, -0.02), B(-0.23, -0.02), B(0.23, -0.02), A(0.23, -0.02), deck);
+          m.quad(A(-0.23, -0.02), A(-0.23, -0.09), B(-0.23, -0.09), B(-0.23, -0.02), dark(deck, 0.82));
+          m.quad(A(0.23, -0.02), B(0.23, -0.02), B(0.23, -0.09), A(0.23, -0.09), dark(deck, 0.82));
+          m.quad(A(-0.23, -0.09), A(0.23, -0.09), B(0.23, -0.09), B(-0.23, -0.09), dark(deck, 0.7));
+          for (const sd of [-1, 1]) {
+            const bx = xm + Math.cos(hm) * 0.215 * sd, bz = zm - Math.sin(hm) * 0.215 * sd;
+            // parapet de béton, ou lisses d'acier sur leurs montants, en ruban le long de la voie
+            const o = 0.215 * sd, top = age >= 4 ? 0.04 : 0.11, bot = age >= 4 ? -0.02 : 0.095;
+            m.quad(A(o - 0.012, top), B(o - 0.012, top), B(o + 0.012, top), A(o + 0.012, top), beam);
+            m.quad(A(o + 0.012, bot), A(o + 0.012, top), B(o + 0.012, top), B(o + 0.012, bot), dark(beam, 0.85));
+            m.quad(A(o - 0.012, bot), B(o - 0.012, bot), B(o - 0.012, top), A(o - 0.012, top), dark(beam, 0.85));
+            if (age < 4 && i % 2 === 0) m.block(bx, ym - 0.02, bz, hm, 0.018, 0.13, 0.018, beam);
+          }
+          if (Math.floor(s1 / 0.7) !== Math.floor(s0 / 0.7)) {
+            const bed = Math.min(w.hAt(xm, zm), ym - 0.6);
+            m.block(xm, bed, zm, hm, 0.3, ym - 0.09 - bed, 0.12, pier);
+            m.block(xm, ym - 0.12, zm, hm, 0.4, 0.03, 0.14, dark(pier, 0.9));
+          }
+        } else {
+          const g = hash2(Math.floor(x0 * 7), Math.floor(z0 * 7), 93) > 0.5 ? 0xa39a8e : dark(0xa39a8e, 0.94);
+          m.quad(A(-0.2, -0.02), B(-0.2, -0.02), B(0.2, -0.02), A(0.2, -0.02), g);
+          // talus jusque sous le sol, plus large et plus profond là où la voie passe en remblai
+          const fill = Math.max(0, Math.min(0.5, y0 - 0.04 - w.hAt(x0, z0))), lo = -0.16 - fill, wide = 0.32 + fill * 0.8;
+          m.quad(A(-0.2, -0.02), A(-wide, lo), B(-wide, lo), B(-0.2, -0.02), dark(g, 0.86));
+          m.quad(A(0.2, -0.02), B(0.2, -0.02), B(wide, lo), A(wide, lo), dark(g, 0.86));
+        }
+        for (const sd of [-0.075, 0.075]) {
+          m.quad(A(sd - 0.01, 0.022), B(sd - 0.01, 0.022), B(sd + 0.01, 0.022), A(sd + 0.01, 0.022), 0xc8ccd2);
+          m.quad(A(sd + 0.01, -0.005), A(sd + 0.01, 0.022), B(sd + 0.01, 0.022), B(sd + 0.01, -0.005), 0x8a8e96);
+          m.quad(A(sd - 0.01, -0.005), B(sd - 0.01, -0.005), B(sd - 0.01, 0.022), A(sd - 0.01, 0.022), 0x8a8e96);
+        }
+        // caténaire (époque moderne) ou poteaux télégraphiques (âge industriel) le long de la voie
+        const side = bridge ? 0.24 : 0.3;
+        if (age >= 4) m.quad(A(-0.004, 0.4), B(-0.004, 0.4), B(0.004, 0.4), A(0.004, 0.4), 0x2a2a2e);
+        else for (const d of [-0.045, 0.045]) m.quad(A(side + 0.06 + d - 0.003, 0.36), B(side + 0.06 + d - 0.003, 0.36), B(side + 0.06 + d + 0.003, 0.36), A(side + 0.06 + d + 0.003, 0.36), 0x2a2a2e);
+        if (Math.floor(s1 / 1.4) !== Math.floor(s0 / 1.4)) {
+          const px = x1 + Math.cos(h1) * (age >= 4 ? side : side + 0.06), pz = z1 - Math.sin(h1) * (age >= 4 ? side : side + 0.06);
+          if (age >= 4) {
+            m.block(px, y1 - 0.1, pz, h1, 0.024, 0.55, 0.024, 0x8a96a2);
+            m.block(x1 + Math.cos(h1) * side * 0.5, y1 + 0.42, z1 - Math.sin(h1) * side * 0.5, h1, side + 0.02, 0.016, 0.016, 0x8a96a2);
+            m.block(x1, y1 + 0.39, z1, h1, 0.012, 0.03, 0.012, 0x5d6878);
+          } else {
+            m.block(px, y1 - 0.1, pz, h1, 0.026, 0.5, 0.026, 0x6a5040);
+            m.block(px, y1 + 0.34, pz, h1, 0.16, 0.016, 0.016, 0x6a5040);
+            for (const d of [-0.045, 0.045]) m.block(px + Math.cos(h1) * d, y1 + 0.355, pz - Math.sin(h1) * d, h1, 0.01, 0.012, 0.01, 0xe8e4dc);
+          }
+        }
+        if (i % 2 === 0) {
+          m.block(x0, y0 - 0.02, z0, h0, 0.3, 0.025, 0.05, sleeper);
+          if (w.road[Math.floor(z0) * N + Math.floor(x0)]) m.block(x0, y0 - 0.015, z0, h0, 0.42, 0.035, 0.3, 0x8a7a6a);
+        }
       }
-      // traverses, et un platelage là où la voie croise une route
-      const cell = Math.floor(z0) * N + Math.floor(x0);
-      if (i % 2 === 0) m.block(x0, y0 - 0.02, z0, h0, 0.3, 0.025, 0.05, sleeper);
-      if (w.road[cell] && i % 2 === 0) m.block(x0, y0 - 0.015, z0, h0, 0.42, 0.035, 0.3, 0x8a7a6a);
-    }
-    // butoir et quai de chargement au pied de la grotte : planches, caisses, tas de minerai, wagonnet
-    const [ex, ez, eh] = P[n - 1], ey = ys[n - 1];
-    m.block(ex + Math.sin(eh) * 0.05, ey - 0.02, ez + Math.cos(eh) * 0.05, eh, 0.24, 0.12, 0.05, 0x3c3c40);
-    m.block(ex + Math.sin(eh) * 0.02, ey + 0.08, ez + Math.cos(eh) * 0.02, eh, 0.3, 0.06, 0.03, 0xd8553c);
-    for (const sd of [-0.08, 0.08]) m.block(ex + Math.sin(eh) * 0.02 + Math.cos(eh) * sd, ey + 0.1, ez + Math.cos(eh) * 0.02 - Math.sin(eh) * sd, eh, 0.06, 0.03, 0.035, 0xf2f2f2);
-    const side = this.quaySide(P, n);
-    for (let s = Math.max(0, l.len - TRAIN_LEN); s < l.len; s += 0.3) {
-      const i = Math.min(n - 1, Math.round(s / STEP)), [qx, qz, qh] = P[i], [ux, uz] = nx(qh);
-      m.block(qx + ux * side * 0.36, ys[i] - 0.06, qz + uz * side * 0.36, qh, 0.26, 0.1, 0.29, dark(0xa07a56, 0.9 + hash2(i, 5, 93) * 0.2));
-    }
-    {
-      const i = Math.max(0, n - 1 - Math.round(0.5 / STEP)), [qx, qz, qh] = P[i], [ux, uz] = nx(qh), y = ys[i] + 0.04;
-      m.block(qx + ux * side * 0.4, y, qz + uz * side * 0.4, qh + 0.3, 0.1, 0.08, 0.1, 0xa07a56);
-      m.block(qx + ux * side * 0.4, y + 0.08, qz + uz * side * 0.4, qh + 0.9, 0.07, 0.06, 0.07, 0x8a6a46);
-      const j = Math.max(0, n - 1 - Math.round(1.4 / STEP)), [rx, rz, rh] = P[j], [vx, vz] = nx(rh);
-      m.block(rx + vx * side * 0.4, ys[j] + 0.04, rz + vz * side * 0.4, rh, 0.16, 0.06, 0.2, 0x4a4a50);
-      m.block(rx + vx * side * 0.4, ys[j] + 0.1, rz + vz * side * 0.4, rh + 0.4, 0.12, 0.05, 0.14, 0x6a6660);
+    };
+    const buffer = (x: number, y: number, z: number, h: number) => {
+      m.block(x, y - 0.02, z, h, 0.24, 0.12, 0.05, 0x3c3c40);
+      m.block(x, y + 0.08, z, h, 0.3, 0.06, 0.03, 0xd8553c);
+      for (const sd of [-0.08, 0.08]) m.block(x + Math.cos(h) * sd, y + 0.1, z - Math.sin(h) * sd, h, 0.06, 0.03, 0.035, 0xf2f2f2);
+    };
+    for (const g of net.segs) lay((s) => along(g.pts, g.cum, s), (s) => this.segAt(g, s), 0, g.len);
+    for (const s of net.stops) {
+      const y = this.stopY.get(s.b.id)!, used = net.used.get(s.b.id) ?? new Set<number>(), h = Math.atan2(s.u[0], s.u[1]);
+      const pt = (t: number): [number, number, number] => [s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t, h];
+      if (s.post) {
+        // embranchement de l'avant-poste, quai de planches côté murs, wagonnet et tas de minerai
+        lay(pt, () => y, -s.half - OVER, s.half + OVER);
+        const sx = s.b.x + 1 - s.c[0], sz = s.b.z + 1 - s.c[1], side = Math.cos(h) * sx - Math.sin(h) * sz > 0 ? 1 : -1;
+        for (let t = -s.half; t < s.half; t += 0.3) {
+          const [qx, qz] = pt(t + 0.15);
+          m.block(qx + Math.cos(h) * side * 0.36, y - 0.06, qz - Math.sin(h) * side * 0.36, h, 0.26, 0.1, 0.29, dark(0xa07a56, 0.9 + hash2(Math.floor(t * 10), 5, 93) * 0.2));
+        }
+        const [ox, oz] = pt(s.half * 0.5), [cx, cz] = pt(-s.half * 0.4);
+        m.block(ox + Math.cos(h) * side * 0.4, y + 0.04, oz - Math.sin(h) * side * 0.4, h + 0.3, 0.1, 0.08, 0.1, 0xa07a56);
+        m.block(ox + Math.cos(h) * side * 0.4, y + 0.12, oz - Math.sin(h) * side * 0.4, h + 0.9, 0.07, 0.06, 0.07, 0x8a6a46);
+        m.block(cx + Math.cos(h) * side * 0.4, y + 0.04, cz - Math.sin(h) * side * 0.4, h, 0.16, 0.06, 0.2, 0x4a4a50);
+        m.block(cx + Math.cos(h) * side * 0.4, y + 0.1, cz - Math.sin(h) * side * 0.4, h + 0.4, 0.12, 0.05, 0.14, 0x6a6660);
+        for (const e of [1, -1]) if (!used.has(e)) { const [bx, bz] = pt(e * (s.half + OVER)); buffer(bx, y, bz, h); }
+      } else {
+        // gare : la voie du quai se prolonge d'un bout de voie et d'un butoir là où aucune ligne ne repart
+        for (const e of [1, -1]) {
+          if (used.has(e)) continue;
+          lay(pt, () => y, e > 0 ? s.half : -s.half - OVER - 0.1, e > 0 ? s.half + OVER + 0.1 : -s.half);
+          const [bx, bz] = pt(e * (s.half + OVER + 0.1));
+          buffer(bx, y, bz, h);
+        }
+      }
     }
     this.track = new THREE.Mesh(m.geometry(), mats.body);
     this.track.receiveShadow = true;
     this.group.add(this.track);
   }
 
-  /** Côté du quai à l'avant-poste : celui où le sol est libre */
-  private quaySide(P: [number, number, number][], n: number) {
-    const w = this.world, [x, z, h] = P[Math.max(0, n - 1 - Math.round(1 / STEP))];
-    for (const sd of [1, -1]) {
-      const cx = Math.floor(x + Math.cos(h) * sd * 0.45), cz = Math.floor(z - Math.sin(h) * sd * 0.45);
-      if (w.inCells(cx, cz) && !w.occ[cz * N + cx] && !w.decor[cz * N + cx]) return sd;
+  // ---------- Les trains ----------
+
+  private geo(kind: 'loco' | 'coach' | 'wagon', variant: number, color: number) {
+    const key = `${kind}|${variant}|${this.age}|${color}`;
+    let g = this.geos.get(key);
+    if (!g) {
+      g = kind === 'loco' ? locoGeo(this.age, color) : kind === 'coach' ? coachGeo(this.age, variant ? 6 : 0, color) : wagonGeo(this.age, !!variant);
+      this.geos.set(key, g);
     }
-    return 1;
+    return g;
+  }
+
+  private show(tr: Train): TrainShow {
+    const key = `${this.age}|${tr.line.color}`;
+    let sh = this.shows.get(tr.line.id);
+    if (sh?.key === key) return sh;
+    if (sh) this.group.remove(sh.group);
+    const group = new THREE.Group();
+    const cars = CARS.map((d) => {
+      const g = this.geo(d.kind, 0, tr.line.color), cg = new THREE.Group();
+      const body = new THREE.Mesh(g.body, mats.body), glow = new THREE.Mesh(g.glow ?? new THREE.BufferGeometry(), mats.glow);
+      body.castShadow = true;
+      cg.add(body, glow);
+      group.add(cg);
+      return { group: cg, meshes: [body, glow], variants: [], shown: 0 };
+    });
+    sh = { group, cars, key, puffT: 0 };
+    this.group.add(group);
+    this.shows.set(tr.line.id, sh);
+    return sh;
   }
 
   /** Chaque voiture posée sur ses deux essieux, penchée dans les pentes ; fumée de la locomotive de tête */
-  private place(dt: number) {
-    const r = this.rail, moving = r.phase === 'down' || r.phase === 'up';
-    // la relève attend sur le quai : on ne la voit assise qu'une fois le train parti
-    const riders = r.phase === 'down' ? r.riders.length : r.phase === 'station' ? 0 : r.up.length;
-    const loaded = r.cargo.ore + r.cargo.stone > 0;
+  private place(tr: Train, dt: number) {
+    const sh = this.show(tr), leg = tr.leg!, r = this.rail, k = tr.flip ? -1 : 1;
+    const seated = r.seated(tr), loaded = tr.cargo.ore + tr.cargo.stone > 0;
     CARS.forEach((d, i) => {
-      const car = this.cars[i];
-      if (!car) return;
-      const s = r.pos + d.at, f = r.at(s + d.half), b = r.at(s - d.half), yf = this.yAt(s + d.half), yb = this.yAt(s - d.half);
+      const car = sh.cars[i], s = tr.s + (d.at - TRAIN_LEN / 2) * k;
+      const f = r.at(leg, s + d.half), b = r.at(leg, s - d.half), yf = this.legY(leg, s + d.half), yb = this.legY(leg, s - d.half);
       car.group.position.set((f[0] + b[0]) / 2, (yf + yb) / 2, (f[1] + b[1]) / 2);
       car.group.rotation.set(0, 0, 0);
       car.group.rotateY(Math.atan2(f[0] - b[0], f[1] - b[1]));
       car.group.rotateX(-Math.atan2(yf - yb, d.half * 2));
-      const want = d.kind === 'coach' ? +(riders > 0) : d.kind === 'wagon' ? +loaded : 0;
-      if (want !== car.shown && car.variants[want]) {
+      // les locomotives regardent vers l'extérieur du train
+      const out = (d.at - TRAIN_LEN / 2) * k < 0;
+      for (const mesh of car.meshes) mesh.rotation.y = d.kind === 'loco' && out ? Math.PI : 0;
+      const want = d.kind === 'coach' ? +(seated > 0) : d.kind === 'wagon' ? +loaded : 0;
+      if (want !== car.shown) {
         car.shown = want;
-        car.meshes[0].geometry = car.variants[want].body;
-        car.meshes[1].geometry = car.variants[want].glow ?? new THREE.BufferGeometry();
+        const g = this.geo(d.kind, want, tr.line.color);
+        car.meshes[0].geometry = g.body;
+        car.meshes[1].geometry = g.glow ?? new THREE.BufferGeometry();
       }
     });
     // à vapeur : la locomotive de tête fume, beaucoup au démarrage, un filet à quai
     if (this.age >= 4) return;
-    this.puffT -= dt * (moving ? 2 + r.speed * 3 : 0.6);
-    if (this.puffT > 0) return;
-    this.puffT = 1;
-    const lead = this.cars[r.phase === 'up' || r.phase === 'station' ? 0 : 4];
-    if (!lead) return;
-    this.v.set(0, 0.32, lead === this.cars[0] ? -0.15 : 0.15);
-    lead.group.localToWorld(this.v);
+    const moving = tr.phase === 'run';
+    sh.puffT -= dt * (moving ? 2 + tr.speed * 3 : 0.6);
+    if (sh.puffT > 0) return;
+    sh.puffT = 1;
+    const lead = k > 0 ? 4 : 0, car = sh.cars[lead], ahead = (CARS[lead].at - TRAIN_LEN / 2) * k > 0;
+    this.v.set(0, 0.32, ahead ? 0.15 : -0.15);
+    car.group.localToWorld(this.v);
     this.puffs.spawn(this.v.x, this.v.y, this.v.z, (Math.random() - 0.5) * 0.06, 0.45 + Math.random() * 0.15, (Math.random() - 0.5) * 0.06, 0.045, 1.4 + Math.random() * 0.6, SMOKE, 0, { grow: 2.2, drag: 0.5, wind: 0.15, alpha: 0.45 });
   }
 }
+
+function smooth(t: number) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }

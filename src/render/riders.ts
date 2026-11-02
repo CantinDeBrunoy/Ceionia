@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Parts } from './parts';
 import { mats } from './materials';
+import { HUMAN_K } from './assets';
 
 /**
  * Cavaliers de la charge de cavalerie, dans le style des chevaliers qui joutent dans les jardins : cheval low-poly aux jambes
@@ -153,8 +154,10 @@ export function makeRider(age: number, v = 0): Rider {
     p.box(0.016, 0.012, 0.008, 0, 0.435, 0.03, 0xfff4d0, 0, true);
     weapon = carbine(); kind = 'rifle'; hand = [-0.048, 0.3, 0.08];
   }
+  // cheval et cavalier dessinés pour des habitants de 0,3 : le cavalier rapetisse avec eux, le cheval un peu moins
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
+  root.scale.setScalar((1 + HUMAN_K) / 2);
   const built = p.build(false);
   const hull = new THREE.Mesh(built.body, mats.body);
   hull.castShadow = true;

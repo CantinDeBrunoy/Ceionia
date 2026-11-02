@@ -532,7 +532,7 @@ export class Expeditions {
   whyCraft(g: Gear, age: number): string | null {
     if (age < g.age) return `Connu à l’âge ${AGES[g.age].name}`;
     if (g.needs && !this.has(g.needs)) return `Il faut : ${KINDS[g.needs].names[Math.min(age, 4)].toLowerCase()}`;
-    if (this.world.ore < g.ore) return `Il faut ${g.ore} minerai`;
+    if (!this.world.unlimited && this.world.ore < g.ore) return `Il faut ${g.ore} minerai`;
     if (this.world.exp.craft.length >= MAX_CRAFT) return 'L’atelier a déjà assez de travail';
     return null;
   }
@@ -541,7 +541,7 @@ export class Expeditions {
   craft(id: GearId, age: number) {
     const g = GEAR_BY[id];
     if (this.whyCraft(g, age)) return false;
-    this.world.ore -= g.ore;
+    if (!this.world.unlimited) this.world.ore -= g.ore;
     this.world.exp.craft.push(id);
     return true;
   }

@@ -42,6 +42,10 @@ export class Streams {
   /** Relief « rempli » : chaque creux monté jusqu'à son débordement (toute pente y mène à la mer ou à un bord) */
   private filled = new Float32Array(0);
   lakes: Lake[] = [];
+  /** cases que traverse un torrent, et leur version (la voie ferrée les enjambe sur un ponceau) */
+  private streamCells = new Set<number>();
+  version = 0;
+  covers(k: number) { return this.streamCells.has(k); }
 
   constructor(private world: World, waterNormal: THREE.Texture | null) {
     const lakeMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.12, metalness: 0, depthWrite: false, normalMap: waterNormal, normalScale: new THREE.Vector2(0.3, 0.3) });
@@ -216,6 +220,12 @@ export class Streams {
       if (si % 3 === 2) yield;
     }
     this.sprays = sprays; this.samples = samples; this.paths = paths;
+    this.streamCells = new Set();
+    for (const p of paths) for (let i = 1; i < p.length; i++) {
+      const [ax, az] = p[i - 1], [bx, bz] = p[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.25));
+      for (let k = 0; k <= n; k++) this.streamCells.add(Math.floor(az + ((bz - az) * k) / n) * N + Math.floor(ax + ((bx - ax) * k) / n));
+    }
+    this.version++;
     this.flowMesh.geometry.dispose();
     this.flowMesh.geometry = geos.length ? mergeRibbons(geos) : new THREE.BufferGeometry();
     this.buildBridges();

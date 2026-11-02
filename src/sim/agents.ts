@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
-import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT } from '../render/assets';
+import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT, HUMAN, HUMAN_K } from '../render/assets';
 import { makeRider, rideStep, Rider } from '../render/riders';
+import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
 import { Parts } from '../render/parts';
 import { mats } from '../render/materials';
@@ -30,7 +31,8 @@ const PROPS = {
 };
 const PROP_FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 /** hauteur de la selle (le cavalier y est assis) et allure à cheval */
-const SADDLE = 0.12, RIDE_SPEED = 1.9;
+/** hauteur de la selle (le cheval garde sa taille ; un cavalier plus petit s'assied plus haut sur son pas) */
+const SADDLE = 0.12 + 0.42 * (0.3 - HUMAN), RIDE_SPEED = 1.9;
 
 const MAX_AGENTS = 90;
 /** Part de la population qu'on voit dehors (un passant pour quatre à cinq habitants), et leur nombre au plus */
@@ -43,7 +45,9 @@ const RUN = ['Running_A', 'sprint', 'Run', 'Man_Run', 'Female_Run'];
 const IDLE = ['Idle', 'idle', 'Man_Idle', 'Female_Idle'];
 const WORK = ['Interact', 'interact-right', 'Use_Item', 'pick-up', 'Man_Clapping', 'Female_Clapping', 'Wave', 'Idle'];
 const CHEER = ['Cheer', 'emote-yes', 'Wave', 'Idle', 'idle'];
-const HUMAN_HEIGHT = 0.3;
+const HUMAN_HEIGHT = HUMAN;
+/** les bancs sont faits pour des habitants de 0,3 : assis, un habitant plus petit se pose un peu plus haut */
+const SIT_LIFT = 0.4 * (0.3 - HUMAN);
 
 const BODY_COLS = [
   [0xb98a5e, 0xa07850, 0xc9a070],
@@ -113,6 +117,8 @@ interface Agent {
   parked: [number, number, number] | null;
   /** cavalier de l'époque, cheval compris, qui le remplace en selle (charge de cavalerie) */
   rider: Rider | null;
+  /** en armure et à pied, le soldat de l'époque (légionnaire, chevalier, fantassin, militaire) prend sa place */
+  soldier: Soldier | null;
 }
 
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
@@ -172,9 +178,9 @@ export class Agents {
   private pathBudget = 0;
 
   constructor(private world: World) {
-    this.body = new THREE.InstancedMesh(new THREE.ConeGeometry(0.075, 0.2, 6).translate(0, 0.1, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
-    this.head = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.052, 0).translate(0, 0.25, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
-    this.tool = new THREE.InstancedMesh(new THREE.BoxGeometry(0.014, 0.26, 0.014).translate(0, 0.13, 0), new THREE.MeshStandardMaterial({ color: 0x8a6a4e, flatShading: true }), MAX_AGENTS);
+    this.body = new THREE.InstancedMesh(new THREE.ConeGeometry(0.075, 0.2, 6).translate(0, 0.1, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
+    this.head = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.052, 0).translate(0, 0.25, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
+    this.tool = new THREE.InstancedMesh(new THREE.BoxGeometry(0.014, 0.26, 0.014).translate(0, 0.13, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0x8a6a4e, flatShading: true }), MAX_AGENTS);
     for (const m of [this.body, this.head, this.tool]) { m.frustumCulled = false; m.castShadow = true; m.count = 0; this.group.add(m); }
   }
 
@@ -182,6 +188,7 @@ export class Agents {
 
   private dropActor(a: Agent) {
     if (a.rider) { this.group.remove(a.rider.root); a.rider = null; }
+    if (a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
     if (!a.actor) return;
     a.actor.mixer.stopAllAction();
     this.group.remove(a.actor.root);
@@ -375,7 +382,7 @@ export class Agents {
       id, home: h.id, x: h.x + 0.5, z: h.z + 0.5, state: 'inside', path: [], pi: 0, timer: this.rnd() * 4, hidden: true, speed: 0.9 + this.rnd() * 0.5,
       heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, actor: null, actorKey: '',
       spot: null, face: null, deck: null, child: this.rnd() < 0.22, ax: 0, az: 0, act: null, hold: null, mission: false, delay: 0, rest: 0, ride: null, shore: null,
-      kit: null, kitKey: '', props: [], mount: null, mounted: false, parked: null, rider: null,
+      kit: null, kitKey: '', props: [], mount: null, mounted: false, parked: null, rider: null, soldier: null,
     });
   }
 
@@ -471,6 +478,7 @@ export class Agents {
     a.mounted = !!kit?.horse;
     if (!kit?.horse && a.mount) { a.mount.mixer.stopAllAction(); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
     if (!kit?.rider && a.rider) { this.group.remove(a.rider.root); a.rider = null; }
+    if (!kit?.armor && a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
   }
 
   /** En selle (en route) ou pied à terre (sur place, le cheval broute à côté) */
@@ -478,6 +486,17 @@ export class Agents {
 
   /** L'équipe disparaît de la surface (descendue sous terre) ; elle réapparaît dès qu'elle se remet en route */
   partyHide(ids: number[], hidden: boolean) { for (const id of ids) { const a = this.byId(id); if (a) { a.hidden = hidden; a.targetHidden = hidden; } } }
+
+  /** L'équipe posée en (x, z), à quelques pas les uns des autres (descendue d'un train) : elle repart de là */
+  partyPlace(ids: number[], x: number, z: number) {
+    ids.forEach((id, i) => {
+      const a = this.byId(id);
+      if (!a) return;
+      const ang = i * 2.4;
+      a.x = x + Math.cos(ang) * 0.18; a.z = z + Math.sin(ang) * 0.18;
+      a.path = []; a.spot = null; a.ride = null; a.shore = null;
+    });
+  }
 
   /** Toute l'équipe est arrivée (ou s'est arrêtée faute de chemin) */
   partyDone(ids: number[]) { return ids.every((id) => { const a = this.byId(id); return !a || a.state !== 'walking'; }); }
@@ -513,6 +532,13 @@ export class Agents {
     }
   }
 
+  /** Hauteur où se tient le premier membre visible de l'équipe : assis dans une barque, sur un ponton, ou au sol */
+  partyLeadY(ids: number[]) {
+    const a = ids.map((id) => this.byId(id)).find((x): x is Agent => !!x && !x.hidden);
+    if (!a) return null;
+    return a.ride ? a.ride.y : a.deck ?? this.world.surfaceAt(a.x, a.z);
+  }
+
   /** Positions des membres de l'équipe, dans l'ordre de marche */
   partyPositions(ids: number[]) { return ids.map((id) => this.byId(id)).filter((a): a is Agent => !!a && !a.hidden).map((a) => [a.x, a.z, a.heading] as [number, number, number]); }
 
@@ -536,7 +562,7 @@ export class Agents {
     const i = this.pick(free);
     if (i === undefined) return null;
     const s = this.gspots[i];
-    return { cell: Math.floor(s.z) * N + Math.floor(s.x), hidden: false, spot: [s.x, s.z], face: s.face, deck: s.seat ? this.world.hAt(s.x, s.z) + s.seat : undefined, act: s.act, hold: `g${i}` };
+    return { cell: Math.floor(s.z) * N + Math.floor(s.x), hidden: false, spot: [s.x, s.z], face: s.face, deck: s.seat ? this.world.hAt(s.x, s.z) + s.seat + (s.act === 'sit' ? SIT_LIFT : 0) : undefined, act: s.act, hold: `g${i}` };
   }
 
   private release(a: Agent) {
@@ -664,8 +690,8 @@ export class Agents {
 
   /** Habitant modélisé : clone de l'époque, cap, animation selon l'activité */
   private animateActor(a: Agent, age: number, dt: number): boolean {
-    // en armure, il devient chevalier
-    const set = AGE_VILLAGERS[Math.min(age, 4)], name = a.kit?.armor && hasModel('villager_knight') ? 'villager_knight' : set[(a.col + a.id) % set.length];
+    // en armure et à cheval, il devient chevalier (à pied, le soldat de l'époque prend sa place)
+    const set = AGE_VILLAGERS[Math.min(age, 4)], name = a.kit?.armor && a.kit.horse && hasModel('villager_knight') ? 'villager_knight' : set[(a.col + a.id) % set.length];
     if (!hasModel(name)) return false;
     const key = `${name}|${a.id}`;
     if (a.actorKey !== key) {
@@ -683,6 +709,7 @@ export class Agents {
     if (a.kitKey !== kitKey) { a.kitKey = kitKey; this.dress(a); }
     // charge de cavalerie : en selle, le cavalier de l'époque (cheval compris) prend sa place
     if (this.stepRider(a, age)) { act.root.visible = false; return true; }
+    if (this.stepSoldier(a, age)) { act.root.visible = false; return true; }
     const riding = this.stepMount(a, dt);
     act.root.visible = !a.hidden;
     if (a.hidden) return true;
@@ -716,7 +743,8 @@ export class Agents {
       m.castShadow = true;
       const s = new THREE.Vector3();
       node.getWorldScale(s);
-      m.scale.setScalar(1 / Math.max(1e-6, s.x));
+      // les accessoires sont dessinés pour des habitants de 0,3
+      m.scale.setScalar(HUMAN_K / Math.max(1e-6, s.x));
       // au bout du bras des petits personnages (repère du modèle), pointé vers l'avant comme dans la main des aventuriers (la torche reste droite)
       if (!slot) { m.position.set(side === 'r' ? -0.03 : 0.03, -0.15, 0.05); if (!flame) m.rotation.x = Math.PI / 2 - 0.3; }
       if (flame) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.045, 5).translate(0, 0.095, 0), PROP_FLAME); m.add(f); }
@@ -728,7 +756,8 @@ export class Agents {
     else if (k.armor) hold(PROPS.shield(), 'l');
     if (k.rope) {
       const r = new THREE.Mesh(PROPS.rope(), mats.body);
-      r.position.set(0, HUMAN_HEIGHT * 0.55, -0.045);
+      r.position.set(0, HUMAN_HEIGHT * 0.55, -0.045 * HUMAN_K);
+      r.scale.setScalar(HUMAN_K);
       r.rotation.z = 0.5;
       act.root.add(r);
       a.props.push(r);
@@ -748,6 +777,22 @@ export class Agents {
     a.rider.root.position.set(a.x, this.groundY(a), a.z);
     a.rider.root.rotation.y = a.heading;
     rideStep(a.rider, a.phase * 1.6, a.state === 'walking' ? 1 : 0, 'rest');
+    return true;
+  }
+
+  /** Le soldat de l'époque qui remplace un membre en armure tant qu'il va à pied ; vrai s'il est affiché */
+  private stepSoldier(a: Agent, age: number) {
+    const on = !!a.kit?.armor && !(a.kit.horse && a.mounted) && !a.ride && !a.hidden;
+    if (a.soldier && (!on || a.soldier.root.userData.age !== Math.min(age, 4))) { this.group.remove(a.soldier.root); a.soldier = null; }
+    if (!on) return false;
+    if (!a.soldier) {
+      a.soldier = makeSoldier(age, a.id, !!a.kit?.torch);
+      a.soldier.root.userData.age = Math.min(age, 4);
+      this.group.add(a.soldier.root);
+    }
+    a.soldier.root.position.set(a.x, this.groundY(a), a.z);
+    a.soldier.root.rotation.y = a.heading;
+    soldierStep(a.soldier, a.phase * 1.6, a.state === 'walking' ? 'walk' : a.act === 'cheer' ? 'cheer' : a.act === 'work' ? 'fight' : 'guard');
     return true;
   }
 

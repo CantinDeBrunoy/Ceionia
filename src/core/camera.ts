@@ -31,8 +31,8 @@ export class CameraRig {
   keys = new Set<string>();
   handler: ToolInput | null = null;
   enabled = true;
-  /** bornes du zoom (resserrées sous terre) */
-  minDist = 10;
+  /** bornes du zoom (resserrées sous terre) : on peut s'approcher tout près des habitants */
+  minDist = 3.2;
   maxDist = maxDistFor();
   /** inclinaison minimale (vue plus plongeante sous terre, pour voir par-dessus les parois) */
   minPitch = 0.25;
@@ -218,6 +218,9 @@ export class CameraRig {
       this.target.z + Math.cos(this.yaw) * cp * this.dist,
     );
     this.camera.lookAt(this.target);
+    // de tout près, le plan de coupe proche se rapproche aussi (sinon il tranche les premiers plans)
+    const near = Math.min(0.5, Math.max(0.1, this.dist * 0.04));
+    if (Math.abs(near - this.camera.near) > 0.01) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
   }
 
   resize(w: number, h: number) {

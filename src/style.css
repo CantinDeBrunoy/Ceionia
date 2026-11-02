@@ -282,6 +282,22 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 #campQuest .bar i, .quests .bar i { display: block; height: 100%; background: var(--accent); }
 .campStats { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 10px; font-size: 12.5px; }
 .campStats > b { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 14px; }
+.lineDot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px #fff8, 0 1px 2px #0003; }
+.rcard { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.rhead { display: flex; align-items: center; gap: 8px; }
+#selCard .rails { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: grid; gap: 6px; }
+#selCard .rails > b { display: flex; align-items: center; gap: 6px; }
+#selCard .rline { display: flex; align-items: center; gap: 8px; }
+#selCard .rline span { display: block; font-weight: 600; }
+#selCard .rline small { display: block; color: var(--ink2); }
+#selCard .rline button { padding: 4px 6px; }
+#selCard .newline { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; }
+#railEdit { display: none; position: absolute; top: 92px; left: 50%; transform: translateX(-50%); width: min(460px, 92vw); padding: 10px 14px 12px; font-size: 12.5px; z-index: 6; }
+#railEdit.show { display: block; animation: rise 0.16s ease-out; }
+#railEdit p { margin: 6px 0 2px; font-weight: 600; font-size: 13.5px; }
+#railEdit small { color: var(--ink2); }
+#railEdit .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#railEdit .acts button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; }
 .railBox { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; }
 .railBox h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 14px; }
 .railBox .campStats { margin: 6px 0 8px; }

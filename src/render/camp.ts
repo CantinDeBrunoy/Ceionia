@@ -4,6 +4,7 @@ import { caveLit } from './caveLight';
 import { N } from '../world/world';
 import { Underground, POOL_WATER } from '../world/underground';
 import { hash2 } from '../core/rng';
+import { HUMAN_K } from './assets';
 
 /**
  * Camp souterrain : il se dresse de lui-même au pied du puits du premier avant-poste et grandit avec ses quêtes (voir
@@ -12,7 +13,8 @@ import { hash2 } from '../core/rng';
  */
 
 export type CampPiece = 'fire' | 'tent' | 'crates' | 'tower' | 'barricade' | 'banner' | 'forge' | 'carts' | 'orepile'
-  | 'barracks' | 'brazier' | 'infirmary' | 'crystal' | 'lift' | 'shrine' | 'smelter' | 'warehouse' | 'keep' | 'statue';
+  | 'barracks' | 'brazier' | 'infirmary' | 'crystal' | 'lift' | 'shrine' | 'smelter' | 'warehouse' | 'keep' | 'statue'
+  | 'rack' | 'barrels' | 'lantern' | 'bedrolls' | 'table' | 'woodpile' | 'dummy' | 'sacks' | 'cauldron';
 
 /** Pièces dans l'ordre où elles s'ajoutent : niveau du camp requis, rayon d'emprise, distance au puits (en pas, min et max) */
 const PIECES: { kind: CampPiece; level: number; r: number; near: [number, number] }[] = [
@@ -20,31 +22,56 @@ const PIECES: { kind: CampPiece; level: number; r: number; near: [number, number
   { kind: 'tent', level: 1, r: 0.42, near: [1, 4] },
   { kind: 'tent', level: 1, r: 0.42, near: [1, 4] },
   { kind: 'crates', level: 1, r: 0.3, near: [1, 4] },
+  { kind: 'bedrolls', level: 1, r: 0.24, near: [1, 3] },
+  { kind: 'rack', level: 1, r: 0.2, near: [1, 4] },
+  { kind: 'barrels', level: 1, r: 0.16, near: [1, 4] },
+  { kind: 'lantern', level: 1, r: 0.1, near: [2, 5] },
   { kind: 'tower', level: 2, r: 0.42, near: [3, 7] },
   { kind: 'barricade', level: 2, r: 0.5, near: [4, 8] },
   { kind: 'barricade', level: 2, r: 0.5, near: [4, 8] },
   { kind: 'banner', level: 2, r: 0.2, near: [1, 3] },
+  { kind: 'table', level: 2, r: 0.26, near: [1, 5] },
+  { kind: 'woodpile', level: 2, r: 0.2, near: [2, 6] },
+  { kind: 'lantern', level: 2, r: 0.1, near: [3, 7] },
   { kind: 'forge', level: 3, r: 0.48, near: [2, 6] },
   { kind: 'carts', level: 3, r: 0.55, near: [2, 6] },
   { kind: 'orepile', level: 3, r: 0.3, near: [2, 6] },
+  { kind: 'dummy', level: 3, r: 0.18, near: [2, 6] },
+  { kind: 'sacks', level: 3, r: 0.18, near: [2, 6] },
+  { kind: 'lantern', level: 3, r: 0.1, near: [3, 8] },
   { kind: 'barracks', level: 4, r: 0.72, near: [2, 7] },
   { kind: 'brazier', level: 4, r: 0.18, near: [1, 5] },
   { kind: 'brazier', level: 4, r: 0.18, near: [2, 6] },
   { kind: 'brazier', level: 4, r: 0.18, near: [3, 7] },
+  { kind: 'cauldron', level: 4, r: 0.2, near: [1, 5] },
+  { kind: 'rack', level: 4, r: 0.2, near: [2, 7] },
+  { kind: 'barrels', level: 4, r: 0.16, near: [2, 7] },
   { kind: 'infirmary', level: 5, r: 0.5, near: [2, 7] },
   { kind: 'crystal', level: 5, r: 0.16, near: [2, 6] },
   { kind: 'crystal', level: 5, r: 0.16, near: [3, 8] },
+  { kind: 'lantern', level: 5, r: 0.1, near: [4, 9] },
+  { kind: 'sacks', level: 5, r: 0.18, near: [3, 8] },
   { kind: 'lift', level: 6, r: 0.5, near: [1, 3] },
+  { kind: 'table', level: 6, r: 0.26, near: [2, 8] },
+  { kind: 'dummy', level: 6, r: 0.18, near: [3, 8] },
   { kind: 'shrine', level: 7, r: 0.45, near: [3, 9] },
+  { kind: 'lantern', level: 7, r: 0.1, near: [5, 10] },
+  { kind: 'woodpile', level: 7, r: 0.2, near: [3, 9] },
   { kind: 'smelter', level: 8, r: 0.45, near: [3, 9] },
   { kind: 'warehouse', level: 8, r: 0.6, near: [3, 9] },
+  { kind: 'barrels', level: 8, r: 0.16, near: [3, 9] },
+  { kind: 'rack', level: 8, r: 0.2, near: [3, 9] },
   { kind: 'keep', level: 9, r: 0.7, near: [3, 10] },
   { kind: 'statue', level: 9, r: 0.22, near: [1, 5] },
 ];
 
 export interface Placed { kind: CampPiece; x: number; z: number; ry: number; r: number }
-/** Les pièces sont dessinées à l'échelle d'un habitant ; le camp les agrandit pour qu'on les lise de loin */
-const SCALE = 1.4;
+/**
+ * Les pièces sont dessinées pour des habitants de 0,3 : les petits objets (tonneaux, caisses, râteliers…) sont ramenés à la
+ * taille des habitants, les bâtiments un peu agrandis pour qu'on les lise de loin
+ */
+const SMALL = new Set<CampPiece>(['fire', 'crates', 'orepile', 'brazier', 'crystal', 'rack', 'barrels', 'lantern', 'bedrolls', 'table', 'woodpile', 'dummy', 'sacks', 'cauldron', 'statue', 'banner']);
+const scaleOf = (k: CampPiece) => (SMALL.has(k) ? HUMAN_K * 1.08 : 1);
 
 /** Place les pièces du camp de niveau `level` autour de la case `center` (sous le puits) */
 export function campLayout(u: Underground, center: number, level: number): Placed[] {
@@ -67,7 +94,7 @@ export function campLayout(u: Underground, center: number, level: number): Place
   };
   for (const pc0 of PIECES) {
     if (pc0.level > level) continue;
-    const pc = { ...pc0, r: pc0.r * SCALE };
+    const pc = { ...pc0, r: pc0.r * scaleOf(pc0.kind) };
     let done = false;
     for (let widen = 0; widen <= 4 && !done; widen += 2) {
       for (const k of cells) {
@@ -101,12 +128,17 @@ const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
 const LIT = new THREE.MeshBasicMaterial({ vertexColors: true });
 
-/** Tente de toile à bandes bleues, ouverte vers +z ; blanche à croix rouge pour l'infirmerie */
-function tent(p: Parts, s: number, white: boolean) {
-  const c = white ? 0xf2efe8 : CANVAS;
+/** Tente de toile à bandes bleues (kaki à l'époque moderne), ouverte vers +z ; blanche à croix rouge pour l'infirmerie */
+function tent(p: Parts, s: number, white: boolean, age = 2) {
+  const c = white ? 0xf2efe8 : age >= 4 ? 0x6a7350 : CANVAS;
   p.gable(0.34 * s, 0.3 * s, 0.56 * s, 0, 0, 0, c, Math.PI / 2);
+  // piquets et haubans
+  for (const k of [-1, 1]) for (const z of [-0.22, 0.22]) {
+    p.add(new THREE.BoxGeometry(0.004, 0.004, 0.16 * s).translate(0, 0, 0.08 * s), k * 0.12 * s, 0.14 * s, z * s, 0xd8d0b8, k * Math.PI / 2, false, 0, -0.9);
+    p.box(0.014, 0.03, 0.014, k * 0.27 * s, 0, z * s, DARK);
+  }
   for (const k of [-1, 1]) {
-    const band = white ? 0xd8443a : BLUE;
+    const band = white ? 0xd8443a : age >= 4 ? 0x4a5236 : BLUE;
     p.add(new THREE.BoxGeometry(0.006, 0.22 * s, 0.57 * s), k * 0.085 * s, 0.15 * s, 0, band, 0, false, k * 0.52);
   }
   if (white) for (const k of [-1, 1]) {
@@ -303,7 +335,7 @@ function keep(p: Parts) {
     p.box(0.07, 0.09, 0.09, s * (S / 2 + 0.01), H + 0.1, u, STONE);
   }
   p.box(0.16, 0.26, 0.02, 0, 0.06, S / 2 + 0.005, 0x4a3426);
-  p.gable(0.18, 0.06, 0.024, 0, 0.32, S / 2 + 0.006, STONE);
+  p.gable(0.024, 0.06, 0.18, 0, 0.32, S / 2 + 0.006, STONE, Math.PI / 2);
   for (const [x, y] of [[-0.16, 0.5], [0.16, 0.5], [0, 0.78]]) { p.box(0.08, 0.12, 0.02, x, y, S / 2 + 0.004, dark(STONE, 0.6)); p.box(0.06, 0.1, 0.012, x, y + 0.01, S / 2 + 0.012, 0xffd890, 0, true); }
   p.cyl(0.012, 0.016, 0.5, 6, 0, H + 0.1, 0, DARK);
   p.box(0.01, 0.16, 0.24, 0, H + 0.4, 0.12, BLUE);
@@ -325,8 +357,107 @@ function statue(p: Parts) {
   p.box(0.012, 0.2, 0.08, -0.08, 0.28, 0.02, S);
 }
 
-/** Construit le camp (pièces déjà placées) : maillages, flammes et roues animées, lumières, postes de garde */
-export function buildCamp(u: Underground, placed: Placed[]): Camp {
+
+/** Râtelier : lances et écus au Moyen Âge, fusils ensuite, fusils d'assaut et casques à l'époque moderne */
+function rack(p: Parts, age: number) {
+  p.box(0.36, 0.03, 0.06, 0, 0, 0, DARK);
+  for (const s of [-1, 1]) p.box(0.025, 0.3, 0.025, s * 0.16, 0, 0, DARK);
+  p.box(0.36, 0.025, 0.04, 0, 0.26, 0, WOOD);
+  for (let i = 0; i < 5; i++) {
+    const x = -0.12 + i * 0.06;
+    if (age <= 2) { p.cyl(0.007, 0.008, 0.42, 5, x, 0.02, 0.02, WOOD); p.add(new THREE.ConeGeometry(0.014, 0.05, 4), x, 0.46, 0.02, 0xc4cad2); }
+    else if (age === 3) { p.box(0.016, 0.3, 0.012, x, 0.02, 0.02, 0x7a5236); p.box(0.006, 0.08, 0.006, x, 0.32, 0.024, 0xc4cad2); }
+    else { p.box(0.016, 0.22, 0.03, x, 0.03, 0.02, 0x2a2a2e); p.box(0.01, 0.04, 0.016, x, 0.1, 0.045, 0x2a2a2e); }
+  }
+  if (age <= 2) for (const s of [-1, 1]) { p.box(0.012, 0.14, 0.11, s * 0.2, 0.04, 0.04, BLUE); p.box(0.013, 0.14, 0.02, s * 0.2, 0.04, 0.04, GOLD); }
+  else for (const s of [-1, 1]) p.sphere(0.035, s * 0.2, 0.06, 0.04, age >= 4 ? 0x4a5236 : 0x1e1e22, 1, 0.7);
+}
+
+/** Tonneaux (fûts de métal à l'époque moderne) */
+function barrels(p: Parts, age: number) {
+  const cols = age >= 4 ? [0x3c6a4a, 0x3c5a8a, 0x8a3c32] : [0x9a6a44, 0x8a5c3a, 0xa0744a];
+  for (const [x, z, k] of [[-0.06, 0, 0], [0.07, 0.04, 1], [0.0, -0.1, 2]]) {
+    p.cyl(0.045, 0.045, 0.12, 9, x, 0, z, cols[k]);
+    for (const y of [0.025, 0.095]) p.cyl(0.047, 0.047, 0.01, 9, x, y, z, age >= 4 ? 0x2a2a2e : 0x4a4448);
+  }
+  p.cyl(0.045, 0.045, 0.12, 9, 0.0, 0.12, -0.03, cols[1]);
+}
+
+/** Lanterne sur son poteau (torchère au Moyen Âge, lanterne à gaz ensuite, projecteur à l'époque moderne) */
+function lantern(p: Parts, age: number) {
+  p.cyl(0.05, 0.06, 0.05, 7, 0, 0, 0, STONE);
+  p.cyl(0.014, 0.018, 0.6, 6, 0, 0.05, 0, age >= 3 ? IRON : DARK);
+  if (age >= 4) { p.box(0.1, 0.06, 0.05, 0, 0.62, 0.02, 0x3c3c40); p.box(0.08, 0.045, 0.006, 0, 0.627, 0.046, 0xf8f4e0, 0, true); }
+  else if (age === 3) { p.box(0.07, 0.08, 0.07, 0, 0.62, 0, IRON); p.box(0.055, 0.065, 0.055, 0, 0.627, 0, 0xffd890, 0, true); p.pyramid(0.09, 0.05, 0.09, 0, 0.7, 0, IRON); }
+  else { p.cyl(0.04, 0.025, 0.05, 6, 0, 0.62, 0, IRON); }
+}
+
+/** Couchages autour du feu : paillasses, couvertures roulées, sacs */
+function bedrolls(p: Parts) {
+  for (const [x, z, ry, c] of [[-0.12, 0.02, 0.3, 0x7a6a8a], [0.12, -0.04, -0.4, 0x8a5a4a], [0.0, 0.14, 1.4, 0x5a7a6a]] as [number, number, number, number][]) {
+    p.box(0.1, 0.02, 0.26, x, 0, z, 0xc8b88a, ry);
+    p.box(0.1, 0.03, 0.12, x + Math.sin(ry) * 0.06, 0.02, z + Math.cos(ry) * 0.06, c, ry);
+    p.add(new THREE.CylinderGeometry(0.025, 0.025, 0.1, 7).rotateZ(Math.PI / 2), x - Math.sin(ry) * 0.11, 0.025, z - Math.cos(ry) * 0.11, c, ry);
+  }
+}
+
+/** Table des cartes : plan déroulé, chope, lanterne, tabourets */
+function table(p: Parts, age: number) {
+  p.box(0.3, 0.02, 0.2, 0, 0.16, 0, WOOD);
+  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.02, 0.16, 0.02, x * 0.13, 0, z * 0.08, DARK);
+  p.box(0.2, 0.004, 0.13, -0.02, 0.18, 0, 0xe8dcb8);
+  for (const [x, z, c] of [[-0.06, -0.02, 0xd8443a], [0.03, 0.03, 0x3a6ab8], [0.0, -0.04, 0x2a2a2a]] as [number, number, number][]) p.box(0.012, 0.006, 0.012, x, 0.185, z, c);
+  p.cyl(0.015, 0.014, 0.03, 6, 0.11, 0.18, 0.05, age >= 4 ? 0x5a6a46 : 0x8a8f96);
+  p.box(0.03, 0.04, 0.03, 0.11, 0.18, -0.06, IRON); p.box(0.022, 0.03, 0.022, 0.11, 0.185, -0.06, 0xffd890, 0, true);
+  for (const [x, z] of [[-0.22, 0], [0.22, 0.02], [0, -0.17]]) { p.cyl(0.04, 0.04, 0.012, 7, x, 0.1, z, WOOD); for (let k = 0; k < 3; k++) p.box(0.01, 0.1, 0.01, x + Math.cos(k * 2.1) * 0.025, 0, z + Math.sin(k * 2.1) * 0.025, DARK); }
+}
+
+/** Bois de chauffe : bûches empilées entre deux piquets, hache plantée dans le billot */
+function woodpile(p: Parts) {
+  for (let row = 0; row < 3; row++) for (let i = 0; i < 4 - row; i++) {
+    const x = -0.09 + i * 0.06 + row * 0.03;
+    p.add(new THREE.CylinderGeometry(0.028, 0.028, 0.2, 7).rotateX(Math.PI / 2), x, 0.028 + row * 0.05, 0, dark(WOOD, 0.85 + ((i + row) % 2) * 0.12));
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.024, 0.024, 0.004, 7).rotateX(Math.PI / 2), x, 0.028 + row * 0.05, s * 0.101, 0xd8b88a);
+  }
+  for (const s of [-1, 1]) p.box(0.016, 0.2, 0.016, s * 0.14, 0, 0, DARK);
+  p.cyl(0.045, 0.05, 0.07, 8, 0.22, 0, 0.08, DARK); p.cyl(0.042, 0.042, 0.004, 8, 0.22, 0.07, 0.08, 0xd8b88a);
+  p.add(new THREE.BoxGeometry(0.01, 0.12, 0.01), 0.24, 0.12, 0.08, WOOD, 0, false, -0.5); p.box(0.04, 0.025, 0.006, 0.21, 0.08, 0.08, IRON, 0, false, -0.5);
+}
+
+/** Mannequin d'entraînement : poteau, bras de bois, sac de paille, cible peinte */
+function dummy(p: Parts, age: number) {
+  p.cyl(0.05, 0.06, 0.03, 7, 0, 0, 0, STONE);
+  p.cyl(0.014, 0.016, 0.42, 6, 0, 0.03, 0, DARK);
+  p.cyl(0.05, 0.045, 0.14, 8, 0, 0.18, 0, 0xd8c08a);
+  p.sphere(0.035, 0, 0.36, 0, 0xd8c08a, 0, 1);
+  p.box(0.26, 0.016, 0.016, 0, 0.28, 0, DARK);
+  p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.006, 12).rotateX(Math.PI / 2), 0, 0.25, 0.048, 0xd8443a);
+  p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.007, 12).rotateX(Math.PI / 2), 0, 0.25, 0.049, 0xf0ece0);
+  if (age >= 3) for (const x of [-0.18, -0.12]) p.box(0.04, 0.006, 0.02, x, 0.003, 0.1, 0xb8a060);
+}
+
+/** Sacs de vivres et de farine, une caisse, un panier de pain */
+function sacks(p: Parts) {
+  for (const [x, z, y] of [[-0.06, 0, 0], [0.06, 0.02, 0], [0.0, -0.08, 0], [0.0, 0.0, 0.08]]) {
+    p.sphere(0.06, x, y + 0.04, z, 0xd8c8a0, 0, 0.75);
+    p.cyl(0.015, 0.02, 0.025, 6, x, y + 0.075, z, 0xb8a880);
+  }
+  p.box(0.08, 0.06, 0.08, 0.13, 0, -0.06, 0xb48a5e, 0.4);
+  p.cyl(0.05, 0.04, 0.04, 8, -0.14, 0, 0.06, 0x9a6a3a); for (let k = 0; k < 4; k++) p.sphere(0.018, -0.14 + Math.cos(k * 1.6) * 0.022, 0.045, 0.06 + Math.sin(k * 1.6) * 0.022, 0xd89a5a, 0, 0.7);
+}
+
+/** Marmite sur son trépied, au-dessus d'un petit feu (la flamme vacille à part) */
+function cauldron(p: Parts) {
+  for (let i = 0; i < 7; i++) p.add(new THREE.IcosahedronGeometry(0.025, 0).scale(1, 0.7, 1), Math.cos(i * 0.9) * 0.08, 0.01, Math.sin(i * 0.9) * 0.08, STONE);
+  for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; p.add(new THREE.BoxGeometry(0.014, 0.32, 0.014).translate(0, 0.16, 0), Math.sin(a) * 0.12, 0, Math.cos(a) * 0.12, DARK, 0, false, -Math.cos(a) * 0.35, Math.sin(a) * 0.35); }
+  p.cyl(0.004, 0.004, 0.1, 4, 0, 0.2, 0, IRON);
+  p.sphere(0.07, 0, 0.15, 0, 0x2a2a2e, 1, 0.8);
+  p.cyl(0.06, 0.06, 0.006, 10, 0, 0.19, 0, 0x9a7a4a);
+  p.add(new THREE.BoxGeometry(0.008, 0.008, 0.16), 0.03, 0.22, 0.02, WOOD, 0.5, false, 0, 0.6);
+}
+
+/** Construit le camp (pièces déjà placées, à l'époque `age`) : maillages, flammes et roues animées, lumières, postes de garde */
+export function buildCamp(u: Underground, placed: Placed[], age = 2): Camp {
   const group = new THREE.Group(), flames: THREE.Object3D[] = [], wheels: THREE.Object3D[] = [], lights: CampLight[] = [], posts: [number, number][] = [];
   const body = caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }), 'camp');
   const flame = (root: THREE.Object3D, x: number, y: number, z: number, s: number) => {
@@ -346,7 +477,16 @@ export function buildCamp(u: Underground, placed: Placed[]): Camp {
         for (const r of [0.3, 1.4, 2.5]) p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.18, 6).rotateZ(Math.PI / 2), 0, 0.03, 0, DARK, r);
         for (const a of [0.8, 2.9, 4.6]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 7).rotateZ(Math.PI / 2), Math.cos(a) * 0.3, 0.035, Math.sin(a) * 0.3, WOOD, -a);
         break;
-      case 'tent': tent(p, 1, false); break;
+      case 'tent': tent(p, 1, false, age); break;
+      case 'rack': rack(p, age); break;
+      case 'barrels': barrels(p, age); break;
+      case 'lantern': lantern(p, age); break;
+      case 'bedrolls': bedrolls(p); break;
+      case 'table': table(p, age); break;
+      case 'woodpile': woodpile(p); break;
+      case 'dummy': dummy(p, age); break;
+      case 'sacks': sacks(p); break;
+      case 'cauldron': cauldron(p); break;
       case 'crates': crates(p); break;
       case 'tower': tower(p); break;
       case 'barricade': barricade(p); break;
@@ -368,6 +508,7 @@ export function buildCamp(u: Underground, placed: Placed[]): Camp {
     const root = new THREE.Group();
     root.position.set(pc.x, u.heightAt(pc.x, pc.z), pc.z);
     root.rotation.y = pc.ry;
+    const SCALE = scaleOf(pc.kind);
     root.scale.setScalar(SCALE);
     const built = p.build(false);
     const m = new THREE.Mesh(built.body, body);
@@ -381,6 +522,11 @@ export function buildCamp(u: Underground, placed: Placed[]): Camp {
     // des lueurs modestes : à plusieurs, elles s'additionnent
     if (pc.kind === 'fire') { flame(root, 0, 0.03, 0, 1.3); light(0, 0.4, 0, 3.6, 0xffa050, 0.85); }
     if (pc.kind === 'brazier') { flame(root, 0, 0.33, 0, 1); light(0, 0.6, 0, 2.8, 0xff9a40, 0.6); }
+    if (pc.kind === 'cauldron') { flame(root, 0, 0.012, 0, 0.7); light(0, 0.3, 0, 2.2, 0xffa050, 0.5); }
+    if (pc.kind === 'lantern') {
+      if (age <= 2) flame(root, 0, 0.66, 0, 0.6);
+      light(0, 0.66, 0, 2.6, age >= 4 ? 0xf0f4ff : 0xffc070, age >= 4 ? 0.55 : 0.45);
+    }
     if (pc.kind === 'tower') { flame(root, 0.14, 0.78, -0.14, 0.8); light(0.14, 1, -0.14, 3.6, 0xffa050, 0.6); }
     if (pc.kind === 'forge') light(-0.06, 0.25, 0.3, 3, 0xff6a20, 0.8);
     if (pc.kind === 'barracks') light(0.1, 0.3, 0.4, 2.6, 0xffc070, 0.45);
@@ -401,8 +547,15 @@ export function buildCamp(u: Underground, placed: Placed[]): Camp {
       wheels.push(w);
     }
     group.add(root);
-    // un garde se poste devant chaque pièce un peu grande
-    if (pc.r >= 0.3) posts.push(at(0, pc.r / SCALE + 0.25));
+    // un garde se poste devant chaque pièce un peu grande, sur une place libre de tout autre décor
+    if (pc.r / SCALE < 0.3) continue;
+    for (const a of [0, 0.7, -0.7, 1.4, -1.4, Math.PI]) {
+      const d = pc.r + 0.16, x = pc.x + Math.sin(pc.ry + a) * d, z = pc.z + Math.cos(pc.ry + a) * d;
+      if (!u.walkable(Math.floor(x), Math.floor(z)) || placed.some((q) => q !== pc && Math.hypot(q.x - x, q.z - z) < q.r + 0.1)) continue;
+      if (posts.some(([px, pz]) => Math.hypot(px - x, pz - z) < 0.25)) continue;
+      posts.push([x, z]);
+      break;
+    }
   }
   return { group, flames, wheels, lights, posts };
 }

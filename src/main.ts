@@ -35,7 +35,7 @@ import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { Expeditions } from './sim/expeditions';
-import { Railway } from './sim/railway';
+import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { ExpeditionView } from './render/expeditionView';
 import { PenView } from './render/pens';
@@ -82,10 +82,12 @@ class Game implements UIHost {
   gardens: GardenView;
   halos: Halos;
   expeditions: Expeditions;
-  /** chemin de fer de la gare à l'avant-poste, et la caméra qui suit le train */
+  /** chemin de fer : ses lignes de gare en gare, le train que la caméra suit (numéro de sa ligne) */
   railway: Railway;
   railView: RailView;
-  trainCam = false;
+  trainCam: number | null = null;
+  /** ligne en cours de tracé : ses arrêts dans l'ordre, et la ligne qu'elle remplacera (null : une nouvelle) */
+  railEdit: { stops: number[]; line: number | null; color: number } | null = null;
   expView: ExpeditionView;
   pens: PenView;
   /** la caméra suit l'expédition */
@@ -157,6 +159,7 @@ class Game implements UIHost {
     if (settings.quality) this.quality = settings.quality;
     this.autoRoads = settings.autoRoads ?? true;
     w.disasters = settings.disasters ?? true;
+    w.unlimited = settings.unlimited ?? false;
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 4);
 
     this.terrain = new TerrainView(w);
@@ -186,6 +189,7 @@ class Game implements UIHost {
     // le train descend des mineurs au pied de la grotte et remonte minerai et pierre des galeries tenues
     this.railway = new Railway(w, this.agents, this.expeditions, () => this.time.dayLen);
     this.railView = new RailView(w, this.railway);
+    this.railView.streams = this.streams;
     this.pens = new PenView(w);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
@@ -212,7 +216,9 @@ class Game implements UIHost {
     this.ui = new UI(uiRoot, host);
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
-    this.cam.onPan = () => { this.trainCam = false; };
+    this.cam.onPan = () => { this.trainCam = null; };
+    // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts
+    this.tools.pickStop = (b) => this.railPick(b);
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
     // une quête du camp souterrain accomplie : il grandit de lui-même
     this.expeditions.onCamp = (q) => {
@@ -262,7 +268,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters, autoRoads: this.autoRoads };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimited };
   }
   buildSave(): SaveData {
     return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, seasonT: this.time.seasonT, hour: this.time.hour, settings: this.settings(), savedAt: Date.now() };
@@ -330,22 +336,73 @@ class Game implements UIHost {
   /** Dissipe le brouillard et la brume ; ils ne reviennent pas avant un bon moment */
   dispelFog() { this.env.dispelFog(); this.atmosphere.dispel(300); }
 
-  /** La caméra suit le train (jusqu'à ce qu'on fasse glisser la vue) */
-  followTrain() {
-    const r = this.railway;
-    if (!r.line) return;
+  /** La caméra suit le train de cette ligne (jusqu'à ce qu'on fasse glisser la vue) */
+  followTrain(line: number) {
+    const tr = this.railway.trains.get(line), p = tr ? this.railway.trainAt(tr) : null;
+    if (!p) return;
     this.following = null;
     if (this.mode === 'under') this.exitUnder();
-    this.trainCam = true;
-    const [x, z] = r.at(r.pos + 1.1);
-    this.cam.follow(x, z, 14);
+    this.trainCam = line;
+    this.cam.follow(p[0], p[1], 14);
+  }
+
+  // ---------- Tracer une ligne de chemin de fer ----------
+
+  /** Commence une ligne à partir de cette gare, ou reprend une ligne existante pour la prolonger */
+  startRailEdit(from: { stop?: number; line?: number }) {
+    const l = from.line !== undefined ? this.world.lines.find((x) => x.id === from.line) : undefined;
+    const used = new Set(this.world.lines.map((x) => x.color));
+    this.railEdit = l ? { stops: [...l.stops], line: l.id, color: l.color } : { stops: from.stop !== undefined ? [from.stop] : [], line: null, color: LINE_COLORS.find((c) => !used.has(c)) ?? LINE_COLORS[0] };
+    this.tools.setTool('none');
+    this.tools.select(null);
+    this.tools.pickStop = (b) => this.railPick(b);
+    this.tools.picking = true;
+    this.ui.update();
+  }
+
+  /** Un clic pendant le tracé : une gare ou un avant-poste s'ajoute aux arrêts (recliquer le dernier le retire) */
+  railPick(b: Building | undefined) {
+    const e = this.railEdit;
+    if (!e || !b) return;
+    if (e.stops[e.stops.length - 1] === b.id) { e.stops.pop(); audio.sfxClick(); this.ui.update(); return; }
+    if (e.stops.includes(b.id)) { this.ui.toast(`${this.railway.stopName(b)} est déjà sur la ligne.`); return; }
+    if (!this.railway.stopOf(b)) {
+      this.ui.toast(b.kind === 'outpost' ? 'Cet avant-poste ne garde aucune entrée, ou n’a pas la place d’un quai à son pied.' : 'Cliquez une gare ou un avant-poste.');
+      return;
+    }
+    e.stops.push(b.id);
+    audio.sfxClick();
+    this.ui.update();
+  }
+
+  /** Retire le dernier arrêt de la ligne en cours de tracé */
+  railUndo() { if (this.railEdit?.stops.length) { this.railEdit.stops.pop(); this.ui.update(); } }
+
+  /** Valide la ligne tracée : le train s'y met en route */
+  railFinish() {
+    const e = this.railEdit;
+    if (!e || e.stops.length < 2) return;
+    const r = this.railway, twin = r.sameAs(e.stops, e.line ?? undefined);
+    if (twin) { this.ui.toast(`🚂 Ce parcours existe déjà (${r.lineLabel(twin)}) : sur une voie unique, un seul train peut y rouler.`); return; }
+    this.railCancel();
+    if (e.line !== null) r.setStops(e.line, e.stops); else r.addLine(e.stops);
+    const l = e.line !== null ? this.world.lines.find((x) => x.id === e.line) : this.world.lines[this.world.lines.length - 1], tr = l ? r.trains.get(l.id) : undefined;
+    audio.sfxPlace();
+    this.ui.toast(tr?.why ? `🚂 ${tr.why}` : `🚂 Ligne ${e.line !== null ? 'prolongée' : 'ouverte'} : ${l ? r.lineLabel(l) : ''}.`);
+    this.ui.update();
+  }
+
+  railCancel() {
+    this.railEdit = null;
+    this.tools.picking = false;
+    this.ui.update();
   }
 
   /** La caméra suit l'expédition donnée (null : elle redevient libre) */
   follow(id: number | null) {
     const a = this.expeditions.active.find((e) => e.id === id);
     this.following = a ? a.id : null;
-    if (a) this.trainCam = false;
+    if (a) this.trainCam = null;
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
     if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 16); }
@@ -389,7 +446,7 @@ class Game implements UIHost {
       this.surfaceZoom = { min: this.cam.minDist, max: this.cam.maxDist };
       this.mode = 'under';
       document.body.classList.add('under');
-      this.cam.minDist = 5;
+      this.cam.minDist = 2.4;
       this.cam.maxDist = 24;
       this.cam.minPitch = 0.95;
       const x = (cell % N) + 0.5, z = Math.floor(cell / N) + 0.5;
@@ -504,6 +561,8 @@ class Game implements UIHost {
       if (tool) { this.tools.setTool(tool); audio.sfxClick(); }
       else if (k === 'b') { this.tools.setTool('build', this.tools.kind); }
       else if (k === 't') this.tools.rotate();
+      else if (k === 'escape' && this.railEdit) this.railCancel();
+      else if (k === 'enter' && this.railEdit) this.railFinish();
       else if (k === 'escape') { this.tools.escape(); this.setPhoto(false); }
       else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
       else if (k === 'p') this.setPhoto(!document.body.classList.contains('photo'));
@@ -664,8 +723,9 @@ class Game implements UIHost {
       uv.setTroops(this.expeditions.active.filter((a) => a.entry >= 0 && a.phase === 'work').map((a) => ({
         id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
       })), dt);
-      // les mineurs descendus par le train
-      uv.setMiners(this.railway.below.length, this.railway.line?.entry ?? -1, this.railway.vein, this.sim.age, gdt);
+      uv.age = this.sim.age;
+      // les mineurs descendus par les trains, une équipe par ligne
+      uv.setMiners([...this.railway.trains.values()].filter((t) => !t.why && t.mine >= 0 && t.crew.length).map((t) => ({ id: t.line.id, n: t.crew.length, entry: t.stops[t.mine].entry, vein: t.vein })), this.sim.age, gdt);
       uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
     }
     else {
@@ -676,8 +736,10 @@ class Game implements UIHost {
       this.life.update(dt, this.time, this.season, this.env, this.cam.target);
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
       this.railView.update(dt, this.sim.age);
-      if (this.trainCam && this.railway.line) { const [x, z] = this.railway.at(this.railway.pos + 1.1); this.cam.follow(x, z); }
-      else this.trainCam = false;
+      this.railView.setPreview(this.railEdit ? this.railEdit.stops.map((id) => this.world.buildings.get(id)).filter((b): b is Building => !!b) : [], this.railEdit?.color ?? 0);
+      const tr = this.trainCam === null ? undefined : this.railway.trains.get(this.trainCam), tp = tr ? this.railway.trainAt(tr) : null;
+      if (tp) this.cam.follow(tp[0], tp[1]);
+      else this.trainCam = null;
       this.gardens.update(dt, this.time.hour);
       this.halos.update(dt, this.env.night);
       this.windT += dt * (1 + this.env.weatherK * 0.6);

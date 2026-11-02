@@ -56,6 +56,9 @@ export class ToolController implements ToolInput {
   private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean } | null = null;
   /** bâtiment choisi d'un clic avec l'outil « Voir » : sa fiche s'affiche, on peut le déplacer, le tourner, le démolir */
   selected: number | null = null;
+  /** tracé d'une ligne de chemin de fer en cours : un clic sur un bâtiment le propose comme arrêt */
+  picking = false;
+  pickStop: ((b: Building | undefined) => void) | null = null;
   /** où le clic a commencé (un glissé n'est pas un clic) */
   private downAt: [number, number] | null = null;
   private lastToast = 0;
@@ -256,7 +259,8 @@ export class ToolController implements ToolInput {
     if (this.tool === 'none' && this.downAt && Math.hypot(e.x - this.downAt[0], e.y - this.downAt[1]) < 8) {
       this.pickAt(e);
       const c = this.cell(), b = c ? this.h.world.buildingAt(c.x, c.z) : undefined;
-      this.select(b ? b.id : null);
+      if (this.picking && this.pickStop) this.pickStop(b);
+      else this.select(b ? b.id : null);
     }
     this.downAt = null;
     if (this.pressed) {
@@ -382,7 +386,7 @@ export class ToolController implements ToolInput {
     const w = this.h.world;
     const o = footprintOrigin(this.kind, hit.x, hit.z);
     // un grand bâtiment neuf se paie en bois et en pierre (déplacer est gratuit)
-    const cost = this.moveOrigin ? null : costOf(this.kind, this.h.getAge());
+    const cost = this.moveOrigin || w.unlimited ? null : costOf(this.kind, this.h.getAge());
     const reason = w.canPlace(this.kind, o.x, o.z) ?? (cost && (w.wood < cost.wood || w.stone < cost.stone) ? `Il faut ${costLabel(cost)} (vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre)` : null);
     if (reason) {
       const now = performance.now();
@@ -455,7 +459,7 @@ export class ToolController implements ToolInput {
         const off = kind === 'lamp' ? 0.32 : 0;
         this.ghostBody.position.set(off, 0, off); this.ghostGlow.position.set(off, 0, off);
       }
-      const cost = this.moveOrigin ? null : costOf(kind, age);
+      const cost = this.moveOrigin || w.unlimited ? null : costOf(kind, age);
       setGhostValid(!reason && !(cost && (w.wood < cost.wood || w.stone < cost.stone)));
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);

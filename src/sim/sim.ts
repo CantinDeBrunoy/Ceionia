@@ -115,7 +115,7 @@ export class Sim {
     const req = AGES[n];
     const items = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
     for (const [k, c] of Object.entries(req.reqKinds)) items.push({ label: KIND_LABEL[k as KindId], have: this.counts[k] ?? 0, need: c as number });
-    if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: Math.floor(this.world.ore), need: req.reqOre });
+    if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
     // l'expédition obligatoire de l'âge en cours
     const m = mandatoryFor(this.age);
     if (m) items.push({ label: `expédition « ${m.title} »`, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });

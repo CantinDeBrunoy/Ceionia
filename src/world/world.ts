@@ -38,6 +38,9 @@ export interface Snapshot {
   stone?: number;
 }
 
+/** Ligne de chemin de fer : ses arrêts dans l'ordre (gares et avant-postes, par numéro de bâtiment) et sa couleur */
+export interface RailLine { id: number; stops: number[]; color: number }
+
 export interface WorldListener {
   onAdd(b: Building, animate: boolean): void;
   onRemove(b: Building): void;
@@ -154,6 +157,11 @@ export class World {
   stone = START_STONE;
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
   exp: ExpState = newExpState();
+  /** ressources illimitées (réglage) : bois, pierre et minerai ne manquent jamais */
+  unlimited = false;
+  /** lignes de chemin de fer ; tant que le joueur n'en a tracé aucune, la première (gare ↔ avant-poste) se trace d'elle-même */
+  lines: RailLine[] = [];
+  linesAuto = true;
   mined = new Set<number>();
   /** galeries du souterrain que le village tient (garnisons des avant-postes, conquêtes des expéditions armées) */
   claimed = new Set<number>();
@@ -614,6 +622,13 @@ export class World {
   }
 
   /** Tablier d'un pont posé sur la case (null si la case n'est pas un pont) */
+  /** Hauteur du tablier d'un pont posé sur une case d'eau (route ou voie ferrée), ou null si la case est sèche */
+  deckY(cx: number, cz: number): number | null {
+    if (!this.inCells(cx, cz) || !this.isWet(cx, cz)) return null;
+    const k = this.ci(cx, cz);
+    return (this.lake[k] ? this.lakeLevel[k] : SEA) + 0.32;
+  }
+
   bridgeY(cx: number, cz: number): number | null {
     if (!this.inCells(cx, cz)) return null;
     const k = this.ci(cx, cz);
@@ -877,6 +892,7 @@ export class World {
     for (let i = 0; i < this.veg.length; i++) if (this.veg[i]) veg.push(i, this.veg[i]);
     const roads: number[] = [];
     for (let i = 0; i < this.road.length; i++) if (this.road[i]) roads.push(i);
+    const order = new Map([...this.buildings.keys()].map((id, i) => [id, i]));
     return {
       n: N,
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
@@ -893,6 +909,9 @@ export class World {
       mined: [...this.mined],
       claimed: [...this.claimed],
       exp: this.exp,
+      // arrêts des lignes : par rang dans la liste des bâtiments (les numéros changent au chargement)
+      lines: this.lines.map((l) => ({ c: l.color, s: l.stops.map((id) => order.get(id) ?? -1).filter((i) => i >= 0) })),
+      linesAuto: this.linesAuto,
     };
   }
 
@@ -946,7 +965,9 @@ export class World {
     for (let i = 0; i + 1 < (d.veg ?? []).length; i += 2) if (d.veg[i] >= 0 && d.veg[i] < veg.length) veg[d.veg[i]] = d.veg[i + 1];
     const buildings: Building[] = [];
     let id = 1;
+    const ids: number[] = [];
     for (const r of d.buildings ?? []) {
+      ids.push(KINDS[r[0] as KindId] ? id : -1);
       if (!KINDS[r[0] as KindId]) continue;
       buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0, ...(r[6] ? { small: true } : {}) });
     }
@@ -964,6 +985,12 @@ export class World {
     this.mined = new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.claimed = new Set((d.claimed ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.exp = readExpState(d.exp);
+    this.lines = [];
+    for (const l of Array.isArray(d.lines) ? d.lines : []) {
+      const stops = (Array.isArray(l?.s) ? l.s : []).map((i: number) => ids[i] ?? -1).filter((id: number) => id > 0);
+      if (stops.length >= 2) this.lines.push({ id: this.lines.length + 1, stops, color: Number.isFinite(+l.c) ? +l.c : 0xd8553c });
+    }
+    this.linesAuto = d.linesAuto ?? !Array.isArray(d.lines);
   }
 }
 

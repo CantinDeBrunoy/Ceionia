@@ -81,10 +81,10 @@ export class ExpeditionView {
     const pos = this.agents.partyPositions(a.party);
     if (!pos.length) { sh.pennant.visible = false; return; }
     const w = this.world;
-    // le fanion flotte au-dessus de l'épaule du chef
-    const [lx, lz, lh] = pos[0];
+    // le fanion flotte au-dessus de l'épaule du chef, à pied, sur un ponton ou assis dans la barque
+    const [lx, lz, lh] = pos[0], ly = this.agents.partyLeadY(a.party) ?? w.surfaceAt(lx, lz);
     sh.pennant.visible = true;
-    sh.pennant.position.set(lx + Math.cos(lh) * 0.06, w.surfaceAt(lx, lz) + 0.08, lz - Math.sin(lh) * 0.06);
+    sh.pennant.position.set(lx + Math.cos(lh) * 0.06, ly + 0.08, lz - Math.sin(lh) * 0.06);
     sh.pennant.rotation.y = lh + Math.PI / 2;
     // trace du dernier de la file
     const trail = sh.trail, [tx, tz] = pos[pos.length - 1], n = trail.length;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { World, N, SEA } from '../world/world';
 import { Building } from '../build/catalog';
-import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT } from './assets';
+import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT, HUMAN } from './assets';
 
 const MAX_CARTS = 10, MAX_BOATS = 16, MAX_SAILS = 5;
 
@@ -261,7 +261,7 @@ export class Traffic {
     if (b.actorKey !== name) {
       this.dropFisher(b);
       b.actorKey = name;
-      b.actor = hasModel(name) ? makeActor(name, 0.27, 'height') : null;
+      b.actor = hasModel(name) ? makeActor(name, HUMAN * 0.9, 'height') : null;
       if (b.actor) {
         b.actor.root.matrixAutoUpdate = false;
         b.actor.mixer.setTime(b.seed);

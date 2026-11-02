@@ -386,12 +386,22 @@ export function meshVariants(name: ModelName, height: number, split: boolean): M
   return split ? parts.map((p) => settle([p])) : [settle(parts)];
 }
 
+/**
+ * Taille d'un habitant (hauteur, en cases) : tout ce qui marche ou monte à cheval s'y règle. Les soldats, cavaliers et
+ * accessoires sont dessinés pour des habitants de 0,3 : `HUMAN_K` les ramène à cette taille
+ */
+export const HUMAN = 0.21;
+export const HUMAN_K = HUMAN / 0.3;
+
 export interface Actor {
   root: THREE.Group;
   mixer: THREE.AnimationMixer;
   actions: Map<string, THREE.AnimationAction>;
   current: THREE.AnimationAction | null;
 }
+
+/** Bêtes de la ferme et des bois, rendues en facettes */
+const FACETED = new Set<string>(['cow', 'pig', 'sheep', 'chicken', 'horse', 'deer', 'stag', 'fox', 'wolf', 'llama', 'dog']);
 
 /** Boîte englobante de chaque modèle animé, mesurée une fois (l'échelle dépend de la taille demandée) */
 const boxes = new Map<ModelName, THREE.Box3>();
@@ -414,8 +424,12 @@ export function makeActor(name: ModelName, size: number, fit: 'length' | 'height
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
-    // glTF sans metallicFactor = métal par défaut : sans carte d'environnement il paraît presque noir
-    for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]) { mat.metalness = 0; mat.roughness = 0.9; }
+    // glTF sans metallicFactor = métal par défaut : sans carte d'environnement il paraît presque noir ; les bêtes en
+    // facettes, comme le reste du décor (leurs normales lissées les faisaient paraître en plastique)
+    for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]) {
+      mat.metalness = 0; mat.roughness = 0.9;
+      if (FACETED.has(name) && !mat.flatShading) { mat.flatShading = true; mat.needsUpdate = true; }
+    }
   });
   const root = new THREE.Group();
   root.add(inner);

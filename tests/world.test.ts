@@ -10,7 +10,7 @@ import { KINDS, KindId } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
-import { Railway, TRAIN_LEN } from '../src/sim/railway';
+import { Railway } from '../src/sim/railway';
 import { EVENTS } from '../src/sim/events';
 
 /** Le continent, toujours la même graine : les tests ne dépendent pas du hasard */
@@ -736,7 +736,37 @@ describe('expéditions', () => {
     expect([w.wood - wood, w.stone - stone]).toEqual([6, 5]);
   });
 
-  it('la voie ferrée relie la gare à l’avant-poste : le train descend des mineurs et remonte ce qu’ils tirent des galeries', () => {
+  it('la voie ferrée franchit une rivière ou un lac sur un pont, pas le large', () => {
+    const w = continent();
+    const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
+    const rail = new Railway(w, new Agents(w), ex, () => 100, () => 0.3);
+    // deux places pour une gare, de part et d'autre d'une eau peu profonde (rivière, lac) de quelques cases
+    const shallow = (x: number, z: number) => w.isWet(x, z) && (w.lake[w.ci(x, z)] === 1 || w.cellAvg(x, z) > -1.7);
+    let pair: number[][] | null = null;
+    for (let z = 12; z < N - 12 && !pair; z++) for (let x = 12; x < N - 20 && !pair; x++) {
+      if (w.canPlace('station', x, z) !== null) continue;
+      let k = x + 2;
+      while (k < x + 6 && !w.isWet(k, z) && !w.isWet(k, z + 1)) k++;
+      let wet = 0;
+      while (wet < 7 && shallow(k + wet, z) && shallow(k + wet, z + 1)) wet++;
+      if (wet < 2 || w.isWet(k + wet, z)) continue;
+      for (let x2 = k + wet; x2 < k + wet + 4 && !pair; x2++) if (w.canPlace('station', x2, z) === null) pair = [[x, z], [x2, z]];
+    }
+    expect(pair).not.toBeNull();
+    const a = w.place('station', pair![0][0], pair![0][1], 0, false, 3, false), b = w.place('station', pair![1][0], pair![1][1], 0, false, 3, false);
+    const line = rail.addLine([a.id, b.id]), tr = rail.trains.get(line.id)!;
+    expect(tr.why).toBeNull();
+    const g = rail.network().segs[0];
+    let onWater = 0;
+    for (let s = 0; s < g.len; s += 0.2) {
+      const k = Math.max(1, g.cum.findIndex((c) => c >= s)), f = (s - g.cum[k - 1]) / (g.cum[k] - g.cum[k - 1]), p = g.pts[k - 1], q = g.pts[k];
+      const x = Math.floor(p[0] + (q[0] - p[0]) * f), z = Math.floor(p[1] + (q[1] - p[1]) * f);
+      if (w.isWet(x, z)) { onWater++; expect(shallow(x, z)).toBe(true); }
+    }
+    expect(onWater).toBeGreaterThan(0);
+  });
+
+  it('le chemin de fer : la première ligne relie la gare à l’avant-poste, d’autres se tracent de gare en gare', () => {
     const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 3, false);
@@ -746,49 +776,74 @@ describe('expéditions', () => {
     ex.under = new Underground(w);
     let post: number[] | null = null;
     for (let zz = 10; zz < N - 10 && !post; zz++) for (let xx = 10; xx < N - 10 && !post; xx++) if (w.canPlace('outpost', xx, zz) === null) post = [xx, zz];
-    w.place('outpost', post![0], post![1], 0, true, 3, false);
+    const outpost = w.place('outpost', post![0], post![1], 0, true, 3, false);
     ex.update(1.1);
-    const rail = new Railway(w, agents, ex, () => 100);
+    const rail = new Railway(w, agents, ex, () => 100, () => 0.3);
     rail.update(0.1);
-    expect(rail.why).toBe('station');
-    // la gare, à quelques cases de l'avant-poste, là où une voie peut passer
-    const spots: number[][] = [];
-    for (let dz = -24; dz <= 24; dz++) for (let dx = -24; dx <= 24; dx++) {
-      const d = Math.hypot(dx, dz);
-      if (d >= 8 && w.canPlace('landmark', post![0] + dx, post![1] + dz) === null) spots.push([post![0] + dx, post![1] + dz, d]);
-    }
-    spots.sort((a, b) => a[2] - b[2]);
+    expect(w.lines.length).toBe(0);
+    // la gare, à quelques cases de l'avant-poste, là où une voie peut passer : la première ligne se trace d'elle-même
+    const near = (cx: number, cz: number, kind: 'landmark' | 'station') => {
+      const out: number[][] = [];
+      for (let dz = -24; dz <= 24; dz++) for (let dx = -24; dx <= 24; dx++) if (Math.hypot(dx, dz) >= 8 && w.canPlace(kind, cx + dx, cz + dz) === null) out.push([cx + dx, cz + dz, Math.hypot(dx, dz)]);
+      return out.sort((a, b) => a[2] - b[2]).slice(0, 30);
+    };
     let station = null;
-    for (const [sx, sz] of spots.slice(0, 30)) {
+    for (const [sx, sz] of near(post![0], post![1], 'landmark')) {
       station = w.place('landmark', sx, sz, 0, true, 3, false);
       rail.update(2.1);
-      if (rail.line) break;
+      if (w.lines.length && !rail.trains.get(w.lines[0].id)!.why) break;
+      w.lines = []; w.linesAuto = true;
       w.removeBuilding(station.id);
       station = null;
+      rail.update(2.1);
     }
-    expect(rail.line).not.toBeNull();
-    const line = rail.line!;
-    expect(line.station.id).toBe(station!.id);
-    expect(line.len).toBeGreaterThan(TRAIN_LEN + 1);
+    expect(station).not.toBeNull();
+    const first = w.lines[0], tr = rail.trains.get(first.id)!;
+    expect(first.stops).toEqual([station!.id, outpost.id]);
+    expect(rail.stopName(station!)).toBe('Gare centrale');
     // la voie ne passe ni sur un bâtiment ni dans l'eau
-    for (let s = 0.6; s < line.len - 0.3; s += 0.25) {
-      const [px, pz] = rail.at(s), cx = Math.floor(px), cz = Math.floor(pz);
+    for (const g of rail.network().segs) for (let s = 0.4; s < g.len - 0.4; s += 0.25) {
+      const k = Math.max(1, g.cum.findIndex((c) => c >= s)), f = (s - g.cum[k - 1]) / (g.cum[k] - g.cum[k - 1]), a = g.pts[k - 1], c = g.pts[k];
+      const cx = Math.floor(a[0] + (c[0] - a[0]) * f), cz = Math.floor(a[1] + (c[1] - a[1]) * f);
       expect(w.occ[cz * N + cx]).toBe(0);
       expect(w.isWet(cx, cz)).toBe(false);
     }
     // la relève attend sur le quai, le train la descend au pied de la grotte et en remonte avec le minerai et la pierre
-    expect(rail.riders.length).toBeGreaterThanOrEqual(2);
+    const run = (steps: number, each?: () => void) => { for (let t = 0; t < steps; t++) { agents.update(0.5, 10, 3, false, 40, 0); ex.update(0.5); rail.update(0.5); each?.(); } };
     const ore = w.ore, stone = w.stone;
-    let below = 0;
-    for (let t = 0; t < 900; t++) { agents.update(0.5, 10, 3, false, 40, 0); ex.update(0.5); rail.update(0.5); below = Math.max(below, rail.below.length); }
-    expect(below).toBeGreaterThanOrEqual(2);
-    expect(rail.delivered.ore + rail.delivered.stone).toBeGreaterThan(0);
-    expect(w.ore - ore + w.stone - stone).toBe(rail.delivered.ore + rail.delivered.stone);
-    // sans gare, plus de ligne : tout le monde rentre au village
+    let crew = 0;
+    run(900, () => { crew = Math.max(crew, tr.crew.length); });
+    expect(crew).toBeGreaterThanOrEqual(2);
+    expect(tr.delivered.ore + tr.delivered.stone).toBeGreaterThan(0);
+    expect(w.ore - ore + w.stone - stone).toBe(tr.delivered.ore + tr.delivered.stone);
+    // une petite gare plus loin : une seconde ligne de la gare centrale à elle, des voyageurs vont de l'une à l'autre
+    let line2 = null, small = null;
+    for (const [sx, sz] of near(station!.x, station!.z, 'station')) {
+      small = w.place('station', sx, sz, 0, true, 3, false);
+      line2 = rail.addLine([station!.id, small.id]);
+      if (!rail.trains.get(line2.id)!.why) break;
+      rail.removeLine(line2.id);
+      w.removeBuilding(small.id);
+      line2 = small = null;
+    }
+    expect(line2).not.toBeNull();
+    expect(line2!.color).not.toBe(first.color);
+    expect(rail.lineLabel(line2!)).toBe('Gare centrale → Petite gare');
+    const tr2 = rail.trains.get(line2!.id)!;
+    run(600);
+    expect(tr2.carried).toBeGreaterThan(0);
+    // les lignes se sauvegardent avec leurs arrêts, même si les numéros des bâtiments changent au chargement
+    const w2 = new World();
+    w2.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(w2.lines.map((l) => l.stops.map((id) => w2.buildings.get(id)!.kind))).toEqual([['landmark', 'outpost'], ['landmark', 'station']]);
+    expect(w2.linesAuto).toBe(false);
+    // la gare démolie : ses lignes ne roulent plus, tout le monde rentre au village
     w.removeBuilding(station!.id);
     rail.update(2.1);
-    expect(rail.line).toBeNull();
-    expect(rail.why).toBe('station');
-    expect(rail.riders.length + rail.below.length + rail.up.length).toBe(0);
+    for (const l of w.lines) {
+      const t = rail.trains.get(l.id)!;
+      expect(t.why).not.toBeNull();
+      expect(t.relief.length + t.crew.length + t.back.length + t.aboard.length + t.boarding.length).toBe(0);
+    }
   });
 });

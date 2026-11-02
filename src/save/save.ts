@@ -15,6 +15,8 @@ export interface Settings {
   disasters?: boolean;
   /** routes posées d'elles-mêmes jusqu'aux nouveaux bâtiments */
   autoRoads?: boolean;
+  /** ressources illimitées : bois, pierre et minerai ne manquent jamais (rien ne se paie) */
+  unlimited?: boolean;
 }
 
 export type Quality = 'high' | 'medium' | 'low';

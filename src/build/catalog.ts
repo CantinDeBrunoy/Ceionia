@@ -1,5 +1,5 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
-  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry';
+  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -79,6 +79,13 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Débloqué par l’expédition « Repérer les profondeurs ». À bâtir tout contre une grotte ou une faille. Chaque expédition armée qui revient victorieuse étend les galeries tenues sous terre.',
     reqMission: 'scout',
   },
+  station: {
+    id: 'station', size: 2, minAge: 3, icon: '🚉', cat: 'service',
+    names: ['', '', '', 'Petite gare', 'Gare moderne'],
+    desc: 'Un arrêt du chemin de fer : les voyageurs y montent et en descendent, les mineurs y prennent le train pour l’avant-poste.',
+    jobs: [0, 0, 0, 3, 5], joy: [0, 0, 0, 3, 4],
+    perk: 'Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux.',
+  },
   lumber: {
     id: 'lumber', size: 1, minAge: 0, icon: '🪓', cat: 'prod',
     names: ['Abri de bûcheron', 'Camp de bûcherons', 'Scierie', 'Scierie à vapeur', 'Scierie mécanique'],
@@ -132,7 +139,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   landmark: {
     id: 'landmark', size: 2, minAge: 2, icon: '🏰', cat: 'life',
-    names: ['', '', 'Château', 'Gare', 'Tours'],
+    names: ['', '', 'Château', 'Gare', 'Gare centrale'],
     desc: 'Grand bâtiment emblématique (2×2).',
     jobs: [0, 0, 6, 12, 20], joy: [0, 0, 6, 6, 8],
   },
@@ -190,7 +197,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'mine', 'outpost', 'mill', 'health', 'school', 'fire', 'observatory', 'gather', 'tavern', 'baths', 'temple', 'landmark'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'mine', 'outpost', 'mill', 'health', 'school', 'fire', 'observatory', 'gather', 'tavern', 'baths', 'temple', 'landmark', 'station'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -221,7 +228,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   house: 'maisons', farm: 'fermes', pen: 'enclos', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
   health: 'lieux de soins', school: 'écoles', fire: 'casernes',
-  stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières',
+  stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
 };
 
 export interface Building {
