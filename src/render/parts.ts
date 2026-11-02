@@ -27,6 +27,12 @@ export class Parts {
     const arr = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
     ng.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    if (glow) {
+      // la graine de cette lumière (voir LIGHTS) : une fenêtre (> 0) a son heure, une flamme ou une lanterne (< 0, teinte
+      // chaude) vacille à son rythme
+      const seed = 0.05 + 0.95 * Math.abs((Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453) % 1);
+      ng.setAttribute('aLight', new THREE.BufferAttribute(new Float32Array(n).fill(c.r > c.b + 0.15 ? -seed : seed), 1));
+    }
     (glow ? this.glow : this.body).push(ng);
   }
 

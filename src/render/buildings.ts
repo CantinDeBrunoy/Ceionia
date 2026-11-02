@@ -28,6 +28,8 @@ interface Entry {
 
 /** Pierre sombre des fondations */
 const PLINTH_MAT = new THREE.MeshStandardMaterial({ color: 0x7d766c, roughness: 1, flatShading: true });
+/** Butte de terre sous un enclos posé en pente */
+const EARTH_MAT = new THREE.MeshStandardMaterial({ color: 0x8a6f52, roughness: 1, flatShading: true });
 
 const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
@@ -130,15 +132,19 @@ export class BuildingView implements WorldListener {
     for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) hs.push(w.h(b.x + i, b.z + j));
     hs.sort((p, q) => p - q);
     const open = b.kind === 'gather' || b.kind === 'lamp' || b.kind === 'pier';
-    const mid = hs.length >> 1, lo = hs[0], base = open ? lo : hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2;
+    // l'enclos a un sol continu (son pré) : il se pose au plus haut de son emprise pour que le terrain ne le traverse pas,
+    // sur une butte de terre à sa largeur
+    const raised = b.kind === 'pen';
+    const mid = hs.length >> 1, lo = hs[0], base = open ? lo : raised ? hs[hs.length - 1] : hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2;
     e.group.position.set(b.x + s / 2, base, b.z + s / 2);
     const ph = open || base - lo < 0.03 ? 0 : base - lo + 0.05;
     if (Math.abs(ph - e.plinthH) > 1e-3) {
       e.plinthH = ph;
       if (e.plinth) { e.group.remove(e.plinth); e.plinth.geometry.dispose(); e.plinth = null; }
       if (ph > 0) {
-        const geo = new THREE.BoxGeometry(s * 0.8, ph, s * 0.8).translate(0, 0.01 - ph / 2, 0);
-        e.plinth = new THREE.Mesh(geo, PLINTH_MAT);
+        const wd = s * (raised ? 0.92 : 0.8);
+        const geo = new THREE.BoxGeometry(wd, ph, wd).translate(0, 0.01 - ph / 2, 0);
+        e.plinth = new THREE.Mesh(geo, raised ? EARTH_MAT : PLINTH_MAT);
         e.plinth.receiveShadow = e.plinth.castShadow = true;
         e.group.add(e.plinth);
       }

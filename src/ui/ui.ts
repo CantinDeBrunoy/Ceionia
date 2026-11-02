@@ -1,6 +1,7 @@
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BuildCat } from '../build/catalog';
 import { Sim } from '../sim/sim';
+import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
 import { AudioEngine } from '../audio/audio';
@@ -8,7 +9,7 @@ import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
-import { effectSummary, mandatoryFor, DestKind } from '../sim/missions';
+import { effectSummary, mandatoryFor, DestKind, MISSIONS } from '../sim/missions';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
@@ -42,6 +43,7 @@ export interface UIHost {
   setAutoRoads(on: boolean): void;
   /** expéditions, et celle que la caméra suit (son numéro) */
   expeditions: Expeditions;
+  agents: Agents;
   following: number | null;
   follow(id: number | null): void;
 }
@@ -214,7 +216,18 @@ export class UI {
       <div id="photoBar" class="panel"><button id="pCap">${ic('camera', 18)} Capturer</button><button id="pExit">Quitter</button></div>
     `;
     $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${ic(n.icon, 20)}</b><div class="bar"><i></i></div><span>${n.label}</span></div>`).join('')
-      + `<div class="pop" id="pop">0<small>habitants</small></div>`;
+      + `<button class="pop" id="pop" title="État des habitants" aria-label="État des habitants" aria-expanded="false">0<small>habitants</small></button>`;
+    // fiche des habitants : un clic sur le compteur l'ouvre, un clic ailleurs la ferme
+    const census = document.createElement('div');
+    census.id = 'census';
+    census.className = 'panel';
+    census.hidden = true;
+    root.appendChild(census);
+    $('#pop').onclick = () => { census.hidden ? this.openCensus() : this.closeCensus(); this.host.audio.sfxClick(); };
+    document.addEventListener('pointerdown', (e) => {
+      const t = e.target as HTMLElement;
+      if (!census.hidden && !census.contains(t) && !t.closest('#pop')) this.closeCensus();
+    });
 
     $('#agePanel').onclick = () => $('#agePanel').classList.toggle('open');
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
@@ -277,11 +290,17 @@ export class UI {
     sub.innerHTML = build
       ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
       : `<span class="mhint">${ic(t.icon, 16, 2)}${t.hint}</span>`;
-    sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => { this.cat = b.dataset.c as BuildCat; this.renderItems(); this.host.audio.sfxClick(); }));
+    sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
+      this.cat = b.dataset.c as BuildCat;
+      // le bâtiment en main est d'un autre rayon : on le lâche, sinon refreshTools ramènerait son rayon
+      const tl = this.host.tools;
+      if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) tl.setTool('none');
+      this.renderItems(); this.host.audio.sfxClick();
+    }));
     let html: string;
     if (build) {
       html = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => {
-        const d = KINDS[k], locked = d.minAge > age, a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
+        const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
         return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
       }).join('');
@@ -294,7 +313,8 @@ export class UI {
     items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {
       const k = b.dataset.kind as KindId;
       b.onclick = () => {
-        if (KINDS[k].minAge > this.host.sim.age) { this.toast(`Disponible à l'âge : ${AGES[KINDS[k].minAge].name}`); return; }
+        const lock = this.lockOf(k);
+        if (lock) { this.toast(lock); return; }
         this.host.tools.setTool('build', k);
         this.host.audio.sfxClick();
       };
@@ -302,6 +322,17 @@ export class UI {
       b.onpointerleave = () => { this.hover = null; this.renderInfo(); };
     });
     this.refreshTools();
+  }
+
+  /** Pourquoi ce bâtiment n'est pas encore constructible : un âge à venir, ou une expédition à réussir (null s'il l'est) */
+  private lockOf(k: KindId): string | null {
+    const d = KINDS[k], h = this.host;
+    if (d.minAge > h.sim.age) return `Disponible à l’âge : ${AGES[d.minAge].name}`;
+    if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
+      const m = MISSIONS.find((x) => x.id === d.reqMission);
+      return `Débloqué par l’expédition « ${m?.title ?? d.reqMission} »`;
+    }
+    return null;
   }
 
   /** Fiche de l'outil ou du bâtiment survolé, sinon du bâtiment qu'on s'apprête à poser */
@@ -316,12 +347,12 @@ export class UI {
       return;
     }
     if (!k) return;
-    const d: KindDef = KINDS[k], age = this.host.sim.age, locked = d.minAge > age, a = Math.max(age, d.minAge);
+    const d: KindDef = KINDS[k], age = this.host.sim.age, lock = this.lockOf(k), a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size === 2 ? 'Grand bâtiment (2 × 2) · ' : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}
-      ${locked ? `<p class="lock">🔒 Disponible à l’âge : ${AGES[d.minAge].name}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
+      ${lock ? `<p class="lock">🔒 ${lock}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -380,7 +411,12 @@ export class UI {
       el.classList.toggle('warn', !need.ok);
       el.title = housing ? `${n.label} : ${Math.floor(sim.pop)} habitants pour ${need.cap} places` : `${n.label} : ${num(need.cap)} pour un besoin de ${num(need.demand)}`;
     }
-    $('#pop').innerHTML = `${Math.floor(sim.pop)}<small>habitants</small>`;
+    // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
+    const cs = this.census(), alert = cs.untreated ? `${cs.untreated} sans soins` : cs.hungry ? `${cs.hungry} ont faim` : cs.thirsty ? `${cs.thirsty} ont soif`
+      : cs.jobless ? `${cs.jobless} sans emploi` : cs.injured ? `${cs.injured} blessé${cs.injured > 1 ? 's' : ''}` : '';
+    const popHtml = `${cs.p}<small>habitants</small>${alert ? `<small class="alert">${alert}</small>` : ''}`;
+    if ($('#pop').dataset.v !== popHtml) { $('#pop').innerHTML = popHtml; $('#pop').dataset.v = popHtml; }
+    if (!$('#census').hidden) this.renderCensus();
     $('#msg').textContent = sim.message;
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
@@ -397,6 +433,65 @@ export class UI {
     this.updateExpeditions();
     ($('#bUndo') as HTMLButtonElement).disabled = !this.host.tools.undoStack.length;
     ($('#bRedo') as HTMLButtonElement).disabled = !this.host.tools.redoStack.length;
+  }
+
+  // ---------------- Habitants ----------------
+  /**
+   * État des habitants, d'après les besoins du village : la moitié travaille (au travail ou sans emploi), les autres sont
+   * enfants ou anciens ; un habitant sur cinq a besoin de soins passé quinze habitants ; ceux qui manquent de nourriture,
+   * d'eau ou de bien-être ; les blessés des expéditions au repos et les équipes en route
+   */
+  private census() {
+    const { sim, agents, expeditions: ex } = this.host, p = Math.floor(sim.pop);
+    const workers = Math.round(p * 0.5), employed = sim.jobs.demand > 0 ? Math.min(workers, Math.floor(sim.jobs.cap)) : workers;
+    const sick = Math.round(sim.health.demand), cared = Math.min(sick, Math.floor(sim.health.cap));
+    const short = (n: { cap: number; demand: number }, per: number) => Math.min(p, Math.max(0, Math.ceil((n.demand - n.cap) / per - 1e-6)));
+    return {
+      p, places: Math.floor(sim.housing.cap), workers, employed, jobless: workers - employed, others: p - workers,
+      sick, cared, untreated: sick - cared, injured: agents.injured(), away: ex.active.reduce((n, a) => n + a.party.length, 0),
+      hungry: short(sim.food, 1), thirsty: short(sim.water, 1), unhappy: short(sim.joy, 0.3),
+    };
+  }
+
+  private openCensus() {
+    const box = $('#census'), r = $('#pop').getBoundingClientRect();
+    box.hidden = false;
+    this.renderCensus();
+    // sous le compteur, sans sortir de l'écran
+    box.style.top = `${Math.round(r.bottom + 8)}px`;
+    box.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, r.left + r.width / 2 - box.offsetWidth / 2)))}px`;
+    $('#pop').setAttribute('aria-expanded', 'true');
+  }
+
+  private closeCensus() { $('#census').hidden = true; $('#pop').setAttribute('aria-expanded', 'false'); }
+
+  /** Fiche des habitants : répartition en barre, puis le détail, et ce qui manquerait */
+  private renderCensus() {
+    const c = this.census(), p = Math.max(1, c.p);
+    const seg = (n: number, cls: string, label: string) => (n > 0 ? `<i class="${cls}" style="width:${(n / p) * 100}%" title="${label} : ${n}"></i>` : '');
+    const row = (icon: string, label: string, n: number, cls = '', note = '') => `<div class="crow ${cls}"><b>${ic(icon, 16, 2)}</b><span>${label}${note ? `<small>${note}</small>` : ''}</span><em>${n}</em></div>`;
+    const tips: string[] = [];
+    if (c.jobless) tips.push('Un atelier, une ferme ou un moulin de plus donnerait du travail.');
+    if (c.untreated) tips.push('Un lieu de soins soignerait les malades.');
+    if (c.hungry) tips.push('Une ferme, un champ ou un ponton de pêche nourrirait tout le monde.');
+    if (c.thirsty) tips.push('Un point d’eau ou un puits de plus abreuverait tout le monde.');
+    if (c.unhappy) tips.push('Un lieu de rencontre, un jardin ou un lieu de culte rendrait le village plus heureux.');
+    const html = `
+      <h4>${ic('houses', 18, 2)} ${c.p} habitants <small>pour ${c.places} places</small></h4>
+      <div class="cbar">${seg(c.employed, 'work', 'Au travail')}${seg(c.jobless, 'idle', 'Sans emploi')}${seg(c.others, 'kids', 'Enfants et anciens')}</div>
+      ${row('hammer', 'Au travail', c.employed)}
+      ${row('alert', 'Sans emploi', c.jobless, c.jobless ? 'warn' : '')}
+      ${row('smile', 'Enfants et anciens', c.others)}
+      ${row('health', 'Malades soignés', c.cared, '', c.sick ? `sur ${c.sick} à soigner` : 'aucun malade pour l’instant')}
+      ${c.untreated ? row('health', 'Malades sans soins', c.untreated, 'warn') : ''}
+      ${row('kit', 'Blessés au repos', c.injured, c.injured ? 'note' : '', c.injured ? 'au retour d’une expédition' : '')}
+      ${row('compass', 'En expédition', c.away)}
+      ${c.hungry ? row('bread', 'Ont faim', c.hungry, 'warn') : ''}
+      ${c.thirsty ? row('drop', 'Ont soif', c.thirsty, 'warn') : ''}
+      ${c.unhappy ? row('smile', 'Mécontents', c.unhappy, 'warn') : ''}
+      ${tips.length ? `<p class="hint">${tips.join(' ')}</p>` : '<p class="hint ok">Tout le monde va bien.</p>'}`;
+    const box = $('#census');
+    if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
 
   // ---------------- Expéditions ----------------
@@ -457,6 +552,7 @@ export class UI {
       }).join('');
       return `<div class="mission ${done ? 'done' : ''}">
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
+        ${m.unlocks ? `<p class="unlock">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})</p>` : ''}
         ${done || run ? '' : `<p>${m.intro}</p>${choices}`}</div>`;
     }).join('');
     const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} Expéditions`, `
@@ -562,6 +658,7 @@ export class UI {
       <p class="story"></p>
       ${r.notes.length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}
       <p class="sum">${r.summary === 'rien' ? 'Rien de gagné, rien de perdu.' : r.summary}</p>
+      ${r.ok && r.m.unlocks ? `<p class="unlock">${ic(KIND_ICON[r.m.unlocks], 18, 2)} Nouveau : vous pouvez bâtir <b>${KINDS[r.m.unlocks].names[this.host.sim.age].toLowerCase()}</b> (rayon ${BUILD_CATS.find((c) => c.id === KINDS[r.m.unlocks!].cat)!.label}).${r.m.unlocks === 'pen' ? ' Les bêtes ramenées y vivront.' : ''}</p>` : ''}
       ${r.ok && r.m.mandatory ? '<p class="hint">Expédition obligatoire réussie : l’âge suivant se rapproche.</p>' : !r.ok && r.m.mandatory ? '<p class="hint">On pourra retenter l’expédition, avec le même choix ou un autre.</p>' : ''}
       <div class="row"><span class="grow"></span><button class="active ok">Fermer</button></div>`);
     $('.story', ov).textContent = `« ${r.c.label} » : ${r.text}`;

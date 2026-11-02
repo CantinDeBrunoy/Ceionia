@@ -27,7 +27,19 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   'b_factory_c', 'b_factory_e', 'b_factory_m', 'b_plant_h', 'b_plant_n', 'b_turbine',
   'b_brick_c', 'b_brick_d', 'b_brick_j', 'b_brick_o', 'b_brick_u', 'b_station_s',
   // tour de guet de KayKit Medieval Hexagon
-  'b_tower_blue', 'b_tower_red'] as const;
+  'b_tower_blue', 'b_tower_red',
+  // Préhistoire (CC0) : puits de Quaternius ; tente, feu de camp, couchage, établi, meule, abri et bloc de pierre du
+  // Survival Kit de Kenney ; seau et rondins de Quaternius
+  'p_well', 'p_tent', 'p_campfire', 'p_bedroll', 'p_stone', 'p_workbench', 'p_grind', 'p_roof', 'p_bucket', 'p_logs',
+  // Antiquité : temple grec (Ashtom, CC-BY), amphore (Bruno Oliveira, CC-BY), vases (Paul Spooner, CC-BY), jarre et cruche
+  // (MilkAndBanana, reyshapes, CC0) ; place à fontaine, étals de marché et petites fermes de Quaternius (CC0)
+  'a_temple', 'a_amphora', 'a_vases', 'a_pot', 'a_jug', 'a_plaza', 'a_stall', 'a_stall2', 'a_farm', 'a_farm2',
+  // enclos (Quaternius, CC0) : écurie à colombages, grange ouverte, poulailler, gerbes de foin, barrique, banc ; chien de berger
+  'f_stable', 'f_barn', 'f_coop', 'f_hay', 'f_barrel', 'f_bench', 'dog',
+  // poste des vigiles et académie (Quaternius, CC0) : tour de pierre au toit de tuiles, statue sur son socle
+  'a_tower', 'a_statue',
+  // abri ouvert sur poteaux de l'enclos antique (Quaternius, CC0)
+  'f_hut'] as const;
 export type ModelName = (typeof NAMES)[number];
 
 /**
@@ -204,8 +216,8 @@ export function bakeStatic(name: ModelName, height: number, tintRe: RegExp, skip
  * Bâtiment importé : couleurs cuites en sommets, posé à y = 0, centré, tourné de `rot` (sa façade vers +z) et mis à l'échelle
  * pour tenir dans `width` (la plus grande de ses deux largeurs)
  */
-export function bakeFit(name: ModelName, width: number, rot = 0, remap?: (c: THREE.Color) => void): THREE.BufferGeometry | null {
-  const m = bakeStatic(name, 1, /^$/);
+export function bakeFit(name: ModelName, width: number, rot = 0, remap?: (c: THREE.Color) => void, skip?: RegExp): THREE.BufferGeometry | null {
+  const m = bakeStatic(name, 1, /^$/, skip);
   if (!m?.rest) return null;
   const g = m.rest.rotateY(rot);
   // recoloration (des murs de brique sur une maison de banlieue…)

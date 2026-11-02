@@ -29,6 +29,7 @@ const P: Record<string, string> = {
   boat: '<path d="M2 15h20l-3 5H5z"/><path d="M12 15V3l6 9h-6"/>',
   kit: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M12 10v7M8.5 13.5h7"/>',
   alert: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>',
+  pen: '<path d="M3 20V9M9 20V9M15 20V9M21 20V9"/><path d="M2 12h20M2 17h20"/><path d="M3 9l0-2M9 9V7M15 9V7M21 9V7"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
   compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
   camera: '<path d="M14.5 5h-5L8 7H4.5A1.5 1.5 0 0 0 3 8.5v9A1.5 1.5 0 0 0 4.5 19h15a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 19.5 7H16z"/><circle cx="12" cy="13" r="3.2"/>',
@@ -96,7 +97,7 @@ export function ic(name: string, size = 20, stroke = 1.8): string {
 }
 
 export const KIND_ICON: Record<KindId, string> = {
-  house: 'house', well: 'well', lamp: 'lamp', farm: 'barn', pier: 'fish', workshop: 'anvil', mill: 'windmill',
+  house: 'house', well: 'well', lamp: 'lamp', farm: 'barn', pen: 'pen', pier: 'fish', workshop: 'anvil', mill: 'windmill',
   health: 'hospital', school: 'book', fire: 'flame', gather: 'campfire', temple: 'columns', landmark: 'castle',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };

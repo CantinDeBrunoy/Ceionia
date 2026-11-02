@@ -11,6 +11,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
 import { bakeStatic, splitTrees, meshVariants, MeshPart, ModelName } from './assets';
 import { broadleafShape, pineShape, bushShape, rockShapes } from './treeShapes';
+import { addSnow } from './snow';
 
 /**
  * Tuiles de CH×CH cases : un maillage instancié par tuile et par couche (élagage hors champ, reconstruction partielle) ;
@@ -277,6 +278,9 @@ export class VegView {
     this.tuftMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 1, side: THREE.DoubleSide });
     addWind(this.tuftMat, this.uTime, 1.3);
     const wood = std(0xffffff, true);
+    // l'hiver, la neige se pose sur les branches des sapins, des bouleaux nus et des buissons, et sur les rochers
+    addSnow(this.pineMat);
+    addSnow(wood, 0.9);
 
     // arbres modélisés (Quaternius, Ultimate Nature) : bouleaux, arbres communs et ronds, sapins ; leur feuillage garde ses
     // nuances mais prend la couleur de la saison. Sans modèles : feuillus ronds et sapins à étages procéduraux (treeShapes)
@@ -341,6 +345,7 @@ export class VegView {
     addSwell(lilyMat, this.uWater, this.uCalm);
     this.lily = layer([{ geo: lilyModel?.rest ?? new THREE.CircleGeometry(0.12, 7).rotateX(-Math.PI / 2), mat: lilyMat }], { shadow: false, detail: true });
     const rockMat = std(0xbabcbd, true);
+    addSnow(rockMat);
     this.rocks = rockShapes().map((r) => ({ layer: layer([{ geo: r.geometry, mat: rockMat }], { small: true }), radius: r.radius }));
     // fonds marins importés : algues (qui ondulent dans le courant) et lot de coraux, textures conservées
     const weed = meshVariants('seaweed', 1, false), corals = meshVariants('coral_set', 0.22, true);
@@ -445,7 +450,8 @@ export class VegView {
     this.blobMat.color.copy(s.foliage);
     this.blob2Mat.color.copy(s.foliage2);
     this.willowMat.color.copy(s.foliage2).lerp(new THREE.Color(0x7fae6a), 0.35);
-    this.pineMat.color.setHex(0x4f9a68).lerp(new THREE.Color(0xe8f0f4), s.snow * 0.7);
+    // un peu de givre sur tout le sapin ; la neige, elle, tient sur le dessus des branches
+    this.pineMat.color.setHex(0x4f9a68).lerp(new THREE.Color(0xe8f0f4), s.snow * 0.18);
     this.wheatMat.color.copy(s.crop);
     this.tuftMat.color.copy(s.grass);
     this.fernMat.color.copy(s.foliage2).lerp(s.grass, 0.4).lerp(new THREE.Color(0x5f9a4e), 0.45);
@@ -636,7 +642,7 @@ export class VegView {
     // sous-bois (fougères sous les palmiers, broussailles sèches au désert)
     if (hash2(cx, cz, 5) < (b === BIOME_DESERT ? 0.3 : 0.7) && s.snow < 0.8) {
       const px = cx + 0.15 + hash2(cx, cz, 6) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 7) * 0.7;
-      col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.8 * snowy(b)).multiplyScalar(0.85 + hash2(cx, cz, 8) * 0.2);
+      col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)).multiplyScalar(0.85 + hash2(cx, cz, 8) * 0.2);
       const sc = (0.8 + hash2(cx, cz, 9) * 0.6) * (b === BIOME_TROPICAL ? 1.4 : b === BIOME_DESERT ? 0.7 : 1);
       if (this.shrub) this.shrub.put(this.at(px, w.hAt(px, pz), pz, hash2(cx, cz, 4) * 6.28, sc), col);
       else this.plantAt(px, pz, 1.1 + hash2(cx, cz, 9) * 0.6, 0.8, hash2(cx, cz, 4) * 6.28, col);
@@ -904,7 +910,7 @@ export class VegView {
       else if ((b === BIOME_TAIGA || hash2(cx, cz, 827) < 0.35) && this.pineVars.length) this.tree(pick(this.pineVars), qx, qy, qz, rot, sc, col);
       else this.broadleaf(qx, qy, qz, rot, sc, col, s, hash2(cx, cz, 828) < 0.4);
     } else if (h < lone + 0.055 && this.shrub && b !== BIOME_MARSH && s.snow < 0.8) {
-      this.shrub.put(this.at(qx, qy, qz, rot, 0.7 + hash2(cx, cz, 829) * 0.6), col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.8 * snowy(b)).multiplyScalar(0.9 + hash2(cx, cz, 830) * 0.2));
+      this.shrub.put(this.at(qx, qy, qz, rot, 0.7 + hash2(cx, cz, 829) * 0.6), col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)).multiplyScalar(0.9 + hash2(cx, cz, 830) * 0.2));
     } else if (h < lone + 0.085 && this.ferns && b !== BIOME_MARSH && s.snow * snowy(b) < 0.5) {
       this.ferns.put(this.at(qx, qy - 0.01, qz, rot, sc, sc * (0.6 + 0.4 * s.leaf)), col.copy(FERN_TINT[b]));
     } else if (h < lone + 0.1 && this.mushrooms && s.snow < 0.5) {

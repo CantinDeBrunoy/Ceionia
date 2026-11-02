@@ -20,7 +20,7 @@ const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 /** Bâtiments devant lesquels la terre est battue (une cour, une place) */
 const YARD: Partial<Record<KindId, number>> = { workshop: 0.45, gather: 0.5, farm: 0.42, mill: 0.42, landmark: 0.5, temple: 0.4, health: 0.42, school: 0.42, fire: 0.5 };
 /** Bâtiments au pied desquels traînent tonneaux, caisses et sacs */
-const CLUTTER: KindId[] = ['house', 'workshop', 'farm', 'mill', 'gather'];
+const CLUTTER: KindId[] = ['house', 'workshop', 'farm', 'mill'];
 const BARREL = 0x9a6a44, HOOP = 0x6f5640, CRATE = 0xb48a5e, SACK = 0xd9c4a0;
 
 /**
@@ -521,6 +521,7 @@ export class RoadView {
     const gg = new THREE.BufferGeometry();
     gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
     gg.setAttribute('color', new THREE.Float32BufferAttribute(gc, 3));
+    gg.setAttribute('aLight', new THREE.Float32BufferAttribute(new Float32Array(gp.length / 3), 1));
     gg.computeVertexNormals();
     this.glow.geometry.dispose();
     this.glow.geometry = gg;

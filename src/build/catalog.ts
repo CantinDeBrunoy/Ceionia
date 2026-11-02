@@ -1,4 +1,4 @@
-export type KindId = 'house' | 'farm' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire';
+export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -21,6 +21,8 @@ export interface KindDef {
   health?: number[];
   /** effet particulier, en clair (fiche du bâtiment) */
   perk?: string;
+  /** mission d'expédition qu'il faut avoir réussie pour le bâtir */
+  reqMission?: string;
 }
 
 export const KINDS: Record<KindId, KindDef> = {
@@ -36,6 +38,14 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Nourrit les habitants.',
     food: [6, 9, 13, 20, 30], jobs: [1, 2, 2, 3, 3],
   },
+  pen: {
+    id: 'pen', size: 2, minAge: 0, icon: '🐑', cat: 'prod',
+    names: ['Enclos de branchages', 'Enclos', 'Bergerie', 'Étable', 'Ferme d’élevage'],
+    desc: 'Les bêtes ramenées par les expéditions y vivent (six par enclos) : du lait, de la laine et de la viande pour le village.',
+    food: [6, 9, 12, 16, 22], jobs: [1, 1, 2, 2, 3],
+    perk: 'Débloqué par l’expédition « Apprivoiser des bêtes ».',
+    reqMission: 'herd',
+  },
   pier: {
     id: 'pier', size: 1, minAge: 0, icon: '🎣', cat: 'prod',
     names: ['Coin de pêche', 'Ponton de pêche', 'Pêcherie', 'Conserverie', 'Port de pêche'],
@@ -45,8 +55,9 @@ export const KINDS: Record<KindId, KindDef> = {
   well: {
     id: 'well', size: 1, minAge: 0, icon: '💧', cat: 'home',
     names: ['Point d’eau', 'Puits', 'Puits couvert', 'Pompe', 'Fontaine'],
-    desc: 'Fournit de l’eau. Une maison près d’une rivière en a déjà.',
-    water: [8, 12, 18, 28, 40],
+    desc: 'Fournit de l’eau à six maisons environ. Une maison près d’une rivière en a déjà.',
+    // un point d'eau pour six maisons environ, à chaque âge (une maison loge 3, 4, 6, 9 puis 14 habitants)
+    water: [18, 26, 38, 56, 85],
   },
   workshop: {
     id: 'workshop', size: 2, minAge: 0, icon: '🔨', cat: 'prod',
@@ -88,7 +99,8 @@ export const KINDS: Record<KindId, KindDef> = {
     id: 'health', size: 2, minAge: 0, icon: '🏥', cat: 'service',
     names: ['Camp du guérisseur', 'Asclépiéion', 'Hôtel-Dieu', 'Hôpital', 'Centre hospitalier'],
     desc: 'Soigne les habitants : la santé du village grandit avec lui.',
-    health: [8, 14, 22, 34, 52], jobs: [1, 2, 3, 6, 10],
+    // un seul lieu de soins suffit à un village ordinaire de son âge (chaque habitant en demande 0,2 passé quinze habitants)
+    health: [30, 45, 60, 90, 140], jobs: [1, 2, 3, 6, 10],
     perk: 'Les blessés des expéditions guérissent deux fois plus vite.',
   },
   school: {
@@ -107,7 +119,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pier', 'workshop', 'mill', 'health', 'school', 'fire', 'gather', 'temple', 'landmark'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'pier', 'workshop', 'mill', 'health', 'school', 'fire', 'gather', 'temple', 'landmark'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -135,7 +147,7 @@ export const AGES: AgeDef[] = [
 ];
 
 export const KIND_LABEL: Record<KindId, string> = {
-  house: 'maisons', farm: 'fermes', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
+  house: 'maisons', farm: 'fermes', pen: 'enclos', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
   health: 'lieux de soins', school: 'écoles', fire: 'casernes',
 };

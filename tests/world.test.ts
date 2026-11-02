@@ -5,7 +5,7 @@ import { genHeights, newWorld, MAPS } from '../src/world/mapgen';
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
-import { MISSIONS, mandatoryFor, applyEffects, needBonus } from '../src/sim/missions';
+import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP } from '../src/sim/missions';
 import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { EVENTS } from '../src/sim/events';
@@ -490,5 +490,20 @@ describe('expéditions', () => {
     expect(asked).toBeGreaterThan(0);
     expect(report!.notes.length).toBe(asked + 1);
     expect(w.exp.gear.spear).toBe(2);
+  });
+
+  it('l’expédition des bêtes débloque l’enclos, où elles vivent (six par enclos)', () => {
+    const w = island();
+    const herd = MISSIONS.find((m) => m.id === 'herd')!;
+    expect(herd.unlocks).toBe('pen');
+    w.exp.herd.push('sheep', 'sheep', 'sheep', 'sheep', 'pig', 'pig', 'cow', 'cow');
+    expect(penHerds(w).rest.length).toBe(8);
+    let spot: [number, number] | null = null;
+    for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 10 && !spot; x++) if (w.canPlace('pen', x, z) === null) spot = [x, z];
+    expect(spot).not.toBeNull();
+    const pen = w.place('pen', spot![0], spot![1], 0, true, 0, false)!;
+    const r = penHerds(w);
+    expect(r.pens.get(pen.id)!.length).toBe(PEN_CAP);
+    expect(r.rest).toEqual(['cow', 'cow']);
   });
 });

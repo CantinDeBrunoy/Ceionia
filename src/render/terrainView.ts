@@ -24,6 +24,8 @@ const BASALT = new THREE.Color(0x4e4645);
 const VOLCANO_BROWN = new THREE.Color(0x7d5c40);
 const GRAVEL = new THREE.Color(0xb9b1a6);
 const WHITE = new THREE.Color(0xf4f7fb);
+/** Neige : teinte de base, bleutée dans les creux, éclatante sur les bosses */
+const SNOW_BASE = new THREE.Color(0xe6eef8), SNOW_SHADE = new THREE.Color(0xb4c8e6), SNOW_LIT = new THREE.Color(0xfbfdff);
 const HIGH = new THREE.Color(0xc9d79a);
 const TILLED = new THREE.Color(0xa47b52);
 const BEDS = new THREE.Color(0x8a6548);
@@ -53,7 +55,8 @@ const MAX_CAVES = 24;
 /** Lignes de cases reteintes par image quand la saison change */
 const RECOLOR_ROWS = 12;
 /** Part de la neige de saison qui tient dans chaque biome */
-const SNOWY = [1, 1, 0.15, 0.2, 1];
+/** Neige que retient chaque biome (tempéré, taïga, désert, tropical, marais) */
+export const SNOWY = [1, 1, 0.15, 0.2, 1];
 /** Nombre de biomes */
 const NB = 5;
 /** Strates de la falaise sous l'île, de la terre du haut à la roche du bas */
@@ -92,7 +95,7 @@ export class TerrainView {
   private pos = new Float32Array(this.C * this.C * 6 * 3);
   private col = new Float32Array(this.C * this.C * 6 * 3);
   private nor = new Float32Array(this.C * this.C * 6 * 3);
-  private surf = new Float32Array(this.C * this.C * 6 * 3);
+  private surf = new Float32Array(this.C * this.C * 6 * 4);
   private skPos = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
   private skCol = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
   private skNor = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
@@ -100,7 +103,8 @@ export class TerrainView {
   /** Par sous-sommet : normale lissée, couleur, poids des motifs de détail (herbe, sable/terre, roche) */
   private vnor = new Float32Array(VS * VS * 3);
   private vcol = new Float32Array(VS * VS * 3);
-  private vsurf = new Float32Array(VS * VS * 3);
+  /** motifs par sous-sommet : herbe, sable, roche, neige */
+  private vsurf = new Float32Array(VS * VS * 4);
   /** Par sous-sommet : part des cases voisines en forêt / champ / jardin / rocaille (zones à bords doux) */
   private vegW = new Float32Array(VS * VS * 4);
   private vegCol = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
@@ -135,23 +139,30 @@ export class TerrainView {
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(this.nor, 3));
-    g.setAttribute('surf', new THREE.BufferAttribute(this.surf, 3));
+    g.setAttribute('surf', new THREE.BufferAttribute(this.surf, 4));
     const topMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
     topMat.onBeforeCompile = (sh) => {
       sh.uniforms.uDetail = { value: detail };
       Object.assign(sh.uniforms, this.caveU);
-      sh.vertexShader = 'attribute vec3 surf;\nvarying vec3 vSurf;\nvarying vec3 vPos;\nvarying vec3 vNrm;\n'
+      sh.vertexShader = 'attribute vec4 surf;\nvarying vec4 vSurf;\nvarying vec3 vPos;\nvarying vec3 vNrm;\n'
         + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSurf = surf;\n  vPos = position;\n  vNrm = normal;');
       const T = CAVE_TUNNEL, f = (v: number) => v.toFixed(3);
       sh.fragmentShader = `uniform sampler2D uDetail;
 uniform vec4 uCaves[${MAX_CAVES}];
 uniform int uCaveN;
-varying vec3 vSurf;
+varying vec4 vSurf;
 varying vec3 vPos;
 varying vec3 vNrm;
 // motif projeté sur les trois axes, pondéré par l'orientation de la surface : pas d'étirement sur les parois (0.5 = neutre)
 vec3 tri(vec3 p, vec3 w, float s) {
   return texture2D(uDetail, p.zy * s).rgb * w.x + texture2D(uDetail, p.xz * s).rgb * w.y + texture2D(uDetail, p.xy * s).rgb * w.z;
+}
+// bruit doux (valeurs interpolées) pour les congères de neige : sans les fissures du motif de roche
+float snH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float snN(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(snH(i), snH(i + vec2(1.0, 0.0)), f.x), mix(snH(i + vec2(0.0, 1.0)), snH(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 ` + sh.fragmentShader
         .replace('void main() {', `void main() {
@@ -172,10 +183,24 @@ vec3 tri(vec3 p, vec3 w, float s) {
   bw /= bw.x + bw.y + bw.z;
   vec3 d1 = tri(vPos, bw, 0.6) - 0.5;
   vec3 d2 = tri(vPos + 0.31, bw, 0.11) - 0.5;
-  diffuseColor.rgb *= 1.0 + dot(vSurf, d1 * vec3(0.55, 0.4, 0.6) + d2 * vec3(0.3, 0.2, 0.35));
+  diffuseColor.rgb *= 1.0 + dot(vSurf.xyz, d1 * vec3(0.55, 0.4, 0.6) + d2 * vec3(0.3, 0.2, 0.35));
   // strates horizontales sur la craie et la roche
   float strata = smoothstep(0.86, 1.0, sin(vPos.y * 9.0 + sin(vPos.x * 1.1 + vPos.z * 0.7) * 0.8));
-  diffuseColor.rgb *= 1.0 - strata * 0.16 * vSurf.z;`);
+  diffuseColor.rgb *= 1.0 - strata * 0.16 * vSurf.z;
+  // neige : congères (grandes ondulations), rides du vent aux creux bleutés, grain et paillettes qui s'éteignent au loin
+  float sn = vSurf.w;
+  if (sn > 0.01) {
+    float drift = snN(vPos.xz * 0.45 + 3.1) * 0.6 + snN(vPos.xz * 1.3 + 7.7) * 0.4 - 0.5;
+    // traînées allongées dans le sens du vent
+    float streak = snN(vec2(vPos.x * 0.3 + vPos.z * 0.12, vPos.z * 2.2 - vPos.x * 0.5)) - 0.5;
+    float rip = tri(vPos + 0.7, bw, 0.9).g - 0.5;
+    float grain = tri(vPos + 1.9, bw, 2.6).g - 0.5;
+    float glint = smoothstep(0.78, 0.86, tri(vPos * 1.7 + 4.1, bw, 3.1).b);
+    vec3 c = diffuseColor.rgb * (1.0 + (drift * 0.32 + streak * 0.16 + grain * 0.07) * sn);
+    c = mix(c, c * vec3(0.84, 0.9, 1.06), clamp(-drift * 2.5, 0.0, 1.0) * 0.5 * sn);
+    c = mix(c, c * vec3(0.86, 0.92, 1.05), clamp(-rip * 2.2, 0.0, 1.0) * 0.55 * sn);
+    diffuseColor.rgb = c + glint * 0.16 * sn;
+  }`);
     };
     this.top = new THREE.Mesh(g, topMat);
     this.top.receiveShadow = true;
@@ -456,7 +481,7 @@ vec3 tri(vec3 p, vec3 w, float s) {
     // couleur et motif par sous-sommet : dégradés continus fond marin → sable → herbe → roche → neiges éternelles
     for (let zz = z0; zz <= z1; zz++) for (let i = zz * VS + x0; i <= zz * VS + x1; i++) {
       const h = vis[i];
-      let grass = 0, sand = 0, rock = 0;
+      let grass = 0, sand = 0, rock = 0, cover = 0;
       if (h < 0.02) {
         // fond vaseux des mares du marais
         tmp.copy(WET_SAND).lerp(SEABED, clamp(-h / 1.6, 0, 1)).lerp(MUD, this.vbw[i * NB + BIOME_MARSH] * 0.8);
@@ -503,7 +528,16 @@ vec3 tri(vec3 p, vec3 w, float s) {
         // champs de lave refroidie : basalte noir, que la mousse puis l'herbe regagnent
         const lf = this.lavaW[i];
         if (lf > 0) tmp.lerp(this.cliff.copy(LAVA_MOSS).lerp(LAVA_FIELD, smoothstep(0.1, 0.35, lf)), smoothstep(0, 0.18, lf) * 0.94);
-        if (snow > 0) tmp.lerp(WHITE, snow * (0.85 - steep * 0.35));
+        // neige : couverture inégale — plaques où l'herbe perce, moins sous les arbres et sur les pentes, qui grandissent
+        // avec l'hiver ; bleutée dans les creux, éclatante sur les bosses
+        if (snow > 0) {
+          cover = clamp(snow * 1.2 - 0.12 + (pv * 0.65 + this.wobble[i] * 0.4 - steep * 0.8 - vw[i * 4] * 0.55) * snow, 0, 1);
+          cover = cover * cover * (3 - 2 * cover);
+          const xi = i % VS, zi = (i / VS) | 0;
+          const curv = xi > 1 && zi > 1 && xi < VS - 2 && zi < VS - 2 ? (vis[i - 2] + vis[i + 2] + vis[i - 2 * VS] + vis[i + 2 * VS]) * 0.25 - h : 0;
+          this.cliff.copy(SNOW_BASE).lerp(SNOW_SHADE, clamp(curv * 5, 0, 0.65)).lerp(SNOW_LIT, clamp(-curv * 5, 0, 0.8));
+          tmp.lerp(this.cliff, cover);
+        }
         // le volcan reste sombre, sans neige sur ses flancs chauds
         if (cap > 0) tmp.lerp(WHITE, cap * (0.95 - steep * 0.25) * (1 - lava));
         // glaciers : la neige des replats d'altitude tourne à la glace bleutée
@@ -512,8 +546,9 @@ vec3 tri(vec3 p, vec3 w, float s) {
         rock = Math.max((steep + alt - steep * alt) * (1 - lava * 0.7), vw[i * 4 + 3], lava * 0.35, smoothstep(0.3, 0.8, lf) * 0.9);
         sand = Math.max(beach, soil, dry * 0.9) * (1 - rock);
         grass = Math.max(0, 1 - sand - rock);
-        // la neige lisse les motifs
-        const smooth = 1 - Math.max(snow, cap) * 0.75;
+        // la neige recouvre les motifs du sol (ils restent là où elle est mince) ; elle a les siens
+        cover = Math.max(cover, cap * 0.9);
+        const smooth = 1 - cover * 0.85;
         grass *= smooth; sand *= smooth; rock *= smooth;
       }
       // ravins : parois de roche, de plus en plus sombres vers le fond
@@ -527,10 +562,11 @@ vec3 tri(vec3 p, vec3 w, float s) {
       if (xi > 2 && zi > 2 && xi < VS - 3 && zi < VS - 3) {
         const l1 = (vis[i - 1] + vis[i + 1] + vis[i - VS] + vis[i + VS]) * 0.25 - h;
         const l3 = (vis[i - 3] + vis[i + 3] + vis[i - 3 * VS] + vis[i + 3 * VS]) * 0.25 - h;
-        tmp.multiplyScalar(1 - clamp(l1 * 0.9 + l3 * 0.3, -0.06, 0.3));
+        // sous la neige, les creux bleuissent au lieu de noircir
+        tmp.multiplyScalar(1 - clamp(l1 * 0.9 + l3 * 0.3, -0.06, 0.3) * (1 - cover * 0.6));
       }
       vcol[i * 3] = tmp.r; vcol[i * 3 + 1] = tmp.g; vcol[i * 3 + 2] = tmp.b;
-      vsurf[i * 3] = grass; vsurf[i * 3 + 1] = sand; vsurf[i * 3 + 2] = rock;
+      vsurf[i * 4] = grass; vsurf[i * 4 + 1] = sand; vsurf[i * 4 + 2] = rock; vsurf[i * 4 + 3] = cover;
     }
 
     // triangles (même découpage que World.hAt)
@@ -545,7 +581,8 @@ vec3 tri(vec3 p, vec3 w, float s) {
         nor[o] = mx / ml; nor[o + 1] = my / ml; nor[o + 2] = mz / ml;
       }
       col[o] = vcol[k]; col[o + 1] = vcol[k + 1]; col[o + 2] = vcol[k + 2];
-      surf[o] = vsurf[k]; surf[o + 1] = vsurf[k + 1]; surf[o + 2] = vsurf[k + 2];
+      const so = (o / 3) * 4, sk = vi * 4;
+      surf[so] = vsurf[sk]; surf[so + 1] = vsurf[sk + 1]; surf[so + 2] = vsurf[sk + 2]; surf[so + 3] = vsurf[sk + 3];
       o += 3;
     };
     // sous-cases dont un sommet a changé ; chacune occupe 18 valeurs (2 triangles × 3 sommets × 3)
@@ -573,7 +610,8 @@ vec3 tri(vec3 p, vec3 w, float s) {
     const sent = colorsOnly ? [ga.color, ga.surf] : [ga.position, ga.color, ga.normal, ga.surf];
     for (const a of sent) {
       const attr = a as THREE.BufferAttribute;
-      if (!full) for (let cz = sz0; cz <= sz1; cz++) attr.addUpdateRange((cz * C + sx0) * 18, (sx1 - sx0 + 1) * 18);
+      const per = 6 * attr.itemSize;
+      if (!full) for (let cz = sz0; cz <= sz1; cz++) attr.addUpdateRange((cz * C + sx0) * per, (sx1 - sx0 + 1) * per);
       attr.needsUpdate = true;
     }
     // falaise du bord : si la zone le touche (la bande de saison la refait une fois finie)

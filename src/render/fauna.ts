@@ -1,3 +1,4 @@
+import { penHerds } from '../sim/missions';
 import * as THREE from 'three';
 import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO } from '../world/world';
 import { KINDS, sizeOf } from '../build/catalog';
@@ -458,12 +459,14 @@ export class Fauna {
         if (h && hasModel('pig') && b.age <= 3) src.push({ key: `pig${b.id}`, kind: 'pig', hx: h[0], hz: h[1], n: 2, radius: 1.2 });
       }
     }
-    // bêtes ramenées par les expéditions : elles paissent en petits groupes près des fermes (des maisons, faute de ferme)
-    if (w.exp.herd.length) {
+    // bêtes ramenées par les expéditions : dans les enclos (PenView), et celles qui n'y ont pas de place paissent en petits
+    // groupes près des fermes (des maisons, faute de ferme)
+    const loose = penHerds(w).rest;
+    if (loose.length) {
       const all = [...w.buildings.values()], farms = all.filter((b) => b.kind === 'farm');
       const hosts = farms.length ? farms : all.filter((b) => b.kind === 'house').slice(0, 3);
       const byKind = new Map<Kind, number>();
-      for (const k of w.exp.herd) byKind.set(k, (byKind.get(k) ?? 0) + 1);
+      for (const k of loose) byKind.set(k, (byKind.get(k) ?? 0) + 1);
       let i = 0;
       for (const [kind, n] of byKind) {
         for (let left = n, j = 0; left > 0 && hosts.length; j++) {

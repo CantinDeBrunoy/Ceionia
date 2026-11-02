@@ -374,6 +374,9 @@ export class Agents {
 
   private byId(id: number) { return this.agents.find((a) => a.id === id); }
 
+  /** Habitants blessés qui se reposent chez eux */
+  injured() { return this.agents.reduce((n, a) => n + (a.rest > 0 ? 1 : 0), 0); }
+
   /** Habitants adultes libres (ni en expédition, ni blessés) */
   available() {
     const busy = this.agents.reduce((n, a) => n + (a.mission || a.rest > 0 ? 1 : 0), 0);

@@ -1,5 +1,6 @@
 import type { World } from '../world/world';
 import { Danger, GearId, Stock, emptyStock, GEAR_BY } from './gear';
+import type { KindId } from '../build/catalog';
 
 /**
  * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant). Une petite équipe
@@ -61,6 +62,8 @@ export interface Mission {
   title: string;
   intro: string;
   choices: Choice[];
+  /** bâtiment que sa réussite permet de construire */
+  unlocks?: KindId;
 }
 
 const food = (n: number, days?: number): Effect => ({ t: 'need', need: 'food', n, days });
@@ -71,7 +74,7 @@ const hurt = (n: number, days: number): Effect => ({ t: 'injured', n, days });
 export const MISSIONS: Mission[] = [
   // ---------------- Préhistoire ----------------
   {
-    id: 'herd', age: 0, mandatory: true, icon: '🐑', title: 'Apprivoiser des bêtes',
+    id: 'herd', age: 0, mandatory: true, icon: '🐑', title: 'Apprivoiser des bêtes', unlocks: 'pen',
     intro: 'Des bêtes sauvages paissent loin du camp. Si l’on en ramenait quelques-unes, on pourrait les garder près des fermes : du lait, de la laine et de la viande toute l’année.',
     choices: [
       {
@@ -349,6 +352,18 @@ export const MISSIONS: Mission[] = [
     ],
   },
 ];
+
+/** Bêtes par enclos, au plus */
+export const PEN_CAP = 6;
+
+/** Bêtes de chaque enclos (dans l'ordre où ils ont été bâtis), et celles qui, faute de place, paissent près des fermes */
+export function penHerds(w: World) {
+  const pens = [...w.buildings.values()].filter((b) => b.kind === 'pen').sort((a, b) => a.id - b.id);
+  const out = new Map<number, HerdKind[]>();
+  let i = 0;
+  for (const p of pens) { out.set(p.id, w.exp.herd.slice(i, i + PEN_CAP)); i += PEN_CAP; }
+  return { pens: out, rest: w.exp.herd.slice(i) };
+}
 
 /** La mission obligatoire de l'âge (celle qui ouvre l'âge suivant) */
 export const mandatoryFor = (age: number) => MISSIONS.find((m) => m.age === age && m.mandatory) ?? null;

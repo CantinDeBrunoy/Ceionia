@@ -7,7 +7,7 @@ import type { UnderView } from './render/underView';
 let underModule: Promise<typeof import('./render/underView')> | null = null;
 const loadUnder = () => (underModule ??= import('./render/underView'));
 import { newWorld, addDefaultDecor, MAPS } from './world/mapgen';
-import { TerrainView } from './render/terrainView';
+import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
 import { RoadView } from './render/roads';
 import { VegView, syncChunks } from './render/vegetation';
@@ -21,6 +21,7 @@ import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
 import { Streams } from './render/streams';
 import { Atmosphere } from './render/atmosphere';
+import { SNOW, setSnowMap } from './render/snow';
 import { AmbientLife } from './render/life';
 import { Glow } from './render/glow';
 import { loadModels } from './render/assets';
@@ -34,6 +35,7 @@ import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { Expeditions } from './sim/expeditions';
 import { ExpeditionView } from './render/expeditionView';
+import { PenView } from './render/pens';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -78,6 +80,7 @@ class Game implements UIHost {
   halos: Halos;
   expeditions: Expeditions;
   expView: ExpeditionView;
+  pens: PenView;
   /** la caméra suit l'expédition */
   /** expédition que la caméra suit (son numéro), ou null */
   following: number | null = null;
@@ -170,13 +173,14 @@ class Game implements UIHost {
     this.expeditions = new Expeditions(w, this.agents, () => this.time.dayLen);
     this.expeditions.pop = () => this.sim.pop;
     this.expView = new ExpeditionView(w, this.agents, this.expeditions);
+    this.pens = new PenView(w);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
     this.atmosphere.onStrike = (x, z) => ignite(w.buildingAt(Math.floor(x), Math.floor(z)));
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.gardens.group, this.halos.mesh, this.expView.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.gardens.group, this.halos.mesh, this.expView.group, this.pens.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -498,6 +502,9 @@ class Game implements UIHost {
       this.seasonKey = key;
       // les teintes du sol changent par bandes, sur quelques images
       if (force) this.terrain.update(this.season); else this.terrain.recolor(this.season);
+      // neige sur les toits selon le biome (la carte a pu changer)
+      const w = this.world;
+      setSnowMap(N, (k) => SNOWY[w.biome[k]] ?? 1);
       this.veg.applySeason(this.season);
       this.gardens.applySeason(this.season);
       this.roads.rebuild(this.sim.age, this.season.snow);
@@ -579,6 +586,7 @@ class Game implements UIHost {
     this.env.update(dt, this.time, this.season, this.cam.target, gdt, this.cam.dist);
     if (!uv) this.atmosphere.update(dt, this.time, this.season, this.env, this.cam.camera, this.cam.target);
     else this.atmosphere.hideMist();
+    SNOW.value = uv ? 0 : this.season.snow;
     this.sim.rain = this.env.rainK;
     this.sim.season = this.time.season;
     this.sim.update(gdt, dt);
@@ -592,6 +600,7 @@ class Game implements UIHost {
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night);
     this.expeditions.update(gdt);
     this.expView.update(gdt);
+    this.pens.update(gdt);
     // la caméra accompagne l'équipe
     const followed = this.following === null ? null : this.expeditions.active.find((e) => e.id === this.following);
     if (!followed) this.following = null;
