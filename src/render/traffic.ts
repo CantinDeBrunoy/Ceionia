@@ -151,17 +151,17 @@ export class Traffic {
       for (const along of [1.05, 1.4, 1.8]) for (const side of [0.3, -0.3]) {
         if (ok) break;
         mx = p.x + 0.5 + f[0] * along - f[1] * side; mz = p.z + 0.5 + f[1] * along + f[0] * side;
-        ok = w.hAt(mx, mz) < SEA - 0.08;
+        ok = w.seaAt(mx, mz, SEA - 0.08);
       }
       if (!ok) continue;
       this.boats.push({ home: p, x: mx, z: mz, tx: mx, tz: mz, heading: Math.atan2(f[0], f[1]), wait: 2 + Math.random() * 4, mx, mz, seed: Math.random() * 10 });
     }
     // voiliers au large à partir du Moyen Âge
     const nSails = age >= 2 ? MAX_SAILS : 0;
-    this.sails.length = Math.min(this.sails.length, nSails);
+    this.sails = this.sails.filter((s) => w.seaAt(s.x, s.z, -0.6)).slice(0, nSails);
     for (let tries = 0; this.sails.length < nSails && tries < 200; tries++) {
       const x = 2 + Math.random() * (N - 4), z = 2 + Math.random() * (N - 4);
-      if (w.hAt(x, z) < -1.2) this.sails.push({ home: null, x, z, tx: x, tz: z, heading: Math.random() * 6.28, wait: 0, mx: x, mz: z, seed: Math.random() * 10 });
+      if (w.seaAt(x, z, -1.2)) this.sails.push({ home: null, x, z, tx: x, tz: z, heading: Math.random() * 6.28, wait: 0, mx: x, mz: z, seed: Math.random() * 10 });
     }
   }
 
@@ -308,12 +308,12 @@ export class Traffic {
     this.sailsMesh.instanceMatrix.needsUpdate = true;
   }
 
-  /** Ligne droite entièrement sur l'eau, plus profonde que `depth` (pas de lac : leur eau est plus haute) */
+  /** Ligne droite entièrement sur l'eau, plus profonde que `depth` (pas de lac : leur eau est plus haute ; pas de faille) */
   private openWater(x0: number, z0: number, x1: number, z1: number, depth: number) {
     const w = this.world, n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.4);
     for (let i = 1; i <= n; i++) {
       const x = x0 + ((x1 - x0) * i) / n, z = z0 + ((z1 - z0) * i) / n;
-      if (x < 0.5 || z < 0.5 || x > N - 0.5 || z > N - 0.5 || w.hAt(x, z) > depth) return false;
+      if (x < 0.5 || z < 0.5 || x > N - 0.5 || z > N - 0.5 || !w.seaAt(x, z, depth)) return false;
     }
     return true;
   }

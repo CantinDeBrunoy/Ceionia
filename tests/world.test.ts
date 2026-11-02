@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { World, N, MAX_H, MIN_H, setMapSize, VEG_FIELD, VEG_GARDEN } from '../src/world/world';
+import { World, N, MAX_H, MIN_H, setMapSize, VEG_FIELD, VEG_GARDEN, VR, VS } from '../src/world/world';
 import { findGardens, layoutGarden } from '../src/world/gardens';
 import { genHeights, newWorld, MAPS } from '../src/world/mapgen';
 import { Sim } from '../src/sim/sim';
@@ -123,6 +123,15 @@ describe('eau', () => {
     w.setLakes(cells, level);
     expect(w.canPlace('house', x, z)).toBe('Un lac est ici');
     w.setLakes(new Uint8Array(N * N), new Float32Array(N * N));
+  });
+
+  it('le fond d’une faille n’est pas la mer : aucun bateau n’y navigue', () => {
+    const i = w.ravine.findIndex((r) => r > 0.5);
+    expect(i).toBeGreaterThanOrEqual(0);
+    const x = (i % VS) / VR, z = Math.floor(i / VS) / VR;
+    expect(w.seaAt(x, z, MAX_H)).toBe(false);
+    const [sx, sz] = findCell((cx, cz) => w.cellAvg(cx, cz) < -1.9);
+    expect(w.seaAt(sx + 0.5, sz + 0.5, -1.2)).toBe(true);
   });
 });
 

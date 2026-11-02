@@ -490,6 +490,12 @@ export class World {
 
   isWaterCell(cx: number, cz: number) { return this.cellAvg(cx, cz) < 0.08; }
 
+  /** Eau libre au point (x, z) : le sol affiché passe sous `depth`, hors du ravin d'une faille (son fond reste à sec) */
+  seaAt(wx: number, wz: number, depth: number) {
+    const x = Math.round(Math.min(Math.max(wx, 0), N) * VR), z = Math.round(Math.min(Math.max(wz, 0), N) * VR);
+    return this.hAt(wx, wz) < depth && this.ravine[z * VS + x] <= 0.02;
+  }
+
   biomeAt(x: number, z: number) {
     const cx = Math.min(N - 1, Math.max(0, Math.floor(x))), cz = Math.min(N - 1, Math.max(0, Math.floor(z)));
     return this.biome[cz * N + cx];
