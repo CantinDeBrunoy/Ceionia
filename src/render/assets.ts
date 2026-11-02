@@ -19,13 +19,13 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   // monde souterrain : cristaux, toiles et créatures
   'crystal', 'crystal2', 'mineral', 'cobweb', 'zombie', 'skeleton', 'spider', 'slime', 'mushnub', 'ghost',
   // bâtiments (CC0) : Moyen Âge et chaumières de KayKit Medieval Hexagon, résidences et bureaux de KayKit City Builder Bits,
-  // usines, éolienne et maisons de brique des City Kits de Kenney
+  // centrales, éolienne et maisons de brique des City Kits de Kenney
   'b_cottage_blue', 'b_cottage_green', 'b_cottage_red', 'b_cottage_yellow', 'b_house_blue', 'b_house_green', 'b_house_red', 'b_house_yellow',
   'b_forge_blue', 'b_forge_red', 'b_market_blue', 'b_market_red', 'b_church_blue', 'b_church_red', 'b_windmill_blue', 'b_windmill_red',
   'b_castle_blue', 'b_castle_red', 'b_well_blue', 'b_well_red',
   'b_flat_a', 'b_flat_b', 'b_flat_d', 'b_flat_h', 'b_office_c', 'b_office_e', 'b_office_f', 'b_office_g',
-  'b_factory_c', 'b_factory_e', 'b_factory_m', 'b_plant_h', 'b_plant_n', 'b_turbine',
-  'b_brick_c', 'b_brick_d', 'b_brick_j', 'b_brick_o', 'b_brick_u', 'b_station_s',
+  'b_plant_h', 'b_plant_n', 'b_turbine',
+  'b_brick_c', 'b_brick_d', 'b_brick_j', 'b_brick_o', 'b_brick_u',
   // tour de guet de KayKit Medieval Hexagon
   'b_tower_blue', 'b_tower_red',
   // Préhistoire (CC0) : puits de Quaternius ; tente, feu de camp, couchage, établi, meule, abri et bloc de pierre du

@@ -68,7 +68,7 @@ export class ExpeditionView {
       const key = `${a.phase === 'back' || a.phase === 'home' ? 'back' : 'out'}|${a.ok}`;
       if (key !== sh.key) { sh.key = key; this.rebuild(a, sh); }
       // sur place : la scène du travail, rangée au départ du retour
-      if (a.phase === 'work' && !sh.scene && !a.targets.length) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a);
+      if (a.phase === 'work' && !sh.scene && a.entry < 0) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a);
       else if (a.phase !== 'work' && sh.scene) { sh.scene.dispose(a); sh.scene = null; }
       sh.scene?.update(dt, a);
       this.step(a, sh, dt);

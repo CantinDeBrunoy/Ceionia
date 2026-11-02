@@ -9,13 +9,16 @@ import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
-import { effectSummary, mandatoryFor, DestKind, MISSIONS, redoEffects, REDO_DAYS } from '../sim/missions';
+import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
+import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
+import { CAMP_QUESTS } from '../sim/depths';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
 
 export interface UIHost {
   tools: ToolController;
+  world: World;
   sim: Sim;
   time: GameTime;
   env: Environment;
@@ -34,6 +37,9 @@ export interface UIHost {
   exitUnder(): void;
   torchMode: boolean;
   underZone(): string | null;
+  /** brouillard visible (0 … 1), et le dissiper */
+  fogLevel(): number;
+  dispelFog(): void;
   /** qualité graphique et catastrophes naturelles */
   quality: 'high' | 'medium' | 'low';
   setQuality(q: 'high' | 'medium' | 'low'): void;
@@ -149,6 +155,7 @@ const tabOfTool = (tool: ToolId, current: string) =>
 /** Ce que change un bâtiment débloqué par une expédition, dit au retour de l'équipe */
 const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
   pen: ' Les bêtes ramenées y vivront.', stable: ' Les chevaux ramenés y vivront.', mine: ' Elle rapportera du minerai chaque jour.',
+  outpost: ' Bâtissez-le tout contre une grotte ou une faille : sa garnison tiendra les galeries dessous, et les expéditions armées partiront de là.',
 };
 
 export class UI {
@@ -161,6 +168,8 @@ export class UI {
   private bannerTimer = 0;
   /** bâtiment ou outil survolé dans la barre (sa fiche s'affiche) */
   private hover: { kind?: KindId; tool?: string } | null = null;
+  /** fiche du bâtiment sélectionné : redessinée seulement quand il change */
+  private selKey = '';
   /** cartes des expéditions en cours, par numéro */
   private expCards = new Map<number, HTMLElement>();
 
@@ -181,6 +190,7 @@ export class UI {
           <div id="clock"></div>
           <button id="bPause" title="Pause (Espace)" aria-label="Pause">${ic('pause', 18, 2.2)}</button>
           <button id="bSpeed" title="Vitesse">×1</button>
+          <button id="bFog" title="Dissiper le brouillard" aria-label="Dissiper le brouillard" hidden>${ic('fog', 18, 2)}</button>
         </div>
         <nav id="menuBtns" class="panel">
           <button id="bExp" title="Expéditions" aria-label="Expéditions">${ic('compass')}<span id="expBadge"></span></button>
@@ -191,9 +201,11 @@ export class UI {
       <div id="expList"></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
+        <button id="campQuest" title="Quêtes du camp souterrain"></button>
         <button id="bTorch" title="Poser ou retirer des torches (T)">${ic('flame', 18)} Torches</button>
         <button id="bUp" title="Remonter à la surface (U)">${ic('up', 18)} Remonter</button>
       </div>
+      <div id="selCard" class="panel"></div>
       <div id="fade"></div>
       <footer id="dock">
         <div id="info" class="panel"></div>
@@ -236,6 +248,7 @@ export class UI {
 
     $('#agePanel').onclick = () => $('#agePanel').classList.toggle('open');
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
+    $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.toast('Le brouillard se lève.'); };
     $('#bSpeed').onclick = () => {
       const seq = [1, 2, 4];
       host.time.speed = seq[(seq.indexOf(host.time.speed) + 1) % seq.length] ?? 1;
@@ -252,6 +265,7 @@ export class UI {
     $('#bHome').onclick = () => host.cam.reset();
     $('#bUnder').onclick = () => host.enterNearest();
     $('#bUp').onclick = () => host.exitUnder();
+    $('#campQuest').onclick = () => this.openExpeditions('depths');
     $('#bTorch').onclick = () => { host.torchMode = !host.torchMode; host.audio.sfxClick(); this.update(); };
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
@@ -360,8 +374,44 @@ export class UI {
       ${lock ? `<p class="lock">🔒 ${lock}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
+  /**
+   * Fiche du bâtiment choisi d'un clic : ce qu'il est et ce qu'il apporte, ses habitants, ses bêtes ou ses galeries ;
+   * le déplacer, le tourner (R), le démolir
+   */
+  private renderSelection() {
+    const h = this.host, tl = h.tools, box = $('#selCard');
+    const b = tl.selected !== null ? h.world.buildings.get(tl.selected) : undefined;
+    if (!b) { if (this.selKey) { this.selKey = ''; box.classList.remove('show'); } return; }
+    const d = KINDS[b.kind], a = Math.max(b.age, d.minAge), stats: string[] = [];
+    if (b.kind === 'house') { const n = h.agents.agents.filter((x) => x.home === b.id).length; stats.push(`${ic('house', 14, 2)} ${n} habitant${n > 1 ? 's' : ''}`); }
+    if (b.kind === 'pen' || b.kind === 'stable') {
+      const herds = penHerds(h.world), list = (b.kind === 'pen' ? herds.pens : herds.stables).get(b.id) ?? [];
+      const names: Record<string, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] }, count = new Map<string, number>();
+      for (const k of list) count.set(k, (count.get(k) ?? 0) + 1);
+      stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => `${n} ${names[k][n > 1 ? 1 : 0]}`).join(', ')}` : `${ic('pen', 14, 2)} aucune bête pour l’instant`);
+    }
+    if (b.kind === 'outpost') stats.push(`${ic('outpost', 14, 2)} ${h.expeditions.held()} cases de galeries tenues sous terre · camp niveau ${h.expeditions.camp()}`);
+    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}`;
+    if (key === this.selKey) return;
+    this.selKey = key;
+    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
+    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${AGES[b.age].name}${d.size === 2 && !b.small ? ' · 2 × 2' : ''} · ${b.auto ? 'façade tournée vers la route' : 'orientée à la main'}</small></div><button class="x" data-act="close" title="Fermer (Échap)" aria-label="Fermer">${ic('close', 16, 2)}</button></div>
+      <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}
+      <div class="acts"><button data-act="move">${ic('hand', 16, 2)} Déplacer</button><button data-act="rot">${ic('rotate', 16, 2)} Tourner <kbd>R</kbd></button><button data-act="del" class="danger">${ic('demolish', 16, 2)} Démolir</button></div>`;
+    box.classList.add('show');
+    box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((el) => (el.onclick = async () => {
+      const act = el.dataset.act;
+      if (act === 'close') tl.select(null);
+      else if (act === 'move') { tl.moveSelected(); h.audio.sfxClick(); }
+      else if (act === 'rot') tl.rotateSelected();
+      else if (act === 'del' && await confirmBox(this.root, `Démolir : ${d.names[a].toLowerCase()} ? (Ctrl+Z pour annuler)`, 'Démolir')) tl.demolishSelected();
+      this.renderSelection();
+    }));
+  }
+
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
   refreshTools() {
+    this.renderSelection();
     const tl = this.host.tools;
     this.root.querySelectorAll<HTMLButtonElement>('#dock button[data-tool], #items button[data-kind]').forEach((b) => {
       const on = b.dataset.tool ? b.dataset.tool === tl.tool : tl.tool === 'build' && b.dataset.kind === tl.kind;
@@ -430,12 +480,20 @@ export class UI {
     if ($('#clock').dataset.v !== clock) { $('#clock').innerHTML = clock; $('#clock').dataset.v = clock; }
     if ($('#bPause').dataset.p !== String(time.paused)) { $('#bPause').innerHTML = ic(time.paused ? 'play' : 'pause', 18, 2.2); $('#bPause').dataset.p = String(time.paused); }
     $('#bSpeed').textContent = `×${time.speed}`;
+    // le bouton du brouillard ne paraît que lorsqu'il y en a
+    ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
     if (zone) {
       $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Cliquez sur un filon pour l’extraire, sur un puits de lumière pour remonter'}</small>`;
       $('#bTorch').classList.toggle('active', this.host.torchMode);
+      // la quête en cours du camp souterrain, et où en est son objectif
+      const ex = this.host.expeditions, cq = ex.campQuest(), lvl = ex.camp();
+      const q = cq ? `<span>${ic('outpost', 16, 2)} Camp · niveau ${lvl}</span><small>${cq.q.title} : ${cq.cur} / ${cq.max}</small><i class="bar"><i style="width:${Math.round((cq.cur / cq.max) * 100)}%"></i></i>`
+        : `<span>${ic('outpost', 16, 2)} Camp achevé</span><small>Toutes ses quêtes sont accomplies</small>`;
+      if ($('#campQuest').dataset.v !== q) { $('#campQuest').innerHTML = q; $('#campQuest').dataset.v = q; }
     }
     this.updateExpeditions();
+    this.renderSelection();
     ($('#bUndo') as HTMLButtonElement).disabled = !this.host.tools.undoStack.length;
     ($('#bRedo') as HTMLButtonElement).disabled = !this.host.tools.redoStack.length;
   }
@@ -540,36 +598,30 @@ export class UI {
     $('#bExp').classList.toggle('ping', !!must && !ex.done(must) && !ex.running(must));
   }
 
-  openExpeditions(tab: 'missions' | 'gear' = 'missions') {
+  openExpeditions(tab: 'missions' | 'gear' | 'depths' = 'missions') {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
     const next = max < partyLimit(1e9) ? `Une équipe de plus à ${max * 30} habitants (le village en compte ${pop}).` : 'Le village envoie autant d’équipes qu’il le peut.';
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord ce qui reste à faire, puis ce qu'on peut refaire
     const cards = ex.list(age).sort((a, b) => +(ex.done(a) && !a.repeat) - +(ex.done(b) && !b.repeat)).map((m) => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
-      const choices = run ? '' : m.choices.map((c, i) => {
-        const why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
-        return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
-          <b>${c.label}</b><span>${c.text}</span>
-          <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''} · ⏳ ${workLabel(c.work)} · 🎲 ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} ${riskLabel(pv.risk)} · ${DEST_ICON[c.dest]}</small>
-          <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')} — ${pv.label ? `on emporte ${pv.label}` : 'aucun équipement en réserve'}</small>
-          <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
-          ${why ? `<small class="why">${why}</small>` : ''}</button>`;
-      }).join('');
+      const choices = run ? '' : this.choiceButtons(m);
       return `<div class="mission ${done ? 'done' : ''}">
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${m.unlocks ? `<p class="unlock">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})</p>` : ''}
         ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).map((id) => [ex.state.done.includes(id), `« ${MISSIONS.find((x) => x.id === id)?.title} »`] as const), ...(m.requires.kinds ?? []).map((k) => [(h.sim.counts[k] ?? 0) > 0, KINDS[k].names[Math.max(age, KINDS[k].minAge)]] as const)].map(([ok, t]) => `<span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${t}</span>`).join('')}</p>` : ''}
+        ${m.choices.some((c) => c.win.some((e) => e.t === 'veins')) ? `<p class="held">${ic('outpost', 15, 2)} Galeries tenues sous terre : <b>${ex.held()}</b> cases${ex.held() ? ' — chaque victoire pousse le front plus loin' : ' — un avant-poste en tiendra les premières'}</p>` : ''}
         ${run ? '' : redo ? `<details class="redo"><summary>${ic('restart', 14, 2)} Refaire cette expédition</summary><p>${m.intro}</p><p class="hint">Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>${choices}</details>` : `<p>${m.intro}</p>${choices}`}</div>`;
     }).join('');
     const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} Expéditions`, `
-      <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button></div>
+      <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button><button data-tab="depths" class="${tab === 'depths' ? 'on' : ''}">${ic('outpost', 16, 2)}Profondeurs</button></div>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
         <p class="hint">Envoyez de petites équipes chercher ce qui manque au village : vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a son expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p>
         <div class="missions">${cards}</div>
       </section>
-      <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>`);
+      <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
+      <section data-sec="depths" ${tab === 'depths' ? '' : 'hidden'}>${this.depthsHtml()}</section>`);
     ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
       ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((sec) => (sec.hidden = sec.dataset.sec !== b.dataset.tab));
@@ -592,9 +644,48 @@ export class UI {
       close();
       h.audio.sfxClick();
       h.follow(a.id);
-      this.toast(`${m.icon} L’équipe se rassemble au village…`);
+      this.toast(a.fromCamp ? `${m.icon} La troupe descend du camp souterrain…` : `${m.icon} L’équipe se rassemble au village…`);
       this.update();
     }));
+  }
+
+  /** Boutons des choix d'une mission : équipe, durée, risque, équipement emporté, gains ; grisés avec la raison s'il manque quelque chose */
+  private choiceButtons(m: Mission) {
+    const ex = this.host.expeditions, done = ex.done(m);
+    return m.choices.map((c, i) => {
+      const why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
+      return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
+          <b>${c.label}</b><span>${c.text}</span>
+          <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''} · ⏳ ${workLabel(c.work)} · 🎲 ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} ${riskLabel(pv.risk)} · ${DEST_ICON[c.dest]}</small>
+          <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')} — ${pv.label ? `on emporte ${pv.label}` : 'aucun équipement en réserve'}</small>
+          <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
+          ${why ? `<small class="why">${why}</small>` : ''}</button>`;
+    }).join('');
+  }
+
+  /** Profondeurs : le camp souterrain, ses quêtes (accomplies, en cours, à venir), ce qu'elles lui apportent ; on y lance l'expédition armée */
+  private depthsHtml() {
+    const ex = this.host.expeditions, lvl = ex.camp(), st = ex.depthStats();
+    // l'expédition armée qui fait avancer les quêtes, lancée d'ici
+    const deep = MISSIONS.find((m) => m.id === 'deep')!, age = this.host.sim.age, miss = ex.missing(deep);
+    const send = age < deep.age ? `<p class="hint">${ic('sword', 15, 2)} Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`
+      : miss.length ? `<p class="hint">${ic('sword', 15, 2)} Pour envoyer une expédition armée, il faut d’abord ${miss.join(', ')}.</p>`
+      : ex.running(deep) ? `<p class="hint">${ic('sword', 15, 2)} Une expédition armée est déjà dans les galeries.</p>`
+      : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe se rassemble au village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><div class="choices">${this.choiceButtons(deep)}</div></div>`;
+    const quests = CAMP_QUESTS.map((q, i) => {
+      const [cur, max] = q.goal(st), done = i < lvl, now = i === lvl, k = Math.min(1, cur / max);
+      return `<li class="${done ? 'done' : now ? 'cur' : 'todo'}">
+        <div class="qh"><b>${done ? '✓' : now ? ic('compass', 15, 2) : ic('clock', 15, 2)} ${q.title}</b><span class="grow"></span><small>${done ? 'accomplie' : !now && cur >= max ? 'objectif atteint : elle suivra la quête en cours' : `${Math.min(cur, max)} / ${max}`}</small></div>
+        <p>${q.text}</p>
+        ${done ? '' : `<i class="bar"><i style="width:${Math.round(k * 100)}%"></i></i>`}
+        <small class="gain">${done ? 'Le camp a gagné' : 'Le camp y gagnera'} : ${q.builds}. ${q.perk}</small>
+      </li>`;
+    }).join('');
+    return `<p class="hint">Sous terre, on ne bâtit pas : le camp se dresse de lui-même au pied du puits du premier avant-poste, et grandit à mesure que ses quêtes s’accomplissent. Chacune lui ajoute des bâtiments et des gardes, posés d’eux-mêmes, et un avantage durable pour les expéditions armées.</p>
+      <div class="campStats"><b>${ic('outpost', 18, 2)} Camp souterrain — niveau ${lvl} / ${CAMP_QUESTS.length}</b>
+        <span>Galeries tenues : <b>${st.held}</b></span><span>Filons abattus : <b>${st.veins}</b></span><span>Embuscades repoussées : <b>${st.wins}</b></span><span>Zones tenues : <b>${st.zones}</b></span></div>
+      ${send}
+      <ol class="quests">${quests}</ol>`;
   }
 
   /** Équipement : réserve, fabrication et file d'attente */

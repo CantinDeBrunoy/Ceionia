@@ -1,10 +1,11 @@
 import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN } from '../world/world';
 import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects } from './missions';
-import { Underground, ORE_KINDS, oreVeins } from '../world/underground';
-import { AGES, KINDS } from '../build/catalog';
+import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
+import { AGES, KINDS, Building } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
 import { ExpEvent, pickEvent } from './events';
+import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
 
 /** Étapes d'une expédition : rassemblement au village, aller, travail sur place, retour, fête (ou mine déconfite) au village */
 export type Phase = 'gather' | 'out' | 'work' | 'back' | 'home';
@@ -42,11 +43,28 @@ export interface ActiveExpedition {
   /** expédition armée : filons visés sous terre (dans l'ordre où la troupe les abat) et case de galerie où elle descend */
   targets: number[];
   entry: number;
+  /** galeries qu'elle prendra si elle l'emporte, et le point le plus avancé où elle plante ses lanternes (-1 : aucun) */
+  take: number[];
+  front: number;
+  /** troupe armée partie du camp souterrain : ni marche depuis le village, ni retour à pied */
+  fromCamp: boolean;
+  /** embuscades sur son chemin, longueur de son parcours (haltes comprises) et sa force au combat */
+  ambush: Ambush[];
+  routeLen: number;
+  might: number;
   /** chevaux de l'écurie partis avec l'équipe */
   mounts: number;
   /** la mission avait déjà été réussie : on la refait (bêtes, minerai, vivres ; bonus durables seulement passagers) */
   redo: boolean;
 }
+
+/** Créatures qui tendent des embuscades aux troupes armées */
+export type FoeKind = 'zombie' | 'skeleton' | 'spider';
+/**
+ * Embuscade dans les galeries sauvages : la case où elle surgit, les créatures et leur nombre, le moment (temps de parcours
+ * de la troupe) ; l'issue est tirée quand elle survient, ses blessés comptés à la fin du combat
+ */
+export interface Ambush { cell: number; kind: FoeKind; n: number; t0: number; state: 'wait' | 'fight' | 'done'; result: 'clean' | 'hurt' | 'rout' | null }
 
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
@@ -71,6 +89,21 @@ export const partyLimit = (pop: number) => Math.min(MAX_TEAMS, 1 + Math.floor(po
  */
 /** Minerai par jour d'une mine, selon son âge */
 const MINE_ORE = [0, 0, 1, 2, 3];
+/** Galeries que la garnison d'un avant-poste tient autour de son entrée (en pas) */
+const HOLD = 6;
+/** Qui attaque, selon la zone : morts-vivants dans la roche et la glace, squelettes du cristal et du magma, araignées des grottes luxuriantes */
+const FOES: Record<number, FoeKind[]> = {
+  [UZ_STONE]: ['zombie', 'zombie', 'skeleton'], [UZ_CRYSTAL]: ['skeleton', 'spider'], [UZ_ICE]: ['skeleton', 'zombie'],
+  [UZ_LUSH]: ['spider'], [UZ_MAGMA]: ['skeleton', 'zombie'],
+};
+const FOE_MIGHT: Record<FoeKind, number> = { zombie: 0.8, skeleton: 1, spider: 1.15 };
+export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 'squelettes', spider: 'araignées géantes' };
+
+/**
+ * Campagne d'une troupe armée : l'avant-poste d'où elle part et l'entrée qu'il garde, la case de galerie où elle descend,
+ * les filons qu'elle abat (dans l'ordre de sa marche), les galeries qu'elle prend et son point le plus avancé
+ */
+export interface Campaign { post: Building; entrance: number; entry: number; targets: number[]; take: number[]; front: number }
 
 export class Expeditions {
   active: ActiveExpedition[] = [];
@@ -78,6 +111,8 @@ export class Expeditions {
   onNews: ((msg: string) => void) | null = null;
   /** une équipe attend une décision */
   onEvent: ((a: ActiveExpedition) => void) | null = null;
+  /** une quête du camp souterrain est accomplie : le camp grandit */
+  onCamp: ((q: CampQuest) => void) | null = null;
   /** population du village, donnée par le jeu */
   pop: () => number = () => 0;
   private nextId = 1;
@@ -123,23 +158,123 @@ export class Expeditions {
   /** Chevaux à l'écurie, prêts à partir */
   horsesHome() { let n = 0; for (const h of penHerds(this.world).stables.values()) n += h.length; return n; }
 
-  /** Filons qu'une troupe descendue par l'entrée la plus proche de `dest` irait abattre, du plus proche au plus loin */
-  private pickVeins(dest: [number, number], n: number): { targets: number[]; entry: number } {
-    const u = this.under;
-    if (!u || n <= 0) return { targets: [], entry: -1 };
+  /** Avant-postes bâtis, chacun avec l'entrée (grotte ou faille) qu'il garde et la case de galerie sous celle-ci */
+  outposts(): { b: Building; entrance: number; entry: number }[] {
+    const u = this.under, out: { b: Building; entrance: number; entry: number }[] = [];
+    if (!u) return out;
     u.sync();
-    // l'entrée la plus proche dont les galeries mènent à assez de filons (certaines ne donnent que sur une petite salle)
-    const all = oreVeins(u, this.world.mined);
-    let best = { targets: [] as number[], entry: -1 };
-    for (const ent of [...u.entrances].sort((a, b) => Math.hypot(a.x - dest[0], a.z - dest[1]) - Math.hypot(b.x - dest[0], b.z - dest[1]))) {
-      const entry = u.under(ent);
-      if (entry < 0) continue;
-      const d = u.distances(entry);
-      const veins = all.filter((v) => d[v.k] >= 0).sort((a, b) => d[a.k] - d[b.k]);
-      if (veins.length > best.targets.length) best = { targets: veins.slice(0, n).map((v) => v.k), entry };
-      if (best.targets.length >= n) break;
+    for (const b of this.world.buildings.values()) {
+      if (b.kind !== 'outpost') continue;
+      const cell = this.world.outpostEntrance(b.x, b.z, KINDS.outpost.size), ent = u.entrances.find((e) => e.cell === cell);
+      const entry = ent ? u.under(ent) : -1;
+      if (entry >= 0) out.push({ b, entrance: cell, entry });
     }
+    return out;
+  }
+
+  /** La garnison de chaque nouvel avant-poste tient aussitôt les galeries autour de son entrée */
+  private holdT = 0;
+  private holdKey = '';
+  private holdStep(dt: number) {
+    if ((this.holdT -= dt) > 0 || !this.under) return;
+    this.holdT = 1;
+    let key = '';
+    for (const b of this.world.buildings.values()) if (b.kind === 'outpost') key += `${b.id}:${b.x},${b.z};`;
+    if (!key) return;
+    const posts = this.outposts();
+    key += this.under.version;
+    if (key === this.holdKey) return;
+    this.holdKey = key;
+    const held = this.world.claimed, before = held.size;
+    for (const p of posts) { const d = this.under.distances(p.entry); for (let k = 0; k < N * N; k++) if (d[k] >= 0 && d[k] <= HOLD) held.add(k); }
+    if (held.size > before) { this.world.version++; this.onNews?.('🚩 La garnison de l’avant-poste tient les premières galeries sous l’entrée.'); }
+  }
+
+  /**
+   * Campagne d'une troupe armée : depuis l'avant-poste le plus prometteur, au-delà des galeries tenues, les filons qu'elle
+   * abattrait (ceux encore en place dans les galeries tenues d'abord) et les galeries qu'elle prendrait ; null s'il n'y a
+   * plus rien à prendre
+   */
+  private plans = new Map<string, Campaign | null>();
+  campaign(c: Choice): Campaign | null {
+    const veins = c.win.find((e) => e.t === 'veins'), u = this.under;
+    if (veins?.t !== 'veins' || !u) return null;
+    const posts = this.outposts(), w = this.world;
+    const key = `${veins.n}|${veins.reach}|${w.claimed.size}|${w.mined.size}|${u.version}|${posts.map((p) => `${p.b.id}:${p.entry}`).join(',')}`;
+    if (this.plans.has(key)) return this.plans.get(key)!;
+    const all = oreVeins(u, w.mined);
+    let best: Campaign | null = null, score = 0;
+    for (const p of posts) {
+      const d = u.reach(w.claimed, p.entry, veins.reach), take: number[] = [];
+      let front = -1;
+      for (let k = 0; k < N * N; k++) if (d[k] > 0) { take.push(k); if (front < 0 || d[k] > d[front]) front = k; }
+      const near = all.filter((v) => d[v.k] >= 0).sort((a, b) => d[a.k] - d[b.k]).slice(0, veins.n).map((v) => v.k);
+      const s = take.length + near.length * 50;
+      if (s <= score) continue;
+      // la troupe va de filon en filon, toujours au plus proche de là où elle se trouve
+      const targets: number[] = [];
+      let at = p.entry;
+      while (near.length) {
+        const dd = u.distances(at);
+        let i = 0;
+        near.forEach((k, j) => { if (dd[k] >= 0 && (dd[near[i]] < 0 || dd[k] < dd[near[i]])) i = j; });
+        at = near.splice(i, 1)[0];
+        targets.push(at);
+      }
+      score = s;
+      best = { post: p.b, entrance: p.entrance, entry: p.entry, targets, take, front };
+    }
+    if (this.plans.size > 24) this.plans.clear();
+    this.plans.set(key, best);
     return best;
+  }
+
+  /** Case libre au pied de l'avant-poste, du côté de l'entrée qu'il garde, où la troupe se rassemble avant de descendre */
+  private postDoor(b: Building, entrance: number, base: [number, number]): [number, number] | null {
+    const w = this.world, s = KINDS.outpost.size, ex = (entrance % N) + 0.5, ez = Math.floor(entrance / N) + 0.5, cand: [number, number, number][] = [];
+    for (let z = b.z - 1; z <= b.z + s; z++)
+      for (let x = b.x - 1; x <= b.x + s; x++) {
+        if (!w.inCells(x, z)) continue;
+        const k = w.ci(x, z);
+        if (w.occ[k] || w.lake[k] || w.decor[k] || w.cellAvg(x, z) < 0.1) continue;
+        cand.push([x + 0.5, z + 0.5, Math.hypot(x + 0.5 - ex, z + 0.5 - ez)]);
+      }
+    cand.sort((p, q) => p[2] - q[2]);
+    const from = w.ci(Math.floor(base[0]), Math.floor(base[1]));
+    for (const [x, z] of cand) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
+    return null;
+  }
+
+  /** Galeries que le village tient sous terre (en cases) */
+  held() { return this.world.claimed.size; }
+
+  /** Mesures des quêtes du camp : galeries tenues, filons abattus, embuscades repoussées, zones tenues */
+  depthStats() { return depthStats(this.world, this.under); }
+
+  /** Niveau du camp souterrain : nombre de ses quêtes accomplies */
+  camp() { return Math.min(CAMP_QUESTS.length, this.world.exp.camp); }
+
+  /** Quête en cours du camp souterrain, et où en est son objectif (null : toutes accomplies) */
+  campQuest(): { q: CampQuest; cur: number; max: number } | null {
+    const q = CAMP_QUESTS[this.camp()];
+    if (!q) return null;
+    const [cur, max] = q.goal(depthStats(this.world, this.under));
+    return { q, cur: Math.min(cur, max), max };
+  }
+
+  /** Les quêtes du camp s'accomplissent d'elles-mêmes, l'une après l'autre ; chacune agrandit le camp */
+  private campT = 0;
+  private campStep(dt: number) {
+    if ((this.campT -= dt) > 0) return;
+    this.campT = 1;
+    const s = this.world.exp;
+    for (let cq = this.campQuest(); cq && cq.cur >= cq.max; cq = this.campQuest()) {
+      s.camp++;
+      // le village fier de ses profondeurs
+      if (cq.q.id === 'all') s.bonus.joy += 3;
+      this.world.version++;
+      this.onCamp?.(cq.q);
+    }
   }
 
   /** Pourquoi l'on ne peut pas partir (ou null) */
@@ -148,7 +283,9 @@ export class Expeditions {
     const miss = this.missing(m);
     if (miss.length) return `Il faut d’abord ${miss.join(', ')}.`;
     if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return `Il faut ${c.mounts} chevaux à l’écurie (${n} pour l’instant).`; }
-    if (c.win.some((e) => e.t === 'veins') && this.under && (this.under.sync(), !oreVeins(this.under, this.world.mined).length)) return 'Il ne reste plus aucun filon dans les galeries.';
+    if (c.win.some((e) => e.t === 'veins') && this.under && !this.campaign(c)) {
+      return this.outposts().length ? 'Toutes les galeries que l’on peut atteindre depuis l’avant-poste sont tenues, et leurs filons abattus.' : 'L’avant-poste ne garde aucune entrée praticable : rebâtissez-le tout contre une grotte ou une faille.';
+    }
     const max = this.slots();
     if (this.active.length >= max) {
       return max < MAX_TEAMS
@@ -165,12 +302,17 @@ export class Expeditions {
     const c = m.choices[ci];
     if (!c || this.why(m, c)) return null;
     const base = this.base()!;
+    // la troupe armée part de l'avant-poste et descend par l'entrée qu'il garde ; les autres vont où les mène leur mission
+    const plan = c.win.some((e) => e.t === 'veins') ? this.campaign(c) : null;
     let kind: DestKind | null = c.dest, dest: [number, number] | null = null;
-    while (kind && !dest) { dest = this.findDest(kind, base); kind = dest ? kind : FALLBACK[kind]; }
+    // avec un camp souterrain, la troupe s'y rassemble : pas besoin de chemin depuis le village jusqu'à l'avant-poste
+    const fromCamp = !!plan && this.camp() >= 1;
+    if (plan) dest = fromCamp ? [(plan.entrance % N) + 0.5, Math.floor(plan.entrance / N) + 0.5] : this.postDoor(plan.post, plan.entrance, base);
+    else if (c.win.some((e) => e.t === 'veins')) return null;
+    else while (kind && !dest) { dest = this.findDest(kind, base); kind = dest ? kind : FALLBACK[kind]; }
     if (!dest) return null;
-    const veins = c.win.find((e) => e.t === 'veins');
-    const { targets, entry } = veins?.t === 'veins' ? this.pickVeins(dest, veins.n) : { targets: [], entry: -1 };
-    if (veins && !targets.length) return null;
+    const { targets, entry, take: held, front } = plan ?? { targets: [], entry: -1, take: [], front: -1 };
+    const { ambush, len } = plan ? this.planAmbush(entry, targets, front) : { ambush: [], len: 0 };
     const mounts = this.mountsFor(c);
     const party = this.agents.recruit(c.party);
     if (!party) return null;
@@ -181,7 +323,7 @@ export class Expeditions {
     const a: ActiveExpedition = {
       id: this.nextId++, m, c, phase: 'gather', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
       wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], notes: [], extra: 0, bonus: [], hurt: 0,
-      targets, entry, redo: this.done(m), mounts,
+      targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp,
     };
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval s'il y en a assez ; on part en selle
     const kits = party.map((): Kit => ({}));
@@ -190,11 +332,19 @@ export class Expeditions {
       if (i < (take.armor ?? 0)) kt.armor = true;
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
-      if (i < mounts) kt.horse = true;
+      // la charge de cavalerie part en cavaliers de l'époque ; les autres équipes à cheval restent des habitants en selle
+      if (i < mounts) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
     });
     party.forEach((id, i) => this.agents.equip(id, kits[i]));
+    // force au combat : chacun compte, davantage en armure, armé, à cheval ou la torche au poing (les monstres craignent la lumière)
+    a.might = kits.reduce((s, k) => s + 1 + (k.armor ? 1 : 0) + (k.weapon ? 0.6 : 0) + (k.rider ? 0.9 : 0) + (k.torch ? 0.3 : 0), 0) + (plan && this.camp() >= 4 ? 2 : 0) + (plan && this.camp() >= 9 ? 2 : 0);
     this.active.push(a);
-    this.agents.partyGo(party, base[0], base[1], 0.15);
+    if (fromCamp) {
+      // elle descend aussitôt du camp souterrain dans les galeries
+      a.phase = 'work';
+      this.agents.partyHide(party, true);
+      this.onNews?.(`${m.icon} « ${m.title} » : la troupe se rassemble au camp souterrain et s’enfonce dans les galeries.`);
+    } else this.agents.partyGo(party, base[0], base[1], 0.15);
     return a;
   }
 
@@ -202,6 +352,8 @@ export class Expeditions {
     const ag = this.agents;
     this.craftStep(dt);
     this.mineStep(dt);
+    this.holdStep(dt);
+    this.campStep(dt);
     for (const a of [...this.active]) {
       // une décision attendue : l'équipe patiente, puis tranche d'elle-même
       if (a.wait) {
@@ -211,6 +363,7 @@ export class Expeditions {
       }
       // avec une écurie, les équipes vont à cheval : le travail sur place avance plus vite
       a.t += dt * (a.phase === 'work' && this.has('stable') ? 1.25 : 1);
+      if (a.phase === 'work' && a.ambush.length) this.ambushStep(a);
       if (a.phase === 'gather' && (ag.partyDone(a.party) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
@@ -220,10 +373,17 @@ export class Expeditions {
         ag.partyAct(a.party, 'work');
         ag.mountParty(a.party, false);
         // la troupe armée descend dans les galeries : on ne la voit plus en surface, mais sous terre
-        if (a.targets.length) ag.partyHide(a.party, true);
+        if (a.entry >= 0) ag.partyHide(a.party, true);
         this.raise(a);
       } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * 0.55) {
         this.raise(a);
+      } else if (a.phase === 'work' && a.t >= a.c.work + a.extra && a.fromCamp) {
+        // partie du camp, elle y remonte : les soldats rentrent au village sans refaire la route, et l'on fête leur retour
+        a.ok = this.rnd() >= this.chance(a);
+        a.phase = 'home'; a.t = 0;
+        ag.partyHide(a.party, false);
+        ag.partyAct(a.party, a.ok ? 'cheer' : 'stroll');
+        this.onNews?.(a.ok ? `${a.m.icon} « ${a.m.title} » : la troupe remonte du camp souterrain, victorieuse !` : `${a.m.icon} « ${a.m.title} » : la troupe remonte du camp souterrain, la mine basse.`);
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra) {
         a.ok = this.rnd() >= this.chance(a);
         a.phase = 'back'; a.t = 0;
@@ -234,6 +394,54 @@ export class Expeditions {
         a.phase = 'home'; a.t = 0;
         ag.partyAct(a.party, a.ok ? 'cheer' : 'stroll');
       } else if (a.phase === 'home' && a.t > 4) this.finish(a);
+    }
+  }
+
+  /**
+   * Embuscades prévues au départ : dans la partie sauvage du chemin (hors des galeries tenues), une à trois selon sa
+   * longueur, réparties le long du trajet ; les créatures sont celles de la zone. Renvoie aussi la longueur du parcours
+   */
+  private planAmbush(entry: number, targets: number[], front: number): { ambush: Ambush[]; len: number } {
+    const u = this.under!, w = this.world;
+    const base = troopRoute(u, entry, targets, front);
+    const wild = base.cells.filter((k) => !w.claimed.has(k));
+    const n = wild.length < 8 ? 0 : Math.min(3, Math.max(1, Math.round(wild.length / 28)));
+    const cells: number[] = [];
+    for (let j = 0; j < n; j++) {
+      const k = wild[Math.min(wild.length - 1, Math.floor(((j + 0.3 + this.rnd() * 0.45) / n) * wild.length))];
+      if (!cells.includes(k)) cells.push(k);
+    }
+    const route = troopRoute(u, entry, targets, front, cells);
+    const ambush = route.legs.filter((l) => l.kind === 'fight').map((l): Ambush => {
+      const cell = route.cells[l.to], zone = u.zone[cell], kinds = FOES[zone] ?? FOES[UZ_STONE];
+      return { cell, kind: kinds[Math.floor(this.rnd() * kinds.length)], n: 2 + Math.floor(this.rnd() * 3) + (zone === UZ_MAGMA ? 1 : 0), t0: l.t0, state: 'wait', result: null };
+    });
+    return { ambush, len: route.total };
+  }
+
+  /** La troupe arrive sur une embuscade : les créatures chargent, le combat se joue ; à la fin, ses blessés et le récit */
+  private ambushStep(a: ActiveExpedition) {
+    const s = Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) * a.routeLen;
+    for (const m of a.ambush) {
+      const name = FOE_NAME[m.kind];
+      if (m.state === 'wait' && s >= m.t0) {
+        m.state = 'fight';
+        // l'issue : la force de la troupe contre le nombre et la férocité des créatures (plus grandes dans le magma)
+        const threat = m.n * FOE_MIGHT[m.kind] * (this.under?.zone[m.cell] === UZ_MAGMA ? 1.25 : 1) * 0.9 * (this.camp() >= 9 ? 0.7 : this.camp() >= 2 ? 0.85 : 1);
+        const win = a.might / (a.might + threat), r = this.rnd();
+        m.result = r < win ? 'clean' : r < win + (1 - win) * 0.65 ? 'hurt' : 'rout';
+        this.onNews?.(`⚔️ « ${a.m.title} » : ${m.n} ${name} surgissent des galeries et chargent la troupe !`);
+      } else if (m.state === 'fight' && s >= m.t0 + FIGHT_HALT) {
+        m.state = 'done';
+        const text = m.result === 'clean' ? `la troupe a taillé en pièces les ${m.n} ${name} qui l'attendaient dans le noir`
+          : m.result === 'hurt' ? `${m.n} ${name} repoussés, mais un soldat est blessé`
+          : `les ${name} étaient trop nombreux : la troupe a dû reculer, deux blessés`;
+        if (m.result !== 'rout') this.world.exp.wins++;
+        if (m.result === 'hurt') { a.hurt += 1; a.riskK *= 1.06; }
+        if (m.result === 'rout') { a.hurt += 2; a.riskK *= 1.2; }
+        a.notes.push(`Embuscade dans les galeries : ${text}.`);
+        this.onNews?.(`⚔️ « ${a.m.title} » : ${text}.`);
+      }
     }
   }
 
@@ -279,7 +487,12 @@ export class Expeditions {
     const eff = a.ok ? [...(a.redo ? redoEffects(a.c.win) : a.c.win), ...a.bonus] : a.c.lose;
     const res = applyEffects(this.world, eff, this.dayLen());
     // la troupe a abattu ses filons : ils disparaissent des parois, leur minerai rentre au village
-    let veins = '';
+    let veins = '', held = '';
+    if (a.ok && a.take.length) {
+      // victoire : la troupe a planté ses lanternes, le village tient ces galeries
+      for (const k of a.take) this.world.claimed.add(k);
+      held = `${a.take.length} cases de galeries prises`;
+    }
     if (a.ok && a.targets.length && this.under) {
       const kinds = new Map(oreVeins(this.under, this.world.mined).map((v) => [v.k, v.ore])), got = new Map<string, number>();
       let ore = 0;
@@ -287,11 +500,12 @@ export class Expeditions {
         const o = kinds.get(k);
         if (o === undefined) continue;
         this.world.mined.add(k);
-        ore += ORE_KINDS[o].amount;
+        // la forge du camp souterrain tire un minerai de plus de chaque filon
+        ore += ORE_KINDS[o].amount + (this.camp() >= 3 ? 1 : 0) + (this.camp() >= 8 ? 1 : 0);
         got.set(ORE_KINDS[o].name, (got.get(ORE_KINDS[o].name) ?? 0) + 1);
       }
       this.world.ore += ore;
-      veins = `+${ore} minerai (${[...got].map(([name, n]) => `${n} ${name}`).join(', ')})`;
+      if (got.size) veins = `+${ore} minerai (${[...got].map(([name, n]) => `${n} ${name}`).join(', ')})`;
     }
     this.world.exp.riding = Math.max(0, this.world.exp.riding - a.mounts);
     if (a.ok && !this.done(a.m)) this.world.exp.done.push(a.m.id);
@@ -306,10 +520,11 @@ export class Expeditions {
     }
     // les blessés guérissent deux fois plus vite avec un lieu de soins, et encore deux fois plus vite avec une trousse
     const injured = Math.min(a.party.length, res.injured + a.hurt), days = Math.max(res.days, a.hurt ? 1 : 0);
-    this.agents.dismiss(a.party, injured, days * this.dayLen() * (this.has('health') ? 0.5 : 1) * (a.gear.kit ? 0.5 : 1));
+    // l'infirmerie du camp souterrain soigne les blessés des troupes armées deux fois plus vite
+    this.agents.dismiss(a.party, injured, days * this.dayLen() * (this.has('health') ? 0.5 : 1) * (a.gear.kit ? 0.5 : 1) * (a.entry >= 0 && this.camp() >= 5 ? 0.5 : 1));
     this.active.splice(this.active.indexOf(a), 1);
     this.world.version++;
-    const summary = [veins || effectSummary(eff.filter((e) => e.t !== 'veins')), veins ? effectSummary(eff.filter((e) => e.t !== 'veins')) : '', lost].filter((x) => x && x !== 'rien').join(' · ') || 'rien';
+    const summary = [veins, held, effectSummary(eff.filter((e) => e.t !== 'veins')), lost].filter((x) => x && x !== 'rien').join(' · ') || 'rien';
     this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text: a.ok ? a.c.winText : a.c.loseText, summary, notes: a.notes, redo: a.redo });
   }
 
@@ -350,6 +565,8 @@ export class Expeditions {
   private mineStep(dt: number) {
     let rate = 0;
     for (const b of this.world.buildings.values()) if (b.kind === 'mine') rate += MINE_ORE[b.age] ?? 0;
+    // le monte-charge du camp souterrain remonte du minerai chaque jour
+    if (this.camp() >= 6) rate += 2;
     if (!rate) return;
     this.mineT += (dt / this.dayLen()) * rate;
     if (this.mineT < 1) return;
@@ -370,6 +587,12 @@ export class Expeditions {
     if (!s.craft.length) this.onNews?.('L’équipement commandé est prêt pour les prochaines expéditions.');
   }
 
+  /** La troupe en plein combat contre une embuscade : ce qu'en dit sa carte (ou null) */
+  fighting(a: ActiveExpedition) {
+    const m = a.ambush.find((x) => x.state === 'fight');
+    return m ? `⚔️ Attaquée par ${m.n} ${FOE_NAME[m.kind]} !` : null;
+  }
+
   /** Avancement d'une expédition (0 … 1) */
   progress(a: ActiveExpedition) {
     const k = Math.min(1, a.t / (a.phase === 'work' ? Math.max(1, a.c.work + a.extra) : a.phase === 'home' ? 4 : 60));
@@ -381,7 +604,7 @@ export class Expeditions {
     return {
       gather: 'Rassemblement au village…',
       out: `En route vers ${DEST_NAME[a.c.dest]}…`,
-      work: a.wait ? `Décision à prendre : ${a.wait.title.toLowerCase()}` : `Sur place, l’équipe ${a.c.doing ?? a.c.label.toLowerCase()}…`,
+      work: a.wait ? `Décision à prendre : ${a.wait.title.toLowerCase()}` : this.fighting(a) ?? `Sur place, l’équipe ${a.c.doing ?? a.c.label.toLowerCase()}…`,
       back: 'Retour au village…',
       home: a.ok ? 'De retour : le village fait la fête !' : 'De retour, bredouilles.',
     }[a.phase];
@@ -419,7 +642,8 @@ export class Expeditions {
         else if (kind === 'plain') ok = w.veg[k] === 0 && !w.road[k] && slope < 0.5 && h < 3 && d > 10;
         else if (kind === 'river') ok = w.nearWater(x, z, 1) && d > 7;
         else if (kind === 'mountain') ok = h > 2.6 && h < 5.2 && slope < 1.2 && d > 9;
-        else if (kind === 'cave') ok = d > 6 && [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => w.inCells(x + dx, z + dz) && w.veg[w.ci(x + dx, z + dz)] === VEG_CAVE);
+        // devant une grotte ou une faille : au bord de son emprise
+        else if (kind === 'cave') ok = d > 6 && w.outpostEntrance(x, z, 1) >= 0;
         else ok = slope < 0.8 && d > 24 && !w.road[k] && w.veg[k] !== VEG_FIELD && w.veg[k] !== VEG_GARDEN;
         if (ok) cand.push([x + 0.5, z + 0.5, Math.abs(d - ideal) + this.rnd() * 5]);
       }

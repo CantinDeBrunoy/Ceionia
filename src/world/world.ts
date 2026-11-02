@@ -146,6 +146,8 @@ export class World {
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
   exp: ExpState = newExpState();
   mined = new Set<number>();
+  /** galeries du souterrain que le village tient (garnisons des avant-postes, conquêtes des expéditions armées) */
+  claimed = new Set<number>();
 
   /**
    * La lave recouvre la case : les arbres brûlent, le sol devient basalte puis cendre fertile ; les routes sont épargnées,
@@ -343,6 +345,20 @@ export class World {
         const t = this.veg[kz * N + kx];
         if ((t !== VEG_CAVE && t !== VEG_FISSURE) || !this.decorCells(kx, kz, t).includes(cz * N + cx)) continue;
         if (Math.hypot(dx, dz) < bd) { bd = Math.hypot(dx, dz); best = kz * N + kx; }
+      }
+    return best;
+  }
+
+  /** Entrée (grotte ou faille) que tiendrait un avant-poste posé en (x, z) : la plus proche à deux cases de son emprise, ou -1 */
+  outpostEntrance(x: number, z: number, s = 2) {
+    let best = -1, bd = Infinity;
+    for (let cz = z - 2; cz < z + s + 2; cz++)
+      for (let cx = x - 2; cx < x + s + 2; cx++) {
+        if (!this.inCells(cx, cz) || !this.decor[cz * N + cx]) continue;
+        const e = this.entranceAt(cx + 0.5, cz + 0.5);
+        if (e < 0) continue;
+        const d = Math.hypot((e % N) + 0.5 - x - s / 2, Math.floor(e / N) + 0.5 - z - s / 2);
+        if (d < bd) { bd = d; best = e; }
       }
     return best;
   }
@@ -620,6 +636,8 @@ export class World {
         if (this.lake[k]) return 'Un lac est ici';
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return 'Trop proche de l’eau';
       }
+    // l'avant-poste se dresse tout contre une grotte ou une faille
+    if (kind === 'outpost' && this.outpostEntrance(x, z, s) < 0) return 'À bâtir tout contre une grotte ou une faille';
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
     if (kind === 'pier' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.inCells(x + dx, z + dz) && (this.cellAvg(x + dx, z + dz) < -0.05 || this.lake[this.ci(x + dx, z + dz)]))) return 'À poser au bord de l’eau';
     for (let j = 0; j <= s; j++)
@@ -691,6 +709,20 @@ export class World {
     this.version++;
     for (const l of this.listeners) l.onAdd(b, animate);
     return b;
+  }
+
+  /**
+   * Tourne un bâtiment sur place (en quarts de tour) : il garde son emprise, et sa façade ne suit plus la route d'elle-même ;
+   * les maisons voisines se raccordent ou se séparent selon leur orientation
+   */
+  rotateBuilding(id: number, rot: number) {
+    const b = this.buildings.get(id);
+    if (!b) return;
+    b.rot = ((rot % 4) + 4) % 4;
+    b.auto = false;
+    this.version++;
+    const s = sizeOf(b);
+    for (const n of this.buildings.values()) if (n.x >= b.x - 2 && n.x <= b.x + s + 1 && n.z >= b.z - 2 && n.z <= b.z + s + 1) for (const l of this.listeners) l.onChange(n);
   }
 
   removeBuilding(id: number) {
@@ -830,6 +862,7 @@ export class World {
       ash: [...this.ash.keys()].filter((k) => this.ash[k]),
       ore: this.ore,
       mined: [...this.mined],
+      claimed: [...this.claimed],
       exp: this.exp,
     };
   }
@@ -898,6 +931,7 @@ export class World {
     for (const k of d.ash ?? []) if (k >= 0 && k < N * N) this.ash[k] = 1;
     this.ore = Math.max(0, +d.ore || 0);
     this.mined = new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
+    this.claimed = new Set((d.claimed ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.exp = readExpState(d.exp);
   }
 }

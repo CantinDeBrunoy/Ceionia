@@ -64,6 +64,7 @@ describe('sauvegarde', () => {
     w.ash[w.ci(6, 6)] = 1;
     w.ore = 17;
     w.mined.add(123);
+    w.claimed.add(456);
     const data = JSON.parse(JSON.stringify(w.toJSON()));
     const r = new World();
     r.fromJSON(data);
@@ -74,6 +75,7 @@ describe('sauvegarde', () => {
     expect(r.ash[r.ci(6, 6)]).toBe(1);
     expect(r.ore).toBe(17);
     expect(r.mined.has(123)).toBe(true);
+    expect(r.claimed.has(456)).toBe(true);
   });
 
   it('refuse une sauvegarde d’une autre taille de carte', () => {
@@ -82,8 +84,8 @@ describe('sauvegarde', () => {
   });
 
   it('lit une ancienne sauvegarde sans lave, cendres ni minerai', () => {
-    const { basalt, ash, ore, mined, ...old } = w.toJSON();
-    void basalt; void ash; void ore; void mined;
+    const { basalt, ash, ore, mined, claimed, ...old } = w.toJSON();
+    void basalt; void ash; void ore; void mined; void claimed;
     const r = new World();
     r.fromJSON(old);
     expect(r.ore).toBe(0);
@@ -222,6 +224,21 @@ describe('routes automatiques', () => {
 });
 
 describe('façades et ponts', () => {
+  it('un bâtiment se tourne sur place : même emprise, orientation gardée, annulable', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    const b = w.place('workshop', x, z, 0, true, 2, false);
+    const occ = Array.from(w.occ).map((v, k) => (v === b.id ? k : -1)).filter((k) => k >= 0);
+    const before = w.snapshot();
+    w.rotateBuilding(b.id, b.rot + 1);
+    expect(w.buildings.get(b.id)).toMatchObject({ rot: 1, auto: false, x, z });
+    expect(Array.from(w.occ).map((v, k) => (v === b.id ? k : -1)).filter((k) => k >= 0)).toEqual(occ);
+    w.rotateBuilding(b.id, 7);
+    expect(w.buildings.get(b.id)!.rot).toBe(3);
+    w.restore(before);
+    expect([...w.buildings.values()].find((o) => o.kind === 'workshop')).toMatchObject({ rot: 0, auto: true });
+  });
+
   it('la façade regarde le côté qui longe le plus la route, sinon la route la plus proche', () => {
     const w = continent();
     const [x, z] = flatLand(w);
@@ -545,7 +562,7 @@ describe('expéditions', () => {
     expect(r.rest).toEqual([]);
   });
 
-  it('l’expédition armée descend sous terre après l’écurie et le filon : elle abat des filons et rapporte leur minerai', () => {
+  it('l’expédition armée part d’un avant-poste bâti devant une grotte : elle abat des filons et prend des galeries', () => {
     const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
@@ -556,29 +573,98 @@ describe('expéditions', () => {
     const deep = MISSIONS.find((m) => m.id === 'deep')!;
     const cav = deep.choices.findIndex((c) => c.troop === 'cavalry'), armor = deep.choices[deep.choices.findIndex((c) => c.troop === 'armor')];
     expect(deep.repeat).toBe(true);
-    expect(ex.why(deep, armor)).toMatch(/Les chevaux sauvages.*Le filon de la montagne.*écurie/);
-    w.exp.done.push('horses', 'mine');
+    expect(ex.why(deep, armor)).toMatch(/Les chevaux sauvages.*Le filon de la montagne.*Repérer les profondeurs.*écurie.*avant-poste/);
+    w.exp.done.push('horses', 'mine', 'scout');
     let spot: number[] | null = null;
     for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
     w.place('stable', spot![0], spot![1], 0, true, 2, false);
+    // l'avant-poste ne se bâtit que tout contre une grotte ou une faille ; sa garnison tient aussitôt les galeries dessous
+    let open: number[] | null = null;
+    for (let zz = 10; zz < N - 10 && !open; zz++) for (let xx = 10; xx < N - 10 && !open; xx++) if (w.canPlace('stable', xx, zz) === null && w.canPlace('outpost', xx, zz) !== null) open = [xx, zz];
+    expect(w.canPlace('outpost', open![0], open![1])).toMatch(/grotte ou une faille/);
+    let post: number[] | null = null;
+    for (let zz = 10; zz < N - 10 && !post; zz++) for (let xx = 10; xx < N - 10 && !post; xx++) if (w.canPlace('outpost', xx, zz) === null) post = [xx, zz];
+    expect(post).not.toBeNull();
+    w.place('outpost', post![0], post![1], 0, true, 2, false);
+    expect(w.claimed.size).toBe(0);
+    ex.update(1.1);
+    const hold = w.claimed.size;
+    expect(hold).toBeGreaterThan(10);
+    // la garnison tient les galeries : la première quête du camp souterrain est accomplie
+    expect(w.exp.camp).toBe(1);
     expect(ex.why(deep, deep.choices[cav])).toMatch(/3 chevaux/);
     w.exp.herd.push('horse', 'horse', 'horse');
     expect(ex.why(deep, deep.choices[cav])).toBeNull();
     const ore = w.ore, mined = w.mined.size;
     const a = ex.start(deep, cav)!;
-    expect(a.targets.length).toBe(4);
+    expect(a.targets.length).toBeGreaterThan(0);
+    expect(a.targets.length).toBeLessThanOrEqual(4);
+    expect(a.take.length).toBeGreaterThan(0);
+    expect(a.take.every((k) => !w.claimed.has(k))).toBe(true);
+    // le camp souterrain dressé, la troupe y descend aussitôt, sans marcher depuis le village
+    expect(a.fromCamp).toBe(true);
+    expect(a.phase).toBe('work');
+    // des créatures l'attendent dans les galeries sauvages, sur son chemin, avant la fin du parcours
+    expect(a.ambush.length).toBeGreaterThan(0);
+    expect(a.ambush.every((m) => !w.claimed.has(m.cell) && m.t0 > 0 && m.t0 < a.routeLen && m.n >= 2)).toBe(true);
+    expect(a.might).toBeGreaterThan(4);
     // les chevaux partent avec la troupe, et reviennent avec elle
     expect([...penHerds(w).stables.values()].flat().length).toBe(0);
     let report: Report | null = null;
     ex.onReport = (r) => (report = r);
     for (let i = 0; i < 60000 && !report; i++) { agents.update(0.05, 10, 2, false, 30, 0); ex.update(0.05); }
     expect(report!.ok).toBe(true);
-    expect(w.mined.size - mined).toBe(4);
+    expect(w.mined.size - mined).toBe(a.targets.length);
     expect(w.ore).toBeGreaterThan(ore);
     expect(report!.summary).toMatch(/minerai/);
+    // victoire : les galeries prises sont tenues, la prochaine troupe partira de plus loin
+    expect(w.claimed.size).toBe(hold + a.take.length);
+    expect(report!.summary).toMatch(/galeries prises/);
+    // chaque embuscade a eu lieu et se lit dans le récit
+    expect(a.ambush.every((m) => m.state === 'done' && m.result)).toBe(true);
+    expect(report!.notes.filter((n) => /Embuscade/.test(n)).length).toBe(a.ambush.length);
+    const next = ex.campaign(deep.choices[cav])!;
+    expect(next.take.every((k) => !w.claimed.has(k))).toBe(true);
     expect([...penHerds(w).stables.values()].flat().length).toBe(3);
     // on peut y retourner
     expect(ex.list(2)).toContain(deep);
+  });
+
+  it('le camp souterrain grandit quête après quête, et chacune lui apporte son avantage', () => {
+    const w = continent();
+    const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
+    ex.under = new Underground(w);
+    ex.under.sync();
+    const done: string[] = [];
+    ex.onCamp = (q) => done.push(q.id);
+    ex.update(1.1);
+    expect(w.exp.camp).toBe(0);
+    expect(ex.campQuest()!.q.id).toBe('camp');
+    // une case tenue : le premier camp ; la quête suivante attend 150 cases
+    const u = ex.under;
+    const open = [...Array(N * N).keys()].filter((k) => u.open[k]);
+    w.claimed.add(open[0]);
+    ex.update(1.1);
+    expect(w.exp.camp).toBe(1);
+    expect(ex.campQuest()).toMatchObject({ cur: 1, max: 150 });
+    // galeries tenues dans trois zones, filons abattus, embuscades repoussées : tout s'accomplit, dans l'ordre
+    const zones = [...new Set(open.map((k) => u.zone[k]))].slice(0, 3);
+    expect(zones.length).toBe(3);
+    for (const z of zones) open.filter((k) => u.zone[k] === z).slice(0, 220).forEach((k) => w.claimed.add(k));
+    for (let k = 0; k < 20; k++) w.mined.add(open[open.length - 1 - k]);
+    w.exp.wins = 3;
+    ex.update(1.1);
+    expect(done).toEqual(['camp', 'hold', 'veins', 'horde', 'zones', 'base']);
+    // la suite attend les cinq zones
+    expect(ex.campQuest()!.q.id).toBe('all');
+    // le monte-charge remonte deux minerai par jour
+    const ore = w.ore;
+    for (let i = 0; i < 100; i++) ex.update(1);
+    expect(w.ore - ore).toBe(2);
+    // le niveau du camp et les embuscades repoussées se sauvegardent
+    const r = new World();
+    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect([r.exp.camp, r.exp.wins]).toEqual([6, 3]);
   });
 
   it('une mission réussie se refait : de nouveau des bêtes, mais ses bonus durables ne durent que quelques jours', () => {

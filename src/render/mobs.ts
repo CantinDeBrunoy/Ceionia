@@ -42,11 +42,15 @@ const SPECS: Record<MobKind, MobSpec> = {
 const KINDS = Object.keys(SPECS) as MobKind[];
 const MAX_MOBS = 90;
 const SLIME_BIG = 1.7;
+/** Durée de la chute d'une créature terrassée (elle tourne, rapetisse et part en fumée) */
+const DIE = 0.5;
+/** Créatures en plus de la population, le temps d'une embuscade */
+const MAX_FOES = 24;
 const BATS = 28;
 /** Au-delà, les créatures ne réfléchissent plus (hors de vue) */
 const ACTIVE_DIST = 42;
 
-interface Mob {
+export interface Mob {
   kind: MobKind;
   actor: Actor;
   x: number;
@@ -70,6 +74,10 @@ interface Mob {
   /** cible à regarder pendant une action */
   face: [number, number] | null;
   alive: boolean;
+  /** à l'assaut d'une troupe armée : le point qu'elle charge (mis à jour par la vue) */
+  foe: [number, number] | null;
+  /** terrassée : temps restant avant de disparaître (négatif : vivante) */
+  dying: number;
 }
 
 export interface Point { x: number; z: number }
@@ -107,6 +115,12 @@ export class UnderMobs {
   private dist = new Int32Array(N * N);
   private q = new Int32Array(N * N);
   private mark = 0;
+  private puffs: { mesh: THREE.Mesh; t: number; vx: number; vz: number }[] = [];
+  private puffGeo = new THREE.IcosahedronGeometry(0.06, 0);
+  private puffMat = new THREE.MeshBasicMaterial({ color: 0xc4bed4, transparent: true, opacity: 0.85, depthWrite: false });
+  /** galeries tenues par le village (lanternes, garnisons) : les créatures n'y naissent pas et n'y vont pas */
+  held: () => Set<number> = () => new Set();
+  private heldN = 0;
 
   constructor(private under: Underground) {
     const g = batGeo();
@@ -127,11 +141,13 @@ export class UnderMobs {
     this.mobs = [];
     const u = this.under;
     this.rnd = mulberry32(u.version * 7919 + 17);
+    const held = this.held();
+    this.heldN = held.size;
     const byZone: number[][] = [[], [], [], [], []];
     for (let k = 0; k < N * N; k++) {
       const x = k % N, z = Math.floor(k / N);
       if (!u.walkable(x, z) || u.wallDist[k] < 1) continue;
-      if (u.entrances.some((e) => Math.hypot(e.x - x - 0.5, e.z - z - 0.5) < 4)) continue;
+      if (u.entrances.some((e) => Math.hypot(e.x - x - 0.5, e.z - z - 0.5) < 4) || held.has(k)) continue;
       byZone[u.zone[k]].push(k);
     }
     for (const kind of KINDS) {
@@ -157,9 +173,9 @@ export class UnderMobs {
     }
   }
 
-  private spawn(kind: MobKind, x: number, z: number): Mob | null {
+  private spawn(kind: MobKind, x: number, z: number, foe = false): Mob | null {
     const sp = SPECS[kind];
-    if (this.mobs.length >= MAX_MOBS || !hasModel(sp.model) || !this.free(x, z)) return null;
+    if (this.mobs.length >= MAX_MOBS + (foe ? MAX_FOES : 0) || !hasModel(sp.model) || !this.free(x, z)) return null;
     const actor = makeActor(sp.model, sp.size * (0.92 + this.rnd() * 0.16), sp.fit);
     if (!actor) return null;
     actor.root.traverse((o) => {
@@ -172,6 +188,7 @@ export class UnderMobs {
     const m: Mob = {
       kind, actor, x, z, heading: this.rnd() * Math.PI * 2, state: 'idle', path: [], goal: null, stop: 0.1,
       timer: this.rnd() * 3, cool: 5 + this.rnd() * 10, fear: 0, scale: 1, split: 0, phase: this.rnd() * 10, prey: null, face: null, alive: true,
+      foe: null, dying: -1,
     };
     play(actor, sp.idle, 0);
     actor.mixer.update(this.rnd() * 2);
@@ -196,12 +213,12 @@ export class UnderMobs {
   private wanderPath(m: Mob, r = 6): number[] {
     const u = this.under, start = Math.floor(m.z) * N + Math.floor(m.x);
     if (!u.walkable(Math.floor(m.x), Math.floor(m.z))) return [];
-    const mark = ++this.mark, q = this.q, cand: number[] = [];
+    const mark = ++this.mark, q = this.q, cand: number[] = [], held = this.held();
     let head = 0, tail = 0;
     q[tail++] = start; this.seen[start] = mark; this.from[start] = -1; this.dist[start] = 0;
     while (head < tail && tail < 500) {
       const k = q[head++], d = this.dist[k], x = k % N, z = Math.floor(k / N);
-      if (d >= 3) cand.push(k);
+      if (d >= 3 && !held.has(k)) cand.push(k);
       if (d >= r) continue;
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, nz = z + dz, nk = nz * N + nx;
@@ -264,13 +281,84 @@ export class UnderMobs {
   scare(x: number, z: number, r = 2.2) {
     let n = 0;
     for (const m of this.mobs) {
-      if (!m.alive || Math.hypot(m.x - x, m.z - z) > r) continue;
+      if (!m.alive || m.foe || m.dying >= 0 || Math.hypot(m.x - x, m.z - z) > r) continue;
       this.act(m, 0.5, [x, z], true);
       m.fear = -1;
       m.goal = [x, z];
       n++;
     }
     return n;
+  }
+
+  // ---------- Embuscades ----------
+
+  /**
+   * Embuscade : `n` créatures surgissent des galeries à deux à quatre pas de `cell` (hors des galeries tenues) et chargent
+   * vers elle par le plus court chemin ; la vue leur donne ensuite la troupe pour cible
+   */
+  ambush(kind: MobKind, n: number, cell: number): Mob[] {
+    const u = this.under, d = u.distances(cell), held = this.held(), cand: number[] = [], out: Mob[] = [];
+    for (let k = 0; k < N * N; k++) if (d[k] >= 2 && d[k] <= 4 && !held.has(k)) cand.push(k);
+    for (let i = 0; i < n && cand.length; i++) {
+      const k = cand.splice(Math.floor(this.rnd() * cand.length), 1)[0];
+      const m = this.spawn(kind, (k % N) + 0.3 + this.rnd() * 0.4, Math.floor(k / N) + 0.3 + this.rnd() * 0.4, true);
+      if (!m) { i--; continue; }
+      m.path = u.route(k, cell)?.slice(1) ?? [];
+      m.foe = [(cell % N) + 0.5, Math.floor(cell / N) + 0.5];
+      out.push(m);
+    }
+    return out;
+  }
+
+  /** Une créature terrassée : elle tourne sur elle-même, rapetisse et part en fumée */
+  kill(m: Mob) {
+    if (!m.alive || m.dying >= 0) return;
+    m.foe = null;
+    m.dying = DIE;
+    this.act(m, DIE, null, true);
+    const y = this.under.heightAt(m.x, m.z) + 0.12;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + this.rnd(), mesh = new THREE.Mesh(this.puffGeo, this.puffMat.clone());
+      mesh.position.set(m.x, y + this.rnd() * 0.1, m.z);
+      this.group.add(mesh);
+      this.puffs.push({ mesh, t: -this.rnd() * 0.15, vx: Math.sin(a) * 0.5, vz: Math.cos(a) * 0.5 });
+    }
+  }
+
+  /** La troupe a dû reculer : les créatures qui restent s'en retournent dans le noir */
+  rout(m: Mob, x: number, z: number) {
+    if (!m.alive || m.dying >= 0) return;
+    m.foe = null;
+    this.flee(m, x, z, 3);
+  }
+
+  /** À l'assaut : par les galeries tant que la troupe est loin, puis droit sur elle ; au contact, on frappe sans relâche */
+  private assault(m: Mob, dt: number) {
+    const [fx, fz] = m.foe!, d = Math.hypot(fx - m.x, fz - m.z), run = Math.max(SPECS[m.kind].run, 1.4) * 1.1;
+    if (d > 0.55) {
+      m.state = 'run';
+      if (m.path.length && d > 1.5) {
+        const k = m.path[0];
+        if (this.step(m, (k % N) + 0.5, Math.floor(k / N) + 0.5, run, dt, 0.15)) m.path.shift();
+      } else this.step(m, fx, fz, run, dt, 0.5);
+      return;
+    }
+    turnTo(m, Math.atan2(fx - m.x, fz - m.z), dt * 6);
+    if (m.state !== 'act' || m.timer <= 0) { m.state = 'act'; m.timer = 0.6 + this.rnd() * 0.5; m.face = [fx, fz]; }
+  }
+
+  /** Fumée des créatures terrassées : elle s'étale, monte et s'efface */
+  private stepPuffs(dt: number) {
+    for (const p of this.puffs) {
+      p.t += dt;
+      if (p.t < 0) continue;
+      const k = p.t / 0.7;
+      p.mesh.scale.setScalar(0.6 + k * 2.4);
+      p.mesh.position.x += p.vx * dt; p.mesh.position.z += p.vz * dt; p.mesh.position.y += dt * 0.35;
+      (p.mesh.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - k);
+      if (k >= 1) { this.group.remove(p.mesh); (p.mesh.material as THREE.Material).dispose(); }
+    }
+    this.puffs = this.puffs.filter((p) => p.t < 0.7);
   }
 
   /** Créature sous le rayon (clic) */
@@ -291,6 +379,13 @@ export class UnderMobs {
 
   update(dt: number, camera: THREE.Camera, lantern: Point, torches: Point[]) {
     if (this.version !== this.under.version) { this.version = this.under.version; this.populate(); }
+    // de nouvelles galeries prises : les créatures qui s'y trouvaient ont fui
+    const held = this.held();
+    if (held.size !== this.heldN) {
+      this.heldN = held.size;
+      for (const m of this.mobs) if (held.has(Math.floor(m.z) * N + Math.floor(m.x))) this.remove(m);
+      this.mobs = this.mobs.filter((m) => m.alive);
+    }
     this.t += dt;
     this.uTime.value = this.t;
     this.frame++;
@@ -302,6 +397,7 @@ export class UnderMobs {
       this.render(m, dt, camera, far);
     }
     this.mobs = this.mobs.filter((m) => m.alive);
+    this.stepPuffs(dt);
     this.renderBats();
   }
 
@@ -318,6 +414,9 @@ export class UnderMobs {
   private think(m: Mob, dt: number, lantern: Point, torches: Point[]) {
     const sp = SPECS[m.kind];
     m.timer -= dt; m.cool -= dt;
+    if (m.dying >= 0) return;
+    // à l'assaut d'une troupe armée : rien ne l'arrête, pas même les torches
+    if (m.foe) { this.assault(m, dt); return; }
     // action ou sursaut en cours : on regarde sa cible
     if (m.state === 'act' || m.state === 'hit') {
       if (m.face) turnTo(m, Math.atan2(m.face[0] - m.x, m.face[1] - m.z), dt * 6);
@@ -446,6 +545,11 @@ export class UnderMobs {
 
   private render(m: Mob, dt: number, camera: THREE.Camera, lanternD: number) {
     const a = m.actor, sp = SPECS[m.kind];
+    if (m.dying >= 0) {
+      m.dying -= dt;
+      m.heading += dt * 12;
+      if (m.dying <= 0) { this.remove(m); return; }
+    }
     const y = this.under.heightAt(m.x, m.z) + (sp.fly ? 0.45 + Math.sin(this.t * 1.7 + m.phase) * 0.08 : 0);
     this.sphere.center.set(m.x, y + sp.size * 0.5, m.z);
     this.sphere.radius = sp.size * m.scale + 0.2;
@@ -454,7 +558,7 @@ export class UnderMobs {
     if (!visible) return;
     a.root.position.set(m.x, y, m.z);
     a.root.rotation.y = m.heading;
-    a.root.scale.setScalar(m.scale);
+    a.root.scale.setScalar(m.scale * (m.dying >= 0 ? m.dying / DIE : 1));
     const anim = m.state === 'act' ? sp.act : m.state === 'hit' ? sp.hit : m.state === 'run' ? sp.runAnim ?? sp.walk : m.state === 'walk' ? sp.walk : sp.idle;
     play(a, anim, 0.2);
     if (a.current) a.current.timeScale = m.state === 'walk' ? sp.walkRate : m.state === 'run' ? sp.walkRate * 1.9 : 1;

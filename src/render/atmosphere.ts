@@ -81,6 +81,8 @@ export class Atmosphere {
   onStrike: ((x: number, z: number) => void) | null = null;
   /** densité de la brume, qui suit lentement l'heure, la saison et le temps */
   private mistK = 0;
+  /** brume dissipée à la demande : secondes avant qu'elle puisse revenir */
+  private calm = 0;
   /** brume affichée (coupée en qualité réduite) */
   mistEnabled = true;
   private caps: THREE.InstancedMesh;
@@ -165,6 +167,12 @@ void main(){
   /** Sous terre : pas de brume */
   hideMist() { MIST.x = 0; }
 
+  /** Épaisseur de la nappe de brume (0 … 1) */
+  get mist() { return this.mistEnabled ? this.mistK : 0; }
+
+  /** Dissipe la nappe de brume ; elle ne se reforme pas avant `seconds` secondes */
+  dispel(seconds: number) { this.calm = seconds; }
+
   update(dt: number, time: GameTime, s: SeasonState, env: Environment, camera: THREE.Camera, focus: THREE.Vector3) {
     const w = this.world, h = time.hour, season = time.season;
     this.t += dt;
@@ -175,9 +183,11 @@ void main(){
     // ---- brume : à l'aube surtout, plus en automne, avec le brouillard ; la pluie la disperse
     const dawn = smoothstep(3.5, 6, h) * (1 - smoothstep(8.5, 11, h));
     const dusk = smoothstep(18.5, 22, h) * 0.45 + (h < 4 || h > 22 ? 0.3 : 0);
-    const seasonK = [1.1, 0.55, 1.45, 0.85][season];
-    const density = clamp((dawn + dusk) * seasonK + fog * 0.45, 0, 1) * (1 - rain * 0.6) * (1 - fog * 0.35);
-    this.mistK += (density - this.mistK) * Math.min(1, dt * 0.3);
+    // plus légère qu'avant : un voile au lever du jour, qui ne noie plus le village chaque matin
+    const seasonK = [0.6, 0.3, 0.8, 0.45][season];
+    this.calm = Math.max(0, this.calm - dt);
+    const density = this.calm > 0 ? 0 : clamp((dawn + dusk) * seasonK + fog * 0.45, 0, 1) * (1 - rain * 0.6) * (1 - fog * 0.35);
+    this.mistK += (density - this.mistK) * Math.min(1, dt * (this.calm > 0 ? 1.2 : 0.3));
     MIST.x = this.mistEnabled ? this.mistK : 0;
     // par temps de brouillard, la nappe monte et noie les collines basses
     MIST.y = 2.1 + fog * 0.6;

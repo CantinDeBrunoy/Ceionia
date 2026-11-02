@@ -1,5 +1,5 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
-  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory';
+  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -70,6 +70,14 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [0, 0, 3, 6, 8],
     perk: 'Débloquée par l’expédition « Le filon de la montagne ». Rapporte du minerai chaque jour : 1 au Moyen Âge, 2 à l’âge industriel, 3 ensuite.',
     reqMission: 'mine',
+  },
+  outpost: {
+    id: 'outpost', size: 2, minAge: 2, icon: '🚩', cat: 'service',
+    names: ['', '', 'Avant-poste', 'Avant-poste fortifié', 'Base avancée'],
+    desc: 'Camp retranché devant une grotte ou une faille : les expéditions armées partent d’ici vers les profondeurs, et sa garnison tient les premières galeries.',
+    jobs: [0, 0, 3, 4, 5],
+    perk: 'Débloqué par l’expédition « Repérer les profondeurs ». À bâtir tout contre une grotte ou une faille. Chaque expédition armée qui revient victorieuse étend les galeries tenues sous terre.',
+    reqMission: 'scout',
   },
   pier: {
     id: 'pier', size: 1, minAge: 0, icon: '🎣', cat: 'prod',
@@ -168,7 +176,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'workshop', 'mine', 'mill', 'health', 'school', 'fire', 'observatory', 'gather', 'tavern', 'baths', 'temple', 'landmark'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'workshop', 'mine', 'outpost', 'mill', 'health', 'school', 'fire', 'observatory', 'gather', 'tavern', 'baths', 'temple', 'landmark'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -199,7 +207,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   house: 'maisons', farm: 'fermes', pen: 'enclos', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
   health: 'lieux de soins', school: 'écoles', fire: 'casernes',
-  stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires',
+  stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes',
 };
 
 export interface Building {

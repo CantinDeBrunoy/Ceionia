@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
+import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents } from '../sim/agents';
 import { ActiveExpedition } from '../sim/expeditions';
 import { HerdKind, Scene } from '../sim/missions';
@@ -208,6 +208,12 @@ const boilerGeo = () => geo('boiler', (p) => {
   p.add(new THREE.TorusGeometry(0.03, 0.008, 4, 8), -0.09, 0.09, 0.06, 0xc8783a);
 });
 const coreGeo = () => geo('core', (p) => { p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.16, 6).rotateZ(Math.PI / 2), 0, 0.018, 0, 0x5a5650); p.add(new THREE.CylinderGeometry(0.019, 0.019, 0.04, 6).rotateZ(Math.PI / 2), 0.03, 0.018, 0, 0x2a2826); });
+const stakeFlagGeo = () => geo('stakeflag', (p) => { p.box(0.02, 0.34, 0.02, 0, 0, 0, 0x8a6a4a); p.cone(0.012, 0.03, 4, 0, 0.34, 0, 0x6a4a34); p.box(0.005, 0.07, 0.1, 0, 0.25, 0.05, 0xf0902a); p.box(0.006, 0.02, 0.1, 0, 0.27, 0.05, 0xf8e0a0); });
+const mapTableGeo = () => geo('maptable', (p) => {
+  for (const s of [-1, 1]) { p.add(new THREE.BoxGeometry(0.012, 0.11, 0.1), s * 0.08, 0.05, 0, 0x6a4a34, 0, false, 0, 0); }
+  p.box(0.22, 0.014, 0.14, 0, 0.1, 0, 0x9a7a5a); p.box(0.16, 0.003, 0.1, 0, 0.114, 0, 0xf2e8d0, 0.12);
+  for (const [x, z, c] of [[-0.04, 0.02, 0xc8443a], [0.03, -0.02, 0x3c3530], [0.05, 0.03, 0xc8443a]] as [number, number, number][]) p.box(0.01, 0.01, 0.01, x, 0.117, z, c);
+});
 const flagGeo = () => geo('flag', (p) => { p.cyl(0.006, 0.008, 0.42, 5, 0, 0, 0, 0xd8d8d8); p.box(0.006, 0.08, 0.13, 0, 0.32, 0.065, 0xd8443a); p.sphere(0.012, 0, 0.43, 0, 0xe8c66a); });
 const stationGeo = () => geo('station', (p) => {
   p.box(0.012, 0.36, 0.012, 0, 0, 0, 0xd8d8d8);
@@ -248,7 +254,7 @@ const BEHAVIOR: Record<Scene, string> = {
   herd: 'herd', corral: 'herd', salt: 'herd', roundup: 'herd', boat: 'boat', dive: 'boat', fish: 'fish',
   mine: 'mine', pass: 'mine', crater: 'mine', gather: 'gather', pebbles: 'gather', hops: 'gather', hunt: 'hunt',
   build: 'build', bridge: 'build', drill: 'build', summit: 'build', basecamp: 'build', rails: 'rails', camp: 'camp',
-  smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
+  smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', scout: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
 };
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
@@ -454,13 +460,20 @@ export class ExpeditionScene {
       this.bath = { at: [[px - 0.11, pz + 0.04], [px + 0.12, pz - 0.05]], y: py + 0.024 - 0.07, in: new Set() };
       for (let i = 0; i < 6; i++) { const ang = i * 1.05 + 0.3; this.spots.push([px + Math.cos(ang) * 0.5, pz + Math.sin(ang) * 0.5]); }
       this.focus = [px, pz];
-    } else if (st === 'gallery' || st === 'cave') {
+    } else if (st === 'gallery' || st === 'cave' || st === 'scout') {
       // l'entrée : dans la pente pour une galerie ou un tunnel, la bouche de la grotte voisine sinon ; tas de minerai et wagonnet
       let mx = cx, mz = cz, found = false;
-      if (st === 'cave') {
-        for (let r = 1; r <= 3 && !found; r++) for (let dz = -r; dz <= r && !found; dz++) for (let dx = -r; dx <= r && !found; dx++) {
-          const x = Math.floor(cx) + dx, z = Math.floor(cz) + dz;
-          if (w.inCells(x, z) && w.veg[w.ci(x, z)] === VEG_CAVE) { const ang = Math.atan2(cx - x - 0.5, cz - z - 0.5); mx = x + 0.5 + Math.sin(ang) * 0.6; mz = z + 0.5 + Math.cos(ang) * 0.6; found = true; }
+      const e = st === 'gallery' ? -1 : w.outpostEntrance(Math.floor(cx), Math.floor(cz), 1);
+      if (e >= 0 && w.veg[e] === VEG_CAVE) {
+        // la bouche de la grotte, du côté de l'équipe
+        const x = e % N, z = Math.floor(e / N), ang = Math.atan2(cx - x - 0.5, cz - z - 0.5);
+        mx = x + 0.5 + Math.sin(ang) * 0.6; mz = z + 0.5 + Math.cos(ang) * 0.6; found = true;
+      } else if (e >= 0) {
+        // le bord de la faille le plus proche
+        let bd = Infinity;
+        for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
+          const x = Math.floor(cx) + dx, z = Math.floor(cz) + dz, d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
+          if (w.inCells(x, z) && w.decor[w.ci(x, z)] && d < bd) { bd = d; mx = x + 0.5; mz = z + 0.5; found = true; }
         }
       }
       if (!found) {
@@ -472,12 +485,21 @@ export class ExpeditionScene {
       if (!found) this.put(galleryGeo(a.m.id === 'railway'), mx, mz, face);
       else for (const s of [-1, 1]) { const tx = mx + Math.cos(face) * s * 0.2, tz = mz - Math.sin(face) * s * 0.2; this.put(stakeTorchGeo(), tx, tz, 0); this.flameAt(tx, y(tx, tz) + 0.26, tz, 0.6); }
       const hx = cx - Math.sin(face) * 0.3, hz = cz - Math.cos(face) * 0.3;
-      this.grows.push({ obj: this.put(rocksGeo(), hx, hz, 0), from: 0.25, to: 1.1 });
+      if (st === 'scout') {
+        // les éclaireurs reviennent reporter leurs relevés sur la table aux plans, et jalonnent devant la grotte l'emprise de
+        // l'avant-poste : des piquets à fanion qui sortent de terre au fil du travail
+        this.put(mapTableGeo(), hx, hz, face + Math.PI / 2);
+        const ox = cx + Math.sin(face) * 0.35, oz = cz + Math.cos(face) * 0.35;
+        for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+          const x = ox + Math.sin(face) * u * 0.42 + Math.cos(face) * v * 0.42, z = oz + Math.cos(face) * u * 0.42 - Math.sin(face) * v * 0.42;
+          this.grows.push({ obj: this.put(stakeFlagGeo(), x, z, face), from: 0.001, to: 1 });
+        }
+      } else this.grows.push({ obj: this.put(rocksGeo(), hx, hz, 0), from: 0.25, to: 1.1 });
       if (!found) {
         for (let i = 0; i < 3; i++) { const t = 0.15 + i * 0.3, x = mx + (cx - mx) * t, z = mz + (cz - mz) * t; this.put(trackGeo(), x, z, face + Math.PI); }
         this.cartRun = { obj: this.put(cartGeo(), mx, mz, face), a: [mx + Math.sin(face) * 0.12, mz + Math.cos(face) * 0.12], b: [hx + Math.sin(face) * 0.1, hz + Math.cos(face) * 0.1] };
       }
-      this.emits.push({ x: hx, y: y(hx, hz) + 0.1, z: hz, kind: 'puff', every: 0.7, t: 0 });
+      if (st !== 'scout') this.emits.push({ x: hx, y: y(hx, hz) + 0.1, z: hz, kind: 'puff', every: 0.7, t: 0 });
       this.mouth = { at: [mx + Math.sin(face) * 0.12, mz + Math.cos(face) * 0.12], heap: [hx, hz] };
     } else if (st === 'troupe') {
       // la roulotte des jongleurs, deux jongleurs et leurs balles, un tambour ; l'équipe applaudit en demi-cercle

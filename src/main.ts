@@ -85,6 +85,8 @@ class Game implements UIHost {
   /** la caméra suit l'expédition */
   /** expédition que la caméra suit (son numéro), ou null */
   following: number | null = null;
+  /** la vue est descendue d'elle-même avec la troupe suivie (elle remonte quand l'expédition est finie) */
+  private autoUnder = false;
   /** réveil spontané d'un volcan : délai (secondes de jeu) et secousses annonciatrices en cours */
   private quakeTimer = 0;
   private quake: { cell: number; t: number } | null = null;
@@ -201,6 +203,12 @@ class Game implements UIHost {
     this.ui = new UI(uiRoot, host);
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
+    // une quête du camp souterrain accomplie : il grandit de lui-même
+    this.expeditions.onCamp = (q) => {
+      audio.sfxAgeUp();
+      this.ui.toast(`⛺ Quête accomplie : « ${q.title} » — le camp souterrain s’agrandit : ${q.builds}.`, () => this.ui.openExpeditions('depths'));
+      this.ui.update();
+    };
     this.expeditions.onReport = (r) => {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       this.ui.showReport(r);
@@ -306,10 +314,17 @@ class Game implements UIHost {
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
+  /** Brouillard visible : la météo « brume » et la nappe au ras du sol (0 … 1) */
+  fogLevel() { return Math.max(this.env.weatherKind === 'fog' ? this.env.weatherK : 0, this.atmosphere.mist); }
+  /** Dissipe le brouillard et la brume ; ils ne reviennent pas avant un bon moment */
+  dispelFog() { this.env.dispelFog(); this.atmosphere.dispel(300); }
+
   /** La caméra suit l'expédition donnée (null : elle redevient libre) */
   follow(id: number | null) {
     const a = this.expeditions.active.find((e) => e.id === id);
     this.following = a ? a.id : null;
+    // on cesse de suivre : la vue reste où elle est
+    if (!a) this.autoUnder = false;
     if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 16); }
   }
   get disasters() { return this.world.disasters; }
@@ -377,9 +392,10 @@ class Game implements UIHost {
     this.enterUnder(best);
   }
 
-  /** Remonte à la surface, devant l'entrée empruntée (ou celle donnée) */
-  exitUnder(cell?: number) {
+  /** Remonte à la surface, devant l'entrée empruntée (ou celle donnée) ; remonter soi-même cesse de suivre la troupe */
+  exitUnder(cell?: number, auto = false) {
     if (this.mode !== 'under') return;
+    if (!auto && this.autoUnder) { this.autoUnder = false; this.following = null; }
     this.fadeThrough(() => {
       this.mode = 'surface';
       document.body.classList.remove('under');
@@ -459,8 +475,8 @@ class Game implements UIHost {
         return;
       }
       if (k === 'u') { this.enterNearest(); return; }
-      // R tourne le bâtiment en main ; sinon c'est l'outil Route
-      if (k === 'r' && this.tools.holding()) { this.tools.rotate(); return; }
+      // R tourne le bâtiment en main ou celui qu'on a choisi ; sinon c'est l'outil Route
+      if (k === 'r' && (this.tools.holding() || this.tools.selected !== null)) { this.tools.rotate(); return; }
       const tool = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) ? undefined : map[k];
       if (tool) { this.tools.setTool(tool); audio.sfxClick(); }
       else if (k === 'b') { this.tools.setTool('build', this.tools.kind); }
@@ -606,16 +622,23 @@ class Game implements UIHost {
     this.pens.update(gdt);
     // la caméra accompagne l'équipe
     const followed = this.following === null ? null : this.expeditions.active.find((e) => e.id === this.following);
+    // une troupe armée suivie : quand elle est sous terre, la vue y descend avec elle ; elle remonte quand l'expédition est finie
+    const below = !!followed && followed.entry >= 0 && followed.phase === 'work';
+    if (below && this.mode === 'surface' && !this.autoUnder) { this.autoUnder = true; this.enterUnder(followed!.entry); }
+    else if (this.autoUnder && !below && this.mode === 'under') { this.autoUnder = false; this.exitUnder(undefined, true); }
     if (!followed) this.following = null;
     else if (!uv) {
       const pos = this.agents.partyPositions(followed.party);
-      if (pos.length) this.cam.follow(pos.reduce((s, p) => s + p[0], 0) / pos.length, pos.reduce((s, p) => s + p[1], 0) / pos.length);
+      if (pos.length && !below) this.cam.follow(pos.reduce((s, p) => s + p[0], 0) / pos.length, pos.reduce((s, p) => s + p[1], 0) / pos.length);
+    } else {
+      const p = uv.troopAt(followed.id);
+      if (p) this.cam.follow(p[0], p[1]);
     }
     // la surface ne s'anime que lorsqu'on la regarde
     if (uv) {
       // les troupes armées en train de parcourir les galeries
-      uv.setTroops(this.expeditions.active.filter((a) => a.targets.length && a.phase === 'work').map((a) => ({
-        id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
+      uv.setTroops(this.expeditions.active.filter((a) => a.entry >= 0 && a.phase === 'work').map((a) => ({
+        id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
       })), dt);
       uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
     }

@@ -38,6 +38,54 @@ export function oreVeins(u: Underground, mined: Set<number>): { k: number; ore: 
   return out;
 }
 
+/** Étape du parcours d'une troupe armée : marche (de case en case du chemin), halte au filon, combat contre une embuscade */
+export interface TroopLeg { from: number; to: number; kind: 'walk' | 'mine' | 'fight'; /** début de l'étape, en temps de parcours */ t0: number }
+export interface TroopRoute { cells: number[]; legs: TroopLeg[]; total: number }
+/** Durée d'une halte au filon et d'un combat, comptée comme une longueur de chemin (cases) */
+export const MINE_HALT = 6, FIGHT_HALT = 14;
+
+/**
+ * Parcours d'une troupe armée : de la case où elle descend, de filon en filon (halte à chacun), puis jusqu'au front où elle
+ * plante ses lanternes ; elle s'arrête pour combattre à chaque case d'embuscade. Le jeu (issue des combats) et la vue
+ * souterraine (où est la troupe) le calculent de la même façon
+ */
+export function troopRoute(u: Underground, entry: number, targets: number[], front: number, ambush: number[] = []): TroopRoute {
+  const cells = [entry], legs: TroopLeg[] = [], fights = new Set(ambush);
+  let at = entry, t = 0;
+  const push = (from: number, to: number, kind: TroopLeg['kind']) => {
+    if (kind === 'walk' && to === from) return;
+    legs.push({ from, to, kind, t0: t });
+    t += kind === 'walk' ? to - from : kind === 'mine' ? MINE_HALT : FIGHT_HALT;
+  };
+  const go = (to: number) => {
+    const r = u.route(at, to);
+    if (!r) return;
+    let from = cells.length - 1;
+    for (let i = 1; i < r.length; i++) {
+      cells.push(r[i]);
+      if (fights.delete(r[i])) { push(from, cells.length - 1, 'walk'); push(cells.length - 1, cells.length - 1, 'fight'); from = cells.length - 1; }
+    }
+    push(from, cells.length - 1, 'walk');
+    push(cells.length - 1, cells.length - 1, 'mine');
+    at = to;
+  };
+  for (const v of targets) go(v);
+  if (front >= 0 && front !== at) go(front);
+  return { cells, legs, total: t };
+}
+
+/** Où en est la troupe au temps de parcours `s` : position sur le chemin (en cases, fractionnaire) et étape en cours */
+export function routeAt(r: TroopRoute, s: number): { pos: number; leg: TroopLeg | null } {
+  for (const l of r.legs) {
+    const d = l.kind === 'walk' ? l.to - l.from : l.kind === 'mine' ? MINE_HALT : FIGHT_HALT;
+    if (s <= l.t0 + d) return { pos: l.kind === 'walk' ? l.from + Math.max(0, s - l.t0) : l.to, leg: l };
+  }
+  return { pos: r.legs.length ? r.legs[r.legs.length - 1].to : 0, leg: null };
+}
+
+/** Champ d'ouverture adouci : roche pleine en dessous de ROCK_ISO, sol de galerie au-dessus de FLOOR_ISO, falaise entre les deux */
+export const ROCK_ISO = 0.12, FLOOR_ISO = 0.42;
+
 /** Bord de carte toujours rocheux */
 const BORDER = 2;
 
@@ -54,6 +102,14 @@ export class Underground {
   wallDist = new Uint8Array(N * N);
   /** relief affiché (VS×VS), même échantillonnage que la surface */
   vis = new Float32Array(VS * VS);
+  /**
+   * Pour le rendu, par sommet : l'ouverture de la galerie (champ adouci, 0 dans la roche … 1 en galerie), le sol, et le
+   * relief de la roche au sol et au sommet des parois — la vue en tire des contours de falaise lisses
+   */
+  vOpen = new Float32Array(VS * VS);
+  vGround = new Float32Array(VS * VS);
+  vBump0 = new Float32Array(VS * VS);
+  vBump1 = new Float32Array(VS * VS);
   entrances: Entrance[] = [];
   /** incrémenté à chaque régénération */
   version = 0;
@@ -110,6 +166,30 @@ export class Underground {
         const nx = x + dx, nz = z + dz, n = nz * N + nx;
         if (!this.walkable(nx, nz) || d[n] >= 0) continue;
         d[n] = d[k] + 1; q[t++] = n;
+      }
+    }
+    return d;
+  }
+
+  /**
+   * Ce qu'une troupe partie de la case `from` peut prendre : distance en pas depuis les galeries tenues (`held`) d'un seul
+   * tenant avec `from` (0 pour elles), jusqu'à `step` pas au-delà ; -1 plus loin ou hors d'atteinte
+   */
+  reach(held: Set<number>, from: number, step: number) {
+    const d = new Int32Array(N * N).fill(-1), q = new Int32Array(N * N);
+    let h = 0, t = 0;
+    d[from] = 0; q[t++] = from;
+    // d'abord toute la zone tenue reliée au départ, puis vague après vague au-delà du front
+    for (const wild of [false, true]) {
+      if (wild) h = 0;
+      while (h < t) {
+        const k = q[h++], x = k % N, z = (k - x) / N;
+        if (wild && d[k] >= step) continue;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, nz = z + dz, n = nz * N + nx;
+          if (!this.walkable(nx, nz) || d[n] >= 0 || (!wild && !held.has(n))) continue;
+          d[n] = wild ? d[k] + 1 : 0; q[t++] = n;
+        }
       }
     }
     return d;
@@ -218,6 +298,7 @@ export class Underground {
           this.floor[k] = -0.55;
         }
       }
+    this.settlePools();
     this.buildVis(s5);
   }
 
@@ -274,35 +355,75 @@ export class Underground {
     }
   }
 
-  /** Relief affiché : sol et parois interpolés aux sous-sommets puis lissés, crêtes des parois bosselées */
-  private buildVis(noise: Simplex) {
-    const vis = this.vis, tmp = new Float32Array(VS * VS);
-    const val = (cx: number, cz: number) => {
-      cx = Math.min(N - 1, Math.max(0, cx)); cz = Math.min(N - 1, Math.max(0, cz));
-      const k = cz * N + cx;
-      return this.open[k] ? this.floor[k] : UWALL;
-    };
-    for (let z = 0; z < VS; z++)
-      for (let x = 0; x < VS; x++) {
-        // centres de case en (i + 0.5)
-        const fx = x / VR - 0.5, fz = z / VR - 0.5, ix = Math.floor(fx), iz = Math.floor(fz), u = fx - ix, v = fz - iz;
-        const a = val(ix, iz) + (val(ix + 1, iz) - val(ix, iz)) * u, b = val(ix, iz + 1) + (val(ix + 1, iz + 1) - val(ix, iz + 1)) * u;
-        vis[z * VS + x] = a + (b - a) * v;
-      }
-    // un seul lissage : parois franches, pied adouci
-    for (let pass = 0; pass < 1; pass++) {
-      tmp.set(vis);
-      for (let z = 1; z < VS - 1; z++)
-        for (let x = 1; x < VS - 1; x++) {
-          const i = z * VS + x;
-          vis[i] = (4 * tmp[i] + 2 * (tmp[i - 1] + tmp[i + 1] + tmp[i - VS] + tmp[i + VS]) + tmp[i - VS - 1] + tmp[i - VS + 1] + tmp[i + VS - 1] + tmp[i + VS + 1]) / 16;
+  /**
+   * Chaque lac d'un seul tenant devient tout d'eau ou tout de lave, selon la zone où il s'étend le plus ; l'eau qui
+   * resterait à moins de trois cases d'une lave s'assèche (jamais de lac à moitié en feu)
+   */
+  private settlePools() {
+    const pool = this.pool, seen = new Uint8Array(N * N), q = new Int32Array(N * N);
+    for (let k0 = 0; k0 < N * N; k0++) {
+      if (!pool[k0] || seen[k0]) continue;
+      let h = 0, t = 0, lava = 0;
+      seen[k0] = 1; q[t++] = k0;
+      while (h < t) {
+        const k = q[h++], x = k % N, z = (k - x) / N;
+        if (this.zone[k] === UZ_MAGMA) lava++;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const n = (z + dz) * N + x + dx;
+          if (x + dx < 0 || z + dz < 0 || x + dx >= N || z + dz >= N || !pool[n] || seen[n]) continue;
+          seen[n] = 1; q[t++] = n;
         }
+      }
+      const kind = t < 12 ? 0 : lava * 2 >= t ? POOL_LAVA : POOL_WATER;
+      for (let i = 0; i < t; i++) { pool[q[i]] = kind; if (!kind) this.floor[q[i]] = 0.1; }
     }
-    // parois : relief rocheux (plus marqué en haut), sol : petites bosses
+    for (let k = 0; k < N * N; k++) {
+      if (pool[k] !== POOL_WATER) continue;
+      const x = k % N, z = Math.floor(k / N);
+      let near = false;
+      for (let dz = -3; dz <= 3 && !near; dz++) for (let dx = -3; dx <= 3 && !near; dx++) near = pool[Math.min(N - 1, Math.max(0, z + dz)) * N + Math.min(N - 1, Math.max(0, x + dx))] === POOL_LAVA;
+      if (near) { pool[k] = 0; this.floor[k] = 0.1; }
+    }
+  }
+
+  /**
+   * Relief affiché, aux contours organiques : la roche et les bassins sont des champs adoucis (1 en galerie, 0 dans la
+   * roche), lus entre les centres de case en un point gauchi par un bruit doux ; la paroi monte franchement là où le champ
+   * passe son seuil, le fond des bassins descend en pente douce ; crêtes des parois bosselées, sol à petites bosses
+   */
+  private buildVis(noise: Simplex) {
+    const vis = this.vis;
+    const blur = (src: Float32Array) => {
+      const out = new Float32Array(N * N);
+      for (let z = 0; z < N; z++)
+        for (let x = 0; x < N; x++) {
+          let s = 0;
+          for (let dz = -1; dz <= 1; dz++)
+            for (let dx = -1; dx <= 1; dx++) s += src[Math.min(N - 1, Math.max(0, z + dz)) * N + Math.min(N - 1, Math.max(0, x + dx))] * (dx ? 1 : 2) * (dz ? 1 : 2);
+          out[z * N + x] = s / 16;
+        }
+      return out;
+    };
+    const o0 = new Float32Array(N * N), b0 = new Float32Array(N * N), fl = new Float32Array(N * N);
+    for (let k = 0; k < N * N; k++) { o0[k] = this.open[k]; b0[k] = this.pool[k] ? 1 : 0; fl[k] = this.pool[k] ? 0.1 : this.floor[k]; }
+    const open = blur(blur(o0)), basin = blur(blur(b0));
+    const sample = (f: Float32Array, fx: number, fz: number) => {
+      const x = Math.min(N - 1.001, Math.max(0, fx)), z = Math.min(N - 1.001, Math.max(0, fz)), ix = Math.floor(x), iz = Math.floor(z), u = x - ix, v = z - iz, i = iz * N + ix;
+      return (f[i] * (1 - u) + f[i + 1] * u) * (1 - v) + (f[i + N] * (1 - u) + f[i + N + 1] * u) * v;
+    };
+    const step = (a: number, b: number, t: number) => { const k = Math.min(1, Math.max(0, (t - a) / (b - a))); return k * k * (3 - 2 * k); };
     for (let z = 0; z < VS; z++)
       for (let x = 0; x < VS; x++) {
-        const i = z * VS + x, h = vis[i], wall = Math.min(1, Math.max(0, (h - 0.3) / (UWALL - 0.3)));
-        vis[i] += noise.fbm(x * 0.21, z * 0.21, 2) * (0.04 + wall * 0.3) + noise.noise2(x * 0.7 + 40, z * 0.7) * wall * 0.12;
+        // centres de case en (i + 0.5) ; le seuil (0.12 … 0.42) laisse dégagée une galerie large d'une seule case
+        const wx = noise.noise2(x * 0.11, z * 0.11) * 0.3, wz = noise.noise2(x * 0.11 + 31, z * 0.11 - 17) * 0.3;
+        const fx = x / VR - 0.5 + wx, fz = z / VR - 0.5 + wz;
+        const op = sample(open, fx, fz), rock = 1 - step(ROCK_ISO, FLOOR_ISO, op), deep = step(0.25, 0.7, sample(basin, fx, fz));
+        const ground = sample(fl, x / VR - 0.5, z / VR - 0.5) - deep * 0.68;
+        const i = z * VS + x;
+        // parois : relief rocheux (plus marqué en haut) ; sol : petites bosses
+        const f = noise.fbm(x * 0.21, z * 0.21, 2), b0 = f * 0.03, b1 = f * 0.23 + noise.noise2(x * 0.7 + 40, z * 0.7) * 0.08;
+        vis[i] = ground + (UWALL - ground) * rock + b0 + (b1 - b0) * rock;
+        this.vOpen[i] = op; this.vGround[i] = ground; this.vBump0[i] = b0; this.vBump1[i] = b1;
       }
   }
 }

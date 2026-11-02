@@ -95,6 +95,7 @@ const P: Record<string, string> = {
   cave: '<path d="M2 20h20"/><path d="M4 20c0-8 3.5-14 8-14s8 6 8 14"/><path d="M9 20c0-4 1.3-7 3-7s3 3 3 7"/>',
   crack: '<path d="M3 4l5 5-2 3 5 4-1 4"/><path d="M14 4l2 4-3 2 4 4 3-1"/>',
   eraser: '<path d="M20 20H9l-6-6 10-10 8 8-7 8"/><path d="M7 12l6 6"/>',
+  outpost: '<path d="M7 21l2-11h6l2 11"/><path d="M6 10h12l-1-3H7z"/><path d="M12 7V2l5 1.5-5 1.5"/><path d="M9.5 15h5"/><path d="M3 21h18"/>',
 };
 
 /** Icône au trait, de la couleur du texte */
@@ -105,7 +106,7 @@ export function ic(name: string, size = 20, stroke = 1.8): string {
 export const KIND_ICON: Record<KindId, string> = {
   house: 'house', well: 'well', lamp: 'lamp', farm: 'barn', pen: 'pen', pier: 'fish', workshop: 'anvil', mill: 'windmill',
   health: 'hospital', school: 'book', fire: 'flame', gather: 'campfire', temple: 'columns', landmark: 'castle',
-  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope',
+  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

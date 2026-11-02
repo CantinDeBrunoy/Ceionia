@@ -22,7 +22,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // le cœur de chaque mission : enclos de branchages, pierre à sel, vallon, galets, houblon, col, chêne enfumé, essaim, troc,
   // source chaude, galerie, grotte, jongleurs, abbaye, étoiles filantes, cratère, pont, sondage, sommet, camp de base, plongée
   | 'corral' | 'salt' | 'roundup' | 'pebbles' | 'hops' | 'pass' | 'smoke' | 'swarm' | 'trade' | 'spring' | 'gallery' | 'cave'
-  | 'troupe' | 'abbey' | 'stars' | 'crater' | 'bridge' | 'drill' | 'summit' | 'basecamp' | 'dive';
+  | 'troupe' | 'abbey' | 'stars' | 'crater' | 'bridge' | 'drill' | 'summit' | 'basecamp' | 'dive'
+  // repérage : on entre dans la grotte relever les galeries, on jalonne l'avant-poste devant
+  | 'scout';
 
 export type Effect =
   /** bêtes ramenées : elles paissent ensuite près des fermes */
@@ -34,8 +36,8 @@ export type Effect =
   | { t: 'perk'; id: string }
   /** habitants blessés, qui se reposent chez eux quelques jours */
   | { t: 'injured'; n: number; days: number }
-  /** filons du monde souterrain abattus par la troupe (les plus proches de l'entrée) */
-  | { t: 'veins'; n: number }
+  /** filons du monde souterrain abattus par la troupe, et galeries prises jusqu'à `reach` cases au-delà du front */
+  | { t: 'veins'; n: number; reach: number }
   /** bêtes perdues en route */
   | { t: 'unherd'; kind: HerdKind; n: number };
 
@@ -294,28 +296,55 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
+    id: 'scout', age: 2, mandatory: false, icon: '🔦', title: 'Repérer les profondeurs', unlocks: 'outpost',
+    intro: 'Avant d’envoyer une troupe sous terre, il faut savoir par où descendre. Des éclaireurs vont reconnaître une grotte, relever le plan des premières galeries et jalonner devant l’entrée l’endroit où bâtir un avant-poste.',
+    choices: [
+      {
+        label: 'Deux éclaireurs à la corde', text: 'Légers et rapides : ils descendent jusqu’à la première salle et remontent avec un plan.',
+        dest: 'cave', scene: 'scout', doing: 'relève le plan des galeries et jalonne l’avant-poste', danger: ['dark', 'fall'], party: 2, work: 20, risk: 0.3,
+        win: [joy(1)], lose: [hurt(1, 2)],
+        winText: 'Les éclaireurs ont dressé le plan des premières galeries et planté leurs jalons devant la grotte : on peut y bâtir un avant-poste.',
+        loseText: 'Une corde a lâché dans le puits : un éclaireur s’est foulé la cheville, et le plan reste à faire.',
+      },
+      {
+        label: 'Patrouille armée', text: 'Quatre hommes, lances et torches : plus lent, mais on ne se laisse pas surprendre par ce qui rôde en bas.',
+        dest: 'cave', scene: 'scout', doing: 'reconnaît les galeries, lances en avant, et jalonne l’avant-poste', danger: ['monster', 'dark'], party: 4, work: 28, risk: 0.18,
+        win: [{ t: 'ore', n: 2 }], lose: [hurt(2, 2)],
+        winText: 'La patrouille a repoussé une bande de squelettes, relevé les galeries et ramassé quelques pierres de minerai : l’avant-poste est jalonné.',
+        loseText: 'Des araignées ont surgi du plafond : la patrouille a battu en retraite avec deux blessés, sans plan.',
+      },
+      {
+        label: 'Suivre un vieux mineur nomade', text: 'Il connaît chaque grotte du pays ; il demandera des vivres pour sa peine.',
+        dest: 'cave', scene: 'scout', doing: 'suit le vieux mineur dans les galeries et jalonne l’avant-poste', danger: ['dark'], party: 2, work: 14, risk: 0.08,
+        win: [food(-2, 3)], lose: [],
+        winText: 'Le vieux mineur a tout montré : les puits, les salles, les passages sûrs. Il repart avec ses vivres, l’avant-poste est jalonné.',
+        loseText: 'Le vieux mineur a filé avec les vivres au premier tournant.',
+      },
+    ],
+  },
+  {
     id: 'deep', age: 2, mandatory: false, repeat: true, icon: '⚔️', title: 'Expédition armée dans les profondeurs',
-    requires: { missions: ['horses', 'mine'], kinds: ['stable'] },
-    intro: 'Sous les grottes et les failles, les galeries regorgent de minerai… et de créatures. Seule une troupe armée peut y descendre, tenir les galeries le temps d’abattre les filons, et en revenir. Longue et dangereuse ; on peut y retourner tant qu’il reste des filons.',
+    requires: { missions: ['horses', 'mine', 'scout'], kinds: ['stable', 'outpost'] },
+    intro: 'Sous les grottes et les failles, les galeries regorgent de minerai… et de créatures. La troupe part de l’avant-poste, descend au-delà des galeries déjà tenues, abat les filons qu’elle y trouve et, si elle l’emporte, plante ses lanternes : le village tient ces galeries à son tour. Longue et dangereuse ; on peut y retourner tant qu’il reste des galeries à prendre.',
     choices: [
       {
         label: 'Charge de cavalerie', text: 'Trois chevaux de l’écurie et leurs cavaliers foncent dans les grandes galeries : rapides, mais les bêtes craignent le noir.',
         dest: 'cave', scene: 'mine', doing: 'charge dans les galeries et abat les filons', troop: 'cavalry', mounts: 3, danger: ['monster', 'dark'], party: 4, work: 34, risk: 0.5, carry: 'cart',
-        win: [{ t: 'veins', n: 4 }], lose: [hurt(2, 3), { t: 'unherd', kind: 'horse', n: 1 }],
+        win: [{ t: 'veins', n: 4, reach: 12 }], lose: [hurt(2, 3), { t: 'unherd', kind: 'horse', n: 1 }],
         winText: 'Les cavaliers ont chargé la horde de squelettes, tenu la grande galerie et remonté les filons dans leurs sacoches !',
         loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cavaliers rentrent blessés, les sacoches vides.',
       },
       {
         label: 'Hommes d’armes en armure', text: 'Lents et lourds : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
         dest: 'cave', scene: 'mine', doing: 'avance bouclier contre bouclier et abat les filons', troop: 'armor', danger: ['monster', 'dark', 'fall'], party: 5, work: 48, risk: 0.45, carry: 'cart',
-        win: [{ t: 'veins', n: 6 }], lose: [hurt(2, 4)],
+        win: [{ t: 'veins', n: 6, reach: 9 }], lose: [hurt(2, 4)],
         winText: 'Pas un monstre n’a percé le mur de boucliers : six filons abattus, le chariot ploie sous le minerai.',
         loseText: 'Les araignées géantes ont attaqué par le plafond : la troupe a reculé, deux blessés sous leurs armures cabossées.',
       },
       {
         label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches : on file droit aux premiers filons et on remonte ce qu’on peut.',
         dest: 'cave', scene: 'mine', doing: 'abat les filons sous la garde des soldats', troop: 'miners', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.55, carry: 'cart',
-        win: [{ t: 'veins', n: 3 }], lose: [hurt(2, 3)],
+        win: [{ t: 'veins', n: 3, reach: 6 }], lose: [hurt(2, 3)],
         winText: 'Les gardes ont tenu bon pendant que les pioches chantaient : trois filons remontés à la lumière.',
         loseText: 'Des zombies ont surgi d’une galerie latérale : les mineurs ont tout lâché pour fuir, deux blessés.',
       },
@@ -532,9 +561,12 @@ export interface ExpState {
   craftT: number;
   /** chevaux partis avec une troupe (pas sauvegardé : une expédition en route ne l'est pas) */
   riding: number;
+  /** embuscades repoussées sous terre, et niveau du camp souterrain (quêtes accomplies) */
+  wins: number;
+  camp: number;
 }
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0 });
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, camp: 0 });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
@@ -550,6 +582,8 @@ export function readExpState(d: any): ExpState {
   for (const k of Object.keys(s.gear) as GearId[]) s.gear[k] = Math.max(0, Math.floor(+d.gear?.[k] || 0));
   s.craft = Array.isArray(d.craft) ? d.craft.filter((x: any) => x in GEAR_BY) : [];
   s.craftT = +d.craftT || 0;
+  s.wins = Math.max(0, Math.floor(+d.wins || 0));
+  s.camp = Math.max(0, Math.floor(+d.camp || 0));
   return s;
 }
 
@@ -592,7 +626,7 @@ export function effectSummary(effects: Effect[]) {
     else if (e.t === 'need') out.push(`${e.n > 0 ? '+' : '−'}${Math.abs(e.n)} ${NEED_ICON[e.need]}${e.days ? ` (${e.days} j)` : ''}`);
     else if (e.t === 'perk') out.push(PERK_NAME[e.id] ?? e.id);
     else if (e.t === 'injured') out.push(`${e.n} blessé${e.n > 1 ? 's' : ''} (${e.days} j)`);
-    else if (e.t === 'veins') out.push(`${e.n} filons du souterrain`);
+    else if (e.t === 'veins') out.push(`${e.n} filons au plus, et les galeries jusqu’à ${e.reach} cases au-delà du front`);
     else if (e.t === 'unherd') out.push(`−${e.n} ${HERD_NAME[e.kind][e.n > 1 ? 1 : 0]}`);
   }
   return out.join(' · ') || 'rien';

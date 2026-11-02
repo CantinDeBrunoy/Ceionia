@@ -3,7 +3,7 @@ import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, VEG_F
 import { sculpt, raiseVolcano, SculptTool } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
-import { KINDS, KindId } from './catalog';
+import { KINDS, KindId, Building, sizeOf } from './catalog';
 import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin } from './placement';
@@ -53,6 +53,10 @@ export class ToolController implements ToolInput {
   private lastRoad: { x: number; z: number } | null = null;
   private vegTimer = 0;
   private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean } | null = null;
+  /** bâtiment choisi d'un clic avec l'outil « Voir » : sa fiche s'affiche, on peut le déplacer, le tourner, le démolir */
+  selected: number | null = null;
+  /** où le clic a commencé (un glissé n'est pas un clic) */
+  private downAt: [number, number] | null = null;
   private lastToast = 0;
 
   private ring: THREE.LineLoop;
@@ -81,6 +85,7 @@ export class ToolController implements ToolInput {
   // ---------- API ----------
   setTool(t: ToolId, kind?: KindId) {
     if (this.moveOrigin && (t !== 'move' && !(t === 'build'))) this.cancelMove();
+    if (t !== 'none') this.selected = null;
     // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route
     if (t !== this.tool || (kind && kind !== this.kind)) this.rotManual = false;
     this.tool = t;
@@ -93,8 +98,9 @@ export class ToolController implements ToolInput {
   /** Un bâtiment en main : à poser, ou ramassé pour le déplacer */
   holding() { return this.tool === 'build' || (this.tool === 'move' && !!this.moveOrigin); }
 
-  /** Quart de tour du bâtiment en main, à partir de l'orientation affichée */
+  /** Quart de tour du bâtiment en main, à partir de l'orientation affichée ; sinon, du bâtiment sélectionné */
   rotate() {
+    if (!this.holding()) { this.rotateSelected(); return; }
     const hit = this.hit;
     if (!this.rotManual && hit) {
       const o = footprintOrigin(this.kind, hit.x, hit.z);
@@ -126,6 +132,54 @@ export class ToolController implements ToolInput {
   escape() {
     if (this.moveOrigin) this.cancelMove();
     this.setTool('none');
+    this.select(null);
+  }
+
+  // ---------- Bâtiment sélectionné ----------
+  /** Choisit un bâtiment (ou aucun) : sa fiche s'affiche, son emprise s'éclaire */
+  select(id: number | null) {
+    if (this.selected === id) return;
+    this.selected = id;
+    this.refreshVisuals();
+    this.h.changed();
+  }
+
+  private selectedBuilding() { return this.selected === null ? undefined : this.h.world.buildings.get(this.selected); }
+
+  /** Ramasse le bâtiment sélectionné : il suit le curseur, un clic le repose (Échap le remet en place) */
+  moveSelected() {
+    const b = this.selectedBuilding();
+    if (!b) return;
+    this.select(null);
+    this.setTool('move');
+    this.beginStroke();
+    this.pickUp(b);
+    this.endStroke();
+  }
+
+  /** Quart de tour du bâtiment sélectionné, sur place */
+  rotateSelected() {
+    const b = this.selectedBuilding();
+    if (!b) return;
+    this.beginStroke();
+    this.mark();
+    this.endStroke();
+    this.h.world.rotateBuilding(b.id, b.rot + 1);
+    this.h.audio.sfxClick();
+    this.refreshVisuals();
+    this.h.changed();
+  }
+
+  /** Démolit le bâtiment sélectionné (annulable) */
+  demolishSelected() {
+    const b = this.selectedBuilding();
+    if (!b) return;
+    this.beginStroke();
+    this.mark();
+    this.endStroke();
+    this.h.world.removeBuilding(b.id);
+    this.h.audio.sfxDestroy();
+    this.select(null);
   }
 
   // ---------- historique ----------
@@ -153,7 +207,8 @@ export class ToolController implements ToolInput {
     this.refreshVisuals();
     // une grotte ou une faille sous le curseur : on peut y descendre ; un volcan : on peut le réveiller
     const w = this.h.world, hit = this.hit;
-    this.h.canvas.style.cursor = this.tool === 'none' && hit && (w.entranceAt(hit.x, hit.z) >= 0 || w.volcanoAt(hit.x, hit.z) >= 0) ? 'pointer' : '';
+    // et un bâtiment : un clic ouvre sa fiche
+    this.h.canvas.style.cursor = this.tool === 'none' && hit && (w.entranceAt(hit.x, hit.z) >= 0 || w.volcanoAt(hit.x, hit.z) >= 0 || w.buildingAt(Math.floor(hit.x), Math.floor(hit.z))) ? 'pointer' : '';
   }
 
   down(e: PointerInfo) {
@@ -168,7 +223,9 @@ export class ToolController implements ToolInput {
       const cell = this.h.world.entranceAt(this.hit.x, this.hit.z);
       if (cell >= 0) { this.pressed = false; this.h.enterUnder(cell); return; }
       const vol = this.h.world.volcanoAt(this.hit.x, this.hit.z);
-      if (vol >= 0) { this.pressed = false; this.h.erupt(vol); }
+      if (vol >= 0) { this.pressed = false; this.h.erupt(vol); return; }
+      // un bâtiment se choisit au relâcher, si le pointeur n'a presque pas bougé
+      this.downAt = [e.x, e.y];
       return;
     }
     this.beginStroke();
@@ -195,6 +252,12 @@ export class ToolController implements ToolInput {
   }
 
   up(e: PointerInfo) {
+    if (this.tool === 'none' && this.downAt && Math.hypot(e.x - this.downAt[0], e.y - this.downAt[1]) < 8) {
+      this.pickAt(e);
+      const c = this.cell(), b = c ? this.h.world.buildingAt(c.x, c.z) : undefined;
+      this.select(b ? b.id : null);
+    }
+    this.downAt = null;
     if (this.pressed) {
       this.pickAt(e);
       if ((this.tool === 'build' || (this.tool === 'move' && this.moveOrigin)) && e.touch && this.hit) this.tryPlace();
@@ -289,11 +352,10 @@ export class ToolController implements ToolInput {
     } else if (w.veg[k]) { this.mark(); w.setVeg(c.x, c.z, 0); }
   }
 
-  private pickUp() {
+  private pickUp(chosen?: Building) {
     const c = this.cell();
-    if (!c) return;
     const w = this.h.world;
-    const b = w.buildingAt(c.x, c.z);
+    const b = chosen ?? (c ? w.buildingAt(c.x, c.z) : undefined);
     if (!b) return;
     this.mark();
     this.moveOrigin = { kind: b.kind, x: b.x, z: b.z, rot: b.rot, auto: b.auto, small: !!b.small };
@@ -338,6 +400,15 @@ export class ToolController implements ToolInput {
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
     this.ring.visible = this.marker.visible = this.ghost.visible = false;
+    // le bâtiment sélectionné : son emprise s'éclaire
+    const sel = t === 'none' ? this.selectedBuilding() : undefined;
+    if (sel) {
+      const s = sizeOf(sel);
+      this.markerMat.color.setHex(0xfff2c0);
+      this.marker.scale.set(s + 0.3, 1, s + 0.3);
+      this.marker.position.set(sel.x + s / 2, w.flatTarget(sel.x, sel.z, s) + 0.05, sel.z + s / 2);
+      this.marker.visible = true;
+    }
     if (!hit || t === 'none') return;
     if (SCULPT_TOOLS.includes(t) || VEG_TOOLS.includes(t)) {
       const r = VEG_TOOLS.includes(t) ? Math.max(0.6, this.radius * 0.8) : this.radius;

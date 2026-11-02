@@ -148,13 +148,20 @@ export class Environment {
     if (w) this.wantKind = w;
   }
 
+  /** Dissipe le brouillard : le temps s'éclaircit, et il ne revient pas avant un bon moment (un brouillard voulu dans les réglages repasse en automatique) */
+  dispelFog() {
+    if (this.manualWeather === 'fog') this.manualWeather = null;
+    if (this.wantKind === 'fog' || this.weatherKind === 'fog') this.wantKind = 'clear';
+    this.weatherTimer = Math.max(this.weatherTimer, 240);
+  }
+
   private autoWeather(season: number) {
     const r = this.rnd();
     const tbl: [WeatherKind, number][][] = [
-      [['clear', 0.5], ['rain', 0.35], ['fog', 0.15]],
-      [['clear', 0.78], ['rain', 0.14], ['fog', 0.08]],
-      [['clear', 0.42], ['rain', 0.3], ['fog', 0.28]],
-      [['clear', 0.4], ['snow', 0.5], ['fog', 0.1]],
+      [['clear', 0.59], ['rain', 0.35], ['fog', 0.06]],
+      [['clear', 0.83], ['rain', 0.14], ['fog', 0.03]],
+      [['clear', 0.6], ['rain', 0.3], ['fog', 0.1]],
+      [['clear', 0.46], ['snow', 0.5], ['fog', 0.04]],
     ];
     let acc = 0;
     for (const [k, p] of tbl[season]) { acc += p; if (r <= acc) return k; }

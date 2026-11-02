@@ -3,12 +3,14 @@ import { World, N } from '../world/world';
 import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT } from '../render/assets';
+import { makeRider, rideStep, Rider } from '../render/riders';
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
 import { Parts } from '../render/parts';
 import { mats } from '../render/materials';
 
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
-export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'rifle'; torch?: boolean; rope?: boolean; armor?: boolean; horse?: boolean }
+/** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie) */
+export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'rifle'; torch?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean }
 
 /** Objets tenus en main (géométries partagées, en unités du monde ; le long de +y, la poignée à l'origine) */
 const propCache = new Map<string, THREE.BufferGeometry>();
@@ -109,6 +111,8 @@ interface Agent {
   mount: Actor | null;
   mounted: boolean;
   parked: [number, number, number] | null;
+  /** cavalier de l'époque, cheval compris, qui le remplace en selle (charge de cavalerie) */
+  rider: Rider | null;
 }
 
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
@@ -177,6 +181,7 @@ export class Agents {
   reset() { for (const a of this.agents) this.dropActor(a); this.agents = []; this.held.clear(); this.lastVersion = -1; }
 
   private dropActor(a: Agent) {
+    if (a.rider) { this.group.remove(a.rider.root); a.rider = null; }
     if (!a.actor) return;
     a.actor.mixer.stopAllAction();
     this.group.remove(a.actor.root);
@@ -370,7 +375,7 @@ export class Agents {
       id, home: h.id, x: h.x + 0.5, z: h.z + 0.5, state: 'inside', path: [], pi: 0, timer: this.rnd() * 4, hidden: true, speed: 0.9 + this.rnd() * 0.5,
       heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, actor: null, actorKey: '',
       spot: null, face: null, deck: null, child: this.rnd() < 0.22, ax: 0, az: 0, act: null, hold: null, mission: false, delay: 0, rest: 0, ride: null, shore: null,
-      kit: null, kitKey: '', props: [], mount: null, mounted: false, parked: null,
+      kit: null, kitKey: '', props: [], mount: null, mounted: false, parked: null, rider: null,
     });
   }
 
@@ -465,6 +470,7 @@ export class Agents {
     a.kit = kit;
     a.mounted = !!kit?.horse;
     if (!kit?.horse && a.mount) { a.mount.mixer.stopAllAction(); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
+    if (!kit?.rider && a.rider) { this.group.remove(a.rider.root); a.rider = null; }
   }
 
   /** En selle (en route) ou pied à terre (sur place, le cheval broute à côté) */
@@ -675,6 +681,8 @@ export class Agents {
     const act = a.actor!;
     const kitKey = `${a.actorKey}|${JSON.stringify(a.kit)}`;
     if (a.kitKey !== kitKey) { a.kitKey = kitKey; this.dress(a); }
+    // charge de cavalerie : en selle, le cavalier de l'époque (cheval compris) prend sa place
+    if (this.stepRider(a, age)) { act.root.visible = false; return true; }
     const riding = this.stepMount(a, dt);
     act.root.visible = !a.hidden;
     if (a.hidden) return true;
@@ -725,6 +733,22 @@ export class Agents {
       act.root.add(r);
       a.props.push(r);
     }
+  }
+
+  /** Le cavalier de l'époque qui remplace un membre de la charge de cavalerie tant qu'il est en selle ; vrai s'il est affiché */
+  private stepRider(a: Agent, age: number) {
+    const on = !!a.kit?.rider && a.mounted && !a.ride && !a.hidden;
+    if (a.rider && (!on || a.rider.root.userData.age !== Math.min(age, 4))) { this.group.remove(a.rider.root); a.rider = null; }
+    if (!on) return false;
+    if (!a.rider) {
+      a.rider = makeRider(age, a.id);
+      a.rider.root.userData.age = Math.min(age, 4);
+      this.group.add(a.rider.root);
+    }
+    a.rider.root.position.set(a.x, this.groundY(a), a.z);
+    a.rider.root.rotation.y = a.heading;
+    rideStep(a.rider, a.phase * 1.6, a.state === 'walking' ? 1 : 0, 'rest');
+    return true;
   }
 
   /** Son cheval : sous lui en route ; sur place, il broute là où il a mis pied à terre. Renvoie vrai s'il est en selle */
