@@ -35,6 +35,8 @@ import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { Expeditions } from './sim/expeditions';
+import { Railway } from './sim/railway';
+import { RailView } from './render/railway';
 import { ExpeditionView } from './render/expeditionView';
 import { PenView } from './render/pens';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -80,6 +82,10 @@ class Game implements UIHost {
   gardens: GardenView;
   halos: Halos;
   expeditions: Expeditions;
+  /** chemin de fer de la gare à l'avant-poste, et la caméra qui suit le train */
+  railway: Railway;
+  railView: RailView;
+  trainCam = false;
   expView: ExpeditionView;
   pens: PenView;
   /** la caméra suit l'expédition */
@@ -177,6 +183,9 @@ class Game implements UIHost {
     this.expeditions.pop = () => this.sim.pop;
     this.expeditions.under = this.under;
     this.expView = new ExpeditionView(w, this.agents, this.expeditions);
+    // le train descend des mineurs au pied de la grotte et remonte minerai et pierre des galeries tenues
+    this.railway = new Railway(w, this.agents, this.expeditions, () => this.time.dayLen);
+    this.railView = new RailView(w, this.railway);
     this.pens = new PenView(w);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
@@ -184,7 +193,7 @@ class Game implements UIHost {
     this.atmosphere.onStrike = (x, z) => ignite(w.buildingAt(Math.floor(x), Math.floor(z)));
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.gardens.group, this.halos.mesh, this.expView.group, this.pens.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.gardens.group, this.halos.mesh, this.expView.group, this.pens.group, this.railView.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -202,6 +211,8 @@ class Game implements UIHost {
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
     this.expeditions.onNews = (m) => this.ui.toast(m);
+    this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
+    this.cam.onPan = () => { this.trainCam = false; };
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
     // une quête du camp souterrain accomplie : il grandit de lui-même
     this.expeditions.onCamp = (q) => {
@@ -319,10 +330,22 @@ class Game implements UIHost {
   /** Dissipe le brouillard et la brume ; ils ne reviennent pas avant un bon moment */
   dispelFog() { this.env.dispelFog(); this.atmosphere.dispel(300); }
 
+  /** La caméra suit le train (jusqu'à ce qu'on fasse glisser la vue) */
+  followTrain() {
+    const r = this.railway;
+    if (!r.line) return;
+    this.following = null;
+    if (this.mode === 'under') this.exitUnder();
+    this.trainCam = true;
+    const [x, z] = r.at(r.pos + 1.1);
+    this.cam.follow(x, z, 14);
+  }
+
   /** La caméra suit l'expédition donnée (null : elle redevient libre) */
   follow(id: number | null) {
     const a = this.expeditions.active.find((e) => e.id === id);
     this.following = a ? a.id : null;
+    if (a) this.trainCam = false;
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
     if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 16); }
@@ -618,6 +641,7 @@ class Game implements UIHost {
     for (const m of w.losses.splice(0)) this.ui.toast(m);
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night);
     this.expeditions.update(gdt);
+    this.railway.update(gdt);
     this.expView.update(gdt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe
@@ -640,6 +664,8 @@ class Game implements UIHost {
       uv.setTroops(this.expeditions.active.filter((a) => a.entry >= 0 && a.phase === 'work').map((a) => ({
         id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
       })), dt);
+      // les mineurs descendus par le train
+      uv.setMiners(this.railway.below.length, this.railway.line?.entry ?? -1, this.railway.vein, this.sim.age, gdt);
       uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
     }
     else {
@@ -649,6 +675,9 @@ class Game implements UIHost {
       this.streams.update(dt, this.season.snow, this.cam.target);
       this.life.update(dt, this.time, this.season, this.env, this.cam.target);
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
+      this.railView.update(dt, this.sim.age);
+      if (this.trainCam && this.railway.line) { const [x, z] = this.railway.at(this.railway.pos + 1.1); this.cam.follow(x, z); }
+      else this.trainCam = false;
       this.gardens.update(dt, this.time.hour);
       this.halos.update(dt, this.env.night);
       this.windT += dt * (1 + this.env.weatherK * 0.6);

@@ -8,6 +8,7 @@ import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin } from './placement';
 import { autoRoad } from './autoroads';
+import { costOf, costLabel } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 
@@ -380,13 +381,16 @@ export class ToolController implements ToolInput {
     if (!hit) return;
     const w = this.h.world;
     const o = footprintOrigin(this.kind, hit.x, hit.z);
-    const reason = w.canPlace(this.kind, o.x, o.z);
+    // un grand bâtiment neuf se paie en bois et en pierre (déplacer est gratuit)
+    const cost = this.moveOrigin ? null : costOf(this.kind, this.h.getAge());
+    const reason = w.canPlace(this.kind, o.x, o.z) ?? (cost && (w.wood < cost.wood || w.stone < cost.stone) ? `Il faut ${costLabel(cost)} (vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre)` : null);
     if (reason) {
       const now = performance.now();
       if (now - this.lastToast > 1200) { this.h.toast(reason); this.lastToast = now; }
       return;
     }
     this.mark();
+    if (cost) { w.wood -= cost.wood; w.stone -= cost.stone; }
     const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, this.kind, o.x, o.z, this.ghostRot);
     const b = w.place(this.kind, o.x, o.z, rot, !this.rotManual, this.h.getAge(), true);
     // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
@@ -451,7 +455,8 @@ export class ToolController implements ToolInput {
         const off = kind === 'lamp' ? 0.32 : 0;
         this.ghostBody.position.set(off, 0, off); this.ghostGlow.position.set(off, 0, off);
       }
-      setGhostValid(!reason);
+      const cost = this.moveOrigin ? null : costOf(kind, age);
+      setGhostValid(!reason && !(cost && (w.wood < cost.wood || w.stone < cost.stone)));
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);

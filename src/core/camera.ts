@@ -136,7 +136,11 @@ export class CameraRig {
     if (this.pointers.size === 0) this.mode = 'none';
   }
 
+  /** le joueur fait glisser la vue (on cesse alors de suivre le train) */
+  onPan: (() => void) | null = null;
+
   private panScreen(dx: number, dy: number) {
+    this.onPan?.();
     const k = this.goal.dist * 0.0017;
     const c = Math.cos(this.goal.yaw), s = Math.sin(this.goal.yaw);
     this.goal.x += (-dx * c - dy * s) * k * -1 * -1;

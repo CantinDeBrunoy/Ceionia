@@ -11,6 +11,7 @@ import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight'
 import { UnderMobs, Mob, MobKind } from './mobs';
 import { campLayout, buildCamp, stepCamp, Camp } from './camp';
 import { CAMP_QUESTS, CAMP_GUARDS } from '../sim/depths';
+import { MINER_SPEED } from '../sim/railway';
 import { hash2, smoothstep } from '../core/rng';
 
 const BG = new THREE.Color(0x09070c);
@@ -62,6 +63,8 @@ const LIGHT_PICK = 0.25;
 interface Source { x: number; y: number; z: number; r: number; c: THREE.Color; flicker: number }
 /** Garde du camp : il va de poste en poste par les galeries, torche au poing, et s'y arrête face à l'extérieur */
 interface Guard { actor: Actor; x: number; z: number; heading: number; path: [number, number][]; wait: number; post: number; light: Source }
+/** Mineur descendu par le train : il abat le filon au pic ; un sur trois porte le minerai jusqu'au camp et revient */
+interface Miner { actor: Actor; x: number; z: number; heading: number; path: [number, number][]; goal: number; wait: number }
 interface Item { m: THREE.Matrix4; c: THREE.Color }
 
 /**
@@ -105,6 +108,10 @@ export class UnderView {
   private campC: [number, number] = [0, 0];
   private campSources: Source[] = [];
   private guards: Guard[] = [];
+  /** mineurs descendus par le train, et la lueur de leurs lampes au filon */
+  private miners: Miner[] = [];
+  private minerKey = '';
+  private minerLight: Source = { x: 0, y: -20, z: 0, r: 4, c: new THREE.Color(1, 0.72, 0.45).multiplyScalar(1.3), flicker: 0.2 };
   /** couleurs du sol telles que générées, avant l'éclaircissement des galeries tenues */
   private groundBase: Float32Array | null = null;
   private models: Record<string, StaticModel | null> = {};
@@ -860,6 +867,106 @@ export class UnderView {
     });
   }
 
+  // ---------- Mineurs du train ----------
+
+  /**
+   * Les mineurs descendus par le train, à chaque image : au filon qu'ils abattent, ou à la roche près du camp quand les
+   * galeries tenues n'ont plus de filon ; les porteurs font la navette entre le filon et le camp
+   */
+  setMiners(n: number, entry: number, vein: number, age: number, dt: number) {
+    const key = `${entry >= 0 ? n : 0}|${Math.min(age, 4)}|${entry}`;
+    if (key !== this.minerKey) {
+      this.minerKey = key;
+      for (const m of this.miners) this.scene.remove(m.actor.root);
+      this.miners = [];
+      const folk = AGE_VILLAGERS[Math.min(age, 4)];
+      for (let i = 0; i < (entry >= 0 ? n : 0); i++) {
+        const name = folk[i % folk.length], actor = hasModel(name) ? makeActor(name, 0.3, 'height') : null;
+        if (!actor) continue;
+        actor.mixer.setTime(i * 0.53);
+        this.holdPick(actor);
+        this.scene.add(actor.root);
+        const x = (entry % N) + 0.5 + Math.cos(i * 2.4) * 0.3, z = Math.floor(entry / N) + 0.5 + Math.sin(i * 2.4) * 0.3;
+        this.miners.push({ actor, x, z, heading: 0, path: [], goal: -1, wait: i * 0.6 });
+      }
+    }
+    if (!this.miners.length) { this.minerLight.y = -20; return; }
+    const u = this.under, work = vein >= 0 ? vein : entry, slots = this.workSlots(work);
+    const ex = (entry % N) + 0.5, ez = Math.floor(entry / N) + 0.5;
+    let wi = 0;
+    this.miners.forEach((m, i) => {
+      // chacun sa place le long de la paroi ; les porteurs vont et viennent jusqu'au camp
+      const carrier = i % 3 === 2 && vein >= 0, slot = slots[(carrier ? i : wi++) % slots.length];
+      const home: [number, number, number] = [ex + Math.cos(i * 2.4) * 0.3, ez + Math.sin(i * 2.4) * 0.3, 0];
+      if (m.goal !== work && !(carrier && m.goal === entry)) this.walkTo(m, work, slot);
+      if (m.path.length) {
+        const [tx, tz] = m.path[0], dx = tx - m.x, dz = tz - m.z, d = Math.hypot(dx, dz), s = Math.min(d, dt * MINER_SPEED);
+        if (d > 1e-3) { m.x += (dx / d) * s; m.z += (dz / d) * s; m.heading = Math.atan2(dx, dz); }
+        if (d - s < 0.02) m.path.shift();
+        if (!m.path.length) m.wait = carrier ? 3 + (i % 2) * 1.5 : 0;
+        play(m.actor, T_WALK);
+      } else {
+        // au filon, face à la roche, on frappe ; au camp, le porteur vide sa hotte
+        if (m.goal === work) m.heading = slot[2];
+        play(m.actor, m.goal === work ? T_HACK : T_IDLE);
+        if (carrier && (m.wait -= dt) <= 0) this.walkTo(m, m.goal === work ? entry : work, m.goal === work ? home : slot);
+      }
+      const y = u.heightAt(m.x, m.z);
+      m.actor.root.position.set(m.x, y, m.z);
+      m.actor.root.rotation.y = m.heading;
+      m.actor.mixer.update(dt);
+    });
+    const wx = (work % N) + 0.5, wz = Math.floor(work / N) + 0.5;
+    Object.assign(this.minerLight, { x: wx, y: u.heightAt(wx, wz) + 0.6, z: wz });
+  }
+
+  /** Le mineur prend le chemin des galeries jusqu'à sa place (x, z), autour de la case `goal` */
+  private walkTo(m: Miner, goal: number, at: [number, number, number]) {
+    const r = this.under.route(Math.floor(m.z) * N + Math.floor(m.x), Math.floor(at[1]) * N + Math.floor(at[0]));
+    m.path = [...(r ?? []).slice(1, -1).map((k): [number, number] => [(k % N) + 0.5, Math.floor(k / N) + 0.5]), [at[0], at[1]]];
+    m.goal = goal;
+  }
+
+  /**
+   * Places autour d'un filon (ou au camp) : les cases de galerie au pied de la roche à deux pas au plus, chacune tout
+   * contre la paroi et tournée vers elle (x, z, cap), les plus proches d'abord
+   */
+  private slotsAt = -2;
+  private slots: [number, number, number][] = [];
+  private workSlots(work: number) {
+    if (work === this.slotsAt) return this.slots;
+    const u = this.under, seen = new Map<number, number>([[work, 0]]), q = [work], out: [number, number, number][] = [];
+    while (q.length) {
+      const k = q.shift()!, x = k % N, z = Math.floor(k / N), d = seen.get(k)!;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, nz = z + dz;
+        if (nx < 0 || nz < 0 || nx >= N || nz >= N) continue;
+        const n = nz * N + nx;
+        if (!u.open[n]) { out.push([x + 0.5 + dx * 0.24, z + 0.5 + dz * 0.24, Math.atan2(dx, dz)]); continue; }
+        if (d < 2 && !seen.has(n) && u.walkable(nx, nz)) { seen.set(n, d + 1); q.push(n); }
+      }
+    }
+    const cx = (work % N) + 0.5, cz = Math.floor(work / N) + 0.5;
+    out.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
+    this.slotsAt = work;
+    this.slots = out.length ? out : [[cx, cz, 0]];
+    return this.slots;
+  }
+
+  /** Un pic dans la main droite du mineur */
+  private holdPick(a: Actor) {
+    let slot: THREE.Object3D | null = null;
+    a.root.traverse((o) => { if (!slot && (o.name === 'handslot.r' || o.name === 'handslotr')) slot = o; });
+    if (!slot) return;
+    const node = slot as THREE.Object3D, t = new THREE.Group(), s = new THREE.Vector3();
+    a.root.updateMatrixWorld(true);
+    node.getWorldScale(s);
+    t.scale.setScalar(1 / Math.max(1e-6, s.x));
+    t.add(new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.008, 0.15, 5).translate(0, 0.05, 0), new THREE.MeshStandardMaterial({ color: 0x7a5a3c })));
+    t.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.014, 0.014).translate(0, 0.12, 0), new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.3, roughness: 0.5 })));
+    node.add(t);
+  }
+
   /** Entrée (puits de jour) sous le point visé */
   entranceAt(x: number, z: number): Entrance | null {
     let best: Entrance | null = null, bd = 1.3;
@@ -895,7 +1002,7 @@ export class UnderView {
     this.lightTimer -= dt;
     if (this.lightTimer <= 0) {
       this.lightTimer = LIGHT_PICK;
-      const all = this.sources.concat(this.torchSources, this.shaftSources, this.claimSources, this.campSources, this.guards.map((g) => g.light), [...this.troops.values()].map((s) => s.light));
+      const all = this.sources.concat(this.torchSources, this.shaftSources, this.claimSources, this.campSources, this.guards.map((g) => g.light), [...this.troops.values()].map((s) => s.light), this.miners.length ? [this.minerLight] : []);
       const dd = (s: Source) => Math.hypot(s.x - target.x, s.z - target.z) - s.r;
       this.active = [this.lantern, ...all.filter((s) => dd(s) < dist * 1.2).sort((a, b) => dd(a) - dd(b)).slice(0, MAX_CAVE_LIGHTS - 1)];
     }
@@ -912,7 +1019,7 @@ export class UnderView {
     if ((this.campT -= dt) <= 0) { this.campT = 1; this.refreshCamp(); }
     if (this.camp) stepCamp(this.camp, this.uTime.value, dt);
     this.stepGuards(dt);
-    this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z }))]);
+    this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z })), ...this.miners.map((m) => ({ x: m.x, z: m.z }))]);
   }
 
   /** Sortie du souterrain : la surface ne reçoit plus ces lumières */

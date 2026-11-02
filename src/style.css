@@ -65,6 +65,12 @@ button:disabled, button.locked { opacity: 0.4; cursor: not-allowed; }
 
 #needsPanel { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 12px; gap: 3px; }
 #needs { display: flex; gap: 10px; align-items: flex-end; justify-content: center; }
+.needsRow { display: flex; gap: 12px; align-items: flex-end; justify-content: center; }
+#res { display: flex; gap: 6px; align-items: flex-end; padding-left: 12px; border-left: 1px solid var(--line); }
+.res { display: flex; flex-direction: column; align-items: center; width: 44px; font-size: 10px; font-weight: 600; color: var(--ink2); line-height: 1.1; }
+.res b { font-size: 13px; color: var(--ink); margin-top: 2px; }
+#info .cost { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+#info .cost.short { color: var(--bad); }
 .need { display: flex; flex-direction: column; align-items: center; width: 54px; font-size: 10.5px; font-weight: 600; color: var(--ink2); cursor: default; }
 .need b { line-height: 0; color: var(--ink); }
 .need .bar { width: 100%; height: 5px; margin: 4px 0 2px; }
@@ -237,6 +243,9 @@ body.under #selCard, body.photo #selCard { display: none; }
   .ageTop small { display: none; }
   #needsPanel { order: 5; flex: 1 1 100%; padding: 5px 6px; }
   #needs { gap: 3px; }
+  #res { gap: 2px; padding-left: 6px; }
+  .res { width: 34px; }
+  .res small { display: none; }
   .need { width: 44px; }
   .need span { display: none; }
   #clock .time { font-size: 13px; min-width: 40px; }
@@ -273,6 +282,10 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 #campQuest .bar i, .quests .bar i { display: block; height: 100%; background: var(--accent); }
 .campStats { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 10px; font-size: 12.5px; }
 .campStats > b { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 14px; }
+.railBox { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; }
+.railBox h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 14px; }
+.railBox .campStats { margin: 6px 0 8px; }
+.trainBtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
 .send { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; background: var(--accent-soft); }
 .send h4 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; }
 .send .choices { display: grid; gap: 8px; margin-top: 8px; }

@@ -1,5 +1,5 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
-  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost';
+  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -68,7 +68,7 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', 'Mine', 'Mine de charbon', 'Carrière'],
     desc: 'Tire du minerai de la terre, jour après jour.',
     jobs: [0, 0, 3, 6, 8],
-    perk: 'Débloquée par l’expédition « Le filon de la montagne ». Rapporte du minerai chaque jour : 1 au Moyen Âge, 2 à l’âge industriel, 3 ensuite.',
+    perk: 'Débloquée par l’expédition « Le filon de la montagne ». Ne se creuse que dans la montagne. Rapporte chaque jour du minerai (3 au Moyen Âge, 5 à l’âge industriel, 8 ensuite) et de la pierre.',
     reqMission: 'mine',
   },
   outpost: {
@@ -78,6 +78,20 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [0, 0, 3, 4, 5],
     perk: 'Débloqué par l’expédition « Repérer les profondeurs ». À bâtir tout contre une grotte ou une faille. Chaque expédition armée qui revient victorieuse étend les galeries tenues sous terre.',
     reqMission: 'scout',
+  },
+  lumber: {
+    id: 'lumber', size: 1, minAge: 0, icon: '🪓', cat: 'prod',
+    names: ['Abri de bûcheron', 'Camp de bûcherons', 'Scierie', 'Scierie à vapeur', 'Scierie mécanique'],
+    desc: 'Abat et débite le bois de la forêt voisine. À poser en lisière ou dans une forêt.',
+    jobs: [1, 2, 2, 3, 3],
+    perk: 'Donne du bois chaque jour (4, puis 6, 8, 11, 14 selon l’âge) pour bâtir les grands bâtiments.',
+  },
+  quarry: {
+    id: 'quarry', size: 1, minAge: 0, icon: '🪨', cat: 'prod',
+    names: ['Pierrier', 'Carrière', 'Carrière', 'Carrière à treuil', 'Carrière mécanisée'],
+    desc: 'Taille la pierre des rochers voisins. À poser près des rochers ou dans la montagne.',
+    jobs: [1, 2, 2, 3, 3],
+    perk: 'Donne de la pierre chaque jour (3, puis 5, 7, 9, 12 selon l’âge) pour bâtir les grands bâtiments.',
   },
   pier: {
     id: 'pier', size: 1, minAge: 0, icon: '🎣', cat: 'prod',
@@ -176,7 +190,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'workshop', 'mine', 'outpost', 'mill', 'health', 'school', 'fire', 'observatory', 'gather', 'tavern', 'baths', 'temple', 'landmark'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'mine', 'outpost', 'mill', 'health', 'school', 'fire', 'observatory', 'gather', 'tavern', 'baths', 'temple', 'landmark'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -207,7 +221,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   house: 'maisons', farm: 'fermes', pen: 'enclos', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
   health: 'lieux de soins', school: 'écoles', fire: 'casernes',
-  stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes',
+  stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières',
 };
 
 export interface Building {

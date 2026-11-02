@@ -9,10 +9,12 @@ import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
+import { Railway, isStation } from '../sim/railway';
 import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
+import { costOf, costLabel, Resource } from '../sim/economy';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
 
@@ -49,12 +51,23 @@ export interface UIHost {
   setAutoRoads(on: boolean): void;
   /** expéditions, et celle que la caméra suit (son numéro) */
   expeditions: Expeditions;
+  /** chemin de fer de la gare à l'avant-poste, et la caméra qui suit le train */
+  railway: Railway;
+  followTrain(): void;
   agents: Agents;
   following: number | null;
   follow(id: number | null): void;
 }
 
 const DEST_ICON: Record<DestKind, string> = { plain: '🌾 plaine', forest: '🌲 forêt', river: '🏞️ rivière', mountain: '⛰️ montagne', cave: '🕳️ grotte', far: '🧭 au loin' };
+const TRAIN_WHERE: Record<Railway['phase'], string> = { station: 'à quai en gare', down: 'en route vers l’avant-poste', post: 'à quai au pied de la grotte', up: 'en route vers la gare' };
+/** Pourquoi il n'y a pas (encore) de chemin de fer */
+function railWhy(r: Railway, age: number) {
+  return r.why === 'station' ? (age < 3 ? 'Le chemin de fer viendra avec la gare, à l’âge industriel : elle reliera le village à l’avant-poste.' : 'Bâtissez la gare (bâtiment majeur) : une voie la reliera d’elle-même à l’avant-poste.')
+    : r.why === 'under' ? 'Le monde souterrain se prépare…'
+    : r.why === 'post' ? 'Bâtissez un avant-poste tout contre une grotte ou une faille : la voie ferrée l’y reliera depuis la gare.'
+    : 'Pas de tracé possible entre la gare et l’avant-poste : de l’eau, des bâtiments ou des pentes trop raides barrent le chemin.';
+}
 const riskLabel = (r: number) => (r <= 0.12 ? 'très sûr' : r <= 0.22 ? 'sûr' : r <= 0.32 ? 'risqué' : 'très risqué');
 const pct = (r: number) => `${Math.round(r * 100)} %`;
 const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
@@ -183,7 +196,7 @@ export class UI {
           <div id="ageReq"></div>
         </div>
         <div id="needsPanel" class="panel">
-          <div id="needs"></div>
+          <div class="needsRow"><div id="needs"></div><div id="res"></div></div>
           <div id="msg"></div>
         </div>
         <div id="timePanel" class="panel">
@@ -369,8 +382,11 @@ export class UI {
     const d: KindDef = KINDS[k], age = this.host.sim.age, lock = this.lockOf(k), a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
+    // les grands bâtiments se paient en bois et en pierre
+    const cost = costOf(k, age), w = this.host.world, rich = !cost || (w.wood >= cost.wood && w.stone >= cost.stone);
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size === 2 ? 'Grand bâtiment (2 × 2) · ' : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}
+      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre`}</p>` : ''}
       ${lock ? `<p class="lock">🔒 ${lock}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
@@ -391,6 +407,9 @@ export class UI {
       stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => `${n} ${names[k][n > 1 ? 1 : 0]}`).join(', ')}` : `${ic('pen', 14, 2)} aucune bête pour l’instant`);
     }
     if (b.kind === 'outpost') stats.push(`${ic('outpost', 14, 2)} ${h.expeditions.held()} cases de galeries tenues sous terre · camp niveau ${h.expeditions.camp()}`);
+    const rl = h.railway.line;
+    if (rl && (rl.station.id === b.id || rl.post.id === b.id)) stats.push(`${ic('train', 14, 2)} Train ${TRAIN_WHERE[h.railway.phase]} · ${h.railway.below.length} mineurs au fond`);
+    else if (isStation(b) || b.kind === 'outpost') stats.push(`${ic('train', 14, 2)} ${railWhy(h.railway, h.sim.age)}`);
     const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}`;
     if (key === this.selKey) return;
     this.selKey = key;
@@ -407,6 +426,18 @@ export class UI {
       else if (act === 'del' && await confirmBox(this.root, `Démolir : ${d.names[a].toLowerCase()} ? (Ctrl+Z pour annuler)`, 'Démolir')) tl.demolishSelected();
       this.renderSelection();
     }));
+  }
+
+  /** Stocks du village (bois, pierre, minerai) et ce qu'il en produit chaque jour */
+  private resKey = '';
+  private renderResources() {
+    const w = this.host.world, day = this.host.expeditions.daily(), rail = this.host.railway.daily();
+    day.ore += rail.ore; day.stone += rail.stone;
+    const items: [Resource, string, string][] = [['wood', 'tree', 'Bois'], ['stone', 'rock', 'Pierre'], ['ore', 'pickaxe', 'Minerai']];
+    const key = items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
+    if (key === this.resKey) return;
+    this.resKey = key;
+    $('#res').innerHTML = items.map(([r, icon, label]) => `<div class="res" title="${label} : ${Math.floor(w[r])} en réserve${day[r] ? `, +${day[r]} par jour` : ''}${r === 'ore' ? '' : ' — pour bâtir les grands bâtiments'}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><small>${label}</small></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -494,6 +525,7 @@ export class UI {
     }
     this.updateExpeditions();
     this.renderSelection();
+    this.renderResources();
     ($('#bUndo') as HTMLButtonElement).disabled = !this.host.tools.undoStack.length;
     ($('#bRedo') as HTMLButtonElement).disabled = !this.host.tools.redoStack.length;
   }
@@ -634,7 +666,15 @@ export class UI {
       if (k !== key) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
       const bar = ov.querySelector<HTMLElement>('.queue .bar i');
       if (bar) bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`;
+      const rb = ov.querySelector<HTMLElement>('.railBox'), rh = this.railHtml();
+      if (rb && rb.dataset.html !== rh) { rb.dataset.html = rh; rb.innerHTML = rh; }
     };
+    ov.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).closest('[data-train]')) return;
+      close();
+      h.audio.sfxClick();
+      h.followTrain();
+    });
     const iv = setInterval(arsenal, 300);
     arsenal();
     ov.querySelectorAll<HTMLButtonElement>('button.choice').forEach((b) => (b.onclick = () => {
@@ -684,8 +724,21 @@ export class UI {
     return `<p class="hint">Sous terre, on ne bâtit pas : le camp se dresse de lui-même au pied du puits du premier avant-poste, et grandit à mesure que ses quêtes s’accomplissent. Chacune lui ajoute des bâtiments et des gardes, posés d’eux-mêmes, et un avantage durable pour les expéditions armées.</p>
       <div class="campStats"><b>${ic('outpost', 18, 2)} Camp souterrain — niveau ${lvl} / ${CAMP_QUESTS.length}</b>
         <span>Galeries tenues : <b>${st.held}</b></span><span>Filons abattus : <b>${st.veins}</b></span><span>Embuscades repoussées : <b>${st.wins}</b></span><span>Zones tenues : <b>${st.zones}</b></span></div>
+      <div class="railBox">${this.railHtml()}</div>
       ${send}
       <ol class="quests">${quests}</ol>`;
+  }
+
+  /** Chemin de fer : où en est le train, qui est au fond, ce qui attend au camp et ce qui est remonté */
+  private railHtml() {
+    const h = this.host, r = h.railway, l = r.line, head = `<h4>${ic('train', 16, 2)} Chemin de fer</h4>`;
+    if (!l) return `${head}<p class="hint">${railWhy(r, h.sim.age)}</p>`;
+    const day = r.daily(), aboard = r.phase === 'down' || r.phase === 'station' ? r.riders.length : r.up.length;
+    return `${head}<p class="hint">La voie relie la gare à l’avant-poste (${Math.round(l.len)} cases). Le train descend une équipe de mineurs (${r.shiftSize() || 'personne de libre'}${r.shiftSize() ? ' la prochaine fois' : ''}) et remonte celle d’avant avec ce qu’elle a tiré des galeries tenues : le minerai des filons, la pierre taillée quand il n’y en a plus.</p>
+      <div class="campStats"><span>Train : <b>${TRAIN_WHERE[r.phase]}</b>${aboard ? ` (${aboard} mineurs à bord)` : ''}</span><span>Mineurs au fond : <b>${r.below.length}</b></span>
+        <span>Au camp : <b>${Math.floor(r.pile.ore)} minerai · ${Math.floor(r.pile.stone)} pierre</b></span><span>Par jour : <b>≈ ${day.ore} minerai · ${day.stone} pierre</b></span>
+        <span>Remonté : <b>${r.delivered.ore} minerai · ${r.delivered.stone} pierre</b></span><span>Filons abattus : <b>${r.dug}</b></span></div>
+      <button class="trainBtn" data-train>${ic('eye', 16, 2)} Suivre le train</button>`;
   }
 
   /** Équipement : réserve, fabrication et file d'attente */

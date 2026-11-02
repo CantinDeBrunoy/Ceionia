@@ -118,7 +118,7 @@ interface Agent {
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
 export interface Ride { x: number; z: number; y: number; heading: number }
 
-class Heap {
+export class Heap {
   keys: number[] = []; vals: number[] = [];
   get size() { return this.keys.length; }
   push(k: number, v: number) {

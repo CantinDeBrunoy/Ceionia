@@ -2326,6 +2326,122 @@ function outpost(p: Parts, age: number) {
   }
 }
 
+/** Grumes empilées en pyramide (couchées le long de x), sections claires aux bouts */
+function logPile(p: Parts, x: number, z: number, n: number, len: number, ry = 0) {
+  const r = 0.035;
+  let k = 0;
+  for (let row = 0; row < n; row++)
+    for (let i = 0; i < n - row; i++, k++) {
+      const u = (i - (n - row - 1) / 2) * r * 2.05, y = r + row * r * 1.75;
+      const ox = Math.sin(ry) * u, oz = Math.cos(ry) * u;
+      p.add(new THREE.CylinderGeometry(r, r, len, 7).rotateZ(Math.PI / 2), x + ox, y, z + oz, dark(0x7a5636, 0.9 + hash2(k, 1, 77) * 0.2), ry);
+      for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(r * 0.8, r * 0.8, 0.004, 7).rotateZ(Math.PI / 2), x + ox + Math.cos(ry) * s * len / 2, y, z + oz - Math.sin(ry) * s * len / 2, 0xd8b88a, ry);
+    }
+}
+
+/**
+ * Bûcherons (en forêt) : abri de rondins et billot à la Préhistoire, camp et cabane de planches, scierie à colombages et
+ * sa grande scie, scierie à vapeur de brique qui fume, scierie mécanique au toit de tôle ; toujours des grumes et du bois débité
+ */
+function lumber(p: Parts, age: number) {
+  p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, 0x9cae6c);
+  for (let i = 0; i < 14; i++) p.cyl(0.012, 0.016, 0.004, 5, -0.4 + hash2(i, 2, 78) * 0.8, 0.012, -0.4 + hash2(i, 3, 78) * 0.8, 0xc8a878);
+  // souches et billot à la hache
+  for (const [x, z] of [[0.3, 0.3], [-0.34, 0.28], [0.36, -0.06]]) { p.cyl(0.05, 0.06, 0.06, 8, x, 0.012, z, 0x7a5636); p.cyl(0.046, 0.046, 0.004, 8, x, 0.072, z, 0xd8b88a); }
+  p.cyl(0.06, 0.065, 0.1, 8, 0.12, 0.012, 0.28, 0x7a5636); p.cyl(0.056, 0.056, 0.004, 8, 0.12, 0.112, 0.28, 0xd8b88a);
+  p.add(new THREE.BoxGeometry(0.012, 0.14, 0.012), 0.14, 0.17, 0.28, C.darkwood, 0, false, -0.5);
+  p.add(new THREE.BoxGeometry(0.05, 0.035, 0.008), 0.11, 0.115, 0.28, C.metal, 0, false, -0.5);
+  if (age <= 1) {
+    // appentis de rondins couvert de branchages (puis de planches), grumes, fagots
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.02, 0.022, 0.42, 6).translate(0, 0.21, 0), s * 0.2, 0.012, -0.24, C.darkwood, 0, false, 0, -0.35);
+    p.add(new THREE.BoxGeometry(0.5, 0.02, 0.32), 0, 0.3, -0.18, age === 0 ? 0x6f8a4a : C.wood, 0, false, 0, -0.75);
+    if (age === 1) for (let k = 0; k < 6; k++) p.add(new THREE.BoxGeometry(0.5, 0.006, 0.05).translate(0, 0.012, -0.12 + k * 0.05), 0, 0.3, -0.18, dark(C.wood, k % 2 ? 0.85 : 1), 0, false, 0, -0.75);
+    logPile(p, -0.08, -0.22, 3, 0.36);
+    for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 6).rotateZ(Math.PI / 2), -0.3, 0.04 + k * 0.035, 0.05 + (k % 2) * 0.03, 0x8a6a3a, 0.5);
+  } else if (age === 2) {
+    // scierie à colombages : grande scie de long sur son chevalet, planches empilées
+    p.box(0.46, 0.26, 0.28, -0.1, 0.012, -0.24, C.cream);
+    timbers(p, -0.1, -0.1, 0.46, 0.012, 0.272, 0, 5, (i) => i % 2 === 1);
+    roof(p, -0.1, 0.272, -0.24, { w: 0.46, d: 0.28, h: 0.16, color: 0x8a5a44, wall: C.cream, courses: true });
+    p.box(0.1, 0.16, 0.012, -0.1, 0.012, -0.096, C.darkwood);
+    for (const s of [-1, 1]) p.box(0.02, 0.14, 0.02, 0.22 + s * 0.08, 0.012, 0.08, C.darkwood);
+    p.box(0.2, 0.025, 0.06, 0.22, 0.15, 0.08, C.wood);
+    p.box(0.006, 0.18, 0.05, 0.22, 0.12, 0.08, C.metal);
+    for (let k = 0; k < 4; k++) p.box(0.26, 0.014, 0.08, -0.2, 0.012 + k * 0.016, 0.12, dark(0xd8b88a, k % 2 ? 0.9 : 1), 0.1);
+    logPile(p, 0.26, -0.22, 3, 0.3, Math.PI / 2);
+  } else if (age === 3) {
+    // scierie à vapeur : halle de brique, cheminée qui fume, scie circulaire, rail de chariot
+    p.box(0.48, 0.28, 0.3, -0.08, 0.012, -0.22, C.brick);
+    stones(p, -0.08, -0.07, 0.48, 0.012, 0.29, 0, dark(C.brick, 0.86), 0.45, 401);
+    roof(p, -0.08, 0.292, -0.22, { w: 0.48, d: 0.3, h: 0.14, color: C.slate, wall: C.brick, courses: true });
+    windows(p, [-0.22, 0.06], 0.1, -0.065, 0.07, 0.08, C.cream);
+    p.box(0.12, 0.17, 0.012, -0.08, 0.012, -0.066, 0x3f5a4a);
+    p.cyl(0.035, 0.045, 0.5, 8, 0.12, 0.3, -0.3, C.darkbrick); smoke(0.12, 0.84, -0.3, 2);
+    p.box(0.26, 0.08, 0.1, 0.18, 0.012, 0.12, C.darkwood);
+    p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.008, 12).rotateX(Math.PI / 2), 0.18, 0.11, 0.12, C.metal);
+    logPile(p, -0.26, 0.14, 3, 0.3);
+    for (let k = 0; k < 4; k++) p.box(0.24, 0.014, 0.08, 0.26, 0.012 + k * 0.016, -0.02, dark(0xd8b88a, k % 2 ? 0.9 : 1));
+  } else {
+    // scierie mécanique : hangar à toit de tôle ondulée, grue à grumes, empilements bien rangés
+    p.box(0.5, 0.26, 0.3, -0.08, 0.012, -0.22, 0x8a9aa6);
+    for (let k = 0; k < 9; k++) p.box(0.012, 0.26, 0.302, -0.32 + k * 0.06, 0.012, -0.22, 0x7a8a96);
+    p.add(new THREE.BoxGeometry(0.56, 0.02, 0.38), -0.08, 0.3, -0.22, 0x5d6878, 0, false, 0, -0.12);
+    p.box(0.2, 0.18, 0.012, -0.08, 0.012, -0.068, 0x3c4650);
+    p.cyl(0.015, 0.02, 0.46, 6, 0.3, 0.012, 0.0, 0xd8b84a);
+    p.add(new THREE.BoxGeometry(0.4, 0.02, 0.02), 0.16, 0.46, 0.0, 0xd8b84a, 0.6);
+    p.box(0.004, 0.14, 0.004, 0.0, 0.32, 0.1, 0x2a2a2a);
+    logPile(p, -0.24, 0.16, 4, 0.34);
+    logPile(p, 0.2, 0.22, 3, 0.3, Math.PI / 2);
+  }
+}
+
+/**
+ * Carrière (près des rochers, dans la montagne) : tas de pierres et pic à la Préhistoire ; front de taille en gradins,
+ * blocs équarris et chèvre de levage ; treuil à vapeur, rails et wagonnet ; engins jaunes et tas de gravier ensuite
+ */
+function quarry(p: Parts, age: number) {
+  const rock = 0xa8a296, cut = 0xc8c2b4;
+  p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, 0xb0a890);
+  // front de taille : rochers anguleux au fond, entaillés de gradins aux arêtes nettes (plus nombreux avec les âges)
+  for (let i = 0; i < 6; i++) {
+    const h = (k: number) => hash2(i, k, 402);
+    p.add(new THREE.DodecahedronGeometry(0.13 + h(1) * 0.05, 0).scale(1, 0.9 + h(2) * 0.5, 0.75), -0.36 + i * 0.145, 0.1 + h(3) * 0.06, -0.33 + h(4) * 0.05, dark(rock, 0.82 + h(5) * 0.16), h(6) * 3);
+  }
+  const steps = age === 0 ? 1 : age <= 2 ? 2 : 3;
+  for (let k = 0; k < steps; k++) p.box(0.56 - k * 0.14, 0.1, 0.14, -0.04 + k * 0.03, 0.012 + k * 0.1, -0.2 - k * 0.05, dark(cut, 0.98 - k * 0.05));
+  stones(p, -0.04, -0.13, 0.56, 0.012, 0.11, 0, dark(cut, 0.86), 0.5, 402);
+  // blocs taillés, éclats
+  for (const [x, z, s] of [[-0.28, 0.12, 1], [-0.16, 0.2, 0.8], [-0.22, 0.04, 0.7]]) p.box(0.1 * s, 0.07 * s, 0.08 * s, x, 0.012, z, cut, x * 3);
+  if (age >= 1) p.box(0.09, 0.06, 0.07, -0.21, 0.08, 0.13, cut, 0.4);
+  for (let i = 0; i < 10; i++) p.add(new THREE.IcosahedronGeometry(0.018 + hash2(i, 4, 79) * 0.015, 0), -0.4 + hash2(i, 5, 79) * 0.8, 0.02, -0.05 + hash2(i, 6, 79) * 0.45, dark(rock, 0.8 + hash2(i, 7, 79) * 0.2));
+  if (age === 0) {
+    p.add(new THREE.BoxGeometry(0.012, 0.16, 0.012), 0.2, 0.07, 0.2, C.darkwood, 0, false, 0.8);
+    p.box(0.06, 0.02, 0.014, 0.25, 0.13, 0.2, C.darkstone, 0, false, 0.8);
+    return;
+  }
+  if (age <= 2) {
+    // chèvre de levage : trois perches, poulie, bloc suspendu
+    for (const a of [0, 2.1, 4.2]) p.add(new THREE.CylinderGeometry(0.012, 0.014, 0.5, 5).translate(0, 0.25, 0), 0.2 + Math.cos(a) * 0.1, 0.012, 0.12 + Math.sin(a) * 0.1, C.darkwood, 0, false, Math.cos(a) * 0.2, -Math.sin(a) * 0.2);
+    p.box(0.004, 0.2, 0.004, 0.2, 0.25, 0.12, 0x5a4a3a);
+    p.box(0.08, 0.06, 0.07, 0.2, 0.2, 0.12, cut);
+  } else if (age === 3) {
+    // treuil à vapeur, rails et wagonnet de pierres
+    p.box(0.14, 0.12, 0.1, 0.26, 0.012, 0.16, 0x3c3c40); p.cyl(0.03, 0.03, 0.14, 8, 0.3, 0.13, 0.16, 0x3c3c40); smoke(0.3, 0.3, 0.16, 0);
+    p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.1, 10).rotateX(Math.PI / 2), 0.2, 0.13, 0.16, 0xb83a2e);
+    for (let z = -0.12; z <= 0.4; z += 0.07) p.box(0.14, 0.01, 0.024, 0.0, 0.012, z, C.darkwood);
+    for (const s of [-1, 1]) p.box(0.01, 0.012, 0.54, s * 0.05, 0.02, 0.14, C.metal);
+    p.box(0.1, 0.06, 0.12, 0.0, 0.035, 0.2, 0x6f5640);
+    for (let k = 0; k < 4; k++) p.box(0.04, 0.03, 0.035, -0.02 + (k % 2) * 0.04, 0.095, 0.17 + (k > 1 ? 0.05 : 0), cut);
+  } else {
+    // engins jaunes : chargeuse, tapis roulant vers le tas de gravier
+    p.box(0.18, 0.08, 0.12, 0.22, 0.04, 0.2, 0xf2c84b); p.box(0.07, 0.08, 0.1, 0.17, 0.12, 0.2, 0x3c4a54);
+    for (const x of [0.16, 0.28]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.02, 8).rotateX(Math.PI / 2), x, 0.035, 0.2 + s * 0.065, 0x2a2a2a);
+    p.add(new THREE.BoxGeometry(0.1, 0.02, 0.12), 0.34, 0.06, 0.2, 0xf2c84b, 0, false, 0.4);
+    p.add(new THREE.BoxGeometry(0.4, 0.025, 0.06), -0.12, 0.14, 0.18, 0x3c3c3c, 0, false, 0.35);
+    p.cone(0.14, 0.14, 8, -0.3, 0.012, 0.3, 0xa8a090);
+  }
+}
+
 function observatory(p: Parts) {
   p.box(0.98, 0.012, 0.98, 0, 0, 0, 0xe4e0d8);
   p.cyl(0.3, 0.32, 0.06, 16, 0, 0.012, -0.08, C.stone);
@@ -2476,6 +2592,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'mine': mine(p, Math.max(2, age)); break;
     case 'observatory': observatory(p); break;
     case 'outpost': outpost(p, Math.max(2, age)); break;
+    case 'lumber': lumber(p, age); break;
+    case 'quarry': quarry(p, age); break;
   }
   // un modèle fait seulement de pièces importées (le point d'eau préhistorique) n'a pas de partie procédurale
   if (!p.body.length && attachOut.length) m = { body: mergeGeometries(attachOut, false)!, glow: null, smoke: smokeOut };

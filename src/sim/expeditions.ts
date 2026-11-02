@@ -6,6 +6,7 @@ import { AGES, KINDS, Building } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
 import { ExpEvent, pickEvent } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
+import { YIELD, Resource } from './economy';
 
 /** Étapes d'une expédition : rassemblement au village, aller, travail sur place, retour, fête (ou mine déconfite) au village */
 export type Phase = 'gather' | 'out' | 'work' | 'back' | 'home';
@@ -87,8 +88,6 @@ export const partyLimit = (pop: number) => Math.min(MAX_TEAMS, 1 + Math.floor(po
  * plus il peut envoyer d'équipes à la fois ; une école les rend plus sûres, un lieu de soins guérit plus vite les blessés.
  * L'équipe emporte l'équipement du village contre les dangers du voyage, et sur place un imprévu demande une décision
  */
-/** Minerai par jour d'une mine, selon son âge */
-const MINE_ORE = [0, 0, 1, 2, 3];
 /** Galeries que la garnison d'un avant-poste tient autour de son entrée (en pas) */
 const HOLD = 6;
 /** Qui attaque, selon la zone : morts-vivants dans la roche et la glace, squelettes du cristal et du magma, araignées des grottes luxuriantes */
@@ -559,22 +558,29 @@ export class Expeditions {
   /** Avancement de la pièce en cours (0 … 1) */
   craftProgress() { const s = this.world.exp; return s.craft.length ? Math.min(1, s.craftT / GEAR_BY[s.craft[0]].time) : 0; }
 
-  /** Le village fabrique une pièce après l'autre, plus vite avec un atelier */
-  /** Minerai tiré des mines, au fil des jours (1 par mine et par jour au Moyen Âge, 2 à l'âge industriel, 3 ensuite) */
-  private mineT = 0;
-  private mineStep(dt: number) {
-    let rate = 0;
-    for (const b of this.world.buildings.values()) if (b.kind === 'mine') rate += MINE_ORE[b.age] ?? 0;
+  /** Ce que le village produit chaque jour : bois des bûcherons, pierre des carrières et des mines, minerai des mines */
+  private prodT: Record<Resource, number> = { wood: 0, stone: 0, ore: 0 };
+  daily(): Record<Resource, number> {
+    const rate: Record<Resource, number> = { wood: 0, stone: 0, ore: 0 };
+    for (const b of this.world.buildings.values()) {
+      const y = YIELD[b.kind];
+      if (y) for (const r of Object.keys(y) as Resource[]) rate[r] += y[r]![b.age] ?? 0;
+    }
     // le monte-charge du camp souterrain remonte du minerai chaque jour
-    if (this.camp() >= 6) rate += 2;
-    if (!rate) return;
-    this.mineT += (dt / this.dayLen()) * rate;
-    if (this.mineT < 1) return;
-    const n = Math.floor(this.mineT);
-    this.mineT -= n;
-    this.world.ore += n;
+    if (this.camp() >= 6) rate.ore += 2;
+    return rate;
+  }
+  private mineStep(dt: number) {
+    const rate = this.daily(), w = this.world;
+    for (const r of ['wood', 'stone', 'ore'] as Resource[]) {
+      if (!rate[r]) continue;
+      this.prodT[r] += (dt / this.dayLen()) * rate[r];
+      const n = Math.floor(this.prodT[r]);
+      if (n) { this.prodT[r] -= n; w[r] += n; }
+    }
   }
 
+  /** Le village fabrique une pièce après l'autre, plus vite avec un atelier */
   private craftStep(dt: number) {
     const s = this.world.exp;
     if (!s.craft.length) return;

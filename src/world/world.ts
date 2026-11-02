@@ -1,4 +1,5 @@
 import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
+import { START_WOOD, START_STONE } from '../sim/economy';
 import { Simplex } from './noise';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 
@@ -12,6 +13,8 @@ export const MAX_H = 16;
 export const MIN_H = -2.4;
 /** Étages de montagne : plus d'arbres au-dessus de TREE_LINE ; neiges éternelles entre les deux altitudes de SNOW_LINE */
 export const TREE_LINE = 5.8;
+/** Altitude à partir de laquelle on est dans la montagne (mines, carrières) */
+export const MOUNTAIN_H = 2.4;
 export const SNOW_LINE: [number, number] = [7, 8.2];
 /** Relief affiché : VR sous-sommets par case, lissé (la grille de jeu reste N×N) */
 export const VR = 2;
@@ -30,6 +33,9 @@ export interface Snapshot {
   veg: Uint8Array;
   buildings: Building[];
   nextId: number;
+  /** stocks de bois et de pierre (un bâtiment annulé rend ce qu'il avait coûté) */
+  wood?: number;
+  stone?: number;
 }
 
 export interface WorldListener {
@@ -143,6 +149,9 @@ export class World {
   losses: string[] = [];
   /** Minerai extrait du monde souterrain, et filons déjà exploités (cases du souterrain) */
   ore = 0;
+  /** bois et pierre, pour bâtir les grands bâtiments */
+  wood = START_WOOD;
+  stone = START_STONE;
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
   exp: ExpState = newExpState();
   mined = new Set<number>();
@@ -347,6 +356,13 @@ export class World {
         if (Math.hypot(dx, dz) < bd) { bd = Math.hypot(dx, dz); best = kz * N + kx; }
       }
     return best;
+  }
+
+  /** Cases d'une végétation donnée à moins de `r` cases d'une emprise */
+  vegAround(x: number, z: number, s: number, r: number, type: number) {
+    let n = 0;
+    for (let cz = z - r; cz < z + s + r; cz++) for (let cx = x - r; cx < x + s + r; cx++) if (this.inCells(cx, cz) && this.veg[cz * N + cx] === type) n++;
+    return n;
   }
 
   /** Entrée (grotte ou faille) que tiendrait un avant-poste posé en (x, z) : la plus proche à deux cases de son emprise, ou -1 */
@@ -636,6 +652,11 @@ export class World {
         if (this.lake[k]) return 'Un lac est ici';
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return 'Trop proche de l’eau';
       }
+    // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
+    const high = kind === 'mine' || kind === 'quarry' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
+    if (kind === 'mine' && !high) return 'Une mine ne se creuse que dans la montagne';
+    if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return 'À poser en lisière ou dans une forêt';
+    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return 'À poser près des rochers ou dans la montagne';
     // l'avant-poste se dresse tout contre une grotte ou une faille
     if (kind === 'outpost' && this.outpostEntrance(x, z, s) < 0) return 'À bâtir tout contre une grotte ou une faille';
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
@@ -646,7 +667,9 @@ export class World {
         mn = Math.min(mn, hh); mx = Math.max(mx, hh);
       }
     const target = this.flatTarget(x, z, s);
-    if (mx - target > 0.85 * s || target - mn > 0.85 * s) return 'Terrain trop pentu';
+    // la mine et la carrière s'accrochent à la pente
+    const steep = kind === 'mine' || kind === 'quarry' ? 1.7 : 1;
+    if (mx - target > 0.85 * s * steep || target - mn > 0.85 * s * steep) return 'Terrain trop pentu';
     if (target < 0.05 && kind !== 'pier') return 'Trop proche de l\u2019eau';
     return null;
   }
@@ -819,6 +842,8 @@ export class World {
       veg: this.veg.slice(),
       buildings: [...this.buildings.values()].map((b) => ({ ...b })),
       nextId: this.nextId,
+      wood: this.wood,
+      stone: this.stone,
     };
   }
 
@@ -836,6 +861,8 @@ export class World {
     }
     this.repairFootprints();
     this.nextId = s.nextId;
+    if (s.wood !== undefined) this.wood = s.wood;
+    if (s.stone !== undefined) this.stone = s.stone;
     this.roadsDirty = this.vegDirty = true;
     this.markTerrainAll();
     this.markVeg(0, 0, N - 1, N - 1);
@@ -861,6 +888,8 @@ export class World {
       basalt: lavaFields(this.basalt),
       ash: [...this.ash.keys()].filter((k) => this.ash[k]),
       ore: this.ore,
+      wood: this.wood,
+      stone: this.stone,
       mined: [...this.mined],
       claimed: [...this.claimed],
       exp: this.exp,
@@ -930,6 +959,8 @@ export class World {
     this.ash.fill(0);
     for (const k of d.ash ?? []) if (k >= 0 && k < N * N) this.ash[k] = 1;
     this.ore = Math.max(0, +d.ore || 0);
+    this.wood = d.wood === undefined ? START_WOOD : Math.max(0, +d.wood || 0);
+    this.stone = d.stone === undefined ? START_STONE : Math.max(0, +d.stone || 0);
     this.mined = new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.claimed = new Set((d.claimed ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.exp = readExpState(d.exp);

@@ -10,6 +10,7 @@ import { KINDS, KindId } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
+import { Railway, TRAIN_LEN } from '../src/sim/railway';
 import { EVENTS } from '../src/sim/events';
 
 /** Le continent, toujours la même graine : les tests ne dépendent pas du hasard */
@@ -702,14 +703,92 @@ describe('expéditions', () => {
     expect(kits.every((k) => k.weapon === 'sword')).toBe(true);
   });
 
-  it('une mine rapporte du minerai chaque jour', () => {
+  it('une mine ne se creuse que dans la montagne, et rapporte généreusement minerai et pierre', () => {
     const w = continent();
+    const [fx, fz] = flatLand(w);
+    expect(w.canPlace('mine', fx, fz)).toMatch(/montagne/);
     let spot: number[] | null = null;
     for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 10 && !spot; x++) if (w.canPlace('mine', x, z) === null) spot = [x, z];
+    expect(spot).not.toBeNull();
+    expect(w.flatTarget(spot![0], spot![1], 2)).toBeGreaterThanOrEqual(2.4);
     w.place('mine', spot![0], spot![1], 0, true, 2, false);
     const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
-    const ore = w.ore;
+    const ore = w.ore, stone = w.stone;
     for (let t = 0; t < 300; t++) ex.update(1);
-    expect(w.ore - ore).toBe(3);
+    expect(w.ore - ore).toBe(9);
+    expect(w.stone - stone).toBe(6);
+  });
+
+  it('les bûcherons se posent en forêt, la carrière près des rochers ; ils donnent bois et pierre', () => {
+    const w = continent();
+    const find = (k: 'lumber' | 'quarry') => { for (let z = 10; z < N - 10; z++) for (let x = 10; x < N - 10; x++) if (w.canPlace(k, x, z) === null) return [x, z]; return null; };
+    const lu = find('lumber')!, qu = find('quarry')!;
+    expect(w.vegAround(lu[0], lu[1], 1, 3, 1)).toBeGreaterThanOrEqual(5);
+    w.place('lumber', lu[0], lu[1], 0, true, 1, false);
+    w.place('quarry', qu[0], qu[1], 0, true, 1, false);
+    // loin de toute forêt, pas de bûcherons
+    let bare: number[] | null = null;
+    for (let z = 10; z < N - 10 && !bare; z++) for (let x = 10; x < N - 10 && !bare; x++) if (w.canPlace('house', x, z) === null && w.vegAround(x, z, 1, 3, 1) === 0) bare = [x, z];
+    expect(w.canPlace('lumber', bare![0], bare![1])).toMatch(/forêt/);
+    const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
+    const wood = w.wood, stone = w.stone;
+    for (let t = 0; t < 100; t++) ex.update(1);
+    expect([w.wood - wood, w.stone - stone]).toEqual([6, 5]);
+  });
+
+  it('la voie ferrée relie la gare à l’avant-poste : le train descend des mineurs et remonte ce qu’ils tirent des galeries', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 3, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 3, false, 40, 0);
+    const ex = new Expeditions(w, agents, () => 100, () => 0.5);
+    ex.under = new Underground(w);
+    let post: number[] | null = null;
+    for (let zz = 10; zz < N - 10 && !post; zz++) for (let xx = 10; xx < N - 10 && !post; xx++) if (w.canPlace('outpost', xx, zz) === null) post = [xx, zz];
+    w.place('outpost', post![0], post![1], 0, true, 3, false);
+    ex.update(1.1);
+    const rail = new Railway(w, agents, ex, () => 100);
+    rail.update(0.1);
+    expect(rail.why).toBe('station');
+    // la gare, à quelques cases de l'avant-poste, là où une voie peut passer
+    const spots: number[][] = [];
+    for (let dz = -24; dz <= 24; dz++) for (let dx = -24; dx <= 24; dx++) {
+      const d = Math.hypot(dx, dz);
+      if (d >= 8 && w.canPlace('landmark', post![0] + dx, post![1] + dz) === null) spots.push([post![0] + dx, post![1] + dz, d]);
+    }
+    spots.sort((a, b) => a[2] - b[2]);
+    let station = null;
+    for (const [sx, sz] of spots.slice(0, 30)) {
+      station = w.place('landmark', sx, sz, 0, true, 3, false);
+      rail.update(2.1);
+      if (rail.line) break;
+      w.removeBuilding(station.id);
+      station = null;
+    }
+    expect(rail.line).not.toBeNull();
+    const line = rail.line!;
+    expect(line.station.id).toBe(station!.id);
+    expect(line.len).toBeGreaterThan(TRAIN_LEN + 1);
+    // la voie ne passe ni sur un bâtiment ni dans l'eau
+    for (let s = 0.6; s < line.len - 0.3; s += 0.25) {
+      const [px, pz] = rail.at(s), cx = Math.floor(px), cz = Math.floor(pz);
+      expect(w.occ[cz * N + cx]).toBe(0);
+      expect(w.isWet(cx, cz)).toBe(false);
+    }
+    // la relève attend sur le quai, le train la descend au pied de la grotte et en remonte avec le minerai et la pierre
+    expect(rail.riders.length).toBeGreaterThanOrEqual(2);
+    const ore = w.ore, stone = w.stone;
+    let below = 0;
+    for (let t = 0; t < 900; t++) { agents.update(0.5, 10, 3, false, 40, 0); ex.update(0.5); rail.update(0.5); below = Math.max(below, rail.below.length); }
+    expect(below).toBeGreaterThanOrEqual(2);
+    expect(rail.delivered.ore + rail.delivered.stone).toBeGreaterThan(0);
+    expect(w.ore - ore + w.stone - stone).toBe(rail.delivered.ore + rail.delivered.stone);
+    // sans gare, plus de ligne : tout le monde rentre au village
+    w.removeBuilding(station!.id);
+    rail.update(2.1);
+    expect(rail.line).toBeNull();
+    expect(rail.why).toBe('station');
+    expect(rail.riders.length + rail.below.length + rail.up.length).toBe(0);
   });
 });
