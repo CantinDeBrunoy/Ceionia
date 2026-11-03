@@ -309,6 +309,8 @@ class Game implements UIHost {
       if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: 'le village', pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days });
     };
     this.sim.onAgeUp = (age) => {
+      // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
+      this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
       audio.sfxAgeUp();
       // le sol des jardins change avec eux
