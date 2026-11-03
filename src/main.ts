@@ -49,6 +49,7 @@ import { ExpeditionView } from './render/expeditionView';
 import { Festivities } from './render/festivities';
 import { PenView } from './render/pens';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
+import { Difficulty, isDifficulty, rulesOf } from './sim/difficulty';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
@@ -161,8 +162,8 @@ class Game implements UIHost {
     },
   };
 
-  /** `seed` : graine d'une nouvelle partie (tirée au hasard sans elle) */
-  constructor(mapId: number, mode: 'continue' | 'new', seed?: number) {
+  /** `seed` : graine d'une nouvelle partie (tirée au hasard sans elle) ; `difficulty` : la sienne (normale sans elle) */
+  constructor(mapId: number, mode: 'continue' | 'new', seed?: number, difficulty: Difficulty = 'normal') {
     const w = this.world;
     const save = mode === 'continue' ? loadSlot(mapId) : null;
     const settings = { ...loadSettings(), ...(save?.settings ?? {}) } as Partial<Settings>;
@@ -181,6 +182,8 @@ class Game implements UIHost {
       }
     } else {
       newWorld(w, mapId, seed ?? newSeed());
+      w.difficulty = difficulty;
+      w.wood = rulesOf(difficulty).startWood; w.stone = rulesOf(difficulty).startStone;
     }
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
@@ -320,7 +323,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimited };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting };
   }
   buildSave(): SaveData {
     return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, seasonT: this.time.seasonT, hour: this.time.hour, settings: this.settings(), savedAt: Date.now() };
@@ -336,9 +339,9 @@ class Game implements UIHost {
       location.reload();
     } catch (e) { this.ui.toast('Import impossible : ' + (e as Error).message); }
   }
-  newGame() {
+  newGame(difficulty: Difficulty) {
     deleteSlot(this.world.mapId);
-    sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|fresh`);
+    sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|fresh|${difficulty}`);
     this.running = false;
     location.reload();
   }
@@ -876,7 +879,7 @@ async function boot() {
   loading.remove();
 
   let started = false;
-  const start = (map: number, mode: 'continue' | 'new', seed?: number) => {
+  const start = (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty) => {
     if (started) return;
     started = true;
     // les anciennes cartes (île, vallée, plateaux) n'existent plus : on joue sur le continent
@@ -885,18 +888,18 @@ async function boot() {
     // tailles des tableaux du monde, des vues et de la caméra
     setMapSize(mapDef(map)!.size);
     syncChunks();
-    (window as any).__game = new Game(map, mode, seed);
+    (window as any).__game = new Game(map, mode, seed, difficulty);
   };
   const auto = sessionStorage.getItem(AUTOSTART);
   let menu: HTMLElement | null = null;
   if (auto) {
     sessionStorage.removeItem(AUTOSTART);
-    const [m, mode] = auto.split('|');
-    start(+m, mode === 'continue' ? 'continue' : 'new');
+    const [m, mode, diff] = auto.split('|');
+    start(+m, mode === 'continue' ? 'continue' : 'new', undefined, isDifficulty(diff) ? diff : undefined);
     return;
   }
   menu = showMenu(uiRoot, {
-    start: (map, mode, seed) => start(map, mode, seed),
+    start: (map, mode, seed, difficulty) => start(map, mode, seed, difficulty),
     importFile: async (f) => {
       try { const d = await readSaveFile(f); saveSlot(d); start(d.map, 'continue'); }
       catch (e) { alert('Import impossible : ' + (e as Error).message); }

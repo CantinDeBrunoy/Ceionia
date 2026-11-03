@@ -7,6 +7,7 @@ import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
 import { ExpEvent, pickEvent } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource } from './economy';
+import { rulesOf } from './difficulty';
 
 /** Étapes d'une expédition : rassemblement au village, aller, travail sur place, retour, fête (ou mine déconfite) au village */
 export type Phase = 'gather' | 'out' | 'work' | 'back' | 'home';
@@ -131,8 +132,8 @@ export class Expeditions {
   slots() { return partyLimit(this.pop()); }
   private has(kind: string) { for (const b of this.world.buildings.values()) if (b.kind === kind) return true; return false; }
 
-  /** Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel */
-  riskOf(c: Choice) { return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1); }
+  /** Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel ; le défi est plus risqué */
+  riskOf(c: Choice) { return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * rulesOf(this.world.difficulty).riskK; }
 
   /** Chevaux qui partiraient avec l'équipe : ceux qu'exige la cavalerie, sinon un par membre tant que l'écurie en a */
   mountsFor(c: Choice) { return c.mounts ?? Math.min(c.party, this.horsesHome()); }

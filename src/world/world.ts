@@ -1,5 +1,6 @@
 import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { START_WOOD, START_STONE } from '../sim/economy';
+import { Difficulty, readDifficulty, rulesOf } from '../sim/difficulty';
 import { GEN, GEN_FIXED, fillClimate } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 
@@ -167,8 +168,13 @@ export class World {
   stone = START_STONE;
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
   exp: ExpState = newExpState();
+  /** difficulté de la partie (sauvegardée) */
+  difficulty: Difficulty = 'normal';
   /** ressources illimitées (réglage) : bois, pierre et minerai ne manquent jamais */
-  unlimited = false;
+  unlimitedSetting = false;
+  /** ressources illimitées : toujours au bac à sable, jamais en défi, selon le réglage en partie normale */
+  get unlimited() { return rulesOf(this.difficulty).unlimited ?? this.unlimitedSetting; }
+  set unlimited(on: boolean) { this.unlimitedSetting = on; }
   /** lignes de chemin de fer ; tant que le joueur n'en a tracé aucune, la première (gare ↔ avant-poste) se trace d'elle-même */
   lines: RailLine[] = [];
   linesAuto = true;
@@ -1050,6 +1056,7 @@ export class World {
       mined: [...this.mined],
       claimed: [...this.claimed],
       exp: this.exp,
+      difficulty: this.difficulty,
       // arrêts des lignes : par rang dans la liste des bâtiments (les numéros changent au chargement)
       lines: this.lines.map((l) => ({ c: l.color, s: l.stops.map((id) => order.get(id) ?? -1).filter((i) => i >= 0) })),
       linesAuto: this.linesAuto,
@@ -1139,6 +1146,7 @@ export class World {
     this.mined = new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.claimed = new Set((d.claimed ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.exp = readExpState(d.exp);
+    this.difficulty = readDifficulty(d.difficulty);
     this.lines = [];
     for (const l of Array.isArray(d.lines) ? d.lines : []) {
       const stops = (Array.isArray(l?.s) ? l.s : []).map((i: number) => ids[i] ?? -1).filter((id: number) => id > 0);

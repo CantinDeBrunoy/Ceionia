@@ -14,7 +14,8 @@ import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, 
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
-import { costOf, costLabel, Resource } from '../sim/economy';
+import { priceIn, canPay, costLabel, Resource, PRODUCERS } from '../sim/economy';
+import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
 
@@ -30,7 +31,7 @@ export interface UIHost {
   saveNow(): void;
   exportSave(): void;
   importFile(f: File): void;
-  newGame(): void;
+  newGame(difficulty: Difficulty): void;
   toMenu(): void;
   setPhoto(on: boolean): void;
   capture(): void;
@@ -184,6 +185,32 @@ export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer')
     const done = (r: boolean) => { ov.remove(); resolve(r); };
     ov.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => done(b.dataset.r === '1')));
     ov.addEventListener('pointerdown', (e) => { if (e.target === ov) done(false); });
+    root.appendChild(ov);
+  });
+}
+
+/**
+ * Choix de la difficulté d'une nouvelle partie : trois cartes (celle de `current` choisie d'avance), puis « Commencer » ;
+ * `note` prévient de ce qui sera écrasé. Rend la difficulté choisie, ou null si le joueur renonce
+ */
+export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty; note?: string; ok?: string } = {}): Promise<Difficulty | null> {
+  const T = DIFF_TEXT;
+  let pick: Difficulty = opts.current ?? 'normal';
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.className = 'overlay';
+    ov.style.zIndex = '40';
+    ov.innerHTML = `<div class="modal panel diffpick"><div class="mtitle"><h3>${ic('target', 22)} ${T.choose}</h3></div><p class="hint">${T.chooseSub}</p>
+      <div class="diffs">${DIFFICULTIES.map((d) => `<button class="diff ${d}" data-d="${d}" aria-pressed="${d === pick}"><b>${ic(T.icon[d], 30, 1.6)}</b><strong>${T.name[d]}</strong><em>${T.tagline[d]}</em><ul>${T.points[d].map((x) => `<li>${x}</li>`).join('')}</ul></button>`).join('')}</div>
+      ${opts.note ? `<p class="hint warn">${ic('alert', 14, 2)}${opts.note}</p>` : ''}
+      <div class="row foot"><span class="grow"></span><button data-r="0">${T.cancel}</button><button data-r="1" class="active">${opts.ok ?? T.start}</button></div></div>`;
+    const done = (r: Difficulty | null) => { ov.remove(); resolve(r); };
+    ov.querySelectorAll<HTMLButtonElement>('[data-d]').forEach((b) => {
+      b.onclick = () => { pick = b.dataset.d as Difficulty; ov.querySelectorAll('[data-d]').forEach((x) => x.setAttribute('aria-pressed', `${x === b}`)); };
+      b.ondblclick = () => done(b.dataset.d as Difficulty);
+    });
+    ov.querySelectorAll<HTMLButtonElement>('[data-r]').forEach((b) => (b.onclick = () => done(b.dataset.r === '1' ? pick : null)));
+    ov.addEventListener('pointerdown', (e) => { if (e.target === ov) done(null); });
     root.appendChild(ov);
   });
 }
@@ -485,11 +512,11 @@ export class UI {
     const d: KindDef = KINDS[k], age = this.host.sim.age, lock = this.lockOf(k), a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
-    // les grands bâtiments se paient en bois et en pierre (sauf en ressources illimitées)
-    const w = this.host.world, cost = w.unlimited ? null : costOf(k, age), rich = !cost || (w.wood >= cost.wood && w.stone >= cost.stone);
+    // les grands bâtiments se paient en bois et en pierre, tous en défi (sauf en ressources illimitées) ; le premier bûcheron du défi est offert
+    const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}
-      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre`}</p>` : ''}
+      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
       ${lock ? `<p class="lock">🔒 ${lock}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
@@ -520,7 +547,7 @@ export class UI {
       : b.kind === 'outpost' && h.sim.age >= 3 ? `<p class="stat">${ic('train', 14, 2)} Cet avant-poste n’a pas la place d’un quai à son pied : le train ne peut pas s’y arrêter.</p>` : '';
     // améliorations : ce qu'il peut devenir à cet âge, et leur prix (ou ce qui manque pour les débloquer)
     const ups = UPGRADES.filter((u) => u.from === b.kind && h.sim.age >= KINDS[u.to].minAge).map((u) => {
-      const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = h.world.unlimited ? null : costOf(u.to, h.sim.age);
+      const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
       const locked = to.reqMission && !h.expeditions.state.done.includes(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
       return locked ? `<button disabled title="Débloqué par l’expédition « ${locked} »">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${locked}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} Améliorer : ${name}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
@@ -608,10 +635,12 @@ export class UI {
     const key = `${w.unlimited}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
     if (key === this.resKey) return;
     this.resKey = key;
+    // la fiche du bâtiment en main dit si l'on a encore de quoi le payer
+    this.renderInfo();
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit)
     const per = (n: number) => `+${Number.isInteger(n) ? n : n.toFixed(1)}/j`;
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
-      ? `<div class="res" title="${label} : illimité (réglage)">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
+      ? `<div class="res" title="${label} : illimité (${DIFF_TEXT.resInfinite[w.difficulty]})">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
       : `<div class="res" title="${label} : ${Math.floor(w[r])} en réserve${day[r] ? `, +${day[r]} par jour` : ', rien n’en produit pour l’instant'}${r === 'ore' ? '' : ' — pour bâtir les grands bâtiments'}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
   }
 
@@ -1090,6 +1119,8 @@ export class UI {
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
     const tabs = [['time', 'clock', 'Temps et météo'], ['look', 'palette', 'Image et son'], ['game', 'houses', 'Partie']];
+    // au bac à sable et en défi, la difficulté impose le réglage des ressources
+    const forced = DIFF_TEXT.resForced[h.world.difficulty];
     const { ov, close } = modal(this.root, 'settings', `${ic('gear', 22)} Réglages`, `
       <div class="tabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 16, 2)}${l}</button>`).join('')}</div>
       <section data-sec="time">
@@ -1112,11 +1143,14 @@ export class UI {
       </section>
       <section data-sec="game" hidden>
         <h4>Règles</h4>
+        <div class="row"><label>${DIFF_TEXT.setting}</label><span class="diffTag ${h.world.difficulty}">${ic(DIFF_TEXT.icon[h.world.difficulty], 16, 2)}${DIFF_TEXT.name[h.world.difficulty]}</span></div>
+        <ul class="hint dpoints">${DIFF_TEXT.points[h.world.difficulty].map((x) => `<li>${x}</li>`).join('')}</ul>
+        <p class="hint">${DIFF_TEXT.settingHint}</p>
         <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments.</p>
         <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
-        <div class="row"><label>Ressources</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}">${h.world.unlimited ? 'Illimitées' : 'Normales'}</button></div>
+        <div class="row"><label>Ressources</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? (h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
         <p class="hint">Illimitées : bois, pierre et minerai ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
         <h4>Sauvegarde</h4>
         <div class="row"><button id="gSave">${ic('save', 16)} Sauvegarder</button><button id="gExport">${ic('download', 16)} Exporter</button><button id="gImport">${ic('upload', 16)} Importer</button></div>
@@ -1184,15 +1218,15 @@ export class UI {
     const fi = q<HTMLInputElement>('#fImport');
     q('#gImport').onclick = () => fi.click();
     fi.onchange = () => { if (fi.files?.[0]) h.importFile(fi.files[0]); };
-    q('#gNew').onclick = async () => { if (await confirmBox(this.root, 'Recommencer cette carte ? La sauvegarde actuelle sera remplacée.', 'Recommencer')) h.newGame(); };
+    q('#gNew').onclick = async () => { const d = await chooseDifficulty(this.root, { current: h.world.difficulty, note: DIFF_TEXT.restartNote, ok: DIFF_TEXT.restart }); if (d) h.newGame(d); };
     q('#gMenu').onclick = () => h.toMenu();
   }
 }
 
 // ---------------- Menu principal ----------------
 export interface MenuHost {
-  /** `seed` : graine d'une nouvelle partie (celle du continent montré en aperçu) */
-  start(map: number, mode: 'continue' | 'new', seed?: number): void;
+  /** `seed` : graine d'une nouvelle partie (celle du continent montré en aperçu) ; `difficulty` : celle qu'a choisie le joueur */
+  start(map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty): void;
   importFile(f: File): void;
 }
 
@@ -1245,15 +1279,17 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     const seed = newSeed();
     const heights = save ? (save.world.heights as number[]).map((v) => v / 100) : genHeights(m.id, seed);
     drawPreview($('canvas', card) as HTMLCanvasElement, heights);
-    if (save) $('.stat', card).textContent = `${AGES[save.age].name} · ${Math.floor(save.pop)} hab. · ${SEASONS[Math.floor(save.seasonT) % 4]}`;
+    if (save) $('.stat', card).textContent = `${AGES[save.age].name} · ${Math.floor(save.pop)} hab. · ${SEASONS[Math.floor(save.seasonT) % 4]} · ${DIFF_TEXT.name[readDifficulty(save.world.difficulty)]}`;
     const btns = $('.btns', card);
     if (save) {
       btns.innerHTML = `<button class="active" data-m="continue">Continuer</button><button data-m="new">Nouvelle</button>`;
     } else btns.innerHTML = `<button class="active" data-m="new">Jouer</button>`;
     btns.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = async () => {
       const mode = b.dataset.m as 'continue' | 'new';
-      if (mode === 'new' && save && !(await confirmBox(root, 'Écraser la sauvegarde de cette carte ?', 'Écraser'))) return;
-      host.start(m.id, mode, mode === 'new' ? seed : undefined);
+      if (mode === 'continue') { host.start(m.id, mode); return; }
+      // une nouvelle partie : le joueur choisit sa difficulté (la fenêtre prévient s'il écrase une sauvegarde)
+      const d = await chooseDifficulty(root, { note: save ? DIFF_TEXT.overwrite : undefined });
+      if (d) host.start(m.id, mode, seed, d);
     }));
     maps.appendChild(card);
   }
