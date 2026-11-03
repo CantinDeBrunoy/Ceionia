@@ -36,6 +36,7 @@ import { loadModels } from './render/assets';
 import { ToolController, ToolId } from './build/tools';
 import { AudioEngine } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
+import { Tutorial } from './ui/tutorial';
 import { AGES, KINDS, Building } from './build/catalog';
 import { MISSIONS } from './sim/missions';
 import { Fires } from './render/fires';
@@ -123,6 +124,8 @@ class Game implements UIHost {
   private quake: { cell: number; t: number } | null = null;
   tools: ToolController;
   ui: UI;
+  /** tutoriel guidé (bulles d'aide), s'il est activé */
+  tutorial: Tutorial;
   audio = audio;
   season = makeSeasonState();
   private lastTime = performance.now();
@@ -310,6 +313,7 @@ class Game implements UIHost {
     this.gardens.sync(this.sim.age);
     this.refreshHalos();
     this.ui.update();
+    this.tutorial = new Tutorial(this.ui, this, !save);
     this.ui.toast(save ? 'Bon retour dans votre village !' : 'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.');
     requestAnimationFrame(() => this.frame());
   }
@@ -858,7 +862,7 @@ class Game implements UIHost {
     });
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
 

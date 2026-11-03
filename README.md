@@ -44,6 +44,8 @@ npm run deploy
 
 Réglages (⚙️), en trois onglets : **Temps et météo** (vitesse, durée du jour et des saisons, choix manuel de la saison et de l'heure, météo auto, clair, pluie, neige, brume), **Image et son** (graphismes : haute avec halo de nuit, normale, réduite sans brume et avec moins de particules ; volumes audio), **Partie** (catastrophes naturelles, routes auto, sauvegarde, export/import JSON, nouvelle partie, menu principal).
 
+**Tutoriel guidé.** Un interrupteur sur l'écran d'accueil l'active pour la partie qu'on lance (activé d'office tant qu'on n'a aucune partie, puis le choix est retenu). Une bulle montre, entourée d'un anneau qui pulse, la partie de l'interface dont il est question, en neuf étapes : bouger, tourner et zoomer la caméra ; la barre de construction ; poser une maison, une ferme et un puits (l'anneau mène à l'onglet, au rayon puis à la vignette) ; tracer une route ; lire les besoins ; pause et vitesse ; les âges et ce que demande le suivant ; ouvrir les expéditions, en lancer une et suivre l'équipe (👁) ; les cartes d'incident. Chaque étape coche ses tâches à mesure que le joueur les fait vraiment et passe d'elle-même à la suivante (« Suivant » pour avancer sans les faire). Rien n'est bloqué : le jeu continue autour, et la bulle s'efface devant une fenêtre ouverte, en mode photo et sous terre. « Passer le tutoriel » le met de côté ; Réglages › Partie le reprend à la même étape, le coupe ou le recommence. Activé, il repart du début à chaque nouvelle partie.
+
 ## Principe de jeu
 
 Le village a des **besoins** (nourriture, eau, logement, travail, bien-être et, passé quinze habitants, santé ; un point d'eau ou un puits abreuve six maisons environ) satisfaits par la présence de bâtiments, de champs, de jardins ou d'une rivière proche. Si un besoin manque, la population cesse simplement de croître (message doux dans le HUD). Un village **plein** n'est pas en manque : il attend des places pour grandir, et le conseil le dit, chiffres à l'appui (« Village plein (30/32 places) : une Maison antique de plus, +4 places »). Quand la population et les bâtiments requis sont atteints, un bouton vert **« Passer à : … »** s'allume sous la jauge de l'âge (et le conseil le propose) : c'est le joueur qui choisit le moment, puis les bâtiments « évoluent » avec une animation.
@@ -199,6 +201,8 @@ Modèles 3D de [Quaternius](https://quaternius.com), licence **CC0** (domaine pu
 
 Sauvegarde automatique toutes les 15 s (et à la fermeture de l'onglet) dans `localStorage` ; elle garde aussi les champs de lave, les cendres fertiles, le bois, la pierre et le minerai, les filons exploités, les galeries tenues et les expéditions réussies avec ce qu'elles ont rapporté, la réserve d'équipement et les commandes en cours (les anciennes sauvegardes se chargent sans). Une expédition en route n'est pas sauvegardée : recharger la partie l'annule, et on peut la relancer. Les trains non plus : au chargement, chacun repart du premier arrêt de sa ligne avec une nouvelle équipe de mineurs (les lignes, elles, sont sauvegardées). Export/import JSON depuis les réglages ou le menu principal. Les sauvegardes des anciennes cartes 48 × 48 ne se chargent plus : la carte repart de zéro. Le relief est sauvegardé tel quel, mais le climat (donc les biomes, et les zones du souterrain qui les suivent) se recalcule au chargement depuis la graine : la sauvegarde note la version du générateur qui a créé la carte (`gen`), et les parties d'avant le continent tiré de la graine (sans `gen`) gardent leur climat d'origine et se rechargent à l'identique ; l'ancien générateur reste dans le code pour elles.
 
+Le tutoriel garde à part, dans `localStorage`, s'il est activé et l'étape où il en est (`village-lowpoly:v1:tutorial`) : il vaut pour toutes les parties.
+
 ## Structure du code
 
 ```
@@ -213,7 +217,7 @@ src/
                    trafic (charrettes, barques, voiliers), voie ferrée et train, halo de nuit, halos des lumières au sol, équipe d'expédition et ses scènes sur place ; le monde souterrain est chargé à part
 tests/             tests automatiques (Vitest)
   audio/           musique générative et ambiances Web Audio
-  ui/              HUD, barre d'outils, réglages, menu de sélection de carte
+  ui/              HUD, barre d'outils, réglages, menu de sélection de carte, tutoriel guidé (bulles, étapes et tous ses textes dans tutorial.ts)
   save/            sérialisation, localStorage, export/import
 ```
 
