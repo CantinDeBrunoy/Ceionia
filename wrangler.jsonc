@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/wrangler@4.147.0/config-schema.json",
+  // Le build Vite du jeu, servi tel quel par Cloudflare Workers (aucun code serveur) :
+  // https://ceionia.cantin-roquier.workers.dev
+  "name": "ceionia",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

@@ -1,0 +1,60 @@
+name: deploy
+
+# Met le jeu en ligne sur Cloudflare Workers (https://ceionia.cantin-roquier.workers.dev) à chaque push sur
+# master ou refonte-graphique : tests, build Vite, puis wrangler deploy. Comme pour les apps du dépôt index.
+
+on:
+  push:
+    branches: [master, refonte-graphique]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Déployer Ceionia
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Tant que les secrets Cloudflare ne sont pas configurés, on prévient sans échouer.
+      - name: Secrets Cloudflare
+        id: secrets
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN ou CLOUDFLARE_ACCOUNT_ID manquant : déploiement ignoré."
+          fi
+
+      - if: steps.secrets.outputs.ok == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.secrets.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.secrets.outputs.ok == 'true'
+        run: npm ci
+
+      - if: steps.secrets.outputs.ok == 'true'
+        run: npm test
+
+      - if: steps.secrets.outputs.ok == 'true'
+        run: npm run build
+
+      - if: steps.secrets.outputs.ok == 'true'
+        run: npx --yes wrangler@4.147.0 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

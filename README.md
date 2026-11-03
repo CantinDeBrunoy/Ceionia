@@ -14,6 +14,14 @@ npm test           # tests automatiques (génération, sauvegarde, eau, volcans,
 
 Le dossier `dist/` est 100 % statique (déployable tel quel).
 
+## En ligne
+
+Le jeu est en ligne sur **https://ceionia.cantin-roquier.workers.dev** (Cloudflare Workers, `wrangler.jsonc`), comme les apps du dépôt `index`. Chaque push sur `master` ou `refonte-graphique` le met à jour : le workflow `.github/workflows/deploy.yml` lance les tests, le build, puis `wrangler deploy`. Il lui faut deux secrets dans le dépôt GitHub (*Settings → Secrets and variables → Actions*) : `CLOUDFLARE_API_TOKEN` (un jeton Cloudflare du modèle « Edit Cloudflare Workers ») et `CLOUDFLARE_ACCOUNT_ID` ; sans eux, le workflow le signale et ne déploie rien. Pour déployer à la main, depuis un poste connecté à Cloudflare (`wrangler login`) :
+
+```bash
+npm run deploy
+```
+
 ## Contrôles
 
 | Action | Souris / clavier | Tactile |
