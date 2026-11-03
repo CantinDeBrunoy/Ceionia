@@ -126,6 +126,11 @@ const P: Record<string, string> = {
   qubit: '<circle cx="12" cy="12" r="4"/><path d="M2 12a10 4 0 0 0 20 0a10 4 0 0 0-20 0"/><path d="M12 2v3M12 19v3"/><path d="M12 8l1.5 4-1.5 4"/>',
   maglev: '<path d="M4 14V9a5 5 0 0 1 5-5h9l3 5v5z"/><path d="M4 9h17M9 4v5M14 4v5"/><path d="M3 18h18M6 21h12"/><path d="M7 14v4M17 14v4"/>',
   tower: '<path d="M8 21V4l4-2 4 2v17"/><path d="M8 8c2 0 2 2 4 2s2-2 4-2M8 13c2 0 2 2 4 2s2-2 4-2"/><path d="M5 21h14"/><path d="M11 21v-3h2v3"/>',
+  // pétrole : chevalet de pompage, raffinerie (colonnes, réservoir, torchère), goutte de brut, pompe à carburant
+  pumpjack: '<path d="M3 21h18"/><path d="M9 21l3-10.5 3 10.5"/><path d="M4 10l14-3.5"/><path d="M18 6.5c2 .8 2.3 3.6.6 4.8"/><path d="M18.8 11.3V21"/><circle cx="6" cy="16.5" r="2"/><path d="M6 14.5L5.2 9.8"/>',
+  refinery: '<path d="M2 21h20"/><path d="M4 21V8h3v13"/><path d="M9 21V5h3v16"/><path d="M14 21v-4a3 3 0 0 1 6 0v4"/><path d="M10.5 5V3"/><path d="M10.5 3c-1-.9-.4-1.8.2-2.2"/><path d="M7 12h2M7 16h2"/>',
+  crude: '<path d="M12 3c3 4.5 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 3-6.5 6-11z"/><path d="M9.3 14.5a2.7 2.7 0 0 0 2.7 2.7"/>',
+  fuel: '<path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M3 21h12"/><path d="M6.5 7.5h5"/><path d="M14 10h2a2 2 0 0 1 2 2v4a1.5 1.5 0 0 0 3 0V8l-3-3"/>',
 };
 
 /** Icône au trait, de la couleur du texte */
@@ -139,7 +144,7 @@ export const KIND_ICON: Record<KindId, string> = {
   stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost', lumber: 'axe', quarry: 'rock', station: 'train', barber: 'scissors', alpine: 'alpine', police: 'police', terminal: 'train',
   harbor: 'anchor', airport: 'plane', heliport: 'heli', watertower: 'well', stadium: 'stadium', football: 'ball', basket: 'hoop', tennis: 'racket', waterpark: 'slide', funfair: 'ferris',
   theater: 'masks', acropolis: 'acropolis', forum: 'arch', senate: 'dome',
-  carworks: 'car', lab: 'flask', aerodrome: 'balloon', manor: 'manor',
+  carworks: 'car', lab: 'flask', aerodrome: 'balloon', manor: 'manor', oilwell: 'pumpjack', refinery: 'refinery',
   arcology: 'arcology', vfarm: 'tower', fusion: 'atom', spaceport: 'rocket', research: 'qubit', maglev: 'maglev',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };

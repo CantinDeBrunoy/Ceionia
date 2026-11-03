@@ -2,12 +2,14 @@ import * as THREE from 'three';
 
 /**
  * Effets des combats : étincelles d'un coup porté (or pour une lame, blanches pour un choc, rouges pour une morsure), éclair
- * d'un coup de feu, poussière soulevée ; et lances des chasseurs qui volent en arc, puis restent plantées un moment
+ * d'un coup de feu, poussière soulevée ; et lances des chasseurs qui volent en arc, puis restent plantées un moment. À
+ * l'époque moderne : balles traçantes qui filent, souffle du canon des chars et explosion de l'obus
  */
 
 const CAP = 1500;
 
-interface Spark { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; c: THREE.Color; dust: boolean }
+/** `fly` : sans pesanteur (traçante) ; `big` : grosse lueur (bouche du canon, explosion) */
+interface Spark { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; c: THREE.Color; dust: boolean; fly?: boolean; big?: boolean }
 interface Spear { mesh: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; stuck: number; onLand: (() => void) | null }
 
 function dotTexture() {
@@ -27,6 +29,7 @@ export class CombatFx {
   private spears: Spear[] = [];
   private glow: THREE.Points;
   private dust: THREE.Points;
+  private flare: THREE.Points;
   private soundT = 0;
   private shaftMat = new THREE.MeshLambertMaterial({ color: 0x8a6a44 });
   private tipMat = new THREE.MeshLambertMaterial({ color: 0xb8bcc4 });
@@ -42,7 +45,8 @@ export class CombatFx {
     const tex = dotTexture();
     this.glow = new THREE.Points(mk(), new THREE.PointsMaterial({ size: 0.09, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     this.dust = new THREE.Points(mk(), new THREE.PointsMaterial({ size: 0.12, map: tex, vertexColors: true, transparent: true, depthWrite: false, opacity: 0.7 }));
-    for (const p of [this.glow, this.dust]) { p.frustumCulled = false; this.group.add(p); }
+    this.flare = new THREE.Points(mk(), new THREE.PointsMaterial({ size: 0.34, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    for (const p of [this.glow, this.dust, this.flare]) { p.frustumCulled = false; this.group.add(p); }
   }
 
   private sound(kind: 'blade' | 'shot' | 'bite') {
@@ -77,6 +81,35 @@ export class CombatFx {
       this.sparks.push({ x: fx + (tx - fx) * u, y: fy + (ty - fy) * u, z: fz + (tz - fz) * u, vx: 0, vy: 0, vz: 0, life: 0.06, max: 0.06, c, dust: false });
     }
     this.hit(tx, ty, tz, 0xffc070, 8, 'shot');
+  }
+
+  /** Balle traçante : un trait lumineux qui file de la bouche de l'arme jusqu'à la cible, à `speed` cases par seconde */
+  tracer(fx: number, fy: number, fz: number, tx: number, ty: number, tz: number, color = 0xffc86a, speed = 11) {
+    const dx = tx - fx, dy = ty - fy, dz = tz - fz, d = Math.hypot(dx, dy, dz) || 1, life = d / speed, c = new THREE.Color(color);
+    for (let i = 0; i < 5 && this.sparks.length < CAP; i++) {
+      const back = i * 0.035;
+      this.sparks.push({ x: fx - (dx / d) * back, y: fy - (dy / d) * back, z: fz - (dz / d) * back, vx: (dx / d) * speed, vy: (dy / d) * speed, vz: (dz / d) * speed, life: life + back / speed, max: life + 0.05, c, dust: false, fly: true });
+    }
+  }
+
+  /** Coup de canon : grosse lueur à la bouche, gerbe d'étincelles et fumée chassées vers l'avant (dx, dz) */
+  blast(x: number, y: number, z: number, dx: number, dz: number) {
+    const c = new THREE.Color(0xffe2a0), l = Math.hypot(dx, dz) || 1;
+    for (let i = 0; i < 3 && this.sparks.length < CAP; i++) this.sparks.push({ x: x + (dx / l) * i * 0.05, y, z: z + (dz / l) * i * 0.05, vx: 0, vy: 0, vz: 0, life: 0.1, max: 0.1, c, dust: false, big: true });
+    for (let i = 0; i < 16 && this.sparks.length < CAP; i++) {
+      const a = (Math.random() - 0.5) * 1.1, sp = 1.5 + Math.random() * 2.5, ca = Math.cos(a), sa = Math.sin(a), ux = (dx * ca - dz * sa) / l, uz = (dx * sa + dz * ca) / l;
+      this.sparks.push({ x, y, z, vx: ux * sp, vy: Math.random() * 0.8, vz: uz * sp, life: 0.12 + Math.random() * 0.15, max: 0.27, c, dust: false });
+    }
+    this.puff(x + (dx / l) * 0.1, y, z + (dz / l) * 0.1, 10);
+    this.sound('shot');
+  }
+
+  /** L'obus éclate : boule de feu, éclats, et un nuage de poussière */
+  boom(x: number, y: number, z: number) {
+    const c = new THREE.Color(0xff9a3a);
+    for (let i = 0; i < 4 && this.sparks.length < CAP; i++) this.sparks.push({ x: x + (Math.random() - 0.5) * 0.1, y: y + Math.random() * 0.1, z: z + (Math.random() - 0.5) * 0.1, vx: 0, vy: 0.3, vz: 0, life: 0.18 + i * 0.04, max: 0.3, c, dust: false, big: true });
+    this.hit(x, y, z, 0xffb050, 26, 'shot');
+    this.puff(x, y, z, 16);
   }
 
   /** Poussière soulevée au sol (une bête qui tombe, une lance qui se plante) */
@@ -122,19 +155,22 @@ export class CombatFx {
     }
     const gpos = this.glow.geometry.attributes.position as THREE.BufferAttribute, gcol = this.glow.geometry.attributes.color as THREE.BufferAttribute;
     const dpos = this.dust.geometry.attributes.position as THREE.BufferAttribute, dcol = this.dust.geometry.attributes.color as THREE.BufferAttribute;
-    let n = 0, m = 0;
+    const fpos = this.flare.geometry.attributes.position as THREE.BufferAttribute, fcol = this.flare.geometry.attributes.color as THREE.BufferAttribute;
+    let n = 0, m = 0, f = 0;
     for (let i = this.sparks.length - 1; i >= 0; i--) {
       const p = this.sparks[i];
       p.life -= dt;
       if (p.life <= 0) { this.sparks.splice(i, 1); continue; }
-      if (!p.dust) p.vy -= 3.5 * dt;
+      if (!p.dust && !p.fly) p.vy -= 3.5 * dt;
       else { p.vx *= 0.94; p.vz *= 0.94; p.vy *= 0.96; }
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       const k = Math.min(1, (p.life / p.max) * 1.5);
       if (p.dust) { dpos.setXYZ(m, p.x, p.y, p.z); dcol.setXYZ(m, p.c.r * k + (1 - k) * 0.4, p.c.g * k + (1 - k) * 0.4, p.c.b * k + (1 - k) * 0.4); m++; }
-      else { gpos.setXYZ(n, p.x, p.y, p.z); gcol.setXYZ(n, p.c.r * k, p.c.g * k, p.c.b * k); n++; }
+      else if (p.big) { fpos.setXYZ(f, p.x, p.y, p.z); fcol.setXYZ(f, p.c.r * k, p.c.g * k, p.c.b * k); f++; }
+      else { gpos.setXYZ(n, p.x, p.y, p.z); gcol.setXYZ(n, p.c.r * (p.fly ? 1 : k), p.c.g * (p.fly ? 1 : k), p.c.b * (p.fly ? 1 : k)); n++; }
     }
     this.glow.geometry.setDrawRange(0, n); gpos.needsUpdate = true; gcol.needsUpdate = true;
     this.dust.geometry.setDrawRange(0, m); dpos.needsUpdate = true; dcol.needsUpdate = true;
+    this.flare.geometry.setDrawRange(0, f); fpos.needsUpdate = true; fcol.needsUpdate = true;
   }
 }

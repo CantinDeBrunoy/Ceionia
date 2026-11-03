@@ -7190,6 +7190,217 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
   return false;
 }
 
+/** Tuyau droit de rayon r tendu entre deux points */
+function pipe(p: Parts, a: V3, b: V3, r: number, color: number) {
+  const A = new THREE.Vector3(...a), d = new THREE.Vector3(...b).sub(A), L = d.length();
+  if (L < 1e-4) return;
+  const g = new THREE.CylinderGeometry(r, r, L, 6).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()));
+  p.add(g, A.x + d.x / 2, A.y + d.y / 2, A.z + d.z / 2, color);
+}
+
+/** Tuyauterie qui suit une ligne brisée, un coude arrondi à chaque angle */
+function pipeRun(p: Parts, pts: V3[], r: number, color: number) {
+  for (let i = 1; i < pts.length; i++) {
+    pipe(p, pts[i - 1], pts[i], r, color);
+    if (i < pts.length - 1) p.sphere(r * 1.15, ...pts[i], color);
+  }
+}
+
+/**
+ * Puits de pétrole (1 case) : chevalet de pompage sur son massif de béton, au-dessus d'une tache de brut. Le balancier jaune
+ * hoche sa tête de cheval rouge, la manivelle et ses contrepoids tournent contre le réducteur et son moteur ; tête de puits et
+ * ses vannes, conduite vers la petite citerne, fûts, lampadaire, et le pétrolier en casque jaune
+ */
+function oilwell(p: Parts) {
+  sink(0.012);
+  const y0 = 0.012, steel = 0x5d6878, beam = 0xf2b23a, head = 0xd84a3e, iron = 0x3c3c40;
+  // la tache de brut autour de la tête de puits, le massif de béton et le longeron d'acier
+  p.add(new THREE.CircleGeometry(0.17, 10).rotateX(-Math.PI / 2).scale(1.4, 1, 1), 0.3, y0 + 0.002, 0.1, 0x1c1814);
+  p.box(0.84, 0.03, 0.32, -0.03, y0, 0, 0xbdb8ae);
+  p.box(0.8, 0.026, 0.1, -0.03, y0 + 0.03, 0, steel);
+  const base = y0 + 0.056;
+  // chevalet : deux montants en A et une jambe de force, le palier du balancier au sommet
+  const px = -0.02, legH = 0.46, top = base + legH * Math.cos(0.21);
+  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.024, legH, 0.024).translate(0, legH / 2, 0), px, base, s * 0.095, steel, 0, false, 0, -s * 0.21);
+  p.add(new THREE.BoxGeometry(0.02, 0.48, 0.02).translate(0, 0.24, 0), px - 0.2, base, 0, steel, 0, false, -0.42);
+  p.box(0.05, 0.03, 0.07, px, top - 0.02, 0, iron);
+  // balancier : la poutre, sa tête de cheval (la bride, la barre et la tige polie qui plonge dans le puits), les bielles qui
+  // descendent vers la manivelle
+  const hx = 0.35, rx = -0.29, rod = hx + 0.05;
+  const B = swing([px, top + 0.012, 0], [0, 0, 1], 0.18, 0.32);
+  B.box(0.68, 0.045, 0.04, 0.03, -0.022, 0, beam);
+  B.box(0.66, 0.008, 0.044, 0.03, 0.02, 0, dark(beam, 0.8));
+  B.box(0.06, 0.025, 0.06, 0, -0.04, 0, iron);
+  B.add(new THREE.BoxGeometry(0.06, 0.24, 0.052), hx, -0.04, 0, head, 0, false, 0.12);
+  B.add(new THREE.CylinderGeometry(0.04, 0.04, 0.054, 10).rotateX(Math.PI / 2), hx + 0.028, -0.15, 0, head);
+  for (const s of [-1, 1]) B.box(0.005, 0.08, 0.005, rod, -0.27, s * 0.012, 0x2a2a2e);
+  B.box(0.05, 0.012, 0.034, rod, -0.282, 0, iron);
+  B.box(0.009, 0.2, 0.009, rod, -0.482, 0, 0xd8dde2);
+  B.box(0.08, 0.03, 0.1, rx, -0.03, 0, iron);
+  for (const s of [-1, 1]) B.box(0.014, 0.27, 0.012, rx, -0.3, s * 0.06, dark(steel, 0.9));
+  // réducteur (le carter rond de la grande roue) et son moteur électrique, carter de courroie, sur le longeron
+  const cx = rx + px, cy = base + 0.16;
+  p.box(0.12, 0.11, 0.1, cx, base, 0, steel);
+  p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.1, 10).rotateX(Math.PI / 2), cx, cy, 0, dark(steel, 0.85));
+  p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.09, 8).rotateZ(Math.PI / 2), cx - 0.13, base + 0.04, 0.06, 0x3a6ab8);
+  p.box(0.1, 0.07, 0.02, cx - 0.07, base + 0.02, 0.1, 0x9aa3ad);
+  // manivelle : deux bras et leurs contrepoids qui tournent (un tour par coup de balancier)
+  const T = turning([cx, cy, 0], [0, 0, 1], 0.32);
+  T.add(new THREE.CylinderGeometry(0.016, 0.016, 0.17, 8).rotateX(Math.PI / 2), 0, 0, 0, iron);
+  for (const s of [-1, 1]) {
+    T.box(0.04, 0.19, 0.014, 0, -0.1, s * 0.072, 0x8a8f96);
+    T.box(0.1, 0.05, 0.026, 0, -0.1, s * 0.072, 0x2a2a2e);
+    T.box(0.096, 0.012, 0.028, 0, -0.06, s * 0.072, beam);
+  }
+  // tête de puits : tubage, croix de vannes à volants rouges, manomètre ; conduite vers la citerne
+  const wx = px + rod;
+  p.cyl(0.03, 0.034, 0.04, 8, wx, base, 0, 0x8a8f96);
+  p.cyl(0.016, 0.016, 0.06, 8, wx, base + 0.04, 0, 0x9aa3ad);
+  p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6).rotateX(Math.PI / 2), wx, base + 0.075, 0, 0x9aa3ad);
+  for (const s of [-1, 1]) p.add(new THREE.TorusGeometry(0.016, 0.005, 4, 8), wx, base + 0.075, s * 0.052, 0xd84a3e);
+  p.sphere(0.012, wx - 0.03, base + 0.09, 0, C.white);
+  pipeRun(p, [[wx, base + 0.075, 0.05], [wx, base + 0.075, 0.2], [wx, y0 + 0.02, 0.24], [-0.15, y0 + 0.02, 0.24], [-0.24, y0 + 0.02, 0.33]], 0.01, 0x6a6e74);
+  // petite citerne de brut, son échelle
+  p.cyl(0.08, 0.08, 0.2, 12, -0.32, y0, 0.33, 0xeceae4);
+  p.cyl(0.082, 0.082, 0.022, 12, -0.32, y0 + 0.13, 0.33, 0x3a6ab8);
+  p.cyl(0.06, 0.082, 0.025, 12, -0.32, y0 + 0.2, 0.33, 0xd8d4cc);
+  p.box(0.012, 0.2, 0.03, -0.235, y0, 0.33, iron);
+  // fûts bleus et rouge, lampadaire, le pétrolier en combinaison orange et casque jaune
+  for (const [x, z, c] of [[0.06, 0.36, 0x3a6ab8], [0.13, 0.4, 0xd84a3e], [0.1, 0.3, 0x3a6ab8]] as number[][]) { p.cyl(0.028, 0.028, 0.075, 8, x, y0, z, c); p.cyl(0.029, 0.029, 0.006, 8, x, y0 + 0.07, z, dark(c, 0.7)); }
+  lampPost(p, 0.42, -0.4, 0.3);
+  figure(p, 0.25, 0.38, 0xf28a3c, -0.5, false, 0xf2c23a);
+}
+
+/** Grand réservoir de stockage : cuve blanche cerclée de couleur, toit en cône aplati et son garde-corps, escalier qui tourne autour */
+function oilTank(p: Parts, x: number, z: number, r: number, h: number, y0: number, band = 0x3a6ab8) {
+  p.cyl(r, r, h, 18, x, y0, z, 0xeceae4);
+  p.cyl(r * 1.01, r * 1.01, 0.03, 18, x, y0 + h * 0.66, z, band);
+  p.cyl(r * 0.78, r * 1.01, 0.05, 18, x, y0 + h, z, 0xd8d4cc);
+  p.add(new THREE.TorusGeometry(r * 0.98, 0.004, 3, 18).rotateX(Math.PI / 2), x, y0 + h + 0.03, z, 0x8a8f96);
+  for (let k = 0; k < 7; k++) {
+    const a = 0.4 + k * 0.32;
+    p.box(0.05, 0.008, 0.026, x + Math.cos(a) * (r + 0.014), y0 + 0.03 + (k / 6) * (h - 0.04), z + Math.sin(a) * (r + 0.014), 0x5d6878, Math.PI / 2 - a);
+  }
+}
+
+/** Sphère de gaz sur ses pieds, et sa ceinture bleue */
+function gasSphere(p: Parts, x: number, z: number, r: number, y0: number) {
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.cyl(0.012, 0.014, r * 1.3, 5, x + Math.cos(a) * r * 0.82, y0, z + Math.sin(a) * r * 0.82, 0x8a8f96); }
+  p.sphere(r, x, y0 + r * 1.35, z, 0xf4f2ee, 2);
+  p.add(new THREE.TorusGeometry(r, 0.008, 3, 18).rotateX(Math.PI / 2), x, y0 + r * 1.35, z, 0x3a6ab8);
+}
+
+/** Colonne de distillation : fût d'acier clair sur son socle, passerelles à garde-corps jaune, échelle, dôme et feu rouge au sommet */
+function distillColumn(p: Parts, x: number, z: number, r: number, h: number, y0: number) {
+  p.cyl(r * 1.3, r * 1.35, 0.06, 10, x, y0, z, 0x9d9890);
+  p.cyl(r, r, h, 12, x, y0 + 0.06, z, 0xdfe3e8);
+  p.sphere(r, x, y0 + 0.06 + h, z, 0xdfe3e8, 1, 0.6);
+  for (let y = 0.3; y < h - 0.05; y += 0.28) {
+    p.cyl(r + 0.05, r + 0.05, 0.012, 12, x, y0 + 0.06 + y, z, 0x5d6878);
+    p.add(new THREE.TorusGeometry(r + 0.05, 0.004, 3, 14).rotateX(Math.PI / 2), x, y0 + 0.06 + y + 0.045, z, 0xf2c23a);
+  }
+  p.box(0.03, h, 0.008, x, y0 + 0.06, z + r + 0.012, 0x5d6878);
+  p.box(0.018, 0.018, 0.018, x, y0 + 0.06 + h + r * 0.55, z, 0xff4a3a, 0, true);
+}
+
+/** Camion-citerne le long de x, la cabine rouge vers +x */
+function tanker(p: Parts, x: number, z: number, y0: number) {
+  p.box(0.42, 0.02, 0.1, x, y0 + 0.03, z, 0x3c3c40);
+  p.box(0.12, 0.1, 0.13, x + 0.2, y0 + 0.03, z, 0xd84a3e);
+  p.box(0.012, 0.05, 0.11, x + 0.262, y0 + 0.08, z, C.glass, 0, true);
+  p.add(new THREE.CylinderGeometry(0.065, 0.065, 0.3, 12).rotateZ(Math.PI / 2), x - 0.05, y0 + 0.115, z, 0xeceef0);
+  p.add(new THREE.CylinderGeometry(0.067, 0.067, 0.03, 12).rotateZ(Math.PI / 2), x - 0.05, y0 + 0.115, z, 0x3a6ab8);
+  for (const wx of [x + 0.2, x - 0.06, x - 0.15]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8).rotateX(Math.PI / 2), wx, y0 + 0.03, z + s * 0.065, 0x2a2a2e);
+}
+
+/**
+ * Raffinerie (3 × 3) : parc de grands réservoirs blancs dans leur cuvette de rétention et sphère de gaz, au fond à gauche ;
+ * colonnes de distillation et leurs passerelles reliées par des tuyaux, four et ses cheminées qui fument, échangeurs, au
+ * fond à droite ; rack de tuyaux de couleur qui court d'un bout à l'autre ; haute torchère haubanée et sa flamme qui danse ;
+ * salle de contrôle vitrée, poste de chargement où un camion-citerne fait le plein, ouvriers casqués, lampadaires
+ */
+function refinery(p: Parts) {
+  sink(0.012);
+  const y0 = 0.012, steel = 0x5d6878;
+  p.box(2.92, 0.012, 2.92, 0, 0, 0, 0xbdb8ae);
+  // voie d'accès bitumée devant, ses tirets
+  p.box(2.9, 0.006, 0.34, 0, y0, 1.22, 0x5d6169);
+  for (let x = -1.3; x <= 1.31; x += 0.26) p.box(0.12, 0.003, 0.02, x, y0 + 0.006, 1.22, C.white);
+  // parc de stockage : cuvette de rétention (muret), trois grands réservoirs, une sphère de gaz
+  const bx = -0.78, bz = -0.78, bw = 1.3;
+  for (const s of [-1, 1]) { p.box(bw, 0.05, 0.03, bx, y0, bz + (s * bw) / 2, 0xa8a49c); p.box(0.03, 0.05, bw, bx + (s * bw) / 2, y0, bz, 0xa8a49c); }
+  p.box(bw - 0.03, 0.004, bw - 0.03, bx, y0, bz, 0xa29a8a);
+  oilTank(p, -1.1, -1.1, 0.27, 0.42, y0);
+  oilTank(p, -0.48, -1.1, 0.27, 0.42, y0, 0xd84a3e);
+  oilTank(p, -1.1, -0.48, 0.22, 0.32, y0);
+  gasSphere(p, -0.46, -0.46, 0.17, y0);
+  // colonnes de distillation, reliées en haut par des tuyaux
+  distillColumn(p, 0.45, -1.0, 0.1, 1.45, y0);
+  distillColumn(p, 0.85, -1.15, 0.075, 1.05, y0);
+  distillColumn(p, 1.2, -0.95, 0.065, 0.8, y0);
+  pipeRun(p, [[0.55, y0 + 1.2, -1.0], [0.7, y0 + 1.2, -1.0], [0.79, y0 + 0.95, -1.12]], 0.014, 0xc4cad2);
+  pipeRun(p, [[0.92, y0 + 0.7, -1.12], [1.05, y0 + 0.7, -1.12], [1.15, y0 + 0.6, -0.98]], 0.012, 0xf2c23a);
+  // four de chauffe : caisson et ses deux cheminées qui fument ; échangeurs couchés sur leurs berceaux
+  p.box(0.4, 0.32, 0.28, 0.75, y0, -0.45, 0x8a8f96);
+  p.box(0.42, 0.03, 0.3, 0.75, y0 + 0.32, -0.45, steel);
+  for (const x of [0.65, 0.85]) { p.cyl(0.03, 0.035, 0.45, 8, x, y0 + 0.35, -0.45, 0xa85e50); p.cyl(0.036, 0.036, 0.02, 8, x, y0 + 0.78, -0.45, 0x3c3c40); smoke(x, y0 + 0.82, -0.45, 2); }
+  for (const z of [-0.55, -0.38]) {
+    for (const x of [1.12, 1.36]) p.box(0.04, 0.06, 0.1, x, y0, z, 0x9d9890);
+    p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.36, 10).rotateZ(Math.PI / 2), 1.24, y0 + 0.1, z, 0xd8dde2);
+  }
+  // rack de tuyaux de couleur, d'un bout à l'autre, et ce qui en part vers les réservoirs et les colonnes
+  const rz = 0.02, rh = 0.3;
+  for (let x = -1.2; x <= 1.31; x += 0.3) {
+    for (const dz of [-0.08, 0.08]) p.box(0.025, rh, 0.025, x, y0, rz + dz, steel);
+    for (const y of [0.18, rh - 0.02]) p.box(0.025, 0.02, 0.2, x, y0 + y, rz, steel);
+  }
+  [0xf2c23a, 0x4fa860, 0xd84a3e, 0xc4cad2, 0x3a6ab8].forEach((c, k) => pipe(p, [-1.32, y0 + rh + 0.016, rz - 0.07 + k * 0.035], [1.42, y0 + rh + 0.016, rz - 0.07 + k * 0.035], 0.014, c));
+  for (const k of [0, 1]) pipe(p, [-1.32, y0 + 0.216, rz - 0.04 + k * 0.08], [1.42, y0 + 0.216, rz - 0.04 + k * 0.08], 0.016, k ? 0x8a8f96 : 0xc4cad2);
+  pipeRun(p, [[0.41, y0 + rh + 0.016, -0.05], [0.41, y0 + rh + 0.016, -0.88], [0.41, y0 + 0.95, -0.88]], 0.014, 0xf2c23a);
+  pipeRun(p, [[1.2, y0 + rh + 0.016, 0.02], [1.2, y0 + 0.45, -0.2], [1.2, y0 + 0.45, -0.86]], 0.012, 0x4fa860);
+  pipeRun(p, [[-0.48, y0 + 0.05, -0.82], [-0.48, y0 + 0.05, -0.1], [-0.48, y0 + 0.216, -0.06]], 0.016, 0xc4cad2);
+  pipeRun(p, [[-0.85, y0 + 0.05, -0.48], [-0.85, y0 + 0.05, -0.1], [-0.85, y0 + 0.216, -0.06]], 0.016, 0x8a8f96);
+  // torchère : haut fût cerclé de rouge sur son trépied de poutrelles ; la flamme danse au sommet et fume
+  const fx = -1.18, fz = 0.62, fh = 1.9;
+  p.cyl(0.03, 0.04, fh, 6, fx, y0, fz, 0xc4cad2);
+  for (const y of [0.35, 0.75, 1.15, 1.55]) p.cyl(0.042, 0.042, 0.08, 6, fx, y0 + y, fz, 0xd84a3e);
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2 + 0.3;
+    pipe(p, [fx + Math.cos(a) * 0.24, y0, fz + Math.sin(a) * 0.24], [fx + Math.cos(a) * 0.035, y0 + 1.15, fz + Math.sin(a) * 0.035], 0.008, steel);
+  }
+  for (const y of [0.4, 0.8]) p.add(new THREE.TorusGeometry(0.24 - (0.205 * y) / 1.15, 0.005, 3, 6).rotateX(Math.PI / 2), fx, y0 + y, fz, steel);
+  p.cyl(0.05, 0.035, 0.06, 8, fx, y0 + fh, fz, 0x3c3c40);
+  p.box(0.02, 0.02, 0.02, fx + 0.04, y0 + 1.0, fz, 0xff4a3a, 0, true);
+  const F = sway([fx, y0 + fh + 0.06, fz], [1, 0, 0], 0.18, 1.3);
+  F.cyl(0.032, 0.032, 0.012, 6, 0, -0.006, 0, 0x3c3c40);
+  F.add(new THREE.IcosahedronGeometry(0.1, 0).scale(1, 0.8, 1), 0, 0.07, 0, 0xff7a2a, 0, true);
+  F.cone(0.11, 0.36, 7, 0, 0.02, 0, 0xff8a3a, true);
+  F.cone(0.08, 0.5, 6, 0.02, 0.04, -0.01, 0xffa040, true);
+  F.cone(0.055, 0.34, 6, -0.01, 0.06, 0.01, 0xffe27a, true);
+  for (const [a, h] of [[0.5, 0.24], [2.6, 0.2], [4.4, 0.27]]) F.add(new THREE.ConeGeometry(0.04, h, 5).translate(0, h / 2, 0), Math.cos(a) * 0.06, 0.08, Math.sin(a) * 0.06, 0xff9a3a, 0, true, -Math.cos(a) * 0.5, Math.sin(a) * 0.5);
+  smoke(fx, y0 + fh + 0.6, fz, 2);
+  // salle de contrôle : bandeau vitré, toit bleu, porte, antenne, enseigne à la goutte de pétrole
+  p.box(0.62, 0.26, 0.34, 0.9, y0, 0.6, 0xeceef0);
+  p.box(0.58, 0.08, 0.012, 0.92, y0 + 0.13, 0.774, C.glass, 0, true);
+  p.box(0.64, 0.03, 0.36, 0.9, y0 + 0.26, 0.6, 0x3a6ab8);
+  p.box(0.08, 0.12, 0.012, 0.68, y0, 0.774, 0x2a2a2e);
+  p.cyl(0.006, 0.006, 0.22, 4, 1.12, y0 + 0.29, 0.52, 0x9aa3ad);
+  p.box(0.26, 0.1, 0.016, 0.95, y0 + 0.29, 0.66, C.white);
+  p.sphere(0.028, 0.86, y0 + 0.34, 0.672, 0x1c1814, 0, 1.3);
+  p.box(0.12, 0.02, 0.004, 0.99, y0 + 0.33, 0.67, 0x3a6ab8);
+  // poste de chargement : auvent jaune sur ses poteaux, bras de chargement, le camion-citerne qui fait le plein
+  const lx = -0.25, lz = 0.62;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.025, 0.3, 0.025, lx + sx * 0.3, y0, lz + sz * 0.2, steel);
+  p.box(0.7, 0.025, 0.48, lx, y0 + 0.3, lz, 0xf2c23a);
+  for (const sx of [-0.15, 0.15]) p.box(0.1, 0.01, 0.03, lx + sx, y0 + 0.29, lz, 0xfff4d8, 0, true);
+  pipeRun(p, [[lx + 0.05, y0 + 0.216, 0.1], [lx + 0.05, y0 + 0.26, 0.5], [lx + 0.05, y0 + 0.2, 0.6]], 0.012, 0x6a6e74);
+  tanker(p, lx, lz, y0);
+  // ouvriers en combinaison et casque, lampadaires
+  for (const [x, z, c, r] of [[-0.62, 0.98, 0xf28a3c, 0.6], [0.2, -0.22, 0xf28a3c, 2.2], [0.42, 0.95, 0x3a5a8a, Math.PI], [-0.05, 0.4, 0xf28a3c, -1.2]] as number[][]) figure(p, x, z, c, r, false, 0xf2c23a);
+  for (const [x, z] of [[-0.7, 1.0], [0.3, 1.0], [1.38, -0.12], [-0.05, -0.2]]) lampPost(p, x, z, 0.34);
+}
+
+
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? KINDS[kind].size - 1 : KINDS[kind].size;
   const imported = importedModel(kind, age, o.v, size);
@@ -7256,6 +7467,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'acropolis': acropolis(p, age); break;
     case 'forum': forum(p, Math.max(1, age)); break;
     case 'senate': senate(p, Math.max(1, age)); break;
+    case 'oilwell': oilwell(p); break;
+    case 'refinery': refinery(p); break;
     case 'arcology': arcology(p, o.v); break;
     case 'vfarm': vfarm(p); break;
     case 'fusion': fusion(p); break;

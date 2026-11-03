@@ -1,7 +1,7 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
   | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
   | 'harbor' | 'airport' | 'heliport' | 'watertower' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'theater' | 'acropolis' | 'forum' | 'senate'
-  | 'carworks' | 'lab' | 'aerodrome' | 'manor'
+  | 'carworks' | 'lab' | 'aerodrome' | 'manor' | 'oilwell' | 'refinery'
   | 'arcology' | 'vfarm' | 'fusion' | 'spaceport' | 'research' | 'maglev';
 
 /** Rayons de la barre de construction */
@@ -73,6 +73,20 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [0, 0, 3, 6, 8, 8],
     perk: 'Débloquée par l’expédition « Le filon de la montagne ». Ne se creuse que dans la montagne. Rapporte chaque jour du minerai (3 au Moyen Âge, 5 à l’âge industriel, 8 à l’époque moderne, 10 ensuite) et de la pierre.',
     reqMission: 'mine',
+  },
+  oilwell: {
+    id: 'oilwell', size: 1, minAge: 4, icon: '🛢️', cat: 'prod',
+    names: ['', '', '', '', 'Puits de pétrole', 'Forage automatisé'],
+    desc: 'Un chevalet de pompage hoche la tête au-dessus d’un gisement et tire le pétrole brut des profondeurs, jour après jour.',
+    jobs: [0, 0, 0, 0, 2, 2],
+    perk: 'Ne se fore que sur un gisement de pétrole (les taches sombres où le brut suinte). Rapporte 4 barils de pétrole brut par jour, que la raffinerie change en carburant.',
+  },
+  refinery: {
+    id: 'refinery', size: 3, minAge: 4, icon: '🏭', cat: 'prod',
+    names: ['', '', '', '', 'Raffinerie', 'Raffinerie de synthèse'],
+    desc: 'Colonnes de distillation, grands réservoirs, torchère qui flambe et forêt de tuyaux : le pétrole brut des puits y devient du carburant.',
+    jobs: [0, 0, 0, 0, 14, 16],
+    perk: 'Grand bâtiment de 3 × 3 cases. Raffine chaque jour jusqu’à 12 barils de pétrole brut, qui donnent 9 de carburant : à l’époque moderne, les chars et les transports de troupes de l’expédition armée en ont besoin.',
   },
   outpost: {
     id: 'outpost', size: 2, minAge: 2, icon: '🚩', cat: 'service',
@@ -384,7 +398,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'outpost', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'outpost', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -431,7 +445,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
   theater: 'théâtres', acropolis: 'acropoles', forum: 'forums et marchés', senate: 'sénats',
   harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions',
-  carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs',
+  carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs', oilwell: 'puits de pétrole', refinery: 'raffineries',
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
 };
 

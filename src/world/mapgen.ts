@@ -1,7 +1,7 @@
-import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
+import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
 import { raiseVolcano } from './terraform';
 import { Simplex } from './noise';
-import { mulberry32, smoothstep, clamp, lerp } from '../core/rng';
+import { mulberry32, smoothstep, clamp, lerp, hash2 } from '../core/rng';
 import { GEN, GEN_FIXED, continentPlan, fixedHeight, plannedHeight } from './continent';
 
 /** Carte jouable : `size` cases de côté */
@@ -46,6 +46,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN) {
   const plan = gen === GEN_FIXED ? null : continentPlan(seed);
   const heights = genHeights(mapId, seed, gen);
   world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), buildings: [], nextId: 1 });
+  world.oil.fill(0);
   world.computeBiomes();
   shapeBiomes(world, seed, plan ? plan.wind : null);
   world.computeBiomes();
@@ -184,4 +185,51 @@ export function addDefaultDecor(world: World, seed: number) {
     if (!free(x, z) || a > 0.1 || a < -0.7) return false;
     return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => world.cellAvg(x + dx, z + dz) > 0.2);
   });
+  addOilFields(world, seed);
+}
+
+/** Gisements de pétrole d'une carte, au plus, dont ceux qu'on tire d'abord au désert et au marais ; écart entre deux nappes */
+const OIL_FIELDS = 7, OIL_DRY = 3, OIL_SPACING = 26;
+
+/**
+ * Gisements de pétrole : quelques nappes de brut qui suintent en surface (taches sombres et flaques luisantes), tirées de la
+ * graine, posés sur toute carte qui n'en a pas (y compris les anciennes sauvegardes). D'abord au désert et au marais, puis
+ * dans les plaines : une dizaine de cases chacune, en tache irrégulière, à l'écart l'une de l'autre, sur la terre ferme,
+ * assez plate pour y forer, hors des grottes, des failles, des lacs et des bâtiments
+ */
+export function addOilFields(world: World, seed: number) {
+  if (world.oil.includes(1)) return;
+  // chaque case a son rang tiré de la graine (pas un tirage à la suite) : un relief à peine différent (celui, arrondi, d'une
+  // sauvegarde) donne les mêmes nappes, ou presque
+  const rank = (k: number) => hash2(k % N, Math.floor(k / N), seed + 4243), blob = new Simplex(seed + 4247);
+  const ok = (x: number, z: number) => {
+    if (x < 2 || z < 2 || x >= N - 2 || z >= N - 2) return false;
+    const k = world.ci(x, z), h = world.cellAvg(x, z);
+    return h > 0.35 && h < MOUNTAIN_H && world.cellSlope(x, z) < 0.6 && !world.decor[k] && !world.lake[k] && !world.occ[k] && !world.road[k]
+      && world.veg[k] !== VEG_VOLCANO && world.waterDist[k] >= 2;
+  };
+  // centres possibles : une case sur trois, dont tout le voisinage proche est praticable
+  const cand: number[] = [];
+  for (let z = 4; z < N - 4; z += 3) for (let x = 4; x < N - 4; x += 3) if ([[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]].every(([dx, dz]) => ok(x + dx, z + dz))) cand.push(z * N + x);
+  cand.sort((a, b) => rank(a) - rank(b));
+  const dry = (k: number) => { const b = world.biome[k]; return b === BIOME_DESERT || b === BIOME_MARSH; };
+  const centers: number[] = [];
+  const take = (max: number, want: (k: number) => boolean) => {
+    for (const k of cand) {
+      if (centers.length >= max) break;
+      if (!want(k) || centers.includes(k) || centers.some((c) => Math.hypot((c % N) - (k % N), Math.floor(c / N) - Math.floor(k / N)) < OIL_SPACING)) continue;
+      centers.push(k);
+    }
+  };
+  take(OIL_DRY, dry);
+  take(OIL_FIELDS, () => true);
+  // chaque nappe : une tache aux bords déchiquetés par le bruit, de deux à trois cases et demie de rayon
+  for (const c of centers) {
+    const cx = c % N, cz = Math.floor(c / N), R = 2.2 + hash2(cx, cz, seed + 4251) * 1.3;
+    for (let z = Math.floor(cz - R); z <= Math.ceil(cz + R); z++)
+      for (let x = Math.floor(cx - R); x <= Math.ceil(cx + R); x++) {
+        const d = Math.hypot(x - cx, z - cz) / R;
+        if (d <= 1 && (d < 0.45 || 1 - d + blob.fbm(x * 0.45, z * 0.45, 2) * 0.6 > 0.25) && ok(x, z)) world.oil[world.ci(x, z)] = 1;
+      }
+  }
 }
