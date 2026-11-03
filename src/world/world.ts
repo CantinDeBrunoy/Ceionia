@@ -185,6 +185,11 @@ export class World {
   exp: ExpState = newExpState();
   /** difficulté de la partie (sauvegardée) */
   difficulty: Difficulty = 'normal';
+  /**
+   * bâtiments du village, par genre, quand il est entré dans son âge (sauvegardés) : en défi, seuls ceux bâtis depuis comptent
+   * pour l'âge d'après
+   */
+  ageBase: Partial<Record<KindId, number>> = {};
   /** ressources illimitées (réglage) : bois, pierre et minerai ne manquent jamais */
   unlimitedSetting = false;
   /** ressources illimitées : toujours au bac à sable, jamais en défi, selon le réglage en partie normale */
@@ -1147,6 +1152,7 @@ export class World {
       claimed: [...this.claimed],
       exp: this.exp,
       difficulty: this.difficulty,
+      ageBase: this.ageBase,
       // arrêts des lignes : par rang dans la liste des bâtiments (les numéros changent au chargement) ; points de passage des
       // tronçons : par case
       lines: this.lines.map((l) => {
@@ -1248,6 +1254,9 @@ export class World {
     this.claimed = new Set((d.claimed ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.exp = readExpState(d.exp);
     this.difficulty = readDifficulty(d.difficulty);
+    // une ancienne sauvegarde n'en a pas : tout le village compte pour l'âge suivant
+    this.ageBase = {};
+    for (const [k, n] of Object.entries(d.ageBase ?? {})) { const v = Math.floor(+(n as number)); if (KINDS[k as KindId] && Number.isFinite(v) && v > 0) this.ageBase[k as KindId] = v; }
     this.lines = [];
     for (const l of Array.isArray(d.lines) ? d.lines : []) {
       const all: number[] = (Array.isArray(l?.s) ? l.s : []).map((i: number) => ids[i] ?? -1);

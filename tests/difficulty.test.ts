@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { World, setMapSize } from '../src/world/world';
-import { Sim } from '../src/sim/sim';
-import { KINDS, KindId, Building } from '../src/build/catalog';
+import { Sim, reqKindsOf } from '../src/sim/sim';
+import { AGES, KINDS, KindId, Building } from '../src/build/catalog';
 import { costOf, priceIn, canPay, pay, shortLabel, PRODUCERS } from '../src/sim/economy';
 import { DIFFICULTY, DIFFICULTIES, Difficulty, readDifficulty } from '../src/sim/difficulty';
 import { Expeditions } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
-import { MISSIONS } from '../src/sim/missions';
+import { MISSIONS, mandatoryFor } from '../src/sim/missions';
+import { GEAR, GEAR_BY, gearCost, gearCostLabel } from '../src/sim/gear';
 
 const ALL = Object.keys(KINDS) as KindId[];
 const total = (c: { wood: number; stone: number } | null) => (c ? c.wood + c.stone : 0);
@@ -210,5 +211,143 @@ describe('expéditions et sauvegarde selon la difficulté', () => {
     r.fromJSON(old);
     expect(r.difficulty).toBe('normal');
     expect(readDifficulty('nimporte')).toBe('normal');
+  });
+});
+
+describe('passage d’âge en défi', () => {
+  beforeAll(() => setMapSize(96));
+
+  const many = (kind: KindId, n: number, age = 0) => Array.from({ length: n }, () => [kind, age] as [KindId, number]);
+  /** Un village préhistorique qui a tout pour l'Antiquité, et bien plus : douze huttes, trois ateliers, deux feux de camp… */
+  function stocked(d: Difficulty) {
+    const w = flatWorld(d);
+    put(w, [...many('house', 12), ['farm', 0], ['well', 0], ...many('workshop', 3), ...many('gather', 2), ['health', 0], ['school', 0]]);
+    w.exp.done.push(mandatoryFor(0)!.id);
+    const sim = new Sim(w);
+    sim.recalc();
+    sim.pop = AGES[1].reqPop;
+    return { w, sim };
+  }
+  const kinds = (sim: Sim) => sim.ageProgress()!.items.filter((i) => i.kind);
+
+  it('en défi, entrer dans un âge n’offre aucun progrès vers le suivant : les bâtiments d’avant ne comptent pas', () => {
+    const { sim } = stocked('challenge');
+    expect(sim.advance()).toBe(true);
+    expect(sim.age).toBe(1);
+    const items = kinds(sim);
+    expect(items.length).toBeGreaterThan(0);
+    for (const i of items) expect(i.have, i.label).toBe(0);
+    // le libellé le dit : ce sont des bâtiments à bâtir en plus
+    expect(items.find((i) => i.kind === 'house')!.label).toBe('Maison antique (en plus)');
+    // en partie normale, comme avant : tout le village compte, des conditions sont cochées d'office
+    const n = stocked('normal');
+    expect(n.sim.advance()).toBe(true);
+    expect(kinds(n.sim).find((i) => i.kind === 'house')).toMatchObject({ label: 'Maison antique', have: 12, need: AGES[2].reqKinds.house });
+    expect(kinds(n.sim).filter((i) => i.have >= i.need).length).toBeGreaterThan(0);
+  });
+
+  it('en défi, ce qu’on bâtit dans l’âge compte ; déplacer un ancien bâtiment ne compte pas', () => {
+    const { w, sim } = stocked('challenge');
+    sim.advance();
+    const house = () => kinds(sim).find((i) => i.kind === 'house')!;
+    // l'Antiquité demandait 4 maisons, le Moyen Âge 8 : 4 de plus
+    expect(house().need).toBe(4);
+    // un ancien bâtiment déplacé (retiré puis reposé) reste un ancien bâtiment
+    const old = [...w.buildings.values()].find((b) => b.kind === 'house')!;
+    w.buildings.delete(old.id);
+    w.buildings.set(w.nextId, { ...old, id: w.nextId++, x: 70, age: 1 });
+    sim.recalc();
+    expect(house().have).toBe(0);
+    put(w, many('house', 3, 1));
+    sim.recalc();
+    expect(house().have).toBe(3);
+    put(w, many('house', 1, 1));
+    sim.recalc();
+    expect(house()).toMatchObject({ have: 4, need: 4 });
+    // démolir une maison : il en manque de nouveau une
+    const last = [...w.buildings.values()].filter((b) => b.kind === 'house').pop()!;
+    w.buildings.delete(last.id);
+    sim.recalc();
+    expect(house().have).toBe(3);
+  });
+
+  it('en défi, chaque âge ne demande que ce qu’il exige de plus que les âges d’avant ; au plus juste, on bâtit autant qu’en partie normale', () => {
+    for (let n = 1; n < AGES.length; n++) expect(reqKindsOf(n, 'normal')).toEqual(AGES[n].reqKinds);
+    expect(reqKindsOf(1, 'challenge')).toEqual(AGES[1].reqKinds);
+    // l'église et le château, déjà exigés à l'âge d'avant, ne sont plus des conditions cochées d'office
+    expect(reqKindsOf(3, 'challenge').temple).toBeUndefined();
+    expect(reqKindsOf(4, 'challenge').landmark).toBeUndefined();
+    expect(reqKindsOf(3, 'challenge').house).toBe(AGES[3].reqKinds.house! - AGES[2].reqKinds.house!);
+    for (const k of Object.keys(KINDS) as KindId[]) {
+      let sum = 0, most = 0;
+      for (let n = 1; n < AGES.length; n++) {
+        const c = reqKindsOf(n, 'challenge')[k] ?? 0;
+        expect(c).toBeGreaterThanOrEqual(0);
+        sum += c;
+        most = Math.max(most, AGES[n].reqKinds[k] ?? 0);
+      }
+      expect(sum, k).toBe(most);
+    }
+  });
+
+  it('les bâtiments retenus au passage d’âge se sauvegardent ; une ancienne sauvegarde n’en a pas', () => {
+    const { w, sim } = stocked('challenge');
+    sim.advance();
+    expect(w.ageBase).toMatchObject({ house: 12, workshop: 3, gather: 2 });
+    const r = new World();
+    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(r.ageBase).toEqual(w.ageBase);
+    const { ageBase, ...old } = w.toJSON();
+    void ageBase;
+    r.fromJSON(old);
+    expect(r.ageBase).toEqual({});
+  });
+});
+
+describe('équipement des expéditions selon la difficulté', () => {
+  beforeAll(() => setMapSize(96));
+  const expOf = (w: World) => new Expeditions(w, new Agents(w), () => 100);
+
+  it('en défi, aucune pièce n’est gratuite ; ailleurs, seul le métal se paie, en minerai, comme avant', () => {
+    for (const g of GEAR) {
+      const c = gearCost(g, 'challenge');
+      expect(c.wood + c.stone + c.ore, g.id).toBeGreaterThan(0);
+      expect(c.ore).toBe(g.ore);
+      for (const d of ['normal', 'sandbox'] as Difficulty[]) expect(gearCost(g, d)).toEqual({ wood: 0, stone: 0, ore: g.ore });
+    }
+    // le bois du manche et la pierre de la pointe pour la lance ; le minerai seul pour l'épée
+    expect(gearCost(GEAR_BY.spear, 'challenge')).toEqual({ wood: 2, stone: 1, ore: 0 });
+    expect(gearCost(GEAR_BY.sword, 'challenge')).toEqual({ wood: 0, stone: 0, ore: 1 });
+    expect(gearCostLabel(gearCost(GEAR_BY.spear, 'challenge'))).toBe('2 bois et 1 pierre');
+    expect(gearCostLabel(gearCost(GEAR_BY.sword, 'normal'))).toBe('1 minerai');
+    expect(gearCostLabel(gearCost(GEAR_BY.bow, 'normal'))).toBe('');
+  });
+
+  it('en défi, fabriquer prend le prix, annuler le rend ; sans de quoi payer, on dit ce qui manque', () => {
+    const w = flatWorld('challenge'), ex = expOf(w);
+    w.wood = 10; w.stone = 5;
+    expect(ex.craft('spear', 0)).toBe(true);
+    expect([w.wood, w.stone]).toEqual([8, 4]);
+    ex.cancelCraft(0);
+    expect([w.wood, w.stone]).toEqual([10, 5]);
+    w.wood = 1;
+    expect(ex.whyCraft(GEAR_BY.spear, 0)).toBe('Il faut 2 bois et 1 pierre');
+    expect(ex.craft('spear', 0)).toBe(false);
+    expect(w.exp.craft).toEqual([]);
+    expect([w.wood, w.stone]).toEqual([1, 5]);
+  });
+
+  it('en partie normale, les pièces sans métal restent gratuites et le métal se paie en minerai', () => {
+    const w = flatWorld('normal'), ex = expOf(w);
+    put(w, [['workshop', 2]]);
+    w.wood = 10; w.stone = 5; w.ore = 0;
+    expect(ex.craft('spear', 0)).toBe(true);
+    expect([w.wood, w.stone]).toEqual([10, 5]);
+    expect(ex.whyCraft(GEAR_BY.sword, 2)).toBe('Il faut 1 minerai');
+    w.ore = 3;
+    expect(ex.craft('sword', 2)).toBe(true);
+    expect(w.ore).toBe(2);
+    ex.cancelCraft(1);
+    expect(w.ore).toBe(3);
   });
 });

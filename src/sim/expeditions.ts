@@ -3,7 +3,7 @@ import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { AGES, KINDS, Building, sizeOf } from '../build/catalog';
-import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
+import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
@@ -565,27 +565,27 @@ export class Expeditions {
   whyCraft(g: Gear, age: number): string | null {
     if (age < g.age) return `Connu à l’âge ${AGES[g.age].name}`;
     if (g.needs && !this.has(g.needs)) return `Il faut : ${KINDS[g.needs].names[Math.min(age, AGES.length - 1)].toLowerCase()}`;
-    if (!this.world.unlimited && this.world.ore < g.ore) return `Il faut ${g.ore} minerai`;
+    const lack = gearShort(this.world, g); if (lack) return lack;
     if (this.world.exp.craft.length >= MAX_CRAFT) return 'L’atelier a déjà assez de travail';
     return null;
   }
 
-  /** Met une pièce en fabrication (le minerai est pris tout de suite) */
+  /** Met une pièce en fabrication (son prix est pris tout de suite) */
   craft(id: GearId, age: number) {
     const g = GEAR_BY[id];
     if (this.whyCraft(g, age)) return false;
-    if (!this.world.unlimited) this.world.ore -= g.ore;
+    payGear(this.world, g);
     this.world.exp.craft.push(id);
     return true;
   }
 
-  /** Annule une pièce de la file (le minerai est rendu) */
+  /** Annule une pièce de la file (son prix est rendu) */
   cancelCraft(i: number) {
     const s = this.world.exp, id = s.craft[i];
     if (!id) return;
     s.craft.splice(i, 1);
     if (i === 0) s.craftT = 0;
-    this.world.ore += GEAR_BY[id].ore;
+    payGear(this.world, GEAR_BY[id], true);
   }
 
   /** Avancement de la pièce en cours (0 … 1) */
