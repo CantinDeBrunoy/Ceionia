@@ -4,11 +4,25 @@ import { Building, KINDS, sizeOf } from '../build/catalog';
 import { getModel, ModelOpts } from './models';
 import { mats, crowdMat, CROWD } from './materials';
 import { hash2 } from '../core/rng';
+import { Simplex } from '../world/noise';
 import { facingRoadRot } from '../build/placement';
 import { wind } from './wind';
 
 const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 const RIGHT = [[1, 0], [0, -1], [-1, 0], [0, 1]];
+/** Maisons accolées par bloc, au plus */
+const BLOCK = 3;
+
+/**
+ * Ligne d'horizon de l'âge futuriste : rang d'une tour (0 immeuble bas … 3 gratte-ciel), tiré de sa place. Un bruit lent fait
+ * des quartiers de grandes tours (le centre d'affaires) et d'autres plus bas ; un tirage propre à chaque case y mêle des
+ * hauteurs voisines différentes, si bien que la ville a une vraie silhouette et plus une rangée de clones
+ */
+const skyline = new Simplex(4171);
+export function skylineTier(x: number, z: number) {
+  const s = 0.5 + skyline.noise2(x * 0.07, z * 0.07) * 0.4 + (hash2(x, z, 41) - 0.5) * 0.75;
+  return s < 0.36 ? 0 : s < 0.62 ? 1 : s < 0.86 ? 2 : 3;
+}
 
 interface Entry {
   b: Building;
@@ -199,12 +213,20 @@ export class BuildingView implements WorldListener {
 
   private opts(b: Building): ModelOpts {
     const o: ModelOpts = { v: Math.floor(hash2(b.x, b.z, 7) * 6), L: false, R: false, F: false, small: !!b.small };
+    if (b.kind === 'house' || b.kind === 'workshop') o.tier = skylineTier(b.x, b.z);
     if (b.kind !== 'house') return o;
     const w = this.world;
     const f = FRONT[b.rot], r = RIGHT[b.rot];
     const isHouse = (x: number, z: number) => { const n = w.buildingAt(x, z); return !!n && n.kind === 'house' && n.rot === b.rot; };
-    o.R = isHouse(b.x + r[0], b.z + r[1]);
-    o.L = isHouse(b.x - r[0], b.z - r[1]);
+    // les maisons accolées forment des blocs de trois au plus, séparés par une ruelle : une longue rangée ne devient plus une
+    // caserne. Les blocs sont calés sur une grille propre à chaque rangée (une maison ajoutée au bout ne redécoupe pas toute la
+    // rue), et chacun a sa couleur de toit, la même d'une maison à l'autre
+    const line = b.x * f[0] + b.z * f[1], pos = b.x * r[0] + b.z * r[1] + Math.floor(hash2(line, b.rot, 23) * BLOCK);
+    const at = ((pos % BLOCK) + BLOCK) % BLOCK, blk = Math.floor(pos / BLOCK);
+    o.R = at < BLOCK - 1 && isHouse(b.x + r[0], b.z + r[1]);
+    o.L = at > 0 && isHouse(b.x - r[0], b.z - r[1]);
+    // d'un bloc au suivant, la couleur change toujours (d'un ou de trois crans sur quatre)
+    o.row = (((Math.floor(hash2(line, b.rot, 29) * 4) + blk + 2 * Math.floor(hash2(blk, line, 31) * 2)) % 4) + 4) % 4;
     const fx = b.x + f[0], fz = b.z + f[1];
     o.F = w.inCells(fx, fz) && w.road[w.ci(fx, fz)] === 1;
     return o;
@@ -222,7 +244,7 @@ export class BuildingView implements WorldListener {
     this.autoRot(b);
     const o = this.opts(b);
     const m = getModel(b.kind, b.age, o);
-    const key = `${b.kind}|${b.age}|${o.v}|${+o.L}${+o.R}${+o.F}`;
+    const key = `${b.kind}|${b.age}|${o.v}|${+o.L}${+o.R}${+o.F}|${o.row ?? ''}|${o.tier ?? ''}`;
     if (key !== e.key) {
       e.key = key;
       this.undrape(e);

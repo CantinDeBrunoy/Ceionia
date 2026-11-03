@@ -121,7 +121,15 @@ export const C = {
 const WALLS = [C.cream, C.pink, C.mint, C.sky, C.butter, C.lav];
 const ROOFS = [C.terracotta, C.teal, C.red, C.slate, C.brown, C.thatch];
 
-export interface ModelOpts { v: number; L: boolean; R: boolean; F: boolean; /** resté en 1 × 1 (ancienne partie) */ small?: boolean }
+export interface ModelOpts {
+  v: number; L: boolean; R: boolean; F: boolean;
+  /** resté en 1 × 1 (ancienne partie) */
+  small?: boolean;
+  /** maisons : variante du bloc de maisons accolées, commune à tout le bloc (la couleur de son toit) */
+  row?: number;
+  /** tours de l'âge futuriste : rang dans la ligne d'horizon, de 0 (immeuble bas) à 3 (gratte-ciel) */
+  tier?: number;
+}
 
 /** Bâtiments passés en 2 × 2 dont le modèle procédural est dessiné pour une case : on l'agrandit d'autant */
 const UPSCALE: KindId[] = ['temple', 'workshop', 'mill'];
@@ -1023,7 +1031,8 @@ function industrialHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: num
 
 function medievalHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number, d: number, zc: number, rw: number, rcx: number) {
   const w = x1 - x0, stone = [0xd3cbbd, 0xc6beb0][o.v % 2], wall = [0xf4ead8, 0xf1e4cc, 0xf6efe2][o.v % 3];
-  const rc = [0x5f9a94, 0x6f86c4, 0x5f8f7a, 0xb06a52][o.v % 4], beam = C.darkwood, shutter = SHUTTERS[o.v % 4];
+  // un bloc de maisons accolées garde un seul toit, d'une seule couleur (pas de bandes bleu, vert, rouge d'une maison à l'autre)
+  const rc = [0x5f9a94, 0x6f86c4, 0x5f8f7a, 0xb06a52][(o.row ?? o.v) % 4], beam = C.darkwood, shutter = SHUTTERS[o.v % 4];
   const g0 = 0.25, h = 0.54, jet = 0.03, zf0 = zc + d / 2 + 0.006, zf1 = zc + d / 2 + jet + 0.006, zb1 = zc - d / 2 - jet - 0.006;
   // socle, rez-de-chaussée de pierre et pierres d'angle
   p.box(w + 0.03, 0.04, d + 0.03, cx, 0, zc, C.darkstone);
@@ -6929,27 +6938,48 @@ function towerPodium(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number,
 }
 
 /**
+ * Flèche d'un gratte-ciel : socle blanc, mât effilé cerclé d'anneaux lumineux de plus en plus petits, feu rouge à la pointe.
+ * Les plus hautes tours se reconnaissent de loin, la nuit aussi
+ */
+function spire(p: Parts, x: number, y: number, z: number, h: number, accent: number) {
+  p.cyl(0.07, 0.09, 0.06, 8, x, y, z, F.white);
+  p.cyl(0.008, 0.04, h, 8, x, y + 0.06, z, F.pearl);
+  for (let k = 0; k < 3; k++) neonRing(p, 0.06 - k * 0.014, y + 0.14 + k * h * 0.22, x, z, accent, 0.005);
+  p.sphere(0.016, x, y + h + 0.07, z, 0xff4a3a);
+}
+
+/**
  * Tour d'habitation futuriste, trois allures : tour ronde aux balcons blancs en anneaux, plantés un étage sur trois, et son
  * jardin sur le toit ; tour en quinconce aux étages qui tournent l'un sur l'autre, terrasses plantées et aire des drones ;
- * tour à ailerons courbes et jardin suspendu à mi-hauteur. Toutes sur un socle de boutiques
+ * tour à ailerons courbes et jardin suspendu à mi-hauteur. Toutes sur un socle de boutiques ; les gratte-ciel portent une flèche
  */
 function futureHouse(p: Parts, o: ModelOpts) {
   const x0 = -0.36 - (o.L ? 0.14 : 0), x1 = 0.36 + (o.R ? 0.14 : 0);
   const w = x1 - x0, cx = (x0 + x1) / 2, d = 0.5, zc = -0.04;
-  const kind = o.v % 3, H = 1.75 + ((o.v >> 2) % 3) * 0.35, accent = NEONS[(o.v >> 1) % 4], y0 = 0.23;
+  // la hauteur suit le rang de la tour dans la ligne d'horizon (immeuble bas, tour, grande tour, gratte-ciel), nuancée d'une
+  // maison à l'autre : plus de rangées de clones à la même hauteur
+  const tier = o.tier ?? 1, H = [1.3, 1.85, 2.55, 3.4][tier] + ((o.v >> 1) % 3) * 0.1;
+  const kind = o.v % 3, accent = NEONS[(o.v >> 1) % 4], y0 = 0.23;
   towerPodium(p, o, x0, x1, cx, d, zc, accent);
   if (kind === 0) {
-    const r = 0.21;
-    p.cyl(r, r, H - y0, 12, cx, y0, zc, F.glass);
+    // les gratte-ciel s'affinent en gradins vers le haut
+    const r0 = 0.21, step = tier === 3 ? y0 + (H - y0) * 0.62 : Infinity, rAt = (y: number) => (y > step ? r0 * 0.78 : r0);
+    p.cyl(r0, r0, Math.min(H, step) - y0, 12, cx, y0, zc, F.glass);
+    if (step < H) { p.cyl(r0 + 0.04, r0 + 0.04, 0.03, 12, cx, step, zc, F.white); p.cyl(r0 * 0.78, r0 * 0.78, H - step, 12, cx, step, zc, F.glass); }
     for (let y = y0 + 0.14, i = 0; y < H - 0.05; y += 0.15, i++) {
+      const r = rAt(y);
       p.cyl(r + 0.055, r + 0.055, 0.02, 12, cx, y, zc, F.white);
       if ((i + o.v) % 3 === 0) for (let k = 0; k < 3; k++) { const a = k * 2.1 + i; p.sphere(0.026, cx + Math.cos(a) * (r + 0.035), y + 0.035, zc + Math.sin(a) * (r + 0.035), F.leaf, 0, 0.8); }
       for (let k = 0; k < 8; k++) if ((k * 3 + i * 5 + o.v) % 7 < 2) { const a = k * 0.785 + 0.4; p.box(0.05, 0.07, 0.006, cx + Math.cos(a) * (r + 0.002), y - 0.1, zc + Math.sin(a) * (r + 0.002), F.warm, Math.PI / 2 - a, true); }
     }
+    const r = rAt(H);
     p.cyl(r + 0.05, r + 0.04, 0.05, 12, cx, H, zc, F.white);
     neonRing(p, r + 0.05, H + 0.025, cx, zc, accent);
-    skyGarden(p, cx, H + 0.05, zc, r, o.v);
-    p.cyl(0.006, 0.012, 0.32, 5, cx + r * 0.55, H + 0.05, zc - 0.06, F.steel); p.sphere(0.012, cx + r * 0.55, H + 0.38, zc - 0.06, 0xff4a3a);
+    if (tier === 3) spire(p, cx, H + 0.05, zc, 0.8, accent);
+    else {
+      skyGarden(p, cx, H + 0.05, zc, r, o.v);
+      p.cyl(0.006, 0.012, 0.32, 5, cx + r * 0.55, H + 0.05, zc - 0.06, F.steel); p.sphere(0.012, cx + r * 0.55, H + 0.38, zc - 0.06, 0xff4a3a);
+    }
   } else if (kind === 1) {
     const fw = Math.min(0.5, w * 0.72), fd = 0.38, n = Math.max(6, Math.round((H - y0) / 0.15));
     let top = y0;
@@ -6963,8 +6993,11 @@ function futureHouse(p: Parts, o: ModelOpts) {
     }
     p.cyl(0.15, 0.15, 0.02, 12, cx, top, zc, F.dark);
     neonRing(p, 0.13, top + 0.024, cx, zc, accent, 0.005);
-    p.box(0.012, 0.004, 0.08, cx - 0.03, top + 0.021, zc, F.white); p.box(0.012, 0.004, 0.08, cx + 0.03, top + 0.021, zc, F.white); p.box(0.06, 0.004, 0.012, cx, top + 0.021, zc, F.white);
-    drone(p, cx + 0.07, top + 0.035, zc + 0.06, 0.5);
+    if (tier === 3) spire(p, cx, top + 0.02, zc, 0.75, accent);
+    else {
+      p.box(0.012, 0.004, 0.08, cx - 0.03, top + 0.021, zc, F.white); p.box(0.012, 0.004, 0.08, cx + 0.03, top + 0.021, zc, F.white); p.box(0.06, 0.004, 0.012, cx, top + 0.021, zc, F.white);
+      drone(p, cx + 0.07, top + 0.035, zc + 0.06, 0.5);
+    }
   } else {
     const tw = Math.min(0.44, w * 0.6), td = 0.34, mid = y0 + (H - y0) * 0.55;
     p.box(tw, mid - 0.1 - y0, td, cx, y0, zc, F.glass);
@@ -6978,7 +7011,8 @@ function futureHouse(p: Parts, o: ModelOpts) {
     // ailerons courbes de part et d'autre, toit blanc, panneaux solaires
     for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, H - y0, 8, 1, false, s > 0 ? 0 : Math.PI, Math.PI).translate(0, (H - y0) / 2, 0), cx + s * tw / 2, y0, zc, F.white);
     p.box(tw + 0.03, 0.035, td + 0.03, cx, H, zc, F.white);
-    for (let k = 0; k < 2; k++) p.add(new THREE.BoxGeometry(tw * 0.38, 0.008, 0.14), cx - tw * 0.2 + k * tw * 0.4, H + 0.06, zc, 0x2a3a6a, 0, false, 0, -0.3);
+    if (tier === 3) spire(p, cx, H + 0.035, zc, 0.7, accent);
+    else for (let k = 0; k < 2; k++) p.add(new THREE.BoxGeometry(tw * 0.38, 0.008, 0.14), cx - tw * 0.2 + k * tw * 0.4, H + 0.06, zc, 0x2a3a6a, 0, false, 0, -0.3);
     p.box(tw + 0.034, 0.006, 0.006, cx, H + 0.015, zc + td / 2 + 0.015, accent, 0, 'neon');
   }
 }
@@ -6988,8 +7022,9 @@ function futureHouse(p: Parts, o: ModelOpts) {
  * l'autre et la tour s'affine en vrillant, nez de dalle blancs ; hall vitré sous son auvent courbe, parvis planté ; au
  * sommet l'anneau lumineux, la flèche et son feu, l'enseigne holographique qui tourne, un drone qui fait sa ronde
  */
-function futureOffice(p: Parts, v: number) {
-  const n = 15 + (v % 3) * 2, glass = [0x5a8aa8, 0x4a8a9a, 0x6a88a8][v % 3], accent = [F.neon, F.pink, F.mint][v % 3];
+function futureOffice(p: Parts, v: number, tier = 1) {
+  // le nombre d'étages suit le rang de la tour dans la ligne d'horizon
+  const n = [10, 14, 18, 22][tier] + (v % 3), glass = [0x5a8aa8, 0x4a8a9a, 0x6a88a8][v % 3], accent = [F.neon, F.pink, F.mint][v % 3];
   p.box(0.94, 0.012, 0.86, 0, 0, 0.04, 0xd8dde2);
   p.box(0.6, 0.13, 0.5, 0, 0.012, -0.02, F.smoke); p.box(0.58, 0.11, 0.504, 0, 0.022, -0.02, F.glass2, 0, true);
   p.add(new THREE.CylinderGeometry(0.2, 0.2, 0.014, 14, 1, false, -Math.PI / 2, Math.PI), 0, 0.15, 0.23, F.white);
@@ -7538,7 +7573,7 @@ function futureExtras(p: Parts, kind: KindId, size: number) {
 function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolean {
   switch (kind) {
     case 'house': futureHouse(p, o); return true;
-    case 'workshop': futureOffice(p, o.v); return true;
+    case 'workshop': futureOffice(p, o.v, o.tier); return true;
     case 'farm': futureFarm(p); return true;
     case 'well': futureWell(p); return true;
     case 'lamp': futureLamp(p); return true;
@@ -7771,7 +7806,9 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? KINDS[kind].size - 1 : KINDS[kind].size;
   const imported = importedModel(kind, age, o.v, size);
   if (imported) return imported;
-  const key = kind === 'house' ? `${kind}|${age}|${o.v}|${+o.L}${+o.R}${+o.F}` : `${kind}|${age}|${o.v % 3}|${size}`;
+  // (le bloc ne compte qu'au Moyen Âge, pour la couleur des toits ; le rang dans la ligne d'horizon, à l'âge futuriste)
+  const key = kind === 'house' ? `${kind}|${age}|${o.v}|${+o.L}${+o.R}${+o.F}|${age === 2 ? o.row ?? '' : ''}|${age >= 5 ? o.tier ?? '' : ''}`
+    : `${kind}|${age}|${o.v % 3}|${size}${age >= 5 && kind === 'workshop' ? `|${o.tier ?? ''}` : ''}`;
   let m = cache.get(key);
   if (m) return m;
   const p = new Parts();
