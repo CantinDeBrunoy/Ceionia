@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, SEA } from '../world/world';
-import { Building } from '../build/catalog';
+import { Building, sizeOf } from '../build/catalog';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { Puffs } from './particles';
@@ -94,16 +94,16 @@ export class Transports {
   // ---------- Navires ----------
 
   private stepShip(b: Building, g: THREE.Group, dt: number) {
-    const age = Math.min(b.age, 4), key = `${b.x}|${b.z}|${b.rot}|${age}|${this.world.visVersion}`;
+    const age = Math.min(b.age, 4), big = sizeOf(b) === 3, key = `${b.x}|${b.z}|${b.rot}|${age}|${+big}|${this.world.visVersion}`;
     let s = this.ships.get(b.id);
     if (s && s.key !== key) { this.group.remove(s.root); s = undefined; }
-    if (!s) { s = this.makeShip(g, age, key, b.id); this.ships.set(b.id, s); }
+    if (!s) { s = this.makeShip(g, age, key, b.id, big); this.ships.set(b.id, s); }
     s.t -= dt;
     const L = s.path.length - 1;
     if (s.state === 'docked') {
       if (s.t <= 0 && L > 2) { s.state = 'out'; s.s = 0; }
     } else if (s.state === 'out' || s.state === 'in') {
-      s.s += dt * (age >= 4 ? 0.7 : 0.45) * (s.state === 'out' ? 1 : -1);
+      s.s += dt * (age >= 4 ? 0.7 : 0.45) * (big ? 1.3 : 1) * (s.state === 'out' ? 1 : -1);
       if (s.state === 'out' && s.s >= L) { s.state = 'away'; s.t = 18 + Math.random() * 25; s.root.visible = false; }
       if (s.state === 'in' && s.s <= 0) { s.state = 'docked'; s.s = 0; s.t = 30 + Math.random() * 30; }
     } else if (s.t <= 0) { s.state = 'in'; s.s = L; s.root.visible = true; }
@@ -126,17 +126,18 @@ export class Transports {
     }
   }
 
-  private makeShip(g: THREE.Group, age: number, key: string, id: number): Ship {
+  private makeShip(g: THREE.Group, age: number, key: string, id: number, big = false): Ship {
     let geo = this.shipGeos.get(age);
     if (!geo) { const p = new Parts(); const f = freighter(p, age); geo = { geo: p.build(false).body, funnel: f }; this.shipGeos.set(age, geo); }
     const root = new THREE.Group(), mesh = new THREE.Mesh(geo.geo, mats.body);
     mesh.castShadow = true;
     root.add(mesh);
-    root.scale.setScalar(age >= 4 ? 1.15 : 1);
+    // au grand port, un navire deux fois plus grand, à quai le long du mur, entre le bord et la jetée
+    root.scale.setScalar(big ? 2 : age >= 4 ? 1.15 : 1);
     this.group.add(root);
     // le poste d'amarrage le long du quai, puis tout droit vers le large tant que l'eau est profonde (dix cases au plus)
     g.updateMatrixWorld();
-    const berth = new THREE.Vector3(0, 0, age >= 4 ? 1.42 : 1.38).applyMatrix4(g.matrixWorld);
+    const berth = (big ? new THREE.Vector3(-0.15, 0, age >= 4 ? 1.95 : age === 3 ? 1.84 : 1.76) : new THREE.Vector3(0, 0, age >= 4 ? 1.42 : 1.38)).applyMatrix4(g.matrixWorld);
     const fx = Math.sin(g.rotation.y), fz = Math.cos(g.rotation.y), path = [berth.clone()];
     for (let k = 1; k <= 20; k++) {
       const x = berth.x + fx * k * 0.5, z = berth.z + fz * k * 0.5;

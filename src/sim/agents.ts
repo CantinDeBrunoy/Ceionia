@@ -28,7 +28,51 @@ const PROPS = {
   torch: () => propGeo('torch', (p) => { p.box(0.009, 0.1, 0.009, 0, -0.03, 0, 0x6a4a34); p.cyl(0.013, 0.01, 0.02, 6, 0, 0.065, 0, 0x4a3a2e); }),
   shield: () => propGeo('shield', (p) => { p.add(new THREE.CylinderGeometry(0.055, 0.055, 0.01, 10).rotateZ(Math.PI / 2), 0, 0.02, 0, 0x4a6aa8); p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.014, 8).rotateZ(Math.PI / 2), 0, 0.02, 0, 0xe8c66a); }),
   rope: () => propGeo('rope', (p) => { for (const r of [0.034, 0.028]) p.add(new THREE.TorusGeometry(r, 0.006, 4, 12), 0, 0, 0, 0xc9b48a); }),
+  // outils des métiers
+  hoe: () => propGeo('hoe', (p) => { p.cyl(0.005, 0.006, 0.3, 5, 0, -0.1, 0, 0x8a6a4a); p.box(0.05, 0.012, 0.03, 0.015, 0.19, 0, 0x8a8f96); }),
+  axe: () => propGeo('axe', (p) => { p.cyl(0.005, 0.006, 0.2, 5, 0, -0.06, 0, 0x8a6a4a); p.box(0.012, 0.045, 0.04, 0, 0.11, 0.02, 0xb8bec6); }),
+  pick: () => propGeo('pick', (p) => { p.cyl(0.005, 0.006, 0.2, 5, 0, -0.06, 0, 0x8a6a4a); p.add(new THREE.BoxGeometry(0.012, 0.012, 0.12).rotateX(0.3), 0, 0.13, 0, 0x8a8f96); }),
+  hammer: () => propGeo('hammer', (p) => { p.cyl(0.005, 0.006, 0.12, 5, 0, -0.03, 0, 0x8a6a4a); p.box(0.025, 0.025, 0.05, 0, 0.09, 0, 0x5d6168); }),
+  rod: () => propGeo('rod', (p) => { p.add(new THREE.CylinderGeometry(0.002, 0.005, 0.42, 4).translate(0, 0.15, 0).rotateX(0.5), 0, 0, 0, 0x8a6a4a); }),
+  bucket: () => propGeo('bucket', (p) => { p.cyl(0.03, 0.022, 0.045, 8, 0, -0.07, 0, 0x9a6a44); p.cyl(0.026, 0.026, 0.004, 8, 0, -0.026, 0, 0x6cc4e0); }),
+  book: () => propGeo('book', (p) => { p.box(0.04, 0.05, 0.012, 0, -0.02, 0, 0x8a3a2a); p.box(0.036, 0.046, 0.013, 0.002, -0.018, 0, 0xf2ead8); }),
+  crook: () => propGeo('crook', (p) => { p.cyl(0.005, 0.006, 0.36, 5, 0, -0.12, 0, 0x8a6a4a); p.add(new THREE.TorusGeometry(0.025, 0.005, 4, 8, Math.PI), 0.025, 0.24, 0, 0x8a6a4a); }),
+  basket: () => propGeo('basket', (p) => { p.cyl(0.035, 0.028, 0.04, 8, 0, -0.07, 0, 0xc8a070); for (let i = 0; i < 3; i++) p.sphere(0.012, -0.012 + i * 0.012, -0.025, 0, [0xd84a3e, 0x8ab84a, 0xf2a03a][i]); }),
 };
+
+/**
+ * Les métiers : chaque habitant en âge de travailler est attaché à un lieu de travail ; aux heures de travail il y va, outil
+ * en main, et l'on voit ce qu'il y fait (le paysan bêche son champ, le bûcheron abat à la lisière, le forgeron frappe devant
+ * l'atelier, le prêtre attend sur le parvis, le garde fait sa ronde, le pompier prend son seau…)
+ */
+type JobKind = 'farmer' | 'woodcutter' | 'quarry' | 'fisher' | 'smith' | 'miller' | 'priest' | 'healer' | 'teacher' | 'guard' | 'firefighter' | 'merchant' | 'herder' | 'keeper' | 'servant';
+const JOB_OF: Partial<Record<KindId, JobKind>> = {
+  farm: 'farmer', lumber: 'woodcutter', quarry: 'quarry', mine: 'quarry', pier: 'fisher', workshop: 'smith', mill: 'miller',
+  temple: 'priest', health: 'healer', school: 'teacher', police: 'guard', fire: 'firefighter',
+  gather: 'merchant', forum: 'merchant', tavern: 'merchant', barber: 'merchant', harbor: 'merchant',
+  pen: 'herder', stable: 'herder', apiary: 'keeper',
+  baths: 'servant', theater: 'servant', senate: 'servant', landmark: 'servant', station: 'servant', terminal: 'servant', observatory: 'servant',
+  carworks: 'smith', lab: 'healer', aerodrome: 'servant',
+};
+const TOOL_OF: Record<JobKind, keyof typeof PROPS | null> = {
+  farmer: 'hoe', woodcutter: 'axe', quarry: 'pick', fisher: 'rod', smith: 'hammer', miller: 'basket', priest: 'book', healer: 'basket', teacher: 'book',
+  guard: 'spear', firefighter: 'bucket', merchant: 'basket', herder: 'crook', keeper: null, servant: null,
+};
+/** Ce qu'il fait une fois à sa place : à l'ouvrage, debout à attendre (prêtre, garde), à parler aux passants (marchand, maître) */
+const JOB_ACT: Record<JobKind, Act> = {
+  farmer: 'work', woodcutter: 'work', quarry: 'work', fisher: 'stroll', smith: 'work', miller: 'work', priest: 'stroll', healer: 'work', teacher: 'cheer',
+  guard: 'stroll', firefighter: 'work', merchant: 'cheer', herder: 'work', keeper: 'work', servant: 'work',
+};
+/**
+ * Ordre de priorité des métiers quand il y a plus de lieux de travail que d'habitants : les secours, les champs et l'église
+ * d'abord, puis le reste ; les paysans comptent double (on en voit toujours plusieurs aux champs)
+ */
+const JOB_RANK: JobKind[] = ['firefighter', 'farmer', 'priest', 'guard', 'healer', 'teacher', 'smith', 'merchant', 'fisher', 'woodcutter', 'quarry', 'herder', 'miller', 'keeper', 'servant'];
+const JOB_SHARE: Partial<Record<JobKind, number>> = { farmer: 2 };
+/** Où l'on habite : les maisons, et les manoirs qu'on en a faits */
+const isHome = (b: Building) => b.kind === 'house' || b.kind === 'manor';
+/** Heures de travail (matin, puis après le repas de midi) */
+const working = (h: number) => (h >= 7.5 && h < 12) || (h >= 13.5 && h < 18);
 const PROP_FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 /** hauteur de la selle (le cavalier y est assis) et allure à cheval */
 /** hauteur de la selle (le cheval garde sa taille ; un cavalier plus petit s'assied plus haut sur son pas) */
@@ -64,7 +108,7 @@ type State = 'inside' | 'walking' | 'doing';
  * Destination d'une sortie : case, caché à l'arrivée (dans un bâtiment), dernier pas hors de la route et cap, platelage ou assise ;
  * activité sur place et place prise dans un jardin
  */
-interface Dest { cell: number; hidden: boolean; spot?: [number, number]; face?: number; deck?: number; act?: Act; hold?: string }
+interface Dest { cell: number; hidden: boolean; spot?: [number, number]; face?: number; deck?: number; act?: Act; hold?: string; tool?: keyof typeof PROPS | null; work?: boolean; urgent?: boolean; blaze?: number }
 /** Places des pêcheurs sur le ponton (repère du bâtiment : x en travers, z vers l'eau) : radeau de la Préhistoire, platelage ensuite */
 const RAFT_SPOTS = [[-0.03, 0.74], [0.02, 0.42]], DECK_SPOTS = [[-0.03, 0.66], [0.06, 0.46]];
 
@@ -76,6 +120,8 @@ interface Agent {
   path: number[];
   /** direction du pas en cours (unitaire), qui tourne en douceur vers la suivante */
   vx?: number;
+  /** il accourt (incendie) : il court, deux fois plus vite, jusqu'à sa place */
+  urgent?: boolean;
   vz?: number;
   pi: number;
   timer: number;
@@ -122,6 +168,11 @@ interface Agent {
   rider: Rider | null;
   /** en armure et à pied, le soldat de l'époque (légionnaire, chevalier, fantassin, militaire) prend sa place */
   soldier: Soldier | null;
+  /** son métier et son lieu de travail (null : sans emploi, ou enfant) ; l'outil qu'il tient en ce moment */
+  job?: { kind: JobKind; b: number } | null;
+  tool?: keyof typeof PROPS | null;
+  /** bâtiment en feu sur lequel il jette l'eau de son seau (il reste tant qu'il brûle) */
+  blaze?: number | null;
 }
 
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
@@ -171,6 +222,8 @@ export class Agents {
   private gspots: Spot[] = [];
   /** places occupées : clé → habitant */
   private held = new Map<string, number>();
+  /** ce bâtiment brûle-t-il encore ? (branché sur les incendies) */
+  burning: (id: number) => boolean = () => false;
   private spotKey = '';
   private lastVersion = -1;
   private lastAge = -1;
@@ -208,12 +261,70 @@ export class Agents {
     }
     this.fields = []; this.roads = []; this.woods = [];
     for (let i = 0; i < w.veg.length; i++) { if (w.veg[i] === 2) this.fields.push(i); if (w.road[i]) this.roads.push(i); }
-    const houses = [...w.buildings.values()].filter((b) => b.kind === 'house');
+    const houses = [...w.buildings.values()].filter(isHome);
     for (let i = 0; i < w.veg.length; i++) {
       if (w.veg[i] !== 1) continue;
       const x = i % N, z = (i / N) | 0;
       if (houses.some((h) => Math.abs(h.x - x) + Math.abs(h.z - z) < 12)) this.woods.push(i);
     }
+    this.assignJobs();
+  }
+
+  /**
+   * Répartit les métiers entre les habitants qu'on voit : chaque lieu de travail reçoit d'abord un employé, puis un deuxième
+   * s'il offre assez d'emplois, et ainsi de suite ; ceux qui gardent leur poste le gardent
+   */
+  private assignJobs() {
+    const w = this.world, slots: [Building, number][] = [];
+    for (const b of w.buildings.values()) {
+      const kind = JOB_OF[b.kind];
+      if (!kind) continue;
+      const jobs = KINDS[b.kind].jobs?.[b.age] ?? 0;
+      slots.push([b, Math.max(1, Math.min(3, Math.round(jobs / 3)))]);
+    }
+    const taken = new Map<number, number>();
+    const adults = this.agents.filter((a) => !a.child && !a.mission);
+    // ceux dont le lieu de travail existe toujours le gardent (dans la limite des places)
+    for (const a of adults) {
+      const s = a.job ? slots.find(([b]) => b.id === a.job!.b) : null;
+      if (!s || (taken.get(s[0].id) ?? 0) >= s[1]) { a.job = null; continue; }
+      taken.set(s[0].id, (taken.get(s[0].id) ?? 0) + 1);
+    }
+    // les autres, tour à tour : le métier le moins représenté (dans l'ordre de priorité), à son lieu de travail le moins pourvu
+    const perKind = new Map<JobKind, number>();
+    for (const a of adults) if (a.job) perKind.set(a.job.kind, (perKind.get(a.job.kind) ?? 0) + 1);
+    for (const a of adults) {
+      if (a.job) continue;
+      let best: [Building, number] | null = null, bk = Infinity, bn = Infinity;
+      for (const s of slots) {
+        const n = taken.get(s[0].id) ?? 0;
+        if (n >= s[1]) continue;
+        const kind = JOB_OF[s[0].kind]!, k = (perKind.get(kind) ?? 0) / (JOB_SHARE[kind] ?? 1) + JOB_RANK.indexOf(kind) * 0.01;
+        if (k < bk || (k === bk && n < bn)) { bk = k; bn = n; best = s; }
+      }
+      if (!best) break;
+      const kind = JOB_OF[best[0].kind]!;
+      a.job = { kind, b: best[0].id };
+      taken.set(best[0].id, bn + 1);
+      perKind.set(kind, (perKind.get(kind) ?? 0) + 1);
+    }
+  }
+
+  /**
+   * Où va travailler un habitant, et ce qu'il y fait : son champ (près de la ferme), la lisière (près du bûcheron), le ponton,
+   * une ronde sur les rues autour du poste, ou à côté de son bâtiment, l'outil en main
+   */
+  private jobDest(a: Agent): Dest | null {
+    const j = a.job!, b = this.world.buildings.get(j.b);
+    if (!b) { a.job = null; return null; }
+    const near = (cells: number[], r: number) => cells.filter((k) => Math.abs((k % N) - b.x) + Math.abs(Math.floor(k / N) - b.z) <= r);
+    let d: Dest | null = null;
+    if (j.kind === 'farmer') { const f = near(this.fields, 8); d = f.length && this.rnd() < 0.8 ? this.cellDest(f) : null; }
+    else if (j.kind === 'woodcutter') { const f = near(this.woods, 6); d = f.length ? this.cellDest(f) : null; }
+    else if (j.kind === 'fisher' && b.kind === 'pier') d = this.onPier(b);
+    else if (j.kind === 'guard') { const f = near(this.roads, 7); d = f.length ? this.cellDest(f) : null; }
+    d ??= this.beside(b);
+    return d && { ...d, act: JOB_ACT[j.kind], tool: TOOL_OF[j.kind], work: true };
   }
 
   private walkable(c: number, start: number, goal: number) {
@@ -272,16 +383,23 @@ export class Agents {
     return out.reverse();
   }
 
-  /** Un incendie : les habitants proches accourent avec des seaux */
+  /** Un incendie : les pompiers et les habitants proches accourent avec des seaux */
   alert(cell: number) {
     const cx = cell % N + 0.5, cz = Math.floor(cell / N) + 0.5, b = this.world.buildings.get(this.world.occ[cell]);
-    const near = this.agents.filter((a) => !a.hidden && Math.hypot(a.x - cx, a.z - cz) < 16).slice(0, 5);
-    for (const a of near) {
+    // les pompiers accourent de leur caserne (même de chez eux), puis les voisins qui passent, tous seau en main
+    const crew = this.agents.filter((a) => a.job?.kind === 'firefighter' && !a.mission && Math.hypot(a.x - cx, a.z - cz) < 30).slice(0, 4);
+    const near = this.agents.filter((a) => !a.hidden && !a.mission && !crew.includes(a) && Math.hypot(a.x - cx, a.z - cz) < 16).slice(0, Math.max(2, 6 - crew.length));
+    for (const a of [...crew, ...near]) {
       a.goingHome = false;
       if (!b) { this.startPath(a, cell, false); continue; }
       const d = this.beside(b);
-      if (d) this.go(a, d);
+      if (d) this.go(a, { ...d, act: 'work', tool: 'bucket', urgent: true, blaze: b.id });
     }
+  }
+
+  /** Où se tiennent ceux qui jettent l'eau de leur seau sur ce bâtiment en feu (arrivés sur place) */
+  pails(b: Building): [number, number][] {
+    return this.agents.filter((a) => a.blaze === b.id && a.state === 'doing' && !a.hidden).map((a) => [a.x, a.z]);
   }
 
   /**
@@ -341,7 +459,17 @@ export class Agents {
 
   private cellOf(b: Building) { return b.z * N + b.x; }
 
-  private chooseDest(hour: number, child = false): Dest | null {
+  private chooseDest(hour: number, child = false, a: Agent | null = null): Dest | null {
+    // un habitant arrivé depuis la dernière répartition : on répartit de nouveau les métiers
+    if (a && !a.child && a.job === undefined) this.assignJobs();
+    // aux heures de travail, chacun va le plus souvent à son poste
+    if (a?.job && working(hour) && this.rnd() < 0.8) { const d = this.jobDest(a); if (d) return d; }
+    // le matin, les enfants vont à l'école (qui écoute le maître, qui joue dans la cour)
+    if (child && hour >= 8 && hour < 12 && this.rnd() < 0.7) {
+      const sc = [...this.world.buildings.values()].filter((b) => b.kind === 'school');
+      const b = this.pick(sc), d = b && this.beside(b, 0.15);
+      if (d) return { ...d, act: this.rnd() < 0.5 ? 'cheer' : 'play' };
+    }
     const r = this.rnd();
     // les enfants vont jouer près des lieux de rencontre, des champs ou au bord des chemins
     if (child) {
@@ -377,7 +505,7 @@ export class Agents {
   }
 
   private addAgent() {
-    const houses = [...this.world.buildings.values()].filter((b) => b.kind === 'house');
+    const houses = [...this.world.buildings.values()].filter(isHome);
     if (!houses.length) return;
     const h = this.pick(houses)!;
     const id = this.nextId++;
@@ -392,7 +520,7 @@ export class Agents {
   private sendHome(a: Agent) {
     const hb = this.world.buildings.get(a.home);
     if (!hb) { // maison détruite : en choisir une autre
-      const houses = [...this.world.buildings.values()].filter((b) => b.kind === 'house');
+      const houses = [...this.world.buildings.values()].filter(isHome);
       const h = this.pick(houses);
       if (!h) { a.state = 'inside'; a.hidden = true; return; }
       a.home = h.id;
@@ -413,6 +541,10 @@ export class Agents {
     a.face = d.face ?? null;
     a.deck = d.deck ?? null;
     a.act = d.act ?? null;
+    a.tool = d.tool ?? null;
+    a.urgent = !!d.urgent;
+    a.blaze = d.blaze ?? null;
+    a.timer = d.work ? -1 : a.timer;
     if (d.hold) { a.hold = d.hold; this.held.set(d.hold, a.id); }
     // champ, lisière, chemin : pas tous au milieu de la case
     if (!d.spot && !d.hidden) { const cx = (d.cell % N) + 0.5, cz = Math.floor(d.cell / N) + 0.5; a.spot = [cx + (this.rnd() - 0.5) * 0.5, cz + (this.rnd() - 0.5) * 0.5]; }
@@ -613,7 +745,7 @@ export class Agents {
     const night = hour >= 20.5 || hour < 5.5 || sheltering;
     this.pathBudget = 4;
     for (const a of this.agents) {
-      a.phase += dt * 8 * a.speed;
+      a.phase += dt * 8 * a.speed * (a.urgent ? 1.8 : 1);
       if (a.rest > 0) a.rest -= dt;
       if (a.state === 'inside') {
         a.timer -= dt;
@@ -622,13 +754,15 @@ export class Agents {
           const hb = w.buildings.get(a.home);
           if (!hb) { this.sendHome(a); continue; }
           a.x = hb.x + 0.5; a.z = hb.z + 0.5;
-          const d = this.chooseDest(hour, a.child);
+          const d = this.chooseDest(hour, a.child, a);
           a.goingHome = false;
           if (d) this.go(a, d); else a.timer = 3;
         }
       } else if (a.state === 'walking') {
         // l'équipe d'une expédition part en file, chacun à son tour
         if (a.mission && a.delay > 0) { a.delay -= dt; continue; }
+        // le feu est éteint avant qu'il n'arrive : il ne court plus
+        if (a.urgent && a.blaze != null && !this.burning(a.blaze)) a.urgent = false;
         if (a.pi >= a.path.length) {
           // dernier pas hors de la route (bout du ponton)
           if (a.spot) {
@@ -645,7 +779,7 @@ export class Agents {
         const [px, pz] = w.passPoint(a.path, a.pi), tx = px + (last ? 0 : a.off), tz = pz + (last ? 0 : a.off * 0.7);
         const dx = tx - a.x, dz = tz - a.z, dist = Math.hypot(dx, dz);
         // l'équipe d'une expédition marche du même pas
-        const step = dt * (a.mission ? (a.mounted ? RIDE_SPEED : 1.05) : a.speed) * (w.road[c] ? 1.1 : 0.8);
+        const step = dt * (a.mission ? (a.mounted ? RIDE_SPEED : 1.05) : a.speed * (a.urgent ? 2.2 : 1)) * (w.road[c] ? 1.1 : 0.8);
         if (dist <= step) { a.x = tx; a.z = tz; a.pi++; }
         else {
           // le pas tourne en douceur vers le point visé (droit dessus pour le dernier, quand on y est presque) ; et l'on vise
@@ -668,6 +802,8 @@ export class Agents {
         // en expédition : il fait ce qu'on lui a dit, jusqu'au prochain ordre
         if (a.mission) continue;
         a.timer -= dt;
+        // au seau, on ne s'en va pas tant que ça brûle
+        if (a.blaze != null && this.burning(a.blaze)) a.timer = Math.max(a.timer, 1.5);
         // l'enfant court en rond autour de l'endroit où il joue (sauf aux jeux, où il reste devant)
         if (a.child && !a.hidden && (!a.act || a.act === 'run')) {
           const t = a.phase * 0.18;
@@ -677,7 +813,7 @@ export class Agents {
         if (night && !a.goingHome) { if (this.pathBudget > 0) this.sendHome(a); }
         else if (a.timer <= 0 && this.pathBudget > 0) {
           a.hidden = false;
-          const d = this.chooseDest(hour, a.child);
+          const d = this.chooseDest(hour, a.child, a);
           if (d) this.go(a, d); else a.timer = 3;
         }
       }
@@ -686,11 +822,12 @@ export class Agents {
   }
 
   private arrive(a: Agent, night: boolean) {
+    a.urgent = false;
     if (a.mission) { a.state = 'doing'; a.timer = 1e9; a.hidden = false; a.ax = a.x; a.az = a.z; return; }
     if (a.goingHome) { a.goingHome = false; a.state = 'inside'; a.hidden = true; a.timer = 1 + this.rnd() * 5; return; }
     a.state = 'doing';
-    // on s'attarde au coin du feu, sur un banc ou dans les gradins
-    a.timer = (a.act === 'sit' || a.act === 'cheer' ? 10 : 4) + this.rnd() * 8;
+    // on s'attarde au coin du feu, sur un banc ou dans les gradins ; à l'ouvrage, bien plus longtemps
+    a.timer = a.timer === -1 ? 14 + this.rnd() * 12 : (a.act === 'sit' || a.act === 'cheer' ? 10 : 4) + this.rnd() * 8;
     a.hidden = a.targetHidden;
     a.ax = a.x; a.az = a.z;
   }
@@ -718,7 +855,7 @@ export class Agents {
       this.group.add(a.actor.root);
     }
     const act = a.actor!;
-    const kitKey = `${a.actorKey}|${JSON.stringify(a.kit)}`;
+    const kitKey = `${a.actorKey}|${JSON.stringify(a.kit)}|${a.tool ?? ''}`;
     if (a.kitKey !== kitKey) { a.kitKey = kitKey; this.dress(a); }
     // charge de cavalerie : en selle, le cavalier de l'époque (cheval compris) prend sa place
     if (this.stepRider(a, age)) { act.root.visible = false; return true; }
@@ -730,7 +867,7 @@ export class Agents {
     act.root.rotation.y = a.heading;
     const running = a.child && (!a.act || a.act === 'run');
     if (riding) play(act, SIT);
-    else if (a.state === 'walking' || (running && a.state === 'doing')) play(act, running && a.state === 'doing' ? [...RUN, ...WALK] : WALK);
+    else if (a.state === 'walking' || (running && a.state === 'doing')) play(act, (running && a.state === 'doing') || a.urgent ? [...RUN, ...WALK] : WALK);
     else if (a.state === 'doing') play(act, a.act === 'sit' ? SIT : a.act === 'cheer' || a.act === 'play' ? CHEER : a.act === 'stroll' || (a.mission && !a.act) ? IDLE : WORK);
     else play(act, IDLE);
     act.mixer.update(dt);
@@ -745,7 +882,7 @@ export class Agents {
     for (const o of a.props) o.parent?.remove(o);
     a.props = [];
     const k = a.kit, act = a.actor;
-    if (!k || !act) return;
+    if ((!k && !a.tool) || !act) return;
     act.root.updateMatrixWorld(true);
     // le chargeur glTF retire les points des noms : « handslot.r » devient « handslotr »
     const find = (...names: string[]) => { let f: THREE.Object3D | null = null; act.root.traverse((o) => { if (!f && names.includes(o.name)) f = o; }); return f as THREE.Object3D | null; };
@@ -764,6 +901,8 @@ export class Agents {
       node.add(m);
       a.props.push(m);
     };
+    // hors expédition, l'outil de son métier
+    if (!k) { if (a.tool) hold(PROPS[a.tool](), 'r'); return; }
     if (k.weapon) hold(PROPS[k.weapon](), 'r');
     if (k.torch) hold(PROPS.torch(), 'l', true);
     else if (k.armor) hold(PROPS.shield(), 'l');

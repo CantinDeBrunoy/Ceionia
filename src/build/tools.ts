@@ -176,6 +176,27 @@ export class ToolController implements ToolInput {
     this.h.changed();
   }
 
+  /**
+   * Améliore le bâtiment sélectionné en `to` (annulable) : au prix du nouveau bâtiment ; s'il manque de la place autour ou de
+   * quoi payer, on le dit
+   */
+  upgradeSelected(to: KindId) {
+    const b = this.selectedBuilding(), w = this.h.world;
+    if (!b) return;
+    const cost = w.unlimited ? null : costOf(to, this.h.getAge());
+    if (cost && (w.wood < cost.wood || w.stone < cost.stone)) { this.h.toast(`Il faut ${costLabel(cost)} (vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre)`); return; }
+    this.beginStroke();
+    const pre = this.pre;
+    const nb = w.upgrade(b.id, to);
+    if (!nb) { this.pre = null; this.h.toast(`Pas assez de place libre autour pour ${KINDS[to].names[Math.max(b.age, KINDS[to].minAge)].toLowerCase()} (${KINDS[to].size} × ${KINDS[to].size}, sans route ni bâtiment derrière).`); return; }
+    this.pre = pre;
+    this.mark();
+    this.endStroke();
+    if (cost) { w.wood -= cost.wood; w.stone -= cost.stone; }
+    this.h.audio.sfxPlace();
+    this.select(nb.id);
+  }
+
   /** Démolit le bâtiment sélectionné (annulable) */
   demolishSelected() {
     const b = this.selectedBuilding();
@@ -397,7 +418,7 @@ export class ToolController implements ToolInput {
     this.moveOrigin = null;
     if (!o) return;
     const w = this.h.world;
-    if (w.canPlace(o.kind, o.x, o.z, o.small ? 1 : undefined)) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
+    if (w.canPlace(o.kind, o.x, o.z, o.small ? (KINDS[o.kind].size - 1) as 1 | 2 : undefined)) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
   }
 
   private tryPlace() {

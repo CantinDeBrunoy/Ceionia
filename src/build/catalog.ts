@@ -1,6 +1,7 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
   | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
-  | 'harbor' | 'airport' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'theater' | 'acropolis' | 'forum' | 'senate';
+  | 'harbor' | 'airport' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'theater' | 'acropolis' | 'forum' | 'senate'
+  | 'carworks' | 'lab' | 'aerodrome' | 'manor';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -95,11 +96,11 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux.',
   },
   harbor: {
-    id: 'harbor', size: 2, minAge: 2, icon: '⚓', cat: 'prod',
+    id: 'harbor', size: 3, minAge: 2, icon: '⚓', cat: 'prod',
     names: ['', '', 'Port', 'Port de commerce', 'Port à conteneurs'],
     desc: 'Quais, entrepôts et grues : les navires marchands y accostent, déchargent et repartent.',
     jobs: [0, 0, 6, 10, 14], food: [0, 0, 4, 6, 8],
-    perk: 'À poser au bord de la mer ou d’un lac, le quai tourné vers l’eau. Un navire de l’époque (cogue, vapeur, porte-conteneurs) entre au port, s’amarre au quai et repart au large.',
+    perk: 'Grande zone portuaire de 3 × 3 à poser au bord de la mer ou d’un lac : il suffit qu’un côté touche l’eau, le quai s’y tourne de lui-même et le bassin devant est creusé pour les grands navires (cogue, vapeur, porte-conteneurs) qui entrent, s’amarrent au quai et repartent au large.',
   },
   airport: {
     id: 'airport', size: 3, minAge: 4, icon: '✈️', cat: 'service',
@@ -155,7 +156,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   mill: {
     id: 'mill', size: 2, minAge: 2, icon: '🌬️', cat: 'prod',
-    names: ['', '', 'Moulin', 'Usine à cheminée', 'Éolienne'],
+    names: ['', '', 'Moulin', 'Minoterie à vapeur', 'Éolienne'],
     desc: 'Travail et un peu de nourriture.',
     jobs: [0, 0, 7, 14, 18], food: [0, 0, 6, 6, 8],
   },
@@ -216,7 +217,7 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Ne se pose que dans la montagne. Des cordées grimpent les parois voisines ; quand la neige tient, des skieurs dévalent les pentes jusqu’au chalet (un télésiège les remonte à l’époque moderne) ; à l’époque moderne, des wingsuits s’élancent du sommet et un parapente tourne au-dessus des pentes.',
   },
   stadium: {
-    id: 'stadium', size: 2, minAge: 3, icon: '🏟️', cat: 'life',
+    id: 'stadium', size: 3, minAge: 3, icon: '🏟️', cat: 'life',
     names: ['', '', '', 'Stade', 'Stade d’athlétisme'],
     desc: 'Piste d’athlétisme autour d’une pelouse, sautoirs, tribunes : on y court, on y saute, on y lance.',
     joy: [0, 0, 0, 8, 12], jobs: [0, 0, 0, 1, 2],
@@ -246,7 +247,7 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [0, 0, 0, 0, 14], jobs: [0, 0, 0, 0, 4],
   },
   funfair: {
-    id: 'funfair', size: 2, minAge: 3, icon: '🎡', cat: 'life',
+    id: 'funfair', size: 3, minAge: 3, icon: '🎡', cat: 'life',
     names: ['', '', '', 'Fête foraine', 'Parc d’attractions'],
     desc: 'Manèges, grande roue, montagnes russes, barbe à papa et lumières le soir.',
     joy: [0, 0, 0, 10, 16], jobs: [0, 0, 0, 3, 6],
@@ -258,6 +259,33 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [0, 6, 8, 10, 13], health: [0, 10, 14, 20, 28], jobs: [0, 2, 2, 3, 5],
     perk: 'Débloqués par l’expédition « Les sources chaudes ».',
     reqMission: 'springs',
+  },
+  manor: {
+    id: 'manor', size: 2, minAge: 2, icon: '🏰', cat: 'home',
+    names: ['', '', 'Manoir', 'Hôtel particulier', 'Villa'],
+    desc: 'Une grande demeure et son jardin : maîtres, enfants et domestiques y logent nombreux. On l’obtient en améliorant une maison.',
+    housing: [0, 0, 16, 24, 34], joy: [0, 0, 2, 3, 4],
+  },
+  carworks: {
+    id: 'carworks', size: 2, minAge: 3, icon: '🚗', cat: 'prod',
+    names: ['', '', '', 'Usine automobile', 'Usine automobile'],
+    desc: 'Châssis, moteurs et carrosseries : les automobiles sortent de la chaîne, font un tour de piste d’essai et partent sur les routes.',
+    jobs: [0, 0, 0, 14, 20],
+    perk: 'Avec la course automobile gagnée, les voitures remplacent les charrettes sur les routes (les écuries gardent leurs chevaux pour la cavalerie).',
+    reqMission: 'motorcar',
+  },
+  lab: {
+    id: 'lab', size: 1, minAge: 3, icon: '⚗️', cat: 'service',
+    names: ['', '', '', 'Laboratoire', 'Centre de recherche'],
+    desc: 'Savants, fioles et bobines qui crépitent : on y met au point vaccins et inventions.',
+    health: [0, 0, 0, 8, 12], jobs: [0, 0, 0, 4, 6],
+  },
+  aerodrome: {
+    id: 'aerodrome', size: 3, minAge: 3, icon: '🎈', cat: 'life',
+    names: ['', '', '', 'Aérodrome', 'Aéro-club'],
+    desc: 'Les montgolfières s’élèvent au-dessus du village, le dirigeable largue les amarres pour un grand tour et revient à son mât ; biplan et hangar au bord de la piste d’herbe.',
+    joy: [0, 0, 0, 9, 11], jobs: [0, 0, 0, 4, 5],
+    reqMission: 'flight',
   },
   theater: {
     id: 'theater', size: 2, minAge: 1, icon: '🎭', cat: 'life',
@@ -300,7 +328,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'mine', 'outpost', 'harbor', 'mill', 'health', 'school', 'fire', 'police', 'observatory', 'airport', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'outpost', 'harbor', 'mill', 'health', 'school', 'fire', 'police', 'lab', 'observatory', 'airport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -335,7 +363,21 @@ export const KIND_LABEL: Record<KindId, string> = {
   barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
   theater: 'théâtres', acropolis: 'acropoles', forum: 'forums et marchés', senate: 'sénats',
   harbor: 'ports', airport: 'aéroports', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions',
+  carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs',
 };
+
+/**
+ * Améliorations proposées sur la fiche d'un bâtiment : il devient un autre, plus grand ou plus riche, sur place (son emprise
+ * s'étend au besoin sur les cases libres derrière lui), contre le prix du nouveau bâtiment
+ */
+export const UPGRADES: { from: KindId; to: KindId }[] = [
+  { from: 'house', to: 'manor' },
+  { from: 'station', to: 'terminal' },
+  { from: 'football', to: 'stadium' },
+  { from: 'pier', to: 'harbor' },
+  { from: 'gather', to: 'forum' },
+  { from: 'workshop', to: 'carworks' },
+];
 
 export interface Building {
   id: number;
@@ -353,6 +395,7 @@ export interface Building {
 }
 
 /** Côté de l'emprise d'un bâtiment posé */
-export const sizeOf = (b: Building) => (b.small ? 1 : KINDS[b.kind].size);
+/** Emprise d'un bâtiment : celle de son genre, une case de moins s'il est resté à l'ancienne taille (`small`) */
+export const sizeOf = (b: Building) => (b.small ? KINDS[b.kind].size - 1 : KINDS[b.kind].size) as 1 | 2 | 3;
 
 export const SEASONS = ['Printemps', 'Été', 'Automne', 'Hiver'];

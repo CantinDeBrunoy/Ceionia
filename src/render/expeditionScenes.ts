@@ -161,6 +161,32 @@ const corralGeo = () => geo('corral', (p) => {
   for (const y of [0.07, 0.13]) p.add(new THREE.TorusGeometry(0.5, 0.006, 3, 20).rotateX(Math.PI / 2), 0, y, 0, 0xc9b48a);
 });
 const saltGeo = () => geo('salt', (p) => { p.box(0.08, 0.06, 0.07, 0, 0, 0, 0xf2f0ea, 0.3); p.box(0.05, 0.04, 0.05, 0.06, 0, 0.05, 0xe8e4dc, 0.9); });
+/** Arche de départ de la course : deux poteaux, banderole à damier, fanions */
+const raceArchGeo = () => geo('racearch', (p) => {
+  for (const s of [-1, 1]) p.box(0.025, 0.42, 0.025, s * 0.3, 0, 0, 0x5a4a3a);
+  for (let k = 0; k < 12; k++) for (let j = 0; j < 2; j++) p.box(0.05, 0.04, 0.008, -0.275 + k * 0.05, 0.36 + j * 0.04, 0, (k + j) % 2 ? 0x1e1e22 : 0xf4f2ee);
+  for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.03, 0.06, 3).rotateZ(-Math.PI / 2), s * 0.3 + 0.03, 0.44, 0, s > 0 ? 0xd84a3e : 0x3a6ab8);
+});
+/** Automobile ancienne, nez vers +z : caisse sombre, capot, radiateur de laiton, roues à rayons, phares */
+const oldCarGeo = () => geo('oldcar', (p) => {
+  p.box(0.13, 0.05, 0.22, 0, 0.05, -0.02, 0x1e2a24); p.box(0.11, 0.045, 0.09, 0, 0.075, 0.11, 0x2a2a2e);
+  p.box(0.09, 0.055, 0.012, 0, 0.065, 0.16, 0xc8a050); p.box(0.12, 0.055, 0.028, 0, 0.1, -0.08, 0x5a3a2a);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.016, 10).rotateZ(Math.PI / 2), sx * 0.072, 0.04, sz * 0.09 - 0.01, 0x2a2a2e); p.box(0.026, 0.008, 0.08, sx * 0.072, 0.082, sz * 0.09 - 0.01, 0x1e1e22); }
+  for (const sx of [-1, 1]) p.box(0.022, 0.022, 0.022, sx * 0.045, 0.09, 0.165, 0xffe8a0);
+});
+/** Bidon d'essence rouge */
+const fuelCanGeo = () => geo('fuelcan', (p) => { p.box(0.05, 0.07, 0.03, 0, 0, 0, 0xc83a32); p.box(0.012, 0.02, 0.012, 0.015, 0.07, 0, 0x8a8f96); });
+/** Nacelle d'osier et son brûleur, posée au sol */
+const nacelleGeo = () => geo('nacelle', (p) => {
+  p.box(0.12, 0.08, 0.12, 0, 0, 0, 0xb08a5a); p.box(0.124, 0.012, 0.124, 0, 0.08, 0, 0x6a4c36);
+  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.004, 0.1, 0.004, x * 0.055, 0.09, z * 0.055, 0x5a4a3a);
+  p.box(0.05, 0.03, 0.05, 0, 0.17, 0, 0x5d6878);
+});
+/** Enveloppe de la montgolfière, posée sur son embouchure : fuseaux rouges et or */
+const envelopeGeo = () => geo('envelope', (p) => {
+  for (let k = 0; k < 12; k++) p.add(new THREE.SphereGeometry(0.34, 3, 10, (k / 12) * Math.PI * 2, Math.PI / 6).scale(1, 1.2, 1), 0, 0.5, 0, k % 2 ? 0xd84a3e : 0xf2c23a);
+  p.add(new THREE.CylinderGeometry(0.19, 0.1, 0.18, 12, 1, true), 0, 0.11, 0, 0xd84a3e);
+});
 const wagonGeo = () => geo('wagon', (p) => {
   p.box(0.36, 0.14, 0.2, 0, 0.07, 0, 0xc84a3e);
   p.box(0.38, 0.02, 0.22, 0, 0.21, 0, 0xe8c66a);
@@ -265,6 +291,7 @@ const BEHAVIOR: Record<Scene, string> = {
   mine: 'mine', pass: 'mine', crater: 'mine', gather: 'gather', pebbles: 'gather', hops: 'gather', hunt: 'hunt',
   build: 'build', bridge: 'build', drill: 'build', summit: 'build', basecamp: 'build', rails: 'rails', camp: 'camp',
   smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', scout: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
+  race: 'tend', balloon: 'tend',
 };
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
@@ -527,6 +554,31 @@ export class ExpeditionScene {
       }
       if (st !== 'scout') this.emits.push({ x: hx, y: y(hx, hz) + 0.1, z: hz, kind: 'puff', every: 0.7, t: 0 });
       this.mouth = { at: [mx + Math.sin(face) * 0.12, mz + Math.cos(face) * 0.12], heap: [hx, hz] };
+    } else if (st === 'race') {
+      // la ligne de départ de la course : arche à damier, la voiture sans chevaux qui pétarade, bidon d'essence ; l'équipe la
+      // prépare tout autour, l'ingénieur donne ses consignes
+      const [ax, az] = this.near(cx + 0.55, cz, cx, cz);
+      this.put(raceArchGeo(), ax, az, Math.PI / 2);
+      const [vx, vz] = this.near(cx + 0.12, cz, cx, cz);
+      this.put(oldCarGeo(), vx, vz, Math.PI / 2);
+      this.emits.push({ x: vx - 0.15, y: y(vx, vz) + 0.05, z: vz, kind: 'smoke', every: 0.4, t: 0 });
+      this.put(fuelCanGeo(), vx - 0.04, vz + 0.2, 0.3);
+      for (const [dx, dz] of [[-0.04, -0.2], [-0.24, 0.04], [0.02, 0.22], [0.2, -0.18]]) this.spots.push([vx + dx, vz + dz]);
+      this.npc(age >= 3 ? 'mini_male_e' : 'villager_mage', vx - 0.32, vz - 0.14, 0.6, TALK);
+      this.focus = [vx, vz];
+    } else if (st === 'balloon') {
+      // la montgolfière qu'on gonfle : nacelle et brûleur qui rugit, l'enveloppe qui s'arrondit à mesure ; l'équipe tient les
+      // cordes tout autour
+      const [bx, bz] = this.near(cx + 0.2, cz, cx, cz), by = y(bx, bz);
+      this.put(nacelleGeo(), bx, bz, 0);
+      const env = new THREE.Mesh(envelopeGeo(), mats.body);
+      env.position.set(bx, by + 0.18, bz);
+      env.castShadow = true;
+      this.group.add(env); this.props.push(env);
+      this.grows.push({ obj: env, from: 0.12, to: 1 });
+      this.flameAt(bx, by + 0.19, bz, 0.5);
+      for (let i = 0; i < 4; i++) { const ang = i * 1.57 + 0.6; this.spots.push(this.near(bx + Math.cos(ang) * 0.42, bz + Math.sin(ang) * 0.42, cx, cz)); }
+      this.focus = [bx, bz];
     } else if (st === 'troupe') {
       // la roulotte des jongleurs, deux jongleurs et leurs balles, un tambour ; l'équipe applaudit en demi-cercle
       const [wx, wz] = this.near(cx + 0.6, cz - 0.4, cx, cz);

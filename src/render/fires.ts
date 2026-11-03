@@ -6,11 +6,15 @@ import { Puffs } from './particles';
 const MAX_FLAMES = 120, FLAMES_PER_FIRE = 7;
 /** Délai avant que les habitants éteignent un feu (un point d'eau tout près), durée au bout de laquelle le bâtiment est perdu */
 const PUT_OUT = 14, BURN_DOWN = 32;
-/** Avec une caserne à portée : les secours arrivent vite, eau ou pas ; arrivés sur place, ils arrosent quatre secondes */
-const CREW = 5, CREW_RANGE = 14, SPRAY_OUT = 4;
-const SMOKE = new THREE.Color(0.22, 0.2, 0.2);
+/**
+ * Avec une caserne à portée : les pompiers accourent avec leurs seaux (au plus tard, le feu est éteint au bout de CREW
+ * secondes) ; le camion arrose SPRAY_OUT secondes. L'eau des seaux l'éteint aussi : DOUSE seaux × secondes en tout
+ */
+const CREW = 20, CREW_RANGE = 14, SPRAY_OUT = 6, DOUSE = 8;
+const WATER = new THREE.Color(0.78, 0.9, 1);
+const SMOKE = new THREE.Color(0.22, 0.2, 0.2), STEAM = new THREE.Color(0.95, 0.96, 0.97);
 
-interface Fire { b: Building; t: number; seed: number }
+interface Fire { b: Building; t: number; seed: number; /** eau jetée par les seaux (seaux × secondes) */ doused: number; /** prochain seau lancé */ throw: number }
 
 /**
  * Incendies : la foudre ou une bombe de lave enflamme un bâtiment. Les habitants accourent ; avec un puits ou de l'eau à
@@ -22,9 +26,11 @@ export class Fires {
   news: string[] = [];
   /** les pompiers en camion (âge industriel et après) : temps d'arrosage d'un feu, 0 en route, null sans camion */
   responder: { spraying(b: Building): number | null } | null = null;
+  /** où se tiennent les habitants qui jettent l'eau de leur seau sur ce bâtiment */
+  pails: ((b: Building) => [number, number][]) | null = null;
   private list: Fire[] = [];
   private flames: THREE.InstancedMesh;
-  private smoke = new Puffs(160, 0);
+  private smoke = new Puffs(260, 0);
   private dummy = new THREE.Object3D();
   private t = 0;
 
@@ -41,7 +47,7 @@ export class Fires {
   /** Met le feu au bâtiment (sans effet s'il brûle déjà) ; true s'il s'enflamme */
   ignite(b: Building) {
     if (b.kind === 'lamp' || this.list.some((f) => f.b.id === b.id)) return false;
-    this.list.push({ b, t: 0, seed: Math.random() * 10 });
+    this.list.push({ b, t: 0, seed: Math.random() * 10, doused: 0, throw: 0 });
     this.news.push(`🔥 Incendie : ${KINDS[b.kind].names[b.age]}`);
     return true;
   }
@@ -65,6 +71,20 @@ export class Fires {
       // le camion des pompiers en route, le feu attend les secours (il finit par brûler si rien n'arrive)
       const crew = this.crewNear(b), spray = crew ? this.responder?.spraying(b) ?? null : null;
       const water = crew || this.waterNear(b), out = crew ? CREW : PUT_OUT;
+      // ceux qui sont arrivés avec leur seau jettent l'eau sur les flammes, chacun à son tour
+      const pails = water ? this.pails?.(b) ?? [] : [];
+      f.doused += dt * pails.length;
+      const s0 = sizeOf(b), cx = b.x + s0 / 2, cz = b.z + s0 / 2, ground = w.h(b.x, b.z);
+      f.throw -= dt * pails.length * 0.9;
+      if (pails.length && f.throw <= 0) {
+        f.throw += 1;
+        const [px, pz] = pails[Math.floor(Math.random() * pails.length)], y0 = w.surfaceAt(px, pz) + 0.16;
+        for (let j = 0; j < 8; j++) {
+          const k = 1.4 + Math.random() * 0.8;
+          this.smoke.spawn(px, y0, pz, (cx - px) * k + (Math.random() - 0.5) * 0.4, (ground + 0.32 - y0) * k + 0.35 + Math.random() * 0.25, (cz - pz) * k + (Math.random() - 0.5) * 0.4, 0.035, 0.5, WATER, 0, { grow: 1.4, drag: 0.6, wind: 0.05, alpha: 0.8 });
+        }
+      }
+      if (f.doused > DOUSE) { this.news.push(crew ? `🚒 Les pompiers ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}` : `💧 Les habitants ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
       if (crew && (spray === null ? f.t > CREW : spray > SPRAY_OUT)) { this.news.push(`🚒 Les pompiers ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
       if (water && spray === null && f.t > PUT_OUT) { this.news.push(`💧 Les habitants ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
       if (f.t > (spray === null ? BURN_DOWN : BURN_DOWN * 2)) {
@@ -73,7 +93,9 @@ export class Fires {
         else this.news.push(`💧 L’incendie s’est éteint : ${KINDS[b.kind].names[b.age]}`);
         continue;
       }
-      const s = sizeOf(b), base = w.h(b.x, b.z), k = Math.min(1, f.t / 3) * (spray !== null ? Math.max(0.25, 1 - spray / SPRAY_OUT) : water ? Math.max(0.3, 1 - f.t / out) : 1);
+      // les flammes faiblissent sous la lance, sous les seaux, ou à mesure qu'on fait la chaîne depuis le puits
+      const tamed = Math.max(spray !== null ? spray / SPRAY_OUT : 0, f.doused / DOUSE, water && spray === null ? f.t / out : 0);
+      const s = s0, base = ground, k = Math.min(1, f.t / 3) * Math.max(0.25, 1 - tamed);
       for (let j = 0; j < FLAMES_PER_FIRE && n < MAX_FLAMES; j++) {
         const ph = f.seed + j * 2.3, flick = 0.65 + 0.35 * Math.sin(this.t * (9 + j) + ph);
         d.position.set(b.x + s / 2 + Math.sin(ph * 3.1) * 0.28 * s, base + 0.25 + (j % 3) * 0.12, b.z + s / 2 + Math.cos(ph * 2.3) * 0.28 * s);
@@ -82,6 +104,9 @@ export class Fires {
         d.updateMatrix();
         this.flames.setMatrixAt(n++, d.matrix);
       }
+      // l'eau jetée sur le feu (seaux ou lance) : de la vapeur blanche monte des flammes qui faiblissent
+      if ((water || spray !== null) && f.t > 2 && Math.random() < dt * 5)
+        this.smoke.spawn(b.x + s / 2 + (Math.random() - 0.5) * 0.6 * s, base + 0.35, b.z + s / 2 + (Math.random() - 0.5) * 0.6 * s, 0, 0.9 + Math.random() * 0.4, 0, 0.14, 1.6, STEAM, 0.2, { grow: 2.4, drag: 0.15, wind: 0.25, alpha: 0.7 });
       if (Math.random() < dt * 6 * k)
         this.smoke.spawn(b.x + s / 2 + (Math.random() - 0.5) * 0.4 * s, base + 0.7, b.z + s / 2 + (Math.random() - 0.5) * 0.4 * s, 0, 0.6 + Math.random() * 0.4, 0, 0.22, 4, SMOKE, 0.3, { grow: 3.4, drag: 0.12, wind: 0.2, alpha: 0.75 });
     }

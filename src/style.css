@@ -249,6 +249,13 @@ button.pop:hover { background: var(--accent-soft); }
 #selCard .acts button { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 12.5px; }
 #selCard .acts kbd { font: inherit; font-size: 10.5px; opacity: 0.6; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 #selCard .acts .danger { color: var(--bad); }
+/* améliorations proposées : une ligne par bâtiment possible, prix et taille en petit */
+#selCard .acts.ups { flex-direction: column; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+#selCard .acts.ups button { justify-content: flex-start; width: 100%; }
+#selCard .acts.ups button small { margin-left: auto; font-weight: 600; opacity: 0.85; color: inherit; }
+#selCard .acts.ups button small + small { margin-left: 8px; }
+#selCard .acts.ups button:disabled { opacity: 0.6; cursor: not-allowed; }
+#selCard .acts.ups button.primary { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
 body.under #selCard, body.photo #selCard { display: none; }
 #info .lock { color: var(--bad); font-weight: 700; }
 #info .keys { color: var(--ink2); font-size: 11.5px; }

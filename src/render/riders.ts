@@ -279,6 +279,40 @@ export function makeRider(age: number, v = 0): Rider {
   return { root, body, legs, weapon: wm, tank: false };
 }
 
+/**
+ * Cheval de trait des charrettes : la même bête que les montures (jambes qui marchent), avec son collier d'attelage, sa
+ * sellette et sa sous-ventrière ; `v` varie la robe. Tourné vers +z, posé à y = 0
+ */
+export function makeDraftHorse(v = 0): Rider {
+  const coat = COATS[(v % COATS.length + COATS.length) % COATS.length], p = new Parts();
+  horse(p, coat);
+  p.add(new THREE.TorusGeometry(0.045, 0.014, 5, 10), 0, 0.255, 0.115, LEATHER, 0, false, 0, -0.5);
+  p.add(new THREE.TorusGeometry(0.047, 0.006, 4, 10), 0, 0.262, 0.11, GOLD, 0, false, 0, -0.5);
+  p.box(0.07, 0.03, 0.05, 0, 0.27, -0.01, LEATHER);
+  p.box(0.15, 0.012, 0.03, 0, 0.2, -0.01, LEATHER);
+  for (const s of [-1, 1]) p.box(0.008, 0.008, 0.2, s * 0.06, 0.22, -0.06, LEATHER);
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  root.scale.setScalar((1 + HUMAN_K) / 2);
+  const hull = new THREE.Mesh(p.build(false).body, mats.body);
+  hull.castShadow = true;
+  body.add(hull);
+  const legs: THREE.Object3D[] = [];
+  for (const [x, z, ph] of [[0.04, 0.09, 0], [-0.04, 0.09, Math.PI], [0.04, -0.09, Math.PI], [-0.04, -0.09, 0]]) {
+    const lp = new Parts();
+    lp.cyl(0.013, 0.015, 0.13, 5, 0, -0.13, 0, coat);
+    lp.cyl(0.016, 0.0135, 0.03, 5, 0, -0.13, 0, v % 2 ? 0xf2eee6 : dark(coat, 0.8));
+    lp.box(0.03, 0.02, 0.03, 0, -0.145, 0, dark(coat, 0.45));
+    const leg = new THREE.Mesh(lp.build(false).body, mats.body);
+    leg.position.set(x, 0.14, z);
+    leg.userData.ph = ph;
+    leg.castShadow = true;
+    body.add(leg);
+    legs.push(leg);
+  }
+  return { root, body, legs, weapon: new THREE.Object3D(), tank: false };
+}
+
 /** Galop (`gait` 0 à l'arrêt … 1 au galop) au rythme de `phase`, et geste de l'arme selon ce que fait le cavalier */
 export function rideStep(r: Rider, phase: number, gait: number, mode: RiderMode) {
   if (r.tank) {

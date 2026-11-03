@@ -24,7 +24,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   | 'corral' | 'salt' | 'roundup' | 'pebbles' | 'hops' | 'pass' | 'smoke' | 'swarm' | 'trade' | 'spring' | 'gallery' | 'cave'
   | 'troupe' | 'abbey' | 'stars' | 'crater' | 'bridge' | 'drill' | 'summit' | 'basecamp' | 'dive'
   // repérage : on entre dans la grotte relever les galeries, on jalonne l'avant-poste devant
-  | 'scout';
+  | 'scout'
+  // la course automobile, la montgolfière qu'on gonfle
+  | 'race' | 'balloon';
 
 export type Effect =
   /** bêtes ramenées : elles paissent ensuite près des fermes */
@@ -448,6 +450,46 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'ore', n: 12 }], lose: [hurt(1, 2)],
         winText: 'La grotte cachait une veine énorme !',
         loseText: 'Un coup de grisou : un prospecteur blessé.',
+      },
+    ],
+  },
+  {
+    id: 'motorcar', age: 3, mandatory: false, icon: '🚗', title: 'La course automobile', unlocks: 'carworks',
+    intro: 'Un ingénieur de passage a monté une drôle de voiture sans chevaux. Il cherche une équipe pour la mener à la grande course de la région.',
+    choices: [
+      {
+        label: 'Rouler prudemment jusqu’à l’arrivée', text: 'Finir la course, c’est déjà la gagner.',
+        dest: 'plain', scene: 'race', doing: 'prépare la voiture et file sur la route de la course', party: 3, work: 22, risk: 0.15,
+        win: [jobs(3), joy(1)], lose: [],
+        winText: 'La voiture franchit la ligne sous les vivats : l’ingénieur ouvre une usine au village, et les premières automobiles remplacent les charrettes.',
+        loseText: 'Une roue cassée dans le fossé : la voiture rentre en remorque.',
+      },
+      {
+        label: 'Pousser la machine à fond', text: 'La victoire, ou le fossé.',
+        dest: 'plain', scene: 'race', doing: 'pousse la voiture à fond sur la route de la course', party: 3, work: 18, risk: 0.35,
+        win: [jobs(4), joy(3)], lose: [hurt(1, 2)],
+        winText: 'Première sur la ligne ! Toute la région parle de la voiture du village : une usine automobile s’y installe, et les charrettes cèdent la route aux autos.',
+        loseText: 'Un tête-à-queue dans le virage : le pilote est blessé.',
+      },
+    ],
+  },
+  {
+    id: 'flight', age: 3, mandatory: false, icon: '🎈', title: 'Le premier envol', unlocks: 'aerodrome',
+    intro: 'Des aéronautes veulent faire voler un ballon au-dessus de la région. Il leur faut des bras pour tenir les cordes, et du cran pour monter dans la nacelle.',
+    choices: [
+      {
+        label: 'Gonfler la montgolfière dans la plaine', text: 'Par temps calme, au ras des champs.',
+        dest: 'plain', scene: 'balloon', doing: 'gonfle la montgolfière et tient les cordes', party: 4, work: 20, risk: 0.15,
+        win: [joy(2)], lose: [hurt(1, 1)],
+        winText: 'Le ballon s’élève au-dessus du village sous les applaudissements : un aérodrome s’ouvre, montgolfières et dirigeable y viendront.',
+        loseText: 'Un coup de vent a couché le ballon : une main brûlée au brûleur.',
+      },
+      {
+        label: 'Décoller du col, dans les vents de la montagne', text: 'Plus haut, plus loin, plus risqué.',
+        dest: 'mountain', scene: 'balloon', doing: 'gonfle la montgolfière au col et guette le vent', party: 3, work: 24, risk: 0.3,
+        win: [joy(3), { t: 'ore', n: 3 }], lose: [hurt(1, 2)],
+        winText: 'Le ballon a survolé toute la région ; de là-haut on a repéré un filon. L’aérodrome ouvre ses portes.',
+        loseText: 'Atterrissage dans les rochers : un aéronaute blessé.',
       },
     ],
   },

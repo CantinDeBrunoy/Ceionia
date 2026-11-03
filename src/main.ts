@@ -12,6 +12,7 @@ import { BuildingView } from './render/buildings';
 import { RoadView } from './render/roads';
 import { stepWind } from './render/wind';
 import { Helis } from './render/helis';
+import { Airships } from './render/airships';
 import { AlpineView } from './render/alpine';
 import { Emergencies } from './render/emergency';
 import { Hoists } from './render/hoists';
@@ -87,6 +88,7 @@ class Game implements UIHost {
   fires: Fires;
   traffic: Traffic;
   helis: Helis;
+  airships: Airships;
   alpine: AlpineView;
   emergencies: Emergencies;
   hoists: Hoists;
@@ -199,9 +201,13 @@ class Game implements UIHost {
     this.traffic = new Traffic(w);
     this.traffic.avoid = this.roads.islands;
     this.helis = new Helis(w, this.buildings);
+    this.airships = new Airships(w);
     this.alpine = new AlpineView(w, this.buildings);
     this.emergencies = new Emergencies(w, this.fires, this.roads.islands);
     this.fires.responder = this.emergencies;
+    // les pompiers et les voisins au seau : ils restent tant que ça brûle, et leur eau éteint le feu
+    this.fires.pails = (b) => this.agents.pails(b);
+    this.agents.burning = (id) => this.fires.burning.some((b) => b.id === id);
     this.hoists = new Hoists(w);
     this.transports = new Transports(w, this.buildings);
     // jardins : lieux qui changent avec les âges ; leurs feux fument et crépitent comme les foyers
@@ -229,7 +235,7 @@ class Game implements UIHost {
     this.atmosphere.onStrike = (x, z) => ignite(w.buildingAt(Math.floor(x), Math.floor(z)));
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.pens.group, this.railView.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.pens.group, this.railView.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -774,8 +780,10 @@ class Game implements UIHost {
       this.terrain.animateWater(this.elapsed, 1 - this.env.weatherK * 0.3);
       this.streams.update(dt, this.season.snow, this.cam.target);
       this.life.update(dt, this.time, this.season, this.env, this.cam.target);
+      this.traffic.motor = this.expeditions.state.done.includes('motorcar');
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
       this.helis.update(gdt, this.sim.age);
+      this.airships.update(gdt, this.time.hour, this.sim.age);
       this.alpine.update(gdt, this.sim.age, this.season.snow);
       this.emergencies.update(gdt, this.sim.age);
       this.hoists.update(gdt);

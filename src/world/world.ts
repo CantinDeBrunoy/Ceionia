@@ -4,7 +4,7 @@ import { GEN, GEN_FIXED, fillClimate } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
-const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill'];
+const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor'];
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
@@ -707,6 +707,7 @@ export class World {
       for (let j = 0; j < s && !landed; j++) for (let i = 0; i < s; i++) if (this.cellAvg(x + i, z + j) >= 0.02) { landed = true; break; }
       if (!side) return 'À poser au bord de l’eau : un côté du quai doit toucher l’eau';
       if (!landed) return 'Le quai doit s’appuyer sur la rive';
+      if (this.flatTarget(x, z, s) > 0.6) return 'Le quai serait trop haut au-dessus de l’eau : posez-le plus près de la rive';
     }
     for (let j = 0; j <= s; j++)
       for (let i = 0; i <= s; i++) {
@@ -737,6 +738,8 @@ export class World {
    */
   private repairFootprints() {
     for (const b of this.buildings.values()) {
+      // le quai du port a son bord au fond du bassin : son emprise n'est pas plate exprès
+      if (b.kind === 'harbor') continue;
       const s = sizeOf(b);
       let mn = Infinity, mx = -Infinity, held = 0, nh = 0;
       const others = (vx: number, vz: number) => {
@@ -761,10 +764,24 @@ export class World {
   }
 
   place(kind: KindId, x: number, z: number, rot: number, auto: boolean, age: number, animate = true, small = false): Building {
-    const s = small ? 1 : KINDS[kind].size;
+    const s = small ? KINDS[kind].size - 1 : KINDS[kind].size;
     // Aplanit l'empreinte, sans toucher aux coins partagés avec les voisins ; le quai du port est remblayé au-dessus de l'eau
     const avg = kind === 'harbor' ? Math.max(this.flatTarget(x, z, s), 0.12) : this.flatTarget(x, z, s);
     for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) if (!this.vertexHeld(x + i, z + j)) this.heights[this.vi(x + i, z + j)] = avg;
+    // le port creuse son bassin : devant le quai, sur trois rangs, le fond descend assez pour les grands navires (seulement là
+    // où c'est déjà de l'eau ou la grève)
+    // le bord du quai lui-même descend au fond du bassin : le mur de quai tombe droit dans l'eau, sans grève devant
+    if (kind === 'harbor') {
+      const f = [[0, 1], [1, 0], [0, -1], [-1, 0]][rot];
+      for (let d = 0; d <= 3; d++) for (let i = d ? -1 : 0; i <= s + (d ? 1 : 0); i++) {
+        const vx = f[0] ? (f[0] > 0 ? x + s + d : x - d) : x + i, vz = f[1] ? (f[1] > 0 ? z + s + d : z - d) : z + i;
+        if (vx < 0 || vz < 0 || vx > N || vz > N || this.vertexHeld(vx, vz)) continue;
+        const k = this.vi(vx, vz);
+        // le bord du quai ne descend que là où l'eau est juste devant (pas de fosse si le quai a été tourné vers la terre)
+        const ahead = d === 0 ? this.h(vx + f[0], vz + f[1]) : this.heights[k];
+        if (ahead < 0.1) this.heights[k] = Math.min(this.heights[k], -0.45 - d * 0.1);
+      }
+    }
     const b: Building = { id: this.nextId++, kind, x, z, rot, auto, age, ...(small ? { small: true } : {}) };
     for (let j = 0; j < s; j++)
       for (let i = 0; i < s; i++) {
@@ -774,7 +791,8 @@ export class World {
       }
     this.buildings.set(b.id, b);
     this.vegDirty = true;
-    this.markTerrain(x - 1, z - 1, x + s, z + s);
+    if (kind === 'harbor') this.markTerrain(x - 4, z - 4, x + s + 3, z + s + 3);
+    else this.markTerrain(x - 1, z - 1, x + s, z + s);
     this.markVeg(x - 1, z - 1, x + s, z + s);
     this.version++;
     for (const l of this.listeners) l.onAdd(b, animate);
@@ -793,6 +811,33 @@ export class World {
     this.version++;
     const s = sizeOf(b);
     for (const n of this.buildings.values()) if (n.x >= b.x - 2 && n.x <= b.x + s + 1 && n.z >= b.z - 2 && n.z <= b.z + s + 1) for (const l of this.listeners) l.onChange(n);
+  }
+
+  /**
+   * Transforme un bâtiment en un autre sur place (amélioration) : s'il est plus grand, son emprise s'étend sur l'une des places
+   * qui contiennent l'ancienne, de préférence vers l'arrière (la façade reste sur la rue) ; il garde son orientation et son
+   * âge, et les lignes de chemin de fer qui s'y arrêtaient s'arrêtent au nouveau. null s'il n'y a pas la place
+   */
+  upgrade(id: number, to: KindId): Building | null {
+    const b = this.buildings.get(id);
+    if (!b) return null;
+    const s0 = sizeOf(b), s1 = KINDS[to].size, grow = Math.max(0, s1 - s0), f = [[0, 1], [1, 0], [0, -1], [-1, 0]][b.rot];
+    // la place idéale : l'ancienne façade reste où elle est, l'emprise s'étend derrière et de part et d'autre
+    const ix = b.x - (f[0] > 0 ? grow : f[0] < 0 ? 0 : grow / 2), iz = b.z - (f[1] > 0 ? grow : f[1] < 0 ? 0 : grow / 2);
+    const spots: [number, number][] = [];
+    for (let dz = 0; dz <= grow; dz++) for (let dx = 0; dx <= grow; dx++) spots.push([b.x - dx, b.z - dz]);
+    spots.sort((p, q) => Math.hypot(p[0] - ix, p[1] - iz) - Math.hypot(q[0] - ix, q[1] - iz));
+    // l'ancien bâtiment ne gêne pas le nouveau : on libère son emprise le temps de chercher
+    const cells: number[] = [];
+    for (let j = 0; j < s0; j++) for (let i = 0; i < s0; i++) { const k = this.ci(b.x + i, b.z + j); cells.push(k); this.occ[k] = 0; }
+    const spot = spots.find(([x, z]) => this.canPlace(to, x, z) === null);
+    for (const k of cells) this.occ[k] = b.id;
+    if (!spot) return null;
+    const stops = this.lines.filter((l) => l.stops.includes(id));
+    this.removeBuilding(id);
+    const nb = this.place(to, spot[0], spot[1], b.rot, b.auto, b.age, true);
+    for (const l of stops) l.stops = l.stops.map((s) => (s === id ? nb.id : s));
+    return nb;
   }
 
   removeBuilding(id: number) {
@@ -964,11 +1009,12 @@ export class World {
     const mark = (b: Building) => { const s = sizeOf(b); for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) if (this.inCells(b.x + i, b.z + j)) owner[this.ci(b.x + i, b.z + j)] = b.id; };
     const grow = buildings.filter((b) => GREW.includes(b.kind));
     for (const b of buildings) if (!GREW.includes(b.kind)) mark(b);
-    // la case d'origine de chacun lui appartient d'office : un voisin qui grandit ne la prend pas
-    for (const b of grow) if (this.inCells(b.x, b.z)) owner[this.ci(b.x, b.z)] = b.id;
+    // l'ancienne emprise de chacun lui appartient d'office : un voisin qui grandit ne la prend pas
+    for (const b of grow) { const o = KINDS[b.kind].size - 1; for (let j = 0; j < o; j++) for (let i = 0; i < o; i++) if (this.inCells(b.x + i, b.z + j)) owner[this.ci(b.x + i, b.z + j)] = b.id; }
     const avg = (x: number, z: number) => (heights[this.vi(x, z)] + heights[this.vi(x + 1, z)] + heights[this.vi(x, z + 1)] + heights[this.vi(x + 1, z + 1)]) / 4;
     const fits = (b: Building, x: number, z: number) => {
-      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+      const S = KINDS[b.kind].size;
+      for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
         const cx = x + i, cz = z + j;
         if (!this.inCells(cx, cz)) return false;
         const k = this.ci(cx, cz);
@@ -976,21 +1022,24 @@ export class World {
       }
       return true;
     };
-    const vegIn = (x: number, z: number) => { let n = 0; for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) if (veg[this.ci(x + i, z + j)]) n++; return n; };
+    const vegIn = (x: number, z: number, S: number) => { let n = 0; for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) if (veg[this.ci(x + i, z + j)]) n++; return n; };
     // d'abord ceux qui n'ont jamais été marqués « petits » (dont les vrais 2 × 2, en place), puis les petits qui réessaient
     for (const b of [...grow.filter((q) => !q.small), ...grow.filter((q) => q.small)]) {
       const spots = [[b.x, b.z], [b.x - 1, b.z], [b.x, b.z - 1], [b.x - 1, b.z - 1]].filter(([x, z]) => fits(b, x, z));
       if (!spots.length) { b.small = true; mark(b); continue; }
-      const [x, z] = spots.reduce((best, s) => (vegIn(s[0], s[1]) < vegIn(best[0], best[1]) ? s : best));
+      const S = KINDS[b.kind].size;
+      const [x, z] = spots.reduce((best, s) => (vegIn(s[0], s[1], S) < vegIn(best[0], best[1], S) ? s : best));
       delete b.small;
       b.x = x; b.z = z;
       mark(b);
       // aplanir sans toucher aux coins partagés avec un voisin ; les champs et les arbres de l'emprise s'effacent
       const held = (vx: number, vz: number) => { for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) { const cx = vx + dx, cz = vz + dz; if (this.inCells(cx, cz) && owner[this.ci(cx, cz)] && owner[this.ci(cx, cz)] !== b.id) return true; } return false; };
       let h = 0;
-      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) h += heights[this.vi(x + i, z + j)] / 9;
-      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) if (!held(x + i, z + j)) heights[this.vi(x + i, z + j)] = h;
-      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) veg[this.ci(x + i, z + j)] = 0;
+      for (let j = 0; j <= S; j++) for (let i = 0; i <= S; i++) h += heights[this.vi(x + i, z + j)] / ((S + 1) * (S + 1));
+      // le quai du port reste remblayé au-dessus de l'eau
+      if (b.kind === 'harbor') h = Math.max(h, 0.12);
+      for (let j = 0; j <= S; j++) for (let i = 0; i <= S; i++) if (!held(x + i, z + j)) heights[this.vi(x + i, z + j)] = h;
+      for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) veg[this.ci(x + i, z + j)] = 0;
     }
   }
 

@@ -638,6 +638,42 @@ describe('expéditions', () => {
     expect(w.h(x + 1, z + 1)).toBeGreaterThanOrEqual(0.12);
   });
 
+  it('le port creuse son bassin devant le quai : le premier rang d’eau est assez profond pour un grand navire', () => {
+    const w = continent(), F = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+    const front = (x: number, z: number, r: number, i: number): [number, number] => { const f = F[r]; return [f[0] ? (f[0] > 0 ? x + 3 : x - 1) : x + i, f[1] ? (f[1] > 0 ? z + 3 : z - 1) : z + i]; };
+    let spot: [number, number, number] | null = null;
+    for (let z = 2; z < N - 4 && !spot; z++) for (let x = 2; x < N - 4 && !spot; x++) {
+      if (w.canPlace('harbor', x, z) !== null) continue;
+      const r = facingRoadRot(w, 'harbor', x, z, 0);
+      if ([0, 1, 2].every((i) => w.cellAvg(...front(x, z, r, i)) < -0.05)) spot = [x, z, r];
+    }
+    expect(spot).not.toBeNull();
+    const [x, z, r] = spot!;
+    w.place('harbor', x, z, r, true, 3, false);
+    expect(w.cellAvg(...front(x, z, r, 1))).toBeLessThan(-0.35);
+    expect(w.h(x + 1, z + 1)).toBeGreaterThanOrEqual(0.12);
+  });
+
+  it('une maison devient un manoir qui s’étend derrière elle, une petite gare une grande gare que ses lignes desservent toujours', () => {
+    const w = continent();
+    const free = (k: KindId, s: number): [number, number] => {
+      for (let z = 20; z < N - 20; z += 3) for (let x = 20; x < N - 20; x += 3) if (w.canPlace(k, x - s, z - s) === null && [...w.buildings.values()].every((o) => Math.hypot(o.x - x, o.z - z) > 8)) return [x, z];
+      throw new Error('pas de place');
+    };
+    const [hx, hz] = free('manor', 1);
+    const h = w.place('house', hx, hz, 0, false, 2, false);
+    const m = w.upgrade(h.id, 'manor')!;
+    expect(m.kind).toBe('manor');
+    expect(w.buildings.has(h.id)).toBe(false);
+    expect(m.z + 1).toBe(hz);
+    const [ax, az] = free('terminal', 0), a = w.place('station', ax, az, 0, false, 3, false);
+    const [bx, bz] = free('terminal', 0), b = w.place('station', bx, bz, 0, false, 3, false);
+    w.lines.push({ id: 7, stops: [a.id, b.id], color: 0xd84a3e });
+    const t = w.upgrade(a.id, 'terminal')!;
+    expect(t.kind).toBe('terminal');
+    expect(w.lines[w.lines.length - 1].stops).toEqual([t.id, b.id]);
+  });
+
   it('le passage à l’âge suivant attend le joueur, même quand tout est réuni', () => {
     const w = continent(), sim = new Sim(w);
     let up = -1;

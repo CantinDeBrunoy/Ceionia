@@ -973,6 +973,12 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       // rues : ligne médiane pointillée, lignes de rive en campagne, passages piétons et feux aux carrefours,
       // poteaux indicateurs, plaques d'égout, grilles d'avaloir, bornes d'incendie et poubelles sur le trottoir
       const white = C3(0xf3f3ee), hw = hw0;
+      // lampadaires posés par le joueur (décalés dans un coin de leur case, selon leur orientation)
+      const posts: [number, number][] = [];
+      for (const b of w.buildings.values()) if (b.kind === 'lamp') {
+        const r = (b.rot * Math.PI) / 2;
+        posts.push([b.x + 0.5 + 0.32 * Math.cos(r) + 0.32 * Math.sin(r), b.z + 0.5 - 0.32 * Math.sin(r) + 0.32 * Math.cos(r)]);
+      }
       for (const [k, st] of plan.cells) {
         if (st.plaza || st.round) continue;
         const cx = k % N, cz = Math.floor(k / N), ox = cx + 0.5, oz = cz + 0.5, y = (x: number, z: number) => w.hAt(x, z) + 0.024;
@@ -1030,8 +1036,12 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
             const mx = ox + dx * (hw + 0.095), mz = oz + dz * (hw + 0.095), my = y(mx, mz);
             for (let s = -2; s <= 2; s++) { const lat = s * 0.112; mark(mx - dz * lat, mz + dx * lat, dx, dz, 0.065, 0.032, my, white); }
           }
-          // feux tricolores (époque moderne) ou poteau indicateur (âge industriel) aux coins du carrefour, hors de la lanterne
-          const lamp = lamps.get(k), corners = QUADS.filter(([sx, sz]) => walkAt(sx * 0.41, sz * 0.41) && !(lamp && Math.hypot(lamp[0] - ox - sx * 0.41, lamp[1] - oz - sz * 0.41) < 0.2));
+          // feux tricolores (époque moderne) ou poteau indicateur (âge industriel) aux coins du carrefour, hors de la lanterne,
+          // des lampadaires posés et des places (le coin du trottoir s'y fond : le poteau se dresserait au milieu des dalles)
+          const lamp = lamps.get(k), corners = QUADS.filter(([sx, sz]) => walkAt(sx * 0.41, sz * 0.41)
+            && !(lamp && Math.hypot(lamp[0] - ox - sx * 0.41, lamp[1] - oz - sz * 0.41) < 0.2)
+            && ![[sx, 0], [0, sz], [sx, sz]].some(([dx, dz]) => plan.cells.get(w.ci(cx + dx, cz + dz))?.plaza)
+            && !posts.some(([px, pz]) => Math.hypot(px - ox - sx * 0.41, pz - oz - sz * 0.41) < 0.3));
           if (!crossings || !corners.length) continue;
           if (a >= 4) {
             for (const [sx, sz] of corners.slice(0, hash2(cx, cz, 57) < 0.5 ? 1 : 2)) {
