@@ -126,8 +126,9 @@ export class TerrainView {
   private biomeW = new Float32Array(N * N * NB);
   private biomeTmp = new Float32Array(N * N * NB);
   private biomeOne = new Float32Array(N * N * NB);
-  /** Teintes de saison à refaire, bande par bande (première ligne de cases restante, -1 si rien) */
+  /** Teintes de saison à refaire, bande par bande : prochaine ligne de cases (-1 si rien), lignes qu'il reste à reteinter */
   private sweep = -1;
+  private sweepLeft = 0;
   private sweepPal: GroundPalette | null = null;
   private biomeCol = Array.from({ length: NB }, () => new THREE.Color());
   /** Par sous-sommet : parts des biomes (interpolées entre les centres de cases) */
@@ -378,19 +379,27 @@ float snN(vec2 p) {
     return m;
   }
 
-  /** Nouvelle saison : les teintes du sol se refont par bandes, sur quelques images (pas d'à-coup sur une grande carte) */
+  /**
+   * Nouvelle saison : les teintes du sol se refont par bandes, sur quelques images (pas d'à-coup sur une grande carte). Un
+   * balayage en cours n'est pas renvoyé en haut de la carte : il continue d'où il en est et fait le tour complet. Repris du
+   * haut à chaque nouvelle teinte, il n'atteignait jamais le bas de la carte quand les saisons filent vite (×4, saisons
+   * courtes, images rares) : la neige y restait l'été, derrière une limite droite
+   */
   recolor(pal: GroundPalette) {
     this.sweepPal = pal;
-    this.sweep = 0;
+    if (this.sweep < 0) this.sweep = 0;
+    this.sweepLeft = N;
   }
 
-  /** Avance d'une bande la mise à jour des teintes de saison */
+  /** Avance d'une bande la mise à jour des teintes de saison ; la falaise du bord suit à chaque tour de la carte */
   stepRecolor() {
     if (this.sweep < 0 || !this.sweepPal) return;
-    const z0 = this.sweep, z1 = Math.min(N - 1, z0 + RECOLOR_ROWS - 1);
+    const z0 = this.sweep, z1 = Math.min(N - 1, z0 + Math.min(RECOLOR_ROWS, this.sweepLeft) - 1);
     this.update(this.sweepPal, [0, z0, N - 1, z1], true);
-    this.sweep = z1 >= N - 1 ? -1 : z1 + 1;
-    if (this.sweep < 0) this.updateSkirt(this.sweepPal);
+    this.sweepLeft -= z1 - z0 + 1;
+    this.sweep = z1 >= N - 1 ? 0 : z1 + 1;
+    if (z1 >= N - 1 || this.sweepLeft <= 0) this.updateSkirt(this.sweepPal);
+    if (this.sweepLeft <= 0) this.sweep = -1;
   }
 
   /**
