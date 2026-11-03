@@ -4,6 +4,8 @@ import { GEN, GEN_FIXED, fillClimate } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
+/** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
+const QUAY_MAX = 0.32;
 const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor'];
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
@@ -738,8 +740,18 @@ export class World {
    */
   private repairFootprints() {
     for (const b of this.buildings.values()) {
-      // le quai du port a son bord au fond du bassin : son emprise n'est pas plate exprès
-      if (b.kind === 'harbor') continue;
+      // le quai du port a son bord au fond du bassin : son emprise n'est pas plate exprès ; un quai trop haut au-dessus de
+      // l'eau (anciennes parties) redescend, le terrain derrière lui fait talus
+      if (b.kind === 'harbor') {
+        const s = sizeOf(b);
+        for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) {
+          const vx = b.x + i, vz = b.z + j, k = this.vi(vx, vz);
+          let held = false;
+          for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) { const cx = vx + dx, cz = vz + dz; if (this.inCells(cx, cz) && this.occ[this.ci(cx, cz)] && this.occ[this.ci(cx, cz)] !== b.id) held = true; }
+          if (!held && this.heights[k] > QUAY_MAX) this.heights[k] = QUAY_MAX;
+        }
+        continue;
+      }
       const s = sizeOf(b);
       let mn = Infinity, mx = -Infinity, held = 0, nh = 0;
       const others = (vx: number, vz: number) => {
@@ -766,7 +778,7 @@ export class World {
   place(kind: KindId, x: number, z: number, rot: number, auto: boolean, age: number, animate = true, small = false): Building {
     const s = small ? KINDS[kind].size - 1 : KINDS[kind].size;
     // Aplanit l'empreinte, sans toucher aux coins partagés avec les voisins ; le quai du port est remblayé au-dessus de l'eau
-    const avg = kind === 'harbor' ? Math.max(this.flatTarget(x, z, s), 0.12) : this.flatTarget(x, z, s);
+    const avg = kind === 'harbor' ? Math.min(QUAY_MAX, Math.max(this.flatTarget(x, z, s), 0.12)) : this.flatTarget(x, z, s);
     for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) if (!this.vertexHeld(x + i, z + j)) this.heights[this.vi(x + i, z + j)] = avg;
     // le port creuse son bassin : devant le quai, sur trois rangs, le fond descend assez pour les grands navires (seulement là
     // où c'est déjà de l'eau ou la grève)

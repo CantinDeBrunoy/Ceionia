@@ -560,8 +560,10 @@ export class UnderView {
     // cavaliers sur les flancs — la troupe a de l'allure
     const escort = t.kind === 'armor' ? (t.age >= 3 ? 7 : 4) : t.kind === 'cavalry' ? (t.age >= 3 ? 4 : 2) : 2;
     const flank = t.kind !== 'cavalry' && t.age >= 2 ? 2 : 0;
-    for (let i = 0; i < flank; i++) { const rider = makeRider(t.age, t.id + 7 + i); this.scene.add(rider.root); members.push({ actor: null, rider, soldier: null }); }
-    for (let i = 0; i < escort; i++) { const soldier = makeSoldier(t.age, t.id + 11 + i, false); this.scene.add(soldier.root); members.push({ actor: null, rider: null, soldier }); }
+    // l'équipe de mineurs part avec des gendarmes (sergents du guet au Moyen Âge), à pied et à cheval ; les autres avec la troupe
+    const police = t.kind === 'miners';
+    for (let i = 0; i < flank; i++) { const rider = makeRider(t.age, t.id + 7 + i, police); this.scene.add(rider.root); members.push({ actor: null, rider, soldier: null }); }
+    for (let i = 0; i < escort; i++) { const soldier = makeSoldier(t.age, t.id + 11 + i, false, police ? 'gendarme' : 'soldier'); this.scene.add(soldier.root); members.push({ actor: null, rider: null, soldier }); }
     for (let i = 0; i < t.n; i++) {
       // la cavalerie : cavaliers de l'époque sur leurs chevaux, comme les jouteurs des jardins
       if (t.kind === 'cavalry' && i < 3) {
@@ -571,7 +573,14 @@ export class UnderView {
         continue;
       }
       if (t.kind !== 'miners' || i === 0) {
-        const soldier = makeSoldier(t.age, t.id + i, i === 0);
+        const soldier = makeSoldier(t.age, t.id + i, i === 0, police ? 'gendarme' : 'soldier');
+        this.scene.add(soldier.root);
+        members.push({ actor: null, rider: null, soldier });
+        continue;
+      }
+      // les mineurs de l'époque, pic en main (et leur lampe)
+      if (police) {
+        const soldier = makeSoldier(t.age, t.id + i, false, 'miner');
         this.scene.add(soldier.root);
         members.push({ actor: null, rider: null, soldier });
         continue;

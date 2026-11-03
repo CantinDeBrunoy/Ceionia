@@ -5,12 +5,12 @@ import { Puffs } from './particles';
 
 const MAX_FLAMES = 120, FLAMES_PER_FIRE = 7;
 /** Délai avant que les habitants éteignent un feu (un point d'eau tout près), durée au bout de laquelle le bâtiment est perdu */
-const PUT_OUT = 14, BURN_DOWN = 32;
+const PUT_OUT = 30, BURN_DOWN = 70;
 /**
  * Avec une caserne à portée : les pompiers accourent avec leurs seaux (au plus tard, le feu est éteint au bout de CREW
  * secondes) ; le camion arrose SPRAY_OUT secondes. L'eau des seaux l'éteint aussi : DOUSE seaux × secondes en tout
  */
-const CREW = 20, CREW_RANGE = 14, SPRAY_OUT = 6, DOUSE = 8;
+const CREW = 40, CREW_RANGE = 14, SPRAY_OUT = 14, DOUSE = 18;
 const WATER = new THREE.Color(0.78, 0.9, 1);
 const SMOKE = new THREE.Color(0.22, 0.2, 0.2), STEAM = new THREE.Color(0.95, 0.96, 0.97);
 
@@ -44,6 +44,20 @@ export class Fires {
 
   get burning() { return this.list.map((f) => f.b); }
 
+  /**
+   * Les incendies en cours, pour leurs cartes : où, ce qui se passe (les secours arrivent, on fait la chaîne, le camion
+   * arrose, ça brûle sans eau) et l'avancement de l'extinction (0 … 1)
+   */
+  incidents(): { key: string; icon: string; title: string; status: string; progress: number; x: number; z: number }[] {
+    return this.list.map((f) => {
+      const b = f.b, s = sizeOf(b), crew = this.crewNear(b), spray = crew ? this.responder?.spraying(b) ?? null : null, water = crew || this.waterNear(b);
+      const pails = water ? this.pails?.(b).length ?? 0 : 0;
+      const progress = Math.min(1, Math.max(spray !== null ? spray / SPRAY_OUT : 0, f.doused / DOUSE, water && spray === null ? f.t / (crew ? CREW : PUT_OUT) : 0));
+      const status = spray !== null && spray > 0 ? 'Le camion des pompiers arrose' : pails ? `${pails} seau${pails > 1 ? 'x' : ''} jeté${pails > 1 ? 's' : ''} sur les flammes` : crew ? 'Les pompiers accourent' : water ? 'On fait la chaîne depuis le puits' : 'Ça brûle, pas d’eau à portée !';
+      return { key: `fire:${b.id}`, icon: '🔥', title: `Incendie : ${KINDS[b.kind].names[b.age].toLowerCase()}`, status, progress, x: b.x + s / 2, z: b.z + s / 2 };
+    });
+  }
+
   /** Met le feu au bâtiment (sans effet s'il brûle déjà) ; true s'il s'enflamme */
   ignite(b: Building) {
     if (b.kind === 'lamp' || this.list.some((f) => f.b.id === b.id)) return false;
@@ -73,7 +87,8 @@ export class Fires {
       const water = crew || this.waterNear(b), out = crew ? CREW : PUT_OUT;
       // ceux qui sont arrivés avec leur seau jettent l'eau sur les flammes, chacun à son tour
       const pails = water ? this.pails?.(b) ?? [] : [];
-      f.doused += dt * pails.length;
+      // trois seaux à la fois au plus devant les flammes (les autres font la chaîne) : on en a pour un bon moment
+      f.doused += dt * Math.min(3, pails.length) * 0.6;
       const s0 = sizeOf(b), cx = b.x + s0 / 2, cz = b.z + s0 / 2, ground = w.h(b.x, b.z);
       f.throw -= dt * pails.length * 0.9;
       if (pails.length && f.throw <= 0) {

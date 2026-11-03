@@ -9,7 +9,7 @@ import type { Fires } from './fires';
 /** Portée des secours (cases) : celle de la caserne pour les incendies, la même pour l'hôpital et la police */
 const RANGE = 14;
 /** Temps d'arrosage avant que le feu soit éteint, temps passé sur place par l'ambulance et la police */
-const SPRAY = 4, STAY = 4.5;
+const SPRAY = 14, STAY = 14;
 const WATER = new THREE.Color(0.85, 0.93, 1);
 
 type Service = 'fire' | 'health' | 'police';
@@ -130,6 +130,16 @@ export class Emergencies {
     p.box(0.05, 0.02, 0.15, 0, 0, 0, 0xd8dde2); p.box(0.04, 0.03, 0.04, 0, 0.02, 0.06, 0xe8b894); p.box(0.05, 0.025, 0.08, 0, 0.02, -0.01, 0x3c7fd8);
     this.patientG = p.build(false).body;
     this.group.add(this.water.mesh);
+  }
+
+  /** Les interventions de l'ambulance et de la police en cours, pour leurs cartes : où est le véhicule, ce qu'il fait, l'avancement */
+  incidents(): { key: string; icon: string; title: string; status: string; progress: number; x: number; z: number }[] {
+    return this.units.filter((u) => u.service !== 'fire' && u.target && (u.state === 'go' || u.state === 'work')).map((u) => {
+      const health = u.service === 'health', go = u.state === 'go';
+      const progress = go ? 0.5 * (u.path.length ? u.i / u.path.length : 0) : 0.5 + 0.5 * Math.min(1, u.t / STAY);
+      const status = health ? (go ? 'L’ambulance arrive, sirène hurlante' : 'On soigne le malade et on l’emporte') : go ? 'La police accourt' : 'Les agents mènent l’enquête';
+      return { key: `unit:${u.service}:${u.target!.id}`, icon: health ? '🚑' : '🚓', title: health ? 'Un habitant a fait un malaise' : 'Cambriolage', status, progress, x: u.x, z: u.z };
+    });
   }
 
   /** Arrosage du feu de ce bâtiment par les pompiers : secondes passées à l'arroser, 0 en route, null sans camion */

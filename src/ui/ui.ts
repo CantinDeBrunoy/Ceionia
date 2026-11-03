@@ -54,6 +54,10 @@ export interface UIHost {
   /** chemin de fer de la gare à l'avant-poste, et la caméra qui suit le train */
   railway: Railway;
   followTrain(line: number): void;
+  /** incendies, malaises, cambriolages en cours, et la caméra qui en suit un */
+  incidents(): { key: string; icon: string; title: string; status: string; progress: number; x: number; z: number }[];
+  incidentCam: string | null;
+  followIncident(key: string | null): void;
   /** ligne en cours de tracé, et ce qu'on en fait */
   railEdit: { stops: number[]; line: number | null; color: number } | null;
   startRailEdit(from: { stop?: number; line?: number }): void;
@@ -224,6 +228,7 @@ export class UI {
   private selKey = '';
   /** cartes des expéditions en cours, par numéro */
   private expCards = new Map<number, HTMLElement>();
+  private incCards = new Map<string, HTMLElement>();
 
   constructor(root: HTMLElement, private host: UIHost) {
     this.root = root;
@@ -861,6 +866,27 @@ export class UI {
       card.classList.toggle('ask', !!a.wait);
     }
     for (const [id, card] of this.expCards) if (!live.has(id)) { card.remove(); this.expCards.delete(id); }
+    // les incidents en cours (incendies, malaises, cambriolages) : une carte chacun, l'œil pour les suivre à la caméra
+    const inc = h.incidents(), liveI = new Set<string>();
+    for (const i of inc) {
+      liveI.add(i.key);
+      let card = this.incCards.get(i.key);
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'expCard panel incident';
+        card.innerHTML = `<i class="team"></i><b class="mi"></b><div class="grow"><div class="t"></div><small></small><div class="bar"><i></i></div></div><button class="cam" title="La caméra suit l'intervention" aria-label="Suivre l'intervention à la caméra">${ic('eye', 18)}</button>`;
+        const key = i.key;
+        $('.cam', card).onclick = () => { h.followIncident(h.incidentCam === key ? null : key); this.update(); };
+        list.appendChild(card);
+        this.incCards.set(i.key, card);
+      }
+      $('.mi', card).textContent = i.icon;
+      $('.t', card).textContent = i.title;
+      $('small', card).textContent = i.status;
+      ($('.bar i', card) as HTMLElement).style.width = `${Math.round(i.progress * 100)}%`;
+      $('.cam', card).classList.toggle('active', h.incidentCam === i.key);
+    }
+    for (const [key, card] of this.incCards) if (!liveI.has(key)) { card.remove(); this.incCards.delete(key); }
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
     const must = mandatoryFor(h.sim.age);

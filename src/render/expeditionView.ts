@@ -56,6 +56,9 @@ export class ExpeditionView {
 
   constructor(private world: World, private agents: Agents, private exp: Expeditions) {}
 
+  /** Le cœur de la scène d'une expédition (ce que la caméra regarde quand on la suit sur place), ou null */
+  focusOf(id: number): [number, number] | null { return this.shows.get(id)?.scene?.focus ?? null; }
+
   update(dt: number) {
     if (!this.fx.group.parent) this.group.add(this.fx.group);
     this.fx.update(dt);

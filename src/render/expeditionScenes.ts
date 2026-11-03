@@ -340,7 +340,8 @@ export class ExpeditionScene {
   private emits: { x: number; y: number; z: number; kind: 'steam' | 'smoke' | 'puff' | 'bubble' | 'star'; every: number; t: number }[] = [];
   private jugglers: { x: number; y: number; z: number; face: number; balls: THREE.Mesh[] }[] = [];
   /** ce que regarde l'équipe (jongleurs, moine, ciel) ; places dans la source ; entrée de la galerie et tas de minerai */
-  private focus: [number, number] = [0, 0];
+  /** le cœur de l'action (l'enclos, la barque, la montgolfière…), que la caméra regarde quand on suit l'équipe */
+  focus: [number, number] = [0, 0];
   private bath: { at: [number, number][]; y: number; in: Set<number> } | null = null;
   private mouth: { at: [number, number]; heap: [number, number] } | null = null;
   private delve = new Map<number, { phase: 'go' | 'in' | 'out' | 'heap'; t: number }>();

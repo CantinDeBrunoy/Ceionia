@@ -185,13 +185,38 @@ function tank(v: number): Rider {
  * Cavalier de l'époque (âge 1 à 3 ; plus tôt, le cavalier romain ; à l'époque moderne, un char) ; `v` varie la robe du
  * cheval. Tourné vers +z, posé à y = 0, à l'échelle des habitants
  */
-export function makeRider(age: number, v = 0): Rider {
+export function makeRider(age: number, v = 0, gendarme = false): Rider {
   const era = Math.min(4, Math.max(1, age)), coat = COATS[(v % COATS.length + COATS.length) % COATS.length];
-  if (era === 4) return tank(v);
+  if (era === 4 && !gendarme) return tank(v);
   const p = new Parts();
   horse(p, coat);
   let weapon: Parts, kind: 'lance' | 'saber' | 'rifle', hand: [number, number, number];
-  if (era === 1) {
+  if (gendarme && era >= 3) {
+    // gendarme à cheval : tapis bleu bordé de blanc, culotte de peau blanche et bottes noires, habit bleu de roi, baudrier
+    // jaune bordé de blanc, trèfles d'argent, bicorne en bataille à cocarde (képi à l'époque moderne), sabre
+    const navy = 0x22305a, buff = 0xe8c060, silver = 0xd8dce2;
+    saddle(p, navy, 0xf0ece0);
+    seated(p, { thigh: era >= 4 ? navy : 0xf0ece0, boot: BLACK, coat: navy, arm: navy, glove: era >= 4 ? BLACK : 0xf0ece0 });
+    p.add(new THREE.BoxGeometry(0.02, 0.12, 0.003), 0, 0.32, 0.031, 0xf0ece0, 0, false, 0.6);
+    p.add(new THREE.BoxGeometry(0.014, 0.12, 0.004), 0, 0.32, 0.032, buff, 0, false, 0.6);
+    for (const s of [-1, 1]) p.box(0.03, 0.01, 0.04, s * 0.05, 0.345, 0, silver);
+    if (era >= 4) { p.cyl(0.026, 0.024, 0.04, 10, 0, 0.42, 0, 0x1a2238); p.cyl(0.0265, 0.0265, 0.008, 10, 0, 0.425, 0, silver); p.box(0.04, 0.005, 0.022, 0, 0.42, 0.03, BLACK); }
+    else {
+      const half = (r: number) => new THREE.CylinderGeometry(r, r, 0.026, 12, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1.25, 0.62, 1);
+      p.add(half(0.046), 0, 0.422, 0, BLACK); for (const z of [-0.0135, 0.0135]) p.add(new THREE.TorusGeometry(0.045, 0.0025, 3, 14, Math.PI).scale(1.25, 0.62, 1), 0, 0.422, z, silver); p.box(0.11, 0.008, 0.03, 0, 0.418, 0, BLACK);
+      p.add(new THREE.CylinderGeometry(0.011, 0.011, 0.004, 10).rotateX(Math.PI / 2), 0.026, 0.438, 0.016, 0xd8443a);
+      p.add(new THREE.CylinderGeometry(0.0075, 0.0075, 0.005, 10).rotateX(Math.PI / 2), 0.026, 0.438, 0.017, 0xf0ece0);
+      p.add(new THREE.CylinderGeometry(0.004, 0.004, 0.006, 8).rotateX(Math.PI / 2), 0.026, 0.438, 0.018, 0x2c4a9a);
+    }
+    weapon = saber(); kind = 'saber'; hand = [-0.048, 0.3, 0.08];
+  } else if (gendarme && era === 2) {
+    // sergent à cheval du guet : tapis bleu, tabard bleu à la fleur d'or, chapel de fer, épée
+    saddle(p, BLUE, GOLD);
+    seated(p, { thigh: 0x6a6a72, boot: LEATHER, coat: BLUE, arm: 0x8f949c, glove: LEATHER });
+    p.box(0.02, 0.02, 0.066, 0, 0.32, 0, GOLD);
+    p.sphere(0.03, 0, 0.425, 0, STEEL, 1, 0.75); p.cyl(0.05, 0.044, 0.012, 10, 0, 0.412, 0, STEEL);
+    weapon = saber(); kind = 'saber'; hand = [-0.048, 0.3, 0.08];
+  } else if (era === 1) {
     // cavalier romain : tapis rouge bordé d'or, tunique rouge et cape, cotte de mailles, casque de bronze à crête rouge,
     // bouclier ovale bleu à l'umbo d'or, lance de frêne
     saddle(p, 0xb8322c, GOLD);

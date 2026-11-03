@@ -112,6 +112,8 @@ class Game implements UIHost {
   /** la caméra suit l'expédition */
   /** expédition que la caméra suit (son numéro), ou null */
   following: number | null = null;
+  /** étape de l'expédition suivie (pour se rapprocher à son arrivée sur place) */
+  private followPhase = '';
   /** la vue est descendue d'elle-même avec la troupe suivie (elle remonte quand l'expédition est finie) */
   private autoUnder = false;
   /** réveil spontané d'un volcan : délai (secondes de jeu) et secousses annonciatrices en cours */
@@ -228,6 +230,12 @@ class Game implements UIHost {
     this.expView.fx.onClash = (k) => this.audio.sfxClash(k);
     // le train descend des mineurs au pied de la grotte et remonte minerai et pierre des galeries tenues
     this.railway = new Railway(w, this.agents, this.expeditions, () => this.time.dayLen);
+    // les scènes des expéditions ne se posent pas sur les voies ferrées
+    this.expeditions.avoidCells = () => {
+      const out = new Set<number>();
+      for (const seg of this.railway.network().segs) for (const [x, z] of seg.pts) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(Math.floor(x) + dx, Math.floor(z) + dz)) out.add(w.ci(Math.floor(x) + dx, Math.floor(z) + dz));
+      return out;
+    };
     this.railView = new RailView(w, this.railway);
     this.railView.streams = this.streams;
     this.pens = new PenView(w);
@@ -257,7 +265,7 @@ class Game implements UIHost {
     this.ui = new UI(uiRoot, host);
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
-    this.cam.onPan = () => { this.trainCam = null; };
+    this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; };
     // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts
     this.tools.pickStop = (b) => this.railPick(b);
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
@@ -377,6 +385,19 @@ class Game implements UIHost {
   /** Dissipe le brouillard et la brume ; ils ne reviennent pas avant un bon moment */
   dispelFog() { this.env.dispelFog(); this.atmosphere.dispel(300); }
 
+  /** Incidents en cours (incendies, malaises, cambriolages), pour leurs cartes et la caméra */
+  incidents() { return [...this.fires.incidents(), ...this.emergencies.incidents()]; }
+  /** l'incident que la caméra suit */
+  incidentCam: string | null = null;
+  followIncident(key: string | null) {
+    this.incidentCam = key;
+    if (!key) return;
+    this.following = null; this.trainCam = null;
+    if (this.mode === 'under') this.exitUnder();
+    const i = this.incidents().find((x) => x.key === key);
+    if (i) this.cam.follow(i.x, i.z, 9);
+  }
+
   /** La caméra suit le train de cette ligne (jusqu'à ce qu'on fasse glisser la vue) */
   followTrain(line: number) {
     const tr = this.railway.trains.get(line), p = tr ? this.railway.trainAt(tr) : null;
@@ -446,7 +467,8 @@ class Game implements UIHost {
     if (a) this.trainCam = null;
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
-    if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 16); }
+    // assez près pour voir l'équipe (de petits personnages) ; on se rapproche encore quand elle arrive sur place
+    if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 10); this.followPhase = ''; }
   }
   get disasters() { return this.world.disasters; }
 
@@ -761,7 +783,15 @@ class Game implements UIHost {
     if (!followed) this.following = null;
     else if (!uv) {
       const pos = this.agents.partyPositions(followed.party);
-      if (pos.length && !below) this.cam.follow(pos.reduce((s, p) => s + p[0], 0) / pos.length, pos.reduce((s, p) => s + p[1], 0) / pos.length);
+      if (pos.length && !below) {
+        let x = pos.reduce((s, p) => s + p[0], 0) / pos.length, z = pos.reduce((s, p) => s + p[1], 0) / pos.length;
+        // sur place, la vue se pose entre l'équipe et le cœur de la scène (l'enclos, la barque, la montgolfière…), et se rapproche
+        const f = followed.phase === 'work' ? this.expView.focusOf(followed.id) : null;
+        if (f && Math.hypot(f[0] - x, f[1] - z) < 4) { x = (x + f[0]) / 2; z = (z + f[1]) / 2; }
+        const arrived = followed.phase === 'work' && this.followPhase !== 'work';
+        this.followPhase = followed.phase;
+        this.cam.follow(x, z, arrived ? 6.5 : undefined);
+      }
     } else {
       const p = uv.troopAt(followed.id);
       if (p) this.cam.follow(p[0], p[1]);
@@ -798,6 +828,8 @@ class Game implements UIHost {
       const tr = this.trainCam === null ? undefined : this.railway.trains.get(this.trainCam), tp = tr ? this.railway.trainAt(tr) : null;
       if (tp) this.cam.follow(tp[0], tp[1]);
       else this.trainCam = null;
+      // l'incident suivi : la caméra reste dessus (sur le véhicule en route), jusqu'à ce qu'il soit fini
+      if (this.incidentCam) { const i = this.incidents().find((x) => x.key === this.incidentCam); if (i) this.cam.follow(i.x, i.z); else this.incidentCam = null; }
       this.gardens.update(dt, this.time.hour);
       this.halos.update(dt, this.env.night);
       this.windT += dt * (1 + this.env.weatherK * 0.6);

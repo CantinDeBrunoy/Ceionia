@@ -2,7 +2,7 @@ import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN } from '../world/
 import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
-import { AGES, KINDS, Building } from '../build/catalog';
+import { AGES, KINDS, Building, sizeOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
 import { ExpEvent, pickEvent } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
@@ -118,6 +118,9 @@ export class Expeditions {
   /** le monde souterrain, où descendent les troupes armées (donné par le jeu) */
   under: Underground | null = null;
   constructor(private world: World, private agents: Agents, private dayLen: () => number, private rnd: () => number = Math.random) {}
+
+  /** cases où ne pas poser une scène d'expédition (les voies ferrées et leurs abords) */
+  avoidCells: (() => Set<number>) | null = null;
 
   /** état sauvegardé des expéditions (réserve d'équipement, fabrication…) et minerai du village */
   get state() { return this.world.exp; }
@@ -639,10 +642,24 @@ export class Expeditions {
     return [x, z];
   }
 
-  /** Destination du genre voulu, à bonne distance du village et atteignable à pied */
+  /**
+   * Destination du genre voulu, hors du village (à quatre cases au moins de tout bâtiment, plus loin que le gros des maisons :
+   * dans un grand village, la plaine la plus proche n'est pas entre deux maisons) et atteignable à pied
+   */
   private findDest(kind: DestKind, base: [number, number]): [number, number] | null {
     const w = this.world, [bx, bz] = base, cand: [number, number, number][] = [];
-    const ideal = { plain: 18, forest: 15, river: 15, mountain: 22, cave: 18, far: 32 }[kind];
+    const town = new Uint8Array(N * N), ds: number[] = [];
+    for (const b of w.buildings.values()) {
+      if (b.kind === 'lamp') continue;
+      const s = sizeOf(b);
+      ds.push(Math.hypot(b.x + s / 2 - bx, b.z + s / 2 - bz));
+      for (let dz = -4; dz < s + 4; dz++) for (let dx = -4; dx < s + 4; dx++) if (w.inCells(b.x + dx, b.z + dz)) town[w.ci(b.x + dx, b.z + dz)] = 1;
+    }
+    ds.sort((p, q) => p - q);
+    // le rayon du gros du village (huit bâtiments sur dix en deçà) : on part au-delà
+    const reach = ds.length ? ds[Math.floor(ds.length * 0.8)] : 0;
+    const ideal = { plain: 18, forest: 15, river: 15, mountain: 22, cave: 18, far: 32 }[kind] + (kind === 'cave' ? 0 : reach * 0.7);
+    const outside: [number, number, number][] = [], rails = this.avoidCells?.() ?? null;
     // dénivelé autour d'une case : de combien le terrain monte dans un rayon de trois cases (une paroi, une pente de montagne)
     const rise = (x: number, z: number) => {
       let top = -Infinity;
@@ -652,7 +669,7 @@ export class Expeditions {
     for (let z = 2; z < N - 2; z += 2)
       for (let x = 2; x < N - 2; x += 2) {
         const k = w.ci(x, z), h = w.cellAvg(x, z), slope = w.cellSlope(x, z), d = Math.hypot(x + 0.5 - bx, z + 0.5 - bz);
-        if (w.occ[k] || w.lake[k] || w.decor[k] || h < 0.15) continue;
+        if (w.occ[k] || w.lake[k] || w.decor[k] || h < 0.15 || rails?.has(k)) continue;
         let ok = false;
         if (kind === 'forest') ok = w.veg[k] === VEG_FOREST && d > 8;
         else if (kind === 'plain') ok = w.veg[k] === 0 && !w.road[k] && slope < 0.5 && h < 3 && d > 10;
@@ -660,14 +677,16 @@ export class Expeditions {
         else if (kind === 'mountain') {
           // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif
           const up = slope < 1.2 && h > 1 && d > 9 ? rise(x, z) : 0;
-          if (up > 1.4 || (h > 4.2 && slope < 1.2 && d > 9)) cand.push([x + 0.5, z + 0.5, Math.abs(d - ideal) - Math.min(up, 4) * 3 + this.rnd() * 5]);
+          if (up > 1.4 || (h > 4.2 && slope < 1.2 && d > 9)) (town[k] ? cand : outside).push([x + 0.5, z + 0.5, Math.abs(d - ideal) - Math.min(up, 4) * 3 + this.rnd() * 5]);
           continue;
         }
         // devant une grotte ou une faille : au bord de son emprise
         else if (kind === 'cave') ok = d > 6 && w.outpostEntrance(x, z, 1) >= 0;
         else ok = slope < 0.8 && d > 24 && !w.road[k] && w.veg[k] !== VEG_FIELD && w.veg[k] !== VEG_GARDEN;
-        if (ok) cand.push([x + 0.5, z + 0.5, Math.abs(d - ideal) + this.rnd() * 5]);
+        if (ok) (kind === 'cave' || !town[k] ? outside : cand).push([x + 0.5, z + 0.5, Math.abs(d - ideal) + this.rnd() * 5]);
       }
+    // hors du village d'abord ; entre les maisons seulement s'il n'y a rien d'autre
+    if (outside.length) cand.splice(0, cand.length, ...outside);
     cand.sort((a, b) => a[2] - b[2]);
     // deux équipes ne vont pas camper au même endroit
     const free = cand.filter(([x, z]) => !this.active.some((a) => Math.hypot(a.dest[0] - x, a.dest[1] - z) < 3));
