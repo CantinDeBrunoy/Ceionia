@@ -360,7 +360,7 @@ float snN(vec2 p) {
         p.setY(i, y + (hash2(i, 9, 3) - 0.5) * 1.2);
       }
     }
-    const ng = geo.toNonIndexed();
+    const ng = geo.index ? geo.toNonIndexed() : geo;
     ng.deleteAttribute('uv');
     ng.computeVertexNormals();
     const c = new Float32Array(ng.attributes.position.count * 3);
