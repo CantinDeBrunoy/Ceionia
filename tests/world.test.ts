@@ -793,6 +793,37 @@ describe('expéditions', () => {
     expect(agents.available()).toBeGreaterThanOrEqual(m.choices[0].party);
   });
 
+  it('le grand départ des colons : adieux au village, aucun échec possible, et pas de retour', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 5, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 5, false, 30, 0);
+    // le hasard le plus défavorable : un tirage à 0 ferait échouer n'importe quelle autre expédition
+    const ex = new Expeditions(w, agents, () => 100, () => 0);
+    const colony = MISSIONS.find((mm) => mm.id === 'colony')!;
+    expect(colony.farewell).toBe(true);
+    // sans cosmodrome dans ce petit village : la même mission, menée dans la plaine
+    const m = { ...colony, requires: undefined, choices: colony.choices.map((c) => ({ ...c, dest: 'plain' as const })) };
+    const a = ex.start(m, 0, 5)!;
+    expect(a).not.toBeNull();
+    expect(ex.chance(a)).toBe(0);
+    let report: Report | null = null;
+    ex.onReport = (r) => (report = r);
+    const phases: string[] = [];
+    for (let i = 0; i < 40000 && !report; i++) {
+      agents.update(0.05, 10, 5, false, 30, 0);
+      ex.update(0.05);
+      if (a.wait) ex.decide(a, 0);
+      // le voyage vu (ou passé) : le travail sur place s'achève aussitôt
+      if (a.phase === 'work' && a.t > 5) ex.landNow(a);
+      if (phases[phases.length - 1] !== a.phase) phases.push(a.phase);
+    }
+    expect(phases).toEqual(['gather', 'out', 'work', 'home']);
+    expect(report!.ok).toBe(true);
+    expect(w.exp.done).toContain('colony');
+  });
+
   it('plus le village est peuplé, plus il mène d’expéditions de front', () => {
     expect([0, 29, 30, 59, 60, 90, 500].map(partyLimit)).toEqual([1, 1, 2, 2, 3, 4, 4]);
     const w = continent();

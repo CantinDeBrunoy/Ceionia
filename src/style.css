@@ -595,6 +595,12 @@ body.photo #photoBar { display: flex; }
 @keyframes rec { 50% { opacity: 0.2; } }
 .sc-cap { min-height: 1.3em; margin: 8px 2px 0; font-size: 13px; font-weight: 700; color: var(--ink2); }
 .overlay.victory { z-index: 40; background: rgba(10, 15, 36, 0.55); }
+/* le grand voyage des colons, plein écran, avant l'écran de fin */
+.overlay.voyage { z-index: 41; flex-direction: column; gap: 14px; background: #02030a; backdrop-filter: none; -webkit-backdrop-filter: none; transition: opacity 0.6s; }
+.overlay.voyage.out { opacity: 0; }
+.voyage canvas { display: block; width: min(960px, 96vw, calc((100vh - 120px) * 16 / 9)); aspect-ratio: 16 / 9; border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.voyage .cap { margin: 0; min-height: 1.4em; color: #dfe6ff; font-size: 17px; font-weight: 700; text-align: center; }
+.voyage .skip { position: absolute; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); background: rgba(255, 255, 255, 0.12); color: #dfe6ff; border-color: rgba(255, 255, 255, 0.25); }
 .victoryCard { max-width: 600px; padding-top: 18px; text-align: center; background: rgba(255, 255, 255, 0.97); }
 .victoryCard canvas { display: block; width: 100%; aspect-ratio: 520 / 200; border-radius: 12px; }
 .victoryCard h2 { margin: 16px 0 6px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }

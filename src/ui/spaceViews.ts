@@ -212,3 +212,167 @@ function drawPlanet(c: CanvasRenderingContext2D, t: number) {
   const f = 1 + Math.sin(t * 9) * 0.2;
   c.fillStyle = '#ffb04a'; c.beginPath(); c.moveTo(px + 30, py - pr + 1); c.lineTo(px + 36, py - pr + 1); c.lineTo(px + 33, py - pr - 8 * f); c.fill();
 }
+
+/** Durée du grand voyage jusqu'à la planète des colons, en secondes réelles (quelle que soit la vitesse du jeu) */
+export const VOYAGE_S = 24;
+
+/**
+ * Le grand voyage, plein écran : le vaisseau colonial quitte la planète du village, file entre les étoiles (le moteur
+ * expérimental plie l'espace d'un éclair), voit grossir la planète bleue de l'étoile voisine et s'y pose dans un nuage de
+ * poussière ; les colons descendent la rampe et allument leur premier feu de camp. « Passer » mène tout de suite à la suite
+ */
+export function showVoyage(root: HTMLElement, jump: boolean, onDone: () => void) {
+  const ov = document.createElement('div');
+  ov.className = 'overlay voyage';
+  ov.innerHTML = '<canvas width="960" height="540"></canvas><p class="cap"></p><button class="skip">Passer ›</button>';
+  root.appendChild(ov);
+  const cv = ov.querySelector('canvas')!, c = cv.getContext('2d'), cap = ov.querySelector('.cap')!, t0 = performance.now();
+  let raf = 0, ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    cancelAnimationFrame(raf);
+    ov.classList.add('out');
+    setTimeout(() => { ov.remove(); onDone(); }, 600);
+  };
+  const frame = () => {
+    if (!ov.isConnected || ended) return;
+    const t = (performance.now() - t0) / 1000;
+    if (c) cap.textContent = drawVoyage(c, Math.min(1, t / VOYAGE_S), t, jump);
+    if (t >= VOYAGE_S) end(); else raf = requestAnimationFrame(frame);
+  };
+  frame();
+  // onglet en arrière-plan (plus d'images) : le voyage se termine quand même
+  setTimeout(end, VOYAGE_S * 1000 + 1500);
+  (ov.querySelector('.skip') as HTMLButtonElement).onclick = end;
+}
+
+/** Une image du voyage à l'instant u (0 … 1), t en secondes ; renvoie la légende */
+function drawVoyage(c: CanvasRenderingContext2D, u: number, t: number, jump: boolean): string {
+  const w = 480, h = 270;
+  c.setTransform(2, 0, 0, 2, 0, 0);
+  if (u < 0.62) {
+    // ---- dans l'espace : départ, traversée, approche ; les étoiles filent, d'autant plus vite pendant le saut
+    c.fillStyle = '#03050d'; c.fillRect(0, 0, w, h);
+    const warp = jump && u > 0.28 && u < 0.4, speed = u < 0.16 ? 0.3 : u < 0.42 ? (warp ? 6 : 1.4) : 0.4;
+    for (let i = 0; i < 140; i++) {
+      const depth = 0.3 + rnd(i, 5) * 0.7, x = (rnd(i, 1) * w * 3 - t * 40 * speed * depth) % w, y = rnd(i, 2) * h;
+      const len = Math.max(1.2, speed * depth * (warp ? 26 : 5));
+      c.fillStyle = `rgba(220,230,255,${0.35 + depth * 0.6})`; c.fillRect(x < 0 ? x + w : x, y, len, 1.2);
+    }
+    // une nébuleuse au loin
+    const neb = c.createRadialGradient(w * 0.7, h * 0.3, 0, w * 0.7, h * 0.3, 160);
+    neb.addColorStop(0, 'rgba(140,90,220,0.18)'); neb.addColorStop(1, 'rgba(140,90,220,0)');
+    c.fillStyle = neb; c.fillRect(0, 0, w, h);
+    if (u < 0.16) {
+      // la planète du village s'éloigne en bas à gauche
+      const k = u / 0.16, pr = 150 - k * 60, px = 60 - k * 60, py = 300 + k * 40, f = pr / 150;
+      c.fillStyle = '#2f6fd8'; c.beginPath(); c.arc(px, py, pr, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#5fb86a';
+      for (const [dx, dy, r] of [[30, -110, 40], [90, -60, 30], [-20, -130, 26]]) { c.beginPath(); c.ellipse(px + dx * f, py + dy * f, r * f, r * 0.6 * f, 0.3, 0, Math.PI * 2); c.fill(); }
+      c.fillStyle = 'rgba(255,255,255,0.55)'; c.fillRect(px + 10, py - pr * 0.8, 70 * f, 3);
+      ship(c, 140 + k * 100, 190 - k * 70, 0.7 + k * 0.3, -0.5 + k * 0.5, 1);
+      return 'Le vaisseau colonial quitte la planète du village…';
+    }
+    if (u < 0.42) {
+      const k = (u - 0.16) / 0.26;
+      ship(c, w / 2 - 20, h / 2 + Math.sin(t * 1.5) * 3, 1, 0, warp ? 2 : 1);
+      // l'éclair du saut à travers l'espace
+      if (jump && u > 0.27 && u < 0.31) { c.fillStyle = `rgba(255,255,255,${1 - Math.abs(u - 0.29) / 0.02})`; c.fillRect(0, 0, w, h); }
+      return jump ? (k < 0.45 ? 'Allumage du moteur expérimental…' : 'L’espace se plie : l’étoile voisine est déjà là !')
+        : (k < 0.5 ? 'Des années de voyage entre les étoiles…' : 'Dans les serres de l’arche, les graines du nouveau village attendent.');
+    }
+    // l'approche : l'étoile voisine, la planète bleue qui grossit
+    const k = smooth((u - 0.42) / 0.2), pr = 14 + k * 190, px = w * 0.72, py = h * 0.5 + k * 120;
+    c.fillStyle = 'rgba(255,210,120,0.25)'; c.beginPath(); c.arc(70, 50, 30, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffd27a'; c.beginPath(); c.arc(70, 50, 14, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#3a8ad8'; c.beginPath(); c.arc(px, py, pr, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#5fc47a';
+    for (const [dx, dy, r] of [[-0.4, -0.5, 0.22], [0.2, -0.7, 0.16], [0.5, -0.3, 0.2]]) { c.beginPath(); c.ellipse(px + dx * pr, py + dy * pr, r * pr, r * 0.55 * pr, 0.2, 0, Math.PI * 2); c.fill(); }
+    c.strokeStyle = 'rgba(255,230,190,0.5)'; c.lineWidth = 2 + k * 3; c.beginPath(); c.ellipse(px, py - pr * 0.1, pr * 1.5, pr * 0.18, -0.1, Math.PI * 1.04, Math.PI * 1.96); c.stroke();
+    ship(c, w * 0.3 + k * 90, h * 0.45 + k * 20, 1 - k * 0.6, 0.15, 1);
+    return 'La planète bleue de l’étoile voisine !';
+  }
+  // ---- sur la planète : le ciel, ses deux lunes et son anneau, la descente, les colons
+  const sky = c.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#2a3a8a'); sky.addColorStop(0.6, '#6aa8d8'); sky.addColorStop(1, '#bfe3f0');
+  c.fillStyle = sky; c.fillRect(0, 0, w, h);
+  c.strokeStyle = 'rgba(255,240,210,0.6)'; c.lineWidth = 3; c.beginPath(); c.ellipse(w * 0.5, h * 0.62, w * 0.75, 70, -0.08, Math.PI * 1.08, Math.PI * 1.92); c.stroke();
+  c.fillStyle = '#e8e2f4'; c.beginPath(); c.arc(w * 0.18, 46, 14, 0, Math.PI * 2); c.fill();
+  c.fillStyle = '#d8c8b0'; c.beginPath(); c.arc(w * 0.82, 30, 8, 0, Math.PI * 2); c.fill();
+  // collines au loin, plaine verte et ses herbes bleutées
+  c.fillStyle = '#4f9a8a'; c.beginPath(); c.moveTo(0, h * 0.68);
+  for (let x = 0; x <= w; x += 40) c.lineTo(x, h * 0.66 - rnd(x, 3) * 22);
+  c.lineTo(w, h); c.lineTo(0, h); c.fill();
+  const gy = h * 0.8;
+  c.fillStyle = '#5fc47a'; c.fillRect(0, gy, w, h - gy);
+  c.fillStyle = '#3fa2a0';
+  for (let i = 0; i < 40; i++) { const x = rnd(i, 7) * w, y = gy + 4 + rnd(i, 8) * (h - gy - 6); c.fillRect(x, y - 4, 1.4, 4); c.fillRect(x + 2, y - 3, 1.4, 3); }
+  // la descente, flamme sous les tuyères, le contact dans la poussière
+  const land = smooth(Math.min(1, (u - 0.62) / 0.14)), lx = w * 0.42, ly = gy + 2, sy = ly - (1 - land) * 190;
+  if (land < 1) {
+    const fl = 10 + Math.sin(t * 40) * 3;
+    c.fillStyle = '#ffb04a'; c.beginPath(); c.moveTo(lx - 10, sy); c.lineTo(lx + 10, sy); c.lineTo(lx, sy + fl * 2); c.fill();
+    c.fillStyle = '#fff2c0'; c.beginPath(); c.moveTo(lx - 5, sy); c.lineTo(lx + 5, sy); c.lineTo(lx, sy + fl); c.fill();
+  }
+  lander(c, lx, sy);
+  const dust = (u - 0.74) / 0.12;
+  if (dust > 0 && dust < 1) for (let i = 0; i < 14; i++) {
+    const s = (rnd(i, 21) - 0.5) * 2, r = 5 + dust * 18 * rnd(i, 22);
+    c.fillStyle = `rgba(230,236,220,${0.75 * (1 - dust)})`; c.beginPath(); c.arc(lx + s * dust * 90, ly - 3 - rnd(i, 23) * 10 * (1 - dust), r, 0, Math.PI * 2); c.fill();
+  }
+  if (u < 0.8) return land < 1 ? 'Descente vers la plaine…' : 'Contact ! L’arche s’est posée.';
+  // la rampe s'ouvre, cinq colons descendent et vont au feu, bras levés quand il prend
+  const walk = Math.min(1, (u - 0.8) / 0.1), fx = w * 0.7;
+  c.fillStyle = '#c8ccd2'; c.beginPath(); c.moveTo(lx + 12, ly - 6); c.lineTo(lx + 30, ly); c.lineTo(lx + 22, ly); c.lineTo(lx + 8, ly - 4); c.fill();
+  // chacun prend sa place en arc de cercle autour du feu (les uns devant, les autres derrière)
+  const spots = [[-34, 2], [-20, -6], [20, -6], [34, 2], [-48, 8]];
+  for (let i = 0; i < 5; i++) {
+    const k = Math.max(0, Math.min(1, walk * 1.6 - i * 0.15));
+    if (k <= 0) continue;
+    const e = smooth(k), x = lx + 28 + (fx + spots[i][0] - lx - 28) * e, y = ly + spots[i][1] * e - (k < 1 ? Math.abs(Math.sin(t * 9 + i)) * 3 : 0);
+    const col = ['#f4f6f8', '#5af0ff', '#f4f6f8', '#ff7ab8', '#ffd04a'][i];
+    c.save(); c.translate(x, y); c.scale(1.7, 1.7);
+    c.fillStyle = col; c.fillRect(-2.5, -12, 5, 8); c.fillRect(-2, -4, 1.6, 4); c.fillRect(0.4, -4, 1.6, 4);
+    c.fillStyle = '#f2c8a0'; c.beginPath(); c.arc(0, -14.5, 2.6, 0, Math.PI * 2); c.fill();
+    // bras levés quand le feu a pris
+    if (k >= 1 && u > 0.9) { c.fillStyle = col; c.fillRect(-4, -18 + Math.sin(t * 6 + i) * 1.5, 1.4, 6); c.fillRect(2.6, -18 + Math.cos(t * 6 + i) * 1.5, 1.4, 6); }
+    c.restore();
+  }
+  if (u > 0.88) {
+    const f = 1 + Math.sin(t * 11) * 0.2, k = Math.min(1, (u - 0.88) / 0.04);
+    c.fillStyle = '#6a4a34'; c.fillRect(fx - 7, ly - 2, 14, 2.5);
+    c.fillStyle = '#ffb04a'; c.beginPath(); c.moveTo(fx - 6, ly - 2); c.lineTo(fx + 6, ly - 2); c.lineTo(fx, ly - 2 - 16 * f * k); c.fill();
+    c.fillStyle = '#fff2c0'; c.beginPath(); c.moveTo(fx - 3, ly - 2); c.lineTo(fx + 3, ly - 2); c.lineTo(fx, ly - 2 - 8 * f * k); c.fill();
+    const glow = c.createRadialGradient(fx, ly - 6, 0, fx, ly - 6, 40);
+    glow.addColorStop(0, `rgba(255,190,90,${0.35 * k})`); glow.addColorStop(1, 'rgba(255,190,90,0)');
+    c.fillStyle = glow; c.fillRect(fx - 40, ly - 46, 80, 80);
+  }
+  // le noir final
+  if (u > 0.95) { c.fillStyle = `rgba(3,5,13,${(u - 0.95) / 0.05})`; c.fillRect(0, 0, w, h); }
+  return u < 0.88 ? 'La rampe s’ouvre : les colons foulent leur nouvelle planète.' : 'Ils allument leur premier feu de camp : un nouveau village est né.';
+}
+
+/** L'arche des colons vue de profil en (x, y), à l'échelle s et penchée de a ; `boost` : la flamme des moteurs (2 : le saut) */
+function ship(c: CanvasRenderingContext2D, x: number, y: number, s: number, a: number, boost: number) {
+  c.save(); c.translate(x, y); c.rotate(a); c.scale(s, s);
+  const fl = (14 + Math.sin(performance.now() / 40) * 3) * boost;
+  c.fillStyle = boost > 1 ? '#bff8ff' : '#5af0ff'; c.beginPath(); c.moveTo(-34, -5); c.lineTo(-34 - fl, 0); c.lineTo(-34, 5); c.fill();
+  c.fillStyle = '#f4f6f8'; c.beginPath(); c.ellipse(0, 0, 34, 10, 0, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.moveTo(30, -6); c.lineTo(46, 0); c.lineTo(30, 6); c.fill();
+  c.strokeStyle = '#d8dce2'; c.lineWidth = 4; c.beginPath(); c.ellipse(-6, 0, 8, 18, 0, 0, Math.PI * 2); c.stroke();
+  c.fillStyle = '#7ad8a0'; c.beginPath(); c.ellipse(10, -6, 12, 5, 0, Math.PI, 0); c.fill();
+  c.fillStyle = '#fff1c9'; for (let k = 0; k < 5; k++) c.fillRect(-18 + k * 8, -1, 3, 2);
+  c.restore();
+}
+
+/** L'arche posée (ou qui se pose), ses pieds en (x, y) */
+function lander(c: CanvasRenderingContext2D, x: number, y: number) {
+  c.strokeStyle = '#c8ccd2'; c.lineWidth = 2;
+  for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x + s * 14, y - 14); c.lineTo(x + s * 24, y); c.stroke(); }
+  c.fillStyle = '#f4f6f8'; c.beginPath(); c.ellipse(x, y - 22, 22, 14, 0, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.moveTo(x - 10, y - 34); c.lineTo(x, y - 52); c.lineTo(x + 10, y - 34); c.fill();
+  c.fillStyle = '#7ad8a0'; c.beginPath(); c.ellipse(x, y - 30, 10, 6, 0, Math.PI, 0); c.fill();
+  c.fillStyle = '#5af0ff'; c.fillRect(x - 18, y - 22, 36, 2);
+  c.fillStyle = '#fff1c9'; for (let k = 0; k < 4; k++) c.fillRect(x - 12 + k * 7, y - 18, 3, 2.5);
+}

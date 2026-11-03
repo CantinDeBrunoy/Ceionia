@@ -1126,8 +1126,10 @@ export class UI {
       if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? 'Aucun chemin praticable vers cette destination.'); return; }
       close();
       h.audio.sfxClick();
-      // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre
-      this.toast(`${m.icon} ${a.fromCamp ? 'La troupe descend du camp souterrain…' : ex.status(a)} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
+      // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre ; le grand départ des colons,
+      // lui, se suit d'office (c'est la fin de la partie)
+      if (m.farewell) h.follow(a.id);
+      else this.toast(`${m.icon} ${a.fromCamp ? 'La troupe descend du camp souterrain…' : ex.status(a)} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
       this.update();
     }));
   }
