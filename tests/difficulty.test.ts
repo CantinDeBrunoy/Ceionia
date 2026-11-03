@@ -135,7 +135,8 @@ describe('nourriture et croissance selon la difficulté', () => {
     for (const d of DIFFICULTIES) {
       const sim = hungry(d, 10);
       sim.update(0, 1);
-      expect(sim.food.demand).toBeCloseTo(11 * DIFFICULTY[d].foodK, 6);
+      // en parts entières : 13,75 parts se comptent 14
+      expect(sim.food.demand).toBe(Math.ceil(11 * DIFFICULTY[d].foodK));
     }
     expect(DIFFICULTY.challenge.foodK).toBeGreaterThan(1);
     expect(DIFFICULTY.normal.foodK).toBe(1);
