@@ -30,6 +30,8 @@ const DECK_COL = [0x9a7452, 0xa27c58, 0x8f7c66, 0xa39d95, 0xb4b9c0].map((c) => n
 const PILE_COL = [0x6f5640, 0x6f5640, 0x8a8178, 0x8a8178, 0x7d838c].map((c) => new THREE.Color(c));
 const SNOW = new THREE.Color(0xf2f6fa);
 const PEBBLE = [0xb3aba1, 0x9d9890, 0xc8c2b8].map((c) => new THREE.Color(c));
+/** Géométrie sans index ; l'icosaèdre n'en a déjà pas (THREE avertirait à chaque appel, à chaque refonte des routes) */
+const unindexed = (g: THREE.BufferGeometry) => (g.index ? g.toNonIndexed() : g);
 const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 /** Directions des voisines, dans l'ordre des bits des masques : est, ouest, sud, nord */
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -197,9 +199,9 @@ export class RoadView {
   /** cases de route sous l'îlot d'un rond-point : les voitures en font le tour */
   islands = new Set<number>();
   /** géométries de base des petits objets (non indexées) */
-  private cyl = new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0).toNonIndexed();
-  private cube = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0).toNonIndexed();
-  private ico = new THREE.IcosahedronGeometry(1, 0).toNonIndexed();
+  private cyl = unindexed(new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0));
+  private cube = unindexed(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
+  private ico = unindexed(new THREE.IcosahedronGeometry(1, 0));
   private noise = new Simplex(9137);
   /** revêtements (âge : terre, terre, dalles, pavés, asphalte), couleurs et neige, pour le shader */
   private u = {
@@ -1037,7 +1039,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       }
     // cailloux au bord des chemins de terre (et quelques-uns dessus), pas en ville ni sous la neige
     if (!town && snow < 0.5) {
-      const pebble = new THREE.IcosahedronGeometry(1, 0).toNonIndexed(), pp = pebble.attributes.position;
+      const pebble = unindexed(new THREE.IcosahedronGeometry(1, 0)), pp = pebble.attributes.position;
       for (const [k, ls] of lines) for (const l of ls) for (let i = 0; i + 3 < l.length; i += 2) {
         const r = hash2(k, i, 41);
         if (r > 0.45) continue;

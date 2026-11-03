@@ -52,7 +52,8 @@ export function broadleafShape() {
   for (const [a, s] of [[0.5, 1], [2.6, -1]]) t.add(new THREE.CylinderGeometry(0.016, 0.03, 0.24, 5).translate(0, 0.12, 0), Math.cos(a) * 0.02, 0.36, Math.sin(a) * 0.02, BARK, -a, false, s * 0.65);
   // racines qui s'évasent au pied
   for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.4; t.add(new THREE.ConeGeometry(0.035, 0.13, 4).translate(0, 0.065, 0), Math.cos(a) * 0.045, -0.01, Math.sin(a) * 0.045, ROOT, Math.PI - a, false, 1.05); }
-  return { canopy: canopy.toNonIndexed(), trunk: t.build(true).body, bottom: 0.32, top: 1.05 };
+  // les boules d'icosaèdres fusionnées sont déjà sans index
+  return { canopy: canopy.index ? canopy.toNonIndexed() : canopy, trunk: t.build(true).body, bottom: 0.32, top: 1.05 };
 }
 
 /**
@@ -91,7 +92,8 @@ export function pineShape(v: number, snow = false) {
 export function bushShape() {
   const blobs = [[0.09, 0, 0.06, 0], [0.065, 0.075, 0.045, 0.02], [0.06, -0.065, 0.04, -0.03], [0.055, 0.01, 0.05, -0.08]];
   const g = mergeGeometries(blobs.map(([r, x, y, z], i) => leafBall(r, x, y, z, 0.85, 0.1, i * 5.1 + 20)), false)!;
-  return shade(g, -0.01, 0.14, 0.58, 1.02, 0.05).toNonIndexed();
+  shade(g, -0.01, 0.14, 0.58, 1.02, 0.05);
+  return g.index ? g.toNonIndexed() : g;
 }
 
 /** Rochers : trois blocs arrondis et facettés, assis à plat, plus clairs sur le dessus ; et leur rayon au sol */

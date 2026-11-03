@@ -14,6 +14,9 @@ export type NeedId = 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health';
  */
 export interface NeedDetail extends Need { rows: { label: string; n: number; v: number }[]; kind: KindId; per: number }
 
+/** Parts entières d'un besoin : ce qui est fourni s'arrondit en dessous, ce qui est demandé au-dessus (aux erreurs d'arrondi près) */
+const down = (v: number) => Math.max(0, Math.floor(v + 1e-9)), up = (v: number) => Math.ceil(v - 1e-9);
+
 export interface AgeProgress {
   next: number;
   ratio: number;
@@ -108,7 +111,8 @@ export class Sim {
     // les champs semés sur les cendres d'une coulée donnent double récolte
     this.baseFood = F;
     this.fieldFood = (fields + fertile) * 3;
-    J += fields * 0.5;
+    // un emploi pour deux champs (des emplois entiers, comme les autres)
+    J += Math.floor(fields / 2);
     Jy += gardens * 0.8 + forests * 0.08;
     this.counts = counts;
     this.housing.cap = H;
@@ -124,19 +128,22 @@ export class Sim {
 
   private evaluate() {
     const p = this.pop, e = this.world.exp;
-    // les expéditions ajoutent (ou retirent pour un temps) de quoi satisfaire les besoins ; le blé des collines enrichit les champs
-    const seeds = e.perks.includes('seeds') ? 1.3 : 1;
-    this.food.cap = Math.max(0, this.baseFood + this.fieldFood * this.yieldK * seeds + needBonus(e, 'food'));
-    this.water.cap = Math.max(0, this.baseWater + needBonus(e, 'water'));
-    this.jobs.cap = Math.max(0, this.baseJobs + needBonus(e, 'jobs'));
+    // nourriture, eau, emplois et soins se comptent en parts entières, pour les habitants entiers (ceux qu'on affiche) : ce
+    // que fournit le village est arrondi en dessous, ce qu'il demande au-dessus. Jauge, manque et nombre d'affamés, de
+    // chômeurs ou de malades disent ainsi la même chose (sinon : « 170 / 170, il manque 0.0 » et un habitant qui a faim)
+    const n = Math.floor(p);
+    // les expéditions ajoutent (ou retirent pour un temps) de quoi satisfaire les besoins
+    this.food.cap = down(this.baseFood + this.fieldsFood + needBonus(e, 'food'));
+    this.water.cap = down(this.baseWater + needBonus(e, 'water'));
+    this.jobs.cap = down(this.baseJobs + needBonus(e, 'jobs'));
     this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy'));
     this.housing.demand = p;
-    this.food.demand = (p + 1) * rulesOf(this.world.difficulty).foodK;
-    this.water.demand = p + 1;
-    this.jobs.demand = p >= 6 ? p * 0.5 : 0;
+    this.food.demand = up((n + 1) * rulesOf(this.world.difficulty).foodK);
+    this.water.demand = n + 1;
+    this.jobs.demand = n >= 6 ? up(n * 0.5) : 0;
     this.joy.demand = p >= 6 ? p * 0.3 : 0;
     // un village de plus de quinze habitants a besoin de soins
-    this.health.demand = p >= 15 ? p * 0.2 : 0;
+    this.health.demand = n >= 15 ? up(n * 0.2) : 0;
     this.housing.ok = this.housing.cap > p;
     this.food.ok = this.food.cap >= this.food.demand;
     this.water.ok = this.water.cap >= this.water.demand;
@@ -149,8 +156,8 @@ export class Sim {
   needDetail(k: NeedId): NeedDetail {
     const e = this.world.exp, L = this.land;
     const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? 'Maisons au bord de l’eau' : this.nameOf(key as KindId), n: s.n, v: s.v }));
-    if (k === 'food' && L.fields) rows.push({ label: L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)', n: L.fields, v: this.fieldFood * this.yieldK * (e.perks.includes('seeds') ? 1.3 : 1) });
-    if (k === 'jobs' && L.fields) rows.push({ label: 'Champs', n: L.fields, v: L.fields * 0.5 });
+    if (k === 'food' && L.fields) rows.push({ label: L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)', n: L.fields, v: this.fieldsFood });
+    if (k === 'jobs' && L.fields >= 2) rows.push({ label: 'Champs', n: L.fields, v: Math.floor(L.fields / 2) });
     if (k === 'joy' && L.gardens) rows.push({ label: 'Jardins', n: L.gardens, v: L.gardens * 0.8 });
     if (k === 'joy' && L.forests) rows.push({ label: 'Forêts où l’on se promène', n: L.forests, v: L.forests * 0.08 });
     if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)', n: 0, v: b }); }
@@ -162,6 +169,9 @@ export class Sim {
 
   /** Rendement des champs selon l'humidité des sols : 55 % en pleine sécheresse, 110 % après la pluie */
   get yieldK() { return 0.55 + 0.55 * this.moisture; }
+
+  /** Récolte des champs, en parts entières (selon la pluie ; le blé des collines l'enrichit) */
+  private get fieldsFood() { return down(this.fieldFood * this.yieldK * (this.world.exp.perks.includes('seeds') ? 1.3 : 1)); }
 
   get drought() { return this.moisture < 0.25 && this.fieldFood > 0; }
 
