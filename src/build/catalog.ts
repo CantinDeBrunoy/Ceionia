@@ -458,6 +458,8 @@ export const UPGRADES: { from: KindId; to: KindId }[] = [
   { from: 'house', to: 'manor' },
   { from: 'well', to: 'watertower' },
   { from: 'station', to: 'terminal' },
+  // à l'âge futuriste, la gare intermodale devient la gare maglev (ses lignes s'y arrêtent toujours)
+  { from: 'terminal', to: 'maglev' },
   { from: 'football', to: 'stadium' },
   { from: 'pier', to: 'harbor' },
   { from: 'gather', to: 'forum' },

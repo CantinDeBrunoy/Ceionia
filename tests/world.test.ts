@@ -7,7 +7,7 @@ import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
 import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS, choiceAt } from '../src/sim/missions';
-import { KINDS, KindId } from '../src/build/catalog';
+import { KINDS, KindId, UPGRADES, Building } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { sculpt, brushOnBuilding } from '../src/world/terraform';
 import { GameTime } from '../src/core/time';
@@ -1234,6 +1234,24 @@ describe('expéditions', () => {
       expect(t.relief.length + t.crew.length + t.back.length + t.aboard.length + t.boarding.length).toBe(0);
     }
   }, 20000);
+});
+
+describe('améliorations', () => {
+  it('à l’âge futuriste, la petite gare devient gare intermodale, puis gare maglev, et ses lignes la suivent', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    expect(UPGRADES.some((u) => u.from === 'terminal' && u.to === 'maglev')).toBe(true);
+    const st = w.place('station', x, z, 0, true, 5, false);
+    let other: Building | null = null;
+    for (let dz = -20; dz <= 20 && !other; dz++) for (let dx = 8; dx <= 20 && !other; dx++) if (w.canPlace('station', x + dx, z + dz) === null) other = w.place('station', x + dx, z + dz, 0, true, 5, false);
+    w.lines.push({ id: 1, stops: [st.id, other!.id], color: 0xff0000 });
+    const term = w.upgrade(st.id, 'terminal');
+    expect(term?.kind).toBe('terminal');
+    const mag = w.upgrade(term!.id, 'maglev');
+    expect(mag?.kind).toBe('maglev');
+    expect(mag!.age).toBe(5);
+    expect(w.lines[0].stops).toEqual([mag!.id, other!.id]);
+  });
 });
 
 describe('pétrole', () => {
