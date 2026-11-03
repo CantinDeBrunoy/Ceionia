@@ -185,11 +185,12 @@ const reqOf = (label: string) => (label.startsWith('expédition') ? 'exp' : labe
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${v < 2 && g.one ? g.one : g.label}`;
-const num = (v: number) => (v < 1 ? v.toFixed(1) : String(Math.round(v)));
+/** une décimale quand il y en a une (« 2,4 » de bien-être ne s'affiche plus « 2 » en rouge) */
+const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
 const NEED_RULE: Record<NeedId, string> = {
   housing: 'Chaque habitant occupe une place. Le village grandit tant qu’il reste des places libres et que les autres besoins sont comblés.',
-  food: 'Chaque habitant mange une part, plus une part de réserve pour le village.',
+  food: 'Chaque habitant mange une part (une part et quart en défi), plus une part de réserve pour le village ; on compte en parts entières.',
   water: 'Chaque habitant boit une part, plus une part de réserve pour le village.',
   jobs: 'À partir de 6 habitants, la moitié d’entre eux cherche du travail.',
   joy: 'À partir de 6 habitants, chacun demande 0,3 de bien-être.',
@@ -988,7 +989,7 @@ export class UI {
     if (c.thirsty) tips.push('Un point d’eau ou un puits de plus abreuverait tout le monde.');
     if (c.unhappy) tips.push('Un lieu de rencontre, un jardin ou un lieu de culte rendrait le village plus heureux.');
     const html = `
-      <h4>${ic('houses', 18, 2)} ${c.p} habitants <small>pour ${c.places} places</small></h4>
+      <h4>${ic('houses', 18, 2)} ${c.p} habitants <small>pour ${c.places} places${c.away ? `, dont ${c.away} en expédition` : ''}</small></h4>
       <div class="cbar">${seg(c.employed, 'work', 'Au travail')}${seg(c.jobless, 'idle', 'Sans emploi')}${seg(c.others, 'kids', 'Enfants et anciens')}</div>
       ${row('hammer', 'Au travail', c.employed)}
       ${row('alert', 'Sans emploi', c.jobless, c.jobless ? 'warn' : '')}
@@ -996,7 +997,7 @@ export class UI {
       ${row('health', 'Malades soignés', c.cared, '', c.sick ? `sur ${c.sick} à soigner` : 'aucun malade pour l’instant')}
       ${c.untreated ? row('health', 'Malades sans soins', c.untreated, 'warn') : ''}
       ${row('kit', 'Blessés au repos', c.injured, c.injured ? 'note' : '', c.injured ? 'au retour d’une expédition' : '')}
-      ${row('compass', 'En expédition', c.away)}
+      ${row('compass', 'En expédition', c.away, '', c.away ? 'déjà comptés parmi les habitants ci-dessus' : '')}
       ${c.hungry ? row('bread', 'Ont faim', c.hungry, 'warn') : ''}
       ${c.thirsty ? row('drop', 'Ont soif', c.thirsty, 'warn') : ''}
       ${c.unhappy ? row('smile', 'Mécontents', c.unhappy, 'warn') : ''}
@@ -1320,7 +1321,7 @@ export class UI {
         <ul class="hint dpoints">${DIFF_TEXT.points[h.world.difficulty].map((x) => `<li>${x}</li>`).join('')}</ul>
         <p class="hint">${DIFF_TEXT.settingHint}</p>
         <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? 'Activées' : 'Désactivées'}</button></div>
-        <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments.</p>
+        <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.</p>
         <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
         <div class="row"><label>Ressources</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? (h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
