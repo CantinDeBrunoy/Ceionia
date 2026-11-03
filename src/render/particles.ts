@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { wind as air } from './wind';
 import { smoothstep } from '../core/rng';
 
 /** Réglages d'une bouffée : grossissement final, freinage de la montée, dérive du vent, opacité maximale */
@@ -53,7 +54,8 @@ export class Puffs {
       const t = p.age / p.life;
       // la bouffée ralentit en montant et s'incline sous le vent
       p.vy *= 1 - p.drag * dt;
-      p.vx += p.wind * dt;
+      p.vx += p.wind * air.dx * dt;
+      p.vz += p.wind * air.dz * dt;
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       d.position.set(p.x, p.y, p.z);
       d.rotation.set(p.age * 0.3, p.age * 0.2, 0);

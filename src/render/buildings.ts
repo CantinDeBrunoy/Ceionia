@@ -5,6 +5,7 @@ import { getModel, ModelOpts } from './models';
 import { mats } from './materials';
 import { hash2 } from '../core/rng';
 import { facingRoadRot } from '../build/placement';
+import { wind } from './wind';
 
 const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 const RIGHT = [[1, 0], [0, -1], [-1, 0], [0, 1]];
@@ -24,6 +25,11 @@ interface Entry {
   /** ailes du moulin, pales de l'éolienne, qui tournent autour de leur moyeu */
   rotor: THREE.Mesh | null;
   spin: { axis: THREE.Vector3; speed: number; phase: number } | null;
+  /** tête tournée face au vent (éolienne, roue de pompage) : son pivot, sa tête, le cap du rotor, déjà orientée ou non */
+  turn: THREE.Group | null;
+  vane: THREE.Mesh | null;
+  face: number;
+  aimed: boolean;
 }
 
 /** Pierre sombre des fondations */
@@ -74,7 +80,7 @@ export class BuildingView implements WorldListener {
     const body = new THREE.Mesh(new THREE.BufferGeometry(), mats.body);
     body.castShadow = true; body.receiveShadow = true;
     group.add(body);
-    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null };
+    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null, turn: null, vane: null, face: 0, aimed: false };
     if (animate) group.scale.setScalar(0.001);
     this.group.add(group);
     this.entries.set(b.id, e);
@@ -123,6 +129,29 @@ export class BuildingView implements WorldListener {
         e.rotor.visible = true;
         e.spin = { axis: new THREE.Vector3(...m.rotor.axis), speed: m.rotor.speed * (0.85 + hash2(b.x, b.z, 11) * 0.3), phase: hash2(b.x, b.z, 12) * 6.28 };
       } else if (e.rotor) { e.rotor.visible = false; e.spin = null; }
+      // tête face au vent : le rotor et la tête (ou tout le modèle) pendus à un pivot sur l'axe du mât
+      const v = m.vane;
+      if (v) {
+        if (!e.turn) { e.turn = new THREE.Group(); e.group.add(e.turn); e.aimed = false; }
+        const t = e.turn, hang = (o: THREE.Object3D, x: number, y: number, z: number) => { t.add(o); o.position.set(x - v.pivot[0], y, z - v.pivot[1]); };
+        t.position.set(v.pivot[0], 0, v.pivot[1]);
+        if (v.whole) { hang(e.body, 0, 0, 0); if (e.glow) hang(e.glow, 0, 0, 0); }
+        if (v.geo) {
+          if (!e.vane) { e.vane = new THREE.Mesh(v.geo, mats.body); e.vane.castShadow = true; }
+          e.vane.geometry = v.geo;
+          e.vane.visible = true;
+          hang(e.vane, 0, 0, 0);
+        } else if (e.vane) e.vane.visible = false;
+        if (e.rotor && m.rotor) hang(e.rotor, ...m.rotor.pivot);
+        e.face = v.face;
+      } else if (e.turn) {
+        e.group.add(e.body);
+        if (e.glow) e.group.add(e.glow);
+        if (e.rotor) { e.group.add(e.rotor); if (m.rotor) e.rotor.position.set(...m.rotor.pivot); }
+        if (e.vane) { e.vane.removeFromParent(); e.vane = null; }
+        e.group.remove(e.turn);
+        e.turn = null;
+      }
     }
     const s = sizeOf(b), w = this.world;
     // les lieux à ciel ouvert (place, feu, lampadaire, ponton) se posent au plus bas de leur emprise, sans socle : leurs
@@ -151,8 +180,10 @@ export class BuildingView implements WorldListener {
     }
     e.group.rotation.y = b.rot * Math.PI / 2;
     const off = b.kind === 'lamp' ? 0.32 : 0;
-    e.body.position.set(off, 0, off);
-    if (e.glow) e.glow.position.set(off, 0, off);
+    if (!m.vane?.whole) {
+      e.body.position.set(off, 0, off);
+      if (e.glow) e.glow.position.set(off, 0, off);
+    }
   }
 
   refreshNear(b: Building) {
@@ -187,9 +218,18 @@ export class BuildingView implements WorldListener {
   }
 
   update(dt: number, worldAge: number) {
-    // les ailes et les pales tournent, chaque moulin à son rythme
-    this.spinT += dt;
-    for (const e of this.entries.values()) if (e.rotor && e.spin) e.rotor.quaternion.copy(this.q.setFromAxisAngle(e.spin.axis, e.spin.phase + this.spinT * e.spin.speed));
+    // les ailes et les pales tournent, chaque moulin à son rythme (les éoliennes plus vite quand le vent forcit) ; les
+    // éoliennes et les roues de pompage se tournent lentement face au vent, le rotor du côté d'où il vient
+    for (const e of this.entries.values()) {
+      if (e.turn) {
+        const want = wind.heading + Math.PI - e.group.rotation.y - e.face, d = Math.atan2(Math.sin(want - e.turn.rotation.y), Math.cos(want - e.turn.rotation.y));
+        e.turn.rotation.y += e.aimed ? Math.sign(d) * Math.min(Math.abs(d), dt * 0.35) : d;
+        e.aimed = true;
+      }
+      if (!e.rotor || !e.spin) continue;
+      e.spin.phase += dt * e.spin.speed * (e.turn ? 0.4 + wind.speed * 1.2 : 1);
+      e.rotor.quaternion.copy(this.q.setFromAxisAngle(e.spin.axis, e.spin.phase));
+    }
     this.evoTimer -= dt;
     if (this.evoTimer <= 0) {
       this.evoTimer = 0.06;

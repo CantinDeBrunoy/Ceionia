@@ -1,91 +1,263 @@
 import * as THREE from 'three';
 import { World, N } from '../world/world';
-import { hash2, smoothstep } from '../core/rng';
+import { hash2 } from '../core/rng';
 import { Simplex } from '../world/noise';
-import { KINDS, KindId, sizeOf } from '../build/catalog';
+import { KindId, sizeOf } from '../build/catalog';
 import { mats } from './materials';
 
-const AGE_COL = [0xe6d0a4, 0xead8b2, 0xdccdb0, 0xb5aea6, 0x9ea3ac].map((c) => new THREE.Color(c));
-/** Bord des chemins : terre plus sombre, puis bordures claires des rues pavées et des trottoirs */
-const EDGE_COL = [0xcdb084, 0xd3bb90, 0xc6b597, 0xd2cbc0, 0xd8d6d0].map((c) => new THREE.Color(c));
+/** Chaussée selon l'âge : sentier, chemin de terre, dalles, pavés, asphalte */
+const ROAD_COL = [0xc49e6c, 0xb48b58, 0xb2a590, 0x8c8479, 0x5d6169];
+/** Abords : terre battue des cours et des placettes, puis trottoirs de pierre, de béton */
+const SIDE_COL = [0xe8dab6, 0xe6d5ad, 0xdfcca5, 0xc9bea9, 0xd0ccc4];
+/** Places pavées (devant les ateliers, les temples, et là où les rues se touchent en carré) */
+const PLAZA_COL = [0xe1cea4, 0xe1cea4, 0xdcc9a2, 0xd6c3a2, 0xddc9ae];
+/** Liseré de terre tassée au bord des chemins ; accotement de gravier des routes de campagne */
+const RIM_COL = [0xa9865a, 0x987548, 0x9a8e7b, 0x8a8277, 0x8d8b86];
+/** Bordures des trottoirs : granit, puis béton */
+const CURB_COL = [0xaaa59c, 0xaaa59c, 0xaaa59c, 0xaba69d, 0xe9e7e1];
+/** Part de terre battue dans les cours (l'herbe repousse par plaques) */
+const YARD_A = [0.45, 0.6, 0.75, 1, 1];
+/** Demi-largeur de la chaussée */
+const HW = [0.2, 0.25, 0.26, 0.3, 0.32];
+/** Rayon des bordures arrondies aux coins des carrefours */
+const FILLET = 0.12;
 /** Ponts : tablier de bois, puis de pierre, puis d'acier ; piles et garde-corps */
 const DECK_COL = [0x9a7452, 0xa27c58, 0x8f7c66, 0xa39d95, 0xb4b9c0].map((c) => new THREE.Color(c));
 const PILE_COL = [0x6f5640, 0x6f5640, 0x8a8178, 0x8a8178, 0x7d838c].map((c) => new THREE.Color(c));
 const SNOW = new THREE.Color(0xf2f6fa);
 const PEBBLE = [0xb3aba1, 0x9d9890, 0xc8c2b8].map((c) => new THREE.Color(c));
-/** Finesse de la grille du chemin (sous-cases par case) */
-const SUB = 6;
 const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+/** Directions des voisines, dans l'ordre des bits des masques : est, ouest, sud, nord */
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+/** Quarts de case (signe x, signe z) */
+const QUADS = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
 /** Bâtiments devant lesquels la terre est battue (une cour, une place) */
-const YARD: Partial<Record<KindId, number>> = { workshop: 0.45, gather: 0.5, farm: 0.42, mill: 0.42, landmark: 0.5, temple: 0.4, health: 0.42, school: 0.42, fire: 0.5, tavern: 0.45, baths: 0.42, mine: 0.5 };
+const YARD: Partial<Record<KindId, number>> = { workshop: 0.45, gather: 0.5, farm: 0.42, mill: 0.42, landmark: 0.5, terminal: 0.5, temple: 0.4, health: 0.42, school: 0.42, fire: 0.5, police: 0.45, tavern: 0.45, baths: 0.42, mine: 0.5 };
 /** Bâtiments au pied desquels traînent tonneaux, caisses et sacs */
 const CLUTTER: KindId[] = ['house', 'workshop', 'farm', 'mill'];
 const BARREL = 0x9a6a44, HOOP = 0x6f5640, CRATE = 0xb48a5e, SACK = 0xd9c4a0;
+/** Une case entière pavée (rectangle qui déborde de la case : pas de bord à l'intérieur) */
+const FULL = [-1.5, -1.5, 1.5, 1.5];
+
+/** Case de rue en ville : voisines en route, côtés et coins de trottoir, chaussée et trottoir en distances signées (coordonnées locales) */
+interface Street {
+  mask: number;
+  sides: number;
+  quads: number;
+  plaza: boolean;
+  /** rond-point dont la case fait partie */
+  round: Round | null;
+  road: (x: number, z: number) => number;
+  pave: (x: number, z: number) => number;
+}
 
 /**
- * Routes : de vrais chemins de terre. Chaque case de route est un point (un peu décalé, d'une case à l'autre) relié à ses
- * voisines par des courbes ; un virage s'arrondit, un escalier de cases devient un chemin qui serpente. Le chemin est un
- * décalque posé sur le relief, aux bords doux et irréguliers, liseré d'une terre plus sombre et semé de cailloux ;
- * plus droit et plus large à partir de l'âge industriel. Les ponts sont des ouvrages (tablier, rampes, piles, garde-corps) :
- * un pont simple suit une courbe douce d'une rive à l'autre, même tracé en escalier
+ * Rond-point posé sur un carré (ou un rectangle) plein de cases de route : îlot rond (ou en stade sur un rectangle) autour
+ * du segment `a`–`b`, anneau de chaussée de `rIn` à `rOut`, entrées (bord de case `e`, point de l'axe de l'îlot `q`) ;
+ * cases de l'emprise (x0, z0, x1, z1 comprises)
+ */
+interface Round {
+  a: [number, number];
+  b: [number, number];
+  rIn: number;
+  rOut: number;
+  entries: [number, number, number, number][];
+  box: [number, number, number, number];
+}
+
+/** Point du segment a–b le plus proche de (x, z) */
+function nearest(x: number, z: number, ax: number, az: number, bx: number, bz: number): [number, number] {
+  const dx = bx - ax, dz = bz - az, l = dx * dx + dz * dz, t = l ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l)) : 0;
+  return [ax + dx * t, az + dz * t];
+}
+
+/** Réunion adoucie de deux distances signées (raccord arrondi de rayon ~k) */
+function smin(a: number, b: number, k: number) {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - (h * h * k) / 4;
+}
+
+/** Chaussée d'un rond-point (anneau et entrées raccordées en douceur), en coordonnées du monde */
+function roundSdf(R: Round, hw: number) {
+  const mid = (R.rIn + R.rOut) / 2, half = (R.rOut - R.rIn) / 2;
+  return (x: number, z: number) => {
+    const [qx, qz] = nearest(x, z, R.a[0], R.a[1], R.b[0], R.b[1]);
+    let d = Math.abs(Math.hypot(x - qx, z - qz) - mid) - half;
+    for (const [ex, ez, ix, iz] of R.entries) {
+      const l = Math.hypot(ex - ix, ez - iz) || 1, px = ix + ((ex - ix) / l) * mid, pz = iz + ((ez - iz) / l) * mid;
+      const [nx, nz] = nearest(x, z, ex, ez, px, pz);
+      d = smin(d, Math.hypot(x - nx, z - nz) - hw, 0.14);
+    }
+    return d;
+  };
+}
+
+/**
+ * Chaussée d'une case de rue, en distance signée au bord (négative dessus), coordonnées locales (−0,5 … 0,5) : rue droite,
+ * virage en quart de cercle, carrefour aux coins arrondis, impasse terminée par une raquette
+ */
+function streetSdf(mask: number, hw: number) {
+  const E = (mask & 1) !== 0, W = (mask & 2) !== 0, S = (mask & 4) !== 0, Nn = (mask & 8) !== 0, n = +E + +W + +S + +Nn;
+  return (x: number, z: number) => {
+    if (n === 0) return Math.hypot(x, z) - hw * 1.15;
+    if (n === 1) {
+      const ax = E ? 1 : W ? -1 : 0, az = S ? 1 : Nn ? -1 : 0, u = x * ax + z * az, v = -x * az + z * ax;
+      return Math.min(u >= 0 ? Math.abs(v) - hw : 9, Math.hypot(x, z) - hw * 1.15);
+    }
+    if (n === 2 && E && W) return Math.abs(z) - hw;
+    if (n === 2 && S && Nn) return Math.abs(x) - hw;
+    if (n === 2) return Math.abs(Math.hypot(x - (E ? 0.5 : -0.5), z - (S ? 0.5 : -0.5)) - 0.5) - hw;
+    // carrefour : chaque quart de case entre deux branches a son coin de trottoir arrondi
+    const ax = x >= 0 ? E : W, az = z >= 0 ? S : Nn, u = Math.abs(x), v = Math.abs(z);
+    if (ax && az) {
+      const qa = FILLET - (u - hw), qb = FILLET - (v - hw);
+      return FILLET - (Math.hypot(Math.max(qa, 0), Math.max(qb, 0)) + Math.min(Math.max(qa, qb), 0));
+    }
+    if (ax) return v - hw;
+    if (az) return u - hw;
+    return Math.max(u - hw, v - hw);
+  };
+}
+
+/** Trottoir d'une case de rue : les moitiés du côté des cases bâties, les coins entre deux branches (distance signée) */
+function walkSdf(sides: number, quads: number) {
+  return (x: number, z: number) => {
+    let d = 1;
+    if (sides & 1) d = Math.min(d, -x);
+    if (sides & 2) d = Math.min(d, x);
+    if (sides & 4) d = Math.min(d, -z);
+    if (sides & 8) d = Math.min(d, z);
+    QUADS.forEach(([sx, sz], i) => { if (quads & (1 << i)) d = Math.min(d, Math.max(-sx * x, -sz * z)); });
+    return d;
+  };
+}
+
+/** Distance signée à une réunion de rectangles (x0, z0, x1, z1), coordonnées locales */
+function rectSdf(rects: number[][]) {
+  return (x: number, z: number) => {
+    let d = 9;
+    for (const [x0, z0, x1, z1] of rects) {
+      const dx = Math.max(x0 - x, x - x1), dz = Math.max(z0 - z, z - z1);
+      d = Math.min(d, Math.hypot(Math.max(dx, 0), Math.max(dz, 0)) + Math.min(Math.max(dx, dz), 0));
+    }
+    return d;
+  };
+}
+
+/**
+ * Routes. Aux premiers âges, de vrais chemins de terre : chaque case de route est un point (un peu décalé, d'une case à l'autre)
+ * relié à ses voisines par des courbes, aux bords irréguliers, dans des cours de terre battue où l'herbe repousse par plaques.
+ * En ville (âge industriel, âge moderne), des rues droites : chaussée de pavés puis d'asphalte à largeur fixe, virages en
+ * quart de cercle, carrefours aux coins arrondis, bordures et trottoirs du côté des maisons, places pavées, passages
+ * piétons, ligne médiane. Les ponts sont des ouvrages (tablier, rampes, piles, garde-corps)
  */
 export class RoadView {
   group = new THREE.Group();
   /** lanternes posées le long des chemins (x, z à la suite) : leur halo de lumière la nuit */
   lights: number[] = [];
-  /** le chemin, en transparence sur ses bords */
+  /** chaussée, trottoirs et cours, dessinés par le shader d'après leurs distances signées */
   private path: THREE.Mesh;
   /** ponts, cailloux, lanternes, tonneaux et caisses */
   private solid: THREE.Mesh;
   /** verre des lanternes (s'allume la nuit) */
   private glow: THREE.Mesh;
-  /**
-   * marquages posés sur la chaussée (zébras, pointillés, ornières, bordures, trottoirs) : ils passent devant le revêtement,
-   * qui est dessiné après eux en transparence et légèrement avancé vers la caméra
-   */
+  /** marquages posés sur la chaussée (zébras, pointillés, lignes de rive, ornières, grilles) */
   private marks: THREE.Mesh;
+  /** cases de route sous l'îlot d'un rond-point : les voitures en font le tour */
+  islands = new Set<number>();
   /** géométries de base des petits objets (non indexées) */
   private cyl = new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0).toNonIndexed();
   private cube = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0).toNonIndexed();
   private ico = new THREE.IcosahedronGeometry(1, 0).toNonIndexed();
   private noise = new Simplex(9137);
-  /** revêtement (âge : terre, terre, dalles, pavés, asphalte) et neige, pour le motif du chemin */
-  private style = { value: 0 };
-  private snowK = { value: 0 };
+  /** revêtements (âge : terre, terre, dalles, pavés, asphalte), couleurs et neige, pour le shader */
+  private u = {
+    uStyle: { value: 0 }, uSnowK: { value: 0 }, uYardA: { value: 1 },
+    uRoad: { value: new THREE.Color() }, uSide: { value: new THREE.Color() }, uPlaza: { value: new THREE.Color() },
+    uRim: { value: new THREE.Color() }, uCurb: { value: new THREE.Color() },
+  };
 
   constructor(private world: World) {
-    const pathMat = new THREE.MeshStandardMaterial({
-      vertexColors: true, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-    });
-    // bord net : la transparence, douce d'un sommet à l'autre, est resserrée au pixel ; le revêtement dessine son motif :
-    // grain de la terre, dalles irrégulières au Moyen Âge, pavés en quinconce à l'âge industriel, grain de l'asphalte
+    const pathMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    // chaque sommet porte sa distance au bord de la chaussée et à celui du trottoir (ou de la cour) : bords nets au pixel,
+    // bordures, accotements, motif de chaque revêtement (grain de la terre, dalles, pavés, asphalte, dalles de béton)
     pathMat.onBeforeCompile = (sh) => {
-      sh.uniforms.uStyle = this.style;
-      sh.uniforms.uSnowK = this.snowK;
-      sh.vertexShader = 'varying vec3 vRoadPos;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvRoadPos = position;');
-      sh.fragmentShader = 'uniform float uStyle;\nuniform float uSnowK;\nvarying vec3 vRoadPos;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-	diffuseColor.a = smoothstep(0.38, 0.62, diffuseColor.a);
+      Object.assign(sh.uniforms, this.u);
+      sh.vertexShader = 'attribute float aRoad;\nattribute float aPave;\nattribute float aKind;\nvarying vec3 vRoadPos;\nvarying float vRoad;\nvarying float vPave;\nvarying float vKind;\n'
+        + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvRoadPos = position; vRoad = aRoad; vPave = aPave; vKind = aKind;');
+      sh.fragmentShader = `uniform float uStyle;
+uniform float uSnowK;
+uniform float uYardA;
+uniform vec3 uRoad;
+uniform vec3 uSide;
+uniform vec3 uPlaza;
+uniform vec3 uRim;
+uniform vec3 uCurb;
+varying vec3 vRoadPos;
+varying float vRoad;
+varying float vPave;
+varying float vKind;
+float rHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float rNoise(vec2 p) {
+	vec2 i = floor(p), f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(rHash(i), rHash(i + vec2(1.0, 0.0)), f.x), mix(rHash(i + vec2(0.0, 1.0)), rHash(i + vec2(1.0)), f.x), f.y);
+}
+// appareil de pierres ou de dalles : rangs décalés, joints adoucis au loin ; renvoie (teinte de la pierre, joint)
+vec2 rBond(vec2 rp, vec2 sc, float shift, float irr, float jw) {
+	vec2 g = rp * sc;
+	float row = floor(g.y);
+	g.x += row * shift + rHash(vec2(row, 3.1)) * irr;
+	vec2 id = floor(g), f = abs(fract(g) - 0.5);
+	float fw = max(fwidth(g.x), fwidth(g.y));
+	float j = smoothstep(0.5 - jw - fw, 0.5 - jw + fw, max(f.x, f.y)) * (1.0 - smoothstep(0.2, 0.45, fw));
+	return vec2(rHash(id), j);
+}
+float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floor(rp * sc)) * amp; }
+` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 	{
 		vec2 rp = vRoadPos.xz;
-		float k = 1.0;
-		if (uStyle > 1.5 && uStyle < 3.5) {
-			// dalles (Moyen Âge, grandes et inégales) ou pavés (âge industriel, petits et réguliers), joints sombres
-			vec2 sc = uStyle < 2.5 ? vec2(5.5, 4.5) : vec2(15.0, 11.0);
-			vec2 g = rp * sc;
-			g.x += floor(g.y) * 0.5 + (uStyle < 2.5 ? fract(sin(floor(g.y) * 91.7) * 437.5) * 0.4 : 0.0);
-			vec2 id = floor(g), f = fract(g) - 0.5;
-			float n = fract(sin(dot(id, vec2(12.9898, 78.233))) * 43758.5453);
-			float e = max(abs(f.x) * (uStyle < 2.5 ? 1.0 : 1.0), abs(f.y));
-			float joint = smoothstep(uStyle < 2.5 ? 0.41 : 0.36, 0.49, e);
-			k = mix(0.88 + n * 0.18 + (0.5 - e) * 0.08, uStyle < 2.5 ? 0.7 : 0.66, joint);
+		bool town = uStyle > 2.5;
+		float fr = max(fwidth(vRoad), 1e-4), fp = max(fwidth(vPave), 1e-4);
+		// bords : nets en ville, irréguliers sur la terre
+		float dR = vRoad + (town ? 0.0 : (rNoise(rp * 6.0) - 0.5) * 0.05);
+		float dP = vPave + (town ? 0.0 : (rNoise(rp * 2.6) - 0.5) * 0.22);
+		float road = 1.0 - smoothstep(-fr, fr, dR);
+		float pave = 1.0 - smoothstep(-fp, fp, dP);
+		if (!town) { float t = 1.0 - uYardA, hn = rNoise(rp * 1.9 + 7.3) * 0.75 + rNoise(rp * 5.3) * 0.25; pave *= smoothstep(t - 0.025, t + 0.025, hn); }
+		float k = 1.0, kp = 1.0;
+		vec2 b;
+		if (uStyle < 1.5) k = rGrain(rp, 22.0, 0.1) + (rNoise(rp * 1.7) - 0.5) * 0.1;
+		else if (uStyle < 2.5) { b = rBond(rp, vec2(5.5, 4.5), 0.5, 0.4, 0.06); k = mix(0.88 + b.x * 0.18, 0.7, b.y); }
+		else if (uStyle < 3.5) { b = rBond(rp, vec2(15.0, 11.0), 0.5, 0.0, 0.1); k = mix(0.86 + b.x * 0.2, 0.64, b.y); }
+		else k = rGrain(rp, 38.0, 0.07) + (rNoise(rp * 1.3) - 0.5) * 0.09;
+		vec3 cPave;
+		if (vKind > 0.5) {
+			// places : petits pavés en rangs décalés
+			b = uStyle < 3.5 ? rBond(rp, vec2(11.0, 11.0), 0.5, 0.0, 0.08) : rBond(rp, vec2(8.0, 8.0), 0.0, 0.0, 0.06);
+			cPave = uPlaza * mix(0.84 + b.x * 0.24, 0.72, b.y);
+		} else if (town) {
+			// trottoirs : dalles de pierre, puis de béton
+			b = uStyle < 3.5 ? rBond(rp, vec2(4.0, 6.0), 0.5, 0.0, 0.05) : rBond(rp, vec2(5.0, 5.0), 0.0, 0.0, 0.035);
+			cPave = uSide * mix(0.93 + b.x * 0.1, 0.8, b.y);
+		} else cPave = uSide * (rGrain(rp, 14.0, 0.12) + (rNoise(rp * 2.1) - 0.5) * 0.12);
+		vec3 c = mix(cPave, uRoad * mix(k, 1.0, uSnowK), road);
+		float a = max(road, pave);
+		if (town) {
+			// bordure du trottoir (ou accotement de gravier en campagne) juste au-delà de la chaussée, caniveau sombre au pied
+			float band = smoothstep(-fr, fr, vRoad) * (1.0 - smoothstep(0.035 - fr, 0.035 + fr, vRoad));
+			float gutter = smoothstep(-0.02 - fr, -0.02 + fr, vRoad) * road;
+			c = mix(c, uCurb, band * pave);
+			c = mix(c, uRim * rGrain(rp, 60.0, 0.2), band * (1.0 - pave));
+			c *= 1.0 - gutter * 0.22 * pave;
+			a = max(a, band);
 		} else {
-			// grain : gravillons de l'asphalte, terre battue mouchetée
-			vec2 id = floor(rp * (uStyle > 3.5 ? 38.0 : 22.0));
-			float n = fract(sin(dot(id, vec2(12.9898, 78.233))) * 43758.5453);
-			k = uStyle > 3.5 ? 0.95 + n * 0.08 : 0.94 + n * 0.1;
+			// liseré de terre tassée au bord du chemin
+			c = mix(c, uRim, smoothstep(-0.07, -0.015, dR) * road * 0.65);
 		}
-		diffuseColor.rgb *= mix(k, 1.0, uSnowK);
+		diffuseColor.rgb *= c;
+		diffuseColor.a = a;
+		if (a < 0.01) discard;
 	}`);
     };
     this.path = new THREE.Mesh(new THREE.BufferGeometry(), pathMat);
@@ -167,7 +339,7 @@ export class RoadView {
           add(w.ci(cx, cz), ex, ez, 0.24);
         }
     }
-    // les poches d'herbe enclavées dans le village (entre routes et bâtiments) sont comblées
+    // une poche d'herbe enclavée sur trois côtés (entre routes et bâtiments) est foulée ; ailleurs l'herbe reste entre les maisons
     const urban = (x: number, z: number) => {
       if (!w.inCells(x, z)) return false;
       const k = w.ci(x, z);
@@ -177,18 +349,130 @@ export class RoadView {
       for (let cx = 0; cx < N; cx++) {
         const k = w.ci(cx, cz);
         if (w.road[k] || w.occ[k] || w.veg[k] || w.lake[k] || w.cellAvg(cx, cz) < 0.1) continue;
-        const e = urban(cx + 1, cz), o = urban(cx - 1, cz), s = urban(cx, cz + 1), n = urban(cx, cz - 1);
         if (!(plain(cx + 1, cz) || plain(cx - 1, cz) || plain(cx, cz + 1) || plain(cx, cz - 1))) continue;
-        const c = +e + +o + +s + +n;
-        // enclavée sur trois côtés, ou prise entre deux rues : toute la case
-        if (c >= 3 || (e && o) || (n && s)) { add(k, cx + 0.5, cz + 0.5, 0.42); continue; }
-        // un coin rentrant (deux côtés et la diagonale bâtis ou en rue) : le quart de case qui les rejoint
-        if (c === 2) {
-          const dx = e ? 1 : -1, dz = s ? 1 : -1;
-          if (urban(cx + dx, cz + dz)) add(k, cx + (dx > 0 ? 1 : 0), cz + (dz > 0 ? 1 : 0), 0.3);
-        }
+        if (+urban(cx + 1, cz) + +urban(cx - 1, cz) + +urban(cx, cz + 1) + +urban(cx, cz - 1) >= 3) add(k, cx + 0.5, cz + 0.5, 0.42);
       }
     return out;
+  }
+
+  /**
+   * Plan des rues de la ville : pour chaque case de route (hors ponts), ses branches, ses côtés de trottoir (là où la voisine
+   * est en ville : un bâtiment à deux cases au plus) et sa chaussée ; puis les abords pavés hors des routes — places devant
+   * les ateliers et les temples, poches enclavées, pied des façades le long des trottoirs
+   */
+  private streets(age: number) {
+    const w = this.world, hw = HW[Math.min(age, 4)];
+    const road = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1;
+    const flat = (x: number, z: number) => road(x, z) && w.bridgeY(x, z) === null;
+    // quatre cases de route en carré : une place pavée ; un carré ou un rectangle plein de cases de route : un rond-point
+    const plaza = new Set<number>();
+    for (let cz = 0; cz < N - 1; cz++)
+      for (let cx = 0; cx < N - 1; cx++)
+        if (flat(cx, cz) && flat(cx + 1, cz) && flat(cx, cz + 1) && flat(cx + 1, cz + 1)) for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) plaza.add(w.ci(cx + dx, cz + dz));
+    const rounds = new Map<number, Round>(), seen = new Set<number>();
+    for (const k0 of plaza) {
+      if (seen.has(k0)) continue;
+      const comp = [k0];
+      seen.add(k0);
+      for (let i = 0; i < comp.length; i++) for (const [dx, dz] of D4) {
+        const x = (comp[i] % N) + dx, z = Math.floor(comp[i] / N) + dz, k = z * N + x;
+        if (w.inCells(x, z) && plaza.has(k) && !seen.has(k)) { seen.add(k); comp.push(k); }
+      }
+      let x0 = N, z0 = N, x1 = -1, z1 = -1;
+      for (const k of comp) { const x = k % N, z = Math.floor(k / N); x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
+      const W = x1 - x0 + 1, H = z1 - z0 + 1;
+      if (comp.length !== W * H || Math.max(W, H) > 2 * Math.min(W, H)) continue;
+      const S = Math.min(W, H), hl = (Math.max(W, H) - S) / 2, mx = x0 + W / 2, mz = z0 + H / 2;
+      const rOut = S / 2 - 0.06, rIn = Math.max(0.24, rOut - 2 * hw);
+      const R: Round = { a: W >= H ? [mx - hl, mz] : [mx, mz - hl], b: W >= H ? [mx + hl, mz] : [mx, mz + hl], rIn, rOut, entries: [], box: [x0, z0, x1, z1] };
+      // une entrée par route qui arrive au bord du rond-point
+      for (const k of comp) {
+        const x = k % N, z = Math.floor(k / N);
+        for (const [dx, dz] of D4) {
+          const nx = x + dx, nz = z + dz;
+          if ((nx >= x0 && nx <= x1 && nz >= z0 && nz <= z1) || !road(nx, nz)) continue;
+          const ex = x + 0.5 + dx * 0.5, ez = z + 0.5 + dz * 0.5, [qx, qz] = nearest(ex, ez, R.a[0], R.a[1], R.b[0], R.b[1]);
+          R.entries.push([ex, ez, qx, qz]);
+        }
+      }
+      for (const k of comp) rounds.set(k, R);
+    }
+    const town = new Uint8Array(N * N);
+    for (const b of w.buildings.values()) {
+      if (b.kind === 'lamp' || b.kind === 'pier') continue;
+      const s = sizeOf(b);
+      for (let z = b.z - 2; z < b.z + s + 2; z++) for (let x = b.x - 2; x < b.x + s + 2; x++) if (w.inCells(x, z)) town[w.ci(x, z)] = 1;
+    }
+    const open = (x: number, z: number) => w.inCells(x, z) && !road(x, z) && !w.isWet(x, z) && town[w.ci(x, z)] === 1;
+    const cells = new Map<number, Street>();
+    for (let cz = 0; cz < N; cz++)
+      for (let cx = 0; cx < N; cx++) {
+        if (!flat(cx, cz)) continue;
+        const k = w.ci(cx, cz);
+        const R = rounds.get(k);
+        if (R) {
+          const sdf = roundSdf(R, hw), ox = cx + 0.5, oz = cz + 0.5;
+          cells.set(k, {
+            mask: 0, sides: 0, quads: 0, plaza: false, round: R, road: (x, z) => sdf(x + ox, z + oz),
+            // tout est trottoir autour de l'anneau ; au milieu, l'îlot garde son herbe derrière sa bordure
+            pave: (x, z) => { const [qx, qz] = nearest(x + ox, z + oz, R.a[0], R.a[1], R.b[0], R.b[1]); return R.rIn - 0.07 - Math.hypot(x + ox - qx, z + oz - qz); },
+          });
+          const [qx, qz] = nearest(ox, oz, R.a[0], R.a[1], R.b[0], R.b[1]);
+          if (Math.hypot(ox - qx, oz - qz) < R.rIn) this.islands.add(k);
+          continue;
+        }
+        if (plaza.has(k)) { cells.set(k, { mask: 0, sides: 0, quads: 0, plaza: true, round: null, road: () => 1, pave: () => -1 }); continue; }
+        let mask = 0, sides = 0, quads = 0;
+        D4.forEach(([dx, dz], i) => { if (road(cx + dx, cz + dz)) mask |= 1 << i; else if (open(cx + dx, cz + dz)) sides |= 1 << i; });
+        QUADS.forEach(([sx, sz], i) => { if (mask & (1 << (sx > 0 ? 0 : 1)) && mask & (1 << (sz > 0 ? 2 : 3)) && open(cx + sx, cz + sz)) quads |= 1 << i; });
+        cells.set(k, { mask, sides, quads, plaza: false, round: null, road: streetSdf(mask, hw), pave: walkSdf(sides, quads) });
+      }
+    const pave = new Map<number, { rects: number[][]; kind: number }>();
+    const addRect = (k: number, r: number[], kind: number) => { const p = pave.get(k) ?? { rects: [], kind }; p.rects.push(r); p.kind = Math.max(p.kind, kind); pave.set(k, p); };
+    // places devant les ateliers, les temples, les fermes
+    for (const b of w.buildings.values()) {
+      if (!YARD[b.kind]) continue;
+      const s = sizeOf(b), f = FRONT[b.rot];
+      for (let i = 0; i < s; i++) {
+        const cx = f[0] ? (f[0] > 0 ? b.x + s : b.x - 1) : b.x + i, cz = f[1] ? (f[1] > 0 ? b.z + s : b.z - 1) : b.z + i;
+        if (!w.inCells(cx, cz) || w.occ[w.ci(cx, cz)] || road(cx, cz) || w.isWet(cx, cz)) continue;
+        addRect(w.ci(cx, cz), FULL, 1);
+      }
+    }
+    // poches d'herbe enclavées entre les rues et les bâtiments : pavées (toute la case, ou le coin rentrant)
+    const urban = (x: number, z: number) => {
+      if (!w.inCells(x, z)) return false;
+      const k = w.ci(x, z);
+      return flat(x, z) || (!!w.occ[k] && w.buildingAt(x, z)?.kind !== 'lamp');
+    };
+    for (let cz = 0; cz < N; cz++)
+      for (let cx = 0; cx < N; cx++) {
+        const k = w.ci(cx, cz);
+        if (w.road[k] || w.occ[k] || w.veg[k] || w.isWet(cx, cz)) continue;
+        if (!(flat(cx + 1, cz) || flat(cx - 1, cz) || flat(cx, cz + 1) || flat(cx, cz - 1))) continue;
+        const e = urban(cx + 1, cz), o = urban(cx - 1, cz), s = urban(cx, cz + 1), n = urban(cx, cz - 1), c = +e + +o + +s + +n;
+        if (c >= 3 || (e && o) || (n && s)) { addRect(k, FULL, 0); continue; }
+        if (c === 2) {
+          const dx = e ? 1 : -1, dz = s ? 1 : -1;
+          if (urban(cx + dx, cz + dz)) addRect(k, [dx > 0 ? 0 : -1.5, dz > 0 ? 0 : -1.5, dx > 0 ? 1.5 : 0, dz > 0 ? 1.5 : 0], 0);
+        }
+      }
+    // pied des façades : le trottoir va jusqu'au mur
+    const M = 0.26;
+    for (const b of w.buildings.values()) {
+      if (b.kind === 'lamp' || b.kind === 'pier') continue;
+      const s = sizeOf(b);
+      for (let z = b.z; z < b.z + s; z++)
+        for (let x = b.x; x < b.x + s; x++)
+          D4.forEach(([dx, dz], i) => {
+            const nx = x + dx, nz = z + dz;
+            if ((nx >= b.x && nx < b.x + s && nz >= b.z && nz < b.z + s) || !w.inCells(nx, nz)) return;
+            const nk = w.ci(nx, nz), st = cells.get(nk);
+            if (!(st ? st.plaza || !!st.round || (st.sides & (1 << (i ^ 1))) !== 0 : pave.get(nk)?.rects.includes(FULL))) return;
+            addRect(w.ci(x, z), dx > 0 ? [0.5 - M, -1.5, 1.5, 1.5] : dx < 0 ? [-1.5, -1.5, -0.5 + M, 1.5] : dz > 0 ? [-1.5, 0.5 - M, 1.5, 1.5] : [-1.5, -1.5, 1.5, -0.5 + M], 0);
+          });
+    }
+    return { cells, pave };
   }
 
   /**
@@ -199,8 +483,8 @@ export class RoadView {
     const w = this.world, GAP = 1.75, out: number[] = [];
     const score = (k: number) => {
       const cx = k % N, cz = Math.floor(k / N);
-      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1);
-      const door = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => { const b = w.buildingAt(cx + dx, cz + dz); return !!b && b.kind !== 'lamp'; });
+      const dirs = D4.filter(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1);
+      const door = D4.some(([dx, dz]) => { const b = w.buildingAt(cx + dx, cz + dz); return !!b && b.kind !== 'lamp'; });
       const bend = dirs.length === 2 && dirs[0][0] !== -dirs[1][0];
       return (dirs.length >= 3 ? 3 : 0) + (door ? 2 : 0) + (bend ? 1 : 0) + hash2(cx, cz, 61) * 0.5;
     };
@@ -213,15 +497,15 @@ export class RoadView {
     return out;
   }
 
-  /** Tracé de chaque case : morceaux de ligne (x, z à la suite) qui forment le chemin */
+  /** Tracé de chaque case : morceaux de ligne (x, z à la suite) qui forment le chemin (tout droit en ville) */
   private skeleton(age: number) {
-    const w = this.world, j = age >= 3 ? 0.06 : 0.22, lines = new Map<number, number[][]>();
+    const w = this.world, j = age >= 3 ? 0 : 0.22, lines = new Map<number, number[][]>();
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
         const k = w.ci(cx, cz);
         if (!w.road[k] || w.bridgeY(cx, cz) !== null) continue;
         const has = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
-        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => has(dx, dz));
+        const dirs = D4.filter(([dx, dz]) => has(dx, dz));
         const n = this.node(cx, cz, j), out: number[][] = [];
         if (dirs.length === 2 && dirs[0][0] !== -dirs[1][0]) {
           // virage : une courbe d'un bord à l'autre, tirée par le point de la case
@@ -241,90 +525,105 @@ export class RoadView {
           for (const [dx, dz] of dirs) { const e = this.edgeMid(cx, cz, dx, dz, j); out.push([n[0], n[1], e[0], e[1]]); }
           if (!dirs.length) out.push([n[0], n[1], n[0] + 0.001, n[1]]);
         }
-        // et vers la porte d'une maison voisine qui n'a pas d'autre route (chemin d'accès)
-        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          if (has(dx, dz)) continue;
-          const b = w.buildingAt(cx + dx, cz + dz);
-          if (b && b.kind !== 'lamp') out.push([n[0], n[1], cx + 0.5 + dx * 0.55, cz + 0.5 + dz * 0.55]);
-        }
+        // et vers la porte d'une maison voisine qui n'a pas d'autre route (chemin d'accès, à la campagne)
+        if (age < 3)
+          for (const [dx, dz] of D4) {
+            if (has(dx, dz)) continue;
+            const b = w.buildingAt(cx + dx, cz + dz);
+            if (b && b.kind !== 'lamp') out.push([n[0], n[1], cx + 0.5 + dx * 0.55, cz + 0.5 + dz * 0.55]);
+          }
         lines.set(k, out);
       }
     return lines;
   }
 
   rebuild(age: number, snow: number) {
-    const w = this.world, a = Math.min(age, 4);
-    this.style.value = a;
-    this.snowK.value = Math.min(1, snow * 1.3);
-    const lines = this.skeleton(age), yards = this.yards();
-    const base = AGE_COL[a].clone().lerp(SNOW, snow * 0.75), edge = EDGE_COL[a].clone().lerp(SNOW, snow * 0.7);
-    const hw0 = age >= 4 ? 0.32 : age === 3 ? 0.3 : 0.25;
-    // segments du chemin et cours autour d'une case (la case et ses voisines) : ax, az, bx, bz, rayon à la suite
-    const near = (cx: number, cz: number) => {
-      const out: number[] = [];
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-        if (!w.inCells(cx + dx, cz + dz)) continue;
-        const k = w.ci(cx + dx, cz + dz), ls = lines.get(k), ys = yards.get(k);
-        if (ls) for (const l of ls) for (let i = 0; i + 3 < l.length; i += 2) out.push(l[i], l[i + 1], l[i + 2], l[i + 3], 0);
-        if (ys) for (let i = 0; i < ys.length; i += 3) out.push(ys[i], ys[i + 1], ys[i], ys[i + 1], ys[i + 2]);
-      }
-      return out;
-    };
-    // distance du point au chemin (le bord d'une cour compte comme l'axe d'un chemin)
-    const dist = (x: number, z: number, seg: number[]) => {
-      let best = 9;
-      for (let i = 0; i < seg.length; i += 5) {
-        const ax = seg[i], az = seg[i + 1], bx = seg[i + 2] - ax, bz = seg[i + 3] - az, len = bx * bx + bz * bz;
-        const t = len ? Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / len)) : 0;
-        const ex = x - ax - bx * t, ez = z - az - bz * t;
-        best = Math.min(best, Math.sqrt(ex * ex + ez * ez) - seg[i + 4]);
-      }
-      return Math.max(0, best);
-    };
-    // largeur qui varie un peu le long du chemin (pas pour l'asphalte)
-    const half = (x: number, z: number) => hw0 * (1 + (age >= 4 ? 0 : 0.16 * this.noise.noise2(x * 1.1, z * 1.1)));
+    const w = this.world, a = Math.min(age, 4), town = a >= 3, j = town ? 0 : 0.22;
+    const u = this.u;
+    u.uStyle.value = a;
+    u.uSnowK.value = Math.min(1, snow * 1.3);
+    u.uYardA.value = YARD_A[a];
+    u.uRoad.value.set(ROAD_COL[a]).lerp(SNOW, snow * 0.75);
+    u.uSide.value.set(SIDE_COL[a]).lerp(SNOW, snow * 0.85);
+    u.uPlaza.value.set(PLAZA_COL[a]).lerp(SNOW, snow * 0.85);
+    u.uRim.value.set(RIM_COL[a]).lerp(SNOW, snow * 0.7);
+    u.uCurb.value.set(CURB_COL[a]).lerp(SNOW, snow * 0.6);
+    const lines = this.skeleton(age), hw0 = HW[a];
+    // largeur qui varie un peu le long des chemins de terre (pas en ville)
+    const half = (x: number, z: number) => hw0 * (1 + (town ? 0 : 0.16 * this.noise.noise2(x * 1.1, z * 1.1)));
 
-    // grille fine sur les cases de route et leurs voisines : couleur et transparence au sommet
-    const pos: number[] = [], col: number[] = [], idx: number[] = [];
-    const vid = new Map<number, number>(), alpha: number[] = [];
-    const S = N * SUB + 1, c = new THREE.Color();
-    const vertex = (gx: number, gz: number, seg: number[]) => {
-      const key = gz * S + gx;
-      let id = vid.get(key);
-      if (id !== undefined) return id;
-      const x = gx / SUB, z = gz / SUB, d = dist(x, z, seg), h = half(x, z);
-      // transparence étalée d'un sommet à l'autre, resserrée ensuite par le shader
-      const al = 1 - smoothstep(h - 0.12, h + 0.12, d);
-      // terre plus claire au milieu, plus sombre au bord, mouchetée
-      c.copy(base).lerp(edge, smoothstep(h - 0.16, h - 0.02, d)).multiplyScalar(0.95 + 0.07 * this.noise.noise2(x * 5.3, z * 5.3));
-      id = alpha.length;
-      pos.push(x, w.hAt(x, z) + 0.02, z);
-      col.push(c.r, c.g, c.b, al);
-      alpha.push(al);
-      vid.set(key, id);
-      return id;
+    // surface : une grille fine par case ; chaque sommet porte ses distances signées au bord de la chaussée et des abords
+    const pos: number[] = [], col: number[] = [], ra: number[] = [], pa: number[] = [], ka: number[] = [], idx: number[] = [];
+    const emit = (cx: number, cz: number, sub: number, road: (x: number, z: number) => number, pave: (x: number, z: number) => number, kind: number, rCut: number, pCut: number) => {
+      const n = sub + 1, R = new Float32Array(n * n), P = new Float32Array(n * n), quads: number[] = [];
+      for (let jz = 0; jz < n; jz++) for (let ix = 0; ix < n; ix++) { R[jz * n + ix] = road(cx + ix / sub, cz + jz / sub); P[jz * n + ix] = pave(cx + ix / sub, cz + jz / sub); }
+      for (let jz = 0; jz < sub; jz++)
+        for (let ix = 0; ix < sub; ix++) {
+          const q = jz * n + ix;
+          if ([q, q + 1, q + n, q + n + 1].some((v) => R[v] < rCut || P[v] < pCut)) quads.push(q);
+        }
+      if (!quads.length) return;
+      const v0 = ra.length;
+      for (let jz = 0; jz < n; jz++)
+        for (let ix = 0; ix < n; ix++) {
+          const x = cx + ix / sub, z = cz + jz / sub, t = 0.96 + 0.06 * this.noise.noise2(x * 5.3, z * 5.3);
+          pos.push(x, w.hAt(x, z) + 0.02, z);
+          col.push(t, t, t);
+          ra.push(R[jz * n + ix]); pa.push(P[jz * n + ix]); ka.push(kind);
+        }
+      for (const q of quads) { const v = v0 + q; idx.push(v, v + n + 1, v + 1, v, v + n, v + n + 1); }
     };
-    const cells = new Set<number>(), pathCell = (x: number, z: number) => { const k = z * N + x; return w.inCells(x, z) && (lines.has(k) || yards.has(k)); };
-    for (const k of [...lines.keys(), ...yards.keys()]) {
-      const cx = k % N, cz = Math.floor(k / N);
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && w.bridgeY(cx + dx, cz + dz) === null) cells.add(w.ci(cx + dx, cz + dz));
-    }
-    // le chemin déborde à peine d'une case de route : dans une case voisine, seule la lisière compte
-    const OFF = [[0.45, 0], [-0.45, 0], [0, 0.45], [0, -0.45], [0.33, 0.33], [-0.33, 0.33], [0.33, -0.33], [-0.33, -0.33]];
-    for (const k of cells) {
-      const cx = k % N, cz = Math.floor(k / N), seg = near(cx, cz), own = pathCell(cx, cz);
-      if (!seg.length) continue;
-      for (let j = 0; j < SUB; j++) for (let i = 0; i < SUB; i++) {
-        const gx = cx * SUB + i, gz = cz * SUB + j;
-        if (!own) { const qx = (gx + 0.5) / SUB, qz = (gz + 0.5) / SUB; if (!OFF.some(([dx, dz]) => pathCell(Math.floor(qx + dx), Math.floor(qz + dz)))) continue; }
-        const v00 = vertex(gx, gz, seg), v10 = vertex(gx + 1, gz, seg), v01 = vertex(gx, gz + 1, seg), v11 = vertex(gx + 1, gz + 1, seg);
-        if (alpha[v00] + alpha[v10] + alpha[v01] + alpha[v11] < 0.01) continue;
-        idx.push(v00, v11, v10, v00, v01, v11);
+    this.islands.clear();
+    const plan = town ? this.streets(age) : null;
+    const yards = town ? new Map<number, number[]>() : this.yards();
+    if (plan) {
+      for (const [k, st] of plan.cells) {
+        const cx = k % N, cz = Math.floor(k / N);
+        if (st.plaza) emit(cx, cz, 4, () => 1, () => -1, 1, 0, 0);
+        else emit(cx, cz, 8, (x, z) => st.road(x - cx - 0.5, z - cz - 0.5), (x, z) => st.pave(x - cx - 0.5, z - cz - 0.5), 0, 0.06, 0.02);
+      }
+      for (const [k, p] of plan.pave) {
+        const cx = k % N, cz = Math.floor(k / N), sdf = rectSdf(p.rects);
+        emit(cx, cz, 4, () => 1, (x, z) => sdf(x - cx - 0.5, z - cz - 0.5), p.kind, 0, 0.02);
+      }
+    } else {
+      const cells = new Set<number>();
+      for (const k of [...lines.keys(), ...yards.keys()]) {
+        const cx = k % N, cz = Math.floor(k / N);
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && w.bridgeY(cx + dx, cz + dz) === null) cells.add(w.ci(cx + dx, cz + dz));
+      }
+      for (const k of cells) {
+        const cx = k % N, cz = Math.floor(k / N), seg: number[] = [], circ: number[] = [];
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+          if (!w.inCells(cx + dx, cz + dz)) continue;
+          const nk = w.ci(cx + dx, cz + dz), ls = lines.get(nk), ys = yards.get(nk);
+          if (ls) for (const l of ls) for (let i = 0; i + 3 < l.length; i += 2) seg.push(l[i], l[i + 1], l[i + 2], l[i + 3]);
+          if (ys) circ.push(...ys);
+        }
+        if (!seg.length && !circ.length) continue;
+        const road = (x: number, z: number) => {
+          let best = 9;
+          for (let i = 0; i < seg.length; i += 4) {
+            const ax = seg[i], az = seg[i + 1], bx = seg[i + 2] - ax, bz = seg[i + 3] - az, len = bx * bx + bz * bz;
+            const t = len ? Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / len)) : 0;
+            best = Math.min(best, Math.hypot(x - ax - bx * t, z - az - bz * t));
+          }
+          return best - half(x, z);
+        };
+        const pave = (x: number, z: number) => {
+          let best = 9;
+          for (let i = 0; i < circ.length; i += 3) best = Math.min(best, Math.hypot(x - circ[i], z - circ[i + 1]) - circ[i + 2]);
+          return best;
+        };
+        emit(cx, cz, 6, road, pave, 0, 0.08, 0.15);
       }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('aRoad', new THREE.Float32BufferAttribute(ra, 1));
+    g.setAttribute('aPave', new THREE.Float32BufferAttribute(pa, 1));
+    g.setAttribute('aKind', new THREE.Float32BufferAttribute(ka, 1));
     g.setIndex(idx);
     g.computeVertexNormals();
     this.path.geometry.dispose();
@@ -378,7 +677,7 @@ export class RoadView {
      * (diagonale d'un tracé en escalier), rejoint l'autre rive ; adouci, puis tablier en ruban, garde-corps et piles
      */
     const smoothBridge = (ch: { cells: number[]; head: boolean; tail: boolean }) => {
-      const cells = ch.cells, jit = age >= 3 ? 0.06 : 0.22, hw = age >= 4 ? 0.34 : 0.32, th = 0.055;
+      const cells = ch.cells, hw = age >= 4 ? 0.34 : 0.32, th = 0.055;
       const xz = (c: number) => [c % N, Math.floor(c / N)];
       const i0 = ch.head ? 1 : 0, i1 = cells.length - (ch.tail ? 2 : 1);
       const deckY = w.bridgeY(xz(cells[i0])[0], xz(cells[i0])[1])!;
@@ -388,7 +687,7 @@ export class RoadView {
       const cap = (bank: number | undefined, first: number, toward: number[], atStart: boolean) => {
         const [fx, fz] = xz(first);
         if (bank !== undefined) {
-          const [bx, bz] = xz(bank), dx = fx - bx, dz = fz - bz, e = this.edgeMid(bx, bz, dx, dz, jit);
+          const [bx, bz] = xz(bank), dx = fx - bx, dz = fz - bz, e = this.edgeMid(bx, bz, dx, dz, j);
           // la rampe descend tout droit du tablier sur le chemin de la rive (sans coude au bord, où le ruban se replierait)
           const px = e[0] - dx * 0.45, pz = e[1] - dz * 0.45, foot = [px, w.hAt(px, pz) + 0.04, pz];
           if (atStart) pts.unshift(foot); else pts.push(foot);
@@ -480,8 +779,8 @@ export class RoadView {
           bridge(x, z, w.bridgeY(x, z)!, (dx, dz) => w.inCells(x + dx, z + dz) && w.road[w.ci(x + dx, z + dz)] === 1);
         }
       }
-    // cailloux au bord des chemins de terre (et quelques-uns dessus), pas sur l'asphalte ni sous la neige
-    if (age < 4 && snow < 0.5) {
+    // cailloux au bord des chemins de terre (et quelques-uns dessus), pas en ville ni sous la neige
+    if (!town && snow < 0.5) {
       const pebble = new THREE.IcosahedronGeometry(1, 0).toNonIndexed(), pp = pebble.attributes.position;
       for (const [k, ls] of lines) for (const l of ls) for (let i = 0; i + 3 < l.length; i += 2) {
         const r = hash2(k, i, 41);
@@ -504,157 +803,252 @@ export class RoadView {
         Cc.push(col.r, col.g, col.b);
       }
     };
-    // détails des chemins selon l'époque : ornières et herbe des bords sur la terre, poteaux indicateurs aux carrefours,
-    // bordures (et trottoirs), ligne médiane, passages piétons, plaques d'égout, feux tricolores, bornes et poubelles
+    const C3 = (c: number) => new THREE.Color(c);
     const mp: number[] = [], mc: number[] = [];
-    if (snow < 0.6) {
-      const C3 = (c: number) => new THREE.Color(c);
-      /** marque plate posée sur le chemin (une seule face) : centre, axe, demi-longueur, demi-largeur, hauteur */
-      const mark = (x: number, z: number, ux: number, uz: number, hu: number, hv: number, y: number, cl: THREE.Color) => {
-        const c = [[-1, -1], [-1, 1], [1, 1], [1, -1]].map(([p, q]) => [x + ux * hu * p - uz * hv * q, y, z + uz * hu * p + ux * hv * q]);
-        for (const i of [0, 1, 2, 0, 2, 3]) { mp.push(...c[i]); mc.push(cl.r, cl.g, cl.b); }
-      };
-      /** le long d'une ligne, tous les `step` : position, direction unitaire, rang */
-      const walk = (l: number[], step: number, fn: (x: number, z: number, ux: number, uz: number, i: number) => void) => {
-        let t0 = step / 2, n = 0;
-        for (let i = 0; i + 3 < l.length; i += 2) {
-          const ax = l[i], az = l[i + 1], dx = l[i + 2] - ax, dz = l[i + 3] - az, len = Math.hypot(dx, dz);
-          if (len < 1e-6) continue;
-          let t = t0;
-          for (; t < len; t += step) fn(ax + (dx / len) * t, az + (dz / len) * t, dx / len, dz / len, n++);
-          t0 = t - len;
-        }
-      };
+    /** marque plate posée sur la chaussée (une seule face) : centre, axe, demi-longueur, demi-largeur, hauteur */
+    const mark = (x: number, z: number, ux: number, uz: number, hu: number, hv: number, y: number, cl: THREE.Color) => {
+      const c = [[-1, -1], [-1, 1], [1, 1], [1, -1]].map(([p, q]) => [x + ux * hu * p - uz * hv * q, y, z + uz * hu * p + ux * hv * q]);
+      for (const i of [0, 1, 2, 0, 2, 3]) { mp.push(...c[i]); mc.push(cl.r, cl.g, cl.b); }
+    };
+    /** le long d'une ligne, tous les `step` : position, direction unitaire, rang */
+    const walk = (l: number[], step: number, fn: (x: number, z: number, ux: number, uz: number, i: number) => void) => {
+      let t0 = step / 2, n = 0;
+      for (let i = 0; i + 3 < l.length; i += 2) {
+        const ax = l[i], az = l[i + 1], dx = l[i + 2] - ax, dz = l[i + 3] - az, len = Math.hypot(dx, dz);
+        if (len < 1e-6) continue;
+        let t = t0;
+        for (; t < len; t += step) fn(ax + (dx / len) * t, az + (dz / len) * t, dx / len, dz / len, n++);
+        t0 = t - len;
+      }
+    };
+
+    // places des lanternes : sur le trottoir en ville (côté maisons, ou coin d'un carrefour), au bord du chemin ailleurs
+    const lamps = new Map<number, [number, number, number, number]>();
+    for (const k of this.lightCells(lines)) {
+      const cx = k % N, cz = Math.floor(k / N), st = plan?.cells.get(k);
+      if (st?.round) continue;
+      const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
+      const dry = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && !w.isWet(cx + dx, cz + dz);
+      const n = this.node(cx, cz, j), off = hw0 + 0.09;
+      let spot: [number, number, number, number] | undefined;
+      if (st && !st.plaza) {
+        const ok = (lx: number, lz: number) => st.pave(lx, lz) < -0.02 && st.road(lx, lz) > 0.05;
+        const d = D4.find(([dx, dz]) => !roadAt(dx, dz) && ok(dx * off, dz * off)) ?? QUADS.find(([sx, sz]) => ok(sx * 0.41, sz * 0.41));
+        if (d) spot = D4.includes(d) ? [n[0] + d[0] * off, n[1] + d[1] * off, d[0], d[1]] : [n[0] + d[0] * 0.41, n[1] + d[1] * 0.41, d[0], d[1]];
+      }
+      // au bord du chemin, de préférence du côté d'une case libre, sinon le long d'un bâtiment (la lanterne reste sur la
+      // case de la route) ; à un carrefour en croix, dans l'angle entre deux rues
+      if (!spot) {
+        const side = D4.find(([dx, dz]) => !roadAt(dx, dz) && dry(dx, dz) && !w.occ[w.ci(cx + dx, cz + dz)])
+          ?? D4.find(([dx, dz]) => !roadAt(dx, dz) && dry(dx, dz))
+          ?? QUADS.map(([dx, dz]) => [dx * 0.72, dz * 0.72, dx, dz]).find(([, , dx, dz]) => !roadAt(dx, dz) && dry(dx, dz));
+        if (!side) continue;
+        spot = [n[0] + side[0] * off, n[1] + side[1] * off, side[0], side[1]];
+      }
+      lamps.set(k, spot);
+    }
+
+    if (snow < 0.6 && !town) {
+      // chemins de terre : ornières des charrettes, touffes d'herbe au bord, poteaux indicateurs aux carrefours
       const mains: [number, number[]][] = [];
-      // sur une place (des cases de route côte à côte), pas de bordure ni de marquage au milieu : seulement là où la route a un bord
-      const paved = (x: number, z: number) => { const cx = Math.floor(x), cz = Math.floor(z); return w.inCells(cx, cz) && (lines.has(cz * N + cx) || yards.has(cz * N + cx)); };
-      const edgeAt = (x: number, z: number, ux: number, uz: number, sd: number) => !paved(x - uz * sd * (half(x, z) + 0.3), z + ux * sd * (half(x, z) + 0.3));
       for (const [k, ls] of lines) for (const l of ls) if (l.length > 4) mains.push([k, l]);
-      const rut = base.clone().multiplyScalar(0.78), grass = [C3(0x7fae5a), C3(0x8fbc62), C3(0x6f9e4e)];
-      if (age >= 1 && age <= 2) for (const [, l] of mains) walk(l, 0.12, (x, z, ux, uz) => {
-        // deux ornières creusées par les roues des charrettes
+      const rut = u.uRoad.value.clone().multiplyScalar(0.8), grass = [C3(0x7fae5a), C3(0x8fbc62), C3(0x6f9e4e)];
+      if (a === 1) for (const [, l] of mains) walk(l, 0.12, (x, z, ux, uz) => {
         for (const o of [-0.075, 0.075]) { const px = x - uz * o, pz = z + ux * o; mark(px, pz, ux, uz, 0.062, 0.013, w.hAt(px, pz) + 0.023, rut); }
       });
-      if (age <= 2) for (const [k, l] of mains) walk(l, 0.3, (x, z, ux, uz, i) => {
-        // touffes d'herbe au bord du chemin
+      for (const [k, l] of mains) walk(l, 0.3, (x, z, ux, uz, i) => {
         if (hash2(k, i, 51) > 0.55) return;
         const side = hash2(k, i, 52) < 0.5 ? -1 : 1, o = half(x, z) * (1.0 + hash2(k, i, 53) * 0.12), px = x - uz * o * side, pz = z + ux * o * side;
         const y = w.hAt(px, pz), cl = grass[Math.floor(hash2(k, i, 54) * 3)];
         put(this.ico, px, y + 0.008, pz, 0.022, 0.03, 0.022, i, cl);
         put(this.ico, px + ux * 0.03, y + 0.006, pz + uz * 0.03, 0.016, 0.022, 0.016, i + 1, cl);
       });
-      // carrefours : poteau indicateur (époques anciennes), passages piétons et feux tricolores (époque moderne)
-      for (const k of lines.keys()) {
+      const paved = (x: number, z: number) => { const cx = Math.floor(x), cz = Math.floor(z); return w.inCells(cx, cz) && (lines.has(cz * N + cx) || yards.has(cz * N + cx)); };
+      if (a >= 1) for (const k of lines.keys()) {
         const cx = k % N, cz = Math.floor(k / N);
         const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
         const dirs = D4.filter(([dx, dz]) => roadAt(dx, dz));
-        if (dirs.length < 3) continue;
-        const jj = age >= 3 ? 0.06 : 0.22, n = this.node(cx, cz, jj);
-        const corner = [[1, 1], [-1, 1], [1, -1], [-1, -1]].find(([dx, dz]) => !roadAt(dx, dz) && !paved(cx + 0.5 + dx * 0.9, cz + 0.5 + dz * 0.9));
+        if (dirs.length < 3 || hash2(cx, cz, 56) > 0.6) continue;
+        const n = this.node(cx, cz, j), corner = QUADS.find(([dx, dz]) => !roadAt(dx, dz) && !paved(cx + 0.5 + dx * 0.9, cz + 0.5 + dz * 0.9));
         if (!corner) continue;
         const qx = n[0] + corner[0] * 0.36, qz = n[1] + corner[1] * 0.36, qy = w.hAt(qx, qz);
-        if (age >= 1 && age <= 3 && hash2(cx, cz, 56) < 0.6) {
-          const post = age === 3 ? 0x3c4a44 : 0x7a6355, plank = age === 3 ? 0xf2efe6 : 0xd8c09a;
-          put(this.cube, qx, qy, qz, 0.02, 0.3, 0.02, 0, post);
-          dirs.slice(0, 2).forEach(([dx, dz], i) => {
-            const ry = Math.atan2(-dz, dx);
-            put(this.cube, qx + dx * 0.05, qy + 0.24 - i * 0.05, qz + dz * 0.05, 0.11, 0.028, 0.01, ry, plank);
-            put(this.cube, qx + dx * 0.105, qy + 0.245 - i * 0.05, qz + dz * 0.105, 0.025, 0.018, 0.012, ry + Math.PI / 4, plank);
-          });
-          if (age === 3) put(this.cube, qx, qy + 0.3, qz, 0.03, 0.012, 0.03, 0, post);
-        }
-        if (age >= 4) {
-          // zébras à l'entrée de chaque branche
-          for (const [dx, dz] of dirs) {
-            // pas de zébra sur une place : la branche doit être une rue, bordée de part et d'autre
-            if (paved(cx + 0.5 + dx - dz, cz + 0.5 + dz + dx) || paved(cx + 0.5 + dx + dz, cz + 0.5 + dz - dx)) continue;
-            const e = this.edgeMid(cx, cz, dx, dz, jj), ex = e[0] - n[0], ez = e[1] - n[1], len = Math.hypot(ex, ez) || 1, ux = ex / len, uz = ez / len;
-            const mx = n[0] + ex * 0.66, mz = n[1] + ez * 0.66, y = w.hAt(mx, mz) + 0.024;
-            for (let s = -2; s <= 2; s++) mark(mx - uz * s * 0.11, mz + ux * s * 0.11, ux, uz, 0.07, 0.03, y, C3(0xf2f2ee));
-          }
-          // feu tricolore au coin du carrefour, bras tendu vers la chaussée
-          if (hash2(cx, cz, 57) < 0.85) {
-            put(this.cyl, qx, qy, qz, 0.011, 0.44, 0.011, 0, 0x3c3c40);
-            const ax = -corner[0] * 0.12, az = -corner[1] * 0.12, ry = Math.atan2(-az, ax);
-            put(this.cube, qx + ax / 2, qy + 0.42, qz + az / 2, 0.17, 0.012, 0.012, ry, 0x3c3c40);
-            put(this.cube, qx + ax, qy + 0.31, qz + az, 0.034, 0.1, 0.034, ry, 0x2a2a2e);
-            const green = hash2(cx, cz, 58) < 0.5;
-            put(this.cube, qx + ax, qy + 0.385, qz + az, 0.024, 0.022, 0.038, ry, green ? 0x5a2a26 : 0xff4a3a, !green);
-            put(this.cube, qx + ax, qy + 0.355, qz + az, 0.024, 0.022, 0.038, ry, 0x5a4a20);
-            put(this.cube, qx + ax, qy + 0.325, qz + az, 0.024, 0.022, 0.038, ry, green ? 0x3aff7a : 0x1e4a2a, green);
-          }
-        }
+        put(this.cube, qx, qy, qz, 0.02, 0.3, 0.02, 0, 0x7a6355);
+        dirs.slice(0, 2).forEach(([dx, dz], i) => {
+          const ry = Math.atan2(-dz, dx);
+          put(this.cube, qx + dx * 0.05, qy + 0.24 - i * 0.05, qz + dz * 0.05, 0.11, 0.028, 0.01, ry, 0xd8c09a);
+          put(this.cube, qx + dx * 0.105, qy + 0.245 - i * 0.05, qz + dz * 0.105, 0.025, 0.018, 0.012, ry + Math.PI / 4, 0xd8c09a);
+        });
       }
-      if (age >= 3) {
-        // bordures de granit (de béton et trottoirs à l'époque moderne), ligne médiane pointillée
-        const curb = C3(age >= 4 ? 0xd2d0ca : 0xa8a39a), curbSide = C3(age >= 4 ? 0xb4b2ac : 0x8f8a82), walkway = C3(0xc4c1ba), dash = C3(0xf2f2ee);
-        /** points de la ligne d'un bout à l'autre, tous les `step` au plus (bouts compris) : x, z, direction */
-        const samples = (l: number[], step: number) => {
-          const out: [number, number, number, number][] = [];
-          for (let i = 0; i + 3 < l.length; i += 2) {
-            const ax = l[i], az = l[i + 1], dx = l[i + 2] - ax, dz = l[i + 3] - az, len = Math.hypot(dx, dz);
-            if (len < 1e-6) continue;
-            const n = Math.max(1, Math.ceil(len / step));
-            for (let k = i === 0 ? 0 : 1; k <= n; k++) out.push([ax + (dx * k) / n, az + (dz * k) / n, dx / len, dz / len]);
+    }
+    if (snow < 0.6 && plan) {
+      // rues : ligne médiane pointillée, lignes de rive en campagne, passages piétons et feux aux carrefours,
+      // poteaux indicateurs, plaques d'égout, grilles d'avaloir, bornes d'incendie et poubelles sur le trottoir
+      const white = C3(0xf3f3ee), hw = hw0;
+      for (const [k, st] of plan.cells) {
+        if (st.plaza || st.round) continue;
+        const cx = k % N, cz = Math.floor(k / N), ox = cx + 0.5, oz = cz + 0.5, y = (x: number, z: number) => w.hAt(x, z) + 0.024;
+        const arms = D4.filter((_, i) => st.mask & (1 << i)), n = arms.length;
+        const walkAt = (lx: number, lz: number) => st.pave(lx, lz) < -0.02 && st.road(lx, lz) > 0.05;
+        const rural = !st.sides && !st.quads;
+        const straight = n === 2 && arms[0][0] === -arms[1][0];
+        if (straight) {
+          const [ux, uz] = arms[0][0] ? [1, 0] : [0, 1];
+          if (a >= 4) {
+            for (const t of [-0.25, 0.25]) mark(ox + ux * t, oz + uz * t, ux, uz, 0.075, 0.009, y(ox + ux * t, oz + uz * t), white);
+            if (rural) for (const sd of [-1, 1]) { const o = (hw - 0.04) * sd, px = ox - uz * o, pz = oz + ux * o; for (const t of [-0.25, 0.25]) mark(px + ux * t, pz + uz * t, ux, uz, 0.25, 0.007, y(px + ux * t, pz + uz * t), white); }
           }
-          return out;
-        };
-        for (const [, l] of mains) {
-          const pts = samples(l, 0.1);
-          // bordure continue de chaque côté qui borde vraiment la rue (dessus et face vers la chaussée), trottoir derrière
-          for (const sd of [-1, 1]) for (let i = 1; i < pts.length; i++) {
-            const [x0, z0, ux0, uz0] = pts[i - 1], [x1, z1, ux1, uz1] = pts[i];
-            if (!edgeAt(x0, z0, ux0, uz0, sd) || !edgeAt(x1, z1, ux1, uz1, sd)) continue;
-            const P = (x: number, z: number, ux: number, uz: number, o: number, dy: number) => { const px = x - uz * o * sd, pz = z + ux * o * sd; return [px, w.hAt(px, pz) + dy, pz]; };
-            const o0 = half(x0, z0) - 0.006, o1 = half(x1, z1) - 0.006;
-            const a = P(x0, z0, ux0, uz0, o0, 0.04), b = P(x1, z1, ux1, uz1, o1, 0.04), c = P(x1, z1, ux1, uz1, o1 + 0.03, 0.04), d = P(x0, z0, ux0, uz0, o0 + 0.03, 0.04);
-            for (const v of [a, b, c, a, c, d]) { mp.push(...v); mc.push(curb.r, curb.g, curb.b); }
-            const e = P(x0, z0, ux0, uz0, o0, 0.012), f = P(x1, z1, ux1, uz1, o1, 0.012);
-            for (const v of [e, f, b, e, b, a]) { sp.push(...v); sc.push(curbSide.r, curbSide.g, curbSide.b); }
-            if (age >= 4) {
-              const g1 = P(x0, z0, ux0, uz0, o0 + 0.03, 0.037), g2 = P(x1, z1, ux1, uz1, o1 + 0.03, 0.037), g3 = P(x1, z1, ux1, uz1, o1 + 0.13, 0.037), g4 = P(x0, z0, ux0, uz0, o0 + 0.13, 0.037);
-              for (const v of [g1, g2, g3, g1, g3, g4]) { mp.push(...v); mc.push(walkway.r, walkway.g, walkway.b); }
-            }
+          const h = hash2(cx, cz, 59);
+          if (h < 0.18) {
+            const px = ox + ux * 0.12 + uz * 0.14, pz = oz + uz * 0.12 - ux * 0.14, py = w.hAt(px, pz) + 0.02;
+            put(this.cyl, px, py, pz, 0.05, 0.005, 0.05, 0, 0x4a4a4e); put(this.cyl, px, py + 0.002, pz, 0.038, 0.005, 0.038, 0, 0x5d5d62);
           }
-          // ligne médiane pointillée des rues
-          if (age >= 4) walk(l, 0.24, (x, z, ux, uz) => { if (edgeAt(x, z, ux, uz, 1) && edgeAt(x, z, ux, uz, -1)) mark(x, z, ux, uz, 0.06, 0.008, w.hAt(x, z) + 0.024, dash); });
-        }
-        // plaques d'égout et grilles, bornes d'incendie et poubelles au bord du trottoir
-        for (const [k, l] of mains) {
-          const h = hash2(k, l.length, 59);
-          walk(l, 0.5, (x, z, ux, uz, i) => {
-            if (i !== 0) return;
-            const y = w.hAt(x, z) + 0.022;
-            if (h < 0.22) { put(this.cyl, x + ux * 0.1, y, z + uz * 0.1, 0.05, 0.005, 0.05, 0, 0x4a4a4e); put(this.cyl, x + ux * 0.1, y + 0.002, z + uz * 0.1, 0.038, 0.005, 0.038, 0, 0x5d5d62); }
-            else if (h < 0.34 && edgeAt(x, z, ux, uz, 1)) mark(x - uz * (half(x, z) - 0.04), z + ux * (half(x, z) - 0.04), ux, uz, 0.04, 0.02, y + 0.001, C3(0x2e2e32));
-            if (age >= 4 && h > 0.6 && h < 0.72 && edgeAt(x, z, ux, uz, 1)) {
-              const o = half(x, z) + 0.09, px = x - uz * o, pz = z + ux * o, py = w.hAt(px, pz) + 0.036;
+          for (const sd of [-1, 1]) {
+            const lx = -uz * sd, lz = ux * sd;
+            if (!walkAt(lx * (hw + 0.08), lz * (hw + 0.08))) continue;
+            const hs = hash2(cx * 3 + sd, cz, 60);
+            if (hs < 0.25) { const o = hw - 0.035, px = ox + lx * o + ux * 0.3, pz = oz + lz * o + uz * 0.3; mark(px, pz, ux, uz, 0.045, 0.02, y(px, pz) + 0.001, C3(0x34353a)); }
+            if (a < 4) continue;
+            const o = hw + 0.085, px = ox + lx * o - ux * 0.22, pz = oz + lz * o - uz * 0.22, py = w.hAt(px, pz) + 0.02;
+            if (hs > 0.55 && hs < 0.68) {
               put(this.cyl, px, py, pz, 0.016, 0.055, 0.016, 0, 0xd84a3e); put(this.ico, px, py + 0.058, pz, 0.017, 0.014, 0.017, 0, 0xd84a3e);
               put(this.cube, px, py + 0.03, pz, 0.045, 0.012, 0.012, Math.atan2(-uz, ux), 0xd84a3e);
-            } else if (age >= 4 && h >= 0.72 && h < 0.82 && edgeAt(x, z, ux, uz, -1)) {
-              const o = half(x, z) + 0.09, px = x + uz * o, pz = z - ux * o, py = w.hAt(px, pz) + 0.036;
+            } else if (hs >= 0.68 && hs < 0.8) {
               put(this.cyl, px, py, pz, 0.025, 0.07, 0.025, 0, 0x3f6a4a); put(this.cyl, px, py + 0.07, pz, 0.028, 0.008, 0.028, 0, 0x2e4a36);
             }
-          });
+          }
+        } else if (n === 2 && a >= 4) {
+          // virage : pointillés (et lignes de rive) le long du quart de cercle
+          const E = (st.mask & 1) !== 0, S = (st.mask & 4) !== 0, sx = E ? 1 : -1, sz = S ? 1 : -1, px = ox + sx * 0.5, pz = oz + sz * 0.5;
+          const arc = (r: number, t: number): [number, number, number, number] => {
+            const s = Math.sin((t * Math.PI) / 2), c = Math.cos((t * Math.PI) / 2);
+            return [px - sx * s * r, pz - sz * c * r, -sx * c, sz * s];
+          };
+          for (const t of [0.25, 0.75]) { const [x, z, ux, uz] = arc(0.5, t); mark(x, z, ux, uz, 0.075, 0.009, y(x, z), white); }
+          if (rural) for (const r of [0.5 - hw + 0.04, 0.5 + hw - 0.04]) for (let s = 0; s < 6; s++) {
+            const [x, z, ux, uz] = arc(r, (s + 0.5) / 6);
+            mark(x, z, ux, uz, (r * Math.PI) / 24 + 0.004, 0.007, y(x, z), white);
+          }
+        }
+        if (n >= 3) {
+          // passages piétons à l'entrée de chaque branche, d'un trottoir à l'autre
+          let crossings = 0;
+          for (const [dx, dz] of arms) {
+            const nb = plan.cells.get(w.ci(cx + dx, cz + dz));
+            if (nb?.plaza || nb?.round) continue;
+            if (!walkAt(dx * 0.42 - dz * 0.42, dz * 0.42 + dx * 0.42) && !walkAt(dx * 0.42 + dz * 0.42, dz * 0.42 - dx * 0.42)) continue;
+            crossings++;
+            if (a < 4) continue;
+            const mx = ox + dx * (hw + 0.095), mz = oz + dz * (hw + 0.095), my = y(mx, mz);
+            for (let s = -2; s <= 2; s++) { const lat = s * 0.112; mark(mx - dz * lat, mz + dx * lat, dx, dz, 0.065, 0.032, my, white); }
+          }
+          // feux tricolores (époque moderne) ou poteau indicateur (âge industriel) aux coins du carrefour, hors de la lanterne
+          const lamp = lamps.get(k), corners = QUADS.filter(([sx, sz]) => walkAt(sx * 0.41, sz * 0.41) && !(lamp && Math.hypot(lamp[0] - ox - sx * 0.41, lamp[1] - oz - sz * 0.41) < 0.2));
+          if (!crossings || !corners.length) continue;
+          if (a >= 4) {
+            for (const [sx, sz] of corners.slice(0, hash2(cx, cz, 57) < 0.5 ? 1 : 2)) {
+              const qx = ox + sx * 0.41, qz = oz + sz * 0.41, qy = w.hAt(qx, qz) + 0.02;
+              put(this.cyl, qx, qy, qz, 0.011, 0.44, 0.011, 0, 0x3c3c40);
+              const ax = -sx * 0.12, az = -sz * 0.12, ry = Math.atan2(-az, ax);
+              put(this.cube, qx + ax / 2, qy + 0.42, qz + az / 2, 0.17, 0.012, 0.012, ry, 0x3c3c40);
+              put(this.cube, qx + ax, qy + 0.31, qz + az, 0.034, 0.1, 0.034, ry, 0x2a2a2e);
+              const green = hash2(cx + sx, cz + sz, 58) < 0.5;
+              put(this.cube, qx + ax, qy + 0.385, qz + az, 0.024, 0.022, 0.038, ry, green ? 0x5a2a26 : 0xff4a3a, !green);
+              put(this.cube, qx + ax, qy + 0.355, qz + az, 0.024, 0.022, 0.038, ry, 0x5a4a20);
+              put(this.cube, qx + ax, qy + 0.325, qz + az, 0.024, 0.022, 0.038, ry, green ? 0x3aff7a : 0x1e4a2a, green);
+              // bouton d'appel des piétons
+              put(this.cube, qx, qy + 0.14, qz, 0.026, 0.04, 0.026, ry, 0xe8c23a);
+            }
+          } else if (hash2(cx, cz, 56) < 0.7) {
+            const [sx, sz] = corners[0], qx = ox + sx * 0.41, qz = oz + sz * 0.41, qy = w.hAt(qx, qz) + 0.02;
+            put(this.cube, qx, qy, qz, 0.02, 0.3, 0.02, 0, 0x3c4a44);
+            arms.slice(0, 2).forEach(([dx, dz], i) => {
+              const ry = Math.atan2(-dz, dx);
+              put(this.cube, qx + dx * 0.05, qy + 0.24 - i * 0.05, qz + dz * 0.05, 0.11, 0.028, 0.01, ry, 0xf2efe6);
+              put(this.cube, qx + dx * 0.105, qy + 0.245 - i * 0.05, qz + dz * 0.105, 0.025, 0.018, 0.012, ry + Math.PI / 4, 0xf2efe6);
+            });
+            put(this.cube, qx, qy + 0.3, qz, 0.03, 0.012, 0.03, 0, 0x3c4a44);
+          }
         }
       }
     }
-    // éclairage automatique des chemins : torches à la Préhistoire, puis lanternes pendues, réverbères à gaz, lampadaires
+    // ronds-points : îlot planté (arbre et fleurs ; statue sur son socle à l'âge industriel ; sculpture et arbres sur un grand
+    // îlot), lampadaires aux coins, cédez-le-passage aux entrées et passages piétons juste avant
+    const rounds = new Set<Round>();
+    if (plan) for (const st of plan.cells.values()) if (st.round) rounds.add(st.round);
+    const FLOWERS = [0xf28ab0, 0xf8e05a, 0xffffff, 0xd84a3e, 0xb48ae8];
+    for (const R of rounds) {
+      const [ax, az] = R.a, [bx, bz] = R.b, isl = R.rIn - 0.08, big = R.rIn > 0.6;
+      const tree = (x: number, z: number, s: number) => {
+        const y = w.hAt(x, z);
+        put(this.cyl, x, y, z, 0.02 * s, 0.24 * s, 0.02 * s, 0, 0x7a5a3e);
+        put(this.ico, x, y + 0.27 * s, z, 0.13 * s, 0.12 * s, 0.13 * s, x * 7, snow > 0.5 ? 0xe8eef2 : 0x5fa84a);
+        put(this.ico, x + 0.04 * s, y + 0.36 * s, z - 0.03 * s, 0.085 * s, 0.085 * s, 0.085 * s, z * 5, snow > 0.5 ? 0xf2f6fa : 0x74bd5a);
+      };
+      // couronne de fleurs le long de la bordure (de l'herbe et des buis l'hiver)
+      const ring = (r: number, step: number, fn: (x: number, z: number, i: number) => void) => {
+        const len = 2 * Math.hypot(bx - ax, bz - az) + 2 * Math.PI * r, n = Math.max(6, Math.round(len / step));
+        for (let i = 0; i < n; i++) {
+          const t = (i / n) * len, seg = Math.hypot(bx - ax, bz - az), ux = seg ? (bx - ax) / seg : 1, uz = seg ? (bz - az) / seg : 0;
+          let x: number, z: number;
+          if (t < seg) { x = ax + ux * t - uz * r; z = az + uz * t + ux * r; }
+          else if (t < seg + Math.PI * r) { const f = (t - seg) / r; x = bx - uz * Math.cos(f) * r + ux * Math.sin(f) * r; z = bz + ux * Math.cos(f) * r + uz * Math.sin(f) * r; }
+          else if (t < 2 * seg + Math.PI * r) { const f = t - seg - Math.PI * r; x = bx - ux * f + uz * r; z = bz - uz * f - ux * r; }
+          else { const f = (t - 2 * seg - Math.PI * r) / r; x = ax + uz * Math.cos(f) * r - ux * Math.sin(f) * r; z = az - ux * Math.cos(f) * r - uz * Math.sin(f) * r; }
+          fn(x, z, i);
+        }
+      };
+      ring(isl - 0.05, 0.075, (x, z, i) => {
+        const y = w.hAt(x, z);
+        if (snow > 0.5 || a < 4) put(this.ico, x, y + 0.02, z, 0.035, 0.035, 0.035, i, a < 4 ? 0x4f8a44 : 0xdfe8e0);
+        else { put(this.ico, x, y + 0.012, z, 0.026, 0.02, 0.026, i, 0x5f9a4a); put(this.ico, x, y + 0.03, z, 0.018, 0.014, 0.018, i, FLOWERS[i % FLOWERS.length]); }
+      });
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      if (a >= 4) {
+        if (big) {
+          // sculpture moderne : cubes empilés de travers, aux couleurs vives, sur un socle ; arbres autour
+          const y = w.hAt(mx, mz);
+          put(this.cube, mx, y, mz, 0.16, 0.05, 0.16, 0, 0xd8d6d0);
+          [[0xd84a3e, 0.3], [0xf2c23a, 1.1], [0x3c7fd8, 0.7]].forEach(([c, r], i) => put(this.cube, mx, y + 0.05 + i * 0.075, mz, 0.09 - i * 0.012, 0.075, 0.09 - i * 0.012, r, c));
+          ring(isl * 0.62, 0.5, (x, z) => tree(x, z, 0.9));
+        } else if (Math.hypot(bx - ax, bz - az) > 0.1) { tree(ax, az, 1); tree(bx, bz, 1); }
+        else tree(mx, mz, 1.1);
+      } else {
+        // statue de bronze vert-de-gris sur son socle de pierre, buis taillés
+        const y = w.hAt(mx, mz);
+        put(this.cube, mx, y, mz, 0.12, 0.1, 0.12, 0, 0xb8b0a0);
+        put(this.cube, mx, y + 0.1, mz, 0.09, 0.025, 0.09, 0, 0xa8a090);
+        put(this.cyl, mx, y + 0.125, mz, 0.022, 0.11, 0.022, 0, 0x6f8a72);
+        put(this.ico, mx, y + 0.25, mz, 0.022, 0.022, 0.022, 0, 0x6f8a72);
+        put(this.cube, mx + 0.03, y + 0.2, mz, 0.06, 0.012, 0.012, 0.4, 0x6f8a72);
+        if (big) ring(isl * 0.6, 0.4, (x, z, i) => put(this.ico, x, w.hAt(x, z) + 0.05, z, 0.06, 0.07, 0.06, i, 0x4f8a44));
+      }
+      // lampadaires aux coins de l'emprise, sur le trottoir
+      const [x0, z0, x1, z1] = R.box, cs = [[x0 + 0.2, z0 + 0.2, -1], [x1 + 0.8, z1 + 0.8, 1], [x1 + 0.8, z0 + 0.2, 1], [x0 + 0.2, z1 + 0.8, -1]];
+      for (const [x, z, sx] of cs.slice(0, big ? 4 : 2)) lamps.set(-1 - lamps.size, [x, z, sx, 0]);
+      if (snow >= 0.6) continue;
+      for (const [ex, ez, qx, qz] of R.entries) {
+        const l = Math.hypot(ex - qx, ez - qz) || 1, ux = (qx - ex) / l, uz = (qz - ez) / l, vx = -uz, vz = ux;
+        if (a >= 4) {
+          // ligne de cédez-le-passage là où l'entrée rejoint l'anneau
+          const yx = qx - ux * (R.rOut + 0.04), yz = qz - uz * (R.rOut + 0.04), yy = w.hAt(yx, yz) + 0.024;
+          for (let s = -2; s <= 2; s++) mark(yx + vx * s * 0.11, yz + vz * s * 0.11, vx, vz, 0.035, 0.011, yy, C3(0xf3f3ee));
+        }
+        // passage piéton sur la rue qui arrive, juste avant le rond-point, d'un trottoir à l'autre
+        const zx = ex - ux * 0.26, zz = ez - uz * 0.26, zc = Math.floor(zx), zr = Math.floor(zz), st = plan?.cells.get(zr * N + zc);
+        if (a < 4 || !st || st.plaza || st.round) continue;
+        const lx = zx - zc - 0.5, lz = zz - zr - 0.5, ok = (o: number) => st.pave(lx + vx * o, lz + vz * o) < -0.02 && st.road(lx + vx * o, lz + vz * o) > 0.05;
+        if (!ok(0.42) && !ok(-0.42)) continue;
+        const zy = w.hAt(zx, zz) + 0.024;
+        for (let s = -2; s <= 2; s++) mark(zx + vx * s * 0.112, zz + vz * s * 0.112, ux, uz, 0.065, 0.032, zy, C3(0xf3f3ee));
+      }
+    }
+    // éclairage des chemins : torches à la Préhistoire, puis lanternes pendues, réverbères à gaz, lampadaires
     this.lights = [];
-    for (const k of this.lightCells(lines)) {
-      const cx = k % N, cz = Math.floor(k / N);
-      const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
-      const dry = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && !w.isWet(cx + dx, cz + dz);
-      // au bord du chemin, de préférence du côté d'une case libre, sinon le long d'un bâtiment (la lanterne reste sur la
-      // case de la route) ; à un carrefour en croix, dans l'angle entre deux rues
-      const side = D4.find(([dx, dz]) => !roadAt(dx, dz) && dry(dx, dz) && !w.occ[w.ci(cx + dx, cz + dz)])
-        ?? D4.find(([dx, dz]) => !roadAt(dx, dz) && dry(dx, dz))
-        ?? [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([dx, dz]) => [dx * 0.72, dz * 0.72, dx, dz]).find(([, , dx, dz]) => !roadAt(dx, dz) && dry(dx, dz));
-      if (!side) continue;
-      const n = this.node(cx, cz, age >= 3 ? 0.06 : 0.22), off = hw0 + 0.09, x = n[0] + side[0] * off, z = n[1] + side[1] * off, y = w.hAt(x, z);
+    for (const [, [x, z, sx, sz]] of lamps) {
+      const y = w.hAt(x, z) + (town ? 0.02 : 0);
       // le bras de la lanterne se tend vers le chemin
-      const ry = Math.atan2(-side[0], -side[1]) - Math.PI / 2;
-      this.lights.push(x - side[0] * 0.08, z - side[1] * 0.08);
+      const ry = Math.atan2(-sx, -sz) - Math.PI / 2;
+      this.lights.push(x - sx * 0.08, z - sz * 0.08);
       if (age === 0) {
         // torche : pieu de bois, tête de paille ficelée, flamme
         put(this.cube, x, y, z, 0.022, 0.3, 0.022, ry, 0x7a5a3e);
@@ -662,17 +1056,17 @@ export class RoadView {
         put(this.ico, x, y + 0.36, z, 0.026, 0.045, 0.026, ry, 0xffb15c, true);
       } else if (age <= 2) {
         put(this.cube, x, y, z, 0.026, 0.36, 0.026, ry, 0x7a6355);
-        put(this.cube, x + -side[0] * 0.05, y + 0.34, z + -side[1] * 0.05, side[0] ? 0.11 : 0.02, 0.018, side[0] ? 0.02 : 0.11, 0, 0x7a6355);
-        put(this.cube, x + -side[0] * 0.09, y + 0.24, z + -side[1] * 0.09, 0.038, 0.05, 0.038, ry, 0xffd27a, true);
-        put(this.cube, x + -side[0] * 0.09, y + 0.29, z + -side[1] * 0.09, 0.05, 0.012, 0.05, ry, 0x5a4636);
+        put(this.cube, x + -sx * 0.05, y + 0.34, z + -sz * 0.05, sx ? 0.11 : 0.02, 0.018, sx ? 0.02 : 0.11, 0, 0x7a6355);
+        put(this.cube, x + -sx * 0.09, y + 0.24, z + -sz * 0.09, 0.038, 0.05, 0.038, ry, 0xffd27a, true);
+        put(this.cube, x + -sx * 0.09, y + 0.29, z + -sz * 0.09, 0.05, 0.012, 0.05, ry, 0x5a4636);
       } else if (age === 3) {
         put(this.cyl, x, y, z, 0.012, 0.38, 0.012, 0, 0x3c4a44);
         put(this.cube, x, y + 0.38, z, 0.036, 0.05, 0.036, ry, 0xffe2a0, true);
         put(this.cube, x, y + 0.43, z, 0.05, 0.014, 0.05, ry, 0x3c4a44);
       } else {
         put(this.cyl, x, y, z, 0.01, 0.42, 0.01, 0, 0x8a9098);
-        put(this.cube, x + -side[0] * 0.04, y + 0.42, z + -side[1] * 0.04, side[0] ? 0.1 : 0.03, 0.012, side[0] ? 0.03 : 0.1, 0, 0x6b7280);
-        put(this.cube, x + -side[0] * 0.07, y + 0.41, z + -side[1] * 0.07, 0.04, 0.008, 0.04, 0, 0xfff1c9, true);
+        put(this.cube, x + -sx * 0.04, y + 0.42, z + -sz * 0.04, sx ? 0.1 : 0.03, 0.012, sx ? 0.03 : 0.1, 0, 0x6b7280);
+        put(this.cube, x + -sx * 0.07, y + 0.41, z + -sz * 0.07, 0.04, 0.008, 0.04, 0, 0xfff1c9, true);
       }
     }
     // tonneaux, caisses, sacs (ou bacs à fleurs) au pied des maisons et des ateliers, à côté de la porte
@@ -684,7 +1078,7 @@ export class RoadView {
         const lat = side * (0.3 + i * 0.09), fw = s / 2 + 0.1 + (i % 2) * 0.07;
         const x = b.x + s / 2 + f[0] * fw + t[0] * lat, z = b.z + s / 2 + f[1] * fw + t[1] * lat, cx = Math.floor(x), cz = Math.floor(z);
         if (!w.inCells(cx, cz) || (w.occ[w.ci(cx, cz)] && w.occ[w.ci(cx, cz)] !== b.id) || w.cellAvg(cx, cz) < 0.1) continue;
-        const y = w.hAt(x, z), r = hash2(b.x + i, b.z, 74), ry = hash2(b.x, b.z + i, 75) * 6.28;
+        const y = w.hAt(x, z) + (town ? 0.02 : 0), r = hash2(b.x + i, b.z, 74), ry = hash2(b.x, b.z + i, 75) * 6.28;
         if (age >= 4) { put(this.cube, x, y, z, 0.09, 0.05, 0.05, ry, 0xb4b0a8); put(this.ico, x, y + 0.07, z, 0.045, 0.03, 0.03, ry, 0x7cc46a); }
         else if (r < 0.45) { put(this.cyl, x, y, z, 0.038, 0.085, 0.038, 0, BARREL); put(this.cyl, x, y + 0.02, z, 0.04, 0.008, 0.04, 0, HOOP); put(this.cyl, x, y + 0.062, z, 0.04, 0.008, 0.04, 0, HOOP); }
         else if (r < 0.8) put(this.cube, x, y, z, 0.07, 0.06, 0.07, ry, CRATE);

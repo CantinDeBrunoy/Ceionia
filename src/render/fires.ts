@@ -6,8 +6,8 @@ import { Puffs } from './particles';
 const MAX_FLAMES = 120, FLAMES_PER_FIRE = 7;
 /** Délai avant que les habitants éteignent un feu (un point d'eau tout près), durée au bout de laquelle le bâtiment est perdu */
 const PUT_OUT = 14, BURN_DOWN = 32;
-/** Avec une caserne à portée : les secours arrivent vite, eau ou pas */
-const CREW = 5, CREW_RANGE = 14;
+/** Avec une caserne à portée : les secours arrivent vite, eau ou pas ; arrivés sur place, ils arrosent quatre secondes */
+const CREW = 5, CREW_RANGE = 14, SPRAY_OUT = 4;
 const SMOKE = new THREE.Color(0.22, 0.2, 0.2);
 
 interface Fire { b: Building; t: number; seed: number }
@@ -20,6 +20,8 @@ export class Fires {
   group = new THREE.Group();
   /** messages à afficher (incendie, feu éteint, bâtiment perdu) */
   news: string[] = [];
+  /** les pompiers en camion (âge industriel et après) : temps d'arrosage d'un feu, 0 en route, null sans camion */
+  responder: { spraying(b: Building): number | null } | null = null;
   private list: Fire[] = [];
   private flames: THREE.InstancedMesh;
   private smoke = new Puffs(160, 0);
@@ -60,16 +62,18 @@ export class Fires {
       // bâtiment démoli entre-temps
       if (!w.buildings.has(b.id)) { this.list.splice(i, 1); continue; }
       f.t += dt;
-      const crew = this.crewNear(b), water = crew || this.waterNear(b), out = crew ? CREW : PUT_OUT;
-      if (crew && f.t > CREW) { this.news.push(`🚒 Les secours ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
-      if (water && f.t > PUT_OUT) { this.news.push(`💧 Les habitants ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
-      if (f.t > BURN_DOWN) {
+      // le camion des pompiers en route, le feu attend les secours (il finit par brûler si rien n'arrive)
+      const crew = this.crewNear(b), spray = crew ? this.responder?.spraying(b) ?? null : null;
+      const water = crew || this.waterNear(b), out = crew ? CREW : PUT_OUT;
+      if (crew && (spray === null ? f.t > CREW : spray > SPRAY_OUT)) { this.news.push(`🚒 Les pompiers ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
+      if (water && spray === null && f.t > PUT_OUT) { this.news.push(`💧 Les habitants ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
+      if (f.t > (spray === null ? BURN_DOWN : BURN_DOWN * 2)) {
         this.list.splice(i, 1);
         if (w.disasters) { this.news.push(`🔥 ${KINDS[b.kind].names[b.age]} a brûlé`); w.removeBuilding(b.id); }
         else this.news.push(`💧 L’incendie s’est éteint : ${KINDS[b.kind].names[b.age]}`);
         continue;
       }
-      const s = sizeOf(b), base = w.h(b.x, b.z), k = Math.min(1, f.t / 3) * (water ? Math.max(0.3, 1 - f.t / out) : 1);
+      const s = sizeOf(b), base = w.h(b.x, b.z), k = Math.min(1, f.t / 3) * (spray !== null ? Math.max(0.25, 1 - spray / SPRAY_OUT) : water ? Math.max(0.3, 1 - f.t / out) : 1);
       for (let j = 0; j < FLAMES_PER_FIRE && n < MAX_FLAMES; j++) {
         const ph = f.seed + j * 2.3, flick = 0.65 + 0.35 * Math.sin(this.t * (9 + j) + ph);
         d.position.set(b.x + s / 2 + Math.sin(ph * 3.1) * 0.28 * s, base + 0.25 + (j % 3) * 0.12, b.z + s / 2 + Math.cos(ph * 2.3) * 0.28 * s);

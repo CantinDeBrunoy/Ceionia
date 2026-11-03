@@ -20,7 +20,7 @@ export const MINER_SPEED = 0.6;
 export const OVER = 0.3;
 
 /** Gares : la petite gare, et le grand bâtiment devenu gare à l'âge industriel (les tours modernes ont la leur à leur pied) */
-export const isStation = (b: Building) => b.kind === 'station' || (b.kind === 'landmark' && b.age >= 3);
+export const isStation = (b: Building) => b.kind === 'station' || b.kind === 'terminal';
 
 /**
  * Arrêt d'une ligne : le quai d'une gare (sa voie, le long de x dans le repère du modèle, en z = 0.34) ou l'embranchement
@@ -170,7 +170,7 @@ export class Railway {
   /** Nom d'un arrêt : gare centrale, petite gare (numérotée s'il y en a plusieurs), avant-poste */
   stopName(b: Building) {
     const same = [...this.world.buildings.values()].filter((x) => x.kind === b.kind).sort((p, q) => p.id - q.id), k = same.indexOf(b) + 1;
-    const base = b.kind === 'landmark' ? 'Gare centrale' : b.kind === 'outpost' ? 'Avant-poste' : KINDS[b.kind].names[Math.max(b.age, KINDS[b.kind].minAge)];
+    const base = b.kind === 'terminal' ? KINDS.terminal.names[Math.max(3, b.age)] : b.kind === 'outpost' ? 'Avant-poste' : KINDS[b.kind].names[Math.max(b.age, KINDS[b.kind].minAge)];
     return same.length > 1 ? `${base} ${k}` : base;
   }
 

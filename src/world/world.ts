@@ -668,14 +668,21 @@ export class World {
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return 'Trop proche de l’eau';
       }
     // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
-    const high = kind === 'mine' || kind === 'quarry' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
+    const high = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
     if (kind === 'mine' && !high) return 'Une mine ne se creuse que dans la montagne';
+    if (kind === 'alpine' && !high) return 'Un club alpin ne se pose que dans la montagne';
     if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return 'À poser en lisière ou dans une forêt';
     if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return 'À poser près des rochers ou dans la montagne';
     // l'avant-poste se dresse tout contre une grotte ou une faille
     if (kind === 'outpost' && this.outpostEntrance(x, z, s) < 0) return 'À bâtir tout contre une grotte ou une faille';
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
     if (kind === 'pier' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.inCells(x + dx, z + dz) && (this.cellAvg(x + dx, z + dz) < -0.05 || this.lake[this.ci(x + dx, z + dz)]))) return 'À poser au bord de l’eau';
+    // le port borde l'eau sur tout un côté de son quai
+    if (kind === 'harbor') {
+      const wet = (cx: number, cz: number) => this.inCells(cx, cz) && (this.cellAvg(cx, cz) < -0.05 || this.lake[this.ci(cx, cz)]);
+      const side = [[0, s, 1, 0], [0, -1, 1, 0], [s, 0, 0, 1], [-1, 0, 0, 1]].some(([ox, oz, ux, uz]) => { let n = 0; for (let i = 0; i < s; i++) if (wet(x + ox + ux * i, z + oz + uz * i)) n++; return n === s; });
+      if (!side) return 'À poser au bord de l’eau, un côté du quai le long de l’eau';
+    }
     for (let j = 0; j <= s; j++)
       for (let i = 0; i <= s; i++) {
         const hh = this.h(x + i, z + j);
@@ -683,7 +690,7 @@ export class World {
       }
     const target = this.flatTarget(x, z, s);
     // la mine et la carrière s'accrochent à la pente
-    const steep = kind === 'mine' || kind === 'quarry' ? 1.7 : 1;
+    const steep = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? 1.7 : 1;
     if (mx - target > 0.85 * s * steep || target - mn > 0.85 * s * steep) return 'Terrain trop pentu';
     if (target < 0.05 && kind !== 'pier') return 'Trop proche de l\u2019eau';
     return null;
@@ -971,6 +978,11 @@ export class World {
       if (!KINDS[r[0] as KindId]) continue;
       buildings.push({ id: id++, kind: r[0], x: r[1] | 0, z: r[2] | 0, rot: (r[3] | 0) & 3, auto: !!r[4], age: r[5] | 0, ...(r[6] ? { small: true } : {}) });
     }
+    // le château devenait la gare à l'âge industriel : ceux qui servent d'arrêt à une ligne deviennent la gare centrale, les
+    // autres redeviennent des châteaux
+    const stops = new Set<number>();
+    for (const l of Array.isArray(d.lines) ? d.lines : []) for (const i of Array.isArray(l?.s) ? l.s : []) if (ids[i] > 0) stops.add(ids[i]);
+    for (const b of buildings) if (b.kind === 'landmark' && b.age >= 3 && stops.has(b.id)) b.kind = 'terminal';
     this.growLarge(buildings, heights, road, veg);
     this.restore({ heights, road, veg, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));

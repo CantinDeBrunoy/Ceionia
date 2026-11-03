@@ -1,12 +1,13 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
-  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station';
+  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
+  | 'harbor' | 'airport' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
 
 export interface KindDef {
   id: KindId;
-  size: 1 | 2;
+  size: 1 | 2 | 3;
   minAge: number;
   icon: string;
   /** rayon de la barre de construction */
@@ -86,6 +87,27 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [0, 0, 0, 3, 5], joy: [0, 0, 0, 3, 4],
     perk: 'Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux.',
   },
+  terminal: {
+    id: 'terminal', size: 2, minAge: 3, icon: '🚉', cat: 'service',
+    names: ['', '', '', 'Grande gare', 'Gare centrale'],
+    desc: 'La grande gare du village : les voyageurs y montent et en descendent, les mineurs y prennent le train pour l’avant-poste.',
+    jobs: [0, 0, 0, 8, 12], joy: [0, 0, 0, 4, 6],
+    perk: 'Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux.',
+  },
+  harbor: {
+    id: 'harbor', size: 2, minAge: 2, icon: '⚓', cat: 'prod',
+    names: ['', '', 'Port', 'Port de commerce', 'Port à conteneurs'],
+    desc: 'Quais, entrepôts et grues : les navires marchands y accostent, déchargent et repartent.',
+    jobs: [0, 0, 6, 10, 14], food: [0, 0, 4, 6, 8],
+    perk: 'À poser au bord de la mer ou d’un lac, le quai tourné vers l’eau. Un navire de l’époque (cogue, vapeur, porte-conteneurs) entre au port, s’amarre au quai et repart au large.',
+  },
+  airport: {
+    id: 'airport', size: 3, minAge: 4, icon: '✈️', cat: 'service',
+    names: ['', '', '', '', 'Aéroport'],
+    desc: 'Piste, aérogare, tour de contrôle et hangar : les avions décollent et se posent.',
+    jobs: [0, 0, 0, 0, 20], joy: [0, 0, 0, 0, 8],
+    perk: 'Grand bâtiment de 3 × 3 cases, sur un terrain plat. Un avion roule jusqu’à la piste, décolle, fait un grand tour au-dessus du pays et revient se poser.',
+  },
   lumber: {
     id: 'lumber', size: 1, minAge: 0, icon: '🪓', cat: 'prod',
     names: ['Abri de bûcheron', 'Camp de bûcherons', 'Scierie', 'Scierie à vapeur', 'Scierie mécanique'],
@@ -139,8 +161,8 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   landmark: {
     id: 'landmark', size: 2, minAge: 2, icon: '🏰', cat: 'life',
-    names: ['', '', 'Château', 'Gare', 'Gare centrale'],
-    desc: 'Grand bâtiment emblématique (2×2).',
+    names: ['', '', 'Château', 'Château', 'Château-musée'],
+    desc: 'Grand bâtiment emblématique (2×2) : le château du village, qu’on garde à travers les âges.',
     jobs: [0, 0, 6, 12, 20], joy: [0, 0, 6, 6, 8],
   },
   lamp: {
@@ -180,6 +202,55 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Débloquée par l’expédition « Le maître brasseur ».',
     reqMission: 'brewer',
   },
+  barber: {
+    id: 'barber', size: 1, minAge: 1, icon: '💈', cat: 'life',
+    names: ['', 'Échoppe du barbier', 'Barbier', 'Salon de barbier', 'Salon de coiffure'],
+    desc: 'On s’y fait couper les cheveux et tailler la barbe, et l’on y apprend toutes les nouvelles du village.',
+    joy: [0, 2, 3, 4, 5], jobs: [0, 1, 1, 2, 2],
+  },
+  alpine: {
+    id: 'alpine', size: 2, minAge: 3, icon: '🏔️', cat: 'life',
+    names: ['', '', '', 'Club alpin', 'Station de montagne'],
+    desc: 'Chalet des alpinistes et des skieurs, au pied des sommets.',
+    joy: [0, 0, 0, 7, 10], jobs: [0, 0, 0, 2, 4],
+    perk: 'Ne se pose que dans la montagne. Des cordées grimpent les parois voisines ; quand la neige tient, des skieurs dévalent les pentes jusqu’au chalet (un télésiège les remonte à l’époque moderne) ; à l’époque moderne, des wingsuits s’élancent du sommet et un parapente tourne au-dessus des pentes.',
+  },
+  stadium: {
+    id: 'stadium', size: 2, minAge: 3, icon: '🏟️', cat: 'life',
+    names: ['', '', '', 'Stade', 'Stade d’athlétisme'],
+    desc: 'Piste d’athlétisme autour d’une pelouse, sautoirs, tribunes : on y court, on y saute, on y lance.',
+    joy: [0, 0, 0, 8, 12], jobs: [0, 0, 0, 1, 2],
+  },
+  football: {
+    id: 'football', size: 2, minAge: 3, icon: '⚽', cat: 'life',
+    names: ['', '', '', 'Terrain de football', 'Terrain de football'],
+    desc: 'Un match le dimanche, des parties improvisées tous les soirs.',
+    joy: [0, 0, 0, 6, 8],
+  },
+  basket: {
+    id: 'basket', size: 1, minAge: 4, icon: '🏀', cat: 'life',
+    names: ['', '', '', '', 'Terrain de basket'],
+    desc: 'Deux paniers, un terrain de bitume et ses lignes : le rendez-vous des jeunes du quartier.',
+    joy: [0, 0, 0, 0, 4],
+  },
+  tennis: {
+    id: 'tennis', size: 1, minAge: 3, icon: '🎾', cat: 'life',
+    names: ['', '', '', 'Court de tennis', 'Court de tennis'],
+    desc: 'Terre battue à l’âge industriel, court en dur ensuite, filet et grillage.',
+    joy: [0, 0, 0, 3, 4],
+  },
+  waterpark: {
+    id: 'waterpark', size: 2, minAge: 4, icon: '🌊', cat: 'life',
+    names: ['', '', '', '', 'Parc aquatique'],
+    desc: 'Bassins, toboggans géants et rivière à bouées : la fête des beaux jours.',
+    joy: [0, 0, 0, 0, 14], jobs: [0, 0, 0, 0, 4],
+  },
+  funfair: {
+    id: 'funfair', size: 2, minAge: 3, icon: '🎡', cat: 'life',
+    names: ['', '', '', 'Fête foraine', 'Parc d’attractions'],
+    desc: 'Manèges, grande roue, montagnes russes, barbe à papa et lumières le soir.',
+    joy: [0, 0, 0, 10, 16], jobs: [0, 0, 0, 3, 6],
+  },
   baths: {
     id: 'baths', size: 2, minAge: 1, icon: '♨️', cat: 'life',
     names: ['', 'Thermes', 'Étuves', 'Bains publics', 'Centre aquatique'],
@@ -187,6 +258,13 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [0, 6, 8, 10, 13], health: [0, 10, 14, 20, 28], jobs: [0, 2, 2, 3, 5],
     perk: 'Débloqués par l’expédition « Les sources chaudes ».',
     reqMission: 'springs',
+  },
+  police: {
+    id: 'police', size: 2, minAge: 1, icon: '🚓', cat: 'service',
+    names: ['', 'Poste des gardes', 'Maison du guet', 'Poste de police', 'Commissariat'],
+    desc: 'Veille sur la tranquillité du village, de jour comme de nuit.',
+    joy: [0, 2, 3, 4, 5], jobs: [0, 2, 3, 5, 7],
+    perk: 'Les rondes rassurent les habitants : un peu de bien-être. À l’âge industriel, le fourgon de la police fait sa tournée ; à l’époque moderne, une voiture de patrouille sillonne les rues, gyrophare allumé.',
   },
   fire: {
     id: 'fire', size: 2, minAge: 0, icon: '🚒', cat: 'service',
@@ -197,7 +275,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'mine', 'outpost', 'mill', 'health', 'school', 'fire', 'observatory', 'gather', 'tavern', 'baths', 'temple', 'landmark', 'station'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'mine', 'outpost', 'harbor', 'mill', 'health', 'school', 'fire', 'police', 'observatory', 'airport', 'gather', 'tavern', 'barber', 'baths', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'landmark', 'station', 'terminal'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -229,6 +307,8 @@ export const KIND_LABEL: Record<KindId, string> = {
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
   health: 'lieux de soins', school: 'écoles', fire: 'casernes',
   stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
+  barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
+  harbor: 'ports', airport: 'aéroports', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions',
 };
 
 export interface Building {

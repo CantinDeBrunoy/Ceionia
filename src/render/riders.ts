@@ -5,23 +5,26 @@ import { HUMAN_K } from './assets';
 
 /**
  * Cavaliers de la charge de cavalerie, dans le style des chevaliers qui joutent dans les jardins : cheval low-poly aux jambes
- * qui galopent, cavalier de l'époque aux couleurs du village (bleu et or) — chevalier caparaçonné à la lance au Moyen Âge,
- * cuirassier au casque à crinière et au sabre à l'âge industriel, garde à cheval en gilet fluo et lampe frontale ensuite
+ * qui galopent, cavalier de l'époque aux couleurs du village (bleu et or) — cavalier romain au casque à crête dans
+ * l'Antiquité, chevalier caparaçonné à la lance au Moyen Âge, cuirassier au casque à crinière et au sabre à l'âge
+ * industriel ; à l'époque moderne, plus de chevaux : un char d'assaut, chenilles, tourelle et canon, fanion du village
  */
 
 export interface Rider {
   root: THREE.Group;
-  /** cheval et cavalier, bercés par le galop ; les jambes et l'arme y sont accrochées */
+  /** cheval et cavalier (ou caisse du char), bercés par le galop ; les jambes (les galets) et l'arme (le canon) y sont accrochées */
   body: THREE.Group;
   legs: THREE.Object3D[];
   weapon: THREE.Object3D;
+  tank: boolean;
 }
 
 /** Ce que fait le cavalier : en route (arme haute), à la charge (lance couchée, sabre en avant), au combat */
 export type RiderMode = 'rest' | 'charge' | 'fight';
 
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
-const STEEL = 0xc4cad2, BLUE = 0x3a6ab8, GOLD = 0xe8c66a, SKIN = 0xe8b894, LEATHER = 0x4a3426, BLACK = 0x1e1e22;
+const STEEL = 0xc4cad2, BLUE = 0x3a6ab8, GOLD = 0xe8c66a, SKIN = 0xe8b894, LEATHER = 0x4a3426, BLACK = 0x1e1e22, BRONZE = 0xc49a54;
+const OLIVE = 0x66723f, OLIVE_D = 0x4c5630, KHAKI = 0x8a845a, TRACK = 0x2f2f2c;
 /** robes des chevaux : bai, alezan, noir, gris */
 const COATS = [0x8a6248, 0xa8683e, 0x3e3434, 0xd8d2c8];
 
@@ -76,10 +79,10 @@ function seated(p: Parts, o: { thigh: number; boot: number; coat: number; arm: n
   p.box(0.046, 0.046, 0.046, 0, 0.395, 0.004, SKIN);
 }
 
-/** Lance rayée bleu et or, garde en cône ; tenue de la main droite, couchée vers +z */
-function lance() {
+/** Lance rayée bleu et or (hampe de frêne pour les Romains), garde en cône ; tenue de la main droite, couchée vers +z */
+function lance(a = BLUE, b = GOLD) {
   const p = new Parts();
-  for (let k = 0; k < 5; k++) p.add(new THREE.CylinderGeometry(0.0075 - k * 0.0008, 0.0085 - k * 0.0008, 0.12, 5).rotateX(Math.PI / 2), 0, 0, k * 0.12, k % 2 ? GOLD : BLUE);
+  for (let k = 0; k < 5; k++) p.add(new THREE.CylinderGeometry(0.0075 - k * 0.0008, 0.0085 - k * 0.0008, 0.12, 5).rotateX(Math.PI / 2), 0, 0, k * 0.12, k % 2 ? b : a);
   p.add(new THREE.ConeGeometry(0.026, 0.05, 6).rotateX(Math.PI / 2), 0, 0, 0.03, STEEL);
   return p;
 }
@@ -104,16 +107,106 @@ function carbine() {
   return p;
 }
 
+/** Canon du char, vers +z depuis le masque de tourelle : masque, tube, frein de bouche */
+function cannon() {
+  const p = new Parts();
+  p.box(0.05, 0.042, 0.04, 0, -0.021, 0, OLIVE_D);
+  p.add(new THREE.CylinderGeometry(0.0105, 0.013, 0.22, 7).rotateX(Math.PI / 2), 0, 0, 0.13, OLIVE);
+  p.box(0.028, 0.024, 0.034, 0, -0.012, 0.24, OLIVE_D);
+  return p;
+}
+
 /**
- * Cavalier de l'époque (âge 2 à 4 ; plus tôt, le chevalier) ; `v` varie la robe du cheval. Tourné vers +z, posé à y = 0,
- * à l'échelle des habitants
+ * Char d'assaut, tourné vers +z : chenilles et garde-boue, caisse et glacis, phares, tourelle et chef de char au tourelleau,
+ * antenne au fanion bleu et or, écusson du village, taches de camouflage ; galets à part (ils roulent), canon à part
+ */
+function tank(v: number): Rider {
+  const p = new Parts();
+  for (const s of [-1, 1]) {
+    p.box(0.07, 0.075, 0.44, s * 0.115, 0, 0, TRACK);
+    p.box(0.072, 0.018, 0.4, s * 0.115, 0.075, 0, dark(TRACK, 1.3));
+    p.box(0.086, 0.012, 0.46, s * 0.115, 0.093, 0, OLIVE_D);
+    // barbotin à l'avant, roue folle à l'arrière
+    for (const z of [0.2, -0.2]) p.add(new THREE.CylinderGeometry(0.034, 0.034, 0.074, 8).rotateZ(Math.PI / 2), s * 0.115, 0.045, z, dark(TRACK, 1.5));
+  }
+  p.box(0.17, 0.06, 0.4, 0, 0.04, 0, OLIVE_D);
+  p.box(0.24, 0.045, 0.36, 0, 0.1, -0.015, OLIVE);
+  p.add(new THREE.BoxGeometry(0.24, 0.012, 0.1), 0, 0.118, 0.19, OLIVE, 0, false, 0, -0.55);
+  for (const s of [-1, 1]) p.box(0.026, 0.018, 0.012, s * 0.085, 0.1, 0.212, 0xfff1c9, 0, true);
+  p.box(0.2, 0.035, 0.03, 0, 0.09, -0.2, OLIVE_D);
+  for (const s of [-1, 1]) p.box(0.03, 0.03, 0.02, s * 0.06, 0.105, -0.218, dark(TRACK, 1.2));
+  // taches de camouflage
+  p.box(0.07, 0.004, 0.09, 0.05, 0.145, 0.06, KHAKI);
+  p.box(0.06, 0.004, 0.07, -0.07, 0.145, -0.12, dark(OLIVE_D, 0.85));
+  p.box(0.05, 0.004, 0.05, -0.05, 0.145, 0.1, dark(OLIVE_D, 0.85));
+  // tourelle : biseautée, écusson bleu et or sur les flancs, tourelleau, chef de char casqué
+  p.box(0.15, 0.055, 0.17, 0, 0.145, -0.03, OLIVE);
+  p.box(0.13, 0.014, 0.15, 0, 0.2, -0.03, dark(OLIVE, 0.92));
+  p.box(0.04, 0.008, 0.06, -0.035, 0.212, -0.09, KHAKI);
+  for (const s of [-1, 1]) { p.box(0.004, 0.03, 0.03, s * 0.076, 0.157, -0.03, BLUE); p.box(0.005, 0.012, 0.012, s * 0.077, 0.166, -0.03, GOLD); }
+  p.cyl(0.026, 0.028, 0.02, 8, 0.03, 0.214, -0.06, OLIVE_D);
+  p.box(0.03, 0.026, 0.028, 0.03, 0.234, -0.06, SKIN);
+  p.sphere(0.022, 0.03, 0.262, -0.062, OLIVE_D, 1, 0.75);
+  // antenne et fanion du village
+  p.box(0.004, 0.2, 0.004, -0.055, 0.214, -0.1, BLACK);
+  p.box(0.003, 0.03, 0.05, -0.055, 0.384, -0.126, BLUE);
+  p.box(0.0035, 0.01, 0.05, -0.055, 0.384, -0.126, GOLD);
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  // un peu plus gros qu’un cheval et son cavalier
+  root.scale.setScalar(((1 + HUMAN_K) / 2) * 1.25);
+  const built = p.build(false);
+  const hull = new THREE.Mesh(built.body, mats.body);
+  hull.castShadow = true;
+  body.add(hull);
+  if (built.glow) body.add(new THREE.Mesh(built.glow, mats.glow));
+  // galets de roulement, de part et d'autre : ils tournent quand le char avance (moyeu clair pour qu'on le voie)
+  const legs: THREE.Object3D[] = [];
+  for (const s of [-1, 1]) for (const z of [-0.12, -0.04, 0.04, 0.12]) {
+    const wp = new Parts();
+    wp.add(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 8).rotateZ(Math.PI / 2), 0, 0, 0, dark(OLIVE_D, 0.9));
+    wp.box(0.014, 0.034, 0.012, s * 0.002, -0.017, 0, KHAKI);
+    const wheel = new THREE.Mesh(wp.build(false).body, mats.body);
+    wheel.position.set(s * 0.152, 0.04, z);
+    wheel.userData.ph = z * 9 + v;
+    body.add(wheel);
+    legs.push(wheel);
+  }
+  const wm = new THREE.Mesh(cannon().build(false).body, mats.body);
+  wm.position.set(0, 0.17, 0.055);
+  wm.rotation.order = 'YXZ';
+  wm.userData.kind = 'cannon';
+  wm.castShadow = true;
+  body.add(wm);
+  return { root, body, legs, weapon: wm, tank: true };
+}
+
+/**
+ * Cavalier de l'époque (âge 1 à 3 ; plus tôt, le cavalier romain ; à l'époque moderne, un char) ; `v` varie la robe du
+ * cheval. Tourné vers +z, posé à y = 0, à l'échelle des habitants
  */
 export function makeRider(age: number, v = 0): Rider {
-  const era = Math.min(4, Math.max(2, age)), coat = COATS[(v % COATS.length + COATS.length) % COATS.length];
+  const era = Math.min(4, Math.max(1, age)), coat = COATS[(v % COATS.length + COATS.length) % COATS.length];
+  if (era === 4) return tank(v);
   const p = new Parts();
   horse(p, coat);
   let weapon: Parts, kind: 'lance' | 'saber' | 'rifle', hand: [number, number, number];
-  if (era === 2) {
+  if (era === 1) {
+    // cavalier romain : tapis rouge bordé d'or, tunique rouge et cape, cotte de mailles, casque de bronze à crête rouge,
+    // bouclier ovale bleu à l'umbo d'or, lance de frêne
+    saddle(p, 0xb8322c, GOLD);
+    seated(p, { thigh: SKIN, boot: LEATHER, coat: 0xb8322c, arm: SKIN, glove: SKIN });
+    p.box(0.091, 0.072, 0.065, 0, 0.3, 0, 0x8f949c);
+    p.box(0.093, 0.012, 0.067, 0, 0.296, 0, LEATHER);
+    p.add(new THREE.BoxGeometry(0.09, 0.13, 0.012), 0, 0.33, -0.04, 0xa82a26, 0, false, 0, 0.22);
+    p.sphere(0.03, 0, 0.44, 0.0, BRONZE, 1, 0.8);
+    p.box(0.012, 0.024, 0.07, 0, 0.455, -0.006, 0xd84a3e);
+    p.box(0.06, 0.008, 0.02, 0, 0.41, -0.028, BRONZE);
+    for (const s of [-1, 1]) p.box(0.008, 0.026, 0.018, s * 0.026, 0.4, 0.012, BRONZE);
+    p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.012, 10).rotateZ(Math.PI / 2).scale(1, 1.3, 1), 0.076, 0.3, 0.02, BLUE);
+    p.sphere(0.014, 0.084, 0.3, 0.02, GOLD);
+    weapon = lance(0x9a7452, 0x8a6448); kind = 'lance'; hand = [-0.05, 0.3, 0.06];
+  } else if (era === 2) {
     // chevalier : caparaçon bleu bordé d'or, chanfrein d'acier, armure, heaume à fente et plumet, écu au bras gauche
     p.box(0.16, 0.1, 0.3, 0, 0.13, -0.005, BLUE);
     p.box(0.162, 0.025, 0.302, 0, 0.13, -0.005, GOLD);
@@ -183,11 +276,21 @@ export function makeRider(age: number, v = 0): Rider {
   wm.userData.kind = kind;
   wm.castShadow = true;
   body.add(wm);
-  return { root, body, legs, weapon: wm };
+  return { root, body, legs, weapon: wm, tank: false };
 }
 
 /** Galop (`gait` 0 à l'arrêt … 1 au galop) au rythme de `phase`, et geste de l'arme selon ce que fait le cavalier */
 export function rideStep(r: Rider, phase: number, gait: number, mode: RiderMode) {
+  if (r.tank) {
+    // le char vibre à peine ; ses galets roulent ; le canon se lève en route, pointe à la charge, recule à chaque tir
+    const beat = Math.sin(phase * 0.45) * 0.5 + 0.5, recoil = mode === 'fight' && beat > 0.92 ? 0.03 : 0;
+    r.body.position.y = Math.abs(Math.sin(phase * 3)) * 0.004 * gait;
+    r.body.rotation.x = Math.sin(phase) * 0.012 * gait;
+    if (gait > 0) for (const l of r.legs) l.rotation.x = phase * 0.9 + l.userData.ph;
+    r.weapon.rotation.x = mode === 'rest' ? -0.12 : mode === 'charge' ? -0.02 : -0.06 - beat * 0.06;
+    r.weapon.position.z = 0.055 - recoil;
+    return;
+  }
   r.body.position.y = Math.abs(Math.sin(phase)) * 0.022 * gait;
   r.body.rotation.x = Math.sin(phase) * 0.04 * gait;
   for (const l of r.legs) l.rotation.x = Math.sin(phase + l.userData.ph) * 0.7 * gait;

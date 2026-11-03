@@ -9,15 +9,21 @@ export const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
  */
 export function facingRoadRot(world: World, kind: KindId, x: number, z: number, rot: number, size = KINDS[kind].size): number {
   if (kind === 'lamp') return rot;
-  // le ponton s'avance vers l'eau
-  if (kind === 'pier') {
-    for (let k = 0; k < 4; k++) {
-      const f = FRONT[(rot + k) % 4], cx = x + f[0], cz = z + f[1];
-      if (world.inCells(cx, cz) && (world.cellAvg(cx, cz) < -0.05 || world.lake[world.ci(cx, cz)])) return (rot + k) % 4;
-    }
-    return rot;
-  }
+  // le ponton s'avance vers l'eau, le quai du port la longe : le côté qui en borde le plus
   const s = size;
+  if (kind === 'pier' || kind === 'harbor') {
+    let best = rot, most = 0;
+    for (let k = 0; k < 4; k++) {
+      const r = (rot + k) % 4, f = FRONT[r];
+      let n = 0;
+      for (let i = 0; i < s; i++) {
+        const cx = f[0] === 0 ? x + i : f[0] > 0 ? x + s : x - 1, cz = f[1] === 0 ? z + i : f[1] > 0 ? z + s : z - 1;
+        if (world.inCells(cx, cz) && (world.cellAvg(cx, cz) < -0.05 || world.lake[world.ci(cx, cz)])) n++;
+      }
+      if (n > most) { most = n; best = r; }
+    }
+    return best;
+  }
   const roadAt = (cx: number, cz: number) => world.inCells(cx, cz) && world.road[world.ci(cx, cz)] === 1;
   // cases de route le long de chaque côté
   const along = (r: number) => {
@@ -52,5 +58,6 @@ export function facingRoadRot(world: World, kind: KindId, x: number, z: number, 
 export function footprintOrigin(kind: KindId, px: number, pz: number) {
   const s = KINDS[kind].size;
   if (s === 1) return { x: Math.floor(px), z: Math.floor(pz) };
+  if (s === 3) return { x: Math.floor(px) - 1, z: Math.floor(pz) - 1 };
   return { x: Math.round(px) - 1, z: Math.round(pz) - 1 };
 }

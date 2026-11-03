@@ -9,7 +9,7 @@ import { CH, NC } from './vegetation';
 
 type Kind = 'sheep' | 'cow' | 'pig' | 'hen' | 'rabbit' | 'deer' | 'horse' | 'llama' | 'fox' | 'wolf' | 'frog'
   | 'duck' | 'duckling' | 'bird' | 'songbird' | 'bee' | 'butterfly' | 'bat' | 'fish' | 'dolphin' | 'whale' | 'manta'
-  | 'eagle' | 'gull' | 'ibex';
+  | 'eagle' | 'gull' | 'ibex' | 'bear';
 
 interface Spec {
   geo: () => THREE.BufferGeometry;
@@ -39,7 +39,7 @@ const PREY: Partial<Record<Kind, { kinds: Kind[]; sight: number }>> = {
 };
 /** Herbivores qui broutent l'herbe des prairies, animaux qui vont boire au bord de l'eau */
 const GRAZERS = new Set<Kind>(['sheep', 'cow', 'pig', 'horse', 'deer', 'llama', 'rabbit']);
-const DRINKERS = new Set<Kind>(['sheep', 'cow', 'horse', 'deer', 'llama', 'fox', 'wolf']);
+const DRINKERS = new Set<Kind>(['sheep', 'cow', 'horse', 'deer', 'llama', 'fox', 'wolf', 'bear']);
 const SWIMMERS = new Set<Kind>(['fish', 'dolphin', 'whale', 'manta']);
 
 interface Critter {
@@ -118,6 +118,10 @@ const land = (w: World, cx: number, cz: number) => !blocked(w, cx, cz) && w.cell
 const water = (w: World, cx: number, cz: number) => w.inCells(cx, cz) && w.cellAvg(cx, cz) < -0.12;
 const pasture = (w: World, cx: number, cz: number) => land(w, cx, cz) && w.veg[w.ci(cx, cz)] !== 2 && w.veg[w.ci(cx, cz)] !== 3;
 const wild = (w: World, cx: number, cz: number) => land(w, cx, cz) && !w.road[w.ci(cx, cz)] && w.veg[w.ci(cx, cz)] <= 1;
+/** bêtes de la ferme : sur l'herbe, jamais sur les routes ni les places du village */
+const farmland = (w: World, cx: number, cz: number) => pasture(w, cx, cz) && !w.road[w.ci(cx, cz)];
+/** petites bêtes et bêtes sauvages : n'importe où sur la terre, sauf dans les rues */
+const offRoad = (w: World, cx: number, cz: number) => land(w, cx, cz) && !w.road[w.ci(cx, cz)];
 /** grenouilles : berges et eau peu profonde */
 const bank = (w: World, cx: number, cz: number) => !blocked(w, cx, cz) && w.cellAvg(cx, cz) > -0.5 && w.cellAvg(cx, cz) < 1.5 && w.waterDist[w.ci(cx, cz)] <= 2;
 const any = () => true;
@@ -191,6 +195,24 @@ function ibexGeo() {
     p.add(box(0.011, 0.05, 0.011), s * 0.014, 0.29, 0.06, 0x5a4c3e, 0, false, 0, -1.2);
   }
   for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.016, 0.09), x * 0.026, 0, z * 0.055, 0x4a4036);
+  return p.build(false).body;
+}
+
+/** Ours : gros corps et sa bosse au garrot, tête ronde, museau clair, petites oreilles, pattes épaisses (la robe teinte le blanc) */
+function bearGeo() {
+  const p = new Parts();
+  p.add(box(0.12, 0.11, 0.22), 0, 0.15, 0, 0xffffff);
+  p.add(box(0.1, 0.05, 0.08), 0, 0.245, 0.04, 0xffffff);
+  p.add(box(0.114, 0.03, 0.2), 0, 0.12, -0.005, 0xffffff);
+  p.add(box(0.085, 0.075, 0.085), 0, 0.19, 0.14, 0xffffff);
+  p.add(box(0.045, 0.038, 0.05), 0, 0.185, 0.195, 0xc8a880);
+  p.add(box(0.02, 0.014, 0.012), 0, 0.2, 0.222, DARK);
+  for (const s2 of [-1, 1]) {
+    p.add(box(0.022, 0.022, 0.014), s2 * 0.032, 0.268, 0.13, 0xffffff);
+    p.add(box(0.008, 0.008, 0.006), s2 * 0.022, 0.215, 0.183, DARK);
+  }
+  p.add(box(0.03, 0.025, 0.02), 0, 0.17, -0.118, 0xffffff);
+  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.03, 0.11), x * 0.04, 0, z * 0.075, 0xffffff);
   return p.build(false).body;
 }
 
@@ -296,16 +318,16 @@ function butterflyGeo() {
 }
 
 const SPECS: Record<Kind, Spec> = {
-  sheep: { geo: sheepGeo, max: 48, colors: [0xffffff, 0xf3ece0, 0xffffff, 0xe9e2d6, 0x5a5052], speed: 0.35, run: 1.2, idle: [3, 9], ok: pasture, graze: 0.14, flee: 2.5 },
-  cow: { geo: cowGeo, max: 64, colors: [0xffffff, 0xb07850, 0xe8d8b8, 0x8a5a3a], speed: 0.3, idle: [4, 12], ok: pasture, graze: 0.1 },
-  pig: { geo: sheepGeo, max: 48, colors: [0xf2b3b3], speed: 0.3, idle: [3, 8], ok: pasture, graze: 0.1 },
-  hen: { geo: henGeo, max: 128, colors: [0xffffff, 0xc8763c, 0xe8d0a0, 0x4a4446], speed: 0.45, run: 0.9, idle: [1, 4], ok: land, peck: true, flee: 1.4 },
-  rabbit: { geo: rabbitGeo, max: 32, colors: [0xb08a68, 0x9a9690, 0xf2efe8, 0x8a6a4e], speed: 0.9, run: 1.75, idle: [2, 6], ok: land, hop: 0.05, flee: 2.2 },
+  sheep: { geo: sheepGeo, max: 48, colors: [0xffffff, 0xf3ece0, 0xffffff, 0xe9e2d6, 0x5a5052], speed: 0.35, run: 1.2, idle: [3, 9], ok: farmland, graze: 0.14, flee: 2.5 },
+  cow: { geo: cowGeo, max: 64, colors: [0xffffff, 0xb07850, 0xe8d8b8, 0x8a5a3a], speed: 0.3, idle: [4, 12], ok: farmland, graze: 0.1 },
+  pig: { geo: sheepGeo, max: 48, colors: [0xf2b3b3], speed: 0.3, idle: [3, 8], ok: farmland, graze: 0.1 },
+  hen: { geo: henGeo, max: 128, colors: [0xffffff, 0xc8763c, 0xe8d0a0, 0x4a4446], speed: 0.45, run: 0.9, idle: [1, 4], ok: offRoad, peck: true, flee: 1.4 },
+  rabbit: { geo: rabbitGeo, max: 32, colors: [0xb08a68, 0x9a9690, 0xf2efe8, 0x8a6a4e], speed: 0.9, run: 1.75, idle: [2, 6], ok: offRoad, hop: 0.05, flee: 2.2 },
   deer: { geo: deerGeo, max: 24, colors: [0xb87a48, 0xa86c40, 0xc48a58], speed: 0.5, run: 1.9, idle: [4, 10], ok: wild, graze: 0.2, flee: 3.5 },
-  horse: { geo: deerGeo, max: 24, colors: [0x8a5a3a, 0x5a3e2e, 0xd8c8a8], speed: 0.45, run: 2, idle: [4, 10], ok: pasture, graze: 0.2, flee: 3, scale: 1.2 },
-  llama: { geo: deerGeo, max: 16, colors: [0xf2ece0, 0xb89878, 0x8a6a4e], speed: 0.38, run: 1.3, idle: [4, 10], ok: land, graze: 0.12, flee: 3 },
-  fox: { geo: deerGeo, max: 8, colors: [0xd8743a], speed: 0.5, run: 1.55, idle: [3, 8], ok: land, scale: 0.6, flee: 1.5 },
-  wolf: { geo: deerGeo, max: 12, colors: [0x8a8a90, 0x6a6a72], speed: 0.55, run: 1.75, idle: [3, 8], ok: land, scale: 0.8, flee: 2 },
+  horse: { geo: deerGeo, max: 24, colors: [0x8a5a3a, 0x5a3e2e, 0xd8c8a8], speed: 0.45, run: 2, idle: [4, 10], ok: farmland, graze: 0.2, flee: 3, scale: 1.2 },
+  llama: { geo: deerGeo, max: 16, colors: [0xf2ece0, 0xb89878, 0x8a6a4e], speed: 0.38, run: 1.3, idle: [4, 10], ok: offRoad, graze: 0.12, flee: 3 },
+  fox: { geo: deerGeo, max: 8, colors: [0xd8743a], speed: 0.5, run: 1.55, idle: [3, 8], ok: offRoad, scale: 0.6, flee: 1.5 },
+  wolf: { geo: deerGeo, max: 12, colors: [0x8a8a90, 0x6a6a72], speed: 0.55, run: 1.75, idle: [3, 8], ok: offRoad, scale: 0.8, flee: 2 },
   frog: { geo: duckGeo, max: 84, colors: [0x6aa84a], speed: 0.35, run: 0.7, idle: [2, 7], ok: bank, hop: 0.03, flee: 1.2, scale: 0.6 },
   duck: { geo: duckGeo, max: 12, colors: [0xffffff], speed: 0.25, idle: [2, 6], ok: water },
   duckling: { geo: duckGeo, max: 36, colors: [0xf8dc6a], speed: 0.25, idle: [1, 1], ok: water, scale: 0.55 },
@@ -319,12 +341,13 @@ const SPECS: Record<Kind, Spec> = {
   dolphin: { geo: dolphinGeo, max: 9, colors: [0x7f97ab, 0x8ea3b4], speed: 0, idle: [1, 1], ok: water, scale: 1.5 },
   eagle: { geo: birdGeo, max: 8, colors: [0x5a4232, 0x6b4e38, 0x4e3a2c], speed: 0, idle: [1, 1], ok: any, flap: [3, 0.45, 0.012], scale: 3.6 },
   gull: { geo: birdGeo, max: 18, colors: [0xffffff, 0xf2f4f6], speed: 0, idle: [1, 1], ok: any, flap: [7, 0.9, 0.012], scale: 2 },
+  bear: { geo: bearGeo, max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
   ibex: { geo: ibexGeo, max: 14, colors: [0x8a7a68, 0x9c8b76, 0x6e6052], speed: 0.35, run: 1.6, idle: [3, 9], ok: alpine, graze: 0.15, flee: 2.6, scale: 1.1 },
   butterfly: { geo: butterflyGeo, max: 32, colors: [0xf7d24c, 0xf29ab4, 0xffffff, 0x9fc8f0, 0xf09a50], speed: 0, idle: [1, 1], ok: any, flap: [26, 1.3, 0.003] },
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex']);
+const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'bear']);
 
 export interface Person { x: number; z: number; hidden: boolean }
 
@@ -451,9 +474,10 @@ export class Fauna {
     for (const b of w.buildings.values()) {
       const s = sizeOf(b);
       const hens = b.kind === 'farm' ? (b.age < 4 ? 3 : 0) : b.kind === 'house' && b.age <= 2 && hash2(b.x, b.z, 41) < 0.3 ? 2 : 0;
-      if (hens) { const h = this.near(b.x, b.z, s, b.rot, land); if (h) src.push({ key: `hen${b.id}`, kind: 'hen', hx: h[0], hz: h[1], n: hens, radius: 0.9 }); }
-      if (b.kind === 'farm' && b.age >= 1) {
-        const h = this.near(b.x, b.z, s, b.rot, pasture);
+      if (hens) { const h = this.near(b.x, b.z, s, b.rot, offRoad); if (h) src.push({ key: `hen${b.id}`, kind: 'hen', hx: h[0], hz: h[1], n: hens, radius: 0.9 }); }
+      // la serre de l'époque moderne n'a pas de vaches
+      if (b.kind === 'farm' && b.age >= 1 && b.age <= 3) {
+        const h = this.near(b.x, b.z, s, b.rot, farmland);
         if (h) src.push({ key: `cow${b.id}`, kind: 'cow', hx: h[0], hz: h[1], n: 2, radius: 1.8 });
         // cochons seulement avec le modèle importé
         if (h && hasModel('pig') && b.age <= 3) src.push({ key: `pig${b.id}`, kind: 'pig', hx: h[0], hz: h[1], n: 2, radius: 1.2 });
@@ -471,7 +495,7 @@ export class Fauna {
       for (const [kind, n] of byKind) {
         for (let left = n, j = 0; left > 0 && hosts.length; j++) {
           const b = hosts[(i + j) % hosts.length], take = Math.min(left, 4);
-          const h = this.near(b.x, b.z, sizeOf(b), b.rot, pasture);
+          const h = this.near(b.x, b.z, sizeOf(b), b.rot, farmland);
           if (h) src.push({ key: `herd-${kind}-${j}`, kind, hx: h[0], hz: h[1], n: take, radius: 1.6 });
           left -= take;
         }
@@ -508,6 +532,8 @@ export class Fauna {
     const woods = edge[BIOME_TEMPERATE].concat(edge[BIOME_TAIGA]);
     group('deer', 'deer', woods, Math.min(6, Math.floor(forest.length / 60)), () => 2, 2.5, 80);
     group('fox', 'fox', woods.concat(edge[BIOME_MARSH]), hasModel('fox') ? Math.min(4, Math.floor(woods.length / 50)) : 0, () => 1, 3.2, 90);
+    // ours : solitaires, ou une ourse et son ourson, au fond des forêts tempérées et de la taïga
+    group('bear', 'bear', woods, Math.min(4, Math.floor(woods.length / 90)), (i) => 1 + (i % 2), 4.5, 105);
     group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, () => 3, 3.5, 100);
     // grenouilles : surtout au bord des mares et des étangs, et dans les marais
     const pond = (k: number) => { const x = k % N, z = Math.floor(k / N); return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => w.inCells(x + dx, z + dz) && !!w.lake[w.ci(x + dx, z + dz)]); };
@@ -773,7 +799,8 @@ export class Fauna {
         if (c.toDrink) { c.toDrink = false; c.act = 'drink'; c.actT = 4 + this.rnd() * 3; }
       } else {
         const nx = c.x + (dx / dist) * step, nz = c.z + (dz / dist) * step;
-        if (sp.ok(w, Math.floor(nx), Math.floor(nz))) { c.x = nx; c.z = nz; } else { c.moving = false; c.toDrink = false; c.timer = 0.5 + this.rnd(); }
+        // une bête égarée là où elle n'a rien à faire (une rue) peut en sortir
+        if (sp.ok(w, Math.floor(nx), Math.floor(nz)) || !sp.ok(w, Math.floor(c.x), Math.floor(c.z))) { c.x = nx; c.z = nz; } else { c.moving = false; c.toDrink = false; c.timer = 0.5 + this.rnd(); }
         turn(c, Math.atan2(dx, dz), dt * (c.run ? 9 : 6));
       }
     }

@@ -345,7 +345,7 @@ export class UI {
       html = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
-        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
+        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
       }).join('');
     } else {
       html = t.tools.map((id) => { const i = TOOL_INFO[id]; return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
@@ -395,7 +395,7 @@ export class UI {
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
     // les grands bâtiments se paient en bois et en pierre (sauf en ressources illimitées)
     const w = this.host.world, cost = w.unlimited ? null : costOf(k, age), rich = !cost || (w.wood >= cost.wood && w.stone >= cost.stone);
-    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size === 2 ? 'Grand bâtiment (2 × 2) · ' : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
+    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}
       ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre`}</p>` : ''}
       ${lock ? `<p class="lock">🔒 ${lock}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
@@ -430,7 +430,7 @@ export class UI {
     if (key === this.selKey) return;
     this.selKey = key;
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
-    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${AGES[b.age].name}${d.size === 2 && !b.small ? ' · 2 × 2' : ''} · ${b.auto ? 'façade tournée vers la route' : 'orientée à la main'}</small></div><button class="x" data-act="close" title="Fermer (Échap)" aria-label="Fermer">${ic('close', 16, 2)}</button></div>
+    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${AGES[b.age].name}${d.size > 1 && !b.small ? ` · ${d.size} × ${d.size}` : ''} · ${b.auto ? 'façade tournée vers la route' : 'orientée à la main'}</small></div><button class="x" data-act="close" title="Fermer (Échap)" aria-label="Fermer">${ic('close', 16, 2)}</button></div>
       <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${rails}
       <div class="acts"><button data-act="move">${ic('hand', 16, 2)} Déplacer</button><button data-act="rot">${ic('rotate', 16, 2)} Tourner <kbd>R</kbd></button><button data-act="del" class="danger">${ic('demolish', 16, 2)} Démolir</button></div>`;
     box.classList.add('show');

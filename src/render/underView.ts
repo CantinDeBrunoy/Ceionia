@@ -113,6 +113,8 @@ export class UnderView {
   private campC: [number, number] = [0, 0];
   private campSources: Source[] = [];
   private guards: Guard[] = [];
+  /** cases des gros décors des galeries (le camp les évite) */
+  private decorCells = new Set<number>();
   /** cases couvertes par les décors du camp : les gardes passent autour */
   private campBlocked = new Set<number>();
   /** équipes de mineurs descendues par les trains (une par ligne) */
@@ -190,6 +192,7 @@ export class UnderView {
   build() {
     if (this.built === this.under.version) return;
     this.built = this.under.version;
+    this.decorCells.clear();
     // les géométries des modèles sont partagées d'une génération à l'autre : on ne libère que celles faites pour la carte
     for (const c of [...this.content.children]) {
       this.content.remove(c);
@@ -367,6 +370,8 @@ export class UnderView {
       d.scale.set(s, sy, s);
       d.updateMatrix();
       (lists[name] ??= []).push({ m: d.matrix.clone(), c: c.clone() });
+      // les gros décors (cristaux, minéraux, rochers, champignons géants) : le camp ne se pose pas dessus
+      if (/^(crystal|mineral|rock|mushroomCap)/.test(name) && s > 0.9) this.decorCells.add(Math.floor(z) * N + Math.floor(x));
     };
     const tmp = new THREE.Color();
     for (let k = 0; k < N * N; k++) {
@@ -822,7 +827,7 @@ export class UnderView {
     this.camp = null; this.campSources = []; this.guards = [];
     if (center < 0) return;
     this.campC = [(center % N) + 0.5, Math.floor(center / N) + 0.5];
-    const placed = campLayout(this.under, center, level);
+    const placed = campLayout(this.under, center, level, this.decorCells);
     this.camp = buildCamp(this.under, placed, this.age);
     this.campBlocked.clear();
     for (const pc of placed) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {

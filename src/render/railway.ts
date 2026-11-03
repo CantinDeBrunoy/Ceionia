@@ -143,6 +143,11 @@ function along(pts: [number, number][], cum: number[], s: number): [number, numb
 export class RailView {
   group = new THREE.Group();
   private track: THREE.Mesh | null = null;
+  /** lanternes et feux des signaux le long des voies (s'allument la nuit) */
+  private lamps: THREE.Mesh | null = null;
+  /** lanternes des voies et des signaux (x, z à la suite) : leur halo de lumière la nuit ; `lightsVersion` change avec elles */
+  lights: number[] = [];
+  lightsVersion = 0;
   private built = '';
   private age = -1;
   private stopY = new Map<number, number>();
@@ -284,12 +289,21 @@ export class RailView {
       this.shows.clear();
     }
     if (this.track) { this.group.remove(this.track); this.track.geometry.dispose(); this.track = null; }
-    const net = this.rail.network(), w = this.world;
+    if (this.lamps) { this.group.remove(this.lamps); this.lamps.geometry.dispose(); this.lamps = null; }
+    const net = this.rail.network(), w = this.world, lights: number[] = [];
     this.stopY.clear();
     this.segY = new WeakMap();
     for (const s of net.stops) this.stopY.set(s.b.id, this.yOfStop(s));
-    if (!net.segs.length) return;
-    const m = new Mesher(), sleeper = age >= 4 ? 0xb8b4ac : 0x6e5a4a;
+    if (!net.segs.length) {
+      if (this.lights.length) { this.lights = lights; this.lightsVersion++; }
+      return;
+    }
+    const m = new Mesher(), gm = new Mesher(), sleeper = age >= 4 ? 0xb8b4ac : 0x6e5a4a;
+    /** fil tendu à `o` du milieu de la voie, à `d0` puis `d1` au-dessus des rails : ruban à plat et de chant, visible de partout */
+    const wire = (A: (o: number, dy: number) => number[], B: (o: number, dy: number) => number[], o: number, d0: number, d1: number, color: number) => {
+      m.quad(A(o - 0.004, d0), B(o - 0.004, d1), B(o + 0.004, d1), A(o + 0.004, d0), color);
+      m.quad(A(o, d0 - 0.004), A(o, d0 + 0.004), B(o, d1 + 0.004), B(o, d1 - 0.004), color);
+    };
     // une voie : ballast et talus, rails, traverses, platelage aux routes, d'un point à l'autre de `at` (de a à b)
     const lay = (at: (s: number) => [number, number, number], yAt: (s: number) => number, a: number, b: number) => {
       const n = Math.max(1, Math.ceil((b - a) / STEP));
@@ -337,20 +351,43 @@ export class RailView {
           m.quad(A(sd + 0.01, -0.005), A(sd + 0.01, 0.022), B(sd + 0.01, 0.022), B(sd + 0.01, -0.005), 0x8a8e96);
           m.quad(A(sd - 0.01, -0.005), B(sd - 0.01, -0.005), B(sd - 0.01, 0.022), A(sd - 0.01, 0.022), 0x8a8e96);
         }
-        // caténaire (époque moderne) ou poteaux télégraphiques (âge industriel) le long de la voie
+        // caténaire (époque moderne) : le câble porteur pend d'un poteau à l'autre et tient le fil de contact par ses
+        // pendules ; poteaux télégraphiques et leurs deux fils à l'âge industriel ; une lanterne un poteau sur deux
         const side = bridge ? 0.24 : 0.3;
-        if (age >= 4) m.quad(A(-0.004, 0.4), B(-0.004, 0.4), B(0.004, 0.4), A(0.004, 0.4), 0x2a2a2e);
-        else for (const d of [-0.045, 0.045]) m.quad(A(side + 0.06 + d - 0.003, 0.36), B(side + 0.06 + d - 0.003, 0.36), B(side + 0.06 + d + 0.003, 0.36), A(side + 0.06 + d + 0.003, 0.36), 0x2a2a2e);
+        const sag = (s: number) => { const f = (s % 1.4) / 1.4; return 0.56 - 0.28 * f * (1 - f); };
+        if (age >= 4) {
+          wire(A, B, 0, 0.4, 0.4, 0x2a2a2e);
+          wire(A, B, 0, sag(s0), sag(s1), 0x3a3a40);
+          if (Math.floor(s1 / 0.35) !== Math.floor(s0 / 0.35) && Math.floor(s1 / 1.4) === Math.floor(s0 / 1.4)) m.block(x1, y1 + 0.4, z1, h1, 0.005, sag(s1) - 0.4, 0.005, 0x4a4a50);
+        } else for (const d of [-0.045, 0.045]) wire(A, B, side + 0.06 + d, 0.36, 0.36, 0x2a2a2e);
         if (Math.floor(s1 / 1.4) !== Math.floor(s0 / 1.4)) {
-          const px = x1 + Math.cos(h1) * (age >= 4 ? side : side + 0.06), pz = z1 - Math.sin(h1) * (age >= 4 ? side : side + 0.06);
+          const out = age >= 4 ? side : side + 0.06, cx = Math.cos(h1), cz = -Math.sin(h1), px = x1 + cx * out, pz = z1 + cz * out;
+          const lamp = Math.floor(s1 / 1.4) % 2 === 0;
           if (age >= 4) {
-            m.block(px, y1 - 0.1, pz, h1, 0.024, 0.55, 0.024, 0x8a96a2);
-            m.block(x1 + Math.cos(h1) * side * 0.5, y1 + 0.42, z1 - Math.sin(h1) * side * 0.5, h1, side + 0.02, 0.016, 0.016, 0x8a96a2);
+            m.block(px, y1 - 0.1, pz, h1, 0.026, 0.7, 0.026, 0x8a96a2);
+            // console : bras du porteur en haut, bras de rappel du fil de contact, hauban entre les deux, isolateurs
+            m.block(x1 + cx * side * 0.5, y1 + 0.545, z1 + cz * side * 0.5, h1, side + 0.02, 0.016, 0.016, 0x8a96a2);
+            m.block(x1 + cx * side * 0.5, y1 + 0.42, z1 + cz * side * 0.5, h1, side + 0.02, 0.014, 0.014, 0x8a96a2);
+            m.block(x1 + cx * side * 0.55, y1 + 0.43, z1 + cz * side * 0.55, h1, 0.008, 0.12, 0.008, 0x6d7884);
             m.block(x1, y1 + 0.39, z1, h1, 0.012, 0.03, 0.012, 0x5d6878);
+            m.block(x1, y1 + 0.53, z1, h1, 0.012, 0.03, 0.012, 0x5d6878);
+            if (lamp) {
+              // lampadaire au sommet du poteau, tourné vers la voie
+              m.block(px - cx * 0.05, y1 + 0.6, pz - cz * 0.05, h1, 0.1, 0.012, 0.024, 0x6b7280);
+              gm.block(px - cx * 0.09, y1 + 0.585, pz - cz * 0.09, h1, 0.04, 0.012, 0.032, 0xfff1c9);
+              lights.push(px - cx * 0.12, pz - cz * 0.12);
+            }
           } else {
             m.block(px, y1 - 0.1, pz, h1, 0.026, 0.5, 0.026, 0x6a5040);
             m.block(px, y1 + 0.34, pz, h1, 0.16, 0.016, 0.016, 0x6a5040);
-            for (const d of [-0.045, 0.045]) m.block(px + Math.cos(h1) * d, y1 + 0.355, pz - Math.sin(h1) * d, h1, 0.01, 0.012, 0.01, 0xe8e4dc);
+            for (const d of [-0.045, 0.045]) m.block(px + cx * d, y1 + 0.355, pz + cz * d, h1, 0.01, 0.012, 0.01, 0xe8e4dc);
+            if (lamp) {
+              // lanterne pendue à une potence, côté voie
+              m.block(px - cx * 0.05, y1 + 0.3, pz - cz * 0.05, h1, 0.1, 0.012, 0.012, 0x3c3c40);
+              gm.block(px - cx * 0.09, y1 + 0.22, pz - cz * 0.09, h1, 0.032, 0.05, 0.032, 0xffd27a);
+              m.block(px - cx * 0.09, y1 + 0.27, pz - cz * 0.09, h1, 0.044, 0.012, 0.044, 0x3c3c40);
+              lights.push(px - cx * 0.12, pz - cz * 0.12);
+            }
           }
         }
         if (i % 2 === 0) {
@@ -383,18 +420,57 @@ export class RailView {
         m.block(cx + Math.cos(h) * side * 0.4, y + 0.1, cz - Math.sin(h) * side * 0.4, h + 0.4, 0.12, 0.05, 0.14, 0x6a6660);
         for (const e of [1, -1]) if (!used.has(e)) { const [bx, bz] = pt(e * (s.half + OVER)); buffer(bx, y, bz, h); }
       } else {
-        // gare : la voie du quai se prolonge d'un bout de voie et d'un butoir là où aucune ligne ne repart
+        // gare : à l'époque moderne, la caténaire passe au-dessus de la voie du quai, tendue entre deux portiques aux bouts
+        // du quai, où elle rejoint celle des lignes
+        if (age >= 4) {
+          const cx = Math.cos(h), cz = -Math.sin(h), L = s.half + 0.02, n = Math.ceil((2 * L) / STEP);
+          const P = (t: number) => (o: number, dy: number) => { const [x, z] = pt(t); return [x + cx * o, y + dy, z + cz * o]; };
+          const sagS = (t: number) => 0.56 - 0.1 * (1 - (t / L) ** 2);
+          for (let i = 0; i < n; i++) {
+            const t0 = -L + (2 * L * i) / n, t1 = -L + (2 * L * (i + 1)) / n;
+            wire(P(t0), P(t1), 0, 0.4, 0.4, 0x2a2a2e);
+            wire(P(t0), P(t1), 0, sagS(t0), sagS(t1), 0x3a3a40);
+            if (i < n - 1 && Math.floor(t1 / 0.35) !== Math.floor(t0 / 0.35)) { const [x, , z] = P(t1)(0, 0); m.block(x, y + 0.4, z, h, 0.005, sagS(t1) - 0.4, 0.005, 0x4a4a50); }
+          }
+          for (const e of [1, -1]) {
+            const [x, , z] = P(e * L)(0, 0);
+            for (const sd of [-1, 1]) m.block(x + cx * sd * 0.3, y - 0.1, z + cz * sd * 0.3, h, 0.026, 0.72, 0.026, 0x8a96a2);
+            m.block(x, y + 0.6, z, h, 0.64, 0.022, 0.022, 0x8a96a2);
+            m.block(x, y + 0.42, z, h, 0.5, 0.012, 0.012, 0x8a96a2);
+            m.block(x, y + 0.56, z, h, 0.012, 0.04, 0.012, 0x5d6878);
+            m.block(x, y + 0.39, z, h, 0.012, 0.03, 0.012, 0x5d6878);
+          }
+        }
+        // la voie du quai se prolonge d'un bout de voie et d'un butoir là où aucune ligne ne repart ; un signal à chaque
+        // sortie de quai (feu rouge et feu vert, et son bras de sémaphore à l'âge industriel)
         for (const e of [1, -1]) {
-          if (used.has(e)) continue;
-          lay(pt, () => y, e > 0 ? s.half : -s.half - OVER - 0.1, e > 0 ? s.half + OVER + 0.1 : -s.half);
-          const [bx, bz] = pt(e * (s.half + OVER + 0.1));
-          buffer(bx, y, bz, h);
+          if (!used.has(e)) {
+            lay(pt, () => y, e > 0 ? s.half : -s.half - OVER - 0.1, e > 0 ? s.half + OVER + 0.1 : -s.half);
+            const [bx, bz] = pt(e * (s.half + OVER + 0.1));
+            buffer(bx, y, bz, h);
+            continue;
+          }
+          const [qx, qz] = pt(e * (s.half + OVER + 0.3)), cx = Math.cos(h), cz = -Math.sin(h), sx = qx - cx * 0.3, sz = qz - cz * 0.3, gy = w.hAt(sx, sz);
+          m.block(sx, gy, sz, h, 0.024, 0.5, 0.024, 0x3c3c40);
+          m.block(sx, gy + 0.4, sz, h, 0.06, 0.14, 0.035, 0x2a2a2e);
+          m.block(sx, gy + 0.54, sz, h, 0.07, 0.012, 0.045, 0x2a2a2e);
+          const go = hash2(s.b.id, e, 97) < 0.5;
+          (go ? m : gm).block(sx, gy + 0.49, sz, h, 0.034, 0.03, 0.04, go ? 0x5a2a26 : 0xff4a3a);
+          (go ? gm : m).block(sx, gy + 0.43, sz, h, 0.034, 0.03, 0.04, go ? 0x3aff7a : 0x1e4a2a);
+          if (age === 3) m.block(sx + cx * 0.06, gy + 0.36, sz + cz * 0.06, h, 0.12, 0.02, 0.012, 0xd8553c);
+          lights.push(sx, sz);
         }
       }
     }
     this.track = new THREE.Mesh(m.geometry(), mats.body);
     this.track.receiveShadow = true;
     this.group.add(this.track);
+    const lg = gm.geometry();
+    lg.setAttribute('aLight', new THREE.Float32BufferAttribute(new Float32Array(gm.pos.length / 3), 1));
+    this.lamps = new THREE.Mesh(lg, mats.glow);
+    this.group.add(this.lamps);
+    this.lights = lights;
+    this.lightsVersion++;
   }
 
   // ---------- Les trains ----------

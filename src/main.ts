@@ -10,6 +10,12 @@ import { newWorld, addDefaultDecor, mapDef, CONTINENT } from './world/mapgen';
 import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
 import { RoadView } from './render/roads';
+import { stepWind } from './render/wind';
+import { Helis } from './render/helis';
+import { AlpineView } from './render/alpine';
+import { Emergencies } from './render/emergency';
+import { Hoists } from './render/hoists';
+import { Transports } from './render/transports';
 import { VegView, syncChunks } from './render/vegetation';
 import { Environment } from './render/env';
 import { computeSeason, makeSeasonState } from './render/season';
@@ -79,6 +85,11 @@ class Game implements UIHost {
   autoRoads = true;
   fires: Fires;
   traffic: Traffic;
+  helis: Helis;
+  alpine: AlpineView;
+  emergencies: Emergencies;
+  hoists: Hoists;
+  transports: Transports;
   gardens: GardenView;
   halos: Halos;
   expeditions: Expeditions;
@@ -103,6 +114,8 @@ class Game implements UIHost {
   audio = audio;
   season = makeSeasonState();
   private lastTime = performance.now();
+  /** version des lanternes des voies déjà données aux halos */
+  private railLightsV = -1;
   private elapsed = 0;
   private windT = 0;
   private seasonKey = -1;
@@ -177,6 +190,13 @@ class Game implements UIHost {
     this.life = new AmbientLife(w, this.buildings);
     this.fires = new Fires(w);
     this.traffic = new Traffic(w);
+    this.traffic.avoid = this.roads.islands;
+    this.helis = new Helis(w, this.buildings);
+    this.alpine = new AlpineView(w, this.buildings);
+    this.emergencies = new Emergencies(w, this.fires, this.roads.islands);
+    this.fires.responder = this.emergencies;
+    this.hoists = new Hoists(w);
+    this.transports = new Transports(w, this.buildings);
     // jardins : lieux qui changent avec les âges ; leurs feux fument et crépitent comme les foyers
     this.gardens = new GardenView(w);
     // halos de lumière des feux et des lanternes, la nuit
@@ -194,10 +214,11 @@ class Game implements UIHost {
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
+    this.emergencies.ignite = (b) => ignite(b);
     this.atmosphere.onStrike = (x, z) => ignite(w.buildingAt(Math.floor(x), Math.floor(z)));
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.gardens.group, this.halos.mesh, this.expView.group, this.pens.group, this.railView.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.pens.group, this.railView.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -593,6 +614,7 @@ class Game implements UIHost {
     }
     this.gardens.lights(pts);
     for (let i = 0; i < this.roads.lights.length; i += 2) pts.push(this.roads.lights[i], this.roads.lights[i + 1], 0.75, 0.5);
+    for (let i = 0; i < this.railView.lights.length; i += 2) pts.push(this.railView.lights[i], this.railView.lights[i + 1], 0.95, 0.6);
     this.halos.set(pts);
   }
 
@@ -629,6 +651,7 @@ class Game implements UIHost {
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
     this.lastTime = now;
     this.elapsed += dt;
+    stepWind(this.elapsed, this.env.rainK);
     const w = this.world;
 
     const gdt = this.time.update(dt);
@@ -697,6 +720,7 @@ class Game implements UIHost {
     this.wakeVolcano(gdt, dt);
     // nouvelles du village : incendies, feux éteints, bâtiments perdus
     for (const m of this.fires.news.splice(0)) this.ui.toast(m);
+    for (const m of this.emergencies.news.splice(0)) this.ui.toast(m);
     for (const m of w.losses.splice(0)) this.ui.toast(m);
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night);
     this.expeditions.update(gdt);
@@ -735,7 +759,13 @@ class Game implements UIHost {
       this.streams.update(dt, this.season.snow, this.cam.target);
       this.life.update(dt, this.time, this.season, this.env, this.cam.target);
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
+      this.helis.update(gdt, this.sim.age);
+      this.alpine.update(gdt, this.sim.age, this.season.snow);
+      this.emergencies.update(gdt, this.sim.age);
+      this.hoists.update(gdt);
+      this.transports.update(gdt, this.sim.age);
       this.railView.update(dt, this.sim.age);
+      if (this.railView.lightsVersion !== this.railLightsV) { this.railLightsV = this.railView.lightsVersion; this.refreshHalos(); }
       this.railView.setPreview(this.railEdit ? this.railEdit.stops.map((id) => this.world.buildings.get(id)).filter((b): b is Building => !!b) : [], this.railEdit?.color ?? 0);
       const tr = this.trainCam === null ? undefined : this.railway.trains.get(this.trainCam), tp = tr ? this.railway.trainAt(tr) : null;
       if (tp) this.cam.follow(tp[0], tp[1]);

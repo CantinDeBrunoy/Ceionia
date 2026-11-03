@@ -200,7 +200,7 @@ export class Agents {
     const w = this.world;
     this.works = []; this.socials = [];
     for (const b of w.buildings.values()) {
-      if (['workshop', 'farm', 'mill', 'landmark', 'pier'].includes(b.kind)) this.works.push(b);
+      if (['workshop', 'farm', 'mill', 'landmark', 'terminal', 'pier'].includes(b.kind)) this.works.push(b);
       else if (['well', 'gather', 'temple'].includes(b.kind)) this.socials.push(b);
     }
     this.fields = []; this.roads = []; this.woods = [];

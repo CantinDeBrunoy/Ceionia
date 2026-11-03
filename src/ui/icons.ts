@@ -98,6 +98,17 @@ const P: Record<string, string> = {
   eraser: '<path d="M20 20H9l-6-6 10-10 8 8-7 8"/><path d="M7 12l6 6"/>',
   axe: '<path d="M14 3l7 7-4 4-7-7z"/><path d="M12 9L3 21"/>',
   train: '<rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M8 19l-2 3M16 19l2 3M9 13h.01M15 13h.01"/>',
+  anchor: '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M8 11h8M5 14a7 7 0 0 0 14 0"/>',
+  plane: '<path d="M10.5 3.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.5V9l8 4.5v2L13.5 13v5l2.5 2v1.5L12 20.5l-4 1V20l2.5-2v-5L2 15.5v-2L10.5 9z"/>',
+  stadium: '<ellipse cx="12" cy="12" rx="10" ry="6.5"/><ellipse cx="12" cy="12" rx="6" ry="3"/><path d="M12 5.5v3M12 15.5v3"/>',
+  ball: '<circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.5 4.5h-5L8 10z"/><path d="M12 3v4M16 10l4.5-1.5M14.5 14.5l2.5 4M9.5 14.5L7 18.5M8 10L3.5 8.5"/>',
+  hoop: '<path d="M4 4h16v8H4z"/><path d="M9 12h6l-1 8h-4z"/><path d="M10 15h4"/>',
+  racket: '<ellipse cx="9" cy="9" rx="5.5" ry="6.5" transform="rotate(-45 9 9)"/><path d="M13 13l7 7"/><circle cx="18.5" cy="5.5" r="1.5"/>',
+  slide: '<path d="M4 21V5h4v4c3 0 4 2 5 5s3 5 7 5"/><path d="M4 9h4M4 13h4"/><path d="M2 21h20"/>',
+  ferris: '<circle cx="12" cy="10" r="7"/><circle cx="12" cy="10" r="1"/><path d="M12 3v14M5 10h14M7 5l10 10M17 5L7 15"/><path d="M8 22l4-12 4 12"/>',
+  police: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M12 8l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4z"/>',
+  scissors: '<circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.2 16L19 3M15.8 16L5 3"/>',
+  alpine: '<path d="M2 20l7-12 4 6 3-4 6 10z"/><path d="M7.2 11l1.8 1.5 1.6-1.4"/><path d="M14.6 12.6l1.4 1 1.2-1"/>',
   outpost: '<path d="M7 21l2-11h6l2 11"/><path d="M6 10h12l-1-3H7z"/><path d="M12 7V2l5 1.5-5 1.5"/><path d="M9.5 15h5"/><path d="M3 21h18"/>',
 };
 
@@ -109,7 +120,8 @@ export function ic(name: string, size = 20, stroke = 1.8): string {
 export const KIND_ICON: Record<KindId, string> = {
   house: 'house', well: 'well', lamp: 'lamp', farm: 'barn', pen: 'pen', pier: 'fish', workshop: 'anvil', mill: 'windmill',
   health: 'hospital', school: 'book', fire: 'flame', gather: 'campfire', temple: 'columns', landmark: 'castle',
-  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost', lumber: 'axe', quarry: 'rock', station: 'train',
+  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost', lumber: 'axe', quarry: 'rock', station: 'train', barber: 'scissors', alpine: 'alpine', police: 'police', terminal: 'train',
+  harbor: 'anchor', airport: 'plane', stadium: 'stadium', football: 'ball', basket: 'hoop', tennis: 'racket', waterpark: 'slide', funfair: 'ferris',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

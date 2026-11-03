@@ -183,10 +183,12 @@ float snN(vec2 p) {
   bw /= bw.x + bw.y + bw.z;
   vec3 d1 = tri(vPos, bw, 0.6) - 0.5;
   vec3 d2 = tri(vPos + 0.31, bw, 0.11) - 0.5;
-  diffuseColor.rgb *= 1.0 + dot(vSurf.xyz, d1 * vec3(0.55, 0.4, 0.6) + d2 * vec3(0.3, 0.2, 0.35));
+  // sous la neige, les motifs du sol et les strates s'effacent : une neige propre, sans traînées grises
+  float clean = 1.0 - vSurf.w * 0.9;
+  diffuseColor.rgb *= 1.0 + dot(vSurf.xyz, d1 * vec3(0.55, 0.4, 0.6) + d2 * vec3(0.3, 0.2, 0.35)) * clean;
   // strates horizontales sur la craie et la roche
   float strata = smoothstep(0.86, 1.0, sin(vPos.y * 9.0 + sin(vPos.x * 1.1 + vPos.z * 0.7) * 0.8));
-  diffuseColor.rgb *= 1.0 - strata * 0.16 * vSurf.z;
+  diffuseColor.rgb *= 1.0 - strata * 0.16 * vSurf.z * clean;
   // neige : congères (grandes ondulations), rides du vent aux creux bleutés, grain et paillettes qui s'éteignent au loin
   float sn = vSurf.w;
   if (sn > 0.01) {
@@ -196,10 +198,10 @@ float snN(vec2 p) {
     float rip = tri(vPos + 0.7, bw, 0.9).g - 0.5;
     float grain = tri(vPos + 1.9, bw, 2.6).g - 0.5;
     float glint = smoothstep(0.78, 0.86, tri(vPos * 1.7 + 4.1, bw, 3.1).b);
-    vec3 c = diffuseColor.rgb * (1.0 + (drift * 0.32 + streak * 0.16 + grain * 0.07) * sn);
-    c = mix(c, c * vec3(0.84, 0.9, 1.06), clamp(-drift * 2.5, 0.0, 1.0) * 0.5 * sn);
-    c = mix(c, c * vec3(0.86, 0.92, 1.05), clamp(-rip * 2.2, 0.0, 1.0) * 0.55 * sn);
-    diffuseColor.rgb = c + glint * 0.16 * sn;
+    vec3 c = diffuseColor.rgb * (1.0 + (drift * 0.12 + streak * 0.05 + grain * 0.035) * sn);
+    c = mix(c, c * vec3(0.9, 0.95, 1.04), clamp(-drift * 2.5, 0.0, 1.0) * 0.3 * sn);
+    c = mix(c, c * vec3(0.92, 0.96, 1.03), clamp(-rip * 2.2, 0.0, 1.0) * 0.3 * sn);
+    diffuseColor.rgb = c + glint * 0.12 * sn;
   }`);
     };
     this.top = new THREE.Mesh(g, topMat);
@@ -531,11 +533,11 @@ float snN(vec2 p) {
         // neige : couverture inégale — plaques où l'herbe perce, moins sous les arbres et sur les pentes, qui grandissent
         // avec l'hiver ; bleutée dans les creux, éclatante sur les bosses
         if (snow > 0) {
-          cover = clamp(snow * 1.2 - 0.12 + (pv * 0.65 + this.wobble[i] * 0.4 - steep * 0.8 - vw[i * 4] * 0.55) * snow, 0, 1);
-          cover = cover * cover * (3 - 2 * cover);
+          // bord net entre la neige et le sol (pas de gris boueux à mi-chemin)
+          cover = smoothstep(0.32, 0.6, snow * 1.2 - 0.12 + (pv * 0.65 + this.wobble[i] * 0.4 - steep * 0.8 - vw[i * 4] * 0.55) * snow);
           const xi = i % VS, zi = (i / VS) | 0;
           const curv = xi > 1 && zi > 1 && xi < VS - 2 && zi < VS - 2 ? (vis[i - 2] + vis[i + 2] + vis[i - 2 * VS] + vis[i + 2 * VS]) * 0.25 - h : 0;
-          this.cliff.copy(SNOW_BASE).lerp(SNOW_SHADE, clamp(curv * 5, 0, 0.65)).lerp(SNOW_LIT, clamp(-curv * 5, 0, 0.8));
+          this.cliff.copy(SNOW_BASE).lerp(SNOW_SHADE, clamp(curv * 4, 0, 0.35)).lerp(SNOW_LIT, clamp(-curv * 5 + 0.2, 0, 0.9));
           tmp.lerp(this.cliff, cover);
         }
         // le volcan reste sombre, sans neige sur ses flancs chauds
@@ -563,7 +565,7 @@ float snN(vec2 p) {
         const l1 = (vis[i - 1] + vis[i + 1] + vis[i - VS] + vis[i + VS]) * 0.25 - h;
         const l3 = (vis[i - 3] + vis[i + 3] + vis[i - 3 * VS] + vis[i + 3 * VS]) * 0.25 - h;
         // sous la neige, les creux bleuissent au lieu de noircir
-        tmp.multiplyScalar(1 - clamp(l1 * 0.9 + l3 * 0.3, -0.06, 0.3) * (1 - cover * 0.6));
+        tmp.multiplyScalar(1 - clamp(l1 * 0.9 + l3 * 0.3, -0.06, 0.3) * (1 - cover * 0.85));
       }
       vcol[i * 3] = tmp.r; vcol[i * 3 + 1] = tmp.g; vcol[i * 3 + 2] = tmp.b;
       vsurf[i * 4] = grass; vsurf[i * 4 + 1] = sand; vsurf[i * 4 + 2] = rock; vsurf[i * 4 + 3] = cover;

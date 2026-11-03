@@ -133,7 +133,9 @@ button.pop:hover { background: var(--accent-soft); }
 #quickR { justify-content: flex-end; }
 .quick button { min-height: 32px; min-width: 34px; padding: 0; border-radius: 9px; }
 #modes { display: flex; gap: 4px; align-self: stretch; align-items: flex-end; }
-#modes button { flex-direction: column; gap: 2px; width: 82px; height: 50px; margin-top: -14px; padding: 2px 4px 4px; border-radius: 12px 12px 0 0; border: 1px solid var(--edge); border-bottom: none; font-size: 12px; font-weight: 700; color: var(--ink2); background: rgba(255, 255, 255, 0.55); box-shadow: none; backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+/* onglets posés sur le bord du panneau : fond clair opaque, pour que la partie qui dépasse ne laisse pas voir le décor et que le bord du panneau ne les traverse pas */
+#modes button { position: relative; z-index: 1; flex-direction: column; gap: 2px; width: 82px; height: 50px; margin-top: -14px; padding: 2px 4px 4px; border-radius: 12px 12px 0 0; border: 1px solid rgba(15, 27, 45, 0.1); border-bottom: none; font-size: 12px; font-weight: 700; color: var(--ink2); background: linear-gradient(#ffffff, #f3f5f8); box-shadow: 0 -3px 10px rgba(15, 27, 45, 0.12); backdrop-filter: none; -webkit-backdrop-filter: none; }
+#modes button:hover:not(.active) { background: linear-gradient(#ffffff, #e9eef5); color: var(--ink); }
 #modes button.active { width: 86px; height: 60px; margin-top: -24px; color: #fff; background: var(--navy); border-color: var(--navy); box-shadow: 0 -4px 14px rgba(15, 27, 45, 0.25); }
 #items { display: flex; gap: 10px; justify-content: center; padding: 14px 12px; overflow-x: auto; scrollbar-width: thin; min-height: 104px; }
 #items button.tile { position: relative; flex-direction: column; gap: 4px; width: 82px; height: 76px; min-height: 0; padding: 0; flex: 0 0 auto; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.78); box-shadow: 0 2px 8px rgba(15, 27, 45, 0.08); }
@@ -143,6 +145,7 @@ button.pop:hover { background: var(--accent-soft); }
 #items button.tile .lbl { font-size: 10.5px; font-weight: 700; line-height: 1.1; max-width: 76px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: center; }
 #items button.tile.big::before { content: '2×2'; position: absolute; left: 6px; top: 4px; font-size: 9px; font-weight: 800; color: var(--accent-ink); }
 #items button.tile.big.active::before { color: #fff; }
+#items button.tile.huge::before { content: '3×3'; }
 #items .badge { position: absolute; right: 5px; top: 4px; font-style: normal; font-size: 10px; font-weight: 800; color: #fff; background: var(--navy); border-radius: 6px; padding: 0 5px; line-height: 1.5; }
 #items button.tile.active .badge { background: #fff; color: var(--accent-ink); }
 #items .badge.lock { background: transparent; color: var(--ink2); font-size: 11px; }

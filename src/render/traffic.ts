@@ -102,6 +102,9 @@ export class Traffic {
   private t = 0;
   private age = 0;
 
+  /** cases à contourner (l'îlot d'un rond-point) */
+  avoid = new Set<number>();
+
   constructor(private world: World) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8, side: THREE.DoubleSide });
     this.carts = new THREE.InstancedMesh(vehicleGeo(1), mat, MAX_CARTS);
@@ -218,7 +221,7 @@ export class Traffic {
       const x = c % N, z = Math.floor(c / N);
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, nz = z + dz, k = nz * N + nx;
-        if (nx < 0 || nz < 0 || nx >= N || nz >= N || !w.road[k] || prev.has(k)) continue;
+        if (nx < 0 || nz < 0 || nx >= N || nz >= N || !w.road[k] || prev.has(k) || (this.avoid.has(k) && k !== goal)) continue;
         prev.set(k, c); q.push(k);
       }
     }
