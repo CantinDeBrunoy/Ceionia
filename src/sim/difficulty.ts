@@ -37,17 +37,25 @@ export interface DifficultyRules {
   recoverT: number;
   /** risque des expéditions (1 : normal) */
   riskK: number;
+  /**
+   * conditions d'âge : seuls comptent les bâtiments bâtis depuis le dernier passage d'âge, et l'âge suivant n'en demande que ce
+   * qu'il exige de plus que les âges d'avant (le passage n'offre aucun progrès vers l'âge d'après) ; false : tout le village compte
+   */
+  newOnly: boolean;
+  /** l'équipement des expéditions se paie aussi en bois et en pierre (false : seules les pièces de métal, en minerai) */
+  gearPrice: boolean;
 }
 
 /** La table des difficultés : c'est ici qu'on les règle */
 export const DIFFICULTY: Record<Difficulty, DifficultyRules> = {
-  sandbox: { unlimited: true, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1 },
-  normal: { unlimited: null, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1 },
+  sandbox: { unlimited: true, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false },
+  normal: { unlimited: null, price: null, startWood: 60, startStone: 60, foodK: 1, famine: 0, growK: 1, recoverK: 1, recoverT: 0, riskK: 1, newOnly: false, gearPrice: false },
   challenge: {
     unlimited: false,
     price: { wood: 5, woodAge: 3, stone: 3, stoneAge: 3, penStone: 1, penStoneAge: 1 },
     startWood: 50, startStone: 40,
     foodK: 1.25, famine: 0.004, growK: 0.75, recoverK: 0.5, recoverT: 100, riskK: 1.25,
+    newOnly: true, gearPrice: true,
   },
 };
 
@@ -71,7 +79,10 @@ export const DIFF_TEXT = {
   points: {
     sandbox: ['Tout est gratuit : bois, pierre et minerai ne manquent jamais', 'Personne ne meurt de faim ni ne quitte le village', 'Pour créer et sculpter sans compter'],
     normal: ['Les grands bâtiments se paient en bois et en pierre', 'Les petits restent gratuits', 'Le village grandit quand ses besoins sont comblés'],
-    challenge: ['Chaque bâtiment se paie, plus cher selon sa taille et l’âge', 'On mange plus ; la disette fait fuir des habitants, et le village met du temps à s’en remettre', 'Les expéditions sont plus risquées'],
+    challenge: [
+      'Chaque bâtiment se paie, plus cher selon sa taille et l’âge', 'Pour passer d’âge, il faut bâtir du neuf : les bâtiments d’avant ne comptent pas',
+      'On mange plus ; la disette fait fuir des habitants, et le village met du temps à s’en remettre', 'Les expéditions sont plus risquées, et leur équipement se paie',
+    ],
   } as Record<Difficulty, string[]>,
   choose: 'Choisissez la difficulté',
   chooseSub: 'Elle vaut pour toute la partie : on peut en changer en la recommençant.',
@@ -90,4 +101,6 @@ export const DIFF_TEXT = {
   firstFree: 'Offert : le premier, pour ne jamais manquer de quoi bâtir',
   famine: (fix: string) => `Disette : des habitants quittent le village faute de manger. Vite, ${fix} ou un champ.`,
   recovering: 'Le village se remet d’un manque : il grandit plus lentement pour l’instant.',
+  /** condition d'âge en défi : les bâtiments à bâtir en plus de ceux qu'avait le village en entrant dans l'âge */
+  more: (name: string) => `${name} (en plus)`,
 };

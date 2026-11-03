@@ -1,7 +1,7 @@
 import { World } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId } from '../build/catalog';
 import { mandatoryFor, needBonus, MISSIONS, VICTORY } from './missions';
-import { DIFF_TEXT, rulesOf } from './difficulty';
+import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -18,6 +18,21 @@ export interface AgeProgress {
   ratio: number;
   /** chaque condition ; `kind` : le bâtiment demandé (nommé comme dans la barre de construction) */
   items: { label: string; have: number; need: number; kind?: KindId }[];
+}
+
+/**
+ * Bâtiments que demande l'âge `n`, par genre : en partie normale, autant qu'il en faut au village ; en défi, ce qu'il en faut
+ * de plus que n'en demandaient déjà les âges d'avant (un genre qu'ils demandaient déjà autant n'est plus demandé)
+ */
+export function reqKindsOf(n: number, d: Difficulty): Partial<Record<KindId, number>> {
+  const req = AGES[n].reqKinds;
+  if (!rulesOf(d).newOnly) return req;
+  const out: Partial<Record<KindId, number>> = {};
+  for (const [k, c] of Object.entries(req) as [KindId, number][]) {
+    const before = Math.max(0, ...AGES.slice(0, n).map((a) => a.reqKinds[k] ?? 0));
+    if (c > before) out[k] = c - before;
+  }
+  return out;
 }
 
 /** Simulation légère : besoins par présence, population, passage d'âge */
@@ -167,9 +182,15 @@ export class Sim {
   ageProgress(): AgeProgress | null {
     const n = this.age + 1;
     if (n >= AGES.length) return null;
-    const req = AGES[n];
+    const req = AGES[n], w = this.world;
     const items: AgeProgress['items'] = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
-    for (const [k, c] of Object.entries(req.reqKinds)) items.push({ label: this.nameOf(k as KindId), have: this.counts[k] ?? 0, need: c as number, kind: k as KindId });
+    // en défi, passé la préhistoire, seuls comptent les bâtiments bâtis depuis l'entrée dans l'âge : ceux d'avant, changés
+    // d'office en leur version du nouvel âge, ne font pas avancer vers le suivant
+    const fresh = rulesOf(w.difficulty).newOnly && this.age > 0;
+    for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty)) as [KindId, number][]) {
+      const have = Math.max(0, (this.counts[k] ?? 0) - (fresh ? w.ageBase[k] ?? 0 : 0));
+      items.push({ label: fresh ? DIFF_TEXT.more(this.nameOf(k)) : this.nameOf(k), have, need: c, kind: k });
+    }
     if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
     // l'expédition obligatoire de l'âge en cours
     const m = mandatoryFor(this.age);
@@ -277,9 +298,12 @@ export class Sim {
 
   /** Passe à l'âge suivant, si tout est réuni ; true si c'est fait */
   advance() {
+    // le compte des bâtiments à jour : c'est lui qu'on retient pour l'âge d'après
+    this.recalc(); this.evaluate();
     const ap = this.ageProgress();
     if (!ap || !ap.items.every((i) => i.have >= i.need)) return false;
     this.age = ap.next;
+    this.world.ageBase = { ...this.counts };
     this.onAgeUp?.(this.age);
     this.message = this.computeMessage();
     return true;
