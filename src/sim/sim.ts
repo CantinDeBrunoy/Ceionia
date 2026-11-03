@@ -1,6 +1,7 @@
 import { World } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId } from '../build/catalog';
 import { mandatoryFor, needBonus, MISSIONS, VICTORY } from './missions';
+import { DIFF_TEXT, rulesOf } from './difficulty';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -44,6 +45,10 @@ export class Sim {
   private baseJobs = 0;
   private baseJoy = 0;
   private grow = 0;
+  /** secondes de jeu pendant lesquelles le village se remet d'un manque (en défi, il grandit alors plus lentement) */
+  recovering = 0;
+  /** habitants partis pendant la disette en cours (défi) */
+  fled = 0;
   /** d'où vient chaque besoin : apports des bâtiments par sorte (et des maisons au bord de l'eau), puis la terre cultivée */
   private src: Record<NeedId, Map<string, { n: number; v: number }>> = { housing: new Map(), food: new Map(), water: new Map(), jobs: new Map(), joy: new Map(), health: new Map() };
   private land = { fields: 0, fertile: 0, gardens: 0, forests: 0 };
@@ -110,7 +115,7 @@ export class Sim {
     this.jobs.cap = Math.max(0, this.baseJobs + needBonus(e, 'jobs'));
     this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy'));
     this.housing.demand = p;
-    this.food.demand = p + 1;
+    this.food.demand = (p + 1) * rulesOf(this.world.difficulty).foodK;
     this.water.demand = p + 1;
     this.jobs.demand = p >= 6 ? p * 0.5 : 0;
     this.joy.demand = p >= 6 ? p * 0.3 : 0;
@@ -186,12 +191,14 @@ export class Sim {
     this.messageKind = null;
     if (w.buildings.size === 0) return about('house', `Pour commencer, posez « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
     if (!this.counts.house) return about('house', `Pour accueillir des habitants : ${say('house')}.`);
+    if (!this.food.ok && this.fled >= 1) return about('farm', DIFF_TEXT.famine(say('farm')));
     if (!this.food.ok) return about('farm', this.drought ? `Sécheresse : les champs donnent moins ; ${say('farm')} ou « ${this.nameOf('pier')} » de plus aiderait.` : `Il manque de quoi manger : ${say('farm')} ou un champ.`);
     if (!this.water.ok) return about('well', `Il manque de l’eau : ${say('well')}.`);
     if (!this.jobs.ok) return about('workshop', `Les habitants cherchent du travail : ${say('workshop')}.`);
     if (!this.joy.ok) return about('gather', `Les habitants aimeraient un lieu de rencontre : ${say('gather')}, un jardin ou un lieu de culte.`);
     if (!this.health.ok) return about('health', `Les habitants tombent malades : il faut ${say('health')}.`);
     if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
+    if (this.recovering > 0 && this.housing.ok) return DIFF_TEXT.recovering;
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
     const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;
     const room = () => about('house', `Village plein (${Math.floor(p)}/${this.housing.cap} places) : ${say('house')} de plus, +${per} places, pour qu’il grandisse.`);
@@ -234,8 +241,10 @@ export class Sim {
       else this.moisture = Math.max(0, this.moisture - dt * [0.0015, 0.004, 0.0015, 0][this.season]);
     }
     this.evaluate();
+    const r = rulesOf(this.world.difficulty);
+    if (dt > 0) this.hardship(dt);
     if (dt > 0 && this.canGrow) {
-      this.grow += dt * 0.55;
+      this.grow += dt * 0.55 * r.growK * (this.recovering > 0 ? r.recoverK : 1);
       while (this.grow >= 1) {
         this.grow -= 1;
         if (this.pop + 1 <= this.housing.cap) this.pop++;
@@ -245,6 +254,22 @@ export class Sim {
     }
     // le passage d'âge n'est plus forcé : c'est le joueur qui le décide (bouton « Passer à l'ère suivante »)
     this.message = this.computeMessage();
+  }
+
+  /**
+   * Les rigueurs de la difficulté : en défi, la disette fait partir des habitants (d'autant plus que le manque est grand),
+   * et tout besoin non comblé laisse le village affaibli un moment ; en partie normale ou au bac à sable, rien de tout cela
+   */
+  private hardship(dt: number) {
+    const r = rulesOf(this.world.difficulty);
+    if (r.famine > 0 && !this.food.ok && this.pop > 0) {
+      const lack = 1 - this.food.cap / this.food.demand, gone = Math.min(this.pop, dt * r.famine * lack * this.pop);
+      this.pop -= gone;
+      this.fled += gone;
+      this.evaluate();
+    } else if (this.food.ok) this.fled = 0;
+    const unmet = !(this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok && this.health.ok);
+    this.recovering = r.recoverT > 0 && unmet ? r.recoverT : Math.max(0, this.recovering - dt);
   }
 
   /** Tout est réuni pour l'âge suivant : le bouton « Passer à l'ère suivante » s'allume */

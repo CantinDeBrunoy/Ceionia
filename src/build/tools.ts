@@ -10,7 +10,7 @@ import { facingRoadRot, footprintOrigin } from './placement';
 import { autoRoad } from './autoroads';
 import { planRoad, RoadPlan } from './freeRoad';
 import { sampleCurve } from '../world/curves';
-import { costOf, costLabel } from '../sim/economy';
+import { priceIn, canPay, pay, shortLabel } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 
@@ -228,8 +228,8 @@ export class ToolController implements ToolInput {
   upgradeSelected(to: KindId) {
     const b = this.selectedBuilding(), w = this.h.world;
     if (!b) return;
-    const cost = w.unlimited ? null : costOf(to, this.h.getAge());
-    if (cost && (w.wood < cost.wood || w.stone < cost.stone)) { this.h.toast(`Il faut ${costLabel(cost)} (vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre)`); return; }
+    const cost = priceIn(w, to, this.h.getAge());
+    if (cost && !canPay(w, cost)) { this.h.toast(shortLabel(w, cost)); return; }
     this.beginStroke();
     const pre = this.pre;
     const nb = w.upgrade(b.id, to);
@@ -237,7 +237,7 @@ export class ToolController implements ToolInput {
     this.pre = pre;
     this.mark();
     this.endStroke();
-    if (cost) { w.wood -= cost.wood; w.stone -= cost.stone; }
+    pay(w, cost);
     this.h.audio.sfxPlace();
     this.select(nb.id);
   }
@@ -551,16 +551,16 @@ export class ToolController implements ToolInput {
     if (!hit) return;
     const w = this.h.world;
     const o = footprintOrigin(this.kind, hit.x, hit.z);
-    // un grand bâtiment neuf se paie en bois et en pierre (déplacer est gratuit)
-    const cost = this.moveOrigin || w.unlimited ? null : costOf(this.kind, this.h.getAge());
-    const reason = w.canPlace(this.kind, o.x, o.z) ?? (cost && (w.wood < cost.wood || w.stone < cost.stone) ? `Il faut ${costLabel(cost)} (vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre)` : null);
+    // un grand bâtiment neuf se paie en bois et en pierre, et tous en défi (déplacer est gratuit)
+    const cost = this.moveOrigin ? null : priceIn(w, this.kind, this.h.getAge());
+    const reason = w.canPlace(this.kind, o.x, o.z) ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
     if (reason) {
       const now = performance.now();
       if (now - this.lastToast > 1200) { this.h.toast(reason); this.lastToast = now; }
       return;
     }
     this.mark();
-    if (cost) { w.wood -= cost.wood; w.stone -= cost.stone; }
+    pay(w, cost);
     const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, this.kind, o.x, o.z, this.ghostRot);
     const b = w.place(this.kind, o.x, o.z, rot, !this.rotManual, this.h.getAge(), true);
     // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
@@ -628,8 +628,7 @@ export class ToolController implements ToolInput {
         const off = kind === 'lamp' ? 0.32 : 0;
         this.ghostBody.position.set(off, 0, off); this.ghostGlow.position.set(off, 0, off);
       }
-      const cost = this.moveOrigin || w.unlimited ? null : costOf(kind, age);
-      setGhostValid(!reason && !(cost && (w.wood < cost.wood || w.stone < cost.stone)));
+      setGhostValid(!reason && (!!this.moveOrigin || canPay(w, priceIn(w, kind, age))));
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);
