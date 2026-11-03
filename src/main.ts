@@ -37,7 +37,8 @@ import { ToolController, ToolId } from './build/tools';
 import { AudioEngine } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { AGES, KINDS, Building } from './build/catalog';
-import { MISSIONS } from './sim/missions';
+import { MISSIONS, VICTORY } from './sim/missions';
+import { SpaceCast, showVictory } from './ui/spaceViews';
 import { Fires } from './render/fires';
 import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
@@ -110,6 +111,8 @@ class Game implements UIHost {
   expView: ExpeditionView;
   /** fêtes du retour des expéditions réussies, et les équipes déjà fêtées */
   fest: Festivities;
+  /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
+  spaceCast: SpaceCast;
   private feted = new Set<number>();
   pens: PenView;
   /** la caméra suit l'expédition */
@@ -272,6 +275,7 @@ class Game implements UIHost {
     });
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
+    this.spaceCast = new SpaceCast(uiRoot);
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
     this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; };
@@ -289,6 +293,8 @@ class Game implements UIHost {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       this.ui.showReport(r);
       this.ui.update();
+      // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir)
+      if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: 'le village', pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days });
     };
     this.sim.onAgeUp = (age) => {
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
@@ -807,6 +813,7 @@ class Game implements UIHost {
     this.expeditions.update(gdt);
     this.railway.update(gdt);
     this.expView.update(gdt);
+    this.spaceCast.update(this.expeditions.active);
     // une équipe rentre victorieuse : tout le village fait la fête au cœur du village, à la mode de son âge
     for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.fromCamp && !this.feted.has(a.id)) { this.feted.add(a.id); this.fest.start(a.base[0], a.base[1], this.sim.age); }
     this.fest.update(dt);

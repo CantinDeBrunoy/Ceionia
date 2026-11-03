@@ -40,6 +40,24 @@ const joy = (n: number, days?: number): Effect => ({ t: 'need', need: 'joy', n, 
 
 export const EVENTS: ExpEvent[] = [
   {
+    id: 'winds', where: ['spaceport'], title: 'Vents violents en altitude',
+    text: 'Les ballons-sondes signalent des vents violents là-haut, et de gros nuages noirs roulent vers le cosmodrome.',
+    options: [
+      { label: 'Attendre une fenêtre de beau temps', risk: 0.8, work: 10, text: 'On a attendu que le ciel se calme : il était parfait pour voler.' },
+      { label: 'Corriger la trajectoire et y aller', risk: 1.1, work: 2, text: 'Les ingénieurs ont corrigé la trajectoire à la volée pour contourner le vent.' },
+      { label: 'Passer en force', risk: 1.35, work: -4, text: 'On a foncé dans le vent, toute la fusée secouée.' },
+    ],
+  },
+  {
+    id: 'alarm', where: ['spaceport'], title: 'Une alarme au centre de contrôle',
+    text: 'Un voyant rouge s’allume sur le pupitre : une vanne du deuxième étage ne répond plus.',
+    options: [
+      { label: 'Tout revérifier, pièce par pièce', risk: 0.75, work: 12, text: 'Les ingénieurs ont tout revérifié : ce n’était qu’un capteur fatigué, aussitôt changé.' },
+      { label: 'Faire appel aux chercheurs', risk: 0.85, work: 5, bonus: [joy(1)], text: 'Les chercheurs ont trouvé la panne en un clin d’œil.' },
+      { label: 'Ignorer l’alarme', risk: 1.35, text: 'On a ignoré l’alarme… en croisant les doigts.' },
+    ],
+  },
+  {
     id: 'boar', where: ['forest', 'plain'], title: 'Une laie et ses petits',
     text: 'Des grognements dans les fourrés : une laie et ses marcassins barrent le sentier. Elle n’a pas l’air commode.',
     options: [

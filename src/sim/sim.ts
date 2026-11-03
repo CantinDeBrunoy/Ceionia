@@ -1,6 +1,6 @@
 import { World } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId } from '../build/catalog';
-import { mandatoryFor, needBonus } from './missions';
+import { mandatoryFor, needBonus, MISSIONS, VICTORY } from './missions';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -205,6 +205,14 @@ export class Sim {
       if (miss) return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`;
     }
     if (full) return room();
+    // au dernier âge, la conquête de l'espace : le cosmodrome, puis chaque expédition spatiale à son tour
+    if (!ap) {
+      if (w.exp.done.includes(VICTORY)) return 'Le village a essaimé dans les étoiles : ses colons vivent sur une autre planète.';
+      const next = MISSIONS.find((m) => m.age === this.age && m.requires && !w.exp.done.includes(m.id));
+      const need = next?.requires?.kinds?.find((k) => !this.counts[k]);
+      if (need) return about(need, `Pour « ${next!.title} » : il faut ${say(need)}.`);
+      if (next) return `Prochaine étape vers les étoiles : l’expédition « ${next.title} » (menu Expéditions).`;
+    }
     return 'Le village est paisible et prospère.';
   }
 

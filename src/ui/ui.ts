@@ -73,7 +73,7 @@ export interface UIHost {
   follow(id: number | null): void;
 }
 
-const DEST_ICON: Record<DestKind, string> = { plain: '🌾 plaine', forest: '🌲 forêt', river: '🏞️ rivière', mountain: '⛰️ montagne', cave: '🕳️ grotte', far: '🧭 au loin' };
+const DEST_ICON: Record<DestKind, string> = { plain: '🌾 plaine', forest: '🌲 forêt', river: '🏞️ rivière', mountain: '⛰️ montagne', cave: '🕳️ grotte', far: '🧭 au loin', spaceport: '🚀 cosmodrome' };
 /** Où en est le train d'une ligne, en clair */
 function trainWhere(r: Railway, tr: Train) {
   if (tr.why) return tr.why;

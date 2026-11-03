@@ -58,6 +58,7 @@ export const emptyStock = (): Stock => ({ spear: 0, bow: 0, sword: 0, rifle: 0, 
 /** Dangers selon la destination, quand le choix ne les précise pas */
 const DEST_DANGER: Record<DestKind, Danger[]> = {
   plain: ['beast', 'weather'], forest: ['beast'], river: ['water'], mountain: ['fall', 'weather'], cave: ['dark', 'fall'], far: ['beast', 'weather'],
+  spaceport: ['weather'],
 };
 export const dangersOf = (c: Choice): Danger[] => c.danger ?? DEST_DANGER[c.dest];
 

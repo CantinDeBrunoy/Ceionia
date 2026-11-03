@@ -14,7 +14,8 @@ export const LIGHTS = { hour: { value: 20 }, time: { value: 0 }, night: { value:
  * Lumières des bâtiments, chacune à son rythme : sa graine (`aLight`) mêlée à la place du bâtiment. Les fenêtres s'allument
  * l'une après l'autre au crépuscule, quelques pièces restent sombres, chacune s'éteint à son heure entre 21 h 30 et 4 h et
  * les lève-tôt rallument avant l'aube ; chaque fenêtre a son éclat, plus ou moins orangé. Flammes et lanternes vacillent à
- * peine, chacune de son côté. Les lumières sans graine (lanternes des rues) restent fixes
+ * peine, chacune de son côté. Les néons (graine ≥ 2) luisent de leur propre couleur et palpitent doucement. Les lumières sans
+ * graine (lanternes des rues) restent fixes
  */
 function addLights(mat: THREE.Material) {
   const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
@@ -26,7 +27,10 @@ function addLights(mat: THREE.Material) {
   vLightK = vec3(1.0);
   if (aLight != 0.0) {
     float lSeed = fract(abs(aLight) + fract(sin(dot(modelMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453));
-    if (aLight > 0.0) {
+    if (aLight >= 2.0) {
+      // la couleur du néon, rapportée à l'éclat chaud du matériau (0xffc46b en couleurs linéaires)
+      vLightK = color.rgb / vec3(1.0, 0.552, 0.147) * (0.7 + 0.12 * sin(uLightTime * 1.7 + lSeed * 40.0));
+    } else if (aLight > 0.0) {
       // heures comptées de midi à midi : le coucher (21 h 30 … 4 h), le lever (5 h … 7 h 30)
       float lH = uLightHour < 12.0 ? uLightHour + 24.0 : uLightHour;
       float lBed = 21.5 + fract(lSeed * 7.31) * 6.5, lWake = 29.0 + fract(lSeed * 3.77) * 2.5;

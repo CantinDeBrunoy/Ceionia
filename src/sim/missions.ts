@@ -5,11 +5,12 @@ import type { KindId } from '../build/catalog';
 /**
  * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant). Une petite équipe
  * d'habitants part sur la carte (forêt, plaine, rivière, montagne, grotte, au-delà des collines), agit sur place et revient ;
- * selon le choix et la chance, le village y gagne des bêtes, du minerai, des savoir-faire… ou des blessés et des soucis
+ * selon le choix et la chance, le village y gagne des bêtes, du minerai, des savoir-faire… ou des blessés et des soucis. À
+ * l'âge futuriste, la fin de la partie : trois expéditions spatiales parties du cosmodrome, chacune ouvrant la suivante
  */
 
 /** Où l'équipe se rend */
-export type DestKind = 'plain' | 'forest' | 'river' | 'mountain' | 'cave' | 'far';
+export type DestKind = 'plain' | 'forest' | 'river' | 'mountain' | 'cave' | 'far' | 'spaceport';
 /** Besoins que l'expédition peut améliorer (ou dégrader) */
 export type NeedKey = 'food' | 'water' | 'jobs' | 'joy';
 /** Bêtes que l'on peut ramener et élever près des fermes */
@@ -26,7 +27,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // repérage : on entre dans la grotte relever les galeries, on jalonne l'avant-poste devant
   | 'scout'
   // la course automobile, la montgolfière qu'on gonfle
-  | 'race' | 'balloon';
+  | 'race' | 'balloon'
+  // le premier vol de fusée, la fusée lunaire (et l'alunissage en direct), le départ du vaisseau colonial
+  | 'launch' | 'moon' | 'colony';
 
 export type Effect =
   /** bêtes ramenées : elles paissent ensuite près des fermes */
@@ -357,6 +360,12 @@ export const MISSIONS: Mission[] = [
             winText: 'Les blindés ont dégagé la grande galerie, la section l’a tenue : les filons remontent dans les soutes !',
             loseText: 'Un blindé s’est embourbé dans le noir ; deux soldats rentrent blessés, les soutes vides.',
           },
+          5: {
+            label: 'Glisseurs en tête', text: 'Trois glisseurs à coussin magnétique ouvrent la route dans les grandes galeries, l’escouade en exo-armure dans leur sillage : rapides, mais l’obscurité reste traîtresse.',
+            doing: 'ouvre la route aux glisseurs et abat les filons',
+            winText: 'Les glisseurs ont balayé la grande galerie, l’escouade l’a tenue : les filons remontent dans les soutes !',
+            loseText: 'Un glisseur a perdu son champ magnétique dans le noir ; deux soldats rentrent blessés, les soutes vides.',
+          },
         },
       },
       {
@@ -378,6 +387,12 @@ export const MISSIONS: Mission[] = [
             winText: 'Pas une créature n’a passé la section : six filons abattus, le chariot ploie sous le minerai.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : la section a décroché, deux blessés.',
           },
+          5: {
+            label: 'Escouade en exo-armure', text: 'Exo-armures, boucliers d’énergie et fusils à impulsions : l’escouade avance pas à pas et tient chaque galerie le temps qu’on la vide.',
+            doing: 'avance sous ses boucliers d’énergie et abat les filons',
+            winText: 'Pas une créature n’a percé les boucliers d’énergie : six filons abattus, le chariot ploie sous le minerai.',
+            loseText: 'Les araignées géantes ont attaqué par le plafond : l’escouade a décroché, deux blessés dans leurs exo-armures cabossées.',
+          },
         },
       },
       {
@@ -389,6 +404,7 @@ export const MISSIONS: Mission[] = [
         ages: {
           3: { label: 'Mineurs et gendarmes', text: 'Peu de soldats, beaucoup de pioches et de lampes à carbure : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'Les gendarmes ont tenu bon pendant que les pioches chantaient : trois filons remontés à la lumière.' },
           4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale, une escorte armée : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient : trois filons remontés à la lumière.' },
+          5: { label: 'Robots foreurs et escorte', text: 'Des robots foreurs, des mineurs en combinaison et une escorte : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les robots foraient : trois filons remontés à la lumière.' },
         },
       },
     ],
@@ -588,6 +604,70 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  // ---------------- Âge futuriste : la conquête de l'espace ----------------
+  {
+    id: 'rocket', age: 5, mandatory: false, icon: '🚀', title: 'Premier vol de fusée',
+    requires: { kinds: ['spaceport'] },
+    intro: 'Au cosmodrome, la première fusée du village attend sur le pas de tir. Ingénieurs et habitants retiennent leur souffle : si elle perce le ciel, la route des étoiles s’ouvre.',
+    choices: [
+      {
+        label: 'Un vol d’essai, sans équipage', text: 'Prudent : la fusée emporte un petit satellite et ses instruments.',
+        dest: 'spaceport', scene: 'launch', doing: 'compte à rebours, puis suit la fusée qui perce le ciel', danger: ['weather'], party: 3, work: 40, risk: 0.2,
+        win: [joy(6), jobs(6)], lose: [joy(-3, 3)],
+        winText: 'Allumage, décollage… la fusée a disparu dans le bleu du ciel, et le satellite envoie ses premiers bips : tout le village a crié de joie !',
+        loseText: 'Un moteur a calé en plein vol : la fusée s’est abîmée en mer. Les ingénieurs ont déjà repris leurs plans.',
+      },
+      {
+        label: 'Pousser les moteurs à fond', text: 'Plus haut, plus vite… et plus risqué.',
+        dest: 'spaceport', scene: 'launch', doing: 'pousse les moteurs à fond et suit la fusée jusqu’en orbite', danger: ['weather'], party: 3, work: 32, risk: 0.38,
+        win: [joy(8), jobs(8)], lose: [joy(-4, 4), hurt(1, 3)],
+        winText: 'La fusée a filé droit vers l’orbite, plus haut que personne ne l’espérait : la route des étoiles est ouverte !',
+        loseText: 'Trop de poussée : la fusée a explosé au-dessus de la mer, et une pluie de débris a blessé un technicien.',
+      },
+    ],
+  },
+  {
+    id: 'moon', age: 5, mandatory: false, icon: '🌕', title: 'Un homme sur la Lune',
+    requires: { missions: ['rocket'], kinds: ['spaceport'] },
+    intro: 'La grande fusée lunaire est prête. Trois astronautes du village tentent le voyage : trois jours jusqu’à la Lune, l’alunissage, les premiers pas… et le retour. Tout le village suivra l’alunissage en direct.',
+    choices: [
+      {
+        label: 'Alunir dans la mer de la Tranquillité', text: 'Une grande plaine lisse : l’endroit le plus sûr.',
+        dest: 'spaceport', scene: 'moon', doing: 'lance la fusée lunaire et suit l’alunissage en direct', danger: ['weather'], party: 4, work: 60, risk: 0.2,
+        win: [joy(12), jobs(6), { t: 'perk', id: 'moon' }], lose: [joy(-4, 4)],
+        winText: '« Un petit pas pour un habitant, un grand bond pour le village ! » Le drapeau flotte sur la Lune, et les astronautes sont rentrés sains et saufs.',
+        loseText: 'Une alarme de l’ordinateur de bord : le module a dû renoncer à se poser et rentrer. On retentera.',
+      },
+      {
+        label: 'Se poser au bord des grands cratères', text: 'Le plus beau paysage, et des roches inconnues… sur un sol accidenté.',
+        dest: 'spaceport', scene: 'moon', doing: 'lance la fusée lunaire et suit l’alunissage au bord des cratères', danger: ['weather'], party: 4, work: 54, risk: 0.35,
+        win: [joy(14), jobs(6), { t: 'ore', n: 12 }, { t: 'perk', id: 'moon' }], lose: [joy(-5, 4), hurt(2, 4)],
+        winText: 'Le module s’est posé au bord d’un cratère géant : les astronautes rapportent des roches lunaires, du minerai inconnu et des images à couper le souffle.',
+        loseText: 'Le module a heurté un rocher : les astronautes ont dû redécoller en catastrophe, et rentrent blessés.',
+      },
+    ],
+  },
+  {
+    id: 'colony', age: 5, mandatory: false, icon: '🪐', title: 'Coloniser une autre planète',
+    requires: { missions: ['moon'], kinds: ['spaceport', 'fusion'] },
+    intro: 'Le dernier voyage : un vaisseau colonial, propulsé par l’énergie de la centrale à fusion, emportera des colons vers la planète bleue d’une étoile voisine. Ils y fonderont un nouveau village… comme au premier jour, autour d’un feu de camp.',
+    choices: [
+      {
+        label: 'L’arche des colons', text: 'Un grand vaisseau, lent et sûr, avec ses serres et ses graines.',
+        dest: 'spaceport', scene: 'colony', doing: 'embarque les colons et lance le vaisseau vers l’étoile voisine', danger: ['weather'], party: 5, work: 70, risk: 0.15,
+        win: [joy(20), { t: 'perk', id: 'colony' }], lose: [joy(-5, 4)],
+        winText: 'Des années plus tard, un message arrive des étoiles : les colons se sont posés sur la planète bleue et y ont allumé leur premier feu de camp. Le village a essaimé dans le ciel.',
+        loseText: 'Une tempête solaire a forcé le vaisseau à faire demi-tour : les colons reviennent, déçus mais sains et saufs. On réparera l’arche.',
+      },
+      {
+        label: 'Le saut à travers l’espace', text: 'Le moteur expérimental plie l’espace : le voyage en quelques mois… si tout se passe bien.',
+        dest: 'spaceport', scene: 'colony', doing: 'embarque les colons et allume le moteur expérimental', danger: ['weather'], party: 5, work: 56, risk: 0.3,
+        win: [joy(22), { t: 'perk', id: 'colony' }], lose: [joy(-6, 5), hurt(2, 4)],
+        winText: 'Un éclair, et le vaisseau a disparu… pour reparaître au bord de l’autre étoile. Les colons se sont posés sur la planète bleue : un nouveau village est né !',
+        loseText: 'Le moteur expérimental a lâché au décollage : le vaisseau est retombé en mer, et deux colons sont blessés.',
+      },
+    ],
+  },
 ];
 
 /** Jours que durent, quand on refait une mission déjà réussie, les bonus qui étaient durables la première fois */
@@ -695,7 +775,10 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
 
 const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: '🔨', joy: '😊' };
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
-const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %' };
+const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
+
+/** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
+export const VICTORY = 'colony';
 
 /** Les effets en quelques mots (« 4 moutons · +3 🍞 · 1 blessé ») */
 export function effectSummary(effects: Effect[]) {

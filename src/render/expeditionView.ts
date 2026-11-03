@@ -5,7 +5,7 @@ import { Expeditions, ActiveExpedition } from '../sim/expeditions';
 import { makeActor, play, hasModel, Actor } from './assets';
 import { Parts } from './parts';
 import { mats } from './materials';
-import { ExpeditionScene, ANIMAL } from './expeditionScenes';
+import { ExpeditionScene, ANIMAL, IdleRockets } from './expeditionScenes';
 import { CombatFx } from './combatFx';
 
 interface Follower { obj: THREE.Object3D; actor: Actor | null; gap: number; x: number; z: number; heading: number }
@@ -53,8 +53,10 @@ export class ExpeditionView {
   private shows = new Map<number, Show>();
   private pennantGeos = TEAM_COLORS.map(pennantGeo);
   private sackGeo = sackGeo();
+  /** la fusée qui attend sur le pas de tir des cosmodromes */
+  private idle: IdleRockets;
 
-  constructor(private world: World, private agents: Agents, private exp: Expeditions) {}
+  constructor(private world: World, private agents: Agents, private exp: Expeditions) { this.idle = new IdleRockets(world, this.group); }
 
   /** Le cœur de la scène d'une expédition (ce que la caméra regarde quand on la suit sur place), ou null */
   focusOf(id: number): [number, number] | null { return this.shows.get(id)?.scene?.focus ?? null; }
@@ -89,6 +91,7 @@ export class ExpeditionView {
     // expéditions terminées : on range leurs objets
     // (et le décor d'une expédition qui s'arrête en route, s'il y en a encore un)
     for (const [id, sh] of this.shows) if (!live.has(id)) { if (sh.scene && sh.exp) sh.scene.dispose(sh.exp); this.clear(sh); this.group.remove(sh.pennant); this.shows.delete(id); }
+    this.idle.update([...this.shows.values()].some((sh) => sh.scene?.launching));
   }
 
   private step(a: ActiveExpedition, sh: Show, dt: number) {

@@ -7,12 +7,17 @@ const _e = new THREE.Euler();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3(1, 1, 1);
 
-/** Constructeur de géométries low-poly : tout est fusionné en 1 (corps) + 1 (lumières) */
+/**
+ * Constructeur de géométries low-poly : tout est fusionné en 1 (corps) + 1 (lumières). Une lumière `'neon'` (âge futuriste :
+ * liserés, hologrammes, enseignes) brille la nuit de sa propre couleur au lieu de l'éclat chaud des fenêtres et des flammes
+ */
+export type Glow = boolean | 'neon';
+
 export class Parts {
   body: THREE.BufferGeometry[] = [];
   glow: THREE.BufferGeometry[] = [];
 
-  add(g: THREE.BufferGeometry, x: number, y: number, z: number, color: number, ry = 0, glow = false, rz = 0, rx = 0) {
+  add(g: THREE.BufferGeometry, x: number, y: number, z: number, color: number, ry = 0, glow: Glow = false, rz = 0, rx = 0) {
     const ng = g.index ? g.toNonIndexed() : g.clone();
     g.dispose();
     ng.deleteAttribute('uv');
@@ -29,21 +34,21 @@ export class Parts {
     ng.setAttribute('color', new THREE.BufferAttribute(arr, 3));
     if (glow) {
       // la graine de cette lumière (voir LIGHTS) : une fenêtre (> 0) a son heure, une flamme ou une lanterne (< 0, teinte
-      // chaude) vacille à son rythme
+      // chaude) vacille à son rythme, un néon (≥ 2) luit de sa couleur
       const seed = 0.05 + 0.95 * Math.abs((Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453) % 1);
-      ng.setAttribute('aLight', new THREE.BufferAttribute(new Float32Array(n).fill(c.r > c.b + 0.15 ? -seed : seed), 1));
+      ng.setAttribute('aLight', new THREE.BufferAttribute(new Float32Array(n).fill(glow === 'neon' ? 2 + seed : c.r > c.b + 0.15 ? -seed : seed), 1));
     }
     (glow ? this.glow : this.body).push(ng);
   }
 
   /** y = base de la boîte */
-  box(w: number, h: number, d: number, x: number, y: number, z: number, color: number, ry = 0, glow = false, rz = 0) {
+  box(w: number, h: number, d: number, x: number, y: number, z: number, color: number, ry = 0, glow: Glow = false, rz = 0) {
     this.add(new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0), x, y, z, color, ry, glow, rz);
   }
-  cyl(rt: number, rb: number, h: number, seg: number, x: number, y: number, z: number, color: number, glow = false, ry = 0) {
+  cyl(rt: number, rb: number, h: number, seg: number, x: number, y: number, z: number, color: number, glow: Glow = false, ry = 0) {
     this.add(new THREE.CylinderGeometry(rt, rb, h, seg).translate(0, h / 2, 0), x, y, z, color, ry, glow);
   }
-  cone(r: number, h: number, seg: number, x: number, y: number, z: number, color: number, glow = false, ry = 0) {
+  cone(r: number, h: number, seg: number, x: number, y: number, z: number, color: number, glow: Glow = false, ry = 0) {
     this.cyl(0, r, h, seg, x, y, z, color, glow, ry);
   }
   sphere(r: number, x: number, y: number, z: number, color: number, detail = 0, sy = 1) {

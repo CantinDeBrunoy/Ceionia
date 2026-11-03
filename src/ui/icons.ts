@@ -120,6 +120,12 @@ const P: Record<string, string> = {
   scissors: '<circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.2 16L19 3M15.8 16L5 3"/>',
   alpine: '<path d="M2 20l7-12 4 6 3-4 6 10z"/><path d="M7.2 11l1.8 1.5 1.6-1.4"/><path d="M14.6 12.6l1.4 1 1.2-1"/>',
   outpost: '<path d="M7 21l2-11h6l2 11"/><path d="M6 10h12l-1-3H7z"/><path d="M12 7V2l5 1.5-5 1.5"/><path d="M9.5 15h5"/><path d="M3 21h18"/>',
+  arcology: '<path d="M3 21h18"/><path d="M5 21v-4h14v4"/><path d="M8 17V9a4 4 0 0 1 8 0v8"/><path d="M12 5V2"/><path d="M8 12h8M8 14.5h8"/><path d="M6 17c0-2 1-3 2-3M18 17c0-2-1-3-2-3"/>',
+  atom: '<circle cx="12" cy="12" r="1.6"/><ellipse cx="12" cy="12" rx="10" ry="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/>',
+  rocket: '<path d="M12 2c3 2.5 4.5 6 4.5 10v5h-9v-5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="10" r="1.8"/><path d="M7.5 13l-3 3v3l3-2M16.5 13l3 3v3l-3-2"/><path d="M10 20.5l2 1.5 2-1.5"/>',
+  qubit: '<circle cx="12" cy="12" r="4"/><path d="M2 12a10 4 0 0 0 20 0a10 4 0 0 0-20 0"/><path d="M12 2v3M12 19v3"/><path d="M12 8l1.5 4-1.5 4"/>',
+  maglev: '<path d="M4 14V9a5 5 0 0 1 5-5h9l3 5v5z"/><path d="M4 9h17M9 4v5M14 4v5"/><path d="M3 18h18M6 21h12"/><path d="M7 14v4M17 14v4"/>',
+  tower: '<path d="M8 21V4l4-2 4 2v17"/><path d="M8 8c2 0 2 2 4 2s2-2 4-2M8 13c2 0 2 2 4 2s2-2 4-2"/><path d="M5 21h14"/><path d="M11 21v-3h2v3"/>',
 };
 
 /** Icône au trait, de la couleur du texte */
@@ -134,6 +140,7 @@ export const KIND_ICON: Record<KindId, string> = {
   harbor: 'anchor', airport: 'plane', heliport: 'heli', watertower: 'well', stadium: 'stadium', football: 'ball', basket: 'hoop', tennis: 'racket', waterpark: 'slide', funfair: 'ferris',
   theater: 'masks', acropolis: 'acropolis', forum: 'arch', senate: 'dome',
   carworks: 'car', lab: 'flask', aerodrome: 'balloon', manor: 'manor',
+  arcology: 'arcology', vfarm: 'tower', fusion: 'atom', spaceport: 'rocket', research: 'qubit', maglev: 'maglev',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

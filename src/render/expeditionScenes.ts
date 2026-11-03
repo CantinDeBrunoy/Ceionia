@@ -11,6 +11,9 @@ import { locoGeo } from './railway';
 import { Parts } from './parts';
 import { mats } from './materials';
 import type { CombatFx } from './combatFx';
+import { rocketGeo, ROCKET_H, ROCKET_R, RocketKind } from './rocket';
+import { SPACEPAD } from './models';
+import { Building, sizeOf } from '../build/catalog';
 
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
 export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34], wolf: ['wolf', 0.3] };
@@ -287,6 +290,7 @@ const meteorGeo = () => geo('meteor', (p) => { p.add(new THREE.IcosahedronGeomet
 const drumGeo = () => geo('drum', (p) => { p.cyl(0.04, 0.04, 0.05, 10, 0, 0, 0, 0xc84a3e); p.cyl(0.041, 0.041, 0.006, 10, 0, 0.05, 0, 0xf2e8d0); });
 const steamGeo = () => geo('steam', (p) => p.sphere(0.035, 0, 0, 0, 0xf4f4f2, 1));
 const smokeGeo = () => geo('smoke', (p) => p.sphere(0.04, 0, 0, 0, 0x8a8680, 1));
+const cloudGeo = () => geo('cloud', (p) => p.sphere(0.05, 0, 0, 0, 0xf2f0ec, 1));
 const bubbleGeo = () => geo('bubble', (p) => p.sphere(0.01, 0, 0, 0, 0xffffff, 0));
 const ballGeo = (c: number) => geo(`ball${c}`, (p) => p.sphere(0.014, 0, 0, 0, c));
 const tentGeoC = (c: number) => geo(`tent${c}`, (p) => {
@@ -303,7 +307,7 @@ const BEHAVIOR: Record<Scene, string> = {
   mine: 'mine', pass: 'mine', crater: 'mine', gather: 'gather', pebbles: 'gather', hops: 'gather', hunt: 'hunt',
   build: 'build', bridge: 'build', drill: 'build', summit: 'build', basecamp: 'build', rails: 'rails', camp: 'camp',
   smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', scout: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
-  race: 'tend', balloon: 'tend',
+  race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch',
 };
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
@@ -317,10 +321,71 @@ const B_FULL = 0.3, B_BOARD = 0.3, B_IN = 0.35, B_LIFT = 0.4, B_LAND = 0.86, B_O
 /** La course : le pilote va à la portière (R_DOOR), s'installe (R_SEAT), la voiture part (R_GO), revient sur la ligne (R_END) */
 const R_DOOR = 0.22, R_SEAT = 0.27, R_GO = 0.3, R_END = 0.92, R_OUT = 0.95;
 const RING = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false });
+/**
+ * Le lancement, selon l'avancement du travail : les astronautes (ou les colons) gagnent la fusée (L_BOARD) et y montent
+ * (L_IN), allumage (L_FIRE), la fusée quitte le pas de tir (L_LIFT) et sort du ciel (L_GONE). L'alunissage se suit ensuite en
+ * direct (voir `SpaceCast`)
+ */
+export const L_BOARD = 0.16, L_IN = 0.26, L_FIRE = 0.3, L_LIFT = 0.35, L_GONE = 0.6;
+/** Lueur des moteurs sur le pas de tir */
+const GLARE = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+/**
+ * La fusée d'une expédition spatiale : son corps (tourné comme le cosmodrome) dans un pivot qui l'incline en virage, ses
+ * flammes, la lueur au sol, le pas de tir, son équipage (qui gagne la fusée puis y monte), le cap de son virage, sa fumée
+ */
+/** Où se dresse la fusée sur le pas de tir de ce cosmodrome (le modèle tourne avec le bâtiment) : x, y, z et cap */
+export function padSpot(w: World, pad: Building): [number, number, number, number] {
+  const s = sizeOf(pad), t = (pad.rot * Math.PI) / 2, c = Math.cos(t), sn = Math.sin(t), [lx, ly, lz] = SPACEPAD, hs: number[] = [];
+  // le bâtiment se pose à la hauteur médiane des coins de son emprise
+  for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) hs.push(w.h(pad.x + i, pad.z + j));
+  hs.sort((p, q) => p - q);
+  const base = hs.length % 2 ? hs[hs.length >> 1] : (hs[(hs.length >> 1) - 1] + hs[hs.length >> 1]) / 2;
+  return [pad.x + s / 2 + lx * c + lz * sn, base + ly, pad.z + s / 2 - lx * sn + lz * c, t];
+}
+
+/** La fusée, son corps et ses lumières, prête à poser */
+function rocketMesh(kind: RocketKind) {
+  const inner = new THREE.Group(), g = rocketGeo(kind), body = new THREE.Mesh(g.body, mats.body);
+  body.castShadow = true;
+  inner.add(body);
+  if (g.glow) inner.add(new THREE.Mesh(g.glow, mats.glow));
+  return inner;
+}
+
+/**
+ * Entre deux expéditions, la fusée de la prochaine mission spatiale attend sur le pas de tir de chaque cosmodrome : la
+ * fusée-sonde, puis la fusée lunaire, puis le vaisseau colonial (le pas de tir reste vide une fois la colonie fondée). Une
+ * scène de lancement la remplace le temps de l'expédition
+ */
+export class IdleRockets {
+  private shown = new Map<number, { obj: THREE.Group; kind: RocketKind }>();
+  constructor(private world: World, private group: THREE.Group) {}
+
+  update(launching: boolean) {
+    const w = this.world, done = w.exp.done, live = new Set<number>();
+    const kind: RocketKind | null = launching ? null : !done.includes('rocket') ? 'probe' : !done.includes('moon') ? 'moon' : !done.includes('colony') ? 'colony' : null;
+    if (kind) for (const b of w.buildings.values()) {
+      if (b.kind !== 'spaceport') continue;
+      live.add(b.id);
+      let r = this.shown.get(b.id);
+      if (r && r.kind !== kind) { this.group.remove(r.obj); r = undefined; }
+      if (!r) { r = { obj: rocketMesh(kind), kind }; this.group.add(r.obj); this.shown.set(b.id, r); }
+      const [x, y, z, ry] = padSpot(w, b);
+      r.obj.position.set(x, y, z);
+      r.obj.rotation.y = ry;
+    }
+    for (const [id, r] of this.shown) if (!live.has(id)) { this.group.remove(r.obj); this.shown.delete(id); }
+  }
+}
+
+interface RocketShow {
+  obj: THREE.Group; flame: THREE.Group; glare: THREE.Mesh; kind: RocketKind; x: number; z: number; y0: number; dir: number;
+  crew: { n: { folk: Folk; pose: FolkPose; off: number }; from: [number, number] }[]; vapor: { every: number } | null; puff: number; trail: number;
+}
 
 interface Beast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; speed: number }
 interface Rod { rod: THREE.Mesh; bob: THREE.Mesh; line: THREE.Line }
-interface Fx { obj: THREE.Object3D; t: number; life: number; kind: 'puff' | 'fish' | 'ring' | 'steam' | 'smoke' | 'bubble' | 'star'; x: number; y: number; z: number; vx: number; vz: number }
+interface Fx { obj: THREE.Object3D; t: number; life: number; kind: 'puff' | 'fish' | 'ring' | 'steam' | 'smoke' | 'bubble' | 'star' | 'plume' | 'trail'; x: number; y: number; z: number; vx: number; vz: number }
 
 /**
  * Ce que fait une équipe sur place, joué sur la carte, et pourquoi elle est venue : elle approche une harde ou la rabat dans
@@ -381,6 +446,10 @@ export class ExpeditionScene {
   private race: { obj: THREE.Object3D; x: number; z: number; ax: number; s: number; rx: number; rz: number; laps: number; driver: number | null; puff: number } | null = null;
   /** où en est chaque membre de l'envol ou de la course (aux cordes, à la nacelle, au bord de la piste…) */
   private stage = new Map<number, string>();
+  /** la fusée de l'expédition spatiale, sur son pas de tir puis dans le ciel */
+  private rocket: RocketShow | null = null;
+  /** une fusée est sur le pas de tir ou dans le ciel : celle qui attendait au cosmodrome s'efface */
+  get launching() { return !!this.rocket; }
 
   constructor(private world: World, private agents: Agents, private group: THREE.Group, a: ActiveExpedition, private combat: CombatFx | null = null) {
     const [cx, cz] = a.dest;
@@ -514,7 +583,8 @@ export class ExpeditionScene {
   /** Ce pour quoi l'équipe est venue : on le pose sur place */
   private heart(a: ActiveExpedition, cx: number, cz: number) {
     const w = this.world, age = a.m.age, st = this.story, y = (x: number, z: number) => w.surfaceAt(x, z);
-    if (st === 'salt') {
+    if (st === 'launch' || st === 'moon' || st === 'colony') this.launchpad(a, cx, cz);
+    else if (st === 'salt') {
       // pierres à sel au bord de l'eau ; l'équipe guette, cachée derrière les buissons
       for (let i = 0; i < 3; i++) { const [x, z] = this.near(cx + Math.cos(i * 2.1) * 0.35, cz + Math.sin(i * 2.1) * 0.35, cx, cz); this.put(saltGeo(), x, z, i); this.salts.push([x, z]); }
       for (const s of [-1, 1]) { const [x, z] = this.near(cx - 0.85, cz + s * 0.35, cx, cz); this.put(bushGeo(), x, z, s); this.spots.push([x - 0.18, z]); }
@@ -730,6 +800,48 @@ export class ExpeditionScene {
     }
   }
 
+  /**
+   * Le cosmodrome : la fusée de la mission dressée sur le pas de tir (fusée-sonde du premier vol, fusée lunaire, vaisseau
+   * colonial), la vapeur des ergols qui s'échappe de ses flancs ; les trois astronautes (ou les colons) attendent au pied de la
+   * tour, en scaphandre, puis montent à bord. L'équipe suit le compte à rebours au bord du pas de tir
+   */
+  private launchpad(a: ActiveExpedition, cx: number, cz: number) {
+    const w = this.world, st = this.story, kind: RocketKind = st === 'launch' ? 'probe' : st === 'moon' ? 'moon' : 'colony';
+    // le cosmodrome le plus proche, et son pas de tir (le modèle tourne avec le bâtiment)
+    let pad: Building | null = null, bd = Infinity;
+    for (const b of w.buildings.values()) if (b.kind === 'spaceport') { const s = sizeOf(b), d = Math.hypot(b.x + s / 2 - cx, b.z + s / 2 - cz); if (d < bd) { bd = d; pad = b; } }
+    const [px, y0, pz, ry] = pad ? padSpot(w, pad) : [cx + 1.2, w.surfaceAt(cx + 1.2, cz), cz, 0];
+    const obj = new THREE.Group(), inner = rocketMesh(kind);
+    inner.rotation.y = ry;
+    // les flammes, sous chaque tuyère : un dard blanc dans un grand cône orangé
+    const flame = new THREE.Group(), R = ROCKET_R[kind];
+    const nozzles: [number, number, number][] = kind === 'colony' ? [[0, 0, 0.09], ...[0, 1, 2, 3].map((k): [number, number, number] => [Math.cos(k * Math.PI / 2 + Math.PI / 4) * 0.2, Math.sin(k * Math.PI / 2 + Math.PI / 4) * 0.2, 0.05])] : [[0, 0, kind === 'moon' ? 0.1 : 0.05]];
+    for (const [fx, fz, r] of nozzles) {
+      const out = new THREE.Mesh(new THREE.ConeGeometry(r, r * 9, 8).rotateX(Math.PI).translate(fx, -r * 4.5, fz), FLAME);
+      out.add(new THREE.Mesh(new THREE.ConeGeometry(r * 0.55, r * 5, 6).rotateX(Math.PI).translate(fx, -r * 2.5, fz), FLAME_IN));
+      flame.add(out);
+    }
+    flame.scale.setScalar(0.001);
+    inner.add(flame);
+    obj.add(inner);
+    obj.position.set(px, y0, pz);
+    this.group.add(obj); this.props.push(obj);
+    const glare = new THREE.Mesh(new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2), GLARE.clone());
+    glare.position.set(px, y0 + 0.012, pz);
+    this.group.add(glare); this.props.push(glare);
+    // la vapeur des ergols, au flanc de la fusée, jusqu'à l'allumage
+    const vapor = { x: px + R * 1.2, y: y0 + ROCKET_H[kind] * 0.55, z: pz, kind: 'steam' as const, every: 0.3, t: 0 };
+    this.emits.push(vapor);
+    // l'équipage attend au pied de la tour, du côté de l'équipe
+    const toward = Math.atan2(cx - px, cz - pz), n = kind === 'probe' ? 0 : kind === 'moon' ? 3 : 6, crew: RocketShow['crew'] = [];
+    for (let i = 0; i < n; i++) {
+      const ang = toward + (i - (n - 1) / 2) * 0.28, rr = R + 0.42, x = px + Math.sin(ang) * rr, z = pz + Math.cos(ang) * rr;
+      crew.push({ n: this.npc('astronaut', 5, x, z, ang + Math.PI, 'idle'), from: [x, z] });
+    }
+    this.rocket = { obj, flame, glare, kind, x: px, z: pz, y0, dir: toward + Math.PI + 0.6, crew, vapor, puff: 0, trail: 0 };
+    this.focus = [px, pz];
+  }
+
   /** Un habitant d'ailleurs (voisin, nomade, moine, jongleur, astronome) qui reste à sa place et fait son geste */
   private npc(role: FolkRole, age: number, x: number, z: number, face: number, pose: FolkPose) {
     const folk = makeFolk({ age, v: Math.floor(x * 131 + z * 17), role });
@@ -915,6 +1027,7 @@ export class ExpeditionScene {
     if (this.balloon) this.stepBalloon(k, onSite);
     if (this.works) this.stepWorks(dt, a);
     if (this.race) this.stepRace(k, dt, onSite);
+    if (this.rocket) this.stepRocket(k, dt, onSite);
     // ouvrages qui avancent avec le travail, panier qui se remplit
     this.built.forEach((o, i) => (o.visible = k * this.built.length > i));
     if (this.basket) this.basket.scale.setScalar(Math.max(0.001, k));
@@ -1127,6 +1240,8 @@ export class ExpeditionScene {
     if (st === 'troupe') return (i + Math.floor(this.t / 5)) % 2 ? 'cheer' : 'sit';
     if (st === 'abbey') return (i + Math.floor(this.t / 7)) % 3 ? 'sit' : 'cheer';
     if (st === 'stars') return i < 3 ? 'work' : 'sit';
+    // au compte à rebours, on attend ; au décollage, on crie de joie
+    if (this.rocket) return k >= L_FIRE ? 'cheer' : (i + Math.floor(this.t / 6)) % 3 ? 'stroll' : 'work';
     if (this.kind === 'spring') return 'sit';
     return 'work';
   }
@@ -1169,6 +1284,57 @@ export class ExpeditionScene {
       const lx = (r ? -0.032 : 0.032) * S, lz = (r ? -0.022 : 0.022) * S;
       this.agents.ride(id, { x: x + lx * cs + lz * sn, z: z - lx * sn + lz * cs, y: o.position.y + 0.012 * S, heading: ry + (r ? Math.PI : 0) + 0.6, act: u > 0.05 && u < 0.95 && Math.floor(this.t / 2.5 + r) % 2 ? 'cheer' : null });
     });
+  }
+
+  /**
+   * Le lancement : l'équipage gagne la fusée et y monte ; allumage, les flammes grandissent et un grand nuage de fumée roule
+   * sur le pas de tir ; la fusée s'arrache, accélère, s'incline dans son virage et sort du ciel en laissant sa traînée
+   */
+  private stepRocket(k: number, dt: number, onSite: boolean) {
+    const r = this.rocket!, H = ROCKET_H[r.kind], big = r.kind === 'colony' ? 1.6 : r.kind === 'moon' ? 1.25 : 1;
+    // l'équipage : il attend, marche jusqu'à la fusée, disparaît à bord
+    r.crew.forEach((c, i) => {
+      const u = onSite ? Math.min(1, Math.max(0, (k - L_BOARD - i * 0.008) / (L_IN - L_BOARD - 0.04))) : 0, f = c.n.folk.root;
+      const x = c.from[0] + (r.x - c.from[0]) * u * 0.8, z = c.from[1] + (r.z - c.from[1]) * u * 0.8;
+      f.position.set(x, this.world.surfaceAt(x, z) + (u > 0.6 ? (u - 0.6) * 0.3 : 0), z);
+      f.visible = u < 1;
+      c.n.pose = u > 0 && u < 1 ? 'walk' : Math.floor(this.t / 3 + i) % 3 === 0 ? 'cheer' : 'idle';
+    });
+    // l'ascension : lente au départ, de plus en plus vite ; le virage vers le large une fois la tour dépassée
+    const u = !onSite || k <= L_LIFT ? 0 : Math.min(1, (k - L_LIFT) / (L_GONE - L_LIFT)), alt = 70 * Math.pow(u, 2.2);
+    const tilt = Math.min(0.6, Math.max(0, alt - 3) * 0.02), off = Math.max(0, alt - 3) * tilt * 0.45;
+    const x = r.x + Math.sin(r.dir) * off, z = r.z + Math.cos(r.dir) * off, y = r.y0 + alt + (onSite && k > L_FIRE && k < L_LIFT ? Math.sin(this.t * 60) * 0.003 : 0);
+    r.obj.position.set(x, y, z);
+    r.obj.rotation.set(Math.cos(r.dir) * tilt, 0, -Math.sin(r.dir) * tilt);
+    r.obj.visible = u < 1;
+    // les flammes : elles naissent à l'allumage, grandissent au décollage, s'allongent en altitude
+    const th = !onSite || k < L_FIRE || u >= 1 ? 0 : k < L_LIFT ? 0.3 + 0.7 * smooth((k - L_FIRE) / (L_LIFT - L_FIRE)) : 1;
+    const fl = 1 + Math.sin(this.t * 31) * 0.08 + Math.sin(this.t * 47) * 0.05;
+    r.flame.scale.set(Math.max(0.001, th * fl), Math.max(0.001, th * (1.1 + Math.sin(this.t * 23) * 0.15) * (1 + u * 1.5)), Math.max(0.001, th * fl));
+    (r.glare.material as THREE.MeshBasicMaterial).opacity = th * Math.max(0, 1 - alt / 5) * (0.55 + Math.sin(this.t * 37) * 0.08);
+    r.glare.scale.setScalar(1.2 * big * (0.6 + th * 0.6));
+    if (r.vapor && onSite && k >= L_FIRE) { r.vapor.every = 1e9; r.vapor = null; }
+    // la fumée : un nuage qui roule sur le pas de tir tant qu'elle est basse, puis sa traînée dans le ciel
+    if (th > 0) {
+      if (alt < 4 && (r.puff -= dt) <= 0) {
+        r.puff = 0.06 / big;
+        for (let j = 0; j < 2; j++) {
+          const ang = Math.random() * Math.PI * 2, sp = (0.25 + Math.random() * 0.35) * big, o = new THREE.Mesh(cloudGeo(), mats.body);
+          this.group.add(o);
+          this.fx.push({ obj: o, t: 0, life: 5 + Math.random() * 2, kind: 'plume', x: r.x, y: r.y0 + 0.03, z: r.z, vx: Math.cos(ang) * sp, vz: Math.sin(ang) * sp });
+        }
+      }
+      if (alt > 0.3 && alt < 55 && (r.trail -= dt) <= 0) {
+        r.trail = 0.08;
+        // elle naît au bout des flammes : on voit le feu sous la tuyère
+        const o = new THREE.Mesh(cloudGeo(), mats.body), dn = 0.45 * big * (1 + u * 1.5);
+        this.group.add(o);
+        this.fx.push({ obj: o, t: 0, life: 6, kind: 'trail', x: x - Math.sin(r.dir) * tilt * dn, y: y - dn, z: z - Math.cos(r.dir) * tilt * dn, vx: (Math.random() - 0.5) * 0.06, vz: (Math.random() - 0.5) * 0.06 });
+      }
+    }
+    // la vue suit la fusée, le nez en l'air
+    if (onSite && u < 1) { this.focus = [x, z]; this.lift = Math.min(alt + H * 0.5, 9); }
+    else { this.focus = [r.x, r.z]; this.lift = H * 0.4; }
   }
 
   /** Un membre de l'envol : à sa corde pendant qu'on gonfle, à la nacelle s'il part, puis le nez en l'air à applaudir ; vrai s'il est pris en charge */
@@ -1314,6 +1480,12 @@ export class ExpeditionScene {
       const s = this.spots[i % this.spots.length], wat = this.water!;
       return [s[0], s[1], Math.atan2(wat.wet[0] - wat.bank[0], wat.wet[1] - wat.bank[1])];
     }
+    if (this.rocket) {
+      // en arc de cercle au bord du pas de tir, face à la fusée
+      const r = this.rocket, d0 = Math.hypot(cx - r.x, cz - r.z), ang = Math.atan2(cx - r.x, cz - r.z) + (i - (a.party.length - 1) / 2) * 0.16, rr = Math.max(1.3, Math.min(2.2, d0));
+      const [x, z] = this.near(r.x + Math.sin(ang) * rr, r.z + Math.cos(ang) * rr, cx, cz);
+      return [x, z, Math.atan2(r.x - x, r.z - z)];
+    }
     if (this.kind === 'watch' && !(this.story === 'stars' && i < 3)) {
       // en demi-cercle face aux jongleurs ou au frère brasseur (tournés vers -x), ou le nez au ciel
       const [fx, fz] = this.focus, ang = -Math.PI / 2 + (i - (a.party.length - 1) / 2) * 0.55, r = this.story === 'stars' ? 0.3 : 0.5;
@@ -1414,6 +1586,15 @@ export class ExpeditionScene {
         f.obj.position.set(f.x + f.vx * f.t, f.y + f.t * (f.kind === 'steam' ? 0.16 : 0.22), f.z + f.vz * f.t);
         f.obj.scale.setScalar(Math.sin(k * Math.PI) * (0.8 + k * 1.8));
       } else if (f.kind === 'bubble') { f.obj.position.set(f.x, f.y + k * 0.08, f.z); f.obj.scale.setScalar(1 - k * 0.5); }
+      else if (f.kind === 'plume') {
+        // le nuage du décollage roule au ras du sol, s'étale, s'élève un peu et se dissipe
+        const e = 1 - (1 - k) * (1 - k);
+        f.obj.position.set(f.x + f.vx * e * 3, f.y + k * 0.45, f.z + f.vz * e * 3);
+        f.obj.scale.setScalar((2 + k * 9) * Math.min(1, (1 - k) * 3));
+      } else if (f.kind === 'trail') {
+        f.obj.position.set(f.x + f.vx * f.t, f.y - f.t * 0.04, f.z + f.vz * f.t);
+        f.obj.scale.setScalar((0.8 + k * 7) * Math.min(1, (1 - k) * 2.5));
+      }
       else if (f.kind === 'star') { f.obj.position.set(f.x + f.vx * f.t, f.y - f.t * 0.9, f.z + f.vz * f.t); f.obj.scale.setScalar(Math.sin(k * Math.PI)); }
       else { f.obj.position.set(f.x, f.y, f.z); f.obj.scale.setScalar(1 + k * 3); }
       return true;
@@ -1427,6 +1608,7 @@ export class ExpeditionScene {
     for (const id of this.balloon?.riders ?? []) this.agents.ride(id, null);
     if (this.race?.driver != null) this.agents.ride(this.race.driver, null);
     for (const l of this.balloon?.ropes ?? []) l.geometry.dispose();
+    if (this.rocket) { this.rocket.glare.geometry.dispose(); (this.rocket.glare.material as THREE.Material).dispose(); }
     if (this.mouth) this.agents.partyHide(a.party, false);
     for (const n of this.npcs) this.group.remove(n.folk.root);
     for (const b of [...this.beasts, ...this.dogs]) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }

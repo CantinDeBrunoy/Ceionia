@@ -875,7 +875,7 @@ export class UnderView {
   /** (Re)construit le camp s'il a grandi, ou si le souterrain ou l'avant-poste ont changé */
   private refreshCamp() {
     const level = Math.min(CAMP_QUESTS.length, this.world.exp.camp), center = level ? this.campCenter() : -1;
-    const key = `${level}|${this.under.version}|${center}|${Math.min(this.age, 4)}`;
+    const key = `${level}|${this.under.version}|${center}|${Math.min(this.age, 5)}`;
     if (key === this.campKey) return;
     this.campKey = key;
     if (this.camp) { this.scene.remove(this.camp.group); this.camp.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose()); }
@@ -963,7 +963,7 @@ export class UnderView {
     for (const c of list) {
       live.add(c.id);
       let crew = this.crews.get(c.id);
-      const key = `${c.n}|${Math.min(age, 4)}|${c.entry}`;
+      const key = `${c.n}|${Math.min(age, 5)}|${c.entry}`;
       if (!crew || crew.key !== key) {
         if (crew) for (const m of crew.miners) this.scene.remove(m.actor.root);
         crew = { key, miners: [], light: { x: 0, y: -20, z: 0, r: 4, c: new THREE.Color(1, 0.72, 0.45).multiplyScalar(1.3), flicker: 0.2 }, slotsAt: -2, slots: [] };

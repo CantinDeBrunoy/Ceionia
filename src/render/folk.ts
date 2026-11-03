@@ -6,13 +6,14 @@ import { HUMAN_K } from './assets';
 /**
  * Les habitants, dessinés comme les soldats, les gendarmes et les pompiers : buste et tête, jambes qui pivotent à la hanche,
  * bras à l'épaule, et la tenue de leur époque (peaux de bêtes à la préhistoire, tunique et sandales dans l'Antiquité, cotte,
- * chaperon et tablier au Moyen Âge, gilet, casquette et jupe longue à l'âge industriel, tee-shirt, sweat et jean ensuite),
- * cheveux, barbe, coiffe et couleurs propres à chacun ; quelques figures à part (moine, jongleur, sage, nomade, savant,
- * pêcheur, tambour). Posés à y = 0, tournés vers +z, à la taille des soldats
+ * chaperon et tablier au Moyen Âge, gilet, casquette et jupe longue à l'âge industriel, tee-shirt, sweat et jean à l'époque
+ * moderne, combinaison à liserés lumineux à l'âge futuriste), cheveux, barbe, coiffe et couleurs propres à chacun ; quelques
+ * figures à part (moine, jongleur, sage, nomade, savant, pêcheur, tambour, astronaute). Posés à y = 0, tournés vers +z, à la
+ * taille des soldats
  */
 
 /** Qui est-ce : un habitant de l'époque, ou l'une des figures qu'on croise en expédition */
-export type FolkRole = 'villager' | 'monk' | 'juggler' | 'sage' | 'nomad' | 'scholar' | 'fisher' | 'drummer' | 'thief';
+export type FolkRole = 'villager' | 'monk' | 'juggler' | 'sage' | 'nomad' | 'scholar' | 'fisher' | 'drummer' | 'thief' | 'astronaut';
 /** Ce qu'il fait : debout, au pas, à la course, à l'ouvrage, assis, bras levés, à parler, à jongler */
 export type FolkPose = 'idle' | 'walk' | 'run' | 'work' | 'sit' | 'cheer' | 'talk' | 'juggle';
 /** Comment il tient ce qu'il a en main : droit (torche, seau, panier), en outil (qui frappe à l'ouvrage), pointé devant (arme) */
@@ -114,7 +115,7 @@ function wear(p: Parts, era: number, v: number, woman: boolean, child: boolean, 
       w.arm = hv(v, 14) % 3 ? shirt : vest;
     }
     w.leg = of([0x5a5a5e, 0x6a5a48, 0x2e3448, 0x4a4038], v, 15); w.boot = BLACK;
-  } else {
+  } else if (era === 4) {
     // tee-shirt (ou sweat à capuche) imprimé, jean, baskets ; jupe pour certaines
     const tee = of([0xd84a3e, 0x3c7fd8, 0xf2c23a, 0x4fa860, 0xf2f2f2, 0x2a2a2e, 0x8a5ad8, 0xf28a3c, 0x2ab0b0], v, 10);
     const hoodie = hv(v, 11) % 3 === 0;
@@ -124,6 +125,16 @@ function wear(p: Parts, era: number, v: number, woman: boolean, child: boolean, 
     if (woman && hv(v, 13) % 2) p.cyl(0.04, 0.05, 0.05, 8, 0, 0.055, 0, of([0x2a2a3a, 0xd84a3e, 0x4a6ab8, 0xe8c66a], v, 14));
     if (hoodie) w.arm = tee; else w.sleeve = tee;
     w.leg = of([0x3a5a8a, 0x2a3a5a, 0x2a2a2e, 0x8a7a5a, 0x4a6a8a], v, 15); w.boot = of([0xf2f2f2, 0xd84a3e, 0x2a2a2e, 0x3c7fd8], v, 16);
+  } else {
+    // combinaison d'une pièce aux épaules marquées, liseré lumineux sur la poitrine et à la ceinture, bottines souples ;
+    // longue tunique à l'ourlet lumineux pour certaines
+    const suit = of([0xf2f4f6, 0xdce6ee, 0x9fd8e8, 0xd8c8f0, 0x2a2e3a, 0xf0d8e0, 0xbfe8d4], v, 10), neon = of([0x5af0ff, 0xff5ad8, 0x7affc0, 0xffd25a], v, 11);
+    p.box(0.078, 0.11, 0.052, 0, 0.1, 0, suit);
+    for (const s of [-1, 1]) p.box(0.03, 0.014, 0.058, s * 0.032, 0.196, 0, dark(suit, 0.84));
+    p.box(0.008, 0.07, 0.004, 0.012, 0.12, 0.0265, neon, 0, 'neon');
+    p.box(0.082, 0.006, 0.056, 0, 0.116, 0, neon, 0, 'neon');
+    if (woman && hv(v, 13) % 2) { p.cyl(0.042, 0.054, 0.07, 8, 0, 0.035, 0, suit); p.cyl(0.0545, 0.0545, 0.006, 8, 0, 0.035, 0, neon, 'neon'); }
+    w.arm = suit; w.leg = suit; w.boot = of([0xf4f6f8, 0x2a2e3a, 0xb8c4d0], v, 16);
   }
   if (child && era >= 3) w.leg = of([0x3a5a8a, 0xd84a3e, 0x4fa860, 0x8a6a4a], v, 17);
   return w;
@@ -163,6 +174,12 @@ function hat(p: Parts, era: number, v: number, woman: boolean): boolean {
     if (r < 3) { p.box(0.05, 0.014, 0.052, 0, 0.25, -0.002, c); p.box(0.044, 0.004, 0.022, 0, 0.25, 0.028, c); return true; }
     if (r < 4) { p.sphere(0.026, 0, 0.252, 0, BLACK, 1, 0.85); p.cyl(0.038, 0.038, 0.004, 10, 0, 0.25, 0, BLACK); return true; }
     if (r < 5) { p.cyl(0.024, 0.024, 0.05, 10, 0, 0.252, 0, BLACK); p.cyl(0.038, 0.038, 0.004, 10, 0, 0.25, 0, BLACK); p.cyl(0.0245, 0.0245, 0.008, 10, 0, 0.258, 0, 0x8a2a2a); return true; }
+    return false;
+  }
+  if (era >= 5) {
+    // visière lumineuse sur les yeux, ou serre-tête
+    if (r < 2) p.box(0.05, 0.01, 0.008, 0, 0.226, 0.023, of([0x5af0ff, 0xff5ad8, 0x7affc0], v, 26), 0, 'neon');
+    else if (r === 2) p.box(0.05, 0.008, 0.05, 0, 0.246, 0, of([0xf2f4f6, 0x5af0ff, 0x2a2e3a], v, 27));
     return false;
   }
   // casquette à visière, bonnet
@@ -222,6 +239,14 @@ function figure(p: Parts, role: FolkRole, era: number, v: number, skin: number):
     p.sphere(0.029, 0, 0.252, -0.002, BLACK, 1, 0.45); p.box(0.006, 0.01, 0.006, 0, 0.264, 0, BLACK);
     p.sphere(0.04, -0.03, 0.2, -0.045, 0xd8d0b8, 1, 1.1); p.box(0.012, 0.012, 0.012, -0.03, 0.245, -0.045, 0xb8ae94);
     w.arm = BLACK; w.leg = BLACK; w.boot = 0x3a3a3a; w.hair = false;
+  } else if (role === 'astronaut') {
+    // scaphandre blanc, sac de survie sur le dos, drapeau et écusson, gants et bottes gris, casque rond à visière dorée
+    p.box(0.086, 0.13, 0.06, 0, 0.075, 0, WHITE); p.box(0.062, 0.1, 0.03, 0, 0.1, -0.045, 0xd8dce2);
+    p.box(0.022, 0.014, 0.004, -0.02, 0.172, 0.031, 0x3a6ab8); p.box(0.022, 0.007, 0.005, -0.02, 0.172, 0.0315, 0xd8443a);
+    p.box(0.02, 0.02, 0.004, 0.018, 0.14, 0.031, 0x2a2e3a); p.box(0.012, 0.004, 0.005, 0.018, 0.146, 0.0315, 0x5af0ff, 0, 'neon');
+    p.box(0.09, 0.012, 0.064, 0, 0.11, 0, 0xb8bcc2);
+    p.sphere(0.042, 0, 0.214, 0, WHITE, 1); p.box(0.05, 0.03, 0.012, 0, 0.212, 0.04, 0xe8b84a);
+    w.arm = WHITE; w.leg = WHITE; w.boot = 0x9aa0a8; w.hand = 0xb8bcc2; w.hair = false;
   } else if (role === 'drummer') {
     // gilet de fourrure ouvert, bras nus, bandeau, grande barbe
     p.box(0.078, 0.1, 0.052, 0, 0.11, 0, skin);
@@ -248,7 +273,7 @@ function figure(p: Parts, role: FolkRole, era: number, v: number, skin: number):
 
 /** Un habitant (ou une figure) de l'époque `age` ; `v` choisit son allure, sa tenue, ses couleurs */
 export function makeFolk(look: FolkLook): Folk {
-  const era = Math.min(4, Math.max(0, look.age)), v = look.v, role = look.role ?? 'villager', child = !!look.child;
+  const era = Math.min(5, Math.max(0, look.age)), v = look.v, role = look.role ?? 'villager', child = !!look.child;
   const woman = look.woman ?? (role === 'villager' && hv(v, 1) % 2 === 1);
   const skin = SKINS[hv(v, 2) % SKINS.length];
   const old = !child && hv(v, 4) % 6 === 0, hair = old ? GREY : HAIRS[hv(v, 3) % HAIRS.length];
@@ -257,7 +282,7 @@ export function makeFolk(look: FolkLook): Folk {
   const covered = role === 'villager' ? hat(p, era, v, woman) : !w.hair;
   // coiffure : longue, chignon ou queue de cheval pour les femmes, courte pour les hommes (en bataille à la préhistoire)
   const style = covered ? (role === 'villager' && woman ? 3 : -1) : woman ? [1, 2, 3][hv(v, 5) % 3] : era === 0 && hv(v, 5) % 2 ? 1 : 0;
-  const beard = child || woman ? 0 : role === 'sage' || (role === 'scholar' && era < 3) ? 3 : role === 'drummer' ? 1 : role === 'monk' || role === 'juggler' ? 0
+  const beard = child || woman ? 0 : role === 'sage' || (role === 'scholar' && era < 3) ? 3 : role === 'drummer' ? 1 : role === 'monk' || role === 'juggler' || role === 'astronaut' ? 0
     : old && era <= 2 ? 3 : [0, 0, 1, 2][hv(v, 6) % 4] * (era === 4 && hv(v, 7) % 2 ? 0 : 1);
   head(p, skin, hair, style, beard);
   const root = new THREE.Group(), body = new THREE.Group();

@@ -110,10 +110,22 @@ function colored(parts: [THREE.BufferGeometry, number][]) {
 
 /**
  * Charrette tirée par un cheval (âges antique à industriel), automobile ancienne (âge industriel, une fois la course
- * automobile gagnée) ou petite voiture (âge moderne) ; avant = +z
+ * automobile gagnée), petite voiture (âge moderne) ou voiture volante (âge futuriste) ; avant = +z
  */
 function vehicleGeo(age: number, motor = false) {
   const wheel = (x: number, z: number, r: number) => new THREE.CylinderGeometry(r, r, 0.025, 8).rotateZ(Math.PI / 2).translate(x, r, z);
+  if (age >= 5) {
+    // coque blanche en goutte, verrière fumée, aileron, liseré et patins lumineux : elle file sans roues au ras de la chaussée
+    return colored([
+      [new THREE.SphereGeometry(0.1, 10, 6).scale(0.78, 0.42, 1.45).translate(0, 0.11, 0), 0xf2f4f6],
+      [new THREE.SphereGeometry(0.06, 8, 5).scale(1, 0.75, 1.5).translate(0, 0.145, -0.012), 0x2a3a4e],
+      [new THREE.BoxGeometry(0.004, 0.035, 0.06).translate(0, 0.16, -0.12), 0xe8553c],
+      [new THREE.BoxGeometry(0.162, 0.01, 0.17).translate(0, 0.095, 0), 0x5af0ff],
+      [new THREE.BoxGeometry(0.03, 0.014, 0.2).translate(-0.05, 0.05, 0), 0x3a4250], [new THREE.BoxGeometry(0.03, 0.014, 0.2).translate(0.05, 0.05, 0), 0x3a4250],
+      [new THREE.BoxGeometry(0.026, 0.004, 0.18).translate(-0.05, 0.043, 0), 0x9ff8ff], [new THREE.BoxGeometry(0.026, 0.004, 0.18).translate(0.05, 0.043, 0), 0x9ff8ff],
+      [new THREE.BoxGeometry(0.05, 0.016, 0.006).translate(-0.04, 0.11, 0.142), 0xfff1c9], [new THREE.BoxGeometry(0.05, 0.016, 0.006).translate(0.04, 0.11, 0.142), 0xfff1c9],
+    ]);
+  }
   if (age === 3 && motor) {
     const body = 0x1e2a24;
     return colored([

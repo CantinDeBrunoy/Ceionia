@@ -69,9 +69,9 @@ export interface Ambush { cell: number; kind: FoeKind; n: number; t0: number; st
 
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
-const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'au-delà des collines' };
+const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'au-delà des collines', spaceport: 'le cosmodrome' };
 /** Repli quand le village n'a pas de tel endroit à portée */
-const FALLBACK: Record<DestKind, DestKind | null> = { cave: 'mountain', mountain: 'far', river: 'plain', forest: 'plain', far: 'plain', plain: null };
+const FALLBACK: Record<DestKind, DestKind | null> = { cave: 'mountain', mountain: 'far', river: 'plain', forest: 'plain', far: 'plain', plain: null, spaceport: null };
 /** Une équipe de plus tous les 30 habitants, quatre au plus */
 const PER_TEAM = 30, MAX_TEAMS = 4;
 /** Sans réponse du joueur, l'équipe tranche d'elle-même au bout de ce temps (secondes de jeu) */
@@ -131,8 +131,8 @@ export class Expeditions {
   slots() { return partyLimit(this.pop()); }
   private has(kind: string) { for (const b of this.world.buildings.values()) if (b.kind === kind) return true; return false; }
 
-  /** Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel */
-  riskOf(c: Choice) { return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1); }
+  /** Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel, un institut de recherche les équipe */
+  riskOf(c: Choice) { return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1); }
 
   /** Chevaux qui partiraient avec l'équipe : ceux qu'exige la cavalerie, sinon un par membre tant que l'écurie en a */
   mountsFor(c: Choice) { return c.mounts ?? Math.min(c.party, this.horsesHome()); }
@@ -541,7 +541,7 @@ export class Expeditions {
   /** Pourquoi le village ne peut pas fabriquer cette pièce (ou null) */
   whyCraft(g: Gear, age: number): string | null {
     if (age < g.age) return `Connu à l’âge ${AGES[g.age].name}`;
-    if (g.needs && !this.has(g.needs)) return `Il faut : ${KINDS[g.needs].names[Math.min(age, 4)].toLowerCase()}`;
+    if (g.needs && !this.has(g.needs)) return `Il faut : ${KINDS[g.needs].names[Math.min(age, AGES.length - 1)].toLowerCase()}`;
     if (!this.world.unlimited && this.world.ore < g.ore) return `Il faut ${g.ore} minerai`;
     if (this.world.exp.craft.length >= MAX_CRAFT) return 'L’atelier a déjà assez de travail';
     return null;
@@ -650,6 +650,7 @@ export class Expeditions {
    * dans un grand village, la plaine la plus proche n'est pas entre deux maisons) et atteignable à pied
    */
   private findDest(kind: DestKind, base: [number, number]): [number, number] | null {
+    if (kind === 'spaceport') return this.padSide(base);
     const w = this.world, [bx, bz] = base, cand: [number, number, number][] = [];
     const town = new Uint8Array(N * N), ds: number[] = [];
     for (const b of w.buildings.values()) {
@@ -661,7 +662,7 @@ export class Expeditions {
     ds.sort((p, q) => p - q);
     // le rayon du gros du village (huit bâtiments sur dix en deçà) : on part au-delà
     const reach = ds.length ? ds[Math.floor(ds.length * 0.8)] : 0;
-    const ideal = { plain: 18, forest: 15, river: 15, mountain: 22, cave: 18, far: 32 }[kind] + (kind === 'cave' ? 0 : reach * 0.7);
+    const ideal = { plain: 18, forest: 15, river: 15, mountain: 22, cave: 18, far: 32, spaceport: 0 }[kind] + (kind === 'cave' ? 0 : reach * 0.7);
     const outside: [number, number, number][] = [], rails = this.avoidCells?.() ?? null;
     // dénivelé autour d'une case : de combien le terrain monte dans un rayon de trois cases (une paroi, une pente de montagne)
     const rise = (x: number, z: number) => {
@@ -695,6 +696,26 @@ export class Expeditions {
     const free = cand.filter(([x, z]) => !this.active.some((a) => Math.hypot(a.dest[0] - x, a.dest[1] - z) < 3));
     const from = w.ci(Math.floor(bx), Math.floor(bz));
     for (const [x, z] of (free.length ? free : cand).slice(0, 16)) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
+    return null;
+  }
+
+  /** Au pied du cosmodrome : une case libre le long de son emprise, la plus proche du village, où l'on arrive à pied */
+  private padSide(base: [number, number]): [number, number] | null {
+    const w = this.world, cand: [number, number, number][] = [];
+    for (const b of w.buildings.values()) {
+      if (b.kind !== 'spaceport') continue;
+      const s = sizeOf(b);
+      for (let z = b.z - 1; z <= b.z + s; z++)
+        for (let x = b.x - 1; x <= b.x + s; x++) {
+          if ((x >= b.x && x < b.x + s && z >= b.z && z < b.z + s) || !w.inCells(x, z)) continue;
+          const k = w.ci(x, z);
+          if (w.occ[k] || w.lake[k] || w.decor[k] || w.cellAvg(x, z) < 0.1) continue;
+          cand.push([x + 0.5, z + 0.5, Math.hypot(x + 0.5 - base[0], z + 0.5 - base[1])]);
+        }
+    }
+    cand.sort((p, q) => p[2] - q[2]);
+    const from = w.ci(Math.floor(base[0]), Math.floor(base[1]));
+    for (const [x, z] of cand.slice(0, 24)) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
     return null;
   }
 }

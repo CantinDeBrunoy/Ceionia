@@ -8,7 +8,8 @@ import { HUMAN_K } from './assets';
  * (tunique rouge, cuirasse à lames, casque à crête, grand bouclier rouge et glaive), chevalier au Moyen Âge (armure, tabard
  * bleu et or, heaume à plumet, écu et épée), fantassin napoléonien à l'âge industriel (habit bleu à revers rouges, buffleteries
  * blanches croisées, shako à plumet, fusil à baïonnette), militaire moderne ensuite (treillis, gilet pare-balles, casque,
- * fusil d'assaut). Posés à y = 0, tournés vers +z, à la taille des habitants (0,3)
+ * fusil d'assaut), exo-armure blanche à liserés lumineux à l'âge futuriste. Posés à y = 0, tournés vers +z, à la taille des
+ * habitants (0,3)
  */
 
 export interface Soldier {
@@ -162,8 +163,37 @@ const modern: Kit = {
   left() {},
 };
 
-/** Tenue de l'époque (avant l'Antiquité, le légionnaire ; après l'époque moderne, le militaire moderne) */
-const KITS = [roman, roman, knight, napoleonic, modern];
+const future: Kit = {
+  leg: 0xe8ecf0, boot: 0x3a4250, hip: 0xe8ecf0, torso: 0xe8ecf0, arm: 0xdfe4ea, hand: 0x3a4250, hold: 'rifle',
+  dress(p) {
+    // exo-armure blanche à plaques, liserés lumineux, épaulières, ceinturon, réacteur dorsal
+    p.box(0.082, 0.1, 0.056, 0, 0.11, 0, 0xe8ecf0);
+    p.box(0.088, 0.06, 0.064, 0, 0.145, 0, 0xf6f8fa);
+    for (const s of [-1, 1]) p.box(0.034, 0.024, 0.06, s * 0.05, 0.19, 0, 0xd0d8e0);
+    p.box(0.006, 0.05, 0.004, 0, 0.15, 0.033, 0x5af0ff, 0, 'neon');
+    for (const s of [-1, 1]) p.box(0.004, 0.02, 0.004, s * 0.026, 0.165, 0.033, 0x5af0ff, 0, 'neon');
+    p.box(0.09, 0.012, 0.066, 0, 0.118, 0, 0x3a4250);
+    p.box(0.056, 0.08, 0.03, 0, 0.13, -0.046, 0xd0d8e0);
+    for (const s of [-1, 1]) p.cyl(0.011, 0.013, 0.02, 6, s * 0.016, 0.11, -0.058, 0x3a4250);
+  },
+  head(p) {
+    // casque intégral à visière fumée et sa ligne lumineuse
+    p.sphere(0.038, 0, 0.231, 0, 0xf6f8fa, 1);
+    p.box(0.052, 0.022, 0.012, 0, 0.22, 0.034, 0x2a3442);
+    p.box(0.046, 0.004, 0.004, 0, 0.226, 0.041, 0x5af0ff, 0, 'neon');
+  },
+  right(p) {
+    // fusil à impulsions : crosse, corps blanc, cellule d'énergie, canon
+    p.box(0.012, 0.03, 0.03, 0, -0.03, -0.01, 0x3a4250);
+    p.box(0.016, 0.028, 0.08, 0, -0.005, 0.025, 0xf0f2f4);
+    p.box(0.018, 0.012, 0.03, 0, -0.008, 0.01, 0x5af0ff);
+    p.box(0.007, 0.007, 0.05, 0, 0.002, 0.085, 0x3a4250);
+  },
+  left() {},
+};
+
+/** Tenue de l'époque (avant l'Antiquité, le légionnaire) */
+const KITS = [roman, roman, knight, napoleonic, modern, future];
 
 const NAVY = 0x22305a, BUFF = 0xe8c060, SILVER = 0xd8dce2, SIENNA = 0x8a5a3a;
 
@@ -440,12 +470,12 @@ const policeNow: Kit = {
 };
 
 /** Gendarmes (sergents du guet au Moyen Âge) et mineurs de chaque époque */
-const GENDARMES = [watchman, watchman, watchman, gendarme, gendarmeNow];
+const GENDARMES = [watchman, watchman, watchman, gendarme, gendarmeNow, gendarmeNow];
 /** Ambulanciers et policiers des secours (ils n'existent qu'à partir de l'âge industriel) */
-const MEDICS = [medic, medic, medic, medic, medicNow];
-const POLICE = [policeman, policeman, policeman, policeman, policeNow];
-const MINERS = [miner2, miner2, miner2, miner3, miner4];
-const FIREMEN = [fireman, fireman, fireman, fireman, firemanNow];
+const MEDICS = [medic, medic, medic, medic, medicNow, medicNow];
+const POLICE = [policeman, policeman, policeman, policeman, policeNow, policeNow];
+const MINERS = [miner2, miner2, miner2, miner3, miner4, miner4];
+const FIREMEN = [fireman, fireman, fireman, fireman, firemanNow, firemanNow];
 
 /** Qui est-ce : un soldat de l'époque, un gendarme, un mineur */
 export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police';
@@ -460,7 +490,7 @@ function torch(): Parts {
 
 /** Fantassin de l'époque `age` ; `v` varie son teint ; `withTorch` : une torche dans la main gauche à la place de l'écu */
 export function makeSoldier(age: number, v = 0, withTorch = false, role: SoldierRole = 'soldier'): Soldier {
-  const era = Math.min(4, Math.max(0, age)), kit = (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : role === 'fireman' ? FIREMEN : role === 'medic' ? MEDICS : role === 'police' ? POLICE : KITS)[era], skin = SKINS[((v % SKINS.length) + SKINS.length) % SKINS.length];
+  const era = Math.min(5, Math.max(0, age)), kit = (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : role === 'fireman' ? FIREMEN : role === 'medic' ? MEDICS : role === 'police' ? POLICE : KITS)[era], skin = SKINS[((v % SKINS.length) + SKINS.length) % SKINS.length];
   const tint = (c: number) => (c === SKIN ? skin : c);
   const p = new Parts();
   kit.dress(p);

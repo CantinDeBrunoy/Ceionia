@@ -59,6 +59,7 @@ const JOB_OF: Partial<Record<KindId, JobKind>> = {
   pen: 'herder', stable: 'herder', apiary: 'keeper',
   baths: 'servant', theater: 'servant', senate: 'servant', landmark: 'servant', station: 'servant', terminal: 'servant', observatory: 'servant',
   carworks: 'smith', lab: 'healer', aerodrome: 'servant', heliport: 'servant', airport: 'servant',
+  arcology: 'merchant', vfarm: 'farmer', fusion: 'smith', spaceport: 'servant', research: 'teacher', maglev: 'servant',
 };
 const TOOL_OF: Record<JobKind, keyof typeof PROPS | null> = {
   farmer: 'hoe', woodcutter: 'axe', quarry: 'pick', fisher: 'rod', smith: 'hammer', miller: 'basket', priest: 'book', healer: 'basket', teacher: 'book',
@@ -126,9 +127,10 @@ const BODY_COLS = [
   [0xc86a5a, 0x6f9f78, 0x8c7fb8, 0xd8b45a],
   [0x6f7a8a, 0x8a6f5f, 0x5f7f95, 0xb08a6a],
   [0xf09ab0, 0x7fc4e8, 0xf5d36a, 0x9fd49a, 0xffffff],
+  [0xf4f6f8, 0x9fe8f0, 0xd8c8f4, 0xf2f2f2, 0xa8f0d0],
 ];
 const SKIN = [0xf2cfb3, 0xe3b894, 0xc99973, 0x8d6445];
-const TOOL_SCALE = [1.5, 0.9, 0.9, 0.5, 0];
+const TOOL_SCALE = [1.5, 0.9, 0.9, 0.5, 0, 0];
 
 type State = 'inside' | 'walking' | 'doing';
 /**
@@ -871,7 +873,7 @@ export class Agents {
 
   /** Habitant dessiné : la tenue de son époque, son cap, son geste selon ce qu'il fait */
   private animateActor(a: Agent, age: number, dt: number): boolean {
-    const key = `${Math.min(age, 4)}|${a.child ? 1 : 0}`;
+    const key = `${Math.min(age, 5)}|${a.child ? 1 : 0}`;
     if (a.actorKey !== key) {
       this.dropActor(a);
       a.actor = makeFolk({ age, v: a.id, child: a.child, size: 0.94 + (a.id % 5) * 0.03 });
@@ -949,11 +951,11 @@ export class Agents {
   /** Le soldat de l'époque qui remplace un membre en armure tant qu'il va à pied ; vrai s'il est affiché */
   private stepSoldier(a: Agent, age: number) {
     const on = !!a.kit?.armor && !(a.kit.horse && a.mounted) && !a.ride && !a.hidden;
-    if (a.soldier && (!on || a.soldier.root.userData.age !== Math.min(age, 4))) { this.group.remove(a.soldier.root); a.soldier = null; }
+    if (a.soldier && (!on || a.soldier.root.userData.age !== Math.min(age, 5))) { this.group.remove(a.soldier.root); a.soldier = null; }
     if (!on) return false;
     if (!a.soldier) {
       a.soldier = makeSoldier(age, a.id, !!a.kit?.torch);
-      a.soldier.root.userData.age = Math.min(age, 4);
+      a.soldier.root.userData.age = Math.min(age, 5);
       this.group.add(a.soldier.root);
     }
     a.soldier.root.position.set(a.x, this.groundY(a), a.z);
@@ -1005,7 +1007,7 @@ export class Agents {
 
   private render(age: number, dt: number) {
     const w = this.world, d = this.d;
-    const palette = BODY_COLS[Math.min(age, 4)];
+    const palette = BODY_COLS[Math.min(age, 5)];
     let n = 0;
     for (const a of this.agents) {
       if (this.animateActor(a, age, dt)) continue;
@@ -1023,7 +1025,7 @@ export class Agents {
       this.col.setHex(SKIN[a.skin]);
       this.head.setColorAt(n, this.col);
       // outil porté sur le côté
-      const ts = a.child ? 0 : TOOL_SCALE[Math.min(age, 4)];
+      const ts = a.child ? 0 : TOOL_SCALE[Math.min(age, 5)];
       d.translateX(0.1); d.translateY(0.02);
       d.rotation.z = a.state === 'doing' ? Math.sin(a.phase) * 0.8 : 0.1;
       d.scale.set(ts, ts, ts);

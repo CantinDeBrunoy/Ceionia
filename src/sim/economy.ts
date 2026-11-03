@@ -24,9 +24,9 @@ export const costLabel = (c: Cost) => [c.wood ? `${c.wood} bois` : '', c.stone ?
 
 /** Production par jour d'un bâtiment, selon son âge */
 export const YIELD: Partial<Record<KindId, Partial<Record<Resource, number[]>>>> = {
-  lumber: { wood: [4, 6, 8, 11, 14] },
-  quarry: { stone: [3, 5, 7, 9, 12] },
-  mine: { ore: [0, 0, 3, 5, 8], stone: [0, 0, 2, 3, 4] },
+  lumber: { wood: [4, 6, 8, 11, 14, 17] },
+  quarry: { stone: [3, 5, 7, 9, 12, 15] },
+  mine: { ore: [0, 0, 3, 5, 8, 10], stone: [0, 0, 2, 3, 4, 5] },
 };
 
 export const RES_NAME: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai' };

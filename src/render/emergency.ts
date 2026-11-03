@@ -143,11 +143,28 @@ interface UnitGeo {
  * cerclée, cheminée, cylindres, dévidoir), la voiture d'ambulance blanche à toit cintré et croix rouges, le fourgon cellulaire
  * bleu nuit à lucarnes grillagées ; puis les premières automobiles (capot à persiennes, radiateur de laiton, ailes,
  * marchepieds, roues à rayons, phares) ; à l'époque moderne, le fourgon pompe-tonne et sa grande échelle, l'ambulance à
- * damier jaune et vert, la voiture de patrouille à bandes tricolores, tous avec leurs rampes de gyrophares
+ * damier jaune et vert, la voiture de patrouille à bandes tricolores, tous avec leurs rampes de gyrophares ; à l'âge
+ * futuriste, l'ambulance et la patrouille volent au ras de la chaussée (le camion des pompiers garde sa grande échelle)
  */
 function unitGeo(service: Service, age: number, motor: boolean): UnitGeo {
   const p = new Parts(), lights: [number, number, number, number][] = [];
   const out: UnitGeo = { body: null!, lights, horse: false, ladder: null, ladderAt: [0, 0, 0], chimney: null };
+  if (age >= 5 && service !== 'fire') {
+    // coque blanche arrondie, verrière fumée, bande et rampe lumineuse aux couleurs du service, patins qui luisent dessous
+    const health = service === 'health', band = health ? 0x2a9a5a : 0x2c4a9a, len = health ? 1.9 : 1.6;
+    p.add(new THREE.SphereGeometry(0.1, 10, 6).scale(0.8, health ? 0.75 : 0.5, len), 0, 0.12, 0, WHITE);
+    p.add(new THREE.SphereGeometry(0.06, 8, 5).scale(1.05, 0.75, 1.5), 0, health ? 0.17 : 0.15, 0.06, TINT);
+    p.box(0.162, 0.016, 0.26, 0, 0.11, 0, band);
+    if (health) { for (const s of [-1, 1]) cross(p, s * 0.078, 0.14, -0.06, true); p.box(0.004, 0.06, 0.004, 0, 0.13, -0.19, 0xd84a3e); }
+    else for (const s of [-1, 1]) for (let k = 0; k < 5; k++) p.box(0.005, 0.01, 0.008, s * 0.08, 0.13, -0.08 + k * 0.016, WHITE);
+    for (const s of [-1, 1]) { p.box(0.03, 0.016, 0.24, s * 0.055, 0.05, 0, 0x3a4250); p.box(0.026, 0.004, 0.22, s * 0.055, 0.044, 0, 0x9ff8ff, 0, 'neon'); }
+    for (const s of [-1, 1]) p.box(0.05, 0.016, 0.006, s * 0.04, 0.12, 0.188, 0xfff1c9, 0, true);
+    p.box(0.08, 0.012, 0.03, 0, health ? 0.215 : 0.185, -0.03, 0x2a2a2e);
+    const ly = health ? 0.23 : 0.2;
+    lights.push([-0.03, ly, -0.03, 0], [0.03, ly, -0.03, health ? 0 : 1]);
+    out.body = p.build(false).body;
+    return out;
+  }
   if (age === 3 && !motor) {
     out.horse = true;
     // brancards jusqu'au cheval, siège du cocher
