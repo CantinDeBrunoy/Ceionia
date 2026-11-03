@@ -43,6 +43,13 @@ export type Effect =
   /** bêtes perdues en route */
   | { t: 'unherd'; kind: HerdKind; n: number };
 
+/** Le choix tel qu'il se présente à cet âge : ses libellés et son récit de l'âge le plus proche, en dessous ou égal */
+export function choiceAt(c: Choice, age: number): Choice {
+  if (!c.ages) return c;
+  const keys = Object.keys(c.ages).map(Number).filter((k) => k <= age).sort((p, q) => p - q);
+  return keys.length ? { ...c, ...Object.assign({}, ...keys.map((k) => c.ages![k])) } : c;
+}
+
 export interface Choice {
   label: string;
   text: string;
@@ -64,6 +71,8 @@ export interface Choice {
   mounts?: number;
   /** troupe de l'expédition armée, telle qu'on la voit sous terre */
   troop?: 'cavalry' | 'armor' | 'miners';
+  /** ce qui change de nom et de récit avec les âges (à partir de l'âge donné) : chevaliers, puis cuirassiers et fusiliers… */
+  ages?: Partial<Record<number, Partial<Pick<Choice, 'label' | 'text' | 'doing' | 'winText' | 'loseText'>>>>;
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -335,6 +344,20 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'veins', n: 4, reach: 12 }], lose: [hurt(2, 3), { t: 'unherd', kind: 'horse', n: 1 }],
         winText: 'Les cavaliers ont chargé la horde de squelettes, tenu la grande galerie et remonté les filons dans leurs sacoches !',
         loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cavaliers rentrent blessés, les sacoches vides.',
+        ages: {
+          3: {
+            label: 'Charge des cuirassiers', text: 'Trois cuirassiers, sabre au clair, foncent dans les grandes galeries ; des fusiliers les suivent et les couvrent : rapides, mais les chevaux craignent le noir.',
+            doing: 'charge sabre au clair, les fusiliers en soutien, et abat les filons',
+            winText: 'Les cuirassiers ont enfoncé la horde, les fusiliers ont tenu la galerie : les filons remontent dans les fontes des selles !',
+            loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cuirassiers rentrent blessés, les fontes vides.',
+          },
+          4: {
+            label: 'Blindés en tête', text: 'Trois blindés légers ouvrent la route dans les grandes galeries, les fantassins dans leur sillage : rapides, mais l’obscurité est traîtresse.',
+            doing: 'ouvre la route aux blindés et abat les filons',
+            winText: 'Les blindés ont dégagé la grande galerie, la section l’a tenue : les filons remontent dans les soutes !',
+            loseText: 'Un blindé s’est embourbé dans le noir ; deux soldats rentrent blessés, les soutes vides.',
+          },
+        },
       },
       {
         label: 'Hommes d’armes en armure', text: 'Lents et lourds : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
@@ -342,6 +365,20 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'veins', n: 6, reach: 9 }], lose: [hurt(2, 4)],
         winText: 'Pas un monstre n’a percé le mur de boucliers : six filons abattus, le chariot ploie sous le minerai.',
         loseText: 'Les araignées géantes ont attaqué par le plafond : la troupe a reculé, deux blessés sous leurs armures cabossées.',
+        ages: {
+          3: {
+            label: 'Ligne de fusiliers', text: 'Une compagnie d’infanterie avance en ligne, baïonnette au canon, quelques cavaliers sur les flancs : elle tire par salves et tient chaque galerie le temps qu’on la vide.',
+            doing: 'avance en ligne, tire par salves et abat les filons',
+            winText: 'Pas une créature n’a franchi la ligne de feu : six filons abattus, le chariot ploie sous le minerai.',
+            loseText: 'Les araignées géantes ont attaqué par le plafond : la ligne a reculé, deux blessés.',
+          },
+          4: {
+            label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section progresse par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
+            doing: 'progresse par bonds, se couvre et abat les filons',
+            winText: 'Pas une créature n’a passé la section : six filons abattus, le chariot ploie sous le minerai.',
+            loseText: 'Les araignées géantes ont attaqué par le plafond : la section a décroché, deux blessés.',
+          },
+        },
       },
       {
         label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches : on file droit aux premiers filons et on remonte ce qu’on peut.',
@@ -349,6 +386,10 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'veins', n: 3, reach: 6 }], lose: [hurt(2, 3)],
         winText: 'Les gardes ont tenu bon pendant que les pioches chantaient : trois filons remontés à la lumière.',
         loseText: 'Des zombies ont surgi d’une galerie latérale : les mineurs ont tout lâché pour fuir, deux blessés.',
+        ages: {
+          3: { label: 'Mineurs et gendarmes', text: 'Peu de soldats, beaucoup de pioches et de lampes à carbure : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'Les gendarmes ont tenu bon pendant que les pioches chantaient : trois filons remontés à la lumière.' },
+          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale, une escorte armée : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient : trois filons remontés à la lumière.' },
+        },
       },
     ],
   },

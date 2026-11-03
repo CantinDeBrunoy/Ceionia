@@ -279,8 +279,9 @@ export class Traffic {
       const c = v.path[v.i];
       if (c === undefined) { this.place(v, n++, dt, 0); continue; }
       const [cx, cz] = this.world.passPoint(v.path, v.i);
-      // tenir sa droite : décalage perpendiculaire au sens de marche
-      const hx = Math.sin(v.heading), hz = Math.cos(v.heading), tx = cx - hz * 0.14, tz = cz + hx * 0.14;
+      // tenir sa droite : décalage perpendiculaire au sens de la rue (du point d'avant à celui-ci), pour ne pas tourner en rond
+      const [px, pz] = v.i > 0 ? this.world.passPoint(v.path, v.i - 1) : v.path.length > 1 ? (([nx, nz]) => [cx * 2 - nx, cz * 2 - nz])(this.world.passPoint(v.path, 1)) : [v.x, v.z];
+      const sl = Math.hypot(cx - px, cz - pz) || 1, hx = (cx - px) / sl, hz = (cz - pz) / sl, tx = cx - hz * 0.14, tz = cz + hx * 0.14;
       const dx = tx - v.x, dz = tz - v.z, dist = Math.hypot(dx, dz), step = dt * (this.builtAge >= 4 ? 1.6 : this.horses ? 0.8 : 1.2);
       if (dist <= step) { v.x = tx; v.z = tz; v.i++; }
       else {

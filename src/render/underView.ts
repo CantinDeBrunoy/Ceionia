@@ -556,6 +556,12 @@ export class UnderView {
     // l'époque et leur garde
     const members: TroopMember[] = [];
     const folk = AGE_VILLAGERS[Math.min(t.age, 4)];
+    // l'escorte qui accompagne l'équipe : une ligne de soldats (fusiliers dès l'âge industriel) et, sauf pour la charge, deux
+    // cavaliers sur les flancs — la troupe a de l'allure
+    const escort = t.kind === 'armor' ? (t.age >= 3 ? 7 : 4) : t.kind === 'cavalry' ? (t.age >= 3 ? 4 : 2) : 2;
+    const flank = t.kind !== 'cavalry' && t.age >= 2 ? 2 : 0;
+    for (let i = 0; i < flank; i++) { const rider = makeRider(t.age, t.id + 7 + i); this.scene.add(rider.root); members.push({ actor: null, rider, soldier: null }); }
+    for (let i = 0; i < escort; i++) { const soldier = makeSoldier(t.age, t.id + 11 + i, false); this.scene.add(soldier.root); members.push({ actor: null, rider: null, soldier }); }
     for (let i = 0; i < t.n; i++) {
       // la cavalerie : cavaliers de l'époque sur leurs chevaux, comme les jouteurs des jardins
       if (t.kind === 'cavalry' && i < 3) {
@@ -579,7 +585,11 @@ export class UnderView {
     }
     if (!members.length) return null;
     const light: Source = { x: path[0][0], y: 0, z: path[0][1], r: 5, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(2), flicker: 0.25 };
-    return { route, path, members, light, scareT: 0, foes: new Map(), over: new Set(), cool: members.map((_, i) => 0.4 + i * 0.23), foeCool: new Map() };
+    // le chef (torche, fanion) marche en tête : on le met en premier
+    const lead = members.findIndex((m, i) => i >= flank + escort && !!m.soldier);
+    if (lead > 0) members.unshift(...members.splice(lead, 1));
+    // les fusiliers tirent par salves : tous ensemble
+    return { route, path, members, light, scareT: 0, foes: new Map(), over: new Set(), cool: members.map((m, i) => (m.soldier?.arms[0].userData.hold === 'rifle' ? 1.2 : 0.4 + i * 0.23)), foeCool: new Map() };
   }
 
   /** Point du chemin à la distance s (en cases) et cap de marche */
@@ -597,22 +607,37 @@ export class UnderView {
     this.ambushes(s, t, time, lead, dt);
     // les créatures encore debout de l'embuscade en cours
     const live = fighting ? [...s.foes.values()].flat().filter((f) => f.alive && f.dying < 0) : [];
+    // au combat, les fusiliers se mettent en ligne, en travers du chemin, un peu en retrait, et tirent par salves
+    const rifles = s.members.map((m) => m.soldier?.arms[0].userData.hold === 'rifle');
+    const nr = rifles.filter(Boolean).length;
+    let ri = 0;
+    if (fighting && nr > 1) {
+      const volley = s.cool.findIndex((c, i) => rifles[i] && c <= 0) >= 0;
+      if (volley) s.cool.forEach((c, i) => { if (rifles[i] && c < 0.3) s.cool[i] = Math.min(c, 0); });
+    }
     s.members.forEach((m, i) => {
       let x: number, z: number, h: number;
       if (fighting) {
         // chacun marche sur la créature la plus proche de sa place dans le cercle, s'arrête à portée (de lame, ou de fusil) et
-        // frappe ; sans créature à portée, il reste en cercle face au noir
-        const a = (i / s.members.length) * Math.PI * 2 + 0.6, r = m.rider ? 0.42 : 0.3;
-        const hx = lead[0] + Math.sin(a) * r, hz = lead[1] + Math.cos(a) * r;
-        const rifle = m.soldier?.arms[0].userData.hold === 'rifle';
-        const foe = live.reduce<Mob | null>((b, f) => (Math.hypot(f.x - hx, f.z - hz) < (b ? Math.hypot(b.x - hx, b.z - hz) : 1.6) ? f : b), null);
+        // frappe ; sans créature à portée, il reste en cercle face au noir. Les fusiliers, eux, tiennent leur ligne
+        const rifle = rifles[i];
+        let a = (i / s.members.length) * Math.PI * 2 + 0.6, r = m.rider ? 0.42 : 0.3;
+        let hx = lead[0] + Math.sin(a) * r, hz = lead[1] + Math.cos(a) * r;
+        if (rifle && nr > 1) {
+          // sur deux rangs de six au plus, le second derrière le premier, en quinconce
+          const rank = Math.floor(ri / 6), inRank = Math.min(6, nr - rank * 6), k = (ri++ % 6) - (inRank - 1) / 2 + (rank % 2) * 0.5, back = 0.4 + rank * 0.17;
+          hx = lead[0] - Math.sin(lead[2]) * back + Math.cos(lead[2]) * k * 0.15;
+          hz = lead[1] - Math.cos(lead[2]) * back - Math.sin(lead[2]) * k * 0.15;
+          a = lead[2]; r = 0;
+        }
+        const foe = live.reduce<Mob | null>((b, f) => (Math.hypot(f.x - hx, f.z - hz) < (b ? Math.hypot(b.x - hx, b.z - hz) : rifle ? 2.4 : 1.6) ? f : b), null);
         if (foe) {
-          const d = Math.hypot(foe.x - hx, foe.z - hz) || 1, reach = rifle ? 0.55 : m.rider ? 0.34 : 0.24, go = Math.max(0, Math.min(0.45, d - reach));
+          const d = Math.hypot(foe.x - hx, foe.z - hz) || 1, reach = rifle ? (nr > 1 ? 1.6 : 0.55) : m.rider ? 0.34 : 0.24, go = Math.max(0, Math.min(0.45, d - reach));
           x = hx + ((foe.x - hx) / d) * go; z = hz + ((foe.z - hz) / d) * go; h = Math.atan2(foe.x - x, foe.z - z);
           // le coup porte : étincelles sur la créature, qui recule ; le fusil tire (éclair, traînée, impact)
           s.cool[i] -= dt;
           if (s.cool[i] <= 0 && Math.hypot(foe.x - x, foe.z - z) < reach + 0.12) {
-            s.cool[i] = (rifle ? 0.8 : 0.6) + Math.random() * 0.35;
+            s.cool[i] = rifle ? (nr > 1 ? 1.6 : 0.8 + Math.random() * 0.35) : 0.6 + Math.random() * 0.35;
             const fy = this.under.heightAt(foe.x, foe.z) + 0.16;
             if (rifle) this.fx.shot(x + Math.sin(h) * 0.12, this.under.heightAt(x, z) + 0.2, z + Math.cos(h) * 0.12, foe.x, fy, foe.z);
             else this.fx.hit((x + foe.x * 2) / 3, fy, (z + foe.z * 2) / 3, 0xffd27a, 12, 'blade');
@@ -625,8 +650,9 @@ export class UnderView {
         const a = i * 2.1 + 0.5;
         x = lead[0] + Math.cos(a) * 0.32 * (i ? 1 : 0.3); z = lead[1] + Math.sin(a) * 0.32 * (i ? 1 : 0.3); h = Math.atan2(lead[0] - x, lead[1] - z) + (i % 2 ? Math.PI : 0);
       } else {
-        const p = this.along(s.path, Math.max(0, pos - i * 0.45));
-        const side = (i % 2 ? 1 : -1) * 0.12;
+        // en colonne par deux derrière le chef ; les cavaliers sur les flancs
+        const p = this.along(s.path, Math.max(0, pos - Math.floor((i + 1) / 2) * 0.32));
+        const side = i === 0 ? 0 : (i % 2 ? 1 : -1) * (m.rider ? 0.2 : 0.11);
         x = p[0] + Math.cos(p[2]) * side; z = p[1] - Math.sin(p[2]) * side; h = p[2];
       }
       const y = this.under.heightAt(x, z);

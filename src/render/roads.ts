@@ -325,6 +325,33 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     return { cells: [...(head !== undefined ? [head] : []), ...order, ...(tail !== undefined ? [tail] : [])], head: head !== undefined, tail: tail !== undefined };
   }
 
+  /**
+   * Cases de route portées par un pont : celles qui passent sur l'eau, et les cases sèches prises entre deux d'entre elles le long
+   * de la même route (deux au plus) : un ruisseau qui serpente sous la route la mouille par endroits, on n'y jette qu'un seul
+   * ouvrage d'une rive à l'autre, dans l'axe de la route, au lieu de petits ponts chacun de travers
+   */
+  private bridged = new Set<number>();
+  private findBridged() {
+    const w = this.world, out = new Set<number>();
+    const road = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1;
+    for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) if (road(cx, cz) && w.bridgeY(cx, cz) !== null) out.add(w.ci(cx, cz));
+    const nbrs = (k: number) => D4.map(([dx, dz]) => [(k % N) + dx, Math.floor(k / N) + dz]).filter(([x, z]) => road(x, z)).map(([x, z]) => w.ci(x, z));
+    for (const k of [...out]) for (const first of nbrs(k)) {
+      // on suit la route depuis le pont, case sèche après case sèche, tant qu'elle ne bifurque pas
+      const gap: number[] = [];
+      let prev = k, cur = first;
+      for (let step = 0; step < 3; step++) {
+        if (out.has(cur)) { for (const c of gap) out.add(c); break; }
+        const n = nbrs(cur);
+        if (n.length !== 2 || step === 2) break;
+        gap.push(cur);
+        const next = n[0] === prev ? n[1] : n[0];
+        prev = cur; cur = next;
+      }
+    }
+    this.bridged = out;
+  }
+
   /** Cours en terre battue devant les ateliers, places, fermes : (x, z, rayon) rangés par case */
   /** Cases de place (aux premiers âges) : là où les routes se serrent en quadrillage, une place pleine, sans bandes de chemin */
   private plaza = new Set<number>();
@@ -342,7 +369,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       out.set(k, l);
     }
     const add = (k: number, x: number, z: number, r: number) => { const l = out.get(k) ?? []; l.push(x, z, r); out.set(k, l); };
-    const plain = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1 && w.bridgeY(x, z) === null;
+    const plain = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1 && !this.bridged.has(w.ci(x, z));
     // les places : un carré de 2 × 2 cases de route, une poche d'herbe prise entre des routes, et les routes coincées entre
     // deux cases de place ; tout cela se remplit d'un seul tenant au lieu d'un quadrillage de chemins et de trous d'herbe
     const P = this.plaza;
@@ -401,7 +428,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
   private streets(age: number) {
     const w = this.world, hw = HW[Math.min(age, 4)];
     const road = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1;
-    const flat = (x: number, z: number) => road(x, z) && w.bridgeY(x, z) === null;
+    const flat = (x: number, z: number) => road(x, z) && !this.bridged.has(w.ci(x, z));
     // quatre cases de route en carré : une place pavée ; un carré ou un rectangle plein de cases de route : un rond-point
     const plaza = new Set<number>();
     for (let cz = 0; cz < N - 1; cz++)
@@ -543,7 +570,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const w = this.world, amp = WIGGLE[Math.min(age, 4)];
     if (!amp) return [x, z];
     const cx = Math.floor(x), cz = Math.floor(z);
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1 && w.bridgeY(cx + dx, cz + dz) !== null) return [x, z];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && this.bridged.has(w.ci(cx + dx, cz + dz))) return [x, z];
     const f = 0.38;
     return [x + this.noise.noise2(x * f + 31.7, z * f - 4.3) * amp, z + this.noise.noise2(x * f - 12.9, z * f + 57.3) * amp];
   }
@@ -554,7 +581,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
         const k = w.ci(cx, cz);
-        if (!w.road[k] || w.bridgeY(cx, cz) !== null) continue;
+        if (!w.road[k] || this.bridged.has(k)) continue;
         const has = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
         const dirs = D4.filter(([dx, dz]) => has(dx, dz));
         const n = this.node(cx, cz, j), out: number[][] = [];
@@ -617,6 +644,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz)) { k += SNOWY[w.biome[w.ci(cx + dx, cz + dz)]] ?? 1; n++; }
       return snow * (n ? k / n : 1);
     };
+    this.findBridged();
     const lines = this.skeleton(age), hw0 = HW[a];
     // largeur qui varie un peu le long des chemins de terre (pas en ville)
     const half = (x: number, z: number) => hw0 * (1 + WIDTH_VAR[a] * this.noise.noise2(x * 0.6, z * 0.6));
@@ -734,7 +762,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       box(x0, y - 0.05, z0, x1, y, z1, deck);
       // rampes vers une route de la rive (plus basse ou plus haute que le tablier)
       const ramp = (dx: number, dz: number) => {
-        if (!has(dx, dz) || w.bridgeY(cx + dx, cz + dz) !== null) return;
+        if (!has(dx, dz) || this.bridged.has(w.ci(cx + dx, cz + dz))) return;
         const ex = dx > 0 ? cx + 1 : dx < 0 ? cx : 0, ez = dz > 0 ? cz + 1 : dz < 0 ? cz : 0;
         const fx = ex + dx * 0.45, fz = ez + dz * 0.45;
         // pente du tablier jusqu'à la route de la rive, à 0,45 case du bord
@@ -769,7 +797,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       const cells = ch.cells, hw = age >= 4 ? 0.34 : 0.32, th = 0.055;
       const xz = (c: number) => [c % N, Math.floor(c / N)];
       const i0 = ch.head ? 1 : 0, i1 = cells.length - (ch.tail ? 2 : 1);
-      const deckY = w.bridgeY(xz(cells[i0])[0], xz(cells[i0])[1])!;
+      // le tablier à la hauteur de l'eau la plus haute qu'il franchit (les cases sèches entre deux bras n'en ont pas)
+      const deckY = Math.max(...cells.slice(i0, i1 + 1).map((c) => w.bridgeY(c % N, Math.floor(c / N)) ?? -Infinity));
       const pts: number[][] = [];
       for (let i = i0; i <= i1; i++) { const [px, pz] = w.passPoint(cells, i); pts.push([px, deckY, pz]); }
       // aux deux bouts : rampe jusqu'au chemin de la rive, ou tablier qui s'arrête au-dessus de l'eau
@@ -849,7 +878,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       }
     };
     // ponts : un pont simple suit sa courbe ; un carrefour ou une boucle sur l'eau reste un ouvrage case par case
-    const isBridge = (cx: number, cz: number) => w.inCells(cx, cz) && w.road[w.ci(cx, cz)] === 1 && w.bridgeY(cx, cz) !== null;
+    const isBridge = (cx: number, cz: number) => w.inCells(cx, cz) && this.bridged.has(w.ci(cx, cz));
     const done = new Set<number>();
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
@@ -863,9 +892,10 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         }
         const ch = this.bridgeChain(comp);
         if (ch) { smoothBridge(ch); continue; }
+        const compY = Math.max(...comp.map((c) => w.bridgeY(c % N, Math.floor(c / N)) ?? -Infinity));
         for (const c of comp) {
           const x = c % N, z = Math.floor(c / N);
-          bridge(x, z, w.bridgeY(x, z)!, (dx, dz) => w.inCells(x + dx, z + dz) && w.road[w.ci(x + dx, z + dz)] === 1);
+          bridge(x, z, compY, (dx, dz) => w.inCells(x + dx, z + dz) && w.road[w.ci(x + dx, z + dz)] === 1);
         }
       }
     // cailloux au bord des chemins de terre (et quelques-uns dessus), pas en ville ni sous la neige

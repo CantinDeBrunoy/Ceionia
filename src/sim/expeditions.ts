@@ -1,6 +1,6 @@
 import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN } from '../world/world';
 import { Agents, Kit } from './agents';
-import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects } from './missions';
+import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { AGES, KINDS, Building } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
@@ -297,8 +297,8 @@ export class Expeditions {
     return null;
   }
 
-  start(m: Mission, ci: number): ActiveExpedition | null {
-    const c = m.choices[ci];
+  start(m: Mission, ci: number, age = m.age): ActiveExpedition | null {
+    const c = m.choices[ci] ? choiceAt(m.choices[ci], age) : undefined;
     if (!c || this.why(m, c)) return null;
     const base = this.base()!;
     // la troupe armée part de l'avant-poste et descend par l'entrée qu'il garde ; les autres vont où les mène leur mission
@@ -473,7 +473,11 @@ export class Expeditions {
     const o = a.wait?.options[i];
     if (!o || !this.canTake(a, i)) return false;
     a.riskK *= o.risk;
+    // l'avancement ne recule jamais : le temps déjà passé compte pour la même part du chantier allongé (ou raccourci) ;
+    // sinon la troupe, sous terre, était ramenée en arrière sur son chemin
+    const before = Math.max(1, a.c.work + a.extra);
     a.extra += o.work ?? 0;
+    if (a.phase === 'work') a.t *= Math.max(1, a.c.work + a.extra) / before;
     if (o.bonus) a.bonus.push(...o.bonus);
     a.hurt += o.hurt ?? 0;
     a.notes.push(o.text);

@@ -31,7 +31,7 @@ export interface KindDef {
 export const KINDS: Record<KindId, KindDef> = {
   house: {
     id: 'house', size: 1, minAge: 0, icon: '🏠', cat: 'home',
-    names: ['Hutte', 'Cabane', 'Maison à colombages', 'Maison de brique', 'Résidence'],
+    names: ['Hutte', 'Maison antique', 'Maison à colombages', 'Maison de brique', 'Résidence'],
     desc: 'Loge des habitants. Les maisons accolées fusionnent.',
     housing: [3, 4, 6, 9, 14],
   },
@@ -349,7 +349,7 @@ export interface AgeDef {
 
 export const AGES: AgeDef[] = [
   { name: 'Préhistoire', tagline: 'Feux de camp et huttes', reqPop: 0, reqKinds: {} },
-  { name: 'Antiquité', tagline: 'Cabanes, temples et agoras', reqPop: 12, reqKinds: { house: 4, farm: 1, well: 1, workshop: 1 } },
+  { name: 'Antiquité', tagline: 'Maisons de tuiles, temples et agoras', reqPop: 12, reqKinds: { house: 4, farm: 1, well: 1, workshop: 1 } },
   { name: 'Médiéval', tagline: 'Colombages, églises et châteaux', reqPop: 30, reqKinds: { house: 8, temple: 1, workshop: 2, gather: 1 } },
   { name: 'Industriel', tagline: 'Briques, cheminées et gares', reqPop: 60, reqKinds: { house: 12, temple: 1, mill: 1, landmark: 1, gather: 2, health: 1 }, reqOre: 12 },
   { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2, school: 1 }, reqOre: 30 },

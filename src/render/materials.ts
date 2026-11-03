@@ -48,6 +48,30 @@ addLights(mats.glow);
 addSnow(mats.body);
 addSnow(mats.glow);
 
+/** Temps (s) qui anime les personnages des bâtiments */
+export const CROWD = { time: { value: 0 } };
+
+/**
+ * Personnages des bâtiments : chaque pièce tourne autour de son pivot (`aPivot`) selon son axe (`aAxis`) d'un angle qui oscille
+ * (`aAnim` : amplitude, fréquence, phase) et sautille (`aAnim.w` : hauteur du rebond, deux fois par battement)
+ */
+export const crowdMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 });
+crowdMat.onBeforeCompile = (sh) => {
+  sh.uniforms.uCrowdT = CROWD.time;
+  sh.vertexShader = `attribute vec3 aPivot;
+attribute vec3 aAxis;
+attribute vec4 aAnim;
+uniform float uCrowdT;
+vec3 crowdRot(vec3 v, float a) { float c = cos(a), s = sin(a); return v * c + cross(aAxis, v) * s + aAxis * dot(aAxis, v) * (1.0 - c); }
+` + sh.vertexShader
+    .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+  objectNormal = crowdRot(objectNormal, aAnim.x * sin(uCrowdT * aAnim.y * 6.2832 + aAnim.z));`)
+    .replace('#include <begin_vertex>', `#include <begin_vertex>
+  transformed = aPivot + crowdRot(transformed - aPivot, aAnim.x * sin(uCrowdT * aAnim.y * 6.2832 + aAnim.z));
+  transformed.y += aAnim.w * abs(sin(uCrowdT * aAnim.y * 6.2832 + aAnim.z));`);
+};
+crowdMat.customProgramCacheKey = () => 'crowd';
+
 export function setGhostValid(ok: boolean) {
   mats.ghost.emissive.setHex(ok ? 0x30e060 : 0xff3a3a);
 }

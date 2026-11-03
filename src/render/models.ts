@@ -11,9 +11,9 @@ import { hash2, smoothstep } from '../core/rng';
  * maisons de brique, usines et éolienne : City Kits de Kenney ; résidences et bureaux modernes : KayKit City Builder Bits
  */
 const IMPORTED: Partial<Record<KindId, (ModelName[] | null)[]>> = {
-  house: [null, ['b_cottage_red', 'b_cottage_yellow'],
+  house: [null, null,
     ['b_house_blue', 'b_house_red', 'b_house_green', 'b_house_yellow', 'b_cottage_blue', 'b_cottage_green'],
-    ['b_brick_c', 'b_brick_d', 'b_brick_j', 'b_brick_o', 'b_brick_u'], ['b_flat_a', 'b_flat_b', 'b_flat_d', 'b_flat_h']],
+    null, ['b_flat_a', 'b_flat_b', 'b_flat_d', 'b_flat_h']],
   well: [null, ['b_well_red'], ['b_well_blue']],
   farm: [null, ['a_farm', 'a_farm2']],
   workshop: [null, null, ['b_forge_blue', 'b_forge_red'], null, ['b_office_c', 'b_office_e', 'b_office_f', 'b_office_g']],
@@ -209,7 +209,9 @@ export interface Model {
    */
   vane?: { pivot: [number, number]; face: number; whole: boolean; geo: THREE.BufferGeometry | null } | null;
   /** pièces qui se balancent (drapeaux, bannières, enseignes pendues, linge, cloches) autour d'un axe passant par `pivot` */
-  sways?: { geo: THREE.BufferGeometry; pivot: [number, number, number]; axis: [number, number, number]; amp: number; freq: number; spin?: number }[];
+  sways?: { geo: THREE.BufferGeometry; glow?: THREE.BufferGeometry | null; pivot: [number, number, number]; axis: [number, number, number]; amp: number; freq: number; spin?: number; steady?: boolean }[];
+  /** personnages animés (voir `animPart`) : une seule géométrie, que le shader des foules anime */
+  crowd?: THREE.BufferGeometry | null;
 }
 
 /**
@@ -223,12 +225,42 @@ function sink(h: number) { sinkOut = Math.max(sinkOut, h); }
  * Pièces du modèle en cours qui se balancent : dessinées autour de leur `pivot` (en 0, 0, 0), elles oscillent autour de `axis`
  * d'au plus `amp` radians, `freq` fois par seconde environ (plus fort quand le vent forcit)
  */
-let swayOut: { p: Parts; pivot: [number, number, number]; axis: [number, number, number]; amp: number; freq: number; spin?: number }[] = [];
+let swayOut: { p: Parts; pivot: [number, number, number]; axis: [number, number, number]; amp: number; freq: number; spin?: number; steady?: boolean }[] = [];
 function sway(pivot: [number, number, number], axis: [number, number, number], amp: number, freq: number) {
   const s = { p: new Parts(), pivot, axis, amp, freq };
   swayOut.push(s);
   return s.p;
 }
+/** Pièce qui se balance comme un manège (bateau pirate, nacelle), à son rythme, sans dépendre du vent */
+function swing(pivot: [number, number, number], axis: [number, number, number], amp: number, freq: number) {
+  const s = { p: new Parts(), pivot, axis, amp, freq, steady: true };
+  swayOut.push(s);
+  return s.p;
+}
+/**
+ * Personnages animés du modèle en cours : chaque pièce (corps et tête, bras, jambes) est dessinée à part, avec son pivot, son
+ * axe, l'amplitude, la fréquence et la phase de son balancement et la hauteur de son rebond ; le shader des foules les anime
+ * (`crowdMat`). Elles sont réunies dans `Model.crowd`. Seuls les personnages posés sur le modèle lui-même s'animent (pas ceux
+ * d'une pièce qui tourne ou se balance déjà)
+ */
+let crowdOut: THREE.BufferGeometry[] = [];
+let mainParts: Parts | null = null;
+type V3 = [number, number, number];
+function animPart(draw: (q: Parts) => void, pivot: V3, axis: V3, amp: number, freq: number, phase: number, bounce = 0) {
+  const q = new Parts();
+  draw(q);
+  if (!q.body.length) return;
+  const g = q.build(false).body, n = g.attributes.position.count;
+  const piv = new Float32Array(n * 3), ax = new Float32Array(n * 3), an = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) { piv.set(pivot, i * 3); ax.set(axis, i * 3); an.set([amp, freq, phase, bounce], i * 4); }
+  g.setAttribute('aPivot', new THREE.BufferAttribute(piv, 3));
+  g.setAttribute('aAxis', new THREE.BufferAttribute(ax, 3));
+  g.setAttribute('aAnim', new THREE.BufferAttribute(an, 4));
+  crowdOut.push(g);
+}
+/** Attitude d'un personnage : il flâne et discute (et gesticule), il acclame bras levés, il court sur place */
+type Pose = 'idle' | 'cheer' | 'run';
+
 /** Pièce du modèle en cours qui tourne sans fin autour de `axis` passant par `pivot`, à `speed` tours par seconde (manèges) */
 function turning(pivot: [number, number, number], axis: [number, number, number], speed: number) {
   const s = { p: new Parts(), pivot, axis, amp: 0, freq: 0, spin: speed };
@@ -456,6 +488,8 @@ function house(p: Parts, age: number, o: ModelOpts) {
     return;
   }
   if (age === 2) { medievalHouse(p, o, x0, x1, cx, d, zc, rw, rcx); return; }
+  if (age === 3) { industrialHouse(p, o, x0, x1, cx, d, zc, rw, rcx); return; }
+  if (age === 1) { antiqueHouse(p, o, x0, x1, cx, d, zc, rw, rcx); return; }
   const h = age === 3 ? 0.55 : 0.32;
   const wc = age === 3 ? C.brick : wall;
   const rc = age === 3 ? C.slate : roofC;
@@ -647,6 +681,213 @@ function prehistoricHut(p: Parts, v: number) {
  * Maison du Moyen Âge : rez-de-chaussée de pierre aux angles chaînés, étage à colombages en encorbellement, toit raide
  * bleu-vert, bleu ou de tuile ; selon la variante, une tourelle d'angle à toit pointu ou une lucarne
  */
+/**
+ * Maison de l'Antiquité, qui s'accole à ses voisines en rangée : domus aux murs enduits (bandeau rouge en soubassement,
+ * porte cloutée entre deux pilastres, fenêtres hautes à barreaux, toit de tuiles et sa cheminée de l'âtre, amphores à la
+ * porte, treille et ses raisins), taberna à étage (comptoir de marbre et ses jarres, amphores sur l'étagère, volets repliés,
+ * enseigne peinte, toile tendue, balcon de bois à l'étage) ou maison blanche à la grecque (porte et volets bleus, toit en
+ * terrasse et son parapet, demi-toit de tuiles, pots de fleurs, escalier extérieur) ; devant, si elle ne donne pas sur la
+ * rue, une cour fermée d'un muret, son olivier ou son cyprès
+ */
+function antiqueHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number, d: number, zc: number, rw: number, rcx: number) {
+  const kind = o.v % 3, w = x1 - x0, zf = zc + d / 2, side = o.v % 2 ? 1 : -1;
+  const plaster = kind === 2 ? 0xf6f2ea : [0xf0e4c8, 0xe8c89a, 0xf0dcb0, 0xead2a8, 0xe2b48a, 0xf2e6cc][o.v % 6];
+  const red = 0xa8443a, wood = 0x6a4a34, stoneC = 0xd8d0c0;
+  const H = kind === 1 ? 0.46 : 0.3;
+  // soubassement de pierre, murs enduits, corniche
+  p.box(w + 0.012, 0.04, d + 0.012, cx, 0, zc, stoneC);
+  p.box(w, H - 0.04, d, cx, 0.04, zc, plaster);
+  for (let y = 0.1; y < H - 0.03; y += 0.07) p.box(w, 0.004, 0.006, cx, y, zf + 0.002, dark(plaster, 0.93));
+  // fenêtre haute et étroite à barreaux (ou à volets de bois)
+  const slit = (x: number, y: number, shut = 0) => {
+    p.box(0.05, 0.07, 0.012, x, y, zf + 0.003, 0x3a2c24);
+    p.box(0.06, 0.012, 0.03, x, y - 0.012, zf + 0.01, stoneC);
+    if (shut) for (const s of [-1, 1]) p.box(0.03, 0.075, 0.008, x + s * 0.042, y - 0.003, zf + 0.008, shut);
+    else for (const dx of [-0.012, 0.012]) p.box(0.005, 0.07, 0.006, x + dx, y, zf + 0.012, 0x2a2a2e);
+  };
+  if (kind === 0) {
+    // domus : soubassement peint en rouge, porte cloutée entre deux pilastres, fenêtres hautes à barreaux
+    p.box(w, 0.07, 0.006, cx, 0.04, zf + 0.002, red);
+    const dx = cx;
+    for (const s of [-1, 1]) { p.box(0.025, 0.24, 0.025, dx + s * 0.08, 0.04, zf + 0.01, 0xf4eee0); p.box(0.034, 0.02, 0.03, dx + s * 0.08, 0.28, zf + 0.01, 0xf4eee0); }
+    p.box(0.2, 0.025, 0.03, dx, 0.28, zf + 0.012, 0xf4eee0);
+    p.box(0.13, 0.22, 0.016, dx, 0.04, zf + 0.004, wood);
+    p.box(0.004, 0.22, 0.02, dx, 0.04, zf + 0.008, dark(wood, 0.7));
+    for (let k = 0; k < 6; k++) p.box(0.008, 0.008, 0.006, dx + (k % 2 ? 0.03 : -0.03), 0.08 + Math.floor(k / 2) * 0.06, zf + 0.014, C.gold);
+    p.box(0.17, 0.03, 0.06, dx, 0, zf + 0.03, stoneC);
+    for (const s of [-1, 1]) slit(cx + s * w * 0.32, 0.18);
+    // amphores à la porte
+    for (const [s, h] of [[-1, 0.07], [1, 0.06]]) { p.cyl(0.018, 0.03, h, 8, dx + s * 0.15, 0.01, zf + 0.05, C.terracotta); p.cyl(0.01, 0.016, 0.03, 6, dx + s * 0.15, 0.01 + h, zf + 0.05, C.terracotta); }
+  } else if (kind === 1) {
+    // taberna : grande baie de la boutique, comptoir de marbre et ses jarres, étagère d'amphores, volets repliés, enseigne
+    const bx = cx - side * w * 0.12, bw = w * 0.55;
+    p.box(bw, 0.2, 0.012, bx, 0.04, zf + 0.003, 0x2a221c);
+    p.box(bw * 0.8, 0.09, 0.08, bx, 0.04, zf + 0.04, 0xece6da); p.box(bw * 0.82, 0.014, 0.09, bx, 0.13, zf + 0.04, 0xf8f4ec);
+    for (const k of [-1, 1]) p.cyl(0.02, 0.02, 0.008, 8, bx + k * bw * 0.2, 0.14, zf + 0.04, 0x8a4a2a);
+    for (let k = 0; k < 4; k++) p.cyl(0.014, 0.02, 0.05, 6, bx - bw * 0.3 + k * bw * 0.2, 0.16, zf + 0.008, [C.terracotta, 0xc8a070][k % 2]);
+    for (const s of [-1, 1]) p.box(0.02, 0.2, 0.05, bx + s * (bw / 2 + 0.012), 0.04, zf + 0.02, wood);
+    p.box(bw, 0.035, 0.008, bx, 0.25, zf + 0.004, red); for (let k = 0; k < 6; k++) p.box(0.02, 0.016, 0.004, bx - bw * 0.35 + k * bw * 0.14, 0.26, zf + 0.009, 0xf4eee0);
+    p.add(new THREE.BoxGeometry(bw + 0.04, 0.008, 0.12), bx, 0.235, zf + 0.06, 0xe8dcc0, 0, false, 0, 0.35);
+    // porte de l'escalier qui monte au logement, à côté
+    p.box(0.08, 0.18, 0.014, cx + side * w * 0.33, 0.04, zf + 0.004, wood);
+    // l'étage : fenêtres à volets, balcon de bois sur ses poutres
+    for (const sx of [-0.22, 0.22]) slit(cx + sx * (w > 0.9 ? 1.25 : 1), 0.34, 0x7a5a3a);
+    p.box(w * 0.86, 0.014, 0.08, cx, 0.29, zf + 0.04, wood);
+    for (let k = 0; k <= 4; k++) p.box(0.016, 0.016, 0.08, cx - w * 0.4 + k * w * 0.2, 0.275, zf + 0.04, dark(wood, 0.8));
+    p.box(w * 0.86, 0.01, 0.01, cx, 0.36, zf + 0.078, wood);
+    for (let x = -w * 0.42; x <= w * 0.42 + 1e-6; x += 0.05) p.box(0.008, 0.07, 0.008, cx + x, 0.3, zf + 0.078, wood);
+  } else {
+    // maison blanche : porte et volets bleus, pots de géraniums
+    const blue = [0x3a6ab8, 0x2e8aa8][o.v % 2];
+    p.box(0.11, 0.2, 0.016, cx + side * w * 0.2, 0.04, zf + 0.004, blue);
+    p.box(0.15, 0.03, 0.06, cx + side * w * 0.2, 0, zf + 0.03, stoneC);
+    slit(cx - side * w * 0.18, 0.16, blue);
+    for (const dx of [-0.05, 0.05]) { p.cyl(0.018, 0.013, 0.03, 6, cx - side * w * 0.18 + dx, 0.115, zf + 0.022, C.terracotta); p.sphere(0.02, cx - side * w * 0.18 + dx, 0.15, zf + 0.022, 0xd84a3e, 0, 0.8); }
+  }
+  if (kind === 2) {
+    // toit en terrasse : parapet blanc, demi-toit de tuiles au fond, pots sur la terrasse ; escalier extérieur au bout de la rangée
+    p.box(w, 0.012, d, cx, H, zc, 0xe8e2d4);
+    for (const z of [zf - 0.02, zc - d / 2 + 0.02]) p.box(w, 0.05, 0.03, cx, H, z, plaster);
+    for (const s of [-1, 1]) if (s < 0 ? !o.L : !o.R) p.box(0.03, 0.05, d, s < 0 ? x0 + 0.015 : x1 - 0.015, H, zc, plaster);
+    tiledShed(p, rcx, H + 0.07, zc - d / 4, rw, d / 2 + 0.04, 0.32);
+    for (const dx of [-0.15, 0.1]) { p.cyl(0.025, 0.018, 0.04, 6, cx + dx, H + 0.012, zf - 0.08, C.terracotta); p.sphere(0.03, cx + dx, H + 0.07, zf - 0.08, 0x5f9a4a, 0, 0.9); }
+    if (!o.R) for (let k = 0; k < 6; k++) p.box(0.07, 0.03, 0.06, x1 + 0.035, k * 0.05, zf - 0.04 - k * 0.06, plaster);
+  } else {
+    roof(p, cx, H, zc, { w, d, h: 0.14, color: C.terracotta, wall: plaster, len: rw, dx: rcx - cx, tiles: true });
+    // conduit de l'âtre qui fume
+    const chx = x1 - 0.1;
+    p.box(0.07, 0.16, 0.07, chx, H + 0.02, zc - 0.08, plaster); p.box(0.09, 0.02, 0.09, chx, H + 0.18, zc - 0.08, C.terracotta);
+    smoke(chx, H + 0.22, zc - 0.08, 0);
+  }
+  // treille sur le flanc libre de la domus : poteaux, perches, feuilles de vigne et grappes
+  if (kind === 0 && !o.R && !o.F) {
+    for (const z of [zf + 0.02, zf + 0.2]) p.box(0.016, 0.24, 0.016, x1 - 0.04, 0, z, wood);
+    p.box(0.016, 0.016, 0.22, x1 - 0.04, 0.24, zf + 0.11, wood);
+    for (let k = 0; k < 5; k++) p.sphere(0.035, x1 - 0.06 - (k % 2) * 0.05, 0.25, zf + 0.03 + k * 0.045, 0x5f9a4a, 0, 0.6);
+    for (const z of [zf + 0.08, zf + 0.16]) p.sphere(0.014, x1 - 0.05, 0.215, z, 0x6a3a8a, 0, 1.4);
+  }
+  // cour sur l'avant quand la maison ne donne pas sur la rue : muret enduit, passage, olivier ou cyprès
+  if (!o.F) {
+    const gx = kind === 2 ? cx + side * w * 0.2 : cx + (kind === 1 ? side * w * 0.33 : 0);
+    p.box(w, 0.006, 0.17, cx, 0, zf + 0.1, kind === 2 ? 0xe8e2d4 : 0xcdb890);
+    for (const [a, b] of [[x0, gx - 0.07], [gx + 0.07, x1]] as [number, number][]) if (b - a > 0.02) p.box(b - a, 0.08, 0.03, (a + b) / 2, 0, zf + 0.18, kind === 2 ? plaster : stoneC);
+    if (o.v % 2) cypress(p, cx - side * w * 0.32, zf + 0.1, 0.26);
+    else tree(p, cx - side * w * 0.32, zf + 0.1, 0.8, 0x8aa86a);
+  }
+}
+
+/**
+ * Maison de l'âge industriel, qui s'accole à ses voisines en rangée : maison ouvrière de brique (bandeau, linteaux et appuis
+ * de pierre, fenêtres à guillotine, porte à imposte et sa marche, souche de cheminée aux pots de terre sur le mur mitoyen,
+ * parfois une lucarne), maison de ville en pierre blonde (chaînes d'angle, persiennes, balcon de fer forgé, toit mansardé à
+ * lucarnes, corniche) ou maison à boutique (devanture peinte et sa vitrine éclairée, enseigne, store rayé, jardinières à
+ * l'étage) ; devant, si elle ne donne pas sur la rue, une courette et sa grille de fonte
+ */
+function industrialHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number, d: number, zc: number, rw: number, rcx: number) {
+  const kind = o.v % 3, w = x1 - x0, zf = zc + d / 2, H = 0.5;
+  const stone = 0xe8dfcc, white = 0xf2efe6, iron = 0x2a2a2e;
+  const brick = [0xa85e50, 0x9a5446, 0xb06a52, 0x96584a, 0xa86452, 0x9e5a4c][o.v % 6];
+  const wall = kind === 1 ? [0xe2d6bc, 0xd8c8a8][o.v % 2] : brick;
+  const doorC = [0x2c4a3e, 0x6a2a2a, 0x2a3a5a, 0x3a3a3e, 0x5a2a4a, 0x2c4a3e][o.v % 6];
+  const side = o.v % 2 ? 1 : -1, spread = w > 0.9 ? 1.25 : 1;
+  // fenêtre à guillotine : cadre blanc, vitres (allumées la nuit), traverse et meneau, appui et linteau de pierre
+  const sash = (x: number, y: number, ww = 0.09, hh = 0.13, shutters = 0) => {
+    p.box(ww + 0.02, hh + 0.02, 0.012, x, y - 0.01, zf + 0.002, white);
+    p.box(ww, hh, 0.016, x, y, zf + 0.004, C.win, 0, true);
+    p.box(ww, 0.008, 0.02, x, y + hh * 0.5, zf + 0.008, white); p.box(0.006, hh, 0.02, x, y, zf + 0.008, white);
+    p.box(ww + 0.05, 0.018, 0.04, x, y - 0.028, zf + 0.012, stone);
+    p.box(ww + 0.04, 0.028, 0.018, x, y + hh + 0.006, zf + 0.006, stone);
+    if (kind !== 1) p.box(0.022, 0.03, 0.02, x, y + hh + 0.004, zf + 0.01, white);
+    if (shutters) for (const s of [-1, 1]) { p.box(ww * 0.5, hh + 0.01, 0.008, x + s * (ww * 0.75 + 0.012), y - 0.005, zf + 0.008, shutters); for (let k = 1; k < 5; k++) p.box(ww * 0.5, 0.004, 0.012, x + s * (ww * 0.75 + 0.012), y - 0.005 + k * (hh / 5), zf + 0.01, dark(shutters, 0.8)); }
+  };
+  // porte à imposte : encadrement, battant, imposte vitrée, heurtoir, marche
+  const door = (x: number) => {
+    p.box(0.15, 0.24, 0.012, x, 0.04, zf + 0.002, kind === 1 ? stone : white);
+    p.box(0.11, 0.18, 0.02, x, 0.04, zf + 0.004, doorC);
+    for (const y of [0.08, 0.15]) p.box(0.08, 0.05, 0.004, x, y, zf + 0.015, dark(doorC, 0.85));
+    archTop(p, x, 0.225, zf + 0.008, 0.05, C.win, true);
+    p.box(0.012, 0.012, 0.01, x + 0.03, 0.13, zf + 0.018, C.gold);
+    p.box(0.17, 0.04, 0.07, x, 0, zf + 0.035, 0x9a948a);
+  };
+  // soubassement, murs, bandeau, corniche
+  p.box(w + 0.012, 0.05, d + 0.012, cx, 0, zc, 0x7a6e64);
+  p.box(w, H - 0.05, d, cx, 0.05, zc, wall);
+  if (kind !== 1) stones(p, cx, zf, w, 0.05, H, 0, dark(brick, 0.85), 0.38, 450 + o.v);
+  else {
+    for (let y = 0.1; y < H - 0.03; y += 0.06) p.box(w, 0.004, 0.006, cx, y, zf + 0.002, dark(wall, 0.9));
+    if (!o.L) quoins(p, x0, zf, 0.05, H, -1, 1, 0xf2ead8);
+    if (!o.R) quoins(p, x1, zf, 0.05, H, 1, 1, 0xf2ead8);
+  }
+  p.box(w + 0.01, 0.022, d + 0.012, cx, 0.255, zc, kind === 1 ? 0xf2ead8 : dark(brick, 0.72));
+  p.box(w + 0.02, 0.03, d + 0.03, cx, H - 0.025, zc, kind === 1 ? 0xf2ead8 : stone);
+  // souche de cheminée sur le mur mitoyen de droite, pots de terre cuite, fumée
+  const chx = x1 - 0.07;
+  const top = kind === 1 ? H + 0.36 : H + 0.34;
+  p.box(0.1, top - H + 0.02, 0.15, chx, H - 0.02, zc - 0.02, kind === 1 ? 0xd8c8a8 : dark(brick, 0.9));
+  p.box(0.12, 0.025, 0.17, chx, top, zc - 0.02, stone);
+  for (const dz of [-0.045, 0, 0.045]) p.cyl(0.013, 0.017, 0.05, 6, chx, top + 0.025, zc - 0.02 + dz, 0xc0704a);
+  smoke(chx, top + 0.09, zc - 0.02, 0);
+  if (kind === 1) {
+    // maison de ville : hautes fenêtres à persiennes, balcon de fer forgé, porte au milieu, toit mansardé et ses lucarnes
+    const sh = [0x7a8a96, 0x5a7a5a][o.v % 2];
+    for (const sx of [-0.22, 0.22]) { sash(cx + sx * spread, 0.09, 0.08, 0.14, sh); sash(cx + sx * spread, 0.3, 0.08, 0.15, sh); }
+    door(cx);
+    p.box(w * 0.78, 0.014, 0.06, cx, 0.285, zf + 0.03, stone);
+    p.box(w * 0.78, 0.008, 0.008, cx, 0.35, zf + 0.058, iron);
+    for (let x = -w * 0.38; x <= w * 0.38 + 1e-6; x += 0.035) p.box(0.005, 0.06, 0.005, cx + x, 0.29, zf + 0.058, iron);
+    for (const s of [-1, 1]) p.box(0.006, 0.06, 0.06, cx + s * w * 0.39, 0.29, zf + 0.03, iron);
+    for (const sg of [1, -1]) p.add(new THREE.BoxGeometry(rw, 0.21, 0.03), rcx, H + 0.09, zc + sg * (d / 2 - 0.05), C.slate, 0, false, 0, -sg * 0.32);
+    p.box(rw - 0.04, 0.025, d - 0.16, rcx, H + 0.19, zc, dark(C.slate, 0.85));
+    p.box(rw, 0.02, d + 0.05, rcx, H + 0.005, zc, 0xf2ead8);
+    for (const s of [-1, 1]) if (s < 0 ? !o.L : !o.R) p.box(0.02, 0.2, d - 0.1, s < 0 ? x0 + 0.02 : x1 - 0.02, H, zc, C.slate);
+    for (const sx of [-0.2, 0.2]) {
+      const x = cx + sx * spread;
+      p.box(0.08, 0.1, 0.06, x, H + 0.04, zf - 0.03, 0xf2ead8); p.box(0.05, 0.065, 0.004, x, H + 0.06, zf + 0.002, C.win, 0, true);
+      p.gable(0.09, 0.04, 0.07, x, H + 0.14, zf - 0.03, C.slate);
+    }
+  } else {
+    if (kind === 2) {
+      // boutique : devanture peinte, vitrine éclairée et ses marchandises, porte vitrée, enseigne, store rayé
+      const shop = [0x2c4a3e, 0x6a2a2a, 0x2a3a5a][o.v % 3], gold = C.gold;
+      p.box(w * 0.92, 0.22, 0.03, cx, 0.03, zf + 0.012, shop);
+      p.box(w * 0.55, 0.13, 0.012, cx - side * w * 0.12, 0.07, zf + 0.03, C.win, 0, true);
+      for (let k = 0; k < 4; k++) p.box(0.03, 0.025, 0.02, cx - side * w * 0.12 - w * 0.2 + k * w * 0.13, 0.075, zf + 0.022, [0xd84a3e, 0xf2c23a, 0x3c7fd8, 0x4fa860][(k + o.v) % 4]);
+      p.box(0.09, 0.17, 0.012, cx + side * w * 0.3, 0.035, zf + 0.03, dark(shop, 0.8)); p.box(0.06, 0.09, 0.004, cx + side * w * 0.3, 0.1, zf + 0.037, C.win, 0, true);
+      p.box(w * 0.8, 0.05, 0.014, cx, 0.2, zf + 0.03, dark(shop, 0.75));
+      for (let k = 0; k < 7; k++) p.box(0.022, 0.026, 0.004, cx - 0.1 + k * 0.033, 0.212, zf + 0.039, gold);
+      const awn = [0xd84a3e, 0x3a6ab8, 0x4fa860][(o.v + 1) % 3];
+      for (let k = 0; k < 8; k++) p.add(new THREE.BoxGeometry((w * 0.86) / 8 + 0.002, 0.008, 0.13), cx - w * 0.43 + (k + 0.5) * (w * 0.86) / 8, 0.17, zf + 0.09, k % 2 ? white : awn, 0, false, 0, 0.5);
+      for (const sx of [-0.22, 0.22]) {
+        const x = cx + sx * spread;
+        sash(x, 0.3);
+        p.box(0.11, 0.025, 0.035, x, 0.272, zf + 0.03, 0x6a4a34);
+        for (let k = 0; k < 3; k++) p.sphere(0.014, x - 0.035 + k * 0.035, 0.302, zf + 0.03, [0xd84a3e, 0xf2a6c8, 0xf2d24a][k], 0, 0.9);
+      }
+    } else {
+      // maison ouvrière : la porte d'un côté, une fenêtre de l'autre, deux à l'étage
+      door(cx + side * w * 0.27);
+      sash(cx - side * w * 0.16, 0.09, 0.11, 0.13);
+      for (const sx of [-0.22, 0.22]) sash(cx + sx * spread, 0.31);
+      p.box(0.03, 0.04, 0.006, cx + side * w * 0.27 + side * 0.1, 0.17, zf + 0.004, 0x2a5aa8);
+    }
+    roof(p, cx, H, zc, { w, d, h: 0.24, color: C.slate, wall, len: rw, dx: rcx - cx, courses: true });
+    // une lucarne à fronton sur une maison sur deux
+    if (o.v % 2 === 0) {
+      const lx = cx - side * w * 0.05, lz = zf - 0.08, ly = H;
+      p.box(0.1, 0.14, 0.1, lx, ly, lz, wall); p.box(0.06, 0.07, 0.004, lx, ly + 0.05, lz + 0.052, C.win, 0, true);
+      p.box(0.07, 0.012, 0.02, lx, ly + 0.038, lz + 0.056, stone);
+      p.gable(0.1, 0.05, 0.12, lx, ly + 0.14, lz + 0.01, C.slate);
+    }
+  }
+  // courette sur l'avant, quand la maison ne donne pas sur la rue : dalles, grille de fonte et son portillon, pot de fleurs
+  if (!o.F) {
+    p.box(w, 0.008, 0.16, cx, 0, zf + 0.1, 0xb8b0a0);
+    for (let x = x0 + 0.02; x <= x1 - 0.02 + 1e-6; x += 0.05) { if (Math.abs(x - (cx + side * w * 0.27)) < 0.07) continue; p.box(0.006, 0.09, 0.006, x, 0, zf + 0.18, iron); p.cone(0.006, 0.014, 4, x, 0.09, zf + 0.18, iron); }
+    p.box(w, 0.008, 0.008, cx, 0.07, zf + 0.18, iron);
+    p.cyl(0.022, 0.016, 0.03, 6, cx - side * w * 0.3, 0.008, zf + 0.09, C.terracotta); p.sphere(0.024, cx - side * w * 0.3, 0.045, zf + 0.09, 0xd84a3e, 0, 0.8);
+  }
+}
+
 function medievalHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number, d: number, zc: number, rw: number, rcx: number) {
   const w = x1 - x0, stone = [0xd3cbbd, 0xc6beb0][o.v % 2], wall = [0xf4ead8, 0xf1e4cc, 0xf6efe2][o.v % 3];
   const rc = [0x5f9a94, 0x6f86c4, 0x5f8f7a, 0xb06a52][o.v % 4], beam = C.darkwood, shutter = SHUTTERS[o.v % 4];
@@ -3421,13 +3662,42 @@ function barberPole(p: Parts, x: number, y: number, z: number, h: number) {
 }
 
 /** Petit personnage figé (client, barbier) : jambes, buste, tête et cheveux ; `sit` : assis */
-function figure(p: Parts, x: number, z: number, body: number, ry = 0, sit = false, hair = 0x4a3426) {
+function figure(p: Parts, x: number, z: number, body: number, ry = 0, sit = false, hair = 0x4a3426, pose: Pose = 'idle') {
   const c = Math.cos(ry), s = Math.sin(ry), P = (u: number, w: number): [number, number] => [x + u * c + w * s, z - u * s + w * c];
   const y0 = sit ? 0.07 : 0.012;
-  if (!sit) for (const u of [-0.014, 0.014]) { const [px, pz] = P(u, 0); p.box(0.02, 0.07, 0.022, px, 0.012, pz, 0x3c3c48, ry); }
-  else { const [px, pz] = P(0, 0.03); p.box(0.05, 0.02, 0.06, px, 0.07, pz, 0x3c3c48, ry); }
-  { const [px, pz] = P(0, 0); p.box(0.055, 0.07, 0.035, px, y0 + (sit ? 0.01 : 0.07), pz, body, ry); }
-  { const [px, pz] = P(0, 0); p.box(0.032, 0.032, 0.032, px, y0 + (sit ? 0.085 : 0.145), pz, 0xe8b894, ry); p.box(0.034, 0.012, 0.034, px, y0 + (sit ? 0.112 : 0.172), pz, hair, ry); }
+  if (p !== mainParts) {
+    if (!sit) for (const u of [-0.014, 0.014]) { const [px, pz] = P(u, 0); p.box(0.02, 0.07, 0.022, px, 0.012, pz, 0x3c3c48, ry); }
+    else { const [px, pz] = P(0, 0.03); p.box(0.05, 0.02, 0.06, px, 0.07, pz, 0x3c3c48, ry); }
+    { const [px, pz] = P(0, 0); p.box(0.055, 0.07, 0.035, px, y0 + (sit ? 0.01 : 0.07), pz, body, ry); }
+    { const [px, pz] = P(0, 0); p.box(0.032, 0.032, 0.032, px, y0 + (sit ? 0.085 : 0.145), pz, 0xe8b894, ry); p.box(0.034, 0.012, 0.034, px, y0 + (sit ? 0.112 : 0.172), pz, hair, ry); }
+    return;
+  }
+  // chacun à son rythme : il discute en gesticulant, lève le bras, ou se balance d'un pied sur l'autre
+  const right: V3 = [c, 0, -s], fwd: V3 = [s, 0, c];
+  const h = hash2(Math.round(x * 97 + 500), Math.round(z * 89 + 500), 23), ph = h * 6.28, f = 0.35 + h * 0.4;
+  const run = pose === 'run', cheer = pose === 'cheer', fq = run ? 1.5 + h * 0.4 : cheer ? 1.2 + h * 0.6 : f, bob = run ? 0.012 : 0;
+  // jambes
+  if (!sit) for (const [i, u] of [[0, -0.014], [1, 0.014]]) {
+    const [px, pz] = P(u, 0);
+    const leg = (q: Parts) => q.box(0.02, 0.07, 0.022, px, 0.012, pz, 0x3c3c48, ry);
+    if (run) animPart(leg, [px, 0.082, pz], right, 0.55, fq, ph + i * Math.PI, bob); else leg(p);
+  } else { const [px, pz] = P(0, 0.03); p.box(0.05, 0.02, 0.06, px, 0.07, pz, 0x3c3c48, ry); }
+  // corps et tête : il se balance (de côté debout, d'avant en arrière assis)
+  const [tx, tz] = P(0, 0), ysh = y0 + (sit ? 0.075 : 0.135);
+  animPart((q) => {
+    q.box(0.055, 0.07, 0.035, tx, y0 + (sit ? 0.01 : 0.07), tz, body, ry);
+    q.box(0.032, 0.032, 0.032, tx, y0 + (sit ? 0.085 : 0.145), tz, 0xe8b894, ry);
+    q.box(0.034, 0.012, 0.034, tx, y0 + (sit ? 0.112 : 0.172), tz, hair, ry);
+  }, [tx, y0, tz], sit ? right : fwd, run ? 0.04 : sit ? 0.05 : 0.045, fq, ph, bob);
+  // bras : pendants (ils gesticulent en parlant), levés pour acclamer ou saluer, ou qui battent la course
+  const talk = !run && !cheer && h < 0.5, wave = !run && !cheer && !sit && h > 0.82;
+  for (const [i, u] of [[0, -0.037], [1, 0.037]]) {
+    const [ax, az] = P(u, 0), up = cheer || (wave && i === 1);
+    animPart((q) => {
+      if (up) { q.box(0.016, 0.06, 0.018, ax, ysh, az, body, ry); q.box(0.018, 0.018, 0.02, ax, ysh + 0.058, az, 0xe8b894, ry); }
+      else { q.box(0.016, 0.055, 0.018, ax, ysh - 0.055, az, body, ry); q.box(0.018, 0.018, 0.02, ax, ysh - 0.07, az, 0xe8b894, ry); }
+    }, [ax, ysh, az], up ? fwd : right, run ? 0.75 : up ? 0.35 : talk && i === 1 ? 0.45 : 0.07, run ? fq : up ? fq * 1.4 : talk ? 0.9 + h : f, ph + (run ? (i ? 0 : Math.PI) : i * 0.9), bob);
+  }
 }
 
 /**
@@ -3875,7 +4145,7 @@ function airport(p: Parts) {
 }
 
 /** Petit sportif figé : jambes, maillot (couleur), tête */
-function athlete(p: Parts, x: number, z: number, shirt: number, ry = 0) { figure(p, x, z, shirt, ry); }
+function athlete(p: Parts, x: number, z: number, shirt: number, ry = 0) { figure(p, x, z, shirt, ry, false, 0x4a3426, 'run'); }
 
 /** Projecteur d'éclairage sur son mât (époque moderne), la rampe tournée vers le centre */
 function floodlight(p: Parts, x: number, z: number, h = 0.7) {
@@ -4205,16 +4475,22 @@ function alpine(p: Parts, age: number) {
 
 /** Personnage debout à la hauteur y (sur une scène, une tribune) : longue robe, tête ou masque */
 function actor(p: Parts, x: number, y: number, z: number, ry: number, robe: number, head = 0xe8b894) {
-  p.box(0.05, 0.1, 0.034, x, y, z, robe, ry);
-  p.box(0.06, 0.012, 0.04, x, y + 0.085, z, dark(robe, 0.85), ry);
-  p.box(0.032, 0.032, 0.032, x, y + 0.1, z, head, ry);
+  const draw = (q: Parts) => { q.box(0.05, 0.1, 0.034, x, y, z, robe, ry); q.box(0.06, 0.012, 0.04, x, y + 0.085, z, dark(robe, 0.85), ry); q.box(0.032, 0.032, 0.032, x, y + 0.1, z, head, ry); };
+  if (p !== mainParts) { draw(p); return; }
+  // l'acteur se balance en déclamant, un bras qui accompagne la tirade
+  const c = Math.cos(ry), s = Math.sin(ry), h = hash2(Math.round(x * 97 + 500), Math.round(z * 89 + 500), 29), ph = h * 6.28;
+  animPart(draw, [x, y, z], [s, 0, c], 0.07, 0.45 + h * 0.3, ph);
+  const ax = x + c * 0.034, az = z - s * 0.034;
+  animPart((q) => { q.box(0.014, 0.05, 0.016, ax, y + 0.035, az, robe, ry); q.box(0.016, 0.016, 0.018, ax, y + 0.02, az, head, ry); }, [ax, y + 0.085, az], [c, 0, -s], 0.6, 0.6 + h * 0.4, ph + 1);
 }
 
 /** Spectateur assis à la hauteur y (gradin, banc) */
 function seated(p: Parts, x: number, y: number, z: number, ry: number, body: number, hair = 0x4a3426) {
-  p.box(0.042, 0.045, 0.03, x, y, z, body, ry);
-  p.box(0.026, 0.026, 0.026, x, y + 0.045, z, 0xe8b894, ry);
-  p.box(0.028, 0.01, 0.028, x, y + 0.071, z, hair, ry);
+  const draw = (q: Parts) => { q.box(0.042, 0.045, 0.03, x, y, z, body, ry); q.box(0.026, 0.026, 0.026, x, y + 0.045, z, 0xe8b894, ry); q.box(0.028, 0.01, 0.028, x, y + 0.071, z, hair, ry); };
+  if (p !== mainParts) { draw(p); return; }
+  // le spectateur se penche, rit, certains trépignent
+  const h = hash2(Math.round(x * 97 + 500), Math.round(z * 89 + 500), 31);
+  animPart(draw, [x, y, z], [Math.cos(ry), 0, -Math.sin(ry)], 0.06, 0.3 + h * 0.5, h * 6.28, h > 0.7 ? 0.008 : 0);
 }
 
 /** Arc en plein cintre tourné vers +z (baie éclairée, arcade) : un demi-disque posé sur le haut d'un rectangle */
@@ -4866,9 +5142,13 @@ function crowd(p: Parts, x0: number, x1: number, y: number, z: number, seed: num
   const shirts = [0xd84a3e, 0x3a6ab8, 0xf2c23a, 0xf4f2ee, 0x4fa860, 0x8a3a8a, 0x3c3c48, 0xe8885a];
   for (let x = x0, i = 0; x <= x1 + 1e-6; x += gap, i++) {
     if (hash2(i, seed, 71) < 0.16) continue;
-    p.box(0.034, 0.042, 0.024, x, y, z, shirts[Math.floor(hash2(i, seed, 72) * shirts.length)]);
-    p.box(0.022, 0.022, 0.022, x, y + 0.048, z + (back ? 0.003 : -0.003), 0xe8b894);
-    p.box(0.024, 0.008, 0.024, x, y + 0.068, z, hash2(i, seed, 73) < 0.5 ? 0x4a3426 : 0x2a2a2e);
+    const draw = (q: Parts) => {
+      q.box(0.034, 0.042, 0.024, x, y, z, shirts[Math.floor(hash2(i, seed, 72) * shirts.length)]);
+      q.box(0.022, 0.022, 0.022, x, y + 0.048, z + (back ? 0.003 : -0.003), 0xe8b894);
+      q.box(0.024, 0.008, 0.024, x, y + 0.068, z, hash2(i, seed, 73) < 0.5 ? 0x4a3426 : 0x2a2a2e);
+    };
+    // les supporters se lèvent l'un après l'autre : la ola fait le tour de la tribune
+    if (p === mainParts) animPart(draw, [x, y, z], [1, 0, 0], 0.04, 0.3, -x * 3 + seed * 0.7, 0.016); else draw(p);
   }
 }
 
@@ -4944,104 +5224,175 @@ function stadiumBig(p: Parts, age: number) {
   else for (const s of [-1, 1]) lampPost(p, s * 1.1, 1.3, 0.32);
 }
 
+/** Voie des montagnes russes de la grande fête foraine (repère du bâtiment) : une boucle de collines, plus hautes à l'époque moderne ; le train la parcourt (`Fairground`) */
+export function coasterPath(modern: boolean): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = [];
+  for (let k = 0; k < 64; k++) {
+    const t = (k / 64) * Math.PI * 2;
+    const y = 0.12 + (modern ? 0.66 : 0.46) * Math.max(0, Math.sin(t + 0.3)) ** 2 + 0.14 * Math.max(0, Math.sin(t * 3 + 1.2));
+    pts.push(new THREE.Vector3(0.88 + Math.cos(t) * 0.5, y, -0.45 + Math.sin(t) * 0.82));
+  }
+  return pts;
+}
+/** Tour de chute de l'époque moderne (repère du bâtiment) : son pied, sa hauteur ; la nacelle y monte et tombe (`Fairground`) */
+export const DROP_TOWER = { x: 0, z: -0.95, h: 1.55 };
+
+/** Ampoule de guirlande, qui s'allume la nuit */
+const bulb = (q: Parts, x: number, y: number, z: number, c: number, s = 0.018) => q.box(s, s, s, x, y, z, c, 0, true);
+const BULBS = [0xffe2a0, 0xff9a6a, 0x9ae8ff, 0xfff4d0, 0xff8ad8];
+
 /**
- * Grande fête foraine (3 × 3) : grande roue, carrousel et chaises volantes qui tournent, montagnes russes de bois sur leurs
- * tréteaux (à looping et en acier à l'époque moderne, avec la tour de chute), baraques de tir, de confiserie, de frites et de
- * chamboule-tout sous leurs auvents rayés, porte illuminée, guirlandes de lampions, marchand de ballons, la foule
+ * Grande fête foraine (3 × 3) : grande roue qui tourne, ses nacelles et ses ampoules ; carrousel aux chevaux de bois sous son
+ * chapiteau rayé bordé de lumières ; chaises volantes (tour de chute à l'époque moderne) ; bateau pirate qui se balance ;
+ * autos tamponneuses qui tournent sous leur auvent illuminé ; montagnes russes de bois sur leurs tréteaux (d'acier ensuite)
+ * et leur gare, où le train file ; baraques de tir, de confiserie, de frites et de chamboule-tout ; porte illuminée et
+ * guichet ; guirlandes d'ampoules le long de l'allée ; marchand de ballons, barbe à papa, et la foule qui s'amuse
  */
 function funfairBig(p: Parts, age: number) {
   sink(0.012);
   const modern = age >= 4, y0 = 0.012;
   p.box(2.92, 0.012, 2.92, 0, 0, 0, 0x8fc47e);
   const alley = modern ? 0xb8b4ac : 0xd8c49a;
-  p.box(0.56, 0.006, 2.9, 0, y0, 0, alley); p.box(2.9, 0.006, 0.5, 0, y0, 0.12, alley);
-  // grande roue : pieds en A de part et d'autre, et la roue qui tourne avec ses nacelles
-  const wx = -0.82, wz = -0.9, wy = 0.74, wr = 0.56, frame = modern ? 0xf4f2ee : 0xd8d0c0;
-  for (const dz of [-0.09, 0.09]) for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.03, 0.8, 0.03).translate(0, 0.4, 0), wx + s * 0.32, y0, wz + dz, frame, 0, false, s * 0.41);
-  p.box(0.3, 0.12, 0.14, wx, y0, wz + 0.2, modern ? 0x3a6ab8 : 0x8a3a3a);
+  p.box(0.42, 0.006, 2.9, 0, y0, 0.05, alley); p.box(2.9, 0.006, 0.3, 0, y0, -0.2, alley);
+  for (let k = 0; k < 40; k++) p.box(0.03, 0.004, 0.02, -1.4 + hash2(k, 3, 81) * 2.8, y0 + 0.006, -1.4 + hash2(k, 4, 81) * 2.8, [0xd84a3e, 0xf2c23a, 0x3c7fd8, 0xf4f2ee][k % 4]);
+  // grande roue : pieds en A, cabine du forain ; la roue, ses rayons, ses nacelles et ses ampoules tournent
+  const wx = -0.85, wz = -0.95, wy = 0.76, wr = 0.56, frame = modern ? 0xf4f2ee : 0xd8d0c0;
+  for (const dz of [-0.1, 0.1]) for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.03, 0.82, 0.03).translate(0, 0.41, 0), wx + s * 0.32, y0, wz + dz, frame, 0, false, s * 0.4);
+  p.box(0.3, 0.14, 0.16, wx, y0, wz + 0.24, modern ? 0x3a6ab8 : 0x8a3a3a); p.box(0.32, 0.02, 0.18, wx, 0.15, wz + 0.24, C.gold);
   const W = turning([wx, wy, wz], [0, 0, 1], 0.035);
-  for (const dz of [-0.07, 0.07]) { W.add(new THREE.TorusGeometry(wr, 0.012, 4, 32), 0, 0, dz, frame); W.add(new THREE.TorusGeometry(wr * 0.35, 0.01, 4, 16), 0, 0, dz, frame); }
+  for (const dz of [-0.07, 0.07]) { W.add(new THREE.TorusGeometry(wr, 0.012, 4, 36), 0, 0, dz, frame); W.add(new THREE.TorusGeometry(wr * 0.35, 0.01, 4, 16), 0, 0, dz, frame); }
   W.add(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 10).rotateX(Math.PI / 2), 0, 0, 0, 0x9aa3ad);
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * Math.PI * 2, gx = -Math.sin(a) * wr, gy = Math.cos(a) * wr;
     for (const dz of [-0.07, 0.07]) W.add(new THREE.BoxGeometry(0.01, wr, 0.01).translate(0, wr / 2, 0), 0, 0, dz, 0xd8d6d0, 0, false, a);
-    W.box(0.07, 0.06, 0.1, gx, gy - 0.07, 0, [0xd84a3e, 0x3c7fd8, 0xf2c23a, 0x4fa860][k % 4]);
-    W.box(0.08, 0.012, 0.11, gx, gy - 0.01, 0, C.white);
+    W.box(0.08, 0.065, 0.11, gx, gy - 0.075, 0, [0xd84a3e, 0x3c7fd8, 0xf2c23a, 0x4fa860, 0xb45ad8, 0xf28a3c][k % 6]);
+    W.box(0.09, 0.014, 0.12, gx, gy - 0.012, 0, C.white);
+    W.box(0.022, 0.022, 0.022, gx, gy - 0.035, 0, 0xe8b894);
   }
-  // carrousel : socle fixe, plateau, chevaux de bois et chapiteau rayé qui tournent ensemble
-  const cx = 0.8, cz = 0.72;
-  p.cyl(0.45, 0.46, 0.025, 20, cx, y0, cz, 0xb8a888);
-  const R = turning([cx, y0 + 0.025, cz], [0, 1, 0], 0.12);
-  R.cyl(0.42, 0.42, 0.03, 20, 0, 0, 0, 0xe8c66a);
-  for (let k = 0; k < 10; k++) {
-    const a = (k / 10) * Math.PI * 2, x = Math.cos(a) * 0.32, z = Math.sin(a) * 0.32;
-    R.cyl(0.005, 0.005, 0.36, 4, x, 0.03, z, C.gold);
-    R.box(0.035, 0.05, 0.1, x, 0.1 + (k % 2) * 0.03, z, [C.white, 0x8a5a3a, 0xd84a3e, 0x3c7fd8, 0x2a2a2e][k % 5], -a);
-    R.box(0.02, 0.04, 0.03, x + Math.cos(a + Math.PI / 2) * 0.05, 0.15 + (k % 2) * 0.03, z + Math.sin(a + Math.PI / 2) * 0.05, [C.white, 0x8a5a3a, 0xd84a3e, 0x3c7fd8, 0x2a2a2e][k % 5], -a);
+  for (let k = 0; k < 36; k++) { const a = (k / 36) * Math.PI * 2; for (const dz of [-0.075, 0.075]) bulb(W, -Math.sin(a) * wr, Math.cos(a) * wr, dz, BULBS[k % BULBS.length], 0.016); }
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2 + 0.26; bulb(W, -Math.sin(a) * wr * 0.6, Math.cos(a) * wr * 0.6, 0.075, BULBS[(k + 2) % BULBS.length], 0.014); }
+  // carrousel : socle et marches, plateau tournant, chevaux de bois sur leurs barres, colonne à miroirs, chapiteau rayé
+  // bordé d'ampoules, fanion au sommet
+  const cx = 0.78, cz = 0.9;
+  p.cyl(0.46, 0.48, 0.03, 24, cx, y0, cz, 0xb8a888);
+  const R = turning([cx, y0 + 0.03, cz], [0, 1, 0], 0.11);
+  R.cyl(0.43, 0.43, 0.03, 24, 0, 0, 0, 0xe8c66a);
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2, rr = k % 2 ? 0.33 : 0.24, x = Math.cos(a) * rr, z = Math.sin(a) * rr, col = [C.white, 0x8a5a3a, 0xd84a3e, 0x3c7fd8, 0x2a2a2e, 0xf2c23a][k % 6];
+    R.cyl(0.005, 0.005, 0.38, 4, x, 0.03, z, C.gold);
+    const hy = 0.1 + (k % 3) * 0.03;
+    R.box(0.032, 0.045, 0.1, x, hy, z, col, -a); R.box(0.022, 0.045, 0.03, x + Math.cos(a + Math.PI / 2) * 0.05, hy + 0.035, z + Math.sin(a + Math.PI / 2) * 0.05, col, -a);
+    for (const d of [-0.03, 0.03]) R.box(0.008, 0.05, 0.008, x + Math.cos(a + Math.PI / 2) * d, hy - 0.045, z + Math.sin(a + Math.PI / 2) * d, dark(col, 0.8), -a);
+    if (k % 3 === 0) { R.box(0.03, 0.035, 0.025, x, hy + 0.045, z, [0x3a6ab8, 0xd84a3e, 0x4fa860][k % 3], -a); R.box(0.02, 0.02, 0.02, x, hy + 0.08, z, 0xe8b894, -a); }
   }
-  R.cyl(0.06, 0.07, 0.4, 8, 0, 0.03, 0, 0xd84a3e);
-  for (let k = 0; k < 16; k++) R.add(new THREE.ConeGeometry(0.46, 0.18, 16, 1, true, (k / 16) * Math.PI * 2, Math.PI / 8), 0, 0.5, 0, k % 2 ? 0xd84a3e : C.white);
-  for (let k = 0; k < 20; k++) { const a = (k / 20) * Math.PI * 2; R.box(0.13, 0.05, 0.01, Math.cos(a) * 0.45, 0.39, Math.sin(a) * 0.45, k % 2 ? C.gold : 0xd84a3e, -a + Math.PI / 2); }
-  R.sphere(0.04, 0, 0.62, 0, C.gold);
-  // chaises volantes : mât fixe, couronne qui tourne et ses chaises lancées vers l'extérieur
-  const kx = -0.82, kz = 0.78;
-  p.cyl(0.03, 0.04, 0.6, 8, kx, y0, kz, modern ? 0xb45ad8 : C.white);
-  p.cyl(0.12, 0.13, 0.04, 12, kx, y0, kz, 0xb8a888);
-  const S = turning([kx, 0, kz], [0, 1, 0], 0.2);
-  S.cyl(0.2, 0.2, 0.04, 14, 0, 0.6, 0, modern ? 0xf2c23a : 0xd84a3e); S.cone(0.22, 0.12, 14, 0, 0.64, 0, modern ? 0xb45ad8 : 0xf2c23a);
-  for (let k = 0; k < 10; k++) {
-    const a = (k / 10) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
-    S.add(new THREE.BoxGeometry(0.004, 0.26, 0.004), ca * 0.27, 0.48, sa * 0.27, 0x9aa3ad, 0, false, ca * 0.55, -sa * 0.55);
-    S.box(0.04, 0.02, 0.04, ca * 0.35, 0.33, sa * 0.35, [0xf2c23a, 0x3c7fd8, 0x4fa860, 0xd84a3e][k % 4], -a);
-    S.box(0.024, 0.035, 0.02, ca * 0.35, 0.35, sa * 0.35, [0x3a6ab8, 0x8a3a3a, 0xf4f2ee][k % 3], -a); S.box(0.018, 0.018, 0.018, ca * 0.35, 0.39, sa * 0.35, 0xe8b894, -a);
+  R.cyl(0.07, 0.08, 0.4, 10, 0, 0.03, 0, 0xd84a3e); for (let k = 0; k < 10; k++) R.box(0.03, 0.06, 0.004, Math.cos((k / 10) * Math.PI * 2) * 0.072, 0.18, Math.sin((k / 10) * Math.PI * 2) * 0.072, 0xcfe2f0, -(k / 10) * Math.PI * 2 + Math.PI / 2);
+  for (let k = 0; k < 16; k++) R.add(new THREE.ConeGeometry(0.47, 0.2, 16, 1, true, (k / 16) * Math.PI * 2, Math.PI / 8), 0, 0.53, 0, k % 2 ? 0xd84a3e : C.white);
+  for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; R.box(0.12, 0.05, 0.01, Math.cos(a) * 0.46, 0.4, Math.sin(a) * 0.46, k % 2 ? C.gold : 0xd84a3e, -a + Math.PI / 2); bulb(R, Math.cos(a) * 0.47, 0.44, Math.sin(a) * 0.47, BULBS[k % BULBS.length]); }
+  R.cyl(0.006, 0.006, 0.14, 4, 0, 0.63, 0, C.gold); R.box(0.08, 0.05, 0.004, 0.04, 0.73, 0, 0xf2c23a);
+  if (!modern) {
+    // chaises volantes : mât fixe, couronne qui tourne, chaises lancées vers l'extérieur
+    const kx = 0.0, kz = -0.95;
+    p.cyl(0.03, 0.045, 0.62, 8, kx, y0, kz, C.white); p.cyl(0.13, 0.14, 0.04, 12, kx, y0, kz, 0xb8a888);
+    const S = turning([kx, 0, kz], [0, 1, 0], 0.2);
+    S.cyl(0.2, 0.2, 0.04, 14, 0, 0.62, 0, 0xd84a3e); S.cone(0.23, 0.13, 14, 0, 0.66, 0, 0xf2c23a);
+    for (let k = 0; k < 14; k++) { const a = (k / 14) * Math.PI * 2; bulb(S, Math.cos(a) * 0.205, 0.64, Math.sin(a) * 0.205, BULBS[k % BULBS.length], 0.015); }
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      S.add(new THREE.BoxGeometry(0.004, 0.27, 0.004), ca * 0.26, 0.49, sa * 0.26, 0x9aa3ad, 0, false, ca * 0.55, -sa * 0.55);
+      S.box(0.04, 0.02, 0.04, ca * 0.33, 0.34, sa * 0.33, [0xf2c23a, 0x3c7fd8, 0x4fa860, 0xd84a3e][k % 4], -a);
+      S.box(0.024, 0.035, 0.02, ca * 0.33, 0.36, sa * 0.33, [0x3a6ab8, 0x8a3a3a, 0xf4f2ee][k % 3], -a); S.box(0.018, 0.018, 0.018, ca * 0.33, 0.4, sa * 0.33, 0xe8b894, -a);
+    }
+  } else {
+    // tour de chute : pylône, anneau de sièges qui monte et tombe (animé à part), feux au sommet
+    const { x: tx, z: tz, h } = DROP_TOWER;
+    p.box(0.08, h, 0.08, tx, y0, tz, 0xd8d6d0); for (let k = 0; k < 10; k++) p.box(0.09, 0.008, 0.09, tx, 0.1 + k * 0.15, tz, 0x9aa3ad);
+    p.cyl(0.12, 0.14, 0.05, 10, tx, y0, tz, 0x3c3c40); p.cyl(0.07, 0.07, 0.06, 8, tx, h, tz, 0xf2c23a);
+    for (let k = 0; k < 8; k++) bulb(p, tx + Math.cos(k) * 0.06, h + 0.02 + (k % 2) * 0.03, tz + Math.sin(k) * 0.06, k % 2 ? 0xff4a3a : 0xffe2a0, 0.02);
+    for (let k = 0; k < 12; k++) bulb(p, tx + 0.042, 0.15 + k * 0.12, tz + 0.042, BULBS[k % BULBS.length], 0.014);
   }
-  // montagnes russes : la voie sur ses tréteaux (bois à l'âge industriel, acier rouge ensuite), le train
-  const pts: THREE.Vector3[] = [];
-  for (let k = 0; k <= 48; k++) { const t = (k / 48) * Math.PI * 2; pts.push(new THREE.Vector3(0.84 + Math.cos(t) * 0.52, 0.12 + 0.34 * Math.max(0, Math.sin(t * 2 + 0.6)) + 0.12 * Math.sin(t * 3) + 0.06, -0.86 + Math.sin(t) * 0.44)); }
-  const rail = modern ? 0xd84a3e : 0xb08968, prop = modern ? 0xd8d6d0 : 0x8a6448;
-  for (let k = 0; k < 48; k++) {
-    const a = pts[k], b = pts[k + 1], d = b.clone().sub(a), len = d.length();
-    p.add(new THREE.BoxGeometry(0.06, 0.014, len + 0.004).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.normalize())), (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, rail);
-    if (k % 2 === 0) { p.box(0.012, a.y, 0.012, a.x, y0, a.z, prop); if (!modern && a.y > 0.25) p.add(new THREE.BoxGeometry(0.008, a.y * 1.05, 0.008), a.x, y0, a.z, prop, 0, false, 0.3); }
+  // bateau pirate qui se balance entre ses deux portiques en A
+  const bx = -0.9, bz = 0.2, by = 0.62;
+  for (const dz of [-0.13, 0.13]) for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.03, 0.68, 0.03).translate(0, 0.34, 0), bx + s * 0.28, y0, bz + dz, 0x5a4a3a, 0, false, s * 0.42);
+  p.box(0.04, 0.04, 0.3, bx, by - 0.02, bz, 0x5a4a3a);
+  const B = swing([bx, by, bz], [0, 0, 1], 0.7, 0.2);
+  for (const s of [-1, 1]) B.add(new THREE.BoxGeometry(0.02, 0.44, 0.02).translate(0, -0.22, 0), 0, 0, 0, 0x8a8f96, 0, false, s * 0.55);
+  B.box(0.66, 0.1, 0.18, 0, -0.48, 0, 0x8a5a3a); B.box(0.68, 0.025, 0.2, 0, -0.39, 0, 0xd8c09a);
+  for (const s of [-1, 1]) B.add(new THREE.BoxGeometry(0.12, 0.16, 0.18), s * 0.36, -0.42, 0, 0x8a5a3a, 0, false, s * 0.6);
+  B.cyl(0.008, 0.008, 0.26, 4, 0, -0.39, 0, 0x5a4a3a); B.box(0.16, 0.12, 0.004, 0.0, -0.2, 0, 0x2a2a2e); B.box(0.04, 0.04, 0.006, 0, -0.18, 0, C.white);
+  for (let k = 0; k < 7; k++) { B.box(0.026, 0.03, 0.02, -0.27 + k * 0.09, -0.37, -0.04, [0xd84a3e, 0x3a6ab8, 0xf2c23a, 0x4fa860][k % 4]); B.box(0.02, 0.02, 0.02, -0.27 + k * 0.09, -0.33, -0.04, 0xe8b894); }
+  for (let k = 0; k < 8; k++) bulb(B, -0.3 + k * 0.086, -0.43, 0.095, BULBS[k % BULBS.length], 0.014);
+  // autos tamponneuses : piste, bordure rayée, auvent sur ses poteaux et son plafond d'ampoules ; les autos tournent
+  const rx = -0.62, rz = 0.95;
+  p.box(0.74, 0.02, 0.52, rx, y0, rz, 0x3c3c44);
+  for (let k = 0; k < 20; k++) { const t = k / 20, along = t < 0.5; p.box(along ? 0.074 : 0.03, 0.04, along ? 0.03 : 0.052, along ? rx - 0.37 + (k % 10) * 0.074 + 0.037 : rx + (k < 15 ? -0.37 : 0.37), y0 + 0.02, along ? rz + (k < 5 ? -0.26 : 0.26) : rz - 0.26 + (k % 5) * 0.104 + 0.052, k % 2 ? 0xf2c23a : 0x2a2a2e); }
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.02, 0.32, 0.02, rx + dx * 0.36, y0, rz + dz * 0.25, 0x9aa3ad);
+  p.box(0.8, 0.03, 0.58, rx, 0.33, rz, modern ? 0x3a6ab8 : 0xd84a3e); p.box(0.82, 0.05, 0.6, rx, 0.36, rz, C.white);
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 4; j++) bulb(p, rx - 0.3 + i * 0.12, 0.325, rz - 0.19 + j * 0.125, BULBS[(i + j) % BULBS.length], 0.014);
+  for (let k = 0; k < 9; k++) p.box(0.06, 0.03, 0.005, rx - 0.24 + k * 0.06, 0.4, rz + 0.302, BULBS[k % BULBS.length], 0, true);
+  const T = turning([rx, y0 + 0.02, rz], [0, 1, 0], 0.13);
+  for (const [r, a, col] of [[0.1, 0, 0xd84a3e], [0.2, 1.3, 0x3c7fd8], [0.15, 2.6, 0xf2c23a], [0.21, 3.8, 0x4fa860], [0.08, 5.0, 0xb45ad8]] as number[][]) {
+    const x = Math.cos(a) * r, z = Math.sin(a) * r * 0.85;
+    T.box(0.07, 0.035, 0.09, x, 0.005, z, col, -a); T.add(new THREE.TorusGeometry(0.048, 0.008, 3, 10).rotateX(Math.PI / 2), x, 0.012, z, 0x2a2a2e);
+    T.cyl(0.003, 0.003, 0.26, 3, x, 0.04, z - 0.03, 0x9aa3ad); T.box(0.026, 0.03, 0.022, x, 0.04, z, 0x3a3a48, -a); T.box(0.02, 0.02, 0.02, x, 0.075, z, 0xe8b894, -a);
   }
-  for (let k = 0; k < 4; k++) { const a = pts[8 + k * 2], b = pts[9 + k * 2]; p.box(0.06, 0.045, 0.07, a.x, a.y + 0.01, a.z, [0xf2c23a, 0x3c7fd8, 0x4fa860, 0xd84a3e][k], Math.atan2(b.x - a.x, b.z - a.z)); p.box(0.03, 0.03, 0.02, a.x, a.y + 0.055, a.z, 0xe8b894); }
-  p.box(0.3, 0.14, 0.16, 0.84, y0, -0.2, modern ? 0xe8eaee : 0xd8c8a8); p.box(0.32, 0.02, 0.18, 0.84, 0.15, -0.2, rail);
-  if (modern) {
-    // le looping, la tour de chute et sa nacelle
-    p.add(new THREE.TorusGeometry(0.17, 0.014, 4, 24).rotateY(Math.PI / 2), 1.36, 0.3, -0.86, rail);
-    for (const dz of [-0.06, 0.06]) p.box(0.016, 0.16, 0.016, 1.36, y0, -0.86 + dz, prop);
-    p.box(0.06, 1.5, 0.06, -0.2, y0, -1.25, 0xd8d6d0); p.cyl(0.11, 0.11, 0.06, 12, -0.2, 0.9, -1.25, 0xf2c23a); p.box(0.04, 0.04, 0.04, -0.2, 1.52, -1.25, 0xff4a3a, 0, true);
+  // montagnes russes : la voie sur ses tréteaux de bois (sur ses piliers d'acier ensuite), sa gare à la descente
+  const pts = coasterPath(modern), rail = modern ? 0xd84a3e : 0x6a4a34, prop = modern ? 0x3c6ab8 : 0x9a7452;
+  for (let k = 0; k < pts.length; k++) {
+    const a = pts[k], b = pts[(k + 1) % pts.length], d = b.clone().sub(a), len = d.length(), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.clone().normalize());
+    const side = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.012, 0.012, len + 0.004).applyQuaternion(q), (a.x + b.x) / 2 + side.x * s * 0.028, (a.y + b.y) / 2 + 0.01, (a.z + b.z) / 2 + side.z * s * 0.028, rail);
+    p.add(new THREE.BoxGeometry(0.075, 0.008, 0.016).applyQuaternion(q), a.x, a.y, a.z, modern ? 0x5d6878 : 0x5a4232);
+    if (k % 2 === 0) {
+      p.box(0.014, a.y, 0.014, a.x, y0, a.z, prop);
+      if (!modern && a.y > 0.2) for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.008, a.y * 0.9, 0.008), a.x + s * 0.04, y0, a.z, prop, 0, false, s * 0.25);
+      if (k % 4 === 0) bulb(p, a.x, a.y + 0.03, a.z, BULBS[(k / 4) % BULBS.length], 0.014);
+    }
   }
+  let low = 0;
+  for (let k = 1; k < pts.length; k++) if (pts[k].y < pts[low].y) low = k;
+  { const a = pts[low], b = pts[(low + 1) % pts.length], ry = Math.atan2(b.x - a.x, b.z - a.z);
+    p.box(0.18, a.y - 0.01, 0.34, a.x - Math.cos(ry) * 0.11, y0, a.z + Math.sin(ry) * 0.11, modern ? 0xe8eaee : 0xd8c8a8, ry);
+    p.box(0.2, 0.02, 0.36, a.x - Math.cos(ry) * 0.11, 0.36, a.z + Math.sin(ry) * 0.11, rail, ry);
+    for (const s of [-1, 1]) p.box(0.016, 0.36 - a.y, 0.016, a.x - Math.cos(ry) * 0.18, a.y, a.z + Math.sin(ry) * 0.18 + s * 0.15, 0x9aa3ad, ry); }
   // baraques le long de l'allée : tir, confiserie, frites, chamboule-tout
   const stall = (x: number, z: number, c: number, kind: number) => {
     p.box(0.36, 0.2, 0.2, x, y0, z, modern ? 0xf4f2ee : C.cream);
     for (let k = 0; k < 6; k++) p.add(new THREE.BoxGeometry(0.06, 0.01, 0.14), x - 0.15 + k * 0.06, 0.22, z + 0.12, k % 2 ? C.white : c, 0, false, 0, 0.35);
     p.box(0.36, 0.05, 0.03, x, y0, z + 0.1, 0x8a6448);
-    p.box(0.28, 0.05, 0.01, x, 0.26, z + 0.06, 0xffe2a0, 0, true);
+    p.box(0.3, 0.05, 0.01, x, 0.26, z + 0.06, 0xffe2a0, 0, true);
+    for (let k = 0; k < 6; k++) bulb(p, x - 0.15 + k * 0.06, 0.205, z + 0.19, BULBS[(k + kind) % BULBS.length], 0.012);
     if (kind === 0) for (let k = 0; k < 4; k++) { p.add(new THREE.CylinderGeometry(0.025, 0.025, 0.006, 10).rotateX(Math.PI / 2), x - 0.12 + k * 0.08, 0.15, z + 0.101, C.white); p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.008, 8).rotateX(Math.PI / 2), x - 0.12 + k * 0.08, 0.15, z + 0.103, 0xd84a3e); }
     else if (kind === 1) for (let k = 0; k < 6; k++) p.sphere(0.022, x - 0.12 + (k % 3) * 0.12, 0.08 + Math.floor(k / 3) * 0.05, z + 0.11, [0xf2a6c8, 0xf8e05a, 0x9ae8ff][k % 3]);
     else if (kind === 2) for (let k = 0; k < 5; k++) p.add(new THREE.ConeGeometry(0.014, 0.04, 6).rotateX(Math.PI), x - 0.1 + k * 0.05, 0.09, z + 0.11, 0xf2d24a);
     else for (const [dx, dy] of [[-0.03, 0], [0, 0], [0.03, 0], [-0.015, 0.03], [0.015, 0.03], [0, 0.06]]) p.cyl(0.012, 0.012, 0.028, 6, x + dx, 0.07 + dy, z + 0.11, [0xd84a3e, 0xc4cad2, 0x3c7fd8][Math.round(dy * 33) % 3]);
-    figure(p, x + 0.1, z + 0.32, [0x3a5a9a, 0x8a3a3a, 0x4a6a3a, 0x5a5a6a][kind], Math.PI);
+    figure(p, x + 0.1, z + 0.3, [0x3a5a9a, 0x8a3a3a, 0x4a6a3a, 0x5a5a6a][kind], Math.PI, false, 0x4a3426, 'cheer');
   };
-  stall(-1.12, -0.28, 0xd84a3e, 0); stall(-0.52, -0.28, 0xf2a6c8, 1); stall(0.5, 0.42 - 0.12, 0xf2c23a, 2);
-  stall(-0.52, 1.0, 0x4fa860, 3);
-  // porte d'entrée illuminée
-  for (const s of [-1, 1]) p.box(0.08, 0.5, 0.08, s * 0.32, y0, 1.38, modern ? 0xb45ad8 : 0x8a3a3a);
-  p.box(0.74, 0.11, 0.08, 0, 0.48, 1.38, modern ? 0xf2c23a : 0xe8c66a);
-  for (let k = 0; k < 9; k++) p.box(0.022, 0.022, 0.012, -0.32 + k * 0.08, 0.6, 1.38, [0xffe2a0, 0xff9a6a, 0x9ae8ff][k % 3], 0, true);
-  for (let k = 0; k < 7; k++) p.box(0.05, 0.04, 0.006, -0.18 + k * 0.06, 0.515, 1.422, modern ? 0xb45ad8 : 0x8a3a3a);
-  // guirlandes de lampions le long de l'allée
+  stall(-0.42, -0.48, 0xd84a3e, 0); stall(0.18, -0.48, 0xf2a6c8, 1); stall(0.3, 0.3, 0xf2c23a, 2); stall(-0.32, 0.5, 0x4fa860, 3);
+  // porte d'entrée illuminée, enseigne, guichet
+  for (const s of [-1, 1]) { p.box(0.09, 0.56, 0.09, s * 0.3, y0, 1.38, modern ? 0xb45ad8 : 0x8a3a3a); p.sphere(0.05, s * 0.3, 0.6, 1.38, C.gold); }
+  p.add(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 16, 1, false, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).rotateZ(0), 0, 0.5, 1.38, modern ? 0xf2c23a : 0xe8c66a);
+  for (let k = 0; k <= 12; k++) { const a = Math.PI * (k / 12); bulb(p, -Math.cos(a) * 0.31, 0.5 + Math.sin(a) * 0.31, 1.42, BULBS[k % BULBS.length], 0.022); }
+  for (let k = 0; k < 7; k++) p.box(0.05, 0.05, 0.006, -0.18 + k * 0.06, 0.6, 1.415, modern ? 0xb45ad8 : 0xd84a3e, 0, true);
+  p.box(0.18, 0.18, 0.14, -0.45, y0, 1.32, modern ? 0xf4f2ee : 0xd8c8a8); p.box(0.2, 0.03, 0.16, -0.45, 0.19, 1.32, 0xd84a3e); p.box(0.1, 0.06, 0.006, -0.45, 0.1, 1.393, 0xffe2a0, 0, true);
+  // guirlandes d'ampoules le long de l'allée, sur leurs mâts
   for (const s of [-1, 1]) {
-    for (const z of [-0.2, 1.2]) p.cyl(0.008, 0.01, 0.46, 4, s * 0.3, y0, z, C.darkwood);
-    for (let k = 0; k <= 14; k++) { const t = k / 14; p.box(0.016, 0.02, 0.016, s * 0.3, 0.44 - Math.sin(t * Math.PI) * 0.08, -0.2 + t * 1.4, [0xffd68a, 0xff8a7a, 0x8ac8ff][k % 3], 0, true); }
+    for (const z of [-0.05, 0.6, 1.25]) p.cyl(0.008, 0.01, 0.48, 4, s * 0.22, y0, z, C.darkwood);
+    for (let k = 0; k <= 26; k++) { const t = k / 26, seg = Math.floor(t * 2 - 1e-6), u = t * 2 - seg; bulb(p, s * 0.22, 0.47 - Math.sin(u * Math.PI) * 0.07, -0.05 + t * 1.3, BULBS[k % BULBS.length], 0.016); }
   }
-  // marchand de ballons, barbe à papa, et la foule
-  figure(p, 0.18, 1.0, 0x6a4a8a, Math.PI);
-  for (const [dx, dz, c] of [[0, 0, 0xd84a3e], [0.05, 0.02, 0xf2c23a], [-0.04, 0.03, 0x3c7fd8], [0.02, -0.04, 0x4fa860]] as number[][]) { p.box(0.002, 0.24, 0.002, 0.2 + dx, 0.15, 1.0 + dz, 0x2a2a2e); p.sphere(0.03, 0.2 + dx, 0.42, 1.0 + dz, c, 1, 1.2); }
-  p.box(0.12, 0.08, 0.07, -0.16, y0, 0.7, C.white); p.sphere(0.035, -0.16, 0.13, 0.7, 0xf2a6c8, 0, 0.9);
-  for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.02, 0.02, 0.01, 8).rotateZ(Math.PI / 2), -0.16 + s * 0.06, 0.03, 0.7, 0x3c3c40);
-  for (const [x, z, c, r] of [[0.1, 0.3, 0x8a3a3a, 2.4], [-0.12, 0.05, 0x3a5a9a, 0.6], [0.05, -0.25, 0xd8a03a, Math.PI], [-0.15, 0.45, 0x6a8a4a, 2.9], [0.12, 0.62, 0xd84a3e, 0.3], [-0.05, 1.18, 0x3c3c48, 0], [0.4, 0.1, 0x5a5a6a, -1.4], [-0.4, 0.18, 0xe8885a, 1.4]] as number[][]) figure(p, x, z, c, r);
+  for (let k = 0; k <= 10; k++) { const t = k / 10; bulb(p, -0.22 + t * 0.44, 0.47 - Math.sin(t * Math.PI) * 0.05, 0.6, BULBS[(k + 1) % BULBS.length], 0.016); }
+  // marchand de ballons (les ballons se balancent au vent), barbe à papa, et la foule
+  figure(p, 0.12, 1.05, 0x6a4a8a, Math.PI);
+  { const f = sway([0.15, 0.16, 1.05], [1, 0, 0.3], 0.18, 0.5);
+    for (const [dx, dz, c] of [[0, 0, 0xd84a3e], [0.05, 0.02, 0xf2c23a], [-0.04, 0.03, 0x3c7fd8], [0.02, -0.04, 0x4fa860], [-0.02, -0.02, 0xb45ad8]] as number[][]) { f.box(0.002, 0.26, 0.002, dx, 0, dz, 0x2a2a2e); f.sphere(0.032, dx, 0.28, dz, c, 1, 1.2); } }
+  p.box(0.12, 0.08, 0.07, -0.12, y0, 0.78, C.white); p.sphere(0.035, -0.12, 0.13, 0.78, 0xf2a6c8, 0, 0.9); p.cyl(0.004, 0.004, 0.2, 3, -0.08, 0.09, 0.78, C.metal); p.cone(0.06, 0.04, 8, -0.08, 0.29, 0.78, 0xd84a3e);
+  for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.02, 0.02, 0.01, 8).rotateZ(Math.PI / 2), -0.12 + s * 0.06, 0.03, 0.78, 0x3c3c40);
+  const folk: [number, number, number, number, Pose][] = [
+    [0.08, 0.3, 0x8a3a3a, 2.4, 'idle'], [-0.1, 0.05, 0x3a5a9a, 0.6, 'idle'], [0.06, -0.22, 0xd8a03a, Math.PI, 'cheer'], [-0.08, 0.42, 0x6a8a4a, 2.9, 'idle'],
+    [0.1, 0.62, 0xd84a3e, 0.3, 'idle'], [-0.06, 1.2, 0x3c3c48, 0, 'idle'], [-0.55, 0.42, 0x5a5a6a, Math.PI, 'cheer'], [-0.6, -0.12, 0xe8885a, Math.PI / 2, 'cheer'],
+    [0.45, -0.18, 0xf2c23a, -Math.PI / 2, 'cheer'], [0.5, 0.62, 0x4fa860, 0.8, 'cheer'], [-0.05, 0.85, 0xb45ad8, 1.6, 'idle'], [0.1, -0.05, 0x3a6ab8, -2.6, 'idle'],
+    [-0.25, 1.15, 0x8a5a3a, 0.4, 'idle'], [0.38, 1.12, 0xd8786c, -0.5, 'cheer'],
+  ];
+  for (const [x, z, c, r, pose] of folk) figure(p, x, z, c, r, false, 0x4a3426, pose);
 }
 
 /** Automobile ancienne (vers +z) : caisse ouverte, capot, radiateur de laiton, ailes, roues à rayons, chauffeur à casquette */
@@ -5420,6 +5771,31 @@ function harborBig(p: Parts, age: number) {
     cr.box(0.004, 0.3, 0.004, 0, 0.56, 0.82, 0x2a2a2e);
     for (const [x, z, c] of [[0.6, -0.3, 0x3a6ab8], [0.25, 0.15, 0xd84a3e]] as number[][]) { p.box(0.14, 0.12, 0.16, x, y0, z + 0.2, c); p.box(0.14, 0.14, 0.34, x, y0, z - 0.06, cols[(x * 10) & 3]); for (const s of [-1, 1]) for (const dz of [0.24, -0.12]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8).rotateZ(Math.PI / 2), x + s * 0.07, 0.03, z + dz, 0x2a2a2e); }
   }
+  // le long du quai : cabestans, cordages lovés, réverbères (torches au Moyen Âge) ; mât de signaux et ses pavillons au pied de la jetée
+  for (const x of [-1.15, 0.2]) { p.cyl(0.04, 0.05, 0.08, 8, x, y0, 1.28, 0x5a4a3a); p.cyl(0.05, 0.05, 0.012, 8, x, y0 + 0.08, 1.28, 0x3c3c40); for (let k = 0; k < 4; k++) p.box(0.14, 0.01, 0.01, x, y0 + 0.06, 1.28, C.darkwood, (k * Math.PI) / 4); }
+  for (const x of [-0.52, 0.72]) p.add(new THREE.TorusGeometry(0.035, 0.012, 4, 10).rotateX(Math.PI / 2), x, y0 + 0.012, 1.3, 0xc8b48a);
+  for (const x of [-0.92, 0.0, 0.92]) {
+    if (med) { p.cyl(0.012, 0.014, 0.32, 5, x, y0, 1.36, C.darkwood); p.cone(0.03, 0.06, 5, x, 0.34, 1.36, C.flame, true); }
+    else lampPost(p, x, 1.36, 0.34);
+  }
+  p.cyl(0.008, 0.01, 0.62, 5, jx, y0, 1.38, C.darkwood); p.box(0.18, 0.01, 0.01, jx, 0.52, 1.38, C.darkwood);
+  for (const [dx, y, c] of [[-0.07, 0.44, 0xd84a3e], [0.07, 0.42, 0xf2c23a], [0.07, 0.34, 0x3a6ab8]] as number[][]) sway([jx + dx, y + 0.06, 1.38], [1, 0, 0], 0.25, 0.9).box(0.004, 0.06, 0.07, 0, -0.03, 0.035, c);
+  if (ind) {
+    // petite locomotive de manœuvre sur les rails du quai, escalier de coupée sur roues, potence et sa caisse au-dessus de la
+    // porte de l'entrepôt, piles de bois, sacs sur palettes
+    const lx = 0.05, lz = 1.015;
+    p.box(0.26, 0.11, 0.13, lx, 0.035, lz, 0x2a3a2e); p.cyl(0.05, 0.05, 0.18, 10, lx + 0.03, 0.12, lz, 0x2a2a2e); p.box(0.08, 0.12, 0.13, lx - 0.1, 0.12, lz, 0x2a3a2e);
+    p.box(0.1, 0.02, 0.15, lx - 0.1, 0.24, lz, 0x1e1e22); p.cyl(0.018, 0.024, 0.09, 8, lx + 0.1, 0.2, lz, 0x1e1e22); smoke(lx + 0.1, 0.31, lz, 2);
+    for (const dx of [-0.08, 0.02, 0.1]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 10).rotateX(Math.PI / 2), lx + dx, 0.035, lz + s * 0.068, 0xb8322c);
+    p.add(new THREE.BoxGeometry(0.14, 0.012, 0.3), -0.72, 0.12, 1.25, 0x8a8f96, 0, false, 0, 0.35);
+    for (let k = 0; k < 5; k++) p.box(0.14, 0.01, 0.04, -0.72, 0.03 + k * 0.025, 1.12 + k * 0.035, 0x6a6f76);
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.01, 8).rotateZ(Math.PI / 2), -0.72 + s * 0.08, 0.02, 1.08, 0x2a2a2e);
+    p.box(0.012, 0.012, 0.16, 0.05, 0.4, -0.5, C.darkwood); p.box(0.003, 0.12, 0.003, 0.05, 0.28, -0.43, 0x3a3030);
+    sway([0.05, 0.28, -0.43], [1, 0, 0], 0.15, 0.6).box(0.06, 0.05, 0.06, 0, -0.06, 0, 0xb48a5e);
+    for (let k = 0; k < 4; k++) p.add(new THREE.CylinderGeometry(0.022, 0.022, 0.42, 6).rotateZ(Math.PI / 2), -0.3, y0 + 0.022 + (k % 2) * 0.04, -0.2 + Math.floor(k / 2) * 0.05 + (k % 2) * 0.025, 0x9a7452);
+    for (const [x, z] of [[0.3, -0.25], [0.45, -0.22]]) { p.box(0.14, 0.02, 0.12, x, y0, z, 0x8a6448); for (let k = 0; k < 4; k++) p.add(new THREE.IcosahedronGeometry(0.03, 0).scale(1.2, 0.75, 1), x - 0.03 + (k % 2) * 0.06, y0 + 0.04 + Math.floor(k / 2) * 0.035, z, 0xd9c4a0, k); }
+    figure(p, -0.72, 0.95, 0x2c3e6a, Math.PI); figure(p, 0.3, 1.25, 0x5a6a7a, -1.2);
+  }
   // dockers au travail, sacs à l'épaule
   for (const [x, z, c, r] of [[-0.2, 1.15, 0x5a6a7a, 0], [0.3, 0.7, 0x8a5a3a, 2.4], [-0.6, 0.35, 0x3a5a8a, -1.2], [1.0, 1.25, 0x6a4a3a, Math.PI]] as number[][]) {
     figure(p, x, z, age >= 4 ? 0xf28a3c : c, r);
@@ -5439,6 +5815,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   attachOut = [];
   sinkOut = 0;
   swayOut = [];
+  crowdOut = [];
+  mainParts = p;
   spinOut = null;
   vaneOut = null;
   switch (kind) {
@@ -5496,7 +5874,9 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   // roues d'un chevalement, coupole d'un observatoire, abeilles d'un rucher
   const spin = spinOut as Spin | null;
   if (spin) m.rotor = { geo: spin.p.build(false).body, pivot: spin.pivot, axis: spin.axis, speed: spin.speed };
-  if (swayOut.length) m.sways = swayOut.filter((sw) => sw.p.body.length).map((sw) => ({ geo: sw.p.build(false).body, pivot: [...sw.pivot] as [number, number, number], axis: sw.axis, amp: sw.amp, freq: sw.freq, spin: sw.spin }));
+  if (swayOut.length) m.sways = swayOut.filter((sw) => sw.p.body.length).map((sw) => { const bb = sw.p.build(false); return { geo: bb.body, glow: bb.glow, pivot: [...sw.pivot] as [number, number, number], axis: sw.axis, amp: sw.amp, freq: sw.freq, spin: sw.spin, steady: sw.steady }; });
+  mainParts = null;
+  if (crowdOut.length) { m.crowd = mergeGeometries(crowdOut, false); for (const g of crowdOut) g.dispose(); crowdOut = []; }
   const vn = vaneOut as { p: Parts; pivot: [number, number]; face: number } | null;
   if (vn) m.vane = { pivot: vn.pivot, face: vn.face, whole: false, geo: vn.p.build(false).body };
   // plus de dalle : tout descend de son épaisseur (à un centimètre près, pour que les pavés ne se confondent pas avec le sol)
@@ -5507,13 +5887,19 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     m.smoke = m.smoke.map((v, i) => (i % 4 === 1 ? v - d : v));
     if (m.rotor) m.rotor.pivot[1] -= d;
     for (const sw of m.sways ?? []) sw.pivot[1] -= d;
+    if (m.crowd) { m.crowd.translate(0, -d, 0); const pv = m.crowd.attributes.aPivot; for (let i = 0; i < pv.count; i++) pv.setY(i, pv.getY(i) - d); }
   }
   // dessiné pour une case, posé sur quatre : tout s'agrandit, cheminées comprises
   if (size === 2 && UPSCALE.includes(kind)) {
     m.body.scale(UP, UP, UP);
     m.glow?.scale(UP, UP, UP);
     m.smoke = m.smoke.map((v, i) => (i % 4 === 3 ? v : v * UP));
-    for (const sw of m.sways ?? []) { sw.geo.scale(UP, UP, UP); sw.pivot = sw.pivot.map((v) => v * UP) as [number, number, number]; }
+    for (const sw of m.sways ?? []) { sw.geo.scale(UP, UP, UP); sw.glow?.scale(UP, UP, UP); sw.pivot = sw.pivot.map((v) => v * UP) as [number, number, number]; }
+    if (m.crowd) {
+      m.crowd.scale(UP, UP, UP);
+      const pv = m.crowd.attributes.aPivot, an = m.crowd.attributes.aAnim;
+      for (let i = 0; i < pv.count; i++) { pv.setXYZ(i, pv.getX(i) * UP, pv.getY(i) * UP, pv.getZ(i) * UP); an.setW(i, an.getW(i) * UP); }
+    }
   }
   cache.set(key, m);
   return m;

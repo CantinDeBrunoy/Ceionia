@@ -6,7 +6,7 @@ import { GEN, GEN_FIXED, GEN_PLAN, Zone, continentPlan, riverU } from '../src/wo
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
-import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS } from '../src/sim/missions';
+import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS, choiceAt } from '../src/sim/missions';
 import { KINDS, KindId } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
@@ -984,6 +984,30 @@ describe('expéditions', () => {
     const kits = a.party.map((id) => agents.agents.find((g) => g.id === id)!.kit!);
     expect(kits.filter((k) => k.horse).length).toBe(2);
     expect(kits.every((k) => k.weapon === 'sword')).toBe(true);
+  });
+
+  it('une décision prise en route ne fait pas reculer l’équipe, et les libellés suivent l’âge', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 30, 0);
+    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
+    const m = MISSIONS.find((q) => q.id === 'coal')!;
+    const a = ex.start(m, 0)!;
+    for (let i = 0; i < 40000 && !(a.phase === 'work' && a.wait); i++) { agents.update(0.05, 10, 3, false, 30, 0); ex.update(0.05); }
+    expect(a.wait).not.toBeNull();
+    const longer = a.wait!.options.findIndex((o, i) => (o.work ?? 0) > 0 && ex.canTake(a, i));
+    const before = ex.progress(a);
+    // un choix qui allonge le chantier (ou, à défaut, le premier) : l'avancement reste où il était
+    const pick = longer >= 0 ? longer : a.wait!.options.findIndex((_, i) => ex.canTake(a, i));
+    expect(ex.decide(a, pick)).toBe(true);
+    expect(ex.progress(a)).toBeCloseTo(before, 5);
+    // l'expédition armée : chevaliers au Moyen Âge, cuirassiers et fusiliers à l'âge industriel
+    const deep = MISSIONS.find((q) => q.id === 'deep')!;
+    expect(choiceAt(deep.choices[1], 2).label).toBe('Hommes d’armes en armure');
+    expect(choiceAt(deep.choices[1], 3).label).toBe('Ligne de fusiliers');
+    expect(choiceAt(deep.choices[0], 4).label).toBe('Blindés en tête');
   });
 
   it('une mine ne se creuse que dans la montagne, et rapporte généreusement minerai et pierre', () => {

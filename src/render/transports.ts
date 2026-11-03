@@ -137,7 +137,7 @@ export class Transports {
     this.group.add(root);
     // le poste d'amarrage le long du quai, puis tout droit vers le large tant que l'eau est profonde (dix cases au plus)
     g.updateMatrixWorld();
-    const berth = (big ? new THREE.Vector3(-0.15, 0, age >= 4 ? 1.95 : age === 3 ? 1.84 : 1.76) : new THREE.Vector3(0, 0, age >= 4 ? 1.42 : 1.38)).applyMatrix4(g.matrixWorld);
+    const berth = (big ? new THREE.Vector3(age >= 4 ? -0.2 : -0.32, 0, age >= 4 ? 1.95 : age === 3 ? 1.84 : 1.76) : new THREE.Vector3(0, 0, age >= 4 ? 1.42 : 1.38)).applyMatrix4(g.matrixWorld);
     const fx = Math.sin(g.rotation.y), fz = Math.cos(g.rotation.y), path = [berth.clone()];
     for (let k = 1; k <= 20; k++) {
       const x = berth.x + fx * k * 0.5, z = berth.z + fz * k * 0.5;

@@ -13,6 +13,7 @@ import { RoadView } from './render/roads';
 import { stepWind } from './render/wind';
 import { Helis } from './render/helis';
 import { Airships } from './render/airships';
+import { Fairground } from './render/fairground';
 import { AlpineView } from './render/alpine';
 import { Emergencies } from './render/emergency';
 import { Hoists } from './render/hoists';
@@ -89,6 +90,7 @@ class Game implements UIHost {
   traffic: Traffic;
   helis: Helis;
   airships: Airships;
+  fairground: Fairground;
   alpine: AlpineView;
   emergencies: Emergencies;
   hoists: Hoists;
@@ -202,6 +204,7 @@ class Game implements UIHost {
     this.traffic.avoid = this.roads.islands;
     this.helis = new Helis(w, this.buildings);
     this.airships = new Airships(w);
+    this.fairground = new Fairground(w, this.buildings);
     this.alpine = new AlpineView(w, this.buildings);
     this.emergencies = new Emergencies(w, this.fires, this.roads.islands);
     this.fires.responder = this.emergencies;
@@ -784,6 +787,7 @@ class Game implements UIHost {
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
       this.helis.update(gdt, this.sim.age);
       this.airships.update(gdt, this.time.hour, this.sim.age);
+      this.fairground.update(dt);
       this.alpine.update(gdt, this.sim.age, this.season.snow);
       this.emergencies.update(gdt, this.sim.age);
       this.hoists.update(gdt);

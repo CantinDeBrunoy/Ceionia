@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World, WorldListener } from '../world/world';
 import { Building, KINDS, sizeOf } from '../build/catalog';
 import { getModel, ModelOpts } from './models';
-import { mats } from './materials';
+import { mats, crowdMat, CROWD } from './materials';
 import { hash2 } from '../core/rng';
 import { facingRoadRot } from '../build/placement';
 import { wind } from './wind';
@@ -26,14 +26,16 @@ interface Entry {
   rotor: THREE.Mesh | null;
   spin: { axis: THREE.Vector3; speed: number; phase: number } | null;
   /** drapeaux, enseignes, linge, cloches qui se balancent */
-  sways: { mesh: THREE.Mesh; axis: THREE.Vector3; amp: number; freq: number; phase: number; spin?: number }[];
+  sways: { mesh: THREE.Mesh; axis: THREE.Vector3; amp: number; freq: number; phase: number; spin?: number; steady?: boolean }[];
+  /** personnages animés du bâtiment */
+  crowd: THREE.Mesh | null;
   /** tête tournée face au vent (éolienne, roue de pompage) : son pivot, sa tête, le cap du rotor, déjà orientée ou non */
   turn: THREE.Group | null;
   vane: THREE.Mesh | null;
   face: number;
   aimed: boolean;
   /** lieu de rencontre posé sur la pente : son modèle épouse le sol (géométries propres à ce bâtiment), et pour quel sol */
-  draped?: { key: string; body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null } | null;
+  draped?: { key: string; body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; crowd: THREE.BufferGeometry | null } | null;
 }
 
 /**
@@ -47,6 +49,9 @@ function drape(geo: THREE.BufferGeometry, w: World, cx: number, cz: number, ry: 
     p.setY(i, p.getY(i) + w.hAt(cx + lx * c + lz * s, cz - lx * s + lz * c) - base);
   }
   p.needsUpdate = true;
+  // les personnages pivotent autour de pieds qui suivent le sol eux aussi
+  const pv = out.attributes.aPivot;
+  if (pv) for (let i = 0; i < pv.count; i++) { const lx = pv.getX(i), lz = pv.getZ(i); pv.setY(i, pv.getY(i) + w.hAt(cx + lx * c + lz * s, cz - lx * s + lz * c) - base); }
   out.computeVertexNormals();
   return out;
 }
@@ -100,7 +105,7 @@ export class BuildingView implements WorldListener {
   /** Rend au bâtiment son modèle partagé (et libère sa copie déformée) */
   private undrape(e: Entry) {
     if (!e.draped) return;
-    e.draped.body.dispose(); e.draped.glow?.dispose();
+    e.draped.body.dispose(); e.draped.glow?.dispose(); e.draped.crowd?.dispose();
     e.draped = null;
   }
 
@@ -130,7 +135,7 @@ export class BuildingView implements WorldListener {
     const body = new THREE.Mesh(new THREE.BufferGeometry(), mats.body);
     body.castShadow = true; body.receiveShadow = true;
     group.add(body);
-    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null, sways: [], turn: null, vane: null, face: 0, aimed: false };
+    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null, sways: [], crowd: null, turn: null, vane: null, face: 0, aimed: false };
     if (animate) group.scale.setScalar(0.001);
     this.group.add(group);
     this.entries.set(b.id, e);
@@ -187,8 +192,16 @@ export class BuildingView implements WorldListener {
         mesh.castShadow = true;
         mesh.position.set(...sw.pivot);
         e.group.add(mesh);
-        return { mesh, axis: new THREE.Vector3(...sw.axis).normalize(), amp: sw.amp, freq: sw.freq * (0.85 + hash2(b.x + i, b.z, 13) * 0.3), phase: hash2(b.x, b.z + i, 14) * 6.28, spin: sw.spin };
+        // les ampoules d'un manège tournent avec lui
+        if (sw.glow) mesh.add(new THREE.Mesh(sw.glow, mats.glow));
+        return { mesh, axis: new THREE.Vector3(...sw.axis).normalize(), amp: sw.amp, freq: sw.freq * (0.85 + hash2(b.x + i, b.z, 13) * 0.3), phase: hash2(b.x, b.z + i, 14) * 6.28, spin: sw.spin, steady: sw.steady };
       });
+      // les personnages du bâtiment, animés
+      if (m.crowd) {
+        if (!e.crowd) { e.crowd = new THREE.Mesh(m.crowd, crowdMat); e.crowd.castShadow = true; e.group.add(e.crowd); }
+        e.crowd.geometry = m.crowd;
+        e.crowd.visible = true;
+      } else if (e.crowd) e.crowd.visible = false;
       // tête face au vent : le rotor et la tête (ou tout le modèle) pendus à un pivot sur l'axe du mât
       const v = m.vane;
       if (v) {
@@ -243,14 +256,16 @@ export class BuildingView implements WorldListener {
       if (e.draped?.key !== dk) {
         this.undrape(e);
         const ry = b.rot * Math.PI / 2;
-        e.draped = { key: dk, body: drape(m.body, w, b.x + s / 2, b.z + s / 2, ry, base), glow: m.glow ? drape(m.glow, w, b.x + s / 2, b.z + s / 2, ry, base) : null };
+        e.draped = { key: dk, body: drape(m.body, w, b.x + s / 2, b.z + s / 2, ry, base), glow: m.glow ? drape(m.glow, w, b.x + s / 2, b.z + s / 2, ry, base) : null, crowd: m.crowd ? drape(m.crowd, w, b.x + s / 2, b.z + s / 2, ry, base) : null };
         e.body.geometry = e.draped.body;
         if (e.glow && e.draped.glow) e.glow.geometry = e.draped.glow;
+        if (e.crowd && e.draped.crowd) e.crowd.geometry = e.draped.crowd;
       }
     } else if (e.draped) {
       this.undrape(e);
       e.body.geometry = m.body;
       if (e.glow && m.glow) e.glow.geometry = m.glow;
+      if (e.crowd && m.crowd) e.crowd.geometry = m.crowd;
     }
     // la hauteur et la sorte de socle (butte ou fondation) : refait quand l'une ou l'autre change
     const pk = ph + (early && ph > 0 ? 100 : 0) + (rocky && ph > 0 ? 200 : 0);
@@ -280,6 +295,7 @@ export class BuildingView implements WorldListener {
     if (!m.vane?.whole) {
       e.body.position.set(off, 0, off);
       if (e.glow) e.glow.position.set(off, 0, off);
+      if (e.crowd) e.crowd.position.set(off, 0, off);
     }
   }
 
@@ -319,9 +335,10 @@ export class BuildingView implements WorldListener {
   update(dt: number, worldAge: number) {
     // drapeaux, enseignes et linge flottent, plus fort quand le vent forcit ; les cloches branlent à leur rythme
     this.swayT += dt;
+    CROWD.time.value += dt;
     const gust = 0.55 + wind.speed * 0.9;
     // les manèges tournent sans fin, à leur vitesse
-    for (const e of this.entries.values()) for (const sw of e.sways) sw.mesh.quaternion.setFromAxisAngle(sw.axis, sw.spin ? this.swayT * sw.spin * 6.28 + sw.phase : (Math.sin(this.swayT * sw.freq * 6.28 + sw.phase) + Math.sin(this.swayT * sw.freq * 11.3 + sw.phase * 2) * 0.3) * sw.amp * gust);
+    for (const e of this.entries.values()) for (const sw of e.sways) sw.mesh.quaternion.setFromAxisAngle(sw.axis, sw.spin ? this.swayT * sw.spin * 6.28 + sw.phase : (Math.sin(this.swayT * sw.freq * 6.28 + sw.phase) + (sw.steady ? 0 : Math.sin(this.swayT * sw.freq * 11.3 + sw.phase * 2) * 0.3)) * sw.amp * (sw.steady ? 1 : gust));
     // les ailes et les pales tournent, chaque moulin à son rythme (les éoliennes plus vite quand le vent forcit) ; les
     // éoliennes et les roues de pompage se tournent lentement face au vent, le rotor du côté d'où il vient
     for (const e of this.entries.values()) {

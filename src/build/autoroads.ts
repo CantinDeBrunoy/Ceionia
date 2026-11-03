@@ -18,19 +18,22 @@ export function autoRoad(w: World, b: Building): number {
   if (b.kind === 'lamp') return 0;
   const ring = ringCells(w, b);
   if (ring.some((k) => w.road[k])) return 0;
-  // départ : devant la porte si possible, sinon tout autour
-  const f = FRONT[b.rot], s = sizeOf(b);
+  // départ : devant la porte si possible, sinon tout autour. Le ponton et le port ont leur façade sur l'eau : leur accès part
+  // de l'arrière, côté terre, et ne passe jamais sur l'eau (pas de pont qui longe le quai)
+  const shore = b.kind === 'pier' || b.kind === 'harbor';
+  const f = shore ? [-FRONT[b.rot][0], -FRONT[b.rot][1]] : FRONT[b.rot], s = sizeOf(b);
+  const dry = (k: number) => !shore || !w.isWet(k % N, Math.floor(k / N));
   const front = ring.filter((k) => {
     const x = k % N, z = Math.floor(k / N);
     return f[0] ? x === (f[0] > 0 ? b.x + s : b.x - 1) : z === (f[1] > 0 ? b.z + s : b.z - 1);
-  }).filter((k) => w.canRoad(k % N, Math.floor(k / N)));
-  const starts = front.length ? front : ring.filter((k) => w.canRoad(k % N, Math.floor(k / N)));
+  }).filter((k) => w.canRoad(k % N, Math.floor(k / N)) && dry(k));
+  const starts = front.length ? front : ring.filter((k) => w.canRoad(k % N, Math.floor(k / N)) && dry(k));
   if (!starts.length) return 0;
   let added = 0;
   const hasRoads = w.road.some((v) => v === 1);
   // vers le réseau, sinon vers le bâtiment voisin le plus proche
   const goal = hasRoads ? (k: number) => w.road[k] === 1 : nearBuilding(w, b);
-  const path = cheapest(w, starts, goal, MAX_LINK, new Set());
+  const path = cheapest(w, starts, goal, MAX_LINK, new Set(), shore);
   if (path) added += lay(w, path);
   // un hameau qui atteint trois bâtiments se relie au village, une fois
   added += joinHamlet(w, b);
@@ -56,7 +59,7 @@ function nearBuilding(w: World, self: Building) {
  * de `max` cases. Coûts : herbe 1, pente, forêt, rocaille, eau (pont) plus chères ; champs et jardins à éviter ; une case qui
  * longe une route existante est chère aussi (pas de routes en double)
  */
-function cheapest(w: World, starts: number[], goal: (k: number) => boolean, max: number, avoid: Set<number>): number[] | null {
+function cheapest(w: World, starts: number[], goal: (k: number) => boolean, max: number, avoid: Set<number>, noWater = false): number[] | null {
   const dist = new Float32Array(N * N).fill(Infinity), steps = new Uint16Array(N * N), prev = new Int32Array(N * N).fill(-1);
   const open: number[] = [];
   for (const k of starts) { dist[k] = cost(w, k, true); open.push(k); }
@@ -77,7 +80,7 @@ function cheapest(w: World, starts: number[], goal: (k: number) => boolean, max:
       const nx = x + dx, nz = z + dz;
       if (!w.inCells(nx, nz)) continue;
       const k = nz * N + nx;
-      if (avoid.has(k)) continue;
+      if (avoid.has(k) || (noWater && w.isWet(nx, nz))) continue;
       const isGoal = goal(k);
       if (!isGoal && !w.canRoad(nx, nz)) continue;
       const d = dist[c] + (isGoal ? 0 : cost(w, k, false));

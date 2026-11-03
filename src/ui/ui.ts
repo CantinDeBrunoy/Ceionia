@@ -10,7 +10,7 @@ import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import { Railway, Train, isStation } from '../sim/railway';
-import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
+import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
@@ -917,7 +917,7 @@ export class UI {
     arsenal();
     ov.querySelectorAll<HTMLButtonElement>('button.choice').forEach((b) => (b.onclick = () => {
       const m = ex.list(age).find((x) => x.id === b.dataset.m)!, ci = +b.dataset.c!;
-      const a = ex.start(m, ci);
+      const a = ex.start(m, ci, this.host.sim.age);
       if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? 'Aucun chemin praticable vers cette destination.'); return; }
       close();
       h.audio.sfxClick();
@@ -930,8 +930,8 @@ export class UI {
   /** Boutons des choix d'une mission : équipe, durée, risque, équipement emporté, gains ; grisés avec la raison s'il manque quelque chose */
   private choiceButtons(m: Mission) {
     const ex = this.host.expeditions, done = ex.done(m);
-    return m.choices.map((c, i) => {
-      const why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
+    return m.choices.map((c0, i) => {
+      const c = choiceAt(c0, this.host.sim.age), why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
       return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
           <b>${c.label}</b><span>${c.text}</span>
           <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''} · ⏳ ${workLabel(c.work)} · 🎲 ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} ${riskLabel(pv.risk)} · ${DEST_ICON[c.dest]}</small>

@@ -29,6 +29,8 @@ interface Unit {
   z: number;
   heading: number;
   state: 'go' | 'work' | 'back' | 'patrol';
+  /** temps passé à viser le même point du chemin (au-delà, on l'y pose) */
+  stuck?: number;
   t: number;
   target: Building | null;
   /** cases de route au départ (devant la caserne) et à l'arrivée */
@@ -308,9 +310,13 @@ export class Emergencies {
   private drive(u: Unit, dt: number) {
     if (u.i >= u.path.length) return true;
     const [cx, cz] = this.world.passPoint(u.path, u.i);
-    const hx = Math.sin(u.heading), hz = Math.cos(u.heading), tx = cx - hz * 0.14, tz = cz + hx * 0.14;
+    // la droite de la chaussée se prend dans le sens de la rue (du point d'avant à celui-ci), pas dans celui du véhicule :
+    // sinon, près du but, le point visé tourne avec lui et il tourne en rond sans jamais l'atteindre
+    const [px, pz] = u.i > 0 ? this.world.passPoint(u.path, u.i - 1) : u.path.length > 1 ? (([nx, nz]) => [cx * 2 - nx, cz * 2 - nz])(this.world.passPoint(u.path, 1)) : [u.x, u.z];
+    const sl = Math.hypot(cx - px, cz - pz) || 1, hx = (cx - px) / sl, hz = (cz - pz) / sl, tx = cx - hz * 0.14, tz = cz + hx * 0.14;
     const dx = tx - u.x, dz = tz - u.z, dist = Math.hypot(dx, dz), step = dt * u.speed;
-    if (dist <= step) { u.x = tx; u.z = tz; u.i++; }
+    u.stuck = (u.stuck ?? 0) + dt;
+    if (dist <= step || u.stuck > 4) { u.x = tx; u.z = tz; u.i++; u.stuck = 0; }
     else {
       u.x += (dx / dist) * step; u.z += (dz / dist) * step;
       let da = Math.atan2(dx, dz) - u.heading;
