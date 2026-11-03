@@ -1,5 +1,5 @@
 import { World, N, MAX_H, MIN_H, VEG_VOLCANO } from './world';
-import { smoothstep } from '../core/rng';
+import { clamp, smoothstep } from '../core/rng';
 import { Simplex } from './noise';
 
 const ridges = new Simplex(31);
@@ -31,19 +31,42 @@ export function brushOnBuilding(world: World, wx: number, wz: number, radius: nu
 /** Rayon du volcan posé avec ce pinceau (la hauteur suit la largeur) */
 export const volcanoRadius = (radius: number) => Math.max(5, radius * 2);
 
+/** Rayon du volcan de la carte : jusque-là, le cône reste lisse ; au-delà (grands pinceaux), il prend ravines et bord dentelé */
+const MAP_VOLCANO_R = 11;
+
 /** Volcan : cône aux flancs concaves et cratère au sommet, d'un seul geste ; renvoie true si le relief a changé */
 export function raiseVolcano(world: World, wx: number, wz: number, radius: number): boolean {
   // centré sur la case du cratère, là où se posent la lave et la fumée
   wx = Math.min(N - 1, Math.floor(wx)) + 0.5; wz = Math.min(N - 1, Math.floor(wz)) + 0.5;
-  // la hauteur suit la largeur : un grand volcan domine la carte
-  const R = volcanoRadius(radius), H = R * 1.6, crater = Math.max(1.5, R * 0.25), pit = 1.2 + H * 0.1;
+  // la hauteur suit la largeur : un grand volcan domine la carte. Plus large que celui de la carte, il s'étale plus qu'il ne
+  // monte : son sommet restait écrêté au plafond du relief (un dôme plat, aux flancs trop raides) ; son cratère s'élargit
+  // moins vite, net et profond, au lieu d'une vaste cuvette
+  const R = volcanoRadius(radius), over = Math.max(0, R - MAP_VOLCANO_R), big = smoothstep(MAP_VOLCANO_R, MAP_VOLCANO_R + 3, R);
+  const H = R * 1.6 - over * 1.3, crater = Math.max(1.5, R * 0.25) - over * 0.13, pit = 1.2 + H * 0.1 + big * 0.6;
   // grille brute : le relief affiché n'est pas encore calculé quand la carte est générée
   const base = Math.max(0.3, world.cellAvg(Math.min(N - 1, Math.floor(wx)), Math.min(N - 1, Math.floor(wz))));
   // bord du cratère arasé sur près d'une case : sur la grille, les sommets proches du bord sont à des distances inégales
   // et le cône, raide en haut, y dessinerait des dents
-  const rim = base + H * Math.pow(1 - (crater + 0.8) / R, 1.6);
+  // (un grand volcan garde son bord sous le plafond du relief, que ses dents ne touchent pas)
+  const cone = base + H * Math.pow(1 - (crater + 0.8) / R, 1.6), rim = big ? Math.min(MAX_H - 1.2, cone) : cone;
   // grands volcans : le rebord s'élargit aussi vers l'intérieur (sommets nombreux près du bord, paroi intérieure très haute)
   const inner = crater - Math.min(0.6, Math.max(0, (R - 9) * 0.1));
+  // grands volcans : les flancs se creusent de ravines qui rayonnent du sommet (coulées anciennes, torrents de boue), séparées
+  // par des arêtes ; elles serpentent un peu, s'ouvrent sous le bord du cratère et s'effacent au pied. Le bord du cratère
+  // ondule, un peu plus haut ici, ébréché là
+  // (assez larges pour que le relief affiché, lissé, les garde)
+  const gullies = Math.round(R * 0.5);
+  const ravine = (x: number, z: number, d: number) => {
+    if (!big) return 0;
+    const a = Math.atan2(z - wz, x - wx), t = clamp((d - crater) / (R - crater), 0, 1);
+    const v = 0.5 + 0.5 * Math.cos(gullies * a + ridges.noise2(x * 0.12 + 13.1, z * 0.12 - 7.7) * 1.4);
+    const deep = 0.7 + 0.3 * ridges.noise2(Math.cos(a) * 2.5 + 31, Math.sin(a) * 2.5 - 17);
+    return big * (0.5 + R * 0.14) * smoothstep(0.4, 1, v) * deep * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.1)), 0.6);
+  };
+  const lip = (x: number, z: number) => {
+    const a = Math.atan2(z - wz, x - wx);
+    return big * 0.45 * ridges.noise2(Math.cos(a) * 1.8 + 52, Math.sin(a) * 1.8 + 52);
+  };
   const x0 = Math.max(0, Math.floor(wx - R)), x1 = Math.min(N, Math.ceil(wx + R));
   const z0 = Math.max(0, Math.floor(wz - R)), z1 = Math.min(N, Math.ceil(wz + R));
   let changed = false;
@@ -51,11 +74,11 @@ export function raiseVolcano(world: World, wx: number, wz: number, radius: numbe
     for (let x = x0; x <= x1; x++) {
       const d = Math.hypot(x - wx, z - wz);
       if (d > R || locked(world, x, z)) continue;
-      const i = world.vi(x, z), h = world.heights[i];
+      const i = world.vi(x, z), h = world.heights[i], top = rim + lip(x, z);
       // cratère : cuvette sous le bord ; flancs : jamais plus bas que le relief existant
-      // cratère à fond plat, où s'étale le lac de lave
-      const nh = d < inner ? rim - pit * Math.min(1, (1 - (d / inner) ** 2) * 1.6)
-        : d < crater ? rim : Math.max(h, Math.min(rim, base + H * Math.pow(1 - d / R, 1.6)));
+      // cratère à fond plat, où s'étale le lac de lave ; sa paroi tombe plus droit sous le bord des grands volcans
+      const nh = d < inner ? top - (top - rim + pit) * Math.min(1, (1 - (d / inner) ** 2) * (1.6 + big * 2))
+        : d < crater ? top : Math.max(h, Math.min(top, base + H * Math.pow(1 - d / R, 1.6)) - ravine(x, z, d));
       const c = Math.min(MAX_H, Math.max(MIN_H, nh));
       if (Math.abs(c - h) > 1e-5) { world.heights[i] = c; changed = true; }
     }
