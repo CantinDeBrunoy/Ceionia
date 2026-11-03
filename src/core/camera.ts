@@ -156,9 +156,14 @@ export class CameraRig {
   }
 
   /** Suit un point (une expédition) : la caméra glisse jusqu'à lui ; dist : la rapprocher au besoin */
-  follow(x: number, z: number, dist?: number) {
+  /** vitesse du jeu : à ×2 ou ×4, ce qu'on suit file d'autant, la vue le rattrape d'autant plus vite */
+  pace = 1;
+  /** hauteur au-dessus du sol du point suivi (une montgolfière en vol) */
+  private lift = 0;
+  follow(x: number, z: number, dist?: number, lift = 0) {
     this.goal.x = x; this.goal.z = z;
     this.tracking = 0.3;
+    this.lift = lift;
     if (dist !== undefined) this.goal.dist = clamp(Math.min(this.goal.dist, dist), this.minDist, this.maxDist);
   }
   zoom(f: number) { this.goal.dist = clamp(this.goal.dist * f, this.minDist, this.maxDist); }
@@ -203,13 +208,13 @@ export class CameraRig {
     const f = 1 - Math.exp(-dt * 10);
     // en suivant une équipe, la vue colle à elle (des cavaliers au galop la distanceraient)
     this.tracking = Math.max(0, this.tracking - dt);
-    const ft = this.tracking > 0 ? 1 - Math.exp(-dt * 24) : f;
+    const ft = this.tracking > 0 ? 1 - Math.exp(-dt * 24 * Math.max(1, this.pace)) : f;
     this.yaw += (this.goal.yaw - this.yaw) * f;
     this.pitch += (this.goal.pitch - this.pitch) * f;
     this.dist += (this.goal.dist - this.dist) * f;
     this.target.x += (this.goal.x - this.target.x) * ft;
     this.target.z += (this.goal.z - this.target.z) * ft;
-    this.target.y += (Math.max(0, groundY(this.target.x, this.target.z)) - this.target.y) * f;
+    this.target.y += (Math.max(0, groundY(this.target.x, this.target.z)) + (this.tracking > 0 ? this.lift : 0) - this.target.y) * f;
     this.apply(1);
     // la caméra passe par-dessus les sommets au lieu de les traverser
     const p = this.camera.position, floor = groundY(p.x, p.z) + 1.5;

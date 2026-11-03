@@ -638,6 +638,21 @@ describe('expéditions', () => {
     expect(w.h(x + 1, z + 1)).toBeGreaterThanOrEqual(0.12);
   });
 
+  it('le quai du port reste au ras de l’eau, même au coin qu’il partage avec un voisin plus haut', () => {
+    const w = continent();
+    let spot: [number, number] | null = null;
+    for (let z = 4; z < N - 6 && !spot; z++) for (let x = 4; x < N - 6 && !spot; x++) if (w.canPlace('harbor', x, z) === null && w.canPlace('house', x + 3, z - 1) === null) spot = [x, z];
+    expect(spot).not.toBeNull();
+    const [x, z] = spot!;
+    // une maison posée en hauteur, en diagonale du coin arrière du port
+    const hw = w as unknown as { heights: Float32Array; vi(x: number, z: number): number };
+    for (const [vx, vz] of [[x + 3, z - 1], [x + 4, z - 1], [x + 3, z], [x + 4, z]]) hw.heights[hw.vi(vx, vz)] = 1.2;
+    w.place('house', x + 3, z - 1, 0, true, 2, false);
+    w.place('harbor', x, z, 0, true, 3, false);
+    expect(w.h(x + 3, z)).toBeLessThanOrEqual(0.32 + 1e-6);
+    expect(w.h(x + 4, z - 1)).toBeGreaterThan(1);
+  });
+
   it('le port creuse son bassin devant le quai : le premier rang d’eau est assez profond pour un grand navire', () => {
     const w = continent(), F = [[0, 1], [1, 0], [0, -1], [-1, 0]];
     const front = (x: number, z: number, r: number, i: number): [number, number] => { const f = F[r]; return [f[0] ? (f[0] > 0 ? x + 3 : x - 1) : x + i, f[1] ? (f[1] > 0 ? z + 3 : z - 1) : z + i]; };

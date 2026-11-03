@@ -4,6 +4,7 @@ import { Building } from '../build/catalog';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { wind } from './wind';
+import { balloonEnvelopeGeo, balloonBasketGeo } from './balloon';
 
 /** Mât d'amarrage et aire des montgolfières dans le repère de l'aérodrome (centre de l'emprise, façade vers +z) */
 const MAST = new THREE.Vector3(0.95, 1.05, -0.95), PAD = new THREE.Vector2(0.75, 0.05);
@@ -32,25 +33,6 @@ function shipGeo(modern: boolean) {
 
 /** Hélices des moteurs du dirigeable, centrées */
 function propGeo() { const p = new Parts(); p.box(0.16, 0.02, 0.006, 0, 0, 0, 0x3c3c40); return p.build(false).body; }
-
-/** Enveloppe de la montgolfière, posée sur son embouchure (y = 0) : fuseaux de deux couleurs, jupe, couronne */
-function envelopeGeo(a: number, b: number) {
-  const p = new Parts(), n = 12;
-  for (let k = 0; k < n; k++) p.add(new THREE.SphereGeometry(0.36, 3, 10, (k / n) * Math.PI * 2, (Math.PI * 2) / n).scale(1, 1.2, 1), 0, 0.52, 0, k % 2 ? a : b);
-  p.add(new THREE.CylinderGeometry(0.2, 0.11, 0.2, 12, 1, true), 0, 0.12, 0, a);
-  p.cyl(0.08, 0.08, 0.02, 10, 0, 0.94, 0, b);
-  return p.build(false).body;
-}
-
-/** Nacelle d'osier, cordes, brûleur et deux aéronautes ; l'enveloppe se pose au-dessus (y = 0.18) */
-function basketGeo() {
-  const p = new Parts();
-  p.box(0.12, 0.08, 0.12, 0, 0, 0, 0xb08a5a); p.box(0.124, 0.012, 0.124, 0, 0.08, 0, 0x6a4c36);
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(new THREE.BoxGeometry(0.004, 0.12, 0.004), x * 0.07, 0.09, z * 0.07, 0x5a4a3a, 0, false, -x * 0.25, z * 0.25);
-  p.box(0.05, 0.03, 0.05, 0, 0.17, 0, 0x5d6878);
-  for (const [x, c] of [[-0.03, 0x8a3a3a], [0.03, 0x3a5a8a]] as number[][]) { p.box(0.03, 0.04, 0.03, x, 0.08, 0, c); p.box(0.024, 0.024, 0.024, x, 0.125, 0, 0xe8b894); }
-  return p.build(false).body;
-}
 
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffb04a });
 const COLORS: [number, number][] = [[0xd84a3e, 0xf2c23a], [0x3a6ab8, 0xf4f2ee], [0x4fa860, 0xf2c23a], [0xb45ad8, 0xf4f2ee]];
@@ -88,7 +70,7 @@ export class Airships {
       const balloons: Balloon[] = [];
       for (let i = 0; i < 2; i++) {
         const [a, c] = COLORS[(b.id + i) % COLORS.length];
-        const root = new THREE.Group(), env = new THREE.Mesh(envelopeGeo(a, c), mats.body), basket = new THREE.Mesh(basketGeo(), mats.body);
+        const root = new THREE.Group(), env = new THREE.Mesh(balloonEnvelopeGeo(a, c), mats.body), basket = new THREE.Mesh(balloonBasketGeo(true), mats.body);
         const flame = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.12, 5).translate(0, 0.06, 0), FLAME);
         env.position.y = 0.18; flame.position.y = 0.19;
         env.castShadow = basket.castShadow = true;

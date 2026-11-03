@@ -3,6 +3,7 @@ import { World } from '../world/world';
 import { Parts } from './parts';
 import { mats } from './materials';
 import type { BuildingView } from './buildings';
+import { HELIPADS } from './models';
 
 /** Héliport sur le toit du centre hospitalier (repère du bâtiment : centre de l'emprise, façade vers +z) */
 const PAD = new THREE.Vector3(-0.45, 0.889, -0.5);
@@ -29,17 +30,23 @@ interface Heli {
   bank: number;
 }
 
-/** Hélicoptère sanitaire, tourné vers +z : cabine blanche à bandeau rouge et croix, verrière, poutre de queue, patins, feux de position */
-function heliGeo() {
-  const p = new Parts();
-  p.add(new THREE.IcosahedronGeometry(0.07, 1).scale(1, 0.82, 1.5), 0, 0.078, 0.03, 0xf4f2ee);
+/** Livrées : sanitaire (blanc à bandeau et croix rouges), héliport (jaune à bandeau bleu nuit, rouge à bandeau blanc) */
+const LIVERIES: { body: number; band: number; cross: boolean }[] = [
+  { body: 0xf4f2ee, band: 0xd84a3e, cross: true }, { body: 0xf2c23a, band: 0x22305a, cross: false }, { body: 0xd84a3e, band: 0xf4f2ee, cross: false },
+];
+
+/** Hélicoptère, tourné vers +z : cabine à bandeau (et croix pour le sanitaire), verrière, poutre de queue, patins, feux de position */
+function heliGeo(livery = 0) {
+  const p = new Parts(), { body, band, cross } = LIVERIES[livery];
+  p.add(new THREE.IcosahedronGeometry(0.07, 1).scale(1, 0.82, 1.5), 0, 0.078, 0.03, body);
   p.add(new THREE.IcosahedronGeometry(0.052, 1).scale(1, 0.75, 1.1), 0, 0.09, 0.09, 0x86c4d8);
-  p.box(0.142, 0.022, 0.19, 0, 0.042, 0.02, 0xd84a3e);
-  for (const s of [-1, 1]) { p.box(0.004, 0.034, 0.012, s * 0.071, 0.065, -0.01, 0xd84a3e); p.box(0.004, 0.012, 0.034, s * 0.071, 0.076, -0.01, 0xd84a3e); }
-  p.box(0.028, 0.03, 0.24, 0, 0.075, -0.18, 0xf4f2ee);
-  p.box(0.03, 0.01, 0.1, 0, 0.096, -0.2, 0xd84a3e);
-  p.box(0.008, 0.07, 0.045, 0, 0.08, -0.29, 0xd84a3e);
-  p.box(0.07, 0.006, 0.025, 0, 0.09, -0.27, 0xf4f2ee);
+  p.box(0.142, 0.022, 0.19, 0, 0.042, 0.02, band);
+  if (cross) for (const s of [-1, 1]) { p.box(0.004, 0.034, 0.012, s * 0.071, 0.065, -0.01, band); p.box(0.004, 0.012, 0.034, s * 0.071, 0.076, -0.01, band); }
+  else for (const s of [-1, 1]) for (let k = 0; k < 2; k++) p.box(0.004, 0.022, 0.03, s * 0.071, 0.07, -0.03 + k * 0.05, 0x86c4d8);
+  p.box(0.028, 0.03, 0.24, 0, 0.075, -0.18, body);
+  p.box(0.03, 0.01, 0.1, 0, 0.096, -0.2, band);
+  p.box(0.008, 0.07, 0.045, 0, 0.08, -0.29, band);
+  p.box(0.07, 0.006, 0.025, 0, 0.09, -0.27, body);
   // patins et leurs jambes
   for (const s of [-1, 1]) {
     p.box(0.008, 0.008, 0.22, s * 0.055, 0, 0.02, 0x5d6878);
@@ -76,21 +83,21 @@ function tailGeo() {
  */
 export class Helis {
   group = new THREE.Group();
-  private helis = new Map<number, Heli>();
-  private geo = heliGeo();
+  private helis = new Map<string, Heli>();
+  private geos = [heliGeo(0), heliGeo(1), heliGeo(2)];
   private rotorG = rotorGeo();
   private tailG = tailGeo();
   private v = new THREE.Vector3();
 
   constructor(private world: World, private buildings: BuildingView) {}
 
-  private make(id: number): Heli {
-    const root = new THREE.Group(), hull = new THREE.Group();
+  private make(id: number, livery = 0): Heli {
+    const root = new THREE.Group(), hull = new THREE.Group(), geo = this.geos[livery];
     root.add(hull);
-    const body = new THREE.Mesh(this.geo.body, mats.body);
+    const body = new THREE.Mesh(geo.body, mats.body);
     body.castShadow = true;
     hull.add(body);
-    if (this.geo.glow) hull.add(new THREE.Mesh(this.geo.glow, mats.glow));
+    if (geo.glow) hull.add(new THREE.Mesh(geo.glow, mats.glow));
     const rotor = new THREE.Mesh(this.rotorG, mats.body), tail = new THREE.Mesh(this.tailG, mats.body);
     rotor.position.set(0, 0.145, 0.03);
     tail.position.set(0.012, 0.09, -0.29);
@@ -104,18 +111,23 @@ export class Helis {
   }
 
   update(dt: number, age: number) {
-    const w = this.world, live = new Set<number>();
+    const w = this.world, live = new Set<string>();
     for (const b of w.buildings.values()) {
-      if (b.kind !== 'health' || b.age < 4 || b.small || age < 4) continue;
+      // l'hélicoptère sanitaire du centre hospitalier ; les deux de l'héliport, à leurs couleurs
+      const pads = b.kind === 'health' && !b.small ? [PAD] : b.kind === 'heliport' ? HELIPADS.map((q) => new THREE.Vector3(...q)) : null;
+      if (!pads || b.age < 4 || age < 4) continue;
       const g = this.buildings.entries.get(b.id)?.group;
       if (!g) continue;
-      live.add(b.id);
-      let h = this.helis.get(b.id);
       g.updateMatrixWorld();
-      if (!h) { h = this.make(b.id); h.heading = g.rotation.y; this.helis.set(b.id, h); }
-      h.pad.copy(PAD).applyMatrix4(g.matrixWorld);
-      if (h.phase === 'parked') h.pos.copy(h.pad);
-      this.step(h, dt);
+      pads.forEach((pad, i) => {
+        const key = `${b.id}:${i}`;
+        live.add(key);
+        let h = this.helis.get(key);
+        if (!h) { h = this.make(b.id + i * 5, b.kind === 'heliport' ? 1 + i : 0); h.heading = g.rotation.y + (i ? 0.6 : -0.4); this.helis.set(key, h); }
+        h.pad.copy(pad).applyMatrix4(g.matrixWorld);
+        if (h.phase === 'parked') h.pos.copy(h.pad);
+        this.step(h, dt);
+      });
     }
     for (const [id, h] of this.helis) if (!live.has(id)) { this.group.remove(h.root); this.helis.delete(id); }
   }

@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { World, N, SEA } from '../world/world';
 import { Building } from '../build/catalog';
-import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT, HUMAN } from './assets';
+import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from './assets';
+import { makeFolk, folkStep, Folk } from './folk';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { makeDraftHorse, rideStep, Rider } from './riders';
@@ -80,10 +81,12 @@ function cartRig(age: number, v: number): CartRig {
 interface Boat {
   home: Building | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; mx: number; mz: number; seed: number;
   /** le pêcheur assis dans la barque (habitant de l'époque) */
-  actor?: Actor | null; actorKey?: string;
+  actor?: Folk | null; actorKey?: string; phase?: number;
 }
 /** Place du pêcheur dans la barque : assis à l'arrière, tourné vers l'avant (repère de la barque) */
 const SEAT = new THREE.Matrix4().makeTranslation(0, 0.02, -0.07);
+/** le pêcheur, à la taille des habitants (sa matrice est posée à la main : son échelle avec) */
+const FOLK_K = new THREE.Matrix4().makeScale(HUMAN_K * 0.9, HUMAN_K * 0.9, HUMAN_K * 0.9);
 
 /** Cap qui tourne vers `want` (par le plus court), d'au plus la fraction `k` de l'écart */
 function turn(heading: number, want: number, k: number) {
@@ -333,7 +336,7 @@ export class Traffic {
   }
 
   /** Plus court chemin sur les seules routes (largeur d'abord) */
-  private roadPath(start: number, goal: number): number[] | null {
+  private roadPath(start: number, goal: number, strict = true): number[] | null {
     const w = this.world;
     if (!w.road[start] || start === goal) return null;
     const prev = new Map<number, number>([[start, -1]]), q = [start];
@@ -347,11 +350,12 @@ export class Traffic {
       const x = c % N, z = Math.floor(c / N);
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, nz = z + dz, k = nz * N + nx;
-        if (nx < 0 || nz < 0 || nx >= N || nz >= N || !w.road[k] || prev.has(k) || (this.avoid.has(k) && k !== goal)) continue;
+        if (nx < 0 || nz < 0 || nx >= N || nz >= N || !w.road[k] || prev.has(k) || (strict && this.avoid.has(k) && k !== goal)) continue;
         prev.set(k, c); q.push(k);
       }
     }
-    return null;
+    // l'îlot d'un rond-point se contourne ; s'il n'y a pas d'autre passage, on le traverse
+    return strict ? this.roadPath(start, goal, false) : null;
   }
 
   /** Barques : le pêcheur rame vers un coin d'eau voisin, y reste à pêcher, recommence ; il rentre au ponton la nuit */
@@ -384,31 +388,28 @@ export class Traffic {
     this.boatsMesh.instanceMatrix.needsUpdate = true;
   }
 
-  /** Pêcheur assis dans la barque : un habitant de l'époque, qui suit la barque et son roulis */
+  /** Pêcheur assis dans la barque : un pêcheur de l'époque (suroît ciré, chapeau de paille), qui suit la barque et son roulis */
   private fisher(b: Boat, m: THREE.Matrix4, dt: number, visible: boolean) {
-    const set = AGE_VILLAGERS[Math.min(this.age, 4)], name = set[Math.floor(b.seed * 7) % set.length];
-    if (b.actorKey !== name) {
+    const key = `${Math.min(this.age, 4)}`;
+    if (b.actorKey !== key) {
       this.dropFisher(b);
-      b.actorKey = name;
-      b.actor = hasModel(name) ? makeActor(name, HUMAN * 0.9, 'height') : null;
-      if (b.actor) {
-        b.actor.root.matrixAutoUpdate = false;
-        b.actor.mixer.setTime(b.seed);
-        this.group.add(b.actor.root);
-      }
+      b.actorKey = key;
+      b.actor = makeFolk({ age: this.age, v: Math.floor(b.seed * 9973), role: 'fisher', size: 0.9 });
+      b.actor.root.matrixAutoUpdate = false;
+      this.group.add(b.actor.root);
     }
     const a = b.actor;
     if (!a) return;
     a.root.visible = visible;
     if (!visible) return;
-    a.root.matrix.copy(m).multiply(SEAT);
+    a.root.matrix.copy(m).multiply(SEAT).multiply(FOLK_K);
     a.root.matrixWorldNeedsUpdate = true;
-    play(a, SIT);
-    a.mixer.update(dt);
+    b.phase = (b.phase ?? 0) + dt;
+    folkStep(a, b.phase * 1.6, 'sit');
   }
 
   private dropFisher(b: Boat) {
-    if (b.actor) { b.actor.mixer.stopAllAction(); this.group.remove(b.actor.root); }
+    if (b.actor) this.group.remove(b.actor.root);
     b.actor = null; b.actorKey = '';
   }
 

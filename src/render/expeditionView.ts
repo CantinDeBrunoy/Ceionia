@@ -40,7 +40,7 @@ function sackGeo() {
 }
 
 /** Ce qu'une expédition montre sur la carte */
-interface Show { key: string; pennant: THREE.Mesh; followers: Follower[]; sacks: THREE.Mesh[]; trail: number[]; scene: ExpeditionScene | null }
+interface Show { key: string; pennant: THREE.Mesh; followers: Follower[]; sacks: THREE.Mesh[]; trail: number[]; scene: ExpeditionScene | null; exp: ActiveExpedition | null }
 
 /**
  * Les expéditions sur la carte : un fanion au-dessus de chaque chef ; sur place, l'équipe fait vraiment son travail (voir
@@ -58,6 +58,8 @@ export class ExpeditionView {
 
   /** Le cœur de la scène d'une expédition (ce que la caméra regarde quand on la suit sur place), ou null */
   focusOf(id: number): [number, number] | null { return this.shows.get(id)?.scene?.focus ?? null; }
+  /** hauteur au-dessus du sol du cœur de la scène (la montgolfière en vol) */
+  liftOf(id: number) { return this.shows.get(id)?.scene?.lift ?? 0; }
 
   update(dt: number) {
     if (!this.fx.group.parent) this.group.add(this.fx.group);
@@ -70,7 +72,7 @@ export class ExpeditionView {
         const pennant = new THREE.Mesh(this.pennantGeos[(a.id - 1) % TEAM_COLORS.length], mats.body);
         pennant.castShadow = true;
         this.group.add(pennant);
-        sh = { key: '', pennant, followers: [], sacks: [], trail: [], scene: null };
+        sh = { key: '', pennant, followers: [], sacks: [], trail: [], scene: null, exp: a };
         this.shows.set(a.id, sh);
       }
       const key = `${a.phase === 'back' || a.phase === 'home' ? 'back' : 'out'}|${a.ok}`;
@@ -85,7 +87,8 @@ export class ExpeditionView {
       this.step(a, sh, dt);
     }
     // expéditions terminées : on range leurs objets
-    for (const [id, sh] of this.shows) if (!live.has(id)) { this.clear(sh); this.group.remove(sh.pennant); this.shows.delete(id); }
+    // (et le décor d'une expédition qui s'arrête en route, s'il y en a encore un)
+    for (const [id, sh] of this.shows) if (!live.has(id)) { if (sh.scene && sh.exp) sh.scene.dispose(sh.exp); this.clear(sh); this.group.remove(sh.pennant); this.shows.delete(id); }
   }
 
   private step(a: ActiveExpedition, sh: Show, dt: number) {

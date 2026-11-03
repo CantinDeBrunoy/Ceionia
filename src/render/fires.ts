@@ -140,7 +140,7 @@ export class Fires {
   private waterNear(b: Building) {
     const w = this.world;
     if (w.nearWater(b.x, b.z, 3)) return true;
-    for (const o of w.buildings.values()) if (o.kind === 'well' && Math.hypot(o.x - b.x, o.z - b.z) <= 8) return true;
+    for (const o of w.buildings.values()) if ((o.kind === 'well' || o.kind === 'watertower') && Math.hypot(o.x - b.x, o.z - b.z) <= 8) return true;
     return false;
   }
 }

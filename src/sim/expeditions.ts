@@ -315,7 +315,9 @@ export class Expeditions {
     if (!dest) return null;
     const { targets, entry, take: held, front } = plan ?? { targets: [], entry: -1, take: [], front: -1 };
     const { ambush, len } = plan ? this.planAmbush(entry, targets, front) : { ambush: [], len: 0 };
-    const mounts = this.mountsFor(c);
+    // une fois la course automobile gagnée, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval
+    const motor = age >= 3 && this.world.exp.done.includes('motorcar') && !c.troop && !c.mounts;
+    const mounts = motor ? 0 : this.mountsFor(c);
     const party = this.agents.recruit(c.party);
     if (!party) return null;
     this.world.exp.riding += mounts;
@@ -335,7 +337,8 @@ export class Expeditions {
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
       // la charge de cavalerie part en cavaliers de l'époque ; les autres équipes à cheval restent des habitants en selle
-      if (i < mounts) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
+      if (motor) kt.car = true;
+      else if (i < mounts) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
     });
     party.forEach((id, i) => this.agents.equip(id, kits[i]));
     // force au combat : chacun compte, davantage en armure, armé, à cheval ou la torche au poing (les monstres craignent la lumière)

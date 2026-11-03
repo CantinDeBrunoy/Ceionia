@@ -99,6 +99,7 @@ const P: Record<string, string> = {
   axe: '<path d="M14 3l7 7-4 4-7-7z"/><path d="M12 9L3 21"/>',
   train: '<rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 10h14M8 19l-2 3M16 19l2 3M9 13h.01M15 13h.01"/>',
   anchor: '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M8 11h8M5 14a7 7 0 0 0 14 0"/>',
+  heli: '<path d="M3 5h18M12 5v3"/><path d="M6 10h8a4 4 0 0 1 4 4v1a2 2 0 0 1-2 2H9a4 4 0 0 1-4-4v-1a2 2 0 0 1 1-2z"/><path d="M18 14h4M21 12v4M8 20h9M10 17v3M15 17v3"/>',
   plane: '<path d="M10.5 3.5c0-1 .7-1.5 1.5-1.5s1.5.5 1.5 1.5V9l8 4.5v2L13.5 13v5l2.5 2v1.5L12 20.5l-4 1V20l2.5-2v-5L2 15.5v-2L10.5 9z"/>',
   stadium: '<ellipse cx="12" cy="12" rx="10" ry="6.5"/><ellipse cx="12" cy="12" rx="6" ry="3"/><path d="M12 5.5v3M12 15.5v3"/>',
   ball: '<circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.5 4.5h-5L8 10z"/><path d="M12 3v4M16 10l4.5-1.5M14.5 14.5l2.5 4M9.5 14.5L7 18.5M8 10L3.5 8.5"/>',
@@ -130,7 +131,7 @@ export const KIND_ICON: Record<KindId, string> = {
   house: 'house', well: 'well', lamp: 'lamp', farm: 'barn', pen: 'pen', pier: 'fish', workshop: 'anvil', mill: 'windmill',
   health: 'hospital', school: 'book', fire: 'flame', gather: 'campfire', temple: 'columns', landmark: 'castle',
   stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost', lumber: 'axe', quarry: 'rock', station: 'train', barber: 'scissors', alpine: 'alpine', police: 'police', terminal: 'train',
-  harbor: 'anchor', airport: 'plane', stadium: 'stadium', football: 'ball', basket: 'hoop', tennis: 'racket', waterpark: 'slide', funfair: 'ferris',
+  harbor: 'anchor', airport: 'plane', heliport: 'heli', watertower: 'well', stadium: 'stadium', football: 'ball', basket: 'hoop', tennis: 'racket', waterpark: 'slide', funfair: 'ferris',
   theater: 'masks', acropolis: 'acropolis', forum: 'arch', senate: 'dome',
   carworks: 'car', lab: 'flask', aerodrome: 'balloon', manor: 'manor',
 };

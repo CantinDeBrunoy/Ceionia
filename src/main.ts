@@ -112,8 +112,10 @@ class Game implements UIHost {
   /** la caméra suit l'expédition */
   /** expédition que la caméra suit (son numéro), ou null */
   following: number | null = null;
-  /** étape de l'expédition suivie (pour se rapprocher à son arrivée sur place) */
+  /** étape de l'expédition suivie (pour se rapprocher à son arrivée sur place), sa dernière position et sa vitesse lissée */
   private followPhase = '';
+  private followLast: [number, number] | null = null;
+  private followVel: [number, number] = [0, 0];
   /** la vue est descendue d'elle-même avec la troupe suivie (elle remonte quand l'expédition est finie) */
   private autoUnder = false;
   /** réveil spontané d'un volcan : délai (secondes de jeu) et secousses annonciatrices en cours */
@@ -243,7 +245,8 @@ class Game implements UIHost {
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
     this.emergencies.ignite = (b) => ignite(b);
-    this.atmosphere.onStrike = (x, z) => ignite(w.buildingAt(Math.floor(x), Math.floor(z)));
+    // (une fois sur deux seulement : les incendies restent des événements)
+    this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
     this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.pens.group, this.railView.group);
@@ -468,7 +471,7 @@ class Game implements UIHost {
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
     // assez près pour voir l'équipe (de petits personnages) ; on se rapproche encore quand elle arrive sur place
-    if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 10); this.followPhase = ''; }
+    if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 10); this.followPhase = ''; this.followLast = null; }
   }
   get disasters() { return this.world.disasters; }
 
@@ -767,6 +770,7 @@ class Game implements UIHost {
     for (const m of this.emergencies.news.splice(0)) this.ui.toast(m);
     for (const m of w.losses.splice(0)) this.ui.toast(m);
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night);
+    this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.update(gdt);
     this.railway.update(gdt);
     this.expView.update(gdt);
@@ -787,10 +791,19 @@ class Game implements UIHost {
         let x = pos.reduce((s, p) => s + p[0], 0) / pos.length, z = pos.reduce((s, p) => s + p[1], 0) / pos.length;
         // sur place, la vue se pose entre l'équipe et le cœur de la scène (l'enclos, la barque, la montgolfière…), et se rapproche
         const f = followed.phase === 'work' ? this.expView.focusOf(followed.id) : null;
-        if (f && Math.hypot(f[0] - x, f[1] - z) < 4) { x = (x + f[0]) / 2; z = (z + f[1]) / 2; }
+        let lift = 0;
+        if (f && Math.hypot(f[0] - x, f[1] - z) < 4) { x = (x + f[0]) / 2; z = (z + f[1]) / 2; lift = this.expView.liftOf(followed.id) * 0.6; }
         const arrived = followed.phase === 'work' && this.followPhase !== 'work';
         this.followPhase = followed.phase;
-        this.cam.follow(x, z, arrived ? 6.5 : undefined);
+        // en route (à cheval surtout), la vue vise un peu devant l'équipe, là où elle va : elle ne la regarde plus filer
+        const last = this.followLast;
+        this.followLast = [x, z];
+        if (last && followed.phase !== 'work' && gdt > 0) {
+          const vx = (x - last[0]) / gdt, vz = (z - last[1]) / gdt, sp = Math.hypot(vx, vz);
+          if (sp < 8) { this.followVel[0] += (vx - this.followVel[0]) * 0.1; this.followVel[1] += (vz - this.followVel[1]) * 0.1; }
+          x += this.followVel[0] * 0.6; z += this.followVel[1] * 0.6;
+        } else this.followVel = [0, 0];
+        this.cam.follow(x, z, arrived ? 6.5 : undefined, lift);
       }
     } else {
       const p = uv.troopAt(followed.id);
@@ -819,6 +832,7 @@ class Game implements UIHost {
       this.airships.update(gdt, this.time.hour, this.sim.age);
       this.fairground.update(dt);
       this.alpine.update(gdt, this.sim.age, this.season.snow);
+      this.emergencies.motor = this.traffic.motor;
       this.emergencies.update(gdt, this.sim.age);
       this.hoists.update(gdt);
       this.transports.update(gdt, this.sim.age);

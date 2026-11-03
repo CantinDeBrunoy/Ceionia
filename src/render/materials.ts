@@ -44,6 +44,39 @@ function addLights(mat: THREE.Material) {
 }
 addLights(mats.glow);
 
+/**
+ * L'eau des bâtiments (fontaines, piscines, bassins, abreuvoirs, puits) : les faces horizontales d'un bleu d'eau se rident et
+ * scintillent, des vaguelettes qui passent et des reflets qui s'allument et s'éteignent, chacune à sa place
+ */
+function addWater(mat: THREE.Material) {
+  const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
+  mat.onBeforeCompile = (sh, r) => {
+    prev.call(mat, sh, r);
+    sh.uniforms.uWaterT = LIGHTS.time;
+    sh.vertexShader = 'varying vec3 vWaterPos;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+  vec4 wW = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+  wW = instanceMatrix * wW;
+  #endif
+  vWaterPos = (modelMatrix * wW).xyz;`);
+    sh.fragmentShader = 'uniform float uWaterT;\nvarying vec3 vWaterPos;\n' + sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  {
+    vec3 wc = vColor.rgb;
+    float wUp = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
+    float wMask = step(0.3, (wc.b - wc.r) / max(wc.b, 0.01)) * step(0.22, (wc.g - wc.r) / max(wc.g, 0.01)) * step(0.45, wc.b) * step(0.8, wUp);
+    if (wMask > 0.0) {
+      vec2 q = vWaterPos.xz;
+      float t = uWaterT;
+      float rip = sin(q.x * 9.0 + t * 1.6) * sin(q.y * 8.0 - t * 1.3) + 0.5 * sin((q.x + q.y) * 15.0 + t * 2.4);
+      float glint = smoothstep(0.86, 1.0, sin(q.x * 23.0 + t * 2.1) * sin(q.y * 21.0 - t * 1.8));
+      diffuseColor.rgb = diffuseColor.rgb * (0.9 + 0.12 * rip) + vec3(0.55) * glint;
+    }
+  }`);
+  };
+  mat.customProgramCacheKey = () => `${key}|water`;
+}
+addWater(mats.body);
+
 // neige sur les toits, les rebords et le dessus de tout ce qui est bâti ou posé dehors
 addSnow(mats.body);
 addSnow(mats.glow);

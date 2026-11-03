@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
-import { makeActor, play, hasModel, Actor, AGE_VILLAGERS, SIT, HUMAN, HUMAN_K } from '../render/assets';
+import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
+import { makeFolk, folkStep, holdFolk, Folk, FolkHold, FolkPose } from '../render/folk';
 import { makeRider, rideStep, Rider } from '../render/riders';
 import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
@@ -11,7 +12,7 @@ import { mats } from '../render/materials';
 
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
 /** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie) */
-export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'rifle'; torch?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean }
+export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'rifle'; torch?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean; car?: boolean }
 
 /** Objets tenus en main (géométries partagées, en unités du monde ; le long de +y, la poignée à l'origine) */
 const propCache = new Map<string, THREE.BufferGeometry>();
@@ -20,6 +21,11 @@ function propGeo(key: string, make: (p: Parts) => void) {
   if (!g) { const p = new Parts(); make(p); g = p.build(false).body; propCache.set(key, g); }
   return g;
 }
+/** Comment se tient chaque accessoire : droit (torche, seau, panier, livre, bouclier), en outil (qui frappe), pointé (arme) */
+const HOLD: Record<string, FolkHold> = {
+  sword: 'point', spear: 'point', bow: 'upright', rifle: 'point', torch: 'upright', shield: 'upright', rope: 'upright',
+  hoe: 'tool', axe: 'tool', pick: 'tool', hammer: 'tool', rod: 'tool', bucket: 'upright', book: 'upright', crook: 'upright', basket: 'upright',
+};
 const PROPS = {
   sword: () => propGeo('sword', (p) => { p.box(0.01, 0.035, 0.01, 0, -0.012, 0, 0x6a4a34); p.box(0.045, 0.008, 0.012, 0, 0.022, 0, 0x8a8f96); p.box(0.014, 0.12, 0.005, 0, 0.03, 0, 0xd8dde2); p.box(0.006, 0.01, 0.006, 0, 0.15, 0, 0xd8dde2); }),
   spear: () => propGeo('spear', (p) => { p.cyl(0.005, 0.006, 0.34, 5, 0, -0.12, 0, 0x8a6a4a); p.cone(0.014, 0.05, 4, 0, 0.22, 0, 0xb8bec6); }),
@@ -52,7 +58,7 @@ const JOB_OF: Partial<Record<KindId, JobKind>> = {
   gather: 'merchant', forum: 'merchant', tavern: 'merchant', barber: 'merchant', harbor: 'merchant',
   pen: 'herder', stable: 'herder', apiary: 'keeper',
   baths: 'servant', theater: 'servant', senate: 'servant', landmark: 'servant', station: 'servant', terminal: 'servant', observatory: 'servant',
-  carworks: 'smith', lab: 'healer', aerodrome: 'servant',
+  carworks: 'smith', lab: 'healer', aerodrome: 'servant', heliport: 'servant', airport: 'servant',
 };
 const TOOL_OF: Record<JobKind, keyof typeof PROPS | null> = {
   farmer: 'hoe', woodcutter: 'axe', quarry: 'pick', fisher: 'rod', smith: 'hammer', miller: 'basket', priest: 'book', healer: 'basket', teacher: 'book',
@@ -77,18 +83,39 @@ const PROP_FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 /** hauteur de la selle (le cavalier y est assis) et allure à cheval */
 /** hauteur de la selle (le cheval garde sa taille ; un cavalier plus petit s'assied plus haut sur son pas) */
 const SADDLE = 0.12 + 0.42 * (0.3 - HUMAN), RIDE_SPEED = 1.6;
+/** au volant d'une petite voiture d'expédition : hauteur du siège, allure */
+const CAR_SEAT = 0.035, CAR_SPEED = 2.1;
+
+/**
+ * Petite voiture tout-terrain de l'âge industriel, pour les expéditions (avant = +z) : caisse ouverte, capot et calandre,
+ * pare-brise rabattable, banquette de cuir, ailes, roues à rayons, roue de secours, bidon, phares
+ */
+function jeepGeo(v: number) {
+  const p = new Parts(), body = [0x4a5a3a, 0x5a4a32, 0x3a4a5a, 0x6a2a24][v % 4];
+  p.box(0.15, 0.05, 0.26, 0, 0.045, -0.01, body);
+  p.box(0.13, 0.045, 0.09, 0, 0.07, 0.1, body); p.box(0.004, 0.03, 0.08, 0.066, 0.08, 0.1, dark(body, 0.8));
+  p.box(0.1, 0.055, 0.012, 0, 0.06, 0.148, 0x3c3c40); for (let k = 0; k < 4; k++) p.box(0.004, 0.045, 0.014, -0.03 + k * 0.02, 0.064, 0.149, 0x8a8f96);
+  p.box(0.14, 0.045, 0.004, 0, 0.12, 0.052, 0x9fc4dc); p.box(0.15, 0.006, 0.012, 0, 0.165, 0.052, 0x3c3c40);
+  p.box(0.13, 0.03, 0.06, 0, 0.095, -0.05, 0x6a4a34); p.box(0.13, 0.05, 0.014, 0, 0.11, -0.085, 0x6a4a34);
+  p.cyl(0.006, 0.006, 0.05, 5, -0.035, 0.1, 0.04, 0x2a2a2e); p.add(new THREE.TorusGeometry(0.018, 0.004, 3, 10), -0.035, 0.14, 0.035, 0x2a2a2e, 0, false, 0, -0.6);
+  for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
+    p.add(new THREE.CylinderGeometry(0.036, 0.036, 0.022, 10).rotateZ(Math.PI / 2), sx * 0.078, 0.036, sz * 0.085, 0x2a2a2e);
+    p.add(new THREE.CylinderGeometry(0.013, 0.013, 0.024, 6).rotateZ(Math.PI / 2), sx * 0.078, 0.036, sz * 0.085, 0x8a8f96);
+    p.box(0.032, 0.008, 0.08, sx * 0.078, 0.078, sz * 0.085, dark(body, 0.85));
+  }
+  p.add(new THREE.CylinderGeometry(0.034, 0.034, 0.018, 10).rotateX(Math.PI / 2), 0, 0.075, -0.15, 0x2a2a2e);
+  p.box(0.03, 0.045, 0.02, 0.055, 0.07, -0.145, 0x4a6a3a);
+  for (const s of [-1, 1]) { p.add(new THREE.CylinderGeometry(0.013, 0.011, 0.016, 8).rotateX(Math.PI / 2), s * 0.05, 0.1, 0.15, 0xc8a050); p.box(0.016, 0.016, 0.004, s * 0.05, 0.1, 0.159, 0xfff1c9, 0, true); }
+  const b = p.build(false);
+  return b.body;
+}
+const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
 const MAX_AGENTS = 90;
 /** Part de la population qu'on voit dehors (un passant pour quatre à cinq habitants), et leur nombre au plus */
 const SHOWN = 0.85 / 4, MAX_SHOWN = Math.floor(MAX_AGENTS / 4);
 /** Part de la population en âge et en état de partir en expédition */
 const ABLE = 0.6;
-/** Animations des habitants, quel que soit le pack (premier nom disponible) */
-const WALK = ['Walking_A', 'walk', 'Walk', 'Man_Walk', 'Female_Walk'];
-const RUN = ['Running_A', 'sprint', 'Run', 'Man_Run', 'Female_Run'];
-const IDLE = ['Idle', 'idle', 'Man_Idle', 'Female_Idle'];
-const WORK = ['Interact', 'interact-right', 'Use_Item', 'pick-up', 'Man_Clapping', 'Female_Clapping', 'Wave', 'Idle'];
-const CHEER = ['Cheer', 'emote-yes', 'Wave', 'Idle', 'idle'];
 const HUMAN_HEIGHT = HUMAN;
 /** les bancs sont faits pour des habitants de 0,3 : assis, un habitant plus petit se pose un peu plus haut */
 const SIT_LIFT = 0.4 * (0.3 - HUMAN);
@@ -134,7 +161,8 @@ interface Agent {
   skin: number; col: number;
   off: number;
   /** modèle animé de l'époque courante (sinon silhouette instanciée) */
-  actor: Actor | null;
+  /** l'habitant dessiné (tenue de l'époque), et pour quelle époque */
+  actor: Folk | null;
   actorKey: string;
   /** dernier pas après la route (bout d'un ponton…) et cap à prendre une fois arrivé */
   spot: [number, number] | null;
@@ -163,6 +191,8 @@ interface Agent {
   props: THREE.Object3D[];
   mount: Actor | null;
   mounted: boolean;
+  /** sa petite voiture d'expédition (après la course automobile) */
+  car?: THREE.Mesh | null;
   parked: [number, number, number] | null;
   /** cavalier de l'époque, cheval compris, qui le remplace en selle (charge de cavalerie) */
   rider: Rider | null;
@@ -176,7 +206,8 @@ interface Agent {
 }
 
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
-export interface Ride { x: number; z: number; y: number; heading: number }
+/** une place où l'on est porté (barque, nacelle, voiture) ; `act` : ce qu'on y fait (assis par défaut, null : debout) */
+export interface Ride { x: number; z: number; y: number; heading: number; act?: Act | null }
 
 export class Heap {
   keys: number[] = []; vals: number[] = [];
@@ -246,7 +277,6 @@ export class Agents {
     if (a.rider) { this.group.remove(a.rider.root); a.rider = null; }
     if (a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
     if (!a.actor) return;
-    a.actor.mixer.stopAllAction();
     this.group.remove(a.actor.root);
     a.actor = null;
     a.actorKey = '';
@@ -610,14 +640,15 @@ export class Agents {
     const a = this.byId(id);
     if (!a) return;
     a.kit = kit;
-    a.mounted = !!kit?.horse;
+    a.mounted = !!kit?.horse || !!kit?.car;
+    if (!kit?.car && a.car) { this.group.remove(a.car); a.car.geometry.dispose(); a.car = null; }
     if (!kit?.horse && a.mount) { a.mount.mixer.stopAllAction(); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
     if (!kit?.rider && a.rider) { this.group.remove(a.rider.root); a.rider = null; }
     if (!kit?.armor && a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
   }
 
   /** En selle (en route) ou pied à terre (sur place, le cheval broute à côté) */
-  mountParty(ids: number[], on: boolean) { for (const id of ids) { const a = this.byId(id); if (a?.kit?.horse) a.mounted = on; } }
+  mountParty(ids: number[], on: boolean) { for (const id of ids) { const a = this.byId(id); if (a?.kit?.horse || a?.kit?.car) a.mounted = on; } }
 
   /** L'équipe disparaît de la surface (descendue sous terre) ; elle réapparaît dès qu'elle se remet en route */
   partyHide(ids: number[], hidden: boolean) { for (const id of ids) { const a = this.byId(id); if (a) { a.hidden = hidden; a.targetHidden = hidden; } } }
@@ -659,7 +690,7 @@ export class Agents {
     if (r) {
       if (!a.ride) a.shore = [a.x, a.z];
       a.ride = r; a.x = r.x; a.z = r.z; a.heading = r.heading;
-      a.state = 'doing'; a.path = []; a.act = 'sit';
+      a.state = 'doing'; a.path = []; a.act = r.act === undefined ? 'sit' : r.act;
     } else if (a.ride) {
       a.ride = null;
       if (a.shore) { a.x = a.shore[0]; a.z = a.shore[1]; a.shore = null; }
@@ -779,7 +810,7 @@ export class Agents {
         const [px, pz] = w.passPoint(a.path, a.pi), tx = px + (last ? 0 : a.off), tz = pz + (last ? 0 : a.off * 0.7);
         const dx = tx - a.x, dz = tz - a.z, dist = Math.hypot(dx, dz);
         // l'équipe d'une expédition marche du même pas
-        const step = dt * (a.mission ? (a.mounted ? RIDE_SPEED : 1.05) : a.speed * (a.urgent ? 2.2 : 1)) * (w.road[c] ? 1.1 : 0.8);
+        const step = dt * (a.mission ? (a.mounted ? (a.kit?.car ? CAR_SPEED : RIDE_SPEED) : 1.05) : a.speed * (a.urgent ? 2.2 : 1)) * (w.road[c] ? 1.1 : 0.8);
         if (dist <= step) { a.x = tx; a.z = tz; a.pi++; }
         else {
           // le pas tourne en douceur vers le point visé (droit dessus pour le dernier, quand on y est presque) ; et l'on vise
@@ -838,20 +869,13 @@ export class Agents {
     return a.deck !== null && a.state !== 'inside' && a.pi >= a.path.length ? a.deck : this.world.surfaceAt(a.x, a.z);
   }
 
-  /** Habitant modélisé : clone de l'époque, cap, animation selon l'activité */
+  /** Habitant dessiné : la tenue de son époque, son cap, son geste selon ce qu'il fait */
   private animateActor(a: Agent, age: number, dt: number): boolean {
-    // en armure et à cheval, il devient chevalier (à pied, le soldat de l'époque prend sa place)
-    const set = AGE_VILLAGERS[Math.min(age, 4)], name = a.kit?.armor && a.kit.horse && hasModel('villager_knight') ? 'villager_knight' : set[(a.col + a.id) % set.length];
-    if (!hasModel(name)) return false;
-    const key = `${name}|${a.id}`;
+    const key = `${Math.min(age, 4)}|${a.child ? 1 : 0}`;
     if (a.actorKey !== key) {
       this.dropActor(a);
-      a.actor = makeActor(name, HUMAN_HEIGHT * (0.92 + (a.id % 5) * 0.04) * (a.child ? 0.62 : 1), 'height');
-      if (!a.actor) return false;
+      a.actor = makeFolk({ age, v: a.id, child: a.child, size: 0.94 + (a.id % 5) * 0.03 });
       a.actorKey = key;
-      // le pas des modèles est lent pour la vitesse de marche du jeu
-      for (const n of WALK) a.actor.actions.get(n)?.setEffectiveTimeScale(1.4);
-      a.actor.mixer.setTime(this.rnd() * 2);
       this.group.add(a.actor.root);
     }
     const act = a.actor!;
@@ -860,58 +884,48 @@ export class Agents {
     // charge de cavalerie : en selle, le cavalier de l'époque (cheval compris) prend sa place
     if (this.stepRider(a, age)) { act.root.visible = false; return true; }
     if (this.stepSoldier(a, age)) { act.root.visible = false; return true; }
-    const riding = this.stepMount(a, dt);
+    const riding = a.kit?.car ? this.stepCar(a) : this.stepMount(a, dt);
     act.root.visible = !a.hidden;
     if (a.hidden) return true;
-    act.root.position.set(a.x, this.groundY(a) + (riding ? SADDLE : 0), a.z);
+    act.root.position.set(a.x, this.groundY(a) + (riding ? (a.kit?.car ? CAR_SEAT : SADDLE) : 0), a.z);
     act.root.rotation.y = a.heading;
     const running = a.child && (!a.act || a.act === 'run');
-    if (riding) play(act, SIT);
-    else if (a.state === 'walking' || (running && a.state === 'doing')) play(act, (running && a.state === 'doing') || a.urgent ? [...RUN, ...WALK] : WALK);
-    else if (a.state === 'doing') play(act, a.act === 'sit' ? SIT : a.act === 'cheer' || a.act === 'play' ? CHEER : a.act === 'stroll' || (a.mission && !a.act) ? IDLE : WORK);
-    else play(act, IDLE);
-    act.mixer.update(dt);
+    const pose: FolkPose = riding ? 'sit'
+      : a.state === 'walking' || (running && a.state === 'doing') ? ((running && a.state === 'doing') || a.urgent ? 'run' : 'walk')
+      : a.state === 'doing' ? (a.act === 'sit' ? 'sit' : a.act === 'cheer' || a.act === 'play' ? 'cheer' : a.act === 'stroll' || (a.mission && !a.act) ? (a.tool === 'book' || a.job?.kind === 'merchant' ? 'talk' : 'idle') : 'work')
+      : 'idle';
+    folkStep(act, a.phase * (pose === 'run' ? 1.1 : pose === 'walk' ? 1.6 : 1), pose);
+    void dt;
     return true;
   }
 
   /**
-   * Accroche au modèle ce que porte le membre : l'arme dans la main droite, la torche ou le bouclier dans la gauche, la corde
-   * en bandoulière (main des aventuriers de KayKit, bout du bras des petits personnages de Kenney)
+   * Met dans les mains de l'habitant ce qu'il porte : l'arme ou l'outil de son métier dans la droite, la torche ou le
+   * bouclier dans la gauche, la corde en bandoulière (les accessoires sont dessinés pour des habitants de 0,3 : à l'échelle
+   * de son bras)
    */
   private dress(a: Agent) {
     for (const o of a.props) o.parent?.remove(o);
     a.props = [];
-    const k = a.kit, act = a.actor;
-    if ((!k && !a.tool) || !act) return;
-    act.root.updateMatrixWorld(true);
-    // le chargeur glTF retire les points des noms : « handslot.r » devient « handslotr »
-    const find = (...names: string[]) => { let f: THREE.Object3D | null = null; act.root.traverse((o) => { if (!f && names.includes(o.name)) f = o; }); return f as THREE.Object3D | null; };
-    const hold = (geo: THREE.BufferGeometry, side: 'r' | 'l', flame = false) => {
-      const slot = find(`handslot.${side}`, `handslot${side}`), arm = find(side === 'r' ? 'arm-right' : 'arm-left'), node = slot ?? arm;
-      if (!node) return;
-      const m = new THREE.Mesh(geo, mats.body);
+    const k = a.kit, f = a.actor;
+    if ((!k && !a.tool) || !f) return;
+    const hold = (name: keyof typeof PROPS, side: 0 | 1, flame = false) => {
+      const m = new THREE.Mesh(PROPS[name](), mats.body);
       m.castShadow = true;
-      const s = new THREE.Vector3();
-      node.getWorldScale(s);
-      // les accessoires sont dessinés pour des habitants de 0,3
-      m.scale.setScalar(HUMAN_K / Math.max(1e-6, s.x));
-      // au bout du bras des petits personnages (repère du modèle), pointé vers l'avant comme dans la main des aventuriers (la torche reste droite)
-      if (!slot) { m.position.set(side === 'r' ? -0.03 : 0.03, -0.15, 0.05); if (!flame) m.rotation.x = Math.PI / 2 - 0.3; }
-      if (flame) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.045, 5).translate(0, 0.095, 0), PROP_FLAME); m.add(f); }
-      node.add(m);
+      if (flame) m.add(new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.045, 5).translate(0, 0.095, 0), PROP_FLAME));
+      holdFolk(f, side, m, HOLD[name]);
       a.props.push(m);
     };
     // hors expédition, l'outil de son métier
-    if (!k) { if (a.tool) hold(PROPS[a.tool](), 'r'); return; }
-    if (k.weapon) hold(PROPS[k.weapon](), 'r');
-    if (k.torch) hold(PROPS.torch(), 'l', true);
-    else if (k.armor) hold(PROPS.shield(), 'l');
+    if (!k) { if (a.tool) hold(a.tool, 0); return; }
+    if (k.weapon) hold(k.weapon, 0);
+    if (k.torch) hold('torch', 1, true);
+    else if (k.armor) hold('shield', 1);
     if (k.rope) {
       const r = new THREE.Mesh(PROPS.rope(), mats.body);
-      r.position.set(0, HUMAN_HEIGHT * 0.55, -0.045 * HUMAN_K);
-      r.scale.setScalar(HUMAN_K);
+      r.position.set(0, 0.16, -0.034);
       r.rotation.z = 0.5;
-      act.root.add(r);
+      f.body.add(r);
       a.props.push(r);
     }
   }
@@ -946,6 +960,26 @@ export class Agents {
     a.soldier.root.rotation.y = a.heading;
     soldierStep(a.soldier, a.phase * 1.6, a.state === 'walking' ? 'walk' : a.act === 'cheer' ? 'cheer' : a.act === 'work' ? 'fight' : 'guard');
     return true;
+  }
+
+  /** Sa voiture : il est au volant en route ; sur place, elle reste garée à côté. Renvoie vrai s'il est au volant */
+  private stepCar(a: Agent) {
+    if (!a.car) { a.car = new THREE.Mesh(jeepGeo(a.id), mats.body); a.car.castShadow = true; this.group.add(a.car); }
+    const c = a.car, driving = a.mounted && !a.ride && !a.hidden;
+    c.visible = !a.hidden;
+    if (driving) {
+      // le volant devant lui : la voiture avance un peu sous lui
+      const x = a.x + Math.sin(a.heading) * 0.045, z = a.z + Math.cos(a.heading) * 0.045;
+      c.position.set(x, this.groundY(a), z);
+      c.rotation.y = a.heading;
+      // garée en retrait, un peu derrière et à côté de là où il met pied à terre : pas au milieu de ce que fait l'équipe
+      a.parked = [x - Math.sin(a.heading) * 0.32 + Math.cos(a.heading) * 0.16, z - Math.cos(a.heading) * 0.32 - Math.sin(a.heading) * 0.16, a.heading + 0.5];
+    } else if (a.parked) {
+      const [x, z, h] = a.parked;
+      c.position.set(x, this.world.surfaceAt(x, z), z);
+      c.rotation.y = h;
+    }
+    return driving;
   }
 
   /** Son cheval : sous lui en route ; sur place, il broute là où il a mis pied à terre. Renvoie vrai s'il est en selle */

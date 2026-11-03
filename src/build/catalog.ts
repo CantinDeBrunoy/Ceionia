@@ -1,6 +1,6 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
   | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
-  | 'harbor' | 'airport' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'theater' | 'acropolis' | 'forum' | 'senate'
+  | 'harbor' | 'airport' | 'heliport' | 'watertower' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'theater' | 'acropolis' | 'forum' | 'senate'
   | 'carworks' | 'lab' | 'aerodrome' | 'manor';
 
 /** Rayons de la barre de construction */
@@ -8,7 +8,7 @@ export type BuildCat = 'home' | 'prod' | 'service' | 'life';
 
 export interface KindDef {
   id: KindId;
-  size: 1 | 2 | 3;
+  size: 1 | 2 | 3 | 4;
   minAge: number;
   icon: string;
   /** rayon de la barre de construction */
@@ -103,11 +103,18 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Grande zone portuaire de 3 × 3 à poser au bord de la mer ou d’un lac : il suffit qu’un côté touche l’eau, le quai s’y tourne de lui-même et le bassin devant est creusé pour les grands navires (cogue, vapeur, porte-conteneurs) qui entrent, s’amarrent au quai et repartent au large.',
   },
   airport: {
-    id: 'airport', size: 3, minAge: 4, icon: '✈️', cat: 'service',
+    id: 'airport', size: 4, minAge: 4, icon: '✈️', cat: 'service',
     names: ['', '', '', '', 'Aéroport'],
-    desc: 'Piste, aérogare, tour de contrôle et hangar : les avions décollent et se posent.',
-    jobs: [0, 0, 0, 0, 20], joy: [0, 0, 0, 0, 8],
-    perk: 'Grand bâtiment de 3 × 3 cases, sur un terrain plat. Un avion roule jusqu’à la piste, décolle, fait un grand tour au-dessus du pays et revient se poser.',
+    desc: 'Piste, aérogare et ses passerelles, tour de contrôle, hangar, radar : les avions décollent et se posent.',
+    jobs: [0, 0, 0, 0, 24], joy: [0, 0, 0, 0, 10],
+    perk: 'Très grand bâtiment de 4 × 4 cases, sur un terrain plat. Un avion quitte son poste, roule par les voies jusqu’au seuil, décolle, fait un grand tour au-dessus du pays, revient dans l’axe, se pose et regagne son poste ; un long-courrier attend à la passerelle.',
+  },
+  heliport: {
+    id: 'heliport', size: 2, minAge: 4, icon: '🚁', cat: 'service',
+    names: ['', '', '', '', 'Héliport'],
+    desc: 'Deux aires d’atterrissage balisées, hangar, salon des passagers et sa terrasse : les hélicoptères emmènent les visiteurs survoler le pays.',
+    jobs: [0, 0, 0, 0, 8], joy: [0, 0, 0, 0, 6],
+    perk: 'Bâtiment de 2 × 2 cases. Deux hélicoptères aux couleurs de l’héliport attendent sur leur aire, lancent leur rotor, décollent, emmènent leurs passagers faire le tour du pays, s’y tiennent en vol stationnaire au-dessus des curiosités, reviennent et se posent ; feux de balisage la nuit.',
   },
   lumber: {
     id: 'lumber', size: 1, minAge: 0, icon: '🪓', cat: 'prod',
@@ -135,6 +142,13 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Fournit de l’eau à six maisons environ. Une maison près d’une rivière en a déjà.',
     // un point d'eau pour six maisons environ, à chaque âge (une maison loge 3, 4, 6, 9 puis 14 habitants)
     water: [18, 26, 38, 56, 85],
+  },
+  watertower: {
+    id: 'watertower', size: 1, minAge: 3, icon: '🗼', cat: 'home',
+    names: ['', '', '', 'Château d’eau', 'Château d’eau'],
+    desc: 'La réserve d’eau du quartier, perchée en hauteur : elle alimente trois fois plus de maisons qu’un puits.',
+    water: [0, 0, 0, 170, 260],
+    perk: 'Amélioration du puits (sur sa fiche) ou à bâtir dès l’âge industriel : cuve d’acier rivetée sur sa tour de brique, puis château d’eau de béton en corolle.',
   },
   workshop: {
     id: 'workshop', size: 2, minAge: 0, icon: '🔨', cat: 'prod',
@@ -328,7 +342,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'outpost', 'harbor', 'mill', 'health', 'school', 'fire', 'police', 'lab', 'observatory', 'airport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'watertower', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'outpost', 'harbor', 'mill', 'health', 'school', 'fire', 'police', 'lab', 'observatory', 'airport', 'heliport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -362,7 +376,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   stable: 'écuries', apiary: 'ruchers', baths: 'thermes et piscines', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
   barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
   theater: 'théâtres', acropolis: 'acropoles', forum: 'forums et marchés', senate: 'sénats',
-  harbor: 'ports', airport: 'aéroports', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions',
+  harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions',
   carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs',
 };
 
@@ -372,6 +386,7 @@ export const KIND_LABEL: Record<KindId, string> = {
  */
 export const UPGRADES: { from: KindId; to: KindId }[] = [
   { from: 'house', to: 'manor' },
+  { from: 'well', to: 'watertower' },
   { from: 'station', to: 'terminal' },
   { from: 'football', to: 'stadium' },
   { from: 'pier', to: 'harbor' },
@@ -396,6 +411,6 @@ export interface Building {
 
 /** Côté de l'emprise d'un bâtiment posé */
 /** Emprise d'un bâtiment : celle de son genre, une case de moins s'il est resté à l'ancienne taille (`small`) */
-export const sizeOf = (b: Building) => (b.small ? KINDS[b.kind].size - 1 : KINDS[b.kind].size) as 1 | 2 | 3;
+export const sizeOf = (b: Building) => (b.small ? KINDS[b.kind].size - 1 : KINDS[b.kind].size) as 1 | 2 | 3 | 4;
 
 export const SEASONS = ['Printemps', 'Été', 'Automne', 'Hiver'];

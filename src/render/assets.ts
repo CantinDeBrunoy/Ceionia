@@ -5,9 +5,6 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 
 /** Modèles Quaternius (CC0, via poly.pizza) servis depuis public/models ; chaque modèle absent retombe sur sa version procédurale */
 const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
-  // habitants : aventuriers trapus de KayKit (Préhistoire → Médiéval), petits personnages de Kenney (Industriel, Moderne)
-  'villager_barbarian', 'villager_hooded_rogue', 'villager_rogue', 'villager_mage', 'villager_knight',
-  'mini_male_a', 'mini_male_c', 'mini_male_e', 'mini_female_a', 'mini_female_c', 'mini_female_f',
   'ship_wreck', 'dolphin', 'whale', 'manta', 'clownfish', 'yellow_tang', 'fish', 'coral_set', 'seaweed',
   // biomes : essences, plantes d'eau et faune sauvage
   'palm', 'palm2', 'palm3', 'cactus', 'cactus2', 'cactus_flowers', 'willow', 'dead_tree', 'lilypad',
@@ -18,16 +15,7 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   'log', 'stump', 'fern', 'flowers', 'mushroom', 'skull', 'ribcage', 'bone',
   // monde souterrain : cristaux, toiles et créatures
   'crystal', 'crystal2', 'mineral', 'cobweb', 'zombie', 'skeleton', 'spider', 'slime', 'mushnub', 'ghost',
-  // bâtiments (CC0) : Moyen Âge et chaumières de KayKit Medieval Hexagon, résidences et bureaux de KayKit City Builder Bits,
-  // centrales, éolienne et maisons de brique des City Kits de Kenney
-  'b_cottage_blue', 'b_cottage_green', 'b_cottage_red', 'b_cottage_yellow', 'b_house_blue', 'b_house_green', 'b_house_red', 'b_house_yellow',
-  'b_forge_blue', 'b_forge_red', 'b_market_blue', 'b_market_red', 'b_church_blue', 'b_church_red', 'b_windmill_blue', 'b_windmill_red',
-  'b_castle_blue', 'b_castle_red', 'b_well_blue', 'b_well_red',
-  'b_flat_a', 'b_flat_b', 'b_flat_d', 'b_flat_h', 'b_office_c', 'b_office_e', 'b_office_f', 'b_office_g',
-  'b_plant_h', 'b_plant_n', 'b_turbine',
-  'b_brick_c', 'b_brick_d', 'b_brick_j', 'b_brick_o', 'b_brick_u',
-  // tour de guet de KayKit Medieval Hexagon
-  'b_tower_blue', 'b_tower_red',
+  // (les bâtiments des packs KayKit et Kenney, trop « jouets » à côté des autres, ont laissé la place aux modèles dessinés)
   // Préhistoire (CC0) : puits de Quaternius ; tente, feu de camp, couchage, établi, meule, abri et bloc de pierre du
   // Survival Kit de Kenney ; seau et rondins de Quaternius
   'p_well', 'p_tent', 'p_campfire', 'p_bedroll', 'p_stone', 'p_workbench', 'p_grind', 'p_roof', 'p_bucket', 'p_logs',
@@ -40,23 +28,9 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   'a_tower', 'a_statue',
   // abri ouvert sur poteaux de l'enclos antique (Quaternius, CC0)
   'f_hut',
-  // taverne et mine du Moyen Âge (KayKit Medieval Hexagon, CC0)
-  'b_tavern_blue', 'b_tavern_red', 'b_mine_blue'] as const;
+] as const;
 export type ModelName = (typeof NAMES)[number];
 
-/**
- * Habitants modélisés (CC0) : plusieurs silhouettes par âge, la tenue change avec l'époque. Aventuriers trapus de KayKit
- * (Kay Lousberg) jusqu'au Moyen Âge, petits personnages de Kenney ensuite
- */
-export const AGE_VILLAGERS: ModelName[][] = [
-  ['villager_barbarian', 'villager_hooded_rogue', 'villager_barbarian'],
-  ['villager_hooded_rogue', 'villager_mage', 'villager_rogue'],
-  ['villager_knight', 'villager_rogue', 'villager_mage', 'villager_hooded_rogue'],
-  ['mini_male_c', 'mini_female_c', 'mini_male_a', 'mini_female_a'],
-  ['mini_male_e', 'mini_female_f', 'mini_male_a', 'mini_female_c'],
-];
-/** Animation assise, quel que soit le pack (premier nom disponible) */
-export const SIT = ['Sit_Floor_Idle', 'sit', 'Sit_Chair_Idle', 'Idle', 'idle'];
 
 const loaded = new Map<ModelName, GLTF>();
 

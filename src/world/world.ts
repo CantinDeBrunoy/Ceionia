@@ -6,7 +6,7 @@ import { ExpState, newExpState, readExpState } from '../sim/missions';
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
 const QUAY_MAX = 0.32;
-const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor'];
+const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor', 'airport'];
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
@@ -232,6 +232,24 @@ export class World {
     this.terrainAll = false;
     this.terrainRect = null;
     return r;
+  }
+
+  /** Abat les arbres et dégage les rochers à moins de `r` du point (x, z) (le passage d'une voie ferrée) ; vrai si l'on a dégagé */
+  clearTrees(x: number, z: number, r: number) {
+    let any = false;
+    for (let cz = Math.floor(z - r); cz <= Math.floor(z + r); cz++) for (let cx = Math.floor(x - r); cx <= Math.floor(x + r); cx++) {
+      if (!this.inCells(cx, cz)) continue;
+      const k = this.ci(cx, cz), v = this.veg[k];
+      if (v !== VEG_FOREST && v !== VEG_ROCKS) continue;
+      // la case touche le disque : son point le plus proche du centre est à moins de r
+      const px = Math.max(cx, Math.min(cx + 1, x)), pz = Math.max(cz, Math.min(cz + 1, z));
+      if (Math.hypot(px - x, pz - z) > r) continue;
+      this.veg[k] = 0;
+      this.markVeg(cx, cz, cx, cz);
+      any = true;
+    }
+    if (any) this.vegDirty = true;
+    return any;
   }
 
   markVeg(x0: number, z0: number, x1: number, z1: number) {
@@ -741,21 +759,27 @@ export class World {
   private repairFootprints() {
     for (const b of this.buildings.values()) {
       // le quai du port a son bord au fond du bassin : son emprise n'est pas plate exprès ; un quai trop haut au-dessus de
-      // l'eau (anciennes parties) redescend, le terrain derrière lui fait talus
+      // l'eau (anciennes parties) redescend, même aux coins qu'il partage avec un voisin plus haut (qui le hissait tout entier
+      // au-dessus de l'eau) : ce voisin garde sa hauteur sur sa butte, le mur de soutènement du port retient le terrain
       if (b.kind === 'harbor') {
         const s = sizeOf(b);
         for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) {
-          const vx = b.x + i, vz = b.z + j, k = this.vi(vx, vz);
-          let held = false;
-          for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) { const cx = vx + dx, cz = vz + dz; if (this.inCells(cx, cz) && this.occ[this.ci(cx, cz)] && this.occ[this.ci(cx, cz)] !== b.id) held = true; }
-          if (!held && this.heights[k] > QUAY_MAX) this.heights[k] = QUAY_MAX;
+          const k = this.vi(b.x + i, b.z + j);
+          if (this.heights[k] > QUAY_MAX) this.heights[k] = QUAY_MAX;
         }
+        // et son bassin, creusé devant le quai (les ports d'avant n'en avaient pas : le navire touchait le fond)
+        this.dredge(b.x, b.z, s, b.rot, b.id);
+        this.clearTalus(b.x, b.z, s);
         continue;
       }
       const s = sizeOf(b);
       let mn = Infinity, mx = -Infinity, held = 0, nh = 0;
+      // (un coin partagé avec le port ne compte pas : le quai est au ras de l'eau, le voisin ne s'y aplanit pas)
       const others = (vx: number, vz: number) => {
-        for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) { const cx = vx + dx, cz = vz + dz; if (this.inCells(cx, cz) && this.occ[this.ci(cx, cz)] && this.occ[this.ci(cx, cz)] !== b.id) return true; }
+        for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) {
+          const cx = vx + dx, cz = vz + dz, o = this.inCells(cx, cz) ? this.occ[this.ci(cx, cz)] : 0;
+          if (o && o !== b.id && this.buildings.get(o)?.kind !== 'harbor') return true;
+        }
         return false;
       };
       for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) {
@@ -769,6 +793,16 @@ export class World {
     }
   }
 
+  /** Autour du port : les talus qui descendent au quai sont pavés (perré) ; ni arbres ni rochers n'y restent */
+  private clearTalus(x0: number, z0: number, s: number) {
+    for (let z = z0 - 1; z <= z0 + s; z++) for (let x = x0 - 1; x <= x0 + s; x++) {
+      if (!this.inCells(x, z) || (x >= x0 && x < x0 + s && z >= z0 && z < z0 + s)) continue;
+      const hs = [this.h(x, z), this.h(x + 1, z), this.h(x, z + 1), this.h(x + 1, z + 1)];
+      const v = this.veg[this.ci(x, z)];
+      if (Math.max(...hs) - Math.min(...hs) > 0.12 && (v === VEG_FOREST || v === VEG_ROCKS)) { this.veg[this.ci(x, z)] = 0; this.vegDirty = true; }
+    }
+  }
+
   /** Sommet de la grille partagé avec l'emprise d'un autre bâtiment (on n'y touche pas : ce voisin resterait en l'air) */
   private vertexHeld(vx: number, vz: number) {
     for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) if (this.inCells(vx + dx, vz + dz) && this.occ[this.ci(vx + dx, vz + dz)]) return true;
@@ -779,21 +813,15 @@ export class World {
     const s = small ? KINDS[kind].size - 1 : KINDS[kind].size;
     // Aplanit l'empreinte, sans toucher aux coins partagés avec les voisins ; le quai du port est remblayé au-dessus de l'eau
     const avg = kind === 'harbor' ? Math.min(QUAY_MAX, Math.max(this.flatTarget(x, z, s), 0.12)) : this.flatTarget(x, z, s);
-    for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) if (!this.vertexHeld(x + i, z + j)) this.heights[this.vi(x + i, z + j)] = avg;
+    for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) {
+      const k = this.vi(x + i, z + j);
+      if (!this.vertexHeld(x + i, z + j)) this.heights[k] = avg;
+      // le quai reste au ras de l'eau jusque dans ses coins partagés
+      else if (kind === 'harbor' && this.heights[k] > QUAY_MAX) this.heights[k] = QUAY_MAX;
+    }
     // le port creuse son bassin : devant le quai, sur trois rangs, le fond descend assez pour les grands navires (seulement là
     // où c'est déjà de l'eau ou la grève)
-    // le bord du quai lui-même descend au fond du bassin : le mur de quai tombe droit dans l'eau, sans grève devant
-    if (kind === 'harbor') {
-      const f = [[0, 1], [1, 0], [0, -1], [-1, 0]][rot];
-      for (let d = 0; d <= 3; d++) for (let i = d ? -1 : 0; i <= s + (d ? 1 : 0); i++) {
-        const vx = f[0] ? (f[0] > 0 ? x + s + d : x - d) : x + i, vz = f[1] ? (f[1] > 0 ? z + s + d : z - d) : z + i;
-        if (vx < 0 || vz < 0 || vx > N || vz > N || this.vertexHeld(vx, vz)) continue;
-        const k = this.vi(vx, vz);
-        // le bord du quai ne descend que là où l'eau est juste devant (pas de fosse si le quai a été tourné vers la terre)
-        const ahead = d === 0 ? this.h(vx + f[0], vz + f[1]) : this.heights[k];
-        if (ahead < 0.1) this.heights[k] = Math.min(this.heights[k], -0.45 - d * 0.1);
-      }
-    }
+    if (kind === 'harbor') { this.dredge(x, z, s, rot); this.clearTalus(x, z, s); }
     const b: Building = { id: this.nextId++, kind, x, z, rot, auto, age, ...(small ? { small: true } : {}) };
     for (let j = 0; j < s; j++)
       for (let i = 0; i < s; i++) {
@@ -847,9 +875,27 @@ export class World {
     if (!spot) return null;
     const stops = this.lines.filter((l) => l.stops.includes(id));
     this.removeBuilding(id);
-    const nb = this.place(to, spot[0], spot[1], b.rot, b.auto, b.age, true);
+    const nb = this.place(to, spot[0], spot[1], b.rot, b.auto, Math.max(b.age, KINDS[to].minAge), true);
     for (const l of stops) l.stops = l.stops.map((s) => (s === id ? nb.id : s));
     return nb;
+  }
+
+  /**
+   * Le port creuse son bassin : devant le quai, sur trois rangs, le fond descend assez pour les grands navires (seulement là
+   * où c'est déjà de l'eau ou la grève) ; le bord du quai lui-même descend au fond, le mur de quai tombe droit dans l'eau.
+   * `owner` : le port lui-même, qui ne compte pas comme un voisin (au chargement, il est déjà dans l'emprise)
+   */
+  private dredge(x: number, z: number, s: number, rot: number, owner = 0) {
+    const f = [[0, 1], [1, 0], [0, -1], [-1, 0]][rot];
+    const held = (vx: number, vz: number) => { for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) { const cx = vx + dx, cz = vz + dz; if (this.inCells(cx, cz) && this.occ[this.ci(cx, cz)] && this.occ[this.ci(cx, cz)] !== owner) return true; } return false; };
+    for (let d = 0; d <= 3; d++) for (let i = d ? -1 : 0; i <= s + (d ? 1 : 0); i++) {
+      const vx = f[0] ? (f[0] > 0 ? x + s + d : x - d) : x + i, vz = f[1] ? (f[1] > 0 ? z + s + d : z - d) : z + i;
+      if (vx < 0 || vz < 0 || vx > N || vz > N || held(vx, vz)) continue;
+      const k = this.vi(vx, vz);
+      // le bord du quai ne descend que là où l'eau est juste devant (pas de fosse si le quai a été tourné vers la terre)
+      const ahead = d === 0 ? this.h(vx + f[0], vz + f[1]) : this.heights[k];
+      if (ahead < 0.1) this.heights[k] = Math.min(this.heights[k], -0.45 - d * 0.1);
+    }
   }
 
   removeBuilding(id: number) {

@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { World, N, VR, VS } from '../world/world';
 import { troopRoute, routeAt, TroopRoute, FIGHT_HALT } from '../world/underground';
 import { Underground, Entrance, UWALL, ROCK_ISO, FLOOR_ISO, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA, POOL_WATER, POOL_LAVA, POOL_Y, ORE_KINDS, oreVeins } from '../world/underground';
-import { bakeStatic, StaticModel, makeActor, play, hasModel, Actor, AGE_VILLAGERS, ModelName, HUMAN, HUMAN_K } from './assets';
+import { bakeStatic, StaticModel, HUMAN_K } from './assets';
 import { makeRider, rideStep, Rider } from './riders';
 import { makeSoldier, soldierStep, Soldier } from './soldiers';
 import { rockShapes } from './treeShapes';
@@ -43,8 +43,8 @@ export interface Troop {
   /** embuscades sur son chemin : case, créatures, nombre, moment (temps de parcours) et issue */
   ambush: { cell: number; kind: MobKind; n: number; t0: number; result: 'clean' | 'hurt' | 'rout' | null }[];
 }
-/** un membre de la troupe : à pied (`actor`) ou cavalier de l'époque, cheval compris (`rider`) */
-interface TroopMember { actor: Actor | null; rider: Rider | null; soldier: Soldier | null }
+/** un membre de la troupe : soldat, gendarme ou mineur à pied (`soldier`), ou cavalier de l'époque, cheval compris (`rider`) */
+interface TroopMember { rider: Rider | null; soldier: Soldier | null }
 interface TroopShow {
   route: TroopRoute; path: [number, number][]; members: TroopMember[]; light: Source; scareT: number;
   /** créatures de chaque embuscade, et embuscades terminées */
@@ -52,7 +52,6 @@ interface TroopShow {
   /** temps avant le prochain coup de chaque membre (et la riposte de chaque créature) */
   cool: number[]; foeCool: Map<Mob, number>;
 }
-const T_WALK = ['Walking_A', 'Walk'], T_IDLE = ['Idle'], T_HACK = ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', 'Interact', 'Use_Item', 'Idle'];
 /** Bassins : remontés d'une case autour pour que la rive coupe la pente du sol */
 const MAX_TORCHES = 64;
 /** Teinte du sol des galeries tenues : terre battue chaude */
@@ -68,7 +67,7 @@ interface Source { x: number; y: number; z: number; r: number; c: THREE.Color; f
 /** Garde du camp : il va de poste en poste par les galeries, torche au poing, et s'y arrête face à l'extérieur */
 interface Guard { soldier: Soldier; x: number; z: number; heading: number; path: [number, number][]; wait: number; post: number; light: Source }
 /** Mineur descendu par le train : il abat le filon au pic ; un sur trois porte le minerai jusqu'au camp et revient */
-interface Miner { actor: Actor; x: number; z: number; heading: number; path: [number, number][]; goal: number; wait: number }
+interface Miner { actor: Soldier; x: number; z: number; heading: number; path: [number, number][]; goal: number; wait: number; phase: number }
 /** Équipe d'une ligne : ses mineurs, la lueur de leurs lampes au filon, les places autour du filon en cours */
 interface Crew { key: string; miners: Miner[]; light: Source; slotsAt: number; slots: [number, number, number][] }
 interface Item { m: THREE.Matrix4; c: THREE.Color }
@@ -541,7 +540,7 @@ export class UnderView {
       this.moveTroop(s, t, dt);
     }
     for (const [id, s] of this.troops) if (!live.has(id)) {
-      for (const m of s.members) this.scene.remove((m.rider ?? m.soldier ?? m.actor)!.root);
+      for (const m of s.members) this.scene.remove((m.rider ?? m.soldier)!.root);
       for (const fs of s.foes.values()) for (const f of fs) this.mobs.kill(f);
       this.troops.delete(id);
     }
@@ -555,42 +554,32 @@ export class UnderView {
     // soldats de l'époque (légionnaires, chevaliers, fantassins napoléoniens, militaires), cavaliers montés, ou mineurs de
     // l'époque et leur garde
     const members: TroopMember[] = [];
-    const folk = AGE_VILLAGERS[Math.min(t.age, 4)];
     // l'escorte qui accompagne l'équipe : une ligne de soldats (fusiliers dès l'âge industriel) et, sauf pour la charge, deux
     // cavaliers sur les flancs — la troupe a de l'allure
     const escort = t.kind === 'armor' ? (t.age >= 3 ? 7 : 4) : t.kind === 'cavalry' ? (t.age >= 3 ? 4 : 2) : 2;
     const flank = t.kind !== 'cavalry' && t.age >= 2 ? 2 : 0;
     // l'équipe de mineurs part avec des gendarmes (sergents du guet au Moyen Âge), à pied et à cheval ; les autres avec la troupe
     const police = t.kind === 'miners';
-    for (let i = 0; i < flank; i++) { const rider = makeRider(t.age, t.id + 7 + i, police); this.scene.add(rider.root); members.push({ actor: null, rider, soldier: null }); }
-    for (let i = 0; i < escort; i++) { const soldier = makeSoldier(t.age, t.id + 11 + i, false, police ? 'gendarme' : 'soldier'); this.scene.add(soldier.root); members.push({ actor: null, rider: null, soldier }); }
+    for (let i = 0; i < flank; i++) { const rider = makeRider(t.age, t.id + 7 + i, police); this.scene.add(rider.root); members.push({ rider, soldier: null }); }
+    for (let i = 0; i < escort; i++) { const soldier = makeSoldier(t.age, t.id + 11 + i, false, police ? 'gendarme' : 'soldier'); this.scene.add(soldier.root); members.push({ rider: null, soldier }); }
     for (let i = 0; i < t.n; i++) {
       // la cavalerie : cavaliers de l'époque sur leurs chevaux, comme les jouteurs des jardins
       if (t.kind === 'cavalry' && i < 3) {
         const rider = makeRider(t.age, t.id + i);
         this.scene.add(rider.root);
-        members.push({ actor: null, rider, soldier: null });
+        members.push({ rider, soldier: null });
         continue;
       }
       if (t.kind !== 'miners' || i === 0) {
         const soldier = makeSoldier(t.age, t.id + i, i === 0, police ? 'gendarme' : 'soldier');
         this.scene.add(soldier.root);
-        members.push({ actor: null, rider: null, soldier });
+        members.push({ rider: null, soldier });
         continue;
       }
       // les mineurs de l'époque, pic en main (et leur lampe)
-      if (police) {
-        const soldier = makeSoldier(t.age, t.id + i, false, 'miner');
-        this.scene.add(soldier.root);
-        members.push({ actor: null, rider: null, soldier });
-        continue;
-      }
-      const name: ModelName = folk[i % folk.length];
-      const actor = hasModel(name) ? makeActor(name, HUMAN, 'height') : null;
-      if (!actor) continue;
-      actor.mixer.setTime(i * 0.37);
-      this.scene.add(actor.root);
-      members.push({ actor, rider: null, soldier: null });
+      const soldier = makeSoldier(t.age, t.id + i, false, 'miner');
+      this.scene.add(soldier.root);
+      members.push({ rider: null, soldier });
     }
     if (!members.length) return null;
     const light: Source = { x: path[0][0], y: 0, z: path[0][1], r: 5, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(2), flicker: 0.25 };
@@ -673,10 +662,6 @@ export class UnderView {
         // au filon, les uns frappent, les autres montent la garde
         m.soldier.root.position.set(x, y, z); m.soldier.root.rotation.y = h;
         soldierStep(m.soldier, this.uTime.value * 9 + i * 1.3, fighting ? 'fight' : mining ? (i % 2 ? 'guard' : 'fight') : 'walk');
-      } else if (m.actor) {
-        m.actor.root.position.set(x, y, z); m.actor.root.rotation.y = h;
-        play(m.actor, fighting ? T_HACK : mining ? (i % 2 ? T_IDLE : T_HACK) : T_WALK);
-        m.actor.mixer.update(dt);
       }
     });
     // la torche du chef éclaire la troupe ; les créatures s'enfuient devant elle
@@ -687,7 +672,7 @@ export class UnderView {
   /** Position de la tête d'une troupe (pour que la caméra la suive), ou null si elle n'est pas sous terre */
   troopAt(id: number): [number, number] | null {
     const s = this.troops.get(id), m = s?.members[0];
-    const o = m ? (m.rider ?? m.soldier ?? m.actor)!.root.position : null;
+    const o = m ? (m.rider ?? m.soldier)!.root.position : null;
     return o ? [o.x, o.z] : null;
   }
 
@@ -983,15 +968,12 @@ export class UnderView {
         if (crew) for (const m of crew.miners) this.scene.remove(m.actor.root);
         crew = { key, miners: [], light: { x: 0, y: -20, z: 0, r: 4, c: new THREE.Color(1, 0.72, 0.45).multiplyScalar(1.3), flicker: 0.2 }, slotsAt: -2, slots: [] };
         this.crews.set(c.id, crew);
-        const folk = AGE_VILLAGERS[Math.min(age, 4)];
+        // les mineurs de l'époque (capuchon, barrette à lampe, casque), pic en main
         for (let i = 0; i < c.n; i++) {
-          const name = folk[i % folk.length], actor = hasModel(name) ? makeActor(name, HUMAN, 'height') : null;
-          if (!actor) continue;
-          actor.mixer.setTime(i * 0.53);
-          this.holdPick(actor);
+          const actor = makeSoldier(age, c.id * 7 + i, false, 'miner');
           this.scene.add(actor.root);
           const x = (c.entry % N) + 0.5 + Math.cos(i * 2.4) * 0.3, z = Math.floor(c.entry / N) + 0.5 + Math.sin(i * 2.4) * 0.3;
-          crew.miners.push({ actor, x, z, heading: 0, path: [], goal: -1, wait: i * 0.6 });
+          crew.miners.push({ actor, x, z, heading: 0, path: [], goal: -1, wait: i * 0.6, phase: i * 0.53 });
         }
       }
       this.stepCrew(crew, c.entry, c.vein, dt);
@@ -1014,17 +996,16 @@ export class UnderView {
         if (d > 1e-3) { m.x += (dx / d) * s; m.z += (dz / d) * s; m.heading = Math.atan2(dx, dz); }
         if (d - s < 0.02) m.path.shift();
         if (!m.path.length) m.wait = carrier ? 3 + (i % 2) * 1.5 : 0;
-        play(m.actor, T_WALK);
+        soldierStep(m.actor, (m.phase += dt * 9), 'walk');
       } else {
         // au filon, face à la roche, on frappe ; au camp, le porteur vide sa hotte
         if (m.goal === work) m.heading = slot[2];
-        play(m.actor, m.goal === work ? T_HACK : T_IDLE);
+        soldierStep(m.actor, (m.phase += dt * 9), m.goal === work ? 'fight' : 'idle');
         if (carrier && (m.wait -= dt) <= 0) this.walkTo(m, m.goal === work ? entry : work, m.goal === work ? home : slot);
       }
       const y = u.heightAt(m.x, m.z);
       m.actor.root.position.set(m.x, y, m.z);
       m.actor.root.rotation.y = m.heading;
-      m.actor.mixer.update(dt);
     });
     const wx = (work % N) + 0.5, wz = Math.floor(work / N) + 0.5;
     Object.assign(crew.light, { x: wx, y: u.heightAt(wx, wz) + 0.6, z: wz });
@@ -1059,20 +1040,6 @@ export class UnderView {
     crew.slotsAt = work;
     crew.slots = out.length ? out : [[cx, cz, 0]];
     return crew.slots;
-  }
-
-  /** Un pic dans la main droite du mineur */
-  private holdPick(a: Actor) {
-    let slot: THREE.Object3D | null = null;
-    a.root.traverse((o) => { if (!slot && (o.name === 'handslot.r' || o.name === 'handslotr')) slot = o; });
-    if (!slot) return;
-    const node = slot as THREE.Object3D, t = new THREE.Group(), s = new THREE.Vector3();
-    a.root.updateMatrixWorld(true);
-    node.getWorldScale(s);
-    t.scale.setScalar(HUMAN_K / Math.max(1e-6, s.x));
-    t.add(new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.008, 0.15, 5).translate(0, 0.05, 0), new THREE.MeshStandardMaterial({ color: 0x7a5a3c })));
-    t.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.014, 0.014).translate(0, 0.12, 0), new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.3, roughness: 0.5 })));
-    node.add(t);
   }
 
   /** Entrée (puits de jour) sous le point visé */

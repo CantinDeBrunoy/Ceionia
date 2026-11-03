@@ -4,7 +4,10 @@ import { Agents } from '../sim/agents';
 import { ActiveExpedition } from '../sim/expeditions';
 import { HerdKind, Scene } from '../sim/missions';
 import { Act } from '../world/gardens';
-import { makeActor, play, hasModel, Actor, ModelName, AGE_VILLAGERS, HUMAN } from './assets';
+import { makeActor, play, hasModel, Actor, ModelName } from './assets';
+import { makeFolk, folkStep, Folk, FolkPose, FolkRole } from './folk';
+import { balloonBasketGeo, balloonEnvelopeGeo } from './balloon';
+import { locoGeo } from './railway';
 import { Parts } from './parts';
 import { mats } from './materials';
 import type { CombatFx } from './combatFx';
@@ -85,6 +88,25 @@ const trackGeo = () => geo('track', (p) => {
   for (const s of [-1, 1]) p.box(0.012, 0.016, 0.3, s * 0.05, 0.014, 0.15, 0x8a8f96);
 });
 const puffGeo = () => geo('puff', (p) => p.sphere(0.03, 0, 0, 0, 0xb8b2a8, 0));
+/** Tronçon de la voie qu'on pose (le long de +z, de 0 à 0,3) : ballast, quatre traverses, deux rails et leurs éclisses */
+const laidGeo = () => geo('laid', (p) => {
+  p.box(0.22, 0.012, 0.3, 0, 0, 0.15, 0xa8a29a);
+  for (let k = 0; k < 4; k++) p.box(0.17, 0.014, 0.034, 0, 0.01, 0.04 + k * 0.074, 0x5a4232);
+  for (const s of [-1, 1]) { p.box(0.012, 0.016, 0.3, s * 0.05, 0.024, 0.15, 0x8a8f96); p.box(0.016, 0.01, 0.03, s * 0.05, 0.024, 0.0, 0x5d6168); }
+});
+/** Plate-forme du train de chantier (avant = +z) : châssis, roues, rails et traverses chargés, ridelles */
+const flatcarGeo = () => geo('flatcar', (p) => {
+  p.box(0.15, 0.03, 0.26, 0, 0.045, 0, 0x4a4a4e);
+  for (const z of [-0.08, 0.08]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.026, 0.026, 0.014, 8).rotateZ(Math.PI / 2), s * 0.05, 0.026, z, 0x2a2a2e);
+  for (let k = 0; k < 3; k++) p.box(0.012, 0.012, 0.24, -0.04 + k * 0.04, 0.075 + (k % 2) * 0.012, 0, 0x8a8f96);
+  for (let k = 0; k < 5; k++) p.box(0.14, 0.014, 0.03, 0, 0.087, -0.1 + k * 0.05, 0x5a4232);
+  for (const s of [-1, 1]) p.box(0.006, 0.03, 0.26, s * 0.072, 0.075, 0, 0x6a4a34);
+});
+/** Les rails et les traverses en réserve au départ du chantier */
+const railStockGeo = () => geo('railstock', (p) => {
+  for (let k = 0; k < 4; k++) p.box(0.012, 0.012, 0.36, -0.03 + (k % 2) * 0.03, 0.012 * Math.floor(k / 2), 0, 0x8a8f96);
+  for (let k = 0; k < 6; k++) p.box(0.17, 0.016, 0.034, 0.2, 0.016 * Math.floor(k / 2), -0.06 + (k % 2) * 0.05, 0x5a4232, 0.1);
+});
 
 // ---------------- Accessoires du cœur des missions ----------------
 const sacksGeo = () => geo('sacks', (p) => {
@@ -176,17 +198,10 @@ const oldCarGeo = () => geo('oldcar', (p) => {
 });
 /** Bidon d'essence rouge */
 const fuelCanGeo = () => geo('fuelcan', (p) => { p.box(0.05, 0.07, 0.03, 0, 0, 0, 0xc83a32); p.box(0.012, 0.02, 0.012, 0.015, 0.07, 0, 0x8a8f96); });
-/** Nacelle d'osier et son brûleur, posée au sol */
-const nacelleGeo = () => geo('nacelle', (p) => {
-  p.box(0.12, 0.08, 0.12, 0, 0, 0, 0xb08a5a); p.box(0.124, 0.012, 0.124, 0, 0.08, 0, 0x6a4c36);
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.004, 0.1, 0.004, x * 0.055, 0.09, z * 0.055, 0x5a4a3a);
-  p.box(0.05, 0.03, 0.05, 0, 0.17, 0, 0x5d6878);
-});
-/** Enveloppe de la montgolfière, posée sur son embouchure : fuseaux rouges et or */
-const envelopeGeo = () => geo('envelope', (p) => {
-  for (let k = 0; k < 12; k++) p.add(new THREE.SphereGeometry(0.34, 3, 10, (k / 12) * Math.PI * 2, Math.PI / 6).scale(1, 1.2, 1), 0, 0.5, 0, k % 2 ? 0xd84a3e : 0xf2c23a);
-  p.add(new THREE.CylinderGeometry(0.19, 0.1, 0.18, 12, 1, true), 0, 0.11, 0, 0xd84a3e);
-});
+/** La montgolfière du premier envol : fuseaux rouges et or, ceinture bleue ; sa nacelle */
+let balloonEnv: THREE.BufferGeometry | null = null, balloonBasket: THREE.BufferGeometry | null = null;
+const BALLOON_ENV = () => (balloonEnv ??= balloonEnvelopeGeo(0xd84a3e, 0xf2c23a, 0x3a6ab8));
+const BALLOON_BASKET = () => (balloonBasket ??= balloonBasketGeo());
 const wagonGeo = () => geo('wagon', (p) => {
   p.box(0.36, 0.14, 0.2, 0, 0.07, 0, 0xc84a3e);
   p.box(0.38, 0.02, 0.22, 0, 0.21, 0, 0xe8c66a);
@@ -281,9 +296,6 @@ const tentGeoC = (c: number) => geo(`tent${c}`, (p) => {
 const STAR = new THREE.MeshBasicMaterial({ color: 0xfff4c0, transparent: true, opacity: 0.95, depthWrite: false });
 const GLOW = new THREE.MeshBasicMaterial({ color: 0xff7a2a });
 /** Gestes des habitants d'ailleurs (aventuriers KayKit, petits personnages de Kenney) */
-const TALK = ['Interact', 'interact-right', 'Use_Item', 'Wave', 'Idle', 'idle'];
-const SITTING = ['Sit_Chair_Idle', 'Sit_Floor_Idle', 'sit', 'Idle', 'idle'];
-const CHEERING = ['Cheer', 'emote-yes', 'Wave', 'Idle', 'idle'];
 
 /** Comment l'équipe se déplace selon le cœur de sa mission : autour des bêtes, de point de travail en point de travail… */
 const BEHAVIOR: Record<Scene, string> = {
@@ -296,6 +308,14 @@ const BEHAVIOR: Record<Scene, string> = {
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
 const LINE = new THREE.LineBasicMaterial({ color: 0xf2f2f2, transparent: true, opacity: 0.8 });
+const ROPE = new THREE.LineBasicMaterial({ color: 0x6a5a48 });
+/**
+ * Le premier envol, selon l'avancement du travail : gonflée au sol jusqu'à B_FULL, les aéronautes s'approchent (B_BOARD) et
+ * montent (B_IN), elle décolle (B_LIFT), revient se poser (B_LAND), ils en descendent (B_OUT)
+ */
+const B_FULL = 0.3, B_BOARD = 0.3, B_IN = 0.35, B_LIFT = 0.4, B_LAND = 0.86, B_OUT = 0.92;
+/** La course : le pilote va à la portière (R_DOOR), s'installe (R_SEAT), la voiture part (R_GO), revient sur la ligne (R_END) */
+const R_DOOR = 0.22, R_SEAT = 0.27, R_GO = 0.3, R_END = 0.92, R_OUT = 0.95;
 const RING = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false });
 
 interface Beast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; speed: number }
@@ -334,7 +354,7 @@ export class ExpeditionScene {
   /** le cœur de la mission (troc, source chaude, abbaye…) ; `kind` dit seulement comment l'équipe s'y déplace */
   readonly story: Scene;
   /** habitants d'ailleurs, pièces qui tournent, objets qui grandissent avec le travail, vapeur, fumée, étoiles */
-  private npcs: { actor: Actor; anims: string[] }[] = [];
+  private npcs: { folk: Folk; pose: FolkPose; off: number }[] = [];
   private spins: { obj: THREE.Object3D; speed: number }[] = [];
   private grows: { obj: THREE.Object3D; from: number; to: number }[] = [];
   private emits: { x: number; y: number; z: number; kind: 'steam' | 'smoke' | 'puff' | 'bubble' | 'star'; every: number; t: number }[] = [];
@@ -342,12 +362,25 @@ export class ExpeditionScene {
   /** ce que regarde l'équipe (jongleurs, moine, ciel) ; places dans la source ; entrée de la galerie et tas de minerai */
   /** le cœur de l'action (l'enclos, la barque, la montgolfière…), que la caméra regarde quand on suit l'équipe */
   focus: [number, number] = [0, 0];
+  /** sa hauteur au-dessus du sol (la montgolfière en vol), pour que la vue la garde dans le cadre */
+  lift = 0;
   private bath: { at: [number, number][]; y: number; in: Set<number> } | null = null;
   private mouth: { at: [number, number]; heap: [number, number] } | null = null;
   private delve = new Map<number, { phase: 'go' | 'in' | 'out' | 'heap'; t: number }>();
   private cartRun: { obj: THREE.Object3D; a: [number, number]; b: [number, number] } | null = null;
   private salts: [number, number][] = [];
   private corral: [number, number] | null = null;
+  /** le tracé du chemin de fer : son départ et son cap, les jalons du géomètre, le train de chantier qui suit la tête de voie */
+  private works: { x: number; z: number; dir: number; stakes: THREE.Object3D[]; train: THREE.Object3D; puff: number } | null = null;
+  /** la montgolfière (nacelle, enveloppe, brûleur), d'où elle part, ses aéronautes, les cordes que tient l'équipe, son vol */
+  private balloon: {
+    obj: THREE.Group; env: THREE.Object3D; burner: THREE.Object3D; home: [number, number]; y0: number; riders: number[];
+    stakes: [number, number][]; ropes: THREE.Line[]; drift: number; high: number; far: number;
+  } | null = null;
+  /** la voiture de course, sa ligne de départ, l'arche, son circuit (côté s, demi-axes rx, rz), ses tours, son pilote */
+  private race: { obj: THREE.Object3D; x: number; z: number; ax: number; s: number; rx: number; rz: number; laps: number; driver: number | null; puff: number } | null = null;
+  /** où en est chaque membre de l'envol ou de la course (aux cordes, à la nacelle, au bord de la piste…) */
+  private stage = new Map<number, string>();
 
   constructor(private world: World, private agents: Agents, private group: THREE.Group, a: ActiveExpedition, private combat: CombatFx | null = null) {
     const [cx, cz] = a.dest;
@@ -412,8 +445,11 @@ export class ExpeditionScene {
     if (this.story === 'build' || this.story === 'corral') {
       // enclos : des piquets en cercle (pierres sèches à partir du Moyen Âge ; branchages où l'on rabat les bêtes), plantés au fil du travail
       const stone = this.story === 'build' && a.m.age >= 2, n = 12;
+      // dans la clairière la plus proche, pas sous les arbres : là où l'on voit l'enclos sortir de terre
+      const [ox, oz] = this.clearing(cx, cz, 0.95);
+      this.focus = [ox, oz];
       for (let i = 0; i < n; i++) {
-        const ang = (i / n) * Math.PI * 2, x = cx + Math.cos(ang) * 0.95, z = cz + Math.sin(ang) * 0.95;
+        const ang = (i / n) * Math.PI * 2, x = ox + Math.cos(ang) * 0.95, z = oz + Math.sin(ang) * 0.95;
         if (!this.free(x, z)) continue;
         // un piquet et les deux traverses qui le relient au précédent
         const o = new THREE.Group();
@@ -423,7 +459,7 @@ export class ExpeditionScene {
         post.castShadow = true;
         o.add(post);
         if (!stone && i > 0) {
-          const pa = ((i - 1) / n) * Math.PI * 2, px = cx + Math.cos(pa) * 0.95, pz = cz + Math.sin(pa) * 0.95;
+          const pa = ((i - 1) / n) * Math.PI * 2, px = ox + Math.cos(pa) * 0.95, pz = oz + Math.sin(pa) * 0.95;
           for (const y of [0.06, 0.12]) {
             const r = new THREE.Mesh(railGeo(), mats.body);
             r.position.y = y;
@@ -436,7 +472,7 @@ export class ExpeditionScene {
         this.props.push(o);
         o.visible = false;
         this.built.push(o);
-        this.spots.push([cx + Math.cos(ang) * 0.7, cz + Math.sin(ang) * 0.7]);
+        this.spots.push([ox + Math.cos(ang) * 0.7, oz + Math.sin(ang) * 0.7]);
       }
     } else if (kind === 'rails') {
       // voie ferrée : des tronçons posés l'un après l'autre, dans la direction la plus dégagée
@@ -447,13 +483,29 @@ export class ExpeditionScene {
         while (n < 10 && this.free(cx + Math.sin(ang) * 0.3 * (n + 1), cz + Math.cos(ang) * 0.3 * (n + 1))) n++;
         if (n > bestN) { bestN = n; best = ang; }
       }
-      for (let i = 0; i < Math.max(3, bestN); i++) {
-        const x = cx + Math.sin(best) * 0.3 * i, z = cz + Math.cos(best) * 0.3 * i;
-        const o = this.put(trackGeo(), x, z, best);
+      // le tracé : les jalons du géomètre balisent la voie devant les poseurs ; au bout, l'arpenteur à son théodolite ; au
+      // départ, les rails et les traverses en réserve ; le train de chantier suit la tête de voie, sa plate-forme chargée
+      const n = Math.max(4, bestN), sx = Math.sin(best), sz = Math.cos(best), px = Math.cos(best), pz = -Math.sin(best);
+      const stakes: THREE.Object3D[] = [];
+      for (let i = 0; i < n; i++) {
+        const x = cx + sx * 0.3 * i, z = cz + sz * 0.3 * i;
+        const o = this.put(laidGeo(), x, z, best);
         o.visible = false;
         this.built.push(o);
-        this.spots.push([x + Math.cos(best) * 0.22, z - Math.sin(best) * 0.22]);
+        this.spots.push([x + px * 0.2, z + pz * 0.2]);
+        stakes.push(this.put(stakeFlagGeo(), x + sx * 0.15 + px * 0.16, z + sz * 0.15 + pz * 0.16, best + Math.PI / 2));
       }
+      const [ex, ez] = this.near(cx + sx * 0.3 * n + px * 0.25, cz + sz * 0.3 * n + pz * 0.25, cx, cz);
+      this.put(telescopeGeo(), ex, ez, best + Math.PI);
+      this.npc('scholar', a.m.age, ex + px * 0.12, ez + pz * 0.12, best + Math.PI, 'talk');
+      this.put(railStockGeo(), cx - sx * 0.3 - px * 0.3, cz - sz * 0.3 - pz * 0.3, best);
+      const train = new THREE.Group(), loco = new THREE.Mesh(locoGeo(a.m.age, 0x3a6ab8).body, mats.body), car = new THREE.Mesh(flatcarGeo(), mats.body);
+      loco.castShadow = car.castShadow = true;
+      car.position.z = 0.36;
+      train.add(loco, car);
+      train.rotation.y = best;
+      this.group.add(train); this.props.push(train);
+      this.works = { x: cx, z: cz, dir: best, stakes, train, puff: 0 };
     }
     this.heart(a, cx, cz);
   }
@@ -462,7 +514,6 @@ export class ExpeditionScene {
   /** Ce pour quoi l'équipe est venue : on le pose sur place */
   private heart(a: ActiveExpedition, cx: number, cz: number) {
     const w = this.world, age = a.m.age, st = this.story, y = (x: number, z: number) => w.surfaceAt(x, z);
-    const folk = AGE_VILLAGERS[Math.min(4, age)];
     if (st === 'salt') {
       // pierres à sel au bord de l'eau ; l'équipe guette, cachée derrière les buissons
       for (let i = 0; i < 3; i++) { const [x, z] = this.near(cx + Math.cos(i * 2.1) * 0.35, cz + Math.sin(i * 2.1) * 0.35, cx, cz); this.put(saltGeo(), x, z, i); this.salts.push([x, z]); }
@@ -473,15 +524,15 @@ export class ExpeditionScene {
       this.corral = [x, z];
       for (const b of this.beasts) b.speed = 0.34;
     } else if (st === 'smoke' || st === 'swarm') {
-      // le vieux chêne enfumé ou l'arbre où l'essaim s'est posé ; les abeilles tournent autour
-      const [tx, tz] = this.near(cx + 0.35, cz - 0.3, cx, cz), ty = y(tx, tz);
+      // le vieux chêne enfumé ou l'arbre où l'essaim s'est posé, en lisière (pas caché sous la forêt) ; les abeilles tournent autour
+      const [ox, oz] = this.clearing(cx, cz, 0.6), [tx, tz] = this.near(ox + 0.35, oz - 0.3, ox, oz), ty = y(tx, tz);
       this.put(st === 'smoke' ? oakGeo() : sproutTreeGeo(), tx, tz, 0);
       const hive = st === 'smoke' ? [tx, ty + 0.22, tz + 0.1] : [tx + 0.16, ty + 0.2, tz];
       this.bees(hive[0], hive[1], hive[2]);
       if (st === 'smoke') {
         this.fireAt(tx, tz + 0.28);
         this.emits.push({ x: tx, y: ty + 0.06, z: tz + 0.28, kind: 'smoke', every: 0.28, t: 0 });
-        const [hx, hz] = this.near(cx - 0.35, cz + 0.3, cx, cz);
+        const [hx, hz] = this.near(ox - 0.35, oz + 0.3, ox, oz);
         this.grows.push({ obj: this.put(logHiveGeo(), hx, hz, 0), from: 0.001, to: 1 });
       } else {
         // la grappe d'abeilles se vide dans le panier de paille posé dessous
@@ -491,7 +542,7 @@ export class ExpeditionScene {
         this.grows.push({ obj: c, from: 1, to: 0.25 });
         this.put(skepGeo(), tx + 0.16, tz + 0.05, 0);
       }
-      for (let i = 0; i < 4; i++) { const ang = i * 1.57 + 0.4; this.spots.push(this.near(tx + Math.cos(ang) * 0.32, tz + Math.sin(ang) * 0.32, cx, cz)); }
+      for (let i = 0; i < 4; i++) { const ang = i * 1.57 + 0.4; this.spots.push(this.near(tx + Math.cos(ang) * 0.32, tz + Math.sin(ang) * 0.32, ox, oz)); }
       this.focus = [tx, tz];
     } else if (st === 'trade') {
       // chez les voisins (ou les mineurs nomades) : une natte, nos marchandises qui partent, les leurs qui arrivent au chariot
@@ -502,8 +553,8 @@ export class ExpeditionScene {
       this.put(cartGeo(), kx, kz, 0.4);
       this.grows.push({ obj: this.put(nomads ? rocksGeo() : sacksGeo(), kx + 0.05, kz + 0.25, 0), from: 0.001, to: 1 });
       for (const [dx, dz] of [[0.78, -0.4], [0.72, 0.42]]) { const [hx, hz] = this.near(cx + dx, cz + dz, cx, cz); this.put(nomads ? yurtGeo() : hutGeo(), hx, hz, Math.atan2(cx - hx, cz - hz)); }
-      const people: ModelName[] = nomads ? ['villager_barbarian', 'villager_hooded_rogue'] : [folk[1 % folk.length], folk[2 % folk.length]];
-      people.forEach((m, i) => this.npc(m, cx + 0.28, cz + (i ? 0.14 : -0.12), -Math.PI / 2, TALK));
+      const people: FolkRole[] = nomads ? ['nomad', 'drummer'] : ['villager', 'villager'];
+      people.forEach((m, i) => this.npc(m, age, cx + 0.28, cz + (i ? 0.14 : -0.12), -Math.PI / 2, 'talk'));
       this.spots.push([cx - 0.24, cz - 0.08], [cx - 0.24, cz + 0.1], [kx + 0.15, kz + 0.12]);
       this.focus = [cx + 0.28, cz];
     } else if (st === 'spring') {
@@ -555,44 +606,67 @@ export class ExpeditionScene {
       }
       if (st !== 'scout') this.emits.push({ x: hx, y: y(hx, hz) + 0.1, z: hz, kind: 'puff', every: 0.7, t: 0 });
       this.mouth = { at: [mx + Math.sin(face) * 0.12, mz + Math.cos(face) * 0.12], heap: [hx, hz] };
+      this.focus = [(mx + hx) / 2, (mz + hz) / 2];
     } else if (st === 'race') {
       // la ligne de départ de la course : arche à damier, la voiture sans chevaux qui pétarade, bidon d'essence ; l'équipe la
-      // prépare tout autour, l'ingénieur donne ses consignes
+      // prépare tout autour, l'ingénieur donne ses consignes ; puis le pilote s'installe au volant et la voiture file faire ses
+      // tours de circuit (un de plus si l'on pousse la machine à fond), repasse sous l'arche et revient sur la ligne
       const [ax, az] = this.near(cx + 0.55, cz, cx, cz);
       this.put(raceArchGeo(), ax, az, Math.PI / 2);
       const [vx, vz] = this.near(cx + 0.12, cz, cx, cz);
-      this.put(oldCarGeo(), vx, vz, Math.PI / 2);
-      this.emits.push({ x: vx - 0.15, y: y(vx, vz) + 0.05, z: vz, kind: 'smoke', every: 0.4, t: 0 });
-      this.put(fuelCanGeo(), vx - 0.04, vz + 0.2, 0.3);
+      const car = this.put(oldCarGeo(), vx, vz, Math.PI / 2);
+      // le circuit : une boucle qui part de la ligne vers l'arche, du côté le plus dégagé, aussi grande que le terrain le permet
+      let best = { s: 1, rx: 1, rz: 0.7, n: -1 };
+      for (const s of [1, -1]) for (const rx of [1.7, 1.3, 1]) for (const rz of [1.2, 0.9, 0.7]) {
+        let n = (rx + rz) * 0.1;
+        for (let j = 0; j < 24; j++) { const th = (j / 24) * Math.PI * 2; if (this.free(vx + rx * Math.sin(th), vz + s * rz * (1 - Math.cos(th)))) n++; }
+        if (n > best.n) best = { s, rx, rz, n };
+      }
+      this.race = { obj: car, x: vx, z: vz, ax, s: best.s, rx: best.rx, rz: best.rz, laps: a.c.risk > 0.3 ? 3 : 2, driver: a.party[0] ?? null, puff: 0 };
+      this.put(fuelCanGeo(), vx - 0.04, vz - best.s * 0.2, 0.3);
       for (const [dx, dz] of [[-0.04, -0.2], [-0.24, 0.04], [0.02, 0.22], [0.2, -0.18]]) this.spots.push([vx + dx, vz + dz]);
-      this.npc(age >= 3 ? 'mini_male_e' : 'villager_mage', vx - 0.32, vz - 0.14, 0.6, TALK);
+      this.npc('scholar', age, vx - 0.32, vz - best.s * 0.2, 0.6, 'talk');
       this.focus = [vx, vz];
     } else if (st === 'balloon') {
-      // la montgolfière qu'on gonfle : nacelle et brûleur qui rugit, l'enveloppe qui s'arrondit à mesure ; l'équipe tient les
-      // cordes tout autour
-      const [bx, bz] = this.near(cx + 0.2, cz, cx, cz), by = y(bx, bz);
-      this.put(nacelleGeo(), bx, bz, 0);
-      const env = new THREE.Mesh(envelopeGeo(), mats.body);
-      env.position.set(bx, by + 0.18, bz);
-      env.castShadow = true;
-      this.group.add(env); this.props.push(env);
-      this.grows.push({ obj: env, from: 0.12, to: 1 });
-      this.flameAt(bx, by + 0.19, bz, 0.5);
-      for (let i = 0; i < 4; i++) { const ang = i * 1.57 + 0.6; this.spots.push(this.near(bx + Math.cos(ang) * 0.42, bz + Math.sin(ang) * 0.42, cx, cz)); }
+      // la montgolfière : on la gonfle au sol (le brûleur rugit, l'enveloppe s'arrondit, l'équipe tient les cordes), deux
+      // aéronautes montent dans la nacelle, elle s'élève, dérive au-dessus de la campagne (plus haut et plus loin dans les
+      // vents de la montagne) et revient se poser près de l'équipe, qui l'a suivie des yeux
+      const [bx, bz] = this.near(cx + 0.6, cz - 0.2, cx, cz), S = 1.6;
+      const obj = new THREE.Group(), basket = new THREE.Mesh(BALLOON_BASKET(), mats.body), env = new THREE.Mesh(BALLOON_ENV(), mats.body), burner = new THREE.Group();
+      basket.castShadow = env.castShadow = true;
+      env.position.y = 0.18; burner.position.y = 0.19;
+      const f = this.flameAt(0, 0, 0, 0.5);
+      this.group.remove(f); burner.add(f);
+      obj.add(basket, env, burner);
+      obj.position.set(bx, y(bx, bz), bz); obj.scale.setScalar(S);
+      this.group.add(obj); this.props.push(obj);
+      const stakes: [number, number][] = [], ropes: THREE.Line[] = [];
+      for (let i = 0; i < 4; i++) {
+        const ang = i * 1.57 + 0.6;
+        stakes.push(this.near(bx + Math.cos(ang) * 0.5, bz + Math.sin(ang) * 0.5, bx, bz));
+        const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), ROPE);
+        l.visible = false;
+        this.group.add(l); this.props.push(l); ropes.push(l);
+      }
+      const windy = a.c.dest === 'mountain';
+      this.balloon = {
+        obj, env, burner, home: [bx, bz], y0: y(bx, bz), riders: a.party.slice(0, Math.min(2, a.party.length - 1)), stakes, ropes,
+        drift: ((cx * 7.3 + cz * 3.1) % 6.283), high: windy ? 2 : 1.7, far: windy ? 2.4 : 1.6,
+      };
       this.focus = [bx, bz];
     } else if (st === 'troupe') {
       // la roulotte des jongleurs, deux jongleurs et leurs balles, un tambour ; l'équipe applaudit en demi-cercle
       const [wx, wz] = this.near(cx + 0.6, cz - 0.4, cx, cz);
       this.put(wagonGeo(), wx, wz, 0.4);
       for (const [dx, dz] of [[0.2, -0.14], [0.24, 0.18]]) {
-        const x = cx + dx, z = cz + dz, n = this.npc(dz < 0 ? 'villager_rogue' : 'villager_mage', x, z, -Math.PI / 2, ['Idle', 'idle']);
-        if (!n) continue;
+        const x = cx + dx, z = cz + dz;
+        this.npc('juggler', age, x, z, -Math.PI / 2, 'juggle');
         const balls = [0xd8443a, 0xe8b84a, 0x4a7aa8].map((c) => { const m = new THREE.Mesh(ballGeo(c), mats.body); this.group.add(m); this.props.push(m); return m; });
         this.jugglers.push({ x, y: y(x, z), z, face: -Math.PI / 2, balls });
       }
       const [dx, dz] = this.near(cx + 0.45, cz + 0.4, cx, cz);
       this.put(drumGeo(), dx - 0.08, dz, 0);
-      this.npc('villager_barbarian', dx, dz, -Math.PI / 2 - 0.5, SITTING);
+      this.npc('drummer', age, dx, dz, -Math.PI / 2 - 0.5, 'sit');
       this.focus = [cx + 0.22, cz];
     } else if (st === 'abbey') {
       // la chapelle de l'abbaye, le frère qui touille sa cuve fumante, les tonneaux ; l'équipe écoute et goûte
@@ -602,13 +676,13 @@ export class ExpeditionScene {
       this.put(kettleGeo(), kx, kz, Math.PI / 2);
       this.emits.push({ x: kx, y: y(kx, kz) + 0.14, z: kz, kind: 'steam', every: 0.3, t: 0 });
       this.flameAt(kx, y(kx, kz) + 0.01, kz, 0.6);
-      this.npc('villager_hooded_rogue', kx + 0.13, kz + 0.02, -Math.PI / 2, TALK);
+      this.npc('monk', age, kx + 0.13, kz + 0.02, -Math.PI / 2, 'talk');
       this.put(barrelsGeo(), cx + 0.42, cz + 0.32, 0);
       this.focus = [kx, kz];
     } else if (st === 'stars') {
       // lunettes braquées vers le ciel, l'astronome ; des étoiles filantes passent au-dessus
       for (const [dx, dz, r] of [[-0.32, -0.15, 0.4], [0.3, -0.2, -0.3], [0.02, 0.32, 2.8]]) { const [x, z] = this.near(cx + dx, cz + dz, cx, cz); this.put(telescopeGeo(), x, z, r); this.spots.push([x - Math.sin(r) * 0.12, z - Math.cos(r) * 0.12]); }
-      this.npc(age >= 3 ? 'mini_male_e' : 'villager_mage', cx + 0.12, cz - 0.05, -0.8, TALK);
+      this.npc('scholar', age, cx + 0.12, cz - 0.05, -0.8, 'talk');
       this.emits.push({ x: cx, y: y(cx, cz) + 2.4, z: cz, kind: 'star', every: 1.1, t: 0 });
     } else if (st === 'bridge') {
       // le tablier avance au-dessus de l'eau, travée après travée (de fer à l'âge industriel)
@@ -637,12 +711,14 @@ export class ExpeditionScene {
       }
     } else if (st === 'summit' || st === 'basecamp') {
       // le drapeau planté, la station météo montée pièce à pièce, son anémomètre qui tourne ; le camp de base au pied
-      let [sx, sz] = [cx, cz];
+      // le drapeau au point le plus haut alentour ; depuis le camp de base, la station monte au sommet voisin
+      let [sx, sz] = this.peak(cx, cz, 2, 0);
       if (st === 'basecamp') {
         [0xd8443a, 0xe8b84a, 0x4a7aa8].forEach((c, i) => { const [x, z] = this.near(cx + Math.cos(i * 2.1) * 0.4, cz + Math.sin(i * 2.1) * 0.4, cx, cz); this.put(tentGeoC(c), x, z, i * 2.1 + Math.PI / 2); });
         this.put(sacksGeo(), cx, cz, 0);
-        [sx, sz] = this.near(cx + 0.9, cz - 0.55, cx, cz);
+        [sx, sz] = this.peak(cx, cz, 3, 0.9);
       }
+      this.focus = st === 'summit' ? [sx, sz] : [(cx + sx) / 2, (cz + sz) / 2];
       this.put(flagGeo(), sx, sz, 0.4);
       const [mx, mz] = this.near(sx + 0.28, sz + 0.1, sx, sz);
       const station = this.put(stationGeo(), mx, mz, 0);
@@ -655,14 +731,12 @@ export class ExpeditionScene {
   }
 
   /** Un habitant d'ailleurs (voisin, nomade, moine, jongleur, astronome) qui reste à sa place et fait son geste */
-  private npc(name: ModelName, x: number, z: number, face: number, anims: string[]) {
-    const actor = hasModel(name) ? makeActor(name, HUMAN, 'height') : null;
-    if (!actor) return null;
-    actor.root.position.set(x, this.world.surfaceAt(x, z), z);
-    actor.root.rotation.y = face;
-    actor.mixer.setTime(x * 7);
-    this.group.add(actor.root);
-    const n = { actor, anims };
+  private npc(role: FolkRole, age: number, x: number, z: number, face: number, pose: FolkPose) {
+    const folk = makeFolk({ age, v: Math.floor(x * 131 + z * 17), role });
+    folk.root.position.set(x, this.world.surfaceAt(x, z), z);
+    folk.root.rotation.y = face;
+    this.group.add(folk.root);
+    const n = { folk, pose, off: x * 7 };
     this.npcs.push(n);
     return n;
   }
@@ -711,6 +785,31 @@ export class ExpeditionScene {
       if (up > best) { best = up; dir = [dx, dz]; }
     }
     return dir;
+  }
+
+  /** Le centre de la clairière la plus proche (hors forêt, hors de tout) : un cercle de rayon `ring` y tient dégagé */
+  private clearing(cx: number, cz: number, ring: number): [number, number] {
+    const w = this.world, open = (x: number, z: number) => this.free(x, z) && w.veg[w.ci(Math.floor(x), Math.floor(z))] !== VEG_FOREST;
+    let best: [number, number] = [cx, cz], score = -Infinity;
+    for (let r = 0; r <= 2.5; r += 0.5) for (let j = 0; j < (r ? 8 : 1); j++) {
+      const px = cx + Math.cos(j * 0.785) * r, pz = cz + Math.sin(j * 0.785) * r;
+      let m = (open(px, pz) ? 2 : 0) - r * 0.6;
+      for (let i = 0; i < 12; i++) { const ang = (i / 12) * Math.PI * 2; if (open(px + Math.cos(ang) * ring, pz + Math.sin(ang) * ring)) m++; }
+      if (m > score) { score = m; best = [px, pz]; }
+    }
+    return best;
+  }
+
+  /** Le point libre le plus haut entre `min` et `r` de (cx, cz) : le sommet où planter le drapeau */
+  private peak(cx: number, cz: number, r: number, min: number): [number, number] {
+    let best: [number, number] = this.near(cx + min, cz, cx, cz), h = -Infinity;
+    for (let dz = -r; dz <= r; dz += 0.25) for (let dx = -r; dx <= r; dx += 0.25) {
+      const d = Math.hypot(dx, dz), x = cx + dx, z = cz + dz;
+      if (d > r || d < min || !this.free(x, z)) continue;
+      const y = this.world.hAt(x, z) - d * 0.03;
+      if (y > h) { h = y; best = [x, z]; }
+    }
+    return best;
   }
 
   private near(x: number, z: number, cx: number, cz: number): [number, number] {
@@ -813,6 +912,9 @@ export class ExpeditionScene {
     if (this.kind === 'hunt' && (onSite || a.phase === 'back')) this.stepHunt(dt, a);
     else for (const b of this.beasts) this.stepBeast(b, dt, a);
     if (this.boat && onSite) this.stepBoat();
+    if (this.balloon) this.stepBalloon(k, onSite);
+    if (this.works) this.stepWorks(dt, a);
+    if (this.race) this.stepRace(k, dt, onSite);
     // ouvrages qui avancent avec le travail, panier qui se remplit
     this.built.forEach((o, i) => (o.visible = k * this.built.length > i));
     if (this.basket) this.basket.scale.setScalar(Math.max(0.001, k));
@@ -821,7 +923,7 @@ export class ExpeditionScene {
       else { const f = 1 + Math.sin(this.t * 17 + s.obj.position.x * 9) * 0.12; s.obj.scale.set(f, 1.1 + Math.sin(this.t * 13 + s.obj.position.z * 7) * 0.2, f); }
     }
     for (const g of this.grows) g.obj.scale.setScalar(Math.max(0.001, g.from + (g.to - g.from) * k));
-    for (const n of this.npcs) { play(n.actor, n.anims); n.actor.mixer.update(dt); }
+    for (const n of this.npcs) folkStep(n.folk, this.t * 1.6 + n.off, n.pose);
     for (const j of this.jugglers) j.balls.forEach((b, i) => {
       const ph = this.t * 4.2 + i * 2.094, side = Math.cos(ph) * 0.06, fx = Math.sin(j.face), fz = Math.cos(j.face);
       b.position.set(j.x + fx * 0.07 + fz * side, j.y + 0.3 + Math.abs(Math.sin(ph)) * 0.16, j.z + fz * 0.07 - fx * side);
@@ -977,6 +1079,7 @@ export class ExpeditionScene {
     const y = bt.y + 0.005 + Math.sin(this.t * 1.7) * 0.006;
     bt.obj.position.set(px, y, pz);
     bt.obj.rotation.set(Math.sin(this.t * 1.3) * 0.03, heading, Math.sin(this.t * 1.1) * 0.04);
+    this.focus = [px, pz];
     bt.riders.forEach((id, i) => {
       const lz = i ? -0.08 : 0.06, sx = Math.sin(heading), cz = Math.cos(heading);
       if (this.story === 'dive' && i === 1 && u > 0.97) {
@@ -994,6 +1097,8 @@ export class ExpeditionScene {
     const riders = this.boat?.riders ?? [];
     a.party.forEach((id, i) => {
       if (riders.includes(id)) return;
+      if (this.balloon && this.stepAeronaut(id, i, k, dt)) return;
+      if (this.race && this.stepRacer(id, i, k)) return;
       if (this.kind === 'spring' && this.stepBather(id, i, a, dt)) return;
       if (this.kind === 'delve' && this.mouth) { this.stepDelver(id, i, dt); return; }
       let left = (this.next.get(id) ?? i * 0.8) - dt;
@@ -1024,6 +1129,135 @@ export class ExpeditionScene {
     if (st === 'stars') return i < 3 ? 'work' : 'sit';
     if (this.kind === 'spring') return 'sit';
     return 'work';
+  }
+
+  /**
+   * La montgolfière : l'enveloppe se gonfle, puis elle s'élève, dérive au loin et revient se poser, en se balançant, le brûleur
+   * qui rugit par bouffées ; les cordes que tient l'équipe jusqu'au décollage ; les aéronautes debout dans la nacelle
+   */
+  private stepBalloon(k: number, onSite: boolean) {
+    const b = this.balloon!, w = this.world, o = b.obj, S = o.scale.x;
+    const fill = k < B_FULL ? smooth(k / B_FULL) : k < B_OUT ? 1 : 1 - smooth(Math.min(1, (k - B_OUT) / (1 - B_OUT))) * 0.6;
+    b.env.scale.setScalar(Math.max(0.001, 0.12 + 0.88 * fill));
+    // u : le vol, du décollage (0) à l'atterrissage (1) ; elle monte, croise au loin en faisant un crochet, redescend
+    const u = k <= B_LIFT ? 0 : k >= B_LAND ? 1 : (k - B_LIFT) / (B_LAND - B_LIFT);
+    const up = u < 0.2 ? smooth(u / 0.2) : u > 0.8 ? 1 - smooth((u - 0.8) / 0.2) : 1;
+    const out = Math.sin(u * Math.PI) * b.far, side = Math.sin(u * Math.PI * 2) * b.far * 0.35, dx = Math.sin(b.drift), dz = Math.cos(b.drift);
+    const x = b.home[0] + dx * out + dz * side, z = b.home[1] + dz * out - dx * side;
+    o.position.set(x, Math.max(w.surfaceAt(x, z), b.y0) + up * b.high + Math.sin(this.t * 0.7) * 0.05 * up, z);
+    o.rotation.set(0, b.drift + u * 2.2, Math.sin(this.t * 0.9) * 0.035 * up);
+    // le brûleur : il chauffe fort pour gonfler et monter, par bouffées en croisière, se tait pour redescendre
+    const heat = !onSite ? 0.3 : k < B_LIFT ? 1.5 : u < 0.22 ? 1.8 : u < 0.75 ? (Math.sin(this.t * 1.7) > 0.2 ? 1.5 : 0.4) : k < B_LAND ? 0.3 : 0.001;
+    b.burner.scale.setScalar(heat);
+    this.focus = [x, z];
+    this.lift = Math.max(0, o.position.y - w.surfaceAt(x, z)) + 0.8 * S * fill * (u > 0 && u < 1 ? 1 : 0.4);
+    // les cordes, des coins de la nacelle aux mains de l'équipe, jusqu'au décollage
+    const ry = o.rotation.y, cs = Math.cos(ry), sn = Math.sin(ry);
+    b.ropes.forEach((l, i) => {
+      l.visible = onSite && k < B_LIFT;
+      if (!l.visible) return;
+      const ang = i * 1.57 + 0.6, lx = Math.cos(ang) * 0.06 * S, lz = Math.sin(ang) * 0.06 * S, [sx, sz] = b.stakes[i];
+      const pa = l.geometry.attributes.position as THREE.BufferAttribute;
+      pa.setXYZ(0, x + lx * cs + lz * sn, o.position.y + 0.085 * S, z - lx * sn + lz * cs);
+      pa.setXYZ(1, sx, w.surfaceAt(sx, sz) + 0.12, sz);
+      pa.needsUpdate = true;
+      l.geometry.computeBoundingSphere();
+    });
+    // les aéronautes, debout de part et d'autre du brûleur ; ils saluent ceux d'en bas
+    if (onSite) b.riders.forEach((id, r) => {
+      if (k < B_IN || k >= B_OUT) return;
+      const lx = (r ? -0.032 : 0.032) * S, lz = (r ? -0.022 : 0.022) * S;
+      this.agents.ride(id, { x: x + lx * cs + lz * sn, z: z - lx * sn + lz * cs, y: o.position.y + 0.012 * S, heading: ry + (r ? Math.PI : 0) + 0.6, act: u > 0.05 && u < 0.95 && Math.floor(this.t / 2.5 + r) % 2 ? 'cheer' : null });
+    });
+  }
+
+  /** Un membre de l'envol : à sa corde pendant qu'on gonfle, à la nacelle s'il part, puis le nez en l'air à applaudir ; vrai s'il est pris en charge */
+  private stepAeronaut(id: number, i: number, k: number, dt: number) {
+    const b = this.balloon!, r = b.riders.indexOf(id), o = b.obj;
+    if (r >= 0 && k >= B_IN && k < B_OUT) return true;
+    if (r >= 0) this.agents.ride(id, null);
+    const st = r >= 0 && k >= B_BOARD && k < B_IN ? 'board' : k < B_LIFT ? 'rope' : 'watch';
+    let left = (this.next.get(id) ?? i * 0.5) - dt;
+    if (this.stage.get(id) !== st || left <= 0) {
+      this.stage.set(id, st);
+      const p = this.agents.partyPositions([id])[0];
+      const [tx, tz] = st === 'rope' ? b.stakes[i % b.stakes.length] : st === 'board' ? [b.home[0] + (r ? -0.17 : 0.17), b.home[1]] : p ? [p[0], p[1]] : b.home;
+      this.agents.memberGo(id, tx, tz, Math.atan2(o.position.x - tx, o.position.z - tz));
+      this.goal.set(id, 1);
+      left = st === 'watch' ? 5 : 1e9;
+    } else if (this.goal.get(id) && this.agents.memberDone(id)) {
+      this.goal.delete(id);
+      this.agents.partyAct([id], st === 'watch' ? 'cheer' : st === 'board' ? null : 'work');
+    }
+    this.next.set(id, left);
+    return true;
+  }
+
+  /** La voiture de course : au départ elle pétarade sur place ; puis elle fait ses tours, accélère, ralentit, revient sur la ligne */
+  private stepRace(k: number, dt: number, onSite: boolean) {
+    const r = this.race!, w = this.world;
+    const u = k <= R_GO ? 0 : k >= R_END ? 1 : smooth((k - R_GO) / (R_END - R_GO)), th = u * r.laps * Math.PI * 2;
+    const x = r.x + r.rx * Math.sin(th), z = r.z + r.s * r.rz * (1 - Math.cos(th));
+    const h = Math.atan2(r.rx * Math.cos(th), r.s * r.rz * Math.sin(th)), driving = onSite && u > 0 && u < 1;
+    const gy = w.surfaceAt(x, z);
+    r.obj.position.set(x, gy + (driving ? Math.abs(Math.sin(this.t * 23)) * 0.005 : 0), z);
+    r.obj.rotation.y = h;
+    if (driving) this.focus = [x, z];
+    // pétarades au pot d'échappement, poussière derrière elle quand elle file
+    if ((r.puff -= dt) <= 0) {
+      r.puff = driving ? 0.1 : 0.45;
+      const o = new THREE.Mesh(driving ? puffGeo() : smokeGeo(), mats.body);
+      this.group.add(o);
+      this.fx.push({ obj: o, t: 0, life: driving ? 1 : 1.6, kind: driving ? 'puff' : 'smoke', x: x - Math.sin(h) * 0.15, y: gy + 0.04, z: z - Math.cos(h) * 0.15, vx: 0, vz: 0 });
+    }
+    // le pilote au volant
+    if (onSite && r.driver !== null) {
+      if (k >= R_SEAT && k < R_OUT) this.agents.ride(r.driver, { x: x - Math.sin(h) * 0.03, z: z - Math.cos(h) * 0.03, y: gy + 0.04, heading: h });
+      else if (k >= R_OUT) this.agents.ride(r.driver, null);
+    }
+  }
+
+  /**
+   * Le chantier de la voie : les jalons disparaissent à mesure qu'on pose les tronçons ; le train de chantier pousse sa
+   * plate-forme jusqu'à la tête de voie, en fumant ; la vue suit la tête de voie
+   */
+  private stepWorks(dt: number, a: ActiveExpedition) {
+    const wk = this.works!, w = this.world, laid = this.built.filter((o) => o.visible).length, sx = Math.sin(wk.dir), sz = Math.cos(wk.dir);
+    wk.stakes.forEach((s, i) => (s.visible = !this.built[i].visible));
+    const head = laid * 0.3, at = Math.max(0, head - 0.62), x = wk.x + sx * at, z = wk.z + sz * at;
+    // le train avance en douceur jusqu'à sa place
+    const o = wk.train, tx = x - o.position.x, tz = z - o.position.z, d = Math.hypot(tx, tz);
+    if (!o.userData.set || d > 2) { o.position.set(x, w.surfaceAt(x, z) + 0.024, z); o.userData.set = true; }
+    else if (d > 1e-3) { const st = Math.min(d, dt * 0.25); o.position.x += (tx / d) * st; o.position.z += (tz / d) * st; o.position.y = w.surfaceAt(o.position.x, o.position.z) + 0.024; }
+    if (a.phase === 'work') this.focus = [wk.x + sx * head, wk.z + sz * head];
+    if ((wk.puff -= dt) <= 0 && !a.wait) {
+      wk.puff = d > 1e-3 ? 0.18 : 0.5;
+      const f = new THREE.Mesh(smokeGeo(), mats.body), cx = o.position.x + sx * 0.12, cz = o.position.z + sz * 0.12;
+      this.group.add(f);
+      this.fx.push({ obj: f, t: 0, life: 2, kind: 'smoke', x: cx, y: o.position.y + 0.3, z: cz, vx: 0, vz: 0 });
+    }
+  }
+
+  /** Le pilote va à sa portière ; les autres, une fois la voiture partie, applaudissent au bord de la piste, près de l'arche */
+  private stepRacer(id: number, i: number, k: number) {
+    const r = this.race!;
+    if (id === r.driver) {
+      if (k >= R_SEAT && k < R_OUT) return true;
+      if (k < R_DOOR || k >= R_OUT) return false;
+      if (this.stage.get(id) !== 'door') { this.stage.set(id, 'door'); this.agents.memberGo(id, r.x - 0.04, r.z - r.s * 0.14, r.s > 0 ? 0 : Math.PI); }
+      return true;
+    }
+    if (k < R_GO) return false;
+    if (this.stage.get(id) !== 'stand') {
+      this.stage.set(id, 'stand');
+      const [sx, sz] = this.near(r.ax + (i - 1.5) * 0.16, r.z - r.s * 0.3, r.x, r.z);
+      this.agents.memberGo(id, sx, sz, r.s > 0 ? 0 : Math.PI);
+      this.goal.set(id, 1);
+    } else if (this.goal.get(id) && this.agents.memberDone(id)) {
+      this.goal.delete(id);
+      this.agents.partyAct([id], 'cheer');
+    }
+    return true;
   }
 
   /** Source chaude : deux membres se baignent, les autres attendent assis sur les pierres ; on change toutes les dix secondes */
@@ -1190,8 +1424,11 @@ export class ExpeditionScene {
   dispose(a: ActiveExpedition) {
     for (const id of this.boat?.riders ?? []) this.agents.ride(id, null);
     for (const id of this.bath?.in ?? []) this.agents.ride(id, null);
+    for (const id of this.balloon?.riders ?? []) this.agents.ride(id, null);
+    if (this.race?.driver != null) this.agents.ride(this.race.driver, null);
+    for (const l of this.balloon?.ropes ?? []) l.geometry.dispose();
     if (this.mouth) this.agents.partyHide(a.party, false);
-    for (const n of this.npcs) { n.actor.mixer.stopAllAction(); this.group.remove(n.actor.root); }
+    for (const n of this.npcs) this.group.remove(n.folk.root);
     for (const b of [...this.beasts, ...this.dogs]) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
     for (const o of this.props) this.group.remove(o);
     for (const f of this.fx) this.group.remove(f.obj);

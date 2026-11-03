@@ -21,8 +21,9 @@ export interface Soldier {
   flame: THREE.Object3D | null;
 }
 
-/** Ce que fait le soldat : immobile, au pas, au combat, au garde-à-vous, en liesse */
-export type SoldierMode = 'idle' | 'walk' | 'fight' | 'guard' | 'cheer';
+/** Ce que fait le soldat : immobile, au pas, au combat, au garde-à-vous, en liesse, à la course, accroupi (auprès d'un blessé),
+ * à porter (un brancard) */
+export type SoldierMode = 'idle' | 'walk' | 'fight' | 'guard' | 'cheer' | 'run' | 'kneel' | 'carry';
 
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 const STEEL = 0xc4cad2, BLUE = 0x3a6ab8, GOLD = 0xe8c66a, SKIN = 0xe8b894, LEATHER = 0x5a3e2c, BLACK = 0x1e1e22, WHITE = 0xf0ece0;
@@ -320,12 +321,134 @@ const miner4: Kit = {
   left() {},
 };
 
+/** Lance d'incendie de laiton, tenue à deux mains (on la pointe comme un fusil) */
+function nozzle(p: Parts) {
+  p.box(0.016, 0.03, 0.016, 0, -0.03, 0, 0x2a2a2e);
+  p.cyl(0.01, 0.006, 0.07, 6, 0, -0.015, 0.0, 0xc8a050);
+}
+
+/** Sapeur-pompier de l'âge industriel : casque de laiton à crête, vareuse bleu nuit passepoilée de rouge, ceinturon et hachette, lance */
+const fireman: Kit = {
+  leg: 0x1e2440, boot: BLACK, hip: 0x1e2440, torso: 0x22305a, arm: 0x22305a, hand: LEATHER, hold: 'rifle',
+  dress(p) {
+    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0x22305a);
+    for (const y of [0.13, 0.17]) p.box(0.082, 0.004, 0.057, 0, y, 0, 0xd8443a);
+    p.box(0.086, 0.014, 0.06, 0, 0.118, 0, BLACK); p.box(0.016, 0.014, 0.004, 0, 0.118, 0.031, 0xc8a050);
+    p.box(0.012, 0.05, 0.02, 0.045, 0.085, -0.01, 0x7a5236); p.box(0.02, 0.018, 0.006, 0.045, 0.11, -0.01, STEEL);
+    for (let k = 0; k < 3; k++) p.box(0.006, 0.006, 0.004, 0.012, 0.14 + k * 0.02, 0.029, 0xc8a050);
+  },
+  head(p) {
+    // casque de laiton : bombe, bord, crête et cimier
+    p.sphere(0.032, 0, 0.25, 0, 0xd8b050, 1, 0.8);
+    p.cyl(0.04, 0.036, 0.008, 10, 0, 0.236, -0.004, 0xd8b050);
+    p.box(0.01, 0.022, 0.06, 0, 0.27, 0, 0xe8c66a);
+    p.box(0.02, 0.016, 0.006, 0, 0.255, 0.031, 0xc8a050);
+  },
+  right: nozzle,
+  left() {},
+};
+
+/** Sapeur-pompier moderne : casque argenté à visière dorée, veste de feu bleu nuit à bandes jaunes réfléchissantes, lance */
+const firemanNow: Kit = {
+  leg: 0x1e2440, boot: BLACK, hip: 0x1e2440, torso: 0x24304a, arm: 0x24304a, hand: BLACK, hold: 'rifle',
+  dress(p) {
+    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0x24304a);
+    for (const y of [0.12, 0.165]) p.box(0.084, 0.01, 0.059, 0, y, 0, 0xe8e040);
+    p.box(0.04, 0.012, 0.004, 0, 0.19, -0.029, 0xd84a3e);
+  },
+  head(p) {
+    p.sphere(0.034, 0, 0.25, 0, 0xd8dce2, 1, 0.85);
+    p.box(0.05, 0.02, 0.008, 0, 0.238, 0.03, 0xe8c040);
+    p.box(0.012, 0.006, 0.06, 0, 0.278, 0, 0xd8dce2);
+  },
+  right: nozzle,
+  left() {},
+};
+
+const RED = 0xd84a3e;
+
+/** Infirmier de l'âge industriel : longue blouse blanche boutonnée, croix rouge sur la poitrine, calot blanc à croix, trousse de cuir */
+const medic: Kit = {
+  leg: 0x3a3a42, boot: BLACK, hip: WHITE, torso: WHITE, arm: WHITE, hand: SKIN, hold: 'rifle',
+  dress(p) {
+    p.box(0.08, 0.13, 0.055, 0, 0.08, 0, WHITE);
+    for (let k = 0; k < 4; k++) p.box(0.005, 0.005, 0.004, 0.012, 0.1 + k * 0.025, 0.029, 0xb8b4ac);
+    p.box(0.084, 0.008, 0.058, 0, 0.13, 0, 0xd8d4cc);
+    p.box(0.006, 0.02, 0.004, -0.02, 0.165, 0.029, RED); p.box(0.02, 0.006, 0.004, -0.02, 0.172, 0.029, RED);
+  },
+  head(p) {
+    p.box(0.046, 0.012, 0.046, 0, 0.246, 0, 0x5a3e2c);
+    p.box(0.044, 0.02, 0.044, 0, 0.252, 0, WHITE);
+    p.box(0.004, 0.012, 0.003, 0, 0.256, 0.0225, RED); p.box(0.012, 0.004, 0.003, 0, 0.26, 0.0225, RED);
+  },
+  right() {},
+  left(p) { p.box(0.004, 0.02, 0.004, 0, -0.01, 0, LEATHER); p.box(0.04, 0.03, 0.022, 0, -0.04, 0, 0x7a4a2e); p.box(0.042, 0.006, 0.024, 0, -0.016, 0, 0x5a3420); },
+};
+
+/** Ambulancier moderne : pantalon bleu nuit, polo blanc, gilet jaune fluo à bandes argentées, étoile de vie bleue, sac rouge */
+const medicNow: Kit = {
+  leg: 0x1e2a44, boot: BLACK, hip: 0x1e2a44, torso: 0xf2f2f2, arm: 0xf2f2f2, hand: SKIN, hold: 'rifle',
+  dress(p) {
+    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0xd8e83a);
+    for (const y of [0.13, 0.165]) p.box(0.084, 0.008, 0.059, 0, y, 0, SILVER);
+    p.box(0.02, 0.02, 0.004, -0.02, 0.185, 0.0285, 0x2c6ad8);
+    p.box(0.03, 0.012, 0.004, 0, 0.185, -0.0285, 0x2c6ad8);
+  },
+  head(p) { p.box(0.046, 0.014, 0.046, 0, 0.25, 0, 0x3a2a1e); p.box(0.046, 0.03, 0.01, 0, 0.222, -0.019, 0x3a2a1e); },
+  right() {},
+  left(p) { p.box(0.004, 0.02, 0.004, 0, -0.01, 0, BLACK); p.box(0.045, 0.032, 0.024, 0, -0.042, 0, RED); p.box(0.006, 0.02, 0.025, 0, -0.035, 0, WHITE); },
+};
+
+/** Sergent de ville de l'âge industriel : képi à bandeau d'argent, tunique bleu nuit à double rangée de boutons, pèlerine, bâton blanc */
+const policeman: Kit = {
+  leg: NAVY, boot: BLACK, hip: NAVY, torso: NAVY, arm: NAVY, hand: SKIN, hold: 'rifle',
+  dress(p) {
+    p.box(0.08, 0.12, 0.055, 0, 0.09, 0, NAVY);
+    for (const x of [-0.012, 0.012]) for (let k = 0; k < 4; k++) p.box(0.005, 0.005, 0.004, x, 0.11 + k * 0.022, 0.029, SILVER);
+    p.box(0.086, 0.01, 0.06, 0, 0.12, 0, BLACK);
+    // la pèlerine sur les épaules
+    p.box(0.1, 0.04, 0.066, 0, 0.17, 0, dark(NAVY, 0.85));
+  },
+  head(p) {
+    p.cyl(0.025, 0.023, 0.036, 10, 0, 0.244, 0, NAVY);
+    p.cyl(0.0255, 0.0255, 0.008, 10, 0, 0.248, 0, SILVER);
+    p.box(0.04, 0.005, 0.02, 0, 0.244, 0.028, BLACK);
+  },
+  // le bâton blanc, pendu au poignet
+  right(p) { p.box(0.008, 0.07, 0.008, 0, -0.065, 0, 0xf4f2ee); },
+  left() {},
+};
+
+/** Policier moderne : casquette bleu nuit au bandeau damier, chemise bleu clair, gilet « POLICE », ceinturon et étui, radio */
+const policeNow: Kit = {
+  leg: 0x1e2a44, boot: BLACK, hip: 0x1e2a44, torso: 0x7a9ad0, arm: 0x7a9ad0, hand: SKIN, hold: 'rifle',
+  dress(p) {
+    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0x7a9ad0);
+    p.box(0.082, 0.07, 0.057, 0, 0.12, 0, 0x1e2a44);
+    for (let k = 0; k < 6; k++) p.box(0.008, 0.01, 0.004, -0.025 + k * 0.01, 0.165, -0.0295, WHITE);
+    p.box(0.03, 0.008, 0.004, 0.018, 0.17, 0.0295, WHITE);
+    p.box(0.086, 0.012, 0.06, 0, 0.118, 0, BLACK); p.box(0.018, 0.026, 0.016, 0.044, 0.1, 0.008, BLACK);
+    p.box(0.012, 0.02, 0.01, -0.03, 0.18, 0.03, BLACK);
+  },
+  head(p) {
+    p.cyl(0.026, 0.024, 0.026, 10, 0, 0.244, 0, 0x1e2a44);
+    for (let k = 0; k < 8; k++) p.box(0.006, 0.008, 0.003, Math.cos(k * 0.785) * 0.025, 0.25, Math.sin(k * 0.785) * 0.025, k % 2 ? WHITE : 0x2c4a9a);
+    p.box(0.042, 0.005, 0.022, 0, 0.244, 0.028, BLACK);
+  },
+  right() {},
+  left() {},
+};
+
 /** Gendarmes (sergents du guet au Moyen Âge) et mineurs de chaque époque */
 const GENDARMES = [watchman, watchman, watchman, gendarme, gendarmeNow];
+/** Ambulanciers et policiers des secours (ils n'existent qu'à partir de l'âge industriel) */
+const MEDICS = [medic, medic, medic, medic, medicNow];
+const POLICE = [policeman, policeman, policeman, policeman, policeNow];
 const MINERS = [miner2, miner2, miner2, miner3, miner4];
+const FIREMEN = [fireman, fireman, fireman, fireman, firemanNow];
 
 /** Qui est-ce : un soldat de l'époque, un gendarme, un mineur */
-export type SoldierRole = 'soldier' | 'gendarme' | 'miner';
+export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police';
 
 /** Torche du garde, flamme à part (elle vacille) */
 function torch(): Parts {
@@ -337,7 +460,7 @@ function torch(): Parts {
 
 /** Fantassin de l'époque `age` ; `v` varie son teint ; `withTorch` : une torche dans la main gauche à la place de l'écu */
 export function makeSoldier(age: number, v = 0, withTorch = false, role: SoldierRole = 'soldier'): Soldier {
-  const era = Math.min(4, Math.max(0, age)), kit = (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : KITS)[era], skin = SKINS[((v % SKINS.length) + SKINS.length) % SKINS.length];
+  const era = Math.min(4, Math.max(0, age)), kit = (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : role === 'fireman' ? FIREMEN : role === 'medic' ? MEDICS : role === 'police' ? POLICE : KITS)[era], skin = SKINS[((v % SKINS.length) + SKINS.length) % SKINS.length];
   const tint = (c: number) => (c === SKIN ? skin : c);
   const p = new Parts();
   kit.dress(p);
@@ -399,13 +522,22 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
 
 /** Le soldat au rythme de `phase` : pas cadencé, garde, coups portés, bras levés */
 export function soldierStep(s: Soldier, phase: number, mode: SoldierMode) {
-  const walk = mode === 'walk', sw = Math.sin(phase);
-  s.body.position.y = walk ? Math.abs(sw) * 0.006 : Math.sin(phase * 0.3) * 0.0015;
-  s.body.rotation.x = mode === 'fight' ? 0.12 : 0;
-  s.legs[0].rotation.x = walk ? sw * 0.6 : mode === 'fight' ? -0.25 : 0;
-  s.legs[1].rotation.x = walk ? -sw * 0.6 : mode === 'fight' ? 0.3 : 0;
+  const run = mode === 'run', walk = mode === 'walk' || mode === 'carry' || run, kneel = mode === 'kneel', sw = Math.sin(phase), stride = run ? 0.95 : 0.6;
+  s.body.position.y = kneel ? -0.065 : walk ? Math.abs(sw) * (run ? 0.012 : 0.006) : Math.sin(phase * 0.3) * 0.0015;
+  s.body.rotation.x = mode === 'fight' ? 0.12 : kneel ? 0.35 : run ? 0.16 : 0;
+  for (const l of s.legs) l.position.y = kneel ? 0.035 : 0.1;
+  s.legs[0].rotation.x = kneel ? -1.35 : walk ? sw * stride : mode === 'fight' ? -0.25 : 0;
+  s.legs[1].rotation.x = kneel ? -1.15 : walk ? -sw * stride : mode === 'fight' ? 0.3 : 0;
   const [right, left] = s.arms, rifle = right.userData.hold === 'rifle';
-  if (mode === 'fight') {
+  if (kneel) {
+    // penché sur le blessé : les mains au travail
+    right.rotation.x = -1 + Math.sin(phase * 1.3) * 0.25; left.rotation.x = -0.9 - Math.sin(phase * 1.1) * 0.2; right.rotation.z = 0;
+  } else if (mode === 'carry') {
+    // les brancards en main, bras tendus
+    right.rotation.x = left.rotation.x = -0.55; right.rotation.z = 0;
+  } else if (run) {
+    right.rotation.x = -sw * 0.9 - 0.35; left.rotation.x = sw * 0.9 - 0.35; right.rotation.z = 0;
+  } else if (mode === 'fight') {
     // il frappe (ou met en joue), l'écu en avant
     const beat = Math.max(0, Math.sin(phase * 1.6));
     right.rotation.x = rifle ? -1.35 : -0.4 - beat * 1.6;

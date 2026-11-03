@@ -22,27 +22,52 @@ interface Ship {
   key: string;
 }
 
+type PlanePhase = 'stand' | 'out' | 'roll' | 'fly' | 'rollout' | 'in';
 interface Plane {
   root: THREE.Group;
-  /** étape en cours et ses points de passage (repère de l'aéroport), vitesse visée */
-  phase: number;
-  wp: number;
+  /** pour quelle taille d'aéroport (3 × 3 des anciennes parties, 4 × 4) */
+  size: number;
+  phase: PlanePhase;
+  /** distance parcourue sur le tracé au sol en cours, avancement sur la courbe du vol (0 … 1) */
+  s: number;
+  u: number;
   pos: THREE.Vector3;
   heading: number;
   speed: number;
+  bank: number;
+  pitch: number;
   t: number;
 }
 
-/** Les étapes du vol (repère de l'aéroport, y au-dessus de la piste) : points de passage et vitesse */
-const LEGS: { pts: [number, number, number][]; v: number }[] = [
-  { pts: [[0.95, 0, -0.25]], v: 0 },
-  { pts: [[0.95, 0, 0.8]], v: 0.35 },
-  { pts: [[-0.75, 0, 0.8]], v: 2.6 },
-  { pts: [[-6, 2.2, 0.8], [-9, 3.6, 5], [0, 4, 9.5], [9, 3.6, 5], [11, 3, 0.8]], v: 3.2 },
-  { pts: [[5, 1.3, 0.8], [1.35, 0.02, 0.8]], v: 2.2 },
-  { pts: [[-0.45, 0, 0.8]], v: 0.9 },
-  { pts: [[0.95, 0, 0.8], [0.95, 0, -0.25]], v: 0.35 },
-];
+type P2 = [number, number];
+/**
+ * Le plan de vol d'un aéroport (repère de l'aéroport, piste le long de x, décollage et atterrissage vers -x) : son poste et
+ * son cap, le roulage jusqu'au seuil, la course de décollage, le tour du pays (courbe, y au-dessus de la piste), le
+ * roulement après le toucher, le retour au poste
+ */
+interface FlightPlan { stand: P2; standHeading: number; out: P2[]; roll: [P2, P2]; air: THREE.CatmullRomCurve3; rollout: [P2, P2]; back: P2[] }
+function flightPlan(size: number): FlightPlan {
+  const big = size >= 4, rz = big ? 1.12 : 0.8, lift = big ? -1.45 : -1.25, td = big ? 1.65 : 1.3;
+  const air = new THREE.CatmullRomCurve3([
+    [lift, 0.09, rz], [lift - 2.6, 0.5, rz], [-8, 1.5, rz + 0.8], [-11, 2.8, rz + 5], [-4, 3.8, rz + 10], [5, 3.8, rz + 9],
+    [10, 3.2, rz + 4], [11, 2.2, rz + 0.5], [8, 1.25, rz], [4.5, 0.55, rz], [td + 1, 0.18, rz], [td, 0, rz],
+  ].map(([x, y, z]) => new THREE.Vector3(x, y, z)), false, 'centripetal');
+  return big
+    ? { stand: [0.6, -0.45], standHeading: Math.PI / 2, out: [[0.6, -0.45], [1.72, -0.45], [1.72, rz]], roll: [[1.72, rz], [lift, rz]], air, rollout: [[td, rz], [-0.6, rz]], back: [[-0.6, rz], [-0.6, -0.45], [0.6, -0.45]] }
+    : { stand: [0.95, -0.25], standHeading: 0, out: [[0.95, -0.25], [0.95, rz]], roll: [[0.95, rz], [lift, rz]], air, rollout: [[td, rz], [-0.45, rz]], back: [[-0.45, rz], [0.95, rz], [0.95, -0.25]] };
+}
+const polyLen = (pts: P2[]) => pts.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
+/** Point à la distance s le long du tracé, et le cap du tronçon */
+function polyAt(pts: P2[], s: number): [number, number, number] {
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, az] = pts[i - 1], [bx, bz] = pts[i], l = Math.hypot(bx - ax, bz - az);
+    if (s <= l || i === pts.length - 1) { const k = l ? Math.min(1, s / l) : 1; return [ax + (bx - ax) * k, az + (bz - az) * k, Math.atan2(bx - ax, bz - az)]; }
+    s -= l;
+  }
+  return [pts[0][0], pts[0][1], 0];
+}
+const wrapA = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+const smoothstep = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 /**
  * Navires des ports et avions des aéroports. Au port, un navire de l'époque reste amarré le long du quai, puis appareille,
@@ -151,8 +176,18 @@ export class Transports {
 
   // ---------- Avions ----------
 
+  private plans = new Map<number, FlightPlan>();
+
+  /**
+   * L'avion : il attend à son poste, roule par les voies jusqu'au seuil de la piste, accélère, lève le nez, quitte le sol
+   * en douceur, fait le tour du pays en s'inclinant dans les virages, revient dans l'axe, se pose, freine et regagne son poste
+   */
   private stepPlane(b: Building, g: THREE.Group, dt: number) {
+    const size = sizeOf(b);
     let pl = this.planes.get(b.id);
+    if (pl && pl.size !== size) { this.group.remove(pl.root); pl = undefined; }
+    let plan = this.plans.get(size);
+    if (!plan) { plan = flightPlan(size); this.plans.set(size, plan); }
     if (!pl) {
       const root = new THREE.Group(), mesh = new THREE.Mesh(this.planeGeo, mats.body);
       mesh.castShadow = true;
@@ -160,53 +195,51 @@ export class Transports {
       root.scale.setScalar(1.1);
       root.rotation.order = 'YXZ';
       this.group.add(root);
-      pl = { root, phase: 0, wp: 0, pos: new THREE.Vector3(0.95, 0, -0.25), heading: 0, speed: 0, t: 10 + (b.id % 4) * 6 };
+      pl = { root, size, phase: 'stand', s: 0, u: 0, pos: new THREE.Vector3(plan.stand[0], 0, plan.stand[1]), heading: plan.standHeading, speed: 0, bank: 0, pitch: 0, t: 10 + (b.id % 4) * 6 };
       this.planes.set(b.id, pl);
     }
     g.updateMatrixWorld();
-    const leg = LEGS[pl.phase];
-    let turn = 0, climb = 0;
-    if (pl.phase === 0) {
-      pl.t -= dt;
-      pl.speed = 0;
-      if (pl.t <= 0) { pl.phase = 1; pl.wp = 0; }
-    } else {
-      const [tx, ty, tz] = leg.pts[pl.wp];
-      // vitesse : on accélère sur la piste, on freine à l'atterrissage ; on roule au pas sur les voies
-      const acc = pl.phase === 2 ? 1.1 : pl.phase === 5 ? 1.6 : 2;
-      pl.speed += Math.sign(leg.v - pl.speed) * Math.min(Math.abs(leg.v - pl.speed), acc * dt);
-      const dx = tx - pl.pos.x, dy = ty - pl.pos.y, dz = tz - pl.pos.z, dist = Math.hypot(dx, dy, dz), step = Math.max(0.15, pl.speed) * dt;
-      const want = Math.atan2(dx, dz);
-      let da = want - pl.heading;
-      while (da > Math.PI) da -= Math.PI * 2;
-      while (da < -Math.PI) da += Math.PI * 2;
-      const rate = pl.phase === 3 ? 0.9 : 3;
-      turn = Math.max(-rate, Math.min(rate, da * 3));
-      pl.heading += turn * dt;
-      if (dist <= step + 0.02) {
-        pl.pos.set(tx, ty, tz);
-        if (++pl.wp >= leg.pts.length) {
-          pl.wp = 0;
-          pl.phase = (pl.phase + 1) % LEGS.length;
-          if (pl.phase === 0) pl.t = 25 + Math.random() * 30;
-        }
-      } else {
-        // en vol, on file dans son cap (les virages s'arrondissent) ; au sol, droit sur le point
-        const fly = pl.phase === 3 || pl.phase === 4;
-        if (fly) {
-          pl.pos.x += Math.sin(pl.heading) * step * Math.hypot(dx, dz) / dist;
-          pl.pos.z += Math.cos(pl.heading) * step * Math.hypot(dx, dz) / dist;
-          pl.pos.y += (dy / dist) * step;
-        } else pl.pos.addScaledVector(this.v.set(dx, dy, dz).normalize(), step);
-        climb = (dy / dist) * pl.speed;
-      }
-      // décollage : le nez se lève en fin de roulage
-      if (pl.phase === 2 && pl.pos.x < 0.1) pl.pos.y = Math.min(0.3, (0.1 - pl.pos.x) * 0.35);
-    }
+    const ground = (pts: P2[], v: number, acc: number) => {
+      pl!.speed += Math.sign(v - pl!.speed) * Math.min(Math.abs(v - pl!.speed), acc * dt);
+      pl!.s += pl!.speed * dt;
+      const [x, z, h] = polyAt(pts, pl!.s);
+      pl!.pos.set(x, 0, z);
+      pl!.heading += wrapA(h - pl!.heading) * Math.min(1, dt * 2.5);
+      return pl!.s >= polyLen(pts);
+    };
+    let targetPitch = 0, targetBank = 0;
+    if (pl.phase === 'stand') {
+      pl.t -= dt; pl.speed = 0;
+      pl.pos.set(plan.stand[0], 0, plan.stand[1]); pl.heading = plan.standHeading;
+      if (pl.t <= 0) { pl.phase = 'out'; pl.s = 0; }
+    } else if (pl.phase === 'out') {
+      if (ground(plan.out, 0.35, 0.6)) { pl.phase = 'roll'; pl.s = 0; }
+    } else if (pl.phase === 'roll') {
+      // la course : il accélère, lève le nez aux deux tiers, quitte le sol au bout
+      const L = polyLen(plan.roll), done = ground(plan.roll, 2.9, 1.25);
+      targetPitch = -0.2 * smoothstep(L - 0.95, L - 0.55, pl.s);
+      pl.pos.y = 0.09 * smoothstep(L - 0.6, L, pl.s);
+      if (done) { pl.phase = 'fly'; pl.u = 0; }
+    } else if (pl.phase === 'fly') {
+      const c = plan.air, len = c.getLength(), v = pl.u > 0.85 ? 3 - 0.8 * smoothstep(0.85, 1, pl.u) : 3;
+      pl.speed += Math.sign(v - pl.speed) * Math.min(Math.abs(v - pl.speed), dt);
+      pl.u = Math.min(1, pl.u + (pl.speed * dt) / len);
+      const p = c.getPointAt(pl.u), t = c.getTangentAt(pl.u), h = Math.atan2(t.x, t.z), dh = wrapA(h - pl.heading);
+      pl.pos.copy(p);
+      pl.heading = h;
+      targetBank = Math.max(-0.55, Math.min(0.55, (-dh / Math.max(1e-3, dt)) * 0.3));
+      // le nez suit la pente ; en descente, il reste un peu levé (l'arrondi)
+      targetPitch = Math.max(-0.26, Math.min(0.12, -Math.atan2(t.y, Math.hypot(t.x, t.z)) - (t.y < 0 ? 0.12 : 0)));
+      if (pl.u >= 1) { pl.phase = 'rollout'; pl.s = 0; pl.pos.y = 0; }
+    } else if (pl.phase === 'rollout') {
+      if (ground(plan.rollout, 0.4, 1.1)) { pl.phase = 'in'; pl.s = 0; }
+    } else if (ground(plan.back, 0.35, 0.6)) { pl.phase = 'stand'; pl.t = 25 + Math.random() * 30; }
+    pl.pitch += (targetPitch - pl.pitch) * Math.min(1, dt * 4);
+    pl.bank += (targetBank - pl.bank) * Math.min(1, dt * 2);
     const world = this.v.copy(pl.pos).applyMatrix4(g.matrixWorld);
     // jamais dans la montagne
-    if (pl.phase === 3) world.y = Math.max(world.y, this.world.surfaceAt(world.x, world.z) + 1.2);
+    if (pl.phase === 'fly' && pl.u > 0.12 && pl.u < 0.85) world.y = Math.max(world.y, this.world.surfaceAt(world.x, world.z) + 1.2);
     pl.root.position.copy(world);
-    pl.root.rotation.set(-Math.atan2(climb, Math.max(0.5, pl.speed)) * 0.8 - (pl.phase === 2 && pl.pos.y > 0.01 ? 0.15 : 0), g.rotation.y + pl.heading, pl.phase === 3 ? -turn * 0.35 : 0);
+    pl.root.rotation.set(pl.pitch, g.rotation.y + pl.heading, pl.bank);
   }
 }

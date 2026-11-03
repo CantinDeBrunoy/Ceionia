@@ -59,5 +59,6 @@ export function footprintOrigin(kind: KindId, px: number, pz: number) {
   const s = KINDS[kind].size;
   if (s === 1) return { x: Math.floor(px), z: Math.floor(pz) };
   if (s === 3) return { x: Math.floor(px) - 1, z: Math.floor(pz) - 1 };
+  if (s === 4) return { x: Math.round(px) - 2, z: Math.round(pz) - 2 };
   return { x: Math.round(px) - 1, z: Math.round(pz) - 1 };
 }

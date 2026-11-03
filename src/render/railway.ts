@@ -49,7 +49,7 @@ class Mesher {
 }
 
 /** Locomotive (avant = +z) : à vapeur, chaudière noire et roues rouges, à l'âge industriel ; diesel jaune ensuite ; bandeau à la couleur de la ligne */
-function locoGeo(age: number, line: number) {
+export function locoGeo(age: number, line: number) {
   const p = new Parts();
   if (age >= 4) {
     const body = 0xf2f2ee, band = line;
@@ -402,6 +402,8 @@ export class RailView {
       for (const sd of [-0.08, 0.08]) m.block(x + Math.cos(h) * sd, y + 0.1, z - Math.sin(h) * sd, h, 0.06, 0.03, 0.035, 0xf2f2f2);
     };
     for (const g of net.segs) lay((s) => along(g.pts, g.cum, s), (s) => this.segAt(g, s), 0, g.len);
+    // l'emprise de la voie est dégagée : ni arbres ni rochers sur le ballast, sous la caténaire ou contre les poteaux
+    for (const g of net.segs) for (let s = 0; s <= g.len; s += 0.25) { const [x, z] = along(g.pts, g.cum, s); w.clearTrees(x, z, 0.42); }
     for (const s of net.stops) {
       const y = this.stopY.get(s.b.id)!, used = net.used.get(s.b.id) ?? new Set<number>(), h = Math.atan2(s.u[0], s.u[1]);
       const pt = (t: number): [number, number, number] => [s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t, h];
