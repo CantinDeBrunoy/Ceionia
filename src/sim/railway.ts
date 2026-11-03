@@ -20,7 +20,7 @@ export const MINER_SPEED = 0.6;
 export const OVER = 0.3;
 
 /** Gares : la petite gare, et le grand bâtiment devenu gare à l'âge industriel (les tours modernes ont la leur à leur pied) */
-export const isStation = (b: Building) => b.kind === 'station' || b.kind === 'terminal';
+export const isStation = (b: Building) => b.kind === 'station' || b.kind === 'terminal' || b.kind === 'maglev';
 
 /**
  * Arrêt d'une ligne : le quai d'une gare (sa voie, le long de x dans le repère du modèle, en z = 0.34) ou l'embranchement

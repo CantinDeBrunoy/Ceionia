@@ -51,6 +51,27 @@ class Mesher {
 /** Locomotive (avant = +z) : à vapeur, chaudière noire et roues rouges, à l'âge industriel ; diesel jaune ensuite ; bandeau à la couleur de la ligne */
 export function locoGeo(age: number, line: number) {
   const p = new Parts();
+  if (age >= 5) {
+    // motrice de la rame à grande vitesse : caisse blanche, long nez profilé et son pare-brise enveloppant, bandeau à la
+    // couleur de la ligne qui file jusqu'au nez, phares, grilles d'aération, pantographe, jupe qui cache les bogies
+    const white = 0xf4f6f8, glass = 0x1e2a38;
+    p.box(0.16, 0.035, 0.36, 0, 0.035, -0.03, 0x2e3238);
+    p.box(0.155, 0.17, 0.27, 0, 0.06, -0.075, white);
+    p.add(new THREE.SphereGeometry(0.08, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2).scale(0.97, 1.06, 1.85), 0, 0.145, 0.06, white);
+    p.add(new THREE.SphereGeometry(0.081, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2).scale(0.8, 0.55, 1.5), 0, 0.19, 0.07, glass);
+    for (const s of [-1, 1]) {
+      p.box(0.004, 0.022, 0.27, s * 0.078, 0.1, -0.075, line);
+      p.add(new THREE.BoxGeometry(0.004, 0.022, 0.13), s * 0.066, 0.1, 0.12, line, -s * 0.35);
+      p.box(0.004, 0.035, 0.04, s * 0.078, 0.17, 0.04, glass);
+      for (let k = 0; k < 5; k++) p.box(0.004, 0.05, 0.006, s * 0.0785, 0.12, -0.18 + k * 0.025, 0x8a929c);
+      p.box(0.02, 0.012, 0.006, s * 0.04, 0.09, 0.2, 0xfff4d8, 0, true);
+    }
+    p.box(0.1, 0.02, 0.12, 0, 0.23, -0.12, 0xd8dce2);
+    p.add(new THREE.BoxGeometry(0.004, 0.08, 0.004), 0, 0.27, -0.1, 0x3c3c40, 0, false, 0, 0.6);
+    p.add(new THREE.BoxGeometry(0.004, 0.08, 0.004), 0, 0.27, -0.06, 0x3c3c40, 0, false, 0, -0.6);
+    p.box(0.08, 0.006, 0.012, 0, 0.3, -0.08, 0x3c3c40);
+    return p.build(false);
+  }
   if (age >= 4) {
     const body = 0xf2f2ee, band = line;
     p.box(0.17, 0.035, 0.42, 0, 0.05, 0, 0x3c3c40);
@@ -85,6 +106,22 @@ export function locoGeo(age: number, line: number) {
 
 /** Voiture des voyageurs et des mineurs : banquettes sous un auvent à la couleur de la ligne ; `riders` passagers casqués assis dedans */
 function coachGeo(age: number, riders: number, line: number) {
+  if (age >= 5) {
+    // voiture de la rame à grande vitesse : caisse blanche au toit arrondi, bandeau vitré continu (éclairé le soir), liseré à
+    // la couleur de la ligne, portes, soufflets d'intercirculation, jupe
+    const p = new Parts(), white = 0xf4f6f8;
+    p.box(0.16, 0.035, 0.38, 0, 0.035, 0, 0x2e3238);
+    p.box(0.155, 0.15, 0.4, 0, 0.06, 0, white);
+    p.add(new THREE.CylinderGeometry(0.0775, 0.0775, 0.4, 12, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.35, 1), 0, 0.21, 0, white);
+    for (const s of [-1, 1]) {
+      p.box(0.004, 0.05, 0.36, s * 0.078, 0.14, 0, 0x1e2a38);
+      for (let k = 0; k < 6; k++) p.box(0.004, 0.034, 0.04, s * 0.0785, 0.148, -0.15 + k * 0.06, 0xfff1c9, 0, true);
+      p.box(0.004, 0.014, 0.4, s * 0.078, 0.11, 0, line);
+      for (const z of [-0.17, 0.17]) p.box(0.005, 0.12, 0.03, s * 0.078, 0.07, z, 0xd8dce2);
+    }
+    for (const z of [-0.205, 0.205]) p.box(0.12, 0.13, 0.012, 0, 0.07, z, 0x3c3c40);
+    return p.build(false);
+  }
   const p = new Parts(), wood = age >= 4 ? 0x4a6a8a : 0x7a5a42, roofC = line;
   p.box(0.16, 0.03, 0.4, 0, 0.05, 0, 0x3c3c40);
   p.box(0.16, 0.012, 0.38, 0, 0.08, 0, dark(wood, 1.15));
@@ -107,6 +144,16 @@ function coachGeo(age: number, riders: number, line: number) {
 
 /** Wagon de minerai (tombereau) ; chargé, un tas de pierres et de minerai qui brille */
 function wagonGeo(age: number, loaded: boolean) {
+  if (age >= 5) {
+    // wagon de fret caréné : coque argentée au toit arrondi, liseré bleu-vert, trappes de déchargement, témoin du chargement
+    const p = new Parts(), shell = 0xd8dce2;
+    p.box(0.15, 0.035, 0.3, 0, 0.035, 0, 0x2e3238);
+    p.box(0.145, 0.12, 0.31, 0, 0.06, 0, shell);
+    p.add(new THREE.CylinderGeometry(0.0725, 0.0725, 0.31, 12, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.4, 1), 0, 0.18, 0, shell);
+    for (const s of [-1, 1]) { p.box(0.004, 0.012, 0.31, s * 0.073, 0.12, 0, 0x2ab0b0); for (const z of [-0.08, 0.08]) p.box(0.004, 0.06, 0.08, s * 0.0735, 0.07, z, 0xb8bec6); }
+    p.box(0.03, 0.01, 0.03, 0, 0.215, 0.1, loaded ? 0x3aff7a : 0x8a929c, 0, loaded);
+    return p.build(false);
+  }
   const p = new Parts(), side = age >= 4 ? 0x9a5a44 : 0x6f5640;
   p.box(0.15, 0.03, 0.32, 0, 0.05, 0, 0x3c3c40);
   p.box(0.13, 0.012, 0.28, 0, 0.08, 0, dark(side, 0.8));
@@ -167,7 +214,7 @@ export class RailView {
   }
 
   update(dt: number, age: number) {
-    const w = this.world, a = Math.min(age, 4), key = `${this.rail.version}|${w.visVersion}|${a}|${this.streams?.version ?? 0}`;
+    const w = this.world, a = Math.min(age, 5), key = `${this.rail.version}|${w.visVersion}|${a}|${this.streams?.version ?? 0}`;
     if (key !== this.built) this.rebuild(key, a);
     const live = new Set<number>();
     for (const tr of this.rail.trains.values()) {

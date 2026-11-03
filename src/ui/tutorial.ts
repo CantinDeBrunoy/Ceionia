@@ -38,8 +38,8 @@ export const TUTO_TEXT = {
   steps: {
     camera: {
       title: 'Bienvenue ! Regardez autour de vous',
-      text: 'Faites tourner la vue (clic droit et glisser, ou A / E), zoomez (molette) et déplacez-vous (clic milieu, Maj + clic droit, ou ZQSD / flèches).',
-      touch: 'Avec deux doigts : glissez pour déplacer la vue, pincez pour zoomer, tournez-les pour faire pivoter.',
+      text: 'Faites tourner la vue (clic droit et glisser, ou A / E), zoomez (molette, vers le point visé) et déplacez-vous (clic milieu, Maj + clic droit, ou ZQSD / flèches). Perdu ? V, ou le bouton {target} en bas à droite, ramène la vue sur le village.',
+      touch: 'Avec deux doigts : glissez pour déplacer la vue, pincez pour zoomer, tournez-les pour faire pivoter. Perdu ? Le bouton {target} en bas à droite ramène la vue sur le village.',
       tasks: ['Se déplacer', 'Tourner la vue', 'Zoomer'],
     },
     dock: {
@@ -70,7 +70,7 @@ export const TUTO_TEXT = {
     },
     ages: {
       title: 'Les âges',
-      text: 'Le village traverse cinq âges : Préhistoire, Antiquité, Médiéval, Industriel et Moderne. Le panneau en haut à gauche montre où il en est : cliquez dessus pour voir ce que demande l’âge suivant (habitants, bâtiments, minerai, expédition obligatoire ★). Une condition qui nomme un bâtiment se clique pour le bâtir. Quand tout est réuni, le bouton « Passer à … » fait entrer le village dans le nouvel âge.',
+      text: 'Le village traverse six âges : Préhistoire, Antiquité, Médiéval, Industriel, Moderne et Futuriste. Le panneau en haut à gauche montre où il en est : cliquez dessus pour voir ce que demande l’âge suivant (habitants, bâtiments, minerai, expédition obligatoire ★). Une condition qui nomme un bâtiment se clique pour le bâtir. Quand tout est réuni, le bouton « Passer à … » fait entrer le village dans le nouvel âge.',
       tasks: ['Ouvrir les conditions de l’âge suivant'],
     },
     expeditions: {

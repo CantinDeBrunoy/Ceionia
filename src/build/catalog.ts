@@ -270,9 +270,9 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [0, 0, 0, 3, 4, 5],
   },
   waterpark: {
-    id: 'waterpark', size: 2, minAge: 4, icon: '🌊', cat: 'life',
+    id: 'waterpark', size: 3, minAge: 4, icon: '🌊', cat: 'life',
     names: ['', '', '', '', 'Parc aquatique', 'Lagon artificiel'],
-    desc: 'Bassins, toboggans géants et rivière à bouées : la fête des beaux jours.',
+    desc: 'Tour aux toboggans géants, piscine à vagues, rivière à bouées autour de l’île aux jeux d’eau, vague de surf : la fête des beaux jours.',
     joy: [0, 0, 0, 0, 14, 18], jobs: [0, 0, 0, 0, 4, 5],
   },
   funfair: {
@@ -298,7 +298,7 @@ export const KINDS: Record<KindId, KindDef> = {
   carworks: {
     id: 'carworks', size: 2, minAge: 3, icon: '🚗', cat: 'prod',
     names: ['', '', '', 'Usine automobile', 'Usine automobile', 'Usine de voitures volantes'],
-    desc: 'Châssis, moteurs et carrosseries : les automobiles sortent de la chaîne, font un tour de piste d’essai et partent sur les routes.',
+    desc: 'Châssis, moteurs et carrosseries : les automobiles sortent de la chaîne, font un tour de piste d’essai et partent sur les routes. À l’âge futuriste, les bras robots montent des voitures volantes qui tournent autour du pylône d’essai.',
     jobs: [0, 0, 0, 14, 20, 26],
     perk: 'Avec la course automobile gagnée, les voitures remplacent les charrettes sur les routes (les écuries gardent leurs chevaux pour la cavalerie).',
     reqMission: 'motorcar',
@@ -393,7 +393,8 @@ export const KINDS: Record<KindId, KindDef> = {
   maglev: {
     id: 'maglev', size: 2, minAge: 5, icon: '🚄', cat: 'service',
     names: ['', '', '', '', '', 'Gare maglev'],
-    desc: 'Une rame à sustentation magnétique file sans un bruit sur son anneau suspendu, au-dessus du quai de verre.',
+    desc: 'La gare de l’âge futuriste : les rames à grande vitesse des lignes s’y arrêtent, et la navette à sustentation magnétique file sans un bruit sur son anneau suspendu.',
+    perk: 'Une gare comme les autres pour le chemin de fer : choisissez-la puis « Nouvelle ligne » pour la relier aux autres gares et aux avant-postes.',
     jobs: [0, 0, 0, 0, 0, 8], joy: [0, 0, 0, 0, 0, 9],
   },
 };

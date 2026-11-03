@@ -70,7 +70,7 @@ export interface Ambush { cell: number; kind: FoeKind; n: number; t0: number; st
 
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
-const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'au-delà des collines', spaceport: 'le cosmodrome' };
+const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'les terres au-delà des collines', spaceport: 'le cosmodrome' };
 /** Repli quand le village n'a pas de tel endroit à portée */
 const FALLBACK: Record<DestKind, DestKind | null> = { cave: 'mountain', mountain: 'far', river: 'plain', forest: 'plain', far: 'plain', plain: null, spaceport: null };
 /** Une équipe de plus tous les 30 habitants, quatre au plus */
@@ -365,6 +365,9 @@ export class Expeditions {
     return a;
   }
 
+  /** vitesse du jeu : l'attente d'une décision se compte en secondes réelles (à ×4, on a le temps de la lire) */
+  speed = 1;
+
   update(dt: number) {
     const ag = this.agents;
     this.craftStep(dt);
@@ -374,7 +377,7 @@ export class Expeditions {
     for (const a of [...this.active]) {
       // une décision attendue : l'équipe patiente, puis tranche d'elle-même
       if (a.wait) {
-        a.waitT += dt;
+        a.waitT += dt / Math.max(1, this.speed);
         if (a.waitT >= AUTO_DECIDE) this.decide(a, this.safest(a));
         continue;
       }
@@ -384,7 +387,7 @@ export class Expeditions {
       if (a.phase === 'gather' && (ag.partyDone(a.party) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
-        this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » prend la route de ${DEST_NAME[a.c.dest]}.`);
+        this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » part vers ${DEST_NAME[a.c.dest]}.`);
       } else if (a.phase === 'out' && (ag.partyDone(a.party) || a.t > 240)) {
         a.phase = 'work'; a.t = 0;
         ag.partyAct(a.party, 'work');

@@ -37,7 +37,7 @@ import { ToolController, ToolId } from './build/tools';
 import { AudioEngine } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { Tutorial } from './ui/tutorial';
-import { AGES, KINDS, Building } from './build/catalog';
+import { AGES, KINDS, Building, sizeOf } from './build/catalog';
 import { MISSIONS, VICTORY } from './sim/missions';
 import { SpaceCast, showVictory } from './ui/spaceViews';
 import { Fires } from './render/fires';
@@ -66,6 +66,8 @@ renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const audio = new AudioEngine();
+/** distance de la caméra quand elle revient sur le village (assez près pour reconnaître ses maisons) */
+const VILLAGE_DIST = 30;
 const AUTOSTART = 'village-lowpoly:autostart';
 
 class Game implements UIHost {
@@ -372,15 +374,21 @@ class Game implements UIHost {
 
   // ---------- Monde souterrain ----------
   /** Fondu au noir, bascule, puis retour à l'image */
-  private fadeThrough(fn: () => void) {
+  /** Passe par un fondu au noir (avec ce qu'il se passe, écrit au milieu) le temps de changer de vue */
+  private fadeThrough(fn: () => void | Promise<void>, label = '') {
     if (this.fading) return;
     this.fading = true;
     const f = document.getElementById('fade')!;
+    f.textContent = label;
     f.classList.add('on');
-    setTimeout(() => {
-      fn();
-      f.classList.remove('on');
-      this.fading = false;
+    setTimeout(async () => {
+      try { await fn(); } finally {
+        // deux images de plus derrière le voile : la nouvelle vue s'y prépare (ses matériaux se compilent) sans figer l'écran à demi ;
+        // onglet caché (plus d'images) : le voile se lève quand même
+        const lift = () => { if (!this.fading) return; f.classList.remove('on'); this.fading = false; };
+        requestAnimationFrame(() => requestAnimationFrame(lift));
+        setTimeout(lift, 600);
+      }
     }, 380);
   }
 
@@ -423,6 +431,25 @@ class Game implements UIHost {
     if (this.mode === 'under') this.exitUnder();
     const i = this.incidents().find((x) => x.key === key);
     if (i) this.cam.follow(i.x, i.z, 9);
+  }
+
+  /** Le cœur du village : le milieu de ses bâtiments (la médiane, qu'un avant-poste lointain ne décale pas) */
+  villageCenter(): [number, number] | null {
+    const bs = [...this.world.buildings.values()];
+    if (!bs.length) return null;
+    const mid = (v: number[]) => v.sort((a, b) => a - b)[v.length >> 1];
+    return [mid(bs.map((b) => b.x + sizeOf(b) / 2)), mid(bs.map((b) => b.z + sizeOf(b) / 2))];
+  }
+
+  /** Ramène la vue sur le village ; si elle y est déjà, passe à la vue d'ensemble. La vue cesse de suivre quoi que ce soit */
+  goHome() {
+    // la vue suivait quelque chose : elle revient au village, même si l'équipe s'y rassemblait encore
+    const tracked = this.following !== null || this.trainCam !== null || this.incidentCam !== null;
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    if (this.mode === 'under') { this.exitUnder(); return; }
+    const c = this.villageCenter(), v = this.cam.view();
+    if (!c || (!tracked && Math.hypot(v.x - c[0], v.z - c[1]) < 2 && v.dist < VILLAGE_DIST * 1.2)) { this.cam.reset(); return; }
+    this.cam.goTo(c[0], c[1], VILLAGE_DIST);
   }
 
   /** La caméra suit le train de cette ligne (jusqu'à ce qu'on fasse glisser la vue) */
@@ -548,8 +575,8 @@ class Game implements UIHost {
   async enterUnder(cell: number) {
     if (this.mode === 'under') return;
     this.tools.setTool('none');
-    const { UnderView } = await loadUnder();
-    this.fadeThrough(() => {
+    this.fadeThrough(async () => {
+      const { UnderView } = await loadUnder();
       this.under.sync();
       this.underView ??= new UnderView(this.world, this.under);
       this.underView.fx.onClash = (k) => this.audio.sfxClash(k);
@@ -567,7 +594,7 @@ class Game implements UIHost {
       canvas.style.cursor = '';
       this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : torches, cristaux et créatures. Le puits de lumière ramène à la surface.`);
       this.ui.update();
-    });
+    }, 'Descente sous terre…');
   }
 
   /** Descend par l'entrée la plus proche du centre de la vue */
@@ -602,7 +629,7 @@ class Game implements UIHost {
       this.cam.handler = this.tools;
       canvas.style.cursor = '';
       this.saveNow();
-    });
+    }, 'Retour à la surface…');
   }
 
   private underClick(e: PointerInfo) {
@@ -659,6 +686,8 @@ class Game implements UIHost {
       if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? this.tools.redo() : this.tools.undo(); return; }
       if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); this.tools.redo(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // Échap ferme d'abord la fenêtre ouverte
+      if (k === 'escape' && this.ui.closeTop()) return;
       // sous terre : U remonte, T bascule les torches, les outils de surface sont inactifs
       if (this.mode === 'under') {
         if (k === 'u' || k === 'escape') this.exitUnder();
@@ -682,6 +711,7 @@ class Game implements UIHost {
       else if (k === 'enter' && this.railEdit) this.railFinish();
       else if (k === 'escape') { this.tools.escape(); this.setPhoto(false); }
       else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
+      else if (k === 'v' || k === 'home') this.goHome();
       else if (k === 'p') this.setPhoto(!document.body.classList.contains('photo'));
       else if (k === 'h') document.body.classList.toggle('photo');
       else if (k === '[' || e.code === 'BracketLeft') { this.tools.radius = Math.max(1, this.tools.radius - 0.5); this.ui.refreshTools(); }
@@ -821,6 +851,7 @@ class Game implements UIHost {
     for (const m of w.losses.splice(0)) this.ui.toast(m);
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night);
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
+    this.expeditions.speed = this.time.speed;
     this.expeditions.update(gdt);
     this.railway.update(gdt);
     this.expView.update(gdt);

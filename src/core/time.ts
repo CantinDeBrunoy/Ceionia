@@ -1,5 +1,8 @@
 import { clamp } from './rng';
 
+/** Écart de cadence entre le jour et la nuit : 0,6 donne environ 70 % du cycle au jour et 30 % à la nuit */
+const NIGHT_SKIP = 0.6;
+
 export class GameTime {
   hour = 9;
   /** 0..4 : 0 printemps, 1 été, 2 automne, 3 hiver */
@@ -14,7 +17,8 @@ export class GameTime {
   update(dt: number): number {
     if (this.paused || this.speed <= 0) return 0;
     const g = dt * this.speed;
-    this.hour += (g * 24) / this.dayLen;
+    // les heures de nuit filent plus vite que celles du jour (un tiers du cycle environ), la journée garde sa durée
+    this.hour += (g * 24) / this.dayLen / (1 + NIGHT_SKIP * Math.sin(((this.hour - 6) / 24) * Math.PI * 2));
     while (this.hour >= 24) { this.hour -= 24; this.days++; }
     this.seasonT += g / this.seasonLen;
     while (this.seasonT >= 4) this.seasonT -= 4;

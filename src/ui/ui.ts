@@ -73,6 +73,8 @@ export interface UIHost {
   agents: Agents;
   following: number | null;
   follow(id: number | null): void;
+  /** la vue revient sur le village (une seconde fois : vue d'ensemble) */
+  goHome(): void;
 }
 
 const DEST_ICON: Record<DestKind, string> = { plain: '🌾 plaine', forest: '🌲 forêt', river: '🏞️ rivière', mountain: '⛰️ montagne', cave: '🕳️ grotte', far: '🧭 au loin', spaceport: '🚀 cosmodrome' };
@@ -88,7 +90,7 @@ function trainWhere(r: Railway, tr: Train) {
   return next ? `de ${name} vers ${r.stopName(next.b)}` : `parti de ${name}`;
 }
 const dot = (c: number) => `<i class="lineDot" style="background:${hex(c)}"></i>`;
-const riskLabel = (r: number) => (r <= 0.12 ? 'très sûr' : r <= 0.22 ? 'sûr' : r <= 0.32 ? 'risqué' : 'très risqué');
+const riskLabel = (r: number) => (r <= 0.12 ? 'faible' : r <= 0.22 ? 'mesuré' : r <= 0.32 ? 'élevé' : 'très élevé');
 const pct = (r: number) => `${Math.round(r * 100)} %`;
 const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
@@ -165,10 +167,12 @@ const NEEDS: { k: 'food' | 'water' | 'housing' | 'jobs' | 'joy' | 'health'; icon
   { k: 'jobs', icon: 'hammer', label: 'Travail' }, { k: 'joy', icon: 'smile', label: 'Bien-être' }, { k: 'health', icon: 'heart', label: 'Santé' },
 ];
 /** Ce qu'un bâtiment apporte, pour sa fiche et sa vignette */
-const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string }[] = [
-  { k: 'housing', icon: 'house', label: 'logements' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
-  { k: 'jobs', icon: 'hammer', label: 'emplois' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
+const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string; one?: string }[] = [
+  { k: 'housing', icon: 'house', label: 'logements', one: 'logement' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
+  { k: 'jobs', icon: 'hammer', label: 'emplois', one: 'emploi' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
 ];
+/** « +1 emploi », « +3 emplois » */
+const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${v < 2 && g.one ? g.one : g.label}`;
 const num = (v: number) => (v < 1 ? v.toFixed(1) : String(Math.round(v)));
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
 const NEED_RULE: Record<NeedId, string> = {
@@ -228,12 +232,14 @@ export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty
 }
 
 /** Fenêtre du jeu : titre, contenu, bouton de fermeture ; se ferme aussi d'un clic à côté */
-function modal(root: HTMLElement, cls: string, title: string, body: string): { ov: HTMLElement; close: () => void } {
+function modal(root: HTMLElement, cls: string, title: string, body: string, onClose?: () => void): { ov: HTMLElement; close: () => void } {
   const ov = document.createElement('div');
   ov.className = 'overlay';
   ov.innerHTML = `<div class="modal panel ${cls}"><div class="mtitle"><h3>${title}</h3><button class="x" title="Fermer" aria-label="Fermer">${ic('close', 16, 2)}</button></div>${body}</div>`;
   root.appendChild(ov);
-  const close = () => ov.remove();
+  // Échap ferme la fenêtre du dessus (voir closeTop)
+  (ov as HTMLElement & { close?: () => void }).close = () => close();
+  const close = () => { if (!ov.isConnected) return; ov.remove(); onClose?.(); };
   ov.addEventListener('pointerdown', (e) => { if (e.target === ov) close(); });
   $('.x', ov).onclick = close;
   return { ov, close };
@@ -318,7 +324,7 @@ export class UI {
               <button id="bUndo" title="Annuler (Ctrl+Z)" aria-label="Annuler">${ic('undo', 17, 2)}</button>
               <button id="bRedo" title="Rétablir (Ctrl+Y)" aria-label="Rétablir">${ic('redo', 17, 2)}</button>
               <button id="bRot" title="Tourner le bâtiment (R)" aria-label="Tourner le bâtiment">${ic('rotate', 17, 2)}</button>
-              <button id="bHome" title="Vue d'ensemble" aria-label="Vue d'ensemble">${ic('target', 17, 2)}</button>
+              <button id="bHome" title="Revenir au village (V) — une seconde fois : vue d'ensemble" aria-label="Revenir au village">${ic('target', 17, 2)}</button>
               <button id="bUnder" title="Explorer le monde souterrain (U)" aria-label="Monde souterrain">${ic('pickaxe', 17, 2)}</button>
             </div>
           </div>
@@ -391,7 +397,7 @@ export class UI {
     $('#bSpeed').onclick = () => {
       const seq = [1, 2, 4];
       host.time.speed = seq[(seq.indexOf(host.time.speed) + 1) % seq.length] ?? 1;
-      host.time.paused = false; host.applySettings();
+      host.applySettings();
     };
     $('#bSettings').onclick = () => this.openSettings();
     $('#bExp').onclick = () => this.openExpeditions();
@@ -401,7 +407,7 @@ export class UI {
     $('#bUndo').onclick = () => host.tools.undo();
     $('#bRedo').onclick = () => host.tools.redo();
     $('#bRot').onclick = () => host.tools.rotate();
-    $('#bHome').onclick = () => host.cam.reset();
+    $('#bHome').onclick = () => { host.goHome(); host.audio.sfxClick(); };
     $('#bUnder').onclick = () => host.enterNearest();
     $('#bUp').onclick = () => host.exitUnder();
     $('#campQuest').onclick = () => this.openExpeditions('depths');
@@ -435,8 +441,11 @@ export class UI {
    */
   private renderDock() {
     const modes = $('#modes');
-    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${t.label}"><b>${ic(t.icon, 20)}</b><span>${t.label}</span></button>`).join('');
+    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${t.label}${t.id === this.tab ? ' — recliquer pour replier ou déplier la barre' : ''}"><b>${ic(t.icon, 20)}</b><span>${t.label}</span></button>`).join('');
     modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
+      // l'onglet déjà ouvert : un clic replie la barre (ou la rouvre), pour laisser la place à la carte
+      if (b.dataset.t === this.tab) { document.body.classList.toggle('dockMin'); this.host.audio.sfxClick(); return; }
+      document.body.classList.remove('dockMin');
       this.tab = b.dataset.t!;
       // l'outil courant appartient à un autre onglet : on le lâche, sinon refreshTools ramènerait l'onglet
       if (tabOfTool(this.host.tools.tool, this.tab) !== this.tab) this.host.tools.setTool('none');
@@ -466,7 +475,15 @@ export class UI {
     this.host.audio.sfxClick();
   }
 
-  renderItems() {
+  /** Ce que montrent les vignettes du rayon ouvert (nombre de chaque bâtiment, cadenas) : elles se redessinent quand ça change */
+  private tilesKey = '';
+  private tilesNow() {
+    return this.tab === 'build' ? KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab;
+  }
+
+  /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
+  renderItems(keep = false) {
+    this.tilesKey = this.tilesNow();
     const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
@@ -481,19 +498,20 @@ export class UI {
     }));
     let html: string;
     if (build) {
-      // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue)
-      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat), shut = (k: KindId) => +!!this.lockOf(k);
+      // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue) ; ceux des âges
+      // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant
+      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1), shut = (k: KindId) => +!!this.lockOf(k);
       html = kinds.sort((p, q) => shut(p) - shut(q)).map((k) => {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
-        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size >= 3 ? 'big huge' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
-      }).join('');
+        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
+      }).join('') || `<span class="mhint">Rien à bâtir dans ce rayon avant l’âge ${AGES[Math.min(age + 2, AGES.length - 1)].name}.</span>`;
     } else {
       html = t.tools.map((id) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
     }
-    const items = $('#items');
+    const items = $('#items'), left = items.scrollLeft;
     items.innerHTML = html;
-    items.scrollLeft = 0;
+    items.scrollLeft = keep ? left : 0;
     this.bindTools(items);
     items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {
       const k = b.dataset.kind as KindId;
@@ -520,12 +538,19 @@ export class UI {
     return null;
   }
 
+  /** la raison du refus montrée par la fiche (elle se redessine quand le curseur passe sur un endroit refusé pour une autre raison) */
+  private infoWhy: string | null = null;
+
   /** Fiche de l'outil ou du bâtiment survolé, sinon du bâtiment qu'on s'apprête à poser */
   private renderInfo() {
     const tl = this.host.tools, box = $('#info');
+    this.infoWhy = tl.placeWhy;
     const held = tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null;
     const k = this.hover ? this.hover.kind ?? null : held, tool = this.hover?.tool;
     box.classList.toggle('show', !!(k || tool));
+    // le bâtiment en main (pas survolé) : une fiche réduite, dans le coin, qui laisse voir et viser le milieu de l'écran
+    const brief = !this.hover;
+    box.classList.toggle('held', brief);
     if (tool) {
       const i = this.toolInfo(tool);
       box.innerHTML = `<div class="ihead"><b>${ic(i.icon, 28, 1.6)}</b><div class="grow"><h4>${i.label}</h4>${i.key ? `<small>Raccourci : ${i.key}</small>` : ''}</div></div><p>${i.desc}</p>`;
@@ -534,13 +559,13 @@ export class UI {
     if (!k) return;
     const d: KindDef = KINDS[k], age = this.host.sim.age, lock = this.lockOf(k), a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
-    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
+    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
     // les grands bâtiments se paient en bois et en pierre, tous en défi (sauf en ressources illimitées) ; le premier bûcheron du défi est offert
     const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
-      <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}
+      ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}`}
       ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">🔒 ${lock}</p>` : tl.tool === 'build' && !this.hover ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
+      ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
   /**
@@ -581,7 +606,7 @@ export class UI {
     const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${rails}|${upgrades}`;
     if (key === this.selKey) return;
     this.selKey = key;
-    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} +${num(d[g.k]![a])} ${g.label}</span>` : '')).join('');
+    const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${AGES[b.age].name}${sizeOf(b) > 1 ? ` · ${sizeOf(b)} × ${sizeOf(b)}` : ''} · ${b.auto ? 'façade tournée vers la route' : 'orientée à la main'}</small></div><button class="x" data-act="close" title="Fermer (Échap)" aria-label="Fermer">${ic('close', 16, 2)}</button></div>
       <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${rails}${upgrades}
       <div class="acts"><button data-act="move">${ic('hand', 16, 2)} Déplacer</button><button data-act="rot">${ic('rotate', 16, 2)} Tourner <kbd>R</kbd></button><button data-act="del" class="danger">${ic('demolish', 16, 2)} Démolir</button></div>`;
@@ -733,6 +758,9 @@ export class UI {
     const { sim, time, env } = this.host;
     this.renderRailEdit();
     if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
+    // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
+    else if (this.tilesNow() !== this.tilesKey) this.renderItems(true);
+    if (this.host.tools.placeWhy !== this.infoWhy) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
     $('#ageSub').textContent = AGES[sim.age].tagline;
     const ap = sim.ageProgress(), pct = ap ? Math.floor(ap.ratio * 100) : 100;
@@ -759,7 +787,7 @@ export class UI {
       el.title = housing ? `${n.label} : ${Math.floor(sim.pop)} habitants pour ${need.cap} places` : `${n.label} : ${num(need.cap)} pour un besoin de ${num(need.demand)}`;
     }
     // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
-    const cs = this.census(), alert = cs.untreated ? `${cs.untreated} sans soins` : cs.hungry ? `${cs.hungry} ont faim` : cs.thirsty ? `${cs.thirsty} ont soif`
+    const cs = this.census(), alert = cs.untreated ? `${cs.untreated} sans soins` : cs.hungry ? `${cs.hungry} ${cs.hungry > 1 ? 'ont' : 'a'} faim` : cs.thirsty ? `${cs.thirsty} ${cs.thirsty > 1 ? 'ont' : 'a'} soif`
       : cs.jobless ? `${cs.jobless} sans emploi` : cs.injured ? `${cs.injured} blessé${cs.injured > 1 ? 's' : ''}` : '';
     const popHtml = `${cs.p}<small>habitants</small>${alert ? `<small class="alert">${alert}</small>` : ''}`;
     if ($('#pop').dataset.v !== popHtml) { $('#pop').innerHTML = popHtml; $('#pop').dataset.v = popHtml; }
@@ -777,7 +805,7 @@ export class UI {
     ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
     if (zone) {
-      $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Cliquez sur un filon pour l’extraire, sur un puits de lumière pour remonter'}</small>`;
+      $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Cliquez sur un filon pour voir ce qu’il faut pour l’abattre, sur un puits de lumière pour remonter'}</small>`;
       $('#bTorch').classList.toggle('active', this.host.torchMode);
       // la quête en cours du camp souterrain, et où en est son objectif
       const ex = this.host.expeditions, cq = ex.campQuest(), lvl = ex.camp();
@@ -905,7 +933,10 @@ export class UI {
   private updateExpeditions() {
     const h = this.host, ex = h.expeditions, list = $('#expList');
     // juste sous la barre du haut, quelle que soit sa hauteur (elle passe sur plusieurs lignes sur un téléphone)
-    list.style.top = `${Math.round($('#hud').getBoundingClientRect().bottom + 8)}px`;
+    const hudB = Math.round($('#hud').getBoundingClientRect().bottom);
+    list.style.top = `${hudB + 8}px`;
+    // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
+    if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
     const live = new Set<number>();
     for (const a of ex.active) {
       live.add(a.id);
@@ -966,8 +997,9 @@ export class UI {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
     const next = max < partyLimit(1e9) ? `Une équipe de plus à ${max * 30} habitants (le village en compte ${pop}).` : 'Le village envoie autant d’équipes qu’il le peut.';
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
-    // d'abord ce qui reste à faire, puis ce qu'on peut refaire
-    const cards = ex.list(age).sort((a, b) => +(ex.done(a) && !a.repeat) - +(ex.done(b) && !b.repeat)).map((m) => {
+    // d'abord l'expédition obligatoire qui reste à faire, puis les autres à faire, puis ce qu'on peut refaire
+    const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : m.mandatory && !ex.done(m) ? 0 : 1);
+    const cards = ex.list(age).sort((a, b) => rank(a) - rank(b)).map((m) => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
       const choices = run ? '' : this.choiceButtons(m);
       return `<div class="mission ${done ? 'done' : ''}">
@@ -1016,8 +1048,8 @@ export class UI {
       if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? 'Aucun chemin praticable vers cette destination.'); return; }
       close();
       h.audio.sfxClick();
-      h.follow(a.id);
-      this.toast(a.fromCamp ? `${m.icon} La troupe descend du camp souterrain…` : `${m.icon} L’équipe se rassemble au village…`);
+      // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre
+      this.toast(`${a.fromCamp ? `${m.icon} La troupe descend du camp souterrain…` : `${m.icon} L’équipe se rassemble au village…`} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
       this.update();
     }));
   }
@@ -1029,7 +1061,7 @@ export class UI {
       const c = choiceAt(c0, this.host.sim.age), why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
       return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
           <b>${c.label}</b><span>${c.text}</span>
-          <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''}${c.fuel ? ` · ⛽ ${c.fuel} carburant` : ''} · ⏳ ${workLabel(c.work)} · 🎲 ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} ${riskLabel(pv.risk)} · ${DEST_ICON[c.dest]}</small>
+          <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''}${c.fuel ? ` · ⛽ ${c.fuel} carburant` : ''} · ⏳ ${workLabel(c.work)} · ⚠️ Risque d’échec : ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} (${riskLabel(pv.risk)}) · ${DEST_ICON[c.dest]}</small>
           <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')} — ${pv.label ? `on emporte ${pv.label}` : 'aucun équipement en réserve'}</small>
           <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
           ${why ? `<small class="why">${why}</small>` : ''}</button>`;
@@ -1106,11 +1138,26 @@ export class UI {
     el.querySelectorAll<HTMLButtonElement>('[data-cancel]').forEach((b) => (b.onclick = () => { ex.cancelCraft(+b.dataset.cancel!); changed(); }));
   }
 
-  /** Imprévu d'une équipe : la fenêtre s'ouvre d'elle-même si rien d'autre n'est ouvert */
+  /**
+   * Imprévu d'une équipe : la fenêtre s'ouvre d'elle-même si rien d'autre n'est ouvert et qu'on n'est pas en train de
+   * bâtir (sinon le message et la carte de l'équipe, qui clignote, y mènent)
+   */
   expEvent(a: ActiveExpedition) {
-    this.toast(`${a.m.icon} « ${a.m.title} » : ${a.wait?.title.toLowerCase()} — une décision vous attend.`, () => this.showDecision(a));
-    if (!this.root.querySelector('.overlay')) this.showDecision(a);
+    this.toast(`${a.m.icon} « ${a.m.title} » : ${a.wait?.title.toLowerCase()} — une décision vous attend (cliquez ici).`, () => this.showDecision(a));
+    if (!this.root.querySelector('.overlay') && this.host.tools.tool === 'none') this.showDecision(a);
     this.update();
+  }
+
+  /** l'état de la pause avant qu'une décision n'arrête le jeu (null : aucune décision ouverte) */
+  private pausedFor: boolean | null = null;
+
+  /** Ferme la fenêtre du dessus (Échap) ; false s'il n'y en avait pas */
+  closeTop(): boolean {
+    const ovs = this.root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay');
+    const top = ovs[ovs.length - 1];
+    if (!top?.close || top.id === 'menu' || top.classList.contains('victory')) return false;
+    top.close();
+    return true;
   }
 
   /** Décision à prendre sur l'imprévu en cours d'une équipe */
@@ -1129,11 +1176,20 @@ export class UI {
       if (o.bonus) hints.push(`si tout va bien : ${effectSummary(o.bonus)}`);
       return `<button class="choice opt" data-o="${i}" ${ok ? '' : 'disabled'}><b>${o.label}</b><small>${hints.join(' · ') || 'sans effet particulier'}</small></button>`;
     }).join('');
+    // le jeu s'arrête le temps de la décision ; il reprend à la fermeture s'il tournait
+    if (this.pausedFor === null) { this.pausedFor = h.time.paused; h.time.paused = true; }
     const { ov, close } = modal(this.root, 'decide', `${a.m.icon} ${a.m.title}`, `
       <h4 class="evt">${ic('alert', 18, 2)} ${ev.title}</h4>
       <p class="story">${ev.text}</p>
       ${opts}
-      <p class="hint">Risque de l’expédition pour l’instant : ${pct(ex.chance(a))}. Sans réponse, l’équipe choisira d’elle-même la voie la plus sûre.</p>`);
+      <p class="hint">Risque d’échec de l’expédition pour l’instant : ${pct(ex.chance(a))}. Le jeu est en pause pendant que vous choisissez. Sans réponse, l’équipe finit par prendre d’elle-même la voie la plus sûre.</p>`, () => {
+      clearInterval(iv);
+      if (this.root.querySelector('.decide')) return;
+      if (this.pausedFor === false) h.time.paused = false;
+      this.pausedFor = null;
+    });
+    // l'équipe a tranché d'elle-même (le jeu relancé à la main) : la fenêtre n'a plus lieu d'être
+    const iv = setInterval(() => { if (a.wait !== ev || !ex.active.includes(a)) close(); }, 500);
     ov.querySelectorAll<HTMLButtonElement>('button.opt').forEach((b) => (b.onclick = () => {
       if (a.wait === ev && ex.decide(a, +b.dataset.o!)) { h.audio.sfxClick(); this.toast(`${a.m.icon} ${ev.options[+b.dataset.o!].label}.`); }
       close();

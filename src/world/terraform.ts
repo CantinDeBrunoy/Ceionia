@@ -8,21 +8,35 @@ export type SculptTool = 'raise' | 'lower' | 'flatten' | 'cliff' | 'dig' | 'moun
 
 export interface SculptCtx { target: number }
 
-function locked(world: World, vx: number, vz: number) {
+/** Un sommet du relief qui borde une case bâtie (ou une route, avec roads) : le pinceau n'y touche pas */
+function locked(world: World, vx: number, vz: number, roads = false) {
   for (let dz = -1; dz <= 0; dz++)
     for (let dx = -1; dx <= 0; dx++) {
       const cx = vx + dx, cz = vz + dz;
-      if (world.inCells(cx, cz) && world.occ[world.ci(cx, cz)]) return true;
+      if (!world.inCells(cx, cz)) continue;
+      const k = world.ci(cx, cz);
+      if (world.occ[k] || (roads && world.road[k])) return true;
     }
   return false;
 }
+
+/** Le pinceau (ou le volcan) de ce rayon touche-t-il un bâtiment ? Il ne modifie alors rien du tout (son cercle est rouge) */
+export function brushOnBuilding(world: World, wx: number, wz: number, radius: number): boolean {
+  for (let z = Math.max(0, Math.floor(wz - radius)); z <= Math.min(N, Math.ceil(wz + radius)); z++)
+    for (let x = Math.max(0, Math.floor(wx - radius)); x <= Math.min(N, Math.ceil(wx + radius)); x++)
+      if (Math.hypot(x - wx, z - wz) <= radius && locked(world, x, z)) return true;
+  return false;
+}
+
+/** Rayon du volcan posé avec ce pinceau (la hauteur suit la largeur) */
+export const volcanoRadius = (radius: number) => Math.max(5, radius * 2);
 
 /** Volcan : cône aux flancs concaves et cratère au sommet, d'un seul geste ; renvoie true si le relief a changé */
 export function raiseVolcano(world: World, wx: number, wz: number, radius: number): boolean {
   // centré sur la case du cratère, là où se posent la lave et la fumée
   wx = Math.min(N - 1, Math.floor(wx)) + 0.5; wz = Math.min(N - 1, Math.floor(wz)) + 0.5;
   // la hauteur suit la largeur : un grand volcan domine la carte
-  const R = Math.max(5, radius * 2), H = R * 1.6, crater = Math.max(1.5, R * 0.25), pit = 1.2 + H * 0.1;
+  const R = volcanoRadius(radius), H = R * 1.6, crater = Math.max(1.5, R * 0.25), pit = 1.2 + H * 0.1;
   // grille brute : le relief affiché n'est pas encore calculé quand la carte est générée
   const base = Math.max(0.3, world.cellAvg(Math.min(N - 1, Math.floor(wx)), Math.min(N - 1, Math.floor(wz))));
   // bord du cratère arasé sur près d'une case : sur la grille, les sommets proches du bord sont à des distances inégales
@@ -62,6 +76,8 @@ export function raiseVolcano(world: World, wx: number, wz: number, radius: numbe
 
 /** Applique un pas de pinceau. Retourne true si le relief a changé. */
 export function sculpt(world: World, tool: SculptTool, wx: number, wz: number, radius: number, dt: number, ctx: SculptCtx): boolean {
+  // sur un bâtiment, rien ne bouge : ni fosse autour, ni pilier sous la maison
+  if (brushOnBuilding(world, wx, wz, radius)) return false;
   const x0 = Math.max(0, Math.floor(wx - radius)), x1 = Math.min(N, Math.ceil(wx + radius));
   const z0 = Math.max(0, Math.floor(wz - radius)), z1 = Math.min(N, Math.ceil(wz + radius));
   let changed = false;
@@ -69,7 +85,8 @@ export function sculpt(world: World, tool: SculptTool, wx: number, wz: number, r
     for (let x = x0; x <= x1; x++) {
       const d = Math.hypot(x - wx, z - wz);
       if (d > radius) continue;
-      if (locked(world, x, z)) continue;
+      // les routes gardent leur niveau : le village reste desservi
+      if (locked(world, x, z, true)) continue;
       const w = smoothstep(0, 1, 1 - d / radius);
       const i = world.vi(x, z);
       const h = world.heights[i];

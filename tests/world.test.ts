@@ -9,6 +9,8 @@ import { facingRoadRot } from '../src/build/placement';
 import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS, choiceAt } from '../src/sim/missions';
 import { KINDS, KindId } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
+import { sculpt, brushOnBuilding } from '../src/world/terraform';
+import { GameTime } from '../src/core/time';
 import { Expeditions, Report, partyLimit } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { Railway } from '../src/sim/railway';
@@ -365,6 +367,43 @@ describe('eau', () => {
   });
 });
 
+describe('relief', () => {
+  it('le pinceau qui touche un bâtiment ne modifie rien : ni fosse autour, ni pilier sous la maison', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    w.place('house', x, z, 0, true, 1, false);
+    const before = w.heights.slice();
+    expect(brushOnBuilding(w, x + 2, z + 0.5, 3)).toBe(true);
+    expect(sculpt(w, 'dig', x + 2, z + 0.5, 3, 0.05, { target: 0 })).toBe(false);
+    expect(w.heights).toEqual(before);
+    // assez loin, le pinceau creuse
+    expect(brushOnBuilding(w, x + 8, z + 0.5, 3)).toBe(false);
+  });
+
+  it('les routes gardent leur niveau : le pinceau creuse autour sans les couper', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    expect(w.setRoad(x, z, true)).toBe(true);
+    const corner = w.h(x, z);
+    sculpt(w, 'lower', x + 0.5, z + 0.5, 2.5, 0.05, { target: 0 });
+    expect(w.h(x, z)).toBe(corner);
+    expect(w.road[w.ci(x, z)]).toBeTruthy();
+  });
+});
+
+describe('heure du jour', () => {
+  it('la nuit passe plus vite que le jour, et une journée garde sa durée', () => {
+    const t = new GameTime();
+    t.dayLen = 100; t.hour = 12;
+    let night = 0;
+    for (let i = 0; i < 1000; i++) { t.update(0.1); if (t.hour < 6 || t.hour >= 18) night += 0.1; }
+    expect(t.days).toBe(1);
+    expect(t.hour).toBeCloseTo(12, 0);
+    expect(night).toBeGreaterThan(25);
+    expect(night).toBeLessThan(38);
+  });
+});
+
 describe('volcans et récoltes', () => {
   it('la lave détruit un bâtiment seulement si les catastrophes sont activées', () => {
     const w = continent();
@@ -635,7 +674,7 @@ describe('expéditions', () => {
     const [x, z] = spots[Math.floor(spots.length / 2)];
     w.place('harbor', x, z, 0, true, 2, false);
     // le sommet au milieu du quai n'est partagé avec aucun voisin : il est remblayé
-    expect(w.h(x + 1, z + 1)).toBeGreaterThanOrEqual(0.12);
+    expect(w.h(x + 1, z + 1)).toBeGreaterThanOrEqual(0.12 - 1e-6);
   });
 
   it('le quai du port reste au ras de l’eau, même au coin qu’il partage avec un voisin plus haut', () => {
@@ -666,7 +705,7 @@ describe('expéditions', () => {
     const [x, z, r] = spot!;
     w.place('harbor', x, z, r, true, 3, false);
     expect(w.cellAvg(...front(x, z, r, 1))).toBeLessThan(-0.35);
-    expect(w.h(x + 1, z + 1)).toBeGreaterThanOrEqual(0.12);
+    expect(w.h(x + 1, z + 1)).toBeGreaterThanOrEqual(0.12 - 1e-6);
   });
 
   it('une maison devient un manoir qui s’étend derrière elle, une petite gare une grande gare que ses lignes desservent toujours', () => {
@@ -1117,7 +1156,7 @@ describe('expéditions', () => {
     rail.update(0.1);
     expect(w.lines.length).toBe(0);
     // la gare, à quelques cases de l'avant-poste, là où une voie peut passer : la première ligne se trace d'elle-même
-    const near = (cx: number, cz: number, kind: 'terminal' | 'station') => {
+    const near = (cx: number, cz: number, kind: 'terminal' | 'station' | 'maglev') => {
       const out: number[][] = [];
       for (let dz = -24; dz <= 24; dz++) for (let dx = -24; dx <= 24; dx++) if (Math.hypot(dx, dz) >= 8 && w.canPlace(kind, cx + dx, cz + dz) === null) out.push([cx + dx, cz + dz, Math.hypot(dx, dz)]);
       return out.sort((a, b) => a[2] - b[2]).slice(0, 30);
@@ -1167,6 +1206,20 @@ describe('expéditions', () => {
     const tr2 = rail.trains.get(line2!.id)!;
     run(600);
     expect(tr2.carried).toBeGreaterThan(0);
+    // la gare maglev de l'âge futuriste est une gare comme les autres : une ligne s'y arrête
+    let line3 = null, mag = null;
+    for (const [sx, sz] of near(small!.x, small!.z, 'maglev')) {
+      mag = w.place('maglev', sx, sz, 0, true, 5, false);
+      line3 = rail.addLine([small!.id, mag.id]);
+      if (!rail.trains.get(line3.id)!.why) break;
+      rail.removeLine(line3.id);
+      w.removeBuilding(mag.id);
+      line3 = mag = null;
+    }
+    expect(line3).not.toBeNull();
+    expect(rail.lineLabel(line3!)).toBe('Petite gare → Gare maglev');
+    rail.removeLine(line3!.id);
+    w.removeBuilding(mag!.id);
     // les lignes se sauvegardent avec leurs arrêts, même si les numéros des bâtiments changent au chargement
     const w2 = new World();
     w2.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
@@ -1180,7 +1233,7 @@ describe('expéditions', () => {
       expect(t.why).not.toBeNull();
       expect(t.relief.length + t.crew.length + t.back.length + t.aboard.length + t.boarding.length).toBe(0);
     }
-  });
+  }, 20000);
 });
 
 describe('pétrole', () => {

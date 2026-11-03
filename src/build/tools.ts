@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, VEG_FISSURE, Snapshot } from '../world/world';
-import { sculpt, raiseVolcano, SculptTool } from '../world/terraform';
+import { sculpt, raiseVolcano, SculptTool, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
 import { KINDS, KindId, Building, sizeOf } from './catalog';
@@ -305,9 +305,13 @@ export class ToolController implements ToolInput {
     }
     this.beginStroke();
     if (t === 'volcano') {
-      // le volcan se pose d'un seul clic
-      if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) { this.mark(); this.h.audio.sfxPlace(); }
-    } else if (SCULPT_TOOLS.includes(t)) this.ctx.target = this.hit.y;
+      // le volcan se pose d'un seul clic, à l'écart des bâtiments
+      if (this.reliefBlocked()) this.h.toast('Trop près des bâtiments : un volcan se pose à l’écart du village.');
+      else if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) { this.mark(); this.h.audio.sfxPlace(); }
+    } else if (SCULPT_TOOLS.includes(t)) {
+      this.ctx.target = this.hit.y;
+      if (this.reliefBlocked()) this.h.toast('Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).');
+    }
     else if (t === 'biome') this.applyBiome();
     else if (VEG_TOOLS.includes(t)) this.applyVeg();
     else if (t === 'road' && this.roadMode === 'free') this.freeDown(e);
@@ -371,6 +375,13 @@ export class ToolController implements ToolInput {
       this.vegTimer -= dt;
       if (this.vegTimer <= 0) { this.vegTimer = 0.15; this.applyVeg(); }
     }
+  }
+
+  /** Le pinceau de relief (ou le volcan) sous le curseur touche un bâtiment : il ne fera rien */
+  private reliefBlocked() {
+    const hit = this.hit, t = this.tool;
+    if (!hit || !SCULPT_TOOLS.includes(t)) return false;
+    return t === 'volcano' ? brushOnBuilding(this.h.world, hit.x, hit.z, volcanoRadius(this.radius) + 1) : brushOnBuilding(this.h.world, hit.x, hit.z, this.radius);
   }
 
   // ---------- Actions ----------
@@ -571,8 +582,12 @@ export class ToolController implements ToolInput {
   }
 
   // ---------- Visuels ----------
+  /** Pourquoi le bâtiment en main ne se poserait pas sous le curseur (null : il se pose), montré dès le survol */
+  placeWhy: string | null = null;
+
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
+    this.placeWhy = null;
     this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = false;
     if (t === 'road' && this.roadMode === 'free') this.freePreview();
     // le bâtiment sélectionné : son emprise s'éclaire
@@ -586,7 +601,7 @@ export class ToolController implements ToolInput {
     }
     if (!hit || t === 'none') return;
     if (SCULPT_TOOLS.includes(t) || VEG_TOOLS.includes(t) || t === 'biome') {
-      const r = VEG_TOOLS.includes(t) || t === 'biome' ? Math.max(0.6, this.radius * 0.8) : this.radius;
+      const r = VEG_TOOLS.includes(t) || t === 'biome' ? Math.max(0.6, this.radius * 0.8) : t === 'volcano' ? volcanoRadius(this.radius) : this.radius;
       const pos = this.ring.geometry.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < 48; i++) {
         const a = (i / 48) * Math.PI * 2;
@@ -594,7 +609,8 @@ export class ToolController implements ToolInput {
         pos.setXYZ(i, x, w.hAt(Math.min(N, Math.max(0, x)), Math.min(N, Math.max(0, z))) + 0.12, z);
       }
       pos.needsUpdate = true;
-      (this.ring.material as THREE.LineBasicMaterial).color.setHex(t === 'lower' || t === 'dig' || t === 'erase' ? 0xff9a8a : 0xffffff);
+      // rouge : refusé, le pinceau ne modifiera rien (il touche un bâtiment)
+      (this.ring.material as THREE.LineBasicMaterial).color.setHex(this.reliefBlocked() ? 0xff5a5a : 0xffffff);
       this.ring.visible = true;
       return;
     }
@@ -628,7 +644,9 @@ export class ToolController implements ToolInput {
         const off = kind === 'lamp' ? 0.32 : 0;
         this.ghostBody.position.set(off, 0, off); this.ghostGlow.position.set(off, 0, off);
       }
-      setGhostValid(!reason && (!!this.moveOrigin || canPay(w, priceIn(w, kind, age))));
+      const cost = this.moveOrigin ? null : priceIn(w, kind, age);
+      this.placeWhy = reason ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+      setGhostValid(!this.placeWhy);
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);

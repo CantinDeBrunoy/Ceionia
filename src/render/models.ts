@@ -4957,6 +4957,218 @@ function waterpark(p: Parts) {
   figure(p, 0.42, 0.45, 0xb45ad8, 2.2, false, 0xc8a070, 'run');
 }
 
+/** Pied de la tour des toboggans du grand parc aquatique : les deux spirales s'enroulent autour */
+const SLIDE_HUB: [number, number] = [-0.75, -1.0];
+
+/**
+ * Les toboggans du grand parc aquatique, du départ en haut à l'arrivée dans le bassin de réception (repère du bâtiment) :
+ * le kamikaze, tout droit depuis sa tour (genre 0, on y descend à plat dos), la spirale aux bouées (1) et la grande spirale
+ * aux radeaux (2), enroulées en sens contraire autour de la tour
+ */
+export function slidePaths(): { pts: THREE.Vector3[]; kind: number }[] {
+  const [hx, hz] = SLIDE_HUB, V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  const helix = (r: number, a0: number, a1: number) => {
+    const out: THREE.Vector3[] = [];
+    for (let i = 0; i <= 40; i++) { const t = i / 40, a = a0 + (a1 - a0) * t; out.push(V(hx + Math.cos(a) * r, 0.9 - 0.78 * t, hz + Math.sin(a) * r)); }
+    return out;
+  };
+  const run = (x: number) => [V(x, 0.1, -0.85), V(x, 0.076, -0.62), V(x, 0.07, -0.42)];
+  return [
+    { kind: 0, pts: [V(-1.38, 0.92, -0.87), V(-1.38, 0.88, -0.83), V(-1.38, 0.62, -0.72), V(-1.38, 0.32, -0.6), V(-1.38, 0.14, -0.5), V(-1.38, 0.08, -0.41), V(-1.38, 0.07, -0.3)] },
+    { kind: 1, pts: [...helix(0.27, 2 * Math.PI, -Math.PI), ...run(hx - 0.27)] },
+    { kind: 2, pts: [...helix(0.4, Math.PI, 4 * Math.PI), ...run(hx + 0.4)] },
+  ];
+}
+
+/** Gouttière d'un toboggan le long d'une ligne brisée : fond, bords et leur liseré blanc */
+function slideRun(p: Parts, pts: THREE.Vector3[], w: number, color: number) {
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const a = pts[k], b = pts[k + 1], d = b.clone().sub(a), len = d.length(), yaw = Math.atan2(d.x, d.z), pitch = Math.asin(d.y / len);
+    const put = (g: THREE.BufferGeometry, c: number) => p.add(g.rotateX(-pitch).rotateY(yaw), (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, c);
+    put(new THREE.BoxGeometry(w, 0.01, len + 0.012), color);
+    for (const s of [-1, 1]) {
+      put(new THREE.BoxGeometry(0.01, 0.035, len + 0.012).translate((s * w) / 2, 0.015, 0), color);
+      put(new THREE.BoxGeometry(0.014, 0.006, len + 0.012).translate((s * w) / 2, 0.034, 0), C.white);
+    }
+  }
+}
+
+/** Palmier : stipe penché, cinq palmes ; dessiné en (x, z), haut de h */
+function palmTree(p: Parts, x: number, z: number, h: number, y0 = 0.012) {
+  p.add(new THREE.CylinderGeometry(0.015, 0.025, h, 5).translate(0, h / 2, 0), x, y0, z, 0x9a7452, 0, false, 0.08);
+  const tx = x - h * 0.08;
+  for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.2, 0.01, 0.05).translate(0.1, 0, 0), tx, y0 + h, z, 0x5fa84a, (k / 5) * Math.PI * 2 + x, false, -0.3);
+  p.sphere(0.025, tx, y0 + h - 0.02, z, 0x7a5a32);
+}
+
+/**
+ * Grand parc aquatique (3 × 3) : la tour aux toboggans — deux spirales enroulées en sens contraire autour d'elle, la spirale
+ * aux bouées et la grande spirale aux radeaux, et le kamikaze qui plonge de sa propre tour reliée par une passerelle — où
+ * descendent les baigneurs (animés à part), jusqu'au bassin de réception ; la piscine à vagues, sa machine, son écume qui
+ * va et vient, ses nageurs, sa plage, ses transats et le maître-nageur ; la rivière à bouées qui fait le tour d'une île
+ * de jeux d'eau (château aux mini-toboggans, grand seau qui bascule, champignon fontaine, palmiers) et ses deux
+ * passerelles ; la vague de surf et son surfeur ; l'entrée en arc et ses tourniquets, les cabines, les douches, la paillote
+ * et ses tables, palmiers, lampadaires, et la foule en maillot
+ */
+function waterparkBig(p: Parts) {
+  sink(0.012);
+  const y0 = 0.012, rim = 0xf4f2ee, sun = [0xd84a3e, 0xf2c23a, 0x4a5ad8, 0x4fa860, 0xb45ad8, 0xf28a3c];
+  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  p.box(2.92, 0.012, 2.92, 0, 0, 0, 0xe8e0d0);
+  /** Bassin rectangulaire : l'eau, quatre margelles, des spots sous l'eau qui s'allument le soir */
+  const pool = (x: number, z: number, w: number, d: number, water: number) => {
+    p.box(w, 0.028, d, x, y0, z, water);
+    for (const s of [-1, 1]) { p.box(w + 0.06, 0.042, 0.03, x, y0, z + s * (d / 2 + 0.015), rim); p.box(0.03, 0.042, d, x + s * (w / 2 + 0.015), y0, z, rim); }
+    for (let k = 0; k < Math.floor(w / 0.3); k++) p.box(0.03, 0.01, 0.004, x - w / 2 + 0.15 + k * 0.3, y0 + 0.029, z - d / 2 + 0.002, 0x9ae8ff, 0, true);
+  };
+
+  // ---- la tour des toboggans, la tour du kamikaze et leur passerelle
+  const [hx, hz] = SLIDE_HUB, levels = [y0, 0.24, 0.47, 0.7, 0.88];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.022, 1.12, 0.022, hx + sx * 0.11, y0, hz + sz * 0.11, rim);
+  for (let i = 1; i < levels.length; i++) p.box(i === levels.length - 1 ? 0.3 : 0.25, 0.02, i === levels.length - 1 ? 0.3 : 0.25, hx, levels[i], hz, 0xf2c23a);
+  for (let i = 0; i + 1 < levels.length; i++) {
+    const rise = levels[i + 1] - levels[i], ang = Math.atan2(rise, 0.2), s = i % 2 ? 1 : -1;
+    p.add(new THREE.BoxGeometry(0.07, 0.012, Math.hypot(rise, 0.2)).rotateX(s * ang), hx + s * 0.05, (levels[i] + levels[i + 1]) / 2 + 0.01, hz, 0xd8d6d0);
+  }
+  for (const [dx, dz, w, d] of [[0, -0.15, 0.3, 0.006], [0, 0.15, 0.3, 0.006], [-0.15, 0, 0.006, 0.3], [0.15, 0, 0.006, 0.3]]) p.box(w, 0.05, d, hx + dx, 0.9, hz + dz, rim);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.014, 0.22, 0.014, hx + sx * 0.13, 0.9, hz + sz * 0.13, rim);
+  p.cone(0.25, 0.16, 4, hx, 1.12, hz, 0xd84a3e, false, Math.PI / 4);
+  p.cyl(0.004, 0.004, 0.14, 3, hx, 1.28, hz, C.metal); p.box(0.07, 0.04, 0.004, hx + 0.035, 1.37, hz, 0xf2c23a);
+  p.box(0.16, 0.02, 0.12, hx + 0.21, 0.88, hz, 0xf2c23a);
+  const kx = -1.38, kz = -0.95;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.018, 1.05, 0.018, kx + sx * 0.06, y0, kz + sz * 0.06, rim);
+  p.box(0.16, 0.02, 0.16, kx, 0.88, kz, 0xf2c23a); p.cone(0.13, 0.1, 4, kx, 1.06, kz, 0xf2c23a, false, Math.PI / 4);
+  for (let y = 0.2; y < 0.88; y += 0.17) p.box(0.13, 0.008, 0.13, kx, y, kz, 0xd8d6d0);
+  p.box(0.45, 0.02, 0.09, (kx + hx) / 2 - 0.02, 0.88, -0.98, 0xf2c23a);
+  // garde-corps de la passerelle, ouvert là où part la grande spirale
+  p.box(0.45, 0.04, 0.006, (kx + hx) / 2 - 0.02, 0.9, -0.935, rim);
+  for (const [x0, x1] of [[-1.31, -1.24], [-1.08, -0.86]]) p.box(x1 - x0, 0.04, 0.006, (x0 + x1) / 2, 0.9, -1.025, rim);
+  // les toboggans, leurs poteaux, et sous les spirales les bras tendus depuis la tour (là où ils ne croisent pas l'autre)
+  const slides = slidePaths(), widths = [0.08, 0.085, 0.13], colors = [0xf2c23a, 0xd84a3e, 0x4a5ad8];
+  slides.forEach((s, i) => slideRun(p, s.pts, widths[i], colors[i]));
+  const near = (x: number, y: number, z: number, self: number) => slides.some((s, i) => i !== self && s.pts.some((q) => Math.hypot(q.x - x, q.z - z) < 0.09 && Math.abs(q.y - y) < 0.08));
+  slides.forEach((s, i) => s.pts.forEach((q, k) => {
+    const onHelix = i > 0 && k <= 40;
+    if (!onHelix) { if (q.y > 0.09 && k % 2 === 0) p.box(0.016, q.y - y0 - 0.012, 0.016, q.x, y0, q.z, 0xd8d6d0); return; }
+    if (k % 4 !== 2) return;
+    const dx = q.x - hx, dz = q.z - hz, r = Math.hypot(dx, dz), y = q.y - 0.03;
+    for (let t = 0.4; t < 1; t += 0.12) if (near(hx + (dx * t), y, hz + (dz * t), i)) return;
+    p.add(new THREE.BoxGeometry(0.014, 0.014, r - 0.11).translate(0, 0, (r - 0.11) / 2 + 0.11), hx, y, hz, 0xd8d6d0, Math.atan2(dx, dz));
+  }));
+  // le bassin de réception, ses lignes d'eau, des baigneurs qui remontent
+  pool(-0.82, -0.35, 1.22, 0.46, 0x3aa8d8);
+  for (const x of [-1.2, -0.88, -0.55]) for (let k = 0; k < 7; k++) p.sphere(0.01, x, y0 + 0.03, -0.55 + k * 0.065, k % 2 ? C.white : 0xd84a3e);
+  for (const [x, z, c] of [[-1.05, -0.2, 0xf2c23a], [-0.7, -0.22, 0xd84a3e], [-0.4, -0.25, 0x4fa860]] as number[][]) { p.add(new THREE.TorusGeometry(0.028, 0.01, 4, 10).rotateX(Math.PI / 2), x, y0 + 0.032, z, c); p.sphere(0.016, x, y0 + 0.05, z, 0xe8b894); }
+
+  // ---- la piscine à vagues : sa machine, l'eau du plus profond au plus clair, l'écume et les nageurs qui vont et viennent, la plage
+  const wx = -0.775;
+  p.box(1.31, 0.17, 0.13, wx, y0, 0.005, rim);
+  for (let k = 0; k < 6; k++) p.box(0.14, 0.05, 0.006, wx - 0.5 + k * 0.2, y0 + 0.02, 0.072, 0x3a4250);
+  for (let k = 0; k < 13; k++) p.box(0.1, 0.03 + (k % 2) * 0.025, 0.006, wx - 0.6 + k * 0.1, y0 + 0.09, 0.072, k % 2 ? 0x3c7fd8 : 0x7ad8ee);
+  p.box(1.33, 0.02, 0.15, wx, y0 + 0.17, 0.005, 0xf2c23a);
+  for (const [z, d, c] of [[0.265, 0.37, 0x2a9ad0], [0.625, 0.35, 0x4ab8e0], [0.95, 0.3, 0x7ad8ee]] as number[][]) p.box(1.25, 0.028, d, wx, y0, z, c);
+  for (const s of [-1, 1]) p.box(0.03, 0.042, 1.04, wx + s * 0.64, y0, 0.59, rim);
+  p.box(1.31, 0.03, 0.36, wx, y0, 1.28, 0xead8b0);
+  for (let k = 0; k < 4; k++) p.box(0.03, 0.01, 0.004, wx - 0.45 + k * 0.3, y0 + 0.029, 0.074, 0x9ae8ff, 0, true);
+  const W = swing([wx, -4, 0.6], [1, 0, 0], 0.012, 0.22), wy = 4 + y0 + 0.031;
+  for (const z of [-0.3, -0.05, 0.2]) { W.box(1.2, 0.005, 0.03, 0, wy, z, 0xf4fbfd); W.box(1.1, 0.004, 0.02, 0.03, wy, z + 0.04, 0xe8f6fa); }
+  [[-0.42, -0.2], [-0.15, 0.02], [0.3, -0.25], [0.48, 0.15], [-0.28, 0.33], [0.1, 0.28], [-0.5, 0.12]].forEach(([x, z], k) => {
+    W.add(new THREE.TorusGeometry(0.028, 0.01, 4, 10).rotateX(Math.PI / 2), x, wy + 0.002, z, sun[k % sun.length]); W.sphere(0.016, x, wy + 0.02, z, 0xe8b894);
+  });
+  W.add(new THREE.IcosahedronGeometry(1, 1).scale(0.03, 0.02, 0.12), -0.05, wy + 0.01, -0.15, 0x6ac85a); W.sphere(0.022, 0.25, wy + 0.016, 0.38, 0xf2c23a, 1);
+  // le maître-nageur sur sa chaise haute, les transats, les parasols, des baigneurs au soleil
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.01, 0.24, 0.01, -0.2 + dx * 0.04, y0, 1.22 + dz * 0.04, C.white);
+  p.box(0.11, 0.012, 0.11, -0.2, 0.25, 1.22, 0xd84a3e); seated(p, -0.2, 0.262, 1.22, Math.PI, 0xd84a3e, 0x8a5a3a);
+  p.cyl(0.004, 0.004, 0.2, 4, -0.17, 0.262, 1.2, C.metal); p.cone(0.08, 0.04, 8, -0.17, 0.46, 1.2, 0xd84a3e);
+  for (let k = 0; k < 7; k++) { const x = -1.36 + k * 0.15; p.add(new THREE.BoxGeometry(0.06, 0.012, 0.14), x, y0 + 0.05, 1.37, sun[k % sun.length], 0, false, 0, -0.25); if (k % 3 === 1) seated(p, x, y0 + 0.05, 1.36, Math.PI, sun[(k + 2) % sun.length]); }
+  for (const [x, c] of [[-1.2, 0xf2785a], [-0.9, 0x8cc4e8], [-0.6, 0xf2c23a]] as number[][]) { p.cyl(0.005, 0.005, 0.26, 4, x, y0, 1.25, C.metal); p.cone(0.11, 0.05, 8, x, 0.27, 1.25, c); }
+
+  // ---- la rivière à bouées autour de l'île, ses bouées qui tournent, ses passerelles
+  const rx = 0.75, rz = -0.2;
+  p.add(new THREE.RingGeometry(0.5, 0.66, 48).rotateX(-Math.PI / 2), rx, y0 + 0.026, rz, 0x4ab8e0);
+  for (const r of [0.5, 0.66]) p.add(new THREE.TorusGeometry(r, 0.022, 4, 48).rotateX(Math.PI / 2), rx, y0 + 0.02, rz, rim);
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + 0.2; p.box(0.03, 0.01, 0.004, rx + Math.cos(a) * 0.69, y0 + 0.02, rz + Math.sin(a) * 0.69, 0x9ae8ff, -a + Math.PI / 2, true); }
+  const R = turning([rx, y0 + 0.03, rz], [0, 1, 0], 0.02);
+  for (let k = 0; k < 11; k++) {
+    const a = (k / 11) * Math.PI * 2, x = Math.cos(a) * 0.58, z = Math.sin(a) * 0.58;
+    R.add(new THREE.TorusGeometry(0.036, 0.014, 4, 12).rotateX(Math.PI / 2), x, 0.006, z, sun[k % sun.length]);
+    if (k % 4 === 3) continue;
+    R.box(0.03, 0.03, 0.03, x, 0.008, z, sun[(k + 3) % sun.length], -a); R.sphere(0.016, x, 0.05, z, 0xe8b894);
+  }
+  /** Passerelle en dos d'âne au-dessus de la rivière, dans l'axe z : marches de part et d'autre, tablier, garde-corps */
+  const footbridge = (z: number) => {
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) p.box(0.14, 0.04 + k * 0.045, 0.04, rx, y0, z + s * (0.17 - k * 0.04), C.white);
+    p.box(0.14, 0.022, 0.2, rx, 0.15, z, 0xb08968);
+    for (const sx of [-1, 1]) { p.box(0.008, 0.06, 0.2, rx + sx * 0.07, 0.172, z, C.white); for (const dz of [-0.09, 0.09]) p.box(0.012, 0.15, 0.012, rx + sx * 0.07, y0 + 0.02, z + dz, C.white); }
+  };
+  footbridge(rz + 0.58); footbridge(rz - 0.58);
+  // l'île : pelouse, aire de jeux d'eau ; le château aux deux mini-toboggans et son grand seau qui bascule ; le champignon fontaine
+  p.cyl(0.47, 0.47, 0.02, 40, rx, y0, rz, 0x8fcf7e);
+  p.cyl(0.2, 0.2, 0.004, 24, rx, y0 + 0.02, rz, 0x7ad8ee);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.018, 0.62, 0.018, rx + sx * 0.12, y0, rz + sz * 0.12, 0xf2c23a);
+  p.box(0.28, 0.02, 0.28, rx, 0.22, rz, 0x4fa860); p.box(0.28, 0.02, 0.28, rx, 0.42, rz, 0xd84a3e); p.box(0.28, 0.02, 0.28, rx, 0.62, rz, 0x4fa860);
+  for (const y of [0.24, 0.44, 0.64]) for (const s of [-1, 1]) p.box(0.28, 0.04, 0.006, rx, y, rz + s * 0.14, 0xf4f2ee);
+  for (const s of [-1, 1]) p.box(0.02, 0.24, 0.02, rx + s * 0.09, 0.64, rz, 0xd84a3e);
+  p.box(0.22, 0.025, 0.025, rx, 0.86, rz, 0xd84a3e);
+  p.cyl(0.006, 0.006, 0.08, 4, rx, 0.78, rz, C.metal);
+  const B = swing([rx, 0.8, rz], [1, 0, 0], 0.55, 0.12);
+  B.cyl(0.075, 0.055, 0.1, 10, 0, -0.1, 0, 0xf2c23a); B.cyl(0.077, 0.077, 0.012, 10, 0, -0.005, 0, 0xd84a3e); B.cyl(0.068, 0.068, 0.004, 10, 0, -0.012, 0, 0x5ac8e8);
+  for (const s of [-1, 1]) B.box(0.006, 0.03, 0.006, s * 0.075, -0.02, 0, C.metal);
+  slideRun(p, [V(rx + 0.14, 0.245, rz), V(rx + 0.2, 0.22, rz), V(rx + 0.36, 0.08, rz + 0.02), V(rx + 0.42, 0.045, rz + 0.03)], 0.06, 0x4fa860);
+  slideRun(p, [V(rx - 0.13, 0.445, rz - 0.03), V(rx - 0.2, 0.39, rz - 0.07), V(rx - 0.28, 0.24, rz - 0.04), V(rx - 0.33, 0.12, rz + 0.04), V(rx - 0.35, 0.05, rz + 0.12)], 0.06, 0xf28a3c);
+  for (let k = 0; k < 4; k++) p.box(0.06, 0.006, 0.012, rx, 0.04 + k * 0.045, rz + 0.155, 0xd8d6d0);
+  const mx = rx - 0.25, mz = rz - 0.27;
+  p.cyl(0.02, 0.03, 0.16, 8, mx, y0 + 0.02, mz, rim);
+  p.add(new THREE.SphereGeometry(0.11, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.5, 1), mx, 0.19, mz, 0xf28aa8);
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; p.sphere(0.014, mx + Math.cos(a) * 0.065, 0.225, mz + Math.sin(a) * 0.065, C.white); }
+  p.add(new THREE.CylinderGeometry(0.105, 0.12, 0.16, 16, 1, true), mx, y0 + 0.1, mz, 0x9ad8f0);
+  palmTree(p, rx + 0.28, rz - 0.3, 0.38, y0 + 0.02); palmTree(p, rx - 0.3, rz + 0.25, 0.42, y0 + 0.02); palmTree(p, rx + 0.3, rz + 0.27, 0.34, y0 + 0.02);
+  figure(p, rx + 0.42, rz + 0.12, 0xf2c23a, 0.4, false, 0xc8a070, 'run', 0.02);
+  figure(p, rx - 0.12, rz + 0.3, 0xd84a3e, 2.4, false, 0x4a3426, 'cheer', 0.02);
+  figure(p, rx + 0.06, rz - 0.2, 0x3a6ab8, 1.2, false, 0x2a2420, 'cheer', 0.02);
+  figure(p, rx - 0.05, rz - 0.36, 0xb45ad8, -0.6, false, 0x8a5a3a, 'idle', 0.02);
+
+  // ---- la vague de surf : sa rampe d'eau qui file, l'écume en haut, le surfeur qui taille sa courbe, les curieux
+  const sx = 0.85, sz = -1.2;
+  p.box(0.66, 0.17, 0.04, sx, y0, -1.4, rim);
+  for (const s of [-1, 1]) p.box(0.04, 0.17, 0.4, sx + s * 0.31, y0, sz, rim);
+  p.box(0.66, 0.045, 0.03, sx, y0, -0.995, rim);
+  for (const [w, x, z, d] of [[0.68, sx, -1.4, 0.05], [0.05, sx - 0.31, sz, 0.42], [0.05, sx + 0.31, sz, 0.42]]) p.box(w, 0.015, d, x, y0 + 0.17, z, 0x3a4a9a);
+  p.add(new THREE.BoxGeometry(0.58, 0.01, 0.4).rotateX(0.3), sx, y0 + 0.085, sz, 0x5ac8e8);
+  p.add(new THREE.CylinderGeometry(0.022, 0.022, 0.58, 8).rotateZ(Math.PI / 2), sx, y0 + 0.15, -1.37, 0xf4fbfd);
+  for (let k = 0; k < 5; k++) { const zz = sz + 0.06 - (k % 3) * 0.05; p.box(0.1, 0.004, 0.012, sx - 0.24 + k * 0.12, y0 + 0.089 - (zz - sz) * 0.31, zz, 0xf4fbfd, 0.2 * (k - 2)); }
+  const S = sway([sx + 0.04, y0 + 0.088, sz + 0.02], [0, 1, 0], 0.5, 0.35);
+  S.box(0.04, 0.008, 0.12, 0, 0, 0, 0xf2c23a, 0.3); figure(S, 0, 0, 0x3a6ab8, 0.3 + Math.PI / 2, false, 0xc8a070);
+  p.box(0.32, 0.07, 0.01, sx, y0 + 0.185, -1.4, 0x2a2a3a); for (let k = 0; k < 4; k++) p.box(0.05, 0.035, 0.004, sx - 0.105 + k * 0.07, y0 + 0.203, -1.394, 0x9ae8ff, 0, true);
+  for (const [x, c] of [[0.6, 0xd84a3e], [0.75, 0x4fa860], [1.08, 0xf2c23a]] as number[][]) figure(p, x, -0.95, c, Math.PI, false, 0x4a3426, x > 1 ? 'cheer' : 'idle');
+
+  // ---- l'allée et l'entrée : arc et vagues lumineuses, guichet, tourniquets ; les cabines, les douches ; la paillote
+  p.box(0.24, 0.004, 0.94, rx, y0, 0.96, 0xd8cfc0);
+  for (const s of [-1, 1]) { p.box(0.07, 0.5, 0.07, rx + s * 0.27, y0, 1.4, rim); p.sphere(0.045, rx + s * 0.27, 0.55, 1.4, 0x3c7fd8); }
+  p.add(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 16, 1, false, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2), rx, 0.47, 1.4, 0x3c7fd8);
+  for (let k = 0; k <= 10; k++) { const a = Math.PI * (k / 10); p.box(0.03, 0.03, 0.006, rx - Math.cos(a) * 0.25, 0.47 + Math.sin(a) * 0.25, 1.433, k % 2 ? 0x9ae8ff : C.white, 0, true); }
+  for (let k = 0; k < 5; k++) p.box(0.05, 0.04, 0.006, rx - 0.12 + k * 0.06, 0.6, 1.432, [0x9ae8ff, 0xffe2a0][k % 2], 0, true);
+  for (const x of [rx - 0.12, rx + 0.12]) { p.box(0.03, 0.08, 0.06, x, y0, 1.3, 0x8a8f96); p.box(0.05, 0.006, 0.006, x + 0.03, 0.07, 1.3, C.metal); }
+  p.box(0.16, 0.16, 0.12, rx + 0.42, y0, 1.32, rim); p.box(0.18, 0.025, 0.14, rx + 0.42, 0.17, 1.32, 0xd84a3e); p.box(0.1, 0.06, 0.006, rx + 0.42, 0.09, 1.252, 0xffe8b0, 0, true);
+  p.box(0.3, 0.16, 0.24, 0.3, y0, 0.75, rim); p.box(0.32, 0.02, 0.26, 0.3, 0.17, 0.75, 0xd8d6d0);
+  for (let k = 0; k < 4; k++) p.box(0.05, 0.12, 0.006, 0.19 + k * 0.074, y0, 0.872, sun[k]);
+  for (let k = 0; k < 2; k++) p.add(new THREE.BoxGeometry(0.11, 0.008, 0.08), 0.24 + k * 0.12, 0.195, 0.72, 0x2c3e5a, 0, false, 0, 0.3);
+  for (const x of [0.1, 0.18]) { p.cyl(0.005, 0.005, 0.24, 4, x, y0, 1.1, C.metal); p.box(0.03, 0.006, 0.012, x, 0.25, 1.08, C.metal); p.cyl(0.025, 0.025, 0.004, 8, x, y0, 1.08, 0x8a8f96); }
+  figure(p, 0.1, 1.08, 0xf28aa8, 0.2, false, 0x4a3426);
+  p.box(0.32, 0.15, 0.2, 1.18, y0, 0.72, 0xb08968); p.box(0.28, 0.05, 0.006, 1.18, 0.09, 0.823, 0xffe8b0, 0, true);
+  p.box(0.34, 0.03, 0.06, 1.18, 0.07, 0.85, 0x8a6448);
+  p.pyramid(0.46, 0.16, 0.34, 1.18, 0.162, 0.72, 0xd8b86a);
+  for (const [x, z, c] of [[0.98, 1.04, 0xd84a3e], [1.22, 1.1, 0x3c7fd8], [1.38, 0.96, 0xf2c23a]] as number[][]) {
+    p.cyl(0.05, 0.05, 0.008, 10, x, 0.07, z, C.white); p.cyl(0.006, 0.006, 0.07, 4, x, y0, z, C.metal);
+    p.cyl(0.004, 0.004, 0.26, 4, x, 0.078, z, C.metal); p.cone(0.1, 0.05, 8, x, 0.3, z, c);
+    seated(p, x - 0.06, y0 + 0.03, z, Math.PI / 2, sun[Math.round(x * 10) % sun.length]); seated(p, x + 0.06, y0 + 0.03, z, -Math.PI / 2, sun[Math.round(z * 10) % sun.length], 0x8a5a3a);
+  }
+  for (const [x, z] of [[0.62, 0.62], [0.88, 1.18]]) lampPost(p, x, z, 0.3);
+  palmTree(p, 1.4, 0.45, 0.42); palmTree(p, 0.03, 1.42, 0.4); palmTree(p, 1.42, 1.42, 0.36); palmTree(p, -0.05, -1.25, 0.44); palmTree(p, 1.4, -0.75, 0.38);
+  for (const [x, z, c, r, pose] of [[0.68, 1.22, 0xf2c23a, Math.PI, 'idle'], [0.82, 1.18, 0x3a6ab8, Math.PI, 'idle'], [0.72, 0.62, 0xd84a3e, Math.PI, 'idle'], [0.84, 0.9, 0x4fa860, 0.3, 'idle'], [1.12, 0.88, 0xf28aa8, 0.2, 'cheer'], [-0.08, -0.3, 0xb45ad8, -Math.PI / 2, 'cheer'], [0.42, 1.2, 0xf2c23a, 2.6, 'run']] as [number, number, number, number, Pose][]) figure(p, x, z, c, r, false, 0x4a3426, pose);
+  figure(p, hx + 0.05, hz - 0.02, 0xf28a3c, 0.4, false, 0x4a3426, 'idle', 0.25); figure(p, hx - 0.05, hz + 0.03, 0x4fa860, 2.2, false, 0x2a2420, 'idle', 0.48); figure(p, hx + 0.06, hz + 0.05, 0xd84a3e, -1.2, false, 0xc8a070, 'cheer', 0.9);
+}
+
 /**
  * Parc d'attractions (2 × 2) : fête foraine de l'âge industriel (carrousel qui tourne sous son chapiteau rayé, grande roue,
  * baraques à frites et à confiseries, guirlandes) ; parc d'attractions ensuite (grande roue qui tourne et ses nacelles,
@@ -7122,32 +7334,185 @@ function research(p: Parts) {
 }
 
 /**
- * Gare maglev : l'anneau suspendu de la voie sur ses pylônes évasés, la rame qui y file sans bruit, le quai de verre sous son
- * auvent courbe, l'escalator, le panneau des départs ; pelouse et arbres au milieu
+ * Voiture volante (vers +z) : coque en goutte, verrière fumée, aileron, ceinture lumineuse, réacteurs arrière, patins qui
+ * brillent dessous ; `stage` 0 = châssis nu et sa batterie, 1 = coque brute, 2 = finie ; `rz` l'incline dans les virages
+ */
+function flyCar(p: Parts, x: number, y: number, z: number, ry: number, body: number, stage = 2, rz = 0) {
+  const put = (g: THREE.BufferGeometry, color: number, glow: boolean | 'neon' = false) => p.add(g, x, y, z, color, ry, glow, rz);
+  for (const s of [-1, 1]) {
+    put(new THREE.BoxGeometry(0.03, 0.014, 0.2).translate(s * 0.05, 0.007, 0), F.dark);
+    put(new THREE.BoxGeometry(0.026, 0.004, 0.18).translate(s * 0.05, -0.001, 0), 0x9ff8ff, 'neon');
+  }
+  if (stage === 0) {
+    put(new THREE.BoxGeometry(0.12, 0.016, 0.24).translate(0, 0.022, 0), F.steel);
+    put(new THREE.BoxGeometry(0.09, 0.03, 0.08).translate(0, 0.045, -0.04), F.dark);
+    put(new THREE.BoxGeometry(0.06, 0.004, 0.05).translate(0, 0.062, -0.04), F.mint, 'neon');
+    for (const s of [-1, 1]) put(new THREE.CylinderGeometry(0.022, 0.026, 0.06, 8).rotateX(Math.PI / 2).translate(s * 0.07, 0.04, -0.09), F.steel);
+    return;
+  }
+  put(new THREE.SphereGeometry(0.1, 10, 6).scale(0.78, 0.42, 1.45).translate(0, 0.05, 0), stage === 1 ? 0xc4c8cc : body);
+  put(new THREE.BoxGeometry(0.162, 0.01, 0.17).translate(0, 0.036, 0), stage === 1 ? F.steel : F.neon, stage === 1 ? false : 'neon');
+  for (const s of [-1, 1]) {
+    put(new THREE.CylinderGeometry(0.022, 0.026, 0.06, 8).rotateX(Math.PI / 2).translate(s * 0.085, 0.05, -0.09), F.white);
+    put(new THREE.CylinderGeometry(0.016, 0.016, 0.004, 8).rotateX(Math.PI / 2).translate(s * 0.085, 0.05, -0.121), F.neon, stage === 2 ? 'neon' : false);
+  }
+  if (stage === 1) return;
+  put(new THREE.SphereGeometry(0.06, 8, 5).scale(1, 0.75, 1.5).translate(0, 0.085, -0.012), 0x2a3a4e);
+  put(new THREE.BoxGeometry(0.004, 0.035, 0.06).translate(0, 0.1, -0.12), body === F.white ? 0xe8553c : F.white);
+  for (const s of [-1, 1]) put(new THREE.BoxGeometry(0.04, 0.012, 0.006).translate(s * 0.04, 0.05, 0.142), F.warm, true);
+}
+
+/**
+ * Bras robot de la chaîne : socle à liseré lumineux, deux segments blancs, rotules sombres et la pince où crépitent les
+ * étincelles ; il plonge vers +z (dir 1) ou vers -z (dir -1) et se balance au rythme du travail
+ */
+function robotArm(p: Parts, x: number, z: number, y0: number, dir: number, freq: number) {
+  p.cyl(0.03, 0.04, 0.04, 8, x, y0, z, F.white);
+  p.cyl(0.032, 0.032, 0.006, 8, x, y0 + 0.04, z, F.neon, 'neon');
+  const A = swing([x, y0 + 0.05, z], [1, 0, 0], 0.2, freq), a1 = 0.45 * dir, a2 = 2.1 * dir;
+  A.sphere(0.022, 0, 0, 0, F.dark);
+  A.add(new THREE.BoxGeometry(0.026, 0.15, 0.026).translate(0, 0.075, 0), 0, 0, 0, F.white, 0, false, 0, a1);
+  A.sphere(0.018, 0, 0.1355, 0.0652 * dir, F.dark);
+  A.add(new THREE.BoxGeometry(0.02, 0.12, 0.02), 0, 0.1052, 0.117 * dir, F.white, 0, false, 0, a2);
+  A.box(0.03, 0.02, 0.03, 0, 0.065, 0.1688 * dir, F.dark);
+  A.add(new THREE.IcosahedronGeometry(0.012, 0), 0, 0.058, 0.178 * dir, F.gold, 0, 'neon');
+}
+
+/**
+ * Usine de voitures volantes (2 × 2, âge futuriste) : la halle de montage sous sa voûte nacrée à nervures lumineuses, ouverte
+ * sur la chaîne où les bras robots assemblent les voitures (châssis nu, coque brute, voiture finie) ; l'entrepôt des
+ * batteries et son toit où se posent les drones de livraison ; la vitrine où une voiture tourne sur son plateau sous un
+ * anneau suspendu ; les aires de stationnement lumineuses ; le circuit d'essai aérien, où deux voitures tournent en sens
+ * contraire autour du pylône et passent dans leurs anneaux
+ */
+function skyCarworks(p: Parts) {
+  p.box(1.94, 0.012, 1.94, 0, 0, 0, 0xd8dde2);
+  const y0 = 0.012;
+  // la halle : murs, sol, voûte et ses nervures, poutre de façade à liseré, piliers
+  const hx = -0.3, hz = -0.625, W = 1.3, D = 0.65, H = 0.34;
+  p.box(W, H, 0.06, hx, y0, -0.92, F.white);
+  for (const x of [hx - W / 2 + 0.03, hx + W / 2 - 0.03]) p.box(0.06, H, D, x, y0, hz, F.white);
+  p.box(W - 0.06, 0.006, D - 0.04, hx, y0, hz, 0xc4cad2);
+  p.add(new THREE.CylinderGeometry(D / 2 + 0.02, D / 2 + 0.02, W + 0.02, 18, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.4, 1), hx, y0 + H, hz, F.pearl);
+  for (let k = 0; k < 5; k++) p.add(new THREE.TorusGeometry(D / 2 + 0.021, 0.005, 3, 18, Math.PI).rotateY(Math.PI / 2).scale(1, 0.4, 1), hx - 0.52 + k * 0.26, y0 + H + 0.001, hz, F.neon, 0, 'neon');
+  p.box(W, 0.035, 0.035, hx, y0 + H - 0.03, -0.3, F.white);
+  p.box(W, 0.006, 0.006, hx, y0 + H - 0.02, -0.281, F.pink, 0, 'neon');
+  for (const x of [-0.6, -0.17, 0.2]) p.cyl(0.012, 0.012, H - 0.03, 6, x, y0, -0.31, F.white);
+  // au fond de la halle, les écrans de contrôle de chaque poste
+  for (const x of [-0.75, -0.38, -0.01]) { p.box(0.18, 0.09, 0.006, x, 0.17, -0.886, F.dark); p.box(0.15, 0.05, 0.004, x, 0.19, -0.882, [F.neon, F.mint, F.gold][Math.round((x + 0.75) / 0.37)], 0, 'neon'); }
+  // la chaîne : le tapis et ses liserés, les trois postes (châssis, coque, voiture finie) et leurs bras robots
+  const cz = -0.6;
+  p.box(1.15, 0.03, 0.12, hx - 0.02, y0, cz, F.dark);
+  for (const s of [-1, 1]) p.box(1.15, 0.006, 0.006, hx - 0.02, y0 + 0.03, cz + s * 0.063, F.neon, 0, 'neon');
+  const stations: [number, number, number][] = [[-0.75, 0, F.white], [-0.38, 1, F.white], [-0.01, 2, 0xff7ab8]];
+  stations.forEach(([x, stage, c], i) => {
+    flyCar(p, x, y0 + 0.032, cz, Math.PI / 2, c, stage);
+    robotArm(p, x - 0.04, cz - 0.17, y0, 1, 0.4 + i * 0.13);
+    if (i < 2) robotArm(p, x + 0.05, cz + 0.17, y0, -1, 0.55 + i * 0.11);
+  });
+  holoSign(hx, 0.62, hz, 1.2, F.pink);
+  // l'entrepôt des batteries : bloc nacré à vitrage éclairé, toit-hélistation des drones, piles de batteries devant
+  const ex = 0.68, ez = -0.68;
+  p.box(0.5, 0.22, 0.5, ex, y0, ez, F.pearl);
+  p.box(0.44, 0.1, 0.006, ex, 0.07, ez + 0.253, F.glass, 0, true);
+  for (let k = 0; k <= 4; k++) p.box(0.008, 0.1, 0.01, ex - 0.22 + k * 0.11, 0.07, ez + 0.256, F.steel);
+  p.box(0.52, 0.02, 0.52, ex, y0 + 0.22, ez, F.white);
+  p.cyl(0.17, 0.17, 0.01, 16, ex, y0 + 0.24, ez, F.dark);
+  neonRing(p, 0.17, y0 + 0.252, ex, ez, F.mint, 0.005);
+  drone(p, ex - 0.04, y0 + 0.27, ez + 0.02, 0.5);
+  circlingDrone(0.15, 0.78, -0.45, 0.55, 0.07, true);
+  for (const [x, z, n] of [[0.5, -0.33, 3], [0.62, -0.33, 2], [0.86, -0.36, 3]] as number[][]) for (let k = 0; k < n; k++) {
+    p.box(0.09, 0.045, 0.07, x, y0 + k * 0.046, z, F.white);
+    p.box(0.091, 0.008, 0.071, x, y0 + k * 0.046 + 0.02, z, F.mint, 0, 'neon');
+  }
+  // la vitrine : socle rond et son liseré, le plateau qui tourne et sa voiture, l'anneau suspendu sur ses trois mâts
+  const vx = -0.55, vz = 0.4;
+  p.cyl(0.3, 0.32, 0.05, 20, vx, y0, vz, F.pearl);
+  neonRing(p, 0.305, y0 + 0.052, vx, vz, F.neon, 0.005);
+  const T = turning([vx, y0 + 0.05, vz], [0, 1, 0], 0.06);
+  T.cyl(0.21, 0.21, 0.012, 20, 0, 0, 0, F.white);
+  flyCar(T, 0, 0.04, 0, 0.6, 0xffd25a);
+  for (const a of [0.6, 2.7, 4.8]) p.cyl(0.01, 0.012, 0.42, 6, vx + Math.cos(a) * 0.29, y0 + 0.05, vz + Math.sin(a) * 0.29, F.white);
+  p.add(new THREE.TorusGeometry(0.3, 0.022, 4, 32).rotateX(Math.PI / 2), vx, y0 + 0.48, vz, F.white);
+  neonRing(p, 0.3, y0 + 0.46, vx, vz, F.pink, 0.005);
+  p.box(0.004, 0.08, 0.12, vx + 0.34, y0 + 0.08, vz + 0.12, F.neon, 0.4, 'neon');
+  p.cyl(0.012, 0.012, 0.08, 6, vx + 0.34, y0, vz + 0.12, F.white);
+  // les aires de stationnement : galettes sombres cerclées de lumière, une voiture posée, une autre qui attend son pilote
+  for (const [z, c] of [[0.12, 0x7affc0], [0.62, F.white]] as number[][]) {
+    p.cyl(0.13, 0.13, 0.006, 18, -0.05, y0, z, 0x4a5260);
+    neonRing(p, 0.125, y0 + 0.008, -0.05, z, F.gold, 0.004);
+    flyCar(p, -0.05, y0 + 0.035, z, 0, c);
+  }
+  // le circuit d'essai aérien : l'aire et ses repères, le pylône et ses bagues de lumière, les bras et leurs anneaux, les deux
+  // voitures qui tournent en sens contraire et s'inclinent dans le virage
+  const tx = 0.5, tz = 0.42, R1 = 0.34, R2 = 0.24, h1 = 0.42, h2 = 0.72;
+  p.cyl(0.38, 0.38, 0.006, 28, tx, y0, tz, 0x4a5260);
+  neonRing(p, 0.36, y0 + 0.008, tx, tz, F.neon, 0.004);
+  for (const r of [0, Math.PI / 2]) p.box(0.5, 0.002, 0.016, tx, y0 + 0.006, tz, F.white, r);
+  p.cyl(0.024, 0.05, 1.0, 8, tx, y0, tz, F.white);
+  for (const y of [0.25, 0.55, 0.85]) neonRing(p, 0.04 - y * 0.015, y, tx, tz, F.neon, 0.005);
+  p.cyl(0.07, 0.05, 0.05, 10, tx, 1.0, tz, F.pearl); p.add(new THREE.IcosahedronGeometry(0.02, 1), tx, 1.07, tz, 0xff4a3a, 0, true);
+  for (const [r, h, a] of [[R1, h1, 0], [R2, h2, Math.PI]] as number[][]) {
+    const hxr = tx + Math.cos(a) * r, len = r - 0.03;
+    p.box(len, 0.014, 0.014, tx + Math.cos(a) * (0.03 + len / 2), h - 0.06, tz, F.white);
+    p.add(new THREE.TorusGeometry(0.1, 0.009, 4, 24), hxr, h + 0.05, tz, F.white);
+    p.add(new THREE.TorusGeometry(0.1, 0.004, 4, 24), hxr, h + 0.05, tz + 0.004, F.pink, 0, 'neon');
+  }
+  flyCar(turning([tx, h1, tz], [0, 1, 0], 0.16), R1, 0, 0, Math.PI, 0xff5a5a, 2, -0.3);
+  flyCar(turning([tx, h2, tz], [0, 1, 0], -0.12), R2, 0, 0, 0, 0x5aa8ff, 2, 0.3);
+  // les abords : arbres en bacs, ingénieurs en blanc, un client devant la vitrine, le pilote d'essai qui salue
+  for (const [x, z] of [[-0.9, 0.9], [0.9, -0.15]]) { p.cyl(0.05, 0.05, 0.05, 8, x, y0, z, F.white); tree(p, x, z, 0.55, F.leaf); }
+  figure(p, -0.2, -0.2, F.white, 0.4);
+  figure(p, 0.3, -0.18, F.white, -2.4);
+  figure(p, -0.22, 0.88, 0x8a5ad8, -2.2);
+  figure(p, -0.62, 0.82, 0x3a6ab8, Math.PI, false, 0x2a2420);
+  figure(p, 0.12, 0.62, 0xf2c23a, -Math.PI / 2, false, 0x4a3426, 'cheer');
+}
+
+/**
+ * Gare maglev : une vraie gare où s'arrêtent les trains des lignes (voie devant le quai, comme les autres gares) — quai de
+ * béton clair sous sa voûte blanche à nervures lumineuses, quai d'en face et son abri ; hall vitré au toit courbe, panneau des
+ * départs et enseigne holographique ; au coin, l'anneau suspendu de la navette maglev qui y tourne sans bruit autour de sa tour
+ * d'ascenseur de verre
  */
 function maglev(p: Parts) {
-  p.box(1.9, 0.012, 1.9, 0, 0, 0, 0xd8dde2);
-  p.cyl(0.6, 0.6, 0.012, 16, 0, 0.012, 0, 0x8fcf7e);
-  tree(p, -0.15, -0.1, 0.9, F.leaf); tree(p, 0.2, 0.05, 0.7, F.leaf2); tree(p, 0, -0.35, 0.6, F.leaf);
-  const R = 0.78, Y = 0.46;
-  p.add(new THREE.TorusGeometry(R, 0.04, 4, 40).rotateX(Math.PI / 2).scale(1, 0.55, 1), 0, Y, 0, F.white);
-  neonRing(p, R, Y - 0.022, 0, 0, F.neon, 0.005);
-  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2 + 0.5; p.cyl(0.02, 0.045, Y - 0.02, 6, Math.cos(a) * R, 0.012, Math.sin(a) * R, F.white); }
-  const train = turning([0, Y + 0.035, 0], [0, 1, 0], 0.13);
-  for (let k = 0; k < 4; k++) {
-    const a = k * 0.21, x = Math.cos(a) * R, z = Math.sin(a) * R;
-    train.add(new THREE.SphereGeometry(0.045, 8, 4).scale(1, 0.75, k === 0 ? 2.6 : 2.2), x, 0.01, z, F.white, -a);
-    train.add(new THREE.BoxGeometry(0.093, 0.022, 0.16), x, 0.02, z, F.smoke, -a);
-    train.add(new THREE.BoxGeometry(0.096, 0.006, 0.17), x, -0.012, z, F.neon, -a, 'neon');
+  sink(0.03);
+  platformTrack(p, 0.03, true);
+  farPlatform(p, true);
+  p.box(1.9, 0.006, 0.03, 0, 0.11, 0.6, F.neon, 0, 'neon');
+  // le quai principal, son liseré, sa voûte blanche et ses nervures lumineuses
+  p.box(1.9, 0.08, 0.38, 0, 0.03, -0.03, F.pearl);
+  p.box(1.9, 0.006, 0.03, 0, 0.11, 0.14, F.neon, 0, 'neon');
+  for (const x of [-0.7, -0.1, 0.5]) p.cyl(0.012, 0.016, 0.24, 6, x, 0.11, -0.12, F.white);
+  p.add(new THREE.CylinderGeometry(0.2, 0.2, 1.7, 14, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.5, 1), 0, 0.35, -0.03, F.white);
+  for (let k = 0; k < 6; k++) p.add(new THREE.TorusGeometry(0.2, 0.004, 3, 14, Math.PI).rotateY(Math.PI / 2).scale(1, 0.5, 1), -0.75 + k * 0.3, 0.351, -0.03, F.neon, 0, 'neon');
+  for (const [x, c, r] of [[-0.55, 0x9fe8f0, Math.PI], [0.2, 0xd8c8f4, 0.2], [0.65, 0xf4f6f8, Math.PI]] as number[][]) actor(p, x, 0.11, -0.05, r, c);
+  // le hall vitré, son toit courbe, son entrée, le panneau des départs, l'enseigne
+  p.box(1.0, 0.32, 0.42, -0.45, 0.03, -0.62, F.white);
+  p.box(0.92, 0.22, 0.006, -0.45, 0.07, -0.407, F.glass2, 0, true);
+  for (let k = 0; k <= 6; k++) p.box(0.008, 0.22, 0.01, -0.91 + k * 0.153, 0.07, -0.404, F.steel);
+  p.add(new THREE.CylinderGeometry(0.24, 0.24, 1.04, 14, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.35, 1), -0.45, 0.35, -0.62, F.pearl);
+  p.box(0.18, 0.18, 0.012, -0.45, 0.03, -0.4, F.smoke);
+  p.box(0.3, 0.09, 0.008, -0.1, 0.2, -0.402, F.dark); for (let k = 0; k < 3; k++) p.box(0.26, 0.012, 0.009, -0.1, 0.22 + k * 0.022, -0.4, [F.gold, F.neon, F.mint][k], 0, 'neon');
+  holoSign(-0.45, 0.5, -0.62, 1, F.neon);
+  // l'anneau de la navette : ses pylônes évasés, la tour d'ascenseur de verre, la navette qui tourne
+  const cx = 0.48, cz = -0.56, R = 0.3, Y = 0.68;
+  p.add(new THREE.TorusGeometry(R, 0.03, 4, 32).rotateX(Math.PI / 2).scale(1, 0.55, 1), cx, Y, cz, F.white);
+  neonRing(p, R, Y - 0.018, cx, cz, F.neon, 0.004);
+  for (const a of [0.5, 2.6, -0.5, -1.6, -2.7]) p.cyl(0.016, 0.04, Y - 0.04, 6, cx + Math.cos(a) * R, 0.03, cz + Math.sin(a) * R, F.white);
+  p.cyl(0.07, 0.07, Y + 0.06, 12, cx, 0.03, cz, F.glass2);
+  for (let y = 0.15; y < Y; y += 0.12) p.cyl(0.072, 0.072, 0.01, 12, cx, y, cz, F.white);
+  p.cyl(0.09, 0.09, 0.03, 12, cx, Y + 0.09, cz, F.white); neonRing(p, 0.09, Y + 0.12, cx, cz, F.pink, 0.004);
+  const shuttle = turning([cx, Y + 0.03, cz], [0, 1, 0], 0.13);
+  for (let k = 0; k < 3; k++) {
+    const a = k * 0.3, x = Math.cos(a) * R, z = Math.sin(a) * R;
+    shuttle.add(new THREE.SphereGeometry(0.04, 8, 4).scale(1, 0.75, k === 0 ? 2.5 : 2.1), x, 0.01, z, F.white, -a);
+    shuttle.add(new THREE.BoxGeometry(0.082, 0.02, 0.14), x, 0.02, z, F.smoke, -a);
+    shuttle.add(new THREE.BoxGeometry(0.085, 0.005, 0.15), x, -0.01, z, F.neon, -a, 'neon');
   }
-  // le quai, son auvent, l'escalator et le panneau des départs
-  p.box(0.7, 0.03, 0.16, 0, Y - 0.08, R + 0.12, F.pearl);
-  for (const s of [-1, 1]) p.cyl(0.012, 0.012, Y - 0.08, 6, s * 0.3, 0.012, R + 0.18, F.white);
-  p.add(new THREE.CylinderGeometry(0.14, 0.14, 0.74, 10, 1, false, -Math.PI / 2, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.5, 1), 0, Y + 0.12, R + 0.1, F.white);
-  p.box(0.68, 0.1, 0.006, 0, Y - 0.05, R + 0.2, F.glass2, 0, true);
-  p.add(new THREE.BoxGeometry(0.5, 0.02, 0.12).rotateZ(-0.62), 0.58, 0.21, R + 0.12, F.steel);
-  p.box(0.16, 0.08, 0.006, -0.2, Y + 0.02, R + 0.204, F.dark); p.box(0.14, 0.01, 0.007, -0.2, Y + 0.06, R + 0.205, F.gold, 0, 'neon'); p.box(0.14, 0.01, 0.007, -0.2, Y + 0.04, R + 0.205, F.neon, 0, 'neon');
-  for (const [x, z, c, r] of [[-0.4, 0.95, 0x9fe8f0, 0], [0.35, 0.92, 0xd8c8f4, 2.6]] as number[][]) figure(p, x, z, c, r);
+  // les abords : arbres en bacs, bancs lumineux
+  for (const x of [0.82, -0.9]) { p.cyl(0.05, 0.05, 0.05, 8, x, 0.03, -0.92, F.white); tree(p, x, -0.92, 0.6, F.leaf); }
+  for (const x of [0.05, 0.9]) { p.box(0.14, 0.02, 0.04, x, 0.06, -0.92, F.white); p.box(0.14, 0.004, 0.006, x, 0.055, -0.9, F.mint, 0, 'neon'); }
 }
 
 /**
@@ -7186,6 +7551,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'spaceport': spaceport(p); return true;
     case 'research': research(p); return true;
     case 'maglev': maglev(p); return true;
+    case 'carworks': skyCarworks(p); return true;
   }
   return false;
 }
@@ -7461,7 +7827,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'football': football(p, Math.max(3, age)); break;
     case 'basket': basket(p); break;
     case 'tennis': tennis(p, Math.max(3, age)); break;
-    case 'waterpark': waterpark(p); break;
+    case 'waterpark': if (size >= 3) waterparkBig(p); else waterpark(p); break;
     case 'funfair': if (size === 3) funfairBig(p, Math.max(3, age)); else funfair(p, Math.max(3, age)); break;
     case 'theater': theater(p, Math.max(1, age)); break;
     case 'acropolis': acropolis(p, age); break;

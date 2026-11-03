@@ -80,6 +80,8 @@ button:disabled, button.locked { opacity: 0.4; cursor: not-allowed; }
 #msg.link:hover { filter: brightness(0.96); }
 #msg.link:hover span { text-decoration: underline; }
 #agePanel.open #ageReq { display: block; }
+/* la liste des conditions passe au-dessus des autres panneaux du haut (chacun a son propre plan, flou oblige) */
+#agePanel.open { z-index: 8; }
 
 #needsPanel { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 12px; gap: 3px; }
 #needs { display: flex; gap: 10px; align-items: flex-end; justify-content: center; }
@@ -201,6 +203,7 @@ button.pop:hover { background: var(--accent-soft); }
 #items button.tile.big::before { content: '2×2'; position: absolute; left: 6px; top: 4px; font-size: 9px; font-weight: 800; color: var(--accent-ink); }
 #items button.tile.big.active::before { color: #fff; }
 #items button.tile.huge::before { content: '3×3'; }
+#items button.tile.giant::before { content: '4×4'; }
 #items .badge { position: absolute; right: 5px; top: 4px; font-style: normal; font-size: 10px; font-weight: 800; color: #fff; background: var(--navy); border-radius: 6px; padding: 0 5px; line-height: 1.5; }
 #items button.tile.active .badge { background: #fff; color: var(--accent-ink); }
 #items .badge.lock { background: transparent; color: var(--ink2); font-size: 11px; }
@@ -232,6 +235,12 @@ button.pop:hover { background: var(--accent-soft); }
 /* fiche de l'outil ou du bâtiment survolé */
 #info { display: none; width: min(384px, 92vw); padding: 12px 16px 13px; font-size: 12.5px; line-height: 1.45; }
 #info.show { display: block; animation: rise 0.16s ease-out; }
+/* la fiche ne prend jamais les clics : ils passent à la carte en dessous */
+#dock > #info { pointer-events: none; }
+/* le bâtiment en main : fiche réduite dans le coin bas gauche, hors du milieu de l'écran où l'on bâtit */
+#info.held { position: absolute; left: var(--gap); bottom: calc(100% + 8px); width: min(300px, 34vw); padding: 9px 12px 10px; }
+#info.held .ihead { padding-bottom: 6px; }
+#info.held h4 { font-size: 14.5px; }
 #info .ihead { display: flex; gap: 12px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 #info .ihead > b { line-height: 0; }
 #info h4 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
@@ -240,7 +249,7 @@ button.pop:hover { background: var(--accent-soft); }
 .effs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .eff { display: inline-flex; align-items: center; gap: 5px; background: rgba(255, 255, 255, 0.8); border: 1px solid var(--line); border-radius: 8px; padding: 2px 8px; font-weight: 700; font-size: 12px; }
 #info .perk { color: var(--accent-ink); font-weight: 700; }
-#selCard { display: none; position: absolute; top: 92px; right: var(--gap); width: min(340px, 92vw); padding: 12px 14px 13px; font-size: 12.5px; line-height: 1.45; z-index: 5; }
+#selCard { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); right: var(--gap); width: min(340px, 92vw); padding: 12px 14px 13px; font-size: 12.5px; line-height: 1.45; z-index: 5; }
 #selCard.show { display: block; animation: rise 0.16s ease-out; }
 #selCard .ihead { display: flex; gap: 12px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 #selCard .ihead > b { line-height: 0; }
@@ -266,7 +275,7 @@ body.under #selCard, body.photo #selCard { display: none; }
 #info .keys { color: var(--ink2); font-size: 11.5px; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 
-#toast { position: absolute; top: 96px; left: 50%; transform: translateX(-50%) translateY(-10px); background: rgba(15, 27, 45, 0.88); color: #fff; padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; opacity: 0; transition: all 0.25s; pointer-events: none !important; max-width: 90vw; text-align: center; z-index: 6; box-shadow: 0 8px 24px rgba(15, 27, 45, 0.3); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+#toast { position: absolute; top: calc(var(--hudB, 82px) + 14px); left: 50%; transform: translateX(-50%) translateY(-10px); background: rgba(15, 27, 45, 0.88); color: #fff; padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; opacity: 0; transition: all 0.25s; pointer-events: none !important; max-width: 90vw; text-align: center; z-index: 6; box-shadow: 0 8px 24px rgba(15, 27, 45, 0.3); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 /* message qui mène quelque part (une décision d'expédition) : cliquable */
 #toast.act.show { pointer-events: auto !important; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
@@ -327,6 +336,13 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
 .hint { font-size: 12px; color: var(--ink2); max-width: 640px; line-height: 1.55; margin: 6px 0; }
 .hint svg.ic { display: inline-block; vertical-align: -3px; margin-right: 4px; }
 
+/* ---------- Fenêtres moyennes : la barre des besoins prend sa propre ligne, sous l'âge et l'horloge ---------- */
+@media (max-width: 1279px) {
+  #hud { flex-wrap: wrap; row-gap: 8px; }
+  #needsPanel { order: 5; flex: 1 1 100%; }
+  #timePanel { margin-left: auto; }
+}
+
 /* ---------- Petits écrans ---------- */
 @media (max-width: 860px) {
   :root { --gap: 8px; }
@@ -340,7 +356,7 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   #res { gap: 2px; padding-left: 6px; }
   .res { width: 34px; }
   .res small { display: none; }
-  .need { width: 44px; }
+  .need { width: 40px; }
   .need span { display: none; }
   #clock .time { font-size: 13px; min-width: 40px; }
   #timePanel, #menuBtns { padding: 4px 6px; }
@@ -349,20 +365,57 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   #dockMain { width: 100%; }
   #dockTop { gap: 3px; padding: 0 4px; }
   .quick { gap: 2px; }
-  .quick button { min-width: 26px; border-radius: 8px; }
-  #bHome { display: none; }
+  .quick button { min-width: 24px; border-radius: 8px; }
   #modes { gap: 3px; }
-  #modes button { width: 40px; min-width: 0; }
-  #modes button.active { width: 42px; }
+  #modes button { width: 36px; min-width: 0; }
+  #modes button.active { width: 38px; }
   #modes button span { display: none; }
+  .needsRow { flex-wrap: wrap; row-gap: 4px; max-width: 100%; }
+  #needs { flex-wrap: wrap; justify-content: center; }
+  #res { border-left: none; padding-left: 0; }
   #items { justify-content: flex-start; padding: 10px 8px; min-height: 92px; }
   #items button.tile { width: 70px; height: 68px; }
   #subcats { justify-content: flex-start; }
   #subcats button { padding: 0 10px; font-size: 12px; }
   #info { display: none !important; }
   #selCard { top: auto; bottom: 210px; right: 50%; transform: translateX(50%); }
-  #toast { top: 150px; }
 }
+/* écrans peu hauts (téléphone à l'horizontale) : un bandeau du haut sur une ligne, sans les textes d'aide ; la barre du bas se replie */
+@media (max-height: 520px) {
+  :root { --gap: 6px; }
+  #hud { flex-wrap: nowrap; gap: 6px; }
+  #agePanel { flex: 0 1 150px; width: auto; min-width: 0; padding: 4px 8px; gap: 3px; }
+  .ageTop b { font-size: 14px; }
+  .ageTop small, #ageNext { display: none; }
+  #needsPanel { order: 0; flex: 1 1 auto; min-width: 0; padding: 3px 6px; }
+  #needsPanel #msg { display: none; }
+  .needsRow { flex-wrap: nowrap; }
+  #needs { flex-wrap: nowrap; gap: 2px; }
+  .need { width: 34px; }
+  .need span, .res small { display: none; }
+  .pop { font-size: 15px; padding-left: 6px; }
+  .pop small:not(.alert) { display: none; }
+  .res { width: 30px; }
+  #res { gap: 2px; padding-left: 6px; border-left: 1px solid var(--line); }
+  #clock small { display: none; }
+  #timePanel, #menuBtns { padding: 3px 5px; gap: 4px; }
+  #timePanel button, #menuBtns button { min-width: 32px; min-height: 32px; }
+  #dock { gap: 4px; }
+  #dockMain { margin-top: 14px; }
+  #dockTop { height: 38px; }
+  #modes button { height: 40px; margin-top: -8px; }
+  #modes button.active { height: 46px; margin-top: -14px; }
+  #items { min-height: 0; padding: 6px 8px; gap: 6px; }
+  #items button.tile { width: 64px; height: 54px; gap: 2px; }
+  #items button.tile b svg { width: 22px; height: 22px; }
+  #dockBottom { min-height: 32px; }
+  #subcats button { min-height: 26px; margin: 3px 0; }
+  #expList { width: min(260px, 40vw); }
+  .expCard small { display: none; }
+}
+/* la barre du bas repliée (on reclique l'onglet ouvert) : il ne reste que ses onglets et ses outils rapides */
+body.dockMin #items, body.dockMin #dockBottom { display: none; }
+body.dockMin #dockTop { border-bottom: none; }
 body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 
 /* monde souterrain : barre dédiée à la place des outils de surface */
@@ -386,7 +439,7 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 #selCard .rline small { display: block; color: var(--ink2); }
 #selCard .rline button { padding: 4px 6px; }
 #selCard .newline { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; }
-#railEdit { display: none; position: absolute; top: 92px; left: 50%; transform: translateX(-50%); width: min(460px, 92vw); padding: 10px 14px 12px; font-size: 12.5px; z-index: 6; }
+#railEdit { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); width: min(460px, 92vw); padding: 10px 14px 12px; font-size: 12.5px; z-index: 6; }
 #railEdit.show { display: block; animation: rise 0.16s ease-out; }
 #railEdit p { margin: 6px 0 2px; font-weight: 600; font-size: 13.5px; }
 #railEdit small { color: var(--ink2); }
@@ -415,7 +468,7 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 body.under #underBar { display: flex; }
 body.under #dock, body.under #expList, body.under #fx-tilt-top, body.under #fx-tilt-bottom { display: none; }
 body.under #fx-vignette { background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(8, 6, 12, 0.55) 100%); }
-#fade { position: absolute; inset: 0; background: #09070c; opacity: 0; transition: opacity 0.35s; pointer-events: none !important; }
+#fade { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: #09070c; color: #c9cfe0; font-size: 15px; font-weight: 700; letter-spacing: 0.02em; opacity: 0; transition: opacity 0.35s; pointer-events: none !important; }
 #fade.on { opacity: 1; }
 #photoBar { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; padding: 8px; }
 body.photo #photoBar { display: flex; }
@@ -527,7 +580,7 @@ body.photo #photoBar { display: flex; }
 .report .sum { font-weight: 800; font-size: 14px; }
 
 /* Âge futuriste : la retransmission en direct de la Lune, l'écran de fin de partie */
-.spacecast { position: absolute; right: 14px; top: 96px; width: 380px; padding: 10px; opacity: 0; transform: translateY(12px) scale(0.96); transition: opacity 0.4s ease, transform 0.4s ease; pointer-events: none !important; z-index: 6; }
+.spacecast { position: absolute; right: 14px; top: calc(var(--hudB, 82px) + 14px); width: 380px; padding: 10px; opacity: 0; transform: translateY(12px) scale(0.96); transition: opacity 0.4s ease, transform 0.4s ease; pointer-events: none !important; z-index: 6; }
 .spacecast.show { opacity: 1; transform: none; }
 .spacecast canvas { display: block; width: 360px; height: 216px; border-radius: 10px; background: #05070d; }
 .sc-head { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }

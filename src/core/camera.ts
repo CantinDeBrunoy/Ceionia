@@ -47,7 +47,7 @@ export class CameraRig {
     window.addEventListener('pointermove', (e) => this.onMove(e));
     window.addEventListener('pointerup', (e) => this.onUp(e));
     window.addEventListener('pointercancel', (e) => this.onUp(e, true));
-    el.addEventListener('wheel', (e) => { e.preventDefault(); this.goal.dist = clamp(this.goal.dist * Math.exp(e.deltaY * 0.0012), this.minDist, this.maxDist); }, { passive: false });
+    el.addEventListener('wheel', (e) => { e.preventDefault(); const r = this.el.getBoundingClientRect(); this.zoomAt(Math.exp(e.deltaY * 0.0012), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
     // touches physiques (e.code) : ZQSD + A/E en AZERTY, WASD + Q/E en QWERTY, sans rien régler ; rien avec Ctrl (Ctrl+Z)
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -167,6 +167,27 @@ export class CameraRig {
     if (dist !== undefined) this.goal.dist = clamp(Math.min(this.goal.dist, dist), this.minDist, this.maxDist);
   }
   zoom(f: number) { this.goal.dist = clamp(this.goal.dist * f, this.minDist, this.maxDist); }
+
+  /** Zoom vers le point visé par le curseur : il reste sous la souris (sauf quand la vue suit quelque chose) */
+  zoomAt(f: number, x: number, y: number) {
+    const before = this.goal.dist;
+    this.zoom(f);
+    const k = 1 - this.goal.dist / before, r = this.el.getBoundingClientRect();
+    if (!k || this.tracking > 0 || !r.width || !r.height) return;
+    const ray = this.ray(x, y, r.width, r.height), p = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.target.y), new THREE.Vector3());
+    if (!p || Math.hypot(p.x - this.target.x, p.z - this.target.z) > this.dist * 4) return;
+    this.goal.x += (p.x - this.goal.x) * k;
+    this.goal.z += (p.z - this.goal.z) * k;
+    this.clampGoal();
+  }
+
+  /** Glisse jusqu'à un point, vu de cette distance (la vue cesse de suivre quoi que ce soit) */
+  goTo(x: number, z: number, dist: number) {
+    this.goal.x = x; this.goal.z = z;
+    this.goal.dist = clamp(dist, this.minDist, this.maxDist);
+    this.tracking = 0;
+    this.clampGoal();
+  }
 
   /** Vue courante (pour y revenir) */
   view() { return { ...this.goal }; }

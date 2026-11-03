@@ -748,10 +748,15 @@ float snN(vec2 p) {
     const w = this.world;
     const o = ray.origin, d = ray.direction;
     const inside = (x: number, z: number) => x >= 0 && z >= 0 && x <= N && z <= N;
+    // le curseur s'arrête à la surface de l'eau (la mer, un lac), pas sur le fond : ce qu'on vise reste sous la souris
+    const top = (x: number, z: number) => {
+      const cx = Math.min(N - 1, Math.floor(x)), cz = Math.min(N - 1, Math.floor(z)), k = w.ci(cx, cz);
+      return Math.max(w.hAt(x, z), w.lake[k] ? w.lakeLevel[k] : SEA);
+    };
     let prevT = 0, hit = false, t = 0;
     for (t = 0; t < 400; t += 0.4) {
       const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t;
-      if (inside(x, z) && y <= w.hAt(x, z)) { hit = true; break; }
+      if (inside(x, z) && y <= top(x, z)) { hit = true; break; }
       prevT = t;
     }
     if (!hit) return null;
@@ -759,9 +764,9 @@ float snN(vec2 p) {
     for (let i = 0; i < 12; i++) {
       const m = (lo + hi) / 2;
       const x = o.x + d.x * m, y = o.y + d.y * m, z = o.z + d.z * m;
-      if (y <= w.hAt(x, z)) hi = m; else lo = m;
+      if (y <= top(x, z)) hi = m; else lo = m;
     }
     const x = o.x + d.x * hi, z = o.z + d.z * hi;
-    return new THREE.Vector3(x, w.hAt(x, z), z);
+    return new THREE.Vector3(x, top(x, z), z);
   }
 }

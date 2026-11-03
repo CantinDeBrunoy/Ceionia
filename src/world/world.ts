@@ -8,7 +8,7 @@ import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
 const QUAY_MAX = 0.32;
-const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor', 'airport'];
+const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor', 'airport', 'waterpark'];
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
@@ -734,7 +734,7 @@ export class World {
         if (this.decor[k]) return 'Une grotte ou une faille est ici';
         if (this.lake[k]) return 'Un lac est ici';
         // le port bâtit son quai sur la rive, et même un peu dans l'eau peu profonde (il le remblaie) ; pas en eau profonde
-        if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.45) return 'L’eau est trop profonde ici pour un quai'; continue; }
+        if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return 'L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'; continue; }
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return 'Trop proche de l’eau';
       }
     // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
@@ -751,13 +751,20 @@ export class World {
     if (kind === 'pier' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.inCells(x + dx, z + dz) && (this.cellAvg(x + dx, z + dz) < -0.05 || this.lake[this.ci(x + dx, z + dz)]))) return 'À poser au bord de l’eau';
     // le port : il lui suffit de toucher l'eau d'un côté (une case d'eau contre le quai) et d'avoir un pied sur la terre ferme
     if (kind === 'harbor') {
-      const wet = (cx: number, cz: number) => this.inCells(cx, cz) && (this.cellAvg(cx, cz) < -0.05 || this.lake[this.ci(cx, cz)]);
+      // le niveau de l'eau qui borde le quai : la mer, ou la surface d'un lac (souvent perché bien plus haut)
+      let level = SEA;
+      const wet = (cx: number, cz: number) => {
+        if (!this.inCells(cx, cz)) return false;
+        const k = this.ci(cx, cz);
+        if (this.lake[k]) { level = this.lakeLevel[k]; return true; }
+        return this.cellAvg(cx, cz) < -0.05;
+      };
       const side = [[0, s, 1, 0], [0, -1, 1, 0], [s, 0, 0, 1], [-1, 0, 0, 1]].some(([ox, oz, ux, uz]) => { for (let i = 0; i < s; i++) if (wet(x + ox + ux * i, z + oz + uz * i)) return true; return false; });
       let landed = false;
-      for (let j = 0; j < s && !landed; j++) for (let i = 0; i < s; i++) if (this.cellAvg(x + i, z + j) >= 0.02) { landed = true; break; }
+      for (let j = 0; j < s && !landed; j++) for (let i = 0; i < s; i++) if (this.cellAvg(x + i, z + j) >= level + 0.02) { landed = true; break; }
       if (!side) return 'À poser au bord de l’eau : un côté du quai doit toucher l’eau';
       if (!landed) return 'Le quai doit s’appuyer sur la rive';
-      if (this.flatTarget(x, z, s) > 0.6) return 'Le quai serait trop haut au-dessus de l’eau : posez-le plus près de la rive';
+      if (this.flatTarget(x, z, s) - level > 0.6) return 'Le quai serait trop haut au-dessus de l’eau : posez-le plus près de la rive';
     }
     for (let j = 0; j <= s; j++)
       for (let i = 0; i <= s; i++) {
