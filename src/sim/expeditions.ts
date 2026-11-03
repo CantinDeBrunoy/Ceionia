@@ -6,7 +6,7 @@ import { AGES, KINDS, Building, sizeOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
 import { ExpEvent, pickEvent } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
-import { YIELD, Resource } from './economy';
+import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
 
 /** Étapes d'une expédition : rassemblement au village, aller, travail sur place, retour, fête (ou mine déconfite) au village */
 export type Phase = 'gather' | 'out' | 'work' | 'back' | 'home';
@@ -137,10 +137,10 @@ export class Expeditions {
   /** Chevaux qui partiraient avec l'équipe : ceux qu'exige la cavalerie, sinon un par membre tant que l'écurie en a */
   mountsFor(c: Choice) { return c.mounts ?? Math.min(c.party, this.horsesHome()); }
 
-  /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux), et son risque avec cet équipement */
+  /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux, carburant), et son risque avec cet équipement */
   preview(c: Choice) {
     const l = loadout(c, this.world.exp.gear), n = this.mountsFor(c);
-    return { take: l.take, label: [packLabel(l.take), n ? `${n} cheva${n > 1 ? 'ux' : 'l'}` : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
+    return { take: l.take, label: [packLabel(l.take), n ? `${n} cheva${n > 1 ? 'ux' : 'l'}` : '', c.fuel ? `${c.fuel} carburant` : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
   }
 
   /** Risque d'une équipe en route : celui du choix, équipement et décisions compris */
@@ -285,6 +285,11 @@ export class Expeditions {
     const miss = this.missing(m);
     if (miss.length) return `Il faut d’abord ${miss.join(', ')}.`;
     if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return `Il faut ${c.mounts} chevaux à l’écurie (${n} pour l’instant).`; }
+    // les blindés roulent au carburant : la raffinerie le tire du pétrole brut des puits
+    if (c.fuel && !this.world.unlimited && this.world.fuel < c.fuel) {
+      const n = Math.floor(this.world.fuel);
+      return `Il faut ${c.fuel} carburant pour les véhicules (${n} pour l’instant) : ${this.has('refinery') ? 'la raffinerie en tire du pétrole brut des puits' : 'forez des puits de pétrole sur un gisement et bâtissez une raffinerie'}.`;
+    }
     if (c.win.some((e) => e.t === 'veins') && this.under && !this.campaign(c)) {
       return this.outposts().length ? 'Toutes les galeries que l’on peut atteindre depuis l’avant-poste sont tenues, et leurs filons abattus.' : 'L’avant-poste ne garde aucune entrée praticable : rebâtissez-le tout contre une grotte ou une faille.';
     }
@@ -315,12 +320,15 @@ export class Expeditions {
     if (!dest) return null;
     const { targets, entry, take: held, front } = plan ?? { targets: [], entry: -1, take: [], front: -1 };
     const { ambush, len } = plan ? this.planAmbush(entry, targets, front) : { ambush: [], len: 0 };
-    // une fois la course automobile gagnée, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval
-    const motor = age >= 3 && this.world.exp.done.includes('motorcar') && !c.troop && !c.mounts;
+    // une fois la course automobile gagnée, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval ;
+    // à l'époque moderne, la troupe qui brûle du carburant roule : des blindés pour la charge, des véhicules pour les autres
+    const armored = !!c.fuel && c.troop === 'cavalry';
+    const motor = (age >= 3 && this.world.exp.done.includes('motorcar') && !c.troop && !c.mounts) || (!!c.fuel && !armored);
     const mounts = motor ? 0 : this.mountsFor(c);
     const party = this.agents.recruit(c.party);
     if (!party) return null;
     this.world.exp.riding += mounts;
+    if (c.fuel && !this.world.unlimited) this.world.fuel = Math.max(0, this.world.fuel - c.fuel);
     // l'équipe emporte le meilleur équipement en réserve contre les dangers du voyage
     const { take, k } = loadout(c, this.world.exp.gear);
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
@@ -336,13 +344,16 @@ export class Expeditions {
       if (i < (take.armor ?? 0)) kt.armor = true;
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
-      // la charge de cavalerie part en cavaliers de l'époque ; les autres équipes à cheval restent des habitants en selle
+      // la charge de cavalerie part en cavaliers de l'époque (en chars à l'époque moderne) ; les autres équipes à cheval
+      // restent des habitants en selle
       if (motor) kt.car = true;
+      else if (armored && i < 3) { kt.rider = true; kt.tank = true; }
       else if (i < mounts) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
     });
     party.forEach((id, i) => this.agents.equip(id, kits[i]));
-    // force au combat : chacun compte, davantage en armure, armé, à cheval ou la torche au poing (les monstres craignent la lumière)
-    a.might = kits.reduce((s, k) => s + 1 + (k.armor ? 1 : 0) + (k.weapon ? 0.6 : 0) + (k.rider ? 0.9 : 0) + (k.torch ? 0.3 : 0), 0) + (plan && this.camp() >= 4 ? 2 : 0) + (plan && this.camp() >= 9 ? 2 : 0);
+    // force au combat : chacun compte, davantage en armure, armé, à cheval (en char, plus encore) ou la torche au poing (les
+    // monstres craignent la lumière)
+    a.might = kits.reduce((s, k) => s + 1 + (k.armor ? 1 : 0) + (k.weapon ? 0.6 : 0) + (k.rider ? (k.tank ? 1.4 : 0.9) : 0) + (k.torch ? 0.3 : 0), 0) + (plan && this.camp() >= 4 ? 2 : 0) + (plan && this.camp() >= 9 ? 2 : 0);
     this.active.push(a);
     if (fromCamp) {
       // elle descend aussitôt du camp souterrain dans les galeries
@@ -568,10 +579,12 @@ export class Expeditions {
   /** Avancement de la pièce en cours (0 … 1) */
   craftProgress() { const s = this.world.exp; return s.craft.length ? Math.min(1, s.craftT / GEAR_BY[s.craft[0]].time) : 0; }
 
-  /** Ce que le village produit chaque jour : bois des bûcherons, pierre des carrières et des mines, minerai des mines */
-  private prodT: Record<Resource, number> = { wood: 0, stone: 0, ore: 0 };
-  daily(): Record<Resource, number> {
-    const rate: Record<Resource, number> = { wood: 0, stone: 0, ore: 0 };
+  /** production de chaque ressource en cours (fractions d'unité), et avancement du baril en cours à la raffinerie (0 … 1) */
+  private prodT: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0 };
+  private refineT = 0;
+  /** Ce que le village tire chaque jour de ses bâtiments : bois, pierre, minerai, pétrole brut des puits (avant raffinage) */
+  yields(): Record<Resource, number> {
+    const rate: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0 };
     for (const b of this.world.buildings.values()) {
       const y = YIELD[b.kind];
       if (y) for (const r of Object.keys(y) as Resource[]) rate[r] += y[r]![b.age] ?? 0;
@@ -580,14 +593,40 @@ export class Expeditions {
     if (this.camp() >= 6) rate.ore += 2;
     return rate;
   }
+
+  /** Pétrole brut que les raffineries peuvent traiter par jour */
+  refining() { let n = 0; for (const b of this.world.buildings.values()) if (b.kind === 'refinery') n += REFINE_CRUDE; return n; }
+
+  /**
+   * Ce que le village produit chaque jour : bois des bûcherons, pierre des carrières et des mines, minerai des mines ; le
+   * pétrole brut des puits, moins ce qu'en raffinent les raffineries (tant qu'il y en a), et le carburant qu'elles en tirent
+   */
+  daily(): Record<Resource, number> {
+    const rate = this.yields(), cap = this.refining();
+    const use = Math.min(cap, this.world.crude >= 1 ? cap : rate.crude);
+    rate.crude -= use;
+    rate.fuel += use * FUEL_PER_CRUDE;
+    return rate;
+  }
   private mineStep(dt: number) {
-    const rate = this.daily(), w = this.world;
-    for (const r of ['wood', 'stone', 'ore'] as Resource[]) {
+    const rate = this.yields(), w = this.world, day = dt / this.dayLen();
+    for (const r of ['wood', 'stone', 'ore', 'crude'] as Resource[]) {
       if (!rate[r]) continue;
-      this.prodT[r] += (dt / this.dayLen()) * rate[r];
+      this.prodT[r] += day * rate[r];
       const n = Math.floor(this.prodT[r]);
       if (n) { this.prodT[r] -= n; w[r] += n; }
     }
+    // la raffinerie traite le brut baril après baril, tant qu'il en reste ; chaque baril donne sa part de carburant
+    const cap = this.refining();
+    if (!cap) return;
+    this.refineT = Math.min(1, this.refineT + day * cap);
+    while (this.refineT >= 1 && w.crude >= 1) {
+      this.refineT -= 1;
+      w.crude -= 1;
+      this.prodT.fuel += FUEL_PER_CRUDE;
+    }
+    const n = Math.floor(this.prodT.fuel + 1e-9);
+    if (n) { this.prodT.fuel -= n; w.fuel += n; }
   }
 
   /** Le village fabrique une pièce après l'autre, plus vite avec un atelier */

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, MAX_H, MIN_H, MOUNTAIN_H, SNOW_LINE, BIOME_DESERT, setMapSize, VEG_FIELD, VEG_GARDEN, VEG_VOLCANO, VR, VS } from '../src/world/world';
 import { findGardens, layoutGarden } from '../src/world/gardens';
-import { genHeights, newWorld, MAPS } from '../src/world/mapgen';
+import { genHeights, newWorld, addDefaultDecor, MAPS } from '../src/world/mapgen';
 import { GEN, GEN_FIXED, GEN_PLAN, Zone, continentPlan, riverU } from '../src/world/continent';
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
@@ -1180,5 +1180,137 @@ describe('expéditions', () => {
       expect(t.why).not.toBeNull();
       expect(t.relief.length + t.crew.length + t.back.length + t.aboard.length + t.boarding.length).toBe(0);
     }
+  });
+});
+
+describe('pétrole', () => {
+  /** Cases des gisements de pétrole */
+  const oilCells = (w: World) => [...w.oil.keys()].filter((k) => w.oil[k]);
+
+  it('les gisements sont tirés de la graine, sur la terre ferme, et se sauvegardent ; une ancienne partie en reçoit', () => {
+    const w = continent(), cells = oilCells(w);
+    expect(cells.length).toBeGreaterThan(40);
+    // plusieurs nappes, à l'écart l'une de l'autre, dont au moins une au désert
+    const fields: number[][] = [];
+    for (const k of cells) if (!fields.some(([x, z]) => Math.hypot(x - (k % N), z - Math.floor(k / N)) < 10)) fields.push([k % N, Math.floor(k / N)]);
+    expect(fields.length).toBeGreaterThanOrEqual(5);
+    expect(cells.some((k) => w.biome[k] === BIOME_DESERT)).toBe(true);
+    expect(cells.every((k) => w.cellAvg(k % N, Math.floor(k / N)) > 0.35 && !w.decor[k] && !w.lake[k])).toBe(true);
+    // même graine, mêmes gisements ; autre graine, d'autres
+    const same = new World();
+    newWorld(same, 3, 2026);
+    expect(oilCells(same)).toEqual(cells);
+    const other = new World();
+    newWorld(other, 3, 77);
+    expect(oilCells(other)).not.toEqual(cells);
+    // la sauvegarde les garde ; une sauvegarde d'avant le pétrole en reçoit au chargement, tirés de la graine sur son relief
+    // (arrondi) : les mêmes nappes, ou presque, et toujours les mêmes pour la même sauvegarde
+    const r = new World();
+    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(oilCells(r)).toEqual(cells);
+    const { oil, crude, fuel, ...old } = w.toJSON();
+    void oil; void crude; void fuel;
+    const o = new World();
+    o.fromJSON(JSON.parse(JSON.stringify(old)));
+    expect(oilCells(o)).toEqual([]);
+    expect([o.crude, o.fuel]).toEqual([0, 0]);
+    addDefaultDecor(o, 2026);
+    const got = oilCells(o);
+    expect(got.length).toBeGreaterThan(40);
+    expect(got.filter((k) => w.oil[k]).length).toBeGreaterThan(cells.length / 2);
+    const o2 = new World();
+    o2.fromJSON(JSON.parse(JSON.stringify(old)));
+    addDefaultDecor(o2, 2026);
+    expect(oilCells(o2)).toEqual(got);
+  });
+
+  it('le puits de pétrole ne se fore que sur un gisement ; il tire du brut, que la raffinerie change en carburant', () => {
+    const w = continent();
+    const [fx, fz] = flatLand(w);
+    expect(w.oil[w.ci(fx, fz)]).toBe(0);
+    expect(w.canPlace('oilwell', fx, fz)).toMatch(/gisement/);
+    const wells = [];
+    for (const k of oilCells(w)) if (wells.length < 3 && w.canPlace('oilwell', k % N, Math.floor(k / N)) === null) wells.push(w.place('oilwell', k % N, Math.floor(k / N), 0, true, 4, false));
+    expect(wells.length).toBe(3);
+    const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
+    const day = () => { for (let t = 0; t < 100; t++) ex.update(1); };
+    // trois puits : 12 barils de brut par jour, pas encore de carburant
+    expect(ex.daily()).toMatchObject({ crude: 12, fuel: 0 });
+    day();
+    expect(w.crude).toBe(12);
+    expect(w.fuel).toBe(0);
+    // la raffinerie traite 12 barils par jour (tant qu'il y a du brut) et en tire 9 de carburant
+    let spot: number[] | null = null;
+    for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 10 && !spot; x++) if (w.canPlace('refinery', x, z) === null) spot = [x, z];
+    w.place('refinery', spot![0], spot![1], 0, true, 4, false);
+    expect(ex.daily()).toMatchObject({ crude: 0, fuel: 9 });
+    day();
+    expect(w.crude).toBeGreaterThanOrEqual(11);
+    expect(w.crude).toBeLessThanOrEqual(13);
+    expect(w.fuel).toBeGreaterThanOrEqual(8);
+    expect(w.fuel).toBeLessThanOrEqual(10);
+    // sans puits, elle finit le brut en réserve, puis s'arrête
+    for (const b of wells) w.removeBuilding(b.id);
+    for (let i = 0; i < 3; i++) day();
+    const fuel = w.fuel;
+    expect(w.crude).toBe(0);
+    expect(fuel).toBeGreaterThan(15);
+    day();
+    expect(w.fuel).toBe(fuel);
+    // brut et carburant se sauvegardent
+    w.crude = 7;
+    const r = new World();
+    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect([r.crude, r.fuel]).toEqual([7, fuel]);
+  });
+
+  it('à l’époque moderne, l’expédition armée roule au carburant : plus de chevaux pour les blindés', () => {
+    const w = continent();
+    const [x, z] = flatLand(w);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 4, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 4, false, 30, 0);
+    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
+    ex.under = new Underground(w);
+    w.exp.done.push('horses', 'mine', 'scout');
+    let spot: number[] | null = null;
+    for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
+    w.place('stable', spot![0], spot![1], 0, true, 4, false);
+    let post: number[] | null = null;
+    for (let zz = 10; zz < N - 10 && !post; zz++) for (let xx = 10; xx < N - 10 && !post; xx++) if (w.canPlace('outpost', xx, zz) === null) post = [xx, zz];
+    w.place('outpost', post![0], post![1], 0, true, 4, false);
+    ex.update(1.1);
+    const deep = MISSIONS.find((m) => m.id === 'deep')!, cav = deep.choices.findIndex((c) => c.troop === 'cavalry');
+    // à l'âge industriel, la charge demande toujours ses chevaux ; à l'époque moderne, du carburant pour ses blindés
+    expect(ex.why(deep, choiceAt(deep.choices[cav], 3))).toMatch(/3 chevaux/);
+    const c = choiceAt(deep.choices[cav], 4);
+    expect(c.label).toBe('Blindés en tête');
+    expect([c.mounts, c.fuel]).toEqual([0, 12]);
+    expect(c.lose.some((e) => e.t === 'unherd')).toBe(false);
+    expect(ex.why(deep, c)).toMatch(/12 carburant.*0 pour l’instant.*raffinerie/);
+    expect(ex.preview(c).label).toMatch(/12 carburant/);
+    // les autres troupes modernes en brûlent un peu, et ne prennent pas non plus de chevaux
+    for (const o of deep.choices.filter((q) => q.troop !== 'cavalry').map((q) => choiceAt(q, 4))) {
+      expect(o.fuel).toBeGreaterThan(0);
+      expect(o.fuel).toBeLessThan(c.fuel!);
+      expect(o.mounts).toBe(0);
+    }
+    w.fuel = 20;
+    expect(ex.why(deep, c)).toBeNull();
+    const a = ex.start(deep, cav, 4)!;
+    expect(a).not.toBeNull();
+    expect(w.fuel).toBe(8);
+    expect(a.mounts).toBe(0);
+    expect(w.exp.riding).toBe(0);
+    const kits = a.party.map((id) => agents.agents.find((g) => g.id === id)!.kit!);
+    expect(kits.filter((k) => k.tank && k.rider).length).toBe(3);
+    expect(kits.some((k) => k.horse)).toBe(false);
+    // ses chars la rendent plus forte au combat qu'une charge à cheval
+    expect(a.might).toBeGreaterThan(4 + 3 * 0.9);
+    // une seule expédition armée à la fois ; en ressources illimitées, le carburant ne manque jamais
+    expect(ex.why(deep, choiceAt(deep.choices[deep.choices.findIndex((q) => q.troop === 'armor')], 4))).toMatch(/déjà en route/);
+    w.unlimited = true;
+    w.fuel = 0;
+    expect(ex.why({ ...deep, id: 'deep2' }, c) ?? '').not.toMatch(/carburant/);
   });
 });

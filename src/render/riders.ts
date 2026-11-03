@@ -7,7 +7,9 @@ import { HUMAN_K } from './assets';
  * Cavaliers de la charge de cavalerie, dans le style des chevaliers qui joutent dans les jardins : cheval low-poly aux jambes
  * qui galopent, cavalier de l'époque aux couleurs du village (bleu et or) — cavalier romain au casque à crête dans
  * l'Antiquité, chevalier caparaçonné à la lance au Moyen Âge, cuirassier au casque à crinière et au sabre à l'âge
- * industriel ; à l'époque moderne, plus de chevaux : un char d'assaut, chenilles, tourelle et canon, fanion du village
+ * industriel ; à l'époque moderne, plus de chevaux : un char d'assaut, chenilles, tourelle et canon, fanion du village.
+ * Sous terre, la colonne blindée moderne : gros chars de bataille, transports de troupes à huit roues, drones d'escorte,
+ * projecteurs braqués
  */
 
 export interface Rider {
@@ -17,6 +19,14 @@ export interface Rider {
   legs: THREE.Object3D[];
   weapon: THREE.Object3D;
   tank: boolean;
+  /** blindé de la colonne moderne : sa tourelle (elle pivote vers la cible, l'arme y est accrochée), le bout de son arme dans
+   * le repère de la tourelle, les faisceaux de ses projecteurs, et son arme : canon du char, canon-mitrailleur du transport */
+  turret?: THREE.Object3D;
+  muzzle?: THREE.Vector3;
+  beams?: THREE.Object3D[];
+  gun?: 'cannon' | 'mg';
+  /** flamme de bouche, montrée un instant après chaque tir */
+  flare?: THREE.Object3D;
 }
 
 /** Ce que fait le cavalier : en route (arme haute), à la charge (lance couchée, sabre en avant), au combat */
@@ -357,4 +367,270 @@ export function rideStep(r: Rider, phase: number, gait: number, mode: RiderMode)
   if (w.userData.kind === 'lance') w.rotation.x = mode === 'rest' ? -1.04 : mode === 'charge' ? -0.06 : -0.2 + beat * 0.25;
   else if (w.userData.kind === 'saber') w.rotation.x = mode === 'rest' ? 0.12 : mode === 'charge' ? 1.25 : 0.3 + beat * 1.3;
   else w.rotation.x = mode === 'rest' ? 0.1 : mode === 'charge' ? 0.35 : 1.42 + (beat > 0.9 ? 0.08 : 0);
+}
+
+// ---------- Colonne blindée de l'époque moderne (sous terre) ----------
+
+/** Lampes des blindés et des drones (phares, projecteurs, feux de position) : elles luisent de jour comme de nuit, sous terre */
+const LAMP = new THREE.MeshBasicMaterial({ vertexColors: true });
+/** Faisceaux des projecteurs : lumière additive, vive à la source, qui s'éteint au bout */
+const BEAM = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+const LIGHT = 0xf4f8ff;
+
+/** Faisceau d'un projecteur, long de `len`, large de `r` au bout : cône ouvert, sommet à l'origine, tourné vers +z */
+function beam(len: number, r: number, tint = 0xdfeaff) {
+  const g = new THREE.ConeGeometry(r, len, 14, 4, true).translate(0, -len / 2, 0).rotateX(-Math.PI / 2);
+  const pos = g.attributes.position, c = new THREE.Color(tint), col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) { const k = Math.pow(1 - Math.min(1, Math.max(0, pos.getZ(i) / len)), 1.6); col.set([c.r * k, c.g * k, c.b * k], i * 3); }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = new THREE.Mesh(g, BEAM);
+  m.renderOrder = 4;
+  return m;
+}
+
+/** Les pièces dessinées, accrochées au groupe : la caisse (ombres portées) et ses lampes qui luisent */
+function hang(p: Parts, g: THREE.Object3D) {
+  const built = p.build(false), m = new THREE.Mesh(built.body, mats.body);
+  m.castShadow = true;
+  g.add(m);
+  if (built.glow) g.add(new THREE.Mesh(built.glow, LAMP));
+}
+
+/** Arme d'un blindé, accrochée à sa tourelle en (x, y, z), tournée vers +z */
+function mountGun(p: Parts, turret: THREE.Object3D, x: number, y: number, z: number) {
+  const wm = new THREE.Mesh(p.build(false).body, mats.body);
+  wm.position.set(x, y, z);
+  wm.rotation.order = 'YXZ';
+  wm.userData.z0 = z;
+  wm.castShadow = true;
+  turret.add(wm);
+  return wm;
+}
+
+/** Flamme de bouche (étoile de feu jaune et orange, large de `r`), au bout de l'arme en `z` ; cachée entre deux tirs */
+function muzzleFlare(gun: THREE.Object3D, z: number, r: number) {
+  const p = new Parts();
+  p.add(new THREE.ConeGeometry(r, r * 3.2, 6).rotateX(Math.PI / 2), 0, 0, r * 1.6, 0xffe08a);
+  for (const a of [0, Math.PI / 2]) p.add(new THREE.BoxGeometry(r * 2.6, r * 0.5, r * 0.6), 0, 0, r * 0.3, 0xffa040, 0, false, a);
+  p.add(new THREE.IcosahedronGeometry(r * 0.9, 0), 0, 0, 0, 0xfff4c0);
+  const m = new THREE.Mesh(p.build(false).body, LAMP);
+  m.position.z = z;
+  m.visible = false;
+  gun.add(m);
+  return m;
+}
+
+/** Roue ou galet (il tourne autour de x quand le blindé roule), moyeu clair pour qu'on le voie tourner */
+function wheel(body: THREE.Object3D, legs: THREE.Object3D[], r: number, w: number, x: number, y: number, z: number, ph: number) {
+  const wp = new Parts();
+  wp.add(new THREE.CylinderGeometry(r, r, w, 10).rotateZ(Math.PI / 2), 0, 0, 0, dark(TRACK, 1.15));
+  wp.box(w * 0.4 + 0.004, r * 1.1, r * 0.4, Math.sign(x) * w * 0.35, -r * 0.55, 0, KHAKI);
+  const m = new THREE.Mesh(wp.build(false).body, mats.body);
+  m.position.set(x, y, z);
+  m.userData.ph = ph;
+  body.add(m);
+  legs.push(m);
+}
+
+/**
+ * Char de bataille, plus gros que le char de la charge : larges chenilles et leurs jupes de blindage, caisse à plage avant
+ * inclinée, phares et feux arrière ; tourelle à part (elle pivote vers la cible) aux joues biseautées, nuque et panier,
+ * tourelleau du chef casqué et sa mitrailleuse, lance-pots fumigènes, rampe de projecteurs au-dessus du long canon à
+ * évacuateur et frein de bouche, antennes au fanion du village ; camouflage et écusson bleu et or
+ */
+function battleTank(v: number): Rider {
+  const p = new Parts();
+  for (const s of [-1, 1]) {
+    p.box(0.085, 0.08, 0.6, s * 0.14, 0, 0, TRACK);
+    p.box(0.087, 0.016, 0.56, s * 0.14, 0.08, 0, dark(TRACK, 1.3));
+    p.box(0.1, 0.01, 0.62, s * 0.14, 0.1, 0, OLIVE_D);
+    p.box(0.014, 0.055, 0.5, s * 0.19, 0.045, 0.02, OLIVE_D);
+    for (let k = 0; k < 5; k++) p.box(0.016, 0.05, 0.004, s * 0.191, 0.048, -0.18 + k * 0.1, dark(OLIVE_D, 0.8));
+    for (const z of [0.27, -0.27]) p.add(new THREE.CylinderGeometry(0.036, 0.036, 0.086, 8).rotateZ(Math.PI / 2), s * 0.14, 0.045, z, dark(TRACK, 1.5));
+  }
+  p.box(0.2, 0.07, 0.58, 0, 0.035, 0, OLIVE_D);
+  p.box(0.27, 0.05, 0.5, 0, 0.1, -0.02, OLIVE);
+  p.add(new THREE.BoxGeometry(0.27, 0.012, 0.12), 0, 0.128, 0.26, OLIVE, 0, false, 0, -0.42);
+  for (let k = 0; k < 3; k++) p.box(0.18, 0.004, 0.03, 0, 0.15, -0.16 - k * 0.045, dark(OLIVE_D, 0.75));
+  for (const s of [-1, 1]) {
+    p.box(0.036, 0.026, 0.01, s * 0.1, 0.098, 0.296, BLACK);
+    p.box(0.03, 0.018, 0.01, s * 0.1, 0.102, 0.3, LIGHT, 0, true);
+    p.box(0.02, 0.014, 0.01, s * 0.12, 0.1, -0.272, 0xff3a2a, 0, true);
+    p.box(0.003, 0.03, 0.03, s * 0.137, 0.11, 0.17, BLUE);
+    p.box(0.004, 0.012, 0.012, s * 0.138, 0.119, 0.17, GOLD);
+  }
+  p.box(0.08, 0.004, 0.1, 0.06, 0.15, 0.08, KHAKI);
+  p.box(0.07, 0.004, 0.08, -0.08, 0.15, -0.14, dark(OLIVE_D, 0.85));
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  root.scale.setScalar(((1 + HUMAN_K) / 2) * 1.2);
+  hang(p, body);
+  const legs: THREE.Object3D[] = [];
+  for (const s of [-1, 1]) for (let k = 0; k < 6; k++) wheel(body, legs, 0.032, 0.02, s * 0.178, 0.035, -0.21 + k * 0.084, k * 0.7 + v);
+  // tourelle, qui pivote d'elle-même vers la cible
+  const turret = new THREE.Group();
+  turret.position.set(0, 0.15, -0.03);
+  body.add(turret);
+  const t = new Parts();
+  t.box(0.2, 0.065, 0.24, 0, 0, 0, OLIVE);
+  for (const s of [-1, 1]) t.add(new THREE.BoxGeometry(0.06, 0.06, 0.09).translate(0, 0.03, 0), s * 0.075, 0.002, 0.13, OLIVE, -s * 0.45);
+  t.box(0.17, 0.05, 0.09, 0, 0.005, -0.16, dark(OLIVE, 0.9));
+  t.box(0.19, 0.03, 0.05, 0, 0.012, -0.225, 0x4a4a3a);
+  t.box(0.18, 0.012, 0.22, 0, 0.065, -0.01, dark(OLIVE, 0.92));
+  t.box(0.06, 0.006, 0.07, -0.04, 0.077, -0.06, KHAKI);
+  t.cyl(0.032, 0.034, 0.025, 8, 0.045, 0.077, -0.05, OLIVE_D);
+  t.box(0.03, 0.028, 0.03, 0.045, 0.1, -0.05, SKIN);
+  t.sphere(0.022, 0.045, 0.13, -0.052, OLIVE_D, 1, 0.75);
+  t.box(0.006, 0.006, 0.07, 0.07, 0.11, -0.02, BLACK);
+  t.cyl(0.026, 0.026, 0.01, 8, -0.05, 0.077, -0.02, OLIVE_D);
+  for (const s of [-1, 1]) for (let k = 0; k < 3; k++) t.add(new THREE.CylinderGeometry(0.008, 0.008, 0.03, 6), s * 0.1, 0.05, 0.03 + k * 0.018, OLIVE_D, 0, false, s * 0.6);
+  t.box(0.15, 0.022, 0.02, 0, 0.068, 0.1, BLACK);
+  for (const x of [-0.05, 0, 0.05]) t.box(0.036, 0.016, 0.006, x, 0.071, 0.111, LIGHT, 0, true);
+  t.box(0.03, 0.024, 0.026, 0.045, 0.13, -0.01, BLACK);
+  t.box(0.022, 0.016, 0.005, 0.045, 0.134, 0.004, LIGHT, 0, true);
+  for (const [x, h] of [[-0.07, 0.24], [0.07, 0.18]]) t.box(0.004, h, 0.004, x, 0.077, -0.18, BLACK);
+  t.box(0.003, 0.03, 0.05, -0.07, 0.29, -0.205, BLUE);
+  t.box(0.0035, 0.01, 0.05, -0.07, 0.29, -0.205, GOLD);
+  hang(t, turret);
+  const g = new Parts();
+  g.box(0.07, 0.05, 0.04, 0, -0.025, 0, OLIVE_D);
+  g.add(new THREE.CylinderGeometry(0.011, 0.014, 0.4, 8).rotateX(Math.PI / 2), 0, 0, 0.22, OLIVE);
+  g.add(new THREE.CylinderGeometry(0.019, 0.019, 0.07, 8).rotateX(Math.PI / 2), 0, 0, 0.2, OLIVE_D);
+  g.box(0.03, 0.026, 0.04, 0, -0.013, 0.43, OLIVE_D);
+  const gun = mountGun(g, turret, 0, 0.035, 0.12);
+  const flare = muzzleFlare(gun, 0.46, 0.03);
+  const b = beam(1.7, 0.45);
+  b.position.set(0, 0.079, 0.115);
+  b.rotation.x = 0.1;
+  turret.add(b);
+  return { root, body, legs, weapon: gun, tank: true, turret, muzzle: new THREE.Vector3(0, 0.035, 0.58), beams: [b], gun: 'cannon', flare };
+}
+
+/**
+ * Transport de troupes à huit roues : haute caisse à flancs droits, nez incliné, hublots de vision, porte arrière, phares ;
+ * petite tourelle au canon-mitrailleur et son projecteur, le tireur dans sa trappe, antenne au fanion ; camouflage, écusson
+ */
+function troopCarrier(v: number): Rider {
+  const p = new Parts();
+  p.box(0.22, 0.04, 0.48, 0, 0.02, -0.01, OLIVE_D);
+  p.box(0.25, 0.1, 0.52, 0, 0.05, -0.01, OLIVE);
+  p.add(new THREE.BoxGeometry(0.25, 0.012, 0.13), 0, 0.12, 0.25, OLIVE, 0, false, 0, -0.55);
+  p.box(0.23, 0.03, 0.36, 0, 0.15, -0.07, dark(OLIVE, 0.92));
+  p.box(0.2, 0.08, 0.008, 0, 0.055, -0.272, OLIVE_D);
+  p.box(0.06, 0.03, 0.004, 0, 0.1, -0.277, 0x2a3a44);
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 3; k++) p.box(0.004, 0.014, 0.03, s * 0.126, 0.125, -0.15 + k * 0.12, 0x2a3a44);
+    p.box(0.036, 0.024, 0.01, s * 0.09, 0.098, 0.27, BLACK);
+    p.box(0.03, 0.016, 0.01, s * 0.09, 0.102, 0.274, LIGHT, 0, true);
+    p.box(0.02, 0.014, 0.01, s * 0.1, 0.11, -0.276, 0xff3a2a, 0, true);
+    p.box(0.003, 0.034, 0.034, s * 0.126, 0.08, 0.06, BLUE);
+    p.box(0.004, 0.014, 0.014, s * 0.127, 0.09, 0.06, GOLD);
+    p.box(0.012, 0.02, 0.44, s * 0.13, 0.085, -0.01, dark(OLIVE_D, 0.9));
+  }
+  p.box(0.09, 0.004, 0.12, 0.05, 0.165, -0.12, KHAKI);
+  p.box(0.07, 0.004, 0.08, -0.06, 0.165, 0.02, dark(OLIVE_D, 0.85));
+  p.cyl(0.026, 0.026, 0.012, 8, -0.06, 0.18, -0.18, OLIVE_D);
+  p.box(0.028, 0.03, 0.028, -0.06, 0.18, -0.18, SKIN);
+  p.sphere(0.02, -0.06, 0.215, -0.18, OLIVE_D, 1, 0.75);
+  p.box(0.004, 0.22, 0.004, 0.08, 0.18, -0.2, BLACK);
+  p.box(0.003, 0.026, 0.045, 0.08, 0.37, -0.222, BLUE);
+  p.box(0.0035, 0.009, 0.045, 0.08, 0.37, -0.222, GOLD);
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  root.scale.setScalar(((1 + HUMAN_K) / 2) * 1.15);
+  hang(p, body);
+  const legs: THREE.Object3D[] = [];
+  for (const s of [-1, 1]) for (const z of [-0.19, -0.07, 0.07, 0.19]) wheel(body, legs, 0.045, 0.036, s * 0.13, 0.045, z, z * 9 + v);
+  const turret = new THREE.Group();
+  turret.position.set(0, 0.165, 0.05);
+  body.add(turret);
+  const t = new Parts();
+  t.box(0.11, 0.045, 0.12, 0, 0, 0, OLIVE);
+  t.box(0.09, 0.01, 0.1, 0, 0.045, 0, dark(OLIVE, 0.9));
+  t.box(0.03, 0.022, 0.024, 0.05, 0.03, 0.03, BLACK);
+  t.box(0.022, 0.014, 0.005, 0.05, 0.034, 0.043, LIGHT, 0, true);
+  hang(t, turret);
+  const g = new Parts();
+  g.box(0.03, 0.03, 0.03, 0, -0.015, 0, OLIVE_D);
+  g.add(new THREE.CylinderGeometry(0.006, 0.007, 0.2, 6).rotateX(Math.PI / 2), 0, 0, 0.11, BLACK);
+  const gun = mountGun(g, turret, 0, 0.022, 0.06);
+  const flare = muzzleFlare(gun, 0.21, 0.016);
+  const b = beam(1.4, 0.34);
+  b.position.set(0.05, 0.041, 0.045);
+  b.rotation.x = 0.12;
+  turret.add(b);
+  return { root, body, legs, weapon: gun, tank: true, turret, muzzle: new THREE.Vector3(0, 0.022, 0.27), beams: [b], gun: 'mg', flare };
+}
+
+/** Blindé de la colonne moderne : char de bataille (`mbt`) ou transport de troupes (`apc`) ; tourné vers +z, posé à y = 0 */
+export function makeArmor(kind: 'mbt' | 'apc', v = 0): Rider {
+  return kind === 'mbt' ? battleTank(v) : troopCarrier(v);
+}
+
+/**
+ * Blindé en marche (`gait` 0 à l'arrêt … 1), au rythme de `phase` : il vibre à peine et ses roues roulent ; `elev` lève (< 0)
+ * ou baisse l'arme, `recoil` (0 … 1) la fait reculer juste après le tir, la flamme de bouche encore à son bout
+ */
+export function armorStep(r: Rider, phase: number, gait: number, elev: number, recoil: number) {
+  r.body.position.y = Math.abs(Math.sin(phase * 3)) * 0.004 * gait;
+  r.body.rotation.x = Math.sin(phase) * 0.01 * gait;
+  if (gait > 0) for (const l of r.legs) l.rotation.x = phase * 0.9 + l.userData.ph;
+  r.weapon.rotation.x = elev;
+  r.weapon.position.z = r.weapon.userData.z0 - recoil * 0.05;
+  if (r.flare) { r.flare.visible = recoil > (r.gun === 'cannon' ? 0.72 : 0.3); r.flare.rotation.z = phase * 7; }
+}
+
+/** Drone d'escorte : son corps (qui tangue), ses quatre hélices, ses feux de position (le dernier clignote) et le faisceau de son projecteur */
+export interface Drone { root: THREE.Group; body: THREE.Group; rotors: THREE.Object3D[]; blink: THREE.Object3D[]; beam: THREE.Object3D }
+
+/**
+ * Drone quadrirotor : corps gris et dôme bleu, bras en croix et moteurs, hélices qui tournent, nacelle de caméra et projecteur
+ * sous le ventre (son faisceau descend devant lui), feux rouge et vert, flash blanc à l'arrière. Centré sur son corps
+ */
+export function makeDrone(): Drone {
+  const p = new Parts();
+  p.box(0.07, 0.024, 0.1, 0, -0.012, 0, 0x3c4048);
+  p.sphere(0.03, 0, 0.012, 0.01, 0x2c4a7a, 1, 0.6);
+  p.box(0.072, 0.006, 0.02, 0, 0.004, -0.035, GOLD);
+  for (const a of [Math.PI / 4, -Math.PI / 4]) p.add(new THREE.BoxGeometry(0.012, 0.008, 0.22), 0, 0, 0, 0x2a2a2e, a);
+  const arms: [number, number][] = [[0.078, 0.078], [-0.078, 0.078], [0.078, -0.078], [-0.078, -0.078]];
+  for (const [x, z] of arms) p.cyl(0.012, 0.012, 0.014, 6, x, -0.004, z, 0x2a2a2e);
+  p.sphere(0.018, 0, -0.03, 0.035, BLACK);
+  p.box(0.03, 0.012, 0.03, 0, -0.042, -0.012, BLACK);
+  p.box(0.022, 0.004, 0.022, 0, -0.046, -0.012, LIGHT, 0, true);
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  root.scale.setScalar(1.6);
+  hang(p, body);
+  const rotors: THREE.Object3D[] = [];
+  for (const [x, z] of arms) {
+    const rp = new Parts();
+    rp.box(0.075, 0.003, 0.012, 0, 0, 0, 0x2a2a2e);
+    rp.cyl(0.04, 0.04, 0.001, 12, 0, 0.002, 0, 0x8a8f96);
+    const r = new THREE.Mesh(rp.build(false).body, mats.body);
+    r.position.set(x, 0.012, z);
+    body.add(r);
+    rotors.push(r);
+  }
+  const blink: THREE.Object3D[] = [];
+  for (const [x, z, c] of [[-0.1, 0.1, 0xff3a2a], [0.1, 0.1, 0x3aff6a], [0, -0.052, 0xffffff]] as number[][]) {
+    const l = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, 0.012), new THREE.MeshBasicMaterial({ color: c }));
+    l.position.set(x, -0.006, z);
+    body.add(l);
+    blink.push(l);
+  }
+  const b = beam(1.1, 0.32);
+  b.position.set(0, -0.046, -0.012);
+  b.rotation.x = Math.PI / 2 - 0.3;
+  body.add(b);
+  return { root, body, rotors, blink, beam: b };
+}
+
+/** Le drone en vol stationnaire : hélices qui tournent, léger tangage, feu flash qui clignote */
+export function droneStep(d: Drone, t: number, v: number) {
+  d.rotors.forEach((r, i) => (r.rotation.y = t * 38 * (i % 2 ? 1 : -1)));
+  d.body.position.y = Math.sin(t * 2.1 + v) * 0.015;
+  d.body.rotation.z = Math.sin(t * 1.3 + v) * 0.05;
+  d.body.rotation.x = Math.sin(t * 0.9 + v * 2) * 0.04;
+  d.blink[2].visible = Math.sin(t * 7 + v) > 0.75;
 }

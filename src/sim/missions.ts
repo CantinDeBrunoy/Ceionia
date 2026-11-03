@@ -69,10 +69,15 @@ export interface Choice {
   danger?: Danger[];
   /** chevaux de l'écurie qu'emmène la troupe (ils reviennent avec elle) */
   mounts?: number;
+  /** carburant brûlé par les véhicules de la troupe (pris au départ, raffiné du pétrole brut des puits) */
+  fuel?: number;
   /** troupe de l'expédition armée, telle qu'on la voit sous terre */
   troop?: 'cavalry' | 'armor' | 'miners';
-  /** ce qui change de nom et de récit avec les âges (à partir de l'âge donné) : chevaliers, puis cuirassiers et fusiliers… */
-  ages?: Partial<Record<number, Partial<Pick<Choice, 'label' | 'text' | 'doing' | 'winText' | 'loseText'>>>>;
+  /**
+   * ce qui change avec les âges (à partir de l'âge donné) : nom et récit (chevaliers, puis cuirassiers et fusiliers…), et à
+   * l'époque moderne ce qu'il faut emmener (du carburant pour les blindés au lieu des chevaux) et ce qu'un échec coûte
+   */
+  ages?: Partial<Record<number, Partial<Pick<Choice, 'label' | 'text' | 'doing' | 'winText' | 'loseText' | 'mounts' | 'fuel' | 'lose'>>>>;
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -351,11 +356,13 @@ export const MISSIONS: Mission[] = [
             winText: 'Les cuirassiers ont enfoncé la horde, les fusiliers ont tenu la galerie : les filons remontent dans les fontes des selles !',
             loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cuirassiers rentrent blessés, les fontes vides.',
           },
+          // plus de chevaux à l'époque moderne : les chars et les transports de troupes roulent au carburant de la raffinerie
           4: {
-            label: 'Blindés en tête', text: 'Trois blindés légers ouvrent la route dans les grandes galeries, les fantassins dans leur sillage : rapides, mais l’obscurité est traîtresse.',
+            label: 'Blindés en tête', text: 'Trois chars d’assaut et deux transports de troupes ouvrent la route dans les grandes galeries, phares braqués, des drones en éclaireurs et la section dans leur sillage : rapides et redoutables, mais gourmands en carburant.',
             doing: 'ouvre la route aux blindés et abat les filons',
             winText: 'Les blindés ont dégagé la grande galerie, la section l’a tenue : les filons remontent dans les soutes !',
             loseText: 'Un blindé s’est embourbé dans le noir ; deux soldats rentrent blessés, les soutes vides.',
+            mounts: 0, fuel: 12, lose: [hurt(2, 3)],
           },
         },
       },
@@ -373,10 +380,11 @@ export const MISSIONS: Mission[] = [
             loseText: 'Les araignées géantes ont attaqué par le plafond : la ligne a reculé, deux blessés.',
           },
           4: {
-            label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section progresse par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
+            label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section, appuyée par deux transports de troupes et un drone, progresse par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
             doing: 'progresse par bonds, se couvre et abat les filons',
             winText: 'Pas une créature n’a passé la section : six filons abattus, le chariot ploie sous le minerai.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : la section a décroché, deux blessés.',
+            mounts: 0, fuel: 4,
           },
         },
       },
@@ -388,7 +396,7 @@ export const MISSIONS: Mission[] = [
         loseText: 'Des zombies ont surgi d’une galerie latérale : les mineurs ont tout lâché pour fuir, deux blessés.',
         ages: {
           3: { label: 'Mineurs et gendarmes', text: 'Peu de soldats, beaucoup de pioches et de lampes à carbure : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'Les gendarmes ont tenu bon pendant que les pioches chantaient : trois filons remontés à la lumière.' },
-          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale, une escorte armée : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient : trois filons remontés à la lumière.' },
+          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale, une escorte armée, un compresseur pour les marteaux-piqueurs : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient : trois filons remontés à la lumière.', mounts: 0, fuel: 2 },
         },
       },
     ],

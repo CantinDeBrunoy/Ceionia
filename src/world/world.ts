@@ -165,6 +165,11 @@ export class World {
   /** bois et pierre, pour bâtir les grands bâtiments */
   wood = START_WOOD;
   stone = START_STONE;
+  /** pétrole brut tiré des puits, et carburant qu'en fait la raffinerie (les blindés de l'expédition armée le brûlent) */
+  crude = 0;
+  fuel = 0;
+  /** Gisements de pétrole : cases où le brut suinte (1), tirées de la graine de la carte ; seul un puits de pétrole s'y pose */
+  oil = new Uint8Array(N * N);
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
   exp: ExpState = newExpState();
   /** ressources illimitées (réglage) : bois, pierre et minerai ne manquent jamais */
@@ -717,6 +722,8 @@ export class World {
     if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return 'À poser près des rochers ou dans la montagne';
     // l'avant-poste se dresse tout contre une grotte ou une faille
     if (kind === 'outpost' && this.outpostEntrance(x, z, s) < 0) return 'À bâtir tout contre une grotte ou une faille';
+    // le puits de pétrole se fore sur un gisement
+    if (kind === 'oilwell' && !this.onOil(x, z, s)) return 'Un puits de pétrole ne se fore que sur un gisement (les taches sombres où le brut suinte)';
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
     if (kind === 'pier' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.inCells(x + dx, z + dz) && (this.cellAvg(x + dx, z + dz) < -0.05 || this.lake[this.ci(x + dx, z + dz)]))) return 'À poser au bord de l’eau';
     // le port : il lui suffit de toucher l'eau d'un côté (une case d'eau contre le quai) et d'avoir un pied sur la terre ferme
@@ -740,6 +747,12 @@ export class World {
     if (mx - target > 0.85 * s * steep || target - mn > 0.85 * s * steep) return 'Terrain trop pentu';
     if (target < 0.05 && kind !== 'pier' && kind !== 'harbor') return 'Trop proche de l\u2019eau';
     return null;
+  }
+
+  /** L'emprise touche-t-elle un gisement de pétrole ? */
+  onOil(x: number, z: number, s: number) {
+    for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) if (this.inCells(x + i, z + j) && this.oil[this.ci(x + i, z + j)]) return true;
+    return false;
   }
 
   /** Hauteur de nivellement : celle des coins déjà tenus par des voisins (pour rester raccordé), sinon la moyenne */
@@ -1047,6 +1060,9 @@ export class World {
       ore: this.ore,
       wood: this.wood,
       stone: this.stone,
+      crude: this.crude,
+      fuel: this.fuel,
+      oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       mined: [...this.mined],
       claimed: [...this.claimed],
       exp: this.exp,
@@ -1136,7 +1152,12 @@ export class World {
     this.ore = Math.max(0, +d.ore || 0);
     this.wood = d.wood === undefined ? START_WOOD : Math.max(0, +d.wood || 0);
     this.stone = d.stone === undefined ? START_STONE : Math.max(0, +d.stone || 0);
-    this.mined = new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
+    this.crude = Math.max(0, +d.crude || 0);
+    this.fuel = Math.max(0, +d.fuel || 0);
+    // une ancienne sauvegarde n'a pas de gisements : ils se tirent de la graine au chargement (addDefaultDecor)
+    this.oil.fill(0);
+    for (const k of Array.isArray(d.oil) ? d.oil : []) if (k >= 0 && k < N * N) this.oil[k] = 1;
+    this.mined =new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.claimed = new Set((d.claimed ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.exp = readExpState(d.exp);
     this.lines = [];

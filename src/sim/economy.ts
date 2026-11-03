@@ -2,12 +2,13 @@ import { KINDS, KindId } from '../build/catalog';
 
 /**
  * Ressources du village : le bois des bûcherons, la pierre des carrières et des mines, le minerai des mines et des
- * profondeurs. Bois et pierre ne servent qu'à bâtir les grands bâtiments (2 × 2) ; la production est généreuse, pour ne
- * jamais bloquer le village. Les petits bâtiments restent gratuits
+ * profondeurs ; à l'époque moderne, le pétrole brut des puits, que la raffinerie change en carburant (les blindés de
+ * l'expédition armée en consomment). Bois et pierre ne servent qu'à bâtir les grands bâtiments (2 × 2) ; la production est
+ * généreuse, pour ne jamais bloquer le village. Les petits bâtiments restent gratuits
  */
 
 export interface Cost { wood: number; stone: number }
-export type Resource = 'wood' | 'stone' | 'ore';
+export type Resource = 'wood' | 'stone' | 'ore' | 'crude' | 'fuel';
 
 /** Stock au départ d'une partie (et d'une ancienne sauvegarde qui n'en avait pas) */
 export const START_WOOD = 60, START_STONE = 60;
@@ -27,6 +28,10 @@ export const YIELD: Partial<Record<KindId, Partial<Record<Resource, number[]>>>>
   lumber: { wood: [4, 6, 8, 11, 14] },
   quarry: { stone: [3, 5, 7, 9, 12] },
   mine: { ore: [0, 0, 3, 5, 8], stone: [0, 0, 2, 3, 4] },
+  oilwell: { crude: [0, 0, 0, 0, 4] },
 };
 
-export const RES_NAME: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai' };
+/** Raffinerie : pétrole brut qu'elle traite par jour, au plus, et carburant qu'elle tire de chaque baril */
+export const REFINE_CRUDE = 12, FUEL_PER_CRUDE = 0.75;
+
+export const RES_NAME: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', crude: 'pétrole brut', fuel: 'carburant' };

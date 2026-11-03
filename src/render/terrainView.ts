@@ -50,6 +50,9 @@ const RAVINE_DEEP = new THREE.Color(0x3a332e);
 /** Champs de lave refroidie : basalte noir, puis mousse quand la végétation revient ; glace des glaciers */
 const LAVA_FIELD = new THREE.Color(0x35302e);
 const LAVA_MOSS = new THREE.Color(0x6f7a4a);
+/** Gisements de pétrole : terre imbibée de brun sombre, et taches de brut presque noires */
+const OIL_SOIL = new THREE.Color(0x5a4c3e);
+const OIL_TAR = new THREE.Color(0x1c1814);
 const ICE = new THREE.Color(0xcfe6f4);
 const MAX_CAVES = 24;
 /** Lignes de cases reteintes par image quand la saison change */
@@ -113,6 +116,8 @@ export class TerrainView {
   /** Par sous-sommet : terre battue autour des bâtiments, champs de lave refroidie */
   private yardW = new Float32Array(VS * VS);
   private lavaW = new Float32Array(VS * VS);
+  /** Par sous-sommet : part des cases voisines sur un gisement de pétrole */
+  private oilW = new Float32Array(VS * VS);
   /** Par sous-sommet : grandes taches de prairie (-1 herbe sombre … 1 herbe claire) */
   private patch = new Float32Array(VS * VS);
   /** Par sous-sommet : bruit fin qui fait onduler les bords des champs et des jardins */
@@ -443,7 +448,7 @@ float snN(vec2 p) {
       const cz1 = Math.min(N - 1, Math.floor(z / VR)), cz0 = z % VR === 0 ? cz1 - (z === VS - 1 ? 0 : 1) : cz1;
       for (let x = x0; x <= x1; x++) {
         const cx1 = Math.min(N - 1, Math.floor(x / VR)), cx0 = x % VR === 0 ? cx1 - (x === VS - 1 ? 0 : 1) : cx1;
-        let n = 0, y = 0, lava = 0;
+        let n = 0, y = 0, lava = 0, oil = 0;
         const f = this.zone;
         f.fill(0);
         for (let cz = cz0; cz <= cz1; cz++)
@@ -456,6 +461,7 @@ float snN(vec2 p) {
             if (t >= 1 && t <= 4) f[t - 1]++;
             if (w.occ[k]) y++;
             lava += w.basalt[k];
+            oil += w.oil[k];
           }
         const i = z * VS + x;
         for (let q = 0; q < 4; q++) vw[i * 4 + q] = n ? f[q] / n : 0;
@@ -463,6 +469,7 @@ float snN(vec2 p) {
         for (const q of [1, 2]) { const v = vw[i * 4 + q]; if (v > 0 && v < 1) vw[i * 4 + q] = smoothstep(0.3, 0.7, v + this.wobble[i] * 0.28); }
         yw[i] = n ? y / n : 0;
         this.lavaW[i] = n ? lava / n : 0;
+        this.oilW[i] = n ? oil / n : 0;
       }
     }
     const bc = this.biomeCol;
@@ -530,6 +537,12 @@ float snN(vec2 p) {
         // champs de lave refroidie : basalte noir, que la mousse puis l'herbe regagnent
         const lf = this.lavaW[i];
         if (lf > 0) tmp.lerp(this.cliff.copy(LAVA_MOSS).lerp(LAVA_FIELD, smoothstep(0.1, 0.35, lf)), smoothstep(0, 0.18, lf) * 0.94);
+        // gisement de pétrole : la terre s'assombrit, le brut y fait des taches noires aux bords irréguliers
+        const of = this.oilW[i];
+        if (of > 0) {
+          const k = smoothstep(0, 0.75, of + this.wobble[i] * 0.25);
+          tmp.lerp(OIL_SOIL, k * 0.75).lerp(OIL_TAR, smoothstep(0.1, 0.5, this.wobble[i] + pv * 0.6 + of * 0.5 - 0.35) * k * 0.9);
+        }
         // neige : couverture inégale — plaques où l'herbe perce, moins sous les arbres et sur les pentes, qui grandissent
         // avec l'hiver ; bleutée dans les creux, éclatante sur les bosses
         if (snow > 0) {

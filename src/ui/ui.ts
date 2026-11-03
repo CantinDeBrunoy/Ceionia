@@ -14,7 +14,7 @@ import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, 
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
-import { costOf, costLabel, Resource } from '../sim/economy';
+import { costOf, costLabel, Resource, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE } from '../sim/economy';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
 
@@ -509,6 +509,8 @@ export class UI {
       for (const k of list) count.set(k, (count.get(k) ?? 0) + 1);
       stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => `${n} ${names[k][n > 1 ? 1 : 0]}`).join(', ')}` : `${ic('pen', 14, 2)} aucune bête pour l’instant`);
     }
+    if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${YIELD.oilwell!.crude![a] ?? 0} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
+    if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);
     if (b.kind === 'outpost') stats.push(`${ic('outpost', 14, 2)} ${h.expeditions.held()} cases de galeries tenues sous terre · camp niveau ${h.expeditions.camp()}`);
     // gare ou avant-poste : les lignes qui s'y arrêtent, où en sont leurs trains ; en tracer une nouvelle d'ici
     const r = h.railway, stop = isStation(b) || b.kind === 'outpost' ? r.stopOf(b) : null, lines = stop ? r.linesAt(b) : [];
@@ -599,20 +601,29 @@ export class UI {
     el.classList.add('flash');
   }
 
-  /** Stocks du village (bois, pierre, minerai) et ce qu'il en produit chaque jour */
+  /**
+   * Stocks du village (bois, pierre, minerai ; pétrole brut et carburant à l'époque moderne, ou dès qu'il y en a) et ce qu'il
+   * en produit chaque jour
+   */
   private resKey = '';
   private renderResources() {
     const w = this.host.world, day = this.host.expeditions.daily(), rail = this.host.railway.daily();
     day.ore += rail.ore; day.stone += rail.stone;
     const items: [Resource, string, string][] = [['wood', 'tree', 'Bois'], ['stone', 'rock', 'Pierre'], ['ore', 'pickaxe', 'Minerai']];
+    if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel) items.push(['crude', 'crude', 'Brut'], ['fuel', 'fuel', 'Carburant']);
     const key = `${w.unlimited}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
     if (key === this.resKey) return;
     this.resKey = key;
-    // la production du jour s'affiche sous le stock (grisée quand rien n'en produit)
-    const per = (n: number) => `+${Number.isInteger(n) ? n : n.toFixed(1)}/j`;
+    // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
+    // le tire baisse chaque jour
+    const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}/j`;
+    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
+    // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
+    const drawn = this.host.expeditions.yields().crude;
+    const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
       ? `<div class="res" title="${label} : illimité (réglage)">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
-      : `<div class="res" title="${label} : ${Math.floor(w[r])} en réserve${day[r] ? `, +${day[r]} par jour` : ', rien n’en produit pour l’instant'}${r === 'ore' ? '' : ' — pour bâtir les grands bâtiments'}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
+      : `<div class="res" title="${label} : ${Math.floor(w[r])} en réserve${flow(r)}${use[r] ?? ''}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -960,7 +971,7 @@ export class UI {
       const c = choiceAt(c0, this.host.sim.age), why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
       return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
           <b>${c.label}</b><span>${c.text}</span>
-          <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''} · ⏳ ${workLabel(c.work)} · 🎲 ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} ${riskLabel(pv.risk)} · ${DEST_ICON[c.dest]}</small>
+          <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''}${c.fuel ? ` · ⛽ ${c.fuel} carburant` : ''} · ⏳ ${workLabel(c.work)} · 🎲 ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} ${riskLabel(pv.risk)} · ${DEST_ICON[c.dest]}</small>
           <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')} — ${pv.label ? `on emporte ${pv.label}` : 'aucun équipement en réserve'}</small>
           <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
           ${why ? `<small class="why">${why}</small>` : ''}</button>`;

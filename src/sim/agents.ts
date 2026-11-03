@@ -11,8 +11,9 @@ import { Parts } from '../render/parts';
 import { mats } from '../render/materials';
 
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
-/** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie) */
-export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'rifle'; torch?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean; car?: boolean }
+/** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie),
+ * avec `tank` le blindé de l'époque moderne, qui roule au carburant, sans cheval */
+export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'rifle'; torch?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean; car?: boolean; tank?: boolean }
 
 /** Objets tenus en main (géométries partagées, en unités du monde ; le long de +y, la poignée à l'origine) */
 const propCache = new Map<string, THREE.BufferGeometry>();
@@ -58,7 +59,7 @@ const JOB_OF: Partial<Record<KindId, JobKind>> = {
   gather: 'merchant', forum: 'merchant', tavern: 'merchant', barber: 'merchant', harbor: 'merchant',
   pen: 'herder', stable: 'herder', apiary: 'keeper',
   baths: 'servant', theater: 'servant', senate: 'servant', landmark: 'servant', station: 'servant', terminal: 'servant', observatory: 'servant',
-  carworks: 'smith', lab: 'healer', aerodrome: 'servant', heliport: 'servant', airport: 'servant',
+  carworks: 'smith', lab: 'healer', aerodrome: 'servant', heliport: 'servant', airport: 'servant', oilwell: 'smith', refinery: 'smith',
 };
 const TOOL_OF: Record<JobKind, keyof typeof PROPS | null> = {
   farmer: 'hoe', woodcutter: 'axe', quarry: 'pick', fisher: 'rod', smith: 'hammer', miller: 'basket', priest: 'book', healer: 'basket', teacher: 'book',
@@ -640,7 +641,7 @@ export class Agents {
     const a = this.byId(id);
     if (!a) return;
     a.kit = kit;
-    a.mounted = !!kit?.horse || !!kit?.car;
+    a.mounted = !!kit?.horse || !!kit?.car || !!kit?.tank;
     if (!kit?.car && a.car) { this.group.remove(a.car); a.car.geometry.dispose(); a.car = null; }
     if (!kit?.horse && a.mount) { a.mount.mixer.stopAllAction(); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
     if (!kit?.rider && a.rider) { this.group.remove(a.rider.root); a.rider = null; }
@@ -648,7 +649,7 @@ export class Agents {
   }
 
   /** En selle (en route) ou pied à terre (sur place, le cheval broute à côté) */
-  mountParty(ids: number[], on: boolean) { for (const id of ids) { const a = this.byId(id); if (a?.kit?.horse || a?.kit?.car) a.mounted = on; } }
+  mountParty(ids: number[], on: boolean) { for (const id of ids) { const a = this.byId(id); if (a?.kit?.horse || a?.kit?.car || a?.kit?.tank) a.mounted = on; } }
 
   /** L'équipe disparaît de la surface (descendue sous terre) ; elle réapparaît dès qu'elle se remet en route */
   partyHide(ids: number[], hidden: boolean) { for (const id of ids) { const a = this.byId(id); if (a) { a.hidden = hidden; a.targetHidden = hidden; } } }
@@ -948,7 +949,7 @@ export class Agents {
 
   /** Le soldat de l'époque qui remplace un membre en armure tant qu'il va à pied ; vrai s'il est affiché */
   private stepSoldier(a: Agent, age: number) {
-    const on = !!a.kit?.armor && !(a.kit.horse && a.mounted) && !a.ride && !a.hidden;
+    const on = !!a.kit?.armor && !((a.kit.horse || a.kit.car) && a.mounted) && !a.ride && !a.hidden;
     if (a.soldier && (!on || a.soldier.root.userData.age !== Math.min(age, 4))) { this.group.remove(a.soldier.root); a.soldier = null; }
     if (!on) return false;
     if (!a.soldier) {

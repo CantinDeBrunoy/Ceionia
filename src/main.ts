@@ -48,6 +48,7 @@ import { RailView } from './render/railway';
 import { ExpeditionView } from './render/expeditionView';
 import { Festivities } from './render/festivities';
 import { PenView } from './render/pens';
+import { OilSeeps } from './render/oilSeeps';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -109,6 +110,8 @@ class Game implements UIHost {
   fest: Festivities;
   private feted = new Set<number>();
   pens: PenView;
+  /** flaques de brut sur les gisements de pétrole */
+  seeps: OilSeeps;
   /** la caméra suit l'expédition */
   /** expédition que la caméra suit (son numéro), ou null */
   following: number | null = null;
@@ -241,6 +244,7 @@ class Game implements UIHost {
     this.railView = new RailView(w, this.railway);
     this.railView.streams = this.streams;
     this.pens = new PenView(w);
+    this.seeps = new OilSeeps(w);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
@@ -249,7 +253,7 @@ class Game implements UIHost {
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.pens.group, this.railView.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.pens.group, this.railView.group, this.seeps.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -835,6 +839,7 @@ class Game implements UIHost {
       this.emergencies.motor = this.traffic.motor;
       this.emergencies.update(gdt, this.sim.age);
       this.hoists.update(gdt);
+      this.seeps.update(dt);
       this.transports.update(gdt, this.sim.age);
       this.railView.update(dt, this.sim.age);
       if (this.railView.lightsVersion !== this.railLightsV) { this.railLightsV = this.railView.lightsVersion; this.refreshHalos(); }
