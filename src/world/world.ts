@@ -167,7 +167,7 @@ export class World {
   basaltRect: [number, number, number, number] | null = null;
   /** Cendres volcaniques : un champ semé sur une ancienne coulée donne double récolte (sauvegardé) */
   ash = new Uint8Array(N * N);
-  /** Catastrophes naturelles (réglage) : la lave et le feu détruisent alors les bâtiments */
+  /** Catastrophes naturelles (réglage) : le volcan se réveille, les incendies prennent, la lave et le feu détruisent les bâtiments */
   disasters = true;
   /** Bâtiments perdus (lave), à annoncer */
   losses: string[] = [];
