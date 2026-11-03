@@ -288,6 +288,21 @@ export class UI {
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
       <div id="photoBar" class="panel"><button id="pCap">${ic('camera', 18)} Capturer</button><button id="pExit">Quitter</button></div>
     `;
+    // dans les bandeaux qui défilent de côté (vignettes de la barre de construction, rayons…), la molette les fait défiler
+    // horizontalement ; une liste qui défile de haut en bas garde son défilement habituel
+    root.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) return;
+      for (let el = e.target as HTMLElement | null; el && el !== root; el = el.parentElement) {
+        if (el.scrollWidth <= el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) continue;
+        const ox = getComputedStyle(el).overflowX;
+        if (ox !== 'auto' && ox !== 'scroll') continue;
+        const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        if (!d) return;
+        e.preventDefault();
+        el.scrollLeft += e.deltaMode === 1 ? d * 32 : e.deltaMode === 2 ? d * el.clientWidth : d;
+        return;
+      }
+    }, { passive: false });
     $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${ic(n.icon, 20)}</b><div class="bar"><i></i></div><span>${n.label}</span></div>`).join('')
       + `<button class="pop" id="pop" title="État des habitants" aria-label="État des habitants" aria-expanded="false">0<small>habitants</small></button>`;
     // fiche des habitants : un clic sur le compteur l'ouvre, un clic ailleurs la ferme
