@@ -61,6 +61,11 @@ button:disabled, button.locked { opacity: 0.4; cursor: not-allowed; }
 #ageReq span { display: flex; gap: 6px; }
 #ageReq em { margin-left: auto; font-style: normal; font-weight: 700; color: var(--ink2); }
 #ageReq .ok { color: var(--good); font-weight: 700; }
+#ageReq .kind { cursor: pointer; }
+#ageReq .kind:hover { color: var(--accent-ink); }
+#ageReq small { color: var(--ink2); font-size: 11px; }
+#msg.link { pointer-events: auto; cursor: pointer; }
+#msg.link:hover { color: var(--accent-ink); text-decoration: underline; }
 #agePanel.open #ageReq { display: block; }
 
 #needsPanel { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 12px; gap: 3px; }
@@ -137,7 +142,11 @@ button.pop:hover { background: var(--accent-soft); }
 #modes button { position: relative; z-index: 1; flex-direction: column; gap: 2px; width: 82px; height: 50px; margin-top: -14px; padding: 2px 4px 4px; border-radius: 12px 12px 0 0; border: 1px solid rgba(15, 27, 45, 0.1); border-bottom: none; font-size: 12px; font-weight: 700; color: var(--ink2); background: linear-gradient(#ffffff, #f3f5f8); box-shadow: 0 -3px 10px rgba(15, 27, 45, 0.12); backdrop-filter: none; -webkit-backdrop-filter: none; }
 #modes button:hover:not(.active) { background: linear-gradient(#ffffff, #e9eef5); color: var(--ink); }
 #modes button.active { width: 86px; height: 60px; margin-top: -24px; color: #fff; background: var(--navy); border-color: var(--navy); box-shadow: 0 -4px 14px rgba(15, 27, 45, 0.25); }
-#items { display: flex; gap: 10px; justify-content: center; padding: 14px 12px; overflow-x: auto; scrollbar-width: thin; min-height: 104px; }
+/* centrée tant qu'elle tient, la rangée défile depuis son début quand elle déborde (pas de justify-content: center, qui
+   rendrait le début inaccessible) */
+#items { display: flex; gap: 10px; padding: 14px 12px; overflow-x: auto; scrollbar-width: thin; min-height: 104px; }
+#items > :first-child { margin-left: auto; }
+#items > :last-child { margin-right: auto; }
 #items button.tile { position: relative; flex-direction: column; gap: 4px; width: 82px; height: 76px; min-height: 0; padding: 0; flex: 0 0 auto; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.78); box-shadow: 0 2px 8px rgba(15, 27, 45, 0.08); }
 #items button.tile:hover { background: #fff; }
 #items button.tile.active { background: linear-gradient(180deg, #3b7cf5, #2a62d6); border-color: #2a62d6; color: #fff; box-shadow: 0 8px 20px rgba(47, 111, 237, 0.45); }

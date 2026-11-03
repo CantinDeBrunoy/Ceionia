@@ -9,7 +9,7 @@ npm install
 npm run dev        # serveur de développement (http://localhost:5173)
 npm run build      # vérification TypeScript + build statique dans dist/
 npm run preview    # sert le dossier dist/
-npm test           # tests automatiques (génération, sauvegarde, eau, volcans, récoltes)
+npm test           # tests automatiques (génération et variété du continent, sauvegarde, eau, volcans, récoltes)
 ```
 
 Le dossier `dist/` est 100 % statique (déployable tel quel).
@@ -100,7 +100,9 @@ Le bouton 🧭 (il clignote tant que l'expédition obligatoire de l'âge n'est n
 
 ## Monde
 
-Une seule carte, le **Continent** (192 × 192 cases) : plateaux en gradins au nord-ouest, montagnes enneigées d'où descend une rivière, île volcanique au sud-ouest, un grand lac et son îlot, des mesas dans le désert à l'est, un archipel tropical au sud-est. Les anciennes cartes (Île flottante, Vallée, Plateaux) ont été retirées : leurs sauvegardes ne se chargent plus. Sur une si grande carte, seule la zone retouchée du relief est recalculée (sculpture fluide) et les teintes de saison changent par bandes.
+Une seule carte, le **Continent** (192 × 192 cases) : plateaux en gradins au nord-ouest, montagnes enneigées d'où descend une rivière jusqu'à la mer, île volcanique au sud-ouest, un grand lac et son îlot, des mesas dans le désert à l'est, un archipel tropical au sud-est. Les anciennes cartes (Île flottante, Vallée, Plateaux) ont été retirées : leurs sauvegardes ne se chargent plus. Sur une si grande carte, seule la zone retouchée du relief est recalculée (sculpture fluide) et les teintes de saison changent par bandes.
+
+**Un continent par partie.** Chaque nouvelle partie tire une graine, et le menu montre en aperçu le continent qu'elle donne. Toujours le même agencement, mais d'une graine à l'autre chaque contrée se déplace, grandit ou rapetisse, s'étire et tourne (`src/world/continent.ts`, plan tiré de la graine) : côte en ellipse plus ou moins tournée, déformée, avancée en caps ou creusée en baies ; chaîne de montagnes plus ou moins de biais, crêtes alignées sur son axe, de deux à cinq grands sommets ; terrasses des plateaux orientées, plus ou moins nombreuses et hautes ; lac rond ou allongé, l'îlot plus ou moins au centre, une rive de terre le séparant toujours de la mer ; île volcanique séparée du continent par un détroit peu profond et irrégulier (franchissable par un pont) ; tables des mesas alignées selon leur contrée ; îles de l'archipel plus ou moins semées, la mer recouvrant en son cœur la côte du continent ; rivière née dans le flanc du massif, source, embouchure et méandres tirés au sort, dans une vallée dont le fond descend jusqu'à l'estuaire ; dunes orientées par le vent dominant. Le désert se resserre autour des mesas, les tropiques autour de l'archipel, et les rives du lac tournent au marais. Un tirage où la rivière frôlerait le lac, les mesas ou l'île, où le lac toucherait la côte ou le détroit, ou où une baie rognerait le massif ou les mesas est refait : il reste toujours de larges terres plates au bord de l'eau pour fonder un village. Une même graine redonne toujours le même continent.
 
 Chaque carte se partage entre cinq **biomes**, déduits d'un climat propre à la carte (axe froid → chaud, humidité, altitude, proximité de l'eau) :
 
@@ -170,7 +172,7 @@ Modèles 3D de [Quaternius](https://quaternius.com), licence **CC0** (domaine pu
 
 ## Sauvegarde
 
-Sauvegarde automatique toutes les 15 s (et à la fermeture de l'onglet) dans `localStorage` ; elle garde aussi les champs de lave, les cendres fertiles, le bois, la pierre et le minerai, les filons exploités, les galeries tenues et les expéditions réussies avec ce qu'elles ont rapporté, la réserve d'équipement et les commandes en cours (les anciennes sauvegardes se chargent sans). Une expédition en route n'est pas sauvegardée : recharger la partie l'annule, et on peut la relancer. Les trains non plus : au chargement, chacun repart du premier arrêt de sa ligne avec une nouvelle équipe de mineurs (les lignes, elles, sont sauvegardées). Export/import JSON depuis les réglages ou le menu principal. Les sauvegardes des anciennes cartes 48 × 48 ne se chargent plus : la carte repart de zéro.
+Sauvegarde automatique toutes les 15 s (et à la fermeture de l'onglet) dans `localStorage` ; elle garde aussi les champs de lave, les cendres fertiles, le bois, la pierre et le minerai, les filons exploités, les galeries tenues et les expéditions réussies avec ce qu'elles ont rapporté, la réserve d'équipement et les commandes en cours (les anciennes sauvegardes se chargent sans). Une expédition en route n'est pas sauvegardée : recharger la partie l'annule, et on peut la relancer. Les trains non plus : au chargement, chacun repart du premier arrêt de sa ligne avec une nouvelle équipe de mineurs (les lignes, elles, sont sauvegardées). Export/import JSON depuis les réglages ou le menu principal. Les sauvegardes des anciennes cartes 48 × 48 ne se chargent plus : la carte repart de zéro. Le relief est sauvegardé tel quel, mais le climat (donc les biomes, et les zones du souterrain qui les suivent) se recalcule au chargement depuis la graine : la sauvegarde note la version du générateur qui a créé la carte (`gen`), et les parties d'avant le continent tiré de la graine (sans `gen`) gardent leur climat d'origine et se rechargent à l'identique ; l'ancien générateur reste dans le code pour elles.
 
 ## Structure du code
 
@@ -178,7 +180,7 @@ Sauvegarde automatique toutes les 15 s (et à la fermeture de l'onglet) dans `lo
 src/
   main.ts          boot, classe Game, boucle de jeu, raccourcis clavier
   core/            caméra orbitale + entrées souris/tactile, temps de jeu, RNG/maths
-  world/           grille et heightmap (World), bruit simplex, génération du continent, pinceaux de relief, monde souterrain (galeries, zones, bassins), plan des jardins selon l'âge
+  world/           grille et heightmap (World), bruit simplex, génération du continent (plan tiré de la graine, versions du générateur), pinceaux de relief, monde souterrain (galeries, zones, bassins), plan des jardins selon l'âge
   build/           catalogue (bâtiments, âges), outils (placement fantôme, routes, démolition, undo/redo), routes automatiques, orientation auto
   sim/             besoins/population/âges (Sim), habitants instanciés + pathfinding (Agents), missions, expéditions, équipement et imprévus, ressources (bois, pierre, minerai), chemin de fer et mineurs
   render/          modèles procéduraux par âge, soldats et cavaliers de chaque époque, terrain/eau, routes, végétation instanciée par tuiles (biomes, niveaux de détail), grottes et failles, faune et ses interactions, bâtiments, jardins (décor par âge, joutes et jeux animés), ciel/météo, saisons, monde souterrain (décor, lumières, créatures),

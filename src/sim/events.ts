@@ -102,7 +102,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'shoal', where: ['river'], missions: ['fishing', 'berries', 'seeds', 'reef'], title: 'Un banc de poissons',
+    id: 'shoal', where: ['river'], missions: ['fishing', 'reef'], title: 'Un banc de poissons',
     text: 'L’eau frémit : un grand banc de poissons remonte le courant juste devant l’équipe !',
     options: [
       { label: 'Lancer les filets', risk: 1.05, work: 5, bonus: [food(2, 4)], text: 'Les filets sont revenus pleins à craquer.' },

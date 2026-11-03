@@ -6,7 +6,7 @@ import type { UnderView } from './render/underView';
 /** Le monde souterrain (décor, créatures) est chargé à part, en arrière-plan après le démarrage */
 let underModule: Promise<typeof import('./render/underView')> | null = null;
 const loadUnder = () => (underModule ??= import('./render/underView'));
-import { newWorld, addDefaultDecor, mapDef, CONTINENT } from './world/mapgen';
+import { newWorld, addDefaultDecor, mapDef, newSeed, CONTINENT } from './world/mapgen';
 import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
 import { RoadView } from './render/roads';
@@ -147,7 +147,8 @@ class Game implements UIHost {
     },
   };
 
-  constructor(mapId: number, mode: 'continue' | 'new', fresh: boolean) {
+  /** `seed` : graine d'une nouvelle partie (tirée au hasard sans elle) */
+  constructor(mapId: number, mode: 'continue' | 'new', seed?: number) {
     const w = this.world;
     const save = mode === 'continue' ? loadSlot(mapId) : null;
     const settings = { ...loadSettings(), ...(save?.settings ?? {}) } as Partial<Settings>;
@@ -165,7 +166,7 @@ class Game implements UIHost {
         newWorld(w, mapId, mapDef(mapId)!.defaultSeed);
       }
     } else {
-      newWorld(w, mapId, fresh ? Math.floor(Math.random() * 100000) + 1 : mapDef(mapId)!.defaultSeed);
+      newWorld(w, mapId, seed ?? newSeed());
     }
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
@@ -802,7 +803,7 @@ async function boot() {
   loading.remove();
 
   let started = false;
-  const start = (map: number, mode: 'continue' | 'new', fresh = false) => {
+  const start = (map: number, mode: 'continue' | 'new', seed?: number) => {
     if (started) return;
     started = true;
     // les anciennes cartes (île, vallée, plateaux) n'existent plus : on joue sur le continent
@@ -811,18 +812,18 @@ async function boot() {
     // tailles des tableaux du monde, des vues et de la caméra
     setMapSize(mapDef(map)!.size);
     syncChunks();
-    (window as any).__game = new Game(map, mode, fresh);
+    (window as any).__game = new Game(map, mode, seed);
   };
   const auto = sessionStorage.getItem(AUTOSTART);
   let menu: HTMLElement | null = null;
   if (auto) {
     sessionStorage.removeItem(AUTOSTART);
     const [m, mode] = auto.split('|');
-    start(+m, mode === 'continue' ? 'continue' : 'new', mode === 'fresh');
+    start(+m, mode === 'continue' ? 'continue' : 'new');
     return;
   }
   menu = showMenu(uiRoot, {
-    start: (map, mode) => start(map, mode, mode === 'new' && !!loadSlot(map)),
+    start: (map, mode, seed) => start(map, mode, seed),
     importFile: async (f) => {
       try { const d = await readSaveFile(f); saveSlot(d); start(d.map, 'continue'); }
       catch (e) { alert('Import impossible : ' + (e as Error).message); }

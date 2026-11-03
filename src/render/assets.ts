@@ -403,6 +403,50 @@ export interface Actor {
 /** Bêtes de la ferme et des bois, rendues en facettes */
 const FACETED = new Set<string>(['cow', 'pig', 'sheep', 'chicken', 'horse', 'deer', 'stag', 'fox', 'wolf', 'llama', 'dog']);
 
+/** Bêtes dont le modèle, trop arrondi, est simplifié en grosses facettes (sommets regroupés sur une grille de `n` cases) */
+const CHUNKY: Partial<Record<string, number>> = { cow: 9 };
+const chunked = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
+
+/**
+ * Simplification « low poly » d'un maillage animé : les sommets d'une même case d'une grille grossière sont fondus en un
+ * seul (à leur position moyenne, avec les poids d'os de l'un d'eux), les triangles devenus plats disparaissent ; de
+ * grandes facettes, et l'animation reste
+ */
+function chunky(g: THREE.BufferGeometry, n: number): THREE.BufferGeometry {
+  const known = chunked.get(g);
+  if (known) return known;
+  const pos = g.attributes.position, count = pos.count;
+  g.computeBoundingBox();
+  const bb = g.boundingBox!, size = bb.getSize(new THREE.Vector3()), cell = Math.max(size.x, size.y, size.z) / n;
+  const keyOf = new Map<string, number>(), repr = new Int32Array(count), sum = new Float32Array(count * 3), num = new Uint16Array(count);
+  for (let i = 0; i < count; i++) {
+    const k = `${Math.floor((pos.getX(i) - bb.min.x) / cell)},${Math.floor((pos.getY(i) - bb.min.y) / cell)},${Math.floor((pos.getZ(i) - bb.min.z) / cell)}`;
+    let r = keyOf.get(k);
+    if (r === undefined) { r = i; keyOf.set(k, i); }
+    repr[i] = r;
+    sum[r * 3] += pos.getX(i); sum[r * 3 + 1] += pos.getY(i); sum[r * 3 + 2] += pos.getZ(i); num[r]++;
+  }
+  const ng = g.clone(), np = ng.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < count; i++) if (num[i]) np.setXYZ(i, sum[i * 3] / num[i], sum[i * 3 + 1] / num[i], sum[i * 3 + 2] / num[i]);
+  const src = g.index ? Array.from(g.index.array) : Array.from({ length: count }, (_, i) => i);
+  const groups = g.groups.length ? g.groups : [{ start: 0, count: src.length, materialIndex: 0 }];
+  const out: number[] = [];
+  ng.clearGroups();
+  for (const gr of groups) {
+    const start = out.length;
+    for (let t = gr.start; t + 2 < gr.start + gr.count; t += 3) {
+      const a = repr[src[t]], b = repr[src[t + 1]], c = repr[src[t + 2]];
+      if (a !== b && b !== c && a !== c) out.push(a, b, c);
+    }
+    ng.addGroup(start, out.length - start, gr.materialIndex ?? 0);
+  }
+  ng.setIndex(out);
+  ng.deleteAttribute('normal');
+  ng.computeVertexNormals();
+  chunked.set(g, ng);
+  return ng;
+}
+
 /** Boîte englobante de chaque modèle animé, mesurée une fois (l'échelle dépend de la taille demandée) */
 const boxes = new Map<ModelName, THREE.Box3>();
 
@@ -424,6 +468,8 @@ export function makeActor(name: ModelName, size: number, fit: 'length' | 'height
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+    const div = CHUNKY[name];
+    if (div) m.geometry = chunky(m.geometry, div);
     // glTF sans metallicFactor = métal par défaut : sans carte d'environnement il paraît presque noir ; les bêtes en
     // facettes, comme le reste du décor (leurs normales lissées les faisaient paraître en plastique)
     for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]) {

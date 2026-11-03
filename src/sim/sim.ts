@@ -1,5 +1,5 @@
 import { World } from '../world/world';
-import { AGES, KINDS, KindId, KIND_LABEL } from '../build/catalog';
+import { AGES, BUILD_CATS, KINDS, KindId } from '../build/catalog';
 import { mandatoryFor, needBonus } from './missions';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -7,7 +7,8 @@ export interface Need { cap: number; demand: number; ok: boolean }
 export interface AgeProgress {
   next: number;
   ratio: number;
-  items: { label: string; have: number; need: number }[];
+  /** chaque condition ; `kind` : le bâtiment demandé (nommé comme dans la barre de construction) */
+  items: { label: string; have: number; need: number; kind?: KindId }[];
 }
 
 /** Simulation légère : besoins par présence, population, passage d'âge */
@@ -21,6 +22,8 @@ export class Sim {
   joy: Need = { cap: 0, demand: 0, ok: true };
   health: Need = { cap: 0, demand: 0, ok: true };
   message = '';
+  /** le bâtiment dont parle le message (un clic sur le message le prend en main), s'il y en a un */
+  messageKind: KindId | null = null;
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
   moisture = 0.7;
@@ -109,12 +112,23 @@ export class Sim {
     return this.housing.ok && this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok && this.health.ok;
   }
 
+  /** Nom du bâtiment tel que le montre la barre de construction à l'âge du village (« Séchoir à grains » pour la ferme préhistorique) */
+  nameOf(k: KindId) {
+    const d = KINDS[k];
+    return d.names[Math.max(this.age, d.minAge)];
+  }
+
+  /** Où le trouver : l'onglet Bâtir et son rayon */
+  whereOf(k: KindId) {
+    return `Bâtir › ${BUILD_CATS.find((c) => c.id === KINDS[k].cat)!.label}`;
+  }
+
   ageProgress(): AgeProgress | null {
     const n = this.age + 1;
     if (n >= AGES.length) return null;
     const req = AGES[n];
-    const items = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
-    for (const [k, c] of Object.entries(req.reqKinds)) items.push({ label: KIND_LABEL[k as KindId], have: this.counts[k] ?? 0, need: c as number });
+    const items: AgeProgress['items'] = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
+    for (const [k, c] of Object.entries(req.reqKinds)) items.push({ label: this.nameOf(k as KindId), have: this.counts[k] ?? 0, need: c as number, kind: k as KindId });
     if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
     // l'expédition obligatoire de l'âge en cours
     const m = mandatoryFor(this.age);
@@ -124,24 +138,32 @@ export class Sim {
     return { next: n, ratio: sum / items.length, items };
   }
 
+  /**
+   * Le conseil du moment. Chaque bâtiment y est nommé comme dans la barre de construction à l'âge du village, avec son
+   * rayon (« Séchoir à grains » (Bâtir › Production), pas « une ferme ») ; `messageKind` dit lequel, pour le prendre en main
+   */
   private computeMessage() {
     const w = this.world;
     const p = this.pop;
-    if (w.buildings.size === 0) return 'Posez une hutte, une ferme et un point d’eau pour commencer.';
-    if (!this.counts.house) return 'Construisez une maison pour accueillir des habitants.';
-    if (!this.housing.ok) return 'Il manque des logements pour accueillir de nouveaux habitants.';
-    if (!this.food.ok) return this.drought ? 'Sécheresse : les champs donnent moins. Un ponton de pêche ou une ferme de plus aiderait.' : 'Il manque une ferme (ou un champ) pour nourrir tout le monde.';
-    if (!this.water.ok) return 'Il manque un puits pour abreuver tout le monde.';
-    if (!this.jobs.ok) return 'Les habitants cherchent du travail : construisez un atelier.';
-    if (!this.joy.ok) return 'Les habitants aimeraient un lieu de rencontre : feu, place, jardin ou temple.';
-    if (!this.health.ok) return 'Les habitants tombent malades : il faut un lieu de soins (Bâtir › Services).';
+    const say = (k: KindId) => `« ${this.nameOf(k)} » (${this.whereOf(k)})`;
+    const about = (k: KindId, text: string) => { this.messageKind = k; return text; };
+    this.messageKind = null;
+    if (w.buildings.size === 0) return about('house', `Pour commencer, posez « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
+    if (!this.counts.house) return about('house', `Pour accueillir des habitants : ${say('house')}.`);
+    if (!this.housing.ok) return about('house', `Il manque des logements : ${say('house')}.`);
+    if (!this.food.ok) return about('farm', this.drought ? `Sécheresse : les champs donnent moins ; ${say('farm')} ou « ${this.nameOf('pier')} » de plus aiderait.` : `Il manque de quoi manger : ${say('farm')} ou un champ.`);
+    if (!this.water.ok) return about('well', `Il manque de l’eau : ${say('well')}.`);
+    if (!this.jobs.ok) return about('workshop', `Les habitants cherchent du travail : ${say('workshop')}.`);
+    if (!this.joy.ok) return about('gather', `Les habitants aimeraient un lieu de rencontre : ${say('gather')}, un jardin ou un lieu de culte.`);
+    if (!this.health.ok) return about('health', `Les habitants tombent malades : il faut ${say('health')}.`);
     if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
     const ap = this.ageProgress();
     if (ap) {
       if (p < AGES[ap.next].reqPop) return `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
       const miss = ap.items.find((i) => i.have < i.need);
       if (miss?.label.startsWith('expédition')) return `Pour l’âge suivant : réussissez l’${miss.label} (menu Expéditions).`;
-      if (miss) return miss.label.startsWith('minerai') ? `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.` : `Pour l’âge suivant : il manque ${miss.need - miss.have} ${miss.label}.`;
+      if (miss?.kind) { const n = miss.need - miss.have; return about(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}.`); }
+      if (miss) return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`;
     }
     return 'Le village est paisible et prospère.';
   }

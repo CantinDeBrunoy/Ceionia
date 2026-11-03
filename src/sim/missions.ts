@@ -131,10 +131,10 @@ export const MISSIONS: Mission[] = [
         loseText: 'Les oiseaux étaient passés avant : il ne restait presque rien.',
       },
       {
-        label: 'Remonter la rivière', text: 'Baies, poissons… et peut-être une baignade.',
+        label: 'Remonter la rivière', text: 'Baies, cresson… et peut-être une baignade.',
         dest: 'river', scene: 'gather', doing: 'cueille des baies au bord de l’eau', party: 2, work: 12, risk: 0.2, carry: 'sacks',
         win: [food(3, 4), joy(1, 4)], lose: [hurt(1, 1)],
-        winText: 'Baies, poissons et une baignade : tout le monde rentre content.',
+        winText: 'Baies, cresson et une baignade : tout le monde rentre content.',
         loseText: 'Une glissade sur les galets : une cheville foulée, rien de grave.',
       },
     ],

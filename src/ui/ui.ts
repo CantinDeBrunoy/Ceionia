@@ -7,7 +7,7 @@ import { Environment, WeatherKind } from '../render/env';
 import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData } from '../save/save';
-import { MAPS, genHeights } from '../world/mapgen';
+import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import { Railway, Train, isStation } from '../sim/railway';
 import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds } from '../sim/missions';
@@ -270,7 +270,14 @@ export class UI {
       if (!census.hidden && !census.contains(t) && !t.closest('#pop')) this.closeCensus();
     });
 
-    $('#agePanel').onclick = () => $('#agePanel').classList.toggle('open');
+    $('#agePanel').onclick = (e) => {
+      // une condition qui demande un bâtiment : on le prend en main (le bon onglet et le bon rayon s'ouvrent)
+      const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
+      if (k) { this.pick(k); return; }
+      $('#agePanel').classList.toggle('open');
+    };
+    // le conseil du moment parle d'un bâtiment : un clic le prend en main
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k) this.pick(k); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.toast('Le brouillard se lève.'); };
     $('#bSpeed').onclick = () => {
@@ -327,6 +334,14 @@ export class UI {
     });
   }
 
+  /** Prend un bâtiment en main (onglet Bâtir, son rayon), ou dit pourquoi il est encore verrouillé */
+  private pick(k: KindId) {
+    const lock = this.lockOf(k);
+    if (lock) { this.toast(lock); return; }
+    this.host.tools.setTool('build', k);
+    this.host.audio.sfxClick();
+  }
+
   renderItems() {
     const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
     const sub = $('#subcats');
@@ -342,7 +357,9 @@ export class UI {
     }));
     let html: string;
     if (build) {
-      html = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => {
+      // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue)
+      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat), shut = (k: KindId) => +!!this.lockOf(k);
+      html = kinds.sort((p, q) => shut(p) - shut(q)).map((k) => {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
         return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
@@ -352,6 +369,7 @@ export class UI {
     }
     const items = $('#items');
     items.innerHTML = html;
+    items.scrollLeft = 0;
     this.bindTools(items);
     items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {
       const k = b.dataset.kind as KindId;
@@ -491,6 +509,8 @@ export class UI {
     const tl = this.host.tools;
     this.root.querySelectorAll<HTMLButtonElement>('#dock button[data-tool], #items button[data-kind]').forEach((b) => {
       const on = b.dataset.tool ? b.dataset.tool === tl.tool : tl.tool === 'build' && b.dataset.kind === tl.kind;
+      // le bâtiment pris en main (depuis un message, un raccourci) défile jusque dans la rangée visible
+      if (on && b.dataset.kind && !b.classList.contains('active')) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       b.classList.toggle('active', on);
     });
     const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && !SINGLE_TOOLS.includes(tl.tool));
@@ -534,7 +554,7 @@ export class UI {
     const ap = sim.ageProgress();
     $('#ageBar').style.width = ap ? `${Math.round(ap.ratio * 100)}%` : '100%';
     $('#ageReq').innerHTML = ap
-      ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''}">${i.have >= i.need ? '✓' : '•'} ${i.label} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''}${i.kind ? ' kind' : ''}"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} — cliquer pour le bâtir"` : ''}>${i.have >= i.need ? '✓' : '•'} ${i.label}${i.kind ? ` <small>${sim.whereOf(i.kind).replace('Bâtir › ', '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
       : 'Dernier âge atteint : profitez de votre village !';
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
@@ -550,6 +570,8 @@ export class UI {
     if ($('#pop').dataset.v !== popHtml) { $('#pop').innerHTML = popHtml; $('#pop').dataset.v = popHtml; }
     if (!$('#census').hidden) this.renderCensus();
     $('#msg').textContent = sim.message;
+    $('#msg').classList.toggle('link', !!sim.messageKind);
+    $('#msg').title = sim.messageKind ? `Cliquer pour bâtir « ${sim.nameOf(sim.messageKind)} »` : '';
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
     const clock = `${ic(SEASON_ICONS[time.season], 18)}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${SEASONS[time.season]} ${wk}</small></span>`;
@@ -974,7 +996,8 @@ export class UI {
 
 // ---------------- Menu principal ----------------
 export interface MenuHost {
-  start(map: number, mode: 'continue' | 'new'): void;
+  /** `seed` : graine d'une nouvelle partie (celle du continent montré en aperçu) */
+  start(map: number, mode: 'continue' | 'new', seed?: number): void;
   importFile(f: File): void;
 }
 
@@ -1023,7 +1046,9 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     const card = document.createElement('div');
     card.className = 'card panel';
     card.innerHTML = `<canvas></canvas><h3>${m.name}</h3><p>${m.desc}</p><div class="stat"></div><div class="btns"></div>`;
-    const heights = save ? (save.world.heights as number[]).map((v) => v / 100) : genHeights(m.id, m.defaultSeed);
+    // chaque nouvelle partie a son continent : sans sauvegarde, l'aperçu montre celui de la graine tirée pour elle
+    const seed = newSeed();
+    const heights = save ? (save.world.heights as number[]).map((v) => v / 100) : genHeights(m.id, seed);
     drawPreview($('canvas', card) as HTMLCanvasElement, heights);
     if (save) $('.stat', card).textContent = `${AGES[save.age].name} · ${Math.floor(save.pop)} hab. · ${SEASONS[Math.floor(save.seasonT) % 4]}`;
     const btns = $('.btns', card);
@@ -1033,7 +1058,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     btns.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = async () => {
       const mode = b.dataset.m as 'continue' | 'new';
       if (mode === 'new' && save && !(await confirmBox(root, 'Écraser la sauvegarde de cette carte ?', 'Écraser'))) return;
-      host.start(m.id, mode);
+      host.start(m.id, mode, mode === 'new' ? seed : undefined);
     }));
     maps.appendChild(card);
   }

@@ -4,11 +4,12 @@ import { hash2 } from '../core/rng';
 import { Simplex } from '../world/noise';
 import { KindId, sizeOf } from '../build/catalog';
 import { mats } from './materials';
+import { SNOWY } from './terrainView';
 
 /** Chaussée selon l'âge : sentier, chemin de terre, dalles, pavés, asphalte */
-const ROAD_COL = [0xc49e6c, 0xb48b58, 0xb2a590, 0x8c8479, 0x5d6169];
+const ROAD_COL = [0xb8915f, 0xb48b58, 0xb2a590, 0x8c8479, 0x5d6169];
 /** Abords : terre battue des cours et des placettes, puis trottoirs de pierre, de béton */
-const SIDE_COL = [0xe8dab6, 0xe6d5ad, 0xdfcca5, 0xc9bea9, 0xd0ccc4];
+const SIDE_COL = [0xc6a474, 0xc4a473, 0xc4a77c, 0xc9bea9, 0xd0ccc4];
 /** Places pavées (devant les ateliers, les temples, et là où les rues se touchent en carré) */
 const PLAZA_COL = [0xe1cea4, 0xe1cea4, 0xdcc9a2, 0xd6c3a2, 0xddc9ae];
 /** Liseré de terre tassée au bord des chemins ; accotement de gravier des routes de campagne */
@@ -16,9 +17,11 @@ const RIM_COL = [0xa9865a, 0x987548, 0x9a8e7b, 0x8a8277, 0x8d8b86];
 /** Bordures des trottoirs : granit, puis béton */
 const CURB_COL = [0xaaa59c, 0xaaa59c, 0xaaa59c, 0xaba69d, 0xe9e7e1];
 /** Part de terre battue dans les cours (l'herbe repousse par plaques) */
-const YARD_A = [0.45, 0.6, 0.75, 1, 1];
+const YARD_A = [0.62, 0.7, 0.8, 1, 1];
 /** Demi-largeur de la chaussée */
-const HW = [0.2, 0.25, 0.26, 0.3, 0.32];
+const HW = [0.21, 0.25, 0.27, 0.3, 0.32];
+/** Les chemins de terre serpentent (amplitude du détour, en cases) ; leur largeur varie, leurs bords s'effilochent */
+const WIGGLE = [0.32, 0.25, 0.14, 0, 0], WIDTH_VAR = [0.22, 0.18, 0.12, 0, 0], FRAY = [0.035, 0.03, 0.02, 0, 0];
 /** Rayon des bordures arrondies aux coins des carrefours */
 const FILLET = 0.12;
 /** Ponts : tablier de bois, puis de pierre, puis d'acier ; piles et garde-corps */
@@ -172,7 +175,7 @@ export class RoadView {
   private noise = new Simplex(9137);
   /** revêtements (âge : terre, terre, dalles, pavés, asphalte), couleurs et neige, pour le shader */
   private u = {
-    uStyle: { value: 0 }, uSnowK: { value: 0 }, uYardA: { value: 1 },
+    uStyle: { value: 0 }, uYardA: { value: 1 }, uFray: { value: 0 }, uSnowCol: { value: SNOW.clone() },
     uRoad: { value: new THREE.Color() }, uSide: { value: new THREE.Color() }, uPlaza: { value: new THREE.Color() },
     uRim: { value: new THREE.Color() }, uCurb: { value: new THREE.Color() },
   };
@@ -183,11 +186,12 @@ export class RoadView {
     // bordures, accotements, motif de chaque revêtement (grain de la terre, dalles, pavés, asphalte, dalles de béton)
     pathMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.u);
-      sh.vertexShader = 'attribute float aRoad;\nattribute float aPave;\nattribute float aKind;\nvarying vec3 vRoadPos;\nvarying float vRoad;\nvarying float vPave;\nvarying float vKind;\n'
-        + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvRoadPos = position; vRoad = aRoad; vPave = aPave; vKind = aKind;');
+      sh.vertexShader = 'attribute float aRoad;\nattribute float aPave;\nattribute float aKind;\nattribute float aSnow;\nvarying vec3 vRoadPos;\nvarying float vRoad;\nvarying float vPave;\nvarying float vKind;\nvarying float vSnow;\n'
+        + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvRoadPos = position; vRoad = aRoad; vPave = aPave; vKind = aKind; vSnow = aSnow;');
       sh.fragmentShader = `uniform float uStyle;
-uniform float uSnowK;
+uniform vec3 uSnowCol;
 uniform float uYardA;
+uniform float uFray;
 uniform vec3 uRoad;
 uniform vec3 uSide;
 uniform vec3 uPlaza;
@@ -197,6 +201,7 @@ varying vec3 vRoadPos;
 varying float vRoad;
 varying float vPave;
 varying float vKind;
+varying float vSnow;
 float rHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 float rNoise(vec2 p) {
 	vec2 i = floor(p), f = fract(p);
@@ -220,11 +225,16 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
 		bool town = uStyle > 2.5;
 		float fr = max(fwidth(vRoad), 1e-4), fp = max(fwidth(vPave), 1e-4);
 		// bords : nets en ville, irréguliers sur la terre
-		float dR = vRoad + (town ? 0.0 : (rNoise(rp * 6.0) - 0.5) * 0.05);
-		float dP = vPave + (town ? 0.0 : (rNoise(rp * 2.6) - 0.5) * 0.22);
+		// bords nets en ville ; sur la terre, des bords qui ondulent en douceur (pas de dents)
+		float dR = vRoad + (town ? 0.0 : (rNoise(rp * 1.7 + 9.1) - 0.5) * 2.0 * uFray);
+		float dP = vPave + (town ? 0.0 : (rNoise(rp * 1.8) - 0.5) * 0.16);
 		float road = 1.0 - smoothstep(-fr, fr, dR);
-		float pave = 1.0 - smoothstep(-fp, fp, dP);
-		if (!town) { float t = 1.0 - uYardA, hn = rNoise(rp * 1.9 + 7.3) * 0.75 + rNoise(rp * 5.3) * 0.25; pave *= smoothstep(t - 0.025, t + 0.025, hn); }
+		// trottoirs nets en ville ; sur la terre, une usure qui s'estompe peu à peu vers l'herbe, sans contour
+		float pave = town ? 1.0 - smoothstep(-fp, fp, dP) : 1.0 - smoothstep(-0.32, 0.22, dP);
+		if (!town) {
+			float t = 1.0 - uYardA, hn = 0.5 + 0.25 * (sin(rp.x * 1.3 + sin(rp.y * 0.8) * 1.6) + sin(rp.y * 1.1 + sin(rp.x * 0.7) * 1.9));
+			pave *= mix(0.3, 1.0, smoothstep(t - 0.35, t + 0.35, hn)) * 0.72;
+		}
 		float k = 1.0, kp = 1.0;
 		vec2 b;
 		if (uStyle < 1.5) k = rGrain(rp, 22.0, 0.1) + (rNoise(rp * 1.7) - 0.5) * 0.1;
@@ -241,7 +251,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
 			b = uStyle < 3.5 ? rBond(rp, vec2(4.0, 6.0), 0.5, 0.0, 0.05) : rBond(rp, vec2(5.0, 5.0), 0.0, 0.0, 0.035);
 			cPave = uSide * mix(0.93 + b.x * 0.1, 0.8, b.y);
 		} else cPave = uSide * (rGrain(rp, 14.0, 0.12) + (rNoise(rp * 2.1) - 0.5) * 0.12);
-		vec3 c = mix(cPave, uRoad * mix(k, 1.0, uSnowK), road);
+		vec3 c = mix(cPave, uRoad * mix(k, 1.0, clamp(vSnow * 1.3, 0.0, 1.0)), road);
 		float a = max(road, pave);
 		if (town) {
 			// bordure du trottoir (ou accotement de gravier en campagne) juste au-delà de la chaussée, caniveau sombre au pied
@@ -255,6 +265,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
 			// liseré de terre tassée au bord du chemin
 			c = mix(c, uRim, smoothstep(-0.07, -0.015, dR) * road * 0.65);
 		}
+		// la neige ne tient que là où le biome la garde (pas dans le désert ni sous les tropiques)
+		c = mix(c, uSnowCol, vSnow * 0.8);
 		diffuseColor.rgb *= c;
 		diffuseColor.a = a;
 		if (a < 0.01) discard;
@@ -497,9 +509,22 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     return out;
   }
 
-  /** Tracé de chaque case : morceaux de ligne (x, z à la suite) qui forment le chemin (tout droit en ville) */
+  /**
+   * Détour d'un chemin de terre en ce point : un même point bouge toujours de la même façon, d'une case à l'autre, si bien
+   * que tout le réseau serpente sans se rompre ; il s'éteint près des ponts, que les chemins rejoignent dans leur axe
+   */
+  private warp(x: number, z: number, age: number): [number, number] {
+    const w = this.world, amp = WIGGLE[Math.min(age, 4)];
+    if (!amp) return [x, z];
+    const cx = Math.floor(x), cz = Math.floor(z);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1 && w.bridgeY(cx + dx, cz + dz) !== null) return [x, z];
+    const f = 0.38;
+    return [x + this.noise.noise2(x * f + 31.7, z * f - 4.3) * amp, z + this.noise.noise2(x * f - 12.9, z * f + 57.3) * amp];
+  }
+
+  /** Tracé de chaque case : morceaux de ligne (x, z à la suite) qui forment le chemin (tout droit en ville, serpentant ailleurs) */
   private skeleton(age: number) {
-    const w = this.world, j = age >= 3 ? 0 : 0.22, lines = new Map<number, number[][]>();
+    const w = this.world, j = age >= 3 ? 0 : 0.08, lines = new Map<number, number[][]>();
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
         const k = w.ci(cx, cz);
@@ -521,39 +546,57 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
           }
           out.push(l);
         } else {
-          // cul-de-sac, carrefour, case isolée : des branches depuis le point de la case
-          for (const [dx, dz] of dirs) { const e = this.edgeMid(cx, cz, dx, dz, j); out.push([n[0], n[1], e[0], e[1]]); }
+          // cul-de-sac, carrefour, case isolée : des branches depuis le point de la case (en plusieurs points, pour serpenter)
+          const seg = (a: number[], b: number[]) => { const l: number[] = []; for (let s2 = 0; s2 <= 4; s2++) l.push(a[0] + ((b[0] - a[0]) * s2) / 4, a[1] + ((b[1] - a[1]) * s2) / 4); return l; };
+          for (const [dx, dz] of dirs) out.push(seg(n, this.edgeMid(cx, cz, dx, dz, j)));
           if (!dirs.length) out.push([n[0], n[1], n[0] + 0.001, n[1]]);
+          // sur la terre, on coupe les angles d'un carrefour : une courbe entre deux branches voisines arrondit le coin
+          if (dirs.length >= 3 && age < 3) for (const [p, q] of [[[1, 0], [0, 1]], [[0, 1], [-1, 0]], [[-1, 0], [0, -1]], [[0, -1], [1, 0]]]) {
+            if (!has(p[0], p[1]) || !has(q[0], q[1])) continue;
+            const a = this.edgeMid(cx, cz, p[0], p[1], j), b = this.edgeMid(cx, cz, q[0], q[1], j), l: number[] = [];
+            for (let s2 = 0; s2 <= 8; s2++) { const t = s2 / 8, u = 1 - t; l.push(u * u * a[0] + 2 * u * t * n[0] + t * t * b[0], u * u * a[1] + 2 * u * t * n[1] + t * t * b[1]); }
+            out.push(l);
+          }
         }
         // et vers la porte d'une maison voisine qui n'a pas d'autre route (chemin d'accès, à la campagne)
         if (age < 3)
           for (const [dx, dz] of D4) {
             if (has(dx, dz)) continue;
             const b = w.buildingAt(cx + dx, cz + dz);
-            if (b && b.kind !== 'lamp') out.push([n[0], n[1], cx + 0.5 + dx * 0.55, cz + 0.5 + dz * 0.55]);
+            if (b && b.kind !== 'lamp') out.push([n[0], n[1], (n[0] + cx + 0.5 + dx * 0.55) / 2, (n[1] + cz + 0.5 + dz * 0.55) / 2, cx + 0.5 + dx * 0.55, cz + 0.5 + dz * 0.55]);
           }
+        // le chemin de terre serpente : chaque point suit le détour du terrain
+        if (WIGGLE[Math.min(age, 4)]) for (const l of out) for (let i = 0; i + 1 < l.length; i += 2) [l[i], l[i + 1]] = this.warp(l[i], l[i + 1], age);
         lines.set(k, out);
       }
     return lines;
   }
 
   rebuild(age: number, snow: number) {
-    const w = this.world, a = Math.min(age, 4), town = a >= 3, j = town ? 0 : 0.22;
+    const w = this.world, a = Math.min(age, 4), town = a >= 3, j = town ? 0 : 0.08;
     const u = this.u;
     u.uStyle.value = a;
-    u.uSnowK.value = Math.min(1, snow * 1.3);
     u.uYardA.value = YARD_A[a];
-    u.uRoad.value.set(ROAD_COL[a]).lerp(SNOW, snow * 0.75);
-    u.uSide.value.set(SIDE_COL[a]).lerp(SNOW, snow * 0.85);
-    u.uPlaza.value.set(PLAZA_COL[a]).lerp(SNOW, snow * 0.85);
-    u.uRim.value.set(RIM_COL[a]).lerp(SNOW, snow * 0.7);
-    u.uCurb.value.set(CURB_COL[a]).lerp(SNOW, snow * 0.6);
+    u.uFray.value = FRAY[a];
+    u.uRoad.value.set(ROAD_COL[a]);
+    u.uSide.value.set(SIDE_COL[a]);
+    u.uPlaza.value.set(PLAZA_COL[a]);
+    u.uRim.value.set(RIM_COL[a]);
+    u.uCurb.value.set(CURB_COL[a]);
+    // neige de saison, retenue selon le biome (moyenne des cases voisines, pour une transition douce)
+    const snowAt = (x: number, z: number) => {
+      if (snow <= 0) return 0;
+      const cx = Math.floor(x), cz = Math.floor(z);
+      let k = 0, n = 0;
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz)) { k += SNOWY[w.biome[w.ci(cx + dx, cz + dz)]] ?? 1; n++; }
+      return snow * (n ? k / n : 1);
+    };
     const lines = this.skeleton(age), hw0 = HW[a];
     // largeur qui varie un peu le long des chemins de terre (pas en ville)
-    const half = (x: number, z: number) => hw0 * (1 + (town ? 0 : 0.16 * this.noise.noise2(x * 1.1, z * 1.1)));
+    const half = (x: number, z: number) => hw0 * (1 + WIDTH_VAR[a] * this.noise.noise2(x * 0.6, z * 0.6));
 
     // surface : une grille fine par case ; chaque sommet porte ses distances signées au bord de la chaussée et des abords
-    const pos: number[] = [], col: number[] = [], ra: number[] = [], pa: number[] = [], ka: number[] = [], idx: number[] = [];
+    const pos: number[] = [], col: number[] = [], ra: number[] = [], pa: number[] = [], ka: number[] = [], sa: number[] = [], idx: number[] = [];
     const emit = (cx: number, cz: number, sub: number, road: (x: number, z: number) => number, pave: (x: number, z: number) => number, kind: number, rCut: number, pCut: number) => {
       const n = sub + 1, R = new Float32Array(n * n), P = new Float32Array(n * n), quads: number[] = [];
       for (let jz = 0; jz < n; jz++) for (let ix = 0; ix < n; ix++) { R[jz * n + ix] = road(cx + ix / sub, cz + jz / sub); P[jz * n + ix] = pave(cx + ix / sub, cz + jz / sub); }
@@ -569,7 +612,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
           const x = cx + ix / sub, z = cz + jz / sub, t = 0.96 + 0.06 * this.noise.noise2(x * 5.3, z * 5.3);
           pos.push(x, w.hAt(x, z) + 0.02, z);
           col.push(t, t, t);
-          ra.push(R[jz * n + ix]); pa.push(P[jz * n + ix]); ka.push(kind);
+          ra.push(R[jz * n + ix]); pa.push(P[jz * n + ix]); ka.push(kind); sa.push(snowAt(x, z));
         }
       for (const q of quads) { const v = v0 + q; idx.push(v, v + n + 1, v + 1, v, v + n, v + n + 1); }
     };
@@ -615,7 +658,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
           for (let i = 0; i < circ.length; i += 3) best = Math.min(best, Math.hypot(x - circ[i], z - circ[i + 1]) - circ[i + 2]);
           return best;
         };
-        emit(cx, cz, 6, road, pave, 0, 0.08, 0.15);
+        emit(cx, cz, 6, road, pave, 0, 0.08, 0.32);
       }
     }
     const g = new THREE.BufferGeometry();
@@ -624,6 +667,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     g.setAttribute('aRoad', new THREE.Float32BufferAttribute(ra, 1));
     g.setAttribute('aPave', new THREE.Float32BufferAttribute(pa, 1));
     g.setAttribute('aKind', new THREE.Float32BufferAttribute(ka, 1));
+    g.setAttribute('aSnow', new THREE.Float32BufferAttribute(sa, 1));
     g.setIndex(idx);
     g.computeVertexNormals();
     this.path.geometry.dispose();
@@ -829,7 +873,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       if (st?.round) continue;
       const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
       const dry = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && !w.isWet(cx + dx, cz + dz);
-      const n = this.node(cx, cz, j), off = hw0 + 0.09;
+      const n = this.warp(...this.node(cx, cz, j), age), off = hw0 + 0.09;
       let spot: [number, number, number, number] | undefined;
       if (st && !st.plaza) {
         const ok = (lx: number, lz: number) => st.pave(lx, lz) < -0.02 && st.road(lx, lz) > 0.05;
@@ -869,7 +913,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
         const dirs = D4.filter(([dx, dz]) => roadAt(dx, dz));
         if (dirs.length < 3 || hash2(cx, cz, 56) > 0.6) continue;
-        const n = this.node(cx, cz, j), corner = QUADS.find(([dx, dz]) => !roadAt(dx, dz) && !paved(cx + 0.5 + dx * 0.9, cz + 0.5 + dz * 0.9));
+        const n = this.warp(...this.node(cx, cz, j), age), corner = QUADS.find(([dx, dz]) => !roadAt(dx, dz) && !paved(cx + 0.5 + dx * 0.9, cz + 0.5 + dz * 0.9));
         if (!corner) continue;
         const qx = n[0] + corner[0] * 0.36, qz = n[1] + corner[1] * 0.36, qy = w.hAt(qx, qz);
         put(this.cube, qx, qy, qz, 0.02, 0.3, 0.02, 0, 0x7a6355);

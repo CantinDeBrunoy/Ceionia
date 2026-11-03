@@ -2,6 +2,7 @@ import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_
 import { raiseVolcano } from './terraform';
 import { Simplex } from './noise';
 import { mulberry32, smoothstep, clamp, lerp } from '../core/rng';
+import { GEN, GEN_FIXED, continentPlan, fixedHeight, plannedHeight } from './continent';
 
 /** Carte jouable : `size` cases de côté */
 export interface MapDef { id: number; name: string; desc: string; defaultSeed: number; size: number }
@@ -9,33 +10,44 @@ export interface MapDef { id: number; name: string; desc: string; defaultSeed: n
 /** La carte jouable : le continent (il garde le numéro 3, celui des sauvegardes déjà faites) */
 export const CONTINENT = 3;
 export const MAPS: MapDef[] = [
-  { id: CONTINENT, name: 'Continent', desc: 'Un grand continent : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192 },
+  { id: CONTINENT, name: 'Continent', desc: 'Un grand continent, différent à chaque partie : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192 },
 ];
 /** La carte de ce numéro (null : une carte qui n'existe plus) */
 export const mapDef = (id: number) => MAPS.find((m) => m.id === id) ?? null;
+/** Graine d'une nouvelle partie : chacune a son continent (`defaultSeed` ne sert plus qu'aux tests et en secours) */
+export const newSeed = () => Math.floor(Math.random() * 100000) + 1;
 
-/** Crêtes : 1 sur les lignes de crête, 0 dans les creux */
-const ridge = (s: Simplex, x: number, z: number, f: number) => 1 - Math.abs(s.noise2(x * f, z * f));
-
-export function genHeights(mapId: number, seed: number): Float32Array {
+/**
+ * Relief du continent pour une graine, selon la version du générateur (`GEN` pour une nouvelle partie) : la version 1 garde
+ * ses contrées à la même place, la version 2 les place selon le plan tiré de la graine
+ */
+export function genHeights(mapId: number, seed: number, gen = GEN): Float32Array {
   const N = (mapDef(mapId) ?? MAPS[0]).size;
   const hts = new Float32Array((N + 1) * (N + 1));
   const s = new Simplex(seed);
   const s2 = new Simplex(seed * 7 + 13);
-  const rnd = mulberry32(seed);
-  const phase = rnd() * 6.28;
+  if (gen === GEN_FIXED) {
+    const rnd = mulberry32(seed);
+    const phase = rnd() * 6.28;
+    for (let z = 0; z <= N; z++)
+      for (let x = 0; x <= N; x++) hts[z * (N + 1) + x] = clamp(fixedHeight(x, z, N, s, s2, phase), MIN_H, MAX_H);
+    return hts;
+  }
+  const plan = continentPlan(seed);
   for (let z = 0; z <= N; z++)
-    for (let x = 0; x <= N; x++) hts[z * (N + 1) + x] = clamp(continentHeight(x, z, N, s, s2, phase), MIN_H, MAX_H);
+    for (let x = 0; x <= N; x++) hts[z * (N + 1) + x] = clamp(plannedHeight(x, z, N, s, s2, plan), MIN_H, MAX_H);
   return hts;
 }
 
-export function newWorld(world: World, mapId: number, seed: number) {
+export function newWorld(world: World, mapId: number, seed: number, gen = GEN) {
   world.mapId = mapId;
   world.seed = seed;
-  const heights = genHeights(mapId, seed);
+  world.gen = gen;
+  const plan = gen === GEN_FIXED ? null : continentPlan(seed);
+  const heights = genHeights(mapId, seed, gen);
   world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), buildings: [], nextId: 1 });
   world.computeBiomes();
-  shapeBiomes(world, seed);
+  shapeBiomes(world, seed, plan ? plan.wind : null);
   world.computeBiomes();
   // forêts plus ou moins denses selon le biome (cactus clairsemés au désert, forêt dense en taïga et sous les tropiques)
   const dense = [0.12, 0, 0.42, 0.04, 0.1];
@@ -60,70 +72,18 @@ export function newWorld(world: World, mapId: number, seed: number) {
   // sanitize (pentes)
   world.sanitize(0, 0, N, N);
   // le volcan, au cœur de l'île volcanique
-  raiseVolcano(world, N * 0.22, N * 0.8, 5.5);
-  carveTarns(world, seed);
+  if (plan) raiseVolcano(world, N * plan.volcano.u, N * plan.volcano.v, 5.5);
+  else raiseVolcano(world, N * 0.22, N * 0.8, 5.5);
+  carveTarns(world, seed, !!plan);
   addDefaultDecor(world, seed);
 }
 
 /**
- * Continent : plateaux en gradins au nord-ouest, montagnes enneigées et leur rivière, île volcanique au sud-ouest, grand lac
- * et son îlot, mesas du désert, archipel tropical
- */
-function continentHeight(x: number, z: number, n: number, s: Simplex, s2: Simplex, phase: number) {
-  const u = x / n, v = z / n;
-  // coordonnées déformées : côtes, rives du lac et bords des contrées découpés
-  const wu = u + s2.fbm(x * 0.012, z * 0.012, 3) * 0.13, wv = v + s2.fbm(x * 0.012 + 31, z * 0.012, 3) * 0.13;
-  const ru = u + s.fbm(x * 0.03 + 17, z * 0.03, 2) * 0.035, rv = v + s.fbm(x * 0.03, z * 0.03 + 17, 2) * 0.035;
-  /** 1 au cœur d'une contrée (centre cu, cv, rayon r en part de carte), 0 au-delà */
-  const zone = (cu: number, cv: number, r: number) => smoothstep(1, 0.55, Math.hypot(ru - cu, rv - cv) / r);
-  const d = Math.hypot((wu - 0.5) / 0.45, (wv - 0.47) / 0.43);
-  let h = 0.9 + s.fbm(x * 0.03, z * 0.03, 4) * 1.6 + (1 - d) * 1.4;
-  // montagnes enneigées au nord-est, où naît la rivière : massif plus haut en son cœur, grandes crêtes hérissées de pics
-  const mnt = zone(0.7, 0.18, 0.26);
-  if (mnt > 0) {
-    const big = Math.pow(ridge(s2, x, z, 0.05), 1.5), peaks = Math.pow(ridge(s, x + 40, z, 0.13), 2) * (0.35 + 0.65 * big);
-    h += mnt * (2.2 + mnt * 1.6 + 7.2 * big * (0.75 + 0.35 * s.fbm(x * 0.02 + 5, z * 0.02, 2)) + 3 * peaks);
-  }
-  // plateaux en gradins et falaises au nord-ouest
-  const pla = zone(0.22, 0.26, 0.22);
-  if (pla > 0) {
-    const t = (1.4 + s.fbm(x * 0.045, z * 0.045, 3) * 1.6) * 1.5, f = t - Math.floor(t);
-    h = lerp(h, Math.floor(t) * 1.1 + smoothstep(0.86, 1, f) * 1.1 + 0.4, pla);
-  }
-  // mesas du désert à l'est : tables à sommet plat, flancs abrupts
-  const mes = zone(0.83, 0.55, 0.17);
-  if (mes > 0) {
-    const m = s2.fbm(x * 0.06 + 11, z * 0.06, 2);
-    h = lerp(h, 0.9 + smoothstep(0.04, 0.12, m) * 2.6 + s.fbm(x * 0.1, z * 0.1, 2) * 0.15, mes);
-  }
-  // grand lac à l'ouest, avec un îlot boisé
-  const lake = smoothstep(0.35, 0.85, zone(0.3, 0.55, 0.13)), islet = zone(0.285, 0.53, 0.028);
-  h = lerp(h, lerp(-0.9, 1.1, islet), lake);
-  // collines de l'île volcanique au sud-ouest (le volcan est ajouté ensuite)
-  h += zone(0.22, 0.8, 0.16) * 0.8 * s.fbm(x * 0.07, z * 0.07, 3);
-  // mer tout autour
-  h = lerp(h, Math.min(h, -1), smoothstep(0.92, 1.08, d));
-  // archipel au sud-est : îles semées dans la mer
-  const arch = zone(0.84, 0.86, 0.15);
-  if (arch > 0) {
-    const a = s2.fbm(x * 0.09 + 70, z * 0.09, 3);
-    h = Math.max(h, lerp(-1, smoothstep(0.1, 0.3, a) * (1.3 + a * 2) - 0.2, arch));
-  }
-  // rivière : des montagnes jusqu'à la côte sud, à travers les prairies
-  if (v > 0.14) {
-    const rx = n * (0.62 - (v - 0.16) * 0.12 + 0.05 * Math.sin(z * 0.045 + phase) + 0.02 * Math.sin(z * 0.11 + phase * 2));
-    const dr = Math.abs(x - rx), w = smoothstep(0.14, 0.22, v);
-    h = lerp(h, Math.min(h, 0.5), Math.exp(-(dr * dr) / (2 * 7 * 7)) * 0.7 * w);
-    h = lerp(h, -0.9, Math.exp(-(dr * dr) / (2 * 2.1 * 2.1)) * w);
-  }
-  return h;
-}
-
-/**
  * Lacs de montagne : quelques cuvettes creusées sur des replats d'altitude, fermées à l'aval par un bourrelet de moraine ;
- * l'eau s'y pose d'elle-même (les creux du relief se remplissent jusqu'à leur point de débordement)
+ * l'eau s'y pose d'elle-même (les creux du relief se remplissent jusqu'à leur point de débordement). `dry` (version 2) : pas
+ * de cuvette près de l'eau, où sa moraine barrerait le lit d'une rivière
  */
-function carveTarns(world: World, seed: number) {
+function carveTarns(world: World, seed: number, dry: boolean) {
   const rnd = mulberry32(seed + 77), S = N + 1, want = 5;
   const volcanoes: number[] = [];
   for (let k = 0; k < N * N; k++) if (world.veg[k] === VEG_VOLCANO) volcanoes.push(k);
@@ -135,6 +95,7 @@ function carveTarns(world: World, seed: number) {
       let slope = 0;
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) slope = Math.max(slope, Math.abs(world.h(x + dx, z + dz) - h));
       if (slope > 0.9 || volcanoes.some((k) => Math.hypot((k % N) - x, Math.floor(k / N) - z) < 14)) continue;
+      if (dry && world.waterDist[Math.min(N - 1, z) * N + Math.min(N - 1, x)] < 8) continue;
       cand.push(z * S + x);
     }
   for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]]; }
@@ -160,9 +121,10 @@ function carveTarns(world: World, seed: number) {
   if (picked.length) world.vegDirty = true;
 }
 
-/** Relief propre aux biomes : mares dans les marais, dunes au désert */
-function shapeBiomes(world: World, seed: number) {
+/** Relief propre aux biomes : mares dans les marais, dunes au désert, en travers du vent `wind` (null : celui de la version 1) */
+function shapeBiomes(world: World, seed: number, wind: number | null) {
   const pond = new Simplex(seed + 313), dune = new Simplex(seed + 317);
+  const wx = wind === null ? 0.55 : Math.cos(wind) * 0.6, wz = wind === null ? 0.25 : Math.sin(wind) * 0.6;
   const biomeNear = (x: number, z: number, b: number) => {
     // un sommet appartient au biome si les quatre cases qui le touchent en font partie
     for (const [dx, dz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (!world.inCells(x + dx, z + dz) || world.biome[world.ci(x + dx, z + dz)] !== b) return false;
@@ -177,7 +139,7 @@ function shapeBiomes(world: World, seed: number) {
         else world.heights[i] = lerp(h, 0.3, 0.5);
       } else if (biomeNear(x, z, BIOME_DESERT) && h > 0.4) {
         // longues ondulations de dunes, orientées par le vent
-        const ph = (x * 0.55 + z * 0.25) + dune.fbm(x * 0.05, z * 0.05, 2) * 4;
+        const ph = (x * wx + z * wz) + dune.fbm(x * 0.05, z * 0.05, 2) * 4;
         world.heights[i] = Math.min(MAX_H, h + (Math.sin(ph) * 0.5 + 0.5) ** 2 * 0.45);
       }
     }

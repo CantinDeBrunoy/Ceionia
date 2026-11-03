@@ -716,10 +716,12 @@ export class ExpeditionScene {
   // ---------------- Animation ----------------
   update(dt: number, a: ActiveExpedition) {
     this.t += dt;
-    const k = Math.min(1, a.t / Math.max(1, a.c.work + a.extra));
+    // avant l'arrivée de l'équipe, le décor est déjà là et vit (bêtes, flammes, voisins) ; le travail n'a pas commencé
+    const onSite = a.phase === 'work';
+    const k = onSite ? Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) : 0;
     if (this.flame) { const f = 1 + Math.sin(this.t * 17) * 0.12 + Math.sin(this.t * 29) * 0.08; this.flame.scale.set(f, 1.1 + Math.sin(this.t * 13) * 0.2, f); }
     for (const b of this.beasts) this.stepBeast(b, dt, a);
-    if (this.boat) this.stepBoat();
+    if (this.boat && onSite) this.stepBoat();
     // ouvrages qui avancent avec le travail, panier qui se remplit
     this.built.forEach((o, i) => (o.visible = k * this.built.length > i));
     if (this.basket) this.basket.scale.setScalar(Math.max(0.001, k));
@@ -738,8 +740,8 @@ export class ExpeditionScene {
       const u = 0.5 - Math.cos(this.t * 0.45) * 0.5, c = this.cartRun, x = c.a[0] + (c.b[0] - c.a[0]) * u, z = c.a[1] + (c.b[1] - c.a[1]) * u;
       c.obj.position.set(x, this.world.surfaceAt(x, z), z);
     }
-    if (!a.wait) this.stepMembers(dt, a, k);
-    this.stepRods(a);
+    if (onSite && !a.wait) this.stepMembers(dt, a, k);
+    if (onSite) this.stepRods(a);
     this.stepFx(dt, a);
   }
 
@@ -767,7 +769,7 @@ export class ExpeditionScene {
         b.wait = wolf ? 1 + Math.random() * 2 : 2.5 + Math.random() * 4;
         const r = wolf ? 1.8 + Math.random() * 1.2 : 0.5 + Math.random() * 1.3, ang = Math.random() * Math.PI * 2;
         [b.tx, b.tz] = this.near(cx + Math.cos(ang) * r, cz + Math.sin(ang) * r, cx, cz);
-        const k = Math.min(1, a.t / Math.max(1, a.c.work + a.extra));
+        const k = a.phase === 'work' ? Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) : 0;
         if (this.salts.length && Math.random() < 0.7) { const s = this.salts[Math.floor(Math.random() * this.salts.length)]; [b.tx, b.tz] = [s[0] + Math.cos(ang) * 0.12, s[1] + Math.sin(ang) * 0.12]; }
         if (this.corral && k > 0.45) [b.tx, b.tz] = [this.corral[0] + Math.cos(ang) * 0.3 * Math.random(), this.corral[1] + Math.sin(ang) * 0.3 * Math.random()];
       }
@@ -950,7 +952,7 @@ export class ExpeditionScene {
   private stepFx(dt: number, a: ActiveExpedition) {
     this.fxTimer -= dt;
     if (this.fxTimer <= 0 && !a.wait) {
-      if (this.kind === 'mine' && this.props[0]) {
+      if (this.kind === 'mine' && this.props[0] && a.phase === 'work') {
         this.fxTimer = 0.35 + Math.random() * 0.5;
         const p = this.props[0].position, o = new THREE.Mesh(puffGeo(), mats.body);
         this.group.add(o);

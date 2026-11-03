@@ -36,6 +36,8 @@ interface Entry {
 const PLINTH_MAT = new THREE.MeshStandardMaterial({ color: 0x7d766c, roughness: 1, flatShading: true });
 /** Butte de terre sous un enclos posé en pente */
 const EARTH_MAT = new THREE.MeshStandardMaterial({ color: 0x8a6f52, roughness: 1, flatShading: true });
+/** Butte de terre battue sous les huttes et les abris des premiers âges (pas de fondation de pierre) */
+const MOUND_MAT = new THREE.MeshStandardMaterial({ color: 0x9c7c58, roughness: 1, flatShading: true });
 
 const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
@@ -164,16 +166,24 @@ export class BuildingView implements WorldListener {
     // l'enclos a un sol continu (son pré) : il se pose au plus haut de son emprise pour que le terrain ne le traverse pas,
     // sur une butte de terre à sa largeur
     const raised = b.kind === 'pen' || b.kind === 'stable';
-    const mid = hs.length >> 1, lo = hs[0], base = open ? lo : raised ? hs[hs.length - 1] : hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2;
+    // aux premiers âges, pas de fondation : la hutte s'enfonce un peu côté pente, sur une petite butte de terre
+    const early = b.age <= 1 && !raised;
+    const mid = hs.length >> 1, lo = hs[0], median = hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2;
+    const base = open ? lo : raised ? hs[hs.length - 1] : early ? (median + lo) / 2 : median;
     e.group.position.set(b.x + s / 2, base, b.z + s / 2);
     const ph = open || base - lo < 0.03 ? 0 : base - lo + 0.05;
-    if (Math.abs(ph - e.plinthH) > 1e-3) {
-      e.plinthH = ph;
+    // la hauteur et la sorte de socle (butte ou fondation) : refait quand l'une ou l'autre change
+    const pk = ph + (early && ph > 0 ? 100 : 0);
+    if (Math.abs(pk - e.plinthH) > 1e-3) {
+      e.plinthH = pk;
       if (e.plinth) { e.group.remove(e.plinth); e.plinth.geometry.dispose(); e.plinth = null; }
       if (ph > 0) {
         const wd = s * (raised ? 0.92 : 0.8);
-        const geo = new THREE.BoxGeometry(wd, ph, wd).translate(0, 0.01 - ph / 2, 0);
-        e.plinth = new THREE.Mesh(geo, raised ? EARTH_MAT : PLINTH_MAT);
+        // butte ronde aux flancs en pente aux premiers âges, fondation de pierre en retrait ensuite
+        const geo = early
+          ? new THREE.CylinderGeometry(wd * 0.48, wd * 0.48 + ph * 0.9, ph, 9).translate(0, 0.01 - ph / 2, 0)
+          : new THREE.BoxGeometry(wd, ph, wd).translate(0, 0.01 - ph / 2, 0);
+        e.plinth = new THREE.Mesh(geo, raised ? EARTH_MAT : early ? MOUND_MAT : PLINTH_MAT);
         e.plinth.receiveShadow = e.plinth.castShadow = true;
         e.group.add(e.plinth);
       }

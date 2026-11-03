@@ -1,6 +1,6 @@
 import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { START_WOOD, START_STONE } from '../sim/economy';
-import { Simplex } from './noise';
+import { GEN, GEN_FIXED, fillClimate } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
@@ -93,6 +93,8 @@ export class World {
   readonly n = N;
   mapId = 3;
   seed = 1;
+  /** version du générateur qui a créé la carte : le climat s'en recalcule au chargement (sauvegardée ; 1 pour les anciennes parties) */
+  gen = GEN;
   heights = new Float32Array((N + 1) * (N + 1));
   occ = new Int32Array(N * N);
   road = new Uint8Array(N * N);
@@ -544,18 +546,10 @@ export class World {
    * les basses terres humides au bord de l'eau deviennent des marais
    */
   computeBiomes() {
-    const key = `${this.mapId}|${this.seed}`;
+    const key = `${this.mapId}|${this.seed}|${this.gen}`;
     if (key !== this.climateKey) {
       this.climateKey = key;
-      const st = new Simplex(this.seed * 13 + 5), sm = new Simplex(this.seed * 17 + 9);
-      for (let cz = 0; cz < N; cz++)
-        for (let cx = 0; cx < N; cx++) {
-          const u = (cx + 0.5) / N - 0.5, v = (cz + 0.5) / N - 0.5;
-          // froid au nord, chaud au sud et à l'est (mesas du désert, archipel tropical)
-          const base = v * 1.5 + Math.max(0, u) * 1.1 - 0.05;
-          this.temp[cz * N + cx] = base + st.fbm(cx * 0.03, cz * 0.03, 3) * 0.45;
-          this.wet[cz * N + cx] = sm.fbm(cx * 0.04 + 50, cz * 0.04, 3) * 0.8;
-        }
+      fillClimate(this.gen, this.seed, N, this.temp, this.wet);
     }
     // distance à l'eau : parcours en largeur depuis les cases d'eau
     const dist = this.waterDist, queue = new Int32Array(N * N);
@@ -902,6 +896,7 @@ export class World {
     const order = new Map([...this.buildings.keys()].map((id, i) => [id, i]));
     return {
       n: N,
+      gen: this.gen,
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
       roads,
       veg,
@@ -984,6 +979,8 @@ export class World {
     for (const l of Array.isArray(d.lines) ? d.lines : []) for (const i of Array.isArray(l?.s) ? l.s : []) if (ids[i] > 0) stops.add(ids[i]);
     for (const b of buildings) if (b.kind === 'landmark' && b.age >= 3 && stops.has(b.id)) b.kind = 'terminal';
     this.growLarge(buildings, heights, road, veg);
+    // les sauvegardes d'avant le plan du continent n'ont pas de version : leur climat reste celui de la version 1
+    this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     this.restore({ heights, road, veg, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.basalt.fill(0);

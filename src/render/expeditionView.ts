@@ -67,9 +67,11 @@ export class ExpeditionView {
       }
       const key = `${a.phase === 'back' || a.phase === 'home' ? 'back' : 'out'}|${a.ok}`;
       if (key !== sh.key) { sh.key = key; this.rebuild(a, sh); }
-      // sur place : la scène du travail, rangée au départ du retour
-      if (a.phase === 'work' && !sh.scene && a.entry < 0) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a);
-      else if (a.phase !== 'work' && sh.scene) { sh.scene.dispose(a); sh.scene = null; }
+      // la scène de la mission (galets, bêtes, éboulis, voisins…) est posée dès le départ de l'expédition : on la voit
+      // en attendant l'équipe ; elle est rangée au départ du retour
+      const going = a.phase === 'gather' || a.phase === 'out' || a.phase === 'work';
+      if (going && !sh.scene && a.entry < 0) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a);
+      else if (!going && sh.scene) { sh.scene.dispose(a); sh.scene = null; }
       sh.scene?.update(dt, a);
       this.step(a, sh, dt);
     }

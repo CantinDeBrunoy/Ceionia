@@ -412,6 +412,76 @@ function house(p: Parts, age: number, o: ModelOpts) {
 }
 
 /** Huttes de la Préhistoire, trois variantes : hutte ronde de clayonnage au chaume épais, maison longue, tipi de peaux peint */
+// ---------- Vie du campement préhistorique : petits objets posés autour des huttes et des abris ----------
+
+/** Séchoir : deux perches fourchues et leur traverse, lanières de viande ou poissons pendus */
+function dryingRack(p: Parts, x: number, z: number, ry: number, fish = false) {
+  const c = Math.cos(ry), s = Math.sin(ry), at = (u: number): [number, number] => [x + u * c, z - u * s];
+  for (const u of [-0.12, 0.12]) { const [px, pz] = at(u); p.cyl(0.009, 0.011, 0.22, 4, px, 0, pz, C.darkwood); p.add(new THREE.BoxGeometry(0.006, 0.05, 0.006), px + 0.008, 0.22, pz, C.darkwood, ry, false, 0.4); }
+  p.add(new THREE.BoxGeometry(0.28, 0.012, 0.012), x, 0.21, z, C.wood, ry);
+  for (let k = 0; k < 5; k++) {
+    const [px, pz] = at(-0.09 + k * 0.045);
+    if (fish) { p.add(new THREE.BoxGeometry(0.016, 0.07, 0.006), px, 0.165, pz, 0xb8c2c8, ry); p.add(new THREE.ConeGeometry(0.014, 0.025, 3), px, 0.125, pz, 0x9aa4aa, ry, false, Math.PI); }
+    else p.add(new THREE.BoxGeometry(0.018, 0.08 + (k % 2) * 0.02, 0.006), px, 0.16 - (k % 2) * 0.01, pz, k % 2 ? 0x9a3a2a : 0x7a2a22, ry);
+  }
+}
+
+/** Peau tendue sur son cadre de perches, lacée, tenue par une jambe de force */
+function hideFrame(p: Parts, x: number, z: number, ry: number) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  for (const u of [-0.1, 0.1]) p.box(0.012, 0.24, 0.012, x + u * c, 0, z - u * s, C.darkwood, ry);
+  for (const y of [0.03, 0.21]) p.add(new THREE.BoxGeometry(0.22, 0.012, 0.012), x, y, z, C.darkwood, ry);
+  p.add(new THREE.BoxGeometry(0.17, 0.15, 0.006), x, 0.12, z, C.hide, ry);
+  p.add(new THREE.BoxGeometry(0.09, 0.07, 0.007), x, 0.12, z, dark(C.hide, 0.82), ry);
+  for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.004, 0.004, 0.012), x + (-0.075 + k * 0.05) * c, 0.205, z - (-0.075 + k * 0.05) * s, 0x5a4636, ry);
+  p.add(new THREE.BoxGeometry(0.008, 0.24, 0.008).translate(0, 0.12, 0), x + s * 0.07, 0, z + c * 0.07, C.darkwood, ry, false, 0, -0.35);
+}
+
+/** Foyer : cercle de pierres, braises qui rougeoient, broche sur deux fourches et sa pièce de viande ; il fume */
+function hearth(p: Parts, x: number, z: number, ry = 0) {
+  for (let i = 0; i < 7; i++) { const a = (i / 7) * 6.283; p.sphere(0.022, x + Math.cos(a) * 0.065, 0.008, z + Math.sin(a) * 0.065, i % 2 ? C.stone : C.darkstone, 0, 0.7); }
+  p.box(0.06, 0.02, 0.06, x, 0.004, z, 0x3a2a22); p.box(0.04, 0.03, 0.04, x, 0.01, z, C.flame, 0.5, true);
+  const c = Math.cos(ry), s = Math.sin(ry);
+  for (const u of [-0.08, 0.08]) p.cyl(0.006, 0.007, 0.13, 4, x + u * c, 0, z - u * s, C.darkwood);
+  p.add(new THREE.BoxGeometry(0.2, 0.008, 0.008), x, 0.13, z, C.wood, ry);
+  p.add(new THREE.BoxGeometry(0.05, 0.03, 0.03), x, 0.118, z, 0x8a3a26, ry);
+  smoke(x, 0.14, z, 1);
+}
+
+/** Panier tressé, plein de baies ou de grains */
+function wickerBasket(p: Parts, x: number, z: number, fill: number, s = 1) {
+  p.cyl(0.04 * s, 0.03 * s, 0.05 * s, 7, x, 0, z, 0xb08a58);
+  p.cyl(0.042 * s, 0.042 * s, 0.008 * s, 7, x, 0.05 * s, z, 0x8a6a40);
+  for (let k = 0; k < 5; k++) p.sphere(0.012 * s, x + Math.cos(k * 1.3) * 0.018 * s, 0.05 * s, z + Math.sin(k * 1.3) * 0.018 * s, fill, 0);
+}
+
+/** Meule à grain : la pierre plate creusée et la molette */
+function quern(p: Parts, x: number, z: number, ry = 0) {
+  p.add(new THREE.BoxGeometry(0.13, 0.03, 0.08), x, 0.015, z, C.darkstone, ry);
+  p.add(new THREE.BoxGeometry(0.1, 0.006, 0.05), x, 0.032, z, 0xd9c49a, ry);
+  p.add(new THREE.CylinderGeometry(0.016, 0.016, 0.07, 6).rotateZ(Math.PI / 2), x, 0.05, z, C.stone, ry);
+}
+
+/** Lances appuyées contre un mur ou une perche, pointes de silex */
+function spears(p: Parts, x: number, z: number, ry: number, n = 2) {
+  for (let k = 0; k < n; k++) {
+    const u = (k - (n - 1) / 2) * 0.04, px = x + u * Math.cos(ry), pz = z - u * Math.sin(ry);
+    p.add(new THREE.CylinderGeometry(0.005, 0.006, 0.36, 4).translate(0, 0.18, 0), px, 0, pz, C.wood, ry, false, 0, -0.2);
+    p.add(new THREE.ConeGeometry(0.012, 0.04, 4).translate(0, 0.38, 0), px, 0, pz, C.darkstone, ry, false, 0, -0.2);
+  }
+}
+
+/** Crâne d'aurochs et ses cornes, accroché au-dessus d'une porte */
+function skull(p: Parts, x: number, y: number, z: number, ry = 0) {
+  p.add(new THREE.BoxGeometry(0.05, 0.04, 0.03), x, y, z, 0xf0e8d8, ry);
+  for (const s2 of [-1, 1]) p.add(new THREE.ConeGeometry(0.01, 0.07, 4).rotateZ(-s2 * 1.2), x + s2 * 0.045 * Math.cos(ry), y + 0.02, z - s2 * 0.045 * Math.sin(ry), 0xe8dcc0, ry);
+}
+
+/** Pots de terre cuite, un peu de travers */
+function pots(p: Parts, x: number, z: number, n = 2) {
+  for (let k = 0; k < n; k++) { const px = x + (k % 2) * 0.06, pz = z + Math.floor(k / 2) * 0.06 - (k % 2) * 0.02; p.cyl(0.03 - k * 0.003, 0.024, 0.055, 7, px, 0, pz, k % 2 ? 0x9c6445 : 0xb5764f); p.cyl(0.024, 0.03, 0.012, 7, px, 0.055, pz, 0x8a5a3e); }
+}
+
 function prehistoricHut(p: Parts, v: number) {
   const straw = [0xe2c472, 0xd9b964, 0xe8cf86][v % 3], strawDark = dark(straw, 0.78), wattle = 0xc59f72, stake = 0x7a5a3e;
   const ring = (n: number, r: number, y: number) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + 0.3; p.sphere(0.03 + (i % 3) * 0.006, Math.cos(a) * r, y, Math.sin(a) * r, i % 2 ? C.stone : C.darkstone, 0, 0.6); } };
@@ -431,6 +501,12 @@ function prehistoricHut(p: Parts, v: number) {
     p.box(0.16, 0.025, 0.05, 0, 0.21, 0.29, C.darkwood);
     p.box(0.12, 0.2, 0.03, 0, 0, 0.3, 0x3d2c22);
     p.box(0.07, 0.15, 0.012, 0.075, 0.05, 0.315, C.hide, 0.15);
+    // crâne d'aurochs au-dessus de la porte, herbes qui sèchent, séchoir à viande, foyer, panier de baies
+    skull(p, 0, 0.27, 0.31);
+    for (let k = 0; k < 3; k++) p.box(0.012, 0.05, 0.012, -0.12 + k * 0.03, 0.2, 0.3, [0x7fae5a, 0x9a8a4a, 0x6f9e4e][k]);
+    dryingRack(p, -0.34, -0.32, 0.7);
+    hearth(p, 0.3, -0.36, 0.3);
+    wickerBasket(p, -0.4, 0.1, 0xb8323a);
   } else if (v % 3 === 1) {
     // maison longue : murs bas de clayonnage, grand toit de chaume qui descend presque au sol, cornes de perches aux pignons
     p.box(0.66, 0.035, 0.44, 0, 0, -0.04, C.darkstone);
@@ -445,6 +521,12 @@ function prehistoricHut(p: Parts, v: number) {
     smoke(0.18, 0.6, -0.04, 1);
     p.box(0.13, 0.17, 0.03, 0, 0.02, 0.165, 0x3d2c22);
     p.box(0.17, 0.025, 0.04, 0, 0.19, 0.17, C.darkwood);
+    // séchoir à poissons, peau tendue, foyer, meule, lances contre le mur
+    dryingRack(p, 0.3, 0.34, 0, true);
+    hideFrame(p, -0.38, -0.38, 0.4);
+    hearth(p, 0.42, -0.08, 1.2);
+    quern(p, -0.42, 0.06, 0.4);
+    spears(p, -0.2, 0.19, 0, 3);
   } else {
     // tipi de peaux peint de bandes d'ocre, perches au sommet, rabat ouvert
     ring(10, 0.3, 0.01);
@@ -454,6 +536,13 @@ function prehistoricHut(p: Parts, v: number) {
     smoke(0, 0.7, -0.02, 1);
     p.add(new THREE.BoxGeometry(0.11, 0.2, 0.01).translate(0, 0.1, 0), 0, 0, 0.255, 0x3d2c22, 0, false, 0, -0.45);
     p.add(new THREE.BoxGeometry(0.07, 0.18, 0.01).translate(0, 0.09, 0), 0.07, 0, 0.25, C.hide, -0.5, false, 0, -0.45);
+    // soleils peints à l'ocre, piquets qui tiennent la toile, lances contre les perches, peau tendue, séchoir, pots
+    for (const [a, y] of [[0.6, 0.24], [-0.6, 0.24], [2.4, 0.3], [-2.2, 0.2], [1.6, 0.42], [-1.4, 0.4]]) p.sphere(0.022, Math.sin(a) * (0.3 - y * 0.484), y, Math.cos(a) * (0.3 - y * 0.484) - 0.02, y > 0.35 ? 0x3a2a22 : 0xd8a03a, 0, 1);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + 0.2; p.box(0.012, 0.03, 0.012, Math.cos(a) * 0.31, 0, Math.sin(a) * 0.31 - 0.02, C.darkwood); }
+    spears(p, -0.22, 0.12, 0.6, 2);
+    hideFrame(p, -0.38, -0.32, -0.5);
+    dryingRack(p, 0.36, -0.3, -0.8);
+    pots(p, 0.38, 0.06, 3);
   }
   // bois empilé, pot de terre, peau étendue devant
   log(p, 0.2, 0.026, 0.3, 0, 0.28, 0.5); log(p, 0.2, 0.026, 0.34, 0, 0.22, 0.5); log(p, 0.2, 0.026, 0.32, 0.046, 0.25, 0.5);
@@ -679,6 +768,12 @@ function farm(p: Parts, age: number) {
     for (let i = 0; i < 4; i++) p.cyl(0.035, 0.02, 0.13, 5, 0.13 + i * 0.08, 0.15, 0.14, C.gold);
     stack(p, 0.3, -0.24); stack(p, 0.02, 0.36, 0.75);
     p.cyl(0.05, 0.04, 0.06, 6, -0.32, 0, 0.3, C.brown);
+    // meule et sa farine, paniers de grain, haie de branches au fond, bâton à fouir, oiseau qui picore
+    quern(p, -0.38, 0.06, 0.5);
+    wickerBasket(p, 0.38, 0.38, C.gold); wickerBasket(p, 0.28, 0.43, C.gold, 0.8);
+    for (let x = -0.44; x <= 0.45; x += 0.08) p.cyl(0.006, 0.008, 0.12 + hash2(x * 10, 3, 61) * 0.05, 4, x, 0, -0.45, C.darkwood);
+    for (const y of [0.05, 0.1]) p.box(0.9, 0.008, 0.008, 0, y, -0.45, C.wood);
+    p.add(new THREE.BoxGeometry(0.008, 0.3, 0.008).translate(0, 0.15, 0), 0.46, 0, 0.1, C.wood, 0, false, 0.25);
   } else if (age === 1) {
     // ferme de bois et chaume, meule, charrette, enclos
     p.box(0.5, 0.04, 0.34, -0.08, 0, -0.22, C.stone);
@@ -813,6 +908,12 @@ function well(p: Parts, age: number) {
     // sol piétiné et humide autour de la margelle, eau sombre juste sous son rebord
     p.cyl(0.36, 0.37, 0.008, 10, 0, 0, 0, dark(C.dirt, 0.82));
     p.cyl(0.155, 0.155, 0.012, 14, 0, 0.17, 0.052, 0x4f9cc0);
+    // jarres à eau, auge creusée dans un tronc, touffes de roseaux, pierres plates pour ne pas patauger
+    pots(p, 0.3, 0.22, 3);
+    p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.22, 7).rotateZ(Math.PI / 2), -0.3, 0.035, 0.26, C.wood);
+    p.box(0.18, 0.012, 0.05, -0.3, 0.06, 0.26, 0x4f9cc0);
+    for (const [x, z] of [[-0.36, -0.3], [0.34, -0.34], [-0.4, 0.0]]) for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.008, 0.1 + k * 0.012, 0.008).translate(0, 0.05, 0), x + Math.cos(k * 1.7) * 0.025, 0, z + Math.sin(k * 1.7) * 0.025, k % 2 ? 0x6f9e4e : 0x8aae5a, 0, false, Math.cos(k) * 0.2);
+    for (const [x, z] of [[0.05, 0.38], [0.14, 0.44], [-0.06, 0.43]]) p.sphere(0.03, x, 0.004, z, C.stone, 0, 0.35);
     return;
   }
   if (age <= 2) {
@@ -882,6 +983,13 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     attach(['p_stone'], 0, 0.09, 0.16, 0.34, 1.2);
     attach(['p_logs'], 0, 0.26, -0.26, 0.28, 0.35);
     for (let i = 0; i < 8; i++) p.sphere(0.016, 0.05 + Math.cos(i * 2.3) * 0.12, 0.008, 0.26 + Math.sin(i * 2.3) * 0.06, i % 2 ? C.stone : C.darkstone, 0, 0.5);
+    // peau étalée où sèchent les outils de silex taillés, haches emmanchées, billot du tailleur, lances, foyer
+    p.add(new THREE.CircleGeometry(0.09, 7).rotateX(-Math.PI / 2).scale(1.3, 1, 0.9), -0.3, 0.012, 0.0, C.hide);
+    for (let k = 0; k < 5; k++) p.add(new THREE.ConeGeometry(0.012, 0.035, 3).rotateZ(Math.PI / 2), -0.36 + k * 0.03, 0.02, -0.01 + (k % 2) * 0.03, k % 2 ? C.darkstone : 0x6a6660, k);
+    for (const z of [-0.08, -0.13]) { p.add(new THREE.BoxGeometry(0.1, 0.008, 0.008), -0.22, 0.02, z, C.wood, 0.3); p.box(0.025, 0.02, 0.03, -0.18, 0.012, z - 0.012, C.darkstone, 0.3); }
+    p.cyl(0.04, 0.045, 0.06, 7, -0.06, 0, -0.38, C.wood); p.cyl(0.038, 0.038, 0.004, 7, -0.06, 0.06, -0.38, 0xd8b88a);
+    spears(p, 0.4, -0.05, 1.4, 3);
+    hearth(p, 0.38, 0.4);
   } else if (age === 0) {
     p.cone(0.38, 0.5, 5, -0.12, 0, -0.1, C.hide);
     p.box(0.16, 0.1, 0.12, 0.28, 0, 0.2, C.darkstone); p.box(0.1, 0.06, 0.08, 0.28, 0.1, 0.2, C.stone);
