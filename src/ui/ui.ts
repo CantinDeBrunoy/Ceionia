@@ -18,6 +18,7 @@ import { CAMP_QUESTS } from '../sim/depths';
 import { costOf, costLabel, Resource } from '../sim/economy';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
+import { type Tutorial, menuToggle } from './tutorial';
 
 export interface UIHost {
   tools: ToolController;
@@ -240,6 +241,8 @@ export class UI {
   /** cartes des expéditions en cours, par numéro */
   private expCards = new Map<number, HTMLElement>();
   private incCards = new Map<string, HTMLElement>();
+  /** tutoriel guidé (sa ligne dans les réglages) */
+  tutorial: Tutorial | null = null;
 
   constructor(root: HTMLElement, private host: UIHost) {
     this.root = root;
@@ -1146,6 +1149,7 @@ export class UI {
         <p class="hint">Illimitées : bois, pierre et minerai ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
         <h4>Sauvegarde</h4>
         <div class="row"><button id="gSave">${ic('save', 16)} Sauvegarder</button><button id="gExport">${ic('download', 16)} Exporter</button><button id="gImport">${ic('upload', 16)} Importer</button></div>
+        ${this.tutorial?.settingsHtml() ?? ''}
         <h4>Quitter</h4>
         <div class="row"><button id="gNew">${ic('restart', 16)} Recommencer cette carte</button><button id="gMenu">${ic('house', 16)} Menu principal</button></div>
         <input type="file" id="fImport" accept="application/json,.json" style="display:none">
@@ -1212,6 +1216,7 @@ export class UI {
     fi.onchange = () => { if (fi.files?.[0]) h.importFile(fi.files[0]); };
     q('#gNew').onclick = async () => { if (await confirmBox(this.root, 'Recommencer cette carte ? La sauvegarde actuelle sera remplacée.', 'Recommencer')) h.newGame(); };
     q('#gMenu').onclick = () => h.toMenu();
+    this.tutorial?.bindSettings(ov, close);
   }
 }
 
@@ -1286,6 +1291,8 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
   const f = $<HTMLInputElement>('#mFile', ov);
   $('#mImport', ov).onclick = () => f.click();
   f.onchange = () => { if (f.files?.[0]) host.importFile(f.files[0]); };
+  // le tutoriel guidé, pour la partie qu'on lance
+  maps.after(menuToggle());
   root.appendChild(ov);
   return ov;
 }

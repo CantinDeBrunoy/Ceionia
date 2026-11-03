@@ -404,6 +404,42 @@ body.under #fx-vignette { background: radial-gradient(ellipse at 50% 45%, transp
 #photoBar { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; padding: 8px; }
 body.photo #photoBar { display: flex; }
 
+/* ---------- Tutoriel guidé : la bulle, l'anneau autour de l'élément montré, l'interrupteur de l'accueil ---------- */
+#tuto { position: absolute; z-index: 32; width: min(330px, calc(100vw - 16px)); padding: 11px 14px 10px; background: rgba(255, 255, 255, 0.96); border: 1px solid var(--edge); border-radius: 14px; box-shadow: 0 16px 40px rgba(15, 27, 45, 0.28), 0 0 0 1px rgba(47, 111, 237, 0.2); font-size: 13px; line-height: 1.45; transition: left 0.25s ease, top 0.25s ease, box-shadow 0.2s; animation: rise 0.2s ease-out; }
+#tuto.fresh { transition: none; }
+#tuto.done { box-shadow: 0 16px 40px rgba(15, 27, 45, 0.28), 0 0 0 2px var(--good); }
+#tuto .tHead { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-ink); }
+#tuto .tHead b { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--good); font-size: 12.5px; letter-spacing: 0; text-transform: none; }
+#tuto h4 { margin: 4px 0; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+#tuto p { margin: 0 0 6px; color: var(--ink2); }
+#tuto p.tNote { color: #b06d0e; font-weight: 600; }
+#tuto svg.ic { display: inline-block; vertical-align: -3px; }
+#tuto ul { list-style: none; margin: 6px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+#tuto li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; }
+#tuto li > i { flex: 0 0 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; border: 2px solid rgba(15, 27, 45, 0.25); color: #fff; }
+#tuto li.ok { color: var(--good); }
+#tuto li.ok > i { background: var(--good); border-color: var(--good); }
+#tuto .tActs { display: flex; align-items: center; gap: 8px; }
+#tuto .tActs button { min-height: 34px; padding: 4px 12px; font-size: 12.5px; }
+#tuto .tSkip { padding: 4px 4px; background: transparent; border-color: transparent; box-shadow: none; color: var(--ink2); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+#tuto .tNext.active { animation: tutoGo 1.4s ease-in-out infinite; }
+@keyframes tutoGo { 50% { box-shadow: 0 0 0 5px rgba(47, 111, 237, 0.2), 0 6px 16px rgba(47, 111, 237, 0.4); } }
+/* la pointe, sur le bord tourné vers l'élément montré */
+#tuto .tArrow { position: absolute; width: 14px; height: 14px; background: inherit; transform: translate(-50%, -50%) rotate(45deg); pointer-events: none; }
+#tuto[data-side="below"] .tArrow { top: 0; }
+#tuto[data-side="above"] .tArrow { top: 100%; }
+#tuto[data-side="right"] .tArrow { left: 0; }
+#tuto[data-side="left"] .tArrow { left: 100%; }
+#tuto:not([data-side]) .tArrow, #tuto[data-side=""] .tArrow { display: none; }
+#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; box-shadow: 0 0 0 3px var(--accent), 0 0 0 7px rgba(47, 111, 237, 0.22); transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease; animation: tutoRing 1.5s ease-in-out infinite; }
+@keyframes tutoRing { 50% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 13px rgba(47, 111, 237, 0.06); } }
+.tutoToggle { justify-content: center; }
+.tutoToggle button { gap: 8px; padding: 8px 14px; }
+.tutoToggle .sw { position: relative; width: 34px; height: 20px; border-radius: 999px; background: rgba(15, 27, 45, 0.2); transition: background 0.15s; }
+.tutoToggle .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(15, 27, 45, 0.3); transition: transform 0.15s; }
+.tutoToggle button.on .sw { background: var(--good); }
+.tutoToggle button.on .sw::after { transform: translateX(14px); }
+
 /* ---------- Expéditions ---------- */
 .expModal { max-width: 740px; }
 .teams { background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; }
