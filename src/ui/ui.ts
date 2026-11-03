@@ -1209,6 +1209,9 @@ export class UI {
       <div class="row"><span class="grow"></span><button class="active ok">Fermer</button></div>`);
     $('.story', ov).textContent = `« ${r.c.label} » : ${r.text}`;
     $('.ok', ov).onclick = close;
+    // ni un clic à côté, ni Échap pour remonter du monde souterrain ne l'effacent avant qu'on l'ait lu (on le ferme au bouton)
+    ov.addEventListener('pointerdown', (e) => { if (e.target === ov) e.stopImmediatePropagation(); }, true);
+    (ov as HTMLElement & { close?: () => void }).close = () => { if (!document.body.classList.contains('under')) close(); };
   }
 
   // ---------------- Réglages ----------------

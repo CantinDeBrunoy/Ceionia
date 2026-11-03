@@ -1,6 +1,6 @@
-import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN } from '../world/world';
+import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT } from '../world/world';
 import { Agents, Kit } from './agents';
-import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt } from './missions';
+import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { AGES, KINDS, Building, sizeOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
@@ -37,10 +37,13 @@ export interface ActiveExpedition {
   /** imprévu en attente de décision : l'équipe patiente sur place (depuis waitT secondes) */
   wait: ExpEvent | null;
   waitT: number;
-  /** imprévus prévus (deux pour un long travail), déjà survenus, et ce qu'en dira le récit */
+  /** imprévus prévus (deux pour un long travail), déjà survenus, l'option choisie pour chacun (-1 : pas encore), et ce qu'en dira le récit */
   events: number;
   seen: string[];
+  picks: number[];
   notes: string[];
+  /** le genre de lieu où l'équipe s'est vraiment rendue (une rivière introuvable : la plaine) */
+  site: DestKind;
   /** temps de travail en plus, gains en plus (si réussite), blessés en plus */
   extra: number;
   bonus: Effect[];
@@ -74,12 +77,17 @@ export interface Ambush { cell: number; kind: FoeKind; n: number; t0: number; st
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
 const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'les terres au-delà des collines', spaceport: 'le cosmodrome' };
-/** Repli quand le village n'a pas de tel endroit à portée */
+/**
+ * Repli quand le village n'a pas de tel endroit à portée ; une grotte introuvable se cherche dans la montagne, puis au pied
+ * de la moindre paroi (l'équipe y trouve une entrée), jamais dans la plaine ou le désert lointain
+ */
 const FALLBACK: Record<DestKind, DestKind | null> = { cave: 'mountain', mountain: 'far', river: 'plain', forest: 'plain', far: 'plain', plain: null, spaceport: null };
 /** Une équipe de plus tous les 30 habitants, quatre au plus */
 const PER_TEAM = 30, MAX_TEAMS = 4;
 /** Sans réponse du joueur, l'équipe tranche d'elle-même au bout de ce temps (secondes de jeu) */
 const AUTO_DECIDE = 90;
+/** Une équipe encore en chemin au bout de ce temps (secondes de jeu) se met au travail là où elle est : elle est bloquée */
+const OUT_MAX = 480;
 /** Pièces en attente de fabrication, au plus */
 const MAX_CRAFT = 6;
 
@@ -101,6 +109,10 @@ const FOES: Record<number, FoeKind[]> = {
 };
 const FOE_MIGHT: Record<FoeKind, number> = { zombie: 0.8, skeleton: 1, spider: 1.15 };
 export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 'squelettes', spider: 'araignées géantes' };
+/** Nombres en toutes lettres, pour le récit (« Quatre filons abattus ») */
+const NUMBER = ['Aucun', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf', 'Dix', 'Onze', 'Douze'];
+/** « de fer », « d’or », « d’émeraude » */
+const ofOre = (name: string) => (/^[aeiouyéèêh]/i.test(name) ? `d’${name}` : `de ${name}`);
 
 /**
  * Campagne d'une troupe armée : l'avant-poste d'où elle part et l'entrée qu'il garde, la case de galerie où elle descend,
@@ -320,8 +332,13 @@ export class Expeditions {
     const fromCamp = !!plan && this.camp() >= 1;
     if (plan) dest = fromCamp ? [(plan.entrance % N) + 0.5, Math.floor(plan.entrance / N) + 0.5] : this.postDoor(plan.post, plan.entrance, base);
     else if (c.win.some((e) => e.t === 'veins')) return null;
-    else while (kind && !dest) { dest = this.findDest(kind, base); kind = dest ? kind : FALLBACK[kind]; }
-    if (!dest) return null;
+    else while (kind && !dest) {
+      dest = this.findDest(kind, base);
+      // une grotte introuvable : dans la montagne, puis au pied de la moindre paroi, plutôt qu'au milieu de la plaine
+      if (!dest && c.dest === 'cave' && kind === 'mountain') dest = this.findDest('mountain', base, true);
+      if (!dest) kind = FALLBACK[kind];
+    }
+    if (!dest || !kind) return null;
     const { targets, entry, take: held, front } = plan ?? { targets: [], entry: -1, take: [], front: -1 };
     const { ambush, len } = plan ? this.planAmbush(entry, targets, front) : { ambush: [], len: 0 };
     // une fois la course automobile gagnée, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval ;
@@ -338,7 +355,9 @@ export class Expeditions {
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
     const a: ActiveExpedition = {
       id: this.nextId++, m, c, phase: 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
-      wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], notes: [], extra: 0, bonus: [], hurt: 0,
+      wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], extra: 0, bonus: [], hurt: 0,
+      // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
+      site: c.dest === 'cave' ? 'cave' : kind,
       targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp,
     };
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval s'il y en a assez ; on part en selle
@@ -396,15 +415,15 @@ export class Expeditions {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
         this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » part vers ${DEST_NAME[a.c.dest]}.`);
-      } else if (a.phase === 'out' && (ag.partyDone(a.party) || a.t > 240)) {
+      } else if (a.phase === 'out' && (ag.partyDone(a.party) || a.t > OUT_MAX)) {
         a.phase = 'work'; a.t = 0;
         ag.partyAct(a.party, 'work');
         ag.mountParty(a.party, false);
         // la troupe armée descend dans les galeries : on ne la voit plus en surface, mais sous terre
         if (a.entry >= 0) ag.partyHide(a.party, true);
-        this.raise(a);
+        this.raise(a, true);
       } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * 0.55) {
-        this.raise(a);
+        this.raise(a, false);
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra && a.fromCamp) {
         // partie du camp, elle y remonte : les soldats rentrent au village sans refaire la route, et l'on fête leur retour
         a.ok = this.rnd() >= this.chance(a);
@@ -416,7 +435,7 @@ export class Expeditions {
         a.ok = this.rnd() >= this.chance(a);
         a.phase = 'back'; a.t = 0;
         ag.mountParty(a.party, true);
-        ag.partyGo(a.party, a.base[0], a.base[1]);
+        this.goHome(a);
         this.onNews?.(a.ok ? `${a.m.icon} « ${a.m.title} » : l’équipe rentre… et elle n’a pas l’air bredouille !` : `${a.m.icon} « ${a.m.title} » : l’équipe rentre, la mine basse.`);
       } else if (a.phase === 'back' && (ag.partyDone(a.party) || a.t > 240)) {
         a.phase = 'home'; a.t = 0;
@@ -473,11 +492,31 @@ export class Expeditions {
     }
   }
 
-  /** Un imprévu survient : l'équipe s'arrête et attend la décision du joueur */
-  private raise(a: ActiveExpedition) {
-    const ev = pickEvent(a.c.dest, a.m.id, a.seen, this.rnd);
+  /**
+   * L'équipe rentre au village. Un membre resté là où aucun chemin ne part (descendu d'une barque, sorti d'une grotte…)
+   * repart du lieu de l'expédition, où le chemin de l'aller arrivait : on voit toujours l'équipe rentrer à pied
+   */
+  private goHome(a: ActiveExpedition) {
+    const ag = this.agents;
+    ag.partyGo(a.party, a.base[0], a.base[1]);
+    const stuck = a.party.filter((id) => { const g = ag.agents.find((x) => x.id === id); return !!g && ag.memberDone(id) && Math.hypot(g.x - a.base[0], g.z - a.base[1]) > 2; });
+    if (!stuck.length) return;
+    ag.partyHide(stuck, false);
+    ag.partyPlace(stuck, a.dest[0], a.dest[1]);
+    ag.partyGo(stuck, a.base[0], a.base[1]);
+  }
+
+  /** Un imprévu survient (à l'arrivée de l'équipe, ou au milieu du travail) : l'équipe s'arrête et attend la décision du joueur */
+  private raise(a: ActiveExpedition, arrive: boolean) {
+    // pas un imprévu des dernières expéditions, ni celui qu'une autre équipe attend ou vient de vivre
+    const avoid = [...this.world.exp.recent, ...this.active.filter((o) => o !== a).flatMap((o) => o.seen)];
+    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.m.age, arrive }, a.seen, avoid, this.rnd);
     if (!ev) { a.events = a.seen.length; return; }
     a.seen.push(ev.id);
+    a.picks.push(-1);
+    const recent = this.world.exp.recent;
+    recent.push(ev.id);
+    if (recent.length > RECENT_EVENTS) recent.splice(0, recent.length - RECENT_EVENTS);
     a.wait = ev; a.waitT = 0;
     this.agents.partyAct(a.party, 'stroll');
     this.onEvent?.(a);
@@ -510,6 +549,9 @@ export class Expeditions {
     if (o.bonus) a.bonus.push(...o.bonus);
     a.hurt += o.hurt ?? 0;
     a.notes.push(o.text);
+    // la scène joue la suite de l'option choisie (le grand feu, la corde, la décrue…)
+    const j = a.seen.lastIndexOf(a.wait!.id);
+    if (j >= 0) a.picks[j] = i;
     a.wait = null;
     if (a.phase === 'work') this.agents.partyAct(a.party, 'work');
     return true;
@@ -519,25 +561,30 @@ export class Expeditions {
     const eff = a.ok ? [...(a.redo ? redoEffects(a.c.win) : a.c.win), ...a.bonus] : a.c.lose;
     const res = applyEffects(this.world, eff, this.dayLen());
     // la troupe a abattu ses filons : ils disparaissent des parois, leur minerai rentre au village
-    let veins = '', held = '';
+    let veins = '', held = '', text = a.ok ? a.c.winText : a.c.loseText;
     if (a.ok && a.take.length) {
       // victoire : la troupe a planté ses lanternes, le village tient ces galeries
       for (const k of a.take) this.world.claimed.add(k);
       held = `${a.take.length} cases de galeries prises`;
     }
-    if (a.ok && a.targets.length && this.under) {
-      const kinds = new Map(oreVeins(this.under, this.world.mined).map((v) => [v.k, v.ore])), got = new Map<string, number>();
-      let ore = 0;
+    if (a.ok && a.c.win.some((e) => e.t === 'veins')) {
+      const kinds = new Map(this.under ? oreVeins(this.under, this.world.mined).map((v) => [v.k, v.ore]) : []), got = new Map<string, number>();
+      let ore = 0, n = 0;
       for (const k of a.targets) {
         const o = kinds.get(k);
         if (o === undefined) continue;
         this.world.mined.add(k);
+        n++;
         // la forge du camp souterrain tire un minerai de plus de chaque filon
         ore += ORE_KINDS[o].amount + (this.camp() >= 3 ? 1 : 0) + (this.camp() >= 8 ? 1 : 0);
         got.set(ORE_KINDS[o].name, (got.get(ORE_KINDS[o].name) ?? 0) + 1);
       }
       this.world.ore += ore;
-      if (got.size) veins = `+${ore} minerai (${[...got].map(([name, n]) => `${n} ${name}`).join(', ')})`;
+      // un seul total de minerai : les filons abattus (combien de chaque), et ce qu'on a trouvé en chemin (une veine creusée)
+      const found = eff.reduce((s, e) => s + (e.t === 'ore' ? e.n : 0), 0), s = n > 1 ? 's' : '';
+      if (n) veins = `+${ore + found} minerai : ${n} filon${s} abattu${s} (${[...got].map(([name, k]) => `${k} ${ofOre(name)}`).join(', ')})${found ? `, et ${found} trouvé${found > 1 ? 's' : ''} en chemin` : ''}`;
+      // le récit dit combien de filons la troupe a vraiment abattus (aucun, s'il n'y en avait pas sur son chemin)
+      text += n ? ` ${NUMBER[n] ?? n} filon${s} abattu${s} : le minerai remonte à la lumière.` : ' Mais pas un filon sur son chemin : elle ne rapporte que les galeries prises.';
     }
     this.world.exp.riding = Math.max(0, this.world.exp.riding - a.mounts);
     if (a.ok && !this.done(a.m)) this.world.exp.done.push(a.m.id);
@@ -556,8 +603,8 @@ export class Expeditions {
     this.agents.dismiss(a.party, injured, days * this.dayLen() * (this.has('health') ? 0.5 : 1) * (a.gear.kit ? 0.5 : 1) * (a.entry >= 0 && this.camp() >= 5 ? 0.5 : 1));
     this.active.splice(this.active.indexOf(a), 1);
     this.world.version++;
-    const summary = [veins, held, effectSummary(eff.filter((e) => e.t !== 'veins')), lost].filter((x) => x && x !== 'rien').join(' · ') || 'rien';
-    this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text: a.ok ? a.c.winText : a.c.loseText, summary, notes: a.notes, redo: a.redo });
+    const summary = [veins, held, effectSummary(eff.filter((e) => e.t !== 'veins' && !(veins && e.t === 'ore'))), lost].filter((x) => x && x !== 'rien').join(' · ') || 'rien';
+    this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text, summary, notes: a.notes, redo: a.redo });
   }
 
   // ---------------- Fabrication de l'équipement ----------------
@@ -698,9 +745,11 @@ export class Expeditions {
 
   /**
    * Destination du genre voulu, hors du village (à quatre cases au moins de tout bâtiment, plus loin que le gros des maisons :
-   * dans un grand village, la plaine la plus proche n'est pas entre deux maisons) et atteignable à pied
+   * dans un grand village, la plaine la plus proche n'est pas entre deux maisons) et atteignable à pied. Une grotte se
+   * cherche d'abord parmi les vraies grottes (une faille fait l'affaire), hors du désert ; la montagne aussi. `loose` : au
+   * pied de la moindre paroi (une grotte qu'on ne trouve nulle part ailleurs)
    */
-  private findDest(kind: DestKind, base: [number, number]): [number, number] | null {
+  private findDest(kind: DestKind, base: [number, number], loose = false): [number, number] | null {
     if (kind === 'spaceport') return this.padSide(base);
     const w = this.world, [bx, bz] = base, cand: [number, number, number][] = [];
     const town = new Uint8Array(N * N), ds: number[] = [];
@@ -725,29 +774,39 @@ export class Expeditions {
       for (let x = 2; x < N - 2; x += 2) {
         const k = w.ci(x, z), h = w.cellAvg(x, z), slope = w.cellSlope(x, z), d = Math.hypot(x + 0.5 - bx, z + 0.5 - bz);
         if (w.occ[k] || w.lake[k] || w.decor[k] || h < 0.15 || rails?.has(k)) continue;
-        let ok = false;
+        let ok = false, extra = 0;
+        // une grotte, une montagne : pas au milieu des dunes, s'il y a mieux
+        const sand = w.biome[k] === BIOME_DESERT && (kind === 'cave' || kind === 'mountain') ? 15 : 0;
         if (kind === 'forest') ok = w.veg[k] === VEG_FOREST && d > 8;
         else if (kind === 'plain') ok = w.veg[k] === 0 && !w.road[k] && slope < 0.5 && h < 3 && d > 10;
         else if (kind === 'river') ok = w.nearWater(x, z, 1) && d > 7;
         else if (kind === 'mountain') {
-          // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif
-          const up = slope < 1.2 && h > 1 && d > 9 ? rise(x, z) : 0;
-          if (up > 1.4 || (h > 4.2 && slope < 1.2 && d > 9)) (town[k] ? cand : outside).push([x + 0.5, z + 0.5, Math.abs(d - ideal) - Math.min(up, 4) * 3 + this.rnd() * 5]);
+          // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif (au pied d'une simple butte, s'il le faut)
+          const up = slope < 1.2 && (h > 1 || loose) && d > 9 ? rise(x, z) : 0;
+          if (up > (loose ? 0.6 : 1.4) || (h > 4.2 && slope < 1.2 && d > 9)) (town[k] ? cand : outside).push([x + 0.5, z + 0.5, Math.abs(d - ideal) - Math.min(up, 4) * 3 + sand + this.rnd() * 5]);
           continue;
         }
-        // devant une grotte ou une faille : au bord de son emprise
-        else if (kind === 'cave') ok = d > 6 && w.outpostEntrance(x, z, 1) >= 0;
+        // devant une grotte ou une faille : au bord de son emprise (une vraie grotte plutôt qu'une faille)
+        else if (kind === 'cave') { const e = d > 6 ? w.outpostEntrance(x, z, 1) : -1; ok = e >= 0; extra = ok && w.veg[e] !== VEG_CAVE ? 10 : 0; }
         else ok = slope < 0.8 && d > 24 && !w.road[k] && w.veg[k] !== VEG_FIELD && w.veg[k] !== VEG_GARDEN;
-        if (ok) (kind === 'cave' || !town[k] ? outside : cand).push([x + 0.5, z + 0.5, Math.abs(d - ideal) + this.rnd() * 5]);
+        if (ok) (kind === 'cave' || !town[k] ? outside : cand).push([x + 0.5, z + 0.5, Math.abs(d - ideal) + extra + sand + this.rnd() * 5]);
       }
     // hors du village d'abord ; entre les maisons seulement s'il n'y a rien d'autre
     if (outside.length) cand.splice(0, cand.length, ...outside);
     cand.sort((a, b) => a[2] - b[2]);
     // deux équipes ne vont pas camper au même endroit
     const free = cand.filter(([x, z]) => !this.active.some((a) => Math.hypot(a.dest[0] - x, a.dest[1] - z) < 3));
+    // atteignable à pied, et sans un détour démesuré (un lac, une chaîne de montagnes à contourner) : l'équipe arrive vraiment
+    // sur place, au lieu d'y « travailler » à mi-chemin ; faute de mieux, le premier lieu atteignable
     const from = w.ci(Math.floor(bx), Math.floor(bz));
-    for (const [x, z] of (free.length ? free : cand).slice(0, 16)) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
-    return null;
+    let far: [number, number] | null = null;
+    for (const [x, z] of (free.length ? free : cand).slice(0, 16)) {
+      const p = this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)));
+      if (!p) continue;
+      if (p.length <= Math.max(24, Math.hypot(x - bx, z - bz) * 1.8)) return [x, z];
+      far ??= [x, z];
+    }
+    return far;
   }
 
   /** Au pied du cosmodrome : une case libre le long de son emprise, la plus proche du village, où l'on arrive à pied */

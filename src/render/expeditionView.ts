@@ -3,12 +3,19 @@ import { World } from '../world/world';
 import { Agents } from '../sim/agents';
 import { Expeditions, ActiveExpedition } from '../sim/expeditions';
 import { makeActor, play, hasModel, Actor } from './assets';
+import { makeFolk, folkStep, Folk, FolkRole } from './folk';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { ExpeditionScene, ANIMAL, IdleRockets } from './expeditionScenes';
 import { CombatFx } from './combatFx';
 
-interface Follower { obj: THREE.Object3D; actor: Actor | null; gap: number; x: number; z: number; heading: number }
+/** Ce qui suit l'équipe au retour : une bête, le chariot, ou quelqu'un qu'elle ramène (le voyageur, les jongleurs) */
+interface Follower { obj: THREE.Object3D; actor: Actor | null; folk?: Folk; gap: number; x: number; z: number; heading: number; ph: number }
+
+/** L'équipe s'éloigne d'autant du cœur de la scène : le décor s'efface derrière elle */
+const LEAVE_DIST = 5;
+/** au plus tard ce temps après son départ (secondes de jeu) */
+const LEAVE_T = 30;
 
 /** Couleurs des fanions, une par équipe */
 export const TEAM_COLORS = [0xe0574a, 0x4f86d8, 0xe8b33a, 0x5aae62];
@@ -51,6 +58,8 @@ export class ExpeditionView {
   /** coups, lances et étincelles des chasses */
   fx = new CombatFx();
   private shows = new Map<number, Show>();
+  /** décors d'expéditions finies, qui achèvent de s'effacer */
+  private fading: { scene: ExpeditionScene; exp: ActiveExpedition }[] = [];
   private pennantGeos = TEAM_COLORS.map(pennantGeo);
   private sackGeo = sackGeo();
   /** la fusée qui attend sur le pas de tir des cosmodromes */
@@ -79,18 +88,25 @@ export class ExpeditionView {
       }
       const key = `${a.phase === 'back' || a.phase === 'home' ? 'back' : 'out'}|${a.ok}`;
       if (key !== sh.key) { sh.key = key; this.rebuild(a, sh); }
-      // la scène de la mission (galets, bêtes, éboulis, voisins…) est posée dès le départ de l'expédition : on la voit
-      // en attendant l'équipe ; elle est rangée au départ du retour
-      // le décor reste encore quelques secondes après le travail : le loup détale ou tient tête, on voit l'équipe repartir
-      const going = a.phase === 'gather' || a.phase === 'out' || a.phase === 'work' || (a.phase === 'back' && a.t < 7);
-      if (going && !sh.scene && a.entry < 0 && a.phase !== 'back') sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a, this.fx);
-      else if (!going && sh.scene) { sh.scene.dispose(a); sh.scene = null; }
+      // la scène de la mission (galets, bêtes, éboulis, voisins…) est posée dès le départ de l'expédition : on la voit en
+      // attendant l'équipe. Elle reste quand l'équipe repart (le loup détale, la pirogue chavire, les voisins saluent) et ne
+      // s'efface, en douceur, qu'une fois l'équipe assez loin : on la voit s'en aller
+      const away = a.phase === 'back' || a.phase === 'home';
+      if (!away && !sh.scene && a.entry < 0) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a, this.fx);
+      if (away && sh.scene) {
+        const pos = this.agents.partyPositions(a.party), [fx, fz] = sh.scene.focus;
+        if (a.phase === 'home' || a.t > LEAVE_T || pos.every(([x, z]) => Math.hypot(x - fx, z - fz) > LEAVE_DIST)) sh.scene.leave();
+      }
       sh.scene?.update(dt, a);
+      if (sh.scene?.gone) { sh.scene.dispose(a); sh.scene = null; }
       this.step(a, sh, dt);
     }
-    // expéditions terminées : on range leurs objets
-    // (et le décor d'une expédition qui s'arrête en route, s'il y en a encore un)
-    for (const [id, sh] of this.shows) if (!live.has(id)) { if (sh.scene && sh.exp) sh.scene.dispose(sh.exp); this.clear(sh); this.group.remove(sh.pennant); this.shows.delete(id); }
+    // expéditions terminées : on range leurs objets ; leur décor, s'il est encore là, achève de s'effacer
+    for (const [id, sh] of this.shows) if (!live.has(id)) {
+      if (sh.scene && sh.exp) { sh.scene.leave(); this.fading.push({ scene: sh.scene, exp: sh.exp }); }
+      this.clear(sh); this.group.remove(sh.pennant); this.shows.delete(id);
+    }
+    this.fading = this.fading.filter((f) => { f.scene.update(dt, f.exp); if (!f.scene.gone) return true; f.scene.dispose(f.exp); return false; });
     this.idle.update([...this.shows.values()].some((sh) => sh.scene?.launching));
   }
 
@@ -115,6 +131,8 @@ export class ExpeditionView {
       f.obj.position.set(fx, w.surfaceAt(fx, fz), fz);
       f.obj.rotation.y = f.heading;
       if (f.actor) { play(f.actor, moving ? ['Walk', 'WalkSlow', 'Idle'] : ['Idle', 'Idle_Eating', 'Eating']); f.actor.mixer.update(dt); }
+      // quelqu'un qu'on ramène : il marche au pas de l'équipe ; arrivé au village, il applaudit à la fête
+      if (f.folk) { f.ph += moving ? Math.hypot(dx, dz) * 9 : dt * 1.6; folkStep(f.folk, f.ph, moving ? 'walk' : a.phase === 'home' ? 'cheer' : 'idle'); }
     }
     // sacs sur le dos des porteurs
     sh.sacks.forEach((s, i) => {
@@ -132,30 +150,40 @@ export class ExpeditionView {
     sh.followers = []; sh.sacks = [];
   }
 
-  /** Au retour d'une expédition réussie : ce qu'elle rapporte */
+  /**
+   * Au retour : ce que l'expédition rapporte si elle a réussi (les bêtes, celle qu'on a menée à la corde comprise, le chariot,
+   * les sacs, les jongleurs invités), et le voyageur blessé qu'on a choisi de ramener au village, quoi qu'il arrive
+   */
   private rebuild(a: ActiveExpedition, sh: Show) {
     this.clear(sh);
-    if (!(a.phase === 'back' || a.phase === 'home') || !a.ok) { sh.trail = []; return; }
+    if (!(a.phase === 'back' || a.phase === 'home')) { sh.trail = []; return; }
     const pos = this.agents.partyPositions(a.party);
     const last = pos[pos.length - 1] ?? [a.dest[0], a.dest[1], 0];
     sh.trail = [last[0], last[1]];
+    let gap = 0.32;
+    const follow = (obj: THREE.Object3D, actor: Actor | null, step: number, folk?: Folk) => { this.group.add(obj); sh.followers.push({ obj, actor, folk, gap, x: last[0], z: last[1], heading: 0, ph: gap * 7 }); gap += step; };
+    const person = (role: FolkRole, v: number) => { const f = makeFolk({ age: a.m.age, v, role }); follow(f.root, null, 0.26, f); };
+    const j = a.seen.indexOf('traveler');
+    if (j >= 0 && a.picks[j] === 1) person('villager', a.id * 31 + 7);
+    if (!a.ok) return;
     if (a.c.carry === 'animals') {
-      const kinds = a.c.win.flatMap((e) => (e.t === 'herd' ? e.kinds : []));
+      const kinds = [...a.c.win, ...a.bonus].flatMap((e) => (e.t === 'herd' ? e.kinds : []));
       kinds.forEach((k, i) => {
         const [name, len] = ANIMAL[k];
         const actor = hasModel(name) ? makeActor(name, len) : null;
         const obj: THREE.Object3D = actor ? actor.root : new THREE.Mesh(new THREE.IcosahedronGeometry(len * 0.5, 0), mats.body);
         if (actor) actor.mixer.setTime(i * 0.7);
-        this.group.add(obj);
-        sh.followers.push({ obj, actor, gap: 0.32 + i * 0.3, x: last[0], z: last[1], heading: 0 });
+        follow(obj, actor, 0.3);
       });
     } else if (a.c.carry === 'cart') {
       const cart = new THREE.Mesh(cartGeo(), mats.body);
       cart.castShadow = true;
-      this.group.add(cart);
-      sh.followers.push({ obj: cart, actor: null, gap: 0.3, x: last[0], z: last[1], heading: 0 });
+      follow(cart, null, 0.3);
     } else if (a.c.carry === 'sacks') {
       for (let i = 0; i < a.party.length; i++) { const s = new THREE.Mesh(this.sackGeo, mats.body); s.castShadow = true; this.group.add(s); sh.sacks.push(s); }
+    } else if (a.c.carry === 'guests') {
+      // les jongleurs et leur tambour, qui viennent faire la fête au village
+      (['juggler', 'juggler', 'drummer'] as FolkRole[]).forEach((r, i) => person(r, a.id * 17 + i));
     }
   }
 }

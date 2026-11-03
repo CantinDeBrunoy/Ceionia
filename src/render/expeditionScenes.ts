@@ -297,8 +297,94 @@ const tentGeoC = (c: number) => geo(`tent${c}`, (p) => {
   p.gable(0.3, 0.24, 0.3, 0, 0, 0, c);
   p.add(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0.151, 0, 0.06, 0.151, 0, -0.06, 0.151, 0.14, 0], 3)), 0, 0, 0, 0x3a2a22);
 });
+// ---------------- Accessoires des imprévus ----------------
+/** Entrée de grotte : butte de rochers, bouche sombre tournée vers +z, stalactites, blocs éboulés devant */
+const caveMouthGeo = () => geo('cavemouth', (p) => {
+  for (const [x, y, z, r, sx, sy, c] of [[0, 0.2, -0.3, 0.4, 1, 0.85, 0x8d8a84], [-0.36, 0.14, 0, 0.24, 1, 0.9, 0x7d7a74], [0.37, 0.15, 0, 0.25, 1, 0.9, 0x86827b],
+    [0, 0.36, 0.02, 0.2, 1.5, 0.6, 0x9a958c], [0.06, 0.5, -0.16, 0.24, 1, 0.8, 0x928e86], [-0.24, 0.34, -0.12, 0.2, 1, 0.9, 0x8a857c]] as number[][])
+    p.add(new THREE.DodecahedronGeometry(r, 0).scale(sx, sy, 0.9), x, y, z, c);
+  // la bouche, et le noir derrière elle (sombre sous tous les angles)
+  p.add(new THREE.CircleGeometry(0.17, 10, 0, Math.PI), 0, 0, 0.15, 0x120e0c);
+  p.box(0.34, 0.17, 0.12, 0, 0, 0.08, 0x1a1512);
+  for (const [x, h] of [[-0.1, 0.05], [-0.03, 0.07], [0.05, 0.045], [0.11, 0.06]]) p.add(new THREE.ConeGeometry(0.014, h, 4).rotateX(Math.PI), x, 0.165 - h / 2 + 0.01, 0.155, 0x7d7a74);
+  for (const [x, z, r] of [[-0.2, 0.3, 0.05], [0.18, 0.28, 0.04], [0.05, 0.38, 0.035], [-0.08, 0.42, 0.03]]) p.add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1), x, r * 0.5, z, 0x8a857c);
+});
+/** Nuage d'orage : boules grises tassées, plus sombres dessous */
+const stormGeo = (light: boolean) => geo(`storm${+light}`, (p) => {
+  for (const [x, y, z, r] of [[0, 0, 0, 0.55], [0.6, -0.05, 0.1, 0.45], [-0.55, -0.03, -0.1, 0.48], [0.2, 0.25, -0.15, 0.42], [-0.25, 0.2, 0.25, 0.38], [0.15, -0.12, 0.45, 0.36], [-0.1, -0.1, -0.5, 0.4]])
+    p.add(new THREE.IcosahedronGeometry(r, 1).scale(1.3, 0.62, 1.1), x, y, z, light ? 0xc9ccd2 : y > 0.1 ? 0x6f7480 : 0x4c515c);
+});
+/** Éclair : un zigzag blanc, du nuage au sol (hauteur 1) */
+const boltGeo = (seed: number) => {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 6; i++) pts.push(new THREE.Vector3(i && i < 6 ? Math.sin(seed * 7.1 + i * 2.3) * 0.12 : 0, 1 - i / 6, i && i < 6 ? Math.cos(seed * 3.7 + i * 1.9) * 0.12 : 0));
+  const g = new THREE.BufferGeometry().setFromPoints(pts.flatMap((v, i) => (i ? [pts[i - 1], v] : [])));
+  return g;
+};
+/** Petit oiseau (ou chauve-souris) : deux ailes en V, le long de +z */
+const wingGeo = (c: number) => geo(`wing${c}`, (p) => {
+  p.sphere(0.012, 0, 0, 0, c);
+  // chaque aile, recto et verso : on la voit d'en dessous comme d'au-dessus
+  for (const s of [-1, 1]) for (const v of [[0, 0, 0.012, 0, 0, -0.012, s * 0.05, 0.012, -0.004], [0, 0, -0.012, 0, 0, 0.012, s * 0.05, 0.012, -0.004]])
+    p.add(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(v, 3)), 0, 0, 0, c);
+});
+/** Rocher où brille un filon : pierre grise, cristaux de couleur */
+const glintGeo = () => geo('glint', (p) => {
+  p.add(new THREE.DodecahedronGeometry(0.11, 0).scale(1, 0.8, 1), 0, 0.08, 0, 0x86827b);
+  for (const [x, y, z, c] of [[0.05, 0.13, 0.05, 0x5ad8e8], [-0.04, 0.15, 0.04, 0xe8c64a], [0.02, 0.17, -0.03, 0x5ad8e8], [0.08, 0.09, -0.02, 0xd84a8a]] as number[][])
+    p.add(new THREE.OctahedronGeometry(0.026, 0).scale(0.7, 1.3, 0.7), x, y, z, c);
+});
+/** Étai de galerie : deux poteaux et une traverse */
+const proppingGeo = () => geo('propping', (p) => {
+  for (const s of [-1, 1]) p.box(0.03, 0.3, 0.03, s * 0.16, 0, 0, 0x8a6a4a);
+  p.box(0.4, 0.04, 0.05, 0, 0.3, 0, 0x7a5a3e);
+});
+/** Piège de corde : une boucle posée au sol, son piquet */
+const snareGeo = () => geo('snare', (p) => { p.add(new THREE.TorusGeometry(0.06, 0.008, 3, 10).rotateX(Math.PI / 2), 0, 0.01, 0, 0xc9b48a); p.box(0.016, 0.08, 0.016, 0.07, 0, 0, 0x6a4a34); });
+/** Empreinte de patte */
+const pawGeo = () => geo('paw', (p) => { p.cyl(0.018, 0.018, 0.004, 6, 0, 0, 0, 0x4a3a2e); for (let i = 0; i < 4; i++) p.cyl(0.007, 0.007, 0.004, 5, -0.015 + i * 0.01, 0, 0.022 + (i % 3 ? 0.004 : 0), 0x4a3a2e); });
+/** Branche que la crue emporte */
+const branchGeo = () => geo('branch', (p) => { p.add(new THREE.CylinderGeometry(0.018, 0.022, 0.34, 5).rotateZ(Math.PI / 2), 0, 0, 0, 0x6a4a34); p.add(new THREE.CylinderGeometry(0.008, 0.01, 0.14, 4).rotateZ(Math.PI / 2 - 0.6), 0.06, 0.03, 0.02, 0x6a4a34); p.sphere(0.04, 0.12, 0.05, 0.02, 0x5c8a45, 0, 0.6); });
+/** Filet de pêche tendu sur l'eau : un quadrillage de cordelettes et ses flotteurs */
+const netGeo = () => geo('net', (p) => {
+  for (let i = 0; i < 6; i++) { p.box(0.5, 0.004, 0.006, 0, 0, -0.25 + i * 0.1, 0xd8d0b8); p.box(0.006, 0.004, 0.5, -0.25 + i * 0.1, 0, 0, 0xd8d0b8); }
+  for (const [x, z] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) p.sphere(0.02, x, 0.01, z, 0xe8843a);
+});
+/** Poissons pêchés, en tas sur la berge */
+const catchGeo = () => geo('catch', (p) => { for (let i = 0; i < 7; i++) p.add(new THREE.SphereGeometry(0.026, 6, 4).scale(1, 0.5, 1.8), Math.cos(i * 2.2) * 0.04, 0.012 + (i % 3) * 0.01, Math.sin(i * 2.2) * 0.04, i % 2 ? 0xc9cdd2 : 0xa8adb4); });
+/** Trois chopes sur un tonnelet */
+const mugsGeo = () => geo('mugs', (p) => {
+  p.cyl(0.05, 0.05, 0.08, 8, 0, 0, 0, 0x9a6a44);
+  for (let i = 0; i < 3; i++) { const a = i * 2.1; p.cyl(0.016, 0.014, 0.04, 6, Math.cos(a) * 0.025, 0.08, Math.sin(a) * 0.025, 0xc8a050); p.cyl(0.015, 0.015, 0.006, 6, Math.cos(a) * 0.025, 0.12, Math.sin(a) * 0.025, 0xf6f0e0); }
+});
+/** Roue de charrette, à plat */
+const wheelGeo = () => geo('wheel', (p) => { p.add(new THREE.TorusGeometry(0.06, 0.012, 4, 12).rotateX(Math.PI / 2), 0, 0.012, 0, 0x6a4a34); for (let i = 0; i < 3; i++) p.box(0.12, 0.008, 0.01, 0, 0.012, 0, 0x7a5a3e, (i * Math.PI) / 3); });
+/** Cage du canari des mineurs */
+const cageGeo = () => geo('cage', (p) => {
+  p.cyl(0.04, 0.04, 0.008, 8, 0, 0, 0, 0x8a7a4a);
+  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; p.box(0.004, 0.08, 0.004, Math.cos(a) * 0.038, 0.004, Math.sin(a) * 0.038, 0xc8a050); }
+  p.add(new THREE.SphereGeometry(0.04, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), 0, 0.08, 0, 0xc8a050);
+  p.sphere(0.016, 0, 0.03, 0, 0xf2d43a);
+});
+/** Seau d'eau */
+const bucketGeo = () => geo('bucket', (p) => { p.cyl(0.03, 0.024, 0.05, 8, 0, 0, 0, 0x8a6a4a); p.cyl(0.027, 0.027, 0.004, 8, 0, 0.044, 0, 0x5a9ac8); });
+const gasGeo = () => geo('gas', (p) => p.sphere(0.04, 0, 0, 0, 0xa8c46a, 1));
+const leafGeo = () => geo('leaf', (p) => p.box(0.018, 0.003, 0.012, 0, 0, 0, 0x8a9a4a));
+/** Caillou qui dévale */
+const pebbleGeo = () => geo('pebble', (p) => p.add(new THREE.IcosahedronGeometry(0.035, 0).scale(1, 0.8, 1), 0, 0, 0, 0x8d8a84));
+/** Rigole creusée dans la terre, le long de +z */
+const ditchGeo = () => geo('ditch', (p) => { p.box(0.06, 0.006, 0.7, 0, 0, 0.35, 0x5a4232); p.box(0.03, 0.007, 0.7, 0, 0, 0.35, 0x5a8fb4); });
+/** La recette du frère, roulée sur le tonnelet */
+const scrollGeo = () => geo('scroll', (p) => { p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6).rotateZ(Math.PI / 2), 0, 0.012, 0, 0xf2e8d0); p.box(0.006, 0.026, 0.004, 0.02, 0, 0, 0xc83a32); });
+/** Manche de la torche de fortune (la flamme est à part : elle baisse et grandit) */
+const handTorchGeo = () => geo('handtorch', (p) => { p.box(0.01, 0.08, 0.01, 0, 0, 0, 0x6a4a34); p.cyl(0.014, 0.01, 0.018, 6, 0, 0.065, 0, 0x4a3a2e); });
+
 const STAR = new THREE.MeshBasicMaterial({ color: 0xfff4c0, transparent: true, opacity: 0.95, depthWrite: false });
 const GLOW = new THREE.MeshBasicMaterial({ color: 0xff7a2a });
+/** Lumières d'alerte et éclairs (ne s'éclairent pas : elles brillent) */
+const RED = new THREE.MeshBasicMaterial({ color: 0xff3a2a });
+const GREEN = new THREE.MeshBasicMaterial({ color: 0x4aff7a });
+const BOLT = new THREE.LineBasicMaterial({ color: 0xf8f8ff });
 /** Gestes des habitants d'ailleurs (aventuriers KayKit, petits personnages de Kenney) */
 
 /** Comment l'équipe se déplace selon le cœur de sa mission : autour des bêtes, de point de travail en point de travail… */
@@ -383,9 +469,33 @@ interface RocketShow {
   crew: { n: { folk: Folk; pose: FolkPose; off: number }; from: [number, number] }[]; vapor: { every: number } | null; puff: number; trail: number;
 }
 
-interface Beast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; speed: number }
+/** Bête de la scène ; `flee` : elle s'enfuit dans cette direction (la harde dispersée) ; `held` : un imprévu la mène (la bête qui charge) */
+interface Beast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; speed: number; flee?: number; fled?: number; held?: boolean }
+/** Le décor s'efface en ce temps-là (secondes), une fois l'équipe repartie */
+const FADE = 1.2;
 interface Rod { rod: THREE.Mesh; bob: THREE.Mesh; line: THREE.Line }
-interface Fx { obj: THREE.Object3D; t: number; life: number; kind: 'puff' | 'fish' | 'ring' | 'steam' | 'smoke' | 'bubble' | 'star' | 'plume' | 'trail'; x: number; y: number; z: number; vx: number; vz: number }
+interface Fx { obj: THREE.Object3D; t: number; life: number; kind: 'puff' | 'fish' | 'ring' | 'steam' | 'smoke' | 'bubble' | 'star' | 'plume' | 'trail' | 'rock' | 'gas' | 'leaf'; x: number; y: number; z: number; vx: number; vz: number; vy?: number }
+
+/**
+ * Un imprévu joué sur la scène : ce qu'on voit pendant que l'équipe attend la décision, puis la suite de l'option choisie
+ * (le grand feu, la corde, la décrue…). `step` le fait vivre à chaque image et dit s'il dure encore ; à la fin, ses objets
+ * rétrécissent et s'effacent
+ */
+interface Staging {
+  id: string;
+  /** option choisie (-1 : la décision se fait attendre) */
+  pick: number;
+  /** secondes depuis qu'il a surgi, depuis la décision, depuis qu'il s'efface (-1 : pas encore) */
+  t: number;
+  after: number;
+  end: number;
+  objs: THREE.Object3D[];
+  step: (dt: number) => boolean;
+  /** au départ de l'équipe : ce qui doit disparaître (le voyageur ramené au village, qui la suit désormais) */
+  leave?: () => void;
+  /** matériaux et géométries propres à l'imprévu, libérés à la fin */
+  own: { dispose(): void }[];
+}
 
 /**
  * Ce que fait une équipe sur place, joué sur la carte, et pourquoi elle est venue : elle approche une harde ou la rabat dans
@@ -448,6 +558,28 @@ export class ExpeditionScene {
   private stage = new Map<number, string>();
   /** la fusée de l'expédition spatiale, sur son pas de tir puis dans le ciel */
   private rocket: RocketShow | null = null;
+  /** imprévus joués sur place (pendant la décision, puis la suite de l'option choisie), et l'échec joué au départ */
+  private stagings: Staging[] = [];
+  private failed = false;
+  /** on explore une grotte : chacun tient une torche de fortune ; leur éclat (1 : normal), et celui vers lequel il va */
+  private lit = false;
+  private torches = new Map<number, THREE.Object3D>();
+  private torchK = 0;
+  private torchTo = 1;
+  private kindled = false;
+  /** la roulotte des jongleurs ; la barque qui tangue plus fort (rapides), la montgolfière secouée (rafale), le ciel couvert */
+  private wagon: THREE.Object3D | null = null;
+  private rough = 0;
+  private gustK = 0;
+  private cloudy = false;
+  /** les jongleurs et leur tambour, qui suivent l'équipe au village quand elle les ramène ; le frère brasseur */
+  private guests: { folk: Folk; pose: FolkPose; off: number }[] = [];
+  private monk: { folk: Folk; pose: FolkPose; off: number } | null = null;
+  /** l'équipe est repartie (une fois) : l'échec se joue, ce qui la suit quitte la scène */
+  private departed = false;
+  /** l'équipe est repartie : le décor rétrécit et s'efface (secondes depuis, -1 : pas encore) */
+  private fade = -1;
+  private fadeObjs: { o: THREE.Object3D; y: number }[] = [];
   /** une fusée est sur le pas de tir ou dans le ciel : celle qui attendait au cosmodrome s'efface */
   get launching() { return !!this.rocket; }
 
@@ -636,29 +768,34 @@ export class ExpeditionScene {
       for (let i = 0; i < 6; i++) { const ang = i * 1.05 + 0.3; this.spots.push([px + Math.cos(ang) * 0.5, pz + Math.sin(ang) * 0.5]); }
       this.focus = [px, pz];
     } else if (st === 'gallery' || st === 'cave' || st === 'scout') {
-      // l'entrée : dans la pente pour une galerie ou un tunnel, la bouche de la grotte voisine sinon ; tas de minerai et wagonnet
-      let mx = cx, mz = cz, found = false;
+      // l'entrée : dans la pente pour une galerie ou un tunnel ; la bouche de la grotte voisine, sinon une entrée de grotte au
+      // bord de la faille ou au pied de la paroi ; tas de minerai et wagonnet. Torches plantées de part et d'autre de la bouche
+      let mx = cx, mz = cz, real = false, fissure = false;
       const e = st === 'gallery' ? -1 : w.outpostEntrance(Math.floor(cx), Math.floor(cz), 1);
       if (e >= 0 && w.veg[e] === VEG_CAVE) {
         // la bouche de la grotte, du côté de l'équipe
         const x = e % N, z = Math.floor(e / N), ang = Math.atan2(cx - x - 0.5, cz - z - 0.5);
-        mx = x + 0.5 + Math.sin(ang) * 0.6; mz = z + 0.5 + Math.cos(ang) * 0.6; found = true;
+        mx = x + 0.5 + Math.sin(ang) * 0.6; mz = z + 0.5 + Math.cos(ang) * 0.6; real = true;
       } else if (e >= 0) {
-        // le bord de la faille le plus proche
-        let bd = Infinity;
+        // au bord de la faille la plus proche, entre elle et l'équipe : l'entrée de la grotte qui y descend
+        let bd = Infinity, fx = cx, fz = cz;
         for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
           const x = Math.floor(cx) + dx, z = Math.floor(cz) + dz, d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
-          if (w.inCells(x, z) && w.decor[w.ci(x, z)] && d < bd) { bd = d; mx = x + 0.5; mz = z + 0.5; found = true; }
+          if (w.inCells(x, z) && w.decor[w.ci(x, z)] && d < bd) { bd = d; fx = x + 0.5; fz = z + 0.5; fissure = true; }
         }
+        [mx, mz] = this.near(fx + (cx - fx) * 0.45, fz + (cz - fz) * 0.45, cx, cz);
       }
-      if (!found) {
+      if (!real && !fissure) {
         let best = 0, gain = -1e9;
         for (let d = 0; d < 8; d++) { const ang = (d / 8) * Math.PI * 2, g = y(cx + Math.sin(ang) * 0.8, cz + Math.cos(ang) * 0.8) - y(cx, cz); if (g > gain) { gain = g; best = ang; } }
         [mx, mz] = this.near(cx + Math.sin(best) * 0.6, cz + Math.cos(best) * 0.6, cx, cz);
       }
-      const face = Math.atan2(cx - mx, cz - mz);
-      if (!found) this.put(galleryGeo(a.m.id === 'railway'), mx, mz, face);
-      else for (const s of [-1, 1]) { const tx = mx + Math.cos(face) * s * 0.2, tz = mz - Math.sin(face) * s * 0.2; this.put(stakeTorchGeo(), tx, tz, 0); this.flameAt(tx, y(tx, tz) + 0.26, tz, 0.6); }
+      // (l'entrée bâtie : la bouche s'ouvre à 0,22 devant la butte ; les torches se plantent devant ses rochers)
+      const face = Math.atan2(cx - mx, cz - mz), built = st !== 'gallery' && !real, lip = built ? 0.22 : 0.12, ahead = built ? 0.42 : 0.07, side = built ? 0.36 : 0.2;
+      if (st === 'gallery') this.put(galleryGeo(a.m.id === 'railway'), mx, mz, face);
+      else if (built) this.put(caveMouthGeo(), mx, mz, face).scale.setScalar(1.6);
+      if (st !== 'gallery') for (const s of [-1, 1]) { const tx = mx + Math.sin(face) * ahead + Math.cos(face) * s * side, tz = mz + Math.cos(face) * ahead - Math.sin(face) * s * side; this.put(stakeTorchGeo(), tx, tz, 0); this.flameAt(tx, y(tx, tz) + 0.26, tz, 0.6); }
+      const found = st !== 'gallery';
       const hx = cx - Math.sin(face) * 0.3, hz = cz - Math.cos(face) * 0.3;
       if (st === 'scout') {
         // les éclaireurs reviennent reporter leurs relevés sur la table aux plans, et jalonnent devant la grotte l'emprise de
@@ -675,8 +812,10 @@ export class ExpeditionScene {
         this.cartRun = { obj: this.put(cartGeo(), mx, mz, face), a: [mx + Math.sin(face) * 0.12, mz + Math.cos(face) * 0.12], b: [hx + Math.sin(face) * 0.1, hz + Math.cos(face) * 0.1] };
       }
       if (st !== 'scout') this.emits.push({ x: hx, y: y(hx, hz) + 0.1, z: hz, kind: 'puff', every: 0.7, t: 0 });
-      this.mouth = { at: [mx + Math.sin(face) * 0.12, mz + Math.cos(face) * 0.12], heap: [hx, hz] };
+      this.mouth = { at: [mx + Math.sin(face) * lip, mz + Math.cos(face) * lip], heap: [hx, hz] };
       this.focus = [(mx + hx) / 2, (mz + hz) / 2];
+      // on explore la grotte à la lueur des torches : chacun a la sienne
+      this.lit = st !== 'gallery';
     } else if (st === 'race') {
       // la ligne de départ de la course : arche à damier, la voiture sans chevaux qui pétarade, bidon d'essence ; l'équipe la
       // prépare tout autour, l'ingénieur donne ses consignes ; puis le pilote s'installe au volant et la voiture file faire ses
@@ -715,7 +854,7 @@ export class ExpeditionScene {
         const ang = i * 1.57 + 0.6;
         stakes.push(this.near(bx + Math.cos(ang) * 0.5, bz + Math.sin(ang) * 0.5, bx, bz));
         const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), ROPE);
-        l.visible = false;
+        l.visible = false; l.userData.flat = true;
         this.group.add(l); this.props.push(l); ropes.push(l);
       }
       const windy = a.c.dest === 'mountain';
@@ -727,16 +866,16 @@ export class ExpeditionScene {
     } else if (st === 'troupe') {
       // la roulotte des jongleurs, deux jongleurs et leurs balles, un tambour ; l'équipe applaudit en demi-cercle
       const [wx, wz] = this.near(cx + 0.6, cz - 0.4, cx, cz);
-      this.put(wagonGeo(), wx, wz, 0.4);
+      this.wagon = this.put(wagonGeo(), wx, wz, 0.4);
       for (const [dx, dz] of [[0.2, -0.14], [0.24, 0.18]]) {
         const x = cx + dx, z = cz + dz;
-        this.npc('juggler', age, x, z, -Math.PI / 2, 'juggle');
+        this.guests.push(this.npc('juggler', age, x, z, -Math.PI / 2, 'juggle'));
         const balls = [0xd8443a, 0xe8b84a, 0x4a7aa8].map((c) => { const m = new THREE.Mesh(ballGeo(c), mats.body); this.group.add(m); this.props.push(m); return m; });
         this.jugglers.push({ x, y: y(x, z), z, face: -Math.PI / 2, balls });
       }
       const [dx, dz] = this.near(cx + 0.45, cz + 0.4, cx, cz);
       this.put(drumGeo(), dx - 0.08, dz, 0);
-      this.npc('drummer', age, dx, dz, -Math.PI / 2 - 0.5, 'sit');
+      this.guests.push(this.npc('drummer', age, dx, dz, -Math.PI / 2 - 0.5, 'sit'));
       this.focus = [cx + 0.22, cz];
     } else if (st === 'abbey') {
       // la chapelle de l'abbaye, le frère qui touille sa cuve fumante, les tonneaux ; l'équipe écoute et goûte
@@ -746,7 +885,7 @@ export class ExpeditionScene {
       this.put(kettleGeo(), kx, kz, Math.PI / 2);
       this.emits.push({ x: kx, y: y(kx, kz) + 0.14, z: kz, kind: 'steam', every: 0.3, t: 0 });
       this.flameAt(kx, y(kx, kz) + 0.01, kz, 0.6);
-      this.npc('monk', age, kx + 0.13, kz + 0.02, -Math.PI / 2, 'talk');
+      this.monk = this.npc('monk', age, kx + 0.13, kz + 0.02, -Math.PI / 2, 'talk');
       this.put(barrelsGeo(), cx + 0.42, cz + 0.32, 0);
       this.focus = [kx, kz];
     } else if (st === 'stars') {
@@ -879,6 +1018,976 @@ export class ExpeditionScene {
     g.position.set(x, y, z);
     this.group.add(g); this.props.push(g);
     this.spins.push({ obj: g, speed: 2.2 });
+  }
+
+  // ---------------- Les imprévus, joués sur place ----------------
+  /**
+   * Un imprévu surgit : on le pose sur la scène. On le voit tout de suite (le jeu s'arrête pendant la décision) : le nuage
+   * d'orage, les loups qui tournent autour de l'équipe, l'eau qui monte, le voyageur assis au bord du chemin…
+   */
+  private stageEvent(id: string, a: ActiveExpedition, fail = false) {
+    const s: Staging = { id, pick: fail ? 0 : -1, t: 0, after: 0, end: -1, objs: [], own: [], step: () => false };
+    const leader = (k: HerdKind, acts: ('calm' | 'lead' | 'flee')[]) => this.stageLeader(s, a, k, acts);
+    const steps: Record<string, () => (dt: number) => boolean> = {
+      winds: () => this.stageWinds(s, a), alarm: () => this.stageAlarm(s), boar: () => this.stageBoar(s, a), flood: () => this.stageFlood(s, a),
+      ledge: () => this.stageRocks(s, a, 'ledge'), scree: () => this.stageRocks(s, a, 'scree'), rockfall: () => this.stageRocks(s, a, 'rockfall'),
+      traveler: () => this.stageTraveler(s, a), hosts: () => this.stageHosts(s, a), storm: () => this.stageStorm(s, a, fail), fog: () => this.stageFog(s, a, fail),
+      wolves: () => this.stageWolves(s, a), pack: () => this.stagePack(s, a),
+      stallion: () => leader('horse', ['calm', 'lead', 'flee']), ram: () => leader('sheep', ['calm', 'lead', 'flee']),
+      tusker: () => leader('pig', ['calm', 'flee', 'flee']), bull: () => leader('cow', ['calm', 'lead', 'flee']), lamb: () => this.stageLamb(s, a),
+      shoal: () => this.stageShoal(s, a), rapids: () => this.stageRapids(s), deer: () => this.stageDeer(s, a), vein: () => this.stageVein(s, a),
+      dark: () => this.stageDark(s, a), bats: () => this.stageBats(s), firedamp: () => this.stageFiredamp(s), seep: () => this.stageSeep(s, a),
+      birds: () => this.stageBirds(s, a, fail), swarm: () => this.stageSwarm(s, a, fail), wheel: () => this.stageWheel(s, a), tasting: () => this.stageTasting(s, a),
+      puncture: () => this.stagePuncture(s), gust: () => this.stageGust(s), clouds: () => this.stageClouds(s), cows: () => this.stageCows(s, a),
+      // les échecs, joués au départ de l'équipe
+      rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
+      stings: () => this.stageSwarm(s, a, true), blast: () => this.stageBlast(s), gone: () => this.stageGone(s),
+    };
+    const make = steps[id];
+    if (!make) return;
+    s.step = make();
+    this.stagings.push(s);
+  }
+
+  /**
+   * Les imprévus à chaque image : celui qui surgit se met en place ; la décision prise, la suite de l'option choisie se joue ;
+   * fini, il rétrécit et s'efface. Au départ de l'équipe, un échec se joue lui aussi (l'orage, la pirogue qui chavire…)
+   */
+  private stepStagings(dt: number, a: ActiveExpedition) {
+    const ev = a.wait;
+    if (ev && !this.stagings.some((s) => s.id === ev.id && s.pick < 0)) this.stageEvent(ev.id, a);
+    if (!this.departed && (a.phase === 'back' || a.phase === 'home')) {
+      this.departed = true;
+      for (const s of this.stagings) s.leave?.();
+      // les jongleurs ramenés suivent l'équipe (voir ExpeditionView) : ils quittent la scène
+      if (a.ok && a.c.carry === 'guests') { for (const g of this.guests) g.folk.root.visible = false; for (const j of this.jugglers) for (const b of j.balls) b.visible = false; this.jugglers = []; }
+      // (l'orage est déjà là : il disperse la harde)
+      const f = a.c.fail;
+      if (!a.ok && f) this.stageEvent(f === 'storm' && this.stagings.some((s) => s.id === 'storm' && s.end < 0) ? 'scatter' : f, a, true);
+    }
+    for (const s of this.stagings) {
+      s.t += dt;
+      if (s.pick < 0 && a.wait?.id !== s.id) { const j = a.seen.lastIndexOf(s.id); s.pick = Math.max(0, j >= 0 ? a.picks[j] : 0); }
+      if (s.pick >= 0) s.after += dt;
+      if (s.end < 0 && !s.step(dt)) {
+        s.end = 0;
+        s.objs.forEach((o) => { o.userData.s0 = o.scale.clone(); if (o.userData.flat) o.visible = false; });
+      }
+      if (s.end >= 0) {
+        s.end += dt;
+        const k = Math.max(0.001, 1 - smooth(Math.min(1, s.end)));
+        for (const o of s.objs) if (o.userData.s0) o.scale.copy(o.userData.s0).multiplyScalar(k);
+      }
+    }
+    this.stagings = this.stagings.filter((s) => { if (s.end < 1) return true; this.unstage(s); return false; });
+  }
+
+  /** On range un imprévu : ses objets, ses habitants d'ailleurs, ses matériaux */
+  private unstage(s: Staging) {
+    const gone = new Set(s.objs);
+    for (const o of s.objs) this.group.remove(o);
+    for (const d of s.own) d.dispose();
+    this.npcs = this.npcs.filter((n) => !gone.has(n.folk.root));
+    this.spins = this.spins.filter((x) => !gone.has(x.obj));
+    this.props = this.props.filter((o) => !gone.has(o));
+  }
+
+  /** Le milieu de l'équipe (ses membres visibles), sinon le cœur de la scène */
+  private teamAt(a: ActiveExpedition): [number, number] {
+    const pos = this.agents.partyPositions(a.party);
+    return pos.length ? [pos.reduce((s, p) => s + p[0], 0) / pos.length, pos.reduce((s, p) => s + p[1], 0) / pos.length] : [this.focus[0], this.focus[1]];
+  }
+
+  /** Le milieu de la harde (ou le cœur de la scène) */
+  private herdAt(): [number, number] {
+    const b = this.beasts;
+    return b.length ? [b.reduce((s, x) => s + x.x, 0) / b.length, b.reduce((s, x) => s + x.z, 0) / b.length] : [this.focus[0], this.focus[1]];
+  }
+
+  /** Un objet de l'imprévu, posé au sol en (x, z) (ou `lift` au-dessus) ; il s'efface avec lui */
+  private sPut(s: Staging, g: THREE.BufferGeometry, x: number, z: number, ry = 0, lift = 0) {
+    const m = new THREE.Mesh(g, mats.body);
+    m.castShadow = true;
+    m.position.set(x, this.world.surfaceAt(x, z) + lift, z);
+    m.rotation.y = ry;
+    return this.sAdd(s, m);
+  }
+  private sAdd<T extends THREE.Object3D>(s: Staging, o: T) { this.group.add(o); s.objs.push(o); return o; }
+
+  /** Une flamme de l'imprévu (le grand feu), qui danse */
+  private sFlame(s: Staging, x: number, z: number, size: number) {
+    const f = this.flameAt(x, this.world.surfaceAt(x, z) + 0.015, z, size);
+    s.objs.push(f);
+    return f;
+  }
+
+  /** Un habitant d'ailleurs le temps de l'imprévu (le voyageur, les voisins) */
+  private sNpc(s: Staging, role: FolkRole, age: number, x: number, z: number, face: number, pose: FolkPose) {
+    const n = this.npc(role, age, x, z, face, pose);
+    s.objs.push(n.folk.root);
+    return n;
+  }
+
+  /** Une bête de l'imprévu (loup, meneur du troupeau, laie, cerf…), à la taille voulue */
+  private sBeast(s: Staging, k: HerdKind | 'wolf' | 'deer', x: number, z: number, size = 1): Beast {
+    const [name, len]: [ModelName, number] = k === 'deer' ? ['deer', 0.3] : ANIMAL[k];
+    const actor = hasModel(name) ? makeActor(name, len * size) : null;
+    const obj: THREE.Object3D = actor ? actor.root : new THREE.Mesh(new THREE.IcosahedronGeometry(len * size * 0.5, 0), mats.body);
+    if (actor) { actor.mixer.setTime(x * 3); s.own.push({ dispose: () => actor.mixer.stopAllAction() }); } else s.own.push((obj as THREE.Mesh).geometry);
+    obj.position.set(x, this.world.surfaceAt(x, z), z);
+    this.sAdd(s, obj);
+    return { obj, actor, x, z, tx: x, tz: z, heading: 0, wait: 0, speed: 0 };
+  }
+
+  /** La bête va vers (tx, tz) ; arrivée (ou immobile), elle joue `idle` ; `anyway` : sans regarder où elle met les pieds (elle s'enfuit) */
+  private sMove(b: Beast, tx: number, tz: number, speed: number, dt: number, idle: string[] = ['Idle', 'Idle_Eating'], anyway = false) {
+    const dx = tx - b.x, dz = tz - b.z, d = Math.hypot(dx, dz);
+    let moving = false;
+    if (d > 0.03 && speed > 0) {
+      const st = Math.min(d, speed * dt), nx = b.x + (dx / d) * st, nz = b.z + (dz / d) * st;
+      if (anyway || this.free(nx, nz)) { b.x = nx; b.z = nz; moving = true; }
+      b.heading = Math.atan2(dx, dz);
+    }
+    b.obj.position.set(b.x, this.world.surfaceAt(b.x, b.z), b.z);
+    b.obj.rotation.y = b.heading;
+    if (b.actor) { play(b.actor, moving ? (speed > 0.8 ? ['Gallop', 'Run', 'Walk'] : ['Walk', 'WalkSlow', 'Idle']) : idle); b.actor.mixer.update(dt); }
+    return moving;
+  }
+  private sFace(b: Beast, x: number, z: number) { b.heading = Math.atan2(x - b.x, z - b.z); }
+  /** Elle s'enfuit à l'opposé de (x, z) */
+  private sFlee(b: Beast, x: number, z: number, speed: number, dt: number) { const ang = Math.atan2(b.x - x, b.z - z); this.sMove(b, b.x + Math.sin(ang) * 2, b.z + Math.cos(ang) * 2, speed, dt, ['Idle'], true); }
+
+  /** Une corde tendue d'un point à l'autre (d'un membre à l'autre, d'un membre à la bête qu'il mène), refaite à chaque image */
+  private sRope(s: Staging) {
+    const g = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 8), 3)), l = new THREE.Line(g, ROPE);
+    l.frustumCulled = false; l.userData.flat = true; l.visible = false;
+    this.sAdd(s, l); s.own.push(g);
+    return (pts: [number, number][], h = 0.13) => {
+      const p = g.attributes.position as THREE.BufferAttribute, n = Math.min(8, pts.length);
+      l.visible = n > 1;
+      if (!l.visible) return;
+      for (let i = 0; i < 8; i++) { const [x, z] = pts[Math.min(i, n - 1)]; p.setXYZ(i, x, this.world.surfaceAt(x, z) + h, z); }
+      p.needsUpdate = true;
+    };
+  }
+  /** Les positions de l'équipe, pour la corde qui la relie */
+  private ropeOf(a: ActiveExpedition): [number, number][] { return this.agents.partyPositions(a.party).map(([x, z]) => [x, z]); }
+
+  /** Un nuage (noir d'orage, ou gris clair) en (x, z), à `h` au-dessus du sol : son ombre assombrit la scène */
+  private sCloud(s: Staging, x: number, z: number, h: number, light = false, size = 1.6) {
+    const m = this.sPut(s, stormGeo(light), x, z, (x * 7 + z * 3) % 6.28, h);
+    m.scale.setScalar(size);
+    return m;
+  }
+
+  /**
+   * Le ciel qui s'assombrit sur l'équipe, et là seulement : un voile sombre et transparent tendu au-dessus de la scène (une
+   * coupole très plate, au-dessus des têtes), sombre au milieu et effacé sur ses bords (k : sa force, 0 … 1)
+   */
+  private sGloom(s: Staging, cx: number, cz: number, r: number) {
+    const g = new THREE.SphereGeometry(r, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.15, 1), p = g.attributes.position, col = new Float32Array(p.count * 4);
+    for (let i = 0; i < p.count; i++) { const d = Math.min(1, Math.hypot(p.getX(i), p.getZ(i)) / r); col.set([0.04, 0.05, 0.1, 0.45 * (1 - d) * (1 + d)], i * 4); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 4));
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: false });
+    const m = this.sAdd(s, new THREE.Mesh(g, mat));
+    m.position.set(cx, this.world.surfaceAt(cx, cz) + 0.9, cz);
+    m.renderOrder = 3;
+    m.userData.flat = true;
+    s.own.push(g, mat);
+    return (k: number) => { mat.opacity = k; m.visible = k > 0.01; };
+  }
+
+  /** La pluie qui tombe sur un disque de rayon r autour de (cx, cz) ; de quoi l'animer (k : sa force, 0 … 1) */
+  private sRain(s: Staging, cx: number, cz: number, r: number, top: number) {
+    const n = 160, pos = new Float32Array(n * 6), drop: number[] = [];
+    for (let i = 0; i < n; i++) { const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r, x = cx + Math.cos(ang) * d, z = cz + Math.sin(ang) * d; drop.push(x, z, this.world.surfaceAt(x, z), Math.random()); }
+    const g = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.LineBasicMaterial({ color: 0xc4d8ee, transparent: true, opacity: 0.8, depthWrite: false });
+    const l = new THREE.LineSegments(g, mat);
+    l.frustumCulled = false; l.userData.flat = true;
+    this.sAdd(s, l); s.own.push(g, mat);
+    return (dt: number, k: number) => {
+      mat.opacity = 0.8 * k;
+      l.visible = k > 0.02;
+      if (!l.visible) return;
+      for (let i = 0; i < n; i++) {
+        let f = drop[i * 4 + 3] - dt * 1.7;
+        if (f < 0) f += 1;
+        drop[i * 4 + 3] = f;
+        const x = drop[i * 4], z = drop[i * 4 + 1], y = drop[i * 4 + 2] + f * top;
+        pos[i * 6] = x; pos[i * 6 + 1] = y; pos[i * 6 + 2] = z; pos[i * 6 + 3] = x - 0.012; pos[i * 6 + 4] = y + 0.14; pos[i * 6 + 5] = z;
+      }
+      g.attributes.position.needsUpdate = true;
+    };
+  }
+
+  /** Une nappe de brouillard : de grosses boules blanches et floues au ras du sol autour de (cx, cz) ; k : son épaisseur */
+  private sFog(s: Staging, cx: number, cz: number, r: number) {
+    const g = new THREE.IcosahedronGeometry(1, 2), mat = new THREE.MeshBasicMaterial({ color: 0xeef1f3, transparent: true, opacity: 0.35, depthWrite: false });
+    s.own.push(g, mat);
+    // beaucoup de boules à demi transparentes qui se chevauchent : la nappe s'épaissit au milieu et s'effiloche sur ses bords
+    const blobs: { m: THREE.Mesh; a: number; d: number; y: number; sp: number }[] = [];
+    for (let i = 0; i < 30; i++) {
+      const m = new THREE.Mesh(g, mat);
+      m.scale.set(0.45 + (i % 4) * 0.16, 0.22 + (i % 3) * 0.07, 0.45 + (i % 3) * 0.2);
+      m.renderOrder = 2;
+      this.sAdd(s, m);
+      blobs.push({ m, a: i * 2.4, d: 0.15 + Math.sqrt((i + 0.5) / 30) * r, y: 0.08 + (i % 4) * 0.1, sp: 0.04 + (i % 5) * 0.012 });
+    }
+    return (dt: number, k: number) => {
+      mat.opacity = 0.4 * k;
+      for (const b of blobs) {
+        b.a += dt * b.sp;
+        const x = cx + Math.cos(b.a) * b.d, z = cz + Math.sin(b.a) * b.d;
+        b.m.position.set(x, this.world.surfaceAt(x, z) + b.y, z);
+        b.m.visible = k > 0.02;
+      }
+    };
+  }
+
+  /** Une pierre qui dévale : elle part de (x, y, z) avec la vitesse (vx, vz), tombe, rebondit, roule et s'arrête */
+  private rock(x: number, y: number, z: number, vx: number, vz: number, size = 1) {
+    const o = new THREE.Mesh(pebbleGeo(), mats.body);
+    o.scale.setScalar(size);
+    o.castShadow = true;
+    this.group.add(o);
+    this.fx.push({ obj: o, t: 0, life: 2.6, kind: 'rock', x, y, z, vx, vz, vy: 0 });
+  }
+  /** Un petit nuage (poussière, écume, fumée) en (x, y, z) */
+  private puffAt(x: number, y: number, z: number, kind: 'puff' | 'smoke' | 'gas' = 'puff', vx = (Math.random() - 0.5) * 0.08, vz = (Math.random() - 0.5) * 0.08) {
+    const o = new THREE.Mesh(kind === 'gas' ? gasGeo() : kind === 'smoke' ? smokeGeo() : puffGeo(), mats.body);
+    this.group.add(o);
+    this.fx.push({ obj: o, t: 0, life: kind === 'puff' ? 1.2 : 2.4, kind, x, y, z, vx, vz });
+  }
+  /** Un poisson qui saute hors de l'eau en (x, z), et le rond qu'il laisse */
+  private fishJump(x: number, z: number, level: number) {
+    const ang = Math.random() * Math.PI * 2, f = new THREE.Mesh(fishGeo(), mats.body), ring = new THREE.Mesh(new THREE.RingGeometry(0.03, 0.045, 12).rotateX(-Math.PI / 2), RING);
+    this.group.add(f, ring);
+    const vx = Math.cos(ang + 1.2) * 0.25, vz = Math.sin(ang + 1.2) * 0.25;
+    this.fx.push({ obj: f, t: 0, life: 0.7, kind: 'fish', x, y: level, z, vx, vz });
+    this.fx.push({ obj: ring, t: 0, life: 1.2, kind: 'ring', x: x + vx * 0.7, y: level + 0.005, z: z + vz * 0.7, vx: 0, vz: 0 });
+  }
+
+  /** L'orage : un nuage noir sur l'équipe, la pluie, les éclairs ; il passe une fois l'abri trouvé (ou le travail fini) */
+  private stageStorm(s: Staging, a: ActiveExpedition, fail: boolean) {
+    const [cx, cz] = this.teamAt(a), h = 2.6, cloud = this.sCloud(s, cx, cz, h + 0.25, false, 1.3), rain = this.sRain(s, cx, cz, 1.8, h), gloom = this.sGloom(s, cx, cz, 3.2);
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+    const flash = this.sAdd(s, new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), flashMat));
+    flash.position.copy(cloud.position); flash.scale.set(2.2, 0.7, 2.2);
+    const bolt = this.sAdd(s, new THREE.LineSegments(boltGeo(1), BOLT));
+    bolt.userData.flat = true; bolt.visible = false;
+    s.own.push(flash.geometry, flashMat, { dispose: () => bolt.geometry.dispose() });
+    // l'orage du départ (un échec) disperse la harde
+    if (fail) for (const b of this.beasts) b.flee = Math.atan2(b.x - cx, b.z - cz);
+    let strike = 0.4, shown = 0, k = 1, drift = 0;
+    return (dt: number) => {
+      const wet = fail ? s.t < 9 : s.pick < 0 || (s.pick === 0 ? s.after < 8 : a.phase === 'work' && s.after < 40);
+      k = wet ? Math.min(1, k + dt) : k - dt * 0.4;
+      rain(dt, Math.max(0, k));
+      gloom(Math.max(0, k) * (1 + flashMat.opacity * -1.2));
+      // un éclair de temps en temps : un zigzag blanc jusqu'au sol, le nuage qui s'illumine
+      if (wet && (strike -= dt) <= 0) {
+        strike = 1.6 + Math.random() * 2.4; shown = 0.16;
+        const ang = Math.random() * Math.PI * 2, d = 0.4 + Math.random(), x = cloud.position.x + Math.cos(ang) * d, z = cloud.position.z + Math.sin(ang) * d, y0 = this.world.surfaceAt(x, z);
+        bolt.geometry.dispose(); bolt.geometry = boltGeo(Math.random() * 10);
+        bolt.position.set(x, y0, z); bolt.scale.set(1, cloud.position.y - y0, 1);
+        flashMat.opacity = 0.55;
+      }
+      shown -= dt;
+      bolt.visible = shown > 0;
+      flashMat.opacity *= Math.pow(0.02, dt);
+      // l'orage passé, le nuage s'en va
+      if (!wet) { drift += dt; cloud.position.x += dt * 0.5 * drift; flash.position.copy(cloud.position); }
+      return k > 0 || drift < 4;
+    };
+  }
+
+  /** Le brouillard : une nappe blanche sur l'équipe ; elle se lève quand on l'attend (ou une fois le travail fini) */
+  private stageFog(s: Staging, a: ActiveExpedition, fail: boolean) {
+    const [tx, tz] = this.teamAt(a), fog = this.sFog(s, (tx + this.focus[0]) / 2, (tz + this.focus[1]) / 2, 2.2);
+    let k = 0.6;
+    return (dt: number) => {
+      const thick = fail ? s.t < 8 : s.pick < 0 || (s.pick === 0 ? s.after < 6 : a.phase === 'work' && s.after < 40);
+      k = thick ? Math.min(1, k + dt * 0.5) : k - dt * 0.12;
+      fog(dt, Math.max(0, k));
+      return k > 0;
+    };
+  }
+
+  /** Des loups tournent autour de l'équipe ; le grand feu (ou la garde) les tient à distance, puis ils filent */
+  private stageWolves(s: Staging, a: ActiveExpedition) {
+    const [cx, cz] = this.teamAt(a), pack = [0, 1, 2].map((i) => { const ang = i * 2.1, b = this.sBeast(s, 'wolf', cx + Math.cos(ang) * 1.7, cz + Math.sin(ang) * 1.7); b.wait = ang; return b; });
+    let fire = false;
+    return (dt: number) => {
+      const p = s.pick, stay = p === 1 ? 10 : p === 0 ? 8 : 6, leave = p >= 0 && s.after > stay;
+      // le grand feu, allumé au milieu de l'équipe : il brûle jusqu'à son départ
+      if (p === 1 && !fire) {
+        fire = true;
+        const [fx, fz] = this.teamAt(a);
+        this.sPut(s, fireGeo(), fx, fz, 0).scale.setScalar(1.6);
+        [1.1, 1.5, 1].forEach((sz, i) => this.sFlame(s, fx + (i - 1) * 0.05, fz + (i % 2) * 0.04, sz * 1.4));
+        const smoke = { x: fx, y: this.world.surfaceAt(fx, fz) + 0.25, z: fz, kind: 'smoke' as const, every: 0.35, t: 0 };
+        this.emits.push(smoke);
+        s.own.push({ dispose: () => { this.emits = this.emits.filter((e) => e !== smoke); } });
+      }
+      const r = p < 0 ? 1.7 : p === 0 ? 1.9 : p === 1 ? 2.4 : 1.1;
+      pack.forEach((b, i) => {
+        if (leave) { this.sFlee(b, cx, cz, 1.6, dt); return; }
+        b.wait += dt * (0.32 + i * 0.05);
+        // (sur la terre ferme : là où le cercle passe dans l'eau, ils rôdent plus près)
+        const [x, z] = this.near(cx + Math.cos(b.wait) * r, cz + Math.sin(b.wait) * r, cx, cz);
+        this.sMove(b, x, z, 0.75, dt, ['Idle'], true);
+      });
+      if (leave && s.after > stay + 4) for (const b of pack) b.obj.visible = false;
+      return !(leave && s.after > stay + 4) || (fire && a.phase === 'work');
+    };
+  }
+
+  /** La meute du loup : deux autres loups tournent autour de lui, leurs traces au sol ; les pièges de corde posés autour */
+  private stagePack(s: Staging, a: ActiveExpedition) {
+    const w0 = this.beasts[0], [wx, wz] = w0 ? [w0.x, w0.z] : this.focus, [tx, tz] = this.teamAt(a);
+    const extra = [0, 1].map((i) => this.sBeast(s, 'wolf', wx + (i ? 0.5 : -0.5), wz + 0.4));
+    for (let i = 0; i < 8; i++) { const k = (i + 1) / 9, x = tx + (wx - tx) * k + (i % 2 ? 0.05 : -0.05), z = tz + (wz - tz) * k; this.sPut(s, pawGeo(), x, z, Math.atan2(wx - tx, wz - tz), 0.004); }
+    let snares = false;
+    return (dt: number) => {
+      const lead = this.beasts[0], [cx, cz] = lead ? [lead.x, lead.z] : this.focus, stay = s.pick === 0 ? 2 : s.pick === 1 ? 10 : 12, flee = s.pick >= 0 && s.after > stay;
+      extra.forEach((b, i) => {
+        if (flee) { this.sFlee(b, tx, tz, 1.6, dt); return; }
+        const ang = this.t * 0.6 + i * Math.PI;
+        this.sMove(b, cx + Math.cos(ang) * 0.6, cz + Math.sin(ang) * 0.6, 0.9, dt, ['Idle'], true);
+      });
+      if (s.pick === 1 && !snares) { snares = true; for (let i = 0; i < 3; i++) { const ang = i * 2.1 + 0.5; const [x, z] = this.near(cx + Math.cos(ang) * 1.1, cz + Math.sin(ang) * 1.1, cx, cz); this.sPut(s, snareGeo(), x, z, ang); } }
+      if (flee && s.after > stay + 3) for (const b of extra) b.obj.visible = false;
+      return !(flee && s.after > stay + 3) || (snares && a.phase === 'work');
+    };
+  }
+
+  /**
+   * Le meneur du troupeau (l'étalon, le bélier, le vieux sanglier, le grand taureau) : plus grand que les autres, il se dresse
+   * entre l'équipe et les bêtes. Apaisé, il broute ; mené à la corde, il suit le premier de l'équipe ; sinon il détale
+   */
+  private stageLeader(s: Staging, a: ActiveExpedition, kind: HerdKind, acts: ('calm' | 'lead' | 'flee')[]) {
+    const [tx, tz] = this.teamAt(a), [hx, hz] = this.herdAt(), ang = Math.atan2(tx - hx, tz - hz);
+    const [lx, lz] = this.near(hx + Math.sin(ang) * 0.55, hz + Math.cos(ang) * 0.55, hx, hz), b = this.sBeast(s, kind, lx, lz, 1.45), rope = this.sRope(s);
+    this.sFace(b, tx, tz);
+    let gone = false;
+    return (dt: number) => {
+      const act = s.pick < 0 ? 'wait' : acts[s.pick] ?? 'calm', lead = this.agents.partyPositions(a.party)[0];
+      if (act === 'wait') { if (lead) this.sFace(b, lead[0], lead[1]); this.sMove(b, b.x, b.z, 0, dt, Math.sin(this.t * 1.3) > 0.3 ? ['Headbutt', 'Idle'] : ['Idle']); }
+      else if (act === 'calm') this.sMove(b, b.x, b.z, 0, dt, ['Idle_Eating', 'Eating', 'Idle']);
+      else if (act === 'lead' && lead) {
+        const d = Math.hypot(lead[0] - b.x, lead[1] - b.z), k = d > 0.38 ? (d - 0.38) / d : 0;
+        this.sMove(b, b.x + (lead[0] - b.x) * k, b.z + (lead[1] - b.z) * k, 0.55, dt, ['Idle'], true);
+        rope([[lead[0], lead[1]], [b.x, b.z]], 0.12);
+      } else if (act === 'flee' && !gone) {
+        this.sFlee(b, tx, tz, 1.5, dt);
+        if (s.after > 3.5) { b.obj.visible = false; gone = true; }
+        // on lui a ouvert l'enclos : deux bêtes filent avec lui
+        if (s.id === 'tusker' && s.pick === 2) for (const x of this.beasts.slice(0, 2)) x.flee ??= Math.atan2(x.x - tx, x.z - tz);
+      }
+      // apaisé ou mené à la corde, il reste jusqu'au départ de l'équipe (ramené, il la suit au village)
+      return !gone && a.phase === 'work';
+    };
+  }
+
+  /** L'agneau pris dans les ronces, sa mère qui tourne autour du buisson ; libéré, il rejoint le troupeau */
+  private stageLamb(s: Staging, a: ActiveExpedition) {
+    const [hx, hz] = this.herdAt(), [bx, bz] = this.near(hx + 0.75, hz - 0.5, hx, hz);
+    this.sPut(s, bushGeo(), bx, bz, 0.5);
+    const lamb = this.sBeast(s, 'sheep', bx + 0.04, bz, 0.55), ewe = this.sBeast(s, 'sheep', bx + 0.32, bz, 1);
+    let ang = 0, sent = false;
+    return (dt: number) => {
+      ang += dt * 0.9;
+      const out = s.pick >= 0 && s.after > (s.pick === 0 ? 4 : 7);
+      if (!out) {
+        this.sMove(ewe, bx + Math.cos(ang) * 0.34, bz + Math.sin(ang) * 0.34, 0.45, dt, ['Idle'], true);
+        this.sMove(lamb, lamb.x, lamb.z, 0, dt, ['Jump_Start', 'Idle']);
+        lamb.obj.position.y += Math.abs(Math.sin(this.t * 6)) * 0.02;
+      } else {
+        this.sMove(lamb, hx + 0.15, hz, 0.35, dt, ['Idle_Eating'], true);
+        this.sMove(ewe, hx + 0.32, hz + 0.1, 0.35, dt, ['Idle_Eating'], true);
+      }
+      // un membre va le dégager des ronces
+      if (s.pick === 0 && !sent && a.phase === 'work') this.sendTo(a, a.party[0], bx - 0.2, bz, bx, bz, 6), sent = true;
+      return a.phase === 'work';
+    };
+  }
+
+  /** Un membre va en (x, z) et y travaille, tourné vers (fx, fz) ; il ne repart pas avant `stay` secondes */
+  private sendTo(a: ActiveExpedition, id: number | undefined, x: number, z: number, fx: number, fz: number, stay: number) {
+    if (id === undefined || this.kind === 'delve' || this.boat?.riders.includes(id) || this.bath?.in.has(id)) return;
+    this.agents.memberGo(id, x, z, Math.atan2(fx - x, fz - z));
+    this.next.set(id, stay);
+    this.goal.set(id, 1);
+    void a;
+  }
+
+  /** La laie et ses marcassins sur le sentier : elle gronde, charge un instant si l'on passe sous son nez, puis s'en va */
+  private stageBoar(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), [bx, bz] = this.near(tx + 0.9, tz + 0.5, tx, tz);
+    const sow = this.sBeast(s, 'pig', bx, bz, 1.3), young = [0, 1, 2].map((i) => this.sBeast(s, 'pig', bx + Math.cos(i * 2.1) * 0.24, bz + Math.sin(i * 2.1) * 0.24, 0.5));
+    this.sFace(sow, tx, tz);
+    return (dt: number) => {
+      const p = s.pick, start = p === 1 ? 0 : p === 0 ? 7 : 3, flee = p >= 0 && s.after > start;
+      if (flee) {
+        [sow, ...young].forEach((b, i) => { const ang = Math.atan2(bx - tx, bz - tz) + (i - 1.5) * 0.25; this.sMove(b, b.x + Math.sin(ang) * 2, b.z + Math.cos(ang) * 2, p === 1 ? 1.5 : 0.6, dt, ['Idle'], true); });
+        if (s.after > start + 4) { for (const b of [sow, ...young]) b.obj.visible = false; return false; }
+        return true;
+      }
+      if (p === 2 && s.after < 2) {
+        // elle charge, puis revient à ses petits
+        const ang = Math.atan2(tx - bx, tz - bz), d = Math.sin(Math.min(1, s.after / 2) * Math.PI) * 0.5;
+        this.sMove(sow, bx + Math.sin(ang) * d, bz + Math.cos(ang) * d, 1.6, dt, ['Idle'], true);
+      } else this.sMove(sow, sow.x, sow.z, 0, dt, Math.sin(this.t * 1.7) > 0.4 ? ['Headbutt', 'Idle'] : ['Idle_Eating', 'Idle']);
+      young.forEach((b, i) => { const ang = this.t * 0.8 + i * 2.1; this.sMove(b, sow.x + Math.cos(ang) * 0.24, sow.z + Math.sin(ang) * 0.24, 0.4, dt, ['Idle'], true); });
+      return true;
+    };
+  }
+
+  /**
+   * Le voyageur blessé, assis au bord du chemin. Soigné, il se relève, salue et reprend sa route ; ramené au village, il suit
+   * l'équipe au retour (voir ExpeditionView) ; laissé là, il y reste
+   */
+  private stageTraveler(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), ang = Math.atan2(a.base[0] - tx, a.base[1] - tz);
+    const [vx, vz] = this.near(tx + Math.sin(ang) * 0.6 + Math.cos(ang) * 0.35, tz + Math.cos(ang) * 0.6 - Math.sin(ang) * 0.35, tx, tz);
+    const man = this.sNpc(s, 'villager', a.m.age, vx, vz, ang + Math.PI, 'sit');
+    let sent = false, x = vx, z = vz;
+    s.leave = () => { if (s.pick === 1) man.folk.root.visible = false; };
+    return (dt: number) => {
+      if (s.pick !== 0) return man.folk.root.visible;
+      if (!sent && a.phase === 'work') { sent = true; this.sendTo(a, a.party[0], vx + 0.17, vz, vx, vz, 6); }
+      man.pose = s.after < 5 ? 'sit' : s.after < 7 ? 'cheer' : 'walk';
+      if (s.after >= 7) {
+        x -= Math.sin(ang) * dt * 0.35; z -= Math.cos(ang) * dt * 0.35;
+        man.folk.root.position.set(x, this.world.surfaceAt(x, z), z);
+        man.folk.root.rotation.y = ang + Math.PI;
+      }
+      return s.after < 14;
+    };
+  }
+
+  /** Des voisins viennent saluer l'équipe, un panier à la main ; les cadeaux échangés, ils restent à bavarder (sinon ils s'en vont) */
+  private stageHosts(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), ang = Math.atan2(tx - a.base[0], tz - a.base[1]);
+    const people = [0, 1].map((i) => {
+      const a0 = ang + (i - 0.5) * 0.5, x0 = tx + Math.sin(a0) * 2.2, z0 = tz + Math.cos(a0) * 2.2;
+      return { n: this.sNpc(s, 'villager', a.m.age, x0, z0, a0 + Math.PI, 'walk'), from: [x0, z0] as [number, number], to: this.near(tx + Math.sin(a0) * 0.45, tz + Math.cos(a0) * 0.45, tx, tz), x: x0, z: z0 };
+    });
+    const basket = this.sPut(s, basketGeo(), people[0].to[0], people[0].to[1], 0), fruit = this.sPut(s, foodGeo(), people[0].to[0], people[0].to[1], 0, 0.06);
+    fruit.scale.setScalar(0.5);
+    basket.visible = fruit.visible = false;
+    let gifts = false;
+    return (dt: number) => {
+      const leaving = s.pick === 1 && s.after > 3;
+      let home = true;
+      for (const p of people) {
+        const [gx, gz] = leaving ? p.from : p.to, dx = gx - p.x, dz = gz - p.z, d = Math.hypot(dx, dz);
+        if (d > 0.03) { const st = Math.min(d, dt * 0.4); p.x += (dx / d) * st; p.z += (dz / d) * st; p.n.folk.root.rotation.y = Math.atan2(dx, dz); home = false; }
+        else p.n.folk.root.rotation.y = Math.atan2(tx - p.x, tz - p.z);
+        p.n.folk.root.position.set(p.x, this.world.surfaceAt(p.x, p.z), p.z);
+        p.n.pose = d > 0.03 ? 'walk' : s.pick === 0 && s.after < 8 ? (Math.floor(this.t * 1.2) % 2 ? 'cheer' : 'talk') : s.pick === 1 ? 'cheer' : 'talk';
+      }
+      const at = !leaving && Math.hypot(people[0].x - people[0].to[0], people[0].z - people[0].to[1]) < 0.05;
+      basket.visible = fruit.visible = at;
+      // les cadeaux échangés : nos poteries, posées près d'eux
+      if (s.pick === 0 && !gifts) { gifts = true; const [gx, gz] = people[1].to; this.sPut(s, potsGeo(), gx + 0.12, gz + 0.1, 0).scale.setScalar(0.8); }
+      return !(leaving && home);
+    };
+  }
+
+  /** Le banc de poissons : des sauts partout devant l'équipe ; les filets tendus, puis la pêche étalée sur la berge */
+  private stageShoal(s: Staging, a: ActiveExpedition) {
+    const wat = this.water ?? this.findWater(...this.teamAt(a));
+    if (!wat) return () => false;
+    const [wx, wz] = wat.wet, [bx, bz] = wat.bank, d = Math.max(0.01, Math.hypot(wx - bx, wz - bz)), ox = (wx - bx) / d, oz = (wz - bz) / d;
+    let cx = wx + ox * 0.4, cz = wz + oz * 0.4, jt = 0, net = false, pile = false;
+    return (dt: number) => {
+      const on = s.pick < 0 || s.after < (s.pick === 0 ? 7 : 5);
+      // on le laisse passer : il remonte le courant et s'éloigne
+      if (s.pick === 1) { cx += -oz * dt * 0.3; cz += ox * dt * 0.3; }
+      if (on && (jt -= dt) <= 0) {
+        jt = 0.12;
+        const x = cx + (Math.random() - 0.5) * 0.7, z = cz + (Math.random() - 0.5) * 0.7;
+        if (this.depth(x, z) !== null) this.fishJump(x, z, wat.level);
+      }
+      if (s.pick === 0 && !net) { net = true; this.sPut(s, netGeo(), cx, cz, Math.atan2(ox, oz)).position.y = wat.level + 0.004; }
+      if (s.pick === 0 && s.after > 7 && !pile) { pile = true; const [px, pz] = this.near(bx - ox * 0.2 + oz * 0.25, bz - oz * 0.2 - ox * 0.25, bx, bz); this.sPut(s, catchGeo(), px, pz, 0); }
+      return s.pick === 0 ? a.phase === 'work' : on;
+    };
+  }
+
+  /** Les rapides : l'eau écume autour de la barque, qui tangue fort (plus encore si on les saute) */
+  private stageRapids(s: Staging) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    const [hx, hz] = bt.home, [ox, oz] = bt.out;
+    for (let i = 0; i < 3; i++) { const k = 0.3 + i * 0.3, x = hx + (ox - hx) * k + (i % 2 ? 0.25 : -0.25), z = hz + (oz - hz) * k; const r = this.sPut(s, rocksGeo(), x, z, i); r.scale.setScalar(0.45); r.position.y = bt.y - 0.03; }
+    let pt = 0;
+    return (dt: number) => {
+      const wild = s.pick < 0 || s.after < (s.pick === 2 ? 6 : 3);
+      this.rough = wild ? (s.pick === 2 ? 1 : 0.6) : Math.max(0, this.rough - dt * 0.3);
+      if (wild && (pt -= dt) <= 0) { pt = 0.07; const k = Math.random(), x = hx + (ox - hx) * k + (Math.random() - 0.5) * 0.6, z = hz + (oz - hz) * k + (Math.random() - 0.5) * 0.6; if (this.depth(x, z) !== null) this.puffAt(x, bt.y + 0.01, z); }
+      return wild || this.rough > 0;
+    };
+  }
+
+  /** La rivière gonfle : l'eau monte sur la berge, le courant emporte des branches ; elle redescend une fois la décrue attendue */
+  private stageFlood(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), wat = this.water ?? this.findWater(tx, tz);
+    const [wx, wz] = wat ? wat.wet : [tx + 0.6, tz], [bx, bz] = wat ? wat.bank : [tx, tz], level = wat ? wat.level : this.world.surfaceAt(tx, tz);
+    const cx = (wx + bx) / 2, cz = (wz + bz) / 2, r = Math.max(1, Math.hypot(wx - bx, wz - bz) + 0.8);
+    const g = new THREE.CircleGeometry(r, 24).rotateX(-Math.PI / 2), mat = new THREE.MeshLambertMaterial({ color: 0x5a8fb4, transparent: true, opacity: 0.72, depthWrite: false });
+    const sheet = this.sAdd(s, new THREE.Mesh(g, mat));
+    s.own.push(g, mat);
+    const dd = Math.max(0.01, Math.hypot(wx - bx, wz - bz)), ux = -(wz - bz) / dd, uz = (wx - bx) / dd;
+    const logs = [0, 1, 2].map((i) => ({ o: this.sPut(s, branchGeo(), wx, wz, i), u: -r + i * r * 0.7, off: (i - 1) * 0.25 }));
+    let rise = 0.05, boat: THREE.Object3D | null = null;
+    return (dt: number) => {
+      const high = s.pick < 0 || (s.pick === 2 ? s.after < 9 : s.after < 3);
+      rise += high ? Math.min(0.13 - rise, dt * 0.05) : -Math.min(rise, dt * 0.012);
+      sheet.position.set(cx, level - 0.03 + rise, cz);
+      for (const l of logs) {
+        l.u += dt * 0.28;
+        if (l.u > r) l.u -= 2 * r;
+        const x = wx + ux * l.u + (wx - bx) / dd * l.off, z = wz + uz * l.u + (wz - bz) / dd * l.off;
+        l.o.position.set(x, sheet.position.y + 0.02, z);
+        l.o.rotation.y += dt * 0.4;
+        l.o.visible = Math.abs(l.u) < r * 0.85;
+      }
+      // en barque : elle traverse l'eau haute
+      if (s.pick === 1 && !boat && wat) boat = this.sPut(s, boatGeo(), wx, wz, Math.atan2(ux, uz));
+      if (boat) { const k = Math.min(1, s.after / 6); boat.position.set(wx + ux * (k - 0.5) * 1.6, sheet.position.y + 0.01, wz + uz * (k - 0.5) * 1.6); }
+      return high || rise > 0.002;
+    };
+  }
+
+  /**
+   * Des pierres dévalent : du haut de la pente vers l'équipe (la corniche, l'éboulis), ou de la paroi au-dessus de l'entrée de la
+   * galerie. Étayer pose des poutres à l'entrée ; s'encorder tend une corde d'un membre à l'autre
+   */
+  private stageRocks(s: Staging, a: ActiveExpedition, kind: 'ledge' | 'scree' | 'rockfall' | 'fail') {
+    const [tx, tz] = this.teamAt(a), src: [number, number] = this.mouth ? this.mouth.at : this.kind === 'mine' && this.props[0] ? [this.props[0].position.x, this.props[0].position.z] : [tx, tz];
+    const [ux, uz] = this.uphill(src[0], src[1]), rope = kind === 'fail' ? null : this.sRope(s);
+    let rt = 0, propped = false;
+    return (dt: number) => {
+      const falling = kind === 'fail' ? s.t < 3.5 : s.pick < 0 || s.after < (s.pick === 2 ? 5 : 2.5);
+      if (falling && (rt -= dt) <= 0) {
+        rt = kind === 'ledge' ? 0.55 : kind === 'fail' ? 0.14 : 0.3;
+        const j = (Math.random() - 0.5) * 0.9, sx = src[0] + ux * 1.1 + uz * j, sz = src[1] + uz * 1.1 - ux * j, sp = kind === 'ledge' ? 0.55 : 0.9;
+        this.rock(sx, this.world.surfaceAt(sx, sz) + (this.mouth ? 0.6 : 0.35), sz, -ux * sp + (Math.random() - 0.5) * 0.3, -uz * sp + (Math.random() - 0.5) * 0.3, kind === 'ledge' ? 0.6 : 0.9 + Math.random() * 0.7);
+      }
+      // étayer : des poutres à l'entrée, qui restent jusqu'au départ
+      if (kind === 'rockfall' && s.pick === 0 && !propped) {
+        propped = true;
+        const [x, z] = this.mouth ? this.mouth.at : src, face = this.mouth ? Math.atan2(this.mouth.heap[0] - x, this.mouth.heap[1] - z) : 0;
+        this.sPut(s, proppingGeo(), x + Math.sin(face) * 0.08, z + Math.cos(face) * 0.08, face).scale.setScalar(1.3);
+      }
+      const roped = kind !== 'fail' && (kind === 'ledge' ? s.pick === 0 : s.pick === 1) && a.phase === 'work' && s.after < 25;
+      rope?.(roped ? this.ropeOf(a) : []);
+      return falling || roped || (propped && a.phase === 'work') || s.t < 1;
+    };
+  }
+
+  /** Un éclat dans la roche : un rocher où brillent des cristaux. On le creuse (un tas de minerai), ou l'on y plante un jalon */
+  private stageVein(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), [ux, uz] = this.uphill(tx, tz), [gx, gz] = this.near(tx + ux * 0.6 + uz * 0.3, tz + uz * 0.6 - ux * 0.3, tx, tz);
+    const rock = this.sPut(s, glintGeo(), gx, gz, gx * 5), spark = this.sAdd(s, new THREE.Mesh(new THREE.OctahedronGeometry(0.03, 0), STAR));
+    s.own.push(spark.geometry);
+    spark.position.set(gx + 0.03, rock.position.y + 0.21, gz);
+    let sent = false, pile = false, flag = false, pt = 0;
+    return (dt: number) => {
+      spark.scale.setScalar(0.4 + Math.max(0, Math.sin(this.t * 4)) * 1.3);
+      spark.rotation.y += dt * 3;
+      if (s.pick === 0) {
+        if (!sent && a.phase === 'work') { sent = true; this.sendTo(a, a.party[0], gx - ux * 0.18, gz - uz * 0.18, gx, gz, 8); }
+        if (s.after < 6 && (pt -= dt) <= 0) { pt = 0.3; this.puffAt(gx, rock.position.y + 0.1, gz); }
+        if (s.after > 6 && !pile) { pile = true; rock.visible = spark.visible = false; this.sPut(s, rocksGeo(), gx, gz, 0).scale.setScalar(0.6); }
+      } else if (s.pick === 1 && !flag) { flag = true; this.sPut(s, stakeFlagGeo(), gx + 0.14, gz + 0.06, 0); }
+      return a.phase === 'work';
+    };
+  }
+
+  /** Les torches faiblissent : les flammes baissent ; les bonnes torches flambent haut, ou l'on ressort refaire des torches au feu */
+  private stageDark(s: Staging, a: ActiveExpedition) {
+    let fire = false, lt = 0;
+    s.own.push({ dispose: () => { this.torchTo = 1; } });
+    // elles baissent d'un coup (on le voit pendant que le jeu attend la décision)
+    this.torchTo = 0.3;
+    if (this.kindled) this.torchK = 0.3;
+    return (dt: number) => {
+      if (s.pick < 0) this.torchTo = 0.3;
+      else if (s.pick === 0) this.torchTo = 1.6;
+      else if (s.pick === 1) {
+        // le courant d'air : il sort de la grotte en soufflant feuilles et poussière
+        this.torchTo = s.after < 5 ? 0.3 : 1;
+        if (this.mouth && s.after < 8 && (lt -= dt) <= 0) { lt = 0.12; const [mx, mz] = this.mouth.at, [hx, hz] = this.mouth.heap; this.leaf(mx, this.world.surfaceAt(mx, mz) + 0.12, mz, (hx - mx) * 0.6, (hz - mz) * 0.6); }
+      } else {
+        this.torchTo = s.after < 6 ? 0.15 : 1;
+        if (!fire && this.mouth) { fire = true; const [hx, hz] = this.mouth.heap, [x, z] = this.near(hx + 0.22, hz + 0.1, hx, hz); this.sPut(s, fireGeo(), x, z, 0); this.sFlame(s, x, z, 0.8); }
+      }
+      return s.pick < 0 || (s.pick === 0 ? a.phase === 'work' : s.after < 10);
+    };
+  }
+  /** Une feuille (ou de la poussière) emportée par le vent */
+  private leaf(x: number, y: number, z: number, vx: number, vz: number) {
+    const o = new THREE.Mesh(leafGeo(), mats.body);
+    this.group.add(o);
+    this.fx.push({ obj: o, t: 0, life: 1.8, kind: 'leaf', x, y, z, vx: vx + (Math.random() - 0.5) * 0.2, vz: vz + (Math.random() - 0.5) * 0.2 });
+  }
+
+  /** La nuée de chauves-souris : elles jaillissent de la grotte, tourbillonnent devant l'entrée, puis s'égaillent vers le ciel */
+  private stageBats(s: Staging) {
+    const [mx, mz] = this.mouth?.at ?? this.focus, y0 = this.world.surfaceAt(mx, mz) + 0.15, dir = this.mouth ? Math.atan2(this.mouth.heap[0] - mx, this.mouth.heap[1] - mz) : 0;
+    const bats = Array.from({ length: 24 }, (_, i) => ({ m: this.sAdd(s, new THREE.Mesh(wingGeo(0x2a2228), mats.body)), a: i * 0.9, r: 0.18 + (i % 5) * 0.12, h: 0.1 + (i % 4) * 0.12, sp: 2.2 + (i % 3) * 0.6 }));
+    return (dt: number) => {
+      const away = s.pick >= 0 ? s.after * (s.pick === 1 ? 1.4 : 0.9) : Math.max(0, 1 - s.t) * -0.4;
+      const cx = mx + Math.sin(dir) * (0.5 + away * 0.6), cz = mz + Math.cos(dir) * (0.5 + away * 0.6);
+      for (const b of bats) {
+        b.a += dt * b.sp;
+        const r = b.r * (1 + Math.max(0, away) * 0.8), x = cx + Math.cos(b.a) * r, z = cz + Math.sin(b.a) * r;
+        b.m.position.set(x, y0 + b.h + Math.max(0, away) * 0.7 + Math.sin(b.a * 2) * 0.05, z);
+        b.m.rotation.y = Math.atan2(-Math.sin(b.a), Math.cos(b.a));
+        b.m.scale.set(1, 0.4 + Math.abs(Math.sin(this.t * 22 + b.a)) * 1.2, 1);
+      }
+      return s.pick < 0 || s.after < 4;
+    };
+  }
+
+  /** Le grisou : une fumée verdâtre sort de la grotte ; on éteint les lampes, ou l'on descend le canari dans sa cage */
+  private stageFiredamp(s: Staging) {
+    const [mx, mz] = this.mouth?.at ?? this.focus;
+    let gt = 0, cage = false;
+    s.own.push({ dispose: () => { this.torchTo = 1; } });
+    return (dt: number) => {
+      const gas = s.pick < 0 || s.after < (s.pick === 2 ? 8 : 5);
+      if (gas && (gt -= dt) <= 0) { gt = 0.2; this.puffAt(mx + (Math.random() - 0.5) * 0.2, this.world.surfaceAt(mx, mz) + 0.08, mz + (Math.random() - 0.5) * 0.2, 'gas'); }
+      if (s.pick === 0) this.torchTo = s.after < 8 ? 0 : 1;
+      if (s.pick === 1 && !cage) { cage = true; const [hx, hz] = this.mouth?.heap ?? [mx, mz]; this.sPut(s, cageGeo(), (mx + hx) / 2 + 0.12, (mz + hz) / 2, 0); }
+      return gas || (s.pick === 0 && s.after < 9) || (cage && s.after < 14);
+    };
+  }
+
+  /** L'eau envahit la galerie : une flaque grandit à l'entrée ; on écope au seau, ou l'on creuse une rigole pour la vider */
+  private stageSeep(s: Staging, a: ActiveExpedition) {
+    const m = this.mouth;
+    if (!m) return () => false;
+    const [mx, mz] = m.at, [hx, hz] = m.heap, g = new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2), mat = new THREE.MeshLambertMaterial({ color: 0x5a8fb4, transparent: true, opacity: 0.75, depthWrite: false });
+    const cx = mx + (hx - mx) * 0.3, cz = mz + (hz - mz) * 0.3, puddle = this.sAdd(s, new THREE.Mesh(g, mat));
+    s.own.push(g, mat);
+    puddle.position.set(cx, this.world.surfaceAt(cx, cz) + 0.015, cz);
+    let r = 0.2, extra = false, dt0 = 0;
+    return (dt: number) => {
+      const target = s.pick < 0 ? 0.55 : s.pick === 2 ? (a.phase === 'work' ? 0.55 : 0) : s.after > 2 ? 0 : 0.55;
+      r += (target - r) * Math.min(1, dt * (target > r ? 0.6 : s.pick === 1 ? 0.3 : 0.18));
+      puddle.scale.set(Math.max(0.001, r), 1, Math.max(0.001, r * 0.8));
+      if (r > 0.1 && (dt0 -= dt) <= 0) { dt0 = 0.25; const o = new THREE.Mesh(bubbleGeo(), mats.body); this.group.add(o); this.fx.push({ obj: o, t: 0, life: 0.6, kind: 'bubble', x: cx + (Math.random() - 0.5) * r, y: puddle.position.y, z: cz + (Math.random() - 0.5) * r, vx: 0, vz: 0 }); }
+      // le seau, ou la rigole qui file vers le bas de la pente
+      if (!extra && s.pick === 0) { extra = true; this.sPut(s, bucketGeo(), cx + 0.3, cz + 0.12, 0); }
+      if (!extra && s.pick === 1) { extra = true; const f = Math.atan2(hx - mx, hz - mz); this.sPut(s, ditchGeo(), cx, cz, f, 0.004); }
+      return s.pick < 0 || r > 0.02 || s.after < 3;
+    };
+  }
+
+  /** Les étourneaux s'abattent sur les buissons : on les chasse, ils restent picorer, ou on leur laisse un buisson */
+  private stageBirds(s: Staging, a: ActiveExpedition, fail: boolean) {
+    const perches = this.spots.length ? this.spots : [this.focus];
+    const birds = Array.from({ length: 14 }, (_, i) => ({ m: this.sAdd(s, new THREE.Mesh(wingGeo(0x3a3440), mats.body)), p: perches[i % perches.length], a: i * 1.3, ox: (Math.random() - 0.5) * 0.18, oz: (Math.random() - 0.5) * 0.18 }));
+    return (dt: number) => {
+      const off = fail ? 0 : s.pick === 0 ? 0.5 : s.pick === 1 ? 8 : Infinity, leave = fail || (s.pick >= 0 && s.after > off), fly = fail ? s.t : leave ? s.after - off : 0, land = fail ? 1 : Math.min(1, s.t / 2.5);
+      for (const b of birds) {
+        b.a += dt * 3;
+        const p = s.pick === 2 ? perches[0] : b.p, gy = this.world.surfaceAt(p[0], p[1]);
+        let x = p[0] + b.ox + Math.cos(b.a) * 0.7 * (1 - land), z = p[1] + b.oz + Math.sin(b.a) * 0.7 * (1 - land), y = gy + 0.2 + 1.2 * (1 - land) + Math.abs(Math.sin(this.t * 9 + b.a)) * 0.02 * land;
+        if (leave) { x += Math.cos(b.a * 0.2) * fly * 1.2; z += Math.sin(b.a * 0.2) * fly * 1.2; y += fly * 1.1; }
+        b.m.position.set(x, y, z);
+        b.m.rotation.y = leave || land < 1 ? Math.atan2(-Math.sin(b.a), Math.cos(b.a)) : b.a;
+        b.m.scale.set(1, leave || land < 1 ? 0.4 + Math.abs(Math.sin(this.t * 20 + b.a)) * 1.2 : 0.35, 1);
+      }
+      return leave ? fly < 3 : a.phase === 'work';
+    };
+  }
+
+  /** L'essaim se réveille : un nuage d'abeilles autour de l'équipe ; la fumée l'endort, il se calme, ou il poursuit un membre */
+  private stageSwarm(s: Staging, a: ActiveExpedition, fail: boolean) {
+    const cloud = this.sAdd(s, new THREE.Group());
+    for (let i = 0; i < 34; i++) {
+      const ang = i * 2.39, r = 0.12 + (i % 5) * 0.08, b = new THREE.Mesh(ballGeo(0xf0c040), mats.body);
+      b.scale.setScalar(0.75);
+      b.position.set(Math.cos(ang) * r, 0.15 + Math.sin(i * 1.7) * 0.12, Math.sin(ang) * r);
+      cloud.add(b);
+    }
+    const [tx, tz] = this.teamAt(a);
+    cloud.position.set(tx, this.world.surfaceAt(tx, tz), tz);
+    let pt = 0;
+    return (dt: number) => {
+      const calm = fail ? Math.max(0, s.t - 3) / 4 : s.pick === 0 ? s.after / 6 : s.pick === 1 ? s.after / 8 : s.pick === 2 ? Math.max(0, s.after - 3) / 4 : 0;
+      const lead = this.agents.partyPositions(a.party)[0], chase = (fail || s.pick === 2) && lead;
+      const [gx, gz] = chase ? [lead[0], lead[1]] : this.teamAt(a);
+      cloud.position.x += (gx - cloud.position.x) * Math.min(1, dt * 2);
+      cloud.position.z += (gz - cloud.position.z) * Math.min(1, dt * 2);
+      cloud.position.y = this.world.surfaceAt(cloud.position.x, cloud.position.z);
+      cloud.rotation.y += dt * (4 - Math.min(1, calm) * 3);
+      cloud.scale.setScalar(Math.max(0.001, 1 - calm) * (1 + Math.sin(this.t * 7) * 0.08));
+      // plus de fumée : un feu d'herbes humides qui fume fort
+      if (s.pick === 0 && !fail && s.after < 6 && (pt -= dt) <= 0) { pt = 0.12; const [fx, fz] = this.focus; this.puffAt(fx + (Math.random() - 0.5) * 0.3, this.world.surfaceAt(fx, fz) + 0.1, fz + (Math.random() - 0.5) * 0.3, 'smoke'); }
+      return calm < 1;
+    };
+  }
+
+  /** Les cerfs descendent boire à la source ; on les regarde, ou ils détalent (une lance lancée, si l'on chasse) */
+  private stageDeer(s: Staging, a: ActiveExpedition) {
+    const [px, pz] = this.focus, a0 = Math.random() * Math.PI * 2;
+    const herd = [0, 1, 2].map((i) => this.sBeast(s, 'deer', px + Math.sin(a0 + i * 0.4) * 2.4, pz + Math.cos(a0 + i * 0.4) * 2.4, i ? 0.9 : 1.15));
+    let thrown = false;
+    return (dt: number) => {
+      const flee = s.pick === 1 || s.pick === 2 || (s.pick === 0 && s.after > 10), start = s.pick === 0 ? 10 : 0;
+      herd.forEach((b, i) => {
+        if (flee) { this.sFlee(b, px, pz, s.pick === 0 ? 0.5 : 1.6, dt); return; }
+        const ang = a0 + (i - 1) * 0.5;
+        this.sMove(b, px + Math.sin(ang) * 0.45, pz + Math.cos(ang) * 0.45, 0.45, dt, ['Idle_Eating', 'Eating']);
+      });
+      if (s.pick === 1 && !thrown) {
+        thrown = true;
+        const p = this.agents.partyPositions(a.party)[0], g = this.world.surfaceAt.bind(this.world);
+        if (p) this.combat?.throw(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), new THREE.Vector3(herd[0].x, g(herd[0].x, herd[0].z) + 0.1, herd[0].z));
+      }
+      if (flee && s.after > start + 4) { for (const b of herd) b.obj.visible = false; return false; }
+      return true;
+    };
+  }
+
+  /** Une roue cassée : la roulotte des jongleurs penche, la roue est au sol ; une fois réparée, la roulotte se redresse */
+  private stageWheel(s: Staging, a: ActiveExpedition) {
+    const wg = this.wagon;
+    if (!wg) return () => false;
+    const [wx, wz] = [wg.position.x, wg.position.z], y0 = wg.position.y, wheel = this.sPut(s, wheelGeo(), wx + 0.24, wz + 0.2, 0.5);
+    wg.rotation.order = 'YXZ';
+    s.own.push({ dispose: () => { wg.rotation.x = 0; wg.position.y = y0; } });
+    let sent = false;
+    return (dt: number) => {
+      const fixed = s.pick === 0 ? s.after > 6 : s.pick === 2 ? s.after > 9 : false;
+      wg.rotation.x = fixed ? 0 : 0.2;
+      wg.position.y = y0 - (fixed ? 0 : 0.03);
+      wheel.visible = !fixed;
+      if (s.pick === 0 && !sent && a.phase === 'work') { sent = true; a.party.forEach((id, i) => this.sendTo(a, id, wx + 0.18 + i * 0.12, wz + 0.26, wx, wz, 7)); }
+      for (const g of this.guests) if (g.pose !== 'sit') g.pose = s.pick === 2 && !fixed ? 'work' : 'juggle';
+      return fixed ? s.after < 11 : a.phase === 'work';
+    };
+  }
+
+  /** La dégustation : trois chopes sur un tonnelet ; le frère lève la sienne (ou recopie sa recette) */
+  private stageTasting(s: Staging, a: ActiveExpedition) {
+    const mk = this.monk, [mx, mz] = mk ? [mk.folk.root.position.x, mk.folk.root.position.z] : this.focus;
+    const [bx, bz] = this.near(mx - 0.18, mz + 0.2, mx, mz);
+    this.sPut(s, mugsGeo(), bx, bz, 0);
+    let scroll = false;
+    return () => {
+      if (mk) mk.pose = s.pick < 0 ? 'cheer' : s.pick === 2 && s.after < 6 ? 'work' : s.pick === 0 && s.after < 8 && Math.floor(this.t) % 2 ? 'cheer' : 'talk';
+      if (s.pick === 2 && !scroll) { scroll = true; this.sPut(s, scrollGeo(), bx, bz, 0.4, 0.13); }
+      if (s.pick === 0 && s.after < 8) this.agents.partyAct(a.party, Math.floor(s.after * 1.2) % 2 ? 'cheer' : 'sit');
+      return a.phase === 'work';
+    };
+  }
+
+  /** Un pneu crevé : la voiture penche dans un nuage de fumée, sa roue au sol ; repartie sur la jante, elle crache des étincelles */
+  private stagePuncture(s: Staging) {
+    const r = this.race;
+    if (!r) return () => false;
+    const car = r.obj, wheel = this.sPut(s, wheelGeo(), car.position.x + 0.16, car.position.z + 0.12, 0);
+    s.own.push({ dispose: () => { car.rotation.z = 0; } });
+    let pt = 0;
+    return (dt: number) => {
+      const flat = s.pick < 0 || s.after < (s.pick === 0 ? 6 : s.pick === 1 ? 2.5 : 1);
+      car.rotation.z = flat ? 0.08 : 0;
+      wheel.visible = flat && s.pick !== 2;
+      if ((pt -= dt) <= 0) {
+        pt = flat ? 0.25 : 0.06;
+        const p = car.position;
+        if (flat) this.puffAt(p.x, p.y + 0.06, p.z, 'smoke');
+        else if (s.pick === 2) { const o = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.008, 0.06), STAR); this.group.add(o); this.fx.push({ obj: o, t: 0, life: 0.4, kind: 'star', x: p.x, y: p.y + 0.06, z: p.z, vx: (Math.random() - 0.5) * 0.6, vz: (Math.random() - 0.5) * 0.6 }); }
+      }
+      return flat || (s.pick === 2 && s.after < 7);
+    };
+  }
+
+  /** Le coup de vent : la montgolfière tangue et dérive, des feuilles filent dans le vent */
+  private stageGust(s: Staging) {
+    let lt = 0;
+    return (dt: number) => {
+      const target = s.pick < 0 ? 1 : s.pick === 0 ? (s.after < 2 ? 0.7 : 0) : s.pick === 1 ? (s.after < 4 ? 0.5 : 0) : s.after < 6 ? 1.3 : 0;
+      this.gustK += (target - this.gustK) * Math.min(1, dt * 1.5);
+      const b = this.balloon;
+      if (b && target > 0 && (lt -= dt) <= 0) { lt = 0.1; const o = b.obj.position, d = b.drift; this.leaf(o.x - Math.sin(d) * 1.2 + (Math.random() - 0.5), o.y + Math.random() * 0.8, o.z - Math.cos(d) * 1.2 + (Math.random() - 0.5), Math.sin(d) * 1.6, Math.cos(d) * 1.6); }
+      return target > 0 || this.gustK > 0.02;
+    };
+  }
+
+  /** Les nuages cachent le ciel : plus d'étoiles filantes tant qu'ils sont là ; l'éclaircie venue, ils s'en vont */
+  private stageClouds(s: Staging) {
+    const [cx, cz] = this.focus, cl = [0, 1, 2].map((i) => this.sCloud(s, cx + (i - 1) * 1.3, cz + (i % 2) * 0.7, 2.3 + i * 0.2, true, 1.3));
+    s.own.push({ dispose: () => { this.cloudy = false; } });
+    let drift = 0;
+    return (dt: number) => {
+      const clear = s.pick === 0 ? s.after > 6 : s.pick === 1 ? s.after > 12 : false;
+      // on observe entre deux nuages : les étoiles reviennent par moments
+      this.cloudy = !clear && !(s.pick === 1 && Math.sin(this.t * 0.8) > 0.3);
+      if (clear) drift += dt;
+      cl.forEach((c, i) => { c.position.x += dt * (clear ? 0.4 + drift * 0.3 : Math.sin(this.t * 0.2 + i) * 0.05); });
+      return drift < 5;
+    };
+  }
+
+  /** Des vaches sur le tracé : elles broutent devant la tête de voie, puis s'écartent (au coup de sifflet, elles détalent) */
+  private stageCows(s: Staging, a: ActiveExpedition) {
+    const wk = this.works;
+    if (!wk) return () => false;
+    const laid = this.built.filter((o) => o.visible).length, head = laid * 0.3 + 0.6, sx = Math.sin(wk.dir), sz = Math.cos(wk.dir), px = Math.cos(wk.dir), pz = -Math.sin(wk.dir);
+    const cows = [0, 1, 2].map((i) => this.sBeast(s, 'cow', wk.x + sx * (head + i * 0.35) + px * (i - 1) * 0.14, wk.z + sz * (head + i * 0.35) + pz * (i - 1) * 0.14));
+    let sent = false, blew = false;
+    return (dt: number) => {
+      const go = s.pick === 0 ? s.after > 6 : s.pick >= 0;
+      cows.forEach((c, i) => {
+        if (!go) { this.sMove(c, c.x, c.z, 0, dt, ['Idle_Eating', 'Eating']); return; }
+        const side = i % 2 ? 1 : -1;
+        this.sMove(c, c.x + px * side * 2, c.z + pz * side * 2, s.pick === 2 ? 1.2 : 0.35, dt, ['Idle_Eating'], true);
+      });
+      // le sifflet de la locomotive : un grand panache de vapeur
+      if (s.pick === 2 && !blew) { blew = true; const o = wk.train.position; for (let i = 0; i < 8; i++) this.puffAt(o.x + sx * 0.1, o.y + 0.3 + i * 0.02, o.z + sz * 0.1, 'smoke', (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3); }
+      if (s.pick === 1 && !sent) { sent = true; this.sendTo(a, a.party[0], cows[0].x - px * 0.3, cows[0].z - pz * 0.3, cows[0].x, cows[0].z, 6); }
+      return !go || s.after < (s.pick === 0 ? 13 : 7);
+    };
+  }
+
+  /** Vents violents au cosmodrome : de gros nuages noirs filent au-dessus du pas de tir ; on attend qu'ils passent, ou l'on part dessous */
+  private stageWinds(s: Staging, a: ActiveExpedition) {
+    const r = this.rocket, [px, pz] = r ? [r.x, r.z] : this.focus, H = r ? ROCKET_H[r.kind] : 2;
+    const cl = [0, 1, 2, 3].map((i) => this.sCloud(s, px - 3 + i * 1.6, pz + (i % 2 ? 1 : -0.7), H + 1.2 + (i % 2) * 0.5, false, 2.2));
+    return (dt: number) => {
+      const pass = s.pick === 0 && s.after > 2;
+      for (const c of cl) c.position.x += dt * (pass ? 1.4 : 0.3);
+      return s.pick < 0 || (pass ? s.after < 8 : a.phase === 'work' && s.after < 14);
+    };
+  }
+
+  /** Un voyant rouge clignote au pied de la fusée ; la panne trouvée, il passe au vert */
+  private stageAlarm(s: Staging) {
+    const r = this.rocket, x = r ? r.x + ROCKET_R[r.kind] + 0.35 : this.focus[0], z = r ? r.z + 0.2 : this.focus[1];
+    this.sPut(s, stakeTorchGeo(), x, z, 0).scale.set(1, 1.4, 1);
+    const lamp = this.sAdd(s, new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), RED));
+    s.own.push(lamp.geometry);
+    lamp.position.set(x, this.world.surfaceAt(x, z) + 0.37, z);
+    return () => {
+      const okT = s.pick === 0 ? 7 : s.pick === 1 ? 3 : Infinity, fixed = s.pick >= 0 && s.after > okT;
+      lamp.material = fixed ? GREEN : RED;
+      lamp.visible = fixed || Math.sin(this.t * 10) > -0.2;
+      lamp.scale.setScalar(fixed ? 1 : 1 + Math.max(0, Math.sin(this.t * 10)) * 0.5);
+      return fixed ? s.after < okT + 3 : s.pick < 0 || s.after < 14;
+    };
+  }
+
+  // ---------------- Les échecs, joués au départ de l'équipe ----------------
+  /** La pirogue chavire dans les rapides : elle se retourne dans une gerbe d'écume, et reste à flotter là, la quille en l'air */
+  private stageCapsize(s: Staging) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    return (dt: number) => {
+      const k = smooth(Math.min(1, s.t / 1.2)), o = bt.obj;
+      o.rotation.z = k * Math.PI * 0.95;
+      o.position.y = bt.y - k * 0.03 + Math.sin(this.t * 2) * 0.005;
+      if (s.t < 1.6 && Math.random() < dt * 14) this.puffAt(o.position.x + (Math.random() - 0.5) * 0.3, bt.y + 0.01, o.position.z + (Math.random() - 0.5) * 0.3);
+      return s.t < 2;
+    };
+  }
+
+  /** La harde s'enfuit au galop, de tous côtés */
+  private stageScatter(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a);
+    for (const b of this.beasts) b.flee = Math.atan2(b.x - tx, b.z - tz) + (Math.random() - 0.5) * 0.6;
+    return () => s.t < 1;
+  }
+
+  /** Une bête charge l'équipe (le sanglier qui force l'enclos, l'aurochs), puis s'en va */
+  private stageCharge(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), b = [...this.beasts].sort((p, q) => Math.hypot(p.x - tx, p.z - tz) - Math.hypot(q.x - tx, q.z - tz))[0];
+    if (!b) return () => false;
+    b.held = true;
+    return (dt: number) => {
+      if (s.t < 1.4) this.sMove(b, tx, tz, 1.7, dt, ['Headbutt', 'Idle'], true);
+      else if (s.t < 2) this.sMove(b, b.x, b.z, 0, dt, ['Headbutt']);
+      else { b.held = false; b.flee = Math.atan2(b.x - tx, b.z - tz); return false; }
+      return true;
+    };
+  }
+
+  /** Le coup de grisou : une flamme jaillit de la grotte dans un nuage de fumée noire */
+  private stageBlast(s: Staging) {
+    const [mx, mz] = this.mouth?.at ?? this.focus, y = this.world.surfaceAt(mx, mz);
+    const f = this.sFlame(s, mx, mz, 3.5);
+    for (let i = 0; i < 12; i++) { const ang = (i / 12) * Math.PI * 2; this.puffAt(mx, y + 0.1 + (i % 3) * 0.05, mz, 'smoke', Math.cos(ang) * 0.35, Math.sin(ang) * 0.35); }
+    this.torchTo = 0;
+    return () => { f.scale.multiplyScalar(0.94); return s.t < 1.5; };
+  }
+
+  /** Les jongleurs s'en vont sur la route, leur roulotte avec eux */
+  private stageGone(s: Staging) {
+    const walkers = [...this.guests], wg = this.wagon, ang = wg ? Math.atan2(wg.position.x - this.focus[0], wg.position.z - this.focus[1]) : 0;
+    for (const j of this.jugglers) for (const b of j.balls) b.visible = false;
+    this.jugglers = [];
+    return (dt: number) => {
+      const step = dt * 0.35, dx = Math.sin(ang) * step, dz = Math.cos(ang) * step;
+      for (const g of walkers) { const o = g.folk.root; o.position.x += dx; o.position.z += dz; o.position.y = this.world.surfaceAt(o.position.x, o.position.z); o.rotation.y = ang; g.pose = 'walk'; }
+      if (wg) { wg.position.x += dx; wg.position.z += dz; wg.position.y = this.world.surfaceAt(wg.position.x, wg.position.z); }
+      return s.t < 20;
+    };
+  }
+
+  /** Les torches de fortune des explorateurs : une flamme au poing de chacun (ceux qui ont emporté une vraie torche la tiennent déjà) */
+  private stepTorches(dt: number, a: ActiveExpedition) {
+    if (!this.lit) return;
+    // allumées dès l'arrivée, sur place seulement (l'imprévu les fait baisser ou flamber) ; on les éteint en repartant
+    if (a.phase === 'work' && !this.kindled) { this.kindled = true; this.torchK = this.torchTo; }
+    const to = a.phase === 'work' ? this.torchTo : 0;
+    this.torchK += Math.sign(to - this.torchK) * Math.min(Math.abs(to - this.torchK), dt * 0.9);
+    const real = a.gear.torch ?? 0;
+    a.party.forEach((id, i) => {
+      if (a.party.length - 1 - i < real) return;
+      const p = this.agents.partyPositions([id])[0];
+      let t = this.torches.get(id);
+      if (!t) {
+        t = new THREE.Group();
+        t.add(new THREE.Mesh(handTorchGeo(), mats.body));
+        const f = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.05, 5).translate(0, 0.025, 0), FLAME);
+        f.add(new THREE.Mesh(new THREE.ConeGeometry(0.01, 0.03, 5).translate(0, 0.015, 0), FLAME_IN));
+        f.position.y = 0.075;
+        t.add(f);
+        this.group.add(t); this.props.push(t); this.torches.set(id, t);
+      }
+      t.visible = !!p && this.torchK > 0.02;
+      if (!p) return;
+      const [x, z, h] = p, fl = this.torchK * (1 + Math.sin(this.t * 19 + id) * 0.15);
+      t.position.set(x + Math.cos(h) * 0.055 + Math.sin(h) * 0.03, this.world.surfaceAt(x, z) + 0.1, z - Math.sin(h) * 0.055 + Math.cos(h) * 0.03);
+      t.children[1].scale.set(Math.max(0.001, fl), Math.max(0.001, fl * (1.1 + Math.sin(this.t * 13 + id) * 0.2)), Math.max(0.001, fl));
+      // une torche qui s'éteint fume un peu
+      if (to < 0.05 && this.torchK > 0.1 && Math.random() < dt * 4) this.puffAt(t.position.x, t.position.y + 0.1, t.position.z, 'smoke');
+    });
+  }
+
+  // ---------------- L'équipe repartie, le décor s'efface ----------------
+  /** L'équipe est assez loin : le décor rétrécit en s'enfonçant un peu, puis disparaît (voir `gone`) */
+  leave() {
+    if (this.fade >= 0) return;
+    this.fade = 0;
+    const all = new Set<THREE.Object3D>([...this.props, ...this.npcs.map((n) => n.folk.root), ...this.beasts.map((b) => b.obj), ...this.dogs.map((b) => b.obj), ...this.stagings.flatMap((s) => s.objs), ...this.fx.map((f) => f.obj)]);
+    this.fadeObjs = [];
+    for (const o of all) { if (o.userData.flat) o.visible = false; else { o.userData.s0 = o.scale.clone(); this.fadeObjs.push({ o, y: o.position.y }); } }
+  }
+  /** Le décor a fini de s'effacer : on peut le ranger */
+  get gone() { return this.fade >= FADE; }
+  private stepFade(dt: number) {
+    this.fade += dt;
+    const k = smooth(Math.min(1, this.fade / FADE));
+    for (const f of this.fadeObjs) { f.o.scale.copy(f.o.userData.s0).multiplyScalar(Math.max(0.001, 1 - k)); f.o.position.y = f.y - k * 0.08; }
   }
 
   // ---------------- Mise en place ----------------
@@ -1017,6 +2126,8 @@ export class ExpeditionScene {
   // ---------------- Animation ----------------
   update(dt: number, a: ActiveExpedition) {
     this.t += dt;
+    // l'équipe repartie, le décor s'efface
+    if (this.fade >= 0) { this.stepFade(dt); return; }
     // avant l'arrivée de l'équipe, le décor est déjà là et vit (bêtes, flammes, voisins) ; le travail n'a pas commencé
     const onSite = a.phase === 'work';
     const k = onSite ? Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) : 0;
@@ -1047,11 +2158,24 @@ export class ExpeditionScene {
       c.obj.position.set(x, this.world.surfaceAt(x, z), z);
     }
     if (onSite && !a.wait) this.stepMembers(dt, a, k);
+    // les pêcheurs repartis, leurs cannes s'en vont avec eux
     if (onSite) this.stepRods(a);
+    else for (const r of this.rods.values()) r.rod.visible = r.bob.visible = r.line.visible = false;
+    this.stepStagings(dt, a);
+    this.stepTorches(dt, a);
     this.stepFx(dt, a);
   }
 
   private stepBeast(b: Beast, dt: number, a: ActiveExpedition) {
+    // un imprévu la mène (elle charge) ; ou elle s'enfuit au galop, et disparaît au loin
+    if (b.held) return;
+    if (b.flee !== undefined) {
+      if (!b.obj.visible) return;
+      b.fled = (b.fled ?? 0) + dt;
+      this.sMove(b, b.x + Math.sin(b.flee) * 2, b.z + Math.cos(b.flee) * 2, 1.4, dt, ['Idle'], true);
+      if (b.fled > 4) b.obj.visible = false;
+      return;
+    }
     const w = this.world, [cx, cz] = a.dest, pos = this.agents.partyPositions(a.party);
     // un membre tout près : la bête s'arrête et se laisse approcher (le loup, lui, détale)
     const close = pos.find(([x, z]) => Math.hypot(x - b.x, z - b.z) < 0.45);
@@ -1188,10 +2312,11 @@ export class ExpeditionScene {
     const sway = Math.sin(this.t * 0.4) * 0.12, dir = Math.atan2(bt.out[0] - bt.home[0], bt.out[1] - bt.home[1]);
     let px = x + Math.cos(dir) * sway, pz = z - Math.sin(dir) * sway;
     if (this.depth(px, pz) === null) { px = x; pz = z; }
-    const heading = dir + (ph >= 0.75 ? Math.PI : 0) + Math.sin(this.t * 0.4) * 0.15;
-    const y = bt.y + 0.005 + Math.sin(this.t * 1.7) * 0.006;
+    // dans les rapides, elle tangue et roule bien plus fort
+    const rough = this.rough, heading = dir + (ph >= 0.75 ? Math.PI : 0) + Math.sin(this.t * 0.4) * 0.15 + Math.sin(this.t * 3.1) * 0.2 * rough;
+    const y = bt.y + 0.005 + Math.sin(this.t * 1.7) * 0.006 + Math.abs(Math.sin(this.t * 4.3)) * 0.02 * rough;
     bt.obj.position.set(px, y, pz);
-    bt.obj.rotation.set(Math.sin(this.t * 1.3) * 0.03, heading, Math.sin(this.t * 1.1) * 0.04);
+    bt.obj.rotation.set(Math.sin(this.t * 1.3) * (0.03 + 0.12 * rough), heading, Math.sin(this.t * 1.1 + rough * 2) * (0.04 + 0.18 * rough));
     this.focus = [px, pz];
     bt.riders.forEach((id, i) => {
       const lz = i ? -0.08 : 0.06, sx = Math.sin(heading), cz = Math.cos(heading);
@@ -1257,10 +2382,12 @@ export class ExpeditionScene {
     // u : le vol, du décollage (0) à l'atterrissage (1) ; elle monte, croise au loin en faisant un crochet, redescend
     const u = k <= B_LIFT ? 0 : k >= B_LAND ? 1 : (k - B_LIFT) / (B_LAND - B_LIFT);
     const up = u < 0.2 ? smooth(u / 0.2) : u > 0.8 ? 1 - smooth((u - 0.8) / 0.2) : 1;
-    const out = Math.sin(u * Math.PI) * b.far, side = Math.sin(u * Math.PI * 2) * b.far * 0.35, dx = Math.sin(b.drift), dz = Math.cos(b.drift);
+    // un coup de vent la fait tanguer et la pousse de côté
+    const g = this.gustK, gust = Math.sin(this.t * 2.3) * 0.18 * g;
+    const out = Math.sin(u * Math.PI) * b.far, side = Math.sin(u * Math.PI * 2) * b.far * 0.35 + gust, dx = Math.sin(b.drift), dz = Math.cos(b.drift);
     const x = b.home[0] + dx * out + dz * side, z = b.home[1] + dz * out - dx * side;
     o.position.set(x, Math.max(w.surfaceAt(x, z), b.y0) + up * b.high + Math.sin(this.t * 0.7) * 0.05 * up, z);
-    o.rotation.set(0, b.drift + u * 2.2, Math.sin(this.t * 0.9) * 0.035 * up);
+    o.rotation.set(Math.sin(this.t * 1.9) * 0.12 * g, b.drift + u * 2.2, Math.sin(this.t * 0.9) * 0.035 * up + Math.sin(this.t * 3.1) * 0.22 * g);
     // le brûleur : il chauffe fort pour gonfler et monter, par bouffées en croisière, se tait pour redescendre
     const heat = !onSite ? 0.3 : k < B_LIFT ? 1.5 : u < 0.22 ? 1.8 : u < 0.75 ? (Math.sin(this.t * 1.7) > 0.2 ? 1.5 : 0.4) : k < B_LAND ? 0.3 : 0.001;
     b.burner.scale.setScalar(heat);
@@ -1518,6 +2645,7 @@ export class ExpeditionScene {
       if (!p) { if (r) r.rod.visible = r.bob.visible = r.line.visible = false; continue; }
       if (!r) {
         r = { rod: new THREE.Mesh(rodGeo(), mats.body), bob: new THREE.Mesh(bobberGeo(), mats.body), line: new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), LINE) };
+        r.line.userData.flat = true;
         this.group.add(r.rod, r.bob, r.line);
         this.props.push(r.rod, r.bob, r.line);
         this.rods.set(id, r);
@@ -1549,17 +2677,12 @@ export class ExpeditionScene {
         this.fxTimer = 2.5 + Math.random() * 3.5;
         const c = this.boat ? this.boat.obj.position : new THREE.Vector3(this.water.wet[0], 0, this.water.wet[1]);
         const ang = Math.random() * Math.PI * 2, x = c.x + Math.cos(ang) * 0.4, z = c.z + Math.sin(ang) * 0.4;
-        if (this.depth(x, z) !== null) {
-          const f = new THREE.Mesh(fishGeo(), mats.body), ring = new THREE.Mesh(new THREE.RingGeometry(0.03, 0.045, 12).rotateX(-Math.PI / 2), RING);
-          this.group.add(f, ring);
-          const vx = Math.cos(ang + 1.2) * 0.25, vz = Math.sin(ang + 1.2) * 0.25;
-          this.fx.push({ obj: f, t: 0, life: 0.7, kind: 'fish', x, y: this.water.level, z, vx, vz });
-          this.fx.push({ obj: ring, t: 0, life: 1.2, kind: 'ring', x: x + vx * 0.7, y: this.water.level + 0.005, z: z + vz * 0.7, vx: 0, vz: 0 });
-        }
+        if (this.depth(x, z) !== null) this.fishJump(x, z, this.water.level);
       } else this.fxTimer = 1;
     }
     for (const e of this.emits) {
-      if ((e.t -= dt) > 0 || a.wait) continue;
+      // les nuages cachent les étoiles filantes
+      if ((e.t -= dt) > 0 || a.wait || (e.kind === 'star' && this.cloudy)) continue;
       e.t = e.every * (0.7 + Math.random() * 0.6);
       const star = e.kind === 'star', o = new THREE.Mesh(star ? new THREE.BoxGeometry(0.012, 0.012, 0.5) : e.kind === 'steam' ? steamGeo() : e.kind === 'smoke' ? smokeGeo() : e.kind === 'bubble' ? bubbleGeo() : puffGeo(), star ? STAR : mats.body);
       this.group.add(o);
@@ -1579,6 +2702,21 @@ export class ExpeditionScene {
       const k = f.t / f.life;
       if (k >= 1) { this.group.remove(f.obj); if (f.kind === 'ring' || f.kind === 'star') (f.obj as THREE.Mesh).geometry.dispose(); return false; }
       if (f.kind === 'puff') { f.obj.position.set(f.x + f.vx * f.t, f.y + f.t * 0.12, f.z + f.vz * f.t); f.obj.scale.setScalar(Math.sin(k * Math.PI) * (1 + k)); }
+      else if (f.kind === 'rock') {
+        // la pierre tombe, rebondit en soulevant de la poussière, roule et s'arrête
+        f.vy = (f.vy ?? 0) - dt * 6;
+        f.x += f.vx * dt; f.z += f.vz * dt; f.y += f.vy * dt;
+        const g = this.world.surfaceAt(f.x, f.z) + 0.025;
+        if (f.y < g) {
+          f.y = g;
+          if (f.vy < -0.5) this.puffAt(f.x, g, f.z);
+          f.vy = -f.vy * 0.35; f.vx *= 0.75; f.vz *= 0.75;
+        }
+        f.obj.position.set(f.x, f.y, f.z);
+        f.obj.rotation.x += dt * 9 * Math.hypot(f.vx, f.vz);
+        if (k > 0.85) f.obj.scale.multiplyScalar(0.9);
+      } else if (f.kind === 'gas') { f.obj.position.set(f.x + f.vx * f.t, f.y + f.t * 0.1, f.z + f.vz * f.t); f.obj.scale.setScalar(Math.sin(k * Math.PI) * (1 + k * 2.5)); }
+      else if (f.kind === 'leaf') { f.obj.position.set(f.x + f.vx * f.t, f.y + Math.sin(f.t * 5) * 0.03 + f.t * 0.05, f.z + f.vz * f.t); f.obj.rotation.set(f.t * 7, f.t * 3, f.t * 5); f.obj.scale.setScalar(k > 0.8 ? (1 - k) * 5 : 1); }
       else if (f.kind === 'fish') {
         f.obj.position.set(f.x + f.vx * f.t, f.y + Math.sin(k * Math.PI) * 0.16, f.z + f.vz * f.t);
         f.obj.rotation.set(-Math.cos(k * Math.PI) * 1.1, Math.atan2(f.vx, f.vz), 0, 'YXZ');
@@ -1601,15 +2739,22 @@ export class ExpeditionScene {
     });
   }
 
-  /** Fin du travail sur place : on range tout (les passagers de la barque reviennent sur la berge) */
+  /**
+   * On range tout. L'équipe encore sur place (une expédition interrompue) reprend pied : les passagers de la barque reviennent
+   * sur la berge, ceux de la grotte en ressortent ; repartie, elle a déjà repris la route, et on ne la touche plus
+   */
   dispose(a: ActiveExpedition) {
-    for (const id of this.boat?.riders ?? []) this.agents.ride(id, null);
-    for (const id of this.bath?.in ?? []) this.agents.ride(id, null);
-    for (const id of this.balloon?.riders ?? []) this.agents.ride(id, null);
-    if (this.race?.driver != null) this.agents.ride(this.race.driver, null);
+    if (a.phase === 'work' || a.phase === 'out' || a.phase === 'gather') {
+      for (const id of this.boat?.riders ?? []) this.agents.ride(id, null);
+      for (const id of this.bath?.in ?? []) this.agents.ride(id, null);
+      for (const id of this.balloon?.riders ?? []) this.agents.ride(id, null);
+      if (this.race?.driver != null) this.agents.ride(this.race.driver, null);
+      if (this.mouth) this.agents.partyHide(a.party, false);
+    }
+    for (const s of this.stagings) this.unstage(s);
+    this.stagings = [];
     for (const l of this.balloon?.ropes ?? []) l.geometry.dispose();
     if (this.rocket) { this.rocket.glare.geometry.dispose(); (this.rocket.glare.material as THREE.Material).dispose(); }
-    if (this.mouth) this.agents.partyHide(a.party, false);
     for (const n of this.npcs) this.group.remove(n.folk.root);
     for (const b of [...this.beasts, ...this.dogs]) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
     for (const o of this.props) this.group.remove(o);

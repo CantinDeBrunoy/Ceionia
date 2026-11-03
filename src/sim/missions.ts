@@ -31,6 +31,13 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // le premier vol de fusée, la fusée lunaire (et l'alunissage en direct), le départ du vaisseau colonial
   | 'launch' | 'moon' | 'colony';
 
+/**
+ * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
+ * harde qui s'enfuit, une bête qui charge, les abeilles en furie, le coup de grisou, les torches qui s'éteignent, les voisins
+ * qui s'en vont, les oiseaux qui s'envolent des buissons pillés
+ */
+export type Fail = 'storm' | 'fog' | 'rocks' | 'capsize' | 'scatter' | 'charge' | 'stings' | 'blast' | 'dark' | 'gone' | 'birds';
+
 export type Effect =
   /** bêtes ramenées : elles paissent ensuite près des fermes */
   | { t: 'herd'; kinds: HerdKind[] }
@@ -63,8 +70,8 @@ export interface Choice {
   work: number;
   /** probabilité d'échec */
   risk: number;
-  /** ce que l'équipe rapporte, visible au retour : des bêtes qui la suivent, un chariot, des sacs sur le dos */
-  carry?: 'animals' | 'cart' | 'sacks';
+  /** ce que l'équipe rapporte, visible au retour : des bêtes qui la suivent, un chariot, des sacs sur le dos, ses invités */
+  carry?: 'animals' | 'cart' | 'sacks' | 'guests';
   /** ce que l'équipe fait sur place, et ce qu'en dit sa carte (« troque ses poteries contre des semences ») */
   scene: Scene;
   doing?: string;
@@ -81,6 +88,8 @@ export interface Choice {
    * l'époque moderne ce qu'il faut emmener (du carburant pour les blindés au lieu des chevaux) et ce qu'un échec coûte
    */
   ages?: Partial<Record<number, Partial<Pick<Choice, 'label' | 'text' | 'doing' | 'winText' | 'loseText' | 'mounts' | 'fuel' | 'lose'>>>>;
+  /** ce qu'on voit de l'échec sur la scène, au départ de l'équipe (l'orage, la pirogue qui chavire, la pierre qui roule…) */
+  fail?: Fail;
   win: Effect[];
   lose: Effect[];
   winText: string;
@@ -117,21 +126,21 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Suivre le troupeau dans la plaine', text: 'Long mais sûr : on marche avec les moutons jusqu’à ce qu’ils se laissent approcher.',
-        dest: 'plain', scene: 'herd', doing: 'marche avec les moutons jusqu’à ce qu’ils se laissent approcher', party: 3, work: 24, risk: 0.15, carry: 'animals',
+        dest: 'plain', scene: 'herd', fail: 'storm', doing: 'marche avec les moutons jusqu’à ce qu’ils se laissent approcher', party: 3, work: 24, risk: 0.15, carry: 'animals',
         win: [{ t: 'herd', kinds: ['sheep', 'sheep', 'sheep', 'sheep'] }, food(3)], lose: [],
-        winText: 'Après des jours de marche, le troupeau a suivi les chasseurs jusqu’au camp. Les moutons broutent maintenant près des fermes.',
-        loseText: 'Un orage a dispersé le troupeau. Les chasseurs rentrent bredouilles, mais ils retenteront leur chance.',
+        winText: 'Le troupeau a suivi les chasseurs jusqu’au camp, sans se presser. Les moutons broutent maintenant près des fermes.',
+        loseText: 'Un orage a éclaté et dispersé le troupeau. Les chasseurs rentrent bredouilles, mais ils retenteront leur chance.',
       },
       {
         label: 'Bâtir un enclos de branchages en lisière', text: 'On rabat les bêtes de la forêt dans un enclos : il faut des bras, et les sangliers sont farouches.',
-        dest: 'forest', scene: 'corral', doing: 'rabat les bêtes dans un enclos de branchages', party: 4, work: 30, risk: 0.25, carry: 'animals',
+        dest: 'forest', scene: 'corral', fail: 'charge', doing: 'rabat les bêtes dans un enclos de branchages', party: 4, work: 30, risk: 0.25, carry: 'animals',
         win: [{ t: 'herd', kinds: ['pig', 'pig', 'pig', 'sheep', 'sheep'] }, food(4)], lose: [hurt(1, 2)],
         winText: 'L’enclos a tenu : sangliers et moutons ont été menés au village, et ils s’y plaisent.',
         loseText: 'Un sanglier a forcé l’enclos et blessé un chasseur. Il se repose à la hutte.',
       },
       {
         label: 'Attirer les aurochs avec du sel', text: 'Rapide mais risqué : près de la rivière, les aurochs viennent lécher le sel… quand ils sont d’humeur.',
-        dest: 'river', scene: 'salt', doing: 'attend, cachée, que les aurochs viennent lécher le sel', danger: ['beast', 'water'], party: 2, work: 14, risk: 0.4, carry: 'animals',
+        dest: 'river', scene: 'salt', fail: 'charge', doing: 'attend, cachée, que les aurochs viennent lécher le sel', danger: ['beast', 'water'], party: 2, work: 14, risk: 0.4, carry: 'animals',
         win: [{ t: 'herd', kinds: ['cow', 'cow', 'sheep'] }, food(4)], lose: [hurt(1, 3), joy(-2, 2)],
         winText: 'Le sel a fait merveille : deux aurochs, doux comme des agneaux, ont suivi les chasseurs jusqu’au camp.',
         loseText: 'Un aurochs a chargé ! Un chasseur est blessé, et le camp a eu très peur.',
@@ -144,7 +153,7 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Partir en forêt', text: 'Des buissons à perte de vue, à condition d’arriver avant les oiseaux.',
-        dest: 'forest', scene: 'gather', doing: 'cueille les baies de buisson en buisson', party: 2, work: 16, risk: 0.15, carry: 'sacks',
+        dest: 'forest', scene: 'gather', fail: 'birds', doing: 'cueille les baies de buisson en buisson', party: 2, work: 16, risk: 0.15, carry: 'sacks',
         win: [food(4, 4)], lose: [],
         winText: 'Les paniers débordent de baies et de noisettes : on mange bien pour quelques jours.',
         loseText: 'Les oiseaux étaient passés avant : il ne restait presque rien.',
@@ -164,7 +173,7 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Escalader la falaise', text: 'Les plus beaux rognons sont en hauteur.',
-        dest: 'mountain', scene: 'mine', doing: 'détache les rognons de silex de la falaise', party: 3, work: 20, risk: 0.25, carry: 'sacks',
+        dest: 'mountain', scene: 'mine', fail: 'rocks', doing: 'détache les rognons de silex de la falaise', party: 3, work: 20, risk: 0.25, carry: 'sacks',
         win: [jobs(3)], lose: [hurt(1, 2)],
         winText: 'Des rognons de silex magnifiques : haches et grattoirs pour tout le village.',
         loseText: 'Une pierre a roulé : un grimpeur est blessé.',
@@ -184,7 +193,7 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Enfumer le vieux chêne', text: 'Un feu d’herbes humides endort l’essaim… pas toujours assez.',
-        dest: 'forest', scene: 'smoke', doing: 'enfume le vieux chêne pour endormir l’essaim', danger: ['beast'], party: 2, work: 14, risk: 0.3, carry: 'sacks',
+        dest: 'forest', scene: 'smoke', fail: 'stings', doing: 'enfume le vieux chêne pour endormir l’essaim', danger: ['beast'], party: 2, work: 14, risk: 0.3, carry: 'sacks',
         win: [food(2), joy(1)], lose: [hurt(1, 1)],
         winText: 'L’essaim, endormi par la fumée, a été rapporté dans un tronc creux : les premières ruches bourdonnent près du camp.',
         loseText: 'Les abeilles se sont réveillées : des piqûres en pagaille, un cueilleur gonflé comme une outre.',
@@ -212,14 +221,14 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Descendre la rivière en pirogue', text: 'Rapide… si l’on passe les rapides.',
-        dest: 'river', scene: 'boat', doing: 'descend la rivière en pirogue', party: 2, work: 12, risk: 0.3, carry: 'sacks',
+        dest: 'river', scene: 'boat', fail: 'capsize', doing: 'descend la rivière en pirogue', party: 2, work: 12, risk: 0.3, carry: 'sacks',
         win: [{ t: 'perk', id: 'seeds' }, food(2)], lose: [hurt(1, 2)],
         winText: 'Le courant a porté les pirogues jusqu’au village voisin, et les semences sont rentrées bien sèches.',
         loseText: 'Une pirogue a chaviré dans les rapides : un rameur blessé, les semences perdues.',
       },
       {
         label: 'Passer par le col de la montagne', text: 'Le raccourci des chèvres : on pourrait y trouver autre chose.',
-        dest: 'mountain', scene: 'pass', doing: 'franchit le col et ramasse les pierres vertes', party: 3, work: 16, risk: 0.3, carry: 'cart',
+        dest: 'mountain', scene: 'pass', fail: 'fog', doing: 'franchit le col et ramasse les pierres vertes', party: 3, work: 16, risk: 0.3, carry: 'cart',
         win: [{ t: 'perk', id: 'seeds' }, { t: 'ore', n: 3 }], lose: [hurt(1, 3)],
         winText: 'Par le col, on a trouvé les semences… et des pierres vertes qui sentent le cuivre !',
         loseText: 'Le col était pris dans la brume ; un marcheur s’est blessé en chutant.',
@@ -232,14 +241,14 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Les approcher patiemment', text: 'Des jours à se faire accepter de la harde.',
-        dest: 'plain', scene: 'herd', doing: 'se fait accepter de la harde', party: 3, work: 26, risk: 0.2, carry: 'animals',
+        dest: 'plain', scene: 'herd', fail: 'scatter', doing: 'se fait accepter de la harde', party: 3, work: 26, risk: 0.2, carry: 'animals',
         win: [{ t: 'herd', kinds: ['horse', 'horse'] }, jobs(2)], lose: [],
         winText: 'Deux chevaux ont accepté le licol : les charrettes rouleront plus vite.',
         loseText: 'La harde s’est enfuie au galop au premier bruit.',
       },
       {
         label: 'Les rabattre dans un vallon', text: 'Plus rapide, mais un cheval affolé, ça rue.',
-        dest: 'far', scene: 'roundup', doing: 'rabat les chevaux vers le corral du vallon', danger: ['beast'], party: 4, work: 18, risk: 0.35, carry: 'animals',
+        dest: 'far', scene: 'roundup', fail: 'scatter', doing: 'rabat les chevaux vers le corral du vallon', danger: ['beast'], party: 4, work: 18, risk: 0.35, carry: 'animals',
         win: [{ t: 'herd', kinds: ['horse', 'horse', 'horse'] }, jobs(3)], lose: [hurt(1, 2)],
         winText: 'Trois chevaux rabattus et calmés : on se dispute déjà pour les monter.',
         loseText: 'Un coup de sabot : un cavalier blessé, et la harde envolée.',
@@ -259,7 +268,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Chercher les grands bancs au loin', text: 'Plus de poisson, plus de chemin.',
-        dest: 'river', scene: 'boat', doing: 'pêche au large les grands bancs', danger: ['water', 'weather'], party: 3, work: 20, risk: 0.25, carry: 'sacks',
+        dest: 'river', scene: 'boat', fail: 'storm', doing: 'pêche au large les grands bancs', danger: ['water', 'weather'], party: 3, work: 20, risk: 0.25, carry: 'sacks',
         win: [food(5, 6), joy(1, 6)], lose: [hurt(1, 1)],
         winText: 'Les grands bancs existent bien : de quoi nourrir le village une semaine !',
         loseText: 'Un orage a renversé les filets ; un pêcheur s’est entaillé la main.',
@@ -272,9 +281,9 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Suivre la vapeur dans la montagne', text: 'La source est là-haut, au bout d’un sentier escarpé.',
-        dest: 'mountain', scene: 'spring', doing: 'se baigne dans la source chaude et regarde d’où elle jaillit', danger: ['fall', 'weather'], party: 3, work: 20, risk: 0.25,
+        dest: 'mountain', scene: 'spring', fail: 'rocks', doing: 'se baigne dans la source chaude et regarde d’où elle jaillit', danger: ['fall', 'weather'], party: 3, work: 20, risk: 0.25,
         win: [joy(2)], lose: [hurt(1, 2)],
-        winText: 'Au creux de la montagne, un bassin d’eau chaude fume dans le froid : les bâtisseurs savent maintenant faire des thermes.',
+        winText: 'Entre les pierres, un bassin d’eau chaude fume dans l’air vif : les bâtisseurs savent maintenant faire des thermes.',
         loseText: 'Le sentier s’est effondré sous un porteur : il redescend sur une civière.',
       },
       {
@@ -282,7 +291,7 @@ export const MISSIONS: Mission[] = [
         dest: 'river', scene: 'spring', doing: 'se baigne dans la source tiède, au milieu des roseaux', party: 2, work: 16, risk: 0.15,
         win: [joy(1), food(1)], lose: [],
         winText: 'La rivière tiède menait à une source chaude au milieu des roseaux : on y a pris un bain, et des idées.',
-        loseText: 'L’eau était tiède… à cause du soleil. Pas de source.',
+        loseText: 'La source n’était qu’une flaque tiède : pas de quoi y bâtir des bains.',
       },
     ],
   },
@@ -293,14 +302,14 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Creuser une galerie', text: 'Du travail de mineur, long et solide.',
-        dest: 'mountain', scene: 'gallery', doing: 'creuse la galerie et sort le minerai au wagonnet', party: 4, work: 30, risk: 0.2, carry: 'cart',
+        dest: 'mountain', scene: 'gallery', fail: 'rocks', doing: 'creuse la galerie et sort le minerai au wagonnet', party: 4, work: 30, risk: 0.2, carry: 'cart',
         win: [{ t: 'ore', n: 10 }, jobs(2)], lose: [{ t: 'ore', n: 3 }, hurt(1, 2)],
         winText: 'La galerie a percé le filon : le chariot rentre chargé de minerai, les forges vont chanter.',
         loseText: 'Un éboulement a bloqué la galerie. Un mineur blessé, et seulement quelques pierres de minerai.',
       },
       {
         label: 'Explorer la grande grotte', text: 'On raconte qu’elle cache un trésor… et qu’on s’y perd.',
-        dest: 'cave', scene: 'cave', doing: 'explore la grotte à la lueur des torches', party: 3, work: 20, risk: 0.35, carry: 'cart',
+        dest: 'cave', scene: 'cave', fail: 'dark', doing: 'explore la grotte à la lueur des torches', party: 3, work: 20, risk: 0.35, carry: 'cart',
         win: [{ t: 'ore', n: 14 }, joy(2)], lose: [hurt(2, 2)],
         winText: 'Au fond de la grotte, un filon gros comme un tonneau ! Le village fête ses explorateurs.',
         loseText: 'Les torches se sont éteintes dans la grotte ; deux explorateurs se sont blessés en ressortant.',
@@ -310,7 +319,7 @@ export const MISSIONS: Mission[] = [
         dest: 'far', scene: 'trade', doing: 'échange des vivres contre le minerai des nomades', party: 2, work: 12, risk: 0.05, carry: 'cart',
         win: [{ t: 'ore', n: 6 }, food(-2, 3)], lose: [],
         winText: 'Les nomades ont échangé leur minerai contre des vivres : il faudra se serrer un peu la ceinture.',
-        loseText: 'Les nomades avaient déjà levé le camp.',
+        loseText: 'Les nomades n’ont rien voulu échanger : leur minerai partira ailleurs.',
       },
     ],
   },
@@ -350,27 +359,27 @@ export const MISSIONS: Mission[] = [
         label: 'Charge de cavalerie', text: 'Trois chevaux de l’écurie et leurs cavaliers foncent dans les grandes galeries : rapides, mais les bêtes craignent le noir.',
         dest: 'cave', scene: 'mine', doing: 'charge dans les galeries et abat les filons', troop: 'cavalry', mounts: 3, danger: ['monster', 'dark'], party: 4, work: 34, risk: 0.5, carry: 'cart',
         win: [{ t: 'veins', n: 4, reach: 12 }], lose: [hurt(2, 3), { t: 'unherd', kind: 'horse', n: 1 }],
-        winText: 'Les cavaliers ont chargé la horde de squelettes, tenu la grande galerie et remonté les filons dans leurs sacoches !',
+        winText: 'Les cavaliers ont chargé la horde de squelettes et tenu la grande galerie !',
         loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cavaliers rentrent blessés, les sacoches vides.',
         ages: {
           3: {
             label: 'Charge des cuirassiers', text: 'Trois cuirassiers, sabre au clair, foncent dans les grandes galeries ; des fusiliers les suivent et les couvrent : rapides, mais les chevaux craignent le noir.',
             doing: 'charge sabre au clair, les fusiliers en soutien, et abat les filons',
-            winText: 'Les cuirassiers ont enfoncé la horde, les fusiliers ont tenu la galerie : les filons remontent dans les fontes des selles !',
+            winText: 'Les cuirassiers ont enfoncé la horde, les fusiliers ont tenu la galerie !',
             loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cuirassiers rentrent blessés, les fontes vides.',
           },
           // plus de chevaux à l'époque moderne : les chars et les transports de troupes roulent au carburant de la raffinerie
           4: {
             label: 'Blindés en tête', text: 'Trois chars d’assaut et deux transports de troupes ouvrent la route dans les grandes galeries, phares braqués, des drones en éclaireurs et la section dans leur sillage : rapides et redoutables, mais gourmands en carburant.',
             doing: 'ouvre la route aux blindés et abat les filons',
-            winText: 'Les blindés ont dégagé la grande galerie, la section l’a tenue : les filons remontent dans les soutes !',
+            winText: 'Les blindés ont dégagé la grande galerie, la section l’a tenue !',
             loseText: 'Un blindé s’est embourbé dans le noir ; deux soldats rentrent blessés, les soutes vides.',
             mounts: 0, fuel: 12, lose: [hurt(2, 3)],
           },
           5: {
             label: 'Glisseurs en tête', text: 'Trois glisseurs à coussin magnétique ouvrent la route dans les grandes galeries, l’escouade en exo-armure dans leur sillage : rapides, mais l’obscurité reste traîtresse.',
             doing: 'ouvre la route aux glisseurs et abat les filons',
-            winText: 'Les glisseurs ont balayé la grande galerie, l’escouade l’a tenue : les filons remontent dans les soutes !',
+            winText: 'Les glisseurs ont balayé la grande galerie, l’escouade l’a tenue !',
             loseText: 'Un glisseur a perdu son champ magnétique dans le noir ; deux soldats rentrent blessés, les soutes vides.',
           },
         },
@@ -379,26 +388,26 @@ export const MISSIONS: Mission[] = [
         label: 'Hommes d’armes en armure', text: 'Lents et lourds : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
         dest: 'cave', scene: 'mine', doing: 'avance bouclier contre bouclier et abat les filons', troop: 'armor', danger: ['monster', 'dark', 'fall'], party: 5, work: 48, risk: 0.45, carry: 'cart',
         win: [{ t: 'veins', n: 6, reach: 9 }], lose: [hurt(2, 4)],
-        winText: 'Pas un monstre n’a percé le mur de boucliers : six filons abattus, le chariot ploie sous le minerai.',
+        winText: 'Pas un monstre n’a percé le mur de boucliers : la troupe a tenu chaque galerie le temps qu’on la vide.',
         loseText: 'Les araignées géantes ont attaqué par le plafond : la troupe a reculé, deux blessés sous leurs armures cabossées.',
         ages: {
           3: {
             label: 'Ligne de fusiliers', text: 'Une compagnie d’infanterie avance en ligne, baïonnette au canon, quelques cavaliers sur les flancs : elle tire par salves et tient chaque galerie le temps qu’on la vide.',
             doing: 'avance en ligne, tire par salves et abat les filons',
-            winText: 'Pas une créature n’a franchi la ligne de feu : six filons abattus, le chariot ploie sous le minerai.',
+            winText: 'Pas une créature n’a franchi la ligne de feu : chaque galerie a été tenue le temps qu’on la vide.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : la ligne a reculé, deux blessés.',
           },
           4: {
             label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section, appuyée par deux transports de troupes et un drone, progresse par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
             doing: 'progresse par bonds, se couvre et abat les filons',
-            winText: 'Pas une créature n’a passé la section : six filons abattus, le chariot ploie sous le minerai.',
+            winText: 'Pas une créature n’a passé la section : chaque galerie a été tenue le temps qu’on la vide.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : la section a décroché, deux blessés.',
             mounts: 0, fuel: 4,
           },
           5: {
             label: 'Escouade en exo-armure', text: 'Exo-armures, boucliers d’énergie et fusils à impulsions : l’escouade avance pas à pas et tient chaque galerie le temps qu’on la vide.',
             doing: 'avance sous ses boucliers d’énergie et abat les filons',
-            winText: 'Pas une créature n’a percé les boucliers d’énergie : six filons abattus, le chariot ploie sous le minerai.',
+            winText: 'Pas une créature n’a percé les boucliers d’énergie : chaque galerie a été tenue le temps qu’on la vide.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : l’escouade a décroché, deux blessés dans leurs exo-armures cabossées.',
           },
         },
@@ -407,12 +416,12 @@ export const MISSIONS: Mission[] = [
         label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches : on file droit aux premiers filons et on remonte ce qu’on peut.',
         dest: 'cave', scene: 'mine', doing: 'abat les filons sous la garde des soldats', troop: 'miners', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.55, carry: 'cart',
         win: [{ t: 'veins', n: 3, reach: 6 }], lose: [hurt(2, 3)],
-        winText: 'Les gardes ont tenu bon pendant que les pioches chantaient : trois filons remontés à la lumière.',
+        winText: 'Les gardes ont tenu bon pendant que les pioches chantaient.',
         loseText: 'Des zombies ont surgi d’une galerie latérale : les mineurs ont tout lâché pour fuir, deux blessés.',
         ages: {
-          3: { label: 'Mineurs et gendarmes', text: 'Peu de soldats, beaucoup de pioches et de lampes à carbure : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'Les gendarmes ont tenu bon pendant que les pioches chantaient : trois filons remontés à la lumière.' },
-          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale, une escorte armée, un compresseur pour les marteaux-piqueurs : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient : trois filons remontés à la lumière.', mounts: 0, fuel: 2 },
-          5: { label: 'Robots foreurs et escorte', text: 'Des robots foreurs, des mineurs en combinaison et une escorte : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les robots foraient : trois filons remontés à la lumière.' },
+          3: { label: 'Mineurs et gendarmes', text: 'Peu de soldats, beaucoup de pioches et de lampes à carbure : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'Les gendarmes ont tenu bon pendant que les pioches chantaient.' },
+          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale, une escorte armée, un compresseur pour les marteaux-piqueurs : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient.', mounts: 0, fuel: 2 },
+          5: { label: 'Robots foreurs et escorte', text: 'Des robots foreurs, des mineurs en combinaison et une escorte : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les robots foraient.' },
         },
       },
     ],
@@ -443,10 +452,10 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Aller à leur rencontre', text: 'Une belle balade, avec un peu de chance au bout.',
-        dest: 'far', scene: 'troupe', doing: 'applaudit les jongleurs et les invite au village', danger: ['weather'], party: 2, work: 10, risk: 0.15,
+        dest: 'far', scene: 'troupe', fail: 'gone', doing: 'applaudit les jongleurs et les invite au village', danger: ['weather'], party: 2, work: 10, risk: 0.15, carry: 'guests',
         win: [joy(5, 5)], lose: [],
         winText: 'La troupe est arrivée en musique : fête au village pendant des jours !',
-        loseText: 'Ils étaient déjà partis vers une autre ville…',
+        loseText: 'Les jongleurs avaient promis d’aller jouer ailleurs : ils sont repartis sur la route.',
       },
     ],
   },
@@ -459,7 +468,7 @@ export const MISSIONS: Mission[] = [
         dest: 'far', scene: 'abbey', doing: 'écoute le frère brasseur et goûte sa bière', danger: ['weather'], party: 2, work: 16, risk: 0.1,
         win: [joy(2)], lose: [],
         winText: 'Le frère a tout expliqué, de l’orge germée au houblon : la première taverne du village peut ouvrir.',
-        loseText: 'Le frère était en retraite, et l’abbaye fermée aux visiteurs.',
+        loseText: 'Le frère n’a rien voulu dire de son secret : la taverne attendra.',
       },
       {
         label: 'Cueillir le houblon sauvage au bord de l’eau', text: 'On rapporte le houblon d’abord ; le frère viendra goûter.',
@@ -484,7 +493,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Percer un tunnel sous la montagne', text: 'Audacieux, et les déblais pourraient rapporter.',
-        dest: 'mountain', scene: 'gallery', doing: 'perce le tunnel et sort les déblais', party: 4, work: 30, risk: 0.35, carry: 'cart',
+        dest: 'mountain', scene: 'gallery', fail: 'rocks', doing: 'perce le tunnel et sort les déblais', party: 4, work: 30, risk: 0.35, carry: 'cart',
         win: [jobs(5), { t: 'ore', n: 8 }], lose: [hurt(2, 3)],
         winText: 'Le tunnel est percé ! En prime, les déblais regorgent de charbon et de fer.',
         loseText: 'Un éboulement dans le tunnel : deux ouvriers blessés.',
@@ -511,7 +520,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Descendre dans la grotte', text: 'Plus riche, plus dangereux.',
-        dest: 'cave', scene: 'cave', doing: 'descend dans la grotte, lampe au front', party: 3, work: 18, risk: 0.3, carry: 'cart',
+        dest: 'cave', scene: 'cave', fail: 'blast', doing: 'descend dans la grotte, lampe au front', party: 3, work: 18, risk: 0.3, carry: 'cart',
         win: [{ t: 'ore', n: 12 }], lose: [hurt(1, 2)],
         winText: 'La grotte cachait une veine énorme !',
         loseText: 'Un coup de grisou : un prospecteur blessé.',
@@ -572,7 +581,7 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'Par la vallée, avec un camp de base', text: 'Lentement mais sûrement.',
-        dest: 'far', scene: 'basecamp', doing: 'monte le camp de base, puis la station au sommet', danger: ['weather', 'fall'], party: 4, work: 30, risk: 0.1, carry: 'sacks',
+        dest: 'far', scene: 'basecamp', fail: 'storm', doing: 'monte le camp de base, puis la station au sommet', danger: ['weather', 'fall'], party: 4, work: 30, risk: 0.1, carry: 'sacks',
         win: [joy(3), jobs(3)], lose: [],
         winText: 'La station est installée, et le village a sa photo dans le journal.',
         loseText: 'Le mauvais temps a tout reporté.',
@@ -598,7 +607,7 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Monter les lunettes au sommet', text: 'Le ciel le plus pur… et le plus long portage.',
-        dest: 'mountain', scene: 'stars', doing: 'observe la pluie d’étoiles filantes', danger: ['fall', 'weather'], party: 3, work: 20, risk: 0.25, carry: 'sacks',
+        dest: 'mountain', scene: 'stars', fail: 'rocks', doing: 'observe la pluie d’étoiles filantes', danger: ['fall', 'weather'], party: 3, work: 20, risk: 0.25, carry: 'sacks',
         win: [joy(3)], lose: [hurt(1, 2)],
         winText: 'Toute la nuit, le ciel a plu des étoiles : les astronomes ont choisi la place de leur observatoire.',
         loseText: 'Un faux pas dans les éboulis : une lunette brisée et un porteur blessé.',
@@ -735,9 +744,14 @@ export interface ExpState {
   /** embuscades repoussées sous terre, et niveau du camp souterrain (quêtes accomplies) */
   wins: number;
   camp: number;
+  /** derniers imprévus survenus, du plus ancien au plus récent : les prochaines expéditions en tirent d'autres */
+  recent: string[];
 }
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, camp: 0 });
+/** Imprévus récents dont on se souvient (les deux ou trois dernières expéditions) */
+export const RECENT_EVENTS = 6;
+
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, camp: 0, recent: [] });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
@@ -755,6 +769,8 @@ export function readExpState(d: any): ExpState {
   s.craftT = +d.craftT || 0;
   s.wins = Math.max(0, Math.floor(+d.wins || 0));
   s.camp = Math.max(0, Math.floor(+d.camp || 0));
+  // (les sauvegardes d'avant ne s'en souviennent pas : rien d'évité)
+  s.recent = Array.isArray(d.recent) ? d.recent.filter((x: any) => typeof x === 'string').slice(-RECENT_EVENTS) : [];
   return s;
 }
 
