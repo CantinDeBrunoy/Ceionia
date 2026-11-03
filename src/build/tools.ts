@@ -16,6 +16,9 @@ import { AudioEngine } from '../audio/audio';
 
 export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
+/** points verts des emplacements libres : jusqu'à tant, dans ce rayon autour du curseur (en cases) */
+const MAX_SPOTS = 900, SPOTS_R = 10;
+
 export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'];
 export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'];
 /** Décors posés d'un clic, sans pinceau */
@@ -99,6 +102,11 @@ export class ToolController implements ToolInput {
   private ghostBody: THREE.Mesh;
   private ghostGlow: THREE.Mesh;
   private ghostKey = '';
+  /** points verts : où viser pour que le grand bâtiment en main tienne (le milieu de chaque emplacement libre alentour) */
+  private spots: THREE.InstancedMesh;
+  private spotsKey = '';
+  /** taille du pinceau de chaque outil (le grand volcan ne couvre pas ensuite le village de rochers) */
+  private radii: Partial<Record<ToolId, number>> = {};
 
   constructor(private h: ToolHost) {
     const pts: THREE.Vector3[] = [];
@@ -117,7 +125,9 @@ export class ToolController implements ToolInput {
     this.freeLine.renderOrder = 9; this.freeLine.visible = false; this.freeLine.frustumCulled = false;
     this.freeDot = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.9, depthTest: false }));
     this.freeDot.renderOrder = 10; this.freeDot.visible = false;
-    h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot);
+    this.spots = new THREE.InstancedMesh(new THREE.CircleGeometry(0.15, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x40e070, transparent: true, opacity: 0.8, depthTest: false, depthWrite: false }), MAX_SPOTS);
+    this.spots.renderOrder = 8; this.spots.visible = false; this.spots.frustumCulled = false; this.spots.count = 0;
+    h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.spots);
   }
 
   // ---------- API ----------
@@ -126,7 +136,12 @@ export class ToolController implements ToolInput {
     if (t !== 'none') this.selected = null;
     // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route
     if (t !== this.tool || (kind && kind !== this.kind)) this.rotManual = false;
-    if (t !== this.tool) this.freeFrom = null;
+    if (t !== this.tool) {
+      this.freeFrom = null;
+      // chaque pinceau retrouve sa propre taille
+      this.radii[this.tool] = this.radius;
+      this.radius = this.radii[t] ?? 3;
+    }
     this.tool = t;
     if (kind) this.kind = kind;
     this.ghostKey = '';
@@ -245,13 +260,29 @@ export class ToolController implements ToolInput {
   /** Démolit le bâtiment sélectionné (annulable) */
   demolishSelected() {
     const b = this.selectedBuilding();
-    if (!b) return;
+    if (!b || (sizeOf(b) >= 2 && !this.confirmed(b, true))) return;
     this.beginStroke();
     this.mark();
     this.endStroke();
     this.h.world.removeBuilding(b.id);
     this.h.audio.sfxDestroy();
     this.select(null);
+  }
+
+  /** grand bâtiment en attente de démolition : le premier clic le désigne, un second (dans les 6 s) le démolit */
+  private doomed: { id: number; stroke: number; t: number } | null = null;
+  private strokeN = 0;
+
+  /** La démolition de ce grand bâtiment est-elle confirmée ? Sinon, le premier clic demande confirmation */
+  private confirmed(b: Building, button = false) {
+    const d = this.doomed, now = performance.now();
+    if (d && d.id === b.id && now - d.t < 6000 && (button || d.stroke !== this.strokeN)) { this.doomed = null; return true; }
+    if (!d || d.id !== b.id || now - d.t >= 6000) {
+      this.doomed = { id: b.id, stroke: this.strokeN, t: now };
+      const name = KINDS[b.kind].names[Math.max(b.age, KINDS[b.kind].minAge)];
+      this.h.toast(`Démolir « ${name} » ? ${button ? 'Recliquez « Démolir »' : 'Cliquez de nouveau dessus'} pour confirmer (Ctrl+Z l’annulerait).`);
+    }
+    return false;
   }
 
   // ---------- historique ----------
@@ -272,6 +303,40 @@ export class ToolController implements ToolInput {
     const c = this.h.canvas;
     const ray = this.h.cam.ray(e.x, e.y, c.clientWidth, c.clientHeight);
     this.hit = this.h.terrain.pick(ray);
+    this.hitBuilding = this.hit ? this.buildingOnRay(ray, this.hit) : undefined;
+  }
+
+  /** bâtiment visé par le curseur : le premier que traverse le rayon (son volume, pas seulement sa case au sol) */
+  hitBuilding: Building | undefined;
+  private tops = new Map<string, number>();
+
+  /**
+   * Premier bâtiment que traverse le rayon avant d'atteindre le sol : un grand bâtiment vu de biais se vise sur sa façade,
+   * pas sur le terrain derrière lui
+   */
+  private buildingOnRay(ray: THREE.Ray, ground: THREE.Vector3) {
+    const w = this.h.world, end = ray.origin.distanceTo(ground), p = new THREE.Vector3();
+    for (let t = Math.max(0, end - 40); t <= end; t += 0.12) {
+      ray.at(t, p);
+      const cx = Math.floor(p.x), cz = Math.floor(p.z);
+      if (!w.inCells(cx, cz)) continue;
+      const b = w.buildingAt(cx, cz);
+      if (b && p.y <= w.flatTarget(b.x, b.z, sizeOf(b)) + this.topOf(b)) return b;
+    }
+    return w.buildingAt(Math.floor(ground.x), Math.floor(ground.z));
+  }
+
+  /** hauteur du modèle d'un bâtiment (mise en cache par genre, âge et taille) */
+  private topOf(b: Building) {
+    const key = `${b.kind}|${b.age}|${sizeOf(b)}`;
+    let h = this.tops.get(key);
+    if (h === undefined) {
+      const g = getModel(b.kind, b.age, { v: 0, L: false, R: false, F: true, small: b.small }).body;
+      g.computeBoundingBox();
+      h = Math.max(0.3, Math.min(6, g.boundingBox?.max.y ?? 0.6));
+      this.tops.set(key, h);
+    }
+    return h;
   }
 
   hover(e: PointerInfo) {
@@ -282,11 +347,12 @@ export class ToolController implements ToolInput {
     // l'éditeur du tracé d'une voie choisit son curseur (une poignée, la voie)
     const over = this.overlay?.hover(hit) ?? '';
     // et un bâtiment : un clic ouvre sa fiche
-    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.entranceAt(hit.x, hit.z) >= 0 || w.volcanoAt(hit.x, hit.z) >= 0 || w.buildingAt(Math.floor(hit.x), Math.floor(hit.z))) ? 'pointer' : '');
+    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.entranceAt(hit.x, hit.z) >= 0 || w.volcanoAt(hit.x, hit.z) >= 0 || this.hitBuilding) ? 'pointer' : '');
   }
 
   down(e: PointerInfo) {
     this.pickAt(e);
+    this.strokeN++;
     this.pressed = true;
     this.touchMode = e.touch;
     this.refreshVisuals();
@@ -306,7 +372,7 @@ export class ToolController implements ToolInput {
     this.beginStroke();
     if (t === 'volcano') {
       // le volcan se pose d'un seul clic, à l'écart des bâtiments
-      if (this.reliefBlocked()) this.h.toast('Trop près des bâtiments : un volcan se pose à l’écart du village.');
+      if (this.reliefBlocked()) this.h.toast(`Trop près des bâtiments : un volcan se pose à l’écart du village${this.radius > 3 ? ', ou réduisez la taille du pinceau (il fait la largeur du volcan)' : ''}.`);
       else if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) { this.mark(); this.h.audio.sfxPlace(); }
     } else if (SCULPT_TOOLS.includes(t)) {
       this.ctx.target = this.hit.y;
@@ -350,7 +416,7 @@ export class ToolController implements ToolInput {
     this.freeDrag = null;
     if (this.tool === 'none' && this.downAt && Math.hypot(e.x - this.downAt[0], e.y - this.downAt[1]) < 8) {
       this.pickAt(e);
-      const c = this.cell(), b = c ? this.h.world.buildingAt(c.x, c.z) : undefined;
+      const c = this.cell(), b = c ? this.hitBuilding : undefined;
       if (this.picking && this.pickStop) this.pickStop(b);
       else this.select(b ? b.id : null);
     }
@@ -375,6 +441,25 @@ export class ToolController implements ToolInput {
       this.vegTimer -= dt;
       if (this.vegTimer <= 0) { this.vegTimer = 0.15; this.applyVeg(); }
     }
+  }
+
+  /** Points verts autour du curseur : le milieu de chaque emplacement où le grand bâtiment en main tiendrait */
+  private showSpots(kind: KindId, ox: number, oz: number) {
+    const w = this.h.world, s = KINDS[kind].size;
+    this.spots.visible = true;
+    // recalculés quand le curseur s'éloigne de quelques cases, ou que le village change
+    const key = `${kind}|${Math.round(ox / 3)}|${Math.round(oz / 3)}|${w.version}`;
+    if (key === this.spotsKey) return;
+    this.spotsKey = key;
+    const m = new THREE.Matrix4();
+    let n = 0;
+    for (let z = oz - SPOTS_R; z <= oz + SPOTS_R; z++)
+      for (let x = ox - SPOTS_R; x <= ox + SPOTS_R && n < MAX_SPOTS; x++) {
+        if (!w.inCells(x, z) || !w.inCells(x + s - 1, z + s - 1) || w.canPlace(kind, x, z) !== null) continue;
+        this.spots.setMatrixAt(n++, m.makeTranslation(x + s / 2, w.flatTarget(x, z, s) + 0.08, z + s / 2));
+      }
+    this.spots.count = n;
+    this.spots.instanceMatrix.needsUpdate = true;
   }
 
   /** Le pinceau de relief (ou le volcan) sous le curseur touche un bâtiment : il ne fera rien */
@@ -522,8 +607,12 @@ export class ToolController implements ToolInput {
     const c = this.cell();
     if (!c) return;
     const w = this.h.world;
-    const b = w.buildingAt(c.x, c.z);
-    if (b) { this.mark(); w.removeBuilding(b.id); this.h.audio.sfxDestroy(); return; }
+    const b = this.hitBuilding;
+    if (b) {
+      // un grand bâtiment ne se démolit qu'au second clic : on le regretterait
+      if (sizeOf(b) >= 2 && !this.confirmed(b)) return;
+      this.mark(); w.removeBuilding(b.id); this.h.audio.sfxDestroy(); return;
+    }
     const k = w.inCells(c.x, c.z) ? w.ci(c.x, c.z) : -1;
     if (k < 0) return;
     if (w.road[k]) { this.mark(); w.setRoad(c.x, c.z, false); this.h.audio.sfxDestroy(); }
@@ -537,7 +626,7 @@ export class ToolController implements ToolInput {
   private pickUp(chosen?: Building) {
     const c = this.cell();
     const w = this.h.world;
-    const b = chosen ?? (c ? w.buildingAt(c.x, c.z) : undefined);
+    const b = chosen ?? (c ? this.hitBuilding : undefined);
     if (!b) return;
     this.mark();
     this.moveOrigin = { kind: b.kind, x: b.x, z: b.z, rot: b.rot, auto: b.auto, small: !!b.small };
@@ -564,10 +653,12 @@ export class ToolController implements ToolInput {
     const o = footprintOrigin(this.kind, hit.x, hit.z);
     // un grand bâtiment neuf se paie en bois et en pierre, et tous en défi (déplacer est gratuit)
     const cost = this.moveOrigin ? null : priceIn(w, this.kind, this.h.getAge());
-    const reason = w.canPlace(this.kind, o.x, o.z) ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+    const where = w.canPlace(this.kind, o.x, o.z), reason = where ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
     if (reason) {
       const now = performance.now();
-      if (now - this.lastToast > 1200) { this.h.toast(reason); this.lastToast = now; }
+      // un grand bâtiment refusé ici : les points verts montrent où il tient
+      const tip = where && KINDS[this.kind].size >= 2 ? (this.spots.count ? ' Visez un point vert : il y tient.' : ' Aucune place assez grande par ici : essayez plus loin du village.') : '';
+      if (now - this.lastToast > 1200) { this.h.toast(reason + (tip ? `.${tip}` : '')); this.lastToast = now; }
       return;
     }
     this.mark();
@@ -588,6 +679,7 @@ export class ToolController implements ToolInput {
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
     this.placeWhy = null;
+    this.spots.visible = false;
     this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = false;
     if (t === 'road' && this.roadMode === 'free') this.freePreview();
     // le bâtiment sélectionné : son emprise s'éclaire
@@ -622,10 +714,18 @@ export class ToolController implements ToolInput {
       if (t === 'road' && this.roadMode === 'free') ok = this.freeFrom && this.freePlan && this.freeLine.visible ? !this.freePlan.why : w.canRoad(c.x, c.z) || !!w.road[w.ci(c.x, c.z)];
       else if (t === 'road') ok = w.canRoad(c.x, c.z) && !w.road[w.ci(c.x, c.z)];
       else if (t === 'bulldoze') ok = false;
-      else ok = !!w.buildingAt(c.x, c.z);
+      else ok = !!this.hitBuilding;
       this.markerMat.color.setHex(t === 'bulldoze' ? 0xff6a5a : ok ? 0x40e070 : 0xff5a5a);
-      this.marker.scale.set(1, 1, 1);
-      this.marker.position.set(c.x + 0.5, w.cellAvg(c.x, c.z) + 0.08, c.z + 0.5);
+      // démolir, déplacer : le bâtiment visé s'éclaire en entier
+      const hb = t !== 'road' ? this.hitBuilding : undefined;
+      if (hb) {
+        const s = sizeOf(hb);
+        this.marker.scale.set(s + 0.2, 1, s + 0.2);
+        this.marker.position.set(hb.x + s / 2, w.flatTarget(hb.x, hb.z, s) + 0.08, hb.z + s / 2);
+      } else {
+        this.marker.scale.set(1, 1, 1);
+        this.marker.position.set(c.x + 0.5, w.cellAvg(c.x, c.z) + 0.08, c.z + 0.5);
+      }
       this.marker.visible = true;
       return;
     }
@@ -646,6 +746,7 @@ export class ToolController implements ToolInput {
       }
       const cost = this.moveOrigin ? null : priceIn(w, kind, age);
       this.placeWhy = reason ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+      if (s >= 2) this.showSpots(kind, o.x, o.z);
       setGhostValid(!this.placeWhy);
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);

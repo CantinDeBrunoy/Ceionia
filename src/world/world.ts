@@ -742,7 +742,7 @@ export class World {
     if (kind === 'mine' && !high) return 'Une mine ne se creuse que dans la montagne';
     if (kind === 'alpine' && !high) return 'Un club alpin ne se pose que dans la montagne';
     if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return 'À poser en lisière ou dans une forêt';
-    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return 'À poser près des rochers ou dans la montagne';
+    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return 'À poser près des rochers ou dans la montagne (des rochers se posent avec Nature › Rochers)';
     // l'avant-poste se dresse tout contre une grotte ou une faille
     if (kind === 'outpost' && this.outpostEntrance(x, z, s) < 0) return 'À bâtir tout contre une grotte ou une faille';
     // le puits de pétrole se fore sur un gisement

@@ -2,6 +2,7 @@ import { World } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId } from '../build/catalog';
 import { mandatoryFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, rulesOf } from './difficulty';
+import { priceIn, YIELD } from './economy';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -188,6 +189,16 @@ export class Sim {
     const p = this.pop;
     const say = (k: KindId) => `« ${this.nameOf(k)} » (${this.whereOf(k)})`;
     const about = (k: KindId, text: string) => { this.messageKind = k; return text; };
+    // le bâtiment conseillé coûte du bois ou de la pierre que le village n'a pas, et rien n'en produit : on dit d'abord
+    // comment en avoir (sinon le joueur attend une ressource qui ne vient jamais)
+    const build = (k: KindId, text: string) => {
+      const c = priceIn(w, k, this.age);
+      for (const [r, prod] of [['stone', 'quarry'], ['wood', 'lumber']] as const) {
+        if (!c || w.unlimited || w[r] >= c[r] || this.producing(r)) continue;
+        return about(prod, `Il manque ${r === 'stone' ? 'de la pierre' : 'du bois'} pour « ${this.nameOf(k)} » : ${say(prod)}, ${r === 'stone' ? 'près des rochers (Nature › Rochers) ou dans la montagne' : 'en lisière ou dans une forêt'}.`);
+      }
+      return about(k, text);
+    };
     this.messageKind = null;
     if (w.buildings.size === 0) return about('house', `Pour commencer, posez « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
     if (!this.counts.house) return about('house', `Pour accueillir des habitants : ${say('house')}.`);
@@ -201,14 +212,14 @@ export class Sim {
     if (this.recovering > 0 && this.housing.ok) return DIFF_TEXT.recovering;
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
     const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;
-    const room = () => about('house', `Village plein (${Math.floor(p)}/${this.housing.cap} places) : ${say('house')} de plus, +${per} places, pour qu’il grandisse.`);
+    const room = () => build('house', `Village plein (${Math.floor(p)}/${this.housing.cap} places) : ${say('house')} de plus, +${per} places, pour qu’il grandisse.`);
     const ap = this.ageProgress();
     if (ap) {
       if (p < AGES[ap.next].reqPop) return full ? room() : `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
       const miss = ap.items.find((i) => i.have < i.need);
       if (!miss) return `Tout est prêt pour l’âge suivant (${AGES[ap.next].name}) : passez-y quand vous voulez.`;
       if (miss?.label.startsWith('expédition')) return `Pour l’âge suivant : réussissez l’${miss.label} (menu Expéditions).`;
-      if (miss?.kind) { const n = miss.need - miss.have; return about(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}.`); }
+      if (miss?.kind) { const n = miss.need - miss.have; return build(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}.`); }
       if (miss) return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`;
     }
     if (full) return room();
@@ -217,10 +228,16 @@ export class Sim {
       if (w.exp.done.includes(VICTORY)) return 'Le village a essaimé dans les étoiles : ses colons vivent sur une autre planète.';
       const next = MISSIONS.find((m) => m.age === this.age && m.requires && !w.exp.done.includes(m.id));
       const need = next?.requires?.kinds?.find((k) => !this.counts[k]);
-      if (need) return about(need, `Pour « ${next!.title} » : il faut ${say(need)}.`);
+      if (need) return build(need, `Pour « ${next!.title} » : il faut ${say(need)}.`);
       if (next) return `Prochaine étape vers les étoiles : l’expédition « ${next.title} » (menu Expéditions).`;
     }
     return 'Le village est paisible et prospère.';
+  }
+
+  /** Un bâtiment du village produit-il cette ressource ? */
+  private producing(r: 'wood' | 'stone') {
+    for (const b of this.world.buildings.values()) if (YIELD[b.kind]?.[r]?.[b.age]) return true;
+    return false;
   }
 
   update(dt: number, realDt: number) {

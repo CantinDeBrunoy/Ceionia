@@ -91,6 +91,9 @@ button:disabled, button.locked { opacity: 0.4; cursor: not-allowed; }
 .res b { font-size: 13px; color: var(--ink); margin-top: 2px; }
 .res .rate { font-style: normal; font-size: 9.5px; font-weight: 800; color: var(--good); margin: 1px 0; }
 .res .rate.none { color: var(--ink2); opacity: 0.5; }
+/* un clic sur une ressource ouvre sa fiche */
+.res[data-r] { cursor: pointer; border-radius: 8px; }
+.res[data-r]:hover, .res.open { background: var(--accent-soft); }
 #info .cost { font-weight: 700; display: flex; align-items: center; gap: 6px; }
 #info .cost.short { color: var(--bad); }
 .need { display: flex; flex-direction: column; align-items: center; width: 54px; font-size: 10.5px; font-weight: 600; color: var(--ink2); cursor: pointer; border-radius: 8px; padding: 2px 0; }
@@ -275,13 +278,14 @@ body.under #selCard, body.photo #selCard { display: none; }
 #info .keys { color: var(--ink2); font-size: 11.5px; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 
-#toast { position: absolute; top: calc(var(--hudB, 82px) + 14px); left: 50%; transform: translateX(-50%) translateY(-10px); background: rgba(15, 27, 45, 0.88); color: #fff; padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; opacity: 0; transition: all 0.25s; pointer-events: none !important; max-width: 90vw; text-align: center; z-index: 6; box-shadow: 0 8px 24px rgba(15, 27, 45, 0.3); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+#toast { position: absolute; top: calc(var(--hudB, 82px) + 14px); left: 50%; transform: translateX(-50%) translateY(-10px); background: rgba(15, 27, 45, 0.88); color: #fff; padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; opacity: 0; transition: all 0.25s; pointer-events: none !important; max-width: 90vw; text-align: center; z-index: 34; box-shadow: 0 8px 24px rgba(15, 27, 45, 0.3); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 /* message qui mène quelque part (une décision d'expédition) : cliquable */
 #toast.act.show { pointer-events: auto !important; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .expCard.ask { cursor: pointer; }
 
-#bannerWrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none !important; }
+/* messages et annonces passent devant la bulle du tutoriel */
+#bannerWrap { position: absolute; inset: 0; z-index: 33; display: flex; align-items: center; justify-content: center; pointer-events: none !important; }
 #banner { text-align: center; padding: 22px 44px; opacity: 0; transform: scale(0.85); transition: all 0.6s cubic-bezier(.2, 1.4, .4, 1); }
 #banner.show { opacity: 1; transform: scale(1); }
 #banner h2 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
@@ -304,6 +308,8 @@ body.under #selCard, body.photo #selCard { display: none; }
 .tabs button { flex: 1; min-height: 40px; font-size: 13.5px; font-weight: 700; border: none; border-radius: 0; box-shadow: none; background: transparent; color: var(--ink2); border-bottom: 2px solid transparent; }
 .tabs button.on { color: var(--accent-ink); border-bottom-color: var(--accent); background: var(--accent-soft); }
 .settings section h4:first-child { margin-top: 12px; }
+/* les réglages restent calés en haut : changer d'onglet ne fait plus sauter la barre d'onglets */
+.overlay > .modal.settings { align-self: flex-start; margin-top: max(12px, 6vh); }
 
 #menu { background: radial-gradient(ellipse at 50% 15%, #f5f9ff 0%, #dbe7f5 55%, #b9cde6 100%); backdrop-filter: none; flex-direction: column; gap: 14px; text-align: center; }
 #menu h1 { font-size: clamp(32px, 6vw, 56px); font-weight: 800; margin: 0; letter-spacing: -0.03em; color: var(--ink); }
@@ -419,7 +425,8 @@ body.dockMin #dockTop { border-bottom: none; }
 body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 
 /* monde souterrain : barre dédiée à la place des outils de surface */
-#underBar { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; padding: 8px 10px; align-items: center; }
+#underBar { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 16px); display: none; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 8px 10px; align-items: center; }
+#underBar > button { white-space: nowrap; }
 #underZone { font-weight: 800; padding: 0 8px; line-height: 1.2; }
 #underZone small { display: block; font-size: 11px; font-weight: 600; color: var(--ink2); }
 #campQuest { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 170px; text-align: left; line-height: 1.15; }

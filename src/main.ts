@@ -407,9 +407,11 @@ class Game implements UIHost {
     const vols: number[] = [];
     for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_VOLCANO) vols.push(k);
     if (!vols.length) return;
-    this.quake = { cell: vols[Math.floor(Math.random() * vols.length)], t: 18 };
+    const cell = vols[Math.floor(Math.random() * vols.length)];
+    this.quake = { cell, t: 18 };
     audio.sfxRumble(18);
-    this.ui.toast('La terre tremble : un volcan se réveille…');
+    // le message mène au volcan qui se réveille (on ne savait pas lequel)
+    this.ui.toast('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.', () => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); });
   }
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
@@ -660,7 +662,9 @@ class Game implements UIHost {
       else this.ui.toast(`⛏️ Filon de ${ore.name} (${ore.amount} minerai) : envoyez une expédition armée pour l’abattre.`, () => this.ui.openExpeditions());
       return;
     }
-    if (uv.mobs.scare(p.x, p.z)) audio.sfxClick();
+    if (uv.mobs.scare(p.x, p.z)) { audio.sfxClick(); return; }
+    // des cristaux : ils tintent, et l'on dit où se trouve le minerai
+    if (uv.crystalNear(p.x, p.z)) { audio.sfxClick(); this.ui.toast('✨ Les cristaux éclairent les galeries. Le minerai, lui, est dans les filons : les taches colorées des parois.'); }
   }
   capture() {
     this.renderer_render();

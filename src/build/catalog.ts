@@ -167,7 +167,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   workshop: {
     id: 'workshop', size: 2, minAge: 0, icon: '🔨', cat: 'prod',
-    names: ['Atelier de pierre', 'Atelier de poterie', 'Forge', 'Usine', 'Bureaux', 'Tour de bureaux'],
+    names: ['Tailleur de silex', 'Atelier de poterie', 'Forge', 'Usine', 'Bureaux', 'Tour de bureaux'],
     desc: 'Offre du travail.',
     jobs: [4, 6, 8, 12, 16, 22],
   },

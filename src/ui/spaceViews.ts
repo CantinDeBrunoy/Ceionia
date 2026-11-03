@@ -40,7 +40,7 @@ export class SpaceCast {
   update(active: ActiveExpedition[]) {
     const a = active.find((e) => e.m.id === 'moon' && e.phase === 'work');
     const k = a ? Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) : 0, on = !!a && k >= CAST_FROM && k < CAST_TO;
-    if (on !== this.shown) { this.shown = on; this.el.classList.toggle('show', on); }
+    if (on !== this.shown) { this.shown = on; this.el.classList.toggle('show', on); this.el.setAttribute('aria-hidden', String(!on)); }
     if (on) this.draw((k - CAST_FROM) / (CAST_TO - CAST_FROM), a!.c.label.includes('cratères'));
   }
 

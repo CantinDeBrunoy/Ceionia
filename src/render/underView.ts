@@ -131,6 +131,8 @@ export class UnderView {
   private guards: Guard[] = [];
   /** cases des gros décors des galeries (le camp les évite) */
   private decorCells = new Set<number>();
+  /** cases où poussent des cristaux (un clic dessus les fait tinter) */
+  private crystalCells = new Set<number>();
   /** cases couvertes par les décors du camp : les gardes passent autour */
   private campBlocked = new Set<number>();
   /** équipes de mineurs descendues par les trains (une par ligne) */
@@ -210,6 +212,7 @@ export class UnderView {
     if (this.built === this.under.version) return;
     this.built = this.under.version;
     this.decorCells.clear();
+    this.crystalCells.clear();
     // les géométries des modèles sont partagées d'une génération à l'autre : on ne libère que celles faites pour la carte
     for (const c of [...this.content.children]) {
       this.content.remove(c);
@@ -409,6 +412,7 @@ export class UnderView {
           add(model, qx, u.heightAt(qx, qz) - 0.03, qz, h(50 + i) * 6.28, s, base, (h(60 + i) - 0.5) * 0.5, h(70 + i) * 6.28);
         }
         this.sources.push({ x: px, y: py + 0.45, z: pz, r: big ? 4 : 2.4, c: base.clone().multiplyScalar(big ? 0.95 : 0.5), flicker: 0 });
+        this.crystalCells.add(k);
         continue;
       }
       // grotte luxuriante : champignons géants lumineux, touffes de petits champignons, fougères
@@ -518,6 +522,12 @@ export class UnderView {
   }
 
   /** Filon de minerai le plus proche du point cliqué : sa sorte et son rendement, ou null (on ne l'extrait qu'en expédition armée) */
+  /** Des cristaux poussent-ils à cet endroit (ou juste à côté) ? */
+  crystalNear(x: number, z: number) {
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (this.crystalCells.has((Math.floor(z) + dz) * N + Math.floor(x) + dx)) return true;
+    return false;
+  }
+
   veinAt(x: number, z: number): { name: string; amount: number } | null {
     let best = -1, bd = 1.4;
     for (const k of this.veins.keys()) {

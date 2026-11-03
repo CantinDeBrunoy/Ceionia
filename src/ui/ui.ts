@@ -171,6 +171,18 @@ const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon
   { k: 'housing', icon: 'house', label: 'logements', one: 'logement' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
   { k: 'jobs', icon: 'hammer', label: 'emplois', one: 'emploi' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
 ];
+/** Fiche d'une ressource : son icône, à quoi elle sert, comment en avoir plus, et le bâtiment qui la produit */
+const RES_META: Record<Resource, { label: string; icon: string; use: string; more: string; kind: KindId }> = {
+  wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Nature › Forêt).' },
+  stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Nature › Rochers). La mine en donne aussi.' },
+  ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; les expéditions armées en remontent du monde souterrain.' },
+  crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
+  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les blindés de l’expédition armée.', more: 'La raffinerie en tire du pétrole brut des puits.' },
+};
+
+/** Une condition d'âge sans bâtiment : le minerai, l'expédition obligatoire ou les habitants */
+const reqOf = (label: string) => (label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : 'pop');
+
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${v < 2 && g.one ? g.one : g.label}`;
 const num = (v: number) => (v < 1 ? v.toFixed(1) : String(Math.round(v)));
@@ -265,6 +277,8 @@ export class UI {
   private lastAge = -1;
   /** le besoin dont la fiche est ouverte */
   private needOpen: NeedId | null = null;
+  /** ressource dont la fiche est ouverte (même panneau que celle d'un besoin) */
+  private resOpen: Resource | null = null;
   private toastTimer = 0;
   private bannerTimer = 0;
   /** bâtiment ou outil survolé dans la barre (sa fiche s'affiche) */
@@ -343,6 +357,10 @@ export class UI {
     `;
     // dans les bandeaux qui défilent de côté (vignettes de la barre de construction, rayons…), la molette les fait défiler
     // horizontalement ; une liste qui défile de haut en bas garde son défilement habituel
+    root.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button');
+      if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
+    });
     root.addEventListener('wheel', (e) => {
       if (e.ctrlKey) return;
       for (let el = e.target as HTMLElement | null; el && el !== root; el = el.parentElement) {
@@ -372,6 +390,14 @@ export class UI {
     needInfo.hidden = true;
     root.appendChild(needInfo);
     for (const n of NEEDS) $('#n-' + n.k).onclick = () => { this.needOpen === n.k ? this.closeNeed() : this.openNeed(n.k); this.host.audio.sfxClick(); };
+    // fiche d'une ressource : un clic sur son stock (d'où elle vient, à quoi elle sert, quoi bâtir pour en avoir plus)
+    $('#res').onclick = (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
+      if (!el) return;
+      const r = el.dataset.r as Resource;
+      if (this.resOpen === r) this.closeNeed(); else this.openRes(r);
+      this.host.audio.sfxClick();
+    };
     needInfo.onclick = (e) => {
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
       if (k) { this.closeNeed(); this.pick(k); }
@@ -379,7 +405,7 @@ export class UI {
     document.addEventListener('pointerdown', (e) => {
       const t = e.target as HTMLElement;
       if (!census.hidden && !census.contains(t) && !t.closest('#pop')) this.closeCensus();
-      if (this.needOpen && !needInfo.contains(t) && !t.closest('.need')) this.closeNeed();
+      if ((this.needOpen || this.resOpen) && !needInfo.contains(t) && !t.closest('.need, .res')) this.closeNeed();
     });
 
     $('#agePanel').onclick = (e) => {
@@ -388,6 +414,11 @@ export class UI {
       // une condition qui demande un bâtiment : on le prend en main (le bon onglet et le bon rayon s'ouvrent)
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
       if (k) { this.pick(k); return; }
+      // une condition sans bâtiment : on montre comment l'obtenir
+      const req = (e.target as HTMLElement).closest<HTMLElement>('[data-req]')?.dataset.req;
+      if (req === 'ore') { this.openRes('ore'); return; }
+      if (req === 'exp') { this.openExpeditions(); return; }
+      if (req === 'pop') { this.openNeed('housing'); return; }
       $('#agePanel').classList.toggle('open');
     };
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
@@ -702,8 +733,8 @@ export class UI {
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
-      ? `<div class="res" title="${label} : illimité (${DIFF_TEXT.resInfinite[w.difficulty]})">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
-      : `<div class="res" title="${label} : ${Math.floor(w[r])} en réserve${flow(r)}${use[r] ?? ''}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
+      ? `<div class="res" data-r="${r}" title="${label} : illimité (${DIFF_TEXT.resInfinite[w.difficulty]})">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
+      : `<div class="res" data-r="${r}" title="${label} : ${Math.floor(w[r])} en réserve${flow(r)}${use[r] ?? ''}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -742,7 +773,9 @@ export class UI {
     t.classList.toggle('act', !!act);
     t.onclick = act ? () => { t.classList.remove('show'); act(); } : null;
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => t.classList.remove('show'), act ? 6000 : 2600);
+    // un message qui mène quelque part reste longtemps, et ne s'efface jamais sous la souris (le clic tomberait sur la carte)
+    const hide = () => { if (act && t.matches(':hover')) { this.toastTimer = window.setTimeout(hide, 800); return; } t.classList.remove('show'); };
+    this.toastTimer = window.setTimeout(hide, act ? 12000 : 2600);
   }
 
   banner(title: string, sub: string) {
@@ -776,7 +809,7 @@ export class UI {
     go.hidden = !ready;
     if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = `Toutes les conditions sont réunies : passer à l’âge suivant (${AGES[ap!.next].name})`; }
     $('#ageReq').innerHTML = ap
-      ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''}${i.kind ? ' kind' : ''}"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} — cliquer pour le bâtir"` : ''}>${i.have >= i.need ? '✓' : '•'} ${i.label}${i.kind ? ` <small>${sim.whereOf(i.kind).replace('Bâtir › ', '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} — cliquer pour le bâtir"` : ` data-req="${reqOf(i.label)}" title="Cliquer pour savoir comment l’obtenir"`}>${i.have >= i.need ? '✓' : '•'} ${i.label}${i.kind ? ` <small>${sim.whereOf(i.kind).replace('Bâtir › ', '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
       : 'Dernier âge atteint : profitez de votre village !';
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
@@ -793,6 +826,7 @@ export class UI {
     if ($('#pop').dataset.v !== popHtml) { $('#pop').innerHTML = popHtml; $('#pop').dataset.v = popHtml; }
     if (!$('#census').hidden) this.renderCensus();
     if (this.needOpen) this.renderNeed();
+    if (this.resOpen) this.renderRes();
     this.renderMessage();
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
@@ -805,7 +839,7 @@ export class UI {
     ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
     if (zone) {
-      $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Cliquez sur un filon pour voir ce qu’il faut pour l’abattre, sur un puits de lumière pour remonter'}</small>`;
+      $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Filon : comment l’abattre · Puits de lumière : remonter'}</small>`;
       $('#bTorch').classList.toggle('active', this.host.torchMode);
       // la quête en cours du camp souterrain, et où en est son objectif
       const ex = this.host.expeditions, cq = ex.campQuest(), lvl = ex.camp();
@@ -852,6 +886,8 @@ export class UI {
 
   private openNeed(k: NeedId) {
     this.closeCensus();
+    this.resOpen = null;
+    document.querySelectorAll('.res.open').forEach((el) => el.classList.remove('open'));
     this.needOpen = k;
     const box = $('#needInfo'), r = $('#n-' + k).getBoundingClientRect();
     box.hidden = false;
@@ -865,8 +901,49 @@ export class UI {
 
   private closeNeed() {
     this.needOpen = null;
+    this.resOpen = null;
     $('#needInfo').hidden = true;
+    document.querySelectorAll('.need.open, .res.open').forEach((el) => el.classList.remove('open'));
+  }
+
+  /** Ouvre la fiche d'une ressource, sous son stock */
+  private openRes(r: Resource) {
+    this.closeCensus();
+    this.needOpen = null;
     document.querySelectorAll('.need.open').forEach((el) => el.classList.remove('open'));
+    this.resOpen = r;
+    const box = $('#needInfo'), el = $(`#res .res[data-r="${r}"]`);
+    box.hidden = false;
+    box.dataset.v = '';
+    this.renderRes();
+    const b = el.getBoundingClientRect();
+    box.style.top = `${Math.round(b.bottom + 8)}px`;
+    box.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, b.left + b.width / 2 - box.offsetWidth / 2)))}px`;
+    document.querySelectorAll('#res .res').forEach((x) => x.classList.toggle('open', x === el));
+  }
+
+  /** Fiche d'une ressource : stock, production du jour et ses sources, à quoi elle sert, et le bâtiment qui en donnerait plus */
+  private renderRes() {
+    const h = this.host, w = h.world, r = this.resOpen!, meta = RES_META[r], day = h.expeditions.daily()[r], age = h.sim.age;
+    const rows: string[] = [];
+    for (const k of Object.keys(YIELD) as KindId[]) {
+      const per = YIELD[k]![r];
+      if (!per) continue;
+      let n = 0, v = 0;
+      for (const b of w.buildings.values()) if (b.kind === k && per[b.age]) { n++; v += per[b.age]; }
+      if (n) rows.push(`<div class="crow"><span>${KINDS[k].names[Math.max(age, KINDS[k].minAge)]}<i>× ${n}</i></span><em>+${num(v)}</em></div>`);
+    }
+    if (r === 'fuel' && day > 0) rows.push(`<div class="crow"><span>Raffinerie (du pétrole brut)</span><em>+${num(day)}</em></div>`);
+    const k = meta.kind, lock = this.lockOf(k), name = KINDS[k].names[Math.max(age, KINDS[k].minAge)];
+    const html = `
+      <h4>${ic(meta.icon, 18, 2)} ${meta.label}<em class="${day > 0 ? 'ok' : 'warn'}">${w.unlimited ? '∞' : Math.floor(w[r])}</em></h4>
+      <div class="sub">${day ? `${day > 0 ? '+' : '−'}${num(Math.abs(day))} par jour` : 'rien n’en produit pour l’instant'}</div>
+      <p class="hint">${meta.use}</p>
+      <div class="src">${rows.join('') || '<div class="crow"><span class="none">Aucun bâtiment n’en produit encore.</span></div>'}</div>
+      <p class="hint ${day > 0 ? 'ok' : 'warn'}">${meta.more}</p>
+      ${lock ? `<p class="hint warn">🔒 ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} Bâtir « ${name} »</button>`}`;
+    const box = $('#needInfo');
+    if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
 
   /**
@@ -1247,7 +1324,7 @@ export class UI {
         <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
         <div class="row"><label>Ressources</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? (h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
-        <p class="hint">Illimitées : bois, pierre et minerai ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
+        <p class="hint">Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
         <h4>Sauvegarde</h4>
         <div class="row"><button id="gSave">${ic('save', 16)} Sauvegarder</button><button id="gExport">${ic('download', 16)} Exporter</button><button id="gImport">${ic('upload', 16)} Importer</button></div>
         ${this.tutorial?.settingsHtml() ?? ''}
@@ -1266,7 +1343,17 @@ export class UI {
       const v = +b.dataset.sp!;
       if (v === 0) t.paused = true; else { t.paused = false; t.speed = v; }
       h.applySettings();
+      live();
     }));
+    // la fenêtre suit le jeu tant qu'elle est ouverte : vitesse en cours, saison et heure qui avancent
+    const live = () => {
+      ov.querySelectorAll<HTMLButtonElement>('[data-sp]').forEach((b) => { const v = +b.dataset.sp!; b.classList.toggle('active', v === 0 ? t.paused : !t.paused && t.speed === v); });
+      ov.querySelectorAll<HTMLButtonElement>('[data-season]').forEach((b) => b.classList.toggle('active', +b.dataset.season! === t.season));
+      const hour = q<HTMLInputElement>('#sHour');
+      if (document.activeElement !== hour) { hour.value = t.hour.toFixed(1); q('#vHour').textContent = `${Math.floor(t.hour)}h`; }
+    };
+    live();
+    const iv = setInterval(() => { if (ov.isConnected) live(); else clearInterval(iv); }, 500);
     const rng = (id: string, fn: (v: number) => void, out?: string, fmt = (v: number) => `${v}`) => {
       const el = q<HTMLInputElement>(id);
       el.oninput = () => { fn(+el.value); if (out) q(out).textContent = fmt(+el.value); h.applySettings(); };
@@ -1295,6 +1382,15 @@ export class UI {
       q('#gDisasters').classList.toggle('active', h.disasters);
     };
     q('#gUnlimited').onclick = () => {
+      // passer en ressources illimitées en pleine partie change tout : un second clic le confirme
+      const b = q<HTMLButtonElement>('#gUnlimited');
+      if (!h.world.unlimited && !b.dataset.sure) {
+        b.dataset.sure = '1';
+        b.textContent = 'Sûr ? Recliquez pour tout rendre illimité';
+        setTimeout(() => { if (b.dataset.sure) { delete b.dataset.sure; b.textContent = h.world.unlimited ? 'Illimitées' : 'Normales'; } }, 4000);
+        return;
+      }
+      delete b.dataset.sure;
       h.world.unlimited = !h.world.unlimited;
       h.applySettings();
       q('#gUnlimited').textContent = h.world.unlimited ? 'Illimitées' : 'Normales';
