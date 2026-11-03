@@ -512,9 +512,9 @@ function villageChurch(p: Parts) {
     [-0.26, -0.06].forEach((z, j) => { p.box(0.012, 0.13, 0.05, -0.06 + s * 0.222, 0.13, z, j ? 0x6a7ad8 : 0xd84a3e, 0, true); p.add(new THREE.CylinderGeometry(0.025, 0.025, 0.012, 8, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), -0.06 + s * 0.222, 0.26, z, dk); });
   }
   roof(p, -0.06, 0.352, -0.1, { w: 0.62, d: 0.44, h: 0.26, color: sl, wall: st, ry: Math.PI / 2, ov: 0.03, courses: true });
-  // l'abside ronde au chevet, son toit en cul-de-four
-  p.cyl(0.17, 0.17, 0.28, 12, -0.06, 0.012, -0.42, st); p.cone(0.2, 0.16, 12, -0.06, 0.29, -0.42, sl);
-  for (const a of [-0.6, 0, 0.6]) p.box(0.01, 0.1, 0.03, -0.06 + Math.sin(a) * 0.171, 0.12, -0.42 - Math.cos(a) * 0.171, 0x6a7ad8, a, true);
+  // l'abside ronde au chevet, son toit en cul-de-four (elle ne déborde pas de la parcelle : les arbres voisins restent dehors)
+  p.cyl(0.15, 0.15, 0.28, 12, -0.06, 0.012, -0.39, st); p.cone(0.165, 0.16, 12, -0.06, 0.29, -0.39, sl);
+  for (const a of [-0.6, 0, 0.6]) p.box(0.01, 0.1, 0.03, -0.06 + Math.sin(a) * 0.151, 0.12, -0.39 - Math.cos(a) * 0.151, 0x6a7ad8, a, true);
   // le clocher-porche : tour de pierre, abat-sons, cadran, flèche, croix et coq
   const tx = -0.06, tz = 0.3;
   p.box(0.26, 0.74, 0.26, tx, 0.012, tz, st);
@@ -535,7 +535,7 @@ function villageChurch(p: Parts) {
   // la porte en plein cintre et ses marches, l'œil-de-bœuf au-dessus
   p.box(0.09, 0.15, 0.014, tx, 0.04, tz + 0.132, 0x5a3e2c); p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.016, 10, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2), tx, 0.19, tz + 0.132, 0x5a3e2c);
   p.add(new THREE.TorusGeometry(0.058, 0.012, 4, 12, Math.PI), tx, 0.19, tz + 0.136, dk);
-  for (let k = 0; k < 3; k++) p.box(0.2 - k * 0.04, 0.014, 0.05, tx, 0.012 + k * 0.014, tz + 0.16 + 0.04 * (2 - k), 0xcfc8ba);
+  for (let k = 0; k < 3; k++) p.box(0.2 - k * 0.04, 0.014, 0.045, tx, 0.012 + k * 0.014, tz + 0.155 + 0.035 * (2 - k), 0xcfc8ba);
   p.add(new THREE.TorusGeometry(0.03, 0.008, 4, 12), tx, 0.3, tz + 0.133, dk); p.add(new THREE.CylinderGeometry(0.026, 0.026, 0.01, 10).rotateX(Math.PI / 2), tx, 0.3, tz + 0.132, 0xb48ad8, 0, true);
   // le cimetière : muret, croix et stèles, l'if
   p.box(0.012, 0.05, 0.6, 0.38, 0.012, -0.05, dk); p.box(0.2, 0.05, 0.012, 0.29, 0.012, -0.35, dk);
