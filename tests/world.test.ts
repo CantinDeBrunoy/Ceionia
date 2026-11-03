@@ -785,7 +785,8 @@ describe('expéditions', () => {
     ex.onReport = (r) => (report = r);
     const phases = new Set<string>();
     for (let i = 0; i < 40000 && !report; i++) { agents.update(0.05, 10, 0, false, 12, 0); ex.update(0.05); if (ex.active[0]) phases.add(ex.active[0].phase); }
-    expect([...phases]).toEqual(['gather', 'out', 'work', 'back', 'home']);
+    // l'équipe part aussitôt, sans se rassembler d'abord au village
+    expect([...phases]).toEqual(['out', 'work', 'back', 'home']);
     expect(report!.ok).toBe(true);
     expect(w.exp.done).toContain(m.id);
     expect(w.exp.herd.length).toBeGreaterThan(0);

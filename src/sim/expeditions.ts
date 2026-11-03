@@ -9,7 +9,10 @@ import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
 import { rulesOf } from './difficulty';
 
-/** Étapes d'une expédition : rassemblement au village, aller, travail sur place, retour, fête (ou mine déconfite) au village */
+/**
+ * Étapes d'une expédition : aller, travail sur place, retour, fête (ou mine déconfite) au village ; « gather » (le rassemblement
+ * au village d'avant le départ) ne sert plus qu'aux équipes des anciennes sauvegardes
+ */
 export type Phase = 'gather' | 'out' | 'work' | 'back' | 'home';
 
 export interface ActiveExpedition {
@@ -22,7 +25,7 @@ export interface ActiveExpedition {
   t: number;
   /** identifiants des membres de l'équipe */
   party: number[];
-  /** point de rassemblement au village et destination */
+  /** cœur du village (où l'équipe revient) et destination */
   base: [number, number];
   dest: [number, number];
   /** succès, tiré à la fin du travail sur place */
@@ -84,7 +87,7 @@ const MAX_CRAFT = 6;
 export const partyLimit = (pop: number) => Math.min(MAX_TEAMS, 1 + Math.floor(pop / PER_TEAM));
 
 /**
- * Expéditions : chaque équipe enrôlée se rassemble au cœur du village, part en file vers sa destination, y travaille, revient ;
+ * Expéditions : chaque équipe enrôlée part aussitôt en file vers sa destination, y travaille, revient au cœur du village ;
  * l'issue (tirée selon le risque du choix) s'applique au retour et fait l'objet d'un récit. Plus le village est peuplé,
  * plus il peut envoyer d'équipes à la fois ; une école les rend plus sûres, un lieu de soins guérit plus vite les blessés.
  * L'équipe emporte l'équipement du village contre les dangers du voyage, et sur place un imprévu demande une décision
@@ -334,7 +337,7 @@ export class Expeditions {
     const { take, k } = loadout(c, this.world.exp.gear);
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
     const a: ActiveExpedition = {
-      id: this.nextId++, m, c, phase: 'gather', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
+      id: this.nextId++, m, c, phase: 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
       wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], notes: [], extra: 0, bonus: [], hurt: 0,
       targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp,
     };
@@ -361,7 +364,11 @@ export class Expeditions {
       a.phase = 'work';
       this.agents.partyHide(party, true);
       this.onNews?.(`${m.icon} « ${m.title} » : la troupe se rassemble au camp souterrain et s’enfonce dans les galeries.`);
-    } else this.agents.partyGo(party, base[0], base[1], 0.15);
+    } else {
+      // elle part aussitôt, chacun de là où il est, sans se rassembler d'abord au village
+      this.agents.partyGo(party, dest[0], dest[1]);
+      this.onNews?.(`${m.icon} L’expédition « ${m.title} » part vers ${DEST_NAME[c.dest]}.`);
+    }
     return a;
   }
 
@@ -384,6 +391,7 @@ export class Expeditions {
       // avec une écurie, les équipes vont à cheval : le travail sur place avance plus vite
       a.t += dt * (a.phase === 'work' && this.has('stable') ? 1.25 : 1);
       if (a.phase === 'work' && a.ambush.length) this.ambushStep(a);
+      // (une équipe d'une ancienne sauvegarde, encore rassemblée au village, part à son tour)
       if (a.phase === 'gather' && (ag.partyDone(a.party) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);

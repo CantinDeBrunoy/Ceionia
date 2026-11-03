@@ -1049,7 +1049,7 @@ export class UI {
       close();
       h.audio.sfxClick();
       // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre
-      this.toast(`${a.fromCamp ? `${m.icon} La troupe descend du camp souterrain…` : `${m.icon} L’équipe se rassemble au village…`} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
+      this.toast(`${m.icon} ${a.fromCamp ? 'La troupe descend du camp souterrain…' : ex.status(a)} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
       this.update();
     }));
   }
@@ -1076,7 +1076,7 @@ export class UI {
     const send = age < deep.age ? `<p class="hint">${ic('sword', 15, 2)} Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`
       : miss.length ? `<p class="hint">${ic('sword', 15, 2)} Pour envoyer une expédition armée, il faut d’abord ${miss.join(', ')}.</p>`
       : ex.running(deep) ? `<p class="hint">${ic('sword', 15, 2)} Une expédition armée est déjà dans les galeries.</p>`
-      : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe se rassemble au village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><div class="choices">${this.choiceButtons(deep)}</div></div>`;
+      : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe part du village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><div class="choices">${this.choiceButtons(deep)}</div></div>`;
     const quests = CAMP_QUESTS.map((q, i) => {
       const [cur, max] = q.goal(st), done = i < lvl, now = i === lvl, k = Math.min(1, cur / max);
       return `<li class="${done ? 'done' : now ? 'cur' : 'todo'}">

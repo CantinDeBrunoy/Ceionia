@@ -443,7 +443,7 @@ class Game implements UIHost {
 
   /** Ramène la vue sur le village ; si elle y est déjà, passe à la vue d'ensemble. La vue cesse de suivre quoi que ce soit */
   goHome() {
-    // la vue suivait quelque chose : elle revient au village, même si l'équipe s'y rassemblait encore
+    // la vue suivait quelque chose : elle revient au village, même si l'équipe en partait à peine
     const tracked = this.following !== null || this.trainCam !== null || this.incidentCam !== null;
     this.follow(null); this.trainCam = null; this.incidentCam = null;
     if (this.mode === 'under') { this.exitUnder(); return; }
