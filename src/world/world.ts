@@ -2,6 +2,7 @@ import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { GEN, GEN_FIXED, fillClimate } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
+import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
@@ -40,10 +41,19 @@ export interface Snapshot {
   /** stocks de bois et de pierre (un bâtiment annulé rend ce qu'il avait coûté) */
   wood?: number;
   stone?: number;
+  /** routes en courbe (absent : celles d'avant restent) */
+  curves?: RoadCurve[];
 }
 
-/** Ligne de chemin de fer : ses arrêts dans l'ordre (gares et avant-postes, par numéro de bâtiment) et sa couleur */
-export interface RailLine { id: number; stops: number[]; color: number }
+/**
+ * Ligne de chemin de fer : ses arrêts dans l'ordre (gares et avant-postes, par numéro de bâtiment) et sa couleur ; `via` :
+ * pour chaque tronçon (de l'arrêt i au suivant), les cases par où le joueur fait passer la voie, dans l'ordre (absent ou
+ * vide : la voie se pose d'elle-même)
+ */
+export interface RailLine { id: number; stops: number[]; color: number; via?: number[][] }
+
+/** Case d'une route en courbe : les courbes qui y passent, et le point de leur ligne le plus proche du centre de la case */
+export interface CurveCell { ids: number[]; at: [number, number] }
 
 export interface WorldListener {
   onAdd(b: Building, animate: boolean): void;
@@ -172,6 +182,10 @@ export class World {
   /** lignes de chemin de fer ; tant que le joueur n'en a tracé aucune, la première (gare ↔ avant-poste) se trace d'elle-même */
   lines: RailLine[] = [];
   linesAuto = true;
+  /** routes tracées en courbe (mode libre) : leurs cases sont des routes ordinaires, la vue les dessine courbes */
+  curves: RoadCurve[] = [];
+  /** cases des courbes (recalculées quand elles changent) */
+  private curveMap: Map<number, CurveCell> | null = null;
   mined = new Set<number>();
   /** galeries du souterrain que le village tient (garnisons des avant-postes, conquêtes des expéditions armées) */
   claimed = new Set<number>();
@@ -682,6 +696,9 @@ export class World {
    */
   passPoint(path: number[], i: number): [number, number] {
     const c = path[i], x = (c % N) + 0.5, z = Math.floor(c / N) + 0.5, p = path[i - 1], n = path[i + 1];
+    // sur une route en courbe, on suit sa ligne
+    const cc = this.curveAt(c);
+    if (cc) return [cc.at[0], cc.at[1]];
     if (p === undefined || n === undefined || n - c === c - p || this.bridgeY(c % N, Math.floor(c / N)) === null) return [x, z];
     return [x * 0.5 + ((p % N) + (n % N) + 1) * 0.25, z * 0.5 + (Math.floor(p / N) + Math.floor(n / N) + 1) * 0.25];
   }
@@ -938,6 +955,54 @@ export class World {
     return true;
   }
 
+  /**
+   * Pose une route en courbe : sa ligne (x, z à la suite, gardée au centième) devient une suite de cases de route (celles qui
+   * en sont déjà une restent telles quelles). Renvoie le nombre de cases de route posées
+   */
+  addCurve(pts: number[]): number {
+    const line = roundPts(pts);
+    let n = 0;
+    for (const k of rasterize(line, N)) if (this.setRoad(k % N, Math.floor(k / N), true)) n++;
+    this.curves.push({ id: Math.max(0, ...this.curves.map((c) => c.id)) + 1, pts: line });
+    this.curveMap = null;
+    this.roadsDirty = true;
+    this.version++;
+    return n;
+  }
+
+  /** Courbes qui passent par cette case, si c'est encore une route (undefined sinon) */
+  curveAt(k: number): CurveCell | undefined {
+    if (!this.curves.length || !this.road[k]) return undefined;
+    return this.curveCells().get(k);
+  }
+
+  /** Cases de toutes les courbes (même celles qui ne sont plus des routes : démolies, emportées par la sculpture) */
+  curveCells(): Map<number, CurveCell> {
+    if (this.curveMap) return this.curveMap;
+    const out = new Map<number, CurveCell>();
+    for (const c of this.curves) {
+      // point de la ligne le plus proche du centre de chaque case : on regarde la case de chaque point et ses voisines (une
+      // case prise dans un coin n'a aucun point à elle)
+      const s = sampleCurve(c.pts), best = new Map<number, [number, number, number]>();
+      for (let i = 0; i + 1 < s.length; i += 2) {
+        const x = Math.floor(s[i]), z = Math.floor(s[i + 1]);
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+          if (!this.inCells(x + dx, z + dz)) continue;
+          const k = this.ci(x + dx, z + dz), d = Math.hypot(s[i] - x - dx - 0.5, s[i + 1] - z - dz - 0.5), b = best.get(k);
+          if (!b || d < b[0]) best.set(k, [d, s[i], s[i + 1]]);
+        }
+      }
+      for (const k of rasterize(c.pts, N)) {
+        const e = out.get(k);
+        if (e) { if (!e.ids.includes(c.id)) e.ids.push(c.id); continue; }
+        const b = best.get(k)!;
+        out.set(k, { ids: [c.id], at: [b[1], b[2]] });
+      }
+    }
+    this.curveMap = out;
+    return out;
+  }
+
   setVeg(cx: number, cz: number, type: number): boolean {
     if (!this.inCells(cx, cz)) return false;
     const k = this.ci(cx, cz);
@@ -995,6 +1060,7 @@ export class World {
       nextId: this.nextId,
       wood: this.wood,
       stone: this.stone,
+      curves: this.curves.map((c) => ({ id: c.id, pts: c.pts.slice() })),
     };
   }
 
@@ -1015,6 +1081,7 @@ export class World {
     this.nextId = s.nextId;
     if (s.wood !== undefined) this.wood = s.wood;
     if (s.stone !== undefined) this.stone = s.stone;
+    if (s.curves) { this.curves = s.curves.map((c) => ({ id: c.id, pts: c.pts.slice() })); this.curveMap = null; }
     this.roadsDirty = this.vegDirty = true;
     this.markTerrainAll();
     this.markVeg(0, 0, N - 1, N - 1);
@@ -1050,9 +1117,15 @@ export class World {
       mined: [...this.mined],
       claimed: [...this.claimed],
       exp: this.exp,
-      // arrêts des lignes : par rang dans la liste des bâtiments (les numéros changent au chargement)
-      lines: this.lines.map((l) => ({ c: l.color, s: l.stops.map((id) => order.get(id) ?? -1).filter((i) => i >= 0) })),
+      // arrêts des lignes : par rang dans la liste des bâtiments (les numéros changent au chargement) ; points de passage des
+      // tronçons : par case
+      lines: this.lines.map((l) => {
+        const kept = l.stops.map((id, i) => (order.has(id) ? i : -1)).filter((i) => i >= 0), via = mergeVia(l.via, kept);
+        return { c: l.color, s: kept.map((i) => order.get(l.stops[i])!), ...(via ? { v: via } : {}) };
+      }),
       linesAuto: this.linesAuto,
+      // routes en courbe (au centième) ; celles dont il ne reste aucune case de route s'oublient
+      curves: this.curves.filter((c) => rasterize(c.pts, N).some((k) => this.road[k])).map((c) => c.pts.map((v) => Math.round(v * 100))),
     };
   }
 
@@ -1141,11 +1214,33 @@ export class World {
     this.exp = readExpState(d.exp);
     this.lines = [];
     for (const l of Array.isArray(d.lines) ? d.lines : []) {
-      const stops = (Array.isArray(l?.s) ? l.s : []).map((i: number) => ids[i] ?? -1).filter((id: number) => id > 0);
-      if (stops.length >= 2) this.lines.push({ id: this.lines.length + 1, stops, color: Number.isFinite(+l.c) ? +l.c : 0xd8553c });
+      const all: number[] = (Array.isArray(l?.s) ? l.s : []).map((i: number) => ids[i] ?? -1);
+      const kept = all.map((id, i) => (id > 0 ? i : -1)).filter((i) => i >= 0), stops = kept.map((i) => all[i]);
+      // points de passage : des cases de la carte, un tronçon par paire d'arrêts (les anciennes parties n'en ont pas)
+      const legs = Array.isArray(l?.v) ? all.slice(1).map((_, i) => (Array.isArray(l.v[i]) ? l.v[i] : []).filter((k: unknown) => Number.isInteger(k) && (k as number) >= 0 && (k as number) < N * N)) : undefined;
+      const via = mergeVia(legs, kept);
+      if (stops.length >= 2) this.lines.push({ id: this.lines.length + 1, stops, color: Number.isFinite(+l.c) ? +l.c : 0xd8553c, ...(via ? { via } : {}) });
     }
     this.linesAuto = d.linesAuto ?? !Array.isArray(d.lines);
+    this.curves = [];
+    for (const c of Array.isArray(d.curves) ? d.curves : []) {
+      if (!Array.isArray(c) || c.length < 4 || c.length % 2 || !c.every((v) => Number.isFinite(+v))) continue;
+      this.curves.push({ id: this.curves.length + 1, pts: c.map((v: number) => +v / 100) });
+    }
+    this.curveMap = null;
+    this.roadsDirty = true;
   }
+}
+
+/**
+ * Points de passage d'une ligne qui ne garde que certains de ses arrêts (`kept` : leurs rangs, dans l'ordre) : les tronçons
+ * fondus en un seul mettent leurs points bout à bout. undefined s'il n'y en a aucun
+ */
+export function mergeVia(via: number[][] | undefined, kept: number[]): number[][] | undefined {
+  if (!via?.some((v) => v.length)) return undefined;
+  const out: number[][] = [];
+  for (let j = 0; j + 1 < kept.length; j++) out.push(via.slice(kept[j], kept[j + 1]).flat());
+  return out.some((v) => v.length) ? out : undefined;
 }
 
 /** Champs de lave à sauvegarder : paires (case, couverture en %) */

@@ -5,6 +5,7 @@ import { Simplex } from '../world/noise';
 import { KindId, sizeOf } from '../build/catalog';
 import { mats } from './materials';
 import { SNOWY } from './terrainView';
+import { sampleCurve } from '../world/curves';
 
 /** Chaussée selon l'âge : sentier, chemin de terre, dalles, pavés, asphalte */
 const ROAD_COL = [0xb8915f, 0xb48b58, 0xb2a590, 0x8c8479, 0x5d6169];
@@ -50,8 +51,35 @@ interface Street {
   plaza: boolean;
   /** rond-point dont la case fait partie */
   round: Round | null;
+  /** case d'une route en courbe (sa chaussée suit la ligne de la courbe) */
+  curve?: boolean;
   road: (x: number, z: number) => number;
   pave: (x: number, z: number) => number;
+}
+
+/** Morceaux de ligne d'une case de route en courbe (x, z à la suite) : la courbe elle-même, et ses raccords aux rues voisines */
+interface Curved { pieces: number[][]; branches: number[][] }
+
+/** Distance de (x, z) à une ligne brisée (x, z à la suite) */
+function lineDist(x: number, z: number, l: number[]) {
+  let best = 9;
+  for (let i = 0; i + 3 < l.length; i += 2) {
+    const ax = l[i], az = l[i + 1], bx = l[i + 2] - ax, bz = l[i + 3] - az, len = bx * bx + bz * bz;
+    const t = len ? Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / len)) : 0;
+    best = Math.min(best, Math.hypot(x - ax - bx * t, z - az - bz * t));
+  }
+  return best;
+}
+
+/** Point le plus proche de (x, z) sur des lignes brisées, et la direction de la ligne en ce point */
+function closestOn(x: number, z: number, ls: number[][]): [number, number, number, number] | null {
+  let best = Infinity, out: [number, number, number, number] | null = null;
+  for (const l of ls) for (let i = 0; i + 3 < l.length; i += 2) {
+    const ax = l[i], az = l[i + 1], bx = l[i + 2] - ax, bz = l[i + 3] - az, len = bx * bx + bz * bz;
+    const t = len ? Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / len)) : 0, px = ax + bx * t, pz = az + bz * t, d = Math.hypot(x - px, z - pz);
+    if (d < best && len) { best = d; const s = Math.sqrt(len); out = [px, pz, bx / s, bz / s]; }
+  }
+  return out;
 }
 
 /**
@@ -352,6 +380,64 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     this.bridged = out;
   }
 
+  /**
+   * Routes en courbe : pour chaque case de route qu'une courbe traverse (hors ponts), les morceaux de sa ligne qui y passent,
+   * et un raccord, du point le plus proche de la courbe jusqu'au milieu du bord, vers chaque voisine de route qui n'est pas
+   * sur la même courbe (une rue, une autre courbe, un pont) ; le raccord rejoint ce bord au même point que la rue d'à côté
+   */
+  private curved = new Map<number, Curved>();
+  private findCurved(age: number) {
+    const w = this.world, j = age >= 3 ? 0 : 0.08, out = new Map<number, Curved>();
+    this.curved = out;
+    if (!w.curves.length) return;
+    const cells = w.curveCells(), live = (k: number) => w.road[k] === 1 && !this.bridged.has(k);
+    for (const [k] of cells) if (live(k)) out.set(k, { pieces: [], branches: [] });
+    for (const c of w.curves) {
+      // la ligne, coupée case par case (chaque pas revient à la case où il commence)
+      const s = sampleCurve(c.pts);
+      let cur: number[] | null = null, ck = -1;
+      for (let i = 0; i + 3 < s.length; i += 2) {
+        const x = Math.floor(s[i]), z = Math.floor(s[i + 1]), k = w.inCells(x, z) ? w.ci(x, z) : -1, cell = out.get(k);
+        if (!cell) { cur = null; ck = -1; continue; }
+        if (k !== ck || !cur) { cur = [s[i], s[i + 1]]; ck = k; cell.pieces.push(cur); }
+        cur.push(s[i + 2], s[i + 3]);
+      }
+    }
+    for (const [k, cell] of out) {
+      const cx = k % N, cz = Math.floor(k / N), mine = cells.get(k)!.ids;
+      for (const [dx, dz] of D4) {
+        const nx = cx + dx, nz = cz + dz;
+        if (!w.inCells(nx, nz) || !w.road[w.ci(nx, nz)]) continue;
+        const nk = w.ci(nx, nz);
+        if (out.has(nk) && cells.get(nk)!.ids.some((id) => mine.includes(id))) continue;
+        // au bord d'un pont, pas de détour : la rampe arrive dans l'axe
+        const e = this.bridged.has(nk) ? this.edgeMid(cx, cz, dx, dz, j) : this.warp(...this.edgeMid(cx, cz, dx, dz, j), age);
+        const p = closestOn(e[0], e[1], cell.pieces) ?? cells.get(k)!.at;
+        cell.branches.push([p[0], p[1], (p[0] + e[0]) / 2, (p[1] + e[1]) / 2, e[0], e[1]]);
+      }
+    }
+  }
+
+  /**
+   * Chaussée et trottoirs d'une route en courbe autour d'une case (en coordonnées du monde) : la ligne et les raccords des
+   * cases voisines, raccordés en douceur ; trottoirs le long des morceaux qui passent en ville (`town`), sinon aucun
+   */
+  private curveSdf(cx: number, cz: number, hw: number, town: Uint8Array) {
+    const w = this.world, pieces: number[][] = [], branches: number[][] = [], walks: number[][] = [];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      if (!w.inCells(cx + dx, cz + dz)) continue;
+      const k = w.ci(cx + dx, cz + dz), c = this.curved.get(k);
+      if (!c) continue;
+      pieces.push(...c.pieces); branches.push(...c.branches);
+      if (town[k]) walks.push(...c.pieces, ...c.branches);
+    }
+    const dist = (x: number, z: number, ls: number[][]) => { let d = 9; for (const l of ls) d = Math.min(d, lineDist(x, z, l)); return d; };
+    return {
+      road: (x: number, z: number) => smin(dist(x, z, pieces), dist(x, z, branches), FILLET) - hw,
+      pave: (x: number, z: number) => (walks.length ? dist(x, z, walks) - hw - 0.17 : 9),
+    };
+  }
+
   /** Cours en terre battue devant les ateliers, places, fermes : (x, z, rayon) rangés par case */
   /** Cases de place (aux premiers âges) : là où les routes se serrent en quadrillage, une place pleine, sans bandes de chemin */
   private plaza = new Set<number>();
@@ -370,6 +456,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     }
     const add = (k: number, x: number, z: number, r: number) => { const l = out.get(k) ?? []; l.push(x, z, r); out.set(k, l); };
     const plain = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1 && !this.bridged.has(w.ci(x, z));
+    // (une route en courbe qui longe une rue ne fait pas une place)
+    const grid = (x: number, z: number) => plain(x, z) && !this.curved.has(w.ci(x, z));
     // les places : un carré de 2 × 2 cases de route, une poche d'herbe prise entre des routes, et les routes coincées entre
     // deux cases de place ; tout cela se remplit d'un seul tenant au lieu d'un quadrillage de chemins et de trous d'herbe
     const P = this.plaza;
@@ -377,19 +465,19 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const free = (x: number, z: number) => { const k = w.ci(x, z); return !w.road[k] && !w.occ[k] && !w.veg[k] && !w.lake[k] && w.cellAvg(x, z) >= 0.1; };
     for (let cz = 0; cz < N - 1; cz++)
       for (let cx = 0; cx < N - 1; cx++)
-        if (plain(cx, cz) && plain(cx + 1, cz) && plain(cx, cz + 1) && plain(cx + 1, cz + 1)) for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) P.add(w.ci(cx + dx, cz + dz));
+        if (grid(cx, cz) && grid(cx + 1, cz) && grid(cx, cz + 1) && grid(cx + 1, cz + 1)) for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) P.add(w.ci(cx + dx, cz + dz));
     for (let cz = 1; cz < N - 1; cz++)
       for (let cx = 1; cx < N - 1; cx++)
-        if (free(cx, cz) && +plain(cx + 1, cz) + +plain(cx - 1, cz) + +plain(cx, cz + 1) + +plain(cx, cz - 1) >= 3) {
+        if (free(cx, cz) && +grid(cx + 1, cz) + +grid(cx - 1, cz) + +grid(cx, cz + 1) + +grid(cx, cz - 1) >= 3) {
           // encadrée de routes de tous côtés (ou de trois, le quatrième étant une maison ou une autre place)
-          const side = (x: number, z: number) => plain(x, z) || !!w.occ[w.ci(x, z)];
+          const side = (x: number, z: number) => grid(x, z) || !!w.occ[w.ci(x, z)];
           if (side(cx + 1, cz) && side(cx - 1, cz) && side(cx, cz + 1) && side(cx, cz - 1)) P.add(w.ci(cx, cz));
         }
     for (let pass = 0; pass < 2; pass++)
       for (let cz = 1; cz < N - 1; cz++)
         for (let cx = 1; cx < N - 1; cx++) {
           const k = w.ci(cx, cz);
-          if (P.has(k) || !plain(cx, cz)) continue;
+          if (P.has(k) || !grid(cx, cz)) continue;
           if (+P.has(k + 1) + +P.has(k - 1) + +P.has(k + N) + +P.has(k - N) >= 2) P.add(k);
         }
     // la terre battue va de la rue jusqu'au mur des bâtiments qui la bordent : plus de liseré d'herbe entre les deux
@@ -408,7 +496,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const urban = (x: number, z: number) => {
       if (!w.inCells(x, z)) return false;
       const k = w.ci(x, z);
-      return plain(x, z) || (!!w.occ[k] && w.buildingAt(x, z)?.kind !== 'lamp');
+      return grid(x, z) || (!!w.occ[k] && w.buildingAt(x, z)?.kind !== 'lamp');
     };
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
@@ -429,11 +517,13 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const w = this.world, hw = HW[Math.min(age, 4)];
     const road = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1;
     const flat = (x: number, z: number) => road(x, z) && !this.bridged.has(w.ci(x, z));
+    const grid = (x: number, z: number) => flat(x, z) && !this.curved.has(w.ci(x, z));
     // quatre cases de route en carré : une place pavée ; un carré ou un rectangle plein de cases de route : un rond-point
+    // (pas avec une route en courbe)
     const plaza = new Set<number>();
     for (let cz = 0; cz < N - 1; cz++)
       for (let cx = 0; cx < N - 1; cx++)
-        if (flat(cx, cz) && flat(cx + 1, cz) && flat(cx, cz + 1) && flat(cx + 1, cz + 1)) for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) plaza.add(w.ci(cx + dx, cz + dz));
+        if (grid(cx, cz) && grid(cx + 1, cz) && grid(cx, cz + 1) && grid(cx + 1, cz + 1)) for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) plaza.add(w.ci(cx + dx, cz + dz));
     const rounds = new Map<number, Round>(), seen = new Set<number>();
     for (const k0 of plaza) {
       if (seen.has(k0)) continue;
@@ -489,8 +579,22 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         if (plaza.has(k)) { cells.set(k, { mask: 0, sides: 0, quads: 0, plaza: true, round: null, road: () => 1, pave: () => -1 }); continue; }
         let mask = 0, sides = 0, quads = 0;
         D4.forEach(([dx, dz], i) => { if (road(cx + dx, cz + dz)) mask |= 1 << i; else if (open(cx + dx, cz + dz)) sides |= 1 << i; });
+        // route en courbe : la chaussée suit sa ligne ; une rue qui la touche y prend aussi sa part, sans couture au bord
+        const ox = cx + 0.5, oz = cz + 0.5;
+        if (this.curved.has(k)) {
+          const cs = this.curveSdf(cx, cz, hw, town);
+          cells.set(k, { mask, sides: 0, quads: 0, plaza: false, round: null, curve: true, road: (x, z) => cs.road(x + ox, z + oz), pave: (x, z) => cs.pave(x + ox, z + oz) });
+          continue;
+        }
         QUADS.forEach(([sx, sz], i) => { if (mask & (1 << (sx > 0 ? 0 : 1)) && mask & (1 << (sz > 0 ? 2 : 3)) && open(cx + sx, cz + sz)) quads |= 1 << i; });
-        cells.set(k, { mask, sides, quads, plaza: false, round: null, road: streetSdf(mask, hw), pave: walkSdf(sides, quads) });
+        const sr = streetSdf(mask, hw), sp = walkSdf(sides, quads);
+        const near = this.curved.size > 0 && [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => w.inCells(cx + dx, cz + dz) && this.curved.has(w.ci(cx + dx, cz + dz))));
+        const cs = near ? this.curveSdf(cx, cz, hw, town) : null;
+        cells.set(k, {
+          mask, sides, quads, plaza: false, round: null,
+          road: cs ? (x, z) => Math.min(sr(x, z), cs.road(x + ox, z + oz)) : sr,
+          pave: cs ? (x, z) => Math.min(sp(x, z), cs.pave(x + ox, z + oz)) : sp,
+        });
       }
     const pave = new Map<number, { rects: number[][]; kind: number }>();
     const addRect = (k: number, r: number[], kind: number) => { const p = pave.get(k) ?? { rects: [], kind }; p.rects.push(r); p.kind = Math.max(p.kind, kind); pave.set(k, p); };
@@ -504,17 +608,18 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         addRect(w.ci(cx, cz), FULL, 1);
       }
     }
-    // poches d'herbe enclavées entre les rues et les bâtiments : pavées (toute la case, ou le coin rentrant)
+    // poches d'herbe enclavées entre les rues et les bâtiments : pavées (toute la case, ou le coin rentrant) ; pas les marches
+    // de l'escalier de cases sous une route en courbe, que sa chaussée recouvre
     const urban = (x: number, z: number) => {
       if (!w.inCells(x, z)) return false;
       const k = w.ci(x, z);
-      return flat(x, z) || (!!w.occ[k] && w.buildingAt(x, z)?.kind !== 'lamp');
+      return grid(x, z) || (!!w.occ[k] && w.buildingAt(x, z)?.kind !== 'lamp');
     };
     for (let cz = 0; cz < N; cz++)
       for (let cx = 0; cx < N; cx++) {
         const k = w.ci(cx, cz);
         if (w.road[k] || w.occ[k] || w.veg[k] || w.isWet(cx, cz)) continue;
-        if (!(flat(cx + 1, cz) || flat(cx - 1, cz) || flat(cx, cz + 1) || flat(cx, cz - 1))) continue;
+        if (!(grid(cx + 1, cz) || grid(cx - 1, cz) || grid(cx, cz + 1) || grid(cx, cz - 1))) continue;
         const e = urban(cx + 1, cz), o = urban(cx - 1, cz), s = urban(cx, cz + 1), n = urban(cx, cz - 1), c = +e + +o + +s + +n;
         if (c >= 3 || (e && o) || (n && s)) { addRect(k, FULL, 0); continue; }
         if (c === 2) {
@@ -537,7 +642,22 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
             addRect(w.ci(x, z), dx > 0 ? [0.5 - M, -1.5, 1.5, 1.5] : dx < 0 ? [-1.5, -1.5, -0.5 + M, 1.5] : dz > 0 ? [-1.5, 0.5 - M, 1.5, 1.5] : [-1.5, -1.5, 1.5, -0.5 + M], 0);
           });
     }
-    return { cells, pave };
+    // une route en courbe déborde de ses cases : sa chaussée et ses trottoirs passent aussi sur les cases voisines qui ne sont
+    // pas des routes (avec leurs abords pavés, s'il y en a)
+    const spill = new Map<number, { road: (x: number, z: number) => number; pave: (x: number, z: number) => number; kind: number }>();
+    for (const k of this.curved.keys()) {
+      const cx = k % N, cz = Math.floor(k / N);
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = cx + dx, nz = cz + dz;
+        if (!w.inCells(nx, nz)) continue;
+        const nk = w.ci(nx, nz);
+        if (spill.has(nk) || road(nx, nz) || w.occ[nk] || w.isWet(nx, nz)) continue;
+        const cs = this.curveSdf(nx, nz, hw, town), p = pave.get(nk), rs = p ? rectSdf(p.rects) : null, ox = nx + 0.5, oz = nz + 0.5;
+        spill.set(nk, { road: (x, z) => cs.road(x + ox, z + oz), pave: (x, z) => Math.min(rs ? rs(x, z) : 9, cs.pave(x + ox, z + oz)), kind: p?.kind ?? 0 });
+        pave.delete(nk);
+      }
+    }
+    return { cells, pave, spill };
   }
 
   /**
@@ -583,6 +703,18 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         const k = w.ci(cx, cz);
         if (!w.road[k] || this.bridged.has(k)) continue;
         const has = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
+        const cv = this.curved.get(k);
+        if (cv) {
+          // route en courbe : sa ligne et ses raccords, sans détour ; à la campagne, un chemin vers la porte d'une maison voisine
+          const out = [...cv.pieces, ...cv.branches], at = w.curveAt(k)!.at;
+          if (age < 3)
+            for (const [dx, dz] of D4) {
+              const b = has(dx, dz) ? undefined : w.buildingAt(cx + dx, cz + dz), ex = cx + 0.5 + dx * 0.55, ez = cz + 0.5 + dz * 0.55;
+              if (b && b.kind !== 'lamp') out.push([at[0], at[1], (at[0] + ex) / 2, (at[1] + ez) / 2, ex, ez]);
+            }
+          lines.set(k, out);
+          continue;
+        }
         const dirs = D4.filter(([dx, dz]) => has(dx, dz));
         const n = this.node(cx, cz, j), out: number[][] = [];
         if (dirs.length === 2 && dirs[0][0] !== -dirs[1][0]) {
@@ -645,6 +777,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       return snow * (n ? k / n : 1);
     };
     this.findBridged();
+    this.findCurved(age);
     const lines = this.skeleton(age), hw0 = HW[a];
     // largeur qui varie un peu le long des chemins de terre (pas en ville)
     const half = (x: number, z: number) => hw0 * (1 + WIDTH_VAR[a] * this.noise.noise2(x * 0.6, z * 0.6));
@@ -682,6 +815,10 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       for (const [k, p] of plan.pave) {
         const cx = k % N, cz = Math.floor(k / N), sdf = rectSdf(p.rects);
         emit(cx, cz, 4, () => 1, (x, z) => sdf(x - cx - 0.5, z - cz - 0.5), p.kind, 0, 0.02);
+      }
+      for (const [k, sp] of plan.spill) {
+        const cx = k % N, cz = Math.floor(k / N);
+        emit(cx, cz, 8, (x, z) => sp.road(x - cx - 0.5, z - cz - 0.5), (x, z) => sp.pave(x - cx - 0.5, z - cz - 0.5), sp.kind, 0.06, 0.02);
       }
     } else {
       const cells = new Set<number>();
@@ -950,7 +1087,19 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       const dry = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && !w.isWet(cx + dx, cz + dz);
       const n = this.warp(...this.node(cx, cz, j), age), off = hw0 + 0.09;
       let spot: [number, number, number, number] | undefined;
-      if (st && !st.plaza) {
+      const cv = this.curved.get(k);
+      if (cv) {
+        // route en courbe : au bord de sa ligne, du côté d'une case libre (le bras de la lanterne garde un axe de la grille)
+        const at = w.curveAt(k)!.at, c = closestOn(at[0], at[1], cv.pieces);
+        if (!c) continue;
+        for (const sd of [1, -1]) {
+          const nx = -c[3] * sd, nz = c[2] * sd, x = c[0] + nx * (off + 0.03), z = c[1] + nz * (off + 0.03), px = Math.floor(x), pz = Math.floor(z);
+          if (!w.inCells(px, pz) || w.road[w.ci(px, pz)] || w.occ[w.ci(px, pz)] || w.isWet(px, pz)) continue;
+          spot = Math.abs(nx) > Math.abs(nz) ? [x, z, Math.sign(nx), 0] : [x, z, 0, Math.sign(nz)];
+          break;
+        }
+        if (!spot) continue;
+      } else if (st && !st.plaza) {
         const ok = (lx: number, lz: number) => st.pave(lx, lz) < -0.02 && st.road(lx, lz) > 0.05;
         const d = D4.find(([dx, dz]) => !roadAt(dx, dz) && ok(dx * off, dz * off)) ?? QUADS.find(([sx, sz]) => ok(sx * 0.41, sz * 0.41));
         if (d) spot = D4.includes(d) ? [n[0] + d[0] * off, n[1] + d[1] * off, d[0], d[1]] : [n[0] + d[0] * 0.41, n[1] + d[1] * 0.41, d[0], d[1]];
@@ -987,7 +1136,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         const cx = k % N, cz = Math.floor(k / N);
         const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
         const dirs = D4.filter(([dx, dz]) => roadAt(dx, dz));
-        if (dirs.length < 3 || hash2(cx, cz, 56) > 0.6) continue;
+        if (dirs.length < 3 || hash2(cx, cz, 56) > 0.6 || this.curved.has(k)) continue;
         const n = this.warp(...this.node(cx, cz, j), age), corner = QUADS.find(([dx, dz]) => !roadAt(dx, dz) && !paved(cx + 0.5 + dx * 0.9, cz + 0.5 + dz * 0.9));
         if (!corner) continue;
         const qx = n[0] + corner[0] * 0.36, qz = n[1] + corner[1] * 0.36, qy = w.hAt(qx, qz);
@@ -1012,6 +1161,17 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       for (const [k, st] of plan.cells) {
         if (st.plaza || st.round) continue;
         const cx = k % N, cz = Math.floor(k / N), ox = cx + 0.5, oz = cz + 0.5, y = (x: number, z: number) => w.hAt(x, z) + 0.024;
+        if (st.curve) {
+          // route en courbe : ligne médiane pointillée le long de sa ligne, lignes de rive continues à la campagne
+          const cv = this.curved.get(k), at = w.curveAt(k)!.at;
+          if (a < 4 || !cv) continue;
+          const rural = st.pave(at[0] - ox, at[1] - oz) > 1;
+          for (const l of cv.pieces) {
+            walk(l, 0.5, (x, z, ux, uz) => mark(x, z, ux, uz, 0.075, 0.009, y(x, z), white));
+            if (rural) walk(l, 0.1, (x, z, ux, uz) => { for (const sd of [-1, 1]) { const o = (hw - 0.04) * sd, px = x - uz * o, pz = z + ux * o; mark(px, pz, ux, uz, 0.056, 0.007, y(px, pz), white); } });
+          }
+          continue;
+        }
         const arms = D4.filter((_, i) => st.mask & (1 << i)), n = arms.length;
         const walkAt = (lx: number, lz: number) => st.pave(lx, lz) < -0.02 && st.road(lx, lz) > 0.05;
         const rural = !st.sides && !st.quads;

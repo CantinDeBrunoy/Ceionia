@@ -45,6 +45,7 @@ import { Halos } from './render/halos';
 import { Expeditions } from './sim/expeditions';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
+import { RailEditState, TrackEditor } from './build/trackEdit';
 import { ExpeditionView } from './render/expeditionView';
 import { Festivities } from './render/festivities';
 import { PenView } from './render/pens';
@@ -102,8 +103,10 @@ class Game implements UIHost {
   railway: Railway;
   railView: RailView;
   trainCam: number | null = null;
-  /** ligne en cours de tracé : ses arrêts dans l'ordre, et la ligne qu'elle remplacera (null : une nouvelle) */
-  railEdit: { stops: number[]; line: number | null; color: number } | null = null;
+  /** ligne en cours de tracé : ses arrêts dans l'ordre, ses points de passage, et la ligne qu'elle remplacera (null : une nouvelle) */
+  railEdit: RailEditState | null = null;
+  /** éditeur du tracé de la voie (la ligne en cours de tracé) */
+  trackEdit: TrackEditor;
   expView: ExpeditionView;
   /** fêtes du retour des expéditions réussies, et les équipes déjà fêtées */
   fest: Festivities;
@@ -240,6 +243,9 @@ class Game implements UIHost {
     };
     this.railView = new RailView(w, this.railway);
     this.railView.streams = this.streams;
+    // on saisit la voie prévue pour la faire passer où l'on veut (rayon de saisie selon le zoom)
+    this.trackEdit = new TrackEditor(w, this.railway, () => this.railEdit, () => Math.max(0.55, this.cam.dist * 0.02), () => this.ui.update());
+    this.railView.group.add(this.trackEdit.group);
     this.pens = new PenView(w);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
@@ -269,8 +275,9 @@ class Game implements UIHost {
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
     this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; };
-    // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts
+    // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
+    this.tools.overlay = this.trackEdit;
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
     // une quête du camp souterrain accomplie : il grandit de lui-même
     this.expeditions.onCamp = (q) => {
@@ -413,11 +420,12 @@ class Game implements UIHost {
 
   // ---------- Tracer une ligne de chemin de fer ----------
 
-  /** Commence une ligne à partir de cette gare, ou reprend une ligne existante pour la prolonger */
+  /** Commence une ligne à partir de cette gare, ou reprend une ligne existante (ses arrêts, le tracé de sa voie) */
   startRailEdit(from: { stop?: number; line?: number }) {
     const l = from.line !== undefined ? this.world.lines.find((x) => x.id === from.line) : undefined;
     const used = new Set(this.world.lines.map((x) => x.color));
-    this.railEdit = l ? { stops: [...l.stops], line: l.id, color: l.color } : { stops: from.stop !== undefined ? [from.stop] : [], line: null, color: LINE_COLORS.find((c) => !used.has(c)) ?? LINE_COLORS[0] };
+    this.railEdit = l ? { stops: [...l.stops], line: l.id, color: l.color, via: l.stops.slice(1).map((_, i) => [...(l.via?.[i] ?? [])]) }
+      : { stops: from.stop !== undefined ? [from.stop] : [], line: null, color: LINE_COLORS.find((c) => !used.has(c)) ?? LINE_COLORS[0], via: [] };
     this.tools.setTool('none');
     this.tools.select(null);
     this.tools.pickStop = (b) => this.railPick(b);
@@ -429,31 +437,51 @@ class Game implements UIHost {
   railPick(b: Building | undefined) {
     const e = this.railEdit;
     if (!e || !b) return;
-    if (e.stops[e.stops.length - 1] === b.id) { e.stops.pop(); audio.sfxClick(); this.ui.update(); return; }
+    if (e.stops[e.stops.length - 1] === b.id) { this.railUndo(); audio.sfxClick(); return; }
     if (e.stops.includes(b.id)) { this.ui.toast(`${this.railway.stopName(b)} est déjà sur la ligne.`); return; }
     if (!this.railway.stopOf(b)) {
       this.ui.toast(b.kind === 'outpost' ? 'Cet avant-poste ne garde aucune entrée, ou n’a pas la place d’un quai à son pied.' : 'Cliquez une gare ou un avant-poste.');
       return;
     }
     e.stops.push(b.id);
+    if (e.stops.length > 1) e.via.push([]);
     audio.sfxClick();
     this.ui.update();
   }
 
-  /** Retire le dernier arrêt de la ligne en cours de tracé */
-  railUndo() { if (this.railEdit?.stops.length) { this.railEdit.stops.pop(); this.ui.update(); } }
+  /** Retire le dernier arrêt de la ligne en cours de tracé (et les points de passage du tronçon qui y menait) */
+  railUndo() {
+    const e = this.railEdit;
+    if (!e?.stops.length) return;
+    e.stops.pop();
+    e.via.length = Math.max(0, e.stops.length - 1);
+    this.ui.update();
+  }
 
-  /** Valide la ligne tracée : le train s'y met en route */
+  /** Le tracé de la voie redevient automatique : plus aucun point de passage */
+  railAuto() {
+    const e = this.railEdit;
+    if (!e) return;
+    e.via = e.via.map(() => []);
+    audio.sfxClick();
+    this.ui.update();
+  }
+
+  /** Ce qui empêche de valider le tracé de la voie (null : rien) */
+  railTrouble() { return this.trackEdit.trouble(); }
+
+  /** Valide la ligne tracée : le train s'y met en route ; un tronçon qui ne passe pas par les points choisis est refusé */
   railFinish() {
     const e = this.railEdit;
     if (!e || e.stops.length < 2) return;
-    const r = this.railway, twin = r.sameAs(e.stops, e.line ?? undefined);
+    const r = this.railway, twin = r.sameAs(e.stops, e.line ?? undefined), trouble = this.trackEdit.trouble();
     if (twin) { this.ui.toast(`🚂 Ce parcours existe déjà (${r.lineLabel(twin)}) : sur une voie unique, un seul train peut y rouler.`); return; }
+    if (trouble) { this.ui.toast(`🚂 ${trouble}`); return; }
     this.railCancel();
-    if (e.line !== null) r.setStops(e.line, e.stops); else r.addLine(e.stops);
+    if (e.line !== null) r.setStops(e.line, e.stops, e.via); else r.addLine(e.stops, e.via);
     const l = e.line !== null ? this.world.lines.find((x) => x.id === e.line) : this.world.lines[this.world.lines.length - 1], tr = l ? r.trains.get(l.id) : undefined;
     audio.sfxPlace();
-    this.ui.toast(tr?.why ? `🚂 ${tr.why}` : `🚂 Ligne ${e.line !== null ? 'prolongée' : 'ouverte'} : ${l ? r.lineLabel(l) : ''}.`);
+    this.ui.toast(tr?.why ? `🚂 ${tr.why}` : `🚂 Ligne ${e.line !== null ? 'modifiée' : 'ouverte'} : ${l ? r.lineLabel(l) : ''}.`);
     this.ui.update();
   }
 
@@ -625,7 +653,12 @@ class Game implements UIHost {
       // R tourne le bâtiment en main ou celui qu'on a choisi ; sinon c'est l'outil Route
       if (k === 'r' && (this.tools.holding() || this.tools.selected !== null)) { this.tools.rotate(); return; }
       const tool = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) ? undefined : map[k];
-      if (tool) { this.tools.setTool(tool); audio.sfxClick(); }
+      // R, l'outil Route déjà en main : on passe du tracé en ligne au tracé libre, et retour
+      if (tool === 'road' && this.tools.tool === 'road') {
+        this.tools.setRoadMode(this.tools.roadMode === 'line' ? 'free' : 'line');
+        this.ui.toast(this.tools.roadMode === 'free' ? 'Route libre : un clic au point A, un clic au point B.' : 'Route en ligne : glissez, case par case.');
+        audio.sfxClick();
+      } else if (tool) { this.tools.setTool(tool); audio.sfxClick(); }
       else if (k === 'b') { this.tools.setTool('build', this.tools.kind); }
       else if (k === 't') this.tools.rotate();
       else if (k === 'escape' && this.railEdit) this.railCancel();
@@ -838,7 +871,9 @@ class Game implements UIHost {
       this.transports.update(gdt, this.sim.age);
       this.railView.update(dt, this.sim.age);
       if (this.railView.lightsVersion !== this.railLightsV) { this.railLightsV = this.railView.lightsVersion; this.refreshHalos(); }
-      this.railView.setPreview(this.railEdit ? this.railEdit.stops.map((id) => this.world.buildings.get(id)).filter((b): b is Building => !!b) : [], this.railEdit?.color ?? 0);
+      // la ligne en cours de tracé : une borne à chaque arrêt ; la voie prévue entre eux, que l'on saisit pour la déplacer
+      this.railView.setPreview(this.railEdit ? this.railEdit.stops.map((id) => this.world.buildings.get(id)).filter((b): b is Building => !!b) : [], this.railEdit?.color ?? 0, false);
+      this.trackEdit.update();
       const tr = this.trainCam === null ? undefined : this.railway.trains.get(this.trainCam), tp = tr ? this.railway.trainAt(tr) : null;
       if (tp) this.cam.follow(tp[0], tp[1]);
       else this.trainCam = null;

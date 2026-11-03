@@ -1,4 +1,4 @@
-import { World, N, RailLine, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_VOLCANO } from '../world/world';
+import { World, N, RailLine, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_VOLCANO, mergeVia } from '../world/world';
 import { Building, KINDS } from '../build/catalog';
 import { ORE_KINDS, oreVeins } from '../world/underground';
 import { Agents, Heap } from './agents';
@@ -59,6 +59,8 @@ export interface Train {
   line: RailLine;
   /** arrêts en service de la ligne, dans l'ordre ; pourquoi le train ne roule pas (null : il roule) */
   stops: Stop[];
+  /** points de passage de chaque tronçon entre ces arrêts (cases) */
+  via: number[][];
   why: string | null;
   sig: string;
   /** arrêt où il est à quai (ou d'où il est parti), sens de parcours, trajet en cours et milieu du train sur ce trajet */
@@ -115,6 +117,8 @@ export class Railway {
   /** cases des embranchements d'avant-postes : aucune autre voie n'y passe */
   private spurs = new Map<number, number>();
   private entries = new Map<number, number>();
+  /** tracés calculés pour l'éditeur de ligne (le même tronçon se redemande à chaque image) */
+  private plans = new Map<string, { seg: Seg | null; pieces: (number[] | null)[] }>();
   private key = '';
   private refreshT = 0;
   private newsT = 0;
@@ -133,22 +137,42 @@ export class Railway {
 
   // ---------- Lignes (le joueur les trace) ----------
 
-  /** Nouvelle ligne par ces arrêts, dans l'ordre */
-  addLine(stops: number[]): RailLine {
+  /** Nouvelle ligne par ces arrêts, dans l'ordre (et, tronçon par tronçon, par ces points de passage) */
+  addLine(stops: number[], via?: number[][]): RailLine {
     const w = this.world, used = new Set(w.lines.map((l) => l.color));
     const l: RailLine = { id: Math.max(0, ...w.lines.map((x) => x.id)) + 1, stops: [...stops], color: LINE_COLORS.find((c) => !used.has(c)) ?? LINE_COLORS[w.lines.length % LINE_COLORS.length] };
+    if (via?.some((v) => v.length)) l.via = via.map((v) => [...v]);
     w.lines.push(l);
     w.linesAuto = false;
     this.refresh(true);
     return l;
   }
 
-  /** La ligne passe désormais par ces arrêts */
-  setStops(id: number, stops: number[]) {
+  /** La ligne passe désormais par ces arrêts (et par ces points de passage ; sans eux, la voie se pose d'elle-même) */
+  setStops(id: number, stops: number[], via?: number[][]) {
     const l = this.world.lines.find((x) => x.id === id);
     if (!l) return;
     l.stops = [...stops];
+    if (via?.some((v) => v.length)) l.via = via.map((v) => [...v]); else delete l.via;
     this.refresh(true);
+  }
+
+  /**
+   * Tracé d'un tronçon pour l'éditeur de ligne, de l'arrêt `a` à l'arrêt `b` par les cases `via` : le tronçon (null s'il ne
+   * passe pas) et, morceau par morceau (d'un point au suivant), ses cases, ou null pour un morceau impossible ; null si l'un
+   * des deux bâtiments ne fait pas d'arrêt
+   */
+  plan(a: Building, b: Building, via: number[]): { seg: Seg | null; pieces: (number[] | null)[] } | null {
+    const A = this.stopOf(a), B = this.stopOf(b), w = this.world;
+    if (!A || !B) return null;
+    const key = `${a.id}>${b.id}|${via.join(',')}|${w.version}|${w.visVersion}|${this.version}`;
+    let p = this.plans.get(key);
+    if (!p) {
+      if (this.plans.size > 48) this.plans.clear();
+      p = this.lay(A, B, via);
+      this.plans.set(key, p);
+    }
+    return p;
   }
 
   removeLine(id: number) {
@@ -365,7 +389,7 @@ export class Railway {
   refresh(force = false) {
     const w = this.world;
     const keyOf = () => {
-      let key = `${w.visVersion}|${[...this.entries].join(',')}|${w.lines.map((l) => `${l.id}:${l.stops.join('.')}`).join(';')}|`;
+      let key = `${w.visVersion}|${[...this.entries].join(',')}|${w.lines.map((l) => `${l.id}:${l.stops.join('.')}/${l.via?.map((v) => v.join(',')).join('/') ?? ''}`).join(';')}|`;
       for (const b of w.buildings.values()) key += `${b.id}:${b.x},${b.z},${b.rot},${b.age};`;
       return key;
     };
@@ -380,18 +404,26 @@ export class Railway {
     const live = new Set<number>();
     for (const l of w.lines) {
       live.add(l.id);
-      const stops = l.stops.map((id) => w.buildings.get(id)).map((b) => (b ? this.stopOf(b) : null)).filter((s): s is Stop => !!s);
+      // un arrêt hors service : les tronçons de part et d'autre n'en font qu'un, avec leurs points de passage bout à bout
+      const all = l.stops.map((id) => w.buildings.get(id)).map((b) => (b ? this.stopOf(b) : null));
+      const kept = all.map((s, i) => (s ? i : -1)).filter((i) => i >= 0), stops = kept.map((i) => all[i]!);
+      const via = mergeVia(l.via, kept) ?? [];
       const sig = stops.map((s) => s.b.id).join('.');
       let tr = this.trains.get(l.id);
       if (tr && tr.sig !== sig) { this.reset(tr); tr = undefined; }
       if (!tr) { tr = this.newTrain(l, stops, sig); this.trains.set(l.id, tr); }
-      tr.line = l; tr.stops = stops; tr.legs.clear();
+      tr.line = l; tr.stops = stops; tr.via = via; tr.legs.clear();
       tr.mine = stops.findIndex((s) => s.post);
       const was = tr.why;
       const twin = this.sameAs(l.stops, l.id);
       tr.why = stops.length < 2 ? (l.stops.length >= 2 ? 'Il lui manque des arrêts en service (gare démolie, avant-poste sans place pour un quai…).' : 'Il faut au moins deux arrêts.')
         : twin && twin.id < l.id ? 'Même parcours qu’une autre ligne : sur une voie unique, un seul train peut y rouler. Fermez l’une des deux.' : null;
-      for (let i = 0; !tr.why && i + 1 < stops.length; i++) if (!this.seg(stops[i], stops[i + 1])) tr.why = `Pas de voie possible entre ${this.stopName(stops[i].b)} et ${this.stopName(stops[i + 1].b)} : de l’eau, des bâtiments ou des pentes trop raides barrent le chemin.`;
+      for (let i = 0; !tr.why && i + 1 < stops.length; i++) {
+        if (this.seg(stops[i], stops[i + 1], via[i])) continue;
+        const a = this.stopName(stops[i].b), b = this.stopName(stops[i + 1].b);
+        tr.why = via[i]?.length ? `La voie ne passe pas par les points choisis entre ${a} et ${b} : un point est sur un obstacle, ou de l’eau, des bâtiments, des pentes trop raides barrent le chemin.`
+          : `Pas de voie possible entre ${a} et ${b} : de l’eau, des bâtiments ou des pentes trop raides barrent le chemin.`;
+      }
       if (tr.why) { this.reset(tr); continue; }
       if (was || !tr.leg) { this.start(tr); continue; }
       // le tracé a bougé : le train garde sa place sur son trajet, à proportion
@@ -418,7 +450,7 @@ export class Railway {
 
   private newTrain(line: RailLine, stops: Stop[], sig: string): Train {
     return {
-      line, stops, why: null, sig, at: 0, dir: 1, leg: null, s: 0, speed: 0, t: 0, phase: 'dwell', flip: false, arrived: null, waiting: false, legs: new Map(),
+      line, stops, via: [], why: null, sig, at: 0, dir: 1, leg: null, s: 0, speed: 0, t: 0, phase: 'dwell', flip: false, arrived: null, waiting: false, legs: new Map(),
       boarding: [], aboard: [], relief: [], crew: [], back: [], mine: -1, cargo: { ore: 0, stone: 0 }, pile: { ore: 0, stone: 0 },
       vein: -1, dig: 0, veinOre: 0, spot: -1, walk: 0, veinsLeft: false, pickT: 0, dist: null, delivered: { ore: 0, stone: 0 }, dug: 0, carried: 0,
     };
@@ -470,7 +502,8 @@ export class Railway {
   private legOf(tr: Train, i: number, j: number): Leg | null {
     const key = `${i}>${j}`, known = tr.legs.get(key);
     if (known) return known;
-    const P = tr.stops[i], Q = tr.stops[j], seg = P && Q ? this.seg(P, Q) : null;
+    // les points de passage du tronçon sont rangés dans le sens de la ligne
+    const P = tr.stops[i], Q = tr.stops[j], lo = Math.min(i, j), seg = P && Q ? this.seg(tr.stops[lo], tr.stops[lo + 1], tr.via[lo]) : null;
     if (!seg) return null;
     const rev = seg.a !== P.b.id, ea = rev ? seg.eb : seg.ea, eb = rev ? seg.ea : seg.eb, mid = rev ? [...seg.pts].reverse() : seg.pts;
     const along = (s: Stop, k: number): [number, number] => [s.c[0] + s.u[0] * k, s.c[1] + s.u[1] * k];
@@ -551,32 +584,21 @@ export class Railway {
   /** Hauteur de la voie sur une case : le sol, ou le tablier du pont au-dessus de l'eau */
   private railH(x: number, z: number) { return this.world.deckY(x, z) ?? this.world.cellAvg(x, z); }
 
-  /** Tronçon entre deux arrêts (calculé une fois pour les deux sens), ou null s'il n'y a pas de passage */
-  private seg(A: Stop, B: Stop): Seg | null {
-    const [P, Q] = A.b.id < B.b.id ? [A, B] : [B, A], key = `${P.b.id}|${Q.b.id}`;
-    if (!this.segs.has(key)) this.segs.set(key, this.lay(P, Q));
+  /**
+   * Tronçon entre deux arrêts, par ces points de passage (rangés de A à B), calculé une fois pour les deux sens ; null s'il
+   * n'y a pas de passage. Deux lignes qui relient les mêmes arrêts par des points différents ont chacune sa voie
+   */
+  private seg(A: Stop, B: Stop, via: number[] = []): Seg | null {
+    const flip = A.b.id > B.b.id, [P, Q] = flip ? [B, A] : [A, B], v = flip ? [...via].reverse() : via;
+    const key = `${P.b.id}|${Q.b.id}${v.length ? `|${v.join(',')}` : ''}`;
+    if (!this.segs.has(key)) this.segs.set(key, this.lay(P, Q, v).seg);
     return this.segs.get(key)!;
   }
 
-  /** Tracé le moins coûteux d'un bout de quai de A à un bout de quai de B, sortant dans l'axe des quais, lissé */
-  private lay(A: Stop, B: Stop): Seg | null {
-    const w = this.world;
-    const cellOf = (p: [number, number]) => (w.inCells(Math.floor(p[0]), Math.floor(p[1])) ? Math.floor(p[1]) * N + Math.floor(p[0]) : -1);
-    const along = (s: Stop, k: number): [number, number] => [s.c[0] + s.u[0] * k, s.c[1] + s.u[1] * k];
-    // on ne traverse pas l'embranchement d'un avant-poste
-    const cost = (k: number) => (this.spurs.has(k) ? Infinity : this.cost(k));
-    // sorties : dans l'axe du quai, sur deux cases si l'on peut (la courbe qui suit en est plus douce)
-    const exits = (s: Stop) => [1, -1].flatMap((sg) => {
-      // au-delà de l'emprise de la gare, ou du bout de l'embranchement de l'avant-poste
-      const e = s.half + (s.post ? OVER : 0) + 0.55, p1 = along(s, sg * e), p2 = along(s, sg * (e + 1)), k1 = cellOf(p1), k2 = cellOf(p2);
-      if (k1 < 0 || !isFinite(cost(k1))) return [];
-      const far = k2 >= 0 && isFinite(cost(k2));
-      return [{ sg, k: far ? k2 : k1, p: far ? p2 : p1 }];
-    });
-    const starts = exits(A), goals = new Map(exits(B).map((g) => [g.k, g]));
-    if (!starts.length || !goals.size) return null;
-    const dist = new Float32Array(N * N).fill(Infinity), prev = new Int32Array(N * N).fill(-1), heap = new Heap(), from = new Map<number, (typeof starts)[0]>();
-    for (const s of starts) { dist[s.k] = 0; heap.push(0, s.k); from.set(s.k, s); }
+  /** Chemin le moins coûteux (Dijkstra, 8-voisinage) de l'une des cases de départ à l'une des cases d'arrivée, ou null */
+  private route(starts: number[], goals: Set<number>, cost: (k: number) => number): number[] | null {
+    const w = this.world, dist = new Float32Array(N * N).fill(Infinity), prev = new Int32Array(N * N).fill(-1), heap = new Heap();
+    for (const s of starts) { dist[s] = 0; heap.push(0, s); }
     let hit = -1;
     while (heap.size) {
       const kk = heap.keys[0], c = heap.pop();
@@ -599,8 +621,49 @@ export class Railway {
     if (hit < 0) return null;
     const cells: number[] = [];
     for (let c = hit; c >= 0; c = prev[c]) cells.push(c);
-    cells.reverse();
-    const sa = from.get(cells[0])!, sb = goals.get(hit)!;
+    return cells.reverse();
+  }
+
+  /**
+   * Tracé le moins coûteux d'un bout de quai de A à un bout de quai de B, sortant dans l'axe des quais, lissé ; s'il y a des
+   * points de passage, il va de l'un à l'autre dans l'ordre (un morceau de chemin pour chacun) et passe par chacun. Avec le
+   * tronçon (null s'il ne passe pas), les cases de chaque morceau (null : morceau impossible, point posé sur un obstacle…)
+   */
+  private lay(A: Stop, B: Stop, via: number[] = []): { seg: Seg | null; pieces: (number[] | null)[] } {
+    const w = this.world;
+    const cellOf = (p: [number, number]) => (w.inCells(Math.floor(p[0]), Math.floor(p[1])) ? Math.floor(p[1]) * N + Math.floor(p[0]) : -1);
+    const along = (s: Stop, k: number): [number, number] => [s.c[0] + s.u[0] * k, s.c[1] + s.u[1] * k];
+    // on ne traverse pas l'embranchement d'un avant-poste
+    const cost = (k: number) => (this.spurs.has(k) ? Infinity : this.cost(k));
+    // sorties : dans l'axe du quai, sur deux cases si l'on peut (la courbe qui suit en est plus douce)
+    const exits = (s: Stop) => [1, -1].flatMap((sg) => {
+      // au-delà de l'emprise de la gare, ou du bout de l'embranchement de l'avant-poste
+      const e = s.half + (s.post ? OVER : 0) + 0.55, p1 = along(s, sg * e), p2 = along(s, sg * (e + 1)), k1 = cellOf(p1), k2 = cellOf(p2);
+      if (k1 < 0 || !isFinite(cost(k1))) return [];
+      const far = k2 >= 0 && isFinite(cost(k2));
+      return [{ sg, k: far ? k2 : k1, p: far ? p2 : p1 }];
+    });
+    const starts = exits(A), goals = new Map(exits(B).map((g) => [g.k, g])), from = new Map(starts.map((s) => [s.k, s]));
+    // un morceau de chemin jusqu'à chaque point de passage, puis jusqu'au quai de B ; un morceau impossible n'empêche pas de
+    // chercher les suivants (l'éditeur les montre tous)
+    const ends = [...via.map((k) => new Set([k])), new Set(goals.keys())], pieces: (number[] | null)[] = [];
+    let at = starts.map((s) => s.k);
+    for (const end of ends) {
+      const p = at.length ? this.route(at, end, cost) : null;
+      pieces.push(p);
+      at = p ? [p[p.length - 1]] : [...end].filter((k) => isFinite(cost(k)));
+    }
+    if (!starts.length || !goals.size || pieces.some((p) => !p)) return { seg: null, pieces };
+    // les morceaux bout à bout ; les cases des points de passage restent des points de la voie
+    const cells: number[] = [], ends2: number[] = [];
+    for (const p of pieces as number[][]) {
+      for (const k of cells.length && cells[cells.length - 1] === p[0] ? p.slice(1) : p) cells.push(k);
+      ends2.push(cells.length - 1);
+    }
+    // les cases des points de passage restent des sommets de la voie, et aussi celles à trois pas de part et d'autre : le
+    // lissage n'arrondit qu'un petit angle, la voie passe tout près du point choisi
+    const must = [...new Set(ends2.flatMap((m) => (m === cells.length - 1 ? [m] : [m - 3, m, m + 3])))].filter((m) => m > 0 && m < cells.length).sort((p, q) => p - q);
+    const hit = cells[cells.length - 1], sa = from.get(cells[0])!, sb = goals.get(hit)!;
     const centre = (k: number): [number, number] => [(k % N) + 0.5, Math.floor(k / N) + 0.5];
     // on garde les cases d'angle, on file tout droit ailleurs tant que la voie reste sur des cases praticables
     const clear = (a: [number, number], b: [number, number]) => {
@@ -613,7 +676,7 @@ export class Railway {
     };
     const keep: [number, number][] = [centre(cells[0])];
     for (let i = 0; i < cells.length - 1;) {
-      let j = Math.min(cells.length - 1, i + 10);
+      let j = Math.min(must.find((m) => m > i) ?? cells.length - 1, i + 10);
       while (j > i + 1 && !clear(centre(cells[i]), centre(cells[j]))) j--;
       keep.push(centre(cells[j]));
       i = j;
@@ -632,6 +695,6 @@ export class Railway {
     }
     const cum = [0];
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-    return { a: A.b.id, b: B.b.id, ea: sa.sg, eb: sb.sg, pts, cum, len: cum[cum.length - 1] };
+    return { seg: { a: A.b.id, b: B.b.id, ea: sa.sg, eb: sb.sg, pts, cum, len: cum[cum.length - 1] }, pieces };
   }
 }

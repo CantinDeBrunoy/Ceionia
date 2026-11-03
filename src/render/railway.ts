@@ -179,9 +179,12 @@ export class RailView {
     this.puffs.update(dt);
   }
 
-  /** Aperçu de la ligne en cours de tracé : un fil de sa couleur d'arrêt en arrêt, une borne à chaque arrêt */
-  setPreview(stops: Building[], color: number) {
-    const key = `${stops.map((b) => b.id).join('.')}|${color}`;
+  /**
+   * Aperçu de la ligne en cours de tracé : une borne à chaque arrêt, et un fil de sa couleur d'arrêt en arrêt (`links` ; sans
+   * lui, c'est l'éditeur du tracé qui montre la voie prévue)
+   */
+  setPreview(stops: Building[], color: number, links = true) {
+    const key = `${stops.map((b) => b.id).join('.')}|${color}|${links}`;
     if (key === this.previewKey) return;
     this.previewKey = key;
     for (const o of [...this.preview.children]) { this.preview.remove(o); (o as THREE.Mesh).geometry?.dispose(); }
@@ -194,7 +197,7 @@ export class RailView {
       const knob = new THREE.Mesh(new THREE.SphereGeometry(0.14 + (i === 0 ? 0.05 : 0), 10, 8), mat);
       knob.position.copy(p).setY(p.y + 0.1); knob.renderOrder = 5; this.preview.add(knob);
       const q = pts[i + 1];
-      if (!q) return;
+      if (!q || !links) return;
       const len = p.distanceTo(q), tube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, len, 6).rotateX(Math.PI / 2), mat);
       tube.position.copy(p).add(q).multiplyScalar(0.5); tube.lookAt(q); tube.renderOrder = 5;
       this.preview.add(tube);

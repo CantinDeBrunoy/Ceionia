@@ -8,6 +8,8 @@ import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin } from './placement';
 import { autoRoad } from './autoroads';
+import { planRoad, RoadPlan } from './freeRoad';
+import { sampleCurve } from '../world/curves';
 import { costOf, costLabel } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
@@ -18,6 +20,19 @@ export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'di
 export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'];
 /** Décors posés d'un clic, sans pinceau */
 export const SINGLE_TOOLS: ToolId[] = ['cave', 'fissure'];
+/** Tracé des routes : en glissant, case par case (« Ligne »), ou d'un point A à un point B, en courbe (« Libre ») */
+export type RoadMode = 'line' | 'free';
+
+/**
+ * Éditeur posé par-dessus les outils (tracé d'une voie ferrée) : il reçoit le clic en premier, et le garde (puis le glissé et
+ * le relâcher) s'il le prend ; `hover` lui dit où est le pointeur et rend le curseur à afficher
+ */
+export interface Overlay {
+  down(hit: THREE.Vector3): boolean;
+  move(hit: THREE.Vector3): void;
+  up(hit: THREE.Vector3 | null): void;
+  hover(hit: THREE.Vector3 | null): string;
+}
 
 export interface ToolHost {
   world: World;
@@ -61,9 +76,21 @@ export class ToolController implements ToolInput {
   /** tracé d'une ligne de chemin de fer en cours : un clic sur un bâtiment le propose comme arrêt */
   picking = false;
   pickStop: ((b: Building | undefined) => void) | null = null;
+  /** éditeur du tracé d'une voie ferrée, prioritaire sur l'outil ; il a pris le clic en cours */
+  overlay: Overlay | null = null;
+  private overlayHeld = false;
   /** où le clic a commencé (un glissé n'est pas un clic) */
   private downAt: [number, number] | null = null;
   private lastToast = 0;
+  /** mode de tracé des routes ; en mode libre, le point A choisi (centre de sa case) et la route prévue jusqu'au pointeur */
+  roadMode: RoadMode = 'line';
+  private freeFrom: [number, number] | null = null;
+  private freePlan: RoadPlan | null = null;
+  private freeKey = '';
+  /** où le glissé du mode libre a commencé (relâcher loin de là pose la route) */
+  private freeDrag: [number, number] | null = null;
+  private freeLine: THREE.Mesh;
+  private freeDot: THREE.Mesh;
 
   private ring: THREE.LineLoop;
   private marker: THREE.Mesh;
@@ -85,7 +112,12 @@ export class ToolController implements ToolInput {
     this.ghostGlow = new THREE.Mesh(new THREE.BufferGeometry(), mats.ghost);
     this.ghost.add(this.ghostBody, this.ghostGlow);
     this.ghost.visible = false;
-    h.scene.add(this.ring, this.marker, this.ghost);
+    // route libre : ruban de la route prévue, pastille sur le point A
+    this.freeLine = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0x40e070, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
+    this.freeLine.renderOrder = 9; this.freeLine.visible = false; this.freeLine.frustumCulled = false;
+    this.freeDot = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.9, depthTest: false }));
+    this.freeDot.renderOrder = 10; this.freeDot.visible = false;
+    h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot);
   }
 
   // ---------- API ----------
@@ -94,9 +126,18 @@ export class ToolController implements ToolInput {
     if (t !== 'none') this.selected = null;
     // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route
     if (t !== this.tool || (kind && kind !== this.kind)) this.rotManual = false;
+    if (t !== this.tool) this.freeFrom = null;
     this.tool = t;
     if (kind) this.kind = kind;
     this.ghostKey = '';
+    this.refreshVisuals();
+    this.h.changed();
+  }
+
+  /** Mode de tracé des routes (le point A d'une route libre en cours s'oublie) */
+  setRoadMode(m: RoadMode) {
+    this.roadMode = m;
+    this.freeFrom = null;
     this.refreshVisuals();
     this.h.changed();
   }
@@ -133,9 +174,13 @@ export class ToolController implements ToolInput {
   }
   cancel() {
     this.pressed = false;
+    if (this.overlayHeld) { this.overlayHeld = false; this.overlay?.up(null); }
+    this.freeDrag = null;
     this.endStroke();
   }
   escape() {
+    // une route libre commencée : Échap oublie son point A, l'outil reste en main
+    if (this.freeFrom) { this.freeFrom = null; this.refreshVisuals(); return; }
     if (this.moveOrigin) this.cancelMove();
     this.setTool('none');
     this.select(null);
@@ -234,8 +279,10 @@ export class ToolController implements ToolInput {
     this.refreshVisuals();
     // une grotte ou une faille sous le curseur : on peut y descendre ; un volcan : on peut le réveiller
     const w = this.h.world, hit = this.hit;
+    // l'éditeur du tracé d'une voie choisit son curseur (une poignée, la voie)
+    const over = this.overlay?.hover(hit) ?? '';
     // et un bâtiment : un clic ouvre sa fiche
-    this.h.canvas.style.cursor = this.tool === 'none' && hit && (w.entranceAt(hit.x, hit.z) >= 0 || w.volcanoAt(hit.x, hit.z) >= 0 || w.buildingAt(Math.floor(hit.x), Math.floor(hit.z))) ? 'pointer' : '';
+    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.entranceAt(hit.x, hit.z) >= 0 || w.volcanoAt(hit.x, hit.z) >= 0 || w.buildingAt(Math.floor(hit.x), Math.floor(hit.z))) ? 'pointer' : '');
   }
 
   down(e: PointerInfo) {
@@ -244,6 +291,7 @@ export class ToolController implements ToolInput {
     this.touchMode = e.touch;
     this.refreshVisuals();
     if (!this.hit) return;
+    if (this.overlay?.down(this.hit)) { this.overlayHeld = true; this.pressed = false; return; }
     const t = this.tool;
     // outil « Voir » : un clic sur une grotte ou une faille fait descendre sous terre, un clic sur un volcan le fait entrer en éruption
     if (t === 'none') {
@@ -262,6 +310,7 @@ export class ToolController implements ToolInput {
     } else if (SCULPT_TOOLS.includes(t)) this.ctx.target = this.hit.y;
     else if (t === 'biome') this.applyBiome();
     else if (VEG_TOOLS.includes(t)) this.applyVeg();
+    else if (t === 'road' && this.roadMode === 'free') this.freeDown(e);
     else if (t === 'road') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
     else if (t === 'build' && !e.touch) this.tryPlace();
@@ -271,16 +320,30 @@ export class ToolController implements ToolInput {
 
   move(e: PointerInfo) {
     this.pickAt(e);
+    if (this.overlayHeld) { if (this.hit) this.overlay?.move(this.hit); return; }
     this.refreshVisuals();
     if (!this.pressed || !this.hit) return;
     const t = this.tool;
     if (t === 'biome') this.applyBiome();
     else if (VEG_TOOLS.includes(t) && !SINGLE_TOOLS.includes(t)) this.applyVeg();
-    else if (t === 'road') this.applyRoad();
+    else if (t === 'road' && this.roadMode === 'line') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
   }
 
   up(e: PointerInfo) {
+    if (this.overlayHeld) {
+      this.overlayHeld = false;
+      this.pickAt(e);
+      this.overlay?.up(this.hit);
+      this.pressed = false;
+      return;
+    }
+    // route libre tracée d'un seul glissé : on relâche sur le point B
+    if (this.freeDrag && this.freeFrom && this.tool === 'road' && Math.hypot(e.x - this.freeDrag[0], e.y - this.freeDrag[1]) > 12) {
+      this.pickAt(e);
+      this.freeLay();
+    }
+    this.freeDrag = null;
     if (this.tool === 'none' && this.downAt && Math.hypot(e.x - this.downAt[0], e.y - this.downAt[1]) < 8) {
       this.pickAt(e);
       const c = this.cell(), b = c ? this.h.world.buildingAt(c.x, c.z) : undefined;
@@ -382,6 +445,68 @@ export class ToolController implements ToolInput {
     if (this.strokeChanged) this.h.audio.sfxClick();
   }
 
+  /**
+   * Route libre : un premier clic choisit le point A, un second (ou le relâcher d'un glissé) le point B, et la route se pose en
+   * courbe de l'un à l'autre ; B devient le point A de la suivante (Échap, ou un clic sur A, arrête là)
+   */
+  private freeDown(e: PointerInfo) {
+    const c = this.cell(), w = this.h.world;
+    if (!c || !w.inCells(c.x, c.z)) return;
+    if (!this.freeFrom) {
+      if (!w.road[w.ci(c.x, c.z)] && !w.canRoad(c.x, c.z)) { this.h.toast('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.'); return; }
+      this.freeFrom = [c.x + 0.5, c.z + 0.5];
+      this.freeDrag = [e.x, e.y];
+      this.h.audio.sfxClick();
+      this.refreshVisuals();
+      return;
+    }
+    if (Math.floor(this.freeFrom[0]) === c.x && Math.floor(this.freeFrom[1]) === c.z) { this.freeFrom = null; this.refreshVisuals(); return; }
+    this.freeLay();
+  }
+
+  /** Pose la route libre prévue du point A jusqu'au pointeur (annulable d'un coup), ou dit pourquoi elle ne passe pas */
+  private freeLay() {
+    const c = this.cell(), A = this.freeFrom;
+    if (!c || !A || (Math.floor(A[0]) === c.x && Math.floor(A[1]) === c.z)) return;
+    const plan = planRoad(this.h.world, A[0], A[1], c.x + 0.5, c.z + 0.5);
+    if (plan.why) { this.h.toast(plan.why); return; }
+    if (!this.pre) this.beginStroke();
+    this.mark();
+    this.h.world.addCurve(plan.pts);
+    this.h.audio.sfxPlace();
+    this.freeFrom = [c.x + 0.5, c.z + 0.5];
+    this.freeKey = '';
+    this.refreshVisuals();
+  }
+
+  /** Aperçu de la route libre : un ruban vert de A jusqu'au pointeur, rouge si elle ne passe pas */
+  private freePreview() {
+    const A = this.freeFrom, c = this.cell(), w = this.h.world;
+    this.freeDot.visible = !!A;
+    if (!A) return;
+    this.freeDot.position.set(A[0], w.surfaceAt(A[0], A[1]) + 0.1, A[1]);
+    if (!c || !w.inCells(c.x, c.z) || (Math.floor(A[0]) === c.x && Math.floor(A[1]) === c.z)) return;
+    const key = `${A[0]},${A[1]}>${c.x},${c.z}|${w.version}|${w.visVersion}`;
+    if (key !== this.freeKey) {
+      this.freeKey = key;
+      this.freePlan = planRoad(w, A[0], A[1], c.x + 0.5, c.z + 0.5);
+      const s = sampleCurve(this.freePlan.pts, 0.2), pos: number[] = [];
+      for (let i = 0; i + 3 < s.length; i += 2) {
+        const p = [s[i], s[i + 1]], q = [s[i + 2], s[i + 3]], l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1, nx = (-(q[1] - p[1]) / l) * 0.3, nz = ((q[0] - p[0]) / l) * 0.3;
+        const y = (x: number, z: number) => w.surfaceAt(x, z) + 0.1;
+        const a = [p[0] + nx, y(p[0] + nx, p[1] + nz), p[1] + nz], b = [p[0] - nx, y(p[0] - nx, p[1] - nz), p[1] - nz];
+        const d = [q[0] + nx, y(q[0] + nx, q[1] + nz), q[1] + nz], e = [q[0] - nx, y(q[0] - nx, q[1] - nz), q[1] - nz];
+        pos.push(...a, ...b, ...e, ...a, ...e, ...d);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      this.freeLine.geometry.dispose();
+      this.freeLine.geometry = g;
+      (this.freeLine.material as THREE.MeshBasicMaterial).color.setHex(this.freePlan.why ? 0xff5a5a : 0x40e070);
+    }
+    this.freeLine.visible = true;
+  }
+
   private applyBulldoze() {
     const c = this.cell();
     if (!c) return;
@@ -448,7 +573,8 @@ export class ToolController implements ToolInput {
   // ---------- Visuels ----------
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
-    this.ring.visible = this.marker.visible = this.ghost.visible = false;
+    this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = false;
+    if (t === 'road' && this.roadMode === 'free') this.freePreview();
     // le bâtiment sélectionné : son emprise s'éclaire
     const sel = t === 'none' ? this.selectedBuilding() : undefined;
     if (sel) {
@@ -476,7 +602,9 @@ export class ToolController implements ToolInput {
       const c = this.cell();
       if (!c || !w.inCells(c.x, c.z)) return;
       let ok = true;
-      if (t === 'road') ok = w.canRoad(c.x, c.z) && !w.road[w.ci(c.x, c.z)];
+      // en mode libre, une route existante est un bon point de départ ; une fois A choisi, la case dit si la route passe
+      if (t === 'road' && this.roadMode === 'free') ok = this.freeFrom && this.freePlan && this.freeLine.visible ? !this.freePlan.why : w.canRoad(c.x, c.z) || !!w.road[w.ci(c.x, c.z)];
+      else if (t === 'road') ok = w.canRoad(c.x, c.z) && !w.road[w.ci(c.x, c.z)];
       else if (t === 'bulldoze') ok = false;
       else ok = !!w.buildingAt(c.x, c.z);
       this.markerMat.color.setHex(t === 'bulldoze' ? 0xff6a5a : ok ? 0x40e070 : 0xff5a5a);

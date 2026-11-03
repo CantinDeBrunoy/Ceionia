@@ -1,4 +1,4 @@
-import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS } from '../build/tools';
+import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BuildCat, sizeOf, UPGRADES } from '../build/catalog';
 import { Sim, NeedId } from '../sim/sim';
 import type { Agents } from '../sim/agents';
@@ -10,6 +10,7 @@ import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import { Railway, Train, isStation } from '../sim/railway';
+import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
@@ -58,12 +59,15 @@ export interface UIHost {
   incidents(): { key: string; icon: string; title: string; status: string; progress: number; x: number; z: number }[];
   incidentCam: string | null;
   followIncident(key: string | null): void;
-  /** ligne en cours de tracé, et ce qu'on en fait */
-  railEdit: { stops: number[]; line: number | null; color: number } | null;
+  /** ligne en cours de tracé (arrêts, points de passage de la voie), et ce qu'on en fait */
+  railEdit: RailEditState | null;
   startRailEdit(from: { stop?: number; line?: number }): void;
   railUndo(): void;
   railFinish(): void;
   railCancel(): void;
+  /** plus de points de passage : la voie se pose d'elle-même ; ce qui empêche de valider le tracé (null : rien) */
+  railAuto(): void;
+  railTrouble(): string | null;
   agents: Agents;
   following: number | null;
   follow(id: number | null): void;
@@ -118,7 +122,8 @@ const TOOL_DESC: Record<string, string> = {
   forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: 'Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille.',
   biome: 'Peindre un biome (tempéré, taïga, désert, tropical, marais) ou rendre la terre à son climat : le sol, les arbres, l’herbe, les bêtes et la neige suivent.',
   rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte vers le monde souterrain (un clic).', fissure: 'Ouvrir une faille vers le monde souterrain (un clic).',
-  erase: 'Effacer forêts, champs, jardins et rochers.', road: 'Tracer une route en glissant ; sur l’eau peu profonde, elle devient un pont.',
+  erase: 'Effacer forêts, champs, jardins et rochers.',
+  road: 'Tracer une route : en ligne, en glissant case par case ; en libre, d’un clic au point A puis au point B, une belle courbe qui contourne les obstacles (R pour changer de mode). Sur l’eau peu profonde, elle devient un pont.',
   bulldoze: 'Démolir un bâtiment, une route ou un décor.', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
 };
 
@@ -134,6 +139,12 @@ const GARDEN_BY_AGE: { icon: string; label: string; desc: string }[] = [
 const BIOME_CHOICES: { b: number | null; label: string; color: string }[] = [
   { b: 0, label: 'Tempéré', color: '#8fc47e' }, { b: 1, label: 'Taïga', color: '#5f8a72' }, { b: 2, label: 'Désert', color: '#e2c27a' },
   { b: 3, label: 'Tropical', color: '#3fae6a' }, { b: 4, label: 'Marais', color: '#7a8a5a' }, { b: null, label: 'Climat', color: 'transparent' },
+];
+
+/** Modes de tracé de l'outil Route */
+const ROAD_MODES: { id: RoadMode; icon: string; label: string; title: string }[] = [
+  { id: 'line', icon: 'road', label: 'Ligne', title: 'En glissant, case par case (tout droit, à angle droit)' },
+  { id: 'free', icon: 'pen', label: 'Libre', title: 'Un clic au point A, un clic au point B : une belle courbe qui contourne les obstacles, comme la voie ferrée' },
 ];
 
 /** Outils rapides, toujours à portée en haut à gauche de la barre */
@@ -285,6 +296,7 @@ export class UI {
           <div id="dockBottom">
             <div id="subcats"></div>
             <div id="biomes"></div>
+            <div id="roadModes"></div>
             <div id="brush"><span>Taille du pinceau</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
           </div>
         </div>
@@ -371,6 +383,14 @@ export class UI {
       this.host.tools.biomeKind = b.dataset.b === '' ? null : Number(b.dataset.b);
       this.host.audio.sfxClick();
       this.refreshTools();
+    };
+    // l'outil Route : tracer en ligne (en glissant) ou en libre (d'un point A à un point B, en courbe)
+    $('#roadModes').innerHTML = `<span>Tracé</span>${ROAD_MODES.map((m) => `<button data-m="${m.id}" title="${m.title}">${ic(m.icon, 15, 2)}${m.label}</button>`).join('')}`;
+    $('#roadModes').onclick = (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-m]');
+      if (!b) return;
+      this.host.tools.setRoadMode(b.dataset.m as RoadMode);
+      this.host.audio.sfxClick();
     };
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
@@ -515,7 +535,7 @@ export class UI {
     const rails = stop ? `<div class="rails"><b>${ic('train', 14, 2)} Chemin de fer</b>${lines.map((l) => {
       const tr = r.trains.get(l.id);
       return `<div class="rline">${dot(l.color)}<div class="grow"><span>${r.lineLabel(l)}</span><small>${tr ? trainWhere(r, tr) : ''}${tr && tr.crew.length ? ` · ${tr.crew.length} mineurs au fond` : ''}</small></div>
-        <button data-act="follow:${l.id}" title="Suivre le train" aria-label="Suivre le train">${ic('eye', 15, 2)}</button><button data-act="edit:${l.id}" title="Modifier les arrêts" aria-label="Modifier les arrêts">${ic('road', 15, 2)}</button><button data-act="drop:${l.id}" title="Fermer la ligne" aria-label="Fermer la ligne">${ic('close', 15, 2)}</button></div>`;
+        <button data-act="follow:${l.id}" title="Suivre le train" aria-label="Suivre le train">${ic('eye', 15, 2)}</button><button data-act="edit:${l.id}" title="Modifier la ligne : ses arrêts et le tracé de sa voie" aria-label="Modifier la ligne">${ic('road', 15, 2)}</button><button data-act="drop:${l.id}" title="Fermer la ligne" aria-label="Fermer la ligne">${ic('close', 15, 2)}</button></div>`;
     }).join('')}<button data-act="newline" class="newline">${ic('train', 15, 2)} Nouvelle ligne depuis ${b.kind === 'outpost' ? 'cet avant-poste' : 'cette gare'}</button></div>`
       : b.kind === 'outpost' && h.sim.age >= 3 ? `<p class="stat">${ic('train', 14, 2)} Cet avant-poste n’a pas la place d’un quai à son pied : le train ne peut pas s’y arrêter.</p>` : '';
     // améliorations : ce qu'il peut devenir à cet âge, et leur prix (ou ce qui manque pour les débloquer)
@@ -556,7 +576,8 @@ export class UI {
   private railKey = '';
   private renderRailEdit() {
     const h = this.host, e = h.railEdit, box = $('#railEdit');
-    const key = e ? `${e.stops.join('.')}|${e.line}` : '';
+    const trouble = e ? h.railTrouble() : null, points = e ? e.via.reduce((n, v) => n + v.length, 0) : 0;
+    const key = e ? `${e.stops.join('.')}|${e.line}|${points}|${trouble}` : '';
     if (key === this.railKey) return;
     this.railKey = key;
     box.classList.toggle('show', !!e);
@@ -565,10 +586,12 @@ export class UI {
     box.innerHTML = `<div class="rhead">${dot(e.color)}<b>${e.line !== null ? 'Modifier la ligne' : 'Nouvelle ligne'}</b></div>
       <p>${names.length ? names.join(' → ') : '—'}</p>
       <small>${e.stops.length < 2 ? 'Cliquez la gare ou l’avant-poste suivant.' : 'Cliquez d’autres arrêts pour prolonger la ligne, ou validez.'} Recliquer le dernier arrêt le retire.</small>
-      <div class="acts"><button data-r="undo" ${e.stops.length ? '' : 'disabled'}>${ic('undo', 15, 2)} Retirer le dernier</button><button data-r="ok" class="primary" ${e.stops.length >= 2 ? '' : 'disabled'}>${ic('check', 15, 2)} Valider <kbd>Entrée</kbd></button><button data-r="cancel">${ic('close', 15, 2)} Annuler <kbd>Échap</kbd></button></div>`;
+      ${e.stops.length >= 2 ? `<small class="rtip">${ic('hand', 13, 2)} Saisissez la voie prévue et glissez-la pour la faire passer où vous voulez ; glissez un point pour le déplacer, un clic sur un point le retire.${points ? ` ${points} point${points > 1 ? 's' : ''} de passage.` : ''}</small>` : ''}
+      ${trouble ? `<small class="rbad">${ic('alert', 13, 2)} ${trouble}</small>` : ''}
+      <div class="acts"><button data-r="undo" ${e.stops.length ? '' : 'disabled'}>${ic('undo', 15, 2)} Retirer le dernier</button><button data-r="auto" ${points ? '' : 'disabled'} title="Retirer tous les points de passage : la voie se pose d’elle-même">${ic('restart', 15, 2)} Tracé auto</button><button data-r="ok" class="primary" ${e.stops.length >= 2 && !trouble ? '' : 'disabled'}>${ic('check', 15, 2)} Valider <kbd>Entrée</kbd></button><button data-r="cancel">${ic('close', 15, 2)} Annuler <kbd>Échap</kbd></button></div>`;
     box.querySelectorAll<HTMLButtonElement>('[data-r]').forEach((b) => (b.onclick = () => {
       const r = b.dataset.r;
-      if (r === 'undo') h.railUndo(); else if (r === 'ok') h.railFinish(); else h.railCancel();
+      if (r === 'undo') h.railUndo(); else if (r === 'auto') h.railAuto(); else if (r === 'ok') h.railFinish(); else h.railCancel();
     }));
   }
 
@@ -630,6 +653,9 @@ export class UI {
     // le pinceau de biome : le choix du biome, à côté de la taille
     $('#biomes').classList.toggle('show', tl.tool === 'biome');
     $('#biomes').querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('active', (b.dataset.b === '' ? null : Number(b.dataset.b)) === tl.biomeKind));
+    // l'outil Route : son mode de tracé
+    $('#roadModes').classList.toggle('show', tl.tool === 'road');
+    $('#roadModes').querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('active', b.dataset.m === tl.roadMode));
     // l'onglet suit l'outil ; le rayon suit le bâtiment choisi
     const tabOf = tabOfTool(tl.tool, this.tab);
     if (tabOf !== this.tab) { this.tab = tabOf; this.renderDock(); return; }
@@ -1230,7 +1256,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
   ov.id = 'menu';
   ov.innerHTML = `
     <h1>Village Lowpoly</h1>
-    <p class="sub">Bâtissez, sculptez et regardez votre village traverser cinq âges et quatre saisons.</p>
+    <p class="sub">Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.</p>
     <div class="maps"></div>
     <div class="row" style="justify-content:center"><button id="mImport">${ic('upload', 16)} Importer une sauvegarde (JSON)</button></div>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">
