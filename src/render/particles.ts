@@ -2,18 +2,22 @@ import * as THREE from 'three';
 import { wind as air } from './wind';
 import { smoothstep } from '../core/rng';
 
-/** Réglages d'une bouffée : grossissement final, freinage de la montée, dérive du vent, opacité maximale */
-export interface PuffStyle { grow?: number; drag?: number; wind?: number; alpha?: number }
+/**
+ * Réglages d'une bouffée : grossissement final, freinage de la montée, dérive du vent, opacité maximale, et part de sa vie
+ * à partir de laquelle elle s'efface (tôt pour une fumée qui se dissipe en montant)
+ */
+export interface PuffStyle { grow?: number; drag?: number; wind?: number; alpha?: number; fade?: number }
 
 interface Puff {
   x: number; y: number; z: number; vx: number; vy: number; vz: number;
   size: number; age: number; life: number; col: THREE.Color; glow: number;
-  grow: number; drag: number; wind: number; alpha: number;
+  grow: number; drag: number; wind: number; alpha: number; fade: number;
 }
 
 /**
- * Bouffées (fumée, cendres, vapeur, embruns) : icosaèdres instanciés qui montent, grossissent et s'effacent,
- * avec une transparence et une lueur propres à chaque bouffée
+ * Bouffées (fumée, cendres, vapeur, embruns) : boules instanciées qui montent, grossissent et s'effacent, avec une
+ * transparence et une lueur propres à chaque bouffée. Ombrées en douceur et transparentes sur leur pourtour : une
+ * bouffée est un flocon vaporeux, pas un caillou facetté
  */
 export class Puffs {
   mesh: THREE.InstancedMesh;
@@ -24,6 +28,9 @@ export class Puffs {
 
   constructor(private max: number, detail = 1) {
     const g = new THREE.IcosahedronGeometry(0.5, detail);
+    // normales de sphère (pas de facettes) : le bord s'estompe en douceur, quelle que soit la finesse du maillage
+    const pos = g.attributes.position, nor = g.attributes.normal, n = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) { n.fromBufferAttribute(pos, i).normalize(); nor.setXYZ(i, n.x, n.y, n.z); }
     this.alpha = new THREE.InstancedBufferAttribute(new Float32Array(max), 1);
     this.glow = new THREE.InstancedBufferAttribute(new Float32Array(max), 1);
     g.setAttribute('aAlpha', this.alpha);
@@ -41,7 +48,7 @@ export class Puffs {
 
   spawn(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, life: number, col: THREE.Color, glow = 0, s: PuffStyle = {}) {
     if (this.list.length >= this.max) return;
-    this.list.push({ x, y, z, vx, vy, vz, size, age: 0, life, col: col.clone(), glow, grow: s.grow ?? 2.4, drag: s.drag ?? 0.22, wind: s.wind ?? 0.3, alpha: s.alpha ?? 0.85 });
+    this.list.push({ x, y, z, vx, vy, vz, size, age: 0, life, col: col.clone(), glow, grow: s.grow ?? 2.4, drag: s.drag ?? 0.22, wind: s.wind ?? 0.3, alpha: s.alpha ?? 0.85, fade: s.fade ?? 0.55 });
   }
 
   update(dt: number) {
@@ -63,7 +70,7 @@ export class Puffs {
       d.updateMatrix();
       m.setMatrixAt(n, d.matrix);
       m.setColorAt(n, p.col);
-      this.alpha.setX(n, Math.min(1, p.age / 0.4) * (1 - smoothstep(0.55, 1, t)) * p.alpha);
+      this.alpha.setX(n, Math.min(1, p.age / 0.4) * (1 - smoothstep(p.fade, 1, t)) * p.alpha);
       this.glow.setX(n++, p.glow * Math.max(0, 1 - t * 3));
     }
     m.count = n;
@@ -74,16 +81,27 @@ export class Puffs {
   }
 }
 
-/** Bouffées : transparence et lueur par instance */
+/**
+ * Bouffées : transparence et lueur par instance ; ombrage doux et bord qui s'efface (plus la surface est vue de biais, plus
+ * elle est transparente)
+ */
 function puffMaterial() {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1, transparent: true, depthWrite: false });
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, transparent: true, depthWrite: false });
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = 'attribute float aAlpha;\nattribute float aGlow;\nvarying float vAlpha;\nvarying float vGlow;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
   vAlpha = aAlpha; vGlow = aGlow;`);
     sh.fragmentShader = 'varying float vAlpha;\nvarying float vGlow;\n' + sh.fragmentShader
       .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.a *= vAlpha;')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  float facing = abs(dot(normal, normalize(vViewPosition)));
+  diffuseColor.a *= pow(facing, 1.6);`)
+      // la vapeur diffuse la lumière du ciel tout autour d'elle : pas de face sombre, ni de bouffée grise contre le ciel
+      .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>
+#if ( NUM_HEMI_LIGHTS > 0 )
+  for ( int i = 0; i < NUM_HEMI_LIGHTS; i ++ ) irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], hemisphereLights[ i ].direction ) * 0.6;
+#endif`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += vec3(1.0, 0.36, 0.08) * vGlow;');
   };
-  m.customProgramCacheKey = () => 'puff';
+  m.customProgramCacheKey = () => 'puff-soft';
   return m;
 }

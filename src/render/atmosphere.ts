@@ -225,10 +225,13 @@ void main(){
     this.caps.count = n;
     this.caps.instanceMatrix.needsUpdate = true;
 
-    // ---- arc-en-ciel : quand la pluie cesse et que le soleil revient
+    // ---- arc-en-ciel : quand la pluie cesse et que le soleil revient ; jamais quand la pluie tourne à la neige, et s'il neige
+    // pendant qu'il brille, il s'efface (en quelques secondes)
+    const snowing = env.weatherKind === 'snow' || env.wantKind === 'snow';
     if (env.weatherKind === 'rain' && env.weatherK > 0.5) this.wasRaining = true;
-    else if (this.wasRaining && env.wantKind !== 'rain' && env.daylight > 0.6 && h > 7 && h < 17.5) { this.wasRaining = false; this.bowT = 45; }
+    else if (this.wasRaining && env.wantKind !== 'rain' && !snowing && env.daylight > 0.6 && h > 7 && h < 17.5) { this.wasRaining = false; this.bowT = 45; }
     else if (env.weatherKind !== 'rain') this.wasRaining = false;
+    if (snowing) this.bowT = Math.min(this.bowT, 6);
     this.bowT = Math.max(0, this.bowT - dt);
     const bowA = smoothstep(0, 8, this.bowT) * smoothstep(45, 40, this.bowT) * env.daylight;
     this.bow.visible = false;

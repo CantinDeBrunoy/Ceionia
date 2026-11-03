@@ -42,6 +42,11 @@ const CAVE_TOP = [0x76a05e, 0x5f8f6a, 0xe6cf9a, 0x5aa850, 0x7d9a58].map((c) => n
 /** Fougères : teinte par biome (multiplie la couleur de saison) */
 const FERN_TINT = [[1, 1, 1], [0.8, 0.95, 0.9], [1, 1, 0.8], [0.85, 1.1, 0.8], [0.9, 1, 0.8]].map(([r, g, b]) => new THREE.Color(r, g, b));
 const BOLETE = new THREE.Color(0.82, 0.62, 0.44);
+/**
+ * Marge autour de l'emprise d'un bâtiment, que ni les cimes ni les rochers ne franchissent : quelques modèles débordent un
+ * peu de leurs cases (perron, abside, douves du château)
+ */
+export const WALL_GAP = 0.16;
 
 /** Fleurs sauvages par biome (teintes ; 0.58 = blanc) */
 const WILD_HUES = [[0.13, 0.58, 0.75, 0.13, 0.58], [0.58, 0.62, 0.58, 0.75], [0.92], [0.92, 0.05, 0.85, 0.11, 0.0], [0.15, 0.58, 0.7]];
@@ -79,8 +84,22 @@ class Layer {
   private far: THREE.InstancedMesh[][] = [];
   private lodGeo: THREE.BufferGeometry[] | null = null;
 
+  private reachR = -1;
+
   constructor(private group: THREE.Group, readonly parts: Part[], readonly o: LayerOpts = {}) {
     for (let i = 0; i < NC * NC; i++) { this.m.push(new Float32Array(64)); this.c.push(new Float32Array(12)); this.near.push([]); this.far.push([]); }
+  }
+
+  /** Portée de ses parties autour du pied, à l'échelle 1 (rayon de la cime d'un arbre, quelle que soit sa rotation) */
+  get reach() {
+    if (this.reachR < 0) {
+      this.reachR = 0;
+      for (const p of this.parts) {
+        const pos = p.geo.attributes.position;
+        for (let i = 0; i < pos.count; i++) this.reachR = Math.max(this.reachR, Math.hypot(pos.getX(i), pos.getZ(i)));
+      }
+    }
+    return this.reachR;
   }
 
   begin(ch: number) { this.n[ch] = 0; }
@@ -578,10 +597,48 @@ export class VegView {
     this.plant.put(this.at(x, this.world.hAt(x, z), z, rot, sc, sc * sy), c);
   }
 
+  /**
+   * Place libre autour du point (x, z) : distance à l'emprise du bâtiment le plus proche, marge comprise (Infinity s'il n'y en
+   * a pas dans les cases voisines : aucune cime ne porte plus loin)
+   */
+  private room(x: number, z: number) {
+    const w = this.world, x0 = Math.floor(x), z0 = Math.floor(z);
+    let d = Infinity;
+    for (let cz = z0 - 1; cz <= z0 + 1; cz++)
+      for (let cx = x0 - 1; cx <= x0 + 1; cx++) {
+        if (!w.inCells(cx, cz) || !w.occ[w.ci(cx, cz)]) continue;
+        const qx = Math.max(cx - WALL_GAP, Math.min(cx + 1 + WALL_GAP, x)), qz = Math.max(cz - WALL_GAP, Math.min(cz + 1 + WALL_GAP, z));
+        d = Math.min(d, Math.hypot(x - qx, z - qz));
+      }
+    return d;
+  }
+
+  /**
+   * Échelle d'un arbre (buisson, rocher) de portée `reach` posé en (x, z) : réduite pour que rien n'entre dans un bâtiment
+   * voisin, quel que soit son âge ou la façon dont il est apparu ; 0 s'il n'y a pas la place (rabougri à moins de la moitié de
+   * sa taille contre un mur, il ferait chétif : il ne pousse pas)
+   */
+  private fit(x: number, z: number, reach: number, sc: number) {
+    const room = this.room(x, z);
+    if (room >= reach * sc) return sc;
+    return room >= reach * sc * 0.5 ? room / reach : 0;
+  }
+
+  /** Buisson, à l'écart des murs */
+  private bush(x: number, y: number, z: number, rot: number, sc: number, c: THREE.Color) {
+    if (!this.shrub || !(sc = this.fit(x, z, this.shrub.reach, sc))) return;
+    this.shrub.put(this.at(x, y, z, rot, sc), c);
+  }
+
   /** Rocher posé au point le plus bas du sol sous lui : aucun bord ne flotte, même en pente */
   private placeRock(px: number, pz: number, sc: number, sy: number, h1: number, h2: number, c: THREE.Color) {
     const w = this.world;
-    const r = this.rocks[Math.floor(h2 * this.rocks.length)], rr = r.radius * sc;
+    const r = this.rocks[Math.floor(h2 * this.rocks.length)];
+    // un gros bloc contre un mur rapetisse (il garde ses proportions)
+    const k = this.fit(px, pz, r.radius, sc) / sc;
+    if (!k) return;
+    sc *= k; sy *= k;
+    const rr = r.radius * sc;
     let y = w.hAt(px, pz);
     for (const [ox, oz] of [[rr, 0], [-rr, 0], [0, rr], [0, -rr], [rr * 0.7, rr * 0.7], [-rr * 0.7, -rr * 0.7], [rr * 0.7, -rr * 0.7], [-rr * 0.7, rr * 0.7]]) y = Math.min(y, w.hAt(px + ox, pz + oz));
     r.layer.put(this.at(px, y - 0.01 * sy, pz, h1 * 6.28, sc, sy, sc), c);
@@ -594,8 +651,9 @@ export class VegView {
     this.flowers[Layer.chunk].push(x, y + 0.08 * scale, z);
   }
 
-  /** Arbre importé posé au sol, cime notée comme perchoir */
+  /** Arbre importé posé au sol, cime notée comme perchoir ; près d'un bâtiment, sa cime reste hors des murs */
   private tree(sp: Species, x: number, y: number, z: number, rot: number, sc: number, c: THREE.Color) {
+    if (!(sc = this.fit(x, z, sp.layer.reach, sc))) return;
     sp.layer.put(this.at(x, y, z, rot, sc), c);
     this.perch(x, y + sp.height * sc + 0.01, z);
   }
@@ -633,9 +691,11 @@ export class VegView {
       } else if (isPine && this.pineVars.length) {
         this.tree(pick(this.pineVars, hv), px, y, pz, rot, sc, col);
       } else if (isPine) {
-        this.pine.put(this.at(px, y, pz, rot, sc), col);
+        const f = this.fit(px, pz, this.pine.reach, sc);
+        if (!f) continue;
+        this.pine.put(this.at(px, y, pz, rot, f), col);
         this.trunk.put(this.dummy.matrix, col);
-        this.perch(px, y + 0.85 * sc, pz);
+        this.perch(px, y + 0.85 * f, pz);
       } else this.broadleaf(px, y, pz, rot, sc, col, s, hash2(cx, cz, 70 + k) < 0.4);
     }
     this.forestFloor(cx, cz, b, s);
@@ -644,7 +704,7 @@ export class VegView {
       const px = cx + 0.15 + hash2(cx, cz, 6) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 7) * 0.7;
       col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)).multiplyScalar(0.85 + hash2(cx, cz, 8) * 0.2);
       const sc = (0.8 + hash2(cx, cz, 9) * 0.6) * (b === BIOME_TROPICAL ? 1.4 : b === BIOME_DESERT ? 0.7 : 1);
-      if (this.shrub) this.shrub.put(this.at(px, w.hAt(px, pz), pz, hash2(cx, cz, 4) * 6.28, sc), col);
+      if (this.shrub) this.bush(px, w.hAt(px, pz), pz, hash2(cx, cz, 4) * 6.28, sc, col);
       else this.plantAt(px, pz, 1.1 + hash2(cx, cz, 9) * 0.6, 0.8, hash2(cx, cz, 4) * 6.28, col);
     }
   }
@@ -656,6 +716,8 @@ export class VegView {
   private broadleaf(px: number, y: number, pz: number, rot: number, sc: number, col: THREE.Color, s: SeasonState, blossom: boolean) {
     if (s.leaf < 0.5 && this.bare) { this.tree(this.bare, px, y, pz, rot, sc, col); return; }
     const t = this.leafy[Math.floor(hash2(Math.floor(px * 7), Math.floor(pz * 7), 77) * this.leafy.length)];
+    // la cime d'été, la plus large, reste hors des murs voisins
+    if (!(sc = this.fit(px, pz, Math.max(t.blob.reach, t.trunk.reach), sc))) return;
     t.trunk.put(this.at(px, y, pz, rot, sc), col);
     const ls = Math.max(0.25, s.leaf) * sc, lsy = ls * (0.8 + 0.2 * s.leaf);
     const m = this.at(px, y + t.leafY * (sc - lsy), pz, rot, ls, lsy, ls);
@@ -671,7 +733,7 @@ export class VegView {
     const px = cx + 0.15 + hash2(cx, cz, 902) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 903) * 0.7;
     const sc = 0.8 + hash2(cx, cz, 905) * 0.5;
     col.setScalar(0.88 + hash2(cx, cz, 906) * 0.18);
-    if (h < 0.06 && this.logs) this.logs.put(this.at(px, w.hAt(px, pz) - 0.015, pz, rot, sc), col);
+    if (h < 0.06 && this.logs && this.fit(px, pz, this.logs.reach, sc) === sc) this.logs.put(this.at(px, w.hAt(px, pz) - 0.015, pz, rot, sc), col);
     else if (h < 0.11 && this.stumps) this.stumps.put(this.at(px, w.hAt(px, pz) - 0.01, pz, rot, sc), col);
     // fougères : denses sous les palmiers, absentes des marais
     const nf = b === BIOME_MARSH || !this.ferns ? 0 : hash2(cx, cz, 907) < (b === BIOME_TROPICAL ? 0.75 : 0.45) ? 1 + Math.floor(hash2(cx, cz, 908) * 2) : 0;
@@ -847,8 +909,10 @@ export class VegView {
       // désert : cactus nains, broussailles sèches et rares touffes jaunies
       const h = hash2(cx, cz, 801);
       const px = cx + 0.2 + hash2(cx, cz, 802) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 803) * 0.6, y = w.hAt(px, pz);
-      if (h < 0.07 && this.cacti.length) this.cacti[Math.floor(hash2(cx, cz, 804) * this.cacti.length)].layer.put(this.at(px, y, pz, hash2(cx, cz, 805) * 6.28, 0.4 + hash2(cx, cz, 806) * 0.3), col.setScalar(1.1));
-      else if (h < 0.17 && this.shrub) this.shrub.put(this.at(px, y, pz, hash2(cx, cz, 805) * 6.28, 0.6 + hash2(cx, cz, 806) * 0.5), col.copy(SHRUB_COLORS[BIOME_DESERT]));
+      if (h < 0.07 && this.cacti.length) {
+        const cactus = this.cacti[Math.floor(hash2(cx, cz, 804) * this.cacti.length)].layer, sc = this.fit(px, pz, cactus.reach, 0.4 + hash2(cx, cz, 806) * 0.3);
+        if (sc) cactus.put(this.at(px, y, pz, hash2(cx, cz, 805) * 6.28, sc), col.setScalar(1.1));
+      } else if (h < 0.17 && this.shrub) this.bush(px, y, pz, hash2(cx, cz, 805) * 6.28, 0.6 + hash2(cx, cz, 806) * 0.5, col.copy(SHRUB_COLORS[BIOME_DESERT]));
       else if (h < 0.4 && s.snow < 0.6) this.tuft.put(this.at(px, y - 0.01, pz, hash2(cx, cz, 805) * 6.28, 0.9, 0.5, 0.9), col.copy(TUFT_TINT[BIOME_DESERT]));
       // ossements blanchis par le soleil, cailloux de grès
       const h2 = hash2(cx, cz, 811), qx = cx + 0.15 + hash2(cx, cz, 812) * 0.7, qz = cz + 0.15 + hash2(cx, cz, 813) * 0.7;
@@ -878,7 +942,7 @@ export class VegView {
     // fougères sous les tropiques
     if (b === BIOME_TROPICAL && this.shrub && hash2(cx, cz, 390) < 0.12) {
       const px = cx + 0.2 + hash2(cx, cz, 391) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 392) * 0.6;
-      this.shrub.put(this.at(px, w.hAt(px, pz), pz, hash2(cx, cz, 393) * 6.28, 1 + hash2(cx, cz, 394) * 0.5), col.copy(SHRUB_COLORS[BIOME_TROPICAL]));
+      this.bush(px, w.hAt(px, pz), pz, hash2(cx, cz, 393) * 6.28, 1 + hash2(cx, cz, 394) * 0.5, col.copy(SHRUB_COLORS[BIOME_TROPICAL]));
     }
     // fleurs : plus nombreuses là où les abeilles ont butiné, broutées par les troupeaux
     const flowers = s.snow < 0.1 && s.growth > 0.5;
@@ -910,7 +974,7 @@ export class VegView {
       else if ((b === BIOME_TAIGA || hash2(cx, cz, 827) < 0.35) && this.pineVars.length) this.tree(pick(this.pineVars), qx, qy, qz, rot, sc, col);
       else this.broadleaf(qx, qy, qz, rot, sc, col, s, hash2(cx, cz, 828) < 0.4);
     } else if (h < lone + 0.055 && this.shrub && b !== BIOME_MARSH && s.snow < 0.8) {
-      this.shrub.put(this.at(qx, qy, qz, rot, 0.7 + hash2(cx, cz, 829) * 0.6), col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)).multiplyScalar(0.9 + hash2(cx, cz, 830) * 0.2));
+      this.bush(qx, qy, qz, rot, 0.7 + hash2(cx, cz, 829) * 0.6, col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)).multiplyScalar(0.9 + hash2(cx, cz, 830) * 0.2));
     } else if (h < lone + 0.085 && this.ferns && b !== BIOME_MARSH && s.snow * snowy(b) < 0.5) {
       this.ferns.put(this.at(qx, qy - 0.01, qz, rot, sc, sc * (0.6 + 0.4 * s.leaf)), col.copy(FERN_TINT[b]));
     } else if (h < lone + 0.1 && this.mushrooms && s.snow < 0.5) {
