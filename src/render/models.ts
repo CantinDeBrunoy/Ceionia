@@ -878,12 +878,23 @@ function antiqueHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number
     p.box(w * 0.86, 0.01, 0.01, cx, 0.36, zf + 0.078, wood);
     for (let x = -w * 0.42; x <= w * 0.42 + 1e-6; x += 0.05) p.box(0.008, 0.07, 0.008, cx + x, 0.3, zf + 0.078, wood);
   } else {
-    // maison blanche : porte et volets bleus, pots de géraniums
+    // maison blanche : porte et volets bleus, pots de géraniums ; un bougainvillier grimpe de la porte jusqu'au parapet
     const blue = [0x3a6ab8, 0x2e8aa8][o.v % 2];
     p.box(0.11, 0.2, 0.016, cx + side * w * 0.2, 0.04, zf + 0.004, blue);
     p.box(0.15, 0.03, 0.06, cx + side * w * 0.2, 0, zf + 0.03, stoneC);
     slit(cx - side * w * 0.18, 0.16, blue);
+    if (w > 0.8) slit(cx + side * w * 0.42, 0.18, blue);
     for (const dx of [-0.05, 0.05]) { p.cyl(0.018, 0.013, 0.03, 6, cx - side * w * 0.18 + dx, 0.115, zf + 0.022, C.terracotta); p.sphere(0.02, cx - side * w * 0.18 + dx, 0.15, zf + 0.022, 0xd84a3e, 0, 0.8); }
+    // auvent de tuiles sur deux consoles au-dessus de la porte, banc de pierre contre le mur, soubassement peint
+    const doorX = cx + side * w * 0.2;
+    p.add(new THREE.BoxGeometry(0.19, 0.02, 0.11), doorX, 0.27, zf + 0.05, C.terracotta, 0, false, 0, 0.45);
+    for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.011, 0.011, 0.11), doorX - 0.08 + k * 0.04, 0.283, zf + 0.05, dark(C.terracotta, 0.84), 0, false, 0, 0.45);
+    for (const s of [-1, 1]) p.box(0.012, 0.03, 0.06, doorX + s * 0.08, 0.235, zf + 0.03, wood);
+    p.box(0.13, 0.03, 0.045, cx - side * w * 0.4, 0, zf + 0.025, stoneC);
+    p.box(w, 0.035, 0.006, cx, 0.04, zf + 0.002, blue);
+    const bx = cx + side * (w * 0.2 + 0.09);
+    p.cyl(0.008, 0.012, 0.28, 5, bx, 0, zf + 0.014, 0x6a4a34);
+    for (let k = 0; k < 7; k++) p.sphere(0.026 + (k % 3) * 0.006, bx + Math.sin(k * 2.3) * 0.035 - side * k * 0.012, 0.1 + k * 0.032, zf + 0.018, [0xd8459a, 0xe868b0, 0xc83a8a][k % 3], 0, 0.75);
   }
   if (kind === 2) {
     // toit en terrasse : parapet blanc, demi-toit de tuiles au fond, pots sur la terrasse ; escalier extérieur au bout de la rangée
@@ -893,12 +904,46 @@ function antiqueHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number
     tiledShed(p, rcx, H + 0.07, zc - d / 4, rw, d / 2 + 0.04, 0.32);
     for (const dx of [-0.15, 0.1]) { p.cyl(0.025, 0.018, 0.04, 6, cx + dx, H + 0.012, zf - 0.08, C.terracotta); p.sphere(0.03, cx + dx, H + 0.07, zf - 0.08, 0x5f9a4a, 0, 0.9); }
     if (!o.R) for (let k = 0; k < 6; k++) p.box(0.07, 0.03, 0.06, x1 + 0.035, k * 0.05, zf - 0.04 - k * 0.06, plaster);
+    // une maison sur deux : treille sur la terrasse, poteaux, perches et feuilles de vigne
+    if (o.v % 2 === 0) {
+      const px = [cx - w * 0.3, cx + w * 0.3], pz = [zc + 0.02, zf - 0.05];
+      for (const x of px) for (const z of pz) p.box(0.014, 0.17, 0.014, x, H + 0.012, z, wood);
+      for (const x of px) p.box(0.016, 0.016, pz[1] - pz[0] + 0.04, x, H + 0.18, (pz[0] + pz[1]) / 2, wood);
+      for (let k = 0; k < 5; k++) p.box(w * 0.64, 0.01, 0.012, cx, H + 0.195, pz[0] + k * (pz[1] - pz[0]) / 4, wood);
+      for (let k = 0; k < 7; k++) p.sphere(0.035, cx - w * 0.27 + k * w * 0.09, H + 0.21, (pz[0] + pz[1]) / 2 + Math.sin(k * 1.9) * 0.05, k % 2 ? 0x6f9a4a : 0x5f8a3e, 0, 0.45);
+    }
   } else {
     roof(p, cx, H, zc, { w, d, h: 0.14, color: C.terracotta, wall: plaster, len: rw, dx: rcx - cx, tiles: true });
     // conduit de l'âtre qui fume
     const chx = x1 - 0.1;
     p.box(0.07, 0.16, 0.07, chx, H + 0.02, zc - 0.08, plaster); p.box(0.09, 0.02, 0.09, chx, H + 0.18, zc - 0.08, C.terracotta);
     smoke(chx, H + 0.22, zc - 0.08, 0);
+  }
+  // l'arrière et les pignons ne sont plus des murs nus : enduit rayé, petites fenêtres hautes à appui de pierre
+  const zb = zc - d / 2;
+  for (let y = 0.1; y < H - 0.03; y += 0.07) p.box(w, 0.004, 0.006, cx, y, zb - 0.002, dark(plaster, 0.93));
+  for (const sx of w > 0.9 ? [-0.32, 0, 0.32] : [-0.18, 0.18]) {
+    p.box(0.05, 0.06, 0.012, cx + sx * w, H * 0.62, zb - 0.003, 0x3a2c24);
+    p.box(0.06, 0.012, 0.03, cx + sx * w, H * 0.62 - 0.012, zb - 0.01, stoneC);
+  }
+  for (const [s, x] of [[-1, x0], [1, x1]] as [number, number][]) {
+    if (s < 0 ? o.L : o.R) continue;
+    p.box(0.012, 0.06, 0.05, x + s * 0.003, H * 0.62, zc, 0x3a2c24);
+    // chaînes d'angle blanches de la domus et de la boutique
+    if (kind !== 2) for (const z of [zf - 0.012, zb + 0.012]) p.box(0.03, H - 0.04, 0.03, x - s * 0.01, 0.04, z, 0xf4eee0);
+  }
+  if (kind !== 2) {
+    // frise peinte sous la corniche : bandeau ocre et sa grecque rouge sombre
+    p.box(w, 0.026, 0.006, cx, H - 0.05, zf + 0.004, 0xd09a4a);
+    for (let x = x0 + 0.03; x < x1 - 0.02; x += 0.045) p.box(0.02, 0.012, 0.004, x, H - 0.043 + (Math.round((x - x0) / 0.045) % 2) * 0.006, zf + 0.008, 0x8a3428);
+  }
+  if (kind === 0) {
+    // le jardin de la domus, derrière : muret enduit, figuier, banc de pierre et jarre
+    p.box(w - 0.04, 0.07, 0.025, cx, 0, zb - 0.17, plaster);
+    for (const s of [-1, 1]) if (s < 0 ? !o.L : !o.R) p.box(0.025, 0.07, 0.17, s < 0 ? x0 + 0.03 : x1 - 0.03, 0, zb - 0.085, plaster);
+    tree(p, cx - side * w * 0.22, zb - 0.09, 0.75, 0x6f9a4a);
+    p.box(0.12, 0.03, 0.04, cx + side * w * 0.18, 0, zb - 0.07, stoneC);
+    p.cyl(0.02, 0.03, 0.07, 8, cx + side * w * 0.34, 0, zb - 0.1, C.terracotta);
   }
   // treille sur le flanc libre de la domus : poteaux, perches, feuilles de vigne et grappes
   if (kind === 0 && !o.R && !o.F) {
@@ -1647,6 +1692,15 @@ function gather(p: Parts, age: number, o: ModelOpts) {
     }
     // des citoyens en toge discutent près de la fontaine ; un marchand derrière son étal
     for (const [x, z, c, r] of [[0.1, 0.4, 0xf2ead8, Math.PI], [-0.08, 0.42, 0xe9e2d4, 2.6], [0.38, 0.05, 0xc8a0d8, -1.6], [0.36, -0.24, 0xb8443a, Math.PI]] as number[][]) figure(p, x, z, c, r);
+    // deux oliviers dans leurs bacs de pierre, et un brasero de bronze qui fume entre les bancs
+    for (const [x, z] of [[-0.24, -0.21], [0.25, 0.245]]) {
+      p.cyl(0.055, 0.05, 0.045, 10, x, top, z, 0xd8ccb4); p.cyl(0.048, 0.048, 0.006, 10, x, top + 0.045, z, 0x7a5a42);
+      p.cyl(0.01, 0.016, 0.1, 5, x, top + 0.045, z, 0x7a6450);
+      for (const [dx, dy, dz, r] of [[0, 0.16, 0, 0.06], [0.04, 0.13, 0.025, 0.045], [-0.035, 0.135, -0.02, 0.042]]) p.sphere(r, x + dx, top + dy, z + dz, 0x8aa070, 0, 0.7);
+    }
+    for (let k = 0; k < 3; k++) { const a = k * 2.094; p.box(0.006, 0.08, 0.006, -0.22 + Math.cos(a) * 0.02, top, 0.22 + Math.sin(a) * 0.02, 0xa8783a); }
+    p.cyl(0.032, 0.018, 0.025, 8, -0.22, top + 0.08, 0.22, 0xb88a42); p.cone(0.02, 0.05, 5, -0.22, top + 0.1, 0.22, C.flame, true);
+    smoke(-0.22, top + 0.16, 0.22, 1);
   } else if (age === 1) {
     p.cyl(0.46, 0.46, 0.04, 12, 0, 0, 0, 0xe6dccb);
     for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; p.cyl(0.04, 0.045, 0.34, 6, Math.cos(a) * 0.34, 0.04, Math.sin(a) * 0.34, C.white); }
@@ -1720,6 +1774,19 @@ function temple(p: Parts, age: number) {
     tileRoof(p, 0.4, C.terracotta);
     p.box(0.94, 0.012, 0.86, 0, 0, 0, 0xd9cdb6);
     for (const x of [-0.42, 0.42]) cypress(p, x, 0.38);
+    // l'escalier monte du parvis au soubassement ; deux trépieds de bronze y brûlent l'encens ; des offrandes au pied des
+    // marches, un prêtre en toge et une fidèle qui apporte une amphore
+    for (let k = 0; k < 4; k++) p.box(0.4 - k * 0.012, 0.1 - k * 0.022, 0.03, 0, 0.012, 0.332 + k * 0.026, k % 2 ? 0xece4d2 : 0xe2d8c4);
+    for (const s of [-1, 1]) {
+      const x = s * 0.29, z = 0.39;
+      for (let k = 0; k < 3; k++) { const a = k * 2.094 + 0.5; p.add(new THREE.CylinderGeometry(0.004, 0.004, 0.13).rotateX(0.18).rotateY(a), x + Math.cos(a) * 0.016, 0.075, z + Math.sin(a) * 0.016, 0xa8783a); }
+      p.cyl(0.038, 0.02, 0.03, 8, x, 0.13, z, 0xb88a42);
+      p.cone(0.026, 0.06, 5, x, 0.155, z, C.flame, true);
+      smoke(x, 0.22, z, 1);
+    }
+    for (const [x, c] of [[-0.12, C.terracotta], [0.13, 0xc8a070]] as [number, number][]) { p.cyl(0.016, 0.024, 0.045, 7, x, 0.012, 0.41, c); p.cyl(0.009, 0.014, 0.02, 6, x, 0.057, 0.41, c); }
+    p.sphere(0.02, 0.06, 0.025, 0.415, 0xe8c050, 0, 0.7);
+    figure(p, 0, 0.29, 0xf2ead8, 0, false, 0xd8d4cc, 'idle', 0.1); figure(p, 0.17, 0.41, 0xb8443a, Math.PI + 0.4);
   } else if (age === 1) {
     p.box(0.88, 0.06, 0.74, 0, 0, 0, C.stone); p.box(0.78, 0.06, 0.64, 0, 0.06, 0, 0xe6dccb);
     for (const [x, z] of [[-0.3, 0.22], [0.3, 0.22], [-0.3, -0.22], [0.3, -0.22], [0, 0.22], [0, -0.22]]) p.cyl(0.045, 0.05, 0.36, 7, x, 0.12, z, C.white);
