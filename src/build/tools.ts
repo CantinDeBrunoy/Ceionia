@@ -12,7 +12,7 @@ import { costOf, costLabel } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 
-export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
+export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
 export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'];
 export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'];
@@ -41,6 +41,8 @@ export class ToolController implements ToolInput {
   tool: ToolId = 'none';
   kind: KindId = 'house';
   radius = 3;
+  /** biome que peint le pinceau de biome (null : rendre au climat) */
+  biomeKind: number | null = 0;
   ghostRot = 0;
   rotManual = false;
   undoStack: Snapshot[] = [];
@@ -237,6 +239,7 @@ export class ToolController implements ToolInput {
       // le volcan se pose d'un seul clic
       if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) { this.mark(); this.h.audio.sfxPlace(); }
     } else if (SCULPT_TOOLS.includes(t)) this.ctx.target = this.hit.y;
+    else if (t === 'biome') this.applyBiome();
     else if (VEG_TOOLS.includes(t)) this.applyVeg();
     else if (t === 'road') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
@@ -250,7 +253,8 @@ export class ToolController implements ToolInput {
     this.refreshVisuals();
     if (!this.pressed || !this.hit) return;
     const t = this.tool;
-    if (VEG_TOOLS.includes(t) && !SINGLE_TOOLS.includes(t)) this.applyVeg();
+    if (t === 'biome') this.applyBiome();
+    else if (VEG_TOOLS.includes(t) && !SINGLE_TOOLS.includes(t)) this.applyVeg();
     else if (t === 'road') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
   }
@@ -319,6 +323,22 @@ export class ToolController implements ToolInput {
           }
         }
       }
+  }
+
+  /** Pinceau de biome : chaque case sous le pinceau prend le biome choisi (ou retrouve celui de son climat) */
+  private applyBiome() {
+    const hit = this.hit;
+    if (!hit) return;
+    const w = this.h.world, r = Math.max(0.6, this.radius * 0.8);
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (let cz = Math.floor(hit.z - r); cz <= Math.ceil(hit.z + r); cz++)
+      for (let cx = Math.floor(hit.x - r); cx <= Math.ceil(hit.x + r); cx++) {
+        if (Math.hypot(cx + 0.5 - hit.x, cz + 0.5 - hit.z) > r || !w.paintBiome(cx, cz, this.biomeKind)) continue;
+        x0 = Math.min(x0, cx); z0 = Math.min(z0, cz); x1 = Math.max(x1, cx); z1 = Math.max(z1, cz);
+      }
+    if (x0 > x1) return;
+    w.biomesChanged(x0, z0, x1, z1);
+    this.mark();
   }
 
   private applyRoad() {
@@ -418,8 +438,8 @@ export class ToolController implements ToolInput {
       this.marker.visible = true;
     }
     if (!hit || t === 'none') return;
-    if (SCULPT_TOOLS.includes(t) || VEG_TOOLS.includes(t)) {
-      const r = VEG_TOOLS.includes(t) ? Math.max(0.6, this.radius * 0.8) : this.radius;
+    if (SCULPT_TOOLS.includes(t) || VEG_TOOLS.includes(t) || t === 'biome') {
+      const r = VEG_TOOLS.includes(t) || t === 'biome' ? Math.max(0.6, this.radius * 0.8) : this.radius;
       const pos = this.ring.geometry.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < 48; i++) {
         const a = (i / 48) * Math.PI * 2;

@@ -280,6 +280,28 @@ describe('sauvegarde', () => {
     expect(r.claimed.has(456)).toBe(true);
   });
 
+  it('un biome peint au pinceau tient malgré le climat et le relief, se sauvegarde et s’annule', () => {
+    const w = continent();
+    let k = -1;
+    for (let i = 0; i < N * N && k < 0; i++) if (w.cellAvg(i % N, Math.floor(i / N)) > 0.5 && w.biome[i] !== BIOME_DESERT) k = i;
+    const cx = k % N, cz = Math.floor(k / N), before = w.biome[k], snap = w.snapshot();
+    expect(w.paintBiome(cx, cz, BIOME_DESERT)).toBe(true);
+    expect(w.paintBiome(cx, cz, BIOME_DESERT)).toBe(false);
+    w.biomesChanged(cx, cz, cx, cz);
+    expect(w.biome[k]).toBe(BIOME_DESERT);
+    // le relief se recalcule (sculpture ailleurs) : le biome peint reste
+    w.updateVis();
+    expect(w.biome[k]).toBe(BIOME_DESERT);
+    const r = new World();
+    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    r.updateVis();
+    expect(r.biome[k]).toBe(BIOME_DESERT);
+    // l'annulation rend la case à son climat
+    w.restore(snap);
+    w.computeBiomes();
+    expect(w.biome[k]).toBe(before);
+  });
+
   it('refuse une sauvegarde d’une autre taille de carte', () => {
     const data = w.toJSON();
     expect(() => new World().fromJSON({ ...data, n: 48 })).toThrow();
@@ -603,6 +625,30 @@ describe('expéditions', () => {
         expect(c.win.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('le port se pose facilement sur une rive, et son quai est remblayé au-dessus de l’eau', () => {
+    const w = continent();
+    const spots: [number, number][] = [];
+    for (let z = 2; z < N - 3; z++) for (let x = 2; x < N - 3; x++) if (w.canPlace('harbor', x, z) === null) spots.push([x, z]);
+    expect(spots.length).toBeGreaterThan(100);
+    const [x, z] = spots[Math.floor(spots.length / 2)];
+    w.place('harbor', x, z, 0, true, 2, false);
+    // le sommet au milieu du quai n'est partagé avec aucun voisin : il est remblayé
+    expect(w.h(x + 1, z + 1)).toBeGreaterThanOrEqual(0.12);
+  });
+
+  it('le passage à l’âge suivant attend le joueur, même quand tout est réuni', () => {
+    const w = continent(), sim = new Sim(w);
+    let up = -1;
+    sim.onAgeUp = (a) => { up = a; };
+    sim.ageProgress = () => ({ next: 1, ratio: 1, items: [{ label: 'Habitants', have: 12, need: 12 }] });
+    sim.update(1, 1);
+    expect(sim.age).toBe(0);
+    expect(sim.ready).toBe(true);
+    expect(sim.advance()).toBe(true);
+    expect(sim.age).toBe(1);
+    expect(up).toBe(1);
   });
 
   it('l’expédition obligatoire conditionne l’âge suivant', () => {

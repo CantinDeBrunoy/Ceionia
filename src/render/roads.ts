@@ -35,7 +35,7 @@ const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 /** Quarts de case (signe x, signe z) */
 const QUADS = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
 /** Bâtiments devant lesquels la terre est battue (une cour, une place) */
-const YARD: Partial<Record<KindId, number>> = { workshop: 0.45, gather: 0.5, farm: 0.42, mill: 0.42, landmark: 0.5, terminal: 0.5, temple: 0.4, health: 0.42, school: 0.42, fire: 0.5, police: 0.45, tavern: 0.45, baths: 0.42, mine: 0.5 };
+const YARD: Partial<Record<KindId, number>> = { workshop: 0.45, gather: 0.5, farm: 0.42, mill: 0.42, landmark: 0.5, terminal: 0.5, temple: 0.4, health: 0.42, school: 0.42, fire: 0.5, police: 0.45, tavern: 0.45, baths: 0.42, mine: 0.5, theater: 0.45, forum: 0.5, senate: 0.45, acropolis: 0.55 };
 /** Bâtiments au pied desquels traînent tonneaux, caisses et sacs */
 const CLUTTER: KindId[] = ['house', 'workshop', 'farm', 'mill'];
 const BARREL = 0x9a6a44, HOOP = 0x6f5640, CRATE = 0xb48a5e, SACK = 0xd9c4a0;
@@ -231,9 +231,12 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
 		float road = 1.0 - smoothstep(-fr, fr, dR);
 		// trottoirs nets en ville ; sur la terre, une usure qui s'estompe peu à peu vers l'herbe, sans contour
 		float pave = town ? 1.0 - smoothstep(-fp, fp, dP) : 1.0 - smoothstep(-0.32, 0.22, dP);
+		// au cœur d'une cour ou d'une place (assez loin de son bord), le sol est plein ; vers les bords, quelques touffes d'herbe
+		// percent, semées au hasard (un bruit, pas un motif régulier qui dessinerait un quadrillage)
+		float solid = town ? 0.0 : 1.0 - smoothstep(-0.38, -0.14, vPave);
 		if (!town) {
-			float t = 1.0 - uYardA, hn = 0.5 + 0.25 * (sin(rp.x * 1.3 + sin(rp.y * 0.8) * 1.6) + sin(rp.y * 1.1 + sin(rp.x * 0.7) * 1.9));
-			pave *= mix(0.3, 1.0, smoothstep(t - 0.35, t + 0.35, hn)) * 0.72;
+			float t = 1.0 - uYardA, hn = rNoise(rp * 0.9 + 3.7) * 0.7 + rNoise(rp * 2.3 + 8.1) * 0.3;
+			pave *= mix(mix(0.55, 1.0, smoothstep(t - 0.3, t + 0.3, hn)) * 0.82, 0.96, solid);
 		}
 		float k = 1.0, kp = 1.0;
 		vec2 b;
@@ -250,7 +253,11 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
 			// trottoirs : dalles de pierre, puis de béton
 			b = uStyle < 3.5 ? rBond(rp, vec2(4.0, 6.0), 0.5, 0.0, 0.05) : rBond(rp, vec2(5.0, 5.0), 0.0, 0.0, 0.035);
 			cPave = uSide * mix(0.93 + b.x * 0.1, 0.8, b.y);
-		} else cPave = uSide * (rGrain(rp, 14.0, 0.12) + (rNoise(rp * 2.1) - 0.5) * 0.12);
+		} else {
+			cPave = uSide * (rGrain(rp, 14.0, 0.12) + (rNoise(rp * 2.1) - 0.5) * 0.12);
+			// au cœur d'une place, le sol prend la teinte et le motif des chemins de l'âge : la place est un chemin bien rempli
+			cPave = mix(cPave, uRoad * mix(k, 1.0, clamp(vSnow * 1.3, 0.0, 1.0)), solid);
+		}
 		vec3 c = mix(cPave, uRoad * mix(k, 1.0, clamp(vSnow * 1.3, 0.0, 1.0)), road);
 		float a = max(road, pave);
 		if (town) {
@@ -319,6 +326,9 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
   }
 
   /** Cours en terre battue devant les ateliers, places, fermes : (x, z, rayon) rangés par case */
+  /** Cases de place (aux premiers âges) : là où les routes se serrent en quadrillage, une place pleine, sans bandes de chemin */
+  private plaza = new Set<number>();
+
   private yards() {
     const w = this.world, out = new Map<number, number[]>();
     for (const b of w.buildings.values()) {
@@ -332,13 +342,29 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       out.set(k, l);
     }
     const add = (k: number, x: number, z: number, r: number) => { const l = out.get(k) ?? []; l.push(x, z, r); out.set(k, l); };
-    // un carré de 2 × 2 cases de route (ou une route de deux cases de large) : une placette pleine, sans trou d'herbe au milieu
     const plain = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1 && w.bridgeY(x, z) === null;
+    // les places : un carré de 2 × 2 cases de route, une poche d'herbe prise entre des routes, et les routes coincées entre
+    // deux cases de place ; tout cela se remplit d'un seul tenant au lieu d'un quadrillage de chemins et de trous d'herbe
+    const P = this.plaza;
+    P.clear();
+    const free = (x: number, z: number) => { const k = w.ci(x, z); return !w.road[k] && !w.occ[k] && !w.veg[k] && !w.lake[k] && w.cellAvg(x, z) >= 0.1; };
     for (let cz = 0; cz < N - 1; cz++)
-      for (let cx = 0; cx < N - 1; cx++) {
-        if (!plain(cx, cz) || !plain(cx + 1, cz) || !plain(cx, cz + 1) || !plain(cx + 1, cz + 1)) continue;
-        add(w.ci(cx, cz), cx + 1, cz + 1, 0.45);
-      }
+      for (let cx = 0; cx < N - 1; cx++)
+        if (plain(cx, cz) && plain(cx + 1, cz) && plain(cx, cz + 1) && plain(cx + 1, cz + 1)) for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) P.add(w.ci(cx + dx, cz + dz));
+    for (let cz = 1; cz < N - 1; cz++)
+      for (let cx = 1; cx < N - 1; cx++)
+        if (free(cx, cz) && +plain(cx + 1, cz) + +plain(cx - 1, cz) + +plain(cx, cz + 1) + +plain(cx, cz - 1) >= 3) {
+          // encadrée de routes de tous côtés (ou de trois, le quatrième étant une maison ou une autre place)
+          const side = (x: number, z: number) => plain(x, z) || !!w.occ[w.ci(x, z)];
+          if (side(cx + 1, cz) && side(cx - 1, cz) && side(cx, cz + 1) && side(cx, cz - 1)) P.add(w.ci(cx, cz));
+        }
+    for (let pass = 0; pass < 2; pass++)
+      for (let cz = 1; cz < N - 1; cz++)
+        for (let cx = 1; cx < N - 1; cx++) {
+          const k = w.ci(cx, cz);
+          if (P.has(k) || !plain(cx, cz)) continue;
+          if (+P.has(k + 1) + +P.has(k - 1) + +P.has(k + N) + +P.has(k - N) >= 2) P.add(k);
+        }
     // la terre battue va de la rue jusqu'au mur des bâtiments qui la bordent : plus de liseré d'herbe entre les deux
     for (const b of w.buildings.values()) {
       if (b.kind === 'lamp' || b.kind === 'pier') continue;
@@ -362,7 +388,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         const k = w.ci(cx, cz);
         if (w.road[k] || w.occ[k] || w.veg[k] || w.lake[k] || w.cellAvg(cx, cz) < 0.1) continue;
         if (!(plain(cx + 1, cz) || plain(cx - 1, cz) || plain(cx, cz + 1) || plain(cx, cz - 1))) continue;
-        if (+urban(cx + 1, cz) + +urban(cx - 1, cz) + +urban(cx, cz + 1) + +urban(cx, cz - 1) >= 3) add(k, cx + 0.5, cz + 0.5, 0.42);
+        if (!P.has(k) && +urban(cx + 1, cz) + +urban(cx - 1, cz) + +urban(cx, cz + 1) + +urban(cx, cz - 1) >= 3) add(k, cx + 0.5, cz + 0.5, 0.42);
       }
     return out;
   }
@@ -631,7 +657,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       }
     } else {
       const cells = new Set<number>();
-      for (const k of [...lines.keys(), ...yards.keys()]) {
+      for (const k of [...lines.keys(), ...yards.keys(), ...this.plaza]) {
         const cx = k % N, cz = Math.floor(k / N);
         for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && w.bridgeY(cx + dx, cz + dz) === null) cells.add(w.ci(cx + dx, cz + dz));
       }
@@ -643,7 +669,23 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
           if (ls) for (const l of ls) for (let i = 0; i + 3 < l.length; i += 2) seg.push(l[i], l[i + 1], l[i + 2], l[i + 3]);
           if (ys) circ.push(...ys);
         }
-        if (!seg.length && !circ.length) continue;
+        const P = this.plaza, nearP = [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => w.inCells(cx + dx, cz + dz) && P.has(w.ci(cx + dx, cz + dz))));
+        if (!seg.length && !circ.length && !nearP) continue;
+        // distance signée au bord de la place (négative dedans), d'après les cases voisines : sans couture entre deux cases
+        const plazaAt = (x: number, z: number) => {
+          if (!nearP) return 9;
+          const ix = Math.min(N - 1, Math.floor(x)), iz = Math.min(N - 1, Math.floor(z)), inside = P.has(w.ci(ix, iz));
+          let best = 1;
+          for (let dz = -1; dz <= 1; dz++)
+            for (let dx = -1; dx <= 1; dx++) {
+              const nx = ix + dx, nz = iz + dz;
+              const other = !w.inCells(nx, nz) ? inside : P.has(w.ci(nx, nz)) !== inside;
+              if (!other || (dx === 0 && dz === 0)) continue;
+              const ex = Math.max(nx - x, x - nx - 1, 0), ez = Math.max(nz - z, z - nz - 1, 0);
+              best = Math.min(best, Math.hypot(ex, ez));
+            }
+          return inside ? -best : best;
+        };
         const road = (x: number, z: number) => {
           let best = 9;
           for (let i = 0; i < seg.length; i += 4) {
@@ -651,12 +693,15 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
             const t = len ? Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / len)) : 0;
             best = Math.min(best, Math.hypot(x - ax - bx * t, z - az - bz * t));
           }
-          return best - half(x, z);
+          // au cœur d'une place, le chemin s'efface : il n'y reste qu'un sol plein
+          return best - half(x, z) + Math.max(0, -plazaAt(x, z) - 0.12) * 2;
         };
         const pave = (x: number, z: number) => {
+          const ok = w.occ[w.ci(Math.min(N - 1, Math.floor(x)), Math.min(N - 1, Math.floor(z)))];
+          if (ok && w.buildings.get(ok)?.kind !== 'lamp') return 9;
           let best = 9;
           for (let i = 0; i < circ.length; i += 3) best = Math.min(best, Math.hypot(x - circ[i], z - circ[i + 1]) - circ[i + 2]);
-          return best;
+          return Math.min(best, plazaAt(x, z));
         };
         emit(cx, cz, 6, road, pave, 0, 0.08, 0.32);
       }
@@ -1127,6 +1172,85 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         else if (r < 0.45) { put(this.cyl, x, y, z, 0.038, 0.085, 0.038, 0, BARREL); put(this.cyl, x, y + 0.02, z, 0.04, 0.008, 0.04, 0, HOOP); put(this.cyl, x, y + 0.062, z, 0.04, 0.008, 0.04, 0, HOOP); }
         else if (r < 0.8) put(this.cube, x, y, z, 0.07, 0.06, 0.07, ry, CRATE);
         else put(this.ico, x, y + 0.03, z, 0.04, 0.035, 0.035, ry, SACK);
+      }
+    }
+    // les places et les grandes cours (aux premiers âges) : bancs, fontaine ou puits, bacs fleuris, caisses du marché, posés là
+    // où le sol est plein, au milieu des chemins (au moins trois cases de route autour), à l'écart les uns des autres
+    if (!town && age >= 0) {
+      const depth = (x: number, z: number) => {
+        const cx = Math.floor(x), cz = Math.floor(z);
+        if (this.plaza.has(w.ci(cx, cz))) return -1;
+        let best = 9;
+        for (let dz = -1; dz <= 1; dz++)
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!w.inCells(cx + dx, cz + dz)) continue;
+            const ys = yards.get(w.ci(cx + dx, cz + dz));
+            if (ys) for (let i = 0; i < ys.length; i += 3) best = Math.min(best, Math.hypot(x - ys[i], z - ys[i + 1]) - ys[i + 2]);
+          }
+        return best;
+      };
+      const cand: [number, number, number][] = [];
+      for (let cz = 1; cz < N - 1; cz++)
+        for (let cx = 1; cx < N - 1; cx++) {
+          const k = w.ci(cx, cz);
+          if (w.road[k] || w.occ[k] || w.veg[k] || w.lake[k] || w.cellAvg(cx, cz) < 0.15 || depth(cx + 0.5, cz + 0.5) > -0.3) continue;
+          let roads = 0;
+          for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if ((dx || dz) && w.road[w.ci(cx + dx, cz + dz)]) roads++;
+          if (roads >= 3 || this.plaza.has(k)) cand.push([cx + 0.5, cz + 0.5, hash2(cx, cz, 91)]);
+        }
+      cand.sort((p, q) => p[2] - q[2]);
+      const done: [number, number, number][] = [];
+      const stone = 0xa8a29a, wood = 0x8a6a4a, dark = 0x6a5240, leaf = 0x6aa84a, water = 0x6cc4e0, clay = 0xc8643a;
+      const bench = (x: number, y: number, z: number, ry: number) => {
+        const c = Math.cos(ry), sn = Math.sin(ry), at = (u: number, v: number): [number, number] => [x + u * c + v * sn, z - u * sn + v * c];
+        if (age === 0) { const [a, b] = at(0, 0); put(this.cube, a, y, b, 0.3, 0.05, 0.06, ry, wood); for (const u of [-0.1, 0.1]) { const [e, f] = at(u, 0); put(this.cube, e, y, f, 0.03, 0.03, 0.08, ry, dark); } return; }
+        const top = age === 1 ? stone : wood;
+        for (const u of [-0.1, 0.1]) { const [a, b] = at(u, 0); put(this.cube, a, y, b, 0.03, 0.05, 0.07, ry, age === 1 ? 0x8f8a82 : dark); }
+        { const [a, b] = at(0, 0); put(this.cube, a, y + 0.05, b, 0.28, 0.018, 0.08, ry, top); }
+        if (age === 2) { const [a, b] = at(0, -0.035); put(this.cube, a, y + 0.068, b, 0.28, 0.06, 0.014, ry, top); }
+      };
+      for (const [x, z, h] of cand) {
+        if (done.some(([px, pz]) => Math.hypot(px - x, pz - z) < 1.7)) continue;
+        // une seule fontaine (ou puits, ou foyer) par place : on regarde s'il y en a déjà une près d'ici
+        let kind = Math.floor(hash2(Math.floor(x), Math.floor(z), 92) * 4);
+        if (kind === 1 && done.some(([px, pz, pk]) => pk === 1 && Math.hypot(px - x, pz - z) < 4)) kind = 0;
+        done.push([x, z, kind]);
+        const y = w.hAt(x, z), ry = Math.floor(h * 4) * (Math.PI / 2);
+        if (kind === 0) {
+          // deux bancs face à face
+          const c = Math.cos(ry), sn = Math.sin(ry);
+          bench(x + sn * 0.16, y, z + c * 0.16, ry + Math.PI); bench(x - sn * 0.16, y, z - c * 0.16, ry);
+        } else if (kind === 1) {
+          if (age === 0) {
+            // le foyer de la place : pierres en cercle, braises qui rougeoient
+            for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; put(this.ico, x + Math.cos(a) * 0.09, y + 0.015, z + Math.sin(a) * 0.09, 0.028, 0.022, 0.028, a, stone); }
+            put(this.ico, x, y + 0.02, z, 0.04, 0.025, 0.04, 0, 0xff8a3a, true);
+          } else if (age === 1) {
+            // fontaine : vasque de pierre, eau, colonne et sa coupe
+            put(this.cyl, x, y, z, 0.14, 0.06, 0.14, 0, stone); put(this.cyl, x, y + 0.06, z, 0.12, 0.008, 0.12, 0, water);
+            put(this.cyl, x, y + 0.06, z, 0.018, 0.12, 0.018, 0, stone); put(this.cyl, x, y + 0.18, z, 0.05, 0.02, 0.05, 0, stone);
+          } else {
+            // le puits de la place : margelle, deux montants, toit de bardeaux
+            put(this.cyl, x, y, z, 0.09, 0.08, 0.09, 0, stone); put(this.cyl, x, y + 0.08, z, 0.075, 0.006, 0.075, 0, water);
+            for (const d of [-0.075, 0.075]) put(this.cube, x + d * Math.cos(ry), y + 0.08, z - d * Math.sin(ry), 0.016, 0.16, 0.016, ry, wood);
+            put(this.cube, x, y + 0.24, z, 0.22, 0.02, 0.14, ry, 0x7a5040);
+          }
+        } else if (kind === 2) {
+          // bacs fleuris (amphores à l'Antiquité, tonneaux coupés au Moyen Âge), un arbuste
+          for (const d of [-0.12, 0.12]) {
+            const px = x + d * Math.cos(ry), pz = z - d * Math.sin(ry);
+            if (age === 0) put(this.ico, px, y + 0.04, pz, 0.06, 0.05, 0.06, ry, leaf);
+            else { put(this.cyl, px, y, pz, 0.045, 0.06, 0.045, 0, age === 1 ? clay : BARREL); put(this.ico, px, y + 0.09, pz, 0.05, 0.04, 0.05, ry, leaf); put(this.ico, px + 0.02, y + 0.12, pz, 0.014, 0.014, 0.014, 0, d > 0 ? 0xe86a7a : 0xf2d24a); }
+          }
+        } else {
+          // le coin du marché : caisses, sacs et tonneau (une statue sur son socle à l'Antiquité)
+          if (age === 1) { put(this.cube, x, y, z, 0.1, 0.08, 0.1, ry, stone); put(this.cyl, x, y + 0.08, z, 0.025, 0.12, 0.025, 0, 0xe8e2d4); put(this.ico, x, y + 0.22, z, 0.025, 0.025, 0.025, 0, 0xe8e2d4); }
+          else {
+            put(this.cube, x - 0.06, y, z, 0.08, 0.07, 0.08, ry, CRATE); put(this.cube, x + 0.05, y, z + 0.04, 0.07, 0.06, 0.07, ry + 0.4, CRATE);
+            put(this.ico, x + 0.03, y + 0.03, z - 0.08, 0.04, 0.035, 0.035, ry, SACK);
+            if (age === 2) { put(this.cyl, x + 0.1, y, z - 0.06, 0.038, 0.085, 0.038, 0, BARREL); put(this.cyl, x + 0.1, y + 0.02, z - 0.06, 0.04, 0.008, 0.04, 0, HOOP); }
+          }
+        }
       }
     }
     const gg = new THREE.BufferGeometry();

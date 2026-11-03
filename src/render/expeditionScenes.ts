@@ -7,6 +7,7 @@ import { Act } from '../world/gardens';
 import { makeActor, play, hasModel, Actor, ModelName, AGE_VILLAGERS, HUMAN } from './assets';
 import { Parts } from './parts';
 import { mats } from './materials';
+import type { CombatFx } from './combatFx';
 
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
 export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34], wolf: ['wolf', 0.3] };
@@ -51,6 +52,15 @@ const rocksGeo = () => geo('rocks', (p) => {
     p.add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.75, 1), x, r * 0.55, z, c);
   for (const [x, y, z, c] of [[0.05, 0.16, 0.03, 0xd8a64a], [-0.08, 0.1, 0.1, 0x8fb3c9], [0.14, 0.11, -0.02, 0xd8a64a], [-0.02, 0.13, -0.1, 0xb0574a]] as number[][])
     p.add(new THREE.IcosahedronGeometry(0.022, 0), x, y, z, c);
+});
+/** Pan de falaise : blocs gris dressés, rognons de silex noirs à cortex blanc sur la face */
+const cliffGeo = () => geo('cliff', (p) => {
+  for (const [x, h, r, c] of [[-0.24, 0.3, 0.13, 0x8d8a84], [-0.08, 0.44, 0.15, 0x9a958c], [0.09, 0.38, 0.14, 0x86827b], [0.24, 0.26, 0.12, 0x928e86], [0, 0.6, 0.11, 0xa29d94]] as number[][])
+    p.add(new THREE.DodecahedronGeometry(r, 0).scale(1, h / r / 2, 0.8), x, h / 2, -0.04, c);
+  for (const [x, y] of [[-0.2, 0.14], [-0.06, 0.28], [0.1, 0.18], [0.02, 0.42], [0.22, 0.1], [-0.12, 0.06]]) {
+    p.add(new THREE.IcosahedronGeometry(0.03, 0).scale(1, 0.75, 0.6), x, y, 0.07, 0xe8e2d4);
+    p.add(new THREE.IcosahedronGeometry(0.022, 0).scale(1, 0.75, 0.6), x, y, 0.088, 0x2e3038);
+  }
 });
 const cartGeo = () => geo('cart', (p) => {
   p.box(0.14, 0.06, 0.2, 0, 0.05, 0, 0x9a7452);
@@ -275,6 +285,10 @@ interface Fx { obj: THREE.Object3D; t: number; life: number; kind: 'puff' | 'fis
 export class ExpeditionScene {
   private props: THREE.Object3D[] = [];
   private beasts: Beast[] = [];
+  /** la chasse : les chiens de la meute, ce que fait le loup, quand chaque chasseur lancera sa prochaine lance */
+  private dogs: Beast[] = [];
+  private hunt = { mode: 'prowl' as 'prowl' | 'charge' | 'bite' | 'back' | 'flee' | 'stand', t: 3, target: 0, ang: 0.5, flinch: 0 };
+  private spearT = new Map<number, number>();
   private fx: Fx[] = [];
   private rods = new Map<number, Rod>();
   /** points de travail (buissons, éboulis, piquets…) et ce que chaque membre y fait */
@@ -307,7 +321,7 @@ export class ExpeditionScene {
   private salts: [number, number][] = [];
   private corral: [number, number] | null = null;
 
-  constructor(private world: World, private agents: Agents, private group: THREE.Group, a: ActiveExpedition) {
+  constructor(private world: World, private agents: Agents, private group: THREE.Group, a: ActiveExpedition, private combat: CombatFx | null = null) {
     const [cx, cz] = a.dest;
     this.story = a.c.scene;
     let kind = BEHAVIOR[this.story] ?? 'camp';
@@ -320,13 +334,25 @@ export class ExpeditionScene {
       const kinds = a.c.win.flatMap((e) => (e.t === 'herd' ? e.kinds : []));
       const base = kinds.length ? kinds : ['sheep' as HerdKind];
       for (let i = 0; i < Math.min(6, Math.max(4, base.length + 2)); i++) this.addBeast(base[i % base.length], cx, cz, 0.7 + (i % 3) * 0.35, i * 1.3);
-    } else if (kind === 'hunt') this.addBeast('wolf', cx, cz, 2.4, 0.5);
+    } else if (kind === 'hunt') {
+      this.addBeast('wolf', cx, cz, 2.4, 0.5);
+      // les chiens de la meute, qui arrivent avec les chasseurs
+      for (let i = 0; i < 2; i++) {
+        const actor = hasModel('dog') ? makeActor('dog', 0.2) : null;
+        if (!actor) break;
+        actor.root.visible = false;
+        this.group.add(actor.root);
+        this.dogs.push({ obj: actor.root, actor, x: cx + (i ? 0.2 : -0.2), z: cz, tx: cx, tz: cz, heading: 0, wait: 0, speed: 1.7 });
+      }
+    }
     else if (kind === 'boat') this.launch(a);
     else if (kind === 'fish') this.spots = this.bankSpots(a.party.length);
     else if (kind === 'mine') {
-      const [rx, rz] = this.near(cx + 0.55, cz + 0.1, cx, cz);
+      const [ux, uz] = this.uphill(cx, cz), [rx, rz] = this.near(cx + ux * 0.56, cz + uz * 0.56, cx, cz);
       this.put(this.story === 'pass' ? copperGeo() : this.story === 'crater' ? meteorGeo() : rocksGeo(), rx, rz, 0);
       if (this.story === 'pass') { const [qx, qz] = this.near(cx - 0.5, cz - 0.45, cx, cz); this.put(cairnGeo(), qx, qz, 0); }
+      // le silex : un pan de falaise derrière le tas, face à l'équipe, même là où la pente est douce
+      if (a.m.id === 'flint') { const [fx, fz] = this.near(cx + ux * 0.95, cz + uz * 0.95, cx, cz); this.put(cliffGeo(), fx, fz, Math.atan2(-ux, -uz)); }
       if (this.story === 'crater') {
         // le cratère encore fumant, la pierre tombée du ciel qui rougeoie
         this.put(craterGeo(), rx, rz, 0);
@@ -335,7 +361,7 @@ export class ExpeditionScene {
         this.group.add(core); this.props.push(core);
         this.emits.push({ x: rx, y: this.world.surfaceAt(rx, rz) + 0.12, z: rz, kind: 'smoke', every: 0.5, t: 0 });
       }
-      const [kx, kz] = this.near(cx - 0.4, cz + 0.45, cx, cz);
+      const [kx, kz] = this.near(cx - ux * 0.3 - uz * 0.45, cz - uz * 0.3 + ux * 0.45, cx, cz);
       this.put(cartGeo(), kx, kz, 0.6);
       for (let i = 0; i < 4; i++) { const ang = i * 1.57 + 0.6; this.spots.push([rx + Math.cos(ang) * 0.26, rz + Math.sin(ang) * 0.26]); }
     } else if (kind === 'gather') {
@@ -623,6 +649,17 @@ export class ExpeditionScene {
   }
 
   /** Le point voulu s'il est libre, sinon un point libre plus près du centre */
+  /** Direction (unitaire) où le terrain monte le plus autour d'un point : vers la paroi ou le haut de la pente */
+  private uphill(cx: number, cz: number): [number, number] {
+    let best = -Infinity, dir: [number, number] = [1, 0];
+    for (let k = 0; k < 12; k++) {
+      const ang = (k / 12) * Math.PI * 2, dx = Math.cos(ang), dz = Math.sin(ang);
+      const up = this.world.hAt(cx + dx * 1.2, cz + dz * 1.2) + this.world.hAt(cx + dx * 2.2, cz + dz * 2.2) * 0.5;
+      if (up > best) { best = up; dir = [dx, dz]; }
+    }
+    return dir;
+  }
+
   private near(x: number, z: number, cx: number, cz: number): [number, number] {
     for (let k = 1; k >= 0; k -= 0.25) { const px = cx + (x - cx) * k, pz = cz + (z - cz) * k; if (this.free(px, pz)) return [px, pz]; }
     return [cx, cz];
@@ -720,7 +757,8 @@ export class ExpeditionScene {
     const onSite = a.phase === 'work';
     const k = onSite ? Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) : 0;
     if (this.flame) { const f = 1 + Math.sin(this.t * 17) * 0.12 + Math.sin(this.t * 29) * 0.08; this.flame.scale.set(f, 1.1 + Math.sin(this.t * 13) * 0.2, f); }
-    for (const b of this.beasts) this.stepBeast(b, dt, a);
+    if (this.kind === 'hunt' && (onSite || a.phase === 'back')) this.stepHunt(dt, a);
+    else for (const b of this.beasts) this.stepBeast(b, dt, a);
     if (this.boat && onSite) this.stepBoat();
     // ouvrages qui avancent avec le travail, panier qui se remplit
     this.built.forEach((o, i) => (o.visible = k * this.built.length > i));
@@ -782,6 +820,97 @@ export class ExpeditionScene {
     }
   }
 
+  /**
+   * La chasse au loup : il rôde autour des chasseurs, fonce sur l'un d'eux, mord (la lame pare, ou la morsure porte), recule
+   * et recommence ; les chasseurs lui lancent leurs lances (celles qui portent le font tressaillir), les chiens le harcèlent.
+   * Au retour, l'issue : il détale loin dans la forêt, ou il tient tête et mord encore
+   */
+  private stepHunt(dt: number, a: ActiveExpedition) {
+    const b = this.beasts[0];
+    if (!b) return;
+    const w = this.world, h = this.hunt, [cx, cz] = a.dest, pos = this.agents.partyPositions(a.party), g = (x: number, z: number) => w.surfaceAt(x, z);
+    h.t -= dt; h.flinch = Math.max(0, h.flinch - dt);
+    if (a.phase === 'back' && h.mode !== 'flee' && h.mode !== 'stand') {
+      h.mode = a.ok ? 'flee' : 'stand'; h.t = a.ok ? 6 : 2; h.ang = Math.atan2(b.x - cx, b.z - cz);
+      const p = pos[0];
+      if (!a.ok && p) this.combat?.hit(p[0], g(p[0], p[1]) + 0.13, p[1], 0xff5a4a, 14, 'bite');
+    }
+    let tx = b.x, tz = b.z, speed = 0, anim = ['Idle'];
+    if (h.mode === 'prowl') {
+      h.ang += dt * 0.55;
+      tx = cx + Math.sin(h.ang) * 1.5; tz = cz + Math.cos(h.ang) * 1.5; speed = 0.75; anim = ['Walk', 'Run'];
+      if (h.t <= 0 && pos.length) { h.mode = 'charge'; h.target = Math.floor(Math.random() * pos.length); h.t = 3; }
+    } else if (h.mode === 'charge') {
+      const p = pos[h.target % Math.max(1, pos.length)];
+      if (p) { tx = p[0]; tz = p[1]; }
+      speed = 1.6; anim = ['Run'];
+      if (p && Math.hypot(p[0] - b.x, p[1] - b.z) < 0.26) {
+        h.mode = 'bite'; h.t = 0.8;
+        const bite = Math.random() < 0.35;
+        this.combat?.hit((p[0] + b.x) / 2, g(p[0], p[1]) + 0.13, (p[1] + b.z) / 2, bite ? 0xff5a4a : 0xf2f4ff, bite ? 12 : 9, bite ? 'bite' : 'blade');
+      } else if (h.t <= 0) { h.mode = 'back'; h.t = 2; }
+    } else if (h.mode === 'bite') {
+      anim = ['Headbutt'];
+      const p = pos[h.target % Math.max(1, pos.length)];
+      if (p) b.heading = Math.atan2(p[0] - b.x, p[1] - b.z);
+      if (h.t <= 0) { h.mode = 'back'; h.t = 2.5; }
+    } else if (h.mode === 'back') {
+      const ang = Math.atan2(b.x - cx, b.z - cz);
+      tx = cx + Math.sin(ang) * 1.8; tz = cz + Math.cos(ang) * 1.8; speed = 1.3; anim = ['Run'];
+      if (Math.hypot(tx - b.x, tz - b.z) < 0.1 || h.t <= 0) { h.mode = 'prowl'; h.ang = ang; h.t = 3 + Math.random() * 2.5; }
+    } else if (h.mode === 'flee') {
+      tx = cx + Math.sin(h.ang) * 9; tz = cz + Math.cos(h.ang) * 9; speed = 2.4; anim = ['Run'];
+      if (h.t <= 0) b.obj.visible = false;
+    } else {
+      // il tient tête : il gronde face aux chasseurs qui s'en vont
+      const p = pos[0];
+      if (p) b.heading = Math.atan2(p[0] - b.x, p[1] - b.z);
+      anim = h.t > 1.2 ? ['Headbutt'] : ['Idle'];
+    }
+    if (h.flinch > 0) { speed *= 0.25; anim = ['Jump_Start', 'Idle']; }
+    const dx = tx - b.x, dz = tz - b.z, d = Math.hypot(dx, dz);
+    if (speed > 0 && d > 0.02) {
+      const st = Math.min(d, speed * dt), nx = b.x + (dx / d) * st, nz = b.z + (dz / d) * st;
+      if (this.free(nx, nz) || h.mode === 'flee') { b.x = nx; b.z = nz; }
+      else if (h.mode === 'prowl') h.ang += 0.6;
+      b.heading = Math.atan2(dx, dz);
+    }
+    b.obj.position.set(b.x, g(b.x, b.z), b.z);
+    b.obj.rotation.y = b.heading;
+    if (b.actor) { play(b.actor, anim); b.actor.mixer.update(dt); }
+    // les lances des chasseurs, lancées en avant du loup qui court
+    if (a.phase === 'work' && h.mode !== 'bite')
+      a.party.forEach((id, i) => {
+        const p = pos[i];
+        if (!p) return;
+        let t = (this.spearT.get(id) ?? 1.2 + i * 0.9) - dt;
+        if (t <= 0 && Math.hypot(p[0] - b.x, p[1] - b.z) < 2.8) {
+          t = 2.4 + Math.random() * 1.6;
+          const lx = b.x + (tx - b.x) * 0.25, lz = b.z + (tz - b.z) * 0.25;
+          const to = new THREE.Vector3(lx + (Math.random() - 0.5) * 0.3, g(lx, lz) + 0.04, lz + (Math.random() - 0.5) * 0.3);
+          this.combat?.throw(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), to, () => {
+            if (Math.hypot(b.x - to.x, b.z - to.z) < 0.32) { this.combat?.hit(b.x, g(b.x, b.z) + 0.12, b.z, 0xffd27a, 12); h.flinch = 0.4; }
+          });
+          this.agents.partyAct([id], 'work');
+        }
+        this.spearT.set(id, t);
+      });
+    // les chiens harcèlent le loup, de part et d'autre ; il détale, ils le poursuivent un peu puis reviennent aux chasseurs
+    this.dogs.forEach((dg, i) => {
+      dg.obj.visible = true;
+      const away = h.mode === 'flee' && h.t < 4.5;
+      const side = i ? 1 : -1, back = b.heading + Math.PI + side * 0.8;
+      const gx = away ? cx + side * 0.25 : b.x + Math.sin(back) * 0.38, gz = away ? cz + 0.2 : b.z + Math.cos(back) * 0.38;
+      const ddx = gx - dg.x, ddz = gz - dg.z, dd = Math.hypot(ddx, ddz);
+      let moving = false;
+      if (dd > 0.06) { const st = Math.min(dd, dg.speed * dt); dg.x += (ddx / dd) * st; dg.z += (ddz / dd) * st; dg.heading = Math.atan2(ddx, ddz); moving = true; }
+      else dg.heading = Math.atan2(b.x - dg.x, b.z - dg.z);
+      dg.obj.position.set(dg.x, g(dg.x, dg.z), dg.z);
+      dg.obj.rotation.y = dg.heading;
+      if (dg.actor) { play(dg.actor, moving ? ['Run'] : Math.sin(this.t * 3 + i) > 0.6 ? ['Jump_Start', 'Idle'] : ['Idle']); dg.actor.mixer.update(dt); }
+    });
+  }
+
   /** La barque va et vient entre la berge et le large, en tanguant ; ses passagers y sont assis */
   private stepBoat() {
     const bt = this.boat!;
@@ -835,7 +964,7 @@ export class ExpeditionScene {
   /** Le geste d'un membre arrivé à sa place : au travail, assis à guetter ou à écouter, à applaudir les jongleurs… */
   private actOf(i: number, k: number): Act {
     const st = this.story;
-    if (this.kind === 'hunt') return 'stroll';
+    if (this.kind === 'hunt') return 'work';
     if (st === 'salt') return k < 0.75 ? 'sit' : 'work';
     if (st === 'troupe') return (i + Math.floor(this.t / 5)) % 2 ? 'cheer' : 'sit';
     if (st === 'abbey') return (i + Math.floor(this.t / 7)) % 3 ? 'sit' : 'cheer';
@@ -1010,7 +1139,7 @@ export class ExpeditionScene {
     for (const id of this.bath?.in ?? []) this.agents.ride(id, null);
     if (this.mouth) this.agents.partyHide(a.party, false);
     for (const n of this.npcs) { n.actor.mixer.stopAllAction(); this.group.remove(n.actor.root); }
-    for (const b of this.beasts) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
+    for (const b of [...this.beasts, ...this.dogs]) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
     for (const o of this.props) this.group.remove(o);
     for (const f of this.fx) this.group.remove(f.obj);
     for (const r of this.rods.values()) r.line.geometry.dispose();

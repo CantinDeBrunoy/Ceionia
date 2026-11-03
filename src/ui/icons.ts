@@ -107,6 +107,10 @@ const P: Record<string, string> = {
   slide: '<path d="M4 21V5h4v4c3 0 4 2 5 5s3 5 7 5"/><path d="M4 9h4M4 13h4"/><path d="M2 21h20"/>',
   ferris: '<circle cx="12" cy="10" r="7"/><circle cx="12" cy="10" r="1"/><path d="M12 3v14M5 10h14M7 5l10 10M17 5L7 15"/><path d="M8 22l4-12 4 12"/>',
   police: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M12 8l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4z"/>',
+  masks: '<path d="M3 4h8v5a4 4 0 0 1-8 0z"/><path d="M13 9h8v5a4 4 0 0 1-8 0z"/><path d="M5.5 7h.01M8.5 7h.01M5.5 10.5q1.5 1 3 0M15.5 12h.01M18.5 12h.01M15.5 16.5q1.5-1 3 0"/>',
+  acropolis: '<path d="M2 21h20l-3-5H5z"/><path d="M7 16v-5M10.3 16v-5M13.7 16v-5M17 16v-5"/><path d="M6 11h12l-6-4z"/>',
+  arch: '<path d="M4 21V9h16v12"/><path d="M9 21v-6a3 3 0 0 1 6 0v6"/><path d="M3 9h18M5 5h14v4H5z"/>',
+  dome: '<path d="M3 21h18"/><path d="M5 21v-8h14v8"/><path d="M8 21v-5M12 21v-5M16 21v-5"/><path d="M4 13h16"/><path d="M7 13a5 5 0 0 1 10 0"/><path d="M12 8V4"/>',
   scissors: '<circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.2 16L19 3M15.8 16L5 3"/>',
   alpine: '<path d="M2 20l7-12 4 6 3-4 6 10z"/><path d="M7.2 11l1.8 1.5 1.6-1.4"/><path d="M14.6 12.6l1.4 1 1.2-1"/>',
   outpost: '<path d="M7 21l2-11h6l2 11"/><path d="M6 10h12l-1-3H7z"/><path d="M12 7V2l5 1.5-5 1.5"/><path d="M9.5 15h5"/><path d="M3 21h18"/>',
@@ -122,6 +126,7 @@ export const KIND_ICON: Record<KindId, string> = {
   health: 'hospital', school: 'book', fire: 'flame', gather: 'campfire', temple: 'columns', landmark: 'castle',
   stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost', lumber: 'axe', quarry: 'rock', station: 'train', barber: 'scissors', alpine: 'alpine', police: 'police', terminal: 'train',
   harbor: 'anchor', airport: 'plane', stadium: 'stadium', football: 'ball', basket: 'hoop', tennis: 'racket', waterpark: 'slide', funfair: 'ferris',
+  theater: 'masks', acropolis: 'acropolis', forum: 'arch', senate: 'dome',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

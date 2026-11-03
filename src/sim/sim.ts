@@ -4,6 +4,14 @@ import { mandatoryFor, needBonus } from './missions';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
+export type NeedId = 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health';
+
+/**
+ * Détail d'un besoin pour sa fiche : chaque source (bâtiments d'une même sorte, champs, jardins, forêts, maisons au bord de
+ * l'eau, effets d'expédition) avec son nombre et son apport ; le bâtiment qui le comble le mieux et ce qu'il apporte
+ */
+export interface NeedDetail extends Need { rows: { label: string; n: number; v: number }[]; kind: KindId; per: number }
+
 export interface AgeProgress {
   next: number;
   ratio: number;
@@ -36,6 +44,9 @@ export class Sim {
   private baseJobs = 0;
   private baseJoy = 0;
   private grow = 0;
+  /** d'où vient chaque besoin : apports des bâtiments par sorte (et des maisons au bord de l'eau), puis la terre cultivée */
+  private src: Record<NeedId, Map<string, { n: number; v: number }>> = { housing: new Map(), food: new Map(), water: new Map(), jobs: new Map(), joy: new Map(), health: new Map() };
+  private land = { fields: 0, fertile: 0, gardens: 0, forests: 0 };
   private lastVersion = -1;
   private recalcTimer = 0;
   onAgeUp: ((age: number) => void) | null = null;
@@ -46,10 +57,19 @@ export class Sim {
     const w = this.world;
     let H = 0, F = 0, W = 0, J = 0, Jy = 0, He = 0;
     const counts: Record<string, number> = {};
+    for (const m of Object.values(this.src)) m.clear();
+    const add = (need: NeedId, key: string, v: number) => {
+      if (v <= 0) return;
+      const s = this.src[need].get(key) ?? { n: 0, v: 0 };
+      s.n++; s.v += v;
+      this.src[need].set(key, s);
+    };
     for (const b of w.buildings.values()) {
       const k = KINDS[b.kind];
       const a = b.age;
       counts[b.kind] = (counts[b.kind] ?? 0) + 1;
+      for (const need of ['housing', 'food', 'water', 'jobs', 'joy', 'health'] as NeedId[]) add(need, b.kind, k[need]?.[a] ?? 0);
+      if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) add('water', 'riverside', k.housing?.[a] ?? 0);
       H += k.housing?.[a] ?? 0;
       F += k.food?.[a] ?? 0;
       W += k.water?.[a] ?? 0;
@@ -63,6 +83,7 @@ export class Sim {
       const v = w.veg[i];
       if (v === 2) { fields++; if (w.ash[i]) fertile++; } else if (v === 3) gardens++; else if (v === 1) forests++;
     }
+    this.land = { fields, fertile, gardens, forests };
     // les champs semés sur les cendres d'une coulée donnent double récolte
     this.baseFood = F;
     this.fieldFood = (fields + fertile) * 3;
@@ -101,6 +122,21 @@ export class Sim {
     this.jobs.ok = this.jobs.cap >= this.jobs.demand;
     this.joy.ok = this.joy.cap >= this.joy.demand;
     this.health.ok = this.health.cap >= this.health.demand;
+  }
+
+  /** Le détail d'un besoin pour sa fiche : ce qui le fournit (du plus gros apport au plus petit) et le bâtiment qui le comble */
+  needDetail(k: NeedId): NeedDetail {
+    const e = this.world.exp, L = this.land;
+    const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? 'Maisons au bord de l’eau' : this.nameOf(key as KindId), n: s.n, v: s.v }));
+    if (k === 'food' && L.fields) rows.push({ label: L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)', n: L.fields, v: this.fieldFood * this.yieldK * (e.perks.includes('seeds') ? 1.3 : 1) });
+    if (k === 'jobs' && L.fields) rows.push({ label: 'Champs', n: L.fields, v: L.fields * 0.5 });
+    if (k === 'joy' && L.gardens) rows.push({ label: 'Jardins', n: L.gardens, v: L.gardens * 0.8 });
+    if (k === 'joy' && L.forests) rows.push({ label: 'Forêts où l’on se promène', n: L.forests, v: L.forests * 0.08 });
+    if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)', n: 0, v: b }); }
+    rows.sort((a, b) => b.v - a.v);
+    const kind = ({ housing: 'house', food: 'farm', water: 'well', jobs: 'workshop', joy: 'gather', health: 'health' } as Record<NeedId, KindId>)[k];
+    const d = KINDS[kind], per = d[k]?.[Math.max(this.age, d.minAge)] ?? 0;
+    return { ...this[k], rows, kind, per };
   }
 
   /** Rendement des champs selon l'humidité des sols : 55 % en pleine sécheresse, 110 % après la pluie */
@@ -150,21 +186,25 @@ export class Sim {
     this.messageKind = null;
     if (w.buildings.size === 0) return about('house', `Pour commencer, posez « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
     if (!this.counts.house) return about('house', `Pour accueillir des habitants : ${say('house')}.`);
-    if (!this.housing.ok) return about('house', `Il manque des logements : ${say('house')}.`);
     if (!this.food.ok) return about('farm', this.drought ? `Sécheresse : les champs donnent moins ; ${say('farm')} ou « ${this.nameOf('pier')} » de plus aiderait.` : `Il manque de quoi manger : ${say('farm')} ou un champ.`);
     if (!this.water.ok) return about('well', `Il manque de l’eau : ${say('well')}.`);
     if (!this.jobs.ok) return about('workshop', `Les habitants cherchent du travail : ${say('workshop')}.`);
     if (!this.joy.ok) return about('gather', `Les habitants aimeraient un lieu de rencontre : ${say('gather')}, un jardin ou un lieu de culte.`);
     if (!this.health.ok) return about('health', `Les habitants tombent malades : il faut ${say('health')}.`);
     if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
+    // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
+    const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;
+    const room = () => about('house', `Village plein (${Math.floor(p)}/${this.housing.cap} places) : ${say('house')} de plus, +${per} places, pour qu’il grandisse.`);
     const ap = this.ageProgress();
     if (ap) {
-      if (p < AGES[ap.next].reqPop) return `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
+      if (p < AGES[ap.next].reqPop) return full ? room() : `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
       const miss = ap.items.find((i) => i.have < i.need);
+      if (!miss) return `Tout est prêt pour l’âge suivant (${AGES[ap.next].name}) : passez-y quand vous voulez.`;
       if (miss?.label.startsWith('expédition')) return `Pour l’âge suivant : réussissez l’${miss.label} (menu Expéditions).`;
       if (miss?.kind) { const n = miss.need - miss.have; return about(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}.`); }
       if (miss) return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`;
     }
+    if (full) return room();
     return 'Le village est paisible et prospère.';
   }
 
@@ -195,12 +235,20 @@ export class Sim {
         if (!this.canGrow) break;
       }
     }
-    // passage d'âge
-    const ap = this.ageProgress();
-    if (ap && ap.items.every((i) => i.have >= i.need)) {
-      this.age = ap.next;
-      this.onAgeUp?.(this.age);
-    }
+    // le passage d'âge n'est plus forcé : c'est le joueur qui le décide (bouton « Passer à l'ère suivante »)
     this.message = this.computeMessage();
+  }
+
+  /** Tout est réuni pour l'âge suivant : le bouton « Passer à l'ère suivante » s'allume */
+  get ready() { const ap = this.ageProgress(); return !!ap && ap.items.every((i) => i.have >= i.need); }
+
+  /** Passe à l'âge suivant, si tout est réuni ; true si c'est fait */
+  advance() {
+    const ap = this.ageProgress();
+    if (!ap || !ap.items.every((i) => i.have >= i.need)) return false;
+    this.age = ap.next;
+    this.onAgeUp?.(this.age);
+    this.message = this.computeMessage();
+    return true;
   }
 }

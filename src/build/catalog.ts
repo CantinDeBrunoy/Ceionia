@@ -1,6 +1,6 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
   | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
-  | 'harbor' | 'airport' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair';
+  | 'harbor' | 'airport' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'theater' | 'acropolis' | 'forum' | 'senate';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -253,11 +253,36 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   baths: {
     id: 'baths', size: 2, minAge: 1, icon: '♨️', cat: 'life',
-    names: ['', 'Thermes', 'Étuves', 'Bains publics', 'Centre aquatique'],
-    desc: 'On s’y lave, on s’y soigne et on s’y retrouve.',
+    names: ['', 'Thermes', 'Étuves', 'Piscine municipale', 'Centre aquatique'],
+    desc: 'On s’y lave, on s’y soigne et on s’y retrouve : les thermes antiques deviennent étuves, puis piscine avec son plongeoir.',
     joy: [0, 6, 8, 10, 13], health: [0, 10, 14, 20, 28], jobs: [0, 2, 2, 3, 5],
     perk: 'Débloqués par l’expédition « Les sources chaudes ».',
     reqMission: 'springs',
+  },
+  theater: {
+    id: 'theater', size: 2, minAge: 1, icon: '🎭', cat: 'life',
+    names: ['', 'Théâtre antique', 'Théâtre de tréteaux', 'Opéra', 'Salle de spectacle'],
+    desc: 'Tragédies, comédies, farces, opéras et concerts : tout le village vient au spectacle.',
+    joy: [0, 7, 9, 12, 15], jobs: [0, 2, 2, 4, 5],
+  },
+  acropolis: {
+    id: 'acropolis', size: 3, minAge: 1, icon: '🏛️', cat: 'life',
+    names: ['', 'Acropole', 'Acropole', 'Acropole', 'Acropole'],
+    desc: 'La ville haute sur son rocher : le grand temple de marbre, les propylées, le portique des caryatides et la statue d’Athéna veillent sur le village, à travers tous les âges.',
+    joy: [0, 12, 12, 14, 16], jobs: [0, 3, 3, 4, 5],
+    perk: 'Grand monument de 3 × 3 cases, qu’on garde à travers les âges (comme le château).',
+  },
+  forum: {
+    id: 'forum', size: 2, minAge: 1, icon: '🏛️', cat: 'life',
+    names: ['', 'Forum', 'Halle du marché', 'Halles', 'Marché couvert'],
+    desc: 'La grande place où l’on commerce, juge et discute : forum romain, puis halle du marché à charpente, halles de fer et de verre, marché couvert.',
+    joy: [0, 8, 8, 9, 10], jobs: [0, 3, 5, 7, 9], food: [0, 0, 2, 3, 4],
+  },
+  senate: {
+    id: 'senate', size: 2, minAge: 1, icon: '🏛️', cat: 'service',
+    names: ['', 'Sénat', 'Palais du conseil', 'Palais du Sénat', 'Sénat'],
+    desc: 'Les anciens du village y débattent des affaires communes : curie romaine, palais communal et son beffroi, puis palais à coupole.',
+    joy: [0, 4, 5, 6, 7], jobs: [0, 4, 5, 7, 9],
   },
   police: {
     id: 'police', size: 2, minAge: 1, icon: '🚓', cat: 'service',
@@ -275,7 +300,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'mine', 'outpost', 'harbor', 'mill', 'health', 'school', 'fire', 'police', 'observatory', 'airport', 'gather', 'tavern', 'barber', 'baths', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'landmark', 'station', 'terminal'];
+export const KIND_ORDER: KindId[] = ['house', 'well', 'lamp', 'farm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'mine', 'outpost', 'harbor', 'mill', 'health', 'school', 'fire', 'police', 'observatory', 'airport', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -306,8 +331,9 @@ export const KIND_LABEL: Record<KindId, string> = {
   house: 'maisons', farm: 'fermes', pen: 'enclos', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
   health: 'lieux de soins', school: 'écoles', fire: 'casernes',
-  stable: 'écuries', apiary: 'ruchers', baths: 'thermes', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
+  stable: 'écuries', apiary: 'ruchers', baths: 'thermes et piscines', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
   barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
+  theater: 'théâtres', acropolis: 'acropoles', forum: 'forums et marchés', senate: 'sénats',
   harbor: 'ports', airport: 'aéroports', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions',
 };
 

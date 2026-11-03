@@ -10,6 +10,7 @@ import { rockShapes } from './treeShapes';
 import { groundDetailTexture } from './textures';
 import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight';
 import { UnderMobs, Mob, MobKind } from './mobs';
+import { CombatFx } from './combatFx';
 import { campLayout, buildCamp, stepCamp, Camp } from './camp';
 import { CAMP_QUESTS, CAMP_GUARDS } from '../sim/depths';
 import { MINER_SPEED } from '../sim/railway';
@@ -48,6 +49,8 @@ interface TroopShow {
   route: TroopRoute; path: [number, number][]; members: TroopMember[]; light: Source; scareT: number;
   /** créatures de chaque embuscade, et embuscades terminées */
   foes: Map<number, Mob[]>; over: Set<number>;
+  /** temps avant le prochain coup de chaque membre (et la riposte de chaque créature) */
+  cool: number[]; foeCool: Map<Mob, number>;
 }
 const T_WALK = ['Walking_A', 'Walk'], T_IDLE = ['Idle'], T_HACK = ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', 'Interact', 'Use_Item', 'Idle'];
 /** Bassins : remontés d'une case autour pour que la rive coupe la pente du sol */
@@ -76,6 +79,8 @@ interface Item { m: THREE.Matrix4; c: THREE.Color }
  */
 export class UnderView {
   scene = new THREE.Scene();
+  /** étincelles, éclairs et poussière des combats sous terre */
+  fx = new CombatFx();
   mobs: UnderMobs;
   private groundGeo = new THREE.BufferGeometry();
   private content = new THREE.Group();
@@ -176,6 +181,7 @@ export class UnderView {
     this.mobs = new UnderMobs(under);
     this.mobs.held = () => this.world.claimed;
     this.scene.add(this.mobs.group);
+    this.scene.add(this.fx.group);
 
     this.models = {
       crystal: bakeStatic('crystal', 0.5, /./), crystal2: bakeStatic('crystal2', 0.42, /./), mineral: bakeStatic('mineral', 0.3, /pink/i),
@@ -573,7 +579,7 @@ export class UnderView {
     }
     if (!members.length) return null;
     const light: Source = { x: path[0][0], y: 0, z: path[0][1], r: 5, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(2), flicker: 0.25 };
-    return { route, path, members, light, scareT: 0, foes: new Map(), over: new Set() };
+    return { route, path, members, light, scareT: 0, foes: new Map(), over: new Set(), cool: members.map((_, i) => 0.4 + i * 0.23), foeCool: new Map() };
   }
 
   /** Point du chemin à la distance s (en cases) et cap de marche */
@@ -588,13 +594,32 @@ export class UnderView {
     const time = t.progress * s.route.total, { pos, leg } = routeAt(s.route, time);
     const mining = leg?.kind === 'mine', fighting = leg?.kind === 'fight';
     const lead = this.along(s.path, pos);
-    this.ambushes(s, t, time, lead);
+    this.ambushes(s, t, time, lead, dt);
+    // les créatures encore debout de l'embuscade en cours
+    const live = fighting ? [...s.foes.values()].flat().filter((f) => f.alive && f.dying < 0) : [];
     s.members.forEach((m, i) => {
       let x: number, z: number, h: number;
       if (fighting) {
-        // en cercle, face aux assaillants
+        // chacun marche sur la créature la plus proche de sa place dans le cercle, s'arrête à portée (de lame, ou de fusil) et
+        // frappe ; sans créature à portée, il reste en cercle face au noir
         const a = (i / s.members.length) * Math.PI * 2 + 0.6, r = m.rider ? 0.42 : 0.3;
-        x = lead[0] + Math.sin(a) * r; z = lead[1] + Math.cos(a) * r; h = a;
+        const hx = lead[0] + Math.sin(a) * r, hz = lead[1] + Math.cos(a) * r;
+        const rifle = m.soldier?.arms[0].userData.hold === 'rifle';
+        const foe = live.reduce<Mob | null>((b, f) => (Math.hypot(f.x - hx, f.z - hz) < (b ? Math.hypot(b.x - hx, b.z - hz) : 1.6) ? f : b), null);
+        if (foe) {
+          const d = Math.hypot(foe.x - hx, foe.z - hz) || 1, reach = rifle ? 0.55 : m.rider ? 0.34 : 0.24, go = Math.max(0, Math.min(0.45, d - reach));
+          x = hx + ((foe.x - hx) / d) * go; z = hz + ((foe.z - hz) / d) * go; h = Math.atan2(foe.x - x, foe.z - z);
+          // le coup porte : étincelles sur la créature, qui recule ; le fusil tire (éclair, traînée, impact)
+          s.cool[i] -= dt;
+          if (s.cool[i] <= 0 && Math.hypot(foe.x - x, foe.z - z) < reach + 0.12) {
+            s.cool[i] = (rifle ? 0.8 : 0.6) + Math.random() * 0.35;
+            const fy = this.under.heightAt(foe.x, foe.z) + 0.16;
+            if (rifle) this.fx.shot(x + Math.sin(h) * 0.12, this.under.heightAt(x, z) + 0.2, z + Math.cos(h) * 0.12, foe.x, fy, foe.z);
+            else this.fx.hit((x + foe.x * 2) / 3, fy, (z + foe.z * 2) / 3, 0xffd27a, 12, 'blade');
+            this.mobs.strike(foe, x, z);
+          }
+          foe.target = [x, z];
+        } else { x = hx; z = hz; h = a; }
       } else if (mining) {
         // autour du filon : les uns frappent la paroi, les autres montent la garde
         const a = i * 2.1 + 0.5;
@@ -635,7 +660,7 @@ export class UnderView {
    * Embuscades : les créatures surgissent un peu avant que la troupe n'arrive et la chargent ; pendant le combat elles
    * tombent une à une ; à la fin, les dernières meurent, ou s'en retournent dans le noir si la troupe a dû reculer
    */
-  private ambushes(s: TroopShow, t: Troop, time: number, lead: [number, number, number]) {
+  private ambushes(s: TroopShow, t: Troop, time: number, lead: [number, number, number], dt: number) {
     t.ambush.forEach((m, j) => {
       if (s.over.has(j)) return;
       if (time >= m.t0 + FIGHT_HALT) {
@@ -646,13 +671,24 @@ export class UnderView {
       if (time < m.t0 - 10) return;
       let foes = s.foes.get(j);
       if (!foes) { foes = this.mobs.ambush(m.kind, m.n, m.cell); s.foes.set(j, foes); }
-      for (const f of foes) if (f.alive && f.dying < 0) f.foe = [lead[0], lead[1]];
+      // chacune prend sa place autour de la troupe au lieu de se ruer toutes au même point
+      foes.forEach((f, fi) => { if (f.alive && f.dying < 0) { const a = (fi / foes!.length) * Math.PI * 2 + j * 1.3; f.foe = [lead[0] + Math.sin(a) * 0.36, lead[1] + Math.cos(a) * 0.36]; } });
       if (time < m.t0) return;
+      // les créatures rendent les coups : une lame les pare (étincelles blanches), parfois une morsure porte
+      for (const f of foes) {
+        if (!f.alive || f.dying >= 0 || !f.target || Math.hypot(f.target[0] - f.x, f.target[1] - f.z) > 0.42) continue;
+        const c = (s.foeCool.get(f) ?? Math.random() * 1.2) - dt;
+        if (c <= 0) {
+          const bite = m.result !== 'clean' && Math.random() < 0.3;
+          this.fx.hit((f.x + f.target[0]) / 2, this.under.heightAt(f.x, f.z) + 0.15, (f.z + f.target[1]) / 2, bite ? 0xff5a4a : 0xf2f4ff, bite ? 10 : 7, bite ? 'bite' : 'blade');
+          s.foeCool.set(f, 1 + Math.random() * 1.2);
+        } else s.foeCool.set(f, c);
+      }
       // tombées jusqu'ici : toutes à la fin d'une victoire, toutes sauf une si un soldat est blessé, la moitié si l'on recule
       const quota = m.result === 'rout' ? Math.floor(m.n / 2) : m.n - (m.result === 'hurt' ? 1 : 0);
       const due = Math.min(quota, Math.floor(((time - m.t0) / FIGHT_HALT) * (quota + 1)));
       let down = foes.filter((f) => !f.alive || f.dying >= 0).length;
-      for (const f of foes) if (down < due && f.alive && f.dying < 0) { this.mobs.kill(f); down++; }
+      for (const f of foes) if (down < due && f.alive && f.dying < 0) { this.fx.hit(f.x, this.under.heightAt(f.x, f.z) + 0.15, f.z, 0xffe8b0, 22, 'blade'); this.fx.puff(f.x, this.under.heightAt(f.x, f.z) + 0.05, f.z, 10); this.mobs.kill(f); down++; }
     });
   }
 
@@ -1056,6 +1092,7 @@ export class UnderView {
     if ((this.campT -= dt) <= 0) { this.campT = 1; this.refreshCamp(); }
     if (this.camp) stepCamp(this.camp, this.uTime.value, dt);
     this.stepGuards(dt);
+    this.fx.update(dt);
     this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z })), ...[...this.crews.values()].flatMap((c) => c.miners.map((m) => ({ x: m.x, z: m.z })))]);
   }
 

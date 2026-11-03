@@ -12,6 +12,9 @@ const MIST_DAY = new THREE.Color(0xf4f7fa), MIST_NIGHT = new THREE.Color(0x4e5a7
 const MIST = { x: 0, y: 2.1, z: 0.9, w: 0 };
 /** couleur de la brume (espace de travail, convertie dans le shader) et taille de la carte (la brume s'efface au bord) */
 const MIST_COL = { x: 1, y: 1, z: 1, w: 192 };
+/** Part des matins (et des soirs) où la brume se lève */
+const MIST_CHANCE = 0.3;
+const mistDay = (n: number) => { const x = Math.sin(n * 91.345 + 7.13) * 43758.5453; return x - Math.floor(x); };
 
 /**
  * Brume au ras du sol, calculée dans tous les matériaux qui reçoivent le brouillard : épaisse au fond des vallées et sur
@@ -185,8 +188,11 @@ void main(){
     const dusk = smoothstep(18.5, 22, h) * 0.45 + (h < 4 || h > 22 ? 0.3 : 0);
     // plus légère qu'avant : un voile au lever du jour, qui ne noie plus le village chaque matin
     const seasonK = [0.6, 0.3, 0.8, 0.45][season];
+    // et pas tous les jours : un matin, un soir sur trois environ (le tirage ne dépend que du jour, il ne clignote pas)
+    const night = h < 4 ? time.days - 1 : time.days;
+    const morningOn = mistDay(time.days * 2) < MIST_CHANCE ? 1 : 0, eveningOn = mistDay(night * 2 + 1) < MIST_CHANCE ? 1 : 0;
     this.calm = Math.max(0, this.calm - dt);
-    const density = this.calm > 0 ? 0 : clamp((dawn + dusk) * seasonK + fog * 0.45, 0, 1) * (1 - rain * 0.6) * (1 - fog * 0.35);
+    const density = this.calm > 0 ? 0 : clamp((dawn * morningOn + dusk * eveningOn) * seasonK + fog * 0.45, 0, 1) * (1 - rain * 0.6) * (1 - fog * 0.35);
     this.mistK += (density - this.mistK) * Math.min(1, dt * (this.calm > 0 ? 1.2 : 0.3));
     MIST.x = this.mistEnabled ? this.mistK : 0;
     // par temps de brouillard, la nappe monte et noie les collines basses

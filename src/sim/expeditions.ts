@@ -639,6 +639,12 @@ export class Expeditions {
   private findDest(kind: DestKind, base: [number, number]): [number, number] | null {
     const w = this.world, [bx, bz] = base, cand: [number, number, number][] = [];
     const ideal = { plain: 18, forest: 15, river: 15, mountain: 22, cave: 18, far: 32 }[kind];
+    // dénivelé autour d'une case : de combien le terrain monte dans un rayon de trois cases (une paroi, une pente de montagne)
+    const rise = (x: number, z: number) => {
+      let top = -Infinity;
+      for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) if (w.inCells(x + dx, z + dz)) top = Math.max(top, w.cellAvg(x + dx, z + dz));
+      return top - w.cellAvg(x, z);
+    };
     for (let z = 2; z < N - 2; z += 2)
       for (let x = 2; x < N - 2; x += 2) {
         const k = w.ci(x, z), h = w.cellAvg(x, z), slope = w.cellSlope(x, z), d = Math.hypot(x + 0.5 - bx, z + 0.5 - bz);
@@ -647,7 +653,12 @@ export class Expeditions {
         if (kind === 'forest') ok = w.veg[k] === VEG_FOREST && d > 8;
         else if (kind === 'plain') ok = w.veg[k] === 0 && !w.road[k] && slope < 0.5 && h < 3 && d > 10;
         else if (kind === 'river') ok = w.nearWater(x, z, 1) && d > 7;
-        else if (kind === 'mountain') ok = h > 2.6 && h < 5.2 && slope < 1.2 && d > 9;
+        else if (kind === 'mountain') {
+          // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif
+          const up = slope < 1.2 && h > 1 && d > 9 ? rise(x, z) : 0;
+          if (up > 1.4 || (h > 4.2 && slope < 1.2 && d > 9)) cand.push([x + 0.5, z + 0.5, Math.abs(d - ideal) - Math.min(up, 4) * 3 + this.rnd() * 5]);
+          continue;
+        }
         // devant une grotte ou une faille : au bord de son emprise
         else if (kind === 'cave') ok = d > 6 && w.outpostEntrance(x, z, 1) >= 0;
         else ok = slope < 0.8 && d > 24 && !w.road[k] && w.veg[k] !== VEG_FIELD && w.veg[k] !== VEG_GARDEN;
@@ -657,7 +668,7 @@ export class Expeditions {
     // deux équipes ne vont pas camper au même endroit
     const free = cand.filter(([x, z]) => !this.active.some((a) => Math.hypot(a.dest[0] - x, a.dest[1] - z) < 3));
     const from = w.ci(Math.floor(bx), Math.floor(bz));
-    for (const [x, z] of (free.length ? free : cand).slice(0, 8)) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
+    for (const [x, z] of (free.length ? free : cand).slice(0, 16)) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
     return null;
   }
 }

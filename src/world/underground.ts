@@ -42,7 +42,7 @@ export function oreVeins(u: Underground, mined: Set<number>): { k: number; ore: 
 export interface TroopLeg { from: number; to: number; kind: 'walk' | 'mine' | 'fight'; /** début de l'étape, en temps de parcours */ t0: number }
 export interface TroopRoute { cells: number[]; legs: TroopLeg[]; total: number }
 /** Durée d'une halte au filon et d'un combat, comptée comme une longueur de chemin (cases) */
-export const MINE_HALT = 6, FIGHT_HALT = 14;
+export const MINE_HALT = 6, FIGHT_HALT = 20;
 
 /**
  * Parcours d'une troupe armée : de la case où elle descend, de filon en filon (halte à chacun), puis jusqu'au front où elle

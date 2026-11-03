@@ -6,6 +6,7 @@ import { makeActor, play, hasModel, Actor } from './assets';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { ExpeditionScene, ANIMAL } from './expeditionScenes';
+import { CombatFx } from './combatFx';
 
 interface Follower { obj: THREE.Object3D; actor: Actor | null; gap: number; x: number; z: number; heading: number }
 
@@ -47,6 +48,8 @@ interface Show { key: string; pennant: THREE.Mesh; followers: Follower[]; sacks:
  */
 export class ExpeditionView {
   group = new THREE.Group();
+  /** coups, lances et étincelles des chasses */
+  fx = new CombatFx();
   private shows = new Map<number, Show>();
   private pennantGeos = TEAM_COLORS.map(pennantGeo);
   private sackGeo = sackGeo();
@@ -54,6 +57,8 @@ export class ExpeditionView {
   constructor(private world: World, private agents: Agents, private exp: Expeditions) {}
 
   update(dt: number) {
+    if (!this.fx.group.parent) this.group.add(this.fx.group);
+    this.fx.update(dt);
     const live = new Set<number>();
     for (const a of this.exp.active) {
       live.add(a.id);
@@ -69,8 +74,9 @@ export class ExpeditionView {
       if (key !== sh.key) { sh.key = key; this.rebuild(a, sh); }
       // la scène de la mission (galets, bêtes, éboulis, voisins…) est posée dès le départ de l'expédition : on la voit
       // en attendant l'équipe ; elle est rangée au départ du retour
-      const going = a.phase === 'gather' || a.phase === 'out' || a.phase === 'work';
-      if (going && !sh.scene && a.entry < 0) sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a);
+      // le décor reste encore quelques secondes après le travail : le loup détale ou tient tête, on voit l'équipe repartir
+      const going = a.phase === 'gather' || a.phase === 'out' || a.phase === 'work' || (a.phase === 'back' && a.t < 7);
+      if (going && !sh.scene && a.entry < 0 && a.phase !== 'back') sh.scene = new ExpeditionScene(this.world, this.agents, this.group, a, this.fx);
       else if (!going && sh.scene) { sh.scene.dispose(a); sh.scene = null; }
       sh.scene?.update(dt, a);
       this.step(a, sh, dt);

@@ -44,6 +44,7 @@ import { Expeditions } from './sim/expeditions';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { ExpeditionView } from './render/expeditionView';
+import { Festivities } from './render/festivities';
 import { PenView } from './render/pens';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 
@@ -100,6 +101,9 @@ class Game implements UIHost {
   /** ligne en cours de tracé : ses arrêts dans l'ordre, et la ligne qu'elle remplacera (null : une nouvelle) */
   railEdit: { stops: number[]; line: number | null; color: number } | null = null;
   expView: ExpeditionView;
+  /** fêtes du retour des expéditions réussies, et les équipes déjà fêtées */
+  fest: Festivities;
+  private feted = new Set<number>();
   pens: PenView;
   /** la caméra suit l'expédition */
   /** expédition que la caméra suit (son numéro), ou null */
@@ -119,6 +123,8 @@ class Game implements UIHost {
   private elapsed = 0;
   private windT = 0;
   private seasonKey = -1;
+  /** dernière version des biomes peints prise en compte pour la neige des toits */
+  private biomeV = 0;
   private terrainTimer = 0;
   private propsTimer = 0;
   private lavaTimer = 2;
@@ -207,6 +213,10 @@ class Game implements UIHost {
     this.expeditions.pop = () => this.sim.pop;
     this.expeditions.under = this.under;
     this.expView = new ExpeditionView(w, this.agents, this.expeditions);
+    this.fest = new Festivities(w);
+    this.fest.onBang = (k) => this.audio.sfxBang(k);
+    this.fest.onFeast = () => this.audio.sfxFeast();
+    this.expView.fx.onClash = (k) => this.audio.sfxClash(k);
     // le train descend des mineurs au pied de la grotte et remonte minerai et pierre des galeries tenues
     this.railway = new Railway(w, this.agents, this.expeditions, () => this.time.dayLen);
     this.railView = new RailView(w, this.railway);
@@ -219,7 +229,7 @@ class Game implements UIHost {
     this.atmosphere.onStrike = (x, z) => ignite(w.buildingAt(Math.floor(x), Math.floor(z)));
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.pens.group, this.railView.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.pens.group, this.railView.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -463,6 +473,7 @@ class Game implements UIHost {
     this.fadeThrough(() => {
       this.under.sync();
       this.underView ??= new UnderView(this.world, this.under);
+      this.underView.fx.onClash = (k) => this.audio.sfxClash(k);
       this.underView.build();
       this.surfaceView = this.cam.view();
       this.surfaceZoom = { min: this.cam.minDist, max: this.cam.maxDist };
@@ -677,6 +688,7 @@ class Game implements UIHost {
       this.terrainTimer = 0.06;
       w.terrainDirty = false;
       this.terrain.update(this.season, w.takeTerrainRect());
+      if (w.biomeVersion !== this.biomeV) { this.biomeV = w.biomeVersion; setSnowMap(N, (k) => SNOWY[w.biome[k]] ?? 1); }
       this.buildings.syncHeights();
       this.propsDirty = true;
     }
@@ -727,6 +739,9 @@ class Game implements UIHost {
     this.expeditions.update(gdt);
     this.railway.update(gdt);
     this.expView.update(gdt);
+    // une équipe rentre victorieuse : tout le village fait la fête au cœur du village, à la mode de son âge
+    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.fromCamp && !this.feted.has(a.id)) { this.feted.add(a.id); this.fest.start(a.base[0], a.base[1], this.sim.age); }
+    this.fest.update(dt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe
     const followed = this.following === null ? null : this.expeditions.active.find((e) => e.id === this.following);

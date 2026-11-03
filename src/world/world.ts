@@ -31,6 +31,8 @@ export interface Snapshot {
   heights: Float32Array;
   road: Uint8Array;
   veg: Uint8Array;
+  /** biomes peints au pinceau (absent : ceux d'avant restent) */
+  biomePaint?: Uint8Array;
   buildings: Building[];
   nextId: number;
   /** stocks de bois et de pierre (un bâtiment annulé rend ce qu'il avait coûté) */
@@ -122,6 +124,10 @@ export class World {
   private visPin = new Uint8Array(VS * VS);
   /** Biome de chaque case, et le climat de fond (sans le relief) dont il découle */
   biome = new Uint8Array(N * N);
+  /** Biomes peints au pinceau (0 : celui du climat ; sinon biome + 1) : ils l'emportent sur le climat, même quand le relief change */
+  biomePaint = new Uint8Array(N * N);
+  /** change à chaque coup de pinceau de biome (la neige des toits se refait) */
+  biomeVersion = 0;
   private temp = new Float32Array(N * N);
   private wet = new Float32Array(N * N);
   private climateKey = '';
@@ -575,8 +581,28 @@ export class World {
       if (t < -0.36) b = BIOME_TAIGA;
       else if (t > 0.3) b = m < 0.08 ? BIOME_DESERT : BIOME_TROPICAL;
       else if (m > 0.32 && h < 1.4 && d <= 4) b = BIOME_MARSH;
-      this.biome[k] = b;
+      const f = this.biomePaint[k];
+      this.biome[k] = f ? f - 1 : b;
     }
+  }
+
+  /** Peint le biome d'une case (null : la case retrouve celui de son climat) ; true si quelque chose change */
+  paintBiome(cx: number, cz: number, b: number | null) {
+    if (!this.inCells(cx, cz)) return false;
+    const k = this.ci(cx, cz), v = b === null ? 0 : b + 1;
+    if (this.biomePaint[k] === v) return false;
+    this.biomePaint[k] = v;
+    return true;
+  }
+
+  /** Après des coups de pinceau de biome dans une zone (cases) : le sol se reteinte, la végétation et les routes se refont */
+  biomesChanged(x0: number, z0: number, x1: number, z1: number) {
+    this.computeBiomes();
+    this.markTerrain(x0 - 2, z0 - 2, x1 + 2, z1 + 2);
+    this.markVeg(Math.max(0, x0 - 1), Math.max(0, z0 - 1), Math.min(N - 1, x1 + 1), Math.min(N - 1, z1 + 1));
+    this.vegDirty = true;
+    this.biomeVersion++;
+    this.version++;
   }
 
   buildingAt(cx: number, cz: number): Building | undefined {
@@ -659,6 +685,8 @@ export class World {
         if (this.road[k] && kind !== 'lamp') return 'Une route est déjà ici';
         if (this.decor[k]) return 'Une grotte ou une faille est ici';
         if (this.lake[k]) return 'Un lac est ici';
+        // le port bâtit son quai sur la rive, et même un peu dans l'eau peu profonde (il le remblaie) ; pas en eau profonde
+        if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.45) return 'L’eau est trop profonde ici pour un quai'; continue; }
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return 'Trop proche de l’eau';
       }
     // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
@@ -671,11 +699,14 @@ export class World {
     if (kind === 'outpost' && this.outpostEntrance(x, z, s) < 0) return 'À bâtir tout contre une grotte ou une faille';
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
     if (kind === 'pier' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.inCells(x + dx, z + dz) && (this.cellAvg(x + dx, z + dz) < -0.05 || this.lake[this.ci(x + dx, z + dz)]))) return 'À poser au bord de l’eau';
-    // le port borde l'eau sur tout un côté de son quai
+    // le port : il lui suffit de toucher l'eau d'un côté (une case d'eau contre le quai) et d'avoir un pied sur la terre ferme
     if (kind === 'harbor') {
       const wet = (cx: number, cz: number) => this.inCells(cx, cz) && (this.cellAvg(cx, cz) < -0.05 || this.lake[this.ci(cx, cz)]);
-      const side = [[0, s, 1, 0], [0, -1, 1, 0], [s, 0, 0, 1], [-1, 0, 0, 1]].some(([ox, oz, ux, uz]) => { let n = 0; for (let i = 0; i < s; i++) if (wet(x + ox + ux * i, z + oz + uz * i)) n++; return n === s; });
-      if (!side) return 'À poser au bord de l’eau, un côté du quai le long de l’eau';
+      const side = [[0, s, 1, 0], [0, -1, 1, 0], [s, 0, 0, 1], [-1, 0, 0, 1]].some(([ox, oz, ux, uz]) => { for (let i = 0; i < s; i++) if (wet(x + ox + ux * i, z + oz + uz * i)) return true; return false; });
+      let landed = false;
+      for (let j = 0; j < s && !landed; j++) for (let i = 0; i < s; i++) if (this.cellAvg(x + i, z + j) >= 0.02) { landed = true; break; }
+      if (!side) return 'À poser au bord de l’eau : un côté du quai doit toucher l’eau';
+      if (!landed) return 'Le quai doit s’appuyer sur la rive';
     }
     for (let j = 0; j <= s; j++)
       for (let i = 0; i <= s; i++) {
@@ -684,9 +715,9 @@ export class World {
       }
     const target = this.flatTarget(x, z, s);
     // la mine et la carrière s'accrochent à la pente
-    const steep = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? 1.7 : 1;
+    const steep = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? 1.7 : kind === 'harbor' ? 2.2 : 1;
     if (mx - target > 0.85 * s * steep || target - mn > 0.85 * s * steep) return 'Terrain trop pentu';
-    if (target < 0.05 && kind !== 'pier') return 'Trop proche de l\u2019eau';
+    if (target < 0.05 && kind !== 'pier' && kind !== 'harbor') return 'Trop proche de l\u2019eau';
     return null;
   }
 
@@ -731,8 +762,8 @@ export class World {
 
   place(kind: KindId, x: number, z: number, rot: number, auto: boolean, age: number, animate = true, small = false): Building {
     const s = small ? 1 : KINDS[kind].size;
-    // Aplanit l'empreinte, sans toucher aux coins partagés avec les voisins
-    const avg = this.flatTarget(x, z, s);
+    // Aplanit l'empreinte, sans toucher aux coins partagés avec les voisins ; le quai du port est remblayé au-dessus de l'eau
+    const avg = kind === 'harbor' ? Math.max(this.flatTarget(x, z, s), 0.12) : this.flatTarget(x, z, s);
     for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) if (!this.vertexHeld(x + i, z + j)) this.heights[this.vi(x + i, z + j)] = avg;
     const b: Building = { id: this.nextId++, kind, x, z, rot, auto, age, ...(small ? { small: true } : {}) };
     for (let j = 0; j < s; j++)
@@ -856,6 +887,7 @@ export class World {
       heights: this.heights.slice(),
       road: this.road.slice(),
       veg: this.veg.slice(),
+      biomePaint: this.biomePaint.slice(),
       buildings: [...this.buildings.values()].map((b) => ({ ...b })),
       nextId: this.nextId,
       wood: this.wood,
@@ -867,6 +899,7 @@ export class World {
     this.heights.set(s.heights);
     this.road.set(s.road);
     this.veg.set(s.veg);
+    if (s.biomePaint) { this.biomePaint.set(s.biomePaint); this.biomeVersion++; }
     this.occ.fill(0);
     this.buildings.clear();
     for (const b0 of s.buildings) {
@@ -893,6 +926,8 @@ export class World {
     for (let i = 0; i < this.veg.length; i++) if (this.veg[i]) veg.push(i, this.veg[i]);
     const roads: number[] = [];
     for (let i = 0; i < this.road.length; i++) if (this.road[i]) roads.push(i);
+    const biomes: number[] = [];
+    for (let i = 0; i < this.biomePaint.length; i++) if (this.biomePaint[i]) biomes.push(i, this.biomePaint[i]);
     const order = new Map([...this.buildings.keys()].map((id, i) => [id, i]));
     return {
       n: N,
@@ -900,6 +935,7 @@ export class World {
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
       roads,
       veg,
+      biomes,
       buildings: [...this.buildings.values()].map((b) => (b.small ? [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age, 1] : [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age])),
       nextId: this.nextId,
       torches: [...this.torches],
@@ -981,7 +1017,9 @@ export class World {
     this.growLarge(buildings, heights, road, veg);
     // les sauvegardes d'avant le plan du continent n'ont pas de version : leur climat reste celui de la version 1
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
-    this.restore({ heights, road, veg, buildings, nextId: id });
+    const biomePaint = new Uint8Array(N * N);
+    for (let i = 0; i + 1 < (d.biomes ?? []).length; i += 2) if (d.biomes[i] >= 0 && d.biomes[i] < N * N && d.biomes[i + 1] >= 1 && d.biomes[i + 1] <= BIOME_NAMES.length) biomePaint[d.biomes[i]] = d.biomes[i + 1];
+    this.restore({ heights, road, veg, biomePaint, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.basalt.fill(0);
     const lava = d.basalt ?? [];

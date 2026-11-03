@@ -32,7 +32,7 @@ const PROPS = {
 const PROP_FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 /** hauteur de la selle (le cavalier y est assis) et allure à cheval */
 /** hauteur de la selle (le cheval garde sa taille ; un cavalier plus petit s'assied plus haut sur son pas) */
-const SADDLE = 0.12 + 0.42 * (0.3 - HUMAN), RIDE_SPEED = 1.9;
+const SADDLE = 0.12 + 0.42 * (0.3 - HUMAN), RIDE_SPEED = 1.6;
 
 const MAX_AGENTS = 90;
 /** Part de la population qu'on voit dehors (un passant pour quatre à cinq habitants), et leur nombre au plus */
@@ -74,6 +74,9 @@ interface Agent {
   x: number; z: number;
   state: State;
   path: number[];
+  /** direction du pas en cours (unitaire), qui tourne en douceur vers la suivante */
+  vx?: number;
+  vz?: number;
   pi: number;
   timer: number;
   hidden: boolean;
@@ -644,7 +647,17 @@ export class Agents {
         // l'équipe d'une expédition marche du même pas
         const step = dt * (a.mission ? (a.mounted ? RIDE_SPEED : 1.05) : a.speed) * (w.road[c] ? 1.1 : 0.8);
         if (dist <= step) { a.x = tx; a.z = tz; a.pi++; }
-        else { a.x += (dx / dist) * step; a.z += (dz / dist) * step; a.heading = Math.atan2(dx, dz); }
+        else {
+          // le pas tourne en douceur vers le point visé (droit dessus pour le dernier, quand on y est presque) ; et l'on vise
+          // déjà le point suivant avant d'atteindre celui-ci : les virages s'arrondissent au lieu d'aller de case en case
+          const ux = dx / dist, uz = dz / dist, k = (last && dist < 0.4) || a.vx === undefined ? 1 : 1 - Math.exp(-dt * 9);
+          let vx = (a.vx ?? ux) + (ux - (a.vx ?? ux)) * k, vz = (a.vz ?? uz) + (uz - (a.vz ?? uz)) * k;
+          const l = Math.hypot(vx, vz) || 1;
+          vx /= l; vz /= l;
+          a.vx = vx; a.vz = vz;
+          a.x += vx * step; a.z += vz * step; a.heading = Math.atan2(vx, vz);
+          if (!last && dist - step < 0.28) a.pi++;
+        }
         // le bâtiment visé cache l'habitant dès qu'il en atteint la case
         if (last && a.targetHidden && dist < 0.35) a.hidden = true;
         // un obstacle posé sur le chemin : on recalcule

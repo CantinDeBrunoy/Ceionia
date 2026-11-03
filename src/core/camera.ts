@@ -33,6 +33,8 @@ export class CameraRig {
   enabled = true;
   /** bornes du zoom (resserrées sous terre) : on peut s'approcher tout près des habitants */
   minDist = 3.2;
+  /** suivi d'une équipe en cours (secondes restantes) : la vue lui colle de plus près */
+  private tracking = 0;
   maxDist = maxDistFor();
   /** inclinaison minimale (vue plus plongeante sous terre, pour voir par-dessus les parois) */
   minPitch = 0.25;
@@ -156,6 +158,7 @@ export class CameraRig {
   /** Suit un point (une expédition) : la caméra glisse jusqu'à lui ; dist : la rapprocher au besoin */
   follow(x: number, z: number, dist?: number) {
     this.goal.x = x; this.goal.z = z;
+    this.tracking = 0.3;
     if (dist !== undefined) this.goal.dist = clamp(Math.min(this.goal.dist, dist), this.minDist, this.maxDist);
   }
   zoom(f: number) { this.goal.dist = clamp(this.goal.dist * f, this.minDist, this.maxDist); }
@@ -198,11 +201,14 @@ export class CameraRig {
     if (k.has('Equal') || k.has('NumpadAdd')) this.goal.dist = clamp(this.goal.dist * (1 - dt * 1.2), this.minDist, this.maxDist);
     if (k.has('Minus') || k.has('NumpadSubtract')) this.goal.dist = clamp(this.goal.dist * (1 + dt * 1.2), this.minDist, this.maxDist);
     const f = 1 - Math.exp(-dt * 10);
+    // en suivant une équipe, la vue colle à elle (des cavaliers au galop la distanceraient)
+    this.tracking = Math.max(0, this.tracking - dt);
+    const ft = this.tracking > 0 ? 1 - Math.exp(-dt * 24) : f;
     this.yaw += (this.goal.yaw - this.yaw) * f;
     this.pitch += (this.goal.pitch - this.pitch) * f;
     this.dist += (this.goal.dist - this.dist) * f;
-    this.target.x += (this.goal.x - this.target.x) * f;
-    this.target.z += (this.goal.z - this.target.z) * f;
+    this.target.x += (this.goal.x - this.target.x) * ft;
+    this.target.z += (this.goal.z - this.target.z) * ft;
     this.target.y += (Math.max(0, groundY(this.target.x, this.target.z)) - this.target.y) * f;
     this.apply(1);
     // la caméra passe par-dessus les sommets au lieu de les traverser

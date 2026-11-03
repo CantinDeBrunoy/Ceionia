@@ -389,6 +389,37 @@ export class AudioEngine {
     this.burst(t + 0.6 + Math.random() * 0.5, 2.2, 120, 0.6 * k);
     this.tone(38, t, 2.4, 'sine', 0.3 * k, this.sfxG, 0, 0.05);
   }
+  /** Feu d'artifice : détonation, souffle grave et crépitement des étincelles (force 0 … 1) */
+  sfxBang(k: number) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.burst(t, 0.5, 1800, 0.3 * k);
+    this.tone(70, t, 0.4, 'sine', 0.22 * k, this.sfxG, 0, 0.004);
+    for (let i = 0; i < 6; i++) this.burst(t + 0.25 + Math.random() * 0.7, 0.05, 4200, 0.07 * k);
+  }
+  /** Combat : choc de lames (tintement métallique), coup de feu (détonation sèche), morsure (grognement bref) */
+  sfxClash(kind: 'blade' | 'shot' | 'bite') {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (kind === 'blade') {
+      this.tone(1500 + Math.random() * 500, t, 0.14, 'triangle', 0.07, this.sfxG, 0, 0.002);
+      this.tone(2700 + Math.random() * 300, t, 0.07, 'sine', 0.04, this.sfxG, 0, 0.002);
+      this.burst(t, 0.04, 5200, 0.05);
+    } else if (kind === 'shot') {
+      this.burst(t, 0.2, 1500, 0.2);
+      this.tone(85, t, 0.16, 'sine', 0.14, this.sfxG, 0, 0.003);
+    } else {
+      this.tone(130 + Math.random() * 30, t, 0.18, 'sawtooth', 0.06, this.sfxG, 650, 0.01);
+      this.burst(t, 0.08, 700, 0.07);
+    }
+  }
+  /** Fête autour du feu : tambours et petite ritournelle de flûte */
+  sfxFeast() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 16; i++) this.tone(i % 4 === 0 ? 70 : 115, t + i * 0.22, 0.18, 'sine', i % 4 === 0 ? 0.3 : 0.14, this.sfxG, 0, 0.003);
+    [0, 2, 4, 7, 4, 2, 0, -3].forEach((iv, i) => this.tone(mtof(72 + iv), t + i * 0.44, 0.4, 'triangle', 0.12, this.sfxG, 2500, 0.02));
+  }
   sfxAgeUp() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

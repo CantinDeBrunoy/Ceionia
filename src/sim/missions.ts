@@ -140,8 +140,8 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'flint', age: 0, mandatory: false, icon: '⛏️', title: 'Le silex de la falaise',
-    intro: 'Au pied de la montagne, la falaise est pleine de silex. Avec de meilleurs outils, tout le monde travaillerait mieux.',
+    id: 'flint', age: 0, mandatory: false, icon: '⛏️', title: 'La chasse au silex',
+    intro: 'Au pied de la montagne, la falaise est pleine de silex, et la rivière en roule des galets. Avec de meilleurs outils, tout le monde travaillerait mieux.',
     choices: [
       {
         label: 'Escalader la falaise', text: 'Les plus beaux rognons sont en hauteur.',

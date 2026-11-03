@@ -158,10 +158,10 @@ export class Environment {
   private autoWeather(season: number) {
     const r = this.rnd();
     const tbl: [WeatherKind, number][][] = [
-      [['clear', 0.59], ['rain', 0.35], ['fog', 0.06]],
-      [['clear', 0.83], ['rain', 0.14], ['fog', 0.03]],
-      [['clear', 0.6], ['rain', 0.3], ['fog', 0.1]],
-      [['clear', 0.46], ['snow', 0.5], ['fog', 0.04]],
+      [['clear', 0.632], ['rain', 0.35], ['fog', 0.018]],
+      [['clear', 0.851], ['rain', 0.14], ['fog', 0.009]],
+      [['clear', 0.67], ['rain', 0.3], ['fog', 0.03]],
+      [['clear', 0.488], ['snow', 0.5], ['fog', 0.012]],
     ];
     let acc = 0;
     for (const [k, p] of tbl[season]) { acc += p; if (r <= acc) return k; }

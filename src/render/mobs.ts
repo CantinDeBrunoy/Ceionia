@@ -76,6 +76,8 @@ export interface Mob {
   alive: boolean;
   /** à l'assaut d'une troupe armée : le point qu'elle charge (mis à jour par la vue) */
   foe: [number, number] | null;
+  /** au contact d'une troupe : le soldat qu'elle attaque (pour lui faire face) */
+  target?: [number, number] | null;
   /** terrassée : temps restant avant de disparaître (négatif : vivante) */
   dying: number;
 }
@@ -137,8 +139,11 @@ export class UnderMobs {
 
   /** Peuple les galeries : chaque espèce dans ses zones, en groupes, à l'écart des entrées */
   private populate() {
-    for (const m of this.mobs) this.remove(m);
-    this.mobs = [];
+    // les créatures d'une embuscade restent jusqu'à la fin de leur combat (elles tombent ou s'enfuient) : le souterrain change
+    // justement quand la troupe prend des galeries
+    const fighting = this.mobs.filter((m) => m.alive && (m.foe || m.dying >= 0));
+    for (const m of this.mobs) if (!fighting.includes(m)) this.remove(m);
+    this.mobs = fighting;
     const u = this.under;
     this.rnd = mulberry32(u.version * 7919 + 17);
     const held = this.held();
@@ -332,8 +337,18 @@ export class UnderMobs {
     this.flee(m, x, z, 3);
   }
 
+  /** Un coup porté à une créature à l'assaut : elle recule d'un pas, sursaute, puis repart à l'attaque */
+  strike(m: Mob, fromX: number, fromZ: number) {
+    if (!m.alive || m.dying >= 0) return;
+    const d = Math.hypot(m.x - fromX, m.z - fromZ) || 1, nx = m.x + ((m.x - fromX) / d) * 0.07, nz = m.z + ((m.z - fromZ) / d) * 0.07;
+    if (this.free(nx, nz)) { m.x = nx; m.z = nz; }
+    m.state = 'hit'; m.timer = 0.32;
+  }
+
   /** À l'assaut : par les galeries tant que la troupe est loin, puis droit sur elle ; au contact, on frappe sans relâche */
   private assault(m: Mob, dt: number) {
+    // touchée : le sursaut se joue jusqu'au bout avant de repartir à l'attaque
+    if (m.state === 'hit' && m.timer > 0) { if (m.face) turnTo(m, Math.atan2(m.face[0] - m.x, m.face[1] - m.z), dt * 6); return; }
     const [fx, fz] = m.foe!, d = Math.hypot(fx - m.x, fz - m.z), run = Math.max(SPECS[m.kind].run, 1.4) * 1.1;
     if (d > 0.55) {
       m.state = 'run';
@@ -343,8 +358,10 @@ export class UnderMobs {
       } else this.step(m, fx, fz, run, dt, 0.5);
       return;
     }
-    turnTo(m, Math.atan2(fx - m.x, fz - m.z), dt * 6);
-    if (m.state !== 'act' || m.timer <= 0) { m.state = 'act'; m.timer = 0.6 + this.rnd() * 0.5; m.face = [fx, fz]; }
+    // au contact : face à sa cible (le soldat le plus proche, s'il y en a un), on frappe sans relâche
+    const tf = m.target ?? [fx, fz];
+    turnTo(m, Math.atan2(tf[0] - m.x, tf[1] - m.z), dt * 6);
+    if (m.state !== 'act' || m.timer <= 0) { m.state = 'act'; m.timer = 0.6 + this.rnd() * 0.5; m.face = tf; }
   }
 
   /** Fumée des créatures terrassées : elle s'étale, monte et s'efface */
@@ -383,7 +400,7 @@ export class UnderMobs {
     const held = this.held();
     if (held.size !== this.heldN) {
       this.heldN = held.size;
-      for (const m of this.mobs) if (held.has(Math.floor(m.z) * N + Math.floor(m.x))) this.remove(m);
+      for (const m of this.mobs) if (!m.foe && m.dying < 0 && held.has(Math.floor(m.z) * N + Math.floor(m.x))) this.remove(m);
       this.mobs = this.mobs.filter((m) => m.alive);
     }
     this.t += dt;

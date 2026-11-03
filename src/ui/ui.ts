@@ -1,6 +1,6 @@
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BuildCat } from '../build/catalog';
-import { Sim } from '../sim/sim';
+import { Sim, NeedId } from '../sim/sim';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
@@ -95,6 +95,7 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
   forest: { icon: 'forest', label: 'Forêt', key: '6' },
   field: { icon: 'wheat', label: 'Champ', key: '7' },
   garden: { icon: 'spring', label: 'Jardin', key: '8' },
+  biome: { icon: 'palette', label: 'Biome' },
   rocks: { icon: 'rock', label: 'Rochers' },
   cave: { icon: 'cave', label: 'Grotte' },
   fissure: { icon: 'crack', label: 'Faille' },
@@ -111,10 +112,25 @@ const TOOL_DESC: Record<string, string> = {
   cliff: 'Tailler des falaises nettes, en gradins.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
   mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut.',
   forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: 'Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille.',
+  biome: 'Peindre un biome (tempéré, taïga, désert, tropical, marais) ou rendre la terre à son climat : le sol, les arbres, l’herbe, les bêtes et la neige suivent.',
   rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte vers le monde souterrain (un clic).', fissure: 'Ouvrir une faille vers le monde souterrain (un clic).',
   erase: 'Effacer forêts, champs, jardins et rochers.', road: 'Tracer une route en glissant ; sur l’eau peu profonde, elle devient un pont.',
   bulldoze: 'Démolir un bâtiment, une route ou un décor.', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
 };
+
+/** Le jardin change de nature avec les âges : son nom, son icône et sa fiche aussi */
+const GARDEN_BY_AGE: { icon: string; label: string; desc: string }[] = [
+  { icon: 'campfire', label: 'Campement', desc: 'Un campement : lieu de rassemblement autour des feux, tipis, séchoirs et taille du silex.' },
+  { icon: 'spring', label: 'Jardin', desc: 'Un jardin à l’antique : pelouse, bassin, cyprès, oliviers et bancs de marbre.' },
+  { icon: 'shield', label: 'Lices', desc: 'Des lices : sur une zone longue, un tournoi où deux chevaliers joutent devant les gradins ; sur une petite zone, quintaine et tir à l’arc.' },
+  { icon: 'leaf', label: 'Jardin public', desc: 'Un jardin public : à la française sur un terrain rectangulaire, à l’anglaise (étang, kiosque) sur une zone aux contours libres.' },
+  { icon: 'slide', label: 'Parc', desc: 'Un parc et son aire de jeux : toboggan, balançoires, bascule, tourniquet, bac à sable.' },
+];
+/** Biomes que peint le pinceau, et leur teinte de pastille (null : rendre la terre à son climat) */
+const BIOME_CHOICES: { b: number | null; label: string; color: string }[] = [
+  { b: 0, label: 'Tempéré', color: '#8fc47e' }, { b: 1, label: 'Taïga', color: '#5f8a72' }, { b: 2, label: 'Désert', color: '#e2c27a' },
+  { b: 3, label: 'Tropical', color: '#3fae6a' }, { b: 4, label: 'Marais', color: '#7a8a5a' }, { b: null, label: 'Climat', color: 'transparent' },
+];
 
 /** Outils rapides, toujours à portée en haut à gauche de la barre */
 const QUICK = ['none', 'road', 'bulldoze', 'move'];
@@ -122,7 +138,7 @@ const QUICK = ['none', 'road', 'bulldoze', 'move'];
 /** Grands onglets de la barre du bas */
 const TABS = [
   { id: 'relief', icon: 'relief', label: 'Relief', hint: 'Sculptez le terrain', tools: ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
-  { id: 'nature', icon: 'tree', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'] },
+  { id: 'nature', icon: 'tree', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'field', 'garden', 'biome', 'rocks', 'cave', 'fissure', 'erase'] },
   { id: 'build', icon: 'houses', label: 'Bâtir', hint: '', tools: [] as string[] },
 ];
 
@@ -137,6 +153,15 @@ const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon
   { k: 'jobs', icon: 'hammer', label: 'emplois' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
 ];
 const num = (v: number) => (v < 1 ? v.toFixed(1) : String(Math.round(v)));
+/** Ce que demande chaque besoin, en clair, pour sa fiche */
+const NEED_RULE: Record<NeedId, string> = {
+  housing: 'Chaque habitant occupe une place. Le village grandit tant qu’il reste des places libres et que les autres besoins sont comblés.',
+  food: 'Chaque habitant mange une part, plus une part de réserve pour le village.',
+  water: 'Chaque habitant boit une part, plus une part de réserve pour le village.',
+  jobs: 'À partir de 6 habitants, la moitié d’entre eux cherche du travail.',
+  joy: 'À partir de 6 habitants, chacun demande 0,3 de bien-être.',
+  health: 'À partir de 15 habitants, chacun demande 0,2 de soins.',
+};
 /** Apport principal d'un bâtiment, sur sa vignette */
 const MAIN: (typeof GIVES)[number]['k'][] = ['housing', 'food', 'water', 'health', 'joy', 'jobs'];
 
@@ -173,7 +198,7 @@ function modal(root: HTMLElement, cls: string, title: string, body: string): { o
 
 /** Onglet auquel appartient un outil ('none' reste dans l'onglet courant) */
 const tabOfTool = (tool: ToolId, current: string) =>
-  SCULPT_TOOLS.includes(tool) ? 'relief' : VEG_TOOLS.includes(tool) ? 'nature' : tool === 'none' ? current : 'build';
+  SCULPT_TOOLS.includes(tool) ? 'relief' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
 
 /** Ce que change un bâtiment débloqué par une expédition, dit au retour de l'équipe */
 const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
@@ -187,6 +212,8 @@ export class UI {
   /** rayon ouvert de la barre de construction */
   cat: BuildCat = 'home';
   private lastAge = -1;
+  /** le besoin dont la fiche est ouverte */
+  private needOpen: NeedId | null = null;
   private toastTimer = 0;
   private bannerTimer = 0;
   /** bâtiment ou outil survolé dans la barre (sa fiche s'affiche) */
@@ -201,8 +228,10 @@ export class UI {
     root.innerHTML = `
       <header id="hud">
         <div id="agePanel" class="panel" title="Voir ce qu'il faut pour l'âge suivant">
-          <div class="ageTop"><b id="ageName"></b><small id="ageSub"></small></div>
-          <div class="bar"><i id="ageBar"></i></div>
+          <div class="ageTop"><b id="ageName"></b><em id="agePct"></em><small id="ageSub"></small></div>
+          <div class="bar ageGauge"><i id="ageBar"></i></div>
+          <div id="ageNext"></div>
+          <button id="ageGo" hidden></button>
           <div id="ageReq"></div>
         </div>
         <div id="needsPanel" class="panel">
@@ -248,6 +277,7 @@ export class UI {
           <div id="items"></div>
           <div id="dockBottom">
             <div id="subcats"></div>
+            <div id="biomes"></div>
             <div id="brush"><span>Taille du pinceau</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
           </div>
         </div>
@@ -265,19 +295,33 @@ export class UI {
     census.hidden = true;
     root.appendChild(census);
     $('#pop').onclick = () => { census.hidden ? this.openCensus() : this.closeCensus(); this.host.audio.sfxClick(); };
+    // fiche d'un besoin : un clic sur son icône l'ouvre (combien il en faut, d'où il vient, ce qui le comblerait)
+    const needInfo = document.createElement('div');
+    needInfo.id = 'needInfo';
+    needInfo.className = 'panel';
+    needInfo.hidden = true;
+    root.appendChild(needInfo);
+    for (const n of NEEDS) $('#n-' + n.k).onclick = () => { this.needOpen === n.k ? this.closeNeed() : this.openNeed(n.k); this.host.audio.sfxClick(); };
+    needInfo.onclick = (e) => {
+      const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
+      if (k) { this.closeNeed(); this.pick(k); }
+    };
     document.addEventListener('pointerdown', (e) => {
       const t = e.target as HTMLElement;
       if (!census.hidden && !census.contains(t) && !t.closest('#pop')) this.closeCensus();
+      if (this.needOpen && !needInfo.contains(t) && !t.closest('.need')) this.closeNeed();
     });
 
     $('#agePanel').onclick = (e) => {
+      // le passage à l'âge suivant, quand tout est prêt
+      if ((e.target as HTMLElement).closest('#ageGo')) { this.host.sim.advance(); return; }
       // une condition qui demande un bâtiment : on le prend en main (le bon onglet et le bon rayon s'ouvrent)
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
       if (k) { this.pick(k); return; }
       $('#agePanel').classList.toggle('open');
     };
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
-    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k) this.pick(k); };
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.toast('Le brouillard se lève.'); };
     $('#bSpeed').onclick = () => {
@@ -298,6 +342,14 @@ export class UI {
     $('#bUp').onclick = () => host.exitUnder();
     $('#campQuest').onclick = () => this.openExpeditions('depths');
     $('#bTorch').onclick = () => { host.torchMode = !host.torchMode; host.audio.sfxClick(); this.update(); };
+    $('#biomes').innerHTML = BIOME_CHOICES.map((c) => `<button data-b="${c.b ?? ''}" title="${c.b === null ? 'Rendre la terre au biome de son climat' : `Peindre : ${c.label.toLowerCase()}`}"><i style="background:${c.color}"></i>${c.label}</button>`).join('');
+    $('#biomes').onclick = (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-b]');
+      if (!b) return;
+      this.host.tools.biomeKind = b.dataset.b === '' ? null : Number(b.dataset.b);
+      this.host.audio.sfxClick();
+      this.refreshTools();
+    };
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
@@ -319,7 +371,7 @@ export class UI {
       this.renderDock(); this.host.audio.sfxClick();
     }));
     const quick = $('#quickL');
-    quick.innerHTML = QUICK.map((id) => { const i = TOOL_INFO[id]; return `<button data-tool="${id}" title="${i.label}${i.key ? ` (${i.key})` : ''}" aria-label="${i.label}">${ic(i.icon, 17, 2)}</button>`; }).join('');
+    quick.innerHTML = QUICK.map((id) => { const i = this.toolInfo(id); return `<button data-tool="${id}" title="${i.label}${i.key ? ` (${i.key})` : ''}" aria-label="${i.label}">${ic(i.icon, 17, 2)}</button>`; }).join('');
     this.bindTools(quick);
     this.renderItems();
   }
@@ -365,7 +417,7 @@ export class UI {
         return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
       }).join('');
     } else {
-      html = t.tools.map((id) => { const i = TOOL_INFO[id]; return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
+      html = t.tools.map((id) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
     }
     const items = $('#items');
     items.innerHTML = html;
@@ -403,8 +455,8 @@ export class UI {
     const k = this.hover ? this.hover.kind ?? null : held, tool = this.hover?.tool;
     box.classList.toggle('show', !!(k || tool));
     if (tool) {
-      const i = TOOL_INFO[tool];
-      box.innerHTML = `<div class="ihead"><b>${ic(i.icon, 28, 1.6)}</b><div class="grow"><h4>${i.label}</h4>${i.key ? `<small>Raccourci : ${i.key}</small>` : ''}</div></div><p>${TOOL_DESC[tool] ?? ''}</p>`;
+      const i = this.toolInfo(tool);
+      box.innerHTML = `<div class="ihead"><b>${ic(i.icon, 28, 1.6)}</b><div class="grow"><h4>${i.label}</h4>${i.key ? `<small>Raccourci : ${i.key}</small>` : ''}</div></div><p>${i.desc}</p>`;
       return;
     }
     if (!k) return;
@@ -489,6 +541,33 @@ export class UI {
     }));
   }
 
+  /** Nom, icône, raccourci et fiche d'un outil ; le jardin prend ceux de l'âge du village (campement, jardin, lices, parc…) */
+  private toolInfo(id: string) {
+    const base = TOOL_INFO[id];
+    if (id !== 'garden') return { ...base, desc: TOOL_DESC[id] ?? '' };
+    const g = GARDEN_BY_AGE[Math.min(this.host.sim.age, GARDEN_BY_AGE.length - 1)];
+    return { ...base, icon: g.icon, label: g.label, desc: g.desc };
+  }
+
+  /**
+   * Le conseil du moment, en pastille : orange quand un besoin manque, bleue pour avancer vers l'âge suivant, verte quand tout
+   * va bien ; un bouton « Bâtir » quand il nomme un bâtiment, et la pastille s'anime un instant à chaque nouveau conseil
+   */
+  private renderMessage() {
+    const { sim } = this.host, el = $('#msg'), k = sim.messageKind;
+    // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
+    const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
+    const ready = !k && sim.ready, key = `${tone}|${k}|${ready}|${sim.message}`;
+    if (el.dataset.v === key) return;
+    el.dataset.v = key;
+    el.className = `tone-${tone}${k || ready ? ' link' : ''}`;
+    el.title = k ? `Cliquer pour bâtir « ${sim.nameOf(k)} »` : ready ? 'Cliquer pour passer à l’âge suivant' : '';
+    const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}Bâtir</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}Passer</b>` : ''}`;
+    void el.offsetWidth;
+    el.classList.add('flash');
+  }
+
   /** Stocks du village (bois, pierre, minerai) et ce qu'il en produit chaque jour */
   private resKey = '';
   private renderResources() {
@@ -498,9 +577,11 @@ export class UI {
     const key = `${w.unlimited}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
     if (key === this.resKey) return;
     this.resKey = key;
+    // la production du jour s'affiche sous le stock (grisée quand rien n'en produit)
+    const per = (n: number) => `+${Number.isInteger(n) ? n : n.toFixed(1)}/j`;
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
       ? `<div class="res" title="${label} : illimité (réglage)">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
-      : `<div class="res" title="${label} : ${Math.floor(w[r])} en réserve${day[r] ? `, +${day[r]} par jour` : ''}${r === 'ore' ? '' : ' — pour bâtir les grands bâtiments'}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><small>${label}</small></div>`).join('');
+      : `<div class="res" title="${label} : ${Math.floor(w[r])} en réserve${day[r] ? `, +${day[r]} par jour` : ', rien n’en produit pour l’instant'}${r === 'ore' ? '' : ' — pour bâtir les grands bâtiments'}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -513,8 +594,11 @@ export class UI {
       if (on && b.dataset.kind && !b.classList.contains('active')) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       b.classList.toggle('active', on);
     });
-    const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && !SINGLE_TOOLS.includes(tl.tool));
+    const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && !SINGLE_TOOLS.includes(tl.tool)) || tl.tool === 'biome';
     $('#brush').classList.toggle('show', brush);
+    // le pinceau de biome : le choix du biome, à côté de la taille
+    $('#biomes').classList.toggle('show', tl.tool === 'biome');
+    $('#biomes').querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('active', (b.dataset.b === '' ? null : Number(b.dataset.b)) === tl.biomeKind));
     // l'onglet suit l'outil ; le rayon suit le bâtiment choisi
     const tabOf = tabOfTool(tl.tool, this.tab);
     if (tabOf !== this.tab) { this.tab = tabOf; this.renderDock(); return; }
@@ -551,8 +635,18 @@ export class UI {
     if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
     $('#ageName').textContent = AGES[sim.age].name;
     $('#ageSub').textContent = AGES[sim.age].tagline;
-    const ap = sim.ageProgress();
-    $('#ageBar').style.width = ap ? `${Math.round(ap.ratio * 100)}%` : '100%';
+    const ap = sim.ageProgress(), pct = ap ? Math.floor(ap.ratio * 100) : 100;
+    $('#ageBar').style.width = `${pct}%`;
+    $('#agePanel').classList.toggle('ready', pct >= 100);
+    // où en est l'âge : le pourcentage, l'âge visé et les conditions remplies (le détail s'ouvre d'un clic)
+    const met = ap ? ap.items.filter((i) => i.have >= i.need).length : 0;
+    const next = ap ? `<span>Vers ${AGES[ap.next].name}</span><span>${met}/${ap.items.length} conditions ▾</span>` : '<span>Dernier âge atteint</span>';
+    $('#agePct').textContent = ap ? `${pct} %` : '';
+    if ($('#ageNext').dataset.v !== next) { $('#ageNext').innerHTML = next; $('#ageNext').dataset.v = next; }
+    // tout est réuni : un bouton pour passer à l'âge suivant (ce n'est plus automatique)
+    const go = $('#ageGo'), ready = !!ap && sim.ready, label = ap ? `${ic('up', 15, 2.4)} Passer à : ${AGES[ap.next].name}` : '';
+    go.hidden = !ready;
+    if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = `Toutes les conditions sont réunies : passer à l’âge suivant (${AGES[ap!.next].name})`; }
     $('#ageReq').innerHTML = ap
       ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''}${i.kind ? ' kind' : ''}"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} — cliquer pour le bâtir"` : ''}>${i.have >= i.need ? '✓' : '•'} ${i.label}${i.kind ? ` <small>${sim.whereOf(i.kind).replace('Bâtir › ', '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
       : 'Dernier âge atteint : profitez de votre village !';
@@ -560,7 +654,8 @@ export class UI {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
       const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);
       $('i', el).style.width = `${Math.round(fill * 100)}%`;
-      el.classList.toggle('warn', !need.ok);
+      el.classList.toggle('warn', !need.ok && !housing);
+      el.classList.toggle('full', !need.ok && housing);
       el.title = housing ? `${n.label} : ${Math.floor(sim.pop)} habitants pour ${need.cap} places` : `${n.label} : ${num(need.cap)} pour un besoin de ${num(need.demand)}`;
     }
     // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
@@ -569,9 +664,8 @@ export class UI {
     const popHtml = `${cs.p}<small>habitants</small>${alert ? `<small class="alert">${alert}</small>` : ''}`;
     if ($('#pop').dataset.v !== popHtml) { $('#pop').innerHTML = popHtml; $('#pop').dataset.v = popHtml; }
     if (!$('#census').hidden) this.renderCensus();
-    $('#msg').textContent = sim.message;
-    $('#msg').classList.toggle('link', !!sim.messageKind);
-    $('#msg').title = sim.messageKind ? `Cliquer pour bâtir « ${sim.nameOf(sim.messageKind)} »` : '';
+    if (this.needOpen) this.renderNeed();
+    this.renderMessage();
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
     const clock = `${ic(SEASON_ICONS[time.season], 18)}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${SEASONS[time.season]} ${wk}</small></span>`;
@@ -627,6 +721,55 @@ export class UI {
   }
 
   private closeCensus() { $('#census').hidden = true; $('#pop').setAttribute('aria-expanded', 'false'); }
+
+  private openNeed(k: NeedId) {
+    this.closeCensus();
+    this.needOpen = k;
+    const box = $('#needInfo'), r = $('#n-' + k).getBoundingClientRect();
+    box.hidden = false;
+    box.dataset.v = '';
+    this.renderNeed();
+    // sous l'icône du besoin, sans sortir de l'écran
+    box.style.top = `${Math.round(r.bottom + 8)}px`;
+    box.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, r.left + r.width / 2 - box.offsetWidth / 2)))}px`;
+    document.querySelectorAll('.need').forEach((el) => el.classList.toggle('open', el.id === 'n-' + k));
+  }
+
+  private closeNeed() {
+    this.needOpen = null;
+    $('#needInfo').hidden = true;
+    document.querySelectorAll('.need.open').forEach((el) => el.classList.remove('open'));
+  }
+
+  /**
+   * Fiche d'un besoin : disponible / nécessaire (habitants / places pour le logement), la règle, chaque source et son apport,
+   * puis ce qui manque et le bâtiment qui le comblerait, à bâtir d'un clic
+   */
+  private renderNeed() {
+    const { sim } = this.host, k = this.needOpen!, meta = NEEDS.find((n) => n.k === k)!, d = sim.needDetail(k), p = Math.floor(sim.pop);
+    const housing = k === 'housing', have = housing ? p : d.cap, want = housing ? d.cap : d.demand;
+    const fill = housing ? (d.cap > 0 ? Math.min(1, p / d.cap) : 0) : d.demand <= 0 ? 1 : Math.min(1, d.cap / d.demand);
+    const state = d.ok ? 'ok' : housing ? 'full' : 'warn', name = sim.nameOf(d.kind), where = sim.whereOf(d.kind);
+    const rows = d.rows.length
+      ? d.rows.map((r) => `<div class="crow"><span>${r.label}${r.n ? `<i>× ${r.n}</i>` : ''}</span><em class="${r.v < 0 ? 'neg' : ''}">${r.v < 0 ? '−' : '+'}${num(Math.abs(r.v))}</em></div>`).join('')
+      : '<div class="crow"><span class="none">Rien ne le fournit encore.</span></div>';
+    let tip: string;
+    if (housing) tip = d.ok ? `${Math.floor(d.cap - p)} place${d.cap - p >= 2 ? 's' : ''} libre${d.cap - p >= 2 ? 's' : ''} : le village va grandir.` : `Le village est plein : chaque « ${name} » de plus loge ${d.per} habitants.`;
+    else if (d.ok) tip = d.demand > 0 ? `Comblé, avec ${num(d.cap - d.demand)} d’avance.` : 'Pas encore demandé : le village est trop petit.';
+    else { const miss = d.demand - d.cap, n = d.per > 0 ? Math.ceil(miss / d.per - 1e-6) : 0; tip = `Il manque ${num(miss)}${n ? ` : ${n > 1 ? `${n} × ` : ''}« ${name} » (+${d.per} chacun) suffirai${n > 1 ? 'ent' : 't'}` : ''}.`; }
+    const html = `
+      <h4>${ic(meta.icon, 18, 2)} ${meta.label}<em class="${state}">${num(have)} / ${num(want)}</em></h4>
+      <div class="sub">${housing ? 'habitants / places' : 'disponible / nécessaire'}</div>
+      <div class="bar ${state}"><i style="width:${Math.round(fill * 100)}%"></i></div>
+      <p class="hint">${NEED_RULE[k]}</p>
+      <div class="src">${rows}</div>
+      <div class="crow total"><span>${housing ? 'Places' : 'Disponible'}</span><em>${num(d.cap)}</em></div>
+      <div class="crow total"><span>${housing ? 'Habitants' : `Nécessaire (${p} habitants)`}</span><em>${num(housing ? p : d.demand)}</em></div>
+      <p class="hint ${state}">${tip}</p>
+      ${d.per > 0 && (!d.ok || housing) ? `<button class="primary" data-kind="${d.kind}" title="${where}">${ic('hammer', 15, 2.2)} Bâtir « ${name} »</button>` : ''}`;
+    const box = $('#needInfo');
+    if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
+  }
 
   /** Fiche des habitants : répartition en barre, puis le détail, et ce qui manquerait */
   private renderCensus() {
