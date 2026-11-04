@@ -12,6 +12,7 @@ import { AGES } from '../src/build/catalog';
 import { ExpeditionScene } from '../src/render/expeditionScenes';
 import { ExpeditionView, along, stepWalker, Walker } from '../src/render/expeditionView';
 import { PenView, ARRIVALS, penWay } from '../src/render/pens';
+import { Festivities } from '../src/render/festivities';
 
 function continent() {
   setMapSize(192);
@@ -357,6 +358,41 @@ describe('la chasse au mammouth', () => {
       expect(scene.handOver(['sheep'])).toEqual([null]);
       expect(s.mammoths.every((x) => group.children.includes(x.b.obj))).toBe(true);
       scene.dispose(a);
+    }
+  });
+});
+
+describe('la fête du retour', () => {
+  it('à chaque âge, un feu de joie à la taille du camp, sa ronde, ses musiciens et son décor ; puis tout se range', () => {
+    stubCanvas();
+    for (let age = 0; age <= 5; age++) {
+      const v = village(age), fest = new Festivities(v.w), b = v.ex.base()!;
+      fest.start(b[0], b[1], age);
+      type F = { x: number; y: number; z: number; tongues: { m: THREE.Mesh }[]; dancers: unknown[]; band: unknown[]; smoke: { s: THREE.Sprite }[]; decor: THREE.Group; group: THREE.Group; dur: number };
+      const fs = (fest as unknown as { fests: F[]; embers: unknown[] }).fests, f = fs[0];
+      // à côté du cœur du village, là où l'équipe est revenue (elle regarde la ronde au lieu de se tenir dans le feu), hors des maisons
+      expect(Math.hypot(f.x - b[0], f.z - b[1])).toBeGreaterThan(0.9);
+      expect(v.w.occ[v.w.ci(Math.floor(f.x), Math.floor(f.z))]).toBeFalsy();
+      expect(f.tongues.length).toBeGreaterThanOrEqual(6);
+      expect(f.dancers.length).toBe(10);
+      expect(f.band.length).toBe(2);
+      let top = 0, smoke = 0;
+      for (let i = 0; i < 300; i++) {
+        fest.update(0.05);
+        for (const t of f.tongues) top = Math.max(top, t.m.position.y + t.m.scale.y);
+        for (const s of f.smoke) smoke = Math.max(smoke, s.s.position.y);
+      }
+      // un grand feu (deux fois un habitant), pas une colonne : la fumée s'efface bien avant le ciel
+      expect(top).toBeGreaterThan(0.3);
+      expect(top).toBeLessThan(0.6);
+      expect(smoke).toBeGreaterThan(0.5);
+      expect(smoke).toBeLessThan(1.6);
+      expect((fest as unknown as { embers: unknown[] }).embers.length).toBeLessThan(100);
+      // le décor : le bûcher et, dès l'Antiquité, les mâts et leurs guirlandes, la table et ses bancs
+      expect(f.decor.children.length).toBeGreaterThanOrEqual(2);
+      for (let i = 0; i < 400 && fs.length; i++) fest.update(0.05);
+      expect(fs.length).toBe(0);
+      expect(fest.group.children.includes(f.group)).toBe(false);
     }
   });
 });
