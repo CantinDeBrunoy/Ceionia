@@ -895,7 +895,7 @@ class Game implements UIHost {
     for (const m of this.fires.news.splice(0)) this.ui.toast(m);
     for (const m of this.emergencies.news.splice(0)) this.ui.toast(m);
     for (const m of w.losses.splice(0)) this.ui.toast(m);
-    this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night);
+    this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night, this.time.season);
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
     this.expeditions.update(gdt);
