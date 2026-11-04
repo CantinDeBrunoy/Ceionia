@@ -712,7 +712,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
           if (age < 3)
             for (const [dx, dz] of D4) {
               const b = has(dx, dz) ? undefined : w.buildingAt(cx + dx, cz + dz), ex = cx + 0.5 + dx * 0.55, ez = cz + 0.5 + dz * 0.55;
-              if (b && b.kind !== 'lamp') out.push([at[0], at[1], (at[0] + ex) / 2, (at[1] + ez) / 2, ex, ez]);
+              if (b && b.kind !== 'lamp' && w.doorOf(cx, cz) === b) out.push([at[0], at[1], (at[0] + ex) / 2, (at[1] + ez) / 2, ex, ez]);
             }
           lines.set(k, out);
           continue;
@@ -745,12 +745,12 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
             out.push(l);
           }
         }
-        // et vers la porte d'une maison voisine qui n'a pas d'autre route (chemin d'accès, à la campagne)
+        // et vers la porte d'une maison voisine (chemin d'accès, à la campagne) : seulement la case devant sa porte, jamais un flanc
         if (age < 3)
           for (const [dx, dz] of D4) {
             if (has(dx, dz)) continue;
             const b = w.buildingAt(cx + dx, cz + dz);
-            if (b && b.kind !== 'lamp') out.push([n[0], n[1], (n[0] + cx + 0.5 + dx * 0.55) / 2, (n[1] + cz + 0.5 + dz * 0.55) / 2, cx + 0.5 + dx * 0.55, cz + 0.5 + dz * 0.55]);
+            if (b && b.kind !== 'lamp' && w.doorOf(cx, cz) === b) out.push([n[0], n[1], (n[0] + cx + 0.5 + dx * 0.55) / 2, (n[1] + cz + 0.5 + dz * 0.55) / 2, cx + 0.5 + dx * 0.55, cz + 0.5 + dz * 0.55]);
           }
         // le chemin de terre serpente : chaque point suit le détour du terrain
         if (WIGGLE[Math.min(age, 4)]) for (const l of out) for (let i = 0; i + 1 < l.length; i += 2) [l[i], l[i + 1]] = this.warp(l[i], l[i + 1], age);
