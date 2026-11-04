@@ -136,6 +136,15 @@ describe('maisons et tours', () => {
     expect(row.filter((h) => h.L).length).toBeGreaterThan(3);
   });
 
+  it('les maisons du Moyen Âge, aussi détaillées que l’hôtel-Dieu, restent légères : il y en a beaucoup dans un village', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    for (let v = 0; v < 6; v++)
+      for (const [L, R, F] of [[false, false, true], [false, false, false], [true, false, true], [true, true, true]]) {
+        const m = getModel('house', 2, { v, L, R, F, row: v % 4 });
+        expect(tris(m.body) + tris(m.glow), `variante ${v}, ${+L}${+R}${+F}`).toBeLessThan(3000);
+      }
+  });
+
   it('les tours futuristes n’ont pas toutes la même hauteur : la ville a une ligne d’horizon', () => {
     const tops = new Set<number>();
     let lo = Infinity, hi = 0;
