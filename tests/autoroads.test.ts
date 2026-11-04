@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { autoRoad } from '../src/build/autoroads';
-import { facingRoadRot, FRONT } from '../src/build/placement';
+import { facingRoadRot, FRONT, doorCells, doorSide, sideCells } from '../src/build/placement';
 import { KINDS, KindId, Building, sizeOf } from '../src/build/catalog';
 import { mulberry32 } from '../src/core/rng';
 
@@ -74,11 +74,13 @@ function wanted(w: World, cx: number, cz: number, seed: number, gap: [number, nu
 }
 
 /**
- * Pose ce village avec des routes automatiques, comme l'outil de pose (façade vers la route proche, puis le chemin). Une case
- * prise par une route : le joueur essaie juste à côté (refus comptés)
+ * Pose ce village avec des routes automatiques, comme l'outil de pose (façade vers la route proche, puis le chemin), et comme
+ * le rendu ensuite (les façades orientées d'elles-mêmes se tournent vers la route). Une case prise par une route : le joueur
+ * essaie juste à côté (refus comptés). Compte aussi les chemins qui n'arrivent pas devant la porte de leur bâtiment, et les
+ * cases posées contre le flanc ou l'arrière d'un bâtiment
  */
 function build(w: World, spots: Spot[], road: RoadFn = autoRoad) {
-  let refused = 0, rot = 0;
+  let refused = 0, rot = 0, astray = 0, laidFlank = 0;
   const placed: Building[] = [];
   for (const sp of spots) {
     let at: [number, number] | null = null;
@@ -92,11 +94,34 @@ function build(w: World, spots: Spot[], road: RoadFn = autoRoad) {
         }
     if (!at) continue;
     rot = facingRoadRot(w, sp.kind, at[0], at[1], rot);
-    const b = w.place(sp.kind, at[0], at[1], rot, true, 0, false);
-    road(w, b);
+    const b = w.place(sp.kind, at[0], at[1], rot, true, 0, false), roads = w.road.slice();
+    if (road(w, b) && !doorsOf(w, b).some((k) => w.road[k])) astray++;
     placed.push(b);
+    turnAll(w);
+    for (const k of flanks(w)) if (!roads[k]) laidFlank++;
   }
-  return { refused, placed };
+  return { refused, placed, astray, laidFlank };
+}
+
+/** Cases de route posées depuis un état, en (x, z) */
+const laidSince = (w: World, before: Uint8Array) => [...w.road.keys()].filter((k) => w.road[k] && !before[k]).map((k) => [k % N, Math.floor(k / N)]);
+
+/** Comme le rendu après chaque changement de routes : les façades orientées d'elles-mêmes se tournent vers la route */
+function turnAll(w: World) {
+  for (const o of w.buildings.values()) if (o.auto) o.rot = facingRoadRot(w, o.kind, o.x, o.z, o.rot, sizeOf(o));
+}
+
+/** Cases devant la porte d'un bâtiment (sa façade, l'arrière pour le ponton et le port) */
+const doorsOf = (w: World, b: Building) => doorCells(b.kind, b.x, b.z, sizeOf(b), doorSide(b.kind, b.rot)).filter(([x, z]) => w.inCells(x, z)).map(([x, z]) => w.ci(x, z));
+
+/** Cases de route qui longent le flanc ou l'arrière d'un bâtiment (un côté sans porte) */
+function flanks(w: World) {
+  const out = new Set<number>();
+  for (const b of w.buildings.values()) {
+    if (b.kind === 'lamp') continue;
+    for (let r = 0; r < 4; r++) if (r !== doorSide(b.kind, b.rot)) for (const [x, z] of sideCells(b.x, b.z, sizeOf(b), r)) if (w.inCells(x, z) && w.road[w.ci(x, z)]) out.add(w.ci(x, z));
+  }
+  return out;
 }
 
 /** Cases qui bordent l'emprise d'un bâtiment */
@@ -115,7 +140,8 @@ function around(spots: Spot[]) {
 
 /**
  * Mesures de la voirie autour du village : cases de route, emplacements libres de 2 × 2 et de 3 × 3 dans le cadre, coudes,
- * carrés de route (deux routes côte à côte), boucles, bâtiments sans route contre eux, réseaux qui desservent le village
+ * carrés de route (deux routes côte à côte), boucles, bâtiments sans route contre eux ou devant leur porte, réseaux qui
+ * desservent le village
  */
 function measure(w: World, box: number[], placed: Building[]) {
   const road = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1;
@@ -143,11 +169,12 @@ function measure(w: World, box: number[], placed: Building[]) {
     }
     nets++;
   }
-  let unlinked = 0;
+  let unlinked = 0, doorless = 0;
   const served = new Set<number>();
   for (const b of placed) {
     const r = ring(w, b).filter((k) => w.road[k]);
     if (!r.length) unlinked++;
+    if (!doorsOf(w, b).some((k) => w.road[k])) doorless++;
     for (const k of r) served.add(net[k]);
   }
   for (let z = box[1]; z <= box[3]; z++)
@@ -156,7 +183,7 @@ function measure(w: World, box: number[], placed: Building[]) {
       if (w.canPlace('house', x, z, 3) === null) free3++;
     }
   // boucles : cycles indépendants du réseau (arêtes − cases + composantes)
-  return { cells, free2, free3, turns, blocks, loops: edges - cells + nets, unlinked, nets: served.size };
+  return { cells, free2, free3, turns, blocks, loops: edges - cells + nets, unlinked, doorless, nets: served.size };
 }
 
 type Row = Record<string, number>;
@@ -172,22 +199,25 @@ function villages(w: World, base: Snap, cx: number, cz: number, gap: [number, nu
     for (const sp of spots) w.place(sp.kind, sp.x, sp.z, 0, true, 0, false);
     const bare = measure(w, box, []);
     w.restore(base);
-    const { refused, placed } = build(w, spots, road);
-    rows.push({ seed, n: placed.length, ...measure(w, box, placed), refused, bare2: bare.free2, bare3: bare.free3 });
+    const { refused, placed, astray, laidFlank } = build(w, spots, road);
+    rows.push({ seed, n: placed.length, ...measure(w, box, placed), astray, laidFlank, refused, bare2: bare.free2, bare3: bare.free3 });
   }
   const avg: Row = {};
   for (const key of Object.keys(rows[0])) avg[key] = Math.round((rows.reduce((s, r) => s + r[key], 0) / rows.length) * 10) / 10;
   return { rows, avg };
 }
 
-/** Le village autour de (cx, cz), dessiné en texte : h petit bâtiment, B grand, = route, t arbres ou rochers, ~ eau */
+/**
+ * Le village autour de (cx, cz), dessiné en texte : petit bâtiment selon sa façade (v > ^ <), B grand, = route, ! route contre
+ * un flanc, t arbres ou rochers, ~ eau
+ */
 function sketch(w: World, cx: number, cz: number) {
-  const lines: string[] = [];
+  const lines: string[] = [], side = flanks(w);
   for (let z = cz - R; z <= cz + R; z++) {
     let l = '';
     for (let x = cx - R; x <= cx + R; x++) {
       const k = w.ci(x, z), b = w.buildingAt(x, z);
-      l += b ? (sizeOf(b) > 1 ? 'B' : 'h') : w.road[k] ? '=' : w.isWet(x, z) ? '~' : w.veg[k] ? 't' : '.';
+      l += b ? (sizeOf(b) > 1 ? 'B' : 'v>^<'[b.rot]) : side.has(k) ? '!' : w.road[k] ? '=' : w.isWet(x, z) ? '~' : w.veg[k] ? 't' : '.';
     }
     lines.push(l);
   }
@@ -262,9 +292,6 @@ function field(w: World, wd: number, ht: number): [number, number] {
   throw new Error('pas de terrain plat');
 }
 
-/** Cases de route posées depuis un état, en (x, z) */
-const laidSince = (w: World, before: Uint8Array) => [...w.road.keys()].filter((k) => w.road[k] && !before[k]).map((k) => [k % N, Math.floor(k / N)]);
-
 describe('routes automatiques discrètes', () => {
   let w: World, base: Snap, cx: number, cz: number;
   beforeAll(() => {
@@ -273,9 +300,11 @@ describe('routes automatiques discrètes', () => {
     base = w.snapshot();
   });
 
-  // Mesures sur huit villages de vingt bâtiments (ROUTES_MESURES=1 les affiche, ROUTES_DESSIN=1 dessine les trois premiers)
-  for (const [name, gap] of [['serré', [0, 4]], ['aéré', [2, 7]]] as [string, [number, number]][])
-    it(`village ${name} : moins de routes, plus de place pour les grands bâtiments, chacun relié`, () => {
+  // Mesures sur huit villages de vingt bâtiments (ROUTES_MESURES=1 les affiche, ROUTES_DESSIN=1 dessine les trois premiers).
+  // Dans le village serré, ne plus longer les flancs coûte parfois un détour autour d'un pâté de maisons : à peine plus de
+  // routes et un peu moins de place que l'ancien tracé (`slack`, 5 % au plus) ; dans le village aéré, moins et plus
+  for (const [name, gap, slack] of [['serré', [0, 4], 0.05], ['aéré', [2, 7], 0]] as [string, [number, number], number][])
+    it(`village ${name} : peu de routes, de la place pour les grands bâtiments, chacun relié par sa porte`, () => {
       const before = villages(w, base, cx, cz, gap, oldAutoRoad), after = villages(w, base, cx, cz, gap, autoRoad);
       if (import.meta.env.ROUTES_MESURES) {
         console.log(`village ${name}, ancien tracé puis nouveau`);
@@ -287,44 +316,119 @@ describe('routes automatiques discrètes', () => {
         build(w, wanted(w, cx, cz, seed, gap), road);
         console.log(`graine ${seed}, ${label}\n${sketch(w, cx, cz)}`);
       }
-      // chaque bâtiment a une route contre lui, et tout le village tient sur un seul réseau
+      // chaque bâtiment a une route devant sa porte, chaque chemin y arrive, et tout le village tient sur un seul réseau
       for (const r of after.rows) {
         expect(r.n).toBe(20);
         expect(r.unlinked).toBe(0);
+        expect(r.doorless).toBe(0);
+        expect(r.astray).toBe(0);
         expect(r.nets).toBe(1);
       }
-      expect(after.avg.cells).toBeLessThan(before.avg.cells);
-      expect(after.avg.free2).toBeGreaterThan(before.avg.free2);
-      expect(after.avg.free3).toBeGreaterThan(before.avg.free3);
+      // presque plus de route posée contre le flanc ou l'arrière d'un bâtiment (une ruelle, quand le détour serait trop grand)
+      expect(after.avg.laidFlank).toBeLessThanOrEqual(before.avg.laidFlank / 3);
+      expect(after.avg.cells).toBeLessThan(before.avg.cells * (1 + slack));
+      expect(after.avg.free2).toBeGreaterThan(before.avg.free2 * (1 - slack));
+      expect(after.avg.free3).toBeGreaterThan(before.avg.free3 * (1 - slack));
       expect(after.avg.turns).toBeLessThan(before.avg.turns);
       // ni routes en double, ni boucles : un carré de route seulement quand c'est le seul moyen de relier un bâtiment coincé
       expect(after.avg.blocks).toBeLessThanOrEqual(0.5);
       expect(after.avg.loops).toBeLessThanOrEqual(0.5);
     });
 
-  it('part du côté de la route, sans faire le tour du bâtiment ; orienté à la main, il part de sa porte', () => {
+  it('part de devant la porte : orienté de lui-même, ouverte côté route ; orienté à la main, la sienne, sans longer ses flancs', () => {
     w.restore(base);
-    const [x, z] = field(w, 7, 9);
-    for (let i = 0; i < 7; i++) w.setRoad(x + i, z, true);
+    const [x, z] = field(w, 9, 9);
+    for (let i = 0; i < 9; i++) w.setRoad(x + i, z, true);
     const snap = w.snapshot(), roads = w.road.slice();
-    // la façade regarde à l'opposé de la route : le chemin part quand même tout droit vers elle
-    expect(autoRoad(w, w.place('house', x + 3, z + 3, 0, true, 0, false))).toBe(2);
-    expect(laidSince(w, roads)).toEqual([[x + 3, z + 1], [x + 3, z + 2]]);
-    // orientée à la main, la maison garde sa porte : le chemin en part et contourne la maison
+    // la façade regarde à l'opposé de la route : la porte s'ouvre de son côté (la façade s'y tourne), le chemin y va tout droit
+    const h = w.place('house', x + 4, z + 3, 0, true, 0, false);
+    expect(autoRoad(w, h)).toBe(2);
+    expect(h.rot).toBe(2);
+    expect(laidSince(w, roads)).toEqual([[x + 4, z + 1], [x + 4, z + 2]]);
+    // orientée à la main, la maison garde sa porte : le chemin en part et fait le tour à distance, sans longer ses flancs
     w.restore(snap);
-    expect(autoRoad(w, w.place('house', x + 3, z + 3, 0, false, 0, false))).toBeGreaterThan(2);
-    expect(laidSince(w, roads)).toContainEqual([x + 3, z + 4]);
+    const m = w.place('house', x + 4, z + 3, 0, false, 0, false);
+    expect(autoRoad(w, m)).toBe(6);
+    const laid = laidSince(w, roads);
+    expect(m.rot).toBe(0);
+    expect(laid).toContainEqual([x + 4, z + 4]);
+    for (const c of [[x + 3, z + 3], [x + 5, z + 3], [x + 4, z + 2]]) expect(laid).not.toContainEqual(c);
   });
 
-  it('longe les bâtiments plutôt que de couper le pré', () => {
+  it('chaque chemin arrive devant la porte, sans longer de flanc ni la façade hors de la porte', () => {
+    w.restore(base);
+    const [x, z] = field(w, 14, 12);
+    for (let i = 0; i < 14; i++) w.setRoad(x + i, z, true);
+    const snap = w.snapshot();
+    for (const kind of ['house', 'workshop', 'acropolis', 'airport'] as KindId[])
+      for (let rot = 0; rot < 4; rot++)
+        for (const auto of [true, false]) {
+          w.restore(snap);
+          const roads = w.road.slice(), b = w.place(kind, x + 5, z + 3, rot, auto, 0, false);
+          expect(autoRoad(w, b)).toBeGreaterThan(0);
+          // orienté de lui-même, il ouvre sa porte face à la route ; à la main, il garde la sienne
+          expect(b.rot).toBe(auto ? 2 : rot);
+          const laid = laidSince(w, roads).map(([cx, cz]) => w.ci(cx, cz)), doors = doorsOf(w, b), edge = ring(w, b), side = flanks(w);
+          expect(laid.some((k) => doors.includes(k))).toBe(true);
+          for (const k of laid) {
+            if (edge.includes(k)) expect(doors).toContain(k);
+            expect(side.has(k)).toBe(false);
+          }
+        }
+  });
+
+  it('longe les façades plutôt que de couper le pré, jamais les flancs ni l’arrière des maisons', () => {
     w.restore(base);
     const [x, z] = field(w, 13, 7);
     // deux routes, à gauche et à droite ; à mi-chemin, une maison ; à droite, deux rangées de maisons bordent un couloir
     for (let j = 0; j < 7; j++) { w.setRoad(x, z + j, true); w.setRoad(x + 12, z + j, true); }
-    for (let i = 7; i <= 11; i++) { w.place('house', x + i, z + 2, 0, true, 0, false); w.place('house', x + i, z + 4, 0, true, 0, false); }
-    const roads = w.road.slice();
-    // aussi court d'un côté que de l'autre (cinq cases) : le chemin prend le couloir et laisse le pré libre
+    const snap = w.snapshot();
+    // les deux rangées se font face : aussi court d'un côté que de l'autre (cinq cases), le chemin prend leur rue et laisse
+    // le pré libre
+    for (let i = 7; i <= 11; i++) { w.place('house', x + i, z + 2, 0, true, 0, false); w.place('house', x + i, z + 4, 2, true, 0, false); }
+    let roads = w.road.slice();
     expect(autoRoad(w, w.place('house', x + 6, z + 3, 0, true, 0, false))).toBe(5);
     for (const [cx] of laidSince(w, roads)) expect(cx).toBeGreaterThan(x + 6);
+    // la rangée du bas tourne le dos au couloir : le chemin ne longe pas l'arrière des maisons, il coupe le pré
+    w.restore(snap);
+    for (let i = 7; i <= 11; i++) { w.place('house', x + i, z + 2, 0, true, 0, false); w.place('house', x + i, z + 4, 0, true, 0, false); }
+    roads = w.road.slice();
+    expect(autoRoad(w, w.place('house', x + 6, z + 3, 0, true, 0, false))).toBe(5);
+    const side = flanks(w);
+    for (const [cx, cz] of laidSince(w, roads)) { expect(cx).toBeLessThan(x + 6); expect(side.has(w.ci(cx, cz))).toBe(false); }
+  });
+
+  it('sans route encore, le chemin va de porte à porte et les deux façades s’y tournent', () => {
+    w.restore(base);
+    w.road.fill(0);
+    const [x, z] = field(w, 8, 3);
+    const a = w.place('house', x + 1, z + 1, 0, true, 0, false), b = w.place('house', x + 5, z + 1, 0, true, 0, false);
+    const roads = w.road.slice();
+    expect(autoRoad(w, b)).toBe(3);
+    expect(laidSince(w, roads)).toEqual([[x + 2, z + 1], [x + 3, z + 1], [x + 4, z + 1]]);
+    expect([a.rot, b.rot]).toEqual([1, 3]);
+  });
+
+  it('la case devant la porte reste libre pour le chemin', () => {
+    w.restore(base);
+    const [x, z] = field(w, 6, 6);
+    // une maison sans route encore, sa porte au sud : rien ne se pose devant, ni petit ni grand bâtiment, ni lampadaire
+    w.place('house', x + 2, z + 2, 0, false, 0, false);
+    for (const kind of ['house', 'lamp'] as KindId[]) expect(w.canPlace(kind, x + 2, z + 3)).toMatch(/porte/);
+    expect(w.canPlace('workshop', x + 1, z + 3)).toMatch(/porte/);
+    // contre ses flancs, derrière elle, en biais devant : rien ne l'empêche
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, -1], [1, 1]]) expect(w.canPlace('house', x + 2 + dx, z + 2 + dz)).toBeNull();
+    // le chemin posé, la case est une route : un lampadaire s'y pose, comme sur toute route
+    w.setRoad(x + 2, z + 3, true);
+    expect(w.canPlace('lamp', x + 2, z + 3)).toBeNull();
+    expect(w.canPlace('house', x + 2, z + 3)).toBe('Une route est déjà ici');
+  });
+
+  it('la façade se tourne vers la route qui passe devant sa porte, à égalité de cases', () => {
+    w.restore(base);
+    const [x, z] = field(w, 7, 7);
+    // un grand bâtiment de 3 × 3 : deux cases de route au nord (aux coins), deux à l'est (dont celle du milieu, devant la porte)
+    for (const [cx, cz] of [[x + 2, z + 1], [x + 4, z + 1], [x + 5, z + 2], [x + 5, z + 3]]) w.setRoad(cx, cz, true);
+    expect(facingRoadRot(w, 'acropolis', x + 2, z + 2, 2)).toBe(1);
   });
 });
