@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N } from '../world/world';
+import { World, N, VEG_FIELD } from '../world/world';
 import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
@@ -9,6 +9,7 @@ import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
 import { Parts } from '../render/parts';
 import { mats } from '../render/materials';
+import { findPlots, fieldHands, shareHands, fieldSeason, fieldTask, longestRun, rigAt, runCells, Plot, Run, FieldTask, TRACTOR_AGE, TRACTOR_CELLS } from './fields';
 
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
 /** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie),
@@ -26,7 +27,13 @@ function propGeo(key: string, make: (p: Parts) => void) {
 const HOLD: Record<string, FolkHold> = {
   sword: 'point', spear: 'point', bow: 'upright', rifle: 'point', torch: 'upright', shield: 'upright', rope: 'upright',
   hoe: 'tool', axe: 'tool', pick: 'tool', hammer: 'tool', rod: 'tool', bucket: 'upright', book: 'upright', crook: 'upright', basket: 'upright',
+  stick: 'tool', spade: 'tool', sickle: 'tool', flint: 'tool', scythe: 'tool', sack: 'upright', sheaf: 'upright', crate: 'upright',
 };
+/** Faucille : le manche, la lame en croissant au bout (de silex emmanché à la préhistoire, de fer ensuite) */
+function sickle(p: Parts, blade: number) {
+  p.cyl(0.006, 0.007, 0.07, 5, 0, -0.03, 0, 0x7a5a3a);
+  p.add(new THREE.TorusGeometry(0.032, 0.005, 3, 10, Math.PI * 1.1), 0.032, 0.04, 0, blade);
+}
 const PROPS = {
   sword: () => propGeo('sword', (p) => { p.box(0.01, 0.035, 0.01, 0, -0.012, 0, 0x6a4a34); p.box(0.045, 0.008, 0.012, 0, 0.022, 0, 0x8a8f96); p.box(0.014, 0.12, 0.005, 0, 0.03, 0, 0xd8dde2); p.box(0.006, 0.01, 0.006, 0, 0.15, 0, 0xd8dde2); }),
   spear: () => propGeo('spear', (p) => { p.cyl(0.005, 0.006, 0.34, 5, 0, -0.12, 0, 0x8a6a4a); p.cone(0.014, 0.05, 4, 0, 0.22, 0, 0xb8bec6); }),
@@ -45,7 +52,106 @@ const PROPS = {
   book: () => propGeo('book', (p) => { p.box(0.04, 0.05, 0.012, 0, -0.02, 0, 0x8a3a2a); p.box(0.036, 0.046, 0.013, 0.002, -0.018, 0, 0xf2ead8); }),
   crook: () => propGeo('crook', (p) => { p.cyl(0.005, 0.006, 0.36, 5, 0, -0.12, 0, 0x8a6a4a); p.add(new THREE.TorusGeometry(0.025, 0.005, 4, 8, Math.PI), 0.025, 0.24, 0, 0x8a6a4a); }),
   basket: () => propGeo('basket', (p) => { p.cyl(0.035, 0.028, 0.04, 8, 0, -0.07, 0, 0xc8a070); for (let i = 0; i < 3; i++) p.sphere(0.012, -0.012 + i * 0.012, -0.025, 0, [0xd84a3e, 0x8ab84a, 0xf2a03a][i]); }),
+  // outils des champs : bâton à fouir durci au feu, bêche, faucilles, faux (la lame à plat au bout du manche), sac de
+  // semences, gerbe liée, cagette de légumes
+  stick: () => propGeo('stick', (p) => { p.cyl(0.005, 0.007, 0.3, 5, 0, -0.08, 0, 0x7a5a3a); p.cone(0.005, 0.035, 5, 0, 0.22, 0, 0x4a3426); }),
+  spade: () => propGeo('spade', (p) => { p.box(0.04, 0.008, 0.008, 0, -0.09, 0, 0x8a6a4a); p.cyl(0.005, 0.006, 0.25, 5, 0, -0.085, 0, 0x8a6a4a); p.box(0.045, 0.065, 0.006, 0, 0.16, 0, 0x8a8f96); }),
+  sickle: () => propGeo('sickle', (p) => sickle(p, 0xb8bec6)),
+  flint: () => propGeo('flint', (p) => sickle(p, 0x7a766e)),
+  scythe: () => propGeo('scythe', (p) => {
+    p.cyl(0.0045, 0.0055, 0.3, 5, 0, -0.05, 0, 0x8a6a4a);
+    p.box(0.028, 0.006, 0.006, 0.012, 0.09, 0, 0x8a6a4a);
+    p.box(0.15, 0.02, 0.004, 0.075, 0.24, 0, 0xc8ced6);
+    p.add(new THREE.BoxGeometry(0.04, 0.014, 0.004), 0.16, 0.236, 0, 0xc8ced6, 0, false, -0.5);
+  }),
+  sack: () => propGeo('sack', (p) => { p.sphere(0.028, 0, -0.055, 0, 0xd8c8a0, 1, 1.2); p.cyl(0.012, 0.016, 0.018, 6, 0, -0.03, 0, 0xc8b48a); }),
+  sheaf: () => propGeo('sheaf', (p) => {
+    p.cyl(0.02, 0.014, 0.1, 7, 0, -0.07, 0, 0xd8b860);
+    p.cyl(0.0205, 0.0205, 0.01, 7, 0, -0.02, 0, 0xa07840);
+    p.cyl(0.032, 0.02, 0.045, 7, 0, 0.03, 0, 0xe8c66a);
+    for (let i = 0; i < 5; i++) p.sphere(0.008, Math.cos(i * 1.26) * 0.022, 0.078, Math.sin(i * 1.26) * 0.022, 0xd8a84a);
+  }),
+  crate: () => propGeo('crate', (p) => { p.box(0.075, 0.035, 0.05, 0, -0.09, 0, 0x3a8a4a); for (let i = 0; i < 3; i++) p.sphere(0.014, -0.022 + i * 0.022, -0.052, 0, [0xd84a3e, 0x6ab84a, 0xe88a3a][i]); }),
 };
+type Prop = keyof typeof PROPS;
+/** Les outils des travaux des champs selon l'époque : [main droite, main gauche] ; `v` varie la moisson (faux ou faucille) */
+function fieldTools(task: FieldTask, age: number, v: number): [Prop | null, Prop | null] {
+  if (task === 'hoe') return [age === 0 ? 'stick' : 'hoe', null];
+  if (task === 'dig') return [age === 0 ? 'stick' : 'spade', null];
+  if (task === 'sow') return [null, age === 0 ? 'basket' : 'sack'];
+  if (task === 'reap') return [age === 0 ? 'flint' : age === 1 || v < 0.35 ? 'sickle' : 'scythe', null];
+  if (task === 'gather') return [null, age >= 4 ? 'crate' : 'basket'];
+  return [null, null];
+}
+/** Geste de chaque travail des champs, et sa cadence */
+const FIELD_POSE: Record<FieldTask, [FolkPose, number]> = {
+  hoe: ['work', 1], dig: ['work', 0.8], sow: ['sow', 0.55], reap: ['reap', 0.6], gather: ['gather', 0.8], drive: ['sit', 1],
+};
+/** Allure du semeur, du faucheur, de celui qui glane (cases par seconde, le long des sillons) */
+const LANE_SPEED: Partial<Record<FieldTask, number>> = { sow: 0.07, reap: 0.045, gather: 0.025 };
+/** Allure du tracteur (cases par seconde), et combien de tracteurs au plus dans tout le village */
+const TRACTOR_SPEED = 0.32, MAX_RIGS = 6;
+/** hauteur du siège du tracteur (le conducteur y est assis) */
+const TRACTOR_SEAT = 0.075;
+
+/** Le tracteur d'une grande parcelle : sa file de cases, le chemin parcouru, son modèle, et qui le conduit (ou va le prendre) */
+interface Rig { key: number; run: Run; d: number; mesh: THREE.Mesh; by: number | null; geoKey: string }
+
+const rigCache = new Map<string, THREE.BufferGeometry>();
+/**
+ * Le tracteur des champs (avant = +z, le siège à l'origine) : rouge, roues à moyeux clairs et sans cabine à l'âge industriel,
+ * vert à arceau et toit à l'époque moderne, blanc à liseré lumineux ensuite ; derrière lui la charrue (printemps, automne)
+ * ou la remorque chargée de gerbes, puis de bottes rondes (été)
+ */
+function tractorGeo(age: number, trailer: boolean) {
+  const era = Math.min(5, Math.max(TRACTOR_AGE, age)), key = `${era}|${trailer ? 1 : 0}`;
+  const known = rigCache.get(key);
+  if (known) return known;
+  const p = new Parts(), tyre = 0x2a2a2e, iron = 0x3c3c40;
+  const body = [0xc8443a, 0x3a8a3a, 0xeef2f4][era - 3], hub = [0xe8d8b0, 0xf2c23a, 0x5af0ff][era - 3];
+  // capot et calandre, réservoir, plancher, siège et dossier, volant, pot d'échappement
+  p.box(0.07, 0.05, 0.13, 0, 0.045, 0.085, body);
+  p.box(0.06, 0.02, 0.07, 0, 0.095, 0.07, dark(body, 0.85));
+  p.box(0.072, 0.046, 0.006, 0, 0.047, 0.152, iron);
+  p.box(0.09, 0.012, 0.07, 0, 0.04, -0.01, dark(body, 0.7));
+  p.box(0.05, 0.014, 0.045, 0, 0.06, -0.012, 0x3a3a3e);
+  p.box(0.05, 0.045, 0.008, 0, 0.07, -0.036, 0x3a3a3e);
+  p.add(new THREE.CylinderGeometry(0.004, 0.004, 0.06).rotateX(-0.6), 0, 0.09, 0.03, iron);
+  p.add(new THREE.TorusGeometry(0.02, 0.004, 3, 10).rotateX(Math.PI / 2 - 0.6), 0, 0.112, 0.016, iron);
+  p.cyl(0.006, 0.006, 0.075, 5, 0.024, 0.09, 0.115, iron);
+  for (const s of [-1, 1]) {
+    // grandes roues arrière (garde-boue par-dessus), petites roues avant
+    p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.032, 12).rotateZ(Math.PI / 2), s * 0.07, 0.06, -0.012, tyre);
+    p.add(new THREE.CylinderGeometry(0.032, 0.032, 0.034, 8).rotateZ(Math.PI / 2), s * 0.07, 0.06, -0.012, hub);
+    p.box(0.036, 0.008, 0.085, s * 0.07, 0.122, -0.012, dark(body, 0.85));
+    p.add(new THREE.CylinderGeometry(0.032, 0.032, 0.022, 10).rotateZ(Math.PI / 2), s * 0.048, 0.032, 0.12, tyre);
+    p.add(new THREE.CylinderGeometry(0.016, 0.016, 0.024, 6).rotateZ(Math.PI / 2), s * 0.048, 0.032, 0.12, hub);
+  }
+  // arceau et toit à l'époque moderne et après ; liseré lumineux le long du capot à l'âge futuriste
+  if (era >= 4) {
+    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.006, 0.15, 0.006, x * 0.046, 0.07, -0.012 + z * 0.042, iron);
+    p.box(0.11, 0.01, 0.1, 0, 0.22, -0.012, body);
+  }
+  if (era >= 5) p.box(0.074, 0.006, 0.12, 0, 0.072, 0.085, 0x5af0ff, 0, 'neon');
+  p.box(0.008, 0.008, 0.07, 0, 0.03, -0.075, iron);
+  if (trailer) {
+    // remorque à ridelles : des gerbes dressées à l'âge industriel, des bottes rondes ensuite
+    p.box(0.11, 0.012, 0.13, 0, 0.045, -0.18, 0x8a6a4a);
+    for (const s of [-1, 1]) {
+      p.box(0.006, 0.03, 0.13, s * 0.053, 0.057, -0.18, 0x6a4a34);
+      p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.016, 10).rotateZ(Math.PI / 2), s * 0.062, 0.03, -0.18, tyre);
+    }
+    if (era === 3) for (let i = 0; i < 6; i++) p.cyl(0.016, 0.012, 0.06, 6, -0.03 + (i % 3) * 0.03, 0.057, -0.215 + Math.floor(i / 3) * 0.07, 0xe0c060);
+    else for (const z of [-0.21, -0.15]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.09, 9).rotateZ(Math.PI / 2), 0, 0.092, z, 0xe8c66a);
+  } else {
+    // charrue : bâti, et ses socs qui retournent la terre
+    p.box(0.1, 0.01, 0.014, 0, 0.03, -0.11, 0x5a5e66);
+    for (let i = 0; i < 3; i++) p.add(new THREE.BoxGeometry(0.008, 0.03, 0.045), -0.034 + i * 0.034, 0.004, -0.12 - i * 0.014, 0x8a8f96, 0.5);
+  }
+  const g = p.build(false).body;
+  rigCache.set(key, g);
+  return g;
+}
 
 /**
  * Les métiers : chaque habitant en âge de travailler est attaché à un lieu de travail ; aux heures de travail il y va, outil
@@ -138,7 +244,11 @@ type State = 'inside' | 'walking' | 'doing';
  * Destination d'une sortie : case, caché à l'arrivée (dans un bâtiment), dernier pas hors de la route et cap, platelage ou assise ;
  * activité sur place et place prise dans un jardin
  */
-interface Dest { cell: number; hidden: boolean; spot?: [number, number]; face?: number; deck?: number; act?: Act; hold?: string; tool?: keyof typeof PROPS | null; work?: boolean; urgent?: boolean; blaze?: number }
+interface Dest {
+  cell: number; hidden: boolean; spot?: [number, number]; face?: number; deck?: number; act?: Act; hold?: string; tool?: keyof typeof PROPS | null; work?: boolean; urgent?: boolean; blaze?: number;
+  /** aux champs : le travail, l'outil de la main gauche, la grange où porter la récolte ; il y porte sa charge ; le tracteur qu'il va prendre */
+  task?: FieldTask; tool2?: Prop | null; barn?: number | null; carry?: boolean; rig?: number;
+}
 /** Places des pêcheurs sur le ponton (repère du bâtiment : x en travers, z vers l'eau) : radeau de la Préhistoire, platelage ensuite */
 const RAFT_SPOTS = [[-0.03, 0.74], [0.02, 0.42]], DECK_SPOTS = [[-0.03, 0.66], [0.06, 0.46]];
 
@@ -206,6 +316,18 @@ interface Agent {
   tool?: keyof typeof PROPS | null;
   /** bâtiment en feu sur lequel il jette l'eau de son seau (il reste tant qu'il brûle) */
   blaze?: number | null;
+  /** bras des champs (en plus des passants) : la parcelle où il travaille */
+  hand?: boolean;
+  plot?: number | null;
+  /** aux champs : ce qu'il y fait, l'outil de sa main gauche, la grange où il porte la récolte, s'il la porte en ce moment */
+  task?: FieldTask | null;
+  tool2?: Prop | null;
+  barn?: number | null;
+  load?: boolean;
+  /** semeur, faucheur : le sens des sillons qu'il suit, et le chemin fait (aller et retour) ; le tracteur qu'il conduit */
+  lane?: [number, number] | null;
+  lanePos?: number;
+  rig?: number | null;
 }
 
 /** Place imposée à un membre d'expédition : il y est assis, sans marcher */
@@ -250,7 +372,19 @@ export class Agents {
   /** lisières boisées proches des maisons : les bûcherons y vont couper du bois */
   private woods: number[] = [];
   private socials: Building[] = [];
+  /** cases de champ où l'on peut se tenir (hors des files des tracteurs), et combien il y en a en tout */
   private fields: number[] = [];
+  private fieldCount = 0;
+  /** parcelles de champ, la parcelle de chaque case, les granges et séchoirs ; les tracteurs des grandes parcelles */
+  private plots = new Map<number, Plot>();
+  private plotAt = new Map<number, Plot>();
+  private farms: Building[] = [];
+  private rigs = new Map<number, Rig>();
+  private runSet = new Set<number>();
+  private plotsDirty = true;
+  /** saison (0 printemps … 3 hiver) et âge du village, donnés à chaque image */
+  private season = 0;
+  private age = 0;
   private roads: number[] = [];
   /** places des jardins (pour l'âge courant) et qui les occupe */
   private gspots: Spot[] = [];
@@ -274,7 +408,11 @@ export class Agents {
     for (const m of [this.body, this.head, this.tool]) { m.frustumCulled = false; m.castShadow = true; m.count = 0; this.group.add(m); }
   }
 
-  reset() { for (const a of this.agents) this.dropActor(a); this.agents = []; this.held.clear(); this.lastVersion = -1; }
+  reset() {
+    for (const a of this.agents) this.dropActor(a);
+    for (const r of this.rigs.values()) this.group.remove(r.mesh);
+    this.agents = []; this.held.clear(); this.rigs.clear(); this.lastVersion = -1; this.spotKey = '';
+  }
 
   private dropActor(a: Agent) {
     if (a.rider) { this.group.remove(a.rider.root); a.rider = null; }
@@ -294,6 +432,12 @@ export class Agents {
     }
     this.fields = []; this.roads = []; this.woods = [];
     for (let i = 0; i < w.veg.length; i++) { if (w.veg[i] === 2) this.fields.push(i); if (w.road[i]) this.roads.push(i); }
+    this.fieldCount = this.fields.length;
+    // les parcelles, et la grange ou le séchoir où chacune porte sa récolte
+    this.plots.clear(); this.plotAt.clear();
+    for (const p of findPlots(w)) { this.plots.set(p.key, p); for (const k of p.cells) this.plotAt.set(k, p); }
+    this.farms = [...w.buildings.values()].filter((b) => b.kind === 'farm');
+    this.plotsDirty = true;
     const houses = [...w.buildings.values()].filter(isHome);
     for (let i = 0; i < w.veg.length; i++) {
       if (w.veg[i] !== 1) continue;
@@ -316,7 +460,8 @@ export class Agents {
       slots.push([b, Math.max(1, Math.min(3, Math.round(jobs / 3)))]);
     }
     const taken = new Map<number, number>();
-    const adults = this.agents.filter((a) => !a.child && !a.mission);
+    // les bras des champs ont déjà leur parcelle
+    const adults = this.agents.filter((a) => !a.child && !a.mission && !a.hand);
     // ceux dont le lieu de travail existe toujours le gardent (dans la limite des places)
     for (const a of adults) {
       const s = a.job ? slots.find(([b]) => b.id === a.job!.b) : null;
@@ -344,6 +489,158 @@ export class Agents {
   }
 
   /**
+   * Les bras des champs : chaque parcelle en reçoit selon sa taille (voir `shareHands`) ; le premier d'une parcelle qui a son
+   * tracteur en est le conducteur ; ceux dont la parcelle existe toujours la gardent
+   */
+  private assignPlots() {
+    const hands = this.agents.filter((a) => a.hand && !a.mission), plots = [...this.plots.values()];
+    shareHands(plots, hands.length);
+    const taken = new Map<number, number>();
+    for (const a of hands) {
+      const p = a.plot != null ? this.plots.get(a.plot) : undefined;
+      if (!p || (taken.get(p.key) ?? 0) >= p.hands) { a.plot = null; continue; }
+      taken.set(p.key, (taken.get(p.key) ?? 0) + 1);
+    }
+    for (const a of hands) {
+      if (a.plot != null) continue;
+      const p = plots.find((q) => (taken.get(q.key) ?? 0) < q.hands);
+      if (!p) break;
+      a.plot = p.key;
+      taken.set(p.key, (taken.get(p.key) ?? 0) + 1);
+    }
+  }
+
+  /** La grange ou le séchoir le plus proche d'une parcelle (pas trop loin), où l'on porte gerbes et paniers */
+  private barnOf(p: Plot): number | null {
+    let best: Building | null = null, bd = 24;
+    for (const b of this.farms) { const d = Math.abs(b.x + 0.5 - p.cx) + Math.abs(b.z + 0.5 - p.cz); if (d < bd) { bd = d; best = b; } }
+    return best?.id ?? null;
+  }
+
+  /**
+   * Un travail des champs parmi ces cases, selon la saison et l'âge : un quart de case libre, l'outil de l'époque en main ;
+   * null l'hiver (personne aux champs) ou si tout est pris
+   */
+  private fieldDest(cells: number[], barn: number | null): Dest | null {
+    const task = fieldTask(this.season, this.age, this.rnd());
+    // plutôt du côté des autres cases du champ : au bord de la parcelle, les épis s'arrêtent avant la fin de la case
+    const w = this.world, field = (x: number, z: number) => w.inCells(x, z) && w.veg[w.ci(x, z)] === VEG_FIELD;
+    const d = task && this.cellDest(cells, (k, q) => field((k % N) + (q % 2 ? 1 : -1), Math.floor(k / N)) && field(k % N, Math.floor(k / N) + (q >> 1 ? 1 : -1)));
+    if (!task || !d) return null;
+    const [tool, tool2] = fieldTools(task, this.age, this.rnd());
+    return { ...d, act: 'work', tool, tool2, task, barn, work: true };
+  }
+
+  /** Le bras des champs à sa parcelle : au volant du tracteur s'il y en a un (et qu'il est libre), sinon à l'ouvrage de la saison */
+  private plotDest(a: Agent): Dest | null {
+    const p = a.plot != null ? this.plots.get(a.plot) : undefined;
+    if (!p) return null;
+    // l'hiver, personne aux champs : on répare outils et clôtures devant la grange, ou l'on fait comme tout le monde
+    if (!fieldSeason(this.season)) {
+      const b = this.rnd() < 0.5 ? this.world.buildings.get(this.barnOf(p) ?? -1) : undefined, d = b && this.beside(b);
+      return d ? { ...d, act: 'work', tool: 'hammer', work: true } : null;
+    }
+    const rig = this.rigs.get(p.key);
+    if (rig && (rig.by === null || rig.by === a.id) && this.rnd() < 0.7) {
+      // il rejoint le tracteur là où il est garé, et monte par le côté
+      const [x, z, h] = rigAt(rig.run, rig.d), sx = x + Math.cos(h) * 0.15, sz = z - Math.sin(h) * 0.15;
+      if (this.world.inCells(Math.floor(sx), Math.floor(sz))) return { cell: Math.floor(sz) * N + Math.floor(sx), hidden: false, spot: [sx, sz], face: h, act: 'work', task: 'drive', rig: p.key, work: true };
+    }
+    return this.fieldDest(p.cells.filter((k) => !this.runSet.has(k)), this.barnOf(p));
+  }
+
+  /** Après la moisson ou la cueillette, il porte le plus souvent sa gerbe (son panier, sa cagette) à la grange ou au séchoir */
+  private carryDest(a: Agent): Dest | null {
+    if ((a.task !== 'reap' && a.task !== 'gather') || a.barn == null || this.rnd() < 0.3) return null;
+    const b = this.world.buildings.get(a.barn), d = b && this.beside(b);
+    if (!d) return null;
+    return { ...d, tool: a.task === 'reap' ? 'sheaf' : this.age >= 4 ? 'crate' : 'basket', carry: true };
+  }
+
+  /** Arrivé à son ouvrage des champs : combien de temps il y reste, tourné le long des sillons ; au tracteur, il monte */
+  private startTask(a: Agent) {
+    const t = a.task!, r = this.rnd();
+    a.timer = t === 'drive' ? 26 + r * 16 : t === 'hoe' || t === 'dig' ? 12 + r * 8 : 8 + r * 6;
+    if (t === 'drive') {
+      const rig = a.rig != null ? this.rigs.get(a.rig) : undefined;
+      if (!rig || (rig.by !== null && rig.by !== a.id)) { a.task = null; a.timer = 1; return; }
+      rig.by = a.id;
+      return;
+    }
+    const p = this.plotAt.get(Math.floor(a.z) * N + Math.floor(a.x)), flip = this.rnd() < 0.5 ? -1 : 1;
+    const ux = Math.cos(p?.angle ?? 0) * flip, uz = Math.sin(p?.angle ?? 0) * flip;
+    a.heading = Math.atan2(ux, uz);
+    a.lane = LANE_SPEED[t] ? [ux, uz] : null;
+    a.lanePos = this.rnd() * 0.36;
+  }
+
+  /** À l'ouvrage aux champs : le semeur, le faucheur, celui qui glane avancent pas à pas le long des sillons (aller et retour) ; le tracteur suit les siens */
+  private fieldStep(a: Agent, dt: number) {
+    if (a.task === 'drive') {
+      const rig = a.rig != null ? this.rigs.get(a.rig) : undefined;
+      if (!rig || rig.by !== a.id) { a.task = null; return; }
+      rig.d += dt * TRACTOR_SPEED;
+      [a.x, a.z, a.heading] = rigAt(rig.run, rig.d);
+      return;
+    }
+    if (!a.lane) return;
+    a.lanePos = (a.lanePos ?? 0) + dt * (LANE_SPEED[a.task!] ?? 0);
+    const L = 0.36, m = a.lanePos % (2 * L), fwd = m < L, o = fwd ? m - L / 2 : L / 2 - (m - L);
+    a.x = a.ax + a.lane[0] * o; a.z = a.az + a.lane[1] * o;
+    // demi-tour au bout du rang, sans pivoter d'un coup
+    const want = fwd ? Math.atan2(a.lane[0], a.lane[1]) : Math.atan2(-a.lane[0], -a.lane[1]);
+    let dh = want - a.heading;
+    dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    a.heading += dh * Math.min(1, dt * 5);
+  }
+
+  /** Les tracteurs : un par grande parcelle à l'âge industriel et après, avec sa file de cases ; refaits quand le monde ou l'âge change */
+  private refreshRigs(age: number) {
+    const keep = new Set<number>();
+    this.runSet.clear();
+    // les plus grandes parcelles d'abord, et quelques tracteurs au plus
+    const big = [...this.plots.values()].filter((p) => p.cells.length >= TRACTOR_CELLS).sort((p, q) => q.cells.length - p.cells.length).slice(0, MAX_RIGS);
+    if (age >= TRACTOR_AGE) for (const p of big) {
+      const run = longestRun(p);
+      if (!run) continue;
+      const old = this.rigs.get(p.key);
+      if (old && JSON.stringify(old.run) === JSON.stringify(run)) keep.add(p.key);
+      else {
+        if (old) this.dropRig(old);
+        const mesh = new THREE.Mesh(tractorGeo(age, false), mats.body);
+        mesh.castShadow = true;
+        this.group.add(mesh);
+        this.rigs.set(p.key, { key: p.key, run, d: hash2(p.key, 3, 91) * 8, mesh, by: null, geoKey: '' });
+        keep.add(p.key);
+      }
+      for (const k of runCells(run)) this.runSet.add(k);
+    }
+    for (const r of [...this.rigs.values()]) if (!keep.has(r.key)) this.dropRig(r);
+    // on ne se tient pas sur la file d'un tracteur
+    this.fields = this.fields.filter((k) => !this.runSet.has(k));
+  }
+
+  private dropRig(r: Rig) {
+    this.group.remove(r.mesh);
+    this.rigs.delete(r.key);
+    for (const a of this.agents) if (a.rig === r.key) { a.rig = null; if (a.task === 'drive') { a.task = null; a.timer = 0; } }
+  }
+
+  /** Les tracteurs à leur place sur leur file (garés quand personne ne les conduit) ; charrue ou remorque selon la saison */
+  private stepRigs(age: number) {
+    for (const r of this.rigs.values()) {
+      const trailer = this.season === 1, gk = `${age}|${trailer}`;
+      if (r.geoKey !== gk) { r.geoKey = gk; r.mesh.geometry = tractorGeo(age, trailer); }
+      const [x, z, h] = rigAt(r.run, r.d);
+      r.mesh.position.set(x, this.world.surfaceAt(x, z), z);
+      r.mesh.rotation.y = h;
+    }
+  }
+
+  /** Les tracteurs des champs : position et cap de chacun */
+  tractors() { return [...this.rigs.values()].map((r) => rigAt(r.run, r.d)); }
+
+  /**
    * Où va travailler un habitant, et ce qu'il y fait : son champ (près de la ferme), la lisière (près du bûcheron), le ponton,
    * une ronde sur les rues autour du poste, ou à côté de son bâtiment, l'outil en main
    */
@@ -352,7 +649,12 @@ export class Agents {
     if (!b) { a.job = null; return null; }
     const near = (cells: number[], r: number) => cells.filter((k) => Math.abs((k % N) - b.x) + Math.abs(Math.floor(k / N) - b.z) <= r);
     let d: Dest | null = null;
-    if (j.kind === 'farmer') { const f = near(this.fields, 8); d = f.length && this.rnd() < 0.8 ? this.cellDest(f) : null; }
+    if (j.kind === 'farmer') {
+      // aux champs près de la ferme, à l'ouvrage de la saison ; l'hiver, il répare outils et clôtures devant la ferme
+      const f = near(this.fields, 8);
+      if (!fieldSeason(this.season)) { const s = this.beside(b); if (s) return { ...s, act: 'work', tool: 'hammer', work: true }; }
+      else if (f.length && this.rnd() < 0.8) { const fd = this.fieldDest(f, b.kind === 'farm' ? b.id : null); if (fd) return fd; }
+    }
     else if (j.kind === 'woodcutter') { const f = near(this.woods, 6); d = f.length ? this.cellDest(f) : null; }
     else if (j.kind === 'fisher' && b.kind === 'pier') d = this.onPier(b);
     else if (j.kind === 'guard') { const f = near(this.roads, 7); d = f.length ? this.cellDest(f) : null; }
@@ -465,12 +767,16 @@ export class Agents {
   /** Centre d'un quart de case (0 : coin x-, z- ; 1 : x+ ; 2 : z+ ; 3 : x+, z+) */
   private quarter(k: number, q: number): [number, number] { return [(k % N) + 0.28 + (q % 2) * 0.44, Math.floor(k / N) + 0.28 + (q >> 1) * 0.44]; }
 
-  /** Un quart de case libre parmi des cases (champ, lisière, chemin), un peu décalé ; null si celles tirées sont pleines */
-  private cellDest(cells: number[]): Dest | null {
+  /**
+   * Un quart de case libre parmi des cases (champ, lisière, chemin), un peu décalé ; de préférence l'un de ceux que `prefer`
+   * retient ; null si celles tirées sont pleines
+   */
+  private cellDest(cells: number[], prefer?: (k: number, q: number) => boolean): Dest | null {
     for (let n = 0; n < 4; n++) {
       const k = this.pick(cells);
       if (k === undefined) return null;
-      const q = this.pick([0, 1, 2, 3].filter((i) => !this.held.has(`c${k}:${i}`)));
+      const free = [0, 1, 2, 3].filter((i) => !this.held.has(`c${k}:${i}`)), inner = prefer ? free.filter((i) => prefer(k, i)) : [];
+      const q = this.pick(inner.length ? inner : free);
       if (q === undefined) continue;
       const [x, z] = this.quarter(k, q);
       return { cell: k, hidden: false, spot: [x + (this.rnd() - 0.5) * 0.08, z + (this.rnd() - 0.5) * 0.08], hold: `c${k}:${q}` };
@@ -494,7 +800,9 @@ export class Agents {
 
   private chooseDest(hour: number, child = false, a: Agent | null = null): Dest | null {
     // un habitant arrivé depuis la dernière répartition : on répartit de nouveau les métiers
-    if (a && !a.child && a.job === undefined) this.assignJobs();
+    if (a && !a.child && !a.hand && a.job === undefined) this.assignJobs();
+    // les bras des champs : à leur parcelle aux heures de travail, du printemps à l'automne (le reste du temps, comme tout le monde)
+    if (a?.hand && working(hour) && this.rnd() < 0.9) { const d = this.plotDest(a); if (d) return d; }
     // aux heures de travail, chacun va le plus souvent à son poste
     if (a?.job && working(hour) && this.rnd() < 0.8) { const d = this.jobDest(a); if (d) return d; }
     // le matin, les enfants vont à l'école (qui écoute le maître, qui joue dans la cour)
@@ -537,7 +845,8 @@ export class Agents {
     return this.cellDest(this.roads);
   }
 
-  private addAgent() {
+  /** Un habitant de plus, chez lui ; `hand` : un bras des champs (un adulte, sans autre métier) */
+  private addAgent(hand = false) {
     const houses = [...this.world.buildings.values()].filter(isHome);
     if (!houses.length) return;
     const h = this.pick(houses)!;
@@ -545,9 +854,11 @@ export class Agents {
     this.agents.push({
       id, home: h.id, x: h.x + 0.5, z: h.z + 0.5, state: 'inside', path: [], pi: 0, timer: this.rnd() * 4, hidden: true, speed: 0.9 + this.rnd() * 0.5,
       heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, actor: null, actorKey: '',
-      spot: null, face: null, deck: null, child: this.rnd() < 0.22, ax: 0, az: 0, act: null, hold: null, mission: false, delay: 0, rest: 0, ride: null, shore: null,
+      spot: null, face: null, deck: null, child: this.rnd() < 0.22 && !hand, ax: 0, az: 0, act: null, hold: null, mission: false, delay: 0, rest: 0, ride: null, shore: null,
       kit: null, kitKey: '', props: [], mount: null, mounted: false, parked: null, rider: null, soldier: null,
+      ...(hand ? { hand: true, plot: null, job: null } : {}),
     });
+    if (hand) this.plotsDirty = true;
   }
 
   private sendHome(a: Agent) {
@@ -579,6 +890,9 @@ export class Agents {
     a.blaze = d.blaze ?? null;
     a.timer = d.work ? -1 : a.timer;
     if (d.hold) { a.hold = d.hold; this.held.set(d.hold, a.id); }
+    // aux champs : son ouvrage, ce qu'il tient de la main gauche, la grange ; le tracteur qu'il va prendre lui est réservé
+    a.task = d.task ?? null; a.tool2 = d.tool2 ?? null; a.barn = d.barn ?? null; a.load = !!d.carry; a.rig = d.rig ?? null;
+    if (d.rig != null) { const r = this.rigs.get(d.rig); if (r) r.by = a.id; }
     // champ, lisière, chemin : pas tous au milieu de la case
     if (!d.spot && !d.hidden) { const cx = (d.cell % N) + 0.5, cz = Math.floor(d.cell / N) + 0.5; a.spot = [cx + (this.rnd() - 0.5) * 0.5, cz + (this.rnd() - 0.5) * 0.5]; }
   }
@@ -617,6 +931,9 @@ export class Agents {
       if (a.hidden) { const hb = this.world.buildings.get(a.home); if (hb) { a.x = hb.x + 0.5; a.z = hb.z + 0.5; } }
       a.mission = true; a.goingHome = false; a.hidden = false; a.delay = 0; a.ride = null; a.shore = null;
       a.state = 'doing'; a.timer = 1e9; a.act = null; a.path = []; a.spot = null; a.face = null; a.deck = null;
+      // un bras des champs parti en expédition laisse sa place aux champs (un autre la prend) ; au retour, il est un habitant comme les autres
+      if (a.hand) { a.hand = false; a.plot = null; a.job = undefined; this.plotsDirty = true; }
+      a.task = null; a.tool2 = null; a.load = false; a.lane = null;
     }
     return team.map((a) => a.id);
   }
@@ -737,6 +1054,13 @@ export class Agents {
   private release(a: Agent) {
     if (a.hold && this.held.get(a.hold) === a.id) this.held.delete(a.hold);
     a.hold = null;
+    // il laisse le tracteur (garé là où il s'arrête) et descend par le côté
+    const r = a.rig != null ? this.rigs.get(a.rig) : undefined;
+    if (r?.by === a.id) {
+      r.by = null;
+      if (a.task === 'drive' && a.state === 'doing') { a.x += Math.cos(a.heading) * 0.15; a.z -= Math.sin(a.heading) * 0.15; }
+    }
+    a.rig = null;
   }
 
   /** Places des jardins : refaites quand le monde ou l'âge change */
@@ -750,6 +1074,7 @@ export class Agents {
 
   private startPath(a: Agent, goal: number, hiddenAtEnd: boolean) {
     a.spot = null; a.face = null; a.deck = null; a.act = null;
+    a.task = null; a.load = false; a.lane = null;
     const start = Math.min(N - 1, Math.max(0, Math.floor(a.z))) * N + Math.min(N - 1, Math.max(0, Math.floor(a.x)));
     const p = this.findPath(start, goal);
     this.pathBudget--;
@@ -757,24 +1082,36 @@ export class Agents {
     a.path = p; a.pi = 0; a.state = 'walking'; a.hidden = false; a.targetHidden = hiddenAtEnd;
   }
 
-  update(dt: number, hour: number, age: number, sheltering: boolean, popTarget: number, glowNight: number) {
+  /** `season` : 0 printemps, 1 été, 2 automne, 3 hiver (les travaux des champs en dépendent) */
+  update(dt: number, hour: number, age: number, sheltering: boolean, popTarget: number, glowNight: number, season = 0) {
     const w = this.world;
     this.popTarget = popTarget;
+    this.season = season; this.age = age;
     if (w.version !== this.lastVersion) { this.lastVersion = w.version; this.refreshTargets(); }
     const key = `${w.version}|${age}`;
-    if (key !== this.spotKey) { this.spotKey = key; this.refreshGardens(age); }
-    // les passants qu'on voit, plus les membres des expéditions en cours
+    if (key !== this.spotKey) { this.spotKey = key; this.refreshGardens(age); this.refreshRigs(age); }
+    // les passants qu'on voit, plus les bras des champs (autant que les champs en emploient, à l'échelle des passants), plus
+    // les membres des expéditions en cours
     const away = this.agents.reduce((n, a) => n + (a.mission ? 1 : 0), 0);
-    const want = Math.min(MAX_AGENTS, Math.min(MAX_SHOWN, Math.floor(popTarget * SHOWN)) + away);
-    while (this.agents.length < want) { const n = this.agents.length; this.addAgent(); if (this.agents.length === n) break; }
+    const hands = fieldHands(this.fieldCount, popTarget);
+    let nh = this.agents.reduce((n, a) => n + (a.hand ? 1 : 0), 0);
+    // des bras de trop (champs arrachés, village qui décline) : ils redeviennent de simples passants
+    for (let i = this.agents.length - 1; i >= 0 && nh > hands; i--) {
+      const a = this.agents[i];
+      if (a.hand) { a.hand = false; a.plot = null; a.job = undefined; nh--; this.plotsDirty = true; }
+    }
+    const want = Math.min(MAX_AGENTS, Math.min(MAX_SHOWN, Math.floor(popTarget * SHOWN)) + hands + away);
+    while (this.agents.length < want) { const n = this.agents.length; this.addAgent(nh < hands); if (this.agents.length === n) break; if (this.agents[n].hand) nh++; }
     // trop de monde dehors : on retire d'abord ceux qui sont chez eux, jamais ceux qui sont en expédition
     while (this.agents.length > want) {
       let i = this.agents.findIndex((a) => !a.mission && a.hidden);
       if (i < 0) { i = this.agents.length - 1; while (i >= 0 && this.agents[i].mission) i--; }
       if (i < 0) break;
       const [a] = this.agents.splice(i, 1);
+      if (a.hand) this.plotsDirty = true;
       this.release(a); this.dropActor(a);
     }
+    if (this.plotsDirty) { this.plotsDirty = false; this.assignPlots(); }
 
     const night = hour >= 20.5 || hour < 5.5 || sheltering;
     this.pathBudget = 4;
@@ -844,14 +1181,18 @@ export class Agents {
           a.x = a.ax + Math.cos(t) * 0.22; a.z = a.az + Math.sin(t) * 0.22;
           a.heading = Math.atan2(-Math.sin(t), Math.cos(t));
         }
+        // aux champs : le semeur et le faucheur suivent les sillons, le tracteur les siens
+        if (a.task && !a.hidden) this.fieldStep(a, dt);
         if (night && !a.goingHome) { if (this.pathBudget > 0) this.sendHome(a); }
         else if (a.timer <= 0 && this.pathBudget > 0) {
           a.hidden = false;
-          const d = this.chooseDest(hour, a.child, a);
+          // la moisson faite, il porte sa gerbe à la grange ; sinon il choisit où aller
+          const d = this.carryDest(a) ?? this.chooseDest(hour, a.child, a);
           if (d) this.go(a, d); else a.timer = 3;
         }
       }
     }
+    this.stepRigs(age);
     this.render(age, dt);
   }
 
@@ -864,6 +1205,9 @@ export class Agents {
     a.timer = a.timer === -1 ? 14 + this.rnd() * 12 : (a.act === 'sit' || a.act === 'cheer' ? 10 : 4) + this.rnd() * 8;
     a.hidden = a.targetHidden;
     a.ax = a.x; a.az = a.z;
+    // à la grange, il pose sa charge et repart ; aux champs, il se met à l'ouvrage
+    if (a.load) { a.load = false; a.tool = null; a.timer = 1.5 + this.rnd() * 2; }
+    else if (a.task) this.startTask(a);
   }
 
   /** Sol sous l'habitant : platelage du ponton une fois sorti de la route, tablier des ponts, sinon le relief */
@@ -874,15 +1218,17 @@ export class Agents {
 
   /** Habitant dessiné : la tenue de son époque, son cap, son geste selon ce qu'il fait */
   private animateActor(a: Agent, age: number, dt: number): boolean {
-    const key = `${Math.min(age, 5)}|${a.child ? 1 : 0}`;
+    // ceux qui travaillent aux champs (bras des champs, paysans de la ferme) en ont la tenue
+    const farmer = !!a.hand || a.job?.kind === 'farmer';
+    const key = `${Math.min(age, 5)}|${a.child ? 1 : 0}|${farmer ? 1 : 0}`;
     if (a.actorKey !== key) {
       this.dropActor(a);
-      a.actor = makeFolk({ age, v: a.id, child: a.child, size: 0.94 + (a.id % 5) * 0.03 });
+      a.actor = makeFolk({ age, v: a.id, child: a.child, size: 0.94 + (a.id % 5) * 0.03, farmer });
       a.actorKey = key;
       this.group.add(a.actor.root);
     }
     const act = a.actor!;
-    const kitKey = `${a.actorKey}|${JSON.stringify(a.kit)}|${a.tool ?? ''}`;
+    const kitKey = `${a.actorKey}|${JSON.stringify(a.kit)}|${a.tool ?? ''}|${a.tool2 ?? ''}`;
     if (a.kitKey !== kitKey) { a.kitKey = kitKey; this.dress(a); }
     // charge de cavalerie : en selle, le cavalier de l'époque (cheval compris) prend sa place
     if (this.stepRider(a, age)) { act.root.visible = false; return true; }
@@ -890,14 +1236,18 @@ export class Agents {
     const riding = a.kit?.car ? this.stepCar(a) : this.stepMount(a, dt);
     act.root.visible = !a.hidden;
     if (a.hidden) return true;
-    act.root.position.set(a.x, this.groundY(a) + (riding ? (a.kit?.car ? CAR_SEAT : SADDLE) : 0), a.z);
+    // aux champs : le geste de son ouvrage (au volant du tracteur, assis), sa charge portée à deux bras jusqu'à la grange
+    const field = a.mission ? null : a.state === 'walking' && a.load ? (['carry', 1.6] as const) : a.state === 'doing' && a.task ? FIELD_POSE[a.task] : null;
+    const lift = riding ? (a.kit?.car ? CAR_SEAT : SADDLE) : a.state === 'doing' && a.task === 'drive' ? TRACTOR_SEAT : 0;
+    act.root.position.set(a.x, this.groundY(a) + lift, a.z);
     act.root.rotation.y = a.heading;
     const running = a.child && (!a.act || a.act === 'run');
     const pose: FolkPose = riding ? 'sit'
+      : field ? field[0]
       : a.state === 'walking' || (running && a.state === 'doing') ? ((running && a.state === 'doing') || a.urgent ? 'run' : 'walk')
       : a.state === 'doing' ? (a.act === 'sit' ? 'sit' : a.act === 'cheer' || a.act === 'play' ? 'cheer' : a.act === 'stroll' || (a.mission && !a.act) ? (a.tool === 'book' || a.job?.kind === 'merchant' ? 'talk' : 'idle') : 'work')
       : 'idle';
-    folkStep(act, a.phase * (pose === 'run' ? 1.1 : pose === 'walk' ? 1.6 : 1), pose);
+    folkStep(act, a.phase * (field && !riding ? field[1] : pose === 'run' ? 1.1 : pose === 'walk' ? 1.6 : 1), pose);
     void dt;
     return true;
   }
@@ -911,7 +1261,7 @@ export class Agents {
     for (const o of a.props) o.parent?.remove(o);
     a.props = [];
     const k = a.kit, f = a.actor;
-    if ((!k && !a.tool) || !f) return;
+    if ((!k && !a.tool && !a.tool2) || !f) return;
     const hold = (name: keyof typeof PROPS, side: 0 | 1, flame = false) => {
       const m = new THREE.Mesh(PROPS[name](), mats.body);
       m.castShadow = true;
@@ -919,8 +1269,8 @@ export class Agents {
       holdFolk(f, side, m, HOLD[name]);
       a.props.push(m);
     };
-    // hors expédition, l'outil de son métier
-    if (!k) { if (a.tool) hold(a.tool, 0); return; }
+    // hors expédition, l'outil de son métier ; aux champs, le sac de semences ou le panier dans la gauche
+    if (!k) { if (a.tool) hold(a.tool, 0); if (a.tool2) hold(a.tool2, 1); return; }
     if (k.weapon) hold(k.weapon, 0);
     if (k.torch) hold('torch', 1, true);
     else if (k.armor) hold('shield', 1);

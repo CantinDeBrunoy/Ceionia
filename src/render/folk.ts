@@ -14,8 +14,11 @@ import { HUMAN_K } from './assets';
 
 /** Qui est-ce : un habitant de l'époque, ou l'une des figures qu'on croise en expédition */
 export type FolkRole = 'villager' | 'monk' | 'juggler' | 'sage' | 'nomad' | 'scholar' | 'fisher' | 'drummer' | 'thief' | 'astronaut';
-/** Ce qu'il fait : debout, au pas, à la course, à l'ouvrage, assis, bras levés, à parler, à jongler */
-export type FolkPose = 'idle' | 'walk' | 'run' | 'work' | 'sit' | 'cheer' | 'talk' | 'juggle';
+/**
+ * Ce qu'il fait : debout, au pas, à la course, à l'ouvrage, assis, bras levés, à parler, à jongler ; aux champs : semer à la
+ * volée, faucher (ou couper à la faucille), ramasser penché, porter à deux bras (gerbe, panier, cagette)
+ */
+export type FolkPose = 'idle' | 'walk' | 'run' | 'work' | 'sit' | 'cheer' | 'talk' | 'juggle' | 'sow' | 'reap' | 'gather' | 'carry';
 /** Comment il tient ce qu'il a en main : droit (torche, seau, panier), en outil (qui frappe à l'ouvrage), pointé devant (arme) */
 export type FolkHold = 'upright' | 'tool' | 'point';
 
@@ -30,13 +33,16 @@ export interface Folk {
   hands: THREE.Object3D[];
 }
 
-export interface FolkLook { age: number; v: number; child?: boolean; woman?: boolean; role?: FolkRole; size?: number }
+/** `farmer` : un habitant qui travaille aux champs (chapeau de paille ou casquette, salopette à l'âge industriel et après) */
+export interface FolkLook { age: number; v: number; child?: boolean; woman?: boolean; role?: FolkRole; size?: number; farmer?: boolean }
 
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 const SKINS = [0xf0c8a8, 0xe8b894, 0xd8a07a, 0xc08a62, 0x8a5a3a];
 const HAIRS = [0x2a1e16, 0x4a3020, 0x6a4a2a, 0xa8743a, 0xd8b060, 0x1a1a1e, 0x7a3a22];
 const GREY = 0xb8b4ac, WHITE = 0xf2ece0, LEATHER = 0x6a4a30, BLACK = 0x26262a, GOLD = 0xe8c66a, ROPE = 0xc9b48a;
 const EYES = 0x2a2a2e;
+/** hauteur de la hanche (pivot des jambes, et du buste quand il se penche) */
+const HIP = 0.1;
 
 /** Un nombre tiré de (v, k), toujours le même : la variété des habitants */
 function hv(v: number, k: number) {
@@ -189,6 +195,54 @@ function hat(p: Parts, era: number, v: number, woman: boolean): boolean {
   return false;
 }
 
+const STRAW = 0xd8c08a;
+
+/**
+ * Tenue des champs, par-dessus celle de l'époque : salopette de toile bleue (bavette, bretelles, ceinture) à l'âge industriel,
+ * salopette de travail et bottes de caoutchouc à l'époque moderne ; avant, la tenue de tous les jours suffit
+ */
+function farmWear(p: Parts, era: number, v: number, woman: boolean, w: Wear) {
+  if (era !== 3 && era !== 4) return;
+  if (era === 3 && woman) return;
+  const c = era === 3 ? of([0x3a4a6a, 0x4a5a7a, 0x5a5048], v, 40) : of([0x3a6a3a, 0x2e4a7a, 0x8a5a2e, 0x4a4a52], v, 40);
+  // ceinture de la salopette (elle couvre le haut des jambes), bavette et sa poche, bretelles croisées par-dessus les épaules
+  p.box(0.082, 0.032, 0.058, 0, 0.084, 0, c);
+  p.box(0.054, 0.066, 0.004, 0, 0.11, 0.0285, c);
+  p.box(0.018, 0.016, 0.003, 0, 0.135, 0.031, dark(c, 0.8));
+  for (const s of [-1, 1]) {
+    p.box(0.01, 0.036, 0.004, s * 0.021, 0.175, 0.0285, c);
+    p.box(0.01, 0.006, 0.058, s * 0.021, 0.207, 0, c);
+    p.box(0.01, 0.11, 0.004, s * 0.021, 0.1, -0.0285, c);
+    p.box(0.006, 0.006, 0.004, s * 0.021, 0.172, 0.031, GOLD);
+  }
+  w.leg = c;
+  if (era === 4) w.boot = of([0x2e4a2e, 0x26262a, 0x8a2a24], v, 41);
+}
+
+/**
+ * Coiffe des champs : chapeau de paille contre le soleil (pétase dans l'Antiquité, grand bord au Moyen Âge, canotier ou
+ * casquette à l'âge industriel, casquette ou chapeau de toile à l'époque moderne) ; vrai si elle cache les cheveux
+ */
+function farmHat(p: Parts, era: number, v: number, woman: boolean): boolean {
+  const r = hv(v, 42) % 4;
+  if (era === 0 || era >= 5) return hat(p, era, v, woman);
+  if (era === 1) { p.cyl(0.058, 0.058, 0.005, 10, 0, 0.25, 0, STRAW); p.sphere(0.024, 0, 0.256, 0, STRAW, 1, 0.7); return true; }
+  if (era === 2) {
+    // fichu noué pour certaines, grand chapeau de paille pour les autres
+    if (woman && r < 2) { p.sphere(0.03, 0, 0.238, -0.002, of([0xf2ece0, 0xc8443a, 0x4a6ab8], v, 43), 1, 0.95); p.box(0.02, 0.02, 0.012, 0, 0.215, -0.03, 0xf2ece0); return true; }
+    p.cyl(0.066, 0.066, 0.005, 10, 0, 0.25, 0, STRAW); p.cone(0.03, 0.035, 8, 0, 0.255, 0, STRAW); return true;
+  }
+  if (era === 3) {
+    if (woman) { p.sphere(0.03, 0, 0.24, -0.008, of([0xe8dcc8, 0xd8c8a0], v, 44), 1, 0.95); p.cyl(0.05, 0.05, 0.004, 10, 0, 0.244, 0.01, STRAW); return true; }
+    if (r < 2) { p.cyl(0.056, 0.056, 0.004, 10, 0, 0.25, 0, STRAW); p.cyl(0.027, 0.027, 0.022, 10, 0, 0.252, 0, STRAW); p.cyl(0.0275, 0.0275, 0.006, 10, 0, 0.256, 0, 0x3a3a42); return true; }
+    const c = of([0x3a3a42, 0x5a4a3a, 0x4a4a3a], v, 45);
+    p.box(0.05, 0.014, 0.052, 0, 0.25, -0.002, c); p.box(0.044, 0.004, 0.022, 0, 0.25, 0.028, c); return true;
+  }
+  // époque moderne : casquette (visière devant) ou chapeau de toile
+  if (r < 3) { const c = of([0x3a6a3a, 0xd84a3e, 0x2e4a7a, 0xf2c23a, 0xf2f2f2], v, 46); p.sphere(0.026, 0, 0.25, 0, c, 1, 0.6); p.box(0.04, 0.004, 0.028, 0, 0.252, 0.03, c); return true; }
+  p.cyl(0.05, 0.05, 0.004, 10, 0, 0.248, 0, 0xd8d0b0); p.cyl(0.027, 0.03, 0.026, 10, 0, 0.25, 0, 0xd8d0b0); return true;
+}
+
 /** Les figures à part : leur buste, leur coiffe ; renvoie les couleurs du reste */
 function figure(p: Parts, role: FolkRole, era: number, v: number, skin: number): Wear {
   const w: Wear = { leg: 0x4a3a2e, boot: LEATHER, arm: skin, hand: skin, sleeve: null, hair: true };
@@ -279,7 +333,9 @@ export function makeFolk(look: FolkLook): Folk {
   const old = !child && hv(v, 4) % 6 === 0, hair = old ? GREY : HAIRS[hv(v, 3) % HAIRS.length];
   const p = new Parts();
   const w = role === 'villager' ? wear(p, era, v, woman, child, skin) : figure(p, role, era, v, skin);
-  const covered = role === 'villager' ? hat(p, era, v, woman) : !w.hair;
+  const farmer = !!look.farmer && role === 'villager' && !child;
+  if (farmer) farmWear(p, era, v, woman, w);
+  const covered = role === 'villager' ? (farmer ? farmHat(p, era, v, woman) : hat(p, era, v, woman)) : !w.hair;
   // coiffure : longue, chignon ou queue de cheval pour les femmes, courte pour les hommes (en bataille à la préhistoire)
   const style = covered ? (role === 'villager' && woman ? 3 : -1) : woman ? [1, 2, 3][hv(v, 5) % 3] : era === 0 && hv(v, 5) % 2 ? 1 : 0;
   const beard = child || woman ? 0 : role === 'sage' || (role === 'scholar' && era < 3) ? 3 : role === 'drummer' ? 1 : role === 'monk' || role === 'juggler' || role === 'astronaut' ? 0
@@ -336,11 +392,41 @@ export function holdFolk(f: Folk, side: 0 | 1, m: THREE.Object3D, how: FolkHold)
 export function folkStep(f: Folk, phase: number, pose: FolkPose) {
   const [right, left] = f.arms, [l0, l1] = f.legs, b = f.body, sw = Math.sin(phase);
   const sit = pose === 'sit';
-  b.position.y = sit ? -0.075 : pose === 'walk' ? Math.abs(sw) * 0.006 : pose === 'run' ? Math.abs(sw) * 0.012 : pose === 'cheer' ? Math.abs(Math.sin(phase * 2)) * 0.008 : Math.sin(phase * 0.3) * 0.0015;
+  b.position.y = sit ? -0.075 : pose === 'walk' || pose === 'carry' ? Math.abs(sw) * 0.006 : pose === 'run' ? Math.abs(sw) * 0.012 : pose === 'cheer' ? Math.abs(Math.sin(phase * 2)) * 0.008 : Math.sin(phase * 0.3) * 0.0015;
   for (const l of f.legs) l.position.y = sit ? 0.025 : 0.1;
   b.rotation.set(pose === 'run' ? 0.18 : 0, pose === 'talk' ? Math.sin(phase * 0.5) * 0.12 : 0, 0);
+  b.position.z = 0;
   right.rotation.z = left.rotation.z = 0;
-  if (pose === 'walk' || pose === 'run') {
+  // penché aux champs : le buste pivote à la hanche (pas aux pieds), le haut des jambes reste dessous
+  const bend = (a: number) => { b.rotation.x = a; b.position.y = HIP * (1 - Math.cos(a)); b.position.z = -HIP * Math.sin(a); };
+  if (pose === 'sow') {
+    // le semeur à la volée : pas lents, la main droite puise au sac (tenu de la gauche) et lance le grain en arc de cercle
+    l0.rotation.x = sw * 0.3; l1.rotation.x = -sw * 0.3;
+    b.rotation.y = -0.2 * sw;
+    right.rotation.x = -0.85 - 0.35 * sw; right.rotation.z = -0.27 - 0.62 * sw;
+    left.rotation.x = -0.35; left.rotation.z = 0.08;
+  } else if (pose === 'reap') {
+    // la faux (ou la faucille) : penché, les deux mains devant, le buste lancé d'un grand geste de droite à gauche
+    const s = Math.sin(phase + 0.45 * Math.sin(phase));
+    bend(0.24);
+    b.rotation.y = 0.55 * s;
+    right.rotation.x = -0.7; left.rotation.x = -0.95;
+    right.rotation.z = 0.22; left.rotation.z = -0.22;
+    l0.rotation.x = -0.3; l1.rotation.x = 0.3;
+  } else if (pose === 'gather') {
+    // il ramasse : penché bas, la main droite cueille au ras du sol et remonte au panier tenu de la gauche
+    const up = (Math.sin(phase * 1.2) + 1) / 2;
+    bend(0.5 - up * 0.14);
+    right.rotation.x = -0.2 - up * 0.75; right.rotation.z = 0.25 * up;
+    left.rotation.x = -0.55; left.rotation.z = -0.12;
+    l0.rotation.x = -0.28; l1.rotation.x = 0.32;
+  } else if (pose === 'carry') {
+    // il porte à deux bras, devant lui, au pas
+    l0.rotation.x = sw * 0.5; l1.rotation.x = -sw * 0.5;
+    right.rotation.x = left.rotation.x = -1.05 + Math.abs(sw) * 0.06;
+    right.rotation.z = 0.34; left.rotation.z = -0.34;
+    b.rotation.x = -0.06;
+  } else if (pose === 'walk' || pose === 'run') {
     const a = pose === 'run' ? 0.95 : 0.55;
     l0.rotation.x = sw * a; l1.rotation.x = -sw * a;
     right.rotation.x = -sw * a * 0.8 - (pose === 'run' ? 0.35 : 0); left.rotation.x = sw * a * 0.8 - (pose === 'run' ? 0.35 : 0);
@@ -374,7 +460,8 @@ export function folkStep(f: Folk, phase: number, pose: FolkPose) {
     for (const c of h.children) {
       const how = c.userData.hold as FolkHold | undefined;
       if (how === 'upright') c.rotation.x = -arm.rotation.x - b.rotation.x;
-      else if (how === 'tool') c.rotation.x = pose === 'work' ? 1.3 : -arm.rotation.x + 0.3;
+      // la faux et la faucille, à la moisson : pointées devant, vers le sol
+      else if (how === 'tool') c.rotation.x = pose === 'work' ? 1.3 : pose === 'reap' ? 2.1 - arm.rotation.x - b.rotation.x : -arm.rotation.x + 0.3;
     }
   });
 }
