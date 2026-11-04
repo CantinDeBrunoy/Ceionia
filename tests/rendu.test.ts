@@ -5,6 +5,7 @@ import { newWorld } from '../src/world/mapgen';
 import { raiseVolcano, volcanoRadius } from '../src/world/terraform';
 import { KINDS, KIND_ORDER, KindId, sizeOf } from '../src/build/catalog';
 import { getModel } from '../src/render/models';
+import { HUMAN } from '../src/render/assets';
 import { VegView, WALL_GAP, syncChunks } from '../src/render/vegetation';
 import { BuildingView, skylineTier } from '../src/render/buildings';
 import { Atmosphere } from '../src/render/atmosphere';
@@ -91,6 +92,20 @@ describe('rendu', () => {
       }
     });
     expect(trees).toBeGreaterThan(20);
+  });
+});
+
+describe('personnages', () => {
+  it('les personnages des bâtiments agrandis (temple, atelier, moulin) gardent la taille des habitants', () => {
+    // le technicien au pied de l'éolienne : posée sur quatre cases, elle est dessinée pour une puis agrandie, lui non
+    const top = (small: boolean) => {
+      const g = getModel('mill', 4, { v: 0, L: false, R: false, F: true, small }).crowd!;
+      g.computeBoundingBox();
+      return g.boundingBox!.max.y;
+    };
+    expect(top(false)).toBeGreaterThan(HUMAN * 0.8);
+    expect(top(false)).toBeLessThan(HUMAN * 1.1);
+    expect(top(false)).toBeCloseTo(top(true), 3);
   });
 });
 

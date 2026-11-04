@@ -194,6 +194,34 @@ function animPart(draw: (q: Parts) => void, pivot: V3, axis: V3, amp: number, fr
   g.setAttribute('aAnim', new THREE.BufferAttribute(an, 4));
   crowdOut.push(g);
 }
+/**
+ * Échelle des personnages du modèle en cours : un modèle dessiné pour une case puis agrandi (UPSCALE) les dessine d'autant
+ * plus petits, pour qu'une fois agrandis ils gardent la taille des habitants qui marchent (le prêtre et la fidèle du temple
+ * antique, le technicien de l'éolienne)
+ */
+let lifeK = 1, lifeIn = false;
+/**
+ * Dessine (`draw`) des personnages, une bête, un véhicule à la taille des habitants, réduits autour de leur pied (x, y, z) dans
+ * un modèle agrandi ; `k` : agrandit en plus un dessin fait plus petit qu'un habitant (le potier à son tour). Les pièces animées
+ * suivent (pivots, rebonds) ; un personnage dans un groupe déjà ramené à la bonne taille n'est pas réduit deux fois
+ */
+function lifeSize(p: Parts, x: number, y: number, z: number, draw: () => void, k = 1) {
+  if (lifeIn) { draw(); return; }
+  const nb = p.body.length, ng = p.glow.length, nc = crowdOut.length;
+  lifeIn = true;
+  draw();
+  lifeIn = false;
+  const s = k * lifeK;
+  if (Math.abs(s - 1) < 1e-6) return;
+  const m = new THREE.Matrix4().makeTranslation(x, y, z).multiply(new THREE.Matrix4().makeScale(s, s, s)).multiply(new THREE.Matrix4().makeTranslation(-x, -y, -z));
+  for (const g of [...p.body.slice(nb), ...p.glow.slice(ng)]) g.applyMatrix4(m);
+  const v = new THREE.Vector3();
+  for (const g of crowdOut.slice(nc)) {
+    g.applyMatrix4(m);
+    const pv = g.attributes.aPivot, an = g.attributes.aAnim;
+    for (let i = 0; i < pv.count; i++) { v.fromBufferAttribute(pv, i).applyMatrix4(m); pv.setXYZ(i, v.x, v.y, v.z); an.setW(i, an.getW(i) * s); }
+  }
+}
 /** Attitude d'un personnage : il flâne et discute (et gesticule), il acclame bras levés, il court sur place */
 type Pose = 'idle' | 'cheer' | 'run';
 
@@ -1553,15 +1581,18 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
       }
     }
     for (const x of [-0.39, -0.03]) p.box(0.012, 0.14, 0.04, x, 0.01, -0.185, C.darkwood);
-    // le potier à son tour : il tourne un vase, la roue lancée du pied
+    // le potier à son tour : il tourne un vase, la roue lancée du pied (dessiné à 1/1,6 d'un habitant, il est ramené à sa
+    // taille avec sa roue, quand l'atelier grandit aussi)
     const wx = -0.02, wz = 0.06;
-    p.cyl(0.035, 0.04, 0.02, 8, wx, 0.01, wz, C.darkwood); p.cyl(0.006, 0.006, 0.03, 4, wx, 0.03, wz, C.darkwood);
-    p.cyl(0.04, 0.04, 0.008, 10, wx, 0.055, wz, C.wood);
-    p.cyl(0.016, 0.022, 0.036, 8, wx, 0.063, wz, raw); p.cyl(0.019, 0.016, 0.008, 8, wx, 0.099, wz, raw);
-    p.cyl(0.02, 0.02, 0.04, 6, wx, 0.01, wz + 0.08, C.wood);
-    p.box(0.034, 0.042, 0.024, wx, 0.05, wz + 0.082, 0xc8a070);
-    p.box(0.02, 0.02, 0.02, wx, 0.092, wz + 0.08, 0xe8b894); p.box(0.022, 0.007, 0.022, wx, 0.112, wz + 0.08, 0x4a3426);
-    for (const d of [-1, 1]) { p.box(0.008, 0.008, 0.045, wx + d * 0.016, 0.075, wz + 0.05, 0xe8b894); p.box(0.01, 0.022, 0.012, wx + d * 0.01, 0.03, wz + 0.05, 0x6a5440); }
+    lifeSize(p, wx, 0.01, wz + 0.04, () => {
+      p.cyl(0.035, 0.04, 0.02, 8, wx, 0.01, wz, C.darkwood); p.cyl(0.006, 0.006, 0.03, 4, wx, 0.03, wz, C.darkwood);
+      p.cyl(0.04, 0.04, 0.008, 10, wx, 0.055, wz, C.wood);
+      p.cyl(0.016, 0.022, 0.036, 8, wx, 0.063, wz, raw); p.cyl(0.019, 0.016, 0.008, 8, wx, 0.099, wz, raw);
+      p.cyl(0.02, 0.02, 0.04, 6, wx, 0.01, wz + 0.08, C.wood);
+      p.box(0.034, 0.042, 0.024, wx, 0.05, wz + 0.082, 0xc8a070);
+      p.box(0.02, 0.02, 0.02, wx, 0.092, wz + 0.08, 0xe8b894); p.box(0.022, 0.007, 0.022, wx, 0.112, wz + 0.08, 0x4a3426);
+      for (const d of [-1, 1]) { p.box(0.008, 0.008, 0.045, wx + d * 0.016, 0.075, wz + 0.05, 0xe8b894); p.box(0.01, 0.022, 0.012, wx + d * 0.01, 0.03, wz + 0.05, 0x6a5440); }
+    }, 1.6);
     // fosse d'argile, motte, pelle plantée, auge d'eau
     p.cyl(0.11, 0.1, 0.012, 9, -0.3, 0.005, 0.22, 0x8a5038);
     p.sphere(0.06, -0.33, 0.025, 0.2, clay, 0, 0.6); p.sphere(0.03, -0.24, 0.02, 0.25, dark(clay, 0.9), 0, 0.7);
@@ -2016,14 +2047,15 @@ function mill(p: Parts, age: number) {
     // aire de grutage et chemin de gravier vers la route, la camionnette, le technicien
     p.box(0.3, 0.008, 0.22, 0.24, 0.0, 0.16, 0xb8b2a6);
     p.box(0.12, 0.006, 0.24, 0.24, 0.0, 0.39, 0xc4bcae);
-    car(p, 0.26, 0.16, Math.PI / 2, C.white, 0.008); p.box(0.2, 0.016, 0.004, 0.26, 0.047, 0.226, 0x2c7a5a);
+    // (la camionnette et les moutons, comme le technicien, gardent la taille des habitants quand l'éolienne grandit)
+    lifeSize(p, 0.26, 0.008, 0.16, () => { car(p, 0.26, 0.16, Math.PI / 2, C.white, 0.008); p.box(0.2, 0.016, 0.004, 0.26, 0.047, 0.226, 0x2c7a5a); });
     figure(p, 0.05, 0.27, 0xf28a3c, -2.4, false, 0xf2f2ee);
     // moutons qui paissent
-    for (const [x, z, ry] of [[-0.3, -0.3, 0.6], [-0.18, -0.4, -0.4], [0.3, -0.28, 2.2]]) {
+    for (const [x, z, ry] of [[-0.3, -0.3, 0.6], [-0.18, -0.4, -0.4], [0.3, -0.28, 2.2]]) lifeSize(p, x, 0, z, () => {
       p.add(new THREE.IcosahedronGeometry(0.04, 0).scale(1, 0.75, 1.35), x, 0.05, z, 0xf2efe6, ry);
       p.box(0.025, 0.025, 0.035, x + Math.sin(ry) * 0.06, 0.04, z + Math.cos(ry) * 0.06, 0x3c3530, ry);
       for (const [u, w] of [[-0.02, -0.03], [0.02, -0.03], [-0.02, 0.03], [0.02, 0.03]]) p.box(0.008, 0.03, 0.008, x + u * Math.cos(ry) + w * Math.sin(ry), 0, z - u * Math.sin(ry) + w * Math.cos(ry), 0x3c3530);
-    }
+    });
   }
 }
 
@@ -4088,6 +4120,8 @@ function barberPole(p: Parts, x: number, y: number, z: number, h: number) {
 
 /** Petit personnage figé (client, barbier) : jambes, buste, tête et cheveux ; `sit` : assis ; `up` : posé plus haut (quai, estrade) */
 function figure(p: Parts, x: number, z: number, body: number, ry = 0, sit = false, hair = 0x4a3426, pose: Pose = 'idle', up = 0) {
+  // dans un modèle agrandi : à la taille des habitants
+  if (lifeK !== 1 && !lifeIn) { lifeSize(p, x, up, z, () => figure(p, x, z, body, ry, sit, hair, pose, up)); return; }
   const c = Math.cos(ry), s = Math.sin(ry), P = (u: number, w: number): [number, number] => [x + u * c + w * s, z - u * s + w * c];
   const y0 = (sit ? 0.07 : 0.012) + up;
   if (p !== mainParts) {
@@ -5428,6 +5462,7 @@ function alpine(p: Parts, age: number) {
 
 /** Personnage debout à la hauteur y (sur une scène, une tribune) : longue robe, tête ou masque */
 function actor(p: Parts, x: number, y: number, z: number, ry: number, robe: number, head = 0xe8b894) {
+  if (lifeK !== 1 && !lifeIn) { lifeSize(p, x, y, z, () => actor(p, x, y, z, ry, robe, head)); return; }
   const draw = (q: Parts) => { q.box(0.05, 0.1, 0.034, x, y, z, robe, ry); q.box(0.06, 0.012, 0.04, x, y + 0.085, z, dark(robe, 0.85), ry); q.box(0.032, 0.032, 0.032, x, y + 0.1, z, head, ry); };
   if (p !== mainParts) { draw(p); return; }
   // l'acteur se balance en déclamant, un bras qui accompagne la tirade
@@ -5439,6 +5474,7 @@ function actor(p: Parts, x: number, y: number, z: number, ry: number, robe: numb
 
 /** Spectateur assis à la hauteur y (gradin, banc) */
 function seated(p: Parts, x: number, y: number, z: number, ry: number, body: number, hair = 0x4a3426) {
+  if (lifeK !== 1 && !lifeIn) { lifeSize(p, x, y, z, () => seated(p, x, y, z, ry, body, hair)); return; }
   const draw = (q: Parts) => { q.box(0.042, 0.045, 0.03, x, y, z, body, ry); q.box(0.026, 0.026, 0.026, x, y + 0.045, z, 0xe8b894, ry); q.box(0.028, 0.01, 0.028, x, y + 0.071, z, hair, ry); };
   if (p !== mainParts) { draw(p); return; }
   // le spectateur se penche, rit, certains trépignent
@@ -7887,6 +7923,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   mainParts = p;
   spinOut = null;
   vaneOut = null;
+  // un modèle qui sera agrandi dessine ses personnages d'autant plus petits (voir lifeSize)
+  lifeK = size === 2 && UPSCALE.includes(kind) ? 1 / UP : 1;
   // à l'âge futuriste : le modèle dessiné pour lui, sinon celui de l'époque moderne, rehaussé (voir futureExtras)
   const future = age >= 5 && futureModel(p, kind, o, size), extras = age >= 5 && !future;
   if (extras) age = 4;
@@ -7947,6 +7985,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'maglev': maglev(p); break;
   }
   if (extras) futureExtras(p, kind, size);
+  lifeK = 1;
   // un modèle fait seulement de pièces importées (le point d'eau préhistorique) n'a pas de partie procédurale
   if (!p.body.length && attachOut.length) m = { body: mergeGeometries(attachOut, false)!, glow: null, smoke: smokeOut };
   else {
