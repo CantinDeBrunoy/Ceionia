@@ -379,6 +379,21 @@ const scrollGeo = () => geo('scroll', (p) => { p.add(new THREE.CylinderGeometry(
 /** Manche de la torche de fortune (la flamme est à part : elle baisse et grandit) */
 const handTorchGeo = () => geo('handtorch', (p) => { p.box(0.01, 0.08, 0.01, 0, 0, 0, 0x6a4a34); p.cyl(0.014, 0.01, 0.018, 6, 0, 0.065, 0, 0x4a3a2e); });
 
+/** Volute de brume : un disque blanc au bord flou (dessiné une fois) */
+let puffTex: THREE.Texture | null = null;
+function softPuff() {
+  if (puffTex) return puffTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const x = c.getContext('2d')!, gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr;
+  x.fillRect(0, 0, 64, 64);
+  puffTex = new THREE.CanvasTexture(c);
+  puffTex.colorSpace = THREE.SRGBColorSpace;
+  return puffTex;
+}
+
 const STAR = new THREE.MeshBasicMaterial({ color: 0xfff4c0, transparent: true, opacity: 0.95, depthWrite: false });
 const GLOW = new THREE.MeshBasicMaterial({ color: 0xff7a2a });
 /** Lumières d'alerte et éclairs (ne s'éclairent pas : elles brillent) */
@@ -790,6 +805,8 @@ export class ExpeditionScene {
         for (let d = 0; d < 8; d++) { const ang = (d / 8) * Math.PI * 2, g = y(cx + Math.sin(ang) * 0.8, cz + Math.cos(ang) * 0.8) - y(cx, cz); if (g > gain) { gain = g; best = ang; } }
         [mx, mz] = this.near(cx + Math.sin(best) * 0.6, cz + Math.cos(best) * 0.6, cx, cz);
       }
+      // l'entrée qu'on bâtit (au bord de la faille, au pied de la paroi) : dans la clairière la plus proche, pas cachée sous les arbres
+      if (st !== 'gallery' && !real) { const [qx, qz] = this.clearing(mx, mz, 0.8); if (Math.hypot(qx - cx, qz - cz) > 0.5) [mx, mz] = [qx, qz]; }
       // (l'entrée bâtie : la bouche s'ouvre à 0,22 devant la butte ; les torches se plantent devant ses rochers)
       const face = Math.atan2(cx - mx, cz - mz), built = st !== 'gallery' && !real, lip = built ? 0.22 : 0.12, ahead = built ? 0.42 : 0.07, side = built ? 0.36 : 0.2;
       if (st === 'gallery') this.put(galleryGeo(a.m.id === 'railway'), mx, mz, face);
@@ -1221,21 +1238,23 @@ export class ExpeditionScene {
     };
   }
 
-  /** Une nappe de brouillard : de grosses boules blanches et floues au ras du sol autour de (cx, cz) ; k : son épaisseur */
+  /**
+   * Une nappe de brouillard au ras du sol autour de (cx, cz) : des volutes blanches toujours tournées vers la vue, au bord
+   * flou ; elles se chevauchent, la nappe s'épaissit au milieu et s'effiloche sur ses bords (k : son épaisseur)
+   */
   private sFog(s: Staging, cx: number, cz: number, r: number) {
-    const g = new THREE.IcosahedronGeometry(1, 2), mat = new THREE.MeshBasicMaterial({ color: 0xeef1f3, transparent: true, opacity: 0.35, depthWrite: false });
-    s.own.push(g, mat);
-    // beaucoup de boules à demi transparentes qui se chevauchent : la nappe s'épaissit au milieu et s'effiloche sur ses bords
-    const blobs: { m: THREE.Mesh; a: number; d: number; y: number; sp: number }[] = [];
-    for (let i = 0; i < 30; i++) {
-      const m = new THREE.Mesh(g, mat);
-      m.scale.set(0.45 + (i % 4) * 0.16, 0.22 + (i % 3) * 0.07, 0.45 + (i % 3) * 0.2);
+    const mat = new THREE.SpriteMaterial({ map: softPuff(), color: 0xf2f4f6, transparent: true, opacity: 0.5, depthWrite: false });
+    s.own.push(mat);
+    const blobs: { m: THREE.Sprite; a: number; d: number; y: number; sp: number }[] = [];
+    for (let i = 0; i < 34; i++) {
+      const m = new THREE.Sprite(mat);
+      m.scale.set(1.3 + (i % 4) * 0.35, 0.7 + (i % 3) * 0.2, 1);
       m.renderOrder = 2;
       this.sAdd(s, m);
-      blobs.push({ m, a: i * 2.4, d: 0.15 + Math.sqrt((i + 0.5) / 30) * r, y: 0.08 + (i % 4) * 0.1, sp: 0.04 + (i % 5) * 0.012 });
+      blobs.push({ m, a: i * 2.4, d: 0.1 + Math.sqrt((i + 0.5) / 34) * r, y: 0.18 + (i % 4) * 0.09, sp: 0.04 + (i % 5) * 0.012 });
     }
     return (dt: number, k: number) => {
-      mat.opacity = 0.4 * k;
+      mat.opacity = 0.5 * k;
       for (const b of blobs) {
         b.a += dt * b.sp;
         const x = cx + Math.cos(b.a) * b.d, z = cz + Math.sin(b.a) * b.d;
@@ -1451,7 +1470,7 @@ export class ExpeditionScene {
   private stageTraveler(s: Staging, a: ActiveExpedition) {
     const [tx, tz] = this.teamAt(a), ang = Math.atan2(a.base[0] - tx, a.base[1] - tz);
     const [vx, vz] = this.near(tx + Math.sin(ang) * 0.6 + Math.cos(ang) * 0.35, tz + Math.cos(ang) * 0.6 - Math.sin(ang) * 0.35, tx, tz);
-    const man = this.sNpc(s, 'villager', a.m.age, vx, vz, ang + Math.PI, 'sit');
+    const man = this.sNpc(s, 'villager', a.age, vx, vz, ang + Math.PI, 'sit');
     let sent = false, x = vx, z = vz;
     s.leave = () => { if (s.pick === 1) man.folk.root.visible = false; };
     return (dt: number) => {
@@ -1472,7 +1491,7 @@ export class ExpeditionScene {
     const [tx, tz] = this.teamAt(a), ang = Math.atan2(tx - a.base[0], tz - a.base[1]);
     const people = [0, 1].map((i) => {
       const a0 = ang + (i - 0.5) * 0.5, x0 = tx + Math.sin(a0) * 2.2, z0 = tz + Math.cos(a0) * 2.2;
-      return { n: this.sNpc(s, 'villager', a.m.age, x0, z0, a0 + Math.PI, 'walk'), from: [x0, z0] as [number, number], to: this.near(tx + Math.sin(a0) * 0.45, tz + Math.cos(a0) * 0.45, tx, tz), x: x0, z: z0 };
+      return { n: this.sNpc(s, 'villager', a.age, x0, z0, a0 + Math.PI, 'walk'), from: [x0, z0] as [number, number], to: this.near(tx + Math.sin(a0) * 0.45, tz + Math.cos(a0) * 0.45, tx, tz), x: x0, z: z0 };
     });
     const basket = this.sPut(s, basketGeo(), people[0].to[0], people[0].to[1], 0), fruit = this.sPut(s, foodGeo(), people[0].to[0], people[0].to[1], 0, 0.06);
     fruit.scale.setScalar(0.5);
@@ -1537,7 +1556,7 @@ export class ExpeditionScene {
     const [tx, tz] = this.teamAt(a), wat = this.water ?? this.findWater(tx, tz);
     const [wx, wz] = wat ? wat.wet : [tx + 0.6, tz], [bx, bz] = wat ? wat.bank : [tx, tz], level = wat ? wat.level : this.world.surfaceAt(tx, tz);
     const cx = (wx + bx) / 2, cz = (wz + bz) / 2, r = Math.max(1, Math.hypot(wx - bx, wz - bz) + 0.8);
-    const g = new THREE.CircleGeometry(r, 24).rotateX(-Math.PI / 2), mat = new THREE.MeshLambertMaterial({ color: 0x5a8fb4, transparent: true, opacity: 0.72, depthWrite: false });
+    const g = new THREE.CircleGeometry(r, 24).rotateX(-Math.PI / 2), mat = new THREE.MeshLambertMaterial({ color: 0x6f98a4, transparent: true, opacity: 0.68, depthWrite: false });
     const sheet = this.sAdd(s, new THREE.Mesh(g, mat));
     s.own.push(g, mat);
     const dd = Math.max(0.01, Math.hypot(wx - bx, wz - bz)), ux = -(wz - bz) / dd, uz = (wx - bx) / dd;
@@ -1738,14 +1757,15 @@ export class ExpeditionScene {
   /** Les cerfs descendent boire à la source ; on les regarde, ou ils détalent (une lance lancée, si l'on chasse) */
   private stageDeer(s: Staging, a: ActiveExpedition) {
     const [px, pz] = this.focus, a0 = Math.random() * Math.PI * 2;
-    const herd = [0, 1, 2].map((i) => this.sBeast(s, 'deer', px + Math.sin(a0 + i * 0.4) * 2.4, pz + Math.cos(a0 + i * 0.4) * 2.4, i ? 0.9 : 1.15));
+    const herd = [0, 1, 2].map((i) => this.sBeast(s, 'deer', px + Math.sin(a0 + i * 0.4) * 1.6, pz + Math.cos(a0 + i * 0.4) * 1.6, i ? 0.9 : 1.15));
     let thrown = false;
     return (dt: number) => {
       const flee = s.pick === 1 || s.pick === 2 || (s.pick === 0 && s.after > 10), start = s.pick === 0 ? 10 : 0;
       herd.forEach((b, i) => {
         if (flee) { this.sFlee(b, px, pz, s.pick === 0 ? 0.5 : 1.6, dt); return; }
+        // ils descendent boire au bord du bassin (par les roseaux et les pierres mouillées s'il le faut)
         const ang = a0 + (i - 1) * 0.5;
-        this.sMove(b, px + Math.sin(ang) * 0.45, pz + Math.cos(ang) * 0.45, 0.45, dt, ['Idle_Eating', 'Eating']);
+        this.sMove(b, px + Math.sin(ang) * 0.45, pz + Math.cos(ang) * 0.45, 0.45, dt, ['Idle_Eating', 'Eating'], true);
       });
       if (s.pick === 1 && !thrown) {
         thrown = true;

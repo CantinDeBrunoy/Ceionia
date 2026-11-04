@@ -44,6 +44,8 @@ export interface ActiveExpedition {
   notes: string[];
   /** le genre de lieu où l'équipe s'est vraiment rendue (une rivière introuvable : la plaine) */
   site: DestKind;
+  /** l'âge du village au départ (une mission d'autrefois refaite à l'époque moderne n'y croise plus de loups) */
+  age: number;
   /** temps de travail en plus, gains en plus (si réussite), blessés en plus */
   extra: number;
   bonus: Effect[];
@@ -357,7 +359,7 @@ export class Expeditions {
       id: this.nextId++, m, c, phase: 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
       wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], extra: 0, bonus: [], hurt: 0,
       // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
-      site: c.dest === 'cave' ? 'cave' : kind,
+      site: c.dest === 'cave' ? 'cave' : kind, age,
       targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp,
     };
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval s'il y en a assez ; on part en selle
@@ -510,7 +512,7 @@ export class Expeditions {
   private raise(a: ActiveExpedition, arrive: boolean) {
     // pas un imprévu des dernières expéditions, ni celui qu'une autre équipe attend ou vient de vivre
     const avoid = [...this.world.exp.recent, ...this.active.filter((o) => o !== a).flatMap((o) => o.seen)];
-    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.m.age, arrive }, a.seen, avoid, this.rnd);
+    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive }, a.seen, avoid, this.rnd);
     if (!ev) { a.events = a.seen.length; return; }
     a.seen.push(ev.id);
     a.picks.push(-1);

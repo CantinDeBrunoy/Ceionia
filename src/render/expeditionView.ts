@@ -162,7 +162,7 @@ export class ExpeditionView {
     sh.trail = [last[0], last[1]];
     let gap = 0.32;
     const follow = (obj: THREE.Object3D, actor: Actor | null, step: number, folk?: Folk) => { this.group.add(obj); sh.followers.push({ obj, actor, folk, gap, x: last[0], z: last[1], heading: 0, ph: gap * 7 }); gap += step; };
-    const person = (role: FolkRole, v: number) => { const f = makeFolk({ age: a.m.age, v, role }); follow(f.root, null, 0.26, f); };
+    const person = (role: FolkRole, v: number) => { const f = makeFolk({ age: role === 'villager' ? a.age : a.m.age, v, role }); follow(f.root, null, 0.26, f); };
     const j = a.seen.indexOf('traveler');
     if (j >= 0 && a.picks[j] === 1) person('villager', a.id * 31 + 7);
     if (!a.ok) return;
