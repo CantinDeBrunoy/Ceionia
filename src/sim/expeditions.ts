@@ -2,7 +2,7 @@ import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT } f
 import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
-import { AGES, KINDS, Building, sizeOf } from '../build/catalog';
+import { AGES, KINDS, KindId, Building, sizeOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
@@ -158,8 +158,18 @@ export class Expeditions {
     return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (map ? 0.8 : 1) * rulesOf(this.world.difficulty).riskK;
   }
 
-  /** Chevaux qui partiraient avec l'équipe : ceux qu'exige la cavalerie, sinon un par membre tant que l'écurie en a */
-  mountsFor(c: Choice) { return c.mounts ?? Math.min(c.party, this.horsesHome()); }
+  /**
+   * Chevaux qui partiraient avec l'équipe : ceux qu'exige la cavalerie ; une troupe armée à pied n'en prend aucun (ils restent
+   * à l'écurie) ; les autres équipes, un par membre tant que l'écurie en a
+   */
+  mountsFor(c: Choice) { return c.mounts ?? (c.troop ? 0 : Math.min(c.party, this.horsesHome())); }
+
+  /** âge du village, donné par le jeu (sinon celui de ses bâtiments, qui passent d'âge avec lui) */
+  age: () => number = () => { let a = 0; for (const b of this.world.buildings.values()) a = Math.max(a, b.age); return a; };
+  /** Nom d'un bâtiment tel qu'on le bâtit à l'âge du village (« haras » plutôt qu'« écurie » à l'âge industriel), en minuscules */
+  private nameOf(k: KindId) { const d = KINDS[k]; return (d.names[Math.max(this.age(), d.minAge)] || d.names.find((n) => n)!).toLowerCase(); }
+  /** « à l'écurie », « au haras », « au centre équestre » */
+  private at(k: KindId) { const n = this.nameOf(k); return /^[aeiouyéèê]/.test(n) ? `à l’${n}` : `au ${n}`; }
 
   /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux, carburant), et son risque avec cet équipement */
   preview(c: Choice) {
@@ -180,7 +190,7 @@ export class Expeditions {
   missing(m: Mission): string[] {
     const out: string[] = [];
     for (const id of m.requires?.missions ?? []) if (!this.world.exp.done.includes(id)) out.push(`réussir « ${MISSIONS.find((x) => x.id === id)?.title ?? id} »`);
-    for (const k of m.requires?.kinds ?? []) if (!this.has(k)) out.push(`bâtir : ${KINDS[k].names.find((n) => n)!.toLowerCase()}`);
+    for (const k of m.requires?.kinds ?? []) if (!this.has(k)) out.push(`bâtir : ${this.nameOf(k)}`);
     return out;
   }
 
@@ -311,7 +321,7 @@ export class Expeditions {
     if (this.running(m)) return 'Cette expédition est déjà en route.';
     const miss = this.missing(m);
     if (miss.length) return `Il faut d’abord ${miss.join(', ')}.`;
-    if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return `Il faut ${c.mounts} chevaux à l’écurie (${n} pour l’instant).`; }
+    if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return `Il faut ${c.mounts} chevaux ${this.at('stable')} (${n} pour l’instant).`; }
     // les blindés roulent au carburant : la raffinerie le tire du pétrole brut des puits
     if (c.fuel && !this.world.unlimited && this.world.fuel < c.fuel) {
       const n = Math.floor(this.world.fuel);

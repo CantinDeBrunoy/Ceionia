@@ -574,18 +574,16 @@ export class UnderView {
     const route = troopRoute(this.under, t.entry, t.targets, t.front, t.ambush.map((m) => m.cell));
     const path = route.cells.map((k): [number, number] => [(k % N) + 0.5, Math.floor(k / N) + 0.5]);
     if (path.length < 2) return null;
-    // l'époque moderne : la colonne blindée (la charge des blindés, la section d'infanterie)
-    if (t.age >= 4 && t.kind !== 'miners') return this.makeColumn(t, route, path);
+    // l'époque moderne : la colonne blindée pour la charge des blindés (la section d'infanterie et les mineurs vont à pied)
+    if (t.age >= 4 && t.kind === 'cavalry') return this.makeColumn(t, route, path);
     // soldats de l'époque (légionnaires, chevaliers, fantassins napoléoniens, militaires), cavaliers montés, ou mineurs de
     // l'époque et leur garde
     const members: TroopMember[] = [];
-    // l'escorte qui accompagne l'équipe : une ligne de soldats (fusiliers dès l'âge industriel) et, sauf pour la charge, deux
-    // cavaliers sur les flancs — la troupe a de l'allure
+    // l'escorte qui accompagne l'équipe, à pied : une ligne de soldats (fusiliers dès l'âge industriel) ; seule la charge est
+    // montée (les hommes d'armes et les mineurs partent sans chevaux)
     const escort = t.kind === 'armor' ? (t.age >= 3 ? 7 : 4) : t.kind === 'cavalry' ? (t.age >= 3 ? 4 : 2) : 2;
-    const flank = t.kind !== 'cavalry' && t.age >= 2 ? 2 : 0;
-    // l'équipe de mineurs part avec des gendarmes (sergents du guet au Moyen Âge), à pied et à cheval ; les autres avec la troupe
+    // l'équipe de mineurs part avec des gendarmes (sergents du guet au Moyen Âge) ; les autres avec la troupe
     const police = t.kind === 'miners';
-    for (let i = 0; i < flank; i++) { const rider = makeRider(t.age, t.id + 7 + i, police); this.scene.add(rider.root); members.push({ rider, soldier: null }); }
     for (let i = 0; i < escort; i++) { const soldier = makeSoldier(t.age, t.id + 11 + i, false, police ? 'gendarme' : 'soldier'); this.scene.add(soldier.root); members.push({ rider: null, soldier }); }
     for (let i = 0; i < t.n; i++) {
       // la cavalerie : cavaliers de l'époque sur leurs chevaux, comme les jouteurs des jardins
@@ -609,7 +607,7 @@ export class UnderView {
     if (!members.length) return null;
     const light: Source = { x: path[0][0], y: 0, z: path[0][1], r: 5, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(2), flicker: 0.25 };
     // le chef (torche, fanion) marche en tête : on le met en premier
-    const lead = members.findIndex((m, i) => i >= flank + escort && !!m.soldier);
+    const lead = members.findIndex((m, i) => i >= escort && !!m.soldier);
     if (lead > 0) members.unshift(...members.splice(lead, 1));
     // les fusiliers tirent par salves : tous ensemble
     return { route, path, members, light, scareT: 0, foes: new Map(), over: new Set(), cool: members.map((m, i) => (m.soldier?.arms[0].userData.hold === 'rifle' ? 1.2 : 0.4 + i * 0.23)), foeCool: new Map() };
@@ -618,8 +616,8 @@ export class UnderView {
   /**
    * Colonne blindée de l'époque moderne, la plus impressionnante (et la plus chère) : pour la charge des blindés, deux chars de
    * bataille en tête, deux transports de troupes, un char en serre-file, la section à pied en deux files sur leurs flancs et
-   * deux drones au-dessus ; pour la section d'infanterie, ses deux transports au milieu de ses deux files et un drone. Chaque
-   * blindé et chaque drone braque son projecteur devant lui
+   * deux drones au-dessus (sans la charge, ses deux transports au milieu de ses deux files et un drone). Chaque blindé et
+   * chaque drone braque son projecteur devant lui
    */
   private makeColumn(t: Troop, route: TroopRoute, path: [number, number][]): TroopShow {
     const charge = t.kind === 'cavalry', members: TroopMember[] = [];

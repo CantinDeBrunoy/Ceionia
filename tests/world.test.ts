@@ -1433,12 +1433,14 @@ describe('pétrole', () => {
     expect(c.lose.some((e) => e.t === 'unherd')).toBe(false);
     expect(ex.why(deep, c)).toMatch(/12 carburant.*0 pour l’instant.*raffinerie/);
     expect(ex.preview(c).label).toMatch(/12 carburant/);
-    // les autres troupes modernes en brûlent un peu, et ne prennent pas non plus de chevaux
+    // les autres troupes modernes vont à pied : ni carburant, ni chevaux (il y en a pourtant à l'écurie)
+    w.exp.herd.push('horse', 'horse', 'horse');
     for (const o of deep.choices.filter((q) => q.troop !== 'cavalry').map((q) => choiceAt(q, 4))) {
-      expect(o.fuel).toBeGreaterThan(0);
-      expect(o.fuel).toBeLessThan(c.fuel!);
-      expect(o.mounts).toBe(0);
+      expect(o.fuel ?? 0).toBe(0);
+      expect(ex.mountsFor(o)).toBe(0);
+      expect(ex.preview(o).label).not.toMatch(/chev|carburant/);
     }
+    w.exp.herd.length = 0;
     w.fuel = 20;
     expect(ex.why(deep, c)).toBeNull();
     const a = ex.start(deep, cav, 4)!;

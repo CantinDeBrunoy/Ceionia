@@ -240,6 +240,34 @@ describe('comptes rendus des expéditions', () => {
     expect(readExpState({ done: ['herd'] }).perks).not.toContain('map');
   });
 
+  it('à chaque âge, deux troupes armées partent à pied : ni chevaux emmenés d’office, ni carburant', () => {
+    const deep = mission('deep');
+    for (let age = 2; age <= 5; age++) {
+      const foot = deep.choices.map((c) => choiceAt(c, age)).filter((c) => !c.mounts && !c.fuel);
+      expect(foot.length, `âge ${age}`).toBeGreaterThanOrEqual(2);
+    }
+    // une écurie pleine : la cavalerie emmène ses trois chevaux, les troupes à pied aucun ; une équipe ordinaire part à cheval
+    const v = village(3);
+    let spot: number[] | null = null;
+    for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 10 && !spot; x++) if (v.w.canPlace('stable', x, z) === null) spot = [x, z];
+    v.w.place('stable', spot![0], spot![1], 0, true, 3, false);
+    v.w.exp.herd.push('horse', 'horse', 'horse', 'horse');
+    for (const c of deep.choices.map((q) => choiceAt(q, 3))) {
+      expect(v.ex.mountsFor(c)).toBe(c.troop === 'cavalry' ? 3 : 0);
+      if (c.troop !== 'cavalry') expect(v.ex.preview(c).label).not.toMatch(/cheva/);
+    }
+    expect(v.ex.mountsFor(mission('herd').choices[0])).toBeGreaterThan(0);
+  });
+
+  it('les conditions nomment les bâtiments comme à l’âge du village (un haras à l’âge industriel)', () => {
+    const v = village(3), deep = mission('deep');
+    expect(v.ex.missing(deep)).toEqual(['bâtir : avant-poste fortifié']);
+    // la charge, sans chevaux : au haras, pas « à l'écurie »
+    const free = { ...deep, requires: undefined };
+    expect(v.ex.why(free, choiceAt(deep.choices[0], 3))).toBe('Il faut 3 chevaux au haras (0 pour l’instant).');
+    expect(village(2).ex.why(free, choiceAt(deep.choices[0], 2))).toBe('Il faut 3 chevaux à l’écurie (0 pour l’instant).');
+  });
+
   it('le filon de la montagne rapporte de quoi passer à l’âge industriel, quel que soit le choix', () => {
     const m = mission('mine'), ore = (es: Effect[]) => es.reduce((s, e) => s + (e.t === 'ore' ? e.n : 0), 0);
     expect(m.mandatory).toBe(true);

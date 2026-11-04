@@ -428,24 +428,24 @@ export const MISSIONS: Mission[] = [
         },
       },
       {
-        label: 'Hommes d’armes en armure', text: 'Lents et lourds : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
+        // à pied, à tous les âges (comme les mineurs) : ni chevaux, ni carburant
+        label: 'Hommes d’armes en armure', text: 'Lents et lourds, à pied : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
         dest: 'cave', scene: 'mine', doing: 'avance bouclier contre bouclier et abat les filons', troop: 'armor', danger: ['monster', 'dark', 'fall'], party: 5, work: 48, risk: 0.45, carry: 'cart',
         win: [{ t: 'veins', n: 6, reach: 9 }], lose: [hurt(2, 4)],
         winText: 'Pas un monstre n’a percé le mur de boucliers : la troupe a tenu chaque galerie le temps qu’on la vide.',
         loseText: 'Les araignées géantes ont attaqué par le plafond : la troupe a reculé, deux blessés sous leurs armures cabossées.',
         ages: {
           3: {
-            label: 'Ligne de fusiliers', text: 'Une compagnie d’infanterie avance en ligne, baïonnette au canon, quelques cavaliers sur les flancs : elle tire par salves et tient chaque galerie le temps qu’on la vide.',
+            label: 'Ligne de fusiliers', text: 'Une compagnie d’infanterie avance à pied, en ligne, baïonnette au canon : elle tire par salves et tient chaque galerie le temps qu’on la vide.',
             doing: 'avance en ligne, tire par salves et abat les filons',
             winText: 'Pas une créature n’a franchi la ligne de feu : chaque galerie a été tenue le temps qu’on la vide.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : la ligne a reculé, deux blessés.',
           },
           4: {
-            label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section, appuyée par deux transports de troupes et un drone, progresse par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
+            label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section progresse à pied, par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
             doing: 'progresse par bonds, se couvre et abat les filons',
             winText: 'Pas une créature n’a passé la section : chaque galerie a été tenue le temps qu’on la vide.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : la section a décroché, deux blessés.',
-            mounts: 0, fuel: 4,
           },
           5: {
             label: 'Escouade en exo-armure', text: 'Exo-armures, boucliers d’énergie et fusils à impulsions : l’escouade avance pas à pas et tient chaque galerie le temps qu’on la vide.',
@@ -456,14 +456,14 @@ export const MISSIONS: Mission[] = [
         },
       },
       {
-        label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches : on file droit aux premiers filons et on remonte ce qu’on peut.',
+        label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches, tout le monde à pied : on file droit aux premiers filons et on remonte ce qu’on peut.',
         dest: 'cave', scene: 'mine', doing: 'abat les filons sous la garde des soldats', troop: 'miners', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.55, carry: 'cart',
         win: [{ t: 'veins', n: 3, reach: 6 }], lose: [hurt(2, 3)],
         winText: 'Les gardes ont tenu bon pendant que les pioches chantaient.',
         loseText: 'Des zombies ont surgi d’une galerie latérale : les mineurs ont tout lâché pour fuir, deux blessés.',
         ages: {
           3: { label: 'Mineurs et gendarmes', text: 'Peu de soldats, beaucoup de pioches et de lampes à carbure : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'Les gendarmes ont tenu bon pendant que les pioches chantaient.' },
-          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale, une escorte armée, un compresseur pour les marteaux-piqueurs : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient.', mounts: 0, fuel: 2 },
+          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale et une escorte armée, à pied, les marteaux-piqueurs sur batteries : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient.' },
           5: { label: 'Robots foreurs et escorte', text: 'Des robots foreurs, des mineurs en combinaison et une escorte : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les robots foraient.' },
         },
       },
