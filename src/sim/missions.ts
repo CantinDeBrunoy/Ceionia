@@ -3,7 +3,8 @@ import { Danger, GearId, Stock, emptyStock, GEAR_BY } from './gear';
 import type { KindId } from '../build/catalog';
 
 /**
- * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant). Une petite équipe
+ * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant, deux à la
+ * Préhistoire : apprivoiser des bêtes et chasser le mammouth). Une petite équipe
  * d'habitants part sur la carte (forêt, plaine, rivière, montagne, grotte, au-delà des collines), agit sur place et revient ;
  * selon le choix et la chance, le village y gagne des bêtes, du minerai, des savoir-faire… ou des blessés et des soucis. À
  * l'âge futuriste, la fin de la partie : trois expéditions spatiales parties du cosmodrome, chacune ouvrant la suivante
@@ -24,19 +25,21 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // source chaude, galerie, grotte, jongleurs, abbaye, étoiles filantes, cratère, pont, sondage, sommet, camp de base, plongée
   | 'corral' | 'salt' | 'roundup' | 'pebbles' | 'hops' | 'pass' | 'smoke' | 'swarm' | 'trade' | 'spring' | 'gallery' | 'cave'
   | 'troupe' | 'abbey' | 'stars' | 'crater' | 'bridge' | 'drill' | 'summit' | 'basecamp' | 'dive'
-  // repérage : on entre dans la grotte relever les galeries, on jalonne l'avant-poste devant
+  // repérage : on entre dans la grotte relever les galeries, on balise le chemin jusqu'à l'entrée
   | 'scout'
   // la course automobile, la montgolfière qu'on gonfle
   | 'race' | 'balloon'
+  // la chasse au mammouth : les fosses, le ravin ou la harde qu'on suit de loin (selon la destination)
+  | 'mammoth'
   // le premier vol de fusée, la fusée lunaire (et l'alunissage en direct), le départ du vaisseau colonial
   | 'launch' | 'moon' | 'colony';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
  * harde qui s'enfuit, une bête qui charge, les abeilles en furie, le coup de grisou, les torches qui s'éteignent, les voisins
- * qui s'en vont, les oiseaux qui s'envolent des buissons pillés
+ * qui s'en vont, les oiseaux qui s'envolent des buissons pillés, la tempête de neige où la harde disparaît
  */
-export type Fail = 'storm' | 'fog' | 'rocks' | 'capsize' | 'scatter' | 'charge' | 'stings' | 'blast' | 'dark' | 'gone' | 'birds';
+export type Fail = 'storm' | 'fog' | 'rocks' | 'capsize' | 'scatter' | 'charge' | 'stings' | 'blast' | 'dark' | 'gone' | 'birds' | 'blizzard';
 
 export type Effect =
   /** bêtes ramenées : elles paissent ensuite près des fermes */
@@ -70,8 +73,11 @@ export interface Choice {
   work: number;
   /** probabilité d'échec */
   risk: number;
-  /** ce que l'équipe rapporte, visible au retour : des bêtes qui la suivent, un chariot, des sacs sur le dos, ses invités */
-  carry?: 'animals' | 'cart' | 'sacks' | 'guests';
+  /**
+   * ce que l'équipe rapporte, visible au retour : des bêtes qui la suivent, un chariot, des sacs sur le dos, ses invités, le
+   * traîneau chargé de viande et de peaux
+   */
+  carry?: 'animals' | 'cart' | 'sacks' | 'guests' | 'sledge';
   /** ce que l'équipe fait sur place, et ce qu'en dit sa carte (« troque ses poteries contre des semences ») */
   scene: Scene;
   doing?: string;
@@ -212,6 +218,35 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // la seconde mission obligatoire de la Préhistoire : un traîneau de viande et de peaux, et la fête au retour
+    // (l'éléphant plutôt que le mammouth 🦣, que Windows 10 n'affiche pas)
+    id: 'mammoth', age: 0, mandatory: true, icon: '🐘', title: 'Chasser le mammouth',
+    intro: 'Une harde de mammouths descend des glaciers et passe non loin du camp. Un seul de ces géants laineux nourrirait tout le monde pendant des lunes, et ses peaux tiendraient chaud tout l’hiver… mais un mammouth, ça se chasse à plusieurs, et avec ruse.',
+    choices: [
+      {
+        label: 'Pièges et fosses', text: 'Long mais sûr : on creuse des fosses sur le passage de la harde, on les couvre de branchages, et l’on attend qu’un mammouth s’y prenne les pattes.',
+        dest: 'plain', scene: 'mammoth', fail: 'scatter', doing: 'creuse des fosses sur le passage de la harde et guette les mammouths', danger: ['beast', 'weather'], party: 4, work: 30, risk: 0.2, carry: 'sledge',
+        win: [food(6, 6), food(2), joy(2, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [],
+        winText: 'Le vieux mâle s’est pris les pattes dans une fosse : les chasseurs rentrent, le traîneau chargé de viande et de peaux. Ce soir, grande fête autour du feu !',
+        loseText: 'La harde a flairé les fosses et fait un grand détour. Les chasseurs rentrent les mains vides, mais les fosses attendront la prochaine fois.',
+      },
+      {
+        label: 'Rabattre la harde vers le ravin', text: 'Rapide mais risqué : torches et grands cris, on pousse les mammouths vers un ravin où le plus vieux restera coincé. Un mammouth affolé, ça charge !',
+        dest: 'mountain', scene: 'mammoth', fail: 'charge', doing: 'rabat la harde vers le ravin, torches et lances en main', danger: ['beast', 'fall'], party: 5, work: 18, risk: 0.4, carry: 'sledge',
+        win: [food(8, 6), food(2), joy(3, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [hurt(2, 2), joy(-1, 3)],
+        winText: 'La harde a dévalé la pente et le vieux mâle est resté coincé au fond du ravin : jamais le camp n’a vu autant de viande et de fourrures !',
+        loseText: 'Le vieux mâle a fait volte-face et chargé les rabatteurs : deux chasseurs sont blessés, et la harde s’est enfuie dans la montagne.',
+      },
+      {
+        label: 'Suivre la harde à distance', text: 'Patient : on suit les mammouths au-delà des collines sans se montrer, jusqu’à ce qu’un vieux mâle fatigué traîne loin derrière les autres.',
+        dest: 'far', scene: 'mammoth', fail: 'blizzard', doing: 'suit la harde à distance et encercle le vieux mâle', party: 3, work: 26, risk: 0.25, carry: 'sledge',
+        win: [food(5, 6), food(2), joy(2, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [hurt(1, 1)],
+        winText: 'Le vieux mâle, à bout de souffle, s’est couché loin derrière la harde : les chasseurs rentrent, le traîneau plein de viande et de peaux.',
+        loseText: 'Une tempête de neige a effacé les traces : la harde s’est évanouie au-delà des collines, et un chasseur rentre en boitant.',
+      },
+    ],
+  },
   // ---------------- Antiquité ----------------
   {
     id: 'seeds', age: 1, mandatory: true, icon: '🌾', title: 'Le blé des collines',
@@ -302,63 +337,66 @@ export const MISSIONS: Mission[] = [
   },
   // ---------------- Moyen Âge ----------------
   {
+    // réussie, elle rapporte de quoi passer à l'âge industriel (12 minerai, voir AGES), quel que soit le choix
     id: 'mine', age: 2, mandatory: true, icon: '⚒️', title: 'Le filon de la montagne', unlocks: 'mine',
     intro: 'Les forgerons manquent de fer. Au cœur de la montagne, dit-on, un filon brille dans le noir.',
     choices: [
       {
         label: 'Creuser une galerie', text: 'Du travail de mineur, long et solide.',
         dest: 'mountain', scene: 'gallery', fail: 'rocks', doing: 'creuse la galerie et sort le minerai au wagonnet', party: 4, work: 30, risk: 0.2, carry: 'cart',
-        win: [{ t: 'ore', n: 10 }, jobs(2)], lose: [{ t: 'ore', n: 3 }, hurt(1, 2)],
+        win: [{ t: 'ore', n: 12 }, jobs(2)], lose: [{ t: 'ore', n: 3 }, hurt(1, 2)],
         winText: 'La galerie a percé le filon : le chariot rentre chargé de minerai, les forges vont chanter.',
         loseText: 'Un éboulement a bloqué la galerie. Un mineur blessé, et seulement quelques pierres de minerai.',
       },
       {
         label: 'Explorer la grande grotte', text: 'On raconte qu’elle cache un trésor… et qu’on s’y perd.',
         dest: 'cave', scene: 'cave', fail: 'dark', doing: 'explore la grotte à la lueur des torches', party: 3, work: 20, risk: 0.35, carry: 'cart',
-        win: [{ t: 'ore', n: 14 }, joy(2)], lose: [hurt(2, 2)],
+        win: [{ t: 'ore', n: 16 }, joy(2)], lose: [hurt(2, 2)],
         winText: 'Au fond de la grotte, un filon gros comme un tonneau ! Le village fête ses explorateurs.',
         loseText: 'Les torches se sont éteintes dans la grotte ; deux explorateurs se sont blessés en ressortant.',
       },
       {
-        label: 'Acheter du minerai aux mineurs nomades', text: 'Sans danger, mais ils voudront des vivres.',
+        label: 'Acheter du minerai aux mineurs nomades', text: 'Sans danger, mais ils voudront beaucoup de vivres.',
         dest: 'far', scene: 'trade', doing: 'échange des vivres contre le minerai des nomades', party: 2, work: 12, risk: 0.05, carry: 'cart',
-        win: [{ t: 'ore', n: 6 }, food(-2, 3)], lose: [],
+        win: [{ t: 'ore', n: 12 }, food(-3, 4)], lose: [],
         winText: 'Les nomades ont échangé leur minerai contre des vivres : il faudra se serrer un peu la ceinture.',
         loseText: 'Les nomades n’ont rien voulu échanger : leur minerai partira ailleurs.',
       },
     ],
   },
   {
-    id: 'scout', age: 2, mandatory: false, icon: '🔦', title: 'Repérer les profondeurs', unlocks: 'outpost',
-    intro: 'Avant d’envoyer une troupe sous terre, il faut savoir par où descendre. Des éclaireurs vont reconnaître une grotte, relever le plan des premières galeries et jalonner devant l’entrée l’endroit où bâtir un avant-poste.',
+    // facultative : rien n'en dépend (l'avant-poste se bâtit sans elle) ; son plan des galeries rend les expéditions armées plus sûres
+    id: 'scout', age: 2, mandatory: false, icon: '🔦', title: 'Repérer les profondeurs',
+    intro: 'Avant d’envoyer une troupe sous terre, mieux vaut savoir où l’on met les pieds. Des éclaireurs vont reconnaître une grotte, relever le plan des premières galeries et baliser le chemin jusqu’à l’entrée : les expéditions armées y seront plus sûres.',
     choices: [
       {
         label: 'Deux éclaireurs à la corde', text: 'Légers et rapides : ils descendent jusqu’à la première salle et remontent avec un plan.',
-        dest: 'cave', scene: 'scout', doing: 'relève le plan des galeries et jalonne l’avant-poste', danger: ['dark', 'fall'], party: 2, work: 20, risk: 0.3,
-        win: [joy(1)], lose: [hurt(1, 2)],
-        winText: 'Les éclaireurs ont dressé le plan des premières galeries et planté leurs jalons devant la grotte : on peut y bâtir un avant-poste.',
+        dest: 'cave', scene: 'scout', doing: 'relève le plan des galeries et balise l’entrée', danger: ['dark', 'fall'], party: 2, work: 20, risk: 0.3,
+        win: [{ t: 'perk', id: 'map' }, joy(1)], lose: [hurt(1, 2)],
+        winText: 'Les éclaireurs ont dressé le plan des premières galeries et balisé l’entrée de la grotte : les expéditions armées sauront par où passer.',
         loseText: 'Une corde a lâché dans le puits : un éclaireur s’est foulé la cheville, et le plan reste à faire.',
       },
       {
         label: 'Patrouille armée', text: 'Quatre hommes, lances et torches : plus lent, mais on ne se laisse pas surprendre par ce qui rôde en bas.',
-        dest: 'cave', scene: 'scout', doing: 'reconnaît les galeries, lances en avant, et jalonne l’avant-poste', danger: ['monster', 'dark'], party: 4, work: 28, risk: 0.18,
-        win: [{ t: 'ore', n: 2 }], lose: [hurt(2, 2)],
-        winText: 'La patrouille a repoussé une bande de squelettes, relevé les galeries et ramassé quelques pierres de minerai : l’avant-poste est jalonné.',
+        dest: 'cave', scene: 'scout', doing: 'reconnaît les galeries, lances en avant, et balise l’entrée', danger: ['monster', 'dark'], party: 4, work: 28, risk: 0.18,
+        win: [{ t: 'perk', id: 'map' }, { t: 'ore', n: 2 }], lose: [hurt(2, 2)],
+        winText: 'La patrouille a repoussé une bande de squelettes, relevé les galeries et ramassé quelques pierres de minerai : le plan est fait.',
         loseText: 'Des araignées ont surgi du plafond : la patrouille a battu en retraite avec deux blessés, sans plan.',
       },
       {
         label: 'Suivre un vieux mineur nomade', text: 'Il connaît chaque grotte du pays ; il demandera des vivres pour sa peine.',
-        dest: 'cave', scene: 'scout', doing: 'suit le vieux mineur dans les galeries et jalonne l’avant-poste', danger: ['dark'], party: 2, work: 14, risk: 0.08,
-        win: [food(-2, 3)], lose: [],
-        winText: 'Le vieux mineur a tout montré : les puits, les salles, les passages sûrs. Il repart avec ses vivres, l’avant-poste est jalonné.',
+        dest: 'cave', scene: 'scout', doing: 'suit le vieux mineur dans les galeries et balise l’entrée', danger: ['dark'], party: 2, work: 14, risk: 0.08,
+        win: [{ t: 'perk', id: 'map' }, food(-2, 3)], lose: [],
+        winText: 'Le vieux mineur a tout montré : les puits, les salles, les passages sûrs. Il repart avec ses vivres, et le plan des galeries est fait.',
         loseText: 'Le vieux mineur a filé avec les vivres au premier tournant.',
       },
     ],
   },
   {
+    // il suffit d'un avant-poste devant une grotte ou une faille ; la charge de cavalerie demande en plus ses chevaux à l'écurie
     id: 'deep', age: 2, mandatory: false, repeat: true, icon: '⚔️', title: 'Expédition armée dans les profondeurs',
-    requires: { missions: ['horses', 'mine', 'scout'], kinds: ['stable', 'outpost'] },
-    intro: 'Sous les grottes et les failles, les galeries regorgent de minerai… et de créatures. La troupe part de l’avant-poste, descend au-delà des galeries déjà tenues, abat les filons qu’elle y trouve et, si elle l’emporte, plante ses lanternes : le village tient ces galeries à son tour. Longue et dangereuse ; on peut y retourner tant qu’il reste des galeries à prendre.',
+    requires: { kinds: ['outpost'] },
+    intro: 'Sous les grottes et les failles, les galeries regorgent de minerai… et de créatures. Il suffit d’un avant-poste bâti tout contre une grotte ou une faille : la troupe en part, descend au-delà des galeries déjà tenues, abat les filons qu’elle y trouve et, si elle l’emporte, plante ses lanternes : le village tient ces galeries à son tour. Longue et dangereuse ; on peut y retourner tant qu’il reste des galeries à prendre.',
     choices: [
       {
         label: 'Charge de cavalerie', text: 'Trois chevaux de l’écurie et leurs cavaliers foncent dans les grandes galeries : rapides, mais les bêtes craignent le noir.',
@@ -390,24 +428,24 @@ export const MISSIONS: Mission[] = [
         },
       },
       {
-        label: 'Hommes d’armes en armure', text: 'Lents et lourds : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
+        // à pied, à tous les âges (comme les mineurs) : ni chevaux, ni carburant
+        label: 'Hommes d’armes en armure', text: 'Lents et lourds, à pied : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
         dest: 'cave', scene: 'mine', doing: 'avance bouclier contre bouclier et abat les filons', troop: 'armor', danger: ['monster', 'dark', 'fall'], party: 5, work: 48, risk: 0.45, carry: 'cart',
         win: [{ t: 'veins', n: 6, reach: 9 }], lose: [hurt(2, 4)],
         winText: 'Pas un monstre n’a percé le mur de boucliers : la troupe a tenu chaque galerie le temps qu’on la vide.',
         loseText: 'Les araignées géantes ont attaqué par le plafond : la troupe a reculé, deux blessés sous leurs armures cabossées.',
         ages: {
           3: {
-            label: 'Ligne de fusiliers', text: 'Une compagnie d’infanterie avance en ligne, baïonnette au canon, quelques cavaliers sur les flancs : elle tire par salves et tient chaque galerie le temps qu’on la vide.',
+            label: 'Ligne de fusiliers', text: 'Une compagnie d’infanterie avance à pied, en ligne, baïonnette au canon : elle tire par salves et tient chaque galerie le temps qu’on la vide.',
             doing: 'avance en ligne, tire par salves et abat les filons',
             winText: 'Pas une créature n’a franchi la ligne de feu : chaque galerie a été tenue le temps qu’on la vide.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : la ligne a reculé, deux blessés.',
           },
           4: {
-            label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section, appuyée par deux transports de troupes et un drone, progresse par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
+            label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section progresse à pied, par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
             doing: 'progresse par bonds, se couvre et abat les filons',
             winText: 'Pas une créature n’a passé la section : chaque galerie a été tenue le temps qu’on la vide.',
             loseText: 'Les araignées géantes ont attaqué par le plafond : la section a décroché, deux blessés.',
-            mounts: 0, fuel: 4,
           },
           5: {
             label: 'Escouade en exo-armure', text: 'Exo-armures, boucliers d’énergie et fusils à impulsions : l’escouade avance pas à pas et tient chaque galerie le temps qu’on la vide.',
@@ -418,14 +456,14 @@ export const MISSIONS: Mission[] = [
         },
       },
       {
-        label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches : on file droit aux premiers filons et on remonte ce qu’on peut.',
+        label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches, tout le monde à pied : on file droit aux premiers filons et on remonte ce qu’on peut.',
         dest: 'cave', scene: 'mine', doing: 'abat les filons sous la garde des soldats', troop: 'miners', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.55, carry: 'cart',
         win: [{ t: 'veins', n: 3, reach: 6 }], lose: [hurt(2, 3)],
         winText: 'Les gardes ont tenu bon pendant que les pioches chantaient.',
         loseText: 'Des zombies ont surgi d’une galerie latérale : les mineurs ont tout lâché pour fuir, deux blessés.',
         ages: {
           3: { label: 'Mineurs et gendarmes', text: 'Peu de soldats, beaucoup de pioches et de lampes à carbure : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'Les gendarmes ont tenu bon pendant que les pioches chantaient.' },
-          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale, une escorte armée, un compresseur pour les marteaux-piqueurs : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient.', mounts: 0, fuel: 2 },
+          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale et une escorte armée, à pied, les marteaux-piqueurs sur batteries : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient.' },
           5: { label: 'Robots foreurs et escorte', text: 'Des robots foreurs, des mineurs en combinaison et une escorte : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les robots foraient.' },
         },
       },
@@ -709,21 +747,24 @@ export const STABLE_CAP = 4;
 
 /**
  * Bêtes de chaque écurie et de chaque enclos (dans l'ordre où ils ont été bâtis) : les chevaux vont d'abord à l'écurie, le
- * reste du troupeau (et les chevaux en trop) dans les enclos ; celles qui, faute de place, paissent près des fermes
+ * reste du troupeau (et les chevaux en trop) dans les enclos ; celles qui, faute de place, paissent près des fermes.
+ * `flock` : un autre troupeau que celui du village (celui de tout à l'heure, avec les bêtes qu'une équipe ramène)
  */
-export function penHerds(w: World) {
+export function penHerds(w: World, flock: HerdKind[] = w.exp.herd) {
   const all = (k: KindId) => [...w.buildings.values()].filter((b) => b.kind === k).sort((a, b) => a.id - b.id);
-  const horses = w.exp.herd.filter((k) => k === 'horse').slice(w.exp.riding), stables = new Map<number, HerdKind[]>(), pens = new Map<number, HerdKind[]>();
+  const horses = flock.filter((k) => k === 'horse').slice(w.exp.riding), stables = new Map<number, HerdKind[]>(), pens = new Map<number, HerdKind[]>();
   let h = 0;
   for (const s of all('stable')) { stables.set(s.id, horses.slice(h, h + STABLE_CAP)); h += STABLE_CAP; }
-  const herd = [...w.exp.herd.filter((k) => k !== 'horse'), ...horses.slice(h)];
+  const herd = [...flock.filter((k) => k !== 'horse'), ...horses.slice(h)];
   let i = 0;
   for (const p of all('pen')) { pens.set(p.id, herd.slice(i, i + PEN_CAP)); i += PEN_CAP; }
   return { pens, stables, rest: herd.slice(i) };
 }
 
-/** La mission obligatoire de l'âge (celle qui ouvre l'âge suivant) */
-export const mandatoryFor = (age: number) => MISSIONS.find((m) => m.age === age && m.mandatory) ?? null;
+/** Les missions obligatoires de l'âge : toutes à réussir pour ouvrir l'âge suivant (deux à la Préhistoire) */
+export const mandatoriesFor = (age: number) => MISSIONS.filter((m) => m.age === age && m.mandatory);
+/** La première mission obligatoire de l'âge */
+export const mandatoryFor = (age: number) => mandatoriesFor(age)[0] ?? null;
 
 /** État des expéditions, sauvegardé avec le monde */
 export interface ExpState {
@@ -765,6 +806,8 @@ export function readExpState(d: any): ExpState {
   const ids = new Set(MISSIONS.map((m) => m.id));
   s.done = Array.isArray(d.done) ? d.done.filter((x: any) => ids.has(x)) : [];
   s.perks = Array.isArray(d.perks) ? d.perks.filter((x: any) => typeof x === 'string') : [];
+  // (les sauvegardes d'avant le plan des galeries : le repérage réussi l'a dressé)
+  if (s.done.includes('scout') && !s.perks.includes('map')) s.perks.push('map');
   s.herd = Array.isArray(d.herd) ? d.herd.filter((x: any) => ['sheep', 'cow', 'pig', 'horse'].includes(x)) : [];
   for (const k of Object.keys(s.bonus) as NeedKey[]) s.bonus[k] = +d.bonus?.[k] || 0;
   s.temp = Array.isArray(d.temp) ? d.temp.filter((t: any) => t && t.need in s.bonus && isFinite(t.n) && isFinite(t.until)) : [];
@@ -804,7 +847,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
 
 const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: '🔨', joy: '😊' };
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
-const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
+const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', map: 'plan des galeries : expéditions armées plus sûres (risque −20 %)', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

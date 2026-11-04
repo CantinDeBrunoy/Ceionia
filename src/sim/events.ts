@@ -194,6 +194,24 @@ export const EVENTS: ExpEvent[] = [
       { label: 'Le chasser à grands cris', risk: 1.2, work: -3, text: 'Le taureau a détalé à nos cris… et les vaches l’ont suivi un moment.' },
     ],
   },
+  // ---------------- La chasse au mammouth : le vieux mâle qui charge, la tempête de neige où la harde disparaît ----------------
+  {
+    id: 'tusks', where: ['plain', 'mountain', 'far'], missions: ['mammoth'], title: 'Le vieux mâle charge',
+    text: 'Le plus vieux mammouth de la harde a flairé les chasseurs : il lève la trompe, barrit à faire trembler le sol… et fonce droit sur eux !',
+    options: [
+      { label: 'Se jeter derrière les rochers', risk: 0.8, work: 5, text: 'Tout le monde s’est jeté derrière les rochers : le vieux mâle est passé en trombe, sans toucher personne.' },
+      { label: 'Serrer les rangs, lances pointées', risk: 0.85, text: 'Serrés en hérisson, lances pointées : le vieux mâle a pilé net, puis fait demi-tour en grondant.' },
+      { label: 'Tenir bon en criant plus fort que lui', risk: 1.25, work: -3, text: 'On a tenu bon en criant à pleins poumons : le vieux mâle a fait demi-tour… à deux pas des chasseurs.' },
+    ],
+  },
+  {
+    id: 'blizzard', where: ['plain', 'mountain', 'far'], missions: ['mammoth'], title: 'Une tempête de neige',
+    text: 'Le vent du nord se lève et la neige tombe à gros flocons : on ne voit plus la harde, et ses traces s’effacent.',
+    options: [
+      { label: 'Se serrer sous les peaux autour du feu', risk: 0.85, work: 7, text: 'Serrés sous les peaux autour du feu, on a laissé passer la tempête.' },
+      { label: 'Suivre les traces avant qu’elles s’effacent', risk: 1.15, work: -3, text: 'On a suivi les grandes traces dans la neige fraîche : la harde n’était pas loin.' },
+    ],
+  },
   // ---------------- Au bord de l'eau ----------------
   {
     id: 'shoal', where: ['river'], missions: ['fishing', 'reef'], title: 'Un banc de poissons',

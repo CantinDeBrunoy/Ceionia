@@ -379,6 +379,81 @@ const scrollGeo = () => geo('scroll', (p) => { p.add(new THREE.CylinderGeometry(
 /** Manche de la torche de fortune (la flamme est à part : elle baisse et grandit) */
 const handTorchGeo = () => geo('handtorch', (p) => { p.box(0.01, 0.08, 0.01, 0, 0, 0, 0x6a4a34); p.cyl(0.014, 0.01, 0.018, 6, 0, 0.065, 0, 0x4a3a2e); });
 
+// ---------------- La chasse au mammouth ----------------
+const FUR = 0x7a4a2a, FUR_DARK = 0x5a3620, IVORY = 0xefe4c8;
+/** Un tronçon de cylindre de a à b, du rayon r0 au rayon r1 (pattes, trompe, queue, perches) */
+function tube(p: Parts, a: number[], b: number[], r0: number, r1: number, c: number, seg = 6) {
+  const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
+  const g = new THREE.CylinderGeometry(r1, r0, len, seg).translate(0, len / 2, 0).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+  p.add(g, a[0], a[1], a[2], c);
+}
+/**
+ * Le mammouth, nez vers +z (0,6 de long, 0,5 au garrot) : torse massif à la fourrure brune, bosse sombre au garrot, frange de
+ * longs poils sous le ventre, tête bombée, petites oreilles, défenses courbes, queue à touffe. Pattes et trompe à part : elles
+ * bougent (voir `addMammoth`)
+ */
+const mammothGeo = () => geo('mammoth', (p) => {
+  p.add(new THREE.IcosahedronGeometry(0.16, 1).scale(1, 0.9, 1.4), 0, 0.27, -0.02, FUR);
+  p.add(new THREE.IcosahedronGeometry(0.13, 1).scale(1, 0.95, 1.1), 0, 0.36, 0.08, FUR_DARK);
+  p.add(new THREE.IcosahedronGeometry(0.12, 1), 0, 0.27, -0.14, FUR);
+  // la frange de longs poils, sur les flancs et sous le poitrail
+  for (const s of [-1, 1]) for (let i = 0; i < 5; i++) p.add(new THREE.ConeGeometry(0.036, 0.12, 4).rotateX(Math.PI), s * (0.125 - Math.abs(i - 2) * 0.012), 0.15, -0.17 + i * 0.075, FUR_DARK);
+  for (let i = 0; i < 3; i++) p.add(new THREE.ConeGeometry(0.034, 0.1, 4).rotateX(Math.PI), (i - 1) * 0.06, 0.15, 0.13, FUR_DARK);
+  // la tête bombée, ses petites oreilles, ses yeux
+  p.add(new THREE.IcosahedronGeometry(0.1, 1).scale(0.85, 1.1, 0.95), 0, 0.37, 0.24, FUR);
+  p.add(new THREE.IcosahedronGeometry(0.065, 1), 0, 0.46, 0.21, FUR_DARK);
+  for (const s of [-1, 1]) {
+    p.add(new THREE.IcosahedronGeometry(0.035, 0).scale(0.45, 1, 1), s * 0.082, 0.39, 0.2, FUR_DARK);
+    p.sphere(0.011, s * 0.052, 0.395, 0.312, 0x1a1410);
+    // la défense : un arc d'ivoire qui part sous l'œil, descend en avant puis remonte, en s'écartant de l'autre
+    p.add(new THREE.TorusGeometry(0.1, 0.013, 4, 9, Math.PI * 0.9).rotateZ(Math.PI).rotateY(-Math.PI / 2), s * 0.06, 0.3, 0.41, IVORY, s * 0.3);
+  }
+  tube(p, [0, 0.3, -0.24], [0, 0.18, -0.29], 0.014, 0.01, FUR_DARK);
+  p.sphere(0.022, 0, 0.17, -0.295, FUR_DARK);
+});
+/** Une patte, de la hanche (à l'origine) au pied : un pilier, la cuisse laineuse */
+const mammothLegGeo = () => geo('mammothleg', (p) => {
+  tube(p, [0, 0, 0], [0, -0.22, 0], 0.048, 0.042, FUR, 7);
+  tube(p, [0, 0.02, 0], [0, -0.1, 0], 0.062, 0.055, FUR_DARK, 7);
+  p.cyl(0.048, 0.05, 0.024, 7, 0, -0.24, 0, 0x4a3a30);
+});
+/** La trompe, de sa racine (à l'origine) : elle pend, puis s'enroule vers l'avant au bout */
+const mammothTrunkGeo = () => geo('mammothtrunk', (p) => {
+  const pts = [[0, 0, 0], [0, -0.09, 0.015], [0, -0.17, 0.035], [0, -0.215, 0.075], [0, -0.205, 0.105]], r = [0.034, 0.028, 0.022, 0.017, 0.013];
+  for (let i = 0; i < pts.length - 1; i++) tube(p, pts[i], pts[i + 1], r[i], r[i + 1], i % 2 ? FUR_DARK : FUR);
+});
+/** Fosse de chasse : le trou sombre, la terre rejetée autour */
+const pitGeo = () => geo('pit', (p) => {
+  p.cyl(0.25, 0.25, 0.006, 12, 0, 0, 0, 0x231a14);
+  p.add(new THREE.TorusGeometry(0.28, 0.045, 4, 14).rotateX(Math.PI / 2).scale(1, 0.55, 1), 0, 0.008, 0, 0x6a5038);
+});
+/** Les branchages qui couvrent la fosse, et leurs feuilles */
+const pitCoverGeo = () => geo('pitcover', (p) => {
+  for (let i = 0; i < 5; i++) p.box(0.022, 0.02, 0.5, -0.16 + i * 0.08, 0.012, 0, 0x6a4a34, 0.2 + i * 0.55);
+  for (let i = 0; i < 9; i++) p.sphere(0.04, Math.cos(i * 2.4) * 0.15, 0.03, Math.sin(i * 2.4) * 0.15, i % 2 ? 0x5c8a45 : 0x6a9a50, 0, 0.45);
+});
+/** Le ravin : une fente sombre le long de +z (son entrée en z = -0,2, son fond en z = 0,6), entre deux rangées de blocs */
+const ravineGeo = () => geo('ravine', (p) => {
+  p.box(0.36, 0.006, 0.8, 0, 0, 0.2, 0x2a2420);
+  for (const s of [-1, 1]) for (let i = 0; i < 4; i++)
+    p.add(new THREE.DodecahedronGeometry(0.13 + (i % 2) * 0.04, 0).scale(1, 1.3 + (i % 3) * 0.25, 1), s * (0.3 + (i % 2) * 0.05), 0.1 + (i % 3) * 0.04, -0.12 + i * 0.22, [0x8d8a84, 0x7d7a74, 0x9a958c][i % 3]);
+});
+/**
+ * Le traîneau de perches que les chasseurs ramènent (avant = +z, d'où on le tire) : deux perches qui traînent au sol derrière,
+ * des traverses, et sa charge : des peaux de mammouth roulées, des ballots de viande dans le cuir
+ */
+export const sledGeo = () => geo('sled', (p) => {
+  for (const s of [-1, 1]) tube(p, [s * 0.035, 0.15, 0.22], [s * 0.11, 0, -0.24], 0.011, 0.013, 0x7a5a3e, 5);
+  // (les perches montent de l'arrière à l'avant : y = 0,15 × (z + 0,24) / 0,46, écartées de 0,11 à 0,035)
+  for (const z of [-0.15, -0.03, 0.08]) { const k = (z + 0.24) / 0.46, x = 0.11 - 0.075 * k; p.box(x * 2 + 0.02, 0.014, 0.018, 0, 0.15 * k - 0.004, z, 0x6a4a34); }
+  for (const [z, r, c] of [[-0.14, 0.05, FUR], [-0.05, 0.045, FUR_DARK], [0.03, 0.04, FUR]] as number[][]) {
+    const y = 0.15 * ((z + 0.24) / 0.46) + r * 0.8;
+    p.add(new THREE.CylinderGeometry(r, r, 0.2, 8).rotateZ(Math.PI / 2), 0, y, z, c);
+    p.add(new THREE.TorusGeometry(r + 0.003, 0.005, 3, 8).rotateY(Math.PI / 2), 0.06, y, z, 0xc9b48a);
+  }
+  for (const [x, z] of [[-0.06, -0.19], [0.06, -0.2]]) p.add(new THREE.IcosahedronGeometry(0.04, 0).scale(1, 0.8, 1.2), x, 0.06 + 0.15 * ((z + 0.24) / 0.46), z, 0xa0704a);
+});
+
 /** Volute de brume : un disque blanc au bord flou (dessiné une fois) */
 let puffTex: THREE.Texture | null = null;
 function softPuff() {
@@ -408,7 +483,7 @@ const BEHAVIOR: Record<Scene, string> = {
   mine: 'mine', pass: 'mine', crater: 'mine', gather: 'gather', pebbles: 'gather', hops: 'gather', hunt: 'hunt',
   build: 'build', bridge: 'build', drill: 'build', summit: 'build', basecamp: 'build', rails: 'rails', camp: 'camp',
   smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', scout: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
-  race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch',
+  race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch', mammoth: 'mammoth',
 };
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
@@ -484,8 +559,16 @@ interface RocketShow {
   crew: { n: { folk: Folk; pose: FolkPose; off: number }; from: [number, number] }[]; vapor: { every: number } | null; puff: number; trail: number;
 }
 
-/** Bête de la scène ; `flee` : elle s'enfuit dans cette direction (la harde dispersée) ; `held` : un imprévu la mène (la bête qui charge) */
-interface Beast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; speed: number; flee?: number; fled?: number; held?: boolean }
+/**
+ * Bête de la scène ; `flee` : elle s'enfuit dans cette direction (la harde dispersée) ; `held` : un imprévu la mène (la bête
+ * qui charge) ; `kind` : l'espèce d'une bête de la harde (celles qu'on ramène quittent la scène pour suivre l'équipe)
+ */
+interface Beast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; speed: number; flee?: number; fled?: number; held?: boolean; kind?: HerdKind | 'wolf' }
+/**
+ * Un mammouth de la scène : la bête (son groupe tourne et avance), ses pattes et sa trompe, sa taille, la cadence de son pas,
+ * sa vitesse lissée, et ce qu'il fait : il barrit (trompe levée, 0 … 1), se couche (0 … 1), s'enfonce dans la fosse
+ */
+interface Mammoth { b: Beast; legs: THREE.Object3D[]; trunk: THREE.Object3D; size: number; ph: number; px: number; pz: number; v: number; trumpet: number; lie: number; sink: number }
 /** Le décor s'efface en ce temps-là (secondes), une fois l'équipe repartie */
 const FADE = 1.2;
 interface Rod { rod: THREE.Mesh; bob: THREE.Mesh; line: THREE.Line }
@@ -517,7 +600,7 @@ interface Staging {
  * un enclos, attend les aurochs à la pierre à sel, part en barque ou plonge sur le récif, pioche un éboulis, cueille baies,
  * houblon ou galets, enfume le vieux chêne ou recueille un essaim, troque ses poteries chez les voisins, se baigne dans la
  * source chaude, entre et sort de la galerie avec le wagonnet, applaudit les jongleurs, écoute le frère brasseur, regarde
- * les étoiles filantes, dégage la météorite, jette un pont, carotte la roche, plante le drapeau au sommet…
+ * les étoiles filantes, dégage la météorite, jette un pont, carotte la roche, plante le drapeau au sommet, chasse le mammouth…
  */
 export class ExpeditionScene {
   private props: THREE.Object3D[] = [];
@@ -590,6 +673,16 @@ export class ExpeditionScene {
   /** les jongleurs et leur tambour, qui suivent l'équipe au village quand elle les ramène ; le frère brasseur */
   private guests: { folk: Folk; pose: FolkPose; off: number }[] = [];
   private monk: { folk: Folk; pose: FolkPose; off: number } | null = null;
+  /**
+   * La chasse au mammouth : la harde (le vieux mâle d'abord), où elle paît et de quel côté du camp, la façon de chasser
+   * (fosses, ravin, ou la harde suivie de loin), le piège et son axe (de la harde vers lui), les fosses et leurs branchages,
+   * l'avancement le plus loin atteint, le temps depuis le départ de l'équipe
+   */
+  private mammoths: Mammoth[] = [];
+  private mam: {
+    old: Mammoth; at: [number, number]; dir: number; way: 'pits' | 'ravine' | 'follow'; trap: [number, number]; axis: [number, number];
+    pits: THREE.Object3D[]; covers: THREE.Object3D[]; k: number; back: number;
+  } | null = null;
   /** l'équipe est repartie (une fois) : l'échec se joue, ce qui la suit quitte la scène */
   private departed = false;
   /** l'équipe est repartie : le décor rétrécit et s'efface (secondes depuis, -1 : pas encore) */
@@ -731,6 +824,7 @@ export class ExpeditionScene {
   private heart(a: ActiveExpedition, cx: number, cz: number) {
     const w = this.world, age = a.m.age, st = this.story, y = (x: number, z: number) => w.surfaceAt(x, z);
     if (st === 'launch' || st === 'moon' || st === 'colony') this.launchpad(a, cx, cz);
+    else if (st === 'mammoth') this.mammothHunt(a, cx, cz);
     else if (st === 'salt') {
       // pierres à sel au bord de l'eau ; l'équipe guette, cachée derrière les buissons
       for (let i = 0; i < 3; i++) { const [x, z] = this.near(cx + Math.cos(i * 2.1) * 0.35, cz + Math.sin(i * 2.1) * 0.35, cx, cz); this.put(saltGeo(), x, z, i); this.salts.push([x, z]); }
@@ -815,12 +909,11 @@ export class ExpeditionScene {
       const found = st !== 'gallery';
       const hx = cx - Math.sin(face) * 0.3, hz = cz - Math.cos(face) * 0.3;
       if (st === 'scout') {
-        // les éclaireurs reviennent reporter leurs relevés sur la table aux plans, et jalonnent devant la grotte l'emprise de
-        // l'avant-poste : des piquets à fanion qui sortent de terre au fil du travail
+        // les éclaireurs reviennent reporter leurs relevés sur la table aux plans, et balisent le chemin jusqu'à l'entrée de
+        // la grotte : des piquets à fanion qui sortent de terre au fil du travail, de part et d'autre du chemin
         this.put(mapTableGeo(), hx, hz, face + Math.PI / 2);
-        const ox = cx + Math.sin(face) * 0.35, oz = cz + Math.cos(face) * 0.35;
-        for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          const x = ox + Math.sin(face) * u * 0.42 + Math.cos(face) * v * 0.42, z = oz + Math.cos(face) * u * 0.42 - Math.sin(face) * v * 0.42;
+        for (let i = 0; i < 4; i++) {
+          const t = 0.25 + i * 0.18, s = i % 2 ? 1 : -1, x = cx + (mx - cx) * t + Math.cos(face) * s * 0.16, z = cz + (mz - cz) * t - Math.sin(face) * s * 0.16;
           this.grows.push({ obj: this.put(stakeFlagGeo(), x, z, face), from: 0.001, to: 1 });
         }
       } else this.grows.push({ obj: this.put(rocksGeo(), hx, hz, 0), from: 0.25, to: 1.1 });
@@ -998,6 +1091,79 @@ export class ExpeditionScene {
     this.focus = [px, pz];
   }
 
+  /**
+   * La chasse au mammouth : le camp des chasseurs (tente, feu, traîneau vide) et, plus loin du côté le plus dégagé, la harde
+   * qui paît (le vieux mâle, une femelle, son petit). Entre les deux, le piège : trois fosses qu'on creuse puis qu'on couvre de
+   * branchages (dans la plaine), ou le ravin entre ses deux rangées de blocs (dans la montagne, où les rabatteurs ont une
+   * torche au poing) ; au-delà des collines, on suit la harde de loin, et le vieux mâle traîne derrière les autres
+   */
+  private mammothHunt(a: ActiveExpedition, cx: number, cz: number) {
+    this.camp(cx, cz);
+    const way = a.c.dest === 'mountain' ? 'ravine' : a.c.dest === 'far' ? 'follow' : 'pits';
+    let dir = 0, best = -1;
+    for (let d = 0; d < 12; d++) {
+      const ang = (d / 12) * Math.PI * 2;
+      let n = 0;
+      while (n < 6 && this.free(cx + Math.sin(ang) * 0.5 * (n + 1), cz + Math.cos(ang) * 0.5 * (n + 1))) n++;
+      if (n > best) { best = n; dir = ang; }
+    }
+    const sx = Math.sin(dir), sz = Math.cos(dir), px = Math.cos(dir), pz = -Math.sin(dir);
+    const at = this.near(cx + sx * 2.4, cz + sz * 2.4, cx, cz);
+    // le piège, entre le camp et la harde, un peu de côté (le ravin plus à l'écart) ; suivie de loin, là où le vieux mâle
+    // s'attarde, derrière les autres
+    const side = way === 'ravine' ? 0.9 : 0.4;
+    const trap = way === 'follow' ? this.near(at[0] - sx * 0.7 + px * 0.6, at[1] - sz * 0.7 + pz * 0.6, cx, cz) : this.near(cx + sx * 1.3 + px * side, cz + sz * 1.3 + pz * side, cx, cz);
+    // le piège s'ouvre face à la harde : le vieux mâle y arrive en venant d'elle
+    const gd = Math.max(0.01, Math.hypot(trap[0] - at[0], trap[1] - at[1])), axis: [number, number] = [(trap[0] - at[0]) / gd, (trap[1] - at[1]) / gd];
+    const herd = [[1.15, -0.5, 0], [0.95, 0.1, 0], [0.5, 0.45, 0.25]].map(([size, u, v], i) => {
+      const [x, z] = this.near(at[0] + px * u + sx * v, at[1] + pz * u + sz * v, cx, cz);
+      return this.addMammoth(x, z, size, dir + Math.PI + (i - 1) * 0.7);
+    });
+    const pits: THREE.Object3D[] = [], covers: THREE.Object3D[] = [];
+    if (way === 'pits') for (let i = 0; i < 3; i++) {
+      const o = i ? (i === 1 ? 0.62 : -0.62) : 0, [x, z] = i ? this.near(trap[0] + px * o - sx * 0.15, trap[1] + pz * o - sz * 0.15, cx, cz) : trap;
+      pits.push(this.put(pitGeo(), x, z, i));
+      const c = this.put(pitCoverGeo(), x, z, i * 1.3);
+      c.visible = false;
+      covers.push(c);
+      // les creuseurs, de part et d'autre de chaque fosse
+      for (const s of [-1, 1]) this.spots.push([x + px * s * 0.36, z + pz * s * 0.36]);
+    } else if (way === 'ravine') {
+      this.put(ravineGeo(), trap[0], trap[1], Math.atan2(axis[0], axis[1]));
+      // les rabatteurs se postent derrière la harde, pour la pousser vers le ravin
+      for (let i = 0; i < 5; i++) this.spots.push(this.near(at[0] - axis[0] * 0.95 + axis[1] * (i - 2) * 0.35, at[1] - axis[1] * 0.95 - axis[0] * (i - 2) * 0.35, cx, cz));
+    } else for (let i = 0; i < 3; i++) this.spots.push(this.near(cx + sx * 1.1 + px * (i - 1) * 0.35, cz + sz * 1.1 + pz * (i - 1) * 0.35, cx, cz));
+    this.lit = way === 'ravine';
+    this.focus = [(cx + at[0]) / 2, (cz + at[1]) / 2];
+    this.mam = { old: herd[0], at, dir, way, trap, axis, pits, covers, k: 0, back: 0 };
+  }
+
+  /** Un mammouth de taille `size` (1 : une femelle adulte) en (x, z), tourné vers `heading` : son corps, ses pattes, sa trompe */
+  private addMammoth(x: number, z: number, size: number, heading: number): Mammoth {
+    const o = new THREE.Group(), body = new THREE.Mesh(mammothGeo(), mats.body), trunk = new THREE.Mesh(mammothTrunkGeo(), mats.body);
+    body.castShadow = trunk.castShadow = true;
+    trunk.position.set(0, 0.34, 0.31);
+    o.add(body, trunk);
+    const legs = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([lx, lz]) => {
+      const l = new THREE.Mesh(mammothLegGeo(), mats.body);
+      l.castShadow = true;
+      l.position.set(lx * 0.09, 0.24, lz * 0.12);
+      o.add(l);
+      return l;
+    });
+    // (il se cabre un peu en barrissant : autour de son propre travers, une fois tourné)
+    o.rotation.order = 'YXZ';
+    o.scale.setScalar(size);
+    o.position.set(x, this.world.surfaceAt(x, z), z);
+    o.rotation.y = heading;
+    this.group.add(o);
+    const b: Beast = { obj: o, actor: null, x, z, tx: x, tz: z, heading, wait: 1 + size * 2, speed: 0.1 };
+    this.beasts.push(b);
+    const m: Mammoth = { b, legs, trunk, size, ph: size * 3, px: x, pz: z, v: 0, trumpet: 0, lie: 0, sink: 0 };
+    this.mammoths.push(m);
+    return m;
+  }
+
   /** Un habitant d'ailleurs (voisin, nomade, moine, jongleur, astronome) qui reste à sa place et fait son geste */
   private npc(role: FolkRole, age: number, x: number, z: number, face: number, pose: FolkPose) {
     const folk = makeFolk({ age, v: Math.floor(x * 131 + z * 17), role });
@@ -1056,6 +1222,7 @@ export class ExpeditionScene {
       dark: () => this.stageDark(s, a), bats: () => this.stageBats(s), firedamp: () => this.stageFiredamp(s), seep: () => this.stageSeep(s, a),
       birds: () => this.stageBirds(s, a, fail), swarm: () => this.stageSwarm(s, a, fail), wheel: () => this.stageWheel(s, a), tasting: () => this.stageTasting(s, a),
       puncture: () => this.stagePuncture(s), gust: () => this.stageGust(s), clouds: () => this.stageClouds(s), cows: () => this.stageCows(s, a),
+      tusks: () => this.stageTusks(s, a), blizzard: () => this.stageBlizzard(s, a, fail),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
       stings: () => this.stageSwarm(s, a, true), blast: () => this.stageBlast(s), gone: () => this.stageGone(s),
@@ -1261,6 +1428,33 @@ export class ExpeditionScene {
         b.m.position.set(x, this.world.surfaceAt(x, z) + b.y, z);
         b.m.visible = k > 0.02;
       }
+    };
+  }
+
+  /** La neige qui tombe à gros flocons sur un disque de rayon r autour de (cx, cz), poussée par le vent ; de quoi l'animer (k : sa force, 0 … 1) */
+  private sSnow(s: Staging, cx: number, cz: number, r: number, top: number) {
+    const n = 260, pos = new Float32Array(n * 3), flake: number[] = [];
+    for (let i = 0; i < n; i++) { const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r, x = cx + Math.cos(ang) * d, z = cz + Math.sin(ang) * d; flake.push(x, z, this.world.surfaceAt(x, z), Math.random(), Math.random() * 6.28); }
+    const g = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.06, map: softPuff(), transparent: true, opacity: 0.95, depthWrite: false });
+    const pts = new THREE.Points(g, mat);
+    pts.frustumCulled = false; pts.userData.flat = true;
+    this.sAdd(s, pts); s.own.push(g, mat);
+    return (dt: number, k: number) => {
+      mat.opacity = 0.95 * k;
+      pts.visible = k > 0.02;
+      if (!pts.visible) return;
+      for (let i = 0; i < n; i++) {
+        let f = flake[i * 5 + 3] - dt * 0.3;
+        if (f < 0) f += 1;
+        flake[i * 5 + 3] = f;
+        // le vent les pousse de travers ; chacun tourbillonne un peu en tombant
+        const ph = flake[i * 5 + 4];
+        pos[i * 3] = flake[i * 5] + (f - 0.5) * 0.6 + Math.sin(this.t * 2.1 + ph) * 0.05;
+        pos[i * 3 + 1] = flake[i * 5 + 2] + f * top;
+        pos[i * 3 + 2] = flake[i * 5 + 1] + Math.cos(this.t * 1.7 + ph) * 0.05;
+      }
+      g.attributes.position.needsUpdate = true;
     };
   }
 
@@ -1906,6 +2100,71 @@ export class ExpeditionScene {
     };
   }
 
+  /**
+   * Le vieux mâle charge : trompe levée, il barrit face aux chasseurs (des rochers tout près d'eux). La décision prise, il
+   * fonce : les chasseurs se sont jetés derrière les rochers (il passe en trombe là où ils se tenaient), l'attendent serrés,
+   * lances pointées (il pile net devant eux), ou tiennent bon (il les frôle) ; puis il fait demi-tour, au pas
+   */
+  private stageTusks(s: Staging, a: ActiveExpedition) {
+    const m = this.mam?.old;
+    if (!m || !m.b.obj.visible) return () => false;
+    const b = m.b, [tx, tz] = this.teamAt(a), d0 = Math.max(0.3, Math.hypot(tx - b.x, tz - b.z)), ux = (tx - b.x) / d0, uz = (tz - b.z) / d0, x0 = b.x, z0 = b.z;
+    const [rx, rz] = this.near(tx - uz * 0.5 + ux * 0.15, tz + ux * 0.5 + uz * 0.15, tx, tz);
+    this.sPut(s, rocksGeo(), rx, rz, 0.7).scale.setScalar(1.8);
+    // l'abri : derrière les rochers, vus du vieux mâle
+    const rd = Math.max(0.3, Math.hypot(rx - x0, rz - z0)), hx = rx + ((rx - x0) / rd) * 0.28, hz = rz + ((rz - z0) / rd) * 0.28;
+    b.held = true;
+    this.sFace(b, tx, tz);
+    s.own.push({ dispose: () => { b.held = false; } });
+    // où il fonce : à travers la place qu'on a quittée, jusque devant le hérisson, ou en frôlant ceux qui tiennent bon
+    const goal = (p: number): [number, number] => (p === 0 ? [tx + ux * 0.6, tz + uz * 0.6] : p === 1 ? [tx - ux * 0.5, tz - uz * 0.5] : [tx + ux * 0.5 - uz * 0.26, tz + uz * 0.5 + ux * 0.26]);
+    let sent = false;
+    return (dt: number) => {
+      if (s.pick < 0) { m.trumpet = 1; this.sMove(b, b.x, b.z, 0, dt); return true; }
+      if (!sent && a.phase === 'work') {
+        sent = true;
+        a.party.forEach((id, i) => {
+          if (s.pick === 0) this.sendTo(a, id, hx + (i - 1) * 0.1 * uz, hz - (i - 1) * 0.1 * ux, rx, rz, 6);
+          else if (s.pick === 1) { const ang = Math.atan2(-ux, -uz) + (i - (a.party.length - 1) / 2) * 0.5; this.sendTo(a, id, tx + Math.sin(ang) * 0.16, tz + Math.cos(ang) * 0.16, b.x, b.z, 6); }
+        });
+      }
+      if (s.after < 0.7) { m.trumpet = 1; this.sMove(b, b.x, b.z, 0, dt); return true; }
+      if (s.after < 4.5) {
+        const [gx, gz] = goal(s.pick);
+        if (this.sMove(b, gx, gz, 1.1, dt, [], true) && Math.random() < dt * 12) this.puffAt(b.x, this.world.surfaceAt(b.x, b.z) + 0.02, b.z);
+        return true;
+      }
+      // demi-tour : il rejoint la harde, au pas, et l'imprévu le rend à la chasse
+      if (s.after < 10 && this.sMove(b, x0, z0, 0.3, dt, [], true)) return true;
+      b.held = false;
+      return false;
+    };
+  }
+
+  /**
+   * La tempête de neige : les flocons tombent dru, une brume blanche avale le paysage et la harde. À l'abri, l'équipe se serre
+   * autour du feu du camp, et la tempête passe ; si l'on suit les traces, elle dure encore un peu. À l'échec, la harde s'y
+   * évanouit
+   */
+  private stageBlizzard(s: Staging, a: ActiveExpedition, fail: boolean) {
+    const [tx, tz] = this.teamAt(a), cx = (tx + this.focus[0]) / 2, cz = (tz + this.focus[1]) / 2, [fx, fz] = a.dest;
+    const snow = this.sSnow(s, cx, cz, 3, 2.4), fog = this.sFog(s, cx, cz, 2.6), gloom = this.sGloom(s, cx, cz, 3.4);
+    if (fail) for (const m of this.mammoths) m.b.flee ??= Math.atan2(m.b.x - tx, m.b.z - tz);
+    let k = 0.8, sent = false;
+    return (dt: number) => {
+      const thick = fail ? s.t < 9 : s.pick < 0 || (s.pick === 0 ? s.after < 8 : a.phase === 'work' && s.after < 14);
+      k = thick ? Math.min(1, k + dt * 0.6) : k - dt * 0.25;
+      const kk = Math.max(0, k);
+      snow(dt, kk); fog(dt, kk * 0.9); gloom(kk * 0.35);
+      // à l'abri : tout le monde se serre autour du feu du camp, assis sous les peaux
+      if (s.pick === 0 && a.phase === 'work') {
+        if (!sent) { sent = true; a.party.forEach((id, i) => { const ang = (i / a.party.length) * Math.PI * 2; this.sendTo(a, id, fx + Math.sin(ang) * 0.24, fz + Math.cos(ang) * 0.24, fx, fz, 8); }); }
+        if (s.after > 2 && s.after < 8) this.agents.partyAct(a.party, 'sit');
+      }
+      return k > 0;
+    };
+  }
+
   // ---------------- Les échecs, joués au départ de l'équipe ----------------
   /** La pirogue chavire dans les rapides : elle se retourne dans une gerbe d'écume, et reste à flotter là, la quille en l'air */
   private stageCapsize(s: Staging) {
@@ -2087,7 +2346,7 @@ export class ExpeditionScene {
     if (actor) actor.mixer.setTime(ang);
     const [x, z] = this.near(cx + Math.cos(ang) * r, cz + Math.sin(ang) * r, cx, cz);
     this.group.add(obj);
-    this.beasts.push({ obj, actor, x, z, tx: x, tz: z, heading: ang, wait: 1 + ang, speed: k === 'wolf' ? 0.55 : 0.16 });
+    this.beasts.push({ obj, actor, x, z, tx: x, tz: z, heading: ang, wait: 1 + ang, speed: k === 'wolf' ? 0.55 : 0.16, kind: k });
   }
 
   /** L'eau la plus proche : un point assez profond pour une barque, et le dernier point sec avant lui */
@@ -2152,7 +2411,8 @@ export class ExpeditionScene {
     const onSite = a.phase === 'work';
     const k = onSite ? Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) : 0;
     if (this.flame) { const f = 1 + Math.sin(this.t * 17) * 0.12 + Math.sin(this.t * 29) * 0.08; this.flame.scale.set(f, 1.1 + Math.sin(this.t * 13) * 0.2, f); }
-    if (this.kind === 'hunt' && (onSite || a.phase === 'back')) this.stepHunt(dt, a);
+    if (this.mam) this.stepMammothHunt(dt, a, k);
+    else if (this.kind === 'hunt' && (onSite || a.phase === 'back')) this.stepHunt(dt, a);
     else for (const b of this.beasts) this.stepBeast(b, dt, a);
     if (this.boat && onSite) this.stepBoat();
     if (this.balloon) this.stepBalloon(k, onSite);
@@ -2182,8 +2442,26 @@ export class ExpeditionScene {
     if (onSite) this.stepRods(a);
     else for (const r of this.rods.values()) r.rod.visible = r.bob.visible = r.line.visible = false;
     this.stepStagings(dt, a);
+    // (les mammouths une fois menés, par la chasse ou par un imprévu : leurs pattes suivent leur pas)
+    if (this.mammoths.length) this.stepMammoths(dt);
     this.stepTorches(dt, a);
     this.stepFx(dt, a);
+  }
+
+  /**
+   * Au retour d'une expédition réussie, les bêtes qu'elle ramène quittent la harde pour suivre l'équipe (voir ExpeditionView) :
+   * une bête de la harde par bête ramenée, de la même espèce. D'où chacune part (x, z, cap), ou null s'il n'y en avait pas
+   * sur place
+   */
+  handOver(what: HerdKind[]): ([number, number, number] | null)[] {
+    return what.map((k) => {
+      const b = this.beasts.find((x) => x.kind === k && x.obj.visible && x.flee === undefined && !x.held);
+      if (!b) return null;
+      b.actor?.mixer.stopAllAction();
+      this.group.remove(b.obj);
+      this.beasts.splice(this.beasts.indexOf(b), 1);
+      return [b.x, b.z, b.heading];
+    });
   }
 
   private stepBeast(b: Beast, dt: number, a: ActiveExpedition) {
@@ -2323,6 +2601,132 @@ export class ExpeditionScene {
     });
   }
 
+  /**
+   * La chasse au mammouth, selon l'avancement : la harde paît pendant qu'on prépare la chasse (les fosses creusées puis
+   * couvertes, les rabatteurs postés derrière elle, les guetteurs tapis) ; puis l'on pousse le vieux mâle vers le piège, ou on
+   * l'encercle, et les autres s'écartent. Au retour, l'issue : il tombe dans la fosse, reste coincé au fond du ravin ou se
+   * couche, épuisé ; à l'échec, la harde s'éloigne (un imprévu la mène d'abord : elle se disperse, le vieux mâle charge…)
+   */
+  private stepMammothHunt(dt: number, a: ActiveExpedition, k: number) {
+    const h = this.mam!, old = h.old, away = a.phase === 'back' || a.phase === 'home', [cx, cz] = a.dest;
+    const K = (h.k = Math.max(h.k, k)), sx = Math.sin(h.dir), sz = Math.cos(h.dir), chase = K >= 0.3 || away;
+    if (away) h.back += dt;
+    // les fosses se creusent au début du travail, puis on les couvre de branchages ; celle où tombe le vieux mâle cède
+    h.pits.forEach((p, i) => { p.scale.setScalar(Math.max(0.001, smooth(Math.min(1, K / 0.22)))); h.covers[i].visible = K > 0.24 && !(i === 0 && old.sink > 0.01); });
+    for (const m of this.mammoths) {
+      const b = m.b;
+      if (b.held || !b.obj.visible) continue;
+      if (b.flee !== undefined) {
+        b.fled = (b.fled ?? 0) + dt;
+        this.sMove(b, b.x + Math.sin(b.flee) * 2, b.z + Math.cos(b.flee) * 2, 0.6 + m.size * 0.2, dt, [], true);
+        if (b.fled > 7) b.obj.visible = false;
+        continue;
+      }
+      // l'échec : ce qu'il reste de la harde s'éloigne de l'équipe qui repart
+      if (away && !a.ok && h.back > 0.8) { const [tx, tz] = this.teamAt(a); b.flee = Math.atan2(b.x - tx, b.z - tz) + (m.size - 1) * 0.5; continue; }
+      if (m === old && chase) { this.stepOldMale(dt, a, away); continue; }
+      // les autres paissent, chacun de son côté ; la chasse lancée, ils s'écartent plus loin (suivie de loin, la harde prend de
+      // l'avance)
+      const far = chase ? (h.way === 'follow' ? 2.4 : 1.4) : 0, side = (this.mammoths.indexOf(m) - 1) * 0.55;
+      this.graze(m, [h.at[0] + sx * far + sz * side, h.at[1] + sz * far - sx * side], chase ? 0.4 : 0.5, chase ? 0.3 : 0.1, dt, cx, cz);
+    }
+    // ils ne se marchent pas dessus : deux mammouths trop proches s'écartent (pas celui qui est pris, ni celui qu'un imprévu mène)
+    const ms = this.mammoths;
+    for (let i = 0; i < ms.length; i++) for (let j = i + 1; j < ms.length; j++) {
+      const p = ms[i].b, q = ms[j].b, d = Math.hypot(q.x - p.x, q.z - p.z), min = 0.26 * (ms[i].size + ms[j].size);
+      if (d >= min || !p.obj.visible || !q.obj.visible) continue;
+      const ux = d > 1e-3 ? (q.x - p.x) / d : 1, uz = d > 1e-3 ? (q.z - p.z) / d : 0, push = (min - d) * 0.5 * Math.min(1, dt * 4);
+      for (const [mm, s] of [[ms[i], -1], [ms[j], 1]] as [Mammoth, number][]) {
+        const b = mm.b, nx = b.x + ux * push * s, nz = b.z + uz * push * s;
+        if (!b.held && !mm.lie && !mm.sink && this.free(nx, nz)) { b.x = nx; b.z = nz; }
+      }
+    }
+    // la caméra garde le camp et le vieux mâle dans le cadre
+    this.focus = [(cx + old.b.x) / 2, (cz + old.b.z) / 2];
+    if (a.phase === 'work' && !a.wait && K >= 0.4) this.throwSpears(dt, a);
+  }
+
+  /** Un mammouth paît autour de `c` : il va d'une touffe à l'autre et s'arrête brouter ; le petit reste dans les pas de sa mère */
+  private graze(m: Mammoth, c: [number, number], r: number, speed: number, dt: number, cx: number, cz: number) {
+    const b = m.b, mom = this.mammoths[1]?.b;
+    if (m.size < 0.7 && mom && mom !== b) {
+      if (Math.hypot(mom.x - b.x, mom.z - b.z) > 0.45) this.sMove(b, mom.x, mom.z, 0.32, dt, [], true);
+      else this.sMove(b, b.x, b.z, 0, dt);
+      return;
+    }
+    if (!this.sMove(b, b.tx, b.tz, speed, dt) && (b.wait -= dt) <= 0) {
+      b.wait = 2.5 + Math.random() * 4;
+      const ang = Math.random() * Math.PI * 2, d = Math.random() * r;
+      [b.tx, b.tz] = this.near(c[0] + Math.cos(ang) * d, c[1] + Math.sin(ang) * d, cx, cz);
+    }
+  }
+
+  /**
+   * Le vieux mâle, la chasse lancée : poussé vers le piège (au bord des fosses, à l'entrée du ravin) ou traînant derrière la
+   * harde ; il s'agite et barrit. Au retour d'une chasse réussie, il tombe dans la fosse, s'engage au fond du ravin et y reste
+   * coincé, ou se couche, épuisé
+   */
+  private stepOldMale(dt: number, a: ActiveExpedition, away: boolean) {
+    const h = this.mam!, m = h.old, b = m.b, [tx, tz] = h.trap, [ux, uz] = h.axis, won = away && a.ok;
+    if (h.way === 'pits') {
+      if (!this.sMove(b, won ? tx : tx - ux * 0.42, won ? tz : tz - uz * 0.42, won ? 0.3 : 0.12, dt, [], true) && won) m.sink = Math.min(0.14, m.sink + dt * 0.12);
+    } else if (h.way === 'ravine') {
+      if (!this.sMove(b, tx + ux * (won ? 0.3 : -0.5), tz + uz * (won ? 0.3 : -0.5), won ? 0.45 : 0.16, dt, [], true) && won) m.sink = Math.min(0.05, m.sink + dt * 0.05);
+    } else if (won) {
+      // à bout de souffle, il se couche là où il est
+      this.sMove(b, b.x, b.z, 0, dt);
+      m.lie = Math.min(1, m.lie + dt * 0.4);
+    } else this.sMove(b, tx, tz, 0.08, dt, [], true);
+    // il s'agite : il barrit de temps en temps, plus souvent une fois pris (pas couché, épuisé)
+    if (m.lie < 0.3 && Math.random() < dt * (won ? 0.5 : 0.22)) m.trumpet = 1;
+  }
+
+  /** Les chasseurs lancent leurs lances vers le vieux mâle, de près et à tour de rôle : elles se plantent à ses pieds, il barrit */
+  private throwSpears(dt: number, a: ActiveExpedition) {
+    const m = this.mam!.old, b = m.b, g = (x: number, z: number) => this.world.surfaceAt(x, z);
+    if (b.held) return;
+    const pos = this.agents.partyPositions(a.party);
+    a.party.forEach((id, i) => {
+      const p = pos[i];
+      if (!p) return;
+      let t = (this.spearT.get(id) ?? 1 + i * 0.8) - dt;
+      if (t <= 0 && Math.hypot(p[0] - b.x, p[1] - b.z) < 1.6 && this.agents.memberDone(id)) {
+        t = 2.6 + Math.random() * 2;
+        const to = new THREE.Vector3(b.x + (Math.random() - 0.5) * 0.3, g(b.x, b.z) + 0.04, b.z + (Math.random() - 0.5) * 0.3);
+        this.combat?.throw(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), to, () => { this.combat?.puff(to.x, to.y, to.z, 6); m.trumpet = 1; });
+        this.agents.partyAct([id], 'work');
+      }
+      this.spearT.set(id, t);
+    });
+  }
+
+  /**
+   * Les mammouths vivent : leurs pattes battent deux par deux au rythme de leur pas, la trompe se balance (levée pour barrir,
+   * avec un souffle de vapeur dans l'air froid), et ils se cabrent un peu en barrissant ; couché, il replie ses pattes ; pris
+   * dans la fosse, il y est enfoncé
+   */
+  private stepMammoths(dt: number) {
+    for (const m of this.mammoths) {
+      const b = m.b, o = b.obj, moved = Math.hypot(b.x - m.px, b.z - m.pz);
+      m.px = b.x; m.pz = b.z;
+      if (dt > 0) m.v += (moved / dt - m.v) * Math.min(1, dt * 6);
+      m.ph += moved / (0.07 * m.size);
+      // un mammouth qui charge barrit
+      if (m.v > 0.8) m.trumpet = Math.max(m.trumpet, 0.7);
+      m.trumpet = Math.max(0, m.trumpet - dt * 0.8);
+      const up = Math.sin(Math.min(1, m.trumpet) * Math.PI * 0.5), stride = Math.min(1, m.v / (0.2 * m.size)) * 0.42 * (1 - m.lie);
+      m.legs.forEach((l, i) => (l.rotation.x = Math.sin(m.ph + (i === 0 || i === 3 ? 0 : Math.PI)) * stride + m.lie * (i < 2 ? -1.35 : 1.35)));
+      m.trunk.rotation.x = -up * 1.7 + Math.sin(this.t * 1.4 + m.size * 7) * 0.12 * (1 - up);
+      m.trunk.rotation.z = Math.sin(this.t * 0.9 + m.size * 3) * 0.12 * (1 - up);
+      o.position.set(b.x, this.world.surfaceAt(b.x, b.z) + (Math.abs(Math.sin(m.ph)) * 0.01 * (1 - m.lie) - m.lie * 0.17 - m.sink) * m.size, b.z);
+      o.rotation.x = -up * 0.12 * (1 - m.lie);
+      if (up > 0.8 && o.visible && Math.random() < dt * 5) {
+        const f = 0.5 * m.size;
+        this.puffAt(b.x + Math.sin(b.heading) * f, o.position.y + 0.62 * m.size, b.z + Math.cos(b.heading) * f, 'puff', Math.sin(b.heading) * 0.1, Math.cos(b.heading) * 0.1);
+      }
+    }
+  }
+
   /** La barque va et vient entre la berge et le large, en tanguant ; ses passagers y sont assis */
   private stepBoat() {
     const bt = this.boat!;
@@ -2367,7 +2771,7 @@ export class ExpeditionScene {
       } else if (left <= 0) {
         const target = this.pick(id, i, a, k);
         if (target) this.agents.memberGo(id, target[0], target[1], target[2]);
-        left = this.kind === 'hunt' ? 4 + Math.random() * 2 : this.kind === 'fish' || this.kind === 'boat' || this.kind === 'watch' || this.kind === 'spring' ? 1e9 : 5 + Math.random() * 3;
+        left = this.kind === 'hunt' ? 4 + Math.random() * 2 : this.mam ? 2.5 + Math.random() * 1.5 : this.kind === 'fish' || this.kind === 'boat' || this.kind === 'watch' || this.kind === 'spring' ? 1e9 : 5 + Math.random() * 3;
         this.goal.set(id, 1);
       } else if (this.goal.get(id) && this.agents.memberDone(id)) {
         this.goal.delete(id);
@@ -2381,6 +2785,8 @@ export class ExpeditionScene {
   private actOf(i: number, k: number): Act {
     const st = this.story;
     if (this.kind === 'hunt') return 'work';
+    // les rabatteurs et les guetteurs attendent, accroupis, que la chasse commence ; les creuseurs creusent
+    if (this.mam) return this.mam.k < 0.3 && this.mam.way !== 'pits' ? 'sit' : 'work';
     if (st === 'salt') return k < 0.75 ? 'sit' : 'work';
     if (st === 'troupe') return (i + Math.floor(this.t / 5)) % 2 ? 'cheer' : 'sit';
     if (st === 'abbey') return (i + Math.floor(this.t / 7)) % 3 ? 'sit' : 'cheer';
@@ -2617,6 +3023,19 @@ export class ExpeditionScene {
       const b = this.beasts[(i + Math.floor(this.t / 6)) % this.beasts.length];
       const ang = Math.atan2(cx - b.x, cz - b.z) + (i - 1) * 0.6;
       return [b.x + Math.sin(ang) * 0.24, b.z + Math.cos(ang) * 0.24, ang + Math.PI];
+    }
+    if (this.mam) {
+      // la chasse au mammouth : on prépare d'abord (au bord des fosses, derrière la harde, tapi à distance)…
+      const h = this.mam, b = h.old.b, n = a.party.length;
+      if (h.k < 0.3 && this.spots.length) {
+        const j = i % this.spots.length, [x, z] = this.spots[j], f = h.way === 'pits' ? h.pits[Math.floor(j / 2)].position : b.obj.position;
+        return [x, z, Math.atan2(f.x - x, f.z - z)];
+      }
+      // … puis en arc derrière le vieux mâle (on le pousse vers le piège), ou tout autour de lui (on l'encercle)
+      const toTrap = Math.atan2(h.trap[0] - b.x, h.trap[1] - b.z);
+      const ang = h.way === 'follow' ? (i / n) * Math.PI * 2 + this.t * 0.04 : toTrap + Math.PI + (i - (n - 1) / 2) * 0.5;
+      const r = 0.8 + (i % 2) * 0.15, [x, z] = this.near(b.x + Math.sin(ang) * r, b.z + Math.cos(ang) * r, b.x, b.z);
+      return [x, z, Math.atan2(b.x - x, b.z - z)];
     }
     if (this.kind === 'hunt' && this.beasts.length) {
       const b = this.beasts[0], ang = Math.atan2(b.x - cx, b.z - cz) + (i - 1) * 0.35;

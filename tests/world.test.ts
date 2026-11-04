@@ -6,7 +6,7 @@ import { GEN, GEN_FIXED, GEN_PLAN, Zone, continentPlan, riverU } from '../src/wo
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
-import { MISSIONS, mandatoryFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS, choiceAt } from '../src/sim/missions';
+import { MISSIONS, mandatoryFor, mandatoriesFor, applyEffects, needBonus, penHerds, PEN_CAP, STABLE_CAP, redoEffects, REDO_DAYS, choiceAt } from '../src/sim/missions';
 import { KINDS, KindId, UPGRADES, Building } from '../src/build/catalog';
 import { Underground } from '../src/world/underground';
 import { sculpt, brushOnBuilding } from '../src/world/terraform';
@@ -650,11 +650,12 @@ describe('jardins', () => {
 });
 
 describe('expéditions', () => {
-  it('chaque âge a une expédition obligatoire, et des choix bien formés', () => {
+  it('chaque âge a au moins une expédition obligatoire (deux à la Préhistoire), et des choix bien formés', () => {
     for (let age = 0; age < 5; age++) {
-      expect(MISSIONS.filter((m) => m.age === age && m.mandatory).length).toBe(1);
-      expect(mandatoryFor(age)).not.toBeNull();
+      expect(mandatoriesFor(age).length).toBe(age === 0 ? 2 : 1);
+      expect(mandatoryFor(age)).toBe(mandatoriesFor(age)[0]);
     }
+    expect(mandatoriesFor(0).map((m) => m.id)).toEqual(['herd', 'mammoth']);
     for (const m of MISSIONS) {
       expect(m.choices.length).toBeGreaterThan(0);
       for (const c of m.choices) {
@@ -741,12 +742,50 @@ describe('expéditions', () => {
     expect(up).toBe(1);
   });
 
-  it('l’expédition obligatoire conditionne l’âge suivant', () => {
+  it('les expéditions obligatoires conditionnent l’âge suivant : à la Préhistoire, les bêtes et le mammouth', () => {
     const w = continent(), sim = new Sim(w);
-    const item = () => sim.ageProgress()!.items.find((i) => i.label.startsWith('expédition'))!;
-    expect(item().have).toBe(0);
-    w.exp.done.push(mandatoryFor(0)!.id);
-    expect(item().have).toBe(1);
+    const items = () => sim.ageProgress()!.items.filter((i) => i.label.startsWith('expédition'));
+    expect(items().map((i) => i.label)).toEqual(['expédition « Apprivoiser des bêtes »', 'expédition « Chasser le mammouth »']);
+    expect(items().map((i) => i.have)).toEqual([0, 0]);
+    w.exp.done.push('herd');
+    expect(items().map((i) => i.have)).toEqual([1, 0]);
+    expect(sim.ready).toBe(false);
+    w.exp.done.push('mammoth');
+    expect(items().every((i) => i.have === i.need)).toBe(true);
+  });
+
+  it('le conseil nomme toutes les expéditions obligatoires qui restent', () => {
+    const w = continent(), sim = new Sim(w);
+    const [x, z] = flatLand(w);
+    w.place('house', x, z, 0, true, 0, false);
+    // un village qui a tout pour l'Antiquité (habitants, bâtiments, besoins comblés), sauf ses expéditions
+    sim.pop = 12;
+    sim.counts = { house: 4, farm: 1, well: 1, workshop: 1 };
+    for (const n of [sim.housing, sim.food, sim.water, sim.jobs, sim.joy, sim.health]) { n.ok = true; n.cap = 100; }
+    const message = () => (sim as unknown as { computeMessage(): string }).computeMessage();
+    expect(message()).toBe('Pour l’âge suivant : réussissez les expéditions « Apprivoiser des bêtes » et « Chasser le mammouth » (menu Expéditions).');
+    w.exp.done.push('mammoth');
+    expect(message()).toBe('Pour l’âge suivant : réussissez l’expédition « Apprivoiser des bêtes » (menu Expéditions).');
+    w.exp.done.push('herd');
+    expect(message()).toMatch(/Tout est prêt pour l’âge suivant/);
+  });
+
+  it('une partie déjà à l’Antiquité (ou plus loin) n’a pas à chasser le mammouth', () => {
+    const w = continent();
+    // une sauvegarde d'avant la chasse au mammouth : seules les bêtes ont été apprivoisées
+    w.exp.done.push('herd', 'seeds');
+    const r = new World();
+    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    const sim = new Sim(r);
+    for (const age of [1, 2, 3, 4]) {
+      sim.age = age;
+      const exp = sim.ageProgress()!.items.filter((i) => i.label.startsWith('expédition'));
+      expect(exp.map((i) => i.label)).toEqual(mandatoriesFor(age).map((m) => `expédition « ${m.title} »`));
+      expect(exp.some((i) => i.label.includes('mammouth'))).toBe(false);
+    }
+    // l'Antiquité ne demande que son blé des collines, déjà rapporté
+    sim.age = 1;
+    expect(sim.ageProgress()!.items.find((i) => i.label.startsWith('expédition'))!.have).toBe(1);
   });
 
   it('les effets s’appliquent : bêtes, minerai, savoir-faire, bonus durables et passagers', () => {
@@ -943,8 +982,10 @@ describe('expéditions', () => {
     const deep = MISSIONS.find((m) => m.id === 'deep')!;
     const cav = deep.choices.findIndex((c) => c.troop === 'cavalry'), armor = deep.choices[deep.choices.findIndex((c) => c.troop === 'armor')];
     expect(deep.repeat).toBe(true);
-    expect(ex.why(deep, armor)).toMatch(/Les chevaux sauvages.*Le filon de la montagne.*Repérer les profondeurs.*écurie.*avant-poste/);
-    w.exp.done.push('horses', 'mine', 'scout');
+    // il ne faut qu'un avant-poste : ni mission réussie, ni écurie (seule la charge de cavalerie demande des chevaux)
+    expect(deep.requires).toEqual({ kinds: ['outpost'] });
+    expect(ex.why(deep, armor)).toBe('Il faut d’abord bâtir : avant-poste.');
+    expect(KINDS.outpost.reqMission).toBeUndefined();
     let spot: number[] | null = null;
     for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
     w.place('stable', spot![0], spot![1], 0, true, 2, false);
@@ -1392,12 +1433,14 @@ describe('pétrole', () => {
     expect(c.lose.some((e) => e.t === 'unherd')).toBe(false);
     expect(ex.why(deep, c)).toMatch(/12 carburant.*0 pour l’instant.*raffinerie/);
     expect(ex.preview(c).label).toMatch(/12 carburant/);
-    // les autres troupes modernes en brûlent un peu, et ne prennent pas non plus de chevaux
+    // les autres troupes modernes vont à pied : ni carburant, ni chevaux (il y en a pourtant à l'écurie)
+    w.exp.herd.push('horse', 'horse', 'horse');
     for (const o of deep.choices.filter((q) => q.troop !== 'cavalry').map((q) => choiceAt(q, 4))) {
-      expect(o.fuel).toBeGreaterThan(0);
-      expect(o.fuel).toBeLessThan(c.fuel!);
-      expect(o.mounts).toBe(0);
+      expect(o.fuel ?? 0).toBe(0);
+      expect(ex.mountsFor(o)).toBe(0);
+      expect(ex.preview(o).label).not.toMatch(/chev|carburant/);
     }
+    w.exp.herd.length = 0;
     w.fuel = 20;
     expect(ex.why(deep, c)).toBeNull();
     const a = ex.start(deep, cav, 4)!;

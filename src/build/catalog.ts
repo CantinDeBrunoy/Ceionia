@@ -93,8 +93,7 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', 'Avant-poste', 'Avant-poste fortifié', 'Base avancée', 'Base souterraine'],
     desc: 'Camp retranché devant une grotte ou une faille : les expéditions armées partent d’ici vers les profondeurs, et sa garnison tient les premières galeries.',
     jobs: [0, 0, 3, 4, 5, 6],
-    perk: 'Débloqué par l’expédition « Repérer les profondeurs ». À bâtir tout contre une grotte ou une faille. Chaque expédition armée qui revient victorieuse étend les galeries tenues sous terre.',
-    reqMission: 'scout',
+    perk: 'À bâtir tout contre une grotte ou une faille : les expéditions armées en partent. Chaque expédition armée qui revient victorieuse étend les galeries tenues sous terre.',
   },
   station: {
     id: 'station', size: 2, minAge: 3, icon: '🚉', cat: 'service',

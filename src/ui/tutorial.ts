@@ -71,12 +71,12 @@ export const TUTO_TEXT = {
     },
     ages: {
       title: 'Les âges',
-      text: 'Le village traverse six âges : Préhistoire, Antiquité, Médiéval, Industriel, Moderne et Futuriste. Le panneau en haut à gauche montre où il en est : cliquez dessus pour voir ce que demande l’âge suivant (habitants, bâtiments, minerai, expédition obligatoire ★). Une condition qui nomme un bâtiment se clique pour le bâtir. Quand tout est réuni, le bouton « Passer à … » fait entrer le village dans le nouvel âge.',
+      text: 'Le village traverse six âges : Préhistoire, Antiquité, Médiéval, Industriel, Moderne et Futuriste. Le panneau en haut à gauche montre où il en est : cliquez dessus pour voir ce que demande l’âge suivant (habitants, bâtiments, minerai, expéditions obligatoires ★). Une condition qui nomme un bâtiment se clique pour le bâtir. Quand tout est réuni, le bouton « Passer à … » fait entrer le village dans le nouvel âge.',
       tasks: ['Ouvrir les conditions de l’âge suivant'],
     },
     expeditions: {
       title: 'Les expéditions',
-      text: 'Le bouton {compass} ouvre les expéditions : une petite équipe d’habitants part chercher bêtes, minerai ou semences, et débloque parfois de nouveaux bâtiments. Chaque âge a son expédition obligatoire ★. Une fois l’équipe partie, sa carte s’affiche à gauche : son bouton {eye} la fait suivre (ou lâcher) par la caméra.',
+      text: 'Le bouton {compass} ouvre les expéditions : une petite équipe d’habitants part chercher bêtes, minerai ou semences, et débloque parfois de nouveaux bâtiments. Chaque âge a au moins une expédition obligatoire ★ (la Préhistoire en a deux). Une fois l’équipe partie, sa carte s’affiche à gauche : son bouton {eye} la fait suivre (ou lâcher) par la caméra.',
       choose: 'Choisissez une mission, puis l’un de ses choix pour faire partir l’équipe.',
       none: 'Aucune équipe ne peut partir pour l’instant (il faut des habitants libres) : « Suivant » passe à la suite.',
       tasks: ['Ouvrir les expéditions', 'Lancer une expédition', 'Suivre l’équipe avec {eye}'],
