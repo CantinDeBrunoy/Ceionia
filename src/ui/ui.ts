@@ -420,7 +420,11 @@ export class UI {
       // une condition sans bâtiment : on montre comment l'obtenir
       const req = (e.target as HTMLElement).closest<HTMLElement>('[data-req]')?.dataset.req;
       if (req === 'ore') { this.openRes('ore'); return; }
-      if (req === 'exp') { this.openExpeditions(); return; }
+      if (req === 'exp') {
+        const t = /« (.+) »/.exec((e.target as HTMLElement).closest<HTMLElement>('[data-req]')!.textContent ?? '')?.[1], m = MISSIONS.find((x) => x.title === t);
+        if (m) this.gotoMission(m.id); else this.openExpeditions();
+        return;
+      }
       if (req === 'pop') { this.openNeed('housing'); return; }
       $('#agePanel').classList.toggle('open');
       this.update();
@@ -505,7 +509,7 @@ export class UI {
   /** Prend un bâtiment en main (onglet Bâtir, son rayon), ou dit pourquoi il est encore verrouillé */
   private pick(k: KindId) {
     const lock = this.lockOf(k);
-    if (lock) { this.toast(lock); return; }
+    if (lock) { this.toast(lock, this.lockGo(k)); return; }
     this.host.tools.setTool('build', k);
     this.host.audio.sfxClick();
   }
@@ -552,7 +556,7 @@ export class UI {
       const k = b.dataset.kind as KindId;
       b.onclick = () => {
         const lock = this.lockOf(k);
-        if (lock) { this.toast(lock); return; }
+        if (lock) { this.toast(lock, this.lockGo(k)); return; }
         this.host.tools.setTool('build', k);
         this.host.audio.sfxClick();
       };
@@ -560,6 +564,41 @@ export class UI {
       b.onpointerleave = () => { this.hover = null; this.renderInfo(); };
     });
     this.refreshTools();
+  }
+
+  /** Un bâtiment verrouillé par une expédition : un clic sur son message mène à cette expédition */
+  private lockGo(k: KindId) {
+    const d = KINDS[k];
+    return d.minAge <= this.host.sim.age && d.reqMission ? () => this.gotoMission(d.reqMission!) : undefined;
+  }
+
+  /** Ce qui manque à une mission, en boutons : un bâtiment à bâtir (sous son nom de l'âge), une expédition à réussir */
+  private needsHtml(m: Mission) {
+    const h = this.host, age = h.sim.age, out: string[] = [];
+    for (const id of m.requires?.missions ?? []) {
+      if (h.expeditions.state.done.includes(id)) continue;
+      const r = MISSIONS.find((x) => x.id === id);
+      out.push(`<button class="go" data-goto="${id}">${r?.icon ?? '🧭'} Réussir « ${r?.title ?? id} »</button>`);
+    }
+    for (const k of m.requires?.kinds ?? []) {
+      if ((h.sim.counts[k] ?? 0) > 0) continue;
+      out.push(`<button class="go" data-kind="${k}">${ic('hammer', 14, 2)} Bâtir « ${KINDS[k].names[Math.max(age, KINDS[k].minAge)]} »</button>`);
+    }
+    return out.join('');
+  }
+
+  /** Ouvre les expéditions sur une mission : l'onglet des missions, sa carte amenée sous les yeux et mise en avant */
+  gotoMission(id: string) {
+    if (!this.root.querySelector('.expModal')) this.openExpeditions();
+    const ov = this.root.querySelector('.expModal')!.closest('.overlay')!;
+    ov.querySelector<HTMLButtonElement>('[data-tab="missions"]')?.click();
+    const card = ov.querySelector<HTMLElement>(`.mission[data-id="${id}"]`);
+    if (!card) return;
+    card.querySelector('details')?.setAttribute('open', '');
+    card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    card.classList.remove('flash');
+    void card.offsetWidth;
+    card.classList.add('flash');
   }
 
   /** Pourquoi ce bâtiment n'est pas encore constructible : un âge à venir, ou une expédition à réussir (null s'il l'est) */
@@ -1085,10 +1124,10 @@ export class UI {
     const cards = ex.list(age).sort((a, b) => rank(a) - rank(b)).map((m) => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
       const choices = run ? '' : `<div class="mchoices" data-m="${m.id}">${this.choiceButtons(m)}</div>`;
-      return `<div class="mission ${done ? 'done' : ''}">
+      return `<div class="mission ${done ? 'done' : ''}" data-id="${m.id}">
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${m.unlocks ? `<p class="unlock">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})</p>` : ''}
-        ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).map((id) => [ex.state.done.includes(id), `« ${MISSIONS.find((x) => x.id === id)?.title} »`] as const), ...(m.requires.kinds ?? []).map((k) => [(h.sim.counts[k] ?? 0) > 0, KINDS[k].names[Math.max(age, KINDS[k].minAge)]] as const)].map(([ok, t]) => `<span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${t}</span>`).join('')}</p>` : ''}
+        ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => (h.sim.counts[k] ?? 0) > 0).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : ''}
         ${m.choices.some((c) => c.win.some((e) => e.t === 'veins')) ? `<p class="held">${ic('outpost', 15, 2)} Galeries tenues sous terre : <b>${ex.held()}</b> cases${ex.held() ? ' — chaque victoire pousse le front plus loin' : ' — un avant-poste en tiendra les premières'}</p>` : ''}
         ${run ? '' : redo ? `<details class="redo"><summary>${ic('restart', 14, 2)} Refaire cette expédition</summary><p>${m.intro}</p><p class="hint">Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>${choices}</details>` : `<p>${m.intro}</p>${choices}`}</div>`;
     }).join('');
@@ -1132,6 +1171,13 @@ export class UI {
     });
     const iv = setInterval(arsenal, 300);
     arsenal();
+    // ce qui manque à une mission : un bâtiment se prend en main (la fenêtre se ferme), une expédition s'amène sous les yeux
+    ov.addEventListener('click', (e) => {
+      const go = (e.target as HTMLElement).closest<HTMLElement>('.go[data-kind], .go[data-goto]');
+      if (!go) return;
+      h.audio.sfxClick();
+      if (go.dataset.kind) { close(); this.pick(go.dataset.kind as KindId); } else this.gotoMission(go.dataset.goto!);
+    });
     // un clic sur un choix (les boutons se redessinent : un seul écouteur pour toute la fenêtre)
     ov.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button.choice[data-m]');
@@ -1169,7 +1215,7 @@ export class UI {
     // l'expédition armée qui fait avancer les quêtes, lancée d'ici
     const deep = MISSIONS.find((m) => m.id === 'deep')!, age = this.host.sim.age, miss = ex.missing(deep);
     const send = age < deep.age ? `<p class="hint">${ic('sword', 15, 2)} Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`
-      : miss.length ? `<p class="hint">${ic('sword', 15, 2)} Pour envoyer une expédition armée, il faut d’abord ${miss.join(', ')}.</p>`
+      : miss.length ? `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">Il faut d’abord :</p><p class="req">${this.needsHtml(deep) || miss.join(', ')}</p></div>`
       : ex.running(deep) ? `<p class="hint">${ic('sword', 15, 2)} Une expédition armée est déjà dans les galeries.</p>`
       : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe part du village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><div class="choices">${this.choiceButtons(deep)}</div></div>`;
     const quests = CAMP_QUESTS.map((q, i) => {
