@@ -3,7 +3,8 @@ import { Danger, GearId, Stock, emptyStock, GEAR_BY } from './gear';
 import type { KindId } from '../build/catalog';
 
 /**
- * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant). Une petite équipe
+ * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant, deux à la
+ * Préhistoire : apprivoiser des bêtes et chasser le mammouth). Une petite équipe
  * d'habitants part sur la carte (forêt, plaine, rivière, montagne, grotte, au-delà des collines), agit sur place et revient ;
  * selon le choix et la chance, le village y gagne des bêtes, du minerai, des savoir-faire… ou des blessés et des soucis. À
  * l'âge futuriste, la fin de la partie : trois expéditions spatiales parties du cosmodrome, chacune ouvrant la suivante
@@ -28,15 +29,17 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   | 'scout'
   // la course automobile, la montgolfière qu'on gonfle
   | 'race' | 'balloon'
+  // la chasse au mammouth : les fosses, le ravin ou la harde qu'on suit de loin (selon la destination)
+  | 'mammoth'
   // le premier vol de fusée, la fusée lunaire (et l'alunissage en direct), le départ du vaisseau colonial
   | 'launch' | 'moon' | 'colony';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
  * harde qui s'enfuit, une bête qui charge, les abeilles en furie, le coup de grisou, les torches qui s'éteignent, les voisins
- * qui s'en vont, les oiseaux qui s'envolent des buissons pillés
+ * qui s'en vont, les oiseaux qui s'envolent des buissons pillés, la tempête de neige où la harde disparaît
  */
-export type Fail = 'storm' | 'fog' | 'rocks' | 'capsize' | 'scatter' | 'charge' | 'stings' | 'blast' | 'dark' | 'gone' | 'birds';
+export type Fail = 'storm' | 'fog' | 'rocks' | 'capsize' | 'scatter' | 'charge' | 'stings' | 'blast' | 'dark' | 'gone' | 'birds' | 'blizzard';
 
 export type Effect =
   /** bêtes ramenées : elles paissent ensuite près des fermes */
@@ -70,8 +73,11 @@ export interface Choice {
   work: number;
   /** probabilité d'échec */
   risk: number;
-  /** ce que l'équipe rapporte, visible au retour : des bêtes qui la suivent, un chariot, des sacs sur le dos, ses invités */
-  carry?: 'animals' | 'cart' | 'sacks' | 'guests';
+  /**
+   * ce que l'équipe rapporte, visible au retour : des bêtes qui la suivent, un chariot, des sacs sur le dos, ses invités, le
+   * traîneau chargé de viande et de peaux
+   */
+  carry?: 'animals' | 'cart' | 'sacks' | 'guests' | 'sledge';
   /** ce que l'équipe fait sur place, et ce qu'en dit sa carte (« troque ses poteries contre des semences ») */
   scene: Scene;
   doing?: string;
@@ -212,6 +218,35 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // la seconde mission obligatoire de la Préhistoire : un traîneau de viande et de peaux, et la fête au retour
+    // (l'éléphant plutôt que le mammouth 🦣, que Windows 10 n'affiche pas)
+    id: 'mammoth', age: 0, mandatory: true, icon: '🐘', title: 'Chasser le mammouth',
+    intro: 'Une harde de mammouths descend des glaciers et passe non loin du camp. Un seul de ces géants laineux nourrirait tout le monde pendant des lunes, et ses peaux tiendraient chaud tout l’hiver… mais un mammouth, ça se chasse à plusieurs, et avec ruse.',
+    choices: [
+      {
+        label: 'Pièges et fosses', text: 'Long mais sûr : on creuse des fosses sur le passage de la harde, on les couvre de branchages, et l’on attend qu’un mammouth s’y prenne les pattes.',
+        dest: 'plain', scene: 'mammoth', fail: 'scatter', doing: 'creuse des fosses sur le passage de la harde et guette les mammouths', danger: ['beast', 'weather'], party: 4, work: 30, risk: 0.2, carry: 'sledge',
+        win: [food(6, 6), food(2), joy(2, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [],
+        winText: 'Le vieux mâle s’est pris les pattes dans une fosse : les chasseurs rentrent, le traîneau chargé de viande et de peaux. Ce soir, grande fête autour du feu !',
+        loseText: 'La harde a flairé les fosses et fait un grand détour. Les chasseurs rentrent les mains vides, mais les fosses attendront la prochaine fois.',
+      },
+      {
+        label: 'Rabattre la harde vers le ravin', text: 'Rapide mais risqué : torches et grands cris, on pousse les mammouths vers un ravin où le plus vieux restera coincé. Un mammouth affolé, ça charge !',
+        dest: 'mountain', scene: 'mammoth', fail: 'charge', doing: 'rabat la harde vers le ravin, torches et lances en main', danger: ['beast', 'fall'], party: 5, work: 18, risk: 0.4, carry: 'sledge',
+        win: [food(8, 6), food(2), joy(3, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [hurt(2, 2), joy(-1, 3)],
+        winText: 'La harde a dévalé la pente et le vieux mâle est resté coincé au fond du ravin : jamais le camp n’a vu autant de viande et de fourrures !',
+        loseText: 'Le vieux mâle a fait volte-face et chargé les rabatteurs : deux chasseurs sont blessés, et la harde s’est enfuie dans la montagne.',
+      },
+      {
+        label: 'Suivre la harde à distance', text: 'Patient : on suit les mammouths au-delà des collines sans se montrer, jusqu’à ce qu’un vieux mâle fatigué traîne loin derrière les autres.',
+        dest: 'far', scene: 'mammoth', fail: 'blizzard', doing: 'suit la harde à distance et encercle le vieux mâle', party: 3, work: 26, risk: 0.25, carry: 'sledge',
+        win: [food(5, 6), food(2), joy(2, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [hurt(1, 1)],
+        winText: 'Le vieux mâle, à bout de souffle, s’est couché loin derrière la harde : les chasseurs rentrent, le traîneau plein de viande et de peaux.',
+        loseText: 'Une tempête de neige a effacé les traces : la harde s’est évanouie au-delà des collines, et un chasseur rentre en boitant.',
+      },
+    ],
+  },
   // ---------------- Antiquité ----------------
   {
     id: 'seeds', age: 1, mandatory: true, icon: '🌾', title: 'Le blé des collines',
@@ -302,27 +337,28 @@ export const MISSIONS: Mission[] = [
   },
   // ---------------- Moyen Âge ----------------
   {
+    // réussie, elle rapporte de quoi passer à l'âge industriel (12 minerai, voir AGES), quel que soit le choix
     id: 'mine', age: 2, mandatory: true, icon: '⚒️', title: 'Le filon de la montagne', unlocks: 'mine',
     intro: 'Les forgerons manquent de fer. Au cœur de la montagne, dit-on, un filon brille dans le noir.',
     choices: [
       {
         label: 'Creuser une galerie', text: 'Du travail de mineur, long et solide.',
         dest: 'mountain', scene: 'gallery', fail: 'rocks', doing: 'creuse la galerie et sort le minerai au wagonnet', party: 4, work: 30, risk: 0.2, carry: 'cart',
-        win: [{ t: 'ore', n: 10 }, jobs(2)], lose: [{ t: 'ore', n: 3 }, hurt(1, 2)],
+        win: [{ t: 'ore', n: 12 }, jobs(2)], lose: [{ t: 'ore', n: 3 }, hurt(1, 2)],
         winText: 'La galerie a percé le filon : le chariot rentre chargé de minerai, les forges vont chanter.',
         loseText: 'Un éboulement a bloqué la galerie. Un mineur blessé, et seulement quelques pierres de minerai.',
       },
       {
         label: 'Explorer la grande grotte', text: 'On raconte qu’elle cache un trésor… et qu’on s’y perd.',
         dest: 'cave', scene: 'cave', fail: 'dark', doing: 'explore la grotte à la lueur des torches', party: 3, work: 20, risk: 0.35, carry: 'cart',
-        win: [{ t: 'ore', n: 14 }, joy(2)], lose: [hurt(2, 2)],
+        win: [{ t: 'ore', n: 16 }, joy(2)], lose: [hurt(2, 2)],
         winText: 'Au fond de la grotte, un filon gros comme un tonneau ! Le village fête ses explorateurs.',
         loseText: 'Les torches se sont éteintes dans la grotte ; deux explorateurs se sont blessés en ressortant.',
       },
       {
-        label: 'Acheter du minerai aux mineurs nomades', text: 'Sans danger, mais ils voudront des vivres.',
+        label: 'Acheter du minerai aux mineurs nomades', text: 'Sans danger, mais ils voudront beaucoup de vivres.',
         dest: 'far', scene: 'trade', doing: 'échange des vivres contre le minerai des nomades', party: 2, work: 12, risk: 0.05, carry: 'cart',
-        win: [{ t: 'ore', n: 6 }, food(-2, 3)], lose: [],
+        win: [{ t: 'ore', n: 12 }, food(-3, 4)], lose: [],
         winText: 'Les nomades ont échangé leur minerai contre des vivres : il faudra se serrer un peu la ceinture.',
         loseText: 'Les nomades n’ont rien voulu échanger : leur minerai partira ailleurs.',
       },
@@ -709,21 +745,24 @@ export const STABLE_CAP = 4;
 
 /**
  * Bêtes de chaque écurie et de chaque enclos (dans l'ordre où ils ont été bâtis) : les chevaux vont d'abord à l'écurie, le
- * reste du troupeau (et les chevaux en trop) dans les enclos ; celles qui, faute de place, paissent près des fermes
+ * reste du troupeau (et les chevaux en trop) dans les enclos ; celles qui, faute de place, paissent près des fermes.
+ * `flock` : un autre troupeau que celui du village (celui de tout à l'heure, avec les bêtes qu'une équipe ramène)
  */
-export function penHerds(w: World) {
+export function penHerds(w: World, flock: HerdKind[] = w.exp.herd) {
   const all = (k: KindId) => [...w.buildings.values()].filter((b) => b.kind === k).sort((a, b) => a.id - b.id);
-  const horses = w.exp.herd.filter((k) => k === 'horse').slice(w.exp.riding), stables = new Map<number, HerdKind[]>(), pens = new Map<number, HerdKind[]>();
+  const horses = flock.filter((k) => k === 'horse').slice(w.exp.riding), stables = new Map<number, HerdKind[]>(), pens = new Map<number, HerdKind[]>();
   let h = 0;
   for (const s of all('stable')) { stables.set(s.id, horses.slice(h, h + STABLE_CAP)); h += STABLE_CAP; }
-  const herd = [...w.exp.herd.filter((k) => k !== 'horse'), ...horses.slice(h)];
+  const herd = [...flock.filter((k) => k !== 'horse'), ...horses.slice(h)];
   let i = 0;
   for (const p of all('pen')) { pens.set(p.id, herd.slice(i, i + PEN_CAP)); i += PEN_CAP; }
   return { pens, stables, rest: herd.slice(i) };
 }
 
-/** La mission obligatoire de l'âge (celle qui ouvre l'âge suivant) */
-export const mandatoryFor = (age: number) => MISSIONS.find((m) => m.age === age && m.mandatory) ?? null;
+/** Les missions obligatoires de l'âge : toutes à réussir pour ouvrir l'âge suivant (deux à la Préhistoire) */
+export const mandatoriesFor = (age: number) => MISSIONS.filter((m) => m.age === age && m.mandatory);
+/** La première mission obligatoire de l'âge */
+export const mandatoryFor = (age: number) => mandatoriesFor(age)[0] ?? null;
 
 /** État des expéditions, sauvegardé avec le monde */
 export interface ExpState {
@@ -804,7 +843,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
 
 const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: '🔨', joy: '😊' };
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
-const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
+const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

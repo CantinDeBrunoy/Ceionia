@@ -6,7 +6,7 @@ import { costOf, priceIn, canPay, pay, shortLabel, PRODUCERS } from '../src/sim/
 import { DIFFICULTY, DIFFICULTIES, Difficulty, readDifficulty } from '../src/sim/difficulty';
 import { Expeditions } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
-import { MISSIONS, mandatoryFor } from '../src/sim/missions';
+import { MISSIONS, mandatoriesFor } from '../src/sim/missions';
 import { GEAR, GEAR_BY, gearCost, gearCostLabel } from '../src/sim/gear';
 
 const ALL = Object.keys(KINDS) as KindId[];
@@ -223,7 +223,7 @@ describe('passage d’âge en défi', () => {
   function stocked(d: Difficulty) {
     const w = flatWorld(d);
     put(w, [...many('house', 12), ['farm', 0], ['well', 0], ...many('workshop', 3), ...many('gather', 2), ['health', 0], ['school', 0]]);
-    w.exp.done.push(mandatoryFor(0)!.id);
+    w.exp.done.push(...mandatoriesFor(0).map((m) => m.id));
     const sim = new Sim(w);
     sim.recalc();
     sim.pop = AGES[1].reqPop;

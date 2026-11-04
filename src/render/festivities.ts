@@ -17,7 +17,12 @@ const BURSTS: number[][] = [
 const CONFETTI = [0xff5a6a, 0x4aa8ff, 0x6ad86a, 0xffd04a, 0xd06aff, 0xffffff];
 const PETALS = [0xf8c8d8, 0xffffff, 0xf2a6c8];
 
-interface Particle { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; c: THREE.Color; kind: 'spark' | 'rocket' | 'flake'; drag: number; trail: number }
+interface Particle { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; c: THREE.Color; kind: 'spark' | 'rocket' | 'flake' | 'ember'; drag: number; trail: number }
+/**
+ * Les braises qui montent du feu de joie : petites, comme les étincelles d'un vrai feu (tirées avec les gerbes du feu
+ * d'artifice, larges pour se voir de loin dans le ciel, elles faisaient une colonne de lumière jaune plus haute que le camp)
+ */
+const EMBERS = 600;
 
 interface Fest {
   x: number; y: number; z: number; age: number; t: number; dur: number; next: number;
@@ -44,8 +49,10 @@ export class Festivities {
   private fests: Fest[] = [];
   private sparks: Particle[] = [];
   private flakes: Particle[] = [];
+  private embers: Particle[] = [];
   private glowPts: THREE.Points;
   private flakePts: THREE.Points;
+  private emberPts: THREE.Points;
   private flashPts: THREE.Points;
   private flashes: { x: number; y: number; z: number; t: number; c: THREE.Color }[] = [];
   private flameMat = new THREE.MeshBasicMaterial({ color: 0xffa040, fog: false });
@@ -70,7 +77,8 @@ export class Festivities {
     this.flashPts.frustumCulled = false;
     this.group.add(this.flashPts);
     this.flakePts = new THREE.Points(mk(CAP / 2), new THREE.PointsMaterial({ size: 0.09, vertexColors: true, transparent: true, depthWrite: false }));
-    for (const p of [this.glowPts, this.flakePts]) { p.frustumCulled = false; this.group.add(p); }
+    this.emberPts = new THREE.Points(mk(EMBERS), new THREE.PointsMaterial({ size: 0.06, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    for (const p of [this.glowPts, this.flakePts, this.emberPts]) { p.frustumCulled = false; this.group.add(p); }
     // danseur : jambes, tunique et tête d'un seul tenant, teinté par instance
     const body = new THREE.BoxGeometry(0.06, 0.09, 0.04).translate(0, 0.115, 0);
     const legs = new THREE.BoxGeometry(0.045, 0.07, 0.03).translate(0, 0.035, 0);
@@ -91,17 +99,18 @@ export class Festivities {
     const y = this.world.surfaceAt(x, z), group = new THREE.Group();
     group.position.set(x, y, z);
     this.group.add(group);
-    // le feu de joie : bûcher, flammes qui dansent
+    // le feu de joie : bûcher, flammes qui dansent (un cœur jaune entre trois langues orangées, à peu près deux fois la
+    // hauteur d'un danseur : un grand feu, pas une colonne qui dépasse le camp)
     const flames: THREE.Mesh[] = [];
     if (age <= 2) {
       for (let i = 0; i < 6; i++) {
-        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.42, 5), this.woodMat);
-        log.position.set(0, 0.14, 0); log.rotation.set(0.5, (i / 6) * Math.PI * 2, 0, 'YXZ'); log.translateY(0.02);
+        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.027, 0.34, 5), this.woodMat);
+        log.position.set(0, 0.11, 0); log.rotation.set(0.5, (i / 6) * Math.PI * 2, 0, 'YXZ'); log.translateY(0.02);
         group.add(log);
       }
-      for (const [r, h, m] of [[0.2, 0.55, this.flameMat], [0.12, 0.7, this.coreMat], [0.1, 0.45, this.flameMat]] as [number, number, THREE.Material][]) {
+      for (const [r, h, m, a] of [[0.1, 0.26, this.coreMat, -1], [0.09, 0.42, this.flameMat, 0], [0.08, 0.34, this.flameMat, 2.1], [0.08, 0.3, this.flameMat, 4.2]] as [number, number, THREE.Material, number][]) {
         const f = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6).translate(0, h / 2, 0), m);
-        f.position.y = 0.04;
+        f.position.set(a < 0 ? 0 : Math.cos(a) * 0.06, 0.04, a < 0 ? 0 : Math.sin(a) * 0.06);
         group.add(f); flames.push(f);
       }
     }
@@ -127,7 +136,7 @@ export class Festivities {
     if (age <= 2) this.onFeast?.(age);
   }
 
-  get active() { return this.fests.length > 0 || this.sparks.length > 0 || this.flakes.length > 0 || this.flashes.length > 0; }
+  get active() { return this.fests.length > 0 || this.sparks.length > 0 || this.flakes.length > 0 || this.embers.length > 0 || this.flashes.length > 0; }
 
   update(dt: number) {
     if (!this.active) return;
@@ -136,9 +145,9 @@ export class Festivities {
       const f = this.fests[i];
       f.t += dt;
       const fade = Math.min(1, (f.dur - f.t) / 3);
-      // flammes qui vacillent et étincelles qui montent du feu
+      // flammes qui vacillent et braises qui montent du feu
       f.flames.forEach((m, j) => m.scale.set(1, (0.85 + Math.sin(f.t * 13 + j * 2.1) * 0.12 + Math.sin(f.t * 7.3 + j) * 0.08) * Math.max(0.05, fade), 1));
-      if (f.age <= 2 && fade > 0) for (let k = 0; k < 3; k++) if (Math.random() < dt * 30) this.spark(f.x + (Math.random() - 0.5) * 0.2, f.y + 0.4, f.z + (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.4, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 0.4, 0xffa040, 0.8 + Math.random() * 0.8, 0.4);
+      if (f.age <= 2 && fade > 0) for (let k = 0; k < 2; k++) if (Math.random() < dt * 14) this.ember(f.x + (Math.random() - 0.5) * 0.16, f.y + 0.3, f.z + (Math.random() - 0.5) * 0.16);
       // la ronde : on tourne, on saute, on lève les bras
       const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
       const n = f.dancers.count;
@@ -178,6 +187,13 @@ export class Festivities {
   private spark(x: number, y: number, z: number, vx: number, vy: number, vz: number, color: number, life: number, drag = 0.6) {
     if (this.sparks.length >= CAP) return;
     this.sparks.push({ x, y, z, vx, vy, vz, life, max: life, c: new THREE.Color(color), kind: 'spark', drag, trail: 0 });
+  }
+
+  /** Une braise qui monte du feu de joie en tourbillonnant un peu, puis s'éteint */
+  private ember(x: number, y: number, z: number) {
+    if (this.embers.length >= EMBERS) return;
+    const life = 0.7 + Math.random() * 0.6;
+    this.embers.push({ x, y, z, vx: (Math.random() - 0.5) * 0.3, vy: 0.5 + Math.random() * 0.5, vz: (Math.random() - 0.5) * 0.3, life, max: life, c: new THREE.Color(Math.random() < 0.6 ? 0xffa040 : 0xffd070), kind: 'ember', drag: 0.5, trail: 0 });
   }
 
   private flake(x: number, y: number, z: number, color: number) {
@@ -240,6 +256,19 @@ export class Festivities {
       fpos.setXYZ(m, p.x, p.y, p.z); fcol.setXYZ(m, p.c.r, p.c.g, p.c.b); m++;
     }
     fg.setDrawRange(0, m); fpos.needsUpdate = true; fcol.needsUpdate = true;
+    const eg = this.emberPts.geometry, epos = eg.attributes.position as THREE.BufferAttribute, ecol = eg.attributes.color as THREE.BufferAttribute;
+    let e = 0;
+    for (let i = this.embers.length - 1; i >= 0; i--) {
+      const p = this.embers[i];
+      p.life -= dt;
+      if (p.life <= 0) { this.embers.splice(i, 1); continue; }
+      const d = Math.exp(-p.drag * dt);
+      p.vx *= d; p.vz *= d;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      const k = Math.min(1, (p.life / p.max) * 1.8);
+      epos.setXYZ(e, p.x, p.y, p.z); ecol.setXYZ(e, p.c.r * k, p.c.g * k, p.c.b * k); e++;
+    }
+    eg.setDrawRange(0, e); epos.needsUpdate = true; ecol.needsUpdate = true;
     const hg = this.flashPts.geometry, hpos = hg.attributes.position as THREE.BufferAttribute, hcol = hg.attributes.color as THREE.BufferAttribute;
     let h = 0;
     for (let i = this.flashes.length - 1; i >= 0; i--) {

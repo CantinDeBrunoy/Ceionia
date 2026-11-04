@@ -1,4 +1,5 @@
-import { penHerds } from '../sim/missions';
+import { penHerds, HerdKind } from '../sim/missions';
+import { claimArrival } from './pens';
 import * as THREE from 'three';
 import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO } from '../world/world';
 import { KINDS, sizeOf } from '../build/catalog';
@@ -41,6 +42,8 @@ const PREY: Partial<Record<Kind, { kinds: Kind[]; sight: number }>> = {
 const GRAZERS = new Set<Kind>(['sheep', 'cow', 'pig', 'horse', 'deer', 'llama', 'rabbit']);
 const DRINKERS = new Set<Kind>(['sheep', 'cow', 'horse', 'deer', 'llama', 'fox', 'wolf', 'bear']);
 const SWIMMERS = new Set<Kind>(['fish', 'dolphin', 'whale', 'manta']);
+/** Bêtes que ramènent les expéditions */
+const HERDS = new Set<Kind>(['sheep', 'cow', 'pig', 'horse']);
 
 interface Critter {
   kind: Kind;
@@ -605,8 +608,11 @@ export class Fauna {
           c.actor = makeActor(name, md.length * (0.9 + this.rnd() * 0.2));
           if (c.actor) { this.group.add(c.actor.root); c.actor.mixer.setTime(this.rnd() * 3); }
         }
-        // apparition dispersée autour du domaine
-        for (let k = 0; k < 6 && kind !== 'duckling' && kind !== 'bird'; k++) {
+        // une bête qu'une expédition vient de ramener (sans place à l'enclos) part de là où l'équipe l'a laissée, et gagne son
+        // pré à pied (voir `claimArrival`) ; les autres apparaissent dispersées autour de leur domaine
+        const arr = s.key.startsWith('herd-') && HERDS.has(kind) ? claimArrival(kind as HerdKind, s.hx, s.hz) : null;
+        if (arr) { c.x = c.tx = arr.x; c.z = c.tz = arr.z; c.heading = arr.heading; }
+        else for (let k = 0; k < 6 && kind !== 'duckling' && kind !== 'bird'; k++) {
           const a = this.rnd() * 6.28, r = this.rnd() * s.radius * 0.6;
           const x = s.hx + Math.cos(a) * r, z = s.hz + Math.sin(a) * r;
           if (sp.ok(this.world, Math.floor(x), Math.floor(z))) { c.x = c.tx = x; c.z = c.tz = z; break; }

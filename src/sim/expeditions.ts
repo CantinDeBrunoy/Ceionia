@@ -369,6 +369,8 @@ export class Expeditions {
     const kits = party.map((): Kit => ({}));
     for (const g of ['rifle', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
     kits.forEach((kt, i) => {
+      // les chasseurs du mammouth ont toujours leurs lances de chasse au poing (les armes du village, emportées en plus, rendent la chasse plus sûre)
+      if (c.scene === 'mammoth') kt.weapon ??= 'spear';
       if (i < (take.armor ?? 0)) kt.armor = true;
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;

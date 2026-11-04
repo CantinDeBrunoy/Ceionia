@@ -104,13 +104,13 @@ Le bouton 🧭 (il clignote tant que l'expédition obligatoire de l'âge n'est n
 
 **Plusieurs expéditions à la fois** : le village envoie une équipe de plus tous les 30 habitants (une seule jusqu'à 29, deux à 30, trois à 60, quatre au plus dès 90), chacune avec son fanion (rouge, bleu, jaune, vert) ; une même mission ne part pas deux fois en même temps, et deux équipes ne campent pas au même endroit.
 
-**Une expédition obligatoire par âge** conditionne le passage à l'âge suivant :
+**Une expédition obligatoire par âge** (deux à la Préhistoire) conditionne le passage à l'âge suivant :
 
 | Âge | Obligatoire | Facultatives |
 | --- | --- | --- |
-| Préhistoire | 🐑 Apprivoiser des bêtes : moutons, vaches ou aurochs, qui broutent ensuite près des fermes | 🍇 La grande cueillette, ⛏️ La chasse au silex |
+| Préhistoire | 🐑 Apprivoiser des bêtes : moutons, vaches ou aurochs, qui broutent ensuite près des fermes (ou entrent à l'enclos, par le portail) ; 🐘 Chasser le mammouth : fosses couvertes de branchages, harde rabattue vers un ravin ou suivie de loin, le vieux mâle qu'on pousse, lances au poing ; au retour, un traîneau de viande et de peaux, des vivres, du bien-être et des fourrures pour tout le camp (imprévus : le vieux mâle qui charge, la tempête de neige) | 🍇 La grande cueillette, ⛏️ La chasse au silex |
 | Antiquité | 🌾 Le blé des collines : les champs donnent 30 % de plus | 🐎 Les chevaux sauvages, 🐟 Les grands bancs |
-| Moyen Âge | ⚒️ Le filon de la montagne : du minerai | 🔦 Repérer les profondeurs, ⚔️ Expédition armée dans les profondeurs, 🐺 Le loup des bois, 🎪 Les jongleurs du carrefour |
+| Moyen Âge | ⚒️ Le filon de la montagne : du minerai (12 au moins, de quoi passer à l'âge industriel) | 🔦 Repérer les profondeurs, ⚔️ Expédition armée dans les profondeurs, 🐺 Le loup des bois, 🎪 Les jongleurs du carrefour |
 | Âge industriel | 🚂 Le tracé du chemin de fer | 🏭 Prospection de charbon |
 | Époque moderne | 🏔️ Expédition au sommet | 🐠 Le récif |
 | Âge futuriste | — (le dernier âge) | 🚀 Premier vol de fusée → 🌕 Un homme sur la Lune → 🪐 Coloniser une autre planète (la fin de la partie) |
