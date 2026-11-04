@@ -5,6 +5,7 @@ import { newWorld } from '../src/world/mapgen';
 import { raiseVolcano, volcanoRadius } from '../src/world/terraform';
 import { KINDS, KIND_ORDER, KindId, sizeOf } from '../src/build/catalog';
 import { getModel } from '../src/render/models';
+import { HUMAN } from '../src/render/assets';
 import { VegView, WALL_GAP, syncChunks } from '../src/render/vegetation';
 import { BuildingView, skylineTier } from '../src/render/buildings';
 import { Atmosphere } from '../src/render/atmosphere';
@@ -94,6 +95,20 @@ describe('rendu', () => {
   });
 });
 
+describe('personnages', () => {
+  it('les personnages des bâtiments agrandis (temple, atelier, moulin) gardent la taille des habitants', () => {
+    // le technicien au pied de l'éolienne : posée sur quatre cases, elle est dessinée pour une puis agrandie, lui non
+    const top = (small: boolean) => {
+      const g = getModel('mill', 4, { v: 0, L: false, R: false, F: true, small }).crowd!;
+      g.computeBoundingBox();
+      return g.boundingBox!.max.y;
+    };
+    expect(top(false)).toBeGreaterThan(HUMAN * 0.8);
+    expect(top(false)).toBeLessThan(HUMAN * 1.1);
+    expect(top(false)).toBeCloseTo(top(true), 3);
+  });
+});
+
 describe('maisons et tours', () => {
   /** Une rangée de n maisons accolées, façade au sud, à l'âge voulu ; leurs fiches (clés de modèle) dans l'ordre */
   function terrace(n: number, age: number) {
@@ -119,6 +134,15 @@ describe('maisons et tours', () => {
       expect(len).toBeLessThanOrEqual(3);
     }
     expect(row.filter((h) => h.L).length).toBeGreaterThan(3);
+  });
+
+  it('les maisons du Moyen Âge, aussi détaillées que l’hôtel-Dieu, restent légères : il y en a beaucoup dans un village', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    for (let v = 0; v < 6; v++)
+      for (const [L, R, F] of [[false, false, true], [false, false, false], [true, false, true], [true, true, true]]) {
+        const m = getModel('house', 2, { v, L, R, F, row: v % 4 });
+        expect(tris(m.body) + tris(m.glow), `variante ${v}, ${+L}${+R}${+F}`).toBeLessThan(3000);
+      }
   });
 
   it('les tours futuristes n’ont pas toutes la même hauteur : la ville a une ligne d’horizon', () => {
