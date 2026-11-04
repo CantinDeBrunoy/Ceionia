@@ -243,6 +243,8 @@ class Game implements UIHost {
     this.halos = new Halos(w);
     // expéditions : une équipe d'habitants part chercher bêtes, minerai, semences… et revient raconter
     this.expeditions = new Expeditions(w, this.agents, () => this.time.dayLen);
+    // l'âge du village (les noms des bâtiments, les troupes de l'époque), pas celui du plus récent de ses bâtiments
+    this.expeditions.age = () => this.sim.age;
     this.expeditions.pop = () => this.sim.pop;
     this.expeditions.under = this.under;
     this.expView = new ExpeditionView(w, this.agents, this.expeditions);

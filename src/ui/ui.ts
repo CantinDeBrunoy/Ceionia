@@ -1214,7 +1214,7 @@ export class UI {
     // l'expédition armée qui fait avancer les quêtes, lancée d'ici
     const deep = MISSIONS.find((m) => m.id === 'deep')!, age = this.host.sim.age, miss = ex.missing(deep);
     const send = age < deep.age ? `<p class="hint">${ic('sword', 15, 2)} Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`
-      : miss.length ? `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">Il faut d’abord :</p><p class="req">${this.needsHtml(deep) || miss.join(', ')}</p></div>`
+      : miss.length ? `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">Il suffit d’un avant-poste bâti tout contre une grotte ou une faille. Les troupes à pied partent sans chevaux ; seule la charge en demande. « Repérer les profondeurs », facultatif, rend les troupes plus sûres.</p><p class="req">${this.needsHtml(deep) || miss.join(', ')}</p></div>`
       : ex.running(deep) ? `<p class="hint">${ic('sword', 15, 2)} Une expédition armée est déjà dans les galeries.</p>`
       : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe part du village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><div class="choices">${this.choiceButtons(deep)}</div></div>`;
     const quests = CAMP_QUESTS.map((q, i) => {
