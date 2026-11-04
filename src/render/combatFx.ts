@@ -112,6 +112,15 @@ export class CombatFx {
     this.puff(x, y, z, 16);
   }
 
+  /** Éclats de roche sous la pioche : ils sautent et retombent, sans éclair ni bruit */
+  chips(x: number, y: number, z: number, color = 0xb8ab94, n = 6) {
+    const c = new THREE.Color(color);
+    for (let i = 0; i < n && this.sparks.length < CAP; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 0.3 + Math.random() * 0.6;
+      this.sparks.push({ x, y, z, vx: Math.cos(a) * sp, vy: 0.4 + Math.random() * 0.8, vz: Math.sin(a) * sp, life: 0.35 + Math.random() * 0.3, max: 0.65, c, dust: false });
+    }
+  }
+
   /** Poussière soulevée au sol (une bête qui tombe, une lance qui se plante) */
   puff(x: number, y: number, z: number, n = 8) {
     const c = new THREE.Color(0xc8b8a0);

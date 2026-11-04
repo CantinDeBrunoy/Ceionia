@@ -206,6 +206,9 @@ export class World {
   mined = new Set<number>();
   /** galeries du souterrain que le village tient (garnisons des avant-postes, conquêtes des expéditions armées) */
   claimed = new Set<number>();
+  /** cases de roche percées par les mineurs du camp (tunnels), et celles qu'ils ont encore à creuser, dans l'ordre */
+  dug = new Set<number>();
+  digs: number[] = [];
 
   /**
    * La lave recouvre la case : les arbres brûlent, le sol devient basalte puis cendre fertile ; les routes sont épargnées,
@@ -1165,6 +1168,8 @@ export class World {
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       mined: [...this.mined],
       claimed: [...this.claimed],
+      dug: [...this.dug],
+      digs: this.digs,
       exp: this.exp,
       difficulty: this.difficulty,
       ageBase: this.ageBase,
@@ -1267,6 +1272,10 @@ export class World {
     for (const k of Array.isArray(d.oil) ? d.oil : []) if (k >= 0 && k < N * N) this.oil[k] = 1;
     this.mined =new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.claimed = new Set((d.claimed ?? []).filter((k: number) => k >= 0 && k < N * N));
+    // tunnels creusés et file des mineurs (les anciennes sauvegardes n'en ont pas)
+    const cells = (a: unknown): number[] => (Array.isArray(a) ? a : []).filter((k): k is number => Number.isInteger(k) && k >= 0 && k < N * N);
+    this.dug = new Set(cells(d.dug));
+    this.digs = [...new Set(cells(d.digs))].filter((k) => !this.dug.has(k));
     this.exp = readExpState(d.exp);
     this.difficulty = readDifficulty(d.difficulty);
     // une ancienne sauvegarde n'en a pas : tout le village compte pour l'âge suivant

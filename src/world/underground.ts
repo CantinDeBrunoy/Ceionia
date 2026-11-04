@@ -23,11 +23,14 @@ export const ORE_KINDS: { name: string; amount: number; w: number }[] = [
 ];
 const ORE_W = ORE_KINDS.reduce((s, o) => s + o.w, 0);
 
-/** Filons incrustés dans les parois (cases de galerie au pied de la roche ; plus précieux dans le magma), sauf ceux exploités */
+/**
+ * Filons incrustés dans les parois (cases de galerie au pied de la roche ; plus précieux dans le magma), sauf ceux exploités ;
+ * les tunnels creusés n'en ont pas (le minerai qu'on y trouve est remonté en creusant)
+ */
 export function oreVeins(u: Underground, mined: Set<number>): { k: number; ore: number }[] {
   const out: { k: number; ore: number }[] = [];
   for (let k = 0; k < N * N; k++) {
-    if (!u.open[k] || u.wallDist[k] !== 1 || mined.has(k)) continue;
+    if (!u.open[k] || u.wallDist[k] !== 1 || mined.has(k) || u.isDug(k)) continue;
     const cx = k % N, cz = Math.floor(k / N), zone = u.zone[k];
     if (hash2(cx, cz, 200) > (zone === UZ_STONE ? 0.2 : 0.06)) continue;
     let r = hash2(cx, cz, 201) * ORE_W, ore = 0;
@@ -113,9 +116,85 @@ export class Underground {
   entrances: Entrance[] = [];
   /** incrémenté à chaque régénération */
   version = 0;
+  /** incrémenté à chaque case creusée par les mineurs (le relief change sans tout régénérer) */
+  carved = 0;
   private key = '';
+  /** bruit du relief affiché, gardé pour le refaire autour d'une case creusée */
+  private visNoise: Simplex | null = null;
 
   constructor(private world: World) {}
+
+  /** Case percée par les mineurs du camp (un tunnel) */
+  isDug(k: number) { return this.world.dug.has(k); }
+
+  /** Case de roche que l'on peut creuser : dans la carte, hors du bord toujours rocheux */
+  canCarve(k: number) {
+    const x = k % N, z = Math.floor(k / N);
+    return k >= 0 && k < N * N && x >= BORDER && z >= BORDER && x < N - BORDER && z < N - BORDER && !this.open[k];
+  }
+
+  /**
+   * Creuse une case de roche : elle devient une galerie (jamais un bassin), les parois et le relief affiché se refont
+   * autour d'elle ; renvoie les sommets du relief refaits (x0, z0, x1, z1, bornes comprises), ou null si l'on ne peut pas
+   */
+  dig(k: number): [number, number, number, number] | null {
+    if (!this.canCarve(k) || !this.visNoise) return null;
+    this.world.dug.add(k);
+    this.open[k] = 1;
+    this.pool[k] = 0;
+    this.walls();
+    const rect = this.carveRect(k);
+    this.buildVis(this.visNoise, rect);
+    this.carved++;
+    return rect;
+  }
+
+  /**
+   * Sommets du relief affiché que change une case creusée (x0, z0, x1, z1, bornes comprises) : le champ d'ouverture est flouté
+   * sur deux cases et lu en un point gauchi d'un tiers de case, quatre cases alentour suffisent
+   */
+  carveRect(k: number): [number, number, number, number] {
+    const x = k % N, z = Math.floor(k / N), M = 4;
+    return [Math.max(0, (x - M) * VR), Math.max(0, (z - M) * VR), Math.min(VS - 1, (x + M + 1) * VR), Math.min(VS - 1, (z + M + 1) * VR)];
+  }
+
+  /**
+   * Tunnel le plus court à travers la roche : depuis les cases `from` (galeries tenues, cases déjà prévues), de case de roche
+   * en case de roche (`pass` : celles qu'on accepte de creuser), jusqu'à la première qui satisfait `goal` ; renvoie les cases
+   * à creuser dans l'ordre (de la galerie vers le but), ou null au-delà de `max` cases
+   */
+  tunnel(from: Iterable<number>, goal: (k: number) => boolean, max: number, pass: (k: number) => boolean = () => true): number[] | null {
+    const prev = new Map<number, number>(), src = new Set(from);
+    let wave: number[] = [];
+    for (const s of src) {
+      const x = s % N, z = (s - x) / N;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const n = (z + dz) * N + x + dx;
+        if (x + dx < 0 || z + dz < 0 || x + dx >= N || z + dz >= N || src.has(n) || prev.has(n) || !this.canCarve(n) || !pass(n)) continue;
+        prev.set(n, -1); wave.push(n);
+      }
+    }
+    for (let depth = 1; depth <= max && wave.length; depth++) {
+      // d'abord la case qui atteint le but, la plus proche de la galerie ; puis la vague suivante
+      const hit = wave.find(goal);
+      if (hit !== undefined) {
+        const out: number[] = [];
+        for (let k = hit; k >= 0; k = prev.get(k)!) out.push(k);
+        return out.reverse();
+      }
+      const next: number[] = [];
+      for (const k of wave) {
+        const x = k % N, z = (k - x) / N;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const n = (z + dz) * N + x + dx;
+          if (x + dx < 0 || z + dz < 0 || x + dx >= N || z + dz >= N || src.has(n) || prev.has(n) || !this.canCarve(n) || !pass(n)) continue;
+          prev.set(n, k); next.push(n);
+        }
+      }
+      wave = next;
+    }
+    return null;
+  }
 
   /** Régénère si la carte ou ses entrées ont changé ; renvoie true dans ce cas */
   sync(): boolean {
@@ -155,11 +234,11 @@ export class Underground {
     return h00 + u * (h11 - h01) + v * (h01 - h00);
   }
 
-  /** Distance en pas (cases où l'on marche) depuis une case, -1 hors d'atteinte */
-  distances(from: number) {
+  /** Distance en pas (cases où l'on marche) depuis une case (ou la plus proche de plusieurs), -1 hors d'atteinte */
+  distances(from: number | number[]) {
     const d = new Int32Array(N * N).fill(-1), q = new Int32Array(N * N);
     let h = 0, t = 0;
-    d[from] = 0; q[t++] = from;
+    for (const f of typeof from === 'number' ? [from] : from) if (f >= 0 && f < N * N && d[f] < 0) { d[f] = 0; q[t++] = f; }
     while (h < t) {
       const k = q[h++], x = k % N, z = (k - x) / N;
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -269,20 +348,8 @@ export class Underground {
         this.zone[k] = zone;
       }
 
-    // distance aux parois (parcours en largeur depuis la roche)
-    const wd = this.wallDist, queue = new Int32Array(N * N);
-    let head = 0, tail = 0;
-    for (let k = 0; k < N * N; k++) if (!open[k]) { wd[k] = 0; queue[tail++] = k; } else wd[k] = 255;
-    while (head < tail) {
-      const k = queue[head++], x = k % N, z = Math.floor(k / N), d = wd[k];
-      if (d >= 8) continue;
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = x + dx, nz = z + dz;
-        if (nx < 0 || nz < 0 || nx >= N || nz >= N) continue;
-        const nk = nz * N + nx;
-        if (wd[nk] > d + 1) { wd[nk] = d + 1; queue[tail++] = nk; }
-      }
-    }
+    this.walls();
+    const wd = this.wallDist;
 
     // sol ondulé ; lacs et bassins de lave au cœur des grandes salles, loin des entrées
     this.pool.fill(0);
@@ -299,7 +366,29 @@ export class Underground {
         }
       }
     this.settlePools();
+    // les tunnels des mineurs, percés après coup : les lacs restent ceux de la roche d'origine
+    let dug = false;
+    for (const k of this.world.dug) if (this.canCarve(k)) { open[k] = 1; this.pool[k] = 0; dug = true; }
+    if (dug) this.walls();
+    this.visNoise = s5;
     this.buildVis(s5);
+  }
+
+  /** Distance aux parois (parcours en largeur depuis la roche) */
+  private walls() {
+    const open = this.open, wd = this.wallDist, queue = new Int32Array(N * N);
+    let head = 0, tail = 0;
+    for (let k = 0; k < N * N; k++) if (!open[k]) { wd[k] = 0; queue[tail++] = k; } else wd[k] = 255;
+    while (head < tail) {
+      const k = queue[head++], x = k % N, z = Math.floor(k / N), d = wd[k];
+      if (d >= 8) continue;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, nz = z + dz;
+        if (nx < 0 || nz < 0 || nx >= N || nz >= N) continue;
+        const nk = nz * N + nx;
+        if (wd[nk] > d + 1) { wd[nk] = d + 1; queue[tail++] = nk; }
+      }
+    }
   }
 
   /**
@@ -389,9 +478,10 @@ export class Underground {
   /**
    * Relief affiché, aux contours organiques : la roche et les bassins sont des champs adoucis (1 en galerie, 0 dans la
    * roche), lus entre les centres de case en un point gauchi par un bruit doux ; la paroi monte franchement là où le champ
-   * passe son seuil, le fond des bassins descend en pente douce ; crêtes des parois bosselées, sol à petites bosses
+   * passe son seuil, le fond des bassins descend en pente douce ; crêtes des parois bosselées, sol à petites bosses.
+   * `rect` : seulement ces sommets (x0, z0, x1, z1, bornes comprises), autour d'une case qu'on vient de creuser
    */
-  private buildVis(noise: Simplex) {
+  private buildVis(noise: Simplex, rect: [number, number, number, number] = [0, 0, VS - 1, VS - 1]) {
     const vis = this.vis;
     const blur = (src: Float32Array) => {
       const out = new Float32Array(N * N);
@@ -412,8 +502,8 @@ export class Underground {
       return (f[i] * (1 - u) + f[i + 1] * u) * (1 - v) + (f[i + N] * (1 - u) + f[i + N + 1] * u) * v;
     };
     const step = (a: number, b: number, t: number) => { const k = Math.min(1, Math.max(0, (t - a) / (b - a))); return k * k * (3 - 2 * k); };
-    for (let z = 0; z < VS; z++)
-      for (let x = 0; x < VS; x++) {
+    for (let z = rect[1]; z <= rect[3]; z++)
+      for (let x = rect[0]; x <= rect[2]; x++) {
         // centres de case en (i + 0.5) ; le seuil (0.12 … 0.42) laisse dégagée une galerie large d'une seule case
         const wx = noise.noise2(x * 0.11, z * 0.11) * 0.3, wz = noise.noise2(x * 0.11 + 31, z * 0.11 - 17) * 0.3;
         const fx = x / VR - 0.5 + wx, fz = z / VR - 0.5 + wz;

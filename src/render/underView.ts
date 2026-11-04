@@ -14,6 +14,7 @@ import { CombatFx } from './combatFx';
 import { campLayout, buildCamp, stepCamp, Camp } from './camp';
 import { CAMP_QUESTS, CAMP_GUARDS } from '../sim/depths';
 import { MINER_SPEED } from '../sim/railway';
+import { DIG_WALK, DIG_WALK_MAX } from '../sim/expeditions';
 import { hash2, smoothstep } from '../core/rng';
 
 const BG = new THREE.Color(0x09070c);
@@ -83,6 +84,15 @@ interface Miner { actor: Soldier; x: number; z: number; heading: number; path: [
 /** Équipe d'une ligne : ses mineurs, la lueur de leurs lampes au filon, les places autour du filon en cours */
 interface Crew { key: string; miners: Miner[]; light: Source; slotsAt: number; slots: [number, number, number][] }
 interface Item { m: THREE.Matrix4; c: THREE.Color }
+/** Relief affiché, par sommet : position, hauteur, normale lissée, parts de paroi, de dessus, de liseré, strates, ombre, nuances */
+interface GroundVerts {
+  pos: Float32Array; hv: Float32Array; nor: Float32Array;
+  fWall: Float32Array; fTop: Float32Array; fRim: Float32Array; fStrata: Float32Array; fAo: Float32Array; vFloor: Float32Array; vWall: Float32Array;
+}
+/** Gravats des tunnels (morceaux par forme), cases marquées au plus (file, conseil, case visée) */
+const MAX_RUBBLE = 600, MAX_MARKS = 64;
+/** Teinte des éclats de roche qui volent sous la pioche */
+const CHIP = 0xb8ab94;
 
 /**
  * Monde souterrain : galeries en coupe (le dessus des parois est la tranche sombre de la roche), décor par zone,
@@ -139,6 +149,33 @@ export class UnderView {
   private crews = new Map<number, Crew>();
   /** couleurs du sol telles que générées, avant l'éclaircissement des galeries tenues */
   private groundBase: Float32Array | null = null;
+  /**
+   * relief affiché, par sommet : position (contours glissés), hauteur, normale, et ce qui fait sa teinte ; gardés pour refaire
+   * le coin d'une case creusée sans tout reconstruire
+   */
+  private gv: GroundVerts | null = null;
+  /** cases creusées déjà montrées (le relief se refait autour des nouvelles) */
+  private dugSeen = new Set<number>();
+  private carvedN = -1;
+  /** toiles d'araignée accrochées aux parois, par case (elles tombent quand on creuse leur roche) */
+  private webs = new Map<number, number>();
+  private webMesh: THREE.InstancedMesh | null = null;
+  /** gravats laissés par les mineurs dans les tunnels (deux formes de roche) */
+  private rubble: THREE.InstancedMesh[] = [];
+  /** cases à creuser (contour ambre ; le front du tunnel se remplit à mesure), passage conseillé, case visée */
+  private digMarks: THREE.InstancedMesh;
+  private digFace: THREE.InstancedMesh;
+  private hintMarks: THREE.InstancedMesh;
+  private cursorMarks: THREE.InstancedMesh;
+  private marksKey = '';
+  private cursorCarved = -1;
+  /**
+   * mineurs du camp au front du tunnel : deux frappent la roche, le troisième emporte les gravats un peu en arrière ; leur
+   * lampe, leur pas (pressé, plus encore de loin), où le porteur vide sa hotte
+   */
+  private digCrew: { miners: Miner[]; light: Source; face: number; hit: number[]; pickT: number; speed: number; dump: [number, number] } | null = null;
+  /** un coup de pioche au front du tunnel (pour le son), au plus toutes les quelques secondes */
+  onPick: (() => void) | null = null;
   private models: Record<string, StaticModel | null> = {};
   private rockPieces: THREE.BufferGeometry[] = [];
   private d = new THREE.Object3D();
@@ -202,6 +239,19 @@ export class UnderView {
       skull: bakeStatic('skull', 0.07, /^$/), ribcage: bakeStatic('ribcage', 0.12, /^$/), bone: bakeStatic('bone', 0.024, /^$/),
     };
     this.rockPieces = rockShapes().map((p) => p.geometry);
+
+    // creusement : gravats au sol des tunnels ; contours carrés posés sur la roche (cases prévues, passage conseillé, case
+    // visée), le front du tunnel se remplit à mesure que les mineurs avancent
+    const rubbleMat = caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), 'under-rubble');
+    this.rubble = this.rockPieces.slice(0, 2).map((g) => { const m = new THREE.InstancedMesh(g, rubbleMat, MAX_RUBBLE); m.setColorAt(0, WHITE); return m; });
+    const frame = new THREE.RingGeometry(0.5, 0.61, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2);
+    const mark = (geo: THREE.BufferGeometry, color: number, opacity: number) => new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, fog: false }), MAX_MARKS);
+    this.digMarks = mark(frame, 0xffb43a, 0.95);
+    this.digFace = mark(new THREE.PlaneGeometry(0.8, 0.8).rotateX(-Math.PI / 2), 0xffc65a, 0.4);
+    this.hintMarks = mark(frame, 0x9fe6ff, 0.6);
+    this.cursorMarks = mark(frame, 0xffffff, 1);
+    for (const m of [...this.rubble, this.digMarks, this.digFace, this.hintMarks, this.cursorMarks]) { m.count = 0; m.frustumCulled = false; this.scene.add(m); }
+    for (const m of [this.digMarks, this.digFace, this.hintMarks, this.cursorMarks]) m.renderOrder = 4;
   }
 
   /** Hauteur où pose la caméra : le sol, jamais le haut des parois */
@@ -219,30 +269,68 @@ export class UnderView {
       if (c.userData.own) (c as THREE.Mesh).geometry.dispose();
     }
     this.sources = [];
+    this.webs.clear();
+    this.webMesh = null;
     this.buildGround();
     this.buildPools();
     this.buildDecor();
     this.buildShafts();
     this.refreshTorches();
     this.claimedN = -1;
+    // les tunnels déjà creusés sont dans le relief : leurs gravats jonchent le sol
+    this.dugSeen = new Set([...this.world.dug].filter((k) => this.under.open[k]));
+    this.carvedN = this.under.carved;
+    for (const r of this.rubble) r.count = 0;
+    for (const k of this.dugSeen) this.addRubble(k);
+    this.marksKey = '';
   }
 
   // ---------- Relief ----------
 
   private buildGround() {
-    const u = this.under, vis = u.vis;
-    const pos = new Float32Array(VS * VS * 3), nor = new Float32Array(VS * VS * 3);
-    // par sommet : part de paroi, de dessus, de liseré, strates, ombre au pied des parois, et nuances de sol et de paroi
-    // fondues d'une zone à l'autre
-    const fWall = new Float32Array(VS * VS), fTop = new Float32Array(VS * VS), fRim = new Float32Array(VS * VS), fStrata = new Float32Array(VS * VS), fAo = new Float32Array(VS * VS);
-    const vFloor = new Float32Array(VS * VS * 3), vWall = new Float32Array(VS * VS * 3), wz = new Float32Array(5);
-    const tmp = new THREE.Color(), wallC = new THREE.Color(), floorC = new THREE.Color();
+    const u = this.under, n = VS * VS, T = (VS - 1) * (VS - 1) * 6;
+    // par sommet : nuances de sol et de paroi fondues d'une zone à l'autre (elles ne dépendent que des zones)
+    const vFloor = new Float32Array(n * 3), vWall = new Float32Array(n * 3), wz = new Float32Array(5);
     const zoneW = smoothZones(u), FL = FLOOR.map((c) => c.toArray()), WL = WALL.map((c) => c.toArray());
-    // contours lisses : un sommet proche du bord du dessus ou du pied d'une paroi glisse jusque sur la ligne exacte du
-    // contour (le long de la pente du champ d'ouverture), à la hauteur du dessus ou du sol ; plus de dents de scie
-    const op = u.vOpen, hv = new Float32Array(VS * VS);
     for (let z = 0; z < VS; z++)
       for (let x = 0; x < VS; x++) {
+        const i = z * VS + x, fx = x / VR, fz = z / VR;
+        zoneW(fx, fz, wz);
+        // le sol varie un peu, en grandes plages douces
+        const tone = 1 + Math.sin(fx * 0.37 + Math.sin(fz * 0.29) * 2) * Math.sin(fz * 0.31 + fx * 0.11) * 0.05;
+        for (let q = 0; q < 3; q++) {
+          let f = 0, wl = 0;
+          for (let zq = 0; zq < 5; zq++) { f += wz[zq] * FL[zq][q]; wl += wz[zq] * WL[zq][q]; }
+          vFloor[i * 3 + q] = f * tone; vWall[i * 3 + q] = wl;
+        }
+      }
+    this.gv = {
+      pos: new Float32Array(n * 3), hv: new Float32Array(n), nor: new Float32Array(n * 3),
+      fWall: new Float32Array(n), fTop: new Float32Array(n), fRim: new Float32Array(n), fStrata: new Float32Array(n), fAo: new Float32Array(n), vFloor, vWall,
+    };
+    // triangles séparés : normale lissée mêlée à celle de la face (facettes de roche)
+    const g = this.groundGeo;
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(T * 3), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(T * 3), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(T * 3), 3));
+    this.groundBase = new Float32Array(T * 3);
+    this.regrid([0, 0, VS - 1, VS - 1]);
+    g.computeBoundingSphere();
+  }
+
+  /**
+   * Refait le relief affiché autour des sommets (x0, z0, x1, z1) dont la hauteur a changé (tout le relief à la construction,
+   * le coin d'une case creusée ensuite) : contours, ombres, teintes et facettes ; renvoie les sommets du maillage refaits
+   */
+  private regrid(r: [number, number, number, number]): [number, number] {
+    const u = this.under, vis = u.vis, gv = this.gv!, { pos, hv, nor, fWall, fTop, fRim, fStrata, fAo, vFloor, vWall } = gv;
+    const tmp = new THREE.Color(), wallC = new THREE.Color(), floorC = new THREE.Color();
+    const grow = (m: number) => [Math.max(0, r[0] - m), Math.max(0, r[1] - m), Math.min(VS - 1, r[2] + m), Math.min(VS - 1, r[3] + m)];
+    // contours lisses : un sommet proche du bord du dessus ou du pied d'une paroi glisse jusque sur la ligne exacte du
+    // contour (le long de la pente du champ d'ouverture), à la hauteur du dessus ou du sol ; plus de dents de scie
+    const op = u.vOpen, ra = grow(1);
+    for (let z = ra[1]; z <= ra[3]; z++)
+      for (let x = ra[0]; x <= ra[2]; x++) {
         const i = z * VS + x;
         let fx = x / VR, fz = z / VR, h = vis[i];
         const o = op[i];
@@ -260,8 +348,10 @@ export class UnderView {
         pos[i * 3] = fx; pos[i * 3 + 1] = h; pos[i * 3 + 2] = fz;
         hv[i] = h;
       }
-    for (let z = 0; z < VS; z++)
-      for (let x = 0; x < VS; x++) {
+    // l'ombre au pied des parois regarde deux sommets alentour
+    const rb = grow(3);
+    for (let z = rb[1]; z <= rb[3]; z++)
+      for (let x = rb[0]; x <= rb[2]; x++) {
         const i = z * VS + x, h = hv[i], fx = x / VR, fz = z / VR;
         const xl = Math.max(0, x - 1), xr = Math.min(VS - 1, x + 1), zl = Math.max(0, z - 1), zr = Math.min(VS - 1, z + 1);
         const dx = ((hv[z * VS + xr] - hv[z * VS + xl]) * VR) / (xr - xl), dz = ((hv[zr * VS + x] - hv[zl * VS + x]) * VR) / (zr - zl);
@@ -282,14 +372,6 @@ export class UnderView {
         fRim[i] = smoothstep(0.8, 1.05, h) * (1 - fTop[i]);
         fStrata[i] = smoothstep(0.82, 1, Math.sin(h * 11 + Math.sin(fx * 0.9 + fz * 0.6) * 1.4));
         fAo[i] = 1 - Math.min(0.4, occ * 0.045) * (1 - fWall[i]);
-        // nuances des zones, fondues ; le sol varie un peu, en grandes plages douces
-        zoneW(fx, fz, wz);
-        const tone = 1 + Math.sin(fx * 0.37 + Math.sin(fz * 0.29) * 2) * Math.sin(fz * 0.31 + fx * 0.11) * 0.05;
-        for (let q = 0; q < 3; q++) {
-          let f = 0, wl = 0;
-          for (let zq = 0; zq < 5; zq++) { f += wz[zq] * FL[zq][q]; wl += wz[zq] * WL[zq][q]; }
-          vFloor[i * 3 + q] = f * tone; vWall[i * 3 + q] = wl;
-        }
       }
     /** Couleur d'un sommet : sol, paroi à strates, liseré clair au bord du dessus, dessus sombre, ombre au pied */
     const shade = (i: number) => {
@@ -308,42 +390,44 @@ export class UnderView {
       }
       return tmp;
     };
-    const idx = new Uint32Array((VS - 1) * (VS - 1) * 6);
-    let n = 0;
-    for (let z = 0; z < VS - 1; z++)
-      for (let x = 0; x < VS - 1; x++) {
-        const a = z * VS + x, b = a + 1, c = a + VS, d = c + 1;
-        // même découpe que heightAt (diagonale a → d)
-        idx[n++] = a; idx[n++] = c; idx[n++] = d;
-        idx[n++] = a; idx[n++] = d; idx[n++] = b;
-      }
-    // triangles séparés : normale lissée mêlée à celle de la face (facettes de roche)
-    const fp = new Float32Array(idx.length * 3), fc = new Float32Array(idx.length * 3), fn = new Float32Array(idx.length * 3);
+    // les facettes qui touchent un sommet refait : deux triangles par carré, même découpe que heightAt (diagonale a → d)
+    const g = this.groundGeo, fp = g.attributes.position.array as Float32Array, fn = g.attributes.normal.array as Float32Array, fc = this.groundBase!;
     const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), fnv = new THREE.Vector3();
-    for (let t = 0; t < idx.length; t += 3) {
-      const [a, b, c] = [idx[t], idx[t + 1], idx[t + 2]];
+    const tri = (t: number, a: number, b: number, c: number) => {
       // chaque facette a sa nuance, comme une roche taillée, et la teinte de la zone où elle se trouve
       const jit = 0.965 + (Math.abs(Math.sin(t * 12.9898) * 43758.5453) % 1) * 0.07;
       e1.set(pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]);
       e2.set(pos[c * 3] - pos[a * 3], pos[c * 3 + 1] - pos[a * 3 + 1], pos[c * 3 + 2] - pos[a * 3 + 2]);
       fnv.crossVectors(e2, e1).normalize();
       if (fnv.y < 0) fnv.negate();
-      for (let j = 0; j < 3; j++) {
-        const v = idx[t + j], o = (t + j) * 3;
-        const sc = shade(v);
+      [a, b, c].forEach((v, j) => {
+        const o = (t + j) * 3, sc = shade(v);
         for (let q = 0; q < 3; q++) fp[o + q] = pos[v * 3 + q];
         fc[o] = sc.r * jit; fc[o + 1] = sc.g * jit; fc[o + 2] = sc.b * jit;
         fn[o] = nor[v * 3] * (1 - FACE_MIX) + fnv.x * FACE_MIX;
         fn[o + 1] = nor[v * 3 + 1] * (1 - FACE_MIX) + fnv.y * FACE_MIX;
         fn[o + 2] = nor[v * 3 + 2] * (1 - FACE_MIX) + fnv.z * FACE_MIX;
+      });
+    };
+    const x0 = Math.max(0, rb[0] - 1), z0 = Math.max(0, rb[1] - 1), x1 = Math.min(VS - 2, rb[2]), z1 = Math.min(VS - 2, rb[3]);
+    for (let z = z0; z <= z1; z++)
+      for (let x = x0; x <= x1; x++) {
+        const a = z * VS + x, b = a + 1, c = a + VS, d = c + 1, t = (z * (VS - 1) + x) * 6;
+        tri(t, a, c, d);
+        tri(t + 3, a, d, b);
       }
+    // seule la plage refaite repart vers la carte graphique ; les couleurs (avant l'éclaircissement des galeries tenues, que
+    // tintHeld refait) repartent entières, tintHeld les touchant toutes
+    const v0 = (z0 * (VS - 1) + x0) * 6, v1 = (z1 * (VS - 1) + x1) * 6 + 6;
+    for (const name of ['position', 'normal']) {
+      const at = g.attributes[name] as THREE.BufferAttribute;
+      at.addUpdateRange(v0 * 3, (v1 - v0) * 3);
+      at.needsUpdate = true;
     }
-    const g = this.groundGeo;
-    g.setAttribute('position', new THREE.BufferAttribute(fp, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(fn, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(fc, 3));
-    this.groundBase = fc.slice();
-    g.computeBoundingSphere();
+    const col = g.attributes.color as THREE.BufferAttribute;
+    (col.array as Float32Array).set(fc.subarray(v0 * 3, v1 * 3), v0 * 3);
+    col.needsUpdate = true;
+    return [v0, v1];
   }
 
   /** Lacs sombres qui reflètent les lueurs, lave qui coule ; chaque bassin déborde d'une case pour couper la rive */
@@ -460,29 +544,17 @@ export class UnderView {
         add(['skull', 'ribcage', 'bone'][Math.floor(h(151) * 3)], px, py - 0.005, pz, h(152) * 6.28, 0.8 + h(153) * 0.5, tmp.setScalar(0.95));
       } else if ((zone === UZ_STONE || zone === UZ_CRYSTAL) && wd <= 1 && h(160) < 0.05) {
         const w = this.wallPoint(cx, cz, 0.15);
-        if (w) add('cobweb', w[0], u.heightAt(w[0], w[1]) - 0.02, w[1], w[2], 0.8 + h(161) * 0.5, tmp.setScalar(0.92));
+        if (w) { add('cobweb', w[0], u.heightAt(w[0], w[1]) - 0.02, w[1], w[2], 0.8 + h(161) * 0.5, tmp.setScalar(0.92)); this.webs.set(k, lists.cobweb.length - 1); }
       }
     }
     // minerais incrustés dans les parois, façon Minecraft (plus précieux dans le magma) ; les filons exploités ont disparu
     this.veins.clear();
     this.minedN = this.world.mined.size;
     for (const { k, ore: oi } of oreVeins(u, this.world.mined)) {
-      const cx = k % N, cz = Math.floor(k / N), ore = ORES[oi];
-      const vein = { mesh: ore.glow ? 'oreGlow' : 'ore', idx: [] as number[], ore: oi };
+      const vein = { mesh: ORES[oi].glow ? 'oreGlow' : 'ore', idx: [] as number[], ore: oi };
       this.veins.set(k, vein);
-      const n = 3 + Math.floor(hash2(cx, cz, 202) * 3), y0 = 0.35 + hash2(cx, cz, 203) * 0.8;
-      for (let i = 0; i < n; i++) {
-        const w = this.wallPoint(cx, cz, y0 + (hash2(cx, cz, 210 + i) - 0.5) * 0.3, (hash2(cx, cz, 220 + i) - 0.5) * 0.5);
-        if (!w) continue;
-        const s = 0.06 + hash2(cx, cz, 230 + i) * 0.05;
-        d.position.set(w[0] + Math.sin(w[2]) * 0.01, y0 + (hash2(cx, cz, 210 + i) - 0.5) * 0.3, w[1] + Math.cos(w[2]) * 0.01);
-        d.rotation.set(hash2(cx, cz, 240 + i) * 3, hash2(cx, cz, 250 + i) * 3, hash2(cx, cz, 260 + i) * 3);
-        d.scale.setScalar(s);
-        d.updateMatrix();
-        const list = (lists[vein.mesh] ??= []);
-        vein.idx.push(list.length);
-        list.push({ m: d.matrix.clone(), c: ore.col.clone().multiplyScalar(0.9 + hash2(cx, cz, 270 + i) * 0.2) });
-      }
+      const list = (lists[vein.mesh] ??= []);
+      for (const it of this.veinCubes(k, oi)) { vein.idx.push(list.length); list.push(it); }
     }
     // maillages instanciés
     const stone = caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), 'under-stone');
@@ -518,7 +590,25 @@ export class UnderView {
       im.frustumCulled = false;
       this.content.add(im);
       if (name === 'ore' || name === 'oreGlow') this.oreMeshes[name] = im;
+      if (name === 'cobweb') this.webMesh = im;
     }
+  }
+
+  /** Cubes de minerai d'un filon, incrustés dans la paroi que sa case choisit parmi ses roches voisines */
+  private veinCubes(k: number, oi: number): Item[] {
+    const d = this.d, cx = k % N, cz = Math.floor(k / N), ore = ORES[oi], out: Item[] = [];
+    const n = 3 + Math.floor(hash2(cx, cz, 202) * 3), y0 = 0.35 + hash2(cx, cz, 203) * 0.8;
+    for (let i = 0; i < n; i++) {
+      const w = this.wallPoint(cx, cz, y0 + (hash2(cx, cz, 210 + i) - 0.5) * 0.3, (hash2(cx, cz, 220 + i) - 0.5) * 0.5);
+      if (!w) continue;
+      const s = 0.06 + hash2(cx, cz, 230 + i) * 0.05;
+      d.position.set(w[0] + Math.sin(w[2]) * 0.01, y0 + (hash2(cx, cz, 210 + i) - 0.5) * 0.3, w[1] + Math.cos(w[2]) * 0.01);
+      d.rotation.set(hash2(cx, cz, 240 + i) * 3, hash2(cx, cz, 250 + i) * 3, hash2(cx, cz, 260 + i) * 3);
+      d.scale.setScalar(s);
+      d.updateMatrix();
+      out.push({ m: d.matrix.clone(), c: ore.col.clone().multiplyScalar(0.9 + hash2(cx, cz, 270 + i) * 0.2) });
+    }
+    return out;
   }
 
   /** Filon de minerai le plus proche du point cliqué : sa sorte et son rendement, ou null (on ne l'extrait qu'en expédition armée) */
@@ -949,6 +1039,196 @@ export class UnderView {
     }
   }
 
+  // ---------- Creusement ----------
+
+  /**
+   * Les cases que les mineurs viennent de percer : le relief se refait autour (parois, sol, teinte des galeries tenues), la
+   * poussière et les éclats jaillissent, les gravats restent au sol ; les toiles de la roche ôtée tombent, les filons voisins
+   * se reposent sur la paroi qui reste
+   */
+  private applyDug() {
+    this.carvedN = this.under.carved;
+    const u = this.under, fresh = [...this.world.dug].filter((k) => !this.dugSeen.has(k) && u.open[k]);
+    if (!fresh.length || !this.gv) return;
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0), before = this.claimedN;
+    for (const k of fresh) {
+      this.dugSeen.add(k);
+      const [v0, v1] = this.regrid(u.carveRect(k));
+      this.tintHeld(v0, v1);
+      const x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5, y = u.heightAt(x, z);
+      this.fx.puff(x, y + 0.1, z, 18);
+      this.fx.chips(x, y + 0.45, z, CHIP, 16);
+      this.addRubble(k);
+      for (const n of [k + 1, k - 1, k + N, k - N]) {
+        const web = this.webs.get(n);
+        if (web !== undefined && this.webMesh) { this.webMesh.setMatrixAt(web, zero); this.webMesh.instanceMatrix.needsUpdate = true; this.webs.delete(n); }
+        if (this.veins.has(n)) this.moveVein(n);
+      }
+    }
+    // lanternes et bannières du tunnel ; la teinte du sol est faite, sauf si d'autres galeries ont été prises entre-temps
+    this.refreshClaims(before < 0 || this.world.claimed.size !== before + fresh.length);
+  }
+
+  /** Le filon suit sa paroi : ses cubes se posent sur la roche qui reste (s'il n'en reste plus, il est tombé avec elle) */
+  private moveVein(k: number) {
+    const v = this.veins.get(k)!, im = this.oreMeshes[v.mesh];
+    if (!im) return;
+    const cubes = this.veinCubes(k, v.ore), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    v.idx.forEach((i, j) => im.setMatrixAt(i, cubes[j]?.m ?? zero));
+    im.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Gravats au sol d'une case creusée : trois ou quatre morceaux de la roche de sa zone */
+  private addRubble(k: number) {
+    const u = this.under, d = this.d, cx = k % N, cz = Math.floor(k / N), c = new THREE.Color();
+    for (let i = 0, n = 3 + Math.floor(hash2(cx, cz, 710) * 2); i < n; i++) {
+      const m = this.rubble[i % this.rubble.length];
+      if (!m || m.count >= MAX_RUBBLE) continue;
+      const x = cx + 0.15 + hash2(cx, cz, 711 + i) * 0.7, z = cz + 0.15 + hash2(cx, cz, 721 + i) * 0.7, s = 0.5 + hash2(cx, cz, 731 + i) * 0.6;
+      d.position.set(x, u.heightAt(x, z) - 0.01, z); d.rotation.set(0, hash2(cx, cz, 741 + i) * 6.28, 0); d.scale.set(s, s * 0.7, s); d.updateMatrix();
+      m.setMatrixAt(m.count, d.matrix);
+      m.setColorAt(m.count, c.copy(WALL[u.zone[k]]).multiplyScalar(0.75 + hash2(cx, cz, 751 + i) * 0.2));
+      m.count++;
+      m.instanceMatrix.needsUpdate = true;
+      m.instanceColor!.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Le creusement, à chaque image : la file des cases à creuser (le front d'abord), l'avancement du front (0 … 1) et le
+   * passage conseillé (null : hors du mode Creuser) ; les mineurs du camp vont au front et frappent la roche
+   */
+  setDigs(queue: number[], progress: number, hint: number[] | null, age: number, dt: number) {
+    const face = queue[0] ?? -1, t = this.uTime.value;
+    // contours : reposés quand la file, le conseil ou le relief changent ; le front se remplit à mesure, le conseil bat
+    const key = `${queue.join(',')}|${hint?.join(',') ?? '-'}|${this.under.carved}`;
+    if (key !== this.marksKey) {
+      this.marksKey = key;
+      this.placeMarks(this.digMarks, queue);
+      this.placeMarks(this.digFace, face >= 0 ? [face] : []);
+      this.placeMarks(this.hintMarks, (hint ?? []).filter((k) => !queue.includes(k)));
+    }
+    // hors du mode Creuser, ou une case vient d'être percée : la case visée se redessinera au prochain mouvement de souris
+    if (!hint || this.cursorCarved !== this.under.carved) { this.cursorCarved = this.under.carved; this.cursorMarks.count = 0; }
+    // (assez léger pour qu'on voie les mineurs au pied de la paroi, à travers)
+    (this.digFace.material as THREE.MeshBasicMaterial).opacity = 0.08 + 0.3 * progress + Math.sin(t * 6) * 0.04;
+    (this.hintMarks.material as THREE.MeshBasicMaterial).opacity = 0.4 + Math.sin(t * 3) * 0.2;
+    this.stepDigCrew(face, age, dt);
+  }
+
+  /** La case visée est-elle dessinée ? (elle s'efface hors du mode Creuser, et quand une case vient d'être percée) */
+  digCursorShown() { return this.cursorMarks.count > 0; }
+
+  /** La case visée en mode Creuser et le tunnel qu'on y creuserait : en vert, en rouge si l'on ne peut pas */
+  digCursor(cells: number[], ok: boolean) {
+    this.placeMarks(this.cursorMarks, cells);
+    (this.cursorMarks.material as THREE.MeshBasicMaterial).color.setHex(ok ? 0x7dffa8 : 0xff6a5a);
+  }
+
+  /** Un contour sur chaque case, posé sur le dessus de la roche (au-dessus de ses bosses) */
+  private placeMarks(mesh: THREE.InstancedMesh, cells: number[]) {
+    const u = this.under, d = this.d;
+    let n = 0;
+    for (const k of cells) {
+      if (n >= MAX_MARKS) break;
+      const x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5;
+      let y = 0;
+      for (const [dx, dz] of [[0, 0], [0.35, 0.35], [-0.35, 0.35], [0.35, -0.35], [-0.35, -0.35]]) y = Math.max(y, u.heightAt(x + dx, z + dz));
+      d.position.set(x, y + 0.05, z); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix();
+      mesh.setMatrixAt(n++, d.matrix);
+    }
+    mesh.count = n;
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Case de galerie d'où l'on creuse la roche `face` (une galerie tenue de préférence, et sans gros cristal qui cache les mineurs), ou -1 */
+  private standOf(face: number) {
+    const u = this.under, score = (n: number) => (this.world.claimed.has(n) ? 2 : 0) + (this.decorCells.has(n) ? 0 : 1);
+    let best = -1;
+    for (const n of [face + 1, face - 1, face + N, face - N]) if (u.walkable(n % N, Math.floor(n / N)) && (best < 0 || score(n) > score(best))) best = n;
+    return best;
+  }
+
+  /**
+   * Les mineurs du camp : ils en sortent jusqu'au front du tunnel, du même pas que le jeu les fait marcher ; deux frappent la
+   * roche au pic (éclats, poussière), le troisième emporte les gravats dans sa hotte un peu en arrière et revient ; la file
+   * vide, ils rentrent au camp
+   */
+  private stepDigCrew(face: number, age: number, dt: number) {
+    const u = this.under, home = this.campCenter();
+    let c = this.digCrew;
+    if (!c) {
+      if (face < 0) return;
+      const start = home >= 0 ? home : this.standOf(face);
+      if (start < 0) return;
+      c = this.digCrew = { miners: [], light: { x: 0, y: -20, z: 0, r: 3.6, c: new THREE.Color(1, 0.74, 0.45).multiplyScalar(1.5), flicker: 0.2 }, face: -2, hit: [0.2, 0.55, 0], pickT: 0, speed: DIG_WALK, dump: [0, 0] };
+      for (let i = 0; i < 3; i++) {
+        const actor = makeSoldier(age, 900 + i, false, 'miner');
+        this.scene.add(actor.root);
+        c.miners.push({ actor, x: (start % N) + 0.5 + Math.cos(i * 2.1) * 0.25, z: Math.floor(start / N) + 0.5 + Math.sin(i * 2.1) * 0.25, heading: 0, path: [], goal: -1, wait: 0, phase: i * 0.7 });
+      }
+    }
+    const crew = c, stand = face >= 0 ? this.standOf(face) : -1;
+    // la roche à frapper : depuis le centre de la case où l'on se tient, vers la case de roche
+    const sx = (stand % N) + 0.5, sz = Math.floor(stand / N) + 0.5, dx = (face % N) - (stand % N), dz = Math.floor(face / N) - Math.floor(stand / N), ah = Math.atan2(dx, dz);
+    const slot = (i: number): [number, number, number] => i < 2 ? [sx + dx * 0.26 + dz * (i ? 0.17 : -0.17), sz + dz * 0.26 - dx * (i ? 0.17 : -0.17), ah] : [sx - dx * 0.18, sz - dz * 0.18, ah];
+    const hx = (home % N) + 0.5, hz = Math.floor(home / N) + 0.5;
+    if (crew.face !== face) {
+      crew.face = face;
+      // un nouveau front : chacun y va ; plus rien à creuser : tout le monde rentre au camp
+      crew.miners.forEach((m, i) => {
+        if (stand >= 0) this.walkTo(m, face, slot(i));
+        else if (home >= 0) { this.walkTo(m, -4, [hx + Math.cos(i * 2.1) * 0.3, hz + Math.sin(i * 2.1) * 0.3, 0]); }
+        else m.path = [];
+        m.wait = 0;
+      });
+      // de loin, ils pressent encore le pas (le jeu compte leur marche au plus DIG_WALK_MAX secondes)
+      crew.speed = Math.max(DIG_WALK, crew.miners[0].path.length / DIG_WALK_MAX);
+      // le porteur vide sa hotte quelques cases en arrière, sur le chemin du camp
+      const back = stand >= 0 && home >= 0 ? u.route(stand, home) : null, dk = back ? back[Math.min(5, back.length - 1)] : stand;
+      crew.dump = [(dk % N) + 0.5, Math.floor(dk / N) + 0.5];
+    }
+    if (stand < 0 && crew.miners.every((m) => !m.path.length)) {
+      for (const m of crew.miners) this.scene.remove(m.actor.root);
+      this.digCrew = null;
+      return;
+    }
+    crew.pickT -= dt;
+    crew.miners.forEach((m, i) => {
+      if (m.path.length) {
+        const [tx, tz] = m.path[0], ex = tx - m.x, ez = tz - m.z, d = Math.hypot(ex, ez), s = Math.min(d, dt * crew.speed);
+        if (d > 1e-3) { m.x += (ex / d) * s; m.z += (ez / d) * s; m.heading = Math.atan2(ex, ez); }
+        if (d - s < 0.02) m.path.shift();
+        if (!m.path.length && m.goal === face) m.wait = 2.5;
+        if (!m.path.length && m.goal === -3) m.wait = 1.5;
+        soldierStep(m.actor, (m.phase += dt * 9), i === 2 && m.goal === -3 ? 'carry' : 'walk');
+      } else if (stand >= 0 && i < 2 && m.goal === face) {
+        // au pic, face à la roche : à chaque coup, des éclats et un peu de poussière
+        m.heading = ah;
+        soldierStep(m.actor, (m.phase += dt * 9), 'fight');
+        if ((crew.hit[i] -= dt) <= 0) {
+          crew.hit[i] = 0.5 + Math.random() * 0.25;
+          const px = sx + dx * 0.5 + dz * (i ? 0.17 : -0.17), pz = sz + dz * 0.5 - dx * (i ? 0.17 : -0.17);
+          this.fx.chips(px, 0.3 + Math.random() * 0.25, pz, CHIP, 5);
+          if (Math.random() < 0.35) this.fx.puff(px - dx * 0.15, u.heightAt(px, pz) + 0.05, pz - dz * 0.15, 3);
+          // le son des pioches, si l'on regarde le chantier
+          if (crew.pickT <= 0 && Math.hypot(sx - this.lantern.x, sz - this.lantern.z) < 14) { crew.pickT = 1.4; this.onPick?.(); }
+        }
+      } else if (stand >= 0 && i === 2) {
+        // le porteur : il charge sa hotte au front, la vide au camp, et revient
+        soldierStep(m.actor, (m.phase += dt * 9), 'idle');
+        if ((m.wait -= dt) <= 0) {
+          if (m.goal === face) this.walkTo(m, -3, [crew.dump[0] + 0.2, crew.dump[1] - 0.15, 0]);
+          else this.walkTo(m, face, slot(2));
+        }
+      } else soldierStep(m.actor, (m.phase += dt * 9), 'idle');
+      m.actor.root.position.set(m.x, u.heightAt(m.x, m.z), m.z);
+      m.actor.root.rotation.y = m.heading;
+    });
+    if (stand >= 0) Object.assign(crew.light, { x: sx + dx * 0.3, y: u.heightAt(sx, sz) + 0.6, z: sz + dz * 0.3 });
+    else crew.light.y = -20;
+  }
+
   // ---------- Torches ----------
 
   /** Pose ou retire une torche sur une case de galerie ; renvoie l'état obtenu, ou null si impossible */
@@ -985,9 +1265,10 @@ export class UnderView {
 
   /**
    * Galeries tenues : une lanterne par bloc de cases, sur la case la plus dégagée ; une bannière là où la zone tenue touche
-   * les galeries sauvages (le front), et sous chaque avant-poste. Elles éclairent : ce qui est tenu se voit de loin
+   * les galeries sauvages (le front), et sous chaque avant-poste. Elles éclairent : ce qui est tenu se voit de loin.
+   * `tint` : le sol tenu se reteinte partout (sinon, il l'est déjà)
    */
-  private refreshClaims() {
+  private refreshClaims(tint = true) {
     const w = this.world, u = this.under, held = w.claimed, d = this.d;
     this.claimedN = held.size;
     this.claimSources = [];
@@ -1023,19 +1304,22 @@ export class UnderView {
       const x = (k % N) + 0.5 + 0.35, z = Math.floor(k / N) + 0.5 + 0.35;
       put(this.bannerPole, nb, x, z, 0); put(this.bannerCloth, nb, x, z, 0.6); nb++;
     }
-    this.tintHeld();
+    if (tint) this.tintHeld();
     this.claimPost.count = this.claimLamp.count = nl;
     this.bannerPole.count = this.bannerCloth.count = nb;
     for (const m of [this.claimPost, this.claimLamp, this.bannerPole, this.bannerCloth]) m.instanceMatrix.needsUpdate = true;
   }
 
-  /** Le sol des galeries tenues s'éclaircit en terre battue chaude, fondue sur une case autour (les parois gardent leur teinte) */
-  private tintHeld() {
+  /**
+   * Le sol des galeries tenues s'éclaircit en terre battue chaude, fondue sur une case autour (les parois gardent leur teinte) ;
+   * seulement les sommets v0 … v1 (exclu) du maillage, autour d'une case qu'on vient de creuser
+   */
+  private tintHeld(v0 = 0, v1 = -1) {
     const base = this.groundBase, attr = this.groundGeo.attributes.color as THREE.BufferAttribute | undefined;
     if (!base || !attr || attr.array.length !== base.length) return;
     const held = new Float32Array(N * N), out = attr.array as Float32Array, pos = this.groundGeo.attributes.position.array as Float32Array;
     for (const k of this.world.claimed) held[k] = 1;
-    for (let v = 0; v < pos.length; v += 3) {
+    for (let v = v0 * 3, end = v1 < 0 ? pos.length : v1 * 3; v < end; v += 3) {
       const x = pos[v], h = pos[v + 1], z = pos[v + 2];
       const ix = Math.floor(x - 0.5), iz = Math.floor(z - 0.5), a = x - 0.5 - ix, b = z - 0.5 - iz;
       let k = 0;
@@ -1263,11 +1547,13 @@ export class UnderView {
     // lanterne du joueur au centre de la vue
     Object.assign(this.lantern, { x: target.x, y: this.groundY(target.x, target.z) + 1.3, z: target.z });
     for (const s of this.shaftSources) s.c.setRGB(1, 0.95, 0.8).multiplyScalar(0.25 + 0.45 * daylight);
+    // les mineurs ont percé de nouvelles cases : le relief se refait autour
+    if (this.under.carved !== this.carvedN) this.applyDug();
     if (this.world.claimed.size !== this.claimedN || this.claimBuilt !== this.world.buildings.size) { this.claimBuilt = this.world.buildings.size; this.refreshClaims(); }
     this.lightTimer -= dt;
     if (this.lightTimer <= 0) {
       this.lightTimer = LIGHT_PICK;
-      const all = this.sources.concat(this.torchSources, this.shaftSources, this.claimSources, this.campSources, this.guards.map((g) => g.light), [...this.troops.values()].flatMap((s) => [s.light, ...(s.modern ? [...s.modern.lamps, s.modern.flash] : [])]), [...this.crews.values()].filter((c) => c.miners.length).map((c) => c.light));
+      const all = this.sources.concat(this.torchSources, this.shaftSources, this.claimSources, this.campSources, this.guards.map((g) => g.light), [...this.troops.values()].flatMap((s) => [s.light, ...(s.modern ? [...s.modern.lamps, s.modern.flash] : [])]), [...this.crews.values()].filter((c) => c.miners.length).map((c) => c.light), this.digCrew ? [this.digCrew.light] : []);
       const dd = (s: Source) => Math.hypot(s.x - target.x, s.z - target.z) - s.r;
       this.active = [this.lantern, ...all.filter((s) => dd(s) < dist * 1.2).sort((a, b) => dd(a) - dd(b)).slice(0, MAX_CAVE_LIGHTS - 1)];
     }
@@ -1285,7 +1571,7 @@ export class UnderView {
     if (this.camp) stepCamp(this.camp, this.uTime.value, dt);
     this.stepGuards(dt);
     this.fx.update(dt);
-    this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z })), ...[...this.crews.values()].flatMap((c) => c.miners.map((m) => ({ x: m.x, z: m.z })))]);
+    this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z })), ...[...this.crews.values(), ...(this.digCrew ? [this.digCrew] : [])].flatMap((c) => c.miners.map((m) => ({ x: m.x, z: m.z })))]);
   }
 
   /** Sortie du souterrain : la surface ne reçoit plus ces lumières */
