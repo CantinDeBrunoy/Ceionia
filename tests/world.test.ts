@@ -982,8 +982,10 @@ describe('expéditions', () => {
     const deep = MISSIONS.find((m) => m.id === 'deep')!;
     const cav = deep.choices.findIndex((c) => c.troop === 'cavalry'), armor = deep.choices[deep.choices.findIndex((c) => c.troop === 'armor')];
     expect(deep.repeat).toBe(true);
-    expect(ex.why(deep, armor)).toMatch(/Les chevaux sauvages.*Le filon de la montagne.*Repérer les profondeurs.*écurie.*avant-poste/);
-    w.exp.done.push('horses', 'mine', 'scout');
+    // il ne faut qu'un avant-poste : ni mission réussie, ni écurie (seule la charge de cavalerie demande des chevaux)
+    expect(deep.requires).toEqual({ kinds: ['outpost'] });
+    expect(ex.why(deep, armor)).toBe('Il faut d’abord bâtir : avant-poste.');
+    expect(KINDS.outpost.reqMission).toBeUndefined();
     let spot: number[] | null = null;
     for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
     w.place('stable', spot![0], spot![1], 0, true, 2, false);

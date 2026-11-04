@@ -224,6 +224,21 @@ describe('comptes rendus des expéditions', () => {
     expect(r2.summary).not.toMatch(/filons? abattus?/);
   });
 
+  it('le repérage des profondeurs est facultatif : son plan rend les troupes armées plus sûres, et une ancienne partie le garde', () => {
+    const scout = mission('scout'), deep = mission('deep'), armor = deep.choices.find((c) => c.troop === 'armor')!, gallery = mission('mine').choices[0];
+    expect(scout.mandatory).toBe(false);
+    expect(scout.unlocks).toBeUndefined();
+    expect(MISSIONS.some((m) => m.requires?.missions?.includes('scout'))).toBe(false);
+    for (const c of scout.choices) expect(c.win).toContainEqual({ t: 'perk', id: 'map' });
+    const v = village(2), risk = v.ex.riskOf(armor), other = v.ex.riskOf(gallery);
+    v.w.exp.perks.push('map');
+    expect(v.ex.riskOf(armor)).toBeCloseTo(risk * 0.8);
+    expect(v.ex.riskOf(gallery)).toBeCloseTo(other);
+    // une sauvegarde d'avant : le repérage réussi y a dressé le plan
+    expect(readExpState({ done: ['scout'] }).perks).toContain('map');
+    expect(readExpState({ done: ['herd'] }).perks).not.toContain('map');
+  });
+
   it('le filon de la montagne rapporte de quoi passer à l’âge industriel, quel que soit le choix', () => {
     const m = mission('mine'), ore = (es: Effect[]) => es.reduce((s, e) => s + (e.t === 'ore' ? e.n : 0), 0);
     expect(m.mandatory).toBe(true);

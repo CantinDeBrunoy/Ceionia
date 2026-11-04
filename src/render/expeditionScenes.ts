@@ -909,12 +909,11 @@ export class ExpeditionScene {
       const found = st !== 'gallery';
       const hx = cx - Math.sin(face) * 0.3, hz = cz - Math.cos(face) * 0.3;
       if (st === 'scout') {
-        // les éclaireurs reviennent reporter leurs relevés sur la table aux plans, et jalonnent devant la grotte l'emprise de
-        // l'avant-poste : des piquets à fanion qui sortent de terre au fil du travail
+        // les éclaireurs reviennent reporter leurs relevés sur la table aux plans, et balisent le chemin jusqu'à l'entrée de
+        // la grotte : des piquets à fanion qui sortent de terre au fil du travail, de part et d'autre du chemin
         this.put(mapTableGeo(), hx, hz, face + Math.PI / 2);
-        const ox = cx + Math.sin(face) * 0.35, oz = cz + Math.cos(face) * 0.35;
-        for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          const x = ox + Math.sin(face) * u * 0.42 + Math.cos(face) * v * 0.42, z = oz + Math.cos(face) * u * 0.42 - Math.sin(face) * v * 0.42;
+        for (let i = 0; i < 4; i++) {
+          const t = 0.25 + i * 0.18, s = i % 2 ? 1 : -1, x = cx + (mx - cx) * t + Math.cos(face) * s * 0.16, z = cz + (mz - cz) * t - Math.sin(face) * s * 0.16;
           this.grows.push({ obj: this.put(stakeFlagGeo(), x, z, face), from: 0.001, to: 1 });
         }
       } else this.grows.push({ obj: this.put(rocksGeo(), hx, hz, 0), from: 0.25, to: 1.1 });

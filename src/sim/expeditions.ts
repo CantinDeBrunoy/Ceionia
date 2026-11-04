@@ -149,8 +149,14 @@ export class Expeditions {
   slots() { return partyLimit(this.pop()); }
   private has(kind: string) { for (const b of this.world.buildings.values()) if (b.kind === kind) return true; return false; }
 
-  /** Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel, un institut de recherche les équipe ; le défi est plus risqué */
-  riskOf(c: Choice) { return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * rulesOf(this.world.difficulty).riskK; }
+  /**
+   * Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel, un institut de recherche
+   * les équipe, le plan des galeries (le repérage des profondeurs) guide les troupes armées ; le défi est plus risqué
+   */
+  riskOf(c: Choice) {
+    const map = this.world.exp.perks.includes('map') && c.win.some((e) => e.t === 'veins');
+    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (map ? 0.8 : 1) * rulesOf(this.world.difficulty).riskK;
+  }
 
   /** Chevaux qui partiraient avec l'équipe : ceux qu'exige la cavalerie, sinon un par membre tant que l'écurie en a */
   mountsFor(c: Choice) { return c.mounts ?? Math.min(c.party, this.horsesHome()); }

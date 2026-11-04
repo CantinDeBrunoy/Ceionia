@@ -25,7 +25,7 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // source chaude, galerie, grotte, jongleurs, abbaye, étoiles filantes, cratère, pont, sondage, sommet, camp de base, plongée
   | 'corral' | 'salt' | 'roundup' | 'pebbles' | 'hops' | 'pass' | 'smoke' | 'swarm' | 'trade' | 'spring' | 'gallery' | 'cave'
   | 'troupe' | 'abbey' | 'stars' | 'crater' | 'bridge' | 'drill' | 'summit' | 'basecamp' | 'dive'
-  // repérage : on entre dans la grotte relever les galeries, on jalonne l'avant-poste devant
+  // repérage : on entre dans la grotte relever les galeries, on balise le chemin jusqu'à l'entrée
   | 'scout'
   // la course automobile, la montgolfière qu'on gonfle
   | 'race' | 'balloon'
@@ -365,36 +365,38 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'scout', age: 2, mandatory: false, icon: '🔦', title: 'Repérer les profondeurs', unlocks: 'outpost',
-    intro: 'Avant d’envoyer une troupe sous terre, il faut savoir par où descendre. Des éclaireurs vont reconnaître une grotte, relever le plan des premières galeries et jalonner devant l’entrée l’endroit où bâtir un avant-poste.',
+    // facultative : rien n'en dépend (l'avant-poste se bâtit sans elle) ; son plan des galeries rend les expéditions armées plus sûres
+    id: 'scout', age: 2, mandatory: false, icon: '🔦', title: 'Repérer les profondeurs',
+    intro: 'Avant d’envoyer une troupe sous terre, mieux vaut savoir où l’on met les pieds. Des éclaireurs vont reconnaître une grotte, relever le plan des premières galeries et baliser le chemin jusqu’à l’entrée : les expéditions armées y seront plus sûres.',
     choices: [
       {
         label: 'Deux éclaireurs à la corde', text: 'Légers et rapides : ils descendent jusqu’à la première salle et remontent avec un plan.',
-        dest: 'cave', scene: 'scout', doing: 'relève le plan des galeries et jalonne l’avant-poste', danger: ['dark', 'fall'], party: 2, work: 20, risk: 0.3,
-        win: [joy(1)], lose: [hurt(1, 2)],
-        winText: 'Les éclaireurs ont dressé le plan des premières galeries et planté leurs jalons devant la grotte : on peut y bâtir un avant-poste.',
+        dest: 'cave', scene: 'scout', doing: 'relève le plan des galeries et balise l’entrée', danger: ['dark', 'fall'], party: 2, work: 20, risk: 0.3,
+        win: [{ t: 'perk', id: 'map' }, joy(1)], lose: [hurt(1, 2)],
+        winText: 'Les éclaireurs ont dressé le plan des premières galeries et balisé l’entrée de la grotte : les expéditions armées sauront par où passer.',
         loseText: 'Une corde a lâché dans le puits : un éclaireur s’est foulé la cheville, et le plan reste à faire.',
       },
       {
         label: 'Patrouille armée', text: 'Quatre hommes, lances et torches : plus lent, mais on ne se laisse pas surprendre par ce qui rôde en bas.',
-        dest: 'cave', scene: 'scout', doing: 'reconnaît les galeries, lances en avant, et jalonne l’avant-poste', danger: ['monster', 'dark'], party: 4, work: 28, risk: 0.18,
-        win: [{ t: 'ore', n: 2 }], lose: [hurt(2, 2)],
-        winText: 'La patrouille a repoussé une bande de squelettes, relevé les galeries et ramassé quelques pierres de minerai : l’avant-poste est jalonné.',
+        dest: 'cave', scene: 'scout', doing: 'reconnaît les galeries, lances en avant, et balise l’entrée', danger: ['monster', 'dark'], party: 4, work: 28, risk: 0.18,
+        win: [{ t: 'perk', id: 'map' }, { t: 'ore', n: 2 }], lose: [hurt(2, 2)],
+        winText: 'La patrouille a repoussé une bande de squelettes, relevé les galeries et ramassé quelques pierres de minerai : le plan est fait.',
         loseText: 'Des araignées ont surgi du plafond : la patrouille a battu en retraite avec deux blessés, sans plan.',
       },
       {
         label: 'Suivre un vieux mineur nomade', text: 'Il connaît chaque grotte du pays ; il demandera des vivres pour sa peine.',
-        dest: 'cave', scene: 'scout', doing: 'suit le vieux mineur dans les galeries et jalonne l’avant-poste', danger: ['dark'], party: 2, work: 14, risk: 0.08,
-        win: [food(-2, 3)], lose: [],
-        winText: 'Le vieux mineur a tout montré : les puits, les salles, les passages sûrs. Il repart avec ses vivres, l’avant-poste est jalonné.',
+        dest: 'cave', scene: 'scout', doing: 'suit le vieux mineur dans les galeries et balise l’entrée', danger: ['dark'], party: 2, work: 14, risk: 0.08,
+        win: [{ t: 'perk', id: 'map' }, food(-2, 3)], lose: [],
+        winText: 'Le vieux mineur a tout montré : les puits, les salles, les passages sûrs. Il repart avec ses vivres, et le plan des galeries est fait.',
         loseText: 'Le vieux mineur a filé avec les vivres au premier tournant.',
       },
     ],
   },
   {
+    // il suffit d'un avant-poste devant une grotte ou une faille ; la charge de cavalerie demande en plus ses chevaux à l'écurie
     id: 'deep', age: 2, mandatory: false, repeat: true, icon: '⚔️', title: 'Expédition armée dans les profondeurs',
-    requires: { missions: ['horses', 'mine', 'scout'], kinds: ['stable', 'outpost'] },
-    intro: 'Sous les grottes et les failles, les galeries regorgent de minerai… et de créatures. La troupe part de l’avant-poste, descend au-delà des galeries déjà tenues, abat les filons qu’elle y trouve et, si elle l’emporte, plante ses lanternes : le village tient ces galeries à son tour. Longue et dangereuse ; on peut y retourner tant qu’il reste des galeries à prendre.',
+    requires: { kinds: ['outpost'] },
+    intro: 'Sous les grottes et les failles, les galeries regorgent de minerai… et de créatures. Il suffit d’un avant-poste bâti tout contre une grotte ou une faille : la troupe en part, descend au-delà des galeries déjà tenues, abat les filons qu’elle y trouve et, si elle l’emporte, plante ses lanternes : le village tient ces galeries à son tour. Longue et dangereuse ; on peut y retourner tant qu’il reste des galeries à prendre.',
     choices: [
       {
         label: 'Charge de cavalerie', text: 'Trois chevaux de l’écurie et leurs cavaliers foncent dans les grandes galeries : rapides, mais les bêtes craignent le noir.',
@@ -804,6 +806,8 @@ export function readExpState(d: any): ExpState {
   const ids = new Set(MISSIONS.map((m) => m.id));
   s.done = Array.isArray(d.done) ? d.done.filter((x: any) => ids.has(x)) : [];
   s.perks = Array.isArray(d.perks) ? d.perks.filter((x: any) => typeof x === 'string') : [];
+  // (les sauvegardes d'avant le plan des galeries : le repérage réussi l'a dressé)
+  if (s.done.includes('scout') && !s.perks.includes('map')) s.perks.push('map');
   s.herd = Array.isArray(d.herd) ? d.herd.filter((x: any) => ['sheep', 'cow', 'pig', 'horse'].includes(x)) : [];
   for (const k of Object.keys(s.bonus) as NeedKey[]) s.bonus[k] = +d.bonus?.[k] || 0;
   s.temp = Array.isArray(d.temp) ? d.temp.filter((t: any) => t && t.need in s.bonus && isFinite(t.n) && isFinite(t.until)) : [];
@@ -843,7 +847,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
 
 const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: '🔨', joy: '😊' };
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
-const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
+const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', map: 'plan des galeries : expéditions armées plus sûres (risque −20 %)', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';
