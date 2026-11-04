@@ -111,6 +111,11 @@ export interface Mission {
   repeat?: boolean;
   /** ce qu'il faut avant de partir : missions réussies, bâtiments bâtis */
   requires?: { missions?: string[]; kinds?: KindId[] };
+  /**
+   * le grand départ (les colons vers une autre planète) : tout le village les accompagne et les acclame, ils ne reviennent
+   * pas, et l'expédition ne peut pas échouer
+   */
+  farewell?: boolean;
 }
 
 const food = (n: number, days?: number): Effect => ({ t: 'need', need: 'food', n, days });
@@ -665,21 +670,21 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'colony', age: 5, mandatory: false, icon: '🪐', title: 'Coloniser une autre planète',
+    id: 'colony', age: 5, mandatory: false, icon: '🪐', title: 'Coloniser une autre planète', farewell: true,
     requires: { missions: ['moon'], kinds: ['spaceport', 'fusion'] },
-    intro: 'Le dernier voyage : un vaisseau colonial, propulsé par l’énergie de la centrale à fusion, emportera des colons vers la planète bleue d’une étoile voisine. Ils y fonderont un nouveau village… comme au premier jour, autour d’un feu de camp.',
+    intro: 'Le dernier voyage : un vaisseau colonial, propulsé par l’énergie de la centrale à fusion, emportera des colons vers la planète bleue d’une étoile voisine. Tout le village viendra leur dire adieu, puis les accompagnera jusqu’au pas de tir. Là-bas, ils fonderont un nouveau village… comme au premier jour, autour d’un feu de camp.',
     choices: [
       {
         label: 'L’arche des colons', text: 'Un grand vaisseau, lent et sûr, avec ses serres et ses graines.',
-        dest: 'spaceport', scene: 'colony', doing: 'embarque les colons et lance le vaisseau vers l’étoile voisine', danger: ['weather'], party: 5, work: 70, risk: 0.15,
-        win: [joy(20), { t: 'perk', id: 'colony' }], lose: [joy(-5, 4)],
+        dest: 'spaceport', scene: 'colony', doing: 'embarque les colons et lance le vaisseau vers l’étoile voisine', danger: ['weather'], party: 5, work: 70, risk: 0,
+        win: [joy(20), { t: 'perk', id: 'colony' }], lose: [],
         winText: 'Des années plus tard, un message arrive des étoiles : les colons se sont posés sur la planète bleue et y ont allumé leur premier feu de camp. Le village a essaimé dans le ciel.',
         loseText: 'Une tempête solaire a forcé le vaisseau à faire demi-tour : les colons reviennent, déçus mais sains et saufs. On réparera l’arche.',
       },
       {
         label: 'Le saut à travers l’espace', text: 'Le moteur expérimental plie l’espace : le voyage en quelques mois… si tout se passe bien.',
-        dest: 'spaceport', scene: 'colony', doing: 'embarque les colons et allume le moteur expérimental', danger: ['weather'], party: 5, work: 56, risk: 0.3,
-        win: [joy(22), { t: 'perk', id: 'colony' }], lose: [joy(-6, 5), hurt(2, 4)],
+        dest: 'spaceport', scene: 'colony', doing: 'embarque les colons et allume le moteur expérimental', danger: ['weather'], party: 5, work: 56, risk: 0,
+        win: [joy(22), { t: 'perk', id: 'colony' }], lose: [],
         winText: 'Un éclair, et le vaisseau a disparu… pour reparaître au bord de l’autre étoile. Les colons se sont posés sur la planète bleue : un nouveau village est né !',
         loseText: 'Le moteur expérimental a lâché au décollage : le vaisseau est retombé en mer, et deux colons sont blessés.',
       },

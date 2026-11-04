@@ -17,8 +17,9 @@ const SMOKE = new THREE.Color(0.22, 0.2, 0.2), STEAM = new THREE.Color(0.95, 0.9
 interface Fire { b: Building; t: number; seed: number; /** eau jetée par les seaux (seaux × secondes) */ doused: number; /** prochain seau lancé */ throw: number }
 
 /**
- * Incendies : la foudre ou une bombe de lave enflamme un bâtiment. Les habitants accourent ; avec un puits ou de l'eau à
- * proximité ils l'éteignent, sinon (catastrophes activées) le bâtiment finit par brûler ; une caserne proche l'éteint très vite
+ * Incendies : la foudre, une bombe de lave ou un feu accidentel enflamme un bâtiment. Les habitants accourent ; avec un puits
+ * ou de l'eau à proximité ils l'éteignent, sinon le bâtiment finit par brûler ; une caserne proche l'éteint très vite. Ce sont
+ * des catastrophes : quand elles sont désactivées, aucun feu ne prend (et un feu déjà allumé s'éteint sans rien détruire)
  */
 export class Fires {
   group = new THREE.Group();
@@ -58,9 +59,12 @@ export class Fires {
     });
   }
 
-  /** Met le feu au bâtiment (sans effet s'il brûle déjà) ; true s'il s'enflamme */
+  /**
+   * Met le feu au bâtiment (sans effet s'il brûle déjà, ni catastrophes désactivées) ; true s'il s'enflamme. Toutes les
+   * sources passent par ici : foudre, bombes de lave, feux accidentels des secours
+   */
   ignite(b: Building) {
-    if (b.kind === 'lamp' || this.list.some((f) => f.b.id === b.id)) return false;
+    if (!this.world.disasters || b.kind === 'lamp' || this.list.some((f) => f.b.id === b.id)) return false;
     this.list.push({ b, t: 0, seed: Math.random() * 10, doused: 0, throw: 0 });
     this.news.push(`🔥 Incendie : ${KINDS[b.kind].names[b.age]}`);
     return true;

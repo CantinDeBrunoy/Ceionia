@@ -13,7 +13,7 @@ import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, mandatoryFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
-import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf } from '../sim/gear';
+import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
 import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE } from '../sim/economy';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -171,13 +171,26 @@ const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon
   { k: 'housing', icon: 'house', label: 'logements', one: 'logement' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
   { k: 'jobs', icon: 'hammer', label: 'emplois', one: 'emploi' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
 ];
+/** Fiche d'une ressource : son icône, à quoi elle sert, comment en avoir plus, et le bâtiment qui la produit */
+const RES_META: Record<Resource, { label: string; icon: string; use: string; more: string; kind: KindId }> = {
+  wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Nature › Forêt).' },
+  stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Nature › Rochers). La mine en donne aussi.' },
+  ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; les expéditions armées en remontent du monde souterrain.' },
+  crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
+  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les blindés de l’expédition armée.', more: 'La raffinerie en tire du pétrole brut des puits.' },
+};
+
+/** Une condition d'âge sans bâtiment : le minerai, l'expédition obligatoire ou les habitants */
+const reqOf = (label: string) => (label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : 'pop');
+
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${v < 2 && g.one ? g.one : g.label}`;
-const num = (v: number) => (v < 1 ? v.toFixed(1) : String(Math.round(v)));
+/** une décimale quand il y en a une (« 2,4 » de bien-être ne s'affiche plus « 2 » en rouge) */
+const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
 const NEED_RULE: Record<NeedId, string> = {
   housing: 'Chaque habitant occupe une place. Le village grandit tant qu’il reste des places libres et que les autres besoins sont comblés.',
-  food: 'Chaque habitant mange une part, plus une part de réserve pour le village.',
+  food: 'Chaque habitant mange une part (une part et quart en défi), plus une part de réserve pour le village ; on compte en parts entières.',
   water: 'Chaque habitant boit une part, plus une part de réserve pour le village.',
   jobs: 'À partir de 6 habitants, la moitié d’entre eux cherche du travail.',
   joy: 'À partir de 6 habitants, chacun demande 0,3 de bien-être.',
@@ -265,6 +278,8 @@ export class UI {
   private lastAge = -1;
   /** le besoin dont la fiche est ouverte */
   private needOpen: NeedId | null = null;
+  /** ressource dont la fiche est ouverte (même panneau que celle d'un besoin) */
+  private resOpen: Resource | null = null;
   private toastTimer = 0;
   private bannerTimer = 0;
   /** bâtiment ou outil survolé dans la barre (sa fiche s'affiche) */
@@ -343,6 +358,10 @@ export class UI {
     `;
     // dans les bandeaux qui défilent de côté (vignettes de la barre de construction, rayons…), la molette les fait défiler
     // horizontalement ; une liste qui défile de haut en bas garde son défilement habituel
+    root.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button');
+      if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
+    });
     root.addEventListener('wheel', (e) => {
       if (e.ctrlKey) return;
       for (let el = e.target as HTMLElement | null; el && el !== root; el = el.parentElement) {
@@ -372,6 +391,14 @@ export class UI {
     needInfo.hidden = true;
     root.appendChild(needInfo);
     for (const n of NEEDS) $('#n-' + n.k).onclick = () => { this.needOpen === n.k ? this.closeNeed() : this.openNeed(n.k); this.host.audio.sfxClick(); };
+    // fiche d'une ressource : un clic sur son stock (d'où elle vient, à quoi elle sert, quoi bâtir pour en avoir plus)
+    $('#res').onclick = (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
+      if (!el) return;
+      const r = el.dataset.r as Resource;
+      if (this.resOpen === r) this.closeNeed(); else this.openRes(r);
+      this.host.audio.sfxClick();
+    };
     needInfo.onclick = (e) => {
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
       if (k) { this.closeNeed(); this.pick(k); }
@@ -379,7 +406,7 @@ export class UI {
     document.addEventListener('pointerdown', (e) => {
       const t = e.target as HTMLElement;
       if (!census.hidden && !census.contains(t) && !t.closest('#pop')) this.closeCensus();
-      if (this.needOpen && !needInfo.contains(t) && !t.closest('.need')) this.closeNeed();
+      if ((this.needOpen || this.resOpen) && !needInfo.contains(t) && !t.closest('.need, .res')) this.closeNeed();
     });
 
     $('#agePanel').onclick = (e) => {
@@ -388,6 +415,11 @@ export class UI {
       // une condition qui demande un bâtiment : on le prend en main (le bon onglet et le bon rayon s'ouvrent)
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
       if (k) { this.pick(k); return; }
+      // une condition sans bâtiment : on montre comment l'obtenir
+      const req = (e.target as HTMLElement).closest<HTMLElement>('[data-req]')?.dataset.req;
+      if (req === 'ore') { this.openRes('ore'); return; }
+      if (req === 'exp') { this.openExpeditions(); return; }
+      if (req === 'pop') { this.openNeed('housing'); return; }
       $('#agePanel').classList.toggle('open');
     };
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
@@ -702,8 +734,8 @@ export class UI {
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
-      ? `<div class="res" title="${label} : illimité (${DIFF_TEXT.resInfinite[w.difficulty]})">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
-      : `<div class="res" title="${label} : ${Math.floor(w[r])} en réserve${flow(r)}${use[r] ?? ''}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
+      ? `<div class="res" data-r="${r}" title="${label} : illimité (${DIFF_TEXT.resInfinite[w.difficulty]})">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
+      : `<div class="res" data-r="${r}" title="${label} : ${Math.floor(w[r])} en réserve${flow(r)}${use[r] ?? ''}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -742,7 +774,9 @@ export class UI {
     t.classList.toggle('act', !!act);
     t.onclick = act ? () => { t.classList.remove('show'); act(); } : null;
     clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => t.classList.remove('show'), act ? 6000 : 2600);
+    // un message qui mène quelque part reste longtemps, et ne s'efface jamais sous la souris (le clic tomberait sur la carte)
+    const hide = () => { if (act && t.matches(':hover')) { this.toastTimer = window.setTimeout(hide, 800); return; } t.classList.remove('show'); };
+    this.toastTimer = window.setTimeout(hide, act ? 12000 : 2600);
   }
 
   banner(title: string, sub: string) {
@@ -776,7 +810,7 @@ export class UI {
     go.hidden = !ready;
     if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = `Toutes les conditions sont réunies : passer à l’âge suivant (${AGES[ap!.next].name})`; }
     $('#ageReq').innerHTML = ap
-      ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''}${i.kind ? ' kind' : ''}"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} — cliquer pour le bâtir"` : ''}>${i.have >= i.need ? '✓' : '•'} ${i.label}${i.kind ? ` <small>${sim.whereOf(i.kind).replace('Bâtir › ', '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} — cliquer pour le bâtir"` : ` data-req="${reqOf(i.label)}" title="Cliquer pour savoir comment l’obtenir"`}>${i.have >= i.need ? '✓' : '•'} ${i.label}${i.kind ? ` <small>${sim.whereOf(i.kind).replace('Bâtir › ', '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
       : 'Dernier âge atteint : profitez de votre village !';
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
@@ -793,6 +827,7 @@ export class UI {
     if ($('#pop').dataset.v !== popHtml) { $('#pop').innerHTML = popHtml; $('#pop').dataset.v = popHtml; }
     if (!$('#census').hidden) this.renderCensus();
     if (this.needOpen) this.renderNeed();
+    if (this.resOpen) this.renderRes();
     this.renderMessage();
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
@@ -805,7 +840,7 @@ export class UI {
     ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
     if (zone) {
-      $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Cliquez sur un filon pour voir ce qu’il faut pour l’abattre, sur un puits de lumière pour remonter'}</small>`;
+      $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Filon : comment l’abattre · Puits de lumière : remonter'}</small>`;
       $('#bTorch').classList.toggle('active', this.host.torchMode);
       // la quête en cours du camp souterrain, et où en est son objectif
       const ex = this.host.expeditions, cq = ex.campQuest(), lvl = ex.camp();
@@ -852,6 +887,8 @@ export class UI {
 
   private openNeed(k: NeedId) {
     this.closeCensus();
+    this.resOpen = null;
+    document.querySelectorAll('.res.open').forEach((el) => el.classList.remove('open'));
     this.needOpen = k;
     const box = $('#needInfo'), r = $('#n-' + k).getBoundingClientRect();
     box.hidden = false;
@@ -865,8 +902,49 @@ export class UI {
 
   private closeNeed() {
     this.needOpen = null;
+    this.resOpen = null;
     $('#needInfo').hidden = true;
+    document.querySelectorAll('.need.open, .res.open').forEach((el) => el.classList.remove('open'));
+  }
+
+  /** Ouvre la fiche d'une ressource, sous son stock */
+  private openRes(r: Resource) {
+    this.closeCensus();
+    this.needOpen = null;
     document.querySelectorAll('.need.open').forEach((el) => el.classList.remove('open'));
+    this.resOpen = r;
+    const box = $('#needInfo'), el = $(`#res .res[data-r="${r}"]`);
+    box.hidden = false;
+    box.dataset.v = '';
+    this.renderRes();
+    const b = el.getBoundingClientRect();
+    box.style.top = `${Math.round(b.bottom + 8)}px`;
+    box.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, b.left + b.width / 2 - box.offsetWidth / 2)))}px`;
+    document.querySelectorAll('#res .res').forEach((x) => x.classList.toggle('open', x === el));
+  }
+
+  /** Fiche d'une ressource : stock, production du jour et ses sources, à quoi elle sert, et le bâtiment qui en donnerait plus */
+  private renderRes() {
+    const h = this.host, w = h.world, r = this.resOpen!, meta = RES_META[r], day = h.expeditions.daily()[r], age = h.sim.age;
+    const rows: string[] = [];
+    for (const k of Object.keys(YIELD) as KindId[]) {
+      const per = YIELD[k]![r];
+      if (!per) continue;
+      let n = 0, v = 0;
+      for (const b of w.buildings.values()) if (b.kind === k && per[b.age]) { n++; v += per[b.age]; }
+      if (n) rows.push(`<div class="crow"><span>${KINDS[k].names[Math.max(age, KINDS[k].minAge)]}<i>× ${n}</i></span><em>+${num(v)}</em></div>`);
+    }
+    if (r === 'fuel' && day > 0) rows.push(`<div class="crow"><span>Raffinerie (du pétrole brut)</span><em>+${num(day)}</em></div>`);
+    const k = meta.kind, lock = this.lockOf(k), name = KINDS[k].names[Math.max(age, KINDS[k].minAge)];
+    const html = `
+      <h4>${ic(meta.icon, 18, 2)} ${meta.label}<em class="${day > 0 ? 'ok' : 'warn'}">${w.unlimited ? '∞' : Math.floor(w[r])}</em></h4>
+      <div class="sub">${day ? `${day > 0 ? '+' : '−'}${num(Math.abs(day))} par jour` : 'rien n’en produit pour l’instant'}</div>
+      <p class="hint">${meta.use}</p>
+      <div class="src">${rows.join('') || '<div class="crow"><span class="none">Aucun bâtiment n’en produit encore.</span></div>'}</div>
+      <p class="hint ${day > 0 ? 'ok' : 'warn'}">${meta.more}</p>
+      ${lock ? `<p class="hint warn">🔒 ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} Bâtir « ${name} »</button>`}`;
+    const box = $('#needInfo');
+    if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
 
   /**
@@ -911,7 +989,7 @@ export class UI {
     if (c.thirsty) tips.push('Un point d’eau ou un puits de plus abreuverait tout le monde.');
     if (c.unhappy) tips.push('Un lieu de rencontre, un jardin ou un lieu de culte rendrait le village plus heureux.');
     const html = `
-      <h4>${ic('houses', 18, 2)} ${c.p} habitants <small>pour ${c.places} places</small></h4>
+      <h4>${ic('houses', 18, 2)} ${c.p} habitants <small>pour ${c.places} places${c.away ? `, dont ${c.away} en expédition` : ''}</small></h4>
       <div class="cbar">${seg(c.employed, 'work', 'Au travail')}${seg(c.jobless, 'idle', 'Sans emploi')}${seg(c.others, 'kids', 'Enfants et anciens')}</div>
       ${row('hammer', 'Au travail', c.employed)}
       ${row('alert', 'Sans emploi', c.jobless, c.jobless ? 'warn' : '')}
@@ -919,7 +997,7 @@ export class UI {
       ${row('health', 'Malades soignés', c.cared, '', c.sick ? `sur ${c.sick} à soigner` : 'aucun malade pour l’instant')}
       ${c.untreated ? row('health', 'Malades sans soins', c.untreated, 'warn') : ''}
       ${row('kit', 'Blessés au repos', c.injured, c.injured ? 'note' : '', c.injured ? 'au retour d’une expédition' : '')}
-      ${row('compass', 'En expédition', c.away)}
+      ${row('compass', 'En expédition', c.away, '', c.away ? 'déjà comptés parmi les habitants ci-dessus' : '')}
       ${c.hungry ? row('bread', 'Ont faim', c.hungry, 'warn') : ''}
       ${c.thirsty ? row('drop', 'Ont soif', c.thirsty, 'warn') : ''}
       ${c.unhappy ? row('smile', 'Mécontents', c.unhappy, 'warn') : ''}
@@ -1026,7 +1104,7 @@ export class UI {
     let key = '';
     const arsenal = () => {
       if (!ov.isConnected) { clearInterval(iv); return; }
-      const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${ex.active.length}`;
+      const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${ex.active.length}`;
       if (k !== key) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
       const bar = ov.querySelector<HTMLElement>('.queue .bar i');
       if (bar) bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`;
@@ -1048,8 +1126,10 @@ export class UI {
       if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? 'Aucun chemin praticable vers cette destination.'); return; }
       close();
       h.audio.sfxClick();
-      // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre
-      this.toast(`${m.icon} ${a.fromCamp ? 'La troupe descend du camp souterrain…' : ex.status(a)} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
+      // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre ; le grand départ des colons,
+      // lui, se suit d'office (c'est la fin de la partie)
+      if (m.farewell) h.follow(a.id);
+      else this.toast(`${m.icon} ${a.fromCamp ? 'La troupe descend du camp souterrain…' : ex.status(a)} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
       this.update();
     }));
   }
@@ -1118,16 +1198,16 @@ export class UI {
     const away = (id: GearId) => ex.active.reduce((n, a) => n + (a.gear[id] ?? 0), 0);
     const per = (id: GearId) => ({ spear: 'une par membre', bow: 'un par membre', sword: 'une par membre', rifle: 'un par membre', rope: 'une pour deux', torch: 'une pour deux', boat: 'une pour trois', kit: 'une par équipe', armor: 'une par membre' }[id]);
     el.innerHTML = `
-      <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Minerai : <b>${Math.floor(ex.ore)}</b>.</p>
+      <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Réserve : <b>${Math.floor(h.world.wood)}</b> bois, <b>${Math.floor(h.world.stone)}</b> pierre, <b>${Math.floor(ex.ore)}</b> minerai.</p>
       <div class="gearGrid">${GEAR.map((g) => {
-        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age;
+        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
         return `<div class="gear ${locked ? 'locked' : ''}">
           <div class="gi">${ic(g.icon, 26, 1.8)}</div>
           <div class="grow"><b>${g.name}</b> <span class="cnt">${n} en réserve${out ? ` · ${out} en route` : ''}</span>
             <small>${g.desc}</small>
             <small class="gd">${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} : −${Math.round(g.cut * 100)} % de risque · ${per(g.id)}</small>
             ${why ? `<small class="why">${why}</small>` : ''}</div>
-          <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${g.ore ? `, ${g.ore} minerai` : ''}`}">${ic('hammer', 16, 2)} ${g.ore ? `${g.ore} minerai` : 'Fabriquer'}</button>
+          <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 16, 2)} ${price || 'Fabriquer'}</button>
         </div>`;
       }).join('')}</div>
       <h4>Fabrication</h4>
@@ -1181,6 +1261,7 @@ export class UI {
     const { ov, close } = modal(this.root, 'decide', `${a.m.icon} ${a.m.title}`, `
       <h4 class="evt">${ic('alert', 18, 2)} ${ev.title}</h4>
       <p class="story">${ev.text}</p>
+      <button class="look">${ic('eye', 16, 2)} Voir l’équipe</button>
       ${opts}
       <p class="hint">Risque d’échec de l’expédition pour l’instant : ${pct(ex.chance(a))}. Le jeu est en pause pendant que vous choisissez. Sans réponse, l’équipe finit par prendre d’elle-même la voie la plus sûre.</p>`, () => {
       clearInterval(iv);
@@ -1190,6 +1271,8 @@ export class UI {
     });
     // l'équipe a tranché d'elle-même (le jeu relancé à la main) : la fenêtre n'a plus lieu d'être
     const iv = setInterval(() => { if (a.wait !== ev || !ex.active.includes(a)) close(); }, 500);
+    // la scène reste visible à côté de la fenêtre : un clic y emmène la caméra, pour voir l'imprévu avant de choisir
+    ($('.look', ov) as HTMLButtonElement).onclick = () => { h.follow(a.id); this.update(); };
     ov.querySelectorAll<HTMLButtonElement>('button.opt').forEach((b) => (b.onclick = () => {
       if (a.wait === ev && ex.decide(a, +b.dataset.o!)) { h.audio.sfxClick(); this.toast(`${a.m.icon} ${ev.options[+b.dataset.o!].label}.`); }
       close();
@@ -1246,11 +1329,11 @@ export class UI {
         <ul class="hint dpoints">${DIFF_TEXT.points[h.world.difficulty].map((x) => `<li>${x}</li>`).join('')}</ul>
         <p class="hint">${DIFF_TEXT.settingHint}</p>
         <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? 'Activées' : 'Désactivées'}</button></div>
-        <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments.</p>
+        <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.</p>
         <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
         <div class="row"><label>Ressources</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? (h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
-        <p class="hint">Illimitées : bois, pierre et minerai ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
+        <p class="hint">Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
         <h4>Sauvegarde</h4>
         <div class="row"><button id="gSave">${ic('save', 16)} Sauvegarder</button><button id="gExport">${ic('download', 16)} Exporter</button><button id="gImport">${ic('upload', 16)} Importer</button></div>
         ${this.tutorial?.settingsHtml() ?? ''}
@@ -1269,7 +1352,17 @@ export class UI {
       const v = +b.dataset.sp!;
       if (v === 0) t.paused = true; else { t.paused = false; t.speed = v; }
       h.applySettings();
+      live();
     }));
+    // la fenêtre suit le jeu tant qu'elle est ouverte : vitesse en cours, saison et heure qui avancent
+    const live = () => {
+      ov.querySelectorAll<HTMLButtonElement>('[data-sp]').forEach((b) => { const v = +b.dataset.sp!; b.classList.toggle('active', v === 0 ? t.paused : !t.paused && t.speed === v); });
+      ov.querySelectorAll<HTMLButtonElement>('[data-season]').forEach((b) => b.classList.toggle('active', +b.dataset.season! === t.season));
+      const hour = q<HTMLInputElement>('#sHour');
+      if (document.activeElement !== hour) { hour.value = t.hour.toFixed(1); q('#vHour').textContent = `${Math.floor(t.hour)}h`; }
+    };
+    live();
+    const iv = setInterval(() => { if (ov.isConnected) live(); else clearInterval(iv); }, 500);
     const rng = (id: string, fn: (v: number) => void, out?: string, fmt = (v: number) => `${v}`) => {
       const el = q<HTMLInputElement>(id);
       el.oninput = () => { fn(+el.value); if (out) q(out).textContent = fmt(+el.value); h.applySettings(); };
@@ -1298,6 +1391,15 @@ export class UI {
       q('#gDisasters').classList.toggle('active', h.disasters);
     };
     q('#gUnlimited').onclick = () => {
+      // passer en ressources illimitées en pleine partie change tout : un second clic le confirme
+      const b = q<HTMLButtonElement>('#gUnlimited');
+      if (!h.world.unlimited && !b.dataset.sure) {
+        b.dataset.sure = '1';
+        b.textContent = 'Sûr ? Recliquez pour tout rendre illimité';
+        setTimeout(() => { if (b.dataset.sure) { delete b.dataset.sure; b.textContent = h.world.unlimited ? 'Illimitées' : 'Normales'; } }, 4000);
+        return;
+      }
+      delete b.dataset.sure;
       h.world.unlimited = !h.world.unlimited;
       h.applySettings();
       q('#gUnlimited').textContent = h.world.unlimited ? 'Illimitées' : 'Normales';

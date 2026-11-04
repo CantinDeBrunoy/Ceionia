@@ -39,7 +39,8 @@ import { UI, showMenu, UIHost } from './ui/ui';
 import { Tutorial } from './ui/tutorial';
 import { AGES, KINDS, Building, sizeOf } from './build/catalog';
 import { MISSIONS, VICTORY } from './sim/missions';
-import { SpaceCast, showVictory } from './ui/spaceViews';
+import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
+import { L_GONE } from './render/expeditionScenes';
 import { Fires } from './render/fires';
 import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
@@ -119,6 +120,8 @@ class Game implements UIHost {
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
+  /** le grand départ des colons : la foule qui les acclame (au cœur du village, puis au pas de tir), le voyage montré */
+  private farewell: { id: number; crowd: number[]; at: string; voyage: boolean } | null = null;
   pens: PenView;
   /** flaques de brut sur les gisements de pétrole */
   seeps: OilSeeps;
@@ -303,12 +306,14 @@ class Game implements UIHost {
     };
     this.expeditions.onReport = (r) => {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
-      this.ui.showReport(r);
-      this.ui.update();
-      // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir)
+      // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
       if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: 'le village', pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days });
+      else this.ui.showReport(r);
+      this.ui.update();
     };
     this.sim.onAgeUp = (age) => {
+      // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
+      this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
       audio.sfxAgeUp();
       // le sol des jardins change avec eux
@@ -407,9 +412,11 @@ class Game implements UIHost {
     const vols: number[] = [];
     for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_VOLCANO) vols.push(k);
     if (!vols.length) return;
-    this.quake = { cell: vols[Math.floor(Math.random() * vols.length)], t: 18 };
+    const cell = vols[Math.floor(Math.random() * vols.length)];
+    this.quake = { cell, t: 18 };
     audio.sfxRumble(18);
-    this.ui.toast('La terre tremble : un volcan se réveille…');
+    // le message mène au volcan qui se réveille (on ne savait pas lequel)
+    this.ui.toast('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.', () => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); });
   }
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
@@ -431,6 +438,41 @@ class Game implements UIHost {
     if (this.mode === 'under') this.exitUnder();
     const i = this.incidents().find((x) => x.key === key);
     if (i) this.cam.follow(i.x, i.z, 9);
+  }
+
+  /**
+   * Le grand départ des colons : tout le village sort les acclamer, d'abord en cercle autour d'eux au cœur du village (fête et
+   * feu d'artifice), puis autour du pas de tir pendant l'embarquement et le décollage. La fusée sortie du ciel, le voyage se
+   * montre en plein écran (le jeu attend), puis vient l'écran de fin
+   */
+  private stepFarewell() {
+    const a = this.expeditions.active.find((e) => e.m.farewell && !e.fromCamp), ag = this.agents;
+    let f = this.farewell;
+    if (!a) { if (f) { ag.dismiss(f.crowd); this.farewell = null; } return; }
+    if (!f || f.id !== a.id) {
+      if (f) ag.dismiss(f.crowd);
+      f = this.farewell = { id: a.id, crowd: ag.recruit(Math.min(30, ag.available())) ?? [], at: '', voyage: false };
+      this.fest.start(a.base[0], a.base[1], this.sim.age);
+      this.ui.toast(`${a.m.icon} Tout le village sort dire adieu aux colons !`);
+    }
+    // la foule se range en cercle, tournée vers les colons, et les acclame une fois en place
+    const at = a.phase === 'gather' ? 'base' : 'pad';
+    if (f.at !== at) {
+      f.at = at;
+      const [cx, cz] = at === 'base' ? a.base : a.dest, r0 = at === 'base' ? 1.6 : 4;
+      f.crowd.forEach((id, i) => {
+        const ang = i * 2.4, r = r0 + (i % 3) * 0.7, x = cx + Math.cos(ang) * r, z = cz + Math.sin(ang) * r;
+        ag.memberGo(id, x, z, Math.atan2(cx - x, cz - z));
+      });
+    }
+    for (const id of f.crowd) if (ag.memberDone(id)) ag.partyAct([id], 'cheer');
+    // la fusée a quitté le ciel : le grand voyage, plein écran et en temps réel, puis le récit (l'écran de fin)
+    if (!f.voyage && a.phase === 'work' && a.t >= (a.c.work + a.extra) * L_GONE) {
+      f.voyage = true;
+      const was = this.time.paused;
+      this.time.paused = true;
+      showVoyage(uiRoot, a.c.label.includes('saut'), () => { this.expeditions.landNow(a); this.time.paused = was; });
+    }
   }
 
   /** Le cœur du village : le milieu de ses bâtiments (la médiane, qu'un avant-poste lointain ne décale pas) */
@@ -660,7 +702,9 @@ class Game implements UIHost {
       else this.ui.toast(`⛏️ Filon de ${ore.name} (${ore.amount} minerai) : envoyez une expédition armée pour l’abattre.`, () => this.ui.openExpeditions());
       return;
     }
-    if (uv.mobs.scare(p.x, p.z)) audio.sfxClick();
+    if (uv.mobs.scare(p.x, p.z)) { audio.sfxClick(); return; }
+    // des cristaux : ils tintent, et l'on dit où se trouve le minerai
+    if (uv.crystalNear(p.x, p.z)) { audio.sfxClick(); this.ui.toast('✨ Les cristaux éclairent les galeries. Le minerai, lui, est dans les filons : les taches colorées des parois.'); }
   }
   capture() {
     this.renderer_render();
@@ -853,6 +897,7 @@ class Game implements UIHost {
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
     this.expeditions.update(gdt);
+    this.stepFarewell();
     this.railway.update(gdt);
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);

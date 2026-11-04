@@ -41,6 +41,7 @@ export const TUTO_TEXT = {
       text: 'Faites tourner la vue (clic droit et glisser, ou A / E), zoomez (molette, vers le point visé) et déplacez-vous (clic milieu, Maj + clic droit, ou ZQSD / flèches). Perdu ? V, ou le bouton {target} en bas à droite, ramène la vue sur le village.',
       touch: 'Avec deux doigts : glissez pour déplacer la vue, pincez pour zoomer, tournez-les pour faire pivoter. Perdu ? Le bouton {target} en bas à droite ramène la vue sur le village.',
       tasks: ['Se déplacer', 'Tourner la vue', 'Zoomer'],
+      paused: 'Le jeu est en pause pendant que vous prenez vos repères : vous le relancerez un peu plus loin. Un seul des trois gestes suffit pour continuer.',
     },
     dock: {
       title: 'La barre de construction',
@@ -65,8 +66,8 @@ export const TUTO_TEXT = {
     },
     time: {
       title: 'Pause et vitesse',
-      text: 'Le bouton {pause} (ou Espace) arrête le temps, pour réfléchir ou bâtir tranquillement ; le bouton ×1 passe à ×2 puis ×4 pour accélérer les jours et les saisons.',
-      tasks: ['Mettre en pause', 'Changer la vitesse'],
+      text: 'Le bouton {pause} (ou Espace) arrête ou relance le temps, pour réfléchir ou bâtir tranquillement ; le bouton ×1 passe à ×2 puis ×4 pour accélérer les jours et les saisons.',
+      tasks: ['Arrêter ou relancer le temps', 'Changer la vitesse'],
     },
     ages: {
       title: 'Les âges',
@@ -109,6 +110,8 @@ interface Step {
   tasks?(): string[];
   /** une étape à lire : une fois faite, elle attend « Suivant » au lieu de passer d'elle-même */
   read?: boolean;
+  /** tâches à faire pour passer (toutes par défaut) */
+  need?: number;
 }
 
 const KEY = 'village-lowpoly:v1:tutorial';
@@ -180,6 +183,9 @@ export class Tutorial {
         id: 'camera', anchor: () => null,
         begin: () => (this.base.view = h.cam.view()),
         text: () => (coarse() ? T.camera.touch : T.camera.text),
+        // une seule des trois suffit : un enfant zoome tout de suite, mais tourner la vue au clic droit ne se devine pas
+        need: 1,
+        note: () => (h.time.paused ? T.camera.paused : ''),
         check: () => {
           const v = h.cam.view(), b = this.base.view!;
           return [Math.hypot(v.x - b.x, v.z - b.z) > 3, Math.abs(v.yaw - b.yaw) > 0.35, Math.abs(Math.log(v.dist / b.dist)) > 0.15];
@@ -192,7 +198,8 @@ export class Tutorial {
       {
         id: 'place',
         begin: () => (this.base.kinds = count()),
-        check: () => { const n = count(); return FIRST.map((k) => (n[k] ?? 0) > (this.base.kinds![k] ?? 0)); },
+        // déjà bâtis avant d'arriver à l'étape : elle passe d'elle-même
+        check: () => { const n = count(); return FIRST.map((k) => (n[k] ?? 0) > 0); },
         // le prochain bâtiment à poser : l'onglet Bâtir, son rayon, puis sa vignette
         anchor: () => {
           const k = FIRST.find((_, j) => !this.ticks[j]);
@@ -284,7 +291,8 @@ export class Tutorial {
     ui.tutorial = this;
 
     const st = readState() ?? { on: tutorialOn(), step: 0 };
-    if (fresh) st.step = 0;
+    // nouvelle partie avec le tutoriel : le temps attend que le joueur ait pris ses repères (il le relance à l'étape du temps)
+    if (fresh) { st.step = 0; if (st.on) h.time.paused = true; }
     this.i = Math.min(st.step, this.steps.length - 1);
     writeState({ on: st.on, step: this.i });
     if (st.on) this.show(this.i);
@@ -334,7 +342,7 @@ export class Tutorial {
     if (!this.on) return;
     const s = this.steps[this.i];
     s.check().forEach((v, j) => { if (v) this.ticks[j] = true; });
-    const all = this.ticks.every(Boolean);
+    const all = this.ticks.filter(Boolean).length >= (s.need ?? this.ticks.length);
     if (all && !s.read) {
       if (!this.doneAt) this.doneAt = performance.now();
       else if (performance.now() - this.doneAt > 1000) { this.next(); return; }

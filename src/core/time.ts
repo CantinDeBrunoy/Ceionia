@@ -2,6 +2,8 @@ import { clamp } from './rng';
 
 /** Écart de cadence entre le jour et la nuit : 0,6 donne environ 70 % du cycle au jour et 30 % à la nuit */
 const NIGHT_SKIP = 0.6;
+/** Part de la saison sur laquelle le décor passe d'une saison à l'autre */
+const BLEND = 0.3;
 
 export class GameTime {
   hour = 9;
@@ -28,10 +30,14 @@ export class GameTime {
   get season() { return Math.floor(this.seasonT) % 4; }
   get frac() { return this.seasonT - Math.floor(this.seasonT); }
 
-  /** Transition vers la saison suivante sur les derniers 30 % */
+  /**
+   * Transition du décor d'une saison à la suivante sur 30 % de saison, centrée sur le changement : à mi-chemin quand la
+   * saison affichée change, qui est donc toujours celle qui domine le décor (partie sur les derniers 30 %, la transition
+   * montrait l'automne en « Été » et la neige en « Automne »)
+   */
   mix(): { a: number; b: number; t: number } {
-    const a = this.season;
-    const f = clamp((this.frac - 0.7) / 0.3, 0, 1);
+    const s = (this.seasonT + 4 - BLEND / 2) % 4, a = Math.floor(s);
+    const f = clamp((s - a - (1 - BLEND)) / BLEND, 0, 1);
     return { a, b: (a + 1) % 4, t: f * f * (3 - 2 * f) };
   }
 

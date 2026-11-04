@@ -3,7 +3,7 @@ import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { AGES, KINDS, Building, sizeOf } from '../build/catalog';
-import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel } from './gear';
+import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
@@ -162,7 +162,10 @@ export class Expeditions {
   }
 
   /** Risque d'une équipe en route : celui du choix, équipement et décisions compris */
-  chance(a: ActiveExpedition) { return Math.min(0.95, Math.max(0.02, this.riskOf(a.c) * a.riskK)); }
+  chance(a: ActiveExpedition) { return this.riskOf(a.c) > 0 ? Math.min(0.95, Math.max(0.02, this.riskOf(a.c) * a.riskK)) : 0; }
+
+  /** Le travail sur place est fini tout de suite (le grand voyage des colons a été vu, ou passé) */
+  landNow(a: ActiveExpedition) { if (a.phase === 'work') a.t = Math.max(a.t, a.c.work + a.extra); }
 
   /** Missions proposées : celles de l'âge et des âges passés ; celles déjà réussies peuvent se refaire */
   list(age: number) { return MISSIONS.filter((m) => m.age <= age); }
@@ -356,7 +359,7 @@ export class Expeditions {
     const { take, k } = loadout(c, this.world.exp.gear);
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
     const a: ActiveExpedition = {
-      id: this.nextId++, m, c, phase: 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
+      id: this.nextId++, m, c, phase: m.farewell ? 'gather' : 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
       wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], extra: 0, bonus: [], hurt: 0,
       // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
       site: c.dest === 'cave' ? 'cave' : kind, age,
@@ -385,6 +388,9 @@ export class Expeditions {
       a.phase = 'work';
       this.agents.partyHide(party, true);
       this.onNews?.(`${m.icon} « ${m.title} » : la troupe se rassemble au camp souterrain et s’enfonce dans les galeries.`);
+    } else if (m.farewell) {
+      // le grand départ : les colons se retrouvent d'abord au cœur du village, où tout le monde vient leur dire adieu
+      this.agents.partyGo(party, base[0], base[1], 0.15);
     } else {
       // elle part aussitôt, chacun de là où il est, sans se rassembler d'abord au village
       this.agents.partyGo(party, dest[0], dest[1]);
@@ -413,7 +419,8 @@ export class Expeditions {
       a.t += dt * (a.phase === 'work' && this.has('stable') ? 1.25 : 1);
       if (a.phase === 'work' && a.ambush.length) this.ambushStep(a);
       // (une équipe d'une ancienne sauvegarde, encore rassemblée au village, part à son tour)
-      if (a.phase === 'gather' && (ag.partyDone(a.party) || a.t > 40)) {
+      // les adieux durent un peu, le temps que le village acclame les colons
+      if (a.phase === 'gather' && ((ag.partyDone(a.party) && a.t > (a.m.farewell ? 14 : 0)) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
         this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » part vers ${DEST_NAME[a.c.dest]}.`);
@@ -433,6 +440,11 @@ export class Expeditions {
         ag.partyHide(a.party, false);
         ag.partyAct(a.party, a.ok ? 'cheer' : 'stroll');
         this.onNews?.(a.ok ? `${a.m.icon} « ${a.m.title} » : la troupe remonte du camp souterrain, victorieuse !` : `${a.m.icon} « ${a.m.title} » : la troupe remonte du camp souterrain, la mine basse.`);
+      } else if (a.phase === 'work' && a.t >= a.c.work + a.extra && a.m.farewell) {
+        // les colons sont partis pour de bon : pas de retour, le récit arrive aussitôt
+        a.ok = this.rnd() >= this.chance(a);
+        a.phase = 'home'; a.t = 4;
+        ag.partyHide(a.party, true);
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra) {
         a.ok = this.rnd() >= this.chance(a);
         a.phase = 'back'; a.t = 0;
@@ -614,27 +626,27 @@ export class Expeditions {
   whyCraft(g: Gear, age: number): string | null {
     if (age < g.age) return `Connu à l’âge ${AGES[g.age].name}`;
     if (g.needs && !this.has(g.needs)) return `Il faut : ${KINDS[g.needs].names[Math.min(age, AGES.length - 1)].toLowerCase()}`;
-    if (!this.world.unlimited && this.world.ore < g.ore) return `Il faut ${g.ore} minerai`;
+    const lack = gearShort(this.world, g); if (lack) return lack;
     if (this.world.exp.craft.length >= MAX_CRAFT) return 'L’atelier a déjà assez de travail';
     return null;
   }
 
-  /** Met une pièce en fabrication (le minerai est pris tout de suite) */
+  /** Met une pièce en fabrication (son prix est pris tout de suite) */
   craft(id: GearId, age: number) {
     const g = GEAR_BY[id];
     if (this.whyCraft(g, age)) return false;
-    if (!this.world.unlimited) this.world.ore -= g.ore;
+    payGear(this.world, g);
     this.world.exp.craft.push(id);
     return true;
   }
 
-  /** Annule une pièce de la file (le minerai est rendu) */
+  /** Annule une pièce de la file (son prix est rendu) */
   cancelCraft(i: number) {
     const s = this.world.exp, id = s.craft[i];
     if (!id) return;
     s.craft.splice(i, 1);
     if (i === 0) s.craftT = 0;
-    this.world.ore += GEAR_BY[id].ore;
+    payGear(this.world, GEAR_BY[id], true);
   }
 
   /** Avancement de la pièce en cours (0 … 1) */

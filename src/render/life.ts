@@ -9,7 +9,8 @@ import { BuildingView } from './buildings';
 import { Puffs } from './particles';
 
 const FIREFLIES = 160, MAX_LEAVES = 260, FLOCK = 90, MAX_RINGS = 10;
-const SMOKE_LIGHT = new THREE.Color(0.8, 0.79, 0.78), SMOKE_DARK = new THREE.Color(0.3, 0.29, 0.29), STEAM = new THREE.Color(0.96, 0.97, 0.98);
+/** Fumée de bois : un voile blanc bleuté ; celle des forges et des usines, grise (jamais noire comme du charbon) */
+const SMOKE_LIGHT = new THREE.Color(0.93, 0.93, 0.95), SMOKE_DARK = new THREE.Color(0.5, 0.49, 0.5), STEAM = new THREE.Color(0.96, 0.97, 0.98);
 const AUTUMN = [0xe0782c, 0xd4a03a, 0xc4532a, 0x9a6a3a, 0xe8b84a].map((c) => new THREE.Color(c));
 const PETALS = [0xf6c6d8, 0xfbe3ec, 0xffffff, 0xf2a9c4].map((c) => new THREE.Color(c));
 
@@ -30,7 +31,7 @@ export class AmbientLife {
   onSplash: ((x: number, z: number) => void) | null = null;
   /** autres feux de bois à faire fumer (jardins) : ajoutés à la suite des cheminées, (x, y, z, sorte) */
   extraChimneys: ((out: number[]) => void) | null = null;
-  private puffs = new Puffs(320, 0);
+  private puffs = new Puffs(1100, 1);
   private chim: number[] = [];
   private chimTimer = 0;
   private col = new THREE.Color();
@@ -161,12 +162,14 @@ void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.
     for (let i = 0; i < c.length; i += 4) {
       const x = c[i], y = c[i + 1], z = c[i + 2], kind = c[i + 3];
       if (Math.abs(x - focus.x) > 50 || Math.abs(z - focus.z) > 50) continue;
-      const rate = (kind === 2 ? 1.6 : kind === 1 ? 0.9 + cold * 0.3 : 0.35 + cold + cook) * this.density;
-      if (Math.random() > dt * rate) continue;
-      const g = kind === 2 ? 0 : 0.85 + Math.random() * 0.2;
-      this.puffs.spawn(x, y, z, (Math.random() - 0.5) * 0.05, 0.32 + Math.random() * 0.18, (Math.random() - 0.5) * 0.05,
-        kind === 2 ? 0.2 : 0.11, 3.6 + Math.random() * 1.6, this.col.copy(kind === 2 ? SMOKE_DARK : SMOKE_LIGHT).multiplyScalar(kind === 2 ? 1 : g), 0,
-        { grow: kind === 2 ? 3.4 : 3, drag: 0.15, wind: 0.12, alpha: kind === 2 ? 0.7 : 0.55 });
+      // bouffées serrées et très transparentes, qui forment un filet continu (et non des boules l'une derrière l'autre) : elles
+      // gonflent, pâlissent et se dissipent en montant. Le filet s'épaissit l'hiver et aux heures des repas
+      const thick = kind === 2 ? 1 : kind === 1 ? 0.7 + cold * 0.25 : clamp(0.25 + cold * 0.6 + cook, 0, 1);
+      if (Math.random() > dt * (kind === 2 ? 5 : 4.5) * this.density) continue;
+      const g = 0.94 + Math.random() * 0.08, j = () => (Math.random() - 0.5) * 0.04;
+      this.puffs.spawn(x + j(), y, z + j(), (Math.random() - 0.5) * 0.05, 0.3 + Math.random() * 0.14, (Math.random() - 0.5) * 0.05,
+        (kind === 2 ? 0.18 : 0.12) * (0.8 + thick * 0.4) * (0.8 + Math.random() * 0.4), 3.4 + Math.random() * 1.4, this.col.copy(kind === 2 ? SMOKE_DARK : SMOKE_LIGHT).multiplyScalar(g), 0,
+        { grow: kind === 2 ? 3.6 : 3.2, drag: 0.15, wind: 0.14, alpha: kind === 2 ? 0.5 : 0.22 + 0.3 * thick, fade: 0.15 });
     }
   }
 
