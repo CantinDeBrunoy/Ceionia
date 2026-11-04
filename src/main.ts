@@ -167,7 +167,11 @@ class Game implements UIHost {
   private surfaceZoom = { min: 10, max: 0 };
   private fading = false;
   torchMode = false;
-  /** entrées sous terre : créatures, puits de jour, torches */
+  /** mode Creuser : un clic sur la roche y fait creuser un tunnel par les mineurs du camp */
+  digMode = false;
+  /** ce que montre la case visée en mode Creuser (case, file, roche) */
+  private digHover = '';
+  /** entrées sous terre : créatures, puits de jour, torches, creusement */
   private underInput: ToolInput = {
     down: (e) => this.underClick(e),
     move: () => {},
@@ -175,7 +179,18 @@ class Game implements UIHost {
     cancel: () => {},
     hover: (e) => {
       const uv = this.underView, p = uv?.pick(this.cam.ray(e.x, e.y, canvas.clientWidth, canvas.clientHeight));
-      canvas.style.cursor = this.torchMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z)) ? 'pointer' : '';
+      // en mode Creuser, la case visée et le tunnel qu'on y creuserait (en rouge si l'on ne peut pas)
+      if (uv && this.digMode) {
+        // (recalculé seulement quand la case visée, la file ou la roche changent)
+        const k = p ? this.digCell(p) : -1, key = `${k}|${this.world.digs.join(',')}|${this.under.carved}|${uv.digCursorShown()}`;
+        if (key !== this.digHover) {
+          this.digHover = key;
+          const plan = k < 0 || this.world.digs.includes(k) ? null : this.expeditions.digPlan(k);
+          if (k < 0 || !plan) uv.digCursor(k < 0 ? [] : [k], true);
+          else uv.digCursor(typeof plan === 'string' ? [k] : plan, typeof plan !== 'string');
+        }
+      }
+      canvas.style.cursor = this.torchMode || this.digMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z)) ? 'pointer' : '';
     },
   };
 
@@ -293,7 +308,7 @@ class Game implements UIHost {
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
     this.spaceCast = new SpaceCast(uiRoot);
-    this.expeditions.onNews = (m) => this.ui.toast(m);
+    this.expeditions.onNews = (m, depths) => this.ui.toast(m, depths ? () => this.ui.openExpeditions('depths') : undefined);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
     this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; };
     // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
@@ -624,6 +639,7 @@ class Game implements UIHost {
       this.under.sync();
       this.underView ??= new UnderView(this.world, this.under);
       this.underView.fx.onClash = (k) => this.audio.sfxClash(k);
+      this.underView.onPick = () => this.audio.sfxMine();
       this.underView.build();
       this.surfaceView = this.cam.view();
       this.surfaceZoom = { min: this.cam.minDist, max: this.cam.maxDist };
@@ -664,6 +680,7 @@ class Game implements UIHost {
       document.body.classList.remove('under');
       this.underView?.leave();
       this.torchMode = false;
+      this.digMode = false;
       this.cam.minDist = this.surfaceZoom.min;
       this.cam.minPitch = 0.25;
       this.cam.maxDist = this.surfaceZoom.max || this.cam.maxDist;
@@ -681,6 +698,17 @@ class Game implements UIHost {
     if (!uv) return;
     const ray = this.cam.ray(e.x, e.y, canvas.clientWidth, canvas.clientHeight);
     const p = uv.pick(ray);
+    // creuser : la roche cliquée (et le tunnel jusqu'à elle) entre dans la file des mineurs ; une case prévue s'annule
+    if (this.digMode) {
+      if (!p) return;
+      const r = this.expeditions.planDig(this.digCell(p));
+      if (typeof r === 'string') { this.ui.toast(r); audio.sfxClick(); }
+      else if (r) audio.sfxMine(); else audio.sfxDestroy();
+      // la case visée se redessine : prévue, elle n'est plus qu'un contour (un clic l'annulerait)
+      this.underInput.hover(e);
+      this.ui.update();
+      return;
+    }
     if (this.torchMode) {
       if (!p) return;
       const r = uv.toggleTorch(p.x, p.z);
@@ -708,6 +736,39 @@ class Game implements UIHost {
     // des cristaux : ils tintent, et l'on dit où se trouve le minerai
     if (uv.crystalNear(p.x, p.z)) { audio.sfxClick(); this.ui.toast('✨ Les cristaux éclairent les galeries. Le minerai, lui, est dans les filons : les taches colorées des parois.'); }
   }
+
+  /** Case visée en mode Creuser : celle du point cliqué ; sur le flanc d'une paroi, la roche la plus proche plutôt que le sol */
+  private digCell(p: THREE.Vector3) {
+    const u = this.under, cx = Math.floor(p.x), cz = Math.floor(p.z), k = cz * N + cx;
+    if (cx < 0 || cz < 0 || cx >= N || cz >= N) return -1;
+    if (!u.open[k] || p.y < 0.45) return k;
+    let best = k, bd = Infinity;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const n = k + dz * N + dx, d = Math.hypot(cx + dx + 0.5 - p.x, cz + dz + 0.5 - p.z);
+      if (!u.open[n] && d < bd) { bd = d; best = n; }
+    }
+    return best;
+  }
+
+  /**
+   * Creuser un tunnel (depuis l'onglet Profondeurs) : la vue descend sous terre là où la roche est la plus mince vers d'autres
+   * galeries, en mode Creuser
+   */
+  digTunnel() {
+    const hint = this.expeditions.tunnelHint(), at = hint[0] ?? this.expeditions.outposts()[0]?.entry ?? -1;
+    this.torchMode = false;
+    this.digMode = true;
+    const tip = hint.length ? `⛏️ Creuser : les marques montrent le passage le plus court (${hint.length} case${hint.length > 1 ? 's' : ''} de roche). Cliquez sur la dernière marque, les mineurs creusent jusque-là.` : '⛏️ Creuser : cliquez sur la roche tout contre une galerie tenue.';
+    if (this.mode === 'under') {
+      if (at >= 0) this.cam.goTo((at % N) + 0.5, Math.floor(at / N) + 0.5, 12);
+      this.ui.toast(tip);
+      this.ui.update();
+      return;
+    }
+    if (at < 0) { this.enterNearest(); return; }
+    this.enterUnder(at);
+    setTimeout(() => this.ui.toast(tip), 1200);
+  }
   capture() {
     this.renderer_render();
     canvas.toBlob((b) => {
@@ -734,10 +795,12 @@ class Game implements UIHost {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       // Échap ferme d'abord la fenêtre ouverte
       if (k === 'escape' && this.ui.closeTop()) return;
-      // sous terre : U remonte, T bascule les torches, les outils de surface sont inactifs
+      // sous terre : U remonte, T bascule les torches, C le creusement, les outils de surface sont inactifs
       if (this.mode === 'under') {
-        if (k === 'u' || k === 'escape') this.exitUnder();
-        else if (k === 't') { this.torchMode = !this.torchMode; this.ui.update(); }
+        if (k === 'escape' && this.digMode) { this.digMode = false; this.ui.update(); }
+        else if (k === 'u' || k === 'escape') this.exitUnder();
+        else if (k === 't') { this.torchMode = !this.torchMode; this.digMode = false; this.ui.update(); }
+        else if (k === 'c') { this.digMode = !this.digMode; this.torchMode = false; this.ui.update(); }
         else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
         return;
       }
@@ -947,6 +1010,8 @@ class Game implements UIHost {
       uv.age = this.sim.age;
       // les mineurs descendus par les trains, une équipe par ligne
       uv.setMiners([...this.railway.trains.values()].filter((t) => !t.why && t.mine >= 0 && t.crew.length).map((t) => ({ id: t.line.id, n: t.crew.length, entry: t.stops[t.mine].entry, vein: t.vein })), this.sim.age, gdt);
+      // les mineurs du camp au front du tunnel ; en mode Creuser, le passage conseillé
+      uv.setDigs(this.world.digs, this.expeditions.digProgress(), this.digMode ? this.expeditions.tunnelHint() : null, this.sim.age, gdt);
       uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
     }
     else {

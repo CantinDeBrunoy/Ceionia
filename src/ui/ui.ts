@@ -37,10 +37,13 @@ export interface UIHost {
   toMenu(): void;
   setPhoto(on: boolean): void;
   capture(): void;
-  /** monde souterrain : descendre par l'entrée la plus proche, remonter, poser des torches */
+  /** monde souterrain : descendre par l'entrée la plus proche, remonter, poser des torches, creuser des tunnels */
   enterNearest(): void;
   exitUnder(): void;
   torchMode: boolean;
+  digMode: boolean;
+  /** descendre là où un tunnel rejoindrait d'autres galeries, en mode Creuser */
+  digTunnel(): void;
   underZone(): string | null;
   /** brouillard visible (0 … 1), et le dissiper */
   fogLevel(): number;
@@ -324,6 +327,7 @@ export class UI {
         <div id="underZone"></div>
         <button id="campQuest" title="Quêtes du camp souterrain"></button>
         <button id="bTorch" title="Poser ou retirer des torches (T)">${ic('flame', 18)} Torches</button>
+        <button id="bDig" title="Creuser un tunnel dans la roche (C)">${ic('pickaxe', 18)} Creuser</button>
         <button id="bUp" title="Remonter à la surface (U)">${ic('up', 18)} Remonter</button>
       </div>
       <div id="selCard" class="panel"></div>
@@ -450,7 +454,8 @@ export class UI {
     $('#bUnder').onclick = () => host.enterNearest();
     $('#bUp').onclick = () => host.exitUnder();
     $('#campQuest').onclick = () => this.openExpeditions('depths');
-    $('#bTorch').onclick = () => { host.torchMode = !host.torchMode; host.audio.sfxClick(); this.update(); };
+    $('#bTorch').onclick = () => { host.torchMode = !host.torchMode; host.digMode = false; host.audio.sfxClick(); this.update(); };
+    $('#bDig').onclick = () => { host.digMode = !host.digMode; host.torchMode = false; host.audio.sfxClick(); this.update(); };
     $('#biomes').innerHTML = BIOME_CHOICES.map((c) => `<button data-b="${c.b ?? ''}" title="${c.b === null ? 'Rendre la terre au biome de son climat' : `Peindre : ${c.label.toLowerCase()}`}"><i style="background:${c.color}"></i>${c.label}</button>`).join('');
     $('#biomes').onclick = (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-b]');
@@ -882,8 +887,15 @@ export class UI {
     ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
     if (zone) {
-      $('#underZone').innerHTML = `⛏️ ${zone}<small>${this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Filon : comment l’abattre · Puits de lumière : remonter'}</small>`;
+      // en mode Creuser : ce que les mineurs ont encore à percer
+      const digs = this.host.expeditions.digs().length, s = digs > 1 ? 's' : '';
+      const tip = this.host.digMode ? (!digs ? 'Cliquez sur la roche tout contre une galerie tenue'
+        : `${this.host.expeditions.digWalking() ? 'Les mineurs se rendent au chantier' : 'Les mineurs creusent'} : ${digs} case${s} de roche · un clic sur une case prévue l’annule`)
+        : this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Filon : comment l’abattre · Puits de lumière : remonter';
+      const zh = `⛏️ ${zone}<small>${tip}</small>`;
+      if ($('#underZone').dataset.v !== zh) { $('#underZone').innerHTML = zh; $('#underZone').dataset.v = zh; }
       $('#bTorch').classList.toggle('active', this.host.torchMode);
+      $('#bDig').classList.toggle('active', this.host.digMode);
       // la quête en cours du camp souterrain, et où en est son objectif
       const ex = this.host.expeditions, cq = ex.campQuest(), lvl = ex.camp();
       const q = cq ? `<span>${ic('outpost', 16, 2)} Camp · niveau ${lvl}</span><small>${cq.q.title} : ${cq.cur} / ${cq.max}</small><i class="bar"><i style="width:${Math.round((cq.cur / cq.max) * 100)}%"></i></i>`
@@ -1122,7 +1134,8 @@ export class UI {
     const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : m.mandatory && !ex.done(m) ? 0 : 1);
     const cards = ex.list(age).sort((a, b) => rank(a) - rank(b)).map((m) => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
-      const choices = run ? '' : `<div class="mchoices" data-m="${m.id}">${this.choiceButtons(m)}</div>`;
+      // l'expédition armée n'a plus rien à prendre : on propose de creuser un tunnel
+      const choices = run ? '' : m.id === 'deep' && ex.tunnelNeeded() ? this.tunnelHtml() : `<div class="mchoices" data-m="${m.id}">${this.choiceButtons(m)}</div>`;
       return `<div class="mission ${done ? 'done' : ''}" data-id="${m.id}">
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${m.unlocks ? `<p class="unlock">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})</p>` : ''}
@@ -1170,6 +1183,13 @@ export class UI {
     });
     const iv = setInterval(arsenal, 300);
     arsenal();
+    // creuser un tunnel : la fenêtre se ferme, on descend sous terre en mode Creuser
+    ov.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).closest('[data-dig]')) return;
+      close();
+      h.audio.sfxClick();
+      h.digTunnel();
+    });
     // ce qui manque à une mission : un bâtiment se prend en main (la fenêtre se ferme), une expédition s'amène sous les yeux
     ov.addEventListener('click', (e) => {
       const go = (e.target as HTMLElement).closest<HTMLElement>('.go[data-kind], .go[data-goto]');
@@ -1216,6 +1236,7 @@ export class UI {
     const send = age < deep.age ? `<p class="hint">${ic('sword', 15, 2)} Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`
       : miss.length ? `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">Il suffit d’un avant-poste bâti tout contre une grotte ou une faille. Les troupes à pied partent sans chevaux ; seule la charge en demande. « Repérer les profondeurs », facultatif, rend les troupes plus sûres.</p><p class="req">${this.needsHtml(deep) || miss.join(', ')}</p></div>`
       : ex.running(deep) ? `<p class="hint">${ic('sword', 15, 2)} Une expédition armée est déjà dans les galeries.</p>`
+      : ex.tunnelNeeded() ? this.tunnelHtml()
       : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe part du village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><div class="choices">${this.choiceButtons(deep)}</div></div>`;
     const quests = CAMP_QUESTS.map((q, i) => {
       const [cur, max] = q.goal(st), done = i < lvl, now = i === lvl, k = Math.min(1, cur / max);
@@ -1232,6 +1253,18 @@ export class UI {
       <div class="railBox">${this.railHtml()}</div>
       ${send}
       <ol class="quests">${quests}</ol>`;
+  }
+
+  /**
+   * Toutes les galeries à portée sont prises : à la place des choix grisés de l'expédition armée, on propose de creuser un
+   * tunnel vers de nouvelles galeries (le bouton descend sous terre, en mode Creuser)
+   */
+  private tunnelHtml() {
+    const n = this.host.expeditions.digs().length;
+    return `<div class="send dig"><h4>${ic('pickaxe', 16, 2)} Creusez un tunnel vers de nouvelles galeries</h4>
+      <p class="hint">Toutes les galeries que l’on peut atteindre depuis l’avant-poste sont tenues, et leurs filons abattus. Les mineurs du camp percent la roche case par case : quand le tunnel débouche sur d’autres galeries, l’expédition armée peut repartir les prendre.</p>
+      ${n ? `<p class="hint"><b>Les mineurs creusent : encore ${n} case${n > 1 ? 's' : ''} de roche.</b></p>` : ''}
+      <button class="digGo" data-dig="1">${ic('pickaxe', 16, 2)} ${n ? 'Voir le chantier' : 'Creuser un tunnel'}</button></div>`;
   }
 
   /** Chemin de fer : chaque ligne, où en est son train, ses voyageurs, ses mineurs et ce qu'ils remontent */

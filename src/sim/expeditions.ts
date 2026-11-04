@@ -8,6 +8,7 @@ import { ExpEvent, pickEvent } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
 import { rulesOf } from './difficulty';
+import { hash2 } from '../core/rng';
 
 /**
  * Étapes d'une expédition : aller, travail sur place, retour, fête (ou mine déconfite) au village ; « gather » (le rassemblement
@@ -115,6 +116,14 @@ export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 
 const NUMBER = ['Aucun', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf', 'Dix', 'Onze', 'Douze'];
 /** « de fer », « d’or », « d’émeraude » */
 const ofOre = (name: string) => (/^[aeiouyéèêh]/i.test(name) ? `d’${name}` : `de ${name}`);
+/** Temps que les mineurs du camp mettent à percer une case de roche (secondes de jeu), et cases qu'ils gardent en file, au plus */
+export const DIG_TIME = 4, MAX_DIGS = 30;
+/** Pas des mineurs qui se rendent au front du tunnel (cases par seconde de jeu ; ils pressent le pas), et leur marche au plus (secondes) */
+export const DIG_WALK = 2.4, DIG_WALK_MAX = 25;
+/** Un tunnel se prévoit d'un clic jusqu'à cette longueur (cases de roche), le tunnel conseillé aussi */
+const DIG_REACH = MAX_DIGS;
+/** Les quatre cases voisines (les cases de galerie et de roche creusable sont loin du bord de la carte) */
+const around = (k: number) => [k + 1, k - 1, k + N, k - N];
 
 /**
  * Campagne d'une troupe armée : l'avant-poste d'où elle part et l'entrée qu'il garde, la case de galerie où elle descend,
@@ -125,7 +134,8 @@ export interface Campaign { post: Building; entrance: number; entry: number; tar
 export class Expeditions {
   active: ActiveExpedition[] = [];
   onReport: ((r: Report) => void) | null = null;
-  onNews: ((msg: string) => void) | null = null;
+  /** une nouvelle à annoncer ; `depths` : un clic dessus ouvre l'onglet Profondeurs */
+  onNews: ((msg: string, depths?: boolean) => void) | null = null;
   /** une équipe attend une décision */
   onEvent: ((a: ActiveExpedition) => void) | null = null;
   /** une quête du camp souterrain est accomplie : le camp grandit */
@@ -239,7 +249,7 @@ export class Expeditions {
     const veins = c.win.find((e) => e.t === 'veins'), u = this.under;
     if (veins?.t !== 'veins' || !u) return null;
     const posts = this.outposts(), w = this.world;
-    const key = `${veins.n}|${veins.reach}|${w.claimed.size}|${w.mined.size}|${u.version}|${posts.map((p) => `${p.b.id}:${p.entry}`).join(',')}`;
+    const key = `${veins.n}|${veins.reach}|${w.claimed.size}|${w.mined.size}|${u.version}|${u.carved}|${posts.map((p) => `${p.b.id}:${p.entry}`).join(',')}`;
     if (this.plans.has(key)) return this.plans.get(key)!;
     const all = oreVeins(u, w.mined);
     let best: Campaign | null = null, score = 0;
@@ -316,6 +326,172 @@ export class Expeditions {
     }
   }
 
+  // ---------------- Creusement ----------------
+  /** temps passé sur la case en cours (secondes de jeu) */
+  private digT = 0;
+  /** où se tient l'équipe de mineurs (case de galerie, -1 : au camp), le front vers lequel elle marche et sa marche restante */
+  private crewAt = -1;
+  private walkFor = -1;
+  private walkT = 0;
+
+  /** Cases que les mineurs du camp ont à creuser, dans l'ordre : la première est le front du tunnel */
+  digs() { return this.world.digs; }
+
+  /** Avancement de la case en cours (0 … 1) */
+  digProgress() { return this.world.digs.length ? Math.min(1, this.digT / DIG_TIME) : 0; }
+
+  /** Les mineurs sont encore en chemin vers le front du tunnel */
+  digWalking() { return this.world.digs.length > 0 && this.walkT > 0; }
+
+  /** Case de galerie d'où l'on creuse la roche `k` (une galerie tenue), ou -1 */
+  digStand(k: number) { const u = this.under!; return around(k).find((n) => this.world.claimed.has(n) && u.walkable(n % N, Math.floor(n / N))) ?? -1; }
+
+  /** Temps de marche de l'équipe jusqu'au front `k` : depuis le camp (sous le premier avant-poste) ou depuis le front d'avant */
+  private walkTime(k: number) {
+    const u = this.under!, stand = this.digStand(k);
+    const from = this.crewAt >= 0 ? this.crewAt : ([...this.outposts()].sort((a, b) => a.b.id - b.b.id)[0]?.entry ?? -1);
+    const d = stand >= 0 && from >= 0 ? u.distances(from)[stand] : -1;
+    this.crewAt = stand;
+    return d > 0 ? Math.min(DIG_WALK_MAX, d / DIG_WALK) : 0;
+  }
+
+  /** Galeries d'où l'on creuse : celles que le village tient, tunnels compris */
+  private digFrom() {
+    const u = this.under!, out: number[] = [];
+    for (const k of this.world.claimed) if (u.walkable(k % N, Math.floor(k / N))) out.push(k);
+    return out;
+  }
+
+  /** La case touche-t-elle une galerie tenue (ou un bout de tunnel) ? */
+  private touchesHeld(k: number) { const u = this.under!; return around(k).some((n) => this.world.claimed.has(n) && u.walkable(n % N, Math.floor(n / N))); }
+
+  /**
+   * Cases à creuser pour atteindre la case visée : une case de roche contre une galerie tenue (ou au bout du tunnel prévu),
+   * sinon le tunnel le plus court jusqu'à elle ; une galerie hors d'atteinte, le tunnel le plus court jusqu'à elle. Renvoie
+   * ces cases, ou pourquoi l'on ne peut pas
+   */
+  digPlan(k: number): number[] | string {
+    const u = this.under, w = this.world;
+    if (!u) return 'Le monde souterrain n’est pas encore prêt.';
+    u.sync();
+    const x = k % N, z = Math.floor(k / N);
+    if (k < 0 || k >= N * N || (!u.open[k] && !u.canCarve(k))) return 'On ne creuse pas au-delà du bord de la carte.';
+    if (u.pool[k]) return 'On ne creuse ni dans l’eau ni dans la lave.';
+    const from = this.digFrom();
+    if (!from.length) return 'Il faut d’abord tenir des galeries : bâtissez un avant-poste tout contre une grotte ou une faille.';
+    const left = MAX_DIGS - w.digs.length, src = [...from, ...w.digs];
+    if (left <= 0) return 'Les mineurs ont déjà assez de travail : laissez-les avancer un peu.';
+    let path: number[] | null;
+    if (u.open[k]) {
+      if (w.claimed.has(k)) return 'C’est une galerie tenue : cliquez sur la roche tout contre elle pour y creuser.';
+      // une galerie au-delà de la roche : le tunnel le plus court jusqu'à elle (déjà à portée : c'est l'affaire des expéditions)
+      const d = u.distances(z * N + x);
+      if (from.some((f) => d[f] >= 0)) return 'Cette galerie est déjà à portée : envoyez une expédition armée pour la prendre.';
+      path = u.tunnel(src, (r) => around(r).some((n) => d[n] >= 0), DIG_REACH);
+      if (!path) return 'Ces galeries sont trop loin à travers la roche : creusez d’abord un bout de tunnel vers elles.';
+    } else {
+      path = u.tunnel(src, (r) => r === k, DIG_REACH);
+      if (!path) return 'Trop loin : creusez la roche tout contre une galerie tenue, ou au bout du tunnel.';
+    }
+    if (path.length > left) return `Ce tunnel ferait ${path.length} cases : les mineurs n’en prennent que ${left} de plus pour l’instant.`;
+    return path;
+  }
+
+  /** Un clic du mode Creuser : on prévoit le tunnel jusqu'à la case (true), on annule une case prévue (false), ou pourquoi l'on ne peut pas */
+  planDig(k: number): boolean | string {
+    const w = this.world, i = w.digs.indexOf(k);
+    if (i >= 0) {
+      w.digs.splice(i, 1);
+      if (i === 0) this.digT = 0;
+      this.pruneDigs();
+      return false;
+    }
+    const p = this.digPlan(k);
+    if (typeof p === 'string') return p;
+    w.digs.push(...p);
+    return true;
+  }
+
+  /** Une case annulée : la suite du tunnel qui ne tient plus à rien l'est avec elle */
+  private pruneDigs() {
+    const u = this.under, w = this.world;
+    if (!u) return;
+    const ok = new Set(this.digFrom());
+    w.digs = w.digs.filter((k) => {
+      const keep = u.canCarve(k) && around(k).some((n) => ok.has(n));
+      if (keep) ok.add(k);
+      return keep;
+    });
+  }
+
+  /** Les mineurs du camp se rendent au front du tunnel, puis creusent la file case après case ; la file vide, ils rentrent au camp */
+  private digStep(dt: number) {
+    const w = this.world, u = this.under;
+    if (!w.digs.length || !u) { this.digT = 0; this.crewAt = this.walkFor = -1; this.walkT = 0; return; }
+    u.sync();
+    const k = w.digs[0];
+    // le front ne tient plus à une galerie tenue (souterrain régénéré, case déjà ouverte) : on le laisse
+    if (!u.canCarve(k) || !this.touchesHeld(k)) { w.digs.shift(); this.digT = 0; this.pruneDigs(); return; }
+    if (this.walkFor !== k) { this.walkFor = k; this.walkT = this.walkTime(k); }
+    if (this.walkT > 0) { this.walkT -= dt; return; }
+    this.digT += dt;
+    if (this.digT < DIG_TIME) return;
+    this.digT = 0;
+    w.digs.shift();
+    this.carve(k);
+  }
+
+  /**
+   * Les mineurs percent la case : elle devient un bout de tunnel que le village tient ; on en remonte de la pierre (parfois
+   * une pépite de minerai), et un filon dont on ôte la dernière roche tombe avec elle. Un tunnel qui débouche sur des galeries
+   * hors d'atteinte les ouvre aux expéditions armées
+   */
+  private carve(k: number) {
+    const u = this.under!, w = this.world, x = k % N, z = Math.floor(k / N);
+    // les galeries sauvages contre la case : jusqu'ici hors d'atteinte des avant-postes ?
+    const wild = around(k).filter((n) => u.walkable(n % N, Math.floor(n / N)) && !w.claimed.has(n));
+    const posts = wild.length ? this.outposts().map((p) => p.entry) : [];
+    const reach = posts.length ? u.distances(posts) : null, fresh = wild.some((n) => !reach || reach[n] < 0);
+    const veins = oreVeins(u, w.mined).filter((v) => around(k).includes(v.k));
+    if (!u.dig(k)) return;
+    w.claimed.add(k);
+    w.stone += 1;
+    let ore = hash2(x, z, 700) < 0.15 ? 1 : 0;
+    const fell = veins.filter((v) => u.wallDist[v.k] !== 1);
+    for (const v of fell) { w.mined.add(v.k); ore += ORE_KINDS[v.ore].amount; }
+    w.ore += ore;
+    w.version++;
+    if (fell.length) this.onNews?.(`⛏️ En creusant, les mineurs font tomber un filon ${ofOre(ORE_KINDS[fell[0].ore].name)} : +${ore} minerai.`);
+    if (fresh) this.onNews?.('⛏️ Le tunnel débouche sur de nouvelles galeries : envoyez une expédition armée !', true);
+  }
+
+  /** Plus rien à prendre depuis les avant-postes : seul un tunnel vers d'autres galeries relancera les expéditions armées */
+  tunnelNeeded() {
+    const deep = MISSIONS.find((m) => m.id === 'deep');
+    return !!deep && !!this.under && this.age() >= deep.age && this.outposts().length > 0 && deep.choices.every((c) => !this.campaign(choiceAt(c, this.age())));
+  }
+
+  /**
+   * Le tunnel conseillé : le plus court, depuis les galeries tenues (ou le bout du tunnel prévu), vers des galeries hors
+   * d'atteinte des avant-postes ; ses cases de roche, de la galerie vers elles (vide : rien à rejoindre, ou déjà prévu)
+   */
+  private hintKey = '';
+  private hint: number[] = [];
+  tunnelHint(): number[] {
+    const u = this.under, w = this.world;
+    if (!u) return [];
+    const posts = this.outposts();
+    const key = `${u.version}|${u.carved}|${w.claimed.size}|${w.digs.join(',')}|${posts.map((p) => p.entry).join(',')}`;
+    if (key === this.hintKey) return this.hint;
+    this.hintKey = key;
+    const from = this.digFrom();
+    if (!from.length || !posts.length) return (this.hint = []);
+    const d = u.distances(posts.map((p) => p.entry)), out = (n: number) => d[n] < 0 && u.walkable(n % N, Math.floor(n / N));
+    // le tunnel prévu débouche déjà quelque part : rien à conseiller
+    if (w.digs.some((k) => around(k).some(out))) return (this.hint = []);
+    return (this.hint = u.tunnel([...from, ...w.digs], (r) => around(r).some(out), DIG_REACH) ?? []);
+  }
+
   /** Pourquoi l'on ne peut pas partir (ou null) */
   why(m: Mission, c: Choice): string | null {
     if (this.running(m)) return 'Cette expédition est déjà en route.';
@@ -328,7 +504,7 @@ export class Expeditions {
       return `Il faut ${c.fuel} carburant pour les véhicules (${n} pour l’instant) : ${this.has('refinery') ? 'la raffinerie en tire du pétrole brut des puits' : 'forez des puits de pétrole sur un gisement et bâtissez une raffinerie'}.`;
     }
     if (c.win.some((e) => e.t === 'veins') && this.under && !this.campaign(c)) {
-      return this.outposts().length ? 'Toutes les galeries que l’on peut atteindre depuis l’avant-poste sont tenues, et leurs filons abattus.' : 'L’avant-poste ne garde aucune entrée praticable : rebâtissez-le tout contre une grotte ou une faille.';
+      return this.outposts().length ? 'Toutes les galeries que l’on peut atteindre depuis l’avant-poste sont tenues, et leurs filons abattus : creusez un tunnel vers de nouvelles galeries.' : 'L’avant-poste ne garde aucune entrée praticable : rebâtissez-le tout contre une grotte ou une faille.';
     }
     const max = this.slots();
     if (this.active.length >= max) {
@@ -426,6 +602,7 @@ export class Expeditions {
     this.mineStep(dt);
     this.holdStep(dt);
     this.campStep(dt);
+    this.digStep(dt);
     for (const a of [...this.active]) {
       // une décision attendue : l'équipe patiente, puis tranche d'elle-même
       if (a.wait) {

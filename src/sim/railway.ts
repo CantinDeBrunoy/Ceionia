@@ -362,7 +362,8 @@ export class Railway {
   private pickVein(tr: Train) {
     const u = this.ex.under, w = this.world, entry = tr.stops[tr.mine]?.entry ?? -1;
     if (!u || entry < 0) return -1;
-    const from = tr.spot >= 0 ? tr.spot : entry, key = `${from}|${u.version}`;
+    // (les tunnels creusés changent les chemins sans régénérer le souterrain)
+    const from = tr.spot >= 0 ? tr.spot : entry, key = `${from}|${u.version}|${u.carved}`;
     if (tr.dist?.key !== key) tr.dist = { key, d: u.distances(from) };
     const d = tr.dist.d, taken = new Set([...this.ex.active.flatMap((a) => a.targets), ...[...this.trains.values()].filter((o) => o !== tr).map((o) => o.vein)]);
     let best = -1;
