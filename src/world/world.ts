@@ -1,4 +1,5 @@
 import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
+import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, readDifficulty, rulesOf } from '../sim/difficulty';
 import { GEN, GEN_FIXED, fillClimate } from './continent';
@@ -736,6 +737,8 @@ export class World {
         const k = this.ci(cx, cz);
         if (this.occ[k]) return 'Emplacement occupé';
         if (this.road[k] && kind !== 'lamp') return 'Une route est déjà ici';
+        // la case devant la porte d'un bâtiment reste libre pour son chemin
+        if (!this.road[k] && this.doorOf(cx, cz)) return 'Devant la porte d’un bâtiment : son chemin passe ici';
         if (this.decor[k]) return 'Une grotte ou une faille est ici';
         if (this.lake[k]) return 'Un lac est ici';
         // le port bâtit son quai sur la rive, et même un peu dans l'eau peu profonde (il le remblaie) ; pas en eau profonde
@@ -782,6 +785,18 @@ export class World {
     if (mx - target > 0.85 * s * steep || target - mn > 0.85 * s * steep) return 'Terrain trop pentu';
     if (target < 0.05 && kind !== 'pier' && kind !== 'harbor') return 'Trop proche de l\u2019eau';
     return null;
+  }
+
+  /** Bâtiment dont la porte donne sur cette case (sur sa façade ; à l'arrière, côté terre, pour le ponton et le port) */
+  doorOf(cx: number, cz: number): Building | undefined {
+    for (let r = 0; r < 4; r++) {
+      // la case est du côté r du bâtiment qui la touche, au rang i le long de ce côté
+      const o = this.buildingAt(cx - FRONT[r][0], cz - FRONT[r][1]);
+      if (!o || o.kind === 'lamp' || doorSide(o.kind, o.rot) !== r) continue;
+      const [a, b] = doorSpan(sizeOf(o)), i = FRONT[r][0] ? cz - o.z : cx - o.x;
+      if (i >= a && i <= b) return o;
+    }
+    return undefined;
   }
 
   /** L'emprise touche-t-elle un gisement de pétrole ? */
