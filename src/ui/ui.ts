@@ -1079,7 +1079,7 @@ export class UI {
     const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : m.mandatory && !ex.done(m) ? 0 : 1);
     const cards = ex.list(age).sort((a, b) => rank(a) - rank(b)).map((m) => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
-      const choices = run ? '' : this.choiceButtons(m);
+      const choices = run ? '' : `<div class="mchoices" data-m="${m.id}">${this.choiceButtons(m)}</div>`;
       return `<div class="mission ${done ? 'done' : ''}">
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${m.unlocks ? `<p class="unlock">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})</p>` : ''}
@@ -1102,10 +1102,17 @@ export class UI {
     }));
     // l'arsenal se redessine quand la réserve ou la file changent ; la barre de fabrication avance en continu
     let key = '';
+    let gearKey = '';
     const arsenal = () => {
       if (!ov.isConnected) { clearInterval(iv); return; }
       const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${ex.active.length}`;
       if (k !== key) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
+      // une pièce fabriquée (ou une équipe partie avec) : les choix des missions disent ce qu'on emporterait, et le risque qui va avec
+      const gk = `${JSON.stringify(st.gear)}|${ex.active.length}`;
+      if (gk !== gearKey) {
+        if (gearKey) ov.querySelectorAll<HTMLElement>('.mchoices[data-m]').forEach((el) => { const m = MISSIONS.find((x) => x.id === el.dataset.m); if (m) el.innerHTML = this.choiceButtons(m); });
+        gearKey = gk;
+      }
       const bar = ov.querySelector<HTMLElement>('.queue .bar i');
       if (bar) bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`;
       const rb = ov.querySelector<HTMLElement>('.railBox'), rh = this.railHtml();
@@ -1120,7 +1127,10 @@ export class UI {
     });
     const iv = setInterval(arsenal, 300);
     arsenal();
-    ov.querySelectorAll<HTMLButtonElement>('button.choice').forEach((b) => (b.onclick = () => {
+    // un clic sur un choix (les boutons se redessinent : un seul écouteur pour toute la fenêtre)
+    ov.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button.choice[data-m]');
+      if (!b || b.disabled) return;
       const m = ex.list(age).find((x) => x.id === b.dataset.m)!, ci = +b.dataset.c!;
       const a = ex.start(m, ci, this.host.sim.age);
       if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? 'Aucun chemin praticable vers cette destination.'); return; }
@@ -1131,7 +1141,7 @@ export class UI {
       if (m.farewell) h.follow(a.id);
       else this.toast(`${m.icon} ${a.fromCamp ? 'La troupe descend du camp souterrain…' : ex.status(a)} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
       this.update();
-    }));
+    });
   }
 
   /** Boutons des choix d'une mission : équipe, durée, risque, équipement emporté, gains ; grisés avec la raison s'il manque quelque chose */
@@ -1288,7 +1298,7 @@ export class UI {
       ${r.notes.length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}
       <p class="sum">${r.summary === 'rien' ? 'Rien de gagné, rien de perdu.' : r.summary}</p>
       ${r.ok && r.m.unlocks && !r.redo ? `<p class="unlock">${ic(KIND_ICON[r.m.unlocks], 18, 2)} Nouveau : vous pouvez bâtir <b>${KINDS[r.m.unlocks].names[this.host.sim.age].toLowerCase()}</b> (rayon ${BUILD_CATS.find((c) => c.id === KINDS[r.m.unlocks!].cat)!.label}).${UNLOCK_NOTE[r.m.unlocks] ?? ''}</p>` : ''}
-      ${r.ok && r.m.mandatory ? '<p class="hint">Expédition obligatoire réussie : l’âge suivant se rapproche.</p>' : !r.ok && r.m.mandatory ? '<p class="hint">On pourra retenter l’expédition, avec le même choix ou un autre.</p>' : ''}
+      ${r.ok && r.m.mandatory && !r.redo && r.m.age === this.host.sim.age ? '<p class="hint">Expédition obligatoire réussie : l’âge suivant se rapproche.</p>' : !r.ok && r.m.mandatory && !r.redo ? '<p class="hint">On pourra retenter l’expédition, avec le même choix ou un autre.</p>' : ''}
       <div class="row"><span class="grow"></span><button class="active ok">Fermer</button></div>`);
     $('.story', ov).textContent = `« ${r.c.label} » : ${r.text}`;
     $('.ok', ov).onclick = close;
