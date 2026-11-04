@@ -568,6 +568,9 @@ body.photo #photoBar { display: flex; }
 .qi button { min-height: 26px; min-width: 26px; padding: 0; border-radius: 50%; }
 /* décision en cours d'expédition */
 .decide { max-width: 480px; }
+/* pendant une décision, la scène reste nette et visible : la fenêtre se range sur le côté, sans flou */
+.overlay:has(> .modal.decide) { background: rgba(15, 27, 45, 0.08); backdrop-filter: none; -webkit-backdrop-filter: none; justify-content: flex-end; }
+.decide .look { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 4px; padding: 4px 10px; font-size: 12.5px; }
 .decide .evt { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; font-size: 16px; text-transform: none; letter-spacing: -0.01em; color: #b06d0e; }
 .decide .story { font-size: 14px; line-height: 1.5; margin: 4px 0 8px; }
 .decide .choice small { color: var(--ink2); }

@@ -1261,6 +1261,7 @@ export class UI {
     const { ov, close } = modal(this.root, 'decide', `${a.m.icon} ${a.m.title}`, `
       <h4 class="evt">${ic('alert', 18, 2)} ${ev.title}</h4>
       <p class="story">${ev.text}</p>
+      <button class="look">${ic('eye', 16, 2)} Voir l’équipe</button>
       ${opts}
       <p class="hint">Risque d’échec de l’expédition pour l’instant : ${pct(ex.chance(a))}. Le jeu est en pause pendant que vous choisissez. Sans réponse, l’équipe finit par prendre d’elle-même la voie la plus sûre.</p>`, () => {
       clearInterval(iv);
@@ -1270,6 +1271,8 @@ export class UI {
     });
     // l'équipe a tranché d'elle-même (le jeu relancé à la main) : la fenêtre n'a plus lieu d'être
     const iv = setInterval(() => { if (a.wait !== ev || !ex.active.includes(a)) close(); }, 500);
+    // la scène reste visible à côté de la fenêtre : un clic y emmène la caméra, pour voir l'imprévu avant de choisir
+    ($('.look', ov) as HTMLButtonElement).onclick = () => { h.follow(a.id); this.update(); };
     ov.querySelectorAll<HTMLButtonElement>('button.opt').forEach((b) => (b.onclick = () => {
       if (a.wait === ev && ex.decide(a, +b.dataset.o!)) { h.audio.sfxClick(); this.toast(`${a.m.icon} ${ev.options[+b.dataset.o!].label}.`); }
       close();
