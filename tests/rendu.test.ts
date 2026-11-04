@@ -145,6 +145,15 @@ describe('maisons et tours', () => {
       }
   });
 
+  it('le château d’eau, détaillé à chaque âge, reste sous 4 000 triangles (girouette, drone et personnages compris)', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    for (let age = 3; age < 6; age++) {
+      const m = getModel('watertower', age, { v: 0, L: false, R: false, F: true });
+      const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+      expect(n, `âge ${age}`).toBeLessThan(4000);
+    }
+  });
+
   it('les tours futuristes n’ont pas toutes la même hauteur : la ville a une ligne d’horizon', () => {
     const tops = new Set<number>();
     let lo = Infinity, hi = 0;
