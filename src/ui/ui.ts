@@ -407,6 +407,8 @@ export class UI {
       const t = e.target as HTMLElement;
       if (!census.hidden && !census.contains(t) && !t.closest('#pop')) this.closeCensus();
       if ((this.needOpen || this.resOpen) && !needInfo.contains(t) && !t.closest('.need, .res')) this.closeNeed();
+      // la liste des conditions d'âge se replie dès qu'on clique ailleurs
+      if (!t.closest('#agePanel') && $('#agePanel').classList.contains('open')) { $('#agePanel').classList.remove('open'); this.update(); }
     });
 
     $('#agePanel').onclick = (e) => {
@@ -421,6 +423,7 @@ export class UI {
       if (req === 'exp') { this.openExpeditions(); return; }
       if (req === 'pop') { this.openNeed('housing'); return; }
       $('#agePanel').classList.toggle('open');
+      this.update();
     };
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
     $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
@@ -597,7 +600,7 @@ export class UI {
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}`}
       ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? '<p class="keys">R : tourner · Échap : lâcher</p>' : ''}`;
+      ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? '<p class="keys">La flèche jaune montre l’entrée · R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
   /**
@@ -1012,7 +1015,9 @@ export class UI {
     const h = this.host, ex = h.expeditions, list = $('#expList');
     // juste sous la barre du haut, quelle que soit sa hauteur (elle passe sur plusieurs lignes sur un téléphone)
     const hudB = Math.round($('#hud').getBoundingClientRect().bottom);
-    list.style.top = `${hudB + 8}px`;
+    // la liste des conditions d'âge dépliée : les cartes des équipes passent dessous au lieu d'être cachées
+    const req = $('#agePanel').classList.contains('open') ? $('#ageReq').getBoundingClientRect().bottom : 0;
+    list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
     const live = new Set<number>();

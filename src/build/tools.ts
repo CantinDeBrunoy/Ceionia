@@ -104,6 +104,8 @@ export class ToolController implements ToolInput {
   private ghostKey = '';
   /** points verts : où viser pour que le grand bâtiment en main tienne (le milieu de chaque emplacement libre alentour) */
   private spots: THREE.InstancedMesh;
+  /** flèche posée au sol devant la façade du bâtiment en main : son entrée, pour le tourner du bon côté */
+  private door: THREE.Mesh;
   private spotsKey = '';
   /** taille du pinceau de chaque outil (le grand volcan ne couvre pas ensuite le village de rochers) */
   private radii: Partial<Record<ToolId, number>> = {};
@@ -127,7 +129,11 @@ export class ToolController implements ToolInput {
     this.freeDot.renderOrder = 10; this.freeDot.visible = false;
     this.spots = new THREE.InstancedMesh(new THREE.CircleGeometry(0.15, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x40e070, transparent: true, opacity: 0.8, depthTest: false, depthWrite: false }), MAX_SPOTS);
     this.spots.renderOrder = 8; this.spots.visible = false; this.spots.frustumCulled = false; this.spots.count = 0;
-    h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.spots);
+    // la flèche de l'entrée : un chevron jaune qui pointe vers la rue (vers +z avant d'être tourné avec le bâtiment)
+    const arrow = new THREE.Shape([new THREE.Vector2(-0.22, 0), new THREE.Vector2(0, 0.26), new THREE.Vector2(0.22, 0), new THREE.Vector2(0.09, 0), new THREE.Vector2(0.09, -0.16), new THREE.Vector2(-0.09, -0.16), new THREE.Vector2(-0.09, 0)]);
+    this.door = new THREE.Mesh(new THREE.ShapeGeometry(arrow).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd04a, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
+    this.door.renderOrder = 10; this.door.visible = false;
+    h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.spots, this.door);
   }
 
   // ---------- API ----------
@@ -680,6 +686,7 @@ export class ToolController implements ToolInput {
     const hit = this.hit, t = this.tool, w = this.h.world;
     this.placeWhy = null;
     this.spots.visible = false;
+    this.door.visible = false;
     this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = false;
     if (t === 'road' && this.roadMode === 'free') this.freePreview();
     // le bâtiment sélectionné : son emprise s'éclaire
@@ -753,6 +760,14 @@ export class ToolController implements ToolInput {
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);
       this.ghost.rotation.y = rot * Math.PI / 2;
       this.ghost.visible = true;
+      // l'entrée : la flèche devant la façade, côté rue (R tourne le bâtiment et la flèche avec lui)
+      if (kind !== 'lamp') {
+        const f = [[0, 1], [1, 0], [0, -1], [-1, 0]][rot], d = s / 2 + 0.5;
+        this.door.position.set(o.x + s / 2 + f[0] * d, y + 0.08, o.z + s / 2 + f[1] * d);
+        this.door.rotation.y = rot * Math.PI / 2;
+        this.door.scale.setScalar(1.8 + s * 0.2);
+        this.door.visible = true;
+      }
       this.markerMat.color.setHex(reason ? 0xff5a5a : 0x40e070);
       this.marker.scale.set(s, 1, s);
       this.marker.position.set(o.x + s / 2, y + 0.05, o.z + s / 2);

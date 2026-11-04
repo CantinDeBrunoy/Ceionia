@@ -239,7 +239,6 @@ export class Sim {
     if (!this.jobs.ok) return about('workshop', `Les habitants cherchent du travail : ${say('workshop')}.`);
     if (!this.joy.ok) return about('gather', `Les habitants aimeraient un lieu de rencontre : ${say('gather')}, un jardin ou un lieu de culte.`);
     if (!this.health.ok) return about('health', `Les habitants tombent malades : il faut ${say('health')}.`);
-    if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
     if (this.recovering > 0 && this.housing.ok) return DIFF_TEXT.recovering;
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
     const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;
@@ -262,6 +261,8 @@ export class Sim {
       if (need) return build(need, `Pour « ${next!.title} » : il faut ${say(need)}.`);
       if (next) return `Prochaine étape vers les étoiles : l’expédition « ${next.title} » (menu Expéditions).`;
     }
+    // la sécheresse ne cache plus ce qu'il reste à bâtir : on n'en parle que quand il n'y a rien d'autre à dire
+    if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
     return 'Le village est paisible et prospère.';
   }
 
