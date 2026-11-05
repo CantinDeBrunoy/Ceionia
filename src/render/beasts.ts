@@ -755,7 +755,7 @@ function camel(c: Coat): { rig: Rig; clips: ClipDef[] } {
   }
   // cou en S : il descend vers l'avant puis se relève ; barbe sous la gorge
   r.put('n1', seg(n0, n1, 0.019, 0.015, 7), c.base);
-  r.add('n1', ell(0.011, 0.022, 0.026), [0, 0.158, 0.11], c.hair, [-0.6, 0, 0]);
+  r.add('n1', ell(0.009, 0.014, 0.026), [0, 0.168, 0.108], c.hair, [-0.45, 0, 0]);
   r.put('n2', seg(n1, n2, 0.015, 0.013, 7), c.base);
   r.add('n2', ell(0.008, 0.02, 0.01, 0), [0, 0.2, 0.15], c.hair);
   // tête : crâne, museau, lèvres pendantes, naseaux, yeux sous de lourdes paupières, petites oreilles
@@ -864,8 +864,8 @@ function moose(c: Coat): { rig: Rig; clips: ClipDef[] } {
   });
   r.add('jaw', ell(0.012, 0.006, 0.02, 0), [0, 0.208, 0.18], c.muzzle);
   // fanon qui pend sous la gorge
-  r.add('bell', ell(0.005, 0.022, 0.008, 0), [0, 0.196, 0.134], c.fur);
-  r.add('bell', ell(0.006, 0.006, 0.006, 0), [0, 0.176, 0.134], c.fur);
+  r.add('bell', ell(0.005, 0.02, 0.009, 0), [0, 0.2, 0.13], c.fur);
+  r.add('bell', ell(0.006, 0.006, 0.006, 0), [0, 0.182, 0.13], c.fur);
   // grandes oreilles
   r.both((s, L) => r.add(`e${L}`, ell(0.008, 0.015, 0.004, 0), [s * 0.026, 0.262, 0.122], c.fur, [0, 0, -s * 0.9]));
   // bois palmés : merrain, empaumure, andouillers sur le bord, andouiller de front
