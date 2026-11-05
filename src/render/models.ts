@@ -1912,7 +1912,34 @@ function farm(p: Parts, age: number) {
     p.cyl(0.07, 0.07, 0.06, 10, wx - 0.12, 0, wz + 0.1, 0x6a7a8a); waterPool(p, wx - 0.12, 0.058 + 0.006, wz + 0.1, 0.062, 10);
     // bottes, tracteur, boîte aux lettres
     bale(p, -0.3, 0.25, 0.2); bale(p, -0.14, 0.3, -0.1);
-    tractor(p, 0.12, 0.22);
+    // la locomobile à vapeur (orientée selon x) : chaudière verte cerclée de laiton, foyer, haute cheminée qui fume, grandes
+    // roues motrices à l'arrière, volant d'entraînement, toit de tôle sur ses montants ; le mécanicien à son poste
+    { const lx = 0.1, lz = 0.2, green = 0x3f6a4a;
+      p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 9).rotateZ(Math.PI / 2), lx + 0.02, 0.11, lz, green);
+      for (const d of [-0.05, 0.03, 0.11]) p.add(new THREE.CylinderGeometry(0.047, 0.047, 0.008, 9).rotateZ(Math.PI / 2), lx + d, 0.11, lz, 0xc8a050);
+      p.box(0.06, 0.1, 0.09, lx - 0.1, 0.05, lz, 0x2a2a2e); p.box(0.03, 0.02, 0.006, lx - 0.1, 0.08, lz + 0.046, 0xff8a3a, 0, true);
+      p.cyl(0.014, 0.018, 0.13, 6, lx + 0.1, 0.15, lz, 0x2a2a2e); p.cyl(0.02, 0.016, 0.012, 6, lx + 0.1, 0.28, lz, 0x2a2a2e); smoke(lx + 0.1, 0.32, lz, 2);
+      for (const s of [-1, 1]) {
+        p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.016, 10).rotateX(Math.PI / 2), lx - 0.09, 0.07, lz + s * 0.07, 0x5a3a2a);
+        p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.014, 8).rotateX(Math.PI / 2), lx + 0.09, 0.04, lz + s * 0.055, 0x5a3a2a);
+      }
+      p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.01, 10).rotateX(Math.PI / 2), lx, 0.15, lz - 0.06, 0x2a2a2e);
+      for (const [dx, dz] of [[-0.12, -0.05], [-0.12, 0.05], [0.1, -0.05], [0.1, 0.05]]) p.box(0.006, 0.14, 0.006, lx + dx, 0.16, lz + dz, 0x2a2a2e);
+      p.box(0.26, 0.008, 0.13, lx - 0.01, 0.3, lz, 0x5d6878);
+      figure(p, lx - 0.15, lz + 0.02, 0x3a4a5a, Math.PI / 2, false, 0x2a1e18);
+    }
+    // les bidons de lait sur leur quai, les poules, la fermière au tablier, la vache à l'attache, la palissade blanche
+    p.box(0.14, 0.04, 0.08, -0.38, 0, 0.04, C.wood);
+    for (let k = 0; k < 3; k++) { p.cyl(0.018, 0.02, 0.06, 7, -0.43 + k * 0.045, 0.04, 0.04, 0xc8ccd2); p.cyl(0.01, 0.012, 0.015, 6, -0.43 + k * 0.045, 0.1, 0.04, 0xa8acb4); }
+    for (const [x, z, c] of [[-0.05, 0.42, 0xf4f0e8], [0.02, 0.38, 0xb8743a], [-0.12, 0.4, 0xf4f0e8]] as number[][]) { p.box(0.025, 0.02, 0.016, x, 0.012, z, c); p.box(0.008, 0.008, 0.006, x + 0.016, 0.027, z, 0xd84a3e); }
+    figure(p, -0.22, 0.4, 0x8a5a7a, 0.4, false, 0xc8a070); p.box(0.04, 0.05, 0.004, -0.215, 0.09, 0.42, C.white);
+    { const cx = -0.4, cz = -0.38;
+      p.box(0.14, 0.07, 0.06, cx, 0.07, cz, C.white); for (const [dx, dz] of [[0.03, 0.02], [-0.04, -0.015]]) p.box(0.04, 0.05, 0.062, cx + dx, 0.085, cz + dz * 0, 0x2a2420);
+      p.box(0.05, 0.045, 0.04, cx + 0.09, 0.1, cz, C.white); p.box(0.02, 0.02, 0.03, cx + 0.12, 0.1, cz, 0xe8b0a0);
+      for (const [dx, dz] of [[-0.05, -0.02], [-0.05, 0.02], [0.05, -0.02], [0.05, 0.02]]) p.box(0.015, 0.07, 0.015, cx + dx, 0, cz + dz, C.white);
+      p.box(0.008, 0.06, 0.008, cx - 0.075, 0.07, cz, 0x2a2420); }
+    for (let x = 0.2; x <= 0.46; x += 0.05) p.box(0.012, 0.08, 0.012, x, 0, 0.46, C.white);
+    p.box(0.27, 0.012, 0.008, 0.33, 0.06, 0.46, C.white);
     p.box(0.01, 0.12, 0.01, -0.42, 0, 0.44, C.wood); p.box(0.05, 0.035, 0.03, -0.42, 0.12, 0.44, 0x4a6aa8); p.box(0.004, 0.025, 0.012, -0.393, 0.14, 0.45, 0xd84a3e);
   } else {
     // serre : soubassement, parois et toit de verre sur des montants blancs, rangées de plantes sur leurs tablettes et
