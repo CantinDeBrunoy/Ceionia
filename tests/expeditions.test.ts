@@ -5,7 +5,7 @@ import { newWorld } from '../src/world/mapgen';
 import { mulberry32 } from '../src/core/rng';
 import { MISSIONS, Mission, choiceAt, readExpState, RECENT_EVENTS, effectSummary, Effect } from '../src/sim/missions';
 import { EVENTS, EVENT_BY, eventsFor, pickEvent, EventCtx } from '../src/sim/events';
-import { Expeditions, Report, ActiveExpedition } from '../src/sim/expeditions';
+import { Expeditions, Report, ActiveExpedition, nextEventAt } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { Underground } from '../src/world/underground';
 import { AGES } from '../src/build/catalog';
@@ -278,6 +278,36 @@ describe('comptes rendus des expéditions', () => {
     }
     expect(ore(m.choices[0].win)).toBe(12);
   });
+});
+
+describe('les imprévus se déclenchent, où que soit la caméra', () => {
+  it('« Les sources chaudes » : un imprévu à l’arrivée, l’autre en plein travail, jamais deux à la suite', () => {
+    for (const ci of [0, 1]) for (const seed of [4, 7, 11]) {
+      const v = village(1, seed), a = v.ex.start(mission('springs'), ci, 1)!;
+      a.events = 2;
+      const at: { phase: string; k: number }[] = [];
+      v.ex.onEvent = (e) => at.push({ phase: e.phase, k: e.t / (e.c.work + e.extra) });
+      play(v, () => !v.ex.active.includes(a) || a.phase === 'back', 1, (e) => e.wait!.options.findIndex((o) => !o.wait && !o.needs) );
+      expect(at.length, `${ci}/${seed}`).toBe(2);
+      expect(at[0]).toEqual({ phase: 'work', k: 0 });
+      expect(at[1].phase).toBe('work');
+      expect(at[1].k).toBeGreaterThanOrEqual(0.55);
+    }
+  }, 120000);
+
+  it('rien ne convenait à l’arrivée : les imprévus viennent quand même pendant le travail', () => {
+    const v = village(1), a = v.ex.start(mission('springs'), 0, 1)!;
+    play(v, () => a.phase === 'work', 1, () => 0);
+    if (a.wait) v.ex.decide(a, a.wait.options.findIndex((o) => !o.wait && !o.needs));
+    a.hold = 0; a.seen = []; a.picks = []; a.arriveMiss = true; a.events = 2; a.t = 0;
+    const ks: number[] = [];
+    v.ex.onEvent = (e) => ks.push(e.t / (e.c.work + e.extra));
+    play(v, () => a.phase !== 'work', 1, (e) => e.wait!.options.findIndex((o) => !o.wait && !o.needs));
+    expect(ks.length).toBe(2);
+    expect(ks[0]).toBeGreaterThanOrEqual(0.55);
+    expect(ks[1]).toBeGreaterThanOrEqual(0.75);
+    expect(nextEventAt({ seen: [], arriveMiss: false })).toBeLessThan(nextEventAt({ seen: ['a'] }));
+  }, 120000);
 });
 
 describe('le repérage des profondeurs et l’éclaireur envoyé devant', () => {

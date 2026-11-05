@@ -74,8 +74,19 @@ export interface ActiveExpedition {
   redo: boolean;
   /** l'équipe vole (héliport, aérodrome) vers la montagne ou le bout du monde : son voyage (voir `airlift`) */
   air?: AirTrip | null;
+  /** aucun imprévu ne convenait à l'arrivée : le premier survient pendant le travail */
+  arriveMiss?: boolean;
   /** un éclaireur parti devant (« Envoyer un éclaireur devant ») : depuis combien de temps, sur combien ; la troupe l'attend */
   scout?: { t: number; dur: number } | null;
+}
+
+/**
+ * À quelle part du travail survient le prochain imprévu de l'équipe : le premier à l'arrivée (sinon au tiers du travail), le
+ * suivant à mi-chemin, un autre encore aux trois quarts ; jamais deux à la suite
+ */
+export function nextEventAt(a: Pick<ActiveExpedition, 'seen' | 'arriveMiss'>): number {
+  const i = a.seen.length + (a.arriveMiss ? 1 : 0);
+  return i <= 0 ? 0.3 : i === 1 ? 0.55 : 0.75;
 }
 
 /** L'équipe est sous terre (troupe armée ou éclaireurs dans les galeries) : c'est dans le monde souterrain qu'on la suit */
@@ -781,7 +792,7 @@ export class Expeditions {
         if (a.entry >= 0) ag.partyHide(a.party, true);
         if (a.entry >= 0 && a.c.scene === 'scout') this.onNews?.(`${a.m.icon} « ${a.m.title} » : les éclaireurs allument leurs torches et descendent dans les galeries.`);
         this.raise(a, true);
-      } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * 0.55) {
+      } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * nextEventAt(a)) {
         this.raise(a, false);
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra && a.fromCamp) {
         // partie du camp, elle y remonte : les soldats rentrent au village sans refaire la route, et l'on fête leur retour
@@ -970,7 +981,8 @@ export class Expeditions {
     // pas un imprévu des dernières expéditions, ni celui qu'une autre équipe attend ou vient de vivre
     const avoid = [...this.world.exp.recent, ...this.active.filter((o) => o !== a).flatMap((o) => o.seen)];
     const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive, sea: a.sea, warm: this.warm(a.dest) }, a.seen, avoid, this.rnd);
-    if (!ev) { a.events = a.seen.length; return; }
+    // rien à l'arrivée : l'imprévu viendra pendant le travail (avant, il était perdu, et le suivant avec lui)
+    if (!ev) { if (arrive) a.arriveMiss = true; else a.events = a.seen.length; return; }
     a.seen.push(ev.id);
     a.picks.push(-1);
     const recent = this.world.exp.recent;
