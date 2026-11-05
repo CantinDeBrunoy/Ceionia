@@ -160,7 +160,7 @@ const QUICK = ['none', 'road', 'bulldoze', 'move'];
 /** Grands onglets de la barre du bas */
 const TABS = [
   { id: 'relief', icon: 'relief', label: 'Relief', hint: 'Sculptez le terrain', tools: ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
-  { id: 'nature', icon: 'tree', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'field', 'garden', 'biome', 'rocks', 'cave', 'fissure', 'erase'] },
+  { id: 'nature', icon: 'tree', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'garden', 'biome', 'rocks', 'cave', 'fissure', 'erase'] },
   { id: 'build', icon: 'houses', label: 'Bâtir', hint: '', tools: [] as string[] },
 ];
 
@@ -263,7 +263,7 @@ function modal(root: HTMLElement, cls: string, title: string, body: string, onCl
 
 /** Onglet auquel appartient un outil ('none' reste dans l'onglet courant) */
 const tabOfTool = (tool: ToolId, current: string) =>
-  SCULPT_TOOLS.includes(tool) ? 'relief' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
+  SCULPT_TOOLS.includes(tool) ? 'relief' : tool === 'field' ? 'build' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
 
 /** Ce que change un bâtiment débloqué par une expédition, dit au retour de l'équipe */
 const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
@@ -549,7 +549,7 @@ export class UI {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
         return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
-      }).join('') || `<span class="mhint">Rien à bâtir dans ce rayon avant l’âge ${AGES[Math.min(age + 2, AGES.length - 1)].name}.</span>`;
+      }).join('') + (this.cat === 'prod' ? (() => { const i = this.toolInfo('field'); return `<button class="tile" data-tool="field" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span><i class="key">${i.key}</i></button>`; })() : '') || `<span class="mhint">Rien à bâtir dans ce rayon avant l’âge ${AGES[Math.min(age + 2, AGES.length - 1)].name}.</span>`;
     } else {
       html = t.tools.map((id) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
     }
