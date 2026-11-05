@@ -22,3 +22,25 @@ describe('guidage : menu et équipement', () => {
     expect(gearGaps(c, stock, [], 0, () => true).some((g) => g.gear.id === 'spear')).toBe(false);
   });
 });
+
+describe('pastille d’évolution', () => {
+  it('un puits peut évoluer en château d’eau à l’âge industriel, s’il y a de quoi payer', async () => {
+    const { World, N, setMapSize } = await import('../src/world/world');
+    const { newWorld } = await import('../src/world/mapgen');
+    const { UpgradeBadges } = await import('../src/render/upgradeBadges');
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026);
+    w.updateVis();
+    let at: [number, number] | null = null;
+    for (let z = 10; z < N - 10 && !at; z++) for (let x = 10; x < N - 10 && !at; x++) if (w.canPlace('well', x, z) === null) at = [x, z];
+    w.place('well', at![0], at![1], 0, true, 3, false);
+    w.wood = 0; w.stone = 0; w.brick = 0; w.unlimited = false;
+    // un petit bâtiment ne coûte rien : la pastille est là dès que l'âge le permet
+    expect(UpgradeBadges.upgradable(w, 3).length).toBe(1);
+    w.wood = 500; w.stone = 500; w.brick = 500;
+    expect(UpgradeBadges.upgradable(w, 3).length).toBe(1);
+    // l'âge d'avant le château d'eau : rien à proposer
+    expect(UpgradeBadges.upgradable(w, 2).length).toBe(0);
+  });
+});
