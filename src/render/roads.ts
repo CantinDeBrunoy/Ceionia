@@ -28,7 +28,8 @@ const FILLET = 0.12;
 /** Ponts : tablier de bois, puis de pierre, puis d'acier ; piles et garde-corps */
 const DECK_COL = [0x9a7452, 0xa27c58, 0x8f7c66, 0xa39d95, 0xb4b9c0].map((c) => new THREE.Color(c));
 const PILE_COL = [0x6f5640, 0x6f5640, 0x8a8178, 0x8a8178, 0x7d838c].map((c) => new THREE.Color(c));
-const SNOW = new THREE.Color(0xf2f6fa);
+/** neige des chemins : la teinte de la neige des champs (une neige plus blanche y dessinerait des plaques crues) */
+const SNOW = new THREE.Color(0xe9f0f8);
 const PEBBLE = [0xb3aba1, 0x9d9890, 0xc8c2b8].map((c) => new THREE.Color(c));
 /** Géométrie sans index ; l'icosaèdre n'en a déjà pas (THREE avertirait à chaque appel, à chaque refonte des routes) */
 const unindexed = (g: THREE.BufferGeometry) => (g.index ? g.toNonIndexed() : g);
@@ -305,8 +306,17 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
 			// liseré de terre tassée au bord du chemin
 			c = mix(c, uRim, smoothstep(-0.07, -0.015, dR) * road * 0.65);
 		}
-		// la neige ne tient que là où le biome la garde (pas dans le désert ni sous les tropiques)
-		c = mix(c, uSnowCol, vSnow * 0.8);
+		// la neige ne tient que là où le biome la garde (pas dans le désert ni sous les tropiques) : sur les chemins, une neige
+		// tassée d'un blanc doux, à peine plus grise que celle des champs, deux ornières bleutées le long de la chaussée ; le
+		// revêtement ne perce qu'à peine, çà et là (pas de bande de boue beige sur la neige)
+		if (vSnow > 0.001) {
+			float sn = rNoise(rp * 3.1) * 0.6 + rNoise(rp * 9.7) * 0.4;
+			vec3 packed = uSnowCol * mix(vec3(0.92, 0.94, 0.97), vec3(1.0), sn * 0.35) * (1.0 - road * 0.03);
+			float rut = road * (1.0 - smoothstep(0.012, 0.035, abs(dR + 0.07)));
+			packed = mix(packed, uSnowCol * vec3(0.8, 0.85, 0.94), rut * 0.7);
+			packed = mix(packed, c, smoothstep(0.6, 0.9, sn) * 0.14 * road);
+			c = mix(c, packed, clamp(vSnow * 1.15, 0.0, 1.0));
+		}
 		diffuseColor.rgb *= c;
 		diffuseColor.a = a;
 		if (a < 0.01) discard;

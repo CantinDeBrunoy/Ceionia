@@ -25,7 +25,7 @@ const VOLCANO_BROWN = new THREE.Color(0x7d5c40);
 const GRAVEL = new THREE.Color(0xb9b1a6);
 const WHITE = new THREE.Color(0xf4f7fb);
 /** Neige : teinte de base, bleutée dans les creux, éclatante sur les bosses */
-const SNOW_BASE = new THREE.Color(0xe6eef8), SNOW_SHADE = new THREE.Color(0xb4c8e6), SNOW_LIT = new THREE.Color(0xfbfdff);
+const SNOW_BASE = new THREE.Color(0xe6eef8), SNOW_SHADE = new THREE.Color(0xb4c8e6), SNOW_LIT = new THREE.Color(0xf3f7fc);
 const HIGH = new THREE.Color(0xc9d79a);
 const TILLED = new THREE.Color(0xa47b52);
 const BEDS = new THREE.Color(0x8a6548);
@@ -567,8 +567,8 @@ float snN(vec2 p) {
         // neige : couverture inégale — plaques où l'herbe perce, moins sous les arbres et sur les pentes, qui grandissent
         // avec l'hiver ; bleutée dans les creux, éclatante sur les bosses
         if (snow > 0) {
-          // bord net entre la neige et le sol (pas de gris boueux à mi-chemin)
-          cover = smoothstep(0.32, 0.6, snow * 1.2 - 0.12 + (pv * 0.65 + this.wobble[i] * 0.4 - steep * 0.8 - vw[i * 4] * 0.55) * snow);
+          // bord doux entre la neige et le sol : la neige s'amincit vers l'herbe (sans plaques blanches découpées)
+          cover = smoothstep(0.24, 0.68, snow * 1.2 - 0.12 + (pv * 0.65 + this.wobble[i] * 0.4 - steep * 0.8 - vw[i * 4] * 0.55) * snow);
           const xi = i % VS, zi = (i / VS) | 0;
           const curv = xi > 1 && zi > 1 && xi < VS - 2 && zi < VS - 2 ? (vis[i - 2] + vis[i + 2] + vis[i - 2 * VS] + vis[i + 2 * VS]) * 0.25 - h : 0;
           this.cliff.copy(SNOW_BASE).lerp(SNOW_SHADE, clamp(curv * 4, 0, 0.35)).lerp(SNOW_LIT, clamp(-curv * 5 + 0.2, 0, 0.9));
