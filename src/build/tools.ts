@@ -108,7 +108,7 @@ export class ToolController implements ToolInput {
   private door: THREE.Mesh;
   private spotsKey = '';
   /** taille du pinceau de chaque outil (le grand volcan ne couvre pas ensuite le village de rochers) */
-  private radii: Partial<Record<ToolId, number>> = {};
+  private radii: Partial<Record<ToolId, number>> = { bulldoze: 1 };
 
   constructor(private h: ToolHost) {
     const pts: THREE.Vector3[] = [];
@@ -609,16 +609,19 @@ export class ToolController implements ToolInput {
     this.freeLine.visible = true;
   }
 
+  /** Démolir : une case (pinceau à 1), ou tout un disque de la taille du pinceau (les parcs, les forêts, les routes d'un coup) */
   private applyBulldoze() {
     const c = this.cell();
     if (!c) return;
-    const w = this.h.world;
+    const w = this.h.world, disc = this.radius > 1 && !!this.hit;
     const b = this.hitBuilding;
     if (b) {
       // un grand bâtiment ne se démolit qu'au second clic : on le regretterait
       if (sizeOf(b) >= 2 && !this.confirmed(b)) return;
-      this.mark(); w.removeBuilding(b.id); this.h.audio.sfxDestroy(); return;
+      this.mark(); w.removeBuilding(b.id); this.h.audio.sfxDestroy();
+      if (!disc) return;
     }
+    if (disc) { this.bulldozeDisc(this.hit!.x, this.hit!.z, this.radius); return; }
     const k = w.inCells(c.x, c.z) ? w.ci(c.x, c.z) : -1;
     if (k < 0) return;
     if (w.road[k]) { this.mark(); w.setRoad(c.x, c.z, false); this.h.audio.sfxDestroy(); }
@@ -627,6 +630,29 @@ export class ToolController implements ToolInput {
       const e = w.entranceAt(c.x + 0.5, c.z + 0.5);
       if (e >= 0) { this.mark(); w.setVeg(e % N, Math.floor(e / N), 0); this.h.audio.sfxDestroy(); }
     } else if (w.veg[k]) { this.mark(); w.setVeg(c.x, c.z, 0); }
+  }
+
+  /**
+   * Le pinceau de démolition sur un disque : routes, plantations (forêts, champs, jardins, rochers) et petits bâtiments partent
+   * sans confirmation ; les grands bâtiments (2 × 2 et plus) et les entrées du souterrain restent : on les vise un à un
+   */
+  private bulldozeDisc(hx: number, hz: number, r: number) {
+    const w = this.h.world;
+    let any = false, big = false;
+    for (let cz = Math.floor(hz - r); cz <= Math.ceil(hz + r); cz++)
+      for (let cx = Math.floor(hx - r); cx <= Math.ceil(hx + r); cx++) {
+        if (!w.inCells(cx, cz) || Math.hypot(cx + 0.5 - hx, cz + 0.5 - hz) > r) continue;
+        const k = w.ci(cx, cz), b = w.buildingAt(cx, cz);
+        if (b) {
+          if (sizeOf(b) >= 2) { big = true; continue; }
+          this.mark(); w.removeBuilding(b.id); any = true;
+          continue;
+        }
+        if (w.road[k]) { this.mark(); w.setRoad(cx, cz, false); any = true; }
+        else if (w.veg[k] && !w.decor[k]) { this.mark(); w.setVeg(cx, cz, 0); any = true; }
+      }
+    if (any) this.h.audio.sfxDestroy();
+    else if (big && performance.now() - this.lastToast > 1500) { this.h.toast('Les grands bâtiments se démolissent un à un : un clic dessus, avec confirmation.'); this.lastToast = performance.now(); }
   }
 
   private pickUp(chosen?: Building) {
@@ -699,7 +725,9 @@ export class ToolController implements ToolInput {
       this.marker.visible = true;
     }
     if (!hit || t === 'none') return;
-    if (SCULPT_TOOLS.includes(t) || VEG_TOOLS.includes(t) || t === 'biome') {
+    // démolir : le pinceau large montre son disque (rouge), et le bâtiment visé reste éclairé dessous
+    const wide = t === 'bulldoze' && this.radius > 1;
+    if (SCULPT_TOOLS.includes(t) || VEG_TOOLS.includes(t) || t === 'biome' || wide) {
       const r = VEG_TOOLS.includes(t) || t === 'biome' ? Math.max(0.6, this.radius * 0.8) : t === 'volcano' ? volcanoRadius(this.radius) : this.radius;
       const pos = this.ring.geometry.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < 48; i++) {
@@ -709,9 +737,9 @@ export class ToolController implements ToolInput {
       }
       pos.needsUpdate = true;
       // rouge : refusé, le pinceau ne modifiera rien (il touche un bâtiment)
-      (this.ring.material as THREE.LineBasicMaterial).color.setHex(this.reliefBlocked() ? 0xff5a5a : 0xffffff);
+      (this.ring.material as THREE.LineBasicMaterial).color.setHex(wide || this.reliefBlocked() ? 0xff5a5a : 0xffffff);
       this.ring.visible = true;
-      return;
+      if (!wide) return;
     }
     if (t === 'road' || t === 'bulldoze' || (t === 'move' && !this.moveOrigin)) {
       const c = this.cell();

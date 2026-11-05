@@ -134,7 +134,7 @@ const TOOL_DESC: Record<string, string> = {
   rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte vers le monde souterrain (un clic).', fissure: 'Ouvrir une faille vers le monde souterrain (un clic).',
   erase: 'Effacer forêts, champs, jardins et rochers.',
   road: 'Tracer une route : en ligne, en glissant case par case ; en libre, d’un clic au point A puis au point B, une belle courbe qui contourne les obstacles (R pour changer de mode). Sur l’eau peu profonde, elle devient un pont.',
-  bulldoze: 'Démolir un bâtiment, une route ou un décor.', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
+  bulldoze: 'Démolir un bâtiment, une route ou un décor. Élargissez le pinceau pour effacer d’un coup tout un parc, une forêt ou des routes (les petits bâtiments partent aussi ; les grands se démolissent un à un, avec confirmation).', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
 };
 
 /** Le jardin change de nature avec les âges : son nom, son icône et sa fiche aussi */
@@ -824,7 +824,7 @@ export class UI {
       if (on && b.dataset.kind && !b.classList.contains('active')) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       b.classList.toggle('active', on);
     });
-    const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && !SINGLE_TOOLS.includes(tl.tool)) || tl.tool === 'biome';
+    const brush = SCULPT_TOOLS.includes(tl.tool) || (VEG_TOOLS.includes(tl.tool) && !SINGLE_TOOLS.includes(tl.tool)) || tl.tool === 'biome' || tl.tool === 'bulldoze';
     $('#brush').classList.toggle('show', brush);
     // le pinceau de biome : le choix du biome, à côté de la taille
     $('#biomes').classList.toggle('show', tl.tool === 'biome');
