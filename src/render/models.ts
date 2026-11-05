@@ -3174,7 +3174,7 @@ function timbers(p: Parts, cx: number, cz: number, len: number, y0: number, y1: 
 /** Haie taillée : un bloc de buis bosselé de touffes un peu plus claires ou plus sombres */
 function hedge(p: Parts, x: number, z: number, w: number, d: number, h = 0.07, y = 0.03) {
   p.box(w, h, d, x, y, z, C.darkgreen);
-  const n = Math.max(1, Math.round(Math.max(w, d) / 0.07)), along = w >= d;
+  const n = Math.max(1, Math.round(Math.max(w, d) / 0.1)), along = w >= d;
   for (let i = 0; i < n; i++) {
     const u = -0.5 + (i + 0.5) / n;
     p.sphere(Math.min(w, d) * 0.5 + 0.008, x + (along ? u * w : 0), y + h, z + (along ? 0 : u * d), dark(C.darkgreen, 0.9 + hash2(i, n, 41) * 0.2), 0, 0.55);
@@ -7882,19 +7882,19 @@ function senate(p: Parts, age: number) {
     for (const y of [0.2, 0.44]) p.box(1.64, 0.025, 0.54, 0, y, -0.4, cream);
     const xs = [-0.7, -0.58, -0.46, 0.46, 0.58, 0.7];
     windows(p, xs, 0.06, -0.142, 0.06, 0.1, cream); windows(p, xs, 0.26, -0.142, 0.06, 0.12, cream);
-    for (let k = 0; k < 27; k++) p.box(0.012, 0.04, 0.012, -0.78 + k * 0.06, 0.465, -0.15, cream);
+    for (let k = 0; k < 27; k++) p.add(slab(0.012, 0.04, 0.012, F_PZ | F_PX | F_NX), -0.78 + k * 0.06, 0.485, -0.15, cream);
     p.box(1.62, 0.012, 0.02, 0, 0.505, -0.15, cream);
     // le péristyle et son fronton, les marches
     p.box(0.66, 0.06, 0.2, 0, 0.02, -0.07, cream);
-    for (let i = 0; i < 6; i++) column(p, -0.25 + i * 0.1, -0.03, 0.38, 0.08, 0.022);
+    for (let i = 0; i < 6; i++) column(p, -0.25 + i * 0.1, -0.03, 0.38, 0.08, 0.022, 6);
     p.box(0.66, 0.04, 0.2, 0, 0.46, -0.07, cream);
     p.gable(0.2, 0.12, 0.66, 0, 0.5, -0.07, cream, Math.PI / 2);
     for (let k = 0; k < 3; k++) p.box(0.5, 0.06 - k * 0.02, 0.05, 0, 0.02, 0.055 + k * 0.05, cream);
     // la coupole sur son tambour à colonnettes, la lanterne et le drapeau
     p.cyl(0.22, 0.22, 0.16, 16, 0, 0.45, -0.4, cream);
-    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; p.cyl(0.008, 0.008, 0.14, 5, Math.sin(a) * 0.235, 0.46, -0.4 + Math.cos(a) * 0.235, C.white); }
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; p.cyl(0.008, 0.008, 0.14, 4, Math.sin(a) * 0.235, 0.46, -0.4 + Math.cos(a) * 0.235, C.white); }
     p.add(new THREE.SphereGeometry(0.24, 16, 7, 0, Math.PI * 2, 0, Math.PI / 2), 0, 0.61, -0.4, dome);
-    for (let i = 0; i < 12; i++) p.add(new THREE.TorusGeometry(0.242, 0.006, 3, 8, Math.PI / 2).rotateY((i / 12) * Math.PI * 2), 0, 0.61, -0.4, dark(dome, 0.85));
+    for (let i = 0; i < 8; i++) p.add(new THREE.TorusGeometry(0.242, 0.006, 3, 6, Math.PI / 2).rotateY((i / 8) * Math.PI * 2), 0, 0.61, -0.4, dark(dome, 0.85));
     p.cyl(0.04, 0.04, 0.08, 8, 0, 0.84, -0.4, cream); p.cone(0.045, 0.06, 8, 0, 0.92, -0.4, dome);
     p.cyl(0.004, 0.004, 0.2, 4, 0, 0.98, -0.4, C.metal); { const f = sway([0, 0, -0.4], [0, 1, 0], 0.45, 1.2); f.box(0.09, 0.055, 0.004, 0.047, 1.12, 0, 0x3a6ab8); f.box(0.045, 0.055, 0.005, 0.07, 1.12, 0, 0xf2c23a); }
     for (const s of [-1, 1]) lampPost(p, s * 0.34, 0.2);
@@ -7910,7 +7910,7 @@ function senate(p: Parts, age: number) {
       for (const z of [0.36, 0.76]) { p.box(0.06, 0.08, 0.06, s * 0.78, 0.02, z, cream); figure(p, s * 0.78, z, 0xe8e2d4, s > 0 ? -1.6 : 1.6); }
     }
     // grille de fer forgé aux pointes dorées, portail, guérites rayées et leurs gardes
-    for (let i = 0; i <= 32; i++) { const x = -0.96 + i * 0.06; if (Math.abs(x) < 0.13) continue; p.box(0.008, 0.16, 0.008, x, 0.02, 0.93, 0x2a2a2e); p.cone(0.008, 0.02, 4, x, 0.18, 0.93, C.gold); }
+    for (let i = 0; i <= 32; i++) { const x = -0.96 + i * 0.06; if (Math.abs(x) < 0.13) continue; p.add(slab(0.008, 0.16, 0.008, F_PZ | F_NZ | F_PX | F_NX), x, 0.1, 0.93, 0x2a2a2e); p.cone(0.008, 0.02, 3, x, 0.18, 0.93, C.gold); }
     for (const y of [0.05, 0.16]) for (const s of [-1, 1]) p.box(0.82, 0.008, 0.01, s * 0.55, y, 0.93, 0x2a2a2e);
     for (const s of [-1, 1]) { p.box(0.04, 0.24, 0.04, s * 0.14, 0.02, 0.93, cream); p.sphere(0.024, s * 0.14, 0.28, 0.93, C.gold); p.box(0.1, 0.006, 0.01, s * 0.06, 0.2, 0.93, C.gold, 0, false, s * 0.2); }
     for (const s of [-1, 1]) {
