@@ -2166,11 +2166,54 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     // enclume sur billot, tonneau d'eau
     p.cyl(0.04, 0.045, 0.07, 7, 0.08, 0, 0.32, C.darkwood); p.box(0.09, 0.03, 0.04, 0.08, 0.07, 0.32, 0x55595f); p.box(0.04, 0.02, 0.03, 0.135, 0.08, 0.32, 0x55595f);
     p.cyl(0.045, 0.04, 0.09, 8, 0.24, 0, 0.3, 0x9a6a44); waterPool(p, 0.24, 0.09 + 0.005, 0.3, 0.04, 8, false);
-    // le râtelier d'outils contre le mur, les fers en tas, le soufflet
+    // le râtelier d'outils contre le mur
     p.box(0.012, 0.16, 0.012, -0.32, 0.04, 0.1, C.darkwood); p.box(0.12, 0.012, 0.012, -0.32, 0.16, 0.1, C.darkwood);
     for (let k = 0; k < 3; k++) p.box(0.006, 0.1, 0.006, -0.36 + k * 0.04, 0.06, 0.106, 0x55595f);
-    for (let k = 0; k < 4; k++) p.box(0.05, 0.008, 0.012, 0.0 + (k % 2) * 0.012, 0.004 + k * 0.008, 0.42, 0x4a4a4e, k);
-    p.box(0.08, 0.03, 0.05, -0.36, 0.06, 0.2, 0x6a4a30); p.cone(0.012, 0.05, 4, -0.36, 0.075, 0.25, 0x3c3c40);
+    // la vie de la forge : sol de terre battue noirci de scories, la flamme qui danse sur les braises, le grand soufflet de
+    // cuir et sa perche, le forgeron qui frappe et les étincelles, l'apprenti au soufflet, pinces et marteaux sur l'enclume,
+    // le bac de trempe, la meule à aiguiser, le tas de charbon, les barres de fer, les fers à cheval pendus, une roue cerclée
+    // qui attend, le cheval attaché qui attend d'être ferré
+    const iron = 0x4a4a4e;
+    trampled(p, -0.06, 0.3, 0.3, 860);
+    for (let i = 0; i < 10; i++) p.sphere(0.008, -0.2 + hash2(i, 1, 861) * 0.4, 0.004, 0.2 + hash2(i, 2, 861) * 0.25, 0x2a2826, 0, 0.5);
+    flame(-0.22, 0.13, 0.17, 0.75);
+    for (let k = 0; k < 5; k++) p.add(new THREE.DodecahedronGeometry(0.012, 0), -0.27 + k * 0.025, 0.128, 0.15 + (k % 2) * 0.03, k % 2 ? 0xff7a2a : 0x8a2a14, k, k % 2 === 1);
+    // soufflet : deux planches en poire, le cuir plissé, la buse vers le foyer, la perche et sa chaîne
+    for (const y of [0.02, 0.07]) p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.01, 7).scale(1, 1, 1.5), -0.4, y, 0.26, C.wood);
+    for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0.046 - k * 0.002, 0.046 - k * 0.002, 0.014, 7).scale(1, 1, 1.5), -0.4, 0.032 + k * 0.014, 0.26, k % 2 ? 0x5a3a24 : 0x6a4a30);
+    p.add(new THREE.CylinderGeometry(0.006, 0.01, 0.08, 5).rotateX(Math.PI / 2), -0.37, 0.045, 0.2, iron, 0.5);
+    p.add(new THREE.CylinderGeometry(0.006, 0.006, 0.36, 4).translate(0, 0.18, 0), -0.46, 0, 0.32, C.darkwood, 0, false, -0.7);
+    p.box(0.003, 0.08, 0.003, -0.41, 0.1, 0.27, 0x3c3c40);
+    figure(p, -0.44, 0.36, 0x6a5a4a, 0.5, false, 0x8a5a3a);
+    // le forgeron au tablier de cuir qui frappe le fer rouge, les étincelles ; marteaux et pinces sur le billot
+    figure(p, 0.08, 0.42, 0x5a4a3a, Math.PI, false, 0x2a2420, 'cheer');
+    p.box(0.04, 0.05, 0.012, 0.08, 0.06, 0.398, 0x6a4a30);
+    p.box(0.03, 0.008, 0.012, 0.06, 0.1, 0.32, 0xff7a2a, 0, true);
+    for (let k = 0; k < 6; k++) p.add(new THREE.OctahedronGeometry(0.004, 0), 0.06 + Math.cos(k * 1.9) * 0.04, 0.12 + (k % 3) * 0.02, 0.32 + Math.sin(k * 1.9) * 0.03, 0xffc060, 0, true);
+    p.add(new THREE.BoxGeometry(0.006, 0.006, 0.07), 0.13, 0.102, 0.3, iron, 0.4); p.box(0.02, 0.012, 0.012, 0.15, 0.1, 0.27, iron);
+    // bac de trempe plein, meule sur son bâti, charbon, barres de fer
+    p.box(0.16, 0.05, 0.07, -0.2, 0, 0.45, C.darkwood); waterRect(p, -0.2, 0.052, 0.45, 0.14, 0.05, 0, false);
+    p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.02, 10).rotateX(Math.PI / 2), 0.4, 0.09, 0.14, 0xa8a296);
+    for (const s of [-1, 1]) p.box(0.012, 0.09, 0.012, 0.4 + s * 0.03, 0, 0.14, C.darkwood);
+    p.add(new THREE.CylinderGeometry(0.004, 0.004, 0.1, 4).rotateZ(Math.PI / 2), 0.4, 0.09, 0.14, iron);
+    p.box(0.03, 0.03, 0.03, 0.4, 0.035, 0.18, 0x9a6a44);
+    p.cone(0.07, 0.06, 7, -0.42, 0, 0.02, 0x24221f); p.cone(0.04, 0.04, 6, -0.36, 0, 0.0, 0x2e2c28);
+    for (let k = 0; k < 5; k++) p.box(0.12, 0.006, 0.006, 0.24, 0.004 + (k > 2 ? 0.006 : 0), 0.46 + (k % 3) * 0.009, 0x5a5a60);
+    // fers à cheval pendus à la planche du mur, roue cerclée appuyée, le cheval attaché à son anneau
+    p.box(0.14, 0.04, 0.008, -0.06, 0.24, 0.104, C.darkwood);
+    for (let k = 0; k < 4; k++) p.add(new THREE.TorusGeometry(0.01, 0.003, 3, 6, Math.PI * 1.4), -0.11 + k * 0.032, 0.25, 0.11, iron, 0, false, Math.PI * 0.8);
+    p.add(new THREE.TorusGeometry(0.06, 0.008, 4, 12), 0.38, 0.065, -0.02, 0x7a5636, Math.PI / 2 - 0.2, false, 0, 0.15);
+    p.add(new THREE.TorusGeometry(0.062, 0.003, 3, 12), 0.384, 0.065, -0.02, iron, Math.PI / 2 - 0.2, false, 0, 0.15);
+    for (let k = 0; k < 3; k++) p.add(new THREE.BoxGeometry(0.004, 0.12, 0.004), 0.38, 0.065, -0.02, 0x7a5636, Math.PI / 2 - 0.2, false, (k * Math.PI) / 3, 0.15);
+    lifeSize(p, 0.44, 0, 0.38, () => {
+      const hx = 0.44, hz = 0.38, coat = 0x7a4a2a;
+      p.box(0.05, 0.06, 0.15, hx, 0.065, hz, coat);
+      for (const [u, w] of [[-0.016, -0.05], [0.016, -0.05], [-0.016, 0.05], [0.016, 0.05]]) p.box(0.014, 0.07, 0.014, hx + u, 0, hz + w, dark(coat, 0.8));
+      p.add(new THREE.BoxGeometry(0.03, 0.07, 0.03), hx, 0.13, hz - 0.08, coat, 0, false, 0, 0.5);
+      p.box(0.03, 0.03, 0.06, hx, 0.15, hz - 0.11, coat);
+      p.box(0.012, 0.05, 0.03, hx, 0.11, hz - 0.06, 0x2a2018);
+      p.add(new THREE.BoxGeometry(0.008, 0.07, 0.008), hx, 0.07, hz + 0.08, 0x2a2018, 0, false, 0, -0.5);
+    }, 1.35);
   } else if (age === 3) {
     // usine de brique : grande halle aux toits en dents de scie vitrés, haute cheminée cerclée, bureaux à l'avant ; et sa cour
     sink(0.012);
@@ -3402,7 +3445,39 @@ function firehouse(p: Parts, age: number, v: number) {
     // tour de guet de pierre, hangar à seaux et tonneaux, charrette à eau, échelle, tas de sable
     sink(0.025);
     {
-      p.box(0.46, 1.0, 0.46, -0.44, 0.025, -0.42, C.stone); p.box(0.54, 0.05, 0.54, -0.44, 1.02, -0.42, C.wood); p.pyramid(0.58, 0.36, 0.58, -0.44, 1.07, -0.42, C.slate);
+      // la tour : soubassement taluté, fût de pierre de taille aux angles chaînés, bandeau, meurtrières, porte haute et son
+      // escalier ; en haut des consoles portent le hourd de bois (galerie couverte en encorbellement), le guetteur et sa
+      // corne, le feu d'alarme dans son pot à feu, la flèche d'ardoise, sa girouette et la bannière
+      const tx = -0.44, tz = -0.42, T = 0.46, top = 0.86, stone = 0xbcb4a6;
+      p.box(T + 0.08, 0.12, T + 0.08, tx, 0.025, tz, dark(stone, 0.85)); p.add(new THREE.BoxGeometry(T + 0.06, 0.04, T + 0.06), tx, 0.165, tz, dark(stone, 0.92));
+      p.box(T, top - 0.12, T, tx, 0.145, tz, stone);
+      stones(p, tx, tz + T / 2, T, 0.145, top, 0, dark(stone, 0.88), 0.28, 870);
+      stones(p, tx + T / 2, tz, T, 0.145, top, Math.PI / 2, dark(stone, 0.88), 0.28, 871);
+      quoins(p, tx + T / 2, tz + T / 2, 0.145, top, 1, 1, 0xd8d0c2); quoins(p, tx - T / 2, tz + T / 2, 0.145, top, -1, 1, 0xd8d0c2);
+      p.box(T + 0.02, 0.025, T + 0.02, tx, 0.5, tz, 0xd8d0c2);
+      for (const y of [0.32, 0.62]) { p.box(0.016, 0.09, 0.012, tx, y, tz + T / 2 + 0.002, 0x2a2622); p.box(0.012, 0.09, 0.016, tx + T / 2 + 0.002, y + 0.08, tz - 0.08, 0x2a2622); }
+      // porte haute, son arc, l'escalier de pierre qui y monte le long du mur
+      p.box(0.09, 0.14, 0.014, tx + 0.1, 0.27, tz + T / 2 + 0.003, 0x5a4030); archTop(p, tx + 0.1, 0.41, tz + T / 2 + 0.005, 0.045, 0xd8d0c2);
+      for (let k = 0; k < 6; k++) p.box(0.08, 0.045 * (k + 1), 0.07, tx - 0.15 + k * 0.045, 0.025, tz + T / 2 + 0.04, dark(stone, 0.9 + (k % 2) * 0.06));
+      // consoles et hourd : plancher débordant, poteaux, garde-corps de planches, toit en pavillon et ses rangs d'ardoises
+      for (let i = 0; i < 3; i++) for (const s of [-1, 1]) { p.box(0.04, 0.05, 0.06, tx - 0.14 + i * 0.14, top - 0.04, tz + s * (T / 2 + 0.02), 0xd8d0c2); p.box(0.06, 0.05, 0.04, tx + s * (T / 2 + 0.02), top - 0.04, tz - 0.14 + i * 0.14, 0xd8d0c2); }
+      p.box(T + 0.14, 0.035, T + 0.14, tx, top, tz, C.darkwood);
+      for (const [u, w] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.03, 0.22, 0.03, tx + u * (T / 2 + 0.05), top + 0.035, tz + w * (T / 2 + 0.05), C.darkwood);
+      for (const s of [-1, 1]) {
+        p.box(T + 0.12, 0.08, 0.016, tx, top + 0.035, tz + s * (T / 2 + 0.06), C.wood); p.box(0.016, 0.08, T + 0.12, tx + s * (T / 2 + 0.06), top + 0.035, tz, C.wood);
+        for (let k = 0; k < 4; k++) { p.box(0.004, 0.08, 0.018, tx - 0.21 + k * 0.14, top + 0.035, tz + s * (T / 2 + 0.06), C.darkwood); p.box(0.018, 0.08, 0.004, tx + s * (T / 2 + 0.06), top + 0.035, tz - 0.21 + k * 0.14, C.darkwood); }
+      }
+      p.box(T + 0.18, 0.025, T + 0.18, tx, top + 0.255, tz, C.darkwood);
+      p.pyramid(T + 0.22, 0.4, T + 0.22, tx, top + 0.28, tz, C.slate);
+      p.cyl(0.006, 0.006, 0.12, 4, tx, top + 0.66, tz, 0x3c3c40); p.sphere(0.012, tx, top + 0.7, tz, C.gold);
+      p.box(0.07, 0.004, 0.02, tx + 0.03, top + 0.76, tz, 0x3c3c40);
+      { const f = sway([tx + 0.006, top + 0.76, tz], [0, 1, 0], 0.5, 0.7); f.box(0.1, 0.06, 0.004, 0.05, -0.03, 0, 0x3a5a9a); f.box(0.1, 0.012, 0.005, 0.05, -0.03, 0, C.gold); }
+      // le guetteur appuyé au garde-corps, sa corne ; le pot à feu sur sa potence qui rougeoie, les torches de la porte
+      figure(p, tx + 0.12, tz + 0.14, 0x8a3a2a, 0.6, false, 0x4a3426, 'idle', top + 0.023);
+      p.add(new THREE.ConeGeometry(0.012, 0.06, 5).rotateZ(-Math.PI / 2), tx + 0.17, top + 0.16, tz + 0.18, 0xe8dcc0);
+      p.box(0.1, 0.01, 0.01, tx + T / 2 + 0.11, top + 0.18, tz + 0.12, 0x3c3c40); p.box(0.004, 0.04, 0.004, tx + T / 2 + 0.15, top + 0.155, tz + 0.12, 0x3c3c40);
+      p.cyl(0.03, 0.02, 0.03, 7, tx + T / 2 + 0.15, top + 0.11, tz + 0.12, 0x3c3c40); flame(tx + T / 2 + 0.15, top + 0.14, tz + 0.12, 0.7);
+      for (const dx of [0.03, 0.17]) { p.box(0.008, 0.06, 0.008, tx + dx, 0.36, tz + T / 2 + 0.012, C.darkwood); flame(tx + dx, 0.42, tz + T / 2 + 0.014, 0.4); }
     }
     for (const [x, z] of [[0.18, -0.86], [0.86, -0.86], [0.18, -0.28], [0.86, -0.28]]) p.box(0.035, z < -0.5 ? 0.42 : 0.34, 0.035, x, 0.025, z, C.darkwood);
     p.box(0.72, 0.38, 0.03, 0.52, 0.025, -0.87, C.wood);
@@ -3417,7 +3492,7 @@ function firehouse(p: Parts, age: number, v: number) {
     p.add(new THREE.BoxGeometry(0.1, 0.6, 0.02), 0.08, 0.3, -0.12, C.wood, 0, false, 0, -0.35);
     p.cone(0.14, 0.1, 8, -0.4, 0.025, 0.5, 0xd8c69a);
     // la cour pavée, la citerne de pierre, le râtelier des crocs et des échelles, la cloche d'alarme, les guetteurs
-    cobbles(p, -0.86, 0.1, 0.86, 0.86, 0xc8bba2, 0.025, 61);
+    cobbles(p, -0.86, 0.1, 0.86, 0.86, 0xc8bba2, 0.025, 61, 0.14, 0.1);
     verge(p, 30, 62, 0.03, (x, z) => z > 0.06 || x > 0.9);
     p.box(0.22, 0.09, 0.15, -0.7, 0.025, 0.74, C.stone); waterRect(p, -0.7, 0.112 + 0.006, 0.74, 0.18, 0.11, 0);
     for (let k = 0; k < 4; k++) { p.add(new THREE.CylinderGeometry(0.005, 0.005, 0.5, 4), 0.06 + k * 0.035, 0.27, 0.12, C.wood, 0, false, 0.12); p.box(0.012, 0.04, 0.012, 0.09 + k * 0.035, 0.5, 0.12, C.metal); }
