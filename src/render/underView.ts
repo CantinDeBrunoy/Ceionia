@@ -14,7 +14,7 @@ import { CombatFx } from './combatFx';
 import { campLayout, buildCamp, stepCamp, Camp } from './camp';
 import { CAMP_QUESTS, CAMP_GUARDS } from '../sim/depths';
 import { MINER_SPEED } from '../sim/railway';
-import { DIG_WALK, DIG_WALK_MAX } from '../sim/expeditions';
+import { DIG_WALK, DIG_WALK_MAX, foesOf } from '../sim/expeditions';
 import { hash2, smoothstep } from '../core/rng';
 
 const BG = new THREE.Color(0x09070c);
@@ -83,6 +83,20 @@ interface Source { x: number; y: number; z: number; r: number; c: THREE.Color; f
 interface Guard { soldier: Soldier; x: number; z: number; heading: number; path: [number, number][]; wait: number; post: number; light: Source }
 /** Mineur descendu par le train : il abat le filon au pic ; un sur trois porte le minerai jusqu'au camp et revient */
 interface Miner { actor: Soldier; x: number; z: number; heading: number; path: [number, number][]; goal: number; wait: number; phase: number }
+/**
+ * Patrouille du camp : ses trois soldats (le chef en tête, les autres dans ses pas), où est le chef et son cap, son chemin,
+ * sa pause, sa torche, les créatures qu'elle combat (coups reçus par chacune), ce qu'elle a abattu, la case du front visée
+ */
+interface Patrol {
+  members: Soldier[]; trail: [number, number][]; x: number; z: number; h: number; path: [number, number][]; wait: number; light: Source;
+  foes: Mob[]; cool: number[]; hits: Map<Mob, number>; tally: Partial<Record<MobKind, number>>; won: string; goal: number;
+}
+/** Créatures qui chargent les patrouilles, et leur nom (un, plusieurs) */
+const HOSTILE = new Set<MobKind>(['zombie', 'skeleton', 'spider', 'golem', 'worm']);
+const MOB_NAMES: Record<MobKind, [string, string]> = {
+  zombie: ['zombie', 'zombies'], skeleton: ['squelette', 'squelettes'], spider: ['araignée géante', 'araignées géantes'], slime: ['slime', 'slimes'],
+  mushnub: ['champignon vivant', 'champignons vivants'], ghost: ['fantôme', 'fantômes'], golem: ['gardien de pierre', 'gardiens de pierre'], worm: ['ver des profondeurs', 'vers des profondeurs'],
+};
 /** Équipe d'une ligne : ses mineurs, la lueur de leurs lampes au filon, les places autour du filon en cours */
 interface Crew { key: string; miners: Miner[]; light: Source; slotsAt: number; slots: [number, number, number][] }
 interface Item { m: THREE.Matrix4; c: THREE.Color }
@@ -141,6 +155,15 @@ export class UnderView {
   private campC: [number, number] = [0, 0];
   private campSources: Source[] = [];
   private guards: Guard[] = [];
+  /** patrouilles du camp (combien : donné par le jeu), dernière nouvelle de leurs combats */
+  private patrols: Patrol[] = [];
+  patrolN = 0;
+  patrolNews = '';
+  /** attaque du camp en cours : les créatures de la vague */
+  private raidShow: { id: number; foes: Mob[]; result: 'clean' | 'hurt'; n: number } | null = null;
+  /** cases du front des galeries tenues (refaites quand elles changent) */
+  private fronts: number[] | null = null;
+  private frontN = -1;
   /** cases des gros décors des galeries (le camp les évite) */
   private decorCells = new Set<number>();
   /** cases où poussent des cristaux (un clic dessus les fait tinter) */
@@ -1643,6 +1666,9 @@ export class UnderView {
     this.campKey = key;
     if (this.camp) { this.scene.remove(this.camp.group); this.camp.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose()); }
     for (const g of this.guards) this.scene.remove(g.soldier.root);
+    // les patrouilles se reforment (soldats de l'époque)
+    for (const p of this.patrols) { for (const s of p.members) this.scene.remove(s.root); for (const f of p.foes) this.mobs.kill(f); }
+    this.patrols = [];
     this.camp = null; this.campSources = []; this.guards = [];
     if (center < 0) { this.refreshTorches(); return; }
     this.campC = [(center % N) + 0.5, Math.floor(center / N) + 0.5];
@@ -1690,8 +1716,9 @@ export class UnderView {
     return out.reverse();
   }
 
-  /** Les gardes vont de poste en poste par les galeries, s'y arrêtent quelques secondes face à l'extérieur */
+  /** Les gardes vont de poste en poste par les galeries, s'y arrêtent quelques secondes face à l'extérieur (sauf à l'attaque du camp) */
   private stepGuards(dt: number) {
+    if (this.guardsFight(dt)) return;
     const u = this.under, posts = this.camp?.posts ?? [];
     this.guards.forEach((g, i) => {
       if (g.path.length) {
@@ -1717,6 +1744,182 @@ export class UnderView {
       g.soldier.root.rotation.y = g.heading;
       Object.assign(g.light, { x: g.x, y: y + 0.5, z: g.z });
     });
+  }
+
+  // ---------- Patrouilles et attaques du camp ----------
+
+  /** Cases tenues au bord des galeries sauvages (le front), refaites quand les galeries tenues changent */
+  private frontCells(): number[] {
+    const w = this.world, u = this.under;
+    if (this.frontN === w.claimed.size && this.fronts) return this.fronts;
+    this.frontN = w.claimed.size;
+    this.fronts = [];
+    for (const k of w.claimed) {
+      const x = k % N, z = Math.floor(k / N);
+      if (u.walkable(x, z) && u.heightAt(x + 0.5, z + 0.5) < 0.42 && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => u.walkable(x + dx, z + dz) && !w.claimed.has((z + dz) * N + x + dx))) this.fronts.push(k);
+    }
+    return this.fronts;
+  }
+
+  /**
+   * Les patrouilles du camp, à chaque image : trois soldats de l'époque en file, torche au poing pour le chef, vont de
+   * poste en poste le long du front des galeries tenues ; au front, des créatures surgissent parfois des galeries sauvages
+   * (et celles qui rôdent trop près les chargent) : la patrouille s'arrête, se déploie et les taille en pièces
+   */
+  private stepPatrols(dt: number) {
+    const u = this.under, want = this.camp ? this.patrolN : 0;
+    while (this.patrols.length > want) { const p = this.patrols.pop()!; for (const s of p.members) this.scene.remove(s.root); for (const f of p.foes) this.mobs.kill(f); }
+    const home = this.campCenter();
+    while (this.patrols.length < want && home >= 0) {
+      const i = this.patrols.length, members = [0, 1, 2].map((j) => { const s = makeSoldier(this.age, 300 + i * 5 + j, j === 0, 'soldier'); this.scene.add(s.root); return s; });
+      const x = (home % N) + 0.5, z = Math.floor(home / N) + 0.5;
+      this.patrols.push({ members, trail: [[x, z]], x, z, h: 0, path: [], wait: 2 + i * 4, light: { x, y: 0.5, z, r: 3.4, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(1.1), flicker: 0.25 }, foes: [], cool: [0.3, 0.6, 0.9], hits: new Map(), tally: {}, won: '', goal: -1 });
+    }
+    const t = this.uTime.value;
+    for (const p of this.patrols) {
+      // les créatures du combat en cours, et celles qui rôdent trop près (elles chargent)
+      p.foes = p.foes.filter((f) => f.alive && f.dying < 0);
+      for (const m of this.mobs.mobs) if (m.alive && m.dying < 0 && !m.foe && HOSTILE.has(m.kind) && Math.hypot(m.x - p.x, m.z - p.z) < 1.6 && p.foes.length < 4) { m.foe = [p.x, p.z]; m.path = []; p.foes.push(m); }
+      if (p.foes.length) { this.patrolFight(p, dt, t); continue; }
+      if (p.won) { this.patrolNews = p.won; p.won = ''; }
+      // en marche : le chef suit le chemin, les deux autres marchent dans ses pas
+      if (p.path.length) {
+        const [tx, tz] = p.path[0], dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz), s = Math.min(d, dt * 0.62);
+        if (d > 1e-3) { p.x += (dx / d) * s; p.z += (dz / d) * s; p.h = Math.atan2(dx, dz); }
+        if (d - s < 0.02) p.path.shift();
+        const last = p.trail[p.trail.length - 1];
+        if (Math.hypot(p.x - last[0], p.z - last[1]) > 0.06) { p.trail.push([p.x, p.z]); if (p.trail.length > 40) p.trail.shift(); }
+        if (!p.path.length) {
+          p.wait = 4 + Math.random() * 5;
+          // arrivée au front : parfois, des créatures surgissent des galeries sauvages
+          if (p.goal >= 0 && Math.random() < 0.45) {
+            const kinds = foesOf(u.zone[p.goal], this.age), kind = kinds[Math.floor(Math.random() * kinds.length)];
+            p.foes = this.mobs.ambush(kind, kind === 'golem' || kind === 'worm' ? 1 : 1 + Math.floor(Math.random() * 2), p.goal);
+          }
+        }
+      } else if ((p.wait -= dt) <= 0) {
+        // le prochain poste : une case du front, ni trop près ni trop loin (sinon n'importe quelle galerie tenue)
+        const fronts = this.frontCells(), from = Math.floor(p.z) * N + Math.floor(p.x);
+        let goal = -1;
+        for (let tries = 0; tries < 8 && goal < 0 && fronts.length; tries++) { const k = fronts[Math.floor(Math.random() * fronts.length)]; const dd = Math.hypot((k % N) - p.x, Math.floor(k / N) - p.z); if (dd > 4 && dd < 26) goal = k; }
+        const atFront = goal >= 0;
+        if (!atFront) {
+          const held = [...this.world.claimed].filter((k) => u.walkable(k % N, Math.floor(k / N)) && u.heightAt((k % N) + 0.5, Math.floor(k / N) + 0.5) < 0.42 && Math.hypot((k % N) - p.x, Math.floor(k / N) - p.z) > 2.5);
+          if (held.length) goal = held[Math.floor(Math.random() * held.length)];
+        }
+        const r = goal >= 0 ? u.route(from, goal) : null;
+        p.goal = r && atFront ? goal : -1;
+        p.path = r ? r.slice(1).map((k): [number, number] => [(k % N) + 0.3 + Math.random() * 0.4, Math.floor(k / N) + 0.3 + Math.random() * 0.4]) : [];
+        if (!p.path.length) p.wait = 3;
+      }
+      const moving = p.path.length > 0;
+      p.members.forEach((s, i) => {
+        const at = p.trail[Math.max(0, p.trail.length - 1 - i * 4)], x = i ? at[0] : p.x, z = i ? at[1] : p.z;
+        const ahead = p.trail[Math.max(0, p.trail.length - i * 4)] ?? [p.x, p.z];
+        s.root.position.set(x, u.heightAt(x, z), z);
+        if (i && Math.hypot(ahead[0] - x, ahead[1] - z) > 1e-3) s.root.rotation.y = Math.atan2(ahead[0] - x, ahead[1] - z);
+        else if (!i) s.root.rotation.y = p.h;
+        soldierStep(s, t * 8 + i * 0.5, moving ? 'walk' : 'guard');
+      });
+      Object.assign(p.light, { x: p.x, y: u.heightAt(p.x, p.z) + 0.55, z: p.z });
+    }
+  }
+
+  /** Le combat d'une patrouille : chacun charge la créature la plus proche et frappe ; trois coups (cinq pour les grosses) l'abattent */
+  private patrolFight(p: Patrol, dt: number, t: number) {
+    const u = this.under;
+    p.members.forEach((s, i) => {
+      const o = s.root.position;
+      const foe = p.foes.reduce<Mob | null>((b, f) => (Math.hypot(f.x - o.x, f.z - o.z) < (b ? Math.hypot(b.x - o.x, b.z - o.z) : Infinity) ? f : b), null);
+      if (!foe) return;
+      const rifle = s.arms[0].userData.hold === 'rifle', reach = rifle ? 1.2 : 0.26, d = Math.hypot(foe.x - o.x, foe.z - o.z) || 1;
+      if (d > reach) { const st = Math.min(d - reach, dt * 1.1), nx = o.x + ((foe.x - o.x) / d) * st, nz = o.z + ((foe.z - o.z) / d) * st; if (u.walkable(Math.floor(nx), Math.floor(nz))) o.set(nx, u.heightAt(nx, nz), nz); }
+      s.root.rotation.y = Math.atan2(foe.x - o.x, foe.z - o.z);
+      foe.target = [o.x, o.z];
+      foe.foe = [o.x, o.z];
+      soldierStep(s, t * 9 + i * 1.3, 'fight');
+      if ((p.cool[i] -= dt) > 0 || d > reach + 0.15) return;
+      p.cool[i] = rifle ? 1.1 + Math.random() * 0.4 : 0.6 + Math.random() * 0.35;
+      const fy = u.heightAt(foe.x, foe.z) + 0.16;
+      if (rifle) this.fx.shot(o.x + Math.sin(s.root.rotation.y) * 0.12, o.y + 0.2, o.z + Math.cos(s.root.rotation.y) * 0.12, foe.x, fy, foe.z);
+      else this.fx.hit((o.x + foe.x * 2) / 3, fy, (o.z + foe.z * 2) / 3, 0xffd27a, 12, 'blade');
+      this.mobs.strike(foe, o.x, o.z);
+      const hits = (p.hits.get(foe) ?? 0) + 1;
+      p.hits.set(foe, hits);
+      if (hits >= (foe.kind === 'golem' || foe.kind === 'worm' ? 5 : 3)) {
+        this.fx.hit(foe.x, fy, foe.z, 0xffe8b0, 22, 'blade');
+        this.fx.puff(foe.x, fy - 0.1, foe.z, 10);
+        this.mobs.kill(foe);
+        p.tally[foe.kind] = (p.tally[foe.kind] ?? 0) + 1;
+      }
+    });
+    // les créatures rendent les coups : la lame les pare, parfois une morsure
+    for (const f of p.foes) {
+      if (!f.target || Math.hypot(f.target[0] - f.x, f.target[1] - f.z) > 0.45 || Math.random() > dt * 1.2) continue;
+      const bite = Math.random() < 0.25;
+      this.fx.hit((f.x + f.target[0]) / 2, u.heightAt(f.x, f.z) + 0.15, (f.z + f.target[1]) / 2, bite ? 0xff5a4a : 0xf2f4ff, bite ? 10 : 7, bite ? 'bite' : 'blade');
+    }
+    const lead = p.members[0].root.position;
+    p.x = lead.x; p.z = lead.z;
+    p.trail = [[p.x, p.z]];
+    Object.assign(p.light, { x: p.x, y: lead.y + 0.55, z: p.z });
+    if (p.foes.every((f) => !f.alive || f.dying >= 0)) {
+      const won = Object.entries(p.tally).map(([k, n]) => `${n} ${n > 1 ? MOB_NAMES[k as MobKind][1] : MOB_NAMES[k as MobKind][0]}`).join(' et ');
+      if (won) p.won = `Une patrouille a taillé en pièces ${won} au bord des galeries tenues.`;
+      p.tally = {};
+      p.hits.clear();
+      p.path = [];
+      p.wait = 2;
+    }
+  }
+
+  /**
+   * L'attaque du camp, telle que le jeu la décrit : la vague surgit des galeries sauvages au plus près du camp et monte vers
+   * lui ; les gardes vont à sa rencontre et la taillent en pièces (au rythme du jeu) ; finie, les dernières créatures
+   * tombent, ou s'enfuient si un garde a été blessé
+   */
+  setRaid(r: { id: number; kind: MobKind; n: number; cell: number; t: number; dur: number; result: 'clean' | 'hurt' } | null) {
+    const u = this.under;
+    if (!r) {
+      if (this.raidShow) { for (const f of this.raidShow.foes) if (this.raidShow.result === 'hurt') this.mobs.rout(f, this.campC[0], this.campC[1]); else this.mobs.kill(f); this.raidShow = null; }
+      return;
+    }
+    if (!this.raidShow || this.raidShow.id !== r.id) {
+      // le bord des galeries tenues le plus proche du camp : la vague en surgit
+      const d = u.distances(r.cell), fronts = this.frontCells();
+      let from = -1;
+      for (const k of fronts) if (d[k] >= 0 && (from < 0 || d[k] < d[from])) from = k;
+      const foes = from >= 0 ? this.mobs.ambush(r.kind, r.n, from) : [];
+      for (const f of foes) { const s = Math.floor(f.z) * N + Math.floor(f.x); f.path = u.route(s, r.cell)?.slice(1) ?? []; f.foe = [(r.cell % N) + 0.5, Math.floor(r.cell / N) + 0.5]; }
+      this.raidShow = { id: r.id, foes, result: r.result, n: r.n };
+    }
+    const s = this.raidShow, live = s.foes.filter((f) => f.alive && f.dying < 0);
+    // tombées jusqu'ici : à mesure que l'attaque avance (toutes avant la fin si les gardes l'emportent sans mal)
+    const due = Math.min(s.n, Math.floor((r.t / r.dur) * (s.n + (r.result === 'clean' ? 1.5 : 0.4))));
+    let down = s.foes.length - live.length;
+    for (const f of live) if (down < due && Math.hypot(f.x - this.campC[0], f.z - this.campC[1]) < 5) { this.fx.hit(f.x, u.heightAt(f.x, f.z) + 0.15, f.z, 0xffe8b0, 22, 'blade'); this.fx.puff(f.x, u.heightAt(f.x, f.z) + 0.05, f.z, 10); this.mobs.kill(f); down++; }
+  }
+
+  /** Les gardes face à la vague : chacun court sur la créature la plus proche du camp et frappe */
+  private guardsFight(dt: number): boolean {
+    const foes = this.raidShow?.foes.filter((f) => f.alive && f.dying < 0 && Math.hypot(f.x - this.campC[0], f.z - this.campC[1]) < 7) ?? [];
+    if (!foes.length) return false;
+    const u = this.under, t = this.uTime.value;
+    this.guards.forEach((g, i) => {
+      const foe = foes.reduce((b, f) => (Math.hypot(f.x - g.x, f.z - g.z) < Math.hypot(b.x - g.x, b.z - g.z) ? f : b));
+      const d = Math.hypot(foe.x - g.x, foe.z - g.z) || 1;
+      g.path = [];
+      if (d > 0.28) { const st = Math.min(d - 0.28, dt * 1.2), nx = g.x + ((foe.x - g.x) / d) * st, nz = g.z + ((foe.z - g.z) / d) * st; if (u.walkable(Math.floor(nx), Math.floor(nz))) { g.x = nx; g.z = nz; } }
+      g.heading = Math.atan2(foe.x - g.x, foe.z - g.z);
+      foe.target = [g.x, g.z];
+      soldierStep(g.soldier, t * 9 + i * 1.3, d < 0.5 ? 'fight' : 'walk');
+      if (d < 0.45 && Math.random() < dt * 1.6) { this.fx.hit((g.x + foe.x * 2) / 3, u.heightAt(foe.x, foe.z) + 0.16, (g.z + foe.z * 2) / 3, 0xffd27a, 10, 'blade'); this.mobs.strike(foe, g.x, g.z); }
+      const y = u.heightAt(g.x, g.z);
+      g.soldier.root.position.set(g.x, y, g.z);
+      g.soldier.root.rotation.y = g.heading;
+      Object.assign(g.light, { x: g.x, y: y + 0.5, z: g.z });
+    });
+    return true;
   }
 
   // ---------- Mineurs du train ----------
@@ -1846,7 +2049,7 @@ export class UnderView {
     this.lightTimer -= dt;
     if (this.lightTimer <= 0) {
       this.lightTimer = LIGHT_PICK;
-      const all = this.sources.concat(this.torchSources, this.shaftSources, this.claimSources, this.campSources, this.guards.map((g) => g.light), [...this.troops.values()].flatMap((s) => [s.light, ...(s.modern ? [...s.modern.lamps, s.modern.flash] : [])]), [...this.crews.values()].filter((c) => c.miners.length).map((c) => c.light), this.digCrew ? [this.digCrew.light] : []);
+      const all = this.sources.concat(this.torchSources, this.shaftSources, this.claimSources, this.campSources, this.guards.map((g) => g.light), this.patrols.map((p) => p.light), [...this.troops.values()].flatMap((s) => [s.light, ...(s.modern ? [...s.modern.lamps, s.modern.flash] : [])]), [...this.crews.values()].filter((c) => c.miners.length).map((c) => c.light), this.digCrew ? [this.digCrew.light] : []);
       const dd = (s: Source) => Math.hypot(s.x - target.x, s.z - target.z) - s.r;
       this.active = [this.lantern, ...all.filter((s) => dd(s) < dist * 1.2).sort((a, b) => dd(a) - dd(b)).slice(0, MAX_CAVE_LIGHTS - 1)];
     }
@@ -1863,6 +2066,7 @@ export class UnderView {
     if ((this.campT -= dt) <= 0) { this.campT = 1; this.refreshCamp(); }
     if (this.camp) stepCamp(this.camp, this.uTime.value, dt);
     this.stepGuards(dt);
+    this.stepPatrols(dt);
     this.fx.update(dt);
     this.mobs.age = this.age;
     this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z })), ...[...this.crews.values(), ...(this.digCrew ? [this.digCrew] : [])].flatMap((c) => c.miners.map((m) => ({ x: m.x, z: m.z })))]);

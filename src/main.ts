@@ -47,7 +47,7 @@ import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { UpgradeBadges } from './render/upgradeBadges';
-import { Expeditions } from './sim/expeditions';
+import { Expeditions, RAID_TIME, FOE_NAME } from './sim/expeditions';
 import { CAMP_GUARDS } from './sim/depths';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
@@ -326,6 +326,8 @@ class Game implements UIHost {
     this.spaceCast = new SpaceCast(uiRoot);
     this.expeditions.onNews = (m, depths) => this.ui.toast(m, depths ? () => this.ui.openExpeditions('depths') : undefined);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
+    // le camp souterrain attaqué : un clic sur le message y descend ; l'issue, un clic ouvre la fiche du camp
+    this.expeditions.onRaid = (m, start) => this.ui.toast(m, start ? () => this.goCamp() : () => { this.goCamp(); this.ui.openCamp(); });
     this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; };
     // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
@@ -818,8 +820,17 @@ class Game implements UIHost {
   }
   /** Le camp souterrain vu de près : ses gardes, ses patrouilles, et la dernière nouvelle de ses combats */
   campInfo() {
-    const lvl = this.expeditions.camp();
-    return { guards: CAMP_GUARDS[lvl] ?? 0, patrols: 0, last: '' };
+    const ex = this.expeditions, lvl = ex.camp(), raid = ex.raid;
+    const last = raid ? `Le camp est attaqué : ${raid.n} ${FOE_NAME[raid.kind]} montent des galeries !` : [ex.campNews, this.underView?.patrolNews ?? ''].filter(Boolean).join(' ');
+    return { guards: CAMP_GUARDS[lvl] ?? 0, patrols: ex.patrols(), last };
+  }
+
+  /** Va voir le camp souterrain (une attaque) : on descend sous terre au besoin, la vue se pose sur le camp */
+  goCamp() {
+    const k = this.expeditions.campCell();
+    if (k < 0) return;
+    if (this.mode === 'under') this.cam.goTo((k % N) + 0.5, Math.floor(k / N) + 0.5, 10);
+    else this.enterUnder(k);
   }
 
   capture() {
@@ -1060,6 +1071,10 @@ class Game implements UIHost {
         id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
       })), dt);
       uv.age = this.sim.age;
+      // les patrouilles du camp, et l'attaque du camp en cours
+      uv.patrolN = this.expeditions.patrols();
+      const raid = this.expeditions.raid;
+      uv.setRaid(raid ? { ...raid, dur: RAID_TIME } : null);
       // les mineurs descendus par les trains, une équipe par ligne
       uv.setMiners([...this.railway.trains.values()].filter((t) => !t.why && t.mine >= 0 && t.crew.length).map((t) => ({ id: t.line.id, n: t.crew.length, entry: t.stops[t.mine].entry, vein: t.vein })), this.sim.age, gdt);
       // les mineurs du camp au front du tunnel ; en mode Creuser, le passage conseillé

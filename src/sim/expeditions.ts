@@ -5,7 +5,7 @@ import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_
 import { AGES, KINDS, KindId, Building, sizeOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
-import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
+import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
 import { rulesOf } from './difficulty';
 import { hash2 } from '../core/rng';
@@ -80,6 +80,12 @@ export type FoeKind = 'zombie' | 'skeleton' | 'spider' | 'golem' | 'worm';
  * de la troupe) ; l'issue est tirée quand elle survient, ses blessés comptés à la fin du combat
  */
 export interface Ambush { cell: number; kind: FoeKind; n: number; t0: number; state: 'wait' | 'fight' | 'done'; result: 'clean' | 'hurt' | 'rout' | null }
+
+/** Attaque du camp souterrain : les créatures, leur nombre, la case du camp, le temps écoulé et l'issue (tirée au début) */
+export interface Raid { id: number; kind: FoeKind; n: number; cell: number; t: number; result: 'clean' | 'hurt' }
+/** Durée d'une attaque du camp, et temps entre deux attaques (au hasard entre ces bornes, secondes de jeu) */
+export const RAID_TIME = 26;
+const RAID_EVERY: [number, number] = [420, 900];
 
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
@@ -341,6 +347,61 @@ export class Expeditions {
       this.onCamp?.(cq.q);
     }
   }
+
+  // ---------------- Patrouilles et attaques du camp ----------------
+  /** Patrouilles du camp souterrain (petits groupes de soldats qui font la ronde dans les galeries tenues) */
+  patrols() { const l = this.camp(); return l ? Math.min(3, 1 + Math.floor(l / 3)) : 0; }
+
+  /** attaque du camp en cours (null : aucune) ; temps avant la prochaine (secondes de jeu) */
+  raid: Raid | null = null;
+  private raidT = RAID_EVERY[0];
+  private raidId = 0;
+  /** dernière nouvelle des combats du camp (pour sa fiche) */
+  campNews = '';
+
+  /** Case de galerie du camp : sous le puits du plus ancien avant-poste, ou -1 */
+  campCell() { return [...this.outposts()].sort((a, b) => a.b.id - b.b.id)[0]?.entry ?? -1; }
+
+  /**
+   * De temps à autre, une vague de créatures monte des galeries sauvages vers le camp ; les gardes la repoussent. L'issue se
+   * tire au début : la force des gardes (et des patrouilles) contre la vague ; au pire, pertes légères (un garde blessé, un
+   * peu de minerai et de pierre renversés), jamais plus. Une victoire compte comme une embuscade repoussée
+   */
+  private raidStep(dt: number) {
+    const lvl = this.camp(), u = this.under;
+    if (!lvl || !u) { this.raid = null; return; }
+    if (this.raid) {
+      const r = this.raid;
+      r.t += dt;
+      if (r.t < RAID_TIME) return;
+      const name = FOE_NAME[r.kind], w = this.world;
+      let text: string;
+      if (r.result === 'clean') { w.exp.wins++; text = `les gardes ont repoussé les ${r.n} ${name} sans une égratignure`; }
+      else {
+        const ore = Math.min(Math.floor(w.ore), 2), stone = Math.min(Math.floor(w.stone), 3);
+        w.ore -= ore; w.stone -= stone; w.exp.wins++;
+        text = `${r.n} ${name} repoussés, mais un garde est blessé${ore || stone ? ` et la réserve a souffert (${[ore ? `−${ore} minerai` : '', stone ? `−${stone} pierre` : ''].filter(Boolean).join(', ')})` : ''}`;
+      }
+      w.version++;
+      this.campNews = `Dernière attaque : ${text}.`;
+      this.onRaid?.(`⚔️ Camp souterrain : ${text}.`, false);
+      this.raid = null;
+      return;
+    }
+    if ((this.raidT -= dt) > 0) return;
+    this.raidT = RAID_EVERY[0] + this.rnd() * (RAID_EVERY[1] - RAID_EVERY[0]);
+    const cell = this.campCell();
+    if (cell < 0) return;
+    const kinds = foesOf(u.zone[cell], this.age()), kind = kinds[Math.floor(this.rnd() * kinds.length)];
+    const big = kind === 'golem' || kind === 'worm', n = big ? 2 : 3 + Math.floor(this.rnd() * 3);
+    // les gardes du camp et ses patrouilles, contre la vague (les gardiens et les vers comptent double)
+    const might = CAMP_GUARDS[lvl] * 1.2 + this.patrols() * 2, threat = n * FOE_MIGHT[kind] * (1 + this.age() * 0.08);
+    const result = this.rnd() < might / (might + threat * 0.6) ? 'clean' : 'hurt';
+    this.raid = { id: ++this.raidId, kind, n, cell, t: 0, result };
+    this.onRaid?.(`⚔️ Le camp souterrain est attaqué : ${n} ${FOE_NAME[kind]} montent des galeries ! Cliquez pour y descendre.`, true);
+  }
+  /** une attaque du camp commence (`start`) ou s'achève : le message, cliquable */
+  onRaid: ((msg: string, start: boolean) => void) | null = null;
 
   // ---------------- Creusement ----------------
   /** temps passé sur la case en cours (secondes de jeu) */
@@ -643,6 +704,7 @@ export class Expeditions {
     this.mineStep(dt);
     this.holdStep(dt);
     this.campStep(dt);
+    this.raidStep(dt);
     this.digStep(dt);
     for (const a of [...this.active]) {
       // une décision attendue : l'équipe patiente, puis tranche d'elle-même

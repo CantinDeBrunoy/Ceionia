@@ -151,6 +151,30 @@ describe('creuser des tunnels sous terre', () => {
     expect(oreVeins(u, w.mined).some((v) => v.k === b.k)).toBe(false);
   });
 
+  it('le camp souterrain est attaqué de temps à autre : les gardes repoussent la vague, au pire avec des pertes légères', () => {
+    const { w, ex } = outpost();
+    const msgs: [string, boolean][] = [];
+    ex.onRaid = (m, start) => msgs.push([m, start]);
+    expect(ex.camp()).toBeGreaterThanOrEqual(1);
+    expect(ex.patrols()).toBeGreaterThanOrEqual(1);
+    w.ore = 10; w.stone = 10;
+    const wins = w.exp.wins;
+    for (let i = 0; i < 2000 && !ex.raid; i++) ex.update(1);
+    const r = ex.raid!;
+    expect(r).not.toBeNull();
+    expect(r.cell).toBe(ex.campCell());
+    expect(r.n).toBeGreaterThanOrEqual(2);
+    expect(msgs[0][1]).toBe(true);
+    for (let i = 0; i < 60 && ex.raid; i++) ex.update(1);
+    expect(ex.raid).toBeNull();
+    expect(msgs[1][1]).toBe(false);
+    expect(w.exp.wins).toBe(wins + 1);
+    // jamais plus que deux minerai et trois pierres
+    expect(w.ore).toBeGreaterThanOrEqual(8);
+    expect(w.stone).toBeGreaterThanOrEqual(7);
+    expect(ex.campNews).toMatch(/repouss/);
+  });
+
   it('la sauvegarde garde les tunnels creusés et la file des mineurs ; une ancienne sauvegarde n’en a pas', () => {
     const { w, u, ex } = outpost();
     const k = rockByHeld(w, u);
