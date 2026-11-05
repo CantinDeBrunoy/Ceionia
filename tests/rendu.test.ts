@@ -4,7 +4,8 @@ import { World, N, setMapSize, VEG_FOREST, MAX_H, MIN_H } from '../src/world/wor
 import { newWorld } from '../src/world/mapgen';
 import { raiseVolcano, volcanoRadius } from '../src/world/terraform';
 import { KINDS, KIND_ORDER, KindId, sizeOf } from '../src/build/catalog';
-import { getModel } from '../src/render/models';
+import { getModel, ZOO_RESIDENTS } from '../src/render/models';
+import { BEAST_KINDS } from '../src/render/beasts';
 import { HUMAN } from '../src/render/assets';
 import { VegView, WALL_GAP, syncChunks } from '../src/render/vegetation';
 import { BuildingView, skylineTier } from '../src/render/buildings';
@@ -196,6 +197,24 @@ describe('maisons et tours', () => {
       const m = getModel('watertower', age, { v: 0, L: false, R: false, F: true });
       const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
       expect(n, `âge ${age}`).toBeLessThan(4000);
+    }
+  });
+
+  it('le zoo (3 × 3) reste sous 3 000 triangles par case, et chaque pensionnaire a ses places dans la parcelle', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    expect(KINDS.zoo.size).toBe(3);
+    expect(KINDS.zoo.minAge).toBe(4);
+    for (const age of [4, 5]) {
+      const m = getModel('zoo', age, { v: 0, L: false, R: false, F: true });
+      const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+      expect(n, `âge ${age}`).toBeLessThan(3000 * 9);
+      expect(n, `âge ${age}`).toBeGreaterThan(4000);
+    }
+    // éléphant, girafe, ours, crocodile, tortue et lézard
+    expect(new Set(ZOO_RESIDENTS.map((r) => r.kind)).size).toBe(6);
+    for (const r of ZOO_RESIDENTS) {
+      expect(BEAST_KINDS.has(r.kind)).toBe(true);
+      for (const [x, z] of r.spots) { expect(Math.abs(x)).toBeLessThan(1.4); expect(Math.abs(z)).toBeLessThan(1.4); }
     }
   });
 

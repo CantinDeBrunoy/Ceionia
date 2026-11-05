@@ -1,6 +1,6 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
   | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
-  | 'harbor' | 'airport' | 'heliport' | 'watertower' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'theater' | 'acropolis' | 'forum' | 'senate'
+  | 'harbor' | 'airport' | 'heliport' | 'watertower' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'zoo' | 'theater' | 'acropolis' | 'forum' | 'senate'
   | 'carworks' | 'lab' | 'aerodrome' | 'manor' | 'oilwell' | 'refinery' | 'brickworks'
   | 'arcology' | 'vfarm' | 'fusion' | 'spaceport' | 'research' | 'maglev';
 
@@ -287,6 +287,13 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Manèges, grande roue, montagnes russes, barbe à papa et lumières le soir.',
     joy: [0, 0, 0, 10, 16, 20], jobs: [0, 0, 0, 3, 6, 7],
   },
+  zoo: {
+    id: 'zoo', size: 3, minAge: 4, icon: '🦒', cat: 'life',
+    names: ['', '', '', '', 'Zoo', 'Parc zoologique'],
+    desc: 'Éléphant, girafe, ours, crocodile, tortues et lézards dans leurs enclos clôturés, bassins, allées, kiosque et soigneurs : la sortie du dimanche.',
+    joy: [0, 0, 0, 0, 12, 16], jobs: [0, 0, 0, 0, 5, 7],
+    perk: 'Grand bâtiment de 3 × 3 cases. Les visiteurs flânent d’un enclos à l’autre ; le soigneur nourrit les bêtes.',
+  },
   baths: {
     id: 'baths', size: 2, minAge: 1, icon: '♨️', cat: 'life',
     names: ['', 'Thermes', 'Étuves', 'Piscine municipale', 'Centre aquatique', 'Spa à bulles'],
@@ -405,7 +412,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'outpost', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'outpost', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -434,7 +441,7 @@ export const KIND_SUB: Record<KindId, string> = {
   station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
-  waterpark: 'detente', funfair: 'detente', alpine: 'detente', aerodrome: 'detente',
+  waterpark: 'detente', funfair: 'detente', zoo: 'detente', alpine: 'detente', aerodrome: 'detente',
   temple: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments',
 };
 
@@ -477,7 +484,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   stable: 'écuries', apiary: 'ruchers', baths: 'thermes et piscines', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
   barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
   theater: 'théâtres', acropolis: 'acropoles', forum: 'forums et marchés', senate: 'sénats',
-  harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions',
+  harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions', zoo: 'zoos',
   carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs', oilwell: 'puits de pétrole', refinery: 'raffineries', brickworks: 'briqueteries',
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
 };

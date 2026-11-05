@@ -14,6 +14,7 @@ import { stepWind } from './render/wind';
 import { Helis } from './render/helis';
 import { Airships } from './render/airships';
 import { Fairground } from './render/fairground';
+import { ZooView } from './render/zoo';
 import { AlpineView } from './render/alpine';
 import { Emergencies } from './render/emergency';
 import { Hoists } from './render/hoists';
@@ -104,6 +105,7 @@ class Game implements UIHost {
   helis: Helis;
   airships: Airships;
   fairground: Fairground;
+  zoo: ZooView;
   alpine: AlpineView;
   emergencies: Emergencies;
   hoists: Hoists;
@@ -257,6 +259,7 @@ class Game implements UIHost {
     this.helis = new Helis(w, this.buildings);
     this.airships = new Airships(w);
     this.fairground = new Fairground(w, this.buildings);
+    this.zoo = new ZooView(w, this.buildings);
     this.alpine = new AlpineView(w, this.buildings);
     this.emergencies = new Emergencies(w, this.fires, this.roads.islands);
     this.fires.responder = this.emergencies;
@@ -1093,6 +1096,7 @@ class Game implements UIHost {
       this.helis.update(gdt, this.sim.age);
       this.airships.update(gdt, this.time.hour, this.sim.age);
       this.fairground.update(dt);
+      this.zoo.update(gdt, this.cam.camera);
       this.alpine.update(gdt, this.sim.age, this.season.snow);
       this.emergencies.motor = this.traffic.motor;
       this.emergencies.update(gdt, this.sim.age);

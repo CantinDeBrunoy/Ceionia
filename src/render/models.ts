@@ -9672,6 +9672,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'theater': futureTheater(p, o.v); return true;
     case 'lab': futureLab(p, o.v); return true;
     case 'baths': futureBaths(p, o.v); return true;
+    case 'zoo': zooBig(p, 5); return true;
   }
   return false;
 }
@@ -10014,6 +10015,291 @@ function brickworks(p: Parts, age: number) {
 }
 
 
+/**
+ * Emplacements du zoo (3 × 3, repère du modèle, avant = +z) : où se tient chaque bête (voir ZooView) ; x, z, cap, taille de
+ * la bête et les autres places où elle va se poster. Les bêtes sont des acteurs animés, posés sur ces enclos
+ */
+export interface ZooResident { kind: 'elephant' | 'giraffe' | 'bear' | 'croc' | 'turtle' | 'lizard'; coat: number; size: number; y: number; spots: [number, number][]; face: number }
+export const ZOO_FLOOR = 0.014;
+export const ZOO_RESIDENTS: ZooResident[] = [
+  // l'enclos de l'éléphant (fond à gauche), sa mère et son petit
+  { kind: 'elephant', coat: 0, size: 0.8, y: ZOO_FLOOR, spots: [[-0.98, -1.0], [-0.86, -0.86], [-1.08, -0.9]], face: 0.5 },
+  { kind: 'elephant', coat: 2, size: 0.5, y: ZOO_FLOOR, spots: [[-0.72, -1.14], [-0.8, -1.0], [-0.66, -0.98]], face: -0.4 },
+  // le bassin des crocodiles (fond au milieu) : deux sur la berge de sable
+  { kind: 'croc', coat: 0, size: 0.55, y: ZOO_FLOOR, spots: [[-0.22, -0.9], [-0.3, -0.96]], face: 1.2 },
+  { kind: 'croc', coat: 1, size: 0.5, y: ZOO_FLOOR, spots: [[0.24, -0.9], [0.18, -0.96]], face: -1.9 },
+  // la savane des girafes (fond à droite)
+  { kind: 'giraffe', coat: 0, size: 0.75, y: ZOO_FLOOR, spots: [[0.95, -1.02], [0.82, -0.9], [1.08, -0.94]], face: 2.4 },
+  { kind: 'giraffe', coat: 1, size: 0.55, y: ZOO_FLOOR, spots: [[0.75, -1.2], [0.7, -1.06]], face: 0.6 },
+  // les ours (milieu à gauche)
+  { kind: 'bear', coat: 0, size: 0.8, y: ZOO_FLOOR, spots: [[-0.84, -0.04], [-0.72, -0.18], [-0.94, 0.1]], face: -0.6 },
+  { kind: 'bear', coat: 1, size: 0.55, y: ZOO_FLOOR, spots: [[-1.02, -0.22], [-0.9, -0.3]], face: 0.9 },
+  // la mare aux tortues et les rochers aux lézards (milieu à droite)
+  { kind: 'turtle', coat: 0, size: 0.9, y: ZOO_FLOOR, spots: [[0.7, -0.02], [0.62, 0.08]], face: 0.5 },
+  { kind: 'turtle', coat: 1, size: 0.7, y: ZOO_FLOOR, spots: [[0.92, 0.1], [0.84, 0.16]], face: -1.0 },
+  { kind: 'lizard', coat: 0, size: 0.8, y: ZOO_FLOOR + 0.03, spots: [[1.2, 0.1]], face: 2.0 },
+  { kind: 'lizard', coat: 1, size: 0.8, y: ZOO_FLOOR + 0.03, spots: [[1.34, 0.0]], face: -2.2 },
+];
+
+/**
+ * Zoo (3 × 3) : cinq enclos clôturés autour des allées — au fond l'éléphant et son petit dans leur parc de sable (mare,
+ * rochers, abreuvoir, tronc à gratter), le bassin des crocodiles et sa berge, la savane des girafes aux acacias plats et sa
+ * plate-forme où l'on tend une branche aux girafes ; au milieu, la fosse aux ours (grotte de rochers, mare, pin) et le jardin
+ * des reptiles (mare aux tortues, pierres chaudes, maison vitrée aux terrariums) ; devant, l'entrée (portique, guichets,
+ * tourniquets), la fontaine de la place, le kiosque aux glaces et ses tables sous parasol, le local des soigneurs, sa
+ * voiturette et le foin, des visiteurs partout et le soigneur et son seau. Les bêtes elles-mêmes sont des acteurs animés
+ * (ZooView, `ZOO_RESIDENTS`) ; à l'époque futuriste, des néons, des arbres lumineux et un toit solaire
+ */
+function zooBig(p: Parts, age: number) {
+  sink(0.012);
+  const y0 = 0.012, F = 0.016, future = age >= 5;
+  const steel = 0x56636f, sand = 0xdcc89a, savanna = 0xd2c07e, path = 0xe9dfc2, rockA = 0x9a968e, rockB = 0xbab6ac, lawn = 0x86bd6a, hedge = 0x5e9a58;
+  const bodies = [0xd84a3e, 0x3a6ab8, 0xf2c23a, 0x4fa860, 0xb45ad8, 0xf28a3c, 0x3aa8d8];
+  p.box(2.92, 0.012, 2.92, 0, 0, 0, lawn);
+  const floor = (x0: number, z0: number, x1: number, z1: number, c: number) => p.box(x1 - x0, 0.004, z1 - z0, (x0 + x1) / 2, y0, (z0 + z1) / 2, c);
+  /** Clôture entre deux points : piquets et lisses (`rails`), ou barreaux serrés (`bars`) sous une lisse haute */
+  const rail = (x0: number, z0: number, x1: number, z1: number, h = 0.12, col = steel, rails = 2, bars = false) => {
+    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / (bars ? 0.05 : 0.14))), ry = -Math.atan2(z1 - z0, x1 - x0);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      if (bars) p.box(0.008, h, 0.008, x0 + (x1 - x0) * t, F, z0 + (z1 - z0) * t, col);
+      else p.box(0.016, h, 0.016, x0 + (x1 - x0) * t, F, z0 + (z1 - z0) * t, col);
+    }
+    for (let k = 1; k <= rails; k++) p.box(len, 0.011, 0.009, (x0 + x1) / 2, F + (h * k) / rails - 0.011, (z0 + z1) / 2, col, ry);
+  };
+  /** Enclos rectangulaire clôturé, avec une porte de `gate` de large au milieu de `gx` sur le côté avant (z1) */
+  const pen = (x0: number, z0: number, x1: number, z1: number, gx: number, col: number, bars = false, h = 0.12) => {
+    rail(x0, z0, x1, z0, h, col, 2, bars); rail(x0, z0, x0, z1, h, col, 2, bars); rail(x1, z0, x1, z1, h, col, 2, bars);
+    rail(x0, z1, gx - 0.07, z1, h, col, 2, bars); rail(gx + 0.07, z1, x1, z1, h, col, 2, bars);
+    // la porte : deux battants, le cadenas
+    p.box(0.014, h + 0.03, 0.014, gx - 0.07, F, z1, col); p.box(0.014, h + 0.03, 0.014, gx + 0.07, F, z1, col);
+    p.box(0.14, 0.01, 0.01, gx, F + h + 0.018, z1, col); p.box(0.012, 0.014, 0.012, gx + 0.03, F + 0.05, z1 + 0.01, 0xe8c66a);
+  };
+  /** Rocher : blocs écrasés et un peu tournés */
+  const rock = (x: number, z: number, s: number, c = rockA, y = F) => {
+    p.add(new THREE.IcosahedronGeometry(s, 0).scale(1, 0.65, 0.85), x, y + s * 0.45, z, c, x * 7);
+    p.add(new THREE.IcosahedronGeometry(s * 0.55, 0).scale(1, 0.7, 0.9), x + s * 0.8, y + s * 0.25, z + s * 0.3, dark(c, 1.1), z * 5);
+  };
+  /** Acacia de savane : tronc penché, couronne plate en deux étages */
+  const acacia = (x: number, z: number, h: number) => {
+    p.add(new THREE.CylinderGeometry(0.012, 0.022, h, 5).translate(0, h / 2, 0), x, F, z, 0x7a5a3a, 0, false, 0.12);
+    p.add(new THREE.CylinderGeometry(0.17, 0.12, 0.035, 8).translate(0, 0, 0), x - h * 0.12, F + h, z, 0x6a9a48);
+    p.add(new THREE.CylinderGeometry(0.11, 0.1, 0.03, 8), x - h * 0.12 + 0.03, F + h + 0.03, z - 0.02, 0x7aae52);
+  };
+  /** Pin : trois étages de cônes sur un tronc */
+  const pine = (x: number, z: number, s: number) => {
+    p.cyl(0.012 * s, 0.018 * s, 0.1 * s, 5, x, F, z, 0x6a4a34);
+    for (let k = 0; k < 3; k++) p.cone((0.1 - k * 0.025) * s, 0.12 * s, 7, x, F + (0.07 + k * 0.07) * s, z, k % 2 ? 0x3f7a48 : 0x34683c);
+  };
+  /** Bassin rond bordé de pierre, eau au-dessus du bord */
+  const pond = (x: number, z: number, r: number) => {
+    p.cyl(r + 0.03, r + 0.035, 0.04, 14, x, F, z, rockB);
+    waterPool(p, x, F + 0.04 + 0.006, z, r, 14);
+  };
+  /** Caisse de foin et de fruits, abreuvoir... */
+  const hay = (x: number, z: number, ry = 0) => { p.box(0.1, 0.05, 0.06, x, F, z, 0xd8b84a, ry); p.box(0.1, 0.012, 0.062, x, F + 0.05, z, 0xe4c85a, ry); };
+  const trough = (x: number, z: number, ry = 0) => { p.box(0.16, 0.035, 0.05, x, F, z, 0x7a6355, ry); p.box(0.14, 0.006, 0.036, x, F + 0.035, z, 0x4a8ab8, ry); };
+
+  // ---- les allées : l'avenue de l'entrée à la place, la grande traverse et celle de derrière, la place de la fontaine
+  floor(-0.16, 0.5, 0.16, 1.46, path);
+  floor(-1.44, 0.24, 1.44, 0.5, path);
+  floor(-1.44, -0.7, 1.44, -0.52, path);
+  floor(-0.16, -0.52, 0.16, 0.24, path);
+  for (let k = 0; k < 8; k++) p.box(0.2, 0.002, 0.012, -0.16 + (k % 2) * 0.12, F, 0.56 + k * 0.11, dark(path, 0.94), 0);
+  // l'entrée : dalles rayées, bordures
+  for (const sx of [-1, 1]) { p.box(0.014, 0.012, 0.96, sx * 0.17, y0, 0.98, 0xbfb59a); p.box(0.014, 0.012, 0.18, sx * 0.9, y0, 0.37, 0xbfb59a, Math.PI / 2); }
+
+  // ---- le parc de l'éléphant (fond à gauche)
+  floor(-1.44, -1.44, -0.52, -0.7, sand);
+  pen(-1.44, -1.44, -0.52, -0.7, -0.78, steel, true, 0.13);
+  pond(-1.2, -1.22, 0.16);
+  p.cyl(0.2, 0.19, 0.004, 9, -0.9, F, -0.9, dark(sand, 0.82));
+  rock(-1.34, -0.86, 0.07); rock(-1.3, -1.4, 0.06, rockB); rock(-0.6, -1.36, 0.07);
+  p.cyl(0.018, 0.02, 0.2, 6, -0.58, F, -0.86, 0x6a4a34); p.cyl(0.018, 0.02, 0.2, 6, -0.54, F, -0.92, 0x6a4a34);
+  p.add(new THREE.CylinderGeometry(0.014, 0.014, 0.14, 5).rotateZ(Math.PI / 2), -0.56, F + 0.2, -0.89, 0x6a4a34, 0.3);
+  acacia(-1.36, -1.08, 0.3);
+  hay(-0.62, -0.78, 0.2); trough(-1.0, -0.76, 0);
+  // un gros ballon de jeu et une pile de rondins
+  p.sphere(0.035, -0.74, F + 0.03, -0.8, 0xd84a3e, 1);
+  for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0.014, 0.014, 0.12, 5).rotateZ(Math.PI / 2), -1.38 + k * 0.03, F + 0.014 + (k === 2 ? 0.024 : 0), -0.74 - (k === 2 ? 0.015 : k * 0.03), 0x7a5a3a);
+
+  // ---- le bassin des crocodiles (fond au milieu) : grand bassin, berge de sable, vitre basse, rondins
+  floor(-0.44, -1.44, 0.44, -0.7, sand);
+  pen(-0.44, -1.44, 0.44, -0.7, 0, 0x6a7a86, false, 0.1);
+  p.box(0.88, 0.05, 0.012, 0, F, -0.7, rockA); p.box(0.012, 0.05, 0.74, -0.44, F, -1.07, rockA); p.box(0.012, 0.05, 0.74, 0.44, F, -1.07, rockA);
+  p.cyl(0.26, 0.285, 0.04, 16, 0, F, -1.2, rockB);
+  waterPool(p, 0, F + 0.04 + 0.006, -1.2, 0.25, 16);
+  rock(-0.34, -1.3, 0.06, rockB); rock(0.34, -1.0, 0.05);
+  p.add(new THREE.CylinderGeometry(0.014, 0.014, 0.16, 5).rotateZ(Math.PI / 2), 0.1, F + 0.014, -0.98, 0x6a4a34, 0.5);
+  for (const [x, z] of [[-0.32, -0.98], [0.3, -1.38]]) for (let k = 0; k < 3; k++) p.cone(0.012, 0.1, 4, x + k * 0.03, F, z, 0x5f8040);
+  // le panneau d'information : un crocodile peint
+  p.box(0.012, 0.1, 0.012, 0.36, F, -0.66, 0x7a6355); p.box(0.09, 0.06, 0.008, 0.36, F + 0.09, -0.66, 0xf4f2ee); p.box(0.06, 0.012, 0.01, 0.36, F + 0.11, -0.659, 0x5f8040); p.box(0.02, 0.012, 0.01, 0.395, F + 0.122, -0.659, 0x5f8040);
+
+  // ---- la savane des girafes (fond à droite) : acacias plats, sol sec, abreuvoir haut, plate-forme des visiteurs
+  floor(0.52, -1.44, 1.44, -0.7, savanna);
+  pen(0.52, -1.44, 1.44, -0.7, 0.8, 0x7a6355, false, 0.14);
+  for (const [x, z] of [[1.28, -1.28], [0.62, -1.34], [1.34, -1.0]] as number[][]) p.cyl(0.07, 0.06, 0.004, 8, x, F, z, dark(savanna, 0.86));
+  acacia(1.22, -1.24, 0.46); acacia(0.66, -1.34, 0.38); acacia(1.36, -0.96, 0.3);
+  rock(0.58, -0.82, 0.05); rock(1.0, -1.4, 0.06, rockB);
+  // abreuvoir haut sur piquets, râtelier à foin à hauteur de tête
+  for (const sx of [-1, 1]) p.box(0.012, 0.22, 0.012, 0.92 + sx * 0.08, F, -1.3, 0x7a6355);
+  p.box(0.2, 0.03, 0.06, 0.92, F + 0.22, -1.3, 0x7a6355); p.box(0.18, 0.02, 0.05, 0.92, F + 0.25, -1.3, 0xd8b84a);
+  // la plate-forme des visiteurs (au bord de l'allée) et son escalier, ses garde-corps : on tend une branche aux girafes
+  const dk = F + 0.16;
+  for (const [x, z] of [[1.0, -0.59], [1.32, -0.59], [1.0, -0.66], [1.32, -0.66]] as number[][]) p.box(0.016, 0.16, 0.016, x, F, z, 0x7a6355);
+  p.box(0.4, 0.016, 0.16, 1.16, dk, -0.62, 0xb08968);
+  for (let k = 0; k < 3; k++) p.box(0.04, 0.05 + k * 0.045, 0.14, 1.36 + k * 0.045, F, -0.62, 0xb08968);
+  p.box(0.4, 0.05, 0.008, 1.16, dk + 0.016, -0.545, 0xb08968); p.box(0.008, 0.05, 0.14, 0.97, dk + 0.016, -0.62, 0xb08968);
+  p.box(0.4, 0.04, 0.008, 1.16, dk + 0.016, -0.69, 0xb08968);
+  p.box(0.05, 0.03, 0.04, 1.08, dk + 0.016, -0.67, 0x7a9a4a);
+  figure(p, 1.1, -0.6, 0xf28aa8, Math.PI + 0.3, false, 0x2a2420, 'cheer', 0.16);
+  figure(p, 1.24, -0.62, 0x3a6ab8, Math.PI - 0.2, false, 0x4a3426, 'idle', 0.16);
+
+  // ---- la fosse aux ours (milieu à gauche) : grotte de rochers, mare, pin, tronc couché, barreaux hauts
+  floor(-1.44, -0.52, -0.52, 0.24, 0xa4a882);
+  p.box(0.88, 0.002, 0.7, -0.98, F, -0.14, 0xb2b68a);
+  pen(-1.44, -0.52, -0.52, 0.24, -0.9, steel, true, 0.15);
+  pond(-1.18, -0.14, 0.1);
+  // la grotte : dôme de rochers et son entrée sombre
+  p.add(new THREE.SphereGeometry(0.17, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.8, 0.9), -1.26, F, -0.36, rockA, 0.3);
+  p.add(new THREE.SphereGeometry(0.1, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.8, 0.9), -1.12, F, -0.36, rockB, 0.1);
+  p.box(0.07, 0.07, 0.03, -1.22, F, -0.24, 0x2a2622, 0.3);
+  rock(-1.38, 0.08, 0.06, rockB); rock(-0.62, -0.42, 0.06);
+  pine(-1.36, -0.12, 1.1); pine(-0.6, 0.16, 0.8);
+  p.add(new THREE.CylinderGeometry(0.02, 0.022, 0.26, 5).rotateZ(Math.PI / 2), -0.72, F + 0.022, 0.14, 0x6a4a34, 0.4);
+  p.box(0.012, 0.1, 0.012, -0.58, F, 0.27, 0x7a6355); p.box(0.1, 0.06, 0.008, -0.58, F + 0.09, 0.27, 0xf4f2ee); p.cone(0.02, 0.02, 5, -0.58, F + 0.12, 0.276, 0x6a4a34);
+  // la barrique de poissons des soigneurs
+  p.cyl(0.03, 0.03, 0.06, 7, -0.62, F, -0.12, 0x6a8ab8); p.cyl(0.032, 0.032, 0.008, 7, -0.62, F + 0.06, -0.12, 0x4a6a98);
+
+  // ---- le jardin des reptiles (milieu à droite) : mare aux tortues, pierres chaudes, maison aux terrariums
+  floor(0.52, -0.52, 1.44, 0.24, 0xb8c68a);
+  pen(0.52, -0.52, 1.44, 0.24, 0.76, 0x7a6355, false, 0.1);
+  pond(0.8, -0.14, 0.17);
+  rock(0.62, -0.38, 0.05); rock(0.98, 0.0, 0.05, rockB);
+  // les pierres où les lézards prennent le soleil, au pied de la maison
+  p.add(new THREE.IcosahedronGeometry(0.07, 0).scale(1.4, 0.5, 1), 1.2, F + 0.02, 0.1, 0xb4a690, 0.3);
+  p.add(new THREE.IcosahedronGeometry(0.06, 0).scale(1.4, 0.45, 1), 1.34, F + 0.015, 0.0, 0xc4b8a0, 1.2);
+  // la maison des reptiles : socle, murs verts, toit en appentis, terrariums vitrés éclairés, bacs de plantes
+  p.box(0.62, 0.06, 0.34, 1.12, F, -0.3, 0x8a8f96);
+  p.box(0.6, 0.18, 0.3, 1.12, F + 0.06, -0.31, 0x6a9a7a);
+  p.gable(0.66, 0.08, 0.38, 1.12, F + 0.24, -0.3, 0x4a6a58);
+  for (let k = 0; k < 3; k++) {
+    const x = 0.93 + k * 0.19;
+    p.box(0.15, 0.1, 0.006, x, F + 0.1, -0.157, 0xffe8a0, 0, true);
+    p.box(0.17, 0.012, 0.012, x, F + 0.2, -0.155, 0x3a4a44); p.box(0.17, 0.012, 0.012, x, F + 0.09, -0.155, 0x3a4a44);
+    for (const s of [-1, 1]) p.box(0.01, 0.12, 0.012, x + s * 0.085, F + 0.09, -0.155, 0x3a4a44);
+    p.sphere(0.02, x - 0.03, F + 0.115, -0.152, [0x6aa84a, 0x8a6a44, 0x4a8a58][k]); p.cone(0.012, 0.05, 4, x + 0.04, F + 0.1, -0.152, 0x4fa860);
+  }
+  p.box(0.1, 0.13, 0.01, 1.12, F + 0.06, -0.155, 0x7a5a48);
+  p.box(0.3, 0.02, 0.012, 1.12, F + 0.22, -0.145, 0x9ad8a0, 0, true);
+  for (const s of [-1, 1]) p.box(0.012, 0.04, 0.02, 1.12 + s * 0.15, F + 0.22, -0.145, 0xf2c23a);
+  // une cage-vitrine dehors : serpent enroulé sur sa branche
+  p.box(0.16, 0.002, 0.12, 0.62, F, 0.14, 0xc8a870, 0); p.box(0.14, 0.07, 0.006, 0.62, F, 0.2, 0xbfe0ee); p.box(0.006, 0.07, 0.1, 0.55, F, 0.14, 0xbfe0ee); p.box(0.006, 0.07, 0.1, 0.69, F, 0.14, 0xbfe0ee);
+  p.add(new THREE.TorusGeometry(0.02, 0.007, 4, 10).rotateX(Math.PI / 2), 0.62, F + 0.03, 0.12, 0x6aa04a);
+  p.add(new THREE.CylinderGeometry(0.004, 0.004, 0.12, 4).rotateZ(Math.PI / 2), 0.62, F + 0.05, 0.12, 0x6a4a34);
+
+  // ---- la place : fontaine ronde, bancs, parterres
+  p.cyl(0.14, 0.15, 0.05, 14, 0, F, 0.37, rockB);
+  waterPool(p, 0, F + 0.05 + 0.006, 0.37, 0.12, 14);
+  p.cyl(0.018, 0.026, 0.1, 6, 0, F + 0.05, 0.37, rockA);
+  waterJet(p, 0, F + 0.15, 0.37, 0.09);
+  bench(p, -0.4, 0.5, Math.PI, F); bench(p, 0.4, 0.5, Math.PI, F);
+  // parterres de fleurs de chaque côté de l'avenue
+  for (const [x, z] of [[-0.3, 0.86], [0.3, 0.86], [-0.3, 1.12], [0.3, 1.12]] as number[][]) {
+    p.box(0.2, 0.03, 0.14, x, y0, z, 0x8a6a44);
+    for (let k = 0; k < 5; k++) p.sphere(0.02, x - 0.08 + k * 0.04, y0 + 0.045, z + (k % 2 ? 0.025 : -0.025), [0xd84a3e, 0xf2c23a, 0xf28aa8, 0xb45ad8, 0xf4f2ee][(k + (x > 0 ? 1 : 0)) % 5], 0, 0.8);
+  }
+
+  // ---- l'entrée : portique, guichets, tourniquets, enseigne aux silhouettes de girafe et d'éléphant, haies
+  const gz = 1.4;
+  for (const sx of [-1, 1]) {
+    p.box(0.09, 0.3, 0.09, sx * 0.27, F, gz, 0x8a8f96); p.box(0.11, 0.025, 0.11, sx * 0.27, F + 0.3, gz, 0xbab6ac);
+    p.sphere(0.035, sx * 0.27, F + 0.345, gz, 0xe8c66a);
+    p.box(0.13, 0.12, 0.1, sx * 0.5, F, gz - 0.06, 0xf4f2ee); p.box(0.15, 0.02, 0.12, sx * 0.5, F + 0.12, gz - 0.06, 0x4fa860);
+    p.box(0.08, 0.05, 0.006, sx * 0.5, F + 0.055, gz - 0.003, 0xffe8b0, 0, true);
+  }
+  p.box(0.6, 0.12, 0.03, 0, F + 0.26, gz, future ? 0x2a2a3a : 0x2f5a3c);
+  p.box(0.58, 0.1, 0.008, 0, F + 0.27, gz + 0.016, future ? 0x2a2a3a : 0x3f7a4c);
+  for (let k = 0; k < 5; k++) p.box(0.05, 0.05, 0.006, -0.22 + k * 0.11, F + 0.285, gz + 0.022, future ? 0x9ae8ff : 0xf4e8d0, 0, future ? 'neon' : false);
+  // silhouettes : girafe (cou haut) et éléphant (trompe) de chaque côté du portique
+  p.box(0.012, 0.075, 0.008, -0.34, F + 0.36, gz, 0xe8b858); p.box(0.04, 0.02, 0.008, -0.34, F + 0.34, gz, 0xe8b858); p.box(0.025, 0.012, 0.008, -0.32, F + 0.43, gz, 0xe8b858);
+  p.box(0.04, 0.03, 0.008, 0.34, F + 0.34, gz, 0x908e94); p.box(0.02, 0.025, 0.008, 0.37, F + 0.35, gz, 0x908e94); p.box(0.006, 0.03, 0.008, 0.385, F + 0.325, gz, 0x908e94);
+  for (const x of [-0.07, 0.07]) { p.box(0.012, 0.07, 0.012, x, F, gz - 0.12, 0x8a8f96); p.add(new THREE.BoxGeometry(0.07, 0.008, 0.008), x + (x > 0 ? -0.035 : 0.035), F + 0.06, gz - 0.12, 0xb8bcc2); }
+  // haies et clôture sur la façade
+  for (const sx of [-1, 1]) {
+    const x0 = sx * 0.62, x1 = sx * 1.44;
+    p.box(Math.abs(x1 - x0), 0.06, 0.06, (x0 + x1) / 2, F, 1.43, hedge);
+    for (let k = 0; k < 5; k++) p.sphere(0.04, x0 + (x1 - x0) * ((k + 0.5) / 5), F + 0.07, 1.43, dark(hedge, 0.94 + (k % 3) * 0.05), 0, 0.8);
+  }
+  lampPost(p, -0.22, 1.2, 0.3); lampPost(p, 0.22, 1.2, 0.3); lampPost(p, -0.22, 0.62, 0.3); lampPost(p, 0.22, 0.62, 0.3);
+
+  // ---- le kiosque aux glaces (devant à gauche) et ses tables sous parasol
+  const kx = -0.92, kz = 1.1;
+  p.box(0.36, 0.14, 0.22, kx, F, kz, 0xf4f2ee);
+  p.box(0.36, 0.012, 0.06, kx, F + 0.1, kz + 0.14, 0xb08968);
+  for (let k = 0; k < 6; k++) p.add(new THREE.BoxGeometry(0.06, 0.012, 0.16), kx - 0.15 + k * 0.06, F + 0.2 - 0.0, kz + 0.04, k % 2 ? 0xf4f2ee : 0xd84a3e, 0, false, 0, -0.35);
+  for (const sx of [-1, 1]) p.box(0.01, 0.1, 0.01, kx + sx * 0.17, F, kz + 0.16, 0xf4f2ee);
+  p.box(0.3, 0.05, 0.006, kx, F + 0.145, kz - 0.113, 0xffe8b0, 0, true);
+  // l'enseigne : un cornet géant sur le toit
+  p.cone(0.03, 0.09, 6, kx, F + 0.3 - 0.07, kz - 0.04, 0xe0b068); p.sphere(0.032, kx, F + 0.28, kz - 0.04, 0xf8d8e0, 0); p.sphere(0.024, kx, F + 0.31, kz - 0.04, 0xf28aa8, 0);
+  figure(p, kx + 0.02, kz + 0.05, 0x4a8ab8, Math.PI, false, 0x2a2420, 'idle');
+  for (const [x, z, c] of [[-0.58, 0.9, 0xd84a3e], [-1.18, 0.76, 0x3a6ab8]] as number[][]) {
+    p.cyl(0.05, 0.05, 0.008, 9, x, F + 0.075, z, C.white); p.cyl(0.006, 0.006, 0.075, 4, x, F, z, C.metal);
+    p.cyl(0.004, 0.004, 0.26, 4, x, F + 0.08, z, C.metal); p.cone(0.11, 0.05, 8, x, F + 0.3, z, c);
+    seated(p, x - 0.065, y0 + 0.03, z, Math.PI / 2, bodies[Math.round(x * 10 + 8) % bodies.length]); seated(p, x + 0.065, y0 + 0.03, z, -Math.PI / 2, bodies[Math.round(z * 10 + 3) % bodies.length], 0x8a5a3a);
+  }
+  for (const [x, z] of [[-1.3, 1.0], [-0.62, 1.2]] as number[][]) { p.cyl(0.018, 0.016, 0.045, 6, x, F, z, 0x4a6a58); p.cyl(0.02, 0.02, 0.006, 6, x, F + 0.045, z, 0x3a5a48); }
+  tree(p, -1.34, 1.3, 1.5, 0x6aa84a); tree(p, -1.38, 0.74, 1.2, 0x7fb87f);
+  if (future) { p.box(0.5, 0.01, 0.3, kx, F + 0.34, kz - 0.02, 0x2a3a6a, 0, false, 0.08); for (const sx of [-1, 1]) p.box(0.01, 0.2, 0.01, kx + sx * 0.22, F + 0.15, kz + 0.1, 0x8a8f96); }
+
+  // ---- le local des soigneurs et la boutique (devant à droite) : toit vert, croix de vétérinaire, voiturette, foin, bidons
+  const lx = 1.0, lz = 1.12;
+  p.box(0.42, 0.16, 0.24, lx, F, lz, 0xe0d6bc);
+  p.gable(0.46, 0.1, 0.28, lx, F + 0.16, lz, 0x4a7a52);
+  p.box(0.07, 0.11, 0.01, lx + 0.1, F, lz + 0.122, 0x7a5a48);
+  p.box(0.1, 0.06, 0.006, lx - 0.1, F + 0.07, lz + 0.122, 0xffe8b0, 0, true);
+  p.box(0.04, 0.012, 0.01, lx - 0.1, F + 0.145, lz + 0.125, 0xf4f2ee); p.box(0.012, 0.04, 0.01, lx - 0.1, F + 0.131, lz + 0.125, 0xf4f2ee);
+  p.box(0.12, 0.1, 0.01, lx - 0.06, F + 0.19, lz + 0.142, 0xf4f2ee); p.box(0.04, 0.012, 0.012, lx - 0.06, F + 0.235, lz + 0.145, 0xd84a3e); p.box(0.012, 0.04, 0.012, lx - 0.06, F + 0.221, lz + 0.145, 0xd84a3e);
+  // la voiturette électrique des soigneurs et sa benne de foin
+  p.box(0.12, 0.035, 0.07, 1.26, F + 0.014, 0.74, 0x4fa860, 0.2); p.box(0.06, 0.04, 0.06, 1.3, F + 0.045, 0.7, 0x3a6a48, 0.2);
+  p.box(0.05, 0.006, 0.07, 1.22, F + 0.05, 0.75, 0xf4f2ee, 0.2); p.box(0.1, 0.03, 0.065, 1.16, F + 0.045, 0.78, 0xd8b84a, 0.2);
+  for (const [x, z] of [[1.2, 0.72], [1.32, 0.76], [1.2, 0.77], [1.32, 0.7]] as number[][]) p.cyl(0.014, 0.014, 0.012, 7, x, F, z, 0x2a2a2e);
+  hay(0.62, 0.8, 0.4); hay(0.62, 0.9, 0.1); p.box(0.1, 0.05, 0.06, 0.62, F + 0.062, 0.85, 0xe4c85a, 0.3);
+  for (const [x, z, c] of [[0.76, 0.96, 0x4a8ab8], [0.8, 1.02, 0xd84a3e]] as number[][]) p.cyl(0.022, 0.022, 0.05, 7, x, F, z, c);
+  // la boutique de souvenirs : étal, ballons
+  p.box(0.2, 0.05, 0.08, 0.62, F, 1.2, 0xb08968); p.box(0.22, 0.012, 0.1, 0.62, F + 0.05, 1.2, 0xf4f2ee);
+  for (let k = 0; k < 4; k++) { p.cyl(0.003, 0.003, 0.14 + (k % 2) * 0.03, 3, 0.55 + k * 0.045, F + 0.06, 1.2, 0xf4f2ee); p.sphere(0.028, 0.55 + k * 0.045, F + 0.22 + (k % 2) * 0.03, 1.2, [0xd84a3e, 0xf2c23a, 0x3a6ab8, 0x4fa860][k], 1, 1.15); }
+  tree(p, 1.38, 1.3, 1.4, 0x7fb87f);
+
+  // ---- les visiteurs sur les allées, le soigneur et son seau
+  figure(p, 0.06, 1.18, 0xd84a3e, Math.PI, false, 0x4a3426, 'idle');
+  figure(p, -0.07, 0.96, 0x3a6ab8, 0.1, false, 0x2a2420, 'idle');
+  figure(p, 0.08, 0.7, 0xf2c23a, Math.PI, false, 0x8a5a3a, 'cheer');
+  figure(p, 0.0, 0.16, 0x4fa860, 0.3, false, 0x4a3426, 'idle');
+  figure(p, -0.62, 0.38, 0xb45ad8, Math.PI / 2, false, 0x2a2420, 'idle');
+  figure(p, -0.76, 0.35, 0xf28aa8, Math.PI / 2, false, 0x4a3426, 'cheer');
+  figure(p, 0.72, 0.37, 0x3aa8d8, -Math.PI / 2, false, 0x2a2420, 'idle');
+  figure(p, 0.5, 0.36, 0xf28a3c, -1.2, false, 0x8a5a3a, 'idle');
+  figure(p, -0.3, -0.61, 0xd84a3e, 0.2, false, 0x4a3426, 'idle');
+  figure(p, -0.18, -0.62, 0x4fa860, 2.6, false, 0x2a2420, 'idle');
+  figure(p, 0.45, -0.6, 0x3a6ab8, 0.4, false, 0x4a3426, 'idle');
+  figure(p, -0.2, 0.74, 0xf2c23a, 0, false, 0x2a2420, 'run');
+  figure(p, 0.18, 0.84, 0xb45ad8, 3.4, false, 0x8a5a3a, 'run');
+  // le soigneur (veste verte) devant l'enclos de l'éléphant, son seau de fruits
+  figure(p, -0.66, -0.6, 0x2f7a48, 1.6, false, 0x2a2420, 'idle');
+  p.cyl(0.014, 0.011, 0.025, 6, -0.6, F, -0.6, 0xe0b068); for (let k = 0; k < 3; k++) p.sphere(0.009, -0.6 + (k - 1) * 0.008, F + 0.028, -0.6, [0xd84a3e, 0xf2a03c, 0x7cc46a][k]);
+  if (future) {
+    // arbres lumineux le long des allées et une borne holographique devant l'entrée
+    for (const [x, z] of [[-0.46, 0.7], [0.46, 0.7], [-0.46, -0.42], [0.46, -0.42]] as number[][]) {
+      p.cyl(0.01, 0.014, 0.16, 5, x, F, z, 0x4a5a66);
+      p.sphere(0.05, x, F + 0.2, z, 0x2a3a6a, 0, 0.8);
+      p.sphere(0.052, x, F + 0.2, z, 0x9ae8ff, 0, 0.8);
+      p.box(0.1, 0.006, 0.006, x, F + 0.2, z, 0x9ae8ff, 0, 'neon');
+    }
+    p.box(0.012, 0.1, 0.012, 0.0, F, 1.28, 0x4a5a66); p.box(0.1, 0.07, 0.006, 0.0, F + 0.1, 1.28, 0x9ae8ff, 0, 'neon');
+  }
+}
+
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? KINDS[kind].size - 1 : KINDS[kind].size;
   const imported = importedModel(kind, age, o.v, size);
@@ -10080,6 +10366,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'tennis': tennis(p, Math.max(3, age)); break;
     case 'waterpark': if (size >= 3) waterparkBig(p); else waterpark(p); break;
     case 'funfair': if (size === 3) funfairBig(p, Math.max(3, age)); else funfair(p, Math.max(3, age)); break;
+    case 'zoo': zooBig(p, Math.max(4, age)); break;
     case 'theater': theater(p, Math.max(1, age)); break;
     case 'acropolis': acropolis(p, age); break;
     case 'forum': forum(p, Math.max(1, age)); break;
