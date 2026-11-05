@@ -611,20 +611,25 @@ export class UnderView {
     return out;
   }
 
-  /** Filon de minerai le plus proche du point cliqué : sa sorte et son rendement, ou null (on ne l'extrait qu'en expédition armée) */
   /** Des cristaux poussent-ils à cet endroit (ou juste à côté) ? */
   crystalNear(x: number, z: number) {
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (this.crystalCells.has((Math.floor(z) + dz) * N + Math.floor(x) + dx)) return true;
     return false;
   }
 
-  veinAt(x: number, z: number): { name: string; amount: number } | null {
+  /** Filon le plus proche du point cliqué : sa sorte, son rendement, sa case et la roche où luisent ses cubes ; ou null */
+  veinAt(x: number, z: number): { name: string; amount: number; k: number; wall: number } | null {
     let best = -1, bd = 1.4;
     for (const k of this.veins.keys()) {
       const d = Math.hypot((k % N) + 0.5 - x, Math.floor(k / N) + 0.5 - z);
       if (d < bd) { bd = d; best = k; }
     }
-    return best < 0 ? null : ORE_KINDS[this.veins.get(best)!.ore];
+    if (best < 0) return null;
+    // la paroi que wallPoint choisit pour les cubes : même tirage parmi les roches voisines
+    const cx = best % N, cz = Math.floor(best / N), u = this.under;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => !u.isOpen(cx + dx + 0.5, cz + dz + 0.5));
+    const [dx, dz] = dirs.length ? dirs[Math.floor(hash2(cx, cz, 300) * dirs.length)] : [0, 0];
+    return { ...ORE_KINDS[this.veins.get(best)!.ore], k: best, wall: dirs.length ? best + dz * N + dx : -1 };
   }
 
   /** Les filons abattus par une troupe disparaissent des parois */

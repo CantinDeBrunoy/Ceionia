@@ -418,6 +418,27 @@ export class Expeditions {
     return true;
   }
 
+  /**
+   * Un clic sur un filon : les mineurs du camp vont percer la roche où il luit (`wall`, sinon la roche voisine la plus proche
+   * à creuser) et l'abattre. Renvoie true si c'est prévu (ou déjà prévu), sinon pourquoi l'on ne peut pas
+   */
+  mineVein(k: number, wall = -1): true | string {
+    const u = this.under, w = this.world;
+    if (!u) return 'Le monde souterrain n’est pas encore prêt.';
+    const rocks = around(k).filter((n) => u.canCarve(n)).sort((a, b) => (b === wall ? 1 : 0) - (a === wall ? 1 : 0));
+    if (rocks.some((n) => w.digs.includes(n))) return true;
+    let best: number[] | null = null, why = 'Ce filon est hors d’atteinte des mineurs du camp.';
+    for (const n of rocks) {
+      const p = this.digPlan(n);
+      if (typeof p === 'string') { why = p; continue; }
+      if (!best || p.length < best.length) best = p;
+      if (n === wall && p.length <= 1) break;
+    }
+    if (!best) return why;
+    w.digs.push(...best);
+    return true;
+  }
+
   /** Une case annulée : la suite du tunnel qui ne tient plus à rien l'est avec elle */
   private pruneDigs() {
     const u = this.under, w = this.world;
@@ -463,11 +484,13 @@ export class Expeditions {
     w.claimed.add(k);
     w.stone += 1;
     let ore = hash2(x, z, 700) < 0.15 ? 1 : 0;
-    const fell = veins.filter((v) => u.wallDist[v.k] !== 1);
+    // la roche percée contre un filon l'abat toujours (avant, il ne tombait qu'avec sa dernière roche : percer la paroi où
+    // luisait le minerai ne donnait rien la plupart du temps, ses cubes sautaient sur l'autre paroi)
+    const fell = veins;
     for (const v of fell) { w.mined.add(v.k); ore += ORE_KINDS[v.ore].amount; }
     w.ore += ore;
     w.version++;
-    if (fell.length) this.onNews?.(`⛏️ En creusant, les mineurs font tomber un filon ${ofOre(ORE_KINDS[fell[0].ore].name)} : +${ore} minerai.`);
+    if (fell.length) this.onNews?.(`⛏️ Les mineurs abattent un filon ${ofOre(ORE_KINDS[fell[0].ore].name)} : +${ore} minerai.`);
     if (fresh) this.onNews?.('⛏️ Le tunnel débouche sur de nouvelles galeries : envoyez une expédition armée !', true);
   }
 

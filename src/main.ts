@@ -768,10 +768,18 @@ class Game implements UIHost {
     if (!p) return;
     const ent = uv.entranceAt(p.x, p.z);
     if (ent) { this.exitUnder(ent.cell); return; }
-    // un filon dans la paroi : seule une expédition armée peut l'abattre (créatures, galeries profondes)
+    // un filon dans la paroi : dans les galeries tenues, les mineurs du camp vont l'abattre ; plus loin, il faut une
+    // expédition armée (créatures, galeries profondes)
     const ore = uv.veinAt(p.x, p.z);
     if (ore) {
       const deep = MISSIONS.find((m) => m.id === 'deep')!, miss = this.expeditions.missing(deep);
+      if (this.world.claimed.has(ore.k)) {
+        const r = this.expeditions.mineVein(ore.k, ore.wall);
+        if (r === true) { audio.sfxMine(); this.ui.toast(`⛏️ Les mineurs du camp vont abattre le filon de ${ore.name} (${ore.amount} minerai).`); this.ui.update(); return; }
+        audio.sfxClick();
+        this.ui.toast(`⛏️ Filon de ${ore.name} : ${r}`);
+        return;
+      }
       audio.sfxClick();
       if (this.sim.age < deep.age) this.ui.toast(`⛏️ Filon de ${ore.name} (${ore.amount} minerai) : il faudra une expédition armée, à l’âge ${AGES[deep.age].name}.`);
       else if (miss.length) this.ui.toast(`⛏️ Filon de ${ore.name} : seule une expédition armée peut l’abattre. Il faut d’abord ${miss.join(', ')}.`);
