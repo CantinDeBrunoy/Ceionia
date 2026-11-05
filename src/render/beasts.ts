@@ -712,14 +712,118 @@ function giraffe(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Chameau ----------
+
+const CAMEL_COATS: Coat[] = [
+  { base: 0xc89a64, hair: 0x9a6c40, belly: 0xdcbc8c, leg: 0xd2aa74, knee: 0x7a5a3a, foot: 0x8a6c50, muzzle: 0xb89068 },
+  { base: 0xb48452, hair: 0x845a34, belly: 0xceac7c, leg: 0xc09460, knee: 0x6a4c30, foot: 0x7a5e44, muzzle: 0xa47c58 },
+  { base: 0xd8b07a, hair: 0xac8050, belly: 0xe8cca0, leg: 0xdcb888, knee: 0x86663e, foot: 0x967858, muzzle: 0xc49e74 },
+];
+
+/**
+ * Chameau : deux bosses coiffées de longs poils, cou en S, tête aux lèvres pendantes et aux naseaux fendus, barbe sous la
+ * gorge, hautes pattes aux genoux calleux et larges pieds ; marche l'amble en dodelinant, mâchonne de côté, s'agenouille
+ * pour dormir
+ */
+function camel(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  const n0: V3 = [0, 0.165, 0.075], n1: V3 = [0, 0.19, 0.13], n2: V3 = [0, 0.262, 0.142];
+  r.bone('hips', null, 0, 0.15, -0.04);
+  r.bone('chest', 'hips', 0, 0.155, 0.035);
+  r.bone('ribs', 'chest', 0, 0.155, 0.035);
+  r.bone('n1', 'chest', ...n0);
+  r.bone('n2', 'n1', ...n1);
+  r.bone('head', 'n2', ...n2);
+  r.bone('jaw', 'head', 0, 0.258, 0.168);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.012, 0.284, 0.143));
+  r.bone('tail1', 'hips', 0, 0.168, -0.088);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.024, 0.14, 0.055);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.024, 0.07, 0.058);
+    r.bone(`h${L}1`, 'hips', s * 0.026, 0.145, -0.06);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.026, 0.07, -0.068);
+  });
+
+  // corps et bosses aux poils plus longs et plus sombres
+  r.add('hips', ell(0.036, 0.04, 0.052), [0, 0.152, -0.04], c.belly, [0, 0, 0], c.base);
+  r.add('ribs', ell(0.038, 0.043, 0.056), [0, 0.155, 0.03], c.belly, [0, 0, 0], c.base);
+  r.add('chest', ell(0.027, 0.034, 0.028), [0, 0.198, 0.034], c.base, [0, 0, 0], c.hair);
+  r.add('hips', ell(0.026, 0.032, 0.027), [0, 0.194, -0.034], c.base, [0, 0, 0], c.hair);
+  for (const [b, z, y] of [['chest', 0.034, 0.23], ['hips', -0.034, 0.224]] as [string, number, number][]) {
+    r.add(b, ell(0.018, 0.009, 0.018, 0), [0, y, z], c.hair);
+    r.both((s) => r.add(b, ell(0.012, 0.007, 0.014, 0), [s * 0.014, y - 0.008, z + s * 0.004], c.hair, [0, 0, s * 0.4]));
+  }
+  // cou en S : il descend vers l'avant puis se relève ; barbe sous la gorge
+  r.put('n1', seg(n0, n1, 0.019, 0.015, 7), c.base);
+  r.add('n1', ell(0.011, 0.022, 0.026), [0, 0.158, 0.11], c.hair, [-0.6, 0, 0]);
+  r.put('n2', seg(n1, n2, 0.015, 0.013, 7), c.base);
+  r.add('n2', ell(0.008, 0.02, 0.01, 0), [0, 0.2, 0.15], c.hair);
+  // tête : crâne, museau, lèvres pendantes, naseaux, yeux sous de lourdes paupières, petites oreilles
+  r.add('head', ell(0.016, 0.016, 0.024), [0, 0.274, 0.155], c.base);
+  r.add('head', ell(0.013, 0.012, 0.02), [0, 0.266, 0.182], c.muzzle);
+  r.both((s) => {
+    r.put('head', seg([s * 0.006, 0.272, 0.198], [s * 0.008, 0.27, 0.202], 0.0025, 0.002, 4), 0x3a2a20);
+    r.add('head', ell(0.0045, 0.004, 0.0035, 0), [s * 0.015, 0.282, 0.162], 0x1a1210);
+    r.add('head', ell(0.007, 0.003, 0.006, 0), [s * 0.014, 0.287, 0.162], c.hair);
+  });
+  r.add('jaw', ell(0.011, 0.006, 0.016, 0), [0, 0.254, 0.182], c.muzzle);
+  r.add('jaw', ell(0.009, 0.004, 0.006, 0), [0, 0.252, 0.196], c.knee);
+  r.both((s, L) => r.add(`e${L}`, ell(0.006, 0.008, 0.004, 0), [s * 0.014, 0.29, 0.143], c.base, [0, 0, s * 0.3]));
+  // queue à toupet
+  r.put('tail1', seg([0, 0.168, -0.088], [0, 0.12, -0.096], 0.004, 0.003, 4), c.base);
+  r.add('tail1', ell(0.005, 0.012, 0.005, 0), [0, 0.114, -0.097], c.hair);
+  // pattes : cuisses, genoux calleux, larges pieds
+  r.both((s, L) => {
+    const x = s * 0.024, hx = s * 0.026;
+    r.add(`f${L}1`, ell(0.016, 0.034, 0.02), [x, 0.124, 0.054], c.base);
+    r.put(`f${L}1`, seg([x, 0.12, 0.055], [x, 0.07, 0.058], 0.01, 0.008), c.leg);
+    r.add(`f${L}2`, ell(0.009, 0.009, 0.01, 0), [x, 0.07, 0.06], c.knee);
+    r.put(`f${L}2`, seg([x, 0.07, 0.058], [x, 0.01, 0.06], 0.007, 0.0065), c.leg);
+    r.add(`f${L}2`, ell(0.013, 0.006, 0.016), [x, 0.005, 0.064], c.foot);
+    r.add(`h${L}1`, ell(0.019, 0.04, 0.025), [hx, 0.125, -0.058], c.base);
+    r.put(`h${L}1`, seg([hx, 0.12, -0.06], [hx, 0.07, -0.068], 0.01, 0.008), c.leg);
+    r.add(`h${L}2`, ell(0.008, 0.008, 0.009, 0), [hx, 0.07, -0.068], c.knee);
+    r.put(`h${L}2`, seg([hx, 0.07, -0.068], [hx, 0.01, -0.062], 0.007, 0.0065), c.leg);
+    r.add(`h${L}2`, ell(0.013, 0.006, 0.016), [hx, 0.005, -0.058], c.foot);
+  });
+
+  const clips = quadClips({
+    walk: { dur: 1.25, A: 0.32, L: 0.8, ph: { hL: 0, fL: 0.05, hR: 0.5, fR: 0.55 }, bob: 0.004 },
+    run: { dur: 0.65, A: 0.55, L: 1.0, ph: { hL: 0, fL: 0.08, hR: 0.5, fR: 0.58 }, bob: 0.012, rock: 0.05 },
+    neck: ['n1', 'n2'], graze: [0.8, 0.6], grazeHead: 0.25,
+    lie: { drop: 0.1, f: [1.45, -2.7], h: [-1.25, 2.5] },
+    hook: (n, u, P) => {
+      // l'amble fait rouler le corps d'un côté à l'autre, la tête dodeline
+      if (n === 'Walk') { R(P, 'hips', 0, 0, 0.05 * sn(u)); R(P, 'chest', 0, 0, 0.03 * sn(u)); R(P, 'n2', 0.06 * sn(u, 2, 0.3)); R(P, 'head', -0.08 * sn(u, 2, 0.3)); }
+      if (n === 'Gallop') { R(P, 'hips', 0, 0, 0.08 * sn(u)); R(P, 'n1', -0.2); R(P, 'head', -0.2); }
+      // mâchonne en faisant aller la mâchoire de côté
+      if (n === 'Idle' || n === 'Eating') R(P, 'jaw', 0.06 * pos(sn(u, 8)), 0.18 * sn(u, 8));
+      if (n === 'Sleep') { R(P, 'n1', -0.3); R(P, 'n2', 0.3); }
+    },
+  });
+  clips.push(
+    // blatère : cou tendu, tête levée, bouche ouverte
+    ['Idle_2', 4, (u, P) => {
+      const k = win(u, 0.15, 0.85, 0.2);
+      breathe(P, u, 3);
+      R(P, 'n1', -0.4 * k); R(P, 'n2', 0.5 * k);
+      R(P, 'head', -0.5 * k, 0.1 * k * sn(u, 2));
+      R(P, 'jaw', 0.35 * k * (0.7 + 0.3 * sn(u, 5)));
+      ears(P, -0.3 * k, 0);
+    }],
+  );
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
   elephant: { coats: ELEPHANT_COATS, build: elephant },
   giraffe: { coats: GIRAFFE_COATS, build: giraffe },
+  camel: { coats: CAMEL_COATS, build: camel },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */

@@ -259,20 +259,6 @@ function crocGeo() {
   return p.build(false).body;
 }
 
-/** Chameau : deux bosses, long cou courbé, hautes pattes fines et queue courte */
-function camelGeo() {
-  const p = new Parts();
-  p.add(box(0.07, 0.07, 0.15), 0, 0.15, 0, 0xffffff);
-  for (const z of [-0.035, 0.035]) p.add(ico(0.03, 1, 1.1, 1, 0), 0, 0.2, z, 0xe8dcc4);
-  p.add(box(0.032, 0.1, 0.034), 0, 0.22, 0.075, 0xffffff, 0, false, 0, -0.5);
-  p.add(box(0.038, 0.04, 0.07), 0, 0.275, 0.105, 0xffffff);
-  p.add(box(0.026, 0.026, 0.026), 0, 0.265, 0.15, 0xe8dcc4);
-  for (const s of [-1, 1]) p.add(box(0.01, 0.014, 0.01), s * 0.015, 0.3, 0.095, 0xffffff);
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.014, 0.115), x * 0.025, 0, z * 0.055, 0xd8c8a8);
-  p.add(box(0.012, 0.04, 0.012), 0, 0.14, -0.085, 0xd8c8a8, 0, false, 0, 0.3);
-  return p.build(false).body;
-}
-
 /** Élan : forte carcasse sombre, bosse au garrot, long museau retombant, bois palmés */
 function mooseGeo() {
   const p = new Parts();
@@ -421,7 +407,7 @@ const SPECS: Record<Kind, Spec> = {
   crab: { geo: crabGeo, max: 24, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
   turtle: { geo: turtleGeo, max: 14, colors: [0x6a8a4a, 0x8a7a50, 0x5a7a58], speed: 0.1, run: 0.25, idle: [5, 14], ok: bank, flee: 0.9 },
   croc: { geo: crocGeo, max: 6, colors: [0x6a8a4a, 0x5a7a3e, 0x7a8a58], speed: 0.18, run: 0.9, idle: [8, 22], ok: bank },
-  camel: { geo: camelGeo, max: 12, colors: [0xc8a070, 0xb89060, 0xd8b888], speed: 0.33, run: 1.2, idle: [5, 12], ok: offRoad, graze: 0.12, flee: 2.5, scale: 1.1 },
+  camel: { max: 12, colors: [0xc8a070, 0xb89060, 0xd8b888], speed: 0.33, run: 1.2, idle: [5, 12], ok: offRoad, graze: 0.12, flee: 2.5, scale: 1.1 },
   elephant: { max: 8, colors: [0x8e8e94, 0x7a7a82, 0x9a9a9e], speed: 0.25, run: 0.8, idle: [6, 16], ok: offRoad, graze: 0.12, scale: 1.45 },
   giraffe: { max: 8, colors: [0xf0c460, 0xe8b858, 0xf4cc78], speed: 0.33, run: 1.5, idle: [5, 12], ok: offRoad, graze: 0.1, flee: 3, scale: 1.25 },
   moose: { geo: mooseGeo, max: 10, colors: [0x6a4e3a, 0x5a4232, 0x7a5a42], speed: 0.33, run: 1.5, idle: [5, 12], ok: wild, graze: 0.15, flee: 3, scale: 1.2 },
@@ -429,7 +415,7 @@ const SPECS: Record<Kind, Spec> = {
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'lizard', 'crab', 'turtle', 'croc', 'camel', 'moose']);
+const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'lizard', 'crab', 'turtle', 'croc', 'moose']);
 
 /** Élément du décor ou zone auquel un groupe d'animaux est rattaché */
 export type Anchor = 'edge' | 'meadow' | 'rocks' | 'banks' | 'ponds' | 'coast';
