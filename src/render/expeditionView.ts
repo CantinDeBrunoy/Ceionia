@@ -10,6 +10,7 @@ import { mats } from './materials';
 import { ExpeditionScene, ANIMAL, IdleRockets, sledGeo } from './expeditionScenes';
 import { CombatFx } from './combatFx';
 import { ARRIVALS, Arrival, penWay } from './pens';
+import { AirFleet } from './airFleet';
 
 /** Une suiveuse en marche : où elle est, son cap, sa vitesse lissée et son allure (0 à l'arrêt, 1 au pas, 2 au galop) */
 export interface Walker { x: number; z: number; heading: number; sp: number; gait: number }
@@ -105,7 +106,14 @@ export class ExpeditionView {
   /** bêtes ramenées par des expéditions finies, qui attendent que l'enclos ou le pré les reprenne */
   private waiting: { f: Follower; arr: Arrival; t: number }[] = [];
 
-  constructor(private world: World, private agents: Agents, private exp: Expeditions) { this.idle = new IdleRockets(world, this.group); }
+  /** les hélicoptères et montgolfières qui emmènent les équipes vers la montagne et le bout du monde */
+  private air: AirFleet;
+
+  constructor(private world: World, private agents: Agents, private exp: Expeditions) {
+    this.idle = new IdleRockets(world, this.group);
+    this.air = new AirFleet(exp);
+    this.group.add(this.air.group);
+  }
 
   /** Le cœur de la scène d'une expédition (ce que la caméra regarde quand on la suit sur place), ou null */
   focusOf(id: number): [number, number] | null { return this.shows.get(id)?.scene?.focus ?? null; }
@@ -167,6 +175,7 @@ export class ExpeditionView {
     });
     this.fading = this.fading.filter((f) => { f.scene.update(dt, f.exp); if (!f.scene.gone) return true; f.scene.dispose(f.exp); return false; });
     this.idle.update([...this.shows.values()].some((sh) => sh.scene?.launching));
+    this.air.update(dt);
   }
 
   private step(a: ActiveExpedition, sh: Show, dt: number) {

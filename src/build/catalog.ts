@@ -135,7 +135,7 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', '', '', 'Héliport', 'Droneport'],
     desc: 'Deux aires d’atterrissage balisées, hangar, salon des passagers et sa terrasse : les hélicoptères emmènent les visiteurs survoler le pays.',
     jobs: [0, 0, 0, 0, 8, 9], joy: [0, 0, 0, 0, 6, 7],
-    perk: 'Bâtiment de 2 × 2 cases. Deux hélicoptères aux couleurs de l’héliport attendent sur leur aire, lancent leur rotor, décollent, emmènent leurs passagers faire le tour du pays, s’y tiennent en vol stationnaire au-dessus des curiosités, reviennent et se posent ; feux de balisage la nuit.',
+    perk: 'Bâtiment de 2 × 2 cases. Deux hélicoptères aux couleurs de l’héliport attendent sur leur aire, lancent leur rotor, décollent, emmènent leurs passagers faire le tour du pays, s’y tiennent en vol stationnaire au-dessus des curiosités, reviennent et se posent ; feux de balisage la nuit. Les expéditions de la montagne et du bout du monde partent en hélicoptère : l’équipe monte à bord à l’héliport, vole jusqu’à sa destination, s’y pose, travaille, puis rentre de la même façon.',
   },
   lumber: {
     id: 'lumber', size: 1, minAge: 0, icon: '🪓', cat: 'prod',
@@ -328,6 +328,7 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Les montgolfières s’élèvent au-dessus du village, le dirigeable largue les amarres pour un grand tour et revient à son mât ; biplan et hangar au bord de la piste d’herbe.',
     joy: [0, 0, 0, 9, 11, 13], jobs: [0, 0, 0, 4, 5, 6],
     reqMission: 'flight',
+    perk: 'Sans héliport, les expéditions de la montagne et du bout du monde partent en montgolfière : l’équipe monte dans la nacelle, dérive jusqu’à sa destination, s’y pose, travaille, puis rentre de la même façon (plus lentement qu’en hélicoptère).',
   },
   theater: {
     id: 'theater', size: 2, minAge: 1, icon: '🎭', cat: 'life',

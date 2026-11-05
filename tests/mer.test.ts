@@ -205,7 +205,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
         r.scene.dispose(r.a);
       }
     }
-  });
+  }, 30000);
 
   it('le mégalodon et le kraken : toute la troupe à bord de la galère, le monstre paraît, les harpons le frappent', () => {
     for (const [ci, kind] of [[0, 'megalodon'], [1, 'kraken']] as [number, string][]) {

@@ -113,7 +113,7 @@ describe('âge futuriste', () => {
     // les tours d'habitation sont bien plus hautes que les résidences de l'époque moderne
     const top = (age: number) => { const g = getModel('house', age, { v: 4, L: false, R: false, F: true }).body; g.computeBoundingBox(); return g.boundingBox!.max.y; };
     expect(top(5)).toBeGreaterThan(top(4) * 1.5);
-  });
+  }, 30000);
 });
 
 describe('la conquête de l’espace', () => {

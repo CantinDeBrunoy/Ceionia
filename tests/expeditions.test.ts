@@ -519,3 +519,76 @@ describe('les bêtes ramenées', () => {
     expect(ARRIVALS.every((r) => r.claimed)).toBe(true);
   });
 });
+
+describe('expéditions en l’air', () => {
+  /** Un village avec un héliport ou un aérodrome posé tout près des maisons */
+  function airfield(age: number, kind: 'heliport' | 'aerodrome') {
+    const v = village(age);
+    const h = [...v.w.buildings.values()][0];
+    let placed = false;
+    for (let r = 3; r < 14 && !placed; r++)
+      for (let dz = -r; dz <= r && !placed; dz++)
+        for (let dx = -r; dx <= r && !placed; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || v.w.canPlace(kind, h.x + dx, h.z + dz) !== null) continue;
+          v.w.place(kind, h.x + dx, h.z + dz, 0, true, age, false);
+          placed = true;
+        }
+    expect(placed).toBe(true);
+    return v;
+  }
+  const riding = (v: ReturnType<typeof village>, a: ActiveExpedition) => a.party.filter((id) => (v.agents.agents.find((g) => g.id === id) as unknown as { ride: unknown } | undefined)?.ride).length;
+
+  it('avec un héliport, l’équipe de la montagne monte à bord, vole, se pose, travaille puis rentre en vol et à pied', () => {
+    const v = airfield(4, 'heliport');
+    const a = v.ex.start(mission('summit'), 0, 4)!;
+    expect(a).toBeTruthy();
+    expect(a.air?.kind).toBe('heli');
+    expect(a.air!.leg).toBe('walk');
+    expect(a.mounts).toBe(0);
+    // l'appareil attend sur son aire, au sol
+    expect(v.ex.airPose(a)!.up).toBe(0);
+    // elle monte à bord : tous les membres sont portés, l'appareil s'élève puis avance vers le lieu d'atterrissage
+    play(v, () => a.air!.leg === 'out', 4);
+    play(v, () => a.air!.t > 2, 4);
+    expect(riding(v, a)).toBe(a.party.length);
+    const pad = a.air!.pad, land = a.air!.land;
+    let top = 0, lowest = Infinity;
+    play(v, () => { const p = v.ex.airPose(a)!; top = Math.max(top, p.y - v.w.surfaceAt(p.x, p.z)); if (p.moving) lowest = Math.min(lowest, p.y - v.w.surfaceAt(p.x, p.z)); return a.air!.leg !== 'out'; }, 4);
+    expect(top).toBeGreaterThan(0.5);
+    // en route, jamais dans le relief
+    expect(lowest).toBeGreaterThan(0.3);
+    // posé : plus personne à bord, l'équipe va à son travail
+    expect(a.air!.leg).toBe('ground');
+    expect(riding(v, a)).toBe(0);
+    expect(v.ex.airPose(a)!.x).toBeCloseTo(land[0], 3);
+    play(v, () => a.phase === 'work', 4);
+    for (const id of a.party) { const g = v.agents.agents.find((x) => x.id === id)!; expect(Math.hypot(g.x - a.dest[0], g.z - a.dest[1])).toBeLessThan(2); }
+    // le travail fini, elle rejoint l'appareil, vole jusqu'à l'aire d'envol, puis rentre à pied
+    play(v, () => a.phase === 'back', 4, () => 0);
+    expect(a.air!.leg).toBe('fetch');
+    play(v, () => a.air!.leg === 'back', 4, () => 0);
+    play(v, () => a.air!.t > 2, 4, () => 0);
+    expect(riding(v, a)).toBe(a.party.length);
+    play(v, () => a.air!.leg === 'home', 4, () => 0);
+    expect(riding(v, a)).toBe(0);
+    expect(v.ex.airPose(a)!.x).toBeCloseTo(pad[0], 3);
+    let report: Report | null = null;
+    v.ex.onReport = (r) => { report = r; };
+    play(v, () => !v.ex.active.length, 4, () => 0);
+    expect(report).not.toBeNull();
+  }, 120000);
+
+  it('sans héliport, à pied ; avec un aérodrome (âge industriel), en montgolfière, plus lentement ; pas pour la plaine', () => {
+    const none = village(4), foot = none.ex.start(mission('summit'), 0, 4)!;
+    expect(foot.air ?? null).toBeNull();
+    const balloon = airfield(3, 'aerodrome'), b = balloon.ex.start(mission('summit'), 0, 3)!;
+    expect(b.air?.kind).toBe('balloon');
+    const heli = airfield(4, 'heliport'), h = heli.ex.start(mission('summit'), 0, 4)!;
+    const slow = (t: NonNullable<ActiveExpedition['air']>) => t.dur / Math.hypot(t.land[0] - t.pad[0], t.land[1] - t.pad[1]);
+    expect(slow(b.air!)).toBeGreaterThan(slow(h.air!));
+    // une destination de plaine se rejoint à pied, héliport ou pas
+    const m = MISSIONS.find((x) => x.age <= 4 && x.choices.some((c) => c.dest === 'plain' && !c.troop))!;
+    const plain = airfield(4, 'heliport'), p = plain.ex.start(m, m.choices.findIndex((c) => c.dest === 'plain' && !c.troop), 4);
+    expect(p?.air ?? null).toBeNull();
+  });
+});
