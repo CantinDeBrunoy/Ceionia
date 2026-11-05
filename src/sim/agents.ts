@@ -1025,6 +1025,19 @@ export class Agents {
     return a.ride ? a.ride.y : a.deck ?? this.world.surfaceAt(a.x, a.z);
   }
 
+  /**
+   * Où est la main droite du porte-fanion (le premier membre visible de l'équipe), dans le monde : le fanion y est tenu et la
+   * suit dans sa marche. Null si son corps n'est pas dessiné (à cheval, en cavalerie) : le fanion se pose alors près de lui
+   */
+  partyHand(ids: number[]): [number, number, number] | null {
+    const a = ids.map((id) => this.byId(id)).find((x): x is Agent => !!x && !x.hidden);
+    const f = a?.actor;
+    if (!a || !f || !f.root.visible) return null;
+    const v = new THREE.Vector3();
+    f.hands[0].getWorldPosition(v);
+    return [v.x, v.y, v.z];
+  }
+
   /** Positions des membres de l'équipe, dans l'ordre de marche */
   partyPositions(ids: number[]) { return ids.map((id) => this.byId(id)).filter((a): a is Agent => !!a && !a.hidden).map((a) => [a.x, a.z, a.heading] as [number, number, number]); }
 

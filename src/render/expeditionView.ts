@@ -52,6 +52,9 @@ export function stepWalker(f: Walker, tx: number, tz: number, pace: number, dt: 
 /** Couleurs des fanions, une par équipe */
 export const TEAM_COLORS = [0xe0574a, 0x4f86d8, 0xe8b33a, 0x5aae62];
 
+/** de combien la hampe descend sous le poing qui la tient */
+const HOLD_LOW = 0.07;
+
 /** Fanion porté par le chef d'expédition */
 function pennantGeo(color: number) {
   const p = new Parts();
@@ -109,6 +112,12 @@ export class ExpeditionView {
   /** hauteur au-dessus du sol du cœur de la scène (la montgolfière en vol) */
   liftOf(id: number) { return this.shows.get(id)?.scene?.lift ?? 0; }
 
+  /** Où flotte le fanion de l'équipe (c'est lui que la caméra suit), ou null s'il n'est pas posé */
+  flagOf(id: number): [number, number] | null {
+    const p = this.shows.get(id)?.pennant;
+    return p && p.visible ? [p.position.x, p.position.z] : null;
+  }
+
   update(dt: number) {
     if (!this.fx.group.parent) this.group.add(this.fx.group);
     this.fx.update(dt);
@@ -164,10 +173,13 @@ export class ExpeditionView {
     const pos = this.agents.partyPositions(a.party);
     if (!pos.length) { sh.pennant.visible = false; return; }
     const w = this.world;
-    // le fanion flotte au-dessus de l'épaule du chef, à pied, sur un ponton ou assis dans la barque
+    // le porte-fanion le tient en main (la hampe pend sous le poing) et le fanion suit son bras dans sa marche ; sans corps
+    // dessiné (à cheval), il se plante près de l'épaule du chef
     const [lx, lz, lh] = pos[0], ly = this.agents.partyLeadY(a.party) ?? w.surfaceAt(lx, lz);
+    const hand = this.agents.partyHand(a.party);
     sh.pennant.visible = true;
-    sh.pennant.position.set(lx + Math.cos(lh) * 0.06, ly + 0.08, lz - Math.sin(lh) * 0.06);
+    if (hand) sh.pennant.position.set(hand[0], hand[1] - HOLD_LOW, hand[2]);
+    else sh.pennant.position.set(lx + Math.cos(lh) * 0.06, ly + 0.08, lz - Math.sin(lh) * 0.06);
     sh.pennant.rotation.y = lh + Math.PI / 2;
     // trace du dernier de la file, et son allure (la file doit tenir le rythme d'une équipe à cheval)
     const trail = sh.trail, [tx, tz] = pos[pos.length - 1], n = trail.length;
@@ -309,4 +321,16 @@ export function along(t: number[], gap: number, hx: number, hz: number): [number
     left -= d; x = t[i]; z = t[i + 1];
   }
   return null;
+}
+
+/**
+ * Où vise la caméra qui suit une équipe : le fanion de son porte-fanion (à défaut, le premier de la file), jamais la moyenne
+ * de l'équipe. Sur place, la vue se pose entre le fanion et le cœur de la scène et se rapproche (`lift`), tant que le fanion
+ * n'en est pas trop loin
+ */
+export function followPoint(flag: [number, number] | null, lead: [number, number] | undefined, focus: [number, number] | null, working: boolean, lift = 0): { x: number; z: number; lift: number } | null {
+  const p = flag ?? lead ?? (working ? focus : null);
+  if (!p) return null;
+  if (working && focus && Math.hypot(focus[0] - p[0], focus[1] - p[1]) < 8) return { x: (p[0] + focus[0]) / 2, z: (p[1] + focus[1]) / 2, lift: lift * 0.6 };
+  return { x: p[0], z: p[1], lift: 0 };
 }

@@ -49,7 +49,7 @@ import { Expeditions } from './sim/expeditions';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
-import { ExpeditionView } from './render/expeditionView';
+import { ExpeditionView, followPoint } from './render/expeditionView';
 import { Festivities } from './render/festivities';
 import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
@@ -988,13 +988,13 @@ class Game implements UIHost {
     else if (this.autoUnder && !below && this.mode === 'under') { this.autoUnder = false; this.exitUnder(undefined, true); }
     if (!followed) this.following = null;
     else if (!uv) {
-      const pos = this.agents.partyPositions(followed.party);
-      if (pos.length && !below) {
-        let x = pos.reduce((s, p) => s + p[0], 0) / pos.length, z = pos.reduce((s, p) => s + p[1], 0) / pos.length;
-        // sur place, la vue se pose entre l'équipe et le cœur de la scène (l'enclos, la barque, la montgolfière…), et se rapproche
-        const f = followed.phase === 'work' ? this.expView.focusOf(followed.id) : null;
-        let lift = 0;
-        if (f && Math.hypot(f[0] - x, f[1] - z) < 4) { x = (x + f[0]) / 2; z = (z + f[1]) / 2; lift = this.expView.liftOf(followed.id) * 0.6; }
+      const pos = this.agents.partyPositions(followed.party), focus = followed.phase === 'work' ? this.expView.focusOf(followed.id) : null;
+      if ((pos.length || focus) && !below) {
+        // la vue suit le fanion du porte-fanion, pas la moyenne de l'équipe ; sur place, elle se pose entre le fanion et le
+        // cœur de la scène (l'enclos, la barque, la montgolfière…), et se rapproche
+        const pt = followPoint(this.expView.flagOf(followed.id), pos.length ? [pos[0][0], pos[0][1]] : undefined, focus, followed.phase === 'work', this.expView.liftOf(followed.id))!;
+        let x = pt.x, z = pt.z;
+        const lift = pt.lift;
         const arrived = followed.phase === 'work' && this.followPhase !== 'work';
         this.followPhase = followed.phase;
         // en route (à cheval surtout), la vue vise un peu devant l'équipe, là où elle va : elle ne la regarde plus filer
