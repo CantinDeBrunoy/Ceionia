@@ -4411,6 +4411,54 @@ function mine(p: Parts, age: number) {
     for (const [x, z] of [[-0.62, 0.52], [-0.5, 0.62]]) p.box(0.1, 0.08, 0.1, x, 0.012, z, 0xb48a5e, x * 3);
     for (const d of [0, 0.05]) { p.box(0.01, 0.2, 0.01, -0.72 + d, 0.012, 0.3, C.wood, 0, false, 0.15); p.box(0.07, 0.014, 0.014, -0.7 + d, 0.2, 0.3, C.metal); }
     for (const [x, z] of [[0.3, 0.86], [-0.42, 0.24]]) { p.box(0.016, 0.28, 0.016, x, 0.012, z, C.darkwood); p.box(0.034, 0.042, 0.034, x, 0.28, z, C.flame, 0, true); }
+    if (age === 2) {
+      // la galerie boisée : second cadre de bois dans l'ombre, étais, lanterne pendue au linteau
+      p.box(0.2, 0.012, 0.06, -0.12, 0.25, 0.08, C.darkwood);
+      for (const s of [-1, 1]) p.box(0.03, 0.25, 0.03, -0.12 + s * 0.09, 0, 0.08, C.darkwood);
+      p.box(0.006, 0.05, 0.006, -0.12, 0.27, 0.165, 0x3c3c40); p.box(0.03, 0.04, 0.03, -0.12, 0.22, 0.165, 0xffb050, 0, true);
+      logPile(p, 0.3, 0.04, 3, 0.2, 0.5);
+      trampled(p, 0.1, 0.45, 0.4, 801, 0.012); trampled(p, -0.45, 0.45, 0.3, 802, 0.012);
+      // le puits d'extraction : margelle de pierre, chevalet, treuil à manivelle qui tourne, corde et seau de minerai
+      const sx = 0.62, sz = -0.5;
+      p.cyl(0.13, 0.14, 0.08, 9, sx, 0.012, sz, C.stone); p.cyl(0.1, 0.1, 0.004, 9, sx, 0.09, sz, 0x1a1612);
+      for (const s of [-1, 1]) { p.box(0.03, 0.3, 0.03, sx + s * 0.15, 0.012, sz, C.wood); p.add(new THREE.BoxGeometry(0.02, 0.2, 0.02), sx + s * 0.19, 0.1, sz, C.wood, 0, false, s * 0.4); }
+      const drum = spinner([sx, 0.27, sz], [1, 0, 0], 0.7);
+      drum.add(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 7).rotateZ(Math.PI / 2), 0, 0, 0, C.wood);
+      for (const d of [-0.07, 0.07]) drum.add(new THREE.CylinderGeometry(0.05, 0.05, 0.01, 7).rotateZ(Math.PI / 2), d, 0, 0, C.darkwood);
+      drum.box(0.012, 0.09, 0.012, 0.17, -0.09, 0, C.darkwood); drum.box(0.04, 0.012, 0.012, 0.19, -0.09, 0, C.darkwood);
+      p.box(0.004, 0.14, 0.004, sx, 0.12, sz + 0.035, 0xc8b890);
+      p.cyl(0.03, 0.025, 0.04, 7, sx, 0.09, sz + 0.035, 0x6f5640); ore(sx, 0.13, sz + 0.035, 0.45);
+      figure(p, sx + 0.24, sz + 0.04, 0x8a6a4a, -Math.PI / 2, false, 0x6a4a2a);
+      // la cabane des mineurs : planches, toit de bardeaux, porte, outils au mur, fumée du poêle
+      const hx = -0.72, hz = 0.08;
+      p.box(0.28, 0.18, 0.22, hx, 0.012, hz, 0x8a6a4a);
+      for (let k = 0; k < 6; k++) p.add(slab(0.004, 0.18, 0.004, F_PZ), hx - 0.12 + k * 0.048, 0.102, hz + 0.111, dark(0x8a6a4a, 0.8));
+      roof(p, hx, 0.192, hz, { w: 0.28, d: 0.22, h: 0.1, color: 0x6a5a48, wall: 0x8a6a4a, rows: true });
+      p.box(0.07, 0.14, 0.01, hx + 0.06, 0.012, hz + 0.112, C.darkwood);
+      p.add(slab(0.05, 0.04, 0.01, F_PZ), hx - 0.06, 0.12, hz + 0.112, C.win, 0, true);
+      p.box(0.04, 0.12, 0.04, hx - 0.08, 0.22, hz - 0.04, C.stone); smoke(hx - 0.08, 0.36, hz - 0.04, 0);
+      for (const [d, a] of [[0, 0.1], [0.03, -0.12]]) p.add(new THREE.BoxGeometry(0.006, 0.16, 0.006), hx - 0.145, 0.1, hz + d, C.wood, 0, false, a);
+      p.add(new THREE.BoxGeometry(0.006, 0.006, 0.05), hx - 0.147, 0.17, hz, C.metal, 0, false, 0.1);
+      // la forge des pics : foyer de pierre qui rougeoie, soufflet, enclume sur sa souche, le forgeron
+      const fx = -0.6, fz = 0.82;
+      p.box(0.16, 0.08, 0.12, fx, 0.012, fz, C.darkstone); p.box(0.1, 0.02, 0.07, fx, 0.092, fz, 0xff7a2a, 0, true); smoke(fx, 0.2, fz, 1);
+      p.add(new THREE.BoxGeometry(0.08, 0.025, 0.06), fx + 0.12, 0.09, fz, 0x6a4a36, 0, false, 0.2);
+      p.cyl(0.035, 0.04, 0.07, 7, fx + 0.2, 0.012, fz - 0.12, C.wood); p.box(0.06, 0.03, 0.025, fx + 0.2, 0.082, fz - 0.12, 0x3c3c40);
+      figure(p, fx + 0.2, fz - 0.2, 0x5a4a3a, 0, false, 0x2a1e18);
+      // l'abattage au pic devant le tas de minerai, le tri dans les paniers sur la table, la brouette
+      figure(p, 0.52, 0.42, 0x6a5a48, 2.4, false, 0x4a3426);
+      p.add(new THREE.BoxGeometry(0.006, 0.12, 0.006), 0.56, 0.17, 0.38, C.wood, 0, false, 0.9); p.add(new THREE.BoxGeometry(0.06, 0.008, 0.008), 0.6, 0.2, 0.38, C.metal, 0, false, -0.4);
+      p.box(0.24, 0.012, 0.1, 0.62, 0.1, -0.12, C.wood); for (const d of [-0.1, 0.1]) p.box(0.012, 0.1, 0.08, 0.62 + d, 0.012, -0.12, C.darkwood);
+      for (const d of [-0.06, 0.05]) { p.cyl(0.03, 0.022, 0.04, 7, 0.62 + d, 0.112, -0.12, 0xb08a5a); ore(0.62 + d, 0.14, -0.12, 0.35); }
+      figure(p, 0.62, -0.02, 0x7a4a3a, Math.PI, false, 0xc8a070);
+      p.box(0.1, 0.04, 0.07, 0.0, 0.04, 0.62, 0x6f5640); p.add(new THREE.CylinderGeometry(0.025, 0.025, 0.012, 7).rotateZ(Math.PI / 2), 0.06, 0.03, 0.62, C.darkwood);
+      for (const s of [-1, 1]) p.box(0.1, 0.008, 0.008, -0.08, 0.06, 0.62 + s * 0.03, C.wood);
+      ore(0.0, 0.08, 0.62, 0.4);
+      // le mulet qui attend à l'abreuvoir, le tonneau d'eau
+      horse(p, -0.18, 0.9, 0, 0x6a5a50);
+      p.box(0.16, 0.04, 0.06, -0.16, 0.012, 0.8, C.darkwood); waterRect(p, -0.16, 0.054, 0.8, 0.14, 0.045, 0);
+      p.cyl(0.04, 0.04, 0.09, 8, 0.42, 0.012, -0.08, 0x9a6a44); for (const y of [0.03, 0.07]) p.cyl(0.042, 0.042, 0.008, 8, 0.42, y, -0.08, 0x6f5640);
+    }
   } else if (age === 3) {
     p.box(1.84, 0.012, 1.84, 0, 0, 0, 0x8a8478);
     // chevalement : quatre montants d'acier entretoisés, plateforme, deux molettes qui tournent
