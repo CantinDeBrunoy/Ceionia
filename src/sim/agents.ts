@@ -220,6 +220,14 @@ function jeepGeo(v: number) {
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
 const MAX_AGENTS = 90;
+/** Écart à l'axe de la rue où l'on marche : le trottoir (la chaussée fait 0,3 de demi-largeur), dès la rue pavée (âge 3) */
+export const SIDEWALK = 0.37;
+export const sidewalkAt = (age: number) => (age >= 3 ? SIDEWALK : 0);
+/** Le point (px, pz) décalé de `lat` vers la droite du sens de marche (dx, dz) : le même côté que les véhicules, au sens près */
+export function sideStep(px: number, pz: number, dx: number, dz: number, lat: number): [number, number] {
+  const l = Math.hypot(dx, dz);
+  return l < 1e-6 ? [px, pz] : [px - (dz / l) * lat, pz + (dx / l) * lat];
+}
 /** Part de la population qu'on voit dehors (un passant pour quatre à cinq habitants), et leur nombre au plus */
 const SHOWN = 0.85 / 4, MAX_SHOWN = Math.floor(MAX_AGENTS / 4);
 /** Part de la population en âge et en état de partir en expédition */
@@ -273,6 +281,8 @@ interface Agent {
   targetHidden: boolean;
   skin: number; col: number;
   off: number;
+  /** écart latéral actuel par rapport à l'axe de la rue (trottoir), lissé */
+  lat: number;
   /** modèle animé de l'époque courante (sinon silhouette instanciée) */
   /** l'habitant dessiné (tenue de l'époque), et pour quelle époque */
   actor: Folk | null;
@@ -853,7 +863,7 @@ export class Agents {
     const id = this.nextId++;
     this.agents.push({
       id, home: h.id, x: h.x + 0.5, z: h.z + 0.5, state: 'inside', path: [], pi: 0, timer: this.rnd() * 4, hidden: true, speed: 0.9 + this.rnd() * 0.5,
-      heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, actor: null, actorKey: '',
+      heading: 0, phase: this.rnd() * 6, goingHome: false, targetHidden: false, skin: Math.floor(this.rnd() * SKIN.length), col: Math.floor(this.rnd() * 5), off: (this.rnd() - 0.5) * 0.28, lat: 0, actor: null, actorKey: '',
       spot: null, face: null, deck: null, child: this.rnd() < 0.22 && !hand, ax: 0, az: 0, act: null, hold: null, mission: false, delay: 0, rest: 0, ride: null, shore: null,
       kit: null, kitKey: '', props: [], mount: null, mounted: false, parked: null, rider: null, soldier: null,
       ...(hand ? { hand: true, plot: null, job: null } : {}),
@@ -1160,7 +1170,17 @@ export class Agents {
         }
         const c = a.path[a.pi];
         const last = a.pi === a.path.length - 1;
-        const [px, pz] = w.passPoint(a.path, a.pi), tx = px + (last ? 0 : a.off), tz = pz + (last ? 0 : a.off * 0.7);
+        const [px, pz] = w.passPoint(a.path, a.pi);
+        // sur une rue en ville (hors ponts), on longe le bord : le trottoir, d'un côté ou de l'autre ; l'écart se lisse d'une case à l'autre
+        const walk = !last && !a.mission && w.road[c] && w.bridgeY(c % N, Math.floor(c / N)) === null ? sidewalkAt(this.age) * (a.off < 0 ? -1 : 1) : 0;
+        a.lat += (walk - a.lat) * Math.min(1, dt * 3);
+        let tx = px, tz = pz;
+        if (!last) {
+          // sens de la rue : du point d'avant à celui-ci (au premier pas, de celui-ci au suivant)
+          const [qx, qz] = a.pi > 0 ? w.passPoint(a.path, a.pi - 1) : a.path.length > 1 ? w.passPoint(a.path, 1) : [px, pz];
+          const k = 1 - Math.abs(a.lat) / SIDEWALK;
+          [tx, tz] = sideStep(px + a.off * k, pz + a.off * 0.7 * k, a.pi > 0 ? px - qx : qx - px, a.pi > 0 ? pz - qz : qz - pz, a.lat);
+        }
         const dx = tx - a.x, dz = tz - a.z, dist = Math.hypot(dx, dz);
         // l'équipe d'une expédition marche du même pas
         const step = dt * (a.mission ? (a.mounted ? (a.kit?.car ? CAR_SPEED : RIDE_SPEED) : 1.05) : a.speed * (a.urgent ? 2.2 : 1)) * (w.road[c] ? 1.1 : 0.8);
