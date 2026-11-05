@@ -919,9 +919,180 @@ function moose(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Reptiles ----------
+
+/** Les deux diagonales d'un reptile : patte avant d'un côté avec la patte arrière de l'autre (os, phase, côté) */
+const DIAG: [string, number, number][] = [['fL', 0, 1], ['hR', 0, -1], ['fR', 0.5, -1], ['hL', 0.5, 1]];
+
+/**
+ * Pas d'un reptile aux pattes écartées : chaque patte balaie d'avant en arrière autour de l'épaule (A) et se lève en
+ * avançant (L) ; le corps ondule (U), la queue suit l'onde avec retard, la tête la compense
+ */
+function crawl(P: Pose, u: number, A: number, L: number, U: number) {
+  for (const [b, ph, s] of DIAG) {
+    const w = TAU * (u - ph), lift = L * pos(Math.cos(w));
+    R(P, b + '1', 0, -s * A * Math.sin(w), s * lift);
+    R(P, b + '2', 0, 0, -s * lift * 0.6);
+  }
+  R(P, 'hips', 0, U * sn(u));
+  R(P, 'chest', 0, -U * 1.6 * sn(u));
+  R(P, 'head', 0, U * 0.9 * sn(u));
+  R(P, 'tail1', 0, U * 1.4 * sn(u, 1, -0.12));
+  R(P, 'tail2', 0, U * 1.5 * sn(u, 1, -0.24));
+  R(P, 'tail3', 0, U * 1.6 * sn(u, 1, -0.36));
+}
+
+interface Reptile {
+  walk: [dur: number, A: number, L: number, U: number];
+  run: [dur: number, A: number, L: number, U: number];
+  /** repos, gestes et repas propres à l'espèce */
+  idle: PoseFn;
+  more: ClipDef[];
+}
+
+function reptileClips(o: Reptile): ClipDef[] {
+  const [wd, wa, wl, wu] = o.walk, [rd, ra, rl, ru] = o.run;
+  return [
+    ['Walk', wd, (u, P) => { crawl(P, u, wa, wl, wu); M(P, 'hips', 0, 0.0015 * pos(sn(u, 2)), 0); breathe(P, u, 2, 0.5); }],
+    ['Gallop', rd, (u, P) => { crawl(P, u, ra, rl, ru); R(P, 'head', -0.12); M(P, 'hips', 0, 0.002 * pos(sn(u, 2)), 0); }],
+    ['Idle', 6, o.idle],
+    // dort à plat ventre, pattes rabattues le long du corps, queue recourbée
+    ['Sleep', 8, (u, P) => {
+      breathe(P, u, 2, 1.2);
+      for (const [b, , s] of DIAG) { R(P, b + '1', 0, s * (b[0] === 'f' ? 0.9 : 0.5), -s * 0.25); R(P, b + '2', 0, 0, s * 0.3); }
+      M(P, 'hips', 0, -0.003, 0);
+      R(P, 'head', 0.05, -0.2);
+      R(P, 'jaw', 0.05);
+      R(P, 'tail1', 0, 0.3); R(P, 'tail2', 0, 0.35); R(P, 'tail3', 0, 0.4);
+    }],
+    ...o.more,
+  ];
+}
+
+const CROC_COATS: Coat[] = [
+  { back: 0x4a5a32, top: 0x36442a, belly: 0xc8c08a, eye: 0xd8c040, mouth: 0xc87870, teeth: 0xf0ecd8, claw: 0x22221a },
+  { back: 0x5a6438, top: 0x404a2a, belly: 0xd0c494, eye: 0xd0b438, mouth: 0xc07068, teeth: 0xece6d0, claw: 0x22221a },
+  { back: 0x3e4a30, top: 0x2c3624, belly: 0xbcb684, eye: 0xc8b840, mouth: 0xb86e68, teeth: 0xf0ecd8, claw: 0x1e1e18 },
+];
+
+/** Aplatit une pièce autour de la hauteur cy (museau, queue) */
+const flat = (g: THREE.BufferGeometry, cy: number, sx: number, sy: number) => g.translate(0, -cy, 0).scale(sx, sy, 1).translate(0, cy, 0);
+
+/**
+ * Crocodile : long corps bas à écailles, deux rangées de plaques dorsales qui se rejoignent en crête sur la queue, ventre
+ * clair, museau plat aux dents qui dépassent, yeux et narines saillants, pattes écartées aux doigts griffus ; marche
+ * haute en ondulant, court, prend le soleil la gueule ouverte, siffle gueule béante, secoue sa prise
+ */
+function croc(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  r.bone('hips', null, 0, 0.03, -0.04);
+  r.bone('chest', 'hips', 0, 0.032, 0.04);
+  r.bone('ribs', 'chest', 0, 0.032, 0.04);
+  r.bone('head', 'chest', 0, 0.036, 0.11);
+  r.bone('jaw', 'head', 0, 0.028, 0.125);
+  r.bone('tail1', 'hips', 0, 0.03, -0.1);
+  r.bone('tail2', 'tail1', 0, 0.026, -0.17);
+  r.bone('tail3', 'tail2', 0, 0.021, -0.232);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.03, 0.03, 0.075);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.058, 0.022, 0.076);
+    r.bone(`h${L}1`, 'hips', s * 0.032, 0.03, -0.06);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.064, 0.022, -0.062);
+  });
+
+  // corps : dessus sombre, ventre clair
+  r.add('hips', ell(0.036, 0.021, 0.062), [0, 0.032, -0.045], c.belly, [0, 0, 0], c.back);
+  r.add('ribs', ell(0.038, 0.022, 0.064), [0, 0.033, 0.045], c.belly, [0, 0, 0], c.back);
+  // plaques dorsales : deux rangées sur le dos, rangées plus petites sur les flancs
+  for (let z = -0.1; z <= 0.1; z += 0.02) {
+    const b = z > 0 ? 'ribs' : 'hips', top = 0.054 - Math.abs(z) * 0.04;
+    r.both((s) => {
+      r.put(b, seg([s * 0.011, top - 0.004, z], [s * 0.011, top + 0.005, z], 0.0045, 0.0008, 4), c.top);
+      r.put(b, seg([s * 0.025, top - 0.008, z + 0.01], [s * 0.026, top - 0.002, z + 0.01], 0.0035, 0.0006, 4), c.top);
+    });
+  }
+  // tête : crâne, yeux saillants à iris jaune, museau plat, narines, dents, mâchoire, intérieur de la gueule
+  r.add('head', ell(0.028, 0.017, 0.03), [0, 0.036, 0.108], c.belly, [0, 0, 0], c.back);
+  r.add('head', bx(0.036, 0.018, 0.036), [0, 0.042, 0.132], c.back);
+  r.both((s) => {
+    r.add('head', ell(0.008, 0.007, 0.009, 0), [s * 0.013, 0.053, 0.135], c.back);
+    r.add('head', ell(0.0045, 0.0045, 0.0045, 0), [s * 0.016, 0.055, 0.139], c.eye);
+    r.add('head', bx(0.0015, 0.005, 0.002), [s * 0.0198, 0.055, 0.14], 0x101010);
+  });
+  r.put('head', flat(seg([0, 0.04, 0.145], [0, 0.04, 0.245], 0.017, 0.011, 6), 0.04, 1.35, 0.55), c.back, c.top);
+  r.add('head', ell(0.007, 0.004, 0.006, 0), [0, 0.047, 0.243], c.top);
+  for (let z = 0.156; z < 0.245; z += 0.0135) {
+    const x = 0.022 - (z - 0.145) * 0.08;
+    r.both((s) => r.put('head', seg([s * x, 0.037, z], [s * x, 0.029, z], 0.0018, 0.0003, 3), c.teeth));
+  }
+  r.put('jaw', flat(seg([0, 0.027, 0.125], [0, 0.026, 0.24], 0.017, 0.01, 6), 0.027, 1.3, 0.45), c.belly, c.back);
+  r.add('jaw', bx(0.022, 0.002, 0.1), [0, 0.031, 0.185], c.mouth);
+  for (let z = 0.163; z < 0.24; z += 0.0135) {
+    const x = 0.019 - (z - 0.145) * 0.075;
+    r.both((s) => r.put('jaw', seg([s * x, 0.028, z], [s * x, 0.036, z], 0.0016, 0.0003, 3), c.teeth));
+  }
+  // queue : épaisse, aplatie sur les côtés, crête qui passe de deux rangées à une seule
+  r.add('tail1', ell(0.027, 0.019, 0.05), [0, 0.03, -0.135], c.belly, [0, 0, 0], c.back);
+  r.add('tail2', ell(0.017, 0.015, 0.045), [0, 0.025, -0.2], c.belly, [0, 0, 0], c.back);
+  r.put('tail3', flat(seg([0, 0.022, -0.232], [0, 0.017, -0.315], 0.012, 0.002, 5), 0.02, 0.65, 1), c.back, c.top);
+  for (let z = -0.11; z > -0.3; z -= 0.016) {
+    const b = z > -0.165 ? 'tail1' : z > -0.232 ? 'tail2' : 'tail3', h = 0.048 + (z + 0.11) * 0.16;
+    if (z > -0.165) r.both((s) => r.put(b, seg([s * 0.008, h - 0.004, z], [s * 0.008, h + 0.006, z], 0.004, 0.0006, 4), c.top));
+    else r.put(b, flat(seg([0, h - 0.006, z], [0, h + 0.007 + (z + 0.3) * 0.02, z], 0.006, 0.0008, 4), h, 0.4, 1), c.top);
+  }
+  // pattes écartées, doigts griffus
+  r.both((s, L) => {
+    for (const [b1, b2, z, k] of [[`f${L}1`, `f${L}2`, 0.075, 1], [`h${L}1`, `h${L}2`, -0.061, 1.25]] as [string, string, number, number][]) {
+      const sh: V3 = [s * (b1[0] === 'f' ? 0.03 : 0.032), 0.03, z], el: V3 = [s * (b1[0] === 'f' ? 0.058 : 0.064), 0.022, z], ft: V3 = [el[0] + s * 0.004, 0.004, z + 0.004];
+      r.put(b1, seg(sh, el, 0.009 * k, 0.007 * k), c.back, c.top);
+      r.put(b2, seg(el, ft, 0.007 * k, 0.006 * k), c.back);
+      r.add(b2, ell(0.009 * k, 0.003, 0.011 * k, 0), [ft[0] + s * 0.002, 0.003, ft[2] + 0.006], c.back);
+      for (let i = 0; i < 4; i++) {
+        const a = -0.5 + i * 0.45, tip: V3 = [ft[0] + s * (0.002 + Math.sin(a) * 0.014 * k), 0.002, ft[2] + 0.008 + Math.cos(a) * 0.014 * k];
+        r.put(b2, seg([ft[0] + s * 0.002, 0.003, ft[2] + 0.008], tip, 0.0022, 0.0015, 4), c.back);
+        r.put(b2, seg(tip, [tip[0] + s * Math.sin(a) * 0.004, 0.001, tip[2] + Math.cos(a) * 0.004], 0.0014, 0.0002, 3), c.claw);
+      }
+    }
+  });
+
+  const clips = reptileClips({
+    walk: [1.6, 0.45, 0.5, 0.1],
+    run: [0.7, 0.7, 0.7, 0.18],
+    // prend le soleil, la gueule grande ouverte ; la queue balaie lentement
+    idle: (u, P) => {
+      breathe(P, u, 2);
+      const k = win(u, 0.15, 0.85, 0.12);
+      R(P, 'jaw', 0.55 * k);
+      R(P, 'head', -0.08 * k);
+      R(P, 'tail1', 0, 0.08 * sn(u)); R(P, 'tail2', 0, 0.1 * sn(u, 1, -0.1)); R(P, 'tail3', 0, 0.14 * sn(u, 1, -0.2));
+    },
+    more: [
+      // secoue sa prise de droite à gauche en refermant la gueule
+      ['Eating', 2.5, (u, P) => {
+        breathe(P, u, 2);
+        R(P, 'head', -0.12, 0.35 * sn(u, 2));
+        R(P, 'chest', 0, 0.15 * sn(u, 2, -0.05));
+        R(P, 'jaw', 0.45 * pos(sn(u, 3)));
+        R(P, 'tail1', 0, 0.25 * sn(u, 2, -0.2)); R(P, 'tail2', 0, 0.3 * sn(u, 2, -0.3)); R(P, 'tail3', 0, 0.35 * sn(u, 2, -0.4));
+      }],
+      // siffle : se gonfle, gueule béante, tête dressée
+      ['Idle_2', 3, (u, P) => {
+        const k = win(u, 0.1, 0.85, 0.15);
+        S(P, 'ribs', 1 + 0.1 * k, 1 + 0.14 * k, 1);
+        R(P, 'head', -0.25 * k, 0.1 * k * sn(u, 2));
+        R(P, 'jaw', 0.95 * k);
+        M(P, 'hips', 0, 0.006 * k, 0);
+        for (const [b, , s] of DIAG) R(P, b + '1', 0, 0, -s * 0.25 * k);
+        R(P, 'tail2', 0, 0.3 * k * sn(u, 1)); R(P, 'tail3', 0, 0.4 * k * sn(u, 1, -0.1));
+      }],
+    ],
+  });
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'croc';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
@@ -929,6 +1100,7 @@ const DEFS: Record<BeastKind, BeastDef> = {
   giraffe: { coats: GIRAFFE_COATS, build: giraffe },
   camel: { coats: CAMEL_COATS, build: camel },
   moose: { coats: MOOSE_COATS, build: moose },
+  croc: { coats: CROC_COATS, build: croc },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */
