@@ -2482,7 +2482,25 @@ function gather(p: Parts, age: number, o: ModelOpts) {
       }
       for (const [fx, fc] of [[-0.08, C.red], [0, C.gold], [0.08, 0x7cc46a]] as [number, number][]) p.sphere(0.035, x + fx, 0.12, z + 0.02, fc, 0, 0.8);
       p.box(0.07, 0.06, 0.07, x + 0.18, 0, z + 0.12, 0xb48a5e, 0.4);
+      // la marchande derrière son étal, la meule de fromage, les miches, le panier posé au pied
+      figure(p, x - 0.05, z - 0.13, [0x8a3a3a, 0x3a5a7a, 0x5a6a3a][i], 0, false, [0xe8e0d0, 0x4a3426, 0xc8a070][i]);
+      if (i === 0) { p.cyl(0.035, 0.035, 0.03, 8, x + 0.1, 0.1, z - 0.03, 0xf2d27a); p.cyl(0.03, 0.03, 0.025, 8, x + 0.1, 0.13, z - 0.03, 0xe8c45a); }
+      else if (i === 1) for (let k = 0; k < 3; k++) p.add(new THREE.IcosahedronGeometry(0.022, 0).scale(1.4, 0.7, 0.9), x - 0.1 + k * 0.035, 0.11, z - 0.04, 0xc8904a, k * 0.4);
+      else for (let k = 0; k < 3; k++) p.add(new THREE.BoxGeometry(0.05, 0.012, 0.02), x - 0.08 + k * 0.04, 0.105, z - 0.04, 0x9ab8c8, k * 0.3);
+      p.cyl(0.03, 0.025, 0.035, 7, x - 0.18, 0.005, z + 0.1, 0xb08a5a); p.sphere(0.022, x - 0.18, 0.04, z + 0.1, [0xd84a3e, 0x7cc46a, 0xf2a03a][i], 0, 0.7);
     });
+    // la place pavée sous les étals, le caniveau du milieu
+    cobbles(p, -0.47, -0.47, 0.47, 0.47, 0xb8ae9a, 0, 77, 0.11, 0.08);
+    // les chalands : une ménagère au panier, un moine, un paysan et son enfant, le crieur
+    for (const [x, z, c, r, h] of [[0.38, 0.02, 0x6a4a7a, -1.8, 0xe8e0d0], [-0.36, 0.0, 0x4a3a2a, 1.6, 0x8a7a6a], [0.18, 0.42, 0x8a6a4a, Math.PI + 0.3, 0x2a1e18], [-0.22, 0.44, 0x3a6ab8, Math.PI - 0.4, 0xc8a070]] as number[][]) figure(p, x, z, c, r, false, h);
+    p.cyl(0.024, 0.02, 0.03, 7, 0.35, 0.07, 0.05, 0xb08a5a);
+    // la cage aux poules, les sacs de grain, la brouette de choux
+    p.box(0.12, 0.07, 0.09, -0.4, 0.005, -0.42, C.wood); for (let k = 0; k < 5; k++) p.add(slab(0.006, 0.07, 0.006, F_PZ | F_PX | F_NX), -0.45 + k * 0.025, 0.04, -0.37, C.darkwood);
+    p.box(0.025, 0.02, 0.016, -0.4, 0.075, -0.42, 0xf4f0e8); p.box(0.008, 0.008, 0.006, -0.385, 0.09, -0.42, 0xd84a3e);
+    for (const [x, z, r] of [[0.4, -0.42, 0.2], [0.44, -0.36, -0.5], [0.36, -0.37, 1]] as number[][]) p.add(new THREE.IcosahedronGeometry(0.028, 0).scale(0.9, 1.3, 0.8).translate(0, 0.035, 0), x, 0, z, 0xd8c8a0, r);
+    p.box(0.1, 0.035, 0.08, 0.4, 0.04, 0.16, 0x8a6a4a); p.add(new THREE.CylinderGeometry(0.025, 0.025, 0.012, 7).rotateZ(Math.PI / 2), 0.45, 0.025, 0.16, C.darkwood);
+    for (const s of [-1, 1]) p.box(0.1, 0.008, 0.008, 0.31, 0.06, 0.16 + s * 0.03, C.wood);
+    for (const d of [-0.025, 0.02]) p.sphere(0.022, 0.4 + d, 0.085, 0.16, 0x7cb45a, 0, 0.8);
   } else if (age === 3) {
     // le parc à la française : allées de gravier blond en croix et en rond-point autour de la fontaine, bordées de pierre ;
     // quatre parterres de broderie aux compartiments fleuris ; ifs taillés en cône aux angles, tilleuls taillés en cube le
