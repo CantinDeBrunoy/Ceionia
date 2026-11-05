@@ -46,6 +46,7 @@ import { Fires } from './render/fires';
 import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
+import { UpgradeBadges } from './render/upgradeBadges';
 import { Expeditions } from './sim/expeditions';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
@@ -108,6 +109,8 @@ class Game implements UIHost {
   transports: Transports;
   gardens: GardenView;
   halos: Halos;
+  /** pastilles « ⬆ » sur les bâtiments qui peuvent évoluer */
+  upBadges: UpgradeBadges;
   expeditions: Expeditions;
   /** chemin de fer : ses lignes de gare en gare, le train que la caméra suit (numéro de sa ligne) */
   railway: Railway;
@@ -266,6 +269,7 @@ class Game implements UIHost {
     this.gardens = new GardenView(w);
     // halos de lumière des feux et des lanternes, la nuit
     this.halos = new Halos(w);
+    this.upBadges = new UpgradeBadges(w);
     // expéditions : une équipe d'habitants part chercher bêtes, minerai, semences… et revient raconter
     this.expeditions = new Expeditions(w, this.agents, () => this.time.dayLen);
     // l'âge du village (les noms des bâtiments, les troupes de l'époque), pas celui du plus récent de ses bâtiments
@@ -302,7 +306,7 @@ class Game implements UIHost {
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -1086,6 +1090,7 @@ class Game implements UIHost {
       if (this.incidentCam) { const i = this.incidents().find((x) => x.key === this.incidentCam); if (i) this.cam.follow(i.x, i.z); else this.incidentCam = null; }
       this.gardens.update(dt, this.time.hour);
       this.halos.update(dt, this.env.night);
+      this.upBadges.update(dt, this.sim.age);
       this.windT += dt * (1 + this.env.weatherK * 0.6);
       this.veg.animate(this.windT, this.elapsed, 1 - this.env.weatherK * 0.3);
       this.veg.update(dt, this.cam.camera.position);

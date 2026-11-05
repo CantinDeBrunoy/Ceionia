@@ -50,8 +50,14 @@ export const TUTO_TEXT = {
     },
     place: {
       title: 'Premières constructions',
-      text: 'Il faut de quoi loger, nourrir et abreuver le village : une maison, une ferme et un puits (leur nom change avec les âges). Le bâtiment en main se pose d’un clic sur le terrain ; R le tourne, Échap le lâche.',
+      text: 'Il faut de quoi loger, nourrir et abreuver le village : une maison, une ferme (à la Préhistoire, un séchoir à grains) et un puits (leur nom change avec les âges). Le bâtiment en main se pose d’un clic sur le terrain ; R le tourne, Échap le lâche.',
       tasks: ['logement', 'nourriture', 'eau'],
+      kindTask: (name: string, what: string) => `${name} (${what})`,
+    },
+    work: {
+      title: 'Les bâtiments qui travaillent',
+      text: 'Un bûcheron et un séchoir : les premiers bâtiments qui travaillent pour vous. Le bûcheron coupe du bois et la carrière taille de la pierre (au rayon Production, groupe Matériaux) : sans eux, impossible de bâtir les grands bâtiments. Posez-les près d’une forêt et de rochers. Le séchoir à grains nourrit le village.',
+      tasks: ['bois', 'pierre'],
       kindTask: (name: string, what: string) => `${name} (${what})`,
     },
     road: {
@@ -150,6 +156,8 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const coarse = () => window.matchMedia('(pointer: coarse)').matches;
 /** les trois premiers bâtiments : de quoi loger, nourrir et abreuver */
 const FIRST: KindId[] = ['house', 'farm', 'well'];
+/** puis ceux qui travaillent pour le village : le bûcheron et la carrière (le séchoir à grains est déjà dans les premiers) */
+const WORK: KindId[] = ['lumber', 'quarry'];
 
 export class Tutorial {
   /** la bulle est affichée */
@@ -208,6 +216,17 @@ export class Tutorial {
           return ui.tab !== 'build' ? q('#modes [data-t="build"]') : ui.cat !== cat ? q(`#subcats [data-c="${cat}"]`) : q(`#items [data-kind="${k}"]`);
         },
         tasks: () => FIRST.map((k, j) => T.place.kindTask(KINDS[k].names[Math.max(h.sim.age, KINDS[k].minAge)], T.place.tasks[j])),
+      },
+      {
+        id: 'work',
+        // le bûcheron, puis la carrière : l'onglet Bâtir, le rayon Production, la vignette
+        check: () => { const n = count(); return WORK.map((k) => (n[k] ?? 0) > 0); },
+        anchor: () => {
+          const k = WORK.find((_, j) => !this.ticks[j]);
+          if (!k) return null;
+          return ui.tab !== 'build' ? q('#modes [data-t="build"]') : ui.cat !== KINDS[k].cat ? q(`#subcats [data-c="${KINDS[k].cat}"]`) : q(`#items [data-kind="${k}"]`);
+        },
+        tasks: () => WORK.map((k, j) => T.work.kindTask(KINDS[k].names[Math.max(h.sim.age, KINDS[k].minAge)], T.work.tasks[j])),
       },
       {
         id: 'road', anchor: () => q('#quickL [data-tool="road"]'),

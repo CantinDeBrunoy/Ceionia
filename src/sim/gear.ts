@@ -117,6 +117,26 @@ export function loadout(c: Choice, stock: Stock): { take: Pack; k: number } {
   return { take, k };
 }
 
+/** Une pièce qui manque à une équipe : contre quel danger, combien il en faut, combien en réserve et en fabrication */
+export interface GearGap { dangers: Danger[]; gear: Gear; need: number; have: number; queued: number }
+
+/**
+ * Ce qu'il faudrait fabriquer pour qu'une équipe parte bien munie : pour chaque danger du choix qu'aucune pièce en réserve ne
+ * couvre en entier, la pièce la plus protectrice que le village sait faire (`usable` : l'atelier ou le lieu de soins est là)
+ */
+export function gearGaps(c: Choice, stock: Stock, queue: GearId[], age: number, usable: (g: Gear) => boolean): GearGap[] {
+  const out: GearGap[] = [];
+  for (const d of dangersOf(c)) {
+    const cands = GEAR.filter((g) => (g.guards === d || g.also === d) && g.age <= age);
+    if (!cands.length || cands.some((g) => stock[g.id] >= g.per(c.party))) continue;
+    const pool = cands.filter(usable), pick = [...(pool.length ? pool : cands)].sort((a, b) => b.cut - a.cut)[0];
+    const dup = out.find((o) => o.gear.id === pick.id);
+    if (dup) dup.dangers.push(d);
+    else out.push({ dangers: [d], gear: pick, need: pick.per(c.party), have: stock[pick.id], queued: queue.filter((q) => q === pick.id).length });
+  }
+  return out;
+}
+
 /** « 3 lances · 1 corde » */
 export function packLabel(p: Pack) {
   return GEAR.filter((g) => (p[g.id] ?? 0) > 0).map((g) => `${p[g.id]} ${(p[g.id]! > 1 ? g.plural : g.name).toLowerCase()}`).join(' · ');

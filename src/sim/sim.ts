@@ -238,6 +238,10 @@ export class Sim {
     if (!this.food.ok && this.fled >= 1) return about('farm', DIFF_TEXT.famine(say('farm')));
     if (!this.food.ok) return about('farm', this.drought ? `Sécheresse : les champs donnent moins ; ${say('farm')} ou « ${this.nameOf('pier')} » de plus aiderait.` : `Il manque de quoi manger : ${say('farm')} ou un champ.`);
     if (!this.water.ok) return about('well', `Il manque de l’eau : ${say('well')}.`);
+    // à la Préhistoire, dans les premières minutes, les premiers bâtiments qui travaillent pour le village : le bûcheron (bois), puis le pierrier (pierre) ; le séchoir à grains nourrit déjà
+    const young = this.age === 0 && p < 8;
+    if (young && !this.producing('wood')) return about('lumber', `${this.counts.farm ? 'Un bûcheron' : 'Un bûcheron et un séchoir'} : ${this.counts.farm ? 'le premier bâtiment' : 'les premiers bâtiments'} qui travaille${this.counts.farm ? '' : 'nt'} pour vous. ${say('lumber')}${this.counts.farm ? '' : `, puis ${say('farm')}`}.`);
+    if (young && !this.producing('stone')) return about('quarry', `Il vous faut aussi de la pierre pour les grands bâtiments : ${say('quarry')}.`);
     if (!this.jobs.ok) return about('workshop', `Les habitants cherchent du travail : ${say('workshop')}.`);
     if (!this.joy.ok) return about('gather', `Les habitants aimeraient un lieu de rencontre : ${say('gather')}, un jardin ou un lieu de culte.`);
     if (!this.health.ok) return about('health', `Les habitants tombent malades : il faut ${say('health')}.`);
