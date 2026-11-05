@@ -2378,6 +2378,30 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     p.box(0.012, 0.16, 0.012, -0.32, 0.012, 0.44, 0x3c4a44); p.box(0.012, 0.16, 0.012, -0.12, 0.012, 0.44, 0x3c4a44);
     p.box(0.22, 0.05, 0.01, -0.22, 0.14, 0.44, C.cream); for (let k = 0; k < 5; k++) p.box(0.022, 0.025, 0.004, -0.29 + k * 0.035, 0.152, 0.447, 0x3c3530);
     p.cyl(0.005, 0.007, 0.2, 5, 0.06, 0.012, 0.44, 0x3c4a44); p.box(0.025, 0.03, 0.025, 0.06, 0.21, 0.44, 0xffe2a0, 0, true);
+    // la cour pavée, la grille sur la rue de part et d'autre du portail et ses deux vantaux ouverts
+    cobbles(p, -0.48, 0.06, 0.33, 0.47, 0x9d9890, 0.012, 372, 0.06, 0.045);
+    for (const [x0, x1] of [[-0.48, -0.33], [-0.11, 0.33]] as number[][]) {
+      p.box(x1 - x0, 0.03, 0.03, (x0 + x1) / 2, 0.012, 0.46, 0xa85e50);
+      for (let x = x0 + 0.02; x < x1 - 0.01; x += 0.03) p.add(slab(0.006, 0.09, 0.006, F_PZ | F_NZ | F_PX | F_NX), x, 0.087, 0.46, 0x3c4a44);
+      p.box(x1 - x0, 0.006, 0.006, (x0 + x1) / 2, 0.12, 0.46, 0x3c4a44);
+    }
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.1, 0.11, 0.006), -0.22 + s * 0.13, 0.067, 0.42, 0x3c4a44, s * 0.9);
+    // la potence de chargement devant la halle, la caisse qui pend au palan ; les lanterneaux de la halle qui fument
+    p.box(0.016, 0.3, 0.016, 0.22, 0.012, 0.1, 0x4a5560); p.box(0.016, 0.016, 0.16, 0.22, 0.3, 0.16, 0x4a5560);
+    p.add(new THREE.BoxGeometry(0.01, 0.01, 0.17), 0.22, 0.22, 0.13, 0x4a5560, 0, false, 0, -0.8);
+    p.box(0.003, 0.1, 0.003, 0.22, 0.2, 0.23, 0x2a2a2a); p.box(0.05, 0.045, 0.05, 0.22, 0.155, 0.23, 0xb48a5e);
+    for (const x of [hx - 0.16, hx + 0.16]) { p.cyl(0.018, 0.018, 0.05, 6, x, H + 0.1, hz - 0.1, 0x5d6878); p.cone(0.025, 0.02, 6, x, H + 0.15, hz - 0.1, 0x3c3c40); smoke(x, H + 0.2, hz - 0.1, 0); }
+    // l'horloge des bureaux, la sirène sur le toit de la halle
+    p.add(new THREE.CircleGeometry(0.025, 10), -0.3, 0.27, 0.2045, C.white); p.add(new THREE.RingGeometry(0.025, 0.031, 10), -0.3, 0.27, 0.205, 0x3c3c40);
+    p.box(0.002, 0.018, 0.003, -0.3, 0.27, 0.207, 0x1e1e22); p.box(0.012, 0.002, 0.003, -0.295, 0.27, 0.207, 0x1e1e22);
+    p.cyl(0.004, 0.004, 0.08, 4, hx - W / 2 + 0.05, H + 0.02, hz + 0.1, 0x3c3c40); p.cone(0.018, 0.03, 6, hx - W / 2 + 0.05, H + 0.1, hz + 0.1, 0x8a8f96);
+    // la sortie des ouvriers à la grille, le contremaître en chapeau melon, le charretier et son cheval attelé au fardier
+    for (const [x, z, c, r] of [[-0.2, 0.36, 0x3a4a6a, 0.2], [-0.26, 0.3, 0x5a4a3a, -0.4], [-0.14, 0.28, 0x4a5a4a, 0.6], [0.0, 0.16, 0x2a2a30, -1.2]] as number[][]) figure(p, x, z, c, r, false, r < -1 ? 0x1e1e22 : 0x4a3426);
+    p.box(0.16, 0.025, 0.08, 0.06, 0.05, 0.3, 0x6f5640);
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.01, 8).rotateX(Math.PI / 2), 0.06, 0.047, 0.3 + s * 0.045, 0x3c2a20);
+    for (const [x, r] of [[0.02, 0.2], [0.09, -0.3]] as number[][]) p.box(0.05, 0.04, 0.05, x, 0.075, 0.3, 0xb48a5e, r);
+    lifeSize(p, -0.07, 0.012, 0.3, () => horse(p, -0.07, 0.3, Math.PI, 0x6a4a36));
+    for (const s of [-1, 1]) p.box(0.1, 0.006, 0.006, -0.03, 0.08, 0.3 + s * 0.02, C.wood);
   } else if (age === 3) {
     p.box(0.8, 0.36, 0.6, 0, 0, 0.02, C.brick);
     for (const x of [-0.27, 0, 0.27]) p.gable(0.27, 0.13, 0.62, x, 0.36, 0.02, C.slate);
