@@ -9,7 +9,8 @@ import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
 import { Parts } from '../render/parts';
 import { mats } from '../render/materials';
-import { findPlots, fieldHands, shareHands, fieldSeason, fieldTask, longestRun, rigAt, runCells, Plot, Run, FieldTask, TRACTOR_AGE, TRACTOR_CELLS } from './fields';
+import { findPlots, fieldHands, shareHands, fieldSeason, fieldTask, longestRun, rigAt, runCells, Plot, Run, FieldTask, TRACTOR_CELLS, MACHINE_AGE, DRONE_AGE, MAX_DRONES, RigKind, machineOf, isAutoRig, isMotorRig, rigShown, RIG_SPEED } from './fields';
+import { rigGeo, droneGeo, propellerGeo, PROP_SPOTS, seatOf } from '../render/farmRigs';
 
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
 /** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie),
@@ -89,69 +90,16 @@ const FIELD_POSE: Record<FieldTask, [FolkPose, number]> = {
 };
 /** Allure du semeur, du faucheur, de celui qui glane (cases par seconde, le long des sillons) */
 const LANE_SPEED: Partial<Record<FieldTask, number>> = { sow: 0.07, reap: 0.045, gather: 0.025 };
-/** Allure du tracteur (cases par seconde), et combien de tracteurs au plus dans tout le village */
-const TRACTOR_SPEED = 0.32, MAX_RIGS = 6;
-/** hauteur du siège du tracteur (le conducteur y est assis) */
-const TRACTOR_SEAT = 0.075;
+/** Combien d'engins des champs au plus dans tout le village (tracteurs, moissonneuses, attelages de bœufs) */
+const MAX_RIGS = 6;
 
-/** Le tracteur d'une grande parcelle : sa file de cases, le chemin parcouru, son modèle, et qui le conduit (ou va le prendre) */
-interface Rig { key: number; run: Run; d: number; mesh: THREE.Mesh; by: number | null; geoKey: string }
-
-const rigCache = new Map<string, THREE.BufferGeometry>();
 /**
- * Le tracteur des champs (avant = +z, le siège à l'origine) : rouge, roues à moyeux clairs et sans cabine à l'âge industriel,
- * vert à arceau et toit à l'époque moderne, blanc à liseré lumineux ensuite ; derrière lui la charrue (printemps, automne)
- * ou la remorque chargée de gerbes, puis de bottes rondes (été)
+ * L'engin d'une grande parcelle : sa file de cases, le chemin parcouru, son rang parmi les plus grandes parcelles, son genre du
+ * moment (selon l'âge et la saison, voir `machineOf`), son modèle, et qui le conduit (ou va le prendre)
  */
-function tractorGeo(age: number, trailer: boolean) {
-  const era = Math.min(5, Math.max(TRACTOR_AGE, age)), key = `${era}|${trailer ? 1 : 0}`;
-  const known = rigCache.get(key);
-  if (known) return known;
-  const p = new Parts(), tyre = 0x2a2a2e, iron = 0x3c3c40;
-  const body = [0xc8443a, 0x3a8a3a, 0xeef2f4][era - 3], hub = [0xe8d8b0, 0xf2c23a, 0x5af0ff][era - 3];
-  // capot et calandre, réservoir, plancher, siège et dossier, volant, pot d'échappement
-  p.box(0.07, 0.05, 0.13, 0, 0.045, 0.085, body);
-  p.box(0.06, 0.02, 0.07, 0, 0.095, 0.07, dark(body, 0.85));
-  p.box(0.072, 0.046, 0.006, 0, 0.047, 0.152, iron);
-  p.box(0.09, 0.012, 0.07, 0, 0.04, -0.01, dark(body, 0.7));
-  p.box(0.05, 0.014, 0.045, 0, 0.06, -0.012, 0x3a3a3e);
-  p.box(0.05, 0.045, 0.008, 0, 0.07, -0.036, 0x3a3a3e);
-  p.add(new THREE.CylinderGeometry(0.004, 0.004, 0.06).rotateX(-0.6), 0, 0.09, 0.03, iron);
-  p.add(new THREE.TorusGeometry(0.02, 0.004, 3, 10).rotateX(Math.PI / 2 - 0.6), 0, 0.112, 0.016, iron);
-  p.cyl(0.006, 0.006, 0.075, 5, 0.024, 0.09, 0.115, iron);
-  for (const s of [-1, 1]) {
-    // grandes roues arrière (garde-boue par-dessus), petites roues avant
-    p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.032, 12).rotateZ(Math.PI / 2), s * 0.07, 0.06, -0.012, tyre);
-    p.add(new THREE.CylinderGeometry(0.032, 0.032, 0.034, 8).rotateZ(Math.PI / 2), s * 0.07, 0.06, -0.012, hub);
-    p.box(0.036, 0.008, 0.085, s * 0.07, 0.122, -0.012, dark(body, 0.85));
-    p.add(new THREE.CylinderGeometry(0.032, 0.032, 0.022, 10).rotateZ(Math.PI / 2), s * 0.048, 0.032, 0.12, tyre);
-    p.add(new THREE.CylinderGeometry(0.016, 0.016, 0.024, 6).rotateZ(Math.PI / 2), s * 0.048, 0.032, 0.12, hub);
-  }
-  // arceau et toit à l'époque moderne et après ; liseré lumineux le long du capot à l'âge futuriste
-  if (era >= 4) {
-    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.006, 0.15, 0.006, x * 0.046, 0.07, -0.012 + z * 0.042, iron);
-    p.box(0.11, 0.01, 0.1, 0, 0.22, -0.012, body);
-  }
-  if (era >= 5) p.box(0.074, 0.006, 0.12, 0, 0.072, 0.085, 0x5af0ff, 0, 'neon');
-  p.box(0.008, 0.008, 0.07, 0, 0.03, -0.075, iron);
-  if (trailer) {
-    // remorque à ridelles : des gerbes dressées à l'âge industriel, des bottes rondes ensuite
-    p.box(0.11, 0.012, 0.13, 0, 0.045, -0.18, 0x8a6a4a);
-    for (const s of [-1, 1]) {
-      p.box(0.006, 0.03, 0.13, s * 0.053, 0.057, -0.18, 0x6a4a34);
-      p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.016, 10).rotateZ(Math.PI / 2), s * 0.062, 0.03, -0.18, tyre);
-    }
-    if (era === 3) for (let i = 0; i < 6; i++) p.cyl(0.016, 0.012, 0.06, 6, -0.03 + (i % 3) * 0.03, 0.057, -0.215 + Math.floor(i / 3) * 0.07, 0xe0c060);
-    else for (const z of [-0.21, -0.15]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.09, 9).rotateZ(Math.PI / 2), 0, 0.092, z, 0xe8c66a);
-  } else {
-    // charrue : bâti, et ses socs qui retournent la terre
-    p.box(0.1, 0.01, 0.014, 0, 0.03, -0.11, 0x5a5e66);
-    for (let i = 0; i < 3; i++) p.add(new THREE.BoxGeometry(0.008, 0.03, 0.045), -0.034 + i * 0.034, 0.004, -0.12 - i * 0.014, 0x8a8f96, 0.5);
-  }
-  const g = p.build(false).body;
-  rigCache.set(key, g);
-  return g;
-}
+interface Rig { key: number; run: Run; d: number; mesh: THREE.Mesh; by: number | null; geoKey: string; rank: number; kind: RigKind | null }
+/** Le drone agricole d'une grande parcelle : il en survole la file de cases, ses hélices tournent */
+interface Drone { key: number; run: Run; d: number; mesh: THREE.Mesh; props: THREE.Mesh[] }
 
 /**
  * Les métiers : chaque habitant en âge de travailler est attaché à un lieu de travail ; aux heures de travail il y va, outil
@@ -390,6 +338,7 @@ export class Agents {
   private plotAt = new Map<number, Plot>();
   private farms: Building[] = [];
   private rigs = new Map<number, Rig>();
+  private drones = new Map<number, Drone>();
   private runSet = new Set<number>();
   private plotsDirty = true;
   /** saison (0 printemps … 3 hiver) et âge du village, donnés à chaque image */
@@ -421,7 +370,8 @@ export class Agents {
   reset() {
     for (const a of this.agents) this.dropActor(a);
     for (const r of this.rigs.values()) this.group.remove(r.mesh);
-    this.agents = []; this.held.clear(); this.rigs.clear(); this.lastVersion = -1; this.spotKey = '';
+    for (const d of this.drones.values()) this.group.remove(d.mesh);
+    this.agents = []; this.held.clear(); this.rigs.clear(); this.drones.clear(); this.lastVersion = -1; this.spotKey = '';
   }
 
   private dropActor(a: Agent) {
@@ -551,7 +501,7 @@ export class Agents {
       return d ? { ...d, act: 'work', tool: 'hammer', work: true } : null;
     }
     const rig = this.rigs.get(p.key);
-    if (rig && (rig.by === null || rig.by === a.id) && this.rnd() < 0.7) {
+    if (rig && rig.kind && isMotorRig(rig.kind) && (rig.by === null || rig.by === a.id) && this.rnd() < 0.7) {
       // il rejoint le tracteur là où il est garé, et monte par le côté
       const [x, z, h] = rigAt(rig.run, rig.d), sx = x + Math.cos(h) * 0.15, sz = z - Math.sin(h) * 0.15;
       if (this.world.inCells(Math.floor(sx), Math.floor(sz))) return { cell: Math.floor(sz) * N + Math.floor(sx), hidden: false, spot: [sx, sz], face: h, act: 'work', task: 'drive', rig: p.key, work: true };
@@ -589,7 +539,7 @@ export class Agents {
     if (a.task === 'drive') {
       const rig = a.rig != null ? this.rigs.get(a.rig) : undefined;
       if (!rig || rig.by !== a.id) { a.task = null; return; }
-      rig.d += dt * TRACTOR_SPEED;
+      rig.d += dt * RIG_SPEED[rig.kind ?? 'plough'];
       [a.x, a.z, a.heading] = rigAt(rig.run, rig.d);
       return;
     }
@@ -604,29 +554,49 @@ export class Agents {
     a.heading += dh * Math.min(1, dt * 5);
   }
 
-  /** Les tracteurs : un par grande parcelle à l'âge industriel et après, avec sa file de cases ; refaits quand le monde ou l'âge change */
+  /**
+   * Les engins : un par grande parcelle, dès l'Antiquité (bœufs), puis le tracteur et la moissonneuse (leur genre change avec la
+   * saison, voir `stepRigs`), avec sa file de cases ; à l'âge futuriste, un drone agricole survole les plus grandes ;
+   * refaits quand le monde ou l'âge change
+   */
   private refreshRigs(age: number) {
-    const keep = new Set<number>();
+    const keep = new Set<number>(), keepDrones = new Set<number>();
     this.runSet.clear();
-    // les plus grandes parcelles d'abord, et quelques tracteurs au plus
+    // les plus grandes parcelles d'abord, et quelques engins au plus
     const big = [...this.plots.values()].filter((p) => p.cells.length >= TRACTOR_CELLS).sort((p, q) => q.cells.length - p.cells.length).slice(0, MAX_RIGS);
-    if (age >= TRACTOR_AGE) for (const p of big) {
+    if (age >= MACHINE_AGE) big.forEach((p, rank) => {
       const run = longestRun(p);
-      if (!run) continue;
+      if (!run) return;
       const old = this.rigs.get(p.key);
-      if (old && JSON.stringify(old.run) === JSON.stringify(run)) keep.add(p.key);
+      if (old && JSON.stringify(old.run) === JSON.stringify(run)) { keep.add(p.key); old.rank = rank; }
       else {
         if (old) this.dropRig(old);
-        const mesh = new THREE.Mesh(tractorGeo(age, false), mats.body);
+        const mesh = new THREE.Mesh(rigGeo(machineOf(age, this.season, rank) ?? 'plough', age), mats.body);
         mesh.castShadow = true;
         this.group.add(mesh);
-        this.rigs.set(p.key, { key: p.key, run, d: hash2(p.key, 3, 91) * 8, mesh, by: null, geoKey: '' });
+        this.rigs.set(p.key, { key: p.key, run, d: hash2(p.key, 3, 91) * 8, mesh, by: null, geoKey: '', rank, kind: null });
         keep.add(p.key);
       }
       for (const k of runCells(run)) this.runSet.add(k);
-    }
+      // le drone : sur les plus grandes parcelles seulement
+      if (age >= DRONE_AGE && rank < MAX_DRONES) {
+        const od = this.drones.get(p.key);
+        if (od && JSON.stringify(od.run) === JSON.stringify(run)) keepDrones.add(p.key);
+        else {
+          if (od) this.group.remove(od.mesh);
+          const mesh = new THREE.Mesh(droneGeo(), mats.body);
+          mesh.castShadow = true;
+          mesh.scale.setScalar(1.5);
+          const props = PROP_SPOTS.map(([x, y, z]) => { const m = new THREE.Mesh(propellerGeo(), mats.body); m.position.set(x, y, z); mesh.add(m); return m; });
+          this.group.add(mesh);
+          this.drones.set(p.key, { key: p.key, run, d: hash2(p.key, 5, 17) * 8, mesh, props });
+          keepDrones.add(p.key);
+        }
+      }
+    });
     for (const r of [...this.rigs.values()]) if (!keep.has(r.key)) this.dropRig(r);
-    // on ne se tient pas sur la file d'un tracteur
+    for (const [k, d] of [...this.drones]) if (!keepDrones.has(k)) { this.group.remove(d.mesh); this.drones.delete(k); }
+    // on ne se tient pas sur la file d'un engin
     this.fields = this.fields.filter((k) => !this.runSet.has(k));
   }
 
@@ -636,19 +606,42 @@ export class Agents {
     for (const a of this.agents) if (a.rig === r.key) { a.rig = null; if (a.task === 'drive') { a.task = null; a.timer = 0; } }
   }
 
-  /** Les tracteurs à leur place sur leur file (garés quand personne ne les conduit) ; charrue ou remorque selon la saison */
-  private stepRigs(age: number) {
+  /**
+   * Les engins à leur place sur leur file : le genre du moment selon la saison (charrue ou remorque, botteleuse, épandeur,
+   * moissonneuse…), garés quand personne ne les conduit ; les attelages de bœufs avancent seuls le jour, à la belle saison ;
+   * les drones font leur ronde au-dessus des parcelles, hélices en rotation
+   */
+  private stepRigs(age: number, dt: number, hour: number) {
     for (const r of this.rigs.values()) {
-      const trailer = this.season === 1, gk = `${age}|${trailer}`;
-      if (r.geoKey !== gk) { r.geoKey = gk; r.mesh.geometry = tractorGeo(age, trailer); }
+      const kind = machineOf(age, this.season, r.rank) ?? 'plough', gk = `${age}|${kind}`;
+      r.kind = kind;
+      if (r.geoKey !== gk) { r.geoKey = gk; r.mesh.geometry = rigGeo(kind, age); }
+      // un attelage de bœufs mène seul son labour ; rentré la nuit et l'hiver
+      const shown = rigShown(kind, this.season, hour);
+      r.mesh.visible = shown;
+      if (isAutoRig(kind) && shown && working(hour)) r.d += dt * RIG_SPEED[kind];
       const [x, z, h] = rigAt(r.run, r.d);
       r.mesh.position.set(x, this.world.surfaceAt(x, z), z);
       r.mesh.rotation.y = h;
     }
+    const flying = age >= DRONE_AGE && fieldSeason(this.season) && hour >= 7 && hour < 19;
+    for (const dr of this.drones.values()) {
+      dr.mesh.visible = flying;
+      if (!flying) continue;
+      dr.d += dt * 0.55;
+      const [x, z, h] = rigAt(dr.run, dr.d);
+      dr.mesh.position.set(x, this.world.surfaceAt(x, z) + 0.3 + Math.sin(dr.d * 3) * 0.012, z);
+      dr.mesh.rotation.set(0.12, h, Math.sin(dr.d * 2) * 0.05, 'YXZ');
+      for (let i = 0; i < dr.props.length; i++) dr.props[i].rotation.y += dt * (i % 2 ? 60 : -60);
+    }
   }
 
-  /** Les tracteurs des champs : position et cap de chacun */
-  tractors() { return [...this.rigs.values()].map((r) => rigAt(r.run, r.d)); }
+  /** Les tracteurs des champs (les engins à moteur) : position et cap de chacun */
+  tractors() { return [...this.rigs.values()].filter((r) => r.kind && isMotorRig(r.kind)).map((r) => rigAt(r.run, r.d)); }
+  /** Tous les engins des champs : leur genre du moment, position et cap */
+  machines() { return [...this.rigs.values()].filter((r) => r.kind).map((r) => ({ kind: r.kind!, visible: r.mesh.visible, at: rigAt(r.run, r.d) })); }
+  /** Les drones qui volent : position et cap */
+  flyingDrones() { return [...this.drones.values()].filter((d) => d.mesh.visible).map((d) => rigAt(d.run, d.d)); }
 
   /**
    * Où va travailler un habitant, et ce qu'il y fait : son champ (près de la ferme), la lisière (près du bûcheron), le ponton,
@@ -1225,7 +1218,7 @@ export class Agents {
         }
       }
     }
-    this.stepRigs(age);
+    this.stepRigs(age, dt, hour);
     this.render(age, dt);
   }
 
@@ -1271,7 +1264,7 @@ export class Agents {
     if (a.hidden) return true;
     // aux champs : le geste de son ouvrage (au volant du tracteur, assis), sa charge portée à deux bras jusqu'à la grange
     const field = a.mission ? null : a.state === 'walking' && a.load ? (['carry', 1.6] as const) : a.state === 'doing' && a.task ? FIELD_POSE[a.task] : null;
-    const lift = riding ? (a.kit?.car ? CAR_SEAT : SADDLE) : a.state === 'doing' && a.task === 'drive' ? TRACTOR_SEAT : 0;
+    const lift = riding ? (a.kit?.car ? CAR_SEAT : SADDLE) : a.state === 'doing' && a.task === 'drive' ? seatOf(a.rig != null ? this.rigs.get(a.rig)?.kind : null) : 0;
     act.root.position.set(a.x, this.groundY(a) + lift, a.z);
     act.root.rotation.y = a.heading;
     const running = a.child && (!a.act || a.act === 'run');

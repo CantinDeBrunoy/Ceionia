@@ -15,6 +15,37 @@ export const MAX_HANDS = 12, PLOT_HANDS = 3;
 export const HAND_POP = 0.15;
 /** Le tracteur : à partir de l'âge industriel, dans une parcelle d'au moins tant de cases, sur une file droite assez longue */
 export const TRACTOR_AGE = 3, TRACTOR_CELLS = 10, TRACTOR_RUN = 3;
+/** Les engins des champs commencent avec l'Antiquité (la charrue à bœufs) ; les drones agricoles, à l'âge futuriste ; peu de drones */
+export const MACHINE_AGE = 1, DRONE_AGE = 5, MAX_DRONES = 3;
+
+/**
+ * Les engins qui travaillent les grandes parcelles : la charrue à bœufs et le chariot à foin (Antiquité, Moyen Âge : menés à
+ * pied, ils vont seuls), le tracteur et ce qu'il tire — charrue, remorque (industriel), botteleuse, épandeur — et la
+ * moissonneuse-batteuse (moderne, futuriste : un habitant les conduit)
+ */
+export type RigKind = 'ox' | 'haycart' | 'plough' | 'trailer' | 'baler' | 'spreader' | 'combine';
+/** Ceux qu'on ne conduit pas (un bouvier les mène à pied : il est dessiné avec l'attelage) */
+export const isAutoRig = (k: RigKind) => k === 'ox' || k === 'haycart';
+/** Ceux qui roulent au moteur */
+export const isMotorRig = (k: RigKind) => !isAutoRig(k);
+/** Allure de chaque engin, en cases par seconde */
+export const RIG_SPEED: Record<RigKind, number> = { ox: 0.1, haycart: 0.09, plough: 0.32, trailer: 0.32, baler: 0.3, spreader: 0.3, combine: 0.26 };
+
+/**
+ * L'engin d'une grande parcelle (`rank` : son rang parmi les plus grandes, pour varier d'une parcelle à l'autre) selon l'âge et
+ * la saison : des bœufs au labour (printemps, automne) puis un chariot à foin à la moisson ; l'âge industriel garde son
+ * tracteur (charrue, puis remorque) ; ensuite la moissonneuse-batteuse et la botteleuse l'été, la charrue et l'épandeur le reste
+ * de l'année. null : pas encore d'engin
+ */
+export function machineOf(age: number, season: number, rank: number): RigKind | null {
+  if (age < MACHINE_AGE) return null;
+  if (age < TRACTOR_AGE) return season === 1 ? 'haycart' : 'ox';
+  if (age === TRACTOR_AGE) return season === 1 ? 'trailer' : 'plough';
+  if (season === 1) return rank % 2 === 0 ? 'combine' : 'baler';
+  return rank % 2 === 0 ? 'plough' : 'spreader';
+}
+/** Un engin qu'on mène seul n'est dehors que l'été et à la belle saison, le jour ; les autres restent garés dans le champ */
+export const rigShown = (k: RigKind, season: number, hour: number) => !isAutoRig(k) || (season !== 3 && hour >= 6 && hour < 19);
 
 export interface Plot {
   /** sa plus petite case : celle d'où la végétation tire le sens des sillons */

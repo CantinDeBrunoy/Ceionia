@@ -9,6 +9,7 @@ import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
 import { rulesOf } from './difficulty';
 import { hash2 } from '../core/rng';
+import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
 
 /**
  * Étapes d'une expédition : aller, travail sur place, retour, fête (ou mine déconfite) au village ; « gather » (le rassemblement
@@ -71,6 +72,8 @@ export interface ActiveExpedition {
   mounts: number;
   /** la mission avait déjà été réussie : on la refait (bêtes, minerai, vivres ; bonus durables seulement passagers) */
   redo: boolean;
+  /** l'équipe vole (héliport, aérodrome) vers la montagne ou le bout du monde : son voyage (voir `airlift`) */
+  air?: AirTrip | null;
 }
 
 /** Créatures qui tendent des embuscades aux troupes armées */
@@ -644,7 +647,9 @@ export class Expeditions {
     // à l'époque moderne, la troupe qui brûle du carburant roule : des blindés pour la charge, des véhicules pour les autres
     const armored = !!c.fuel && c.troop === 'cavalry';
     const motor = (age >= 3 && this.world.exp.done.includes('motorcar') && !c.troop && !c.mounts) || (!!c.fuel && !armored);
-    const mounts = motor ? 0 : this.mountsFor(c);
+    // la montagne et le bout du monde se gagnent en l'air quand le village a de quoi s'envoler : pas de chevaux, pas de voiture
+    const air = plan || c.troop || c.mounts || sea || m.farewell || c.fuel || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest);
+    const mounts = motor || air ? 0 : this.mountsFor(c);
     const party = this.agents.recruit(c.party);
     if (!party) return null;
     this.world.exp.riding += mounts;
@@ -657,7 +662,7 @@ export class Expeditions {
       wait: null, waitT: 0, hold: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], extra: 0, bonus: [], hurt: 0,
       // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
       site: c.dest === 'cave' ? 'cave' : kind, age, sea: sea && kind === 'river',
-      targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp,
+      targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp, air,
     };
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval s'il y en a assez ; on part en selle
     const kits = party.map((): Kit => ({}));
@@ -670,7 +675,7 @@ export class Expeditions {
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
       // la charge de cavalerie part en cavaliers de l'époque (en chars à l'époque moderne) ; les autres équipes à cheval
       // restent des habitants en selle
-      if (motor) kt.car = true;
+      if (motor && !air) kt.car = true;
       else if (armored && i < 3) { kt.rider = true; kt.tank = true; }
       else if (i < mounts) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
     });
@@ -688,9 +693,9 @@ export class Expeditions {
       // le grand départ : les colons se retrouvent d'abord au cœur du village, où tout le monde vient leur dire adieu
       this.agents.partyGo(party, base[0], base[1], 0.15);
     } else {
-      // elle part aussitôt, chacun de là où il est, sans se rassembler d'abord au village
-      this.agents.partyGo(party, dest[0], dest[1]);
-      this.onNews?.(`${m.icon} L’expédition « ${m.title} » part vers ${destName(c)}.`);
+      // elle part aussitôt, chacun de là où il est, sans se rassembler d'abord au village (à l'aire d'envol s'il faut voler)
+      this.agents.partyGo(party, air ? air.pad[0] : dest[0], air ? air.pad[1] : dest[1]);
+      this.onNews?.(`${m.icon} L’expédition « ${m.title} » part ${air ? (air.kind === 'heli' ? 'en hélicoptère ' : 'en montgolfière ') : ''}vers ${destName(c)}.`);
     }
     return a;
   }
@@ -724,7 +729,7 @@ export class Expeditions {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
         this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » part vers ${destName(a.c)}.`);
-      } else if (a.phase === 'out' && (ag.partyDone(a.party) || a.t > OUT_MAX)) {
+      } else if (a.phase === 'out' && this.arrived(a, dt)) {
         a.phase = 'work'; a.t = 0;
         ag.partyAct(a.party, 'work');
         ag.mountParty(a.party, false);
@@ -749,9 +754,11 @@ export class Expeditions {
         a.ok = this.rnd() >= this.chance(a);
         a.phase = 'back'; a.t = 0;
         ag.mountParty(a.party, true);
-        this.goHome(a);
+        // en l'air : l'équipe rejoint d'abord l'appareil posé non loin ; sinon, elle rentre à pied
+        if (a.air) { a.air.leg = 'fetch'; a.air.t = 0; ag.partyGo(a.party, a.air.land[0], a.air.land[1]); }
+        else this.goHome(a);
         this.onNews?.(a.ok ? `${a.m.icon} « ${a.m.title} » : l’équipe rentre… et elle n’a pas l’air bredouille !` : `${a.m.icon} « ${a.m.title} » : l’équipe rentre, la mine basse.`);
-      } else if (a.phase === 'back' && (ag.partyDone(a.party) || a.t > 240)) {
+      } else if (a.phase === 'back' && this.returned(a, dt)) {
         a.phase = 'home'; a.t = 0;
         ag.partyAct(a.party, a.ok ? 'cheer' : 'stroll');
       } else if (a.phase === 'home' && a.t > 4) this.finish(a);
@@ -806,6 +813,97 @@ export class Expeditions {
         this.onNews?.(`⚔️ « ${a.m.title} » : ${text}.`);
       }
     }
+  }
+
+  /**
+   * L'équipe est-elle arrivée sur place ? À pied : quand tous ont fini de marcher. En l'air : elle gagne l'aire d'envol, monte à
+   * bord, vole, se pose et marche jusqu'à son lieu de travail
+   */
+  private arrived(a: ActiveExpedition, dt: number) {
+    const ag = this.agents, air = a.air;
+    if (!air) return ag.partyDone(a.party) || a.t > OUT_MAX;
+    if (air.leg === 'walk') {
+      if (ag.partyDone(a.party) || a.t > OUT_MAX / 4) { air.leg = 'out'; air.t = 0; this.airRide(a); }
+    } else if (air.leg === 'out') {
+      air.t += dt;
+      if (air.t < air.dur) this.airRide(a);
+      else {
+        // posé : tout le monde descend et va à son ouvrage
+        for (const id of a.party) ag.ride(id, null);
+        ag.partyPlace(a.party, air.land[0], air.land[1]);
+        ag.partyGo(a.party, a.dest[0], a.dest[1]);
+        air.leg = 'ground'; air.t = 0;
+      }
+    } else return ag.partyDone(a.party) || a.t > OUT_MAX;
+    return false;
+  }
+
+  /** L'équipe est-elle rentrée au village ? En l'air : elle rejoint l'appareil, vole jusqu'à l'aire d'envol, puis rentre à pied */
+  private returned(a: ActiveExpedition, dt: number) {
+    const ag = this.agents, air = a.air;
+    if (!air) return ag.partyDone(a.party) || a.t > 240;
+    if (air.leg === 'fetch') {
+      air.t += dt;
+      if (ag.partyDone(a.party) || air.t > 40) { air.leg = 'back'; air.t = 0; this.airRide(a); }
+    } else if (air.leg === 'back') {
+      air.t += dt;
+      if (air.t < air.dur) this.airRide(a);
+      else {
+        for (const id of a.party) ag.ride(id, null);
+        ag.partyPlace(a.party, air.pad[0], air.pad[1]);
+        air.leg = 'home'; air.t = 0;
+        this.goHome(a);
+      }
+    } else return ag.partyDone(a.party) || a.t > 240;
+    return false;
+  }
+
+  /** Où est l'appareil de l'équipe (null : elle va à pied) : au sol sur l'aire d'envol ou d'atterrissage, ou en vol */
+  airPose(a: ActiveExpedition): AirPose | null {
+    const t = a.air;
+    if (!t) return null;
+    const w = this.world, surf = (x: number, z: number) => w.surfaceAt(x, z), head = Math.atan2(t.land[0] - t.pad[0], t.land[1] - t.pad[1]);
+    const park = (p: [number, number]): AirPose => ({ x: p[0], z: p[1], y: surf(p[0], p[1]), heading: head, up: 0, moving: false });
+    if (t.leg === 'out') return flightPose(t.kind, t.dur, t.pad, t.land, t.t, surf);
+    if (t.leg === 'back') return flightPose(t.kind, t.dur, t.land, t.pad, t.t, surf);
+    return park(t.leg === 'ground' || t.leg === 'fetch' ? t.land : t.pad);
+  }
+
+  /** L'équipe à bord : chacun à sa place dans l'appareil (assis dans l'hélicoptère, debout dans la nacelle), où qu'il soit en vol */
+  private airRide(a: ActiveExpedition) {
+    const p = this.airPose(a);
+    if (!p || !a.air) return;
+    const seats = airSeats(a.air.kind, a.party.length), c = Math.cos(p.heading), s = Math.sin(p.heading);
+    a.party.forEach((id, i) => {
+      const k = seats[i];
+      this.agents.ride(id, { x: p.x + k.x * c + k.z * s, z: p.z - k.x * s + k.z * c, y: p.y + k.y, heading: p.heading + k.face, act: k.sit ? 'sit' : null });
+    });
+  }
+
+  /** L'appareil qui emmènerait l'équipe : l'hélicoptère de l'héliport (âge moderne) ou la montgolfière de l'aérodrome, avec ses deux aires ; null si le village n'en a pas */
+  private airFor(kind: DestKind | null, age: number, base: [number, number], dest: [number, number]): AirTrip | null {
+    if (kind !== 'mountain' && kind !== 'far') return null;
+    const air: AirKind | null = age >= 4 && this.has('heliport') ? 'heli' : age >= 3 && this.has('aerodrome') ? 'balloon' : null;
+    if (!air) return null;
+    const pad = this.padSide(base, air === 'heli' ? 'heliport' : 'aerodrome'), land = this.landing(dest, base);
+    return pad && land ? airTrip(air, pad, land) : null;
+  }
+
+  /** Aire d'atterrissage près du lieu de travail : la case libre la moins pentue autour, sur le côté (la scène occupe le cœur du lieu), d'où l'on rejoint le lieu à pied */
+  private landing(dest: [number, number], base: [number, number]): [number, number] | null {
+    const w = this.world, side = Math.atan2(base[1] - dest[1], base[0] - dest[0]) + Math.PI / 2, cand: [number, number, number][] = [];
+    for (const r of [1.6, 2.3, 3])
+      for (let k = 0; k < 8; k++) {
+        const ang = side + (k * Math.PI) / 4, x = dest[0] + Math.cos(ang) * r, z = dest[1] + Math.sin(ang) * r, cx = Math.floor(x), cz = Math.floor(z);
+        if (!w.inCells(cx, cz)) continue;
+        const i = w.ci(cx, cz);
+        if (w.occ[i] || w.lake[i] || w.decor[i] || w.cellAvg(cx, cz) < 0.1) continue;
+        cand.push([x, z, w.cellSlope(cx, cz) + r * 0.05 + k * 0.01]);
+      }
+    cand.sort((p, q) => p[2] - q[2]);
+    const goal = w.ci(Math.floor(dest[0]), Math.floor(dest[1]));
+    for (const [x, z] of cand.slice(0, 10)) if (this.agents.findPath(w.ci(Math.floor(x), Math.floor(z)), goal)) return [x, z];
+    return null;
   }
 
   /**
@@ -1037,9 +1135,9 @@ export class Expeditions {
   status(a: ActiveExpedition) {
     return {
       gather: 'Rassemblement au village…',
-      out: `En route vers ${destName(a.c)}…`,
+      out: `${a.air ? (a.air.kind === 'heli' ? 'En hélicoptère' : 'En montgolfière') : 'En route'} vers ${destName(a.c)}…`,
       work: a.wait ? `Décision à prendre : ${a.wait.title.toLowerCase()}` : this.fighting(a) ?? `Sur place, l’équipe ${a.c.doing ?? a.c.label.toLowerCase()}…`,
-      back: 'Retour au village…',
+      back: a.air ? `Retour au village en ${a.air.kind === 'heli' ? 'hélicoptère' : 'montgolfière'}…` : 'Retour au village…',
       home: a.ok ? 'De retour : le village fait la fête !' : 'De retour, bredouilles.',
     }[a.phase];
   }
@@ -1155,11 +1253,11 @@ export class Expeditions {
     return w.inCells(cx, cz) && [BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH].includes(w.biome[w.ci(cx, cz)]);
   }
 
-  /** Au pied du cosmodrome : une case libre le long de son emprise, la plus proche du village, où l'on arrive à pied */
-  private padSide(base: [number, number]): [number, number] | null {
+  /** Au pied du cosmodrome (ou de l'héliport, de l'aérodrome) : une case libre le long de son emprise, la plus proche du village, où l'on arrive à pied */
+  private padSide(base: [number, number], kind: KindId = 'spaceport'): [number, number] | null {
     const w = this.world, cand: [number, number, number][] = [];
     for (const b of w.buildings.values()) {
-      if (b.kind !== 'spaceport') continue;
+      if (b.kind !== kind) continue;
       const s = sizeOf(b);
       for (let z = b.z - 1; z <= b.z + s; z++)
         for (let x = b.x - 1; x <= b.x + s; x++) {

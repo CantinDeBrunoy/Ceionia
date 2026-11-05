@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize, VEG_FIELD } from '../src/world/world';
 import { Agents } from '../src/sim/agents';
-import { findPlots, fieldHands, shareHands, fieldTask, longestRun, rigAt, MAX_HANDS, HAND_POP } from '../src/sim/fields';
+import { findPlots, fieldHands, shareHands, fieldTask, longestRun, rigAt, MAX_HANDS, HAND_POP, machineOf, rigShown, MAX_DRONES } from '../src/sim/fields';
 
 /** Un village sur un monde plat : six maisons, une ferme (ou pas), et un champ de `fw` × `fd` cases un peu plus loin */
 function village(age: number, farm = true, fw = 5, fd = 4) {
@@ -117,5 +117,57 @@ describe('travaux des champs', () => {
       expect(w.veg[Math.floor(z) * N + Math.floor(x)]).toBe(VEG_FIELD);
       px = x; pz = z;
     }
+  });
+  it('les engins des champs suivent l’époque et la saison : bœufs, tracteur, moissonneuse-batteuse, botteleuse, épandeur', () => {
+    expect(machineOf(0, 1, 0)).toBeNull();
+    expect(machineOf(1, 0, 0)).toBe('ox');
+    expect(machineOf(2, 2, 3)).toBe('ox');
+    expect(machineOf(2, 1, 0)).toBe('haycart');
+    expect(machineOf(3, 0, 0)).toBe('plough');
+    expect(machineOf(3, 1, 1)).toBe('trailer');
+    for (const age of [4, 5]) {
+      expect(machineOf(age, 1, 0)).toBe('combine');
+      expect(machineOf(age, 1, 1)).toBe('baler');
+      expect(machineOf(age, 0, 0)).toBe('plough');
+      expect(machineOf(age, 2, 1)).toBe('spreader');
+    }
+    // les attelages de bœufs ne sont dehors que le jour, à la belle saison ; les tracteurs restent garés dans le champ
+    expect(rigShown('ox', 1, 10)).toBe(true);
+    expect(rigShown('ox', 3, 10)).toBe(false);
+    expect(rigShown('haycart', 1, 22)).toBe(false);
+    expect(rigShown('plough', 3, 22)).toBe(true);
+  });
+
+  it('dès l’Antiquité des bœufs labourent la grande parcelle (sans tracteur) ; l’hiver et la nuit, ils sont rentrés', () => {
+    const w = village(2), ag = new Agents(w);
+    live(ag, 20, 9.5, 2, 0);
+    expect(ag.tractors()).toEqual([]);
+    expect(ag.machines().map((m) => m.kind)).toEqual(['ox']);
+    const [x0, z0] = ag.machines()[0].at;
+    live(ag, 60, 9.5, 2, 0);
+    const [x1, z1] = ag.machines()[0].at;
+    expect(Math.hypot(x1 - x0, z1 - z0)).toBeGreaterThan(0.5);
+    live(ag, 5, 9.5, 2, 1);
+    expect(ag.machines().map((m) => m.kind)).toEqual(['haycart']);
+    live(ag, 5, 9.5, 2, 3);
+    expect(ag.machines()[0].visible).toBe(false);
+  });
+
+  it('à la moisson, la moissonneuse-batteuse travaille la grande parcelle ; à l’âge futuriste, un drone la survole, de jour', () => {
+    const w = village(4), ag = new Agents(w);
+    live(ag, 5, 9.5, 4, 1);
+    expect(ag.machines().map((m) => m.kind)).toEqual(['combine']);
+    expect(ag.tractors().length).toBe(1);
+    expect(ag.flyingDrones()).toEqual([]);
+    const w5 = village(5), ag5 = new Agents(w5);
+    live(ag5, 5, 9.5, 5, 1);
+    expect(ag5.machines().map((m) => m.kind)).toEqual(['combine']);
+    expect(ag5.flyingDrones().length).toBe(1);
+    expect(ag5.flyingDrones().length).toBeLessThanOrEqual(MAX_DRONES);
+    // la nuit et l'hiver, il est posé
+    live(ag5, 5, 22, 5, 1);
+    expect(ag5.flyingDrones()).toEqual([]);
+    live(ag5, 5, 9.5, 5, 3);
+    expect(ag5.flyingDrones()).toEqual([]);
   });
 });
