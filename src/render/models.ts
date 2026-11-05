@@ -3087,7 +3087,8 @@ function hedge(p: Parts, x: number, z: number, w: number, d: number, h = 0.07, y
 function cobbles(p: Parts, x0: number, z0: number, x1: number, z1: number, color: number, y: number, seed: number, w = 0.1, d = 0.07) {
   for (let r = 0, z = z0 + d / 2; z < z1 - d / 2 + 0.001; r++, z += d + 0.012)
     for (let i = 0, x = x0 + w / 2 + (r % 2 ? w / 2 : 0); x < x1 - w / 2 + 0.001; i++, x += w + 0.012)
-      p.box(w, 0.005, d, x, y, z, dark(color, 0.84 + hash2(i, r, seed) * 0.2));
+      // (le dessus seul : un pavé n'a que cinq millimètres de relief)
+      p.add(slab(w, 0.005, d, F_PY), x, y + 0.0025, z, dark(color, 0.84 + hash2(i, r, seed) * 0.2));
 }
 
 /** Herbe au bord de la parcelle : touffes et fleurs semées le long des quatre bords, là où `ok` le permet */
@@ -3790,6 +3791,24 @@ function firehouse(p: Parts, age: number, v: number) {
     for (let k = 0; k < 4; k++) { p.add(new THREE.CylinderGeometry(0.005, 0.005, 0.5, 4), 0.06 + k * 0.035, 0.27, 0.12, C.wood, 0, false, 0.12); p.box(0.012, 0.04, 0.012, 0.09 + k * 0.035, 0.5, 0.12, C.metal); }
     p.box(0.02, 0.36, 0.02, 0.76, 0.025, 0.02, C.darkwood); p.box(0.14, 0.02, 0.02, 0.72, 0.38, 0.02, C.darkwood); sway([0.68, 0.37, 0.02], [0, 0, 1], 0.35, 0.6).cone(0.04, 0.06, 8, 0, -0.07, 0, C.gold);
     figure(p, -0.1, 0.62, 0x8a3a2a, 0.4); figure(p, 0.1, 0.3, 0x3a5a9a, -2.6);
+    // le cheval attelé à la charrette à eau ; la chaîne des seaux de l'abreuvoir à la pompe à bras, que deux hommes manœuvrent
+    horse(p, 0.42, 0.74, -Math.PI / 2, 0x8a6a4a, 0.025);
+    const px = -0.3, pz = 0.36;
+    p.box(0.16, 0.1, 0.1, px, 0.025, pz, 0x7a3a2a); p.box(0.17, 0.012, 0.11, px, 0.125, pz, C.darkwood);
+    p.cyl(0.02, 0.02, 0.1, 6, px, 0.137, pz, 0x9a7a4a);
+    for (const s of [-1, 1]) {
+      p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 8).rotateX(Math.PI / 2), px + s * 0.06, 0.035, pz + 0.056, C.darkwood);
+      p.add(new THREE.BoxGeometry(0.012, 0.012, 0.26), px + s * 0.1, 0.17, pz, C.wood, 0, false, s * 0.15);
+    }
+    p.add(new THREE.CylinderGeometry(0.006, 0.006, 0.3, 4).rotateZ(Math.PI / 2).rotateY(0.4), px + 0.14, 0.16, pz - 0.06, 0x8a7a5a);
+    for (const s of [-1, 1]) figure(p, px + s * 0.17, pz + 0.04, 0x6a5a3a, -s * Math.PI / 2, false, 0x2a1e18);
+    for (const [x, z, r] of [[-0.6, 0.62, 2.4], [-0.5, 0.5, 2.2]] as number[][]) {
+      figure(p, x, z, r > 2.3 ? 0x3a5a7a : 0x8a5a3a, r, false, 0x4a3426);
+      p.cyl(0.022, 0.018, 0.04, 6, x - 0.03, 0.08, z - 0.03, 0x9a6a44);
+    }
+    // lanterne au poteau de la cloche, crocs et seaux pendus au mur du hangar
+    p.box(0.03, 0.04, 0.03, 0.76, 0.3, 0.06, 0xffd68a, 0, true);
+    for (let i = 0; i < 3; i++) p.add(new THREE.BoxGeometry(0.01, 0.34, 0.01), 0.88, 0.2, -0.75 + i * 0.12, C.wood, 0, false, 0.08);
   } else if (age === 3) {
     // caserne de brique : trois grandes portes rouges, tour de séchage des tuyaux et sa cloche, pompes à vapeur attelées
     sink(0.025);
