@@ -20,6 +20,80 @@ interface Ship {
   s: number;
   heading: number;
   key: string;
+  /** sa taille à quai : il rapetisse à l'horizon, au bout de son chemin, au lieu de disparaître d'un coup */
+  scale: number;
+}
+
+/** Cases d'eau où un navire peut passer : près du quai, la moindre eau ; plus loin, de l'eau profonde (ou un lac) */
+const NAV_SHALLOW = -0.08, NAV_DEEP = -0.35;
+/** Longueur au plus du chenal (en cases) et pas entre deux points du chemin */
+const ROUTE_MAX = 70, ROUTE_STEP = 0.5;
+/** Sur les derniers points du chemin (huit : quatre cases), le navire s'amenuise */
+const FADE_STEPS = 8;
+
+/**
+ * Le chemin d'un navire depuis son poste d'amarrage `berth` (x, z) vers le large, en suivant l'eau : on explore le chenal
+ * (rivière, côte, golfe) de proche en proche depuis le quai, et l'on prend le trajet vers le bord de la carte s'il y en a
+ * un, sinon jusqu'à l'eau la plus lointaine ; (fx, fz) : la direction du quai vers l'eau, où le navire part d'abord. Le
+ * tracé est lissé et rééchantillonné tous les `ROUTE_STEP` ; il ne compte qu'un point si le navire n'a nulle part où aller
+ */
+export function shipRoute(w: World, berth: [number, number], fx: number, fz: number): [number, number][] {
+  const nav = (cx: number, cz: number, near: boolean) => w.inCells(cx, cz) && (w.lake[w.ci(cx, cz)] === 1 || w.cellAvg(cx, cz) < (near ? NAV_SHALLOW : NAV_DEEP));
+  const sx = Math.floor(berth[0]), sz = Math.floor(berth[1]);
+  // le départ : deux pas droit devant le quai tant que l'eau le permet
+  let x0 = berth[0], z0 = berth[1];
+  const lead: [number, number][] = [[x0, z0]];
+  for (let k = 1; k <= 3; k++) {
+    const x = berth[0] + fx * k * 0.5, z = berth[1] + fz * k * 0.5;
+    if (!nav(Math.floor(x), Math.floor(z), true)) break;
+    lead.push([x, z]); x0 = x; z0 = z;
+  }
+  const start = w.ci(Math.floor(x0), Math.floor(z0));
+  if (!w.inCells(Math.floor(x0), Math.floor(z0))) return lead;
+  // exploration en largeur à travers les cases d'eau
+  const dist = new Int16Array(N * N).fill(-1), from = new Int32Array(N * N).fill(-1), queue: number[] = [start];
+  dist[start] = 0;
+  let far = start, edge = -1;
+  for (let h = 0; h < queue.length; h++) {
+    const k = queue[h], cx = k % N, cz = Math.floor(k / N);
+    if (dist[k] > dist[far]) far = k;
+    if (edge < 0 && (cx < 3 || cz < 3 || cx > N - 4 || cz > N - 4) && dist[k] > 2) { edge = k; break; }
+    if (dist[k] >= ROUTE_MAX) continue;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx, nz = cz + dz;
+      if (!w.inCells(nx, nz)) continue;
+      const nk = w.ci(nx, nz);
+      // près du quai (quatre cases), la moindre eau suffit
+      if (dist[nk] >= 0 || !nav(nx, nz, Math.max(Math.abs(nx - sx), Math.abs(nz - sz)) <= 4)) continue;
+      dist[nk] = dist[k] + 1; from[nk] = k; queue.push(nk);
+    }
+  }
+  const goal = edge >= 0 ? edge : far;
+  if (goal === start) return lead;
+  // du but au quai, puis lissage (deux passes de coupe de coins) et rééchantillonnage
+  const cells: [number, number][] = [];
+  for (let k = goal; k >= 0 && k !== start; k = from[k]) cells.push([(k % N) + 0.5, Math.floor(k / N) + 0.5]);
+  cells.reverse();
+  let pts: [number, number][] = [...lead, ...cells];
+  for (let pass = 0; pass < 2; pass++) {
+    const out: [number, number][] = [pts[0]];
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+      out.push([ax * 0.75 + bx * 0.25, az * 0.75 + bz * 0.25], [ax * 0.25 + bx * 0.75, az * 0.25 + bz * 0.75]);
+    }
+    out.push(pts[pts.length - 1]);
+    pts = out;
+  }
+  const route: [number, number][] = [pts[0]];
+  let carry = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], len = Math.hypot(bx - ax, bz - az);
+    let d = ROUTE_STEP - carry;
+    while (d <= len) { route.push([ax + ((bx - ax) * d) / len, az + ((bz - az) * d) / len]); d += ROUTE_STEP; }
+    carry = len - (d - ROUTE_STEP);
+  }
+  route.push(pts[pts.length - 1]);
+  return route;
 }
 
 type PlanePhase = 'stand' | 'out' | 'roll' | 'fly' | 'rollout' | 'in';
@@ -71,8 +145,8 @@ const smoothstep = (a: number, b: number, x: number) => { const t = Math.max(0, 
 
 /**
  * Navires des ports et avions des aéroports. Au port, un navire de l'époque reste amarré le long du quai, puis appareille,
- * gagne le large tout droit tant que l'eau est profonde, disparaît à l'horizon et revient s'amarrer (le vapeur fume par sa
- * cheminée). À l'aéroport, un avion quitte son poste, roule jusqu'à la piste, accélère, décolle, fait un grand tour
+ * gagne le large en suivant l'eau (la rivière, la côte) jusqu'à la sortir de la vue, rapetisse à l'horizon et revient par le
+ * même chenal s'amarrer (le vapeur fume par sa cheminée). À l'aéroport, un avion quitte son poste, roule jusqu'à la piste, accélère, décolle, fait un grand tour
  * au-dessus du pays, revient dans l'axe, se pose, freine et regagne son poste
  */
 export class Transports {
@@ -96,11 +170,6 @@ export class Transports {
     if (!w.inCells(cx, cz)) return SEA;
     const k = w.ci(cx, cz);
     return w.lake[k] ? w.lakeLevel[k] : SEA;
-  }
-
-  private deep(x: number, z: number) {
-    const w = this.world, cx = Math.floor(x), cz = Math.floor(z);
-    return w.inCells(cx, cz) && (w.lake[w.ci(cx, cz)] === 1 || w.cellAvg(cx, cz) < -0.35);
   }
 
   update(dt: number, age: number) {
@@ -128,7 +197,8 @@ export class Transports {
     if (s.state === 'docked') {
       if (s.t <= 0 && L > 2) { s.state = 'out'; s.s = 0; }
     } else if (s.state === 'out' || s.state === 'in') {
-      s.s += dt * (age >= 4 ? 0.7 : 0.45) * (big ? 1.3 : 1) * (s.state === 'out' ? 1 : -1);
+      // (le chenal est long : on file à une ou deux cases par seconde ; un point du chemin tous les demi-cases)
+      s.s += dt * (age >= 4 ? 2.6 : 1.9) * (big ? 1.3 : 1) * (s.state === 'out' ? 1 : -1);
       if (s.state === 'out' && s.s >= L) { s.state = 'away'; s.t = 18 + Math.random() * 25; s.root.visible = false; }
       if (s.state === 'in' && s.s <= 0) { s.state = 'docked'; s.s = 0; s.t = 30 + Math.random() * 30; }
     } else if (s.t <= 0) { s.state = 'in'; s.s = L; s.root.visible = true; }
@@ -142,6 +212,8 @@ export class Transports {
     const dock = g.rotation.y + Math.PI / 2, quay = Math.abs(wrap(dock - s.heading)) < Math.PI / 2 ? dock : dock + Math.PI;
     const want = s.state === 'docked' || s.state === 'away' ? quay : s.s < 0.6 ? quay + wrap(along - quay) * (s.s / 0.6) : along;
     s.heading += wrap(want - s.heading) * Math.min(1, dt * 1.5);
+    // au bout du chenal, il rapetisse en se fondant dans l'horizon (il ne disparaît pas d'un coup) ; il grandit au retour
+    s.root.scale.setScalar(s.scale * (L > 2 * FADE_STEPS ? Math.max(0.001, Math.min(1, (L - s.s) / FADE_STEPS)) : 1));
     s.root.position.set(this.v.x, this.waterY(this.v.x, this.v.z) + Math.sin(performance.now() / 900 + b.id) * 0.006, this.v.z);
     s.root.rotation.set(Math.sin(performance.now() / 1300 + b.id) * 0.01, s.heading, Math.sin(performance.now() / 1100) * 0.015);
     if (s.funnel && s.root.visible && Math.random() < dt * (s.state === 'docked' ? 2 : 7)) {
@@ -160,18 +232,12 @@ export class Transports {
     // au grand port, un navire deux fois plus grand, à quai le long du mur, entre le bord et la jetée
     root.scale.setScalar(big ? 2 : age >= 4 ? 1.15 : 1);
     this.group.add(root);
-    // le poste d'amarrage le long du quai, puis tout droit vers le large tant que l'eau est profonde (dix cases au plus)
+    // le poste d'amarrage le long du quai, puis le chenal : on suit l'eau (rivière, côte) jusqu'à la sortir de la vue
     g.updateMatrixWorld();
     const berth = (big ? new THREE.Vector3(age >= 4 ? -0.2 : -0.32, 0, age >= 4 ? 1.95 : age === 3 ? 1.84 : 1.76) : new THREE.Vector3(0, 0, age >= 4 ? 1.42 : 1.38)).applyMatrix4(g.matrixWorld);
-    const fx = Math.sin(g.rotation.y), fz = Math.cos(g.rotation.y), path = [berth.clone()];
-    for (let k = 1; k <= 20; k++) {
-      const x = berth.x + fx * k * 0.5, z = berth.z + fz * k * 0.5;
-      // près du quai l'eau peut être basse ; au-delà, il lui faut de l'eau profonde
-      const cx = Math.floor(x), cz = Math.floor(z), wet = this.world.inCells(cx, cz) && (this.world.lake[this.world.ci(cx, cz)] === 1 || this.world.cellAvg(cx, cz) < -0.08);
-      if (!(k <= 4 ? wet : this.deep(x, z)) || x < 1 || z < 1 || x > N - 1 || z > N - 1) break;
-      path.push(new THREE.Vector3(x, 0, z));
-    }
-    return { root, age, funnel: geo.funnel ? new THREE.Vector3(...geo.funnel) : null, state: 'docked', t: 6 + (id % 5) * 4, path, s: 0, heading: g.rotation.y + Math.PI / 2, key };
+    const scale = big ? 2 : age >= 4 ? 1.15 : 1;
+    const path = shipRoute(this.world, [berth.x, berth.z], Math.sin(g.rotation.y), Math.cos(g.rotation.y)).map(([x, z]) => new THREE.Vector3(x, 0, z));
+    return { root, age, funnel: geo.funnel ? new THREE.Vector3(...geo.funnel) : null, state: 'docked', t: 6 + (id % 5) * 4, path, s: 0, heading: g.rotation.y + Math.PI / 2, key, scale };
   }
 
   // ---------- Avions ----------

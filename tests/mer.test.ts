@@ -8,6 +8,7 @@ import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
 import { Expeditions, ActiveExpedition } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { ExpeditionScene } from '../src/render/expeditionScenes';
+import { shipRoute } from '../src/render/transports';
 
 const mission = (id: string) => MISSIONS.find((m) => m.id === id)!;
 
@@ -222,6 +223,48 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
       expect(r.s.monster!.hits).toBeGreaterThan(0);
       r.scene.dispose(r.a);
     }
+  });
+});
+
+describe('le navire du port suit l’eau jusqu’au large', () => {
+  it('son chemin longe la rivière ou la côte bien au-delà de dix cases, reste sur l’eau et se lisse', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026);
+    w.updateVis();
+    // un quai : une case d’eau peu profonde, collée à une eau profonde
+    let found: [number, number, number, number] | null = null;
+    for (let z = 30; z < N - 30 && !found; z += 2)
+      for (let x = 30; x < N - 30 && !found; x += 2) {
+        const h = w.cellAvg(x, z);
+        if (h > -0.1 || h < -0.3 || w.lake[w.ci(x, z)]) continue;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (w.cellAvg(x + dx * 2, z + dz * 2) < -0.6 && !w.lake[w.ci(x + dx * 2, z + dz * 2)]) { found = [x, z, dx, dz]; break; }
+      }
+    expect(found).not.toBeNull();
+    const [x, z, dx, dz] = found!;
+    const route = shipRoute(w, [x + 0.5, z + 0.5], dx, dz);
+    expect(route.length).toBeGreaterThan(20);
+    // bien plus loin que les dix cases d’autrefois
+    const last = route[route.length - 1];
+    expect(Math.hypot(last[0] - x, last[1] - z)).toBeGreaterThan(12);
+    // des points tous les demi-cases ; jamais sur la terre ferme (à une case de marge près)
+    let wet = 0;
+    route.forEach(([px, pz], i) => {
+      if (i) expect(Math.hypot(px - route[i - 1][0], pz - route[i - 1][1])).toBeLessThan(0.65);
+      if (w.cellAvg(Math.floor(px), Math.floor(pz)) < 0.05) wet++;
+    });
+    expect(wet / route.length).toBeGreaterThan(0.95);
+  });
+
+  it('faute d’eau, le navire reste à quai', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026);
+    w.updateVis();
+    let land: [number, number] | null = null;
+    for (let z = 20; z < N - 20 && !land; z += 7) for (let x = 20; x < N - 20 && !land; x += 7) if (w.cellAvg(x, z) > 1 && !w.nearWater(x, z, 4)) land = [x, z];
+    expect(land).not.toBeNull();
+    expect(shipRoute(w, [land![0] + 0.5, land![1] + 0.5], 0, 1).length).toBeLessThanOrEqual(2);
   });
 });
 
