@@ -704,7 +704,7 @@ export class ToolController implements ToolInput {
     this.moveOrigin = null;
     if (!o) return;
     const w = this.h.world;
-    if (w.canPlace(o.kind, o.x, o.z, o.small ? smallSize(o.kind) : undefined)) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
+    if (w.canPlace(o.kind, o.x, o.z, o.small ? smallSize(o.kind) : undefined) === null) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
   }
 
   private tryPlace() {
