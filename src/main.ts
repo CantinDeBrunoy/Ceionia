@@ -48,7 +48,7 @@ import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { UpgradeBadges } from './render/upgradeBadges';
-import { Expeditions, RAID_TIME, FOE_NAME } from './sim/expeditions';
+import { Expeditions, RAID_TIME, FOE_NAME, isBelow } from './sim/expeditions';
 import { CAMP_GUARDS } from './sim/depths';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
@@ -650,8 +650,18 @@ class Game implements UIHost {
     if (a) this.trainCam = null;
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
+    if (!a) return;
+    this.followPhase = ''; this.followLast = null; this.followSm = null;
+    if (this.mode === 'under') {
+      // depuis le monde souterrain : une troupe (ou des éclaireurs) déjà dans les galeries, la vue reste en bas et la suit,
+      // puis remonte avec elle ; une équipe en surface, la vue remonte la retrouver
+      if (isBelow(a)) { this.autoUnder = true; const p = this.underView?.troopAt(a.id); if (p) this.cam.follow(p[0], p[1]); }
+      else this.exitUnder(undefined, true);
+      return;
+    }
     // assez près pour voir l'équipe (de petits personnages) ; on se rapproche encore quand elle arrive sur place
-    if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 10); this.followPhase = ''; this.followLast = null; this.followSm = null; }
+    const p = this.agents.partyPositions(a.party)[0];
+    if (p) this.cam.follow(p[0], p[1], 10);
   }
   get disasters() { return this.world.disasters; }
 
@@ -1044,7 +1054,7 @@ class Game implements UIHost {
     // la caméra accompagne l'équipe
     const followed = this.following === null ? null : this.expeditions.active.find((e) => e.id === this.following);
     // une troupe armée suivie : quand elle est sous terre, la vue y descend avec elle ; elle remonte quand l'expédition est finie
-    const below = !!followed && followed.entry >= 0 && followed.phase === 'work';
+    const below = !!followed && isBelow(followed);
     if (below && this.mode === 'surface' && !this.autoUnder) { this.autoUnder = true; this.enterUnder(followed!.entry); }
     else if (this.autoUnder && !below && this.mode === 'under') { this.autoUnder = false; this.exitUnder(undefined, true); }
     if (!followed) this.following = null;
@@ -1079,7 +1089,8 @@ class Game implements UIHost {
     if (uv) {
       // les troupes armées en train de parcourir les galeries
       uv.setTroops(this.expeditions.active.filter((a) => a.entry >= 0 && a.phase === 'work').map((a) => ({
-        id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
+        id: a.id, kind: a.c.scene === 'scout' ? 'scouts' : a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
+        halt: a.hold > 0 || !!a.wait, scout: a.scout ? a.scout.t / Math.max(0.01, a.scout.dur) : -1,
       })), dt);
       uv.age = this.sim.age;
       // les patrouilles du camp, et l'attaque du camp en cours

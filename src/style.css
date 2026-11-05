@@ -526,7 +526,7 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 .quests li.cur { border-color: var(--accent); background: var(--accent-soft); }
 .quests li.todo { opacity: 0.6; }
 body.under #underBar { display: flex; }
-body.under #dock, body.under #expList, body.under #fx-tilt-top, body.under #fx-tilt-bottom { display: none; }
+body.under #dock, body.under #fx-tilt-top, body.under #fx-tilt-bottom { display: none; }
 body.under #fx-vignette { background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(8, 6, 12, 0.55) 100%); }
 #fade { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: #09070c; color: #c9cfe0; font-size: 15px; font-weight: 700; letter-spacing: 0.02em; opacity: 0; transition: opacity 0.35s; pointer-events: none !important; }
 #fade.on { opacity: 1; }

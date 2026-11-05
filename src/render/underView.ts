@@ -40,7 +40,10 @@ const ORES: { col: THREE.Color; glow: boolean }[] = [
 
 /** Troupe d'une expédition armée, telle que le jeu la décrit : descendue par `entry`, elle va de filon en filon, puis pousse jusqu'à `front` */
 export interface Troop {
-  id: number; kind: 'cavalry' | 'armor' | 'miners'; n: number; entry: number; targets: number[]; front: number; progress: number; age: number;
+  /** `scouts` : les éclaireurs du repérage, torche au poing, sans armes ni escorte */
+  id: number; kind: 'cavalry' | 'armor' | 'miners' | 'scouts'; n: number; entry: number; targets: number[]; front: number; progress: number; age: number;
+  /** la troupe est à l'arrêt (une attente choisie) ; un éclaireur parti devant : où il en est de son aller-retour (0 … 1) */
+  halt?: boolean; scout?: number;
   /** embuscades sur son chemin : case, créatures, nombre, moment (temps de parcours) et issue */
   ambush: { cell: number; kind: MobKind; n: number; t0: number; result: 'clean' | 'hurt' | 'rout' | null }[];
 }
@@ -73,6 +76,8 @@ const TORCH_GRID = 4;
 const HELD_FLOOR = [0.78, 0.64, 0.45];
 /** Lanternes des galeries tenues : une par bloc de CLAIM_GRID × CLAIM_GRID cases, au plus MAX_CLAIM */
 const CLAIM_GRID = 5, MAX_CLAIM = 900;
+/** Jusqu'où l'éclaireur envoyé devant s'avance dans la galerie avant de revenir (en cases) */
+const SCOUT_AHEAD = 3.5;
 /** Hauteur des colonnes de jour sous les entrées */
 const SHAFT_H = 4;
 /** Temps entre deux choix des sources de lumière les plus proches */
@@ -959,6 +964,12 @@ export class UnderView {
     // soldats de l'époque (légionnaires, chevaliers, fantassins napoléoniens, militaires), cavaliers montés, ou mineurs de
     // l'époque et leur garde
     const members: TroopMember[] = [];
+    // les éclaireurs du repérage : des habitants en tenue de mineur, chacun sa torche, sans escorte
+    if (t.kind === 'scouts') {
+      for (let i = 0; i < t.n; i++) { const soldier = makeSoldier(t.age, t.id + i, true, 'miner'); this.scene.add(soldier.root); members.push({ rider: null, soldier }); }
+      const light: Source = { x: path[0][0], y: 0, z: path[0][1], r: 4, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(1.8), flicker: 0.3 };
+      return { route, path, members, light, scareT: 0, foes: new Map(), over: new Set(), cool: members.map(() => 1), foeCool: new Map() };
+    }
     // l'escorte qui accompagne l'équipe, à pied : une ligne de soldats (fusiliers dès l'âge industriel) ; seule la charge est
     // montée (les hommes d'armes et les mineurs partent sans chevaux)
     const escort = t.kind === 'armor' ? (t.age >= 3 ? 7 : 4) : t.kind === 'cavalry' ? (t.age >= 3 ? 4 : 2) : 2;
@@ -1039,7 +1050,9 @@ export class UnderView {
     const nf = s.members.filter((m) => m.soldier).length;
     if (fighting && s.cool.some((v, i) => s.members[i].soldier && v <= 0)) s.cool.forEach((v, i) => { if (s.members[i].soldier && v < 0.3) s.cool[i] = Math.min(v, 0); });
     c.flash.c.multiplyScalar(Math.exp(-dt * 18));
-    const dust = (c.dustT -= dt) <= 0 && !fighting && !mining;
+    // à l'arrêt (une attente, un éclaireur parti devant) : la colonne ne roule plus
+    const ahead = t.scout !== undefined && t.scout >= 0 ? t.scout : -1, still = !fighting && !mining && (!!t.halt || ahead >= 0);
+    const dust = (c.dustT -= dt) <= 0 && !fighting && !mining && !still;
     if (dust) c.dustT = 0.3;
     let vi = 0, si = 0;
     s.members.forEach((m, i) => {
@@ -1061,15 +1074,20 @@ export class UnderView {
         const near = j < 4, a = near ? j * 1.57 + 0.4 : ((j - 4) / Math.max(1, nf - 4)) * Math.PI * 2, r = near ? 0.26 : 0.62;
         tx = lead[0] + Math.sin(a) * r; tz = lead[1] + Math.cos(a) * r;
         th = near ? Math.atan2(lead[0] - tx, lead[1] - tz) : a; act = near ? 'fight' : 'guard';
+      } else if (j === 0 && ahead >= 0) {
+        // l'éclaireur envoyé devant : le premier fantassin s'avance dans la galerie, puis revient à sa place
+        const p = this.along(s.path, Math.min(s.path.length - 1.01, pos + 0.3 + Math.sin(Math.PI * ahead) * SCOUT_AHEAD));
+        tx = p[0]; tz = p[1]; th = ahead < 0.5 ? p[2] : p[2] + Math.PI; act = 'run';
       } else {
         const [back, side] = m.slot!, p = this.along(s.path, pos - back);
         tx = p[0] + Math.cos(p[2]) * side; tz = p[1] - Math.sin(p[2]) * side; th = p[2];
+        if (still) act = 'guard';
       }
       // chacun glisse jusqu'à sa place (pas de saut quand la colonne se déploie) ; ceux qui ne sont pas encore descendus
       // dans les galeries restent cachés
       if (m.x === undefined) { m.x = tx; m.z = tz; m.h = th; }
       m.x += (tx - m.x) * ease; m.z! += (tz - m.z!) * ease; m.h = m.h! + wrapAngle(th - m.h!) * ease;
-      const x = m.x, z = m.z!, h = m.h, y = this.under.heightAt(x, z), moving = !fighting && !mining;
+      const x = m.x, z = m.z!, h = m.h, y = this.under.heightAt(x, z), moving = !fighting && !mining && !still;
       const root = (m.rider ?? m.soldier)!.root;
       root.visible = fighting || mining || pos - m.slot![0] > -0.15;
       root.position.set(x, y, z); root.rotation.y = h;
@@ -1183,9 +1201,16 @@ export class UnderView {
       const volley = s.cool.findIndex((c, i) => rifles[i] && c <= 0) >= 0;
       if (volley) s.cool.forEach((c, i) => { if (rifles[i] && c < 0.3) s.cool[i] = Math.min(c, 0); });
     }
+    // l'éclaireur envoyé devant (le dernier à pied de la troupe) : il s'avance dans la galerie, puis revient ; la troupe l'attend
+    const ahead = t.scout !== undefined && t.scout >= 0 ? t.scout : -1, scouts = t.kind === 'scouts';
+    let sc = -1;
+    if (ahead >= 0) for (let i = s.members.length - 1; i > 0 && sc < 0; i--) if (s.members[i].soldier) sc = i;
     s.members.forEach((m, i) => {
       let x: number, z: number, h: number;
-      if (fighting) {
+      if (i === sc && !fighting) {
+        const p = this.along(s.path, Math.min(s.path.length - 1.01, pos + 0.3 + Math.sin(Math.PI * ahead) * SCOUT_AHEAD));
+        x = p[0]; z = p[1]; h = ahead < 0.5 ? p[2] : p[2] + Math.PI;
+      } else if (fighting) {
         // chacun marche sur la créature la plus proche de sa place dans le cercle, s'arrête à portée (de lame, ou de fusil) et
         // frappe ; sans créature à portée, il reste en cercle face au noir. Les fusiliers, eux, tiennent leur ligne
         const rifle = rifles[i];
@@ -1227,11 +1252,14 @@ export class UnderView {
       if (m.rider) {
         // à la charge, lance couchée ou sabre en avant ; au filon, ceux qui font face à la paroi frappent, les autres gardent
         m.rider.root.position.set(x, y, z); m.rider.root.rotation.y = h;
-        rideStep(m.rider, this.uTime.value * 13 + i * 1.7, fighting ? 0.3 : mining ? 0 : 1, fighting ? 'fight' : mining ? (i % 2 ? 'rest' : 'fight') : 'charge');
+        const still = !fighting && !mining && (t.halt || ahead >= 0);
+        rideStep(m.rider, this.uTime.value * 13 + i * 1.7, fighting ? 0.3 : mining || still ? 0 : 1, fighting ? 'fight' : mining ? (i % 2 ? 'rest' : 'fight') : still ? 'rest' : 'charge');
       } else if (m.soldier) {
         // au filon, les uns frappent, les autres montent la garde
         m.soldier.root.position.set(x, y, z); m.soldier.root.rotation.y = h;
-        soldierStep(m.soldier, this.uTime.value * 9 + i * 1.3, fighting ? 'fight' : mining ? (i % 2 ? 'guard' : 'fight') : 'walk');
+        // les éclaireurs, à la halte, relèvent le plan (l'un à genoux, l'autre aux aguets) ; à l'arrêt, la troupe monte la garde
+        const mode: SoldierMode = i === sc && !fighting ? 'run' : fighting ? 'fight' : mining ? (i % 2 ? 'guard' : scouts ? 'kneel' : 'fight') : t.halt || ahead >= 0 ? 'guard' : 'walk';
+        soldierStep(m.soldier, this.uTime.value * (mode === 'run' ? 13 : 9) + i * 1.3, mode);
       }
     });
     // la torche du chef éclaire la troupe ; les créatures s'enfuient devant elle

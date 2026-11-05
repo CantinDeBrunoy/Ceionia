@@ -15,6 +15,11 @@ export interface EventOption {
    * de travail est un temps d'attente, pendant lequel le travail est suspendu et l'équipe reste à l'arrêt
    */
   wait?: boolean;
+  /**
+   * Un éclaireur part devant reconnaître le chemin : la troupe s'arrête et l'attend (son temps de travail, comme une attente),
+   * on le voit s'avancer dans la galerie puis revenir
+   */
+  scout?: boolean;
   /** équipement nécessaire : l'une de ces pièces, emportée par l'équipe */
   needs?: GearId[];
   /** multiplicateur du risque de l'expédition */
@@ -444,7 +449,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'crossroads', where: ['cave'], missions: ['deep'], title: 'Un carrefour de galeries',
     text: 'Trois galeries s’ouvrent devant la troupe, et le plan des éclaireurs s’arrête là.',
     options: [
-      { label: 'Envoyer un éclaireur devant', risk: 0.8, work: 6, text: 'L’éclaireur est revenu : on a pris la bonne galerie.' },
+      { scout: true, label: 'Envoyer un éclaireur devant', risk: 0.8, work: 8, text: 'L’éclaireur est revenu : on a pris la bonne galerie.' },
       { label: 'Suivre la plus large', risk: 1.05, text: 'On a suivi la plus large, au jugé.' },
       { label: 'Couper par la plus étroite', risk: 1.25, work: -4, text: 'On s’est faufilé par la plus étroite, en file indienne.' },
     ],

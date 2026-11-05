@@ -2,7 +2,7 @@ import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BI
 import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
-import { AGES, KINDS, KindId, Building, sizeOf } from '../build/catalog';
+import { AGES, KINDS, KindId, Building, sizeOf, lineOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats } from './depths';
@@ -74,7 +74,23 @@ export interface ActiveExpedition {
   redo: boolean;
   /** l'équipe vole (héliport, aérodrome) vers la montagne ou le bout du monde : son voyage (voir `airlift`) */
   air?: AirTrip | null;
+  /** aucun imprévu ne convenait à l'arrivée : le premier survient pendant le travail */
+  arriveMiss?: boolean;
+  /** un éclaireur parti devant (« Envoyer un éclaireur devant ») : depuis combien de temps, sur combien ; la troupe l'attend */
+  scout?: { t: number; dur: number } | null;
 }
+
+/**
+ * À quelle part du travail survient le prochain imprévu de l'équipe : le premier à l'arrivée (sinon au tiers du travail), le
+ * suivant à mi-chemin, un autre encore aux trois quarts ; jamais deux à la suite
+ */
+export function nextEventAt(a: Pick<ActiveExpedition, 'seen' | 'arriveMiss'>): number {
+  const i = a.seen.length + (a.arriveMiss ? 1 : 0);
+  return i <= 0 ? 0.3 : i === 1 ? 0.55 : 0.75;
+}
+
+/** L'équipe est sous terre (troupe armée ou éclaireurs dans les galeries) : c'est dans le monde souterrain qu'on la suit */
+export const isBelow = (a: Pick<ActiveExpedition, 'entry' | 'phase'>) => a.entry >= 0 && a.phase === 'work';
 
 /** Créatures qui tendent des embuscades aux troupes armées */
 export type FoeKind = 'zombie' | 'skeleton' | 'spider' | 'golem' | 'worm';
@@ -155,6 +171,10 @@ const around = (k: number) => [k + 1, k - 1, k + N, k - N];
  * les filons qu'elle abat (dans l'ordre de sa marche), les galeries qu'elle prend et son point le plus avancé
  */
 export interface Campaign { post: Building; entrance: number; entry: number; targets: number[]; take: number[]; front: number }
+/** Chemin des éclaireurs du repérage sous terre : la case où ils descendent, le point le plus loin qu'ils relèvent, et le retour */
+export interface ScoutWay { entry: number; targets: number[]; front: number }
+/** Jusqu'où s'enfoncent les éclaireurs (en cases de galerie) */
+export const SCOUT_REACH = 14;
 
 export class Expeditions {
   active: ActiveExpedition[] = [];
@@ -182,7 +202,12 @@ export class Expeditions {
   running(m: Mission) { return this.active.some((a) => a.m.id === m.id); }
   /** équipes que le village peut envoyer à la fois */
   slots() { return partyLimit(this.pop()); }
-  has(kind: string) { for (const b of this.world.buildings.values()) if (b.kind === kind) return true; return false; }
+  /** Le village en a-t-il un, déjà bâti, ou amélioré depuis (une gare devenue gare centrale compte encore comme une gare) ? */
+  has(kind: string) {
+    const line: string[] = KINDS[kind as KindId] ? lineOf(kind as KindId) : [kind];
+    for (const b of this.world.buildings.values()) if (line.includes(b.kind)) return true;
+    return false;
+  }
 
   /**
    * Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel, un institut de recherche
@@ -317,6 +342,24 @@ export class Expeditions {
     const from = w.ci(Math.floor(base[0]), Math.floor(base[1]));
     for (const [x, z] of cand) if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
     return null;
+  }
+
+  /**
+   * Chemin des éclaireurs sous terre : ils descendent par l'entrée donnée (grotte ou faille), s'enfoncent dans les galeries
+   * jusqu'à SCOUT_REACH cases au plus, y relèvent le plan (une halte), puis remontent par où ils sont venus ; null si
+   * l'entrée ne mène nulle part
+   */
+  scoutRoute(entrance: number): ScoutWay | null {
+    const u = this.under;
+    if (!u) return null;
+    u.sync();
+    const ent = u.entrances.find((e) => e.cell === entrance), entry = ent ? u.under(ent) : -1;
+    if (entry < 0) return null;
+    const d = u.distances(entry);
+    let far = -1;
+    for (let k = 0; k < N * N; k++) if (d[k] > 0 && d[k] <= SCOUT_REACH && (far < 0 || d[k] > d[far])) far = k;
+    if (far < 0 || d[far] < 3) return null;
+    return { entry, targets: [far], front: entry };
   }
 
   /** Galeries que le village tient sous terre (en cases) */
@@ -630,9 +673,18 @@ export class Expeditions {
     let kind: DestKind | null = c.dest, dest: [number, number] | null = null, sea = !!c.sea;
     // avec un camp souterrain, la troupe s'y rassemble : pas besoin de chemin depuis le village jusqu'à l'avant-poste
     const fromCamp = !!plan && this.camp() >= 1;
+    // les éclaireurs du repérage gagnent d'abord l'avant-poste le plus proche, s'il y en a un : ils descendent par son entrée
+    let scout: ScoutWay | null = null;
     if (plan) dest = fromCamp ? [(plan.entrance % N) + 0.5, Math.floor(plan.entrance / N) + 0.5] : this.postDoor(plan.post, plan.entrance, base);
     else if (c.win.some((e) => e.t === 'veins')) return null;
-    else while (kind && !dest) {
+    else if (c.scene === 'scout') {
+      const posts = this.outposts().map((p) => ({ p, d: Math.hypot(p.b.x - base[0], p.b.z - base[1]) })).sort((p, q) => p.d - q.d);
+      for (const { p } of posts) {
+        const way = this.scoutRoute(p.entrance), door = way ? this.postDoor(p.b, p.entrance, base) : null;
+        if (way && door) { scout = way; dest = door; break; }
+      }
+    }
+    while (kind && !dest) {
       dest = this.findDest(kind, base, false, sea && kind === 'river');
       // pas de côte ouverte sur le large à portée : la rivière la plus proche fera l'affaire
       if (!dest && sea && kind === 'river') { sea = false; continue; }
@@ -641,8 +693,10 @@ export class Expeditions {
       if (!dest) kind = FALLBACK[kind];
     }
     if (!dest || !kind) return null;
-    const { targets, entry, take: held, front } = plan ?? { targets: [], entry: -1, take: [], front: -1 };
-    const { ambush, len } = plan ? this.planAmbush(entry, targets, front) : { ambush: [], len: 0 };
+    // sans avant-poste : la grotte (ou la faille) trouvée, si elle descend vers les galeries
+    if (c.scene === 'scout' && !scout && kind === 'cave') { const e = this.world.outpostEntrance(Math.floor(dest[0]), Math.floor(dest[1]), 1); if (e >= 0) scout = this.scoutRoute(e); }
+    const { targets, entry, take: held, front } = plan ?? (scout ? { ...scout, take: [] } : { targets: [], entry: -1, take: [], front: -1 });
+    const { ambush, len } = plan ? this.planAmbush(entry, targets, front) : scout ? { ambush: [], len: troopRoute(this.under!, entry, targets, front).total } : { ambush: [], len: 0 };
     // une fois la course automobile gagnée, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval ;
     // à l'époque moderne, la troupe qui brûle du carburant roule : des blindés pour la charge, des véhicules pour les autres
     const armored = !!c.fuel && c.troop === 'cavalry';
@@ -719,7 +773,13 @@ export class Expeditions {
         continue;
       }
       // une attente choisie : le travail est suspendu, l'équipe reste là à attendre (elle ne fait pas l'action d'une autre option)
-      if (a.hold > 0) { a.hold = Math.max(0, a.hold - dt); if (!a.hold && a.phase === 'work') ag.partyAct(a.party, 'work'); continue; }
+      if (a.hold > 0) {
+        a.hold = Math.max(0, a.hold - dt);
+        // l'éclaireur parti devant revient quand l'attente finit
+        if (a.scout) { a.scout.t = Math.min(a.scout.dur, a.scout.t + dt); if (!a.hold) a.scout = null; }
+        if (!a.hold && a.phase === 'work') ag.partyAct(a.party, 'work');
+        continue;
+      }
       // avec une écurie, les équipes vont à cheval : le travail sur place avance plus vite
       a.t += dt * (a.phase === 'work' && this.has('stable') ? 1.25 : 1);
       if (a.phase === 'work' && a.ambush.length) this.ambushStep(a);
@@ -735,8 +795,9 @@ export class Expeditions {
         ag.mountParty(a.party, false);
         // la troupe armée descend dans les galeries : on ne la voit plus en surface, mais sous terre
         if (a.entry >= 0) ag.partyHide(a.party, true);
+        if (a.entry >= 0 && a.c.scene === 'scout') this.onNews?.(`${a.m.icon} « ${a.m.title} » : les éclaireurs allument leurs torches et descendent dans les galeries.`);
         this.raise(a, true);
-      } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * 0.55) {
+      } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * nextEventAt(a)) {
         this.raise(a, false);
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra && a.fromCamp) {
         // partie du camp, elle y remonte : les soldats rentrent au village sans refaire la route, et l'on fête leur retour
@@ -925,7 +986,8 @@ export class Expeditions {
     // pas un imprévu des dernières expéditions, ni celui qu'une autre équipe attend ou vient de vivre
     const avoid = [...this.world.exp.recent, ...this.active.filter((o) => o !== a).flatMap((o) => o.seen)];
     const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive, sea: a.sea, warm: this.warm(a.dest) }, a.seen, avoid, this.rnd);
-    if (!ev) { a.events = a.seen.length; return; }
+    // rien à l'arrivée : l'imprévu viendra pendant le travail (avant, il était perdu, et le suivant avec lui)
+    if (!ev) { if (arrive) a.arriveMiss = true; else a.events = a.seen.length; return; }
     a.seen.push(ev.id);
     a.picks.push(-1);
     const recent = this.world.exp.recent;
@@ -959,9 +1021,11 @@ export class Expeditions {
     // sinon la troupe, sous terre, était ramenée en arrière sur son chemin
     const before = Math.max(1, a.c.work + a.extra);
     // choisir d'attendre : le temps d'attente est du temps réel de jeu pendant lequel rien n'avance (on ne l'ajoute pas au travail)
-    const waits = !!o.wait && a.phase === 'work';
+    // envoyer un éclaireur devant : la troupe l'attend sur place le temps qu'il aille reconnaître le chemin et revienne
+    const waits = (!!o.wait || !!o.scout) && a.phase === 'work';
     a.extra += waits ? Math.min(0, o.work ?? 0) : o.work ?? 0;
     if (waits) a.hold = waitTime(o);
+    a.scout = waits && o.scout ? { t: 0, dur: a.hold } : null;
     if (a.phase === 'work') a.t *= Math.max(1, a.c.work + a.extra) / before;
     if (o.bonus) a.bonus.push(...o.bonus);
     a.hurt += o.hurt ?? 0;

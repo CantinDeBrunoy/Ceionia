@@ -9,6 +9,7 @@ import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData } from '../save/save';
 import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
+import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, splitIntro, mandatoriesFor, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
@@ -1196,6 +1197,7 @@ export class UI {
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
     $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
+    this.offerPending();
   }
 
   openExpeditions(tab: 'missions' | 'gear' | 'depths' = 'missions') {
@@ -1211,7 +1213,7 @@ export class UI {
       return `<div class="mission ${done ? 'done' : ''}" data-id="${m.id}">
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${m.unlocks ? `<p class="unlock">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})</p>` : ''}
-        ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => (h.sim.counts[k] ?? 0) > 0).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : ''}
+        ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => ex.has(k)).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : ''}
         ${m.choices.some((c) => c.win.some((e) => e.t === 'veins')) ? `<p class="held">${ic('outpost', 15, 2)} Galeries tenues sous terre : <b>${ex.held()}</b> cases${ex.held() ? ' — chaque victoire pousse le front plus loin' : ' — un avant-poste en tiendra les premières'}</p>` : ''}
         ${run ? '' : redo ? `<details class="redo"><summary>${ic('restart', 14, 2)} Refaire cette expédition</summary><p>${m.intro}</p><p class="hint">Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>${choices}</details>` : `${this.introHtml(m.intro)}${choices}`}</div>`;
     }).join('');
@@ -1492,6 +1494,20 @@ export class UI {
     this.update();
   }
 
+  /** l'imprévu de chaque équipe dont la fenêtre s'est déjà ouverte (une fois fermée sans choisir, elle ne se rouvre pas d'elle-même) */
+  private offered = new WeakMap<ActiveExpedition, ExpEvent>();
+
+  /**
+   * Un imprévu dont la fenêtre n'a pas encore pu s'ouvrir (un récit ou un panneau ouvert, un bâtiment en main) : elle s'ouvre
+   * dès que la voie est libre, où que soit la caméra et quelle que soit l'équipe suivie
+   */
+  private offerPending() {
+    const h = this.host;
+    if (this.root.querySelector('.overlay') || h.tools.tool !== 'none') return;
+    const a = h.expeditions.active.find((e) => e.wait && this.offered.get(e) !== e.wait);
+    if (a) this.showDecision(a);
+  }
+
   /** l'état de la pause avant qu'une décision n'arrête le jeu (null : aucune décision ouverte) */
   private pausedFor: boolean | null = null;
 
@@ -1508,6 +1524,9 @@ export class UI {
   showDecision(a: ActiveExpedition) {
     const h = this.host, ex = h.expeditions, ev = a.wait;
     if (!ev) return;
+    // la première fois que la fenêtre s'ouvre pour cet imprévu, l'équipe attend encore tout son temps : celui passé à attendre
+    // que la fenêtre puisse s'ouvrir (un récit, un panneau ouvert, un bâtiment en main) ne compte pas
+    if (this.offered.get(a) !== ev) { this.offered.set(a, ev); a.waitT = 0; }
     this.root.querySelector('.decide')?.closest('.overlay')?.remove();
     const opts = ev.options.map((o, i) => {
       const ok = ex.canTake(a, i), hints: string[] = [];
