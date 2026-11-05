@@ -750,6 +750,28 @@ function villageChurch(p: Parts) {
     else { p.box(0.04, 0.05, 0.012, x, 0.012, z, 0x9a9488); p.box(0.03, 0.004, 0.06, x, 0.012, z + 0.03, 0x7fa86a); }
   }
   p.cyl(0.015, 0.02, 0.06, 5, 0.3, 0.012, 0.26, C.darkwood); p.cone(0.07, 0.24, 7, 0.3, 0.07, 0.26, 0x3f6a46);
+  // d'autres tombes : tertres herbus, croix de bois, une dalle couchée, la lanterne des morts sur sa colonnette
+  for (const [x, z, k] of [[0.2, -0.18, 2], [0.28, -0.05, 1], [0.2, 0.08, 2], [0.32, -0.3, 1], [0.17, -0.3, 3]] as number[][]) {
+    p.box(0.035, 0.012, 0.07, x, 0.012, z + 0.035, 0x6f9a5a);
+    if (k === 1) { p.box(0.008, 0.06, 0.008, x, 0.012, z, C.darkwood); p.box(0.032, 0.008, 0.008, x, 0.05, z, C.darkwood); }
+    else if (k === 2) { p.box(0.035, 0.045, 0.01, x, 0.012, z, 0xa8a294); p.add(new THREE.CircleGeometry(0.0175, 6, 0, Math.PI), x, 0.057, z + 0.001, 0xa8a294); }
+    else p.box(0.05, 0.016, 0.09, x, 0.012, z + 0.03, 0xb8b2a4);
+  }
+  p.cyl(0.012, 0.014, 0.18, 6, 0.33, 0.012, -0.2, dk); p.box(0.03, 0.04, 0.03, 0.33, 0.19, -0.2, 0xffd890, 0, true); p.pyramid(0.04, 0.04, 0.04, 0.33, 0.23, -0.2, dk);
+  for (const z of [-0.3, -0.12, 0.06]) p.box(0.016, 0.016, 0.016, 0.38, 0.062, z, dk);
+  // le calvaire sur ses degrés, le tilleul et son banc, la lanterne de la porte
+  const cx = -0.34, cz = 0.32;
+  for (let k = 0; k < 2; k++) p.box(0.09 - k * 0.03, 0.02, 0.09 - k * 0.03, cx, 0.012 + k * 0.02, cz, dk);
+  p.box(0.014, 0.16, 0.014, cx, 0.052, cz, st); p.box(0.06, 0.014, 0.014, cx, 0.17, cz, st);
+  p.cyl(0.012, 0.018, 0.12, 5, -0.36, 0.012, -0.3, C.wood); p.sphere(0.1, -0.36, 0.2, -0.3, 0x6f9a4a, 0, 0.85);
+  bench(p, -0.36, -0.18, Math.PI / 2);
+  p.box(0.006, 0.006, 0.03, tx + 0.07, 0.2, tz + 0.145, 0x3c3c40); p.box(0.022, 0.03, 0.022, tx + 0.07, 0.165, tz + 0.16, 0xffd890, 0, true);
+  // fleurs le long de la nef, le curé sur le parvis, les paroissiennes qui arrivent, l'enfant de chœur
+  for (let i = 0; i < 5; i++) p.sphere(0.018, -0.31, 0.03, -0.32 + i * 0.1, [C.pink, C.butter, C.lav, 0xd84a3e, 0xffffff][i], 0, 0.8);
+  figure(p, tx + 0.13, tz + 0.17, 0x1e1e24, 0.2, false, 0x8a8a8a);
+  figure(p, tx - 0.15, tz + 0.2, 0x6a4a7a, 2.6, false, 0xe8e0d0);
+  figure(p, tx + 0.22, tz + 0.12, 0x3a6ab8, -2.2, false, 0x4a3426);
+  figure(p, tx - 0.2, tz + 0.12, 0xece4d4, 0.6, false, 0xc8a070);
 }
 
 /**
