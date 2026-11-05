@@ -44,6 +44,9 @@ export interface ExpEvent {
   ages?: [number, number];
   /** il survient en chemin : à l'arrivée de l'équipe seulement, pas au milieu du travail */
   arrive?: boolean;
+  /** en pleine mer (requins, houle) ou sur l'eau douce (crocodiles) ; `warm` : seulement sous un climat chaud */
+  water?: 'sea' | 'fresh';
+  warm?: boolean;
   title: string;
   text: string;
   options: EventOption[];
@@ -84,7 +87,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'flood', where: ['river'], notScenes: ['boat', 'dive'], title: 'La rivière gonfle',
+    id: 'flood', where: ['river'], water: 'fresh', notScenes: ['boat', 'dive'], title: 'La rivière gonfle',
     text: 'Il a plu en amont : l’eau monte à vue d’œil et le courant emporte des branches.',
     options: [
       { wait: true, label: 'Attendre la décrue', risk: 0.85, work: 8, text: 'On a attendu que l’eau baisse, en haut de la berge.' },
@@ -102,7 +105,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'traveler', where: ['plain', 'forest', 'far', 'river', 'mountain'], arrive: true, title: 'Un voyageur blessé',
+    id: 'traveler', where: ['plain', 'forest', 'far', 'river', 'mountain'], water: 'fresh', arrive: true, title: 'Un voyageur blessé',
     text: 'Au bord du chemin, un voyageur s’est foulé la cheville. Il est loin de chez lui.',
     options: [
       { label: 'Le soigner', needs: ['kit'], risk: 1, bonus: [joy(2, 5)], text: 'Soigné et reposé, le voyageur a promis de raconter partout l’accueil du village.' },
@@ -116,6 +119,44 @@ export const EVENTS: ExpEvent[] = [
     options: [
       { label: 'Échanger des cadeaux', risk: 0.9, work: 4, bonus: [joy(2, 5)], text: 'Cadeaux échangés, chansons partagées : de nouveaux amis.' },
       { label: 'Remercier et reprendre la route', risk: 1, text: 'On a remercié nos hôtes avant de reprendre la route.' },
+    ],
+  },
+  // ---------------- Les dents de l'eau : le requin au large, le crocodile des eaux douces chaudes ----------------
+  {
+    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive'], title: 'Un aileron dans l’eau',
+    text: 'Un grand aileron gris fend l’eau et tourne autour du bateau : un requin !',
+    options: [
+      { label: 'Fuir vers la rive', risk: 0.9, work: 6, text: 'On a mis le cap sur la rive à toute vitesse, l’aileron sur les talons.' },
+      { label: 'Se battre à la lance', needs: WEAPONS, risk: 0.6, text: 'Un bon coup de lance sur le museau : le requin a filé dans les profondeurs.' },
+      { label: 'Jeter des appâts', risk: 0.8, work: 3, text: 'On a jeté des poissons au loin : le requin s’est rué dessus, et on a pu continuer.' },
+    ],
+  },
+  {
+    id: 'croc', where: ['river'], water: 'fresh', warm: true, scenes: ['boat', 'fish', 'gather', 'pebbles', 'hops', 'salt', 'spring'], title: 'Un crocodile !',
+    text: 'Ce que l’on prenait pour un tronc flottant ouvre un œil, puis une gueule pleine de dents : un crocodile glisse vers l’équipe.',
+    options: [
+      { label: 'Fuir loin de l’eau', risk: 0.9, work: 5, text: 'On a couru loin de la berge : le crocodile a claqué des mâchoires dans le vide.' },
+      { label: 'Se battre à la lance', needs: WEAPONS, risk: 0.65, text: 'Les lances pointées l’ont fait reculer : le crocodile a replongé dans l’eau brune.' },
+      { label: 'Lui jeter de la viande', risk: 0.8, work: 3, text: 'Un morceau de viande lancé au loin : le crocodile l’a avalé d’un coup, et on l’a laissé digérer.' },
+    ],
+  },
+  // ---------------- La chasse au monstre des mers ----------------
+  {
+    id: 'swell', where: ['river'], scenes: ['megalodon', 'kraken'], title: 'La houle se lève',
+    text: 'De grosses vagues secouent la galère : les hommes d’armes se cramponnent aux bords, harpons à la main.',
+    options: [
+      { label: 'Ramer face aux vagues', risk: 0.85, work: 4, text: 'Tous aux rames, face aux vagues : la galère a tenu bon.' },
+      { wait: true, label: 'Attendre que la mer se calme', risk: 0.9, work: 6, text: 'On a attendu que la mer se calme, à l’abri derrière les boucliers.' },
+      { label: 'Foncer quand même', risk: 1.25, work: -3, text: 'On a foncé dans les vagues, trempés jusqu’aux os.' },
+    ],
+  },
+  {
+    id: 'wreck', where: ['river'], scenes: ['megalodon', 'kraken'], title: 'Une épave flotte',
+    text: 'Les restes d’un bateau dérivent sur l’eau, rongés et brisés : le monstre est passé par là.',
+    options: [
+      { label: 'Fouiller l’épave', risk: 1.1, work: 5, bonus: [{ t: 'ore', n: 2 }], text: 'Dans l’épave, des lingots de métal : un petit trésor.' },
+      { label: 'Charger les harpons', needs: WEAPONS, risk: 0.75, work: 3, text: 'Les harpons chargés et prêts, on a avancé, l’œil sur l’eau.' },
+      { label: 'Passer sans s’arrêter', risk: 0.95, text: 'On est passé en silence, sans quitter l’eau des yeux.' },
     ],
   },
   // ---------------- Le temps qu'il fait : l'orage et le brouillard sur la scène ----------------
@@ -227,7 +268,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'rapids', where: ['river'], scenes: ['boat'], title: 'Les rapides',
+    id: 'rapids', where: ['river'], water: 'fresh', scenes: ['boat'], title: 'Les rapides',
     text: 'Le courant forcit : devant la barque, l’eau écume entre les rochers.',
     options: [
       { label: 'Porter la barque le long de la berge', risk: 0.8, work: 6, text: 'On a porté la barque sur la berge le temps de passer les rapides.' },
@@ -413,14 +454,15 @@ export const EVENTS: ExpEvent[] = [
 export const EVENT_BY: Record<string, ExpEvent> = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 
 /** Où en est l'équipe quand l'imprévu survient : sa destination, sa mission, ce qu'elle y fait, l'âge, et si elle arrive */
-export interface EventCtx { dest: DestKind; mission: string; scene: Scene; age: number; arrive: boolean }
+export interface EventCtx { dest: DestKind; mission: string; scene: Scene; age: number; arrive: boolean; /** au large (la mer) ; climat chaud */ sea?: boolean; warm?: boolean }
 
 /** Imprévus qui peuvent survenir à cette équipe, à ce moment-là (sans tenir compte de ceux déjà vus) */
 export function eventsFor(ctx: EventCtx): ExpEvent[] {
   return EVENTS.filter((e) => e.where.includes(ctx.dest)
     && (!e.missions || e.missions.includes(ctx.mission)) && (!e.scenes || e.scenes.includes(ctx.scene))
     && !e.not?.includes(ctx.mission) && !e.notScenes?.includes(ctx.scene)
-    && (!e.ages || (ctx.age >= e.ages[0] && ctx.age <= e.ages[1])) && (!e.arrive || ctx.arrive));
+    && (!e.ages || (ctx.age >= e.ages[0] && ctx.age <= e.ages[1])) && (!e.arrive || ctx.arrive)
+    && (!e.water || (e.water === 'sea') === !!ctx.sea) && (!e.warm || !!ctx.warm));
 }
 
 /**

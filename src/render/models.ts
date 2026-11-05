@@ -8546,3 +8546,94 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   cache.set(key, m);
   return m;
 }
+
+// ---------------- Monstres et dents de l'eau des expéditions (requin, crocodile, mégalodon, kraken) ----------------
+/**
+ * Requin, museau vers +z, centré sur l'origine, long d'un demi-mètre de jeu (0,5) : dos gris bleu, ventre blanc, grand aileron
+ * dorsal, nageoires, queue en croissant. `big` : le mégalodon (même corps, plus sombre et balafré, rangée de grandes dents) ;
+ * la scène le grossit
+ */
+export function shark(p: Parts, big = false) {
+  const back = big ? 0x4a5663 : 0x6e7e8e, belly = big ? 0xcfd2d0 : 0xeef0f0;
+  p.add(new THREE.IcosahedronGeometry(0.1, 1).scale(0.58, 0.6, 2.4), 0, 0, 0, back);
+  p.add(new THREE.IcosahedronGeometry(0.09, 1).scale(0.52, 0.36, 2.2), 0, -0.03, 0.01, belly);
+  p.add(new THREE.ConeGeometry(0.042, 0.1, 6).rotateX(Math.PI / 2), 0, 0.002, 0.27, back);
+  // l'aileron dorsal (le seul qu'on voie quand il rôde), l'aileron de la queue, les pectorales
+  p.add(new THREE.ConeGeometry(0.045, 0.15, 3).scale(0.28, 1, 1), 0, 0.095, -0.01, back, 0, false, 0, -0.32);
+  p.add(new THREE.ConeGeometry(0.03, 0.08, 3).scale(0.28, 1, 1), 0, 0.075, -0.16, back, 0, false, 0, -0.5);
+  for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.03, 0.12, 3).scale(1, 1, 0.3), s * 0.07, -0.035, 0.07, back, 0, false, s * 1.25, 0.2);
+  p.add(new THREE.ConeGeometry(0.04, 0.13, 3).scale(0.28, 1, 1), 0, 0.045, -0.265, back, 0, false, 0, -0.75);
+  p.add(new THREE.ConeGeometry(0.03, 0.09, 3).scale(0.28, 1, 1), 0, -0.035, -0.255, back, 0, false, 0, 2.4);
+  for (const s of [-1, 1]) p.box(0.01, 0.01, 0.01, s * 0.045, 0.02, 0.2, 0x1a1a1e);
+  // la gueule : un sourire de dents blanches sous le museau
+  for (let i = 0; i < (big ? 7 : 4); i++) for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(big ? 0.008 : 0.005, big ? 0.03 : 0.02, 3).rotateX(Math.PI), s * (0.012 + i * 0.006), -0.03, 0.17 + i * 0.012 + (big ? 0.02 : 0), 0xffffff);
+  if (big) for (let i = 0; i < 3; i++) p.box(0.004, 0.025, 0.04, 0.052, 0.01 - i * 0.012, 0.08 - i * 0.02, 0x2f3944, 0.3);
+}
+
+/**
+ * Crocodile, museau vers +z, long de 0,34, pattes posées à y = 0 : cuirasse verte à crête de bosses, queue effilée, yeux
+ * jaunes saillants, dents. `jaw` : seulement la mâchoire inférieure, dont la charnière est à l'origine (la scène l'ouvre en
+ * la faisant tourner autour de x ; elle se place en (0, 0.024, 0.075) sur le corps)
+ */
+export function crocodile(p: Parts, jaw = false) {
+  const hide = 0x5f8040, dark = 0x4a6a34, pale = 0xdcd8a4;
+  if (jaw) {
+    p.box(0.034, 0.011, 0.1, 0, -0.011, 0.05, pale);
+    for (let i = 0; i < 5; i++) for (const s of [-1, 1]) p.box(0.004, 0.009, 0.005, s * 0.016, 0.0, 0.02 + i * 0.018, 0xffffff);
+    return;
+  }
+  p.box(0.07, 0.036, 0.17, 0, 0.012, -0.01, hide);
+  p.box(0.074, 0.01, 0.17, 0, 0.044, -0.01, dark);
+  p.box(0.064, 0.008, 0.16, 0, 0.008, -0.01, pale);
+  // la queue, effilée
+  p.add(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([
+    -0.032, 0.048, -0.09, 0.032, 0.048, -0.09, 0, 0.038, -0.22, -0.032, 0.012, -0.09, 0, 0.012, -0.22, 0.032, 0.012, -0.09,
+    -0.032, 0.048, -0.09, 0, 0.038, -0.22, -0.032, 0.012, -0.09, 0.032, 0.048, -0.09, 0.032, 0.012, -0.09, 0, 0.038, -0.22,
+    -0.032, 0.012, -0.09, 0, 0.012, -0.22, 0, 0.038, -0.22, 0.032, 0.012, -0.09, 0.032, 0.048, -0.09, 0, 0.012, -0.22], 3)), 0, 0, 0, hide);
+  // le museau : mâchoire supérieure longue, narines, dents de côté
+  p.box(0.046, 0.018, 0.11, 0, 0.026, 0.075, hide);
+  p.box(0.034, 0.012, 0.03, 0, 0.026, 0.178, hide);
+  p.box(0.012, 0.01, 0.012, 0, 0.042, 0.185, 0x2a2a22);
+  for (let i = 0; i < 5; i++) for (const s of [-1, 1]) p.box(0.004, 0.009, 0.005, s * 0.022, 0.018, 0.1 + i * 0.016, 0xffffff);
+  for (const s of [-1, 1]) {
+    p.add(new THREE.IcosahedronGeometry(0.011, 0), s * 0.022, 0.054, 0.065, 0xe8d860);
+    p.box(0.004, 0.012, 0.004, s * 0.022, 0.058, 0.066, 0x1a1a14);
+    // pattes écartées
+    for (const z of [-0.055, 0.06]) p.add(new THREE.BoxGeometry(0.022, 0.012, 0.026), s * 0.047, 0.006, z, dark, s * 0.4);
+  }
+  // la crête de bosses sur le dos, jusqu'au bout de la queue
+  for (let i = 0; i < 9; i++) p.box(0.012, 0.011, 0.014, 0, 0.049 - Math.max(0, i - 4) * 0.0035, 0.07 - i * 0.026, 0x3f5a2c);
+}
+
+/** Une tentacule de kraken, dressée à y = 0 depuis l'origine : neuf anneaux qui s'amincissent en s'enroulant, ventouses roses (haute de 0,6) */
+export function tentacle(p: Parts) {
+  let y = 0, z = 0;
+  for (let i = 0; i < 9; i++) {
+    const h = 0.07, r0 = 0.055 * (1 - i / 10) + 0.006, r1 = 0.055 * (1 - (i + 1) / 10) + 0.006;
+    // l'angle de chaque anneau : une courbe en S, qui s'enroule vers la pointe
+    const a = 0.22 * Math.sin(i * 0.6) + i * 0.07;
+    p.add(new THREE.CylinderGeometry(r1, r0, h, 6).translate(0, h / 2, 0), 0, y, z, i % 2 ? 0x8f3f66 : 0x7e3458, 0, false, 0, a);
+    for (let k = 0; k < 2; k++) p.add(new THREE.IcosahedronGeometry(r0 * 0.34, 0), 0, y + h * (0.3 + k * 0.4) * Math.cos(a), z + h * (0.3 + k * 0.4) * Math.sin(a) + r0 * 0.8, 0xf0c4d4);
+    y += Math.cos(a) * h; z += Math.sin(a) * h;
+  }
+}
+
+/** La tête du kraken, dressée à y = 0 : manteau en dôme pointu, deux gros yeux jaunes, bec ; large de 0,36 */
+export function krakenHead(p: Parts) {
+  p.add(new THREE.IcosahedronGeometry(0.17, 1).scale(1, 0.8, 1.05), 0, 0.1, 0, 0x7a3254);
+  p.add(new THREE.ConeGeometry(0.13, 0.3, 7), 0, 0.3, -0.03, 0x6a2a48, 0, false, 0, -0.18);
+  for (let i = 0; i < 6; i++) p.add(new THREE.IcosahedronGeometry(0.02, 0), Math.sin(i * 1.4) * 0.09, 0.2 + (i % 3) * 0.06, -0.06 - Math.cos(i * 1.4) * 0.03, 0x9a4a6e);
+  for (const s of [-1, 1]) {
+    p.add(new THREE.IcosahedronGeometry(0.042, 1), s * 0.11, 0.12, 0.12, 0xf6e27a);
+    p.box(0.012, 0.03, 0.012, s * 0.11, 0.105, 0.158, 0x1a1218);
+  }
+  p.add(new THREE.ConeGeometry(0.03, 0.06, 5).rotateX(Math.PI / 2), 0, 0.03, 0.17, 0x2a1a22);
+}
+
+/** Harpon lancé, pointe vers +z, centré : hampe de bois, pointe de fer à barbes, bout de corde */
+export function harpoon(p: Parts) {
+  p.box(0.008, 0.008, 0.3, 0, -0.004, -0.15, 0x8a6a44);
+  p.add(new THREE.ConeGeometry(0.016, 0.06, 4).rotateX(Math.PI / 2), 0, 0, 0.03, 0xaab0b8);
+  p.box(0.03, 0.005, 0.012, 0, -0.002, 0.0, 0x8a8f96);
+  p.box(0.004, 0.004, 0.08, 0, 0, -0.34, 0xd8c8a0);
+}

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents } from '../sim/agents';
 import { ActiveExpedition } from '../sim/expeditions';
-import { HerdKind, Scene } from '../sim/missions';
+import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
 import { Act } from '../world/gardens';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { makeFolk, folkStep, Folk, FolkPose, FolkRole } from './folk';
@@ -12,7 +12,7 @@ import { Parts } from './parts';
 import { mats } from './materials';
 import type { CombatFx } from './combatFx';
 import { rocketGeo, ROCKET_H, ROCKET_R, RocketKind } from './rocket';
-import { SPACEPAD } from './models';
+import { SPACEPAD, shark, crocodile, tentacle, krakenHead, harpoon } from './models';
 import { Building, sizeOf } from '../build/catalog';
 
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
@@ -37,15 +37,169 @@ const fireGeo = () => geo('fire', (p) => {
   for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; p.sphere(0.025, Math.cos(a) * 0.075, 0.012, Math.sin(a) * 0.075, 0x8a857c); }
   for (const r of [0, 1.05, 2.1]) p.box(0.022, 0.022, 0.13, 0, 0.01, 0, 0x6a4a34, r);
 });
-const boatGeo = () => geo('boat', (p) => {
-  const side = 0x9a6a44, dark = 0x6f4a30;
-  p.box(0.15, 0.012, 0.3, 0, 0, 0, dark);
-  for (const s of [-1, 1]) { p.box(0.014, 0.05, 0.3, s * 0.07, 0, 0, side); p.box(0.008, 0.008, 0.28, s * 0.11, 0.035, 0.01, 0xb08458, s * 0.45); }
-  p.box(0.15, 0.05, 0.014, 0, 0, -0.15, side);
-  p.box(0.1, 0.05, 0.05, 0, 0, 0.17, side);
-  p.box(0.05, 0.05, 0.04, 0, 0, 0.21, side);
-  p.box(0.13, 0.01, 0.045, 0, 0.032, 0.06, 0xb08458);
-  p.box(0.13, 0.01, 0.045, 0, 0.032, -0.08, 0xb08458);
+/** Un triangle à deux faces (une voile, un fanion), dans un plan vertical x = constante */
+function sailTri(p: Parts, x: number, pts: [number, number][], color: number) {
+  const v = pts.flatMap(([y, z]) => [x, y, z]), r = pts.slice().reverse().flatMap(([y, z]) => [x, y, z]);
+  p.add(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([...v, ...r], 3)), 0, 0, 0, color);
+}
+/**
+ * Les embarcations des expéditions, proue vers +z, ligne de flottaison à y = 0 (voir `boatKindFor`) : la pirogue creusée dans
+ * un tronc, la barque à rames, le voilier à deux voiles, le vapeur à roues à aubes, la vedette moderne, l'hydroglisseur
+ * futuriste, la galère à rames et boucliers
+ */
+const BOAT_MAKE: Record<BoatKind, (p: Parts) => void> = {
+  canoe: (p) => {
+    p.add(new THREE.IcosahedronGeometry(0.1, 1).scale(0.6, 0.4, 1.7), 0, 0.02, 0, 0x7a5a3c);
+    p.add(new THREE.IcosahedronGeometry(0.08, 1).scale(0.5, 0.15, 1.5), 0, 0.055, 0, 0xa8845a);
+    p.box(0.1, 0.008, 0.02, 0, 0.05, 0.04, 0x6a4a30);
+    p.box(0.1, 0.008, 0.02, 0, 0.05, -0.06, 0x6a4a30);
+  },
+  rowboat: (p) => {
+    const side = 0x9a6a44, dark = 0x6f4a30;
+    p.box(0.15, 0.012, 0.3, 0, 0, 0, dark);
+    for (const s of [-1, 1]) { p.box(0.014, 0.05, 0.3, s * 0.07, 0, 0, side); p.box(0.008, 0.008, 0.28, s * 0.11, 0.035, 0.01, 0xb08458, s * 0.45); }
+    p.box(0.15, 0.05, 0.014, 0, 0, -0.15, side);
+    p.box(0.1, 0.05, 0.05, 0, 0, 0.17, side);
+    p.box(0.05, 0.05, 0.04, 0, 0, 0.21, side);
+    p.box(0.13, 0.01, 0.045, 0, 0.032, 0.06, 0xb08458);
+    p.box(0.13, 0.01, 0.045, 0, 0.032, -0.08, 0xb08458);
+  },
+  sail: (p) => {
+    // coque ventrue de bois, pont clair, mât, grand-voile et foc, fanion rouge
+    const side = 0x8a5a38, dark = 0x5f3e28;
+    p.box(0.16, 0.012, 0.36, 0, 0, 0, dark);
+    for (const s of [-1, 1]) p.box(0.016, 0.06, 0.36, s * 0.078, 0, 0, side);
+    p.box(0.16, 0.06, 0.016, 0, 0, -0.18, side);
+    p.box(0.11, 0.06, 0.06, 0, 0, 0.2, side);
+    p.box(0.05, 0.06, 0.05, 0, 0, 0.255, side);
+    p.box(0.14, 0.008, 0.34, 0, 0.045, 0, 0xc9a46c);
+    p.box(0.1, 0.03, 0.08, 0, 0.05, -0.12, 0x9a6a44);
+    p.cyl(0.006, 0.009, 0.4, 5, 0, 0.05, 0.02, 0x5a3e2e);
+    p.box(0.008, 0.008, 0.18, 0, 0.14, -0.08, 0x5a3e2e);
+    sailTri(p, 0, [[0.15, -0.01], [0.43, -0.01], [0.15, -0.17]], 0xf4ecdc);
+    sailTri(p, 0, [[0.14, 0.04], [0.4, 0.03], [0.07, 0.25]], 0xe8dcc0);
+    sailTri(p, 0.003, [[0.42, 0.0], [0.47, 0.0], [0.42, 0.06]], 0xc8443a);
+  },
+  steam: (p) => {
+    // coque de fer, flottaison rouge, roues à aubes, cabine blanche, cheminée noire à bague rouge
+    const iron = 0x3a3f48;
+    p.box(0.14, 0.05, 0.34, 0, 0, 0, iron);
+    p.box(0.145, 0.012, 0.34, 0, 0.0, 0, 0xb0392e);
+    p.box(0.1, 0.05, 0.07, 0, 0, 0.2, iron);
+    p.box(0.05, 0.05, 0.05, 0, 0, 0.255, iron);
+    p.box(0.13, 0.008, 0.34, 0, 0.05, 0, 0xa07850);
+    p.box(0.1, 0.06, 0.12, 0, 0.056, -0.05, 0xece8de);
+    p.box(0.11, 0.008, 0.13, 0, 0.116, -0.05, 0x8a8f96);
+    p.box(0.07, 0.04, 0.05, 0, 0.056, 0.1, 0xece8de);
+    for (const s of [-1, 1]) {
+      p.add(new THREE.CylinderGeometry(0.052, 0.052, 0.014, 10).rotateZ(Math.PI / 2), s * 0.095, 0.05, -0.04, 0x8a5a38);
+      p.add(new THREE.BoxGeometry(0.016, 0.1, 0.012), s * 0.095, 0.05, -0.04, 0x5a3e2e, 0, false, 0, 0.8);
+      p.add(new THREE.BoxGeometry(0.016, 0.1, 0.012), s * 0.095, 0.05, -0.04, 0x5a3e2e, 0, false, 0, -0.8);
+    }
+    p.cyl(0.024, 0.03, 0.14, 8, 0, 0.12, -0.02, 0x2a2a2e);
+    p.cyl(0.027, 0.027, 0.014, 8, 0, 0.215, -0.02, 0xb0392e);
+    p.cyl(0.03, 0.026, 0.02, 8, 0, 0.234, -0.02, 0x2a2a2e);
+  },
+  launch: (p) => {
+    // vedette : coque blanche à liseré bleu, étrave haute, cabine vitrée, radar, deux moteurs hors-bord
+    p.box(0.13, 0.045, 0.34, 0, 0, -0.02, 0xf4f4f2);
+    p.box(0.134, 0.012, 0.34, 0, 0.03, -0.02, 0x2a5ea8);
+    p.add(new THREE.BoxGeometry(0.1, 0.04, 0.12), 0, 0.022, 0.2, 0xf4f4f2, 0, false, 0, -0.3);
+    p.add(new THREE.BoxGeometry(0.05, 0.035, 0.08), 0, 0.03, 0.27, 0xf4f4f2, 0, false, 0, -0.35);
+    p.box(0.1, 0.05, 0.12, 0, 0.045, -0.03, 0xf4f4f2);
+    p.add(new THREE.BoxGeometry(0.09, 0.03, 0.01), 0, 0.085, 0.05, 0x86c4d8, 0, false, 0, 0.5);
+    p.box(0.102, 0.012, 0.13, 0, 0.095, -0.03, 0x2a5ea8);
+    p.cyl(0.004, 0.004, 0.06, 5, 0, 0.107, -0.04, 0x5d6878);
+    p.box(0.05, 0.006, 0.012, 0, 0.165, -0.04, 0x8a8f96);
+    for (const s of [-1, 1]) p.box(0.026, 0.06, 0.04, s * 0.035, 0.0, -0.205, 0x2a2a2e);
+  },
+  hover: (p) => {
+    // hydroglisseur futuriste : jupe basse bleu nuit, coque blanche profilée, bulle de verre, deux grandes hélices carénées
+    p.box(0.19, 0.022, 0.34, 0, 0, 0, 0x2f4a66);
+    p.add(new THREE.BoxGeometry(0.15, 0.028, 0.26), 0, 0.034, -0.02, 0xf4f4f2);
+    p.add(new THREE.BoxGeometry(0.11, 0.025, 0.1), 0, 0.03, 0.18, 0xf4f4f2, 0, false, 0, -0.3);
+    p.add(new THREE.IcosahedronGeometry(0.055, 1).scale(1, 0.75, 1.5), 0, 0.075, 0.03, 0x7fd0e8);
+    p.box(0.152, 0.006, 0.26, 0, 0.056, -0.02, 0x6af0ff);
+    for (const s of [-1, 1]) {
+      p.add(new THREE.CylinderGeometry(0.036, 0.036, 0.02, 10).rotateX(Math.PI / 2), s * 0.05, 0.085, -0.165, 0x8a8f96);
+      p.add(new THREE.BoxGeometry(0.06, 0.004, 0.006), s * 0.05, 0.085, -0.178, 0x3c3c40);
+      p.box(0.01, 0.04, 0.02, s * 0.05, 0.05, -0.15, 0x5d6878);
+    }
+    p.box(0.012, 0.05, 0.03, 0, 0.056, -0.15, 0x6af0ff);
+  },
+  galley: (p) => {
+    // galère de guerre : longue coque de bois, éperon, boucliers au bordage, rames, voile carrée rayée
+    const side = 0x8a5a38, dark = 0x5f3e28;
+    p.box(0.17, 0.012, 0.5, 0, 0, 0, dark);
+    for (const s of [-1, 1]) p.box(0.016, 0.06, 0.5, s * 0.085, 0, 0, side);
+    p.box(0.17, 0.06, 0.016, 0, 0, -0.25, side);
+    p.box(0.13, 0.06, 0.06, 0, 0, 0.27, side);
+    p.box(0.06, 0.05, 0.05, 0, 0, 0.325, side);
+    p.add(new THREE.ConeGeometry(0.02, 0.09, 5).rotateX(Math.PI / 2), 0, 0.012, 0.405, 0x8a8f96);
+    p.box(0.1, 0.1, 0.03, 0, 0, -0.27, side);
+    p.box(0.06, 0.04, 0.03, 0, 0.1, -0.28, 0xe8c04a);
+    p.box(0.15, 0.008, 0.46, 0, 0.045, 0, 0xc9a46c);
+    for (let i = 0; i < 6; i++) for (const s of [-1, 1]) {
+      p.add(new THREE.CylinderGeometry(0.02, 0.02, 0.006, 8).rotateZ(Math.PI / 2), s * 0.095, 0.062, -0.2 + i * 0.075, i % 2 ? 0xc8443a : 0xe8c04a);
+      p.box(0.12, 0.004, 0.008, s * 0.15, 0.03, -0.2 + i * 0.075, 0xb08458, 0, false, s * 0.35);
+    }
+    p.cyl(0.006, 0.009, 0.32, 5, 0, 0.05, 0.04, 0x5a3e2e);
+    p.box(0.22, 0.008, 0.008, 0, 0.3, 0.04, 0x5a3e2e);
+    for (let k = 0; k < 3; k++) p.box(0.21, 0.05, 0.006, 0, 0.18 + k * 0.05, 0.04, k % 2 ? 0xc8443a : 0xf4ecdc);
+  },
+};
+const boatGeo = (kind: BoatKind = 'rowboat') => geo(`boat:${kind}`, BOAT_MAKE[kind]);
+/** Hauteur du siège des passagers au-dessus de l'eau selon l'embarcation, et haut de la cheminée du vapeur (pour sa fumée) */
+const BOAT_SEAT: Record<BoatKind, number> = { canoe: 0.0, rowboat: 0.03, sail: 0.05, steam: 0.06, launch: 0.06, hover: 0.07, galley: 0.05 };
+const STEAM_FUNNEL: [number, number, number] = [0, 0.26, -0.02];
+/** La faune marine : à défaut du modèle de Quaternius, un dauphin, une baleine, une raie dessinés (longueur 1, nez vers +z) */
+type SwimKind = 'dolphin' | 'whale' | 'manta' | 'school';
+interface Swimmer {
+  kind: SwimKind; obj: THREE.Group; actor: Actor | null; len: number;
+  /** le centre de sa ronde, le niveau de l'eau, son rayon, son angle, son sens, sa vitesse (rad/s) */
+  cx: number; cz: number; level: number; r: number; ang: number; dir: number; w: number;
+  /** son saut en cours (0 … 1, -1 : il nage), la durée et la hauteur du prochain, l'attente avant lui */
+  jump: number; next: number; dur: number; height: number;
+  x: number; z: number; heading: number;
+}
+/**
+ * Le monstre de la chasse en mer : le mégalodon (un aileron géant qui rôde, puis des bonds) ou le kraken (tentacules qui
+ * jaillissent de l'eau, tête qui se dresse) ; son centre (la galère au large), le niveau de l'eau, le rayon de sa ronde,
+ * l'angle, le bond en cours (0 … 1, -1 : aucun) et ceux déjà faits, les harpons reçus, son tressaillement, l'attente avant
+ * le prochain harpon, la mort (secondes)
+ */
+interface Monster {
+  kind: 'megalodon' | 'kraken'; obj: THREE.Group; cx: number; cz: number; level: number; r: number; ang: number;
+  breach: number; done: number; hits: number; flinch: number; dart: number; death: number;
+  /** tentacules du kraken : leur base (angle, rayon), leur élan (0 … 1), le temps qu'elles repoussent après un coup de harpon */
+  tents: { obj: THREE.Mesh; ang: number; r: number; up: number; cut: number; ph: number }[];
+}
+/** Avancement du travail où le mégalodon bondit hors de l'eau */
+const MEGA_BREACH = [0.42, 0.6, 0.76];
+const sharkGeo = (big = false) => geo(`shark:${+big}`, (p) => shark(p, big));
+const krakenHeadGeo = () => geo('krakenHead', (p) => krakenHead(p));
+const tentacleGeo = () => geo('tentacle', (p) => tentacle(p));
+const harpoonGeo = () => geo('harpoon', (p) => harpoon(p));
+const crocGeo = () => geo('croc', (p) => crocodile(p));
+const crocJawGeo = () => geo('crocJaw', (p) => crocodile(p, true));
+const swimGeo = (kind: 'dolphin' | 'whale' | 'manta') => geo(`swim:${kind}`, (p) => {
+  if (kind === 'manta') {
+    p.add(new THREE.BoxGeometry(0.62, 0.035, 0.62), 0, 0.01, 0, 0x2c3d5c, Math.PI / 4);
+    p.add(new THREE.BoxGeometry(0.58, 0.03, 0.58), 0, -0.012, 0, 0xe8ecf0, Math.PI / 4);
+    for (const s of [-1, 1]) p.box(0.1, 0.04, 0.16, s * 0.07, 0, 0.42, 0x2c3d5c);
+    p.box(0.012, 0.012, 0.42, 0, 0, -0.62, 0x2c3d5c);
+    return;
+  }
+  const whale = kind === 'whale', back = whale ? 0x55607a : 0x7f97ab, belly = whale ? 0xe4e8ee : 0xe0e8ee;
+  p.add(new THREE.IcosahedronGeometry(0.5, 1).scale(whale ? 0.3 : 0.2, whale ? 0.26 : 0.22, 1), 0, 0, 0, back);
+  p.add(new THREE.IcosahedronGeometry(0.46, 1).scale(whale ? 0.24 : 0.17, 0.13, 0.96), 0, -0.07, 0.01, belly);
+  if (!whale) p.add(new THREE.ConeGeometry(0.05, 0.16, 5).rotateX(Math.PI / 2), 0, -0.02, 0.56, back);
+  p.add(new THREE.ConeGeometry(0.07, 0.2, 3).scale(0.25, 1, 1), 0, whale ? 0.2 : 0.17, -0.05, back, 0, false, 0, -0.5);
+  for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.05, 0.28, 3).scale(1, 1, 0.25), s * (whale ? 0.18 : 0.12), -0.06, 0.18, back, 0, false, s * 1.2, 0.3);
+  // la queue : deux lobes horizontaux
+  p.add(new THREE.ConeGeometry(0.08, whale ? 0.34 : 0.26, 3).scale(1, 1, 0.22), whale ? 0.17 : 0.13, 0.0, -0.5, back, 0, false, -1.35);
+  p.add(new THREE.ConeGeometry(0.08, whale ? 0.34 : 0.26, 3).scale(1, 1, 0.22), whale ? -0.17 : -0.13, 0.0, -0.5, back, 0, false, 1.35);
+  for (const s of [-1, 1]) p.box(0.014, 0.014, 0.014, s * (whale ? 0.12 : 0.085), 0.03, 0.4, 0x1a1a1e);
 });
 const rodGeo = () => geo('rod', (p) => p.add(new THREE.CylinderGeometry(0.003, 0.006, 0.42, 4).translate(0, 0.21, 0), 0, 0, 0, 0x6a4a34));
 const bobberGeo = () => geo('bobber', (p) => { p.sphere(0.014, 0, 0.004, 0, 0xffffff); p.sphere(0.0145, 0, 0.012, 0, 0xd8443a, 0, 0.6); });
@@ -483,7 +637,7 @@ const BEHAVIOR: Record<Scene, string> = {
   mine: 'mine', pass: 'mine', crater: 'mine', gather: 'gather', pebbles: 'gather', hops: 'gather', hunt: 'hunt',
   build: 'build', bridge: 'build', drill: 'build', summit: 'build', basecamp: 'build', rails: 'rails', camp: 'camp',
   smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', scout: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
-  race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch', mammoth: 'mammoth',
+  race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch', mammoth: 'mammoth', megalodon: 'boat', kraken: 'boat',
 };
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
@@ -617,6 +771,17 @@ export class ExpeditionScene {
   private goal = new Map<number, number>();
   private flame: THREE.Mesh | null = null;
   private boat: { obj: THREE.Object3D; home: [number, number]; out: [number, number]; y: number; riders: number[] } | null = null;
+  /** l'embarcation de l'âge (pirogue, barque, voilier, vapeur, vedette, hydroglisseur, galère de guerre) */
+  private boatKind: BoatKind = 'rowboat';
+  /** l'expédition prend la mer : sa barque file bien plus loin que la rive, sur l'eau profonde, et revient au bout du travail */
+  private offshore = false;
+  /** avancement du travail (0 … 1) à la dernière image : la barque du large part, reste et revient avec lui */
+  private workK = 0;
+  /** la faune marine autour de la barque (dauphins, baleine, raies, bancs de poissons) */
+  private swimmers: Swimmer[] = [];
+  /** les harpons lancés sur le monstre, et le monstre (mégalodon ou kraken) de la chasse en mer */
+  private darts: { obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; t: number; life: number; ti: number }[] = [];
+  private monster: Monster | null = null;
   /** l'eau près de la destination : un point mouillé et un point de berge, et le niveau de l'eau */
   private water: { wet: [number, number]; bank: [number, number]; level: number } | null = null;
   private built: THREE.Object3D[] = [];
@@ -696,6 +861,8 @@ export class ExpeditionScene {
   constructor(private world: World, private agents: Agents, private group: THREE.Group, a: ActiveExpedition, private combat: CombatFx | null = null) {
     const [cx, cz] = a.dest;
     this.story = a.c.scene;
+    this.offshore = !!a.sea;
+    this.boatKind = boatKindFor(a.age, this.story === 'megalodon' || this.story === 'kraken');
     let kind = BEHAVIOR[this.story] ?? 'camp';
     if (kind === 'boat' || kind === 'fish' || this.story === 'bridge') { this.water = this.findWater(cx, cz); if (!this.water && kind !== 'build') kind = 'camp'; }
     this.kind = kind;
@@ -717,7 +884,7 @@ export class ExpeditionScene {
         this.dogs.push({ obj: actor.root, actor, x: cx + (i ? 0.2 : -0.2), z: cz, tx: cx, tz: cz, heading: 0, wait: 0, speed: 1.7 });
       }
     }
-    else if (kind === 'boat') this.launch(a);
+    else if (kind === 'boat') { this.launch(a); this.populateSea(a); }
     else if (kind === 'fish') this.spots = this.bankSpots(a.party.length);
     else if (kind === 'mine') {
       const [ux, uz] = this.uphill(cx, cz), [rx, rz] = this.near(cx + ux * 0.56, cz + uz * 0.56, cx, cz);
@@ -1225,6 +1392,7 @@ export class ExpeditionScene {
       birds: () => this.stageBirds(s, a, fail), swarm: () => this.stageSwarm(s, a, fail), wheel: () => this.stageWheel(s, a), tasting: () => this.stageTasting(s, a),
       puncture: () => this.stagePuncture(s), gust: () => this.stageGust(s), clouds: () => this.stageClouds(s), cows: () => this.stageCows(s, a),
       tusks: () => this.stageTusks(s, a), blizzard: () => this.stageBlizzard(s, a, fail),
+      shark: () => this.stageShark(s), croc: () => this.stageCroc(s, a), swell: () => this.stageSwell(s), wreck: () => this.stageWreck(s),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
       stings: () => this.stageSwarm(s, a, true), blast: () => this.stageBlast(s), gone: () => this.stageGone(s),
@@ -1732,6 +1900,161 @@ export class ExpeditionScene {
     };
   }
 
+  /**
+   * Un requin tourne autour du bateau, aileron dehors. Fuir : il suit, puis lâche prise ; la lance : il fonce, reçoit un
+   * harpon et file ; l'appât : des poissons jetés au loin, il bondit dessus et s'éloigne
+   */
+  private stageShark(s: Staging) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    const body = this.sAdd(s, new THREE.Mesh(sharkGeo(false), mats.body));
+    body.castShadow = true;
+    body.visible = false;
+    let ang = Math.random() * Math.PI * 2, r = 1.3, lunge = -1, thrown = false;
+    const baits: { o: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3 }[] = [];
+    const spear = this.sAdd(s, new THREE.Mesh(harpoonGeo(), mats.body));
+    spear.visible = false;
+    let spearT = -1;
+    return (dt: number) => {
+      const o = bt.obj.position, pick = s.pick, t = s.after;
+      // il rôde de loin, puis resserre ses cercles ; selon le choix : il suit, il fonce, ou il part à l'appât
+      const want = pick < 0 ? 0.42 : pick === 0 ? (t < 3 ? 0.55 : 2.2) : pick === 1 ? (t < 1.1 ? 0.16 : 2.2) : 1.1;
+      r += (want - r) * Math.min(1, dt * (pick === 1 && t > 1.1 ? 2.5 : 1.4));
+      ang += dt * (pick === 1 && t > 1.1 ? 2.4 : 1.3);
+      let x = o.x + Math.cos(ang) * r, z = o.z + Math.sin(ang) * r, y = bt.y - 0.03, pitch = 0, h = Math.atan2(-Math.sin(ang), Math.cos(ang));
+      // l'appât : trois poissons jetés au loin, le requin bondit dessus
+      if (pick === 2) {
+        if (!thrown) {
+          thrown = true;
+          const a0 = ang + Math.PI, to = new THREE.Vector3(o.x + Math.cos(a0) * 1.15, bt.y, o.z + Math.sin(a0) * 1.15);
+          for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(fishGeo(), mats.body); this.sAdd(s, f); baits.push({ o: f, from: new THREE.Vector3(o.x, bt.y + 0.14, o.z), to: to.clone().add(new THREE.Vector3((i - 1) * 0.08, 0, (i % 2) * 0.06)) }); }
+        }
+        const u = Math.min(1, t / 0.7);
+        for (const b of baits) { b.o.position.lerpVectors(b.from, b.to, u); b.o.position.y += Math.sin(u * Math.PI) * 0.18; b.o.visible = t < 1.9; }
+        if (t > 0.7 && t < 0.75) this.splash(baits[0].to.x, baits[0].to.z, bt.y);
+        // il se dirige vers les appâts et bondit
+        const bx = baits[0].to.x, bz = baits[0].to.z, k = Math.min(1, Math.max(0, (t - 0.8) / 1.0));
+        if (t > 0.8) { x = o.x + (bx - o.x) * (0.5 + 0.5 * smooth(k)); z = o.z + (bz - o.z) * (0.5 + 0.5 * smooth(k)); h = Math.atan2(bx - o.x, bz - o.z); y += Math.sin(k * Math.PI) * 0.32; pitch = -Math.cos(k * Math.PI) * 0.9; if (lunge < 0 && k > 0.45) { lunge = 1; this.splash(bx, bz, bt.y, true); } }
+      }
+      // la lance : il fonce sur le bord, le harpon part de la barque et le touche au flanc
+      if (pick === 1) {
+        if (spearT < 0 && t > 0.7) spearT = 0;
+        if (spearT >= 0) {
+          spearT += dt;
+          const u = Math.min(1, spearT / 0.35);
+          spear.visible = u < 1;
+          spear.position.set(o.x + (x - o.x) * u, bt.y + 0.2 - u * 0.14, o.z + (z - o.z) * u);
+          spear.lookAt(x, bt.y, z);
+          if (u >= 1 && lunge < 0) { lunge = 1; this.splash(x, z, bt.y); this.puffAt(x, bt.y + 0.05, z); }
+        }
+        if (t > 1.1) { y -= Math.min(0.08, (t - 1.1) * 0.05); }
+      }
+      body.visible = true;
+      body.position.set(x, y, z);
+      body.rotation.set(pitch, h, 0, 'YXZ');
+      body.scale.setScalar(1);
+      // le sillage, et le bateau tangue quand il rôde de près
+      if (Math.random() < dt * 4) this.puffAt(x - Math.sin(h) * 0.2, bt.y + 0.01, z - Math.cos(h) * 0.2);
+      this.rough = pick < 0 || r < 0.7 ? 0.35 : Math.max(0, this.rough - dt * 0.4);
+      return pick < 0 || t < (pick === 0 ? 5.5 : pick === 1 ? 3.2 : 3.4);
+    };
+  }
+
+  /**
+   * Un crocodile sort de l'eau et file sur l'équipe (ou sur la barque), mâchoires qui claquent. Fuir : il s'arrête à la rive
+   * et retourne à l'eau ; la lance : il reçoit un coup au museau et plonge ; la viande : jetée dans l'eau, il se rue dessus
+   */
+  private stageCroc(s: Staging, a: ActiveExpedition) {
+    const [tx, tz] = this.teamAt(a), wat = this.water ?? this.findWater(tx, tz);
+    if (!wat) return () => false;
+    const [wx, wz] = wat.wet, lvl = wat.level;
+    const g = new THREE.Group(), body = new THREE.Mesh(crocGeo(), mats.body), jaw = new THREE.Mesh(crocJawGeo(), mats.body);
+    body.castShadow = true;
+    jaw.position.set(0, 0.024, 0.075);
+    g.add(body, jaw);
+    g.scale.setScalar(1.5);
+    this.sAdd(s, g);
+    let x = wx, z = wz, heading = Math.atan2(tx - wx, tz - wz), flinch = 0, meat: THREE.Mesh | null = null, spearT = -1, spoke = false;
+    const spear = this.sAdd(s, new THREE.Mesh(harpoonGeo(), mats.body));
+    spear.visible = false;
+    return (dt: number) => {
+      const pick = s.pick, t = s.after, tgt = this.boat ? this.boat.obj.position : new THREE.Vector3(tx, 0, tz);
+      // où il va : vers sa proie ; fuite et coup de lance : il rebrousse chemin vers l'eau ; la viande : droit dessus
+      let gx = tgt.x, gz = tgt.z, speed = 0.3, stop = this.boat ? 0.3 : 0.18;
+      if (pick === 0 && t > 1.4) { gx = wx; gz = wz; speed = 0.45; stop = 0; }
+      if (pick === 1 && t > 1.2) { gx = wx - (tgt.x - wx); gz = wz - (tgt.z - wz); speed = 0.7; stop = 0; }
+      if (pick === 2) {
+        if (!meat) { meat = new THREE.Mesh(ballGeo(0xc8443a), mats.body); meat.scale.setScalar(1.6); this.sAdd(s, meat); }
+        const mx = x + Math.sin(heading) * 0.5 + 0.1, mz = z + Math.cos(heading) * 0.5, u = Math.min(1, t / 0.6);
+        meat.position.set(tgt.x + (mx - tgt.x) * u, lvl + 0.15 * Math.sin(u * Math.PI) + 0.01, tgt.z + (mz - tgt.z) * u);
+        meat.visible = t < 2.4;
+        if (t < 2.4) { gx = mx; gz = mz; speed = 0.5; stop = 0.05; }
+        else { gx = wx - (tgt.x - wx); gz = wz - (tgt.z - wz); speed = 0.35; stop = 0; }
+      }
+      const dx = gx - x, dz = gz - z, d = Math.hypot(dx, dz);
+      if (d > stop) { x += (dx / d) * Math.min(d - stop, speed * dt); z += (dz / d) * Math.min(d - stop, speed * dt); heading += Math.atan2(Math.sin(Math.atan2(dx, dz) - heading), Math.cos(Math.atan2(dx, dz) - heading)) * Math.min(1, dt * 4); }
+      // la lance : elle part de l'équipe et le touche au museau ; il se tord et recule
+      if (pick === 1) {
+        if (spearT < 0 && t > 0.6) spearT = 0;
+        if (spearT >= 0) {
+          spearT += dt;
+          const u = Math.min(1, spearT / 0.3);
+          spear.visible = u < 1;
+          spear.position.set(tgt.x + (x - tgt.x) * u, lvl + 0.22 - u * 0.17, tgt.z + (z - tgt.z) * u);
+          spear.lookAt(x, lvl, z);
+          if (u >= 1 && !spoke) { spoke = true; flinch = 1; this.splash(x, z, lvl); }
+        }
+      }
+      flinch = Math.max(0, flinch - dt * 1.5);
+      // sur l'eau il ne montre que le dos et les yeux ; à la rive, il se dresse sur ses pattes
+      const ground = this.world.surfaceAt(x, z), y = Math.max(lvl - 0.034, ground), near = d <= stop + 0.05;
+      g.position.set(x, y, z);
+      g.rotation.set(0, heading + Math.sin(this.t * 40) * 0.25 * flinch, 0);
+      // gueule : elle claque quand il est sur sa proie, bée quand il se dresse
+      jaw.rotation.x = near ? Math.max(0, Math.sin(this.t * 7)) * 0.55 : 0.08 + 0.05 * Math.sin(this.t * 3);
+      if (y < lvl && Math.random() < dt * 3) this.puffAt(x, lvl + 0.005, z);
+      return pick < 0 || t < (pick === 0 ? 4.2 : pick === 1 ? 3 : 3.6);
+    };
+  }
+
+  /** La houle : la galère tangue fort, des crêtes d'écume courent sur l'eau (plus calme si l'on attend, plus dure si l'on fonce) */
+  private stageSwell(s: Staging) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    let pt = 0;
+    return (dt: number) => {
+      const wild = s.pick < 0 || s.after < (s.pick === 2 ? 5 : s.pick === 1 ? 4 : 3);
+      this.rough = wild ? (s.pick === 2 ? 1 : 0.7) : Math.max(0, this.rough - dt * 0.3);
+      if (wild && (pt -= dt) <= 0) { pt = 0.09; const o = bt.obj.position, a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.6, x = o.x + Math.cos(a) * r, z = o.z + Math.sin(a) * r; if (this.depth(x, z) !== null) this.puffAt(x, bt.y + 0.01, z); }
+      return wild || this.rough > 0.02;
+    };
+  }
+
+  /** Une épave dérive près de la galère : coque brisée, planches, et (si l'on fouille) un coffre de lingots qui brillent */
+  private stageWreck(s: Staging) {
+    const bt = this.boat;
+    if (!bt) return () => false;
+    const wreck = new THREE.Group(), hull = new THREE.Mesh(boatGeo('rowboat'), mats.body);
+    hull.rotation.z = 2.5; hull.position.y = 0.05; hull.scale.setScalar(1.7);
+    wreck.add(hull);
+    for (let i = 0; i < 3; i++) { const pl = new THREE.Mesh(branchGeo(), mats.body); pl.position.set(Math.cos(i * 2.3) * 0.25, 0, Math.sin(i * 2.3) * 0.2); pl.rotation.y = i; pl.scale.setScalar(0.7); wreck.add(pl); }
+    this.sAdd(s, wreck);
+    const loot = new THREE.Mesh(rocksGeo(), mats.body);
+    loot.scale.setScalar(0.45); loot.position.set(0.02, 0.06, 0); loot.visible = false;
+    wreck.add(loot);
+    const ang = 0.7 + Math.random() * 1.2;
+    let d = 1.25;
+    return (dt: number) => {
+      const o = bt.obj.position;
+      // elle dérive vers la galère quand on veut la fouiller, s'éloigne quand on passe son chemin
+      d += ((s.pick === 0 ? 0.55 : s.pick === 2 && s.after > 1 ? 2.2 : 1.1) - d) * Math.min(1, dt * 0.8);
+      wreck.position.set(o.x + Math.cos(ang) * d, bt.y - 0.005 + Math.sin(this.t * 1.5) * 0.008, o.z + Math.sin(ang) * d);
+      wreck.rotation.set(Math.sin(this.t * 1.1) * 0.08, ang + this.t * 0.05, Math.sin(this.t * 0.9) * 0.1);
+      loot.visible = s.pick === 0 && s.after > 2;
+      return s.pick < 0 || s.after < (s.pick === 0 ? 6 : 4);
+    };
+  }
+
   /** Les rapides : l'eau écume autour de la barque, qui tangue fort (plus encore si on les saute) */
   private stageRapids(s: Staging) {
     const bt = this.boat;
@@ -1771,7 +2094,7 @@ export class ExpeditionScene {
         l.o.visible = Math.abs(l.u) < r * 0.85;
       }
       // en barque : elle traverse l'eau haute
-      if (s.pick === 1 && !boat && wat) boat = this.sPut(s, boatGeo(), wx, wz, Math.atan2(ux, uz));
+      if (s.pick === 1 && !boat && wat) boat = this.sPut(s, boatGeo(this.boatKind), wx, wz, Math.atan2(ux, uz));
       if (boat) { const k = Math.min(1, s.after / 6); boat.position.set(wx + ux * (k - 0.5) * 1.6, sheet.position.y + 0.01, wz + uz * (k - 0.5) * 1.6); }
       return high || rise > 0.002;
     };
@@ -2259,7 +2582,7 @@ export class ExpeditionScene {
   leave() {
     if (this.fade >= 0) return;
     this.fade = 0;
-    const all = new Set<THREE.Object3D>([...this.props, ...this.npcs.map((n) => n.folk.root), ...this.beasts.map((b) => b.obj), ...this.dogs.map((b) => b.obj), ...this.stagings.flatMap((s) => s.objs), ...this.fx.map((f) => f.obj)]);
+    const all = new Set<THREE.Object3D>([...this.props, ...this.npcs.map((n) => n.folk.root), ...this.beasts.map((b) => b.obj), ...this.dogs.map((b) => b.obj), ...this.stagings.flatMap((s) => s.objs), ...this.fx.map((f) => f.obj), ...this.darts.map((d) => d.obj)]);
     this.fadeObjs = [];
     for (const o of all) { if (o.userData.flat) o.visible = false; else { o.userData.s0 = o.scale.clone(); this.fadeObjs.push({ o, y: o.position.y }); } }
   }
@@ -2393,15 +2716,250 @@ export class ExpeditionScene {
     const dx = wx - bx, dz = wz - bz, d = Math.max(0.01, Math.hypot(dx, dz));
     let out: [number, number] = [wx, wz];
     for (let k = 0.4; k <= 2; k += 0.2) { const x = wx + (dx / d) * k, z = wz + (dz / d) * k; if (this.depth(x, z) === null) break; out = [x, z]; }
+    // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
+    if (this.offshore) {
+      let best = 0;
+      for (let d = 0; d < 16; d++) {
+        const ux = Math.cos((d * Math.PI) / 8), uz = Math.sin((d * Math.PI) / 8);
+        let run = 0;
+        for (let k = 0.5; k <= 12; k += 0.5) { if (this.depth(wx + ux * k, wz + uz * k) === null) break; run = k; }
+        const score = run + Math.max(0, ux * (dx / d) + uz * (dz / d)) * 1.5;
+        if (score > best) { best = score; out = [wx + ux * run, wz + uz * run]; }
+      }
+    }
     const obj = new THREE.Group();
-    const hull = new THREE.Mesh(boatGeo(), mats.body);
+    const hull = new THREE.Mesh(boatGeo(this.boatKind), mats.body);
     hull.castShadow = true;
     obj.add(hull);
+    // la chasse armée : une galère plus grande, toute la troupe à bord
+    const war = this.story === 'megalodon' || this.story === 'kraken';
+    obj.scale.setScalar(war ? 1.1 : this.boatKind === 'galley' ? 1 : 1);
     this.group.add(obj);
     this.props.push(obj);
-    const riders = a.party.slice(0, Math.min(2, a.party.length));
+    const riders = a.party.slice(0, war ? a.party.length : Math.min(2, a.party.length));
     this.boat = { obj, home: [wx, wz], out, y: wat.level, riders };
     this.spots = this.bankSpots(Math.max(1, a.party.length - riders.length));
+  }
+
+  /**
+   * Le vide autour d'un point d'eau : de combien l'on peut s'en écarter, dans toutes les directions, sans toucher la rive
+   * (au plus `max`)
+   */
+  private seaRoom(cx: number, cz: number, max = 2.4) {
+    let room = max;
+    for (let d = 0; d < 12; d++) {
+      const ux = Math.cos((d * Math.PI) / 6), uz = Math.sin((d * Math.PI) / 6);
+      let run = 0;
+      for (let k = 0.2; k <= max; k += 0.2) { if (this.depth(cx + ux * k, cz + uz * k) === null) break; run = k; }
+      room = Math.min(room, run);
+    }
+    return room;
+  }
+
+  /**
+   * Autour de la barque, au large : le récif grouille de vie (une baleine qui bondit, des dauphins qui sautent, des raies
+   * qui planent, des bancs de poissons) ; en pêche au large, quelques dauphins et des bancs ; la chasse au monstre a le sien
+   */
+  private populateSea(a: ActiveExpedition) {
+    const bt = this.boat;
+    if (!bt) return;
+    const [cx, cz] = bt.out, room = this.seaRoom(cx, cz), level = bt.y;
+    const reef = this.story === 'dive', fishing = this.story === 'boat';
+    if (this.story === 'megalodon' || this.story === 'kraken') { this.makeMonster(cx, cz, level, room); return; }
+    if (!this.offshore || (!reef && !fishing)) return;
+    const plan: [SwimKind, number][] = reef ? [['whale', 1], ['dolphin', 3], ['manta', 2], ['school', 3]] : [['dolphin', 2], ['school', 2]];
+    let i = 0;
+    for (const [kind, n] of plan) for (let j = 0; j < n; j++, i++) this.addSwimmer(kind, cx, cz, level, room, i, j);
+    void a;
+  }
+
+  private addSwimmer(kind: SwimKind, cx: number, cz: number, level: number, room: number, i: number, j: number) {
+    const len = { dolphin: 0.46, whale: 1.5, manta: 0.55, school: 0.05 }[kind];
+    const model: ModelName | null = kind === 'school' ? null : kind;
+    const actor = model && hasModel(model) ? makeActor(model, len) : null;
+    const obj = new THREE.Group();
+    if (actor) obj.add(actor.root);
+    else if (kind === 'school') {
+      // un banc : une grappe de petits poissons qui nagent ensemble
+      for (let f = 0; f < 7; f++) { const m = new THREE.Mesh(fishGeo(), mats.body); m.position.set(Math.cos(f * 2.4) * 0.07, Math.sin(f * 1.7) * 0.01, Math.sin(f * 2.4) * 0.07); m.rotation.y = f * 0.3; m.scale.setScalar(0.9); obj.add(m); }
+    } else { const m = new THREE.Mesh(swimGeo(kind), mats.body); m.scale.setScalar(len); m.castShadow = true; obj.add(m); }
+    this.group.add(obj);
+    this.props.push(obj);
+    const big = kind === 'whale', ring = kind === 'school' ? room * (0.35 + 0.15 * j) : big ? room * 0.85 : kind === 'manta' ? room * (0.35 + 0.2 * j) : room * (0.5 + 0.12 * j);
+    this.swimmers.push({
+      kind, obj, actor, len, cx, cz, level, r: Math.max(0.3, ring), ang: i * 2.1 + j, dir: i % 2 ? 1 : -1, w: (kind === 'whale' ? 0.18 : kind === 'school' ? 0.5 : kind === 'manta' ? 0.3 : 0.55) * (0.85 + (j % 3) * 0.12),
+      jump: -1, next: 1.5 + i * 1.3 + Math.random() * 2, dur: 1, height: 0, x: cx, z: cz, heading: 0,
+    });
+  }
+
+  /** La faune marine nage en cercle autour de la barque, saute, plane ; chaque saut soulève des gerbes d'écume */
+  private stepSwimmers(dt: number) {
+    for (const s of this.swimmers) {
+      s.ang += s.dir * s.w * dt;
+      const ex = 1.25, c = Math.cos(s.ang), sn = Math.sin(s.ang);
+      let x = s.cx + c * s.r * ex, z = s.cz + sn * s.r;
+      // (la baleine et les raies au-dessus de la terre ne se montrent pas)
+      const wet = this.depth(x, z) !== null;
+      s.obj.visible = wet;
+      const tx = -sn * s.r * ex * s.dir, tz = c * s.r * s.dir;
+      s.heading = Math.atan2(tx, tz);
+      let y = s.level - s.len * (s.kind === 'school' ? 0.15 : s.kind === 'whale' ? 0.1 : 0.06) + Math.sin(this.t * 1.6 + s.ang * 3) * 0.004, pitch = 0, roll = 0;
+      if (s.kind === 'manta') y = s.level - 0.03 + Math.sin(this.t * 2 + s.ang) * 0.006;
+      if (s.jump < 0) {
+        if ((s.next -= dt) <= 0 && wet && s.kind !== 'school') {
+          s.jump = 0; s.dur = s.kind === 'whale' ? 2.4 : s.kind === 'manta' ? 1.3 : 1.1; s.height = s.kind === 'whale' ? 0.5 : s.kind === 'manta' ? 0.12 : 0.26;
+          this.splash(x, z, s.level, s.kind === 'whale');
+        } else if (s.kind === 'school' && (s.next -= dt) <= 0) { s.next = 1.2 + Math.random() * 2; this.fishJump(x + (Math.random() - 0.5) * 0.3, z + (Math.random() - 0.5) * 0.3, s.level); }
+      } else {
+        s.jump += dt / s.dur;
+        const u = Math.min(1, s.jump), arc = Math.sin(u * Math.PI);
+        y += arc * s.height;
+        // le nez monte puis plonge ; la raie fait un tonneau, la baleine retombe de tout son poids
+        pitch = -Math.cos(u * Math.PI) * (s.kind === 'whale' ? 0.9 : 0.85);
+        if (s.kind === 'manta') { roll = u * Math.PI * 2; pitch = 0; }
+        if (u >= 1) { s.jump = -1; s.next = (s.kind === 'whale' ? 7 : 3) + Math.random() * 4; this.splash(x, z, s.level, s.kind === 'whale'); }
+      }
+      s.obj.position.set(x, y, z);
+      s.obj.rotation.set(pitch, s.heading, roll, 'YXZ');
+      if (s.actor) { s.actor.mixer.update(dt); play(s.actor, ['Swimming_Fast', 'Swimming_Normal', 'Swim', 'Idle'].slice(s.jump >= 0 ? 0 : 1)); }
+      else if (s.kind !== 'school') s.obj.children[0].rotation.y = Math.sin(this.t * 5 + s.ang) * 0.06;
+      s.x = x; s.z = z;
+    }
+  }
+
+  /** Une gerbe d'écume et un rond dans l'eau en (x, z) */
+  private splash(x: number, z: number, level: number, big = false) {
+    const n = big ? 7 : 3;
+    for (let i = 0; i < n; i++) this.puffAt(x + (Math.random() - 0.5) * 0.2, level + 0.01, z + (Math.random() - 0.5) * 0.2, 'puff', (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(big ? 0.08 : 0.04, big ? 0.11 : 0.055, 14).rotateX(-Math.PI / 2), RING);
+    this.group.add(ring);
+    this.fx.push({ obj: ring, t: 0, life: 1.4, kind: 'ring', x, y: level + 0.005, z, vx: 0, vz: 0 });
+  }
+
+  // ---------------- La chasse au monstre des mers : le mégalodon et le kraken ----------------
+  /**
+   * Le monstre de la chasse, caché d'abord : le mégalodon (un aileron géant qui rôde, puis des bonds hors de l'eau) ou le kraken
+   * (des tentacules qui jaillissent autour de la galère, puis la tête qui se dresse au large)
+   */
+  private makeMonster(cx: number, cz: number, level: number, room: number) {
+    const r = Math.max(0.5, Math.min(0.9, room * 0.8)), obj = new THREE.Group();
+    obj.visible = false;
+    this.group.add(obj);
+    this.props.push(obj);
+    const tents: Monster['tents'] = [];
+    if (this.story === 'megalodon') {
+      const mesh = new THREE.Mesh(sharkGeo(true), mats.body);
+      mesh.scale.setScalar(3.2);
+      mesh.castShadow = true;
+      obj.add(mesh);
+    } else {
+      const head = new THREE.Mesh(krakenHeadGeo(), mats.body);
+      head.castShadow = true;
+      head.scale.setScalar(1.3);
+      obj.add(head);
+      for (let i = 0; i < 7; i++) {
+        const t = new THREE.Mesh(tentacleGeo(), mats.body);
+        t.castShadow = true; t.visible = false;
+        t.rotation.order = 'YXZ';
+        this.group.add(t);
+        this.props.push(t);
+        tents.push({ obj: t, ang: (i / 7) * Math.PI * 2 + 0.4, r: r * (0.62 + (i % 3) * 0.14), up: 0, cut: 0, ph: i * 1.7 });
+      }
+    }
+    this.monster = { kind: this.story === 'kraken' ? 'kraken' : 'megalodon', obj, cx, cz, level, r, ang: 0.6, breach: -1, done: 0, hits: 0, flinch: 0, dart: 1, death: 0, tents };
+  }
+
+  /** Le monstre à chaque image (voir `makeMonster`) ; `k` : l'avancement du travail */
+  private stepMonster(dt: number, a: ActiveExpedition, kIn: number) {
+    const m = this.monster!, bt = this.boat;
+    const over = a.phase === 'back' || a.phase === 'home', k = over ? 1 : kIn;
+    if (!bt || (a.phase !== 'work' && !over)) return;
+    m.flinch = Math.max(0, m.flinch - dt * 2.5);
+    const shake = Math.sin(this.t * 38) * 0.14 * m.flinch;
+    if (m.kind === 'megalodon') {
+      const show = k > 0.1 || over, rad = m.r * (1 + (1 - smooth(Math.min(1, Math.max(0, (k - 0.1) / 0.2)))) * 1.6);
+      m.obj.visible = show && (a.ok || m.death < 2.6);
+      // dead : il flotte le ventre en l'air ; sinon (échec) il plonge ; blessé, il ralentit
+      if (!over || a.ok) m.ang += dt * (k > 0.85 || over ? 0.25 : 0.65);
+      const c = Math.cos(m.ang), sn = Math.sin(m.ang), x = m.cx + c * rad * 1.15, z = m.cz + sn * rad;
+      if (this.depth(x, z) === null) { m.obj.visible = false; return; }
+      let y = m.level - 0.1 + Math.sin(this.t * 1.4) * 0.006, pitch = 0, roll = 0;
+      if (m.breach < 0 && !over && m.done < MEGA_BREACH.length && k >= MEGA_BREACH[m.done]) { m.breach = 0; m.done++; this.splash(x, z, m.level, true); }
+      if (m.breach >= 0) {
+        // il jaillit de l'eau, gueule ouverte, et retombe dans une grande gerbe : la galère roule
+        m.breach += dt / 2.2;
+        const u = Math.min(1, m.breach);
+        y += Math.sin(u * Math.PI) * 0.62;
+        pitch = -Math.cos(u * Math.PI) * 1.0;
+        if (u >= 1) { m.breach = -1; this.splash(x, z, m.level, true); }
+      }
+      if (over) {
+        m.death += dt;
+        if (a.ok) { roll = Math.PI * smooth(Math.min(1, m.death / 2)); y = m.level - 0.04; }
+        else y -= m.death * 0.12;
+      }
+      m.obj.position.set(x, y, z);
+      m.obj.rotation.set(pitch, Math.atan2(-sn * 1.15, c) + shake, roll, 'YXZ');
+      // l'écume de son sillage
+      if (m.obj.visible && !over && Math.random() < dt * 5) this.puffAt(x - Math.sin(m.obj.rotation.y) * 0.3, m.level + 0.01, z - Math.cos(m.obj.rotation.y) * 0.3);
+      this.rough = m.breach >= 0 && m.breach < 0.6 ? 0.8 : Math.max(0, this.rough - dt * 0.5);
+      if (!over && m.obj.visible && k > 0.18 && k < 0.9) this.throwDarts(dt, m, new THREE.Vector3(x + Math.sin(m.obj.rotation.y) * 0.25, y + 0.15, z + Math.cos(m.obj.rotation.y) * 0.25), -1);
+    } else {
+      // le kraken : ses tentacules jaillissent, deux entourent la galère, les harpons les tranchent ; la tête se dresse au large
+      const hug = k > 0.38 && k < 0.82 && !over;
+      let tip: THREE.Vector3 | null = null, tipI = -1;
+      m.tents.forEach((tn, i) => {
+        const grab = hug && i < 2, want = (over ? (a.ok ? 0 : 1) : k > 0.1 + i * 0.045 && k < 0.88 ? 1 : 0) * (tn.cut > 0 ? 0 : 1);
+        if (tn.cut > 0) tn.cut -= dt;
+        tn.up += (want - tn.up) * Math.min(1, dt * (tn.cut > 0 ? 6 : 1.1));
+        tn.ang += dt * 0.12 * (i % 2 ? 1 : -1);
+        const rr = grab ? m.r * 0.42 : tn.r, x = m.cx + Math.cos(tn.ang) * rr, z = m.cz + Math.sin(tn.ang) * rr, o = tn.obj;
+        o.visible = tn.up > 0.03 && this.depth(x, z) !== null;
+        o.position.set(x, m.level - 0.03, z);
+        const s = (grab ? 1.15 : 0.95) * (0.9 + 0.1 * Math.sin(this.t + tn.ph));
+        o.scale.set(s, s * Math.max(0.01, tn.up), s);
+        o.rotation.set(Math.sin(this.t * 1.3 + tn.ph) * 0.22 + (tn.cut > 0 ? 0.9 : 0), Math.atan2(m.cx - x, m.cz - z) + Math.sin(this.t * 0.8 + tn.ph) * 0.3 + shake * (i % 2 ? 1 : -1), 0, 'YXZ');
+        if (o.visible && tn.up > 0.9 && (!tip || i < tipI)) { tip = new THREE.Vector3(x + Math.sin(o.rotation.y) * 0.25, m.level + 0.42 * s, z + Math.cos(o.rotation.y) * 0.25); tipI = i; }
+        if (o.visible && Math.random() < dt * 0.8) this.puffAt(x, m.level + 0.01, z);
+      });
+      const head = smooth(Math.min(1, Math.max(0, (k - 0.5) / 0.2))) * (over && a.ok ? 0 : 1);
+      m.obj.visible = head > 0.02;
+      const hx = m.cx - Math.cos(0.9) * m.r * 1.7, hz = m.cz - Math.sin(0.9) * m.r * 1.7;
+      m.obj.position.set(hx, m.level - 0.32 + head * 0.3 + Math.sin(this.t * 1.1) * 0.01, hz);
+      m.obj.rotation.set(0, Math.atan2(m.cx - hx, m.cz - hz) + shake, 0);
+      if (over) m.death += dt;
+      this.rough = hug ? 0.55 : Math.max(0, this.rough - dt * 0.5);
+      if (tip && !over && k > 0.16 && k < 0.88) this.throwDarts(dt, m, tip, tipI);
+    }
+    this.stepDarts(dt);
+  }
+
+  /** Les hommes d'armes lancent un harpon de temps en temps vers `to` (le monstre, ou le bout d'une tentacule : `ti`) */
+  private throwDarts(dt: number, m: Monster, to: THREE.Vector3, ti: number) {
+    if ((m.dart -= dt) > 0 || !this.boat) return;
+    m.dart = 1.1 + Math.random() * 0.8;
+    const o = this.boat.obj.position, g = new THREE.Mesh(harpoonGeo(), mats.body);
+    this.group.add(g);
+    const from = new THREE.Vector3(o.x + (Math.random() - 0.5) * 0.2, o.y + 0.22, o.z + (Math.random() - 0.5) * 0.2);
+    this.darts.push({ obj: g, from, to: to.clone(), t: 0, life: 0.35 + from.distanceTo(to) * 0.3, ti });
+  }
+
+  private stepDarts(dt: number) {
+    const m = this.monster!;
+    this.darts = this.darts.filter((d) => {
+      d.t += dt;
+      const u = Math.min(1, d.t / d.life), at = (v: number) => new THREE.Vector3().lerpVectors(d.from, d.to, v).add(new THREE.Vector3(0, Math.sin(v * Math.PI) * 0.22, 0));
+      const p = at(u);
+      d.obj.position.copy(p);
+      d.obj.lookAt(at(Math.min(1, u + 0.04)));
+      if (u < 1) return true;
+      // touché : l'écume, le monstre tressaille ; une tentacule touchée tombe, et repousse ailleurs
+      this.splash(d.to.x, d.to.z, m.level);
+      m.flinch = 1; m.hits++;
+      if (d.ti >= 0 && m.tents[d.ti] && m.tents[d.ti].cut <= 0) { m.tents[d.ti].cut = 2.4; m.tents[d.ti].ang += 1.3; }
+      this.group.remove(d.obj);
+      return false;
+    });
   }
 
   // ---------------- Animation ----------------
@@ -2416,7 +2974,10 @@ export class ExpeditionScene {
     if (this.mam) this.stepMammothHunt(dt, a, k);
     else if (this.kind === 'hunt' && (onSite || a.phase === 'back')) this.stepHunt(dt, a);
     else for (const b of this.beasts) this.stepBeast(b, dt, a);
-    if (this.boat && onSite) this.stepBoat();
+    this.workK = k;
+    if (this.boat && onSite) this.stepBoat(dt);
+    if (this.swimmers.length) this.stepSwimmers(dt);
+    if (this.monster) this.stepMonster(dt, a, k);
     if (this.balloon) this.stepBalloon(k, onSite);
     if (this.works) this.stepWorks(dt, a);
     if (this.race) this.stepRace(k, dt, onSite);
@@ -2733,29 +3294,43 @@ export class ExpeditionScene {
   }
 
   /** La barque va et vient entre la berge et le large, en tanguant ; ses passagers y sont assis */
-  private stepBoat() {
+  private stepBoat(dt: number) {
     const bt = this.boat!;
-    // aller-retour lent (une vingtaine de secondes), pause au large le temps de pêcher
-    const ph = ((this.t - this.idle) / 22) % 1, u = ph < 0.3 ? smooth(ph / 0.3) : ph < 0.75 ? 1 : 1 - smooth((ph - 0.75) / 0.25);
+    let u: number, back: boolean;
+    if (this.offshore) {
+      // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
+      const k = this.workK;
+      u = k < 0.2 ? smooth(k / 0.2) : k < 0.8 ? 1 : 1 - smooth(Math.min(1, (k - 0.8) / 0.17));
+      back = k >= 0.8;
+    } else {
+      // aller-retour lent (une vingtaine de secondes), pause au large le temps de pêcher
+      const ph = ((this.t - this.idle) / 22) % 1;
+      u = ph < 0.3 ? smooth(ph / 0.3) : ph < 0.75 ? 1 : 1 - smooth((ph - 0.75) / 0.25);
+      back = ph >= 0.75;
+    }
     const x = bt.home[0] + (bt.out[0] - bt.home[0]) * u, z = bt.home[1] + (bt.out[1] - bt.home[1]) * u;
     const sway = Math.sin(this.t * 0.4) * 0.12, dir = Math.atan2(bt.out[0] - bt.home[0], bt.out[1] - bt.home[1]);
     let px = x + Math.cos(dir) * sway, pz = z - Math.sin(dir) * sway;
     if (this.depth(px, pz) === null) { px = x; pz = z; }
     // dans les rapides, elle tangue et roule bien plus fort
-    const rough = this.rough, heading = dir + (ph >= 0.75 ? Math.PI : 0) + Math.sin(this.t * 0.4) * 0.15 + Math.sin(this.t * 3.1) * 0.2 * rough;
+    const rough = this.rough, heading = dir + (back ? Math.PI : 0) + Math.sin(this.t * 0.4) * 0.15 + Math.sin(this.t * 3.1) * 0.2 * rough;
     const y = bt.y + 0.005 + Math.sin(this.t * 1.7) * 0.006 + Math.abs(Math.sin(this.t * 4.3)) * 0.02 * rough;
     bt.obj.position.set(px, y, pz);
     bt.obj.rotation.set(Math.sin(this.t * 1.3) * (0.03 + 0.12 * rough), heading, Math.sin(this.t * 1.1 + rough * 2) * (0.04 + 0.18 * rough));
     this.focus = [px, pz];
+    // le bateau à vapeur fume par sa cheminée
+    if (this.boatKind === 'steam' && Math.random() < dt * 4) this.puffAt(px - Math.sin(heading) * 0.02, y + STEAM_FUNNEL[1] + 0.01, pz - Math.cos(heading) * 0.02, 'smoke', -Math.sin(heading) * 0.04, -Math.cos(heading) * 0.04);
+    const war = this.story === 'megalodon' || this.story === 'kraken', sc = bt.obj.scale.x, seat = BOAT_SEAT[this.boatKind];
     bt.riders.forEach((id, i) => {
-      const lz = i ? -0.08 : 0.06, sx = Math.sin(heading), cz = Math.cos(heading);
+      // les hommes d'armes de la galère, répartis le long du bordage ; sinon deux à bord : le pêcheur à l'arrière
+      const lz = (war ? 0.17 - i * 0.075 : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading);
       if (this.story === 'dive' && i === 1 && u > 0.97) {
         // le plongeur se met à l'eau, masque au ras de l'eau, à côté de la barque
         this.agents.ride(id, { x: px + cz * 0.2, z: pz - sx * 0.2, y: y - 0.13, heading: heading + Math.PI / 2 });
         return;
       }
       // le pêcheur, à l'arrière, se tourne vers le bord pour lancer sa ligne
-      this.agents.ride(id, { x: px + sx * lz, z: pz + cz * lz, y: y + 0.03, heading: heading + (i ? Math.PI / 2 : 0) });
+      this.agents.ride(id, { x: px + sx * lz, z: pz + cz * lz, y: y + seat, heading: heading + (war ? (i % 2 ? -1 : 1) * Math.PI / 2 : i ? Math.PI / 2 : 0) });
     });
   }
 
@@ -3201,6 +3776,8 @@ export class ExpeditionScene {
     if (this.rocket) { this.rocket.glare.geometry.dispose(); (this.rocket.glare.material as THREE.Material).dispose(); }
     for (const n of this.npcs) this.group.remove(n.folk.root);
     for (const b of [...this.beasts, ...this.dogs]) { b.actor?.mixer.stopAllAction(); this.group.remove(b.obj); }
+    for (const s of this.swimmers) s.actor?.mixer.stopAllAction();
+    for (const d of this.darts) this.group.remove(d.obj);
     for (const o of this.props) this.group.remove(o);
     for (const f of this.fx) this.group.remove(f.obj);
     for (const r of this.rods.values()) r.line.geometry.dispose();

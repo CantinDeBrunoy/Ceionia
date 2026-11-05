@@ -54,7 +54,7 @@ function play(v: ReturnType<typeof village>, until: () => boolean, age: number, 
 
 const mission = (id: string) => MISSIONS.find((m) => m.id === id)!;
 /** Ce qu'une équipe rencontre à son arrivée, pour ce choix de cette mission */
-const ctxOf = (m: Mission, ci: number, arrive = true): EventCtx => { const c = m.choices[ci]; return { dest: c.dest, mission: m.id, scene: c.scene, age: m.age, arrive }; };
+const ctxOf = (m: Mission, ci: number, arrive = true): EventCtx => { const c = m.choices[ci]; return { dest: c.dest, mission: m.id, scene: c.scene, age: m.age, arrive, sea: !!c.sea, warm: true }; };
 
 describe('imprévus des expéditions', () => {
   it('chaque imprévu survient dans au moins une mission, et chaque mission a de quoi varier', () => {
