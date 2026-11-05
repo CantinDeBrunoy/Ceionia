@@ -179,7 +179,6 @@ class Game implements UIHost {
   private surfaceView: ReturnType<CameraRig['view']> | null = null;
   private surfaceZoom = { min: 10, max: 0 };
   private fading = false;
-  torchMode = false;
   /** mode Creuser : un clic sur la roche y fait creuser un tunnel par les mineurs du camp */
   digMode = false;
   /** ce que montre la case visée en mode Creuser (case, file, roche) */
@@ -203,7 +202,7 @@ class Game implements UIHost {
           else uv.digCursor(typeof plan === 'string' ? [k] : plan, typeof plan !== 'string');
         }
       }
-      canvas.style.cursor = this.torchMode || this.digMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z)) ? 'pointer' : '';
+      canvas.style.cursor = this.digMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z)) ? 'pointer' : '';
     },
   };
 
@@ -698,7 +697,7 @@ class Game implements UIHost {
       this.cam.jump({ x, z, dist: 11, pitch: 1.05 }, this.underView.groundY(x, z));
       this.cam.handler = this.underInput;
       canvas.style.cursor = '';
-      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : torches, cristaux et créatures. Le puits de lumière ramène à la surface.`);
+      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : un clic sur un filon des galeries tenues, les mineurs du camp l’abattent. Le puits de lumière ramène à la surface.`);
       this.ui.update();
     }, 'Descente sous terre…');
   }
@@ -725,7 +724,6 @@ class Game implements UIHost {
       this.mode = 'surface';
       document.body.classList.remove('under');
       this.underView?.leave();
-      this.torchMode = false;
       this.digMode = false;
       this.cam.minDist = this.surfaceZoom.min;
       this.cam.minPitch = 0.25;
@@ -753,13 +751,6 @@ class Game implements UIHost {
       // la case visée se redessine : prévue, elle n'est plus qu'un contour (un clic l'annulerait)
       this.underInput.hover(e);
       this.ui.update();
-      return;
-    }
-    if (this.torchMode) {
-      if (!p) return;
-      const r = uv.toggleTorch(p.x, p.z);
-      if (r === null) this.ui.toast('Une torche se pose sur le sol d’une galerie.');
-      else if (r) audio.sfxPlace(); else audio.sfxDestroy();
       return;
     }
     // une créature cliquée sursaute et détale
@@ -810,7 +801,6 @@ class Game implements UIHost {
    */
   digTunnel() {
     const hint = this.expeditions.tunnelHint(), at = hint[0] ?? this.expeditions.outposts()[0]?.entry ?? -1;
-    this.torchMode = false;
     this.digMode = true;
     const tip = hint.length ? `⛏️ Creuser : les marques montrent le passage le plus court (${hint.length} case${hint.length > 1 ? 's' : ''} de roche). Cliquez sur la dernière marque, les mineurs creusent jusque-là.` : '⛏️ Creuser : cliquez sur la roche tout contre une galerie tenue.';
     if (this.mode === 'under') {
@@ -849,12 +839,11 @@ class Game implements UIHost {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       // Échap ferme d'abord la fenêtre ouverte
       if (k === 'escape' && this.ui.closeTop()) return;
-      // sous terre : U remonte, T bascule les torches, C le creusement, les outils de surface sont inactifs
+      // sous terre : U remonte, C bascule le creusement, les outils de surface sont inactifs
       if (this.mode === 'under') {
         if (k === 'escape' && this.digMode) { this.digMode = false; this.ui.update(); }
         else if (k === 'u' || k === 'escape') this.exitUnder();
-        else if (k === 't') { this.torchMode = !this.torchMode; this.digMode = false; this.ui.update(); }
-        else if (k === 'c') { this.digMode = !this.digMode; this.torchMode = false; this.ui.update(); }
+        else if (k === 'c') { this.digMode = !this.digMode; this.ui.update(); }
         else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
         return;
       }

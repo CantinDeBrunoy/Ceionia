@@ -37,10 +37,9 @@ export interface UIHost {
   toMenu(): void;
   setPhoto(on: boolean): void;
   capture(): void;
-  /** monde souterrain : descendre par l'entrée la plus proche, remonter, poser des torches, creuser des tunnels */
+  /** monde souterrain : descendre par l'entrée la plus proche, remonter, creuser des tunnels */
   enterNearest(): void;
   exitUnder(): void;
-  torchMode: boolean;
   digMode: boolean;
   /** descendre là où un tunnel rejoindrait d'autres galeries, en mode Creuser */
   digTunnel(): void;
@@ -338,7 +337,6 @@ export class UI {
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="campQuest" title="Quêtes du camp souterrain"></button>
-        <button id="bTorch" title="Poser ou retirer des torches (T)">${ic('flame', 18)} Torches</button>
         <button id="bDig" title="Creuser un tunnel dans la roche (C)">${ic('pickaxe', 18)} Creuser</button>
         <button id="bUp" title="Remonter à la surface (U)">${ic('up', 18)} Remonter</button>
       </div>
@@ -469,8 +467,7 @@ export class UI {
     $('#bUnder').onclick = () => host.enterNearest();
     $('#bUp').onclick = () => host.exitUnder();
     $('#campQuest').onclick = () => this.openExpeditions('depths');
-    $('#bTorch').onclick = () => { host.torchMode = !host.torchMode; host.digMode = false; host.audio.sfxClick(); this.update(); };
-    $('#bDig').onclick = () => { host.digMode = !host.digMode; host.torchMode = false; host.audio.sfxClick(); this.update(); };
+    $('#bDig').onclick = () => { host.digMode = !host.digMode; host.audio.sfxClick(); this.update(); };
     $('#biomes').innerHTML = BIOME_CHOICES.map((c) => `<button data-b="${c.b ?? ''}" title="${c.b === null ? 'Rendre la terre au biome de son climat' : `Peindre : ${c.label.toLowerCase()}`}"><i style="background:${c.color}"></i>${c.label}</button>`).join('');
     $('#biomes').onclick = (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-b]');
@@ -950,10 +947,9 @@ export class UI {
       const digs = this.host.expeditions.digs().length, s = digs > 1 ? 's' : '';
       const tip = this.host.digMode ? (!digs ? 'Cliquez sur la roche tout contre une galerie tenue'
         : `${this.host.expeditions.digWalking() ? 'Les mineurs se rendent au chantier' : 'Les mineurs creusent'} : ${digs} case${s} de roche · un clic sur une case prévue l’annule`)
-        : this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Filon : comment l’abattre · Puits de lumière : remonter';
+        : 'Filon des galeries tenues : les mineurs l’abattent · Puits de lumière : remonter';
       const zh = `⛏️ ${zone}<small>${tip}</small>`;
       if ($('#underZone').dataset.v !== zh) { $('#underZone').innerHTML = zh; $('#underZone').dataset.v = zh; }
-      $('#bTorch').classList.toggle('active', this.host.torchMode);
       $('#bDig').classList.toggle('active', this.host.digMode);
       // la quête en cours du camp souterrain, et où en est son objectif
       const ex = this.host.expeditions, cq = ex.campQuest(), lvl = ex.camp();

@@ -66,7 +66,9 @@ interface TroopShow {
 /** Angle ramené entre -π et π */
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 /** Bassins : remontés d'une case autour pour que la rive coupe la pente du sol */
-const MAX_TORCHES = 64;
+const MAX_TORCHES = 400;
+/** Torches des galeries tenues : une par bloc de TORCH_GRID × TORCH_GRID cases */
+const TORCH_GRID = 4;
 /** Teinte du sol des galeries tenues : terre battue chaude */
 const HELD_FLOOR = [0.78, 0.64, 0.45];
 /** Lanternes des galeries tenues : une par bloc de CLAIM_GRID × CLAIM_GRID cases, au plus MAX_CLAIM */
@@ -96,7 +98,7 @@ const CHIP = 0xb8ab94;
 
 /**
  * Monde souterrain : galeries en coupe (le dessus des parois est la tranche sombre de la roche), décor par zone,
- * lacs, lave, puits de jour aux entrées, torches du joueur et créatures ; seules les sources de lumière l'éclairent
+ * lacs, lave, puits de jour aux entrées, torches des galeries tenues et créatures ; seules les sources de lumière l'éclairent
  */
 export class UnderView {
   scene = new THREE.Scene();
@@ -205,7 +207,7 @@ export class UnderView {
     const ground = new THREE.Mesh(this.groundGeo, caveLit(groundMat, 'under-ground'));
     this.scene.add(ground, this.content);
 
-    // torches posées par le joueur : manche et flamme qui vacille
+    // torches du camp et des galeries tenues : manche et flamme qui vacille
     const stick = new THREE.CylinderGeometry(0.018, 0.024, 0.34, 6).translate(0, 0.17, 0);
     this.torchMesh = new THREE.InstancedMesh(stick, caveLit(new THREE.MeshStandardMaterial({ color: 0x7a5434, roughness: 0.9 }), 'torch'), MAX_TORCHES);
     this.flameMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(0.04, 0.12, 6).translate(0, 0.39, 0), flameMaterial(this.uTime), MAX_TORCHES);
@@ -1236,34 +1238,55 @@ export class UnderView {
 
   // ---------- Torches ----------
 
-  /** Pose ou retire une torche sur une case de galerie ; renvoie l'état obtenu, ou null si impossible */
-  toggleTorch(x: number, z: number): boolean | null {
-    const cx = Math.floor(x), cz = Math.floor(z), k = cz * N + cx, w = this.world;
-    if (w.torches.has(k)) { w.torches.delete(k); this.refreshTorches(); return false; }
-    if (!this.under.walkable(cx, cz) || this.under.heightAt(cx + 0.5, cz + 0.5) > 0.5 || w.torches.size >= MAX_TORCHES) return null;
-    w.torches.add(k);
-    this.refreshTorches();
-    return true;
-  }
-
   torchPoints() { return this.torchSources.map((s) => ({ x: s.x, z: s.z })); }
 
+  /**
+   * Torches posées d'elles-mêmes : en couronne autour du camp, et fichées dans les parois des galeries tenues, une par bloc
+   * de TORCH_GRID cases (sur la case au pied de la paroi que le bloc tire au sort) ; celles des anciennes sauvegardes restent
+   */
   private refreshTorches() {
-    const d = this.d;
+    const d = this.d, u = this.under, w = this.world;
     this.torchSources = [];
     let n = 0;
-    for (const k of this.world.torches) {
-      const x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5;
-      if (!this.under.walkable(Math.floor(x), Math.floor(z))) continue;
-      const y = this.under.heightAt(x, z);
+    const put = (x: number, y: number, z: number, ry: number, tilt: number) => {
+      if (n >= MAX_TORCHES) return;
       d.position.set(x, y, z);
-      d.rotation.set(0, 0, 0);
+      d.rotation.set(tilt, ry, 0, 'YXZ');
       d.scale.setScalar(1);
       d.updateMatrix();
       this.torchMesh.setMatrixAt(n, d.matrix);
       this.flameMesh.setMatrixAt(n, d.matrix);
       n++;
-      this.torchSources.push({ x, y: y + 0.5, z, r: 4.8, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(2), flicker: 0.25 });
+      this.torchSources.push({ x, y: y + 0.45, z, r: 4.2, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(1.7), flicker: 0.25 });
+    };
+    // le camp : une couronne de torches à quelques pas du feu, sur le sol des galeries
+    if (this.camp) {
+      const [cx, cz] = this.campC;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + 0.2, x = cx + Math.sin(a) * 3.2, z = cz + Math.cos(a) * 3.2;
+        const k = Math.floor(z) * N + Math.floor(x);
+        if (!u.walkable(Math.floor(x), Math.floor(z)) || this.campBlocked.has(k) || u.heightAt(x, z) > 0.45) continue;
+        put(x, u.heightAt(x, z), z, 0, 0);
+      }
+    }
+    // les galeries tenues : une torche par bloc, penchée hors de la paroi, à mi-hauteur de la roche
+    const blocks = new Map<number, [number, number]>();
+    for (const k of w.claimed) {
+      const x = k % N, z = Math.floor(k / N);
+      if (u.wallDist[k] !== 1 || !u.walkable(x, z)) continue;
+      const bk = Math.floor(z / TORCH_GRID) * N + Math.floor(x / TORCH_GRID), s = hash2(x, z, 620), b = blocks.get(bk);
+      if (!b || s > b[1]) blocks.set(bk, [k, s]);
+    }
+    for (const [k] of blocks.values()) {
+      const cx = k % N, cz = Math.floor(k / N), p = this.wallPoint(cx, cz, 0.42);
+      if (!p) continue;
+      // un peu en avant de la roche, penchée vers la galerie
+      const x = p[0] + Math.sin(p[2]) * 0.05, z = p[1] + Math.cos(p[2]) * 0.05;
+      put(x, 0.3, z, p[2], 0.45);
+    }
+    for (const k of w.torches) {
+      const x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5;
+      if (u.walkable(Math.floor(x), Math.floor(z))) put(x, u.heightAt(x, z), z, 0, 0);
     }
     for (const m of [this.torchMesh, this.flameMesh]) { m.count = n; m.instanceMatrix.needsUpdate = true; }
   }
@@ -1310,6 +1333,7 @@ export class UnderView {
       put(this.bannerPole, nb, x, z, 0); put(this.bannerCloth, nb, x, z, 0.6); nb++;
     }
     if (tint) this.tintHeld();
+    this.refreshTorches();
     this.claimPost.count = this.claimLamp.count = nl;
     this.bannerPole.count = this.bannerCloth.count = nb;
     for (const m of [this.claimPost, this.claimLamp, this.bannerPole, this.bannerCloth]) m.instanceMatrix.needsUpdate = true;
@@ -1360,7 +1384,7 @@ export class UnderView {
     if (this.camp) { this.scene.remove(this.camp.group); this.camp.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose()); }
     for (const g of this.guards) this.scene.remove(g.soldier.root);
     this.camp = null; this.campSources = []; this.guards = [];
-    if (center < 0) return;
+    if (center < 0) { this.refreshTorches(); return; }
     this.campC = [(center % N) + 0.5, Math.floor(center / N) + 0.5];
     const placed = campLayout(this.under, center, level, this.decorCells);
     this.camp = buildCamp(this.under, placed, this.age);
@@ -1380,6 +1404,7 @@ export class UnderView {
       this.guards.push({ soldier, x, z, heading: Math.atan2(x - this.campC[0], z - this.campC[1]), path: [], wait: 1 + i * 0.9, post: i % posts.length,
         light: { x, y: 0.5, z, r: 2.2, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(0.55), flicker: 0.25 } });
     }
+    this.refreshTorches();
   }
 
   /** Chemin de case en case qui contourne les décors du camp (ses bornes comprises), ou null */
