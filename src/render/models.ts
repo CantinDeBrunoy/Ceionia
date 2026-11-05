@@ -3071,6 +3071,26 @@ function campfire(p: Parts, x: number, z: number, s = 1) {
 }
 
 /** Lieux de soins (2 × 2) : camp du guérisseur, asclépiéion, hôtel-Dieu, hôpital en U, centre hospitalier */
+/**
+ * Cheval attelé ou à l'attache, tourné vers +x quand ry = 0 : corps, encolure tendue, tête, crinière, quatre jambes, queue,
+ * sellette du harnais ; y : le sol sous ses sabots
+ */
+function horse(p: Parts, x: number, z: number, ry: number, coat = 0x7a5236, y = 0.012) {
+  const c = Math.cos(ry), s = Math.sin(ry), P = (u: number, w: number): [number, number] => [x + u * c + w * s, z - u * s + w * c];
+  const part = (w: number, h: number, d: number, u: number, v: number, yy: number, color: number, rz = 0) => {
+    const [px, pz] = P(u, v);
+    p.add(new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0), px, y + yy, pz, color, ry, false, rz);
+  };
+  const dark2 = dark(coat, 0.8), mane = 0x2a1e18;
+  part(0.15, 0.065, 0.052, 0, 0, 0.075, coat);
+  part(0.04, 0.075, 0.036, 0.08, 0, 0.11, coat, -0.6);
+  part(0.065, 0.03, 0.03, 0.12, 0, 0.16, dark2);
+  part(0.05, 0.014, 0.012, 0.07, 0, 0.175, mane, -0.6);
+  for (const [u, v] of [[-0.055, -0.017], [-0.055, 0.017], [0.055, -0.017], [0.055, 0.017]]) part(0.015, 0.08, 0.015, u, v, -0.005, dark2);
+  part(0.01, 0.06, 0.012, -0.08, 0, 0.07, mane, 0.25);
+  part(0.06, 0.012, 0.058, 0, 0, 0.138, 0x3c2a20);
+}
+
 function health(p: Parts, age: number) {
   if (age === 0) {
     // deux huttes de peaux, un grand séchoir à herbes, la marmite sur le feu, nattes des malades, carrés de simples
@@ -3261,15 +3281,7 @@ function health(p: Parts, age: number) {
       }
       p.box(0.006, 0.006, 0.13, x, 0.045, 0.55, C.darkwood);
       for (const dz of [-0.035, 0.035]) p.box(0.16, 0.008, 0.008, x + sd * 0.16, 0.09, 0.55 + dz, C.wood);
-      // le cheval (robe baie, crinière sombre), tête basse vers la rue
-      const hx = x + sd * 0.2;
-      p.box(0.14, 0.06, 0.05, hx, 0.08, 0.55, 0x7a5236);
-      p.add(new THREE.BoxGeometry(0.04, 0.07, 0.035), hx + sd * 0.08, 0.15, 0.55, 0x7a5236, 0, false, -sd * 0.6);
-      p.box(0.06, 0.03, 0.03, hx + sd * 0.115, 0.165, 0.55, 0x6a4630);
-      p.box(0.05, 0.012, 0.012, hx + sd * 0.07, 0.18, 0.55, 0x2a1e18);
-      for (const [dx, dz] of [[-0.05, -0.016], [-0.05, 0.016], [0.05, -0.016], [0.05, 0.016]]) p.box(0.014, 0.08, 0.014, hx + dx, 0.0, 0.55 + dz, 0x5a3a28);
-      p.box(0.008, 0.06, 0.01, hx - sd * 0.075, 0.08, 0.55, 0x2a1e18);
-      p.box(0.06, 0.012, 0.058, hx, 0.14, 0.55, 0x3c2a20);
+      horse(p, x + sd * 0.2, 0.55, sd > 0 ? 0 : Math.PI, 0x7a5236, 0.025);
     }
     // perron de pierre au pied du pavillon d'entrée, lanternes de part et d'autre de la porte, marquise de fonte et de verre
     steps(p, 0, 0.03, -0.31, 0.26, 0.05, 3);
@@ -3764,6 +3776,24 @@ function firehouse(p: Parts, age: number, v: number) {
       p.box(0.02, 0.02, 0.26, x, 0.07, 0.6, C.wood);
     }
     p.cyl(0.03, 0.035, 0.1, 6, 0.75, 0.025, 0.3, 0xd84a3e); p.sphere(0.03, 0.75, 0.13, 0.3, 0xd84a3e);
+    // la cour de pierre devant les portes, ses joints, et le caniveau
+    p.box(1.3, 0.008, 0.5, -0.22, 0.025, 0.05, 0xaaa69c);
+    for (let k = 1; k < 5; k++) p.add(slab(1.3, 0.002, 0.008, F_PY), -0.22, 0.034, -0.2 + k * 0.1, 0x8a867c);
+    for (let k = 0; k < 5; k++) for (let x = -0.84 + (k % 2) * 0.08; x < 0.42; x += 0.16) p.add(slab(0.008, 0.002, 0.1, F_PY), x, 0.034, -0.15 + k * 0.1, 0x8a867c);
+    p.box(1.3, 0.01, 0.03, -0.22, 0.022, 0.31, 0x7a7266);
+    // les pompes attelées : deux chevaux gris pommelé par pompe, la flamme sous la chaudière, les pompiers au casque de cuivre
+    for (const x of [-0.5, 0.15]) {
+      for (const d of [-0.035, 0.035]) horse(p, x + d, 0.72, -Math.PI / 2, d < 0 ? 0xc8c4bc : 0x8a8680, 0.025);
+      p.box(0.04, 0.03, 0.04, x - 0.06, 0.06, 0.4, 0xff8a3a, 0, true);
+      smoke(x + 0.05, 0.42, 0.4, 0);
+      figure(p, x - 0.15, 0.48, 0x2a3a5a, 0.6, false, 0xd8a050, 'idle', 0.025);
+    }
+    // l'échelle de bois pendue au mur du pignon, la cloche d'alarme à la porte, la girouette de la tour
+    for (const y of [0.3, 0.4]) p.add(slab(0.014, 0.014, 0.6, F_NX | F_PY), -0.884, y, -0.52, C.wood);
+    for (let k = 0; k < 8; k++) p.add(slab(0.01, 0.1, 0.01, F_NX | F_PZ | F_NZ), -0.886, 0.35, -0.8 + k * 0.08, C.wood);
+    for (const z of [-0.7, -0.34]) p.box(0.02, 0.012, 0.012, -0.88, 0.41, z, 0x3c3c40);
+    p.box(0.012, 0.012, 0.05, -0.85, 0.36, -0.18, 0x3c3c40); p.cone(0.035, 0.05, 8, -0.85, 0.3, -0.155, C.gold);
+    p.box(0.006, 0.12, 0.006, 0.68, 1.46, -0.62, 0x3c3c40); p.box(0.08, 0.025, 0.004, 0.7, 1.54, -0.62, 0x3c3c40);
   } else {
     // centre de secours : quatre portes rouges, bandeau rouge, tour d'entraînement, deux camions à échelle, marquages au sol
     sink(0.03);
