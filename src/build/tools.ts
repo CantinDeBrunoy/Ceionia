@@ -3,7 +3,7 @@ import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, VEG_F
 import { sculpt, raiseVolcano, SculptTool, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
-import { KINDS, KindId, Building, sizeOf } from './catalog';
+import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize } from './catalog';
 import { getModel } from '../render/models';
 import { mats, setGhostValid } from '../render/materials';
 import { facingRoadRot, footprintOrigin } from './placement';
@@ -704,7 +704,7 @@ export class ToolController implements ToolInput {
     this.moveOrigin = null;
     if (!o) return;
     const w = this.h.world;
-    if (w.canPlace(o.kind, o.x, o.z, o.small ? (KINDS[o.kind].size - 1) as 1 | 2 : undefined)) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
+    if (w.canPlace(o.kind, o.x, o.z, o.small ? smallSize(o.kind) : undefined)) w.place(o.kind, o.x, o.z, o.rot, o.auto, this.h.getAge(), false, o.small);
   }
 
   private tryPlace() {
@@ -817,8 +817,9 @@ export class ToolController implements ToolInput {
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);
       this.ghost.rotation.y = rot * Math.PI / 2;
       this.ghost.visible = true;
-      // l'entrée : la flèche devant la façade, côté rue (R tourne le bâtiment et la flèche avec lui)
-      if (kind !== 'lamp') {
+      // l'entrée : la flèche devant la façade, côté rue (R tourne le bâtiment et la flèche avec lui) ; pas de flèche pour la
+      // place du village, qu'on rejoint de tous côtés
+      if (hasDoor(kind)) {
         const f = [[0, 1], [1, 0], [0, -1], [-1, 0]][rot], d = s / 2 + 0.5;
         this.door.position.set(o.x + s / 2 + f[0] * d, y + 0.08, o.z + s / 2 + f[1] * d);
         this.door.rotation.y = rot * Math.PI / 2;

@@ -36,12 +36,15 @@ export function costOf(kind: KindId, age: number, diff: Difficulty = 'normal', o
   const d = KINDS[kind], p = rulesOf(diff).price;
   const a = Math.max(age, d.minAge), pens = kind === 'pen' || kind === 'stable';
   const brick = BRICK_PRICE[kind];
+  // la place du village, première pose de la partie, se paie comme un petit bâtiment malgré ses 3 × 3 cases (une place
+  // dégagée, sans murs) : gratuite en partie normale
+  const plaza = kind === 'gather';
   if (!p) {
-    if (d.size < 2) return null;
+    if (d.size < 2 || plaza) return null;
     return { wood: 8 + a * 4, stone: pens ? 2 + a : 6 + a * 4, ...(brick ? { brick } : {}) };
   }
   if (!owned && PRODUCERS.includes(kind)) return null;
-  const s = d.size;
+  const s = plaza ? 1 : d.size;
   return { wood: Math.round(s * (p.wood + a * p.woodAge)), stone: Math.round(s * (pens ? p.penStone + a * p.penStoneAge : p.stone + a * p.stoneAge)), ...(brick ? { brick: Math.round(brick * 1.5) } : {}) };
 }
 

@@ -1142,14 +1142,18 @@ export class Expeditions {
     }[a.phase];
   }
 
-  /** Cœur du village : le feu de camp ou la place, sinon le milieu des maisons, sur une case libre */
+  /**
+   * Cœur du village : la place du village (le feu de camp, l'agora…), sinon le milieu des maisons ; on s'y rassemble sur la
+   * case libre la plus proche, au bord de la place (d'abord au milieu de son côté sud)
+   */
   base(): [number, number] | null {
     const w = this.world, bs = [...w.buildings.values()];
     const g = bs.find((b) => b.kind === 'gather');
     const houses = bs.filter((b) => b.kind === 'house');
     if (!g && !houses.length) return null;
-    let x = g ? g.x + 0.5 : houses.reduce((s, b) => s + b.x + 0.5, 0) / houses.length;
-    let z = g ? g.z + 1.5 : houses.reduce((s, b) => s + b.z + 0.5, 0) / houses.length;
+    const gs = g ? sizeOf(g) : 1;
+    let x = g ? g.x + gs / 2 : houses.reduce((s, b) => s + b.x + 0.5, 0) / houses.length;
+    let z = g ? g.z + gs + 0.5 : houses.reduce((s, b) => s + b.z + 0.5, 0) / houses.length;
     for (let r = 0; r < 5; r++)
       for (let dz = -r; dz <= r; dz++)
         for (let dx = -r; dx <= r; dx++) {

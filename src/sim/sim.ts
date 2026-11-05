@@ -234,8 +234,8 @@ export class Sim {
     };
     this.messageKind = null;
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
-    if (w.buildings.size === 0) return about('gather', `Pour commencer, posez « ${this.nameOf('gather')} » : la place du village. On y fêtera le retour des expéditions, et elle grandira avec les âges.`);
-    if (!this.counts.gather && !this.counts.house) return about('house', `Autour de la place : « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
+    if (w.buildings.size === 0) return about('gather', `Pour commencer, posez « ${this.nameOf('gather')} » au centre du futur village : c’est la place du village (3 × 3), sans entrée, qu’on rejoint de tous côtés. On y fêtera le retour des expéditions, et elle grandira avec les âges.`);
+    if (!this.counts.house) return about('house', `Autour de la place, le centre du village : « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
     if (!this.counts.house) return about('house', `Pour accueillir des habitants : ${say('house')}.`);
     if (!this.food.ok && this.fled >= 1) return about('farm', DIFF_TEXT.famine(say('farm')));
     if (!this.food.ok) return about('farm', this.drought ? `Sécheresse : les champs donnent moins ; ${say('farm')} ou « ${this.nameOf('pier')} » de plus aiderait.` : `Il manque de quoi manger : ${say('farm')} ou un champ.`);

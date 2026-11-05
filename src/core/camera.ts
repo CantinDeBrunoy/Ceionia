@@ -203,8 +203,10 @@ export class CameraRig {
   }
   rotate(d: number) { this.goal.yaw += d; }
 
+  /** Point visé par la vue d'ensemble (une partie neuve : là où poser la place du village), sinon le milieu de la carte */
+  homeAt: [number, number] | null = null;
   /** Vue d'ensemble */
-  reset() { this.goal = { yaw: 0.75, pitch: 0.85, dist: this.homeDist(), x: N / 2, z: N / 2 }; }
+  reset() { this.goal = { yaw: 0.75, pitch: 0.85, dist: this.homeDist(), x: this.homeAt?.[0] ?? N / 2, z: this.homeAt?.[1] ?? N / 2 }; }
 
   homeDist() { const home = homeFor(); return clamp(home * Math.max(1, 1.05 / Math.max(0.3, this.camera.aspect)), home, maxDistFor() * 0.93); }
 

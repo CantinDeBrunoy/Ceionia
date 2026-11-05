@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, VEG_FIELD } from '../world/world';
-import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
+import { Building, KINDS, KindId, hasDoor, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/assets';
 import { makeFolk, folkStep, holdFolk, Folk, FolkHold, FolkPose } from '../render/folk';
@@ -763,8 +763,8 @@ export class Agents {
         if ((f[0] ? x + 0.5 - cx : z + 0.5 - cz) * (f[0] || f[1]) > 0) front.push(d);
       }
     }
-    // devant une fois sur deux, sinon n'importe quel côté
-    return (front.length && this.rnd() < 0.5 ? this.pick(front) : this.pick(free)) ?? null;
+    // devant une fois sur deux, sinon n'importe quel côté (la place du village n'a pas de devant : on s'y rassemble tout autour)
+    return (front.length && hasDoor(b.kind) && this.rnd() < 0.5 ? this.pick(front) : this.pick(free)) ?? null;
   }
 
   /** Centre d'un quart de case (0 : coin x-, z- ; 1 : x+ ; 2 : z+ ; 3 : x+, z+) */
