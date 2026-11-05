@@ -43,6 +43,9 @@ export function computeSeason(time: GameTime, out: SeasonState) {
   out.water.copy(P.water[a]).lerp(P.water[b], t);
   out.tint.copy(P.tint[a]).lerp(P.tint[b], t);
   out.snow = P.snow[a] + (P.snow[b] - P.snow[a]) * t;
+  // la neige ne tient que la première moitié de l'hiver : elle fond ensuite, sur le dernier quart avant le printemps
+  if (time.seasonT >= 3.5) out.snow *= 1 - Math.min(1, (time.seasonT - 3.5) / 0.4) * 0.85;
+  else if (time.seasonT < 0.2) out.snow *= 0.15;
   out.leaf = P.leaf[a] + (P.leaf[b] - P.leaf[a]) * t;
   out.growth = P.growth[a] + (P.growth[b] - P.growth[a]) * t;
   out.waterOpacity = P.waterOpacity[a] + (P.waterOpacity[b] - P.waterOpacity[a]) * t;

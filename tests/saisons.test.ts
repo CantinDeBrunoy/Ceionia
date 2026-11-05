@@ -51,7 +51,8 @@ describe('saisons', () => {
       time.seasonT = (i % 4000) / 1000;
       computeSeason(time, s);
       if (time.season === 1) expect(s.snow).toBeLessThan(0.03);
-      if (time.season === 3) expect(s.snow).toBeGreaterThanOrEqual(0.5);
+      // la neige tient la première moitié de l'hiver, puis fond
+      if (time.season === 3 && time.frac <= 0.5) expect(s.snow).toBeGreaterThanOrEqual(0.5);
       if (last >= 0) expect(Math.abs(s.snow - last)).toBeLessThan(0.02);
       last = s.snow;
     }
