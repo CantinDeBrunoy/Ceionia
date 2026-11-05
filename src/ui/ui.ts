@@ -1531,6 +1531,7 @@ export class UI {
 
   /** Récit du retour d'une expédition */
   showReport(r: Report) {
+    const build = r.ok && r.m.unlocks && !r.redo && !this.lockOf(r.m.unlocks) ? r.m.unlocks : null;
     const { ov, close } = modal(this.root, `report ${r.ok ? 'win' : 'lose'}`, `${r.m.icon} ${r.m.title}`, `
       <h2>${r.ok ? 'Réussite !' : 'Échec…'}</h2>
       <p class="story"></p>
@@ -1538,9 +1539,11 @@ export class UI {
       <p class="sum">${r.summary === 'rien' ? 'Rien de gagné, rien de perdu.' : r.summary}</p>
       ${r.ok && r.m.unlocks && !r.redo ? `<p class="unlock">${ic(KIND_ICON[r.m.unlocks], 18, 2)} Nouveau : vous pouvez bâtir <b>${KINDS[r.m.unlocks].names[this.host.sim.age].toLowerCase()}</b> (rayon ${BUILD_CATS.find((c) => c.id === KINDS[r.m.unlocks!].cat)!.label}).${UNLOCK_NOTE[r.m.unlocks] ?? ''}</p>` : ''}
       ${r.ok && r.m.mandatory && !r.redo && r.m.age === this.host.sim.age ? '<p class="hint">Expédition obligatoire réussie : l’âge suivant se rapproche.</p>' : !r.ok && r.m.mandatory && !r.redo ? '<p class="hint">On pourra retenter l’expédition, avec le même choix ou un autre.</p>' : ''}
-      <div class="row"><span class="grow"></span><button class="active ok">Fermer</button></div>`);
+      <div class="row"><span class="grow"></span>${build ? `<button class="build">${ic(KIND_ICON[build], 16, 2)} Bâtir ${KINDS[build].names[this.host.sim.age].toLowerCase()}</button>` : ''}<button class="active ok">Fermer</button></div>`);
     $('.story', ov).textContent = `« ${r.c.label} » : ${r.text}`;
     $('.ok', ov).onclick = close;
+    // le bâtiment que l'expédition vient de débloquer : on le prend en main d'un clic
+    ov.querySelector<HTMLButtonElement>('.build')?.addEventListener('click', () => { close(); this.host.audio.sfxClick(); this.pick(build!); });
     // ni un clic à côté, ni Échap pour remonter du monde souterrain ne l'effacent avant qu'on l'ait lu (on le ferme au bouton)
     ov.addEventListener('pointerdown', (e) => { if (e.target === ov) e.stopImmediatePropagation(); }, true);
     (ov as HTMLElement & { close?: () => void }).close = () => { if (!document.body.classList.contains('under')) close(); };
