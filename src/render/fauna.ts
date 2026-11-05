@@ -210,16 +210,6 @@ function ibexGeo() {
   return p.build(false).body;
 }
 
-/** Lézard : corps allongé, longue queue, quatre pattes écartées */
-function lizardGeo() {
-  const p = new Parts();
-  p.add(ico(0.012, 0.8, 0.55, 2.2, 0), 0, 0.01, 0, 0xffffff);
-  p.add(ico(0.009, 0.9, 0.7, 1.2, 0), 0, 0.012, 0.03, 0xffffff);
-  p.add(new THREE.ConeGeometry(0.008, 0.05, 4).rotateX(-Math.PI / 2), 0, 0.008, -0.05, 0xffffff);
-  for (const s of [-1, 1]) for (const z of [-0.012, 0.016]) p.add(box(0.014, 0.004, 0.006), s * 0.014, 0.004, z, 0xe8e0c8, s * 0.5);
-  return p.build(false).body;
-}
-
 /** Crabe : carapace plate, deux pinces levées, pattes de côté et yeux sur tiges */
 function crabGeo() {
   const p = new Parts();
@@ -371,7 +361,7 @@ const SPECS: Record<Kind, Spec> = {
   gull: { geo: birdGeo, max: 18, colors: [0xffffff, 0xf2f4f6], speed: 0, idle: [1, 1], ok: any, flap: [7, 0.9, 0.012], scale: 2 },
   bear: { max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
   ibex: { geo: ibexGeo, max: 14, colors: [0x8a7a68, 0x9c8b76, 0x6e6052], speed: 0.35, run: 1.6, idle: [3, 9], ok: alpine, graze: 0.15, flee: 2.6, scale: 1.1 },
-  lizard: { geo: lizardGeo, max: 28, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
+  lizard: { max: 28, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
   crab: { geo: crabGeo, max: 24, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
   turtle: { geo: turtleGeo, max: 14, colors: [0x6a8a4a, 0x8a7a50, 0x5a7a58], speed: 0.1, run: 0.25, idle: [5, 14], ok: bank, flee: 0.9 },
   croc: { max: 6, colors: [0x6a8a4a, 0x5a7a3e, 0x7a8a58], speed: 0.18, run: 0.9, idle: [8, 22], ok: bank },
@@ -383,7 +373,7 @@ const SPECS: Record<Kind, Spec> = {
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'lizard', 'crab', 'turtle']);
+const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'crab', 'turtle']);
 
 /** Élément du décor ou zone auquel un groupe d'animaux est rattaché */
 export type Anchor = 'edge' | 'meadow' | 'rocks' | 'banks' | 'ponds' | 'coast';

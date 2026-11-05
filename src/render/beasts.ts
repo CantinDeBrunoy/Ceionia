@@ -1090,9 +1090,113 @@ function croc(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+const LIZARD_COATS: Coat[] = [
+  // vert à taches sombres, sable à bandes brunes, gris-bleu, ocre
+  { base: 0x7a9a48, top: 0x5e7e34, belly: 0xd8dca0, mark: 0x3e5a24, eye: 0xd8a030 },
+  { base: 0xc8a868, top: 0xb09050, belly: 0xece0b8, mark: 0x7a5a34, eye: 0xc89030 },
+  { base: 0x8a9488, top: 0x6e786c, belly: 0xdcdcc8, mark: 0x4a5048, eye: 0xc8a040 },
+  { base: 0xb08a58, top: 0x94703e, belly: 0xe4d4b0, mark: 0x5e4428, eye: 0xd09a30 },
+];
+
+/**
+ * Lézard : corps fin, longue queue effilée en trois segments, tête triangulaire, dos marqué de taches en bandes, ventre
+ * clair, doigts écartés ; trottine en ondulant, détale, fait des « pompes » au soleil, darde sa langue fourchue
+ */
+function lizard(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  const t0: V3 = [0, 0.009, -0.03], t1: V3 = [0, 0.007, -0.056], t2: V3 = [0, 0.005, -0.082], t3: V3 = [0, 0.003, -0.122];
+  r.bone('hips', null, 0, 0.009, -0.012);
+  r.bone('chest', 'hips', 0, 0.01, 0.012);
+  r.bone('ribs', 'chest', 0, 0.01, 0.012);
+  r.bone('head', 'chest', 0, 0.011, 0.03);
+  r.bone('jaw', 'head', 0, 0.008, 0.036);
+  r.bone('tongue', 'head', 0, 0.0085, 0.04);
+  r.bone('tail1', 'hips', ...t0);
+  r.bone('tail2', 'tail1', ...t1);
+  r.bone('tail3', 'tail2', ...t2);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.008, 0.009, 0.02);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.018, 0.007, 0.021);
+    r.bone(`h${L}1`, 'hips', s * 0.008, 0.009, -0.019);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.019, 0.007, -0.02);
+  });
+
+  const hipC: V3 = [0, 0.009, -0.014], hipR: V3 = [0.009, 0.006, 0.02], ribC: V3 = [0, 0.01, 0.01], ribR: V3 = [0.01, 0.0065, 0.02];
+  r.add('hips', ell(...hipR), hipC, c.belly, [0, 0, 0], c.base);
+  r.add('ribs', ell(...ribR), ribC, c.belly, [0, 0, 0], c.base);
+  // taches du dos en bandes
+  for (const [b, C, Rr] of [['hips', hipC, hipR], ['ribs', ribC, ribR]] as [string, V3, V3][])
+    for (const lat of [0.9, 0.55])
+      for (const lon of [-0.5, 0.5, 2.6, -2.6, Math.PI]) {
+        const o = onEll(C, Rr, lat, lon, 0.0004);
+        r.add(b, ell(0.003, 0.0006, 0.0028, 0), o.at, c.mark, o.rot);
+      }
+  // tête triangulaire, yeux dorés, mâchoire et langue fourchue (rentrée)
+  r.add('head', ell(0.0075, 0.0055, 0.012), [0, 0.0115, 0.038], c.belly, [0, 0, 0], c.base);
+  r.add('head', ell(0.0055, 0.004, 0.008), [0, 0.0105, 0.048], c.base, [0, 0, 0], c.top);
+  r.both((s) => {
+    r.add('head', ell(0.0022, 0.0022, 0.0022, 0), [s * 0.0058, 0.0135, 0.042], c.eye);
+    r.add('head', ell(0.0012, 0.0016, 0.001, 0), [s * 0.0075, 0.0136, 0.0425], 0x101010);
+  });
+  r.add('jaw', ell(0.0055, 0.0022, 0.01, 0), [0, 0.0075, 0.045], c.belly);
+  r.add('tongue', bx(0.0014, 0.0007, 0.012), [0, 0.0085, 0.046], 0xd04858);
+  r.both((s) => r.add('tongue', bx(0.0008, 0.0006, 0.004), [s * 0.0012, 0.0085, 0.053], 0xd04858, [0, s * 0.4, 0]));
+  // longue queue effilée, annelée de taches
+  r.put('tail1', seg(t0, t1, 0.0062, 0.0045, 5), c.belly, c.base);
+  r.put('tail2', seg(t1, t2, 0.0045, 0.003, 5), c.belly, c.base);
+  r.put('tail3', seg(t2, t3, 0.003, 0.0005, 5), c.base, c.top);
+  for (const [b, p, q, r1, r2] of [['tail1', t0, t1, 0.0062, 0.0045], ['tail2', t1, t2, 0.0045, 0.003], ['tail3', t2, t3, 0.003, 0.0006]] as [string, V3, V3, number, number][])
+    for (const t of [0.3, 0.75]) {
+      const o = onSeg(p, q, r1, r2, t, Math.PI / 2, 0.0003);
+      r.add(b, ell(0.0035 * (r1 / 0.006 + 0.3), 0.0006, 0.0024, 0), o.at, c.mark, o.rot);
+    }
+  // pattes écartées à cinq doigts
+  r.both((s, L) => {
+    for (const [b1, b2, z] of [[`f${L}1`, `f${L}2`, 0.02], [`h${L}1`, `h${L}2`, -0.019]] as [string, string, number][]) {
+      const sh: V3 = [s * 0.008, 0.009, z], el: V3 = [s * 0.018, 0.007, z + 0.001], ft: V3 = [s * 0.02, 0.0012, z + 0.003];
+      r.put(b1, seg(sh, el, 0.0026, 0.002, 5), c.base);
+      r.put(b2, seg(el, ft, 0.002, 0.0016, 5), c.base);
+      for (let i = 0; i < 5; i++) {
+        const a = -0.6 + i * 0.4;
+        r.put(b2, seg(ft, [ft[0] + s * Math.sin(a) * 0.006, 0.0006, ft[2] + Math.cos(a) * 0.006], 0.0008, 0.0004, 3), c.base);
+      }
+    }
+  });
+
+  /** coup de langue */
+  const flick = (P: Pose, k: number) => { M(P, 'tongue', 0, 0, 0.011 * k); R(P, 'jaw', 0.15 * k); };
+  const clips = reptileClips({
+    walk: [0.5, 0.55, 0.6, 0.22],
+    run: [0.28, 0.8, 0.8, 0.32],
+    // pompes au soleil, coups de langue, tête qui pivote par saccades
+    idle: (u, P) => {
+      breathe(P, u, 6, 1.5);
+      const push = pos(sn(u, 12)) * win(u, 0.08, 0.34, 0.02);
+      R(P, 'chest', -0.35 * push);
+      M(P, 'chest', 0, 0.003 * push, 0);
+      R(P, 'fL1', 0, 0, -0.5 * push); R(P, 'fR1', 0, 0, 0.5 * push);
+      flick(P, Math.max(blip(u, 0.5, 0.025), blip(u, 0.56, 0.025), blip(u, 0.9, 0.025)));
+      R(P, 'head', 0, 0.4 * win(u, 0.62, 0.8, 0.015) - 0.35 * win(u, 0.8, 0.95, 0.015));
+      R(P, 'tail3', 0, 0.25 * sn(u, 1));
+    },
+    more: [
+      // se plaque au sol pour chauffer, la queue qui ondule lentement
+      ['Idle_2', 5, (u, P) => {
+        const k = win(u, 0.1, 0.9, 0.15);
+        breathe(P, u, 6, 1.5);
+        M(P, 'hips', 0, -0.002 * k, 0);
+        for (const [b, , s] of DIAG) R(P, b + '1', 0, 0, s * 0.35 * k);
+        R(P, 'tail1', 0, 0.15 * k * sn(u)); R(P, 'tail2', 0, 0.25 * k * sn(u, 1, -0.1)); R(P, 'tail3', 0, 0.35 * k * sn(u, 1, -0.2));
+        flick(P, blip(u, 0.7, 0.025));
+      }],
+    ],
+  });
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'croc';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'croc' | 'lizard';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
@@ -1101,6 +1205,7 @@ const DEFS: Record<BeastKind, BeastDef> = {
   camel: { coats: CAMEL_COATS, build: camel },
   moose: { coats: MOOSE_COATS, build: moose },
   croc: { coats: CROC_COATS, build: croc },
+  lizard: { coats: LIZARD_COATS, build: lizard },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */
