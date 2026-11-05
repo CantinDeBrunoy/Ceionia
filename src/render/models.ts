@@ -2724,6 +2724,33 @@ function mill(p: Parts, age: number) {
       r.add(new THREE.BoxGeometry(0.012, 0.44, 0.012).translate(0.135, 0.4, 0), 0, 0, 0, C.wood, 0, false, a);
       for (let j = 0; j < 4; j++) r.add(new THREE.BoxGeometry(0.15, 0.01, 0.012).translate(0.065, 0.22 + j * 0.12, 0.004), 0, 0, 0, C.wood, 0, false, a);
     }
+    // la butte herbue sous le moulin, le chemin de terre jusqu'à la porte et ses marches de bois
+    p.cyl(0.4, 0.46, 0.03, 12, 0, 0, 0, 0x7aa65a);
+    p.box(0.12, 0.004, 0.24, 0, 0.03, 0.38, dark(C.dirt, 0.95));
+    for (let k = 0; k < 2; k++) p.box(0.12, 0.025 + k * 0.025, 0.04, 0, 0.03, 0.31 - k * 0.035, C.wood);
+    // rangs de bardeaux sur le chapeau, galerie de planches à mi-hauteur et son garde-corps
+    for (const t of [0.25, 0.5, 0.75]) p.add(new THREE.CylinderGeometry(0.28 * (1 - t) + 0.006, 0.28 * (1 - t) + 0.006, 0.01, 8, 1, true), 0, 0.755 + 0.32 * t, 0, dark(0x8a5a44, 0.78));
+    p.add(new THREE.CylinderGeometry(0.31, 0.31, 0.016, 8, 1, false, -Math.PI * 0.35, Math.PI * 0.7), 0, 0.3, 0, C.wood);
+    for (let i = 0; i < 6; i++) { const a = -Math.PI * 0.3 + (i / 5) * Math.PI * 0.6; p.box(0.008, 0.07, 0.008, Math.sin(a) * 0.3, 0.316, Math.cos(a) * 0.3, C.darkwood); }
+    p.add(new THREE.TorusGeometry(0.3, 0.005, 3, 8, Math.PI * 0.62).rotateX(Math.PI / 2).rotateY(-Math.PI * 0.19), 0, 0.385, 0, C.darkwood);
+    // la queue du chapeau qui le tourne face au vent, appuyée au sol sur sa roue
+    p.add(new THREE.BoxGeometry(0.02, 0.02, 0.5), 0.0, 0.45, -0.36, C.darkwood, 0, false, 0, -1.1);
+    p.box(0.016, 0.21, 0.016, 0, 0.03, -0.47, C.darkwood); p.box(0.05, 0.02, 0.05, 0, 0.03, -0.47, C.stone);
+    // la charrette du paysan et son âne, les sacs de grain qui attendent, la meule de rechange contre le mur, le meunier enfariné
+    for (const [x, y, z, r] of [[0.2, 0.03, 0.28, 0.3], [0.25, 0.03, 0.24, -0.4], [0.22, 0.065, 0.26, 0.9], [0.3, 0.03, 0.3, 1.2]] as number[][])
+      p.add(new THREE.IcosahedronGeometry(0.03, 0).scale(0.9, 1.3, 0.8).translate(0, 0.035, 0), x, y, z, 0xd8c8a0, r);
+    p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 10).rotateX(Math.PI / 2).rotateZ(0.2), -0.24, 0.1, 0.18, C.stone, 0.6);
+    lifeSize(p, 0.1, 0.03, 0.36, () => figure(p, 0.1, 0.36, 0xece4d4, 0.3, false, 0xe8e0d0, 'idle', 0.03));
+    p.box(0.16, 0.05, 0.1, -0.16, 0.07, 0.42, 0x8a6a4a);
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.012, 8).rotateX(Math.PI / 2), -0.16, 0.07, 0.42 + s * 0.058, C.darkwood);
+    for (const [dx, r] of [[-0.04, 0.4], [0.03, -0.2]]) p.add(new THREE.IcosahedronGeometry(0.03, 0).scale(1.2, 0.8, 0.9), -0.16 + dx, 0.13, 0.42, 0xd8c8a0, r);
+    for (const s of [-1, 1]) p.box(0.12, 0.008, 0.008, -0.29, 0.09, 0.42 + s * 0.03, C.wood);
+    lifeSize(p, -0.34, 0.03, 0.42, () => horse(p, -0.34, 0.42, Math.PI, 0x8a8078, 0.03));
+    // poules qui picorent le grain tombé, carré de choux, piquets de la clôture
+    for (const [x, z, c] of [[0.36, -0.1, 0xf4f0e8], [0.4, -0.02, 0xb8743a], [0.32, 0.05, 0xf4f0e8]] as number[][]) { p.box(0.025, 0.02, 0.016, x, 0.035, z, c); p.box(0.008, 0.008, 0.006, x + 0.016, 0.05, z, 0xd84a3e); }
+    for (let i = 0; i < 6; i++) p.sphere(0.022, -0.36 + (i % 3) * 0.06, 0.045, -0.24 + Math.floor(i / 3) * 0.07, i % 2 ? 0x6fa35a : 0x8fbf6a, 0, 0.7);
+    for (let i = 0; i < 7; i++) p.box(0.012, 0.07, 0.012, -0.46 + i * 0.05, 0.03, -0.34, C.darkwood);
+    p.box(0.32, 0.01, 0.01, -0.31, 0.08, -0.34, C.wood);
   } else if (age === 3) {
     // minoterie à vapeur : haut moulin de brique sur trois niveaux (bandeaux de pierre, fenêtres cintrées, lucarne et potence
     // du monte-sacs), salle des machines à grandes baies, haute cheminée cerclée de fer qui fume ; quai de chargement, sacs
