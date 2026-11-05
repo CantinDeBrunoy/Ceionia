@@ -1326,9 +1326,9 @@ export class UI {
       const price = gearCostLabel(gearCost(g.gear, h.world.difficulty)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
       const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
       const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
-      return `<div class="gnrow"><span>${ic(g.gear.icon, 15, 2)} <b>${g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</b> <small>${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}</small>${why && left > 0 ? `<small class="why">${why}</small>` : ''}</span>${act}</div>`;
+      return `<div class="gnrow" title="${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <b>${left > 0 ? left : g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</b> ${left > 0 ? '<em>à fabriquer</em>' : ''}${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}</div>`;
     }).join('');
-    return `<div class="gearNeed"><button type="button" class="gnHead" data-geargo="${gaps[0].gear.id}" title="Ouvrir l’onglet Équipement">${ic('kit', 14, 2)} Outils nécessaires</button>${rows}</div>`;
+    return `<div class="gearNeed">${rows}</div>`;
   }
 
   /** Profondeurs : le camp souterrain, ses quêtes (accomplies, en cours, à venir), ce qu'elles lui apportent ; on y lance l'expédition armée */
