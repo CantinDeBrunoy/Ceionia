@@ -437,6 +437,30 @@ const toFur = (c: THREE.Color) => {
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 const SHUTTERS = [C.teal, C.red, C.darkgreen, C.slate];
 
+/** Faces d'une plaquette (voir `slab`) : devant (+z), derrière (-z), dessus (+y), côtés (+x, -x) */
+const F_PZ = 1, F_NZ = 2, F_PY = 4, F_PX = 8, F_NX = 16;
+const SLAB_FACES: [number, number[][]][] = [
+  [F_PZ, [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]],
+  [F_NZ, [[1, -1, -1], [-1, -1, -1], [-1, 1, -1], [1, 1, -1]]],
+  [F_PY, [[-1, 1, 1], [1, 1, 1], [1, 1, -1], [-1, 1, -1]]],
+  [F_PX, [[1, -1, 1], [1, -1, -1], [1, 1, -1], [1, 1, 1]]],
+  [F_NX, [[-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-1, 1, -1]]],
+];
+/**
+ * Plaquette (w × h × d, centrée) réduite à ses faces vues : une pierre posée sur un mur n'a besoin que de son devant et de
+ * son dessus, une ardoise de son dessus et de son bord à l'égout ; deux triangles par face au lieu des douze d'une boîte
+ */
+function slab(w: number, h: number, d: number, faces: number): THREE.BufferGeometry {
+  const pos: number[] = [];
+  for (const [f, q] of SLAB_FACES) {
+    if (!(faces & f)) continue;
+    for (const k of [0, 1, 2, 0, 2, 3]) pos.push((q[k][0] * w) / 2, (q[k][1] * h) / 2, (q[k][2] * d) / 2);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  return g;
+}
+
 interface RoofOpts {
   /** largeur des murs (le long du faîtage, x local) et profondeur (z local) */
   w: number; d: number; h: number;
@@ -469,7 +493,8 @@ function roof(p: Parts, x: number, y: number, z: number, o: RoofOpts) {
       for (let j = 0; j < rows; j++)
         for (let u = -len / 2 + (j % 2 ? 0.035 : 0), i = 0; u < len / 2 - 0.01; i++) {
           const pw = Math.min(0.07 + hash2(j, i, 31) * 0.06, len / 2 - u);
-          const pg = new THREE.BoxGeometry(pw - 0.006, 0.007, rl + 0.004).translate(dx + u + pw / 2, t / 2 + 0.0035, -sl / 2 + (j + 0.5) * rl);
+          // (le dessus et le bord à l'égout : le reste est caché sous le rang suivant ou contre le pan)
+          const pg = slab(pw - 0.006, 0.007, rl + 0.004, F_PY | (sg > 0 ? F_PZ : F_NZ)).translate(dx + u + pw / 2, t / 2 + 0.0035, -sl / 2 + (j + 0.5) * rl);
           p.add(pg.rotateX(sg * a).translate(0, cy, cz).rotateY(ry), x, y, z, dark(o.color, 0.84 + hash2(i, j, 33 + sg) * 0.24));
           u += pw;
         }
@@ -486,7 +511,7 @@ function roof(p: Parts, x: number, y: number, z: number, o: RoofOpts) {
     const ny = Math.cos(a) * (t / 2 + 0.0055), nz = sg * Math.sin(a) * (t / 2 + 0.0055);
     const n = Math.max(3, Math.round(len / 0.045));
     for (let i = 0; i <= n; i++) {
-      const tg = new THREE.BoxGeometry(0.011, 0.011, sl).rotateX(sg * a).translate(dx - len / 2 + 0.015 + (i * (len - 0.03)) / n, cy + ny, cz + nz);
+      const tg = slab(0.011, 0.011, sl, F_PY | F_PX | F_NX).rotateX(sg * a).translate(dx - len / 2 + 0.015 + (i * (len - 0.03)) / n, cy + ny, cz + nz);
       p.add(tg.rotateY(ry), x, y, z, dark(o.color, 0.84));
     }
   }
@@ -2945,12 +2970,13 @@ function redCross(p: Parts, x: number, y: number, z: number, s = 1) {
 
 /** Rangée de fenêtres éclairées la nuit sur la façade z : encadrement, appui, croisée de bois qui partage les carreaux */
 function windows(p: Parts, xs: number[], y: number, z: number, w = 0.08, h = 0.1, frame = 0xece4d4) {
+  // (les faces vues seulement : la vitre et la croisée de face, l'encadrement de face et dessus, l'appui sur trois côtés)
   for (const x of xs) {
-    p.box(w, h, 0.02, x, y, z, C.win, 0, true);
-    p.box(w + 0.022, h + 0.022, 0.014, x, y - 0.011, z - 0.005, frame);
-    p.box(w + 0.034, 0.014, 0.034, x, y - 0.016, z + 0.004, frame);
-    p.box(0.008, h, 0.006, x, y, z + 0.012, C.darkwood);
-    p.box(w, 0.008, 0.006, x, y + h * 0.55, z + 0.012, C.darkwood);
+    p.add(slab(w, h, 0.02, F_PZ), x, y + h / 2, z, C.win, 0, true);
+    p.add(slab(w + 0.022, h + 0.022, 0.014, F_PZ | F_PY), x, y + h / 2, z - 0.005, frame);
+    p.add(slab(w + 0.034, 0.014, 0.034, F_PZ | F_PY | F_PX | F_NX), x, y - 0.009, z + 0.004, frame);
+    p.add(slab(0.008, h, 0.006, F_PZ), x, y + h / 2, z + 0.012, C.darkwood);
+    p.add(slab(w, 0.008, 0.006, F_PZ | F_PY), x, y + h * 0.55 + 0.004, z + 0.012, C.darkwood);
   }
 }
 
@@ -2964,7 +2990,8 @@ function stones(p: Parts, cx: number, cz: number, len: number, y0: number, y1: n
     const y = y0 + r * rh, hh = Math.min(rh, y1 - y) - 0.007;
     for (let u = -len / 2 + (r % 2 ? 0.035 : 0.004), i = 0; u < len / 2 - 0.02; i++) {
       const sw = Math.min(0.05 + hash2(r, i, seed) * 0.06, len / 2 - u), m = u + sw / 2;
-      if (hash2(i, r, seed + 1) < fill) p.box(sw - 0.007, hh, 0.008, cx + m * c, y + 0.0035, cz - m * s, dark(color, 0.86 + hash2(r + 9, i, seed + 2) * 0.2), ry);
+      // (son devant et son dessus seulement : les côtés n'ont que l'épaisseur du relief)
+      if (hash2(i, r, seed + 1) < fill) p.add(slab(sw - 0.007, hh, 0.008, F_PZ | F_PY).translate(0, hh / 2, 0), cx + m * c, y + 0.0035, cz - m * s, dark(color, 0.86 + hash2(r + 9, i, seed + 2) * 0.2), ry);
       u += sw;
     }
   }
@@ -2984,13 +3011,14 @@ function quoins(p: Parts, x: number, z: number, y0: number, y1: number, sx: numb
  */
 function timbers(p: Parts, cx: number, cz: number, len: number, y0: number, y1: number, ry: number, n: number, braced: (i: number) => boolean = () => true, color = C.darkwood) {
   const c = Math.cos(ry), s = Math.sin(ry), h = y1 - y0, bay = len / n;
-  for (let i = 0; i <= n; i++) { const u = -len / 2 + i * bay; p.box(0.024, h, 0.012, cx + u * c, y0, cz - u * s, color, ry); }
-  for (const y of [y0, y1 - 0.022]) p.box(len, 0.022, 0.012, cx, y, cz, color, ry);
+  // (pièces plaquées sur le mur : leur face arrière ne se voit jamais)
+  for (let i = 0; i <= n; i++) { const u = -len / 2 + i * bay; p.add(slab(0.024, h, 0.012, F_PZ | F_PY | F_PX | F_NX), cx + u * c, y0 + h / 2, cz - u * s, color, ry); }
+  for (const y of [y0, y1 - 0.022]) p.add(slab(len, 0.022, 0.012, F_PZ | F_PY), cx, y + 0.011, cz, color, ry);
   const dl = Math.hypot(bay, h) * 0.94, ang = Math.atan2(h, bay);
   for (let i = 0; i < n; i++) {
     if (!braced(i)) continue;
     const u = -len / 2 + (i + 0.5) * bay;
-    for (const sg of [1, -1]) p.add(new THREE.BoxGeometry(dl, 0.018, 0.01), cx + u * c, y0 + h / 2, cz - u * s, color, ry, false, sg * ang);
+    for (const sg of [1, -1]) p.add(slab(dl, 0.018, 0.01, F_PZ | F_PY), cx + u * c, y0 + h / 2, cz - u * s, color, ry, false, sg * ang);
   }
 }
 
