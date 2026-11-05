@@ -1407,6 +1407,9 @@ export class UnderView {
     this.refreshTorches();
   }
 
+  /** Le point est-il dans le camp (ses tentes, son feu, ses gardes autour du puits) ? */
+  campAt(x: number, z: number) { return !!this.camp && Math.hypot(x - this.campC[0], z - this.campC[1]) < 3.4; }
+
   /** Chemin de case en case qui contourne les décors du camp (ses bornes comprises), ou null */
   private campRoute(from: number, to: number): number[] | null {
     const u = this.under, prev = new Map<number, number>([[from, -1]]), q = [from];

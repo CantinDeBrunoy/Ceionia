@@ -48,6 +48,7 @@ import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { UpgradeBadges } from './render/upgradeBadges';
 import { Expeditions } from './sim/expeditions';
+import { CAMP_GUARDS } from './sim/depths';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
@@ -202,7 +203,7 @@ class Game implements UIHost {
           else uv.digCursor(typeof plan === 'string' ? [k] : plan, typeof plan !== 'string');
         }
       }
-      canvas.style.cursor = this.digMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z)) ? 'pointer' : '';
+      canvas.style.cursor = this.digMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z) || uv!.campAt(p.x, p.z)) ? 'pointer' : '';
     },
   };
 
@@ -758,6 +759,8 @@ class Game implements UIHost {
     if (mob) { uv.mobs.scare(mob.x, mob.z, 0.6); audio.sfxClick(); return; }
     if (!p) return;
     const ent = uv.entranceAt(p.x, p.z);
+    // le camp : ce qu'il contient, et l'expédition armée qu'on lance d'un clic (au cœur du puits, on remonte)
+    if (uv.campAt(p.x, p.z) && !(ent && Math.hypot(ent.x - p.x, ent.z - p.z) < 0.65)) { audio.sfxClick(); this.ui.openCamp(); return; }
     if (ent) { this.exitUnder(ent.cell); return; }
     // un filon dans la paroi : dans les galeries tenues, les mineurs du camp vont l'abattre ; plus loin, il faut une
     // expédition armée (créatures, galeries profondes)
@@ -813,6 +816,12 @@ class Game implements UIHost {
     this.enterUnder(at);
     setTimeout(() => this.ui.toast(tip), 1200);
   }
+  /** Le camp souterrain vu de près : ses gardes, ses patrouilles, et la dernière nouvelle de ses combats */
+  campInfo() {
+    const lvl = this.expeditions.camp();
+    return { guards: CAMP_GUARDS[lvl] ?? 0, patrols: 0, last: '' };
+  }
+
   capture() {
     this.renderer_render();
     canvas.toBlob((b) => {
