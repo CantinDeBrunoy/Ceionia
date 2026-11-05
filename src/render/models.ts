@@ -3199,7 +3199,20 @@ function health(p: Parts, age: number) {
     figure(p, 0.4, 0.28, 0x8a3a6a, 2.6, false, 0x2a2420, 'idle', 0.02); figure(p, -0.02, 0.26, 0x4fa860, -2.9, false, 0xc8a070, 'idle', 0.02);
     seated(p, 0.6, 0.09, 0.05, 0, 0x8ab8d8, 0x8a8f96);
     for (let k = 0; k < 3; k++) bike(p, 0.72 + k * 0.07, 0.3, [0x3c7fd8, 0x4fa860, C.white][k], 0, 0.03);
-  }
+    // l'hélicoptère du SAMU posé sur l'héliport du toit : cabine rouge et blanche, verrière, poutre de queue, patins, pales
+    { const hx = -0.45, hy = 0.89, hz = -0.5;
+      p.add(new THREE.SphereGeometry(0.06, 10, 6).scale(1, 0.85, 1.6), hx, hy + 0.07, hz, 0xd84a3e);
+      p.add(new THREE.SphereGeometry(0.045, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.9, 1.3), hx, hy + 0.08, hz + 0.05, 0x9fc4dc);
+      p.box(0.122, 0.02, 0.16, hx, hy + 0.05, hz, C.white);
+      p.add(new THREE.CylinderGeometry(0.012, 0.02, 0.2, 6).rotateX(Math.PI / 2), hx, hy + 0.09, hz - 0.17, C.white);
+      p.box(0.006, 0.06, 0.04, hx, hy + 0.08, hz - 0.26, 0xd84a3e);
+      for (const s of [-1, 1]) { p.box(0.006, 0.006, 0.2, hx + s * 0.05, hy + 0.012, hz, 0x3c3c40); for (const d of [-0.05, 0.05]) p.box(0.006, 0.03, 0.006, hx + s * 0.045, hy + 0.012, hz + d, 0x3c3c40); }
+      p.cyl(0.008, 0.008, 0.03, 5, hx, hy + 0.12, hz, 0x3c3c40);
+      for (let k = 0; k < 4; k++) p.box(0.34, 0.004, 0.02, hx, hy + 0.15, hz, 0x2a2a2e, k * Math.PI / 4 + 0.3);
+      p.box(0.03, 0.03, 0.04, hx + 0.03, hy + 0.06, hz + 0.11, 0xd84a3e); }
+    // les fenêtres des chambres qui s'allument une à une sur la façade de la tour, les stores des bandeaux vitrés
+    for (let y = 0.2; y < 1.1; y += 0.16) for (const x of [0.56, 0.68, 0.8]) if ((Math.round(y * 50) + Math.round(x * 30)) % 3 === 0) p.box(0.05, 0.05, 0.004, x, y, -0.262, 0xffe8b8, 0, true);
+    for (let x = -0.82; x <= 0.42; x += 0.22) p.box(0.08, 0.04, 0.004, x, 0.62, -0.132, 0xe8e4dc);  }
 }
 
 /** Écoles (2 × 2) : cercle des anciens, académie à portiques, école du monastère, école communale, université */
@@ -3649,6 +3662,24 @@ function firehouse(p: Parts, age: number, v: number) {
     p.box(0.15, 0.08, 0.26, 0.72, 0.03, 0.35, 0xd84a3e); p.box(0.14, 0.06, 0.14, 0.72, 0.11, 0.33, 0x9fd0e4); p.box(0.1, 0.02, 0.04, 0.72, 0.17, 0.33, 0x6aa8ff, 0, true);
     for (const z of [0.26, 0.44]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.16, 8).rotateZ(Math.PI / 2), 0.72, 0.035, z, 0x3c3c40);
     hedge(p, 0.0, 0.9, 1.1, 0.05, 0.05, 0.03);
+    // « SAPEURS-POMPIERS » en lettres lumineuses sur le bandeau rouge, de part et d'autre de l'emblème ; une applique au-dessus
+    // de chaque porte
+    for (const s of [-1, 1]) for (let k = 0; k < 7; k++) p.box(0.03, 0.035, 0.006, -0.18 + s * (0.1 + k * 0.045), 0.458, -0.215, 0xfff4e0, 0, true);
+    for (const x of [-0.72, -0.36, 0.0, 0.36]) { p.box(0.04, 0.016, 0.03, x, 0.39, -0.21, 0x3c3c40); p.box(0.03, 0.006, 0.02, x, 0.386, -0.205, 0xfff1c9, 0, true); }
+    // l'exercice au pied de la tour : un pompier au balcon qui descend un sac, deux à la lance qui arrose la tour, le
+    // tuyau déroulé jusqu'à la borne, le casque et la veste posés ; le chef qui chronomètre
+    const fire = 0x2a3a5a, helmet = 0xd8c84a;
+    figure(p, 0.7, -0.36, fire, 0, false, helmet, 'idle', 0.44);
+    p.box(0.004, 0.36, 0.004, 0.76, 0.12, -0.33, 0xd8d4c4); p.box(0.03, 0.04, 0.03, 0.76, 0.1, -0.33, 0xd84a3e);
+    figure(p, 0.62, 0.02, fire, Math.PI + 0.3, false, helmet, 'idle', 0.03); figure(p, 0.68, 0.06, fire, Math.PI + 0.2, false, helmet, 'idle', 0.03);
+    p.add(new THREE.CylinderGeometry(0.008, 0.01, 0.12, 5).rotateX(-1.2), 0.63, 0.13, -0.04, 0x8a8f96);
+    for (let k = 0; k < 6; k++) { const t = k / 6; p.box(0.006, 0.006, 0.04, 0.63 - t * 0.06 + Math.sin(k) * 0.01, 0.15 + t * 0.2 - t * t * 0.12, -0.1 - t * 0.2, 0xcfeaf4); }
+    pipeRun(p, [[0.66, 0.035, 0.08], [0.78, 0.035, 0.12], [0.84, 0.035, 0.18]], 0.008, 0xe8e0c8);
+    figure(p, 0.45, 0.1, 0xd84a3e, -0.6, false, 0x8a8f96, 'idle', 0.03);
+    p.box(0.05, 0.035, 0.03, 0.62, 0.09, 0.86, 0xd8c84a); p.sphere(0.02, 0.66, 0.11, 0.86, helmet);
+    // le dalmatien de la caserne, couché près du banc
+    p.box(0.07, 0.035, 0.03, 0.5, 0.045, 0.8, 0xf4f2ee); p.box(0.03, 0.03, 0.026, 0.54, 0.065, 0.8, 0xf4f2ee);
+    for (const [dx, dy] of [[-0.02, 0.06], [0.01, 0.07], [0.0, 0.05]]) p.box(0.01, 0.006, 0.032, 0.5 + dx, 0.03 + dy - 0.02, 0.8, 0x1e1e22);
   }
 }
 
@@ -5335,6 +5366,22 @@ function police(p: Parts, age: number) {
     // le totem lumineux sur la rue, un arbre au coin
     p.box(0.07, 0.32, 0.035, 0.86, 0.012, 0.8, 0x2c4a9a); for (let k = 0; k < 6; k++) p.box(0.04, 0.026, 0.004, 0.86, 0.29 - k * 0.04, 0.82, 0xf4f8ff, 0, true);
     tree(p, -0.86, 0.84, 0.9);
+    // les brise-soleil bleus de la façade, les appliques de l'entrée, les réverbères du parking, la parabole du toit
+    for (let x = -0.76; x <= 0.46; x += 0.3) p.box(0.02, 0.44, 0.05, x, 0.04, -0.215, blue);
+    for (const s of [-1, 1]) { p.box(0.02, 0.03, 0.02, -0.15 + s * 0.15, 0.17, -0.22, 0x3c3c40); p.box(0.016, 0.02, 0.012, -0.15 + s * 0.15, 0.172, -0.21, 0xfff1c9, 0, true); }
+    lampPost(p, -0.18, 0.3, 0.34); lampPost(p, 0.72, 0.3, 0.34);
+    p.cyl(0.006, 0.01, 0.06, 5, -0.8, 0.59, -0.4, 0x9aa3ad);
+    p.add(new THREE.CylinderGeometry(0.07, 0.02, 0.03, 12).rotateX(-0.8), -0.8, 0.67, -0.38, C.white);
+    // la fourgonnette au hayon ouvert, l'agent qui y range les barrières ; les vélos de patrouille au râtelier ; un
+    // stagiaire qui promène un plateau de cafés
+    p.box(0.15, 0.13, 0.3, -0.3, 0.04, 0.5, 0xf4f2ee); p.box(0.152, 0.03, 0.3, -0.3, 0.1, 0.5, blue); p.box(0.13, 0.05, 0.06, -0.3, 0.13, 0.66, 0x9fc4dc);
+    p.add(new THREE.BoxGeometry(0.14, 0.008, 0.08), -0.3, 0.18, 0.31, 0xf4f2ee, 0, false, 0, 0); p.box(0.13, 0.1, 0.004, -0.3, 0.06, 0.352, 0x2a2a2e);
+    for (const z of [0.4, 0.62]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.17, 8).rotateZ(Math.PI / 2), -0.3, 0.04, z, 0x3c3c40);
+    p.box(0.06, 0.012, 0.006, -0.32, 0.18, 0.67, 0x3a7aff, 0, true);
+    figure(p, -0.3, 0.25, 0x2c3e6a, 0, false, 0x1e2a48);
+    for (let k = 0; k < 2; k++) bike(p, -0.88, 0.1 + k * 0.07, 0x2c4a9a, Math.PI / 2);
+    figure(p, -0.3, 0.0, 0xd8d0c0, 1.1, false, 0x8a5a3a);
+    p.box(0.05, 0.006, 0.03, -0.27, 0.11, 0.01, C.wood); for (const d of [-0.012, 0.012]) p.cyl(0.006, 0.005, 0.014, 5, -0.27 + d, 0.116, 0.01, C.white);
   }
   // abords : dalles de la cour, mannequin d'exercice et garde en ronde (Antiquité) ; trottoir, réverbères, colonne Morris et
   // passants devant le poste (âge industriel)
@@ -6937,6 +6984,25 @@ function theater(p: Parts, age: number) {
     p.cyl(0.05, 0.05, 0.24, 10, -0.86, 0.02, 0.48, 0x2e5a3e); p.cyl(0.052, 0.052, 0.13, 10, -0.86, 0.07, 0.48, 0xf2e2b8);
     for (const [a, c] of [[0.4, 0xd84a3e], [1.4, 0x3a6ab8], [-0.6, 0xf2c23a]]) p.box(0.04, 0.09, 0.004, -0.86 + Math.sin(a) * 0.053, 0.09, 0.48 + Math.cos(a) * 0.053, c, a);
     p.sphere(0.052, -0.86, 0.26, 0.48, 0x2e5a3e, 0, 0.6);
+    // dans le foyer : les lustres allumés, le grand escalier, le bar, le public de l'entracte
+    for (const x of [-0.4, 0, 0.4]) { p.cyl(0.002, 0.002, 0.06, 3, x, 0.26, 0.32, 0x8a8f96); p.add(new THREE.OctahedronGeometry(0.035, 0), x, 0.24, 0.32, 0xfff1c9, 0, true); }
+    for (let k = 0; k < 6; k++) p.box(0.3 - k * 0.02, 0.025, 0.04, 0.42, 0.02 + k * 0.025, 0.24 + k * 0.03, k % 2 ? 0xb8322c : 0xa82a24);
+    p.box(0.3, 0.07, 0.06, -0.42, 0.02, 0.22, 0x3a2a22); p.box(0.32, 0.01, 0.07, -0.42, 0.09, 0.22, 0xd8c8a0);
+    for (const [x, z, c, r] of [[-0.5, 0.3, 0x2a2a2e, 0.3], [-0.36, 0.33, 0x8a2a4a, -0.4], [0.0, 0.38, 0xd8b04a, -2.4]] as number[][]) figure(p, x, z, c, r, false, 0x2a2420, 'idle', 0.02);
+    // le tapis rouge jusqu'à la rue, ses potelets dorés et leurs cordons, les photographes et leurs flashs
+    p.box(0.22, 0.004, 0.42, 0, 0.022, 0.68, 0xb8322c);
+    for (const s of [-1, 1]) {
+      for (let k = 0; k < 4; k++) { p.cyl(0.006, 0.01, 0.07, 4, s * 0.14, 0.02, 0.52 + k * 0.11, C.gold); p.box(0.016, 0.012, 0.016, s * 0.14, 0.09, 0.52 + k * 0.11, C.gold); }
+      for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0.003, 0.003, 0.11, 3).rotateX(Math.PI / 2), s * 0.14, 0.075, 0.575 + k * 0.11, 0x8a1a1a);
+      figure(p, s * 0.24, 0.64, 0x2a2a2e, s > 0 ? -Math.PI / 2 : Math.PI / 2, false, 0x4a3426, 'idle', 0.02);
+      p.box(0.025, 0.02, 0.02, s * 0.215, 0.15, 0.64, 0x1e1e22); p.box(0.012, 0.012, 0.004, s * 0.2, 0.17, 0.64, 0xffffff, 0, true);
+    }
+    // la terrasse sur le toit du foyer : bacs plantés, guirlande de lampions, gens qui prennent l'air
+    for (const x of [-0.6, -0.2, 0.2, 0.6]) { p.box(0.1, 0.04, 0.06, x, 0.345, 0.52, 0x9a968e); p.sphere(0.04, x, 0.4, 0.52, 0x6fa85a, 0, 0.8); }
+    for (let k = 0; k < 10; k++) p.box(0.012, 0.012, 0.012, -0.63 + k * 0.14, 0.42 - Math.abs(Math.sin(k * 1.57)) * 0.02, 0.55, BULBS[k % BULBS.length], 0, true);
+    figure(p, -0.4, 0.45, 0x6a3a8a, 0.4, false, 0xc8a070, 'idle', 0.345);
+    // les projecteurs au pied de la coque, qui l'éclairent la nuit
+    for (const s of [-1, 1]) for (const z of [-0.55, -0.1]) { p.box(0.025, 0.02, 0.03, s * 0.74, 0.02, z, 0x3c3c40); p.box(0.004, 0.006, 0.024, s * 0.727, 0.034, z, 0xfff1c9, 0, true); }
     // sculpture de l'anneau rouge sur son socle, le taxi qui dépose, les spectateurs qui arrivent
     p.box(0.1, 0.05, 0.1, -0.6, 0.02, 0.6, 0xd8d6d0); p.add(new THREE.TorusGeometry(0.07, 0.018, 6, 16), -0.6, 0.15, 0.6, 0xd84a3e, 0.6);
     car(p, 0.0, 0.88, Math.PI / 2, 0x2a2a2e, 0.02); p.box(0.04, 0.02, 0.06, 0.0, 0.145, 0.88, 0xfff4b0, 0, true);
