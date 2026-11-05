@@ -1194,9 +1194,124 @@ function lizard(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Tortue ----------
+
+const TURTLE_COATS: Coat[] = [
+  { shell: 0x4e5e32, scute: 0x6e7440, ring: 0x3a4426, rim: 0x5a6038, skin: 0x7a7e50, top: 0x5e6640, plastron: 0xd8c890, streak: 0xd8c860, beak: 0x3a3a2a },
+  { shell: 0x6a5434, scute: 0x8a7444, ring: 0x4a3a26, rim: 0x705a38, skin: 0x8a8460, top: 0x6a6648, plastron: 0xe0cc98, streak: 0xe0b848, beak: 0x3a3428 },
+  { shell: 0x3e5240, scute: 0x5a6e50, ring: 0x2e3c30, rim: 0x485a42, skin: 0x6e7a5a, top: 0x52604a, plastron: 0xd0c49a, streak: 0xe8d070, beak: 0x30342a },
+];
+
+/**
+ * Tortue : carapace bombée à écailles hexagonales (vertébrales, costales, marginales) cernées de sombre, plastron clair,
+ * tête au bec corné rayée de jaune, pattes trapues griffues ; avance d'un pas lent qui fait tanguer la carapace, sort la
+ * tête pour regarder, la rentre au moindre doute, se replie pour dormir
+ */
+function turtle(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  r.bone('shell', null, 0, 0.012, 0);
+  r.bone('neck', 'shell', 0, 0.013, 0.028);
+  r.bone('head', 'neck', 0, 0.016, 0.048);
+  r.bone('jaw', 'head', 0, 0.0145, 0.056);
+  r.bone('tail1', 'shell', 0, 0.011, -0.036);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'shell', s * 0.021, 0.011, 0.022);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.032, 0.007, 0.027);
+    r.bone(`h${L}1`, 'shell', s * 0.021, 0.011, -0.022);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.031, 0.007, -0.027);
+  });
+
+  // carapace : dôme, rebord, plastron
+  const C: V3 = [0, 0.012, 0], Rr: V3 = [0.032, 0.022, 0.04];
+  r.add('shell', new THREE.SphereGeometry(1, 10, 5, 0, TAU, 0, Math.PI / 2).scale(...Rr), C, c.rim, [0, 0, 0], c.shell);
+  r.add('shell', ell(0.029, 0.005, 0.036, 1), [0, 0.011, 0], c.plastron);
+  // écailles : plaque claire cernée d'un liseré sombre, centre plus foncé
+  const plate = (lat: number, lon: number, k: number) => {
+    const o = onEll(C, Rr, lat, lon, 0.0004), o2 = onEll(C, Rr, lat, lon, 0.0016);
+    r.add('shell', new THREE.CylinderGeometry(0.0092 * k, 0.0098 * k, 0.0012, 6), o.at, c.ring, o.rot);
+    r.add('shell', new THREE.CylinderGeometry(0.0078 * k, 0.0084 * k, 0.0016, 6), o2.at, c.scute, o2.rot);
+    r.add('shell', new THREE.CylinderGeometry(0.0036 * k, 0.004 * k, 0.0012, 6), onEll(C, Rr, lat, lon, 0.0026).at, c.shell, o2.rot);
+  };
+  for (const [lat, lon] of [[1.5, 0], [1.02, 0], [1.02, Math.PI], [0.62, 0], [0.62, Math.PI]]) plate(lat, lon, 1);
+  for (const lon of [0.85, 1.6, 2.35]) for (const s of [-1, 1]) plate(0.68, s * lon, 1);
+  for (let i = 0; i < 18; i++) {
+    const o = onEll(C, Rr, 0.1, (i / 18) * TAU, 0.0006);
+    r.add('shell', bx(0.0105, 0.0055, 0.0018), o.at, i % 2 ? c.rim : c.ring, o.rot);
+  }
+  // cou, tête rayée de jaune, bec, yeux
+  r.put('neck', seg([0, 0.012, 0.026], [0, 0.016, 0.049], 0.0058, 0.0052, 6), c.skin, c.top);
+  r.both((s) => r.put('neck', seg([s * 0.0055, 0.015, 0.032], [s * 0.0052, 0.0172, 0.047], 0.0009, 0.0008, 3), c.streak));
+  r.add('head', ell(0.0075, 0.0068, 0.01), [0, 0.0185, 0.054], c.skin, [0, 0, 0], c.top);
+  r.both((s) => {
+    r.add('head', ell(0.0018, 0.0018, 0.0016, 0), [s * 0.0058, 0.0205, 0.058], 0x101010);
+    r.put('head', seg([s * 0.006, 0.017, 0.048], [s * 0.005, 0.0175, 0.058], 0.0008, 0.0006, 3), c.streak);
+  });
+  r.add('head', ell(0.0048, 0.0032, 0.004, 0), [0, 0.0175, 0.0625], c.beak);
+  r.add('jaw', ell(0.0042, 0.0018, 0.0036, 0), [0, 0.014, 0.06], c.beak);
+  r.put('tail1', seg([0, 0.011, -0.036], [0, 0.007, -0.049], 0.003, 0.0005, 4), c.skin);
+  // pattes trapues, écailleuses, trois griffes
+  r.both((s, L) => {
+    for (const [b1, b2, z, dz] of [[`f${L}1`, `f${L}2`, 0.022, 1], [`h${L}1`, `h${L}2`, -0.022, -1]] as [string, string, number, number][]) {
+      const sh: V3 = [s * 0.021, 0.011, z], el: V3 = [s * 0.032, 0.007, z + dz * 0.005], ft: V3 = [s * 0.035, 0.0015, z + dz * 0.008];
+      r.put(b1, seg(sh, el, 0.0052, 0.0046, 6), c.skin, c.top);
+      r.put(b2, seg(el, ft, 0.0046, 0.004, 6), c.skin);
+      r.add(b2, ell(0.0052, 0.0018, 0.0058, 0), [ft[0], 0.0015, ft[2] + dz * 0.002], c.skin);
+      for (let i = -1; i <= 1; i++) r.put(b2, seg([ft[0] + s * 0.001 + i * 0.0025, 0.0012, ft[2] + dz * 0.006], [ft[0] + s * 0.0015 + i * 0.003, 0.0004, ft[2] + dz * 0.0095], 0.0009, 0.0002, 3), c.beak);
+    }
+  });
+
+  /** pas lent : diagonales, la carapace tangue */
+  const amble = (P: Pose, u: number, A: number, L: number) => {
+    for (const [b, ph, s] of DIAG) {
+      const w = TAU * (u - ph), lift = L * pos(Math.cos(w));
+      R(P, b + '1', 0, -s * A * Math.sin(w), s * lift);
+      R(P, b + '2', 0, 0, -s * lift * 0.5);
+    }
+    R(P, 'shell', 0.02 * sn(u, 2), 0.04 * sn(u), 0.05 * sn(u));
+    M(P, 'shell', 0, 0.0008 * pos(sn(u, 2)), 0);
+    R(P, 'tail1', 0, 0.3 * sn(u));
+  };
+  /** tête rentrée dans la carapace (0 … 1) */
+  const tuck = (P: Pose, k: number) => { M(P, 'neck', 0, -0.002 * k, -0.017 * k); R(P, 'neck', 0.2 * k); };
+  const clips: ClipDef[] = [
+    ['Walk', 1.6, (u, P) => { amble(P, u, 0.45, 0.45); R(P, 'neck', -0.05); R(P, 'head', 0.05 * sn(u, 2), 0.12 * sn(u)); }],
+    ['Gallop', 0.9, (u, P) => { amble(P, u, 0.6, 0.6); R(P, 'neck', -0.15); M(P, 'neck', 0, 0, 0.002); }],
+    // sort la tête, regarde, mâchonne, la rentre un instant
+    ['Idle', 8, (u, P) => {
+      const look = Math.sin(TAU * u * 2) * win(u, 0.05, 0.55, 0.08);
+      R(P, 'neck', -0.15 * win(u, 0.05, 0.55, 0.1), 0.25 * look);
+      R(P, 'head', 0.05 * sn(u, 3), 0.35 * look);
+      R(P, 'jaw', 0.3 * pos(sn(u, 16)) * win(u, 0.3, 0.5, 0.03));
+      tuck(P, win(u, 0.62, 0.85, 0.06));
+      R(P, 'fL1', 0, -0.2 * win(u, 0.4, 0.5, 0.03));
+      R(P, 'tail1', 0, 0.2 * sn(u, 2));
+    }],
+    // tête et pattes rentrées sous la carapace
+    ['Sleep', 6, (u, P) => {
+      tuck(P, 1);
+      M(P, 'shell', 0, -0.004, 0);
+      for (const [b, , s] of DIAG) {
+        R(P, b + '1', 0, b[0] === 'f' ? s * 0.7 : -s * 0.7, -s * 0.35);
+        M(P, b + '1', -s * 0.006, 0, 0);
+      }
+      R(P, 'tail1', 0, 0.8);
+    }],
+    // tend le cou vers le ciel et regarde alentour
+    ['Idle_2', 5, (u, P) => {
+      const k = win(u, 0.1, 0.9, 0.15);
+      M(P, 'neck', 0, 0.002 * k, 0.003 * k);
+      R(P, 'neck', -0.6 * k);
+      R(P, 'head', 0.35 * k, 0.5 * k * sn(u, 1, 0.1));
+      M(P, 'shell', 0, 0.0015 * k, 0);
+      for (const [b, , s] of DIAG) R(P, b + '1', 0, 0, -s * 0.2 * k);
+    }],
+  ];
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'croc' | 'lizard';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'croc' | 'lizard' | 'turtle';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
@@ -1206,6 +1321,7 @@ const DEFS: Record<BeastKind, BeastDef> = {
   moose: { coats: MOOSE_COATS, build: moose },
   croc: { coats: CROC_COATS, build: croc },
   lizard: { coats: LIZARD_COATS, build: lizard },
+  turtle: { coats: TURTLE_COATS, build: turtle },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */
