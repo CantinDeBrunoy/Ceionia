@@ -145,6 +145,20 @@ describe('maisons et tours', () => {
       }
   });
 
+  it('la Préhistoire, les puits, l’éclairage et les bâtiments antiques enrichis restent sous le plafond (3 000 triangles par case, 4 500 en 2 × 2)', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    const cases: [KindId, number][] = [];
+    for (const kind of KIND_ORDER) if (KINDS[kind].minAge === 0) cases.push([kind, 0]);
+    for (const age of [0, 1, 2, 3]) cases.push(['well', age], ['lamp', age]);
+    cases.push(['health', 1], ['senate', 1], ['school', 1], ['workshop', 2], ['fire', 2]);
+    for (const [kind, age] of cases)
+      for (let v = 0; v < 3; v++) {
+        const m = getModel(kind, age, { v, L: false, R: false, F: true });
+        const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + tris(m.rotor?.geo) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+        expect(n, `${kind} à l’âge ${age}, variante ${v}`).toBeLessThan(KINDS[kind].size === 1 ? 3000 : 4500);
+      }
+  });
+
   it('le château d’eau, détaillé à chaque âge, reste sous 4 000 triangles (girouette, drone et personnages compris)', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
     for (let age = 3; age < 6; age++) {

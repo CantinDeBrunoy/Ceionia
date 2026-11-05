@@ -71,9 +71,22 @@ function addWater(mat: THREE.Material) {
     if (wMask > 0.0) {
       vec2 q = vWaterPos.xz;
       float t = uWaterT;
-      float rip = sin(q.x * 9.0 + t * 1.6) * sin(q.y * 8.0 - t * 1.3) + 0.5 * sin((q.x + q.y) * 15.0 + t * 2.4);
+      // deux trains de vaguelettes croisés et un clapot fin : la surface penche (la lumière du soleil y joue) et se nuance
+      float a1 = q.x * 9.0 + q.y * 3.0 + t * 1.6, a2 = q.y * 8.0 - q.x * 2.5 - t * 1.3, a3 = (q.x - q.y) * 17.0 + t * 2.6;
+      float rip = 0.5 * sin(a1) + 0.5 * sin(a2) + 0.35 * sin(a3);
+      vec2 sl = vec2(4.5 * cos(a1) - 1.25 * cos(a2) + 5.95 * cos(a3), 1.5 * cos(a1) + 4.0 * cos(a2) - 5.95 * cos(a3)) * 0.014;
+      normal = normalize((viewMatrix * vec4(-sl.x, 1.0, -sl.y, 0.0)).xyz);
+      // des eaux plus ou moins profondes, en grandes taches lentes
+      float deep = 0.5 + 0.5 * sin(q.x * 2.3 + sin(q.y * 1.7) + t * 0.15) * sin(q.y * 2.1 - t * 0.12);
+      // caustiques : des lignes claires qui serpentent au fond
+      float ca = abs(sin(q.x * 13.0 + sin(q.y * 7.0 + t) * 1.5 + t * 0.7) + sin(q.y * 12.0 + sin(q.x * 6.0 - t * 0.8) * 1.5 - t * 0.6));
+      float caus = smoothstep(1.5, 1.95, ca);
       float glint = smoothstep(0.86, 1.0, sin(q.x * 23.0 + t * 2.1) * sin(q.y * 21.0 - t * 1.8));
-      diffuseColor.rgb = diffuseColor.rgb * (0.9 + 0.12 * rip) + vec3(0.55) * glint;
+      diffuseColor.rgb = diffuseColor.rgb * (0.84 + 0.1 * rip + 0.12 * deep) + vec3(0.2, 0.28, 0.3) * caus + vec3(0.6) * glint;
+      // vue en rasant, l'eau reflète le ciel
+      float fr = pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), 3.0);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.72, 0.86, 0.97), fr * 0.5);
+      roughnessFactor = 0.3;
     }
   }`);
   };
