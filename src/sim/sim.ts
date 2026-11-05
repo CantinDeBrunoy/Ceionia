@@ -1,5 +1,5 @@
 import { World } from '../world/world';
-import { AGES, BUILD_CATS, KINDS, KindId } from '../build/catalog';
+import { AGES, BUILD_CATS, KINDS, KindId, lineOf } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
@@ -199,7 +199,8 @@ export class Sim {
     // d'office en leur version du nouvel âge, ne font pas avancer vers le suivant
     const fresh = rulesOf(w.difficulty).newOnly && this.age > 0;
     for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty)) as [KindId, number][]) {
-      const have = Math.max(0, (this.counts[k] ?? 0) - (fresh ? w.ageBase[k] ?? 0 : 0));
+      const line = lineOf(k), sum = (r: Record<string, number>) => line.reduce((n, x) => n + (r[x] ?? 0), 0);
+      const have = Math.max(0, sum(this.counts) - (fresh ? sum(w.ageBase) : 0));
       items.push({ label: fresh ? DIFF_TEXT.more(this.nameOf(k)) : this.nameOf(k), have, need: c, kind: k });
     }
     if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });

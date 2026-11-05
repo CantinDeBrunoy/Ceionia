@@ -127,3 +127,14 @@ describe('les places des anciennes sauvegardes', () => {
     expect([big.x, big.z]).toEqual([x, z]);
   });
 });
+
+describe('les âges et les améliorations', () => {
+  it('une place améliorée en forum compte encore comme une place', async () => {
+    const { lineOf } = await import('../src/build/catalog');
+    expect(lineOf('gather')).toContain('forum');
+  });
+  it('l’acropole, le forum et le sénat ne se bâtissent plus après l’Antiquité', async () => {
+    const { KINDS } = await import('../src/build/catalog');
+    for (const k of ['acropolis', 'forum', 'senate'] as const) expect(KINDS[k].maxAge).toBe(1);
+  });
+});

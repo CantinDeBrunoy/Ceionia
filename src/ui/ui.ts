@@ -571,7 +571,7 @@ export class UI {
       // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue) ; ceux des âges
       // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant. Les vignettes se rangent par groupe de
       // lecture (Nourriture, Matériaux, Santé…), chacun sous son titre
-      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1), shut = (k: KindId) => +!!this.lockOf(k);
+      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1 && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge)), shut = (k: KindId) => +!!this.lockOf(k);
       const tile = (k: KindId) => {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0, gv = givesOf(k, a);
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
@@ -650,6 +650,7 @@ export class UI {
   private lockOf(k: KindId): string | null {
     const d = KINDS[k], h = this.host;
     if (d.minAge > h.sim.age) return `Disponible à l’âge : ${AGES[d.minAge].name}`;
+    if (d.maxAge !== undefined && h.sim.age > d.maxAge) return `On ne le bâtit plus qu’à l’âge : ${AGES[d.maxAge].name} (c’est trop tard)`;
     // un village neuf commence par sa place : le reste se bâtit autour
     if (k !== 'gather' && h.world.buildings.size === 0) return `Posez d’abord ${h.sim.nameOf('gather').toLowerCase()}, la place au centre du village`;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {

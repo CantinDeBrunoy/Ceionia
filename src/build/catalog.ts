@@ -11,6 +11,8 @@ export interface KindDef {
   id: KindId;
   size: 1 | 2 | 3 | 4;
   minAge: number;
+  /** dernier âge où on peut le bâtir : après, tant pis (ceux déjà bâtis restent) */
+  maxAge?: number;
   icon: string;
   /** rayon de la barre de construction */
   cat: BuildCat;
@@ -338,20 +340,20 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [0, 7, 9, 12, 15, 18], jobs: [0, 2, 2, 4, 5, 6],
   },
   acropolis: {
-    id: 'acropolis', size: 3, minAge: 1, icon: '🏛️', cat: 'life',
+    id: 'acropolis', size: 3, minAge: 1, maxAge: 1, icon: '🏛️', cat: 'life',
     names: ['', 'Acropole', 'Acropole', 'Acropole', 'Acropole', 'Acropole'],
     desc: 'La ville haute sur son rocher : le grand temple de marbre, les propylées, le portique des caryatides et la statue d’Athéna veillent sur le village, à travers tous les âges.',
     joy: [0, 12, 12, 14, 16, 18], jobs: [0, 3, 3, 4, 5, 6],
     perk: 'Grand monument de 3 × 3 cases, qu’on garde à travers les âges (comme le château).',
   },
   forum: {
-    id: 'forum', size: 3, minAge: 1, icon: '🏛️', cat: 'life',
+    id: 'forum', size: 3, minAge: 1, maxAge: 1, icon: '🏛️', cat: 'life',
     names: ['', 'Forum', 'Halle du marché', 'Halles', 'Marché couvert', 'Galerie marchande'],
     desc: 'La grande place où l’on commerce, juge et discute : forum romain, puis halle du marché à charpente, halles de fer et de verre, marché couvert.',
     joy: [0, 8, 8, 9, 10, 12], jobs: [0, 3, 5, 7, 9, 11], food: [0, 0, 2, 3, 4, 5],
   },
   senate: {
-    id: 'senate', size: 2, minAge: 1, icon: '🏛️', cat: 'service',
+    id: 'senate', size: 2, minAge: 1, maxAge: 1, icon: '🏛️', cat: 'service',
     names: ['', 'Sénat', 'Palais du conseil', 'Palais du Sénat', 'Sénat', 'Sénat'],
     desc: 'Les anciens du village y débattent des affaires communes : curie romaine, palais communal et son beffroi, puis palais à coupole.',
     joy: [0, 4, 5, 6, 7, 8], jobs: [0, 4, 5, 7, 9, 10],
@@ -507,6 +509,13 @@ export const UPGRADES: { from: KindId; to: KindId }[] = [
   { from: 'workshop', to: 'carworks' },
   { from: 'farm', to: 'vfarm' },
 ];
+
+/** Un genre et tous ceux en lesquels il s'améliore (une place devenue forum compte encore comme une place) */
+export function lineOf(k: KindId): KindId[] {
+  const out: KindId[] = [k];
+  for (let i = 0; i < out.length; i++) for (const u of UPGRADES) if (u.from === out[i] && !out.includes(u.to)) out.push(u.to);
+  return out;
+}
 
 export interface Building {
   id: number;
