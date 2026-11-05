@@ -68,13 +68,13 @@ function dotTexture() {
 }
 
 /** Un tronçon de cylindre de a à b, du rayon r0 au rayon r1 (petit bois, cordes des guirlandes) */
-function tube(p: Parts, a: number[], b: number[], r0: number, r1: number, c: number, seg = 5, glow: Glow = false) {
+export function tube(p: Parts, a: number[], b: number[], r0: number, r1: number, c: number, seg = 5, glow: Glow = false) {
   const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
   const g = new THREE.CylinderGeometry(r1, r0, len, seg).translate(0, len / 2, 0).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
   p.add(g, a[0], a[1], a[2], c, 0, glow);
 }
 /** Un triangle (un fanion), visible des deux côtés */
-function tri(p: Parts, a: number[], b: number[], c: number[], color: number) {
+export function tri(p: Parts, a: number[], b: number[], c: number[], color: number) {
   for (const v of [[...a, ...b, ...c], [...a, ...c, ...b]]) p.add(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(v, 3)), 0, 0, 0, color);
 }
 

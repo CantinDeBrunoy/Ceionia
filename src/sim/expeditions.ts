@@ -619,7 +619,7 @@ export class Expeditions {
       if (a.phase === 'work' && a.ambush.length) this.ambushStep(a);
       // (une équipe d'une ancienne sauvegarde, encore rassemblée au village, part à son tour)
       // les adieux durent un peu, le temps que le village acclame les colons
-      if (a.phase === 'gather' && ((ag.partyDone(a.party) && a.t > (a.m.farewell ? 14 : 0)) || a.t > 40)) {
+      if (a.phase === 'gather' && ((ag.partyDone(a.party) && a.t > (a.m.farewell ? 20 : 0)) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
         this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » part vers ${DEST_NAME[a.c.dest]}.`);
