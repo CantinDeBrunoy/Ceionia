@@ -1864,6 +1864,7 @@ export class UnderView {
     if (this.camp) stepCamp(this.camp, this.uTime.value, dt);
     this.stepGuards(dt);
     this.fx.update(dt);
+    this.mobs.age = this.age;
     this.mobs.update(dt, camera, this.lantern, [...this.torchPoints(), ...this.guards.map((g) => ({ x: g.x, z: g.z })), ...[...this.troops.values()].map((s) => ({ x: s.light.x, z: s.light.z })), ...[...this.crews.values(), ...(this.digCrew ? [this.digCrew] : [])].flatMap((c) => c.miners.map((m) => ({ x: m.x, z: m.z })))]);
   }
 

@@ -6,7 +6,7 @@ import { batGeo, flapMaterial } from './fauna';
 import { caveLit } from './caveLight';
 import { mulberry32 } from '../core/rng';
 
-export type MobKind = 'zombie' | 'skeleton' | 'spider' | 'slime' | 'mushnub' | 'ghost';
+export type MobKind = 'zombie' | 'skeleton' | 'spider' | 'slime' | 'mushnub' | 'ghost' | 'golem' | 'worm';
 
 interface MobSpec {
   model: ModelName;
@@ -29,6 +29,10 @@ interface MobSpec {
   hostile?: boolean;
   /** taille des groupes */
   group?: number;
+  /** créature dessinée et animée ici (pas de modèle animé) */
+  drawn?: boolean;
+  /** âge du village où elle apparaît, et ses zones (cases de galerie par individu) */
+  from?: number;
 }
 
 const SPECS: Record<MobKind, MobSpec> = {
@@ -38,7 +42,17 @@ const SPECS: Record<MobKind, MobSpec> = {
   slime: { model: 'slime', size: 0.2, fit: 'height', speed: 0.35, run: 0.75, density: { [UZ_LUSH]: 90, [UZ_STONE]: 320, [UZ_CRYSTAL]: 260 }, walk: ['Slime_Walk'], idle: ['Slime_Idle'], act: ['Slime_Attack'], hit: ['Slime_Attack'], walkRate: 1 },
   mushnub: { model: 'mushnub', size: 0.26, fit: 'height', speed: 0.3, run: 0.8, density: { [UZ_LUSH]: 55 }, walk: ['Walk'], idle: ['Idle'], act: ['Dance', 'Yes'], hit: ['HitRecieve', 'No'], walkRate: 1, group: 3 },
   ghost: { model: 'ghost', size: 0.34, fit: 'height', speed: 0.28, run: 1.2, density: { [UZ_CRYSTAL]: 110, [UZ_ICE]: 200 }, walk: ['Flying_Idle'], idle: ['Flying_Idle'], act: ['Yes'], hit: ['HitReact', 'No'], runAnim: ['Fast_Flying'], walkRate: 1, fly: true },
+  // gardien de pierre (dès l'âge médiéval) : le corps du zombie, pétrifié, cuirassé de rocs, un cristal planté dans le dos
+  golem: { model: 'zombie', size: 0.62, fit: 'height', speed: 0.2, run: 0.5, density: { [UZ_STONE]: 300, [UZ_MAGMA]: 220, [UZ_CRYSTAL]: 320 }, walk: ['Walk', 'Run_Arms'], idle: ['Idle'], act: ['Punch', 'Run_Attack'], hit: ['HitReact'], walkRate: 0.45, hostile: true, from: 2 },
+  // ver des profondeurs (dès l'âge industriel) : un long corps annelé qui ondule, une gueule ronde hérissée de crocs
+  worm: { model: 'zombie', size: 1.1, fit: 'length', speed: 0.38, run: 0.9, density: { [UZ_STONE]: 360, [UZ_MAGMA]: 260, [UZ_LUSH]: 320, [UZ_ICE]: 360 }, walk: [], idle: [], act: [], hit: [], walkRate: 1, hostile: true, drawn: true, from: 3 },
 };
+/** Les créatures grandissent avec les âges du village (échelle selon l'âge, de la préhistoire au futur) */
+const GROW = [1, 1.06, 1.16, 1.28, 1.4, 1.52];
+/** Yeux luisants : à partir de l'âge médiéval, ambre, puis rouge braise, puis rouge sang */
+const EYES = [0, 0, 0xffc04a, 0xff6a2a, 0xff2a2a, 0xff1040];
+/** Teinte des corps aux âges avancés (plus sombres, plus malsains) */
+const DARKEN: Partial<Record<MobKind, number>> = { zombie: 0x2d3a22, skeleton: 0x3a3028, spider: 0x2a0e12, slime: 0x1e4a1a, ghost: 0x40306a };
 const KINDS = Object.keys(SPECS) as MobKind[];
 const MAX_MOBS = 90;
 const SLIME_BIG = 1.7;
@@ -80,9 +94,67 @@ export interface Mob {
   target?: [number, number] | null;
   /** terrassée : temps restant avant de disparaître (négatif : vivante) */
   dying: number;
+  /** yeux luisants, et l'os de la tête qu'ils suivent */
+  eyes?: THREE.Object3D | null;
+  head?: THREE.Object3D | null;
+  /** ver des profondeurs : ses anneaux, de la tête à la queue */
+  segs?: THREE.Object3D[];
 }
 
 export interface Point { x: number; z: number }
+
+const EYE_GEO = new THREE.SphereGeometry(1, 6, 4), ROCK_GEO = new THREE.DodecahedronGeometry(1, 0), SHARD_GEO = new THREE.OctahedronGeometry(1, 0);
+const STONE_SKIN = new THREE.Color(0x7d786f), EYE_AT = new THREE.Vector3();
+
+/**
+ * Ver des profondeurs, dessiné anneau par anneau (même facture facettée que les bêtes) : une tête ronde à la gueule béante
+ * hérissée de crocs, quatre yeux verts, des anneaux de plus en plus fins, chacun cerclé d'une plaque plus sombre. `size` :
+ * sa longueur. L'animation est faite à la main (wormPose) : pas de squelette, un mélangeur vide
+ */
+function makeWorm(size: number) {
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  const skin = caveLit(new THREE.MeshStandardMaterial({ color: 0x7a5f68, roughness: 0.85, flatShading: true }), 'worm-skin');
+  const plate = caveLit(new THREE.MeshStandardMaterial({ color: 0x3e3036, roughness: 0.7, flatShading: true }), 'worm-plate');
+  const fang = caveLit(new THREE.MeshStandardMaterial({ color: 0xece2c8, roughness: 0.6, flatShading: true }), 'worm-fang');
+  const maw = new THREE.MeshBasicMaterial({ color: 0x5a0d14 }), eye = new THREE.MeshBasicMaterial({ color: 0xc6ff4a, fog: false });
+  const n = 12, segs: THREE.Object3D[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1), r = size * (0.085 - 0.05 * t) * (i === 0 ? 1.15 : 1), s = new THREE.Group();
+    const ball = new THREE.Mesh(ROCK_GEO, skin);
+    ball.scale.set(r, r * 0.9, r * 1.15);
+    s.add(ball);
+    if (i === 0) { const collar = new THREE.Mesh(RING_GEO, plate); collar.scale.set(r * 1.12, r * 1.12, r * 0.7); collar.position.z = r * 0.5; s.add(collar); }
+    if (i > 0) { const ringM = new THREE.Mesh(RING_GEO, plate); ringM.scale.set(r * 1.08, r * 1.08, r * 0.5); s.add(ringM); }
+    else {
+      // la gueule : un disque rouge sombre devant, une couronne de crocs tournés vers l'intérieur, les yeux au-dessus
+      const mouth = new THREE.Mesh(new THREE.CircleGeometry(r * 0.75, 10), maw);
+      mouth.position.z = r * 1.1;
+      s.add(mouth);
+      for (let j = 0; j < 8; j++) {
+        const a = (j / 8) * Math.PI * 2, f = new THREE.Mesh(FANG_GEO, fang);
+        f.scale.set(r * 0.12, r * 0.45, r * 0.12);
+        f.position.set(Math.cos(a) * r * 0.7, Math.sin(a) * r * 0.7, r * 1.08);
+        f.rotation.set(Math.PI / 2, 0, a + Math.PI / 2);
+        f.rotateX(0.5);
+        s.add(f);
+      }
+      for (const [ex, ey] of [[-0.45, 0.55], [0.45, 0.55], [-0.75, 0.25], [0.75, 0.25]]) {
+        const e = new THREE.Mesh(EYE_GEO, eye);
+        e.scale.setScalar(r * 0.13);
+        e.position.set(ex * r, ey * r, r * 0.85);
+        s.add(e);
+      }
+    }
+    s.userData.r = r;
+    s.userData.len = size;
+    body.add(s);
+    segs.push(s);
+  }
+  root.userData.segs = segs;
+  return { root, mixer: new THREE.AnimationMixer(root), actions: new Map<string, THREE.AnimationAction>(), current: null } as Actor;
+}
+const RING_GEO = new THREE.TorusGeometry(1, 0.18, 4, 9), FANG_GEO = new THREE.ConeGeometry(1, 1, 4);
 
 const turnTo = (m: Mob, target: number, k: number) => {
   let d = target - m.heading;
@@ -123,6 +195,9 @@ export class UnderMobs {
   /** galeries tenues par le village (lanternes, garnisons) : les créatures n'y naissent pas et n'y vont pas */
   held: () => Set<number> = () => new Set();
   private heldN = 0;
+  /** âge du village (donné par la vue) : les créatures grandissent, s'assombrissent, de nouvelles espèces paraissent */
+  age = 0;
+  private bornAge = -1;
 
   constructor(private under: Underground) {
     const g = batGeo();
@@ -155,17 +230,25 @@ export class UnderMobs {
       if (u.entrances.some((e) => Math.hypot(e.x - x - 0.5, e.z - z - 0.5) < 4) || held.has(k)) continue;
       byZone[u.zone[k]].push(k);
     }
+    // chaque espèce dans ses zones, groupe après groupe et à tour de rôle : le plafond n'affame aucune espèce
+    const tasks: { kind: MobKind; cells: number[]; n: number }[] = [];
     for (const kind of KINDS) {
       const sp = SPECS[kind];
+      if ((sp.from ?? 0) > this.age) continue;
       for (const [zone, per] of Object.entries(sp.density)) {
         const cells = byZone[+zone];
-        let n = Math.floor(cells.length / (per as number));
-        while (n > 0 && cells.length) {
-          const k = cells[Math.floor(this.rnd() * cells.length)];
-          const size = Math.min(n, sp.group ? 1 + Math.floor(this.rnd() * sp.group) : 1);
-          for (let i = 0; i < size; i++) this.spawn(kind, (k % N) + 0.3 + this.rnd() * 0.4 + (i % 2) * 0.3, Math.floor(k / N) + 0.3 + this.rnd() * 0.4);
-          n -= size;
-        }
+        if (cells.length) tasks.push({ kind, cells, n: Math.floor(cells.length / (per as number)) });
+      }
+    }
+    for (let more = true; more && this.mobs.length < MAX_MOBS;) {
+      more = false;
+      for (const t of tasks) {
+        if (t.n <= 0) continue;
+        const sp = SPECS[t.kind], k = t.cells[Math.floor(this.rnd() * t.cells.length)];
+        const size = Math.min(t.n, sp.group ? 1 + Math.floor(this.rnd() * sp.group) : 1);
+        for (let i = 0; i < size; i++) this.spawn(t.kind, (k % N) + 0.3 + this.rnd() * 0.4 + (i % 2) * 0.3, Math.floor(k / N) + 0.3 + this.rnd() * 0.4);
+        t.n -= size;
+        more = true;
       }
     }
     // chauves-souris : quelques colonies dans les grandes salles
@@ -180,14 +263,26 @@ export class UnderMobs {
 
   private spawn(kind: MobKind, x: number, z: number, foe = false): Mob | null {
     const sp = SPECS[kind];
-    if (this.mobs.length >= MAX_MOBS + (foe ? MAX_FOES : 0) || !hasModel(sp.model) || !this.free(x, z)) return null;
-    const actor = makeActor(sp.model, sp.size * (0.92 + this.rnd() * 0.16), sp.fit);
+    if (this.mobs.length >= MAX_MOBS + (foe ? MAX_FOES : 0) || (!sp.drawn && !hasModel(sp.model)) || !this.free(x, z)) return null;
+    // plus l'âge avance, plus elles sont grosses (l'araignée devient géante)
+    const age = Math.min(5, Math.max(0, this.age)), size = sp.size * GROW[age] * (kind === 'spider' && age >= 3 ? 1.35 : 1) * (0.92 + this.rnd() * 0.16);
+    const actor = sp.drawn ? makeWorm(size) : makeActor(sp.model, size, sp.fit);
     if (!actor) return null;
+    // aux âges avancés, les corps s'assombrissent : chacune a alors ses propres matériaux
+    const own = kind === 'golem' || (age >= 3 && !!DARKEN[kind]);
     actor.root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       mesh.castShadow = mesh.receiveShadow = false;
-      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) caveLit(mat, `mob-${kind}`);
+      if (own && !sp.drawn) mesh.material = Array.isArray(mesh.material) ? mesh.material.map((mt) => mt.clone()) : mesh.material.clone();
+      for (const mat of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.MeshStandardMaterial[]) {
+        if (own && !sp.drawn) {
+          // pétrifié : plus de texture ni de couleurs de sommet, une pierre grise (un peu plus claire ou sombre par pièce)
+          if (kind === 'golem') { mat.map = null; mat.vertexColors = false; mat.color.copy(STONE_SKIN).multiplyScalar(0.85 + this.rnd() * 0.3); mat.flatShading = true; mat.needsUpdate = true; }
+          else mat.color.lerp(new THREE.Color(DARKEN[kind]!), age >= 4 ? 0.72 : 0.5);
+        }
+        caveLit(mat, `mob-${kind}${own ? '-own' : ''}`);
+      }
     });
     this.group.add(actor.root);
     const m: Mob = {
@@ -195,10 +290,60 @@ export class UnderMobs {
       timer: this.rnd() * 3, cool: 5 + this.rnd() * 10, fear: 0, scale: 1, split: 0, phase: this.rnd() * 10, prey: null, face: null, alive: true,
       foe: null, dying: -1,
     };
+    if (sp.drawn) m.segs = actor.root.userData.segs;
+    else this.dress(m, size, age);
     play(actor, sp.idle, 0);
     actor.mixer.update(this.rnd() * 2);
     this.mobs.push(m);
     return m;
+  }
+
+  /**
+   * Habille une créature selon l'âge : yeux luisants qui suivent sa tête (dès l'âge médiéval) ; le gardien de pierre se
+   * couvre de rocs sur la tête, les épaules, le torse et les bras, un cristal lumineux planté entre les omoplates
+   */
+  private dress(m: Mob, size: number, age: number) {
+    const root = m.actor.root, bones: Record<string, THREE.Object3D> = {};
+    root.traverse((o) => { if ((o as THREE.Bone).isBone) bones[o.name] = o; });
+    m.head = bones.Head ?? null;
+    const eye = m.kind === 'golem' ? 0x7dfcff : EYES[age];
+    // (l'araignée a déjà ses yeux rouges : elle s'assombrit et grandit)
+    if (eye && m.kind !== 'slime' && m.kind !== 'mushnub' && m.kind !== 'spider') {
+      const eyes = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: eye, fog: false }), s = size * 0.026;
+      for (const side of [-1, 1]) {
+        const e = new THREE.Mesh(EYE_GEO, mat);
+        e.scale.setScalar(s);
+        e.position.set(side * s * 1.3, 0, 0);
+        eyes.add(e);
+      }
+      root.add(eyes);
+      m.eyes = eyes;
+    }
+    if (m.kind !== 'golem') return;
+    // les rocs sur les os : leur taille se compte en monde (l'os porte l'échelle du modèle)
+    root.updateMatrixWorld(true);
+    const ws = new THREE.Vector3(), rock = new THREE.MeshStandardMaterial({ color: 0x8a857c, roughness: 0.95, flatShading: true });
+    caveLit(rock, 'golem-rock');
+    const plates: [string, number, number][] = [['Head', 0.13, 0.05], ['ShoulderL', 0.15, 0], ['ShoulderR', 0.15, 0], ['Torso', 0.2, 0.02], ['UpperArmL', 0.1, 0], ['UpperArmR', 0.1, 0], ['LowerArmL', 0.12, 0.04], ['LowerArmR', 0.12, 0.04], ['Abdomen', 0.16, 0]];
+    plates.forEach(([name, r, up], i) => {
+      const b = bones[name];
+      if (!b) return;
+      b.getWorldScale(ws);
+      const g = new THREE.Mesh(ROCK_GEO, rock), k = 1 / Math.max(1e-6, ws.x);
+      g.scale.set(r * size * k * (0.9 + (i % 3) * 0.1), r * size * k * 0.8, r * size * k);
+      g.position.set(0, up * size * k, 0);
+      g.rotation.set(i * 1.3, i * 2.1, i * 0.7);
+      b.add(g);
+    });
+    const torso = bones.Torso;
+    if (torso) {
+      torso.getWorldScale(ws);
+      const k = 1 / Math.max(1e-6, ws.x), c = new THREE.Mesh(SHARD_GEO, new THREE.MeshBasicMaterial({ color: 0x7dfcff }));
+      c.scale.set(size * 0.06 * k, size * 0.22 * k, size * 0.06 * k);
+      c.position.set(0, size * 0.05 * k, -size * 0.12 * k);
+      c.rotation.x = -0.5;
+      torso.add(c);
+    }
   }
 
   private remove(m: Mob) {
@@ -395,7 +540,8 @@ export class UnderMobs {
   // ---------- Comportements ----------
 
   update(dt: number, camera: THREE.Camera, lantern: Point, torches: Point[]) {
-    if (this.version !== this.under.version) { this.version = this.under.version; this.populate(); }
+    // un nouvel âge : la population renaît, plus grosse et plus terrible
+    if (this.version !== this.under.version || this.bornAge !== Math.min(5, this.age)) { this.version = this.under.version; this.bornAge = Math.min(5, this.age); this.populate(); }
     // de nouvelles galeries prises : les créatures qui s'y trouvaient ont fui
     const held = this.held();
     if (held.size !== this.heldN) {
@@ -576,12 +722,39 @@ export class UnderMobs {
     a.root.position.set(m.x, y, m.z);
     a.root.rotation.y = m.heading;
     a.root.scale.setScalar(m.scale * (m.dying >= 0 ? m.dying / DIE : 1));
+    if (m.segs) { this.wormPose(m, dt); return; }
     const anim = m.state === 'act' ? sp.act : m.state === 'hit' ? sp.hit : m.state === 'run' ? sp.runAnim ?? sp.walk : m.state === 'walk' ? sp.walk : sp.idle;
     play(a, anim, 0.2);
     if (a.current) a.current.timeScale = m.state === 'walk' ? sp.walkRate : m.state === 'run' ? sp.walkRate * 1.9 : 1;
     const far = camera.position.distanceTo(this.sphere.center) > 26;
     if (!far) a.mixer.update(dt);
     else if ((this.frame + Math.floor(m.phase * 10)) % 2 === 0) a.mixer.update(dt * 2);
+    // les yeux suivent la tête (un peu devant et au-dessus de son os)
+    if (m.eyes) {
+      const size = sp.size * GROW[Math.min(5, this.age)];
+      if (m.head) { m.head.getWorldPosition(EYE_AT); a.root.worldToLocal(EYE_AT); }
+      else EYE_AT.set(0, size * (m.kind === 'spider' ? 0.35 : 0.85), 0);
+      const fwd = m.kind === 'skeleton' ? 0.13 : m.kind === 'ghost' ? 0.2 : 0.2, up = m.kind === 'skeleton' ? 0.12 : m.kind === 'ghost' ? -0.25 : 0.17;
+      m.eyes.position.set(EYE_AT.x, EYE_AT.y + size * up, EYE_AT.z + size * fwd);
+    }
+  }
+
+  /**
+   * Le ver des profondeurs : ses anneaux ondulent derrière la tête, plus vite à la course ; à l'attaque, il se cabre et
+   * plonge, la gueule ouverte ; touché, il se tord
+   */
+  private wormPose(m: Mob, dt: number) {
+    const segs = m.segs!, n = segs.length, len = segs[0].userData.len as number;
+    const k = m.state === 'run' ? 11 : m.state === 'walk' ? 6 : m.state === 'act' ? 4 : 1.5;
+    m.phase += dt * k;
+    const rear = m.state === 'act' ? Math.max(0, Math.sin(m.phase * 1.6)) : 0, writhe = m.state === 'hit' ? 1 : 0;
+    segs.forEach((s, i) => {
+      const t = i / (n - 1), amp = len * (0.05 + 0.07 * t) * (1 + writhe);
+      const r = s.userData.r as number;
+      s.position.set(Math.sin(m.phase - i * 0.75) * amp, r * 0.85 + (i < 4 ? rear * len * 0.22 * (1 - i / 4) : 0) + Math.max(0, Math.sin(m.phase * 0.5 - i * 0.6)) * r * 0.25, -i * len / n);
+      s.rotation.y = Math.cos(m.phase - i * 0.75) * 0.35;
+      s.rotation.x = i === 0 ? -rear * 0.7 : 0;
+    });
   }
 
   /** Chauves-souris : boucles irrégulières sous la voûte de leur salle */

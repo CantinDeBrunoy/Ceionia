@@ -74,7 +74,7 @@ export interface ActiveExpedition {
 }
 
 /** Créatures qui tendent des embuscades aux troupes armées */
-export type FoeKind = 'zombie' | 'skeleton' | 'spider';
+export type FoeKind = 'zombie' | 'skeleton' | 'spider' | 'golem' | 'worm';
 /**
  * Embuscade dans les galeries sauvages : la case où elle surgit, les créatures et leur nombre, le moment (temps de parcours
  * de la troupe) ; l'issue est tirée quand elle survient, ses blessés comptés à la fin du combat
@@ -116,8 +116,18 @@ const FOES: Record<number, FoeKind[]> = {
   [UZ_STONE]: ['zombie', 'zombie', 'skeleton'], [UZ_CRYSTAL]: ['skeleton', 'spider'], [UZ_ICE]: ['skeleton', 'zombie'],
   [UZ_LUSH]: ['spider'], [UZ_MAGMA]: ['skeleton', 'zombie'],
 };
-const FOE_MIGHT: Record<FoeKind, number> = { zombie: 0.8, skeleton: 1, spider: 1.15 };
-export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 'squelettes', spider: 'araignées géantes' };
+/**
+ * Aux âges avancés, les profondeurs se peuplent de pires créatures : gardiens de pierre dès l'âge médiéval (roche, cristal,
+ * magma), vers des profondeurs dès l'âge industriel (roche, magma, grotte luxuriante, glace)
+ */
+const LATE_FOES: [FoeKind, number, number[]][] = [['golem', 2, [UZ_STONE, UZ_CRYSTAL, UZ_MAGMA]], ['worm', 3, [UZ_STONE, UZ_MAGMA, UZ_LUSH, UZ_ICE]]];
+const FOE_MIGHT: Record<FoeKind, number> = { zombie: 0.8, skeleton: 1, spider: 1.15, golem: 1.6, worm: 1.8 };
+export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 'squelettes', spider: 'araignées géantes', golem: 'gardiens de pierre', worm: 'vers des profondeurs' };
+/** Créatures d'une embuscade dans cette zone, à l'âge donné */
+export function foesOf(zone: number, age: number): FoeKind[] {
+  const base = FOES[zone] ?? FOES[UZ_STONE];
+  return [...base, ...LATE_FOES.filter(([, from, zones]) => age >= from && zones.includes(zone)).map(([k]) => k)];
+}
 /** Nombres en toutes lettres, pour le récit (« Quatre filons abattus ») */
 const NUMBER = ['Aucun', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf', 'Dix', 'Onze', 'Douze'];
 /** « de fer », « d’or », « d’émeraude » */
@@ -702,8 +712,10 @@ export class Expeditions {
     }
     const route = troopRoute(u, entry, targets, front, cells);
     const ambush = route.legs.filter((l) => l.kind === 'fight').map((l): Ambush => {
-      const cell = route.cells[l.to], zone = u.zone[cell], kinds = FOES[zone] ?? FOES[UZ_STONE];
-      return { cell, kind: kinds[Math.floor(this.rnd() * kinds.length)], n: 2 + Math.floor(this.rnd() * 3) + (zone === UZ_MAGMA ? 1 : 0), t0: l.t0, state: 'wait', result: null };
+      const cell = route.cells[l.to], zone = u.zone[cell], kinds = foesOf(zone, this.age()), kind = kinds[Math.floor(this.rnd() * kinds.length)];
+      // les grosses créatures vont par deux ou trois
+      const n = kind === 'golem' || kind === 'worm' ? 2 + (this.rnd() < 0.3 ? 1 : 0) : 2 + Math.floor(this.rnd() * 3) + (zone === UZ_MAGMA ? 1 : 0);
+      return { cell, kind, n, t0: l.t0, state: 'wait', result: null };
     });
     return { ambush, len: route.total };
   }
