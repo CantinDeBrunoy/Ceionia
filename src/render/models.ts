@@ -493,8 +493,8 @@ function roof(p: Parts, x: number, y: number, z: number, o: RoofOpts) {
       for (let j = 0; j < rows; j++)
         for (let u = -len / 2 + (j % 2 ? 0.035 : 0), i = 0; u < len / 2 - 0.01; i++) {
           const pw = Math.min(0.07 + hash2(j, i, 31) * 0.06, len / 2 - u);
-          // (le dessus et le bord à l'égout : le reste est caché sous le rang suivant ou contre le pan)
-          const pg = slab(pw - 0.006, 0.007, rl + 0.004, F_PY | (sg > 0 ? F_PZ : F_NZ)).translate(dx + u + pw / 2, t / 2 + 0.0035, -sl / 2 + (j + 0.5) * rl);
+          // (le dessus seulement : ses bords n'ont que l'épaisseur d'une ardoise, les teintes suffisent à marquer les rangs)
+          const pg = slab(pw - 0.006, 0.007, rl + 0.004, F_PY).translate(dx + u + pw / 2, t / 2 + 0.0035, -sl / 2 + (j + 0.5) * rl);
           p.add(pg.rotateX(sg * a).translate(0, cy, cz).rotateY(ry), x, y, z, dark(o.color, 0.84 + hash2(i, j, 33 + sg) * 0.24));
           u += pw;
         }
@@ -2999,9 +2999,11 @@ function stones(p: Parts, cx: number, cz: number, len: number, y0: number, y1: n
 
 /** Chaîne d'angle : pierres de taille alternées, longues sur une face puis sur l'autre ; (sx, sz) : côtés vers l'extérieur */
 function quoins(p: Parts, x: number, z: number, y0: number, y1: number, sx: number, sz: number, color = 0xe9e2d4) {
+  // (les deux faces tournées vers l'extérieur et le dessus : le reste est dans le mur)
+  const faces = F_PY | (sx > 0 ? F_PX : F_NX) | (sz > 0 ? F_PZ : F_NZ);
   for (let i = 0, y = y0; y + 0.03 < y1; i++, y += 0.055) {
     const a = i % 2 ? 0.085 : 0.05, b = i % 2 ? 0.05 : 0.085;
-    p.box(a, 0.047, b, x - sx * (a / 2 - 0.006), y + 0.004, z - sz * (b / 2 - 0.006), color);
+    p.add(slab(a, 0.047, b, faces), x - sx * (a / 2 - 0.006), y + 0.004 + 0.0235, z - sz * (b / 2 - 0.006), color);
   }
 }
 
@@ -3215,26 +3217,26 @@ function health(p: Parts, age: number) {
     sink(0.025);
     p.box(0.92, 0.62, 0.44, 0, 0.03, -0.66, C.brick); p.box(0.94, 0.035, 0.46, 0, 0.33, -0.66, C.cream);
     roof(p, 0, 0.65, -0.66, { w: 0.92, d: 0.44, h: 0.22, color: C.slate, wall: C.brick, courses: true });
-    stones(p, 0, -0.439, 0.92, 0.03, 0.65, 0, dark(C.brick, 0.86), 0.45, 350);
+    stones(p, 0, -0.439, 0.92, 0.03, 0.65, 0, dark(C.brick, 0.86), 0.32, 350);
     for (const x of [-0.46, 0.46]) quoins(p, x, -0.44, 0.03, 0.65, x < 0 ? -1 : 1, 1);
     for (const x of [-0.3, 0.3]) { p.box(0.07, 0.22, 0.07, x, 0.75, -0.78, 0xa85e50); p.box(0.085, 0.025, 0.085, x, 0.97, -0.78, C.cream); smoke(x, 1.0, -0.78, 0); }
     // mât au drapeau à croix rouge, bancs et massifs de fleurs dans la cour, réverbères au portail
     p.cyl(0.008, 0.01, 0.7, 5, -0.24, 0.03, -0.36, C.metal); { const f = sway([-0.24, 0, -0.36], [0, 1, 0], 0.35, 1.1); f.box(0.006, 0.1, 0.15, 0, 0.6, 0.075, C.white); f.box(0.008, 0.025, 0.06, 0, 0.64, 0.075, 0xd84a3e); f.box(0.008, 0.07, 0.02, 0, 0.617, 0.075, 0xd84a3e); }
     for (const x of [-0.24, 0.24]) { p.box(0.16, 0.02, 0.05, x, 0.07, 0.1, C.wood); for (const d of [-0.06, 0.06]) p.box(0.016, 0.045, 0.04, x + d, 0.025, 0.1, 0x3c4a44); }
-    for (let i = 0; i < 14; i++) p.sphere(0.022, -0.46 + (i % 7) * 0.15, 0.05, i < 7 ? -0.3 : 0.15, [C.pink, C.butter, C.lav, 0xd84a3e][i % 4], 0, 0.8);
+    for (let i = 0; i < 10; i++) p.sphere(0.024, -0.45 + (i % 5) * 0.225, 0.05, i < 5 ? -0.3 : 0.15, [C.pink, C.butter, C.lav, 0xd84a3e][i % 4], 0, 0.8);
     for (const s of [-1, 1]) { p.cyl(0.007, 0.009, 0.3, 5, s * 0.26, 0.025, 0.86, 0x3c4a44); p.box(0.04, 0.045, 0.04, s * 0.26, 0.32, 0.86, 0xffe2a0, 0, true); }
     p.box(0.34, 0.78, 0.1, 0, 0.03, -0.41, C.cream); p.gable(0.36, 0.16, 0.12, 0, 0.81, -0.41, C.slate);
     p.cyl(0.055, 0.055, 0.012, 12, 0, 0.66, -0.355, C.white); p.box(0.005, 0.04, 0.004, 0, 0.675, -0.348, C.darkwood); p.box(0.03, 0.005, 0.004, 0.012, 0.66, -0.348, C.darkwood);
     p.box(0.14, 0.24, 0.02, 0, 0.03, -0.355, C.door); redCross(p, 0, 0.52, -0.352, 0.85);
     for (const s of [-1, 1]) {
       p.box(0.36, 0.52, 0.88, s * 0.72, 0.03, -0.3, C.brick); p.box(0.38, 0.035, 0.9, s * 0.72, 0.29, -0.3, C.cream);
-      roof(p, s * 0.72, 0.55, -0.3, { w: 0.88, d: 0.36, h: 0.2, color: C.slate, wall: C.brick, ry: Math.PI / 2, courses: true });
-      stones(p, s * 0.54, -0.3, 0.88, 0.03, 0.55, -s * Math.PI / 2, dark(C.brick, 0.86), 0.45, 352 + s);
-      stones(p, s * 0.72, 0.14, 0.36, 0.03, 0.55, 0, dark(C.brick, 0.86), 0.45, 354 + s);
+      roof(p, s * 0.72, 0.55, -0.3, { w: 0.88, d: 0.36, h: 0.2, color: C.slate, wall: C.brick, ry: Math.PI / 2, rows: true });
+      stones(p, s * 0.54, -0.3, 0.88, 0.03, 0.55, -s * Math.PI / 2, dark(C.brick, 0.86), 0.3, 352 + s);
+      stones(p, s * 0.72, 0.14, 0.36, 0.03, 0.55, 0, dark(C.brick, 0.86), 0.3, 354 + s);
       quoins(p, s * 0.54, 0.14, 0.03, 0.55, -s, 1); quoins(p, s * 0.9, 0.14, 0.03, 0.55, s, 1);
       for (const y of [0.1, 0.36]) {
-        for (const z of [-0.6, -0.36, -0.12]) p.box(0.02, 0.1, 0.07, s * 0.535, 0.03 + y, z, C.win, 0, true);
-        p.box(0.07, 0.1, 0.02, s * 0.72, 0.03 + y, 0.145, C.win, 0, true);
+        for (const z of [-0.6, -0.36, -0.12]) p.add(slab(0.07, 0.1, 0.02, F_PZ), s * 0.535, 0.08 + y, z, C.win, -s * Math.PI / 2, true);
+        p.add(slab(0.07, 0.1, 0.02, F_PZ), s * 0.72, 0.08 + y, 0.145, C.win, 0, true);
       }
       for (const x of [0.3, 0.18]) windows(p, [s * x], 0.13 + (x === 0.3 ? 0 : 0.26), -0.43, 0.07, 0.1);
       windows(p, [s * 0.3], 0.39, -0.43, 0.07, 0.1);
@@ -3243,12 +3245,51 @@ function health(p: Parts, age: number) {
     p.cyl(0.1, 0.11, 0.05, 10, 0, 0.03, -0.08, C.stone); waterPool(p, 0, 0.075 + 0.01, -0.08, 0.08, 10); p.cyl(0.015, 0.02, 0.12, 5, 0, 0.08, -0.08, C.stone);
     for (const x of [-0.36, 0.36]) tree(p, x, -0.08, 0.9);
     // grille et portail, deux charrettes d'ambulance
-    for (let x = -0.9; x <= 0.9; x += 0.075) if (Math.abs(x) > 0.16) p.box(0.012, 0.1, 0.012, x, 0.025, 0.9, 0x3c4a44);
-    for (const s of [-1, 1]) { p.box(0.74, 0.012, 0.012, s * 0.53, 0.1, 0.9, 0x3c4a44); p.box(0.05, 0.16, 0.05, s * 0.18, 0.025, 0.9, C.cream); }
-    for (const x of [-0.5, 0.45]) {
-      p.box(0.18, 0.11, 0.11, x, 0.07, 0.55, C.white); p.box(0.19, 0.02, 0.12, x, 0.18, 0.55, C.slate); p.box(0.05, 0.035, 0.005, x, 0.12, 0.608, 0xd84a3e);
-      for (const d of [-0.07, 0.07]) p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.13, 8).rotateX(Math.PI / 2), x + d, 0.045, 0.55, C.darkwood);
+    // (barreaux réduits à leurs faces vues)
+    for (let x = -0.9; x <= 0.9; x += 0.075) if (Math.abs(x) > 0.16) p.add(slab(0.012, 0.11, 0.012, F_PZ | F_NZ | F_PX | F_NX), x, 0.08, 0.9, 0x3c4a44);
+    for (const s of [-1, 1]) {
+      p.box(0.74, 0.012, 0.012, s * 0.53, 0.1, 0.9, 0x3c4a44); p.box(0.05, 0.16, 0.05, s * 0.18, 0.025, 0.9, C.cream);
+      p.box(0.064, 0.02, 0.064, s * 0.18, 0.185, 0.9, C.stone); p.sphere(0.022, s * 0.18, 0.225, 0.9, C.stone);
     }
+    // ambulances à cheval : caisse blanche à croix rouge, bâche d'ardoise, roues à rayons, brancards et cheval attelé
+    for (const [x, sd] of [[-0.5, -1], [0.45, 1]] as [number, number][]) {
+      p.box(0.18, 0.11, 0.11, x, 0.07, 0.55, C.white); p.box(0.19, 0.02, 0.12, x, 0.18, 0.55, C.slate); p.box(0.05, 0.035, 0.005, x, 0.12, 0.608, 0xd84a3e);
+      for (const d of [-0.07, 0.07]) {
+        for (const z of [0.6, 0.5]) p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.012, 7).rotateX(Math.PI / 2), x + d, 0.045, z, C.darkwood);
+        // rayons et moyeu peints sur la roue côté rue
+        for (const a of [0, Math.PI / 2]) p.add(slab(0.075, 0.008, 0.004, F_PZ), x + d, 0.045, 0.607, C.wood, 0, false, a);
+      }
+      p.box(0.006, 0.006, 0.13, x, 0.045, 0.55, C.darkwood);
+      for (const dz of [-0.035, 0.035]) p.box(0.16, 0.008, 0.008, x + sd * 0.16, 0.09, 0.55 + dz, C.wood);
+      // le cheval (robe baie, crinière sombre), tête basse vers la rue
+      const hx = x + sd * 0.2;
+      p.box(0.14, 0.06, 0.05, hx, 0.08, 0.55, 0x7a5236);
+      p.add(new THREE.BoxGeometry(0.04, 0.07, 0.035), hx + sd * 0.08, 0.15, 0.55, 0x7a5236, 0, false, -sd * 0.6);
+      p.box(0.06, 0.03, 0.03, hx + sd * 0.115, 0.165, 0.55, 0x6a4630);
+      p.box(0.05, 0.012, 0.012, hx + sd * 0.07, 0.18, 0.55, 0x2a1e18);
+      for (const [dx, dz] of [[-0.05, -0.016], [-0.05, 0.016], [0.05, -0.016], [0.05, 0.016]]) p.box(0.014, 0.08, 0.014, hx + dx, 0.0, 0.55 + dz, 0x5a3a28);
+      p.box(0.008, 0.06, 0.01, hx - sd * 0.075, 0.08, 0.55, 0x2a1e18);
+      p.box(0.06, 0.012, 0.058, hx, 0.14, 0.55, 0x3c2a20);
+    }
+    // perron de pierre au pied du pavillon d'entrée, lanternes de part et d'autre de la porte, marquise de fonte et de verre
+    steps(p, 0, 0.03, -0.31, 0.26, 0.05, 3);
+    for (const s of [-1, 1]) { p.box(0.012, 0.012, 0.04, s * 0.11, 0.22, -0.345, 0x3c3c40); p.box(0.03, 0.045, 0.03, s * 0.11, 0.18, -0.325, 0xffe2a0, 0, true); p.cone(0.024, 0.025, 4, s * 0.11, 0.225, -0.325, 0x3c3c40); }
+    p.add(new THREE.BoxGeometry(0.22, 0.01, 0.1), 0, 0.29, -0.31, 0x9fc4dc, 0, false, 0, 0.25);
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.006, 0.006, 0.1), s * 0.1, 0.296, -0.31, 0x3c3c40, 0, false, 0, 0.25);
+    // lucarnes sur le grand toit, épi de faîtage et paratonnerre
+    for (const x of [-0.3, 0.3]) {
+      p.box(0.1, 0.12, 0.08, x, 0.66, -0.47, C.cream); p.gable(0.12, 0.06, 0.1, x, 0.78, -0.47, C.slate, Math.PI / 2);
+      p.add(slab(0.06, 0.07, 0.01, F_PZ), x, 0.725, -0.427, C.win, 0, true);
+    }
+    p.box(0.008, 0.12, 0.008, 0, 0.97, -0.41, 0x3c3c40); p.sphere(0.012, 0, 1.09, -0.41, C.gold);
+    // la sœur hospitalière à cornette blanche qui pousse un fauteuil roulant, le médecin en redingote à sa sacoche, un convalescent
+    // sur le banc de la cour
+    figure(p, 0.16, -0.24, 0x2a3a5a, 0.3, false, C.white);
+    p.box(0.07, 0.012, 0.06, 0.18, 0.06, -0.15, 0x6a4a36); p.box(0.07, 0.06, 0.01, 0.18, 0.066, -0.18, 0x6a4a36);
+    for (const s of [-1, 1]) p.add(new THREE.TorusGeometry(0.028, 0.005, 4, 8).rotateY(Math.PI / 2), 0.18 + s * 0.04, 0.055, -0.15, 0x3c3c40);
+    seated(p, 0.18, 0.07, -0.14, 0, 0xd8d4cc, 0x8a7a6a);
+    figure(p, -0.3, 0.38, 0x1e1e24, 0.8, false, 0x5a4434); p.box(0.04, 0.03, 0.02, -0.27, 0.06, 0.4, 0x3c2a20);
+    seated(p, -0.24, 0.09, 0.1, 0, 0xc8d4e4, 0xc8a070);
   } else {
     // centre hospitalier : grand bloc blanc à bandeaux vitrés, tour, héliport sur le toit, auvent, parking et ambulances
     sink(0.03);
