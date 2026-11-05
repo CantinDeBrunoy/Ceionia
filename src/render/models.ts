@@ -224,6 +224,38 @@ function lifeSize(p: Parts, x: number, y: number, z: number, draw: () => void, k
     for (let i = 0; i < pv.count; i++) { v.fromBufferAttribute(pv, i).applyMatrix4(m); pv.setXYZ(i, v.x, v.y, v.z); an.setW(i, an.getW(i) * s); }
   }
 }
+/**
+ * Dessine (`draw`) un morceau du modèle en cours autour de l'origine, puis le pose en (x, z), tourné de `ry` et agrandi `k`
+ * fois : ses personnages gardent la taille des habitants (dessinés d'autant plus petits, voir lifeSize) ; modèles importés,
+ * cheminées, foules animées et pièces qui se balancent ou tournent suivent. Sert à reprendre un modèle d'une case au milieu
+ * d'une grande place, ou à tourner un étal vers elle
+ */
+function placed(p: Parts, x: number, z: number, ry: number, k: number, draw: () => void) {
+  const nb = p.body.length, ng = p.glow.length, na = attachOut.length, nc = crowdOut.length, ns = smokeOut.length, nw = swayOut.length, k0 = lifeK;
+  lifeK = k0 / k;
+  draw();
+  lifeK = k0;
+  const rot = new THREE.Matrix4().makeRotationY(ry), local = rot.clone().multiply(new THREE.Matrix4().makeScale(k, k, k));
+  const m = new THREE.Matrix4().makeTranslation(x, 0, z).multiply(local), v = new THREE.Vector3();
+  for (const g of [...p.body.slice(nb), ...p.glow.slice(ng), ...attachOut.slice(na)]) g.applyMatrix4(m);
+  for (const g of crowdOut.slice(nc)) {
+    g.applyMatrix4(m);
+    const pv = g.attributes.aPivot, ax = g.attributes.aAxis, an = g.attributes.aAnim;
+    for (let i = 0; i < pv.count; i++) {
+      v.fromBufferAttribute(pv, i).applyMatrix4(m); pv.setXYZ(i, v.x, v.y, v.z);
+      v.fromBufferAttribute(ax, i).applyMatrix4(rot); ax.setXYZ(i, v.x, v.y, v.z);
+      an.setW(i, an.getW(i) * k);
+    }
+  }
+  for (let i = ns; i + 3 < smokeOut.length; i += 4) { v.set(smokeOut[i], smokeOut[i + 1], smokeOut[i + 2]).applyMatrix4(m); smokeOut[i] = v.x; smokeOut[i + 1] = v.y; smokeOut[i + 2] = v.z; }
+  // une pièce qui se balance est dessinée autour de son pivot : elle tourne et grandit sur place, le pivot se déplace
+  for (const sw of swayOut.slice(nw)) {
+    for (const g of [...sw.p.body, ...sw.p.glow]) g.applyMatrix4(local);
+    sw.pivot = v.set(...sw.pivot).applyMatrix4(m).toArray() as [number, number, number];
+    sw.axis = v.set(...sw.axis).applyMatrix4(rot).toArray() as [number, number, number];
+  }
+}
+
 /** Attitude d'un personnage : il flâne et discute (et gesticule), il acclame bras levés, il court sur place */
 type Pose = 'idle' | 'cheer' | 'run';
 
@@ -2649,6 +2681,233 @@ function gather(p: Parts, age: number, o: ModelOpts) {
     p.add(new THREE.BoxGeometry(0.02, 0.07, 0.008), 0.26, 0.09, 0.4, 0x8a5a3a, -0.5, false, 0.9);
     p.box(0.08, 0.012, 0.04, 0.2, 0.01, 0.32, 0x2a2a2e); p.box(0.07, 0.004, 0.03, 0.2, 0.022, 0.32, 0xb8322c);
   }
+}
+
+// ---------- La place du village (3 × 3) : le cœur du village, à chaque âge ----------
+
+/** Cap d'un personnage posé en (x, z) qui regarde le milieu de la place */
+const faceIn = (x: number, z: number) => Math.atan2(-x, -z);
+/** Un enfant (plus petit qu'un habitant), posé en (x, z) */
+function kidAt(p: Parts, x: number, z: number, body: number, ry: number, pose: Pose = 'idle', hair = 0x4a3426) {
+  lifeSize(p, x, 0, z, () => figure(p, x, z, body, ry, false, hair, pose), 0.72);
+}
+
+/**
+ * La place du village, sur ses 3 × 3 cases, sans porte ni façade : on y arrive de tous côtés. Au milieu, le lieu de rencontre
+ * de l'âge (le dessin d'une case, agrandi, ses personnages à la taille des habitants : le feu du clan, la fontaine de l'agora,
+ * les étals du marché, le parc à la française, la place et son bassin, l'agora holographique) ; tout autour, la place
+ * elle-même et sa vie : pierres levées, fumoirs et peaux du campement ; portique, statues et tribune de l'agora ; étals,
+ * charrette et croix du marché ; allées, kiosque à musique et tilleuls du parc ; arbres, terrasse de café, jeux et vélos de la
+ * place ; pylônes, jardinières et bancs lumineux de l'agora holographique ; et partout des habitants
+ */
+function gatherPlaza(p: Parts, age: number, o: ModelOpts) {
+  const H = 1.47;
+  if (age === 0) {
+    // le grand feu du clan au milieu ; le sol battu tout autour
+    trampled(p, 0, 0, 1.05, 671);
+    trampled(p, 0.5, -0.45, 0.6, 673);
+    placed(p, 0, 0, 0, 1.35, () => gather(p, 0, o));
+    // le cercle de pierres levées, ouvert de tous côtés
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + 0.31, r = 1.27 + hash2(i, 1, 680) * 0.08, h = 0.15 + hash2(i, 2, 680) * 0.17, w = 0.06 + hash2(i, 3, 680) * 0.03;
+      p.add(new THREE.BoxGeometry(w, h, w * 0.75).translate(0, h / 2, 0), Math.cos(a) * r, 0, Math.sin(a) * r, i % 3 ? C.darkstone : 0x8a857c, -a, false, (hash2(i, 4, 680) - 0.5) * 0.18);
+      p.sphere(w * 0.45, Math.cos(a) * r, h, Math.sin(a) * r, 0x8a9a6a, 0, 0.4);
+    }
+    // quatre torches plantées aux angles du cercle
+    for (const [x, z] of [[-0.98, -0.98], [0.98, -0.98], [-0.98, 0.98], [0.98, 0.98]]) {
+      pole(p, 0.008, 0.3, x, z, C.darkwood);
+      p.cyl(0.02, 0.014, 0.03, 5, x, 0.29, z, 0x6a4a34);
+      p.cone(0.022, 0.07, 5, x, 0.315, z, C.flame, true);
+    }
+    // le mât totem au fond : têtes peintes à l'ocre, ramure de cerf au sommet
+    const tx = 0, tz = -1.05;
+    p.cyl(0.032, 0.038, 0.14, 6, tx, 0, tz, 0x8a6a4a); p.cyl(0.036, 0.032, 0.1, 6, tx, 0.14, tz, OCHRE); p.cyl(0.03, 0.036, 0.1, 6, tx, 0.24, tz, 0x6a5040);
+    for (const y of [0.18, 0.28]) { p.box(0.05, 0.012, 0.012, tx, y, tz + 0.033, 0x2a2018); for (const s of [-1, 1]) p.box(0.01, 0.01, 0.01, tx + s * 0.013, y + 0.022, tz + 0.034, BONE); }
+    for (const s of [-1, 1]) { p.add(new THREE.CylinderGeometry(0.004, 0.006, 0.12, 3).translate(0, 0.06, 0), tx + s * 0.02, 0.34, tz, 0xc8b08a, 0, false, -s * 0.6); p.add(new THREE.CylinderGeometry(0.003, 0.004, 0.05, 3).translate(0, 0.025, 0), tx + s * 0.06, 0.4, tz, 0xc8b08a, 0, false, s * 0.2); }
+    // les fumoirs à viande et à poisson, le cadre où sèche une peau que l'on gratte
+    smokeRack(p, -1.02, 0.62, 0.4);
+    smokeRack(p, 1.0, -0.62, -0.3);
+    const fx = 0.3, fz = 1.06;
+    for (const s of [-1, 1]) pole(p, 0.008, 0.26, fx + s * 0.13, fz, C.darkwood);
+    p.add(new THREE.CylinderGeometry(0.005, 0.005, 0.3, 4).rotateZ(Math.PI / 2), fx, 0.25, fz, C.wood);
+    p.add(new THREE.BoxGeometry(0.22, 0.2, 0.008), fx, 0.14, fz, C.hide, 0, false, 0.04);
+    caveFolk(p, fx, fz - 0.12, Math.PI, 4);
+    // le tailleur de silex assis devant ses outils, les paillasses, les fagots, les os et les outres
+    flintKit(p, -0.76, -0.74, 0.5);
+    caveSeated(p, -0.7, -0.6, Math.PI + 0.3, 2);
+    pallet(p, -1.18, -0.12, Math.PI / 2); pallet(p, 1.15, -0.02, -Math.PI / 2, 0x8a6a4a);
+    fagot(p, 0.55, -1.15, 0.2); fagot(p, 0.62, -1.08, 0.5);
+    bonePile(p, -0.42, -1.18, 0.3);
+    waterSkin(p, 0.58, 1.12, 0.4); waterSkin(p, 0.64, 1.18, 1.6);
+    // le joueur de tambour, le chasseur qui rentre sa lance à l'épaule, les enfants qui courent autour du cercle
+    caveSeated(p, -0.5, 1.02, faceIn(-0.5, 1.02), 1);
+    p.cyl(0.035, 0.03, 0.06, 7, -0.44, 0, 0.94, 0x8a6a4a); p.cyl(0.036, 0.036, 0.004, 7, -0.44, 0.06, 0.94, 0xe0d0b0);
+    caveFolk(p, 1.16, -1.06, faceIn(1.16, -1.06), 0);
+    pole(p, 0.004, 0.36, 1.2, -1.04, C.darkwood, 0.2, -0.35, 0.05);
+    p.add(new THREE.ConeGeometry(0.01, 0.04, 3), 1.32, 0.38, -0.98, FLINT, 0, false, -0.35);
+    kidAt(p, -1.12, 0.92, HIDES[2], 2.4, 'run', 0x8a4a2a);
+    kidAt(p, 1.12, 0.62, HIDES[3], 0.3, 'run');
+    return;
+  }
+  if (age === 1) {
+    // l'agora : un dallage de travertin d'un bord à l'autre, liseré de marbre ; la fontaine au milieu
+    p.box(2.94, 0.01, 2.94, 0, 0, 0, 0xe2d6c0);
+    flagJoints(p, -H, -H, H, H, 0.0105, 0.245, 0xc4b69c);
+    for (const s of [-1, 1]) { p.box(2.94, 0.006, 0.03, 0, 0.01, s * 1.455, MARBLE); p.box(0.03, 0.006, 2.94, s * 1.455, 0.01, 0, MARBLE); }
+    placed(p, 0, 0, 0, 1.5, () => gather(p, 1, o));
+    // le portique (stoa) au fond : colonnade, mur des boutiques, entablement et toit de tuiles ; des jarres à l'abri
+    for (let i = 0; i < 7; i++) column(p, -1.2 + i * 0.4, -1.1, 0.42, 0.01, 0.03, 6);
+    p.box(2.7, 0.46, 0.05, 0, 0.01, -1.42, 0xe9e2d4);
+    for (const x of [-0.8, 0, 0.8]) p.box(0.14, 0.22, 0.01, x, 0.01, -1.39, 0x5a4a3a);
+    p.box(2.74, 0.05, 0.4, 0, 0.42, -1.25, MARBLE);
+    p.add(new THREE.BoxGeometry(2.78, 0.03, 0.46), 0, 0.5, -1.25, C.terracotta, 0, false, 0, 0.22);
+    for (let i = 0; i < 16; i++) p.add(new THREE.BoxGeometry(0.012, 0.012, 0.46), -1.33 + i * 0.177, 0.52, -1.25, dark(C.terracotta, 0.82), 0, false, 0, 0.22);
+    amphorae(p, -0.95, 0.01, -1.3); amphorae(p, 0.62, 0.01, -1.32, 1);
+    figure(p, -0.6, -1.28, 0xc8a0d8, 0, false, 0x2a2420);
+    // la tribune de l'orateur et son public
+    p.box(0.26, 0.05, 0.22, 1.08, 0.01, 0.0, MARBLE); p.box(0.2, 0.04, 0.16, 1.1, 0.06, 0.0, TRAVERTINE);
+    actor(p, 1.12, 0.1, 0.0, -Math.PI / 2, 0xf2ead8);
+    for (const [x, z, c] of [[0.8, -0.22, 0xf2ead8], [0.78, 0.2, 0xe9e2d4], [0.84, 0.36, 0xb8443a]] as number[][]) figure(p, x, z, c, Math.atan2(1.1 - x, -z));
+    // statues sur leurs socles aux deux angles de devant, cyprès, bancs de marbre et leurs promeneurs
+    statue(p, -1.22, 0.01, 1.22, faceIn(-1.22, 1.22), 1.5);
+    statue(p, 1.22, 0.01, 1.22, faceIn(1.22, 1.22), 1.5);
+    for (const [x, z] of [[-1.3, 0.55], [-1.3, -0.62], [1.3, 0.62], [1.3, -0.6]]) cypress(p, x, z, 0.34);
+    marbleBench(p, -1.12, 0.01, 0.0, Math.PI / 2); seated(p, -1.11, 0.05, -0.04, Math.PI / 2, 0xf2ead8, 0xd8d4cc);
+    marbleBench(p, 0.0, 0.01, 1.2, 0); seated(p, 0.05, 0.05, 1.2, Math.PI, 0xd8a03a);
+    for (const [x, z, c, r] of [[-0.4, 1.12, 0xe9e2d4, 2.6], [-0.28, 1.2, 0x3a5a9a, -2.8], [0.55, -0.92, 0xf2ead8, 0.4]] as number[][]) figure(p, x, z, c, r);
+    return;
+  }
+  if (age === 2) {
+    // le marché : pavés tout autour des étals du milieu
+    const pave = 0xb8ae9a;
+    cobbles(p, -H, -H, H, -0.64, pave, 0, 701, 0.16, 0.11); cobbles(p, -H, 0.64, H, H, pave, 0, 702, 0.16, 0.11);
+    cobbles(p, -H, -0.64, -0.64, 0.64, pave, 0, 703, 0.16, 0.11); cobbles(p, 0.64, -0.64, H, 0.64, pave, 0, 704, 0.16, 0.11);
+    placed(p, 0, 0, 0, 1.3, () => gather(p, 2, o));
+    const folk = [0x8a3a3a, 0x3a5a7a, 0x5a6a3a, 0x6a4a7a, 0xb8843a, 0x4a3a2a];
+    // des étals sous leurs auvents rayés, tournés vers la place : deux au nord, un au sud
+    placed(p, -0.78, -1.12, 0, 1, () => { awning(p, 0, 0, 0.34, 0xd8584e, 0xf4e8d0); stall(p, 0, 0.02, [0xd84a3e, 0x8ab84a, 0xf2a03a], folk[0], 0.3); });
+    placed(p, 0.78, -1.12, 0, 1, () => { awning(p, 0, 0, 0.34, 0x4f7fc4, 0xf4e8d0); stall(p, 0, 0.02, [0xf2d27a, 0xe8c45a, 0xd8c49a], folk[1], 0.3); });
+    placed(p, 0.0, 1.12, Math.PI, 1, () => { awning(p, 0, 0, 0.34, 0x6fae6a, 0xf4e8d0); stall(p, 0, 0.02, [0x9ab8c8, 0xc8904a, 0xf2f0ea], folk[2], 0.3); });
+    // la charrette de choux et son cheval, à l'est
+    horse(p, 1.18, -0.3, Math.PI / 2, 0x7a5236, 0);
+    p.box(0.14, 0.05, 0.24, 1.18, 0.07, 0.05, C.wood);
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.016, 8).rotateZ(Math.PI / 2), 1.18 + s * 0.08, 0.06, 0.08, C.darkwood);
+    for (const s of [-1, 1]) p.box(0.008, 0.008, 0.2, 1.18 + s * 0.04, 0.09, -0.15, C.wood);
+    for (let k = 0; k < 5; k++) p.sphere(0.028, 1.15 + (k % 2) * 0.05, 0.14, -0.03 + k * 0.04, 0x7cb45a, 0, 0.8);
+    figure(p, 1.32, 0.3, 0x8a6a4a, -Math.PI / 2, false, 0x2a1e18);
+    // la croix du marché sur ses marches, à l'ouest ; le ménestrel et son luth, ceux qui l'écoutent
+    p.box(0.24, 0.035, 0.24, -1.14, 0, 0.1, C.stone); p.box(0.17, 0.035, 0.17, -1.14, 0.035, 0.1, C.stone);
+    p.cyl(0.016, 0.022, 0.3, 6, -1.14, 0.07, 0.1, C.stone); p.box(0.1, 0.018, 0.018, -1.14, 0.3, 0.1, C.stone);
+    seated(p, -1.12, 0.07, 0.24, Math.PI / 2, 0x6a3a8a, 0xc8a070);
+    p.add(new THREE.BoxGeometry(0.024, 0.008, 0.06), -1.09, 0.1, 0.24, 0x9a6a3a, 0.5);
+    for (const [x, z, r] of [[-0.82, 0.32, -1.6], [-0.86, 0.48, -2.0]] as number[][]) figure(p, x, z, folk[3 + (x > -0.84 ? 1 : 0)], r);
+    // les tilleuls des angles, tonneaux, cageots, les poules qui picorent, les chalands
+    for (const [x, z] of [[-1.24, -1.24], [1.24, -1.24], [-1.24, 1.24], [1.24, 1.24]]) tree(p, x, z, 1.7, 0x7fae6a);
+    for (const [x, z] of [[-1.3, -0.5], [-1.2, -0.56]]) { p.cyl(0.04, 0.04, 0.1, 8, x, 0, z, 0x9a6a44); for (const y of [0.02, 0.07]) p.cyl(0.042, 0.042, 0.008, 8, x, y, z, C.darkwood); }
+    p.box(0.1, 0.07, 0.08, 0.5, 0, 1.3, 0xb48a5e, 0.3); p.box(0.08, 0.06, 0.08, 0.6, 0, 1.24, C.wood, -0.2);
+    for (const [x, z, r] of [[-0.35, -0.82, 0.4], [-0.28, -0.88, 2.1], [0.4, 0.9, 1.2]] as number[][]) { p.box(0.025, 0.022, 0.035, x, 0, z, C.white, r); p.box(0.01, 0.01, 0.01, x + Math.sin(r) * 0.015, 0.022, z + Math.cos(r) * 0.015, 0xd84a3e); }
+    for (const [x, z, c, r] of [[0.5, -0.82, folk[4], 0.3], [-0.3, 1.0, folk[5], 2.9], [0.98, 0.78, folk[3], -2.4], [-0.95, -0.82, 0x3a6ab8, 0.7]] as number[][]) figure(p, x, z, c, r);
+    return;
+  }
+  if (age === 3) {
+    // le parc à la française : la pelouse et le grand parterre du milieu, l'allée de ceinture et les quatre allées qui y
+    // mènent depuis chaque bord (on entre de partout)
+    const gravel = 0xe8dcc0, edge = 0xd2c8b0, leaf = 0x5f9a56;
+    p.box(2.94, 0.008, 2.94, 0, 0, 0, 0x8fc47e);
+    placed(p, 0, 0, 0, 1.5, () => gather(p, 3, o));
+    for (const s of [-1, 1]) {
+      p.box(2.06, 0.004, 0.18, 0, 0.009, s * 0.94, gravel); p.box(0.18, 0.004, 2.06, s * 0.94, 0.009, 0, gravel);
+      p.box(0.2, 0.004, 0.62, 0, 0.009, s * 1.16, gravel); p.box(0.62, 0.004, 0.2, s * 1.16, 0.009, 0, gravel);
+      for (const e of [-1, 1]) { p.box(2.06, 0.008, 0.008, 0, 0.009, s * (0.94 + e * 0.09), edge); p.box(0.008, 0.008, 2.06, s * (0.94 + e * 0.09), 0.009, 0, edge); }
+    }
+    // les tilleuls taillés en rideau tout autour, les réverbères à gaz aux angles de l'allée et au bout des allées
+    for (const s of [-1, 1]) for (const u of [-0.9, -0.55, 0.55, 0.9]) { clipped(p, u, s * 1.3, 'cube', 0.95, 0.008, leaf); clipped(p, s * 1.3, u, 'cube', 0.95, 0.008, leaf); }
+    for (const [x, z] of [[-0.94, -0.94], [0.94, -0.94], [-0.94, 0.94], [0.94, 0.94]]) gasLamp(p, x, z, 0.3);
+    for (const s of [-1, 1]) { gasLamp(p, 0.16, s * 1.36, 0.28); gasLamp(p, s * 1.36, -0.16, 0.28); }
+    // le kiosque à musique, dans l'angle du nord-ouest : socle, colonnettes de fonte, toit en pavillon, la fanfare
+    const kx = -1.2, kz = -1.2;
+    p.cyl(0.21, 0.22, 0.06, 8, kx, 0, kz, 0xd8d0bc); p.cyl(0.215, 0.215, 0.008, 8, kx, 0.06, kz, 0xb8a888);
+    for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.cyl(0.006, 0.006, 0.2, 4, kx + Math.cos(a) * 0.18, 0.066, kz + Math.sin(a) * 0.18, 0x3f6a5a); }
+    p.cone(0.25, 0.12, 8, kx, 0.266, kz, 0x3f6a5a); p.sphere(0.014, kx, 0.39, kz, C.gold);
+    seated(p, kx - 0.06, 0.07, kz + 0.04, 0.6, 0x2a3a6a, 0x2a2420); seated(p, kx + 0.07, 0.07, kz - 0.02, 1.2, 0x2a3a6a, 0x4a3426);
+    p.add(new THREE.TorusGeometry(0.02, 0.006, 4, 8), kx + 0.02, 0.15, kz + 0.1, C.gold, 0.6);
+    // la buvette dans l'angle du sud-est : petit pavillon à toit rayé, guéridons
+    const bx = 1.2, bz = 1.2;
+    p.box(0.2, 0.16, 0.16, bx, 0, bz, 0xf2ead8); p.box(0.12, 0.08, 0.005, bx, 0.06, bz - 0.083, 0xffe2a0, 0, true);
+    for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.06, 0.008, 0.22), bx - 0.09 + k * 0.06, 0.18, bz, k % 2 ? 0xf4e8d0 : 0xb8443a, 0, false, 0, 0.25);
+    for (const [x, z] of [[0.92, 1.24], [1.24, 0.92]]) { p.cyl(0.03, 0.03, 0.005, 8, x, 0.06, z, C.white); p.cyl(0.004, 0.004, 0.06, 4, x, 0, z, 0x2e3632); }
+    seated(p, 0.92, 0.04, 1.18, Math.PI, 0x8a3a5a, 0x8a5a3a);
+    // un massif fleuri et une statue dans les deux autres angles
+    p.cyl(0.18, 0.19, 0.03, 10, 1.22, 0, -1.22, 0x7a5a42);
+    for (let k = 0; k < 9; k++) { const a = (k / 9) * Math.PI * 2; p.sphere(0.03, 1.22 + Math.cos(a) * 0.12, 0.04, -1.22 + Math.sin(a) * 0.12, [0xd84a5a, 0xf2d25a, 0xf4f2ee][k % 3], 0, 0.8); }
+    clipped(p, 1.22, -1.22, 'ball', 0.9, 0.03, leaf);
+    statue(p, -1.22, 0.008, 1.22, faceIn(-1.22, 1.22), 1.4);
+    // les bancs de l'allée de ceinture, et les promeneurs
+    for (const [x, z, r] of [[0.48, -1.07, 0], [-0.48, 1.07, Math.PI], [-1.07, 0.48, Math.PI / 2], [1.07, -0.48, -Math.PI / 2]] as number[][]) parkBench(p, x, z, r);
+    seated(p, 0.48, 0.05, -1.06, 0, 0x5a4a6a);
+    for (const [x, z, c, r, h] of [[0.94, 0.4, 0x8a3a5a, Math.PI, 0x8a5a3a], [0.92, 0.5, 0x2a2e3a, Math.PI, 0x2a2420], [-0.94, -0.45, 0x6a7a4a, 0, 0x4a3426], [0.3, 0.95, 0x3a4a6a, -Math.PI / 2, 0x2a2420]] as number[][]) figure(p, x, z, c, r, false, h);
+    kidAt(p, -0.62, 0.95, 0xd84a3e, 1.4, 'run', 0xc8a070);
+    return;
+  }
+  if (age === 4) {
+    // la place : un dallage clair d'un bord à l'autre ; le bassin et ses jets au milieu
+    p.box(2.94, 0.01, 2.94, 0, 0, 0, 0xe2ded6);
+    for (let i = 1; i < 10; i++) { const u = -H + i * 0.294; p.box(2.94, 0.003, 0.006, 0, 0.01, u, 0xc8c4bc); p.box(0.006, 0.003, 2.94, u, 0.01, 0, 0xc8c4bc); }
+    placed(p, 0, 0, 0, 1.5, () => gather(p, 4, o));
+    // les arbres dans leurs grilles tout autour, les bancs entre eux, les lampadaires aux angles
+    for (const [x, z] of [[-1.2, -0.48], [-1.2, 0.48], [1.2, -0.48], [1.2, 0.48], [-0.48, -1.2], [0.48, -1.2], [-0.48, 1.2], [0.48, 1.2]]) {
+      p.box(0.18, 0.006, 0.18, x, 0.01, z, 0x5d6168);
+      tree(p, x, z, 1.5, 0x6fa85a);
+    }
+    for (const [x, z, r] of [[0, -1.18, 0], [0, 1.18, Math.PI], [-1.18, 0, Math.PI / 2], [1.18, 0, -Math.PI / 2]] as number[][]) bench(p, x, z, r);
+    seated(p, 0.04, 0.05, 1.17, Math.PI, 0x3a6ab8); seated(p, -1.17, 0.05, -0.04, Math.PI / 2, 0xd8786c, 0x8a5a3a);
+    for (const [x, z] of [[-0.95, -0.95], [0.95, 0.95]]) lampPost(p, x, z, 0.34);
+    // la terrasse du café, à l'angle du nord-est : guéridons, parasols, consommateurs
+    for (const [x, z] of [[1.08, -1.25], [1.28, -1.02]]) {
+      p.cyl(0.035, 0.035, 0.006, 8, x, 0.07, z, C.white); p.cyl(0.004, 0.004, 0.07, 4, x, 0.01, z, 0x3c3c40);
+      p.cyl(0.004, 0.004, 0.24, 4, x, 0.01, z, C.metal); p.cone(0.15, 0.05, 8, x, 0.25, z, x > 1.2 ? 0xd84a3e : 0xf4ecd8);
+      seated(p, x - 0.07, 0.05, z, Math.PI / 2, x > 1.2 ? 0x2a2a2e : 0xf2c23a, 0x4a3426);
+    }
+    seated(p, 1.08, 0.05, -1.17, Math.PI, 0x8a3a6a, 0x2a2420);
+    // les jeux d'enfants, au sud-est : toboggan, balançoire, l'enfant qui court
+    p.box(0.05, 0.14, 0.05, 1.3, 0.01, 1.05, 0xd84a3e); p.add(new THREE.BoxGeometry(0.05, 0.008, 0.24), 1.3, 0.08, 1.2, 0xf2c23a, 0, false, 0, 0.62);
+    for (const s of [-1, 1]) pole(p, 0.006, 0.2, 1.0 + s * 0.12, 1.34, 0x3a6ab8);
+    p.add(new THREE.CylinderGeometry(0.005, 0.005, 0.26, 4).rotateZ(Math.PI / 2), 1.0, 0.2, 1.34, 0x3a6ab8);
+    for (const s of [-1, 1]) { p.box(0.004, 0.13, 0.004, 1.0 + s * 0.05, 0.07, 1.34, 0x8a8f96); p.box(0.05, 0.006, 0.03, 1.0 + s * 0.05, 0.065, 1.34, 0x2a2a2e); }
+    kidAt(p, 0.86, 1.12, 0xf2c23a, -2.2, 'run');
+    // les vélos au sud-ouest, une sculpture au nord-ouest, et les passants
+    bike(p, -1.3, 1.0, 0x3a6ab8, 0); bike(p, -1.18, 1.02, 0xd84a3e, 0);
+    p.box(0.12, 0.03, 0.12, -1.18, 0.01, -1.18, 0x8a8f96); p.add(new THREE.TorusGeometry(0.08, 0.018, 6, 12), -1.18, 0.14, -1.18, 0xd8a03a, 0.7);
+    for (const [x, z, c, r] of [[0.32, -0.92, 0x2a2a2e, 0.3], [-0.85, 0.82, 0xf2c23a, -2.6], [0.9, 0.3, 0x3a6ab8, -1.4], [-0.6, -1.0, 0x8a3a6a, 2.8]] as number[][]) figure(p, x, z, c, r, false, 0x2a2420);
+    return;
+  }
+  // l'agora holographique : la place de perle, ses cercles de lumière, le globe au milieu
+  p.box(2.94, 0.012, 2.94, 0, 0, 0, F.pearl);
+  for (const s of [-1, 1]) { p.box(2.9, 0.004, 0.012, 0, 0.012, s * 1.42, NEONS[(o.v + 1) % 4], 0, 'neon'); p.box(0.012, 0.004, 2.9, s * 1.42, 0.012, 0, NEONS[(o.v + 1) % 4], 0, 'neon'); }
+  neonRing(p, 1.05, 0.014, 0, 0, NEONS[o.v % 4], 0.006, 32);
+  placed(p, 0, 0, 0, 1.5, () => futureGather(p, o));
+  // les pylônes aux quatre angles : fût blanc, liserés et panneau holographique qui flotte
+  for (const [x, z] of [[-1.18, -1.18], [1.18, -1.18], [-1.18, 1.18], [1.18, 1.18]]) {
+    p.cyl(0.04, 0.05, 0.4, 8, x, 0.012, z, F.white);
+    p.box(0.006, 0.36, 0.006, x + 0.04, 0.03, z, NEONS[(o.v + 2) % 4], 0, 'neon');
+    p.box(0.16, 0.1, 0.006, x, 0.44, z, NEONS[(o.v + 3) % 4], faceIn(x, z), 'neon');
+    p.sphere(0.03, x, 0.42, z, F.white);
+  }
+  // les jardinières blanches et leurs arbres en boule dans l'axe de chaque côté ; les bancs courbes entre elles
+  for (const [x, z] of [[0, -1.2], [0, 1.2], [-1.2, 0], [1.2, 0]]) {
+    p.cyl(0.12, 0.1, 0.07, 10, x, 0.012, z, F.white); p.cyl(0.11, 0.11, 0.004, 10, x, 0.082, z, 0x6a5040);
+    clipped(p, x, z, 'ball', 1.3, 0.08, F.leaf2);
+  }
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2 + Math.PI / 4 - 0.28;
+    p.add(new THREE.TorusGeometry(1.24, 0.03, 4, 6, 0.56).rotateX(Math.PI / 2), 0, 0.05, 0, F.white, -a);
+    p.add(new THREE.TorusGeometry(1.24, 0.004, 3, 6, 0.56).rotateX(Math.PI / 2), 0, 0.02, 0, NEONS[k % 4], -a, 'neon');
+  }
+  seated(p, Math.cos(Math.PI / 4) * 1.2, 0.07, Math.sin(Math.PI / 4) * 1.2, faceIn(0.85, 0.85), 0x9fe8f0, 0x2a2420);
+  seated(p, -Math.cos(Math.PI / 4) * 1.2, 0.07, -Math.sin(Math.PI / 4) * 1.2, faceIn(-0.85, -0.85), 0xd8c8f4);
+  // le drone de la place qui fait sa ronde, et ses passants
+  circlingDrone(0, 0.85, 0, 1.0, 0.07);
+  for (const [x, z, c, r] of [[0.95, -0.4, 0xf4f6f8, -1.2], [-0.45, 0.98, 0x9fe8f0, 2.6], [-1.0, -0.6, 0xd8c8f4, 1.0], [0.62, 0.95, 0xffc8f0, -2.4]] as number[][]) figure(p, x, z, c, r, false, 0x2a2420);
 }
 
 function temple(p: Parts, age: number) {
@@ -10062,7 +10321,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'well': futureWell(p); return true;
     case 'watertower': futureWatertower(p); return true;
     case 'lamp': futureLamp(p); return true;
-    case 'gather': futureGather(p, o); return true;
+    case 'gather': if (size >= 3) gatherPlaza(p, 5, o); else futureGather(p, o); return true;
     case 'temple': futureTemple(p); return true;
     case 'school': if (size < 2) return false; futureSchool(p); return true;
     case 'arcology': arcology(p, o.v); return true;
@@ -10739,7 +10998,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'pen': pen(p, age); break;
     case 'well': well(p, age); break;
     case 'workshop': workshop(p, age, o); break;
-    case 'gather': gather(p, age, o); break;
+    case 'gather': if (size >= 3) gatherPlaza(p, age, o); else gather(p, age, o); break;
     case 'temple': temple(p, Math.max(1, age)); break;
     case 'mill': mill(p, Math.max(2, age)); break;
     case 'landmark': landmark(p, Math.max(2, age), o.v); break;

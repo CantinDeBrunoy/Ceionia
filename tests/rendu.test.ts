@@ -25,6 +25,12 @@ function continent() {
   return w;
 }
 
+/**
+ * Plafond de triangles d'un modèle selon son emprise : 3 000 pour une case, 4 500 en 2 × 2, 6 500 en 3 × 3 (la place du
+ * village : à peine plus de 700 par case)
+ */
+const CAP: Record<number, number> = { 1: 3000, 2: 4500, 3: 6500 };
+
 /** Portée d'une géométrie autour de son axe vertical */
 function reach(g: THREE.BufferGeometry) {
   const p = g.attributes.position;
@@ -108,6 +114,28 @@ describe('personnages', () => {
     expect(top(false)).toBeLessThan(HUMAN * 1.1);
     expect(top(false)).toBeCloseTo(top(true), 3);
   });
+
+  it('la place du village remplit ses 3 × 3 cases à chaque âge, sans géants, sous le plafond ; l’ancienne reste d’une case', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    for (let age = 0; age < 6; age++)
+      for (let v = 0; v < 3; v++) {
+        const m = getModel('gather', age, { v, L: false, R: false, F: true });
+        const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+        expect(n, `place à l’âge ${age}`).toBeLessThan(CAP[3]);
+        // elle s'étend bien sur toute sa parcelle (pas un modèle d'une case au milieu de trois)
+        m.body.computeBoundingBox();
+        const bb = m.body.boundingBox!;
+        expect(Math.min(bb.max.x, -bb.min.x, bb.max.z, -bb.min.z), `place à l’âge ${age}`).toBeGreaterThan(1.25);
+        // ses habitants, au milieu agrandi comme autour, ont la taille de ceux qui marchent
+        m.crowd!.computeBoundingBox();
+        expect(m.crowd!.boundingBox!.max.y, `place à l’âge ${age}`).toBeLessThan(HUMAN * 1.25);
+        expect(m.crowd!.boundingBox!.max.y, `place à l’âge ${age}`).toBeGreaterThan(HUMAN * 0.8);
+        // le feu de camp d'une ancienne partie, resté en 1 × 1 : le modèle d'une case
+        const old = getModel('gather', age, { v, L: false, R: false, F: true, small: true }).body;
+        old.computeBoundingBox();
+        expect(old.boundingBox!.max.x).toBeLessThan(0.5 + WALL_GAP);
+      }
+  });
 });
 
 describe('maisons et tours', () => {
@@ -156,7 +184,7 @@ describe('maisons et tours', () => {
       for (let v = 0; v < 3; v++) {
         const m = getModel(kind, age, { v, L: false, R: false, F: true });
         const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + tris(m.rotor?.geo) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
-        expect(n, `${kind} à l’âge ${age}, variante ${v}`).toBeLessThan(KINDS[kind].size === 1 ? 3000 : 4500);
+        expect(n, `${kind} à l’âge ${age}, variante ${v}`).toBeLessThan(CAP[KINDS[kind].size]);
       }
   });
 
@@ -167,7 +195,7 @@ describe('maisons et tours', () => {
       for (let v = 0; v < 3; v++) {
         const m = getModel(kind, 5, { v, L: false, R: false, F: true });
         const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + tris(m.rotor?.geo) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
-        expect(n, `${kind}, variante ${v}`).toBeLessThan(KINDS[kind].size === 1 ? 3000 : 4500);
+        expect(n, `${kind}, variante ${v}`).toBeLessThan(CAP[KINDS[kind].size]);
       }
   });
 
@@ -180,7 +208,7 @@ describe('maisons et tours', () => {
       for (let v = 0; v < 6; v++) for (const F of [true, false]) {
         const m = getModel(kind, age, { v, L: false, R: false, F });
         const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + tris(m.rotor?.geo) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
-        expect(n, `${kind} à l’âge ${age}, variante ${v}`).toBeLessThan(KINDS[kind].size === 1 ? 3000 : 4500);
+        expect(n, `${kind} à l’âge ${age}, variante ${v}`).toBeLessThan(CAP[KINDS[kind].size]);
       }
   });
 
