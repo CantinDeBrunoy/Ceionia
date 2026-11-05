@@ -1,4 +1,4 @@
-import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT } from '../world/world';
+import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from '../world/world';
 import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
@@ -47,6 +47,8 @@ export interface ActiveExpedition {
   notes: string[];
   /** le genre de lieu où l'équipe s'est vraiment rendue (une rivière introuvable : la plaine) */
   site: DestKind;
+  /** elle a pris la mer pour de bon (une côte ouverte sur le large, pas une simple rivière) : requins, baleines… */
+  sea: boolean;
   /** l'âge du village au départ (une mission d'autrefois refaite à l'époque moderne n'y croise plus de loups) */
   age: number;
   /** temps de travail en plus, gains en plus (si réussite), blessés en plus */
@@ -82,6 +84,8 @@ export interface Ambush { cell: number; kind: FoeKind; n: number; t0: number; st
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
 const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'les terres au-delà des collines', spaceport: 'le cosmodrome' };
+/** Où va l'équipe, en deux mots (la mer pour une expédition qui prend le large) */
+const destName = (c: Choice) => (c.sea ? 'la mer' : DEST_NAME[c.dest]);
 /**
  * Repli quand le village n'a pas de tel endroit à portée ; une grotte introuvable se cherche dans la montagne, puis au pied
  * de la moindre paroi (l'équipe y trouve une entrée), jamais dans la plaine ou le désert lointain
@@ -526,13 +530,15 @@ export class Expeditions {
     const base = this.base()!;
     // la troupe armée part de l'avant-poste et descend par l'entrée qu'il garde ; les autres vont où les mène leur mission
     const plan = c.win.some((e) => e.t === 'veins') ? this.campaign(c) : null;
-    let kind: DestKind | null = c.dest, dest: [number, number] | null = null;
+    let kind: DestKind | null = c.dest, dest: [number, number] | null = null, sea = !!c.sea;
     // avec un camp souterrain, la troupe s'y rassemble : pas besoin de chemin depuis le village jusqu'à l'avant-poste
     const fromCamp = !!plan && this.camp() >= 1;
     if (plan) dest = fromCamp ? [(plan.entrance % N) + 0.5, Math.floor(plan.entrance / N) + 0.5] : this.postDoor(plan.post, plan.entrance, base);
     else if (c.win.some((e) => e.t === 'veins')) return null;
     else while (kind && !dest) {
-      dest = this.findDest(kind, base);
+      dest = this.findDest(kind, base, false, sea && kind === 'river');
+      // pas de côte ouverte sur le large à portée : la rivière la plus proche fera l'affaire
+      if (!dest && sea && kind === 'river') { sea = false; continue; }
       // une grotte introuvable : dans la montagne, puis au pied de la moindre paroi, plutôt qu'au milieu de la plaine
       if (!dest && c.dest === 'cave' && kind === 'mountain') dest = this.findDest('mountain', base, true);
       if (!dest) kind = FALLBACK[kind];
@@ -556,7 +562,7 @@ export class Expeditions {
       id: this.nextId++, m, c, phase: m.farewell ? 'gather' : 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
       wait: null, waitT: 0, hold: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], extra: 0, bonus: [], hurt: 0,
       // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
-      site: c.dest === 'cave' ? 'cave' : kind, age,
+      site: c.dest === 'cave' ? 'cave' : kind, age, sea: sea && kind === 'river',
       targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp,
     };
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval s'il y en a assez ; on part en selle
@@ -564,7 +570,7 @@ export class Expeditions {
     for (const g of ['rifle', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
     kits.forEach((kt, i) => {
       // les chasseurs du mammouth ont toujours leurs lances de chasse au poing (les armes du village, emportées en plus, rendent la chasse plus sûre)
-      if (c.scene === 'mammoth') kt.weapon ??= 'spear';
+      if (c.scene === 'mammoth' || c.scene === 'megalodon' || c.scene === 'kraken') kt.weapon ??= 'spear';
       if (i < (take.armor ?? 0)) kt.armor = true;
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
@@ -590,7 +596,7 @@ export class Expeditions {
     } else {
       // elle part aussitôt, chacun de là où il est, sans se rassembler d'abord au village
       this.agents.partyGo(party, dest[0], dest[1]);
-      this.onNews?.(`${m.icon} L’expédition « ${m.title} » part vers ${DEST_NAME[c.dest]}.`);
+      this.onNews?.(`${m.icon} L’expédition « ${m.title} » part vers ${destName(c)}.`);
     }
     return a;
   }
@@ -622,7 +628,7 @@ export class Expeditions {
       if (a.phase === 'gather' && ((ag.partyDone(a.party) && a.t > (a.m.farewell ? 20 : 0)) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
-        this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » part vers ${DEST_NAME[a.c.dest]}.`);
+        this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » part vers ${destName(a.c)}.`);
       } else if (a.phase === 'out' && (ag.partyDone(a.party) || a.t > OUT_MAX)) {
         a.phase = 'work'; a.t = 0;
         ag.partyAct(a.party, 'work');
@@ -723,7 +729,7 @@ export class Expeditions {
   private raise(a: ActiveExpedition, arrive: boolean) {
     // pas un imprévu des dernières expéditions, ni celui qu'une autre équipe attend ou vient de vivre
     const avoid = [...this.world.exp.recent, ...this.active.filter((o) => o !== a).flatMap((o) => o.seen)];
-    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive }, a.seen, avoid, this.rnd);
+    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive, sea: a.sea, warm: this.warm(a.dest) }, a.seen, avoid, this.rnd);
     if (!ev) { a.events = a.seen.length; return; }
     a.seen.push(ev.id);
     a.picks.push(-1);
@@ -934,7 +940,7 @@ export class Expeditions {
   status(a: ActiveExpedition) {
     return {
       gather: 'Rassemblement au village…',
-      out: `En route vers ${DEST_NAME[a.c.dest]}…`,
+      out: `En route vers ${destName(a.c)}…`,
       work: a.wait ? `Décision à prendre : ${a.wait.title.toLowerCase()}` : this.fighting(a) ?? `Sur place, l’équipe ${a.c.doing ?? a.c.label.toLowerCase()}…`,
       back: 'Retour au village…',
       home: a.ok ? 'De retour : le village fait la fête !' : 'De retour, bredouilles.',
@@ -966,7 +972,7 @@ export class Expeditions {
    * cherche d'abord parmi les vraies grottes (une faille fait l'affaire), hors du désert ; la montagne aussi. `loose` : au
    * pied de la moindre paroi (une grotte qu'on ne trouve nulle part ailleurs)
    */
-  private findDest(kind: DestKind, base: [number, number], loose = false): [number, number] | null {
+  private findDest(kind: DestKind, base: [number, number], loose = false, sea = false): [number, number] | null {
     if (kind === 'spaceport') return this.padSide(base);
     const w = this.world, [bx, bz] = base, cand: [number, number, number][] = [];
     const town = new Uint8Array(N * N), ds: number[] = [];
@@ -996,7 +1002,7 @@ export class Expeditions {
         const sand = w.biome[k] === BIOME_DESERT && (kind === 'cave' || kind === 'mountain') ? 15 : 0;
         if (kind === 'forest') ok = w.veg[k] === VEG_FOREST && d > 8;
         else if (kind === 'plain') ok = w.veg[k] === 0 && !w.road[k] && slope < 0.5 && h < 3 && d > 10;
-        else if (kind === 'river') ok = w.nearWater(x, z, 1) && d > 7;
+        else if (kind === 'river') ok = sea ? w.nearWater(x, z, 2) && d > 7 && this.openSea(x, z) : w.nearWater(x, z, 1) && d > 7;
         else if (kind === 'mountain') {
           // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif (au pied d'une simple butte, s'il le faut)
           const up = slope < 1.2 && (h > 1 || loose) && d > 9 ? rise(x, z) : 0;
@@ -1024,6 +1030,32 @@ export class Expeditions {
       far ??= [x, z];
     }
     return far;
+  }
+
+  /**
+   * La côte s'ouvre-t-elle sur le large ? Tout droit depuis cette case, huit cases de mer au moins (pas un lac), dont de
+   * l'eau profonde : de quoi aller bien plus loin que la rive
+   */
+  private openSea(x: number, z: number, len = 8): boolean {
+    const w = this.world;
+    for (let d = 0; d < 8; d++) {
+      const dx = Math.round(Math.cos((d * Math.PI) / 4)), dz = Math.round(Math.sin((d * Math.PI) / 4));
+      let wet = 0, deep = false;
+      for (let s = 1; s <= len + 4; s++) {
+        const cx = x + dx * s, cz = z + dz * s;
+        if (!w.inCells(cx, cz) || w.lake[w.ci(cx, cz)]) break;
+        const h = w.cellAvg(cx, cz);
+        if (h < -0.1) { wet++; if (h < -0.5) deep = true; } else if (wet) break;
+      }
+      if (wet >= len && deep) return true;
+    }
+    return false;
+  }
+
+  /** Le climat de l'endroit est chaud (désert, tropiques, marais) : les crocodiles y hantent les eaux douces */
+  private warm([x, z]: [number, number]) {
+    const w = this.world, cx = Math.floor(x), cz = Math.floor(z);
+    return w.inCells(cx, cz) && [BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH].includes(w.biome[w.ci(cx, cz)]);
   }
 
   /** Au pied du cosmodrome : une case libre le long de son emprise, la plus proche du village, où l'on arrive à pied */

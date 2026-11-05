@@ -32,7 +32,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // la chasse au mammouth : les fosses, le ravin ou la harde qu'on suit de loin (selon la destination)
   | 'mammoth'
   // le premier vol de fusée, la fusée lunaire (et l'alunissage en direct), le départ du vaisseau colonial
-  | 'launch' | 'moon' | 'colony';
+  | 'launch' | 'moon' | 'colony'
+  // la chasse en mer : le mégalodon (aileron géant) et le kraken (tentacules), la galère et ses harpons
+  | 'megalodon' | 'kraken';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -78,6 +80,11 @@ export interface Choice {
    * traîneau chargé de viande et de peaux
    */
   carry?: 'animals' | 'cart' | 'sacks' | 'guests' | 'sledge';
+  /**
+   * l'équipe prend la mer : au large, sur l'eau profonde, plus loin que la rive (sinon, faute de mer à portée, elle reste sur
+   * la rivière la plus proche)
+   */
+  sea?: boolean;
   /** ce que l'équipe fait sur place, et ce qu'en dit sa carte (« troque ses poteries contre des semences ») */
   scene: Scene;
   doing?: string;
@@ -122,6 +129,18 @@ export interface Mission {
    * pas, et l'expédition ne peut pas échouer
    */
   farewell?: boolean;
+}
+
+/**
+ * L'embarcation de l'expédition, selon l'âge du village : la pirogue creusée dans un tronc, la barque à rames, le voilier, le
+ * bateau à vapeur à roues, la vedette, l'hydroglisseur futuriste ; une troupe armée prend la galère à rames (jusqu'au Moyen Âge)
+ */
+export type BoatKind = 'canoe' | 'rowboat' | 'sail' | 'steam' | 'launch' | 'hover' | 'galley';
+export const BOAT_NAME: Record<BoatKind, string> = { canoe: 'pirogue', rowboat: 'barque', sail: 'voilier', steam: 'bateau à vapeur', launch: 'vedette', hover: 'hydroglisseur', galley: 'galère' };
+const BOATS: BoatKind[] = ['canoe', 'rowboat', 'sail', 'steam', 'launch', 'hover'];
+export function boatKindFor(age: number, war = false): BoatKind {
+  if (war && age <= 2) return 'galley';
+  return BOATS[Math.max(0, Math.min(BOATS.length - 1, Math.floor(age) || 0))];
 }
 
 const food = (n: number, days?: number): Effect => ({ t: 'need', need: 'food', n, days });
@@ -307,8 +326,8 @@ export const MISSIONS: Mission[] = [
         loseText: 'Pas une touche de la journée…',
       },
       {
-        label: 'Chercher les grands bancs au loin', text: 'Plus de poisson, plus de chemin.',
-        dest: 'river', scene: 'boat', fail: 'storm', doing: 'pêche au large les grands bancs', danger: ['water', 'weather'], party: 3, work: 20, risk: 0.25, carry: 'sacks',
+        label: 'Chercher les grands bancs au loin', text: 'Plus de poisson, plus de chemin : on prend le large.',
+        dest: 'river', sea: true, scene: 'boat', fail: 'storm', doing: 'pêche au large les grands bancs', danger: ['water', 'weather'], party: 3, work: 20, risk: 0.25, carry: 'sacks',
         win: [food(5, 6), joy(1, 6)], lose: [hurt(1, 1)],
         winText: 'Les grands bancs existent bien : de quoi nourrir le village une semaine !',
         loseText: 'Un orage a renversé les filets ; un pêcheur s’est entaillé la main.',
@@ -332,6 +351,27 @@ export const MISSIONS: Mission[] = [
         win: [joy(1), food(1)], lose: [],
         winText: 'La rivière tiède menait à une source chaude au milieu des roseaux : on y a pris un bain, et des idées.',
         loseText: 'La source n’était qu’une flaque tiède : pas de quoi y bâtir des bains.',
+      },
+    ],
+  },
+  {
+    // expédition armée en mer : une galère, des hommes d'armes à pied (pas de chevaux), des harpons ; facultative, refaisable
+    id: 'monster', age: 1, mandatory: false, icon: '🦈', title: 'Chasser le monstre des mers',
+    intro: 'Un monstre géant rôde au large et coule les barques des pêcheurs. Une troupe d’hommes d’armes embarque sur une galère, harpons en main : il est temps de le chasser !',
+    choices: [
+      {
+        label: 'Le mégalodon', text: 'Un requin gros comme une maison : son aileron fend l’eau. Ses dents valent de l’or… s’il ne vous croque pas.',
+        dest: 'river', sea: true, scene: 'megalodon', fail: 'capsize', doing: 'harponne le mégalodon depuis la galère', danger: ['monster', 'water'], party: 5, work: 34, risk: 0.45, carry: 'sacks',
+        win: [food(5, 5), joy(3, 5), joy(1), { t: 'ore', n: 6 }, { t: 'perk', id: 'megalodon' }], lose: [hurt(2, 3), joy(-2, 3)],
+        winText: 'Les harpons ont frappé juste : le mégalodon est vaincu ! Sa viande nourrit le village, et ses dents géantes ornent la place.',
+        loseText: 'Un coup de queue, et la galère a chaviré : les hommes d’armes rentrent à la nage, deux sont blessés.',
+      },
+      {
+        label: 'Le kraken', text: 'Un géant à tentacules qui attrape les navires. Plus risqué, mais quelle gloire !',
+        dest: 'river', sea: true, scene: 'kraken', fail: 'capsize', doing: 'tranche les tentacules du kraken, harpons en main', danger: ['monster', 'water'], party: 5, work: 38, risk: 0.55, carry: 'sacks',
+        win: [food(3, 5), joy(5, 6), joy(2), { t: 'ore', n: 10 }, { t: 'perk', id: 'kraken' }], lose: [hurt(3, 4), joy(-3, 4)],
+        winText: 'Le kraken a lâché la galère et fui dans les profondeurs, un tentacule en moins : la légende est née ! Des perles et du minerai remontent avec lui.',
+        loseText: 'Les tentacules ont brisé les rames et secoué la galère : trois blessés, et le kraken est toujours là.',
       },
     ],
   },
@@ -633,13 +673,13 @@ export const MISSIONS: Mission[] = [
   },
   {
     id: 'reef', age: 4, mandatory: false, icon: '🐠', title: 'Le récif',
-    intro: 'Des plongeurs aimeraient étudier le récif, plus loin sur la côte.',
+    intro: 'Des plongeurs aimeraient étudier le récif, loin au large. On y va en bateau : baleines, dauphins et raies y nagent, dit-on.',
     choices: [
       {
-        label: 'Partir avec les plongeurs', text: 'Masques, tubas et pique-nique.',
-        dest: 'river', scene: 'dive', doing: 'plonge sur le récif avec les plongeurs', party: 2, work: 16, risk: 0.1,
+        label: 'Partir avec les plongeurs', text: 'Masques, tubas et pique-nique, en bateau jusqu’au large.',
+        dest: 'river', sea: true, scene: 'dive', doing: 'plonge sur le récif avec les plongeurs, au large', danger: ['water'], party: 2, work: 22, risk: 0.1,
         win: [joy(3)], lose: [],
-        winText: 'Des photos magnifiques : tout le village veut aller voir les poissons.',
+        winText: 'Des photos magnifiques : des baleines, des dauphins qui sautent, des raies géantes ! Tout le village veut aller voir.',
         loseText: 'L’eau était trouble : on n’a rien vu.',
       },
     ],
@@ -847,7 +887,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
 
 const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: '🔨', joy: '😊' };
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
-const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', map: 'plan des galeries : expéditions armées plus sûres (risque −20 %)', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
+const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', map: 'plan des galeries : expéditions armées plus sûres (risque −20 %)', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

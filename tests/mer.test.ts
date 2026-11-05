@@ -1,0 +1,272 @@
+import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
+import { World, N, setMapSize } from '../src/world/world';
+import { newWorld } from '../src/world/mapgen';
+import { mulberry32 } from '../src/core/rng';
+import { MISSIONS, boatKindFor, BoatKind, choiceAt } from '../src/sim/missions';
+import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
+import { Expeditions, ActiveExpedition } from '../src/sim/expeditions';
+import { Agents } from '../src/sim/agents';
+import { ExpeditionScene } from '../src/render/expeditionScenes';
+import { shipRoute } from '../src/render/transports';
+
+const mission = (id: string) => MISSIONS.find((m) => m.id === id)!;
+
+function stubCanvas() {
+  const ctx = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: '' };
+  (globalThis as { document?: unknown }).document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
+}
+
+describe('l’embarcation évolue avec l’âge', () => {
+  it('pirogue, barque, voilier, vapeur, vedette, hydroglisseur ; la troupe armée prend la galère aux premiers âges', () => {
+    const kinds: BoatKind[] = [0, 1, 2, 3, 4, 5].map((a) => boatKindFor(a));
+    expect(kinds).toEqual(['canoe', 'rowboat', 'sail', 'steam', 'launch', 'hover']);
+    expect(new Set(kinds).size).toBe(6);
+    expect([0, 1, 2].map((a) => boatKindFor(a, true))).toEqual(['galley', 'galley', 'galley']);
+    expect(boatKindFor(3, true)).toBe('steam');
+    // un âge hors bornes ne casse rien
+    expect(boatKindFor(9)).toBe('hover');
+    expect(boatKindFor(-1)).toBe('canoe');
+  });
+});
+
+describe('le récif, la pêche au large et la chasse au monstre', () => {
+  const sea = (id: string, ci: number, age = mission(id).age, arrive = true): EventCtx => {
+    const c = mission(id).choices[ci];
+    return { dest: c.dest, mission: id, scene: c.scene, age, arrive, sea: !!c.sea, warm: false };
+  };
+  const ids = (ctx: EventCtx) => eventsFor(ctx).map((e) => e.id);
+
+  it('le récif et les grands bancs prennent la mer', () => {
+    expect(mission('reef').choices[0].sea).toBe(true);
+    expect(mission('fishing').choices[1].sea).toBe(true);
+    expect(mission('fishing').choices[0].sea).toBeFalsy();
+  });
+
+  it('requins en mer, crocodiles sur les eaux douces chaudes, jamais l’inverse', () => {
+    expect(ids(sea('reef', 0, 4))).toContain('shark');
+    expect(ids(sea('fishing', 1))).toContain('shark');
+    expect(ids(sea('reef', 0, 4))).not.toContain('croc');
+    // sur une rivière : pas de requin ; le crocodile seulement sous un climat chaud
+    const river = (warm: boolean): EventCtx => ({ dest: 'river', mission: 'fishing', scene: 'boat', age: 1, arrive: false, sea: false, warm });
+    expect(ids(river(true))).toContain('croc');
+    expect(ids(river(false))).not.toContain('croc');
+    expect(ids(river(true))).not.toContain('shark');
+    // le crocodile guette aussi ceux qui pêchent depuis la berge
+    expect(ids({ dest: 'river', mission: 'fishing', scene: 'fish', age: 1, arrive: false, sea: false, warm: true })).toContain('croc');
+    // pas de crocodile en pleine montagne
+    expect(ids({ dest: 'mountain', mission: 'flint', scene: 'mine', age: 0, arrive: false, sea: false, warm: true })).not.toContain('croc');
+  });
+
+  it('chaque attaque offre de fuir, de se battre à la lance ou de jeter un appât', () => {
+    for (const id of ['shark', 'croc']) {
+      const e = EVENT_BY[id];
+      expect(e.options.length).toBe(3);
+      expect(e.options.some((o) => o.needs?.includes('spear'))).toBe(true);
+      expect(e.options.some((o) => !o.needs && /fuir/i.test(o.label))).toBe(true);
+      expect(e.options.some((o) => /appât|viande/i.test(o.label))).toBe(true);
+      // se battre est la plus sûre, fuir la plus coûteuse en temps
+      const spear = e.options.find((o) => o.needs)!;
+      expect(Math.min(...e.options.map((o) => o.risk))).toBe(spear.risk);
+    }
+  });
+
+  it('la chasse au monstre : mission armée de l’Antiquité, galère et troupe à pied, deux monstres, des trophées', () => {
+    const m = mission('monster');
+    expect(m.age).toBe(1);
+    expect(m.mandatory).toBe(false);
+    expect(m.choices.map((c) => c.scene)).toEqual(['megalodon', 'kraken']);
+    for (const c of m.choices) {
+      expect(c.sea).toBe(true);
+      // à pied : ni chevaux, ni carburant ; une vraie troupe et un vrai risque
+      expect(c.mounts ?? 0).toBe(0);
+      expect(c.fuel ?? 0).toBe(0);
+      expect(c.party).toBeGreaterThanOrEqual(5);
+      expect(c.risk).toBeGreaterThan(0.3);
+      expect(c.danger).toContain('monster');
+      // bien-être, nourriture, minerai et un trophée
+      const kinds = c.win.map((e) => e.t);
+      expect(kinds).toContain('ore');
+      expect(kinds).toContain('perk');
+      expect(c.win.some((e) => e.t === 'need' && e.need === 'joy')).toBe(true);
+      expect(c.win.some((e) => e.t === 'need' && e.need === 'food')).toBe(true);
+      expect(c.lose.some((e) => e.t === 'injured')).toBe(true);
+      // à tous les âges, la même troupe
+      expect(choiceAt(c, 4).party).toBe(c.party);
+    }
+    // le trophée est propre à chaque monstre
+    const perks = m.choices.map((c) => c.win.find((e) => e.t === 'perk')).map((e) => (e as { id: string }).id);
+    expect(new Set(perks).size).toBe(2);
+    // des imprévus de mer pour la galère, pas ceux du requin ni de la rivière
+    for (let ci = 0; ci < 2; ci++) {
+      const got = ids(sea('monster', ci, 1));
+      expect(got).toEqual(expect.arrayContaining(['swell', 'wreck']));
+      expect(got).not.toContain('shark');
+      expect(got).not.toContain('flood');
+      expect(got).not.toContain('traveler');
+    }
+  });
+});
+
+/** Un village sur la côte : ses maisons à la distance voulue d’une mer profonde */
+function coastVillage(age: number, seed = 7) {
+  setMapSize(192);
+  const w = new World();
+  newWorld(w, 3, 2026);
+  w.updateVis();
+  const deep = (x: number, z: number) => w.inCells(x, z) && !w.lake[w.ci(x, z)] && w.cellAvg(x, z) < -0.6;
+  const ok = (x: number, z: number) => w.cellSlope(x, z) < 0.2 && !w.veg[w.ci(x, z)] && !w.decor[w.ci(x, z)] && w.canPlace('house', x, z) === null;
+  let best: [number, number] | null = null, bd = 1e9;
+  for (let z = 14; z < N - 14; z += 2)
+    for (let x = 14; x < N - 14; x += 2) {
+      if (w.cellAvg(x, z) < 0.5 || !ok(x, z)) continue;
+      // la mer profonde la plus proche, entre 10 et 18 cases
+      let d = 1e9;
+      for (let dz = -18; dz <= 18; dz += 2) for (let dx = -18; dx <= 18; dx += 2) if (deep(x + dx, z + dz)) d = Math.min(d, Math.hypot(dx, dz));
+      if (d >= 10 && d < bd) { bd = d; best = [x, z]; }
+    }
+  if (!best) throw new Error('pas de côte');
+  const [x, z] = best;
+  for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, age, false);
+  const agents = new Agents(w);
+  for (let i = 0; i < 20; i++) agents.update(0.1, 10, age, false, 40, 0);
+  const ex = new Expeditions(w, agents, () => 100, mulberry32(seed));
+  ex.pop = () => 60;
+  return { w, agents, ex };
+}
+
+describe('en mer : la barque file au large, la faune et le monstre sont de la partie', () => {
+  function sail(id: string, ci: number, age: number) {
+    stubCanvas();
+    const v = coastVillage(age), m = mission(id);
+    const a = v.ex.start(m, ci, age)!;
+    expect(a).not.toBeNull();
+    const group = new THREE.Group(), scene = new ExpeditionScene(v.w, v.agents, group, a, null);
+    return { v, a, group, scene, s: scene as unknown as { boat: { obj: THREE.Object3D; home: [number, number]; out: [number, number] } | null; swimmers: { kind: string; obj: THREE.Object3D }[]; monster: { kind: string; obj: THREE.Object3D; tents: { obj: THREE.Object3D }[]; hits: number } | null; darts: unknown[] } };
+  }
+  /** Joue l’expédition jusqu’à son terme, en prenant des mesures à chaque image */
+  function run(r: ReturnType<typeof sail>, each: (k: number) => void) {
+    const { v, a, scene } = r;
+    for (let i = 0; i < 60000 && a.phase !== 'back'; i++) {
+      v.agents.update(0.05, 10, a.age, false, 40, 0); v.ex.update(0.05);
+      if (a.wait) v.ex.decide(a, 0);
+      scene.update(0.05, a);
+      if (a.phase === 'work') each(Math.min(1, a.t / Math.max(1, a.c.work + a.extra)));
+    }
+  }
+
+  it('le récif : au large (sur l’eau profonde), à bord de l’embarcation de l’âge, entouré de baleine, dauphins, raies et poissons', () => {
+    const r = sail('reef', 0, 4);
+    expect(r.a.sea).toBe(true);
+    expect(r.s.boat).not.toBeNull();
+    const { home, out } = r.s.boat!;
+    // bien plus loin que la rive
+    expect(Math.hypot(out[0] - home[0], out[1] - home[1])).toBeGreaterThan(3);
+    const kinds = new Set(r.s.swimmers.map((x) => x.kind));
+    for (const k of ['whale', 'dolphin', 'manta', 'school']) expect(kinds.has(k), k).toBe(true);
+    let far = 0, jumped = false;
+    const ys = new Map<unknown, number>();
+    run(r, () => {
+      const p = r.s.boat!.obj.position;
+      far = Math.max(far, Math.hypot(p.x - home[0], p.z - home[1]));
+      for (const sw of r.s.swimmers) if (sw.obj.position.y > (ys.get(sw) ?? 1e9) + 0.01) jumped = true; else ys.set(sw, Math.min(ys.get(sw) ?? 1e9, sw.obj.position.y));
+    });
+    expect(far).toBeGreaterThan(3);
+    expect(jumped).toBe(true);
+    r.scene.dispose(r.a);
+  });
+
+  it('chaque âge a sa barque (une géométrie distincte)', () => {
+    const geos = new Set<unknown>();
+    for (const age of [0, 1, 2, 3, 4, 5]) {
+      const r = sail('fishing', 1, age);
+      const mesh = r.s.boat!.obj.children[0] as THREE.Mesh;
+      geos.add(mesh.geometry);
+      r.scene.dispose(r.a);
+    }
+    expect(geos.size).toBe(6);
+  });
+
+  it('le requin, le crocodile, la houle et l’épave se jouent sur la scène, pour chaque option, puis s’effacent', () => {
+    for (const [id, mid, ci, age] of [['shark', 'reef', 0, 4], ['croc', 'fishing', 0, 1], ['swell', 'monster', 0, 1], ['wreck', 'monster', 1, 1]] as [string, string, number, number][]) {
+      for (let pick = 0; pick < EVENT_BY[id].options.length; pick++) {
+        const r = sail(mid, ci, age), st = () => (r.scene as unknown as { stagings: { id: string; objs: THREE.Object3D[] }[] }).stagings;
+        r.a.wait = EVENT_BY[id];
+        for (let i = 0; i < 40; i++) r.scene.update(0.05, r.a);
+        expect(st().some((x) => x.id === id), `${id} surgit`).toBe(true);
+        // l’imprévu attend la décision : il est là, visible, et personne ne sort de la scène
+        for (const o of st().flatMap((x) => x.objs)) expect(Number.isFinite(o.position.x + o.position.y + o.position.z), id).toBe(true);
+        r.a.wait = null; r.a.seen.push(id); r.a.picks.push(pick);
+        for (let i = 0; i < 400; i++) {
+          r.scene.update(0.05, r.a);
+          for (const o of st().flatMap((x) => x.objs)) if (!Number.isFinite(o.position.x + o.position.y + o.position.z)) throw new Error(`${id}/${pick} : position invalide`);
+        }
+        expect(st().length, `${id}/${pick} s’efface`).toBe(0);
+        r.scene.dispose(r.a);
+      }
+    }
+  });
+
+  it('le mégalodon et le kraken : toute la troupe à bord de la galère, le monstre paraît, les harpons le frappent', () => {
+    for (const [ci, kind] of [[0, 'megalodon'], [1, 'kraken']] as [number, string][]) {
+      const r = sail('monster', ci, 1);
+      expect(r.s.monster?.kind).toBe(kind);
+      expect(r.a.party.length).toBeGreaterThanOrEqual(5);
+      let seen = false, darts = 0;
+      run(r, () => {
+        const m = r.s.monster!;
+        if (m.obj.visible) seen = true;
+        darts = Math.max(darts, r.s.darts.length);
+      });
+      expect(seen).toBe(true);
+      expect(darts).toBeGreaterThan(0);
+      expect(r.s.monster!.hits).toBeGreaterThan(0);
+      r.scene.dispose(r.a);
+    }
+  });
+});
+
+describe('le navire du port suit l’eau jusqu’au large', () => {
+  it('son chemin longe la rivière ou la côte bien au-delà de dix cases, reste sur l’eau et se lisse', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026);
+    w.updateVis();
+    // un quai : une case d’eau peu profonde, collée à une eau profonde
+    let found: [number, number, number, number] | null = null;
+    for (let z = 30; z < N - 30 && !found; z += 2)
+      for (let x = 30; x < N - 30 && !found; x += 2) {
+        const h = w.cellAvg(x, z);
+        if (h > -0.1 || h < -0.3 || w.lake[w.ci(x, z)]) continue;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (w.cellAvg(x + dx * 2, z + dz * 2) < -0.6 && !w.lake[w.ci(x + dx * 2, z + dz * 2)]) { found = [x, z, dx, dz]; break; }
+      }
+    expect(found).not.toBeNull();
+    const [x, z, dx, dz] = found!;
+    const route = shipRoute(w, [x + 0.5, z + 0.5], dx, dz);
+    expect(route.length).toBeGreaterThan(20);
+    // bien plus loin que les dix cases d’autrefois
+    const last = route[route.length - 1];
+    expect(Math.hypot(last[0] - x, last[1] - z)).toBeGreaterThan(12);
+    // des points tous les demi-cases ; jamais sur la terre ferme (à une case de marge près)
+    let wet = 0;
+    route.forEach(([px, pz], i) => {
+      if (i) expect(Math.hypot(px - route[i - 1][0], pz - route[i - 1][1])).toBeLessThan(0.65);
+      if (w.cellAvg(Math.floor(px), Math.floor(pz)) < 0.05) wet++;
+    });
+    expect(wet / route.length).toBeGreaterThan(0.95);
+  });
+
+  it('faute d’eau, le navire reste à quai', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026);
+    w.updateVis();
+    let land: [number, number] | null = null;
+    for (let z = 20; z < N - 20 && !land; z += 7) for (let x = 20; x < N - 20 && !land; x += 7) if (w.cellAvg(x, z) > 1 && !w.nearWater(x, z, 4)) land = [x, z];
+    expect(land).not.toBeNull();
+    expect(shipRoute(w, [land![0] + 0.5, land![1] + 0.5], 0, 1).length).toBeLessThanOrEqual(2);
+  });
+});
+
+// (pour que le type ActiveExpedition reste utilisé quand les tests évoluent)
+export type { ActiveExpedition };
