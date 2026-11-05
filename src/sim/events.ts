@@ -10,6 +10,11 @@ import type { GearId } from './gear';
 
 export interface EventOption {
   label: string;
+  /**
+   * Option d'attente (attendre, s'abriter, passer son chemin, laisser faire) : l'équipe ne fait rien d'autre. Son temps
+   * de travail est un temps d'attente, pendant lequel le travail est suspendu et l'équipe reste à l'arrêt
+   */
+  wait?: boolean;
   /** équipement nécessaire : l'une de ces pièces, emportée par l'équipe */
   needs?: GearId[];
   /** multiplicateur du risque de l'expédition */
@@ -54,7 +59,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'winds', where: ['spaceport'], arrive: true, title: 'Vents violents en altitude',
     text: 'Les ballons-sondes signalent des vents violents là-haut, et de gros nuages noirs roulent vers le cosmodrome.',
     options: [
-      { label: 'Attendre une fenêtre de beau temps', risk: 0.8, work: 10, text: 'On a attendu que les nuages passent : le ciel était parfait pour voler.' },
+      { wait: true, label: 'Attendre une fenêtre de beau temps', risk: 0.8, work: 10, text: 'On a attendu que les nuages passent : le ciel était parfait pour voler.' },
       { label: 'Corriger la trajectoire et y aller', risk: 1.1, work: 2, text: 'Les ingénieurs ont corrigé la trajectoire à la volée pour contourner le vent.' },
       { label: 'Passer en force', risk: 1.35, work: -4, text: 'On a foncé dans le vent, toute la fusée secouée.' },
     ],
@@ -82,7 +87,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'flood', where: ['river'], notScenes: ['boat', 'dive'], title: 'La rivière gonfle',
     text: 'Il a plu en amont : l’eau monte à vue d’œil et le courant emporte des branches.',
     options: [
-      { label: 'Attendre la décrue', risk: 0.85, work: 8, text: 'On a attendu que l’eau baisse, en haut de la berge.' },
+      { wait: true, label: 'Attendre la décrue', risk: 0.85, work: 8, text: 'On a attendu que l’eau baisse, en haut de la berge.' },
       { label: 'Passer en barque', needs: ['boat'], risk: 0.6, text: 'La barque a fendu le courant sans une goutte embarquée.' },
       { label: 'Continuer les pieds dans l’eau', risk: 1.3, work: -4, text: 'On a continué les pieds dans l’eau, de l’eau jusqu’aux genoux.' },
     ],
@@ -102,7 +107,7 @@ export const EVENTS: ExpEvent[] = [
     options: [
       { label: 'Le soigner', needs: ['kit'], risk: 1, bonus: [joy(2, 5)], text: 'Soigné et reposé, le voyageur a promis de raconter partout l’accueil du village.' },
       { label: 'Le ramener au village', risk: 1, work: 5, bonus: [joy(1, 4)], text: 'On a ramené le voyageur au village, qui l’a fêté comme un des siens.' },
-      { label: 'Passer son chemin', risk: 1.05, text: 'On a passé son chemin, sans fierté.' },
+      { wait: true, label: 'Passer son chemin', risk: 1.05, text: 'On a passé son chemin, sans fierté.' },
     ],
   },
   {
@@ -118,7 +123,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'storm', where: ['plain', 'far', 'mountain'], not: ['stars'], title: 'L’orage menace',
     text: 'Un gros nuage noir s’arrête au-dessus de l’équipe, les éclairs zèbrent le ciel et la pluie se met à tomber.',
     options: [
-      { label: 'S’abriter et attendre', risk: 0.85, work: 7, text: 'On a attendu la fin de l’orage, serrés les uns contre les autres.' },
+      { wait: true, label: 'S’abriter et attendre', risk: 0.85, work: 7, text: 'On a attendu la fin de l’orage, serrés les uns contre les autres.' },
       { label: 'Continuer sous la pluie', risk: 1.2, work: -3, text: 'Trempés jusqu’aux os, on a continué coûte que coûte.' },
     ],
   },
@@ -126,7 +131,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'fog', where: ['plain', 'forest', 'mountain', 'far'], title: 'Le brouillard tombe',
     text: 'En quelques minutes, un brouillard épais avale le paysage : on n’y voit plus à dix pas.',
     options: [
-      { label: 'Attendre qu’il se lève', risk: 0.9, work: 6, text: 'On a attendu que le brouillard se lève, emmitouflés.' },
+      { wait: true, label: 'Attendre qu’il se lève', risk: 0.9, work: 6, text: 'On a attendu que le brouillard se lève, emmitouflés.' },
       { label: 'Avancer à l’aveugle', risk: 1.2, work: -3, text: 'On a avancé à l’aveugle, en se tenant par l’épaule.' },
     ],
   },
@@ -156,7 +161,7 @@ export const EVENTS: ExpEvent[] = [
     options: [
       { label: 'L’amadouer patiemment', risk: 0.8, work: 6, text: 'Des heures de patience : l’étalon s’est laissé caresser l’encolure.' },
       { label: 'Le capturer au lasso', needs: ['rope'], risk: 0.75, bonus: [{ t: 'herd', kinds: ['horse'] }], text: 'Un lasso bien lancé : l’étalon a suivi, et la harde avec lui.' },
-      { label: 'Le laisser filer', risk: 1, work: -2, text: 'On a laissé partir l’étalon pour ne pas affoler la harde.' },
+      { wait: true, label: 'Le laisser filer', risk: 1, work: -2, text: 'On a laissé partir l’étalon pour ne pas affoler la harde.' },
     ],
   },
   {
@@ -165,7 +170,7 @@ export const EVENTS: ExpEvent[] = [
     options: [
       { label: 'Lui tendre une poignée d’herbe', risk: 0.8, work: 6, text: 'Une poignée d’herbe tendre, et le vieux bélier s’est laissé gratter le front.' },
       { label: 'Le mener à la corde', needs: ['rope'], risk: 0.75, bonus: [{ t: 'herd', kinds: ['sheep'] }], text: 'Une corde au cou, le bélier a suivi… et tout le troupeau derrière lui.' },
-      { label: 'Le laisser filer', risk: 1, work: -2, text: 'On a laissé partir le bélier, et le troupeau s’est un peu dispersé.' },
+      { wait: true, label: 'Le laisser filer', risk: 1, work: -2, text: 'On a laissé partir le bélier, et le troupeau s’est un peu dispersé.' },
     ],
   },
   {
@@ -173,7 +178,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Un agneau s’est pris dans un buisson de ronces et bêle à fendre l’âme ; sa mère tourne autour, affolée.',
     options: [
       { label: 'Le libérer doucement', risk: 0.85, work: 4, bonus: [{ t: 'herd', kinds: ['sheep'] }], text: 'Libéré des ronces, l’agneau ne nous a plus quittés.' },
-      { label: 'Laisser la mère s’en charger', risk: 1, text: 'La brebis a fini par tirer son petit des ronces.' },
+      { wait: true, label: 'Laisser la mère s’en charger', risk: 1, text: 'La brebis a fini par tirer son petit des ronces.' },
     ],
   },
   {
@@ -189,7 +194,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'bull', where: ['river'], missions: ['herd'], scenes: ['salt'], title: 'Le grand taureau',
     text: 'Un aurochs énorme, cornes en avant, gratte le sol près de la pierre à sel et souffle bruyamment.',
     options: [
-      { label: 'Rester cachés jusqu’à ce qu’il se calme', risk: 0.8, work: 6, text: 'Cachés derrière les buissons, on a attendu que le grand taureau se calme.' },
+      { wait: true, label: 'Rester cachés jusqu’à ce qu’il se calme', risk: 0.8, work: 6, text: 'Cachés derrière les buissons, on a attendu que le grand taureau se calme.' },
       { label: 'Le mener à la corde', needs: ['rope'], risk: 0.8, bonus: [{ t: 'herd', kinds: ['cow'] }], text: 'Une corde aux cornes : le grand taureau a suivi, doux comme un agneau.' },
       { label: 'Le chasser à grands cris', risk: 1.2, work: -3, text: 'Le taureau a détalé à nos cris… et les vaches l’ont suivi un moment.' },
     ],
@@ -208,7 +213,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'blizzard', where: ['plain', 'mountain', 'far'], missions: ['mammoth'], title: 'Une tempête de neige',
     text: 'Le vent du nord se lève et la neige tombe à gros flocons : on ne voit plus la harde, et ses traces s’effacent.',
     options: [
-      { label: 'Se serrer sous les peaux autour du feu', risk: 0.85, work: 7, text: 'Serrés sous les peaux autour du feu, on a laissé passer la tempête.' },
+      { wait: true, label: 'Se serrer sous les peaux autour du feu', risk: 0.85, work: 7, text: 'Serrés sous les peaux autour du feu, on a laissé passer la tempête.' },
       { label: 'Suivre les traces avant qu’elles s’effacent', risk: 1.15, work: -3, text: 'On a suivi les grandes traces dans la neige fraîche : la harde n’était pas loin.' },
     ],
   },
@@ -218,7 +223,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'L’eau frémit : un grand banc de poissons remonte le courant juste devant l’équipe !',
     options: [
       { label: 'Lancer les filets', risk: 1.05, work: 5, bonus: [food(2, 4)], text: 'Les filets sont revenus pleins à craquer.' },
-      { label: 'Ne pas se disperser', risk: 0.95, text: 'On a laissé passer le banc pour rester à l’ouvrage.' },
+      { wait: true, label: 'Ne pas se disperser', risk: 0.95, text: 'On a laissé passer le banc pour rester à l’ouvrage.' },
     ],
   },
   {
@@ -226,7 +231,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Le courant forcit : devant la barque, l’eau écume entre les rochers.',
     options: [
       { label: 'Porter la barque le long de la berge', risk: 0.8, work: 6, text: 'On a porté la barque sur la berge le temps de passer les rapides.' },
-      { label: 'Attendre que l’eau se calme', risk: 0.9, work: 5, text: 'On a attendu, amarrés, que l’eau se calme.' },
+      { wait: true, label: 'Attendre que l’eau se calme', risk: 0.9, work: 5, text: 'On a attendu, amarrés, que l’eau se calme.' },
       { label: 'Sauter les rapides', risk: 1.3, work: -4, text: 'On a sauté les rapides, cramponnés aux bords.' },
     ],
   },
@@ -234,7 +239,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'deer', where: ['mountain', 'river'], missions: ['springs'], title: 'Des cerfs à la source',
     text: 'Une petite harde de cerfs descend boire à l’eau chaude, sans se soucier de l’équipe.',
     options: [
-      { label: 'Les regarder en silence', risk: 1, bonus: [joy(1, 4)], text: 'On a regardé les cerfs boire, sans faire un bruit : un moment magique.' },
+      { wait: true, label: 'Les regarder en silence', risk: 1, bonus: [joy(1, 4)], text: 'On a regardé les cerfs boire, sans faire un bruit : un moment magique.' },
       { label: 'Les chasser pour la viande', needs: WEAPONS, risk: 1.05, bonus: [food(2, 4)], text: 'Une chasse rapide : de la viande pour le retour.' },
       { label: 'Les faire fuir', risk: 0.95, text: 'Un grand cri, et les cerfs ont détalé dans la montagne.' },
     ],
@@ -244,7 +249,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'scree', where: ['mountain'], scenes: ['mine', 'pass', 'summit'], title: 'Des pierres dévalent la pente',
     text: 'Un grondement sourd : des pierres se détachent de la paroi et dévalent la pente, juste à côté de l’équipe.',
     options: [
-      { label: 'S’abriter sous un surplomb', risk: 0.75, work: 7, text: 'Serrés sous un surplomb, on a laissé passer les pierres.' },
+      { wait: true, label: 'S’abriter sous un surplomb', risk: 0.75, work: 7, text: 'Serrés sous un surplomb, on a laissé passer les pierres.' },
       { label: 'S’encorder et continuer', needs: ['rope'], risk: 0.8, text: 'Encordés, on a continué sous la paroi.' },
       { label: 'Foncer avant que ça tombe', risk: 1.3, work: -4, text: 'On a foncé, un œil sur la pente.' },
     ],
@@ -280,7 +285,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'bats', where: ['cave'], scenes: ['cave', 'scout'], title: 'Une nuée de chauves-souris',
     text: 'Un grand battement d’ailes : des centaines de chauves-souris jaillissent de la grotte !',
     options: [
-      { label: 'Se plaquer au sol', risk: 0.85, work: 3, text: 'À plat ventre, on a laissé passer la nuée.' },
+      { wait: true, label: 'Se plaquer au sol', risk: 0.85, work: 3, text: 'À plat ventre, on a laissé passer la nuée.' },
       { label: 'Agiter les torches', needs: ['torch'], risk: 0.75, text: 'Les torches agitées ont écarté les chauves-souris.' },
       { label: 'Foncer à travers', risk: 1.2, work: -3, text: 'On a foncé à travers la nuée, les bras devant les yeux.' },
     ],
@@ -310,7 +315,7 @@ export const EVENTS: ExpEvent[] = [
     options: [
       { label: 'Les chasser à grands gestes', risk: 0.9, work: 3, text: 'De grands gestes et des cris : les étourneaux sont allés picorer ailleurs.' },
       { label: 'Cueillir plus vite qu’eux', risk: 1.1, work: -3, text: 'On a cueilli à toute vitesse, les oiseaux tout autour.' },
-      { label: 'Leur laisser un buisson', risk: 0.95, work: 2, bonus: [joy(1, 3)], text: 'On a laissé un buisson aux oiseaux, qui nous ont chanté merci.' },
+      { wait: true, label: 'Leur laisser un buisson', risk: 0.95, work: 2, bonus: [joy(1, 3)], text: 'On a laissé un buisson aux oiseaux, qui nous ont chanté merci.' },
     ],
   },
   {
@@ -318,7 +323,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Un bourdonnement monte : les abeilles sortent par centaines et tournent autour de l’équipe.',
     options: [
       { label: 'Plus de fumée !', risk: 0.75, work: 4, text: 'Une épaisse fumée a rendormi l’essaim.' },
-      { label: 'Reculer et attendre', risk: 0.9, work: 6, text: 'On a reculé sans un geste, le temps que l’essaim se calme.' },
+      { wait: true, label: 'Reculer et attendre', risk: 0.9, work: 6, text: 'On a reculé sans un geste, le temps que l’essaim se calme.' },
       { label: 'Prendre le rayon tout de suite', risk: 1.3, work: -4, bonus: [food(1, 3)], text: 'On a pris le rayon tout de suite… et quelques piqûres avec.' },
     ],
   },
@@ -328,7 +333,7 @@ export const EVENTS: ExpEvent[] = [
     options: [
       { label: 'Aider à la réparer', risk: 0.9, work: 6, bonus: [joy(1, 5)], text: 'Tout le monde a mis la main à la roue : les jongleurs nous ont remerciés en chansons.' },
       { label: 'Porter les bagages à dos d’homme', risk: 1, work: 3, text: 'On a porté les malles des jongleurs à dos d’homme.' },
-      { label: 'Laisser les jongleurs se débrouiller', risk: 1.15, work: -3, text: 'On a laissé les jongleurs réparer seuls leur roulotte.' },
+      { wait: true, label: 'Laisser les jongleurs se débrouiller', risk: 1.15, work: -3, text: 'On a laissé les jongleurs réparer seuls leur roulotte.' },
     ],
   },
   {
@@ -354,7 +359,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Une rafale secoue la montgolfière : l’enveloppe se creuse et la nacelle tangue.',
     options: [
       { label: 'Tenir bon et chauffer', risk: 0.85, work: 3, text: 'Brûleur à fond, on a tenu bon jusqu’à ce que le vent tombe.' },
-      { label: 'Attendre que le vent tombe', risk: 0.8, work: 7, text: 'On a attendu que le vent tombe avant d’aller plus loin.' },
+      { wait: true, label: 'Attendre que le vent tombe', risk: 0.8, work: 7, text: 'On a attendu que le vent tombe avant d’aller plus loin.' },
       { label: 'Se laisser porter', risk: 1.25, work: -3, text: 'On s’est laissé porter par la rafale, en se cramponnant.' },
     ],
   },
@@ -362,7 +367,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'clouds', where: ['mountain', 'far'], missions: ['stars'], title: 'Les nuages cachent le ciel',
     text: 'Une couche de nuages gris glisse au-dessus de l’équipe et cache le ciel.',
     options: [
-      { label: 'Attendre une éclaircie', risk: 0.9, work: 8, text: 'On a attendu l’éclaircie : le ciel s’est rouvert d’un coup.' },
+      { wait: true, label: 'Attendre une éclaircie', risk: 0.9, work: 8, text: 'On a attendu l’éclaircie : le ciel s’est rouvert d’un coup.' },
       { label: 'Observer quand même', risk: 1.1, work: -2, text: 'On a observé entre deux nuages.' },
     ],
   },
@@ -370,7 +375,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'cows', where: ['plain'], missions: ['railway'], scenes: ['rails'], title: 'Des vaches sur le tracé',
     text: 'Des vaches broutent en plein sur le tracé de la voie, et ne comptent pas bouger.',
     options: [
-      { label: 'Attendre qu’elles passent', risk: 0.9, work: 5, text: 'On a attendu que les vaches finissent leur repas.' },
+      { wait: true, label: 'Attendre qu’elles passent', risk: 0.9, work: 5, text: 'On a attendu que les vaches finissent leur repas.' },
       { label: 'Les mener plus loin', risk: 0.95, work: 2, text: 'On a mené les vaches un peu plus loin, dans un meilleur pré.' },
       { label: 'Faire siffler la locomotive', risk: 1.1, work: -2, bonus: [joy(1, 3)], text: 'Un coup de sifflet : les vaches ont détalé, et tout le chantier a ri.' },
     ],
@@ -389,7 +394,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'tired', where: ['cave'], missions: ['deep'], title: 'La troupe est fourbue',
     text: 'Après des heures de marche dans les galeries, les soldats tombent de fatigue.',
     options: [
-      { label: 'Faire halte et manger', risk: 0.85, work: 6, text: 'Une halte, un repas chaud : la troupe est repartie d’un bon pas.' },
+      { wait: true, label: 'Faire halte et manger', risk: 0.85, work: 6, text: 'Une halte, un repas chaud : la troupe est repartie d’un bon pas.' },
       { label: 'Chanter pour se donner du courage', risk: 0.95, bonus: [joy(1, 4)], text: 'On a chanté à pleine voix dans les galeries.' },
       { label: 'Continuer coûte que coûte', risk: 1.2, work: -3, text: 'On a continué, les jambes en coton.' },
     ],
@@ -429,4 +434,9 @@ export function pickEvent(ctx: EventCtx, seen: string[], avoid: string[], rnd: (
   const own = pool.filter((e) => e.missions || e.scenes), any = pool.filter((e) => !e.missions && !e.scenes);
   const list = own.length && (rnd() < 0.7 || !any.length) ? own : any;
   return list.length ? list[Math.floor(rnd() * list.length)] : null;
+}
+
+/** Combien de secondes de jeu l'équipe attend quand elle choisit cette option d'attente (son temps de travail, de 4 à 12 s) */
+export function waitTime(o: EventOption): number {
+  return Math.min(12, Math.max(4, o.work ?? 0));
 }

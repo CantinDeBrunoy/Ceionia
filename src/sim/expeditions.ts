@@ -4,7 +4,7 @@ import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummar
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { AGES, KINDS, KindId, Building, sizeOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
-import { ExpEvent, pickEvent } from './events';
+import { ExpEvent, pickEvent, waitTime } from './events';
 import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
 import { rulesOf } from './difficulty';
@@ -38,6 +38,8 @@ export interface ActiveExpedition {
   /** imprévu en attente de décision : l'équipe patiente sur place (depuis waitT secondes) */
   wait: ExpEvent | null;
   waitT: number;
+  /** secondes restantes d'une attente choisie (« Attendre… ») : le travail est suspendu, l'équipe reste à l'arrêt */
+  hold: number;
   /** imprévus prévus (deux pour un long travail), déjà survenus, l'option choisie pour chacun (-1 : pas encore), et ce qu'en dira le récit */
   events: number;
   seen: string[];
@@ -552,7 +554,7 @@ export class Expeditions {
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
     const a: ActiveExpedition = {
       id: this.nextId++, m, c, phase: m.farewell ? 'gather' : 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
-      wait: null, waitT: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], extra: 0, bonus: [], hurt: 0,
+      wait: null, waitT: 0, hold: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], extra: 0, bonus: [], hurt: 0,
       // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
       site: c.dest === 'cave' ? 'cave' : kind, age,
       targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp,
@@ -610,6 +612,8 @@ export class Expeditions {
         if (a.waitT >= AUTO_DECIDE) this.decide(a, this.safest(a));
         continue;
       }
+      // une attente choisie : le travail est suspendu, l'équipe reste là à attendre (elle ne fait pas l'action d'une autre option)
+      if (a.hold > 0) { a.hold = Math.max(0, a.hold - dt); if (!a.hold && a.phase === 'work') ag.partyAct(a.party, 'work'); continue; }
       // avec une écurie, les équipes vont à cheval : le travail sur place avance plus vite
       a.t += dt * (a.phase === 'work' && this.has('stable') ? 1.25 : 1);
       if (a.phase === 'work' && a.ambush.length) this.ambushStep(a);
@@ -753,7 +757,10 @@ export class Expeditions {
     // l'avancement ne recule jamais : le temps déjà passé compte pour la même part du chantier allongé (ou raccourci) ;
     // sinon la troupe, sous terre, était ramenée en arrière sur son chemin
     const before = Math.max(1, a.c.work + a.extra);
-    a.extra += o.work ?? 0;
+    // choisir d'attendre : le temps d'attente est du temps réel de jeu pendant lequel rien n'avance (on ne l'ajoute pas au travail)
+    const waits = !!o.wait && a.phase === 'work';
+    a.extra += waits ? Math.min(0, o.work ?? 0) : o.work ?? 0;
+    if (waits) a.hold = waitTime(o);
     if (a.phase === 'work') a.t *= Math.max(1, a.c.work + a.extra) / before;
     if (o.bonus) a.bonus.push(...o.bonus);
     a.hurt += o.hurt ?? 0;
@@ -762,7 +769,7 @@ export class Expeditions {
     const j = a.seen.lastIndexOf(a.wait!.id);
     if (j >= 0) a.picks[j] = i;
     a.wait = null;
-    if (a.phase === 'work') this.agents.partyAct(a.party, 'work');
+    if (a.phase === 'work') this.agents.partyAct(a.party, a.hold > 0 ? 'sit' : 'work');
     return true;
   }
 

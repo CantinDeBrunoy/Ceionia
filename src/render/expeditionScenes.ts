@@ -658,6 +658,8 @@ export class ExpeditionScene {
   private rocket: RocketShow | null = null;
   /** imprévus joués sur place (pendant la décision, puis la suite de l'option choisie), et l'échec joué au départ */
   private stagings: Staging[] = [];
+  /** temps passé à attendre (la barque reste amarrée pendant ce temps) */
+  private idle = 0;
   private failed = false;
   /** on explore une grotte : chacun tient une torche de fortune ; leur éclat (1 : normal), et celui vers lequel il va */
   private lit = false;
@@ -2437,7 +2439,10 @@ export class ExpeditionScene {
       const u = 0.5 - Math.cos(this.t * 0.45) * 0.5, c = this.cartRun, x = c.a[0] + (c.b[0] - c.a[0]) * u, z = c.a[1] + (c.b[1] - c.a[1]) * u;
       c.obj.position.set(x, this.world.surfaceAt(x, z), z);
     }
-    if (onSite && !a.wait) this.stepMembers(dt, a, k);
+    // une attente choisie : l'équipe reste à l'arrêt (assise), la barque amarrée, et ne reprend l'ouvrage qu'ensuite
+    const holding = a.hold > 0;
+    if (holding) this.idle += dt;
+    if (onSite && !a.wait && !holding) this.stepMembers(dt, a, k);
     // les pêcheurs repartis, leurs cannes s'en vont avec eux
     if (onSite) this.stepRods(a);
     else for (const r of this.rods.values()) r.rod.visible = r.bob.visible = r.line.visible = false;
@@ -2731,7 +2736,7 @@ export class ExpeditionScene {
   private stepBoat() {
     const bt = this.boat!;
     // aller-retour lent (une vingtaine de secondes), pause au large le temps de pêcher
-    const ph = (this.t / 22) % 1, u = ph < 0.3 ? smooth(ph / 0.3) : ph < 0.75 ? 1 : 1 - smooth((ph - 0.75) / 0.25);
+    const ph = ((this.t - this.idle) / 22) % 1, u = ph < 0.3 ? smooth(ph / 0.3) : ph < 0.75 ? 1 : 1 - smooth((ph - 0.75) / 0.25);
     const x = bt.home[0] + (bt.out[0] - bt.home[0]) * u, z = bt.home[1] + (bt.out[1] - bt.home[1]) * u;
     const sway = Math.sin(this.t * 0.4) * 0.12, dir = Math.atan2(bt.out[0] - bt.home[0], bt.out[1] - bt.home[1]);
     let px = x + Math.cos(dir) * sway, pz = z - Math.sin(dir) * sway;

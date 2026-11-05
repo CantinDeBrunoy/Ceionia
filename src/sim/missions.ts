@@ -869,3 +869,10 @@ export function effectSummary(effects: Effect[]) {
   }
   return out.join(' · ') || 'rien';
 }
+
+/** Une intro en deux temps : sa première phrase (ce qu'on affiche) et le reste (replié sous « En savoir plus »). Rien n'est perdu : head + rest = le texte */
+export function splitIntro(text: string): { head: string; rest: string } {
+  const m = /^.*?[.!?…](?=\s|$)/s.exec(text);
+  const head = m ? m[0] : text;
+  return { head, rest: text.slice(head.length).trim() };
+}
