@@ -4371,6 +4371,31 @@ function tavern(p: Parts, age: number, o: ModelOpts) {
     p.box(0.22, 0.02, 0.1, -0.2, 0.08, 0.4, C.wood); for (const s of [-1, 1]) p.box(0.22, 0.02, 0.04, -0.2, 0.05, 0.4 + s * 0.09, C.darkwood);
     for (const s of [-1, 1]) p.box(0.02, 0.07, 0.08, -0.2 + s * 0.09, 0.012, 0.4, C.darkwood);
     p.cyl(0.012, 0.012, 0.025, 6, -0.25, 0.1, 0.39, C.gold); p.cyl(0.012, 0.012, 0.025, 6, -0.15, 0.1, 0.41, C.gold);
+    if (age === 2) {
+      // l'étage : fenêtres à croisée et leurs jardinières fleuries, la cheminée qui fume, l'appentis du bûcher sur le côté
+      windows(p, [-0.18, 0.18], 0.33, 0.13, 0.07, 0.08, C.darkwood);
+      for (const x of [-0.18, 0.18]) { p.box(0.1, 0.025, 0.035, x, 0.3, 0.15, C.darkwood); for (let k = 0; k < 3; k++) p.sphere(0.016, x - 0.03 + k * 0.03, 0.33, 0.152, k === 1 ? C.butter : 0xd84a3e, 0, 0.8); }
+      p.box(0.09, 0.3, 0.09, 0.22, 0.5, -0.26, C.stone); p.box(0.11, 0.025, 0.11, 0.22, 0.8, -0.26, C.darkstone); smoke(0.22, 0.86, -0.26, 0);
+      p.box(0.12, 0.2, 0.36, -0.37, 0.012, -0.12, C.darkwood);
+      p.add(new THREE.BoxGeometry(0.16, 0.014, 0.4), -0.38, 0.23, -0.12, 0x8a5a44, 0, false, 0.4);
+      for (let k = 0; k < 3; k++) log(p, 0.1, 0.02, -0.4, 0.012 + k * 0.035, 0.1 - (k % 2) * 0.01, Math.PI / 2, k % 2 ? C.wood : 0x9a7a5a);
+      // l'enseigne pendue à sa potence de fer (une chope dorée sur fond rouge) qui se balance, la lanterne de la porte
+      p.box(0.012, 0.012, 0.14, 0.22, 0.42, 0.18, 0x3c3c40); p.add(new THREE.BoxGeometry(0.008, 0.06, 0.008), 0.22, 0.38, 0.13, 0x3c3c40, 0, false, 0, 0.7);
+      { const f = swing([0.22, 0.415, 0.24], [1, 0, 0], 0.12, 0.7); f.box(0.004, 0.03, 0.004, 0, -0.03, -0.035, 0x3c3c40); f.box(0.004, 0.03, 0.004, 0, -0.03, 0.035, 0x3c3c40); f.box(0.012, 0.1, 0.12, 0, -0.13, 0, 0x8a2a24); f.box(0.014, 0.05, 0.035, 0, -0.105, 0, C.gold); }
+      // la barre d'attache et le cheval du voyageur, l'aubergiste au tablier blanc sur le seuil, le chien couché
+      for (const z of [-0.04, 0.18]) p.box(0.014, 0.08, 0.014, 0.33, 0.012, z, C.darkwood); p.box(0.014, 0.014, 0.24, 0.33, 0.085, 0.07, C.darkwood);
+      horse(p, 0.41, 0.06, Math.PI / 2, 0x4a3426);
+      figure(p, 0.06, 0.2, 0x6a5a48, 0.2, false, 0x2a1e18); p.box(0.04, 0.05, 0.004, 0.064, 0.09, 0.219, C.white);
+      p.box(0.06, 0.025, 0.03, -0.02, 0.012, 0.48, 0x8a6a4a); p.box(0.025, 0.025, 0.025, 0.02, 0.025, 0.48, 0x8a6a4a);
+      // la seconde table de la terrasse, ses buveurs, les chopes et le pichet ; pavés devant la porte
+      p.box(0.18, 0.02, 0.09, 0.08, 0.08, 0.38, C.wood); for (const s of [-1, 1]) p.box(0.02, 0.07, 0.07, 0.08 + s * 0.07, 0.012, 0.38, C.darkwood);
+      for (const s of [-1, 1]) p.box(0.18, 0.02, 0.04, 0.08, 0.05, 0.38 + s * 0.085, C.darkwood);
+      seated(p, 0.04, 0.07, 0.3, 0, 0x8a3a3a, 0x4a3426); seated(p, 0.12, 0.07, 0.46, Math.PI, 0x3a5a7a, 0xc8a070);
+      seated(p, -0.24, 0.07, 0.31, 0, 0x5a7a3a, 0x8a5a3a);
+      for (const [x, z] of [[0.05, 0.37], [0.12, 0.39]]) p.cyl(0.012, 0.012, 0.025, 6, x, 0.1, z, 0x9a7a5a);
+      p.cyl(0.016, 0.02, 0.04, 7, 0.09, 0.1, 0.38, 0xc8b8a0);
+      for (let k = 0; k < 6; k++) p.box(0.07, 0.004, 0.05, -0.14 + (k % 3) * 0.08 + (k > 2 ? 0.04 : 0), 0.012, 0.15 + (k > 2 ? 0.06 : 0), dark(C.stone, 0.88 + (k % 2) * 0.1));
+    }
   } else if (age === 3) {
     // brasserie : brique sur deux niveaux, grandes vitrines, store rayé sur la terrasse, enseigne
     const brick = 0xb4685c;
