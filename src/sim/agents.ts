@@ -165,7 +165,7 @@ const JOB_OF: Partial<Record<KindId, JobKind>> = {
   gather: 'merchant', forum: 'merchant', tavern: 'merchant', barber: 'merchant', harbor: 'merchant',
   pen: 'herder', stable: 'herder', apiary: 'keeper',
   baths: 'servant', theater: 'servant', senate: 'servant', landmark: 'servant', station: 'servant', terminal: 'servant', observatory: 'servant',
-  carworks: 'smith', lab: 'healer', aerodrome: 'servant', heliport: 'servant', airport: 'servant', oilwell: 'smith', refinery: 'smith',
+  carworks: 'smith', lab: 'healer', aerodrome: 'servant', heliport: 'servant', airport: 'servant', oilwell: 'smith', refinery: 'smith', brickworks: 'smith',
   arcology: 'merchant', vfarm: 'farmer', fusion: 'smith', spaceport: 'servant', research: 'teacher', maglev: 'servant',
 };
 const TOOL_OF: Record<JobKind, keyof typeof PROPS | null> = {

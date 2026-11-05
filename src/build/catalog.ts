@@ -1,7 +1,7 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
   | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
   | 'harbor' | 'airport' | 'heliport' | 'watertower' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'theater' | 'acropolis' | 'forum' | 'senate'
-  | 'carworks' | 'lab' | 'aerodrome' | 'manor' | 'oilwell' | 'refinery'
+  | 'carworks' | 'lab' | 'aerodrome' | 'manor' | 'oilwell' | 'refinery' | 'brickworks'
   | 'arcology' | 'vfarm' | 'fusion' | 'spaceport' | 'research' | 'maglev';
 
 /** Rayons de la barre de construction */
@@ -87,6 +87,13 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Colonnes de distillation, grands réservoirs, torchère qui flambe et forêt de tuyaux : le pétrole brut des puits y devient du carburant.',
     jobs: [0, 0, 0, 0, 14, 16],
     perk: 'Grand bâtiment de 3 × 3 cases. Raffine chaque jour jusqu’à 12 barils de pétrole brut, qui donnent 9 de carburant : à l’époque moderne, les chars et les transports de troupes de l’expédition armée en ont besoin.',
+  },
+  brickworks: {
+    id: 'brickworks', size: 2, minAge: 3, icon: '🧱', cat: 'prod',
+    names: ['', '', '', 'Briqueterie', 'Briqueterie mécanisée', 'Briqueterie automatisée'],
+    desc: 'Un four à briques sous sa très haute cheminée qui fume, un séchoir à claire-voie, un tas d’argile et des piles de briques cuites : la ville de brique se fabrique ici.',
+    jobs: [0, 0, 0, 6, 8, 8],
+    perk: 'Bâtiment de 2 × 2 cases, qui se pose n’importe où. Cuit chaque jour des briques (8 à l’âge industriel, 12 à l’époque moderne, 16 ensuite), dont ont besoin les gares, les usines et les raffineries, et que réclame le passage à l’époque moderne.',
   },
   outpost: {
     id: 'outpost', size: 2, minAge: 2, icon: '🚩', cat: 'service',
@@ -398,7 +405,7 @@ export const KINDS: Record<KindId, KindDef> = {
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'outpost', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'outpost', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -415,6 +422,8 @@ export interface AgeDef {
   reqKinds: Partial<Record<KindId, number>>;
   /** minerai tiré du monde souterrain */
   reqOre?: number;
+  /** briques en réserve au village (la briqueterie en cuit) */
+  reqBrick?: number;
 }
 
 export const AGES: AgeDef[] = [
@@ -422,8 +431,8 @@ export const AGES: AgeDef[] = [
   { name: 'Antiquité', tagline: 'Maisons de tuiles, temples et agoras', reqPop: 12, reqKinds: { house: 4, farm: 1, well: 1, workshop: 1 } },
   { name: 'Médiéval', tagline: 'Colombages, églises et châteaux', reqPop: 30, reqKinds: { house: 8, temple: 1, workshop: 2, gather: 1 } },
   { name: 'Industriel', tagline: 'Briques, cheminées et gares', reqPop: 60, reqKinds: { house: 12, temple: 1, mill: 1, quarry: 1, landmark: 1, gather: 2, health: 1 }, reqOre: 12 },
-  { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2, school: 1 }, reqOre: 30 },
-  { name: 'Futuriste', tagline: 'Arcologies, maglev et fusées', reqPop: 180, reqKinds: { house: 24, workshop: 3, school: 2, lab: 1, health: 1, gather: 4 }, reqOre: 50 },
+  { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2, school: 1 }, reqOre: 30, reqBrick: 40 },
+  { name: 'Futuriste', tagline: 'Arcologies, maglev et fusées', reqPop: 180, reqKinds: { house: 24, workshop: 3, school: 2, lab: 1, health: 1, gather: 4 }, reqOre: 50, reqBrick: 80 },
 ];
 
 /**
@@ -445,7 +454,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
   theater: 'théâtres', acropolis: 'acropoles', forum: 'forums et marchés', senate: 'sénats',
   harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions',
-  carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs', oilwell: 'puits de pétrole', refinery: 'raffineries',
+  carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs', oilwell: 'puits de pétrole', refinery: 'raffineries', brickworks: 'briqueteries',
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
 };
 

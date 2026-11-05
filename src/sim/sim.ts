@@ -203,6 +203,8 @@ export class Sim {
       items.push({ label: fresh ? DIFF_TEXT.more(this.nameOf(k)) : this.nameOf(k), have, need: c, kind: k });
     }
     if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
+    // les briques de la briqueterie (en réserve : on peut en dépenser pour bâtir, il faudra alors en recuire)
+    if (req.reqBrick) items.push({ label: 'briques (briqueterie)', have: w.unlimited ? req.reqBrick : Math.floor(w.brick), need: req.reqBrick });
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
     for (const m of mandatoriesFor(this.age)) items.push({ label: `expédition « ${m.title} »`, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
     let sum = 0;
@@ -223,9 +225,10 @@ export class Sim {
     // comment en avoir (sinon le joueur attend une ressource qui ne vient jamais)
     const build = (k: KindId, text: string) => {
       const c = priceIn(w, k, this.age);
-      for (const [r, prod] of [['stone', 'quarry'], ['wood', 'lumber']] as const) {
-        if (!c || w.unlimited || w[r] >= c[r] || this.producing(r)) continue;
-        return about(prod, `Il manque ${r === 'stone' ? 'de la pierre' : 'du bois'} pour « ${this.nameOf(k)} » : ${say(prod)}, ${r === 'stone' ? 'près des rochers (Nature › Rochers) ou dans la montagne' : 'en lisière ou dans une forêt'}.`);
+      for (const [r, prod] of [['stone', 'quarry'], ['wood', 'lumber'], ['brick', 'brickworks']] as const) {
+        if (!c || w.unlimited || w[r] >= (c[r] ?? 0) || this.producing(r)) continue;
+        const what = { stone: 'de la pierre', wood: 'du bois', brick: 'des briques' }[r], where = { stone: 'près des rochers (Nature › Rochers) ou dans la montagne', wood: 'en lisière ou dans une forêt', brick: 'elle se pose où l’on veut et cuit ses briques toute seule' }[r];
+        return about(prod, `Il manque ${what} pour « ${this.nameOf(k)} » : ${say(prod)}, ${where}.`);
       }
       return about(k, text);
     };
@@ -253,6 +256,7 @@ export class Sim {
         return `Pour l’âge suivant : réussissez ${left.length > 1 ? `les expéditions ${left.slice(0, -1).join(', ')} et ${left[left.length - 1]}` : `l’${miss.label}`} (menu Expéditions).`;
       }
       if (miss?.kind) { const n = miss.need - miss.have; return build(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}.`); }
+      if (miss.label.startsWith('briques')) return this.counts.brickworks ? `Pour l’âge suivant : il faut encore ${miss.need - miss.have} briques (la briqueterie en cuit chaque jour).` : about('brickworks', `Pour l’âge suivant : il faut ${miss.need} briques : ${say('brickworks')}.`);
       if (miss) return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`;
     }
     if (full) return room();
@@ -270,7 +274,7 @@ export class Sim {
   }
 
   /** Un bâtiment du village produit-il cette ressource ? */
-  private producing(r: 'wood' | 'stone') {
+  private producing(r: 'wood' | 'stone' | 'brick') {
     for (const b of this.world.buildings.values()) if (YIELD[b.kind]?.[r]?.[b.age]) return true;
     return false;
   }
