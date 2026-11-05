@@ -225,6 +225,12 @@ button.pop:hover { background: var(--accent-soft); }
 #items .key { position: absolute; left: 6px; top: 4px; font-style: normal; font-size: 9px; font-weight: 800; color: var(--ink2); }
 #items button.tile.active .key { color: rgba(255, 255, 255, 0.85); }
 #items button.locked { opacity: 0.5; }
+/* partie neuve : l'onglet Bâtir, le rayon Vie & culture et la vignette de la place du village luisent doucement, d'une
+   lumière de feu de camp, tant que rien n'est posé */
+#modes button.first, #subcats button.first, #items button.tile.first { animation: firstGlow 1.8s ease-in-out infinite; }
+#items button.tile.first:not(.active) { border-color: #f2b33a; background: #fff8e6; }
+@keyframes firstGlow { 0%, 100% { box-shadow: 0 0 0 2px rgba(242, 179, 58, 0.75), 0 0 8px rgba(242, 179, 58, 0.3); } 50% { box-shadow: 0 0 0 3px rgba(242, 179, 58, 1), 0 0 18px 5px rgba(242, 179, 58, 0.5); } }
+@media (prefers-reduced-motion: reduce) { #modes button.first, #subcats button.first, #items button.tile.first { animation: none; box-shadow: 0 0 0 3px rgba(242, 179, 58, 0.9); } }
 #dockBottom { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 8px; border-top: 1px solid var(--line); background: rgba(255, 255, 255, 0.4); border-radius: 0 0 18px 18px; }
 #subcats { display: flex; gap: 2px; flex: 1; min-width: 0; justify-content: center; overflow-x: auto; scrollbar-width: none; }
 #subcats button { gap: 7px; min-height: 32px; min-width: 0; margin: 4px 0; padding: 0 16px; border: none; border-top: 2px solid transparent; border-radius: 0; box-shadow: none; background: transparent; font-size: 13px; font-weight: 700; color: var(--ink2); white-space: nowrap; }

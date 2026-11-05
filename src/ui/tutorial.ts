@@ -50,7 +50,7 @@ export const TUTO_TEXT = {
     },
     place: {
       title: 'Premières constructions',
-      text: 'Un village commence par sa place (à la Préhistoire, un feu de camp) : on y fêtera le retour des expéditions, et elle grandit avec les âges. Autour, il faut de quoi loger, nourrir et abreuver : une maison, une ferme (à la Préhistoire, un séchoir à grains) et un puits (leur nom change avec les âges). Le bâtiment en main se pose d’un clic sur le terrain ; R le tourne, Échap le lâche.',
+      text: 'Un village commence par sa place, au centre (à la Préhistoire, un feu de camp) : une grande place de 3 × 3 cases, sans entrée, qu’on rejoint de tous côtés. On y fêtera le retour des expéditions, et elle grandit avec les âges. Autour, il faut de quoi loger, nourrir et abreuver : une maison, une ferme (à la Préhistoire, un séchoir à grains) et un puits (leur nom change avec les âges). Le bâtiment en main se pose d’un clic sur le terrain ; R le tourne, Échap le lâche.',
       tasks: ['la place', 'logement', 'nourriture', 'eau'],
       kindTask: (name: string, what: string) => `${name} (${what})`,
     },

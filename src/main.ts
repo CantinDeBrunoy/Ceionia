@@ -383,7 +383,7 @@ class Game implements UIHost {
     this.refreshHalos();
     this.ui.update();
     this.tutorial = new Tutorial(this.ui, this, !save);
-    this.ui.toast(save ? 'Bon retour dans votre village !' : 'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.');
+    this.ui.toast(save ? 'Bon retour dans votre village !' : w.buildings.size ? 'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.' : `Commencez par « ${this.sim.nameOf('gather')} », la place au centre du village (Bâtir › Vie & culture).`);
     requestAnimationFrame(() => this.frame());
   }
 

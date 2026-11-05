@@ -1,5 +1,5 @@
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
-import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, UPGRADES } from '../build/catalog';
+import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES } from '../build/catalog';
 import { Sim, NeedId } from '../sim/sim';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
@@ -489,7 +489,19 @@ export class UI {
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
+    // une partie neuve s'ouvre sur le rayon de la place du village, la première chose à bâtir (voir markFirst)
+    if (!host.world.buildings.size) { this.tab = 'build'; this.cat = KINDS.gather.cat; }
     this.renderDock();
+  }
+
+  /**
+   * Tant que rien n'est bâti, l'onglet Bâtir, le rayon Vie & culture et la vignette de la place du village luisent doucement :
+   * le joueur voit tout de suite par où commencer (les autres bâtiments restent grisés jusque-là)
+   */
+  private markFirst() {
+    const first = this.host.world.buildings.size === 0;
+    const sel = ['#modes [data-t="build"]', `#subcats [data-c="${KINDS.gather.cat}"]`, '#items [data-kind="gather"]'];
+    for (const s of sel) this.root.querySelector(s)?.classList.toggle('first', first);
   }
 
   // ---------------- Barre du bas (façon Anno 1800) ----------------
@@ -583,6 +595,7 @@ export class UI {
     const items = $('#items'), left = items.scrollLeft;
     items.innerHTML = html;
     items.scrollLeft = keep ? left : 0;
+    this.markFirst();
     this.bindTools(items);
     items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {
       const k = b.dataset.kind as KindId;
@@ -638,7 +651,7 @@ export class UI {
     const d = KINDS[k], h = this.host;
     if (d.minAge > h.sim.age) return `Disponible à l’âge : ${AGES[d.minAge].name}`;
     // un village neuf commence par sa place : le reste se bâtit autour
-    if (k !== 'gather' && h.world.buildings.size === 0) return `Posez d’abord ${h.sim.nameOf('gather').toLowerCase()}, la place du village`;
+    if (k !== 'gather' && h.world.buildings.size === 0) return `Posez d’abord ${h.sim.nameOf('gather').toLowerCase()}, la place au centre du village`;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
       return `Débloqué par l’expédition « ${m?.title ?? d.reqMission} »`;
@@ -673,7 +686,7 @@ export class UI {
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}`}
       ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois${cost.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`}`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? '<p class="keys">La flèche jaune montre l’entrée · R : tourner · Échap : lâcher</p>' : ''}`;
+      ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés'} · R : tourner · Échap : lâcher</p>` : ''}`;
   }
 
   /**
@@ -899,6 +912,7 @@ export class UI {
     if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
     else if (this.tilesNow() !== this.tilesKey) this.renderItems(true);
+    this.markFirst();
     if (this.host.tools.placeWhy !== this.infoWhy) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
     $('#ageSub').textContent = AGES[sim.age].tagline;
