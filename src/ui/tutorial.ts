@@ -50,8 +50,8 @@ export const TUTO_TEXT = {
     },
     place: {
       title: 'Premières constructions',
-      text: 'Il faut de quoi loger, nourrir et abreuver le village : une maison, une ferme (à la Préhistoire, un séchoir à grains) et un puits (leur nom change avec les âges). Le bâtiment en main se pose d’un clic sur le terrain ; R le tourne, Échap le lâche.',
-      tasks: ['logement', 'nourriture', 'eau'],
+      text: 'Un village commence par sa place (à la Préhistoire, un feu de camp) : on y fêtera le retour des expéditions, et elle grandit avec les âges. Autour, il faut de quoi loger, nourrir et abreuver : une maison, une ferme (à la Préhistoire, un séchoir à grains) et un puits (leur nom change avec les âges). Le bâtiment en main se pose d’un clic sur le terrain ; R le tourne, Échap le lâche.',
+      tasks: ['la place', 'logement', 'nourriture', 'eau'],
       kindTask: (name: string, what: string) => `${name} (${what})`,
     },
     work: {
@@ -155,7 +155,7 @@ export function menuToggle(): HTMLElement {
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const coarse = () => window.matchMedia('(pointer: coarse)').matches;
 /** les trois premiers bâtiments : de quoi loger, nourrir et abreuver */
-const FIRST: KindId[] = ['house', 'farm', 'well'];
+const FIRST: KindId[] = ['gather', 'house', 'farm', 'well'];
 /** puis ceux qui travaillent pour le village : le bûcheron et la carrière (le séchoir à grains est déjà dans les premiers) */
 const WORK: KindId[] = ['lumber', 'quarry'];
 

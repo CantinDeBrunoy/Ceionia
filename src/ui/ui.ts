@@ -638,6 +638,8 @@ export class UI {
   private lockOf(k: KindId): string | null {
     const d = KINDS[k], h = this.host;
     if (d.minAge > h.sim.age) return `Disponible à l’âge : ${AGES[d.minAge].name}`;
+    // un village neuf commence par sa place : le reste se bâtit autour
+    if (k !== 'gather' && h.world.buildings.size === 0) return `Posez d’abord ${h.sim.nameOf('gather').toLowerCase()}, la place du village`;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
       return `Débloqué par l’expédition « ${m?.title ?? d.reqMission} »`;
