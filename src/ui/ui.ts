@@ -1,5 +1,5 @@
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
-import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BuildCat, sizeOf, UPGRADES } from '../build/catalog';
+import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, UPGRADES } from '../build/catalog';
 import { Sim, NeedId } from '../sim/sim';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
@@ -18,7 +18,7 @@ import { CAMP_QUESTS } from '../sim/depths';
 import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE } from '../sim/economy';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
-import { ic, KIND_ICON, CAT_ICON, SEASON_ICONS } from './icons';
+import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 
 export interface UIHost {
@@ -120,13 +120,16 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
   move: { icon: 'hand', label: 'Déplacer', key: 'M' },
 };
 
+/** Ce que le jardin n'est pas : il ne produit rien */
+const DECO_NOTE = 'Décoratif : rend le village plus heureux, ne produit rien.';
+
 /** À quoi sert chaque outil (fiche au survol) */
 const TOOL_DESC: Record<string, string> = {
   none: 'Regarder le village. Un clic sur un volcan le réveille, sur une grotte ou une faille on descend sous terre.',
   raise: 'Monter le terrain sous le pinceau.', lower: 'Baisser le terrain sous le pinceau.', flatten: 'Aplanir à la hauteur du premier clic.',
   cliff: 'Tailler des falaises nettes, en gradins.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
   mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut.',
-  forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: 'Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille.',
+  forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: `Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille. ${DECO_NOTE}`,
   biome: 'Peindre un biome (tempéré, taïga, désert, tropical, marais) ou rendre la terre à son climat : le sol, les arbres, l’herbe, les bêtes et la neige suivent.',
   rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte vers le monde souterrain (un clic).', fissure: 'Ouvrir une faille vers le monde souterrain (un clic).',
   erase: 'Effacer forêts, champs, jardins et rochers.',
@@ -200,6 +203,14 @@ const NEED_RULE: Record<NeedId, string> = {
   joy: 'À partir de 6 habitants, chacun demande 0,3 de bien-être.',
   health: 'À partir de 15 habitants, chacun demande 0,2 de soins.',
 };
+/** Ce qu'un bâtiment apporte, en quelques mots (bois, pierre, nourriture, emplois…) : sa vignette et son info-bulle */
+const givesOf = (k: KindId, a: number): string[] => {
+  const out: string[] = [];
+  const y = YIELD[k];
+  for (const r of Object.keys(y ?? {}) as Resource[]) if (y![r]![a]) out.push(RES_META[r].label);
+  for (const g of MAIN.map((m) => GIVES.find((x) => x.k === m)!)) if (KINDS[k][g.k]?.[a]) out.push(g.label[0].toUpperCase() + g.label.slice(1));
+  return out;
+};
 /** Apport principal d'un bâtiment, sur sa vignette */
 const MAIN: (typeof GIVES)[number]['k'][] = ['housing', 'food', 'water', 'health', 'joy', 'jobs'];
 
@@ -264,7 +275,7 @@ function modal(root: HTMLElement, cls: string, title: string, body: string, onCl
 
 /** Onglet auquel appartient un outil ('none' reste dans l'onglet courant) */
 const tabOfTool = (tool: ToolId, current: string) =>
-  SCULPT_TOOLS.includes(tool) ? 'relief' : tool === 'field' ? 'build' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
+  SCULPT_TOOLS.includes(tool) ? 'relief' : tool === 'field' || (tool === 'garden' && current === 'build') ? 'build' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
 
 /** Ce que change un bâtiment débloqué par une expédition, dit au retour de l'équipe */
 const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
@@ -533,7 +544,7 @@ export class UI {
     const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label} : ${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
       : `<span class="mhint">${ic(t.icon, 16, 2)}${t.hint}</span>`;
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
       this.cat = b.dataset.c as BuildCat;
@@ -545,13 +556,26 @@ export class UI {
     let html: string;
     if (build) {
       // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue) ; ceux des âges
-      // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant
+      // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant. Les vignettes se rangent par groupe de
+      // lecture (Nourriture, Matériaux, Santé…), chacun sous son titre
       const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1), shut = (k: KindId) => +!!this.lockOf(k);
-      html = kinds.sort((p, q) => shut(p) - shut(q)).map((k) => {
-        const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0;
+      const tile = (k: KindId) => {
+        const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0, gv = givesOf(k, a);
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
-        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" aria-label="${d.names[a]}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span>${badge}</button>`;
-      }).join('') + (this.cat === 'prod' ? (() => { const i = this.toolInfo('field'); return `<button class="tile" data-tool="field" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span><i class="key">${i.key}</i></button>`; })() : '') || `<span class="mhint">Rien à bâtir dans ce rayon avant l’âge ${AGES[Math.min(age + 2, AGES.length - 1)].name}.</span>`;
+        const tip = `${d.names[a]}${gv.length ? ` : ${gv.join(', ').toLowerCase()}` : ''}`;
+        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" title="${tip}" aria-label="${tip}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span><small class="gv">${gv[0] ?? ''}</small>${badge}</button>`;
+      };
+      const toolTile = (id: string, sub: string, deco = false) => {
+        const i = this.toolInfo(id);
+        return `<button class="tile${deco ? ' deco' : ''}" data-tool="${id}" title="${i.label} : ${sub}" aria-label="${i.label} : ${sub}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span><small class="gv">${sub}</small>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`;
+      };
+      html = BUILD_SUBS[this.cat].map((sub) => {
+        const tiles = kinds.filter((k) => KIND_SUB[k] === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
+        // les champs nourrissent (groupe Nourriture) ; le jardin est un décor : bien en vue dans Parcs et décor
+        if (this.cat === 'prod' && sub.id === 'nourriture') tiles.push(toolTile('field', 'Nourriture'));
+        if (this.cat === 'life' && sub.id === 'parcs') tiles.unshift(toolTile('garden', 'Décor', true));
+        return tiles.length ? `<div class="grp" data-sub="${sub.id}"><div class="gh">${ic(SUB_ICON[sub.id] ?? 'leaf', 13, 2)}<span>${sub.label}</span></div><div class="gt">${tiles.join('')}</div></div>` : '';
+      }).join('') || `<span class="mhint">Rien à bâtir dans ce rayon avant l’âge ${AGES[Math.min(age + 2, AGES.length - 1)].name}.</span>`;
     } else {
       html = t.tools.map((id) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
     }
@@ -739,7 +763,7 @@ export class UI {
     const base = TOOL_INFO[id];
     if (id !== 'garden') return { ...base, desc: TOOL_DESC[id] ?? '' };
     const g = GARDEN_BY_AGE[Math.min(this.host.sim.age, GARDEN_BY_AGE.length - 1)];
-    return { ...base, icon: g.icon, label: g.label, desc: g.desc };
+    return { ...base, icon: g.icon, label: g.label, desc: `${g.desc} ${DECO_NOTE}` };
   }
 
   /**

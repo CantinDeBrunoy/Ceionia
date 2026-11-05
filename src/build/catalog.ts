@@ -414,6 +414,30 @@ export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'life', icon: '🎭', label: 'Vie & culture' },
 ];
 
+/** Groupes de lecture d'un rayon (titres dans la rangée de vignettes) */
+export interface BuildSub { id: string; label: string }
+export const BUILD_SUBS: Record<BuildCat, BuildSub[]> = {
+  home: [{ id: 'logis', label: 'Logements' }, { id: 'eau', label: 'Eau' }, { id: 'lumiere', label: 'Éclairage' }],
+  prod: [{ id: 'nourriture', label: 'Nourriture' }, { id: 'materiaux', label: 'Matériaux' }, { id: 'industrie', label: 'Industrie' }],
+  service: [{ id: 'sante', label: 'Santé' }, { id: 'savoir', label: 'Savoir' }, { id: 'securite', label: 'Sécurité' }, { id: 'transport', label: 'Transport' }],
+  life: [{ id: 'parcs', label: 'Parcs et décor' }, { id: 'detente', label: 'Détente' }, { id: 'culte', label: 'Culte' }, { id: 'monuments', label: 'Monuments' }],
+};
+
+/** Le groupe de chaque bâtiment dans son rayon (n'a aucun effet sur le jeu ni sur la sauvegarde) */
+export const KIND_SUB: Record<KindId, string> = {
+  house: 'logis', manor: 'logis', arcology: 'logis', well: 'eau', watertower: 'eau', lamp: 'lumiere',
+  farm: 'nourriture', vfarm: 'nourriture', pen: 'nourriture', stable: 'nourriture', apiary: 'nourriture', pier: 'nourriture',
+  lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
+  workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie',
+  health: 'sante', school: 'savoir', observatory: 'savoir', lab: 'savoir', research: 'savoir',
+  police: 'securite', fire: 'securite', outpost: 'securite', senate: 'securite',
+  station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
+  gather: 'parcs',
+  tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
+  waterpark: 'detente', funfair: 'detente', alpine: 'detente', aerodrome: 'detente',
+  temple: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments',
+};
+
 export interface AgeDef {
   name: string;
   tagline: string;
