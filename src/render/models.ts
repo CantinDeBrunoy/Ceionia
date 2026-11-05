@@ -2311,6 +2311,65 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
   } else modernOffice(p, o.v);
 }
 
+// ---------- Parcs et places : jardins à la française ----------
+
+/** Arbre taillé : tronc, couronne en cube, en boule ou en cône (if), à la hauteur y */
+function clipped(p: Parts, x: number, z: number, shape: 'cube' | 'ball' | 'cone', s = 1, y = 0.012, leaf = 0x4f8a4e) {
+  if (shape === 'cone') { p.cyl(0.03 * s, 0.035 * s, 0.03, 6, x, y, z, 0x9a8a72); p.cone(0.05 * s, 0.2 * s, 7, x, y + 0.02, z, leaf); p.cone(0.03 * s, 0.08 * s, 6, x, y + 0.19 * s, z, dark(leaf, 1.08)); return; }
+  p.cyl(0.006 * s, 0.009 * s, 0.13 * s, 5, x, y, z, 0x6a5040);
+  if (shape === 'cube') { p.box(0.11 * s, 0.1 * s, 0.11 * s, x, y + 0.12 * s, z, leaf); p.box(0.1 * s, 0.012, 0.1 * s, x, y + 0.22 * s, z, dark(leaf, 1.1)); }
+  else { p.sphere(0.065 * s, x, y + 0.17 * s, z, leaf, 1); }
+}
+
+/**
+ * Parterre à la française (w × d) centré en (x, z), à la hauteur y : bordure de buis taillé, broderie de buis en croix de
+ * Saint-André autour d'une boule, compartiments fleuris de deux couleurs, gravier tout autour
+ */
+function parterreFr(p: Parts, x: number, z: number, w: number, d: number, seed: number, y = 0.012, flowers = [0xd84a5a, 0xf2d25a]) {
+  const box = 0x4f8a4e, hh = 0.028;
+  p.box(w, 0.006, d, x, y, z, 0x7a5a42);
+  // les compartiments fleuris, d'une couleur sur deux
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(w / 2 - 0.03, 0.012, d / 2 - 0.03, x + sx * w / 4, y + 0.006, z + sz * d / 4, flowers[((sx * sz > 0 ? 1 : 0) + seed) % 2]);
+  // la bordure, la croix et le sautoir de buis, la boule au centre
+  for (const s of [-1, 1]) { p.box(w, hh, 0.016, x, y, z + s * (d / 2 - 0.008), box); p.box(0.016, hh, d, x + s * (w / 2 - 0.008), y, z, box); }
+  p.box(w - 0.02, hh * 0.8, 0.012, x, y, z, box); p.box(0.012, hh * 0.8, d - 0.02, x, y, z, box);
+  p.box(0.05, hh * 1.4, 0.05, x, y, z, dark(box, 1.06), Math.PI / 4);
+}
+
+/**
+ * Fontaine à la française en (x, z), de rayon r : bassin octogonal à margelle de pierre claire et son eau, piédestal, vasque
+ * et sa petite eau, gerbe centrale, couronne de jets qui retombent dans le bassin, quatre bornes et leurs mascarons
+ */
+function fountainFr(p: Parts, x: number, z: number, r: number, y = 0.012, stone = 0xe8e0cc) {
+  p.cyl(r + 0.03, r + 0.035, 0.04, 8, x, y, z, dark(stone, 0.9), false, Math.PI / 8);
+  p.add(new THREE.TorusGeometry(r + 0.016, 0.016, 3, 8).rotateX(Math.PI / 2).rotateY(Math.PI / 8), x, y + 0.046, z, stone);
+  waterPool(p, x, y + 0.046, z, r, 10);
+  p.cyl(0.03, 0.045, 0.12, 8, x, y + 0.04, z, stone); p.cyl(0.05, 0.03, 0.02, 8, x, y + 0.16, z, stone);
+  p.cyl(r * 0.42, r * 0.2, 0.04, 10, x, y + 0.17, z, stone); p.cyl(r * 0.38, r * 0.38, 0.004, 10, x, y + 0.205, z, 0x5aa8c8);
+  p.cyl(0.016, 0.022, 0.06, 6, x, y + 0.2, z, stone); p.sphere(0.02, x, y + 0.26, z, stone);
+  waterJet(p, x, y + 0.27, z, 0.12);
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + 0.3, jx = x + Math.cos(a) * r * 0.82, jz = z + Math.sin(a) * r * 0.82;
+    p.add(new THREE.CylinderGeometry(0.0025, 0.004, r * 0.5, 4).translate(0, r * 0.25, 0), jx, y + 0.05, jz, 0xd8f2fa, 0, false, Math.sin(a) * 0.7, -Math.cos(a) * 0.7);
+  }
+  for (let k = 0; k < 4; k++) { const a = (k / 4) * Math.PI * 2 + Math.PI / 4; p.box(0.03, 0.05, 0.03, x + Math.cos(a) * (r + 0.03), y + 0.05, z + Math.sin(a) * (r + 0.03), stone, -a); }
+}
+
+/** Réverbère à gaz des parcs, léger : fût de fonte, lanterne allumée la nuit, chapeau */
+function gasLamp(p: Parts, x: number, z: number, h = 0.3, y = 0.012) {
+  p.cyl(0.006, 0.01, h, 4, x, y, z, 0x2e3632);
+  p.box(0.03, 0.04, 0.03, x, y + h, z, 0xffe2a0, 0, true);
+  p.pyramid(0.044, 0.03, 0.044, x, y + h + 0.04, z, 0x2e3632);
+}
+
+/** Banc de parc à pieds de fonte et lattes de bois peint, le long de x une fois tourné de ry (dossier vers -z) */
+function parkBench(p: Parts, x: number, z: number, ry = 0, wood = 0x5a8a5a, y = 0.012) {
+  const c = Math.cos(ry), s = Math.sin(ry), iron = 0x2e3632;
+  for (const d of [-0.06, 0.06]) { p.box(0.01, 0.045, 0.045, x + c * d, y, z - s * d, iron, ry); p.box(0.01, 0.06, 0.01, x + c * d - s * 0.02, y + 0.04, z - s * d - c * 0.02, iron, ry); }
+  p.box(0.15, 0.008, 0.036, x - s * 0.002, y + 0.045, z - c * 0.002, wood, ry);
+  p.box(0.15, 0.03, 0.006, x - s * 0.024, y + 0.068, z - c * 0.024, wood, ry);
+}
+
 function gather(p: Parts, age: number, o: ModelOpts) {
   if (age === 0) {
     p.cyl(0.14, 0.15, 0.015, 8, 0, 0, 0, dark(C.dirt, 0.55));
@@ -2378,26 +2437,47 @@ function gather(p: Parts, age: number, o: ModelOpts) {
       p.box(0.07, 0.06, 0.07, x + 0.18, 0, z + 0.12, 0xb48a5e, 0.4);
     });
   } else if (age === 3) {
-    // le square : pelouse, allées de gravier en croix, bassin et son jet, quatre arbres ronds, bancs, réverbères, massifs, promeneurs
-    p.box(0.92, 0.008, 0.92, 0, 0, 0, 0x8fc47e);
-    p.box(0.12, 0.004, 0.92, 0, 0.008, 0, 0xe2d6bc); p.box(0.92, 0.004, 0.12, 0, 0.008, 0, 0xe2d6bc);
-    p.cyl(0.17, 0.18, 0.05, 14, 0, 0.008, 0, C.stone); waterPool(p, 0, 0.052 + 0.006, 0, 0.15, 14);
-    p.cyl(0.02, 0.03, 0.1, 6, 0, 0.05, 0, C.stone); p.cyl(0.05, 0.03, 0.02, 8, 0, 0.15, 0, C.stone); p.cyl(0.005, 0.012, 0.1, 5, 0, 0.17, 0, 0xcfeaf4);
-    for (const [x, z] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) tree(p, x, z, 1.15);
-    for (const [x, z, r] of [[0, -0.36, 0], [0.36, 0.02, Math.PI / 2]] as number[][]) {
-      p.box(0.18, 0.016, 0.06, x, 0.05, z, C.wood, r); p.box(0.18, 0.05, 0.012, x - (r ? 0.03 : 0), 0.066, z - (r ? 0 : 0.03), C.wood, r);
-      for (const d of [-0.07, 0.07]) p.box(0.012, 0.05, 0.05, x + (r ? 0 : d), 0.008, z + (r ? d : 0), 0x3c4a44, r);
+    // le parc à la française : allées de gravier blond en croix et en rond-point autour de la fontaine, bordées de pierre ;
+    // quatre parterres de broderie aux compartiments fleuris ; ifs taillés en cône aux angles, tilleuls taillés en cube le
+    // long des bords ; bancs de fonte, réverbères à gaz, deux statues dans l'axe ; promeneurs, nourrice et landau, enfant au
+    // cerceau, pigeons
+    const gravel = 0xe8dcc0, edge = 0xd2c8b0;
+    p.box(0.94, 0.008, 0.94, 0, 0, 0, 0x8fc47e);
+    p.box(0.94, 0.004, 0.13, 0, 0.008, 0, gravel); p.box(0.13, 0.004, 0.94, 0, 0.008, 0, gravel);
+    p.cyl(0.235, 0.235, 0.004, 16, 0, 0.008, 0, gravel);
+    for (const s of [-1, 1]) for (const e of [-1, 1]) { p.box(0.006, 0.008, 0.24, s * 0.068, 0.008, e * 0.35, edge); p.box(0.24, 0.008, 0.006, e * 0.35, 0.008, s * 0.068, edge); }
+    fountainFr(p, 0, 0, 0.15, 0.012);
+    const fl = [[0xd84a5a, 0xf2d25a], [0xb48ae0, 0xf4f2ee], [0xf28a5e, 0xd84a5a], [0xf2d25a, 0x8a6ad8]];
+    let k = 0;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      parterreFr(p, sx * 0.29, sz * 0.29, 0.2, 0.2, k, 0.012, fl[(k + o.v) % 4]);
+      clipped(p, sx * 0.43, sz * 0.43, 'cone', 0.85);
+      clipped(p, sx * 0.29, sz * 0.44, 'cube', 0.75);
+      gasLamp(p, sx * 0.158, sz * 0.158, 0.26);
+      k++;
     }
-    lampPost(p, -0.16, -0.16, 0.3); lampPost(p, 0.16, 0.16, 0.3);
-    for (const [x, z] of [[-0.42, 0.14], [-0.14, 0.42], [0.42, -0.14], [0.14, -0.42]]) for (let k = 0; k < 3; k++) p.sphere(0.025, x + (Math.abs(x) > 0.3 ? 0 : (k - 1) * 0.05), 0.02, z + (Math.abs(z) > 0.3 ? 0 : (k - 1) * 0.05), [C.pink, C.butter, 0xd84a3e][k], 0, 0.7);
-    figure(p, -0.06, 0.26, 0x3c3c48, Math.PI); figure(p, 0.2, -0.1, 0x8a3a3a, 2.2); seated(p, 0.02, 0.066, -0.36, 0, 0x5a4a6a);
-  } else {
+    // les bancs le long de l'allée nord-sud, tournés vers elle
+    for (const sx of [-1, 1]) parkBench(p, sx * 0.1, sx * 0.36, sx > 0 ? -Math.PI / 2 : Math.PI / 2);
+    // les deux statues sur leurs socles dans l'axe est-ouest
+    statue(p, 0.4, 0.012, 0, -Math.PI / 2, 1.1);
+    p.box(0.06, 0.06, 0.06, -0.4, 0.012, 0, 0xd8d0bc); p.cyl(0.02, 0.032, 0.06, 8, -0.4, 0.072, 0, 0xe8e0cc); p.sphere(0.024, -0.4, 0.14, 0, 0x6fa85a);
+    // les promeneurs : un couple, un homme assis qui lit, la nourrice et son landau, l'enfant au cerceau
+    figure(p, 0.03, 0.3, 0x8a3a5a, Math.PI, false, 0x8a5a3a);
+    seated(p, 0.1, 0.06, -0.36, -Math.PI / 2, 0x5a4a6a);
+    figure(p, 0.03, -0.27, 0x2a3a5a, 0.2, false, 0x2a2420);
+    p.box(0.05, 0.035, 0.07, 0.03, 0.03, -0.2, 0x2a2e3a); p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.05, 8, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), 0.03, 0.065, -0.225, 0x2a2e3a);
+    for (const s of [-1, 1]) p.box(0.006, 0.026, 0.07, 0.03 + s * 0.027, 0.012, -0.2, 0x1e1e22);
+    figure(p, -0.25, 0.04, 0xd84a3e, 1.2, false, 0xc8a070, 'run');
+    p.add(new THREE.TorusGeometry(0.03, 0.003, 3, 12), -0.2, 0.04, 0.06, 0xa8783a, 1.2);
+    for (let i = 0; i < 2; i++) { const x = 0.16 + hash2(i, 1, 78) * 0.1, z = -0.06 + hash2(i, 2, 78) * 0.12, r = hash2(i, 3, 78) * 6; p.add(new THREE.IcosahedronGeometry(0.011, 0).scale(1, 0.8, 1.4), x, 0.02, z, i % 2 ? 0x8a8f9a : 0xa8acb4, r); }  } else {
     // la place : dalles claires, bassin et ses jets, arbres en bacs, bancs, lampadaires, passants
     p.box(0.92, 0.01, 0.92, 0, 0, 0, 0xe2ded6);
     for (let i = 0; i < 7; i++) { p.box(0.92, 0.003, 0.006, 0, 0.01, -0.42 + i * 0.14, 0xc8c4bc); p.box(0.006, 0.003, 0.92, -0.42 + i * 0.14, 0.01, 0, 0xc8c4bc); }
     p.box(0.34, 0.04, 0.34, 0, 0.01, 0, 0xb8bcc4); waterRect(p, 0, 0.046 + 0.006, 0, 0.3, 0.3, 0);
     for (const [x, z] of [[-0.08, -0.08], [0.08, -0.08], [-0.08, 0.08], [0.08, 0.08], [0, 0]]) p.cyl(0.004, 0.009, x || z ? 0.1 : 0.16, 4, x, 0.05, z, 0xcfeaf4);
-    for (const [x, z] of [[-0.34, -0.34], [0.34, -0.34], [-0.34, 0.34], [0.34, 0.34]]) { p.box(0.13, 0.06, 0.13, x, 0.01, z, 0x8a8a8a); tree(p, x, z, 1.05); }
+    for (const [x, z] of [[-0.34, -0.34], [0.34, -0.34], [-0.34, 0.34], [0.34, 0.34]]) { p.box(0.13, 0.06, 0.13, x, 0.01, z, 0x8a8a8a); clipped(p, x, z, 'cube', 1.35, 0.07, 0x5a9452); }
+    // deux parterres géométriques de lavande et de rosiers, bordés de buis
+    parterreFr(p, 0.27, -0.2, 0.15, 0.14, o.v, 0.01, [0x9a7ad8, 0xf2f0ea]); parterreFr(p, -0.31, 0.22, 0.15, 0.14, o.v + 1, 0.01, [0xd84a6e, 0x9a7ad8]);
     for (const [x, z, r] of [[0, 0.3, 0], [0, -0.3, Math.PI], [0.3, 0, Math.PI / 2]] as number[][]) { p.box(0.2, 0.02, 0.06, x, 0.05, z, C.white, r); for (const d of [-0.07, 0.07]) p.box(0.02, 0.04, 0.05, x + (r === Math.PI / 2 ? 0 : d), 0.01, z + (r === Math.PI / 2 ? d : 0), 0x6b7280, r); }
     for (const x of [-0.42, 0.42]) { p.cyl(0.007, 0.007, 0.34, 5, x, 0.01, 0, 0x8a9098); p.box(0.05, 0.01, 0.05, x, 0.35, 0, 0xfff1c9, 0, true); }
     figure(p, -0.2, 0.18, 0xd8786c, 2.8); figure(p, 0.18, 0.2, 0x3a6ab8, -2.4); seated(p, -0.04, 0.07, -0.3, Math.PI, 0x6a8a4a);
@@ -8203,8 +8283,8 @@ const F = {
 const NEONS = [F.neon, F.pink, F.mint, F.gold];
 
 /** Anneau lumineux couché, de rayon r, à la hauteur y */
-function neonRing(p: Parts, r: number, y: number, x: number, z: number, color: number, tube = 0.006) {
-  p.add(new THREE.TorusGeometry(r, tube, 4, 28).rotateX(Math.PI / 2), x, y, z, color, 0, 'neon');
+function neonRing(p: Parts, r: number, y: number, x: number, z: number, color: number, tube = 0.006, seg = 28) {
+  p.add(new THREE.TorusGeometry(r, tube, 4, seg).rotateX(Math.PI / 2), x, y, z, color, 0, 'neon');
 }
 
 /** Jardin suspendu posé à la hauteur y : pelouse, arbustes ronds et un arbre */
@@ -8504,19 +8584,29 @@ function futureLamp(p: Parts) {
  */
 function futureGather(p: Parts, o: ModelOpts) {
   p.cyl(0.44, 0.46, 0.02, 18, 0, 0, 0, F.pearl);
-  for (const r of [0.2, 0.36]) neonRing(p, r, 0.022, 0, 0, NEONS[o.v % 4], 0.004);
+  for (const r of [0.2, 0.36]) neonRing(p, r, 0.022, 0, 0, NEONS[o.v % 4], 0.004, 18);
+  // le bassin rond au pied du globe, sa margelle blanche, ses jets que la nuit teinte de néon
+  p.cyl(0.18, 0.185, 0.035, 14, 0, 0.02, 0, F.white);
+  waterPool(p, 0, 0.055, 0, 0.16, 10);
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; p.add(new THREE.CylinderGeometry(0.002, 0.004, 0.11, 4).translate(0, 0.055, 0), Math.cos(a) * 0.14, 0.05, Math.sin(a) * 0.14, k % 2 ? 0xbff8ff : 0xffc8f0, 0, 'neon', -Math.sin(a) * 0.45, Math.cos(a) * 0.45); }
+  // les parterres géométriques entre les bancs : buis taillé, fleurs, liseré lumineux
+  for (let k = 0; k < 3; k++) {
+    const a = k * 2.094 + 0.5 + 1.6, x = Math.cos(a) * 0.3, z = Math.sin(a) * 0.3;
+    parterreFr(p, x, z, 0.13, 0.13, k + o.v, 0.02, [[0xff8ad8, 0xf4f6f8], [0x9fe8f0, 0xb48ae0], [0xffd25a, 0xff8ad8]][k]);
+    p.box(0.136, 0.004, 0.136, x, 0.02, z, NEONS[(k + o.v) % 4], 0, 'neon');
+  }
   p.cyl(0.06, 0.08, 0.1, 10, 0, 0.02, 0, F.white);
   const g = turning([0, 0.3, 0], [0, 1, 0], 0.12);
-  for (let k = 0; k < 4; k++) g.add(new THREE.TorusGeometry(0.12, 0.005, 4, 20), 0, 0, 0, F.neon, k * Math.PI / 4, 'neon');
-  g.add(new THREE.TorusGeometry(0.12, 0.005, 4, 20).rotateX(Math.PI / 2), 0, 0, 0, F.neon, 0, 'neon');
+  for (let k = 0; k < 4; k++) g.add(new THREE.TorusGeometry(0.12, 0.005, 3, 16), 0, 0, 0, F.neon, k * Math.PI / 4, 'neon');
+  g.add(new THREE.TorusGeometry(0.12, 0.005, 3, 16).rotateX(Math.PI / 2), 0, 0, 0, F.neon, 0, 'neon');
   g.sphere(0.05, 0, 0, 0, F.mint);
   for (let k = 0; k < 3; k++) {
     const a = k * 2.094 + 0.5;
     p.add(new THREE.TorusGeometry(0.3, 0.02, 4, 10, 0.7).rotateX(Math.PI / 2), 0, 0.05, 0, F.white, a);
-    tree(p, Math.cos(a + 1) * 0.33, Math.sin(a + 1) * 0.33, 0.7, F.leaf);
+    clipped(p, Math.cos(a + 1) * 0.33, Math.sin(a + 1) * 0.33, 'ball', 1.1, 0.07, F.leaf2);
     p.cyl(0.05, 0.05, 0.05, 8, Math.cos(a + 1) * 0.33, 0.02, Math.sin(a + 1) * 0.33, F.white);
   }
-  for (const [x, z, c, r] of [[-0.18, 0.26, 0x9fe8f0, 0.4], [0.24, -0.12, 0xd8c8f4, 2.3], [0.06, 0.3, 0xf4f6f8, -0.3]] as number[][]) figure(p, x, z, c, r);
+  for (const [x, z, c, r] of [[-0.02, 0.38, 0x9fe8f0, 0.4], [0.24, -0.16, 0xd8c8f4, 2.3], [0.1, 0.27, 0xf4f6f8, -0.3]] as number[][]) figure(p, x, z, c, r);
 }
 
 /**
