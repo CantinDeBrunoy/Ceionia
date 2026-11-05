@@ -40,7 +40,8 @@ import { Tutorial } from './ui/tutorial';
 import { AGES, KINDS, Building, sizeOf } from './build/catalog';
 import { MISSIONS, VICTORY } from './sim/missions';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
-import { L_GONE } from './render/expeditionScenes';
+import { L_GONE, L_LIFT } from './render/expeditionScenes';
+import { Parade, Spot } from './render/parade';
 import { Fires } from './render/fires';
 import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
@@ -69,6 +70,8 @@ renderer.toneMappingExposure = 1.0;
 const audio = new AudioEngine();
 /** distance de la caméra quand elle revient sur le village (assez près pour reconnaître ses maisons) */
 const VILLAGE_DIST = 30;
+/** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
+const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
 
 class Game implements UIHost {
@@ -122,8 +125,13 @@ class Game implements UIHost {
   private feted = new Set<number>();
   /** la caméra a déjà filé sur un volcan en éruption (la première fois seulement) */
   private volcanoSeen = false;
-  /** le grand départ des colons : la foule qui les acclame (au cœur du village, puis au pas de tir), le voyage montré */
-  private farewell: { id: number; crowd: number[]; at: string; voyage: boolean } | null = null;
+  /** la parade du grand départ : les haies de foule, le char et les confettis le long de la route jusqu'au pas de tir */
+  parade: Parade;
+  /**
+   * le grand départ des colons : la foule qui fait la haie le long de la route (`spots` : ses places, `sent` : combien y sont déjà
+   * envoyés), l'instant où la caméra a lâché la fusée (`rel`, en temps de l'expédition, `relAt`, en temps réel), le voyage montré
+   */
+  private farewell: { id: number; crowd: number[]; spots: Spot[]; sent: number; rel: number | null; relAt: number; voyage: boolean } | null = null;
   pens: PenView;
   /** flaques de brut sur les gisements de pétrole */
   seeps: OilSeeps;
@@ -268,6 +276,8 @@ class Game implements UIHost {
     this.fest = new Festivities(w);
     this.fest.onBang = (k) => this.audio.sfxBang(k);
     this.fest.onFeast = () => this.audio.sfxFeast();
+    this.parade = new Parade(w);
+    this.parade.onPop = () => this.audio.sfxBang(0.12);
     this.expView.fx.onClash = (k) => this.audio.sfxClash(k);
     // le train descend des mineurs au pied de la grotte et remonte minerai et pierre des galeries tenues
     this.railway = new Railway(w, this.agents, this.expeditions, () => this.time.dayLen);
@@ -292,7 +302,7 @@ class Game implements UIHost {
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.pens.group, this.railView.group, this.seeps.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
     setTimeout(() => void loadUnder(), 4000);
@@ -326,7 +336,7 @@ class Game implements UIHost {
     this.expeditions.onReport = (r) => {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
-      if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: 'le village', pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days });
+      if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: 'le village', pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
       else this.ui.showReport(r);
       this.ui.update();
     };
@@ -462,33 +472,55 @@ class Game implements UIHost {
   }
 
   /**
-   * Le grand départ des colons : tout le village sort les acclamer, d'abord en cercle autour d'eux au cœur du village (fête et
-   * feu d'artifice), puis autour du pas de tir pendant l'embarquement et le décollage. La fusée sortie du ciel, le voyage se
-   * montre en plein écran (le jeu attend), puis vient l'écran de fin
+   * Le grand départ des colons, en carnaval : tout le village se range en deux haies le long de la route du cœur du village au
+   * pas de tir (cases de route de préférence, tracé direct sans route), parmi les fanions, les musiciens, les confettis et un
+   * char à plumes qui précède les colons ; ils défilent entre les haies jusqu'à la fusée. Dès que la caméra lâche la fusée qui
+   * s'élève (ou qu'on ne la suit plus), la parade éclate (feu d'artifice, confettis à foison) et, quelques secondes après, le
+   * voyage se montre en plein écran (le jeu attend), puis vient l'écran de fin
    */
-  private stepFarewell() {
+  private stepFarewell(dt: number) {
     const a = this.expeditions.active.find((e) => e.m.farewell && !e.fromCamp), ag = this.agents;
     let f = this.farewell;
-    if (!a) { if (f) { ag.dismiss(f.crowd); this.farewell = null; } return; }
+    if (!a) { if (f) { ag.dismiss(f.crowd); this.farewell = null; } this.parade.stop(); return; }
     if (!f || f.id !== a.id) {
       if (f) ag.dismiss(f.crowd);
-      f = this.farewell = { id: a.id, crowd: ag.recruit(Math.min(30, ag.available())) ?? [], at: '', voyage: false };
+      const crowd = ag.recruit(Math.min(60, ag.available())) ?? [];
+      // la route des colons : les cases que suivrait leur marche, du cœur du village au pas de tir (le tracé direct sans chemin)
+      const cell = (p: number[]) => Math.min(N - 1, Math.max(0, Math.floor(p[1]))) * N + Math.min(N - 1, Math.max(0, Math.floor(p[0])));
+      const path = ag.findPath(cell(a.base), cell(a.dest)) ?? [];
+      const route: [number, number][] = [[a.base[0], a.base[1]], ...path.slice(0, -1).map((c): [number, number] => [(c % N) + 0.5, Math.floor(c / N) + 0.5]), [a.dest[0], a.dest[1]]];
+      const spots = this.parade.start(route, [a.base[0], a.base[1]], [a.dest[0], a.dest[1]], this.sim.age, crowd.length);
+      f = this.farewell = { id: a.id, crowd, spots, sent: 0, rel: null, relAt: 0, voyage: false };
       this.fest.start(a.base[0], a.base[1], this.sim.age);
       this.ui.toast(`${a.m.icon} Tout le village sort dire adieu aux colons !`);
     }
-    // la foule se range en cercle, tournée vers les colons, et les acclame une fois en place
-    const at = a.phase === 'gather' ? 'base' : 'pad';
-    if (f.at !== at) {
-      f.at = at;
-      const [cx, cz] = at === 'base' ? a.base : a.dest, r0 = at === 'base' ? 1.6 : 4;
-      f.crowd.forEach((id, i) => {
-        const ang = i * 2.4, r = r0 + (i % 3) * 0.7, x = cx + Math.cos(ang) * r, z = cz + Math.sin(ang) * r;
-        ag.memberGo(id, x, z, Math.atan2(cx - x, cz - z));
-      });
+    // la foule gagne sa place le long de la route, quelques-uns par image (chaque trajet se calcule) ; à défaut de place, elle
+    // se range en cercle près du cœur du village
+    for (let n = 0; n < 6 && f.sent < f.crowd.length; n++, f.sent++) {
+      const i = f.sent, sp = f.spots[i];
+      if (sp) ag.memberGo(f.crowd[i], sp.x, sp.z, sp.face);
+      else {
+        const ang = i * 2.4, r = 2.8 + (i % 4) * 0.5, x = a.base[0] + Math.cos(ang) * r, z = a.base[1] + Math.sin(ang) * r;
+        ag.memberGo(f.crowd[i], x, z, Math.atan2(a.base[0] - x, a.base[1] - z));
+      }
     }
-    for (const id of f.crowd) if (ag.memberDone(id)) ag.partyAct([id], 'cheer');
-    // la fusée a quitté le ciel : le grand voyage, plein écran et en temps réel, puis le récit (l'écran de fin)
-    if (!f.voyage && a.phase === 'work' && a.t >= (a.c.work + a.extra) * L_GONE) {
+    for (let i = 0; i < f.sent; i++) if (ag.memberDone(f.crowd[i])) ag.partyAct([f.crowd[i]], 'cheer');
+    // la caméra lâche la fusée qui s'élève : elle va voir la parade, et la fête éclate
+    const k = a.phase === 'work' ? a.t / Math.max(1, a.c.work + a.extra) : 0;
+    if (f.rel === null && a.phase === 'work' && (k >= L_LIFT + 0.07 || (k >= L_LIFT && this.following !== a.id))) {
+      f.rel = a.t; f.relAt = performance.now();
+      if (this.following === a.id && this.mode === 'surface') {
+        this.follow(null);
+        const [mx, mz] = this.parade.middle();
+        this.cam.goTo(mx, mz, Math.min(40, Math.max(18, this.parade.length * 0.8)));
+      }
+      this.fest.start(a.base[0], a.base[1], this.sim.age);
+      this.fest.start(a.base[0], a.base[1], this.sim.age);
+    }
+    const lead = ag.partyPositions(a.party)[0];
+    this.parade.update(dt, lead ? [lead[0], lead[1]] : null, f.rel !== null ? 1 : a.phase === 'gather' ? 0.3 : 0.6);
+    // quelques secondes de parade, puis le grand voyage, plein écran et en temps réel, puis le récit (l'écran de fin)
+    if (!f.voyage && a.phase === 'work' && f.rel !== null && ((a.t - f.rel >= PARADE_G && performance.now() - f.relAt >= PARADE_MS) || k >= 0.92 || a.t >= (a.c.work + a.extra) * L_GONE)) {
       f.voyage = true;
       const was = this.time.paused;
       this.time.paused = true;
@@ -972,7 +1004,7 @@ class Game implements UIHost {
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
     this.expeditions.update(gdt);
-    this.stepFarewell();
+    this.stepFarewell(dt);
     this.railway.update(gdt);
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);
