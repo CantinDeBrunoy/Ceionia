@@ -280,6 +280,80 @@ describe('comptes rendus des expéditions', () => {
   });
 });
 
+describe('le repérage des profondeurs et l’éclaireur envoyé devant', () => {
+  /** Un village de l'âge médiéval avec son avant-poste devant une grotte ou une faille, et le monde souterrain */
+  function withPost() {
+    const v = village(2);
+    v.ex.under = new Underground(v.w);
+    const free = () => { for (let zz = 10; zz < N - 10; zz++) for (let xx = 10; xx < N - 10; xx++) if (v.w.canPlace('outpost', xx, zz) === null) return [xx, zz]; throw new Error('pas de place'); };
+    const [px, pz] = free();
+    v.w.place('outpost', px, pz, 0, true, 2, false);
+    expect(v.ex.outposts().length).toBe(1);
+    return v;
+  }
+  const hidden = (v: ReturnType<typeof village>, a: ActiveExpedition) => a.party.filter((id) => v.agents.agents.find((g) => g.id === id)!.hidden).length;
+
+  it('les éclaireurs (pas une troupe) quittent le village, gagnent l’avant-poste, descendent dans les galeries puis remontent', () => {
+    const v = withPost(), scout = mission('scout'), post = v.ex.outposts()[0];
+    const a = v.ex.start(scout, 0, 2)!;
+    expect(a).toBeTruthy();
+    expect(a.c.troop).toBeUndefined();
+    expect(a.party.length).toBe(2);
+    // ils vont à l'avant-poste, et descendront par l'entrée qu'il garde
+    expect(Math.hypot(a.dest[0] - post.b.x - 1, a.dest[1] - post.b.z - 1)).toBeLessThan(3);
+    expect(a.entry).toBe(post.entry);
+    expect(a.targets.length).toBe(1);
+    expect(a.front).toBe(a.entry);
+    expect(a.ambush).toEqual([]);
+    // ils partent vraiment : ils marchent, loin du village
+    const start = v.agents.partyPositions(a.party).map(([x, z]) => [x, z]);
+    play(v, () => a.phase === 'work', 2, () => 0);
+    expect(a.phase).toBe('work');
+    const moved = a.party.map((id, i) => { const g = v.agents.agents.find((x) => x.id === id)!; return Math.hypot(g.x - start[i][0], g.z - start[i][1]); });
+    expect(Math.min(...moved)).toBeGreaterThan(2);
+    // sous terre : on ne les voit plus en surface ; ils remontent ensuite et rentrent à pied
+    expect(hidden(v, a)).toBe(a.party.length);
+    play(v, () => a.phase === 'back', 2, () => 0);
+    play(v, () => a.phase !== 'back' || a.t > 2, 2, () => 0);
+    expect(hidden(v, a)).toBe(0);
+    play(v, () => !v.ex.active.includes(a), 2, () => 0);
+    expect(v.ex.active.includes(a)).toBe(false);
+  }, 120000);
+
+  it('sans avant-poste, ils descendent par la grotte trouvée ; sans monde souterrain, la scène reste en surface', () => {
+    const v = village(2);
+    v.ex.under = new Underground(v.w);
+    const a = v.ex.start(mission('scout'), 0, 2)!;
+    expect(a.site).toBe('cave');
+    expect(a.entry).toBeGreaterThanOrEqual(0);
+    const plain = village(2), b = plain.ex.start(mission('scout'), 0, 2)!;
+    expect(b.entry).toBe(-1);
+  });
+
+  it('« Envoyer un éclaireur devant » : la troupe s’arrête, l’éclaireur part et revient, puis la troupe repart', () => {
+    const v = withPost(), deep = mission('deep'), armor = deep.choices.findIndex((c) => c.troop === 'armor');
+    const a = v.ex.start(deep, armor, 2)!;
+    play(v, () => a.phase === 'work', 2, () => 0);
+    if (a.wait) v.ex.decide(a, 0);
+    while (a.hold > 0) play(v, () => a.hold <= 0, 2);
+    const cross = EVENT_BY.crossroads, i = cross.options.findIndex((o) => o.scout);
+    expect(cross.options[i].label).toBe('Envoyer un éclaireur devant');
+    a.wait = cross; a.seen.push(cross.id); a.picks.push(-1);
+    const t0 = a.t;
+    expect(v.ex.decide(a, i)).toBe(true);
+    expect(a.hold).toBeGreaterThan(0);
+    expect(a.scout).toEqual({ t: 0, dur: a.hold });
+    // la troupe ne bouge plus pendant que l'éclaireur va et vient
+    for (let k = 0; k < 40; k++) { v.agents.update(0.05, 10, 2, false, 40, 0); v.ex.update(0.05); }
+    expect(a.t).toBeCloseTo(t0, 5);
+    expect(a.scout!.t).toBeGreaterThan(1.5);
+    play(v, () => a.hold <= 0, 2);
+    expect(a.scout ?? null).toBeNull();
+    for (let k = 0; k < 20; k++) { v.agents.update(0.05, 10, 2, false, 40, 0); v.ex.update(0.05); }
+    expect(a.t).toBeGreaterThan(t0);
+  }, 120000);
+});
+
 /** De quoi dessiner les petites textures des scènes (brume, étincelles) hors du navigateur */
 function stubCanvas() {
   const ctx = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: '' };
