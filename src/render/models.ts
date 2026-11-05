@@ -5288,28 +5288,64 @@ function ellipseRing(p: Parts, rx: number, rz: number, y: number, w: number, col
   p.add(new THREE.TorusGeometry(1, w, 3, 48).rotateX(Math.PI / 2).scale(rx, 1, rz), x, y, z, color);
 }
 
-/** Avion de ligne, nez vers +z, posé à y : fuselage blanc à bandeau bleu, hublots, ailes et réacteurs, empennage aux couleurs du village, feux */
-export function airliner(p: Parts, x: number, y: number, z: number, ry = 0) {
-  const c = Math.cos(ry), s = Math.sin(ry);
-  const A = (g: THREE.BufferGeometry, u: number, v: number, w: number, color: number, glow = false) => p.add(g, x + u * c + w * s, y + v, z - u * s + w * c, color, ry, glow);
-  A(new THREE.CylinderGeometry(0.05, 0.05, 0.56, 8).rotateX(Math.PI / 2), 0, 0.1, 0, 0xf4f2ee);
-  A(new THREE.SphereGeometry(0.05, 8, 6).scale(1, 1, 1.7), 0, 0.1, 0.28, 0xf4f2ee);
-  A(new THREE.ConeGeometry(0.05, 0.18, 8).rotateX(-Math.PI / 2), 0, 0.11, -0.37, 0xf4f2ee);
-  A(new THREE.BoxGeometry(0.103, 0.014, 0.58), 0, 0.085, 0, 0x3a6ab8);
-  A(new THREE.BoxGeometry(0.07, 0.02, 0.04), 0, 0.125, 0.33, 0x2a3440);
-  for (let k = 0; k < 8; k++) A(new THREE.BoxGeometry(0.103, 0.012, 0.014), 0, 0.112, -0.2 + k * 0.055, 0xcfe2f0, true);
-  A(new THREE.BoxGeometry(0.7, 0.014, 0.12), 0, 0.075, 0.02, 0xe4e2dc);
-  for (const sd of [-1, 1]) {
-    A(new THREE.CylinderGeometry(0.024, 0.024, 0.1, 8).rotateX(Math.PI / 2), sd * 0.17, 0.05, 0.07, 0x8a8f96);
-    A(new THREE.BoxGeometry(0.014, 0.01, 0.014), sd * 0.35, 0.078, 0.02, sd > 0 ? 0x3aff7a : 0xff4a3a, true);
-    A(new THREE.BoxGeometry(0.012, 0.05, 0.012), sd * 0.06, 0.025, 0, 0x3c3c40);
+/**
+ * Avion de ligne, nez vers +z, posé à y (roues au sol), à l'échelle S : fuselage blanc à liseré bleu, rangée de hublots
+ * allumés, pare-brise du poste de pilotage, portes ; ailes en flèche et leurs winglets, volets, deux réacteurs sous les
+ * ailes (nacelle, soufflante sombre, pylône) ; dérive en flèche aux couleurs du village, plan fixe ; train d'atterrissage ;
+ * feux de position rouge et vert, feu à éclats blanc, gyrophare rouge
+ */
+export function airliner(p: Parts, x: number, y: number, z: number, ry = 0, S = 1.75) {
+  const q = new Parts(), W = 0xf4f2ee, BLUE = 0x3a6ab8, GREY = 0xc8ccd2;
+  const A = (g: THREE.BufferGeometry, u: number, v: number, w: number, color: number, glow: boolean | 'neon' = false) => q.add(g, u, v, w, color, 0, glow);
+  // le fuselage, le nez, le cône de queue relevé, le ventre
+  A(new THREE.CylinderGeometry(0.05, 0.05, 0.56, 12).rotateX(Math.PI / 2), 0, 0.1, 0, W);
+  A(new THREE.SphereGeometry(0.05, 12, 6).scale(1, 0.95, 1.8), 0, 0.098, 0.28, W);
+  A(new THREE.CylinderGeometry(0.05, 0.016, 0.2, 12).rotateX(-Math.PI / 2 + 0.12), 0, 0.112, -0.37, W);
+  A(new THREE.CylinderGeometry(0.046, 0.046, 0.4, 10).rotateX(Math.PI / 2).scale(1, 0.6, 1), 0, 0.078, 0.02, GREY);
+  // le liseré bleu, les hublots qui s'allument, le pare-brise, les portes
+  for (const s of [-1, 1]) {
+    A(new THREE.BoxGeometry(0.004, 0.012, 0.62), s * 0.05, 0.088, -0.02, BLUE);
+    for (let k = 0; k < 14; k++) A(new THREE.BoxGeometry(0.004, 0.011, 0.012), s * 0.0505, 0.112, -0.24 + k * 0.034, 0xcfe2f0, true);
+    A(new THREE.BoxGeometry(0.03, 0.014, 0.022), s * 0.026, 0.125, 0.355, 0x2a3440);
+    for (const w of [0.24, -0.27]) { A(new THREE.BoxGeometry(0.004, 0.05, 0.026), s * 0.0505, 0.08, w, 0xb8bcc2); A(new THREE.BoxGeometry(0.005, 0.006, 0.006), s * 0.0505, 0.1, w + 0.008, 0x8a8f96); }
   }
-  A(new THREE.BoxGeometry(0.012, 0.05, 0.012), 0, 0.025, 0.24, 0x3c3c40);
-  A(new THREE.BoxGeometry(0.012, 0.14, 0.1), 0, 0.18, -0.34, 0x3a6ab8);
-  A(new THREE.BoxGeometry(0.013, 0.03, 0.1), 0, 0.22, -0.34, 0xe8c66a);
-  A(new THREE.BoxGeometry(0.24, 0.012, 0.08), 0, 0.12, -0.36, 0xe4e2dc);
+  A(new THREE.BoxGeometry(0.05, 0.016, 0.02), 0, 0.132, 0.345, 0x2a3440);
+  // les ailes en flèche : le plan, le bord d'attaque clair, les volets, les winglets et leurs feux
+  for (const s of [-1, 1]) {
+    const wing = (g: THREE.BufferGeometry) => g.translate(s * 0.19, 0, 0).rotateY(s * 0.42);
+    A(wing(new THREE.BoxGeometry(0.36, 0.012, 0.11)), 0, 0.072, 0.03, 0xe4e2dc);
+    A(wing(new THREE.BoxGeometry(0.34, 0.014, 0.018).translate(0, 0, 0.055)), 0, 0.072, 0.03, 0xf4f4f4);
+    A(wing(new THREE.BoxGeometry(0.2, 0.006, 0.03).translate(-s * 0.04, 0.008, -0.05)), 0, 0.072, 0.03, 0xb8bcc2);
+    const tx = s * 0.36 * Math.cos(0.42), tz = 0.03 - 0.36 * Math.sin(0.42);
+    A(new THREE.BoxGeometry(0.006, 0.05, 0.04).translate(0, 0.025, 0), tx, 0.078, tz, BLUE);
+    A(new THREE.BoxGeometry(0.012, 0.01, 0.012), tx, 0.078, tz + 0.02, s > 0 ? 0x3aff7a : 0xff4a3a, true);
+    // le réacteur : nacelle, soufflante, cône d'échappement, pylône
+    const ex = s * 0.15, ez = 0.13 - 0.15 * Math.tan(0.42);
+    A(new THREE.CylinderGeometry(0.03, 0.026, 0.13, 10).rotateX(Math.PI / 2), ex, 0.04, ez, 0xd8dce2);
+    A(new THREE.CylinderGeometry(0.031, 0.031, 0.012, 10).rotateX(Math.PI / 2), ex, 0.04, ez + 0.06, GREY);
+    A(new THREE.CircleGeometry(0.025, 10), ex, 0.04, ez + 0.067, 0x2a2e36);
+    A(new THREE.ConeGeometry(0.016, 0.04, 8).rotateX(-Math.PI / 2), ex, 0.04, ez - 0.08, 0x6a6e74);
+    A(new THREE.BoxGeometry(0.008, 0.03, 0.08), ex, 0.06, ez - 0.01, 0xd8dce2);
+  }
+  // l'empennage : dérive en flèche aux couleurs du village, plan fixe, feu à éclats
+  A(new THREE.BoxGeometry(0.012, 0.15, 0.1).translate(0, 0.075, 0).applyMatrix4(new THREE.Matrix4().makeShear(0, 0, 0, 0, -0.6, 0)), 0, 0.13, -0.36, BLUE);
+  A(new THREE.BoxGeometry(0.013, 0.03, 0.08).applyMatrix4(new THREE.Matrix4().makeShear(0, 0, 0, 0, -0.6, 0)), 0, 0.22, -0.4, 0xe8c66a);
+  for (const s of [-1, 1]) A(new THREE.BoxGeometry(0.13, 0.008, 0.06).translate(s * 0.065, 0, 0).rotateY(s * 0.5), 0, 0.12, -0.4, 0xe4e2dc);
+  A(new THREE.BoxGeometry(0.01, 0.01, 0.01), 0, 0.12, -0.475, 0xffffff, true);
+  // le train : roues sous le nez et sous les ailes, jambes
+  A(new THREE.BoxGeometry(0.008, 0.04, 0.008), 0, 0.02, 0.24, 0x3c3c40);
+  A(new THREE.CylinderGeometry(0.012, 0.012, 0.016, 8).rotateZ(Math.PI / 2), 0, 0.012, 0.24, 0x1e1e22);
+  for (const s of [-1, 1]) {
+    A(new THREE.BoxGeometry(0.01, 0.05, 0.01), s * 0.06, 0.025, -0.02, 0x3c3c40);
+    for (const w of [-0.035, -0.005]) A(new THREE.CylinderGeometry(0.016, 0.016, 0.022, 8).rotateZ(Math.PI / 2), s * 0.06, 0.016, w, 0x1e1e22);
+  }
+  // les gyrophares rouges, dessus et dessous
+  A(new THREE.BoxGeometry(0.012, 0.008, 0.012), 0, 0.154, 0.02, 0xff4a3a, true);
+  A(new THREE.BoxGeometry(0.012, 0.008, 0.012), 0, 0.05, -0.08, 0xff4a3a, true);
+  const m = new THREE.Matrix4().makeTranslation(x, y, z).multiply(new THREE.Matrix4().makeRotationY(ry)).multiply(new THREE.Matrix4().makeScale(S, S, S));
+  for (const g of q.body) { g.applyMatrix4(m); g.computeVertexNormals(); p.body.push(g); }
+  for (const g of q.glow) { g.applyMatrix4(m); g.computeVertexNormals(); p.glow.push(g); }
 }
-
 /**
  * Navire marchand de l'époque, proue vers +z, ligne de flottaison à y = 0 : cogue à voile carrée rayée et châteaux crénelés
  * (Moyen Âge), vapeur à coque noire, ligne de flottaison rouge, hublots, passerelle blanche, haute cheminée rayée, mâts de
@@ -5478,31 +5514,35 @@ function airportBig(p: Parts) {
   p.box(3.86, 0.012, 3.86, 0, 0, 0, 0x9ccf92);
   for (let k = 0; k < 8; k++) p.box(3.86, 0.003, 0.24, 0, 0.012, -1.8 + k * 0.48, k % 2 ? 0x94c88a : 0xa4d69a);
   // la piste et ses marques
-  p.box(3.84, 0.014, 0.56, 0, 0.012, rz, asphalt);
-  for (let x = -1.2; x <= 1.21; x += 0.24) p.box(0.12, 0.004, 0.014, x, 0.027, rz, C.white);
+  p.box(3.84, 0.014, 0.8, 0, 0.012, rz, asphalt);
+  for (let x = -1.2; x <= 1.21; x += 0.24) p.box(0.14, 0.004, 0.018, x, 0.027, rz, C.white);
+  // les traces de gomme des atterrissages
+  for (const sx of [-1, 1]) for (let k = 0; k < 5; k++) p.box(0.5 - k * 0.06, 0.003, 0.05, sx * (1.05 - k * 0.12), 0.0265, rz + (k % 2 ? 0.06 : -0.06), dark(asphalt, 0.78));
   for (const sx of [-1, 1]) {
-    for (let k = 0; k < 8; k++) p.box(0.14, 0.004, 0.028, sx * 1.74, 0.027, rz - 0.21 + k * 0.06, C.white);
-    for (const dz of [-0.07, 0.07]) p.box(0.05, 0.004, 0.04, sx * 1.56, 0.027, rz + dz, C.white);
-    for (const dz of [-0.14, 0.14]) { p.box(0.16, 0.004, 0.05, sx * 1.3, 0.027, rz + dz, C.white); for (const d2 of [-0.04, 0.04]) p.box(0.06, 0.004, 0.02, sx * 1.48, 0.027, rz + dz + d2, C.white); }
-    p.box(0.02, 0.004, 0.54, sx * 1.9, 0.027, rz, C.white);
-    for (let k = 0; k < 7; k++) p.box(0.016, 0.012, 0.016, sx * 1.9, 0.026, rz - 0.24 + k * 0.08, sx > 0 ? 0x3aff7a : 0xff4a3a, 0, true);
+    for (let k = 0; k < 10; k++) p.box(0.16, 0.004, 0.032, sx * 1.72, 0.027, rz - 0.3 + k * 0.066, C.white);
+    for (const dz of [-0.1, 0.1]) p.box(0.06, 0.004, 0.05, sx * 1.52, 0.027, rz + dz, C.white);
+    for (const dz of [-0.2, 0.2]) { p.box(0.2, 0.004, 0.07, sx * 1.28, 0.027, rz + dz, C.white); for (const d2 of [-0.05, 0.05]) p.box(0.07, 0.004, 0.026, sx * 1.48, 0.027, rz + dz + d2, C.white); }
+    p.box(0.024, 0.004, 0.78, sx * 1.9, 0.027, rz, C.white);
+    for (let k = 0; k < 9; k++) p.box(0.018, 0.012, 0.018, sx * 1.91, 0.026, rz - 0.36 + k * 0.09, sx > 0 ? 0x3aff7a : 0xff4a3a, 0, true);
   }
-  for (const z of [rz - 0.26, rz + 0.26]) p.box(3.8, 0.004, 0.012, 0, 0.027, z, C.white);
-  for (let x = -1.8; x <= 1.81; x += 0.24) for (const z of [rz - 0.3, rz + 0.3]) p.box(0.016, 0.014, 0.016, x, 0.026, z, 0xfff1c9, 0, true);
+  for (const z of [rz - 0.37, rz + 0.37]) p.box(3.8, 0.004, 0.014, 0, 0.027, z, C.white);
+  for (let x = -1.8; x <= 1.81; x += 0.24) for (const z of [rz - 0.42, rz + 0.42]) { p.box(0.006, 0.02, 0.006, x, 0.012, z, 0x8a8f96); p.box(0.018, 0.012, 0.018, x, 0.03, z, 0xfff1c9, 0, true); }
+  // les feux d'axe, encastrés
+  for (let x = -1.7; x <= 1.71; x += 0.17) p.box(0.012, 0.006, 0.012, x, 0.027, rz, 0xfff8e8, 0, true);
   // les voies de circulation (axe jaune, feux bleus, marques d'attente) et l'aire de trafic
   for (const x of [-0.6, 1.72]) {
     p.box(0.22, 0.014, 1.5, x, 0.012, 0.15, taxi);
     p.box(0.012, 0.004, 1.5, x, 0.027, 0.15, yel);
     for (let z = -0.5; z < 0.8; z += 0.18) for (const s of [-1, 1]) p.box(0.012, 0.012, 0.012, x + s * 0.12, 0.026, z, 0x4a8aff, 0, true);
-    for (const d of [0, 0.03]) p.box(0.22, 0.004, 0.01, x, 0.027, 0.76 + d, yel);
+    for (const d of [0, 0.03]) p.box(0.22, 0.004, 0.01, x, 0.027, 0.6 + d, yel);
   }
-  p.box(3.84, 0.014, 1.0, 0, 0.012, -0.7, apron);
-  for (let x = -1.9; x < 1.9; x += 0.32) p.box(0.004, 0.003, 1.0, x, 0.027, -0.7, dark(apron, 0.9));
+  p.box(3.84, 0.014, 1.3, 0, 0.012, -0.55, apron);
+  for (let x = -1.9; x < 1.9; x += 0.32) p.box(0.004, 0.003, 1.3, x, 0.027, -0.55, dark(apron, 0.9));
   p.box(2.4, 0.004, 0.012, 0.56, 0.027, -0.45, yel);
   p.box(0.012, 0.004, 0.34, 0.6, 0.027, -0.62, yel); p.box(0.12, 0.004, 0.012, 1.1, 0.027, -0.45, C.white);
-  for (const x of [-1.3, -0.15]) { p.box(0.012, 0.004, 0.62, x, 0.027, -0.95, yel); p.box(0.16, 0.004, 0.012, x, 0.027, -0.66, yel); }
+  for (const x of [-1.3, -0.15]) { p.box(0.012, 0.004, 1.0, x, 0.027, -0.75, yel); p.box(0.3, 0.004, 0.012, x, 0.027, -1.12, yel); }
   // le long-courrier à la passerelle, l'autre poste libre
-  airliner(p, -1.3, 0.012, -0.86, Math.PI);
+  airliner(p, -1.3, 0.012, -0.6, Math.PI);
   // l'aérogare : façade vitrée, montants, toit en vague, enseigne, passerelles télescopiques
   p.box(2.3, 0.36, 0.5, -0.72, 0.012, -1.62, 0xe8eaee);
   p.box(2.2, 0.26, 0.012, -0.72, 0.05, -1.366, C.glass, 0, true);
@@ -5510,26 +5550,49 @@ function airportBig(p: Parts) {
   p.box(2.3, 0.012, 0.02, -0.72, 0.18, -1.362, 0xd8dde2);
   for (let k = 0; k < 6; k++) p.add(new THREE.BoxGeometry(0.4, 0.025, 0.62), -1.72 + k * 0.4, 0.4, -1.6, 0xf4f2ee, 0, false, k % 2 ? 0.08 : -0.08);
   p.box(0.7, 0.06, 0.02, -0.72, 0.31, -1.355, 0x3a6ab8); for (let k = 0; k < 9; k++) p.box(0.04, 0.03, 0.006, -1.0 + k * 0.07, 0.325, -1.345, 0xfff1c9, 0, true);
-  for (const x of [-1.3, -0.15]) {
-    p.box(0.08, 0.08, 0.42, x + 0.16, 0.13, -1.12, 0xd8dde2); p.box(0.082, 0.02, 0.42, x + 0.16, 0.2, -1.12, 0x8a8f96);
-    p.cyl(0.03, 0.03, 0.13, 8, x + 0.16, 0.012, -0.95, 0x8a8f96); p.box(0.1, 0.1, 0.1, x + 0.16, 0.12, -0.9, 0xe8eaee);
+  // les passerelles télescopiques : rotonde contre l'aérogare, tunnel vitré en trois tronçons, jambe à roues, cabine ; l'une
+  // accostée à la porte avant du long-courrier, l'autre repliée
+  for (const [x0, x1, z1] of [[-1.0, -1.2, -1.02], [0.15, 0.1, -1.0]]) {
+    const z0 = -1.33, L = Math.hypot(x1 - x0, z1 - z0), ry = Math.atan2(x1 - x0, z1 - z0), y = 0.15;
+    p.cyl(0.06, 0.06, 0.22, 10, x0, 0.012, z0, 0xd8dde2);
+    for (let k = 0; k < 3; k++) {
+      const a = 0.04 + (k * (L - 0.08)) / 3, b = a + (L - 0.08) / 3 + 0.01, m = (a + b) / 2, w = 0.086 - k * 0.006;
+      p.box(w, w * 0.9, b - a, x0 + Math.sin(ry) * m, y, z0 + Math.cos(ry) * m, k % 2 ? 0xc8ccd2 : 0xd8dde2, ry);
+      p.box(w + 0.002, 0.016, b - a - 0.02, x0 + Math.sin(ry) * m, y + w * 0.45, z0 + Math.cos(ry) * m, 0x9fd0e4, ry, true);
+    }
+    const lx = x0 + Math.sin(ry) * L * 0.7, lz = z0 + Math.cos(ry) * L * 0.7;
+    p.box(0.02, y - 0.012, 0.02, lx, 0.012, lz, 0x6a7280); p.box(0.1, 0.03, 0.04, lx, 0.012, lz, 0x3c3c40, ry);
+    p.box(0.1, 0.1, 0.06, x1, y - 0.01, z1, 0xe8eaee, ry); p.box(0.104, 0.02, 0.064, x1, y + 0.07, z1, 0x3a6ab8, ry);
   }
+  // les numéros des portes, lumineux
+  for (const [x, n] of [[-1.0, 1], [0.15, 2]]) { p.box(0.08, 0.05, 0.01, x, 0.17, -1.268, 0x2a3440); for (let k = 0; k < n; k++) p.box(0.012, 0.034, 0.012, x - 0.01 * (n - 1) + k * 0.02, 0.178, -1.262, 0xfff1c9, 0, true); }
   // la vie de l'aire : chariots à bagages et leur tracteur, camion-citerne, escalier, cônes
-  for (let k = 0; k < 3; k++) { p.box(0.07, 0.03, 0.1, -1.76 + k * 0.09, 0.02, -0.36, 0x8a8f96); p.box(0.06, 0.04, 0.09, -1.76 + k * 0.09, 0.05, -0.36, [0xd84a3e, 0x3c7fd8, 0xf2c23a][k]); }
-  p.box(0.08, 0.05, 0.1, -1.86, 0.02, -0.36, yel);
+  for (let k = 0; k < 3; k++) { p.box(0.07, 0.03, 0.1, -0.5 + k * 0.09, 0.02, -1.12, 0x8a8f96); p.box(0.06, 0.04, 0.09, -0.5 + k * 0.09, 0.05, -1.12, [0xd84a3e, 0x3c7fd8, 0xf2c23a][k]); }
+  p.box(0.08, 0.05, 0.1, -0.6, 0.02, -1.12, yel);
   p.box(0.1, 0.06, 0.3, 0.05, 0.02, -1.0, C.white); p.add(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 10).rotateX(Math.PI / 2), 0.05, 0.11, -1.04, 0xd8dde2); p.box(0.1, 0.07, 0.08, 0.05, 0.02, -0.82, 0xd84a3e);
   p.add(new THREE.BoxGeometry(0.06, 0.012, 0.22), -1.02, 0.08, -1.1, 0xd8dde2, 0, false, 0, -0.5); p.box(0.08, 0.04, 0.12, -1.02, 0.012, -1.01, yel);
   for (const [x, z] of [[-0.9, -0.42], [-1.3, -0.42], [0.95, -0.3]]) p.cone(0.012, 0.035, 6, x, 0.027, z, 0xf28a3c);
   // la tour de contrôle : fût, vigie vitrée en surplomb, toit, antennes, feu rouge
-  p.box(0.3, 0.16, 0.3, 1.5, 0.012, -1.55, 0xd8d6d0);
-  p.cyl(0.075, 0.095, 1.2, 10, 1.5, 0.17, -1.55, 0xe4e2dc);
-  for (let y = 0.4; y < 1.3; y += 0.2) p.box(0.02, 0.04, 0.012, 1.5, y, -1.46, C.glass, 0, true);
-  p.cyl(0.17, 0.12, 0.05, 10, 1.5, 1.36, -1.55, 0xd8d6d0);
-  p.cyl(0.18, 0.16, 0.13, 10, 1.5, 1.41, -1.55, 0x6a9ac0, true);
-  for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; p.box(0.008, 0.13, 0.008, 1.5 + Math.sin(a) * 0.17, 1.41, -1.55 + Math.cos(a) * 0.17, 0x3a4048); }
-  p.cyl(0.21, 0.2, 0.03, 10, 1.5, 1.54, -1.55, 0x5d6878);
-  p.cyl(0.006, 0.006, 0.24, 4, 1.46, 1.57, -1.55, 0x9aa3ad); p.box(0.022, 0.022, 0.022, 1.46, 1.8, -1.55, 0xff4a3a, 0, true);
-  p.box(0.1, 0.012, 0.012, 1.56, 1.66, -1.55, 0x9aa3ad); p.cyl(0.004, 0.004, 0.1, 4, 1.6, 1.57, -1.52, 0x9aa3ad);
+  // la tour de contrôle : socle vitré, fût cannelé et sa cage d'escalier, étage technique, vigie aux vitres inclinées en
+  // surplomb, coursive, toit, radôme, antennes et feu rouge
+  const TX = 1.5, TZ = -1.55, TY = 1.75;
+  p.box(0.36, 0.2, 0.34, TX, 0.012, TZ, 0xd8d6d0); p.box(0.34, 0.1, 0.006, TX, 0.06, TZ + 0.172, C.glass, 0, true);
+  p.box(0.38, 0.02, 0.36, TX, 0.212, TZ, 0xc8c6c0);
+  p.cyl(0.08, 0.1, TY - 0.2, 12, TX, 0.21, TZ, 0xe4e2dc);
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.012, TY - 0.2, 0.012, TX + Math.sin(a) * 0.088, 0.21, TZ + Math.cos(a) * 0.088, 0xd0cec8); }
+  p.box(0.06, TY - 0.3, 0.05, TX, 0.21, TZ - 0.1, 0xd8d6d0);
+  for (let y = 0.4; y < TY - 0.1; y += 0.16) p.box(0.022, 0.05, 0.012, TX, y, TZ + 0.096, C.glass, 0, true);
+  p.cyl(0.15, 0.1, 0.08, 12, TX, TY - 0.1, TZ, 0xd8d6d0);
+  p.cyl(0.16, 0.16, 0.06, 12, TX, TY - 0.02, TZ, 0xc8c6c0);
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; p.box(0.02, 0.012, 0.006, TX + Math.sin(a) * 0.162, TY + 0.01, TZ + Math.cos(a) * 0.162, 0xfff1c9, a, true); }
+  p.add(new THREE.CylinderGeometry(0.22, 0.17, 0.15, 12, 1, true), TX, TY + 0.115, TZ, 0x6a9ac0, 0, true);
+  p.cyl(0.17, 0.17, 0.012, 12, TX, TY + 0.04, TZ, 0x5d6878);
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; p.add(new THREE.BoxGeometry(0.008, 0.155, 0.008), TX + Math.sin(a) * 0.195, TY + 0.115, TZ + Math.cos(a) * 0.195, 0x3a4048, 0, false, Math.cos(a) * 0.32, -Math.sin(a) * 0.32); }
+  p.add(new THREE.TorusGeometry(0.2, 0.006, 3, 16).rotateX(Math.PI / 2), TX, TY + 0.06, TZ, 0x8a8f96);
+  p.cyl(0.24, 0.23, 0.035, 12, TX, TY + 0.19, TZ, 0x5d6878);
+  p.add(new THREE.IcosahedronGeometry(0.06, 1), TX + 0.08, TY + 0.27, TZ - 0.06, 0xf4f2ee);
+  p.cyl(0.006, 0.006, 0.28, 4, TX - 0.06, TY + 0.225, TZ, 0x9aa3ad); p.box(0.022, 0.022, 0.022, TX - 0.06, TY + 0.505, TZ, 0xff4a3a, 0, true);
+  p.box(0.12, 0.012, 0.012, TX - 0.02, TY + 0.36, TZ, 0x9aa3ad); p.cyl(0.004, 0.004, 0.1, 4, TX + 0.04, TY + 0.225, TZ + 0.06, 0x9aa3ad);
   // le hangar voûté, sa grande porte, l'avion d'affaires qu'on y prépare
   p.add(new THREE.CylinderGeometry(0.34, 0.34, 0.62, 14, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2), 0.8, 0.012, -1.58, 0xb8c2cc);
   for (let k = 0; k < 6; k++) p.add(new THREE.TorusGeometry(0.345, 0.006, 3, 14, Math.PI), 0.8, 0.012, -1.86 + k * 0.115, 0x8a96a2);
@@ -5542,15 +5605,15 @@ function airportBig(p: Parts) {
   radar.add(new THREE.BoxGeometry(0.3, 0.07, 0.012).translate(0, 0.05, 0), 0, 0, 0.02, 0xe4e2dc, 0, false, 0, -0.25);
   radar.box(0.03, 0.04, 0.03, 0, 0, 0, 0x3c3c40);
   // le dépôt de carburant, la caserne des pompiers de l'aéroport et son engin, la manche à air, l'antenne d'alignement
-  for (const [x, z] of [[-1.62, 0.32], [-1.4, 0.32], [-1.51, 0.12]]) { p.cyl(0.09, 0.09, 0.14, 12, x, 0.012, z, 0xe8eaee); p.cyl(0.092, 0.092, 0.012, 12, x, 0.15, z, 0xd84a3e); }
-  p.box(0.5, 0.012, 0.03, -1.5, 0.012, 0.47, 0x8a8f96);
+  for (const [x, z] of [[-1.7, 0.5], [-1.48, 0.5], [-1.59, 0.3]]) { p.cyl(0.09, 0.09, 0.14, 12, x, 0.012, z, 0xe8eaee); p.cyl(0.092, 0.092, 0.012, 12, x, 0.15, z, 0xd84a3e); }
+  p.box(0.5, 0.012, 0.03, -1.55, 0.012, 0.62, 0x8a8f96);
   p.box(0.42, 0.22, 0.28, 0.35, 0.012, 0.32, 0xe8e4dc); p.box(0.44, 0.03, 0.3, 0.35, 0.23, 0.32, 0xd84a3e);
   for (const x of [0.25, 0.45]) p.box(0.14, 0.15, 0.012, x, 0.012, 0.465, 0x6a7a8a);
-  p.box(0.12, 0.08, 0.24, 0.25, 0.012, 0.62, 0xd84a3e); p.box(0.11, 0.04, 0.06, 0.25, 0.09, 0.72, 0x9fc4dc);
+  p.box(0.12, 0.08, 0.24, 0.25, 0.012, 0.56, 0xd84a3e); p.box(0.11, 0.04, 0.06, 0.25, 0.09, 0.62, 0x9fc4dc);
   p.cyl(0.006, 0.006, 0.4, 4, -0.05, 0.012, 0.7, 0x9aa3ad);
   const sock = sway([-0.05, 0.39, 0.7], [0, 1, 0], 0.5, 0.4);
   for (let k = 0; k < 4; k++) sock.add(new THREE.CylinderGeometry(0.026 - k * 0.004, 0.022 - k * 0.004, 0.035, 6).rotateZ(Math.PI / 2), 0.03 + k * 0.035, 0, 0, k % 2 ? C.white : 0xf28a3c);
-  for (const [x, z] of [[-1.85, -0.05], [0.95, 0.66]]) tree(p, x, z, 0.8);
+  for (const [x, z] of [[-1.85, 0.4], [1.4, 0.5]]) tree(p, x, z, 0.8);
 }
 
 /** Les aires de l'héliport (repère du bâtiment : centre de l'emprise, façade vers +z) où se posent ses hélicoptères */
@@ -5860,7 +5923,7 @@ function airport(p: Parts) {
   p.box(0.18, 0.014, 0.6, 0.95, 0.012, 0.25, 0x5d6169); p.box(0.012, 0.004, 0.6, 0.95, 0.027, 0.25, 0xf2c23a);
   p.box(1.7, 0.014, 0.66, 0.4, 0.012, -0.22, 0xb8b4ac);
   for (const x of [-0.1, 0.5]) p.box(0.012, 0.004, 0.5, x, 0.027, -0.22, 0xf2c23a);
-  airliner(p, 0.2, 0.012, -0.28, Math.PI / 2);
+  airliner(p, 0.2, 0.012, -0.28, Math.PI / 2, 1.35);
   // aérogare : longue façade vitrée, toit en vague, passerelle d'embarquement
   p.box(1.1, 0.3, 0.46, -0.78, 0.012, -1.0, 0xe8eaee);
   p.box(1.0, 0.2, 0.012, -0.78, 0.06, -0.765, C.glass, 0, true);

@@ -170,6 +170,15 @@ describe('maisons et tours', () => {
       }
   });
 
+  it('le cosmodrome et l’aéroport, refaits en détail, restent sous 800 triangles par case', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    for (const [kind, age] of [['spaceport', 5], ['airport', 4], ['airport', 5]] as [KindId, number][]) {
+      const m = getModel(kind, age, { v: 0, L: false, R: false, F: true });
+      const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+      expect(n, `${kind} à l’âge ${age}`).toBeLessThan(800 * KINDS[kind].size ** 2);
+    }
+  });
+
   it('le château d’eau, détaillé à chaque âge, reste sous 4 000 triangles (girouette, drone et personnages compris)', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
     for (let age = 3; age < 6; age++) {
