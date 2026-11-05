@@ -784,20 +784,20 @@ function castle(p: Parts) {
   p.cyl(0.9, 0.96, 0.06, 4, 0, 0, 0, 0x8fb87e, false, Math.PI / 4);
   const merlons = (x0: number, z0: number, x1: number, z1: number, y: number) => {
     const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(2, Math.floor(len / 0.1)), ry = Math.atan2(x1 - x0, z1 - z0);
-    for (let k = 0; k <= n; k += 2) { const t = k / n; p.box(0.05, 0.05, 0.05, x0 + (x1 - x0) * t, y, z0 + (z1 - z0) * t, st, ry); }
+    for (let k = 0; k <= n; k += 2) { const t = k / n; p.add(slab(0.05, 0.05, 0.05, F_PZ | F_NZ | F_PX | F_NX | F_PY), x0 + (x1 - x0) * t, y + 0.025, z0 + (z1 - z0) * t, st, ry); }
   };
   // les courtines, crénelées, et leur chemin de ronde
   for (const [x, z, w, d] of [[0, -0.78, 1.4, 0.16], [-0.78, 0, 0.16, 1.4], [0.78, 0, 0.16, 1.4]] as number[][]) {
     p.box(w, 0.42, d, x, 0.06, z, st);
     p.box(w, 0.012, d, x, 0.48, z, dk);
-    if (w > d) { stones(p, x, z - d / 2, w, 0.06, 0.48, Math.PI, dk, 0.5, 600); merlons(x - w / 2, z + d / 2 - 0.02, x + w / 2, z + d / 2 - 0.02, 0.48); merlons(x - w / 2, z - d / 2 + 0.02, x + w / 2, z - d / 2 + 0.02, 0.48); }
-    else { const sx = Math.sign(x); stones(p, x + sx * w / 2, z, d, 0.06, 0.48, sx * Math.PI / 2, dk, 0.5, 610 + sx); merlons(x + w / 2 - 0.02, z - d / 2, x + w / 2 - 0.02, z + d / 2, 0.48); merlons(x - w / 2 + 0.02, z - d / 2, x - w / 2 + 0.02, z + d / 2, 0.48); }
+    if (w > d) { stones(p, x, z - d / 2, w, 0.06, 0.48, Math.PI, dk, 0.2, 600); merlons(x - w / 2, z + d / 2 - 0.02, x + w / 2, z + d / 2 - 0.02, 0.48); merlons(x - w / 2, z - d / 2 + 0.02, x + w / 2, z - d / 2 + 0.02, 0.48); }
+    else { const sx = Math.sign(x); stones(p, x + sx * w / 2, z, d, 0.06, 0.48, sx * Math.PI / 2, dk, 0.2, 610 + sx); merlons(x + w / 2 - 0.02, z - d / 2, x + w / 2 - 0.02, z + d / 2, 0.48); merlons(x - w / 2 + 0.02, z - d / 2, x - w / 2 + 0.02, z + d / 2, 0.48); }
   }
   // la façade avant, de part et d'autre du châtelet
   for (const s of [-1, 1]) {
     const x = s * 0.48;
     p.box(0.44, 0.42, 0.16, x, 0.06, 0.78, st);
-    stones(p, x, 0.86, 0.44, 0.06, 0.48, 0, dk, 0.5, 620 + s);
+    stones(p, x, 0.86, 0.44, 0.06, 0.48, 0, dk, 0.2, 620 + s);
     merlons(x - 0.22, 0.84, x + 0.22, 0.84, 0.48); merlons(x - 0.22, 0.72, x + 0.22, 0.72, 0.48);
     for (const z of [0.86]) p.box(0.012, 0.06, 0.004, x, 0.26, z + 0.001, 0x2a2622);
   }
@@ -826,8 +826,8 @@ function castle(p: Parts) {
   for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.004, 0.004, 0.3), s * 0.06, 0.2, 0.96, 0x3c3c40, 0, false, 0, -0.55);
   // le donjon carré, ses meurtrières, ses créneaux, son échauguette, sa bannière
   p.box(0.5, 0.88, 0.5, 0, 0.06, -0.18, st);
-  for (const s of [-1, 1]) stones(p, s * 0.25, -0.18, 0.5, 0.06, 0.94, s * Math.PI / 2, dk, 0.5, 640 + s);
-  stones(p, 0, 0.07, 0.5, 0.06, 0.94, 0, dk, 0.5, 643);
+  for (const s of [-1, 1]) stones(p, s * 0.25, -0.18, 0.5, 0.06, 0.94, s * Math.PI / 2, dk, 0.2, 640 + s);
+  stones(p, 0, 0.07, 0.5, 0.06, 0.94, 0, dk, 0.2, 643);
   for (const y of [0.3, 0.55, 0.78]) for (const x of [-0.12, 0.12]) p.box(0.016, 0.07, 0.004, x, y, 0.071, 0x2a2622);
   p.box(0.54, 0.03, 0.54, 0, 0.94, -0.18, dk);
   merlons(-0.25, 0.06, 0.25, 0.06, 0.97); merlons(-0.25, -0.42, 0.25, -0.42, 0.97); merlons(-0.25, -0.42, -0.25, 0.06, 0.97); merlons(0.25, -0.42, 0.25, 0.06, 0.97);
@@ -838,6 +838,35 @@ function castle(p: Parts) {
   for (const s of [-1, 1]) p.box(0.012, 0.14, 0.012, -0.45 + s * 0.06, 0.13, 0.35, C.darkwood); p.box(0.14, 0.012, 0.012, -0.45, 0.27, 0.35, C.darkwood);
   p.box(0.16, 0.05, 0.1, 0.45, 0.1, 0.35, C.wood); for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.012, 8).rotateZ(Math.PI / 2), 0.45 + s * 0.085, 0.1, 0.35, C.darkwood);
   for (const [x, z] of [[0.5, 0.15], [0.42, 0.12]]) p.cyl(0.04, 0.04, 0.06, 8, x, 0.06, z, 0xd8c06a);
+  // le chemin de terre battue de la porte au donjon, l'escalier de bois qui monte à sa porte haute
+  p.box(0.14, 0.004, 0.62, 0, 0.06, 0.4, 0xa8906a);
+  p.box(0.08, 0.14, 0.012, 0, 0.36, 0.072, 0x5a4030);
+  for (let k = 0; k < 5; k++) p.box(0.1, 0.012, 0.05, 0, 0.06 + k * 0.06, 0.32 - k * 0.05, C.wood);
+  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.01, 0.01, 0.4), s * 0.05, 0.25, 0.22, C.darkwood, 0, false, 0, 0.83);
+  // la forge sous son appentis contre la courtine : foyer qui rougeoie, enclume, le forgeron
+  const fx = -0.6, fz = -0.3;
+  for (const z of [fz - 0.14, fz + 0.14]) p.box(0.02, 0.22, 0.02, fx + 0.1, 0.06, z, C.darkwood);
+  p.add(new THREE.BoxGeometry(0.26, 0.014, 0.34), fx, 0.3, fz, 0x8a5a44, 0, false, -0.35);
+  p.box(0.12, 0.08, 0.12, fx - 0.04, 0.06, fz - 0.06, C.darkstone); p.box(0.07, 0.015, 0.07, fx - 0.04, 0.14, fz - 0.06, 0xff7a2a, 0, true); smoke(fx - 0.04, 0.4, fz - 0.06, 1);
+  p.cyl(0.025, 0.03, 0.05, 7, fx + 0.04, 0.06, fz + 0.06, C.wood); p.box(0.05, 0.025, 0.02, fx + 0.04, 0.11, fz + 0.06, 0x3c3c40);
+  figure(p, fx + 0.12, fz + 0.08, 0x5a4a3a, -Math.PI / 2, false, 0x2a1e18, 'idle', 0.048);
+  // l'écurie du seigneur contre l'autre courtine, le destrier caparaçonné aux couleurs du château, son écuyer
+  const sx = 0.6, sz = -0.3;
+  for (const z of [sz - 0.16, sz + 0.16]) p.box(0.02, 0.22, 0.02, sx - 0.1, 0.06, z, C.darkwood);
+  p.add(new THREE.BoxGeometry(0.26, 0.014, 0.38), sx, 0.3, sz, 0x8a5a44, 0, false, 0.35);
+  for (const [x, z] of [[sx + 0.05, sz - 0.1], [sx + 0.07, sz + 0.02]]) p.cyl(0.035, 0.035, 0.05, 7, x, 0.06, z, 0xd8c06a);
+  horse(p, sx - 0.16, sz + 0.24, Math.PI, 0xe8e0d0, 0.06);
+  p.box(0.11, 0.05, 0.062, sx - 0.16, 0.13, sz + 0.24, banner); p.box(0.112, 0.012, 0.064, sx - 0.16, 0.13, sz + 0.24, C.gold);
+  figure(p, sx - 0.3, sz + 0.3, 0x8a6a4a, 0.4, false, 0xc8a070, 'idle', 0.048);
+  // la quintaine où s'exercent les cavaliers : poteau, bras tournant, écu et sac de sable
+  p.box(0.025, 0.24, 0.025, 0.22, 0.06, 0.52, C.darkwood);
+  { const q = spinner([0.22, 0.29, 0.52], [0, 1, 0], 0.4); q.box(0.24, 0.016, 0.016, 0.0, 0, 0, C.wood); q.box(0.06, 0.07, 0.01, -0.12, -0.04, 0, banner); q.box(0.025, 0.05, 0.01, -0.12, -0.03, 0.006, C.gold); q.add(new THREE.IcosahedronGeometry(0.025, 0).scale(1, 1.3, 1), 0.12, -0.04, 0, 0xc8b890); }
+  // la garnison : les guetteurs sur le chemin de ronde et leurs piques, les torches de la porte
+  for (const [x, z, r] of [[-0.78, 0.05, Math.PI / 2], [0.78, -0.25, -Math.PI / 2], [0.3, -0.78, Math.PI], [0.5, 0.76, 0]] as number[][]) {
+    figure(p, x, z, 0x6a6a72, r, false, 0x8a8f96, 'idle', 0.49);
+    p.cyl(0.004, 0.004, 0.3, 4, x + Math.cos(r) * 0.04, 0.49, z - Math.sin(r) * 0.04, C.wood);
+  }
+  for (const s of [-1, 1]) { p.box(0.008, 0.06, 0.008, s * 0.09, 0.3, 0.9, C.darkwood); flame(s * 0.09, 0.36, 0.9, 0.5); }
 }
 
 function house(p: Parts, age: number, o: ModelOpts) {
