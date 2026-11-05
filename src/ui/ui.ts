@@ -11,7 +11,7 @@ import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { effectSummary, mandatoriesFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
+import { effectSummary, splitIntro, mandatoriesFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
@@ -1157,13 +1157,13 @@ export class UI {
         ${m.unlocks ? `<p class="unlock">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})</p>` : ''}
         ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => (h.sim.counts[k] ?? 0) > 0).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : ''}
         ${m.choices.some((c) => c.win.some((e) => e.t === 'veins')) ? `<p class="held">${ic('outpost', 15, 2)} Galeries tenues sous terre : <b>${ex.held()}</b> cases${ex.held() ? ' — chaque victoire pousse le front plus loin' : ' — un avant-poste en tiendra les premières'}</p>` : ''}
-        ${run ? '' : redo ? `<details class="redo"><summary>${ic('restart', 14, 2)} Refaire cette expédition</summary><p>${m.intro}</p><p class="hint">Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>${choices}</details>` : `<p>${m.intro}</p>${choices}`}</div>`;
+        ${run ? '' : redo ? `<details class="redo"><summary>${ic('restart', 14, 2)} Refaire cette expédition</summary><p>${m.intro}</p><p class="hint">Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>${choices}</details>` : `${this.introHtml(m.intro)}${choices}`}</div>`;
     }).join('');
     const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} Expéditions`, `
       <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button><button data-tab="depths" class="${tab === 'depths' ? 'on' : ''}">${ic('outpost', 16, 2)}Profondeurs</button></div>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
-        <p class="hint">Envoyez de petites équipes chercher ce qui manque au village : vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p>
+        <p class="hint">Envoyez de petites équipes chercher ce qui manque au village.</p><details class="cdet"><summary>En savoir plus</summary><p class="hint">Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p></details>
         <div class="missions">${cards}</div>
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
@@ -1230,17 +1230,30 @@ export class UI {
     });
   }
 
-  /** Boutons des choix d'une mission : équipe, durée, risque, équipement emporté, gains ; grisés avec la raison s'il manque quelque chose */
+  /** L'intro d'une mission : sa première phrase, le reste replié */
+  private introHtml(text: string) {
+    const { head, rest } = splitIntro(text);
+    return `<p>${head}</p>${rest ? `<details class="cdet"><summary>En savoir plus</summary><p>${rest}</p></details>` : ''}`;
+  }
+
+  /**
+   * Les choix d'une mission, une ligne chacun (le nom, l'équipe, la durée, le risque d'échec) ; le détail (récit, chevaux,
+   * carburant, dangers, équipement emporté, gains) se replie dessous. Grisés avec la raison s'il manque quelque chose
+   */
   private choiceButtons(m: Mission) {
     const ex = this.host.expeditions, done = ex.done(m);
     return m.choices.map((c0, i) => {
       const c = choiceAt(c0, this.host.sim.age), why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
-      return `<button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
-          <b>${c.label}</b><span>${c.text}</span>
-          <small>👥 ${c.party}${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''}${c.fuel ? ` · ⛽ ${c.fuel} carburant` : ''} · ⏳ ${workLabel(c.work)} · ⚠️ Risque d’échec : ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} (${riskLabel(pv.risk)}) · ${DEST_ICON[c.dest]}</small>
+      return `<div class="cbox"><button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
+          <b>${c.label}</b>
+          <small>👥 ${c.party} · ⏳ ${workLabel(c.work)} · ⚠️ ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''}</small>
+          ${why ? `<small class="why">${why}</small>` : ''}</button>
+        <details class="cdet"><summary>Détails</summary>
+          <p>${c.text}</p>
+          <small>${DEST_ICON[c.dest]} Risque d’échec : ${pct(pv.risk)} (${riskLabel(pv.risk)})${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''}${c.fuel ? ` · ⛽ ${c.fuel} carburant` : ''}</small>
           <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')} — ${pv.label ? `on emporte ${pv.label}` : 'aucun équipement en réserve'}</small>
           <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
-          ${why ? `<small class="why">${why}</small>` : ''}</button>`;
+        </details></div>`;
     }).join('');
   }
 

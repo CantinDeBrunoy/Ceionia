@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { followPoint } from '../src/render/expeditionView';
+import { MISSIONS, splitIntro } from '../src/sim/missions';
+
+describe('textes des expéditions', () => {
+  it('l’intro se coupe après sa première phrase, sans rien perdre', () => {
+    for (const m of MISSIONS) {
+      const { head, rest } = splitIntro(m.intro);
+      expect(`${head} ${rest}`.trim()).toBe(m.intro);
+      expect(head.length, m.id).toBeLessThan(260);
+    }
+    expect(splitIntro('Un loup rôde. Les bergers ne dorment plus.')).toEqual({ head: 'Un loup rôde.', rest: 'Les bergers ne dorment plus.' });
+  });
+});
 
 describe('suivi de l’équipe par la caméra', () => {
   it('vise le fanion, pas la moyenne', () => {
