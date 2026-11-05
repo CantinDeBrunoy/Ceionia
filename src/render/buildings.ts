@@ -268,6 +268,7 @@ export class BuildingView implements WorldListener {
         const mesh = new THREE.Mesh(sw.geo, mats.body);
         mesh.castShadow = true;
         mesh.position.set(...sw.pivot);
+        mesh.userData.pivot = sw.pivot;
         e.group.add(mesh);
         // les ampoules d'un manège tournent avec lui
         if (sw.glow) mesh.add(new THREE.Mesh(sw.glow, mats.glow));
@@ -375,6 +376,8 @@ export class BuildingView implements WorldListener {
       e.body.position.set(off, 0, off);
       if (e.glow) e.glow.position.set(off, 0, off);
       if (e.crowd) e.crowd.position.set(off, 0, off);
+      // les pièces qui se balancent (flamme de la torche, lanterne pendue) suivent le lampadaire dans son coin de case
+      for (const sw of e.sways) { const pv = sw.mesh.userData.pivot as [number, number, number]; sw.mesh.position.set(pv[0] + off, pv[1], pv[2] + off); }
     }
   }
 

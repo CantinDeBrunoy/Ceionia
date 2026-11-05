@@ -4390,12 +4390,93 @@ function observatory(p: Parts) {
   figure(p, -0.13, 0.44, 0xf2c23a, Math.PI - 0.2, false, 0x8a5a3a, 'cheer');
 }
 
+/**
+ * Flamme qui danse au vent, posée en (x, y, z) : un cœur de braise sombre, la flamme orangée et son cœur jaune qui luisent
+ * (et vacillent la nuit), deux étincelles ; le tout ondule autour de son pied
+ */
+function flame(x: number, y: number, z: number, s = 1) {
+  const f = sway([x, y, z], [1, 0, 0.5], 0.14, 1.4);
+  f.cyl(0.022 * s, 0.018 * s, 0.014 * s, 6, 0, -0.006 * s, 0, 0x3a2418);
+  f.cone(0.034 * s, 0.12 * s, 6, 0, 0.004 * s, 0, 0xff8a2a, true);
+  f.cone(0.02 * s, 0.08 * s, 5, 0, 0.006 * s, 0, 0xffe08a, true);
+  f.add(new THREE.ConeGeometry(0.012 * s, 0.05 * s, 4), 0.02 * s, 0.07 * s, 0.01 * s, 0xff7a20, 0, true, -0.4);
+  for (const [u, v, w] of [[0.012, 0.15, -0.006], [-0.01, 0.18, 0.008]]) f.add(new THREE.OctahedronGeometry(0.004 * s, 0), u * s, v * s, w * s, 0xffc060, 0, true);
+}
+
+/**
+ * Éclairage de rue, d'un âge à l'autre : torche de résine plantée dans un cairn, brasero de bronze sur son trépied, lanterne
+ * de fer forgé pendue à sa potence, lampadaire à gaz de fonte, lampadaire à LED
+ */
 function lamp(p: Parts, age: number) {
-  if (age === 0) { p.cyl(0.02, 0.03, 0.42, 5, 0, 0, 0, C.wood); p.cone(0.06, 0.14, 5, 0, 0.4, 0, C.flame, true); }
-  else if (age === 1) { p.cyl(0.04, 0.06, 0.2, 6, 0, 0, 0, C.stone); p.cyl(0.1, 0.06, 0.06, 7, 0, 0.2, 0, C.darkstone); p.cone(0.07, 0.14, 5, 0, 0.26, 0, C.flame, true); }
-  else if (age === 2) { p.cyl(0.02, 0.03, 0.5, 5, 0, 0, 0, C.darkwood); p.box(0.09, 0.1, 0.09, 0, 0.5, 0, 0xfff1c9, 0, true); p.pyramid(0.13, 0.07, 0.13, 0, 0.6, 0, C.darkwood); }
-  else if (age === 3) { p.cyl(0.02, 0.035, 0.6, 6, 0, 0, 0, C.roofdark); p.cyl(0.05, 0.05, 0.12, 6, 0, 0.6, 0, 0xfff1c9, true); p.cone(0.08, 0.06, 6, 0, 0.72, 0, C.roofdark); }
-  else {
+  if (age === 0) {
+    // torche : cairn de pierres sèches, manche de bois noueux lié de lanières, fourche qui serre le fagot de résine, flamme
+    for (let i = 0; i < 7; i++) { const a = (i / 7) * 6.283 + 0.4; p.add(new THREE.DodecahedronGeometry(0.026 + (i % 3) * 0.006, 0), Math.cos(a) * 0.055, 0.016, Math.sin(a) * 0.055, i % 2 ? C.stone : C.darkstone, a); }
+    for (let i = 0; i < 3; i++) { const a = (i / 3) * 6.283 + 1.2; p.add(new THREE.DodecahedronGeometry(0.022, 0), Math.cos(a) * 0.028, 0.046, Math.sin(a) * 0.028, C.darkstone, a); }
+    p.cyl(0.013, 0.018, 0.42, 6, 0, 0.01, 0, 0x7a5636);
+    for (const [y, r] of [[0.12, 0.3], [0.27, -0.2]]) p.add(new THREE.CylinderGeometry(0.009, 0.009, 0.03, 4).rotateZ(Math.PI / 2), 0, y, 0, 0x6a4a30, r, false, 0.5);
+    for (const y of [0.18, 0.2, 0.33, 0.35]) p.cyl(0.0175, 0.0175, 0.008, 6, 0, y, 0, 0x4a3426);
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.006, 0.008, 0.08, 4).translate(0, 0.04, 0), s * 0.006, 0.42, 0, 0x7a5636, 0, false, -s * 0.35);
+    p.cyl(0.03, 0.02, 0.07, 6, 0, 0.42, 0, 0x5a3a24);
+    for (const y of [0.44, 0.47]) p.cyl(0.031, 0.031, 0.006, 6, 0, y, 0, 0xb8945a);
+    p.cyl(0.032, 0.03, 0.014, 6, 0, 0.49, 0, 0x2a1a12);
+    flame(0, 0.5, 0, 1.2);
+    // l'éclat sur les pierres et un rondin pour s'asseoir
+    log(p, 0.14, 0.018, 0.1, 0, -0.06, 0.8, 0x8a6a48);
+  } else if (age === 1) {
+    // brasero : socle de marbre mouluré, trépied de bronze aux pattes de lion, vasque à godrons et sa lèvre, braises, flamme
+    p.box(0.15, 0.03, 0.15, 0, 0, 0, 0xd8ccb4); p.box(0.13, 0.012, 0.13, 0, 0.03, 0, 0xeee4d0); p.box(0.11, 0.014, 0.11, 0, 0.042, 0, 0xd8ccb4);
+    const bronze = 0xb8843a, patina = 0x7a9a7a;
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * 6.283;
+      p.add(new THREE.CylinderGeometry(0.006, 0.008, 0.27, 5).translate(0, 0.135, 0), Math.cos(a) * 0.04, 0.056, Math.sin(a) * 0.04, bronze, -a, false, 0.16);
+      p.sphere(0.011, Math.cos(a) * 0.046, 0.062, Math.sin(a) * 0.046, dark(bronze, 0.8), 0, 0.8);
+      p.add(new THREE.TorusGeometry(0.014, 0.003, 3, 6, Math.PI), Math.cos(a) * 0.022, 0.2, Math.sin(a) * 0.022, bronze, -a + Math.PI / 2);
+    }
+    p.add(new THREE.TorusGeometry(0.03, 0.004, 3, 8).rotateX(Math.PI / 2), 0, 0.15, 0, bronze);
+    p.cyl(0.075, 0.03, 0.06, 10, 0, 0.3, 0, bronze);
+    for (let k = 0; k < 10; k++) { const a = (k / 10) * 6.283; p.box(0.006, 0.05, 0.008, Math.cos(a) * 0.055, 0.305, Math.sin(a) * 0.055, patina, -a, false, 0); }
+    p.add(new THREE.TorusGeometry(0.075, 0.007, 4, 12).rotateX(Math.PI / 2), 0, 0.36, 0, dark(bronze, 0.9));
+    for (let k = 0; k < 6; k++) p.add(new THREE.DodecahedronGeometry(0.014, 0), Math.cos(k) * 0.035, 0.355, Math.sin(k) * 0.035, k % 2 ? 0xff7a2a : 0x8a2a14, k, k % 2 === 1);
+    flame(-0.015, 0.36, 0.01, 1.1); flame(0.025, 0.355, -0.015, 0.8);
+  } else if (age === 2) {
+    // lanterne : socle de pierre, poteau de chêne équarri chanfreiné, potence de fer forgé à volute et sa jambe de force ;
+    // la lanterne pend à son anneau et se balance : cage de fer, vitres de corne qui luisent, chapeau pointu, bougie
+    p.box(0.1, 0.05, 0.1, 0, 0, 0, C.stone); p.box(0.08, 0.012, 0.08, 0, 0.05, 0, C.darkstone);
+    p.box(0.04, 0.5, 0.04, 0, 0.06, 0, C.darkwood); p.cyl(0.03, 0.03, 0.5, 4, 0, 0.06, 0, dark(C.darkwood, 0.85), false, Math.PI / 4);
+    p.pyramid(0.05, 0.04, 0.05, 0, 0.56, 0, 0x3a3436);
+    const iron = 0x2e2a2c;
+    p.box(0.16, 0.01, 0.01, 0.08, 0.52, 0, iron);
+    p.add(new THREE.BoxGeometry(0.008, 0.13, 0.008), 0.05, 0.47, 0, iron, 0, false, -0.9);
+    p.add(new THREE.TorusGeometry(0.022, 0.004, 3, 8, Math.PI * 1.5), 0.07, 0.5, 0, iron, 0, false, 0.4);
+    p.add(new THREE.TorusGeometry(0.014, 0.003, 3, 8, Math.PI * 1.5), 0.115, 0.538, 0, iron, 0, false, 2.2);
+    for (const y of [0.2, 0.3]) p.box(0.044, 0.008, 0.044, 0, y, 0, iron);
+    const l = swing([0.15, 0.515, 0], [0, 0, 1], 0.06, 0.45);
+    l.add(new THREE.TorusGeometry(0.01, 0.002, 3, 6), 0, -0.006, 0, iron);
+    l.box(0.004, 0.03, 0.004, 0, -0.04, 0, iron);
+    l.pyramid(0.08, 0.05, 0.08, 0, -0.07, 0, iron); l.cyl(0.006, 0.006, 0.012, 4, 0, -0.026, 0, iron);
+    l.box(0.07, 0.008, 0.07, 0, -0.078, 0, iron);
+    for (const [u, w] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) l.box(0.007, 0.09, 0.007, u * 0.032, -0.168, w * 0.032, iron);
+    l.box(0.058, 0.08, 0.058, 0, -0.163, 0, 0xffd890, 0, true);
+    for (const r of [0, Math.PI / 2]) l.box(0.072, 0.004, 0.004, 0, -0.125, 0, iron, r);
+    l.box(0.072, 0.012, 0.072, 0, -0.18, 0, iron);
+    l.cone(0.02, 0.02, 4, 0, -0.2, 0, iron, false, Math.PI / 4);
+  } else if (age === 3) {
+    // lampadaire à gaz : socle de fonte à pans et moulures, fût cannelé à bagues, traverse de l'allumeur, lanterne à six
+    // vitres qui luisent, chapeau en pagode et son fleuron, bec de gaz au cœur
+    const cast = 0x2c3a34, gilt = 0xc8a24a;
+    p.cyl(0.06, 0.07, 0.04, 8, 0, 0, 0, cast); p.cyl(0.045, 0.058, 0.05, 8, 0, 0.04, 0, cast); p.cyl(0.05, 0.05, 0.012, 8, 0, 0.09, 0, dark(cast, 0.8));
+    p.cyl(0.026, 0.034, 0.12, 8, 0, 0.1, 0, cast);
+    p.cyl(0.016, 0.022, 0.42, 8, 0, 0.22, 0, cast);
+    for (let k = 0; k < 8; k++) { const a = (k / 8) * 6.283; p.box(0.004, 0.36, 0.004, Math.cos(a) * 0.019, 0.24, Math.sin(a) * 0.019, dark(cast, 1.25)); }
+    for (const y of [0.22, 0.4, 0.62]) p.cyl(0.026, 0.026, 0.014, 8, 0, y, 0, y === 0.4 ? gilt : dark(cast, 0.8));
+    p.box(0.14, 0.01, 0.012, 0, 0.6, 0, cast); for (const s of [-1, 1]) p.sphere(0.008, s * 0.07, 0.605, 0, cast);
+    p.cyl(0.03, 0.016, 0.03, 8, 0, 0.64, 0, cast); p.cyl(0.042, 0.03, 0.012, 6, 0, 0.67, 0, cast);
+    p.cyl(0.05, 0.036, 0.11, 6, 0, 0.682, 0, 0xfff1c9, true);
+    for (let k = 0; k < 6; k++) { const a = (k / 6) * 6.283 + Math.PI / 6; p.add(new THREE.BoxGeometry(0.005, 0.115, 0.005), Math.cos(a) * 0.043, 0.737, Math.sin(a) * 0.043, cast, 0, false, Math.cos(a) * 0.12, -Math.sin(a) * 0.12); }
+    p.cyl(0.056, 0.056, 0.012, 6, 0, 0.792, 0, cast);
+    p.cyl(0.012, 0.064, 0.05, 6, 0, 0.804, 0, cast); p.cyl(0.014, 0.014, 0.025, 6, 0, 0.854, 0, cast);
+    p.sphere(0.012, 0, 0.885, 0, gilt);
+  } else {
     // lampadaire de la ville : socle, fût à manchon sombre, crosse et tête à LED ; bannière de la fête qui flotte à sa potence,
     // suspension fleurie, corbeille
     p.cyl(0.045, 0.05, 0.03, 8, 0, 0, 0, 0x5d6168);
@@ -6101,9 +6182,15 @@ function archTop(p: Parts, x: number, y: number, z: number, r: number, color: nu
 
 /** Réverbère à globe : fût sombre, lanterne allumée la nuit */
 function lampPost(p: Parts, x: number, z: number, h = 0.32) {
-  p.cyl(0.01, 0.016, h, 6, x, 0.02, z, 0x3c4a44);
-  p.sphere(0.03, x, h + 0.045, z, 0xffe2a0);
-  p.add(new THREE.IcosahedronGeometry(0.026, 1), x, h + 0.045, z, 0xffe2a0, 0, true);
+  // socle de fonte mouluré, fût et sa bague, console, lanterne à vitres qui luisent sous son chapeau, fleuron
+  const cast = 0x3c4a44;
+  p.cyl(0.024, 0.03, 0.03, 6, x, 0, z, cast); p.cyl(0.02, 0.02, 0.008, 6, x, 0.03, z, dark(cast, 0.8));
+  p.cyl(0.009, 0.014, h - 0.02, 6, x, 0.038, z, cast);
+  p.cyl(0.015, 0.015, 0.01, 6, x, h * 0.55, z, dark(cast, 0.8));
+  p.cyl(0.02, 0.01, 0.018, 6, x, h + 0.008, z, cast);
+  p.cyl(0.028, 0.02, 0.05, 6, x, h + 0.026, z, 0xffe2a0, true);
+  p.cyl(0.006, 0.034, 0.024, 6, x, h + 0.076, z, cast);
+  p.sphere(0.007, x, h + 0.106, z, cast);
 }
 
 /**
