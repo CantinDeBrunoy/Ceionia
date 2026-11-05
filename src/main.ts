@@ -147,6 +147,8 @@ class Game implements UIHost {
   /** étape de l'expédition suivie (pour se rapprocher à son arrivée sur place), sa dernière position et sa vitesse lissée */
   private followPhase = '';
   private followLast: [number, number] | null = null;
+  /** le point suivi, lissé : le balancement du porte-fanion ne secoue plus la vue */
+  private followSm: [number, number] | null = null;
   private followVel: [number, number] = [0, 0];
   /** la vue est descendue d'elle-même avec la troupe suivie (elle remonte quand l'expédition est finie) */
   private autoUnder = false;
@@ -647,7 +649,7 @@ class Game implements UIHost {
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
     // assez près pour voir l'équipe (de petits personnages) ; on se rapproche encore quand elle arrive sur place
-    if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 10); this.followPhase = ''; this.followLast = null; }
+    if (a) { const p = this.agents.partyPositions(a.party)[0]; if (p) this.cam.follow(p[0], p[1], 10); this.followPhase = ''; this.followLast = null; this.followSm = null; }
   }
   get disasters() { return this.world.disasters; }
 
@@ -1051,6 +1053,9 @@ class Game implements UIHost {
         const pt = followPoint(this.expView.flagOf(followed.id), pos.length ? [pos[0][0], pos[0][1]] : undefined, focus, followed.phase === 'work', this.expView.liftOf(followed.id))!;
         let x = pt.x, z = pt.z;
         const lift = pt.lift;
+        const sm = this.followSm;
+        if (!sm || this.followLast === null || Math.hypot(x - sm[0], z - sm[1]) > 6) this.followSm = [x, z];
+        else { const k = 1 - Math.exp(-Math.min(gdt, 0.25) / 0.6); sm[0] += (x - sm[0]) * k; sm[1] += (z - sm[1]) * k; x = sm[0]; z = sm[1]; }
         const arrived = followed.phase === 'work' && this.followPhase !== 'work';
         this.followPhase = followed.phase;
         // en route (à cheval surtout), la vue vise un peu devant l'équipe, là où elle va : elle ne la regarde plus filer
