@@ -8763,10 +8763,496 @@ function futureExtras(p: Parts, kind: KindId, size: number) {
   if (box.min.y > -0.03 && kind !== 'pier' && kind !== 'harbor') {
     p.box(x1 - x0, 0.006, 0.008, cx, 0.014, z1, color, 0, 'neon'); p.box(x1 - x0, 0.006, 0.008, cx, 0.014, z0, color, 0, 'neon');
     p.box(0.008, 0.006, z1 - z0, x0, 0.014, cz, color, 0, 'neon'); p.box(0.008, 0.006, z1 - z0, x1, 0.014, cz, color, 0, 'neon');
+    // le totem d'enseigne verticale au coin de la parcelle, côté rue, comme dans les rues de la nuit
+    const th = Math.min(0.6, 0.28 + size * 0.1), tx = x1 - 0.04, tz = z1 - 0.04;
+    p.box(0.02, th, 0.02, tx, 0, tz, NC.steel);
+    vSign(p, tx, th * 0.3, tz, th * 0.7, CYBER[(h + 1) % 4], -Math.PI / 2, h);
   }
   const s = Math.min(1.4, 0.6 + size * 0.3);
   holoSign(cx, top + 0.08 * s, cz, s, color);
   if (size >= 2) circlingDrone(cx, Math.max(0.5, top * 0.8), cz, Math.max(x1 - x0, z1 - z0) * 0.55, 0.06 + h * 0.01);
+}
+
+// ---------------- Âge futuriste : les quartiers « Night City » ----------------
+
+/**
+ * Palette des rues de la nuit : verre sombre et béton noirci, que relèvent les néons roses, cyan, violets et ambrés, la
+ * lumière chaude des fenêtres et des touches claires (auvents, bacs plantés) pour que la ville reste accueillante
+ */
+const NC = {
+  glass: 0x4c6a88, glass2: 0x5a7896, dark: 0x2e3440, slab: 0x262b34, steel: 0x6a7280, concrete: 0x6e747e, pave: 0x6c727c,
+  pink: 0xff4fc8, cyan: 0x4ff0ff, violet: 0xa46aff, amber: 0xffb84a, red: 0xff4a5a, blue: 0x4a8aff, warm: 0xffe2b0, light: 0xd8dde2,
+};
+const CYBER = [NC.pink, NC.cyan, NC.violet, NC.amber];
+
+/** Fenêtres de la nuit sur une façade (normale de cap ry) : surtout chaudes, quelques-unes roses ou cyan derrière leurs stores */
+function cyberLights(p: Parts, cx: number, cz: number, ry: number, half: number, y0: number, y1: number, step: number, seed: number) {
+  const ux = Math.cos(ry), uz = -Math.sin(ry);
+  for (let y = y0; y < y1; y += step) for (let u = -half + 0.04; u < half - 0.03; u += 0.075) {
+    const h = hash2(Math.round(u * 50) + seed * 13, Math.round(y * 40), 977);
+    if (h > 0.28) continue;
+    p.box(0.045, 0.05, 0.005, cx + ux * u, y, cz + uz * u, h < 0.05 ? NC.pink : h < 0.1 ? NC.cyan : NC.warm, ry, h < 0.1 ? 'neon' : true);
+  }
+}
+
+/**
+ * Tour « Night City » posée en (x, y0, z) : verre sombre en gradins qui se retirent vers l'arrière (−z), nez de dalle noirs à
+ * chaque étage, arêtes de néon en façade, fenêtres qui s'allument la nuit et bandeaux lumineux sur les flancs ; chaque retrait
+ * porte sa corniche et son liseré. Au toit, ventilation, antenne et feu rouge. Rend la hauteur du toit et sa profondeur
+ */
+function cyberTower(p: Parts, x: number, y0: number, z: number, w: number, d: number, h: number, accent: number, seed: number, tiers = 3): { top: number; zc: number; w: number; d: number } {
+  const share = tiers === 1 ? [1] : tiers === 2 ? [0.62, 0.38] : [0.48, 0.32, 0.2];
+  let y = y0, cw = w, cd = d, zc = z;
+  for (let t = 0; t < tiers; t++) {
+    const th = h * share[t], zf = zc + cd / 2;
+    p.box(cw, th, cd, x, y, zc, t % 2 ? NC.glass2 : NC.glass);
+    for (let f = y + 0.12; f < y + th - 0.04; f += 0.12) {
+      p.box(cw + 0.01, 0.012, cd + 0.01, x, f, zc, NC.slab);
+      // les flancs : un bandeau de lumière par étage, d'une couleur sur deux
+      if ((Math.round(f * 25) + seed + t) % 3 === 0) for (const s of [-1, 1]) p.box(0.004, 0.03, cd * 0.7, x + s * (cw / 2 + 0.004), f - 0.06, zc, s > 0 ? accent : NC.warm, 0, s > 0 ? 'neon' : true);
+    }
+    for (const s of [-1, 1]) p.box(0.01, th, 0.01, x + s * cw / 2, y, zf, accent, 0, 'neon');
+    cyberLights(p, x, zf + 0.003, 0, cw / 2, y + 0.04, y + th - 0.05, 0.12, seed + t * 7);
+    y += th;
+    p.box(cw + 0.03, 0.024, cd + 0.03, x, y, zc, NC.dark);
+    p.box(cw + 0.034, 0.008, 0.006, x, y + 0.008, zf + 0.017, accent, 0, 'neon');
+    y += 0.024;
+    if (t < tiers - 1) { const nd = cd * 0.74; zc -= (cd - nd) * 0.4; cd = nd; cw *= 0.78; }
+  }
+  hvac(p, x - cw * 0.22, y, zc, Math.min(0.12, cw * 0.35));
+  p.cyl(0.005, 0.01, 0.3, 4, x + cw * 0.28, y, zc - cd * 0.2, NC.steel); p.sphere(0.012, x + cw * 0.28, y + 0.31, zc - cd * 0.2, 0xff4a3a);
+  return { top: y, zc, w: cw, d: cd };
+}
+
+/**
+ * Enseigne verticale accrochée à une façade (normale de cap ry, l'enseigne s'avance vers la rue) : potences d'acier, caisson
+ * sombre, panneau de néon et idéogrammes clairs qui se lisent des deux côtés
+ */
+function vSign(p: Parts, x: number, y: number, z: number, h: number, color: number, ry = 0, seed = 0) {
+  const s = Math.sin(ry), c = Math.cos(ry), ox = x + s * 0.045, oz = z + c * 0.045;
+  for (const yy of [y + 0.02, y + h - 0.03]) p.box(0.01, 0.01, 0.04, x + s * 0.02, yy, z + c * 0.02, NC.steel, ry);
+  p.box(0.014, h, 0.064, ox, y, oz, NC.dark, ry);
+  p.box(0.018, h - 0.024, 0.052, ox, y + 0.012, oz, color, ry, 'neon');
+  for (let yy = y + 0.03, k = 0; yy < y + h - 0.05; yy += 0.045, k++) {
+    const g = hash2(k, seed, 983);
+    p.box(0.022, 0.012 + g * 0.012, 0.016 + g * 0.018, ox, yy, oz, 0xffffff, ry, 'neon');
+  }
+  for (const yy of [y - 0.006, y + h]) p.box(0.02, 0.008, 0.07, ox, yy, oz, NC.steel, ry);
+}
+
+/** Panneau holographique (w × h) sur ses deux pieds, face vers le cap ry : cadre sombre, image de néon, bandes de texte claires */
+function holoBoard(p: Parts, x: number, y: number, z: number, w: number, h: number, color: number, ry = 0, seed = 0) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  for (const u of [-w * 0.35, w * 0.35]) p.box(0.014, 0.06, 0.014, x + c * u, y, z - s * u, NC.steel, ry);
+  p.box(w, h, 0.018, x, y + 0.06, z, NC.dark, ry);
+  p.box(w - 0.02, h - 0.02, 0.022, x, y + 0.07, z, color, ry, 'neon');
+  for (let k = 0; k < 3; k++) { const g = hash2(k, seed, 985); p.box((w - 0.06) * (0.4 + g * 0.5), 0.012, 0.024, x - c * (w * 0.1) * (g - 0.5), y + 0.09 + k * (h - 0.06) / 3, z + s * (w * 0.1) * (g - 0.5), 0xffffff, ry, 'neon'); }
+}
+
+/** Passerelle vitrée entre deux tours, de (x0, z0) à (x1, z1) à la hauteur y : tablier sombre, verrière allumée, liseré dessous */
+function skyBridge(p: Parts, x0: number, z0: number, x1: number, z1: number, y: number, accent: number) {
+  const L = Math.hypot(x1 - x0, z1 - z0), ry = Math.atan2(x1 - x0, z1 - z0), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+  p.box(0.1, 0.02, L, mx, y, mz, NC.dark, ry);
+  p.box(0.084, 0.056, L, mx, y + 0.02, mz, 0x8ac8e8, ry, true);
+  p.box(0.1, 0.014, L, mx, y + 0.076, mz, NC.dark, ry);
+  p.box(0.008, 0.006, L, mx, y - 0.005, mz, accent, ry, 'neon');
+}
+
+/** Rideau de « pluie de lumière » sous le bord d'un auvent, centré en (x, y, z), large de w le long du cap ry : fils de néon de longueurs inégales */
+function lightRain(p: Parts, x: number, y: number, z: number, w: number, ry: number, color: number, seed = 0) {
+  const c = Math.cos(ry), s = Math.sin(ry), n = Math.max(3, Math.round(w / 0.035));
+  for (let i = 0; i < n; i++) {
+    const u = -w / 2 + (i + 0.5) * (w / n), L = 0.05 + hash2(i, seed, 991) * 0.11;
+    p.box(0.003, L, 0.003, x + c * u, y - L, z - s * u, i % 3 ? color : 0xffffff, 0, 'neon');
+  }
+}
+
+/** Bouche de vapeur sur un toit ou un trottoir : caisson à grille et son panache */
+function steamVent(p: Parts, x: number, y: number, z: number) {
+  p.box(0.06, 0.03, 0.06, x, y, z, NC.steel);
+  for (const d of [-0.016, 0, 0.016]) p.box(0.006, 0.004, 0.05, x + d, y + 0.03, z, NC.slab);
+  smoke(x, y + 0.05, z, 1);
+}
+
+/**
+ * Sol des parcelles « Night City » (w × d, centré en (x, z)) : dalles sombres, flaques où se reflètent les néons, liseré
+ * lumineux sur le bord côté rue (+z), bornes lumineuses
+ */
+function cyberGround(p: Parts, x: number, z: number, w: number, d: number, accent: number, seed: number) {
+  p.box(w, 0.012, d, x, 0, z, NC.pave);
+  for (let u = -w / 2 + 0.12; u < w / 2 - 0.05; u += 0.24) p.box(0.006, 0.002, d - 0.02, x + u, 0.012, z, 0x4a4f58);
+  p.box(w - 0.02, 0.004, 0.008, x, 0.012, z + d / 2 - 0.01, accent, 0, 'neon');
+  for (let k = 0; k < 3; k++) {
+    const g = hash2(k, seed, 987), px = x + (g - 0.5) * w * 0.8, pz = z + d / 2 - 0.08 - hash2(k, seed, 988) * 0.12;
+    p.add(new THREE.CircleGeometry(0.035 + g * 0.03, 8).rotateX(-Math.PI / 2).scale(1.6, 1, 1), px, 0.0135, pz, k % 2 ? 0x4a3a6a : 0x2a4a62);
+  }
+}
+
+/** Arbre des rues de la nuit : bac de béton cerclé de lumière, tronc fin, couronne ronde d'un vert vif */
+function cyberTree(p: Parts, x: number, z: number, accent: number, s = 1, y = 0.012) {
+  p.cyl(0.05 * s, 0.05 * s, 0.04, 8, x, y, z, NC.concrete);
+  p.add(new THREE.TorusGeometry(0.052 * s, 0.003, 3, 10).rotateX(Math.PI / 2), x, y + 0.042, z, accent, 0, 'neon');
+  p.cyl(0.006, 0.009, 0.14 * s, 5, x, y + 0.04, z, 0x4a3a2e);
+  p.sphere(0.07 * s, x, y + 0.04 + 0.17 * s, z, F.leaf, 0, 0.9);
+  p.sphere(0.045 * s, x + 0.03 * s, y + 0.04 + 0.13 * s, z + 0.02 * s, F.leaf2, 0, 0.9);
+}
+
+/**
+ * Clinique de la nuit (2 × 2, entrée vers +z) : tour de verre sombre en gradins à la grande croix de néon menthe, aile des
+ * soins reliée par une passerelle, aire des ambulances volantes sur son toit (l'une s'y pose, l'autre fait sa ronde), croix
+ * holographique qui tourne au sommet ; auvent clair et sa pluie de lumière, enseigne verticale, jardin de soins planté, patients
+ */
+function futureHealth(p: Parts, v: number) {
+  const mint = 0x5affb0, accent = [NC.cyan, mint, NC.violet][v % 3];
+  cyberGround(p, 0, 0, 1.92, 1.92, accent, 31 + v);
+  const T = cyberTower(p, -0.4, 0.012, -0.38, 0.86, 0.74, 1.75, accent, 40 + v);
+  // la grande croix menthe en façade, dans son caisson
+  const zf = -0.38 + 0.37 + 0.012;
+  p.box(0.36, 0.36, 0.012, -0.4, 0.42, zf - 0.004, NC.dark);
+  p.box(0.3, 0.09, 0.014, -0.4, 0.555, zf, mint, 0, 'neon'); p.box(0.09, 0.3, 0.014, -0.4, 0.45, zf, mint, 0, 'neon');
+  // la croix holographique qui tourne au-dessus du toit
+  const q = turning([-0.4, T.top + 0.32, T.zc], [0, 1, 0], 0.1);
+  q.box(0.2, 0.06, 0.012, 0, -0.03, 0, mint, 0, 'neon'); q.box(0.06, 0.2, 0.012, 0, -0.1, 0, mint, 0, 'neon');
+  q.add(new THREE.TorusGeometry(0.16, 0.005, 4, 20), 0, 0, 0, mint, 0, 'neon');
+  p.cyl(0.05, 0.07, 0.03, 10, -0.4 - T.w * 0.05, T.top, T.zc, NC.steel);
+  // l'aile des soins, ses bandeaux vitrés, l'aire des ambulances sur le toit
+  const wx = 0.5, wz = -0.42, wh = 0.46;
+  p.box(0.82, wh, 0.82, wx, 0.012, wz, NC.glass2);
+  for (const y of [0.1, 0.25, 0.38]) { p.box(0.8, 0.06, 0.006, wx, y, wz + 0.413, 0x9ad8ff, 0, true); p.box(0.006, 0.06, 0.6, wx + 0.413, y, wz, NC.warm, 0, true); }
+  p.box(0.86, 0.024, 0.86, wx, wh + 0.012, wz, NC.dark);
+  p.box(0.86, 0.008, 0.006, wx, wh + 0.02, wz + 0.433, accent, 0, 'neon');
+  p.cyl(0.3, 0.3, 0.012, 16, wx, wh + 0.036, wz, 0x2a2e36);
+  neonRing(p, 0.3, wh + 0.05, wx, wz, mint, 0.005);
+  for (const dx of [-0.06, 0.06]) p.box(0.026, 0.004, 0.2, wx + dx, wh + 0.048, wz, 0xf4f6f8);
+  p.box(0.12, 0.004, 0.026, wx, wh + 0.048, wz, 0xf4f6f8);
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.02, 0.012, 0.02, wx + Math.cos(a) * 0.34, wh + 0.036, wz + Math.sin(a) * 0.34, k % 2 ? mint : NC.warm, 0, 'neon'); }
+  steamVent(p, wx + 0.33, wh + 0.036, wz - 0.33);
+  flyCar(p, wx + 0.02, wh + 0.07, wz + 0.02, 0.3, F.white);
+  { const a = turning([0.1, 1.05, -0.1], [0, 1, 0], 0.045); flyCar(a, 0.62, 0, 0, Math.PI, F.white, 2, 0.25); }
+  skyBridge(p, -0.4 + 0.43, -0.25, wx - 0.41, -0.25, 0.3, accent);
+  // l'auvent clair de l'entrée, ses portes, sa pluie de lumière ; l'enseigne verticale
+  p.box(0.7, 0.024, 0.3, -0.35, 0.3, 0.12, NC.light);
+  p.box(0.7, 0.008, 0.006, -0.35, 0.296, 0.27, mint, 0, 'neon');
+  for (const x of [-0.66, -0.04]) p.cyl(0.01, 0.01, 0.29, 5, x, 0.012, 0.25, NC.steel);
+  lightRain(p, -0.35, 0.296, 0.27, 0.6, 0, mint, v);
+  p.box(0.3, 0.2, 0.01, -0.35, 0.012, zf, 0x9ad8ff, 0, true);
+  vSign(p, -0.83, 0.5, -0.05, 0.62, NC.cyan, -Math.PI / 2, v);
+  // le jardin de soins : pelouse, bacs plantés, bancs, une infirmière qui pousse un fauteuil, un robot de soins, un patient
+  p.box(0.74, 0.006, 0.42, 0.5, 0.012, 0.5, 0x7ac87a);
+  for (const [x, z] of [[0.24, 0.36], [0.76, 0.36], [0.76, 0.7]]) cyberTree(p, x, z, accent, 1.1);
+  bench(p, 0.45, 0.72, Math.PI); bench(p, 0.22, 0.66, Math.PI * 0.75);
+  seated(p, 0.45, 0.06, 0.72, Math.PI, 0x9ad8ff, 0xd8d4cc);
+  figure(p, 0.3, 0.52, F.white, 2.4, false, 0x2a2420);
+  for (const s of [-1, 1]) p.add(new THREE.TorusGeometry(0.026, 0.005, 4, 10).rotateY(Math.PI / 2), 0.37 + s * 0.03, 0.04, 0.47, 0x3c3c40);
+  p.box(0.055, 0.012, 0.05, 0.37, 0.07, 0.47, mint); seated(p, 0.37, 0.07, 0.47, 2.4, 0x6a5aa8);
+  // le robot de soins : corps blanc en goutte, visière lumineuse
+  p.cyl(0.02, 0.03, 0.08, 8, -0.02, 0.012, 0.55, F.white); p.sphere(0.026, -0.02, 0.11, 0.55, F.white); p.box(0.03, 0.008, 0.006, -0.02, 0.112, 0.575, NC.cyan, 0, 'neon');
+  figure(p, -0.6, 0.55, 0x3a6ab8, 0.3, false, 0x8a5a3a); figure(p, -0.15, 0.78, NC.violet, -2.6, false, 0x2a2420);
+}
+
+/**
+ * Caserne de la nuit (2 × 2, entrée vers +z) : remise à trois portes cerclées de rouge, l'une ouverte sur le camion volant,
+ * tour de séchage aux arêtes rouges et sa citerne d'eau qui luit, aire d'envol sur le toit et son drone extincteur qui tourne,
+ * flamme holographique, enseigne verticale ; bouche d'incendie, pompiers, pluie de lumière sous l'auvent
+ */
+function futureFire(p: Parts, v: number) {
+  const red = NC.red, accent = [NC.amber, NC.pink, NC.cyan][v % 3];
+  cyberGround(p, 0, 0, 1.92, 1.92, red, 51 + v);
+  // la remise et ses trois portes
+  const gz = -0.2, gh = 0.4, gw = 1.36, gx = -0.22;
+  p.box(gw, gh, 0.9, gx, 0.012, gz, NC.glass2);
+  for (let k = 0; k < 3; k++) {
+    const x = gx - 0.42 + k * 0.42, zf = gz + 0.451;
+    p.box(0.34, 0.3, 0.008, x, 0.012, zf, k === 1 ? 0x0e1014 : 0x4a1e24);
+    if (k !== 1) for (let y = 0.05; y < 0.3; y += 0.05) p.box(0.32, 0.006, 0.01, x, y, zf, 0x6a2a30);
+    p.box(0.36, 0.012, 0.012, x, 0.314, zf + 0.004, red, 0, 'neon');
+    for (const s of [-1, 1]) p.box(0.012, 0.3, 0.012, x + s * 0.176, 0.012, zf + 0.004, red, 0, 'neon');
+  }
+  // le camion volant rouge qui sort de la porte ouverte
+  p.box(0.24, 0.12, 0.06, gx, 0.1, gz + 0.36, 0x0e1014);
+  flyCar(p, gx, 0.03, gz + 0.5, 0, 0xd83a3a);
+  for (const d of [-0.025, 0.025]) p.box(0.016, 0.01, 0.016, gx + d, 0.15, gz + 0.5, d < 0 ? red : NC.blue, 0, 'neon');
+  // l'étage : dortoir vitré en retrait, ses fenêtres
+  const T = cyberTower(p, gx - 0.12, gh + 0.012, gz - 0.12, 1.0, 0.6, 0.5, red, 60 + v, 2);
+  // l'auvent clair de la remise, sa pluie de lumière
+  p.box(gw + 0.04, 0.02, 0.14, gx, gh - 0.02, gz + 0.52, NC.light);
+  p.box(gw + 0.04, 0.008, 0.006, gx, gh - 0.024, gz + 0.592, red, 0, 'neon');
+  lightRain(p, gx, gh - 0.024, gz + 0.592, gw - 0.1, 0, accent, v + 3);
+  // la tour de séchage, ses arêtes rouges, sa citerne d'eau claire qui luit la nuit
+  const tx = 0.72, tz = -0.62, th = 1.45;
+  p.box(0.26, th, 0.26, tx, 0.012, tz, NC.glass);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.012, th, 0.012, tx + sx * 0.13, 0.012, tz + sz * 0.13, red, 0, 'neon');
+  for (let y = 0.15; y < th; y += 0.15) p.box(0.27, 0.012, 0.27, tx, y, tz, NC.slab);
+  cyberLights(p, tx, tz + 0.133, 0, 0.13, 0.08, th - 0.05, 0.15, 71);
+  p.cyl(0.15, 0.15, 0.03, 12, tx, th + 0.012, tz, NC.dark);
+  p.cyl(0.13, 0.13, 0.18, 12, tx, th + 0.042, tz, 0x3cc4e8, 'neon');
+  for (const y of [0.06, 0.15]) p.cyl(0.135, 0.135, 0.014, 12, tx, th + 0.012 + y, tz, NC.steel);
+  p.cyl(0.14, 0.12, 0.03, 12, tx, th + 0.222, tz, NC.dark);
+  p.cyl(0.004, 0.008, 0.25, 4, tx, th + 0.25, tz, NC.steel); p.sphere(0.012, tx, th + 0.51, tz, 0xff4a3a);
+  // la flamme holographique sur le toit, et le drone extincteur qui fait sa ronde
+  const q = turning([gx - 0.12, T.top + 0.1, T.zc], [0, 1, 0], 0.12);
+  q.cone(0.07, 0.2, 5, 0, 0, 0, accent, 'neon'); q.cone(0.045, 0.14, 5, 0.03, 0, 0.01, red, 'neon');
+  q.cone(0.035, 0.1, 5, -0.035, 0, -0.01, NC.amber, 'neon');
+  q.add(new THREE.TorusGeometry(0.11, 0.004, 4, 18).rotateX(Math.PI / 2), 0, 0.005, 0, red, 0, 'neon');
+  circlingDrone(gx - 0.12, T.top + 0.35, T.zc, 0.5, 0.08, true);
+  vSign(p, gx + gw / 2 + 0.006, 0.08, gz + 0.3, 0.3, red, Math.PI / 2, v + 7);
+  // devant : bouche d'incendie, tuyau déroulé, pompiers, borne de recharge
+  p.cyl(0.022, 0.026, 0.07, 8, 0.55, 0.012, 0.42, 0xd83a3a); p.sphere(0.022, 0.55, 0.085, 0.42, 0xd83a3a); p.box(0.05, 0.016, 0.016, 0.55, 0.05, 0.42, 0xd8b04a);
+  for (let k = 0; k < 4; k++) p.add(new THREE.CylinderGeometry(0.007, 0.007, 0.12, 4).rotateZ(Math.PI / 2), 0.48 - k * 0.1, 0.02, 0.48 + (k % 2) * 0.03, 0xd8d4c4, 0.3 - (k % 2) * 0.6);
+  figure(p, 0.26, 0.5, 0xd8b04a, -0.4, false, 0x2a2420); figure(p, 0.1, 0.62, 0xd8b04a, 2.6, false, 0x8a5a3a);
+  figure(p, -0.7, 0.7, NC.violet, 1.4, false, 0x2a2420);
+  for (const x of [0.4, 0.9]) cyberTree(p, x, 0.82, accent);
+  p.box(0.05, 0.12, 0.04, 0.86, 0.012, 0.3, NC.dark); p.box(0.03, 0.04, 0.004, 0.86, 0.08, 0.321, NC.cyan, 0, 'neon');
+  steamVent(p, 0.2, gh + 0.012, gz - 0.38);
+}
+
+/**
+ * Commissariat de la nuit (2 × 2, entrée vers +z) : tour de verre aux arêtes bleues et rouges en gradins, socle aux larges
+ * marches cerclées de bleu, insigne holographique qui tourne, aire des patrouilles volantes et leurs rampes de gyrophares,
+ * patrouille qui fait sa ronde, projecteurs, enseigne verticale ; robot d'accueil, agents, barrières lumineuses
+ */
+function futurePolice(p: Parts, v: number) {
+  const blue = NC.blue, red = NC.red;
+  cyberGround(p, 0, 0, 1.92, 1.92, blue, 81 + v);
+  // le socle et ses marches
+  p.box(1.2, 0.3, 0.8, -0.3, 0.012, -0.36, NC.glass2);
+  for (const y of [0.08, 0.2]) p.box(1.18, 0.06, 0.006, -0.3, y, 0.044, 0x9ad8ff, 0, true);
+  p.box(1.24, 0.02, 0.84, -0.3, 0.31, -0.36, NC.dark);
+  p.box(1.24, 0.008, 0.006, -0.3, 0.316, 0.062, blue, 0, 'neon');
+  for (let k = 0; k < 3; k++) { p.box(0.5 - k * 0.06, 0.02, 0.06, -0.3, 0.012 + k * 0.02, 0.12 - k * 0.04, NC.concrete); p.box(0.5 - k * 0.06, 0.004, 0.004, -0.3, 0.032 + k * 0.02, 0.15 - k * 0.04, blue, 0, 'neon'); }
+  p.box(0.24, 0.22, 0.01, -0.3, 0.07, 0.046, 0x0e1014);
+  const T = cyberTower(p, -0.42, 0.33, -0.48, 0.72, 0.56, 1.75, v % 2 ? red : blue, 90 + v);
+  for (const s of [-1, 1]) p.box(0.01, 1.75 * 0.48, 0.01, -0.42 + s * 0.36, 0.33, -0.48 - 0.28, v % 2 ? blue : red, 0, 'neon');
+  // l'insigne holographique (bouclier hexagonal et son étoile d'or) qui tourne au sommet
+  const q = turning([-0.42, T.top + 0.3, T.zc], [0, 1, 0], 0.09);
+  q.add(new THREE.CylinderGeometry(0.12, 0.12, 0.012, 6).rotateX(Math.PI / 2), 0, 0, 0, blue, 0, 'neon');
+  q.add(new THREE.CylinderGeometry(0.06, 0.06, 0.016, 5).rotateX(Math.PI / 2), 0, 0, 0, NC.amber, 0, 'neon');
+  q.add(new THREE.TorusGeometry(0.15, 0.004, 4, 6), 0, 0, 0, 0xffffff, 0, 'neon');
+  p.cyl(0.04, 0.06, 0.06, 8, -0.42, T.top, T.zc, NC.steel);
+  vSign(p, -0.3 + 0.6 + 0.006, 0.36, -0.15, 0.7, blue, Math.PI / 2, v + 11);
+  // l'aire des patrouilles volantes : dalle, balises, deux voitures noires et blanches à leurs rampes de gyrophares
+  const ax = 0.56, az = -0.45;
+  p.box(0.7, 0.18, 0.9, ax, 0.012, az, NC.glass);
+  p.box(0.72, 0.02, 0.92, ax, 0.19, az, NC.dark);
+  for (let k = 0; k < 6; k++) p.box(0.02, 0.01, 0.02, ax - 0.33 + (k % 2) * 0.66, 0.21, az - 0.4 + Math.floor(k / 2) * 0.4, k % 2 ? blue : red, 0, 'neon');
+  for (const [z, r] of [[-0.62, 0.2], [-0.25, -0.15]]) {
+    flyCar(p, ax, 0.22, az + z + 0.45, r, 0x1e2a44);
+    p.box(0.05, 0.012, 0.016, ax + Math.sin(r) * 0.0, 0.335, az + z + 0.45, red, r, 'neon');
+    p.box(0.05, 0.012, 0.016, ax + Math.sin(r) * 0.0, 0.335, az + z + 0.43, blue, r, 'neon');
+  }
+  { const a = turning([-0.1, 1.25, -0.2], [0, 1, 0], 0.05); flyCar(a, 0.75, 0, 0, Math.PI, 0x1e2a44, 2, 0.25); a.box(0.05, 0.012, 0.03, 0.75, 0.115, 0, red, 0, 'neon'); }
+  // projecteurs du toit
+  for (const s of [-1, 1]) { const x = -0.42 + s * 0.3; p.cyl(0.012, 0.016, 0.05, 6, x, 0.33, 0.0, NC.steel); p.add(new THREE.CylinderGeometry(0.026, 0.018, 0.05, 8).rotateX(-0.9), x, 0.4, 0.0, NC.dark); p.add(new THREE.CircleGeometry(0.022, 8).rotateX(-0.9 + Math.PI / 2), x, 0.41, 0.022, 0xeaf4ff, 0, 'neon'); }
+  // le parvis : barrières lumineuses, robot d'accueil, agents, borne, arbres en bacs
+  for (const x of [0.2, 0.42, 0.64]) { p.box(0.016, 0.06, 0.016, x, 0.012, 0.3, NC.steel); p.box(0.2, 0.012, 0.01, x + 0.11, 0.05, 0.3, x === 0.42 ? blue : 0xf4f6f8, 0, 'neon'); }
+  p.cyl(0.022, 0.03, 0.09, 8, -0.05, 0.012, 0.3, F.white); p.sphere(0.028, -0.05, 0.12, 0.3, F.white); p.box(0.034, 0.008, 0.006, -0.05, 0.122, 0.327, blue, 0, 'neon');
+  figure(p, -0.55, 0.35, 0x1e2a44, 0.3, false, 0x2a2420); figure(p, -0.42, 0.42, 0x1e2a44, -2.6, false, 0x8a5a3a);
+  figure(p, 0.1, 0.6, NC.pink, 2.2, false, 0x2a2420);
+  for (const x of [-0.85, -0.55, 0.85]) cyberTree(p, x, 0.78, blue);
+  steamVent(p, 0.2, 0.33, -0.66);
+}
+
+/**
+ * Bar à nouilles de la nuit (1 case, comptoir vers +z) : échoppe basse au comptoir ouvert sous son auvent et sa pluie de
+ * lumière, tabourets et clients, marmite qui fume, lampions ; deux étages de verre sombre au-dessus, la grande enseigne
+ * verticale, le panneau holographique du toit et ses câbles ; bouche de vapeur dans la ruelle
+ */
+function futureTavern(p: Parts, v: number) {
+  const accent = CYBER[v % 4], other = CYBER[(v + 1) % 4];
+  cyberGround(p, 0, 0, 0.94, 0.94, accent, 101 + v);
+  // l'échoppe et son comptoir
+  p.box(0.78, 0.24, 0.5, 0, 0.012, -0.12, NC.concrete);
+  p.box(0.7, 0.16, 0.012, 0, 0.06, 0.13, 0x3a2a22);
+  p.box(0.66, 0.11, 0.008, 0, 0.1, 0.122, NC.warm, 0, true);
+  p.box(0.74, 0.06, 0.1, 0, 0.012, 0.19, NC.dark); p.box(0.76, 0.012, 0.12, 0, 0.072, 0.19, 0xb8a080);
+  p.box(0.74, 0.006, 0.006, 0, 0.07, 0.25, accent, 0, 'neon');
+  // la marmite qui fume, bols sur le comptoir
+  p.cyl(0.04, 0.035, 0.05, 8, -0.24, 0.084, 0.17, NC.steel); smoke(-0.24, 0.16, 0.17, 1);
+  for (const x of [-0.05, 0.12, 0.25]) { p.cyl(0.014, 0.009, 0.012, 6, x, 0.084, 0.2, 0xf4ecd8); p.box(0.03, 0.002, 0.002, x, 0.098, 0.2, 0x8a5a3a, 0.4); }
+  // tabourets et clients
+  for (const [x, c] of [[-0.12, 0x3a6ab8], [0.12, NC.violet], [0.3, 0xd8786c]] as number[][]) {
+    p.cyl(0.018, 0.012, 0.05, 6, x, 0.012, 0.29, NC.steel); p.cyl(0.022, 0.022, 0.008, 8, x, 0.062, 0.29, accent);
+    if (x !== 0.3 || v % 2) seated(p, x, 0.07, 0.3, Math.PI, c, 0x2a2420);
+  }
+  // l'auvent clair, ses lampions, sa pluie de lumière
+  p.add(new THREE.BoxGeometry(0.86, 0.016, 0.22), 0, 0.27, 0.2, NC.light, 0, false, 0, -0.18);
+  p.box(0.86, 0.008, 0.006, 0, 0.245, 0.31, accent, 0, 'neon');
+  lightRain(p, 0, 0.245, 0.31, 0.8, 0, accent, v);
+  for (const x of [-0.3, -0.1, 0.1, 0.3]) { p.box(0.002, 0.03, 0.002, x, 0.2, 0.28, NC.steel); p.sphere(0.022, x, 0.19, 0.28, x < 0 ? NC.red : other, 0, 1.2); }
+  for (const x of [-0.3, -0.1, 0.1, 0.3]) p.box(0.03, 0.03, 0.03, x, 0.175, 0.28, x < 0 ? NC.red : other, 0, 'neon');
+  // les deux étages de verre sombre, en léger retrait
+  const T = cyberTower(p, 0, 0.252, -0.16, 0.72, 0.42, 0.5, accent, 110 + v, 2);
+  vSign(p, 0.37, 0.3, 0.04, 0.48, other, Math.PI / 2, v + 13);
+  holoBoard(p, 0, T.top, T.zc, 0.34, 0.16, accent, 0, v);
+  for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.002, 0.002, 0.5, 3).rotateZ(Math.PI / 2 + s * 0.2), s * 0.2, 0.62, 0.12, NC.slab);
+  steamVent(p, -0.38, 0.012, 0.36);
+  p.box(0.06, 0.08, 0.06, 0.4, 0.012, 0.38, 0x3a4a6a); p.box(0.05, 0.004, 0.05, 0.4, 0.092, 0.38, other, 0, 'neon');
+}
+
+/**
+ * Salon de coiffure de la nuit (1 case, vitrine vers +z) : vitrine allumée, fauteuil et miroir holographique, le coiffeur et
+ * sa cliente ; les grands ciseaux de néon rose en enseigne, le poteau rayé lumineux qui tourne, un étage de verre sombre,
+ * l'enseigne verticale et les plantes de la devanture
+ */
+function futureBarber(p: Parts, v: number) {
+  const accent = [NC.pink, NC.cyan, NC.violet][v % 3];
+  cyberGround(p, 0, 0, 0.94, 0.94, accent, 121 + v);
+  p.box(0.72, 0.3, 0.5, 0, 0.012, -0.14, NC.concrete);
+  p.box(0.66, 0.24, 0.01, 0, 0.03, 0.115, 0x9ad8ff, 0, true);
+  for (const x of [-0.22, 0.22]) p.box(0.012, 0.25, 0.014, x, 0.03, 0.118, NC.dark);
+  // fauteuil, miroir holographique, coiffeur et cliente derrière la vitrine
+  p.box(0.08, 0.05, 0.08, -0.1, 0.012, 0.05, NC.dark); p.box(0.08, 0.06, 0.016, -0.1, 0.062, 0.012, NC.dark);
+  seated(p, -0.1, 0.06, 0.05, Math.PI, 0xf4f6f8, 0xc8a070);
+  figure(p, 0.04, 0.04, NC.dark, -2.4, false, 0xff8ad8);
+  p.box(0.12, 0.16, 0.006, -0.1, 0.08, -0.15, accent, 0, 'neon'); p.box(0.1, 0.14, 0.008, -0.1, 0.09, -0.148, 0xd8f4ff, 0, 'neon');
+  // l'enseigne : les ciseaux de néon au-dessus de la vitrine
+  p.box(0.74, 0.1, 0.03, 0, 0.3, 0.1, NC.dark);
+  for (const s of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(0.16, 0.012, 0.012), 0.02, 0.35, 0.12, accent, 0, 'neon', s * 0.45);
+    p.add(new THREE.TorusGeometry(0.022, 0.005, 4, 10), -0.08, 0.35 + s * 0.035, 0.12, accent, 0, 'neon');
+  }
+  for (const x of [0.14, 0.2, 0.26]) p.box(0.04, 0.012, 0.012, x, 0.33 + (x - 0.2) * 0.2, 0.12, 0xffffff, 0, 'neon');
+  // le poteau rayé lumineux qui tourne
+  for (const y of [0.062, 0.26]) p.cyl(0.026, 0.026, 0.018, 8, 0.3, y, 0.16, NC.steel);
+  p.box(0.01, 0.01, 0.04, 0.3, 0.16, 0.13, NC.steel);
+  const sp = turning([0.3, 0.08, 0.16], [0, 1, 0], 0.5);
+  sp.cyl(0.019, 0.019, 0.18, 8, 0, 0, 0, 0xf4f6f8, 'neon');
+  for (let i = 0; i < 6; i++) sp.add(new THREE.BoxGeometry(0.042, 0.012, 0.042), 0, 0.02 + i * 0.028, 0, i % 2 ? NC.blue : NC.red, 0, 'neon', 0.5);
+  // l'étage de verre sombre, l'enseigne verticale, la devanture plantée
+  cyberTower(p, 0, 0.312, -0.18, 0.66, 0.4, 0.34, accent, 130 + v, 1);
+  vSign(p, -0.37, 0.36, 0.0, 0.32, CYBER[(v + 2) % 4], -Math.PI / 2, v + 17);
+  for (const x of [-0.36, 0.38]) cyberTree(p, x, 0.34, accent, 0.8);
+  p.add(new THREE.BoxGeometry(0.76, 0.012, 0.16), 0, 0.27, 0.22, NC.light, 0, false, 0, -0.15);
+  lightRain(p, 0, 0.255, 0.3, 0.7, 0, accent, v + 1);
+  figure(p, 0.15, 0.38, 0x3a6ab8, 2.8, false, 0x2a2420);
+}
+
+/**
+ * Villa sur le toit de la ville (2 × 2, vers +z) : trois dalles claires en porte-à-faux qui tournent l'une sur l'autre,
+ * baies de verre sombre allumées la nuit, liserés de néon sous chaque dalle, piscine à débordement sur la terrasse haute,
+ * palmiers et jardin, voiture volante sur son aire, holo de bienvenue ; mur d'enceinte lumineux
+ */
+function futureManor(p: Parts, v: number) {
+  const accent = CYBER[v % 4];
+  // le jardin : pelouse, allée sombre, mur bas lumineux
+  p.box(1.92, 0.012, 1.92, 0, 0, 0, 0x6fb86a);
+  p.box(0.3, 0.004, 0.9, 0.3, 0.012, 0.5, NC.pave);
+  for (const [x, z, w, d] of [[0, 0.94, 1.9, 0.04], [-0.94, 0, 0.04, 1.9], [0.94, 0, 0.04, 1.9]]) { p.box(w, 0.08, d, x, 0.012, z, NC.concrete); p.box(w, 0.006, d + 0.004, x, 0.094, z, accent, 0, 'neon'); }
+  // les trois dalles en porte-à-faux
+  const lv = [[0, 0, -0.3, 1.2, 0.8, 0], [0.18, 0.3, -0.38, 1.0, 0.7, 0.18], [-0.1, 0.6, -0.42, 0.8, 0.6, -0.12]];
+  for (const [x, y, z, w, d, ry] of lv) {
+    p.box(w * 0.86, 0.26, d * 0.8, x, y + 0.012, z, NC.glass, ry);
+    p.box(w, 0.04, d, x, y + 0.272, z, NC.light, ry);
+    p.box(w + 0.004, 0.006, d + 0.004, x, y + 0.268, z, accent, ry, 'neon');
+    cyberLights(p, x + Math.sin(ry) * (d * 0.4 + 0.004), z + Math.cos(ry) * (d * 0.4 + 0.004), ry, w * 0.43, y + 0.06, y + 0.25, 0.1, Math.round(y * 10) + v);
+  }
+  // la piscine à débordement sur la terrasse du milieu, son liseré
+  { const [x, y, z, , d, ry] = lv[1]; p.box(0.42, 0.04, 0.18, x + 0.2, y + 0.312, z + d * 0.32, NC.light, ry); waterRect(p, x + 0.2, y + 0.354, z + d * 0.32, 0.38, 0.14, ry); }
+  // terrasse haute : salon, palmier en bac
+  { const [x, y, z] = lv[2]; palmTree(p, x - 0.28, z + 0.1, 0.32, y + 0.312); p.box(0.14, 0.03, 0.06, x + 0.1, y + 0.312, z + 0.14, F.white); }
+  // l'aire de la voiture volante et sa voiture
+  p.cyl(0.2, 0.2, 0.012, 14, -0.56, 0.012, 0.5, NC.dark); neonRing(p, 0.2, 0.026, -0.56, 0.5, accent, 0.004);
+  flyCar(p, -0.56, 0.04, 0.5, 0.6, [F.white, 0xd83a7a, 0x3a6ab8][v % 3]);
+  // le jardin : palmiers, massifs, holo de bienvenue, promeneurs
+  for (const [x, z] of [[0.78, 0.2], [0.75, 0.68], [-0.8, -0.1]]) palmTree(p, x, z, 0.36);
+  for (const [x, z] of [[0.05, 0.55], [0.55, 0.42]]) { p.sphere(0.05, x, 0.04, z, F.leaf, 0, 0.7); p.sphere(0.03, x + 0.06, 0.03, z + 0.03, 0xff8ad8, 0, 0.8); }
+  holoSign(0.3, 0.2, 0.86, 0.7, accent);
+  figure(p, 0.35, 0.3, F.white, 2.8, false, 0x2a2420); figure(p, -0.25, 0.62, accent, 0.6, false, 0xc8a070);
+}
+
+/**
+ * Salle des hologrammes (2 × 2, entrée vers +z) : grande coque de verre sombre en biseau, façade-écran aux cadres de néon,
+ * danseuse holographique géante qui tourne au-dessus de la marquise, marquise à ampoules et sa pluie de lumière, enseignes
+ * verticales, file d'attente, food-truck volant
+ */
+function futureTheater(p: Parts, v: number) {
+  const accent = CYBER[v % 4], other = CYBER[(v + 1) % 4];
+  cyberGround(p, 0, 0, 1.92, 1.92, accent, 141 + v);
+  // la coque en biseau : un grand volume, et son toit qui monte vers l'arrière
+  p.box(1.5, 0.6, 1.1, 0, 0.012, -0.3, NC.glass);
+  p.add(new THREE.BoxGeometry(1.54, 0.05, 1.2), 0, 0.68, -0.3, NC.dark, 0, false, 0, 0.12);
+  for (const s of [-1, 1]) p.box(0.012, 0.6, 0.012, s * 0.75, 0.012, 0.25, accent, 0, 'neon');
+  // la façade-écran : trois panneaux de néon dans leurs cadres
+  for (const [x, w, c] of [[-0.48, 0.4, other], [0, 0.5, accent], [0.48, 0.4, other]] as number[][]) {
+    p.box(w, 0.3, 0.012, x, 0.3, 0.252, NC.dark);
+    p.box(w - 0.03, 0.27, 0.014, x, 0.315, 0.254, c, 0, 'neon');
+    for (let k = 0; k < 3; k++) p.box((w - 0.08) * (0.5 + hash2(k, x * 10, 143) * 0.5), 0.014, 0.016, x, 0.35 + k * 0.07, 0.255, 0xffffff, 0, 'neon');
+  }
+  // la marquise à ampoules et sa pluie de lumière
+  p.box(1.2, 0.04, 0.3, 0, 0.24, 0.4, NC.light);
+  for (let x = -0.56; x <= 0.56; x += 0.08) p.box(0.016, 0.016, 0.016, x, 0.23, 0.55, BULBS[Math.round(x * 12 + 7) % BULBS.length], 0, true);
+  lightRain(p, 0, 0.23, 0.55, 1.1, 0, accent, v);
+  for (const x of [-0.56, 0.56]) p.cyl(0.012, 0.012, 0.23, 5, x, 0.012, 0.52, NC.steel);
+  p.box(0.5, 0.18, 0.01, 0, 0.012, 0.254, 0x9ad8ff, 0, true);
+  // la danseuse holographique qui tourne, sur son anneau de projection
+  p.cyl(0.24, 0.27, 0.04, 12, 0, 0.73, -0.15, NC.steel); neonRing(p, 0.24, 0.775, 0, -0.15, accent, 0.005);
+  const q = turning([0, 0.78, -0.15], [0, 1, 0], 0.14), K = 1.8;
+  q.box(0.06 * K, 0.18 * K, 0.04 * K, 0, 0.12 * K, 0, accent, 0, 'neon'); q.sphere(0.035 * K, 0, 0.34 * K, 0, 0xffffff);
+  q.add(new THREE.ConeGeometry(0.09 * K, 0.14 * K, 8).translate(0, 0.07 * K, 0), 0, 0.05 * K, 0, other, 0, 'neon');
+  for (const s of [-1, 1]) { q.add(new THREE.BoxGeometry(0.02 * K, 0.16 * K, 0.02 * K).translate(0, 0.08 * K, 0), s * 0.04 * K, 0.26 * K, 0, accent, 0, 'neon', -s * 2.4); q.box(0.02 * K, 0.12 * K, 0.02 * K, s * 0.022 * K, 0, 0, accent, 0, 'neon'); }
+  q.add(new THREE.TorusGeometry(0.2 * K, 0.004, 4, 20).rotateX(Math.PI / 2), 0, 0.12 * K, 0, 0xffffff, 0, 'neon');
+  vSign(p, -0.76, 0.26, 0.05, 0.4, other, -Math.PI / 2, v + 19); vSign(p, 0.76, 0.26, 0.05, 0.4, accent, Math.PI / 2, v + 23);
+  // la file d'attente, le food-truck volant, les arbres
+  for (let k = 0; k < 5; k++) figure(p, -0.5 + k * 0.1, 0.72 + (k % 2) * 0.03, [NC.violet, 0x3a6ab8, F.white, 0xd8786c, NC.dark][k], Math.PI * 0.95, false, [0x2a2420, 0xff8ad8, 0x8a5a3a, 0x2a2420, 0x5af0ff][k]);
+  flyCar(p, 0.6, 0.03, 0.75, -Math.PI / 2, 0xf2c23a);
+  p.add(new THREE.BoxGeometry(0.08, 0.006, 0.06), 0.6, 0.16, 0.75, 0xff8ad8, 0, 'neon');
+  for (const x of [-0.85, 0.85]) cyberTree(p, x, 0.82, accent);
+  steamVent(p, 0.5, 0.012, -0.7 + 0.86);
+}
+
+/**
+ * Laboratoire de la nuit (1 case) : tour hexagonale de verre sombre, ses colonnes de liquide lumineux, la serre de culture
+ * rose, la parabole et son feu ; chercheurs en blouse
+ */
+function futureLab(p: Parts, v: number) {
+  const accent = [NC.cyan, 0x5affb0, NC.violet][v % 3];
+  cyberGround(p, 0, 0, 0.94, 0.94, accent, 161 + v);
+  p.cyl(0.24, 0.26, 0.9, 6, -0.08, 0.012, -0.12, NC.glass);
+  for (let y = 0.15; y < 0.9; y += 0.15) p.cyl(0.255, 0.255, 0.014, 6, -0.08, y, -0.12, NC.slab);
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.01, 0.9, 0.01, -0.08 + Math.cos(a) * 0.25, 0.012, -0.12 + Math.sin(a) * 0.25, accent, 0, 'neon'); }
+  cyberLights(p, -0.08, -0.12 + 0.218, 0, 0.11, 0.08, 0.86, 0.15, 170 + v);
+  // les colonnes de liquide
+  for (const x of [0.25, 0.34]) { p.cyl(0.03, 0.03, 0.4, 8, x, 0.012, 0.0, 0x3cc4e8, 'neon'); p.cyl(0.034, 0.034, 0.02, 8, x, 0.412, 0.0, NC.steel); p.cyl(0.034, 0.034, 0.02, 8, x, 0.012, 0.0, NC.steel); }
+  // la serre rose
+  p.box(0.26, 0.14, 0.2, 0.26, 0.012, -0.3, 0xd0ece4); p.box(0.24, 0.006, 0.18, 0.26, 0.13, -0.3, NC.pink, 0, 'neon');
+  // toit : parabole et feu
+  p.cyl(0.2, 0.22, 0.03, 6, -0.08, 0.912, -0.12, NC.dark);
+  p.cyl(0.008, 0.012, 0.12, 5, -0.08, 0.94, -0.12, NC.steel);
+  p.add(new THREE.SphereGeometry(0.1, 10, 4, 0, Math.PI * 2, 0, Math.PI / 3).rotateX(Math.PI).rotateX(-0.8), -0.08, 1.12, -0.12, F.white, 0.6);
+  p.sphere(0.012, -0.08, 1.2, -0.12, 0xff4a3a);
+  vSign(p, -0.33, 0.25, 0.0, 0.4, accent, -Math.PI / 2, v + 29);
+  figure(p, 0.15, 0.3, F.white, 2.6, false, 0x2a2420); figure(p, 0.3, 0.26, F.white, -2.2, false, 0xc8a070);
+  cyberTree(p, -0.36, 0.36, accent);
+}
+
+/**
+ * Thermes de la nuit (2 × 2) : bassins en gradins sous leurs anneaux de lumière, d'où monte la vapeur, pavillon de verre sombre
+ * à toit planté, cascade, transats et baigneurs, enseigne verticale et palmiers
+ */
+function futureBaths(p: Parts, v: number) {
+  const accent = CYBER[v % 4];
+  cyberGround(p, 0, 0, 1.92, 1.92, accent, 181 + v);
+  // le pavillon
+  p.box(1.4, 0.4, 0.5, -0.1, 0.012, -0.66, NC.glass);
+  for (const y of [0.1, 0.26]) p.box(1.38, 0.08, 0.006, -0.1, y, -0.408, NC.warm, 0, true);
+  p.box(1.44, 0.03, 0.54, -0.1, 0.412, -0.66, NC.dark); p.box(1.3, 0.02, 0.44, -0.1, 0.442, -0.66, F.leaf2);
+  for (let k = 0; k < 5; k++) p.sphere(0.04, -0.6 + k * 0.25, 0.48, -0.66, F.leaf, 0, 0.8);
+  p.box(1.44, 0.008, 0.006, -0.1, 0.418, -0.388, accent, 0, 'neon');
+  // les bassins en gradins, leurs anneaux, la vapeur, la cascade de l'un à l'autre
+  for (const [x, z, r, y] of [[-0.45, -0.05, 0.3, 0.12], [0.3, 0.1, 0.34, 0.06], [-0.2, 0.55, 0.26, 0.03]]) {
+    p.cyl(r + 0.04, r + 0.05, y, 14, x, 0.012, z, NC.concrete);
+    waterPool(p, x, y + 0.016, z, r, 14);
+    neonRing(p, r + 0.03, y + 0.016, x, z, accent, 0.005);
+    smoke(x, y + 0.05, z, 1);
+  }
+  p.box(0.12, 0.08, 0.02, -0.2, 0.06, -0.05 + 0.27, 0xbfe8ff, 0, 'neon');
+  // les baigneurs, les transats, les palmiers
+  for (const [x, z] of [[-0.4, 0.0], [0.3, 0.1], [0.36, 0.0]]) p.sphere(0.022, x, 0.1, z, 0xe8b894);
+  for (const [x, z] of [[0.75, -0.2], [0.75, 0.05]]) { p.add(new THREE.BoxGeometry(0.08, 0.012, 0.18), x, 0.05, z, F.white, 0, false, 0, 0.0); p.box(0.08, 0.04, 0.012, x, 0.05, z - 0.09, F.white); }
+  seated(p, 0.75, 0.05, 0.05, 0, 0xff8ad8, 0x2a2420);
+  for (const [x, z] of [[0.8, 0.6], [-0.8, 0.3], [0.85, -0.3]]) palmTree(p, x, z, 0.36);
+  vSign(p, 0.6, 0.06, -0.5, 0.3, accent, 0, v + 31);
+  figure(p, 0.1, 0.75, F.white, 2.8, false, 0x2a2420);
 }
 
 /** Les bâtiments qui ont, à l'âge futuriste, un modèle à eux (les autres prennent celui de l'époque moderne, rehaussé) ; vrai s'il est dessiné */
@@ -8788,6 +9274,15 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'research': research(p); return true;
     case 'maglev': maglev(p); return true;
     case 'carworks': skyCarworks(p); return true;
+    case 'health': if (size < 2) return false; futureHealth(p, o.v); return true;
+    case 'fire': futureFire(p, o.v); return true;
+    case 'police': futurePolice(p, o.v); return true;
+    case 'tavern': futureTavern(p, o.v); return true;
+    case 'barber': futureBarber(p, o.v); return true;
+    case 'manor': futureManor(p, o.v); return true;
+    case 'theater': futureTheater(p, o.v); return true;
+    case 'lab': futureLab(p, o.v); return true;
+    case 'baths': futureBaths(p, o.v); return true;
   }
   return false;
 }

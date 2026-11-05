@@ -159,6 +159,17 @@ describe('maisons et tours', () => {
       }
   });
 
+  it('les bâtiments « Night City » de l’âge futuriste restent sous le plafond (3 000 triangles par case, 4 500 en 2 × 2)', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    const kinds: KindId[] = ['health', 'fire', 'police', 'tavern', 'barber', 'manor', 'theater', 'lab', 'baths'];
+    for (const kind of kinds)
+      for (let v = 0; v < 3; v++) {
+        const m = getModel(kind, 5, { v, L: false, R: false, F: true });
+        const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + tris(m.rotor?.geo) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+        expect(n, `${kind}, variante ${v}`).toBeLessThan(KINDS[kind].size === 1 ? 3000 : 4500);
+      }
+  });
+
   it('le château d’eau, détaillé à chaque âge, reste sous 4 000 triangles (girouette, drone et personnages compris)', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
     for (let age = 3; age < 6; age++) {
