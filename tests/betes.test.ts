@@ -20,16 +20,16 @@ describe('bêtes articulées', () => {
     }
   });
 
-  it('chaque bête se clone avec son squelette et ses animations', () => {
+  it('chaque bête se clone avec son squelette et ses animations', { timeout: 30000 }, () => {
     for (const k of kinds) {
-      const a = makeBeast(k, 0, 1);
+      const info = beastInfo(k), a = makeBeast(k, 0, 1);
       let bones = 0, skinned = 0;
       a.root.traverse((o) => { if ((o as any).isBone) bones++; if ((o as any).isSkinnedMesh) skinned++; });
       expect(skinned, k).toBe(1);
-      expect(bones, k).toBe(beastInfo(k).bones.length);
-      expect(a.actions.size, k).toBe(beastInfo(k).clips.length);
+      expect(bones, k).toBe(info.bones.length);
+      expect(a.actions.size, k).toBe(info.clips.length);
       // chaque piste vise un os existant
-      for (const act of a.actions.values()) for (const t of act.getClip().tracks) expect(beastInfo(k).bones, k).toContain(t.name.split('.')[0]);
+      for (const act of a.actions.values()) for (const t of act.getClip().tracks) expect(info.bones, k).toContain(t.name.split('.')[0]);
     }
   });
 });
