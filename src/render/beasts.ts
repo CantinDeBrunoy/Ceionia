@@ -421,12 +421,154 @@ function bear(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Éléphant ----------
+
+const ELEPHANT_COATS: Coat[] = [
+  { skin: 0x908e94, top: 0xaaa8ae, dark: 0x747278, ear: 0xa48c90, tusk: 0xf2ead2, nail: 0xd8d0c0, tuft: 0x2e2a2a },
+  { skin: 0x84807e, top: 0x9e9894, dark: 0x6a6664, ear: 0x9a8282, tusk: 0xeee2c4, nail: 0xd0c6b4, tuft: 0x262222 },
+  { skin: 0x9c968e, top: 0xb4aea6, dark: 0x7e7872, ear: 0xb09a96, tusk: 0xf4ecd8, nail: 0xdcd4c4, tuft: 0x302c2a },
+];
+
+/**
+ * Éléphant : masse grise au dos voûté, grandes oreilles qui battent, trompe en trois segments annelés, défenses ivoire
+ * recourbées, pattes en piliers aux ongles clairs, queue à toupet ; marche lente et ample, charge oreilles déployées
+ * trompe levée, cueille l'herbe de la trompe et la porte à la bouche, barrit
+ */
+function elephant(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  r.bone('hips', null, 0, 0.18, -0.05);
+  r.bone('chest', 'hips', 0, 0.19, 0.04);
+  r.bone('ribs', 'chest', 0, 0.19, 0.04);
+  r.bone('neck', 'chest', 0, 0.21, 0.1);
+  r.bone('head', 'neck', 0, 0.215, 0.12);
+  r.bone('jaw', 'head', 0, 0.168, 0.15);
+  const t0: V3 = [0, 0.18, 0.188], t1: V3 = [0, 0.118, 0.198], t2: V3 = [0, 0.062, 0.2], t3: V3 = [0, 0.024, 0.192];
+  r.bone('trunk1', 'head', ...t0);
+  r.bone('trunk2', 'trunk1', ...t1);
+  r.bone('trunk3', 'trunk2', ...t2);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.042, 0.232, 0.132));
+  r.bone('tail1', 'hips', 0, 0.21, -0.125);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.044, 0.16, 0.072);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.044, 0.088, 0.072);
+    r.bone(`h${L}1`, 'hips', s * 0.044, 0.165, -0.078);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.044, 0.088, -0.08);
+  });
+
+  // corps : croupe tombante, torse (qui respire), échine saillante, ventre plus sombre
+  r.add('hips', ell(0.068, 0.076, 0.08), [0, 0.186, -0.055], c.dark, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.074, 0.082, 0.088), [0, 0.192, 0.035], c.dark, [0, 0, 0], c.top);
+  r.add('chest', ell(0.046, 0.03, 0.08), [0, 0.252, 0.02], c.skin, [0.1, 0, 0], c.top);
+  // tête : front bombé, bosses du crâne, yeux, bouche
+  r.add('neck', ell(0.052, 0.058, 0.036), [0, 0.205, 0.11], c.dark, [0, 0, 0], c.skin);
+  r.add('head', ell(0.048, 0.054, 0.046), [0, 0.218, 0.15], c.dark, [0, 0, 0], c.top);
+  r.both((s) => r.add('head', ell(0.022, 0.02, 0.02), [s * 0.018, 0.255, 0.16], c.top));
+  r.both((s) => r.add('head', ell(0.005, 0.005, 0.004, 0), [s * 0.038, 0.218, 0.172], 0x161212));
+  r.add('jaw', ell(0.022, 0.012, 0.024, 0), [0, 0.16, 0.162], c.dark);
+  r.add('jaw', ell(0.014, 0.006, 0.012, 0), [0, 0.162, 0.182], 0xa87a78);
+  // défenses : deux segments, vers l'avant puis vers le haut
+  r.both((s) => {
+    const a: V3 = [s * 0.02, 0.168, 0.176], b: V3 = [s * 0.025, 0.148, 0.222], tip: V3 = [s * 0.03, 0.158, 0.25];
+    r.put('head', seg(a, b, 0.0075, 0.0055), c.tusk);
+    r.put('head', seg(b, tip, 0.0055, 0.0012), c.tusk);
+  });
+  // trompe annelée, narines au bout
+  r.put('trunk1', seg(t0, t1, 0.023, 0.018, 7), c.skin);
+  r.put('trunk2', seg(t1, t2, 0.018, 0.013, 7), c.skin);
+  r.put('trunk3', seg(t2, t3, 0.013, 0.011, 6), c.skin);
+  for (const [b, p, q, rr] of [['trunk1', t0, t1, 0.023], ['trunk2', t1, t2, 0.018], ['trunk3', t2, t3, 0.013]] as [string, V3, V3, number][])
+    for (const f of [0.3, 0.55, 0.8]) r.put(b, seg(along(p, q, f), along(p, q, f + 0.04), rr * 1.03, rr * 1.02, 7), c.dark);
+  r.add('trunk3', ell(0.013, 0.006, 0.013, 0), [0, 0.022, 0.191], c.dark);
+  // grandes oreilles : face externe grise, face interne rosée
+  r.both((s, L) => {
+    r.add(`e${L}`, ell(0.006, 0.068, 0.056), [s * 0.06, 0.205, 0.105], c.skin, [0, -s * 0.5, 0], c.top);
+    r.add(`e${L}`, ell(0.004, 0.056, 0.046), [s * 0.056, 0.205, 0.11], c.ear, [0, -s * 0.5, 0]);
+  });
+  // queue à toupet
+  r.put('tail1', seg([0, 0.21, -0.125], [0, 0.135, -0.15], 0.006, 0.004, 5), c.skin);
+  r.add('tail1', ell(0.007, 0.016, 0.007, 0), [0, 0.128, -0.152], c.tuft);
+  // pattes en piliers, pieds ronds aux ongles clairs
+  r.both((s, L) => {
+    const x = s * 0.044;
+    r.add(`f${L}1`, ell(0.034, 0.05, 0.04), [x, 0.15, 0.07], c.dark, [0, 0, 0], c.skin);
+    r.put(`f${L}2`, seg([x, 0.092, 0.072], [x, 0.012, 0.072], 0.028, 0.031, 8), c.dark);
+    r.add(`h${L}1`, ell(0.036, 0.056, 0.046), [x, 0.15, -0.075], c.dark, [0, 0, 0], c.skin);
+    r.put(`h${L}2`, seg([x, 0.092, -0.08], [x, 0.012, -0.08], 0.027, 0.03, 8), c.dark);
+    for (const [b, z] of [[`f${L}2`, 0.072], [`h${L}2`, -0.08]] as [string, number][]) {
+      r.put(b, seg([x, 0, z], [x, 0.014, z], 0.034, 0.032, 8), c.dark);
+      for (const i of [-1, 0, 1]) r.add(b, ell(0.007, 0.006, 0.004, 0), [x + i * 0.014, 0.006, z + 0.031], c.nail);
+    }
+  });
+
+  const ph = { hL: 0, fL: 0.2, hR: 0.5, fR: 0.7 };
+  /** oreilles écartées de la tête (angle autour de la charnière) */
+  const flap = (P: Pose, a: number) => { R(P, 'eL', 0, -a); R(P, 'eR', 0, a); };
+  const trunk = (P: Pose, a: number, b: number, d: number, y = 0) => { R(P, 'trunk1', a, y); R(P, 'trunk2', b, y * 0.6); R(P, 'trunk3', d, y * 0.4); };
+  const clips = quadClips({
+    walk: { dur: 1.6, A: 0.28, L: 0.6, ph, bob: 0.004 },
+    run: { dur: 0.85, A: 0.42, L: 0.8, ph, bob: 0.01, rock: 0.05 },
+    neck: ['neck'], graze: [0.12], grazeHead: 0.12,
+    lie: null,
+    hook: (n, u, P) => {
+      if (n === 'Walk') {
+        // la trompe balance comme un pendule, les oreilles battent doucement
+        trunk(P, 0.12 * sn(u, 1, 0.2), 0.18 * sn(u, 1, 0.1), 0.25 * sn(u), 0.1 * sn(u, 1, 0.3));
+        ears(P, 0, 0);
+        flap(P, 0.15 + 0.1 * sn(u, 2));
+      } else if (n === 'Gallop') {
+        // charge : oreilles déployées, trompe levée
+        ears(P, 0.55, 0);
+        flap(P, 0.9);
+        trunk(P, -0.9 + 0.1 * sn(u), -0.6, -0.5 + 0.15 * sn(u, 1, 0.3));
+        R(P, 'head', -0.15);
+      } else if (n === 'Idle') {
+        // éventail des oreilles, trompe qui se balance et s'enroule
+        const fan = pos(sn(u, 4)) * win(u, 0.1, 0.9, 0.1);
+        flap(P, 0.2 + 0.5 * fan);
+        trunk(P, 0.1 * sn(u, 1), 0.25 * sn(u, 1, -0.1) + 0.3 * win(u, 0.55, 0.8, 0.08), 0.4 * sn(u, 1, -0.2) + 0.6 * win(u, 0.55, 0.8, 0.08), 0.15 * sn(u, 2));
+      } else if (n === 'Eating') {
+        // la trompe cueille au sol puis porte à la bouche
+        const reach = win(u, 0.0, 0.45, 0.12), feed = win(u, 0.5, 0.95, 0.12);
+        trunk(P, -0.35 * reach + 0.3 * feed, -0.1 * reach + 1.3 * feed, -0.3 * reach + 1.5 * feed, 0.15 * reach * sn(u, 4));
+        flap(P, 0.2 + 0.2 * pos(sn(u, 3)));
+      } else if (n === 'Sleep') {
+        // somnole debout, la trompe posée au sol
+        trunk(P, -0.12, 0.05, -0.25);
+        flap(P, 0.05);
+      }
+    },
+  });
+  clips.push(
+    // barrit : tête levée, trompe dressée, oreilles grandes ouvertes
+    ['Idle_2', 4, (u, P) => {
+      const k = win(u, 0.1, 0.85, 0.18);
+      breathe(P, u, 2);
+      R(P, 'neck', -0.15 * k); R(P, 'head', -0.25 * k);
+      trunk(P, -1.6 * k, -0.9 * k + 0.2 * k * sn(u, 6), -0.7 * k + 0.3 * k * sn(u, 6, 0.2));
+      flap(P, 0.2 + 0.8 * k);
+      R(P, 'jaw', 0.35 * k);
+      R(P, 'fL1', -0.2 * k); R(P, 'fL2', 0.5 * k * win(u, 0.2, 0.7, 0.1));
+      R(P, 'tail1', -0.4 * k);
+    }],
+    // s'asperge de poussière : trompe repliée sur le dos
+    ['Idle_3', 4, (u, P) => {
+      const k = win(u, 0.1, 0.9, 0.2);
+      breathe(P, u, 2);
+      trunk(P, -0.4 * k, -1.4 * k - 0.3 * k * pos(sn(u, 3)), -1.2 * k, 0.4 * k * sn(u, 1, 0.2));
+      R(P, 'head', -0.1 * k);
+      flap(P, 0.3 + 0.3 * pos(sn(u, 3)));
+    }],
+  );
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear';
+export type BeastKind = 'bear' | 'elephant';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
+  elephant: { coats: ELEPHANT_COATS, build: elephant },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */
