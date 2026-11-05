@@ -159,7 +159,7 @@ export class Expeditions {
   running(m: Mission) { return this.active.some((a) => a.m.id === m.id); }
   /** équipes que le village peut envoyer à la fois */
   slots() { return partyLimit(this.pop()); }
-  private has(kind: string) { for (const b of this.world.buildings.values()) if (b.kind === kind) return true; return false; }
+  has(kind: string) { for (const b of this.world.buildings.values()) if (b.kind === kind) return true; return false; }
 
   /**
    * Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel, un institut de recherche

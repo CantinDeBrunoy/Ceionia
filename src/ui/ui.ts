@@ -11,9 +11,9 @@ import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { effectSummary, splitIntro, mandatoriesFor, DestKind, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
+import { effectSummary, splitIntro, mandatoriesFor, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
-import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel } from '../sim/gear';
+import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
 import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE } from '../sim/economy';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -1209,7 +1209,7 @@ export class UI {
       const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${ex.active.length}`;
       if (k !== key) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
       // une pièce fabriquée (ou une équipe partie avec) : les choix des missions disent ce qu'on emporterait, et le risque qui va avec
-      const gk = `${JSON.stringify(st.gear)}|${ex.active.length}`;
+      const gk = `${JSON.stringify(st.gear)}|${st.craft.join()}|${ex.active.length}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${Math.floor(ex.ore)}`;
       if (gk !== gearKey) {
         if (gearKey) ov.querySelectorAll<HTMLElement>('.mchoices[data-m]').forEach((el) => { const m = MISSIONS.find((x) => x.id === el.dataset.m); if (m) el.innerHTML = this.choiceButtons(m); });
         gearKey = gk;
@@ -1241,6 +1241,21 @@ export class UI {
       if (!go) return;
       h.audio.sfxClick();
       if (go.dataset.kind) { close(); this.pick(go.dataset.kind as KindId); } else this.gotoMission(go.dataset.goto!);
+    });
+    // l'équipement qui manque à un choix : le fabriquer d'ici, ou aller à sa fiche dans l'onglet Équipement
+    ov.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement, mk = t.closest<HTMLButtonElement>('button[data-mk]'), go = t.closest<HTMLButtonElement>('button[data-geargo]');
+      if (mk) {
+        if (mk.disabled) return;
+        const id = mk.dataset.mk as GearId;
+        if (ex.craft(id, this.host.sim.age)) { h.audio.sfxClick(); key = ''; gearKey = ''; arsenal(); } else this.toast(ex.whyCraft(GEAR_BY[id], this.host.sim.age) ?? 'Impossible à fabriquer pour l’instant.');
+      } else if (go) {
+        h.audio.sfxClick();
+        ov.querySelector<HTMLButtonElement>('[data-tab="gear"]')?.click();
+        const card = ov.querySelector<HTMLElement>(`.gear[data-gear="${go.dataset.geargo}"]`);
+        card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        card?.classList.remove('flash'); void card?.offsetWidth; card?.classList.add('flash');
+      }
     });
     // un clic sur un choix (les boutons se redessinent : un seul écouteur pour toute la fenêtre)
     ov.addEventListener('click', (e) => {
@@ -1277,6 +1292,7 @@ export class UI {
           <b>${c.label}</b>
           <small>👥 ${c.party} · ⏳ ${workLabel(c.work)} · ⚠️ ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''}</small>
           ${why ? `<small class="why">${why}</small>` : ''}</button>
+        ${this.gearNeedHtml(c)}
         <details class="cdet"><summary>Détails</summary>
           <p>${c.text}</p>
           <small>${DEST_ICON[c.dest]} Risque d’échec : ${pct(pv.risk)} (${riskLabel(pv.risk)})${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''}${c.fuel ? ` · ⛽ ${c.fuel} carburant` : ''}</small>
@@ -1284,6 +1300,23 @@ export class UI {
           <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
         </details></div>`;
     }).join('');
+  }
+
+  /**
+   * Sous un choix : l'équipement qui lui manque (« Outils nécessaires »), avec son prix et un bouton pour le fabriquer tout de
+   * suite ; le titre mène à l'onglet Équipement, sur la pièce
+   */
+  private gearNeedHtml(c: Choice) {
+    const h = this.host, ex = h.expeditions, st = ex.state, age = h.sim.age;
+    const gaps = gearGaps(c, st.gear, st.craft, age, (g) => !g.needs || ex.has(g.needs));
+    if (!gaps.length) return '';
+    const rows = gaps.map((g) => {
+      const price = gearCostLabel(gearCost(g.gear, h.world.difficulty)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
+      const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
+      const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
+      return `<div class="gnrow"><span>${ic(g.gear.icon, 15, 2)} <b>${g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</b> <small>${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}</small>${why && left > 0 ? `<small class="why">${why}</small>` : ''}</span>${act}</div>`;
+    }).join('');
+    return `<div class="gearNeed"><button type="button" class="gnHead" data-geargo="${gaps[0].gear.id}" title="Ouvrir l’onglet Équipement">${ic('kit', 14, 2)} Outils nécessaires</button>${rows}</div>`;
   }
 
   /** Profondeurs : le camp souterrain, ses quêtes (accomplies, en cours, à venir), ce qu'elles lui apportent ; on y lance l'expédition armée */
@@ -1352,7 +1385,7 @@ export class UI {
       <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Réserve : <b>${Math.floor(h.world.wood)}</b> bois, <b>${Math.floor(h.world.stone)}</b> pierre, <b>${Math.floor(ex.ore)}</b> minerai.</p>
       <div class="gearGrid">${GEAR.map((g) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
-        return `<div class="gear ${locked ? 'locked' : ''}">
+        return `<div class="gear ${locked ? 'locked' : ''}" data-gear="${g.id}">
           <div class="gi">${ic(g.icon, 26, 1.8)}</div>
           <div class="grow"><b>${g.name}</b> <span class="cnt">${n} en réserve${out ? ` · ${out} en route` : ''}</span>
             <small>${g.desc}</small>
