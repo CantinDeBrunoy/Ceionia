@@ -259,23 +259,6 @@ function crocGeo() {
   return p.build(false).body;
 }
 
-/** Élan : forte carcasse sombre, bosse au garrot, long museau retombant, bois palmés */
-function mooseGeo() {
-  const p = new Parts();
-  p.add(box(0.075, 0.08, 0.16), 0, 0.16, 0, 0xffffff);
-  p.add(box(0.07, 0.04, 0.06), 0, 0.215, 0.04, 0xffffff);
-  p.add(box(0.036, 0.075, 0.04), 0, 0.215, 0.085, 0xffffff, 0, false, 0, -0.5);
-  p.add(box(0.044, 0.05, 0.085), 0, 0.245, 0.12, 0xffffff);
-  p.add(box(0.036, 0.04, 0.04), 0, 0.23, 0.17, 0xcab8a0);
-  for (const s of [-1, 1]) {
-    p.add(box(0.07, 0.006, 0.04), s * 0.055, 0.285, 0.1, 0xd8c8a8, 0, false, s * 0.2);
-    p.add(box(0.03, 0.006, 0.03), s * 0.1, 0.29, 0.115, 0xd8c8a8);
-    p.add(box(0.016, 0.014, 0.01), s * 0.032, 0.262, 0.098, 0xffffff, 0, false, s * 0.5);
-  }
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.018, 0.13), x * 0.026, 0, z * 0.055, 0x5a4a3e);
-  return p.build(false).body;
-}
-
 function deerGeo() {
   const p = new Parts();
   p.add(box(0.07, 0.07, 0.16), 0, 0.13, 0, 0xffffff);
@@ -410,12 +393,12 @@ const SPECS: Record<Kind, Spec> = {
   camel: { max: 12, colors: [0xc8a070, 0xb89060, 0xd8b888], speed: 0.33, run: 1.2, idle: [5, 12], ok: offRoad, graze: 0.12, flee: 2.5, scale: 1.1 },
   elephant: { max: 8, colors: [0x8e8e94, 0x7a7a82, 0x9a9a9e], speed: 0.25, run: 0.8, idle: [6, 16], ok: offRoad, graze: 0.12, scale: 1.45 },
   giraffe: { max: 8, colors: [0xf0c460, 0xe8b858, 0xf4cc78], speed: 0.33, run: 1.5, idle: [5, 12], ok: offRoad, graze: 0.1, flee: 3, scale: 1.25 },
-  moose: { geo: mooseGeo, max: 10, colors: [0x6a4e3a, 0x5a4232, 0x7a5a42], speed: 0.33, run: 1.5, idle: [5, 12], ok: wild, graze: 0.15, flee: 3, scale: 1.2 },
+  moose: { max: 10, colors: [0x6a4e3a, 0x5a4232, 0x7a5a42], speed: 0.33, run: 1.5, idle: [5, 12], ok: wild, graze: 0.15, flee: 3, scale: 1.2 },
   butterfly: { geo: butterflyGeo, max: 32, colors: [0xf7d24c, 0xf29ab4, 0xffffff, 0x9fc8f0, 0xf09a50], speed: 0, idle: [1, 1], ok: any, flap: [26, 1.3, 0.003] },
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'lizard', 'crab', 'turtle', 'croc', 'moose']);
+const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'lizard', 'crab', 'turtle', 'croc']);
 
 /** Élément du décor ou zone auquel un groupe d'animaux est rattaché */
 export type Anchor = 'edge' | 'meadow' | 'rocks' | 'banks' | 'ponds' | 'coast';

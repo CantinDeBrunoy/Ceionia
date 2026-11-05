@@ -815,15 +815,120 @@ function camel(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Élan ----------
+
+const MOOSE_COATS: Coat[] = [
+  { fur: 0x3e2c20, top: 0x58402c, leg: 0x9a8a78, muzzle: 0x5e4636, antler: 0xd2c09c, tip: 0xeee4cc, hoof: 0x261e1a },
+  { fur: 0x2e221c, top: 0x463428, leg: 0x8a7c6c, muzzle: 0x4e3a2e, antler: 0xc8b490, tip: 0xe6dcc2, hoof: 0x201a16 },
+  { fur: 0x4e3a2a, top: 0x6a503a, leg: 0xa89884, muzzle: 0x6a5242, antler: 0xdccaa8, tip: 0xf2ead4, hoof: 0x2a221c },
+];
+
+/**
+ * Élan : haute carcasse sombre à la bosse du garrot, pattes claires et fines, long museau busqué qui retombe, fanon
+ * qui pend sous la gorge, grandes oreilles, larges bois palmés hérissés d'andouillers ; marche à grandes enjambées,
+ * trotte quand il fuit, broute, secoue ses bois
+ */
+function moose(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  const n0: V3 = [0, 0.205, 0.072], n1: V3 = [0, 0.228, 0.118];
+  r.bone('hips', null, 0, 0.17, -0.05);
+  r.bone('chest', 'hips', 0, 0.18, 0.03);
+  r.bone('ribs', 'chest', 0, 0.18, 0.03);
+  r.bone('neck', 'chest', ...n0);
+  r.bone('head', 'neck', ...n1);
+  r.bone('jaw', 'head', 0, 0.215, 0.16);
+  r.bone('bell', 'head', 0, 0.214, 0.132);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.018, 0.256, 0.124));
+  r.bone('tail1', 'hips', 0, 0.188, -0.105);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.026, 0.165, 0.06);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.026, 0.088, 0.062);
+    r.bone(`h${L}1`, 'hips', s * 0.028, 0.168, -0.07);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.028, 0.088, -0.078);
+  });
+
+  // corps : croupe basse, torse, haute bosse du garrot
+  r.add('hips', ell(0.037, 0.042, 0.055), [0, 0.172, -0.045], c.fur, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.042, 0.05, 0.06), [0, 0.18, 0.028], c.fur, [0, 0, 0], c.top);
+  r.add('chest', ell(0.03, 0.036, 0.046), [0, 0.222, 0.04], c.top, [0.2, 0, 0]);
+  // cou épais à crinière sombre
+  r.put('neck', seg(n0, n1, 0.026, 0.021, 7), c.fur, c.top);
+  r.put('neck', seg([0, 0.226, 0.064], [0, 0.248, 0.108], 0.008, 0.005, 4), c.fur);
+  // tête : crâne, long museau busqué qui retombe, lèvre pendante, naseaux, yeux
+  r.add('head', ell(0.02, 0.021, 0.026), [0, 0.24, 0.13], c.fur, [0, 0, 0], c.top);
+  r.add('head', ell(0.016, 0.018, 0.032), [0, 0.226, 0.166], c.muzzle, [0.25, 0, 0]);
+  r.add('head', ell(0.016, 0.013, 0.013), [0, 0.218, 0.193], c.muzzle);
+  r.both((s) => {
+    r.add('head', ell(0.003, 0.004, 0.003, 0), [s * 0.008, 0.222, 0.205], 0x140e0c);
+    r.add('head', ell(0.0045, 0.0045, 0.0035, 0), [s * 0.019, 0.246, 0.142], 0x140e0c);
+  });
+  r.add('jaw', ell(0.012, 0.006, 0.02, 0), [0, 0.208, 0.18], c.muzzle);
+  // fanon qui pend sous la gorge
+  r.add('bell', ell(0.005, 0.022, 0.008, 0), [0, 0.196, 0.134], c.fur);
+  r.add('bell', ell(0.006, 0.006, 0.006, 0), [0, 0.176, 0.134], c.fur);
+  // grandes oreilles
+  r.both((s, L) => r.add(`e${L}`, ell(0.008, 0.015, 0.004, 0), [s * 0.026, 0.262, 0.122], c.fur, [0, 0, -s * 0.9]));
+  // bois palmés : merrain, empaumure, andouillers sur le bord, andouiller de front
+  r.both((s) => {
+    const base: V3 = [s * 0.013, 0.256, 0.128], elbow: V3 = [s * 0.034, 0.268, 0.124];
+    r.put('head', seg(base, elbow, 0.0045, 0.004, 5), c.antler);
+    r.add('head', ell(0.03, 0.004, 0.02, 1), [s * 0.058, 0.276, 0.118], c.antler, [0.1, 0, s * 0.28]);
+    for (let i = 0; i < 6; i++) {
+      const a = -1.0 + i * 0.42, px = s * (0.058 + Math.cos(a) * 0.028), pz = 0.118 + Math.sin(a) * 0.018, py = 0.276 + (Math.abs(px) - 0.058) * 0.28;
+      r.put('head', seg([px, py, pz], [px + s * 0.008 * Math.cos(a), py + 0.016, pz + 0.004 * Math.sin(a)], 0.0028, 0.0008, 4), c.tip);
+    }
+    r.put('head', seg(elbow, [s * 0.04, 0.272, 0.146], 0.0035, 0.001, 4), c.tip);
+  });
+  r.add('tail1', ell(0.008, 0.012, 0.008, 0), [0, 0.18, -0.108], c.fur);
+  // longues pattes claires, sabots sombres
+  r.both((s, L) => {
+    const x = s * 0.026, hx = s * 0.028;
+    r.add(`f${L}1`, ell(0.018, 0.042, 0.024), [x, 0.148, 0.058], c.fur, [0, 0, 0], c.top);
+    r.put(`f${L}1`, seg([x, 0.13, 0.06], [x, 0.088, 0.062], 0.011, 0.009), c.leg);
+    r.put(`f${L}2`, seg([x, 0.088, 0.062], [x, 0.012, 0.064], 0.0085, 0.0075), c.leg);
+    r.put(`f${L}2`, seg([x, 0, 0.066], [x, 0.012, 0.064], 0.0105, 0.009, 6), c.hoof);
+    r.add(`h${L}1`, ell(0.021, 0.048, 0.028), [hx, 0.145, -0.066], c.fur, [0, 0, 0], c.top);
+    r.put(`h${L}1`, seg([hx, 0.12, -0.07], [hx, 0.088, -0.078], 0.012, 0.009), c.leg);
+    r.put(`h${L}2`, seg([hx, 0.088, -0.078], [hx, 0.012, -0.07], 0.0085, 0.0075), c.leg);
+    r.put(`h${L}2`, seg([hx, 0, -0.068], [hx, 0.012, -0.07], 0.0105, 0.009, 6), c.hoof);
+  });
+
+  const clips = quadClips({
+    walk: { dur: 1.2, A: 0.3, L: 0.8, ph: { hL: 0, fL: 0.25, hR: 0.5, fR: 0.75 }, bob: 0.004 },
+    // trot : diagonales ensemble
+    run: { dur: 0.6, A: 0.55, L: 1.1, ph: { hL: 0, fR: 0.02, hR: 0.5, fL: 0.52 }, bob: 0.012, rock: 0.04 },
+    neck: ['neck'], graze: [0.95], grazeHead: 0.45,
+    lie: TUCK(0.11),
+    hook: (n, u, P) => {
+      // le fanon ballotte en retard sur la tête
+      R(P, 'bell', 0.25 * sn(u, n === 'Gallop' ? 1 : 2, -0.15), 0, 0.12 * sn(u, 1, 0.1));
+      if (n === 'Walk') R(P, 'neck', -0.05);
+    },
+  });
+  clips.push(
+    // secoue la tête et ses bois, oreilles qui pivotent
+    ['Idle_2', 3, (u, P) => {
+      const k = win(u, 0.1, 0.9, 0.15);
+      breathe(P, u, 2);
+      R(P, 'neck', 0.15 * k);
+      R(P, 'head', 0.1 * k, 0.35 * k * sn(u, 3), 0.15 * k * sn(u, 3, 0.1));
+      R(P, 'bell', 0, 0, 0.5 * k * sn(u, 3, -0.1));
+      ears(P, 0, 0.5 * k * sn(u, 3, 0.2));
+    }],
+  );
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
   elephant: { coats: ELEPHANT_COATS, build: elephant },
   giraffe: { coats: GIRAFFE_COATS, build: giraffe },
   camel: { coats: CAMEL_COATS, build: camel },
+  moose: { coats: MOOSE_COATS, build: moose },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */
