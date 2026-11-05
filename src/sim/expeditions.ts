@@ -78,6 +78,9 @@ export interface ActiveExpedition {
   scout?: { t: number; dur: number } | null;
 }
 
+/** L'équipe est sous terre (troupe armée ou éclaireurs dans les galeries) : c'est dans le monde souterrain qu'on la suit */
+export const isBelow = (a: Pick<ActiveExpedition, 'entry' | 'phase'>) => a.entry >= 0 && a.phase === 'work';
+
 /** Créatures qui tendent des embuscades aux troupes armées */
 export type FoeKind = 'zombie' | 'skeleton' | 'spider' | 'golem' | 'worm';
 /**
