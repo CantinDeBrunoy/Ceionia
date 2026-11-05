@@ -1309,9 +1309,129 @@ function turtle(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Crabe ----------
+
+const CRAB_COATS: Coat[] = [
+  { top: 0xd04a2a, shell: 0xa8341e, under: 0xf0d8b8, leg: 0xe06a40, tip: 0x3a2020 },
+  { top: 0xc89060, shell: 0x9a6a40, under: 0xf2e2c8, leg: 0xd8a070, tip: 0x3a2a20 },
+  { top: 0xe07040, shell: 0xb04e2a, under: 0xf6e0c0, leg: 0xec8a58, tip: 0x3a2020 },
+];
+
+/**
+ * Crabe : carapace large et plate aux épines latérales, dessous clair, yeux sur pédoncules, deux pinces (bras, main,
+ * doigt mobile), quatre paires de pattes en deux segments ; marche de côté en alternant ses pattes, détale pinces levées,
+ * porte la nourriture à sa bouche, menace pinces ouvertes, se tasse pour dormir
+ */
+function crab(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  const Z = [0.009, 0.0, -0.009, -0.017], DZ = [0.006, 0.001, -0.004, -0.009];
+  r.bone('body', null, 0, 0.02, 0);
+  r.bone('head', 'body', 0, 0.026, 0.016);
+  r.both((s, L) => {
+    r.bone(`e${L}`, 'head', s * 0.007, 0.032, 0.016);
+    r.bone(`c${L}1`, 'body', s * 0.022, 0.02, 0.016);
+    r.bone(`c${L}2`, `c${L}1`, s * 0.032, 0.022, 0.03);
+    r.bone(`c${L}3`, `c${L}2`, s * 0.036, 0.026, 0.048);
+    for (let i = 0; i < 4; i++) {
+      r.bone(`k${L}${i}1`, 'body', s * 0.026, 0.019, Z[i]);
+      r.bone(`k${L}${i}2`, `k${L}${i}1`, s * 0.044, 0.028, Z[i] + DZ[i]);
+    }
+  });
+
+  // carapace bombée au bord festonné, épines latérales, dessous clair, pièces buccales
+  r.add('body', ell(0.03, 0.011, 0.022, 1), [0, 0.024, 0], c.shell, [0, 0, 0], c.top);
+  r.add('body', ell(0.024, 0.006, 0.017, 0), [0, 0.017, 0], c.under);
+  for (let i = 0; i < 7; i++) {
+    const a = -1.2 + i * 0.4;
+    r.add('body', ell(0.0045, 0.0028, 0.0035, 0), [Math.sin(a) * 0.026, 0.026, Math.cos(a) * 0.019], c.top);
+  }
+  r.both((s) => {
+    r.put('body', seg([s * 0.027, 0.025, 0.004], [s * 0.037, 0.027, 0.008], 0.0022, 0.0002, 4), c.top);
+    r.add('body', ell(0.006, 0.0018, 0.006, 0), [s * 0.012, 0.0345, -0.004], c.shell);
+  });
+  r.add('head', bx(0.009, 0.004, 0.003), [0, 0.019, 0.021], c.under);
+  // yeux sur pédoncules
+  r.both((s, L) => {
+    r.put(`e${L}`, seg([s * 0.007, 0.03, 0.016], [s * 0.008, 0.04, 0.018], 0.0017, 0.0013, 4), c.top);
+    r.add(`e${L}`, ell(0.0028, 0.0028, 0.0028, 0), [s * 0.008, 0.0415, 0.0185], 0x101010);
+  });
+  // pinces : bras, main renflée, doigt fixe et doigt mobile aux pointes sombres
+  r.both((s, L) => {
+    r.put(`c${L}1`, seg([s * 0.022, 0.02, 0.016], [s * 0.032, 0.022, 0.03], 0.0042, 0.0036, 5), c.leg, c.top);
+    r.add(`c${L}2`, ell(0.0085, 0.0068, 0.0115), [s * 0.034, 0.024, 0.04], c.shell, [0, s * 0.2, 0], c.top);
+    r.put(`c${L}2`, seg([s * 0.034, 0.021, 0.049], [s * 0.032, 0.02, 0.058], 0.0034, 0.0016, 4), c.top);
+    r.put(`c${L}2`, seg([s * 0.032, 0.02, 0.058], [s * 0.031, 0.0205, 0.062], 0.0016, 0.0003, 4), c.tip);
+    r.put(`c${L}3`, seg([s * 0.036, 0.026, 0.048], [s * 0.034, 0.0255, 0.057], 0.003, 0.0014, 4), c.top);
+    r.put(`c${L}3`, seg([s * 0.034, 0.0255, 0.057], [s * 0.033, 0.025, 0.061], 0.0014, 0.0003, 4), c.tip);
+  });
+  // quatre paires de pattes articulées
+  r.both((s, L) => {
+    for (let i = 0; i < 4; i++) {
+      const base: V3 = [s * 0.026, 0.019, Z[i]], knee: V3 = [s * 0.044, 0.028, Z[i] + DZ[i]], foot: V3 = [s * 0.058, 0.0005, Z[i] + DZ[i] * 1.6];
+      r.put(`k${L}${i}1`, seg(base, knee, 0.0026, 0.0021, 4), c.leg, c.top);
+      r.put(`k${L}${i}2`, seg(knee, along(knee, foot, 0.8), 0.0021, 0.0012, 4), c.leg);
+      r.put(`k${L}${i}2`, seg(along(knee, foot, 0.8), foot, 0.0012, 0.0002, 4), c.tip);
+    }
+  });
+
+  /** pas de côté : deux groupes de pattes alternés */
+  const scuttle = (P: Pose, u: number, A: number) => {
+    for (const [s, L] of [[1, 'L'], [-1, 'R']] as [number, string][])
+      for (let i = 0; i < 4; i++) {
+        const w = TAU * (u - ((i + (s > 0 ? 0 : 1)) % 2) * 0.5);
+        R(P, `k${L}${i}1`, 0, 0.12 * A * Math.sin(w), s * A * 0.4 * pos(Math.cos(w)));
+        R(P, `k${L}${i}2`, 0, 0, -s * A * 0.3 * Math.sin(w));
+      }
+    R(P, 'body', 0, 0, 0.04 * A * sn(u, 2));
+    M(P, 'body', 0, 0.0008 * pos(sn(u, 2)), 0);
+  };
+  const pinch = (P: Pose, L: string, k: number) => R(P, `c${L}3`, -0.45 * k);
+  const clips: ClipDef[] = [
+    ['Walk', 0.55, (u, P) => { scuttle(P, u, 1); R(P, 'eL', 0.1 * sn(u, 2)); R(P, 'eR', 0.1 * sn(u, 2, 0.25)); }],
+    // détale pinces levées
+    ['Gallop', 0.3, (u, P) => {
+      scuttle(P, u, 1.4);
+      for (const [s, L] of [[1, 'L'], [-1, 'R']] as [number, string][]) { R(P, `c${L}1`, -0.5, 0, s * 0.3); pinch(P, L, 0.6); }
+    }],
+    // porte la nourriture à la bouche d'une pince puis de l'autre, les yeux s'agitent
+    ['Idle', 4, (u, P) => {
+      for (const [s, L, a] of [[1, 'L', 0], [-1, 'R', 0.5]] as [number, string, number][]) {
+        const k = win((u - a + 1) % 1, 0.05, 0.42, 0.08);
+        R(P, `c${L}1`, -0.15 * k, -s * 0.5 * k);
+        R(P, `c${L}2`, -0.2 * k, -s * 0.6 * k);
+        pinch(P, L, pos(sn(u, 8)) * k);
+      }
+      R(P, 'eL', 0.4 * blip(u, 0.3), 0, 0.3 * blip(u, 0.7)); R(P, 'eR', 0.4 * blip(u, 0.32), 0, -0.3 * blip(u, 0.75));
+      R(P, 'body', 0, 0, 0.03 * sn(u));
+    }],
+    // tassé, pattes repliées, yeux couchés
+    ['Sleep', 6, (u, P) => {
+      M(P, 'body', 0, -0.006, 0);
+      for (const [s, L] of [[1, 'L'], [-1, 'R']] as [number, string][]) {
+        for (let i = 0; i < 4; i++) { R(P, `k${L}${i}1`, 0, 0, s * 0.45); R(P, `k${L}${i}2`, 0, 0, -s * 0.5); }
+        R(P, `c${L}1`, 0.1, -s * 0.5); R(P, `c${L}2`, 0, -s * 0.4);
+        R(P, `e${L}`, -1.2);
+      }
+    }],
+    // menace : se dresse, pinces levées grandes ouvertes, se balance
+    ['Idle_2', 3, (u, P) => {
+      const k = win(u, 0.1, 0.9, 0.15);
+      M(P, 'body', 0, 0.005 * k, 0);
+      R(P, 'body', -0.15 * k, 0, 0.08 * k * sn(u, 2));
+      for (const [s, L] of [[1, 'L'], [-1, 'R']] as [number, string][]) {
+        R(P, `c${L}1`, -0.8 * k, 0, s * 0.5 * k);
+        R(P, `c${L}2`, -0.3 * k);
+        pinch(P, L, k * (0.7 + 0.3 * sn(u, 4)));
+        for (let i = 0; i < 4; i++) R(P, `k${L}${i}1`, 0, 0, -s * 0.2 * k);
+      }
+    }],
+  ];
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'croc' | 'lizard' | 'turtle';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'croc' | 'lizard' | 'turtle' | 'crab';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
@@ -1322,6 +1442,8 @@ const DEFS: Record<BeastKind, BeastDef> = {
   croc: { coats: CROC_COATS, build: croc },
   lizard: { coats: LIZARD_COATS, build: lizard },
   turtle: { coats: TURTLE_COATS, build: turtle },
+  // le crabe marche de côté : son flanc gauche mène
+  crab: { coats: CRAB_COATS, build: crab, yaw: -Math.PI / 2 },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */
