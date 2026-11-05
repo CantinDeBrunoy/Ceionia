@@ -126,6 +126,55 @@ describe('creuser des tunnels sous terre', () => {
     expect(troopRoute(u, plan.entry, plan.targets, plan.front).cells.some((k) => w.dug.has(k))).toBe(true);
   });
 
+  it('percer la roche d’un filon l’abat toujours, même s’il lui reste une autre paroi ; un clic sur le filon y envoie les mineurs', () => {
+    const { w, u, ex, news } = outpost();
+    // deux filons à deux parois (au moins) : l'un creusé à la main, l'autre par un clic sur lui
+    const two = oreVeins(u, w.mined).filter((v) => around(v.k).filter((n) => u.canCarve(n)).length >= 2 && u.walkable(v.k % N, Math.floor(v.k / N)));
+    expect(two.length).toBeGreaterThan(1);
+    const [a, b] = two;
+    w.claimed.add(a.k); w.claimed.add(b.k);
+    const rock = around(a.k).find((n) => u.canCarve(n))!, ore = w.ore;
+    expect(ex.planDig(rock)).toBe(true);
+    digAll(ex);
+    expect(w.dug.has(rock)).toBe(true);
+    expect(w.mined.has(a.k)).toBe(true);
+    expect(w.ore).toBeGreaterThan(ore);
+    expect(news.some(([m]) => /abattent un filon/.test(m))).toBe(true);
+    // le clic sur le filon : la roche où il luit entre dans la file ; un second clic ne la double pas
+    const wall = around(b.k).find((n) => u.canCarve(n))!;
+    expect(ex.mineVein(b.k, wall)).toBe(true);
+    expect(ex.digs()).toEqual([wall]);
+    expect(ex.mineVein(b.k, wall)).toBe(true);
+    expect(ex.digs()).toEqual([wall]);
+    digAll(ex);
+    expect(w.mined.has(b.k)).toBe(true);
+    expect(oreVeins(u, w.mined).some((v) => v.k === b.k)).toBe(false);
+  });
+
+  it('le camp souterrain est attaqué de temps à autre : les gardes repoussent la vague, au pire avec des pertes légères', () => {
+    const { w, ex } = outpost();
+    const msgs: [string, boolean][] = [];
+    ex.onRaid = (m, start) => msgs.push([m, start]);
+    expect(ex.camp()).toBeGreaterThanOrEqual(1);
+    expect(ex.patrols()).toBeGreaterThanOrEqual(1);
+    w.ore = 10; w.stone = 10;
+    const wins = w.exp.wins;
+    for (let i = 0; i < 2000 && !ex.raid; i++) ex.update(1);
+    const r = ex.raid!;
+    expect(r).not.toBeNull();
+    expect(r.cell).toBe(ex.campCell());
+    expect(r.n).toBeGreaterThanOrEqual(2);
+    expect(msgs[0][1]).toBe(true);
+    for (let i = 0; i < 60 && ex.raid; i++) ex.update(1);
+    expect(ex.raid).toBeNull();
+    expect(msgs[1][1]).toBe(false);
+    expect(w.exp.wins).toBe(wins + 1);
+    // jamais plus que deux minerai et trois pierres
+    expect(w.ore).toBeGreaterThanOrEqual(8);
+    expect(w.stone).toBeGreaterThanOrEqual(7);
+    expect(ex.campNews).toMatch(/repouss/);
+  });
+
   it('la sauvegarde garde les tunnels creusés et la file des mineurs ; une ancienne sauvegarde n’en a pas', () => {
     const { w, u, ex } = outpost();
     const k = rockByHeld(w, u);

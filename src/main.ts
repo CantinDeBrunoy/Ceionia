@@ -47,7 +47,8 @@ import { Traffic } from './render/traffic';
 import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { UpgradeBadges } from './render/upgradeBadges';
-import { Expeditions } from './sim/expeditions';
+import { Expeditions, RAID_TIME, FOE_NAME } from './sim/expeditions';
+import { CAMP_GUARDS } from './sim/depths';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
@@ -179,7 +180,6 @@ class Game implements UIHost {
   private surfaceView: ReturnType<CameraRig['view']> | null = null;
   private surfaceZoom = { min: 10, max: 0 };
   private fading = false;
-  torchMode = false;
   /** mode Creuser : un clic sur la roche y fait creuser un tunnel par les mineurs du camp */
   digMode = false;
   /** ce que montre la case visée en mode Creuser (case, file, roche) */
@@ -203,7 +203,7 @@ class Game implements UIHost {
           else uv.digCursor(typeof plan === 'string' ? [k] : plan, typeof plan !== 'string');
         }
       }
-      canvas.style.cursor = this.torchMode || this.digMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z)) ? 'pointer' : '';
+      canvas.style.cursor = this.digMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z) || uv!.campAt(p.x, p.z)) ? 'pointer' : '';
     },
   };
 
@@ -326,6 +326,8 @@ class Game implements UIHost {
     this.spaceCast = new SpaceCast(uiRoot);
     this.expeditions.onNews = (m, depths) => this.ui.toast(m, depths ? () => this.ui.openExpeditions('depths') : undefined);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
+    // le camp souterrain attaqué : un clic sur le message y descend ; l'issue, un clic ouvre la fiche du camp
+    this.expeditions.onRaid = (m, start) => this.ui.toast(m, start ? () => this.goCamp() : () => { this.goCamp(); this.ui.openCamp(); });
     this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; };
     // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
@@ -698,7 +700,7 @@ class Game implements UIHost {
       this.cam.jump({ x, z, dist: 11, pitch: 1.05 }, this.underView.groundY(x, z));
       this.cam.handler = this.underInput;
       canvas.style.cursor = '';
-      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : torches, cristaux et créatures. Le puits de lumière ramène à la surface.`);
+      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : un clic sur un filon des galeries tenues, les mineurs du camp l’abattent. Le puits de lumière ramène à la surface.`);
       this.ui.update();
     }, 'Descente sous terre…');
   }
@@ -725,7 +727,6 @@ class Game implements UIHost {
       this.mode = 'surface';
       document.body.classList.remove('under');
       this.underView?.leave();
-      this.torchMode = false;
       this.digMode = false;
       this.cam.minDist = this.surfaceZoom.min;
       this.cam.minPitch = 0.25;
@@ -755,23 +756,26 @@ class Game implements UIHost {
       this.ui.update();
       return;
     }
-    if (this.torchMode) {
-      if (!p) return;
-      const r = uv.toggleTorch(p.x, p.z);
-      if (r === null) this.ui.toast('Une torche se pose sur le sol d’une galerie.');
-      else if (r) audio.sfxPlace(); else audio.sfxDestroy();
-      return;
-    }
     // une créature cliquée sursaute et détale
     const mob = uv.mobs.hit(ray);
     if (mob) { uv.mobs.scare(mob.x, mob.z, 0.6); audio.sfxClick(); return; }
     if (!p) return;
     const ent = uv.entranceAt(p.x, p.z);
+    // le camp : ce qu'il contient, et l'expédition armée qu'on lance d'un clic (au cœur du puits, on remonte)
+    if (uv.campAt(p.x, p.z) && !(ent && Math.hypot(ent.x - p.x, ent.z - p.z) < 0.65)) { audio.sfxClick(); this.ui.openCamp(); return; }
     if (ent) { this.exitUnder(ent.cell); return; }
-    // un filon dans la paroi : seule une expédition armée peut l'abattre (créatures, galeries profondes)
+    // un filon dans la paroi : dans les galeries tenues, les mineurs du camp vont l'abattre ; plus loin, il faut une
+    // expédition armée (créatures, galeries profondes)
     const ore = uv.veinAt(p.x, p.z);
     if (ore) {
       const deep = MISSIONS.find((m) => m.id === 'deep')!, miss = this.expeditions.missing(deep);
+      if (this.world.claimed.has(ore.k)) {
+        const r = this.expeditions.mineVein(ore.k, ore.wall);
+        if (r === true) { audio.sfxMine(); this.ui.toast(`⛏️ Les mineurs du camp vont abattre le filon de ${ore.name} (${ore.amount} minerai).`); this.ui.update(); return; }
+        audio.sfxClick();
+        this.ui.toast(`⛏️ Filon de ${ore.name} : ${r}`);
+        return;
+      }
       audio.sfxClick();
       if (this.sim.age < deep.age) this.ui.toast(`⛏️ Filon de ${ore.name} (${ore.amount} minerai) : il faudra une expédition armée, à l’âge ${AGES[deep.age].name}.`);
       else if (miss.length) this.ui.toast(`⛏️ Filon de ${ore.name} : seule une expédition armée peut l’abattre. Il faut d’abord ${miss.join(', ')}.`);
@@ -802,7 +806,6 @@ class Game implements UIHost {
    */
   digTunnel() {
     const hint = this.expeditions.tunnelHint(), at = hint[0] ?? this.expeditions.outposts()[0]?.entry ?? -1;
-    this.torchMode = false;
     this.digMode = true;
     const tip = hint.length ? `⛏️ Creuser : les marques montrent le passage le plus court (${hint.length} case${hint.length > 1 ? 's' : ''} de roche). Cliquez sur la dernière marque, les mineurs creusent jusque-là.` : '⛏️ Creuser : cliquez sur la roche tout contre une galerie tenue.';
     if (this.mode === 'under') {
@@ -815,6 +818,21 @@ class Game implements UIHost {
     this.enterUnder(at);
     setTimeout(() => this.ui.toast(tip), 1200);
   }
+  /** Le camp souterrain vu de près : ses gardes, ses patrouilles, et la dernière nouvelle de ses combats */
+  campInfo() {
+    const ex = this.expeditions, lvl = ex.camp(), raid = ex.raid;
+    const last = raid ? `Le camp est attaqué : ${raid.n} ${FOE_NAME[raid.kind]} montent des galeries !` : [ex.campNews, this.underView?.patrolNews ?? ''].filter(Boolean).join(' ');
+    return { guards: CAMP_GUARDS[lvl] ?? 0, patrols: ex.patrols(), last };
+  }
+
+  /** Va voir le camp souterrain (une attaque) : on descend sous terre au besoin, la vue se pose sur le camp */
+  goCamp() {
+    const k = this.expeditions.campCell();
+    if (k < 0) return;
+    if (this.mode === 'under') this.cam.goTo((k % N) + 0.5, Math.floor(k / N) + 0.5, 10);
+    else this.enterUnder(k);
+  }
+
   capture() {
     this.renderer_render();
     canvas.toBlob((b) => {
@@ -841,12 +859,11 @@ class Game implements UIHost {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       // Échap ferme d'abord la fenêtre ouverte
       if (k === 'escape' && this.ui.closeTop()) return;
-      // sous terre : U remonte, T bascule les torches, C le creusement, les outils de surface sont inactifs
+      // sous terre : U remonte, C bascule le creusement, les outils de surface sont inactifs
       if (this.mode === 'under') {
         if (k === 'escape' && this.digMode) { this.digMode = false; this.ui.update(); }
         else if (k === 'u' || k === 'escape') this.exitUnder();
-        else if (k === 't') { this.torchMode = !this.torchMode; this.digMode = false; this.ui.update(); }
-        else if (k === 'c') { this.digMode = !this.digMode; this.torchMode = false; this.ui.update(); }
+        else if (k === 'c') { this.digMode = !this.digMode; this.ui.update(); }
         else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
         return;
       }
@@ -1054,6 +1071,10 @@ class Game implements UIHost {
         id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
       })), dt);
       uv.age = this.sim.age;
+      // les patrouilles du camp, et l'attaque du camp en cours
+      uv.patrolN = this.expeditions.patrols();
+      const raid = this.expeditions.raid;
+      uv.setRaid(raid ? { ...raid, dur: RAID_TIME } : null);
       // les mineurs descendus par les trains, une équipe par ligne
       uv.setMiners([...this.railway.trains.values()].filter((t) => !t.why && t.mine >= 0 && t.crew.length).map((t) => ({ id: t.line.id, n: t.crew.length, entry: t.stops[t.mine].entry, vein: t.vein })), this.sim.age, gdt);
       // les mineurs du camp au front du tunnel ; en mode Creuser, le passage conseillé

@@ -5,7 +5,7 @@ import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_
 import { AGES, KINDS, KindId, Building, sizeOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
-import { CAMP_QUESTS, CampQuest, depthStats } from './depths';
+import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
 import { rulesOf } from './difficulty';
 import { hash2 } from '../core/rng';
@@ -74,12 +74,18 @@ export interface ActiveExpedition {
 }
 
 /** Créatures qui tendent des embuscades aux troupes armées */
-export type FoeKind = 'zombie' | 'skeleton' | 'spider';
+export type FoeKind = 'zombie' | 'skeleton' | 'spider' | 'golem' | 'worm';
 /**
  * Embuscade dans les galeries sauvages : la case où elle surgit, les créatures et leur nombre, le moment (temps de parcours
  * de la troupe) ; l'issue est tirée quand elle survient, ses blessés comptés à la fin du combat
  */
 export interface Ambush { cell: number; kind: FoeKind; n: number; t0: number; state: 'wait' | 'fight' | 'done'; result: 'clean' | 'hurt' | 'rout' | null }
+
+/** Attaque du camp souterrain : les créatures, leur nombre, la case du camp, le temps écoulé et l'issue (tirée au début) */
+export interface Raid { id: number; kind: FoeKind; n: number; cell: number; t: number; result: 'clean' | 'hurt' }
+/** Durée d'une attaque du camp, et temps entre deux attaques (au hasard entre ces bornes, secondes de jeu) */
+export const RAID_TIME = 26;
+const RAID_EVERY: [number, number] = [420, 900];
 
 export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summary: string; notes: string[]; /** mission déjà réussie, refaite */ redo: boolean }
 
@@ -116,8 +122,18 @@ const FOES: Record<number, FoeKind[]> = {
   [UZ_STONE]: ['zombie', 'zombie', 'skeleton'], [UZ_CRYSTAL]: ['skeleton', 'spider'], [UZ_ICE]: ['skeleton', 'zombie'],
   [UZ_LUSH]: ['spider'], [UZ_MAGMA]: ['skeleton', 'zombie'],
 };
-const FOE_MIGHT: Record<FoeKind, number> = { zombie: 0.8, skeleton: 1, spider: 1.15 };
-export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 'squelettes', spider: 'araignées géantes' };
+/**
+ * Aux âges avancés, les profondeurs se peuplent de pires créatures : gardiens de pierre dès l'âge médiéval (roche, cristal,
+ * magma), vers des profondeurs dès l'âge industriel (roche, magma, grotte luxuriante, glace)
+ */
+const LATE_FOES: [FoeKind, number, number[]][] = [['golem', 2, [UZ_STONE, UZ_CRYSTAL, UZ_MAGMA]], ['worm', 3, [UZ_STONE, UZ_MAGMA, UZ_LUSH, UZ_ICE]]];
+const FOE_MIGHT: Record<FoeKind, number> = { zombie: 0.8, skeleton: 1, spider: 1.15, golem: 1.6, worm: 1.8 };
+export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 'squelettes', spider: 'araignées géantes', golem: 'gardiens de pierre', worm: 'vers des profondeurs' };
+/** Créatures d'une embuscade dans cette zone, à l'âge donné */
+export function foesOf(zone: number, age: number): FoeKind[] {
+  const base = FOES[zone] ?? FOES[UZ_STONE];
+  return [...base, ...LATE_FOES.filter(([, from, zones]) => age >= from && zones.includes(zone)).map(([k]) => k)];
+}
 /** Nombres en toutes lettres, pour le récit (« Quatre filons abattus ») */
 const NUMBER = ['Aucun', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf', 'Dix', 'Onze', 'Douze'];
 /** « de fer », « d’or », « d’émeraude » */
@@ -332,6 +348,61 @@ export class Expeditions {
     }
   }
 
+  // ---------------- Patrouilles et attaques du camp ----------------
+  /** Patrouilles du camp souterrain (petits groupes de soldats qui font la ronde dans les galeries tenues) */
+  patrols() { const l = this.camp(); return l ? Math.min(3, 1 + Math.floor(l / 3)) : 0; }
+
+  /** attaque du camp en cours (null : aucune) ; temps avant la prochaine (secondes de jeu) */
+  raid: Raid | null = null;
+  private raidT = RAID_EVERY[0];
+  private raidId = 0;
+  /** dernière nouvelle des combats du camp (pour sa fiche) */
+  campNews = '';
+
+  /** Case de galerie du camp : sous le puits du plus ancien avant-poste, ou -1 */
+  campCell() { return [...this.outposts()].sort((a, b) => a.b.id - b.b.id)[0]?.entry ?? -1; }
+
+  /**
+   * De temps à autre, une vague de créatures monte des galeries sauvages vers le camp ; les gardes la repoussent. L'issue se
+   * tire au début : la force des gardes (et des patrouilles) contre la vague ; au pire, pertes légères (un garde blessé, un
+   * peu de minerai et de pierre renversés), jamais plus. Une victoire compte comme une embuscade repoussée
+   */
+  private raidStep(dt: number) {
+    const lvl = this.camp(), u = this.under;
+    if (!lvl || !u) { this.raid = null; return; }
+    if (this.raid) {
+      const r = this.raid;
+      r.t += dt;
+      if (r.t < RAID_TIME) return;
+      const name = FOE_NAME[r.kind], w = this.world;
+      let text: string;
+      if (r.result === 'clean') { w.exp.wins++; text = `les gardes ont repoussé les ${r.n} ${name} sans une égratignure`; }
+      else {
+        const ore = Math.min(Math.floor(w.ore), 2), stone = Math.min(Math.floor(w.stone), 3);
+        w.ore -= ore; w.stone -= stone; w.exp.wins++;
+        text = `${r.n} ${name} repoussés, mais un garde est blessé${ore || stone ? ` et la réserve a souffert (${[ore ? `−${ore} minerai` : '', stone ? `−${stone} pierre` : ''].filter(Boolean).join(', ')})` : ''}`;
+      }
+      w.version++;
+      this.campNews = `Dernière attaque : ${text}.`;
+      this.onRaid?.(`⚔️ Camp souterrain : ${text}.`, false);
+      this.raid = null;
+      return;
+    }
+    if ((this.raidT -= dt) > 0) return;
+    this.raidT = RAID_EVERY[0] + this.rnd() * (RAID_EVERY[1] - RAID_EVERY[0]);
+    const cell = this.campCell();
+    if (cell < 0) return;
+    const kinds = foesOf(u.zone[cell], this.age()), kind = kinds[Math.floor(this.rnd() * kinds.length)];
+    const big = kind === 'golem' || kind === 'worm', n = big ? 2 : 3 + Math.floor(this.rnd() * 3);
+    // les gardes du camp et ses patrouilles, contre la vague (les gardiens et les vers comptent double)
+    const might = CAMP_GUARDS[lvl] * 1.2 + this.patrols() * 2, threat = n * FOE_MIGHT[kind] * (1 + this.age() * 0.08);
+    const result = this.rnd() < might / (might + threat * 0.6) ? 'clean' : 'hurt';
+    this.raid = { id: ++this.raidId, kind, n, cell, t: 0, result };
+    this.onRaid?.(`⚔️ Le camp souterrain est attaqué : ${n} ${FOE_NAME[kind]} montent des galeries ! Cliquez pour y descendre.`, true);
+  }
+  /** une attaque du camp commence (`start`) ou s'achève : le message, cliquable */
+  onRaid: ((msg: string, start: boolean) => void) | null = null;
+
   // ---------------- Creusement ----------------
   /** temps passé sur la case en cours (secondes de jeu) */
   private digT = 0;
@@ -418,6 +489,27 @@ export class Expeditions {
     return true;
   }
 
+  /**
+   * Un clic sur un filon : les mineurs du camp vont percer la roche où il luit (`wall`, sinon la roche voisine la plus proche
+   * à creuser) et l'abattre. Renvoie true si c'est prévu (ou déjà prévu), sinon pourquoi l'on ne peut pas
+   */
+  mineVein(k: number, wall = -1): true | string {
+    const u = this.under, w = this.world;
+    if (!u) return 'Le monde souterrain n’est pas encore prêt.';
+    const rocks = around(k).filter((n) => u.canCarve(n)).sort((a, b) => (b === wall ? 1 : 0) - (a === wall ? 1 : 0));
+    if (rocks.some((n) => w.digs.includes(n))) return true;
+    let best: number[] | null = null, why = 'Ce filon est hors d’atteinte des mineurs du camp.';
+    for (const n of rocks) {
+      const p = this.digPlan(n);
+      if (typeof p === 'string') { why = p; continue; }
+      if (!best || p.length < best.length) best = p;
+      if (n === wall && p.length <= 1) break;
+    }
+    if (!best) return why;
+    w.digs.push(...best);
+    return true;
+  }
+
   /** Une case annulée : la suite du tunnel qui ne tient plus à rien l'est avec elle */
   private pruneDigs() {
     const u = this.under, w = this.world;
@@ -463,11 +555,13 @@ export class Expeditions {
     w.claimed.add(k);
     w.stone += 1;
     let ore = hash2(x, z, 700) < 0.15 ? 1 : 0;
-    const fell = veins.filter((v) => u.wallDist[v.k] !== 1);
+    // la roche percée contre un filon l'abat toujours (avant, il ne tombait qu'avec sa dernière roche : percer la paroi où
+    // luisait le minerai ne donnait rien la plupart du temps, ses cubes sautaient sur l'autre paroi)
+    const fell = veins;
     for (const v of fell) { w.mined.add(v.k); ore += ORE_KINDS[v.ore].amount; }
     w.ore += ore;
     w.version++;
-    if (fell.length) this.onNews?.(`⛏️ En creusant, les mineurs font tomber un filon ${ofOre(ORE_KINDS[fell[0].ore].name)} : +${ore} minerai.`);
+    if (fell.length) this.onNews?.(`⛏️ Les mineurs abattent un filon ${ofOre(ORE_KINDS[fell[0].ore].name)} : +${ore} minerai.`);
     if (fresh) this.onNews?.('⛏️ Le tunnel débouche sur de nouvelles galeries : envoyez une expédition armée !', true);
   }
 
@@ -610,6 +704,7 @@ export class Expeditions {
     this.mineStep(dt);
     this.holdStep(dt);
     this.campStep(dt);
+    this.raidStep(dt);
     this.digStep(dt);
     for (const a of [...this.active]) {
       // une décision attendue : l'équipe patiente, puis tranche d'elle-même
@@ -679,8 +774,10 @@ export class Expeditions {
     }
     const route = troopRoute(u, entry, targets, front, cells);
     const ambush = route.legs.filter((l) => l.kind === 'fight').map((l): Ambush => {
-      const cell = route.cells[l.to], zone = u.zone[cell], kinds = FOES[zone] ?? FOES[UZ_STONE];
-      return { cell, kind: kinds[Math.floor(this.rnd() * kinds.length)], n: 2 + Math.floor(this.rnd() * 3) + (zone === UZ_MAGMA ? 1 : 0), t0: l.t0, state: 'wait', result: null };
+      const cell = route.cells[l.to], zone = u.zone[cell], kinds = foesOf(zone, this.age()), kind = kinds[Math.floor(this.rnd() * kinds.length)];
+      // les grosses créatures vont par deux ou trois
+      const n = kind === 'golem' || kind === 'worm' ? 2 + (this.rnd() < 0.3 ? 1 : 0) : 2 + Math.floor(this.rnd() * 3) + (zone === UZ_MAGMA ? 1 : 0);
+      return { cell, kind, n, t0: l.t0, state: 'wait', result: null };
     });
     return { ambush, len: route.total };
   }

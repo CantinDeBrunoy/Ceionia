@@ -37,13 +37,14 @@ export interface UIHost {
   toMenu(): void;
   setPhoto(on: boolean): void;
   capture(): void;
-  /** monde souterrain : descendre par l'entrée la plus proche, remonter, poser des torches, creuser des tunnels */
+  /** monde souterrain : descendre par l'entrée la plus proche, remonter, creuser des tunnels */
   enterNearest(): void;
   exitUnder(): void;
-  torchMode: boolean;
   digMode: boolean;
   /** descendre là où un tunnel rejoindrait d'autres galeries, en mode Creuser */
   digTunnel(): void;
+  /** le camp souterrain vu de près : ses gardes, ses patrouilles et la dernière attaque (ou la dernière rencontre) */
+  campInfo(): { guards: number; patrols: number; last: string };
   underZone(): string | null;
   /** brouillard visible (0 … 1), et le dissiper */
   fogLevel(): number;
@@ -338,7 +339,6 @@ export class UI {
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="campQuest" title="Quêtes du camp souterrain"></button>
-        <button id="bTorch" title="Poser ou retirer des torches (T)">${ic('flame', 18)} Torches</button>
         <button id="bDig" title="Creuser un tunnel dans la roche (C)">${ic('pickaxe', 18)} Creuser</button>
         <button id="bUp" title="Remonter à la surface (U)">${ic('up', 18)} Remonter</button>
       </div>
@@ -469,8 +469,7 @@ export class UI {
     $('#bUnder').onclick = () => host.enterNearest();
     $('#bUp').onclick = () => host.exitUnder();
     $('#campQuest').onclick = () => this.openExpeditions('depths');
-    $('#bTorch').onclick = () => { host.torchMode = !host.torchMode; host.digMode = false; host.audio.sfxClick(); this.update(); };
-    $('#bDig').onclick = () => { host.digMode = !host.digMode; host.torchMode = false; host.audio.sfxClick(); this.update(); };
+    $('#bDig').onclick = () => { host.digMode = !host.digMode; host.audio.sfxClick(); this.update(); };
     $('#biomes').innerHTML = BIOME_CHOICES.map((c) => `<button data-b="${c.b ?? ''}" title="${c.b === null ? 'Rendre la terre au biome de son climat' : `Peindre : ${c.label.toLowerCase()}`}"><i style="background:${c.color}"></i>${c.label}</button>`).join('');
     $('#biomes').onclick = (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-b]');
@@ -950,10 +949,9 @@ export class UI {
       const digs = this.host.expeditions.digs().length, s = digs > 1 ? 's' : '';
       const tip = this.host.digMode ? (!digs ? 'Cliquez sur la roche tout contre une galerie tenue'
         : `${this.host.expeditions.digWalking() ? 'Les mineurs se rendent au chantier' : 'Les mineurs creusent'} : ${digs} case${s} de roche · un clic sur une case prévue l’annule`)
-        : this.host.torchMode ? 'Cliquez sur le sol pour poser ou retirer une torche' : 'Filon : comment l’abattre · Puits de lumière : remonter';
+        : 'Filon des galeries tenues : les mineurs l’abattent · Puits de lumière : remonter';
       const zh = `⛏️ ${zone}<small>${tip}</small>`;
       if ($('#underZone').dataset.v !== zh) { $('#underZone').innerHTML = zh; $('#underZone').dataset.v = zh; }
-      $('#bTorch').classList.toggle('active', this.host.torchMode);
       $('#bDig').classList.toggle('active', this.host.digMode);
       // la quête en cours du camp souterrain, et où en est son objectif
       const ex = this.host.expeditions, cq = ex.campQuest(), lvl = ex.camp();
@@ -1358,6 +1356,57 @@ export class UI {
       <div class="railBox">${this.railHtml()}</div>
       ${send}
       <ol class="quests">${quests}</ol>`;
+  }
+
+  /**
+   * Un clic sur le camp souterrain : ce qu'il contient (niveau, bâtiments, gardes, mineurs, réserves, quête en cours), et un
+   * gros bouton « Lancer une expédition armée » qui ouvre un menu simple : une ligne par troupe (hommes, durée, risque)
+   */
+  openCamp() {
+    this.closeTop();
+    const h = this.host, ex = h.expeditions, lvl = ex.camp(), w = h.world, deep = MISSIONS.find((m) => m.id === 'deep')!, age = h.sim.age;
+    const cq = ex.campQuest(), st = ex.depthStats();
+    const builds = CAMP_QUESTS.slice(0, lvl).map((q) => `<li>${q.builds}</li>`).join('') || '<li>quelques caisses au pied du puits : le camp se dressera avec sa première quête</li>';
+    const miners = [...h.railway.trains.values()].reduce((s, t) => s + t.crew.length, 0);
+    const gear = (Object.entries(ex.state.gear) as [GearId, number][]).filter(([, n]) => n > 0).map(([g, n]) => `${n} ${(n > 1 ? GEAR_BY[g].plural : GEAR_BY[g].name).toLowerCase()}`).join(', ');
+    const digs = ex.digs().length, pat = h.campInfo();
+    const body = () => `<div class="campCard">
+        <div class="campStats"><span>${ic('outpost', 16, 2)} Niveau <b>${lvl} / ${CAMP_QUESTS.length}</b></span><span>Gardes : <b>${pat.guards}</b></span><span>Patrouilles : <b>${pat.patrols}</b></span><span>Mineurs : <b>${3 + miners}</b>${digs ? ` · ${digs} case${digs > 1 ? 's' : ''} à creuser` : ''}</span></div>
+        <div class="campCols">
+          <div><h4>${ic('house', 15, 2)} Bâtiments</h4><ul>${builds}</ul></div>
+          <div><h4>${ic('kit', 15, 2)} Réserves</h4><ul><li>Minerai : <b>${Math.floor(w.ore)}</b></li><li>Pierre : <b>${Math.floor(w.stone)}</b></li><li>Équipement : ${gear || 'rien en réserve'}</li><li>Galeries tenues : <b>${st.held}</b> · filons abattus : <b>${st.veins}</b></li></ul></div>
+        </div>
+        ${cq ? `<div class="campQ"><b>${ic('compass', 15, 2)} Quête : ${cq.q.title}</b> <small>${cq.cur} / ${cq.max}</small><i class="bar"><i style="width:${Math.round((cq.cur / cq.max) * 100)}%"></i></i><small>${cq.q.text}</small></div>` : '<p class="hint">Toutes les quêtes du camp sont accomplies.</p>'}
+        ${pat.last ? `<p class="hint">${ic('sword', 14, 2)} ${pat.last}</p>` : ''}
+        <button class="campGo" data-go="1">${ic('sword', 20, 2)} Lancer une expédition armée</button>
+      </div>`;
+    const menu = () => {
+      if (age < deep.age) return `<p class="hint">Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`;
+      const miss = ex.missing(deep);
+      if (miss.length) return `<p class="hint">Il faut d’abord ${miss.join(', ')}.</p>`;
+      if (ex.running(deep)) return `<p class="hint">Une expédition armée est déjà dans les galeries.</p>`;
+      if (ex.tunnelNeeded()) return this.tunnelHtml();
+      return `<p class="hint">Choisissez la troupe : victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front.</p><div class="troopPick">${deep.choices.map((c0, i) => {
+        const c = choiceAt(c0, age), why = ex.why(deep, c), pv = ex.preview(c);
+        return `<button class="troop" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}"><b>${c.label}</b><span>👥 ${c.party} hommes</span><span>⏳ ${workLabel(c.work)}</span><span class="risk">⚠️ ${pct(pv.risk)} · ${riskLabel(pv.risk)}</span>${why ? `<small class="why">${why}</small>` : ''}</button>`;
+      }).join('')}</div>`;
+    };
+    const { ov, close } = modal(this.root, 'campModal', `${ic('outpost', 22)} Camp souterrain`, `<div class="campBody">${body()}</div>`);
+    const root = $('.campBody', ov);
+    ov.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('[data-go]')) { h.audio.sfxClick(); root.innerHTML = `${menu()}<button class="campBack" data-back="1">${ic('undo', 15, 2)} Retour au camp</button>`; return; }
+      if (t.closest('[data-back]')) { h.audio.sfxClick(); root.innerHTML = body(); return; }
+      if (t.closest('[data-dig]')) { close(); h.audio.sfxClick(); h.digTunnel(); return; }
+      const b = t.closest<HTMLButtonElement>('button.troop[data-c]');
+      if (!b || b.disabled) return;
+      const ci = +b.dataset.c!, a = ex.start(deep, ci, age);
+      if (!a) { this.toast(ex.why(deep, deep.choices[ci]) ?? 'Aucun chemin praticable dans les galeries.'); return; }
+      close();
+      h.audio.sfxClick();
+      this.toast(`${deep.icon} ${a.fromCamp ? 'La troupe se rassemble au camp et s’enfonce dans les galeries…' : ex.status(a)} Cliquez ici pour la suivre.`, () => { h.follow(a.id); this.update(); });
+      this.update();
+    });
   }
 
   /**

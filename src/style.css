@@ -461,6 +461,25 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 #campQuest .bar i, .quests .bar i { display: block; height: 100%; background: var(--accent); }
 .campStats { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 10px; font-size: 12.5px; }
 .campStats > b { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 14px; }
+/* le camp souterrain, vu d'un clic : ce qu'il contient, et le gros bouton de l'expédition armée */
+.campModal { width: min(520px, 94vw); }
+.campModal .campStats span { display: inline-flex; align-items: center; gap: 5px; }
+.campCols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .campCols { grid-template-columns: 1fr; } }
+.campCols h4, .campQ b { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 13.5px; }
+.campCols ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
+.campQ { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 10px 0; display: grid; gap: 4px; font-size: 12.5px; }
+.campQ small { color: var(--ink2); }
+.campQ .bar { display: block; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.campQ .bar i { display: block; height: 100%; background: var(--accent); }
+.campGo { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; margin-top: 6px; font-size: 16px; font-weight: 800; background: var(--accent); color: #fff; border-color: transparent; }
+.troopPick { display: grid; gap: 8px; margin: 8px 0; }
+.troop { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 12px; align-items: center; text-align: left; padding: 10px 12px; }
+.troop b { grid-column: 1 / -1; font-size: 14px; }
+.troop span { font-size: 12.5px; font-weight: 600; color: var(--ink2); }
+.troop .risk { color: #b0541a; }
+.troop .why { grid-column: 1 / -1; color: #c0392b; font-size: 11.5px; }
+.campBack { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
 .lineDot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px #fff8, 0 1px 2px #0003; }
 .rcard { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
 .rhead { display: flex; align-items: center; gap: 8px; }
