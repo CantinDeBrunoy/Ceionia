@@ -1431,12 +1431,13 @@ export class UI {
         <div class="row"><button id="gSave">${ic('save', 16)} Sauvegarder</button><button id="gExport">${ic('download', 16)} Exporter</button><button id="gImport">${ic('upload', 16)} Importer</button></div>
         ${this.tutorial?.settingsHtml() ?? ''}
         <h4>Quitter</h4>
-        <div class="row"><button id="gNew">${ic('restart', 16)} Recommencer cette carte</button><button id="gMenu">${ic('house', 16)} Menu principal</button></div>
+        <div class="row"><button id="gCredits">Crédits</button><button id="gNew">${ic('restart', 16)} Recommencer cette carte</button><button id="gMenu">${ic('house', 16)} Menu principal</button></div>
         <input type="file" id="fImport" accept="application/json,.json" style="display:none">
       </section>
       <div class="row foot"><span class="grow"></span><button id="gClose" class="active">Fermer</button></div>`);
     const q = <T extends HTMLElement>(s: string) => $(s, ov) as T;
     q('#gClose').onclick = close;
+    q('#gCredits').onclick = () => showCredits(this.root);
     ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
       ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((s) => (s.hidden = s.dataset.sec !== b.dataset.tab));
@@ -1554,15 +1555,34 @@ export function drawPreview(canvas: HTMLCanvasElement, heights: ArrayLike<number
   g.putImageData(img, 0, 0);
 }
 
+/** Les crédits : les modèles 3D et les licences (les auteurs sous licence CC-BY doivent être cités) */
+export function showCredits(root: HTMLElement) {
+  const a = (href: string, t: string) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${t}</a>`;
+  modal(root, 'credits', 'Crédits', `
+    <p>Ceionia est un jeu libre de droits d’image et de son : la géométrie des bâtiments, des habitants, des véhicules et de la musique est dessinée et générée par le jeu lui-même. Certains modèles 3D, gratuits, viennent d’artistes à qui nous disons merci.</p>
+    <h4>Modèles sous licence CC0 (domaine public)</h4>
+    <ul class="credits">
+      <li>${a('https://quaternius.com', 'Quaternius')} : animaux de ferme et sauvages, faune marine, arbres (Ultimate Nature), palmiers, cactus, créatures du souterrain, décors, puits, fermes, tour de pierre, enclos.</li>
+      <li>${a('https://kenney.nl', 'Kenney')} : Survival Kit, épave de navire.</li>
+      <li>Kay Lousberg (crâne, os), MiniPoly (coraux), Mohabins (algues), iPoly3D (cristaux), MilkAndBanana (jarre), reyshapes (cruche), via ${a('https://poly.pizza', 'Poly Pizza')}.</li>
+    </ul>
+    <h4>Modèles sous licence CC-BY 3.0</h4>
+    <ul class="credits">
+      <li>« Greek Temple » par ${a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)')} : temple et asclépiéion de l’Antiquité.</li>
+      <li>« Amphora » par ${a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira')} et « Eight Vases » par ${a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner')} : atelier du potier.</li>
+    </ul>
+    <p class="hint">Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : ${a('https://creativecommons.org/publicdomain/zero/1.0/deed.fr', 'CC0')} et ${a('https://creativecommons.org/licenses/by/3.0/deed.fr', 'CC-BY 3.0')}.</p>`);
+}
+
 export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
   const ov = document.createElement('div');
   ov.className = 'overlay';
   ov.id = 'menu';
   ov.innerHTML = `
-    <h1>Village Lowpoly</h1>
+    <h1>Ceionia</h1>
     <p class="sub">Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.</p>
     <div class="maps"></div>
-    <div class="row" style="justify-content:center"><button id="mImport">${ic('upload', 16)} Importer une sauvegarde (JSON)</button></div>
+    <div class="row" style="justify-content:center"><button id="mImport">${ic('upload', 16)} Importer une sauvegarde (JSON)</button><button id="mCredits">Crédits</button></div>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">
     <p class="hint">Souris : clic gauche = outil, clic droit + glisser = tourner, molette = zoom, clic milieu ou Maj + clic droit = déplacer, ZQSD/flèches = déplacement, A/E = rotation (WASD et Q/E en QWERTY).<br>Tactile : un doigt = outil, deux doigts = déplacer / zoomer / tourner.</p>`;
   const maps = $('.maps', ov);
@@ -1591,6 +1611,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
   }
   const f = $<HTMLInputElement>('#mFile', ov);
   $('#mImport', ov).onclick = () => f.click();
+  $('#mCredits', ov).onclick = () => showCredits(root);
   f.onchange = () => { if (f.files?.[0]) host.importFile(f.files[0]); };
   // le tutoriel guidé, pour la partie qu'on lance
   maps.after(menuToggle());

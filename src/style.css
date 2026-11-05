@@ -386,6 +386,8 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   #info { display: none !important; }
   #selCard { top: auto; bottom: 210px; right: 50%; transform: translateX(50%); }
 }
+.credits { margin: 4px 0 8px; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.credits a, .modal .hint a { color: var(--accent-ink); }
 /* écrans peu hauts (téléphone à l'horizontale) : un bandeau du haut sur une ligne, sans les textes d'aide ; la barre du bas se replie */
 @media (max-height: 520px) {
   :root { --gap: 6px; }

@@ -1,4 +1,4 @@
-# Village Lowpoly
+# Ceionia
 
 Jeu de construction contemplatif en navigateur : on sculpte le terrain, on bâtit un village et on le regarde traverser **6 âges** (Préhistoire → Futuriste) et **4 saisons**, jusqu'à la colonisation d'une autre planète. Bâtiments, relief, cultures et sons sont procéduraux (géométrie low-poly, sons Web Audio) ; arbres, buissons, rochers et animaux de ferme ou sauvages sont des modèles Quaternius (voir Crédits).
 
