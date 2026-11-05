@@ -8294,6 +8294,133 @@ function refinery(p: Parts) {
   for (const [x, z] of [[-0.7, 1.0], [0.3, 1.0], [1.38, -0.12], [-0.05, -0.2]]) lampPost(p, x, z, 0.34);
 }
 
+/**
+ * Pile de briques cuites, posées en croisé : chaque rang tourne d'un quart de tour sur le précédent, sur sa palette de bois ;
+ * `rows` rangs de huit briques (l'empreinte fait deux briques de long)
+ */
+function brickPile(p: Parts, x: number, z: number, rows: number, color: number, ry = 0, seed = 0) {
+  const L = 0.056, W = 0.027, H = 0.024, c = Math.cos(ry), s = Math.sin(ry);
+  p.box(L * 2 + 0.03, 0.016, L * 2 + 0.02, x, 0.012, z, C.wood, ry);
+  for (const o of [-0.045, 0, 0.045]) p.box(L * 2 + 0.032, 0.006, 0.014, x + o * s, 0.01, z + o * c, dark(C.wood, 0.8), ry);
+  for (let r = 0; r < rows; r++) {
+    const turn = r % 2 === 1;
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 4; j++) {
+      // rang pair : briques couchées dans le sens de x (deux de long, quatre de large) ; rang impair : dans celui de z
+      const u = (i - 0.5) * L, w = (j - 1.5) * W, lx = turn ? w : u, lz = turn ? u : w;
+      p.box(turn ? W - 0.003 : L - 0.003, H - 0.003, turn ? L - 0.003 : W - 0.003, x + lx * c + lz * s, 0.028 + r * H, z - lx * s + lz * c, dark(color, 0.9 + hash2(r * 8 + i * 4 + j, seed, 481) * 0.18), ry);
+    }
+  }
+}
+
+/**
+ * Briqueterie (2 × 2) : le four à briques (maçonnerie rouge, trois gueules de feu qui rougeoient la nuit, frettes de fer) et sa
+ * très haute cheminée cerclée qui fume ; le séchoir à claire-voie (poteaux, lattes, claies garnies de briques crues roses) ;
+ * le hangar de moulage aux fenêtres éclairées ; le tas d'argile et sa flaque, la pelle plantée ; piles de briques cuites,
+ * charrette chargée, ouvriers ; à l'époque moderne : four-tunnel sous tôle, cheminée d'acier rayée, toits plats
+ */
+function brickworks(p: Parts, age: number) {
+  sink(0.012);
+  const modern = age >= 4, y0 = 0.012, red = 0xa85e50, fired = 0xb4553f, raw = 0xdba67f, iron = 0x3c3c40;
+  // sol : terre battue, ornières, flaques d'argile
+  for (const [x, z, r, k] of [[0, 0, 0.62, 1], [-0.5, 0.45, 0.4, 0.94], [0.55, 0.5, 0.36, 1.08], [0.45, -0.5, 0.42, 0.9], [-0.5, -0.5, 0.4, 1.04], [0.0, 0.85, 0.3, 0.96]] as number[][])
+    p.cyl(r, r * 0.94, 0.004, 12, x, y0, z, dark(0xc4a67e, k));
+  p.box(1.8, 0.004, 0.2, 0, y0 + 0.002, -0.02, dark(0xc4a67e, 0.82));
+  p.box(0.2, 0.004, 0.9, -0.1, y0 + 0.002, 0.45, dark(0xc4a67e, 0.82));
+  // le four : massif de brique (ou tôle et béton), ses frettes de fer, ses trois gueules, les bouches de tirage sur la voûte
+  const kx = 0.45, kz = -0.52, kw = 0.8, kd = 0.6, kh = 0.46, kf = kz + kd / 2;
+  p.box(kw, kh, kd, kx, y0, kz, modern ? 0xdfe3e8 : red);
+  if (modern) {
+    p.box(kw + 0.01, 0.05, kd + 0.01, kx, y0 + 0.2, kz, 0x3a6ab8);
+    for (let k = 1; k < 6; k++) p.box(0.006, kh, 0.006, kx - kw / 2 + (k * kw) / 6, y0, kf + 0.004, 0xb4bac2);
+  } else stones(p, kx, kf, kw, y0, kh, 0, dark(red, 0.84), 0.5, 410);
+  p.box(kw + 0.04, 0.03, kd + 0.04, kx, y0 + kh, kz, modern ? 0x8a9098 : 0x7a6a62);
+  for (const dx of [-0.34, 0.34]) p.box(0.022, kh + 0.03, kd + 0.03, kx + dx, y0, kz, iron);
+  for (const dx of [-0.17, 0, 0.17]) {
+    const x = kx + dx;
+    p.box(0.1, 0.12, 0.014, x, y0 + 0.008, kf + 0.004, 0x241a16);
+    archTop(p, x, y0 + 0.128, kf + 0.004, 0.05, 0x241a16);
+    p.box(0.07, 0.06, 0.012, x, y0 + 0.012, kf + 0.012, 0xff7a2a, 0, true);
+    archTop(p, x, y0 + 0.072, kf + 0.012, 0.035, 0xffa040, true);
+    p.box(0.12, 0.014, 0.03, x, y0 + 0.004, kf + 0.026, iron);
+  }
+  for (const [x, z] of [[-0.24, -0.1], [0.0, 0.08], [0.24, -0.1], [-0.12, 0.12], [0.12, -0.28], [-0.24, -0.28]]) {
+    p.cyl(0.026, 0.03, 0.026, 6, kx + x * 1.2, y0 + kh + 0.03, kz + z * 0.9, iron);
+    p.box(0.03, 0.006, 0.03, kx + x * 1.2, y0 + kh + 0.056, kz + z * 0.9, 0xff7a2a, 0, true);
+  }
+  // la cheminée : plinthe, fût conique cerclé de fer, rangs clairs près du sommet, couronne ; le carneau qui la relie au four
+  const cx = kx, cz = -0.9, ch = 1.42;
+  p.box(0.22, 0.1, 0.22, cx, y0, cz, modern ? 0xb4bac2 : dark(red, 0.9));
+  p.cyl(0.05, 0.085, ch, 12, cx, y0 + 0.1, cz, modern ? 0xf4f6f8 : red);
+  for (const y of [0.3, 0.62, 0.94, 1.2]) p.cyl(0.082 - y * 0.026, 0.082 - y * 0.026, 0.016, 12, cx, y0 + y, cz, modern ? 0xd84a3e : iron);
+  if (modern) for (const y of [1.28, 1.36]) p.cyl(0.052, 0.052, 0.05, 12, cx, y0 + y - 0.02, cz, 0xd84a3e);
+  else for (const y of [1.28, 1.34]) p.cyl(0.056, 0.056, 0.028, 12, cx, y0 + y, cz, 0xd8c0a0);
+  p.cyl(0.062, 0.05, 0.05, 12, cx, y0 + ch + 0.08, cz, iron);
+  p.box(0.12, 0.1, 0.16, cx, y0 + kh + 0.03, kz - kd / 2 + 0.02, dark(red, 0.8));
+  smoke(cx, y0 + ch + 0.16, cz, 2);
+  // le séchoir à claire-voie : poteaux, lattes sur les côtés et au fond, toit sur chevrons, trois claies de briques crues
+  const sx = -0.5, sz = -0.5, sw = 0.8, sd = 0.56, sh = 0.36;
+  for (const dx of [-1, 0, 1]) for (const dz of [-1, 1]) p.box(0.03, sh, 0.03, sx + dx * (sw / 2 - 0.015), y0, sz + dz * (sd / 2 - 0.015), C.wood);
+  for (let k = 0; k < 15; k++) { const x = sx - sw / 2 + 0.05 + k * 0.05; p.box(0.014, sh - 0.02, 0.01, x, y0 + 0.01, sz - sd / 2 + 0.01, dark(C.wood, 0.86)); }
+  for (const s of [-1, 1]) for (let k = 0; k < 9; k++) p.box(0.01, sh - 0.02, 0.014, sx + s * (sw / 2 - 0.015), y0 + 0.01, sz - sd / 2 + 0.05 + k * 0.055, dark(C.wood, 0.86));
+  for (const y of [0.05, 0.15, 0.25]) {
+    p.box(sw - 0.04, 0.01, sd - 0.06, sx, y0 + y, sz, C.darkwood);
+    // des briques crues posées de chant, en deux rangées, avec des vides où l'on a déjà enfourné
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 12; i++) {
+      if (hash2(i + r * 12, Math.round(y * 100), 483) < 0.12) continue;
+      p.box(0.046, 0.044, 0.026, sx - sw / 2 + 0.075 + i * 0.056, y0 + y + 0.01, sz - 0.1 + r * 0.17, dark(raw, 0.92 + hash2(i, r + y * 10, 484) * 0.16));
+    }
+  }
+  if (modern) p.box(sw + 0.1, 0.03, sd + 0.1, sx, y0 + sh, sz, 0x6f7c96);
+  else roof(p, sx, y0 + sh, sz, { w: sw, d: sd, h: 0.14, color: C.brown, wall: C.wood, len: sw + 0.12, rows: true });
+  // le hangar de moulage : planches, porte, fenêtres éclairées, toit d'ardoise (plat et métallique de nos jours), tuyau de poêle
+  const hx = -0.55, hz = 0.46, hw = 0.72, hd = 0.46, hh = 0.28, hf = hz + hd / 2;
+  p.box(hw, hh, hd, hx, y0, hz, modern ? 0xe8eaee : 0xc9a878);
+  if (!modern) for (let k = 1; k < 14; k++) p.box(0.006, hh, 0.006, hx - hw / 2 + (k * hw) / 14, y0, hf + 0.003, dark(0xc9a878, 0.82));
+  windows(p, [hx - 0.24, hx + 0.24], y0 + 0.1, hf + 0.006, 0.09, 0.1, modern ? 0xb4bac2 : 0xece4d4);
+  p.box(0.11, 0.18, 0.014, hx, y0, hf + 0.004, 0x4a3a30);
+  p.box(0.16, 0.03, 0.02, hx, y0 + 0.2, hf + 0.012, 0x2c3e4a);
+  for (let k = 0; k < 3; k++) p.box(0.034, 0.02, 0.004, hx - 0.05 + k * 0.05, y0 + 0.205, hf + 0.024, C.gold);
+  if (modern) p.box(hw + 0.04, 0.035, hd + 0.04, hx, y0 + hh, hz, 0x6f7c96);
+  else roof(p, hx, y0 + hh, hz, { w: hw, d: hd, h: 0.14, color: C.slate, wall: 0xc9a878, len: hw + 0.1, courses: true });
+  p.cyl(0.014, 0.014, 0.13, 6, hx + 0.22, y0 + hh + 0.05, hz - 0.1, iron);
+  smoke(hx + 0.22, y0 + hh + 0.2, hz - 0.1, 0);
+  // devant le hangar : table de moulage, briques crues qui sèchent au sol, seau d'eau
+  p.box(0.3, 0.012, 0.12, hx + 0.02, y0 + 0.09, hz + 0.37, C.wood);
+  for (const dx of [-0.13, 0.13]) p.box(0.02, 0.09, 0.1, hx + 0.02 + dx, y0, hz + 0.37, C.darkwood);
+  for (let i = 0; i < 3; i++) p.box(0.046, 0.026, 0.026, hx - 0.05 + i * 0.06, y0 + 0.102, hz + 0.37, raw);
+  p.box(0.07, 0.016, 0.052, hx + 0.12, y0 + 0.102, hz + 0.37, C.darkwood);
+  for (let i = 0; i < 8; i++) p.box(0.05, 0.024, 0.026, hx - 0.3 + (i % 4) * 0.062, y0, hz + 0.58 + Math.floor(i / 4) * 0.04, dark(raw, 0.94 + hash2(i, 3, 485) * 0.12));
+  p.cyl(0.02, 0.016, 0.034, 8, hx + 0.34, y0, hz + 0.34, C.wood); p.cyl(0.016, 0.016, 0.004, 8, hx + 0.34, y0 + 0.032, hz + 0.34, C.water);
+  // le tas d'argile : buttes jaune-orangé, sa flaque, la pelle plantée, la brouette
+  p.sphere(0.24, 0.62, y0 - 0.06, 0.46, 0xb8704a, 1, 0.55);
+  p.sphere(0.14, 0.76, y0 - 0.03, 0.36, 0x9a5a3c, 1, 0.6);
+  p.sphere(0.12, 0.5, y0 - 0.03, 0.58, 0xc98458, 1, 0.5);
+  p.cyl(0.13, 0.12, 0.006, 10, 0.34, y0, 0.66, 0x8a5238); p.cyl(0.1, 0.09, 0.004, 10, 0.34, y0 + 0.004, 0.66, 0x7a9aa8);
+  p.box(0.012, 0.22, 0.012, 0.7, y0 + 0.05, 0.56, C.darkwood, 0, false, 0.35);
+  p.box(0.045, 0.06, 0.008, 0.66, y0 + 0.04, 0.56, C.metal, 0, false, 0.35);
+  p.box(0.12, 0.04, 0.08, 0.88, y0 + 0.05, 0.7, 0x5d6878, 0.3);
+  p.box(0.1, 0.03, 0.06, 0.88, y0 + 0.09, 0.7, 0xb8704a, 0.3);
+  p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 8).rotateX(Math.PI / 2), 0.96, y0 + 0.03, 0.66, 0x2a2a2e, 0.3);
+  // piles de briques cuites, en croisé
+  brickPile(p, -0.08, 0.2, 6, fired, 0.1, 1);
+  brickPile(p, 0.1, 0.22, 4, fired, -0.08, 2);
+  brickPile(p, 0.3, 0.2, 5, dark(fired, 0.94), 0.06, 3);
+  brickPile(p, 0.8, 0.12, 3, fired, 0.5, 4);
+  // la charrette chargée de briques et ses brancards ; un ouvrier la tire
+  const ax = 0.0, az = 0.82;
+  p.box(0.3, 0.02, 0.17, ax, y0 + 0.06, az, C.wood);
+  for (const s of [-1, 1]) { p.box(0.3, 0.05, 0.012, ax, y0 + 0.08, az + s * 0.085, C.wood); p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.018, 10).rotateX(Math.PI / 2), ax - 0.02, y0 + 0.06, az + s * 0.1, C.darkwood); p.box(0.2, 0.012, 0.012, ax + 0.24, y0 + 0.06, az + s * 0.045, C.wood); }
+  for (let r = 0; r < 2; r++) for (let i = 0; i < 5; i++) for (let j = 0; j < 2; j++) p.box(0.05, 0.024, 0.026, ax - 0.1 + i * 0.052, y0 + 0.08 + r * 0.026, az - 0.03 + j * 0.06, dark(fired, 0.92 + hash2(i + r * 5, j, 486) * 0.16));
+  figure(p, ax + 0.4, az - 0.01, 0x8a5a3a, -1.57);
+  // ouvriers : l'enfourneur devant les gueules, un briquetier à la table, le contremaître au tas d'argile
+  figure(p, kx - 0.1, kf + 0.14, 0x3a5a8a, 0.2, false, 0x2a2420);
+  figure(p, hx + 0.1, hz + 0.5, 0x8a3a3a, 3.1, false, 0x4a3426);
+  figure(p, 0.46, 0.44, 0x5a6a4a, 2.4, false, 0x2a2420);
+  // lampadaires aux deux coins de la cour
+  lampPost(p, -0.92, 0.92, 0.34);
+  lampPost(p, 0.9, -0.12, 0.34);
+}
+
 
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? KINDS[kind].size - 1 : KINDS[kind].size;
@@ -8367,6 +8494,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'senate': senate(p, Math.max(1, age)); break;
     case 'oilwell': oilwell(p); break;
     case 'refinery': refinery(p); break;
+    case 'brickworks': brickworks(p, Math.max(3, age)); break;
     case 'arcology': arcology(p, o.v); break;
     case 'vfarm': vfarm(p); break;
     case 'fusion': fusion(p); break;
