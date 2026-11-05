@@ -251,10 +251,12 @@ export class Environment {
     this.cloudMat.color.setHex(0xffffff).lerp(new THREE.Color(0x6a7396), 1 - day).lerp(GREY, overcast * 0.5);
 
     // précipitations
-    this.rain.visible = rainK > 0.01;
-    this.snowPts.visible = snowK > 0.01;
+    // de loin, la pluie et la neige (un volume carré autour du point visé) ne se dessinent plus : on y verrait le carré
+    const near = camDist < 95, far = clamp((camDist - 60) / 35, 0, 1);
+    this.rain.visible = rainK > 0.01 && near;
+    this.snowPts.visible = snowK > 0.01 && near;
     if (this.rain.visible) {
-      (this.rain.material as THREE.LineBasicMaterial).opacity = 0.55 * rainK;
+      (this.rain.material as THREE.LineBasicMaterial).opacity = 0.55 * rainK * (1 - far);
       const b = this.rainBase, p = this.rainPos;
       for (let i = 0; i < rainCount; i++) {
         b[i * 3 + 1] -= dt * 22;
@@ -266,7 +268,7 @@ export class Environment {
       (this.rain.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     }
     if (this.snowPts.visible) {
-      (this.snowPts.material as THREE.PointsMaterial).opacity = 0.9 * snowK;
+      (this.snowPts.material as THREE.PointsMaterial).opacity = 0.9 * snowK * (1 - far);
       const b = this.snowBase, p = this.snowPos, t = this.time;
       for (let i = 0; i < snowCount; i++) {
         b[i * 3 + 1] -= dt * 2.2;
