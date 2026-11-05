@@ -569,11 +569,6 @@ function modernHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number,
     else { p.box(0.09, 0.2, 0.012, cx + w * 0.22, 0.03, zf + 0.004, 0x5a3e2c); p.box(0.05, 0.1, 0.014, cx + w * 0.22, 0.12, zf + 0.005, glass, 0, true); }
     windows(p, [cx - w * 0.2, cx + w * 0.22], 0.31, zf + 0.004, 0.08, 0.08, C.white);
     p.cyl(0.014, 0.014, 0.12, 6, cx + w * 0.3, h + 0.1, zc - 0.08, 0x8a8f96); p.cyl(0.02, 0.02, 0.01, 6, cx + w * 0.3, h + 0.22, zc - 0.08, 0x5d6168);
-    if (!o.F) {
-      p.box(w * 0.9, 0.006, 0.12, cx, 0.03, zf + 0.12, 0x8fcf7e);
-      hedge(p, cx - w * 0.25, zf + 0.17, w * 0.4, 0.04, 0.05, 0.03);
-      p.box(0.012, 0.08, 0.012, cx + w * 0.4, 0.03, zf + 0.15, 0x3c3c40); p.box(0.04, 0.03, 0.05, cx + w * 0.4, 0.11, zf + 0.15, 0x3a6ab8);
-    }
   } else {
     // petit immeuble : boutique au rez-de-chaussée (vitrine, store rayé, enseigne), deux étages à balcons vitrés, toit-terrasse
     const tall = !o.L && !o.R, ww = tall ? Math.min(w, 0.66) : w, H = 1.0, shop = of3(o.v, [0xd84a3e, 0x3c7fd8, 0x4fa860, 0xf2c23a]);
@@ -597,8 +592,60 @@ function modernHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number,
     p.cyl(0.05, 0.05, 0.09, 8, cx + ww * 0.25, H + 0.03, zc - 0.1, 0x8a8f96); p.cone(0.055, 0.03, 8, cx + ww * 0.25, H + 0.12, zc - 0.1, 0x5d6168);
     p.cyl(0.004, 0.004, 0.2, 4, cx + ww * 0.35, H + 0.03, zc + 0.12, 0x8a8f96);
   }
+  modernYard(p, o, x0, x1, cx, d, zc, kind === 0 ? cx + w * 0.3 : kind === 1 ? (w > 0.6 ? cx - w * 0.2 : cx + w * 0.22) : cx, kind);
 }
 const of3 = (v: number, a: number[]) => a[(v >> 2) % a.length];
+
+/**
+ * Les abords d'une maison moderne : allée de dalles jusqu'à la porte, applique allumée la nuit, boîte aux lettres, poubelles
+ * de tri, descente d'eau pluviale ; devant (quand la maison ne donne pas sur la rue) la pelouse, le massif fleuri, l'arbuste,
+ * la voiture garée ou le vélo ; derrière, la terrasse de bois, sa table, ses chaises et son parasol, le barbecue, la
+ * balançoire ou le trampoline des enfants, la haie du fond ; un habitant qui jardine ou qui rentre
+ */
+function modernYard(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number, d: number, zc: number, doorX: number, kind: number) {
+  const zf = zc + d / 2, zb = zc - d / 2, w = x1 - x0, h = (k: number) => hash2(o.v, k, 211);
+  // l'allée de dalles, l'applique, la boîte aux lettres
+  for (let k = 0; k < 4; k++) p.box(0.08, 0.006, 0.05, doorX + (k % 2 ? 0.01 : -0.01), 0.03, zf + 0.09 + k * 0.07, 0xd2ccc0);
+  p.box(0.02, 0.03, 0.016, doorX + 0.07, kind === 2 ? 0.2 : 0.17, zf + 0.012, 0x3a4048); p.box(0.014, 0.018, 0.012, doorX + 0.07, kind === 2 ? 0.205 : 0.175, zf + 0.02, 0xfff1c9, 0, true);
+  p.box(0.012, 0.09, 0.012, doorX + 0.1, 0.03, zf + 0.36, 0x3a4048); p.box(0.04, 0.03, 0.05, doorX + 0.1, 0.12, zf + 0.36, [0x3a6ab8, 0xf2c23a, 0xd84a3e, 0x4fa860][o.v % 4]);
+  // les poubelles de tri contre le mur, la descente d'eau pluviale
+  if (!o.R) {
+    for (const [k, c] of [[0, 0x4f8a4a], [1, 0xe8c040]] as number[][]) { p.box(0.045, 0.07, 0.05, x1 - 0.04 - k * 0.055, 0.03, zf + 0.04, c); p.box(0.047, 0.008, 0.052, x1 - 0.04 - k * 0.055, 0.1, zf + 0.04, dark(c, 0.75)); }
+    p.cyl(0.006, 0.006, kind === 2 ? 0.98 : kind === 1 ? 0.38 : 0.6, 5, x1 - 0.008, 0.03, zf + 0.008, 0x8a8f96);
+  }
+  // devant : pelouse, massif fleuri, arbuste, la voiture ou le vélo
+  if (!o.F) {
+    p.box(w * 0.9, 0.004, 0.24, cx, 0.03, zf + 0.15, 0x8fcf7e);
+    for (let k = 0; k < 4; k++) p.box(0.026, 0.026, 0.026, x0 + 0.08 + k * 0.045, 0.034, zf + 0.06, [C.pink, C.butter, 0xd84a3e, C.lav, C.white][(k + o.v) % 5], k * 0.7);
+    p.box(0.2, 0.012, 0.05, x0 + 0.15, 0.03, zf + 0.06, 0x6a5040);
+    { tree(p, x0 + 0.12, zf + 0.2, 0.55, [0x6fa85a, 0x8ab85a][o.v % 2]); if (kind !== 1) bike(p, doorX - 0.12, zf + 0.08, [0x3c7fd8, 0xd84a3e][o.v % 2], Math.PI / 2, 0.03); }
+    if (o.v % 2) figure(p, cx - w * 0.1, zf + 0.22, [0x3a6ab8, 0xd8786c, 0x6a8a4a][o.v % 3], h(1) * 6, false, 0x4a3426);
+  }
+  // derrière : la terrasse de bois, la table et ses chaises, le parasol, le barbecue
+  const tz = zb - 0.1, tx = cx + (o.v % 2 ? -0.1 : 0.1), back = kind !== 1 || o.F;
+  if (back) {
+  p.box(Math.min(0.44, w * 0.7), 0.014, 0.16, tx, 0.03, tz + 0.02, 0xa8784e);
+  for (let k = 0; k < 6; k++) p.box(0.004, 0.015, 0.16, tx - 0.18 + k * 0.07, 0.03, tz + 0.02, 0x8a6040);
+  p.cyl(0.04, 0.04, 0.008, 10, tx, 0.085, tz, C.white); p.cyl(0.006, 0.006, 0.04, 4, tx, 0.044, tz, 0x8a8f96);
+  for (const s of [-1, 1]) { p.box(0.03, 0.012, 0.03, tx + s * 0.07, 0.065, tz, 0xe8e4dc); p.box(0.03, 0.035, 0.006, tx + s * 0.085, 0.065, tz, 0xe8e4dc, Math.PI / 2); }
+  p.cyl(0.003, 0.003, 0.16, 4, tx, 0.093, tz, 0x8a8f96); p.cone(0.09, 0.04, 8, tx, 0.24, tz, [0xf28a3c, 0x3c7fd8, 0xe8e4dc][o.v % 3]);
+  p.cyl(0.018, 0.012, 0.05, 6, tx + 0.17, 0.044, tz + 0.04, 0x2a2a2e); p.cyl(0.024, 0.024, 0.01, 8, tx + 0.17, 0.094, tz + 0.04, 0x2a2a2e);
+  }
+  // les jeux des enfants : balançoire ou trampoline, au fond ; la haie du fond
+  const gx = cx - (o.v % 2 ? -0.24 : 0.24) * Math.min(1, w / 0.72);
+  if (kind === 1) { /* le pavillon a déjà son jardin devant */ } else if ((o.v >> 1) % 2) {
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.008, 0.18, 0.008), gx + s * 0.07, 0.03, zb - 0.12, 0xd84a3e, 0, false, s * 0.15);
+    p.box(0.16, 0.008, 0.008, gx, 0.2, zb - 0.12, 0xd84a3e);
+    const sw = sway([gx, 0.2, zb - 0.12], [1, 0, 0], 0.25, 0.6);
+    for (const s of [-1, 1]) sw.box(0.002, 0.13, 0.002, s * 0.02, -0.15, 0, 0x8a8f96);
+    sw.box(0.05, 0.008, 0.025, 0, -0.15, 0, 0x3c7fd8);
+  } else {
+    p.cyl(0.08, 0.08, 0.008, 12, gx, 0.07, zb - 0.12, 0x2a2a2e); p.add(new THREE.TorusGeometry(0.08, 0.008, 4, 12).rotateX(Math.PI / 2), gx, 0.074, zb - 0.12, 0x3c7fd8);
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; p.box(0.006, 0.04, 0.006, gx + Math.cos(a) * 0.075, 0.03, zb - 0.12 + Math.sin(a) * 0.075, 0x8a8f96); }
+  }
+  p.box(w * 0.94, 0.07, 0.045, cx, 0.03, -0.47, 0x4f7a46);
+  for (let k = 0; k < 4; k++) p.sphere(0.03, x0 + w * (0.15 + k * 0.23), 0.1, -0.47, dark(0x5a8a4e, 0.9 + h(k + 5) * 0.2), 0, 0.6);
+}
 
 /**
  * Immeuble de bureaux moderne : socle vitré du hall et son auvent, tour à mur-rideau (montants, bandeaux de planchers), arête
@@ -2511,8 +2558,15 @@ function temple(p: Parts, age: number) {
     p.box(0.004, 0.025, 0.004, tx, 0.445, tz + 0.074, 0x2a2a2a); p.box(0.018, 0.004, 0.004, tx + 0.006, 0.44, tz + 0.074, 0x2a2a2a);
     for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.022, 0.16, 0.022, tx + dx * 0.054, 0.52, tz + dz * 0.054, white);
     for (const [ry, dx, dz] of [[0, 0, 1], [0, 0, -1], [Math.PI / 2, 1, 0], [Math.PI / 2, -1, 0]] as [number, number, number][]) for (let k = 0; k < 3; k++) p.add(new THREE.BoxGeometry(0.08, 0.008, 0.02), tx + dx * 0.058, 0.55 + k * 0.035, tz + dz * 0.058, 0x8a96a2, ry, false, 0, 0.5);
-    p.sphere(0.03, tx - 0.02, 0.6, tz, C.gold, 1, 1.1); p.sphere(0.022, tx + 0.025, 0.59, tz, C.gold, 1, 1.1);
+    // les deux cloches sonnent à toute volée pour la noce : joug, cloche évasée, battant
     p.box(0.1, 0.008, 0.008, tx, 0.65, tz, 0x5a4a3a);
+    for (const [bx, r, ph] of [[-0.022, 0.03, 0.55], [0.026, 0.022, 0.7]]) {
+      const b = swing([tx + bx, 0.645, tz], [1, 0, 0], 0.5, ph);
+      b.box(0.01, 0.012, r * 1.4, 0, -0.008, 0, 0x5a4a3a);
+      b.cyl(r * 0.45, r, r * 1.5, 10, 0, -0.012 - r * 1.5, 0, C.gold);
+      b.cyl(r * 1.05, r * 1.05, 0.004, 10, 0, -0.014 - r * 1.5, 0, dark(C.gold, 0.8));
+      b.sphere(r * 0.25, 0, -0.016 - r * 1.6, 0, 0x6a5a3a);
+    }
     p.box(0.15, 0.025, 0.15, tx, 0.68, tz, roofC); p.pyramid(0.14, 0.06, 0.14, tx, 0.705, tz, roofC);
     p.box(0.012, 0.14, 0.012, tx, 0.765, tz, C.gold); p.box(0.07, 0.012, 0.012, tx, 0.85, tz, C.gold);
     // parvis : muret fleuri, statue sur son socle, arbres, bancs, réverbères, panneau d'affichage, vélos
@@ -2522,7 +2576,22 @@ function temple(p: Parts, age: number) {
     for (const x of [-0.26, 0.08]) { p.box(0.1, 0.014, 0.035, x, 0.045, 0.4, C.wood); p.box(0.1, 0.035, 0.008, x, 0.06, 0.418, C.wood); for (const d of [-0.035, 0.035]) p.box(0.012, 0.025, 0.03, x + d, 0.02, 0.4, 0x5d6878); }
     for (const x of [-0.44, 0.44]) { p.cyl(0.006, 0.008, 0.2, 5, x, 0.02, 0.2, 0x5d6878); p.box(0.025, 0.025, 0.025, x, 0.22, 0.2, 0xffe2a0, 0, true); }
     p.box(0.01, 0.12, 0.01, -0.36, 0.02, 0.0, 0x5d6878); p.box(0.1, 0.07, 0.01, -0.36, 0.1, 0.0, 0x8a6a4a); p.box(0.08, 0.05, 0.004, -0.36, 0.11, 0.006, 0xf2ece0);
-    for (let k = 0; k < 3; k++) { const x = 0.34 + k * 0.05; for (const d of [-0.025, 0.025]) p.add(new THREE.TorusGeometry(0.02, 0.004, 4, 10).rotateY(Math.PI / 2), x, 0.04, 0.0 + d, 0x3c3c40); p.box(0.004, 0.004, 0.05, x, 0.05, 0.0, [0xd8553c, 0x3c7fd8, 0x4fa860][k]); }
+    for (let k = 0; k < 3; k++) { const x = 0.34 + k * 0.05; for (const d of [-0.025, 0.025]) p.add(new THREE.TorusGeometry(0.02, 0.004, 4, 10).rotateY(Math.PI / 2), x, 0.04, -0.07 + d, 0x3c3c40); p.box(0.004, 0.004, 0.05, x, 0.05, -0.07, [0xd8553c, 0x3c7fd8, 0x4fa860][k]); }
+    // la noce sur le perron : les mariés sous la pluie de riz et de pétales, les invités qui les acclament, la voiture
+    // blanche enrubannée qui les attend ; les bacs fleuris de part et d'autre de la porte
+    figure(p, -0.085, 0.3, 0xf8f6f2, 0, false, 0xc8a070, 'idle', 0.02);
+    lifeSize(p, -0.085, 0.02, 0.3, () => p.add(new THREE.ConeGeometry(0.034, 0.08, 8).translate(0, 0.04, 0), -0.085, 0.02, 0.3, 0xf8f6f2));
+    figure(p, -0.035, 0.3, 0x2a2e38, 0, false, 0x3a2a20, 'idle', 0.02);
+    for (const [x, z, c, hc] of [[-0.24, 0.37, 0x9a5ad8, 0x2a2420], [0.12, 0.38, 0x3c7fd8, 0x8a5a3a], [-0.16, 0.43, 0xe8a83c, 0xc8a070], [0.05, 0.43, 0xd8786c, 0x2a2420]] as number[][]) figure(p, x, z, c, Math.PI + (x < -0.06 ? 0.5 : -0.5), false, hc, 'cheer', 0.02);
+    for (let k = 0; k < 14; k++) p.box(0.006, 0.006, 0.006, -0.06 + (hash2(k, 1, 251) - 0.5) * 0.24, 0.2 + hash2(k, 2, 251) * 0.12, 0.34 + hash2(k, 3, 251) * 0.06, k % 3 ? 0xffffff : C.pink, hash2(k, 4, 251) * 3);
+    lifeSize(p, 0.33, 0.02, 0.12, () => {
+      car(p, 0.33, 0.12, 0, 0xf4f2ee, 0.02);
+      for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.006, 0.004, 0.24), 0.33 + s * 0.03, 0.14, 0.12, 0xffffff, 0, false, s * 0.6);
+      p.sphere(0.022, 0.33, 0.15, 0.25, 0xffffff, 0, 0.7);
+    });
+    for (const sx of [-1, 1]) { p.box(0.05, 0.04, 0.05, -0.06 + sx * 0.12, 0.02, 0.25, 0xd2ccc0); for (const d of [-0.012, 0.012]) p.sphere(0.018, -0.06 + sx * 0.12 + d, 0.07, 0.25, d < 0 ? C.white : C.pink, 0, 0.8); }
+    // les projecteurs au sol qui éclairent la façade la nuit
+    for (const sx of [-1, 1]) { p.box(0.025, 0.015, 0.02, -0.06 + sx * 0.17, 0.02, 0.24, 0x3c3c40); p.box(0.02, 0.006, 0.004, -0.06 + sx * 0.17, 0.03, 0.229, 0xfff1c9, 0, true); }
   }
 }
 
