@@ -7,13 +7,15 @@ import { hash2, mulberry32 } from '../core/rng';
 import { Parts } from './parts';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { CH, NC } from './vegetation';
+import { makeBeast, BEAST_KINDS, GESTURES, beastYaw, BeastKind } from './beasts';
 
 type Kind = 'sheep' | 'cow' | 'pig' | 'hen' | 'rabbit' | 'deer' | 'horse' | 'llama' | 'fox' | 'wolf' | 'frog'
   | 'duck' | 'duckling' | 'bird' | 'songbird' | 'bee' | 'butterfly' | 'bat' | 'fish' | 'dolphin' | 'whale' | 'manta'
   | 'eagle' | 'gull' | 'ibex' | 'bear' | 'lizard' | 'crab' | 'turtle' | 'croc' | 'camel' | 'elephant' | 'giraffe' | 'moose';
 
 interface Spec {
-  geo: () => THREE.BufferGeometry;
+  /** forme instanciée (absente pour les bêtes articulées de beasts.ts) */
+  geo?: () => THREE.BufferGeometry;
   max: number;
   colors: number[];
   /** vitesse de marche et de course (cases/s), pause entre deux déplacements (s) */
@@ -45,6 +47,8 @@ const DRINKERS = new Set<Kind>(['sheep', 'cow', 'horse', 'deer', 'llama', 'fox',
 /** Bêtes sauvages qui se méfient des villageois (celles de la ferme, non) */
 const WARY = new Set<Kind>(['rabbit', 'deer', 'frog', 'fox', 'wolf', 'bear', 'lizard', 'crab', 'turtle', 'moose', 'giraffe', 'ibex']);
 const SWIMMERS = new Set<Kind>(['fish', 'dolphin', 'whale', 'manta']);
+/** Petites bêtes articulées, qu'on cesse d'animer et d'afficher plus tôt quand on s'éloigne */
+const TINY = new Set<Kind>(['lizard', 'crab', 'turtle']);
 /** Bêtes que ramènent les expéditions */
 const HERDS = new Set<Kind>(['sheep', 'cow', 'pig', 'horse']);
 
@@ -206,140 +210,6 @@ function ibexGeo() {
   return p.build(false).body;
 }
 
-/** Ours : gros corps et sa bosse au garrot, tête ronde, museau clair, petites oreilles, pattes épaisses (la robe teinte le blanc) */
-function bearGeo() {
-  const p = new Parts();
-  p.add(box(0.12, 0.11, 0.22), 0, 0.15, 0, 0xffffff);
-  p.add(box(0.1, 0.05, 0.08), 0, 0.245, 0.04, 0xffffff);
-  p.add(box(0.114, 0.03, 0.2), 0, 0.12, -0.005, 0xffffff);
-  p.add(box(0.085, 0.075, 0.085), 0, 0.19, 0.14, 0xffffff);
-  p.add(box(0.045, 0.038, 0.05), 0, 0.185, 0.195, 0xc8a880);
-  p.add(box(0.02, 0.014, 0.012), 0, 0.2, 0.222, DARK);
-  for (const s2 of [-1, 1]) {
-    p.add(box(0.022, 0.022, 0.014), s2 * 0.032, 0.268, 0.13, 0xffffff);
-    p.add(box(0.008, 0.008, 0.006), s2 * 0.022, 0.215, 0.183, DARK);
-  }
-  p.add(box(0.03, 0.025, 0.02), 0, 0.17, -0.118, 0xffffff);
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.03, 0.11), x * 0.04, 0, z * 0.075, 0xffffff);
-  return p.build(false).body;
-}
-
-/** Lézard : corps allongé, longue queue, quatre pattes écartées */
-function lizardGeo() {
-  const p = new Parts();
-  p.add(ico(0.012, 0.8, 0.55, 2.2, 0), 0, 0.01, 0, 0xffffff);
-  p.add(ico(0.009, 0.9, 0.7, 1.2, 0), 0, 0.012, 0.03, 0xffffff);
-  p.add(new THREE.ConeGeometry(0.008, 0.05, 4).rotateX(-Math.PI / 2), 0, 0.008, -0.05, 0xffffff);
-  for (const s of [-1, 1]) for (const z of [-0.012, 0.016]) p.add(box(0.014, 0.004, 0.006), s * 0.014, 0.004, z, 0xe8e0c8, s * 0.5);
-  return p.build(false).body;
-}
-
-/** Crabe : carapace plate, deux pinces levées, pattes de côté et yeux sur tiges */
-function crabGeo() {
-  const p = new Parts();
-  p.add(ico(0.02, 1.2, 0.55, 0.9, 0), 0, 0.014, 0, 0xffffff);
-  for (const s of [-1, 1]) {
-    p.add(box(0.006, 0.006, 0.02), s * 0.028, 0.02, 0.026, 0xffffff, s * 0.3);
-    p.add(ico(0.008, 1.2, 0.8, 0.9, 0), s * 0.034, 0.024, 0.04, 0xffffff);
-    p.add(box(0.003, 0.012, 0.003), s * 0.008, 0.03, 0.016, DARK);
-    for (const z of [-0.012, 0, 0.012]) p.add(box(0.022, 0.003, 0.003), s * 0.03, 0.008, z, 0xe8d0b8, 0, false, s * 0.5);
-  }
-  return p.build(false).body;
-}
-
-/** Tortue : carapace bombée, tête et pattes courtes d'une teinte plus claire */
-function turtleGeo() {
-  const p = new Parts();
-  p.add(ico(0.03, 1, 0.62, 1.25, 1), 0, 0.016, 0, 0xffffff);
-  p.add(ico(0.022, 1, 0.3, 1.1, 0), 0, 0.012, 0, 0xc8c8a8);
-  p.add(ico(0.011, 1, 0.9, 1.1, 0), 0, 0.022, 0.045, 0xdcdcb4);
-  p.add(box(0.012, 0.005, 0.012), 0, 0.006, -0.042, 0xdcdcb4);
-  for (const s of [-1, 1]) for (const z of [-0.022, 0.022]) p.add(box(0.014, 0.008, 0.016), s * 0.03, 0.005, z, 0xdcdcb4);
-  return p.build(false).body;
-}
-
-/** Crocodile : long corps bas, queue effilée, museau en bec, crête de bosses sur le dos */
-function crocGeo() {
-  const p = new Parts();
-  p.add(box(0.05, 0.03, 0.14), 0, 0.03, -0.01, 0xffffff);
-  p.add(tri([-0.025, 0.045, -0.08, 0.025, 0.045, -0.08, 0, 0.04, -0.24, -0.025, 0.02, -0.08, 0, 0.02, -0.24, 0.025, 0.02, -0.08]), 0, 0, 0, 0xffffff);
-  p.add(box(0.04, 0.022, 0.1), 0, 0.034, 0.12, 0xffffff);
-  p.add(box(0.032, 0.012, 0.04), 0, 0.028, 0.19, 0xe8e4c0);
-  for (const s of [-1, 1]) {
-    p.add(box(0.008, 0.008, 0.008), s * 0.014, 0.054, 0.1, 0xe8e0a0);
-    for (const z of [-0.05, 0.05]) p.add(box(0.016, 0.02, 0.02), s * 0.036, 0.012, z, 0xe8e4c0, 0, false, s * 0.3);
-  }
-  for (let i = 0; i < 6; i++) p.add(box(0.012, 0.01, 0.012), 0, 0.052, 0.06 - i * 0.03, 0xdcdcc0);
-  return p.build(false).body;
-}
-
-/** Chameau : deux bosses, long cou courbé, hautes pattes fines et queue courte */
-function camelGeo() {
-  const p = new Parts();
-  p.add(box(0.07, 0.07, 0.15), 0, 0.15, 0, 0xffffff);
-  for (const z of [-0.035, 0.035]) p.add(ico(0.03, 1, 1.1, 1, 0), 0, 0.2, z, 0xe8dcc4);
-  p.add(box(0.032, 0.1, 0.034), 0, 0.22, 0.075, 0xffffff, 0, false, 0, -0.5);
-  p.add(box(0.038, 0.04, 0.07), 0, 0.275, 0.105, 0xffffff);
-  p.add(box(0.026, 0.026, 0.026), 0, 0.265, 0.15, 0xe8dcc4);
-  for (const s of [-1, 1]) p.add(box(0.01, 0.014, 0.01), s * 0.015, 0.3, 0.095, 0xffffff);
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.014, 0.115), x * 0.025, 0, z * 0.055, 0xd8c8a8);
-  p.add(box(0.012, 0.04, 0.012), 0, 0.14, -0.085, 0xd8c8a8, 0, false, 0, 0.3);
-  return p.build(false).body;
-}
-
-/** Éléphant : masse grise, grandes oreilles, trompe qui tombe, défenses ivoire, pattes en piliers */
-function elephantGeo() {
-  const p = new Parts();
-  p.add(box(0.12, 0.13, 0.2), 0, 0.18, -0.01, 0xffffff);
-  p.add(box(0.1, 0.05, 0.09), 0, 0.26, 0.03, 0xffffff);
-  p.add(box(0.09, 0.09, 0.08), 0, 0.2, 0.13, 0xffffff);
-  p.add(box(0.03, 0.1, 0.03), 0, 0.14, 0.18, 0xe8e8e8, 0, false, 0, 0.25);
-  p.add(box(0.026, 0.05, 0.026), 0, 0.075, 0.205, 0xe8e8e8, 0, false, 0, 0.6);
-  for (const s of [-1, 1]) {
-    p.add(box(0.014, 0.1, 0.1), s * 0.068, 0.22, 0.1, 0xf2f2f2, 0, false, s * -0.18);
-    p.add(box(0.012, 0.012, 0.05), s * 0.03, 0.15, 0.17, 0xf4eedc, 0, false, 0, 0.35);
-    p.add(box(0.008, 0.008, 0.008), s * 0.03, 0.225, 0.172, DARK);
-  }
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.038, 0.115), x * 0.04, 0, z * 0.07, 0xdcdcdc);
-  p.add(box(0.008, 0.07, 0.008), 0, 0.17, -0.12, 0xdcdcdc);
-  return p.build(false).body;
-}
-
-/** Girafe : très long cou, petite tête à cornes, corps tacheté sur de hautes pattes */
-function giraffeGeo() {
-  const p = new Parts();
-  p.add(box(0.06, 0.07, 0.14), 0, 0.2, 0, 0xffffff);
-  p.add(box(0.03, 0.2, 0.034), 0, 0.31, 0.06, 0xffffff, 0, false, 0, -0.18);
-  p.add(box(0.034, 0.034, 0.06), 0, 0.42, 0.085, 0xffffff);
-  p.add(box(0.024, 0.022, 0.02), 0, 0.41, 0.125, 0xd8b078);
-  for (const s of [-1, 1]) {
-    p.add(box(0.006, 0.02, 0.006), s * 0.009, 0.445, 0.08, 0x5a3e2a);
-    p.add(box(0.012, 0.01, 0.006), s * 0.022, 0.43, 0.075, 0xffffff, 0, false, s * 0.5);
-  }
-  for (const [x, y, z] of [[0.03, 0.22, -0.03], [-0.03, 0.2, 0.02], [0.03, 0.19, 0.04], [-0.03, 0.23, -0.04], [0.016, 0.33, 0.062], [-0.016, 0.38, 0.072]])
-    p.add(box(0.012, 0.016, 0.016), x, y, z, 0xa8703a);
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.014, 0.17), x * 0.022, 0, z * 0.05, 0xe8c888);
-  p.add(box(0.006, 0.05, 0.006), 0, 0.2, -0.075, 0x8a5a30, 0, false, 0, 0.25);
-  return p.build(false).body;
-}
-
-/** Élan : forte carcasse sombre, bosse au garrot, long museau retombant, bois palmés */
-function mooseGeo() {
-  const p = new Parts();
-  p.add(box(0.075, 0.08, 0.16), 0, 0.16, 0, 0xffffff);
-  p.add(box(0.07, 0.04, 0.06), 0, 0.215, 0.04, 0xffffff);
-  p.add(box(0.036, 0.075, 0.04), 0, 0.215, 0.085, 0xffffff, 0, false, 0, -0.5);
-  p.add(box(0.044, 0.05, 0.085), 0, 0.245, 0.12, 0xffffff);
-  p.add(box(0.036, 0.04, 0.04), 0, 0.23, 0.17, 0xcab8a0);
-  for (const s of [-1, 1]) {
-    p.add(box(0.07, 0.006, 0.04), s * 0.055, 0.285, 0.1, 0xd8c8a8, 0, false, s * 0.2);
-    p.add(box(0.03, 0.006, 0.03), s * 0.1, 0.29, 0.115, 0xd8c8a8);
-    p.add(box(0.016, 0.014, 0.01), s * 0.032, 0.262, 0.098, 0xffffff, 0, false, s * 0.5);
-  }
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.018, 0.13), x * 0.026, 0, z * 0.055, 0x5a4a3e);
-  return p.build(false).body;
-}
-
 function deerGeo() {
   const p = new Parts();
   p.add(box(0.07, 0.07, 0.16), 0, 0.13, 0, 0xffffff);
@@ -465,21 +335,21 @@ const SPECS: Record<Kind, Spec> = {
   dolphin: { geo: dolphinGeo, max: 9, colors: [0x7f97ab, 0x8ea3b4], speed: 0, idle: [1, 1], ok: water, scale: 1.5 },
   eagle: { geo: birdGeo, max: 8, colors: [0x5a4232, 0x6b4e38, 0x4e3a2c], speed: 0, idle: [1, 1], ok: any, flap: [3, 0.45, 0.012], scale: 3.6 },
   gull: { geo: birdGeo, max: 18, colors: [0xffffff, 0xf2f4f6], speed: 0, idle: [1, 1], ok: any, flap: [7, 0.9, 0.012], scale: 2 },
-  bear: { geo: bearGeo, max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
+  bear: { max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
   ibex: { geo: ibexGeo, max: 14, colors: [0x8a7a68, 0x9c8b76, 0x6e6052], speed: 0.35, run: 1.6, idle: [3, 9], ok: alpine, graze: 0.15, flee: 2.6, scale: 1.1 },
-  lizard: { geo: lizardGeo, max: 28, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
-  crab: { geo: crabGeo, max: 24, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
-  turtle: { geo: turtleGeo, max: 14, colors: [0x6a8a4a, 0x8a7a50, 0x5a7a58], speed: 0.1, run: 0.25, idle: [5, 14], ok: bank, flee: 0.9 },
-  croc: { geo: crocGeo, max: 6, colors: [0x6a8a4a, 0x5a7a3e, 0x7a8a58], speed: 0.18, run: 0.9, idle: [8, 22], ok: bank },
-  camel: { geo: camelGeo, max: 12, colors: [0xc8a070, 0xb89060, 0xd8b888], speed: 0.33, run: 1.2, idle: [5, 12], ok: offRoad, graze: 0.12, flee: 2.5, scale: 1.1 },
-  elephant: { geo: elephantGeo, max: 8, colors: [0x8e8e94, 0x7a7a82, 0x9a9a9e], speed: 0.25, run: 0.8, idle: [6, 16], ok: offRoad, graze: 0.12, scale: 1.45 },
-  giraffe: { geo: giraffeGeo, max: 8, colors: [0xf0c460, 0xe8b858, 0xf4cc78], speed: 0.33, run: 1.5, idle: [5, 12], ok: offRoad, graze: 0.1, flee: 3, scale: 1.25 },
-  moose: { geo: mooseGeo, max: 10, colors: [0x6a4e3a, 0x5a4232, 0x7a5a42], speed: 0.33, run: 1.5, idle: [5, 12], ok: wild, graze: 0.15, flee: 3, scale: 1.2 },
+  lizard: { max: 28, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
+  crab: { max: 24, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
+  turtle: { max: 14, colors: [0x6a8a4a, 0x8a7a50, 0x5a7a58], speed: 0.1, run: 0.25, idle: [5, 14], ok: bank, flee: 0.9 },
+  croc: { max: 6, colors: [0x6a8a4a, 0x5a7a3e, 0x7a8a58], speed: 0.18, run: 0.9, idle: [8, 22], ok: bank },
+  camel: { max: 12, colors: [0xc8a070, 0xb89060, 0xd8b888], speed: 0.33, run: 1.2, idle: [5, 12], ok: offRoad, graze: 0.12, flee: 2.5, scale: 1.1 },
+  elephant: { max: 8, colors: [0x8e8e94, 0x7a7a82, 0x9a9a9e], speed: 0.25, run: 0.8, idle: [6, 16], ok: offRoad, graze: 0.12, scale: 1.45 },
+  giraffe: { max: 8, colors: [0xf0c460, 0xe8b858, 0xf4cc78], speed: 0.33, run: 1.5, idle: [5, 12], ok: offRoad, graze: 0.1, flee: 3, scale: 1.25 },
+  moose: { max: 10, colors: [0x6a4e3a, 0x5a4232, 0x7a5a42], speed: 0.33, run: 1.5, idle: [5, 12], ok: wild, graze: 0.15, flee: 3, scale: 1.2 },
   butterfly: { geo: butterflyGeo, max: 32, colors: [0xf7d24c, 0xf29ab4, 0xffffff, 0x9fc8f0, 0xf09a50], speed: 0, idle: [1, 1], ok: any, flap: [26, 1.3, 0.003] },
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'bear', 'lizard', 'crab', 'turtle', 'croc', 'camel', 'elephant', 'giraffe', 'moose']);
+const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex']);
 
 /** Élément du décor ou zone auquel un groupe d'animaux est rattaché */
 export type Anchor = 'edge' | 'meadow' | 'rocks' | 'banks' | 'ponds' | 'coast';
@@ -584,6 +454,7 @@ export class Fauna {
   constructor(private world: World, private veg: { perches: number[][]; flowers: number[][] }) {
     for (const k of KIND_LIST) {
       const sp = SPECS[k];
+      if (!sp.geo) continue;
       const g = sp.geo();
       let mat: THREE.MeshStandardMaterial;
       if (sp.flap) {
@@ -829,12 +700,19 @@ export class Fauna {
           kind, key: s.key, x: s.hx, y: 0, z: s.hz, heading: this.rnd() * 6.28, pitch: 0, tx: s.hx, tz: s.hz,
           moving: false, timer: this.rnd() * 3, phase: this.rnd() * 10, hx: s.hx, hz: s.hz, radius: s.radius,
           col: sp.colors[Math.floor(this.rnd() * sp.colors.length)], size: (sp.scale ?? 1) * (0.9 + this.rnd() * 0.2),
-          hidden: false, sleeping: false, leader: kind === 'duckling' || (kind === 'wolf' && i > 0) ? list[kind === 'wolf' ? 0 : i - 1] : null, slot: i, actor: null,
+          hidden: false, sleeping: false, leader: kind === 'duckling' || ((kind === 'wolf' || kind === 'bear') && i > 0) ? list[kind === 'duckling' ? i - 1 : 0] : null, slot: i, actor: null,
           run: false, threat: null, fear: 0, prey: null, chase: 0, hunger: 20 + this.rnd() * 40, dead: 0, act: null, actT: 0, toDrink: false,
           thirst: 30 + this.rnd() * 90, ang: this.rnd() * 6.28, rush: 0, ax: s.hx, ay: 0, az: s.hz, by: 0, flight: 1, flightT: 1, perched: false, flap: 1,
         };
+        // l'ourson suit sa mère
+        if (kind === 'bear' && i > 0) c.size *= 0.55;
         const md = MODELS[kind];
-        if (md && !PROCEDURAL.has(kind)) {
+        if (BEAST_KINDS.has(kind)) {
+          // bête articulée dessinée par le jeu : sa robe suit sa couleur, sa nuance varie un peu
+          c.actor = makeBeast(kind as BeastKind, Math.max(0, sp.colors.indexOf(c.col)), c.size, 0.9 + this.rnd() * 0.16);
+          this.group.add(c.actor.root);
+          c.actor.mixer.setTime(this.rnd() * 3);
+        } else if (md && !PROCEDURAL.has(kind)) {
           const name = md.pick ? md.pick[Math.floor(hash2(s.key.length, s.key.charCodeAt(s.key.length - 1), 9) * md.pick.length)] : i === 0 && md.lead ? md.lead : md.name;
           c.actor = makeActor(name, md.length * (0.9 + this.rnd() * 0.2));
           if (c.actor) { this.group.add(c.actor.root); c.actor.mixer.setTime(this.rnd() * 3); }
@@ -1015,8 +893,8 @@ export class Fauna {
       c.timer -= dt;
       if (c.timer <= 0) {
         c.timer = 1;
-        // meute : les loups suivent leur chef
-        const L = c.kind === 'wolf' ? c.leader : null;
+        // meute : les loups suivent leur chef ; l'ourson suit sa mère
+        const L = c.kind === 'wolf' || c.kind === 'bear' ? c.leader : null;
         const hx = L ? L.x : c.hx, hz = L ? L.z : c.hz, rad = L ? 0.9 : c.radius;
         // les herbivores préfèrent l'herbe intacte, les lapins chapardeurs visent le potager
         let best = -1, bx = 0, bz = 0;
@@ -1361,20 +1239,36 @@ export class Fauna {
     // modèle sans animation de marche (cochon, lama) : petit trot simulé, rebond et roulis
     const gait = c.moving && !swimmer && !a.actions.has('Walk') && !a.actions.has('WalkSlow');
     const bob = gait ? Math.abs(Math.sin(c.phase * 0.9)) * (c.run ? 0.03 : 0.012) : 0;
-    const ground = this.world.hAt(c.x, c.z);
-    a.root.position.set(c.x, (swimmer ? c.y : c.kind === 'frog' ? Math.max(ground, SEA - 0.01) : ground) + bob, c.z);
-    a.root.rotation.set(swimmer ? c.pitch : 0, c.heading + (MODELS[c.kind]?.yaw ?? 0), gait ? Math.sin(c.phase * 0.9) * 0.07 : 0, 'YXZ');
+    const ground = this.world.hAt(c.x, c.z), beast = BEAST_KINDS.has(c.kind);
+    // grenouilles à fleur d'eau, crocodiles et tortues à demi immergés sur les hauts-fonds
+    const wet = c.kind === 'frog' ? SEA - 0.01 : c.kind === 'croc' ? SEA - 0.035 : c.kind === 'turtle' ? SEA - 0.018 : -Infinity;
+    a.root.position.set(c.x, (swimmer ? c.y : Math.max(ground, wet)) + bob, c.z);
+    a.root.rotation.set(swimmer ? c.pitch : 0, c.heading + (MODELS[c.kind]?.yaw ?? beastYaw(c.kind)), gait ? Math.sin(c.phase * 0.9) * 0.07 : 0, 'YXZ');
     if (swimmer) play(a, ['Swimming_Fast', 'Swimming_Normal', 'Swim', 'Idle'].slice(c.rush > 0.3 ? 0 : 1));
     else if (c.moving && c.run) play(a, ['Gallop', 'Run', 'Jump', 'Walk', 'Idle'], 0.15);
     else if (c.moving) play(a, c.kind === 'frog' ? ['Jump', 'Walk'] : ['Walk', 'WalkSlow', 'Idle']);
     else if (c.act === 'eat') play(a, ['Eating', 'Idle_Eating', 'Attack', 'Idle']);
-    else if (c.sleeping) play(a, ['Idle_Headlow', 'Idle_2_HeadLow', 'Idle']);
+    else if (c.act === 'drink') play(a, ['Drink', 'Eating', 'Idle_Eating', 'Bite_Front', 'Idle_Headlow', 'Idle']);
+    else if (c.sleeping) play(a, beast ? ['Sleep', 'Idle'] : ['Idle_Headlow', 'Idle_2_HeadLow', 'Idle']);
     else if (c.pitch > 0.05) play(a, ['Eating', 'Idle_Eating', 'Bite_Front', 'Idle_Headlow', 'Idle']);
+    else if (beast) this.idleBeast(c, a);
     else play(a, ['Idle', 'Idle_2']);
     const speedUp = c.run ? 1.3 : 1;
     // au loin, l'animation n'avance qu'une image sur trois
     if (!far) a.mixer.update(dt * speedUp);
     else if ((this.frame + c.slot) % 3 === 0) a.mixer.update(dt * 3 * speedUp);
+  }
+
+  /**
+   * Repos d'une bête articulée : de temps en temps un geste joué une fois (l'ours se dresse ou hume l'air, l'éléphant
+   * barrit…), qu'on laisse finir avant de revenir au repos
+   */
+  private idleBeast(c: Critter, a: Actor) {
+    const cur = a.current?.getClip().name ?? '';
+    if (GESTURES.has(cur) && a.current!.isRunning()) return;
+    const k = Math.floor(this.t / 7 + c.slot * 2.3 + c.hx * 3.1 + c.hz * 1.7);
+    const want = k % 4 === 2 ? 'Idle_2' : k % 4 === 3 ? 'Idle_3' : 'Idle';
+    play(a, want !== 'Idle' && want !== cur && a.actions.has(want) ? [want] : ['Idle']);
   }
 
   private render(elapsed: number, dt: number, camera?: THREE.Camera) {
@@ -1394,8 +1288,8 @@ export class Fauna {
           visible = this.frustum.intersectsSphere(this.sphere);
           const d = this.sphere.center.distanceTo(camera.position);
           far = d > 60;
-          // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points
-          if (d > 130) visible = false;
+          // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points (les petites, plus tôt)
+          if (d > (TINY.has(c.kind) ? 45 : 130)) visible = false;
         }
         this.animateActor(c, c.actor, dt, visible, far);
         continue;
@@ -1427,6 +1321,7 @@ export class Fauna {
     }
     for (const k of KIND_LIST) {
       const m = this.meshes[k];
+      if (!m) continue;
       m.count = counts[k];
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
