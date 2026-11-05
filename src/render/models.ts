@@ -2779,10 +2779,13 @@ function gatherPlaza(p: Parts, age: number, o: ModelOpts) {
   }
   if (age === 2) {
     // le marché : pavés tout autour des étals du milieu
-    const pave = 0xb8ae9a;
-    cobbles(p, -H, -H, H, -0.64, pave, 0, 701, 0.16, 0.11); cobbles(p, -H, 0.64, H, H, pave, 0, 702, 0.16, 0.11);
-    cobbles(p, -H, -0.64, -0.64, 0.64, pave, 0, 703, 0.16, 0.11); cobbles(p, 0.64, -0.64, H, 0.64, pave, 0, 704, 0.16, 0.11);
-    placed(p, 0, 0, 0, 1.3, () => gather(p, 2, o));
+    // (sous les pavés, la terre battue des joints : la place est pleine, sans herbe entre les pierres)
+    const pave = 0xb8ae9a, c = 0.58;
+    p.box(2.94, 0.004, 2.94, 0, 0, 0, 0x8a7a62);
+    cobbles(p, -H, -H, H, -c, pave, 0.004, 701, 0.16, 0.11); cobbles(p, -H, c, H, H, pave, 0.004, 702, 0.16, 0.11);
+    cobbles(p, -H, -c, -c, c, pave, 0.004, 703, 0.16, 0.11); cobbles(p, c, -c, H, c, pave, 0.004, 704, 0.16, 0.11);
+    // les étals du milieu, à peine agrandis : à la taille de ceux du pourtour
+    placed(p, 0, 0, 0, 1.18, () => gather(p, 2, o));
     const folk = [0x8a3a3a, 0x3a5a7a, 0x5a6a3a, 0x6a4a7a, 0xb8843a, 0x4a3a2a];
     // des étals sous leurs auvents rayés, tournés vers la place : deux au nord, un au sud
     placed(p, -0.78, -1.12, 0, 1, () => { awning(p, 0, 0, 0.34, 0xd8584e, 0xf4e8d0); stall(p, 0, 0.02, [0xd84a3e, 0x8ab84a, 0xf2a03a], folk[0], 0.3); });
