@@ -1,5 +1,5 @@
 import { World } from '../world/world';
-import { KINDS, KindId } from './catalog';
+import { KINDS, KindId, hasDoor } from './catalog';
 
 export const FRONT = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 
@@ -18,10 +18,10 @@ export const doorSpan = (s: number) => [(s - 1) >> 1, s >> 1];
 
 /**
  * Cases devant la porte, si elle est du côté `side` : au milieu du côté, une case (deux, celles du milieu, pour une emprise
- * paire). Le chemin d'accès n'arrive que là. Un lampadaire n'a pas de porte
+ * paire). Le chemin d'accès n'arrive que là. Un lampadaire et la place du village n'ont pas de porte
  */
 export function doorCells(kind: KindId, x: number, z: number, s: number, side: number): [number, number][] {
-  if (kind === 'lamp') return [];
+  if (!hasDoor(kind)) return [];
   const [a, b] = doorSpan(s);
   return sideCells(x, z, s, side).slice(a, b + 1);
 }

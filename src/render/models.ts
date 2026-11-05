@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Parts } from './parts';
-import { KindId, KINDS } from '../build/catalog';
+import { KindId, KINDS, smallSize } from '../build/catalog';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { bakeFit, hasModel, ModelName } from './assets';
 import { hash2 } from '../core/rng';
@@ -134,6 +134,8 @@ export interface ModelOpts {
 /** Bâtiments passés en 2 × 2 dont le modèle procédural est dessiné pour une case : on l'agrandit d'autant */
 const UPSCALE: KindId[] = ['temple', 'workshop', 'mill'];
 const UP = 1.85;
+/** Agrandissement du modèle : ceux d'UPSCALE sur 2 × 2 ; le forum, dessiné pour 2 × 2, passé en 3 × 3 avec la place du village */
+const upOf = (kind: KindId, size: number) => (size === 2 && UPSCALE.includes(kind) ? UP : size === 3 && kind === 'forum' ? 1.5 : 1);
 /** Géométries d'un bâtiment, et sommets de ses cheminées (x, y, z, sorte : 0 foyer, 1 feu de bois, 2 forge ou usine) */
 export interface Model {
   body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; smoke: number[];
@@ -10708,7 +10710,7 @@ function zooBig(p: Parts, age: number) {
 }
 
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
-  const size = o.small ? KINDS[kind].size - 1 : KINDS[kind].size;
+  const size = o.small ? smallSize(kind) : KINDS[kind].size;
   const imported = importedModel(kind, age, o.v, size);
   if (imported) return imported;
   // (le bloc ne compte qu'au Moyen Âge, pour la couleur des toits ; le rang dans la ligne d'horizon, à l'âge futuriste)
@@ -10726,7 +10728,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   spinOut = null;
   vaneOut = null;
   // un modèle qui sera agrandi dessine ses personnages d'autant plus petits (voir lifeSize)
-  lifeK = size === 2 && UPSCALE.includes(kind) ? 1 / UP : 1;
+  const up = upOf(kind, size);
+  lifeK = 1 / up;
   // à l'âge futuriste : le modèle dessiné pour lui, sinon celui de l'époque moderne, rehaussé (voir futureExtras)
   const future = age >= 5 && futureModel(p, kind, o, size), extras = age >= 5 && !future;
   if (extras) age = 4;
@@ -10788,7 +10791,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'research': research(p); break;
     case 'maglev': maglev(p); break;
   }
-  if (extras) futureExtras(p, kind, size);
+  if (extras) futureExtras(p, kind, kind === 'forum' && size === 3 ? 2 : size);
   lifeK = 1;
   // un modèle fait seulement de pièces importées (le point d'eau préhistorique) n'a pas de partie procédurale
   if (!p.body.length && attachOut.length) m = { body: mergeGeometries(attachOut, false)!, glow: null, smoke: smokeOut };
@@ -10814,19 +10817,19 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     for (const sw of m.sways ?? []) sw.pivot[1] -= d;
     if (m.crowd) { m.crowd.translate(0, -d, 0); const pv = m.crowd.attributes.aPivot; for (let i = 0; i < pv.count; i++) pv.setY(i, pv.getY(i) - d); }
   }
-  // dessiné pour une case, posé sur quatre : tout s'agrandit, cheminées comprises
-  if (size === 2 && UPSCALE.includes(kind)) {
-    m.body.scale(UP, UP, UP);
-    m.glow?.scale(UP, UP, UP);
-    m.smoke = m.smoke.map((v, i) => (i % 4 === 3 ? v : v * UP));
-    for (const sw of m.sways ?? []) { sw.geo.scale(UP, UP, UP); sw.glow?.scale(UP, UP, UP); sw.pivot = sw.pivot.map((v) => v * UP) as [number, number, number]; }
+  // dessiné pour une case, posé sur quatre (le forum : dessiné pour quatre, posé sur neuf) : tout s'agrandit, cheminées comprises
+  if (up !== 1) {
+    m.body.scale(up, up, up);
+    m.glow?.scale(up, up, up);
+    m.smoke = m.smoke.map((v, i) => (i % 4 === 3 ? v : v * up));
+    for (const sw of m.sways ?? []) { sw.geo.scale(up, up, up); sw.glow?.scale(up, up, up); sw.pivot = sw.pivot.map((v) => v * up) as [number, number, number]; }
     // le rotor et la tête face au vent de l'éolienne grandissent avec elle
-    if (m.rotor) { m.rotor.geo.scale(UP, UP, UP); m.rotor.pivot = m.rotor.pivot.map((v) => v * UP) as [number, number, number]; }
-    if (m.vane) { m.vane.geo?.scale(UP, UP, UP); m.vane.pivot = m.vane.pivot.map((v) => v * UP) as [number, number]; }
+    if (m.rotor) { m.rotor.geo.scale(up, up, up); m.rotor.pivot = m.rotor.pivot.map((v) => v * up) as [number, number, number]; }
+    if (m.vane) { m.vane.geo?.scale(up, up, up); m.vane.pivot = m.vane.pivot.map((v) => v * up) as [number, number]; }
     if (m.crowd) {
-      m.crowd.scale(UP, UP, UP);
+      m.crowd.scale(up, up, up);
       const pv = m.crowd.attributes.aPivot, an = m.crowd.attributes.aAnim;
-      for (let i = 0; i < pv.count; i++) { pv.setXYZ(i, pv.getX(i) * UP, pv.getY(i) * UP, pv.getZ(i) * UP); an.setW(i, an.getW(i) * UP); }
+      for (let i = 0; i < pv.count; i++) { pv.setXYZ(i, pv.getX(i) * up, pv.getY(i) * up, pv.getZ(i) * up); an.setW(i, an.getW(i) * up); }
     }
   }
   cache.set(key, m);

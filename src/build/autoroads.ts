@@ -1,5 +1,5 @@
 import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS } from '../world/world';
-import { Building, sizeOf } from './catalog';
+import { Building, hasDoor, sizeOf } from './catalog';
 import { FRONT, doorCells, doorSide, facingRoadRot, nearRoadSide, sideCells } from './placement';
 import { Heap } from '../sim/agents';
 
@@ -39,7 +39,8 @@ const isShore = (b: Building) => b.kind === 'pier' || b.kind === 'harbor';
  * de cases de route posées
  */
 export function autoRoad(w: World, b: Building): number {
-  if (b.kind === 'lamp') return 0;
+  // ni le lampadaire ni la place du village (sans porte : on la rejoint de tous côtés) n'ont de chemin à eux
+  if (!hasDoor(b.kind)) return 0;
   const shore = isShore(b), side = new Map<number, number>();
   let starts: number[] = [];
   if (shore) {
@@ -105,15 +106,19 @@ function doors(w: World, b: Building, side: number) {
  */
 function nearDoor(w: World, self: Building) {
   const at = new Map<number, [Building, number]>();
+  // la place du village, sans porte, s'aborde de n'importe quelle case qui la borde (sa façade ne se tourne pas pour autant)
+  const plazas: number[] = [];
   for (const o of w.buildings.values()) {
     if (o.id === self.id || o.kind === 'lamp') continue;
+    if (!hasDoor(o.kind)) { plazas.push(...ringCells(w, o)); continue; }
     const own = doorSide(o.kind, o.rot);
     // (une case devant deux portes : celle qui s'y ouvre déjà l'emporte)
     for (const r of doorSides(o)) for (const k of doors(w, o, r)) if (!at.has(k) || r === own) at.set(k, [o, r]);
   }
+  const edge = new Set(plazas.filter((k) => !w.occ[k]));
   return {
-    any: at.size > 0,
-    goal: (k: number) => at.has(k),
+    any: at.size > 0 || edge.size > 0,
+    goal: (k: number) => at.has(k) || edge.has(k),
     welcome: (k: number) => { const e = at.get(k); if (e && !isShore(e[0])) e[0].rot = e[1]; },
   };
 }
@@ -128,7 +133,8 @@ function flank(w: World, k: number, self: number, doors: Set<number>) {
   for (let r = 0; r < 4; r++) {
     // la case est du côté r du bâtiment qui la touche
     const o = w.buildingAt(x - FRONT[r][0], z - FRONT[r][1]);
-    if (!o || o.kind === 'lamp') continue;
+    // (la place du village n'a ni flanc ni arrière : un chemin peut la longer)
+    if (!o || !hasDoor(o.kind)) continue;
     if (o.id === self) { if (!doors.has(k)) return 2; } else if (r !== doorSide(o.kind, o.rot)) out = 1;
   }
   return out;

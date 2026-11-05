@@ -178,10 +178,11 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [4, 6, 8, 12, 16, 22],
   },
   gather: {
-    id: 'gather', size: 1, minAge: 0, icon: '🔥', cat: 'life',
+    id: 'gather', size: 3, minAge: 0, icon: '🔥', cat: 'life',
     names: ['Feu de camp', 'Agora', 'Marché', 'Parc', 'Place', 'Agora holographique'],
-    desc: 'Lieu de rencontre : augmente le bien-être.',
+    desc: 'La place du village (3 × 3), son centre : on s’y retrouve de tous côtés, sans porte ni chemin d’accès. Augmente le bien-être.',
     joy: [4, 6, 8, 10, 12, 15],
+    perk: 'À poser en premier, au cœur du futur village : les maisons, la ferme et le puits viendront autour. On y fête le retour des expéditions.',
   },
   temple: {
     id: 'temple', size: 2, minAge: 1, icon: '⛪', cat: 'life',
@@ -344,7 +345,7 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Grand monument de 3 × 3 cases, qu’on garde à travers les âges (comme le château).',
   },
   forum: {
-    id: 'forum', size: 2, minAge: 1, icon: '🏛️', cat: 'life',
+    id: 'forum', size: 3, minAge: 1, icon: '🏛️', cat: 'life',
     names: ['', 'Forum', 'Halle du marché', 'Halles', 'Marché couvert', 'Galerie marchande'],
     desc: 'La grande place où l’on commerce, juge et discute : forum romain, puis halle du marché à charpente, halles de fer et de verre, marché couvert.',
     joy: [0, 8, 8, 9, 10, 12], jobs: [0, 3, 5, 7, 9, 11], food: [0, 0, 2, 3, 4, 5],
@@ -522,8 +523,17 @@ export interface Building {
   small?: boolean;
 }
 
-/** Côté de l'emprise d'un bâtiment posé */
-/** Emprise d'un bâtiment : celle de son genre, une case de moins s'il est resté à l'ancienne taille (`small`) */
-export const sizeOf = (b: Building) => (b.small ? KINDS[b.kind].size - 1 : KINDS[b.kind].size) as 1 | 2 | 3 | 4;
+/**
+ * Ancienne emprise des bâtiments qui ont grandi depuis les premières parties : une case de moins, sauf la place du village,
+ * passée de 1 × 1 à 3 × 3 (le forum, son amélioration, de 2 × 2 à 3 × 3 avec elle)
+ */
+const OLD_SIZE: Partial<Record<KindId, number>> = { gather: 1 };
+export const smallSize = (kind: KindId) => (OLD_SIZE[kind] ?? KINDS[kind].size - 1) as 1 | 2 | 3;
+
+/** Emprise d'un bâtiment : celle de son genre, l'ancienne s'il est resté à l'ancienne taille (`small`) */
+export const sizeOf = (b: Building) => (b.small ? smallSize(b.kind) : KINDS[b.kind].size) as 1 | 2 | 3 | 4;
+
+/** Bâtiments sans porte ni chemin d'accès : le lampadaire, et la place du village, qu'on rejoint de tous côtés */
+export const hasDoor = (kind: KindId) => kind !== 'lamp' && kind !== 'gather';
 
 export const SEASONS = ['Printemps', 'Été', 'Automne', 'Hiver'];

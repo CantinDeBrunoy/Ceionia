@@ -366,6 +366,8 @@ class Game implements UIHost {
     this.sim.update(0, 1);
 
     this.onResize();
+    // une partie neuve : la vue se pose sur le centre de la place du village à venir (3 × 3 libres près du milieu de la carte)
+    if (!w.buildings.size) { const [sx, sz] = w.startSpot(), S = KINDS.gather.size; this.cam.homeAt = [sx + S / 2, sz + S / 2]; }
     this.cam.reset();
     this.cam.dist = this.cam.homeDist();
     window.addEventListener('resize', () => this.onResize());
@@ -905,7 +907,8 @@ class Game implements UIHost {
   private refreshHalos() {
     const pts: number[] = [];
     for (const b of this.world.buildings.values()) {
-      if (b.kind === 'gather' && b.age === 0) pts.push(b.x + 0.5, b.z + 0.5, 1.5, 0.8);
+      // le feu de camp, au milieu de la place du village (3 × 3, ou 1 × 1 dans une ancienne partie)
+      if (b.kind === 'gather' && b.age === 0) { const s = sizeOf(b); pts.push(b.x + s / 2, b.z + s / 2, s > 1 ? 2.1 : 1.5, 0.8); }
       else if (b.kind === 'lamp') {
         // le lampadaire est dans un coin de sa case (décalé de 0,32, tourné avec elle)
         const t = (b.rot * Math.PI) / 2, c = Math.cos(t), s = Math.sin(t);

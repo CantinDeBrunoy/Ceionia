@@ -1,4 +1,4 @@
-import { Building, KINDS, KindId, sizeOf } from '../build/catalog';
+import { Building, KINDS, KindId, hasDoor, sizeOf, smallSize } from '../build/catalog';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -10,6 +10,13 @@ import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
 const QUAY_MAX = 0.32;
 const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor', 'airport', 'waterpark'];
+/**
+ * Places passées en 3 × 3 (la place du village, de 1 × 1 ; le forum, son amélioration, de 2 × 2) : les sauvegardes d'avant
+ * (sans la marque `plaza3`) les font grandir autour de leur ancienne emprise, recentrée, s'ils ont la place
+ */
+const GREW3: KindId[] = ['gather', 'forum'];
+/** Marque des sauvegardes où places et forums sont déjà en 3 × 3 */
+const PLAZA3 = 1;
 
 /** Côté de la carte en cases : propre à chaque carte, fixé (setMapSize) avant de créer le monde et ses vues */
 export let N = 96;
@@ -794,12 +801,34 @@ export class World {
     return null;
   }
 
+  /**
+   * Où commencer une partie : l'emplacement de la place du village (3 × 3) le plus proche du milieu de la carte, sur un sol
+   * libre (ni arbres ni rochers à abattre) et peu pentu de préférence ; le coin de son emprise. C'est là que la vue d'une
+   * partie neuve se pose
+   */
+  startSpot(): [number, number] {
+    const c = Math.floor(N / 2) - 1, S = KINDS.gather.size;
+    let best: [number, number] = [c, c], score = Infinity;
+    // (un anneau plus loin ne peut faire mieux que la distance déjà trouvée)
+    for (let r = 0; r < N / 2 && r <= score; r++)
+      for (let dz = -r; dz <= r; dz++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || this.canPlace('gather', c + dx, c + dz) !== null) continue;
+          let veg = 0, steep = 0;
+          for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const x = c + dx + i, z = c + dz + j; if (this.veg[this.ci(x, z)]) veg++; steep = Math.max(steep, this.cellSlope(x, z)); }
+          // un sol couvert ou pentu ne compte qu'à défaut d'autre chose à quelques cases de là
+          const s = Math.hypot(dx, dz) + veg * 4 + (steep > 0.5 ? 8 : 0);
+          if (s < score) { score = s; best = [c + dx, c + dz]; }
+        }
+    return best;
+  }
+
   /** Bâtiment dont la porte donne sur cette case (sur sa façade ; à l'arrière, côté terre, pour le ponton et le port) */
   doorOf(cx: number, cz: number): Building | undefined {
     for (let r = 0; r < 4; r++) {
       // la case est du côté r du bâtiment qui la touche, au rang i le long de ce côté
       const o = this.buildingAt(cx - FRONT[r][0], cz - FRONT[r][1]);
-      if (!o || o.kind === 'lamp' || doorSide(o.kind, o.rot) !== r) continue;
+      if (!o || !hasDoor(o.kind) || doorSide(o.kind, o.rot) !== r) continue;
       const [a, b] = doorSpan(sizeOf(o)), i = FRONT[r][0] ? cz - o.z : cx - o.x;
       if (i >= a && i <= b) return o;
     }
@@ -880,7 +909,7 @@ export class World {
   }
 
   place(kind: KindId, x: number, z: number, rot: number, auto: boolean, age: number, animate = true, small = false): Building {
-    const s = small ? KINDS[kind].size - 1 : KINDS[kind].size;
+    const s = small ? smallSize(kind) : KINDS[kind].size;
     // Aplanit l'empreinte, sans toucher aux coins partagés avec les voisins ; le quai du port est remblayé au-dessus de l'eau
     const avg = kind === 'harbor' ? Math.min(QUAY_MAX, Math.max(this.flatTarget(x, z, s), 0.12)) : this.flatTarget(x, z, s);
     for (let j = 0; j <= s; j++) for (let i = 0; i <= s; i++) {
@@ -1161,6 +1190,7 @@ export class World {
       biomes,
       buildings: [...this.buildings.values()].map((b) => (b.small ? [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age, 1] : [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age])),
       nextId: this.nextId,
+      plaza3: PLAZA3,
       torches: [...this.torches],
       basalt: lavaFields(this.basalt),
       ash: [...this.ash.keys()].filter((k) => this.ash[k]),
@@ -1194,15 +1224,18 @@ export class World {
    * Bâtiments devenus plus grands depuis la sauvegarde (soins, école, secours, lieux de culte, ateliers, moulins, passés en
    * 2 × 2) : chacun s'étend sur l'une des quatre places de 2 × 2 qui contiennent sa case, libre d'autres bâtiments et de routes,
    * hors de l'eau (de préférence sans champ ni forêt, qui s'effacent) ; le sol s'aplanit. Sans place, il reste en 1 × 1
-   * (`small`) et réessaie au prochain chargement
+   * (`small`) et réessaie au prochain chargement. De même pour la place du village (1 × 1 → 3 × 3) et le forum (2 × 2 → 3 × 3)
+   * des sauvegardes d'avant (`plaza3` absent) : leur nouvelle emprise entoure l'ancienne, centrée sur elle de préférence ;
+   * sans place, ils gardent l'ancienne taille, sans chevaucher personne
    */
-  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array, veg: Uint8Array) {
+  private growLarge(buildings: Building[], heights: Float32Array, road: Uint8Array, veg: Uint8Array, plaza3: boolean) {
     const owner = new Int32Array(N * N);
     const mark = (b: Building) => { const s = sizeOf(b); for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) if (this.inCells(b.x + i, b.z + j)) owner[this.ci(b.x + i, b.z + j)] = b.id; };
-    const grow = buildings.filter((b) => GREW.includes(b.kind));
-    for (const b of buildings) if (!GREW.includes(b.kind)) mark(b);
+    const grows = (b: Building) => GREW.includes(b.kind) || (GREW3.includes(b.kind) && (!plaza3 || !!b.small));
+    const grow = buildings.filter(grows);
+    for (const b of buildings) if (!grows(b)) mark(b);
     // l'ancienne emprise de chacun lui appartient d'office : un voisin qui grandit ne la prend pas
-    for (const b of grow) { const o = KINDS[b.kind].size - 1; for (let j = 0; j < o; j++) for (let i = 0; i < o; i++) if (this.inCells(b.x + i, b.z + j)) owner[this.ci(b.x + i, b.z + j)] = b.id; }
+    for (const b of grow) { const o = smallSize(b.kind); for (let j = 0; j < o; j++) for (let i = 0; i < o; i++) if (this.inCells(b.x + i, b.z + j)) owner[this.ci(b.x + i, b.z + j)] = b.id; }
     const avg = (x: number, z: number) => (heights[this.vi(x, z)] + heights[this.vi(x + 1, z)] + heights[this.vi(x, z + 1)] + heights[this.vi(x + 1, z + 1)]) / 4;
     const fits = (b: Building, x: number, z: number) => {
       const S = KINDS[b.kind].size;
@@ -1217,10 +1250,13 @@ export class World {
     const vegIn = (x: number, z: number, S: number) => { let n = 0; for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) if (veg[this.ci(x + i, z + j)]) n++; return n; };
     // d'abord ceux qui n'ont jamais été marqués « petits » (dont les vrais 2 × 2, en place), puis les petits qui réessaient
     for (const b of [...grow.filter((q) => !q.small), ...grow.filter((q) => q.small)]) {
-      const spots = [[b.x, b.z], [b.x - 1, b.z], [b.x, b.z - 1], [b.x - 1, b.z - 1]].filter(([x, z]) => fits(b, x, z));
+      // les places qui contiennent l'ancienne emprise ; d'abord la plus centrée sur elle, puis la moins boisée
+      const S = KINDS[b.kind].size, d = S - smallSize(b.kind), all: [number, number][] = [];
+      for (let dz = 0; dz <= d; dz++) for (let dx = 0; dx <= d; dx++) all.push([b.x - dx, b.z - dz]);
+      const off = (s: [number, number]) => Math.hypot(s[0] - (b.x - d / 2), s[1] - (b.z - d / 2));
+      const spots = all.filter(([x, z]) => fits(b, x, z));
       if (!spots.length) { b.small = true; mark(b); continue; }
-      const S = KINDS[b.kind].size;
-      const [x, z] = spots.reduce((best, s) => (vegIn(s[0], s[1], S) < vegIn(best[0], best[1], S) ? s : best));
+      const [x, z] = spots.reduce((best, s) => (off(s) * 10 + vegIn(s[0], s[1], S) < off(best) * 10 + vegIn(best[0], best[1], S) - 1e-9 ? s : best));
       delete b.small;
       b.x = x; b.z = z;
       mark(b);
@@ -1255,7 +1291,7 @@ export class World {
     const stops = new Set<number>();
     for (const l of Array.isArray(d.lines) ? d.lines : []) for (const i of Array.isArray(l?.s) ? l.s : []) if (ids[i] > 0) stops.add(ids[i]);
     for (const b of buildings) if (b.kind === 'landmark' && b.age >= 3 && stops.has(b.id)) b.kind = 'terminal';
-    this.growLarge(buildings, heights, road, veg);
+    this.growLarge(buildings, heights, road, veg, d.plaza3 === PLAZA3);
     // les sauvegardes d'avant le plan du continent n'ont pas de version : leur climat reste celui de la version 1
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     const biomePaint = new Uint8Array(N * N);
