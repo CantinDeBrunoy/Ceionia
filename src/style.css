@@ -672,7 +672,7 @@ body.photo #photoBar { display: flex; }
 /* l'équipement qui manque à un choix : « Outils nécessaires », et de quoi le fabriquer sur place */
 .gearNeed { margin: 2px 0 0; padding: 0 4px; display: flex; flex-direction: column; gap: 2px; }
 .gnrow em { font-style: normal; color: #7a5300; font-size: 11.5px; }
-.gnrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.gnrow { flex-wrap: wrap; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; }
 .gnrow small { display: block; font-size: 11px; color: var(--ink2); }
 .gnrow .why { color: var(--bad); }
 .gnrow .mk { flex: 0 0 auto; min-height: 30px; padding: 0 10px; gap: 5px; font-size: 12.5px; }
@@ -685,3 +685,5 @@ body.photo #photoBar { display: flex; }
 .cdet small { display: block; margin: 2px 4px; font-size: 11.5px; color: var(--ink2); }
 .cdet .gain { color: #0d7a5f; }
 .cdet .gain em { color: var(--bad); font-style: normal; }
+
+.gnbar { flex: 1 0 100%; height: 5px; }

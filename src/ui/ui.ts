@@ -1215,7 +1215,7 @@ export class UI {
     }));
     // l'arsenal se redessine quand la réserve ou la file changent ; la barre de fabrication avance en continu
     let key = '';
-    let gearKey = '';
+    let gearKey = '-';
     const arsenal = () => {
       if (!ov.isConnected) { clearInterval(iv); return; }
       const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${ex.active.length}`;
@@ -1223,11 +1223,12 @@ export class UI {
       // une pièce fabriquée (ou une équipe partie avec) : les choix des missions disent ce qu'on emporterait, et le risque qui va avec
       const gk = `${JSON.stringify(st.gear)}|${st.craft.join()}|${ex.active.length}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${Math.floor(ex.ore)}`;
       if (gk !== gearKey) {
-        if (gearKey) ov.querySelectorAll<HTMLElement>('.mchoices[data-m]').forEach((el) => { const m = MISSIONS.find((x) => x.id === el.dataset.m); if (m) el.innerHTML = this.choiceButtons(m); });
+        if (gearKey !== '-') ov.querySelectorAll<HTMLElement>('.mchoices[data-m]').forEach((el) => { const m = MISSIONS.find((x) => x.id === el.dataset.m); if (m) el.innerHTML = this.choiceButtons(m); });
         gearKey = gk;
       }
       const bar = ov.querySelector<HTMLElement>('.queue .bar i');
       if (bar) bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`;
+      ov.querySelectorAll<HTMLElement>('.gnbar i').forEach((i) => (i.style.width = `${Math.round(ex.craftProgress() * 100)}%`));
       const rb = ov.querySelector<HTMLElement>('.railBox'), rh = this.railHtml();
       if (rb && rb.dataset.html !== rh) { rb.dataset.html = rh; rb.innerHTML = rh; }
     };
@@ -1260,7 +1261,7 @@ export class UI {
       if (mk) {
         if (mk.disabled) return;
         const id = mk.dataset.mk as GearId;
-        if (ex.craft(id, this.host.sim.age)) { h.audio.sfxClick(); key = ''; gearKey = ''; arsenal(); } else this.toast(ex.whyCraft(GEAR_BY[id], this.host.sim.age) ?? 'Impossible à fabriquer pour l’instant.');
+        if (ex.craft(id, this.host.sim.age)) { h.audio.sfxClick(); key = ''; gearKey = '+'; arsenal(); } else this.toast(ex.whyCraft(GEAR_BY[id], this.host.sim.age) ?? 'Impossible à fabriquer pour l’instant.');
       } else if (go) {
         h.audio.sfxClick();
         ov.querySelector<HTMLButtonElement>('[data-tab="gear"]')?.click();
@@ -1326,7 +1327,8 @@ export class UI {
       const price = gearCostLabel(gearCost(g.gear, h.world.difficulty)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
       const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
       const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
-      return `<div class="gnrow" title="${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <b>${left > 0 ? left : g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</b> ${left > 0 ? '<em>à fabriquer</em>' : ''}${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}</div>`;
+      const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
+      return `<div class="gnrow" title="${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <b>${left > 0 ? left : g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</b> ${left > 0 ? '<em>à fabriquer</em>' : ''}${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
     }).join('');
     return `<div class="gearNeed">${rows}</div>`;
   }
