@@ -179,6 +179,8 @@ export class UnderView {
   /** un coup de pioche au front du tunnel (pour le son), au plus toutes les quelques secondes */
   onPick: (() => void) | null = null;
   private models: Record<string, StaticModel | null> = {};
+  /** matériaux des pièces des biomes (glace, lac gelé, lueurs, coulées…), faits à la première construction */
+  private decorMats: Record<string, THREE.Material> | null = null;
   private rockPieces: THREE.BufferGeometry[] = [];
   private d = new THREE.Object3D();
   private fog = new THREE.Fog(BG, 12, 40);
@@ -467,86 +469,328 @@ export class UnderView {
 
   // ---------- Décor ----------
 
+  /**
+   * Décor des galeries, par biome et toujours en groupes : chaque grande salle peut devenir une « clairière » au thème de sa
+   * zone (géode de cristaux, forêt de stalagmites, colonnes, éboulis, ossuaire, ruines ; piliers et dalles de glace, lac
+   * gelé ; bosquet de champignons géants, tapis de mousse, racines ; orgues de basalte, coulées de lave, éclats d'obsidienne),
+   * et le pied des parois se garnit par tronçons (jamais une pièce isolée au hasard)
+   */
   private buildDecor() {
     const u = this.under, d = this.d;
     const lists: Record<string, Item[]> = {};
+    const push = (name: string, c: THREE.Color) => { d.updateMatrix(); (lists[name] ??= []).push({ m: d.matrix.clone(), c: c.clone() }); };
     const add = (name: string, x: number, y: number, z: number, rot: number, s: number, c: THREE.Color, tilt = 0, tiltA = 0, sy = s) => {
       d.position.set(x, y, z);
       d.rotation.set(Math.cos(tiltA) * tilt, rot, Math.sin(tiltA) * tilt, 'YXZ');
       d.scale.set(s, sy, s);
-      d.updateMatrix();
-      (lists[name] ??= []).push({ m: d.matrix.clone(), c: c.clone() });
-      // les gros décors (cristaux, minéraux, rochers, champignons géants) : le camp ne se pose pas dessus
-      if (/^(crystal|mineral|rock|mushroomCap)/.test(name) && s > 0.9) this.decorCells.add(Math.floor(z) * N + Math.floor(x));
+      push(name, c);
     };
-    const tmp = new THREE.Color();
+    /** une pièce penchée vers (dx, dz) de `tilt` radians, tournée de `spin` sur elle-même */
+    const lean = (name: string, x: number, y: number, z: number, s: number, c: THREE.Color, dx: number, dz: number, tilt: number, spin = 0, sy = s) => {
+      const l = Math.hypot(dx, dz) || 1;
+      LEAN_DIR.set((dx / l) * Math.sin(tilt), Math.cos(tilt), (dz / l) * Math.sin(tilt));
+      d.position.set(x, y, z);
+      d.quaternion.setFromUnitVectors(UP, LEAN_DIR).multiply(SPIN.setFromAxisAngle(UP, spin));
+      d.scale.set(s, sy, s);
+      push(name, c);
+    };
+    // les gros décors : le camp ne se pose pas dessus
+    const block = (x: number, z: number) => this.decorCells.add(Math.floor(z) * N + Math.floor(x));
+    /** hauteur du sol d'une galerie où l'on marche en ce point, ou null (roche, bassin, pente de paroi) */
+    const floorAt = (x: number, z: number) => (u.walkable(Math.floor(x), Math.floor(z)) && u.heightAt(x, z) < 0.42 ? u.heightAt(x, z) : null);
+    /** depuis (x0, z0), on avance dans la direction a jusqu'au pied de la paroi (au plus `max` cases) : le dernier point de sol */
+    const toWall = (x0: number, z0: number, a: number, max: number): [number, number] | null => {
+      let last: [number, number] | null = null;
+      for (let t = 0.3; t <= max; t += 0.12) {
+        const x = x0 + Math.sin(a) * t, z = z0 + Math.cos(a) * t;
+        if (floorAt(x, z) === null) return last;
+        last = [x, z];
+      }
+      return null;
+    };
+    const tmp = new THREE.Color(), c2 = new THREE.Color();
+    const used = new Uint8Array(N * N);
+    const nearEntrance = (x: number, z: number, r: number) => u.entrances.some((e) => Math.hypot(e.x - x, e.z - z) < r);
+
+    // ---- les clairières : une par bloc de CLEAR_GRID cases au plus, au cœur de sa plus grande salle ----
+    for (let bz = 0; bz < N; bz += CLEAR_GRID)
+      for (let bx = 0; bx < N; bx += CLEAR_GRID) {
+        let best = -1, bs = -1;
+        for (let z = bz; z < Math.min(N, bz + CLEAR_GRID); z++)
+          for (let x = bx; x < Math.min(N, bx + CLEAR_GRID); x++) {
+            const k = z * N + x;
+            if (!u.walkable(x, z)) continue;
+            const s = u.wallDist[k] + hash2(x, z, 901) * 0.8;
+            if (s > bs) { bs = s; best = k; }
+          }
+        if (best < 0 || u.wallDist[best] < 2) continue;
+        const zone = u.zone[best], x0 = (best % N) + 0.5, z0 = Math.floor(best / N) + 0.5;
+        if (hash2(bx, bz, 902) > CLEAR_P[zone] || nearEntrance(x0, z0, 4.5) || floorAt(x0, z0) === null) continue;
+        const R = Math.min(4, u.wallDist[best] + 0.6), themes = THEMES[zone];
+        let seed = 0;
+        const r = () => hash2(best, seed++, 905);
+        const theme = themes[Math.floor(hash2(bx, bz, 903) * themes.length)];
+        for (let z = Math.floor(z0 - R); z <= z0 + R; z++) for (let x = Math.floor(x0 - R); x <= x0 + R; x++) if (x >= 0 && z >= 0 && x < N && z < N && Math.hypot(x + 0.5 - x0, z + 0.5 - z0) <= R) used[z * N + x] = 1;
+        /** n points autour du centre, à une distance de rr (± un peu), chacun là où il y a du sol */
+        const ring = (n: number, rr: number, fn: (x: number, z: number, y: number, a: number, i: number) => void) => {
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * Math.PI * 2 + r() * 0.6, rad = rr * (0.7 + r() * 0.4), x = x0 + Math.sin(a) * rad, z = z0 + Math.cos(a) * rad, y = floorAt(x, z);
+            if (y !== null) fn(x, z, y, a, i);
+          }
+        };
+        const y0 = floorAt(x0, z0)!;
+        const light = (rad: number, col: THREE.Color, k: number, y = 0.5, flicker = 0) => this.sources.push({ x: x0, y: y0 + y, z: z0, r: rad, c: col.clone().multiplyScalar(k), flicker });
+        const crystalHere = () => { for (let z = Math.floor(z0 - R); z <= z0 + R; z++) for (let x = Math.floor(x0 - R); x <= x0 + R; x++) if (x >= 0 && z >= 0 && x < N && z < N && used[z * N + x]) this.crystalCells.add(z * N + x); };
+        switch (theme) {
+          case 'geode': {
+            // une géode : les parois de la salle hérissées d'amas de cristaux penchés vers son cœur, un grand amas au milieu
+            const base = c2.copy(CRYSTAL[zone]).offsetHSL((r() - 0.5) * 0.12, 0, 0);
+            for (let i = 0, n = 14 + Math.floor(r() * 8); i < n; i++) {
+              const a = (i / n) * Math.PI * 2 + r() * 0.3, p = toWall(x0, z0, a, R + 2.5);
+              if (!p) continue;
+              for (let j = 0, m = 2 + Math.floor(r() * 3); j < m; j++) {
+                const qx = p[0] + (r() - 0.5) * 0.3, qz = p[1] + (r() - 0.5) * 0.3, qy = u.heightAt(qx, qz);
+                lean(r() < 0.6 ? 'crystal' : 'crystal2', qx, qy - 0.04, qz, 0.7 + r() * 1.1, tmp.copy(base).offsetHSL((r() - 0.5) * 0.05, 0, (r() - 0.5) * 0.15), x0 - qx, z0 - qz, 0.35 + r() * 0.5, r() * 6.28);
+              }
+            }
+            for (let j = 0; j < 5; j++) {
+              const a = r() * 6.28, rr = j ? 0.25 + r() * 0.3 : 0;
+              lean(j ? 'crystal2' : 'crystal', x0 + Math.sin(a) * rr, y0 - 0.05, z0 + Math.cos(a) * rr, j ? 1.4 + r() * 0.9 : 3 + r() * 1.2, tmp.copy(base).offsetHSL(0, 0, j ? 0.05 : 0.12), Math.sin(a), Math.cos(a), j ? 0.4 + r() * 0.3 : 0.05, r() * 6.28);
+            }
+            add('mineral', x0 + 0.5, floorAt(x0 + 0.5, z0) ?? y0, z0 - 0.3, r() * 6.28, 1.3, base);
+            block(x0, z0);
+            light(R + 3, base, 1.1, 0.7);
+            crystalHere();
+            break;
+          }
+          case 'spire': {
+            // une flèche de cristal : trois grands cristaux soudés au milieu de la salle, des éclats semés autour
+            const base = c2.copy(CRYSTAL[zone]).offsetHSL((r() - 0.5) * 0.12, 0, 0);
+            for (let j = 0; j < 3; j++) { const a = (j / 3) * 6.28 + r(); lean('crystal', x0 + Math.sin(a) * 0.12, y0 - 0.05, z0 + Math.cos(a) * 0.12, 3.2 + r() * 1.8, tmp.copy(base).offsetHSL(0, 0, r() * 0.1), Math.sin(a), Math.cos(a), 0.15 + r() * 0.2, r() * 6.28); }
+            ring(9, R * 0.65, (x, z, y, a) => lean('crystal2', x, y - 0.03, z, 0.5 + r() * 0.7, tmp.copy(base).offsetHSL(0, 0, -0.05), Math.sin(a), Math.cos(a), 0.3 + r() * 0.4, r() * 6.28));
+            ring(5, R * 0.4, (x, z, y) => add(`rock${Math.floor(r() * this.rockPieces.length)}`, x, y - 0.02, z, r() * 6.28, 0.6 + r() * 0.5, tmp.copy(WALL[zone]).multiplyScalar(0.8), 0, 0, 0.4));
+            block(x0, z0);
+            light(R + 2.5, base, 1.2, 1);
+            crystalHere();
+            break;
+          }
+          case 'column': {
+            // des colonnes : stalactite et stalagmite soudées, qui montent jusqu'à la tranche de la roche ; petites stalagmites au pied
+            for (let j = 0, n = 1 + Math.floor(r() * 2.6); j < n; j++) {
+              const a = r() * 6.28, rr = j ? R * (0.35 + r() * 0.3) : 0, x = x0 + Math.sin(a) * rr, z = z0 + Math.cos(a) * rr, y = floorAt(x, z);
+              if (y === null) continue;
+              const w = 0.24 + r() * 0.14;
+              add('column', x, y - 0.05, z, r() * 6.28, w, tmp.copy(STALAG[zone]).multiplyScalar(0.9 + r() * 0.15), 0, 0, UWALL + 0.15 - y);
+              block(x, z);
+              for (let i = 0; i < 5; i++) { const b = r() * 6.28, q = w + 0.1 + r() * 0.25, sx = x + Math.sin(b) * q, sz = z + Math.cos(b) * q, sy = floorAt(sx, sz); if (sy !== null) add('stalag', sx, sy - 0.03, sz, r() * 6.28, 0.05 + r() * 0.06, tmp.copy(STALAG[zone]), 0, 0, 0.2 + r() * 0.45); }
+            }
+            break;
+          }
+          case 'stalagmites': {
+            // une forêt de stalagmites : une grande au milieu, les autres de plus en plus petites en s'éloignant
+            const col = STALAG[zone];
+            add('stalag', x0, y0 - 0.04, z0, r() * 6.28, 0.2 + r() * 0.08, tmp.copy(col), 0, 0, 1.3 + r() * 0.5);
+            block(x0, z0);
+            for (let i = 0, n = 10 + Math.floor(r() * 10); i < n; i++) {
+              const a = r() * 6.28, rr = 0.35 + r() * R * 0.9, x = x0 + Math.sin(a) * rr, z = z0 + Math.cos(a) * rr, y = floorAt(x, z);
+              if (y === null) continue;
+              const k = 1 - rr / (R + 0.5);
+              add('stalag', x, y - 0.03, z, r() * 6.28, 0.06 + k * 0.12 + r() * 0.03, tmp.copy(col).multiplyScalar(0.88 + r() * 0.2), (r() - 0.5) * 0.15, r() * 6.28, 0.25 + k * 1.1 + r() * 0.25);
+            }
+            break;
+          }
+          case 'rockfall': {
+            // un éboulis : un gros bloc tombé, les autres semés en éventail jusqu'au pied de la paroi
+            const a0 = r() * 6.28, p = toWall(x0, z0, a0, R + 2) ?? [x0, z0];
+            for (let i = 0, n = 8 + Math.floor(r() * 6); i < n; i++) {
+              const t = i / n, a = a0 + Math.PI + (r() - 0.5) * 1.4, rr = t * R * 0.9, x = p[0] + Math.sin(a) * rr, z = p[1] + Math.cos(a) * rr, y = floorAt(x, z);
+              if (y === null) continue;
+              const s = (i ? 1.6 - t * 1.1 : 2.6) * (0.8 + r() * 0.4);
+              add(`rock${Math.floor(r() * this.rockPieces.length)}`, x, y - 0.03, z, r() * 6.28, s, tmp.copy(WALL[zone]).multiplyScalar(0.75 + r() * 0.2), 0, 0, s * (0.55 + r() * 0.3));
+              if (s > 1.2) block(x, z);
+            }
+            break;
+          }
+          case 'ossuary': {
+            // un ossuaire : les restes d'aventuriers d'autrefois, crânes et os en tas, pierres taillées renversées autour
+            for (let j = 0, n = 2 + Math.floor(r() * 3); j < n; j++) {
+              const a = r() * 6.28, rr = j ? 0.5 + r() * R * 0.5 : 0, x = x0 + Math.sin(a) * rr, z = z0 + Math.cos(a) * rr, y = floorAt(x, z);
+              if (y === null) continue;
+              add('ribcage', x, y - 0.01, z, r() * 6.28, 0.9 + r() * 0.4, BONE);
+              add('skull', x + 0.12, (floorAt(x + 0.12, z + 0.05) ?? y) - 0.005, z + 0.05, r() * 6.28, 0.9 + r() * 0.3, BONE);
+              for (let i = 0; i < 4; i++) { const b = r() * 6.28, q = 0.08 + r() * 0.2; add('bone', x + Math.sin(b) * q, y, z + Math.cos(b) * q, r() * 6.28, 0.8 + r() * 0.5, BONE); }
+            }
+            ring(4, R * 0.75, (x, z, y) => add('cutStone', x, y + 0.05, z, r() * 6.28, 0.18 + r() * 0.1, tmp.copy(RUIN).multiplyScalar(0.85 + r() * 0.2), (r() - 0.5) * 0.6, r() * 6.28, 0.12 + r() * 0.08));
+            this.sources.push({ x: x0, y: y0 + 0.4, z: z0, r: 2.6, c: new THREE.Color(0.5, 0.85, 0.7).multiplyScalar(0.5), flicker: 0.05 });
+            break;
+          }
+          case 'ruins': {
+            // des ruines : un cercle de piliers, certains brisés, un tombé de tout son long, une dalle au milieu
+            const n = 5 + Math.floor(r() * 3), rr = Math.min(R * 0.7, 2.2);
+            for (let i = 0; i < n; i++) {
+              const a = (i / n) * Math.PI * 2, x = x0 + Math.sin(a) * rr, z = z0 + Math.cos(a) * rr, y = floorAt(x, z);
+              if (y === null) continue;
+              const broken = r() < 0.45, col = tmp.copy(RUIN).multiplyScalar(0.85 + r() * 0.2);
+              if (i === 0) { lean('pillar', x, y + 0.08, z, 0.12, col, Math.cos(a), -Math.sin(a), 1.5, 0, 0.9); continue; }
+              add('pillar', x, y - 0.02, z, r() * 6.28, 0.12, col, broken ? (r() - 0.5) * 0.2 : 0, r() * 6.28, broken ? 0.25 + r() * 0.35 : 0.95 + r() * 0.2);
+              block(x, z);
+              if (broken) { const b = r() * 6.28; add('cutStone', x + Math.sin(b) * 0.3, (floorAt(x + Math.sin(b) * 0.3, z + Math.cos(b) * 0.3) ?? y) + 0.05, z + Math.cos(b) * 0.3, r() * 6.28, 0.13, col, 0.4, r() * 6.28, 0.12); }
+            }
+            add('cutStone', x0, y0 + 0.06, z0, r() * 6.28, 0.42, tmp.copy(RUIN).multiplyScalar(0.8), 0, 0, 0.14);
+            break;
+          }
+          case 'icePillars': {
+            // des piliers de glace, un peu penchés, sur un sol de dalles gelées
+            for (let j = 0, n = 3 + Math.floor(r() * 3); j < n; j++) {
+              const a = r() * 6.28, rr = j ? 0.5 + r() * R * 0.55 : 0, x = x0 + Math.sin(a) * rr, z = z0 + Math.cos(a) * rr, y = floorAt(x, z);
+              if (y === null) continue;
+              lean('icePillar', x, y - 0.05, z, 0.14 + r() * 0.1, tmp.copy(ICE).offsetHSL(0, 0, (r() - 0.5) * 0.1), Math.sin(a), Math.cos(a), r() * 0.25, r() * 6.28, 0.7 + r() * 0.9);
+              block(x, z);
+            }
+            ring(12, R * 0.7, (x, z, y) => add('slab', x, y + 0.005, z, r() * 6.28, 0.22 + r() * 0.2, tmp.copy(ICE).multiplyScalar(0.92 + r() * 0.1), 0, 0, 0.04));
+            light(R + 2, ICE, 0.45, 0.8);
+            break;
+          }
+          case 'iceSlabs': {
+            // un champ de dalles de glace qui se chevauchent, des éclats contre les parois
+            for (let i = 0, n = 16 + Math.floor(r() * 10); i < n; i++) {
+              const a = r() * 6.28, rr = r() * R * 0.85, x = x0 + Math.sin(a) * rr, z = z0 + Math.cos(a) * rr, y = floorAt(x, z);
+              if (y !== null) add('slab', x, y + 0.004 + i * 0.002, z, r() * 6.28, 0.2 + r() * 0.3, tmp.copy(ICE).multiplyScalar(0.9 + r() * 0.12), (r() - 0.5) * 0.12, r() * 6.28, 0.04 + r() * 0.04);
+            }
+            for (let i = 0; i < 8; i++) { const a = r() * 6.28, p = toWall(x0, z0, a, R + 2); if (p) lean('crystal2', p[0], u.heightAt(p[0], p[1]) - 0.04, p[1], 0.7 + r() * 0.8, tmp.copy(CRYSTAL[UZ_ICE]), x0 - p[0], z0 - p[1], 0.5 + r() * 0.3, r() * 6.28); }
+            break;
+          }
+          case 'frozenLake': {
+            // un lac gelé : une grande plaque de glace lisse, bordée de congères et d'éclats
+            add('iceSheet', x0, y0 + 0.01, z0, r() * 6.28, R * 0.75, ICE, 0, 0, 1);
+            ring(10, R * 0.85, (x, z, y) => add(`rock${Math.floor(r() * this.rockPieces.length)}`, x, y - 0.04, z, r() * 6.28, 0.7 + r() * 0.6, SNOWY, 0, 0, 0.3));
+            ring(6, R * 0.95, (x, z, y, a) => lean('crystal2', x, y - 0.03, z, 0.6 + r() * 0.6, CRYSTAL[UZ_ICE], -Math.sin(a), -Math.cos(a), 0.4, r() * 6.28));
+            block(x0, z0);
+            light(R + 2, ICE, 0.4, 0.6);
+            break;
+          }
+          case 'shroomGrove': {
+            // un bosquet de champignons géants : un immense au milieu, les moyens autour, les petits en couronne, de la mousse au pied
+            const c0 = c2.copy(SHROOM[Math.floor(r() * SHROOM.length)]);
+            const shroom = (x: number, z: number, y: number, s: number, c: THREE.Color) => { const rot = r() * 6.28, tl = (r() - 0.5) * 0.25, ta = r() * 6.28; add('mushroomCap', x, y - 0.02, z, rot, s, c, tl, ta); add('mushroomStem', x, y - 0.02, z, rot, s, WHITE, tl, ta); };
+            shroom(x0, z0, y0, 24 + r() * 10, c0);
+            block(x0, z0);
+            ring(4, R * 0.5, (x, z, y) => { shroom(x, z, y, 12 + r() * 7, tmp.copy(c0).offsetHSL((r() - 0.5) * 0.08, 0, 0)); block(x, z); });
+            ring(12, R * 0.9, (x, z, y) => { for (let i = 0; i < 3; i++) shroom(x + (r() - 0.5) * 0.3, z + (r() - 0.5) * 0.3, y, 1.8 + r() * 2.6, tmp.copy(c0).offsetHSL((r() - 0.5) * 0.1, 0, 0)); });
+            ring(10, R * 0.6, (x, z, y) => add('moss', x, y + 0.004, z, r() * 6.28, 0.14 + r() * 0.14, tmp.setRGB(0.22, 0.5, 0.26).multiplyScalar(0.85 + r() * 0.3), 0, 0, 1));
+            this.sources.push({ x: x0, y: y0 + 1.2, z: z0, r: R + 3, c: c0.clone().multiplyScalar(0.9), flicker: 0 });
+            break;
+          }
+          case 'mossGlade': {
+            // un tapis de mousse : fougères, petits champignons lumineux, spores qui flottent
+            ring(18, R * 0.8, (x, z, y) => add('moss', x, y + 0.004, z, r() * 6.28, 0.15 + r() * 0.16, tmp.setRGB(0.2 + r() * 0.08, 0.46 + r() * 0.12, 0.22), 0, 0, 1));
+            ring(9, R * 0.7, (x, z, y) => add('fern', x, y - 0.02, z, r() * 6.28, 0.9 + r() * 0.8, tmp.setRGB(0.2, 0.5, 0.25)));
+            const c0 = SHROOM[Math.floor(r() * SHROOM.length)];
+            ring(7, R * 0.6, (x, z, y) => { for (let i = 0; i < 3; i++) { const s = 1.4 + r() * 2, qx = x + (r() - 0.5) * 0.25, qz = z + (r() - 0.5) * 0.25; add('mushroomCap', qx, y - 0.01, qz, r() * 6.28, s, c0); add('mushroomStem', qx, y - 0.01, qz, r() * 6.28, s, WHITE); } });
+            ring(14, R * 0.8, (x, z, y) => add('orb', x, y + 0.2 + r() * 0.6, z, 0, 0.02 + r() * 0.02, tmp.copy(c0).offsetHSL(0, 0, 0.15)));
+            light(R + 2, c0, 0.55, 0.6);
+            break;
+          }
+          case 'roots': {
+            // des racines géantes qui percent les parois et rampent vers le milieu de la salle, de la mousse entre elles
+            for (let i = 0, n = 6 + Math.floor(r() * 4); i < n; i++) {
+              const a = (i / n) * Math.PI * 2 + r() * 0.4, p = toWall(x0, z0, a, R + 2);
+              if (!p) continue;
+              const toC = Math.atan2(x0 - p[0], z0 - p[1]);
+              add('root', p[0], u.heightAt(p[0], p[1]) - 0.02, p[1], toC - Math.PI / 2, 0.9 + r() * 0.9, tmp.setRGB(0.42, 0.3, 0.2).multiplyScalar(0.85 + r() * 0.3), 0, 0, 0.8 + r() * 0.5);
+            }
+            ring(12, R * 0.65, (x, z, y) => add('moss', x, y + 0.004, z, r() * 6.28, 0.12 + r() * 0.14, tmp.setRGB(0.25, 0.52, 0.24), 0, 0, 1));
+            ring(6, R * 0.45, (x, z, y) => add('fern', x, y - 0.02, z, r() * 6.28, 1 + r() * 0.7, tmp.setRGB(0.22, 0.52, 0.26)));
+            ring(8, R * 0.7, (x, z, y) => add('orb', x, y + 0.25 + r() * 0.5, z, 0, 0.02 + r() * 0.015, SPORE));
+            light(R + 1.5, SPORE, 0.4, 0.6);
+            break;
+          }
+          case 'basalt': {
+            // des orgues de basalte : colonnes hexagonales serrées, de hauteurs inégales, la lave luit entre elles
+            const s = 0.13;
+            for (let i = -3; i <= 3; i++)
+              for (let j = -3; j <= 3; j++) {
+                const x = x0 + (i + (j % 2) * 0.5) * s * 1.75, z = z0 + j * s * 1.52, dd = Math.hypot(x - x0, z - z0), y = floorAt(x, z);
+                if (y === null || dd > R * 0.55 || r() < 0.12) continue;
+                add('basalt', x, y - 0.05, z, 0, s, tmp.copy(BASALT).multiplyScalar(0.85 + r() * 0.3), 0, 0, 0.15 + (1 - dd / (R * 0.55)) * (0.5 + r() * 0.9));
+              }
+            add('glowDisc', x0, y0 + 0.01, z0, 0, R * 0.62, EMBER_DISC, 0, 0, 1);
+            block(x0, z0);
+            light(R + 2, EMBER_GLOW, 0.9, 0.4, 0.12);
+            break;
+          }
+          case 'lavaFlow': {
+            // une bouche de lave : un cône de scories au milieu, des coulées qui s'en échappent, croûtées sur leurs bords
+            add('stalag', x0, y0 - 0.05, z0, r() * 6.28, 0.32, BASALT, 0, 0, 0.45);
+            block(x0, z0);
+            for (let f = 0, n = 3 + Math.floor(r() * 3); f < n; f++) {
+              let a = (f / n) * Math.PI * 2 + r() * 0.6, x = x0 + Math.sin(a) * 0.3, z = z0 + Math.cos(a) * 0.3;
+              const len = R * (0.6 + r() * 0.4);
+              for (let t = 0, w = 0.32; t < len; t += 0.4, w *= 0.9) {
+                const y = floorAt(x, z);
+                if (y === null) break;
+                add('flow', x, y + 0.012, z, a - Math.PI / 2, 1, WHITE, 0, 0, 1);
+                lists.flow[lists.flow.length - 1].m.multiply(new THREE.Matrix4().makeScale(0.5, 1, w));
+                if (r() < 0.6) add('crust', x + Math.cos(a) * w * 0.5, y + 0.02, z - Math.sin(a) * w * 0.5, r() * 6.28, 0.08 + r() * 0.07, BASALT, 0, 0, 0.03);
+                a += (r() - 0.5) * 0.6;
+                x += Math.sin(a) * 0.4; z += Math.cos(a) * 0.4;
+              }
+            }
+            light(R + 2.5, EMBER_GLOW, 1.2, 0.3, 0.15);
+            break;
+          }
+          case 'obsidian': {
+            // des éclats d'obsidienne noire, des braises qui rougeoient entre eux
+            ring(10, R * 0.75, (x, z, y, a) => lean(r() < 0.5 ? 'crystal' : 'crystal2', x, y - 0.04, z, 0.8 + r() * 1.2, OBSIDIAN, Math.sin(a), Math.cos(a), 0.2 + r() * 0.4, r() * 6.28));
+            ring(8, R * 0.5, (x, z, y) => add('orb', x, y + 0.03, z, 0, 0.025 + r() * 0.02, EMBER_GLOW));
+            lean('crystal', x0, y0 - 0.05, z0, 2.6 + r(), OBSIDIAN, 0, 1, 0.05, r() * 6.28);
+            block(x0, z0);
+            light(R + 1.5, EMBER_GLOW, 0.6, 0.3, 0.2);
+            break;
+          }
+        }
+      }
+
+    // ---- le pied des parois, par tronçons de quelques cases ; les rives des lacs ; les toiles d'araignée ----
     for (let k = 0; k < N * N; k++) {
       if (!u.open[k] || u.pool[k]) continue;
       const cx = k % N, cz = Math.floor(k / N), zone = u.zone[k], wd = u.wallDist[k];
       const h = (s: number) => hash2(cx, cz, s);
       const px = cx + 0.15 + h(1) * 0.7, pz = cz + 0.15 + h(2) * 0.7, py = u.heightAt(px, pz);
-      if (py > 0.5) continue;
-      // cristaux : forêts d'améthyste, glace, quelques géodes ailleurs ; ils éclairent leur coin
-      const crystalP = [0.025, wd <= 2 ? 0.45 : 0.18, 0.16, 0.02, 0.05][zone];
-      if (h(3) < crystalP) {
-        const n = 1 + Math.floor(h(4) * 3), big = zone === UZ_CRYSTAL && h(5) < 0.12;
-        const base = tmp.copy(CRYSTAL[zone]).offsetHSL((h(6) - 0.5) * 0.06, 0, 0);
-        for (let i = 0; i < n; i++) {
-          const qx = px + (h(10 + i) - 0.5) * 0.4, qz = pz + (h(20 + i) - 0.5) * 0.4;
-          const s = (big ? 2.6 + h(30 + i) * 1.6 : 0.6 + h(30 + i) * 0.9) * (zone === UZ_CRYSTAL ? 1.2 : 0.9);
-          const model = h(40 + i) < 0.45 ? 'crystal' : h(40 + i) < 0.8 ? 'crystal2' : 'mineral';
-          add(model, qx, u.heightAt(qx, qz) - 0.03, qz, h(50 + i) * 6.28, s, base, (h(60 + i) - 0.5) * 0.5, h(70 + i) * 6.28);
-        }
-        this.sources.push({ x: px, y: py + 0.45, z: pz, r: big ? 4 : 2.4, c: base.clone().multiplyScalar(big ? 0.95 : 0.5), flicker: 0 });
-        this.crystalCells.add(k);
-        continue;
-      }
-      // grotte luxuriante : champignons géants lumineux, touffes de petits champignons, fougères
-      if (zone === UZ_LUSH) {
-        if (wd >= 2 && h(80) < 0.07) {
-          const c = tmp.copy(SHROOM[Math.floor(h(81) * SHROOM.length)]);
-          const s = 13 + h(82) * 10;
-          add('mushroomCap', px, py - 0.02, pz, h(83) * 6.28, s, c, (h(84) - 0.5) * 0.25, h(85) * 6.28);
-          add('mushroomStem', px, py - 0.02, pz, h(83) * 6.28, s, WHITE, (h(84) - 0.5) * 0.25, h(85) * 6.28);
-          this.sources.push({ x: px, y: py + s * 0.07, z: pz, r: 3.2, c: c.clone().multiplyScalar(0.7), flicker: 0 });
-          continue;
-        }
-        if (h(86) < 0.22) {
-          const c = tmp.copy(SHROOM[Math.floor(h(87) * SHROOM.length)]);
-          for (let i = 0; i < 2 + Math.floor(h(88) * 3); i++) {
-            const qx = px + (h(90 + i) - 0.5) * 0.35, qz = pz + (h(95 + i) - 0.5) * 0.35, s = 1.6 + h(100 + i) * 2.2;
-            add('mushroomCap', qx, u.heightAt(qx, qz) - 0.01, qz, h(105 + i) * 6.28, s, c);
-            add('mushroomStem', qx, u.heightAt(qx, qz) - 0.01, qz, h(105 + i) * 6.28, s, WHITE);
-          }
-        }
-        if (h(110) < 0.4) for (let i = 0; i < 1 + Math.floor(h(111) * 2); i++) {
-          const qx = cx + 0.1 + h(112 + i) * 0.8, qz = cz + 0.1 + h(116 + i) * 0.8;
-          add('fern', qx, u.heightAt(qx, qz) - 0.02, qz, h(120 + i) * 6.28, 0.8 + h(124 + i) * 0.7, tmp.setRGB(0.2, 0.48, 0.24));
-        }
-      }
-      // stalagmites au pied des parois, quelques-unes au milieu des salles
-      if (zone !== UZ_LUSH && h(130) < (wd <= 1 ? 0.24 : 0.035)) {
-        const s = 0.6 + h(131) * 1.1;
-        add('stalag', px, py - 0.04, pz, h(132) * 6.28, 0.12 + h(133) * 0.1, tmp.copy(STALAG[zone]).multiplyScalar(0.9 + h(134) * 0.2), 0, 0, s);
-        continue;
-      }
-      // éboulis : au pied des parois, galets sur les rives des lacs, quelques blocs ailleurs
+      if (py > 0.42) continue;
+      // galets sur les rives des lacs
       const shore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => u.pool[(cz + dz) * N + cx + dx] === POOL_WATER);
-      if ((wd <= 1 && h(146) < 0.16) || (shore && h(147) < 0.45)) {
-        const r = Math.floor(h(148) * this.rockPieces.length), s = shore ? 0.6 + h(149) * 0.8 : 0.9 + h(149) * 1.3;
-        const q = shore ? (h(155) - 0.5) * 0.5 : 0;
-        add(`rock${r}`, px + q, u.heightAt(px + q, pz) - 0.02, pz, h(143) * 6.28, s, tmp.copy(WALL[zone]).multiplyScalar(0.72 + h(144) * 0.25), 0, 0, s * (0.5 + h(145) * 0.4));
+      if (shore && h(147) < 0.45) {
+        const q = (h(155) - 0.5) * 0.5, s = 0.6 + h(149) * 0.8;
+        add(`rock${Math.floor(h(148) * this.rockPieces.length)}`, px + q, u.heightAt(px + q, pz) - 0.02, pz, h(143) * 6.28, s, tmp.copy(WALL[zone]).multiplyScalar(0.72 + h(144) * 0.25), 0, 0, s * (0.5 + h(145) * 0.4));
         continue;
       }
-      // blocs, ossements, toiles d'araignée
-      if (h(140) < 0.05) {
-        const r = Math.floor(h(141) * this.rockPieces.length), s = 1.5 + h(142) * 2.5;
-        add(`rock${r}`, px, py - 0.02, pz, h(143) * 6.28, s, tmp.copy(WALL[zone]).multiplyScalar(0.85 + h(144) * 0.2), 0, 0, s * (0.6 + h(145) * 0.4));
-      } else if ((zone === UZ_STONE || zone === UZ_MAGMA) && h(150) < 0.014) {
-        add(['skull', 'ribcage', 'bone'][Math.floor(h(151) * 3)], px, py - 0.005, pz, h(152) * 6.28, 0.8 + h(153) * 0.5, tmp.setScalar(0.95));
-      } else if ((zone === UZ_STONE || zone === UZ_CRYSTAL) && wd <= 1 && h(160) < 0.05) {
+      if (wd !== 1 || used[k] || !u.walkable(cx, cz)) continue;
+      // toiles d'araignée, dans la roche et le cristal
+      if ((zone === UZ_STONE || zone === UZ_CRYSTAL) && h(160) < 0.04) {
         const w = this.wallPoint(cx, cz, 0.15);
         if (w) { add('cobweb', w[0], u.heightAt(w[0], w[1]) - 0.02, w[1], w[2], 0.8 + h(161) * 0.5, tmp.setScalar(0.92)); this.webs.set(k, lists.cobweb.length - 1); }
+        continue;
+      }
+      // un tronçon garni (blocs de 3 × 3 cases tirés au sort), puis une case sur deux à peu près
+      if (hash2(Math.floor(cx / 3), Math.floor(cz / 3), 910 + zone) > FRINGE_P[zone] || h(911) > 0.6) continue;
+      const w = this.wallPoint(cx, cz, 0.12);
+      if (!w) continue;
+      const ox = Math.sin(w[2]), oz = Math.cos(w[2]), n = 1 + Math.floor(h(912) * 3);
+      for (let i = 0; i < n; i++) {
+        const side = (h(913 + i) - 0.5) * 0.6, x = w[0] + oz * side + ox * (0.05 + h(920 + i) * 0.12), z = w[1] - ox * side + oz * (0.05 + h(920 + i) * 0.12), y = u.heightAt(x, z) - 0.03, rot = h(930 + i) * 6.28;
+        switch (zone) {
+          case UZ_STONE: if (h(940 + i) < 0.55) add('stalag', x, y, z, rot, 0.07 + h(950 + i) * 0.07, tmp.copy(STALAG[zone]).multiplyScalar(0.9 + h(960 + i) * 0.15), 0, 0, 0.35 + h(970 + i) * 0.7);
+            else add(`rock${Math.floor(h(980 + i) * this.rockPieces.length)}`, x, y, z, rot, 0.6 + h(950 + i) * 0.7, tmp.copy(WALL[zone]).multiplyScalar(0.75 + h(960 + i) * 0.2), 0, 0, 0.5);
+            break;
+          case UZ_CRYSTAL: lean(h(940 + i) < 0.5 ? 'crystal' : 'crystal2', x, y, z, 0.5 + h(950 + i) * 0.8, tmp.copy(CRYSTAL[zone]).offsetHSL((h(960 + i) - 0.5) * 0.08, 0, 0), ox, oz, 0.4 + h(970 + i) * 0.4, rot); this.crystalCells.add(k); break;
+          case UZ_ICE: if (h(940 + i) < 0.6) lean('crystal2', x, y, z, 0.5 + h(950 + i) * 0.7, CRYSTAL[UZ_ICE], ox, oz, 0.5 + h(970 + i) * 0.3, rot);
+            else add('slab', x + ox * 0.2, y + 0.035, z + oz * 0.2, rot, 0.2 + h(950 + i) * 0.15, ICE, 0, 0, 0.04);
+            break;
+          case UZ_LUSH: { const c = SHROOM[Math.floor(hash2(Math.floor(cx / 3), Math.floor(cz / 3), 915) * SHROOM.length)], s = 1.5 + h(950 + i) * 2.4; if (h(940 + i) < 0.6) { add('mushroomCap', x, y + 0.02, z, rot, s, c); add('mushroomStem', x, y + 0.02, z, rot, s, WHITE); } else add('fern', x, y + 0.01, z, rot, 0.8 + h(950 + i) * 0.6, tmp.setRGB(0.2, 0.48, 0.24)); break; }
+          default: if (h(940 + i) < 0.7) add('basalt', x, y - 0.02, z, 0, 0.09 + h(950 + i) * 0.05, tmp.copy(BASALT).multiplyScalar(0.85 + h(960 + i) * 0.3), 0, 0, 0.2 + h(970 + i) * 0.5);
+            else add('orb', x + ox * 0.15, y + 0.05, z + oz * 0.15, 0, 0.03, EMBER_GLOW);
+        }
       }
     }
     // minerais incrustés dans les parois, façon Minecraft (plus précieux dans le magma) ; les filons exploités ont disparu
@@ -581,6 +825,22 @@ export class UnderView {
       ore: [whiteBox(), stone],
       oreGlow: [whiteBox(), oreGlowMat],
     };
+    // les pièces dessinées pour les biomes (partagées d'une génération à l'autre)
+    const dg = decorGeos(), uTime = this.uTime;
+    this.decorMats ??= {
+      ice: glowMaterial(0.22, 'under-ice', { transparent: true, opacity: 0.82, roughness: 0.12, depthWrite: false }),
+      sheet: caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.7, depthWrite: false }), 'under-sheet'),
+      glow: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      disc: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }),
+      flow: lavaMaterial(uTime, true),
+      moss: caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), 'under-moss'),
+    };
+    const dm = this.decorMats;
+    Object.assign(parts, {
+      column: [dg.column, stone], pillar: [dg.pillar, stone], cutStone: [whiteBox(), stone], basalt: [dg.basalt, stone], crust: [dg.basalt, stone],
+      icePillar: [dg.icePillar, dm.ice], slab: [dg.slab, dm.ice], iceSheet: [dg.sheet, dm.sheet],
+      moss: [dg.moss, dm.moss], root: [dg.root, soft], orb: [dg.orb, dm.glow], glowDisc: [dg.sheet, dm.disc], flow: [dg.flow, dm.flow],
+    });
     this.rockPieces.forEach((g, i) => { parts[`rock${i}`] = [g, stone]; });
     // le minéral a un socle de roche : mêmes instances, roche grise
     if (lists.mineral) lists.mineralRock = lists.mineral.map((it) => ({ m: it.m, c: new THREE.Color(0.85, 0.85, 0.85) }));
@@ -1612,6 +1872,82 @@ export class UnderView {
 }
 
 const WHITE = new THREE.Color(1, 1, 1);
+const UP = new THREE.Vector3(0, 1, 0), LEAN_DIR = new THREE.Vector3(), SPIN = new THREE.Quaternion();
+/** Os blanchis, pierre taillée des ruines, glace, neige, basalte, obsidienne, braises, spores */
+const BONE = new THREE.Color(0.93, 0.9, 0.82), RUIN = new THREE.Color(0xb9ab92), ICE = new THREE.Color(0xbfe6f5), SNOWY = new THREE.Color(0xeef4f8);
+const BASALT = new THREE.Color(0x3a3434), OBSIDIAN = new THREE.Color(0x2a1e36), EMBER_GLOW = new THREE.Color(1, 0.42, 0.12), EMBER_DISC = new THREE.Color(0.55, 0.16, 0.03);
+const SPORE = new THREE.Color(0xc8ff8a);
+/** Clairières : une au plus par bloc de CLEAR_GRID × CLEAR_GRID cases, avec cette chance selon la zone */
+const CLEAR_GRID = 7;
+const CLEAR_P = [0.55, 0.75, 0.6, 0.75, 0.65];
+/** Thèmes des clairières, par zone (pierre, cristal, glace, luxuriante, magma) ; un thème répété sort plus souvent */
+const THEMES: string[][] = [
+  ['stalagmites', 'stalagmites', 'column', 'rockfall', 'ossuary', 'ruins'],
+  ['geode', 'geode', 'spire', 'column'],
+  ['icePillars', 'iceSlabs', 'frozenLake', 'stalagmites'],
+  ['shroomGrove', 'shroomGrove', 'mossGlade', 'roots'],
+  ['basalt', 'lavaFlow', 'obsidian', 'ossuary'],
+];
+/** Pied des parois : part des tronçons garnis, selon la zone */
+const FRINGE_P = [0.35, 0.5, 0.4, 0.5, 0.4];
+
+/** Couleurs de sommet : f(y relatif, 0 en bas … 1 en haut) ; sans uv, sommets séparés (facettes) */
+function painted(g: THREE.BufferGeometry, f: (y: number, i: number) => number = () => 1) {
+  const out = g.index ? g.toNonIndexed() : g;
+  out.deleteAttribute('uv');
+  out.computeBoundingBox();
+  const p = out.attributes.position, b = out.boundingBox!, h = Math.max(1e-6, b.max.y - b.min.y), c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) c.fill(f((p.getY(i) - b.min.y) / h, i), i * 3, i * 3 + 3);
+  out.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  out.computeVertexNormals();
+  return out;
+}
+
+let DECOR_GEOS: Record<string, THREE.BufferGeometry> | null = null;
+/**
+ * Les pièces dessinées des biomes, à l'échelle 1 (l'instance donne largeur et hauteur) : colonne en sablier bosselée, pilier
+ * taillé, orgue de basalte, pilier et dalle de glace, plaque (lac gelé, lueur au sol), tapis de mousse, racine, lueur, coulée
+ */
+function decorGeos() {
+  if (DECOR_GEOS) return DECOR_GEOS;
+  // colonne : large au pied et sous la roche, étranglée au milieu, bourrelets de calcite
+  const col = new THREE.CylinderGeometry(1, 1, 1, 9, 10).translate(0, 0.5, 0), cp = col.attributes.position;
+  for (let i = 0; i < cp.count; i++) {
+    const y = cp.getY(i), a = Math.atan2(cp.getZ(i), cp.getX(i)), r = (0.5 + 0.9 * (2 * y - 1) ** 2) * (1 + Math.sin(y * 23 + a * 3) * 0.06);
+    cp.setX(i, cp.getX(i) * r); cp.setZ(i, cp.getZ(i) * r);
+  }
+  // pilier taillé : fût à huit pans, base et chapiteau carrés
+  const pillar = mergeGeometries([
+    new THREE.CylinderGeometry(0.8, 0.85, 0.84, 8).translate(0, 0.5, 0).toNonIndexed(),
+    new THREE.BoxGeometry(2.1, 0.08, 2.1).translate(0, 0.04, 0).toNonIndexed(),
+    new THREE.BoxGeometry(2, 0.08, 2).translate(0, 0.96, 0).toNonIndexed(),
+  ].map((g) => { g.deleteAttribute('uv'); return g; }))!;
+  // la plaque : un disque à bord irrégulier
+  const sheet = new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2), sp = sheet.attributes.position;
+  for (let i = 1; i < sp.count; i++) { const r = 0.85 + Math.sin(i * 2.7) * 0.1 + Math.sin(i * 1.3) * 0.05; sp.setX(i, sp.getX(i) * r); sp.setZ(i, sp.getZ(i) * r); }
+  // le tapis de mousse : un coussin bas et bosselé
+  const moss = new THREE.SphereGeometry(1, 9, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.12, 1), mp = moss.attributes.position;
+  for (let i = 0; i < mp.count; i++) { const r = 0.8 + Math.sin(i * 1.9) * 0.15; mp.setX(i, mp.getX(i) * r); mp.setZ(i, mp.getZ(i) * r); }
+  // la racine : elle sort de la paroi (en haut), plonge et rampe le long du sol (vers +x), de plus en plus fine
+  const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.1, 0.45, 0), new THREE.Vector3(0.25, 0.12, 0.06), new THREE.Vector3(0.6, 0.04, -0.06), new THREE.Vector3(1, 0.02, 0.05)]);
+  const root = new THREE.TubeGeometry(curve, 16, 0.07, 6), rp = root.attributes.position, ruv = root.attributes.uv, c = new THREE.Vector3();
+  for (let i = 0; i < rp.count; i++) { const t = ruv.getX(i), k = 1 - t * 0.75; curve.getPointAt(t, c); rp.setXYZ(i, c.x + (rp.getX(i) - c.x) * k, c.y + (rp.getY(i) - c.y) * k, c.z + (rp.getZ(i) - c.z) * k); }
+  // la coulée : un ruban (de -0.5 à 0.5 en long), la lave du matériau dessus
+  const flow = new THREE.PlaneGeometry(1, 1, 2, 2).rotateX(-Math.PI / 2);
+  DECOR_GEOS = {
+    column: painted(col, (y) => 0.82 + 0.18 * Math.sin(y * Math.PI)),
+    pillar: painted(pillar, (y) => 0.9 + y * 0.1),
+    basalt: painted(new THREE.CylinderGeometry(1, 1, 1, 6).translate(0, 0.5, 0), (y) => (y > 0.99 ? 1.25 : 0.85 + y * 0.1)),
+    icePillar: painted(new THREE.CylinderGeometry(0.75, 1, 1, 6).translate(0, 0.5, 0), (y) => 0.8 + y * 0.3),
+    slab: painted(new THREE.CylinderGeometry(1, 1.05, 1, 6).translate(0, 0.5, 0), (y) => 0.85 + y * 0.15),
+    sheet: painted(sheet),
+    moss: painted(moss, (y, i) => 0.85 + y * 0.2 + Math.sin(i * 7.1) * 0.06),
+    root: painted(root, (y) => 0.8 + y * 0.25),
+    orb: painted(new THREE.IcosahedronGeometry(1, 0)),
+    flow,
+  };
+  return DECOR_GEOS;
+}
 
 /**
  * Zones aux frontières fondues : la présence de chaque zone est floutée sur quelques cases ; renvoie, en un point, la part
@@ -1672,14 +2008,30 @@ function stalagGeo() {
   return out;
 }
 
-/** Lave : bruit qui coule lentement, du rouge sombre au jaune ; non éclairée, elle brille */
-function lavaMaterial(uTime: { value: number }) {
+/**
+ * Lave : bruit qui coule lentement, du rouge sombre au jaune ; non éclairée, elle brille. `ribbon` : pour les coulées
+ * (instances), la lave se croûte vers les bords du ruban
+ */
+function lavaMaterial(uTime: { value: number }, ribbon = false) {
   return new THREE.ShaderMaterial({
     uniforms: { uTime },
+    defines: ribbon ? { RIBBON: 1 } : {},
     vertexShader: `varying vec2 vP;
-void main() { vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+varying vec2 vUv;
+void main() {
+#ifdef RIBBON
+  vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  vUv = uv;
+#else
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vUv = vec2(0.5);
+#endif
+  vP = wp.xz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`,
     fragmentShader: `uniform float uTime;
 varying vec2 vP;
+varying vec2 vUv;
 float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -1707,7 +2059,8 @@ void main() {
   float rim = 1.0 - smoothstep(0.16, 0.34, edge);
   vec3 crust = mix(vec3(0.16, 0.05, 0.035), vec3(0.28, 0.08, 0.04), h(cell * 1.7));
   crust = mix(crust, vec3(0.75, 0.2, 0.04), rim * 0.7);
-  gl_FragColor = vec4(mix(melt, crust, crusted), 1.0);
+  float edgeK = smoothstep(0.22, 0.48, abs(vUv.y - 0.5));
+  gl_FragColor = vec4(mix(mix(melt, crust, crusted), crust * 0.7, edgeK), 1.0);
 }`,
   });
 }
