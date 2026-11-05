@@ -231,15 +231,34 @@ describe('passage d’âge en défi', () => {
   }
   const kinds = (sim: Sim) => sim.ageProgress()!.items.filter((i) => i.kind);
 
-  it('en défi, entrer dans un âge n’offre aucun progrès vers le suivant : les bâtiments d’avant ne comptent pas', () => {
+  /** Un village préhistorique qui a tout juste ce que demande l'Antiquité */
+  function exact(d: Difficulty) {
+    const w = flatWorld(d);
+    put(w, [...many('house', 4), ['farm', 0], ['well', 0], ['workshop', 0]]);
+    w.exp.done.push(...mandatoriesFor(0).map((m) => m.id));
+    const sim = new Sim(w);
+    sim.recalc();
+    sim.pop = AGES[1].reqPop;
+    return { w, sim };
+  }
+
+  it('en défi, les bâtiments qui ont servi aux âges d’avant ne comptent plus ; ceux bâtis en avance comptent déjà', () => {
+    const { sim: tight } = exact('challenge');
+    expect(tight.advance()).toBe(true);
+    for (const i of kinds(tight)) expect(i.have, i.label).toBe(0);
     const { sim } = stocked('challenge');
     expect(sim.advance()).toBe(true);
     expect(sim.age).toBe(1);
-    const items = kinds(sim);
+    const items = kinds(sim), of = (k: KindId) => items.find((i) => i.kind === k)!;
     expect(items.length).toBeGreaterThan(0);
-    for (const i of items) expect(i.have, i.label).toBe(0);
+    // douze huttes, dont quatre demandées par l'Antiquité : les huit autres, bâties en avance, comptent pour le Moyen Âge ;
+    // de même deux des trois ateliers, et les deux feux de camp (que l'Antiquité ne demandait pas) ; aucun lieu de culte
+    expect(of('house').have).toBe(8);
+    expect(of('workshop').have).toBe(2);
+    expect(of('gather').have).toBe(2);
+    expect(of('temple').have).toBe(0);
     // le libellé le dit : ce sont des bâtiments à bâtir en plus
-    expect(items.find((i) => i.kind === 'house')!.label).toBe('Maison antique (en plus)');
+    expect(of('house').label).toBe('Maison antique (en plus)');
     // en partie normale, comme avant : tout le village compte, des conditions sont cochées d'office
     const n = stocked('normal');
     expect(n.sim.advance()).toBe(true);
@@ -248,7 +267,7 @@ describe('passage d’âge en défi', () => {
   });
 
   it('en défi, ce qu’on bâtit dans l’âge compte ; déplacer un ancien bâtiment ne compte pas', () => {
-    const { w, sim } = stocked('challenge');
+    const { w, sim } = exact('challenge');
     sim.advance();
     const house = () => kinds(sim).find((i) => i.kind === 'house')!;
     // l'Antiquité demandait 4 maisons, le Moyen Âge 8 : 4 de plus
@@ -350,5 +369,46 @@ describe('équipement des expéditions selon la difficulté', () => {
     expect(w.ore).toBe(2);
     ex.cancelCraft(1);
     expect(w.ore).toBe(3);
+  });
+});
+
+describe('un bâtiment posé avant d’être demandé compte déjà', () => {
+  beforeAll(() => setMapSize(96));
+
+  it('pour l’âge suivant : le moulin et l’hôpital bâtis en avance, une place devenue forum', () => {
+    for (const d of ['normal', 'challenge'] as Difficulty[]) {
+      const w = flatWorld(d);
+      put(w, [['house', 0], ['house', 0], ['house', 0], ['house', 0], ['farm', 0], ['well', 0], ['workshop', 0], ['mill', 0], ['health', 0], ['forum', 0]]);
+      w.exp.done.push(...mandatoriesFor(0).map((m) => m.id));
+      const sim = new Sim(w);
+      sim.recalc();
+      sim.pop = AGES[1].reqPop;
+      expect(sim.advance(), d).toBe(true);
+      // au Moyen Âge (on y entre comme au passage d'âge), ce que l'âge industriel demande et qui est déjà là
+      sim.age = 2;
+      w.ageBase = { ...sim.counts };
+      sim.recalc();
+      const item = (k: KindId) => sim.ageProgress()!.items.find((i) => i.kind === k)!;
+      expect(item('mill').have, d).toBe(1);
+      expect(item('health').have, d).toBe(1);
+      // la place devenue forum compte comme une place (en défi, elle a déjà servi au Moyen Âge, qui en demandait une)
+      expect(item('gather').have, d).toBe(d === 'normal' ? 1 : 0);
+      expect(sim.built('gather')).toBe(1);
+    }
+  });
+
+  it('pour une expédition : l’avant-poste ou le cosmodrome déjà là ; une gare devenue gare centrale reste une gare', () => {
+    const w = flatWorld('normal');
+    put(w, [['house', 2], ['outpost', 2], ['terminal', 3]]);
+    const ex = new Expeditions(w, new Agents(w), () => 100);
+    const deep = MISSIONS.find((m) => m.id === 'deep')!;
+    expect(ex.missing(deep)).toEqual([]);
+    expect(ex.has('station')).toBe(true);
+    expect(ex.has('terminal')).toBe(true);
+    expect(ex.has('maglev')).toBe(false);
+    const moon = MISSIONS.find((m) => m.requires?.kinds?.includes('spaceport'))!;
+    expect(ex.missing(moon).some((s) => /cosmodrome|spatio/i.test(s))).toBe(true);
+    put(w, [['spaceport', 5]]);
+    expect(ex.missing(moon).some((s) => /cosmodrome|spatio/i.test(s))).toBe(false);
   });
 });

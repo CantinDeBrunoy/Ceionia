@@ -33,10 +33,15 @@ export function reqKindsOf(n: number, d: Difficulty): Partial<Record<KindId, num
   if (!rulesOf(d).newOnly) return req;
   const out: Partial<Record<KindId, number>> = {};
   for (const [k, c] of Object.entries(req) as [KindId, number][]) {
-    const before = Math.max(0, ...AGES.slice(0, n).map((a) => a.reqKinds[k] ?? 0));
+    const before = usedBefore(k, n);
     if (c > before) out[k] = c - before;
   }
   return out;
+}
+
+/** Combien de bâtiments de ce genre les âges d'avant `n` ont déjà demandés (ceux-là ne comptent plus, en défi) */
+export function usedBefore(k: KindId, n: number): number {
+  return Math.max(0, ...AGES.slice(0, n).map((a) => a.reqKinds[k] ?? 0));
 }
 
 /** Simulation légère : besoins par présence, population, passage d'âge */
@@ -185,6 +190,9 @@ export class Sim {
     return d.names[Math.max(this.age, d.minAge)];
   }
 
+  /** Combien le village en a, en comptant ceux qui s'en sont améliorés (une gare devenue gare centrale reste une gare) */
+  built(k: KindId) { return lineOf(k).reduce((n, x) => n + (this.counts[x] ?? 0), 0); }
+
   /** Où le trouver : l'onglet Bâtir et son rayon */
   whereOf(k: KindId) {
     return `Bâtir › ${BUILD_CATS.find((c) => c.id === KINDS[k].cat)!.label}`;
@@ -195,12 +203,13 @@ export class Sim {
     if (n >= AGES.length) return null;
     const req = AGES[n], w = this.world;
     const items: AgeProgress['items'] = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
-    // en défi, passé la préhistoire, seuls comptent les bâtiments bâtis depuis l'entrée dans l'âge : ceux d'avant, changés
-    // d'office en leur version du nouvel âge, ne font pas avancer vers le suivant
+    // en défi, passé la préhistoire, les bâtiments d'avant qui ont servi aux âges passés (changés d'office en leur version du
+    // nouvel âge) ne font pas avancer vers le suivant ; ceux bâtis en avance, avant que le jeu ne les demande, comptent déjà
     const fresh = rulesOf(w.difficulty).newOnly && this.age > 0;
     for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty)) as [KindId, number][]) {
       const line = lineOf(k), sum = (r: Record<string, number>) => line.reduce((n, x) => n + (r[x] ?? 0), 0);
-      const have = Math.max(0, sum(this.counts) - (fresh ? sum(w.ageBase) : 0));
+      const used = fresh ? Math.min(sum(w.ageBase), usedBefore(k, n)) : 0;
+      const have = Math.max(0, sum(this.counts) - used);
       items.push({ label: fresh ? DIFF_TEXT.more(this.nameOf(k)) : this.nameOf(k), have, need: c, kind: k });
     }
     if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
@@ -271,7 +280,7 @@ export class Sim {
     if (!ap) {
       if (w.exp.done.includes(VICTORY)) return 'Le village a essaimé dans les étoiles : ses colons vivent sur une autre planète.';
       const next = MISSIONS.find((m) => m.age === this.age && m.requires && !w.exp.done.includes(m.id));
-      const need = next?.requires?.kinds?.find((k) => !this.counts[k]);
+      const need = next?.requires?.kinds?.find((k) => !this.built(k));
       if (need) return build(need, `Pour « ${next!.title} » : il faut ${say(need)}.`);
       if (next) return `Prochaine étape vers les étoiles : l’expédition « ${next.title} » (menu Expéditions).`;
     }

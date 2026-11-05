@@ -2,7 +2,7 @@ import { World, N, VEG_FOREST, VEG_CAVE, VEG_FIELD, VEG_GARDEN, BIOME_DESERT, BI
 import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
-import { AGES, KINDS, KindId, Building, sizeOf } from '../build/catalog';
+import { AGES, KINDS, KindId, Building, sizeOf, lineOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats } from './depths';
@@ -202,7 +202,12 @@ export class Expeditions {
   running(m: Mission) { return this.active.some((a) => a.m.id === m.id); }
   /** équipes que le village peut envoyer à la fois */
   slots() { return partyLimit(this.pop()); }
-  has(kind: string) { for (const b of this.world.buildings.values()) if (b.kind === kind) return true; return false; }
+  /** Le village en a-t-il un, déjà bâti, ou amélioré depuis (une gare devenue gare centrale compte encore comme une gare) ? */
+  has(kind: string) {
+    const line: string[] = KINDS[kind as KindId] ? lineOf(kind as KindId) : [kind];
+    for (const b of this.world.buildings.values()) if (line.includes(b.kind)) return true;
+    return false;
+  }
 
   /**
    * Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel, un institut de recherche
