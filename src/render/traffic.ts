@@ -238,7 +238,7 @@ export class Traffic {
     if (age !== this.builtAge || this.motor !== this.builtMotor) {
       this.builtMotor = this.motor;
       this.carts.geometry.dispose();
-      this.carts.geometry = vehicleGeo(age, this.motor);
+      this.carts.geometry = vehicleGeo(age >= 4 && !this.motor ? 3 : age, this.motor);
       // les attelages changent d'époque (ou laissent place aux voitures)
       for (const v of this.vehicles) this.dropRig(v);
     }

@@ -1022,7 +1022,8 @@ class Game implements UIHost {
       this.terrain.animateWater(this.elapsed, 1 - this.env.weatherK * 0.3);
       this.streams.update(dt, this.season.snow, this.cam.target);
       this.life.update(dt, this.time, this.season, this.env, this.cam.target);
-      this.traffic.motor = this.expeditions.state.done.includes('motorcar');
+      // pas de voiture sur les routes tant que l'usine automobile n'est pas bâtie : des charrettes jusque-là
+      this.traffic.motor = (this.sim.counts.carworks ?? 0) > 0;
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
       this.helis.update(gdt, this.sim.age);
       this.airships.update(gdt, this.time.hour, this.sim.age);
