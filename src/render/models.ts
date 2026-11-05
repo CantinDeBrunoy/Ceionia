@@ -1741,6 +1741,134 @@ function farm(p: Parts, age: number) {
   }
 }
 
+/**
+ * Eau d'un bassin, d'une vasque, d'un puits, à la hauteur `y` : disque (à `seg` pans) aux bleus dégradés, clair au bord, plus
+ * profond au centre, que le shader ride, éclaire de caustiques et fait scintiller (voir `addWater` : seuls ces bleus reçoivent
+ * les ondulations) ; un liseré d'écume contre le bord
+ */
+function waterPool(p: Parts, x: number, y: number, z: number, r: number, seg = 12, foam = true, ry = 0) {
+  p.cyl(r, r, 0.004, seg, x, y - 0.004, z, 0x8fd0e0, false, ry);
+  p.cyl(r * 0.74, r * 0.74, 0.004, seg, x, y - 0.0035, z, 0x5aa8c8, false, ry);
+  p.cyl(r * 0.42, r * 0.42, 0.004, seg, x, y - 0.003, z, 0x3f8fb8, false, ry);
+  if (foam) p.add(new THREE.TorusGeometry(r * 0.96, 0.0045, 3, Math.min(24, seg * 2)).rotateX(Math.PI / 2), x, y, z, 0xeef6f4, ry);
+}
+/** La même eau dans un bassin rectangulaire (w × d), tourné de `ry` : bandes de plus en plus profondes vers le milieu, écume aux bords */
+function waterRect(p: Parts, x: number, y: number, z: number, w: number, d: number, ry = 0, foam = true) {
+  p.add(new THREE.BoxGeometry(w, 0.004, d), x, y - 0.002, z, 0x8fd0e0, ry);
+  p.add(new THREE.BoxGeometry(w - Math.min(w, d) * 0.3, 0.004, d * 0.7), x, y - 0.0015, z, 0x5aa8c8, ry);
+  p.add(new THREE.BoxGeometry(w - Math.min(w, d) * 0.62, 0.004, d * 0.38), x, y - 0.001, z, 0x3f8fb8, ry);
+  if (!foam) return;
+  const c = Math.cos(ry), s = Math.sin(ry);
+  for (const e of [-1, 1]) {
+    p.add(new THREE.BoxGeometry(w, 0.004, 0.008), x + e * (d / 2 - 0.004) * s, y, z + e * (d / 2 - 0.004) * c, 0xeef6f4, ry);
+    p.add(new THREE.BoxGeometry(0.008, 0.004, d), x + e * (w / 2 - 0.004) * c, y, z - e * (w / 2 - 0.004) * s, 0xeef6f4, ry);
+  }
+}
+/** Jet d'eau qui monte de (x, y, z) et retombe en gerbe : colonne d'eau claire, gouttes, éclaboussures à la retombée */
+function waterJet(p: Parts, x: number, y: number, z: number, h: number) {
+  p.cyl(0.004, 0.009, h, 5, x, y, z, 0xd8f2fa);
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * 6.283;
+    p.add(new THREE.CylinderGeometry(0.0025, 0.004, h * 0.55, 4).translate(0, -h * 0.27, 0), x + Math.cos(a) * 0.012, y + h, z + Math.sin(a) * 0.012, 0xd8f2fa, 0, false, Math.sin(a) * 0.5, -Math.cos(a) * 0.5);
+    p.add(new THREE.OctahedronGeometry(0.005, 0), x + Math.cos(a) * h * 0.3, y + h * 0.4, z + Math.sin(a) * h * 0.3, 0xf2fbff);
+  }
+  p.sphere(0.012, x, y + h, z, 0xf2fbff);
+}
+
+/**
+ * Puits de l'Antiquité : cour dallée, margelle de marbre en grand appareil sur son degré, eau sombre ; deux colonnes portent
+ * l'architrave, le treuil et sa manivelle, sous un petit toit de tuiles ; corde et seau de bronze, hydries sur la margelle,
+ * amphores debout et couchée, vigne qui grimpe à une colonne et ses grappes, la porteuse d'eau
+ */
+function antiqueWell(p: Parts) {
+  sink(0.012);
+  const B = 0.012, marble = 0xeee4d0, stone = 0xd8ccb4;
+  // dallage : grandes dalles aux joints sombres, un peu de jeu de teintes
+  for (let i = 0; i < 5; i++) for (let k = 0; k < 5; k++) p.box(0.168, B, 0.168, -0.36 + i * 0.18, 0, -0.36 + k * 0.18, dark(stone, 0.9 + hash2(i, k, 740) * 0.12));
+  p.cyl(0.28, 0.3, 0.025, 12, 0, B, 0, dark(stone, 0.95)); p.cyl(0.27, 0.27, 0.004, 12, 0, B + 0.025, 0, marble);
+  // margelle : trois assises de blocs décalés, couronnement mouluré
+  const R = 0.19, n = 10;
+  for (let row = 0; row < 3; row++)
+    for (let i = 0; i < n; i++) {
+      const a = ((i + (row % 2) * 0.5) / n) * Math.PI * 2;
+      p.box(0.118, 0.054, 0.05, Math.cos(a) * R, B + 0.029 + row * 0.056, Math.sin(a) * R, dark(marble, 0.86 + hash2(i, row, 741) * 0.14), -a + Math.PI / 2);
+    }
+  p.add(new THREE.TorusGeometry(R, 0.03, 4, 14).rotateX(Math.PI / 2), 0, B + 0.2, 0, marble);
+  p.add(new THREE.CylinderGeometry(R - 0.02, R - 0.02, 0.06, 12, 1, true).scale(-1, 1, 1).translate(0, 0.03, 0), 0, B + 0.14, 0, 0x2a3a40);
+  waterPool(p, 0, B + 0.16, 0, R - 0.03, 12, false);
+  // colonnes, architrave, toit de tuiles
+  for (const s of [-1, 1]) column(p, s * 0.27, 0, 0.42, B + 0.025, 0.026);
+  p.box(0.62, 0.035, 0.07, 0, B + 0.445, 0, marble); p.box(0.64, 0.012, 0.08, 0, B + 0.48, 0, dark(marble, 0.9));
+  roof(p, 0, B + 0.492, 0, { w: 0.62, d: 0.2, h: 0.09, color: C.terracotta, wall: marble, rows: true, len: 0.7, ov: 0.04 });
+  // treuil : le rouleau sur ses paliers, la manivelle, la corde enroulée qui descend au seau de bronze
+  for (const s of [-1, 1]) p.box(0.03, 0.06, 0.03, s * 0.2, B + 0.39, 0, dark(marble, 0.85));
+  p.add(new THREE.CylinderGeometry(0.022, 0.022, 0.38, 8).rotateZ(Math.PI / 2), 0, B + 0.42, 0, C.darkwood);
+  for (let k = 0; k < 3; k++) p.add(new THREE.TorusGeometry(0.024, 0.005, 3, 6).rotateY(Math.PI / 2), -0.04 + k * 0.014, B + 0.42, 0, 0xc8b08a);
+  p.add(new THREE.BoxGeometry(0.008, 0.07, 0.008).translate(0, -0.035, 0), 0.25, B + 0.42, 0, C.metal); p.add(new THREE.CylinderGeometry(0.006, 0.006, 0.04, 4).rotateZ(Math.PI / 2), 0.27, B + 0.355, 0, C.darkwood);
+  p.box(0.004, 0.2, 0.004, -0.02, B + 0.2, 0.02, 0xc8b08a);
+  p.cyl(0.032, 0.026, 0.05, 8, -0.02, B + 0.16, 0.02, 0xb8843a); p.add(new THREE.TorusGeometry(0.03, 0.003, 3, 8, Math.PI), -0.02, B + 0.21, 0.02, 0x8a6a3a);
+  // hydries sur la margelle et au pied, amphores, seau posé
+  const hydria = (x: number, y: number, z: number, c: number) => { p.cyl(0.024, 0.018, 0.05, 8, x, y, z, c); p.sphere(0.026, x, y + 0.05, z, c, 0, 0.8); p.cyl(0.012, 0.018, 0.025, 8, x, y + 0.065, z, c); p.add(new THREE.TorusGeometry(0.012, 0.003, 3, 6, Math.PI), x + 0.022, y + 0.06, z, dark(c, 0.8), 0, false, -Math.PI / 2); };
+  hydria(0.12, B + 0.23, 0.13, 0xb8704e); hydria(0.33, B, 0.3, 0xc07a52); hydria(0.39, B, 0.22, 0x9c5a3e);
+  for (const [x, z] of [[-0.36, -0.36], [-0.28, -0.4]]) if (!attach(['a_amphora'], 0, 0.1, x, z)) { p.cyl(0.03, 0.012, 0.14, 8, x, B, z, C.terracotta); p.cyl(0.012, 0.018, 0.04, 8, x, B + 0.14, z, C.terracotta); }
+  p.add(new THREE.CylinderGeometry(0.028, 0.014, 0.15, 8).rotateZ(Math.PI / 2), -0.38, B + 0.03, -0.22, C.terracotta, 0.4);
+  // vigne : le cep tordu qui grimpe à la colonne de gauche et file sur l'architrave, feuilles et grappes
+  for (let k = 0; k < 4; k++) p.add(new THREE.CylinderGeometry(0.008, 0.01, 0.12, 4), -0.3 + (k % 2) * 0.012, B + 0.03 + k * 0.1, 0.02, 0x6a4a30, 0, false, (k % 2 ? 0.3 : -0.3));
+  for (let k = 0; k < 9; k++) p.sphere(0.03 - (k % 3) * 0.004, -0.3 + k * 0.045 - (k > 5 ? 0.1 : 0), B + 0.47 + (k % 2) * 0.02 - (k < 3 ? 0.16 - k * 0.05 : 0), 0.04 - (k % 2) * 0.05, k % 2 ? 0x6f9a4a : 0x5a8a3e, 0, 0.7);
+  for (const [x, y] of [[-0.24, 0.42], [-0.08, 0.43], [0.06, 0.44]]) for (let k = 0; k < 4; k++) p.add(new THREE.OctahedronGeometry(0.01, 0), x + (k % 2) * 0.01, B + y - k * 0.011, 0.065, 0x5a2a5a);
+  // la porteuse d'eau, une hydrie sur l'épaule ; un massif de lauriers dans le coin
+  figure(p, 0.3, 0.12, 0xf2ead8, -2.2, false, 0x2a2420);
+  hydria(0.33, B + 0.17, 0.1, 0xb8704e);
+  for (const [x, z, r] of [[0.38, -0.36, 0.05], [0.33, -0.4, 0.04]]) p.sphere(r, x, B + r * 0.8, z, 0x6f8a5a, 0, 0.9);
+}
+
+/**
+ * Puits couvert du Moyen Âge : margelle de moellons irréguliers, couronnée de pierres de taille ; bâti de chêne à deux poteaux
+ * contreventés, toit d'ardoises à deux pans ; treuil et sa roue, corde, seau cerclé de fer qui pend ; auge de pierre
+ * pleine, seaux, pavés tout autour, la puiseuse
+ */
+function medievalWell(p: Parts) {
+  sink(0.012);
+  const B = 0.012, grey = 0xa8a296;
+  cobbles(p, -0.46, -0.46, 0.46, 0.46, 0x9d9890, 0, 750, 0.15, 0.11);
+  p.cyl(0.29, 0.3, B, 12, 0, 0, 0, 0x8a857c);
+  const R = 0.2, n = 9;
+  for (let row = 0; row < 4; row++)
+    for (let i = 0; i < n; i++) {
+      const a = ((i + (row % 2) * 0.5 + hash2(i, row, 751) * 0.2) / n) * Math.PI * 2, h = 0.04 + hash2(i, row, 752) * 0.012;
+      p.add(new THREE.BoxGeometry(0.11 + hash2(i, row, 754) * 0.03, h, 0.05), Math.cos(a) * R, B + 0.022 + row * 0.046, Math.sin(a) * R, dark(grey, 0.78 + hash2(i, row, 753) * 0.26), -a + Math.PI / 2);
+    }
+  p.add(new THREE.CylinderGeometry(R - 0.02, R - 0.01, 0.2, 10, 1, true).scale(-1, 1, 1).translate(0, 0.1, 0), 0, B, 0, dark(grey, 0.7));
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; p.box(0.13, 0.03, 0.07, Math.cos(a) * (R + 0.005), B + 0.2, Math.sin(a) * (R + 0.005), dark(C.stone, 0.92 + (i % 3) * 0.04), -a + Math.PI / 2); }
+  p.add(new THREE.CylinderGeometry(R - 0.035, R - 0.035, 0.05, 10, 1, true).scale(-1, 1, 1).translate(0, 0.025, 0), 0, B + 0.15, 0, 0x2a3a40);
+  waterPool(p, 0, B + 0.17, 0, R - 0.045, 10, false);
+  // bâti de chêne, contrefiches, toit d'ardoises
+  const oak = 0x6a5040;
+  for (const s of [-1, 1]) {
+    p.box(0.045, 0.52, 0.045, s * 0.25, B, 0, oak);
+    p.box(0.07, 0.04, 0.12, s * 0.25, B, 0, dark(grey, 0.85));
+    for (const e of [-1, 1]) p.add(new THREE.BoxGeometry(0.018, 0.16, 0.018), s * 0.25, B + 0.07, e * 0.06, oak, 0, false, 0, e * 0.6);
+    p.add(new THREE.BoxGeometry(0.018, 0.13, 0.018), s * 0.21, B + 0.48, 0, oak, 0, false, s * 0.7);
+  }
+  p.box(0.6, 0.04, 0.05, 0, B + 0.52, 0, oak);
+  roof(p, 0, B + 0.56, 0, { w: 0.56, d: 0.34, h: 0.2, color: C.slate, wall: oak, rows: true, len: 0.66, ov: 0.05 });
+  // treuil : rouleau, roue à rayons du côté droit, corde, seau cerclé
+  p.add(new THREE.CylinderGeometry(0.026, 0.026, 0.46, 8).rotateZ(Math.PI / 2), 0, B + 0.4, 0, C.darkwood);
+  for (let k = 0; k < 3; k++) p.add(new THREE.TorusGeometry(0.028, 0.005, 3, 6).rotateY(Math.PI / 2), -0.05 + k * 0.014, B + 0.4, 0, 0xc8b08a);
+  p.add(new THREE.TorusGeometry(0.08, 0.008, 4, 12).rotateY(Math.PI / 2), 0.3, B + 0.4, 0, C.darkwood);
+  for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.008, 0.16, 0.008), 0.3, B + 0.4, 0, C.darkwood, 0, false, 0, (k * Math.PI) / 4);
+  p.box(0.004, 0.17, 0.004, 0.01, B + 0.24, 0.0, 0xc8b08a);
+  p.cyl(0.034, 0.028, 0.055, 8, 0.01, B + 0.19, 0, 0x8a6a48);
+  for (const y of [0.2, 0.235]) p.cyl(0.035, 0.035, 0.006, 8, 0.01, B + y, 0, 0x3c3c40);
+  p.add(new THREE.TorusGeometry(0.032, 0.003, 3, 8, Math.PI), 0.01, B + 0.245, 0, 0x3c3c40);
+  // auge de pierre pleine d'eau, seaux, pavés, la puiseuse
+  p.box(0.3, 0.08, 0.12, -0.24, B, 0.34, grey); p.box(0.26, 0.004, 0.08, -0.24, B + 0.078, 0.34, 0x2a3a40);
+  waterRect(p, -0.24, B + 0.08, 0.34, 0.26, 0.08, 0, false);
+  for (const [x, z] of [[0.3, 0.3], [0.36, 0.22]]) { p.cyl(0.028, 0.022, 0.05, 8, x, B, z, 0x8a6a48); p.cyl(0.029, 0.029, 0.005, 8, x, B + 0.03, z, 0x3c3c40); }
+  figure(p, 0.16, 0.3, 0x8a5a3a, Math.PI + 0.4, false, 0x4a3426);
+  for (const [x, z, c] of [[-0.4, -0.38, 0xd84a3e], [-0.36, -0.42, 0xf2d24a], [0.4, -0.4, 0x8a6abf]] as number[][]) { p.sphere(0.03, x, B + 0.02, z, 0x6f9e5a, 0, 0.7); p.sphere(0.012, x, B + 0.05, z, c); }
+}
+
 function well(p: Parts, age: number) {
   // Préhistoire : margelle de pierre, seau et petit toit de chaume (puits de Quaternius, tuiles recolorées)
   if (age === 0 && attach(['p_well'], 0, 0.6, 0, 0, Math.PI, unRed(C.thatch))) {
@@ -1762,6 +1890,8 @@ function well(p: Parts, age: number) {
     branchFence(p, -0.24, -0.44, 0.22, -0.45, 661, 0.12);
     return;
   }
+  if (age === 1) { antiqueWell(p); return; }
+  if (age === 2) { medievalWell(p); return; }
   if (age <= 2) {
     p.cyl(0.22, 0.24, 0.2, 8, 0, 0, 0, C.stone);
     p.cyl(0.17, 0.17, 0.02, 8, 0, 0.19, 0, C.water);
