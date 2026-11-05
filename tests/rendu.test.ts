@@ -172,7 +172,9 @@ describe('maisons et tours', () => {
 
   it('les parcs à la française, les maisons modernes et les bâtiments modernes enrichis restent sous le plafond', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
-    const cases: [KindId, number][] = [['gather', 3], ['gather', 4], ['gather', 5], ['house', 4], ['temple', 4], ['health', 4], ['theater', 4], ['fire', 4], ['police', 4]];
+    const cases: [KindId, number][] = [['gather', 3], ['gather', 4], ['gather', 5], ['house', 4], ['temple', 4], ['health', 4], ['theater', 4], ['fire', 4], ['police', 4],
+      // l'hôpital, l'opéra, la caserne et le poste de police de l'âge industriel, allégés puis enrichis
+      ['health', 3], ['theater', 3], ['fire', 3], ['police', 3]];
     for (const [kind, age] of cases)
       for (let v = 0; v < 6; v++) for (const F of [true, false]) {
         const m = getModel(kind, age, { v, L: false, R: false, F });

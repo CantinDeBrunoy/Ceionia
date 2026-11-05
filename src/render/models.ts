@@ -5494,11 +5494,30 @@ function police(p: Parts, age: number) {
     p.box(0.2, 0.16, 0.32, 0.5, 0.06, 0.4, 0x2c3e6a); p.box(0.21, 0.02, 0.33, 0.5, 0.22, 0.4, 0x1e2a48);
     for (const z of [0.3, 0.5]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 10).rotateZ(Math.PI / 2), 0.5 + s * 0.11, 0.06, z, 0x7a6355);
     p.box(0.006, 0.04, 0.12, 0.6, 0.12, 0.4, 0xf4f2ee);
-    p.box(0.06, 0.07, 0.15, 0.5, 0.1, 0.68, 0x5a3e2e); p.box(0.035, 0.07, 0.05, 0.5, 0.16, 0.76, 0x5a3e2e);
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.018, 0.1, 0.018, 0.5 + sx * 0.02, 0.012, 0.68 + sz * 0.05, 0x3e2a20);
+    horse(p, 0.5, 0.68, -Math.PI / 2, 0x5a3e2e);
+    for (const s of [-1, 1]) p.box(0.008, 0.008, 0.2, 0.5 + s * 0.03, 0.1, 0.62, C.wood);
+    p.box(0.08, 0.012, 0.06, 0.5, 0.22, 0.55, 0x1e2a48); figure(p, 0.5, 0.55, 0x2c3e6a, Math.PI, true, 0x1e2a48, 'idle', 0.16);
     figure(p, 0.15, -0.06, 0x2c3e6a, 0, false, 0x1e2a48);
     p.cyl(0.018, 0.016, 0.02, 8, 0.15, 0.185, -0.06, 0x1e2a48); p.cyl(0.0185, 0.0185, 0.006, 8, 0.15, 0.205, -0.06, 0xd84a3e);
-    p.cyl(0.012, 0.012, 0.38, 5, -0.6, 0.012, 0.0, 0x3c4a44); p.box(0.04, 0.05, 0.04, -0.6, 0.39, 0.0, 0xffe2a0, 0, true); p.box(0.05, 0.014, 0.05, -0.6, 0.44, 0.0, 0x3c4a44);
+    lampPost(p, -0.6, 0.0, 0.38);
+    // cheminées et lucarnes du toit, horloge au-dessus de la porte, cellule aux barreaux sur le pignon, chaînes d'angle
+    for (const x of [-0.55, 0.35]) { p.box(0.08, 0.2, 0.08, x, 0.72, -0.62, 0xa85e50); p.box(0.095, 0.025, 0.095, x, 0.92, -0.62, C.cream); smoke(x, 0.95, -0.62, 0); }
+    for (const x of [-0.35, 0.15]) {
+      p.box(0.1, 0.14, 0.08, x, 0.68, -0.36, brick); p.gable(0.12, 0.06, 0.1, x, 0.82, -0.36, C.slate, Math.PI / 2);
+      p.add(slab(0.06, 0.07, 0.01, F_PZ), x, 0.77, -0.317, C.win, 0, true);
+    }
+    p.add(new THREE.CircleGeometry(0.04, 10), -0.1, 0.48, -0.17, C.white); p.add(new THREE.RingGeometry(0.04, 0.048, 10), -0.1, 0.48, -0.169, 0x3c3c40);
+    p.box(0.004, 0.03, 0.004, -0.1, 0.48, -0.167, 0x1e1e22); p.box(0.022, 0.004, 0.004, -0.09, 0.48, -0.167, 0x1e1e22);
+    p.add(slab(0.01, 0.08, 0.1, F_NX), -0.705, 0.22, -0.6, 0x2a2a30);
+    for (let k = 0; k < 4; k++) p.add(slab(0.008, 0.08, 0.008, F_NX | F_PZ | F_NZ), -0.71, 0.22, -0.635 + k * 0.023, 0x8a8f96);
+    for (const x of [-0.7, 0.5]) quoins(p, x, -0.19, 0.012, 0.6, x < 0 ? -1 : 1, 1);
+    // tableau des avis de recherche, banc de l'agent, bicyclette contre le mur, borne et perron pavé
+    p.box(0.16, 0.12, 0.012, 0.36, 0.1, -0.17, 0x5a3e2e);
+    for (const [dx, dy, c] of [[-0.04, 0.03, 0xf2ead2], [0.03, 0.04, 0xe8dcc0], [-0.02, -0.03, 0xf2ead2], [0.045, -0.025, 0xd8c8a8]] as [number, number, number][]) p.add(slab(0.045, 0.05, 0.004, F_PZ), 0.36 + dx, 0.16 + dy, -0.162, c);
+    bench(p, -0.38, -0.12, 0);
+    bike(p, 0.0, -0.13, 0x1e1e22, Math.PI / 2, 0.012);
+    p.box(1.2, 0.008, 0.2, -0.1, 0.012, -0.06, 0xb8b0a2);
+    for (let x = -0.68; x < 0.5; x += 0.12) p.add(slab(0.006, 0.002, 0.2, F_PY), x, 0.021, -0.06, 0x8a867c);
   } else {
     // commissariat : bloc blanc à bandeaux vitrés, bandeau bleu, enseigne lumineuse, entrée vitrée sous auvent, antenne
     const wall = 0xeceae6, blue = 0x2c4a9a;
