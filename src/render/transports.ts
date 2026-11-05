@@ -258,7 +258,6 @@ export class Transports {
       const root = new THREE.Group(), mesh = new THREE.Mesh(this.planeGeo, mats.body);
       mesh.castShadow = true;
       root.add(mesh);
-      root.scale.setScalar(1.1);
       root.rotation.order = 'YXZ';
       this.group.add(root);
       pl = { root, size, phase: 'stand', s: 0, u: 0, pos: new THREE.Vector3(plan.stand[0], 0, plan.stand[1]), heading: plan.standHeading, speed: 0, bank: 0, pitch: 0, t: 10 + (b.id % 4) * 6 };

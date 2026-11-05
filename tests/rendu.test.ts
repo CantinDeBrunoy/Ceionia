@@ -159,6 +159,37 @@ describe('maisons et tours', () => {
       }
   });
 
+  it('les bâtiments « Night City » de l’âge futuriste restent sous le plafond (3 000 triangles par case, 4 500 en 2 × 2)', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    const kinds: KindId[] = ['health', 'fire', 'police', 'tavern', 'barber', 'manor', 'theater', 'lab', 'baths'];
+    for (const kind of kinds)
+      for (let v = 0; v < 3; v++) {
+        const m = getModel(kind, 5, { v, L: false, R: false, F: true });
+        const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + tris(m.rotor?.geo) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+        expect(n, `${kind}, variante ${v}`).toBeLessThan(KINDS[kind].size === 1 ? 3000 : 4500);
+      }
+  });
+
+  it('les parcs à la française, les maisons modernes et les bâtiments modernes enrichis restent sous le plafond', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    const cases: [KindId, number][] = [['gather', 3], ['gather', 4], ['gather', 5], ['house', 4], ['temple', 4], ['health', 4], ['theater', 4], ['fire', 4], ['police', 4]];
+    for (const [kind, age] of cases)
+      for (let v = 0; v < 6; v++) for (const F of [true, false]) {
+        const m = getModel(kind, age, { v, L: false, R: false, F });
+        const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + tris(m.rotor?.geo) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+        expect(n, `${kind} à l’âge ${age}, variante ${v}`).toBeLessThan(KINDS[kind].size === 1 ? 3000 : 4500);
+      }
+  });
+
+  it('le cosmodrome et l’aéroport, refaits en détail, restent sous 800 triangles par case', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    for (const [kind, age] of [['spaceport', 5], ['airport', 4], ['airport', 5]] as [KindId, number][]) {
+      const m = getModel(kind, age, { v: 0, L: false, R: false, F: true });
+      const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+      expect(n, `${kind} à l’âge ${age}`).toBeLessThan(800 * KINDS[kind].size ** 2);
+    }
+  });
+
   it('le château d’eau, détaillé à chaque âge, reste sous 4 000 triangles (girouette, drone et personnages compris)', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
     for (let age = 3; age < 6; age++) {

@@ -118,6 +118,8 @@ export class TerrainView {
   private lavaW = new Float32Array(VS * VS);
   /** Par sous-sommet : part des cases voisines sur un gisement de pétrole */
   private oilW = new Float32Array(VS * VS);
+  /** Par sous-sommet : part des cases voisines sous un port ou à ses abords (le terre-plein et son talus gardent l'herbe : ni grève, ni roche, ni terre battue) */
+  private quayW = new Float32Array(VS * VS);
   /** Par sous-sommet : grandes taches de prairie (-1 herbe sombre … 1 herbe claire) */
   private patch = new Float32Array(VS * VS);
   /** Par sous-sommet : bruit fin qui fait onduler les bords des champs et des jardins */
@@ -452,12 +454,19 @@ float snN(vec2 p) {
         vnor[i] = -dx / l; vnor[i + 1] = 1 / l; vnor[i + 2] = -dz / l;
       }
 
+    // les abords des ports : leur emprise et deux cases tout autour (le talus du terre-plein), hors de l'eau
+    const quayNear = new Set<number>();
+    for (const b of w.buildings.values()) {
+      if (b.kind !== 'harbor') continue;
+      const s = b.small ? 2 : 3;
+      for (let cz = b.z - 2; cz < b.z + s + 2; cz++) for (let cx = b.x - 2; cx < b.x + s + 2; cx++) if (w.inCells(cx, cz) && (w.occ[w.ci(cx, cz)] === b.id || w.cellAvg(cx, cz) > 0.05)) quayNear.add(w.ci(cx, cz));
+    }
     // zones : part des cases qui touchent chaque sous-sommet (1 au centre d'une case, ½ sur un bord)
     for (let z = z0; z <= z1; z++) {
       const cz1 = Math.min(N - 1, Math.floor(z / VR)), cz0 = z % VR === 0 ? cz1 - (z === VS - 1 ? 0 : 1) : cz1;
       for (let x = x0; x <= x1; x++) {
         const cx1 = Math.min(N - 1, Math.floor(x / VR)), cx0 = x % VR === 0 ? cx1 - (x === VS - 1 ? 0 : 1) : cx1;
-        let n = 0, y = 0, lava = 0, oil = 0;
+        let n = 0, y = 0, lava = 0, oil = 0, quay = 0;
         const f = this.zone;
         f.fill(0);
         for (let cz = cz0; cz <= cz1; cz++)
@@ -469,6 +478,7 @@ float snN(vec2 p) {
             n++;
             if (t >= 1 && t <= 4) f[t - 1]++;
             if (w.occ[k]) y++;
+            if (quayNear.has(k)) quay++;
             lava += w.basalt[k];
             oil += w.oil[k];
           }
@@ -479,6 +489,7 @@ float snN(vec2 p) {
         yw[i] = n ? y / n : 0;
         this.lavaW[i] = n ? lava / n : 0;
         this.oilW[i] = n ? oil / n : 0;
+        this.quayW[i] = n ? quay / n : 0;
       }
     }
     const bc = this.biomeCol;
@@ -505,7 +516,8 @@ float snN(vec2 p) {
         tmp.copy(WET_SAND).lerp(SEABED, clamp(-h / 1.6, 0, 1)).lerp(MUD, this.vbw[i * NB + BIOME_MARSH] * 0.8);
         sand = 0.6;
       } else {
-        const steep = 1 - smoothstep(0.6, 0.8, vnor[i * 3 + 1]), flat = 1 - steep;
+        // (le talus du terre-plein d'un port reste en herbe : pas de paroi de roche ni de grève autour du quai)
+        const quay = this.quayW[i], steep = (1 - smoothstep(0.6, 0.8, vnor[i * 3 + 1])) * (1 - quay * 0.9), flat = 1 - steep;
         const alt = smoothstep(3.8, 5.4, h), cap = smoothstep(SNOW_LINE[0], SNOW_LINE[1], h);
         // sol du biome (mélange des biomes voisins), neige plus ou moins tenace
         const bw = this.vbw, bo = i * NB;
@@ -520,7 +532,7 @@ float snN(vec2 p) {
         // marais : flaques de vase sombre
         if (wet > 0 && pv < 0) tmp.lerp(MUD, -pv * 0.7 * wet);
         // rivages : sable, sauf au marais (berges de vase)
-        const beach = 1 - smoothstep(0.12, 0.42, h);
+        const beach = (1 - smoothstep(0.12, 0.42, h)) * (1 - quay);
         tmp.lerp(SAND, beach * (1 - wet)).lerp(MUD, beach * wet * 0.6);
         // parois : craie blanche près de la mer, roche plus haut, grise en montagne
         if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(MOUNTAIN, alt), steep);
@@ -539,8 +551,8 @@ float snN(vec2 p) {
           if (lava > 0) tmp.lerp(VOLCANO_BROWN, lava * 0.95).lerp(BASALT, top * lava * 0.65);
         }
         // terre battue et sable des jardins nus ; la pelouse garde le motif de l'herbe
-        const soil = Math.min(1, yw[i] * 0.55 + vw[i * 4 + 1] + (bare ? vw[i * 4 + 2] : 0));
-        if (yw[i] > 0) tmp.lerp(YARD, yw[i] * 0.55 * flat);
+        const yard = yw[i] * (1 - quay), soil = Math.min(1, yard * 0.55 + vw[i * 4 + 1] + (bare ? vw[i * 4 + 2] : 0));
+        if (yard > 0) tmp.lerp(YARD, yard * 0.55 * flat);
         // pas de sous-bois vert sous les cactus
         for (let q = 0; q < 4; q++) if (vw[i * 4 + q] > 0) tmp.lerp(this.vegCol[q], vw[i * 4 + q] * (q === 3 ? 1 : flat) * (q === 0 ? 1 - dry : 1));
         // champs de lave refroidie : basalte noir, que la mousse puis l'herbe regagnent

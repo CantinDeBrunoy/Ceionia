@@ -120,16 +120,22 @@ export class Atmosphere {
     this.caps.count = 0;
     this.caps.frustumCulled = false;
     this.caps.renderOrder = 4;
-    // ---- arc-en-ciel : demi-anneau aux couleurs du spectre, rouge à l'extérieur
+    // ---- arc-en-ciel : demi-anneau aux couleurs du spectre, rouge à l'extérieur et violet à l'intérieur ; au-dehors, l'arc
+    // secondaire, plus pâle, aux couleurs inversées. L'arc entier jusqu'à l'horizon (seul son pied s'estompe), translucide
     const bm = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, fog: false, uniforms: this.bowU,
       vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `uniform float uAlpha; varying vec2 vP;
 vec3 hue(float h){ return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
-void main(){ float t = (length(vP) - 0.9) / 0.1; float a = uAlpha * sin(clamp(t, 0.0, 1.0) * 3.14159) * smoothstep(0.0, 0.25, vP.y);
-  gl_FragColor = vec4(hue(0.78 * (1.0 - t)), a * 0.3); }`,
+void main(){
+  float r = length(vP), t = clamp((r - 0.9) / 0.1, 0.0, 1.0), s = clamp((1.13 - r) / 0.08, 0.0, 1.0);
+  float a1 = sin(t * 3.14159), a2 = sin(s * 3.14159) * 0.35;
+  vec3 c = a1 >= a2 ? hue(0.78 * (1.0 - t)) : hue(0.78 * (1.0 - s));
+  float a = uAlpha * max(a1, a2) * smoothstep(0.0, 0.06, vP.y / r);
+  if (a < 0.002) discard;
+  gl_FragColor = vec4(c, a * 0.34); }`,
     });
-    this.bow = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 96, 1, 0, Math.PI), bm);
+    this.bow = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.15, 128, 2, 0, Math.PI), bm);
     this.bow.visible = false;
     this.bow.renderOrder = -5;
     // ---- aurores : deux rideaux courbes au-dessus de l'horizon, face à la caméra (hauteur unité, étirée à chaque image)
@@ -225,24 +231,35 @@ void main(){
     this.caps.count = n;
     this.caps.instanceMatrix.needsUpdate = true;
 
-    // ---- arc-en-ciel : quand la pluie cesse et que le soleil revient ; jamais quand la pluie tourne à la neige, et s'il neige
-    // pendant qu'il brille, il s'efface (en quelques secondes)
+    // ---- arc-en-ciel : seulement quand la pluie a cessé et que le soleil est revenu (ciel dégagé, en journée) ; jamais quand
+    // la pluie tourne à la neige, et s'il neige pendant qu'il brille, il s'efface (en quelques secondes)
     const snowing = env.weatherKind === 'snow' || env.wantKind === 'snow';
+    const sunny = (env.weatherKind === 'clear' || env.weatherK < 0.25) && env.wantKind !== 'rain';
     if (env.weatherKind === 'rain' && env.weatherK > 0.5) this.wasRaining = true;
-    else if (this.wasRaining && env.wantKind !== 'rain' && !snowing && env.daylight > 0.6 && h > 7 && h < 17.5) { this.wasRaining = false; this.bowT = 45; }
-    else if (env.weatherKind !== 'rain') this.wasRaining = false;
+    else if (this.wasRaining && env.weatherKind !== 'rain' && sunny && !snowing && env.daylight > 0.6 && h > 7 && h < 17.5) { this.wasRaining = false; this.bowT = 45; }
+    else if (env.weatherKind !== 'rain' && env.wantKind !== 'rain') this.wasRaining = false;
     if (snowing) this.bowT = Math.min(this.bowT, 6);
     this.bowT = Math.max(0, this.bowT - dt);
-    const bowA = smoothstep(0, 8, this.bowT) * smoothstep(45, 40, this.bowT) * env.daylight;
+    // il se tient à l'opposé du soleil : on ne le voit qu'en lui tournant le dos (pâle quand on regarde de côté), et il pâlit
+    // si les nuages reviennent
+    const cp = camera.position, fwd = new THREE.Vector3(focus.x - cp.x, 0, focus.z - cp.z).normalize();
+    const anti = env.sun ? new THREE.Vector3(env.sun.target.position.x - env.sun.position.x, 0, env.sun.target.position.z - env.sun.position.z) : fwd.clone();
+    if (anti.lengthSq() < 1e-6) anti.copy(fwd); else anti.normalize();
+    const facing = smoothstep(-0.1, 0.6, fwd.dot(anti));
+    const bowA = smoothstep(0, 8, this.bowT) * smoothstep(45, 40, this.bowT) * env.daylight * (1 - overcast) * facing;
     this.bow.visible = false;
     if (bowA > 0.01) {
       this.bowU.uAlpha.value = bowA;
-      // au loin dans l'axe de la vue, son sommet dans le haut de l'image (la vue plongeante montre peu de ciel)
-      const cp = camera.position, fwd = new THREE.Vector3(focus.x - cp.x, 0, focus.z - cp.z).normalize(), D = 130;
+      // au loin, dans la direction opposée au soleil (ramenée vers l'axe de la vue), dans le ciel : il paraît dès que la vue
+      // montre un peu de ciel au-dessus de l'horizon, son sommet sous le haut de l'image, ses pieds sous l'horizon (un arc
+      // entier, non un bout d'arc coupé en l'air) ; la vue plongeante, qui ne montre pas le ciel, ne le montre pas
+      const D = 130, R = D * 0.75;
+      fwd.lerp(anti, 0.6).normalize();
       const down = Math.asin(clamp((cp.y - focus.y) / Math.max(1e-3, cp.distanceTo(focus)), -1, 1));
-      const half = THREE.MathUtils.degToRad((camera as THREE.PerspectiveCamera).fov / 2), R = D * 0.62;
-      const apex = cp.y + Math.tan(half * 0.55 - down) * D;
-      this.bow.visible = apex > 4;
+      const half = THREE.MathUtils.degToRad((camera as THREE.PerspectiveCamera).fov / 2), sky = half - down;
+      const apex = cp.y + Math.tan(Math.min(0.45, Math.max(0.02, sky * 0.75))) * D;
+      this.bow.visible = sky > 0.004;
+      this.bowU.uAlpha.value = bowA * smoothstep(0.004, 0.04, sky);
       this.bow.position.set(cp.x + fwd.x * D, apex - R, cp.z + fwd.z * D);
       this.bow.scale.setScalar(R);
       this.bow.lookAt(cp.x, apex - R, cp.z);

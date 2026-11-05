@@ -49,7 +49,6 @@ interface Entry {
   face: number;
   aimed: boolean;
   /** murs de soutènement du port côté terre et terre-plein qui couvre le talus, et pour quel terrain */
-  retain?: { key: string; mesh: THREE.Mesh | null } | null;
   /** lieu de rencontre posé sur la pente : son modèle épouse le sol (géométries propres à ce bâtiment), et pour quel sol */
   draped?: { key: string; body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; crowd: THREE.BufferGeometry | null } | null;
 }
@@ -76,8 +75,6 @@ function drape(geo: THREE.BufferGeometry, w: World, cx: number, cz: number, ry: 
 const PLINTH_MAT = new THREE.MeshStandardMaterial({ color: 0x7d766c, roughness: 1, flatShading: true });
 /** Butte de terre sous un enclos posé en pente */
 const EARTH_MAT = new THREE.MeshStandardMaterial({ color: 0x8a6f52, roughness: 1, flatShading: true });
-/** perré du port (pierres du talus) */
-const RETAIN_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true, side: THREE.DoubleSide });
 /** Butte de terre battue sous les huttes et les abris des premiers âges (pas de fondation de pierre) */
 const MOUND_MAT = new THREE.MeshStandardMaterial({ color: 0x9c7c58, roughness: 1, flatShading: true });
 /** Pied rocheux de l'acropole : son rocher se prolonge jusqu'au sol, jamais une fondation de pierre taillée */
@@ -118,57 +115,7 @@ export class BuildingView implements WorldListener {
     this.onReset();
   }
 
-  private disposeEntry(e: Entry) { this.group.remove(e.group); e.plinth?.geometry.dispose(); this.undrape(e); this.unretain(e); }
-
-  private unretain(e: Entry) {
-    if (e.retain?.mesh) { this.group.remove(e.retain.mesh); e.retain.mesh.geometry.dispose(); }
-    e.retain = null;
-  }
-
-  /**
-   * Le port, côté terre : son quai est au ras de l'eau ; là où le terrain libre d'à côté monte plus haut, le talus est pavé
-   * d'un perré de pierres qui épouse exactement le sol (pas devant une route qui descend au quai, ni sous un voisin bâti)
-   */
-  private retain(e: Entry, base: number) {
-    const b = e.b, w = this.world, s = sizeOf(b), x0 = b.x, z0 = b.z, sea = FRONT[((b.rot % 4) + 4) % 4];
-    const free = (cx: number, cz: number) => w.inCells(cx, cz) && !w.occ[w.ci(cx, cz)] && !w.road[w.ci(cx, cz)] && !w.isWet(cx, cz);
-    const cells: [number, number][] = [];
-    let key = `${base.toFixed(3)}`;
-    for (let z = z0 - 1; z <= z0 + s; z++) for (let x = x0 - 1; x <= x0 + s; x++) {
-      if (x >= x0 && x < x0 + s && z >= z0 && z < z0 + s) continue;
-      // pas du côté de l'eau
-      const ox = x < x0 ? -1 : x >= x0 + s ? 1 : 0, oz = z < z0 ? -1 : z >= z0 + s ? 1 : 0;
-      if ((ox && ox === sea[0]) || (oz && oz === sea[1])) continue;
-      const hs = [w.h(x, z), w.h(x + 1, z), w.h(x, z + 1), w.h(x + 1, z + 1)], hi = Math.max(...hs), lo = Math.min(...hs);
-      const on = free(x, z) && hi > base + 0.1 && hi - lo > 0.12;
-      key += on ? `|${hs.map((h) => h.toFixed(3)).join(',')}` : '|-';
-      if (on) cells.push([x, z]);
-    }
-    if (e.retain?.key === key) return;
-    this.unretain(e);
-    e.retain = { key, mesh: null };
-    if (!cells.length) return;
-    // chaque case du talus : une grille calée sur celle du relief (deux sous-carreaux par côté de case, coupés selon la même
-    // diagonale), un peu au-dessus, une pierre d'une teinte par carreau
-    const pos: number[] = [], col: number[] = [], STONE = [0x9d9282, 0x8f8576, 0xa89e8e, 0x958a7a].map((c) => new THREE.Color(c)), n = 8;
-    for (const [cx, cz] of cells) {
-      const y = (i: number, j: number) => w.hAt(cx + i / n, cz + j / n) + 0.012;
-      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-        const c = STONE[hash2(cx * n + i, cz * n + j, 91) * STONE.length | 0];
-        const p00 = [cx + i / n, y(i, j), cz + j / n], p10 = [cx + (i + 1) / n, y(i + 1, j), cz + j / n];
-        const p01 = [cx + i / n, y(i, j + 1), cz + (j + 1) / n], p11 = [cx + (i + 1) / n, y(i + 1, j + 1), cz + (j + 1) / n];
-        for (const p of [p00, p11, p10, p00, p01, p11]) { pos.push(...p); col.push(c.r, c.g, c.b); }
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, RETAIN_MAT);
-    mesh.receiveShadow = true;
-    this.group.add(mesh);
-    e.retain.mesh = mesh;
-  }
+  private disposeEntry(e: Entry) { this.group.remove(e.group); e.plinth?.geometry.dispose(); this.undrape(e); }
 
 
   /** Rend au bâtiment son modèle partagé (et libère sa copie déformée) */
@@ -328,8 +275,6 @@ export class BuildingView implements WorldListener {
     const quay = b.kind === 'harbor';
     const base = quay ? hs[hs.length - 1] : low ? lo : drapes ? median : open ? Math.max(lo, median - 0.08) : raised ? hs[hs.length - 1] : early ? (median + lo) / 2 : median;
     e.group.position.set(b.x + s / 2, base, b.z + s / 2);
-    if (quay) this.retain(e, base);
-    else if (e.retain) this.unretain(e);
     const ph = low || drapes || quay || base - lo < 0.03 ? 0 : base - lo + 0.05;
     if (drapes) {
       const dk = `${e.key}|${b.rot}|${hs.join(',')}`;
