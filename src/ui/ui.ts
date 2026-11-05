@@ -826,6 +826,22 @@ export class UI {
     this.toastTimer = window.setTimeout(hide, act ? 12000 : 2600);
   }
 
+  /** Fenêtre d'un nouvel âge : les bâtiments qui apparaissent, chacun à bâtir d'un clic (et ses améliorations) */
+  showNewAge(age: number) {
+    const fresh = KIND_ORDER.filter((k) => KINDS[k].minAge === age && !this.lockOf(k));
+    if (!fresh.length) return;
+    const tile = (k: KindId) => `<button class="newKind" data-kind="${k}" title="${this.host.sim.whereOf(k)}"><b>${ic(KIND_ICON[k], 26, 1.6)}</b><span>${KINDS[k].names[age]}</span><small>${BUILD_CATS.find((c) => c.id === KINDS[k].cat)!.label}</small></button>`;
+    const { ov, close } = modal(this.root, 'newAge', `${ic('up', 22)} ${AGES[age].name}`, `
+      <p class="hint">${AGES[age].tagline}. Nouveaux bâtiments à votre disposition :</p>
+      <div class="newKinds">${fresh.map(tile).join('')}</div>
+      <div class="row"><span class="grow"></span><button class="active ok">C’est parti</button></div>`);
+    $('.ok', ov).onclick = close;
+    ov.addEventListener('click', (e) => {
+      const k = (e.target as HTMLElement).closest<HTMLElement>('.newKind')?.dataset.kind as KindId | undefined;
+      if (k) { close(); this.pick(k); }
+    });
+  }
+
   banner(title: string, sub: string) {
     const b = $('#banner');
     $('h2', b).textContent = title;

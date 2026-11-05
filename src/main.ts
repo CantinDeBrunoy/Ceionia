@@ -332,6 +332,8 @@ class Game implements UIHost {
       // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
       this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
+      // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
+      setTimeout(() => this.ui.showNewAge(age), 1800);
       audio.sfxAgeUp();
       // le sol des jardins change avec eux
       this.terrain.gardenAge = age;
