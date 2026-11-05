@@ -8482,66 +8482,167 @@ function fusion(p: Parts) {
 /** Où se dresse la fusée sur le pas de tir du cosmodrome (repère du modèle) : la scène de lancement l'y pose */
 export const SPACEPAD: [number, number, number] = [-0.85, 0.13, -0.75];
 
+/** Mât en treillis de hauteur h posé en (x, y0, z), de section `s` : quatre montants, ceintures et croisillons */
+function lattice(p: Parts, x: number, y0: number, z: number, s: number, h: number, color: number, brace = 0xd8d8d8, step = 0.2) {
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.02, h, 0.02, x + sx * s / 2, y0, z + sz * s / 2, color);
+  for (let y = y0 + step; y < y0 + h; y += step) {
+    for (const sz of [-1, 1]) p.box(s, 0.01, 0.01, x, y, z + sz * s / 2, brace);
+    for (const sx of [-1, 1]) p.box(0.01, 0.01, s, x + sx * s / 2, y, z, brace);
+    const k = Math.round((y - y0) / step) % 2 ? 1 : -1, L = Math.hypot(s, step);
+    for (const sz of [-1, 1]) p.add(new THREE.BoxGeometry(0.007, L, 0.007), x, y - step / 2, z + sz * s / 2, brace, 0, false, k * Math.atan2(s, step));
+    for (const sx of [-1, 1]) p.add(new THREE.BoxGeometry(0.007, L, 0.007), x + sx * s / 2, y - step / 2, z, brace, 0, false, 0, -k * Math.atan2(s, step));
+  }
+}
+
+/** Camion (avant vers +x une fois tourné de ry) : cabine, châssis et roues ; `load` dessine son chargement sur le plateau */
+function truck(p: Parts, x: number, z: number, ry: number, cab: number, len: number, load?: (cx: number, cz: number) => void) {
+  const c = Math.cos(ry), s = Math.sin(ry), at = (u: number): [number, number] => [x + u * c, z - u * s];
+  let [px, pz] = at(len / 2 - 0.05);
+  p.box(0.09, 0.08, 0.11, px, 0.03, pz, cab, ry); p.box(0.02, 0.035, 0.1, px + c * 0.045, 0.07, pz - s * 0.045, 0x9fc4dc, ry);
+  [px, pz] = at(-0.03);
+  p.box(len - 0.1, 0.02, 0.1, px, 0.035, pz, 0x3c3c40, ry);
+  for (let u = -len / 2 + 0.06; u < len / 2; u += Math.max(0.08, (len - 0.1) / 4)) {
+    [px, pz] = at(u);
+    for (const d of [-0.05, 0.05]) p.add(new THREE.CylinderGeometry(0.022, 0.022, 0.016, 8).rotateX(Math.PI / 2), px - s * d, 0.026, pz - c * d, 0x1e1e22, ry);
+  }
+  if (load) { [px, pz] = at(-0.05); load(px, pz); }
+}
+
 /**
- * Cosmodrome (4 × 4) : le pas de tir octogonal et sa tranchée des flammes, la tour de lancement en treillis et ses bras,
- * les paratonnerres, les sphères d'ergols ; le grand hall d'assemblage où l'on devine la prochaine fusée par sa porte
- * ouverte ; une fusée-sonde sur le petit pas de tir ; le centre de contrôle et ses paraboles ; la route des convois
+ * Cosmodrome (4 × 4, entrée vers +z) : le grand pas de tir octogonal, sa tranchée des flammes et son déflecteur, le château
+ * d'eau du déluge, la tour ombilicale en treillis rouge, ses bras d'accès, son ascenseur et sa grue, les paratonnerres, les
+ * sphères d'ergols et leurs conduites, les projecteurs. Le hall d'assemblage, haut comme une cathédrale, ses portes hautes
+ * entrouvertes sur un étage, son emblème et ses nervures ; sur la voie des chenilles, le transbordeur qui mène au pas de tir
+ * la grande fusée debout. Le petit pas de tir de la fusée-sonde et son portique ; la grande antenne de poursuite, les
+ * radômes, le champ d'antennes ; le centre de contrôle et sa salle vitrée ; la route des convois (étage couché sur sa
+ * remorque, citerne, car des astronautes), le parking et les visiteurs
  */
 function spaceport(p: Parts) {
-  p.box(3.92, 0.012, 3.92, 0, 0, 0, 0xb8bcc0);
-  p.box(0.42, 0.006, 2.6, 0.15, 0.012, 0.6, 0x5a5e64);
-  p.box(1.8, 0.006, 0.42, -0.6, 0.012, -0.25, 0x5a5e64);
-  for (let z = -0.6; z < 1.9; z += 0.25) p.box(0.02, 0.002, 0.1, 0.15, 0.019, z, 0xf2f2f2);
-  // le pas de tir
+  const APRON = 0xc4c8cc, ROAD = 0x5a5e64, TOWER = 0xc8443a, CONC = 0xd8dadc;
+  // le sol : herbe rase (le vrai sol) entre les dalles, la voie des chenilles, les routes
+  p.box(3.9, 0.006, 3.9, 0, 0, 0, 0x9ab87e);
   const [px, , pz] = SPACEPAD;
-  p.cyl(0.62, 0.7, 0.13, 8, px, 0.012, pz, 0xd0d2d4, false, Math.PI / 8);
-  p.box(0.3, 0.14, 0.9, px - 0.62, 0, pz, 0x4a4e54); p.box(0.22, 0.02, 0.86, px - 0.62, 0.13, pz, 0x2a2a2e);
-  p.cyl(0.15, 0.15, 0.012, 10, px, 0.142, pz, 0x3a3a3e);
-  neonRing(p, 0.62, 0.145, px, pz, F.gold, 0.006);
-  // la tour de lancement : quatre montants, croisillons, bras ombilicaux, la grue au sommet
-  const tx = px + 0.4, tz = pz - 0.04, TH = 2.3;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.022, TH, 0.022, tx + sx * 0.08, 0.14, tz + sz * 0.08, 0xc8443a);
-  for (let y = 0.3; y < TH; y += 0.22) {
-    for (const sz of [-1, 1]) p.box(0.18, 0.012, 0.012, tx, y, tz + sz * 0.08, 0xd8d8d8);
-    for (const sx of [-1, 1]) p.box(0.012, 0.012, 0.18, tx + sx * 0.08, y, tz, 0xd8d8d8);
-    p.add(new THREE.BoxGeometry(0.008, 0.25, 0.008), tx - 0.08, y + 0.1, tz, 0xd8d8d8, 0, false, 0, 0.6);
+  p.box(2.1, 0.008, 0.5, -0.05, 0.006, pz, 0x9a8a72);
+  for (const d of [-0.15, 0.15]) p.box(2.1, 0.01, 0.13, -0.05, 0.006, pz + d, 0xb4a88e);
+  p.box(3.9, 0.008, 0.3, 0, 0.006, 1.75, ROAD);
+  for (let x = -1.8; x < 1.9; x += 0.25) p.box(0.12, 0.002, 0.016, x, 0.014, 1.75, 0xf2f2f2);
+  p.box(0.24, 0.008, 1.0, 0.45, 0.006, 1.1, ROAD);
+  // le pas de tir : la dalle octogonale, le socle de la fusée, la tranchée des flammes et son déflecteur
+  p.cyl(0.66, 0.74, 0.13, 8, px, 0.006, pz, CONC, false, Math.PI / 8);
+  p.cyl(0.62, 0.62, 0.006, 8, px, 0.136, pz, APRON, false, Math.PI / 8);
+  p.cyl(0.18, 0.2, 0.012, 12, px, 0.136, pz, 0x3a3a3e);
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; p.box(0.05, 0.04, 0.05, px + Math.cos(a) * 0.22, 0.136, pz + Math.sin(a) * 0.22, 0x5a5e64); }
+  neonRing(p, 0.64, 0.144, px, pz, F.gold, 0.006);
+  p.box(0.42, 0.14, 0.34, px - 0.66, 0.0, pz, 0x4a4e54); p.box(0.36, 0.02, 0.3, px - 0.66, 0.13, pz, 0x2a2a2e);
+  p.add(new THREE.BoxGeometry(0.3, 0.02, 0.32), px - 0.52, 0.09, pz, 0x6a6e74, 0, false, -0.5);
+  p.box(0.2, 0.006, 0.4, px - 0.95, 0.006, pz, 0x5a5048);
+  // les conduites d'ergols, des sphères au socle
+  const spheres: [number, number, number][] = [[0.0, -1.66, 0xf4f2ee], [0.36, -1.66, 0xe8eaee]];
+  for (const [sx, sz] of spheres) gasSphere(p, sx, sz, 0.14, 0.006);
+  p.add(new THREE.TorusGeometry(0.14, 0.008, 3, 18).rotateX(Math.PI / 2), 0.36, 0.2, -1.66, 0xd8443a);
+  pipeRun(p, [[0.0, 0.05, -1.48], [0.0, 0.05, -1.3], [px + 0.3, 0.05, -1.3], [px + 0.3, 0.05, pz - 0.5]], 0.018, 0xd8d8d8);
+  pipeRun(p, [[0.36, 0.08, -1.48], [0.36, 0.08, -1.26], [px + 0.36, 0.08, -1.26], [px + 0.36, 0.08, pz - 0.5]], 0.014, 0xe8c040);
+  // la tour ombilicale derrière la fusée : treillis rouge, cabine d'ascenseur, bras d'accès, plateformes, grue et feu
+  const tx = px, tz = pz - 0.44, TH = 2.4;
+  lattice(p, tx, 0.136, tz, 0.2, TH, TOWER);
+  p.box(0.07, 0.1, 0.07, tx + 0.13, 0.7, tz, 0xf2c23a);
+  p.box(0.012, TH, 0.012, tx + 0.13, 0.136, tz - 0.03, 0x9aa0a8);
+  for (const [y, len] of [[0.7, 0.26], [1.15, 0.24], [1.55, 0.22], [1.95, 0.2]] as number[][]) {
+    p.box(0.26, 0.012, 0.26, tx, y - 0.02, tz, 0x9aa0a8);
+    p.box(0.05, 0.04, len, tx, y, tz + 0.1 + len / 2, 0x9aa0a8); p.box(0.07, 0.06, 0.04, tx, y - 0.01, tz + 0.12 + len, F.dark);
+    p.box(0.054, 0.006, len, tx, y + 0.04, tz + 0.1 + len / 2, 0xf2c23a);
   }
-  for (const [y, len] of [[0.9, 0.3], [1.35, 0.3], [1.75, 0.26]]) { p.box(len, 0.04, 0.05, tx - len / 2 - 0.06, y, tz, 0x9aa0a8); p.box(0.03, 0.06, 0.06, tx - len - 0.06, y - 0.01, tz, F.dark); }
-  p.box(0.22, 0.05, 0.22, tx, TH + 0.14, tz, 0xc8443a); p.box(0.5, 0.03, 0.03, tx - 0.15, TH + 0.2, tz, 0xd8d8d8);
-  p.sphere(0.02, tx, TH + 0.24, tz, 0xff4a3a);
-  for (const [x, z] of [[px - 0.55, pz - 0.55], [px + 0.5, pz + 0.55], [px - 0.5, pz + 0.6]]) { p.cyl(0.008, 0.016, 2.0, 5, x, 0.012, z, 0xd8d8d8); p.sphere(0.014, x, 2.02, z, 0xff4a3a); }
-  for (const [x, z] of [[px + 0.15, pz + 0.95], [px + 0.45, pz + 0.95]]) { p.sphere(0.13, x, 0.24, z, F.white, 1); for (const s of [-1, 1]) p.box(0.012, 0.13, 0.012, x + s * 0.08, 0.012, z, F.steel); }
-  // le hall d'assemblage : porte ouverte sur la prochaine fusée
-  const hx = 1.0, hz = -1.0;
-  p.box(0.96, 0.006, 0.86, hx, 0.012, hz, 0x4a4e54);
-  p.box(1.0, 1.7, 0.05, hx, 0.012, hz - 0.425, 0x8a929c);
-  for (const s of [-1, 1]) p.box(0.05, 1.7, 0.9, hx + s * 0.475, 0.012, hz, F.white);
-  p.box(0.27, 1.7, 0.05, hx - 0.385, 0.012, hz + 0.425, F.white); p.box(0.33, 1.7, 0.05, hx + 0.335, 0.012, hz + 0.425, F.white);
-  p.box(0.42, 0.26, 0.05, hx - 0.04, 1.45, hz + 0.425, F.white);
-  // l'étage sur son berceau, les passerelles de travail
-  p.cyl(0.13, 0.13, 0.9, 14, hx - 0.04, 0.1, hz - 0.05, F.white);
-  for (const y of [0.3, 0.75]) p.cyl(0.132, 0.132, 0.06, 14, hx - 0.04, y, hz - 0.05, 0x26262a);
-  for (const [bx, bz] of [[0, 0], [0.07, 0.07], [-0.07, 0.07], [0.07, -0.07], [-0.07, -0.07]]) p.cyl(0.015, 0.04, 0.08, 8, hx - 0.04 + bx, 0.02, hz - 0.05 + bz, 0x3c3c40);
-  for (const y of [0.55, 1.05]) for (const s of [-1, 1]) p.box(0.2, 0.02, 0.3, hx - 0.04 + s * 0.25, y, hz - 0.05, 0xf2c23a);
-  for (let y = 0.25; y < 1.7; y += 0.25) for (const s of [-1, 1]) p.box(0.006, 0.012, 0.9, hx + s * 0.501, y, hz, F.pearl);
-  p.box(0.3, 0.3, 0.006, hx + 0.32, 1.25, hz + 0.453, 0x3a6ab8); p.box(0.22, 0.05, 0.007, hx + 0.32, 1.38, hz + 0.454, F.white);
-  p.box(1.02, 0.04, 0.92, hx, 1.71, hz, 0xd8dde2);
-  p.box(0.24, 0.006, 0.006, hx + 0.32, 1.08, hz + 0.455, F.neon, 0, 'neon');
-  // la fusée-sonde sur le petit pas de tir
-  const sx = 1.35, sz = 0.95;
-  p.cyl(0.2, 0.22, 0.06, 8, sx, 0.012, sz, 0xd0d2d4);
-  drawRocket(p, 'probe', sx, 0.07, sz);
-  for (const s of [-1, 1]) p.box(0.02, 0.9, 0.02, sx + s * 0.13, 0.07, sz, F.steel);
-  // le centre de contrôle et ses paraboles
-  const cx = -0.8, cz = 1.15;
-  p.box(1.1, 0.34, 0.5, cx, 0.012, cz, F.white); p.box(1.06, 0.14, 0.504, cx, 0.15, cz, F.glass, 0, true);
-  p.add(new THREE.CylinderGeometry(0.26, 0.26, 1.1, 12, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.3, 1), cx, 0.35, cz, F.pearl);
-  for (const [x, a] of [[cx - 0.3, 0.6], [cx + 0.3, -0.5]]) {
-    p.cyl(0.012, 0.02, 0.18, 6, x, 0.42, cz - 0.05, F.steel);
-    p.add(new THREE.SphereGeometry(0.13, 10, 4, 0, Math.PI * 2, 0, Math.PI / 3).rotateX(Math.PI).rotateX(-0.8), x, 0.72, cz - 0.05, F.white, a);
+  p.box(0.26, 0.05, 0.26, tx, TH + 0.136, tz, TOWER);
+  { const cr = turning([tx, TH + 0.19, tz], [0, 1, 0], 0.01); cr.box(0.04, 0.12, 0.04, 0, 0, 0, 0xf2c23a); cr.box(0.62, 0.035, 0.035, 0.18, 0.12, 0, 0xf2c23a); cr.box(0.08, 0.06, 0.06, -0.14, 0.09, 0, 0x5a5e64); cr.box(0.004, 0.2, 0.004, 0.45, -0.08, 0, 0x3c3c40); }
+  p.sphere(0.02, tx, TH + 0.36, tz, 0xff4a3a);
+  // le château d'eau du déluge
+  { const wx = -1.62, wz = -1.55; for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.cyl(0.012, 0.016, 0.9, 5, wx + sx * 0.12, 0.006, wz + sz * 0.12, 0x8a929c); p.cyl(0.17, 0.17, 0.32, 14, wx, 0.9, wz, 0xe8eaee); p.cone(0.18, 0.08, 14, wx, 1.22, wz, 0xd8dce2); p.cyl(0.172, 0.172, 0.04, 14, wx, 1.0, wz, 0x3a6ab8); pipeRun(p, [[wx, 0.9, wz], [wx, 0.05, wz + 0.1], [px - 0.4, 0.05, pz - 0.3]], 0.016, 0x8a929c); }
+  // les paratonnerres et les projecteurs
+  for (const [x, z] of [[px - 0.6, pz - 0.6], [px + 0.62, pz - 0.5], [px - 0.55, pz + 0.62]]) { p.cyl(0.008, 0.02, 2.4, 5, x, 0.006, z, 0xd8d8d8); p.cyl(0.002, 0.004, 0.2, 3, x, 2.4, z, 0x8a929c); p.sphere(0.014, x, 2.6, z, 0xff4a3a); }
+  for (const [x, z] of [[px + 0.75, pz + 0.55], [px - 0.8, pz + 0.3]]) floodlight(p, x, z, 0.8);
+  // le hall d'assemblage, ses portes hautes entrouvertes (vers le pas de tir), ses nervures, son emblème
+  const hx = 1.2, hz = -0.9, HH = 2.0, hw = 1.1, hd = 1.2;
+  p.box(hw, HH, hd, hx, 0.006, hz, 0xe4e6e8);
+  p.box(hw + 0.02, 0.05, hd + 0.02, hx, HH, hz, 0xc8ccd0);
+  for (let z = hz - hd / 2 + 0.1; z < hz + hd / 2; z += 0.2) for (const s of [-1, 1]) p.box(0.02, HH, 0.03, hx + s * (hw / 2 + 0.008), 0.006, z, 0xc8ccd0);
+  for (let x = hx - hw / 2 + 0.1; x < hx + hw / 2; x += 0.2) p.box(0.03, HH, 0.02, x, 0.006, hz + hd / 2 + 0.008, 0xc8ccd0);
+  // les portes : deux vantaux hauts striés, entrouverts sur l'étage dressé dans le hall
+  const dx = hx - hw / 2 - 0.012;
+  p.box(0.006, HH * 0.86, 0.5, dx - 0.004, 0.006, hz, 0x1a1c20);
+  for (const s of [-1, 1]) {
+    p.box(0.02, HH * 0.86, 0.14, dx - 0.01, 0.006, hz + s * 0.2, 0x8a929c);
+    for (let y = 0.15; y < HH * 0.86; y += 0.15) p.box(0.024, 0.01, 0.14, dx - 0.012, y, hz + s * 0.2, 0x6a7280);
   }
-  holoSign(cx, 0.6, cz + 0.3, 1.1, F.neon);
-  for (const [x, z, c, r] of [[cx - 0.2, cz + 0.4, 0xf4f6f8, 0], [cx + 0.25, cz + 0.42, 0x9fe8f0, 0.5], [0.5, 0.3, 0xf2c23a, 1.8]] as number[][]) figure(p, x, z, c, r);
+  p.cyl(0.11, 0.11, 1.3, 14, dx + 0.2, 0.06, hz, F.white);
+  for (const y of [0.4, 0.95]) p.cyl(0.112, 0.112, 0.05, 14, dx + 0.2, y, hz, 0x26262a);
+  for (const y of [0.5, 1.0, 1.4]) p.box(0.08, 0.016, 0.34, dx + 0.06, y, hz, 0xf2c23a);
+  p.box(0.12, HH * 0.86 + 0.04, 0.02, dx - 0.01, 0.006, hz - 0.29, 0x9aa0a8); p.box(0.12, HH * 0.86 + 0.04, 0.02, dx - 0.01, 0.006, hz + 0.29, 0x9aa0a8);
+  // l'emblème sur la façade (vers +z) et le drapeau peint, le liseré lumineux, la grue du toit
+  p.box(0.4, 0.4, 0.008, hx - 0.2, 1.3, hz + hd / 2 + 0.02, 0x2a4a8a); p.cyl(0.14, 0.14, 0.01, 16, hx - 0.2, 1.5, hz + hd / 2 + 0.024, F.white, false, 0);
+  p.add(new THREE.CylinderGeometry(0.14, 0.14, 0.012, 16).rotateX(Math.PI / 2), hx - 0.2, 1.5, hz + hd / 2 + 0.026, F.white);
+  p.add(new THREE.TorusGeometry(0.1, 0.012, 4, 16, Math.PI * 1.4), hx - 0.2, 1.5, hz + hd / 2 + 0.034, 0xd8443a, 0, false, 0.6);
+  p.add(new THREE.ConeGeometry(0.03, 0.12, 4).rotateZ(-0.7), hx - 0.14, 1.53, hz + hd / 2 + 0.034, 0x2a4a8a);
+  for (let k = 0; k < 3; k++) p.box(0.1, 0.28, 0.008, hx + 0.22 + k * 0.1, 1.12, hz + hd / 2 + 0.02, [0x2a4a8a, F.white, 0xd8443a][k]);
+  p.box(hw, 0.012, 0.008, hx, 0.3, hz + hd / 2 + 0.024, F.neon, 0, 'neon');
+  for (const [x, z] of [[hx + 0.2, hz - 0.3], [hx + 0.35, hz + 0.25]]) hvac(p, x, HH + 0.05, z, 0.14);
+  // l'annexe basse des bureaux du hall
+  p.box(0.6, 0.4, 0.4, hx + 0.1, 0.006, hz + hd / 2 + 0.24, 0xd8dce2);
+  for (const y of [0.1, 0.24]) p.box(0.58, 0.08, 0.006, hx + 0.1, y, hz + hd / 2 + 0.442, 0x9fd0e4, 0, true);
+  // le transbordeur à chenilles et la grande fusée debout qui part vers le pas de tir
+  const cx = 0.22, cz = pz;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    p.box(0.16, 0.07, 0.12, cx + sx * 0.18, 0.006, cz + sz * 0.18, 0x5a5e64);
+    for (let u = -0.06; u <= 0.06; u += 0.03) p.box(0.01, 0.072, 0.124, cx + sx * 0.18 + u, 0.006, cz + sz * 0.18, 0x3a3c40);
+  }
+  p.box(0.56, 0.1, 0.56, cx, 0.076, cz, 0x8a929c);
+  p.box(0.6, 0.02, 0.6, cx, 0.176, cz, 0x6a7280);
+  for (const s of [-1, 1]) p.box(0.08, 0.06, 0.08, cx + s * 0.25, 0.196, cz + 0.25, 0xd8dce2);
+  drawRocket(p, 'moon', cx, 0.196, cz);
+  lattice(p, cx + 0.2, 0.196, cz - 0.2, 0.08, 1.55, 0xd8443a, 0xd8d8d8, 0.25);
+  for (const y of [0.9, 1.4]) p.box(0.03, 0.03, 0.14, cx + 0.14, y, cz - 0.12, 0x9aa0a8, -0.8);
+  // le petit pas de tir de la fusée-sonde et son portique
+  const sx = 1.38, sz = 0.88;
+  p.cyl(0.22, 0.24, 0.06, 8, sx, 0.006, sz, CONC, false, Math.PI / 8);
+  drawRocket(p, 'probe', sx, 0.066, sz);
+  lattice(p, sx + 0.15, 0.066, sz, 0.08, 1.15, 0x8a929c, 0xc8ccd0, 0.23);
+  for (const y of [0.55, 0.95]) p.box(0.1, 0.02, 0.03, sx + 0.08, y, sz, 0xf2c23a);
+  // la grande antenne de poursuite, tournée vers le ciel, qui suit lentement la fusée
+  const ax = 0.6, az = 0.45;
+  p.cyl(0.12, 0.16, 0.2, 8, ax, 0.006, az, 0xd8dce2); p.cyl(0.05, 0.07, 0.2, 8, ax, 0.206, az, 0xc8ccd0);
+  {
+    const dish = turning([ax, 0.44, az], [0, 1, 0], 0.02);
+    for (const s of [-1, 1]) dish.box(0.03, 0.14, 0.06, s * 0.1, -0.04, 0, 0xc8ccd0);
+    dish.add(new THREE.CylinderGeometry(0.34, 0.1, 0.12, 16).translate(0, 0.08, 0).rotateX(-0.8), 0, 0.02, 0, F.white);
+    dish.add(new THREE.CircleGeometry(0.31, 16).rotateX(-Math.PI / 2).translate(0, 0.141, 0).rotateX(-0.8), 0, 0.02, 0, 0xd8dce2);
+    for (let k = 0; k < 3; k++) { const a = k * 2.094; dish.add(new THREE.CylinderGeometry(0.004, 0.004, 0.26, 3).rotateX(-0.8 + Math.cos(a) * 0.5).rotateZ(Math.sin(a) * 0.5), Math.sin(a) * 0.06, 0.15, 0.06, 0x8a929c); }
+    dish.sphere(0.02, 0, 0.24, 0.2, 0x8a929c);
+  }
+  // les radômes et le champ d'antennes
+  for (const [x, z, r] of [[-1.62, 0.15, 0.2], [-1.62, 0.62, 0.15], [-1.25, 0.32, 0.12]]) { p.cyl(r * 0.9, r, r * 0.6, 10, x, 0.006, z, 0xd8dce2); p.add(new THREE.IcosahedronGeometry(r, 1).scale(1, 1, 1), x, r * 0.6 + r * 0.7, z, F.white); }
+  for (let k = 0; k < 4; k++) { const x = 0.9 + k * 0.16, z = 1.38; p.cyl(0.004, 0.008, 0.5 + (k % 2) * 0.2, 4, x, 0.006, z, 0x9aa0a8); for (const y of [0.3, 0.45]) p.box(0.1, 0.006, 0.006, x, y + (k % 2) * 0.1, z, 0x9aa0a8); }
+  // le centre de contrôle : deux étages, la salle vitrée en saillie qui regarde le pas de tir, paraboles, enseigne
+  const ccx = -0.6, ccz = 1.18;
+  p.box(1.1, 0.34, 0.46, ccx, 0.006, ccz, F.white);
+  for (const y of [0.05, 0.19]) p.box(1.06, 0.1, 0.006, ccx, y, ccz + 0.232, 0x9fd0e4, 0, true);
+  p.add(new THREE.BoxGeometry(0.5, 0.16, 0.24), ccx + 0.1, 0.36, ccz - 0.08, 0x6a9ab8, 0, true, 0, 0);
+  p.box(0.54, 0.02, 0.28, ccx + 0.1, 0.52, ccz - 0.08, F.white); p.box(0.54, 0.02, 0.28, ccx + 0.1, 0.34, ccz - 0.08, F.white);
+  p.box(1.12, 0.02, 0.48, ccx, 0.346, ccz, 0xd8dce2);
+  for (const [x, a] of [[ccx - 0.38, 0.6], [ccx + 0.45, -0.5]]) { p.cyl(0.01, 0.016, 0.18, 6, x, 0.36, ccz + 0.05, F.steel); p.add(new THREE.SphereGeometry(0.11, 10, 4, 0, Math.PI * 2, 0, Math.PI / 3).rotateX(Math.PI).rotateX(-0.8), x, 0.64, ccz + 0.05, F.white, a); }
+  holoSign(ccx - 0.1, 0.66, ccz + 0.1, 1.0, F.neon);
+  // la route des convois : l'étage couché sur sa remorque, la citerne d'ergols, le car des astronautes
+  truck(p, 0.9, 1.7, 0, 0xf2f2f2, 0.62, (lx, lz) => { p.add(new THREE.CylinderGeometry(0.075, 0.075, 0.46, 12).rotateZ(Math.PI / 2), lx, 0.12, lz, F.white); p.add(new THREE.CylinderGeometry(0.077, 0.077, 0.04, 12).rotateZ(Math.PI / 2), lx + 0.1, 0.12, lz, 0x26262a); for (const s of [-1, 1]) p.box(0.02, 0.05, 0.1, lx + s * 0.15, 0.045, lz, 0x6a7280); });
+  truck(p, -0.1, 1.8, Math.PI, 0x3a6ab8, 0.44, (lx, lz) => { p.add(new THREE.CapsuleGeometry(0.05, 0.22, 3, 8).rotateZ(Math.PI / 2), lx, 0.1, lz, 0xe8eaee); p.add(new THREE.CylinderGeometry(0.052, 0.052, 0.02, 8).rotateZ(Math.PI / 2), lx, 0.1, lz, 0xd8443a); });
+  // le car des astronautes et leur petite troupe en scaphandre blanc
+  p.box(0.3, 0.1, 0.12, 0.45, 0.02, 1.3, F.white); p.box(0.28, 0.035, 0.124, 0.45, 0.07, 1.3, 0x9fd0e4, 0, true);
+  for (const d of [-0.1, 0.1]) p.add(new THREE.CylinderGeometry(0.024, 0.024, 0.13, 8).rotateX(Math.PI / 2), 0.45 + d, 0.026, 1.3, 0x1e1e22);
+  for (let k = 0; k < 3; k++) figure(p, 0.3 + k * 0.08, 1.12, F.white, 0.2, false, 0xe8eaee);
+  // le parking et les visiteurs
+  p.box(0.6, 0.006, 0.3, -1.5, 0.006, 1.3, ROAD);
+  for (const [x, c] of [[-1.67, 0x3c7fd8], [-1.5, 0xe8c66a], [-1.33, 0xd8584e]] as number[][]) car(p, x, 1.3, 0, c, 0.012);
+  for (const [x, z, c, r] of [[ccx - 0.2, ccz + 0.36, 0xf4f6f8, 0], [ccx + 0.25, ccz + 0.38, 0x9fe8f0, 0.5], [-0.3, 0.9, 0xf2c23a, 2.4], [-0.15, 0.95, 0xd8786c, -2.6]] as number[][]) figure(p, x, z, c, r);
+  // la clôture du côté route
+  for (let x = -1.9; x < 1.95; x += 0.3) p.cyl(0.006, 0.006, 0.1, 4, x, 0.006, 1.55, 0x9aa0a8);
+  p.box(3.8, 0.006, 0.004, 0, 0.09, 1.55, 0x9aa0a8);
 }
 
 /**
