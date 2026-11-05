@@ -369,6 +369,7 @@ export class UI {
         </div>
       </footer>
       <div id="toast"></div>
+      <div id="cursorHint"></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
       <div id="photoBar" class="panel"><button id="pCap">${ic('camera', 18)} Capturer</button><button id="pExit">Quitter</button></div>
     `;
@@ -378,6 +379,7 @@ export class UI {
       const b = (e.target as HTMLElement).closest('button');
       if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
     });
+    window.addEventListener('pointermove', (e) => { this.cursorXY = [e.clientX, e.clientY]; }, { passive: true });
     root.addEventListener('wheel', (e) => {
       if (e.ctrlKey) return;
       for (let el = e.target as HTMLElement | null; el && el !== root; el = el.parentElement) {
@@ -842,6 +844,15 @@ export class UI {
     this.renderInfo();
   }
 
+  /** Route libre : une bulle suit le curseur et dit quoi cliquer (le point A, puis le point B) */
+  private cursorXY: [number, number] | null = null;
+  private hintTxt = '';
+  private renderCursorHint() {
+    const el = $('#cursorHint'), st = this.host.tools.freeStage, txt = st === 1 ? 'Cliquez le point A' : st === 2 ? 'Cliquez le point B' : '';
+    if (txt !== this.hintTxt) { this.hintTxt = txt; el.textContent = txt; el.classList.toggle('show', !!txt); el.classList.toggle('b', st === 2); }
+    if (txt && this.cursorXY) el.style.transform = `translate(${this.cursorXY[0] + 18}px, ${this.cursorXY[1] + 20}px)`;
+  }
+
   /** Message bref en haut de l'écran ; avec `act`, un clic dessus y mène (il reste alors affiché plus longtemps) */
   toast(msg: string, act?: () => void) {
     const t = $('#toast');
@@ -883,6 +894,7 @@ export class UI {
   update() {
     const { sim, time, env } = this.host;
     this.renderRailEdit();
+    this.renderCursorHint();
     if (sim.age !== this.lastAge) { this.lastAge = sim.age; this.renderItems(); }
     // les vignettes suivent le village : un bâtiment de plus ou de moins, un cadenas levé par une expédition
     else if (this.tilesNow() !== this.tilesKey) this.renderItems(true);
