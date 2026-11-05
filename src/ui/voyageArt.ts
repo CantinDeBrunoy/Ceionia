@@ -401,7 +401,7 @@ function surfaceScene(c: CanvasRenderingContext2D, u: number, t: number): string
     const kk = clamp(walk * 1.8 - i * 0.12);
     if (kk <= 0) continue;
     const e = smooth(kk), x0 = ex + 4, x = x0 + (fx + spots[i][0] - x0) * e, y = ly + 1 + spots[i][1] * e - (kk < 1 ? Math.abs(Math.sin(t * 9 + i)) * 2.5 : 0);
-    settler(c, x, y, 1.45, cols[i], t * 9 + i, kk >= 1 && u > 0.9 ? 1 : 0, x < fx + spots[i][0] - 1 ? 1 : (i % 2 ? -1 : 1));
+    settler(c, x, y, 1.8, cols[i], t * 9 + i, kk >= 1 && u > 0.9 ? 1 : 0, x < fx + spots[i][0] - 1 ? 1 : (i % 2 ? -1 : 1));
   }
   if (u > 0.87) campfire(c, fx, ly, clamp((u - 0.87) / 0.04), t);
   // un voile chaud sur l'image quand le feu prend, puis le noir final
