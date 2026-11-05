@@ -7,13 +7,15 @@ import { hash2, mulberry32 } from '../core/rng';
 import { Parts } from './parts';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { CH, NC } from './vegetation';
+import { makeBeast, BEAST_KINDS, GESTURES, beastYaw, BeastKind } from './beasts';
 
 type Kind = 'sheep' | 'cow' | 'pig' | 'hen' | 'rabbit' | 'deer' | 'horse' | 'llama' | 'fox' | 'wolf' | 'frog'
   | 'duck' | 'duckling' | 'bird' | 'songbird' | 'bee' | 'butterfly' | 'bat' | 'fish' | 'dolphin' | 'whale' | 'manta'
   | 'eagle' | 'gull' | 'ibex' | 'bear' | 'lizard' | 'crab' | 'turtle' | 'croc' | 'camel' | 'elephant' | 'giraffe' | 'moose';
 
 interface Spec {
-  geo: () => THREE.BufferGeometry;
+  /** forme instanciée (absente pour les bêtes articulées de beasts.ts) */
+  geo?: () => THREE.BufferGeometry;
   max: number;
   colors: number[];
   /** vitesse de marche et de course (cases/s), pause entre deux déplacements (s) */
@@ -45,6 +47,8 @@ const DRINKERS = new Set<Kind>(['sheep', 'cow', 'horse', 'deer', 'llama', 'fox',
 /** Bêtes sauvages qui se méfient des villageois (celles de la ferme, non) */
 const WARY = new Set<Kind>(['rabbit', 'deer', 'frog', 'fox', 'wolf', 'bear', 'lizard', 'crab', 'turtle', 'moose', 'giraffe', 'ibex']);
 const SWIMMERS = new Set<Kind>(['fish', 'dolphin', 'whale', 'manta']);
+/** Petites bêtes articulées, qu'on cesse d'animer et d'afficher plus tôt quand on s'éloigne */
+const TINY = new Set<Kind>(['lizard', 'crab', 'turtle']);
 /** Bêtes que ramènent les expéditions */
 const HERDS = new Set<Kind>(['sheep', 'cow', 'pig', 'horse']);
 
@@ -203,24 +207,6 @@ function ibexGeo() {
     p.add(box(0.011, 0.05, 0.011), s * 0.014, 0.29, 0.06, 0x5a4c3e, 0, false, 0, -1.2);
   }
   for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.016, 0.09), x * 0.026, 0, z * 0.055, 0x4a4036);
-  return p.build(false).body;
-}
-
-/** Ours : gros corps et sa bosse au garrot, tête ronde, museau clair, petites oreilles, pattes épaisses (la robe teinte le blanc) */
-function bearGeo() {
-  const p = new Parts();
-  p.add(box(0.12, 0.11, 0.22), 0, 0.15, 0, 0xffffff);
-  p.add(box(0.1, 0.05, 0.08), 0, 0.245, 0.04, 0xffffff);
-  p.add(box(0.114, 0.03, 0.2), 0, 0.12, -0.005, 0xffffff);
-  p.add(box(0.085, 0.075, 0.085), 0, 0.19, 0.14, 0xffffff);
-  p.add(box(0.045, 0.038, 0.05), 0, 0.185, 0.195, 0xc8a880);
-  p.add(box(0.02, 0.014, 0.012), 0, 0.2, 0.222, DARK);
-  for (const s2 of [-1, 1]) {
-    p.add(box(0.022, 0.022, 0.014), s2 * 0.032, 0.268, 0.13, 0xffffff);
-    p.add(box(0.008, 0.008, 0.006), s2 * 0.022, 0.215, 0.183, DARK);
-  }
-  p.add(box(0.03, 0.025, 0.02), 0, 0.17, -0.118, 0xffffff);
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(leg(0.03, 0.11), x * 0.04, 0, z * 0.075, 0xffffff);
   return p.build(false).body;
 }
 
@@ -465,7 +451,7 @@ const SPECS: Record<Kind, Spec> = {
   dolphin: { geo: dolphinGeo, max: 9, colors: [0x7f97ab, 0x8ea3b4], speed: 0, idle: [1, 1], ok: water, scale: 1.5 },
   eagle: { geo: birdGeo, max: 8, colors: [0x5a4232, 0x6b4e38, 0x4e3a2c], speed: 0, idle: [1, 1], ok: any, flap: [3, 0.45, 0.012], scale: 3.6 },
   gull: { geo: birdGeo, max: 18, colors: [0xffffff, 0xf2f4f6], speed: 0, idle: [1, 1], ok: any, flap: [7, 0.9, 0.012], scale: 2 },
-  bear: { geo: bearGeo, max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
+  bear: { max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
   ibex: { geo: ibexGeo, max: 14, colors: [0x8a7a68, 0x9c8b76, 0x6e6052], speed: 0.35, run: 1.6, idle: [3, 9], ok: alpine, graze: 0.15, flee: 2.6, scale: 1.1 },
   lizard: { geo: lizardGeo, max: 28, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
   crab: { geo: crabGeo, max: 24, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
@@ -479,7 +465,7 @@ const SPECS: Record<Kind, Spec> = {
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'bear', 'lizard', 'crab', 'turtle', 'croc', 'camel', 'elephant', 'giraffe', 'moose']);
+const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'lizard', 'crab', 'turtle', 'croc', 'camel', 'elephant', 'giraffe', 'moose']);
 
 /** Élément du décor ou zone auquel un groupe d'animaux est rattaché */
 export type Anchor = 'edge' | 'meadow' | 'rocks' | 'banks' | 'ponds' | 'coast';
@@ -584,6 +570,7 @@ export class Fauna {
   constructor(private world: World, private veg: { perches: number[][]; flowers: number[][] }) {
     for (const k of KIND_LIST) {
       const sp = SPECS[k];
+      if (!sp.geo) continue;
       const g = sp.geo();
       let mat: THREE.MeshStandardMaterial;
       if (sp.flap) {
@@ -829,12 +816,19 @@ export class Fauna {
           kind, key: s.key, x: s.hx, y: 0, z: s.hz, heading: this.rnd() * 6.28, pitch: 0, tx: s.hx, tz: s.hz,
           moving: false, timer: this.rnd() * 3, phase: this.rnd() * 10, hx: s.hx, hz: s.hz, radius: s.radius,
           col: sp.colors[Math.floor(this.rnd() * sp.colors.length)], size: (sp.scale ?? 1) * (0.9 + this.rnd() * 0.2),
-          hidden: false, sleeping: false, leader: kind === 'duckling' || (kind === 'wolf' && i > 0) ? list[kind === 'wolf' ? 0 : i - 1] : null, slot: i, actor: null,
+          hidden: false, sleeping: false, leader: kind === 'duckling' || ((kind === 'wolf' || kind === 'bear') && i > 0) ? list[kind === 'duckling' ? i - 1 : 0] : null, slot: i, actor: null,
           run: false, threat: null, fear: 0, prey: null, chase: 0, hunger: 20 + this.rnd() * 40, dead: 0, act: null, actT: 0, toDrink: false,
           thirst: 30 + this.rnd() * 90, ang: this.rnd() * 6.28, rush: 0, ax: s.hx, ay: 0, az: s.hz, by: 0, flight: 1, flightT: 1, perched: false, flap: 1,
         };
+        // l'ourson suit sa mère
+        if (kind === 'bear' && i > 0) c.size *= 0.55;
         const md = MODELS[kind];
-        if (md && !PROCEDURAL.has(kind)) {
+        if (BEAST_KINDS.has(kind)) {
+          // bête articulée dessinée par le jeu : sa robe suit sa couleur, sa nuance varie un peu
+          c.actor = makeBeast(kind as BeastKind, Math.max(0, sp.colors.indexOf(c.col)), c.size, 0.9 + this.rnd() * 0.16);
+          this.group.add(c.actor.root);
+          c.actor.mixer.setTime(this.rnd() * 3);
+        } else if (md && !PROCEDURAL.has(kind)) {
           const name = md.pick ? md.pick[Math.floor(hash2(s.key.length, s.key.charCodeAt(s.key.length - 1), 9) * md.pick.length)] : i === 0 && md.lead ? md.lead : md.name;
           c.actor = makeActor(name, md.length * (0.9 + this.rnd() * 0.2));
           if (c.actor) { this.group.add(c.actor.root); c.actor.mixer.setTime(this.rnd() * 3); }
@@ -1015,8 +1009,8 @@ export class Fauna {
       c.timer -= dt;
       if (c.timer <= 0) {
         c.timer = 1;
-        // meute : les loups suivent leur chef
-        const L = c.kind === 'wolf' ? c.leader : null;
+        // meute : les loups suivent leur chef ; l'ourson suit sa mère
+        const L = c.kind === 'wolf' || c.kind === 'bear' ? c.leader : null;
         const hx = L ? L.x : c.hx, hz = L ? L.z : c.hz, rad = L ? 0.9 : c.radius;
         // les herbivores préfèrent l'herbe intacte, les lapins chapardeurs visent le potager
         let best = -1, bx = 0, bz = 0;
@@ -1361,20 +1355,36 @@ export class Fauna {
     // modèle sans animation de marche (cochon, lama) : petit trot simulé, rebond et roulis
     const gait = c.moving && !swimmer && !a.actions.has('Walk') && !a.actions.has('WalkSlow');
     const bob = gait ? Math.abs(Math.sin(c.phase * 0.9)) * (c.run ? 0.03 : 0.012) : 0;
-    const ground = this.world.hAt(c.x, c.z);
-    a.root.position.set(c.x, (swimmer ? c.y : c.kind === 'frog' ? Math.max(ground, SEA - 0.01) : ground) + bob, c.z);
-    a.root.rotation.set(swimmer ? c.pitch : 0, c.heading + (MODELS[c.kind]?.yaw ?? 0), gait ? Math.sin(c.phase * 0.9) * 0.07 : 0, 'YXZ');
+    const ground = this.world.hAt(c.x, c.z), beast = BEAST_KINDS.has(c.kind);
+    // grenouilles à fleur d'eau, crocodiles et tortues à demi immergés sur les hauts-fonds
+    const wet = c.kind === 'frog' ? SEA - 0.01 : c.kind === 'croc' ? SEA - 0.035 : c.kind === 'turtle' ? SEA - 0.018 : -Infinity;
+    a.root.position.set(c.x, (swimmer ? c.y : Math.max(ground, wet)) + bob, c.z);
+    a.root.rotation.set(swimmer ? c.pitch : 0, c.heading + (MODELS[c.kind]?.yaw ?? beastYaw(c.kind)), gait ? Math.sin(c.phase * 0.9) * 0.07 : 0, 'YXZ');
     if (swimmer) play(a, ['Swimming_Fast', 'Swimming_Normal', 'Swim', 'Idle'].slice(c.rush > 0.3 ? 0 : 1));
     else if (c.moving && c.run) play(a, ['Gallop', 'Run', 'Jump', 'Walk', 'Idle'], 0.15);
     else if (c.moving) play(a, c.kind === 'frog' ? ['Jump', 'Walk'] : ['Walk', 'WalkSlow', 'Idle']);
     else if (c.act === 'eat') play(a, ['Eating', 'Idle_Eating', 'Attack', 'Idle']);
-    else if (c.sleeping) play(a, ['Idle_Headlow', 'Idle_2_HeadLow', 'Idle']);
+    else if (c.act === 'drink') play(a, ['Drink', 'Eating', 'Idle_Eating', 'Bite_Front', 'Idle_Headlow', 'Idle']);
+    else if (c.sleeping) play(a, beast ? ['Sleep', 'Idle'] : ['Idle_Headlow', 'Idle_2_HeadLow', 'Idle']);
     else if (c.pitch > 0.05) play(a, ['Eating', 'Idle_Eating', 'Bite_Front', 'Idle_Headlow', 'Idle']);
+    else if (beast) this.idleBeast(c, a);
     else play(a, ['Idle', 'Idle_2']);
     const speedUp = c.run ? 1.3 : 1;
     // au loin, l'animation n'avance qu'une image sur trois
     if (!far) a.mixer.update(dt * speedUp);
     else if ((this.frame + c.slot) % 3 === 0) a.mixer.update(dt * 3 * speedUp);
+  }
+
+  /**
+   * Repos d'une bête articulée : de temps en temps un geste joué une fois (l'ours se dresse ou hume l'air, l'éléphant
+   * barrit…), qu'on laisse finir avant de revenir au repos
+   */
+  private idleBeast(c: Critter, a: Actor) {
+    const cur = a.current?.getClip().name ?? '';
+    if (GESTURES.has(cur) && a.current!.isRunning()) return;
+    const k = Math.floor(this.t / 7 + c.slot * 2.3 + c.hx * 3.1 + c.hz * 1.7);
+    const want = k % 4 === 2 ? 'Idle_2' : k % 4 === 3 ? 'Idle_3' : 'Idle';
+    play(a, want !== 'Idle' && want !== cur && a.actions.has(want) ? [want] : ['Idle']);
   }
 
   private render(elapsed: number, dt: number, camera?: THREE.Camera) {
@@ -1394,8 +1404,8 @@ export class Fauna {
           visible = this.frustum.intersectsSphere(this.sphere);
           const d = this.sphere.center.distanceTo(camera.position);
           far = d > 60;
-          // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points
-          if (d > 130) visible = false;
+          // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points (les petites, plus tôt)
+          if (d > (TINY.has(c.kind) ? 45 : 130)) visible = false;
         }
         this.animateActor(c, c.actor, dt, visible, far);
         continue;
@@ -1427,6 +1437,7 @@ export class Fauna {
     }
     for (const k of KIND_LIST) {
       const m = this.meshes[k];
+      if (!m) continue;
       m.count = counts[k];
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;

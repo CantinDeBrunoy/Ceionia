@@ -1,0 +1,475 @@
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mulberry32 } from '../core/rng';
+import type { Actor } from './assets';
+
+/**
+ * Bêtes sauvages articulées, dessinées par le jeu faute de modèle animé libre de droits (ours, éléphant, girafe, crocodile,
+ * tortue, chameau, élan, lézard, crabe) : chaque bête est un vrai maillage à squelette (os du bassin, du poitrail, du cou,
+ * de la tête, de la mâchoire, des oreilles, de la queue, pattes en deux segments…) et ses animations (marche, course,
+ * repos, broutage, sommeil, gestes propres) sont des clips calculés une fois ; elle se joue comme les modèles Quaternius
+ * (même mélangeur, mêmes noms d'animation : Walk, Gallop, Idle, Eating, Sleep…)
+ */
+
+type V3 = [number, number, number];
+type Coat = Record<string, number>;
+
+const TAU = Math.PI * 2;
+const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _m = new THREE.Matrix4(), _v = new THREE.Vector3(), _w = new THREE.Vector3();
+const ONE = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
+const _ca = new THREE.Color(), _cb = new THREE.Color();
+
+// ---------- Formes ----------
+
+/** ellipsoïde à facettes */
+const ell = (rx: number, ry: number, rz: number, d = 1) => new THREE.IcosahedronGeometry(1, d).scale(rx, ry, rz);
+const bx = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
+/** segment (tronc de cône) de p à q, rayon r1 en p et r2 en q */
+function seg(p: V3, q: V3, r1: number, r2: number, n = 6) {
+  const a = _v.set(...p), d = _w.set(...q).sub(a), len = d.length();
+  const g = new THREE.CylinderGeometry(r2, r1, len, n).translate(0, len / 2, 0);
+  g.applyQuaternion(_q.setFromUnitVectors(UP, d.normalize()));
+  return g.translate(p[0], p[1], p[2]);
+}
+/** point d'un segment p→q à la fraction t */
+const along = (p: V3, q: V3, t: number): V3 => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
+const mirror = (p: V3, s: number): V3 => [p[0] * s, p[1], p[2]];
+const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+
+/** Rotation qui dresse +y selon la direction n */
+function rotTo(n: THREE.Vector3): V3 {
+  _q.setFromUnitVectors(UP, n);
+  _e.setFromQuaternion(_q);
+  return [_e.x, _e.y, _e.z];
+}
+
+/** Point d'un ellipsoïde (centre c, demi-axes r) à la latitude `lat` et à la longitude `lon` (0 = vers l'avant), et sa normale */
+function onEll(c: V3, r: V3, lat: number, lon: number, lift = 0.001): { at: V3; rot: V3 } {
+  const dx = Math.cos(lat) * Math.sin(lon), dy = Math.sin(lat), dz = Math.cos(lat) * Math.cos(lon);
+  const n = new THREE.Vector3(dx / r[0], dy / r[1], dz / r[2]).normalize();
+  return { at: [c[0] + r[0] * dx + n.x * lift, c[1] + r[1] * dy + n.y * lift, c[2] + r[2] * dz + n.z * lift], rot: rotTo(n) };
+}
+
+/** Point de la surface d'un segment p→q (rayons r1, r2) à la fraction t et à l'angle a autour de l'axe (0 = côté +x), et sa normale */
+function onSeg(p: V3, q: V3, r1: number, r2: number, t: number, a: number, lift = 0.001): { at: V3; rot: V3 } {
+  const d = new THREE.Vector3(q[0] - p[0], q[1] - p[1], q[2] - p[2]).normalize();
+  const e1 = new THREE.Vector3(1, 0, 0).addScaledVector(d, -d.x).normalize(), e2 = new THREE.Vector3().crossVectors(d, e1);
+  const n = e1.multiplyScalar(Math.cos(a)).addScaledVector(e2, Math.sin(a)).normalize();
+  const r = r1 + (r2 - r1) * t + lift, c = along(p, q, t);
+  return { at: [c[0] + n.x * r, c[1] + n.y * r, c[2] + n.z * r], rot: rotTo(n) };
+}
+
+// ---------- Squelette ----------
+
+/**
+ * Bête en construction : des os (nom, parent, pivot dans le repère du modèle) et des pièces rattachées chacune à un os,
+ * d'une couleur unie ou d'un dégradé du dessous (`color`) au dessus (`top`) : ventre plus sombre, dos plus clair
+ */
+class Rig {
+  names: string[] = [];
+  parents: number[] = [];
+  pivots: THREE.Vector3[] = [];
+  private geos: THREE.BufferGeometry[] = [];
+
+  bone(name: string, parent: string | null, x: number, y: number, z: number) {
+    this.names.push(name);
+    this.parents.push(parent === null ? -1 : this.idx(parent));
+    this.pivots.push(new THREE.Vector3(x, y, z));
+  }
+  idx(name: string) {
+    const i = this.names.indexOf(name);
+    if (i < 0) throw new Error(`os inconnu : ${name}`);
+    return i;
+  }
+  has(name: string) { return this.names.includes(name); }
+
+  /** pièce posée en `at`, tournée de `rot` (angles d'Euler) */
+  add(bone: string, g: THREE.BufferGeometry, at: V3, color: number, rot: V3 = [0, 0, 0], top?: number) {
+    let ng = g;
+    if (g.index) { ng = g.toNonIndexed(); g.dispose(); }
+    ng.deleteAttribute('uv');
+    ng.deleteAttribute('normal');
+    _m.compose(_v.set(...at), _q.setFromEuler(_e.set(rot[0], rot[1], rot[2])), ONE);
+    ng.applyMatrix4(_m);
+    ng.computeVertexNormals();
+    const pos = ng.attributes.position, n = pos.count, bi = this.idx(bone);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < n; i++) { lo = Math.min(lo, pos.getY(i)); hi = Math.max(hi, pos.getY(i)); }
+    _ca.setHex(color); _cb.setHex(top ?? color);
+    const col = new Float32Array(n * 3), si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      const t = top === undefined ? 0 : smooth((pos.getY(i) - lo) / Math.max(1e-6, hi - lo) * 1.3 - 0.15);
+      col[i * 3] = _ca.r + (_cb.r - _ca.r) * t; col[i * 3 + 1] = _ca.g + (_cb.g - _ca.g) * t; col[i * 3 + 2] = _ca.b + (_cb.b - _ca.b) * t;
+      si[i * 4] = bi; sw[i * 4] = 1;
+    }
+    ng.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    ng.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+    ng.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    this.geos.push(ng);
+  }
+  /** pièce déjà placée (segment…) */
+  put(bone: string, g: THREE.BufferGeometry, color: number, top?: number) { this.add(bone, g, [0, 0, 0], color, [0, 0, 0], top); }
+  /** la même pièce des deux côtés (s = 1 côté gauche +x, s = -1 côté droit), os nommés `${nom}L` / `${nom}R` si `side` */
+  both(fn: (s: number, L: string) => void) { fn(1, 'L'); fn(-1, 'R'); }
+
+  build(): THREE.Group {
+    const geo = mergeGeometries(this.geos, false)!;
+    for (const g of this.geos) g.dispose();
+    const bones = this.names.map((n) => { const b = new THREE.Bone(); b.name = n; return b; });
+    const root = new THREE.Group();
+    bones.forEach((b, i) => {
+      const p = this.parents[i];
+      b.position.copy(this.pivots[i]);
+      if (p >= 0) { b.position.sub(this.pivots[p]); bones[p].add(b); } else root.add(b);
+    });
+    const mesh = new THREE.SkinnedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 0.9, metalness: 0 }));
+    mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false;
+    root.add(mesh);
+    root.updateMatrixWorld(true);
+    mesh.bind(new THREE.Skeleton(bones));
+    return root;
+  }
+}
+
+// ---------- Poses et clips ----------
+
+/** Pose d'une image : rotations (Euler, ordre YXZ), décalages de position et échelles des os */
+interface Pose { r: Record<string, V3>; p: Record<string, V3>; s: Record<string, V3> }
+type PoseFn = (u: number, P: Pose) => void;
+type ClipDef = [name: string, dur: number, fn: PoseFn];
+
+const sn = (u: number, f = 1, ph = 0) => Math.sin(TAU * (u * f + ph));
+const cs = (u: number, f = 1, ph = 0) => Math.cos(TAU * (u * f + ph));
+/** créneau adouci : 0 hors de [a, b], 1 au milieu, rampes de largeur e */
+const win = (u: number, a: number, b: number, e: number) => smooth((u - a) / e) * smooth((b - u) / e);
+/** brève impulsion autour de u0 (oreille qui frémit, coup de langue) */
+const blip = (u: number, u0: number, w = 0.04) => Math.max(0, 1 - Math.abs(u - u0) / w);
+const pos = (x: number) => Math.max(0, x);
+
+/** ajoute une rotation à un os */
+function R(P: Pose, b: string, x: number, y = 0, z = 0) { const v = P.r[b] ?? (P.r[b] = [0, 0, 0]); v[0] += x; v[1] += y; v[2] += z; }
+/** décale un os */
+function M(P: Pose, b: string, x: number, y: number, z: number) { const v = P.p[b] ?? (P.p[b] = [0, 0, 0]); v[0] += x; v[1] += y; v[2] += z; }
+/** échelle d'un os */
+function S(P: Pose, b: string, x: number, y: number, z: number) { P.s[b] = [x, y, z]; }
+/** respiration : le torse se gonfle */
+const breathe = (P: Pose, u: number, n: number, k = 1) => { const b = sn(u, n); S(P, 'ribs', 1 + 0.014 * b * k, 1 + 0.024 * b * k, 1 + 0.006 * b * k); };
+
+/**
+ * Pas d'un quadrupède : chaque patte (préfixe d'os, phase) balance d'avant en arrière (`A`) et plie le genou en avançant (`L`)
+ * — la patte avance quand cos > 0, et c'est là qu'elle se lève
+ */
+function stride(P: Pose, u: number, ph: Record<string, number>, A: number, L: number) {
+  for (const b in ph) {
+    const w = TAU * (u - ph[b]);
+    R(P, b + '1', -A * Math.sin(w));
+    R(P, b + '2', L * Math.pow(pos(Math.cos(w)), 1.5));
+  }
+}
+
+/** Clip d'animation : la pose est échantillonnée sur la durée (u de 0 à 1, la pose de u = 1 rejoint celle de u = 0) */
+function makeClip(rig: Rig, [name, dur, fn]: ClipDef): THREE.AnimationClip {
+  const n = Math.max(24, Math.ceil(dur * 14));
+  const times: number[] = [], poses: Pose[] = [];
+  for (let i = 0; i <= n; i++) {
+    const P: Pose = { r: {}, p: {}, s: {} };
+    fn(i / n, P);
+    poses.push(P);
+    times.push((i / n) * dur);
+  }
+  const tracks: THREE.KeyframeTrack[] = [];
+  const e = new THREE.Euler(0, 0, 0, 'YXZ'), q = new THREE.Quaternion(), prev = new THREE.Quaternion();
+  rig.names.forEach((b, bi) => {
+    const qv: number[] = [];
+    poses.forEach((P, i) => {
+      const r = P.r[b] ?? [0, 0, 0];
+      q.setFromEuler(e.set(r[0], r[1], r[2], 'YXZ'));
+      // continuité : pas de demi-tour entre deux images
+      if (i && q.dot(prev) < 0) q.set(-q.x, -q.y, -q.z, -q.w);
+      prev.copy(q);
+      qv.push(q.x, q.y, q.z, q.w);
+    });
+    tracks.push(new THREE.QuaternionKeyframeTrack(`${b}.quaternion`, times, qv));
+    if (poses.some((P) => P.p[b])) {
+      const rest = rig.pivots[bi].clone();
+      const pi = rig.parents[bi];
+      if (pi >= 0) rest.sub(rig.pivots[pi]);
+      tracks.push(new THREE.VectorKeyframeTrack(`${b}.position`, times, poses.flatMap((P) => { const o = P.p[b] ?? [0, 0, 0]; return [rest.x + o[0], rest.y + o[1], rest.z + o[2]]; })));
+    }
+    if (poses.some((P) => P.s[b])) tracks.push(new THREE.VectorKeyframeTrack(`${b}.scale`, times, poses.flatMap((P) => P.s[b] ?? [1, 1, 1])));
+  });
+  return new THREE.AnimationClip(name, dur, tracks);
+}
+
+// ---------- Quadrupèdes ----------
+
+interface Gait { dur: number; A: number; L: number; ph: Record<string, number>; bob: number; rock?: number }
+interface Quad {
+  walk: Gait;
+  run: Gait;
+  /** os du cou, de la base vers la tête, et leur flexion pour brouter (puis celle de la tête) */
+  neck: string[];
+  graze: number[];
+  grazeHead: number;
+  /** couché : abaissement du corps, plis des pattes avant et arrière (épaule, genou) ; null : dort debout */
+  lie: { drop: number; f: [number, number]; h: [number, number] } | null;
+  /** mouvements propres à l'espèce, ajoutés à chaque clip (trompe, oreilles, langue…) */
+  hook?: (clip: string, u: number, P: Pose) => void;
+}
+
+const ears = (P: Pose, x: number, z: number) => { R(P, 'eL', x, 0, z); R(P, 'eR', x, 0, -z); };
+
+/** Clips communs des quadrupèdes : marche, course, repos (regard, oreilles, queue, respiration), broutage, sommeil */
+function quadClips(q: Quad): ClipDef[] {
+  const head = (P: Pose, x: number, y = 0) => R(P, 'head', x, y);
+  const hook = (n: string, u: number, P: Pose) => q.hook?.(n, u, P);
+  return [
+    ['Walk', q.walk.dur, (u, P) => {
+      stride(P, u, q.walk.ph, q.walk.A, q.walk.L);
+      M(P, 'hips', 0, -q.walk.bob * cs(u, 2), 0);
+      R(P, 'hips', 0, 0.03 * sn(u), 0.03 * sn(u));
+      R(P, 'chest', 0, -0.03 * sn(u), -0.045 * sn(u));
+      R(P, q.neck[0], 0.05 * sn(u, 2, 0.1), 0.04 * sn(u, 1, 0.2));
+      head(P, -0.03 * sn(u, 2, 0.1), 0.06 * sn(u, 1, 0.3));
+      R(P, 'tail1', 0.1, 0.18 * sn(u));
+      ears(P, 0, 0.08 * sn(u, 2));
+      breathe(P, u, 2, 0.6);
+      hook('Walk', u, P);
+    }],
+    ['Gallop', q.run.dur, (u, P) => {
+      stride(P, u, q.run.ph, q.run.A, q.run.L);
+      M(P, 'hips', 0, q.run.bob * (pos(sn(u, 1, -0.1)) - 0.4), 0);
+      R(P, 'hips', (q.run.rock ?? 0.1) * sn(u));
+      R(P, 'chest', -(q.run.rock ?? 0.1) * sn(u, 1, 0.2));
+      R(P, q.neck[0], 0.12 * sn(u, 1, 0.35));
+      head(P, -0.06 * sn(u, 1, 0.35));
+      R(P, 'tail1', -0.5 + 0.15 * sn(u));
+      ears(P, -0.55, 0);
+      hook('Gallop', u, P);
+    }],
+    ['Idle', 6, (u, P) => {
+      breathe(P, u, 3);
+      const look = Math.sin(TAU * u) * win(u, 0.05, 0.95, 0.15);
+      R(P, q.neck[0], 0.04 * sn(u, 2, 0.3), 0.15 * look);
+      head(P, 0.06 * sn(u, 2, 0.3), 0.3 * look);
+      ears(P, 0, 0.45 * blip(u, 0.22) + 0.3 * blip(u, 0.7));
+      R(P, 'eR', 0, 0, -0.4 * blip(u, 0.47));
+      R(P, 'tail1', 0.1, 0.35 * sn(u, 3) * win(u, 0.3, 0.65, 0.05));
+      R(P, 'jaw', 0.06 * pos(sn(u, 8)) * win(u, 0.55, 0.95, 0.05));
+      R(P, 'hips', 0, 0, 0.015 * sn(u));
+      hook('Idle', u, P);
+    }],
+    ['Eating', 4, (u, P) => {
+      breathe(P, u, 2);
+      q.neck.forEach((b, i) => R(P, b, q.graze[i] + 0.04 * sn(u, 2, i * 0.1), i ? 0 : 0.12 * sn(u)));
+      head(P, q.grazeHead + 0.08 * pos(sn(u, 4)), 0.15 * sn(u, 1, 0.2));
+      R(P, 'jaw', 0.16 * pos(sn(u, 6)));
+      R(P, 'chest', 0.04);
+      ears(P, 0.1, 0.3 * blip(u, 0.35));
+      R(P, 'tail1', 0.1, 0.3 * sn(u, 2) * win(u, 0.6, 0.9, 0.05));
+      // un pas de côté de temps en temps
+      R(P, 'fL1', -0.15 * win(u, 0.4, 0.62, 0.08));
+      R(P, 'fL2', 0.4 * win(u, 0.42, 0.55, 0.05));
+      hook('Eating', u, P);
+    }],
+    ['Sleep', 8, (u, P) => {
+      breathe(P, u, 2, 1.5);
+      if (q.lie) {
+        M(P, 'hips', 0, -q.lie.drop, 0);
+        for (const L of ['L', 'R']) {
+          R(P, `f${L}1`, q.lie.f[0]); R(P, `f${L}2`, q.lie.f[1]);
+          R(P, `h${L}1`, q.lie.h[0]); R(P, `h${L}2`, q.lie.h[1]);
+        }
+        R(P, q.neck[0], 0.25, 0.2);
+        head(P, 0.3, 0.35);
+      } else {
+        R(P, q.neck[0], 0.35);
+        head(P, 0.2);
+        R(P, 'hL2', 0.3);
+      }
+      ears(P, 0.3, -0.25);
+      R(P, 'tail1', 0.2);
+      hook('Sleep', u, P);
+    }],
+  ];
+}
+
+// ---------- Ours ----------
+
+const BEAR_COATS: Coat[] = [
+  // brun, grizzly fauve, ours noir
+  { fur: 0x4a3222, top: 0x7a5434, tip: 0x9a7650, leg: 0x3a281c, muzzle: 0xa8845c, paw: 0x2e221a, inner: 0x2a1e18 },
+  { fur: 0x5e4430, top: 0x977450, tip: 0xc0a07a, leg: 0x46342a, muzzle: 0xc0a07a, paw: 0x3a2c24, inner: 0x34261e },
+  { fur: 0x221c1c, top: 0x383030, tip: 0x504644, leg: 0x1a1616, muzzle: 0x9a7a5a, paw: 0x161212, inner: 0x2a2020 },
+];
+
+/**
+ * Ours : corps massif à la bosse du garrot, fourrure à deux tons (pattes plus sombres, dos et bosse plus clairs, quelques
+ * jarres claires), tête large au front bombé, museau clair et truffe noire, oreilles rondes, griffes claires aux larges
+ * pattes ; démarche lourde qui roule des épaules, galop bondissant, se dresse sur ses pattes arrière pour humer l'air,
+ * fouille le sol de la patte et du museau
+ */
+function bear(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  r.bone('hips', null, 0, 0.15, -0.05);
+  r.bone('chest', 'hips', 0, 0.155, 0.03);
+  r.bone('ribs', 'chest', 0, 0.155, 0.03);
+  r.bone('neck', 'chest', 0, 0.175, 0.1);
+  r.bone('head', 'neck', 0, 0.172, 0.135);
+  r.bone('jaw', 'head', 0, 0.152, 0.17);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.03, 0.202, 0.148));
+  r.bone('tail1', 'hips', 0, 0.17, -0.13);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.044, 0.14, 0.075);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.044, 0.078, 0.08);
+    r.bone(`h${L}1`, 'hips', s * 0.046, 0.145, -0.085);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.046, 0.075, -0.09);
+  });
+
+  // corps : croupe, torse (qui respire), bosse du garrot, ventre, jabot
+  r.add('hips', ell(0.066, 0.066, 0.075), [0, 0.152, -0.055], c.fur, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.07, 0.074, 0.085), [0, 0.158, 0.035], c.fur, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.056, 0.03, 0.085), [0, 0.108, 0], c.leg);
+  r.add('chest', ell(0.056, 0.036, 0.066), [0, 0.2, 0.048], c.top, [0.15, 0, 0], c.tip);
+  r.add('chest', ell(0.05, 0.05, 0.03), [0, 0.132, 0.096], c.fur);
+  // longs poils qui pendent sous le ventre et derrière les bras
+  r.both((s) => {
+    for (let i = 0; i < 6; i++) {
+      const z = 0.07 - i * 0.026, b = z > 0.0 ? 'ribs' : 'hips';
+      r.put(b, seg([s * 0.05, 0.112, z], [s * 0.052, 0.088, z - 0.01], 0.012, 0.002, 4), c.fur);
+    }
+  });
+  // cou et tête
+  r.add('neck', ell(0.046, 0.05, 0.046), [0, 0.17, 0.118], c.fur, [0, 0, 0], c.top);
+  r.add('head', ell(0.044, 0.04, 0.042), [0, 0.178, 0.152], c.fur, [0, 0, 0], c.top);
+  r.add('head', ell(0.03, 0.022, 0.03), [0, 0.196, 0.164], c.top);
+  r.both((s) => r.add('head', ell(0.022, 0.024, 0.024), [s * 0.03, 0.165, 0.158], c.fur));
+  r.add('head', ell(0.022, 0.019, 0.032), [0, 0.162, 0.192], c.muzzle, [0.1, 0, 0]);
+  r.add('head', ell(0.012, 0.008, 0.008, 0), [0, 0.171, 0.222], 0x141010);
+  r.both((s) => r.add('head', ell(0.0055, 0.006, 0.004, 0), [s * 0.02, 0.186, 0.184], 0x120c0a));
+  r.add('jaw', ell(0.017, 0.008, 0.026, 0), [0, 0.148, 0.19], c.muzzle);
+  r.add('jaw', ell(0.024, 0.016, 0.02, 0), [0, 0.146, 0.168], c.fur);
+  // oreilles rondes, intérieur sombre
+  r.both((s, L) => {
+    r.add(`e${L}`, ell(0.014, 0.014, 0.007), [s * 0.031, 0.212, 0.147], c.fur, [0, 0, -s * 0.2], c.top);
+    r.add(`e${L}`, ell(0.0085, 0.0085, 0.004, 0), [s * 0.031, 0.211, 0.152], c.inner, [0, 0, -s * 0.2]);
+  });
+  r.add('tail1', ell(0.014, 0.012, 0.016, 0), [0, 0.172, -0.136], c.top);
+  // pattes : bras épais, avant-bras, larges pattes aux griffes claires
+  r.both((s, L) => {
+    const x = s * 0.044, hx = s * 0.046;
+    r.add(`f${L}1`, ell(0.026, 0.048, 0.032), [s * 0.04, 0.12, 0.074], c.leg, [0, 0, 0], c.fur);
+    r.put(`f${L}2`, seg([x, 0.08, 0.08], [x, 0.016, 0.084], 0.021, 0.023, 7), c.leg);
+    r.add(`f${L}2`, ell(0.024, 0.012, 0.03), [x, 0.012, 0.092], c.paw);
+    for (let i = -1.5; i <= 1.5; i++) r.put(`f${L}2`, seg([x + i * 0.009, 0.01, 0.114], [x + i * 0.0095, 0.002, 0.127], 0.0035, 0.0008, 4), 0xd8ccb0);
+    r.add(`h${L}1`, ell(0.032, 0.056, 0.042), [s * 0.04, 0.124, -0.078], c.leg, [0, 0, 0], c.fur);
+    r.put(`h${L}2`, seg([hx, 0.078, -0.09], [hx, 0.016, -0.082], 0.021, 0.022, 7), c.leg);
+    r.add(`h${L}2`, ell(0.023, 0.011, 0.036), [hx, 0.011, -0.074], c.paw);
+    for (let i = -1.5; i <= 1.5; i++) r.put(`h${L}2`, seg([hx + i * 0.0085, 0.008, -0.042], [hx + i * 0.009, 0.002, -0.033], 0.003, 0.0007, 4), 0xd8ccb0);
+  });
+
+  const ph = { hL: 0, fL: 0.2, hR: 0.5, fR: 0.7 };
+  const clips = quadClips({
+    walk: { dur: 1.2, A: 0.36, L: 0.75, ph, bob: 0.003 },
+    run: { dur: 0.6, A: 0.75, L: 1.1, ph: { hL: 0, hR: 0.08, fL: 0.45, fR: 0.55 }, bob: 0.014, rock: 0.14 },
+    neck: ['neck'], graze: [0.55], grazeHead: 0.3,
+    lie: { drop: 0.075, f: [-1.35, 0.25], h: [-1.0, 2.0] },
+    hook: (n, u, P) => {
+      // l'ours marche tête basse en la balançant
+      if (n === 'Walk') { R(P, 'neck', 0.16); R(P, 'head', 0, 0.06 * sn(u)); }
+    },
+  }).filter(([n]) => n !== 'Eating');
+  clips.push(
+    // se dresse sur ses pattes arrière, hume l'air en tournant la tête, puis retombe
+    ['Idle_2', 6, (u, P) => {
+      const k = win(u, 0.08, 0.86, 0.2);
+      breathe(P, u, 4);
+      R(P, 'hips', -1.1 * k);
+      M(P, 'hips', 0, 0.03 * k, -0.024 * k);
+      for (const L of ['L', 'R']) { R(P, `h${L}1`, 1.1 * k); R(P, `h${L}2`, -0.08 * k); }
+      R(P, 'chest', -0.15 * k);
+      R(P, 'fL1', 0.75 * k + 0.12 * k * sn(u, 3)); R(P, 'fR1', 0.75 * k + 0.12 * k * sn(u, 3, 0.3));
+      R(P, 'fL2', 0.75 * k); R(P, 'fR2', 0.75 * k);
+      R(P, 'neck', 0.85 * k);
+      R(P, 'head', 0.1 * k - 0.14 * k * pos(sn(u, 5)), 0.45 * k * sn(u, 1, 0.1));
+      ears(P, -0.2 * k, 0.3 * blip(u, 0.5));
+      R(P, 'tail1', 0.3 * k);
+    }],
+    // fouille : museau au sol, une patte avant qui gratte la terre
+    ['Eating', 3, (u, P) => {
+      breathe(P, u, 2);
+      R(P, 'neck', 0.55, 0.08 * sn(u));
+      R(P, 'head', 0.3 + 0.1 * sn(u, 6), 0.2 * sn(u));
+      R(P, 'chest', 0.1);
+      M(P, 'hips', 0, -0.004, 0);
+      R(P, 'fR1', -0.35 + 0.45 * sn(u, 2));
+      R(P, 'fR2', 0.6 * pos(cs(u, 2)));
+      R(P, 'jaw', 0.12 * pos(sn(u, 5)));
+      R(P, 'hips', 0, 0, 0.03 * sn(u, 2));
+      ears(P, 0.1, 0.25 * blip(u, 0.6));
+    }],
+    // hume l'air, museau levé, en remuant la truffe
+    ['Idle_3', 4, (u, P) => {
+      const k = win(u, 0.05, 0.95, 0.2);
+      breathe(P, u, 3);
+      R(P, 'neck', -0.3 * k, 0.15 * k * sn(u));
+      R(P, 'head', -0.3 * k + 0.06 * k * sn(u, 8), 0.25 * k * sn(u, 1, 0.25));
+      ears(P, -0.15 * k, 0);
+    }],
+  );
+  return { rig: r, clips };
+}
+
+// ---------- Catalogue ----------
+
+export type BeastKind = 'bear';
+interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
+const DEFS: Record<BeastKind, BeastDef> = {
+  bear: { coats: BEAR_COATS, build: bear },
+};
+export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
+/** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */
+export const GESTURES = new Set(['Idle_2', 'Idle_3']);
+/** correction de cap (le crabe marche de côté) */
+export const beastYaw = (k: string) => DEFS[k as BeastKind]?.yaw ?? 0;
+
+const templates = new Map<string, { root: THREE.Group; clips: THREE.AnimationClip[] }>();
+
+/** Bête articulée : un clone (squelette compris) du modèle de sa robe, à l'échelle `size`, ses animations prêtes */
+export function makeBeast(kind: BeastKind, coat: number, size: number, shade = 1): Actor {
+  const def = DEFS[kind], ci = ((coat % def.coats.length) + def.coats.length) % def.coats.length, key = `${kind}${ci}`;
+  let t = templates.get(key);
+  if (!t) {
+    const { rig, clips } = def.build(def.coats[ci]);
+    t = { root: rig.build(), clips: clips.map((c) => makeClip(rig, c)) };
+    templates.set(key, t);
+  }
+  const inner = cloneSkinned(t.root) as THREE.Group;
+  inner.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh) return;
+    // chaque bête a sa nuance
+    const mat = (m.material as THREE.MeshStandardMaterial).clone();
+    mat.color.setScalar(shade);
+    m.material = mat;
+    m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+  });
+  inner.scale.setScalar(size);
+  const root = new THREE.Group();
+  root.add(inner);
+  const mixer = new THREE.AnimationMixer(inner);
+  const actions = new Map<string, THREE.AnimationAction>();
+  for (const clip of t.clips) {
+    const a = mixer.clipAction(clip);
+    if (GESTURES.has(clip.name)) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = false; }
+    actions.set(clip.name, a);
+  }
+  return { root, mixer, actions, current: null };
+}
+
+/** pour les essais : noms des os et des clips d'une bête */
+export function beastInfo(kind: BeastKind) {
+  const { rig, clips } = DEFS[kind].build(DEFS[kind].coats[0]);
+  return { bones: rig.names, clips: clips.map((c) => c[0]) };
+}
