@@ -519,10 +519,10 @@ function roof(p: Parts, x: number, y: number, z: number, o: RoofOpts) {
 }
 
 /** Colonne à l'antique : base, fût, chapiteau */
-function column(p: Parts, x: number, z: number, h: number, y = 0, r = 0.032) {
-  p.cyl(r * 1.35, r * 1.45, 0.025, 8, x, y, z, C.stone);
-  p.cyl(r * 0.92, r * 1.06, h - 0.05, 8, x, y + 0.025, z, 0xf2ead8);
-  p.cyl(r * 1.3, r, 0.012, 8, x, y + h - 0.037, z, C.stone);
+function column(p: Parts, x: number, z: number, h: number, y = 0, r = 0.032, seg = 8) {
+  p.cyl(r * 1.35, r * 1.45, 0.025, seg, x, y, z, C.stone);
+  p.cyl(r * 0.92, r * 1.06, h - 0.05, seg, x, y + 0.025, z, 0xf2ead8);
+  p.cyl(r * 1.3, r, 0.012, seg, x, y + h - 0.037, z, C.stone);
   p.box(r * 2.5, 0.025, r * 2.5, x, y + h - 0.025, z, C.stone);
 }
 
@@ -6831,9 +6831,12 @@ function seated(p: Parts, x: number, y: number, z: number, ry: number, body: num
   animPart(draw, [x, y, z], [Math.cos(ry), 0, -Math.sin(ry)], 0.06, 0.3 + h * 0.5, h * 6.28, h > 0.7 ? 0.008 : 0);
 }
 
-/** Arc en plein cintre tourné vers +z (baie éclairée, arcade) : un demi-disque posé sur le haut d'un rectangle */
+/**
+ * Arc en plein cintre tourné vers +z (baie éclairée, arcade) : un demi-disque posé sur le haut d'un rectangle (sa seule face
+ * avant, au nu de la baie qu'il coiffe : huit triangles)
+ */
 function archTop(p: Parts, x: number, y: number, z: number, r: number, color: number, glow = false) {
-  p.add(new THREE.CylinderGeometry(r, r, 0.012, 10, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2), x, y, z, color, 0, glow);
+  p.add(new THREE.CircleGeometry(r, 8, 0, Math.PI), x, y, z + 0.006, color, 0, glow);
 }
 
 /** Réverbère à globe : fût sombre, lanterne allumée la nuit */
@@ -7064,7 +7067,7 @@ function theater(p: Parts, age: number) {
       p.box(0.11, 0.13, 0.012, x, 0.06, 0.452, 0xffe2a0, 0, true);
       archTop(p, x, 0.19, 0.452, 0.055, 0xffe2a0, true);
       p.box(0.06, 0.1, 0.012, x, 0.32, 0.452, 0xffe2a0, 0, true);
-      if (i < 6) for (const d of [-0.02, 0.02]) column(p, x + 0.1 + d, 0.47, 0.2, 0.275, 0.012);
+      if (i < 6) for (const d of [-0.02, 0.02]) column(p, x + 0.1 + d, 0.47, 0.2, 0.275, 0.012, 5);
     }
     for (const y of [0.25, 0.48]) p.box(1.54, 0.025, 0.54, 0, y, 0.2, cream);
     p.box(1.5, 0.1, 0.48, 0, 0.505, 0.2, st);
@@ -7084,8 +7087,8 @@ function theater(p: Parts, age: number) {
       for (const w of [-1, 1]) p.add(new THREE.BoxGeometry(0.1, 0.008, 0.05), s * 0.5 + w * 0.05, 0.94, -0.61, C.gold, 0, false, w * 0.6);
     }
     // médaillons dorés et bustes entre les arcades, œils-de-bœuf du tambour de la coupole
-    for (let i = 0; i < 6; i++) { const x = -0.5 + i * 0.2; p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 12).rotateX(Math.PI / 2), x, 0.43, 0.454, C.gold); p.sphere(0.016, x, 0.43, 0.46, 0xe8dcc0); }
-    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; p.add(new THREE.CylinderGeometry(0.025, 0.025, 0.01, 10).rotateX(Math.PI / 2).rotateY(-a), Math.sin(a) * 0.42, 0.52, -0.3 + Math.cos(a) * 0.42, 0xffe2a0, 0, true); }
+    for (let i = 0; i < 6; i++) { const x = -0.5 + i * 0.2; p.add(new THREE.CircleGeometry(0.03, 10), x, 0.43, 0.453, C.gold); p.sphere(0.016, x, 0.43, 0.46, 0xe8dcc0); }
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; p.add(new THREE.CircleGeometry(0.025, 8).rotateY(a), Math.sin(a) * 0.423, 0.52, -0.3 + Math.cos(a) * 0.423, 0xffe2a0, 0, true); }
     // pavillons latéraux et leurs petites coupoles
     for (const s of [-1, 1]) {
       p.box(0.22, 0.46, 0.38, s * 0.87, 0.02, 0.06, st);
@@ -7098,6 +7101,19 @@ function theater(p: Parts, age: number) {
       const f = sway([s * 0.42, 0.47, 0.458], [1, 0, 0], 0.08, 0.5); f.box(0.07, 0.2, 0.006, 0, -0.1, 0, 0xb8322c); f.box(0.07, 0.02, 0.008, 0, -0.19, 0, C.gold); f.box(0.04, 0.04, 0.008, 0, -0.07, 0, C.gold);
       p.box(0.07, 0.08, 0.07, s * 0.7, 0.02, 0.56, cream); figure(p, s * 0.7, 0.56, 0x5a7a6a, s > 0 ? -2.6 : 2.6);
     }
+    // balustrade dorée sur l'attique, marquise de verre et de fonte au-dessus des trois portes du milieu, affiches des
+    // pavillons, lanterne du pavillon, et le contrôleur en livrée à la porte
+    p.add(slab(1.44, 0.012, 0.02, F_PZ | F_PY), 0, 0.705, 0.43, C.gold);
+    for (let i = 0; i < 17; i++) p.add(slab(0.012, 0.07, 0.012, F_PZ | F_PX | F_NX), -0.68 + i * 0.085, 0.665, 0.432, cream);
+    p.add(new THREE.BoxGeometry(0.66, 0.012, 0.16), 0, 0.235, 0.53, 0x9fc4dc, 0, false, 0, 0.12);
+    p.add(slab(0.67, 0.02, 0.006, F_PZ | F_PY), 0, 0.225, 0.612, 0x2a2a2e);
+    for (const x of [-0.32, 0, 0.32]) p.add(new THREE.BoxGeometry(0.008, 0.008, 0.17), x, 0.245, 0.53, 0x2a2a2e, 0, false, 0, 0.12);
+    for (const s of [-1, 1]) {
+      p.add(slab(0.12, 0.17, 0.004, F_PZ), s * 0.87, 0.22, 0.252, s > 0 ? 0xf2d27a : 0xe8b8a0);
+      p.add(slab(0.09, 0.04, 0.005, F_PZ), s * 0.87, 0.26, 0.254, 0xb8322c);
+      p.box(0.012, 0.012, 0.04, s * 0.87, 0.4, 0.26, 0x2a2a2e); p.box(0.03, 0.04, 0.03, s * 0.87, 0.355, 0.28, 0xffe2a0, 0, true);
+    }
+    figure(p, 0.1, 0.5, 0x8a2a2a, 0.1, false, 0x2a2420); p.cyl(0.02, 0.02, 0.012, 6, 0.1, 0.184, 0.5, 0x8a2a2a);
     // le fiacre à la porte, et les spectateurs en tenue de soirée
     p.box(0.1, 0.08, 0.16, -0.42, 0.06, 0.86, 0x2c4a3e); p.box(0.11, 0.015, 0.17, -0.42, 0.14, 0.86, 0x1e1e22);
     for (const [dx, dz, r] of [[-0.06, -0.05, 0.035], [0.06, -0.05, 0.035], [-0.06, 0.06, 0.028], [0.06, 0.06, 0.028]]) p.add(new THREE.TorusGeometry(r, 0.006, 3, 10).rotateY(Math.PI / 2), -0.42 + dx, r + 0.02, 0.86 + dz, 0x2a2a2e);
