@@ -3631,8 +3631,8 @@ function school(p: Parts, age: number) {
     p.box(1.3, 0.48, 0.5, -0.24, 0.025, -0.64, 0xc98a72); p.box(1.32, 0.03, 0.52, -0.24, 0.26, -0.64, C.cream);
     roof(p, -0.24, 0.505, -0.64, { w: 1.3, d: 0.5, h: 0.24, color: C.slate, wall: 0xc98a72, courses: true });
     // briques, chaînes d'angle et cordon de pierre, linteaux, cheminées qui fument
-    stones(p, -0.24, -0.389, 1.3, 0.025, 0.505, 0, dark(0xc98a72, 0.86), 0.45, 340);
-    stones(p, -0.89, -0.64, 0.5, 0.025, 0.505, -Math.PI / 2, dark(0xc98a72, 0.86), 0.45, 341);
+    stones(p, -0.24, -0.389, 1.3, 0.025, 0.505, 0, dark(0xc98a72, 0.86), 0.3, 340);
+    stones(p, -0.89, -0.64, 0.5, 0.025, 0.505, -Math.PI / 2, dark(0xc98a72, 0.86), 0.3, 341);
     for (const x of [-0.89, 0.41]) quoins(p, x, -0.39, 0.025, 0.505, x < 0 ? -1 : 1, 1);
     for (const y of [0.08, 0.32]) for (const x of [-0.78, -0.62, -0.46, -0.02, 0.14, 0.3]) p.box(0.1, 0.018, 0.024, x, y + 0.135, -0.385, C.cream);
     for (const x of [-0.7, 0.22]) { p.box(0.07, 0.24, 0.07, x, 0.62, -0.72, 0xa85e50); p.box(0.085, 0.025, 0.085, x, 0.86, -0.72, C.cream); smoke(x, 0.9, -0.72, 0); }
@@ -3655,6 +3655,23 @@ function school(p: Parts, age: number) {
     for (let x = -0.9; x <= 0.9; x += 0.08) if (Math.abs(x - 0.0) > 0.12) p.box(0.012, 0.1, 0.012, x, 0.025, 0.9, C.white);
     for (const s of [-1, 1]) p.box(0.78, 0.012, 0.012, s * 0.51, 0.1, 0.9, C.white);
     for (const [x, z] of [[0.5, 0.5], [0.3, 0.75], [-0.6, 0.65]]) tree(p, x, z, 1.15, 0x8fbf72);
+    // la cour sablée, la fontaine à boire et son bassin, les cartables jetés au pied du préau, la bicyclette de l'instituteur
+    p.box(1.76, 0.002, 1.12, 0, 0.025, 0.31, 0xd8ccae);
+    p.cyl(0.05, 0.06, 0.07, 8, 0.12, 0.025, -0.22, C.stone); waterPool(p, 0.12, 0.095 + 0.004, -0.22, 0.04, 8, false);
+    p.cyl(0.012, 0.014, 0.14, 6, 0.12, 0.095, -0.26, 0x3f6a4a); p.box(0.01, 0.01, 0.03, 0.12, 0.21, -0.245, 0x3f6a4a);
+    for (const [x, z, c, r] of [[0.46, 0.06, 0x6a4a2a, 0.3], [0.52, 0.08, 0x3a4a6a, -0.4], [0.49, 0.12, 0x8a3a2a, 1.2]] as number[][]) p.box(0.04, 0.03, 0.015, x, 0.027, z, c, r);
+    bike(p, 0.0, 0.84, 0x1e1e22, Math.PI / 2, 0.025);
+    // l'instituteur en blouse noire qui sonne la cloche sur le perron, les élèves qui jouent : la ronde, la corde à sauter, la
+    // marelle, les deux qui se poursuivent, et sous le préau deux qui bavardent
+    figure(p, -0.1, -0.3, 0x1e1e24, 0.3, false, 0x8a8a8a);
+    p.cone(0.012, 0.02, 6, -0.07, 0.14, -0.28, C.gold);
+    const kid = (x: number, z: number, c: number, r: number, pose: Pose = 'idle', hair = 0x4a3426) => lifeSize(p, x, 0.025, z, () => figure(p, x, z, c, r, false, hair, pose, 0.013), 0.72);
+    for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2; kid(-0.45 + Math.cos(a) * 0.09, 0.3 + Math.sin(a) * 0.09, [0x3a5a9a, 0xd84a3e, 0x6a8a4a, 0xf2c23a, 0x8a5a8a][k], -a - Math.PI / 2, 'cheer', k % 2 ? 0xc8a070 : 0x4a3426); }
+    kid(0.12, 0.42, 0x3a5a9a, 0); kid(0.32, 0.42, 0xd84a3e, Math.PI); kid(0.22, 0.42, 0xf2c23a, Math.PI / 2, 'run', 0xc8a070);
+    p.add(new THREE.TorusGeometry(0.1, 0.003, 3, 10, Math.PI).rotateZ(Math.PI), 0.22, 0.12, 0.42, 0xe8dcc0);
+    kid(-0.2, 0.36, 0x6a8a4a, Math.PI, 'run');
+    kid(-0.05, 0.6, 0x8a5a3a, -0.6, 'run', 0xc8a070); kid(0.06, 0.66, 0x3a6a8a, -0.8, 'run');
+    for (const [x, z, r] of [[0.62, -0.3, Math.PI / 2], [0.74, -0.32, -Math.PI / 2]] as number[][]) kid(x, z, [0xd8a03a, 0x4a6aa8][x > 0.7 ? 1 : 0], r);
   } else {
     // université : grand portique à colonnes cannelées sur un perron, fronton sculpté et ses statues, bannières des
     // expositions, coupole de la bibliothèque sur un tambour à colonnade, ailes à pilastres et toits de cuivre, parvis avec
