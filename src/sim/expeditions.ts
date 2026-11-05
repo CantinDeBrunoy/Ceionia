@@ -880,9 +880,10 @@ export class Expeditions {
     const rate = this.yields(), w = this.world, day = dt / this.dayLen();
     for (const r of ['wood', 'stone', 'ore', 'crude'] as Resource[]) {
       if (!rate[r]) continue;
-      this.prodT[r] += day * rate[r];
-      const n = Math.floor(this.prodT[r]);
-      if (n) { this.prodT[r] -= n; w[r] += n; }
+      // bois, pierre et minerai arrivent au fil des heures, en petites parts (l'affichage arrondit), et non d'un coup chaque
+      // jour ; le brut et le carburant se comptent en barils entiers (la raffinerie les traite un à un)
+      if (r === 'crude') { this.prodT[r] += day * rate[r]; const n = Math.floor(this.prodT[r]); if (n) { this.prodT[r] -= n; w[r] += n; } }
+      else w[r] += day * rate[r];
     }
     // la raffinerie traite le brut baril après baril, tant qu'il en reste ; chaque baril donne sa part de carburant
     const cap = this.refining();

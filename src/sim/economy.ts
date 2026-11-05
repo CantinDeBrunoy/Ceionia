@@ -14,7 +14,7 @@ export interface Cost { wood: number; stone: number }
 export type Resource = 'wood' | 'stone' | 'ore' | 'crude' | 'fuel';
 
 /** Stock au départ d'une partie (et d'une ancienne sauvegarde qui n'en avait pas) */
-export const START_WOOD = 60, START_STONE = 60;
+export const START_WOOD = 100, START_STONE = 100;
 
 /** Ceux qui produisent bois et pierre : en défi, le premier est offert, pour ne jamais rester sans rien pour bâtir */
 export const PRODUCERS: KindId[] = ['lumber', 'quarry'];
@@ -57,9 +57,12 @@ export const shortLabel = (w: World, c: Cost) => `Il faut ${costLabel(c)} (vous 
 
 /** Production par jour d'un bâtiment, selon son âge */
 export const YIELD: Partial<Record<KindId, Partial<Record<Resource, number[]>>>> = {
-  lumber: { wood: [4, 6, 8, 11, 14, 17] },
-  quarry: { stone: [3, 5, 7, 9, 12, 15] },
-  mine: { ore: [0, 0, 3, 5, 8, 10], stone: [0, 0, 2, 3, 4, 5] },
+  // le double d'avant : la production venait trop lentement pour bâtir les grands bâtiments
+  lumber: { wood: [8, 12, 16, 22, 28, 34] },
+  quarry: { stone: [6, 10, 14, 18, 24, 30] },
+  mine: { ore: [0, 0, 6, 10, 16, 20], stone: [0, 0, 4, 6, 8, 10] },
+  // le marché du Moyen Âge (le lieu de rencontre de cet âge) fait du troc : un peu de bois et de pierre
+  gather: { wood: [0, 0, 3, 0, 0, 0], stone: [0, 0, 2, 0, 0, 0] },
   oilwell: { crude: [0, 0, 0, 0, 4, 5] },
 };
 

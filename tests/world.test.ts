@@ -1071,7 +1071,7 @@ describe('expéditions', () => {
     // le monte-charge remonte deux minerai par jour
     const ore = w.ore;
     for (let i = 0; i < 100; i++) ex.update(1);
-    expect(w.ore - ore).toBe(2);
+    expect(w.ore - ore).toBeCloseTo(2, 5);
     // le niveau du camp et les embuscades repoussées se sauvegardent
     const r = new World();
     r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
@@ -1149,8 +1149,9 @@ describe('expéditions', () => {
     const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
     const ore = w.ore, stone = w.stone;
     for (let t = 0; t < 300; t++) ex.update(1);
-    expect(w.ore - ore).toBe(9);
-    expect(w.stone - stone).toBe(6);
+    // production doublée : 6 minerai et 4 pierres par jour au Moyen Âge, trois jours
+    expect(w.ore - ore).toBeCloseTo(18, 5);
+    expect(w.stone - stone).toBeCloseTo(12, 5);
   });
 
   it('le club alpin ne se pose que dans la montagne ; le coiffeur se pose partout', () => {
@@ -1178,7 +1179,8 @@ describe('expéditions', () => {
     const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
     const wood = w.wood, stone = w.stone;
     for (let t = 0; t < 100; t++) ex.update(1);
-    expect([w.wood - wood, w.stone - stone]).toEqual([6, 5]);
+    expect(w.wood - wood).toBeCloseTo(12, 5);
+    expect(w.stone - stone).toBeCloseTo(10, 5);
   });
 
   it('la voie ferrée franchit une rivière ou un lac sur un pont, pas le large', () => {
