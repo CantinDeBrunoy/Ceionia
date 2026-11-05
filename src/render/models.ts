@@ -5128,6 +5128,23 @@ function station(p: Parts, age: number) {
     // clôture de l'arrière-cour
     for (let x = 0.45; x <= 0.9; x += 0.09) p.box(0.012, 0.1, 0.012, x, 0.03, -0.8, C.white);
     p.box(0.48, 0.012, 0.01, 0.67, 0.1, -0.8, C.white);
+    // les voyageurs qui attendent le train : la dame à l'ombrelle, le monsieur en haut-de-forme et sa malle, la nourrice et
+    // l'enfant, le porteur à sa casquette ; le chef de gare au drapeau rouge au bord du quai
+    for (const [x, z, c, r, h] of [[-0.3, -0.08, 0x8a5a8a, Math.PI, 0x4a3426], [-0.1, -0.12, 0x2a2a30, 2.8, 0x1e1e22], [0.12, -0.04, 0x3a5a7a, 3.4, 0xe8e0d0], [0.18, -0.02, 0xd84a3e, 3.0, 0xc8a070], [0.62, -0.04, 0x3a4a6a, -2.4, 0x2a3a5a]] as number[][])
+      figure(p, x, z, c, r, false, h, 'idle', 0.11);
+    p.cyl(0.003, 0.003, 0.08, 4, -0.27, 0.2, -0.08, 0x2a2a2a); p.cone(0.04, 0.025, 8, -0.27, 0.28, -0.08, 0xf2c8d8);
+    p.cyl(0.02, 0.02, 0.022, 8, -0.1, 0.302, -0.12, 0x1e1e22);
+    p.box(0.08, 0.05, 0.05, -0.02, 0.11, -0.13, 0x6a4a2a); p.box(0.082, 0.006, 0.052, -0.02, 0.14, -0.13, 0x3c3c40);
+    figure(p, 0.75, 0.08, 0x1e2a48, -Math.PI / 2, false, 0x1e2a48, 'idle', 0.11); p.box(0.04, 0.03, 0.004, 0.71, 0.21, 0.1, 0xd84a3e);
+    // la grue à eau des locomotives au bout du quai, son bras rangé le long de la voie
+    p.cyl(0.03, 0.035, 0.04, 8, -0.8, 0.11, -0.04, 0x3f6a4a); p.cyl(0.014, 0.016, 0.32, 6, -0.8, 0.15, -0.04, 0x3f6a4a);
+    p.add(new THREE.CylinderGeometry(0.01, 0.01, 0.2, 6).rotateZ(Math.PI / 2), -0.71, 0.45, -0.04, 0x3f6a4a); p.add(new THREE.CylinderGeometry(0.008, 0.012, 0.05, 6), -0.61, 0.41, -0.04, 0x2a2a2a);
+    // le fiacre qui attend dans l'arrière-cour, son cheval et son cocher
+    p.box(0.1, 0.08, 0.14, 0.66, 0.08, -0.6, 0x2c3e3a); p.box(0.11, 0.012, 0.15, 0.66, 0.16, -0.6, 0x1e1e22);
+    for (const z of [-0.65, -0.55]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.008, 8).rotateZ(Math.PI / 2), 0.66 + s * 0.055, 0.07, z, 0x2a2a2e);
+    horse(p, 0.66, -0.42, -Math.PI / 2, 0x2a1e18, 0.03);
+    for (const s of [-1, 1]) p.box(0.006, 0.006, 0.14, 0.66 + s * 0.03, 0.12, -0.47, C.wood);
+    figure(p, 0.66, -0.58, 0x2a2a30, -Math.PI / 2, true, 0x1e1e22, 'idle', 0.11);
   } else {
     // bâtiment de verre et de béton, auvent d'acier sur poteaux, écran des départs, distributeur, vélos
     p.box(1.1, 0.34, 0.44, -0.25, 0.03, -0.6, 0xe6e4de);
