@@ -468,12 +468,12 @@ const SPECS: Record<Kind, Spec> = {
   bear: { geo: bearGeo, max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
   ibex: { geo: ibexGeo, max: 14, colors: [0x8a7a68, 0x9c8b76, 0x6e6052], speed: 0.35, run: 1.6, idle: [3, 9], ok: alpine, graze: 0.15, flee: 2.6, scale: 1.1 },
   lizard: { geo: lizardGeo, max: 28, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
-  crab: { geo: crabGeo, max: 36, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
-  turtle: { geo: turtleGeo, max: 20, colors: [0x6a8a4a, 0x8a7a50, 0x5a7a58], speed: 0.1, run: 0.25, idle: [5, 14], ok: bank, flee: 0.9 },
-  croc: { geo: crocGeo, max: 10, colors: [0x6a8a4a, 0x5a7a3e, 0x7a8a58], speed: 0.18, run: 0.9, idle: [8, 22], ok: bank },
+  crab: { geo: crabGeo, max: 24, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
+  turtle: { geo: turtleGeo, max: 14, colors: [0x6a8a4a, 0x8a7a50, 0x5a7a58], speed: 0.1, run: 0.25, idle: [5, 14], ok: bank, flee: 0.9 },
+  croc: { geo: crocGeo, max: 6, colors: [0x6a8a4a, 0x5a7a3e, 0x7a8a58], speed: 0.18, run: 0.9, idle: [8, 22], ok: bank },
   camel: { geo: camelGeo, max: 12, colors: [0xc8a070, 0xb89060, 0xd8b888], speed: 0.33, run: 1.2, idle: [5, 12], ok: offRoad, graze: 0.12, flee: 2.5, scale: 1.1 },
-  elephant: { geo: elephantGeo, max: 10, colors: [0x8e8e94, 0x7a7a82, 0x9a9a9e], speed: 0.25, run: 0.8, idle: [6, 16], ok: offRoad, graze: 0.12, scale: 1.45 },
-  giraffe: { geo: giraffeGeo, max: 10, colors: [0xf0c460, 0xe8b858, 0xf4cc78], speed: 0.33, run: 1.5, idle: [5, 12], ok: offRoad, graze: 0.1, flee: 3, scale: 1.25 },
+  elephant: { geo: elephantGeo, max: 8, colors: [0x8e8e94, 0x7a7a82, 0x9a9a9e], speed: 0.25, run: 0.8, idle: [6, 16], ok: offRoad, graze: 0.12, scale: 1.45 },
+  giraffe: { geo: giraffeGeo, max: 8, colors: [0xf0c460, 0xe8b858, 0xf4cc78], speed: 0.33, run: 1.5, idle: [5, 12], ok: offRoad, graze: 0.1, flee: 3, scale: 1.25 },
   moose: { geo: mooseGeo, max: 10, colors: [0x6a4e3a, 0x5a4232, 0x7a5a42], speed: 0.33, run: 1.5, idle: [5, 12], ok: wild, graze: 0.15, flee: 3, scale: 1.2 },
   butterfly: { geo: butterflyGeo, max: 32, colors: [0xf7d24c, 0xf29ab4, 0xffffff, 0x9fc8f0, 0xf09a50], speed: 0, idle: [1, 1], ok: any, flap: [26, 1.3, 0.003] },
 };
@@ -754,11 +754,19 @@ export class Fauna {
     // zones de vie : chaque espèce rattachée à son biome et à un élément du décor (rochers, lisières, berges, plages)
     const anchors: Record<Anchor, number[][]> = { edge, meadow, rocks, banks: bankB, ponds: pondB, coast };
     const scale = N > 128 ? 2 : 1;
+    // plafond par espèce : le nombre que le rendu instancié peut montrer (la même faune, quel que soit l'ordre des biomes)
+    const budget = {} as Record<Kind, number>;
+    for (const k of KIND_LIST) budget[k] = SPECS[k].max;
     for (const [zi, z] of ZONES.entries()) {
       if (z.needs && !hasModel(z.needs)) continue;
       for (const b of z.biomes) {
         const list = z.anchors.map((a) => anchors[a][b]).find((l) => l.length);
-        if (list) group(`z${zi}b${b}-`, z.kind, list, Math.min(z.max * scale, Math.floor(list.length / z.per)), z.n, z.radius, z.salt + b * 7);
+        if (!list) continue;
+        // au moins un groupe quand le décor existe, au plus `max` par biome ; et jamais plus que ce que le rendu peut montrer
+        let count = Math.min(z.max * scale, Math.max(list.length >= 3 ? 1 : 0, Math.floor(list.length / z.per)));
+        while (count > 0 && budget[z.kind] - Array.from({ length: count }, (_, i) => z.n(i)).reduce((s, n) => s + n, 0) < 0) count--;
+        for (let i = 0; i < count; i++) budget[z.kind] -= z.n(i);
+        group(`z${zi}b${b}-`, z.kind, list, count, z.n, z.radius, z.salt + b * 7);
       }
     }
     group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, () => 3, 3.5, 100);
