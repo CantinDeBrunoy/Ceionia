@@ -2083,15 +2083,18 @@ function mill(p: Parts, age: number) {
     p.cone(0.28, 0.32, 8, 0, 0.755, 0, 0x8a5a44);
     p.sphere(0.022, 0, 1.08, 0, C.darkwood);
     p.box(0.1, 0.16, 0.02, 0, 0.08, 0.262, C.door); p.box(0.07, 0.08, 0.02, 0, 0.42, 0.226, C.win, 0, true);
-    // ailes : un longeron, une toile tendue d'un côté, un treillis
+    // ailes : un longeron, une toile tendue d'un côté, un treillis. Elles étaient dessinées sur le corps du moulin, donc
+    // figées : elles forment maintenant la pièce qui tourne (spinner), autour de l'arbre qui sort du chapeau
     const hub = [0, 0.64, 0.3];
     p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.12, 8).rotateX(Math.PI / 2), hub[0], hub[1], hub[2] - 0.04, C.darkwood);
+    const r = spinner([hub[0], hub[1], hub[2]], [0, 0, 1], 0.7);
+    r.add(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 8).rotateX(Math.PI / 2), 0, 0, 0.01, dark(C.darkwood, 0.85));
     for (let k = 0; k < 4; k++) {
       const a = (k * Math.PI) / 2 + Math.PI / 4;
-      p.add(new THREE.BoxGeometry(0.022, 0.6, 0.02).translate(0, 0.33, 0), hub[0], hub[1], hub[2], C.wood, 0, false, a);
-      p.add(new THREE.BoxGeometry(0.12, 0.42, 0.008).translate(0.07, 0.4, -0.006), hub[0], hub[1], hub[2], 0xf4ead8, 0, false, a);
-      p.add(new THREE.BoxGeometry(0.012, 0.44, 0.012).translate(0.135, 0.4, 0), hub[0], hub[1], hub[2], C.wood, 0, false, a);
-      for (let j = 0; j < 4; j++) p.add(new THREE.BoxGeometry(0.15, 0.01, 0.012).translate(0.065, 0.22 + j * 0.12, 0.004), hub[0], hub[1], hub[2], C.wood, 0, false, a);
+      r.add(new THREE.BoxGeometry(0.022, 0.6, 0.02).translate(0, 0.33, 0), 0, 0, 0, C.wood, 0, false, a);
+      r.add(new THREE.BoxGeometry(0.12, 0.42, 0.008).translate(0.07, 0.4, -0.006), 0, 0, 0, 0xf4ead8, 0, false, a);
+      r.add(new THREE.BoxGeometry(0.012, 0.44, 0.012).translate(0.135, 0.4, 0), 0, 0, 0, C.wood, 0, false, a);
+      for (let j = 0; j < 4; j++) r.add(new THREE.BoxGeometry(0.15, 0.01, 0.012).translate(0.065, 0.22 + j * 0.12, 0.004), 0, 0, 0, C.wood, 0, false, a);
     }
   } else if (age === 3) {
     // minoterie à vapeur : haut moulin de brique sur trois niveaux (bandeaux de pierre, fenêtres cintrées, lucarne et potence
