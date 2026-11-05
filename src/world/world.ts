@@ -180,6 +180,8 @@ export class World {
   /** pétrole brut tiré des puits, et carburant qu'en fait la raffinerie (les blindés de l'expédition armée le brûlent) */
   crude = 0;
   fuel = 0;
+  /** briques de la briqueterie (les anciennes sauvegardes n'en ont pas : zéro) */
+  brick = 0;
   /** Gisements de pétrole : cases où le brut suinte (1), tirées de la graine de la carte ; seul un puits de pétrole s'y pose */
   oil = new Uint8Array(N * N);
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
@@ -1167,6 +1169,7 @@ export class World {
       stone: this.stone,
       crude: this.crude,
       fuel: this.fuel,
+      brick: this.brick,
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       mined: [...this.mined],
       claimed: [...this.claimed],
@@ -1269,6 +1272,7 @@ export class World {
     this.stone = d.stone === undefined ? START_STONE : Math.max(0, +d.stone || 0);
     this.crude = Math.max(0, +d.crude || 0);
     this.fuel = Math.max(0, +d.fuel || 0);
+    this.brick = Math.max(0, +d.brick || 0);
     // une ancienne sauvegarde n'a pas de gisements : ils se tirent de la graine au chargement (addDefaultDecor)
     this.oil.fill(0);
     for (const k of Array.isArray(d.oil) ? d.oil : []) if (k >= 0 && k < N * N) this.oil[k] = 1;

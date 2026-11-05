@@ -179,12 +179,13 @@ const RES_META: Record<Resource, { label: string; icon: string; use: string; mor
   wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Nature › Forêt).' },
   stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Nature › Rochers). La mine en donne aussi.' },
   ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; les expéditions armées en remontent du monde souterrain.' },
+  brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’époque moderne et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
   crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
   fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les blindés de l’expédition armée.', more: 'La raffinerie en tire du pétrole brut des puits.' },
 };
 
-/** Une condition d'âge sans bâtiment : le minerai, l'expédition obligatoire ou les habitants */
-const reqOf = (label: string) => (label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : 'pop');
+/** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
+const reqOf = (label: string) => (label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : 'pop');
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${v < 2 && g.one ? g.one : g.label}`;
@@ -424,6 +425,7 @@ export class UI {
       // une condition sans bâtiment : on montre comment l'obtenir
       const req = (e.target as HTMLElement).closest<HTMLElement>('[data-req]')?.dataset.req;
       if (req === 'ore') { this.openRes('ore'); return; }
+      if (req === 'brick') { this.openRes('brick'); return; }
       if (req === 'exp') {
         const t = /« (.+) »/.exec((e.target as HTMLElement).closest<HTMLElement>('[data-req]')!.textContent ?? '')?.[1], m = MISSIONS.find((x) => x.title === t);
         if (m) this.gotoMission(m.id); else this.openExpeditions();
@@ -643,7 +645,7 @@ export class UI {
     const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}`}
-      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois et ${Math.floor(w.stone)} pierre`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
+      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois${cost.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`}`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
       ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? '<p class="keys">La flèche jaune montre l’entrée · R : tourner · Échap : lâcher</p>' : ''}`;
   }
 
@@ -663,6 +665,7 @@ export class UI {
       for (const k of list) count.set(k, (count.get(k) ?? 0) + 1);
       stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => `${n} ${names[k][n > 1 ? 1 : 0]}`).join(', ')}` : `${ic('pen', 14, 2)} aucune bête pour l’instant`);
     }
+    if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${YIELD.brickworks!.brick![a] ?? 0} briques cuites par jour · ${Math.floor(h.world.brick)} en réserve au village`);
     if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${YIELD.oilwell!.crude![a] ?? 0} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
     if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);
     if (b.kind === 'outpost') stats.push(`${ic('outpost', 14, 2)} ${h.expeditions.held()} cases de galeries tenues sous terre · camp niveau ${h.expeditions.camp()}`);
@@ -759,7 +762,7 @@ export class UI {
   }
 
   /**
-   * Stocks du village (bois, pierre, minerai ; pétrole brut et carburant à l'époque moderne, ou dès qu'il y en a) et ce qu'il
+   * Stocks du village (bois, pierre, minerai, briques ; pétrole brut et carburant à l'époque moderne, ou dès qu'il y en a) et ce qu'il
    * en produit chaque jour
    */
   private resKey = '';
@@ -767,6 +770,8 @@ export class UI {
     const w = this.host.world, day = this.host.expeditions.daily(), rail = this.host.railway.daily();
     day.ore += rail.ore; day.stone += rail.stone;
     const items: [Resource, string, string][] = [['wood', 'tree', 'Bois'], ['stone', 'rock', 'Pierre'], ['ore', 'pickaxe', 'Minerai']];
+    // les briques paraissent avec la briqueterie, dès l'âge industriel (ou dès qu'on en a : une partie plus ancienne)
+    if (this.host.sim.age >= 3 || w.brick >= 1 || day.brick) items.push(['brick', 'brick', 'Briques']);
     if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel) items.push(['crude', 'crude', 'Brut'], ['fuel', 'fuel', 'Carburant']);
     const key = `${w.unlimited}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
     if (key === this.resKey) return;
@@ -776,7 +781,7 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}/j`;
-    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
+    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');

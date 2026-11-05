@@ -855,11 +855,11 @@ export class Expeditions {
   craftProgress() { const s = this.world.exp; return s.craft.length ? Math.min(1, s.craftT / GEAR_BY[s.craft[0]].time) : 0; }
 
   /** production de chaque ressource en cours (fractions d'unité), et avancement du baril en cours à la raffinerie (0 … 1) */
-  private prodT: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0 };
+  private prodT: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0, brick: 0 };
   private refineT = 0;
-  /** Ce que le village tire chaque jour de ses bâtiments : bois, pierre, minerai, pétrole brut des puits (avant raffinage) */
+  /** Ce que le village tire chaque jour de ses bâtiments : bois, pierre, minerai, briques, pétrole brut des puits (avant raffinage) */
   yields(): Record<Resource, number> {
-    const rate: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0 };
+    const rate: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0, brick: 0 };
     for (const b of this.world.buildings.values()) {
       const y = YIELD[b.kind];
       if (y) for (const r of Object.keys(y) as Resource[]) rate[r] += y[r]![b.age] ?? 0;
@@ -885,9 +885,9 @@ export class Expeditions {
   }
   private mineStep(dt: number) {
     const rate = this.yields(), w = this.world, day = dt / this.dayLen();
-    for (const r of ['wood', 'stone', 'ore', 'crude'] as Resource[]) {
+    for (const r of ['wood', 'stone', 'ore', 'brick', 'crude'] as Resource[]) {
       if (!rate[r]) continue;
-      // bois, pierre et minerai arrivent au fil des heures, en petites parts (l'affichage arrondit), et non d'un coup chaque
+      // bois, pierre, minerai et briques arrivent au fil des heures, en petites parts (l'affichage arrondit), et non d'un coup chaque
       // jour ; le brut et le carburant se comptent en barils entiers (la raffinerie les traite un à un)
       if (r === 'crude') { this.prodT[r] += day * rate[r]; const n = Math.floor(this.prodT[r]); if (n) { this.prodT[r] -= n; w[r] += n; } }
       else w[r] += day * rate[r];
