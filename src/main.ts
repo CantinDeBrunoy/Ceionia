@@ -120,6 +120,8 @@ class Game implements UIHost {
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
+  /** la caméra a déjà filé sur un volcan en éruption (la première fois seulement) */
+  private volcanoSeen = false;
   /** le grand départ des colons : la foule qui les acclame (au cœur du village, puis au pas de tir), le voyage montré */
   private farewell: { id: number; crowd: number[]; at: string; voyage: boolean } | null = null;
   pens: PenView;
@@ -630,6 +632,12 @@ class Game implements UIHost {
     if (!this.eruptions.start(cell)) return;
     audio.sfxEruption(ERUPTION_DUR);
     this.ui.toast('Le volcan entre en éruption !');
+    // la première éruption de la partie : la vue file sur le volcan pour ne pas la manquer
+    if (!this.volcanoSeen) {
+      this.volcanoSeen = true;
+      this.follow(null);
+      this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 34);
+    }
   }
 
   /** Descend par l'entrée (grotte ou faille) de la case donnée */
