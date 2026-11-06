@@ -923,9 +923,9 @@ function moose(c: Coat): { rig: Rig; clips: ClipDef[] } {
 
 const WOLF_COATS: Coat[] = [
   // gris (dos sombre, joues et ventre crème), gris anthracite, fauve des bois
-  { fur: 0x8c8a88, top: 0x4c4846, saddle: 0x3a3634, belly: 0xdcd4c4, cheek: 0xe6e0d2, muzzle: 0xc4bcae, leg: 0xb4a894, paw: 0x3a3432, inner: 0xd8ccbc, tip: 0x242020 },
-  { fur: 0x5e5c5e, top: 0x302e30, saddle: 0x222022, belly: 0xa8a29a, cheek: 0xbcb6ac, muzzle: 0x8e8882, leg: 0x7e766c, paw: 0x221e1e, inner: 0xa89c90, tip: 0x161414 },
-  { fur: 0x9a8670, top: 0x5c4c3c, saddle: 0x44382c, belly: 0xe2d6c0, cheek: 0xeae0cc, muzzle: 0xcebea6, leg: 0xc0aa8c, paw: 0x3a3028, inner: 0xdccab2, tip: 0x2a221c },
+  { fur: 0xaeaeb2, top: 0x626066, saddle: 0x403e44, belly: 0xe8e4dc, cheek: 0xf0ece4, muzzle: 0xd4d0c8, leg: 0xc8c0b2, paw: 0x3a3432, inner: 0xd8ccbc, tip: 0x242020 },
+  { fur: 0x7a7a80, top: 0x3c3c42, saddle: 0x28282c, belly: 0xc4c0b8, cheek: 0xd2cec6, muzzle: 0xa8a49e, leg: 0x9a948a, paw: 0x221e1e, inner: 0xa89c90, tip: 0x161414 },
+  { fur: 0xa8a090, top: 0x625a50, saddle: 0x46403a, belly: 0xe2d6c0, cheek: 0xeae0cc, muzzle: 0xcebea6, leg: 0xc0aa8c, paw: 0x3a3028, inner: 0xdccab2, tip: 0x2a221c },
 ];
 
 /**
@@ -959,7 +959,7 @@ function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
   r.add('ribs', ell(0.031, 0.042, 0.054), [0, 0.128, 0.018], c.fur, [0, 0, 0], c.top);
   r.add('ribs', ell(0.02, 0.012, 0.05), [0, 0.096, -0.012], c.belly);
   r.add('chest', ell(0.022, 0.034, 0.026), [0, 0.118, 0.06], c.belly, [0.25, 0, 0], c.fur);
-  r.add('ribs', ell(0.026, 0.01, 0.07), [0, 0.168, 0.0], c.saddle, [0.06, 0, 0], c.top);
+  r.add('ribs', ell(0.027, 0.009, 0.068), [0, 0.162, 0.0], c.saddle, [0.06, 0, 0], c.top);
   r.add('hips', ell(0.022, 0.008, 0.036), [0, 0.164, -0.05], c.saddle, [-0.08, 0, 0]);
   // crinière : collerette épaisse autour du cou et jarres hérissées du garrot
   r.add('neck', ell(0.03, 0.034, 0.03), [0, 0.15, 0.072], c.fur, [0.3, 0, 0], c.top);
@@ -996,8 +996,8 @@ function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
   });
   // queue touffue portée bas, bout noir
   r.put('tail1', seg([0, 0.142, -0.098], [0, 0.116, -0.128], 0.01, 0.014, 6), c.fur, c.top);
-  r.add('tail2', ell(0.016, 0.042, 0.017), [0, 0.084, -0.142], c.fur, [-0.32, 0, 0], c.top);
-  r.add('tail2', ell(0.01, 0.014, 0.011, 0), [0, 0.046, -0.156], c.tip, [-0.32, 0, 0]);
+  r.add('tail2', ell(0.019, 0.046, 0.02), [0, 0.084, -0.142], c.fur, [0.32, 0, 0], c.top);
+  r.add('tail2', ell(0.011, 0.016, 0.012, 0), [0, 0.046, -0.155], c.tip, [0.32, 0, 0]);
   // longues pattes fines : épaule et cuisse fournies, canons clairs, pieds serrés aux doigts sombres
   r.both((s, L) => {
     const x = s * 0.019, hx = s * 0.021;
@@ -1049,15 +1049,15 @@ function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
     ['Idle_2', 6, (u, P) => {
       const k = win(u, 0.06, 0.92, 0.12), h = win(u, 0.22, 0.82, 0.08);
       breathe(P, u, 3, 1 + h);
-      R(P, 'hips', -0.62 * k);
-      M(P, 'hips', 0, -0.05 * k, -0.012 * k);
-      for (const L of ['L', 'R']) { R(P, `f${L}1`, 0.68 * k); R(P, `h${L}1`, -0.8 * k); R(P, `h${L}2`, 1.75 * k); }
+      R(P, 'hips', -0.45 * k);
+      M(P, 'hips', 0, -0.06 * k, -0.012 * k);
+      for (const L of ['L', 'R']) { R(P, `f${L}1`, 0.5 * k); R(P, `h${L}1`, -0.85 * k); R(P, `h${L}2`, 1.5 * k); }
       R(P, 'chest', -0.06 * k);
       R(P, 'neck', -0.15 * k - 0.22 * h);
       R(P, 'head', -0.05 * k - 0.2 * h + 0.03 * h * sn(u, 9), 0.04 * h * sn(u, 2));
       R(P, 'jaw', 0.26 * h + 0.05 * h * sn(u, 11));
       ears(P, 0.35 * h, -0.1 * h);
-      R(P, 'tail1', 0.25 * k); R(P, 'tail2', 0.5 * k);
+      R(P, 'tail1', 0.6 * k); R(P, 'tail2', 0.3 * k);
     }],
     // flaire le sol en avançant la truffe, les oreilles pointées vers l'avant
     ['Idle_3', 4, (u, P) => {
