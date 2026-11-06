@@ -1070,6 +1070,28 @@ function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
       ears(P, -0.2 * k, 0);
       R(P, 'tail1', 0.2 * k); R(P, 'tail2', 0, 0.2 * k * sn(u, 3));
     }],
+    // mord : il se tasse sur ses pattes arrière, bondit gueule ouverte, claque des mâchoires et recule (oreilles couchées)
+    ['Attack', 0.8, (u, P) => {
+      const crouch = win(u, 0, 0.35, 0.12), lunge = win(u, 0.3, 0.62, 0.08), snap = blip(u, 0.5, 0.08);
+      M(P, 'hips', 0, -0.014 * crouch, -0.012 * crouch + 0.02 * lunge);
+      R(P, 'hips', 0.12 * crouch - 0.1 * lunge);
+      for (const L of ['L', 'R']) { R(P, `h${L}1`, -0.35 * crouch + 0.3 * lunge); R(P, `h${L}2`, 0.6 * crouch); R(P, `f${L}1`, 0.3 * crouch - 0.55 * lunge); R(P, `f${L}2`, 0.4 * crouch); }
+      R(P, 'neck', 0.25 * crouch - 0.05 * lunge); R(P, 'head', -0.15 * lunge);
+      R(P, 'jaw', 0.5 * lunge * (1 - snap));
+      ears(P, 0.45, 0);
+      R(P, 'tail1', 0.6, 0.15 * sn(u, 2)); R(P, 'tail2', 0.2);
+      breathe(P, u, 2, 1.5);
+    }],
+    // touché : il se cabre de côté, la tête rejetée, et rentre la queue
+    ['Hit', 0.5, (u, P) => {
+      const k = Math.sin(Math.PI * u);
+      R(P, 'hips', -0.12 * k, 0, 0.1 * k); R(P, 'chest', -0.15 * k, 0.15 * k);
+      R(P, 'neck', -0.3 * k, 0.25 * k); R(P, 'head', -0.15 * k);
+      R(P, 'jaw', 0.25 * k);
+      ears(P, 0.6 * k, 0);
+      R(P, 'fL1', -0.4 * k); R(P, 'fR1', -0.25 * k);
+      R(P, 'tail1', -0.4 * k); R(P, 'tail2', -0.3 * k);
+    }],
   );
   return { rig: r, clips };
 }

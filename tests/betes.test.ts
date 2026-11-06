@@ -24,7 +24,8 @@ describe('bêtes articulées', () => {
     expect(BEAST_KINDS.has('wolf')).toBe(true);
     const { bones, clips } = beastInfo('wolf');
     for (const b of ['eL', 'eR', 'jaw', 'tail1', 'tail2']) expect(bones).toContain(b);
-    for (const n of ['Sleep', 'Eating', 'Idle_2', 'Idle_3']) expect(clips).toContain(n);
+    // (morsure et sursaut : pour la chasse au loup des expéditions)
+    for (const n of ['Sleep', 'Eating', 'Idle_2', 'Idle_3', 'Attack', 'Hit']) expect(clips).toContain(n);
     for (const coat of [0, 1, 2]) expect(makeBeast('wolf', coat, 1).actions.has('Idle_2')).toBe(true);
   });
 
