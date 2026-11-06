@@ -13,9 +13,9 @@ export const STATION_KINDS: KindId[] = ['station', 'terminal', 'maglev'];
 export const isStation = (b: Building) => STATION_KINDS.includes(b.kind);
 
 /** Distance (en cases) jusqu'où une gare sert ses voisins */
-export const RAIL_REACH = 5;
+export const RAIL_REACH = 8;
 /** Production en plus d'un bâtiment servi par une gare de marchandises */
-export const FREIGHT_BONUS = 0.5;
+export const FREIGHT_BONUS = 0.75;
 /** Les bâtiments qui produisent, que sert une gare de marchandises voisine */
 export const FREIGHT_KINDS: KindId[] = ['brickworks', 'mine', 'quarry', 'lumber', 'oilwell', 'refinery'];
 /** Les bâtiments qu'une gare de voyageurs voisine sert en leur amenant du monde */

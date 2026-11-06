@@ -113,7 +113,7 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Un arrêt du chemin de fer : les voyageurs y montent et en descendent, les mineurs y prennent le train pour l’avant-poste.',
     jobs: [0, 0, 0, 3, 5, 6], joy: [0, 0, 0, 3, 4, 5],
     reqKind: 'terminal',
-    perk: 'On les bâtit une fois la gare centrale au village, pour la prolonger. Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux. Train de marchandises : briqueterie, mine, carrière, scierie, puits et raffinerie à 5 cases de la gare produisent 50 % de plus. Train de voyageurs : il amène les équipes au cosmodrome voisin.',
+    perk: 'On les bâtit une fois la gare centrale au village, pour la prolonger. Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux. Train de marchandises : briqueterie, mine, carrière, scierie, puits et raffinerie à 8 cases de la gare produisent 75 % de plus. Train de voyageurs : il amène les équipes au cosmodrome voisin.',
   },
   terminal: {
     id: 'terminal', size: 3, minAge: 3, icon: '🚉', cat: 'service',
@@ -121,7 +121,7 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'La très grande gare du village, toute de brique : façade gothique et sa haute tour de l’horloge sur la rue, et derrière, sous une immense halle de fer et de verre, trois voies où les trains de plusieurs lignes sont à quai ensemble.',
     jobs: [0, 0, 0, 10, 14, 16], joy: [0, 0, 0, 5, 7, 8],
     reqKind: 'brickworks',
-    perk: 'Très grand bâtiment de 3 × 3 cases, qui demande des briques : bâtissez d’abord une briqueterie. C’est la première gare du village, avant les petites gares. Ses trois voies partent par l’arrière de la halle : tracez-en plusieurs lignes vers les autres gares (« Nouvelle ligne », sur sa fiche) pour former un réseau. Trains de marchandises : ateliers et carrières à 5 cases d’une gare produisent 50 % de plus. Trains de voyageurs : ils amènent les équipes au cosmodrome.',
+    perk: 'Très grand bâtiment de 3 × 3 cases, qui demande des briques : bâtissez d’abord une briqueterie. C’est la première gare du village, avant les petites gares. Ses trois voies partent par l’arrière de la halle : tracez-en plusieurs lignes vers les autres gares (« Nouvelle ligne », sur sa fiche) pour former un réseau. Trains de marchandises : ateliers et carrières à 8 cases d’une gare produisent 75 % de plus. Trains de voyageurs : ils amènent les équipes au cosmodrome.',
   },
   harbor: {
     id: 'harbor', size: 3, minAge: 2, icon: '⚓', cat: 'prod',

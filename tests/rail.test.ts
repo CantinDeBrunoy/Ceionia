@@ -38,7 +38,7 @@ describe('le rail au service du village', () => {
     expect(railWant('house')).toBeNull();
   });
 
-  it('une gare desservie par un train de marchandises fait produire 50 % de plus la briqueterie voisine ; pas une gare de voyageurs, ni une ligne en panne', () => {
+  it('une gare desservie par un train de marchandises fait produire 75 % de plus la briqueterie voisine ; pas une gare de voyageurs, ni une ligne en panne', () => {
     const w = continent();
     const [x, z] = spot(w, 'brickworks', 40, 40);
     const bw = w.place('brickworks', x, z, 0, true, 3, false);
@@ -53,11 +53,11 @@ describe('le rail au service du village', () => {
     w.lines.push({ id: 1, stops: [st.id, far.id], color: 0 });
     expect(servedStations(w, true)).toEqual([]);
     expect(ex.daily().brick).toBe(8);
-    // de marchandises : +50 %
+    // de marchandises : +75 %
     w.lines[0].freight = true;
     expect(servedStations(w, true).map((b) => b.id).sort()).toEqual([st.id, far.id].sort());
     expect(railBoost(w, bw)).toBe(1 + FREIGHT_BONUS);
-    expect(ex.daily().brick).toBe(12);
+    expect(ex.daily().brick).toBe(14);
     // son train ne peut pas rouler : pas de bonus
     w.lines[0].ok = false;
     expect(ex.daily().brick).toBe(8);
