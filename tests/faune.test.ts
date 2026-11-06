@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { World, N, setMapSize, VEG_CAVE, VEG_FISSURE, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
-import { speciesIn, bearDens, ZONES } from '../src/render/fauna';
+import * as THREE from 'three';
+import { World, N, setMapSize, VEG_CAVE, VEG_FISSURE, VEG_FOREST, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
+import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors } from '../src/render/fauna';
+import { hash2 } from '../src/core/rng';
 
 describe('faune : rattachement au décor', () => {
   beforeAll(() => setMapSize(96));
@@ -47,5 +49,62 @@ describe('faune : rattachement au décor', () => {
     const w = new World();
     w.heights.fill(1);
     expect(bearDens(w)).toEqual([]);
+  });
+});
+
+describe('faune : plus de bêtes, et toujours à voir', () => {
+  beforeAll(() => setMapSize(96));
+  /** Une prairie tempérée, quelques bosquets, et la place du village au milieu */
+  function meadow() {
+    const w = new World();
+    w.heights.fill(1);
+    w.computeBiomes();
+    w.biome.fill(BIOME_TEMPERATE);
+    for (let k = 0; k < N * N; k++) if (hash2(k % N, Math.floor(k / N), 5) < 0.12) w.veg[k] = VEG_FOREST;
+    for (let z = 45; z < 52; z++) for (let x = 45; x < 52; x++) w.veg[w.ci(x, z)] = 0;
+    w.place('gather', 46, 46, 0, true, 0, false);
+    return w;
+  }
+  const cameraAt = (x: number, z: number, h: number) => {
+    const c = new THREE.PerspectiveCamera(50, 1.5, 0.1, 500);
+    c.position.set(x + 4, h, z + 4);
+    c.lookAt(x, 1, z);
+    c.updateMatrixWorld();
+    return c;
+  };
+  const near = (f: Fauna, x: number, z: number, r: number) => (f as any).critters.filter((c: any) => !c.hidden && Math.abs(c.x - x) < r && Math.abs(c.z - z) < r);
+
+  it('le centre du village est sa place ; des bêtes sauvages vivent dans un anneau autour', () => {
+    const w = meadow();
+    expect(villageCenter(w)).toEqual([47.5, 47.5]);
+    expect(villageCenter(new World())).toBeNull();
+    const f = new Fauna(w, { perches: Array.from({ length: 4096 }, () => []), flowers: Array.from({ length: 4096 }, () => []) });
+    f.update(0.016, 0, 12, 0, 0, 0);
+    const ring = (f as any).critters.filter((c: any) => c.key.startsWith('near'));
+    expect(ring.length).toBeGreaterThanOrEqual(4);
+    for (const c of ring) {
+      const d = Math.hypot(c.hx - 47.5, c.hz - 47.5);
+      expect(d).toBeGreaterThanOrEqual(VILLAGE_RING[0]);
+      expect(d).toBeLessThanOrEqual(VILLAGE_RING[1]);
+      expect(NEARBY[BIOME_TEMPERATE]).toContain(c.kind);
+    }
+  });
+
+  it('sous la vue, des visiteurs arrivent quand on ne voit aucune bête, sans dépasser leur plafond', () => {
+    const w = meadow(), f = new Fauna(w, { perches: Array.from({ length: 4096 }, () => []), flowers: Array.from({ length: 4096 }, () => []) });
+    // un coin éloigné du village, vue rapprochée
+    const cam = cameraAt(14, 80, 14);
+    f.update(0.016, 0, 12, 0, 0, 0, cam);
+    // personne sous la vue : un groupe vient
+    (f as any).critters = (f as any).critters.filter((c: any) => Math.abs(c.x - 14) > 20 || Math.abs(c.z - 80) > 20);
+    for (let i = 0; i < 4 * 60; i++) f.update(1 / 60, i / 60, 12, 0, 0, 0, cam);
+    expect((f as any).visitors.length).toBeGreaterThanOrEqual(1);
+    for (let i = 0; i < 12 * 60; i++) f.update(1 / 60, i / 60, 12, 0, 0, 0, cam);
+    expect(near(f, 14, 80, SEEN_R + 8).length).toBeGreaterThanOrEqual(SEEN_MIN - 1);
+    expect(new Set((f as any).critters.filter((c: any) => c.key.startsWith('visit')).map((c: any) => c.key)).size).toBeLessThanOrEqual(VISITORS);
+    // vue d'ensemble : on ne fait venir personne
+    expect(wantsVisitors(0, 120)).toBe(false);
+    expect(wantsVisitors(0, 20)).toBe(true);
+    expect(wantsVisitors(SEEN_MIN, 20)).toBe(false);
   });
 });
