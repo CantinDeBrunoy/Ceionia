@@ -110,6 +110,28 @@ class Rig {
   }
   /** pièce déjà placée (segment…) */
   put(bone: string, g: THREE.BufferGeometry, color: number, top?: number) { this.add(bone, g, [0, 0, 0], color, [0, 0, 0], top); }
+  /**
+   * Membrane tendue entre des os (aile de dragon) : chaque sommet suit son os, ou ses os à parts égales, si bien qu'elle se
+   * tend quand les os s'écartent et se plisse quand ils se replient ; triangles vus des deux côtés
+   */
+  web(color: number, pts: { at: V3; on: string[] }[], tris: [number, number, number][]) {
+    const pos: number[] = [], si: number[] = [], sw: number[] = [];
+    const push = (i: number) => {
+      const p = pts[i], ids = p.on.map((b) => this.idx(b));
+      pos.push(...p.at);
+      for (let k = 0; k < 4; k++) { si.push(ids[k] ?? 0); sw.push(k < ids.length ? 1 / ids.length : 0); }
+    };
+    for (const [a, b, c] of tris) { push(a); push(b); push(c); push(a); push(c); push(b); }
+    const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    _ca.setHex(color);
+    const n = pos.length / 3, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { col[i * 3] = _ca.r; col[i * 3 + 1] = _ca.g; col[i * 3 + 2] = _ca.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    this.geos.push(g);
+  }
   /** la même pièce des deux côtés (s = 1 côté gauche +x, s = -1 côté droit), os nommés `${nom}L` / `${nom}R` si `side` */
   both(fn: (s: number, L: string) => void) { fn(1, 'L'); fn(-1, 'R'); }
 
@@ -1615,16 +1637,29 @@ const DRAGON_COATS: Coat[] = [
   { back: 0x2a2232, top: 0x3e3048, belly: 0x8a7a8a, wing: 0x3a2a46, spar: 0x16101c, spike: 0xc8b8d0, horn: 0xd0c4b8, eye: 0xff6a20, mouth: 0xa83a3a },
 ];
 
-/** Triangle à deux faces (une membrane d'aile, vue des deux côtés) */
-function tri(a: V3, b: V3, c: V3) {
-  return new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([...a, ...b, ...c, ...a, ...c, ...b], 3));
+/** Articulations de l'aile gauche déployée : épaule, coude, poignet ; bouts des trois doigts ; attaches de la membrane au flanc */
+const WING_JOINTS: V3[] = [[0.06, 0.285, 0.075], [0.2, 0.335, 0.03], [0.345, 0.375, 0.05]];
+const WING_TIPS: V3[] = [[0.62, 0.385, -0.04], [0.57, 0.315, -0.2], [0.43, 0.27, -0.31]];
+const WING_ROOT: V3[] = [[0.2, 0.275, -0.2], [0.055, 0.255, -0.16]];
+
+/**
+ * Point de la surface d'un ellipsoïde du corps (centre c0, demi-axes rr) à la hauteur z, à l'angle a (0 : flanc, π/2 : dos),
+ * côté s, et sa normale (pour y poser une écaille, une côte)
+ */
+function barrel(c0: V3, rr: V3, z: number, a: number, s: number, lift = 0.002): { at: V3; rot: V3 } | null {
+  const k2 = 1 - ((z - c0[2]) / rr[2]) ** 2;
+  if (k2 <= 0.04) return null;
+  const k = Math.sqrt(k2), x = s * rr[0] * Math.cos(a) * k, y = c0[1] + rr[1] * Math.sin(a) * k;
+  const n = new THREE.Vector3(x / rr[0] ** 2, (y - c0[1]) / rr[1] ** 2, (z - c0[2]) / rr[2] ** 2).normalize();
+  return { at: [x + n.x * lift, y + n.y * lift, z + n.z * lift], rot: rotTo(n) };
 }
 
 /**
- * Dragon : long corps cuirassé au ventre de plaques claires, crête d'épines du crâne au bout de la queue, cou en trois
- * segments, tête cornue aux yeux de braise, mâchoire dentée qui s'ouvre sur une gueule rouge, grandes ailes de chauve-souris
- * (bras, doigts, membranes) qui se replient sur le dos, pattes griffues (les arrière au jarret retourné), queue en quatre
- * segments terminée en fer de lance. Il marche, court, se repose en balançant la queue, vole à grands coups d'ailes, se
+ * Dragon : corps massif (tonneau des côtes aux flancs côtelés, poitrail en carène, ventre qui pend sous ses plaques claires,
+ * croupe ronde et grosses cuisses), rangées d'écailles le long de l'échine, crête d'épines du crâne au bout de la queue, cou
+ * puissant en trois segments, tête cornue aux yeux de braise, mâchoire dentée qui s'ouvre sur une gueule rouge ; grandes ailes
+ * de chauve-souris aux os visibles (bras, avant-bras, griffe du pouce, trois longs doigts) dont la membrane suit chaque os, tendue
+ * ou plissée le long des flancs ; pattes griffues (les arrière au jarret retourné), queue effilée jusqu'à un petit fer de lance. Il marche, court, se repose en balançant la queue, vole à grands coups d'ailes, se
  * dresse en rugissant, crache le feu cou tendu, tressaille sous les coups, s'effondre et meurt, dort enroulé sur lui-même
  */
 function dragon(c: Coat): { rig: Rig; clips: ClipDef[] } {
@@ -1646,29 +1681,53 @@ function dragon(c: Coat): { rig: Rig; clips: ClipDef[] } {
     r.bone(`f${L}2`, `f${L}1`, s * 0.082, 0.095, 0.12);
     r.bone(`h${L}1`, 'hips', s * 0.075, 0.19, -0.1);
     r.bone(`h${L}2`, `h${L}1`, s * 0.088, 0.1, -0.06);
-    r.bone(`w${L}1`, 'chest', s * 0.055, 0.28, 0.06);
-    r.bone(`w${L}2`, `w${L}1`, s * 0.26, 0.33, 0.0);
+    // l'aile : bras (épaule → coude), avant-bras (coude → poignet), main, et trois longs doigts qui tendent la membrane
+    const [S, E, W] = WING_JOINTS.map((p) => mirror(p, s));
+    r.bone(`w${L}1`, 'chest', ...S);
+    r.bone(`w${L}2`, `w${L}1`, ...E);
+    r.bone(`w${L}3`, `w${L}2`, ...W);
+    for (const f of ['a', 'b', 'c']) r.bone(`w${L}${f}`, `w${L}3`, ...W);
   });
 
-  // corps : poitrail massif, croupe, ventre de plaques claires (dégradé du ventre au dos)
-  r.add('ribs', ell(0.085, 0.08, 0.12), [0, 0.21, 0.05], c.belly, [0, 0, 0], c.back);
-  r.add('chest', ell(0.07, 0.07, 0.07), [0, 0.225, 0.12], c.belly, [-0.2, 0, 0], c.back);
-  r.add('hips', ell(0.075, 0.072, 0.1), [0, 0.2, -0.08], c.belly, [0, 0, 0], c.back);
-  for (let i = 0; i < 7; i++) {
-    const z = 0.13 - i * 0.04, b = z > 0 ? 'ribs' : 'hips', y = 0.135 + Math.abs(z - 0.03) * 0.12;
-    r.add(b, bx(0.08 - Math.abs(z) * 0.08, 0.008, 0.03), [0, y, z], c.belly, [0.1, 0, 0]);
+  // corps : tonneau des côtes (qui respire), poitrail profond en carène, ventre qui pend, croupe ronde ; du ventre clair au dos
+  const RIBS: V3 = [0, 0.218, 0.035], RIBR: V3 = [0.088, 0.086, 0.13], HIPS: V3 = [0, 0.208, -0.085], HIPR: V3 = [0.078, 0.076, 0.105];
+  r.add('ribs', ell(RIBR[0], RIBR[1], RIBR[2]), RIBS, c.back, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.07, 0.052, 0.115), [0, 0.164, 0.005], c.belly, [0.05, 0, 0], c.back);
+  r.add('chest', ell(0.07, 0.088, 0.072), [0, 0.205, 0.13], c.belly, [-0.3, 0, 0], c.back);
+  r.add('hips', ell(HIPR[0], HIPR[1], HIPR[2]), HIPS, c.back, [0, 0, 0], c.top);
+  // pectoraux saillants à la naissance des pattes avant
+  r.both((s) => r.add('chest', ell(0.036, 0.05, 0.042), [s * 0.046, 0.19, 0.14], c.back, [-0.25, 0, -s * 0.2], c.top));
+  // le ventre cuirassé : des plaques claires qui suivent sa courbe, du poitrail à l'entrejambe
+  for (let i = 0; i < 9; i++) {
+    const z = 0.175 - i * 0.034, u = (z - 0.03) / 0.15, y = 0.113 + u * u * 0.03, b = z > 0.1 ? 'chest' : z > -0.06 ? 'ribs' : 'hips';
+    r.add(b, bx(0.078 - Math.abs(u) * 0.03, 0.007, 0.031), [0, y, z], i % 2 ? c.belly : c.spike, [-Math.atan(u * 0.4), 0, 0]);
   }
-  // écailles plus claires sur le dos, en rangées
+  // flancs côtelés : les côtes saillent sous les écailles, du dos au ventre
   r.both((s) => {
     for (let i = 0; i < 6; i++) {
-      const z = 0.12 - i * 0.045, b = z > -0.02 ? 'ribs' : 'hips';
-      r.add(b, ell(0.018, 0.008, 0.022, 0), [s * 0.045, 0.272 - Math.abs(z) * 0.06, z], c.top, [0, 0, s * 0.5]);
+      const z = 0.125 - i * 0.034, pts = [0.62, 0.15, -0.38].map((a) => barrel(RIBS, RIBR, z - a * 0.012, a, s, 0.001)).filter(Boolean) as { at: V3 }[];
+      for (let j = 0; j + 1 < pts.length; j++) r.put('ribs', seg(pts[j].at, pts[j + 1].at, 0.0048 - j * 0.001, 0.004 - j * 0.001, 4), c.back, c.top);
     }
   });
-  // cou en trois segments, gorge claire
-  r.put('neck1', seg([0, 0.25, 0.14], [0, 0.31, 0.23], 0.052, 0.042, 7), c.belly, c.back);
-  r.put('neck2', seg([0, 0.31, 0.23], [0, 0.36, 0.29], 0.042, 0.034, 7), c.belly, c.back);
-  r.put('neck3', seg([0, 0.36, 0.29], [0, 0.385, 0.335], 0.034, 0.03, 7), c.belly, c.back);
+  // écailles du dos, en rangées qui se chevauchent de part et d'autre de l'échine (plus grandes vers l'échine)
+  r.both((s) => {
+    [1.22, 0.98, 0.74].forEach((a, row) => {
+      for (let i = 0; i < 10; i++) {
+        const z = 0.15 - i * 0.034 - (row % 2) * 0.017, onRibs = z > -0.035, p = barrel(onRibs ? RIBS : HIPS, onRibs ? RIBR : HIPR, z, a, s);
+        if (!p) continue;
+        const k = 1 - row * 0.2;
+        r.add(z > 0.12 ? 'chest' : onRibs ? 'ribs' : 'hips', new THREE.OctahedronGeometry(0.015 * k, 0).scale(1, 0.32, 1.35), p.at, row ? c.back : c.top, p.rot, c.top);
+      }
+    });
+  });
+  // cou en trois segments, puissant à sa naissance, gorge claire et ses plaques
+  const NECK: [string, V3, V3, number, number][] = [
+    ['neck1', [0, 0.245, 0.135], [0, 0.31, 0.23], 0.058, 0.045], ['neck2', [0, 0.31, 0.23], [0, 0.36, 0.29], 0.045, 0.036], ['neck3', [0, 0.36, 0.29], [0, 0.385, 0.335], 0.036, 0.03],
+  ];
+  for (const [b, p, q, r1, r2] of NECK) {
+    r.put(b, seg(p, q, r1, r2, 8), c.back, c.top);
+    for (const t of [0.12, 0.38, 0.64, 0.9]) { const o = onSeg(p, q, r1, r2, t, -Math.PI / 2, -0.004); r.add(b, ell((r1 + (r2 - r1) * t) * 0.85, 0.008, 0.019, 0), o.at, c.belly, o.rot); }
+  }
   // tête : crâne, arcades, long museau, narines, yeux de braise à pupille fendue, cornes recourbées, collerette d'épines
   r.add('head', ell(0.04, 0.034, 0.048), [0, 0.392, 0.355], c.back, [0, 0, 0], c.top);
   r.put('head', flat(seg([0, 0.388, 0.37], [0, 0.382, 0.452], 0.03, 0.019, 7), 0.385, 1.15, 0.7), c.back, c.top);
@@ -1701,45 +1760,79 @@ function dragon(c: Coat): { rig: Rig; clips: ClipDef[] } {
   const crest: [string, number, number, number][] = [
     ['neck3', 0.392, 0.315, 0.012], ['neck2', 0.37, 0.265, 0.014], ['neck2', 0.345, 0.235, 0.015], ['neck1', 0.322, 0.2, 0.017], ['neck1', 0.3, 0.17, 0.018],
     ['chest', 0.298, 0.12, 0.022], ['ribs', 0.296, 0.07, 0.024], ['ribs', 0.292, 0.02, 0.024], ['hips', 0.28, -0.03, 0.022], ['hips', 0.275, -0.08, 0.02], ['hips', 0.265, -0.13, 0.018],
-    ['tail1', 0.235, -0.19, 0.016], ['tail1', 0.225, -0.24, 0.014], ['tail2', 0.205, -0.3, 0.013], ['tail2', 0.19, -0.35, 0.011], ['tail3', 0.17, -0.41, 0.01], ['tail3', 0.155, -0.46, 0.008], ['tail4', 0.138, -0.52, 0.007],
+    ['tail1', 0.235, -0.19, 0.016], ['tail1', 0.225, -0.24, 0.014], ['tail2', 0.205, -0.3, 0.013], ['tail2', 0.19, -0.35, 0.011], ['tail3', 0.17, -0.41, 0.01], ['tail3', 0.155, -0.46, 0.008],
+    ['tail4', 0.136, -0.525, 0.0065], ['tail4', 0.124, -0.57, 0.005], ['tail4', 0.112, -0.61, 0.004],
   ];
   for (const [b, y, z, h] of crest) r.put(b, flat(seg([0, y - h * 0.4, z], [0, y + h, z - h * 0.6], h * 0.55, 0.0008, 4), y, 0.45, 1), c.spike);
-  // queue : quatre segments qui s'effilent, fer de lance au bout
-  r.put('tail1', seg([0, 0.2, -0.15], [0, 0.18, -0.29], 0.05, 0.038, 7), c.belly, c.back);
-  r.put('tail2', seg([0, 0.18, -0.29], [0, 0.15, -0.41], 0.038, 0.026, 7), c.belly, c.back);
-  r.put('tail3', seg([0, 0.15, -0.41], [0, 0.12, -0.52], 0.026, 0.015, 6), c.belly, c.back);
-  r.put('tail4', seg([0, 0.12, -0.52], [0, 0.1, -0.6], 0.015, 0.006, 6), c.back, c.top);
-  r.add('tail4', new THREE.OctahedronGeometry(0.03, 0).scale(1, 0.25, 1.3), [0, 0.098, -0.625], c.back, [0, 0, 0], c.top);
-  // pattes : épaule et cuisse puissantes, avant-bras, jarret retourné derrière, pieds à trois griffes
+  // queue : quatre segments qui s'effilent jusqu'à un fil, plaques claires dessous, petit fer de lance au bout
+  const TAIL: [string, V3, V3, number, number][] = [
+    ['tail1', [0, 0.205, -0.16], [0, 0.18, -0.29], 0.052, 0.037], ['tail2', [0, 0.18, -0.29], [0, 0.15, -0.41], 0.037, 0.024],
+    ['tail3', [0, 0.15, -0.41], [0, 0.12, -0.52], 0.024, 0.012], ['tail4', [0, 0.12, -0.52], [0, 0.093, -0.655], 0.012, 0.0025],
+  ];
+  for (const [b, p, q, r1, r2] of TAIL) {
+    r.put(b, seg(p, q, r1, r2, 7), c.back, c.top);
+    if (r2 > 0.01) for (const t of [0.15, 0.45, 0.75]) { const o = onSeg(p, q, r1, r2, t, -Math.PI / 2, -0.003); r.add(b, ell((r1 + (r2 - r1) * t) * 0.8, 0.007, 0.022, 0), o.at, c.belly, o.rot); }
+  }
+  r.add('tail4', new THREE.OctahedronGeometry(0.022, 0).scale(1, 0.16, 1.5), [0, 0.092, -0.672], c.back, [0, 0, 0], c.top);
+  // pattes : épaule et grosse cuisse musclées, avant-bras, jarret retourné derrière, pieds à trois griffes
   r.both((s, L) => {
     const fx = s * 0.082, hx = s * 0.088;
-    r.add(`f${L}1`, ell(0.03, 0.05, 0.034), [s * 0.074, 0.15, 0.105], c.back, [0, 0, 0], c.top);
-    r.put(`f${L}2`, seg([fx, 0.1, 0.12], [fx, 0.018, 0.112], 0.02, 0.016, 6), c.back);
+    r.add(`f${L}1`, ell(0.025, 0.062, 0.038), [s * 0.068, 0.15, 0.11], c.back, [0.2, 0, -s * 0.1], c.top);
+    r.put(`f${L}2`, seg([fx, 0.1, 0.12], [fx, 0.018, 0.112], 0.02, 0.015, 6), c.back);
     r.add(`f${L}2`, ell(0.02, 0.01, 0.026, 0), [fx, 0.012, 0.122], c.back);
     for (let i = -1; i <= 1; i++) r.put(`f${L}2`, seg([fx + i * 0.01, 0.01, 0.138], [fx + i * 0.013, 0.002, 0.156], 0.004, 0.0008, 4), c.horn);
-    r.add(`h${L}1`, ell(0.036, 0.058, 0.05), [s * 0.08, 0.16, -0.085], c.back, [0, 0, 0], c.top);
-    r.put(`h${L}2`, seg([hx, 0.1, -0.06], [hx, 0.045, -0.115], 0.02, 0.015, 6), c.back);
+    // la cuisse : une masse ronde qui déborde du flanc, le mollet bombé
+    r.add(`h${L}1`, ell(0.03, 0.07, 0.066), [s * 0.066, 0.165, -0.088], c.back, [0.4, 0, -s * 0.08], c.top);
+    r.put(`h${L}2`, seg([hx, 0.1, -0.06], [hx, 0.045, -0.115], 0.021, 0.015, 6), c.back);
     r.put(`h${L}2`, seg([hx, 0.045, -0.115], [hx, 0.014, -0.095], 0.015, 0.013, 6), c.back);
     r.add(`h${L}2`, ell(0.021, 0.01, 0.03, 0), [hx, 0.011, -0.08], c.back);
     for (let i = -1; i <= 1; i++) r.put(`h${L}2`, seg([hx + i * 0.011, 0.009, -0.058], [hx + i * 0.014, 0.002, -0.04], 0.0045, 0.0008, 4), c.horn);
   });
-  // ailes : le bras (de l'épaule au poignet), la membrane qui le relie au flanc ; les trois doigts et leurs membranes
+  // ailes : les os bien visibles (bras, avant-bras, nœuds des articulations, griffe du pouce, trois longs doigts) et la membrane
+  // tendue entre eux et le flanc, qui suit chaque os : tendue l'aile ouverte, plissée l'aile repliée
   r.both((s, L) => {
-    const S: V3 = [s * 0.055, 0.28, 0.06], E: V3 = [s * 0.26, 0.33, 0.0], B: V3 = [s * 0.05, 0.26, -0.13];
-    const T1: V3 = [s * 0.52, 0.34, -0.07], T2: V3 = [s * 0.48, 0.3, -0.19], T3: V3 = [s * 0.36, 0.27, -0.27], M: V3 = [s * 0.18, 0.28, -0.17];
-    r.put(`w${L}1`, seg(S, E, 0.014, 0.01, 5), c.back, c.top);
-    r.put(`w${L}1`, tri(S, E, B), c.wing);
-    r.put(`w${L}1`, tri(E, M, B), c.wing);
-    r.put(`w${L}2`, seg(E, [s * 0.255, 0.355, 0.03], 0.006, 0.001, 4), c.horn);
-    for (const T of [T1, T2, T3]) r.put(`w${L}2`, seg(E, T, 0.007, 0.002, 4), c.spar);
-    r.put(`w${L}2`, tri(E, T1, T2), c.wing);
-    r.put(`w${L}2`, tri(E, T2, T3), c.wing);
-    r.put(`w${L}2`, tri(E, T3, M), c.wing);
+    const [S, E, W] = WING_JOINTS.map((p) => mirror(p, s)), [Ta, Tb, Tc] = WING_TIPS.map((p) => mirror(p, s)), [M, B] = WING_ROOT.map((p) => mirror(p, s));
+    r.put(`w${L}1`, seg(S, E, 0.018, 0.012, 6), c.back, c.top);
+    r.add(`w${L}2`, ell(0.014, 0.013, 0.014, 0), E, c.back);
+    r.put(`w${L}2`, seg(E, W, 0.012, 0.009, 6), c.back, c.top);
+    r.add(`w${L}3`, ell(0.012, 0.011, 0.012, 0), W, c.back);
+    r.put(`w${L}3`, seg(W, [W[0] + s * 0.012, W[1] + 0.03, W[2] + 0.025], 0.006, 0.001, 4), c.horn);
+    ([['a', Ta], ['b', Tb], ['c', Tc]] as [string, V3][]).forEach(([f, T]) => {
+      r.put(`w${L}${f}`, seg(W, T, 0.0075, 0.0015, 5), c.spar);
+      r.add(`w${L}${f}`, ell(0.0065, 0.0065, 0.0065, 0), along(W, T, 0.45), c.spar);
+    });
+    // le bord de fuite festonné, creusé entre les doigts
+    const dip = (P: V3, Q: V3, k = 0.8): V3 => along(W, along(P, Q, 0.5), k);
+    r.web(c.wing, [
+      { at: S, on: ['chest'] }, { at: E, on: [`w${L}2`] }, { at: W, on: [`w${L}3`] },
+      { at: Ta, on: [`w${L}a`] }, { at: dip(Ta, Tb), on: [`w${L}a`, `w${L}b`] }, { at: Tb, on: [`w${L}b`] }, { at: dip(Tb, Tc), on: [`w${L}b`, `w${L}c`] },
+      { at: Tc, on: [`w${L}c`] }, { at: along(Tc, M, 0.5), on: [`w${L}c`, `w${L}1`] }, { at: M, on: [`w${L}1`, 'hips'] }, { at: B, on: ['hips'] },
+    ], [[2, 3, 4], [2, 4, 5], [2, 5, 6], [2, 6, 7], [2, 7, 8], [2, 8, 9], [1, 2, 9], [1, 9, 10], [0, 1, 10]]);
   });
 
-  // ailes repliées sur le dos (k = 1) ou déployées (k = 0)
+  /**
+   * Ailes repliées le long des flancs (k = 1) ou déployées (k = 0), comme celles d'une chauve-souris : le bras se couche vers
+   * l'arrière, l'avant-bras revient vers l'avant (le poignet et sa griffe au-dessus de l'épaule), la main et ses doigts
+   * repartent vers l'arrière en se resserrant, la membrane plissée entre eux
+   */
   const fold = (P: Pose, k: number) => {
-    r.both((s, L) => { R(P, `w${L}1`, 0, s * 1.2 * k, s * 0.45 * k); R(P, `w${L}2`, 0, -s * 0.5 * k, -s * 1.35 * k); });
+    r.both((s, L) => {
+      // (angles calculés pour amener le coude derrière l'épaule, le poignet au-dessus d'elle, les doigts le long du flanc)
+      R(P, `w${L}1`, -0.234 * k, s * 0.69 * k, s * 0.077 * k);
+      R(P, `w${L}2`, 0.817 * k, -s * 1.369 * k, s * 0.622 * k);
+      R(P, `w${L}3`, 0.251 * k, s * 1.623 * k, -s * 0.56 * k);
+      R(P, `w${L}a`, -0.024 * k, s * 0.526 * k, -s * 0.105 * k); R(P, `w${L}c`, -0.06 * k, -s * 0.455 * k, s * 0.126 * k);
+    });
+  };
+  /** coup d'aile : `f` de -1 (aile basse) à 1 (aile haute) ; le bout suit avec retard (`g`) */
+  const flap = (P: Pose, f: number, g: number) => {
+    r.both((s, L) => {
+      R(P, `w${L}1`, 0, s * 0.1, s * (0.15 + 0.75 * f));
+      R(P, `w${L}2`, 0, -s * 0.12 * (1 - g), s * (0.1 + 0.3 * g));
+      R(P, `w${L}3`, 0, s * 0.1 * (1 + g), s * 0.25 * g);
+      // à la remontée, les doigts se resserrent un peu (la membrane fasèye moins)
+      R(P, `w${L}a`, 0, s * 0.12 * pos(g), 0); R(P, `w${L}c`, 0, -s * 0.08 * pos(g), 0);
+    });
   };
   const tail = (P: Pose, a: number, u: number, f = 1, side = true) => {
     for (let i = 1; i <= 4; i++) {
@@ -1787,7 +1880,7 @@ function dragon(c: Coat): { rig: Rig; clips: ClipDef[] } {
     // en vol : grands coups d'ailes (le bout des ailes suit avec retard), pattes repliées, queue qui ondule
     ['Fly', 1, (u, P) => {
       const f = sn(u);
-      r.both((s, L) => { R(P, `w${L}1`, 0, s * 0.12, s * (0.2 + 0.8 * f)); R(P, `w${L}2`, 0, -s * 0.1, s * (0.15 + 0.45 * sn(u, 1, -0.12))); });
+      flap(P, f, sn(u, 1, -0.12));
       M(P, 'hips', 0, -0.02 * f, 0);
       for (const L of ['L', 'R']) { R(P, `f${L}1`, -0.9); R(P, `f${L}2`, 1.7); R(P, `h${L}1`, 1.1); R(P, `h${L}2`, 0.4); }
       neck(P, 0.25 + 0.05 * sn(u, 1, 0.3));
