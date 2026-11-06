@@ -5,7 +5,7 @@ import { newWorld } from '../src/world/mapgen';
 import { mulberry32 } from '../src/core/rng';
 import { MISSIONS, boatKindFor, BoatKind, choiceAt } from '../src/sim/missions';
 import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
-import { Expeditions, ActiveExpedition } from '../src/sim/expeditions';
+import { Expeditions, ActiveExpedition, seaClearance, SEA_CLEAR_MIN } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { ExpeditionScene } from '../src/render/expeditionScenes';
 import { shipRoute } from '../src/render/transports';
@@ -174,6 +174,20 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
     expect(far).toBeGreaterThan(3);
     expect(jumped).toBe(true);
     r.scene.dispose(r.a);
+  });
+
+  it('mégalodon et kraken : le combat se tient en haute mer, loin de toute rive ou falaise', () => {
+    for (const ci of [0, 1]) {
+      const r = sail('monster', ci, 1), { out, home } = r.s.boat!;
+      // un point d'eau dégagé tout autour (aucune rive, aucun rocher dans le rayon du combat et de la caméra)
+      expect(seaClearance(r.v.w, out[0], out[1], 8)).toBeGreaterThanOrEqual(SEA_CLEAR_MIN);
+      expect(Math.hypot(out[0] - home[0], out[1] - home[1])).toBeGreaterThan(2);
+      // pendant le combat, ni le monstre ni la galère ne frôlent la rive
+      const seen: number[] = [];
+      run(r, (k) => { if (k < 0.25 || k > 0.8) return; const p = r.s.boat!.obj.position, m = r.s.monster!.obj; seen.push(seaClearance(r.v.w, p.x, p.z, 8)); if (m.visible) seen.push(seaClearance(r.v.w, m.position.x, m.position.z, 8)); });
+      expect(Math.min(...seen)).toBeGreaterThanOrEqual(SEA_CLEAR_MIN - 1);
+      r.scene.dispose(r.a);
+    }
   });
 
   it('chaque âge a sa barque (une géométrie distincte)', () => {

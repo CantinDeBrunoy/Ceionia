@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents } from '../sim/agents';
-import { ActiveExpedition } from '../sim/expeditions';
+import { ActiveExpedition, seaClearance, SEA_CLEAR } from '../sim/expeditions';
 import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
 import { Act } from '../world/gardens';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
@@ -2888,8 +2888,12 @@ export class ExpeditionScene {
     const dx = wx - bx, dz = wz - bz, d = Math.max(0.01, Math.hypot(dx, dz));
     let out: [number, number] = [wx, wz];
     for (let k = 0.4; k <= 2; k += 0.2) { const x = wx + (dx / d) * k, z = wz + (dz / d) * k; if (this.depth(x, z) === null) break; out = [x, z]; }
+    // la chasse au monstre : en haute mer, au point le plus dégagé à portée (aucune rive ni rocher dans le rayon du combat et de
+    // la caméra), pas au bout d'un bras de mer contre la paroi d'en face
+    const war = this.story === 'megalodon' || this.story === 'kraken';
+    if (this.offshore && war) { const at = this.openSpot(wx, wz); if (at) out = at; }
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
-    if (this.offshore) {
+    else if (this.offshore) {
       let best = 0;
       for (let d = 0; d < 16; d++) {
         const ux = Math.cos((d * Math.PI) / 8), uz = Math.sin((d * Math.PI) / 8);
@@ -2904,13 +2908,33 @@ export class ExpeditionScene {
     hull.castShadow = true;
     obj.add(hull);
     // la chasse armée : une galère plus grande, toute la troupe à bord
-    const war = this.story === 'megalodon' || this.story === 'kraken';
     obj.scale.setScalar(war ? 1.1 : this.boatKind === 'galley' ? 1 : 1);
     this.group.add(obj);
     this.props.push(obj);
     const riders = a.party.slice(0, war ? a.party.length : Math.min(2, a.party.length));
     this.boat = { obj, home: [wx, wz], out, y: wat.level, riders };
     this.spots = this.bankSpots(Math.max(1, a.party.length - riders.length));
+  }
+
+  /**
+   * Le point de combat de la chasse au monstre : depuis le mouillage (wx, wz), le point d'eau le plus dégagé à portée (au plus
+   * `SEA_CLEAR` cases de vide tout autour, le plus proche d'abord), atteint tout droit sur l'eau
+   */
+  private openSpot(wx: number, wz: number): [number, number] | null {
+    let best: [number, number] | null = null, bs = -1;
+    for (let dz = -22; dz <= 22; dz += 1)
+      for (let dx = -22; dx <= 22; dx += 1) {
+        const x = wx + dx, z = wz + dz, d = Math.hypot(dx, dz);
+        if (d > 22 || this.depth(x, z) === null) continue;
+        const c = seaClearance(this.world, x, z, SEA_CLEAR);
+        const score = Math.min(c, SEA_CLEAR) * 10 - d * 0.15;
+        if (score <= bs) continue;
+        // la route depuis le mouillage reste sur l'eau
+        let ok = true;
+        for (let k = 0.1; k < 1 && ok; k += 0.1) if (this.depth(wx + dx * k, wz + dz * k) === null) ok = false;
+        if (ok) { bs = score; best = [x, z]; }
+      }
+    return best;
   }
 
   /**
@@ -2935,7 +2959,7 @@ export class ExpeditionScene {
   private populateSea(a: ActiveExpedition) {
     const bt = this.boat;
     if (!bt) return;
-    const [cx, cz] = bt.out, room = this.seaRoom(cx, cz), level = bt.y;
+    const war = this.story === 'megalodon' || this.story === 'kraken', [cx, cz] = bt.out, room = this.seaRoom(cx, cz, war ? SEA_CLEAR : 2.4), level = bt.y;
     const reef = this.story === 'dive', fishing = this.story === 'boat';
     if (this.story === 'megalodon' || this.story === 'kraken') { this.makeMonster(cx, cz, level, room); return; }
     if (!this.offshore || (!reef && !fishing)) return;
