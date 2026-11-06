@@ -254,7 +254,7 @@ describe('organiser les JO', () => {
   it('époque moderne, facultative : il faut toutes les installations sportives', () => {
     const m = mission('games');
     expect(m.age).toBe(4);
-    expect(m.mandatory).toBe(true);
+    expect(m.mandatory).toBe(false);
     expect(m.requires?.kinds).toEqual(expect.arrayContaining(['stadium', 'football', 'basket', 'tennis', 'waterpark']));
     for (const c of m.choices) {
       expect(c.scene).toBe('games');

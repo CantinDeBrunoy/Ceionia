@@ -91,11 +91,11 @@ const SEAT = new THREE.Matrix4().makeTranslation(0, 0.02, -0.07);
 const FOLK_K = new THREE.Matrix4().makeScale(HUMAN_K * 0.9, HUMAN_K * 0.9, HUMAN_K * 0.9);
 
 /** Cap qui tourne vers `want` (par le plus court), d'au plus la fraction `k` de l'écart */
-function turn(heading: number, want: number, k: number) {
+function turn(heading: number, want: number, k: number, maxRad = Infinity) {
   let da = want - heading;
   while (da > Math.PI) da -= Math.PI * 2;
   while (da < -Math.PI) da += Math.PI * 2;
-  return heading + da * Math.min(1, k);
+  return heading + Math.max(-maxRad, Math.min(maxRad, da * Math.min(1, k)));
 }
 
 /** Géométrie colorée (attribut de couleur par sommet) à partir de boîtes et de cylindres */
@@ -364,7 +364,9 @@ export class Traffic {
     this.builtVersion = w.version; this.builtAge = age; this.age = age;
     this.roads = [];
     for (let k = 0; k < N * N; k++) if (w.road[k]) this.roads.push(k);
-    const nCarts = age >= 1 && pop >= 8 ? Math.min(MAX_CARTS, Math.floor(this.roads.length / 18)) : 0;
+    // sans écurie, pas de chevaux : pas d'attelages (les autos viennent avec l'usine automobile)
+    const stabled = this.motor || [...w.buildings.values()].some((b) => b.kind === 'stable');
+    const nCarts = age >= 1 && pop >= 8 && stabled ? Math.min(MAX_CARTS, Math.floor(this.roads.length / 18)) : 0;
     for (const v of this.vehicles.slice(nCarts)) this.dropRig(v);
     this.vehicles.length = Math.min(this.vehicles.length, nCarts);
     for (const v of this.vehicles) if (v.path.some((c) => !w.road[c])) { v.path = []; v.i = 0; }
@@ -420,7 +422,8 @@ export class Traffic {
       if (dist <= step) { v.x = tx; v.z = tz; v.i++; }
       else {
         v.x += (dx / dist) * step; v.z += (dz / dist) * step;
-        v.heading = turn(v.heading, Math.atan2(dx, dz), dt * 6);
+        // pas de virage sur une cible quasi confondue (le cap s'affolerait) ; et un virage borné, pour ne jamais tourner sur place
+        if (dist > 0.04) v.heading = turn(v.heading, Math.atan2(dx, dz), dt * 6, dt * 3.5);
       }
       this.place(v, dt, Math.min(dist, step));
     }

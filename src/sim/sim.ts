@@ -59,6 +59,8 @@ export class Sim {
   message = '';
   /** le bâtiment dont parle le message (un clic sur le message le prend en main), s'il y en a un */
   messageKind: KindId | null = null;
+  /** le conseil renvoie au menu Expéditions (un clic dessus l'ouvre) */
+  messageExp = false;
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
   moisture = 0.7;
@@ -244,7 +246,7 @@ export class Sim {
       }
       return about(k, text);
     };
-    this.messageKind = null;
+    this.messageKind = null; this.messageExp = false;
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
     if (w.buildings.size === 0) return about('gather', `Pour commencer, posez « ${this.nameOf('gather')} » au centre du futur village : c’est la place du village (3 × 3), sans entrée, qu’on rejoint de tous côtés. On y fêtera le retour des expéditions, et elle grandira avec les âges.`);
     if (!this.counts.house) return about('house', `Autour de la place, le centre du village : « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
@@ -277,11 +279,12 @@ export class Sim {
       if (miss?.label.startsWith('expédition')) {
         // toutes celles qui restent à réussir (la Préhistoire en demande deux)
         const left = ap.items.filter((i) => i.label.startsWith('expédition') && i.have < i.need).map((i) => i.label.slice('expédition '.length));
+        this.messageExp = true;
         return `Pour l’âge suivant : réussissez ${left.length > 1 ? `les expéditions ${left.slice(0, -1).join(', ')} et ${left[left.length - 1]}` : `l’${miss.label}`} (menu Expéditions).`;
       }
       if (miss?.kind) { const n = miss.need - miss.have; return build(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}.`); }
       if (miss.label.startsWith('briques')) return this.counts.brickworks ? `Pour l’âge suivant : il faut encore ${miss.need - miss.have} briques (la briqueterie en cuit chaque jour).` : about('brickworks', `Pour l’âge suivant : il faut ${miss.need} briques : ${say('brickworks')}.`);
-      if (miss) return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`;
+      if (miss) { this.messageExp = true; return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`; }
     }
     if (full) return room();
     // au dernier âge, la conquête de l'espace : le cosmodrome, puis chaque expédition spatiale à son tour
