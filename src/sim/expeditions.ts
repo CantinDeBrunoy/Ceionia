@@ -218,6 +218,8 @@ export class Expeditions {
   /** Le village en a-t-il un, déjà bâti, ou amélioré depuis (une gare devenue gare centrale compte encore comme une gare) ? */
   has(kind: string) {
     const line: string[] = KINDS[kind as KindId] ? lineOf(kind as KindId) : [kind];
+    // la gare centrale et la gare maglev sont des gares aussi
+    if (kind === 'station') line.push('terminal', 'maglev');
     for (const b of this.world.buildings.values()) if (line.includes(b.kind)) return true;
     return false;
   }

@@ -309,6 +309,9 @@ export class Sim {
   private railTip(): string | null {
     const w = this.world;
     if (this.age < 3) return null;
+    // l'ordre du chemin de fer : la briqueterie (les briques), puis la gare centrale, puis les petites gares
+    if (!this.built('brickworks')) { this.messageKind = 'brickworks'; return `Pour le chemin de fer : bâtissez d’abord « ${this.nameOf('brickworks')} » (${this.whereOf('brickworks')}), il faudra des briques pour la gare centrale.`; }
+    if (!this.built('terminal')) { this.messageKind = 'terminal'; return `Pour le chemin de fer : bâtissez « ${this.nameOf('terminal')} » (${this.whereOf('terminal')}), la grande gare d’où partiront les lignes ; les petites gares viendront ensuite.`; }
     const st = allServed(w), prod = [...w.buildings.values()].filter((b) => railWant(b.kind) === 'freight');
     if (!prod.length || prod.some((b) => railStation(w, b, st))) return null;
     this.messageKind = 'station';

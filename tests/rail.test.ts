@@ -183,6 +183,14 @@ describe('les conseils du rail', () => {
     sim.recalc();
     sim.pop = 20;
     const say = () => { sim.pop = 20; return (sim as unknown as { computeMessage(): string }).computeMessage(); };
+    // l'ordre : la briqueterie, puis la gare centrale, puis les petites gares
+    expect(say()).toMatch(/^Pour le chemin de fer : bâtissez d’abord « Briqueterie »/);
+    w.place('brickworks', ...spot(w, 'brickworks', 90, 30), 0, true, 3, false);
+    sim.recalc();
+    expect(say()).toMatch(/gare centrale|Gare centrale/);
+    expect(sim.messageKind).toBe('terminal');
+    w.place('terminal', ...spot(w, 'terminal', 30, 90), 0, true, 3, false);
+    sim.recalc();
     expect(say()).toMatch(/^Astuce : posez « Petite gare »/);
     expect(sim.messageKind).toBe('station');
     // une gare de marchandises à côté : le village grandit, sans autre conseil
