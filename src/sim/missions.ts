@@ -871,6 +871,8 @@ export function penHerds(w: World, flock: HerdKind[] = w.exp.herd) {
 /** Les trophées des grandes légendes : une expédition qui en rapporte un est « légendaire » */
 const LEGENDS = new Set(['megalodon', 'kraken', 'dragon', 'games', 'moon', 'colony']);
 export const isLegendary = (m: Mission) => m.id === 'mammoth' || m.choices.some((c) => c.win.some((e) => e.t === 'perk' && LEGENDS.has(e.id)));
+/** Expéditions armées : une troupe de soldats, ou une chasse aux bêtes dangereuses */
+export const isMilitary = (m: Mission) => m.id === 'deep' || m.id === 'wolf' || m.choices.some((c) => !!c.troop);
 export const mandatoriesFor = (age: number) => MISSIONS.filter((m) => m.age === age && m.mandatory);
 /** La première mission obligatoire de l'âge */
 export const mandatoryFor = (age: number) => mandatoriesFor(age)[0] ?? null;

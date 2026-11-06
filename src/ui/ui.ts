@@ -13,7 +13,7 @@ import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import { depthIncome, HELD_PER_STONE, VEINS_PER_ORE } from '../sim/depths';
 import type { RailEditState } from '../build/trackEdit';
-import { effectSummary, splitIntro, mandatoriesFor, isLegendary, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
+import { effectSummary, splitIntro, mandatoriesFor, isLegendary, isMilitary, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
@@ -1267,7 +1267,7 @@ export class UI {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
       // l'expédition armée n'a plus rien à prendre : on propose de creuser un tunnel
       const choices = run ? '' : m.id === 'deep' && ex.tunnelNeeded() ? this.tunnelHtml() : `<div class="mchoices" data-m="${m.id}">${this.choiceButtons(m)}</div>`;
-      return `<div class="mission ${done ? 'done' : ''}" data-id="${m.id}">
+      return `<div class="mission ${done ? 'done' : ''}" data-id="${m.id}" data-leg="${+isLegendary(m)}" data-mil="${+isMilitary(m)}">
         <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}${isLegendary(m) ? ' <span class="legendTag">✨ légendaire</span>' : ''}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} Bâtir</button>` : ''}</p>` : ''}
         ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => ex.hasFor(k, m.requires!.kinds!)).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : ''}
@@ -1275,15 +1275,14 @@ export class UI {
         ${run ? '' : redo ? `<details class="redo"><summary>${ic('restart', 14, 2)} Refaire cette expédition</summary><p>${m.intro}</p><p class="hint">Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>${choices}</details>` : `${this.introHtml(m.intro)}${choices}`}</div>`;
     };
     const sorted = ex.list(age).sort((a, b) => rank(a) - rank(b));
-    // (une légendaire obligatoire, pas encore faite, reste en tête de liste avec les autres)
-    const inLegends = (m: Mission) => isLegendary(m) && !(m.mandatory && !ex.done(m));
-    const legends = sorted.filter(inLegends);
-    const cards = sorted.filter((m) => !inLegends(m)).map(card).join('') + (legends.length ? `<h3 class="legendHead">✨ Expéditions légendaires</h3><p class="hint">Les grandes chasses et les grands exploits : chacune laisse un trophée ou une légende au village.</p>${legends.map(card).join('')}` : '');
+    const cards = sorted.map(card).join('');
+    const nMil = sorted.filter(isMilitary).length, nLeg = sorted.filter(isLegendary).length;
     const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} Expéditions`, `
       <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button><button data-tab="depths" class="${tab === 'depths' ? 'on' : ''}">${ic('outpost', 16, 2)}Profondeurs</button></div>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
         <p class="hint">Envoyez de petites équipes chercher ce qui manque au village.</p><details class="cdet"><summary>En savoir plus</summary><p class="hint">Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p></details>
+        <div class="subtabs"><button data-f="all" class="on">Toutes <small>${sorted.length}</small></button><button data-f="mil">⚔️ Militaires <small>${nMil}</small></button><button data-f="leg">✨ Légendaires <small>${nLeg}</small></button></div>
         <div class="missions">${cards}</div>
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
@@ -1291,6 +1290,12 @@ export class UI {
     ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
       ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((sec) => (sec.hidden = sec.dataset.sec !== b.dataset.tab));
+    }));
+    // sous-menu des types d'expéditions : toutes, militaires, légendaires
+    ov.querySelectorAll<HTMLButtonElement>('[data-f]').forEach((b) => (b.onclick = () => {
+      ov.querySelectorAll<HTMLButtonElement>('[data-f]').forEach((x) => x.classList.toggle('on', x === b));
+      const f = b.dataset.f;
+      ov.querySelectorAll<HTMLElement>('.mission').forEach((el) => { el.hidden = f === 'mil' ? el.dataset.mil !== '1' : f === 'leg' ? el.dataset.leg !== '1' : false; });
     }));
     // l'arsenal se redessine quand la réserve ou la file changent ; la barre de fabrication avance en continu
     let key = '';
