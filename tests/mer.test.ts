@@ -188,7 +188,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
   });
 
   it('le requin, le crocodile, la houle et l’épave se jouent sur la scène, pour chaque option, puis s’effacent', () => {
-    for (const [id, mid, ci, age] of [['shark', 'reef', 0, 4], ['croc', 'fishing', 0, 1], ['swell', 'monster', 0, 1], ['wreck', 'monster', 1, 1]] as [string, string, number, number][]) {
+    for (const [id, mid, ci, age] of [['shark', 'reef', 0, 4], ['croc', 'fishing', 0, 1], ['swell', 'monster', 0, 1], ['wreck', 'monster', 1, 1], ['maelstrom', 'monster', 1, 1]] as [string, string, number, number][]) {
       for (let pick = 0; pick < EVENT_BY[id].options.length; pick++) {
         const r = sail(mid, ci, age), st = () => (r.scene as unknown as { stagings: { id: string; objs: THREE.Object3D[] }[] }).stagings;
         r.a.wait = EVENT_BY[id];
@@ -223,6 +223,41 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
       expect(r.s.monster!.hits).toBeGreaterThan(0);
       r.scene.dispose(r.a);
     }
+  });
+
+  it('le monstre vaincu meurt sous les yeux de la troupe : le mégalodon se retourne pendant le combat, la galère au large', () => {
+    for (const [ci, kind] of [[0, 'megalodon'], [1, 'kraken']] as [number, string][]) {
+      const r = sail('monster', ci, 1), { home } = r.s.boat!;
+      // l'issue est tirée d'avance : vaincu
+      let rolled = -1, sunk = -1, farAtDeath = 0;
+      const { v, a, scene } = r;
+      for (let i = 0; i < 60000 && a.phase !== 'back'; i++) {
+        v.agents.update(0.05, 10, a.age, false, 40, 0); v.ex.update(0.05);
+        if (a.wait) v.ex.decide(a, 0);
+        if (a.fate === false) a.fate = true;
+        scene.update(0.05, a);
+        if (a.phase !== 'work' || a.fate === undefined) continue;
+        const m = r.s.monster as unknown as { obj: THREE.Object3D; ended: boolean };
+        expect(m.ended).toBe(true);
+        const k = a.t / Math.max(1, a.c.work + a.extra), p = r.s.boat!.obj.position;
+        if (kind === 'megalodon' && rolled < 0 && Math.abs(m.obj.rotation.z) > 3) { rolled = k; farAtDeath = Math.hypot(p.x - home[0], p.z - home[1]); }
+        if (kind === 'kraken' && sunk < 0 && !m.obj.visible) { sunk = k; farAtDeath = Math.hypot(p.x - home[0], p.z - home[1]); }
+      }
+      const when = kind === 'megalodon' ? rolled : sunk;
+      // pendant le travail, pas une fois l'équipe repartie ; la galère est encore au large
+      expect(when, kind).toBeGreaterThan(0);
+      expect(when, kind).toBeLessThan(1);
+      expect(farAtDeath, kind).toBeGreaterThan(3);
+      expect(a.ok).toBe(true);
+      r.scene.dispose(r.a);
+    }
+  });
+
+  it('le kraken a tout son corps : la tête et ses bras, qui ondulent autour d’elle', () => {
+    const r = sail('monster', 1, 1), m = r.s.monster as unknown as { obj: THREE.Group; arms: THREE.Object3D[] };
+    expect(m.arms.length).toBe(8);
+    for (const arm of m.arms) expect(arm.parent).toBe(m.obj);
+    r.scene.dispose(r.a);
   });
 });
 

@@ -147,21 +147,78 @@ export const EVENTS: ExpEvent[] = [
   },
   // ---------------- La chasse au monstre des mers ----------------
   {
-    id: 'swell', where: ['river'], scenes: ['megalodon', 'kraken'], title: 'La houle se lève',
-    text: 'De grosses vagues secouent la galère : les hommes d’armes se cramponnent aux bords, harpons à la main.',
+    id: 'swell', where: ['river'], scenes: ['megalodon', 'kraken'], title: 'La tempête se lève',
+    text: 'Le ciel noircit au large, la pluie fouette la mer et de grosses vagues secouent la galère : les hommes d’armes se cramponnent aux bords, harpons à la main.',
     options: [
-      { label: 'Ramer face aux vagues', risk: 0.85, work: 4, text: 'Tous aux rames, face aux vagues : la galère a tenu bon.' },
-      { wait: true, label: 'Attendre que la mer se calme', risk: 0.9, work: 6, text: 'On a attendu que la mer se calme, à l’abri derrière les boucliers.' },
+      { label: 'Ramer face aux vagues', risk: 0.85, work: 4, text: 'Tous aux rames, face aux vagues : la galère a tenu bon dans la tempête.' },
+      { wait: true, label: 'Attendre que la mer se calme', risk: 0.9, work: 6, text: 'On a attendu que la tempête passe, à l’abri derrière les boucliers.' },
       { label: 'Foncer quand même', risk: 1.25, work: -3, text: 'On a foncé dans les vagues, trempés jusqu’aux os.' },
     ],
   },
   {
-    id: 'wreck', where: ['river'], scenes: ['megalodon', 'kraken'], title: 'Une épave flotte',
+    // le kraken creuse la mer : un tourbillon tourne autour de la galère
+    id: 'maelstrom', where: ['river'], scenes: ['kraken'], title: 'Un tourbillon se creuse',
+    text: 'La mer se met à tourner autour du kraken : un immense tourbillon d’écume aspire la galère vers son cœur.',
+    options: [
+      { label: 'Ramer hors du tourbillon', risk: 0.85, work: 5, text: 'Tous aux rames : la galère s’est arrachée au tourbillon.' },
+      { label: 'Harponner le kraken au cœur du tourbillon', needs: WEAPONS, risk: 1.1, work: -4, bonus: [{ t: 'ore', n: 2 }], text: 'Au cœur du tourbillon, les harpons ont frappé le kraken de tout près.' },
+      { wait: true, label: 'Jeter l’ancre et attendre qu’il se referme', risk: 0.9, work: 6, text: 'L’ancre jetée, on a attendu que le tourbillon se referme.' },
+    ],
+  },
+  {
+    // le mégalodon fonce sur la galère, gueule ouverte
+    id: 'lunge', where: ['river'], scenes: ['megalodon'], title: 'Le mégalodon fonce sur la galère',
+    text: 'L’aileron plonge, puis la gueule géante jaillit droit sur la galère !',
+    options: [
+      { label: 'Virer de bord à toutes rames', risk: 0.9, work: 4, text: 'Un coup de barre, et la gueule s’est refermée sur le vide.' },
+      { label: 'Le recevoir, harpons pointés', needs: WEAPONS, risk: 0.8, text: 'Les harpons pointés l’ont reçu de plein fouet : il a reculé, en sang.' },
+      { label: 'Lui jeter un quartier de viande', risk: 0.95, work: 2, text: 'Le quartier de viande l’a détourné un instant.' },
+    ],
+  },
+  {
+    // en chemin vers le large seulement : pendant le combat, on n'a pas le temps de fouiller une épave
+    id: 'wreck', where: ['river'], scenes: ['megalodon', 'kraken'], arrive: true, title: 'Une épave flotte',
     text: 'Les restes d’un bateau dérivent sur l’eau, rongés et brisés : le monstre est passé par là.',
     options: [
       { label: 'Fouiller l’épave', risk: 1.1, work: 5, bonus: [{ t: 'ore', n: 2 }], text: 'Dans l’épave, des lingots de métal : un petit trésor.' },
       { label: 'Charger les harpons', needs: WEAPONS, risk: 0.75, work: 3, text: 'Les harpons chargés et prêts, on a avancé, l’œil sur l’eau.' },
       { label: 'Passer sans s’arrêter', risk: 0.95, text: 'On est passé en silence, sans quitter l’eau des yeux.' },
+    ],
+  },
+  // ---------------- Le dragon dans sa grotte ----------------
+  {
+    id: 'bones', where: ['cave'], scenes: ['dragon'], arrive: true, title: 'Des ossements devant la grotte',
+    text: 'Des os rongés et des boucliers fondus jonchent l’entrée de la grotte : d’autres sont venus avant vous…',
+    options: [
+      { label: 'Fouiller les boucliers fondus', risk: 1.05, work: 4, bonus: [{ t: 'ore', n: 2 }], text: 'Sous les os, du bon métal à refondre.' },
+      { label: 'Serrer les rangs, boucliers levés', needs: ['armor'], risk: 0.8, work: 2, text: 'Boucliers levés, rangs serrés : la troupe est entrée sans trembler.' },
+      { label: 'Avancer sans un regard', risk: 1, text: 'On a enjambé les os sans un mot.' },
+    ],
+  },
+  {
+    id: 'flames', where: ['cave'], scenes: ['dragon'], title: 'Le dragon crache le feu',
+    text: 'Le dragon gonfle sa poitrine : un torrent de flammes jaillit de sa gueule et balaie l’entrée de la grotte !',
+    options: [
+      { label: 'Lever les boucliers', needs: ['armor'], risk: 0.75, work: 2, text: 'Les flammes ont léché les boucliers sans les percer.' },
+      { label: 'Se jeter derrière les rochers', risk: 0.85, work: 4, text: 'Tout le monde s’est jeté derrière les rochers : le feu est passé au-dessus des têtes.' },
+      { label: 'Charger à travers les flammes', risk: 1.3, work: -4, text: 'On a chargé à travers les flammes, les barbes roussies.' },
+    ],
+  },
+  // ---------------- Les grands Jeux du village ----------------
+  {
+    id: 'flame', where: ['plain'], scenes: ['games'], arrive: true, title: 'La flamme vacille',
+    text: 'Le vent se lève sur la dernière ligne droite : la flamme du relais vacille au bout de la torche.',
+    options: [
+      { label: 'La rallumer à la lanterne de secours', risk: 0.85, work: 3, text: 'La lanterne de secours a rallumé la flamme : le relais a repris de plus belle.' },
+      { label: 'Courir plus vite', risk: 1.15, work: -3, bonus: [{ t: 'need', need: 'joy', n: 1, days: 4 }], text: 'Le porteur a couru à perdre haleine : la flamme est arrivée, toute petite, sous les vivats.' },
+    ],
+  },
+  {
+    id: 'record', where: ['plain'], scenes: ['games'], title: 'Un record en vue',
+    text: 'Sur la piste, une coureuse du village file plus vite que personne avant elle : le record est à portée !',
+    options: [
+      { label: 'Encourager à tue-tête', risk: 0.9, work: 2, bonus: [{ t: 'need', need: 'joy', n: 2, days: 6 }], text: 'Tout le stade a crié son nom : record battu !' },
+      { label: 'Faire silence pour l’athlète', risk: 0.95, work: 3, text: 'Le stade a retenu son souffle : la coureuse a fini en tête.' },
     ],
   },
   // ---------------- Le temps qu'il fait : l'orage et le brouillard sur la scène ----------------
@@ -328,7 +385,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'bats', where: ['cave'], scenes: ['cave', 'scout'], title: 'Une nuée de chauves-souris',
+    id: 'bats', where: ['cave'], scenes: ['cave', 'scout', 'dragon'], title: 'Une nuée de chauves-souris',
     text: 'Un grand battement d’ailes : des centaines de chauves-souris jaillissent de la grotte !',
     options: [
       { wait: true, label: 'Se plaquer au sol', risk: 0.85, work: 3, text: 'À plat ventre, on a laissé passer la nuée.' },

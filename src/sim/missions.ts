@@ -34,7 +34,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // le premier vol de fusée, la fusée lunaire (et l'alunissage en direct), le départ du vaisseau colonial
   | 'launch' | 'moon' | 'colony'
   // la chasse en mer : le mégalodon (aileron géant) et le kraken (tentacules), la galère et ses harpons
-  | 'megalodon' | 'kraken';
+  | 'megalodon' | 'kraken'
+  // le dragon dans sa grotte (Moyen Âge) ; les grands Jeux au stade (époque moderne)
+  | 'dragon' | 'games';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -562,6 +564,27 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // facultative (le passage d'âge ne tient qu'au filon) : un gros risque, un gros butin ; les armures et les épées aident
+    id: 'dragon', age: 2, mandatory: false, icon: '🐉', title: 'Chasser le dragon',
+    intro: 'Un dragon s’est terré dans une grotte au pied de la montagne : il enlève les moutons et roussit les toits. On dit qu’il dort sur un tas d’or… Des chevaliers sont prêts à l’en déloger.',
+    choices: [
+      {
+        label: 'L’affronter dans sa grotte', text: 'Lances, épées et boucliers : on le défie à l’entrée de son antre. Le plus court, et le plus dangereux.',
+        dest: 'cave', scene: 'dragon', doing: 'affronte le dragon à l’entrée de sa grotte', danger: ['monster', 'dark'], party: 5, work: 32, risk: 0.45, carry: 'cart',
+        win: [{ t: 'ore', n: 16 }, joy(4, 6), joy(2), { t: 'perk', id: 'dragon' }], lose: [hurt(2, 3), joy(-2, 3)],
+        winText: 'Le dragon s’est effondré devant sa grotte ! Les chevaliers rentrent avec son trésor : de l’or et du fer plein le chariot.',
+        loseText: 'Le dragon a craché le feu et pris son envol : deux chevaliers brûlés, et la bête rôde toujours.',
+      },
+      {
+        label: 'L’enfumer hors de sa grotte', text: 'Un grand feu d’herbes humides devant l’entrée : à moitié étouffé, il sortira affaibli. Plus long, plus sûr.',
+        dest: 'cave', scene: 'dragon', doing: 'enfume la grotte du dragon et l’attend, lances pointées', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.3, carry: 'cart',
+        win: [{ t: 'ore', n: 12 }, joy(3, 6), joy(2), { t: 'perk', id: 'dragon' }], lose: [hurt(1, 2), joy(-1, 3)],
+        winText: 'Le dragon est sorti en toussant, et les lances ont fait le reste ! Son trésor rentre au village sur le chariot.',
+        loseText: 'Le dragon a jailli de la fumée et s’est envolé par-dessus la montagne : un chevalier brûlé.',
+      },
+    ],
+  },
   // ---------------- Âge industriel ----------------
   {
     id: 'railway', age: 3, mandatory: true, icon: '🚂', title: 'Le tracé du chemin de fer',
@@ -722,6 +745,28 @@ export const MISSIONS: Mission[] = [
         win: [joy(2), { t: 'ore', n: 4 }], lose: [],
         winText: 'La météorite fumait encore au fond de son trou : du fer tombé du ciel, et un observatoire promis au village !',
         loseText: 'Rien qu’un rocher ordinaire… la météorite est tombée ailleurs.',
+      },
+    ],
+  },
+  {
+    // les grands Jeux, au stade du village : il faut toutes les installations sportives ; la flamme, la foule, le podium
+    id: 'games', age: 4, mandatory: false, icon: '🏅', title: 'Organiser les JO',
+    requires: { kinds: ['stadium', 'football', 'basket', 'tennis', 'waterpark'] },
+    intro: 'Stade, terrains, courts et bassins : le village a tout ce qu’il faut pour accueillir les Jeux. Athlètes du monde entier, relais de la flamme, cérémonie d’ouverture… le monde entier regardera !',
+    choices: [
+      {
+        label: 'Une cérémonie grandiose', text: 'Relais de la flamme, défilé des nations, drapeaux et foule en délire : une fête que l’on n’oubliera pas.',
+        dest: 'plain', scene: 'games', fail: 'storm', doing: 'allume la flamme au stade et ouvre les Jeux devant la foule', danger: ['weather'], party: 6, work: 34, risk: 0.2,
+        win: [joy(10, 10), joy(4), jobs(4), { t: 'ore', n: 8 }, { t: 'perk', id: 'games' }], lose: [joy(-2, 4)],
+        winText: 'La flamme brille au-dessus du stade, les médailles pleuvent : le monde entier parle du village ! Les visiteurs ont laissé de quoi garnir les réserves.',
+        loseText: 'Un orage a noyé la cérémonie : la flamme s’est éteinte, et les Jeux se sont terminés sous les parapluies.',
+      },
+      {
+        label: 'Des Jeux simples et joyeux', text: 'Moins de faste, plus de sport : on court, on saute, on nage, et tout le monde y gagne.',
+        dest: 'plain', scene: 'games', fail: 'storm', doing: 'allume la flamme au stade et lance les épreuves', danger: ['weather'], party: 4, work: 26, risk: 0.08,
+        win: [joy(6, 8), joy(2), jobs(2), { t: 'ore', n: 4 }, { t: 'perk', id: 'games' }], lose: [],
+        winText: 'Des records, des sourires et des médailles : les Jeux du village resteront dans les mémoires.',
+        loseText: 'La pluie a écourté les épreuves : on remettra ça.',
       },
     ],
   },
@@ -908,7 +953,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
 
 const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: '🔨', joy: '😊' };
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
-const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', map: 'plan des galeries : expéditions armées plus sûres (risque −20 %)', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
+const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', map: 'plan des galeries : expéditions armées plus sûres (risque −20 %)', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', dragon: 'le trésor du dragon : sa légende court dans tout le pays', games: 'les Jeux du village : le monde entier connaît son stade', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

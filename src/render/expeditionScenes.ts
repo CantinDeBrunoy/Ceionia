@@ -13,6 +13,7 @@ import { mats } from './materials';
 import type { CombatFx } from './combatFx';
 import { rocketGeo, ROCKET_H, ROCKET_R, RocketKind } from './rocket';
 import { SPACEPAD, shark, crocodile, tentacle, krakenHead, harpoon } from './models';
+import { makeBeast } from './beasts';
 import { Building, sizeOf } from '../build/catalog';
 
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
@@ -173,9 +174,13 @@ interface Monster {
   breach: number; done: number; hits: number; flinch: number; dart: number; death: number;
   /** tentacules du kraken : leur base (angle, rayon), leur élan (0 … 1), le temps qu'elles repoussent après un coup de harpon */
   tents: { obj: THREE.Mesh; ang: number; r: number; up: number; cut: number; ph: number }[];
+  /** les bras du kraken, attachés sous sa tête (ils ondulent sur l'eau autour d'elle) */
+  arms: THREE.Object3D[];
+  /** l'issue est tombée (voir `ActiveExpedition.fate`) : la dernière volée de harpons est partie */
+  ended: boolean;
 }
-/** Avancement du travail où le mégalodon bondit hors de l'eau */
-const MEGA_BREACH = [0.42, 0.6, 0.76];
+/** Avancement du travail où le mégalodon bondit hors de l'eau (le dernier bond retombe avant l'issue du combat) */
+const MEGA_BREACH = [0.4, 0.56, 0.7];
 const sharkGeo = (big = false) => geo(`shark:${+big}`, (p) => shark(p, big));
 const krakenHeadGeo = () => geo('krakenHead', (p) => krakenHead(p));
 const tentacleGeo = () => geo('tentacle', (p) => tentacle(p));
@@ -533,6 +538,53 @@ const scrollGeo = () => geo('scroll', (p) => { p.add(new THREE.CylinderGeometry(
 /** Manche de la torche de fortune (la flamme est à part : elle baisse et grandit) */
 const handTorchGeo = () => geo('handtorch', (p) => { p.box(0.01, 0.08, 0.01, 0, 0, 0, 0x6a4a34); p.cyl(0.014, 0.01, 0.018, 6, 0, 0.065, 0, 0x4a3a2e); });
 
+// ---------------- Les grands Jeux et le dragon ----------------
+/** La vasque des Jeux : socle de marches, colonne blanche cannelée, coupe dorée (son bord à 0,43) */
+const cauldronGeo = () => geo('cauldron', (p) => {
+  p.cyl(0.13, 0.15, 0.03, 10, 0, 0, 0, 0xb8b2a6);
+  p.cyl(0.1, 0.11, 0.03, 10, 0, 0.03, 0, 0xcac4b8);
+  p.cyl(0.035, 0.045, 0.3, 10, 0, 0.06, 0, 0xeee8dc);
+  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; p.box(0.008, 0.28, 0.008, Math.cos(a) * 0.04, 0.07, Math.sin(a) * 0.04, 0xd8d2c6); }
+  p.cyl(0.065, 0.04, 0.03, 10, 0, 0.36, 0, 0xc89a3a);
+  p.cyl(0.13, 0.07, 0.05, 12, 0, 0.385, 0, 0xe0b44a);
+  p.cyl(0.125, 0.125, 0.006, 12, 0, 0.432, 0, 0x6a4a2a);
+});
+/** Un drapeau de nation sur son mât (le tissu dans le plan x = 0, flottant vers +z) */
+const NATION: [number, number, number][] = [[0x2a5ea8, 0xf4f4f2, 0xc8443a], [0x3a9a5a, 0xf4f4f2, 0xe88a3a], [0xc8443a, 0xe8c04a, 0xc8443a], [0x1a1a1e, 0xc8443a, 0xe8c04a], [0x2a8ac8, 0xf4f4f2, 0x2a8ac8], [0xe8c04a, 0x3a9a5a, 0x2a5ea8]];
+const gamesFlagGeo = (i: number) => geo(`gamesflag${i}`, (p) => {
+  p.cyl(0.005, 0.006, 0.42, 5, 0, 0, 0, 0xd8dce0);
+  p.sphere(0.009, 0, 0.42, 0, 0xe0b44a);
+  const c = NATION[i % NATION.length];
+  for (let j = 0; j < 3; j++) p.box(0.004, 0.09, 0.045, 0, 0.3, 0.025 + j * 0.045, c[j]);
+});
+/** Le podium : trois marches (la première au milieu), leurs chiffres d'or, d'argent et de bronze ; tourné vers +z */
+const podiumGeo = () => geo('podium', (p) => {
+  for (const [x, h, c] of [[0, 0.07, 0xe0b44a], [-0.12, 0.05, 0xc8ccd4], [0.12, 0.035, 0xc0804a]] as number[][]) {
+    p.box(0.12, h, 0.12, x, 0, 0, 0xf2f0ea);
+    p.box(0.03, 0.03, 0.004, x, h * 0.3, 0.061, c);
+  }
+});
+/** Hauteur du dessus de chaque marche du podium (or, argent, bronze) et leur place le long de x */
+const PODIUM: [number, number][] = [[0, 0.07], [-0.12, 0.05], [0.12, 0.035]];
+/** Le trésor du dragon : un tas de pièces d'or, un coffre ouvert, des coupes, des gemmes, un crâne */
+const hoardGeo = () => geo('hoard', (p) => {
+  for (let i = 0; i < 26; i++) { const a = i * 2.4, r = 0.04 + (i % 7) * 0.022; p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.005, 7), Math.cos(a) * r, 0.05 - r * 0.45 + (i % 3) * 0.004, Math.sin(a) * r, i % 4 ? 0xe8c04a : 0xd0a03a, a, false, 0.4 * Math.sin(i), 0.3 * Math.cos(i)); }
+  p.add(new THREE.IcosahedronGeometry(0.11, 1).scale(1, 0.38, 1), 0, 0, 0, 0xd8a83a);
+  p.box(0.11, 0.06, 0.07, 0.13, 0, -0.05, 0x7a4a2a, 0.4);
+  p.box(0.115, 0.01, 0.075, 0.13, 0.06, -0.05, 0xc89a3a, 0.4);
+  p.add(new THREE.BoxGeometry(0.11, 0.05, 0.012), 0.12, 0.09, -0.09, 0x6a3e22, 0.4, false, 0, -0.9);
+  p.cyl(0.012, 0.018, 0.04, 6, -0.11, 0.02, 0.06, 0xe0b44a);
+  p.cyl(0.022, 0.012, 0.02, 6, -0.11, 0.06, 0.06, 0xe0b44a);
+  for (const [x, z, c] of [[0.03, 0.06, 0xc8443a], [-0.05, -0.04, 0x3a9a5a], [0.07, -0.02, 0x2a8ac8]] as number[][]) p.add(new THREE.OctahedronGeometry(0.016, 0), x, 0.05, z, c);
+  p.sphere(0.03, -0.14, 0.02, -0.06, 0xe8e0cc, 0, 0.9);
+  for (const s of [-1, 1]) p.box(0.008, 0.008, 0.004, -0.14 + s * 0.011, 0.025, -0.034, 0x2a2420);
+});
+/** Couleurs des étincelles des feux d'artifice, et celles du souffle du dragon */
+const SPARK = [0xffe08a, 0xff6a6a, 0x8ad0ff, 0xb0ff8a, 0xffffff].map((c) => new THREE.MeshBasicMaterial({ color: c }));
+const EMBER = [0xffa040, 0xffe08a, 0xff6a2a].map((c) => new THREE.MeshBasicMaterial({ color: c }));
+const sparkGeo = new THREE.BoxGeometry(0.02, 0.02, 0.02);
+const emberGeo = new THREE.IcosahedronGeometry(0.03, 0);
+
 // ---------------- La chasse au mammouth ----------------
 const FUR = 0x7a4a2a, FUR_DARK = 0x5a3620, IVORY = 0xefe4c8;
 /** Un tronçon de cylindre de a à b, du rayon r0 au rayon r1 (pattes, trompe, queue, perches) */
@@ -638,6 +690,7 @@ const BEHAVIOR: Record<Scene, string> = {
   build: 'build', bridge: 'build', drill: 'build', summit: 'build', basecamp: 'build', rails: 'rails', camp: 'camp',
   smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', scout: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
   race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch', mammoth: 'mammoth', megalodon: 'boat', kraken: 'boat',
+  dragon: 'dragon', games: 'games',
 };
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
@@ -723,10 +776,19 @@ interface Beast { obj: THREE.Object3D; actor: Actor | null; x: number; z: number
  * sa vitesse lissée, et ce qu'il fait : il barrit (trompe levée, 0 … 1), se couche (0 … 1), s'enfonce dans la fosse
  */
 interface Mammoth { b: Beast; legs: THREE.Object3D[]; trunk: THREE.Object3D; size: number; ph: number; px: number; pz: number; v: number; trumpet: number; lie: number; sink: number }
+/**
+ * Le dragon de la grotte : la bête articulée, où elle se tient (devant la bouche de la grotte) et son cap, sa hauteur en vol,
+ * ce qu'elle fait (dort, rugit, crache le feu, marche, vole, est touchée, meurt, s'enfuit) et depuis quand, le roulis de sa
+ * chute, la bouche de l'antre et sa direction (vers l'équipe), le trésor, s'il faut l'enfumer, le souffle de feu en cours
+ */
+interface DragonLair {
+  actor: Actor; x: number; z: number; heading: number; lift: number; act: 'sleep' | 'roar' | 'breath' | 'prowl' | 'fly' | 'hit' | 'dead' | 'flee'; actT: number;
+  roll: number; mouth: [number, number]; face: number; home: [number, number]; hoard: THREE.Object3D; smoke: boolean; hits: number; ended: boolean; next: number;
+}
 /** Le décor s'efface en ce temps-là (secondes), une fois l'équipe repartie */
 const FADE = 1.2;
 interface Rod { rod: THREE.Mesh; bob: THREE.Mesh; line: THREE.Line }
-interface Fx { obj: THREE.Object3D; t: number; life: number; kind: 'puff' | 'fish' | 'ring' | 'steam' | 'smoke' | 'bubble' | 'star' | 'plume' | 'trail' | 'rock' | 'gas' | 'leaf'; x: number; y: number; z: number; vx: number; vz: number; vy?: number }
+interface Fx { obj: THREE.Object3D; t: number; life: number; kind: 'puff' | 'fish' | 'ring' | 'steam' | 'smoke' | 'bubble' | 'star' | 'plume' | 'trail' | 'rock' | 'gas' | 'leaf' | 'spark'; x: number; y: number; z: number; vx: number; vz: number; vy?: number }
 
 /**
  * Un imprévu joué sur la scène : ce qu'on voit pendant que l'équipe attend la décision, puis la suite de l'option choisie
@@ -817,6 +879,16 @@ export class ExpeditionScene {
   } | null = null;
   /** la voiture de course, sa ligne de départ, l'arche, son circuit (côté s, demi-axes rx, rz), ses tours, son pilote */
   private race: { obj: THREE.Object3D; x: number; z: number; ax: number; s: number; rx: number; rz: number; laps: number; driver: number | null; puff: number } | null = null;
+  /**
+   * Les grands Jeux : le centre du stade et son sol, la vasque (où, la hauteur de sa coupe, la direction du stade à elle), la
+   * flamme de la vasque et celle du relais, les drapeaux, le podium, la course de chaque athlète sur la piste, le feu d'artifice
+   */
+  private games: {
+    sx: number; sz: number; sy: number; half: number; cx: number; cz: number; cy: number; ux: number; uz: number;
+    flame: THREE.Object3D; torch: THREE.Object3D; flags: THREE.Object3D[]; podium: THREE.Object3D; laps: Map<number, number>; lit: boolean; boom: number;
+  } | null = null;
+  /** Le dragon et son antre (voir `dragonLair`) */
+  private dragon: DragonLair | null = null;
   /** où en est chaque membre de l'envol ou de la course (aux cordes, à la nacelle, au bord de la piste…) */
   private stage = new Map<number, string>();
   /** la fusée de l'expédition spatiale, sur son pas de tir puis dans le ciel */
@@ -994,6 +1066,8 @@ export class ExpeditionScene {
     const w = this.world, age = a.m.age, st = this.story, y = (x: number, z: number) => w.surfaceAt(x, z);
     if (st === 'launch' || st === 'moon' || st === 'colony') this.launchpad(a, cx, cz);
     else if (st === 'mammoth') this.mammothHunt(a, cx, cz);
+    else if (st === 'games') this.gamesStage(a, cx, cz);
+    else if (st === 'dragon') this.dragonLair(a, cx, cz);
     else if (st === 'salt') {
       // pierres à sel au bord de l'eau ; l'équipe guette, cachée derrière les buissons
       for (let i = 0; i < 3; i++) { const [x, z] = this.near(cx + Math.cos(i * 2.1) * 0.35, cz + Math.sin(i * 2.1) * 0.35, cx, cz); this.put(saltGeo(), x, z, i); this.salts.push([x, z]); }
@@ -1392,7 +1466,7 @@ export class ExpeditionScene {
       birds: () => this.stageBirds(s, a, fail), swarm: () => this.stageSwarm(s, a, fail), wheel: () => this.stageWheel(s, a), tasting: () => this.stageTasting(s, a),
       puncture: () => this.stagePuncture(s), gust: () => this.stageGust(s), clouds: () => this.stageClouds(s), cows: () => this.stageCows(s, a),
       tusks: () => this.stageTusks(s, a), blizzard: () => this.stageBlizzard(s, a, fail),
-      shark: () => this.stageShark(s), croc: () => this.stageCroc(s, a), swell: () => this.stageSwell(s), wreck: () => this.stageWreck(s),
+      shark: () => this.stageShark(s), croc: () => this.stageCroc(s, a), swell: () => this.stageSwell(s), wreck: () => this.stageWreck(s), maelstrom: () => this.stageMaelstrom(s),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
       stings: () => this.stageSwarm(s, a, true), blast: () => this.stageBlast(s), gone: () => this.stageGone(s),
@@ -1538,13 +1612,13 @@ export class ExpeditionScene {
    * Le ciel qui s'assombrit sur l'équipe, et là seulement : un voile sombre et transparent tendu au-dessus de la scène (une
    * coupole très plate, au-dessus des têtes), sombre au milieu et effacé sur ses bords (k : sa force, 0 … 1)
    */
-  private sGloom(s: Staging, cx: number, cz: number, r: number) {
+  private sGloom(s: Staging, cx: number, cz: number, r: number, y0?: number) {
     const g = new THREE.SphereGeometry(r, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.15, 1), p = g.attributes.position, col = new Float32Array(p.count * 4);
     for (let i = 0; i < p.count; i++) { const d = Math.min(1, Math.hypot(p.getX(i), p.getZ(i)) / r); col.set([0.04, 0.05, 0.1, 0.45 * (1 - d) * (1 + d)], i * 4); }
     g.setAttribute('color', new THREE.BufferAttribute(col, 4));
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: false });
     const m = this.sAdd(s, new THREE.Mesh(g, mat));
-    m.position.set(cx, this.world.surfaceAt(cx, cz) + 0.9, cz);
+    m.position.set(cx, (y0 ?? this.world.surfaceAt(cx, cz)) + 0.9, cz);
     m.renderOrder = 3;
     m.userData.flat = true;
     s.own.push(g, mat);
@@ -1552,13 +1626,15 @@ export class ExpeditionScene {
   }
 
   /** La pluie qui tombe sur un disque de rayon r autour de (cx, cz) ; de quoi l'animer (k : sa force, 0 … 1) */
-  private sRain(s: Staging, cx: number, cz: number, r: number, top: number) {
+  private sRain(s: Staging, cx: number, cz: number, r: number, top: number, y0?: number) {
     const n = 160, pos = new Float32Array(n * 6), drop: number[] = [];
-    for (let i = 0; i < n; i++) { const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r, x = cx + Math.cos(ang) * d, z = cz + Math.sin(ang) * d; drop.push(x, z, this.world.surfaceAt(x, z), Math.random()); }
+    // (en mer, elle tombe jusqu'à l'eau : `y0`, pas jusqu'au fond)
+    for (let i = 0; i < n; i++) { const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r, x = cx + Math.cos(ang) * d, z = cz + Math.sin(ang) * d; drop.push(x, z, y0 ?? this.world.surfaceAt(x, z), Math.random()); }
     const g = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const mat = new THREE.LineBasicMaterial({ color: 0xc4d8ee, transparent: true, opacity: 0.8, depthWrite: false });
     const l = new THREE.LineSegments(g, mat);
-    l.frustumCulled = false; l.userData.flat = true;
+    // (après l'eau, transparente elle aussi, pour qu'elle ne passe pas par-dessus)
+    l.frustumCulled = false; l.userData.flat = true; l.renderOrder = 3;
     this.sAdd(s, l); s.own.push(g, mat);
     return (dt: number, k: number) => {
       mat.opacity = 0.8 * k;
@@ -1586,7 +1662,7 @@ export class ExpeditionScene {
     for (let i = 0; i < 34; i++) {
       const m = new THREE.Sprite(mat);
       m.scale.set(1.3 + (i % 4) * 0.35, 0.7 + (i % 3) * 0.2, 1);
-      m.renderOrder = 2;
+      m.renderOrder = 3;
       this.sAdd(s, m);
       blobs.push({ m, a: i * 2.4, d: 0.1 + Math.sqrt((i + 0.5) / 34) * r, y: 0.18 + (i % 4) * 0.09, sp: 0.04 + (i % 5) * 0.012 });
     }
@@ -1608,7 +1684,7 @@ export class ExpeditionScene {
     const g = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.06, map: softPuff(), transparent: true, opacity: 0.95, depthWrite: false });
     const pts = new THREE.Points(g, mat);
-    pts.frustumCulled = false; pts.userData.flat = true;
+    pts.frustumCulled = false; pts.userData.flat = true; pts.renderOrder = 3;
     this.sAdd(s, pts); s.own.push(g, mat);
     return (dt: number, k: number) => {
       mat.opacity = 0.95 * k;
@@ -1645,6 +1721,7 @@ export class ExpeditionScene {
   /** Un poisson qui saute hors de l'eau en (x, z), et le rond qu'il laisse */
   private fishJump(x: number, z: number, level: number) {
     const ang = Math.random() * Math.PI * 2, f = new THREE.Mesh(fishGeo(), mats.body), ring = new THREE.Mesh(new THREE.RingGeometry(0.03, 0.045, 12).rotateX(-Math.PI / 2), RING);
+    ring.renderOrder = 3;
     this.group.add(f, ring);
     const vx = Math.cos(ang + 1.2) * 0.25, vz = Math.sin(ang + 1.2) * 0.25;
     this.fx.push({ obj: f, t: 0, life: 0.7, kind: 'fish', x, y: level, z, vx, vz });
@@ -2017,16 +2094,92 @@ export class ExpeditionScene {
     };
   }
 
-  /** La houle : la galère tangue fort, des crêtes d'écume courent sur l'eau (plus calme si l'on attend, plus dure si l'on fonce) */
+  /**
+   * La tempête au large : un nuage noir sur la galère, la pluie qui fouette la mer, des éclairs qui tombent sur l'eau ; la galère
+   * tangue fort, des crêtes d'écume courent sur les vagues (plus calme si l'on attend, plus dure si l'on fonce)
+   */
   private stageSwell(s: Staging) {
     const bt = this.boat;
     if (!bt) return () => false;
-    let pt = 0;
+    const o0 = bt.obj.position, cx = o0.x, cz = o0.z, h = 2.4;
+    const cloud = this.sCloud(s, cx, cz, 0, false, 1.6), rain = this.sRain(s, cx, cz, 2, h, bt.y), gloom = this.sGloom(s, cx, cz, 3.4, bt.y);
+    cloud.position.y = bt.y + h + 0.25;
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+    const flash = this.sAdd(s, new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), flashMat));
+    flash.position.copy(cloud.position); flash.scale.set(2.4, 0.7, 2.4); flash.renderOrder = 3;
+    const bolt = this.sAdd(s, new THREE.LineSegments(boltGeo(1), BOLT));
+    bolt.userData.flat = true; bolt.visible = false;
+    s.own.push(flash.geometry, flashMat, { dispose: () => bolt.geometry.dispose() });
+    let pt = 0, k = 0, strike = 0.6, shown = 0;
     return (dt: number) => {
       const wild = s.pick < 0 || s.after < (s.pick === 2 ? 5 : s.pick === 1 ? 4 : 3);
       this.rough = wild ? (s.pick === 2 ? 1 : 0.7) : Math.max(0, this.rough - dt * 0.3);
+      k = wild ? Math.min(1, k + dt * 0.8) : Math.max(0, k - dt * 0.35);
+      rain(dt, k);
+      gloom(k * (1 - flashMat.opacity * 1.2));
       if (wild && (pt -= dt) <= 0) { pt = 0.09; const o = bt.obj.position, a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.6, x = o.x + Math.cos(a) * r, z = o.z + Math.sin(a) * r; if (this.depth(x, z) !== null) this.puffAt(x, bt.y + 0.01, z); }
-      return wild || this.rough > 0.02;
+      // un éclair de temps en temps : un zigzag blanc jusqu'à la mer, le nuage qui s'illumine, une gerbe là où il tombe
+      if (wild && (strike -= dt) <= 0) {
+        strike = 1.4 + Math.random() * 2.2; shown = 0.16;
+        const ang = Math.random() * Math.PI * 2, d = 0.6 + Math.random() * 1.2, x = cx + Math.cos(ang) * d, z = cz + Math.sin(ang) * d;
+        bolt.geometry.dispose(); bolt.geometry = boltGeo(Math.random() * 10);
+        bolt.position.set(x, bt.y, z); bolt.scale.set(1, cloud.position.y - bt.y, 1);
+        flashMat.opacity = 0.55;
+        if (this.depth(x, z) !== null) this.splash(x, z, bt.y, true);
+      }
+      shown -= dt;
+      bolt.visible = shown > 0;
+      flashMat.opacity *= Math.pow(0.02, dt);
+      cloud.visible = flash.visible = k > 0.02;
+      return wild || this.rough > 0.02 || k > 0.02;
+    };
+  }
+
+  /**
+   * Le tourbillon du kraken : la mer tourne autour de lui, trois bras d'écume s'enroulent vers un cœur sombre où l'eau se creuse,
+   * des gerbes y sont aspirées, la galère tangue ; il se referme quand on s'en arrache, quand on l'attend… ou après le coup de
+   * harpon au cœur
+   */
+  private stageMaelstrom(s: Staging) {
+    const bt = this.boat, m = this.monster;
+    if (!bt) return () => false;
+    const o = bt.obj.position, cx = m ? (m.cx + o.x) / 2 : o.x, cz = m ? (m.cz + o.z) / 2 : o.z, R = 1.3, y = bt.y + 0.006;
+    // trois bras d'écume en spirale, sur un ruban plat ; un cœur d'eau sombre
+    const arms = 3, steps = 40, pos: number[] = [];
+    for (let a = 0; a < arms; a++)
+      for (let i = 0; i < steps; i++) {
+        const t0 = i / steps, t1 = (i + 1) / steps, r0 = 0.12 + t0 * R, r1 = 0.12 + t1 * R, a0 = a * (Math.PI * 2 / arms) + t0 * 4.2, a1 = a * (Math.PI * 2 / arms) + t1 * 4.2;
+        const w0 = 0.02 + t0 * 0.07, w1 = 0.02 + t1 * 0.07;
+        const p = (r: number, ang: number): [number, number, number] => [Math.cos(ang) * r, 0, Math.sin(ang) * r];
+        const A = p(r0 - w0, a0), B = p(r0 + w0, a0), C = p(r1 - w1, a1), D = p(r1 + w1, a1);
+        pos.push(...A, ...B, ...C, ...B, ...D, ...C);
+      }
+    const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const foam = new THREE.MeshBasicMaterial({ color: 0xf2f8fb, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    const swirl = this.sAdd(s, new THREE.Mesh(g, foam));
+    swirl.position.set(cx, y, cz); swirl.renderOrder = 3; swirl.userData.flat = true;
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0x0c2230, transparent: true, opacity: 0, depthWrite: false });
+    const core = this.sAdd(s, new THREE.Mesh(new THREE.CircleGeometry(0.42, 20).rotateX(-Math.PI / 2), coreMat));
+    core.position.set(cx, y - 0.002, cz); core.renderOrder = 3; core.userData.flat = true;
+    s.own.push(g, foam, core.geometry, coreMat);
+    let k = 0, pt = 0, spin = 0;
+    return (dt: number) => {
+      // ramer : il se referme vite ; le harpon au cœur : un peu plus tard ; l'ancre : il tourne encore un moment
+      const open = s.pick < 0 || s.after < (s.pick === 0 ? 2.5 : s.pick === 1 ? 3.5 : 6);
+      k = open ? Math.min(1, k + dt * 0.6) : Math.max(0, k - dt * 0.4);
+      spin += dt * (0.6 + 1.2 * k);
+      swirl.rotation.y = spin;
+      swirl.scale.setScalar(0.4 + 0.6 * k);
+      foam.opacity = 0.6 * k; coreMat.opacity = 0.55 * k;
+      this.rough = Math.max(this.rough, 0.75 * k);
+      // des gerbes d'écume aspirées vers le cœur
+      if (k > 0.2 && (pt -= dt) <= 0) {
+        pt = 0.12;
+        const a = Math.random() * Math.PI * 2, r = 0.4 + Math.random() * R * 0.8, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+        if (this.depth(x, z) !== null) this.puffAt(x, y + 0.004, z, 'puff', (cx - x) * 0.4 - Math.sin(a) * 0.3, (cz - z) * 0.4 + Math.cos(a) * 0.3);
+      }
+      if (m && s.pick === 1 && s.after < 0.2) m.flinch = 1;
+      return open || k > 0.01;
     };
   }
 
@@ -2832,6 +2985,8 @@ export class ExpeditionScene {
     const n = big ? 7 : 3;
     for (let i = 0; i < n; i++) this.puffAt(x + (Math.random() - 0.5) * 0.2, level + 0.01, z + (Math.random() - 0.5) * 0.2, 'puff', (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2);
     const ring = new THREE.Mesh(new THREE.RingGeometry(big ? 0.08 : 0.04, big ? 0.11 : 0.055, 14).rotateX(-Math.PI / 2), RING);
+    // (dessiné après l'eau, transparente elle aussi : sinon elle le recouvre)
+    ring.renderOrder = 3;
     this.group.add(ring);
     this.fx.push({ obj: ring, t: 0, life: 1.4, kind: 'ring', x, y: level + 0.005, z, vx: 0, vz: 0 });
   }
@@ -2846,7 +3001,7 @@ export class ExpeditionScene {
     obj.visible = false;
     this.group.add(obj);
     this.props.push(obj);
-    const tents: Monster['tents'] = [];
+    const tents: Monster['tents'] = [], arms: THREE.Object3D[] = [];
     if (this.story === 'megalodon') {
       const mesh = new THREE.Mesh(sharkGeo(true), mats.body);
       mesh.scale.setScalar(3.2);
@@ -2857,6 +3012,20 @@ export class ExpeditionScene {
       head.castShadow = true;
       head.scale.setScalar(1.3);
       obj.add(head);
+      // le corps sous la tête : huit gros bras qui partent du manteau et s'étalent sur l'eau tout autour (la tête n'est plus posée
+      // seule sur l'eau, coupée net à la flottaison)
+      for (let i = 0; i < 8; i++) {
+        const pivot = new THREE.Group(), arm = new THREE.Mesh(tentacleGeo(), mats.body);
+        pivot.rotation.order = 'YXZ';
+        pivot.rotation.y = (i / 8) * Math.PI * 2 + 0.2;
+        pivot.position.y = 0.05;
+        arm.castShadow = true;
+        arm.scale.set(1.35, 0.95, 1.35);
+        arm.rotation.order = 'YXZ';
+        pivot.add(arm);
+        obj.add(pivot);
+        arms.push(pivot);
+      }
       for (let i = 0; i < 7; i++) {
         const t = new THREE.Mesh(tentacleGeo(), mats.body);
         t.castShadow = true; t.visible = false;
@@ -2866,7 +3035,18 @@ export class ExpeditionScene {
         tents.push({ obj: t, ang: (i / 7) * Math.PI * 2 + 0.4, r: r * (0.62 + (i % 3) * 0.14), up: 0, cut: 0, ph: i * 1.7 });
       }
     }
-    this.monster = { kind: this.story === 'kraken' ? 'kraken' : 'megalodon', obj, cx, cz, level, r, ang: 0.6, breach: -1, done: 0, hits: 0, flinch: 0, dart: 1, death: 0, tents };
+    this.monster = { kind: this.story === 'kraken' ? 'kraken' : 'megalodon', obj, cx, cz, level, r, ang: 0.6, breach: -1, done: 0, hits: 0, flinch: 0, dart: 1, death: 0, tents, arms, ended: false };
+  }
+
+  /**
+   * L'issue du combat tombe (voir `ActiveExpedition.fate`) : toute la troupe lance ses harpons d'un coup sur le monstre, dans une
+   * grande gerbe d'écume ; vaincu, il meurt sous ses yeux, sinon il s'échappe
+   */
+  private finalVolley(m: Monster, to: THREE.Vector3) {
+    m.ended = true;
+    for (let i = 0; i < 4; i++) { m.dart = 0; this.throwDarts(0, m, to.clone().add(new THREE.Vector3((i - 1.5) * 0.08, 0, (i % 2) * 0.06)), -1); }
+    this.splash(to.x, to.z, m.level, true);
+    m.flinch = 1;
   }
 
   /** Le monstre à chaque image (voir `makeMonster`) ; `k` : l'avancement du travail */
@@ -2876,42 +3056,51 @@ export class ExpeditionScene {
     if (!bt || (a.phase !== 'work' && !over)) return;
     m.flinch = Math.max(0, m.flinch - dt * 2.5);
     const shake = Math.sin(this.t * 38) * 0.14 * m.flinch;
+    // l'issue du combat, tombée pendant le travail (ou, pour une ancienne équipe, au départ) : vaincu, ou échappé
+    const fate = a.fate ?? (over ? a.ok : undefined), won = fate === true, lost = fate === false;
+    if (fate !== undefined) m.death += dt;
     if (m.kind === 'megalodon') {
       const show = k > 0.1 || over, rad = m.r * (1 + (1 - smooth(Math.min(1, Math.max(0, (k - 0.1) / 0.2)))) * 1.6);
-      m.obj.visible = show && (a.ok || m.death < 2.6);
-      // dead : il flotte le ventre en l'air ; sinon (échec) il plonge ; blessé, il ralentit
-      if (!over || a.ok) m.ang += dt * (k > 0.85 || over ? 0.25 : 0.65);
+      m.obj.visible = show && (!lost || m.death < 2.6);
+      // vivant, il tourne autour de la galère (blessé, il ralentit) ; mort, il ne bouge plus ; échappé, il file en plongeant
+      if (!won) m.ang += dt * (lost ? 0.9 : k > 0.72 ? 0.3 : 0.65);
       const c = Math.cos(m.ang), sn = Math.sin(m.ang), x = m.cx + c * rad * 1.15, z = m.cz + sn * rad;
-      if (this.depth(x, z) === null) { m.obj.visible = false; return; }
+      if (this.depth(x, z) === null) { m.obj.visible = false; this.stepDarts(dt); return; }
       let y = m.level - 0.1 + Math.sin(this.t * 1.4) * 0.006, pitch = 0, roll = 0;
-      if (m.breach < 0 && !over && m.done < MEGA_BREACH.length && k >= MEGA_BREACH[m.done]) { m.breach = 0; m.done++; this.splash(x, z, m.level, true); }
+      if (m.breach < 0 && fate === undefined && m.done < MEGA_BREACH.length && k >= MEGA_BREACH[m.done]) { m.breach = 0; m.done++; this.splash(x, z, m.level, true); }
       if (m.breach >= 0) {
         // il jaillit de l'eau, gueule ouverte, et retombe dans une grande gerbe : la galère roule
         m.breach += dt / 2.2;
         const u = Math.min(1, m.breach);
         y += Math.sin(u * Math.PI) * 0.62;
         pitch = -Math.cos(u * Math.PI) * 1.0;
-        if (u >= 1) { m.breach = -1; this.splash(x, z, m.level, true); }
+        if (u >= 1 || fate !== undefined) { m.breach = -1; this.splash(x, z, m.level, true); }
       }
-      if (over) {
-        m.death += dt;
-        if (a.ok) { roll = Math.PI * smooth(Math.min(1, m.death / 2)); y = m.level - 0.04; }
-        else y -= m.death * 0.12;
-      }
+      // l'issue : toute la troupe lance ses harpons, il se débat un instant…
+      const head = new THREE.Vector3(x + Math.sin(m.obj.rotation.y) * 0.25, y + 0.15, z + Math.cos(m.obj.rotation.y) * 0.25);
+      if (fate !== undefined && !m.ended && m.obj.visible) this.finalVolley(m, head);
+      if (won) {
+        // … et meurt sous ses yeux : il se retourne d'un coup, le ventre en l'air, et flotte, immobile
+        const u = smooth(Math.min(1, Math.max(0, (m.death - 0.4) / 1.1)));
+        roll = Math.PI * u;
+        y = m.level - 0.1 + (0.06 + Math.sin(this.t * 1.1) * 0.004) * u;
+        if (m.death > 0.4 && m.death - dt <= 0.4) this.splash(x, z, m.level, true);
+      } else if (lost) y -= m.death * 0.12;
       m.obj.position.set(x, y, z);
       m.obj.rotation.set(pitch, Math.atan2(-sn * 1.15, c) + shake, roll, 'YXZ');
-      // l'écume de son sillage
-      if (m.obj.visible && !over && Math.random() < dt * 5) this.puffAt(x - Math.sin(m.obj.rotation.y) * 0.3, m.level + 0.01, z - Math.cos(m.obj.rotation.y) * 0.3);
-      this.rough = m.breach >= 0 && m.breach < 0.6 ? 0.8 : Math.max(0, this.rough - dt * 0.5);
-      if (!over && m.obj.visible && k > 0.18 && k < 0.9) this.throwDarts(dt, m, new THREE.Vector3(x + Math.sin(m.obj.rotation.y) * 0.25, y + 0.15, z + Math.cos(m.obj.rotation.y) * 0.25), -1);
+      // l'écume de son sillage (pas une fois mort)
+      if (m.obj.visible && !won && !over && Math.random() < dt * 5) this.puffAt(x - Math.sin(m.obj.rotation.y) * 0.3, m.level + 0.01, z - Math.cos(m.obj.rotation.y) * 0.3);
+      this.rough = m.breach >= 0 && m.breach < 0.6 ? 0.8 : won && m.death < 1.5 ? 0.6 : Math.max(0, this.rough - dt * 0.5);
+      if (fate === undefined && !over && m.obj.visible && k > 0.18) this.throwDarts(dt, m, head, -1);
     } else {
       // le kraken : ses tentacules jaillissent, deux entourent la galère, les harpons les tranchent ; la tête se dresse au large
-      const hug = k > 0.38 && k < 0.82 && !over;
+      const hug = k > 0.38 && fate === undefined && !over;
       let tip: THREE.Vector3 | null = null, tipI = -1;
       m.tents.forEach((tn, i) => {
-        const grab = hug && i < 2, want = (over ? (a.ok ? 0 : 1) : k > 0.1 + i * 0.045 && k < 0.88 ? 1 : 0) * (tn.cut > 0 ? 0 : 1);
+        // vaincu, il lâche tout et ses tentacules replongent ; échappé, elles restent dressées
+        const grab = hug && i < 2, want = (won ? 0 : lost ? 1 : k > 0.1 + i * 0.045 ? 1 : 0) * (tn.cut > 0 ? 0 : 1);
         if (tn.cut > 0) tn.cut -= dt;
-        tn.up += (want - tn.up) * Math.min(1, dt * (tn.cut > 0 ? 6 : 1.1));
+        tn.up += (want - tn.up) * Math.min(1, dt * (tn.cut > 0 ? 6 : won ? 1.6 : 1.1));
         tn.ang += dt * 0.12 * (i % 2 ? 1 : -1);
         const rr = grab ? m.r * 0.42 : tn.r, x = m.cx + Math.cos(tn.ang) * rr, z = m.cz + Math.sin(tn.ang) * rr, o = tn.obj;
         o.visible = tn.up > 0.03 && this.depth(x, z) !== null;
@@ -2922,14 +3111,22 @@ export class ExpeditionScene {
         if (o.visible && tn.up > 0.9 && (!tip || i < tipI)) { tip = new THREE.Vector3(x + Math.sin(o.rotation.y) * 0.25, m.level + 0.42 * s, z + Math.cos(o.rotation.y) * 0.25); tipI = i; }
         if (o.visible && Math.random() < dt * 0.8) this.puffAt(x, m.level + 0.01, z);
       });
-      const head = smooth(Math.min(1, Math.max(0, (k - 0.5) / 0.2))) * (over && a.ok ? 0 : 1);
+      // la tête se dresse au large ; vaincu, elle s'enfonce lentement dans un nuage d'encre et de bulles
+      const rise = smooth(Math.min(1, Math.max(0, (k - 0.5) / 0.2))), sink = won ? smooth(Math.min(1, Math.max(0, (m.death - 0.6) / 3))) : 0, head = rise * (1 - sink);
       m.obj.visible = head > 0.02;
       const hx = m.cx - Math.cos(0.9) * m.r * 1.7, hz = m.cz - Math.sin(0.9) * m.r * 1.7;
       m.obj.position.set(hx, m.level - 0.32 + head * 0.3 + Math.sin(this.t * 1.1) * 0.01, hz);
-      m.obj.rotation.set(0, Math.atan2(m.cx - hx, m.cz - hz) + shake, 0);
-      if (over) m.death += dt;
+      m.obj.rotation.set(sink * 0.35, Math.atan2(m.cx - hx, m.cz - hz) + shake, 0);
+      // ses bras ondulent sur l'eau autour de la tête, se tordent quand un harpon le touche
+      m.arms.forEach((p, i) => {
+        const arm = p.children[0];
+        arm.rotation.x = 0.72 + Math.sin(this.t * 1.5 + i * 0.8) * 0.25 - m.flinch * 0.3 + sink * 0.5;
+        arm.rotation.z = Math.sin(this.t * 0.9 + i * 1.3) * 0.22;
+      });
+      if (fate !== undefined && !m.ended && m.obj.visible) this.finalVolley(m, new THREE.Vector3(hx, m.level + 0.25, hz));
+      if (won && m.obj.visible && Math.random() < dt * 6) this.puffAt(hx + (Math.random() - 0.5) * 0.5, m.level + 0.01, hz + (Math.random() - 0.5) * 0.5, 'smoke', 0, 0);
       this.rough = hug ? 0.55 : Math.max(0, this.rough - dt * 0.5);
-      if (tip && !over && k > 0.16 && k < 0.88) this.throwDarts(dt, m, tip, tipI);
+      if (tip && fate === undefined && !over && k > 0.16) this.throwDarts(dt, m, tip, tipI);
     }
     this.stepDarts(dt);
   }
@@ -2981,6 +3178,8 @@ export class ExpeditionScene {
     if (this.balloon) this.stepBalloon(k, onSite);
     if (this.works) this.stepWorks(dt, a);
     if (this.race) this.stepRace(k, dt, onSite);
+    if (this.games) this.stepGames(dt, a, k);
+    if (this.dragon) this.stepDragon(dt, a, k);
     if (this.rocket) this.stepRocket(k, dt, onSite);
     // ouvrages qui avancent avec le travail, panier qui se remplit
     this.built.forEach((o, i) => (o.visible = k * this.built.length > i));
@@ -3299,9 +3498,10 @@ export class ExpeditionScene {
     let u: number, back: boolean;
     if (this.offshore) {
       // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
-      const k = this.workK;
-      u = k < 0.2 ? smooth(k / 0.2) : k < 0.8 ? 1 : 1 - smooth(Math.min(1, (k - 0.8) / 0.17));
-      back = k >= 0.8;
+      // (la galère de la chasse reste sur place jusqu'à ce que le monstre soit mort ou enfui, voir `FATE_AT`)
+      const k = this.workK, home = this.monster ? 0.87 : 0.8;
+      u = k < 0.2 ? smooth(k / 0.2) : k < home ? 1 : 1 - smooth(Math.min(1, (k - home) / (0.97 - home)));
+      back = k >= home;
     } else {
       // aller-retour lent (une vingtaine de secondes), pause au large le temps de pêcher
       const ph = ((this.t - this.idle) / 22) % 1;
@@ -3341,6 +3541,8 @@ export class ExpeditionScene {
       if (riders.includes(id)) return;
       if (this.balloon && this.stepAeronaut(id, i, k, dt)) return;
       if (this.race && this.stepRacer(id, i, k)) return;
+      if (this.games && this.stepAthlete(id, i, k, dt)) return;
+      if (this.dragon && this.stepKnight(id, i, a, k, dt)) return;
       if (this.kind === 'spring' && this.stepBather(id, i, a, dt)) return;
       if (this.kind === 'delve' && this.mouth) { this.stepDelver(id, i, dt); return; }
       let left = (this.next.get(id) ?? i * 0.8) - dt;
@@ -3559,6 +3761,332 @@ export class ExpeditionScene {
     return true;
   }
 
+  // ---------------- Les grands Jeux ----------------
+  /** Une gerbe de feu d'artifice qui éclate en (x, y, z) : des étincelles de couleur filent dans tous les sens et retombent */
+  private firework(x: number, y: number, z: number) {
+    const mat = SPARK[Math.floor(Math.random() * SPARK.length)];
+    for (let i = 0; i < 16; i++) {
+      const a = Math.random() * Math.PI * 2, e = (Math.random() - 0.3) * 1.2, v = 0.45 + Math.random() * 0.2;
+      const o = new THREE.Mesh(sparkGeo, mat);
+      this.group.add(o);
+      this.fx.push({ obj: o, t: 0, life: 1.1, kind: 'spark', x, y, z, vx: Math.cos(a) * Math.cos(e) * v, vy: Math.sin(e) * v, vz: Math.sin(a) * Math.cos(e) * v });
+    }
+  }
+
+  /**
+   * Les Jeux au pied du stade : la vasque sur sa colonne, face au stade ; derrière elle, les drapeaux des nations ; plus loin,
+   * la foule ; sur le côté, le podium. Le porteur de la flamme fait le tour du stade avant d'allumer la vasque, puis les
+   * athlètes courent sur la piste ; à la fin, les trois premiers montent sur le podium sous le feu d'artifice
+   */
+  private gamesStage(a: ActiveExpedition, cx: number, cz: number) {
+    const w = this.world;
+    let st: Building | null = null, bd = 1e9;
+    for (const b of w.buildings.values()) if (b.kind === 'stadium') { const s = sizeOf(b), d = Math.hypot(b.x + s / 2 - cx, b.z + s / 2 - cz); if (d < bd) { bd = d; st = b; } }
+    const size = st ? sizeOf(st) : 3, sx = st ? st.x + size / 2 : cx + 2, sz = st ? st.z + size / 2 : cz;
+    const dl = Math.max(0.01, Math.hypot(cx - sx, cz - sz)), ux = (cx - sx) / dl, uz = (cz - sz) / dl, px = -uz, pz = ux, face = Math.atan2(sx - cx, sz - cz);
+    const base = this.put(cauldronGeo(), cx, cz, face), cy = base.position.y + 0.43;
+    const flame = this.flameAt(cx, cy, cz, 2.6);
+    flame.visible = false;
+    // le flambeau du relais : la poignée, la coupe, la flamme
+    const torch = new THREE.Group();
+    torch.add(new THREE.Mesh(handTorchGeo(), mats.body));
+    const tf = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.06, 5).translate(0, 0.03, 0), FLAME);
+    tf.add(new THREE.Mesh(new THREE.ConeGeometry(0.011, 0.035, 5).translate(0, 0.017, 0), FLAME_IN));
+    tf.position.y = 0.075;
+    torch.add(tf);
+    torch.visible = false;
+    this.group.add(torch); this.props.push(torch);
+    const flags: THREE.Object3D[] = [];
+    for (let i = 0; i < 6; i++) {
+      const o = (i - 2.5) * 0.17, [x, z] = this.near(cx + ux * 0.45 + px * o, cz + uz * 0.45 + pz * o, cx, cz);
+      flags.push(this.put(gamesFlagGeo(i), x, z, face + Math.PI / 2));
+    }
+    // la foule, en arc derrière les drapeaux, qui acclame
+    for (let i = 0; i < 9; i++) {
+      const o = (i - 4) * 0.2, r = 0.8 + (i % 2) * 0.14, [x, z] = this.near(cx + ux * r + px * o, cz + uz * r + pz * o, cx, cz);
+      this.npc('villager', a.age, x, z, Math.atan2(cx - x, cz - z), i % 3 ? 'cheer' : 'idle');
+    }
+    const [qx, qz] = this.near(cx + px * 0.75 + ux * 0.1, cz + pz * 0.75 + uz * 0.1, cx, cz);
+    const podium = this.put(podiumGeo(), qx, qz, face);
+    // les athlètes attendent en rang devant la vasque
+    for (let i = 0; i < 6; i++) this.spots.push(this.near(cx - ux * 0.3 + px * (i - 2.5) * 0.15, cz - uz * 0.3 + pz * (i - 2.5) * 0.15, cx, cz));
+    this.focus = [(cx + sx) / 2, (cz + sz) / 2];
+    this.games = { sx, sz, sy: w.surfaceAt(sx, sz), half: size / 2, cx, cz, cy, ux, uz, flame, torch, flags, podium, laps: new Map(), lit: false, boom: 0 };
+  }
+
+  /** Le tour du stade du porteur de la flamme (u : 0 … 1), en partant de la vasque et en y revenant, au ras de son emprise */
+  private relayAt(u: number): [number, number, number] {
+    const g = this.games!, a0 = Math.atan2(g.cz - g.sz, g.cx - g.sx), ang = a0 + u * Math.PI * 2, c = Math.cos(ang), s = Math.sin(ang);
+    // un carré aux coins arrondis, juste au-delà de l'emprise du stade
+    const e = 0.35, R = g.half + 0.35, x = g.sx + R * Math.sign(c) * Math.pow(Math.abs(c), e), z = g.sz + R * Math.sign(s) * Math.pow(Math.abs(s), e);
+    // les premiers et derniers pas : de la vasque au tour, du tour à la vasque
+    const k = Math.min(1, u * 12, (1 - u) * 12);
+    return [g.cx + (x - g.cx) * k, g.cz + (z - g.cz) * k, ang + Math.PI];
+  }
+
+  /** Les Jeux à chaque image : le flambeau suit son porteur, la vasque s'allume, les drapeaux flottent, le feu d'artifice */
+  private stepGames(dt: number, a: ActiveExpedition, k: number) {
+    const g = this.games!, bearer = a.party[0], away = a.phase === 'back' || a.phase === 'home';
+    const p = bearer !== undefined ? this.agents.partyPositions([bearer])[0] : undefined;
+    const carrying = a.phase === 'work' && k >= 0.04 && k < 0.31;
+    g.torch.visible = carrying && !!p;
+    if (g.torch.visible && p) {
+      const [x, z, h] = p;
+      g.torch.position.set(x + Math.cos(h) * 0.05, this.world.surfaceAt(x, z) + 0.2, z - Math.sin(h) * 0.05);
+      g.torch.children[1].scale.setScalar(1 + Math.sin(this.t * 19) * 0.15);
+      this.focus = [x, z];
+    } else this.focus = [(g.cx + g.sx) / 2, (g.cz + g.sz) / 2];
+    // la flamme arrive : la vasque s'embrase dans une gerbe d'étincelles
+    if (!g.lit && a.phase === 'work' && k >= 0.31) { g.lit = true; g.boom = 4; for (let i = 0; i < 3; i++) this.puffAt(g.cx, g.cy + 0.05, g.cz, 'smoke'); this.firework(g.cx, g.cy + 0.5, g.cz); }
+    // (une flamme éteinte par l'orage, quand les Jeux tournent mal)
+    const out = away && !a.ok;
+    g.flame.visible = g.lit && !out;
+    if (out && g.lit && Math.random() < dt * 3) this.puffAt(g.cx, g.cy + 0.05, g.cz, 'smoke');
+    for (const [i, f] of g.flags.entries()) f.rotation.y = Math.atan2(g.sx - g.cx, g.sz - g.cz) + Math.PI / 2 + Math.sin(this.t * 2.1 + i) * 0.25;
+    // le feu d'artifice : à l'allumage, puis à la remise des médailles
+    const finale = a.phase === 'work' && k >= 0.8 && a.ok !== false;
+    if (g.boom > 0 || finale) {
+      g.boom -= dt;
+      if (Math.random() < dt * 2.2) { const ang = Math.random() * Math.PI * 2, r = Math.random() * g.half; this.firework(g.sx + Math.cos(ang) * r, g.sy + 1.1 + Math.random() * 0.6, g.sz + Math.sin(ang) * r); }
+    }
+  }
+
+  /**
+   * Un athlète : le premier porte la flamme autour du stade jusqu'à la vasque ; les autres attendent en rang, courent ensuite
+   * sur la piste (chacun à son train) ; à la fin, les trois premiers montent sur le podium, les autres applaudissent
+   */
+  private stepAthlete(id: number, i: number, k: number, dt: number) {
+    const g = this.games!, w = this.world;
+    if (i === 0) {
+      if (k >= 0.04 && k < 0.3) {
+        const [x, z, h] = this.relayAt((k - 0.04) / 0.26);
+        this.agents.ride(id, { x, z, y: w.surfaceAt(x, z), heading: h, act: 'run' });
+        this.stage.set(id, 'relay');
+        return true;
+      }
+      if (k >= 0.3 && this.stage.get(id) === 'relay') {
+        // arrivé à la vasque, il lève la flamme, puis rejoint les autres
+        this.agents.ride(id, null);
+        this.stage.set(id, 'lit');
+        const [x, z] = this.near(g.cx - g.ux * 0.18, g.cz - g.uz * 0.18, g.cx, g.cz);
+        this.agents.memberGo(id, x, z, Math.atan2(g.cx - x, g.cz - z));
+        this.goal.set(id, 1);
+      }
+      if (this.stage.get(id) === 'lit') {
+        if (this.goal.get(id) && this.agents.memberDone(id)) { this.goal.delete(id); this.agents.partyAct([id], 'cheer'); }
+        return true;
+      }
+      return k >= 0.04;
+    }
+    if (k < 0.33) return false;
+    if (k < 0.78) {
+      // la course sur la piste du stade : un ovale autour de la pelouse, chacun à son train
+      const lap = (g.laps.get(id) ?? i * 0.45) + dt * (0.9 + ((i * 37) % 7) * 0.05);
+      g.laps.set(id, lap);
+      const r = g.half * 0.72 + (i % 3) * 0.05, x = g.sx + Math.cos(lap) * r, z = g.sz + Math.sin(lap) * r * 0.8;
+      this.agents.ride(id, { x, z, y: g.sy + 0.02, heading: Math.atan2(-Math.sin(lap), Math.cos(lap) * 0.8), act: 'run' });
+      return true;
+    }
+    if (this.stage.get(id) !== 'podium') {
+      this.stage.set(id, 'podium');
+      this.agents.ride(id, null);
+      if (i > 3) {
+        const [x, z] = this.near(g.podium.position.x + g.ux * 0.3 + (i - 4) * 0.12, g.podium.position.z + g.uz * 0.3, g.cx, g.cz);
+        this.agents.memberGo(id, x, z, g.podium.rotation.y + Math.PI);
+        this.goal.set(id, 1);
+      }
+    }
+    if (i <= 3) {
+      // sur sa marche, face à la foule, bras levés
+      const [lx, top] = PODIUM[i - 1], f = g.podium.rotation.y, c = Math.cos(f), s = Math.sin(f), o = g.podium.position;
+      this.agents.ride(id, { x: o.x + lx * c, z: o.z - lx * s, y: o.y + top, heading: f + Math.PI, act: 'cheer' });
+    } else if (this.goal.get(id) && this.agents.memberDone(id)) { this.goal.delete(id); this.agents.partyAct([id], 'cheer'); }
+    return true;
+  }
+
+  // ---------------- Le dragon dans sa grotte ----------------
+  /**
+   * L'antre du dragon : la bouche de la grotte (la vraie, si elle est là ; sinon un amas de rochers au pied de la pente), des
+   * ossements devant, le trésor qui brille dans l'ombre, et le dragon endormi en travers de l'entrée (enfumé, il est encore
+   * dedans : un feu d'herbes humides fume devant la bouche)
+   */
+  private dragonLair(a: ActiveExpedition, cx: number, cz: number) {
+    const w = this.world, y = (x: number, z: number) => w.surfaceAt(x, z);
+    let mx = cx, mz = cz, real = false;
+    const e = w.outpostEntrance(Math.floor(cx), Math.floor(cz), 1);
+    if (e >= 0 && w.veg[e] === VEG_CAVE) {
+      const x = e % N, z = Math.floor(e / N), ang = Math.atan2(cx - x - 0.5, cz - z - 0.5);
+      mx = x + 0.5 + Math.sin(ang) * 0.6; mz = z + 0.5 + Math.cos(ang) * 0.6; real = true;
+    } else {
+      const [ux, uz] = this.uphill(cx, cz);
+      [mx, mz] = this.near(cx + ux * 0.9, cz + uz * 0.9, cx, cz);
+    }
+    const face = Math.atan2(cx - mx, cz - mz), fx = Math.sin(face), fz = Math.cos(face);
+    if (!real) this.put(caveMouthGeo(), mx, mz, face).scale.setScalar(1.7);
+    // le trésor, à l'entrée de l'antre ; des os devant
+    const hoard = this.put(hoardGeo(), mx + fx * 0.7 - fz * 0.5, mz + fz * 0.7 + fx * 0.5, face);
+    hoard.scale.setScalar(1.6);
+    for (let i = 0; i < 4; i++) { const [bx, bz] = this.near(mx + fx * (1.5 + i * 0.15) + fz * (i - 1.5) * 0.2, mz + fz * (0.6 + i * 0.15) - fx * (i - 1.5) * 0.2, cx, cz); this.put(pebbleGeo(), bx, bz, i).scale.set(1.4, 0.4, 0.4); }
+    const smoke = /enfum/.test(a.c.doing ?? '');
+    if (smoke) { const [sx, sz] = this.near(mx + fx * 0.85, mz + fz * 0.85, cx, cz); this.fireAt(sx, sz); this.emits.push({ x: sx, y: y(sx, sz) + 0.08, z: sz, kind: 'smoke', every: 0.15, t: 0 }); }
+    // le dragon, couché en travers de l'entrée, tête vers l'équipe (enfumé : encore dans le noir de la grotte)
+    const actor = makeBeast('dragon', Math.floor(Math.abs(cx * 7 + cz * 3)) % 3, 1.5);
+    const hx = mx + fx * (smoke ? 0.3 : 1.05), hz = mz + fz * (smoke ? 0.3 : 1.05);
+    actor.root.position.set(hx, y(hx, hz), hz);
+    actor.root.rotation.order = 'YXZ';
+    actor.root.rotation.y = face;
+    actor.root.visible = !smoke;
+    this.group.add(actor.root); this.props.push(actor.root);
+    play(actor, ['Sleep'], 0);
+    this.lit = true;
+    this.focus = [(cx + mx) / 2, (cz + mz) / 2];
+    this.dragon = { actor, x: hx, z: hz, heading: face, lift: 0, act: 'sleep', actT: 0, roll: 0, mouth: [mx, mz], face, home: [mx + fx * 1.05, mz + fz * 1.05], hoard, smoke, hits: 0, ended: false, next: 0 };
+  }
+
+  /** Où est la gueule du dragon, dans le monde (pour son souffle de feu) */
+  private dragonMouth(d: DragonLair) {
+    const head = d.actor.root.getObjectByName('head'), v = new THREE.Vector3();
+    if (head) { head.getWorldPosition(v); v.add(new THREE.Vector3(Math.sin(d.heading) * 0.12, -0.02, Math.cos(d.heading) * 0.12)); }
+    else v.set(d.x + Math.sin(d.heading) * 0.6, this.world.surfaceAt(d.x, d.z) + 0.5, d.z + Math.cos(d.heading) * 0.6);
+    return v;
+  }
+
+  /** Le dragon change de geste */
+  private dragonDo(d: DragonLair, act: DragonLair['act'], clip: string[]) { d.act = act; d.actT = 0; play(d.actor, clip, 0.25); }
+
+  /**
+   * Le dragon, selon l'avancement du combat : il dort ; l'équipe approche, il se réveille en rugissant (enfumé, il sort de la
+   * grotte en toussant) ; puis il crache le feu sur la troupe, rôde devant son antre, s'envole et revient se poser, tressaille
+   * sous les lances. L'issue tombée : vaincu, il s'effondre et roule sur le flanc, le trésor brille à l'entrée ; sinon il
+   * rugit et s'envole par-dessus la montagne
+   */
+  private stepDragon(dt: number, a: ActiveExpedition, k: number) {
+    const d = this.dragon!, w = this.world, over = a.phase === 'back' || a.phase === 'home';
+    const fate = a.fate ?? (over ? a.ok : undefined);
+    d.actT += dt;
+    const team = this.teamAt(a), toTeam = Math.atan2(team[0] - d.x, team[1] - d.z);
+    if (fate !== undefined && !d.ended) {
+      d.ended = true;
+      // la dernière charge : toutes les lances volent d'un coup
+      const at = new THREE.Vector3(d.x, w.surfaceAt(d.x, d.z) + 0.3, d.z);
+      for (const p of this.agents.partyPositions(a.party)) this.combat?.throw(new THREE.Vector3(p[0], w.surfaceAt(p[0], p[1]) + 0.17, p[1]), at, () => this.combat?.puff(at.x, at.y, at.z, 6));
+      d.actor.root.visible = true;
+      if (fate) this.dragonDo(d, 'dead', ['Death']);
+      else this.dragonDo(d, 'roar', ['Idle_2', 'Idle']);
+    }
+    if (d.act === 'sleep') {
+      // (enfumé, il sort de la grotte à 0,2 en toussant de la fumée)
+      if (k >= (d.smoke ? 0.2 : 0.12) && a.phase === 'work') {
+        d.actor.root.visible = true;
+        if (d.smoke) for (let i = 0; i < 4; i++) this.puffAt(d.mouth[0], w.surfaceAt(d.mouth[0], d.mouth[1]) + 0.2, d.mouth[1], 'smoke');
+        this.dragonDo(d, 'roar', ['Idle_2', 'Idle']);
+      }
+    } else if (d.act === 'roar') {
+      d.heading += Math.max(-dt * 2, Math.min(dt * 2, ((toTeam - d.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI));
+      if (d.actT > 3) {
+        if (fate === false) this.dragonDo(d, 'flee', ['Fly']);
+        else if (fate === undefined) this.dragonDo(d, 'breath', ['Attack']);
+        else this.dragonDo(d, 'dead', ['Death']);
+      }
+    } else if (d.act === 'breath') {
+      // le souffle : des braises et de la fumée jaillissent de la gueule vers la troupe
+      d.heading += Math.max(-dt, Math.min(dt, ((toTeam - d.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI));
+      if (d.actT > 0.4 && d.actT < 2.4) {
+        const m = this.dragonMouth(d);
+        for (let i = 0; i < 2; i++) {
+          if (Math.random() > dt * 30) continue;
+          const sp = 1.1 + Math.random() * 0.5, h = d.heading + (Math.random() - 0.5) * 0.35, o = new THREE.Mesh(emberGeo, EMBER[Math.floor(Math.random() * EMBER.length)]);
+          this.group.add(o);
+          this.fx.push({ obj: o, t: 0, life: 0.7, kind: 'spark', x: m.x, y: m.y, z: m.z, vx: Math.sin(h) * sp, vy: -0.25 + Math.random() * 0.2, vz: Math.cos(h) * sp });
+        }
+        if (Math.random() < dt * 6) { const r = 0.6 + Math.random() * 0.4; this.puffAt(m.x + Math.sin(d.heading) * r, w.surfaceAt(d.x, d.z) + 0.1, m.z + Math.cos(d.heading) * r, 'smoke'); }
+      }
+      if (d.actT > 2.8) {
+        // tantôt il rôde devant l'antre, tantôt il prend son envol (plutôt au milieu du combat)
+        if (k > 0.45 && k < 0.65 && d.next <= 0) { d.next = 1; this.dragonDo(d, 'fly', ['Fly']); }
+        else this.dragonDo(d, 'prowl', ['Walk']);
+      }
+    } else if (d.act === 'prowl') {
+      // quelques pas de côté devant son antre, sans s'en éloigner
+      const side = Math.sin(this.t * 0.4) > 0 ? 1 : -1, tx = d.home[0] + Math.cos(d.face) * side * 0.5, tz = d.home[1] - Math.sin(d.face) * side * 0.5;
+      const dx = tx - d.x, dz = tz - d.z, dd = Math.hypot(dx, dz);
+      if (dd > 0.05) { d.x += (dx / dd) * Math.min(dd, dt * 0.25); d.z += (dz / dd) * Math.min(dd, dt * 0.25); d.heading = Math.atan2(dx, dz); }
+      if (d.actT > 3) this.dragonDo(d, 'breath', ['Attack']);
+    } else if (d.act === 'fly') {
+      // il s'envole, tourne au-dessus de la troupe, et revient se poser devant son antre
+      const u = Math.min(1, d.actT / 6), ang = d.face + u * Math.PI * 2, r = 1.1 * Math.sin(u * Math.PI);
+      const tx = d.home[0] + Math.sin(ang) * r, tz = d.home[1] + Math.cos(ang) * r;
+      d.heading = Math.atan2(tx - d.x, tz - d.z) || d.heading;
+      d.x = tx; d.z = tz;
+      d.lift = Math.sin(u * Math.PI) * 0.9;
+      if (u >= 1) { d.lift = 0; this.dragonDo(d, 'roar', ['Idle_2', 'Idle']); this.puffAt(d.x, w.surfaceAt(d.x, d.z) + 0.02, d.z); }
+    } else if (d.act === 'hit') {
+      if (d.actT > 0.7) this.dragonDo(d, 'breath', ['Attack']);
+    } else if (d.act === 'dead') {
+      // il s'effondre, puis roule sur le flanc dans un nuage de poussière
+      d.lift = Math.max(0, d.lift - dt * 1.5);
+      d.roll = 0.5 * smooth(Math.min(1, Math.max(0, (d.actT - 1.2) / 1.2)));
+      if (d.actT > 1.2 && d.actT - dt <= 1.2) for (let i = 0; i < 5; i++) this.puffAt(d.x + (Math.random() - 0.5) * 0.6, w.surfaceAt(d.x, d.z) + 0.03, d.z + (Math.random() - 0.5) * 0.6);
+    } else if (d.act === 'flee') {
+      // il s'envole par-dessus la montagne, loin de la troupe, et disparaît
+      d.lift += dt * 0.35;
+      d.x -= Math.sin(toTeam) * dt * 0.5; d.z -= Math.cos(toTeam) * dt * 0.5;
+      d.heading = toTeam + Math.PI;
+      if (d.actT > 7) d.actor.root.visible = false;
+    }
+    d.next = Math.max(0, d.next - dt * 0.05);
+    const o = d.actor.root;
+    o.position.set(d.x, w.surfaceAt(d.x, d.z) + d.lift, d.z);
+    o.rotation.set(0, d.heading, d.roll);
+    d.actor.mixer.update(dt);
+    this.focus = [(team[0] + d.x) / 2, (team[1] + d.z) / 2];
+  }
+
+  /**
+   * Un chevalier : il approche de l'antre en silence ; le dragon réveillé, la troupe se déploie en arc face à lui et lance
+   * ses lances (il tressaille) ; vaincu, on charge le trésor ; s'il s'enfuit, on recule
+   */
+  private stepKnight(id: number, i: number, a: ActiveExpedition, k: number, dt: number) {
+    const d = this.dragon!, w = this.world, n = a.party.length, [hx, hz] = d.home;
+    const fate = a.fate, phase = fate === true ? 'loot' : fate === false ? 'back' : k < 0.12 ? 'near' : 'fight';
+    if (this.stage.get(id) !== phase || (phase === 'fight' && (this.next.get(id) ?? 0) <= 0)) {
+      this.stage.set(id, phase);
+      this.next.set(id, 5 + Math.random() * 3);
+      let tx: number, tz: number;
+      if (phase === 'loot') { const o = d.hoard.position; [tx, tz] = this.near(o.x + Math.cos(i * 1.3) * 0.28, o.z + Math.sin(i * 1.3) * 0.28, a.dest[0], a.dest[1]); }
+      else {
+        const r = phase === 'near' ? 1.7 : phase === 'back' ? 2 : 1.15 + (i % 2) * 0.12, ang = d.face + (i - (n - 1) / 2) * 0.42 + (phase === 'fight' ? (Math.random() - 0.5) * 0.2 : 0);
+        [tx, tz] = this.near(hx + Math.sin(ang) * r, hz + Math.cos(ang) * r, a.dest[0], a.dest[1]);
+      }
+      this.agents.memberGo(id, tx, tz, phase === 'loot' ? null : Math.atan2(hx - tx, hz - tz));
+      this.goal.set(id, 1);
+    }
+    this.next.set(id, (this.next.get(id) ?? 0) - dt);
+    if (this.goal.get(id) && this.agents.memberDone(id)) {
+      this.goal.delete(id);
+      this.agents.partyAct([id], phase === 'loot' ? 'work' : phase === 'back' ? 'stroll' : phase === 'near' ? null : 'work');
+    }
+    // les lances : chacun à son tour, quand il est en place et que le dragon est à portée
+    if (phase === 'fight' && d.act !== 'sleep' && d.act !== 'fly' && d.actor.root.visible && this.agents.memberDone(id)) {
+      let t = (this.spearT.get(id) ?? 1.5 + i * 0.9) - dt;
+      if (t <= 0) {
+        t = 3 + Math.random() * 2.5;
+        const p = this.agents.partyPositions([id])[0];
+        if (p) {
+          const to = new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.3, w.surfaceAt(d.x, d.z) + 0.25, d.z + (Math.random() - 0.5) * 0.3);
+          this.combat?.throw(new THREE.Vector3(p[0], w.surfaceAt(p[0], p[1]) + 0.17, p[1]), to, () => {
+            this.combat?.puff(to.x, to.y, to.z, 5);
+            d.hits++;
+            if (d.act === 'prowl' || d.act === 'breath') this.dragonDo(d, 'hit', ['Hit']);
+          });
+          this.agents.partyAct([id], 'work');
+        }
+      }
+      this.spearT.set(id, t);
+    }
+    return true;
+  }
+
   /** Source chaude : deux membres se baignent, les autres attendent assis sur les pierres ; on change toutes les dix secondes */
   private stepBather(id: number, i: number, a: ActiveExpedition, dt: number) {
     const b = this.bath!, n = a.party.length, slot = (i + Math.floor(this.t / 10)) % n, inWater = slot < Math.min(2, n);
@@ -3753,6 +4281,8 @@ export class ExpeditionScene {
         f.obj.scale.setScalar((0.8 + k * 7) * Math.min(1, (1 - k) * 2.5));
       }
       else if (f.kind === 'star') { f.obj.position.set(f.x + f.vx * f.t, f.y - f.t * 0.9, f.z + f.vz * f.t); f.obj.scale.setScalar(Math.sin(k * Math.PI)); }
+      // une étincelle de feu d'artifice (ou une braise) : elle file, retombe et s'éteint
+      else if (f.kind === 'spark') { f.obj.position.set(f.x + f.vx * f.t, f.y + (f.vy ?? 0) * f.t - 0.6 * f.t * f.t, f.z + f.vz * f.t); f.obj.scale.setScalar(Math.max(0.001, 1 - k)); }
       else { f.obj.position.set(f.x, f.y, f.z); f.obj.scale.setScalar(1 + k * 3); }
       return true;
     });
@@ -3768,6 +4298,7 @@ export class ExpeditionScene {
       for (const id of this.bath?.in ?? []) this.agents.ride(id, null);
       for (const id of this.balloon?.riders ?? []) this.agents.ride(id, null);
       if (this.race?.driver != null) this.agents.ride(this.race.driver, null);
+      if (this.games || this.dragon) for (const id of a.party) this.agents.ride(id, null);
       if (this.mouth) this.agents.partyHide(a.party, false);
     }
     for (const s of this.stagings) this.unstage(s);
