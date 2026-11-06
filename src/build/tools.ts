@@ -13,6 +13,7 @@ import { sampleCurve } from '../world/curves';
 import { priceIn, canPay, pay, shortLabel } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
+import { ZoneHighlight } from './zones';
 
 export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
@@ -113,6 +114,10 @@ export class ToolController implements ToolInput {
   private spotsKey = '';
   /** taille du pinceau de chaque outil (le grand volcan ne couvre pas ensuite le village de rochers) */
   private radii: Partial<Record<ToolId, number>> = { bulldoze: 1 };
+  /** emplacements possibles du bâtiment en main quand il ne se pose qu'à des endroits précis (port, mine, bûcheron…) */
+  private zones: ZoneHighlight;
+  /** la surbrillance s'éteint une fois le bâtiment posé, jusqu'au prochain choix dans la barre */
+  private zonesOff = false;
 
   constructor(private h: ToolHost) {
     const pts: THREE.Vector3[] = [];
@@ -144,6 +149,8 @@ export class ToolController implements ToolInput {
     this.door = new THREE.Mesh(new THREE.ShapeGeometry(arrow).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd04a, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
     this.door.renderOrder = 10; this.door.visible = false;
     h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.freePulse, this.freeArrow, this.spots, this.door);
+    this.zones = new ZoneHighlight(() => this.h.world, h.scene);
+    this.zones.onEmpty = (m) => this.h.toast(m);
   }
 
   // ---------- API ----------
@@ -160,6 +167,7 @@ export class ToolController implements ToolInput {
     }
     this.tool = t;
     if (kind) this.kind = kind;
+    this.zonesOff = false;
     this.ghostKey = '';
     this.refreshVisuals();
     this.h.changed();
@@ -450,6 +458,8 @@ export class ToolController implements ToolInput {
   get freeStage(): 0 | 1 | 2 { return this.tool !== 'road' || this.roadMode !== 'free' ? 0 : this.freeFrom ? 2 : 1; }
 
   update(dt: number) {
+    this.zones.set(this.holding() && !this.zonesOff ? this.kind : null);
+    this.zones.update(dt);
     // la pastille du point A bat doucement : on ne la perd pas de vue
     if (this.freePulse.visible) {
       this.pulseT += dt;
@@ -729,6 +739,7 @@ export class ToolController implements ToolInput {
     // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
     if (this.h.autoRoads) autoRoad(w, b);
     this.moveOrigin = null;
+    this.zonesOff = true;
     if (this.tool === 'move') { this.tool = 'none'; this.h.changed(); }
     this.h.audio.sfxPlace();
   }
