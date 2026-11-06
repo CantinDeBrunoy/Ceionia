@@ -55,6 +55,7 @@ import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
 import { ExpeditionView, followPoint } from './render/expeditionView';
 import { Festivities } from './render/festivities';
+import { Trophies, trophiesWon } from './render/trophies';
 import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -126,6 +127,9 @@ class Game implements UIHost {
   expView: ExpeditionView;
   /** fêtes du retour des expéditions réussies, et les équipes déjà fêtées */
   fest: Festivities;
+  /** les trophées des gros monstres vaincus, sur la grande place ; quand on les remet à jour */
+  trophies: Trophies;
+  private trophyT = 0;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
@@ -286,6 +290,8 @@ class Game implements UIHost {
     this.fest.onBang = (k) => this.audio.sfxBang(k);
     this.fest.onFeast = () => this.audio.sfxFeast();
     this.parade = new Parade(w);
+    this.trophies = new Trophies(w);
+    this.scene.add(this.trophies.group);
     this.parade.onPop = () => this.audio.sfxBang(0.12);
     this.expView.fx.onClash = (k) => this.audio.sfxClash(k);
     // le train descend des mineurs au pied de la grotte et remonte minerai et pierre des galeries tenues
@@ -1165,6 +1171,7 @@ class Game implements UIHost {
 
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); }
+    if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
 
