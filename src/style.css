@@ -763,3 +763,14 @@ button.bgo:hover { background: #0f9270; }
 .cdet .gain em { color: var(--bad); font-style: normal; }
 
 .gnbar { flex: 1 0 100%; height: 5px; }
+.dhead { display: flex; align-items: center; gap: 8px; margin: 2px 0 4px; font-size: 16px; }
+.dsteps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; }
+.dstep { display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: 0; box-shadow: none; width: 100%; padding: 6px 4px; border-radius: 12px; color: inherit; font: inherit; }
+.dstep:hover { background: var(--accent-soft); }
+.dstep b { font-size: 14px; }
+.dstep small { display: block; color: var(--ink2); font-size: 12px; }
+.ddot { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; font-weight: 800; border: 3px solid var(--line); background: var(--panel, #fff); color: var(--ink2); }
+.dstep.done .ddot { background: #2f9e5a; border-color: #2f9e5a; color: #fff; }
+.dstep.cur .ddot { border-color: var(--accent); color: var(--accent); }
+.dtip { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 13px; line-height: 1.45; color: var(--ink2); }
+.dtip[hidden] { display: none; }

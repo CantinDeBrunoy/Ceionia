@@ -1482,29 +1482,25 @@ export class UI {
     // l'expédition armée qui fait avancer les quêtes, lancée d'ici
     const deep = MISSIONS.find((m) => m.id === 'deep')!, age = this.host.sim.age, miss = ex.missing(deep);
     const send = age < deep.age ? `<p class="hint">${ic('sword', 15, 2)} Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`
-      : miss.length ? `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">Il suffit d’un avant-poste bâti tout contre une grotte ou une faille. Les troupes à pied partent sans chevaux ; seule la charge en demande. « Repérer les profondeurs », facultatif, rend les troupes plus sûres.</p><p class="req">${this.needsHtml(deep) || miss.join(', ')}</p></div>`
+      : miss.length ? `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="req">${this.needsHtml(deep) || miss.join(', ')}</p></div>`
       : ex.running(deep) ? `<p class="hint">${ic('sword', 15, 2)} Une expédition armée est déjà dans les galeries.</p>`
       : ex.tunnelNeeded() ? this.tunnelHtml()
-      : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe part du village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><button class="sendBtn" data-send="deep">${ic('sword', 16, 2)} Choisir la troupe</button></div>`;
+      : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><button class="sendBtn" title="Victorieuse, la troupe abat les filons de son chemin et prend les galeries : c’est ce qui fait avancer les quêtes." data-send="deep">${ic('sword', 16, 2)} Choisir la troupe</button></div>`;
     const quests = CAMP_QUESTS.map((q, i) => {
-      const [cur, max] = q.goal(st), done = i < lvl, now = i === lvl, k = Math.min(1, cur / max);
-      return `<li class="${done ? 'done' : now ? 'cur' : 'todo'}">
-        <div class="qh"><b>${done ? '✓' : now ? ic('compass', 15, 2) : ic('clock', 15, 2)} ${q.title}</b><span class="grow"></span><small>${done ? 'accomplie' : !now && cur >= max ? 'objectif atteint : elle suivra la quête en cours' : `${Math.min(cur, max)} / ${max}`}</small></div>
-        <p>${q.text}</p>
-        ${done ? '' : `<i class="bar"><i style="width:${Math.round(k * 100)}%"></i></i>`}
-        <small class="gain">${done ? 'Le camp a gagné' : 'Le camp y gagnera'} : ${q.builds}. ${q.perk}</small>
-      </li>`;
+      const [cur, max] = q.goal(st), done = i < lvl, now = i === lvl;
+      const state = done ? 'accomplie' : now ? `${Math.min(cur, max)} / ${max}` : cur >= max ? 'objectif atteint' : 'à venir';
+      const detail = `${q.title} : ${q.text} ${done ? 'Le camp a gagné' : 'Le camp y gagnera'} : ${q.builds}. ${q.perk}`;
+      return `<li><button type="button" class="dstep ${done ? 'done' : now ? 'cur' : ''}" data-dtip="${detail.replace(/"/g, '&quot;')}"><span class="ddot">${done ? '✓' : i + 1}</span><span><b>${q.title}</b><small>${state}</small></span></button></li>`;
     }).join('');
     const inc = depthIncome(this.host.world, lvl);
-    const rente = lvl < 1 ? `<p class="hint">${ic('pickaxe', 15, 2)} <b>Rente du sous-sol</b> : dès que le camp est dressé, chaque tranche de ${HELD_PER_STONE} cases de galeries tenues rapporte 1 pierre par jour, et chaque tranche de ${VEINS_PER_ORE} filons abattus 1 minerai par jour, pour toujours.</p>`
-      : `<p class="hint" title="Chaque tranche de ${HELD_PER_STONE} cases de galeries tenues rapporte 1 pierre par jour ; chaque tranche de ${VEINS_PER_ORE} filons abattus, 1 minerai par jour. Cela s'ajoute à la production des bâtiments et se voit dans les réserves en haut de l'écran.">${ic('pickaxe', 15, 2)} <b>Rente du sous-sol</b> : <b>+${inc.stone} pierre/j</b> (${st.held} cases tenues, 1 pierre par ${HELD_PER_STONE}) et <b>+${inc.ore} minerai/j</b> (${st.veins} filons abattus, 1 minerai par ${VEINS_PER_ORE}). Tenir plus de galeries et abattre plus de filons l'augmente, pour toujours.</p>`;
-    return `<p class="hint">Sous terre, on ne bâtit pas : le camp se dresse de lui-même au pied du puits du premier avant-poste, et grandit à mesure que ses quêtes s’accomplissent. Chacune lui ajoute des bâtiments et des gardes, posés d’eux-mêmes, et un avantage durable pour les expéditions armées.</p>
-      <div class="campStats"><b>${ic('outpost', 18, 2)} Camp souterrain — niveau ${lvl} / ${CAMP_QUESTS.length}</b>
-        <span>Galeries tenues : <b>${st.held}</b></span><span>Filons abattus : <b>${st.veins}</b></span><span>Embuscades repoussées : <b>${st.wins}</b></span><span>Zones tenues : <b>${st.zones}</b></span></div>
-      ${rente}
-      <div class="railBox">${this.railHtml()}</div>
+    const rente = `<p class="hint" title="Chaque tranche de ${HELD_PER_STONE} cases de galeries tenues rapporte 1 pierre par jour ; chaque tranche de ${VEINS_PER_ORE} filons abattus, 1 minerai par jour, pour toujours.">${ic('pickaxe', 15, 2)} Rente du sous-sol : <b>+${inc.stone} pierre/j</b>, <b>+${inc.ore} minerai/j</b> <small>(${st.held} galeries tenues, ${st.veins} filons abattus)</small></p>`;
+    return `<h4 class="dhead">${ic('outpost', 18, 2)} Camp souterrain <span class="mtag">niveau ${lvl} / ${CAMP_QUESTS.length}</span></h4>
+      <p class="hint">Touchez une étape pour voir ce qu’elle apporte.</p>
+      <ul class="dsteps">${quests}</ul>
+      <p class="dtip" hidden></p>
       ${send}
-      <ol class="quests">${quests}</ol>`;
+      ${rente}
+      <div class="railBox">${this.railHtml()}</div>`;
   }
 
   /**
