@@ -416,6 +416,34 @@ function statue(p: Parts, x: number, y: number, z: number, ry = 0, s = 1) {
   p.add(new THREE.BoxGeometry(0.03 * s, 0.07 * s, 0.01 * s), x - Math.cos(ry) * 0.012 * s, t + 0.04 * s, z + Math.sin(ry) * 0.012 * s, 0xe8dcc8, ry, false, 0.15);
 }
 
+/**
+ * Fronton sculpté sur un pignon déjà dessiné (base large de `w` à hauteur y, sommet à y + h, face vers +z en z) : corniches
+ * rampantes et horizontale en relief ; au tympan, une figure assise au centre sous une couronne dorée, deux debout, deux
+ * allongées dans les angles ; acrotères dorés aux angles
+ */
+function pediment(p: Parts, x: number, y: number, z: number, w: number, h: number, stone: number, relief = 0xe6dcc6, gold = C.gold, back = 0xa8604a) {
+  const a = Math.atan2(h, w / 2), len = Math.hypot(w / 2, h) + 0.02, k = h / 0.22, d = z + 0.008;
+  // le fond peint du tympan, d'où se détachent les figures
+  const tri = new THREE.BufferGeometry();
+  tri.setAttribute('position', new THREE.Float32BufferAttribute([-w / 2 + 0.04, 0, 0, w / 2 - 0.04, 0, 0, 0, h - 0.025, 0], 3));
+  p.add(tri, x, y, z + 0.003, back);
+  p.add(slab(w + 0.05, 0.022, 0.04, F_PZ | F_PY | F_PX | F_NX), x, y - 0.011, z + 0.012, stone);
+  for (const s of [-1, 1]) p.add(slab(len, 0.02, 0.04, F_PZ | F_PY), x + (s * w) / 4, y + h / 2 + 0.008, z + 0.012, stone, 0, false, -s * a);
+  // la figure assise et sa couronne, les deux debout, les deux allongées
+  p.add(slab(0.05 * k, 0.07 * k, 0.012, F_PZ | F_PY | F_PX | F_NX), x, y + 0.035 * k, d, relief);
+  p.add(slab(0.03 * k, 0.04 * k, 0.012, F_PZ | F_PY), x, y + 0.085 * k, d + 0.002, relief);
+  p.sphere(0.013 * k, x, y + 0.115 * k, d, relief);
+  p.add(new THREE.TorusGeometry(0.016 * k, 0.003 * k, 3, 8), x, y + 0.15 * k, d, gold);
+  for (const s of [-1, 1]) {
+    const u = w * 0.17;
+    p.add(slab(0.022 * k, 0.07 * k, 0.012, F_PZ | F_PX | F_NX), x + s * u, y + 0.035 * k, d, relief, 0, false, s * 0.08);
+    p.sphere(0.011 * k, x + s * u - s * 0.004, y + 0.08 * k, d, relief);
+    p.add(slab(0.11 * k, 0.022 * k, 0.012, F_PZ | F_PY), x + s * w * 0.34, y + 0.012 * k, d, relief, 0, false, -s * 0.12);
+    p.sphere(0.01 * k, x + s * w * 0.4, y + 0.028 * k, d, relief);
+    p.cone(0.016 * k, 0.05 * k, 4, x + (s * w) / 2, y + 0.01, z + 0.012, gold);
+  }
+}
+
 /** Amphores : debout, appuyées l'une à l'autre, une couchée (tirée de `k` pour varier) */
 function amphorae(p: Parts, x: number, y: number, z: number, k = 0) {
   const one = (px: number, pz: number, c: number, tilt = 0) => {
@@ -3462,6 +3490,44 @@ function windows(p: Parts, xs: number[], y: number, z: number, w = 0.08, h = 0.1
     p.add(slab(w + 0.034, 0.014, 0.034, F_PZ | F_PY | F_PX | F_NX), x, y - 0.009, z + 0.004, frame);
     p.add(slab(0.008, h, 0.006, F_PZ), x, y + h / 2, z + 0.012, C.darkwood);
     p.add(slab(w, 0.008, 0.006, F_PZ | F_PY), x, y + h * 0.55 + 0.004, z + 0.012, C.darkwood);
+  }
+}
+
+/**
+ * Fenêtres régulières sur un mur de côté ou de dos (les façades n'étaient pas les seules à en avoir) : `n` baies sur la face
+ * de centre (cx, cz) tournée selon ry (0 : vers +z, π/2 : vers +x, π : vers -z, -π/2 : vers -x), large de `len`, l'appui à
+ * hauteur y ; vitre éclairée la nuit, encadrement, appui, croisée ; `shutters` : volets ouverts de cette couleur ; `arch` :
+ * un cintre au-dessus. Seules les faces vues sont dessinées
+ */
+function wallWindows(p: Parts, cx: number, cz: number, len: number, y: number, ry: number, n: number, w = 0.07, h = 0.1, frame = 0xece4d4, shutters = -1, arch = false) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  for (let i = 0; i < n; i++) {
+    const u = -len / 2 + (len * (i + 0.5)) / n, x = cx + u * c, z = cz - u * s;
+    p.add(slab(w, h, 0.01, F_PZ).translate(0, h / 2, 0.003), x, y, z, C.win, ry, true);
+    p.add(slab(w + 0.02, h + 0.02, 0.008, F_PZ | F_PY).translate(0, h / 2, 0), x, y, z, frame, ry);
+    p.add(slab(w + 0.03, 0.012, 0.026, F_PZ | F_PY | F_PX | F_NX).translate(0, -0.006, 0.006), x, y, z, frame, ry);
+    p.add(slab(0.006, h, 0.004, F_PZ).translate(0, h / 2, 0.01), x, y, z, C.darkwood, ry);
+    if (arch) p.add(new THREE.CylinderGeometry(w / 2 + 0.01, w / 2 + 0.01, 0.008, 4, 1, false, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).translate(0, h, 0.004), x, y, z, frame, ry);
+    if (shutters >= 0) for (const e of [-1, 1]) p.add(slab(w / 2, h, 0.006, F_PZ | F_PX | F_NX).translate(e * (w * 0.75 + 0.012), h / 2, 0.006), x, y, z, shutters, ry);
+  }
+}
+
+/** Descente d'eau le long d'un mur : tuyau de la gouttière (à hauteur y1) jusqu'au sol, coude et sabot au pied */
+function downpipe(p: Parts, x: number, z: number, y1: number, color = 0x6a6e72, y0 = 0) {
+  p.add(new THREE.CylinderGeometry(0.008, 0.008, y1 - y0, 5, 1, true), x, (y0 + y1) / 2, z, color);
+  p.box(0.024, 0.016, 0.024, x, y1 - 0.016, z, color);
+  p.box(0.02, 0.012, 0.03, x, y0, z, dark(color, 0.85));
+}
+
+/**
+ * Lierre ou vigne vierge qui grimpe sur un mur : touffes de feuillage aplaties contre la face de centre (cx, cz) tournée
+ * selon ry, de plus en plus clairsemées vers le haut (jusqu'à y1), autour de u0 (position le long du mur)
+ */
+function ivy(p: Parts, cx: number, cz: number, u0: number, y1: number, ry: number, seed: number, leaf = 0x4f7f3e) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  for (let i = 0; i < 7; i++) {
+    const t = i / 7, u = u0 + (hash2(i, 1, seed) - 0.5) * 0.12 * (1 + t), y = 0.02 + t * (y1 - 0.04), r = 0.035 - t * 0.012;
+    p.add(new THREE.OctahedronGeometry(r, 0).scale(1.3, 1, 0.45), cx + u * c + s * 0.01, y, cz - u * s + c * 0.01, dark(leaf, 0.85 + hash2(i, 2, seed) * 0.3), ry);
   }
 }
 
@@ -8173,6 +8239,29 @@ function senate(p: Parts, age: number) {
     for (const s of [-1, 1]) { statue(p, s * 0.62, 0.02, 0.3, s > 0 ? -0.6 : 0.6); parterre(p, s * 0.68, 0.02, -0.3, 0.2, 0.5, 790 + s); }
     for (const s of [-1, 1]) muret(p, s * 0.86, 0.88, s * 0.2, 0.88, 0.02);
     marbleBench(p, 0.55, 0.02, 0.55, Math.PI / 2); marbleBench(p, -0.55, 0.02, 0.55, Math.PI / 2);
+    // la façade ordonnancée : pilastres à chapiteaux aux deux niveaux, fronton sculpté (le Sénat entre deux génies, les
+    // fleuves allongés dans les angles), inscription dorée sous la corniche
+    for (const [xs, y0, y1] of [[[-0.42, -0.14, 0.14, 0.42], 0.02, 0.36], [[-0.42, -0.11, 0.11, 0.42], 0.39, 0.62]] as [number[], number, number][])
+      for (const x of xs) {
+        p.add(slab(0.036, y1 - y0, 0.016, F_PZ | F_PX | F_NX), x, (y0 + y1) / 2, 0.168, marble);
+        p.add(slab(0.05, 0.02, 0.024, F_PZ | F_PY | F_PX | F_NX), x, y1 - 0.01, 0.17, marble);
+      }
+    pediment(p, 0, 0.645, 0.16, 0.92, 0.2, marble, 0xe2d4b8);
+    for (let k = 0; k < 9; k++) p.add(slab(0.022, 0.016, 0.004, F_PZ), -0.16 + k * 0.04, 0.38, 0.188, C.gold);
+    // les côtés : hautes baies cintrées, corniche sous le toit, descentes d'eau aux angles, lierre au pied du mur
+    for (const s of [-1, 1]) {
+      wallWindows(p, s * 0.458, -0.25, 0.7, 0.36, s * Math.PI / 2, 3, 0.07, 0.14, marble, -1, true);
+      p.add(slab(0.03, 0.025, 0.84, F_PY | (s > 0 ? F_PX : F_NX)), s * 0.46, 0.625, -0.25, marble);
+      downpipe(p, s * 0.462, -0.64, 0.62, 0x8a6a4a, 0.02);
+      ivy(p, s * 0.452, -0.25, 0.28, 0.5, s * Math.PI / 2, 795 + s);
+    }
+    // au dos : l'abside en hémicycle sous son toit de tuiles, ses baies, la porte de service ; jarres et bois pour l'hiver
+    p.add(new THREE.CylinderGeometry(0.22, 0.22, 0.46, 10, 1, false, Math.PI / 2, Math.PI), 0, 0.25, -0.65, brick);
+    p.add(new THREE.CylinderGeometry(0.02, 0.25, 0.14, 10, 1, false, Math.PI / 2, Math.PI), 0, 0.55, -0.65, C.terracotta);
+    for (const a of [-0.7, 0, 0.7]) wallWindows(p, Math.sin(Math.PI + a) * 0.222, -0.65 + Math.cos(Math.PI + a) * 0.222, 0.1, 0.28, Math.PI + a, 1, 0.045, 0.1, marble, -1, true);
+    for (const s of [-1, 1]) { p.box(0.08, 0.17, 0.012, s * 0.33, 0.02, -0.656, 0x5a4a3a); p.add(slab(0.11, 0.02, 0.02, F_NZ | F_PY), s * 0.33, 0.2, -0.66, marble); }
+    amphorae(p, 0.3, 0.02, -0.82, 2); amphorae(p, -0.36, 0.02, -0.8, 1);
+    for (let k = 0; k < 4; k++) log(p, 0.16, 0.022, 0.52, 0.02 + (k > 2 ? 0.04 : 0), -0.84 + (k % 3) * 0.045, Math.PI / 2, 0x8a6a48);
   } else if (age === 2) {
     sink(0.02);
     // le palais communal : arcades au rez-de-chaussée, baies gothiques à l'étage, créneaux, toit d'ardoise
@@ -8213,6 +8302,37 @@ function senate(p: Parts, age: number) {
     p.box(0.2, 0.12, 0.012, 0.55, 0.12, 0.2, C.wood); for (const [dx, c] of [[-0.05, 0xf2ead8], [0.04, 0xe8dcc0]] as [number, number][]) p.box(0.06, 0.08, 0.004, 0.55 + dx, 0.135, 0.208, c);
     p.cyl(0.008, 0.01, 0.62, 5, 0.42, 0.02, 0.66, C.darkwood); { const f = sway([0.42, 0, 0.67], [0, 1, 0], 0.4, 1); f.box(0.004, 0.16, 0.12, 0, 0.44, 0.06, 0xb8443a); f.box(0.005, 0.05, 0.05, 0, 0.5, 0.06, C.gold); }
     verge(p, 26, 72, 0.025, (x, z) => z > -0.02 && !(x > 0.6 && z > 0.6));
+    // la façade : balcon des proclamations sur consoles au-dessus de l'arcade du milieu, écus peints de la commune entre
+    // les baies, corniche à modillons sous le toit ; le lion de la ville sur sa colonne
+    p.box(0.26, 0.02, 0.09, -0.15, 0.25, zf + 0.045, 0xece4d4);
+    for (let k = 0; k < 7; k++) p.add(new THREE.CylinderGeometry(0.006, 0.008, 0.05, 4, 1, true), -0.26 + k * 0.037, 0.295, zf + 0.085, 0xece4d4);
+    p.box(0.26, 0.012, 0.012, -0.15, 0.32, zf + 0.085, 0xece4d4);
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.02, 0.05, 0.06).translate(0, -0.025, 0), -0.15 + s * 0.1, 0.25, zf + 0.03, st, 0, false, 0, -0.5);
+    for (const [x, c] of [[-0.27, 0xd8c040], [-0.03, 0x3a6ab8], [0.21, 0xd8c040]] as [number, number][]) {
+      p.add(slab(0.05, 0.05, 0.008, F_PZ | F_PY), x, 0.345, zf + 0.006, c);
+      p.add(new THREE.ConeGeometry(0.025, 0.03, 4).rotateZ(Math.PI).rotateY(Math.PI / 4).scale(1, 1, 0.3), x, 0.305, zf + 0.006, c);
+      p.add(slab(0.014, 0.035, 0.004, F_PZ), x, 0.34, zf + 0.012, x < 0 && x > -0.1 ? C.gold : 0xb8443a);
+    }
+    for (let k = 0; k < 13; k++) p.add(slab(0.018, 0.018, 0.03, F_PZ | F_PX | F_NX), -0.72 + k * 0.095, 0.505, zf + 0.012, 0xece4d4);
+    p.cyl(0.03, 0.035, 0.36, 8, -0.78, 0.02, 0.42, 0xece4d4); p.box(0.08, 0.025, 0.08, -0.78, 0.38, 0.42, 0xece4d4);
+    p.box(0.07, 0.035, 0.03, -0.78, 0.405, 0.42, C.gold, 0.4); p.sphere(0.02, -0.75, 0.45, 0.43, C.gold); p.add(slab(0.05, 0.035, 0.004, F_PZ | F_NZ), -0.8, 0.45, 0.42, C.gold, 0.4);
+    // les côtés et le dos : baies à l'étage, petites fenêtres grillagées en bas, porte de service, descentes d'eau ;
+    // derrière, l'appentis du concierge, son bois, ses tonneaux et la charrette à bras
+    wallWindows(p, -0.758, -0.3, 0.5, 0.29, -Math.PI / 2, 2, 0.07, 0.12, 0xece4d4);
+    wallWindows(p, -0.758, -0.3, 0.5, 0.08, -Math.PI / 2, 2, 0.05, 0.06, 0xece4d4);
+    wallWindows(p, -0.15, -0.583, W - 0.1, 0.29, Math.PI, 5, 0.07, 0.12, 0xece4d4);
+    wallWindows(p, -0.15, -0.583, W - 0.1, 0.08, Math.PI, 4, 0.05, 0.06, 0xece4d4);
+    p.box(0.1, 0.17, 0.012, 0.3, 0.02, -0.586, 0x5a4434);
+    for (const x of [-0.74, 0.44]) downpipe(p, x, -0.585, 0.5, 0x6a6e72, 0.02);
+    p.box(0.42, 0.18, 0.2, -0.45, 0.02, -0.7, C.wood);
+    p.add(new THREE.BoxGeometry(0.48, 0.02, 0.26), -0.45, 0.23, -0.71, C.slate, 0, false, 0, -0.3);
+    p.box(0.1, 0.14, 0.012, -0.45, 0.02, -0.806, C.darkwood);
+    for (let k = 0; k < 5; k++) log(p, 0.18, 0.022, -0.12, 0.02 + (k > 2 ? 0.04 : 0), -0.66 - (k % 3) * 0.045, Math.PI / 2, 0x8a6a48);
+    for (const [x, z] of [[0.1, -0.75], [0.18, -0.8]]) { p.cyl(0.04, 0.04, 0.09, 8, x, 0.02, z, 0x9a6a44); p.cyl(0.042, 0.042, 0.008, 8, x, 0.065, z, C.darkwood); }
+    // la tour : horloge aussi du côté de la place, chaîne d'angle au dos
+    p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.014, 14).rotateZ(Math.PI / 2), bx + 0.136, 0.72, bz, C.white);
+    p.box(0.006, 0.05, 0.008, bx + 0.145, 0.72, bz, 0x2a2622);
+    quoins(p, bx + 0.13, bz - 0.13, 0.02, 1.0, 1, -1, 0xece4d4);
   } else {
     sink(0.02);
     const st = 0xe8dcc4, cream = 0xf4ead6, dome = age >= 4 ? 0x6fb39a : 0x6f8a9e;
@@ -8244,10 +8364,28 @@ function senate(p: Parts, age: number) {
     p.cyl(0.04, 0.04, 0.08, 8, 0, 0.84, -0.4, cream); p.cone(0.045, 0.06, 8, 0, 0.92, -0.4, dome);
     p.cyl(0.004, 0.004, 0.2, 4, 0, 0.98, -0.4, C.metal); { const f = sway([0, 0, -0.4], [0, 1, 0], 0.45, 1.2); f.box(0.09, 0.055, 0.004, 0.047, 1.12, 0, 0x3a6ab8); f.box(0.045, 0.055, 0.005, 0.07, 1.12, 0, 0xf2c23a); }
     for (const s of [-1, 1]) lampPost(p, s * 0.34, 0.2);
-    if (age >= 4) {
-      for (const s of [-1, 1]) { p.cyl(0.005, 0.005, 0.42, 4, s * 0.82, 0.02, 0.05, C.metal); sway([s * 0.82, 0, 0.05], [0, 1, 0], 0.4, 1.2).box(0.1, 0.06, 0.004, 0.05, 0.36, 0, s > 0 ? 0x3a6ab8 : 0xf2c23a); }
-      for (const [x, z] of [[-0.75, 0.84], [0.75, 0.84]]) floodlight(p, x, z, 0.1);
+    // les drapeaux de part et d'autre du palais (dès l'âge industriel), les projecteurs ensuite
+    for (const s of [-1, 1]) { p.cyl(0.005, 0.005, 0.42, 4, s * 0.82, 0.02, 0.05, C.metal); p.sphere(0.008, s * 0.82, 0.44, 0.05, C.gold); sway([s * 0.82, 0, 0.05], [0, 1, 0], 0.4, 1.2).box(0.1, 0.06, 0.004, 0.05, 0.36, 0, s > 0 ? 0x3a6ab8 : age >= 4 ? 0xf2c23a : 0xd84a3e); }
+    if (age >= 4) for (const [x, z] of [[-0.75, 0.84], [0.75, 0.84]]) floodlight(p, x, z, 0.1);
+    // le fronton sculpté du péristyle, l'inscription dorée de l'entablement, la statue de la Loi au sommet ; deux lions
+    // couchés de part et d'autre des marches
+    pediment(p, 0, 0.5, 0.03, 0.66, 0.12, cream, 0xf4eee0, C.gold, 0x8a9cae);
+    for (let k = 0; k < 7; k++) p.add(slab(0.022, 0.018, 0.004, F_PZ), -0.12 + k * 0.04, 0.48, 0.034, C.gold);
+    p.cyl(0.012, 0.02, 0.06, 6, 0, 0.62, -0.07, 0xe8e2d4); p.sphere(0.012, 0, 0.69, -0.07, 0xe8e2d4); p.box(0.004, 0.08, 0.004, 0.018, 0.64, -0.07, C.gold, 0, false, -0.2);
+    for (const s of [-1, 1]) {
+      const x = s * 0.32, z = 0.1;
+      p.box(0.1, 0.05, 0.14, x, 0.02, z, cream);
+      p.box(0.06, 0.04, 0.11, x, 0.07, z - 0.005, 0xd8ccb2); p.sphere(0.032, x, 0.12, z + 0.04, 0xcfc2a6, 0, 1.1);
+      p.box(0.034, 0.03, 0.03, x, 0.1, z + 0.065, 0xd8ccb2); for (const d of [-0.016, 0.016]) p.box(0.014, 0.012, 0.03, x + d, 0.07, z + 0.06, 0xd8ccb2);
     }
+    // les côtés et le dos ont aussi leurs deux étages de fenêtres, leurs descentes d'eau ; au fond, le jardin privé : buis
+    // taillés en cône, allée, banc
+    for (const s of [-1, 1]) { wallWindows(p, s * 0.802, -0.4, 0.44, 0.06, s * Math.PI / 2, 2, 0.06, 0.1, cream); wallWindows(p, s * 0.802, -0.4, 0.44, 0.26, s * Math.PI / 2, 2, 0.06, 0.12, cream); }
+    wallWindows(p, 0, -0.652, 1.5, 0.06, Math.PI, 7, 0.06, 0.1, cream); wallWindows(p, 0, -0.652, 1.5, 0.26, Math.PI, 7, 0.06, 0.12, cream);
+    p.box(0.12, 0.17, 0.012, 0, 0.02, -0.658, 0x4a5a6a);
+    for (const x of [-0.79, 0.79]) downpipe(p, x, -0.66, 0.46, 0x5a6268, 0.02);
+    for (const x of [-0.6, -0.3, 0.3, 0.6]) clipped(p, x, -0.84, 'cone', 0.9, 0.02);
+    p.box(0.7, 0.012, 0.08, 0, 0.02, -0.84, 0xe2d6bc); parkBench(p, 0, -0.78, Math.PI, 0x3c4a44, 0.02);
     for (const [x, z, c, r] of [[-0.12, 0.25, 0x3c3c48, 3.1], [0.16, 0.3, 0x5a5a6a, 2.9], [0.3, 0.86, 0xd8786c, 0.6]] as number[][]) figure(p, x, z, c, r);
     // allée de gravier jusqu'aux marches, buis taillés autour des pelouses, statues sur leurs socles aux angles du jardin
     p.box(0.22, 0.014, 0.82, 0, 0.022, 0.5, 0xe2d6bc);
