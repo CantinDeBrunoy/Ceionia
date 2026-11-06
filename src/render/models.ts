@@ -1160,7 +1160,7 @@ function campGround(p: Parts, seed: number, busy: number[][] = [], door: [number
     // (la plaque reste dans la parcelle, quelle que soit sa rotation)
     const r = 0.1 + h(i, 3) * 0.1, sx = 1.2 + h(i, 4) * 0.4, room = Math.max(0, half + 0.02 - r * sx);
     const x = (h(i, 1) * 2 - 1) * room, z = (h(i, 2) * 2 - 1) * room;
-    p.add(new THREE.CircleGeometry(r, 6).rotateX(-Math.PI / 2).scale(sx, 1, 0.75), x, y + 0.0015 + i * 0.0004, z, i === 5 ? 0x8a9658 : dark(C.dirt, 0.68 + h(i, 5) * 0.28), h(i, 6) * 3);
+    p.add(new THREE.CircleGeometry(r, 6).rotateX(-Math.PI / 2).scale(sx, 1, 0.75), x, y + 0.0015 + i * 0.0004, z, dark(C.dirt, 0.68 + h(i, 5) * 0.28), h(i, 6) * 3);
   }
   // le sentier : des pas qui mènent à la porte depuis le bord de la parcelle, et l'ornière d'un traîneau de branches
   if (door) {
@@ -1199,8 +1199,8 @@ function campGround(p: Parts, seed: number, busy: number[][] = [], door: [number
   if (hide) p.add(new THREE.CircleGeometry(0.035, 5).rotateX(-Math.PI / 2).scale(1.4, 1, 0.8), hide[0], y + 0.005, hide[1], HIDES[seed % HIDES.length], h(4, 40) * 3);
   const ash = spot(401, 0.06);
   if (ash) {
-    p.add(new THREE.CircleGeometry(0.045, 6).rotateX(-Math.PI / 2), ash[0], y + 0.005, ash[1], 0x6a645c);
-    for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0.005, 0.006, 0.05, 3, 1, true).rotateZ(Math.PI / 2), ash[0] + (k - 1) * 0.012, y + 0.008, ash[1] + ((k * 2) % 3 - 1) * 0.01, 0x2a2420, k * 1.1);
+    p.add(new THREE.CircleGeometry(0.04, 6).rotateX(-Math.PI / 2), ash[0], y + 0.005, ash[1], 0x9a948a);
+    for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0.004, 0.005, 0.04, 3, 1, true).rotateZ(Math.PI / 2), ash[0] + (k - 1) * 0.012, y + 0.008, ash[1] + ((k * 2) % 3 - 1) * 0.01, 0x3a302a, k * 1.1);
   }
 }
 
@@ -5516,6 +5516,9 @@ function lumber(p: Parts, age: number) {
     p.box(0.006, 0.18, 0.05, 0.22, 0.12, 0.08, C.metal);
     for (let k = 0; k < 4; k++) p.box(0.26, 0.014, 0.08, -0.2, 0.012 + k * 0.016, 0.12, dark(0xd8b88a, k % 2 ? 0.9 : 1), 0.1);
     logPile(p, 0.26, -0.22, 3, 0.3, Math.PI / 2);
+    // le dos de la scierie : pans de bois, fenêtres à volets, descentes d'eau
+    timbers(p, -0.1, -0.384, 0.46, 0.012, 0.272, Math.PI, 2, () => false);
+    dressBack(p, 2, -0.1, -0.24, 0.46, 0.28, 0.012, 0.272, 83, -1, 0.5);
   } else if (age === 3) {
     // scierie à vapeur : halle de brique, cheminée qui fume, scie circulaire, rail de chariot
     p.box(0.48, 0.28, 0.3, -0.08, 0.012, -0.22, C.brick);
