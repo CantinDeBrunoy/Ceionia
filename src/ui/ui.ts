@@ -488,7 +488,7 @@ export class UI {
       this.update();
     };
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
-    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.toast('Le brouillard se lève.'); };
     $('#bSpeed').onclick = () => {
@@ -843,7 +843,7 @@ export class UI {
     if (el.dataset.v === key) return;
     el.dataset.v = key;
     el.className = `tone-${tone}${k || ready ? ' link' : ''}`;
-    el.title = k ? `Cliquer pour bâtir « ${sim.nameOf(k)} »` : ready ? 'Cliquer pour passer à l’âge suivant' : '';
+    el.title = k === 'farm' && !sim.food.ok ? 'Cliquer pour tracer un champ' : k ? `Cliquer pour bâtir « ${sim.nameOf(k)} »` : ready ? 'Cliquer pour passer à l’âge suivant' : '';
     const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}Bâtir</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}Passer</b>` : ''}`;
     void el.offsetWidth;
