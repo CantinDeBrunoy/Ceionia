@@ -1585,11 +1585,10 @@ export class UI {
       <div class="gearGrid">${GEAR.map((g) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
         return `<div class="gear ${locked ? 'locked' : ''}" data-gear="${g.id}">
-          <div class="gi">${ic(g.icon, 26, 1.8)}</div>
-          <div class="grow"><b>${g.name}</b> <span class="cnt">${n} en réserve${out ? ` · ${out} en route` : ''}</span>
-            <small>${g.desc}</small>
-            <small class="gd">${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} : −${Math.round(g.cut * 100)} % de risque · ${per(g.id)}</small>
-            ${why ? `<small class="why">${why}</small>` : ''}</div>
+          <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt">${n} en réserve${out ? ` · ${out} en route` : ''}</span></div></div>
+          <small class="gdesc">${g.desc}</small>
+          <small class="gd">${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} : −${Math.round(g.cut * 100)} % de risque · ${per(g.id)}</small>
+          ${why ? `<small class="why">${why}</small>` : ''}
           <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 16, 2)} ${price || 'Fabriquer'}</button>
         </div>`;
       }).join('')}</div>

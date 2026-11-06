@@ -662,16 +662,20 @@ button.sendBtn:disabled { background: rgba(15, 27, 45, 0.12); color: var(--ink2)
 .expCard.incident .team { background: #d84a3e; animation: pulse 1.2s infinite; }
 .expCard.incident .bar i { background: #d84a3e; }
 /* équipement */
-.gearGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
-.gear { display: flex; gap: 10px; align-items: center; background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.gearGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); gap: 8px; }
+.gear { display: flex; flex-direction: column; gap: 4px; align-items: stretch; background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
 .gear.locked { opacity: 0.55; }
-.gear .gi { flex: 0 0 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); }
+.gear .gi { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); }
 .gear b { font-size: 13.5px; }
 .gear .cnt { font-size: 12px; font-weight: 700; color: var(--accent-ink); margin-left: 4px; }
 .gear small { display: block; font-size: 11.5px; color: var(--ink2); line-height: 1.35; margin-top: 2px; }
 .gear .gd { color: #0d7a5f; }
 .gear .why { color: var(--bad); }
-.gear button { flex: 0 0 auto; font-size: 12.5px; gap: 5px; }
+.gear button { flex: 0 0 auto; font-size: 12.5px; gap: 5px; margin-top: auto; width: 100%; }
+.gear .gtop { display: flex; align-items: center; gap: 8px; }
+.gear .gtop .grow { display: flex; flex-direction: column; line-height: 1.2; }
+.gear .gtop .cnt { margin-left: 0; }
+.gear .gdesc { margin-top: 0; }
 .queue { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .queue small { color: var(--ink2); }
 .qi { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; padding: 3px 4px 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.7); border: 1px solid var(--line); }
