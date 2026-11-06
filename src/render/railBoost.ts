@@ -9,7 +9,7 @@ const MAX_FX = 28, MAX_CARTS = 20;
 const GOLD = new THREE.Color(1, 0.78, 0.2), SMOKE = new THREE.Color(0.62, 0.62, 0.64);
 
 /** Un bâtiment boosté devant la caméra : son centre, le départ et l'arrivée de son chariot (bord du bâtiment, pied de la gare) */
-export interface Fx { id: number; x: number; z: number; r: number; ax: number; az: number; bx: number; bz: number; freight: boolean; phase: number; cart: number; emit: number }
+export interface Fx { id: number; x: number; z: number; r: number; ax: number; az: number; bx: number; bz: number; freight: boolean; gy: number; phase: number; cart: number; emit: number }
 
 /**
  * Bâtiments boostés par le rail, rendus vivants : une flaque dorée qui pulse au sol, des étincelles qui montent, une
@@ -33,7 +33,7 @@ export class RailBoost {
   private scan = 0;
 
   constructor(private world: World) {
-    this.ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.72, 0.18), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    this.ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.7, 0.12), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
     this.ring = new THREE.InstancedMesh(new THREE.RingGeometry(0.82, 1, 40).rotateX(-Math.PI / 2), this.ringMat, MAX_FX);
     this.body = new THREE.InstancedMesh(new THREE.BoxGeometry(0.2, 0.09, 0.13).translate(0, 0.09, 0), new THREE.MeshStandardMaterial({ color: 0x7a4a26, roughness: 0.9 }), MAX_CARTS);
     this.load = new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.07, 0.1).translate(0, 0.17, 0), new THREE.MeshStandardMaterial({ color: 0xe0b030, roughness: 0.6, emissive: 0x4a3000 }), MAX_CARTS);
@@ -67,7 +67,7 @@ export class RailBoost {
     let n = 0, c = 0;
     for (const f of this.active) {
       const y = w.surfaceAt(f.x, f.z);
-      d.position.set(f.x, y + 0.05, f.z);
+      d.position.set(f.x, f.gy + 0.06, f.z);
       d.rotation.set(0, 0, 0);
       d.scale.setScalar(f.r * (1 + 0.05 * Math.sin(this.t * 2.2 + f.phase)));
       d.updateMatrix();
@@ -75,10 +75,10 @@ export class RailBoost {
       if (work <= 0) continue;
       // étincelles dorées qui montent du bâtiment, fumée plus dense au-dessus
       f.emit += dt * work;
-      while (f.emit > 0.16) {
-        f.emit -= 0.16;
+      while (f.emit > 0.09) {
+        f.emit -= 0.09;
         const a = Math.random() * Math.PI * 2, rr = f.r * 0.45 * Math.random();
-        this.puffs.spawn(f.x + Math.cos(a) * rr, y + 0.5, f.z + Math.sin(a) * rr, (Math.random() - 0.5) * 0.12, 0.7 + Math.random() * 0.5, (Math.random() - 0.5) * 0.12, 0.05 + Math.random() * 0.03, 1.1 + Math.random() * 0.7, GOLD, 1, { grow: 0.2, drag: 0.5, wind: 0.1, alpha: 1, fade: 0.4 });
+        this.puffs.spawn(f.x + Math.cos(a) * rr, y + 0.5, f.z + Math.sin(a) * rr, (Math.random() - 0.5) * 0.12, 0.7 + Math.random() * 0.5, (Math.random() - 0.5) * 0.12, 0.07 + Math.random() * 0.04, 1.1 + Math.random() * 0.7, GOLD, 1, { grow: 0.2, drag: 0.5, wind: 0.1, alpha: 1, fade: 0.4 });
         if (f.freight && Math.random() < 0.5) this.puffs.spawn(f.x + (Math.random() - 0.5) * f.r * 0.5, y + 1.1, f.z + (Math.random() - 0.5) * f.r * 0.5, 0, 0.35, 0, 0.2, 2.6, SMOKE, 0, { grow: 2.4, drag: 0.3, wind: 0.5, alpha: 0.5, fade: 0.3 });
       }
       // le chariot : charge au bâtiment, roule jusqu'à la gare, décharge, revient à vide
@@ -102,6 +102,13 @@ export class RailBoost {
     for (const m of [this.ring, this.body, this.load]) m.instanceMatrix.needsUpdate = true;
   }
 
+  /** Le point le plus haut du sol sous la flaque : on la pose dessus pour que le relief ne la mange pas */
+  private ground(x: number, z: number, r: number) {
+    let y = this.world.surfaceAt(x, z);
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; y = Math.max(y, this.world.surfaceAt(x + Math.cos(a) * r, z + Math.sin(a) * r)); }
+    return y;
+  }
+
   /** Refait la liste de ceux qu'on anime, en gardant l'état (phase du chariot) de ceux qui restent */
   private refresh(cx: number, cz: number, dist: number) {
     const old = new Map(this.active.map((f) => [f.id, f]));
@@ -112,7 +119,7 @@ export class RailBoost {
       const sx = station.x + ss / 2, sz = station.z + ss / 2, L = Math.hypot(sx - x, sz - z) || 1, ux = (sx - x) / L, uz = (sz - z) / L;
       const prev = old.get(b.id);
       return {
-        id: b.id, x, z, r: s * 0.75 + 0.5, freight,
+        id: b.id, x, z, r: s * 0.75 + 0.5, freight, gy: this.ground(x, z, s * 0.75 + 0.5),
         ax: x + ux * (s / 2 + 0.3), az: z + uz * (s / 2 + 0.3), bx: sx - ux * (ss / 2 + 0.3), bz: sz - uz * (ss / 2 + 0.3),
         phase: prev?.phase ?? b.id * 1.7, cart: prev?.cart ?? (b.id * 0.37) % 1, emit: prev?.emit ?? 0,
       };
