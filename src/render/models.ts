@@ -2019,6 +2019,7 @@ function farm(p: Parts, age: number) {
     const bx = -0.06, bz = -0.16, W = 0.56, D = 0.38, H = 0.3, red2 = dark(C.red, 0.82);
     p.box(0.6, 0.05, 0.42, bx, 0, bz, C.stone);
     stones(p, bx, bz + 0.21, 0.6, 0, 0.05, 0, C.stone, 0.85, 1);
+    dressBack(p, 2, bx, bz, W, D, 0.05, H, 65, 0, 0.5, C.white);
     for (const s of [-1, 1]) stones(p, bx + s * 0.3, bz, 0.42, 0, 0.05, s * Math.PI / 2, C.stone, 0.85, 2 + s);
     p.box(W, H, D, bx, 0.05, bz, C.red);
     roof(p, bx, 0.35, bz, { w: D, d: W, h: 0.3, color: C.darkbrick, wall: C.red, ry: Math.PI / 2, len: 0.48, courses: true });
@@ -2490,6 +2491,7 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     p.box(0.13, 0.66, 0.13, 0.28, 0.04, -0.2, C.darkstone); p.box(0.15, 0.04, 0.15, 0.28, 0.7, -0.2, 0x7d7870);
     smoke(0.28, 0.76, -0.2, 1);
     p.box(0.12, 0.2, 0.02, 0.16, 0.04, 0.1, C.door); p.box(0.09, 0.08, 0.02, -0.06, 0.16, 0.1, C.win, 0, true);
+    dressBack(p, 2, 0.08, -0.12, 0.56, 0.42, 0.04, 0.36, 64, 1, 0.54);
     // l'appareil de pierre, les chaînages d'angle, les volets, l'enseigne au fer à cheval
     stones(p, 0.08, 0.09, 0.56, 0.04, 0.36, 0, dark(C.stone, 0.88), 0.5, 700);
     stones(p, 0.36, -0.12, 0.42, 0.04, 0.36, Math.PI / 2, dark(C.stone, 0.88), 0.5, 701);
@@ -3845,6 +3847,12 @@ function health(p: Parts, age: number) {
     p.box(0.14, 0.22, 0.02, -0.18, 0.03, -0.32, C.door);
     p.box(0.18, 0.025, 0.04, -0.18, 0.25, -0.31, C.darkwood);
     windows(p, [-0.72, -0.46, 0.1, 0.34], 0.12, -0.32, 0.07, 0.1); windows(p, [-0.7925, -0.4425, -0.0925, 0.2575], 0.39, -0.29, 0.06, 0.09, C.darkwood);
+    // le dos de la grande salle : pans de bois et fenêtres à l'étage, fenêtres en bas, descentes d'eau ; la chapelle percée au chevet
+    timbers(p, -0.18, -0.898, 1.4, 0.345, 0.59, Math.PI, 8, (i) => i % 2 === 0);
+    wallWindows(p, -0.2675, -0.897, 1.4, 0.4, Math.PI, 4, 0.06, 0.09, C.darkwood, SHUTTERS[1]);
+    wallWindows(p, -0.18, -0.877, 1.3, 0.12, Math.PI, 4, 0.06, 0.09, C.darkwood);
+    for (const x of [-0.86, 0.48]) downpipe(p, x, -0.89, 0.33, 0x7a6a5a, 0.03);
+    wallWindows(p, 0.7, -0.912, 0.2, 0.18, Math.PI, 1, 0.06, 0.16, C.stone, -1, true);
     // chapelle à contreforts et clocher de pierre
     p.box(0.36, 0.48, 0.66, 0.7, 0.03, -0.58, C.stone);
     stones(p, 0.88, -0.58, 0.66, 0.03, 0.51, Math.PI / 2, C.stone, 0.5, 13);
@@ -4622,6 +4630,7 @@ function stable(p: Parts, age: number) {
     p.box(W + 0.03, 0.025, D + 0.03, 0, H - 0.03, bz, C.white);
   }
   roof(p, 0, H, bz, { w: W, d: D, h: 0.26, color: roofC, wall, len: W + 0.12, ov: 0.08, courses: true });
+  dressBack(p, age, 0, bz, W, D, 0.05, H, 66, 2, 1);
   const door = age === 3 ? 0x3f7a5a : age === 4 ? 0x5a6470 : C.darkwood, frame = age >= 3 ? C.white : dark(C.wood, 0.75);
   for (const x of [-0.6, -0.3, 0.3, 0.6]) {
     // porte de stalle en deux : le bas fermé en croix, le haut ouvert sur la pénombre, une barre de fer
@@ -5035,6 +5044,7 @@ function tavern(p: Parts, age: number, o: ModelOpts) {
       for (const [x, z] of [[0.05, 0.37], [0.12, 0.39]]) p.cyl(0.012, 0.012, 0.025, 6, x, 0.1, z, 0x9a7a5a);
       p.cyl(0.016, 0.02, 0.04, 7, 0.09, 0.1, 0.38, 0xc8b8a0);
       for (let k = 0; k < 6; k++) p.box(0.07, 0.004, 0.05, -0.14 + (k % 3) * 0.08 + (k > 2 ? 0.04 : 0), 0.012, 0.15 + (k > 2 ? 0.06 : 0), dark(C.stone, 0.88 + (k % 2) * 0.1));
+      dressBack(p, 2, 0, -0.12, 0.6, 0.46, 0.012, 0.27, 61, 1, 0.5);
     }
   } else if (age === 3) {
     // brasserie : brique sur deux niveaux, grandes vitrines, store rayé sur la terrasse, enseigne
@@ -5053,6 +5063,7 @@ function tavern(p: Parts, age: number, o: ModelOpts) {
     }
     for (const x of [-0.24, 0.24]) { p.cyl(0.05, 0.05, 0.01, 10, x, 0.1, 0.34, C.white); p.cyl(0.008, 0.012, 0.09, 5, x, 0.012, 0.34, 0x3c4a44); for (const s of [-1, 1]) p.box(0.04, 0.06, 0.04, x + s * 0.08, 0.012, 0.34, 0x3c4a44); }
     for (const [x, z] of [[0.42, 0.04], [0.42, -0.06]]) { p.cyl(0.04, 0.04, 0.09, 8, x, 0.012, z, 0x9a6a44); p.cyl(0.042, 0.042, 0.008, 8, x, 0.05, z, 0x6f5640); }
+    dressBack(p, 3, 0, -0.16, 0.7, 0.5, 0.012, 0.5, 62, -1, 0.5);
   } else {
     // café au pied d'un immeuble : rez-de-chaussée vitré sous un store rayé, enseigne lumineuse, étage d'habitation à
     // balcon et jardinières, toit plat et sa corniche ; terrasse de tables rondes sous les parasols, guirlande de lampions,
@@ -5090,6 +5101,7 @@ function tavern(p: Parts, age: number, o: ModelOpts) {
     for (const x of [-0.42, 0.42]) { p.cyl(0.035, 0.03, 0.06, 7, x, 0.012, 0.12, C.terracotta); p.sphere(0.045, x, 0.1, 0.12, C.darkgreen, 0, 0.9); }
     for (const d of [-0.04, 0.04]) p.add(new THREE.TorusGeometry(0.025, 0.005, 4, 10).rotateY(Math.PI / 2), -0.42, 0.04, -0.28 + d, 0x3c3c40);
     p.box(0.005, 0.005, 0.08, -0.42, 0.05, -0.28, 0x3c7fd8);
+    dressBack(p, 4, 0, -0.18, 0.66, 0.46, 0.012, 0.6, 63, 1, 0.5);
   }
 }
 
@@ -9078,6 +9090,7 @@ function manor(p: Parts, age: number) {
     const st = 0xe8dcc4, cream = 0xf4ead6, x0 = 0, z0 = -0.45, W = 1.4, D = 0.5, H = 0.44;
     p.box(W, H, D, x0, y0, z0, st);
     for (const y of [0.2, H - 0.02]) p.box(W + 0.03, 0.025, D + 0.03, x0, y, z0, cream);
+    dressBack(p, 3, x0, z0, W, D, y0, H, 68, 2, 1);
     const xs = [-0.55, -0.38, -0.21, 0.21, 0.38, 0.55];
     windows(p, xs, 0.05, z0 + D / 2 + 0.01, 0.07, 0.12, cream); windows(p, xs, 0.25, z0 + D / 2 + 0.01, 0.07, 0.12, cream);
     for (const x of xs) for (const s of [-1, 1]) p.box(0.02, 0.12, 0.006, x + s * 0.055, 0.25, z0 + D / 2 + 0.014, 0x5a7a8a);
@@ -9110,6 +9123,7 @@ function manor(p: Parts, age: number) {
   p.box(1.0, 0.36, 0.5, x0, y0, z0, stone);
   stones(p, x0, z0 + 0.25, 1.0, y0, 0.36, 0, dark(stone, 0.86), 0.45, 401);
   roof(p, x0, 0.372, z0, { w: 1.0, d: 0.5, h: 0.32, color: C.slate, wall: stone, courses: true });
+  dressBack(p, 2, x0, z0, 1.0, 0.5, y0, 0.372, 67, 0, 1);
   windows(p, [x0 - 0.3, x0 - 0.1, x0 + 0.1, x0 + 0.3], 0.18, z0 + 0.26, 0.06, 0.1, 0xece4d4);
   p.box(0.12, 0.18, 0.016, x0, y0, z0 + 0.255, 0x5a4434); archTop(p, x0, 0.19, z0 + 0.258, 0.06, 0x5a4434);
   for (const x of [x0 - 0.38, x0 + 0.38]) { p.box(0.09, 0.22, 0.09, x, 0.5, z0, stone); smoke(x, 0.74, z0, 1); }
