@@ -57,6 +57,9 @@ export interface UIHost {
   setDisasters(on: boolean): void;
   autoRoads: boolean;
   setAutoRoads(on: boolean): void;
+  /** flèches d'amélioration au-dessus des bâtiments, masquées ou non */
+  hideUpBadges: boolean;
+  setHideUpBadges(on: boolean): void;
   /** expéditions, et celle que la caméra suit (son numéro) */
   expeditions: Expeditions;
   /** chemin de fer de la gare à l'avant-poste, et la caméra qui suit le train */
@@ -1618,6 +1621,8 @@ export class UI {
         <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.</p>
         <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
+        <div class="row"><label>Flèches d’amélioration</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${h.hideUpBadges ? 'Masquées' : 'Affichées'}</button></div>
+        <p class="hint">Une flèche dorée flotte au-dessus des bâtiments qu’on peut améliorer et dont on a de quoi payer l’amélioration.</p>
         <div class="row"><label>Ressources</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? (h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
         <p class="hint">Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
         <h4>Sauvegarde</h4>
@@ -1692,6 +1697,11 @@ export class UI {
       q('#gUnlimited').textContent = h.world.unlimited ? 'Illimitées' : 'Normales';
       q('#gUnlimited').classList.toggle('active', h.world.unlimited);
       this.update();
+    };
+    q('#gBadges').onclick = () => {
+      h.setHideUpBadges(!h.hideUpBadges);
+      q('#gBadges').textContent = h.hideUpBadges ? 'Masquées' : 'Affichées';
+      q('#gBadges').classList.toggle('active', !h.hideUpBadges);
     };
     q('#gRoads').onclick = () => {
       h.setAutoRoads(!h.autoRoads);

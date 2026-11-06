@@ -30,6 +30,8 @@ export class UpgradeBadges {
   private t = 0;
   /** nombre de bâtiments qui peuvent évoluer (pour les tests) */
   count = 0;
+  /** masquées par le joueur (réglages) */
+  hidden = false;
 
   constructor(private world: World) {
     this.mat = new THREE.PointsMaterial({ map: badgeTexture(), size: 0.9, sizeAttenuation: true, transparent: true, alphaTest: 0.2, depthWrite: false });
@@ -69,8 +71,8 @@ export class UpgradeBadges {
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       this.points.geometry = g;
       this.count = list.length;
-      this.points.visible = list.length > 0;
     }
+    this.points.visible = !this.hidden && this.count > 0;
     this.t += dt;
     this.mat.size = 0.85 + 0.12 * Math.sin(this.t * 3.2);
   }

@@ -100,6 +100,7 @@ class Game implements UIHost {
   quality: Quality = coarse ? 'low' : 'high';
   /** routes automatiques jusqu'aux nouveaux bâtiments */
   autoRoads = true;
+  hideUpBadges = false;
   fires: Fires;
   traffic: Traffic;
   helis: Helis;
@@ -238,6 +239,7 @@ class Game implements UIHost {
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
     if (settings.quality) this.quality = settings.quality;
     this.autoRoads = settings.autoRoads ?? true;
+    this.hideUpBadges = settings.hideUpBadges ?? false;
     w.disasters = settings.disasters ?? true;
     w.unlimited = settings.unlimited ?? false;
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 4);
@@ -275,6 +277,7 @@ class Game implements UIHost {
     // halos de lumière des feux et des lanternes, la nuit
     this.halos = new Halos(w);
     this.upBadges = new UpgradeBadges(w);
+    this.upBadges.hidden = this.hideUpBadges;
     // expéditions : une équipe d'habitants part chercher bêtes, minerai, semences… et revient raconter
     this.expeditions = new Expeditions(w, this.agents, () => this.time.dayLen);
     // l'âge du village (les noms des bâtiments, les troupes de l'époque), pas celui du plus récent de ses bâtiments
@@ -395,7 +398,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
   }
   buildSave(): SaveData {
     return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, seasonT: this.time.seasonT, hour: this.time.hour, settings: this.settings(), savedAt: Date.now() };
@@ -466,6 +469,7 @@ class Game implements UIHost {
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
+  setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
   /** Brouillard visible : la météo « brume » et la nappe au ras du sol (0 … 1) */
   fogLevel() { return Math.max(this.env.weatherKind === 'fog' ? this.env.weatherK : 0, this.atmosphere.mist); }
   /** Dissipe le brouillard et la brume ; ils ne reviennent pas avant un bon moment */
