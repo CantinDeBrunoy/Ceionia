@@ -642,6 +642,8 @@ button.sendBtn:disabled { background: rgba(15, 27, 45, 0.12); color: var(--ink2)
 .subtabs { display: flex; gap: 6px; margin: 4px 0 10px; flex-wrap: wrap; }
 .subtabs button { min-height: 32px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: var(--accent-soft); color: var(--ink2); border: 1px solid var(--line); box-shadow: none; }
 .subtabs button small { opacity: .65; margin-left: 3px; }
+.emptyMsg { margin: 18px 4px; padding: 16px; border-radius: 14px; background: var(--accent-soft); border: 1px dashed var(--line); color: var(--ink2); font-size: 14px; line-height: 1.45; text-align: center; }
+.emptyMsg[hidden] { display: none; }
 .subtabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .mission[hidden] { display: none; }
 .legendHead { margin: 18px 0 2px; font-size: 15px; color: #8a5a00; }

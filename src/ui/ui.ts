@@ -1288,6 +1288,7 @@ export class UI {
         <p class="hint">Envoyez de petites équipes chercher ce qui manque au village.</p><details class="cdet"><summary>En savoir plus</summary><p class="hint">Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p></details>
         <div class="subtabs"><button data-f="all" class="on">Toutes <small>${sorted.length}</small></button><button data-f="mil">⚔️ Militaires <small>${nMil}</small></button><button data-f="leg">✨ Légendaires <small>${nLeg}</small></button></div>
         <div class="missions">${cards}</div>
+        <p class="emptyMsg" hidden></p>
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
       <section data-sec="depths" ${tab === 'depths' ? '' : 'hidden'}>${this.depthsHtml()}</section>`);
@@ -1299,7 +1300,18 @@ export class UI {
     ov.querySelectorAll<HTMLButtonElement>('[data-f]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-f]').forEach((x) => x.classList.toggle('on', x === b));
       const f = b.dataset.f;
-      ov.querySelectorAll<HTMLElement>('.mission').forEach((el) => { el.hidden = f === 'mil' ? el.dataset.mil !== '1' : f === 'leg' ? el.dataset.leg !== '1' : false; });
+      let shown = 0;
+      ov.querySelectorAll<HTMLElement>('.mission').forEach((el) => {
+        el.hidden = f === 'mil' ? el.dataset.mil !== '1' : f === 'leg' ? el.dataset.leg !== '1' : false;
+        if (!el.hidden) shown++;
+      });
+      const em = ov.querySelector<HTMLElement>('.emptyMsg');
+      if (em) {
+        em.hidden = shown > 0;
+        em.textContent = f === 'mil' ? 'Aucune expédition militaire à cet âge. Les expéditions armées (le loup des bois, les galeries des profondeurs…) apparaissent au fil des âges : revenez après avoir progressé.'
+          : f === 'leg' ? 'Aucune expédition légendaire à cet âge. Les grands exploits (mammouth, monstre des mers, dragon, JO…) arrivent à des âges précis.'
+          : 'Aucune expédition disponible pour le moment.';
+      }
     }));
     // l'arsenal se redessine quand la réserve ou la file changent ; la barre de fabrication avance en continu
     let key = '';
