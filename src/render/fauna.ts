@@ -516,6 +516,8 @@ export class Fauna {
   /** prédateurs, et chef (rang 0) de chaque groupe : recensés à chaque image plutôt que cherchés parmi toutes les bêtes */
   private hunters: Critter[] = [];
   private leads = new Map<string, Critter>();
+  /** qualité graphique : part de la distance à laquelle les bêtes articulées restent affichées et animées à chaque image */
+  detail = 1;
 
   constructor(private world: World, private veg: { perches: number[][]; flowers: number[][] }) {
     for (const k of KIND_LIST) {
@@ -1508,9 +1510,9 @@ export class Fauna {
           this.sphere.radius = (MODELS[c.kind]?.length ?? 0.3) * 1.5 + 0.2;
           visible = this.frustum.intersectsSphere(this.sphere);
           const d = this.sphere.center.distanceTo(camera.position);
-          far = d > 60;
+          far = d > 60 * this.detail;
           // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points (les petites, plus tôt)
-          if (d > (TINY.has(c.kind) ? 45 : 130)) visible = false;
+          if (d > (TINY.has(c.kind) ? 45 : 130) * this.detail) visible = false;
         }
         this.animateActor(c, c.actor, dt, visible, far);
         continue;

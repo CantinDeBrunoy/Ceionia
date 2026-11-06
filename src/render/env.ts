@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GameTime } from '../core/time';
 import { SeasonState } from './season';
-import { mats, LIGHTS } from './materials';
+import { mats, LIGHTS, SHADOW_LAYER } from './materials';
 import { clamp, lerp, smoothstep, mulberry32 } from '../core/rng';
 import { N } from '../world/world';
 
@@ -66,6 +66,7 @@ export class Environment {
     this.sun.shadow.mapSize.set(ss, ss);
     const sc = this.sun.shadow.camera;
     sc.near = 1; sc.far = 420;
+    sc.layers.enable(SHADOW_LAYER);
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.04;
     this.sun.shadow.radius = 3;
@@ -166,6 +167,15 @@ export class Environment {
     let acc = 0;
     for (const [k, p] of tbl[season]) { acc += p; if (r <= acc) return k; }
     return 'clear' as WeatherKind;
+  }
+
+  /** Taille (texels de côté) de la carte des ombres, selon la qualité graphique */
+  setShadowSize(s: number) {
+    const sh = this.sun.shadow;
+    if (sh.mapSize.x === s) return;
+    sh.mapSize.set(s, s);
+    sh.map?.dispose();
+    sh.map = null;
   }
 
   update(dt: number, time: GameTime, s: SeasonState, focus: THREE.Vector3, gameDt: number, camDist = 60) {

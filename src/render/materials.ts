@@ -9,6 +9,8 @@ export const mats = {
 };
 /** Heure du jour, temps écoulé (s) et nuit (0 … 1), pour les lumières des bâtiments */
 export const LIGHTS = { hour: { value: 20 }, time: { value: 0 }, night: { value: 0 } };
+/** Calque vu par la seule caméra des ombres : silhouettes simplifiées qui projettent l'ombre d'objets détaillés */
+export const SHADOW_LAYER = 1;
 
 /**
  * Lumières des bâtiments, chacune à son rythme : sa graine (`aLight`) mêlée à la place du bâtiment. Les fenêtres s'allument
