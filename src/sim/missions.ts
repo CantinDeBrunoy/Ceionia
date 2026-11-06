@@ -566,7 +566,7 @@ export const MISSIONS: Mission[] = [
   },
   {
     // facultative (le passage d'âge ne tient qu'au filon) : un gros risque, un gros butin ; les armures et les épées aident
-    id: 'dragon', age: 2, mandatory: false, icon: '🐉', title: 'Chasser le dragon',
+    id: 'dragon', age: 2, mandatory: true, icon: '🐉', title: 'Chasser le dragon',
     intro: 'Un dragon s’est terré dans une grotte au pied de la montagne : il enlève les moutons et roussit les toits. On dit qu’il dort sur un tas d’or… Des chevaliers sont prêts à l’en déloger.',
     choices: [
       {
