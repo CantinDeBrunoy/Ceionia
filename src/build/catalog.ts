@@ -505,12 +505,11 @@ export const UPGRADES: { from: KindId; to: KindId }[] = [
   { from: 'terminal', to: 'maglev' },
   { from: 'football', to: 'stadium' },
   { from: 'pier', to: 'harbor' },
-  { from: 'gather', to: 'forum' },
   { from: 'workshop', to: 'carworks' },
   { from: 'farm', to: 'vfarm' },
 ];
 
-/** Un genre et tous ceux en lesquels il s'améliore (une place devenue forum compte encore comme une place) */
+/** Un genre et tous ceux en lesquels il s'améliore (une maison devenue manoir compte encore comme une maison) */
 export function lineOf(k: KindId): KindId[] {
   const out: KindId[] = [k];
   for (let i = 0; i < out.length; i++) for (const u of UPGRADES) if (u.from === out[i] && !out.includes(u.to)) out.push(u.to);
