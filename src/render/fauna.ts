@@ -706,7 +706,7 @@ export class Fauna {
     const scale = N > 128 ? 2 : 1;
     // plafond par espèce : le nombre que le rendu instancié peut montrer (la même faune, quel que soit l'ordre des biomes)
     const budget = {} as Record<Kind, number>;
-    for (const k of KIND_LIST) budget[k] = SPECS[k].max;
+    for (const k of KIND_LIST) budget[k] = Math.ceil(SPECS[k].max * 0.7);
     for (const [zi, z] of ZONES.entries()) {
       if (z.needs && !hasModel(z.needs)) continue;
       for (const b of z.biomes) {
