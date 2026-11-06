@@ -604,7 +604,7 @@ const B: Record<string, Builder> = {
     p.add(new THREE.IcosahedronGeometry(0.04, 0), 0, y + R + 0.02, 0, NEON[1], 0, 'neon');
     p.add(new THREE.TorusGeometry(0.11, 0.012, 3, 8, Math.PI), 0, y, R, NEON[1], 0, 'neon');
     // l'allée de nacre qui traverse la serre
-    p.box(0.16, 0.006, R * 2 - 0.06, 0, y, 0, PEARL);
+    p.box(0.16, 0.006, R * 2 - 0.06, 0, y + 0.003, 0, PEARL);
     // le grand arbre-lumière du milieu et, tout autour, feuilles géantes et bulbes qui luisent
     p.cyl(0.018, 0.03, 0.36, 6, 0, y, 0, WHITE);
     for (const s of [-1, 1]) stick(p, 0.16, 0.01, s * 0.05, y + 0.32, 0, WHITE, -s * 0.7);
@@ -644,7 +644,8 @@ const B: Record<string, Builder> = {
     const p = c.p;
     p.cyl(0.03, 0.045, 0.045, 8, 0, 0, 0, PEARL);
     p.box(0.24, 0.022, 0.085, 0, 0.045, 0, WHITE);
-    p.add(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 10, 1, true, -0.9, 1.8).scale(1, 1, 0.45).translate(0, 0.045, 0), 0, 0.06, 0.02, WHITE, Math.PI);
+    p.add(new THREE.BoxGeometry(0.24, 0.1, 0.02).translate(0, 0.05, 0), 0, 0.06, -0.035, WHITE, 0, false, 0, -0.25);
+    for (const s of [-1, 1]) p.box(0.02, 0.05, 0.08, s * 0.12, 0.06, 0, PEARL);
     p.box(0.2, 0.006, 0.006, 0, 0.04, 0.045, NEON[it.v % 4], 0, 'neon');
   },
   gravpool: (c, it) => {
@@ -731,6 +732,9 @@ const B: Record<string, Builder> = {
     for (let i = 0; i < 3; i++) c.p.add(new THREE.OctahedronGeometry(0.035, 0).scale(0.55, 1.8 - i * 0.3, 0.55), Math.cos(i * 2.1) * 0.03, 0.06, Math.sin(i * 2.1) * 0.03, NEON[(it.v + i) % 4], i * 0.7, 'neon', 0.25 * (i - 1));
   },
 };
+
+/** Les éléments que le rendu sait dessiner (le sol souple de l'aire de jeux à part) */
+export const GARDEN_PIECES = new Set([...Object.keys(B), 'pad']);
 
 /** Flamme : un cœur orangé et trois langues jaunes */
 function flameGeo() {
