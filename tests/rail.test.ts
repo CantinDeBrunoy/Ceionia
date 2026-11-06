@@ -9,6 +9,7 @@ import { MISSIONS } from '../src/sim/missions';
 import { BRICK_PRICE, CAR_FUEL, YIELD } from '../src/sim/economy';
 import { gap, railBoost, servedStations, spaceRail, railWant, FREIGHT_BONUS, RAIL_REACH } from '../src/sim/freight';
 import { getModel } from '../src/render/models';
+import { Sim } from '../src/sim/sim';
 
 /** Le continent des tests, toujours la même graine */
 function continent() {
@@ -168,6 +169,35 @@ describe('la gare centrale', () => {
     expect(rail.trains.get(l.id)!.carried).toBe(0);
     rail.setFreight(l.id, false);
     expect(l.freight).toBeUndefined();
+  });
+});
+
+describe('les conseils du rail', () => {
+  it('une carrière sans gare de marchandises : le conseil propose une gare ; servie, il n’en parle plus ; voitures sans carburant : la raffinerie', () => {
+    const w = continent();
+    const sim = new Sim(w);
+    sim.age = 3;
+    for (const k of ['house', 'house', 'house', 'house', 'farm', 'farm', 'well', 'workshop', 'workshop', 'gather', 'health'] as KindId[]) w.place(k, ...spot(w, k, 60, 60), 0, true, 3, false);
+    const [qx, qz] = spot(w, 'quarry', 30, 30);
+    w.place('quarry', qx, qz, 0, true, 3, false);
+    sim.recalc();
+    sim.pop = 20;
+    const say = () => { sim.pop = 20; return (sim as unknown as { computeMessage(): string }).computeMessage(); };
+    expect(say()).toMatch(/^Astuce : posez « Petite gare »/);
+    expect(sim.messageKind).toBe('station');
+    // une gare de marchandises à côté : le village grandit, sans autre conseil
+    const a = w.place('station', ...spot(w, 'station', qx + 2, qz), 0, true, 3, false);
+    const b = w.place('station', ...spot(w, 'station', qx + 30, qz + 30), 0, true, 3, false);
+    w.lines.push({ id: 1, stops: [a.id, b.id], color: 0, freight: true });
+    sim.recalc();
+    expect(say()).toMatch(/^Le village grandit/);
+    // une usine automobile sans carburant ni raffinerie
+    w.place('carworks', ...spot(w, 'carworks', 90, 90), 0, true, 3, false);
+    sim.recalc();
+    w.wood = w.stone = w.brick = 999;
+    expect(say()).toMatch(/^Les voitures restent au garage, faute de carburant : « Raffinerie »/);
+    w.fuel = 5;
+    expect(say()).not.toMatch(/carburant/);
   });
 });
 

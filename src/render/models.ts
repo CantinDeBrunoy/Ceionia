@@ -3383,7 +3383,7 @@ function terminal(p: Parts, age: number) {
  */
 function terminalBig(p: Parts, age: number) {
   const modern = age >= 4, brick = 0xb4685c, stoneC = 0xe9dcc4, slate = 0x5a6470;
-  const rib = modern ? 0x8fbcdc : 0x5a3e34, bar = modern ? 0xc8d6e2 : 0x4a3a32;
+  const rib = modern ? 0x8fbcdc : 0x5a3e34, bar = modern ? 0xc8d6e2 : 0x4a3a32, cover = modern ? 0xa9bccb : 0x7d8a96;
   sink(0.03);
   const Y = 0.03, ZB = -1.48, ZF = 0.66, HZ0 = 0.86;
   // le sol de la halle et du hall
@@ -3428,7 +3428,7 @@ function terminalBig(p: Parts, age: number) {
   for (let z = ZB + 0.02; z <= HZ0 + 1e-6; z += (L - 0.04) / 7) for (let i = 0; i < n; i++) seg(arc[i], arc[i + 1], z, z < ZB + 0.1 ? 0.05 : 0.035, 0.03, rib);
   for (let i = 0; i < n; i++) {
     const u = Math.abs(-1 + (2 * i + 1) / n);
-    if (u > 0.5) seg(arc[i], arc[i + 1], zc, 0.014, L, slate, 0.02);
+    if (u > 0.5) seg(arc[i], arc[i + 1], zc, 0.014, L, cover, 0.02);
     else for (const f of [0.25, 0.75]) { const a = arc[i], b = arc[i + 1], m: [number, number] = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; p.box(0.012, 0.012, L, m[0], m[1] + 0.01, zc, bar); }
     if (u <= 0.5) seg(arc[i], arc[i + 1], zc, 0.01, 0.02, bar, 0.015);
   }
@@ -3485,16 +3485,16 @@ function terminalBig(p: Parts, age: number) {
   p.add(new THREE.BoxGeometry(0.6, 0.014, 0.16), ex, Y + 0.32, zf + 0.14, modern ? 0x3a4a5a : 0x3f5a4a, 0, false, 0, -0.12);
   p.box(0.36, 0.05, 0.012, ex, Y + 0.44, zf + 0.075, 0x3f5a4a); for (let k = 0; k < 6; k++) p.box(0.03, 0.025, 0.004, ex - 0.1 + k * 0.04, Y + 0.452, zf + 0.082, C.gold);
   // la tour de l'horloge, haute et fine, horloges sur trois faces, flèche d'ardoise et ses clochetons
-  const tx = 1.16, tz = 1.12, TW = 0.34, TH = 1.32;
+  const tx = 1.16, tz = 1.12, TW = 0.34, TH = 1.62;
   p.box(TW, TH, TW, tx, Y, tz, dark(brick, 0.95));
   stones(p, tx, tz + TW / 2, TW, Y, Y + TH, 0, dark(brick, 0.8), 0.45, 513);
-  for (const y of [Y + 0.42, Y + 0.85, Y + TH]) p.box(TW + 0.03, 0.025, TW + 0.03, tx, y, tz, stoneC);
-  for (const y of [Y + 0.5, Y + 0.68]) windows(p, [tx], y, tz + TW / 2 + 0.01, 0.06, 0.12, stoneC);
+  for (const y of [Y + 0.42, Y + 0.85, Y + 1.15, Y + TH]) p.box(TW + 0.03, 0.025, TW + 0.03, tx, y, tz, stoneC);
+  for (const y of [Y + 0.5, Y + 0.68, Y + 0.93]) windows(p, [tx], y, tz + TW / 2 + 0.01, 0.06, 0.12, stoneC);
   for (const [dx, dz, ry] of [[0, TW / 2 + 0.006, 0], [-TW / 2 - 0.006, 0, -Math.PI / 2], [TW / 2 + 0.006, 0, Math.PI / 2]] as number[][]) {
-    p.add(new THREE.CylinderGeometry(0.11, 0.11, 0.014, 18).rotateX(Math.PI / 2).rotateY(ry), tx + dx, Y + 1.08, tz + dz, C.white, 0, true);
-    p.add(new THREE.CylinderGeometry(0.122, 0.122, 0.01, 18).rotateX(Math.PI / 2).rotateY(ry), tx + dx * 0.99, Y + 1.08, tz + dz * 0.99, C.gold);
-    p.add(new THREE.BoxGeometry(0.008, 0.075, 0.006).rotateY(ry), tx + dx * 1.05, Y + 1.11, tz + dz * 1.05, 0x2a2a2a);
-    p.add(new THREE.BoxGeometry(0.055, 0.008, 0.006).rotateY(ry), tx + dx * 1.05, Y + 1.08, tz + dz * 1.05, 0x2a2a2a);
+    p.add(new THREE.CylinderGeometry(0.11, 0.11, 0.014, 18).rotateX(Math.PI / 2).rotateY(ry), tx + dx, Y + 1.38, tz + dz, C.white, 0, true);
+    p.add(new THREE.CylinderGeometry(0.122, 0.122, 0.01, 18).rotateX(Math.PI / 2).rotateY(ry), tx + dx * 0.99, Y + 1.38, tz + dz * 0.99, C.gold);
+    p.add(new THREE.BoxGeometry(0.008, 0.075, 0.006).rotateY(ry), tx + dx * 1.05, Y + 1.41, tz + dz * 1.05, 0x2a2a2a);
+    p.add(new THREE.BoxGeometry(0.055, 0.008, 0.006).rotateY(ry), tx + dx * 1.05, Y + 1.38, tz + dz * 1.05, 0x2a2a2a);
   }
   p.pyramid(TW + 0.02, 0.5, TW + 0.02, tx, Y + TH + 0.02, tz, slate);
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { p.cyl(0.02, 0.025, 0.08, 6, tx + dx * TW / 2, Y + TH + 0.02, tz + dz * TW / 2, stoneC); p.cone(0.026, 0.12, 6, tx + dx * TW / 2, Y + TH + 0.1, tz + dz * TW / 2, slate); }

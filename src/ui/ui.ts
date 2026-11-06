@@ -17,7 +17,7 @@ import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
 import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
-import { gap, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
+import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
@@ -121,7 +121,7 @@ function railStat(h: UIHost, b: Building): string | null {
   const prod = near.some((o) => railWant(o.kind) === 'freight'), space = near.some((o) => railWant(o.kind) === 'passenger');
   const served = (prod && freight) || (space && pass);
   return served ? `${t} Sert ses voisins : ${names}`
-    : `${t} À côté : ${names}. ${prod ? 'Une ligne de marchandises d’ici les ferait produire 50 % de plus' : 'Une ligne de voyageurs d’ici y amènerait les équipes'} (bouton du genre de train, à côté de la ligne).`;
+    : `${t} À côté : ${names}. ${prod ? 'Une ligne de marchandises d’ici les ferait produire 50 % de plus' : 'Une ligne de voyageurs d’ici y amènerait les équipes'} (bouton 📦 / 🧳 d’une ligne : marchandises ou voyageurs).`;
 }
 /** Le conseil du rail sur la fiche d'un bâtiment qu'on s'apprête à bâtir */
 function railTip(k: KindId) {
@@ -742,9 +742,9 @@ export class UI {
       for (const k of list) count.set(k, (count.get(k) ?? 0) + 1);
       stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => `${n} ${names[k][n > 1 ? 1 : 0]}`).join(', ')}` : `${ic('pen', 14, 2)} aucune bête pour l’instant`);
     }
-    if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${YIELD.brickworks!.brick![a] ?? 0} briques cuites par jour · ${Math.floor(h.world.brick)} en réserve au village`);
-    if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${YIELD.oilwell!.crude![a] ?? 0} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
-    if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);
+    if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${(YIELD.brickworks!.brick![a] ?? 0) * railBoost(h.world, b)} briques cuites par jour · ${Math.floor(h.world.brick)} en réserve au village`);
+    if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${(YIELD.oilwell!.crude![a] ?? 0) * railBoost(h.world, b)} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
+    if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE * railBoost(h.world, b)} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE * railBoost(h.world, b)} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);
     if (b.kind === 'outpost') stats.push(`${ic('outpost', 14, 2)} ${h.expeditions.held()} cases de galeries tenues sous terre · camp niveau ${h.expeditions.camp()}`);
     if (b.kind === 'carworks' && !h.world.unlimited) stats.push(h.expeditions.cars() ? `${ic('fuel', 14, 2)} Les voitures brûlent ${CAR_FUEL} carburant par jour · ${Math.floor(h.world.fuel)} au village` : `${ic('fuel', 14, 2)} Plus de carburant : les voitures restent au garage. La raffinerie en tire du pétrole brut des puits.`);
     // ce que le rail lui apporte (ou lui apporterait), et pour une gare, les bâtiments qu'elle sert
@@ -754,8 +754,8 @@ export class UI {
     const r = h.railway, stop = isStation(b) || b.kind === 'outpost' ? r.stopOf(b) : null, lines = stop ? r.linesAt(b) : [];
     const rails = stop ? `<div class="rails"><b>${ic('train', 14, 2)} Chemin de fer</b>${lines.map((l) => {
       const tr = r.trains.get(l.id);
-      return `<div class="rline">${dot(l.color)}<div class="grow"><span>${r.lineLabel(l)}</span><small>${tr ? trainWhere(r, tr) : ''}${tr && tr.crew.length ? ` · ${tr.crew.length} mineurs au fond` : ''}</small></div>
-        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? 'Train de marchandises : les ateliers et carrières à côté de ses gares produisent 50 % de plus. Cliquer pour en faire un train de voyageurs' : 'Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises'}">${l.freight ? '📦 Marchandises' : '🧳 Voyageurs'}</button>
+      return `<div class="rline">${dot(l.color)}<div class="grow"><span>${r.lineLabel(l)}</span><small>${l.freight ? 'Marchandises' : 'Voyageurs'}${tr ? ` · ${trainWhere(r, tr)}` : ''}${tr && tr.crew.length ? ` · ${tr.crew.length} mineurs au fond` : ''}</small></div>
+        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? 'Train de marchandises : les ateliers et carrières à côté de ses gares produisent 50 % de plus. Cliquer pour en faire un train de voyageurs' : 'Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises'}" aria-label="${l.freight ? 'Train de marchandises' : 'Train de voyageurs'}">${l.freight ? '📦' : '🧳'}</button>
         <button data-act="follow:${l.id}" title="Suivre le train" aria-label="Suivre le train">${ic('eye', 15, 2)}</button><button data-act="edit:${l.id}" title="Modifier la ligne : ses arrêts et le tracé de sa voie" aria-label="Modifier la ligne">${ic('road', 15, 2)}</button><button data-act="drop:${l.id}" title="Fermer la ligne" aria-label="Fermer la ligne">${ic('close', 15, 2)}</button></div>`;
     }).join('')}<button data-act="newline" class="newline">${ic('train', 15, 2)} Nouvelle ligne depuis ${b.kind === 'outpost' ? 'cet avant-poste' : 'cette gare'}</button></div>`
       : b.kind === 'outpost' && h.sim.age >= 3 ? `<p class="stat">${ic('train', 14, 2)} Cet avant-poste n’a pas la place d’un quai à son pied : le train ne peut pas s’y arrêter.</p>` : '';
