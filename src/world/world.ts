@@ -9,7 +9,7 @@ import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
 const QUAY_MAX = 0.32;
-const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor', 'airport', 'waterpark'];
+const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor', 'airport', 'waterpark', 'terminal'];
 /**
  * Places passées en 3 × 3 (la place du village, de 1 × 1 ; le forum, son amélioration, de 2 × 2) : les sauvegardes d'avant
  * (sans la marque `plaza3`) les font grandir autour de leur ancienne emprise, recentrée, s'ils ont la place
@@ -59,7 +59,11 @@ export interface Snapshot {
  * pour chaque tronçon (de l'arrêt i au suivant), les cases par où le joueur fait passer la voie, dans l'ordre (absent ou
  * vide : la voie se pose d'elle-même)
  */
-export interface RailLine { id: number; stops: number[]; color: number; via?: number[][] }
+/**
+ * Ligne de chemin de fer : ses arrêts, sa couleur, les points de passage de ses tronçons ; `freight` : train de marchandises
+ * (sinon de voyageurs) ; `ok` (non sauvegardé) : faux tant que son train ne peut pas rouler
+ */
+export interface RailLine { id: number; stops: number[]; color: number; via?: number[][]; freight?: boolean; ok?: boolean }
 
 /** Case d'une route en courbe : les courbes qui y passent, et le point de leur ligne le plus proche du centre de la case */
 export interface CurveCell { ids: number[]; at: [number, number] }
@@ -1212,7 +1216,7 @@ export class World {
       // tronçons : par case
       lines: this.lines.map((l) => {
         const kept = l.stops.map((id, i) => (order.has(id) ? i : -1)).filter((i) => i >= 0), via = mergeVia(l.via, kept);
-        return { c: l.color, s: kept.map((i) => order.get(l.stops[i])!), ...(via ? { v: via } : {}) };
+        return { c: l.color, s: kept.map((i) => order.get(l.stops[i])!), ...(via ? { v: via } : {}), ...(l.freight ? { f: 1 } : {}) };
       }),
       linesAuto: this.linesAuto,
       // routes en courbe (au centième) ; celles dont il ne reste aucune case de route s'oublient
@@ -1330,7 +1334,7 @@ export class World {
       // points de passage : des cases de la carte, un tronçon par paire d'arrêts (les anciennes parties n'en ont pas)
       const legs = Array.isArray(l?.v) ? all.slice(1).map((_, i) => (Array.isArray(l.v[i]) ? l.v[i] : []).filter((k: unknown) => Number.isInteger(k) && (k as number) >= 0 && (k as number) < N * N)) : undefined;
       const via = mergeVia(legs, kept);
-      if (stops.length >= 2) this.lines.push({ id: this.lines.length + 1, stops, color: Number.isFinite(+l.c) ? +l.c : 0xd8553c, ...(via ? { via } : {}) });
+      if (stops.length >= 2) this.lines.push({ id: this.lines.length + 1, stops, color: Number.isFinite(+l.c) ? +l.c : 0xd8553c, ...(via ? { via } : {}), ...(l.f ? { freight: true } : {}) });
     }
     this.linesAuto = d.linesAuto ?? !Array.isArray(d.lines);
     this.curves = [];

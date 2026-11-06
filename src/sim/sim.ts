@@ -4,6 +4,7 @@ import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
 import { CAMP_JOY } from './depths';
+import { allServed, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -262,9 +263,15 @@ export class Sim {
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
     const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;
     const room = () => build('house', `Village plein (${Math.floor(p)}/${this.housing.cap} places) : ${say('house')} de plus, +${per} places, pour qu’il grandisse.`);
+    // les automobiles à l'arrêt, faute de carburant : on dit d'où il vient
+    if (this.counts.carworks && !w.unlimited && w.fuel <= 0) {
+      const lack = !this.counts.refinery ? 'refinery' : !this.counts.oilwell ? 'oilwell' : null;
+      return lack ? build(lack, `Les voitures restent au garage, faute de carburant : ${lack === 'refinery' ? `${say('refinery')} le tire du pétrole brut des puits` : `${say('oilwell')}, sur les taches sombres où le brut suinte, alimentera la raffinerie`}.`)
+        : 'Les voitures restent au garage, faute de carburant : la raffinerie en refait avec le brut des puits.';
+    }
     const ap = this.ageProgress();
     if (ap) {
-      if (p < AGES[ap.next].reqPop) return full ? room() : `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
+      if (p < AGES[ap.next].reqPop) return full ? room() : this.railTip() ?? `Le village grandit… (${Math.floor(p)}/${AGES[ap.next].reqPop} habitants pour l’âge suivant)`;
       const miss = ap.items.find((i) => i.have < i.need);
       if (!miss) return `Tout est prêt pour l’âge suivant (${AGES[ap.next].name}) : passez-y quand vous voulez.`;
       if (miss?.label.startsWith('expédition')) {
@@ -283,11 +290,27 @@ export class Sim {
       const next = MISSIONS.find((m) => m.age === this.age && m.requires && !w.exp.done.includes(m.id));
       const need = next?.requires?.kinds?.find((k) => !this.built(k));
       if (need) return build(need, `Pour « ${next!.title} » : il faut ${say(need)}.`);
-      if (next) return `Prochaine étape vers les étoiles : l’expédition « ${next.title} » (menu Expéditions).`;
+      if (next) return `Prochaine étape vers les étoiles : l’expédition « ${next.title} » (menu Expéditions).${this.counts.spaceport && !spaceRail(w) ? ` Astuce : une gare desservie par un train de voyageurs, à ${RAIL_REACH} cases au plus du cosmodrome, y amènerait les équipes (plus sûr, plus rapide).` : ''}`;
     }
+    const tip = this.railTip();
+    if (tip) return tip;
     // la sécheresse ne cache plus ce qu'il reste à bâtir : on n'en parle que quand il n'y a rien d'autre à dire
     if (this.drought) return 'Sécheresse : il n’a pas plu depuis longtemps, les champs donnent moins.';
     return 'Le village est paisible et prospère.';
+  }
+
+  /**
+   * Le conseil du rail, quand le village a des ateliers ou des carrières qu'aucune gare de marchandises ne sert : une gare à
+   * côté, une ligne de marchandises (null : rien à dire, ou pas encore l'âge des gares)
+   */
+  private railTip(): string | null {
+    const w = this.world;
+    if (this.age < 3) return null;
+    const st = allServed(w), prod = [...w.buildings.values()].filter((b) => railWant(b.kind) === 'freight');
+    if (!prod.length || prod.some((b) => railStation(w, b, st))) return null;
+    this.messageKind = 'station';
+    const names = [...new Set(prod.map((b) => this.nameOf(b.kind).toLowerCase()))].slice(0, 3).join(', ');
+    return `Astuce : posez « ${this.nameOf('station')} » (${this.whereOf('station')}) à ${RAIL_REACH} cases au plus d’un bâtiment qui produit (${names}) et reliez-la à une autre gare par un train de marchandises : il produira ${Math.round(FREIGHT_BONUS * 100)} % de plus.`;
   }
 
   /** Un bâtiment du village produit-il cette ressource ? */

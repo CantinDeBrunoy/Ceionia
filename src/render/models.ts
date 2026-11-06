@@ -3372,6 +3372,143 @@ function terminal(p: Parts, age: number) {
   }
 }
 
+/**
+ * Gare centrale (3 × 3), à la façon de Saint-Pancras : sur la rue (+z), l'hôtel de brique rouge à fenêtres gothiques, bandeaux
+ * de pierre claire, toit d'ardoise à lucarnes et pinacles, sa haute tour de l'horloge à flèche et une tour plus petite ;
+ * derrière, la grande halle : murs de brique à arcades aveugles, arcs de fonte en ogive surbaissée portant la couverture
+ * (ardoise en bas, verrière à claire-voie en haut, lanterneau au faîte), pignon vitré au-dessus de la sortie des trains (-z).
+ * Sous la halle, trois voies en cul-de-sac (x = -0.9, 0, 0.9 : voir `LANE`) et leurs butoirs, quais entre elles, le hall des
+ * voyageurs devant les butoirs (horloge suspendue, bancs, chariots, voyageurs). À l'époque moderne, les arcs sont repeints
+ * bleu ciel, les quais bordés de jaune, écrans des départs et boutiques sous les arcades du hall
+ */
+function terminalBig(p: Parts, age: number) {
+  const modern = age >= 4, brick = 0xb4685c, stoneC = 0xe9dcc4, slate = 0x5a6470;
+  const rib = modern ? 0x8fbcdc : 0x5a3e34, bar = modern ? 0xc8d6e2 : 0x4a3a32, cover = modern ? 0xa9bccb : 0x7d8a96;
+  sink(0.03);
+  const Y = 0.03, ZB = -1.48, ZF = 0.66, HZ0 = 0.86;
+  // le sol de la halle et du hall
+  p.box(2.96, 0.012, ZF - ZB + 0.24, 0, Y - 0.012, (ZB + ZF + 0.24) / 2, modern ? 0xcfcac0 : 0x9a948a);
+  // les trois voies et leurs butoirs
+  for (const x of [-0.9, 0, 0.9]) {
+    p.box(0.36, 0.012, ZF - ZB, x, Y - 0.006, (ZB + ZF) / 2, 0xa39a8e);
+    for (let z = ZB + 0.04; z < ZF; z += 0.1) p.box(0.24, 0.016, 0.04, x, Y, z, modern ? 0xb8b4ac : C.darkwood);
+    for (const d of [-0.06, 0.06]) p.box(0.014, 0.02, ZF - ZB, x + d, Y + 0.016, (ZB + ZF) / 2, C.metal);
+    p.box(0.26, 0.1, 0.05, x, Y, ZF + 0.02, 0x3c3c40);
+    p.box(0.3, 0.05, 0.03, x, Y + 0.08, ZF + 0.005, 0xd8553c);
+    for (const d of [-0.08, 0.08]) p.box(0.05, 0.03, 0.03, x + d, Y + 0.1, ZF - 0.01, C.white);
+  }
+  // quais entre les voies et le long des murs, bord peint
+  for (const [x, w] of [[-0.45, 0.5], [0.45, 0.5], [-1.3, 0.34], [1.3, 0.34]] as [number, number][]) {
+    p.box(w, 0.08, ZF - ZB - 0.06, x, Y, (ZB + ZF) / 2 + 0.03, modern ? 0xc8c4bc : C.stone);
+    for (const s of [-1, 1]) if (Math.abs(x + (s * w) / 2) < 1.2) p.box(0.03, 0.004, ZF - ZB - 0.06, x + (s * (w / 2 - 0.02)), Y + 0.08, (ZB + ZF) / 2 + 0.03, modern ? 0xf2c84b : 0xece4d4);
+  }
+  // le hall des voyageurs, devant les butoirs
+  p.box(2.96, 0.08, HZ0 - ZF + 0.02, 0, Y, (ZF + HZ0) / 2, modern ? 0xd8d2c6 : C.stone);
+  // murs de la halle : brique, arcades aveugles, pilastres, couronnement de pierre
+  const L = HZ0 - ZB, zc = (HZ0 + ZB) / 2, WH = 0.34;
+  for (const s of [-1, 1]) {
+    p.box(0.06, WH, L, s * 1.46, Y, zc, brick);
+    p.box(0.08, 0.03, L, s * 1.46, Y + WH, zc, stoneC);
+    for (let k = 0; k < 7; k++) {
+      const z = ZB + 0.18 + k * 0.33;
+      p.box(0.012, 0.2, 0.16, s * 1.493, Y + 0.06, z, dark(brick, 0.62));
+      p.add(new THREE.CylinderGeometry(0.08, 0.08, 0.012, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), s * 1.493, Y + 0.26, z, dark(brick, 0.62));
+      p.box(0.07, WH + 0.02, 0.05, s * 1.47, Y, z + 0.165, dark(brick, 0.86));
+    }
+  }
+  // la halle : arcs de fonte en ogive, couverture d'ardoise en bas, verrière à claire-voie en haut, lanterneau au faîte
+  const R = 1.44, y0 = Y + WH + 0.02, HA = 0.78, n = 14;
+  const arc: [number, number][] = [];
+  for (let i = 0; i <= n; i++) { const u = -1 + (2 * i) / n; arc.push([u * R, y0 + HA * Math.sqrt(Math.max(0, 1 - u * u)) * (1 - 0.16 * Math.abs(u))]); }
+  const seg = (a: [number, number], b: [number, number], z: number, t: number, d: number, color: number, out = 0, glow = false) => {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), th = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    const nx = -Math.sin(th) * out, ny = Math.cos(th) * out;
+    p.add(new THREE.BoxGeometry(len + 0.004, t, d), (a[0] + b[0]) / 2 + nx, (a[1] + b[1]) / 2 + ny, z, color, 0, glow, th);
+  };
+  for (let z = ZB + 0.02; z <= HZ0 + 1e-6; z += (L - 0.04) / 7) for (let i = 0; i < n; i++) seg(arc[i], arc[i + 1], z, z < ZB + 0.1 ? 0.05 : 0.035, 0.03, rib);
+  for (let i = 0; i < n; i++) {
+    const u = Math.abs(-1 + (2 * i + 1) / n);
+    if (u > 0.5) seg(arc[i], arc[i + 1], zc, 0.014, L, cover, 0.02);
+    else for (const f of [0.25, 0.75]) { const a = arc[i], b = arc[i + 1], m: [number, number] = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; p.box(0.012, 0.012, L, m[0], m[1] + 0.01, zc, bar); }
+    if (u <= 0.5) seg(arc[i], arc[i + 1], zc, 0.01, 0.02, bar, 0.015);
+  }
+  // rangs de verrière pâle de part et d'autre (on voit les trains entre eux), lanterneau vitré au faîte
+  for (const i of [4, 9]) seg(arc[i], arc[i + 1], zc, 0.012, L, modern ? 0xd4e6f0 : 0xa8bcc4, 0.022);
+  p.box(0.16, 0.08, L, 0, arc[n / 2][1] + 0.01, zc, bar);
+  p.add(new THREE.BoxGeometry(0.2, 0.012, L), 0, arc[n / 2][1] + 0.1, zc, slate);
+  // pignon au-dessus de la sortie des trains : arc renforcé, poutre, meneaux vitrés (le passage reste libre sous la poutre)
+  const yt = Y + 0.6;
+  p.box(2.88, 0.04, 0.04, 0, yt, ZB + 0.02, rib);
+  for (let x = -1.2; x <= 1.21; x += 0.2) {
+    const u = x / R, top = y0 + HA * Math.sqrt(Math.max(0, 1 - u * u)) * (1 - 0.16 * Math.abs(u));
+    if (top - yt > 0.04) p.box(0.016, top - yt, 0.016, x, yt, ZB + 0.02, bar);
+  }
+  for (let x = -1.1; x <= 1.11; x += 0.4) { const u = x / R, top = y0 + HA * Math.sqrt(1 - u * u) * (1 - 0.16 * Math.abs(u)); if (top - yt > 0.1) p.box(0.18, (top - yt) * 0.6, 0.006, x + 0.1, yt + 0.03, ZB + 0.012, modern ? 0xd4e6f0 : 0xa8bcc4, 0, true); }
+  // sur les quais : réverbères, bancs, horloge suspendue au-dessus du hall, chariots à bagages, voyageurs
+  for (const x of [-0.45, 0.45]) for (const z of [-1.1, -0.4, 0.3]) {
+    p.cyl(0.008, 0.01, 0.3, 5, x, Y + 0.08, z, modern ? 0x5d6878 : 0x3c4a44);
+    p.box(0.035, 0.04, 0.035, x, Y + 0.38, z, 0xffe2a0, 0, true);
+    p.box(0.05, 0.02, 0.14, x, Y + 0.13, z + 0.2, modern ? 0x8a96a2 : C.wood);
+  }
+  p.cyl(0.006, 0.006, 0.3, 4, 0, Y + 0.62, ZF + 0.1, 0x3c3c40);
+  p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 14).rotateX(Math.PI / 2), 0, Y + 0.56, ZF + 0.1, C.gold);
+  for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.06, 0.06, 0.006, 14).rotateX(Math.PI / 2), 0, Y + 0.56, ZF + 0.1 + s * 0.017, C.white);
+  for (const [x, z] of [[-1.3, 0.2], [1.3, -0.6]] as number[][]) { p.box(0.12, 0.03, 0.07, x, Y + 0.13, z, C.wood); for (const [c, d] of [[0x8a5a3a, -0.03], [0x4a6aa8, 0.03]] as number[][]) p.box(0.05, 0.035, 0.035, x + d, Y + 0.16, z, c); }
+  const coats = [0x3a4a6a, 0x8a3a3a, 0x4a6a4a, 0x6a5a3a, 0x2f3a4a, 0xb08a3a];
+  [[-0.5, -0.8, 1.6], [0.4, -0.2, -1.4], [-0.38, 0.45, 3], [0.55, 0.4, 0.2], [-1.25, -0.4, 0.5], [0.15, 0.76, 2.4], [-0.6, 0.78, -0.3], [1.0, 0.75, 0.9]]
+    .forEach(([x, z, ry], i) => figure(p, x, z, coats[i % coats.length], ry, false, i % 2 ? 0x2a2420 : 0x7a5a3a, 'idle', 0.1));
+  if (modern) {
+    // écrans des départs, boutiques sous les arcades du hall
+    p.box(0.012, 0.16, 0.012, -0.9, Y + 0.08, ZF + 0.1, 0x5d6878); p.box(0.5, 0.1, 0.016, -0.9, Y + 0.24, ZF + 0.1, 0x2e3c48); p.box(0.46, 0.07, 0.004, -0.9, Y + 0.255, ZF + 0.11, 0xffb84a, 0, true);
+    for (const x of [0.75, 1.2]) { p.box(0.36, 0.2, 0.02, x, Y + 0.08, HZ0 - 0.02, 0x2e3c48); p.box(0.32, 0.14, 0.006, x, Y + 0.1, HZ0 - 0.032, 0xfff1c9, 0, true); }
+  }
+  // l'hôtel sur la rue : brique rouge, trois étages de fenêtres gothiques, bandeaux de pierre, toit d'ardoise et lucarnes
+  const hz = 1.13, D = 0.5, H = 0.62, zf = hz + D / 2;
+  p.box(2.96, H, D, 0, Y, hz, brick);
+  stones(p, 0, zf, 2.96, Y, Y + H, 0, dark(brick, 0.86), 0.4, 512);
+  for (const y of [Y, Y + 0.22, Y + 0.42, Y + H - 0.01]) p.box(2.98, 0.025, D + 0.02, 0, y, hz, stoneC);
+  roof(p, 0, Y + H, hz, { w: 2.96, d: D, h: 0.3, color: slate, wall: brick, courses: true, len: 2.98, ov: 0.03 });
+  const xs = [-1.32, -1.1, -0.88, -0.66, -0.44, 0.4, 0.62, 0.84];
+  for (const [y, h] of [[Y + 0.05, 0.12], [Y + 0.27, 0.11], [Y + 0.47, 0.09]] as number[][]) {
+    windows(p, xs, y, zf + 0.01, 0.08, h, stoneC);
+    for (const x of xs) p.gable(0.1, 0.04, 0.03, x, y + h + 0.012, zf + 0.012, stoneC);
+  }
+  // lucarnes à pignon et pinacles
+  for (const x of [-1.1, -0.66, 0.62]) { p.box(0.14, 0.12, 0.1, x, Y + H + 0.02, zf - 0.08, brick); p.gable(0.16, 0.08, 0.12, x, Y + H + 0.14, zf - 0.08, slate, Math.PI / 2); windows(p, [x], Y + H + 0.04, zf - 0.025, 0.06, 0.07, stoneC); }
+  for (let x = -1.4; x <= 0.5; x += 0.47) { p.cyl(0.02, 0.025, 0.08, 6, x, Y + H, zf - 0.01, stoneC); p.cone(0.025, 0.1, 6, x, Y + H + 0.08, zf - 0.01, slate); }
+  // le porche central : grand arc de pierre, porte, marquise
+  const ex = -0.02;
+  p.box(0.4, 0.4, 0.06, ex, Y, zf + 0.03, stoneC);
+  p.box(0.24, 0.26, 0.02, ex, Y, zf + 0.065, 0x4a3a2e);
+  p.add(new THREE.CylinderGeometry(0.12, 0.12, 0.02, 12, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), ex, Y + 0.26, zf + 0.065, 0x4a3a2e);
+  p.gable(0.44, 0.14, 0.08, ex, Y + 0.4, zf + 0.03, stoneC, Math.PI / 2);
+  p.add(new THREE.BoxGeometry(0.6, 0.014, 0.16), ex, Y + 0.32, zf + 0.14, modern ? 0x3a4a5a : 0x3f5a4a, 0, false, 0, -0.12);
+  p.box(0.36, 0.05, 0.012, ex, Y + 0.44, zf + 0.075, 0x3f5a4a); for (let k = 0; k < 6; k++) p.box(0.03, 0.025, 0.004, ex - 0.1 + k * 0.04, Y + 0.452, zf + 0.082, C.gold);
+  // la tour de l'horloge, haute et fine, horloges sur trois faces, flèche d'ardoise et ses clochetons
+  const tx = 1.16, tz = 1.12, TW = 0.34, TH = 1.62;
+  p.box(TW, TH, TW, tx, Y, tz, dark(brick, 0.95));
+  stones(p, tx, tz + TW / 2, TW, Y, Y + TH, 0, dark(brick, 0.8), 0.45, 513);
+  for (const y of [Y + 0.42, Y + 0.85, Y + 1.15, Y + TH]) p.box(TW + 0.03, 0.025, TW + 0.03, tx, y, tz, stoneC);
+  for (const y of [Y + 0.5, Y + 0.68, Y + 0.93]) windows(p, [tx], y, tz + TW / 2 + 0.01, 0.06, 0.12, stoneC);
+  for (const [dx, dz, ry] of [[0, TW / 2 + 0.006, 0], [-TW / 2 - 0.006, 0, -Math.PI / 2], [TW / 2 + 0.006, 0, Math.PI / 2]] as number[][]) {
+    p.add(new THREE.CylinderGeometry(0.11, 0.11, 0.014, 18).rotateX(Math.PI / 2).rotateY(ry), tx + dx, Y + 1.38, tz + dz, C.white, 0, true);
+    p.add(new THREE.CylinderGeometry(0.122, 0.122, 0.01, 18).rotateX(Math.PI / 2).rotateY(ry), tx + dx * 0.99, Y + 1.38, tz + dz * 0.99, C.gold);
+    p.add(new THREE.BoxGeometry(0.008, 0.075, 0.006).rotateY(ry), tx + dx * 1.05, Y + 1.41, tz + dz * 1.05, 0x2a2a2a);
+    p.add(new THREE.BoxGeometry(0.055, 0.008, 0.006).rotateY(ry), tx + dx * 1.05, Y + 1.38, tz + dz * 1.05, 0x2a2a2a);
+  }
+  p.pyramid(TW + 0.02, 0.5, TW + 0.02, tx, Y + TH + 0.02, tz, slate);
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { p.cyl(0.02, 0.025, 0.08, 6, tx + dx * TW / 2, Y + TH + 0.02, tz + dz * TW / 2, stoneC); p.cone(0.026, 0.12, 6, tx + dx * TW / 2, Y + TH + 0.1, tz + dz * TW / 2, slate); }
+  p.box(0.01, 0.14, 0.01, tx, Y + TH + 0.5, tz, C.gold);
+  // la petite tour, de l'autre côté de la façade
+  const sx = -1.3;
+  p.box(0.24, 0.92, 0.24, sx, Y, 1.2, dark(brick, 0.95));
+  for (const y of [Y + 0.42, Y + 0.92]) p.box(0.27, 0.025, 0.27, sx, y, 1.2, stoneC);
+  windows(p, [sx], Y + 0.6, 1.2 + 0.13, 0.06, 0.14, stoneC);
+  p.pyramid(0.26, 0.34, 0.26, sx, Y + 0.94, 1.2, slate);
+  // réverbères du parvis
+  for (const x of [-0.5, 0.45]) { p.cyl(0.008, 0.01, 0.34, 5, x, Y, 1.5 - 0.05, 0x3c4a44); p.box(0.04, 0.05, 0.04, x, Y + 0.34, 1.45, 0xffe2a0, 0, true); }
+}
+
 /** Croix rouge sur fond blanc, face à +z, centrée en (x, y, z) */
 function redCross(p: Parts, x: number, y: number, z: number, s = 1) {
   p.box(0.16 * s, 0.16 * s, 0.015, x, y - 0.08 * s, z, C.white);
@@ -11005,7 +11142,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'temple': temple(p, Math.max(1, age)); break;
     case 'mill': mill(p, Math.max(2, age)); break;
     case 'landmark': landmark(p, Math.max(2, age), o.v); break;
-    case 'terminal': terminal(p, Math.max(3, age)); break;
+    case 'terminal': if (size >= 3) terminalBig(p, Math.max(3, age)); else terminal(p, Math.max(3, age)); break;
     case 'station': station(p, Math.max(3, age)); break;
     case 'lamp': lamp(p, age); break;
     case 'pier': pier(p, age, o); break;

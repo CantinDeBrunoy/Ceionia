@@ -1,5 +1,5 @@
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
-import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES } from '../build/catalog';
+import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building } from '../build/catalog';
 import { Sim, NeedId } from '../sim/sim';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
@@ -17,7 +17,8 @@ import { effectSummary, splitIntro, mandatoriesFor, DestKind, Mission, Choice, M
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
 import { CAMP_QUESTS } from '../sim/depths';
-import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE } from '../sim/economy';
+import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
+import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
@@ -99,6 +100,39 @@ function trainWhere(r: Railway, tr: Train) {
   return next ? `de ${name} vers ${r.stopName(next.b)}` : `parti de ${name}`;
 }
 const dot = (c: number) => `<i class="lineDot" style="background:${hex(c)}"></i>`;
+
+/**
+ * Ce que le rail apporte à ce bâtiment, pour sa fiche : une gare de marchandises voisine à un atelier ou une carrière (ou
+ * ce qu'il faudrait pour en avoir une), une gare de voyageurs au cosmodrome ; pour une gare, les bâtiments qu'elle sert
+ */
+function railStat(h: UIHost, b: Building): string | null {
+  const w = h.world, r = h.railway, want = railWant(b.kind), t = ic('train', 14, 2);
+  if (want === 'freight') {
+    const st = railStation(w, b);
+    return st ? `${t} Servi par la gare de marchandises voisine (${r.stopName(st)}) : produit ${Math.round(FREIGHT_BONUS * 100)} % de plus`
+      : `${t} Une gare à ${RAIL_REACH} cases au plus, desservie par un train de marchandises, le ferait produire ${Math.round(FREIGHT_BONUS * 100)} % de plus`;
+  }
+  if (want === 'passenger') {
+    const st = railStation(w, b);
+    return st ? `${t} Servi par la gare de voyageurs voisine (${r.stopName(st)}) : les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite`
+      : `${t} Une gare à ${RAIL_REACH} cases au plus, desservie par un train de voyageurs, y amènerait les équipes : expéditions spatiales plus sûres et lancements préparés plus vite`;
+  }
+  if (!isStation(b)) return null;
+  const near = [...w.buildings.values()].filter((o) => railWant(o.kind) && gap(o, b) <= RAIL_REACH);
+  if (!near.length) return null;
+  const names = [...new Set(near.map((o) => KINDS[o.kind].names[Math.max(o.age, KINDS[o.kind].minAge)].toLowerCase()))].join(', ');
+  const lines = r.linesAt(b), freight = lines.some((l) => l.freight), pass = lines.some((l) => !l.freight);
+  const prod = near.some((o) => railWant(o.kind) === 'freight'), space = near.some((o) => railWant(o.kind) === 'passenger');
+  const served = (prod && freight) || (space && pass);
+  return served ? `${t} Sert ses voisins : ${names}`
+    : `${t} À côté : ${names}. ${prod ? 'Une ligne de marchandises d’ici les ferait produire 50 % de plus' : 'Une ligne de voyageurs d’ici y amènerait les équipes'} (bouton 📦 / 🧳 d’une ligne : marchandises ou voyageurs).`;
+}
+/** Le conseil du rail sur la fiche d'un bâtiment qu'on s'apprête à bâtir */
+function railTip(k: KindId) {
+  const want = railWant(k);
+  return want === 'freight' ? `<p class="perk">🚂 Posé à ${RAIL_REACH} cases au plus d’une gare desservie par un train de marchandises, il produit ${Math.round(FREIGHT_BONUS * 100)} % de plus.</p>`
+    : want === 'passenger' ? `<p class="perk">🚂 Une gare de voyageurs à ${RAIL_REACH} cases au plus y amène les équipes : expéditions spatiales plus sûres et lancements préparés plus vite.</p>` : '';
+}
 const riskLabel = (r: number) => (r <= 0.12 ? 'faible' : r <= 0.22 ? 'mesuré' : r <= 0.32 ? 'élevé' : 'très élevé');
 const pct = (r: number) => `${Math.round(r * 100)} %`;
 const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
@@ -190,7 +224,7 @@ const RES_META: Record<Resource, { label: string; icon: string; use: string; mor
   ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; les expéditions armées en remontent du monde souterrain.' },
   brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’époque moderne et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
   crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
-  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les blindés de l’expédition armée.', more: 'La raffinerie en tire du pétrole brut des puits.' },
+  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage) et les blindés de l’expédition armée.', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 50 % de plus.' },
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
@@ -662,6 +696,7 @@ export class UI {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
       return `Débloqué par l’expédition « ${m?.title ?? d.reqMission} »`;
     }
+    if (d.reqKind && !h.sim.built(d.reqKind)) return `Il faut d’abord « ${h.sim.nameOf(d.reqKind)} » au village`;
     return null;
   }
 
@@ -690,7 +725,7 @@ export class UI {
     // les grands bâtiments se paient en bois et en pierre, tous en défi (sauf en ressources illimitées) ; le premier bûcheron du défi est offert
     const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
-      ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}`}
+      ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois${cost.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`}`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
       ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés'} · R : tourner · Échap : lâcher</p>` : ''}`;
   }
@@ -711,15 +746,20 @@ export class UI {
       for (const k of list) count.set(k, (count.get(k) ?? 0) + 1);
       stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => `${n} ${names[k][n > 1 ? 1 : 0]}`).join(', ')}` : `${ic('pen', 14, 2)} aucune bête pour l’instant`);
     }
-    if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${YIELD.brickworks!.brick![a] ?? 0} briques cuites par jour · ${Math.floor(h.world.brick)} en réserve au village`);
-    if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${YIELD.oilwell!.crude![a] ?? 0} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
-    if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);
+    if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${(YIELD.brickworks!.brick![a] ?? 0) * railBoost(h.world, b)} briques cuites par jour · ${Math.floor(h.world.brick)} en réserve au village`);
+    if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${(YIELD.oilwell!.crude![a] ?? 0) * railBoost(h.world, b)} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
+    if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE * railBoost(h.world, b)} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE * railBoost(h.world, b)} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);
     if (b.kind === 'outpost') stats.push(`${ic('outpost', 14, 2)} ${h.expeditions.held()} cases de galeries tenues sous terre · camp niveau ${h.expeditions.camp()}`);
+    if (b.kind === 'carworks' && !h.world.unlimited) stats.push(h.expeditions.cars() ? `${ic('fuel', 14, 2)} Les voitures brûlent ${CAR_FUEL} carburant par jour · ${Math.floor(h.world.fuel)} au village` : `${ic('fuel', 14, 2)} Plus de carburant : les voitures restent au garage. La raffinerie en tire du pétrole brut des puits.`);
+    // ce que le rail lui apporte (ou lui apporterait), et pour une gare, les bâtiments qu'elle sert
+    const railLine = railStat(h, b);
+    if (railLine) stats.push(railLine);
     // gare ou avant-poste : les lignes qui s'y arrêtent, où en sont leurs trains ; en tracer une nouvelle d'ici
     const r = h.railway, stop = isStation(b) || b.kind === 'outpost' ? r.stopOf(b) : null, lines = stop ? r.linesAt(b) : [];
     const rails = stop ? `<div class="rails"><b>${ic('train', 14, 2)} Chemin de fer</b>${lines.map((l) => {
       const tr = r.trains.get(l.id);
-      return `<div class="rline">${dot(l.color)}<div class="grow"><span>${r.lineLabel(l)}</span><small>${tr ? trainWhere(r, tr) : ''}${tr && tr.crew.length ? ` · ${tr.crew.length} mineurs au fond` : ''}</small></div>
+      return `<div class="rline">${dot(l.color)}<div class="grow"><span>${r.lineLabel(l)}</span><small>${l.freight ? 'Marchandises' : 'Voyageurs'}${tr ? ` · ${trainWhere(r, tr)}` : ''}${tr && tr.crew.length ? ` · ${tr.crew.length} mineurs au fond` : ''}</small></div>
+        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? 'Train de marchandises : les ateliers et carrières à côté de ses gares produisent 50 % de plus. Cliquer pour en faire un train de voyageurs' : 'Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises'}" aria-label="${l.freight ? 'Train de marchandises' : 'Train de voyageurs'}">${l.freight ? '📦' : '🧳'}</button>
         <button data-act="follow:${l.id}" title="Suivre le train" aria-label="Suivre le train">${ic('eye', 15, 2)}</button><button data-act="edit:${l.id}" title="Modifier la ligne : ses arrêts et le tracé de sa voie" aria-label="Modifier la ligne">${ic('road', 15, 2)}</button><button data-act="drop:${l.id}" title="Fermer la ligne" aria-label="Fermer la ligne">${ic('close', 15, 2)}</button></div>`;
     }).join('')}<button data-act="newline" class="newline">${ic('train', 15, 2)} Nouvelle ligne depuis ${b.kind === 'outpost' ? 'cet avant-poste' : 'cette gare'}</button></div>`
       : b.kind === 'outpost' && h.sim.age >= 3 ? `<p class="stat">${ic('train', 14, 2)} Cet avant-poste n’a pas la place d’un quai à son pied : le train ne peut pas s’y arrêter.</p>` : '';
@@ -727,6 +767,8 @@ export class UI {
     const ups = UPGRADES.filter((u) => u.from === b.kind && h.sim.age >= KINDS[u.to].minAge).map((u) => {
       const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
       const locked = to.reqMission && !h.expeditions.state.done.includes(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
+      const first = !locked && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
+      if (first) return `<button disabled title="Il faut d’abord « ${first} » au village">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${first} d’abord</small></button>`;
       return locked ? `<button disabled title="Débloqué par l’expédition « ${locked} »">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${locked}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} Améliorer : ${name}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
     }).join('');
@@ -748,6 +790,7 @@ export class UI {
       else if (act === 'newline') { h.audio.sfxClick(); h.startRailEdit({ stop: b.id }); }
       else if (act?.startsWith('up:')) tl.upgradeSelected(act.slice(3) as KindId);
       else if (act?.startsWith('follow:')) h.followTrain(+act.slice(7));
+      else if (act?.startsWith('cargo:')) { const l = h.world.lines.find((x) => x.id === +act.slice(6)); if (l) { h.audio.sfxClick(); h.railway.setFreight(l.id, !l.freight); this.selKey = ''; this.renderSelection(); } }
       else if (act?.startsWith('edit:')) { h.audio.sfxClick(); h.startRailEdit({ line: +act.slice(5) }); }
       else if (act?.startsWith('drop:')) {
         const l = h.world.lines.find((x) => x.id === +act.slice(5));
@@ -818,7 +861,7 @@ export class UI {
     const items: [Resource, string, string][] = [['wood', 'tree', 'Bois'], ['stone', 'rock', 'Pierre'], ['ore', 'pickaxe', 'Minerai']];
     // les briques paraissent avec la briqueterie, dès l'âge industriel (ou dès qu'on en a : une partie plus ancienne)
     if (this.host.sim.age >= 3 || w.brick >= 1 || day.brick) items.push(['brick', 'brick', 'Briques']);
-    if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel) items.push(['crude', 'crude', 'Brut'], ['fuel', 'fuel', 'Carburant']);
+    if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel || this.host.expeditions.state.done.includes('oil')) items.push(['crude', 'crude', 'Brut'], ['fuel', 'fuel', 'Carburant']);
     const key = `${w.unlimited}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
     if (key === this.resKey) return;
     this.resKey = key;
@@ -827,7 +870,7 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}/j`;
-    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments (les galeries tenues du monde souterrain en rapportent aussi)', ore: ' — pour passer les âges et s’équiper ; les filons abattus du monde souterrain en rapportent chaque jour (onglet Profondeurs)', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
+    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments (les galeries tenues du monde souterrain en rapportent aussi)', ore: ' — pour passer les âges et s’équiper ; les filons abattus du monde souterrain en rapportent chaque jour (onglet Profondeurs)', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les automobiles et les blindés de l’expédition armée' };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');

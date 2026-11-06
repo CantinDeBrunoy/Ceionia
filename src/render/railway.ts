@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World, N } from '../world/world';
 import type { Streams } from './streams';
 import { Building, sizeOf } from '../build/catalog';
-import { Railway, Train, Stop, Seg, Leg, TRAIN_LEN, OVER } from '../sim/railway';
+import { Railway, Train, Stop, Seg, Leg, TRAIN_LEN, OVER, stopKey } from '../sim/railway';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { Puffs } from './particles';
@@ -18,6 +18,9 @@ const CARS: { kind: 'loco' | 'coach' | 'wagon'; at: number; half: number }[] = [
   { kind: 'wagon', at: 1.58, half: 0.1 },
   { kind: 'loco', at: 2.04, half: 0.14 },
 ];
+/** Le train de marchandises, aux mêmes places : un fourgon couvert au lieu de la voiture, un wagon-citerne, un tombereau */
+type CarKind = 'loco' | 'coach' | 'wagon' | 'van' | 'tank';
+const FREIGHT: CarKind[] = ['loco', 'van', 'tank', 'wagon', 'loco'];
 const SMOKE = new THREE.Color(0xdcd8d0);
 
 /** Petit assembleur de géométrie colorée : quadrilatères et pavés orientés, sans index */
@@ -168,6 +171,46 @@ function wagonGeo(age: number, loaded: boolean) {
   return p.build(false);
 }
 
+/**
+ * Fourgon de marchandises (long comme la voiture des voyageurs) : caisse de planches rouge sombre à toit bombé et porte
+ * coulissante à l'âge industriel ; conteneur bleu sur wagon plat à l'époque moderne ; bandeau à la couleur de la ligne
+ */
+function vanGeo(age: number, line: number) {
+  if (age >= 5) return wagonGeo(age, true);
+  const p = new Parts();
+  p.box(0.16, 0.03, 0.4, 0, 0.05, 0, 0x3c3c40);
+  if (age >= 4) {
+    // conteneur nervuré sur son wagon plat
+    p.box(0.15, 0.15, 0.36, 0, 0.08, 0, 0x3a6ab8);
+    for (let k = 0; k < 7; k++) for (const s of [-1, 1]) p.box(0.004, 0.14, 0.012, s * 0.076, 0.085, -0.15 + k * 0.05, dark(0x3a6ab8, 0.8));
+    p.box(0.152, 0.012, 0.362, 0, 0.23, 0, line);
+    p.box(0.14, 0.13, 0.004, 0, 0.09, 0.181, dark(0x3a6ab8, 0.85));
+  } else {
+    const wood = 0x7a3a2e;
+    p.box(0.15, 0.15, 0.38, 0, 0.08, 0, wood);
+    for (let k = 0; k < 5; k++) for (const s of [-1, 1]) p.box(0.004, 0.15, 0.008, s * 0.076, 0.08, -0.16 + k * 0.08, dark(wood, 0.75));
+    p.add(new THREE.CylinderGeometry(0.08, 0.08, 0.38, 10, 1, false, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.3, 1), 0, 0.23, 0, 0x8a8a86);
+    for (const s of [-1, 1]) { p.box(0.006, 0.11, 0.12, s * 0.078, 0.095, 0, dark(wood, 0.85)); p.box(0.008, 0.012, 0.14, s * 0.08, 0.2, 0, 0x3c3c40); }
+    p.box(0.152, 0.014, 0.382, 0, 0.12, 0, line);
+  }
+  for (const z of [-0.13, 0.13]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 8).rotateZ(Math.PI / 2), s * 0.075, 0.035, z, 0x2a2a2e);
+  return p.build(false);
+}
+
+/** Wagon-citerne : la citerne couchée sur son châssis, cerclée, son dôme et son échelle (noire, puis blanche à l'époque moderne) */
+function tankGeo(age: number) {
+  if (age >= 5) return wagonGeo(age, true);
+  const p = new Parts(), tank = age >= 4 ? 0xe8e8e4 : 0x2a2a2e;
+  p.box(0.15, 0.03, 0.32, 0, 0.05, 0, 0x3c3c40);
+  p.add(new THREE.CylinderGeometry(0.068, 0.068, 0.3, 12).rotateX(Math.PI / 2), 0, 0.15, 0, tank);
+  for (const z of [-1, 1]) p.add(new THREE.SphereGeometry(0.068, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX((z * Math.PI) / 2).scale(1, 1, 0.35), 0, 0.15, z * 0.15, tank);
+  for (const z of [-0.08, 0.08]) p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.012, 12).rotateX(Math.PI / 2), 0, 0.15, z, age >= 4 ? 0xd8553c : 0x5a5a5e);
+  p.cyl(0.025, 0.025, 0.03, 8, 0, 0.21, 0, tank);
+  p.box(0.004, 0.12, 0.02, 0.07, 0.08, 0.04, 0x8a8a86);
+  for (const z of [-0.1, 0.1]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 8).rotateZ(Math.PI / 2), s * 0.07, 0.035, z, 0x2a2a2e);
+  return p.build(false);
+}
+
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
 interface Car { group: THREE.Group; meshes: THREE.Mesh[]; variants: { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null }[]; shown: number }
@@ -266,10 +309,11 @@ export class RailView {
     const w = this.world;
     if (!s.post) {
       // comme la vue des bâtiments : le bâtiment se pose à la médiane des hauteurs des coins de son emprise
-      const hs: number[] = [];
-      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) hs.push(w.h(s.b.x + i, s.b.z + j));
+      const hs: number[] = [], n = sizeOf(s.b);
+      for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) hs.push(w.h(s.b.x + i, s.b.z + j));
       hs.sort((p, q) => p - q);
-      return hs[4] + 0.044;
+      const mid = hs.length >> 1;
+      return (hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2) + 0.044;
     }
     let y = -Infinity;
     for (let t = -s.half - OVER; t <= s.half + OVER + 1e-6; t += 0.2) y = Math.max(y, w.hAt(s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t));
@@ -455,7 +499,7 @@ export class RailView {
     // l'emprise de la voie est dégagée : ni arbres ni rochers sur le ballast, sous la caténaire ou contre les poteaux
     for (const g of net.segs) for (let s = 0; s <= g.len; s += 0.25) { const [x, z] = along(g.pts, g.cum, s); w.clearTrees(x, z, 0.42); }
     for (const s of net.stops) {
-      const y = this.stopY.get(s.b.id)!, used = net.used.get(s.b.id) ?? new Set<number>(), h = Math.atan2(s.u[0], s.u[1]);
+      const y = this.stopY.get(s.b.id)!, used = net.used.get(stopKey(s)) ?? new Set<number>(), h = Math.atan2(s.u[0], s.u[1]);
       const pt = (t: number): [number, number, number] => [s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t, h];
       if (s.post) {
         // embranchement de l'avant-poste, quai de planches côté murs, wagonnet et tas de minerai
@@ -473,7 +517,22 @@ export class RailView {
         for (const e of [1, -1]) if (!used.has(e)) { const [bx, bz] = pt(e * (s.half + OVER)); buffer(bx, y, bz, h); }
       } else {
         // gare : à l'époque moderne, la caténaire passe au-dessus de la voie du quai, tendue entre deux portiques aux bouts
-        // du quai, où elle rejoint celle des lignes
+        // du quai, où elle rejoint celle des lignes (la gare centrale a ses voies, ses butoirs et sa halle dans son modèle)
+        if (s.ends) {
+          for (const e of s.ends) {
+            if (!used.has(e)) continue;
+            const [qx, qz] = pt(e * (s.half + 0.75)), cx = Math.cos(h), cz = -Math.sin(h), sx = qx - cx * 0.3, sz = qz - cz * 0.3, gy = w.hAt(sx, sz);
+            m.block(sx, gy, sz, h, 0.024, 0.5, 0.024, 0x3c3c40);
+            m.block(sx, gy + 0.4, sz, h, 0.06, 0.14, 0.035, 0x2a2a2e);
+            m.block(sx, gy + 0.54, sz, h, 0.07, 0.012, 0.045, 0x2a2a2e);
+            const go = hash2(s.b.id, s.lane, 97) < 0.5;
+            (go ? m : gm).block(sx, gy + 0.49, sz, h, 0.034, 0.03, 0.04, go ? 0x5a2a26 : 0xff4a3a);
+            (go ? gm : m).block(sx, gy + 0.43, sz, h, 0.034, 0.03, 0.04, go ? 0x3aff7a : 0x1e4a2a);
+            if (age === 3) m.block(sx + cx * 0.06, gy + 0.36, sz + cz * 0.06, h, 0.12, 0.02, 0.012, 0xd8553c);
+            lights.push(sx, sz);
+          }
+          continue;
+        }
         if (age >= 4) {
           const cx = Math.cos(h), cz = -Math.sin(h), L = s.half + 0.02, n = Math.ceil((2 * L) / STEP);
           const P = (t: number) => (o: number, dy: number) => { const [x, z] = pt(t); return [x + cx * o, y + dy, z + cz * o]; };
@@ -527,29 +586,33 @@ export class RailView {
 
   // ---------- Les trains ----------
 
-  private geo(kind: 'loco' | 'coach' | 'wagon', variant: number, color: number) {
+  private geo(kind: CarKind, variant: number, color: number) {
     const key = `${kind}|${variant}|${this.age}|${color}`;
     let g = this.geos.get(key);
     if (!g) {
-      g = kind === 'loco' ? locoGeo(this.age, color) : kind === 'coach' ? coachGeo(this.age, variant ? 6 : 0, color) : wagonGeo(this.age, !!variant);
+      g = kind === 'loco' ? locoGeo(this.age, color) : kind === 'coach' ? coachGeo(this.age, variant ? 6 : 0, color) : kind === 'van' ? vanGeo(this.age, color) : kind === 'tank' ? tankGeo(this.age) : wagonGeo(this.age, !!variant);
       this.geos.set(key, g);
     }
     return g;
   }
 
+  /** Voitures du train de cette ligne : de voyageurs (et de mineurs), ou de marchandises */
+  private kinds(tr: Train): CarKind[] { return tr.line.freight ? FREIGHT : CARS.map((d) => d.kind); }
+
   private show(tr: Train): TrainShow {
-    const key = `${this.age}|${tr.line.color}`;
+    const key = `${this.age}|${tr.line.color}|${!!tr.line.freight}`;
     let sh = this.shows.get(tr.line.id);
     if (sh?.key === key) return sh;
     if (sh) this.group.remove(sh.group);
-    const group = new THREE.Group();
-    const cars = CARS.map((d) => {
-      const g = this.geo(d.kind, 0, tr.line.color), cg = new THREE.Group();
+    const group = new THREE.Group(), kinds = this.kinds(tr);
+    const cars = CARS.map((d, i) => {
+      // le tombereau du train de marchandises roule toujours chargé
+      const g = this.geo(kinds[i], kinds[i] === 'wagon' && tr.line.freight ? 1 : 0, tr.line.color), cg = new THREE.Group();
       const body = new THREE.Mesh(g.body, mats.body), glow = new THREE.Mesh(g.glow ?? new THREE.BufferGeometry(), mats.glow);
       body.castShadow = true;
       cg.add(body, glow);
       group.add(cg);
-      return { group: cg, meshes: [body, glow], variants: [], shown: 0 };
+      return { group: cg, meshes: [body, glow], variants: [], shown: kinds[i] === 'wagon' && tr.line.freight ? 1 : 0 };
     });
     sh = { group, cars, key, puffT: 0 };
     this.group.add(group);
@@ -560,7 +623,7 @@ export class RailView {
   /** Chaque voiture posée sur ses deux essieux, penchée dans les pentes ; fumée de la locomotive de tête */
   private place(tr: Train, dt: number) {
     const sh = this.show(tr), leg = tr.leg!, r = this.rail, k = tr.flip ? -1 : 1;
-    const seated = r.seated(tr), loaded = tr.cargo.ore + tr.cargo.stone > 0;
+    const seated = r.seated(tr), loaded = tr.line.freight || tr.cargo.ore + tr.cargo.stone > 0, kinds = this.kinds(tr);
     CARS.forEach((d, i) => {
       const car = sh.cars[i], s = tr.s + (d.at - TRAIN_LEN / 2) * k;
       const f = r.at(leg, s + d.half), b = r.at(leg, s - d.half), yf = this.legY(leg, s + d.half), yb = this.legY(leg, s - d.half);
@@ -571,10 +634,10 @@ export class RailView {
       // les locomotives regardent vers l'extérieur du train
       const out = (d.at - TRAIN_LEN / 2) * k < 0;
       for (const mesh of car.meshes) mesh.rotation.y = d.kind === 'loco' && out ? Math.PI : 0;
-      const want = d.kind === 'coach' ? +(seated > 0) : d.kind === 'wagon' ? +loaded : 0;
+      const kind = kinds[i], want = kind === 'coach' ? +(seated > 0) : kind === 'wagon' ? +loaded : 0;
       if (want !== car.shown) {
         car.shown = want;
-        const g = this.geo(d.kind, want, tr.line.color);
+        const g = this.geo(kind, want, tr.line.color);
         car.meshes[0].geometry = g.body;
         car.meshes[1].geometry = g.glow ?? new THREE.BufferGeometry();
       }

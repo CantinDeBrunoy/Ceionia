@@ -501,6 +501,7 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 #selCard .rline span { display: block; font-weight: 600; }
 #selCard .rline small { display: block; color: var(--ink2); }
 #selCard .rline button { padding: 4px 6px; }
+#selCard .rline button.ltype { font-size: 14px; line-height: 1; }
 #selCard .newline { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; }
 #railEdit { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); width: min(460px, 92vw); padding: 10px 14px 12px; font-size: 12.5px; z-index: 6; }
 #railEdit.show { display: block; animation: rise 0.16s ease-out; }

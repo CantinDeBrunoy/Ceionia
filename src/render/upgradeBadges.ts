@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World } from '../world/world';
-import { KINDS, UPGRADES, sizeOf } from '../build/catalog';
+import { KINDS, UPGRADES, sizeOf, lineOf } from '../build/catalog';
 import { priceIn, canPay } from '../sim/economy';
 
 /** La pastille : un disque doré et sa flèche vers le haut, dessinés une fois pour toutes */
@@ -49,6 +49,7 @@ export class UpgradeBadges {
         if (u.from !== b.kind) continue;
         const to = KINDS[u.to];
         if (age < to.minAge || (to.reqMission && !w.exp.done.includes(to.reqMission))) continue;
+        if (to.reqKind && ![...w.buildings.values()].some((o) => lineOf(to.reqKind!).includes(o.kind))) continue;
         if (!canPay(w, priceIn(w, u.to, age))) continue;
         const s = sizeOf(b);
         out.push({ x: b.x + s / 2, y: w.flatTarget(b.x, b.z, s) + 1.3 + s * 0.55, z: b.z + s / 2 });

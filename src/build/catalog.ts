@@ -29,6 +29,8 @@ export interface KindDef {
   perk?: string;
   /** mission d'expédition qu'il faut avoir réussie pour le bâtir */
   reqMission?: string;
+  /** bâtiment que le village doit déjà avoir pour le bâtir (l'usine automobile veut une raffinerie) */
+  reqKind?: KindId;
 }
 
 export const KINDS: Record<KindId, KindDef> = {
@@ -77,18 +79,19 @@ export const KINDS: Record<KindId, KindDef> = {
     reqMission: 'mine',
   },
   oilwell: {
-    id: 'oilwell', size: 1, minAge: 4, icon: '🛢️', cat: 'prod',
-    names: ['', '', '', '', 'Puits de pétrole', 'Forage automatisé'],
+    id: 'oilwell', size: 1, minAge: 3, icon: '🛢️', cat: 'prod',
+    names: ['', '', '', 'Puits de pétrole', 'Puits de pétrole', 'Forage automatisé'],
     desc: 'Un chevalet de pompage hoche la tête au-dessus d’un gisement et tire le pétrole brut des profondeurs, jour après jour.',
-    jobs: [0, 0, 0, 0, 2, 2],
-    perk: 'Ne se fore que sur un gisement de pétrole (les taches sombres où le brut suinte). Rapporte 4 barils de pétrole brut par jour, que la raffinerie change en carburant.',
+    jobs: [0, 0, 0, 2, 2, 2],
+    perk: 'Ne se fore que sur un gisement de pétrole (les taches sombres où le brut suinte). Rapporte chaque jour du pétrole brut (3 barils à l’âge industriel, 4 ensuite), que la raffinerie change en carburant.',
   },
   refinery: {
-    id: 'refinery', size: 3, minAge: 4, icon: '🏭', cat: 'prod',
-    names: ['', '', '', '', 'Raffinerie', 'Raffinerie de synthèse'],
+    id: 'refinery', size: 3, minAge: 3, icon: '🏭', cat: 'prod',
+    names: ['', '', '', 'Raffinerie', 'Raffinerie', 'Raffinerie de synthèse'],
     desc: 'Colonnes de distillation, grands réservoirs, torchère qui flambe et forêt de tuyaux : le pétrole brut des puits y devient du carburant.',
-    jobs: [0, 0, 0, 0, 14, 16],
-    perk: 'Grand bâtiment de 3 × 3 cases. Raffine chaque jour jusqu’à 12 barils de pétrole brut, qui donnent 9 de carburant : à l’époque moderne, les chars et les transports de troupes de l’expédition armée en ont besoin.',
+    jobs: [0, 0, 0, 12, 14, 16],
+    perk: 'Débloquée par l’expédition « L’or noir ». Grand bâtiment de 3 × 3 cases. Raffine chaque jour jusqu’à 12 barils de pétrole brut, qui donnent 9 de carburant : les automobiles du village roulent avec (il faut une raffinerie pour bâtir l’usine automobile), et à l’époque moderne les blindés de l’expédition armée.',
+    reqMission: 'oil',
   },
   brickworks: {
     id: 'brickworks', size: 2, minAge: 3, icon: '🧱', cat: 'prod',
@@ -109,14 +112,14 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', '', 'Petite gare', 'Gare moderne', 'Gare à grande vitesse'],
     desc: 'Un arrêt du chemin de fer : les voyageurs y montent et en descendent, les mineurs y prennent le train pour l’avant-poste.',
     jobs: [0, 0, 0, 3, 5, 6], joy: [0, 0, 0, 3, 4, 5],
-    perk: 'Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux.',
+    perk: 'Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux. Train de marchandises : briqueterie, mine, carrière, scierie, puits et raffinerie à 5 cases de la gare produisent 50 % de plus. Train de voyageurs : il amène les équipes au cosmodrome voisin.',
   },
   terminal: {
-    id: 'terminal', size: 2, minAge: 3, icon: '🚉', cat: 'service',
-    names: ['', '', '', 'Grande gare', 'Gare centrale', 'Gare intermodale'],
-    desc: 'La grande gare du village : les voyageurs y montent et en descendent, les mineurs y prennent le train pour l’avant-poste.',
-    jobs: [0, 0, 0, 8, 12, 14], joy: [0, 0, 0, 4, 6, 7],
-    perk: 'Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux.',
+    id: 'terminal', size: 3, minAge: 3, icon: '🚉', cat: 'service',
+    names: ['', '', '', 'Gare centrale', 'Gare centrale', 'Gare intermodale'],
+    desc: 'La très grande gare du village, toute de brique : façade gothique et sa haute tour de l’horloge sur la rue, et derrière, sous une immense halle de fer et de verre, trois voies où les trains de plusieurs lignes sont à quai ensemble.',
+    jobs: [0, 0, 0, 10, 14, 16], joy: [0, 0, 0, 5, 7, 8],
+    perk: 'Très grand bâtiment de 3 × 3 cases, qui demande des briques. Ses trois voies partent par l’arrière de la halle : tracez-en plusieurs lignes vers les autres gares (« Nouvelle ligne », sur sa fiche) pour former un réseau. Trains de marchandises : ateliers et carrières à 5 cases d’une gare produisent 50 % de plus. Trains de voyageurs : ils amènent les équipes au cosmodrome.',
   },
   harbor: {
     id: 'harbor', size: 3, minAge: 2, icon: '⚓', cat: 'prod',
@@ -316,8 +319,9 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', '', 'Usine automobile', 'Usine automobile', 'Usine de voitures volantes'],
     desc: 'Châssis, moteurs et carrosseries : les automobiles sortent de la chaîne, font un tour de piste d’essai et partent sur les routes. À l’âge futuriste, les bras robots montent des voitures volantes qui tournent autour du pylône d’essai.',
     jobs: [0, 0, 0, 14, 20, 26],
-    perk: 'Avec la course automobile gagnée, les voitures remplacent les charrettes sur les routes (les écuries gardent leurs chevaux pour la cavalerie).',
+    perk: 'Avec la course automobile gagnée, et une raffinerie au village, les voitures remplacent les charrettes sur les routes (les écuries gardent leurs chevaux pour la cavalerie). Les voitures roulent au carburant : 2 par jour pour chaque usine ; sans carburant, elles restent au garage.',
     reqMission: 'motorcar',
+    reqKind: 'refinery',
   },
   lab: {
     id: 'lab', size: 1, minAge: 3, icon: '⚗️', cat: 'service',
