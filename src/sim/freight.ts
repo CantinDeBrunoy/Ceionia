@@ -78,3 +78,19 @@ export function spaceRail(w: World) {
   for (const b of w.buildings.values()) if (PASSENGER_KINDS.includes(b.kind) && nearest(b, st)) return true;
   return false;
 }
+
+/** Un bâtiment que le rail sert, avec la gare qui le sert (pour l'animation de « boost ») */
+export interface Boosted { b: Building; station: Building; freight: boolean }
+
+/** Tous les bâtiments servis par une gare en ce moment (production boostée, ou cosmodrome relié aux voyageurs) */
+export function boostedBuildings(w: World): Boosted[] {
+  const st = allServed(w), out: Boosted[] = [];
+  if (!st.freight.length && !st.passenger.length) return out;
+  for (const b of w.buildings.values()) {
+    const want = railWant(b.kind);
+    if (!want) continue;
+    const station = nearest(b, st[want]);
+    if (station) out.push({ b, station, freight: want === 'freight' });
+  }
+  return out;
+}

@@ -109,12 +109,12 @@ function railStat(h: UIHost, b: Building): string | null {
   const w = h.world, r = h.railway, want = railWant(b.kind), t = ic('train', 14, 2);
   if (want === 'freight') {
     const st = railStation(w, b);
-    return st ? `${t} Servi par la gare de marchandises voisine (${r.stopName(st)}) : produit ${Math.round(FREIGHT_BONUS * 100)} % de plus`
+    return st ? `${t} ⚡ Boosté : servi par la gare de marchandises voisine (${r.stopName(st)}), dont le chariot fait la navette ; produit ${Math.round(FREIGHT_BONUS * 100)} % de plus`
       : `${t} Une gare à ${RAIL_REACH} cases au plus, desservie par un train de marchandises, le ferait produire ${Math.round(FREIGHT_BONUS * 100)} % de plus`;
   }
   if (want === 'passenger') {
     const st = railStation(w, b);
-    return st ? `${t} Servi par la gare de voyageurs voisine (${r.stopName(st)}) : les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite`
+    return st ? `${t} ⚡ Boosté : servi par la gare de voyageurs voisine (${r.stopName(st)}) ; les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite`
       : `${t} Une gare à ${RAIL_REACH} cases au plus, desservie par un train de voyageurs, y amènerait les équipes : expéditions spatiales plus sûres et lancements préparés plus vite`;
   }
   if (!isStation(b)) return null;
