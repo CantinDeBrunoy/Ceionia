@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { World, N, MAX_H, MIN_H, MOUNTAIN_H, SNOW_LINE, BIOME_DESERT, setMapSize, VEG_FIELD, VEG_GARDEN, VEG_VOLCANO, VR, VS } from '../src/world/world';
+import { World, N, MAX_H, MIN_H, MOUNTAIN_H, SNOW_LINE, BIOME_DESERT, setMapSize, VEG_FIELD, VEG_GARDEN, VEG_VOLCANO, VEG_FOREST, VR, VS } from '../src/world/world';
 import { findGardens, layoutGarden } from '../src/world/gardens';
 import { genHeights, newWorld, addDefaultDecor, MAPS } from '../src/world/mapgen';
-import { GEN, GEN_FIXED, GEN_PLAN, Zone, continentPlan, riverU } from '../src/world/continent';
+import { GEN, GEN_FIXED, GEN_PLAN, Zone, continentPlan, riverU, toPlan, fromPlan } from '../src/world/continent';
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
@@ -70,6 +70,20 @@ function continentOf(seed: number, gen = GEN) {
   return w;
 }
 
+/** Empreinte du relief de la graine 2026 en version 2, relevée avant l'arrivée de la version 3 */
+const PLAN2_SIG = 2006609.137;
+
+/** Case du plan d'une case du monde, selon l'orientation du continent de cette graine */
+function planCell(seed: number) {
+  const o = continentPlan(seed).orient;
+  return (x: number, z: number) => toPlan(o, x + 0.5, z + 0.5, N).map(Math.floor) as [number, number];
+}
+/** Case du monde d'une case du plan */
+function worldCell(seed: number) {
+  const o = continentPlan(seed).orient;
+  return (x: number, z: number) => fromPlan(o, x + 0.5, z + 0.5, N).map(Math.floor) as [number, number];
+}
+
 /** Étendues d'eau et de terre (cases voisines par un côté) : numéro de l'étendue de chaque case, taille, eau ou terre, au bord de la carte */
 function regions(w: World) {
   const id = new Int32Array(N * N).fill(-1), size: number[] = [], water: boolean[] = [], edge: boolean[] = [];
@@ -133,17 +147,18 @@ describe('continent tiré de la graine', () => {
 
   it('chaque continent garde ses contrées : montagnes enneigées, plateaux, lac et îlot, île volcanique, mesas, archipel, cinq biomes', () => {
     for (const seed of SEEDS) {
-      const w = shown(seed), g = regions(w), biomes = [0, 0, 0, 0, 0], isles = new Set<number>();
+      const w = shown(seed), g = regions(w), biomes = [0, 0, 0, 0, 0], isles = new Set<number>(), pc = planCell(seed);
       let snow = 0, terraces = 0, desert = 0, tables = 0, volcano = -1;
-      for (let z = 0; z < N; z++)
-        for (let x = 0; x < N; x++) {
-          const k = z * N + x, a = w.cellAvg(x, z), north = z < 0.45 * N;
+      for (let wz = 0; wz < N; wz++)
+        for (let wx = 0; wx < N; wx++) {
+          // les contrées se cherchent dans le repère du plan (le continent peut être tourné ou retourné)
+          const k = wz * N + wx, a = w.cellAvg(wx, wz), [x, z] = pc(wx, wz), north = z < 0.45 * N;
           if (w.veg[k] === VEG_VOLCANO) volcano = k;
           if (a < 0.08) continue;
           biomes[w.biome[k]]++;
           if (north && a > SNOW_LINE[0]) snow++;
           // replats des gradins, au nord-ouest
-          if (north && x < 0.42 * N && a > 1.2 && a < 6 && w.cellSlope(x, z) < 0.25) terraces++;
+          if (north && x < 0.42 * N && a > 1.2 && a < 6 && w.cellSlope(wx, wz) < 0.25) terraces++;
           // désert de l'est et tables de ses mesas
           if (x > 0.6 * N && z > 0.3 * N && z < 0.75 * N && w.biome[k] === BIOME_DESERT) { desert++; if (a > 2.2) tables++; }
           // îles de l'archipel, au sud-est
@@ -154,9 +169,10 @@ describe('continent tiré de la graine', () => {
       expect(desert).toBeGreaterThan(1500);
       expect(tables).toBeGreaterThan(150);
       expect(isles.size).toBeGreaterThanOrEqual(3);
-      // le volcan, au sud-ouest, sur son île
-      expect(volcano % N).toBeLessThan(0.4 * N);
-      expect(Math.floor(volcano / N)).toBeGreaterThan(0.65 * N);
+      // le volcan, au sud-ouest du plan, sur son île
+      const [vx, vz] = pc(volcano % N, Math.floor(volcano / N));
+      expect(vx).toBeLessThan(0.4 * N);
+      expect(vz).toBeGreaterThan(0.65 * N);
       expect(g.id[volcano]).not.toBe(g.main);
       // le grand lac, fermé, et son îlot
       const lakes = new Set(g.size.map((s, i) => (g.water[i] && !g.edge[i] && s > 400 ? i : -1)).filter((i) => i >= 0));
@@ -176,10 +192,12 @@ describe('continent tiré de la graine', () => {
 
   it('la rivière descend des montagnes jusqu’à la mer, et l’on trouve où bâtir au bord de l’eau', () => {
     for (const seed of SEEDS) {
-      const w = shown(seed), g = regions(w), r = continentPlan(seed).river;
+      const w = shown(seed), g = regions(w), r = continentPlan(seed).river, wc = worldCell(seed);
+      /** case du monde de la case (x, z) du plan */
+      const at = (x: number, z: number) => { const [a, b] = wc(x, z); return b * N + a; };
       // du massif à la côte, son lit est de l'eau qui rejoint la mer
       for (let z = Math.ceil((r.v + 0.1) * N); z < N - 4; z++) {
-        const x = Math.round(riverU(r, z / N) * N), bed = [0, -1, 1, -2, 2].map((d) => z * N + x + d).find((k) => g.water[g.id[k]]);
+        const x = Math.round(riverU(r, z / N) * N), bed = [0, -1, 1, -2, 2].map((d) => at(x + d, z)).find((k) => g.water[g.id[k]]);
         expect(bed).toBeDefined();
         expect(g.edge[g.id[bed!]]).toBe(true);
       }
@@ -189,7 +207,11 @@ describe('continent tiré de la graine', () => {
         let s = 0, c = 0;
         for (let z = Math.floor((v0 + i * len) * N); z < Math.floor((v0 + (i + 1) * len) * N); z++) {
           const rx = Math.round(riverU(r, z / N) * N);
-          for (let x = rx - 7; x <= rx + 7; x++) if (w.inCells(x, z) && !w.isWaterCell(x, z)) { s += w.cellAvg(x, z); c++; }
+          for (let x = rx - 7; x <= rx + 7; x++) {
+            if (x < 0 || x >= N) continue;
+            const k = at(x, z), kx = k % N, kz = Math.floor(k / N);
+            if (!w.isWaterCell(kx, kz)) { s += w.cellAvg(kx, kz); c++; }
+          }
         }
         return s / c;
       });
@@ -254,6 +276,31 @@ describe('continent tiré de la graine', () => {
     w2.updateVis();
     expect(w2.gen).toBe(GEN);
     expect(same(w.biome, w2.biome)).toBeGreaterThan(0.999);
+  });
+
+  it('d’une partie à l’autre, le continent se tourne ou se retourne, ses forêts changent, et la place du village reste libre', () => {
+    // huit orientations, presque toutes tirées sur vingt-quatre parties
+    const orients = new Set(Array.from({ length: 24 }, (_, i) => continentPlan(i + 1).orient));
+    expect(orients.size).toBeGreaterThanOrEqual(6);
+    for (let o = 0; o < 8; o++) expect(fromPlan(o, ...toPlan(o, 17, 120, 192), 192)).toEqual([17, 120]);
+    const forest: number[] = [];
+    for (const seed of SEEDS) {
+      const w = shown(seed), [sx, sz] = w.startSpot();
+      // la place du village, 3 × 3, près du milieu de la carte, sans arbres ni rochers à abattre
+      expect(Math.hypot(sx + 1.5 - N / 2, sz + 1.5 - N / 2)).toBeLessThan(20);
+      expect(w.canPlace('gather', sx, sz)).toBeNull();
+      for (let z = sz; z < sz + 3; z++) for (let x = sx; x < sx + 3; x++) expect(w.veg[w.ci(x, z)]).toBe(0);
+      let f = 0, land = 0;
+      for (let k = 0; k < N * N; k++) if (w.cellAvg(k % N, Math.floor(k / N)) > 0.45) { land++; if (w.veg[k] === VEG_FOREST) f++; }
+      forest.push(f / land);
+    }
+    // chaque partie a ses forêts, plus ou moins étendues
+    expect(Math.max(...forest) - Math.min(...forest)).toBeGreaterThan(0.03);
+  });
+
+  it('le générateur de la version 2 ne change pas', () => {
+    setMapSize(192);
+    expect(signature(genHeights(3, 2026, GEN_PLAN))).toBeCloseTo(PLAN2_SIG, 2);
   });
 });
 

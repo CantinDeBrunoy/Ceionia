@@ -5,11 +5,30 @@ import { mulberry32, smoothstep, clamp, lerp } from '../core/rng';
  * Versions du générateur du continent, sauvegardées avec la partie. Le relief est sauvegardé tel quel, mais le climat (donc
  * les biomes, et les zones du monde souterrain qui les suivent) se recalcule au chargement depuis la graine : chaque partie
  * garde la version qui l'a créée. 1 : agencement fixe, seuls les détails changent avec la graine (parties d'avant le plan) ;
- * 2 : agencement tiré de la graine (plan du continent)
+ * 2 : agencement tiré de la graine (plan du continent) ; 3 : plan plus libre (contrées, côte, rivière, relief), tourné ou
+ * retourné (huit orientations), lacs, forêts et bosquets en nombre variable
  */
-export const GEN_FIXED = 1, GEN_PLAN = 2;
+export const GEN_FIXED = 1, GEN_PLAN = 2, GEN_VAR = 3;
 /** Version des nouvelles parties */
-export const GEN = GEN_PLAN;
+export const GEN = GEN_VAR;
+
+/**
+ * Orientation du plan (version 3) : `o` de 0 à 7, bit 1 : miroir est-ouest, bit 2 : miroir nord-sud, bit 4 : échange des
+ * axes. Passe des coordonnées du monde (sommets de 0 à n) à celles du plan ; le milieu de la carte reste le milieu
+ */
+export function toPlan(o: number, x: number, z: number, n: number): [number, number] {
+  let a = o & 1 ? n - x : x, b = o & 2 ? n - z : z;
+  if (o & 4) [a, b] = [b, a];
+  return [a, b];
+}
+/** Inverse de `toPlan` : des coordonnées du plan à celles du monde */
+export function fromPlan(o: number, a: number, b: number, n: number): [number, number] {
+  if (o & 4) [a, b] = [b, a];
+  return [o & 1 ? n - a : a, o & 2 ? n - b : b];
+}
+
+/** Relief de fond des versions 1 et 2 : finesse et amplitude du bruit, bombement vers le cœur du continent */
+const RELIEF0 = { freq: 0.03, amp: 1.6, lift: 1.4 };
 
 /** Crêtes : 1 sur les lignes de crête, 0 dans les creux */
 const ridge = (s: Simplex, x: number, z: number, f: number) => 1 - Math.abs(s.noise2(x * f, z * f));
@@ -97,6 +116,10 @@ export interface ContinentPlan {
   river: { u: number; v: number; mouth: number; a1: number; k1: number; p1: number; a2: number; k2: number; p2: number };
   /** vent dominant (angle) : il oriente les dunes du désert */
   wind: number;
+  /** orientation du plan sur la carte (`toPlan`), 0 avant la version 3 */
+  orient: number;
+  /** relief de fond (version 3 ; absent : celui des versions 1 et 2) */
+  relief?: { freq: number; amp: number; lift: number };
 }
 
 /** Distance au centre du continent, rapportée à son rayon (côte vers 1) : ellipse tournée, qui s'avance en caps ou se creuse en baies selon l'angle */
@@ -148,35 +171,47 @@ function fits(p: ContinentPlan) {
 /**
  * Tire le plan du continent de la graine. L'agencement reste celui du continent d'origine (plateaux au nord-ouest, montagnes
  * au nord, lac à l'ouest, île volcanique au sud-ouest, mesas à l'est, archipel au sud-est, rivière vers la côte sud), mais
- * chaque contrée bouge, grandit ou rapetisse, s'étire et tourne ; un tirage qui ne convient pas (`fits`) est refait
+ * chaque contrée bouge, grandit ou rapetisse, s'étire et tourne ; un tirage qui ne convient pas (`fits`) est refait. La
+ * version 3 (`gen`) tire de plus larges écarts, un relief de fond propre à la partie et une orientation du plan sur la carte
  */
-export function continentPlan(seed: number): ContinentPlan {
-  const rnd = mulberry32(seed * 977 + 4049);
+export function continentPlan(seed: number, gen = GEN): ContinentPlan {
+  const v3 = gen >= GEN_VAR;
+  const rnd = v3 ? mulberry32(seed * 991 + 7121) : mulberry32(seed * 977 + 4049);
   const R = (a: number, b: number) => lerp(a, b, rnd());
-  const zone = (u0: number, u1: number, v0: number, v1: number, r0: number, r1: number, e1: number): Zone =>
-    ({ u: R(u0, u1), v: R(v0, v1), r: R(r0, r1), a: R(0, Math.PI), e: R(1, e1) });
+  /** bornes de la version 2, ou celles, plus larges, de la version 3 */
+  const W = (a: number, b: number, a3: number, b3: number) => (v3 ? R(a3, b3) : R(a, b));
+  const zone = (u0: number, u1: number, v0: number, v1: number, r0: number, r1: number, e1: number, sp = 0.03): Zone =>
+    v3 ? { u: R(u0 - sp, u1 + sp), v: R(v0 - sp, v1 + sp), r: R(r0 * 0.9, r1 * 1.1), a: R(0, Math.PI), e: R(1, 1 + (e1 - 1) * 1.5) }
+      : { u: R(u0, u1), v: R(v0, v1), r: R(r0, r1), a: R(0, Math.PI), e: R(1, e1) };
   for (let tries = 0; tries < 100; tries++) {
     const coast = {
-      u: R(0.48, 0.52), v: R(0.45, 0.49), ru: R(0.43, 0.47), rv: R(0.41, 0.45), a: R(-0.2, 0.2), warp: R(0.1, 0.15), freq: R(0.01, 0.015),
-      capes: Array.from({ length: 2 + Math.floor(rnd() * 4) }, () => ({ t: R(-Math.PI, Math.PI), w: R(0.2, 0.5), d: (rnd() < 0.5 ? -1 : 1) * R(0.06, 0.16) })),
+      u: R(0.48, 0.52), v: R(0.45, 0.49), ru: W(0.43, 0.47, 0.42, 0.47), rv: W(0.41, 0.45, 0.4, 0.45), a: W(-0.2, 0.2, -0.35, 0.35), warp: W(0.1, 0.15, 0.09, 0.18), freq: W(0.01, 0.015, 0.009, 0.018),
+      capes: Array.from({ length: 2 + Math.floor(rnd() * (v3 ? 6 : 4)) }, () => ({ t: R(-Math.PI, Math.PI), w: R(0.2, 0.5), d: (rnd() < 0.5 ? -1 : 1) * W(0.06, 0.16, 0.05, 0.2) })),
     };
     // la chaîne court d'ouest en est, plus ou moins de biais ; ses sommets s'égrènent le long de son axe
-    const m = { ...zone(0.62, 0.76, 0.15, 0.22, 0.22, 0.27, 1.5), peaks: [] as ContinentPlan['mountains']['peaks'] };
-    m.a = R(-0.6, 0.6);
-    for (let k = 2 + Math.floor(rnd() * 4); k > 0; k--) {
+    const m = { ...zone(0.62, 0.76, 0.15, 0.22, 0.22, 0.27, 1.5, 0.02), peaks: [] as ContinentPlan['mountains']['peaks'] };
+    m.a = W(-0.6, 0.6, -0.8, 0.8);
+    for (let k = 2 + Math.floor(rnd() * (v3 ? 5 : 4)); k > 0; k--) {
       const al = R(-0.55, 0.55) * m.r * Math.sqrt(m.e), ac = R(-0.2, 0.2) * m.r / Math.sqrt(m.e);
-      m.peaks.push({ u: m.u + al * Math.cos(m.a) - ac * Math.sin(m.a), v: m.v + al * Math.sin(m.a) + ac * Math.cos(m.a), r: R(0.025, 0.045), h: R(2.5, 4.5) });
+      m.peaks.push({ u: m.u + al * Math.cos(m.a) - ac * Math.sin(m.a), v: m.v + al * Math.sin(m.a) + ac * Math.cos(m.a), r: R(0.025, 0.045), h: W(2.5, 4.5, 2, 5) });
     }
-    const plateaus = { ...zone(0.17, 0.26, 0.21, 0.3, 0.19, 0.24, 1.35), freq: R(0.035, 0.055), levels: R(1.3, 1.75), step: R(0.95, 1.25) };
+    const plateaus = { ...zone(0.17, 0.26, 0.21, 0.3, 0.19, 0.24, 1.35), freq: W(0.035, 0.055, 0.03, 0.065), levels: W(1.3, 1.75, 1.2, 1.95), step: W(0.95, 1.25, 0.9, 1.35) };
     // l'îlot, près du centre du lac, reste loin de ses rives même quand le lac est étroit
     const l = zone(0.26, 0.34, 0.46, 0.55, 0.11, 0.14, 1.4), ia = R(0, 2 * Math.PI), io = R(0, 0.22) * l.r / Math.sqrt(l.e);
     const lake = { ...l, islet: { u: l.u + io * Math.cos(ia), v: l.v + io * Math.sin(ia), r: R(0.026, 0.033), a: 0, e: 1 } };
-    const volcano = { ...zone(0.15, 0.24, 0.79, 0.85, 0.11, 0.15, 1.3), strait: R(0.07, 0.15) };
-    const mesas = { ...zone(0.79, 0.86, 0.47, 0.6, 0.14, 0.18, 1.4), freq: R(0.05, 0.075), cut: R(0.02, 0.08), top: R(2.2, 3) };
-    const archipelago = { ...zone(0.8, 0.87, 0.83, 0.88, 0.13, 0.17, 1.4), freq: R(0.085, 0.115), cut: R(0.1, 0.15) };
+    const volcano = { ...zone(0.15, 0.24, 0.79, 0.85, 0.11, 0.15, 1.3, 0.02), strait: R(0.07, 0.15) };
+    const mesas = { ...zone(0.79, 0.86, 0.47, 0.6, 0.14, 0.18, 1.4, 0.02), freq: W(0.05, 0.075, 0.045, 0.085), cut: R(0.02, 0.08), top: W(2.2, 3, 2, 3.3) };
+    const archipelago = { ...zone(0.8, 0.87, 0.83, 0.88, 0.13, 0.17, 1.4, 0.015), freq: W(0.085, 0.115, 0.075, 0.13), cut: R(0.1, 0.15) };
     // la rivière naît dans le flanc ouest du massif
-    const river = { u: m.u + R(-0.1, 0), v: Math.max(0.1, m.v + R(-0.07, -0.02)), mouth: R(0.45, 0.62), a1: R(0.02, 0.055), k1: R(3.5, 8), p1: R(0, 2 * Math.PI), a2: R(0.006, 0.018), k2: R(12, 22), p2: R(0, 2 * Math.PI) };
-    const p: ContinentPlan = { coast, mountains: m, plateaus, lake, volcano, mesas, archipelago, river, wind: R(0, Math.PI) };
+    const river = {
+      u: m.u + W(-0.1, 0, -0.14, 0.02), v: Math.max(0.1, m.v + R(-0.07, -0.02)), mouth: W(0.45, 0.62, 0.4, 0.66), a1: W(0.02, 0.055, 0.02, 0.075), k1: W(3.5, 8, 3, 9),
+      p1: R(0, 2 * Math.PI), a2: R(0.006, 0.018), k2: R(12, 22), p2: R(0, 2 * Math.PI),
+    };
+    const p: ContinentPlan = { coast, mountains: m, plateaus, lake, volcano, mesas, archipelago, river, wind: R(0, Math.PI), orient: 0 };
+    if (v3) {
+      p.relief = { freq: R(0.022, 0.04), amp: R(1.2, 2.1), lift: R(1.1, 1.8) };
+      p.orient = Math.floor(rnd() * 8);
+    }
     if (fits(p)) return p;
   }
   return SAFE_PLAN;
@@ -195,6 +230,7 @@ const SAFE_PLAN: ContinentPlan = (() => {
     archipelago: { ...z(0.85, 0.87, 0.15), freq: 0.09, cut: 0.1 },
     river: { u: 0.62, v: 0.14, mouth: 0.54, a1: 0.035, k1: 6, p1: 0, a2: 0.012, k2: 16, p2: 0 },
     wind: 0.43,
+    orient: 0,
   };
 })();
 
@@ -206,8 +242,8 @@ export function plannedHeight(x: number, z: number, n: number, s: Simplex, s2: S
   const ru = u + s.fbm(x * 0.03 + 17, z * 0.03, 2) * 0.035, rv = v + s.fbm(x * 0.03, z * 0.03 + 17, 2) * 0.035;
   /** 1 au cœur d'une contrée, 0 au-delà de son pourtour */
   const zone = (q: Zone) => smoothstep(1, 0.55, zoneDist(q, ru, rv));
-  const d = coastDist(c, wu, wv);
-  let h = 0.9 + s.fbm(x * 0.03, z * 0.03, 4) * 1.6 + (1 - d) * 1.4;
+  const d = coastDist(c, wu, wv), rl = p.relief ?? RELIEF0;
+  let h = 0.9 + s.fbm(x * rl.freq, z * rl.freq, 4) * rl.amp + (1 - d) * rl.lift;
   // montagnes enneigées au nord, où naît la rivière : grandes crêtes alignées sur la chaîne, hérissées de pics, et ses grands sommets
   const m = p.mountains, mnt = zone(m);
   if (mnt > 0) {
@@ -273,9 +309,12 @@ export function plannedHeight(x: number, z: number, n: number, s: Simplex, s2: S
  * du grand lac s'humidifient (marais), pas son îlot
  */
 export function fillClimate(gen: number, seed: number, n: number, temp: Float32Array, wet: Float32Array) {
-  const st = new Simplex(seed * 13 + 5), sm = new Simplex(seed * 17 + 9), p = gen >= GEN_PLAN ? continentPlan(seed) : null;
-  for (let cz = 0; cz < n; cz++)
-    for (let cx = 0; cx < n; cx++) {
+  const st = new Simplex(seed * 13 + 5), sm = new Simplex(seed * 17 + 9), p = gen >= GEN_PLAN ? continentPlan(seed, gen) : null;
+  for (let wz = 0; wz < n; wz++)
+    for (let wx = 0; wx < n; wx++) {
+      // le climat suit le plan, tourné ou retourné avec lui (version 3)
+      let cx = wx, cz = wz;
+      if (p?.orient) { const [a, b] = toPlan(p.orient, wx + 0.5, wz + 0.5, n); cx = a - 0.5; cz = b - 0.5; }
       const u = (cx + 0.5) / n - 0.5, v = (cz + 0.5) / n - 0.5;
       // froid au nord, chaud au sud et à l'est (mesas du désert, archipel tropical)
       const base = v * 1.5 + Math.max(0, u) * 1.1 - 0.05;
@@ -286,7 +325,7 @@ export function fillClimate(gen: number, seed: number, n: number, temp: Float32A
         const ld = zoneDist(p.lake, u + 0.5, v + 0.5), islet = smoothstep(1.8, 1, zoneDist(p.lake.islet, u + 0.5, v + 0.5));
         m += tropic * 0.5 - dry * 0.5 + smoothstep(0.55, 0.85, ld) * smoothstep(1.3, 0.95, ld) * 0.25 - islet * 0.4;
       }
-      temp[cz * n + cx] = t;
-      wet[cz * n + cx] = m;
+      temp[wz * n + wx] = t;
+      wet[wz * n + wx] = m;
     }
 }

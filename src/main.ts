@@ -7,6 +7,7 @@ import type { UnderView } from './render/underView';
 let underModule: Promise<typeof import('./render/underView')> | null = null;
 const loadUnder = () => (underModule ??= import('./render/underView'));
 import { newWorld, addDefaultDecor, mapDef, newSeed, CONTINENT } from './world/mapgen';
+import { GEN } from './world/continent';
 import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
 import { RoadView } from './render/roads';
@@ -230,7 +231,7 @@ class Game implements UIHost {
         newWorld(w, mapId, mapDef(mapId)!.defaultSeed);
       }
     } else {
-      newWorld(w, mapId, seed ?? newSeed());
+      newWorld(w, mapId, seed ?? newSeed(), GEN);
       w.difficulty = difficulty;
       w.wood = rulesOf(difficulty).startWood; w.stone = rulesOf(difficulty).startStone;
     }

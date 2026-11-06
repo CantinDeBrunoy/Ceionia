@@ -2,7 +2,7 @@ import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_
 import { raiseVolcano } from './terraform';
 import { Simplex } from './noise';
 import { mulberry32, smoothstep, clamp, lerp, hash2 } from '../core/rng';
-import { GEN, GEN_FIXED, continentPlan, fixedHeight, plannedHeight } from './continent';
+import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, continentPlan, fixedHeight, plannedHeight, toPlan, fromPlan } from './continent';
 
 /** Carte jouable : `size` cases de côté */
 export interface MapDef { id: number; name: string; desc: string; defaultSeed: number; size: number }
@@ -33,25 +33,35 @@ export function genHeights(mapId: number, seed: number, gen = GEN): Float32Array
       for (let x = 0; x <= N; x++) hts[z * (N + 1) + x] = clamp(fixedHeight(x, z, N, s, s2, phase), MIN_H, MAX_H);
     return hts;
   }
-  const plan = continentPlan(seed);
+  const plan = continentPlan(seed, gen);
   for (let z = 0; z <= N; z++)
-    for (let x = 0; x <= N; x++) hts[z * (N + 1) + x] = clamp(plannedHeight(x, z, N, s, s2, plan), MIN_H, MAX_H);
+    for (let x = 0; x <= N; x++) {
+      // chaque sommet prend la hauteur de son point du plan, tourné ou retourné (version 3)
+      const [px, pz] = toPlan(plan.orient, x, z, N);
+      hts[z * (N + 1) + x] = clamp(plannedHeight(px, pz, N, s, s2, plan), MIN_H, MAX_H);
+    }
   return hts;
 }
 
-export function newWorld(world: World, mapId: number, seed: number, gen = GEN) {
+/**
+ * Crée le monde d'une graine. Sans `gen`, c'est le continent de référence des tests (version 2, qui ne bouge plus) ; une
+ * nouvelle partie passe `GEN`
+ */
+export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PLAN) {
   world.mapId = mapId;
   world.seed = seed;
   world.gen = gen;
-  const plan = gen === GEN_FIXED ? null : continentPlan(seed);
+  const plan = gen === GEN_FIXED ? null : continentPlan(seed, gen), v3 = gen >= GEN_VAR;
   const heights = genHeights(mapId, seed, gen);
   world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), buildings: [], nextId: 1 });
   world.oil.fill(0);
   world.computeBiomes();
   shapeBiomes(world, seed, plan ? plan.wind : null);
   world.computeBiomes();
-  // forêts plus ou moins denses selon le biome (cactus clairsemés au désert, forêt dense en taïga et sous les tropiques)
-  const dense = [0.12, 0, 0.42, 0.04, 0.1];
+  // forêts plus ou moins denses selon le biome (cactus clairsemés au désert, forêt dense en taïga et sous les tropiques) ;
+  // version 3 : chaque partie a ses forêts, plus ou moins étendues, en massifs plus ou moins grands
+  const vary = mulberry32(seed + 6), dOff = v3 ? (vary() - 0.5) * 0.26 : 0, fq = v3 ? lerp(0.1, 0.2, vary()) : 0.14;
+  const dense = [0.12, 0, 0.42, 0.04, 0.1].map((d) => d + dOff);
   const s = new Simplex(seed + 99);
   const rnd = mulberry32(seed + 5);
   for (let z = 0; z < N; z++)
@@ -65,34 +75,78 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN) {
       // au-dessus de la limite des arbres : alpages, éboulis et neige
       if (a > TREE_LINE) continue;
       if (a < 0.45 && b !== BIOME_TROPICAL && b !== BIOME_MARSH) continue;
-      const n = s.fbm(x * 0.14, z * 0.14, 3);
+      const n = s.fbm(x * fq, z * fq, 3);
       if (n > dense[b] && rnd() < (b === BIOME_DESERT ? 0.35 : 0.8)) world.veg[world.ci(x, z)] = VEG_FOREST;
       else if (n > dense[b] - 0.17 && rnd() < 0.04) world.veg[world.ci(x, z)] = VEG_FOREST;
     }
+  if (v3) addGroves(world, vary);
   world.vegDirty = true;
   // sanitize (pentes)
   world.sanitize(0, 0, N, N);
   // le volcan, au cœur de l'île volcanique
-  if (plan) raiseVolcano(world, N * plan.volcano.u, N * plan.volcano.v, 5.5);
+  if (plan) { const [vx, vz] = fromPlan(plan.orient, N * plan.volcano.u, N * plan.volcano.v, N); raiseVolcano(world, vx, vz, 5.5); }
   else raiseVolcano(world, N * 0.22, N * 0.8, 5.5);
-  carveTarns(world, seed, !!plan);
+  if (!v3) carveTarns(world, seed, !!plan);
+  else {
+    // lacs de montagne et étangs de plaine, plus ou moins nombreux
+    const lr = mulberry32(seed + 81);
+    carveTarns(world, seed, true, 2 + Math.floor(lr() * 6));
+    world.computeBiomes();
+    carveTarns(world, seed + 1, true, Math.floor(lr() * 5), 1, 3.2, 0.6);
+  }
   addDefaultDecor(world, seed);
+  if (v3) clearStart(world);
+}
+
+/** La place du village (3 × 3, `startSpot`) et une case autour : ni arbres ni rochers à abattre au début d'une partie */
+function clearStart(world: World) {
+  const [sx, sz] = world.startSpot();
+  let cut = false;
+  for (let z = sz - 1; z <= sz + 3; z++)
+    for (let x = sx - 1; x <= sx + 3; x++) {
+      if (!world.inCells(x, z)) continue;
+      const k = world.ci(x, z);
+      if (world.veg[k] === VEG_FOREST || world.veg[k] === VEG_ROCKS) { world.veg[k] = 0; cut = true; }
+    }
+  if (cut) world.vegDirty = true;
+}
+
+/**
+ * Bosquets (version 3) : quelques touffes d'arbres semées dans les prés, hors des forêts, du désert et des hauteurs, pour que
+ * les clairières ne se ressemblent pas d'une partie à l'autre
+ */
+function addGroves(world: World, rnd: () => number) {
+  const want = 8 + Math.floor(rnd() * 16);
+  for (let i = 0, made = 0; i < want * 30 && made < want; i++) {
+    const cx = 4 + Math.floor(rnd() * (N - 8)), cz = 4 + Math.floor(rnd() * (N - 8)), k = world.ci(cx, cz), a = world.cellAvg(cx, cz);
+    if (world.veg[k] || a < 0.5 || a > TREE_LINE - 0.5 || world.cellSlope(cx, cz) > 0.7 || world.biome[k] === BIOME_DESERT) continue;
+    const R = 1 + rnd() * 1.8;
+    for (let z = Math.floor(cz - R); z <= Math.ceil(cz + R); z++)
+      for (let x = Math.floor(cx - R); x <= Math.ceil(cx + R); x++) {
+        if (!world.inCells(x, z) || Math.hypot(x - cx, z - cz) > R || rnd() > 0.75) continue;
+        const j = world.ci(x, z), h = world.cellAvg(x, z);
+        if (!world.veg[j] && h > 0.45 && h < TREE_LINE && world.cellSlope(x, z) <= 0.8) world.veg[j] = VEG_FOREST;
+      }
+    made++;
+  }
 }
 
 /**
  * Lacs de montagne : quelques cuvettes creusées sur des replats d'altitude, fermées à l'aval par un bourrelet de moraine ;
  * l'eau s'y pose d'elle-même (les creux du relief se remplissent jusqu'à leur point de débordement). `dry` (version 2) : pas
- * de cuvette près de l'eau, où sa moraine barrerait le lit d'une rivière
+ * de cuvette près de l'eau, où sa moraine barrerait le lit d'une rivière. Version 3 : `want` cuvettes, entre les hauteurs
+ * `lo` et `hi` (des étangs en plaine), de taille `k` fois celle d'un lac de montagne
  */
-function carveTarns(world: World, seed: number, dry: boolean) {
-  const rnd = mulberry32(seed + 77), S = N + 1, want = 5;
+function carveTarns(world: World, seed: number, dry: boolean, want = 5, lo = 4, hi = 8.5, k = 1) {
+  const rnd = mulberry32(seed + 77), S = N + 1;
+  if (want <= 0) return;
   const volcanoes: number[] = [];
   for (let k = 0; k < N * N; k++) if (world.veg[k] === VEG_VOLCANO) volcanoes.push(k);
   const cand: number[] = [];
   for (let z = 5; z <= N - 5; z++)
     for (let x = 5; x <= N - 5; x++) {
       const h = world.h(x, z);
-      if (h < 4 || h > 8.5) continue;
+      if (h < lo || h > hi) continue;
       let slope = 0;
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) slope = Math.max(slope, Math.abs(world.h(x + dx, z + dz) - h));
       if (slope > 0.9 || volcanoes.some((k) => Math.hypot((k % N) - x, Math.floor(k / N) - z) < 14)) continue;
@@ -106,7 +160,7 @@ function carveTarns(world: World, seed: number, dry: boolean) {
     if (picked.every((p) => Math.hypot((p % S) - (c % S), Math.floor(p / S) - Math.floor(c / S)) > 14)) picked.push(c);
   }
   for (const c of picked) {
-    const x0 = c % S, z0 = Math.floor(c / S), h0 = world.heights[c], R = 2.4 + rnd() * 0.8, D = 1.1 + rnd() * 0.4, L = R + 2;
+    const x0 = c % S, z0 = Math.floor(c / S), h0 = world.heights[c], R = (2.4 + rnd() * 0.8) * (k === 1 ? 1 : k + rnd() * 0.8), D = 1.1 + rnd() * 0.4, L = R + 2;
     for (let z = Math.max(0, z0 - Math.ceil(L)); z <= Math.min(N, z0 + Math.ceil(L)); z++)
       for (let x = Math.max(0, x0 - Math.ceil(L)); x <= Math.min(N, x0 + Math.ceil(L)); x++) {
         const d = Math.hypot(x - x0, z - z0), i = z * S + x;
@@ -114,8 +168,9 @@ function carveTarns(world: World, seed: number, dry: boolean) {
         else if (d < L) world.heights[i] = Math.min(MAX_H, Math.max(world.heights[i], h0 + 0.15 - (d - R) * 0.6));
       }
     // ni arbres ni rochers au fond de l'eau
-    for (let z = Math.max(0, z0 - 3); z < Math.min(N, z0 + 3); z++)
-      for (let x = Math.max(0, x0 - 3); x < Math.min(N, x0 + 3); x++)
+    const C = k === 1 ? 3 : Math.ceil(R);
+    for (let z = Math.max(0, z0 - C); z < Math.min(N, z0 + C); z++)
+      for (let x = Math.max(0, x0 - C); x < Math.min(N, x0 + C); x++)
         if (Math.hypot(x + 0.5 - x0, z + 0.5 - z0) < R && world.veg[world.ci(x, z)] < VEG_CAVE) world.veg[world.ci(x, z)] = 0;
     world.markTerrain(x0 - L - 1, z0 - L - 1, x0 + L, z0 + L);
   }
