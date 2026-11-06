@@ -870,7 +870,7 @@ export function penHerds(w: World, flock: HerdKind[] = w.exp.herd) {
 /** Les missions obligatoires de l'âge : toutes à réussir pour ouvrir l'âge suivant (deux à la Préhistoire) */
 /** Les trophées des grandes légendes : une expédition qui en rapporte un est « légendaire » */
 const LEGENDS = new Set(['megalodon', 'kraken', 'dragon', 'games', 'moon', 'colony']);
-export const isLegendary = (m: Mission) => m.choices.some((c) => c.win.some((e) => e.t === 'perk' && LEGENDS.has(e.id)));
+export const isLegendary = (m: Mission) => m.id === 'mammoth' || m.choices.some((c) => c.win.some((e) => e.t === 'perk' && LEGENDS.has(e.id)));
 export const mandatoriesFor = (age: number) => MISSIONS.filter((m) => m.age === age && m.mandatory);
 /** La première mission obligatoire de l'âge */
 export const mandatoryFor = (age: number) => mandatoriesFor(age)[0] ?? null;
