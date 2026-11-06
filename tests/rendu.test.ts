@@ -221,6 +221,16 @@ describe('maisons et tours', () => {
     }
   });
 
+  it('le Sénat, détaillé sur ses quatre faces à chaque âge (fronton sculpté, abside, beffroi, jardin), reste léger', () => {
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    for (let age = 1; age < 6; age++) {
+      const m = getModel('senate', age, { v: 0, L: false, R: false, F: true });
+      const n = tris(m.body) + tris(m.glow) + tris(m.crowd) + (m.sways ?? []).reduce((s, w) => s + tris(w.geo) + tris(w.glow), 0);
+      // à l'Antiquité, le plafond des 2 × 2 ; ensuite, le palais et son jardin restent sous celui d'une 3 × 3 et demie
+      expect(n, `âge ${age}`).toBeLessThan(age === 1 ? CAP[2] : 7500);
+    }
+  });
+
   it('le château d’eau, détaillé à chaque âge, reste sous 4 000 triangles (girouette, drone et personnages compris)', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
     for (let age = 3; age < 6; age++) {
