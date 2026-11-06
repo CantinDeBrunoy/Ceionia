@@ -395,6 +395,16 @@ export const NEARBY: Record<number, Kind[]> = {
   [BIOME_TROPICAL]: ['giraffe', 'lizard', 'elephant', 'songbird', 'rabbit', 'lizard'],
   [BIOME_MARSH]: ['turtle', 'deer', 'rabbit', 'frog', 'songbird', 'frog'],
 };
+/**
+ * Les bêtes qu'on laisse approcher du village selon l'âge : toutes à la Préhistoire et dans l'Antiquité, les petites et les
+ * cerfs au Moyen Âge, seulement le petit gibier (oiseaux, lapins, lézards, grenouilles, tortues, moutons) dès l'ère industrielle :
+ * un éléphant ne rôde pas entre les usines
+ */
+const SMALL_GAME = new Set<Kind>(['songbird', 'rabbit', 'lizard', 'frog', 'turtle', 'sheep']);
+const BIG_GAME = new Set<Kind>(['elephant', 'giraffe', 'camel', 'moose']);
+/** Gros gibier et prédateurs : dès le Moyen Âge, ils se tiennent loin du village (voir `group`) */
+const KEEP_AWAY = new Set<Kind>(['elephant', 'giraffe', 'camel', 'moose', 'deer', 'fox', 'wolf']);
+export const nearbyAllowed = (k: Kind, age: number) => age >= 3 ? SMALL_GAME.has(k) : age === 2 ? !BIG_GAME.has(k) : true;
 /** Taille d'un groupe de ces bêtes */
 export const nearbyGroup = (k: Kind) => (k === 'moose' || k === 'fox' ? 1 : k === 'sheep' ? 4 : k === 'songbird' ? 3 : 2);
 /** Anneau des alentours du village (distance au centre, en cases) */
@@ -655,6 +665,13 @@ export class Fauna {
     const at = (c: number) => [(c % N) + 0.5, Math.floor(c / N) + 0.5];
     /** groupes d'une espèce répartis sur une liste de cases */
     const group = (prefix: string, kind: Kind, list: number[], count: number, n: (i: number) => number, radius: number, salt: number) => {
+      // le gros gibier reste loin du village dès le Moyen Âge (plus loin encore aux âges industriels), sauf à la Préhistoire
+      const vc0 = this.lastAge >= 2 && KEEP_AWAY.has(kind) ? villageCenter(w) : null;
+      if (vc0) {
+        const far = this.lastAge >= 3 ? 34 : 18;
+        const out = list.filter((k) => Math.hypot((k % N) + 0.5 - vc0[0], Math.floor(k / N) + 0.5 - vc0[1]) >= far);
+        list = out;
+      }
       if (!list.length) return;
       const set = new Set(list);
       for (let i = 0; i < count; i++) {
@@ -716,7 +733,7 @@ export class Fauna {
         }
       for (const b of [0, 1, 2, 3, 4]) {
         if (ring[b].length < 12) continue;
-        const kinds = NEARBY[b].filter((k) => this.shows(k));
+        const kinds = NEARBY[b].filter((k) => this.shows(k) && nearbyAllowed(k, this.lastAge));
         for (let i = 0; i < Math.min(8, 2 + Math.floor(ring[b].length / 25)) && kinds.length; i++) {
           const kind = kinds[i % kinds.length], n = nearbyGroup(kind);
           if (budget[kind] < n) continue;
@@ -726,7 +743,7 @@ export class Fauna {
       }
     }
     // visiteurs : des bêtes venues près de la vue quand on n'en voit aucune (voir `scout`)
-    for (const v of this.visitors) if (budget[v.kind] >= v.n) { budget[v.kind] -= v.n; src.push(v); }
+    for (const v of this.visitors) if (nearbyAllowed(v.kind, this.lastAge) && budget[v.kind] >= v.n) { budget[v.kind] -= v.n; src.push(v); }
     group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, () => 3, 3.5, 100);
     // grenouilles : surtout au bord des mares et des étangs, et dans les marais
     const ponds = banks.filter(pond), frogBanks = ponds.concat(ponds, banks.filter((k) => w.biome[k] === BIOME_MARSH), banks.filter((_, i) => i % 4 === 0));
@@ -869,7 +886,7 @@ export class Fauna {
     if (!best) return;
     let kind: Kind = 'fish';
     if (!wet) {
-      const list = NEARBY[w.biome[w.ci(Math.floor(best[0]), Math.floor(best[1]))]].filter((k) => this.shows(k));
+      const list = NEARBY[w.biome[w.ci(Math.floor(best[0]), Math.floor(best[1]))]].filter((k) => this.shows(k) && nearbyAllowed(k, this.lastAge));
       if (!list.length) return;
       kind = list[this.visitSerial % list.length];
     }
