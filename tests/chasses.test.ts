@@ -7,6 +7,9 @@ import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
 import { Expeditions, ActiveExpedition, FATE_AT, FATED, nextEventAt } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { KindId } from '../src/build/catalog';
+import * as THREE from 'three';
+import { ExpeditionScene } from '../src/render/expeditionScenes';
+import { beastInfo } from '../src/render/beasts';
 
 const mission = (id: string) => MISSIONS.find((m) => m.id === id)!;
 const ctx = (m: Mission, ci: number, arrive: boolean): EventCtx => { const c = m.choices[ci]; return { dest: c.dest, mission: m.id, scene: c.scene, age: m.age, arrive, sea: !!c.sea, warm: false }; };
@@ -161,6 +164,73 @@ describe('chasser le dragon (Moyen Âge)', () => {
   });
 });
 
+function stubCanvas() {
+  const ctx = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: '' };
+  (globalThis as { document?: unknown }).document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
+}
+
+/** Joue l'expédition et sa scène jusqu'au départ de l'équipe ; `fate` force l'issue dès qu'elle tombe */
+function stage(v: ReturnType<typeof village>, a: ActiveExpedition, each: (s: ExpeditionScene, k: number) => void, fate?: boolean) {
+  stubCanvas();
+  const s = new ExpeditionScene(v.w, v.agents, new THREE.Group(), a, null);
+  for (let i = 0; i < 80000 && a.phase !== 'back'; i++) {
+    v.agents.update(0.05, 10, a.age, false, 40, 0);
+    v.ex.update(0.05);
+    if (a.wait) v.ex.decide(a, 0);
+    if (fate !== undefined && a.fate !== undefined) a.fate = fate;
+    s.update(0.05, a);
+    if (a.phase === 'work') each(s, a.t / Math.max(1, a.c.work + a.extra));
+  }
+  return s;
+}
+
+describe('la scène du dragon', () => {
+  type Lair = { actor: { root: THREE.Object3D; actions: Map<string, unknown> }; act: string; roll: number; lift: number; hoard: THREE.Object3D };
+  const lair = (s: ExpeditionScene) => (s as unknown as { dragon: Lair | null }).dragon!;
+
+  it('le dragon est une bête articulée qui vole, crache le feu, rugit et meurt', () => {
+    const { bones, clips } = beastInfo('dragon');
+    for (const b of ['head', 'jaw', 'neck1', 'neck2', 'neck3', 'tail4', 'wL1', 'wL2', 'wR1', 'wR2']) expect(bones).toContain(b);
+    for (const c of ['Walk', 'Idle', 'Fly', 'Attack', 'Idle_2', 'Hit', 'Death', 'Sleep']) expect(clips).toContain(c);
+  });
+
+  it('vaincu, il s’effondre et roule sur le flanc pendant le combat ; la troupe l’a assailli, il a craché le feu', () => {
+    const v = village(2), a = v.ex.start(mission('dragon'), 0, 2)!;
+    const acts = new Set<string>();
+    let rolled = -1, awake = -1;
+    const s = stage(v, a, (sc, k) => {
+      const d = lair(sc);
+      acts.add(d.act);
+      if (awake < 0 && d.act !== 'sleep') awake = k;
+      if (rolled < 0 && d.roll > 1) rolled = k;
+      expect(Number.isFinite(d.actor.root.position.x + d.actor.root.position.y + d.actor.root.position.z)).toBe(true);
+    }, true);
+    expect(awake).toBeGreaterThan(0.05);
+    expect(acts).toContain('breath');
+    expect(acts).toContain('dead');
+    expect(rolled).toBeGreaterThan(FATE_AT - 0.01);
+    expect(rolled).toBeLessThan(1);
+    expect(a.ok).toBe(true);
+    expect(lair(s).hoard.visible).toBe(true);
+    s.dispose(a);
+  });
+
+  it('enfumé puis vainqueur, il sort de sa grotte et s’envole au loin', () => {
+    const v = village(2, 5), a = v.ex.start(mission('dragon'), 1, 2)!;
+    let hidden = false, fled = false;
+    const s = stage(v, a, (sc, k) => {
+      const d = lair(sc);
+      if (k < 0.1 && !d.actor.root.visible) hidden = true;
+      if (d.act === 'flee' && d.lift > 0.5) fled = true;
+    }, false);
+    expect(hidden).toBe(true);
+    expect(a.ok).toBe(false);
+    // il prend son envol dès l'issue tombée ; on l'a vu monter avant le départ de la troupe
+    expect(fled || lair(s).act === 'flee' || lair(s).act === 'roar').toBe(true);
+    s.dispose(a);
+  });
+});
+
 describe('organiser les JO', () => {
   it('époque moderne, facultative : il faut toutes les installations sportives', () => {
     const m = mission('games');
@@ -193,5 +263,24 @@ describe('organiser les JO', () => {
     // au bord de l'emprise du stade
     const cx = stadium.x + 1.5, cz = stadium.z + 1.5;
     expect(Math.max(Math.abs(a.dest[0] - cx), Math.abs(a.dest[1] - cz))).toBeLessThan(3);
+    // la cérémonie : le relais fait le tour du stade, la vasque s'allume, les athlètes courent, puis le podium
+    type Games = { flame: THREE.Object3D; torch: THREE.Object3D; lit: boolean; sx: number; sz: number; half: number };
+    let torch = false, lit = -1, far = 0, crowd = 0;
+    const ids = a.party.slice();
+    const s = stage(v, a, (sc, k) => {
+      const g = (sc as unknown as { games: Games }).games;
+      crowd = (sc as unknown as { npcs: unknown[] }).npcs.length;
+      if (g.torch.visible) torch = true;
+      if (lit < 0 && g.flame.visible) lit = k;
+      const p = v.agents.partyPositions([ids[0]])[0];
+      if (p && k < 0.3) far = Math.max(far, Math.hypot(p[0] - a.dest[0], p[1] - a.dest[1]));
+    });
+    expect(torch).toBe(true);
+    expect(lit).toBeGreaterThan(0.28);
+    expect(lit).toBeLessThan(0.4);
+    // le porteur de la flamme s'est éloigné de la vasque : il a fait le tour du stade
+    expect(far).toBeGreaterThan(2.5);
+    expect(crowd).toBeGreaterThanOrEqual(8);
+    s.dispose(a);
   });
 });
