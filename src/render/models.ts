@@ -2491,6 +2491,41 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     if (attach(['a_vases'], 0, 0.16, -0.02, 0.4)) lift(0.082);
     else for (let i = 0; i < 4; i++) p.cyl(0.014, 0.018, 0.05, 7, -0.09 + i * 0.045, 0.082, 0.4, i % 2 ? clay : 0x2f3a44);
     attach(['a_jug'], 0, 0.05, 0.12, 0.42);
+    // le sol de l'atelier : terre foncée détrempée de barbotine autour du tour et de la fosse, traces de pas vers l'étal
+    for (const [x, z, r, k] of [[-0.02, 0.1, 0.1, 0.62], [-0.2, 0.3, 0.07, 0.66], [0.2, 0.34, 0.06, 0.7], [0.4, -0.02, 0.07, 0.72], [-0.42, 0.06, 0.06, 0.7], [0.1, -0.02, 0.06, 0.68]])
+      p.add(new THREE.CircleGeometry(r, 7).rotateX(-Math.PI / 2).scale(1.3, 1, 0.8), x, 0.0125 + k * 0.001, z, dark(C.dirt, k), x * 7);
+    for (let k = 0; k < 6; k++) p.add(new THREE.CircleGeometry(0.01, 5).rotateX(-Math.PI / 2).scale(0.7, 1, 1.4), -0.1 + (k % 2) * 0.03 + k * 0.012, 0.0145, 0.2 + k * 0.045, dark(C.dirt, 0.5), 0.2);
+    // un second banc de travail : planche sur tréteaux, pains d'argile, boudins, estèque et fil à couper
+    p.box(0.15, 0.012, 0.05, 0.14, 0.05, 0.035, C.wood);
+    for (const x of [0.08, 0.2]) p.box(0.012, 0.04, 0.04, x, 0.01, 0.035, C.darkwood);
+    for (const [x, z] of [[0.1, 0.03], [0.14, 0.045]]) p.box(0.03, 0.018, 0.022, x, 0.062, z, clay, x * 9);
+    p.add(new THREE.CylinderGeometry(0.005, 0.005, 0.05, 5).rotateZ(Math.PI / 2), 0.18, 0.07, 0.03, clay, 0.3);
+    p.box(0.02, 0.003, 0.012, 0.19, 0.064, 0.05, C.wood, 0.5);
+    // tas d'argile brute et pains empilés en pyramide, un fil pour les couper
+    p.sphere(0.035, 0.24, 0.012, 0.34, dark(clay, 0.95), 0, 0.55); p.sphere(0.02, 0.28, 0.01, 0.33, clay, 0, 0.6);
+    for (const [x, y, z] of [[0.2, 0.012, 0.275], [0.246, 0.012, 0.28], [0.222, 0.03, 0.278]]) p.box(0.04, 0.018, 0.03, x, y, z, clay, 0.1);
+    // bassine d'eau où le potier trempe ses mains, éponge posée sur le bord
+    p.cyl(0.04, 0.032, 0.03, 9, -0.12, 0.012, 0.29, 0x9a6a44); waterPool(p, -0.12, 0.012 + 0.03, 0.29, 0.034, 8, false);
+    p.sphere(0.012, -0.095, 0.045, 0.3, 0xe8d8a8, 0, 0.6);
+    // rangée de jarres et de pots crus qui sèchent sur des planches posées à terre, le long du bord gauche
+    for (const z of [0.0, 0.17]) { p.box(0.05, 0.008, 0.12, -0.44, 0.012, z + 0.06, C.wood); }
+    for (let i = 0; i < 8; i++) {
+      const z = 0.01 + i * 0.02 + (i > 3 ? 0.04 : 0), c = i % 3 === 0 ? clay : raw;
+      if (i % 2) { p.sphere(0.017, -0.44, 0.032, z, c, 0, 0.9); p.cyl(0.008, 0.01, 0.014, 6, -0.44, 0.044, z, c); }
+      else p.cyl(0.012, 0.016, 0.035, 6, -0.44, 0.02, z, c);
+    }
+    // pots qui sèchent à l'air sur le muret du fond, à côté du four : jarre au col haut, cruche, bol
+    p.cyl(0.02, 0.026, 0.07, 7, 0.45, 0.012, 0.19, clay); p.cyl(0.011, 0.015, 0.03, 6, 0.45, 0.082, 0.19, clay);
+    p.cyl(0.018, 0.012, 0.03, 7, 0.4, 0.012, 0.22, raw); p.cyl(0.02, 0.012, 0.016, 7, 0.45, 0.012, 0.0, raw);
+    // tessons, boulettes d'argile et copeaux de tournassage éparpillés
+    for (let i = 0; i < 14; i++) {
+      const h = (k: number) => hash2(i, k, 811), x = (h(1) * 2 - 1) * 0.44, z = (h(2) * 2 - 1) * 0.44;
+      if (Math.hypot(x - 0.31, z + 0.28) < 0.15 || (z < -0.2 && x > -0.45 && x < 0.17)) continue;
+      if (i % 3 === 0) p.sphere(0.009 + h(3) * 0.005, x, 0.016, z, i % 2 ? clay : raw, 0, 0.55);
+      else if (i % 3 === 1) p.add(new THREE.TetrahedronGeometry(0.009 + h(3) * 0.006, 0).scale(1.4, 0.4, 1), x, 0.016, z, i % 2 ? clay : dark(clay, 0.8), h(4) * 6);
+      else p.box(0.03 + h(3) * 0.02, 0.002, 0.004, x, 0.0135, z, raw, h(4) * 6);
+    }
+    for (let i = 0; i < 6; i++) p.add(new THREE.TorusGeometry(0.012, 0.0025, 3, 6, Math.PI * 1.5).rotateX(Math.PI / 2), -0.06 + i * 0.018, 0.0145 + (i % 2) * 0.002, 0.14 + (i % 3) * 0.01, dark(raw, 0.95), i);
   } else if (age === 2) {
     // forge : maison de pierre au toit d'ardoise et grande cheminée, appentis où rougeoie le foyer, enclume et tonneau devant
     p.box(0.58, 0.04, 0.44, 0.08, 0, -0.12, C.darkstone); p.box(0.56, 0.32, 0.42, 0.08, 0.04, -0.12, C.stone);
