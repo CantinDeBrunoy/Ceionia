@@ -55,6 +55,8 @@ import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
 import { ExpeditionView, followPoint } from './render/expeditionView';
 import { Festivities } from './render/festivities';
+import { Trophies, trophiesWon } from './render/trophies';
+import { HomeButton, awayFromHome } from './ui/homeButton';
 import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -127,6 +129,11 @@ class Game implements UIHost {
   expView: ExpeditionView;
   /** fêtes du retour des expéditions réussies, et les équipes déjà fêtées */
   fest: Festivities;
+  /** les trophées des gros monstres vaincus, sur la grande place ; quand on les remet à jour */
+  trophies: Trophies;
+  private trophyT = 0;
+  /** le bouton « Retourner au village », quand la vue s'éloigne de la grande place */
+  private homeBtn: HomeButton;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
@@ -289,6 +296,8 @@ class Game implements UIHost {
     this.fest.onBang = (k) => this.audio.sfxBang(k);
     this.fest.onFeast = () => this.audio.sfxFeast();
     this.parade = new Parade(w);
+    this.trophies = new Trophies(w);
+    this.scene.add(this.trophies.group);
     this.parade.onPop = () => this.audio.sfxBang(0.12);
     this.expView.fx.onClash = (k) => this.audio.sfxClash(k);
     // le train descend des mineurs au pied de la grotte et remonte minerai et pierre des galeries tenues
@@ -332,6 +341,7 @@ class Game implements UIHost {
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
     this.spaceCast = new SpaceCast(uiRoot);
+    this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
     this.expeditions.onNews = (m, depths) => this.ui.toast(m, depths ? () => this.ui.openExpeditions('depths') : undefined);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
     // le camp souterrain attaqué : un clic sur le message y descend ; l'issue, un clic ouvre la fiche du camp
@@ -481,12 +491,14 @@ class Game implements UIHost {
   /** l'incident que la caméra suit */
   incidentCam: string | null = null;
   followIncident(key: string | null) {
-    this.incidentCam = key;
-    if (!key) return;
-    this.following = null; this.trainCam = null;
-    if (this.mode === 'under') this.exitUnder();
-    const i = this.incidents().find((x) => x.key === key);
-    if (i) this.cam.follow(i.x, i.z, 9);
+    const i = key ? this.incidents().find((x) => x.key === key) : undefined;
+    if (!i) { this.incidentCam = null; return; }
+    // une seule chose suivie à la fois : la vue lâche l'équipe (et sa descente sous terre) ou le train
+    this.follow(null); this.trainCam = null;
+    this.incidentCam = i.key;
+    // sous terre, on remonte droit sur l'incident
+    if (this.mode === 'under') this.exitUnder(Math.floor(i.z) * N + Math.floor(i.x));
+    this.cam.follow(i.x, i.z, 9);
   }
 
   /**
@@ -509,7 +521,7 @@ class Game implements UIHost {
       const route: [number, number][] = [[a.base[0], a.base[1]], ...path.slice(0, -1).map((c): [number, number] => [(c % N) + 0.5, Math.floor(c / N) + 0.5]), [a.dest[0], a.dest[1]]];
       const spots = this.parade.start(route, [a.base[0], a.base[1]], [a.dest[0], a.dest[1]], this.sim.age, crowd.length);
       f = this.farewell = { id: a.id, crowd, spots, sent: 0, rel: null, relAt: 0, voyage: false };
-      this.fest.start(a.base[0], a.base[1], this.sim.age);
+      this.festAt(a.base[0], a.base[1]);
       this.ui.toast(`${a.m.icon} Tout le village sort dire adieu aux colons !`);
     }
     // la foule gagne sa place le long de la route, quelques-uns par image (chaque trajet se calcule) ; à défaut de place, elle
@@ -532,8 +544,8 @@ class Game implements UIHost {
         const [mx, mz] = this.parade.middle();
         this.cam.goTo(mx, mz, Math.min(40, Math.max(18, this.parade.length * 0.8)));
       }
-      this.fest.start(a.base[0], a.base[1], this.sim.age);
-      this.fest.start(a.base[0], a.base[1], this.sim.age);
+      this.festAt(a.base[0], a.base[1]);
+      this.festAt(a.base[0], a.base[1]);
     }
     const lead = ag.partyPositions(a.party)[0];
     this.parade.update(dt, lead ? [lead[0], lead[1]] : null, f.rel !== null ? 1 : a.phase === 'gather' ? 0.3 : 0.6);
@@ -544,6 +556,31 @@ class Game implements UIHost {
       this.time.paused = true;
       showVoyage(uiRoot, a.c.label.includes('saut'), () => { this.expeditions.landNow(a); this.time.paused = was; });
     }
+  }
+
+  /** La grande place du village (le lieu de rencontre de 3 × 3, sans entrée) la plus proche de (x, z), s'il y en a une */
+  plazaNear(x: number, z: number): Building | null {
+    let best: Building | null = null, bd = Infinity;
+    for (const b of this.world.buildings.values()) {
+      const s = sizeOf(b);
+      if (b.kind !== 'gather' || s < 3) continue;
+      const d = Math.hypot(b.x + s / 2 - x, b.z + s / 2 - z);
+      if (d < bd) { bd = d; best = b; }
+    }
+    return best;
+  }
+  /** La fête du village : sur la grande place s'il y en a une (et au feu du clan, à la Préhistoire), sinon près de (x, z) */
+  festAt(x: number, z: number) {
+    const b = this.plazaNear(x, z);
+    this.fest.start(x, z, this.sim.age, b ? { x0: b.x, z0: b.z, size: sizeOf(b), fire: b.age === 0 } : null);
+  }
+
+  /** La vue s'est éloignée du cœur du village, où la ramène « Retourner au village » (en surface seulement) */
+  private awayFromHome() {
+    const c = this.mode === 'surface' ? this.villageCenter() : null;
+    if (!c) return false;
+    const v = this.cam.view(), p = new THREE.Vector3(c[0], this.world.surfaceAt(c[0], c[1]), c[1]).project(this.cam.camera);
+    return awayFromHome(Math.hypot(v.x - c[0], v.z - c[1]), v.dist, p.z < 1 ? p : null, this.homeBtn.shown);
   }
 
   /** Le cœur du village : le milieu de ses bâtiments (la médiane, qu'un avant-poste lointain ne décale pas) */
@@ -569,8 +606,9 @@ class Game implements UIHost {
   followTrain(line: number) {
     const tr = this.railway.trains.get(line), p = tr ? this.railway.trainAt(tr) : null;
     if (!p) return;
-    this.following = null;
-    if (this.mode === 'under') this.exitUnder();
+    // une seule chose suivie à la fois
+    this.follow(null); this.incidentCam = null;
+    if (this.mode === 'under') this.exitUnder(Math.floor(p[1]) * N + Math.floor(p[0]));
     this.trainCam = line;
     this.cam.follow(p[0], p[1], 14);
   }
@@ -652,7 +690,8 @@ class Game implements UIHost {
   follow(id: number | null) {
     const a = this.expeditions.active.find((e) => e.id === id);
     this.following = a ? a.id : null;
-    if (a) this.trainCam = null;
+    // une seule chose suivie à la fois : suivre l'équipe lâche le train et l'incident
+    if (a) { this.trainCam = null; this.incidentCam = null; }
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
     if (!a) return;
@@ -1053,7 +1092,7 @@ class Game implements UIHost {
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);
     // une équipe rentre victorieuse : tout le village fait la fête au cœur du village, à la mode de son âge
-    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.fromCamp && !this.feted.has(a.id)) { this.feted.add(a.id); this.fest.start(a.base[0], a.base[1], this.sim.age); }
+    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.fromCamp && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
     this.fest.update(dt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe
@@ -1153,6 +1192,8 @@ class Game implements UIHost {
 
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); }
+    if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
+    if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
 
