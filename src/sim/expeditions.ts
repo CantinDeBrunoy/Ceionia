@@ -1375,13 +1375,15 @@ export class Expeditions {
     // sur place, au lieu d'y « travailler » à mi-chemin ; faute de mieux, le premier lieu atteignable
     const from = w.ci(Math.floor(bx), Math.floor(bz));
     let far: [number, number] | null = null;
-    for (const [x, z] of (free.length ? free : cand).slice(0, 16)) {
+    const pool = free.length ? free : cand;
+    for (const [x, z] of pool.slice(0, 40)) {
       const p = this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)));
       if (!p) continue;
       if (p.length <= Math.max(24, Math.hypot(x - bx, z - bz) * 1.8)) return [x, z];
       far ??= [x, z];
     }
-    return far;
+    // aucun chemin trouvé (village ceint de rails, de bâtiments ou d'eau) : on part quand même vers le meilleur lieu, plutôt que de renoncer
+    return far ?? (pool.length ? [pool[0][0], pool[0][1]] : null);
   }
 
   /**
