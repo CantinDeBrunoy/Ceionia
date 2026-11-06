@@ -241,9 +241,17 @@ export class Streams {
         if (!w.road[k] || seen.has(k) || w.isWet(k % N, Math.floor(k / N))) continue;
         seen.add(k);
         const tx = p[i + 1][0] - p[i - 1][0], tz = p[i + 1][1] - p[i - 1][1], tl = Math.hypot(tx, tz) || 1;
-        const a = Math.atan2(-tx / tl, -tz / tl), y = w.hAt(px, pz) + 0.09;
+        // le tablier passe au-dessus du sol le plus haut sous ses planches (le torrent, posé sur le relief et tiré vers la vue,
+        // ne doit jamais le traverser), porté par deux traverses jusqu'au sol
+        const ux = tx / tl, uz = tz / tl;
+        let top = -Infinity, low = Infinity;
+        // s : le long des planches (en travers du courant), o : dans le sens du courant
+        for (const s of [-0.45, -0.2, 0, 0.2, 0.45]) for (const o of [-0.21, 0, 0.21]) { const h = w.hAt(px - uz * s + ux * o, pz + ux * s + uz * o); top = Math.max(top, h); low = Math.min(low, h); }
+        const a = Math.atan2(-tx / tl, -tz / tl), y = top + 0.16;
         for (const [bx, by, bz, oy, oz] of [[0.9, 0.05, 0.42, 0, 0], [0.9, 0.025, 0.025, 0.11, 0.19], [0.9, 0.025, 0.025, 0.11, -0.19]])
           geos.push(new THREE.BoxGeometry(bx, by, bz).translate(0, oy, oz).rotateY(a).translate(px, y, pz));
+        const leg = y - low;
+        for (const ox of [-0.4, 0.4]) geos.push(new THREE.BoxGeometry(0.06, leg, 0.46).translate(ox, -leg / 2, 0).rotateY(a).translate(px, y, pz));
       }
     this.bridgeMesh.geometry.dispose();
     this.bridgeMesh.geometry = geos.length ? mergeGeometries(geos)! : new THREE.BufferGeometry();
