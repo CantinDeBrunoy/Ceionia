@@ -990,6 +990,52 @@ function house(p: Parts, age: number, o: ModelOpts) {
   }
 }
 
+/**
+ * L'arrière d'une maison de rangée (de l'Antiquité à l'âge industriel), vu depuis la rue de derrière : porte de service et
+ * sa marche, descente d'eau (dès le Moyen Âge), et selon la maison un bûcher sous son appentis, un tonneau de pluie et des
+ * caisses, un potager et son seau, ou une corde à linge où sèchent draps et chemises ; du lierre sur une maison sur trois.
+ * `zb` : le mur arrière, `H` : sa hauteur ; `yard` : faux quand la maison a déjà son jardin derrière
+ */
+function houseBack(p: Parts, o: ModelOpts, age: number, x0: number, x1: number, zb: number, H: number, frame: number, yard = true) {
+  const w = x1 - x0, cx = (x0 + x1) / 2, side = o.v % 2 ? 1 : -1, wood = age === 1 ? 0x6a4a34 : [0x5a4434, 0x3a4a5a, 0x4a5a3a][o.v % 3];
+  const dx = cx + side * w * (w > 0.9 ? 0.16 : 0.3), z = zb - 0.004;
+  p.add(slab(0.1, 0.18, 0.01, F_PZ).translate(0, 0.09, 0), dx, 0.02, z, wood, Math.PI);
+  p.add(slab(0.12, 0.195, 0.006, F_PZ | F_PY).translate(0, 0.0975, 0), dx, 0.02, z + 0.002, frame, Math.PI);
+  p.box(0.14, 0.02, 0.05, dx, 0, zb - 0.025, C.stone);
+  // la descente d'eau à l'angle libre (ou contre la porte, au milieu d'une rangée)
+  const px = !o.R ? x1 - 0.025 : !o.L ? x0 + 0.025 : dx - side * 0.1;
+  if (age >= 2) downpipe(p, px, zb - 0.012, H, age === 2 ? 0x7a6a5a : 0x5a6268);
+  if (o.v % 3 === 0) ivy(p, cx, zb - 0.002, side * w * 0.42, H * 0.9, Math.PI, 900 + o.v);
+  if (!yard) return;
+  const k = (o.v + age) % 4, yx = cx - side * w * 0.12, yz = zb - 0.12;
+  if (k === 0) {
+    // le bûcher : bûches rangées sous un appentis de planches contre le mur
+    for (let i = 0; i < 6; i++) log(p, 0.2, 0.02, yx, (i > 3 ? 0.04 : 0) + (i > 5 ? 0.04 : 0), zb - 0.04 - (i % 4) * 0.04, 0, i % 2 ? 0x8a6a48 : 0x9a7652);
+    for (const s of [-1, 1]) p.box(0.014, 0.17, 0.014, yx + s * 0.12, 0, zb - 0.17, wood);
+    p.add(new THREE.BoxGeometry(0.28, 0.012, 0.18), yx, 0.18, zb - 0.09, age === 1 ? C.terracotta : age === 2 ? 0x8a6a48 : C.slate, 0, false, 0, -0.35);
+  } else if (k === 1) {
+    // le tonneau de pluie sous la gouttière, des caisses empilées, un balai
+    p.cyl(0.04, 0.04, 0.1, 8, px - (px > cx ? 0.06 : -0.06), 0, zb - 0.05, 0x9a6a44);
+    p.cyl(0.042, 0.042, 0.008, 8, px - (px > cx ? 0.06 : -0.06), 0.05, zb - 0.05, C.darkwood);
+    p.box(0.08, 0.06, 0.07, yx, 0, yz, 0xb48a5e, 0.2); p.box(0.07, 0.05, 0.06, yx + 0.01, 0.06, yz, 0xc49a6a, -0.1); p.box(0.07, 0.06, 0.06, yx + 0.1, 0, yz + 0.03, 0xa47a4e, 0.5);
+    p.add(new THREE.CylinderGeometry(0.004, 0.004, 0.2, 4).translate(0, 0.1, 0), yx - 0.1, 0, zb - 0.02, C.wood, 0, false, 0, -0.25);
+    p.cone(0.02, 0.05, 5, yx - 0.1, 0, zb - 0.055, 0xd8c070);
+  } else if (k === 2) {
+    // le potager : terre retournée, rangs de salades et de choux, le seau
+    p.box(0.34, 0.01, 0.14, yx, 0, yz - 0.02, 0x7a5a42);
+    for (let r = 0; r < 3; r++) for (let i = 0; i < 5; i++) p.cone(0.02, 0.03, 4, yx - 0.13 + i * 0.065, 0.01, yz - 0.065 + r * 0.045, r === 1 ? 0x8ab85a : 0x5f9a4a);
+    p.cyl(0.024, 0.02, 0.04, 7, yx + 0.21, 0, yz, age >= 3 ? C.metal : 0x8a6a48);
+  } else {
+    // la corde à linge entre deux perches : draps et chemises qui sèchent au vent
+    const lx0 = cx - w * 0.36, lx1 = cx + w * 0.36, lz = zb - 0.16;
+    for (const x of [lx0, lx1]) p.cyl(0.006, 0.008, 0.24, 4, x, 0, lz, C.wood);
+    p.box(lx1 - lx0, 0.003, 0.003, cx, 0.235, lz, 0xe8e2d4);
+    const line = sway([cx, 0.235, lz], [1, 0, 0], 0.25, 0.9);
+    [[-0.18, 0.1, 0.09, 0xf4f0e6], [-0.04, 0.06, 0.07, [0x7a9ac8, 0xd8786c, 0xc8b878][o.v % 3]], [0.09, 0.1, 0.1, 0xece6d8]].forEach(([u, cw, ch, c]) =>
+      line.add(slab(cw * w, ch, 0.004, F_PZ | F_NZ).translate(0, -ch / 2, 0), u * w, 0, 0, c));
+  }
+}
+
 /** Huttes de la Préhistoire, trois variantes : hutte ronde de clayonnage au chaume épais, maison longue, tipi de peaux peint */
 // ---------- Vie du campement préhistorique : petits objets posés autour des huttes et des abris ----------
 
@@ -1434,6 +1480,7 @@ function antiqueHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number
     p.box(0.05, 0.06, 0.012, cx + sx * w, H * 0.62, zb - 0.003, 0x3a2c24);
     p.box(0.06, 0.012, 0.03, cx + sx * w, H * 0.62 - 0.012, zb - 0.01, stoneC);
   }
+  houseBack(p, o, 1, x0, x1, zb, H, stoneC, kind !== 0);
   for (const [s, x] of [[-1, x0], [1, x1]] as [number, number][]) {
     if (s < 0 ? o.L : o.R) continue;
     p.box(0.012, 0.06, 0.05, x + s * 0.003, H * 0.62, zc, 0x3a2c24);
@@ -1514,6 +1561,11 @@ function industrialHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: num
   }
   p.box(w + 0.01, 0.022, d + 0.012, cx, 0.255, zc, kind === 1 ? 0xf2ead8 : dark(brick, 0.72));
   p.box(w + 0.02, 0.03, d + 0.03, cx, H - 0.025, zc, kind === 1 ? 0xf2ead8 : stone);
+  // l'arrière : fenêtres à guillotine aux deux niveaux, porte de la cour, et la vie de la cour (voir houseBack)
+  const zb = zc - d / 2;
+  wallWindows(p, cx - side * w * 0.2, zb - 0.002, 0.1, 0.09, Math.PI, 1, 0.08, 0.12, white);
+  wallWindows(p, cx, zb - 0.002, w * 0.9, 0.31, Math.PI, w > 0.9 ? 3 : 2, 0.08, 0.13, white);
+  houseBack(p, o, 3, x0, x1, zb, H, white);
   // souche de cheminée sur le mur mitoyen de droite, pots de terre cuite, fumée
   const chx = x1 - 0.07;
   const top = kind === 1 ? H + 0.36 : H + 0.34;
@@ -1648,6 +1700,7 @@ function medievalHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: numbe
   timbers(p, cx, zb - jet - 0.004, w, g0, h, Math.PI, 3, (i) => i !== 1, beam);
   win(cx, 0.35, zb - jet - 0.008, 0.08, 0.09, false, -1);
   win(cx - side * w * 0.25, 0.1, zb - 0.006, 0.07, 0.08, false, -1);
+  houseBack(p, o, 2, x0, x1, zb, g0, lintel);
   // pignons aux bouts du bloc : pans de bois et petite fenêtre, poinçon et contrefiches sous le faîte, épi de faîtage
   for (const s of [-1, 1]) {
     if (!free(s)) continue;
