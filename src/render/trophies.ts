@@ -42,7 +42,10 @@ export function trophySlot(id: TrophyId, age: number): [number, number] {
   return s[TROPHIES.indexOf(id) % s.length];
 }
 
-const IVORY = 0xeee2c4, IVORY_TIP = 0xf8f2e2, BONE = 0xd8ccb0;
+/** l'orientation de la vue d'ensemble (voir CameraRig.reset) */
+const VIEW_YAW = 0.75;
+
+const IVORY =0xeee2c4, IVORY_TIP = 0xf8f2e2, BONE = 0xd8ccb0;
 
 /** Le socle, à la mode de l'âge de la place ; rend la hauteur de son dessus */
 function plinth(p: Parts, age: number, w: number): number {
@@ -123,7 +126,7 @@ function megalodon(p: Parts, age: number) {
   const y = plinth(p, age, 0.3);
   // l'arc de la mâchoire, derrière : la gencive grise et ses dents
   const jaw = new THREE.TorusGeometry(0.12, 0.016, 5, 14, Math.PI).scale(1, 1.15, 0.8);
-  p.add(jaw, 0, y + 0.005, -0.07, 0x8a8f96);
+  p.add(jaw, 0, y + 0.005, -0.07, 0xc8b89a);
   for (let i = 0; i <= 10; i++) {
     const a = (i / 10) * Math.PI, x = Math.cos(a) * 0.12, h = Math.sin(a) * 0.138;
     p.add(new THREE.ConeGeometry(0.012, 0.035, 3).translate(0, -0.02, 0).rotateZ(a - Math.PI / 2 + Math.PI), x * 0.88, y + 0.005 + h * 0.88, -0.06, IVORY_TIP);
@@ -197,8 +200,9 @@ export class Trophies {
       // (x, z) dans le repère de la place, tournée comme elle
       const wx = cx + x * Math.cos(ry) + z * Math.sin(ry), wz = cz - x * Math.sin(ry) + z * Math.cos(ry);
       m.position.set(x, (draped ? w.surfaceAt(wx, wz) : base) + 0.01, z);
-      // la plaque tournée vers le dehors de la place
-      m.rotation.y = Math.atan2(x, z);
+      // tous tournés du même côté, vers la vue d'ensemble (la caméra regarde le village depuis ce côté-là) : on voit la dent
+      // de face, et non sa tranche
+      m.rotation.y = VIEW_YAW - ry;
       if (glow) { const g = new THREE.Mesh(glow, mats.glow); m.add(g); }
       this.group.add(m);
     }
