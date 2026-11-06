@@ -1659,8 +1659,8 @@ function dragon(c: Coat): { rig: Rig; clips: ClipDef[] } {
       const k = smooth(u * 1.3), j = smooth(u * 2.2);
       M(P, 'hips', 0, -0.13 * k, 0);
       for (const L of ['L', 'R']) { R(P, `f${L}1`, -0.9 * k); R(P, `f${L}2`, 0.4 * k); R(P, `h${L}1`, 0.8 * k); R(P, `h${L}2`, -0.6 * k); }
-      neck(P, -0.4 * j * (1 - k) + 0.55 * k, 0.6 * k);
-      R(P, 'head', 0.3 * k, 0.3 * k);
+      neck(P, -0.4 * j * (1 - k) + 1.2 * k, 0.6 * k);
+      R(P, 'head', 0.45 * k, 0.3 * k);
       R(P, 'jaw', 0.6 * j);
       fold(P, (1 - j) * 0.6 + 0.4 * k);
       R(P, 'wL1', 0, 0, -0.5 * k); R(P, 'wR1', 0, 0, 0.5 * k);

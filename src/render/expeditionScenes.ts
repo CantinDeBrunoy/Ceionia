@@ -3120,7 +3120,7 @@ export class ExpeditionScene {
       // ses bras ondulent sur l'eau autour de la tête, se tordent quand un harpon le touche
       m.arms.forEach((p, i) => {
         const arm = p.children[0];
-        arm.rotation.x = 1.12 + Math.sin(this.t * 1.5 + i * 0.8) * 0.22 - m.flinch * 0.35 + sink * 0.5;
+        arm.rotation.x = 0.72 + Math.sin(this.t * 1.5 + i * 0.8) * 0.25 - m.flinch * 0.3 + sink * 0.5;
         arm.rotation.z = Math.sin(this.t * 0.9 + i * 1.3) * 0.22;
       });
       if (fate !== undefined && !m.ended && m.obj.visible) this.finalVolley(m, new THREE.Vector3(hx, m.level + 0.25, hz));
@@ -3922,16 +3922,16 @@ export class ExpeditionScene {
       [mx, mz] = this.near(cx + ux * 0.9, cz + uz * 0.9, cx, cz);
     }
     const face = Math.atan2(cx - mx, cz - mz), fx = Math.sin(face), fz = Math.cos(face);
-    if (!real) this.put(caveMouthGeo(), mx, mz, face).scale.setScalar(2.3);
+    if (!real) this.put(caveMouthGeo(), mx, mz, face).scale.setScalar(1.7);
     // le trésor, à l'entrée de l'antre ; des os devant
-    const hoard = this.put(hoardGeo(), mx + fx * 0.25 - fz * 0.3, mz + fz * 0.25 + fx * 0.3, face);
+    const hoard = this.put(hoardGeo(), mx + fx * 0.7 - fz * 0.5, mz + fz * 0.7 + fx * 0.5, face);
     hoard.scale.setScalar(1.6);
-    for (let i = 0; i < 4; i++) { const [bx, bz] = this.near(mx + fx * (0.6 + i * 0.15) + fz * (i - 1.5) * 0.2, mz + fz * (0.6 + i * 0.15) - fx * (i - 1.5) * 0.2, cx, cz); this.put(pebbleGeo(), bx, bz, i).scale.set(1.4, 0.4, 0.4); }
+    for (let i = 0; i < 4; i++) { const [bx, bz] = this.near(mx + fx * (1.5 + i * 0.15) + fz * (i - 1.5) * 0.2, mz + fz * (0.6 + i * 0.15) - fx * (i - 1.5) * 0.2, cx, cz); this.put(pebbleGeo(), bx, bz, i).scale.set(1.4, 0.4, 0.4); }
     const smoke = /enfum/.test(a.c.doing ?? '');
-    if (smoke) { const [sx, sz] = this.near(mx + fx * 0.75, mz + fz * 0.75, cx, cz); this.fireAt(sx, sz); this.emits.push({ x: sx, y: y(sx, sz) + 0.08, z: sz, kind: 'smoke', every: 0.15, t: 0 }); }
+    if (smoke) { const [sx, sz] = this.near(mx + fx * 0.85, mz + fz * 0.85, cx, cz); this.fireAt(sx, sz); this.emits.push({ x: sx, y: y(sx, sz) + 0.08, z: sz, kind: 'smoke', every: 0.15, t: 0 }); }
     // le dragon, couché en travers de l'entrée, tête vers l'équipe (enfumé : encore dans le noir de la grotte)
     const actor = makeBeast('dragon', Math.floor(Math.abs(cx * 7 + cz * 3)) % 3, 1.5);
-    const hx = mx + fx * (smoke ? -0.1 : 0.55), hz = mz + fz * (smoke ? -0.1 : 0.55);
+    const hx = mx + fx * (smoke ? 0.3 : 1.05), hz = mz + fz * (smoke ? 0.3 : 1.05);
     actor.root.position.set(hx, y(hx, hz), hz);
     actor.root.rotation.order = 'YXZ';
     actor.root.rotation.y = face;
@@ -3940,7 +3940,7 @@ export class ExpeditionScene {
     play(actor, ['Sleep'], 0);
     this.lit = true;
     this.focus = [(cx + mx) / 2, (cz + mz) / 2];
-    this.dragon = { actor, x: hx, z: hz, heading: face, lift: 0, act: 'sleep', actT: 0, roll: 0, mouth: [mx, mz], face, home: [mx + fx * 0.6, mz + fz * 0.6], hoard, smoke, hits: 0, ended: false, next: 0 };
+    this.dragon = { actor, x: hx, z: hz, heading: face, lift: 0, act: 'sleep', actT: 0, roll: 0, mouth: [mx, mz], face, home: [mx + fx * 1.05, mz + fz * 1.05], hoard, smoke, hits: 0, ended: false, next: 0 };
   }
 
   /** Où est la gueule du dragon, dans le monde (pour son souffle de feu) */
@@ -4025,7 +4025,7 @@ export class ExpeditionScene {
     } else if (d.act === 'dead') {
       // il s'effondre, puis roule sur le flanc dans un nuage de poussière
       d.lift = Math.max(0, d.lift - dt * 1.5);
-      d.roll = 1.25 * smooth(Math.min(1, Math.max(0, (d.actT - 1.2) / 1.2)));
+      d.roll = 0.5 * smooth(Math.min(1, Math.max(0, (d.actT - 1.2) / 1.2)));
       if (d.actT > 1.2 && d.actT - dt <= 1.2) for (let i = 0; i < 5; i++) this.puffAt(d.x + (Math.random() - 0.5) * 0.6, w.surfaceAt(d.x, d.z) + 0.03, d.z + (Math.random() - 0.5) * 0.6);
     } else if (d.act === 'flee') {
       // il s'envole par-dessus la montagne, loin de la troupe, et disparaît

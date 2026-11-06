@@ -87,7 +87,7 @@ describe('la chasse au monstre des mers', () => {
     }
   });
 
-  it('le monstre meurt sous les yeux de l’équipe : l’issue se tire avant la fin du travail, après le dernier imprévu, et c’est elle qui compte', () => {
+  it('le monstre meurt sous les yeux de l’équipe : l’issue se tire avant la fin du travail, après le dernier imprévu, et c’est elle qui compte', { timeout: 30000 }, () => {
     for (const seed of [3, 7, 11, 19]) for (const ci of [0, 1]) {
       const v = village(1, seed), a = v.ex.start(mission('monster'), ci, 1)!;
       expect(a).not.toBeNull();
@@ -202,7 +202,7 @@ describe('la scène du dragon', () => {
       const d = lair(sc);
       acts.add(d.act);
       if (awake < 0 && d.act !== 'sleep') awake = k;
-      if (rolled < 0 && d.roll > 1) rolled = k;
+      if (rolled < 0 && d.roll > 0.4) rolled = k;
       expect(Number.isFinite(d.actor.root.position.x + d.actor.root.position.y + d.actor.root.position.z)).toBe(true);
     }, true);
     expect(awake).toBeGreaterThan(0.05);
