@@ -678,7 +678,8 @@ export class UI {
     ov.querySelector<HTMLButtonElement>('[data-tab="missions"]')?.click();
     const card = ov.querySelector<HTMLElement>(`.mission[data-id="${id}"]`);
     if (!card) return;
-    card.querySelector('details')?.setAttribute('open', '');
+    // le filtre en cours pourrait la cacher : retour à « Toutes »
+    if (card.hidden) ov.querySelector<HTMLButtonElement>('[data-f="all"]')?.click();
     card.scrollIntoView({ block: 'center', behavior: 'smooth' });
     card.classList.remove('flash');
     void card.offsetWidth;
@@ -1263,16 +1264,19 @@ export class UI {
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord l'expédition obligatoire qui reste à faire, puis les autres à faire, puis ce qu'on peut refaire
     const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : m.mandatory && !ex.done(m) ? 0 : 1);
+    // une carte compacte par mission : pastille, titre, âge, étiquettes, une phrase, ce qu'elle débloque ; un seul bouton ouvre
+    // la petite fenêtre de départ (les choix, l'équipement, le risque)
     const card = (m: Mission) => {
-      const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
-      // l'expédition armée n'a plus rien à prendre : on propose de creuser un tunnel
-      const choices = run ? '' : m.id === 'deep' && ex.tunnelNeeded() ? this.tunnelHtml() : `<div class="mchoices" data-m="${m.id}">${this.choiceButtons(m)}</div>`;
-      return `<div class="mission ${done ? 'done' : ''}" data-id="${m.id}" data-leg="${+isLegendary(m)}" data-mil="${+isMilitary(m)}">
-        <div class="mhead"><b>${m.icon}</b><div class="grow"><h4>${m.title}${isLegendary(m) ? ' <span class="legendTag">✨ légendaire</span>' : ''}</h4><small>${AGES[m.age].name}${m.mandatory ? ' · <span class="star">★ obligatoire pour l’âge suivant</span>' : ''}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
-        ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b> (${BUILD_CATS.find((c) => c.id === KINDS[m.unlocks!].cat)!.label})${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} Bâtir</button>` : ''}</p>` : ''}
-        ${m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => ex.hasFor(k, m.requires!.kinds!)).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : ''}
-        ${m.choices.some((c) => c.win.some((e) => e.t === 'veins')) ? `<p class="held">${ic('outpost', 15, 2)} Galeries tenues sous terre : <b>${ex.held()}</b> cases${ex.held() ? ' — chaque victoire pousse le front plus loin' : ' — un avant-poste en tiendra les premières'}</p>` : ''}
-        ${run ? '' : redo ? `<details class="redo"><summary>${ic('restart', 14, 2)} Refaire cette expédition</summary><p>${m.intro}</p><p class="hint">Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>${choices}</details>` : `${this.introHtml(m.intro)}${choices}`}</div>`;
+      const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, leg = isLegendary(m), mil = isMilitary(m);
+      const tags = `${m.mandatory ? '<span class="mtag must">★ Obligatoire</span>' : ''}${leg ? '<span class="mtag leg">✨ Légendaire</span>' : ''}${mil ? '<span class="mtag mil">⚔️ Militaire</span>' : ''}`;
+      const label = run ? 'Équipe en route…' : m.id === 'deep' && ex.tunnelNeeded() ? 'Creuser un tunnel' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe';
+      return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
+        <div class="mhead"><b class="mbadge">${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
+        ${tags ? `<div class="mtags">${tags}</div>` : ''}
+        <p class="mtext">${splitIntro(m.intro).head}</p>
+        ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} Bâtir</button>` : ''}</p>` : ''}
+        ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m)}</p>` : ''}
+        <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${ic(m.id === 'deep' && ex.tunnelNeeded() ? 'pickaxe' : 'compass', 16, 2)} ${label}</button></div>`;
     };
     const sorted = ex.list(age).sort((a, b) => rank(a) - rank(b));
     const cards = sorted.map(card).join('');
@@ -1299,20 +1303,12 @@ export class UI {
     }));
     // l'arsenal se redessine quand la réserve ou la file changent ; la barre de fabrication avance en continu
     let key = '';
-    let gearKey = '-';
     const arsenal = () => {
       if (!ov.isConnected) { clearInterval(iv); return; }
       const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${ex.active.length}`;
       if (k !== key) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
-      // une pièce fabriquée (ou une équipe partie avec) : les choix des missions disent ce qu'on emporterait, et le risque qui va avec
-      const gk = `${JSON.stringify(st.gear)}|${st.craft.join()}|${ex.active.length}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${Math.floor(ex.ore)}`;
-      if (gk !== gearKey) {
-        if (gearKey !== '-') ov.querySelectorAll<HTMLElement>('.mchoices[data-m]').forEach((el) => { const m = MISSIONS.find((x) => x.id === el.dataset.m); if (m) el.innerHTML = this.choiceButtons(m); });
-        gearKey = gk;
-      }
       const bar = ov.querySelector<HTMLElement>('.queue .bar i');
       if (bar) bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`;
-      ov.querySelectorAll<HTMLElement>('.gnbar i').forEach((i) => (i.style.width = `${Math.round(ex.craftProgress() * 100)}%`));
       const rb = ov.querySelector<HTMLElement>('.railBox'), rh = this.railHtml();
       if (rb && rb.dataset.html !== rh) { rb.dataset.html = rh; rb.innerHTML = rh; }
     };
@@ -1339,29 +1335,84 @@ export class UI {
       h.audio.sfxClick();
       if (go.dataset.kind) { close(); this.pick(go.dataset.kind as KindId); } else this.gotoMission(go.dataset.goto!);
     });
-    // l'équipement qui manque à un choix : le fabriquer d'ici, ou aller à sa fiche dans l'onglet Équipement
+    // « Envoyer une équipe » : la petite fenêtre de départ s'ouvre par-dessus (un tunnel à creuser, lui, se creuse tout de suite)
     ov.addEventListener('click', (e) => {
-      const t = e.target as HTMLElement, mk = t.closest<HTMLButtonElement>('button[data-mk]'), go = t.closest<HTMLButtonElement>('button[data-geargo]');
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-send]');
+      if (!b || b.disabled) return;
+      const m = MISSIONS.find((x) => x.id === b.dataset.send);
+      if (!m) return;
+      h.audio.sfxClick();
+      if (m.id === 'deep' && ex.tunnelNeeded()) { close(); h.digTunnel(); return; }
+      this.openSend(m, ov, close);
+    });
+  }
+
+  /**
+   * La petite fenêtre de départ d'une mission, par-dessus les expéditions : l'intro, puis chaque choix avec tout ce qu'il faut
+   * pour décider (habitants, durée, risque, dangers, équipement prêt ou à fabriquer, chevaux, carburant, gains) et son bouton
+   * « Partir ». Elle se redessine quand l'équipement ou la réserve changent ; l'équipe partie, tout se ferme
+   */
+  private openSend(m: Mission, main: HTMLElement, closeMain: () => void) {
+    const h = this.host, ex = h.expeditions, age = h.sim.age;
+    const body = () => {
+      const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, max = ex.slots();
+      const req = m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => ex.hasFor(k, m.requires!.kinds!)).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : '';
+      const held = m.choices.some((c) => c.win.some((e) => e.t === 'veins')) ? `<p class="held">${ic('outpost', 15, 2)} Galeries tenues sous terre : <b>${ex.held()}</b> cases${ex.held() ? ' — chaque victoire pousse le front plus loin' : ' — un avant-poste en tiendra les premières'}</p>` : '';
+      const choices = run ? `<p class="hint">${ic('clock', 15, 2)} Une équipe est déjà en route pour cette mission.</p>` : m.id === 'deep' && ex.tunnelNeeded() ? this.tunnelHtml() : `<div class="choices">${this.choiceButtons(m)}</div>`;
+      return `<p class="sintro">${m.intro}</p>
+        ${redo ? `<p class="hint">${ic('restart', 14, 2)} Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>` : ''}
+        ${req}${held}
+        <p class="slots">${ic('compass', 14, 2)} Équipes en route : <b>${ex.active.length} / ${max}</b>${ex.active.length >= max ? ' — attendez le retour d’une équipe' : ''}</p>
+        ${choices}`;
+    };
+    const { ov, close } = modal(this.root, 'sendModal', `${m.icon} ${m.title}`, `<div class="sendBody">${body()}</div>`, () => clearInterval(iv));
+    const root = $('.sendBody', ov);
+    // une pièce fabriquée, une équipe partie ou de retour, la réserve qui bouge : les choix se redessinent ; la barre de
+    // fabrication avance en continu
+    const stamp = () => { const st = ex.state; return `${JSON.stringify(st.gear)}|${st.craft.join()}|${ex.active.length}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${Math.floor(ex.ore)}|${Math.floor(h.world.fuel)}|${Math.floor(h.sim.pop)}|${ex.done(m)}`; };
+    let key = stamp();
+    const tick = () => {
+      if (!ov.isConnected) { clearInterval(iv); return; }
+      const k = stamp();
+      if (k !== key) { key = k; root.innerHTML = body(); }
+      ov.querySelectorAll<HTMLElement>('.gnbar i').forEach((i) => (i.style.width = `${Math.round(ex.craftProgress() * 100)}%`));
+    };
+    const iv = setInterval(tick, 300);
+    ov.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      // l'équipement qui manque : le fabriquer d'ici, ou aller à sa fiche dans l'onglet Équipement
+      const mk = t.closest<HTMLButtonElement>('button[data-mk]'), gg = t.closest<HTMLButtonElement>('button[data-geargo]');
       if (mk) {
         if (mk.disabled) return;
         const id = mk.dataset.mk as GearId;
-        if (ex.craft(id, this.host.sim.age)) { h.audio.sfxClick(); key = ''; gearKey = '+'; arsenal(); } else this.toast(ex.whyCraft(GEAR_BY[id], this.host.sim.age) ?? 'Impossible à fabriquer pour l’instant.');
-      } else if (go) {
+        if (ex.craft(id, h.sim.age)) { h.audio.sfxClick(); key = ''; tick(); } else this.toast(ex.whyCraft(GEAR_BY[id], h.sim.age) ?? 'Impossible à fabriquer pour l’instant.');
+        return;
+      }
+      if (gg) {
         h.audio.sfxClick();
-        ov.querySelector<HTMLButtonElement>('[data-tab="gear"]')?.click();
-        const card = ov.querySelector<HTMLElement>(`.gear[data-gear="${go.dataset.geargo}"]`);
+        close();
+        main.querySelector<HTMLButtonElement>('[data-tab="gear"]')?.click();
+        const card = main.querySelector<HTMLElement>(`.gear[data-gear="${gg.dataset.geargo}"]`);
         card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         card?.classList.remove('flash'); void card?.offsetWidth; card?.classList.add('flash');
+        return;
       }
-    });
-    // un clic sur un choix (les boutons se redessinent : un seul écouteur pour toute la fenêtre)
-    ov.addEventListener('click', (e) => {
-      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button.choice[data-m]');
+      // ce qui manque à la mission : un bâtiment se prend en main (tout se ferme), une expédition s'amène sous les yeux
+      const go = t.closest<HTMLElement>('.go[data-kind], .go[data-goto]');
+      if (go) {
+        h.audio.sfxClick();
+        close();
+        if (go.dataset.kind) { closeMain(); this.pick(go.dataset.kind as KindId); } else this.gotoMission(go.dataset.goto!);
+        return;
+      }
+      if (t.closest('[data-dig]')) { close(); closeMain(); h.audio.sfxClick(); h.digTunnel(); return; }
+      // « Partir »
+      const b = t.closest<HTMLButtonElement>('button.choice[data-m]');
       if (!b || b.disabled) return;
-      const m = ex.list(age).find((x) => x.id === b.dataset.m)!, ci = +b.dataset.c!;
-      const a = ex.start(m, ci, this.host.sim.age);
+      const ci = +b.dataset.c!, a = ex.start(m, ci, h.sim.age);
       if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? ex.lastFail ?? 'Aucun chemin praticable vers cette destination.'); return; }
       close();
+      closeMain();
       h.audio.sfxClick();
       // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre ; le grand départ des colons,
       // lui, se suit d'office (c'est la fin de la partie)
@@ -1371,31 +1422,26 @@ export class UI {
     });
   }
 
-  /** L'intro d'une mission : sa première phrase, le reste replié */
-  private introHtml(text: string) {
-    const { head, rest } = splitIntro(text);
-    return `<p>${head}</p>${rest ? `<details class="cdet"><summary>En savoir plus</summary><p>${rest}</p></details>` : ''}`;
-  }
-
   /**
-   * Les choix d'une mission, une ligne chacun (le nom, l'équipe, la durée, le risque d'échec) ; le détail (récit, chevaux,
-   * carburant, dangers, équipement emporté, gains) se replie dessous. Grisés avec la raison s'il manque quelque chose
+   * Les choix d'une mission (fenêtre de départ), une fiche chacun : le nom et le risque d'échec, le récit, l'équipe, la durée,
+   * la destination, les chevaux et le carburant, les dangers, l'équipement emporté et celui qui manque (à fabriquer d'ici),
+   * les gains ; puis « Partir », ou la raison pour laquelle on ne peut pas
    */
   private choiceButtons(m: Mission) {
     const ex = this.host.expeditions, done = ex.done(m);
     return m.choices.map((c0, i) => {
       const c = choiceAt(c0, this.host.sim.age), why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
-      return `<div class="cbox"><button class="choice" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">
-          <b>${c.label}</b>
-          <small>👥 ${c.party} · ⏳ ${workLabel(c.work)} · ⚠️ ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''}</small>
-          ${why ? `<small class="why">${why}</small>` : ''}</button>
+      const lvl = pv.risk <= 0.12 ? 'low' : pv.risk <= 0.22 ? 'mid' : 'high';
+      return `<div class="cbox ${why ? 'off' : ''}">
+        <div class="chead"><b>${c.label}</b><span class="crisk ${lvl}" title="Risque d’échec">⚠️ ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} · ${riskLabel(pv.risk)}</span></div>
+        <p class="ctext">${c.text}</p>
+        <div class="cstats"><span>👥 ${c.party} habitant${c.party > 1 ? 's' : ''}</span><span>⏳ ${workLabel(c.work)}</span><span>${DEST_ICON[c.dest]}</span>${c.mounts ? `<span>🐎 ${c.mounts} chevaux</span>` : ''}${c.fuel ? `<span>⛽ ${c.fuel} carburant</span>` : ''}</div>
+        <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')}</small>
+        <small class="kit ${pv.label ? 'ready' : ''}">${ic('kit', 13, 2)} ${pv.label ? `Prêt : on emporte ${pv.label}` : 'Aucun équipement en réserve pour ces dangers'}</small>
         ${this.gearNeedHtml(c)}
-        <details class="cdet"><summary>Détails</summary>
-          <p>${c.text}</p>
-          <small>${DEST_ICON[c.dest]} Risque d’échec : ${pct(pv.risk)} (${riskLabel(pv.risk)})${c.mounts ? ` · 🐎 ${c.mounts} chevaux` : ''}${c.fuel ? ` · ⛽ ${c.fuel} carburant` : ''}</small>
-          <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')} — ${pv.label ? `on emporte ${pv.label}` : 'aucun équipement en réserve'}</small>
-          <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
-        </details></div>`;
+        <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
+        <button class="choice depart" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">${ic('compass', 16, 2)} Partir</button>
+        ${why ? `<small class="why">${why}</small>` : ''}</div>`;
     }).join('');
   }
 
@@ -1412,9 +1458,9 @@ export class UI {
       const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
       const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
       const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
-      return `<div class="gnrow" title="${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <b>${left > 0 ? left : g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</b> ${left > 0 ? '<em>à fabriquer</em>' : ''}${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
+      return `<div class="gnrow" title="${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <button type="button" class="gnlink" data-geargo="${g.gear.id}" title="Voir dans l’onglet Équipement">${left > 0 ? left : g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</button> ${left > 0 ? '<em>à fabriquer</em>' : ''}${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
     }).join('');
-    return `<div class="gearNeed">${rows}</div>`;
+    return `<div class="gearNeed"><small class="gnh">${ic('hammer', 13, 2)} Équipement nécessaire</small>${rows}</div>`;
   }
 
   /** Profondeurs : le camp souterrain, ses quêtes (accomplies, en cours, à venir), ce qu'elles lui apportent ; on y lance l'expédition armée */
@@ -1426,7 +1472,7 @@ export class UI {
       : miss.length ? `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">Il suffit d’un avant-poste bâti tout contre une grotte ou une faille. Les troupes à pied partent sans chevaux ; seule la charge en demande. « Repérer les profondeurs », facultatif, rend les troupes plus sûres.</p><p class="req">${this.needsHtml(deep) || miss.join(', ')}</p></div>`
       : ex.running(deep) ? `<p class="hint">${ic('sword', 15, 2)} Une expédition armée est déjà dans les galeries.</p>`
       : ex.tunnelNeeded() ? this.tunnelHtml()
-      : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe part du village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><div class="choices">${this.choiceButtons(deep)}</div></div>`;
+      : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="hint">${lvl ? 'La troupe se rassemble au camp souterrain et s’enfonce aussitôt dans les galeries.' : 'La troupe part du village et gagne l’avant-poste.'} Victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front : c’est ce qui fait avancer les quêtes.</p><button class="sendBtn" data-send="deep">${ic('sword', 16, 2)} Choisir la troupe</button></div>`;
     const quests = CAMP_QUESTS.map((q, i) => {
       const [cur, max] = q.goal(st), done = i < lvl, now = i === lvl, k = Math.min(1, cur / max);
       return `<li class="${done ? 'done' : now ? 'cur' : 'todo'}">

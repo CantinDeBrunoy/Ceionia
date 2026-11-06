@@ -83,7 +83,7 @@ export const TUTO_TEXT = {
     expeditions: {
       title: 'Les expéditions',
       text: 'Le bouton {compass} ouvre les expéditions : une petite équipe d’habitants part chercher bêtes, minerai ou semences, et débloque parfois de nouveaux bâtiments. Chaque âge a au moins une expédition obligatoire ★ (la Préhistoire en a deux). Une fois l’équipe partie, sa carte s’affiche à gauche : son bouton {eye} la fait suivre (ou lâcher) par la caméra.',
-      choose: 'Choisissez une mission, puis l’un de ses choix pour faire partir l’équipe.',
+      choose: 'Choisissez une mission et « Envoyer une équipe », puis l’un de ses choix : « Partir » fait partir l’équipe.',
       none: 'Aucune équipe ne peut partir pour l’instant (il faut des habitants libres) : « Suivant » passe à la suite.',
       tasks: ['Ouvrir les expéditions', 'Lancer une expédition', 'Suivre l’équipe avec {eye}'],
     },
@@ -258,9 +258,10 @@ export class Tutorial {
         id: 'expeditions',
         // le bouton 🧭, puis un choix de mission dans la fenêtre, puis l'œil de la carte de l'équipe
         anchor: () => {
-          const m = q('.expModal');
+          // la fenêtre de départ d'une mission, sinon la liste des missions (le bouton « Envoyer une équipe »)
+          const m = q('.sendModal') ?? q('.expModal');
           if (m && !this.ticks[1]) {
-            const b = [...m.querySelectorAll('button.choice:not([disabled])')].find((x) => x.getClientRects().length);
+            const b = [...m.querySelectorAll('button.choice:not([disabled]), button[data-send]:not([disabled])')].find((x) => x.getClientRects().length);
             if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
             return b ?? m.querySelector('.mtitle');
           }
@@ -269,9 +270,9 @@ export class Tutorial {
         },
         check: () => [!!q('.expModal'), h.expeditions.active.length > 0, this.clicks.has('exp')],
         note: () => {
-          const m = q('.expModal');
+          const m = q('.sendModal') ?? q('.expModal');
           if (!m || this.ticks[1]) return '';
-          return m.querySelector('button.choice:not([disabled])') ? T.expeditions.choose : T.expeditions.none;
+          return m.querySelector('button.choice:not([disabled]), button[data-send]:not([disabled])') ? T.expeditions.choose : T.expeditions.none;
         },
       },
       {
