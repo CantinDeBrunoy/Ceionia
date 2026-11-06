@@ -11,6 +11,7 @@ import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
+import { depthIncome, HELD_PER_STONE, VEINS_PER_ORE } from '../sim/depths';
 import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, splitIntro, mandatoriesFor, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
@@ -826,7 +827,7 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}/j`;
-    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
+    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments (les galeries tenues du monde souterrain en rapportent aussi)', ore: ' — pour passer les âges et s’équiper ; les filons abattus du monde souterrain en rapportent chaque jour (onglet Profondeurs)', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');
@@ -1382,9 +1383,13 @@ export class UI {
         <small class="gain">${done ? 'Le camp a gagné' : 'Le camp y gagnera'} : ${q.builds}. ${q.perk}</small>
       </li>`;
     }).join('');
+    const inc = depthIncome(this.host.world, lvl);
+    const rente = lvl < 1 ? `<p class="hint">${ic('pickaxe', 15, 2)} <b>Rente du sous-sol</b> : dès que le camp est dressé, chaque tranche de ${HELD_PER_STONE} cases de galeries tenues rapporte 1 pierre par jour, et chaque tranche de ${VEINS_PER_ORE} filons abattus 1 minerai par jour, pour toujours.</p>`
+      : `<p class="hint" title="Chaque tranche de ${HELD_PER_STONE} cases de galeries tenues rapporte 1 pierre par jour ; chaque tranche de ${VEINS_PER_ORE} filons abattus, 1 minerai par jour. Cela s'ajoute à la production des bâtiments et se voit dans les réserves en haut de l'écran.">${ic('pickaxe', 15, 2)} <b>Rente du sous-sol</b> : <b>+${inc.stone} pierre/j</b> (${st.held} cases tenues, 1 pierre par ${HELD_PER_STONE}) et <b>+${inc.ore} minerai/j</b> (${st.veins} filons abattus, 1 minerai par ${VEINS_PER_ORE}). Tenir plus de galeries et abattre plus de filons l'augmente, pour toujours.</p>`;
     return `<p class="hint">Sous terre, on ne bâtit pas : le camp se dresse de lui-même au pied du puits du premier avant-poste, et grandit à mesure que ses quêtes s’accomplissent. Chacune lui ajoute des bâtiments et des gardes, posés d’eux-mêmes, et un avantage durable pour les expéditions armées.</p>
       <div class="campStats"><b>${ic('outpost', 18, 2)} Camp souterrain — niveau ${lvl} / ${CAMP_QUESTS.length}</b>
         <span>Galeries tenues : <b>${st.held}</b></span><span>Filons abattus : <b>${st.veins}</b></span><span>Embuscades repoussées : <b>${st.wins}</b></span><span>Zones tenues : <b>${st.zones}</b></span></div>
+      ${rente}
       <div class="railBox">${this.railHtml()}</div>
       ${send}
       <ol class="quests">${quests}</ol>`;

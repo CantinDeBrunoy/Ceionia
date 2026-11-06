@@ -375,10 +375,10 @@ describe('équipement des expéditions selon la difficulté', () => {
 describe('un bâtiment posé avant d’être demandé compte déjà', () => {
   beforeAll(() => setMapSize(96));
 
-  it('pour l’âge suivant : le moulin et l’hôpital bâtis en avance, une place devenue forum', () => {
+  it('pour l’âge suivant : le moulin et l’hôpital bâtis en avance, la place du village', () => {
     for (const d of ['normal', 'challenge'] as Difficulty[]) {
       const w = flatWorld(d);
-      put(w, [['house', 0], ['house', 0], ['house', 0], ['house', 0], ['farm', 0], ['well', 0], ['workshop', 0], ['mill', 0], ['health', 0], ['forum', 0]]);
+      put(w, [['house', 0], ['house', 0], ['house', 0], ['house', 0], ['farm', 0], ['well', 0], ['workshop', 0], ['mill', 0], ['health', 0], ['gather', 0]]);
       w.exp.done.push(...mandatoriesFor(0).map((m) => m.id));
       const sim = new Sim(w);
       sim.recalc();
@@ -391,7 +391,7 @@ describe('un bâtiment posé avant d’être demandé compte déjà', () => {
       const item = (k: KindId) => sim.ageProgress()!.items.find((i) => i.kind === k)!;
       expect(item('mill').have, d).toBe(1);
       expect(item('health').have, d).toBe(1);
-      // la place devenue forum compte comme une place (en défi, elle a déjà servi au Moyen Âge, qui en demandait une)
+      // la place compte comme une place (en défi, elle a déjà servi au Moyen Âge, qui en demandait une)
       expect(item('gather').have, d).toBe(d === 'normal' ? 1 : 0);
       expect(sim.built('gather')).toBe(1);
     }

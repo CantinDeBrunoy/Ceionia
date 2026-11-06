@@ -5,7 +5,7 @@ import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_
 import { AGES, KINDS, KindId, Building, sizeOf, lineOf } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
-import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats } from './depths';
+import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats, depthIncome } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
 import { rulesOf } from './difficulty';
 import { hash2 } from '../core/rng';
@@ -1131,6 +1131,9 @@ export class Expeditions {
     }
     // le monte-charge du camp souterrain remonte du minerai chaque jour
     if (this.camp() >= 6) rate.ore += 2;
+    // la rente du sous-sol : galeries tenues et filons abattus rapportent pierre et minerai chaque jour
+    const inc = depthIncome(this.world, this.camp());
+    rate.stone += inc.stone; rate.ore += inc.ore;
     return rate;
   }
 

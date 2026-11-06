@@ -69,6 +69,19 @@ export const CAMP_QUESTS: CampQuest[] = [
   },
 ];
 
+/**
+ * Rente du sous-sol : une fois le camp dressé, les galeries tenues et les filons abattus rapportent chaque jour, pour toujours,
+ * de la pierre (galeries étayées, déblais) et du minerai (filons exploités) : 1 pierre pour 40 cases tenues, 1 minerai pour 4 filons
+ */
+export const HELD_PER_STONE = 40, VEINS_PER_ORE = 4;
+export function depthIncome(w: World, camp: number): { stone: number; ore: number } {
+  if (camp < 1) return { stone: 0, ore: 0 };
+  return { stone: Math.floor(w.claimed.size / HELD_PER_STONE), ore: Math.floor(w.mined.size / VEINS_PER_ORE) };
+}
+
+/** Bien-être que le village tire de ses profondeurs, une fois la quête « Les cinq profondeurs » accomplie (niveau 7 du camp) */
+export const CAMP_JOY = 3; // (le texte de la quête « all » le dit en clair)
+
 /** Gardes du camp selon son niveau (nombre de quêtes accomplies) */
 export const CAMP_GUARDS = [0, 2, 4, 4, 6, 6, 8, 8, 8, 12];
 
