@@ -66,16 +66,6 @@ describe('la place du village (3 × 3)', () => {
       expect(Math.hypot(sx + 1.5 - N / 2, sz + 1.5 - N / 2)).toBeLessThan(12);
     }
   });
-
-  it('s’améliore en forum sur la même emprise', () => {
-    const w = continent();
-    const [x, z] = plazaSpot(w);
-    const g = w.place('gather', x, z, 0, true, 1, false);
-    const cells = cellsOf(w, g.id);
-    const f = w.upgrade(g.id, 'forum')!;
-    expect(f.kind).toBe('forum');
-    expect(cellsOf(w, f.id)).toEqual(cells);
-  });
 });
 
 describe('les places des anciennes sauvegardes', () => {
@@ -129,9 +119,11 @@ describe('les places des anciennes sauvegardes', () => {
 });
 
 describe('les âges et les améliorations', () => {
-  it('une place améliorée en forum compte encore comme une place', async () => {
-    const { lineOf } = await import('../src/build/catalog');
-    expect(lineOf('gather')).toContain('forum');
+  it('la place du village et le forum ont chacun leur propre ligne d’évolution', async () => {
+    const { lineOf, UPGRADES } = await import('../src/build/catalog');
+    expect(lineOf('gather')).toEqual(['gather']);
+    expect(lineOf('forum')).toEqual(['forum']);
+    expect(UPGRADES.some((u) => u.to === 'forum' || u.from === 'forum')).toBe(false);
   });
   it('l’acropole, le forum et le sénat ne se bâtissent plus après l’Antiquité', async () => {
     const { KINDS } = await import('../src/build/catalog');

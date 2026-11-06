@@ -78,7 +78,8 @@ describe('creuser des tunnels sous terre', () => {
     expect(u.heightAt(x, z)).toBeLessThan(0.5);
     expect(w.dug.has(k)).toBe(true);
     expect(w.claimed.has(k)).toBe(true);
-    expect(w.stone).toBe(stone + 1);
+    // (la rente du sous-sol ajoute quelques fractions de pierre au fil du temps)
+    expect(w.stone).toBeCloseTo(stone + 1, 0);
     // on enchaîne : un clic au loin trace tout le tunnel jusque-là, un clic sur une case prévue l'annule avec la suite
     const far = u.tunnel([...w.claimed], (n) => n !== k && around(n).every((m) => !w.claimed.has(m)), 3)!;
     expect(far.length).toBeGreaterThanOrEqual(2);
@@ -210,5 +211,16 @@ describe('creuser des tunnels sous terre', () => {
     expect(old.w2.dug.size).toBe(0);
     expect(old.w2.digs).toEqual([]);
     expect(old.u2.open[k]).toBe(0);
+  });
+});
+
+describe("la rente du sous-sol", () => {
+  it("sans camp rien ; avec le camp, 1 pierre par 40 cases tenues et 1 minerai par 4 filons", async () => {
+    const { depthIncome } = await import("../src/sim/depths");
+    const w = { claimed: new Set<number>(), mined: new Set<number>() } as any;
+    for (let i = 0; i < 130; i++) w.claimed.add(i);
+    for (let i = 0; i < 9; i++) w.mined.add(i);
+    expect(depthIncome(w, 0)).toEqual({ stone: 0, ore: 0 });
+    expect(depthIncome(w, 1)).toEqual({ stone: 3, ore: 2 });
   });
 });

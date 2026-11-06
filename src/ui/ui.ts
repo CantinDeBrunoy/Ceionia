@@ -11,6 +11,7 @@ import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
+import { depthIncome, HELD_PER_STONE, VEINS_PER_ORE } from '../sim/depths';
 import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, splitIntro, mandatoriesFor, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
@@ -57,6 +58,9 @@ export interface UIHost {
   setDisasters(on: boolean): void;
   autoRoads: boolean;
   setAutoRoads(on: boolean): void;
+  /** flèches d'amélioration au-dessus des bâtiments, masquées ou non */
+  hideUpBadges: boolean;
+  setHideUpBadges(on: boolean): void;
   /** expéditions, et celle que la caméra suit (son numéro) */
   expeditions: Expeditions;
   /** chemin de fer de la gare à l'avant-poste, et la caméra qui suit le train */
@@ -823,7 +827,7 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}/j`;
-    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
+    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments (les galeries tenues du monde souterrain en rapportent aussi)', ore: ' — pour passer les âges et s’équiper ; les filons abattus du monde souterrain en rapportent chaque jour (onglet Profondeurs)', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');
@@ -885,16 +889,26 @@ export class UI {
   /** Fenêtre d'un nouvel âge : les bâtiments qui apparaissent, chacun à bâtir d'un clic (et ses améliorations) */
   showNewAge(age: number) {
     const fresh = KIND_ORDER.filter((k) => KINDS[k].minAge === age && !this.lockOf(k));
-    if (!fresh.length) return;
+    // ceux qu'une expédition débloquerait : visibles mais grisés, avec le nom de l'expédition
+    const shut = KIND_ORDER.filter((k) => KINDS[k].minAge <= age && KINDS[k].reqMission && !this.host.expeditions.state.done.includes(KINDS[k].reqMission!)
+      && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge!));
+    if (!fresh.length && !shut.length) return;
+    const lockedTile = (k: KindId) => {
+      const m = MISSIONS.find((x) => x.id === KINDS[k].reqMission);
+      return `<button class="newKind shut" data-mission="${KINDS[k].reqMission}" title="Un clic mène à l’expédition"><b>${ic(KIND_ICON[k], 26, 1.6)}</b><span>${KINDS[k].names[age] || KINDS[k].names[KINDS[k].minAge]}</span><small>Expédition « ${m?.title ?? KINDS[k].reqMission} »</small></button>`;
+    };
     const tile = (k: KindId) => `<button class="newKind" data-kind="${k}" title="${this.host.sim.whereOf(k)}"><b>${ic(KIND_ICON[k], 26, 1.6)}</b><span>${KINDS[k].names[age]}</span><small>${BUILD_CATS.find((c) => c.id === KINDS[k].cat)!.label}</small></button>`;
     const { ov, close } = modal(this.root, 'newAge', `${ic('up', 22)} ${AGES[age].name}`, `
       <p class="hint">${AGES[age].tagline}. Nouveaux bâtiments à votre disposition :</p>
-      <div class="newKinds">${fresh.map(tile).join('')}</div>
+      ${fresh.length ? `<div class="newKinds">${fresh.map(tile).join('')}</div>` : ''}
+      ${shut.length ? `<p class="hint">À débloquer par des expéditions :</p><div class="newKinds">${shut.map(lockedTile).join('')}</div>` : ''}
       <div class="row"><span class="grow"></span><button class="active ok">C’est parti</button></div>`);
     $('.ok', ov).onclick = close;
     ov.addEventListener('click', (e) => {
-      const k = (e.target as HTMLElement).closest<HTMLElement>('.newKind')?.dataset.kind as KindId | undefined;
+      const t = (e.target as HTMLElement).closest<HTMLElement>('.newKind');
+      const k = t?.dataset.kind as KindId | undefined;
       if (k) { close(); this.pick(k); }
+      else if (t?.dataset.mission) { close(); this.gotoMission(t.dataset.mission); }
     });
   }
 
@@ -1369,9 +1383,13 @@ export class UI {
         <small class="gain">${done ? 'Le camp a gagné' : 'Le camp y gagnera'} : ${q.builds}. ${q.perk}</small>
       </li>`;
     }).join('');
+    const inc = depthIncome(this.host.world, lvl);
+    const rente = lvl < 1 ? `<p class="hint">${ic('pickaxe', 15, 2)} <b>Rente du sous-sol</b> : dès que le camp est dressé, chaque tranche de ${HELD_PER_STONE} cases de galeries tenues rapporte 1 pierre par jour, et chaque tranche de ${VEINS_PER_ORE} filons abattus 1 minerai par jour, pour toujours.</p>`
+      : `<p class="hint" title="Chaque tranche de ${HELD_PER_STONE} cases de galeries tenues rapporte 1 pierre par jour ; chaque tranche de ${VEINS_PER_ORE} filons abattus, 1 minerai par jour. Cela s'ajoute à la production des bâtiments et se voit dans les réserves en haut de l'écran.">${ic('pickaxe', 15, 2)} <b>Rente du sous-sol</b> : <b>+${inc.stone} pierre/j</b> (${st.held} cases tenues, 1 pierre par ${HELD_PER_STONE}) et <b>+${inc.ore} minerai/j</b> (${st.veins} filons abattus, 1 minerai par ${VEINS_PER_ORE}). Tenir plus de galeries et abattre plus de filons l'augmente, pour toujours.</p>`;
     return `<p class="hint">Sous terre, on ne bâtit pas : le camp se dresse de lui-même au pied du puits du premier avant-poste, et grandit à mesure que ses quêtes s’accomplissent. Chacune lui ajoute des bâtiments et des gardes, posés d’eux-mêmes, et un avantage durable pour les expéditions armées.</p>
       <div class="campStats"><b>${ic('outpost', 18, 2)} Camp souterrain — niveau ${lvl} / ${CAMP_QUESTS.length}</b>
         <span>Galeries tenues : <b>${st.held}</b></span><span>Filons abattus : <b>${st.veins}</b></span><span>Embuscades repoussées : <b>${st.wins}</b></span><span>Zones tenues : <b>${st.zones}</b></span></div>
+      ${rente}
       <div class="railBox">${this.railHtml()}</div>
       ${send}
       <ol class="quests">${quests}</ol>`;
@@ -1618,6 +1636,8 @@ export class UI {
         <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.</p>
         <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? 'Activées' : 'Désactivées'}</button></div>
         <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
+        <div class="row"><label>Flèches d’amélioration</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${h.hideUpBadges ? 'Masquées' : 'Affichées'}</button></div>
+        <p class="hint">Une flèche dorée flotte au-dessus des bâtiments qu’on peut améliorer et dont on a de quoi payer l’amélioration.</p>
         <div class="row"><label>Ressources</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? (h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
         <p class="hint">Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
         <h4>Sauvegarde</h4>
@@ -1692,6 +1712,11 @@ export class UI {
       q('#gUnlimited').textContent = h.world.unlimited ? 'Illimitées' : 'Normales';
       q('#gUnlimited').classList.toggle('active', h.world.unlimited);
       this.update();
+    };
+    q('#gBadges').onclick = () => {
+      h.setHideUpBadges(!h.hideUpBadges);
+      q('#gBadges').textContent = h.hideUpBadges ? 'Masquées' : 'Affichées';
+      q('#gBadges').classList.toggle('active', !h.hideUpBadges);
     };
     q('#gRoads').onclick = () => {
       h.setAutoRoads(!h.autoRoads);

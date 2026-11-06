@@ -3,6 +3,7 @@ import { AGES, BUILD_CATS, KINDS, KindId, lineOf } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
+import { CAMP_JOY } from './depths';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -141,7 +142,7 @@ export class Sim {
     this.food.cap = down(this.baseFood + this.fieldsFood + needBonus(e, 'food'));
     this.water.cap = down(this.baseWater + needBonus(e, 'water'));
     this.jobs.cap = down(this.baseJobs + needBonus(e, 'jobs'));
-    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy'));
+    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + (e.camp >= 7 ? CAMP_JOY : 0));
     this.housing.demand = p;
     this.food.demand = up((n + 1) * rulesOf(this.world.difficulty).foodK);
     this.water.demand = n + 1;

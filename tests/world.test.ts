@@ -1071,7 +1071,8 @@ describe('expéditions', () => {
     // le monte-charge remonte deux minerai par jour
     const ore = w.ore;
     for (let i = 0; i < 100; i++) ex.update(1);
-    expect(w.ore - ore).toBeCloseTo(2, 5);
+    // + la rente du sous-sol : 20 filons abattus = 5 minerai par jour
+    expect(w.ore - ore).toBeCloseTo(7, 5);
     // le niveau du camp et les embuscades repoussées se sauvegardent
     const r = new World();
     r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
@@ -1264,7 +1265,8 @@ describe('expéditions', () => {
     run(900, () => { crew = Math.max(crew, tr.crew.length); });
     expect(crew).toBeGreaterThanOrEqual(2);
     expect(tr.delivered.ore + tr.delivered.stone).toBeGreaterThan(0);
-    expect(w.ore - ore + w.stone - stone).toBe(tr.delivered.ore + tr.delivered.stone);
+    // la rente du sous-sol (galeries tenues, filons abattus) s'ajoute à ce que les trains livrent
+    expect(w.ore - ore + w.stone - stone).toBeGreaterThanOrEqual(tr.delivered.ore + tr.delivered.stone);
     // une petite gare plus loin : une seconde ligne de la gare centrale à elle, des voyageurs vont de l'une à l'autre
     let line2 = null, small = null;
     for (const [sx, sz] of near(station!.x, station!.z, 'station')) {

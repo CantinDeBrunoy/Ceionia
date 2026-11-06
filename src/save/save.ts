@@ -17,6 +17,8 @@ export interface Settings {
   autoRoads?: boolean;
   /** ressources illimitées : bois, pierre et minerai ne manquent jamais (rien ne se paie) */
   unlimited?: boolean;
+  /** flèches d'amélioration au-dessus des bâtiments : masquées si vrai */
+  hideUpBadges?: boolean;
 }
 
 export type Quality = 'high' | 'medium' | 'low';
