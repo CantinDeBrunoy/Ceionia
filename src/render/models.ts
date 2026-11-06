@@ -3085,11 +3085,29 @@ function gatherPlaza(p: Parts, age: number, o: ModelOpts) {
     for (const [x, z, c, r] of [[0.32, -0.92, 0x2a2a2e, 0.3], [-0.85, 0.82, 0xf2c23a, -2.6], [0.9, 0.3, 0x3a6ab8, -1.4], [-0.6, -1.0, 0x8a3a6a, 2.8]] as number[][]) figure(p, x, z, c, r, false, 0x2a2420);
     return;
   }
-  // l'agora holographique : la place de perle, ses cercles de lumière, le globe au milieu
-  p.box(2.94, 0.012, 2.94, 0, 0, 0, F.pearl);
+  // l'agora holographique, un jardin plus qu'une place (la place moderne est toute dallée) : pelouse menthe, le parvis rond
+  // de nacre et ses quatre allées lumineuses vers les bords, le globe au milieu
+  p.box(2.94, 0.01, 2.94, 0, 0, 0, 0x7ae8b4);
+  p.cyl(1.0, 1.0, 0.014, 32, 0, 0, 0, 0xf2f6f8);
+  for (const r of [0, Math.PI / 2]) {
+    p.box(0.36, 0.013, 2.94, 0, 0, 0, 0xf2f6f8, r);
+    for (const s of [-1, 1]) p.box(0.012, 0.004, 0.42, r ? s * 1.22 : 0, 0.013, r ? 0 : s * 1.22, NEONS[(o.v + 2) % 4], r, 'neon');
+  }
   for (const s of [-1, 1]) { p.box(2.9, 0.004, 0.012, 0, 0.012, s * 1.42, NEONS[(o.v + 1) % 4], 0, 'neon'); p.box(0.012, 0.004, 2.9, s * 1.42, 0.012, 0, NEONS[(o.v + 1) % 4], 0, 'neon'); }
-  neonRing(p, 1.05, 0.014, 0, 0, NEONS[o.v % 4], 0.006, 32);
+  neonRing(p, 1.0, 0.016, 0, 0, NEONS[o.v % 4], 0.008, 32);
   placed(p, 0, 0, 0, 1.5, () => futureGather(p, o));
+  // dans les quatre pelouses : arbres-lumière (tronc blanc, ombelle qui luit), massifs hexagonaux aux bulbes phosphorescents
+  for (const [x, z, k] of [[-1.22, -0.42, 0], [-0.42, -1.22, 1], [1.22, 0.42, 2], [0.42, 1.22, 3], [1.22, -0.42, 1], [-1.22, 0.42, 3]] as number[][]) {
+    p.cyl(0.018, 0.03, 0.42, 6, x, 0.01, z, F.white);
+    p.add(new THREE.CylinderGeometry(0.17, 0.07, 0.04, 9), x, 0.42, z, F.white);
+    p.add(new THREE.IcosahedronGeometry(0.18, 1).scale(1, 0.55, 1), x, 0.48, z, NEONS[(k + o.v) % 4], 0, 'neon');
+    neonRing(p, 0.08, 0.016, x, z, NEONS[(k + o.v + 1) % 4], 0.008, 12);
+  }
+  for (const [x, z, k] of [[0.9, -1.25, 0], [-0.9, 1.25, 2]] as number[][]) {
+    p.cyl(0.2, 0.21, 0.09, 6, x, 0.01, z, F.white); p.cyl(0.185, 0.185, 0.01, 6, x, 0.1, z, 0x34404a);
+    for (let i = 0; i < 3; i++) { const a = i * 2.1 + k; p.sphere(0.06, x + Math.cos(a) * 0.08, 0.14, z + Math.sin(a) * 0.08, [0x2fbf8a, 0x7a62d8, 0x26a6b8][i], 0, 0.75); }
+    for (let i = 0; i < 3; i++) { const a = i * 2.1 + 1 + k; p.cyl(0.004, 0.005, 0.16, 4, x + Math.cos(a) * 0.05, 0.1, z + Math.sin(a) * 0.05, 0x3a9a6a); p.add(new THREE.IcosahedronGeometry(0.026, 0), x + Math.cos(a) * 0.05, 0.27, z + Math.sin(a) * 0.05, NEONS[(i + k) % 4], 0, 'neon'); }
+  }
   // les pylônes aux quatre angles : fût blanc, liserés et panneau holographique qui flotte
   for (const [x, z] of [[-1.18, -1.18], [1.18, -1.18], [-1.18, 1.18], [1.18, 1.18]]) {
     p.cyl(0.04, 0.05, 0.4, 8, x, 0.012, z, F.white);
@@ -3097,11 +3115,7 @@ function gatherPlaza(p: Parts, age: number, o: ModelOpts) {
     p.box(0.16, 0.1, 0.006, x, 0.44, z, NEONS[(o.v + 3) % 4], faceIn(x, z), 'neon');
     p.sphere(0.03, x, 0.42, z, F.white);
   }
-  // les jardinières blanches et leurs arbres en boule dans l'axe de chaque côté ; les bancs courbes entre elles
-  for (const [x, z] of [[0, -1.2], [0, 1.2], [-1.2, 0], [1.2, 0]]) {
-    p.cyl(0.12, 0.1, 0.07, 10, x, 0.012, z, F.white); p.cyl(0.11, 0.11, 0.004, 10, x, 0.082, z, 0x6a5040);
-    clipped(p, x, z, 'ball', 1.3, 0.08, F.leaf2);
-  }
+  // les bancs courbes dans les pelouses, tournés vers le globe
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * Math.PI * 2 + Math.PI / 4 - 0.28;
     p.add(new THREE.TorusGeometry(1.24, 0.03, 4, 6, 0.56).rotateX(Math.PI / 2), 0, 0.05, 0, F.white, -a);
