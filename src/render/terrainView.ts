@@ -32,6 +32,8 @@ const BEDS = new THREE.Color(0x8a6548);
 /** Sol des jardins : terre battue du camp préhistorique, sable des lices du Moyen Âge ; pelouse aux autres âges */
 const CAMP_GROUND = new THREE.Color(0xb49a76), LISTS_GROUND = new THREE.Color(0xcdb48c);
 const LAWN = new THREE.Color(0x74c060);
+/** pelouse du jardin bioluminescent (âge futuriste) : vert menthe, bleuté */
+const FUTURE_LAWN = new THREE.Color(0x52d6a4);
 const UNDERGROWTH = new THREE.Color(0x6f9c5c);
 const MEADOW = new THREE.Color(0xc9da8e);
 const YARD = new THREE.Color(0xcdb791);
@@ -510,10 +512,11 @@ float snN(vec2 p) {
     const [cForest, cField, cGarden, cRocks] = this.vegCol;
     cForest.copy(pal.grass).lerp(UNDERGROWTH, 0.55).lerp(pal.foliage, 0.12);
     cField.copy(TILLED).lerp(pal.crop, 0.55);
-    const gAge = Math.min(this.gardenAge, 4);
+    const gAge = Math.min(this.gardenAge, 5);
     const bare = gAge === 0 || gAge === 2;
     if (bare) cGarden.copy(gAge ? LISTS_GROUND : CAMP_GROUND).lerp(pal.grass, gAge ? 0.12 : 0.22);
-    else cGarden.copy(pal.grass).lerp(LAWN, 0.45);
+    else if (gAge === 5) cGarden.copy(pal.grass).lerp(FUTURE_LAWN, 0.6);
+    else cGarden.copy(pal.grass).lerp(LAWN, 0.55);
     cRocks.copy(GRAVEL).lerp(pal.grass, 0.15);
 
     // couleur et motif par sous-sommet : dégradés continus fond marin → sable → herbe → roche → neiges éternelles

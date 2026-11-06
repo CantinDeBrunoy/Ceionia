@@ -13,13 +13,16 @@ import { hash2, smoothstep, clamp } from '../core/rng';
  * flammes des feux, chevaliers qui joutent, balançoires, bascules, tourniquets et jets d'eau animés
  */
 
-/** Canaux d'un élément : décor, feuillage caduc (teinté par la saison), persistant, fleurs, eau ; feux et pièces animées */
-interface Ch { p: Parts; leaf: Parts; ever: Parts; fl: Parts; water: Parts; fires: number[]; dyn: DynSpec[] }
-/** Pièce animée : sorte, pivot dans le repère de l'élément, géométrie autour du pivot */
-interface DynSpec { kind: 'swing' | 'seesaw' | 'spin' | 'jet'; x: number; y: number; z: number; parts: Parts; ph: number }
+/** Canaux d'un élément : décor, feuillage caduc (teinté par la saison), persistant, fleurs, eau, verre ; feux et pièces animées */
+interface Ch { p: Parts; leaf: Parts; ever: Parts; fl: Parts; water: Parts; glass: Parts; fires: number[]; dyn: DynSpec[] }
+/**
+ * Pièce animée : sorte, pivot dans le repère de l'élément, géométrie autour du pivot (ses néons compris). hover flotte et
+ * tourne doucement (bulle d'eau, jardinière volante) ; orbit tourne autour du pivot en flottant (drone-jardinier)
+ */
+interface DynSpec { kind: 'swing' | 'seesaw' | 'spin' | 'jet' | 'hover' | 'orbit'; x: number; y: number; z: number; parts: Parts; ph: number }
 type Builder = (c: Ch, it: Item, age: number) => void;
 
-interface Dyn { kind: DynSpec['kind']; obj: THREE.Object3D; ph: number; base: number; s0: number; spin: number }
+interface Dyn { kind: DynSpec['kind']; obj: THREE.Object3D; ph: number; base: number; s0: number; spin: number; y0: number }
 interface Knight { root: THREE.Group; legs: THREE.Object3D[]; lance: THREE.Object3D; x0: number; z0: number; x1: number; z1: number; lx: number; lz: number; team: number; ph: number }
 interface Entry { sig: string; age: number; g: Garden; y0: number; group: THREE.Group; flowers: THREE.Mesh | null; dyn: Dyn[]; knights: Knight[]; fires: number[]; pop: number }
 
@@ -27,13 +30,17 @@ const MAX_FLAMES = 128;
 /** profondeur sous terre des socles (bassins, fontaines, kiosques, gradins) : posés au plus haut de leur emprise, ils ne flottent pas */
 const SKIRT = 0.3;
 /** éléments rigides posés au plus haut de leur emprise, et leur rayon (à l'échelle 1) */
-const FLAT: Record<string, number> = { fountain: 0.31, fountain4: 0.45, kiosk: 0.36, folly: 0.31 };
+const FLAT: Record<string, number> = { fountain: 0.31, fountain4: 0.45, kiosk: 0.36, folly: 0.31, dome: 0.69, gravpool: 0.4, hoverpad: 0.26 };
 const MARBLE = 0xf1ece2;
 const STEEL = 0xc4cad2;
 const FLOWERS = [0xf28fb0, 0xf6d04d, 0xb48ae0, 0xf27a5e, 0xffffff];
 /** couleurs des champions et de leurs bannières */
 const TEAM = [[0xd8584e, 0xf4e8d0], [0x4f7fc4, 0xf2d272], [0x6fae6a, 0xf4e8d0], [0x9a6fc0, 0xf2d272]];
 const PLAY = [0xf2c94c, 0xe8705c, 0x6fb8e8, 0x7cc46a];
+/** Âge futuriste : blanc nacré, terre sombre, néons (cyan, rose, violet, vert acide) et feuillages d'un autre monde */
+const WHITE = 0xf4f6f8, PEARL = 0xe4ecf2, SOIL = 0x34404a;
+const NEON = [0x5ff2ff, 0xff6ad5, 0xb48aff, 0x9cff6a];
+const ALIEN = [0x2fbf8a, 0x7a62d8, 0x26a6b8, 0x4fcf6a];
 const UP = new THREE.Vector3(0, 1, 0);
 
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
@@ -384,6 +391,12 @@ const B: Record<string, Builder> = {
     for (let i = 0; i < 12; i++) c.p.sphere(0.035 + hash2(i, 3, it.v) * 0.025, pts[i].x * 1.04, 0.008, -pts[i].y * 1.04, i % 2 ? C.stone : C.darkstone, 0, 0.55);
     for (const [x, z] of [[0.12, 0.05], [-0.1, -0.08], [0.02, 0.15]]) c.p.add(new THREE.CircleGeometry(0.035, 7).rotateX(-Math.PI / 2), x, 0.02, z, 0x6fae5a);
     for (let i = 0; i < 6; i++) { const a = 0.6 + i * 0.25, v = pts[Math.floor((a / (Math.PI * 2)) * 12) % 12]; c.ever.cone(0.008, 0.12 + (i % 3) * 0.03, 3, v.x * 0.9, 0, -v.y * 0.9, 0x6f9a4e); }
+    // deux canards (un colvert à tête verte, une cane brune) qui glissent sur l'eau
+    for (const [x, z, r, body, head] of [[0.14, -0.06, 0.6, 0xf2efe6, 0x2f7a4a], [-0.12, 0.1, 2.4, 0xa07a54, 0x8a6a48]]) {
+      c.p.add(new THREE.IcosahedronGeometry(0.026, 0).scale(1, 0.7, 1.5), x, 0.03, z, body, r);
+      c.p.sphere(0.015, x + Math.sin(r) * 0.03, 0.055, z + Math.cos(r) * 0.03, head);
+      c.p.box(0.01, 0.006, 0.014, x + Math.sin(r) * 0.045, 0.05, z + Math.cos(r) * 0.045, 0xf2a03a, r);
+    }
   },
   kiosk: (c) => {
     const p = c.p, n = 8, r = 0.3;
@@ -477,6 +490,246 @@ const B: Record<string, Builder> = {
     c.water.box(2 * s - 0.02, 0.01, 2 * s - 0.02, 0, 0.045, 0, 0xffffff);
     for (const [x, z, ph] of [[-0.18, 0, 0], [0, 0, 1], [0.18, 0, 2], [0, 0.18, 3], [0, -0.18, 4]]) jet(c, x, 0.04, z, 0.14 + (ph % 2) * 0.06, 0.014, ph);
   },
+  icecream: (c, it) => {
+    // la carriole du glacier : caisse blanche à bandeau rose, roues, parasol rayé, cornets sur le comptoir
+    const p = c.p, col = [0xff8ab8, 0x6fc8e8, 0xf2c94c][it.v % 3];
+    p.box(0.16, 0.1, 0.09, 0, 0.03, 0, C.white); p.box(0.162, 0.025, 0.092, 0, 0.07, 0, col);
+    for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 8).rotateX(Math.PI / 2), s * 0.05, 0.03, 0.05, 0x3c4a54);
+    p.box(0.012, 0.05, 0.012, -0.075, 0, -0.035, 0x9aa3ad);
+    p.cyl(0.004, 0.004, 0.2, 4, 0.04, 0.13, 0, 0x9aa3ad);
+    for (let i = 0; i < 6; i++) p.add(new THREE.ConeGeometry(0.13, 0.05, 2, 1, true, (i * Math.PI) / 3, Math.PI / 3), 0.04, 0.355, 0, i % 2 ? C.white : col);
+    for (const [x, sc] of [[-0.05, 0xf4e2b8], [-0.015, 0xff9ac0], [0.02, 0x8fd88a]] as number[][]) {
+      p.add(new THREE.ConeGeometry(0.009, 0.03, 5).rotateX(Math.PI), x, 0.145, 0, 0xd8a868);
+      p.sphere(0.012, x, 0.165, 0, sc);
+    }
+  },
+  meadow: (c, it) => {
+    // pré de fleurs sauvages : herbe plus claire, coquelicots, bleuets, marguerites
+    c.ever.add(new THREE.CircleGeometry(0.26, 9).rotateX(-Math.PI / 2).scale(1, 1, 0.7), 0, 0.008, 0, 0x9ad870);
+    const cols = [0xe84a3e, 0x6a8ef2, 0xffffff, 0xf6d04d];
+    for (let i = 0; i < 14; i++) {
+      const a = i * 2.4 + it.v, r = 0.04 + ((i * 7) % 11) * 0.018, x = Math.cos(a) * r, z = Math.sin(a) * r * 0.7;
+      if (i % 2) c.ever.add(new THREE.ConeGeometry(0.012, 0.07, 3).translate(0, 0.035, 0), x, 0, z, 0x6fb85a, a);
+      flower(c, x, 0.05, z, cols[i % 4], 0.8);
+    }
+  },
+
+  // ---------- Herbe plus riche, à tous les âges ----------
+  tuft: (c, it) => {
+    for (let i = 0; i < 3; i++) c.ever.add(new THREE.ConeGeometry(0.012, 0.07 + i * 0.015, 3).translate(0, 0.035 + i * 0.008, 0), 0, 0, 0, [0x6fb85a, 0x7cc45e, 0x5fa850][i], i * 2.1, false, 0.25 * (i - 1));
+    if (it.v % 2 === 0) [[0.02, 0.01], [-0.015, 0.02]].forEach(([x, z], i) => flower(c, x, 0.07, z, FLOWERS[(it.v + i * 3) % 5], 0.75));
+  },
+  fern: (c, it) => {
+    for (let i = 0; i < 5; i++) c.ever.add(new THREE.ConeGeometry(0.016, 0.13, 3).scale(1, 1, 0.35).translate(0, 0.065, 0), 0, 0, 0, it.v % 2 ? 0x5f9a4a : 0x6aa452, i * 1.257, false, 0.75);
+  },
+  glowgrass: (c, it) => {
+    for (let i = 0; i < 3; i++) c.ever.add(new THREE.ConeGeometry(0.012, 0.08 + i * 0.02, 3).translate(0, 0.04 + i * 0.01, 0), 0, 0, 0, ALIEN[(it.v + i) % 4], i * 2.1, false, 0.25 * (i - 1));
+    c.p.add(new THREE.IcosahedronGeometry(0.013, 0), 0, 0.12, 0, NEON[it.v % 4], 0, 'neon');
+  },
+
+  // ---------- Préhistoire : totem, baies ----------
+  totem: (c) => {
+    const p = c.p;
+    p.cyl(0.036, 0.042, 0.46, 6, 0, 0, 0, 0x8a6a4a);
+    for (const [y, col] of [[0.08, 0xc8763a], [0.2, 0xe2d6bc], [0.32, 0xb8443a]] as number[][]) {
+      p.cyl(0.04, 0.04, 0.07, 6, 0, y, 0, col);
+      p.box(0.05, 0.012, 0.012, 0, y + 0.04, 0.036, 0x2a2018);
+      for (const s of [-1, 1]) p.box(0.012, 0.012, 0.01, s * 0.014, y + 0.055, 0.04, 0xf2ead8);
+    }
+    // les ailes et la tête d'oiseau au sommet
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.14, 0.05, 0.012).translate(s * 0.07, 0, 0), 0, 0.42, 0, s > 0 ? 0xc8763a : 0xb8443a, 0, false, s * 0.25);
+    p.add(new THREE.ConeGeometry(0.03, 0.08, 4).rotateX(Math.PI / 2), 0, 0.47, 0.04, 0xe2b04a);
+  },
+  berrybush: (c, it) => {
+    blob(c.ever, 0.085, 0, 0.06, 0, it.v % 2 ? 0x4f8f4a : 0x5a9a4e, 0.8); blob(c.ever, 0.06, 0.06, 0.045, 0.03, 0x4a8a46, 0.75);
+    for (let i = 0; i < 7; i++) { const a = i * 2.3 + it.v; c.p.sphere(0.012, Math.cos(a) * 0.075, 0.06 + (i % 3) * 0.02, Math.sin(a) * 0.07, i % 3 ? 0xd8344a : 0x6a3a9a); }
+  },
+
+  // ---------- Antiquité : vases, rosiers, treille ----------
+  urn: (c, it) => {
+    c.p.box(0.07, 0.03, 0.07, 0, 0, 0, C.stone);
+    c.p.add(lathe([0, 0, 0.025, 0, 0.03, 0.02, 0.05, 0.06, 0.055, 0.09, 0.04, 0.11, 0.05, 0.12], 8), 0, 0.03, 0, it.v % 2 ? MARBLE : 0xd8865a);
+    blob(c.ever, 0.045, 0, 0.17, 0, 0x5f9a4e, 0.7);
+    for (let i = 0; i < 4; i++) flower(c, Math.cos(i * 1.6) * 0.035, 0.19, Math.sin(i * 1.6) * 0.035, FLOWERS[(i + it.v) % 4], 0.9);
+  },
+  rosebush: (c, it) => {
+    blob(c.ever, 0.065, 0, 0.05, 0, 0x4f8a4a, 0.85); blob(c.ever, 0.045, 0.04, 0.04, -0.03, 0x5a944e, 0.8);
+    const cols = [0xe8485e, 0xf28fb0, 0xffffff];
+    for (let i = 0; i < 6; i++) { const a = i * 1.1 + it.v; flower(c, Math.cos(a) * 0.055, 0.07 + (i % 2) * 0.03, Math.sin(a) * 0.05, cols[(i + it.v) % 3], 1.15); }
+  },
+  pergola: (c) => {
+    const p = c.p;
+    for (const x of [-0.2, 0.2]) for (const z of [-0.12, 0.12]) p.cyl(0.016, 0.018, 0.3, 7, x, 0, z, MARBLE);
+    for (const z of [-0.12, 0.12]) p.box(0.5, 0.025, 0.03, 0, 0.3, z, MARBLE);
+    for (let i = 0; i < 6; i++) p.box(0.016, 0.016, 0.34, -0.22 + i * 0.088, 0.325, 0, C.wood);
+    // la vigne sur le toit et ses grappes ; un banc de marbre à l'ombre
+    for (let i = 0; i < 6; i++) blob(c.ever, 0.06, -0.2 + i * 0.08, 0.35, (i % 2 ? 0.05 : -0.05), i % 2 ? 0x5a944e : 0x6a9f52, 0.55);
+    for (const [x, z] of [[-0.13, 0.08], [0.02, -0.07], [0.15, 0.06]]) c.p.add(new THREE.ConeGeometry(0.02, 0.05, 6).rotateX(Math.PI), x, 0.28, z, 0x7a4a9a);
+    p.box(0.22, 0.016, 0.07, 0, 0.05, 0, MARBLE); for (const x of [-0.08, 0.08]) p.box(0.03, 0.05, 0.06, x, 0, 0, C.stone);
+  },
+
+  // ---------- Âge industriel : saule, arches de rosiers ----------
+  willow: (c) => {
+    const p = c.p;
+    p.add(new THREE.CylinderGeometry(0.022, 0.035, 0.32, 6).translate(0, 0.16, 0), 0, 0, 0, 0x8a7458, 0, false, 0, 0.15);
+    stick(p, 0.16, 0.012, 0.05, 0.33, 0.08, 0x8a7458, -0.6, 0.3);
+    blob(c.leaf, 0.2, 0, 0.42, 0.06, 0xf2f7ea, 0.6);
+    // le rideau de branches qui retombe jusqu'à l'eau
+    for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2; c.leaf.add(new THREE.ConeGeometry(0.06, 0.3, 4).rotateZ(Math.PI), Math.cos(a) * 0.17, 0.27, 0.06 + Math.sin(a) * 0.17, 0xe8f0dc, a); }
+  },
+  arch: (c, it) => {
+    // arche de fer (blanche, ou verte au parc), roses qui grimpent ; elle enjambe l'allée (le long de x)
+    const p = c.p, iron = it.v ? 0x4f8a6a : 0xf2efe6;
+    for (const s of [-1, 1]) p.box(0.016, 0.28, 0.016, s * 0.18, 0, 0, iron);
+    p.add(new THREE.TorusGeometry(0.18, 0.009, 3, 10, Math.PI), 0, 0.28, 0, iron);
+    const cols = it.v ? [0xf6d04d, 0xffffff] : [0xe8485e, 0xf28fb0];
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 8) * Math.PI, x = Math.cos(a) * 0.18, y = 0.28 + Math.sin(a) * 0.18;
+      blob(c.ever, 0.03, x, y, 0, 0x4f8a4a, 0.9);
+      flower(c, x, y + 0.02, 0.02, cols[i % 2], 1.1);
+    }
+    for (const s of [-1, 1]) for (const y of [0.06, 0.16]) { blob(c.ever, 0.028, s * 0.18, y, 0, 0x5a944e, 1.1); flower(c, s * 0.18, y + 0.02, 0.025, cols[0], 1); }
+  },
+
+  // ---------- Âge futuriste : jardin bioluminescent ----------
+  dome: (c) => {
+    // la serre-dôme : socle blanc, sol de mousse, coupole de verre sur ses nervures, anneaux lumineux, porte en arc
+    const p = c.p, R = 0.62, y = 0.05;
+    p.cyl(R + 0.06, R + 0.075, y + SKIRT, 20, 0, -SKIRT, 0, WHITE);
+    p.cyl(R - 0.01, R - 0.01, 0.006, 20, 0, y, 0, 0x4fc77e);
+    c.glass.add(new THREE.SphereGeometry(R, 18, 7, 0, Math.PI * 2, 0, Math.PI / 2), 0, y, 0, 0xd8fbff);
+    for (let k = 0; k < 6; k++) p.add(new THREE.TorusGeometry(R + 0.004, 0.01, 3, 14, Math.PI), 0, y, 0, WHITE, (k * Math.PI) / 6);
+    p.add(new THREE.TorusGeometry(R * Math.cos(0.65), 0.009, 3, 24).rotateX(Math.PI / 2), 0, y + R * Math.sin(0.65), 0, NEON[0], 0, 'neon');
+    p.add(new THREE.TorusGeometry(R + 0.012, 0.01, 3, 28).rotateX(Math.PI / 2), 0, y + 0.006, 0, NEON[0], 0, 'neon');
+    p.add(new THREE.IcosahedronGeometry(0.04, 0), 0, y + R + 0.02, 0, NEON[1], 0, 'neon');
+    p.add(new THREE.TorusGeometry(0.11, 0.012, 3, 8, Math.PI), 0, y, R, NEON[1], 0, 'neon');
+    // l'allée de nacre qui traverse la serre
+    p.box(0.16, 0.006, R * 2 - 0.06, 0, y, 0, PEARL);
+    // le grand arbre-lumière du milieu et, tout autour, feuilles géantes et bulbes qui luisent
+    p.cyl(0.018, 0.03, 0.36, 6, 0, y, 0, WHITE);
+    for (const s of [-1, 1]) stick(p, 0.16, 0.01, s * 0.05, y + 0.32, 0, WHITE, -s * 0.7);
+    p.add(new THREE.IcosahedronGeometry(0.17, 1).scale(1, 0.55, 1), 0, y + 0.42, 0, NEON[1], 0, 'neon');
+    p.add(new THREE.CylinderGeometry(0.15, 0.06, 0.03, 9), 0, y + 0.37, 0, WHITE);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.2, r = 0.3 + (i % 2) * 0.12, x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (Math.abs(x) < 0.1) continue;
+      blob(c.ever, 0.07, x, y + 0.04, z, ALIEN[i % 4], 0.7);
+      c.ever.add(new THREE.ConeGeometry(0.03, 0.16, 3).scale(1, 1, 0.3).translate(0, 0.08, 0), x, y, z, ALIEN[(i + 1) % 4], a, false, 0.5);
+      p.cyl(0.003, 0.004, 0.12, 3, x + 0.03, y, z, 0x3a8a6a);
+      p.add(new THREE.IcosahedronGeometry(0.024, 0), x + 0.03, y + 0.13, z, NEON[(i + 2) % 4], 0, 'neon');
+    }
+  },
+  lighttree: (c, it) => {
+    // arbre-lumière : tronc blanc, ombelle qui luit de sa couleur, gouttes de lumière suspendues, cercle lumineux au pied
+    const p = c.p, col = NEON[it.v % 4];
+    p.cyl(0.012, 0.022, 0.32, 6, 0, 0, 0, WHITE);
+    for (const s of [-1, 1]) stick(p, 0.12, 0.008, s * 0.035, 0.27, 0, WHITE, -s * 0.75);
+    p.add(new THREE.CylinderGeometry(0.12, 0.05, 0.03, 9), 0, 0.31, 0, WHITE);
+    p.add(new THREE.IcosahedronGeometry(0.13, 1).scale(1, 0.55, 1), 0, 0.36, 0, col, 0, 'neon');
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.4, x = Math.cos(a) * 0.09, z = Math.sin(a) * 0.09;
+      p.cyl(0.002, 0.002, 0.06, 3, x, 0.25, z, WHITE);
+      p.add(new THREE.IcosahedronGeometry(0.016, 0), x, 0.245, z, NEON[(it.v + 1) % 4], 0, 'neon');
+    }
+    p.add(new THREE.TorusGeometry(0.055, 0.006, 3, 12).rotateX(Math.PI / 2), 0, 0.008, 0, col, 0, 'neon');
+  },
+  pathlight: (c, it) => {
+    const p = c.p;
+    p.cyl(0.014, 0.02, 0.07, 6, 0, 0, 0, WHITE);
+    p.cyl(0.017, 0.017, 0.025, 6, 0, 0.07, 0, NEON[it.v % 4], 'neon');
+    p.cyl(0.02, 0.018, 0.01, 6, 0, 0.095, 0, WHITE);
+  },
+  podbench: (c, it) => {
+    // banc-cocon : coque blanche sur son pied, dossier galbé, liseré lumineux sous l'assise
+    const p = c.p;
+    p.cyl(0.03, 0.045, 0.045, 8, 0, 0, 0, PEARL);
+    p.box(0.24, 0.022, 0.085, 0, 0.045, 0, WHITE);
+    p.add(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 10, 1, true, -0.9, 1.8).scale(1, 1, 0.45).translate(0, 0.045, 0), 0, 0.06, 0.02, WHITE, Math.PI);
+    p.box(0.2, 0.006, 0.006, 0, 0.04, 0.045, NEON[it.v % 4], 0, 'neon');
+  },
+  gravpool: (c, it) => {
+    // bassin anti-gravité : margelle blanche et son anneau lumineux, trois pylônes, une bulle d'eau qui flotte dans ses anneaux
+    const p = c.p, R = 0.36;
+    p.add(new THREE.CylinderGeometry(R, R + 0.025, 0.07 + SKIRT, 18, 1, true), 0, (0.07 - SKIRT) / 2, 0, WHITE);
+    p.add(new THREE.TorusGeometry(R + 0.005, 0.012, 3, 24).rotateX(Math.PI / 2), 0, 0.07, 0, NEON[0], 0, 'neon');
+    p.cyl(R - 0.01, R - 0.01, 0.02 + SKIRT, 18, 0, -SKIRT, 0, 0x2fb8d8);
+    c.water.cyl(R - 0.01, R - 0.01, 0.01, 18, 0, 0.05, 0, 0xffffff);
+    p.cyl(0.05, 0.07, 0.07, 8, 0, 0, 0, WHITE); p.cyl(0.04, 0.04, 0.006, 8, 0, 0.07, 0, NEON[0], 'neon');
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2 + 0.5, x = Math.cos(a) * (R + 0.01), z = Math.sin(a) * (R + 0.01);
+      p.cyl(0.014, 0.02, 0.3, 6, x, 0.05, z, WHITE);
+      p.add(new THREE.IcosahedronGeometry(0.022, 0), x, 0.36, z, NEON[(it.v + k) % 4], 0, 'neon');
+    }
+    const q = new Parts();
+    q.add(new THREE.IcosahedronGeometry(0.1, 1), 0, 0, 0, 0x7fe6ff);
+    for (let i = 0; i < 3; i++) q.sphere(0.02, Math.cos(i * 2.1) * 0.15, 0.04 * (i - 1), Math.sin(i * 2.1) * 0.15, 0xa8f0ff);
+    q.add(new THREE.TorusGeometry(0.17, 0.007, 3, 20).rotateX(Math.PI / 2 + 0.4), 0, 0, 0, NEON[1], 0, 'neon');
+    q.add(new THREE.TorusGeometry(0.2, 0.006, 3, 20).rotateX(Math.PI / 2 - 0.5), 0, 0, 0, NEON[2], 0, 'neon');
+    c.dyn.push({ kind: 'hover', x: 0, y: 0.32, z: 0, parts: q, ph: it.v });
+  },
+  hoverpad: (c, it) => {
+    // trampoline lumineux : galette blanche, toile qui luit, anneau rose, bulles de lumière au-dessus
+    const p = c.p;
+    p.cyl(0.25, 0.26, 0.04 + SKIRT, 16, 0, -SKIRT, 0, WHITE);
+    p.cyl(0.21, 0.21, 0.006, 16, 0, 0.04, 0, [0x7a6aff, 0x3ad8e8, 0xff6ad5, 0x6ad86a][it.v % 4], 'neon');
+    p.add(new THREE.TorusGeometry(0.235, 0.012, 3, 24).rotateX(Math.PI / 2), 0, 0.045, 0, NEON[(it.v + 1) % 4], 0, 'neon');
+    for (let i = 0; i < 3; i++) p.add(new THREE.IcosahedronGeometry(0.025, 0), Math.cos(i * 2.1) * 0.1, 0.2 + i * 0.05, Math.sin(i * 2.1) * 0.1, NEON[(it.v + i) % 4], 0, 'neon');
+  },
+  gyro: (c, it) => {
+    // gyroscope où l'on grimpe : socle, mât, trois anneaux de couleur qui tournent
+    const p = c.p;
+    p.cyl(0.07, 0.09, 0.04, 10, 0, 0, 0, WHITE);
+    p.cyl(0.012, 0.014, 0.2, 6, 0, 0.04, 0, PEARL);
+    const q = new Parts();
+    q.add(new THREE.TorusGeometry(0.19, 0.012, 4, 20), 0, 0, 0, PLAY[it.v % 4]);
+    q.add(new THREE.TorusGeometry(0.17, 0.012, 4, 20), 0, 0, 0, PLAY[(it.v + 1) % 4], Math.PI / 2);
+    q.add(new THREE.TorusGeometry(0.15, 0.012, 4, 20).rotateX(Math.PI / 2), 0, 0, 0, PLAY[(it.v + 2) % 4]);
+    q.add(new THREE.IcosahedronGeometry(0.03, 0), 0, 0, 0, NEON[it.v % 4], 0, 'neon');
+    c.dyn.push({ kind: 'spin', x: 0, y: 0.22, z: 0, parts: q, ph: it.v });
+  },
+  hexbed: (c, it) => {
+    // massif hexagonal : bac blanc, liseré lumineux, terre sombre, feuilles d'ailleurs, bulbes et fleurs phosphorescents
+    const p = c.p, col = NEON[it.v % 4];
+    p.cyl(0.2, 0.21, 0.08, 6, 0, 0, 0, WHITE);
+    p.cyl(0.185, 0.185, 0.01, 6, 0, 0.08, 0, SOIL);
+    p.add(new THREE.TorusGeometry(0.2, 0.007, 3, 6).rotateX(Math.PI / 2), 0, 0.083, 0, col, Math.PI / 6, 'neon');
+    for (let i = 0; i < 4; i++) {
+      const a = i * 1.57 + 0.4, x = Math.cos(a) * 0.1, z = Math.sin(a) * 0.1;
+      blob(c.ever, 0.05, x, 0.12, z, ALIEN[(i + it.v) % 4], 0.75);
+      flower(c, x * 0.5, 0.15, z * 0.5, [0xffffff, 0xff9ad8, 0xfff07a, 0x9af0ff][i], 1.1);
+    }
+    for (let i = 0; i < 3; i++) {
+      const a = i * 2.1 + 1.2, x = Math.cos(a) * 0.06, z = Math.sin(a) * 0.06;
+      p.cyl(0.004, 0.005, 0.14 + i * 0.03, 4, x, 0.09, z, 0x3a9a6a);
+      p.add(new THREE.IcosahedronGeometry(0.024, 0).scale(1, 1.3, 1), x, 0.24 + i * 0.03, z, NEON[(it.v + i) % 4], 0, 'neon');
+    }
+  },
+  drone: (c, it) => {
+    // drone-jardinier : coque blanche, quatre rotors, œil lumineux, brumisateur ; il tourne au-dessus du massif
+    const q = new Parts(), x = 0.17;
+    q.add(new THREE.IcosahedronGeometry(0.032, 1).scale(1.2, 0.6, 1), x, 0, 0, WHITE);
+    for (const [dx, dz] of [[0.035, 0.035], [-0.035, 0.035], [0.035, -0.035], [-0.035, -0.035]]) { q.box(0.006, 0.006, 0.05, x + dx * 0.5, 0.008, dz * 0.5, 0x8a9aa8, Math.atan2(dx, dz)); q.cyl(0.02, 0.02, 0.003, 7, x + dx, 0.014, dz, 0x5a6672); }
+    q.box(0.012, 0.01, 0.03, x, 0, 0.03, NEON[it.v % 4], 0, 'neon');
+    q.add(new THREE.ConeGeometry(0.03, 0.08, 6, 1, true).translate(0, -0.04, 0), x, -0.015, 0, 0xc8f4ff);
+    c.dyn.push({ kind: 'orbit', x: 0, y: 0.36, z: 0, parts: q, ph: it.v });
+  },
+  floater: (c, it) => {
+    // jardinière qui flotte au-dessus de son socle émetteur : coque blanche, buissons, fleurs, anneau lumineux dessous
+    const p = c.p;
+    p.cyl(0.05, 0.065, 0.02, 8, 0, 0, 0, PEARL); p.cyl(0.035, 0.035, 0.005, 8, 0, 0.02, 0, NEON[it.v % 4], 'neon');
+    const q = new Parts();
+    q.add(new THREE.CylinderGeometry(0.13, 0.07, 0.07, 8), 0, 0, 0, WHITE);
+    q.cyl(0.12, 0.12, 0.006, 8, 0, 0.033, 0, SOIL);
+    q.sphere(0.06, -0.03, 0.08, 0.01, ALIEN[it.v % 4], 1, 0.8); q.sphere(0.045, 0.05, 0.065, -0.03, ALIEN[(it.v + 1) % 4], 1, 0.8);
+    for (let i = 0; i < 4; i++) q.sphere(0.016, Math.cos(i * 1.6) * 0.07, 0.07, Math.sin(i * 1.6) * 0.07, [0xff9ad8, 0xfff07a, 0xffffff, 0x9af0ff][i]);
+    q.add(new THREE.TorusGeometry(0.09, 0.007, 3, 14).rotateX(Math.PI / 2), 0, -0.04, 0, NEON[it.v % 4], 0, 'neon');
+    c.dyn.push({ kind: 'hover', x: 0, y: 0.26, z: 0, parts: q, ph: it.v * 1.3 });
+  },
+  crystal: (c, it) => {
+    // buisson de cristal : trois prismes qui luisent, sur une touffe d'herbe bleutée
+    blob(c.ever, 0.05, 0, 0.02, 0, ALIEN[(it.v + 2) % 4], 0.5);
+    for (let i = 0; i < 3; i++) c.p.add(new THREE.OctahedronGeometry(0.035, 0).scale(0.55, 1.8 - i * 0.3, 0.55), Math.cos(i * 2.1) * 0.03, 0.06, Math.sin(i * 2.1) * 0.03, NEON[(it.v + i) % 4], i * 0.7, 'neon', 0.25 * (i - 1));
+  },
 };
 
 /** Flamme : un cœur orangé et trois langues jaunes */
@@ -509,6 +762,8 @@ export class GardenView {
   /** buis, cyprès, oliviers : toujours verts */
   private everMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0 });
   private waterMat = new THREE.MeshStandardMaterial({ color: 0x7cc6dc, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.88 });
+  /** verre de la serre-dôme futuriste, commun à tous les jardins */
+  private glassMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide });
   /** dalles des allées, tirées vers la caméra pour ne pas scintiller sur le sol */
   private tileMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
   private flames: THREE.InstancedMesh;
@@ -565,7 +820,7 @@ export class GardenView {
     const w = this.world, L = layoutGarden(w, g, age), y0 = w.hAt(g.cx, g.cz);
     const group = new THREE.Group();
     group.position.set(g.cx, y0, g.cz);
-    const out: Record<'p' | 'glow' | 'leaf' | 'ever' | 'fl' | 'water', THREE.BufferGeometry[]> = { p: [], glow: [], leaf: [], ever: [], fl: [], water: [] };
+    const out: Record<'p' | 'glow' | 'leaf' | 'ever' | 'fl' | 'water' | 'glass', THREE.BufferGeometry[]> = { p: [], glow: [], leaf: [], ever: [], fl: [], water: [], glass: [] };
     const fires: number[] = [], dyn: Dyn[] = [], pads: Item[] = [];
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
     for (const it of L.items) {
@@ -573,7 +828,7 @@ export class GardenView {
       if (it.k === 'pad') { pads.push(it); continue; }
       const b = B[it.k];
       if (!b) continue;
-      const ch: Ch = { p: new Parts(), leaf: new Parts(), ever: new Parts(), fl: new Parts(), water: new Parts(), fires: [], dyn: [] };
+      const ch: Ch = { p: new Parts(), leaf: new Parts(), ever: new Parts(), fl: new Parts(), water: new Parts(), glass: new Parts(), fires: [], dyn: [] };
       b(ch, it, age);
       const high = it.k === 'basin' || it.k === 'stand' || it.k in FLAT, pond = it.k === 'pond';
       const rad = high ? (it.w ? Math.hypot(it.w, it.d ?? 0.26) / 2 : FLAT[it.k]) * it.s : pond ? 0.45 * it.s : Math.min(0.12 * it.s, 0.4);
@@ -588,22 +843,24 @@ export class GardenView {
         for (let i = 0; i < n; i++) a.set([c.x, c.y, c.z], i * 3);
         geo.setAttribute('aCenter', new THREE.BufferAttribute(a, 3));
       }
-      take(ch.fl.body, out.fl, false); take(ch.water.body, out.water, false);
+      take(ch.fl.body, out.fl, false); take(ch.water.body, out.water, false); take(ch.glass.body, out.glass, false);
       for (let i = 0; i < ch.fires.length; i += 4) { v.set(ch.fires[i], ch.fires[i + 1], ch.fires[i + 2]).applyMatrix4(m); fires.push(v.x + g.cx, v.y + y0, v.z + g.cz, ch.fires[i + 3] * it.s); }
       for (const d of ch.dyn) {
-        const water = d.kind === 'jet';
-        const mesh = new THREE.Mesh(d.parts.build(false).body, water ? this.waterMat : mats.body);
+        const water = d.kind === 'jet', built = d.parts.build(false);
+        const mesh = new THREE.Mesh(built.body, water ? this.waterMat : mats.body);
         mesh.castShadow = !water;
+        // ses néons (anneaux de la bulle d'eau, œil du drone) bougent avec elle
+        if (built.glow) mesh.add(new THREE.Mesh(built.glow, mats.glow));
         mesh.position.copy(v.set(d.x, d.y, d.z).applyMatrix4(m));
         mesh.rotation.order = 'YXZ';
         mesh.rotation.y = it.r;
         mesh.scale.setScalar(it.s);
         group.add(mesh);
-        dyn.push({ kind: d.kind, obj: mesh, ph: d.ph + it.x * 1.7, base: it.r, s0: it.s, spin: 0 });
+        dyn.push({ kind: d.kind, obj: mesh, ph: d.ph + it.x * 1.7, base: it.r, s0: it.s, spin: 0, y0: mesh.position.y });
       }
     }
     // dalles des allées, couchées sur la pente
-    const tiles = new Parts(), tcol = age >= 4 ? 0xcfcdc6 : age === 1 ? 0xe6dcc6 : 0xdccca6, nq = new THREE.Quaternion(), n = new THREE.Vector3();
+    const tiles = new Parts(), tcol = age >= 5 ? 0xf0f5f8 : age === 4 ? 0xd8d4ca : age === 1 ? 0xeee2c8 : 0xe4d2a8, nq = new THREE.Quaternion(), n = new THREE.Vector3();
     for (let i = 0; i < L.paths.length; i += 2) {
       const x = L.paths[i], z = L.paths[i + 1], s = 0.15;
       n.set(w.hAt(x - s, z) - w.hAt(x + s, z), 2 * s, w.hAt(x, z - s) - w.hAt(x, z + s)).normalize();
@@ -632,6 +889,7 @@ export class GardenView {
     const flowers = mk(out.fl, mats.body, false);
     if (flowers) flowers.visible = this.flowersOn;
     mk(out.water, this.waterMat, false);
+    mk(out.glass, this.glassMat, false);
     mk(tiles.body, this.tileMat, false);
     const knights: Knight[] = [];
     for (let i = 0; i < L.lanes.length; i += 4) for (const team of [0, 1]) knights.push(this.knight(group, L.lanes, i, team, g.id));
@@ -726,6 +984,8 @@ export class GardenView {
         if (k.kind === 'swing') k.obj.rotation.x = Math.sin(t * 2.6 + k.ph) * 0.45 * day;
         else if (k.kind === 'seesaw') k.obj.rotation.x = Math.sin(t * 1.5 + k.ph) * 0.2 * day;
         else if (k.kind === 'spin') { k.spin += dt * 0.9 * day; k.obj.rotation.y = k.base + k.spin; }
+        else if (k.kind === 'hover') { k.obj.position.y = k.y0 + Math.sin(t * 1.4 + k.ph) * 0.025 * k.s0; k.obj.rotation.y = k.base + t * 0.35; }
+        else if (k.kind === 'orbit') { k.spin += dt * 0.8; k.obj.rotation.y = k.base + k.spin; k.obj.position.y = k.y0 + Math.sin(t * 2.2 + k.ph) * 0.012 * k.s0; }
         else { k.obj.scale.y = k.s0 * (0.85 + 0.15 * Math.sin(t * 7 + k.ph)); k.obj.visible = !this.frozen; }
       }
       for (const k of e.knights) this.animKnight(k, e, t, day);
