@@ -9,7 +9,7 @@ export interface Settings {
   /** son activé : coupé par défaut tant que le joueur ne l'a pas allumé dans les réglages */
   music?: boolean;
   sfx?: boolean;
-  /** qualité graphique : halo, brume et densité des particules */
+  /** qualité graphique : halo, brume, densité des particules, finesse de l'image, ombres, distance d'affichage des détails */
   quality?: Quality;
   /** catastrophes naturelles : lave et incendies détruisent les bâtiments, le volcan se réveille de lui-même */
   disasters?: boolean;

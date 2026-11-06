@@ -12,6 +12,7 @@ import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.
 import { bakeStatic, splitTrees, meshVariants, MeshPart, ModelName } from './assets';
 import { broadleafShape, pineShape, bushShape, rockShapes } from './treeShapes';
 import { addSnow } from './snow';
+import { SHADOW_LAYER } from './materials';
 
 /**
  * Tuiles de CH×CH cases : un maillage instancié par tuile et par couche (élagage hors champ, reconstruction partielle) ;
@@ -63,7 +64,7 @@ interface LayerOpts {
   detail?: boolean;
   /** petits décors : masqués très loin (vue d'ensemble d'une grande carte) */
   small?: boolean;
-  /** arbres : version simplifiée au loin (calculée en tâche de fond) */
+  /** arbres, buissons et sous-bois : version simplifiée au loin, et pour leur ombre portée (calculée en tâche de fond) */
   lod?: boolean;
   /** triangles au plus, même de près : les parties plus détaillées (branches de certains arbres importés) sont allégées */
   max?: number;
@@ -177,14 +178,16 @@ class Layer {
   }
 
   /** Visibilité d'une tuile selon sa distance à la caméra */
-  view(ch: number, dist: number) {
+  view(ch: number, dist: number, lodDist = LOD_DIST) {
     const has = this.n[ch] > 0;
     const hide = (this.o.detail && dist > DETAIL_DIST) || (this.o.small && dist > SMALL_DIST);
-    const far = !!this.far[ch].length && dist > LOD_DIST;
+    const lod = !!this.far[ch].length, far = lod && dist > lodDist;
     // les ombres des tuiles lointaines, à peine visibles, doubleraient les appels de dessin
     const shadow = this.o.shadow !== false && dist < SHADOW_DIST;
-    for (const m of this.near[ch]) { m.visible = has && !hide && !far; m.castShadow = shadow; }
-    for (const m of this.far[ch]) { m.visible = has && !hide && far; m.castShadow = shadow; }
+    // de près, l'ombre portée vient de la version simplifiée, rangée sur le calque des seules ombres : trois fois moins
+    // de triangles à dessiner dans la carte des ombres, pour une silhouette au sol presque identique
+    for (const m of this.near[ch]) { m.visible = has && !hide && !far; m.castShadow = shadow && !lod; }
+    for (const m of this.far[ch]) { m.visible = has && !hide && (far || shadow); m.castShadow = shadow; m.layers.mask = far ? 1 | (1 << SHADOW_LAYER) : 1 << SHADOW_LAYER; }
   }
 }
 
@@ -208,6 +211,8 @@ interface Leafy {
 /** Végétation instanciée : forêts par biome, blé, prairies, marais, déserts et fonds marins (les jardins : GardenView) */
 export class VegView {
   group = new THREE.Group();
+  /** distance à partir de laquelle les arbres passent en version simplifiée (qualité graphique) */
+  lodDist = LOD_DIST;
   /** perchoirs (cimes) et fleurs de chaque tuile, [x, y, z, …] : la faune s'y pose et les butine */
   perches: number[][] = Array.from({ length: NC * NC }, () => []);
   flowers: number[][] = Array.from({ length: NC * NC }, () => []);
@@ -350,7 +355,7 @@ export class VegView {
     this.cacti = keep([species('cactus2', 0.95, /^$/, wood, wood), species('cactus_flowers', 0.72, /^$/, wood, wood), species('cactus', 0.42, /^$/, wood, wood, /black|brown/i)]);
     this.willows = keep([species('willow', 1.2, /green/i, this.willowMat, wood)]);
     this.deadTrees = keep([species('dead_tree', 0.95, /^$/, wood, wood)]);
-    this.shrub = layer([{ geo: bushShape(), mat: soft(true) }], { detail: true });
+    this.shrub = layer([{ geo: bushShape(), mat: soft(true) }], { detail: true, lod: true });
     this.wheat = layer([{ geo: wheatClumpGeo(), mat: this.wheatMat }], { shadow: false, detail: true });
     this.plant = layer([{ geo: smoothBlobs([[0.07, 0, 0.045, 0, 0.72, 1]], false), mat: soft(false) }], { detail: true });
     this.blossom = layer([{ geo: new THREE.IcosahedronGeometry(0.035, 0).translate(0, 0.085, 0), mat: std(0xffffff) }], { shadow: false, detail: true });
@@ -383,7 +388,7 @@ export class VegView {
       const parts: Part[] = [];
       if (m?.tint && tintMat) parts.push({ geo: m.tint, mat: tintMat });
       if (m?.rest) parts.push({ geo: m.rest, mat: wood });
-      return parts.length ? layer(parts, { detail: true }) : null;
+      return parts.length ? layer(parts, { detail: true, lod: true }) : null;
     };
     this.logs = prop('log', 0.12);
     this.stumps = prop('stump', 0.1);
@@ -530,7 +535,7 @@ export class VegView {
     for (let ch = 0; ch < NC * NC; ch++) {
       const x = ((ch % NC) + 0.5) * CH, z = (Math.floor(ch / NC) + 0.5) * CH;
       const dist = Math.max(0, Math.hypot(cam.x - x, cam.y - 1, cam.z - z) - CH * 0.6);
-      for (const l of this.layers) l.view(ch, dist);
+      for (const l of this.layers) l.view(ch, dist, this.lodDist);
     }
   }
 

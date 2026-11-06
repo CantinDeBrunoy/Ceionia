@@ -70,7 +70,8 @@ const coarse = window.matchMedia('(pointer: coarse)').matches || Math.min(screen
 if (coarse) document.body.classList.add('low-fx');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !coarse, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 2));
+// finesse de l'image plafonnée (1,5 pixel par point d'écran au plus) : voir `applyQuality`
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 
@@ -173,11 +174,19 @@ class Game implements UIHost {
   audio = audio;
   season = makeSeasonState();
   private lastTime = performance.now();
+  /** carte des ombres : position et orientation de la caméra à la dernière image, images depuis sa dernière mise à jour */
+  private shadowPos = new THREE.Vector3();
+  private shadowQ = new THREE.Quaternion();
+  private shadowN = 0;
   /** version des lanternes des voies déjà données aux halos */
   private railLightsV = -1;
   private elapsed = 0;
   private windT = 0;
   private seasonKey = -1;
+  /** créneau de saison des dernières teintes du sol */
+  private groundKey = -9;
+  /** neige sur les routes à leur dernière reconstruction pour la saison */
+  private roadSnow = -1;
   /** dernière version des biomes peints prise en compte pour la neige des toits */
   private biomeV = 0;
   private terrainTimer = 0;
@@ -715,12 +724,20 @@ class Game implements UIHost {
   }
   get disasters() { return this.world.disasters; }
 
-  /** Qualité graphique : halo (haute), brume (haute et normale), densité des particules */
+  /**
+   * Qualité graphique : halo (haute), brume (haute et normale), densité des particules ; finesse de l'image (pixels par point
+   * d'écran, plafonnée), taille de la carte des ombres, distance d'affichage des bêtes et des arbres détaillés
+   */
   private applyQuality() {
-    const k = { high: 1, medium: 0.7, low: 0.35 }[this.quality];
-    this.atmosphere.mistEnabled = this.quality !== 'low';
+    const q = this.quality, k = { high: 1, medium: 0.7, low: 0.35 }[q];
+    this.atmosphere.mistEnabled = q !== 'low';
     this.life.density = k;
     this.streams.density = k;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, { high: 1.5, medium: 1.25, low: coarse ? 1.25 : 1 }[q]));
+    this.glow?.setSize(innerWidth, innerHeight);
+    this.env.setShadowSize({ high: 2048, medium: 1536, low: 1024 }[q]);
+    this.fauna.detail = { high: 1, medium: 0.8, low: 0.6 }[q];
+    this.veg.lodDist = { high: 48, medium: 40, low: 32 }[q];
   }
 
   /** Sons de l'environnement autour du point visé : plus forts quand la caméra est proche */
@@ -988,22 +1005,37 @@ class Game implements UIHost {
     computeSeason(this.time, this.season);
     const key = Math.floor(this.time.seasonT * 120);
     if (force || key !== this.seasonKey) {
+      // les teintes du sol changent par bandes, sur quelques images (un balayage de la carte sur deux suffit : les teintes
+      // n'y bougent que d'un soixantième de saison)
+      if (force || Math.abs(key - this.groundKey) >= 2) {
+        this.groundKey = key;
+        if (force) this.terrain.update(this.season); else this.terrain.recolor(this.season);
+      }
       this.seasonKey = key;
-      // les teintes du sol changent par bandes, sur quelques images
-      if (force) this.terrain.update(this.season); else this.terrain.recolor(this.season);
       // neige sur les toits selon le biome (la carte a pu changer)
       const w = this.world;
       setSnowMap(N, (k) => SNOWY[w.biome[k]] ?? 1);
       this.veg.applySeason(this.season);
       this.gardens.applySeason(this.season);
-      this.roads.rebuild(this.sim.age, this.season.snow);
-      this.propsDirty = false;
+      // les routes ne se refont que si la neige qui les couvre a changé : sur un grand village, les refaire coûte un à-coup
+      const s = this.season.snow, last = this.roadSnow;
+      if (force || this.propsDirty || Math.abs(s - last) > 0.02 || [0, 0.5, 0.6].some((t) => (s > t) !== (last > t))) {
+        this.roads.rebuild(this.sim.age, s);
+        this.roadSnow = s;
+        this.propsDirty = false;
+      }
     }
   }
 
   private renderer_render() {
     const under = this.mode === 'under' && this.underView;
     const scene = under ? this.underView!.scene : this.scene;
+    // la carte des ombres ne se refait qu'une image sur deux (sur trois en qualité réduite) quand la vue ne bouge pas : seuls
+    // les passants et les véhicules y bougent ; dès que la caméra se déplace, elle suit à chaque image
+    const c = this.cam.camera, moved = c.position.distanceToSquared(this.shadowPos) > 1e-6 || 1 - Math.abs(c.quaternion.dot(this.shadowQ)) > 1e-9;
+    this.shadowPos.copy(c.position); this.shadowQ.copy(c.quaternion);
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = moved || !!under || ++this.shadowN % (this.quality === 'low' ? 3 : 2) === 0;
     if (!this.glow || this.quality !== 'high') { renderer.render(scene, this.cam.camera); return; }
     // le halo vient avec la nuit ; sous terre, il entoure cristaux, lave et torches
     const night = Math.min(1, Math.max(0, (this.env.night - 0.35) / 0.45));

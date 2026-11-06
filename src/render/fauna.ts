@@ -106,7 +106,7 @@ interface Critter {
   lag?: number;
 }
 
-/** Au-delà de cette distance à la caméra, les bêtes à terre ne réfléchissent qu'une image sur trois */
+/** Au-delà de cette distance à la caméra, les bêtes à terre et dans l'eau ne réfléchissent qu'une image sur trois */
 const FAR_WALK = 70;
 
 /** Modèles animés Quaternius par espèce : longueur du corps visée, variante pour le premier du groupe (le cerf), correction de cap */
@@ -513,6 +513,11 @@ export class Fauna {
   private visitSerial = 0;
   private scoutTimer = 2;
   private look = new THREE.Vector3();
+  /** prédateurs, et chef (rang 0) de chaque groupe : recensés à chaque image plutôt que cherchés parmi toutes les bêtes */
+  private hunters: Critter[] = [];
+  private leads = new Map<string, Critter>();
+  /** qualité graphique : part de la distance à laquelle les bêtes articulées restent affichées et animées à chaque image */
+  detail = 1;
 
   constructor(private world: World, private veg: { perches: number[][]; flowers: number[][] }) {
     for (const k of KIND_LIST) {
@@ -927,6 +932,12 @@ export class Fauna {
     this.uTime.value = this.t;
     const night = hour < 6 || hour > 21;
     const people = this.people().filter((p) => !p.hidden), cam = camera?.position;
+    this.hunters.length = 0;
+    this.leads.clear();
+    for (const c of this.critters) {
+      if (PREY[c.kind]) this.hunters.push(c);
+      if (c.slot === 0 && !this.leads.has(c.key)) this.leads.set(c.key, c);
+    }
     for (const c of this.critters) {
       if (c.dead > 0) {
         // proie attrapée : elle revient au domaine un peu plus tard
@@ -935,26 +946,42 @@ export class Fauna {
         if (c.dead <= 0) { c.x = c.tx = c.hx; c.z = c.tz = c.hz; c.moving = c.run = false; c.fear = 0; c.threat = null; }
         continue;
       }
+      // loin de la vue (une image sur trois) ou hors champ (une sur dix), la bête ne réfléchit que de temps en temps, à plus
+      // grands pas ; le temps en retard est rattrapé dès son retour dans le champ, sans à-coup
+      let step = dt;
+      if (cam && c.kind !== 'duckling') {
+        const every = c.run ? 1 : this.pace(c, cam);
+        c.lag = (c.lag ?? 0) + dt;
+        if (every > 1 && (this.frame + c.slot + c.key.length) % every) continue;
+        step = Math.min(0.25, c.lag);
+        c.lag = 0;
+      }
       if (c.kind === 'bird') this.fly(c, night || rain > 0.6);
       else if (c.kind === 'eagle') this.soar(c, night || rain > 0.7);
       else if (c.kind === 'gull') this.glide(c, night || rain > 0.7);
-      else if (c.kind === 'songbird') this.songbird(c, dt, night || rain > 0.6 || season === 3, people);
-      else if (c.kind === 'bee') this.bee(c, dt, night || rain > 0.3 || season === 3);
+      else if (c.kind === 'songbird') this.songbird(c, step, night || rain > 0.6 || season === 3, people);
+      else if (c.kind === 'bee') this.bee(c, step, night || rain > 0.3 || season === 3);
       else if (c.kind === 'butterfly') this.flutter(c, night || season > 1 || rain > 0.3);
       else if (c.kind === 'bat') this.flutter(c, !night, 0.6, 1.9);
-      else if (SWIMMERS.has(c.kind)) this.swim(c, dt, season);
+      else if (SWIMMERS.has(c.kind)) this.swim(c, step, season);
       else if (c.kind === 'duckling') this.follow(c, dt);
-      else if (cam && !c.run && (c.x - cam.x) ** 2 + (c.z - cam.z) ** 2 > FAR_WALK * FAR_WALK) {
-        // loin de la vue, une bête à terre ne réfléchit qu'une image sur trois, à plus grands pas
-        c.lag = (c.lag ?? 0) + dt;
-        if ((this.frame + c.slot + c.key.length) % 3) continue;
-        this.walk(c, Math.min(0.25, c.lag), night, season, people);
-        c.lag = 0;
-      } else this.walk(c, dt, night, season, people);
+      else this.walk(c, step, night, season, people);
     }
     if (camera) this.scout(dt, camera);
     this.life(dt);
     this.render(elapsed, dt, camera);
+  }
+
+  /**
+   * Cadence de réflexion d'une bête : chaque image près de la vue, une sur trois au loin (à terre ou dans l'eau ; les vols,
+   * calculés d'après l'heure, coûtent peu), une sur dix hors du champ de l'image précédente (avec une marge)
+   */
+  private pace(c: Critter, cam: THREE.Vector3) {
+    const fly = !!SPECS[c.kind].flap;
+    this.sphere.center.set(c.x, fly || SWIMMERS.has(c.kind) ? c.y : this.world.hAt(c.x, c.z), c.z);
+    this.sphere.radius = 3;
+    if (!this.frustum.intersectsSphere(this.sphere)) return 10;
+    return !fly && (c.x - cam.x) ** 2 + (c.z - cam.z) ** 2 > FAR_WALK * FAR_WALK ? 3 : 1;
   }
 
   /** Prédateurs (et villageois) proches dont l'animal a peur */
@@ -964,7 +991,7 @@ export class Fauna {
     const al = this.alarm;
     if (al && Math.hypot(c.x - al.x, c.z - al.z) < al.r) return al;
     let best: { x: number; z: number } | null = null, bd = r;
-    for (const o of this.critters) {
+    for (const o of this.hunters) {
       if (o.dead > 0 || o.hidden || !PREY[o.kind]?.kinds.includes(c.kind)) continue;
       const d = Math.hypot(o.x - c.x, o.z - c.z);
       if (d < bd) { bd = d; best = o; }
@@ -1332,7 +1359,7 @@ export class Fauna {
   private swim(c: Critter, dt: number, season: number) {
     const w = this.world, dolphin = c.kind === 'dolphin', big = c.kind === 'whale' || c.kind === 'manta';
     if (c.slot === 0 && (dolphin || c.kind === 'fish')) this.hunt(c, dt);
-    const L = c.slot === 0 ? c : this.critters.find((o) => o.key === c.key && o.slot === 0) ?? c;
+    const L = c.slot === 0 ? c : this.leads.get(c.key) ?? c;
     if (L !== c) { c.hx = L.hx; c.hz = L.hz; c.rush = L.rush; }
     const dir = hash2(Math.floor(c.key.length * 7 + c.key.charCodeAt(c.key.length - 1)), 3, 3) < 0.5 ? 1 : -1;
     const om = (c.kind === 'whale' ? 0.05 : dolphin ? 0.16 : big ? 0.12 : 0.32) * dir * (1 + c.rush * 1.5);
@@ -1419,7 +1446,10 @@ export class Fauna {
 
   /** Animal importé : position, cap et animation selon ce qu'il fait (marche, course, broute, boit, mange, dort) */
   private animateActor(c: Critter, a: Actor, dt: number, visible: boolean, far: boolean) {
-    a.root.visible = visible;
+    // hors champ, la bête quitte la scène : ses dizaines d'os ne sont plus parcourus à chaque image par le moteur
+    if (visible !== (a.root.parent === this.group)) {
+      if (visible) this.group.add(a.root); else this.group.remove(a.root);
+    }
     if (!visible) return;
     const swimmer = SWIMMERS.has(c.kind);
     // modèle sans animation de marche (cochon, lama) : petit trot simulé, rebond et roulis
@@ -1480,9 +1510,9 @@ export class Fauna {
           this.sphere.radius = (MODELS[c.kind]?.length ?? 0.3) * 1.5 + 0.2;
           visible = this.frustum.intersectsSphere(this.sphere);
           const d = this.sphere.center.distanceTo(camera.position);
-          far = d > 60;
+          far = d > 60 * this.detail;
           // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points (les petites, plus tôt)
-          if (d > (TINY.has(c.kind) ? 45 : 130)) visible = false;
+          if (d > (TINY.has(c.kind) ? 45 : 130) * this.detail) visible = false;
         }
         this.animateActor(c, c.actor, dt, visible, far);
         continue;
