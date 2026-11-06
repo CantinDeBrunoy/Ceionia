@@ -78,6 +78,25 @@ describe('la chasse au monstre des mers', () => {
     }
   });
 
+  it('le tourbillon ne tombe qu’en plein combat, une fois le kraken sorti de l’eau, jamais à l’arrivée', () => {
+    const m = mission('monster'), at = (k?: number) => eventsFor({ ...ctx(m, 1, k === undefined), at: k }).map((e) => e.id);
+    expect(at()).not.toContain('maelstrom');
+    expect(at(0.3)).not.toContain('maelstrom');
+    expect(at(0.55)).toContain('maelstrom');
+    expect(at(0.75)).toContain('maelstrom');
+    // la tête du kraken se dresse à mi-combat (voir la scène) : le tourbillon ne vient pas avant
+    expect(EVENT_BY.maelstrom.from).toBeGreaterThanOrEqual(0.5);
+    // sur le vrai fil d'une chasse : jamais le premier imprévu à l'arrivée
+    for (const seed of [3, 7, 11, 19, 23, 29]) {
+      const v = village(1, seed), a = v.ex.start(m, 1, 1)!;
+      let atK = -1;
+      play(v, a, () => a.phase === 'back' || a.phase === 'home', () => {
+        if (a.wait?.id === 'maelstrom' && atK < 0) atK = a.phase === 'work' ? a.t / Math.max(1, a.c.work + a.extra) : 0;
+      });
+      if (atK >= 0) expect(atK).toBeGreaterThanOrEqual(0.5);
+    }
+  }, 60000);
+
   it('même d’un village loin de la côte, la chasse prend le large (pas une rivière)', () => {
     for (const ci of [0, 1]) {
       const v = village(1), a = v.ex.start(mission('monster'), ci, 1)!;

@@ -1017,7 +1017,7 @@ export class Expeditions {
   private raise(a: ActiveExpedition, arrive: boolean) {
     // pas un imprévu des dernières expéditions, ni celui qu'une autre équipe attend ou vient de vivre
     const avoid = [...this.world.exp.recent, ...this.active.filter((o) => o !== a).flatMap((o) => o.seen)];
-    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive, sea: a.sea, warm: this.warm(a.dest) }, a.seen, avoid, this.rnd);
+    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive, sea: a.sea, warm: this.warm(a.dest), at: arrive ? undefined : nextEventAt(a) }, a.seen, avoid, this.rnd);
     // rien à l'arrivée : l'imprévu viendra pendant le travail (avant, il était perdu, et le suivant avec lui)
     if (!ev) { if (arrive) a.arriveMiss = true; else a.events = a.seen.length; return; }
     a.seen.push(ev.id);
