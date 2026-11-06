@@ -1066,6 +1066,69 @@ function branchFence(p: Parts, x0: number, z0: number, x1: number, z1: number, s
   for (let i = 0; i < n; i += 2) { const t = (i + 0.5) / n; p.sphere(0.022, x0 + (x1 - x0) * t, h * 0.75, z0 + (z1 - z0) * t, i % 4 ? 0x6f8a4a : 0x8a9a52, 0, 0.6); }
 }
 
+/**
+ * Sol d'un campement préhistorique sur toute la parcelle (de -`half` à `half`) : grandes plaques de terre battue qui se
+ * chevauchent, sentier de traces de pas vers la porte (en `door`, ou aucun), ornière d'un traîneau, herbes folles et
+ * touffes jaunies, cailloux, éclats de silex, brindilles, os rongés, lambeau de peau, cendres d'un vieux feu et ses
+ * tisons. Rien ne pousse dans les cercles `busy` ([x, z, r] : la hutte, l'abri, les objets posés). Pièces très légères
+ * (tétraèdres, cônes ouverts, disques), pour tenir sous le plafond de triangles
+ */
+function campGround(p: Parts, seed: number, busy: number[][] = [], door: [number, number] | null = [0, 0.5], half = 0.47, y = 0) {
+  const h = (i: number, k: number) => hash2(i, k, seed);
+  const free = (x: number, z: number, m = 0) => Math.abs(x) < half && Math.abs(z) < half && busy.every(([bx, bz, r]) => Math.hypot(x - bx, z - bz) > r + m);
+  const spot = (i: number, m = 0): [number, number] | null => {
+    for (let t = 0; t < 6; t++) { const x = (h(i, 40 + t) * 2 - 1) * half, z = (h(i, 50 + t) * 2 - 1) * half; if (free(x, z, m)) return [x, z]; }
+    return null;
+  };
+  // terre battue : larges plaques irrégulières, plus ou moins sombres (sous les objets aussi : c'est le sol du camp)
+  for (let i = 0; i < 6; i++) {
+    // (la plaque reste dans la parcelle, quelle que soit sa rotation)
+    const r = 0.1 + h(i, 3) * 0.1, sx = 1.2 + h(i, 4) * 0.4, room = Math.max(0, half + 0.02 - r * sx);
+    const x = (h(i, 1) * 2 - 1) * room, z = (h(i, 2) * 2 - 1) * room;
+    p.add(new THREE.CircleGeometry(r, 6).rotateX(-Math.PI / 2).scale(sx, 1, 0.75), x, y + 0.0015 + i * 0.0004, z, i === 5 ? 0x8a9658 : dark(C.dirt, 0.68 + h(i, 5) * 0.28), h(i, 6) * 3);
+  }
+  // le sentier : des pas qui mènent à la porte depuis le bord de la parcelle, et l'ornière d'un traîneau de branches
+  if (door) {
+    const [dx, dz] = door, ex = dx * 0.6 + (h(0, 7) - 0.5) * 0.3, ez = half, n = 8;
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n, x = dx + (ex - dx) * t, z = dz + (ez - dz) * t, a = Math.atan2(ex - dx, ez - dz), s = k % 2 ? 1 : -1;
+      p.add(new THREE.CircleGeometry(0.011, 5).rotateX(-Math.PI / 2).scale(0.7, 1, 1.4), x + Math.cos(a) * 0.014 * s, y + 0.0045, z - Math.sin(a) * 0.014 * s, dark(C.dirt, 0.52), a);
+    }
+  }
+  const [tx, tz] = [(h(1, 8) * 2 - 1) * half * 0.5, (h(1, 9) * 2 - 1) * half * 0.5], ta = h(1, 10) * 3;
+  for (const s of [-1, 1]) p.add(new THREE.PlaneGeometry(0.008, 0.34).rotateX(-Math.PI / 2), tx + Math.cos(ta) * 0.03 * s, y + 0.004, tz - Math.sin(ta) * 0.03 * s, dark(C.dirt, 0.6), ta);
+  // herbes folles : touffes de trois brins penchés, vertes ou jaunies, surtout vers les bords
+  for (let i = 0; i < 14; i++) {
+    const at = spot(100 + i, 0.03);
+    if (!at) continue;
+    const [x, z] = at, c = [0x7f9e4a, 0x9aa852, 0xb8b060, 0x6f8e44][i % 4], tall = 0.05 + h(i, 11) * 0.05;
+    for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0, 0.009, tall * (1 - k * 0.15), 3, 1, true).translate(0, tall / 2, 0), x + (k - 1) * 0.01, y, z + ((k * 7) % 3 - 1) * 0.008, c, k * 2.1, false, (k - 1) * 0.35, (h(i, 12 + k) - 0.5) * 0.5);
+  }
+  // cailloux et éclats de silex
+  for (let i = 0; i < 12; i++) {
+    const at = spot(200 + i, 0.01);
+    if (!at) continue;
+    const r = 0.008 + h(i, 20) * 0.014;
+    p.add(new THREE.TetrahedronGeometry(r, 0).scale(1.3, 0.55, 1), at[0], y + r * 0.3, at[1], i % 4 === 0 ? FLINT : dark(C.stone, 0.72 + h(i, 21) * 0.3), h(i, 22) * 6);
+  }
+  // brindilles et branches mortes, os rongés
+  for (let i = 0; i < 5; i++) {
+    const at = spot(300 + i, 0.03);
+    if (!at) continue;
+    const bone = i >= 3;
+    p.add(new THREE.CylinderGeometry(0.003, 0.004, bone ? 0.05 : 0.07 + h(i, 30) * 0.05, 3, 1, true).rotateZ(Math.PI / 2), at[0], y + 0.005, at[1], bone ? BONE : i % 2 ? C.darkwood : 0x8a6a48, h(i, 31) * 6);
+    if (bone) for (const e of [-1, 1]) p.add(new THREE.TetrahedronGeometry(0.007, 0), at[0] + e * 0.025 * Math.cos(h(i, 31) * 6), y + 0.006, at[1] - e * 0.025 * Math.sin(h(i, 31) * 6), 0xe2d6bc, e);
+  }
+  // lambeau de peau oublié, cendres d'un vieux feu et ses tisons noircis
+  const hide = spot(400, 0.05);
+  if (hide) p.add(new THREE.CircleGeometry(0.035, 5).rotateX(-Math.PI / 2).scale(1.4, 1, 0.8), hide[0], y + 0.005, hide[1], HIDES[seed % HIDES.length], h(4, 40) * 3);
+  const ash = spot(401, 0.06);
+  if (ash) {
+    p.add(new THREE.CircleGeometry(0.045, 6).rotateX(-Math.PI / 2), ash[0], y + 0.005, ash[1], 0x6a645c);
+    for (let k = 0; k < 3; k++) p.add(new THREE.CylinderGeometry(0.005, 0.006, 0.05, 3, 1, true).rotateZ(Math.PI / 2), ash[0] + (k - 1) * 0.012, y + 0.008, ash[1] + ((k * 2) % 3 - 1) * 0.01, 0x2a2420, k * 1.1);
+  }
+}
+
 /** Tas d'os : os longs aux têtes renflées, côtes en arc, un crâne de cerf et ses bois */
 function bonePile(p: Parts, x: number, z: number, ry = 0, antlers = true) {
   const c = Math.cos(ry), s = Math.sin(ry);
@@ -1230,6 +1293,9 @@ function prehistoricHut(p: Parts, v: number) {
   log(p, 0.2, 0.026, 0.3, 0, 0.28, 0.5); log(p, 0.2, 0.026, 0.34, 0, 0.22, 0.5); log(p, 0.2, 0.026, 0.32, 0.046, 0.25, 0.5);
   p.cyl(0.035, 0.028, 0.06, 7, -0.28, 0, 0.3, 0xb5764f); p.cyl(0.03, 0.035, 0.015, 7, -0.28, 0.06, 0.3, 0x9c6445);
   p.add(new THREE.CircleGeometry(0.1, 7).rotateX(-Math.PI / 2).scale(1.3, 1, 0.9), -0.12, 0.005, 0.38, C.hide);
+  // le sol du campement tout autour : terre battue, sentier vers la porte, herbes, cailloux, os, cendres
+  const body = v % 3 === 1 ? [[-0.2, -0.04, 0.27], [0.2, -0.04, 0.27]] : [[0, -0.02, 0.37]];
+  campGround(p, 620 + (v % 3), [...body, [0.32, 0.25, 0.1], [-0.28, 0.3, 0.06], [-0.12, 0.38, 0.1], [0.4, -0.3, 0.12], [-0.38, -0.34, 0.12]], [0, 0.3]);
 }
 
 /**
@@ -1703,7 +1769,12 @@ function pen(p: Parts, age: number) {
   p.cyl(0.22, 0.2, 0.005, 10, 0.45, 0.012, 0.52, mud);
   p.cyl(0.07, 0.065, 0.004, 8, 0.22, 0.017, 0.62, 0x6fa8c0);
   // herbes folles et fleurs
-  for (let i = 0; i < 40; i++) {
+  // (à la Préhistoire, le sol du campement : boue piétinée, herbes, cailloux, os, plus légers)
+  if (age === 0) {
+    const busy = [[-0.5, -0.56, 0.3], [0.45, 0.56, 0.2], [-0.15, -0.5, 0.15], [0.55, -0.5, 0.15], [0, 0.62, 0.08], [-0.62, 0.12, 0.08]];
+    campGround(p, 630, busy, [0, 0.2], 0.8, 0.012);
+  }
+  for (let i = 0; i < (age === 0 ? 0 : 40); i++) {
     const x = Math.sin(i * 2.39) * 0.74, z = Math.cos(i * 1.71 + i * 0.13) * 0.74;
     if (x < -0.1 && z < -0.25) continue;
     if (i % 5 === 0) p.sphere(0.014, x, 0.03, z, [0xf2e27a, 0xffffff, 0xd88ab8][i % 3]);
@@ -1850,6 +1921,7 @@ function farm(p: Parts, age: number) {
     caveSeated(p, -0.38, 0.16, Math.PI, 2);
     caveFolk(p, 0.2, 0.27, Math.PI, 0);
     waterSkin(p, 0.44, 0.0, 1.2);
+    campGround(p, 625, [[-0.18, -0.18, 0.2], [0.25, 0.14, 0.12], [0.3, -0.24, 0.12], [0.02, 0.36, 0.1], [-0.38, 0.06, 0.08], [0.34, 0.4, 0.08], [-0.16, 0.18, 0.1]], [0.1, 0.2]);
   } else if (age === 1) {
     // ferme de bois et chaume, meule, charrette, enclos
     p.box(0.5, 0.04, 0.34, -0.08, 0, -0.22, C.stone);
@@ -2161,6 +2233,7 @@ function well(p: Parts, age: number) {
     waterSkin(p, 0.23, 0.4, 0.4);
     p.add(new THREE.CircleGeometry(0.06, 8).rotateX(-Math.PI / 2).scale(1.4, 1, 0.8), 0.16, 0.01, 0.3, 0x5a8aa0, 0.4);
     branchFence(p, -0.24, -0.44, 0.22, -0.45, 661, 0.12);
+    campGround(p, 632, [[0, 0, 0.36], [0.32, 0.24, 0.1], [-0.3, 0.26, 0.13], [-0.15, 0.38, 0.06], [0.23, 0.4, 0.05], [0, -0.45, 0.06]], [0, 0.32]);
     return;
   }
   if (age === 1) { antiqueWell(p); return; }
@@ -2259,6 +2332,7 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     for (let k = 0; k < 5; k++) p.add(new THREE.DodecahedronGeometry(0.022 - k * 0.002, 0), 0.43 + (k % 2) * 0.03 - 0.015, 0.02 + (k > 2 ? 0.025 : 0), 0.13 + (k % 3) * 0.025, k % 2 ? 0x4a4640 : 0x6a6458, k);
     flintKit(p, -0.02, 0.42, 0.1);
     branchFence(p, 0.08, -0.46, 0.44, -0.42, 692, 0.14);
+    campGround(p, 633, [[-0.22, -0.26, 0.2], [0.02, 0.1, 0.2], [0.28, -0.18, 0.1], [0.24, 0.28, 0.1], [-0.26, 0.28, 0.14], [-0.3, 0, 0.1], [-0.06, -0.38, 0.06], [0.4, -0.05, 0.06], [0.38, 0.4, 0.1]], null);
   } else if (age === 0) {
     p.cone(0.38, 0.5, 5, -0.12, 0, -0.1, C.hide);
     p.box(0.16, 0.1, 0.12, 0.28, 0, 0.2, C.darkstone); p.box(0.1, 0.06, 0.08, 0.28, 0.1, 0.2, C.stone);
@@ -3548,6 +3622,8 @@ function health(p: Parts, age: number) {
     pole(p, 0.012, 0.42, 0.88 - 0.1, -0.06, C.darkwood);
     skull(p, 0.78, 0.38, -0.04, 0); for (let k = 0; k < 3; k++) p.box(0.006, 0.05, 0.006, 0.76 + k * 0.02, 0.27, -0.045, k % 2 ? BONE : 0xc8a070);
     branchFence(p, 0.33, 0.44, 0.85, 0.44, 702, 0.1); branchFence(p, 0.33, 0.44, 0.33, 0.86, 703, 0.1);
+    const busy = [[-0.44, -0.46, 0.34], [0.46, -0.52, 0.3], [-0.22, 0.32, 0.15], [-0.62, 0.02, 0.16], [-0.66, 0.3, 0.16], [0.6, 0.66, 0.3], [-0.3, 0.66, 0.16], [0.05, 0.4, 0.12], [0.3, 0.27, 0.1], [0.12, 0.6, 0.06]];
+    campGround(p, 636, busy, [-0.1, 0.5], 0.84, 0.012); campGround(p, 637, busy, null, 0.84, 0.012);
   } else if (age === 1) {
     // sanctuaire d'Asclépios : temple à colonnes, portique, bassin de l'eau sacrée, cyprès et jardin des simples
     p.box(1.76, 0.05, 1.16, 0, 0, -0.36, C.stone); p.box(1.66, 0.05, 1.06, 0, 0.05, -0.36, 0xe6dccb);
@@ -3818,6 +3894,8 @@ function school(p: Parts, age: number) {
     p.cyl(0.05, 0.045, 0.08, 8, -0.42, 0, -0.38, 0x8a6a4a); p.cyl(0.051, 0.051, 0.006, 8, -0.42, 0.08, -0.38, 0xe0d0b0);
     bonePile(p, 0.74, -0.3, 2.4);
     pallet(p, -0.66, -0.5, 0.6, 0x8a6a4a);
+    const busy = [[0, 0.05, 0.62], [-0.48, -0.72, 0.13], [0, -0.82, 0.13], [0.48, -0.72, 0.13], [-0.72, 0.5, 0.1], [0.68, 0.42, 0.26], [-0.42, -0.38, 0.07], [0.74, -0.3, 0.1], [-0.66, -0.5, 0.16]];
+    campGround(p, 638, busy, [0, 0.55], 0.84, 0.012); campGround(p, 639, busy, null, 0.84, 0.012);
   } else if (age === 1) {
     // académie : portiques en U autour d'une cour dallée, colonnes à chapiteaux et toits de tuiles, oliviers, statue,
     // bancs, cadran solaire
@@ -4083,6 +4161,8 @@ function firehouse(p: Parts, age: number, v: number) {
     pallet(p, 0.68, -0.1, 0.2);
     bonePile(p, -0.1, -0.7, 0.3);
     branchFence(p, -0.86, 0.0, -0.86, 0.36, 721, 0.14); branchFence(p, 0.2, -0.86, 0.75, -0.86, 722, 0.14);
+    const busy = [[-0.42, -0.42, 0.24], [0.5, -0.5, 0.32], [0.42, 0.32, 0.22], [-0.6, 0.52, 0.14], [-0.12, 0.66, 0.2], [0.1, 0.32, 0.09], [0.76, 0.1, 0.12], [0.68, -0.1, 0.15], [-0.1, -0.7, 0.1], [0.1, 0.44, 0.06]];
+    campGround(p, 640, busy, [0.5, -0.2], 0.84, 0.012); campGround(p, 641, busy, null, 0.84, 0.012);
   } else if (age === 1) {
     // poste des vigiles : tour de guet de pierre au toit de tuiles, caserne tuilée, grande citerne, amphores d'eau,
     // râtelier de seaux, échelle, tonneaux
@@ -5218,6 +5298,7 @@ function lumber(p: Parts, age: number) {
       fagot(p, 0.05, 0.06, 0.3); fagot(p, 0.22, 0.12, -0.9);
       for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.1, 0.004, 0.022), -0.16 + k * 0.03, 0.014 + k * 0.001, 0.36, k % 2 ? 0x6a4a34 : 0x8a6a4a, 0.3 + k * 0.4);
       for (let k = 0; k < 8; k++) p.box(0.014, 0.004, 0.008, 0.12 + Math.cos(k * 2.2) * 0.07, 0.013, 0.28 + Math.sin(k * 2.2) * 0.07, 0xd8b88a, k);
+      campGround(p, 634, [[-0.12, -0.22, 0.2], [0.12, -0.22, 0.2], [0.3, 0.3, 0.07], [-0.34, 0.28, 0.07], [0.36, -0.06, 0.07], [0.12, 0.3, 0.1], [-0.3, 0.08, 0.1], [0.12, 0.1, 0.13], [-0.15, 0.17, 0.08]], [0, 0.0], 0.44, 0.012);
     }
   } else if (age === 2) {
     // scierie à colombages : grande scie de long sur son chevalet, planches empilées
@@ -5320,6 +5401,7 @@ function quarry(p: Parts, age: number) {
     p.add(new THREE.CylinderGeometry(0.004, 0.006, 0.14, 4).rotateZ(Math.PI / 2), -0.3, 0.012, 0.38, 0xc8b08a, -0.4);
     p.add(new THREE.CylinderGeometry(0.003, 0.004, 0.05, 3).rotateZ(Math.PI / 2), -0.27, 0.012, 0.355, 0xc8b08a, 0.6);
     wickerBasket(p, 0.06, 0.38, 0xb8b0a0);
+    campGround(p, 635, [[-0.3, -0.28, 0.18], [0, -0.28, 0.18], [0.3, -0.28, 0.18], [-0.22, 0.12, 0.12], [0.38, -0.03, 0.08], [0.32, 0.2, 0.13], [0.06, 0.38, 0.06], [-0.34, 0.32, 0.07], [-0.06, 0.12, 0.07]], [0.1, 0.2], 0.44, 0.012);
     return;
   }
   if (age <= 2) {
