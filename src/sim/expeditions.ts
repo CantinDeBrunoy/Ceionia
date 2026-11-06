@@ -6,7 +6,8 @@ import { AGES, KINDS, KindId, Building, sizeOf, lineOf } from '../build/catalog'
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats } from './depths';
-import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE } from './economy';
+import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
+import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
 import { rulesOf } from './difficulty';
 import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
@@ -215,7 +216,9 @@ export class Expeditions {
    */
   riskOf(c: Choice) {
     const map = this.world.exp.perks.includes('map') && c.win.some((e) => e.t === 'veins');
-    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (map ? 0.8 : 1) * rulesOf(this.world.difficulty).riskK;
+    // un train de voyageurs amène les équipes au cosmodrome : les expéditions spatiales sont plus sûres
+    const rail = c.dest === 'spaceport' && spaceRail(this.world);
+    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (map ? 0.8 : 1) * (rail ? SPACE_RAIL_RISK : 1) * rulesOf(this.world.difficulty).riskK;
   }
 
   /**
@@ -713,7 +716,9 @@ export class Expeditions {
     for (const [g, n] of Object.entries(take) as [GearId, number][]) this.world.exp.gear[g] -= n;
     const a: ActiveExpedition = {
       id: this.nextId++, m, c, phase: m.farewell ? 'gather' : 'out', t: 0, party, base, dest, ok: false, gear: take, riskK: k,
-      wait: null, waitT: 0, hold: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], extra: 0, bonus: [], hurt: 0,
+      wait: null, waitT: 0, hold: 0, events: c.work >= 20 && this.rnd() < 0.5 ? 2 : 1, seen: [], picks: [], notes: [], bonus: [], hurt: 0,
+      // (le train de voyageurs amène l'équipe au cosmodrome : les préparatifs du lancement vont plus vite)
+      extra: c.dest === 'spaceport' && spaceRail(this.world) ? -c.work * SPACE_RAIL_WORK : 0,
       // une grotte trouvée au pied d'une paroi reste une grotte : l'équipe y entre
       site: c.dest === 'cave' ? 'cave' : kind, age, sea: sea && kind === 'river',
       targets: [...targets], entry, take: held, front, redo: this.done(m), mounts, ambush, routeLen: len, might: 0, fromCamp, air,
@@ -1125,9 +1130,13 @@ export class Expeditions {
   /** Ce que le village tire chaque jour de ses bâtiments : bois, pierre, minerai, briques, pétrole brut des puits (avant raffinage) */
   yields(): Record<Resource, number> {
     const rate: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0, brick: 0 };
+    // une gare de marchandises à côté : le bâtiment produit davantage
+    const st = allServed(this.world);
     for (const b of this.world.buildings.values()) {
       const y = YIELD[b.kind];
-      if (y) for (const r of Object.keys(y) as Resource[]) rate[r] += y[r]![b.age] ?? 0;
+      if (!y) continue;
+      const k = railBoost(this.world, b, st);
+      for (const r of Object.keys(y) as Resource[]) rate[r] += (y[r]![b.age] ?? 0) * k;
     }
     // le monte-charge du camp souterrain remonte du minerai chaque jour
     if (this.camp() >= 6) rate.ore += 2;
@@ -1135,7 +1144,22 @@ export class Expeditions {
   }
 
   /** Pétrole brut que les raffineries peuvent traiter par jour */
-  refining() { let n = 0; for (const b of this.world.buildings.values()) if (b.kind === 'refinery') n += REFINE_CRUDE; return n; }
+  refining() {
+    const st = allServed(this.world);
+    let n = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'refinery') n += REFINE_CRUDE * railBoost(this.world, b, st);
+    return n;
+  }
+
+  /** Carburant que brûlent chaque jour les automobiles (celles des usines automobiles) */
+  burning() { let n = 0; for (const b of this.world.buildings.values()) if (b.kind === 'carworks') n += CAR_FUEL; return this.world.unlimited ? 0 : n; }
+
+  /** Les automobiles roulent-elles ? Il faut une usine automobile, et du carburant (sauf en ressources illimitées) */
+  cars() {
+    let n = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'carworks') n++;
+    return n > 0 && (this.world.unlimited || this.world.fuel > 0);
+  }
 
   /**
    * Ce que le village produit chaque jour : bois des bûcherons, pierre des carrières et des mines, minerai des mines ; le
@@ -1145,7 +1169,7 @@ export class Expeditions {
     const rate = this.yields(), cap = this.refining();
     const use = Math.min(cap, this.world.crude >= 1 ? cap : rate.crude);
     rate.crude -= use;
-    rate.fuel += use * FUEL_PER_CRUDE;
+    rate.fuel += use * FUEL_PER_CRUDE - this.burning();
     return rate;
   }
   private mineStep(dt: number) {
@@ -1157,6 +1181,9 @@ export class Expeditions {
       if (r === 'crude') { this.prodT[r] += day * rate[r]; const n = Math.floor(this.prodT[r]); if (n) { this.prodT[r] -= n; w[r] += n; } }
       else w[r] += day * rate[r];
     }
+    // les automobiles brûlent leur carburant au fil des heures
+    const burn = this.burning();
+    if (burn) w.fuel = Math.max(0, w.fuel - day * burn);
     // la raffinerie traite le brut baril après baril, tant qu'il en reste ; chaque baril donne sa part de carburant
     const cap = this.refining();
     if (!cap) return;

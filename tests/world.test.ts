@@ -1249,7 +1249,7 @@ describe('expéditions', () => {
     expect(station).not.toBeNull();
     const first = w.lines[0], tr = rail.trains.get(first.id)!;
     expect(first.stops).toEqual([station!.id, outpost.id]);
-    expect(rail.stopName(station!)).toBe('Grande gare');
+    expect(rail.stopName(station!)).toBe('Gare centrale');
     // la voie ne passe ni sur un bâtiment ni dans l'eau
     for (const g of rail.network().segs) for (let s = 0.4; s < g.len - 0.4; s += 0.25) {
       const k = Math.max(1, g.cum.findIndex((c) => c >= s)), f = (s - g.cum[k - 1]) / (g.cum[k] - g.cum[k - 1]), a = g.pts[k - 1], c = g.pts[k];
@@ -1277,7 +1277,7 @@ describe('expéditions', () => {
     }
     expect(line2).not.toBeNull();
     expect(line2!.color).not.toBe(first.color);
-    expect(rail.lineLabel(line2!)).toBe('Grande gare → Petite gare');
+    expect(rail.lineLabel(line2!)).toBe('Gare centrale → Petite gare');
     const tr2 = rail.trains.get(line2!.id)!;
     run(600);
     expect(tr2.carried).toBeGreaterThan(0);

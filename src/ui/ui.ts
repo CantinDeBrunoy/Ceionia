@@ -186,7 +186,7 @@ const RES_META: Record<Resource, { label: string; icon: string; use: string; mor
   ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; les expéditions armées en remontent du monde souterrain.' },
   brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’époque moderne et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
   crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
-  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les blindés de l’expédition armée.', more: 'La raffinerie en tire du pétrole brut des puits.' },
+  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage) et les blindés de l’expédition armée.', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 50 % de plus.' },
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
@@ -658,6 +658,7 @@ export class UI {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
       return `Débloqué par l’expédition « ${m?.title ?? d.reqMission} »`;
     }
+    if (d.reqKind && !h.sim.built(d.reqKind)) return `Il faut d’abord « ${h.sim.nameOf(d.reqKind)} » au village`;
     return null;
   }
 
@@ -723,6 +724,8 @@ export class UI {
     const ups = UPGRADES.filter((u) => u.from === b.kind && h.sim.age >= KINDS[u.to].minAge).map((u) => {
       const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
       const locked = to.reqMission && !h.expeditions.state.done.includes(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
+      const first = !locked && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
+      if (first) return `<button disabled title="Il faut d’abord « ${first} » au village">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${first} d’abord</small></button>`;
       return locked ? `<button disabled title="Débloqué par l’expédition « ${locked} »">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${locked}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} Améliorer : ${name}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
     }).join('');
@@ -814,7 +817,7 @@ export class UI {
     const items: [Resource, string, string][] = [['wood', 'tree', 'Bois'], ['stone', 'rock', 'Pierre'], ['ore', 'pickaxe', 'Minerai']];
     // les briques paraissent avec la briqueterie, dès l'âge industriel (ou dès qu'on en a : une partie plus ancienne)
     if (this.host.sim.age >= 3 || w.brick >= 1 || day.brick) items.push(['brick', 'brick', 'Briques']);
-    if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel) items.push(['crude', 'crude', 'Brut'], ['fuel', 'fuel', 'Carburant']);
+    if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel || this.host.expeditions.state.done.includes('oil')) items.push(['crude', 'crude', 'Brut'], ['fuel', 'fuel', 'Carburant']);
     const key = `${w.unlimited}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
     if (key === this.resKey) return;
     this.resKey = key;
@@ -823,7 +826,7 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}/j`;
-    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les blindés de l’expédition armée' };
+    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les automobiles et les blindés de l’expédition armée' };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');

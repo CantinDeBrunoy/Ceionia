@@ -650,6 +650,27 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // une courte expédition qui ouvre la raffinerie : sans elle, pas de carburant, et sans carburant, pas de voitures
+    id: 'oil', age: 3, mandatory: false, icon: '🛢️', title: 'L’or noir', unlocks: 'refinery',
+    intro: 'Un prospecteur a vu un liquide noir suinter du sol. S’il y a là du pétrole, un ingénieur viendra bâtir une raffinerie au village : on en tirera le carburant des futures automobiles.',
+    choices: [
+      {
+        label: 'Forer un puits d’essai tout près', text: 'Court et sans danger.',
+        dest: 'plain', scene: 'drill', doing: 'fore un puits d’essai là où le brut suinte', party: 2, work: 12, risk: 0.1, carry: 'cart',
+        win: [jobs(2)], lose: [],
+        winText: 'Le pétrole jaillit du puits d’essai ! L’ingénieur promet sa raffinerie : bâtissez-la, avec des puits de pétrole sur les taches sombres.',
+        loseText: 'Rien que de l’eau boueuse : il faudra forer ailleurs.',
+      },
+      {
+        label: 'Suivre les suintements au-delà des collines', text: 'Plus loin, un gisement plus riche.',
+        dest: 'far', scene: 'drill', doing: 'suit les suintements et fore au cœur du gisement', party: 3, work: 16, risk: 0.2, carry: 'cart',
+        win: [jobs(3), joy(1)], lose: [hurt(1, 1)],
+        winText: 'Un geyser de pétrole au-delà des collines ! Toute la région en parle, et l’ingénieur promet sa raffinerie au village.',
+        loseText: 'Le trépan s’est brisé : un foreur blessé à la main.',
+      },
+    ],
+  },
   // ---------------- Époque moderne ----------------
   {
     id: 'summit', age: 4, mandatory: true, icon: '🏔️', title: 'Expédition au sommet',

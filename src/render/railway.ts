@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { World, N } from '../world/world';
 import type { Streams } from './streams';
 import { Building, sizeOf } from '../build/catalog';
-import { Railway, Train, Stop, Seg, Leg, TRAIN_LEN, OVER } from '../sim/railway';
+import { Railway, Train, Stop, Seg, Leg, TRAIN_LEN, OVER, stopKey } from '../sim/railway';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { Puffs } from './particles';
@@ -266,10 +266,11 @@ export class RailView {
     const w = this.world;
     if (!s.post) {
       // comme la vue des bâtiments : le bâtiment se pose à la médiane des hauteurs des coins de son emprise
-      const hs: number[] = [];
-      for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) hs.push(w.h(s.b.x + i, s.b.z + j));
+      const hs: number[] = [], n = sizeOf(s.b);
+      for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) hs.push(w.h(s.b.x + i, s.b.z + j));
       hs.sort((p, q) => p - q);
-      return hs[4] + 0.044;
+      const mid = hs.length >> 1;
+      return (hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2) + 0.044;
     }
     let y = -Infinity;
     for (let t = -s.half - OVER; t <= s.half + OVER + 1e-6; t += 0.2) y = Math.max(y, w.hAt(s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t));
@@ -455,7 +456,7 @@ export class RailView {
     // l'emprise de la voie est dégagée : ni arbres ni rochers sur le ballast, sous la caténaire ou contre les poteaux
     for (const g of net.segs) for (let s = 0; s <= g.len; s += 0.25) { const [x, z] = along(g.pts, g.cum, s); w.clearTrees(x, z, 0.42); }
     for (const s of net.stops) {
-      const y = this.stopY.get(s.b.id)!, used = net.used.get(s.b.id) ?? new Set<number>(), h = Math.atan2(s.u[0], s.u[1]);
+      const y = this.stopY.get(s.b.id)!, used = net.used.get(stopKey(s)) ?? new Set<number>(), h = Math.atan2(s.u[0], s.u[1]);
       const pt = (t: number): [number, number, number] => [s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t, h];
       if (s.post) {
         // embranchement de l'avant-poste, quai de planches côté murs, wagonnet et tas de minerai
@@ -473,7 +474,22 @@ export class RailView {
         for (const e of [1, -1]) if (!used.has(e)) { const [bx, bz] = pt(e * (s.half + OVER)); buffer(bx, y, bz, h); }
       } else {
         // gare : à l'époque moderne, la caténaire passe au-dessus de la voie du quai, tendue entre deux portiques aux bouts
-        // du quai, où elle rejoint celle des lignes
+        // du quai, où elle rejoint celle des lignes (la gare centrale a ses voies, ses butoirs et sa halle dans son modèle)
+        if (s.ends) {
+          for (const e of s.ends) {
+            if (!used.has(e)) continue;
+            const [qx, qz] = pt(e * (s.half + 0.75)), cx = Math.cos(h), cz = -Math.sin(h), sx = qx - cx * 0.3, sz = qz - cz * 0.3, gy = w.hAt(sx, sz);
+            m.block(sx, gy, sz, h, 0.024, 0.5, 0.024, 0x3c3c40);
+            m.block(sx, gy + 0.4, sz, h, 0.06, 0.14, 0.035, 0x2a2a2e);
+            m.block(sx, gy + 0.54, sz, h, 0.07, 0.012, 0.045, 0x2a2a2e);
+            const go = hash2(s.b.id, s.lane, 97) < 0.5;
+            (go ? m : gm).block(sx, gy + 0.49, sz, h, 0.034, 0.03, 0.04, go ? 0x5a2a26 : 0xff4a3a);
+            (go ? gm : m).block(sx, gy + 0.43, sz, h, 0.034, 0.03, 0.04, go ? 0x3aff7a : 0x1e4a2a);
+            if (age === 3) m.block(sx + cx * 0.06, gy + 0.36, sz + cz * 0.06, h, 0.12, 0.02, 0.012, 0xd8553c);
+            lights.push(sx, sz);
+          }
+          continue;
+        }
         if (age >= 4) {
           const cx = Math.cos(h), cz = -Math.sin(h), L = s.half + 0.02, n = Math.ceil((2 * L) / STEP);
           const P = (t: number) => (o: number, dy: number) => { const [x, z] = pt(t); return [x + cx * o, y + dy, z + cz * o]; };
