@@ -583,7 +583,8 @@ function roof(p: Parts, x: number, y: number, z: number, o: RoofOpts) {
 /** Colonne à l'antique : base, fût, chapiteau */
 function column(p: Parts, x: number, z: number, h: number, y = 0, r = 0.032, seg = 8) {
   p.cyl(r * 1.35, r * 1.45, 0.025, seg, x, y, z, C.stone);
-  p.cyl(r * 0.92, r * 1.06, h - 0.05, seg, x, y + 0.025, z, 0xf2ead8);
+  // (le fût sans ses disques : la base et le chapiteau les cachent)
+  p.add(new THREE.CylinderGeometry(r * 0.92, r * 1.06, h - 0.05, seg, 1, true).translate(0, (h - 0.05) / 2, 0), x, y + 0.025, z, 0xf2ead8);
   p.cyl(r * 1.3, r, 0.012, seg, x, y + h - 0.037, z, C.stone);
   p.box(r * 2.5, 0.025, r * 2.5, x, y + h - 0.025, z, C.stone);
 }
@@ -3560,8 +3561,8 @@ function wallWindows(p: Parts, cx: number, cz: number, len: number, y: number, r
   for (let i = 0; i < n; i++) {
     const u = -len / 2 + (len * (i + 0.5)) / n, x = cx + u * c, z = cz - u * s;
     p.add(slab(w, h, 0.01, F_PZ).translate(0, h / 2, 0.003), x, y, z, C.win, ry, true);
-    p.add(slab(w + 0.02, h + 0.02, 0.008, F_PZ | F_PY).translate(0, h / 2, 0), x, y, z, frame, ry);
-    p.add(slab(w + 0.03, 0.012, 0.026, F_PZ | F_PY | F_PX | F_NX).translate(0, -0.006, 0.006), x, y, z, frame, ry);
+    p.add(slab(w + 0.02, h + 0.02, 0.008, F_PZ).translate(0, h / 2, 0), x, y, z, frame, ry);
+    p.add(slab(w + 0.03, 0.012, 0.026, F_PZ | F_PY).translate(0, -0.006, 0.006), x, y, z, frame, ry);
     p.add(slab(0.006, h, 0.004, F_PZ).translate(0, h / 2, 0.01), x, y, z, C.darkwood, ry);
     if (arch) p.add(new THREE.CylinderGeometry(w / 2 + 0.01, w / 2 + 0.01, 0.008, 4, 1, false, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).translate(0, h, 0.004), x, y, z, frame, ry);
     if (shutters >= 0) for (const e of [-1, 1]) p.add(slab(w / 2, h, 0.006, F_PZ | F_PX | F_NX).translate(e * (w * 0.75 + 0.012), h / 2, 0.006), x, y, z, shutters, ry);
@@ -3581,8 +3582,8 @@ function dressBack(p: Parts, age: number, cx: number, cz: number, w: number, d: 
   const sh = age === 2 ? SHUTTERS[seed % 4] : -1, zb = cz - d / 2;
   const floors = y1 - y0 > 0.42 ? [y0 + (y1 - y0) * 0.2, y0 + (y1 - y0) * 0.62] : [y0 + (y1 - y0) * (age === 1 ? 0.5 : 0.35)];
   for (const y of floors) {
-    wallWindows(p, cx, zb - 0.002, w * 0.9, y, Math.PI, Math.max(1, Math.round(w / 0.26)), ww, wh, fr, sh);
-    for (const s of [-1, 1]) if (sides === 2 || sides === s) wallWindows(p, cx + s * (w / 2 + 0.002), cz, d * 0.8, y, (s * Math.PI) / 2, Math.max(1, Math.round(d / 0.3)), ww, wh, fr, sh);
+    wallWindows(p, cx, zb - 0.006, w * 0.9, y, Math.PI, Math.max(1, Math.round(w / 0.26)), ww, wh, fr, sh);
+    for (const s of [-1, 1]) if (sides === 2 || sides === s) wallWindows(p, cx + s * (w / 2 + 0.006), cz, d * 0.8, y, (s * Math.PI) / 2, Math.max(1, Math.round(d / 0.3)), ww, wh, fr, sh);
   }
   if (age >= 2) for (const s of [-1, 1]) downpipe(p, cx + s * (w / 2 - 0.02), zb - 0.012, y1, age === 2 ? 0x7a6a5a : 0x5a6268, y0);
   if (seed % 2 === 0) ivy(p, cx, zb - 0.002, w * 0.38, (y1 - y0) * 0.8 + y0, Math.PI, seed);
@@ -3604,9 +3605,8 @@ function dressBack(p: Parts, age: number, cx: number, cz: number, w: number, d: 
 
 /** Descente d'eau le long d'un mur : tuyau de la gouttière (à hauteur y1) jusqu'au sol, coude et sabot au pied */
 function downpipe(p: Parts, x: number, z: number, y1: number, color = 0x6a6e72, y0 = 0) {
-  p.add(new THREE.CylinderGeometry(0.008, 0.008, y1 - y0, 5, 1, true), x, (y0 + y1) / 2, z, color);
-  p.box(0.024, 0.016, 0.024, x, y1 - 0.016, z, color);
-  p.box(0.02, 0.012, 0.03, x, y0, z, dark(color, 0.85));
+  p.add(new THREE.CylinderGeometry(0.008, 0.008, y1 - y0, 4, 1, true), x, (y0 + y1) / 2, z, color);
+  p.add(slab(0.024, 0.016, 0.024, F_PY | F_PZ | F_NZ | F_PX | F_NX), x, y1 - 0.008, z, color);
 }
 
 /**
@@ -3893,7 +3893,7 @@ function health(p: Parts, age: number) {
     // mât au drapeau à croix rouge, bancs et massifs de fleurs dans la cour, réverbères au portail
     p.cyl(0.008, 0.01, 0.7, 5, -0.24, 0.03, -0.36, C.metal); { const f = sway([-0.24, 0, -0.36], [0, 1, 0], 0.35, 1.1); f.box(0.006, 0.1, 0.15, 0, 0.6, 0.075, C.white); f.box(0.008, 0.025, 0.06, 0, 0.64, 0.075, 0xd84a3e); f.box(0.008, 0.07, 0.02, 0, 0.617, 0.075, 0xd84a3e); }
     for (const x of [-0.24, 0.24]) { p.box(0.16, 0.02, 0.05, x, 0.07, 0.1, C.wood); for (const d of [-0.06, 0.06]) p.box(0.016, 0.045, 0.04, x + d, 0.025, 0.1, 0x3c4a44); }
-    for (let i = 0; i < 10; i++) p.sphere(0.024, -0.45 + (i % 5) * 0.225, 0.05, i < 5 ? -0.3 : 0.15, [C.pink, C.butter, C.lav, 0xd84a3e][i % 4], 0, 0.8);
+    for (let i = 0; i < 10; i++) p.add(new THREE.OctahedronGeometry(0.026, 0).scale(1, 0.8, 1), -0.45 + (i % 5) * 0.225, 0.05, i < 5 ? -0.3 : 0.15, [C.pink, C.butter, C.lav, 0xd84a3e][i % 4]);
     for (const s of [-1, 1]) { p.cyl(0.007, 0.009, 0.3, 5, s * 0.26, 0.025, 0.86, 0x3c4a44); p.box(0.04, 0.045, 0.04, s * 0.26, 0.32, 0.86, 0xffe2a0, 0, true); }
     p.box(0.34, 0.78, 0.1, 0, 0.03, -0.41, C.cream); p.gable(0.36, 0.16, 0.12, 0, 0.81, -0.41, C.slate);
     p.cyl(0.055, 0.055, 0.012, 12, 0, 0.66, -0.355, C.white); p.box(0.005, 0.04, 0.004, 0, 0.675, -0.348, C.darkwood); p.box(0.03, 0.005, 0.004, 0.012, 0.66, -0.348, C.darkwood);
@@ -3901,8 +3901,8 @@ function health(p: Parts, age: number) {
     for (const s of [-1, 1]) {
       p.box(0.36, 0.52, 0.88, s * 0.72, 0.03, -0.3, C.brick); p.box(0.38, 0.035, 0.9, s * 0.72, 0.29, -0.3, C.cream);
       roof(p, s * 0.72, 0.55, -0.3, { w: 0.88, d: 0.36, h: 0.2, color: C.slate, wall: C.brick, ry: Math.PI / 2, rows: true });
-      stones(p, s * 0.54, -0.3, 0.88, 0.03, 0.55, -s * Math.PI / 2, dark(C.brick, 0.86), 0.3, 352 + s);
-      stones(p, s * 0.72, 0.14, 0.36, 0.03, 0.55, 0, dark(C.brick, 0.86), 0.3, 354 + s);
+      stones(p, s * 0.54, -0.3, 0.88, 0.03, 0.55, -s * Math.PI / 2, dark(C.brick, 0.86), 0.2, 352 + s);
+      stones(p, s * 0.72, 0.14, 0.36, 0.03, 0.55, 0, dark(C.brick, 0.86), 0.2, 354 + s);
       quoins(p, s * 0.54, 0.14, 0.03, 0.55, -s, 1); quoins(p, s * 0.9, 0.14, 0.03, 0.55, s, 1);
       for (const y of [0.1, 0.36]) {
         for (const z of [-0.6, -0.36, -0.12]) p.add(slab(0.07, 0.1, 0.02, F_PZ), s * 0.535, 0.08 + y, z, C.win, -s * Math.PI / 2, true);
@@ -3910,7 +3910,12 @@ function health(p: Parts, age: number) {
       }
       for (const x of [0.3, 0.18]) windows(p, [s * x], 0.13 + (x === 0.3 ? 0 : 0.26), -0.43, 0.07, 0.1);
       windows(p, [s * 0.3], 0.39, -0.43, 0.07, 0.1);
+      // le flanc extérieur de l'aile, percé comme sur la cour
+      for (const y of [0.13, 0.39]) wallWindows(p, s * 0.906, -0.3, 0.8, y, (s * Math.PI) / 2, 3, 0.07, 0.1, 0xf2efe6);
     }
+    // le dos du corps central : deux étages de fenêtres, descentes d'eau, porte de service
+    dressBack(p, 3, 0, -0.66, 0.92, 0.44, 0.03, 0.65, 71, 0, 1);
+    p.box(0.12, 0.2, 0.012, 0, 0.03, -0.887, 0x3f5a4a);
     p.box(1.0, 0.02, 0.5, 0, 0.025, -0.08, C.green);
     p.cyl(0.1, 0.11, 0.05, 10, 0, 0.03, -0.08, C.stone); waterPool(p, 0, 0.075 + 0.01, -0.08, 0.08, 10); p.cyl(0.015, 0.02, 0.12, 5, 0, 0.08, -0.08, C.stone);
     for (const x of [-0.36, 0.36]) tree(p, x, -0.08, 0.9);
@@ -4168,6 +4173,7 @@ function school(p: Parts, age: number) {
     stones(p, -0.24, -0.389, 1.3, 0.025, 0.505, 0, dark(0xc98a72, 0.86), 0.3, 340);
     stones(p, -0.89, -0.64, 0.5, 0.025, 0.505, -Math.PI / 2, dark(0xc98a72, 0.86), 0.3, 341);
     for (const x of [-0.89, 0.41]) quoins(p, x, -0.39, 0.025, 0.505, x < 0 ? -1 : 1, 1);
+    dressBack(p, 3, -0.24, -0.64, 1.3, 0.5, 0.025, 0.505, 69, 2, 1);
     for (const y of [0.08, 0.32]) for (const x of [-0.78, -0.62, -0.46, -0.02, 0.14, 0.3]) p.box(0.1, 0.018, 0.024, x, y + 0.135, -0.385, C.cream);
     for (const x of [-0.7, 0.22]) { p.box(0.07, 0.24, 0.07, x, 0.62, -0.72, 0xa85e50); p.box(0.085, 0.025, 0.085, x, 0.86, -0.72, C.cream); smoke(x, 0.9, -0.72, 0); }
     p.box(0.3, 0.6, 0.08, -0.24, 0.025, -0.37, 0xc98a72); p.gable(0.32, 0.14, 0.1, -0.24, 0.625, -0.37, C.slate);
@@ -7909,6 +7915,7 @@ function theater(p: Parts, age: number) {
     // la cage de scène au fond, son toit de cuivre et l'Apollon doré au faîte
     p.box(1.1, 0.85, 0.36, 0, 0.02, -0.66, st);
     roof(p, 0, 0.87, -0.66, { w: 1.12, d: 0.36, h: 0.16, color: copper, wall: st, ov: 0.03 });
+    dressBack(p, 3, 0, -0.66, 1.1, 0.36, 0.02, 0.87, 71, 0, 0);
     p.cyl(0.012, 0.02, 0.08, 5, 0, 1.02, -0.66, C.gold); p.sphere(0.024, 0, 1.12, -0.66, C.gold);
     // la salle, ronde sous sa coupole de cuivre et sa couronne d'or
     p.cyl(0.42, 0.42, 0.62, 18, 0, 0.02, -0.3, st);
