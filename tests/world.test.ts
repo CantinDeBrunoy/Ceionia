@@ -699,7 +699,7 @@ describe('jardins', () => {
 describe('expéditions', () => {
   it('chaque âge a au moins une expédition obligatoire (deux à la Préhistoire), et des choix bien formés', () => {
     for (let age = 0; age < 5; age++) {
-      expect(mandatoriesFor(age).length).toBe(age === 0 ? 2 : 1);
+      expect(mandatoriesFor(age).length).toBe(age <= 1 ? 2 : 1);
       expect(mandatoryFor(age)).toBe(mandatoriesFor(age)[0]);
     }
     expect(mandatoriesFor(0).map((m) => m.id)).toEqual(['herd', 'mammoth']);

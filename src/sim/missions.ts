@@ -358,7 +358,7 @@ export const MISSIONS: Mission[] = [
   },
   {
     // expédition armée en mer : une galère, des hommes d'armes à pied (pas de chevaux), des harpons ; facultative, refaisable
-    id: 'monster', age: 1, mandatory: false, icon: '🦈', title: 'Chasser le monstre des mers',
+    id: 'monster', age: 1, mandatory: true, icon: '🦈', title: 'Chasser le monstre des mers',
     intro: 'Un monstre géant rôde au large et coule les barques des pêcheurs. Une troupe d’hommes d’armes embarque sur une galère, harpons en main : il est temps de le chasser !',
     choices: [
       {

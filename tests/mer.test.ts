@@ -74,7 +74,7 @@ describe('le récif, la pêche au large et la chasse au monstre', () => {
   it('la chasse au monstre : mission armée de l’Antiquité, galère et troupe à pied, deux monstres, des trophées', () => {
     const m = mission('monster');
     expect(m.age).toBe(1);
-    expect(m.mandatory).toBe(false);
+    expect(m.mandatory).toBe(true);
     expect(m.choices.map((c) => c.scene)).toEqual(['megalodon', 'kraken']);
     for (const c of m.choices) {
       expect(c.sea).toBe(true);
