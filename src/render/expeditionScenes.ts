@@ -173,9 +173,13 @@ interface Monster {
   breach: number; done: number; hits: number; flinch: number; dart: number; death: number;
   /** tentacules du kraken : leur base (angle, rayon), leur élan (0 … 1), le temps qu'elles repoussent après un coup de harpon */
   tents: { obj: THREE.Mesh; ang: number; r: number; up: number; cut: number; ph: number }[];
+  /** les bras du kraken, attachés sous sa tête (ils ondulent sur l'eau autour d'elle) */
+  arms: THREE.Object3D[];
+  /** l'issue est tombée (voir `ActiveExpedition.fate`) : la dernière volée de harpons est partie */
+  ended: boolean;
 }
-/** Avancement du travail où le mégalodon bondit hors de l'eau */
-const MEGA_BREACH = [0.42, 0.6, 0.76];
+/** Avancement du travail où le mégalodon bondit hors de l'eau (le dernier bond retombe avant l'issue du combat) */
+const MEGA_BREACH = [0.4, 0.56, 0.7];
 const sharkGeo = (big = false) => geo(`shark:${+big}`, (p) => shark(p, big));
 const krakenHeadGeo = () => geo('krakenHead', (p) => krakenHead(p));
 const tentacleGeo = () => geo('tentacle', (p) => tentacle(p));
@@ -1393,7 +1397,7 @@ export class ExpeditionScene {
       birds: () => this.stageBirds(s, a, fail), swarm: () => this.stageSwarm(s, a, fail), wheel: () => this.stageWheel(s, a), tasting: () => this.stageTasting(s, a),
       puncture: () => this.stagePuncture(s), gust: () => this.stageGust(s), clouds: () => this.stageClouds(s), cows: () => this.stageCows(s, a),
       tusks: () => this.stageTusks(s, a), blizzard: () => this.stageBlizzard(s, a, fail),
-      shark: () => this.stageShark(s), croc: () => this.stageCroc(s, a), swell: () => this.stageSwell(s), wreck: () => this.stageWreck(s),
+      shark: () => this.stageShark(s), croc: () => this.stageCroc(s, a), swell: () => this.stageSwell(s), wreck: () => this.stageWreck(s), maelstrom: () => this.stageMaelstrom(s),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
       stings: () => this.stageSwarm(s, a, true), blast: () => this.stageBlast(s), gone: () => this.stageGone(s),
@@ -1539,13 +1543,13 @@ export class ExpeditionScene {
    * Le ciel qui s'assombrit sur l'équipe, et là seulement : un voile sombre et transparent tendu au-dessus de la scène (une
    * coupole très plate, au-dessus des têtes), sombre au milieu et effacé sur ses bords (k : sa force, 0 … 1)
    */
-  private sGloom(s: Staging, cx: number, cz: number, r: number) {
+  private sGloom(s: Staging, cx: number, cz: number, r: number, y0?: number) {
     const g = new THREE.SphereGeometry(r, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.15, 1), p = g.attributes.position, col = new Float32Array(p.count * 4);
     for (let i = 0; i < p.count; i++) { const d = Math.min(1, Math.hypot(p.getX(i), p.getZ(i)) / r); col.set([0.04, 0.05, 0.1, 0.45 * (1 - d) * (1 + d)], i * 4); }
     g.setAttribute('color', new THREE.BufferAttribute(col, 4));
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, fog: false });
     const m = this.sAdd(s, new THREE.Mesh(g, mat));
-    m.position.set(cx, this.world.surfaceAt(cx, cz) + 0.9, cz);
+    m.position.set(cx, (y0 ?? this.world.surfaceAt(cx, cz)) + 0.9, cz);
     m.renderOrder = 3;
     m.userData.flat = true;
     s.own.push(g, mat);
@@ -1553,13 +1557,15 @@ export class ExpeditionScene {
   }
 
   /** La pluie qui tombe sur un disque de rayon r autour de (cx, cz) ; de quoi l'animer (k : sa force, 0 … 1) */
-  private sRain(s: Staging, cx: number, cz: number, r: number, top: number) {
+  private sRain(s: Staging, cx: number, cz: number, r: number, top: number, y0?: number) {
     const n = 160, pos = new Float32Array(n * 6), drop: number[] = [];
-    for (let i = 0; i < n; i++) { const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r, x = cx + Math.cos(ang) * d, z = cz + Math.sin(ang) * d; drop.push(x, z, this.world.surfaceAt(x, z), Math.random()); }
+    // (en mer, elle tombe jusqu'à l'eau : `y0`, pas jusqu'au fond)
+    for (let i = 0; i < n; i++) { const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * r, x = cx + Math.cos(ang) * d, z = cz + Math.sin(ang) * d; drop.push(x, z, y0 ?? this.world.surfaceAt(x, z), Math.random()); }
     const g = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const mat = new THREE.LineBasicMaterial({ color: 0xc4d8ee, transparent: true, opacity: 0.8, depthWrite: false });
     const l = new THREE.LineSegments(g, mat);
-    l.frustumCulled = false; l.userData.flat = true;
+    // (après l'eau, transparente elle aussi, pour qu'elle ne passe pas par-dessus)
+    l.frustumCulled = false; l.userData.flat = true; l.renderOrder = 3;
     this.sAdd(s, l); s.own.push(g, mat);
     return (dt: number, k: number) => {
       mat.opacity = 0.8 * k;
@@ -1587,7 +1593,7 @@ export class ExpeditionScene {
     for (let i = 0; i < 34; i++) {
       const m = new THREE.Sprite(mat);
       m.scale.set(1.3 + (i % 4) * 0.35, 0.7 + (i % 3) * 0.2, 1);
-      m.renderOrder = 2;
+      m.renderOrder = 3;
       this.sAdd(s, m);
       blobs.push({ m, a: i * 2.4, d: 0.1 + Math.sqrt((i + 0.5) / 34) * r, y: 0.18 + (i % 4) * 0.09, sp: 0.04 + (i % 5) * 0.012 });
     }
@@ -1609,7 +1615,7 @@ export class ExpeditionScene {
     const g = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.06, map: softPuff(), transparent: true, opacity: 0.95, depthWrite: false });
     const pts = new THREE.Points(g, mat);
-    pts.frustumCulled = false; pts.userData.flat = true;
+    pts.frustumCulled = false; pts.userData.flat = true; pts.renderOrder = 3;
     this.sAdd(s, pts); s.own.push(g, mat);
     return (dt: number, k: number) => {
       mat.opacity = 0.95 * k;
@@ -1646,6 +1652,7 @@ export class ExpeditionScene {
   /** Un poisson qui saute hors de l'eau en (x, z), et le rond qu'il laisse */
   private fishJump(x: number, z: number, level: number) {
     const ang = Math.random() * Math.PI * 2, f = new THREE.Mesh(fishGeo(), mats.body), ring = new THREE.Mesh(new THREE.RingGeometry(0.03, 0.045, 12).rotateX(-Math.PI / 2), RING);
+    ring.renderOrder = 3;
     this.group.add(f, ring);
     const vx = Math.cos(ang + 1.2) * 0.25, vz = Math.sin(ang + 1.2) * 0.25;
     this.fx.push({ obj: f, t: 0, life: 0.7, kind: 'fish', x, y: level, z, vx, vz });
@@ -2018,16 +2025,92 @@ export class ExpeditionScene {
     };
   }
 
-  /** La houle : la galère tangue fort, des crêtes d'écume courent sur l'eau (plus calme si l'on attend, plus dure si l'on fonce) */
+  /**
+   * La tempête au large : un nuage noir sur la galère, la pluie qui fouette la mer, des éclairs qui tombent sur l'eau ; la galère
+   * tangue fort, des crêtes d'écume courent sur les vagues (plus calme si l'on attend, plus dure si l'on fonce)
+   */
   private stageSwell(s: Staging) {
     const bt = this.boat;
     if (!bt) return () => false;
-    let pt = 0;
+    const o0 = bt.obj.position, cx = o0.x, cz = o0.z, h = 2.4;
+    const cloud = this.sCloud(s, cx, cz, 0, false, 1.6), rain = this.sRain(s, cx, cz, 2, h, bt.y), gloom = this.sGloom(s, cx, cz, 3.4, bt.y);
+    cloud.position.y = bt.y + h + 0.25;
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+    const flash = this.sAdd(s, new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), flashMat));
+    flash.position.copy(cloud.position); flash.scale.set(2.4, 0.7, 2.4); flash.renderOrder = 3;
+    const bolt = this.sAdd(s, new THREE.LineSegments(boltGeo(1), BOLT));
+    bolt.userData.flat = true; bolt.visible = false;
+    s.own.push(flash.geometry, flashMat, { dispose: () => bolt.geometry.dispose() });
+    let pt = 0, k = 0, strike = 0.6, shown = 0;
     return (dt: number) => {
       const wild = s.pick < 0 || s.after < (s.pick === 2 ? 5 : s.pick === 1 ? 4 : 3);
       this.rough = wild ? (s.pick === 2 ? 1 : 0.7) : Math.max(0, this.rough - dt * 0.3);
+      k = wild ? Math.min(1, k + dt * 0.8) : Math.max(0, k - dt * 0.35);
+      rain(dt, k);
+      gloom(k * (1 - flashMat.opacity * 1.2));
       if (wild && (pt -= dt) <= 0) { pt = 0.09; const o = bt.obj.position, a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.6, x = o.x + Math.cos(a) * r, z = o.z + Math.sin(a) * r; if (this.depth(x, z) !== null) this.puffAt(x, bt.y + 0.01, z); }
-      return wild || this.rough > 0.02;
+      // un éclair de temps en temps : un zigzag blanc jusqu'à la mer, le nuage qui s'illumine, une gerbe là où il tombe
+      if (wild && (strike -= dt) <= 0) {
+        strike = 1.4 + Math.random() * 2.2; shown = 0.16;
+        const ang = Math.random() * Math.PI * 2, d = 0.6 + Math.random() * 1.2, x = cx + Math.cos(ang) * d, z = cz + Math.sin(ang) * d;
+        bolt.geometry.dispose(); bolt.geometry = boltGeo(Math.random() * 10);
+        bolt.position.set(x, bt.y, z); bolt.scale.set(1, cloud.position.y - bt.y, 1);
+        flashMat.opacity = 0.55;
+        if (this.depth(x, z) !== null) this.splash(x, z, bt.y, true);
+      }
+      shown -= dt;
+      bolt.visible = shown > 0;
+      flashMat.opacity *= Math.pow(0.02, dt);
+      cloud.visible = flash.visible = k > 0.02;
+      return wild || this.rough > 0.02 || k > 0.02;
+    };
+  }
+
+  /**
+   * Le tourbillon du kraken : la mer tourne autour de lui, trois bras d'écume s'enroulent vers un cœur sombre où l'eau se creuse,
+   * des gerbes y sont aspirées, la galère tangue ; il se referme quand on s'en arrache, quand on l'attend… ou après le coup de
+   * harpon au cœur
+   */
+  private stageMaelstrom(s: Staging) {
+    const bt = this.boat, m = this.monster;
+    if (!bt) return () => false;
+    const o = bt.obj.position, cx = m ? (m.cx + o.x) / 2 : o.x, cz = m ? (m.cz + o.z) / 2 : o.z, R = 1.3, y = bt.y + 0.006;
+    // trois bras d'écume en spirale, sur un ruban plat ; un cœur d'eau sombre
+    const arms = 3, steps = 40, pos: number[] = [];
+    for (let a = 0; a < arms; a++)
+      for (let i = 0; i < steps; i++) {
+        const t0 = i / steps, t1 = (i + 1) / steps, r0 = 0.12 + t0 * R, r1 = 0.12 + t1 * R, a0 = a * (Math.PI * 2 / arms) + t0 * 4.2, a1 = a * (Math.PI * 2 / arms) + t1 * 4.2;
+        const w0 = 0.02 + t0 * 0.07, w1 = 0.02 + t1 * 0.07;
+        const p = (r: number, ang: number): [number, number, number] => [Math.cos(ang) * r, 0, Math.sin(ang) * r];
+        const A = p(r0 - w0, a0), B = p(r0 + w0, a0), C = p(r1 - w1, a1), D = p(r1 + w1, a1);
+        pos.push(...A, ...B, ...C, ...B, ...D, ...C);
+      }
+    const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const foam = new THREE.MeshBasicMaterial({ color: 0xf2f8fb, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    const swirl = this.sAdd(s, new THREE.Mesh(g, foam));
+    swirl.position.set(cx, y, cz); swirl.renderOrder = 3; swirl.userData.flat = true;
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0x0c2230, transparent: true, opacity: 0, depthWrite: false });
+    const core = this.sAdd(s, new THREE.Mesh(new THREE.CircleGeometry(0.42, 20).rotateX(-Math.PI / 2), coreMat));
+    core.position.set(cx, y - 0.002, cz); core.renderOrder = 3; core.userData.flat = true;
+    s.own.push(g, foam, core.geometry, coreMat);
+    let k = 0, pt = 0, spin = 0;
+    return (dt: number) => {
+      // ramer : il se referme vite ; le harpon au cœur : un peu plus tard ; l'ancre : il tourne encore un moment
+      const open = s.pick < 0 || s.after < (s.pick === 0 ? 2.5 : s.pick === 1 ? 3.5 : 6);
+      k = open ? Math.min(1, k + dt * 0.6) : Math.max(0, k - dt * 0.4);
+      spin += dt * (0.6 + 1.2 * k);
+      swirl.rotation.y = spin;
+      swirl.scale.setScalar(0.4 + 0.6 * k);
+      foam.opacity = 0.6 * k; coreMat.opacity = 0.55 * k;
+      this.rough = Math.max(this.rough, 0.75 * k);
+      // des gerbes d'écume aspirées vers le cœur
+      if (k > 0.2 && (pt -= dt) <= 0) {
+        pt = 0.12;
+        const a = Math.random() * Math.PI * 2, r = 0.4 + Math.random() * R * 0.8, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+        if (this.depth(x, z) !== null) this.puffAt(x, y + 0.004, z, 'puff', (cx - x) * 0.4 - Math.sin(a) * 0.3, (cz - z) * 0.4 + Math.cos(a) * 0.3);
+      }
+      if (m && s.pick === 1 && s.after < 0.2) m.flinch = 1;
+      return open || k > 0.01;
     };
   }
 
@@ -2833,6 +2916,8 @@ export class ExpeditionScene {
     const n = big ? 7 : 3;
     for (let i = 0; i < n; i++) this.puffAt(x + (Math.random() - 0.5) * 0.2, level + 0.01, z + (Math.random() - 0.5) * 0.2, 'puff', (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2);
     const ring = new THREE.Mesh(new THREE.RingGeometry(big ? 0.08 : 0.04, big ? 0.11 : 0.055, 14).rotateX(-Math.PI / 2), RING);
+    // (dessiné après l'eau, transparente elle aussi : sinon elle le recouvre)
+    ring.renderOrder = 3;
     this.group.add(ring);
     this.fx.push({ obj: ring, t: 0, life: 1.4, kind: 'ring', x, y: level + 0.005, z, vx: 0, vz: 0 });
   }
@@ -2847,7 +2932,7 @@ export class ExpeditionScene {
     obj.visible = false;
     this.group.add(obj);
     this.props.push(obj);
-    const tents: Monster['tents'] = [];
+    const tents: Monster['tents'] = [], arms: THREE.Object3D[] = [];
     if (this.story === 'megalodon') {
       const mesh = new THREE.Mesh(sharkGeo(true), mats.body);
       mesh.scale.setScalar(3.2);
@@ -2858,6 +2943,20 @@ export class ExpeditionScene {
       head.castShadow = true;
       head.scale.setScalar(1.3);
       obj.add(head);
+      // le corps sous la tête : huit gros bras qui partent du manteau et s'étalent sur l'eau tout autour (la tête n'est plus posée
+      // seule sur l'eau, coupée net à la flottaison)
+      for (let i = 0; i < 8; i++) {
+        const pivot = new THREE.Group(), arm = new THREE.Mesh(tentacleGeo(), mats.body);
+        pivot.rotation.order = 'YXZ';
+        pivot.rotation.y = (i / 8) * Math.PI * 2 + 0.2;
+        pivot.position.y = 0.05;
+        arm.castShadow = true;
+        arm.scale.set(1.35, 0.95, 1.35);
+        arm.rotation.order = 'YXZ';
+        pivot.add(arm);
+        obj.add(pivot);
+        arms.push(pivot);
+      }
       for (let i = 0; i < 7; i++) {
         const t = new THREE.Mesh(tentacleGeo(), mats.body);
         t.castShadow = true; t.visible = false;
@@ -2867,7 +2966,18 @@ export class ExpeditionScene {
         tents.push({ obj: t, ang: (i / 7) * Math.PI * 2 + 0.4, r: r * (0.62 + (i % 3) * 0.14), up: 0, cut: 0, ph: i * 1.7 });
       }
     }
-    this.monster = { kind: this.story === 'kraken' ? 'kraken' : 'megalodon', obj, cx, cz, level, r, ang: 0.6, breach: -1, done: 0, hits: 0, flinch: 0, dart: 1, death: 0, tents };
+    this.monster = { kind: this.story === 'kraken' ? 'kraken' : 'megalodon', obj, cx, cz, level, r, ang: 0.6, breach: -1, done: 0, hits: 0, flinch: 0, dart: 1, death: 0, tents, arms, ended: false };
+  }
+
+  /**
+   * L'issue du combat tombe (voir `ActiveExpedition.fate`) : toute la troupe lance ses harpons d'un coup sur le monstre, dans une
+   * grande gerbe d'écume ; vaincu, il meurt sous ses yeux, sinon il s'échappe
+   */
+  private finalVolley(m: Monster, to: THREE.Vector3) {
+    m.ended = true;
+    for (let i = 0; i < 4; i++) { m.dart = 0; this.throwDarts(0, m, to.clone().add(new THREE.Vector3((i - 1.5) * 0.08, 0, (i % 2) * 0.06)), -1); }
+    this.splash(to.x, to.z, m.level, true);
+    m.flinch = 1;
   }
 
   /** Le monstre à chaque image (voir `makeMonster`) ; `k` : l'avancement du travail */
@@ -2877,42 +2987,51 @@ export class ExpeditionScene {
     if (!bt || (a.phase !== 'work' && !over)) return;
     m.flinch = Math.max(0, m.flinch - dt * 2.5);
     const shake = Math.sin(this.t * 38) * 0.14 * m.flinch;
+    // l'issue du combat, tombée pendant le travail (ou, pour une ancienne équipe, au départ) : vaincu, ou échappé
+    const fate = a.fate ?? (over ? a.ok : undefined), won = fate === true, lost = fate === false;
+    if (fate !== undefined) m.death += dt;
     if (m.kind === 'megalodon') {
       const show = k > 0.1 || over, rad = m.r * (1 + (1 - smooth(Math.min(1, Math.max(0, (k - 0.1) / 0.2)))) * 1.6);
-      m.obj.visible = show && (a.ok || m.death < 2.6);
-      // dead : il flotte le ventre en l'air ; sinon (échec) il plonge ; blessé, il ralentit
-      if (!over || a.ok) m.ang += dt * (k > 0.85 || over ? 0.25 : 0.65);
+      m.obj.visible = show && (!lost || m.death < 2.6);
+      // vivant, il tourne autour de la galère (blessé, il ralentit) ; mort, il ne bouge plus ; échappé, il file en plongeant
+      if (!won) m.ang += dt * (lost ? 0.9 : k > 0.72 ? 0.3 : 0.65);
       const c = Math.cos(m.ang), sn = Math.sin(m.ang), x = m.cx + c * rad * 1.15, z = m.cz + sn * rad;
-      if (this.depth(x, z) === null) { m.obj.visible = false; return; }
+      if (this.depth(x, z) === null) { m.obj.visible = false; this.stepDarts(dt); return; }
       let y = m.level - 0.1 + Math.sin(this.t * 1.4) * 0.006, pitch = 0, roll = 0;
-      if (m.breach < 0 && !over && m.done < MEGA_BREACH.length && k >= MEGA_BREACH[m.done]) { m.breach = 0; m.done++; this.splash(x, z, m.level, true); }
+      if (m.breach < 0 && fate === undefined && m.done < MEGA_BREACH.length && k >= MEGA_BREACH[m.done]) { m.breach = 0; m.done++; this.splash(x, z, m.level, true); }
       if (m.breach >= 0) {
         // il jaillit de l'eau, gueule ouverte, et retombe dans une grande gerbe : la galère roule
         m.breach += dt / 2.2;
         const u = Math.min(1, m.breach);
         y += Math.sin(u * Math.PI) * 0.62;
         pitch = -Math.cos(u * Math.PI) * 1.0;
-        if (u >= 1) { m.breach = -1; this.splash(x, z, m.level, true); }
+        if (u >= 1 || fate !== undefined) { m.breach = -1; this.splash(x, z, m.level, true); }
       }
-      if (over) {
-        m.death += dt;
-        if (a.ok) { roll = Math.PI * smooth(Math.min(1, m.death / 2)); y = m.level - 0.04; }
-        else y -= m.death * 0.12;
-      }
+      // l'issue : toute la troupe lance ses harpons, il se débat un instant…
+      const head = new THREE.Vector3(x + Math.sin(m.obj.rotation.y) * 0.25, y + 0.15, z + Math.cos(m.obj.rotation.y) * 0.25);
+      if (fate !== undefined && !m.ended && m.obj.visible) this.finalVolley(m, head);
+      if (won) {
+        // … et meurt sous ses yeux : il se retourne d'un coup, le ventre en l'air, et flotte, immobile
+        const u = smooth(Math.min(1, Math.max(0, (m.death - 0.4) / 1.1)));
+        roll = Math.PI * u;
+        y = m.level - 0.1 + (0.06 + Math.sin(this.t * 1.1) * 0.004) * u;
+        if (m.death > 0.4 && m.death - dt <= 0.4) this.splash(x, z, m.level, true);
+      } else if (lost) y -= m.death * 0.12;
       m.obj.position.set(x, y, z);
       m.obj.rotation.set(pitch, Math.atan2(-sn * 1.15, c) + shake, roll, 'YXZ');
-      // l'écume de son sillage
-      if (m.obj.visible && !over && Math.random() < dt * 5) this.puffAt(x - Math.sin(m.obj.rotation.y) * 0.3, m.level + 0.01, z - Math.cos(m.obj.rotation.y) * 0.3);
-      this.rough = m.breach >= 0 && m.breach < 0.6 ? 0.8 : Math.max(0, this.rough - dt * 0.5);
-      if (!over && m.obj.visible && k > 0.18 && k < 0.9) this.throwDarts(dt, m, new THREE.Vector3(x + Math.sin(m.obj.rotation.y) * 0.25, y + 0.15, z + Math.cos(m.obj.rotation.y) * 0.25), -1);
+      // l'écume de son sillage (pas une fois mort)
+      if (m.obj.visible && !won && !over && Math.random() < dt * 5) this.puffAt(x - Math.sin(m.obj.rotation.y) * 0.3, m.level + 0.01, z - Math.cos(m.obj.rotation.y) * 0.3);
+      this.rough = m.breach >= 0 && m.breach < 0.6 ? 0.8 : won && m.death < 1.5 ? 0.6 : Math.max(0, this.rough - dt * 0.5);
+      if (fate === undefined && !over && m.obj.visible && k > 0.18) this.throwDarts(dt, m, head, -1);
     } else {
       // le kraken : ses tentacules jaillissent, deux entourent la galère, les harpons les tranchent ; la tête se dresse au large
-      const hug = k > 0.38 && k < 0.82 && !over;
+      const hug = k > 0.38 && fate === undefined && !over;
       let tip: THREE.Vector3 | null = null, tipI = -1;
       m.tents.forEach((tn, i) => {
-        const grab = hug && i < 2, want = (over ? (a.ok ? 0 : 1) : k > 0.1 + i * 0.045 && k < 0.88 ? 1 : 0) * (tn.cut > 0 ? 0 : 1);
+        // vaincu, il lâche tout et ses tentacules replongent ; échappé, elles restent dressées
+        const grab = hug && i < 2, want = (won ? 0 : lost ? 1 : k > 0.1 + i * 0.045 ? 1 : 0) * (tn.cut > 0 ? 0 : 1);
         if (tn.cut > 0) tn.cut -= dt;
-        tn.up += (want - tn.up) * Math.min(1, dt * (tn.cut > 0 ? 6 : 1.1));
+        tn.up += (want - tn.up) * Math.min(1, dt * (tn.cut > 0 ? 6 : won ? 1.6 : 1.1));
         tn.ang += dt * 0.12 * (i % 2 ? 1 : -1);
         const rr = grab ? m.r * 0.42 : tn.r, x = m.cx + Math.cos(tn.ang) * rr, z = m.cz + Math.sin(tn.ang) * rr, o = tn.obj;
         o.visible = tn.up > 0.03 && this.depth(x, z) !== null;
@@ -2923,14 +3042,22 @@ export class ExpeditionScene {
         if (o.visible && tn.up > 0.9 && (!tip || i < tipI)) { tip = new THREE.Vector3(x + Math.sin(o.rotation.y) * 0.25, m.level + 0.42 * s, z + Math.cos(o.rotation.y) * 0.25); tipI = i; }
         if (o.visible && Math.random() < dt * 0.8) this.puffAt(x, m.level + 0.01, z);
       });
-      const head = smooth(Math.min(1, Math.max(0, (k - 0.5) / 0.2))) * (over && a.ok ? 0 : 1);
+      // la tête se dresse au large ; vaincu, elle s'enfonce lentement dans un nuage d'encre et de bulles
+      const rise = smooth(Math.min(1, Math.max(0, (k - 0.5) / 0.2))), sink = won ? smooth(Math.min(1, Math.max(0, (m.death - 0.6) / 3))) : 0, head = rise * (1 - sink);
       m.obj.visible = head > 0.02;
       const hx = m.cx - Math.cos(0.9) * m.r * 1.7, hz = m.cz - Math.sin(0.9) * m.r * 1.7;
       m.obj.position.set(hx, m.level - 0.32 + head * 0.3 + Math.sin(this.t * 1.1) * 0.01, hz);
-      m.obj.rotation.set(0, Math.atan2(m.cx - hx, m.cz - hz) + shake, 0);
-      if (over) m.death += dt;
+      m.obj.rotation.set(sink * 0.35, Math.atan2(m.cx - hx, m.cz - hz) + shake, 0);
+      // ses bras ondulent sur l'eau autour de la tête, se tordent quand un harpon le touche
+      m.arms.forEach((p, i) => {
+        const arm = p.children[0];
+        arm.rotation.x = 1.12 + Math.sin(this.t * 1.5 + i * 0.8) * 0.22 - m.flinch * 0.35 + sink * 0.5;
+        arm.rotation.z = Math.sin(this.t * 0.9 + i * 1.3) * 0.22;
+      });
+      if (fate !== undefined && !m.ended && m.obj.visible) this.finalVolley(m, new THREE.Vector3(hx, m.level + 0.25, hz));
+      if (won && m.obj.visible && Math.random() < dt * 6) this.puffAt(hx + (Math.random() - 0.5) * 0.5, m.level + 0.01, hz + (Math.random() - 0.5) * 0.5, 'smoke', 0, 0);
       this.rough = hug ? 0.55 : Math.max(0, this.rough - dt * 0.5);
-      if (tip && !over && k > 0.16 && k < 0.88) this.throwDarts(dt, m, tip, tipI);
+      if (tip && fate === undefined && !over && k > 0.16) this.throwDarts(dt, m, tip, tipI);
     }
     this.stepDarts(dt);
   }
@@ -3300,9 +3427,10 @@ export class ExpeditionScene {
     let u: number, back: boolean;
     if (this.offshore) {
       // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
-      const k = this.workK;
-      u = k < 0.2 ? smooth(k / 0.2) : k < 0.8 ? 1 : 1 - smooth(Math.min(1, (k - 0.8) / 0.17));
-      back = k >= 0.8;
+      // (la galère de la chasse reste sur place jusqu'à ce que le monstre soit mort ou enfui, voir `FATE_AT`)
+      const k = this.workK, home = this.monster ? 0.87 : 0.8;
+      u = k < 0.2 ? smooth(k / 0.2) : k < home ? 1 : 1 - smooth(Math.min(1, (k - home) / (0.97 - home)));
+      back = k >= home;
     } else {
       // aller-retour lent (une vingtaine de secondes), pause au large le temps de pêcher
       const ph = ((this.t - this.idle) / 22) % 1;
