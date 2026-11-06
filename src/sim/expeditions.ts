@@ -78,7 +78,19 @@ export interface ActiveExpedition {
   arriveMiss?: boolean;
   /** un éclaireur parti devant (« Envoyer un éclaireur devant ») : depuis combien de temps, sur combien ; la troupe l'attend */
   scout?: { t: number; dur: number } | null;
+  /**
+   * la chasse au monstre (mégalodon, kraken, dragon) : l'issue du combat, tirée un peu avant la fin du travail (à `FATE_AT`) pour
+   * que le monstre meure (ou s'échappe) sous les yeux de l'équipe, avant qu'elle ne reparte ; elle devient `ok` à la fin
+   */
+  fate?: boolean;
 }
+
+/** Les chasses où le monstre meurt sur place : l'issue s'y tire avant la fin du travail */
+export const FATED = new Set<string>(['megalodon', 'kraken', 'dragon']);
+/** Part du travail où se joue l'issue d'une chasse au monstre (après le dernier imprévu, qui survient aux trois quarts au plus) */
+export const FATE_AT = 0.8;
+/** Les chasses en haute mer : jamais sur une simple rivière */
+const OPEN_SEA = new Set<string>(['megalodon', 'kraken']);
 
 /**
  * À quelle part du travail survient le prochain imprévu de l'équipe : le premier à l'arrivée (sinon au tiers du travail), le
@@ -664,6 +676,9 @@ export class Expeditions {
     return null;
   }
 
+  /** pourquoi le dernier départ a échoué alors que `why` ne disait rien (pas de haute mer à portée…), ou null */
+  lastFail: string | null = null;
+
   start(m: Mission, ci: number, age = m.age): ActiveExpedition | null {
     const c = m.choices[ci] ? choiceAt(m.choices[ci], age) : undefined;
     if (!c || this.why(m, c)) return null;
@@ -684,8 +699,17 @@ export class Expeditions {
         if (way && door) { scout = way; dest = door; break; }
       }
     }
+    // les grands Jeux se tiennent au pied du stade
+    else if (c.scene === 'games') dest = this.padSide(base, 'stadium');
+    this.lastFail = null;
     while (kind && !dest) {
       dest = this.findDest(kind, base, false, sea && kind === 'river');
+      // la chasse au monstre des mers se fait au large, jamais sur une rivière : faute de mieux, une côte moins dégagée
+      if (!dest && sea && kind === 'river' && OPEN_SEA.has(c.scene)) {
+        dest = this.findDest(kind, base, false, true, 5);
+        if (!dest) { this.lastFail = 'Aucune côte ne s’ouvre sur le large à portée du village : le monstre ne quitte pas la haute mer.'; return null; }
+        break;
+      }
       // pas de côte ouverte sur le large à portée : la rivière la plus proche fera l'affaire
       if (!dest && sea && kind === 'river') { sea = false; continue; }
       // une grotte introuvable : dans la montagne, puis au pied de la moindre paroi, plutôt qu'au milieu de la plaine
@@ -723,7 +747,7 @@ export class Expeditions {
     for (const g of ['rifle', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
     kits.forEach((kt, i) => {
       // les chasseurs du mammouth ont toujours leurs lances de chasse au poing (les armes du village, emportées en plus, rendent la chasse plus sûre)
-      if (c.scene === 'mammoth' || c.scene === 'megalodon' || c.scene === 'kraken') kt.weapon ??= 'spear';
+      if (c.scene === 'mammoth' || c.scene === 'megalodon' || c.scene === 'kraken' || c.scene === 'dragon') kt.weapon ??= 'spear';
       if (i < (take.armor ?? 0)) kt.armor = true;
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
@@ -799,6 +823,9 @@ export class Expeditions {
         this.raise(a, true);
       } else if (a.phase === 'work' && a.seen.length < a.events && a.t >= (a.c.work + a.extra) * nextEventAt(a)) {
         this.raise(a, false);
+      } else if (a.phase === 'work' && a.fate === undefined && FATED.has(a.c.scene) && a.seen.length >= a.events && a.t >= (a.c.work + a.extra) * FATE_AT) {
+        // la chasse au monstre se joue sous les yeux de l'équipe : il meurt (ou s'échappe) avant qu'elle ne reparte
+        a.fate = this.rnd() >= this.chance(a);
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra && a.fromCamp) {
         // partie du camp, elle y remonte : les soldats rentrent au village sans refaire la route, et l'on fête leur retour
         a.ok = this.rnd() >= this.chance(a);
@@ -812,7 +839,7 @@ export class Expeditions {
         a.phase = 'home'; a.t = 4;
         ag.partyHide(a.party, true);
       } else if (a.phase === 'work' && a.t >= a.c.work + a.extra) {
-        a.ok = this.rnd() >= this.chance(a);
+        a.ok = a.fate ?? this.rnd() >= this.chance(a);
         a.phase = 'back'; a.t = 0;
         ag.mountParty(a.party, true);
         // en l'air : l'équipe rejoint d'abord l'appareil posé non loin ; sinon, elle rentre à pied
@@ -1235,7 +1262,7 @@ export class Expeditions {
    * cherche d'abord parmi les vraies grottes (une faille fait l'affaire), hors du désert ; la montagne aussi. `loose` : au
    * pied de la moindre paroi (une grotte qu'on ne trouve nulle part ailleurs)
    */
-  private findDest(kind: DestKind, base: [number, number], loose = false, sea = false): [number, number] | null {
+  private findDest(kind: DestKind, base: [number, number], loose = false, sea = false, seaLen = 8): [number, number] | null {
     if (kind === 'spaceport') return this.padSide(base);
     const w = this.world, [bx, bz] = base, cand: [number, number, number][] = [];
     const town = new Uint8Array(N * N), ds: number[] = [];
@@ -1265,7 +1292,7 @@ export class Expeditions {
         const sand = w.biome[k] === BIOME_DESERT && (kind === 'cave' || kind === 'mountain') ? 15 : 0;
         if (kind === 'forest') ok = w.veg[k] === VEG_FOREST && d > 8;
         else if (kind === 'plain') ok = w.veg[k] === 0 && !w.road[k] && slope < 0.5 && h < 3 && d > 10;
-        else if (kind === 'river') ok = sea ? w.nearWater(x, z, 2) && d > 7 && this.openSea(x, z) : w.nearWater(x, z, 1) && d > 7;
+        else if (kind === 'river') ok = sea ? w.nearWater(x, z, 2) && d > 7 && this.openSea(x, z, seaLen) : w.nearWater(x, z, 1) && d > 7;
         else if (kind === 'mountain') {
           // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif (au pied d'une simple butte, s'il le faut)
           const up = slope < 1.2 && (h > 1 || loose) && d > 9 ? rise(x, z) : 0;

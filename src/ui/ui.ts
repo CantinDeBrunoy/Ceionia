@@ -1293,7 +1293,7 @@ export class UI {
       if (!b || b.disabled) return;
       const m = ex.list(age).find((x) => x.id === b.dataset.m)!, ci = +b.dataset.c!;
       const a = ex.start(m, ci, this.host.sim.age);
-      if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? 'Aucun chemin praticable vers cette destination.'); return; }
+      if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? ex.lastFail ?? 'Aucun chemin praticable vers cette destination.'); return; }
       close();
       h.audio.sfxClick();
       // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre ; le grand départ des colons,
