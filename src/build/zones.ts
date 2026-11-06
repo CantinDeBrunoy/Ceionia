@@ -72,16 +72,19 @@ export function zoneOrigins(w: World, kind: KindId): number[] {
   return out;
 }
 
-/** Emprises examinées par image : la carte entière en quelques images, sans à-coup */
-const BUDGET = 6000;
+/** Emprises examinées par image : la carte entière en une dizaine d'images, sans à-coup */
+const BUDGET = 3000;
 
 /**
  * Surbrillance des emplacements possibles du bâtiment en main, quand il ne se pose qu'à des endroits précis (port, mine,
- * bûcheron…) : un seul maillage, posé au ras du sol, qui bat doucement. Calculé à la sélection, refait quand le monde change
+ * bûcheron…) : un voile doré posé au ras du sol, cerné d'un liseré, qui bat doucement (un maillage et un tracé pour toute la
+ * carte). Calculé à la sélection, refait seulement quand le monde change
  */
 export class ZoneHighlight {
   readonly mesh: THREE.Mesh;
   private mat: THREE.MeshBasicMaterial;
+  private edge: THREE.LineSegments;
+  private edgeMat: THREE.LineBasicMaterial;
   private scan: ZoneScan | null = null;
   private kind: KindId | null = null;
   private version = -1;
@@ -92,9 +95,14 @@ export class ZoneHighlight {
   private warned = false;
 
   constructor(private getWorld: () => World, scene: THREE.Scene, private nameOf: (k: KindId) => string = (k) => KINDS[k].names.find((n) => n)!) {
-    this.mat = new THREE.MeshBasicMaterial({ color: 0x5b9bff, transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    // doré : il ne se confond ni avec l'eau ni avec l'herbe
+    this.mat = new THREE.MeshBasicMaterial({ color: 0xffd45a, transparent: true, opacity: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.mat);
     this.mesh.renderOrder = 7; this.mesh.visible = false; this.mesh.frustumCulled = false;
+    this.edgeMat = new THREE.LineBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 0.85, depthWrite: false });
+    this.edge = new THREE.LineSegments(new THREE.BufferGeometry(), this.edgeMat);
+    this.edge.renderOrder = 7; this.edge.frustumCulled = false;
+    this.mesh.add(this.edge);
     scene.add(this.mesh);
   }
 
@@ -119,37 +127,59 @@ export class ZoneHighlight {
       if (!sc.origins && !this.warned && this.onEmpty) { this.warned = true; this.onEmpty(sc.emptyMessage(this.nameOf(kind))); }
     }
     this.t += dt;
-    this.mat.opacity = 0.22 + 0.1 * Math.sin(this.t * 2.6);
+    const p = 0.5 + 0.5 * Math.sin(this.t * 2.6);
+    this.mat.opacity = 0.2 + 0.14 * p;
+    this.edgeMat.opacity = 0.55 + 0.4 * p;
   }
 
-  /** Une tuile par case, posée sur le relief affiché (quatre petits carreaux : il a deux sous-sommets par case) */
+  /** Une tuile par case, posée sur le relief affiché (quatre petits carreaux : il a deux sous-sommets par case) ; le liseré suit le bord des zones */
   private build(cells: Uint8Array) {
     const w = this.getWorld();
-    let n = 0;
-    for (let k = 0; k < cells.length; k++) n += cells[k];
-    const pos = new Float32Array(n * 9 * 3), idx = new Uint32Array(n * 24);
-    let v = 0, t = 0;
+    // au-dessus de l'eau (le quai du port mord dessus), au ras du sol ailleurs
+    const y = (x: number, z: number, k: number) => Math.max(w.hAt(x, z), w.lake[k] ? w.lakeLevel[k] : SEA) + 0.05;
+    const on = (x: number, z: number) => x >= 0 && z >= 0 && x < N && z < N && cells[z * N + x] === 1;
+    let n = 0, e = 0;
+    for (let k = 0; k < cells.length; k++) if (cells[k]) {
+      n++;
+      const x = k % N, z = Math.floor(k / N);
+      e += +!on(x - 1, z) + +!on(x + 1, z) + +!on(x, z - 1) + +!on(x, z + 1);
+    }
+    const pos = new Float32Array(n * 9 * 3), idx = new Uint32Array(n * 24), line = new Float32Array(e * 4 * 3);
+    let v = 0, t = 0, l = 0;
+    const seg = (x0: number, z0: number, x1: number, z1: number, k: number) => {
+      // deux traits par côté de case, par le milieu : il épouse le relief
+      const xm = (x0 + x1) / 2, zm = (z0 + z1) / 2;
+      for (const [ax, az, bx, bz] of [[x0, z0, xm, zm], [xm, zm, x1, z1]]) {
+        line.set([ax, y(ax, az, k) + 0.02, az, bx, y(bx, bz, k) + 0.02, bz], l); l += 6;
+      }
+    };
     for (let k = 0; k < cells.length; k++) {
       if (!cells[k]) continue;
       const cx = k % N, cz = Math.floor(k / N);
-      // au-dessus de l'eau (le quai du port mord dessus), au ras du sol ailleurs
-      const water = w.lake[k] ? w.lakeLevel[k] : SEA;
       const base = v;
       for (let j = 0; j <= 2; j++) for (let i = 0; i <= 2; i++) {
         const x = cx + i / 2, z = cz + j / 2;
-        pos[v * 3] = x; pos[v * 3 + 1] = Math.max(w.hAt(x, z), water) + 0.05; pos[v * 3 + 2] = z;
+        pos[v * 3] = x; pos[v * 3 + 1] = y(x, z, k); pos[v * 3 + 2] = z;
         v++;
       }
       for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
         const a = base + j * 3 + i, b = a + 1, c = a + 3, d = a + 4;
         idx.set([a, c, b, b, c, d], t); t += 6;
       }
+      if (!on(cx - 1, cz)) seg(cx, cz, cx, cz + 1, k);
+      if (!on(cx + 1, cz)) seg(cx + 1, cz, cx + 1, cz + 1, k);
+      if (!on(cx, cz - 1)) seg(cx, cz, cx + 1, cz, k);
+      if (!on(cx, cz + 1)) seg(cx, cz + 1, cx + 1, cz + 1, k);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
     this.mesh.geometry.dispose();
     this.mesh.geometry = g;
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.BufferAttribute(line, 3));
+    this.edge.geometry.dispose();
+    this.edge.geometry = lg;
     this.mesh.visible = n > 0;
   }
 }
