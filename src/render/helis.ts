@@ -7,6 +7,11 @@ import { HELIPADS } from './models';
 
 /** Héliport sur le toit du centre hospitalier (repère du bâtiment : centre de l'emprise, façade vers +z) */
 const PAD = new THREE.Vector3(-0.45, 0.889, -0.5);
+/**
+ * À l'âge futuriste, la clinique n'a plus ce toit : son aire (sur l'aile des soins) est prise par l'ambulance volante qui y
+ * est posée ; le drone sanitaire attend donc en vol stationnaire au-dessus d'elle
+ */
+const FUTURE_PAD = new THREE.Vector3(0.5, 0.84, -0.42);
 /** Hauteur de vol au-dessus de l'héliport, vitesse de croisière (cases par seconde), vitesse des pales à plein régime */
 const CRUISE = 2.6, SPEED = 2.2, ROTOR = 26;
 
@@ -29,6 +34,8 @@ interface Heli {
   pad: THREE.Vector3;
   pos: THREE.Vector3;
   bank: number;
+  /** pas d'aire où se poser : il attend en vol stationnaire, soufflantes lancées */
+  aloft: boolean;
 }
 
 /** Livrées : sanitaire (blanc à bandeau et croix rouges), héliport (jaune à bandeau bleu nuit, rouge à bandeau blanc) */
@@ -77,44 +84,68 @@ function tailGeo() {
   return p.build(false).body;
 }
 
-/** Les soufflantes du drone futuriste (x, z dans le repère de la caisse) */
-const FANS: [number, number][] = [[-0.12, 0.1], [0.12, 0.1], [-0.12, -0.12], [0.12, -0.12]];
+/** Les soufflantes du drone futuriste (x, z dans le repère de la caisse), bien dégagées de la cabine ; leur hauteur, leur carène */
+const FANS: [number, number][] = [[-0.17, 0.13], [0.17, 0.13], [-0.17, -0.12], [0.17, -0.12]];
+const FAN_Y = 0.13, DUCT = 0.062;
 
 /**
- * Drone sanitaire de l'âge futuriste, tourné vers +z : capsule blanche à verrière fumée (on y voit le pilote casqué), bandeau
- * et croix vertes lumineuses, quatre bras chromés portant chacun sa carène annulaire (les soufflantes à part), feux de
- * position, projecteur sous le nez, antenne, patins
+ * Drone sanitaire de l'âge futuriste, tourné vers +z : cabine blanche effilée à verrière fumée qui coiffe le nez, dérive à
+ * l'arrière, bandeaux et croix vertes lumineuses ; quatre bras chromés portant chacun sa carène profonde (les soufflantes à
+ * part), bien à l'écart de la cabine ; sous le ventre, la civière suspendue (brancards orange, blessé sous sa couverture) entre
+ * les deux patins ; feux de position au bord des carènes, projecteur sous le nez, antenne
  */
 function droneGeo() {
-  const p = new Parts(), WHITE = 0xf2f4f6, CHROME = 0xc8d0da, NEON = 0x3aff9a;
-  p.add(new THREE.SphereGeometry(0.075, 12, 8).scale(1, 0.75, 1.6), 0, 0.09, 0, WHITE);
-  p.add(new THREE.SphereGeometry(0.05, 10, 6).scale(1, 0.7, 1.2), 0, 0.12, 0.06, 0x2a3a4e);
-  p.box(0.022, 0.022, 0.022, 0, 0.115, 0.05, 0xe8b894); p.sphere(0.016, 0, 0.132, 0.05, WHITE, 0, 0.85);
-  p.box(0.152, 0.008, 0.2, 0, 0.074, 0, NEON, 0, 'neon');
-  for (const s of [-1, 1]) { p.box(0.004, 0.036, 0.012, s * 0.075, 0.08, -0.04, 0x2a9a5a); p.box(0.004, 0.012, 0.036, s * 0.075, 0.092, -0.04, 0x2a9a5a); }
-  p.box(0.012, 0.004, 0.04, 0, 0.146, -0.06, NEON, 0, 'neon'); p.box(0.04, 0.004, 0.012, 0, 0.146, -0.055, NEON, 0, 'neon');
-  // bras et carènes, chacune avec son liseré lumineux
-  for (const [x, z] of FANS) {
-    p.add(new THREE.BoxGeometry(0.012, 0.01, Math.hypot(x, z)), x / 2, 0.1, z / 2, CHROME, Math.atan2(x, z));
-    p.add(new THREE.TorusGeometry(0.06, 0.01, 4, 16).rotateX(Math.PI / 2), x, 0.1, z, 0x3a4250);
-    p.add(new THREE.TorusGeometry(0.06, 0.003, 3, 16).rotateX(Math.PI / 2), x, 0.088, z, 0x9ff8ff, 0, 'neon');
-    p.cyl(0.012, 0.012, 0.02, 6, x, 0.09, z, 0x5a6270);
+  const p = new Parts(), WHITE = 0xf2f4f6, CHROME = 0xc8d0da, NEON = 0x3aff9a, DARK = 0x3a4250, Y = 0.105;
+  // la cabine : un fuseau blanc, la verrière fumée sur le nez, la dérive
+  p.add(new THREE.SphereGeometry(0.058, 14, 8).scale(1, 0.85, 2.1), 0, Y, -0.01, WHITE);
+  p.add(new THREE.SphereGeometry(0.047, 12, 8).scale(1, 0.78, 1.45), 0, Y + 0.012, 0.05, 0x24384c);
+  p.box(0.006, 0.05, 0.05, 0, Y + 0.02, -0.12, WHITE);
+  p.box(0.008, 0.008, 0.03, 0, Y + 0.068, -0.13, NEON, 0, 'neon');
+  // le bandeau lumineux qui fait le tour de la cabine, croix vertes sur les flancs et sur le dos
+  p.add(new THREE.TorusGeometry(0.054, 0.003, 3, 28).rotateX(Math.PI / 2).scale(1, 1, 2.1), 0, Y - 0.018, -0.01, NEON, 0, 'neon');
+  for (const s of [-1, 1]) {
+    p.box(0.004, 0.032, 0.011, s * 0.054, Y - 0.008, -0.06, 0x2a9a5a); p.box(0.004, 0.011, 0.032, s * 0.054, Y + 0.003, -0.06, 0x2a9a5a);
   }
-  // patins, projecteur, antenne, feux de position
-  for (const s of [-1, 1]) { p.box(0.008, 0.008, 0.2, s * 0.05, 0, 0, 0x5d6878); for (const z of [-0.05, 0.06]) p.box(0.006, 0.04, 0.006, s * 0.05, 0.004, z, 0x5d6878); }
-  p.box(0.03, 0.012, 0.012, 0, 0.04, 0.1, 0xfff1c9, 0, true);
-  p.cyl(0.0015, 0.0015, 0.07, 4, 0.02, 0.14, -0.08, 0x2a2a2e);
-  p.box(0.012, 0.012, 0.012, 0.18, 0.1, 0.1, 0xff4a3a, 0, true);
-  p.box(0.012, 0.012, 0.012, -0.18, 0.1, 0.1, 0x3aff7a, 0, true);
-  p.box(0.01, 0.01, 0.01, 0, 0.09, -0.12, 0xfff4e0, 0, true);
+  p.box(0.011, 0.004, 0.034, 0, Y + 0.044, -0.06, NEON, 0, 'neon'); p.box(0.034, 0.004, 0.011, 0, Y + 0.044, -0.06, NEON, 0, 'neon');
+  // bras chromés (du dos de la cabine aux moyeux), carènes profondes à liseré lumineux, moteurs
+  for (const [x, z] of FANS) {
+    const len = Math.hypot(x, z);
+    p.add(new THREE.BoxGeometry(0.014, 0.01, len - DUCT).translate(0, 0, (len - DUCT) / 2), 0, FAN_Y - 0.004, 0, CHROME, Math.atan2(x, z));
+    p.add(new THREE.TorusGeometry(DUCT, 0.008, 6, 22).rotateX(Math.PI / 2).scale(1, 2.2, 1), x, FAN_Y, z, 0xe4e8ee);
+    p.add(new THREE.TorusGeometry(DUCT, 0.003, 3, 20).rotateX(Math.PI / 2), x, FAN_Y - 0.021, z, 0x9ff8ff, 0, 'neon');
+    // les croisillons qui tiennent le moteur au milieu de la carène
+    for (const a of [0, Math.PI / 2]) p.add(new THREE.BoxGeometry(DUCT * 2, 0.004, 0.006), x, FAN_Y - 0.012, z, DARK, a + Math.PI / 4);
+    p.cyl(0.013, 0.015, 0.022, 8, x, FAN_Y - 0.02, z, 0x5a6270);
+  }
+  // la civière suspendue sous le ventre : sangles, brancards orange, toile blanche, le blessé sous sa couverture
+  const sy = 0.028;
+  for (const s of [-1, 1]) {
+    p.box(0.005, 0.007, 0.17, s * 0.029, sy, -0.01, 0xf08a2a);
+    for (const z of [-0.07, 0.05]) p.box(0.003, Y - 0.045 - sy, 0.003, s * 0.026, sy + 0.006, z, 0x2a2a2e);
+  }
+  p.box(0.054, 0.004, 0.16, 0, sy + 0.002, -0.01, 0xf4f4f0);
+  p.box(0.042, 0.012, 0.1, 0, sy + 0.006, -0.03, 0x3a6ab8);
+  p.sphere(0.011, 0, sy + 0.014, 0.045, 0xe8b894, 1);
+  p.box(0.03, 0.006, 0.022, 0, sy + 0.006, 0.045, 0xf4f4f0);
+  // patins de part et d'autre de la civière, et leurs jambes jusqu'au ventre
+  for (const s of [-1, 1]) {
+    p.box(0.008, 0.008, 0.22, s * 0.062, 0, -0.01, 0x5d6878);
+    for (const z of [-0.07, 0.06]) p.add(new THREE.BoxGeometry(0.006, 0.075, 0.006).translate(0, 0.0375, 0), s * 0.062, 0.004, z, 0x5d6878, 0, false, s * 0.32);
+  }
+  // projecteur sous le nez, antenne, feux de position (rouge à bâbord, vert à tribord, blanc à la dérive)
+  p.box(0.026, 0.01, 0.012, 0, Y - 0.05, 0.085, 0xfff1c9, 0, true);
+  p.cyl(0.0015, 0.0015, 0.06, 4, 0.018, Y + 0.035, -0.085, 0x2a2a2e);
+  p.box(0.012, 0.012, 0.012, 0.17 + DUCT + 0.012, FAN_Y - 0.01, 0.13, 0xff4a3a, 0, true);
+  p.box(0.012, 0.012, 0.012, -0.17 - DUCT - 0.012, FAN_Y - 0.01, 0.13, 0x3aff7a, 0, true);
+  p.box(0.01, 0.01, 0.01, 0, Y + 0.07, -0.145, 0xfff4e0, 0, true);
   return p.build(false);
 }
 
-/** Soufflante (cinq pales et moyeu) dans sa carène, centrée sur l'axe */
+/** Soufflante (cinq pales vrillées et moyeu) dans sa carène, centrée sur l'axe */
 function fanGeo() {
   const p = new Parts();
-  for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.05, 0.003, 0.014).translate(0.028, 0, 0), 0, 0, 0, 0x5a6270, (k * Math.PI * 2) / 5, false, 0, 0.3);
-  p.cyl(0.01, 0.01, 0.01, 6, 0, -0.005, 0, 0xc8d0da);
+  for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(DUCT - 0.012, 0.003, 0.016).translate((DUCT - 0.012) / 2 + 0.006, 0, 0), 0, 0, 0, 0x5a6270, (k * Math.PI * 2) / 5, false, 0, 0.3);
+  p.cyl(0.012, 0.009, 0.012, 8, 0, -0.006, 0, 0xc8d0da);
   return p.build(false).body;
 }
 
@@ -132,6 +163,7 @@ export class Helis {
   private droneG = droneGeo();
   private fanG = fanGeo();
   private v = new THREE.Vector3();
+  private clock = 0;
 
   /** l'usine automobile est bâtie */
   motor = false;
@@ -148,7 +180,7 @@ export class Helis {
     let rotors: THREE.Mesh[], tail: THREE.Mesh | null = null;
     if (future) {
       // les quatre soufflantes, chacune dans sa carène
-      rotors = FANS.map(([x, z]) => { const m = new THREE.Mesh(this.fanG, mats.body); m.position.set(x, 0.1, z); hull.add(m); return m; });
+      rotors = FANS.map(([x, z]) => { const m = new THREE.Mesh(this.fanG, mats.body); m.position.set(x, FAN_Y, z); hull.add(m); return m; });
     } else {
       const rotor = new THREE.Mesh(this.rotorG, mats.body);
       tail = new THREE.Mesh(this.tailG, mats.body);
@@ -162,14 +194,15 @@ export class Helis {
     root.scale.setScalar(1.15);
     this.group.add(root);
     // chaque hôpital à son rythme : on ne part pas tous en même temps
-    return { root, hull, rotors, tail, phase: 'parked', t: 8 + (id % 7) * 6, rpm: 0, heading: 0, goal: new THREE.Vector3(), pad: new THREE.Vector3(), pos: new THREE.Vector3(), bank: 0 };
+    return { root, hull, rotors, tail, phase: 'parked', t: 8 + (id % 7) * 6, rpm: 0, heading: 0, goal: new THREE.Vector3(), pad: new THREE.Vector3(), pos: new THREE.Vector3(), bank: 0, aloft: false };
   }
 
   update(dt: number, age: number) {
     const w = this.world, live = new Set<string>();
+    this.clock += dt;
     for (const b of w.buildings.values()) {
       // l'hélicoptère sanitaire du centre hospitalier ; les deux de l'héliport, à leurs couleurs
-      const pads = b.kind === 'health' && !b.small ? [PAD] : b.kind === 'heliport' ? HELIPADS.map((q) => new THREE.Vector3(...q)) : null;
+      const pads = b.kind === 'health' && !b.small ? [b.age >= 5 ? FUTURE_PAD : PAD] : b.kind === 'heliport' ? HELIPADS.map((q) => new THREE.Vector3(...q)) : null;
       // pas d'hélicoptère tant que l'usine automobile n'est pas bâtie (aucun moteur avant elle)
       if (!pads || b.age < 4 || age < 4 || !this.motor) continue;
       const g = this.buildings.entries.get(b.id)?.group;
@@ -182,6 +215,7 @@ export class Helis {
         let h = this.helis.get(key);
         if (!h) { h = this.make(b.id + i * 5, b.kind === 'heliport' ? 1 + i : 0, future); h.heading = g.rotation.y + (i ? 0.6 : -0.4); this.helis.set(key, h); }
         h.pad.copy(pad).applyMatrix4(g.matrixWorld);
+        h.aloft = pad === FUTURE_PAD;
         if (h.phase === 'parked') h.pos.copy(h.pad);
         this.step(h, dt);
       });
@@ -213,8 +247,10 @@ export class Helis {
     };
     switch (h.phase) {
       case 'parked':
-        h.rpm = Math.max(0, h.rpm - dt * 6);
-        if (h.t <= 0) { h.phase = 'spin'; h.t = 3; }
+        // en vol stationnaire (pas d'aire libre) : soufflantes lancées, il se balance un peu
+        if (h.aloft) { h.rpm = Math.min(ROTOR, h.rpm + dt * (ROTOR / 3)); h.pos.y += Math.sin(this.clock * 1.7 + h.pad.x) * 0.015; h.heading += dt * 0.15; }
+        else h.rpm = Math.max(0, h.rpm - dt * 6);
+        if (h.t <= 0) { h.phase = h.aloft ? 'up' : 'spin'; h.t = 3; }
         break;
       case 'spin':
         h.rpm = Math.min(ROTOR, h.rpm + dt * (ROTOR / 3));
@@ -250,7 +286,7 @@ export class Helis {
         if (h.t <= 0) { h.pos.copy(h.pad); h.phase = 'cool'; h.t = 4; }
         break;
       case 'cool':
-        h.rpm = Math.max(0, h.rpm - dt * (ROTOR / 4));
+        if (!h.aloft) h.rpm = Math.max(0, h.rpm - dt * (ROTOR / 4));
         if (h.t <= 0) { h.phase = 'parked'; h.t = 25 + Math.random() * 40; }
         break;
     }
