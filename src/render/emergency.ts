@@ -139,17 +139,17 @@ interface UnitGeo {
 }
 
 /**
- * Véhicule de secours de l'époque, tourné vers +z : à l'âge industriel, attelés, la pompe à vapeur rouge (chaudière de laiton
+ * Véhicule de secours de l'époque, tourné vers +z : tant que l'usine automobile n'est pas bâtie, attelés, la pompe à vapeur rouge (chaudière de laiton
  * cerclée, cheminée, cylindres, dévidoir), la voiture d'ambulance blanche à toit cintré et croix rouges, le fourgon cellulaire
  * bleu nuit à lucarnes grillagées ; puis les premières automobiles (capot à persiennes, radiateur de laiton, ailes,
  * marchepieds, roues à rayons, phares) ; à l'époque moderne, le fourgon pompe-tonne et sa grande échelle, l'ambulance à
  * damier jaune et vert, la voiture de patrouille à bandes tricolores, tous avec leurs rampes de gyrophares ; à l'âge
  * futuriste, l'ambulance et la patrouille volent au ras de la chaussée (le camion des pompiers garde sa grande échelle)
  */
-function unitGeo(service: Service, age: number, motor: boolean): UnitGeo {
+export function unitGeo(service: Service, age: number, motor: boolean): UnitGeo {
   const p = new Parts(), lights: [number, number, number, number][] = [];
   const out: UnitGeo = { body: null!, lights, horse: false, ladder: null, ladderAt: [0, 0, 0], chimney: null };
-  if (age >= 5 && service !== 'fire') {
+  if (age >= 5 && motor && service !== 'fire') {
     // coque blanche arrondie, verrière fumée, bande et rampe lumineuse aux couleurs du service, patins qui luisent dessous
     const health = service === 'health', band = health ? 0x2a9a5a : 0x2c4a9a, len = health ? 1.9 : 1.6;
     p.add(new THREE.SphereGeometry(0.1, 10, 6).scale(0.8, health ? 0.75 : 0.5, len), 0, 0.12, 0, WHITE);
@@ -165,7 +165,7 @@ function unitGeo(service: Service, age: number, motor: boolean): UnitGeo {
     out.body = p.build(false).body;
     return out;
   }
-  if (age === 3 && !motor) {
+  if (!motor) {
     out.horse = true;
     // brancards jusqu'au cheval, siège du cocher
     for (const s of [-1, 1]) p.box(0.01, 0.01, 0.3, s * 0.06, 0.13, 0.27, 0x6a4a34);
@@ -392,7 +392,7 @@ export class Emergencies {
     return g;
   }
 
-  /** la course automobile est gagnée : à l'âge industriel, les secours roulent en voiture */
+  /** l'usine automobile est bâtie : les secours roulent en voiture ; sans elle, voitures attelées à tout âge */
   motor = false;
   private builtMotor = false;
 
@@ -713,7 +713,7 @@ export class Emergencies {
     this.group.add(root);
     const u: Unit = {
       service, station, root, flash, path: [], i: 0, x: (home % N) + 0.5, z: Math.floor(home / N) + 0.5, heading: 0, state: 'patrol', t: 0, target: null, home,
-      speed: this.age >= 4 ? 1.7 : this.builtMotor ? 1.4 : 0.9, crew: null, horse, phase: 0, ladder, chimney: g.chimney, park: null,
+      speed: !this.builtMotor ? 0.9 : this.age >= 4 ? 1.7 : 1.4, crew: null, horse, phase: 0, ladder, chimney: g.chimney, park: null,
     };
     this.units.push(u);
     return u;

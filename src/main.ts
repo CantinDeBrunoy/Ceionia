@@ -1039,6 +1039,8 @@ class Game implements UIHost {
     for (const m of this.fires.news.splice(0)) this.ui.toast(m);
     for (const m of this.emergencies.news.splice(0)) this.ui.toast(m);
     for (const m of w.losses.splice(0)) this.ui.toast(m);
+    // pas de tracteur aux champs tant que l'usine automobile n'est pas bâtie
+    this.agents.motor = (this.sim.counts.carworks ?? 0) > 0;
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night, this.time.season);
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
@@ -1112,6 +1114,7 @@ class Game implements UIHost {
       // pas de voiture sur les routes tant que l'usine automobile n'est pas bâtie : des charrettes jusque-là
       this.traffic.motor = (this.sim.counts.carworks ?? 0) > 0;
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
+      this.helis.motor = this.traffic.motor;
       this.helis.update(gdt, this.sim.age);
       this.airships.update(gdt, this.time.hour, this.sim.age);
       this.fairground.update(dt);

@@ -210,7 +210,7 @@ export class Traffic {
 
   /** cases à contourner (l'îlot d'un rond-point) */
   avoid = new Set<number>();
-  /** la course automobile est gagnée : à l'âge industriel, les autos remplacent les charrettes */
+  /** l'usine automobile est bâtie : les autos (puis les voitures volantes) remplacent les charrettes ; sans elle, des attelages à tout âge */
   motor = false;
   private builtMotor = false;
 
@@ -240,7 +240,7 @@ export class Traffic {
     if (age !== this.builtAge || this.motor !== this.builtMotor) {
       this.builtMotor = this.motor;
       this.carts.geometry.dispose();
-      this.carts.geometry = vehicleGeo(age >= 4 && !this.motor ? 3 : age, this.motor);
+      this.carts.geometry = vehicleGeo(age, this.motor);
       // les attelages changent d'époque (ou laissent place aux voitures)
       for (const v of this.vehicles) this.dropRig(v);
     }
@@ -299,7 +299,7 @@ export class Traffic {
       // tenir sa droite : décalage perpendiculaire au sens de la rue (du point d'avant à celui-ci), pour ne pas tourner en rond
       const [px, pz] = v.i > 0 ? this.world.passPoint(v.path, v.i - 1) : v.path.length > 1 ? (([nx, nz]) => [cx * 2 - nx, cz * 2 - nz])(this.world.passPoint(v.path, 1)) : [v.x, v.z];
       const sl = Math.hypot(cx - px, cz - pz) || 1, hx = (cx - px) / sl, hz = (cz - pz) / sl, tx = cx - hz * LANE, tz = cz + hx * LANE;
-      const dx = tx - v.x, dz = tz - v.z, dist = Math.hypot(dx, dz), step = dt * (this.builtAge >= 4 ? 1.6 : this.horses ? 0.8 : 1.2);
+      const dx = tx - v.x, dz = tz - v.z, dist = Math.hypot(dx, dz), step = dt * (this.horses ? 0.8 : this.builtAge >= 4 ? 1.6 : 1.2);
       if (dist <= step) { v.x = tx; v.z = tz; v.i++; }
       else {
         v.x += (dx / dist) * step; v.z += (dz / dist) * step;
@@ -311,8 +311,8 @@ export class Traffic {
     this.carts.instanceMatrix.needsUpdate = true;
   }
 
-  /** Des charrettes attelées (avant les automobiles) */
-  private get horses() { return this.builtAge < 4 && !(this.builtAge === 3 && this.builtMotor); }
+  /** Des charrettes attelées tant que l'usine automobile n'est pas bâtie, quel que soit l'âge */
+  private get horses() { return !this.builtMotor; }
 
   /** Retire l'attelage d'une charrette (changement d'époque, charrette de trop) */
   private dropRig(v: Vehicle) {

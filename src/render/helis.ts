@@ -89,6 +89,9 @@ export class Helis {
   private tailG = tailGeo();
   private v = new THREE.Vector3();
 
+  /** l'usine automobile est bâtie */
+  motor = false;
+
   constructor(private world: World, private buildings: BuildingView) {}
 
   private make(id: number, livery = 0): Heli {
@@ -115,7 +118,8 @@ export class Helis {
     for (const b of w.buildings.values()) {
       // l'hélicoptère sanitaire du centre hospitalier ; les deux de l'héliport, à leurs couleurs
       const pads = b.kind === 'health' && !b.small ? [PAD] : b.kind === 'heliport' ? HELIPADS.map((q) => new THREE.Vector3(...q)) : null;
-      if (!pads || b.age < 4 || age < 4) continue;
+      // pas d'hélicoptère tant que l'usine automobile n'est pas bâtie (aucun moteur avant elle)
+      if (!pads || b.age < 4 || age < 4 || !this.motor) continue;
       const g = this.buildings.entries.get(b.id)?.group;
       if (!g) continue;
       g.updateMatrixWorld();
