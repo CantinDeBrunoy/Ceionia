@@ -6,7 +6,7 @@ import { MISSIONS, Mission } from '../src/sim/missions';
 import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
 import { Expeditions, ActiveExpedition, FATE_AT, FATED, nextEventAt } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
-import { KindId } from '../src/build/catalog';
+import { KindId, lineOf, reqLine } from '../src/build/catalog';
 import * as THREE from 'three';
 import { ExpeditionScene } from '../src/render/expeditionScenes';
 import { beastInfo } from '../src/render/beasts';
@@ -266,6 +266,20 @@ describe('organiser les JO', () => {
     expect(ids(m, 0, true)).toContain('flame');
     expect(ids(m, 0, false)).not.toContain('flame');
     expect(ids(m, 0, false)).toContain('record');
+  });
+
+  it('chaque équipement compte à part : le stade seul ne vaut pas le terrain de football', () => {
+    const v = village(4), m = mission('games'), [x, z] = v.at;
+    build(v.w, 'stadium', x + 8, z, 4);
+    for (const k of ['basket', 'tennis', 'waterpark'] as KindId[]) build(v.w, k, x - 6, z + 6, 4);
+    // le stade (qui compte d'ordinaire comme un terrain de football amélioré) ne suffit pas aux JO
+    expect(v.ex.has('football')).toBe(true);
+    expect(v.ex.missing(m)).toEqual(['bâtir : terrain de football']);
+    expect(reqLine('football', m.requires!.kinds!)).toEqual(['football']);
+    // ailleurs, la lignée reste entière
+    expect(reqLine('football', ['football'])).toEqual(lineOf('football'));
+    build(v.w, 'football', x - 6, z - 6, 4);
+    expect(v.ex.missing(m)).toEqual([]);
   });
 
   it('sans stade ni bassins, on ne peut pas partir ; tout bâti, l’équipe se rend au pied du stade', () => {

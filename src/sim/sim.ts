@@ -1,5 +1,5 @@
 import { World } from '../world/world';
-import { AGES, BUILD_CATS, KINDS, KindId, lineOf } from '../build/catalog';
+import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
@@ -288,7 +288,7 @@ export class Sim {
     if (!ap) {
       if (w.exp.done.includes(VICTORY)) return 'Le village a essaimé dans les étoiles : ses colons vivent sur une autre planète.';
       const next = MISSIONS.find((m) => m.age === this.age && m.requires && !w.exp.done.includes(m.id));
-      const need = next?.requires?.kinds?.find((k) => !this.built(k));
+      const need = next?.requires?.kinds?.find((k) => !reqLine(k, next.requires!.kinds!).some((x) => this.counts[x]));
       if (need) return build(need, `Pour « ${next!.title} » : il faut ${say(need)}.`);
       if (next) return `Prochaine étape vers les étoiles : l’expédition « ${next.title} » (menu Expéditions).${this.counts.spaceport && !spaceRail(w) ? ` Astuce : une gare desservie par un train de voyageurs, à ${RAIL_REACH} cases au plus du cosmodrome, y amènerait les équipes (plus sûr, plus rapide).` : ''}`;
     }
