@@ -675,7 +675,7 @@ export const MISSIONS: Mission[] = [
   },
   {
     // une courte expédition qui ouvre la raffinerie : sans elle, pas de carburant, et sans carburant, pas de voitures
-    id: 'oil', age: 3, mandatory: false, icon: '🛢️', title: 'L’or noir', unlocks: 'refinery',
+    id: 'oil', age: 3, mandatory: true, icon: '🛢️', title: 'L’or noir', unlocks: 'refinery',
     intro: 'Un prospecteur a vu un liquide noir suinter du sol. S’il y a là du pétrole, un ingénieur viendra bâtir une raffinerie au village : on en tirera le carburant des futures automobiles.',
     choices: [
       {

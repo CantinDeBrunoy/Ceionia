@@ -212,7 +212,7 @@ describe('les conseils du rail', () => {
 describe('la raffinerie et le carburant', () => {
   it('une courte expédition de l’âge industriel la débloque ; elle vient avant l’usine automobile', () => {
     const m = MISSIONS.find((x) => x.id === 'oil')!;
-    expect(m).toMatchObject({ age: 3, mandatory: false, unlocks: 'refinery' });
+    expect(m).toMatchObject({ age: 3, mandatory: true, unlocks: 'refinery' });
     expect(Math.max(...m.choices.map((c) => c.work))).toBeLessThanOrEqual(20);
     expect(KINDS.refinery).toMatchObject({ minAge: 3, reqMission: 'oil' });
     expect(KINDS.oilwell.minAge).toBe(3);
