@@ -504,6 +504,7 @@ function french(c: Ctx) {
     const m = (Math.abs(iu) + Math.abs(iv) * 2) % 4;
     if (m === 0) c.put('fl', x, z, c.rnd() * 6.28, 1, 0, { v: Math.abs(iu * 7 + iv * 3) % 5 });
     else if (m === 2 && (iu + iv) % 2 === 0) c.put('lowbox', x, z, 0, 1, 0);
+    else if (m === 2) c.put('fl', x, z, c.rnd() * 6.28, 0.85, 0, { v: Math.abs(iu * 3 + iv * 7) % 5 });
   }
   // bancs sur la place, tournés vers la fontaine ; statues au bout des allées
   for (const a of [0.785, 2.356, 3.927, 5.498]) {

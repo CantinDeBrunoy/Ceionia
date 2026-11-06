@@ -575,20 +575,20 @@ const B: Record<string, Builder> = {
     stick(p, 0.16, 0.012, 0.05, 0.33, 0.08, 0x8a7458, -0.6, 0.3);
     blob(c.leaf, 0.2, 0, 0.42, 0.06, 0xf2f7ea, 0.6);
     // le rideau de branches qui retombe jusqu'à l'eau
-    for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2; c.leaf.add(new THREE.ConeGeometry(0.06, 0.3, 4).rotateZ(Math.PI), Math.cos(a) * 0.17, 0.27, 0.06 + Math.sin(a) * 0.17, 0xe8f0dc, a); }
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2, r = i % 2 ? 0.17 : 0.12; c.leaf.add(new THREE.ConeGeometry(0.04, 0.3 - (i % 2) * 0.06, 4).rotateZ(Math.PI), Math.cos(a) * r, 0.28 + (i % 2) * 0.03, 0.06 + Math.sin(a) * r, 0xe8f0dc, a); }
   },
   arch: (c, it) => {
     // arche de fer (blanche, ou verte au parc), roses qui grimpent ; elle enjambe l'allée (le long de x)
     const p = c.p, iron = it.v ? 0x4f8a6a : 0xf2efe6;
-    for (const s of [-1, 1]) p.box(0.016, 0.28, 0.016, s * 0.18, 0, 0, iron);
-    p.add(new THREE.TorusGeometry(0.18, 0.009, 3, 10, Math.PI), 0, 0.28, 0, iron);
+    for (const s of [-1, 1]) p.box(0.016, 0.28, 0.016, s * 0.2, 0, 0, iron);
+    p.add(new THREE.TorusGeometry(0.2, 0.009, 3, 10, Math.PI), 0, 0.28, 0, iron);
     const cols = it.v ? [0xf6d04d, 0xffffff] : [0xe8485e, 0xf28fb0];
     for (let i = 0; i < 9; i++) {
-      const a = (i / 8) * Math.PI, x = Math.cos(a) * 0.18, y = 0.28 + Math.sin(a) * 0.18;
+      const a = (i / 8) * Math.PI, x = Math.cos(a) * 0.2, y = 0.28 + Math.sin(a) * 0.2;
       blob(c.ever, 0.03, x, y, 0, 0x4f8a4a, 0.9);
       flower(c, x, y + 0.02, 0.02, cols[i % 2], 1.1);
     }
-    for (const s of [-1, 1]) for (const y of [0.06, 0.16]) { blob(c.ever, 0.028, s * 0.18, y, 0, 0x5a944e, 1.1); flower(c, s * 0.18, y + 0.02, 0.025, cols[0], 1); }
+    for (const s of [-1, 1]) for (const y of [0.06, 0.16]) { blob(c.ever, 0.028, s * 0.2, y, 0, 0x5a944e, 1.1); flower(c, s * 0.2, y + 0.02, 0.025, cols[0], 1); }
   },
 
   // ---------- Âge futuriste : jardin bioluminescent ----------
@@ -866,9 +866,14 @@ export class GardenView {
       n.set(w.hAt(x - s, z) - w.hAt(x + s, z), 2 * s, w.hAt(x, z - s) - w.hAt(x, z + s)).normalize();
       const geo = new THREE.CylinderGeometry(0.14, 0.14, 0.01, 7).applyQuaternion(nq.setFromUnitVectors(UP, n));
       tiles.add(geo, x - g.cx, w.hAt(x, z) - y0 + 0.006, z - g.cz, new THREE.Color(tcol).multiplyScalar(0.94 + hash2(i, 5, g.id) * 0.1).getHex(), hash2(i, 7, g.id) * 6);
+      // âge futuriste : chaque dalle a son cœur de lumière, l'allée brille la nuit
+      if (age >= 5) tiles.add(new THREE.CylinderGeometry(0.06, 0.06, 0.004, 6).applyQuaternion(nq), x - g.cx, w.hAt(x, z) - y0 + 0.013, z - g.cz, i % 9 ? 0xa8f4ff : 0xffb0ec, hash2(i, 7, g.id) * 6, 'neon');
     }
+    out.glow.push(...tiles.glow);
+    tiles.glow = [];
     // sol souple de l'aire de jeux : un disque drapé sur le relief, bordé d'un liseré clair
-    for (const it of pads) for (const [r0, r1, col, dy] of [[0, it.s, it.v ? 0x6fb8b0 : 0xd98a6a, 0.012], [it.s * 0.95, it.s, 0xe9e2d4, 0.016]]) {
+    // (et un anneau d'une autre couleur, comme les marelles peintes des cours de récréation)
+    for (const it of pads) for (const [r0, r1, col, dy] of [[0, it.s, it.v ? 0x6fb8b0 : 0xd98a6a, 0.012], [it.s * 0.95, it.s, 0xe9e2d4, 0.016], [it.s * 0.6, it.s * 0.66, it.v ? 0xf2c94c : 0x6fb8e8, 0.015]]) {
       const geo = new THREE.RingGeometry(r0, r1, 28, r0 ? 1 : 6).rotateX(-Math.PI / 2), pos = geo.attributes.position;
       for (let k = 0; k < pos.count; k++) { const x = it.x + pos.getX(k), z = it.z + pos.getZ(k); pos.setXYZ(k, x - g.cx, w.hAt(x, z) - y0 + dy, z - g.cz); }
       tiles.add(geo, 0, 0, 0, col);
