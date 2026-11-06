@@ -486,12 +486,14 @@ class Game implements UIHost {
   /** l'incident que la caméra suit */
   incidentCam: string | null = null;
   followIncident(key: string | null) {
-    this.incidentCam = key;
-    if (!key) return;
-    this.following = null; this.trainCam = null;
-    if (this.mode === 'under') this.exitUnder();
-    const i = this.incidents().find((x) => x.key === key);
-    if (i) this.cam.follow(i.x, i.z, 9);
+    const i = key ? this.incidents().find((x) => x.key === key) : undefined;
+    if (!i) { this.incidentCam = null; return; }
+    // une seule chose suivie à la fois : la vue lâche l'équipe (et sa descente sous terre) ou le train
+    this.follow(null); this.trainCam = null;
+    this.incidentCam = i.key;
+    // sous terre, on remonte droit sur l'incident
+    if (this.mode === 'under') this.exitUnder(Math.floor(i.z) * N + Math.floor(i.x));
+    this.cam.follow(i.x, i.z, 9);
   }
 
   /**
@@ -599,8 +601,9 @@ class Game implements UIHost {
   followTrain(line: number) {
     const tr = this.railway.trains.get(line), p = tr ? this.railway.trainAt(tr) : null;
     if (!p) return;
-    this.following = null;
-    if (this.mode === 'under') this.exitUnder();
+    // une seule chose suivie à la fois
+    this.follow(null); this.incidentCam = null;
+    if (this.mode === 'under') this.exitUnder(Math.floor(p[1]) * N + Math.floor(p[0]));
     this.trainCam = line;
     this.cam.follow(p[0], p[1], 14);
   }
@@ -682,7 +685,8 @@ class Game implements UIHost {
   follow(id: number | null) {
     const a = this.expeditions.active.find((e) => e.id === id);
     this.following = a ? a.id : null;
-    if (a) this.trainCam = null;
+    // une seule chose suivie à la fois : suivre l'équipe lâche le train et l'incident
+    if (a) { this.trainCam = null; this.incidentCam = null; }
     // on cesse de suivre : la vue reste où elle est
     if (!a) this.autoUnder = false;
     if (!a) return;
