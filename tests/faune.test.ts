@@ -108,3 +108,11 @@ describe('faune : plus de bêtes, et toujours à voir', () => {
     expect(wantsVisitors(SEEN_MIN, 20)).toBe(false);
   });
 });
+
+describe('faune : densité', () => {
+  it('chaque biome a un gibier varié autour du village, et on veut voir plusieurs bêtes à la fois', () => {
+    for (const b of [BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH]) expect(new Set(NEARBY[b]).size).toBeGreaterThanOrEqual(4);
+    expect(SEEN_MIN).toBeGreaterThanOrEqual(5);
+    expect(VISITORS).toBeGreaterThanOrEqual(4);
+  });
+});
