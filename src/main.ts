@@ -359,7 +359,8 @@ class Game implements UIHost {
       this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
-      setTimeout(() => this.ui.showNewAge(age), 1800);
+      // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
+      setTimeout(() => this.ui.showNewAge(age), 4600);
       audio.sfxAgeUp();
       // le sol des jardins change avec eux
       this.terrain.gardenAge = age;

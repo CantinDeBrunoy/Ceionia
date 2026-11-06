@@ -888,16 +888,26 @@ export class UI {
   /** Fenêtre d'un nouvel âge : les bâtiments qui apparaissent, chacun à bâtir d'un clic (et ses améliorations) */
   showNewAge(age: number) {
     const fresh = KIND_ORDER.filter((k) => KINDS[k].minAge === age && !this.lockOf(k));
-    if (!fresh.length) return;
+    // ceux qu'une expédition débloquerait : visibles mais grisés, avec le nom de l'expédition
+    const shut = KIND_ORDER.filter((k) => KINDS[k].minAge <= age && KINDS[k].reqMission && !this.host.expeditions.state.done.includes(KINDS[k].reqMission!)
+      && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge!));
+    if (!fresh.length && !shut.length) return;
+    const lockedTile = (k: KindId) => {
+      const m = MISSIONS.find((x) => x.id === KINDS[k].reqMission);
+      return `<button class="newKind shut" data-mission="${KINDS[k].reqMission}" title="Un clic mène à l’expédition"><b>${ic(KIND_ICON[k], 26, 1.6)}</b><span>${KINDS[k].names[age] || KINDS[k].names[KINDS[k].minAge]}</span><small>Expédition « ${m?.title ?? KINDS[k].reqMission} »</small></button>`;
+    };
     const tile = (k: KindId) => `<button class="newKind" data-kind="${k}" title="${this.host.sim.whereOf(k)}"><b>${ic(KIND_ICON[k], 26, 1.6)}</b><span>${KINDS[k].names[age]}</span><small>${BUILD_CATS.find((c) => c.id === KINDS[k].cat)!.label}</small></button>`;
     const { ov, close } = modal(this.root, 'newAge', `${ic('up', 22)} ${AGES[age].name}`, `
       <p class="hint">${AGES[age].tagline}. Nouveaux bâtiments à votre disposition :</p>
-      <div class="newKinds">${fresh.map(tile).join('')}</div>
+      ${fresh.length ? `<div class="newKinds">${fresh.map(tile).join('')}</div>` : ''}
+      ${shut.length ? `<p class="hint">À débloquer par des expéditions :</p><div class="newKinds">${shut.map(lockedTile).join('')}</div>` : ''}
       <div class="row"><span class="grow"></span><button class="active ok">C’est parti</button></div>`);
     $('.ok', ov).onclick = close;
     ov.addEventListener('click', (e) => {
-      const k = (e.target as HTMLElement).closest<HTMLElement>('.newKind')?.dataset.kind as KindId | undefined;
+      const t = (e.target as HTMLElement).closest<HTMLElement>('.newKind');
+      const k = t?.dataset.kind as KindId | undefined;
       if (k) { close(); this.pick(k); }
+      else if (t?.dataset.mission) { close(); this.gotoMission(t.dataset.mission); }
     });
   }
 
