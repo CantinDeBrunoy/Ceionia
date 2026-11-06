@@ -102,7 +102,12 @@ interface Critter {
   flap: number;
   /** créneau du dernier geste joué au repos (bête articulée) */
   gestK?: number;
+  /** temps cumulé depuis la dernière réflexion (bête loin de la vue, voir `FAR_WALK`) */
+  lag?: number;
 }
+
+/** Au-delà de cette distance à la caméra, les bêtes à terre ne réfléchissent qu'une image sur trois */
+const FAR_WALK = 70;
 
 /** Modèles animés Quaternius par espèce : longueur du corps visée, variante pour le premier du groupe (le cerf), correction de cap */
 const MODELS: Partial<Record<Kind, { name: ModelName; length: number; lead?: ModelName; yaw?: number; pick?: ModelName[] }>> = {
@@ -317,20 +322,20 @@ const SPECS: Record<Kind, Spec> = {
   cow: { geo: cowGeo, max: 64, colors: [0xffffff, 0xb07850, 0xe8d8b8, 0x8a5a3a], speed: 0.3, idle: [4, 12], ok: farmland, graze: 0.1 },
   pig: { geo: sheepGeo, max: 48, colors: [0xf2b3b3], speed: 0.3, idle: [3, 8], ok: farmland, graze: 0.1 },
   hen: { geo: henGeo, max: 128, colors: [0xffffff, 0xc8763c, 0xe8d0a0, 0x4a4446], speed: 0.45, run: 0.9, idle: [1, 4], ok: offRoad, peck: true, flee: 1.4 },
-  rabbit: { geo: rabbitGeo, max: 32, colors: [0xb08a68, 0x9a9690, 0xf2efe8, 0x8a6a4e], speed: 0.9, run: 1.75, idle: [2, 6], ok: offRoad, hop: 0.05, flee: 2.2 },
-  deer: { geo: deerGeo, max: 24, colors: [0xb87a48, 0xa86c40, 0xc48a58], speed: 0.5, run: 1.9, idle: [4, 10], ok: wild, graze: 0.2, flee: 3.5 },
+  rabbit: { geo: rabbitGeo, max: 64, colors: [0xb08a68, 0x9a9690, 0xf2efe8, 0x8a6a4e], speed: 0.9, run: 1.75, idle: [2, 6], ok: offRoad, hop: 0.05, flee: 2.2 },
+  deer: { geo: deerGeo, max: 44, colors: [0xb87a48, 0xa86c40, 0xc48a58], speed: 0.5, run: 1.9, idle: [4, 10], ok: wild, graze: 0.2, flee: 3.5 },
   horse: { geo: deerGeo, max: 24, colors: [0x8a5a3a, 0x5a3e2e, 0xd8c8a8], speed: 0.45, run: 2, idle: [4, 10], ok: farmland, graze: 0.2, flee: 3, scale: 1.2 },
   llama: { geo: deerGeo, max: 16, colors: [0xf2ece0, 0xb89878, 0x8a6a4e], speed: 0.38, run: 1.3, idle: [4, 10], ok: offRoad, graze: 0.12, flee: 3 },
-  fox: { geo: deerGeo, max: 8, colors: [0xd8743a], speed: 0.5, run: 1.55, idle: [3, 8], ok: offRoad, scale: 0.6, flee: 1.5 },
+  fox: { geo: deerGeo, max: 16, colors: [0xd8743a], speed: 0.5, run: 1.55, idle: [3, 8], ok: offRoad, scale: 0.6, flee: 1.5 },
   wolf: { geo: deerGeo, max: 16, colors: [0x8a8a90, 0x6a6a72, 0x9a8670], speed: 0.55, run: 1.75, idle: [3, 8], ok: offRoad, scale: 0.8, flee: 2 },
   frog: { geo: duckGeo, max: 84, colors: [0x6aa84a], speed: 0.35, run: 0.7, idle: [2, 7], ok: bank, hop: 0.03, flee: 1.2, scale: 0.6 },
-  duck: { geo: duckGeo, max: 12, colors: [0xffffff], speed: 0.25, idle: [2, 6], ok: water },
-  duckling: { geo: duckGeo, max: 36, colors: [0xf8dc6a], speed: 0.25, idle: [1, 1], ok: water, scale: 0.55 },
-  bird: { geo: birdGeo, max: 24, colors: [0xffffff, 0xdfe4ea], speed: 0, idle: [1, 1], ok: any, flap: [9, 0.9, 0.012], scale: 2.3 },
-  songbird: { geo: songbirdGeo, max: 32, colors: [0xe8553c, 0x4a8ce0, 0xf2c94c, 0x9a7458, 0x5abf8a], speed: 0, idle: [4, 14], ok: any, flap: [22, 1.2, 0.012], scale: 1.3 },
+  duck: { geo: duckGeo, max: 18, colors: [0xffffff], speed: 0.25, idle: [2, 6], ok: water },
+  duckling: { geo: duckGeo, max: 54, colors: [0xf8dc6a], speed: 0.25, idle: [1, 1], ok: water, scale: 0.55 },
+  bird: { geo: birdGeo, max: 40, colors: [0xffffff, 0xdfe4ea], speed: 0, idle: [1, 1], ok: any, flap: [9, 0.9, 0.012], scale: 2.3 },
+  songbird: { geo: songbirdGeo, max: 48, colors: [0xe8553c, 0x4a8ce0, 0xf2c94c, 0x9a7458, 0x5abf8a], speed: 0, idle: [4, 14], ok: any, flap: [22, 1.2, 0.012], scale: 1.3 },
   bee: { geo: beeGeo, max: 48, colors: [0xffffff], speed: 0, idle: [1, 3], ok: any, flap: [40, 1.5, 0.003], scale: 2.2 },
   bat: { geo: batGeo, max: 24, colors: [0x3a3238, 0x2e282e, 0x4a3e3e], speed: 0, idle: [1, 1], ok: any, flap: [17, 1.4, 0.008], scale: 1.7 },
-  fish: { geo: fishGeo, max: 80, colors: [0xf28c38, 0xc8d4dc, 0x5fa8d8, 0xf2d04a], speed: 0, idle: [1, 1], ok: water },
+  fish: { geo: fishGeo, max: 140, colors: [0xf28c38, 0xc8d4dc, 0x5fa8d8, 0xf2d04a], speed: 0, idle: [1, 1], ok: water },
   whale: { geo: dolphinGeo, max: 2, colors: [0x55607a], speed: 0, idle: [1, 1], ok: water, scale: 4 },
   manta: { geo: dolphinGeo, max: 6, colors: [0x2c3d5c], speed: 0, idle: [1, 1], ok: water, scale: 1.2 },
   dolphin: { geo: dolphinGeo, max: 9, colors: [0x7f97ab, 0x8ea3b4], speed: 0, idle: [1, 1], ok: water, scale: 1.5 },
@@ -338,15 +343,15 @@ const SPECS: Record<Kind, Spec> = {
   gull: { geo: birdGeo, max: 18, colors: [0xffffff, 0xf2f4f6], speed: 0, idle: [1, 1], ok: any, flap: [7, 0.9, 0.012], scale: 2 },
   bear: { max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
   ibex: { geo: ibexGeo, max: 14, colors: [0x8a7a68, 0x9c8b76, 0x6e6052], speed: 0.35, run: 1.6, idle: [3, 9], ok: alpine, graze: 0.15, flee: 2.6, scale: 1.1 },
-  lizard: { max: 28, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
-  crab: { max: 24, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
-  turtle: { max: 14, colors: [0x6a8a4a, 0x8a7a50, 0x5a7a58], speed: 0.1, run: 0.25, idle: [5, 14], ok: bank, flee: 0.9 },
+  lizard: { max: 44, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
+  crab: { max: 32, colors: [0xd8583a, 0xc8a070, 0xe07a50], speed: 0.35, run: 0.9, idle: [2, 6], ok: beach, flee: 1.1 },
+  turtle: { max: 22, colors: [0x6a8a4a, 0x8a7a50, 0x5a7a58], speed: 0.1, run: 0.25, idle: [5, 14], ok: bank, flee: 0.9 },
   croc: { max: 6, colors: [0x6a8a4a, 0x5a7a3e, 0x7a8a58], speed: 0.18, run: 0.9, idle: [8, 22], ok: bank },
-  camel: { max: 12, colors: [0xc8a070, 0xb89060, 0xd8b888], speed: 0.33, run: 1.2, idle: [5, 12], ok: offRoad, graze: 0.12, flee: 2.5, scale: 1.1 },
-  elephant: { max: 8, colors: [0x8e8e94, 0x7a7a82, 0x9a9a9e], speed: 0.25, run: 0.8, idle: [6, 16], ok: offRoad, graze: 0.12, scale: 1.45 },
-  giraffe: { max: 8, colors: [0xf0c460, 0xe8b858, 0xf4cc78], speed: 0.33, run: 1.5, idle: [5, 12], ok: offRoad, graze: 0.1, flee: 3, scale: 1.25 },
-  moose: { max: 10, colors: [0x6a4e3a, 0x5a4232, 0x7a5a42], speed: 0.33, run: 1.5, idle: [5, 12], ok: wild, graze: 0.15, flee: 3, scale: 1.2 },
-  butterfly: { geo: butterflyGeo, max: 32, colors: [0xf7d24c, 0xf29ab4, 0xffffff, 0x9fc8f0, 0xf09a50], speed: 0, idle: [1, 1], ok: any, flap: [26, 1.3, 0.003] },
+  camel: { max: 20, colors: [0xc8a070, 0xb89060, 0xd8b888], speed: 0.33, run: 1.2, idle: [5, 12], ok: offRoad, graze: 0.12, flee: 2.5, scale: 1.1 },
+  elephant: { max: 14, colors: [0x8e8e94, 0x7a7a82, 0x9a9a9e], speed: 0.25, run: 0.8, idle: [6, 16], ok: offRoad, graze: 0.12, scale: 1.45 },
+  giraffe: { max: 14, colors: [0xf0c460, 0xe8b858, 0xf4cc78], speed: 0.33, run: 1.5, idle: [5, 12], ok: offRoad, graze: 0.1, flee: 3, scale: 1.25 },
+  moose: { max: 18, colors: [0x6a4e3a, 0x5a4232, 0x7a5a42], speed: 0.33, run: 1.5, idle: [5, 12], ok: wild, graze: 0.15, flee: 3, scale: 1.2 },
+  butterfly: { geo: butterflyGeo, max: 48, colors: [0xf7d24c, 0xf29ab4, 0xffffff, 0x9fc8f0, 0xf09a50], speed: 0, idle: [1, 1], ok: any, flap: [26, 1.3, 0.003] },
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
@@ -359,22 +364,59 @@ export interface Zone { kind: Kind; biomes: number[]; anchors: Anchor[]; per: nu
 const ALL_BIOMES = [BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH];
 export const ZONES: Zone[] = [
   // désert : lézards sur les rochers, chameaux aux lisières des oasis (cactus, palmiers)
-  { kind: 'lizard', biomes: [BIOME_DESERT, BIOME_TROPICAL], anchors: ['rocks', 'edge'], per: 12, max: 4, n: (i) => 2 + (i % 2), radius: 1.3, salt: 300 },
-  { kind: 'camel', biomes: [BIOME_DESERT], anchors: ['edge', 'meadow'], per: 90, max: 3, n: (i) => 2 + (i % 2), radius: 2.6, salt: 310 },
+  { kind: 'lizard', biomes: [BIOME_DESERT, BIOME_TROPICAL], anchors: ['rocks', 'edge'], per: 10, max: 6, n: (i) => 2 + (i % 2), radius: 1.3, salt: 300 },
+  { kind: 'camel', biomes: [BIOME_DESERT], anchors: ['edge', 'meadow'], per: 60, max: 4, n: (i) => 2 + (i % 2), radius: 2.6, salt: 310 },
   // marais, fleuves et lacs : crocodiles sur les berges, tortues au bord des mares
   { kind: 'croc', biomes: [BIOME_MARSH, BIOME_TROPICAL, BIOME_DESERT], anchors: ['banks'], per: 40, max: 3, n: () => 1, radius: 1.4, salt: 320 },
-  { kind: 'turtle', biomes: [BIOME_MARSH, BIOME_TROPICAL, BIOME_TEMPERATE, BIOME_DESERT], anchors: ['ponds', 'banks'], per: 18, max: 4, n: (i) => 1 + (i % 2), radius: 1.1, salt: 330 },
+  { kind: 'turtle', biomes: [BIOME_MARSH, BIOME_TROPICAL, BIOME_TEMPERATE, BIOME_DESERT], anchors: ['ponds', 'banks'], per: 14, max: 5, n: (i) => 1 + (i % 2), radius: 1.1, salt: 330 },
   // savane et plaines chaudes : éléphants et girafes à l'ombre des arbres
-  { kind: 'elephant', biomes: [BIOME_TROPICAL], anchors: ['edge', 'meadow'], per: 90, max: 2, n: (i) => 2 + (i % 2), radius: 3, salt: 340 },
-  { kind: 'giraffe', biomes: [BIOME_TROPICAL], anchors: ['edge', 'meadow'], per: 80, max: 2, n: (i) => 2 + (i % 2), radius: 3, salt: 350 },
+  { kind: 'elephant', biomes: [BIOME_TROPICAL], anchors: ['edge', 'meadow'], per: 60, max: 3, n: (i) => 2 + (i % 2), radius: 3, salt: 340 },
+  { kind: 'giraffe', biomes: [BIOME_TROPICAL], anchors: ['edge', 'meadow'], per: 55, max: 3, n: (i) => 2 + (i % 2), radius: 3, salt: 350 },
   // taïga : élans aux lisières ; forêts tempérées : une petite meute de loups
-  { kind: 'moose', biomes: [BIOME_TAIGA], anchors: ['edge'], per: 70, max: 3, n: (i) => 1 + (i % 2), radius: 2.8, salt: 360 },
+  { kind: 'moose', biomes: [BIOME_TAIGA], anchors: ['edge'], per: 45, max: 5, n: (i) => 1 + (i % 2), radius: 2.8, salt: 360 },
   { kind: 'wolf', biomes: [BIOME_TEMPERATE], anchors: ['edge'], per: 140, max: 1, n: (i) => 3 + (i % 2), radius: 3, salt: 370 },
   // côtes : crabes sur les plages, quel que soit le biome
-  { kind: 'crab', biomes: ALL_BIOMES, anchors: ['coast'], per: 25, max: 3, n: (i) => 2 + (i % 2), radius: 1.2, salt: 380 },
+  { kind: 'crab', biomes: ALL_BIOMES, anchors: ['coast'], per: 20, max: 4, n: (i) => 2 + (i % 2), radius: 1.2, salt: 380 },
 ];
 /** Espèces rattachées à un biome par la table des zones */
 export const speciesIn = (biome: number): Kind[] => ZONES.filter((z) => z.biomes.includes(biome)).map((z) => z.kind);
+
+/**
+ * Bêtes sauvages des alentours du village et des visiteurs près de la vue, par biome (tempéré, taïga, désert, tropiques,
+ * marais) : du gibier familier, qu'on croise souvent
+ */
+export const NEARBY: Record<number, Kind[]> = {
+  [BIOME_TEMPERATE]: ['deer', 'rabbit', 'fox', 'rabbit'],
+  [BIOME_TAIGA]: ['moose', 'deer', 'rabbit'],
+  [BIOME_DESERT]: ['camel', 'lizard', 'lizard'],
+  [BIOME_TROPICAL]: ['giraffe', 'lizard', 'elephant'],
+  [BIOME_MARSH]: ['turtle', 'deer', 'rabbit'],
+};
+/** Taille d'un groupe de ces bêtes */
+export const nearbyGroup = (k: Kind) => (k === 'moose' || k === 'fox' ? 1 : 2);
+/** Anneau des alentours du village (distance au centre, en cases) */
+export const VILLAGE_RING: [number, number] = [6, 24];
+/** Bêtes à terre qu'on veut voir près du centre de la vue, et rayon où on les compte */
+export const SEEN_MIN = 3, SEEN_R = 10;
+/** Groupes de visiteurs au plus (les plus anciens repartent quand d'autres arrivent) */
+export const VISITORS = 3;
+
+/** Centre du village : la place (le feu de camp, le forum), sinon le milieu de ses bâtiments ; null sans bâtiment */
+export function villageCenter(w: World): [number, number] | null {
+  let sx = 0, sz = 0, n = 0;
+  for (const b of w.buildings.values()) {
+    const s = sizeOf(b);
+    if (b.kind === 'gather') return [b.x + s / 2, b.z + s / 2];
+    sx += b.x + s / 2; sz += b.z + s / 2; n++;
+  }
+  return n ? [sx / n, sz / n] : null;
+}
+
+/**
+ * Faut-il un groupe de visiteurs près de la vue ? Quand la vue est assez proche du sol pour voir des bêtes (`camDist`), et
+ * qu'on en compte moins de `SEEN_MIN` à terre autour de son centre
+ */
+export const wantsVisitors = (seen: number, camDist: number) => camDist < 55 && seen < SEEN_MIN;
 
 /**
  * Tanières des ours : à l'entrée de chaque grotte (devant l'ouverture) ou au bout d'une faille, sur la case praticable
@@ -453,6 +495,11 @@ export class Fauna {
   private sphere = new THREE.Sphere();
   private pm = new THREE.Matrix4();
   private frame = 0;
+  /** groupes venus près de la vue (voir `scout`), le plus ancien d'abord */
+  private visitors: Source[] = [];
+  private visitSerial = 0;
+  private scoutTimer = 2;
+  private look = new THREE.Vector3();
 
   constructor(private world: World, private veg: { perches: number[][]; flowers: number[][] }) {
     for (const k of KIND_LIST) {
@@ -608,7 +655,7 @@ export class Fauna {
     group('sheep', 'sheep', grass, Math.min(7, Math.floor(grass.length / 150)), (i) => 3 + (i % 3), 2.2, 0);
     group('horse', 'horse', green, hasModel('horse') ? Math.min(3, Math.floor(green.length / 260)) : 0, (i) => 3 + (i % 2), 3, 30);
     group('llama', 'llama', mD.concat(mTa.filter((k) => w.cellAvg(k % N, Math.floor(k / N)) > 2)), hasModel('llama') ? Math.min(3, Math.floor((mD.length + mTa.length / 3) / 90)) : 0, () => 3, 2.4, 40);
-    group('rabbit', 'rabbit', all, Math.min(14, Math.floor(all.length / 70)), () => 1, 1.6, 50);
+    group('rabbit', 'rabbit', all, Math.min(24, Math.floor(all.length / 45)), (i) => 1 + (i % 2), 1.6, 50);
     // lapins chapardeurs : un terrier près de chaque potager (jusqu'à 4)
     for (let i = 0; i < Math.min(4, gardens.length); i++) {
       const g = gardens[Math.floor(hash2(i, gardens.length, 61) * gardens.length)];
@@ -621,8 +668,8 @@ export class Fauna {
       if (spot >= 0) { const [x, z] = at(spot); src.push({ key: `raider${i}`, kind: 'rabbit', hx: x, hz: z, n: 2, radius: Math.hypot(gx + 0.5 - x, gz + 0.5 - z) + 1 }); }
     }
     const woods = edge[BIOME_TEMPERATE].concat(edge[BIOME_TAIGA]);
-    group('deer', 'deer', woods, Math.min(6, Math.floor(forest.length / 60)), () => 2, 2.5, 80);
-    group('fox', 'fox', woods.concat(edge[BIOME_MARSH]), hasModel('fox') ? Math.min(4, Math.floor(woods.length / 50)) : 0, () => 1, 3.2, 90);
+    group('deer', 'deer', woods, Math.min(11, Math.floor(forest.length / 40)), (i) => 2 + (i % 2), 2.5, 80);
+    group('fox', 'fox', woods.concat(edge[BIOME_MARSH]), hasModel('fox') ? Math.min(7, Math.floor(woods.length / 35)) : 0, () => 1, 3.2, 90);
     // ours : à l'entrée des grottes et au bout des failles, seuls ou avec leur ourson ; ils rôdent aux alentours de jour
     for (const d of bearDens(w)) src.push({ key: d.key, kind: 'bear', hx: d.x, hz: d.z, n: d.cub ? 2 : 1, radius: 2.4 });
     // zones de vie : chaque espèce rattachée à son biome et à un élément du décor (rochers, lisières, berges, plages)
@@ -644,17 +691,42 @@ export class Fauna {
       }
     }
     group('wolf', 'wolf', edge[BIOME_TAIGA], Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)), (i) => 4 - (i % 2), 3.5, 100);
+    // alentours du village : quelques groupes des bêtes du biome dans un anneau autour de la place, à l'écart des maisons,
+    // pour qu'on en croise sans partir loin
+    const vc = villageCenter(w);
+    if (vc) {
+      const ring: number[][] = [[], [], [], [], []];
+      const clear = (cx: number, cz: number) => { for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) if (w.inCells(cx + dx, cz + dz) && w.occ[w.ci(cx + dx, cz + dz)]) return false; return true; };
+      for (const b of [0, 1, 2, 3, 4])
+        for (const k of meadow[b].concat(edge[b])) {
+          const d = Math.hypot((k % N) + 0.5 - vc[0], Math.floor(k / N) + 0.5 - vc[1]);
+          if (d >= VILLAGE_RING[0] && d <= VILLAGE_RING[1] && clear(k % N, Math.floor(k / N))) ring[b].push(k);
+        }
+      for (const b of [0, 1, 2, 3, 4]) {
+        if (ring[b].length < 12) continue;
+        const kinds = NEARBY[b].filter((k) => this.shows(k));
+        for (let i = 0; i < Math.min(4, 1 + Math.floor(ring[b].length / 40)) && kinds.length; i++) {
+          const kind = kinds[i % kinds.length], n = nearbyGroup(kind);
+          if (budget[kind] < n) continue;
+          budget[kind] -= n;
+          group(`near${b}-${i}-`, kind, ring[b], 1, () => n, 2.6, 400 + b * 13 + i);
+        }
+      }
+    }
+    // visiteurs : des bêtes venues près de la vue quand on n'en voit aucune (voir `scout`)
+    for (const v of this.visitors) if (budget[v.kind] >= v.n) { budget[v.kind] -= v.n; src.push(v); }
+    group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, () => 3, 3.5, 100);
     // grenouilles : surtout au bord des mares et des étangs, et dans les marais
     const ponds = banks.filter(pond), frogBanks = ponds.concat(ponds, banks.filter((k) => w.biome[k] === BIOME_MARSH), banks.filter((_, i) => i % 4 === 0));
     group('frog', 'frog', frogBanks, hasModel('frog') ? Math.min(28, Math.floor(frogBanks.length / 5)) : 0, (i) => 2 + (i % 2), 1.3, 110);
-    group('duck', 'duck', shore, Math.min(5, Math.floor(shore.length / 50)), () => 4, 2.5, 120);
+    group('duck', 'duck', shore, Math.min(8, Math.floor(shore.length / 40)), () => 4, 2.5, 120);
     // oiseaux chanteurs : un par bosquet, ils se posent dans les arbres alentour
-    group('song', 'songbird', forest.concat(gardens), Math.min(16, Math.floor(forest.length / 40)), () => 1, 6, 140);
+    group('song', 'songbird', forest.concat(gardens), Math.min(24, Math.floor(forest.length / 30)), (i) => 1 + (i % 2), 6, 140);
     // abeilles : essaims près des jardins et des prairies fleuries
     const flowery = gardens.concat(mT.filter((_, i) => i % 3 === 0), mTr);
     group('bees', 'bee', flowery, Math.min(7, Math.floor(flowery.length / 60) + Math.min(3, gardens.length)), () => 3, 5, 150);
-    group('fly', 'butterfly', gardens.concat(green), Math.min(20, gardens.length + Math.floor(green.length / 160)), () => 1, 0.4, 160);
-    group('fish', 'fish', shallows, Math.min(10, Math.floor(shallows.length / 40)), (i) => 5 + (i % 3), 1.3, 200);
+    group('fly', 'butterfly', gardens.concat(green), Math.min(30, gardens.length + Math.floor(green.length / 110)), () => 1, 0.4, 160);
+    group('fish', 'fish', shallows, Math.min(16, Math.floor(shallows.length / 30)), (i) => 5 + (i % 3), 1.3, 200);
     // les grands animaux décrivent de larges boucles : domaine loin des bords de la carte
     const open = (r: number) => deep.filter((k) => { const x = k % N, z = Math.floor(k / N); return x > r && z > r && x < N - 1 - r && z < N - 1 - r; });
     const deepD = open(4), deepW = open(6);
@@ -665,6 +737,8 @@ export class Fauna {
     // chauves-souris : trois par grotte, de sortie la nuit
     for (const k of caves.slice(0, 8)) { const [x, z] = at(k); src.push({ key: `bat${k}`, kind: 'bat', hx: x, hz: z, n: 3, radius: 0.8 }); }
     for (let i = 0; i < 3; i++) src.push({ key: `birds${i}`, kind: 'bird', hx: N / 2, hz: N / 2, n: 5 + i, radius: (12 + i * 6) * (N / 48) * 0.8 });
+    // et deux vols plus petits qui tournent au-dessus du village
+    if (vc) for (let i = 0; i < 2; i++) src.push({ key: `vbirds${i}`, kind: 'bird', hx: vc[0], hz: vc[1], n: 4 + i, radius: 9 + i * 7 });
     // montagnes : bouquetins sur les hauts pâturages, aigles qui tournoient autour des plus hauts sommets
     const alp: number[] = [], tops: number[] = [], volcanoes: number[] = [];
     for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_VOLCANO) volcanoes.push(k);
@@ -737,6 +811,79 @@ export class Fauna {
     }
   }
 
+  /** L'espèce a de quoi s'afficher : forme instanciée, bête articulée ou modèle chargé */
+  private shows(k: Kind) {
+    const md = MODELS[k];
+    return !!SPECS[k].geo || BEAST_KINDS.has(k as BeastKind) || (!!md && hasModel(md.name));
+  }
+
+  /**
+   * Toujours des bêtes à voir : toutes les trois secondes, si la vue est assez proche du sol et qu'on compte moins de
+   * `SEEN_MIN` bêtes à terre dans le champ près de son centre, un petit groupe du biome (un banc de poissons sur l'eau)
+   * s'installe à quatre à huit cases, juste hors du champ de préférence, et vient y errer ; au plus `VISITORS` groupes, les
+   * plus anciens repartent
+   */
+  private scout(dt: number, camera: THREE.Camera) {
+    this.scoutTimer -= dt;
+    if (this.scoutTimer > 0) return;
+    this.scoutTimer = 3;
+    const w = this.world, cam = camera.position, dir = camera.getWorldDirection(this.look);
+    if (dir.y > -0.05) return;
+    // centre de la vue : là où son axe rencontre le sol (à peu près)
+    const t = (SEA + 0.5 - cam.y) / dir.y, fx = cam.x + dir.x * t, fz = cam.z + dir.z * t;
+    if (!w.inCells(Math.floor(fx), Math.floor(fz))) return;
+    // bêtes à terre (ou dans l'eau) dans le champ, pas trop loin
+    let seen = 0;
+    for (const c of this.critters) {
+      if (c.hidden || c.dead > 0 || SPECS[c.kind].flap || Math.abs(c.x - fx) > SEEN_R * 2 || Math.abs(c.z - fz) > SEEN_R * 2) continue;
+      this.sphere.center.set(c.x, SWIMMERS.has(c.kind) ? c.y : w.hAt(c.x, c.z), c.z);
+      this.sphere.radius = 0.1;
+      if (this.frustum.intersectsSphere(this.sphere) && Math.hypot(c.x - fx, c.z - fz) < SEEN_R) seen++;
+    }
+    if (!wantsVisitors(seen, Math.hypot(cam.x - fx, cam.y - SEA, cam.z - fz))) return;
+    // les visiteurs déjà là restent : on ne rappelle que le plus ancien, s'il est loin de la vue
+    if (this.visitors.length >= VISITORS && Math.hypot(this.visitors[0].hx - fx, this.visitors[0].hz - fz) < 25) return;
+    const wet = water(w, Math.floor(fx), Math.floor(fz)), ok = (cx: number, cz: number) => (wet ? water(w, cx, cz) : wild(w, cx, cz));
+    // domaine dans le champ, à quelques cases du centre ; ils entrent par le bord, deux ou trois cases plus loin
+    let best: [number, number] | null = null, inView = false;
+    for (let i = 0; i < 24 && !inView; i++) {
+      const a = this.rnd() * 6.28, r = 1.5 + this.rnd() * 3, x = fx + Math.cos(a) * r, z = fz + Math.sin(a) * r, cx = Math.floor(x), cz = Math.floor(z);
+      if (!ok(cx, cz)) continue;
+      this.sphere.center.set(x, w.hAt(x, z), z);
+      this.sphere.radius = 0.3;
+      inView = this.frustum.intersectsSphere(this.sphere);
+      if (inView || !best) best = [cx + 0.5, cz + 0.5];
+    }
+    if (!best) return;
+    let kind: Kind = 'fish';
+    if (!wet) {
+      const list = NEARBY[w.biome[w.ci(Math.floor(best[0]), Math.floor(best[1]))]].filter((k) => this.shows(k));
+      if (!list.length) return;
+      kind = list[this.visitSerial % list.length];
+    }
+    const key = `visit${this.visitSerial++}`;
+    this.visitors.push({ key, kind, hx: best[0], hz: best[1], n: kind === 'fish' ? 6 : nearbyGroup(kind), radius: 3 });
+    if (this.visitors.length > VISITORS) this.visitors.shift();
+    this.refresh();
+    this.refreshTimer = 0.5;
+    this.lastVersion = w.version;
+    // les nouveaux venus arrivent à pied de l'extérieur du champ (les poissons, eux, sont déjà là)
+    if (wet) return;
+    const ux = best[0] - fx, uz = best[1] - fz, l = Math.hypot(ux, uz) || 1;
+    for (const c of this.critters) {
+      if (c.key !== key) continue;
+      for (const back of [3.5, 2.5, 1.5]) {
+        const x = best[0] + (ux / l) * back + (this.rnd() - 0.5), z = best[1] + (uz / l) * back + (this.rnd() - 0.5);
+        if (!ok(Math.floor(x), Math.floor(z))) continue;
+        c.x = c.ax = x; c.z = c.az = z;
+        c.tx = best[0] + (this.rnd() - 0.5); c.tz = best[1] + (this.rnd() - 0.5);
+        c.heading = Math.atan2(c.tx - x, c.tz - z);
+        c.moving = true;
+        break;
+      }
+    }
+  }
+
   // ---------- Comportements ----------
 
   update(dt: number, elapsed: number, hour: number, season: number, rain: number, age: number, camera?: THREE.Camera) {
@@ -750,7 +897,7 @@ export class Fauna {
     this.t += dt;
     this.uTime.value = this.t;
     const night = hour < 6 || hour > 21;
-    const people = this.people().filter((p) => !p.hidden);
+    const people = this.people().filter((p) => !p.hidden), cam = camera?.position;
     for (const c of this.critters) {
       if (c.dead > 0) {
         // proie attrapée : elle revient au domaine un peu plus tard
@@ -768,8 +915,15 @@ export class Fauna {
       else if (c.kind === 'bat') this.flutter(c, !night, 0.6, 1.9);
       else if (SWIMMERS.has(c.kind)) this.swim(c, dt, season);
       else if (c.kind === 'duckling') this.follow(c, dt);
-      else this.walk(c, dt, night, season, people);
+      else if (cam && !c.run && (c.x - cam.x) ** 2 + (c.z - cam.z) ** 2 > FAR_WALK * FAR_WALK) {
+        // loin de la vue, une bête à terre ne réfléchit qu'une image sur trois, à plus grands pas
+        c.lag = (c.lag ?? 0) + dt;
+        if ((this.frame + c.slot + c.key.length) % 3) continue;
+        this.walk(c, Math.min(0.25, c.lag), night, season, people);
+        c.lag = 0;
+      } else this.walk(c, dt, night, season, people);
     }
+    if (camera) this.scout(dt, camera);
     this.life(dt);
     this.render(elapsed, dt, camera);
   }
