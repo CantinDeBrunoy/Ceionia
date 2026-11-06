@@ -16,8 +16,9 @@ interface Heli {
   root: THREE.Group;
   /** caisse, inclinée en vol (nez qui pique, virage) */
   hull: THREE.Group;
-  rotor: THREE.Mesh;
-  tail: THREE.Mesh;
+  /** rotor principal (ou les quatre soufflantes carénées du drone futuriste) ; rotor de queue (aucun pour le drone) */
+  rotors: THREE.Mesh[];
+  tail: THREE.Mesh | null;
   phase: Phase;
   t: number;
   /** vitesse des pales (radians par seconde) */
@@ -76,6 +77,47 @@ function tailGeo() {
   return p.build(false).body;
 }
 
+/** Les soufflantes du drone futuriste (x, z dans le repère de la caisse) */
+const FANS: [number, number][] = [[-0.12, 0.1], [0.12, 0.1], [-0.12, -0.12], [0.12, -0.12]];
+
+/**
+ * Drone sanitaire de l'âge futuriste, tourné vers +z : capsule blanche à verrière fumée (on y voit le pilote casqué), bandeau
+ * et croix vertes lumineuses, quatre bras chromés portant chacun sa carène annulaire (les soufflantes à part), feux de
+ * position, projecteur sous le nez, antenne, patins
+ */
+function droneGeo() {
+  const p = new Parts(), WHITE = 0xf2f4f6, CHROME = 0xc8d0da, NEON = 0x3aff9a;
+  p.add(new THREE.SphereGeometry(0.075, 12, 8).scale(1, 0.75, 1.6), 0, 0.09, 0, WHITE);
+  p.add(new THREE.SphereGeometry(0.05, 10, 6).scale(1, 0.7, 1.2), 0, 0.12, 0.06, 0x2a3a4e);
+  p.box(0.022, 0.022, 0.022, 0, 0.115, 0.05, 0xe8b894); p.sphere(0.016, 0, 0.132, 0.05, WHITE, 0, 0.85);
+  p.box(0.152, 0.008, 0.2, 0, 0.074, 0, NEON, 0, 'neon');
+  for (const s of [-1, 1]) { p.box(0.004, 0.036, 0.012, s * 0.075, 0.08, -0.04, 0x2a9a5a); p.box(0.004, 0.012, 0.036, s * 0.075, 0.092, -0.04, 0x2a9a5a); }
+  p.box(0.012, 0.004, 0.04, 0, 0.146, -0.06, NEON, 0, 'neon'); p.box(0.04, 0.004, 0.012, 0, 0.146, -0.055, NEON, 0, 'neon');
+  // bras et carènes, chacune avec son liseré lumineux
+  for (const [x, z] of FANS) {
+    p.add(new THREE.BoxGeometry(0.012, 0.01, Math.hypot(x, z)), x / 2, 0.1, z / 2, CHROME, Math.atan2(x, z));
+    p.add(new THREE.TorusGeometry(0.06, 0.01, 4, 16).rotateX(Math.PI / 2), x, 0.1, z, 0x3a4250);
+    p.add(new THREE.TorusGeometry(0.06, 0.003, 3, 16).rotateX(Math.PI / 2), x, 0.088, z, 0x9ff8ff, 0, 'neon');
+    p.cyl(0.012, 0.012, 0.02, 6, x, 0.09, z, 0x5a6270);
+  }
+  // patins, projecteur, antenne, feux de position
+  for (const s of [-1, 1]) { p.box(0.008, 0.008, 0.2, s * 0.05, 0, 0, 0x5d6878); for (const z of [-0.05, 0.06]) p.box(0.006, 0.04, 0.006, s * 0.05, 0.004, z, 0x5d6878); }
+  p.box(0.03, 0.012, 0.012, 0, 0.04, 0.1, 0xfff1c9, 0, true);
+  p.cyl(0.0015, 0.0015, 0.07, 4, 0.02, 0.14, -0.08, 0x2a2a2e);
+  p.box(0.012, 0.012, 0.012, 0.18, 0.1, 0.1, 0xff4a3a, 0, true);
+  p.box(0.012, 0.012, 0.012, -0.18, 0.1, 0.1, 0x3aff7a, 0, true);
+  p.box(0.01, 0.01, 0.01, 0, 0.09, -0.12, 0xfff4e0, 0, true);
+  return p.build(false);
+}
+
+/** Soufflante (cinq pales et moyeu) dans sa carène, centrée sur l'axe */
+function fanGeo() {
+  const p = new Parts();
+  for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.05, 0.003, 0.014).translate(0.028, 0, 0), 0, 0, 0, 0x5a6270, (k * Math.PI * 2) / 5, false, 0, 0.3);
+  p.cyl(0.01, 0.01, 0.01, 6, 0, -0.005, 0, 0xc8d0da);
+  return p.build(false).body;
+}
+
 /**
  * Hélicoptères des centres hospitaliers (époque moderne) : chacun attend sur l'héliport du toit, pales à l'arrêt, puis
  * lance son rotor, décolle, part en vol vers un coin du village, s'y tient en vol stationnaire, revient, se pose et coupe le
@@ -87,6 +129,8 @@ export class Helis {
   private geos = [heliGeo(0), heliGeo(1), heliGeo(2)];
   private rotorG = rotorGeo();
   private tailG = tailGeo();
+  private droneG = droneGeo();
+  private fanG = fanGeo();
   private v = new THREE.Vector3();
 
   /** l'usine automobile est bâtie */
@@ -94,23 +138,31 @@ export class Helis {
 
   constructor(private world: World, private buildings: BuildingView) {}
 
-  private make(id: number, livery = 0): Heli {
-    const root = new THREE.Group(), hull = new THREE.Group(), geo = this.geos[livery];
+  private make(id: number, livery = 0, future = false): Heli {
+    const root = new THREE.Group(), hull = new THREE.Group(), geo = future ? this.droneG : this.geos[livery];
     root.add(hull);
     const body = new THREE.Mesh(geo.body, mats.body);
     body.castShadow = true;
     hull.add(body);
     if (geo.glow) hull.add(new THREE.Mesh(geo.glow, mats.glow));
-    const rotor = new THREE.Mesh(this.rotorG, mats.body), tail = new THREE.Mesh(this.tailG, mats.body);
-    rotor.position.set(0, 0.145, 0.03);
-    tail.position.set(0.012, 0.09, -0.29);
-    rotor.castShadow = true;
-    hull.add(rotor, tail);
+    let rotors: THREE.Mesh[], tail: THREE.Mesh | null = null;
+    if (future) {
+      // les quatre soufflantes, chacune dans sa carène
+      rotors = FANS.map(([x, z]) => { const m = new THREE.Mesh(this.fanG, mats.body); m.position.set(x, 0.1, z); hull.add(m); return m; });
+    } else {
+      const rotor = new THREE.Mesh(this.rotorG, mats.body);
+      tail = new THREE.Mesh(this.tailG, mats.body);
+      rotor.position.set(0, 0.145, 0.03);
+      tail.position.set(0.012, 0.09, -0.29);
+      rotor.castShadow = true;
+      hull.add(rotor, tail);
+      rotors = [rotor];
+    }
     // un peu plus gros que les voitures, à la taille de l'héliport
     root.scale.setScalar(1.15);
     this.group.add(root);
     // chaque hôpital à son rythme : on ne part pas tous en même temps
-    return { root, hull, rotor, tail, phase: 'parked', t: 8 + (id % 7) * 6, rpm: 0, heading: 0, goal: new THREE.Vector3(), pad: new THREE.Vector3(), pos: new THREE.Vector3(), bank: 0 };
+    return { root, hull, rotors, tail, phase: 'parked', t: 8 + (id % 7) * 6, rpm: 0, heading: 0, goal: new THREE.Vector3(), pad: new THREE.Vector3(), pos: new THREE.Vector3(), bank: 0 };
   }
 
   update(dt: number, age: number) {
@@ -124,10 +176,11 @@ export class Helis {
       if (!g) continue;
       g.updateMatrixWorld();
       pads.forEach((pad, i) => {
-        const key = `${b.id}:${i}`;
+        // à l'âge futuriste, le drone sanitaire et les drones de l'héliport remplacent les hélicoptères
+        const future = age >= 5, key = `${b.id}:${i}:${+future}`;
         live.add(key);
         let h = this.helis.get(key);
-        if (!h) { h = this.make(b.id + i * 5, b.kind === 'heliport' ? 1 + i : 0); h.heading = g.rotation.y + (i ? 0.6 : -0.4); this.helis.set(key, h); }
+        if (!h) { h = this.make(b.id + i * 5, b.kind === 'heliport' ? 1 + i : 0, future); h.heading = g.rotation.y + (i ? 0.6 : -0.4); this.helis.set(key, h); }
         h.pad.copy(pad).applyMatrix4(g.matrixWorld);
         if (h.phase === 'parked') h.pos.copy(h.pad);
         this.step(h, dt);
@@ -205,7 +258,7 @@ export class Helis {
     h.root.position.copy(h.pos);
     h.root.rotation.y = h.heading;
     h.hull.rotation.set(moving ? 0.12 : 0, 0, h.bank);
-    h.rotor.rotation.y += h.rpm * dt;
-    h.tail.rotation.x += h.rpm * 1.6 * dt;
+    h.rotors.forEach((r, i) => { r.rotation.y += h.rpm * dt * (i % 2 ? -1 : 1); });
+    if (h.tail) h.tail.rotation.x += h.rpm * 1.6 * dt;
   }
 }

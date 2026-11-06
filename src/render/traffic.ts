@@ -164,6 +164,110 @@ function vehicleGeo(age: number, motor = false) {
   ]);
 }
 
+const HULL = 0x2e3440, CHROME = 0xc8d0da, TINTED = 0x1c2836, SKIN = 0xe8b894;
+type Geo = { body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null };
+
+/** Patins de sustentation des véhicules futuristes : carénage sombre de part et d'autre, semelle qui luit dessous */
+function pads(p: Parts, w: number, len: number, z = 0) {
+  for (const s of [-1, 1]) { p.box(0.03, 0.016, len, s * w, 0.042, z, HULL); p.box(0.026, 0.004, len - 0.02, s * w, 0.038, z, 0x9ff8ff, 0, 'neon'); }
+}
+
+/** Phares en bandeau à l'avant (z0), feux arrière rouges (z1), à la hauteur y, écartés de ±x */
+function lamps(p: Parts, x: number, y: number, z0: number, z1: number) {
+  for (const s of [-1, 1]) { p.box(0.036, 0.01, 0.006, s * x, y, z0, 0xfff1c9, 0, true); p.box(0.03, 0.01, 0.006, s * x, y, z1, 0xff3a2a, 0, true); }
+}
+
+/**
+ * Voiture volante, avant = +z : coque en goutte, verrière fumée à arête chromée, liseré lumineux à la couleur de la voiture,
+ * quatre petites soufflantes carénées aux coins, aileron à deux dérives, deux réacteurs arrière qui luisent, phares en
+ * bandeau et feux arrière, antenne, patins
+ */
+function flyCarGeo(body: number, accent: number): Geo {
+  const p = new Parts();
+  p.add(new THREE.SphereGeometry(0.1, 12, 8).scale(0.78, 0.42, 1.45), 0, 0.11, 0, body);
+  p.add(new THREE.SphereGeometry(0.062, 10, 6).scale(1, 0.72, 1.55), 0, 0.145, -0.01, TINTED);
+  p.box(0.006, 0.004, 0.15, 0, 0.186, -0.01, CHROME);
+  p.box(0.162, 0.005, 0.2, 0, 0.098, 0, accent, 0, 'neon');
+  p.box(0.1, 0.004, 0.006, 0, 0.094, 0.143, accent, 0, 'neon');
+  // soufflantes carénées aux quatre coins
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    p.add(new THREE.TorusGeometry(0.024, 0.006, 4, 12).rotateX(Math.PI / 2), sx * 0.068, 0.088, sz * 0.095, HULL);
+    p.box(0.04, 0.003, 0.006, sx * 0.068, 0.086, sz * 0.095, 0x5a6270, Math.PI / 4); p.box(0.04, 0.003, 0.006, sx * 0.068, 0.086, sz * 0.095, 0x5a6270, -Math.PI / 4);
+  }
+  // aileron, réacteurs
+  p.box(0.13, 0.006, 0.03, 0, 0.17, -0.128, body);
+  for (const s of [-1, 1]) {
+    p.box(0.004, 0.034, 0.04, s * 0.06, 0.136, -0.13, accent);
+    p.add(new THREE.CylinderGeometry(0.016, 0.013, 0.03, 8).rotateX(Math.PI / 2), s * 0.035, 0.1, -0.145, 0x5a6270);
+    p.add(new THREE.CircleGeometry(0.012, 8).rotateY(Math.PI), s * 0.035, 0.1, -0.161, accent, 0, 'neon');
+  }
+  lamps(p, 0.042, 0.11, 0.142, -0.142);
+  p.cyl(0.0015, 0.0015, 0.05, 4, 0.03, 0.15, -0.1, 0x2a2a2e);
+  pads(p, 0.05, 0.2);
+  return p.build(false);
+}
+
+/**
+ * Bus volant, avant = +z : longue caisse blanche à toit arrondi, bandeau de vitres fumées à montants chromés, pare-brise et
+ * son pilote, girouette lumineuse, liseré cyan, porte à deux vantaux, nacelles et soufflantes sur le toit, patins
+ */
+function flyBusGeo(): Geo {
+  const p = new Parts(), W = 0xf2f4f6;
+  p.box(0.17, 0.03, 0.5, 0, 0.045, 0, HULL);
+  p.box(0.168, 0.12, 0.48, 0, 0.07, 0, W);
+  p.add(new THREE.CylinderGeometry(0.084, 0.084, 0.48, 12, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2).scale(1, 0.25, 1), 0, 0.19, 0, 0xe4e8ec);
+  for (const s of [-1, 1]) {
+    p.box(0.004, 0.05, 0.38, s * 0.085, 0.12, -0.03, TINTED);
+    for (let k = 0; k < 7; k++) p.box(0.005, 0.05, 0.006, s * 0.0855, 0.12, -0.21 + k * 0.06, CHROME);
+    p.box(0.004, 0.006, 0.46, s * 0.085, 0.105, 0, 0x5af0ff, 0, 'neon');
+  }
+  // la porte (côté trottoir), deux vantaux vitrés
+  for (const z of [0.15, 0.19]) p.box(0.005, 0.1, 0.036, 0.0855, 0.075, z, TINTED);
+  // avant : pare-brise, pilote, girouette ; arrière : lunette
+  p.add(new THREE.BoxGeometry(0.15, 0.09, 0.004), 0, 0.14, 0.24, TINTED, 0, false, 0, -0.25);
+  p.box(0.024, 0.024, 0.024, -0.04, 0.15, 0.2, SKIN); p.box(0.04, 0.03, 0.026, -0.04, 0.12, 0.2, 0x2c4a9a);
+  p.box(0.11, 0.016, 0.004, 0, 0.198, 0.241, 0xffb040, 0, 'neon');
+  p.box(0.13, 0.04, 0.004, 0, 0.13, -0.241, TINTED);
+  lamps(p, 0.06, 0.07, 0.242, -0.242);
+  // le toit : deux nacelles de batteries, deux soufflantes carénées, antenne
+  for (const z of [-0.12, 0.06]) p.box(0.08, 0.02, 0.1, 0, 0.21, z, 0xd8dde2);
+  for (const z of [-0.2, 0.17]) { p.add(new THREE.TorusGeometry(0.03, 0.008, 4, 12).rotateX(Math.PI / 2), 0, 0.218, z, HULL); p.box(0.05, 0.003, 0.008, 0, 0.214, z, 0x5a6270); }
+  p.cyl(0.0015, 0.0015, 0.06, 4, 0.05, 0.21, -0.2, 0x2a2a2e);
+  pads(p, 0.065, 0.42);
+  return p.build(false);
+}
+
+/**
+ * Camion volant, avant = +z : cabine jaune avancée à pare-brise fumé et déflecteur, chauffeur, caisson chromé à nervures et
+ * liseré orange lumineux, portes arrière, feux de gabarit, antenne, patins
+ */
+function flyTruckGeo(): Geo {
+  const p = new Parts(), Y = 0xf2c23a;
+  p.box(0.16, 0.024, 0.46, 0, 0.045, 0, HULL);
+  p.box(0.16, 0.11, 0.11, 0, 0.065, 0.17, Y);
+  p.add(new THREE.BoxGeometry(0.15, 0.06, 0.004), 0, 0.15, 0.226, TINTED, 0, false, 0, -0.3);
+  for (const s of [-1, 1]) p.box(0.004, 0.04, 0.06, s * 0.0805, 0.13, 0.17, TINTED);
+  p.box(0.024, 0.024, 0.024, -0.035, 0.145, 0.18, SKIN); p.box(0.04, 0.03, 0.026, -0.035, 0.115, 0.18, 0xd8382e);
+  p.add(new THREE.BoxGeometry(0.15, 0.03, 0.08), 0, 0.19, 0.15, Y, 0, false, 0, 0.3);
+  p.box(0.17, 0.15, 0.3, 0, 0.06, -0.075, CHROME);
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 6; k++) p.box(0.005, 0.15, 0.008, s * 0.0855, 0.06, -0.21 + k * 0.054, 0xa8b0ba);
+    p.box(0.004, 0.008, 0.29, s * 0.0858, 0.17, -0.075, 0xff8a3a, 0, 'neon');
+    for (const z of [-0.22, 0.07]) p.box(0.01, 0.01, 0.01, s * 0.08, 0.21, z, 0xffa040, 0, true);
+  }
+  p.box(0.004, 0.14, 0.004, 0, 0.065, -0.2265, 0x8a929c);
+  lamps(p, 0.055, 0.08, 0.226, -0.228);
+  p.cyl(0.0015, 0.0015, 0.06, 4, 0.06, 0.18, 0.13, 0x2a2a2e);
+  pads(p, 0.062, 0.4);
+  return p.build(false);
+}
+
+/** Les modèles du trafic : à l'âge futuriste (avec l'usine automobile), deux voitures volantes, un bus et un camion ; sinon un seul */
+function fleetGeos(age: number, motor: boolean): Geo[] {
+  if (age >= 5 && motor) return [flyCarGeo(0xf2f4f6, 0x5af0ff), flyCarGeo(0x3a4250, 0xff8a3a), flyBusGeo(), flyCarGeo(0xd8382e, 0xfff1c9), flyTruckGeo()];
+  return [{ body: vehicleGeo(age, motor), glow: null }];
+}
+
 /** Barque de pêche (le pêcheur est un habitant modélisé, assis dedans) et sa canne qui pointe vers l'avant ; avant = +z */
 function rowboatGeo() {
   return colored([
@@ -194,7 +298,10 @@ function sailboatGeo() {
  */
 export class Traffic {
   group = new THREE.Group();
-  private carts: THREE.InstancedMesh;
+  /** un maillage par modèle de véhicule (et ses lumières), le nombre posé de chacun à cette image */
+  private fleets: { body: THREE.InstancedMesh; glow: THREE.InstancedMesh | null }[] = [];
+  private fleetN: number[] = [];
+  private mat: THREE.MeshStandardMaterial;
   private boatsMesh: THREE.InstancedMesh;
   private sailsMesh: THREE.InstancedMesh;
   private vehicles: Vehicle[] = [];
@@ -215,12 +322,23 @@ export class Traffic {
   private builtMotor = false;
 
   constructor(private world: World) {
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8, side: THREE.DoubleSide });
-    this.carts = new THREE.InstancedMesh(vehicleGeo(1), mat, MAX_CARTS);
+    const mat = (this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8, side: THREE.DoubleSide }));
+    this.setFleet(fleetGeos(1, false));
     this.boatsMesh = new THREE.InstancedMesh(rowboatGeo(), mat, MAX_BOATS);
     this.sailsMesh = new THREE.InstancedMesh(sailboatGeo(), mat, MAX_SAILS);
-    for (const m of [this.carts, this.boatsMesh, this.sailsMesh]) { m.count = 0; m.frustumCulled = false; m.castShadow = true; }
-    this.group.add(this.carts, this.boatsMesh, this.sailsMesh);
+    for (const m of [this.boatsMesh, this.sailsMesh]) { m.count = 0; m.frustumCulled = false; m.castShadow = true; }
+    this.group.add(this.boatsMesh, this.sailsMesh);
+  }
+
+  /** Remplace les modèles du trafic (un maillage par modèle, et ses lumières) */
+  private setFleet(geos: Geo[]) {
+    for (const f of this.fleets) for (const m of [f.body, f.glow]) if (m) { this.group.remove(m); m.geometry.dispose(); m.dispose(); }
+    this.fleets = geos.map((g) => {
+      const body = new THREE.InstancedMesh(g.body, this.mat, MAX_CARTS), glow = g.glow ? new THREE.InstancedMesh(g.glow, mats.glow, MAX_CARTS) : null;
+      for (const m of [body, glow]) if (m) { m.count = 0; m.frustumCulled = false; m.castShadow = m === body; this.group.add(m); }
+      return { body, glow };
+    });
+    this.fleetN = this.fleets.map(() => 0);
   }
 
   update(dt: number, hour: number, age: number, pop: number) {
@@ -239,8 +357,7 @@ export class Traffic {
     const w = this.world;
     if (age !== this.builtAge || this.motor !== this.builtMotor) {
       this.builtMotor = this.motor;
-      this.carts.geometry.dispose();
-      this.carts.geometry = vehicleGeo(age, this.motor);
+      this.setFleet(fleetGeos(age, this.motor));
       // les attelages changent d'époque (ou laissent place aux voitures)
       for (const v of this.vehicles) this.dropRig(v);
     }
@@ -283,18 +400,18 @@ export class Traffic {
 
   /** Les charrettes vont d'un bout à l'autre du réseau, en tenant leur droite ; elles s'arrêtent la nuit */
   private moveCarts(dt: number, day: boolean) {
-    let n = 0;
+    this.fleetN.fill(0);
     for (const v of this.vehicles) {
       if (!day) { if (v.rig) v.rig.root.visible = false; continue; }
       if (v.i >= v.path.length) {
         v.wait -= dt;
-        if (v.wait > 0) { this.place(v, n++, dt, 0); continue; }
+        if (v.wait > 0) { this.place(v, dt, 0); continue; }
         const start = Math.floor(v.z) * N + Math.floor(v.x), goal = this.roads[Math.floor(Math.random() * this.roads.length)];
         v.path = this.roadPath(start, goal) ?? [];
         v.i = 0; v.wait = 2 + Math.random() * 6;
       }
       const c = v.path[v.i];
-      if (c === undefined) { this.place(v, n++, dt, 0); continue; }
+      if (c === undefined) { this.place(v, dt, 0); continue; }
       const [cx, cz] = this.world.passPoint(v.path, v.i);
       // tenir sa droite : décalage perpendiculaire au sens de la rue (du point d'avant à celui-ci), pour ne pas tourner en rond
       const [px, pz] = v.i > 0 ? this.world.passPoint(v.path, v.i - 1) : v.path.length > 1 ? (([nx, nz]) => [cx * 2 - nx, cz * 2 - nz])(this.world.passPoint(v.path, 1)) : [v.x, v.z];
@@ -305,10 +422,9 @@ export class Traffic {
         v.x += (dx / dist) * step; v.z += (dz / dist) * step;
         v.heading = turn(v.heading, Math.atan2(dx, dz), dt * 6);
       }
-      this.place(v, n++, dt, Math.min(dist, step));
+      this.place(v, dt, Math.min(dist, step));
     }
-    this.carts.count = this.horses ? 0 : n;
-    this.carts.instanceMatrix.needsUpdate = true;
+    this.fleets.forEach((f, k) => { for (const m of [f.body, f.glow]) if (m) { m.count = this.horses ? 0 : this.fleetN[k]; m.instanceMatrix.needsUpdate = true; } });
   }
 
   /** Des charrettes attelées tant que l'usine automobile n'est pas bâtie, quel que soit l'âge */
@@ -326,7 +442,7 @@ export class Traffic {
    * Pose la charrette (ou la voiture) : avant l'âge moderne, l'attelage animé — le cheval marche au pas, les roues tournent
    * de la distance parcourue, le charretier se balance ; à l'arrêt, le cheval secoue la tête
    */
-  private place(v: Vehicle, i: number, dt = 0, moved = 0) {
+  private place(v: Vehicle, dt = 0, moved = 0) {
     if (this.horses) {
       if (!v.rig) { v.rig = cartRig(this.builtAge, this.vehicles.indexOf(v)); this.group.add(v.rig.root); }
       const r = v.rig, gait = moved > 0 ? 0.55 : 0;
@@ -342,11 +458,15 @@ export class Traffic {
       return;
     }
     const d = this.dummy;
-    d.position.set(v.x, this.world.surfaceAt(v.x, v.z) + 0.01, v.z);
+    // chaque véhicule a son modèle (voiture, bus, camion à l'âge futuriste), et à l'âge futuriste il flotte en ondulant à peine
+    const vi = this.vehicles.indexOf(v), f = this.fleets[vi % this.fleets.length], i = this.fleetN[vi % this.fleets.length]++;
+    const hover = this.builtAge >= 5 ? 0.012 + Math.sin(this.t * 2.4 + vi * 1.7) * 0.006 : 0;
+    d.position.set(v.x, this.world.surfaceAt(v.x, v.z) + 0.01 + hover, v.z);
     d.rotation.set(0, v.heading, 0);
     d.scale.setScalar(1);
     d.updateMatrix();
-    this.carts.setMatrixAt(i, d.matrix);
+    f.body.setMatrixAt(i, d.matrix);
+    f.glow?.setMatrixAt(i, d.matrix);
   }
 
   /** Plus court chemin sur les seules routes (largeur d'abord) */
