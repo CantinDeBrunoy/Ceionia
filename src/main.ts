@@ -323,6 +323,8 @@ class Game implements UIHost {
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
+    // le hurlement d'une meute, plus faible au loin
+    this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
     this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée
@@ -1083,6 +1085,8 @@ class Game implements UIHost {
     for (const m of this.fires.news.splice(0)) this.ui.toast(m);
     for (const m of this.emergencies.news.splice(0)) this.ui.toast(m);
     for (const m of w.losses.splice(0)) this.ui.toast(m);
+    // pas de tracteur aux champs tant que l'usine automobile n'est pas bâtie
+    this.agents.motor = (this.sim.counts.carworks ?? 0) > 0;
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night, this.time.season);
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
@@ -1156,6 +1160,7 @@ class Game implements UIHost {
       // pas de voiture sur les routes tant que l'usine automobile n'est pas bâtie : des charrettes jusque-là
       this.traffic.motor = (this.sim.counts.carworks ?? 0) > 0;
       this.traffic.update(gdt, this.time.hour, this.sim.age, this.sim.pop);
+      this.helis.motor = this.traffic.motor;
       this.helis.update(gdt, this.sim.age);
       this.airships.update(gdt, this.time.hour, this.sim.age);
       this.fairground.update(dt);

@@ -170,4 +170,20 @@ describe('travaux des champs', () => {
     live(ag5, 5, 9.5, 5, 3);
     expect(ag5.flyingDrones()).toEqual([]);
   });
+
+  it('sans usine automobile, pas de tracteur ni de drone : les bœufs et le chariot à foin, même à l’âge futuriste', () => {
+    const w = village(5), ag = new Agents(w);
+    ag.motor = false;
+    live(ag, 5, 9.5, 5, 0);
+    expect(ag.tractors()).toEqual([]);
+    expect(ag.machines().map((m) => m.kind)).toEqual(['ox']);
+    live(ag, 5, 9.5, 5, 1);
+    expect(ag.machines().map((m) => m.kind)).toEqual(['haycart']);
+    expect(ag.flyingDrones()).toEqual([]);
+    // l'usine bâtie, les machines arrivent
+    ag.motor = true;
+    live(ag, 5, 9.5, 5, 1);
+    expect(ag.machines().map((m) => m.kind)).toEqual(['combine']);
+    expect(ag.flyingDrones().length).toBe(1);
+  });
 });

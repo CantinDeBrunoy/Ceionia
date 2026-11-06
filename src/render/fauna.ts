@@ -100,6 +100,8 @@ interface Critter {
   perched: boolean;
   /** battement d'ailes affiché (0 ailes repliées … 1) */
   flap: number;
+  /** créneau du dernier geste joué au repos (bête articulée) */
+  gestK?: number;
 }
 
 /** Modèles animés Quaternius par espèce : longueur du corps visée, variante pour le premier du groupe (le cerf), correction de cap */
@@ -117,7 +119,6 @@ const MODELS: Partial<Record<Kind, { name: ModelName; length: number; lead?: Mod
   horse: { name: 'horse', length: 0.34 },
   llama: { name: 'llama', length: 0.24 },
   fox: { name: 'fox', length: 0.2 },
-  wolf: { name: 'wolf', length: 0.3 },
   frog: { name: 'frog', length: 0.085 },
 };
 
@@ -321,7 +322,7 @@ const SPECS: Record<Kind, Spec> = {
   horse: { geo: deerGeo, max: 24, colors: [0x8a5a3a, 0x5a3e2e, 0xd8c8a8], speed: 0.45, run: 2, idle: [4, 10], ok: farmland, graze: 0.2, flee: 3, scale: 1.2 },
   llama: { geo: deerGeo, max: 16, colors: [0xf2ece0, 0xb89878, 0x8a6a4e], speed: 0.38, run: 1.3, idle: [4, 10], ok: offRoad, graze: 0.12, flee: 3 },
   fox: { geo: deerGeo, max: 8, colors: [0xd8743a], speed: 0.5, run: 1.55, idle: [3, 8], ok: offRoad, scale: 0.6, flee: 1.5 },
-  wolf: { geo: deerGeo, max: 12, colors: [0x8a8a90, 0x6a6a72], speed: 0.55, run: 1.75, idle: [3, 8], ok: offRoad, scale: 0.8, flee: 2 },
+  wolf: { geo: deerGeo, max: 16, colors: [0x8a8a90, 0x6a6a72, 0x9a8670], speed: 0.55, run: 1.75, idle: [3, 8], ok: offRoad, scale: 0.8, flee: 2 },
   frog: { geo: duckGeo, max: 84, colors: [0x6aa84a], speed: 0.35, run: 0.7, idle: [2, 7], ok: bank, hop: 0.03, flee: 1.2, scale: 0.6 },
   duck: { geo: duckGeo, max: 12, colors: [0xffffff], speed: 0.25, idle: [2, 6], ok: water },
   duckling: { geo: duckGeo, max: 36, colors: [0xf8dc6a], speed: 0.25, idle: [1, 1], ok: water, scale: 0.55 },
@@ -368,7 +369,7 @@ export const ZONES: Zone[] = [
   { kind: 'giraffe', biomes: [BIOME_TROPICAL], anchors: ['edge', 'meadow'], per: 80, max: 2, n: (i) => 2 + (i % 2), radius: 3, salt: 350 },
   // taïga : élans aux lisières ; forêts tempérées : une petite meute de loups
   { kind: 'moose', biomes: [BIOME_TAIGA], anchors: ['edge'], per: 70, max: 3, n: (i) => 1 + (i % 2), radius: 2.8, salt: 360 },
-  { kind: 'wolf', biomes: [BIOME_TEMPERATE], anchors: ['edge'], per: 140, max: 1, n: () => 2, radius: 3, salt: 370, needs: 'wolf' },
+  { kind: 'wolf', biomes: [BIOME_TEMPERATE], anchors: ['edge'], per: 140, max: 1, n: (i) => 3 + (i % 2), radius: 3, salt: 370 },
   // côtes : crabes sur les plages, quel que soit le biome
   { kind: 'crab', biomes: ALL_BIOMES, anchors: ['coast'], per: 25, max: 3, n: (i) => 2 + (i % 2), radius: 1.2, salt: 380 },
 ];
@@ -416,6 +417,8 @@ export interface Person { x: number; z: number; hidden: boolean }
  */
 export class Fauna {
   group = new THREE.Group();
+  /** une meute de loups se met à hurler (pour le son) */
+  onHowl: ((x: number, z: number) => void) | null = null;
   /** villageois, que les bêtes sauvages évitent */
   people: () => Person[] = () => [];
   /** volcan en éruption : tous les animaux qui craignent quelque chose s'en éloignent en courant */
@@ -640,7 +643,7 @@ export class Fauna {
         group(`z${zi}b${b}-`, z.kind, list, count, z.n, z.radius, z.salt + b * 7);
       }
     }
-    group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, () => 3, 3.5, 100);
+    group('wolf', 'wolf', edge[BIOME_TAIGA], Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)), (i) => 4 - (i % 2), 3.5, 100);
     // grenouilles : surtout au bord des mares et des étangs, et dans les marais
     const ponds = banks.filter(pond), frogBanks = ponds.concat(ponds, banks.filter((k) => w.biome[k] === BIOME_MARSH), banks.filter((_, i) => i % 4 === 0));
     group('frog', 'frog', frogBanks, hasModel('frog') ? Math.min(28, Math.floor(frogBanks.length / 5)) : 0, (i) => 2 + (i % 2), 1.3, 110);
@@ -1266,9 +1269,16 @@ export class Fauna {
   private idleBeast(c: Critter, a: Actor) {
     const cur = a.current?.getClip().name ?? '';
     if (GESTURES.has(cur) && a.current!.isRunning()) return;
-    const k = Math.floor(this.t / 7 + c.slot * 2.3 + c.hx * 3.1 + c.hz * 1.7);
+    // la meute fait ses gestes ensemble : tous les loups au repos s'assoient et hurlent avec le chef
+    const L = c.kind === 'wolf' ? c.leader ?? c : null;
+    const k = L ? Math.floor(this.t / 9 + L.hx * 3.1 + L.hz * 1.7) : Math.floor(this.t / 7 + c.slot * 2.3 + c.hx * 3.1 + c.hz * 1.7);
     const want = k % 4 === 2 ? 'Idle_2' : k % 4 === 3 ? 'Idle_3' : 'Idle';
-    play(a, want !== 'Idle' && want !== cur && a.actions.has(want) ? [want] : ['Idle']);
+    // un seul geste par créneau : fini, on revient au repos jusqu'au créneau suivant
+    const go = want !== 'Idle' && c.gestK !== k && a.actions.has(want);
+    if (go) c.gestK = k;
+    // le hurlement s'entend (une fois par meute, quand le chef s'y met)
+    if (go && want === 'Idle_2' && c.kind === 'wolf' && !c.leader) this.onHowl?.(c.x, c.z);
+    play(a, go ? [want] : ['Idle']);
   }
 
   private render(elapsed: number, dt: number, camera?: THREE.Camera) {

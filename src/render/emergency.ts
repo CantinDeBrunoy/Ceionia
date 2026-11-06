@@ -17,7 +17,7 @@ const WATER = new THREE.Color(0.85, 0.93, 1), COAL = new THREE.Color(0.32, 0.3, 
 /** Le pas des secouristes, leur course (cases par seconde) */
 const WALK = 0.34, RUN = 0.66;
 
-type Service = 'fire' | 'health' | 'police';
+export type Service = 'fire' | 'health' | 'police';
 const HOME: Record<Service, KindId> = { fire: 'fire', health: 'health', police: 'police' };
 
 /** Un secouriste (ou le cambrioleur) à pied : où il est, où il va, ce qu'il fait une fois arrivé */
@@ -129,6 +129,8 @@ function cross(p: Parts, x: number, y: number, z: number, onSide: boolean, s = 1
 
 interface UnitGeo {
   body: THREE.BufferGeometry;
+  /** phares, feux arrière, liserés lumineux (qui luisent la nuit) */
+  glow: THREE.BufferGeometry | null;
   /** feux : position et couleur (0 bleu, 1 rouge) */
   lights: [number, number, number, number][];
   /** voiture attelée : un cheval à l'avant */
@@ -139,33 +141,23 @@ interface UnitGeo {
 }
 
 /**
- * Véhicule de secours de l'époque, tourné vers +z : à l'âge industriel, attelés, la pompe à vapeur rouge (chaudière de laiton
+ * Véhicule de secours de l'époque, tourné vers +z : tant que l'usine automobile n'est pas bâtie, attelés, la pompe à vapeur rouge (chaudière de laiton
  * cerclée, cheminée, cylindres, dévidoir), la voiture d'ambulance blanche à toit cintré et croix rouges, le fourgon cellulaire
  * bleu nuit à lucarnes grillagées ; puis les premières automobiles (capot à persiennes, radiateur de laiton, ailes,
  * marchepieds, roues à rayons, phares) ; à l'époque moderne, le fourgon pompe-tonne et sa grande échelle, l'ambulance à
  * damier jaune et vert, la voiture de patrouille à bandes tricolores, tous avec leurs rampes de gyrophares ; à l'âge
- * futuriste, l'ambulance et la patrouille volent au ras de la chaussée (le camion des pompiers garde sa grande échelle)
+ * futuriste, les secours glissent sur coussin d'air au ras de la chaussée (voir `futureUnit`)
  */
-function unitGeo(service: Service, age: number, motor: boolean): UnitGeo {
+export function unitGeo(service: Service, age: number, motor: boolean): UnitGeo {
   const p = new Parts(), lights: [number, number, number, number][] = [];
-  const out: UnitGeo = { body: null!, lights, horse: false, ladder: null, ladderAt: [0, 0, 0], chimney: null };
-  if (age >= 5 && service !== 'fire') {
-    // coque blanche arrondie, verrière fumée, bande et rampe lumineuse aux couleurs du service, patins qui luisent dessous
-    const health = service === 'health', band = health ? 0x2a9a5a : 0x2c4a9a, len = health ? 1.9 : 1.6;
-    p.add(new THREE.SphereGeometry(0.1, 10, 6).scale(0.8, health ? 0.75 : 0.5, len), 0, 0.12, 0, WHITE);
-    p.add(new THREE.SphereGeometry(0.06, 8, 5).scale(1.05, 0.75, 1.5), 0, health ? 0.17 : 0.15, 0.06, TINT);
-    p.box(0.162, 0.016, 0.26, 0, 0.11, 0, band);
-    if (health) { for (const s of [-1, 1]) cross(p, s * 0.078, 0.14, -0.06, true); p.box(0.004, 0.06, 0.004, 0, 0.13, -0.19, 0xd84a3e); }
-    else for (const s of [-1, 1]) for (let k = 0; k < 5; k++) p.box(0.005, 0.01, 0.008, s * 0.08, 0.13, -0.08 + k * 0.016, WHITE);
-    for (const s of [-1, 1]) { p.box(0.03, 0.016, 0.24, s * 0.055, 0.05, 0, 0x3a4250); p.box(0.026, 0.004, 0.22, s * 0.055, 0.044, 0, 0x9ff8ff, 0, 'neon'); }
-    for (const s of [-1, 1]) p.box(0.05, 0.016, 0.006, s * 0.04, 0.12, 0.188, 0xfff1c9, 0, true);
-    p.box(0.08, 0.012, 0.03, 0, health ? 0.215 : 0.185, -0.03, 0x2a2a2e);
-    const ly = health ? 0.23 : 0.2;
-    lights.push([-0.03, ly, -0.03, 0], [0.03, ly, -0.03, health ? 0 : 1]);
-    out.body = p.build(false).body;
+  const out: UnitGeo = { body: null!, glow: null, lights, horse: false, ladder: null, ladderAt: [0, 0, 0], chimney: null };
+  if (age >= 5 && motor) {
+    futureUnit(p, service, out);
+    const g = p.build(false);
+    out.body = g.body; out.glow = g.glow;
     return out;
   }
-  if (age === 3 && !motor) {
+  if (!motor) {
     out.horse = true;
     // brancards jusqu'au cheval, siège du cocher
     for (const s of [-1, 1]) p.box(0.01, 0.01, 0.3, s * 0.06, 0.13, 0.27, 0x6a4a34);
@@ -310,8 +302,145 @@ function unitGeo(service: Service, age: number, motor: boolean): UnitGeo {
     p.box(0.1, 0.012, 0.03, 0, 0.153, -0.02, 0x2a2a2e);
     lights.push([0.03, 0.17, -0.02, 0], [-0.03, 0.17, -0.02, 1]);
   }
-  out.body = p.build(false).body;
+  const g = p.build(false);
+  out.body = g.body; out.glow = g.glow;
   return out;
+}
+
+/** Bleu nuit des carénages futuristes, chrome, cyan des patins */
+const HULL = 0x2e3440, CHROME = 0xc8d0da, CYAN = 0x9ff8ff;
+
+/** Patins de sustentation : carénage sombre de part et d'autre, semelle qui luit dessous, buses aux deux bouts */
+function hoverPads(p: Parts, w: number, len: number, z = 0) {
+  for (const s of [-1, 1]) {
+    p.box(0.034, 0.022, len, s * w, 0.03, z, HULL);
+    p.box(0.028, 0.004, len - 0.02, s * w, 0.026, z, CYAN, 0, 'neon');
+    for (const e of [-1, 1]) p.cyl(0.016, 0.02, 0.012, 8, s * w, 0.018, z + e * (len / 2 - 0.022), 0x5a6270);
+  }
+}
+
+/** Un secouriste debout (sur le marchepied arrière), une main à la rambarde : jambes, combinaison, casque à visière */
+function stander(p: Parts, x: number, y: number, z: number, suit: number, helm: number) {
+  for (const s of [-1, 1]) p.box(0.016, 0.05, 0.018, x + s * 0.012, y, z, dark(suit, 0.7));
+  p.box(0.046, 0.06, 0.03, x, y + 0.05, z, suit);
+  p.box(0.048, 0.008, 0.032, x, y + 0.075, z, 0xd8e83a);
+  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.014, 0.05, 0.014), x + s * 0.03, y + 0.09, z + 0.006, suit, 0, false, s * -0.25, 0.4);
+  p.box(0.028, 0.028, 0.028, x, y + 0.11, z, SKIN);
+  p.sphere(0.02, x, y + 0.13, z, helm, 0, 0.85);
+  p.box(0.034, 0.012, 0.006, x, y + 0.122, z + 0.016, TINT);
+}
+
+/** Tête et épaules d'un équipier assis, casque à visière (vue par la verrière ouverte ou le cockpit) */
+function seated(p: Parts, x: number, y: number, z: number, suit: number, helm: number) {
+  p.box(0.046, 0.04, 0.03, x, y, z, suit);
+  p.box(0.026, 0.026, 0.026, x, y + 0.04, z + 0.002, SKIN);
+  p.sphere(0.019, x, y + 0.058, z, helm, 0, 0.85);
+  p.box(0.03, 0.01, 0.006, x, y + 0.052, z + 0.016, TINT);
+}
+
+/**
+ * Les secours de l'âge futuriste, tournés vers +z, sur patins de sustentation qui luisent : l'aéroglisseur-pompe rouge
+ * (cabine à verrière fumée, caissons à volets chromés, liseré orange lumineux, canon à eau sur tourelle, grande échelle
+ * télescopique, deux pompiers debout sur le marchepied arrière, antenne, rampe de feux) ; le fourgon maglev d'ambulance
+ * (caisse blanche à toit cintré, bandeau vert lumineux, damier, croix holographique sur le toit, cabine aux montants
+ * ouverts où l'on voit le pilote) ; l'intercepteur de police (coque en coin bleu nuit et blanche, cockpit ouvert et ses
+ * deux agents casqués, arceau porte-feux, ailerons, réacteurs arrière, antenne fouet)
+ */
+function futureUnit(p: Parts, service: Service, out: UnitGeo) {
+  const lights = out.lights;
+  if (service === 'fire') {
+    hoverPads(p, 0.07, 0.42, -0.02);
+    // coque : jupe sombre, caisse rouge, cabine à l'avant
+    p.box(0.18, 0.024, 0.46, 0, 0.04, -0.02, HULL);
+    p.box(0.17, 0.11, 0.3, 0, 0.064, -0.07, RED);
+    p.box(0.17, 0.1, 0.12, 0, 0.064, 0.145, RED);
+    p.add(new THREE.BoxGeometry(0.17, 0.05, 0.08), 0, 0.17, 0.155, RED, 0, false, 0, -0.35);
+    p.add(new THREE.BoxGeometry(0.156, 0.06, 0.004), 0, 0.172, 0.2, TINT, 0, false, 0, -0.55);
+    for (const s of [-1, 1]) p.box(0.004, 0.04, 0.07, s * 0.0855, 0.12, 0.15, TINT);
+    // nez : bouclier chromé, phares en bandeau, liseré lumineux tout du long
+    p.box(0.176, 0.022, 0.012, 0, 0.05, 0.208, CHROME);
+    p.box(0.14, 0.012, 0.004, 0, 0.1, 0.207, 0xfff1c9, 0, true);
+    for (const s of [-1, 1]) {
+      p.box(0.004, 0.006, 0.44, s * 0.0855, 0.112, -0.02, 0xff7a3a, 0, 'neon');
+      // caissons à volets chromés, poignées
+      for (const z of [-0.18, -0.09, 0.0]) { p.box(0.004, 0.06, 0.08, s * 0.086, 0.07, z, 0x8a2a24); for (let k = 0; k < 4; k++) p.box(0.005, 0.003, 0.08, s * 0.087, 0.078 + k * 0.014, z, CHROME); }
+    }
+    // chevrons rouge et jaune à l'arrière, feux arrière, marchepied et rambarde, deux pompiers debout
+    for (let k = 0; k < 6; k++) p.box(0.026, 0.04, 0.004, -0.065 + k * 0.026, 0.07, -0.222, k % 2 ? 0xf2c23a : 0xd8382e);
+    for (const s of [-1, 1]) p.box(0.02, 0.012, 0.004, s * 0.072, 0.12, -0.222, 0xff3a2a, 0, true);
+    p.box(0.17, 0.008, 0.04, 0, 0.05, -0.245, CHROME);
+    p.box(0.15, 0.006, 0.006, 0, 0.16, -0.225, CHROME);
+    for (const s of [-1, 1]) p.box(0.006, 0.1, 0.006, s * 0.075, 0.06, -0.225, CHROME);
+    for (const s of [-1, 1]) stander(p, s * 0.04, 0.058, -0.248, 0x2a2e36, 0xf2c23a);
+    // le dessus : canon à eau sur sa tourelle, antenne, rampe de feux sur la cabine
+    p.cyl(0.03, 0.034, 0.016, 10, 0, 0.174, 0.04, 0x5a6270);
+    p.add(new THREE.CylinderGeometry(0.008, 0.012, 0.08, 8).rotateX(Math.PI / 2 - 0.3), 0, 0.2, 0.08, CHROME);
+    p.cyl(0.002, 0.002, 0.09, 4, 0.07, 0.19, 0.12, 0x2a2a2e);
+    p.box(0.12, 0.012, 0.02, 0, 0.198, 0.13, HULL);
+    for (const s of [-1, 1]) p.box(0.04, 0.004, 0.012, s * 0.035, 0.196, 0.142, CYAN, 0, 'neon');
+    lights.push([-0.04, 0.21, 0.13, 0], [0.04, 0.21, 0.13, 1], [-0.07, 0.18, -0.2, 1], [0.07, 0.18, -0.2, 0]);
+    // la grande échelle télescopique (repère de son pied), blanche à liseré lumineux
+    const lp = new Parts();
+    for (const s of [-1, 1]) { lp.box(0.01, 0.014, 0.38, s * 0.028, 0, 0.19, 0xe8ecf0); lp.box(0.003, 0.004, 0.36, s * 0.034, 0.008, 0.19, CYAN); }
+    for (let k = 0; k < 10; k++) lp.box(0.056, 0.006, 0.006, 0, 0.004, 0.02 + k * 0.038, CHROME);
+    lp.box(0.05, 0.016, 0.03, 0, 0.004, 0.38, 0x5a6270);
+    lp.box(0.05, 0.03, 0.05, 0, -0.012, 0, 0x5a6270);
+    out.ladder = lp.build(false).body;
+    out.ladderAt = [0, 0.19, -0.15];
+  } else if (service === 'health') {
+    hoverPads(p, 0.068, 0.38, -0.02);
+    p.box(0.168, 0.024, 0.42, 0, 0.04, -0.02, HULL);
+    // caisse blanche à toit cintré, cabine en avant à montants ouverts (on y voit le pilote)
+    p.box(0.16, 0.15, 0.27, 0, 0.064, -0.075, WHITE);
+    p.add(new THREE.CylinderGeometry(0.08, 0.08, 0.27, 12, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2).scale(1, 0.3, 1), 0, 0.214, -0.075, 0xe4e8ec);
+    p.box(0.156, 0.07, 0.12, 0, 0.064, 0.13, WHITE);
+    p.add(new THREE.BoxGeometry(0.15, 0.07, 0.004), 0, 0.165, 0.135, TINT, 0, false, 0, -0.75);
+    for (const s of [-1, 1]) { p.box(0.006, 0.075, 0.006, s * 0.075, 0.134, 0.17, WHITE); p.box(0.006, 0.08, 0.006, s * 0.075, 0.134, 0.065, WHITE); }
+    p.box(0.156, 0.006, 0.11, 0, 0.21, 0.115, WHITE);
+    seated(p, -0.032, 0.134, 0.1, 0x2a9a5a, WHITE);
+    p.box(0.15, 0.012, 0.004, 0, 0.1, 0.191, 0xfff1c9, 0, true);
+    p.box(0.162, 0.02, 0.012, 0, 0.05, 0.195, CHROME);
+    for (const s of [-1, 1]) {
+      // bandeau vert lumineux, damier jaune et vert, croix, hublot
+      p.box(0.004, 0.006, 0.4, s * 0.0805, 0.11, -0.02, 0x3aff9a, 0, 'neon');
+      for (let k = 0; k < 8; k++) p.box(0.004, 0.022, 0.032, s * 0.0805, 0.076 + (k % 2) * 0.022, -0.2 + k * 0.032, k % 2 ? 0xd8e83a : 0x2a9a5a);
+      cross(p, s * 0.081, 0.14, -0.08, true);
+      p.box(0.004, 0.03, 0.04, s * 0.081, 0.16, 0.0, TINT);
+    }
+    // portes arrière, feux, croix holographique sur le toit, antenne
+    p.box(0.004, 0.13, 0.004, 0, 0.07, -0.2105, 0xb8bcc2);
+    cross(p, 0, 0.14, -0.212, false, 0.7);
+    for (const s of [-1, 1]) p.box(0.016, 0.03, 0.004, s * 0.07, 0.15, -0.212, 0xff3a2a, 0, true);
+    p.box(0.012, 0.004, 0.05, 0, 0.246, -0.1, 0x3aff9a, 0, 'neon'); p.box(0.05, 0.004, 0.012, 0, 0.246, -0.09, 0x3aff9a, 0, 'neon');
+    p.cyl(0.002, 0.002, 0.08, 4, -0.06, 0.24, -0.18, 0x2a2a2e);
+    p.box(0.1, 0.012, 0.024, 0, 0.214, 0.12, HULL);
+    lights.push([-0.035, 0.228, 0.12, 0], [0.035, 0.228, 0.12, 0], [-0.05, 0.25, -0.19, 0], [0.05, 0.25, -0.19, 0]);
+  } else {
+    hoverPads(p, 0.062, 0.3);
+    // coque en coin : dessous bleu nuit, dessus blanc, nez effilé
+    p.box(0.15, 0.04, 0.32, 0, 0.04, 0, 0x1c2a4a);
+    p.add(new THREE.BoxGeometry(0.148, 0.036, 0.12), 0, 0.095, 0.1, WHITE, 0, false, 0, -0.18);
+    p.box(0.148, 0.04, 0.16, 0, 0.08, -0.08, WHITE);
+    p.add(new THREE.ConeGeometry(0.075, 0.06, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4).scale(1, 0.4, 1), 0, 0.06, 0.185, 0x1c2a4a);
+    // cockpit ouvert : pare-brise fumé, deux agents casqués, arceau et sa rampe de feux
+    p.add(new THREE.BoxGeometry(0.12, 0.04, 0.004), 0, 0.132, 0.06, TINT, 0, false, 0, -0.6);
+    p.box(0.12, 0.01, 0.1, 0, 0.12, -0.01, 0x1e1e22);
+    for (const s of [-1, 1]) seated(p, s * 0.03, 0.124, -0.01, 0x22305a, 0x2c4a9a);
+    for (const s of [-1, 1]) p.box(0.008, 0.06, 0.008, s * 0.065, 0.12, -0.06, CHROME);
+    p.box(0.138, 0.012, 0.016, 0, 0.18, -0.06, HULL);
+    // flancs : bande lumineuse bleue, tirets « POLICE », ailerons et réacteurs à l'arrière, phares et feux arrière
+    for (const s of [-1, 1]) {
+      p.box(0.004, 0.006, 0.3, s * 0.0755, 0.07, 0, 0x4a8aff, 0, 'neon');
+      for (let k = 0; k < 6; k++) p.box(0.005, 0.01, 0.008, s * 0.0755, 0.095, -0.12 + k * 0.016, 0x1c2a4a);
+      p.add(new THREE.BoxGeometry(0.006, 0.05, 0.05), s * 0.06, 0.135, -0.14, 0x1c2a4a, 0, false, s * 0.25);
+      p.box(0.004, 0.004, 0.03, s * 0.063, 0.15, -0.15, s < 0 ? 0x4a8aff : 0xff4a3a, 0, 'neon');
+      p.add(new THREE.CylinderGeometry(0.02, 0.016, 0.03, 8).rotateX(Math.PI / 2), s * 0.04, 0.07, -0.17, 0x5a6270);
+      p.add(new THREE.CircleGeometry(0.014, 8).rotateY(Math.PI), s * 0.04, 0.07, -0.186, CYAN, 0, 'neon');
+      p.box(0.034, 0.008, 0.004, s * 0.045, 0.07, 0.16, 0xfff1c9, 0, true);
+    }
+    p.cyl(0.0015, 0.0015, 0.12, 4, 0.06, 0.12, -0.12, 0x2a2a2e);
+    lights.push([-0.035, 0.195, -0.06, 0], [0.035, 0.195, -0.06, 1]);
+  }
 }
 
 /** La civière : toile tendue sur deux brancards ; le blessé allongé sous sa couverture bleue (le long de z) */
@@ -392,7 +521,7 @@ export class Emergencies {
     return g;
   }
 
-  /** la course automobile est gagnée : à l'âge industriel, les secours roulent en voiture */
+  /** l'usine automobile est bâtie : les secours roulent en voiture ; sans elle, voitures attelées à tout âge */
   motor = false;
   private builtMotor = false;
 
@@ -706,6 +835,7 @@ export class Emergencies {
     const g = this.geo(service, this.age), root = new THREE.Group(), body = new THREE.Mesh(g.body, mats.body);
     body.castShadow = true;
     root.add(body);
+    if (g.glow) root.add(new THREE.Mesh(g.glow, mats.glow));
     const flash = g.lights.map(([x, y, z, c]) => { const m = new THREE.Mesh(this.flashG, c ? this.red : this.blue); m.position.set(x, y, z); root.add(m); return m; });
     let horse: Rider | null = null, ladder: THREE.Object3D | null = null;
     if (g.horse) { horse = makeDraftHorse(station.id + (service === 'fire' ? 0 : service === 'health' ? 1 : 2)); horse.root.position.set(0, 0, 0.36); root.add(horse.root); }
@@ -713,7 +843,7 @@ export class Emergencies {
     this.group.add(root);
     const u: Unit = {
       service, station, root, flash, path: [], i: 0, x: (home % N) + 0.5, z: Math.floor(home / N) + 0.5, heading: 0, state: 'patrol', t: 0, target: null, home,
-      speed: this.age >= 4 ? 1.7 : this.builtMotor ? 1.4 : 0.9, crew: null, horse, phase: 0, ladder, chimney: g.chimney, park: null,
+      speed: !this.builtMotor ? 0.9 : this.age >= 4 ? 1.7 : 1.4, crew: null, horse, phase: 0, ladder, chimney: g.chimney, park: null,
     };
     this.units.push(u);
     return u;
@@ -798,7 +928,9 @@ export class Emergencies {
         else this.stepPolice(u, tb, dt);
       }
       if (u.crew && u.state !== 'work') this.recall(u);
-      u.root.position.set(u.x, w.surfaceAt(u.x, u.z) + 0.01, u.z);
+      // à l'âge futuriste, il flotte sur son coussin d'air, qui ondule à peine
+      const hover = this.age >= 5 && this.builtMotor ? 0.018 + Math.sin(this.time * 2.6 + u.home) * 0.005 : 0;
+      u.root.position.set(u.x, w.surfaceAt(u.x, u.z) + 0.01 + hover, u.z);
       u.root.rotation.y = u.heading;
       // le cheval au pas (ou qui piaffe à l'arrêt), l'échelle qui se dresse vers le feu, la pompe à vapeur qui fume
       const moved = Math.hypot(u.x - px, u.z - pz);

@@ -9,7 +9,7 @@ import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
 import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
 import { Parts } from '../render/parts';
 import { mats } from '../render/materials';
-import { findPlots, fieldHands, shareHands, fieldSeason, fieldTask, longestRun, rigAt, runCells, Plot, Run, FieldTask, TRACTOR_CELLS, MACHINE_AGE, DRONE_AGE, MAX_DRONES, RigKind, machineOf, isAutoRig, isMotorRig, rigShown, RIG_SPEED } from './fields';
+import { findPlots, fieldHands, shareHands, fieldSeason, fieldTask, longestRun, rigAt, runCells, Plot, Run, FieldTask, TRACTOR_AGE, TRACTOR_CELLS, MACHINE_AGE, DRONE_AGE, MAX_DRONES, RigKind, machineOf, isAutoRig, isMotorRig, rigShown, RIG_SPEED } from './fields';
 import { rigGeo, droneGeo, propellerGeo, PROP_SPOTS, seatOf } from '../render/farmRigs';
 
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
@@ -1098,14 +1098,19 @@ export class Agents {
     a.path = p; a.pi = 0; a.state = 'walking'; a.hidden = false; a.targetHidden = hiddenAtEnd;
   }
 
+  /** l'usine automobile est bâtie : sans elle, pas de tracteur ni de drone, les bœufs et le chariot à foin à tout âge */
+  motor = true;
+  /** L'âge des engins des champs : celui du village, mais le Moyen Âge tant qu'il n'y a pas de moteur */
+  private rigAge(age: number) { return this.motor ? age : Math.min(age, TRACTOR_AGE - 1); }
+
   /** `season` : 0 printemps, 1 été, 2 automne, 3 hiver (les travaux des champs en dépendent) */
   update(dt: number, hour: number, age: number, sheltering: boolean, popTarget: number, glowNight: number, season = 0) {
     const w = this.world;
     this.popTarget = popTarget;
     this.season = season; this.age = age;
     if (w.version !== this.lastVersion) { this.lastVersion = w.version; this.refreshTargets(); }
-    const key = `${w.version}|${age}`;
-    if (key !== this.spotKey) { this.spotKey = key; this.refreshGardens(age); this.refreshRigs(age); }
+    const key = `${w.version}|${age}|${+this.motor}`;
+    if (key !== this.spotKey) { this.spotKey = key; this.refreshGardens(age); this.refreshRigs(this.rigAge(age)); }
     // les passants qu'on voit, plus les bras des champs (autant que les champs en emploient, à l'échelle des passants), plus
     // les membres des expéditions en cours
     const away = this.agents.reduce((n, a) => n + (a.mission ? 1 : 0), 0);
@@ -1218,7 +1223,7 @@ export class Agents {
         }
       }
     }
-    this.stepRigs(age, dt, hour);
+    this.stepRigs(this.rigAge(age), dt, hour);
     this.render(age, dt);
   }
 
