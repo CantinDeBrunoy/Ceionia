@@ -20,6 +20,14 @@ describe('bêtes articulées', () => {
     }
   });
 
+  it('le loup est une bête articulée : oreilles, queue en deux os, hurlement et flairage, trois robes', () => {
+    expect(BEAST_KINDS.has('wolf')).toBe(true);
+    const { bones, clips } = beastInfo('wolf');
+    for (const b of ['eL', 'eR', 'jaw', 'tail1', 'tail2']) expect(bones).toContain(b);
+    for (const n of ['Sleep', 'Eating', 'Idle_2', 'Idle_3']) expect(clips).toContain(n);
+    for (const coat of [0, 1, 2]) expect(makeBeast('wolf', coat, 1).actions.has('Idle_2')).toBe(true);
+  });
+
   it('chaque bête se clone avec son squelette et ses animations', { timeout: 30000 }, () => {
     for (const k of kinds) {
       const info = beastInfo(k), a = makeBeast(k, 0, 1);

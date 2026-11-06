@@ -311,6 +311,8 @@ class Game implements UIHost {
     this.atmosphere.onStrike = (x, z) => { if (Math.random() < 0.5) ignite(w.buildingAt(Math.floor(x), Math.floor(z))); };
     this.eruptions.onImpact = (k) => { if (w.disasters && w.occ[k] && Math.random() < 0.3) ignite(w.buildings.get(w.occ[k])); };
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
+    // le hurlement d'une meute, plus faible au loin
+    this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
     this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group);
     this.applyQuality();
     // le monde souterrain se charge en arrière-plan, une fois la partie lancée

@@ -389,7 +389,34 @@ export class AudioEngine {
     this.burst(t + 0.6 + Math.random() * 0.5, 2.2, 120, 0.6 * k);
     this.tone(38, t, 2.4, 'sine', 0.3 * k, this.sfxG, 0, 0.05);
   }
-  /** Feu d'artifice : détonation, souffle grave et crépitement des étincelles (force 0 … 1) */
+  /**
+   * Hurlement d'une meute (force 0 … 1) : chaque voix monte, tient en vibrant, puis retombe en glissant ; les voix
+   * entrent l'une après l'autre, à des hauteurs différentes
+   */
+  sfxHowl(k: number) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t0 = ctx.currentTime;
+    for (let v = 0; v < 3; v++) {
+      const t = t0 + v * (0.6 + Math.random() * 0.5), f0 = 330 + v * 55 + Math.random() * 40, dur = 2.6 + Math.random() * 0.8;
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0 * 0.7, t);
+      o.frequency.linearRampToValueAtTime(f0 * 1.45, t + 0.5);
+      o.frequency.setValueAtTime(f0 * 1.45, t + dur * 0.6);
+      o.frequency.exponentialRampToValueAtTime(f0 * 0.8, t + dur);
+      // vibrato
+      const lfo = ctx.createOscillator(), lg = ctx.createGain();
+      lfo.frequency.value = 5 + Math.random() * 1.5; lg.gain.value = f0 * 0.025;
+      lfo.connect(lg); lg.connect(o.frequency);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.07 * k, t + 0.4);
+      g.gain.setValueAtTime(0.07 * k, t + dur * 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400;
+      o.connect(f); f.connect(g); g.connect(this.sfxG);
+      o.start(t); lfo.start(t); o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+    }
+  }  /** Feu d'artifice : détonation, souffle grave et crépitement des étincelles (force 0 … 1) */
   sfxBang(k: number) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

@@ -6,7 +6,7 @@ import type { Actor } from './assets';
 
 /**
  * Bêtes sauvages articulées, dessinées par le jeu faute de modèle animé libre de droits (ours, éléphant, girafe, crocodile,
- * tortue, chameau, élan, lézard, crabe) : chaque bête est un vrai maillage à squelette (os du bassin, du poitrail, du cou,
+ * tortue, chameau, élan, loup, lézard, crabe) : chaque bête est un vrai maillage à squelette (os du bassin, du poitrail, du cou,
  * de la tête, de la mâchoire, des oreilles, de la queue, pattes en deux segments…) et ses animations (marche, course,
  * repos, broutage, sommeil, gestes propres) sont des clips calculés une fois ; elle se joue comme les modèles Quaternius
  * (même mélangeur, mêmes noms d'animation : Walk, Gallop, Idle, Eating, Sleep…)
@@ -919,6 +919,161 @@ function moose(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Loup ----------
+
+const WOLF_COATS: Coat[] = [
+  // gris (dos sombre, joues et ventre crème), gris anthracite, fauve des bois
+  { fur: 0x8c8a88, top: 0x4c4846, saddle: 0x3a3634, belly: 0xdcd4c4, cheek: 0xe6e0d2, muzzle: 0xc4bcae, leg: 0xb4a894, paw: 0x3a3432, inner: 0xd8ccbc, tip: 0x242020 },
+  { fur: 0x5e5c5e, top: 0x302e30, saddle: 0x222022, belly: 0xa8a29a, cheek: 0xbcb6ac, muzzle: 0x8e8882, leg: 0x7e766c, paw: 0x221e1e, inner: 0xa89c90, tip: 0x161414 },
+  { fur: 0x9a8670, top: 0x5c4c3c, saddle: 0x44382c, belly: 0xe2d6c0, cheek: 0xeae0cc, muzzle: 0xcebea6, leg: 0xc0aa8c, paw: 0x3a3028, inner: 0xdccab2, tip: 0x2a221c },
+];
+
+/**
+ * Loup : silhouette haute et sèche — poitrail étroit et profond, ventre levretté, longues pattes fines aux pieds serrés —,
+ * pelage gris à dos sombre (selle et crinière de jarres hérissées sur le garrot), joues, gorge et ventre crème ; tête
+ * large au long museau étroit, truffe noire, yeux ambrés, oreilles pointues dressées ; queue touffue portée bas, à bout
+ * noir. Trotte tête basse, pattes dans la même trace ; galope ventre à terre, oreilles couchées, queue à l'horizontale ;
+ * s'assied pour hurler, museau au ciel ; flaire le sol ; dort roulé en boule, la queue sur le museau
+ */
+function wolf(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  const n0: V3 = [0, 0.148, 0.07], n1: V3 = [0, 0.166, 0.106];
+  r.bone('hips', null, 0, 0.13, -0.05);
+  r.bone('chest', 'hips', 0, 0.134, 0.03);
+  r.bone('ribs', 'chest', 0, 0.134, 0.03);
+  r.bone('neck', 'chest', ...n0);
+  r.bone('head', 'neck', ...n1);
+  r.bone('jaw', 'head', 0, 0.158, 0.13);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.014, 0.188, 0.112));
+  r.bone('tail1', 'hips', 0, 0.142, -0.098);
+  r.bone('tail2', 'tail1', 0, 0.116, -0.128);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.019, 0.112, 0.056);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.019, 0.064, 0.058);
+    r.bone(`h${L}1`, 'hips', s * 0.021, 0.118, -0.07);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.021, 0.068, -0.088);
+  });
+
+  // corps : croupe, poitrail étroit et profond (qui respire), ventre levretté, gorge crème, selle sombre sur le dos
+  r.add('hips', ell(0.028, 0.032, 0.05), [0, 0.134, -0.056], c.fur, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.031, 0.042, 0.054), [0, 0.128, 0.018], c.fur, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.02, 0.012, 0.05), [0, 0.096, -0.012], c.belly);
+  r.add('chest', ell(0.022, 0.034, 0.026), [0, 0.118, 0.06], c.belly, [0.25, 0, 0], c.fur);
+  r.add('ribs', ell(0.026, 0.01, 0.07), [0, 0.168, 0.0], c.saddle, [0.06, 0, 0], c.top);
+  r.add('hips', ell(0.022, 0.008, 0.036), [0, 0.164, -0.05], c.saddle, [-0.08, 0, 0]);
+  // crinière : collerette épaisse autour du cou et jarres hérissées du garrot
+  r.add('neck', ell(0.03, 0.034, 0.03), [0, 0.15, 0.072], c.fur, [0.3, 0, 0], c.top);
+  r.add('neck', ell(0.024, 0.026, 0.02), [0, 0.136, 0.09], c.cheek, [0.4, 0, 0]);
+  for (let i = 0; i < 7; i++) {
+    const z = 0.088 - i * 0.016, y = 0.178 - Math.abs(i - 2) * 0.003, b = i < 2 ? 'neck' : 'ribs';
+    r.both((s) => r.put(b, seg([s * 0.008, y - 0.006, z], [s * 0.011, y + 0.008 - i * 0.0008, z - 0.012], 0.006, 0.0008, 4), c.saddle));
+  }
+  // jarres claires le long des flancs et sous le ventre
+  r.both((s) => {
+    for (let i = 0; i < 5; i++) {
+      const z = 0.05 - i * 0.022, b = z > -0.01 ? 'ribs' : 'hips';
+      r.put(b, seg([s * 0.026, 0.104, z], [s * 0.028, 0.092, z - 0.008], 0.006, 0.001, 4), c.fur);
+    }
+  });
+  r.put('neck', seg(n0, n1, 0.02, 0.016, 7), c.fur, c.top);
+  // tête : crâne large, joues claires, long museau étroit, arête plus sombre, truffe noire, yeux ambrés
+  r.add('head', ell(0.022, 0.02, 0.024), [0, 0.174, 0.114], c.fur, [0, 0, 0], c.top);
+  r.both((s) => r.add('head', ell(0.012, 0.015, 0.016), [s * 0.016, 0.163, 0.114], c.cheek, [0, 0, s * 0.3]));
+  r.put('head', seg([0, 0.166, 0.128], [0, 0.161, 0.17], 0.0125, 0.0075, 6), c.muzzle);
+  r.put('head', seg([0, 0.176, 0.126], [0, 0.168, 0.166], 0.0065, 0.0035, 5), c.fur);
+  r.add('head', ell(0.0062, 0.0052, 0.0055, 0), [0, 0.165, 0.173], 0x141010);
+  r.both((s) => {
+    r.add('head', ell(0.0042, 0.0032, 0.003, 0), [s * 0.0118, 0.18, 0.13], 0xd8a030, [0, s * 0.5, 0]);
+    r.add('head', ell(0.0018, 0.0022, 0.0015, 0), [s * 0.0124, 0.18, 0.1325], 0x100c0a);
+    // trait sombre au coin de l'œil
+    r.put('head', seg([s * 0.011, 0.179, 0.126], [s * 0.016, 0.177, 0.118], 0.0016, 0.001, 3), c.saddle);
+  });
+  r.put('jaw', seg([0, 0.156, 0.13], [0, 0.155, 0.164], 0.0075, 0.0045, 5), c.belly);
+  // oreilles pointues et dressées, intérieur clair
+  r.both((s, L) => {
+    r.add(`e${L}`, new THREE.ConeGeometry(0.0095, 0.026, 4), [s * 0.0145, 0.199, 0.11], c.fur, [-0.12, 0, -s * 0.18], c.saddle);
+    r.add(`e${L}`, new THREE.ConeGeometry(0.0055, 0.017, 3), [s * 0.0145, 0.197, 0.1135], c.inner, [-0.12, 0, -s * 0.18]);
+  });
+  // queue touffue portée bas, bout noir
+  r.put('tail1', seg([0, 0.142, -0.098], [0, 0.116, -0.128], 0.01, 0.014, 6), c.fur, c.top);
+  r.add('tail2', ell(0.016, 0.042, 0.017), [0, 0.084, -0.142], c.fur, [-0.32, 0, 0], c.top);
+  r.add('tail2', ell(0.01, 0.014, 0.011, 0), [0, 0.046, -0.156], c.tip, [-0.32, 0, 0]);
+  // longues pattes fines : épaule et cuisse fournies, canons clairs, pieds serrés aux doigts sombres
+  r.both((s, L) => {
+    const x = s * 0.019, hx = s * 0.021;
+    r.add(`f${L}1`, ell(0.014, 0.03, 0.018), [x, 0.104, 0.054], c.fur, [0, 0, 0], c.top);
+    r.put(`f${L}1`, seg([x, 0.09, 0.056], [x, 0.064, 0.058], 0.0085, 0.0065), c.fur);
+    r.put(`f${L}2`, seg([x, 0.064, 0.058], [x, 0.01, 0.06], 0.006, 0.005), c.leg);
+    r.add(`f${L}2`, ell(0.0075, 0.005, 0.011, 0), [x, 0.005, 0.066], c.paw);
+    r.add(`h${L}1`, ell(0.017, 0.034, 0.024), [hx, 0.11, -0.07], c.fur, [0.15, 0, 0], c.top);
+    r.put(`h${L}1`, seg([hx, 0.094, -0.076], [hx, 0.068, -0.088], 0.0095, 0.0065), c.fur);
+    r.put(`h${L}2`, seg([hx, 0.068, -0.088], [hx, 0.01, -0.078], 0.006, 0.005), c.leg);
+    r.add(`h${L}2`, ell(0.0075, 0.005, 0.011, 0), [hx, 0.005, -0.072], c.paw);
+  });
+
+  // au trot, chaque diagonale ensemble ; au galop, les arrière puis les avant
+  const clips = quadClips({
+    walk: { dur: 0.7, A: 0.42, L: 0.95, ph: { hL: 0, fR: 0.02, hR: 0.5, fL: 0.52 }, bob: 0.003 },
+    run: { dur: 0.46, A: 0.85, L: 1.25, ph: { hL: 0, hR: 0.07, fL: 0.42, fR: 0.5 }, bob: 0.012, rock: 0.18 },
+    neck: ['neck'], graze: [0.95], grazeHead: 0.35,
+    lie: { drop: 0.078, f: [-1.42, 0.22], h: [-1.05, 2.15] },
+    hook: (n, u, P) => {
+      if (n === 'Walk') {
+        // tête portée bas, dans l'axe du dos ; pieds dans la même trace ; la queue pend et balance à peine
+        R(P, 'neck', 0.32); R(P, 'head', -0.12);
+        for (const [b, s] of [['fL1', 1], ['fR1', -1], ['hL1', 1], ['hR1', -1]] as [string, number][]) R(P, b, 0, 0, s * 0.06);
+        R(P, 'tail1', 0.08); R(P, 'tail2', 0.05 * sn(u, 2), 0.1 * sn(u, 1, 0.2));
+        ears(P, 0.1, 0);
+      } else if (n === 'Gallop') {
+        // ventre à terre : cou tendu, oreilles couchées, queue à l'horizontale qui ondule
+        R(P, 'neck', 0.35); R(P, 'head', -0.2);
+        R(P, 'tail1', 1.55); R(P, 'tail2', 0.25 + 0.12 * sn(u, 1, 0.3));
+        ears(P, 0.25, 0);
+      } else if (n === 'Idle') {
+        // queue au repos, un léger frémissement de la truffe
+        R(P, 'tail2', 0, 0.12 * sn(u, 2) * win(u, 0.3, 0.65, 0.05));
+        R(P, 'head', 0.02 * pos(sn(u, 14)) * win(u, 0.1, 0.25, 0.04));
+      } else if (n === 'Sleep') {
+        // roulé en boule : la queue ramenée sur le museau
+        R(P, 'tail1', -0.5, 0.9); R(P, 'tail2', -0.4, 0.7);
+        R(P, 'neck', 0.1, 0.4); R(P, 'head', 0.2, 0.3);
+      } else if (n === 'Eating') {
+        // tête dans la prise, il tire et arrache
+        M(P, 'hips', 0, -0.004 * pos(sn(u, 2)), -0.003 * pos(sn(u, 2)));
+        R(P, 'tail1', 0.15);
+      }
+    },
+  });
+  clips.push(
+    // s'assied sur son arrière-train, lève le museau au ciel et hurle (la gorge vibre), puis se relève
+    ['Idle_2', 6, (u, P) => {
+      const k = win(u, 0.06, 0.92, 0.12), h = win(u, 0.22, 0.82, 0.08);
+      breathe(P, u, 3, 1 + h);
+      R(P, 'hips', -0.62 * k);
+      M(P, 'hips', 0, -0.05 * k, -0.012 * k);
+      for (const L of ['L', 'R']) { R(P, `f${L}1`, 0.68 * k); R(P, `h${L}1`, -0.8 * k); R(P, `h${L}2`, 1.75 * k); }
+      R(P, 'chest', -0.06 * k);
+      R(P, 'neck', -0.15 * k - 0.22 * h);
+      R(P, 'head', -0.05 * k - 0.2 * h + 0.03 * h * sn(u, 9), 0.04 * h * sn(u, 2));
+      R(P, 'jaw', 0.26 * h + 0.05 * h * sn(u, 11));
+      ears(P, 0.35 * h, -0.1 * h);
+      R(P, 'tail1', 0.25 * k); R(P, 'tail2', 0.5 * k);
+    }],
+    // flaire le sol en avançant la truffe, les oreilles pointées vers l'avant
+    ['Idle_3', 4, (u, P) => {
+      const k = win(u, 0.05, 0.95, 0.15);
+      breathe(P, u, 4);
+      R(P, 'neck', 0.85 * k, 0.15 * k * sn(u));
+      R(P, 'head', 0.3 * k + 0.05 * k * pos(sn(u, 10)), 0.25 * k * sn(u, 1, 0.2));
+      R(P, 'chest', 0.06 * k);
+      R(P, 'fR1', -0.2 * win(u, 0.4, 0.6, 0.06)); R(P, 'fR2', 0.5 * win(u, 0.42, 0.56, 0.05));
+      ears(P, -0.2 * k, 0);
+      R(P, 'tail1', 0.2 * k); R(P, 'tail2', 0, 0.2 * k * sn(u, 3));
+    }],
+  );
+  return { rig: r, clips };
+}
+
 // ---------- Reptiles ----------
 
 /** Les deux diagonales d'un reptile : patte avant d'un côté avec la patte arrière de l'autre (os, phase, côté) */
@@ -1431,7 +1586,7 @@ function crab(c: Coat): { rig: Rig; clips: ClipDef[] } {
 
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'croc' | 'lizard' | 'turtle' | 'crab';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
@@ -1439,6 +1594,7 @@ const DEFS: Record<BeastKind, BeastDef> = {
   giraffe: { coats: GIRAFFE_COATS, build: giraffe },
   camel: { coats: CAMEL_COATS, build: camel },
   moose: { coats: MOOSE_COATS, build: moose },
+  wolf: { coats: WOLF_COATS, build: wolf },
   croc: { coats: CROC_COATS, build: croc },
   lizard: { coats: LIZARD_COATS, build: lizard },
   turtle: { coats: TURTLE_COATS, build: turtle },
