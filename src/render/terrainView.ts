@@ -83,6 +83,8 @@ export class TerrainView {
   private waterGeo: THREE.BufferGeometry;
   private waterU = {
     uTime: { value: 0 },
+    /** amplitude de la houle (plus calme par gros temps) */
+    uCalm: { value: 1 },
     uHeight: { value: null as THREE.Texture | null },
     uDetail: { value: null as THREE.Texture | null },
     uShallow: { value: new THREE.Color() },
@@ -135,7 +137,6 @@ export class TerrainView {
   private biomeCol = Array.from({ length: NB }, () => new THREE.Color());
   /** Par sous-sommet : parts des biomes (interpolées entre les centres de cases) */
   private vbw = new Float32Array(VS * VS * NB);
-  private frame = 0;
   private zone = [0, 0, 0, 0];
   private cliff = new THREE.Color();
   /** grottes (x, y du seuil, z, cap) : le relief est ouvert à l'intérieur de leur tunnel */
@@ -241,7 +242,15 @@ float snN(vec2 p) {
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, roughness: 0.1, metalness: 0, depthWrite: false, normalMap, normalScale: new THREE.Vector2(0.4, 0.4) });
     this.waterMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.waterU);
-      sh.vertexShader = 'varying vec2 vWater;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWater = (modelMatrix * vec4(transformed, 1.0)).xz;');
+      // houle calculée par la carte graphique (même vague que les canards de la faune) : plus de sommets à recopier à chaque image
+      sh.vertexShader = 'uniform float uTime;\nuniform float uCalm;\nvarying vec2 vWater;\n' + sh.vertexShader
+        .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+  float wA = position.x * 0.9 + uTime * 1.3, wB = position.z * 1.1 + uTime * 1.1, wC = (position.x + position.z) * 0.5 + uTime * 0.7;
+  float wK = 0.018 * uCalm;
+  objectNormal = normalize(vec3(-wK * (0.9 * cos(wA) + 0.5 * cos(wC)), 1.0, -wK * (1.1 * cos(wB) + 0.5 * cos(wC))));`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+  transformed.y = ${SEA.toFixed(4)} + (sin(wA) + sin(wB) + sin(wC)) * wK;
+  vWater = (modelMatrix * vec4(transformed, 1.0)).xz;`);
       sh.fragmentShader = `uniform float uTime;\nuniform sampler2D uHeight;\nuniform sampler2D uDetail;\nuniform sampler2D uFlow;\nuniform vec3 uShallow;\nuniform vec3 uDeep;\nvarying vec2 vWater;\n`
         + sh.fragmentShader
           .replace('#include <color_fragment>', `#include <color_fragment>
@@ -751,16 +760,8 @@ float snN(vec2 p) {
   }
 
   animateWater(t: number, calm = 1) {
-    this.frame++;
-    const arr = this.waterGeo.attributes.position.array as Float32Array;
-    const b = this.waterBase;
-    for (let i = 0; i < arr.length; i += 3) {
-      const x = b[i], z = b[i + 2];
-      arr[i + 1] = SEA + (Math.sin(x * 0.9 + t * 1.3) + Math.sin(z * 1.1 + t * 1.1) + Math.sin((x + z) * 0.5 + t * 0.7)) * 0.018 * calm;
-    }
-    this.waterGeo.attributes.position.needsUpdate = true;
-    if (this.frame % 2 === 0) this.waterGeo.computeVertexNormals();
     this.waterU.uTime.value = t;
+    this.waterU.uCalm.value = calm;
     this.waterMat.normalMap!.offset.set(t * 0.011, t * 0.007);
   }
 
