@@ -255,7 +255,7 @@ describe('organiser les JO', () => {
     const m = mission('games');
     expect(m.age).toBe(4);
     expect(m.mandatory).toBe(false);
-    expect(m.requires?.kinds).toEqual(expect.arrayContaining(['stadium', 'football', 'basket', 'tennis', 'waterpark']));
+    expect(m.requires?.kinds).toEqual(expect.arrayContaining(['stadium', 'football', 'basket', 'tennis', 'waterpark', 'alpine']));
     for (const c of m.choices) {
       expect(c.scene).toBe('games');
       // du bien-être, et des ressources
@@ -272,6 +272,7 @@ describe('organiser les JO', () => {
     const v = village(4), m = mission('games'), [x, z] = v.at;
     build(v.w, 'stadium', x + 8, z, 4);
     for (const k of ['basket', 'tennis', 'waterpark'] as KindId[]) build(v.w, k, x - 6, z + 6, 4);
+    v.w.place('alpine', x + 20, z + 20, 0, true, 4, false);
     // le stade (qui compte d'ordinaire comme un terrain de football amélioré) ne suffit pas aux JO
     expect(v.ex.has('football')).toBe(true);
     expect(v.ex.missing(m)).toEqual(['bâtir : terrain de football']);
@@ -284,12 +285,13 @@ describe('organiser les JO', () => {
 
   it('sans stade ni bassins, on ne peut pas partir ; tout bâti, l’équipe se rend au pied du stade', () => {
     const v = village(4), m = mission('games');
-    expect(v.ex.missing(m).length).toBe(5);
+    expect(v.ex.missing(m).length).toBe(6);
     expect(v.ex.why(m, m.choices[0])).toMatch(/Il faut d’abord/);
     const [x, z] = v.at;
     const stadium = build(v.w, 'stadium', x + 8, z, 4);
     expect(v.ex.missing(m).length).toBeGreaterThan(0);
     for (const k of ['football', 'basket', 'tennis', 'waterpark'] as KindId[]) build(v.w, k, x - 6, z + 6, 4);
+    v.w.place('alpine', x + 20, z + 20, 0, true, 4, false);
     expect(v.ex.missing(m)).toEqual([]);
     const a = v.ex.start(m, 1, 4)!;
     expect(a).not.toBeNull();

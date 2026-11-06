@@ -751,8 +751,8 @@ export const MISSIONS: Mission[] = [
   {
     // les grands Jeux, au stade du village : il faut toutes les installations sportives ; la flamme, la foule, le podium
     id: 'games', age: 4, mandatory: false, icon: '🏅', title: 'Organiser les JO',
-    requires: { kinds: ['stadium', 'football', 'basket', 'tennis', 'waterpark'] },
-    intro: 'Stade, terrains, courts et bassins : le village a tout ce qu’il faut pour accueillir les Jeux. Athlètes du monde entier, relais de la flamme, cérémonie d’ouverture… le monde entier regardera !',
+    requires: { kinds: ['stadium', 'football', 'basket', 'tennis', 'waterpark', 'alpine'] },
+    intro: 'Stade, terrains, courts, bassins et station de montagne : le village a tout ce qu’il faut pour accueillir les Jeux. Athlètes du monde entier, relais de la flamme, cérémonie d’ouverture… le monde entier regardera !',
     choices: [
       {
         label: 'Une cérémonie grandiose', text: 'Relais de la flamme, défilé des nations, drapeaux et foule en délire : une fête que l’on n’oubliera pas.',
