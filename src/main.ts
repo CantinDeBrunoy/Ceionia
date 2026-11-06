@@ -504,7 +504,7 @@ class Game implements UIHost {
       const route: [number, number][] = [[a.base[0], a.base[1]], ...path.slice(0, -1).map((c): [number, number] => [(c % N) + 0.5, Math.floor(c / N) + 0.5]), [a.dest[0], a.dest[1]]];
       const spots = this.parade.start(route, [a.base[0], a.base[1]], [a.dest[0], a.dest[1]], this.sim.age, crowd.length);
       f = this.farewell = { id: a.id, crowd, spots, sent: 0, rel: null, relAt: 0, voyage: false };
-      this.fest.start(a.base[0], a.base[1], this.sim.age);
+      this.festAt(a.base[0], a.base[1]);
       this.ui.toast(`${a.m.icon} Tout le village sort dire adieu aux colons !`);
     }
     // la foule gagne sa place le long de la route, quelques-uns par image (chaque trajet se calcule) ; à défaut de place, elle
@@ -527,8 +527,8 @@ class Game implements UIHost {
         const [mx, mz] = this.parade.middle();
         this.cam.goTo(mx, mz, Math.min(40, Math.max(18, this.parade.length * 0.8)));
       }
-      this.fest.start(a.base[0], a.base[1], this.sim.age);
-      this.fest.start(a.base[0], a.base[1], this.sim.age);
+      this.festAt(a.base[0], a.base[1]);
+      this.festAt(a.base[0], a.base[1]);
     }
     const lead = ag.partyPositions(a.party)[0];
     this.parade.update(dt, lead ? [lead[0], lead[1]] : null, f.rel !== null ? 1 : a.phase === 'gather' ? 0.3 : 0.6);
@@ -539,6 +539,23 @@ class Game implements UIHost {
       this.time.paused = true;
       showVoyage(uiRoot, a.c.label.includes('saut'), () => { this.expeditions.landNow(a); this.time.paused = was; });
     }
+  }
+
+  /** La grande place du village (le lieu de rencontre de 3 × 3, sans entrée) la plus proche de (x, z), s'il y en a une */
+  plazaNear(x: number, z: number): Building | null {
+    let best: Building | null = null, bd = Infinity;
+    for (const b of this.world.buildings.values()) {
+      const s = sizeOf(b);
+      if (b.kind !== 'gather' || s < 3) continue;
+      const d = Math.hypot(b.x + s / 2 - x, b.z + s / 2 - z);
+      if (d < bd) { bd = d; best = b; }
+    }
+    return best;
+  }
+  /** La fête du village : sur la grande place s'il y en a une (et au feu du clan, à la Préhistoire), sinon près de (x, z) */
+  festAt(x: number, z: number) {
+    const b = this.plazaNear(x, z);
+    this.fest.start(x, z, this.sim.age, b ? { x0: b.x, z0: b.z, size: sizeOf(b), fire: b.age === 0 } : null);
   }
 
   /** Le cœur du village : le milieu de ses bâtiments (la médiane, qu'un avant-poste lointain ne décale pas) */
@@ -1048,7 +1065,7 @@ class Game implements UIHost {
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);
     // une équipe rentre victorieuse : tout le village fait la fête au cœur du village, à la mode de son âge
-    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.fromCamp && !this.feted.has(a.id)) { this.feted.add(a.id); this.fest.start(a.base[0], a.base[1], this.sim.age); }
+    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.fromCamp && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
     this.fest.update(dt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe

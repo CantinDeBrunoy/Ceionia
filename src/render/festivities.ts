@@ -42,8 +42,17 @@ interface Tongue { m: THREE.Mesh; r: number; h: number; ph: number; ax: number; 
 /** Une volute de fumée qui monte, grossit et s'efface */
 interface Puff { s: THREE.Sprite; t: number; life: number; x: number; y: number; z: number; vx: number; vz: number }
 
+/**
+ * La place du village où tenir la fête (son coin nord-ouest, sa taille en cases) : la fête s'y tient en son milieu, les mâts
+ * à son bord ; `fire` : la place a déjà son feu au milieu (le feu du clan), qui flambe pour la fête ; sinon (fontaine, étals,
+ * bassin…) pas de bûcher, la ronde tourne autour du cœur de la place
+ */
+export interface FestPlaza { x0: number; z0: number; size: number; fire: boolean }
+
 interface Fest {
   x: number; y: number; z: number; age: number; t: number; dur: number; next: number;
+  /** la place où elle se tient (null : à côté du cœur du village, là où il y a de la place) ; le rayon de la ronde */
+  plaza: FestPlaza | null; ring: number;
   /** équipes de plus fêtées en même temps : la fête dure et s'intensifie au lieu de s'empiler */
   boost: number;
   /** tout ce que montre la fête ; le décor (bûcher, mâts, guirlandes, festin), qui s'aplatit à la fin */
@@ -124,12 +133,16 @@ export class Festivities {
     this.tongueGeo = new THREE.LatheGeometry([[0, 0], [0.62, 0.07], [0.92, 0.2], [0.86, 0.38], [0.6, 0.6], [0.3, 0.82], [0, 1]].map(([x, y]) => new THREE.Vector2(x, y)), 6);
   }
 
-  /** Une fête commence près de (x, z) (le cœur du village, où l'équipe est revenue) : elle dure une trentaine de secondes */
-  start(x: number, z: number, age: number) {
+  /**
+   * Une fête commence près de (x, z) (le cœur du village, où l'équipe est revenue), ou sur la place du village donnée, en son
+   * milieu : elle dure une trentaine de secondes
+   */
+  start(x: number, z: number, age: number, plaza: FestPlaza | null = null) {
+    if (plaza) { x = plaza.x0 + plaza.size / 2; z = plaza.z0 + plaza.size / 2; }
     // une autre équipe rentre pendant la fête : la même fête repart de plus belle, plus longue et plus fournie
     const near = this.fests.find((f) => Math.hypot(f.x - x, f.z - z) < 4);
     if (near) { near.dur = Math.max(near.dur, near.t + 28); near.boost = Math.min(3, near.boost + 1); near.next = Math.min(near.next, 0.3); return; }
-    [x, z] = this.spot(x, z);
+    if (!plaza) [x, z] = this.spot(x, z);
     const y = this.world.surfaceAt(x, z), group = new THREE.Group(), decor = new THREE.Group();
     group.position.set(x, y, z);
     group.add(decor);
@@ -137,7 +150,7 @@ export class Festivities {
     const halo = new THREE.Mesh(this.haloGeo(x, y, z), new THREE.MeshBasicMaterial({ map: this.tex, color: 0xff8a3a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tex, color: 0xff9a48, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     const f: Fest = {
-      x, y, z, age, t: 0, dur: age >= 3 ? 34 : 28, next: 1.2, boost: 0, group, decor, tongues: [], halo, aura, torches: [],
+      x, y, z, age, t: 0, dur: age >= 3 ? 34 : 28, next: 1.2, boost: 0, plaza, ring: plaza ? Math.min(1, plaza.size * 0.32) : 0.8, group, decor, tongues: [], halo, aura, torches: [],
       dancers: [], band: [], smoke: [], puffT: 0, own: [halo.geometry, halo.material as THREE.Material, aura.material],
     };
     this.bonfire(f);
@@ -179,24 +192,13 @@ export class Festivities {
    * lueur au-dessus du feu
    */
   private bonfire(f: Fest) {
-    const p = new Parts();
-    for (let i = 0; i < 11; i++) { const a = (i / 11) * Math.PI * 2; p.add(new THREE.IcosahedronGeometry(0.04 + (i % 3) * 0.006, 0).scale(1, 0.7, 1), Math.cos(a) * 0.27, 0.02, Math.sin(a) * 0.27, i % 2 ? 0x8a857c : 0x9d978d); }
-    for (let l = 0; l < 4; l++) {
-      const len = 0.36 - l * 0.035, y = 0.025 + l * 0.04, along = l % 2 === 0;
-      for (const s of [-1, 1]) {
-        const ox = along ? 0 : s * 0.1, oz = along ? s * 0.1 : 0, ry = along ? 0 : Math.PI / 2;
-        p.add(new THREE.CylinderGeometry(0.022, 0.025, len, 6).rotateZ(Math.PI / 2), ox, y, oz, l % 2 ? 0x5e3e26 : 0x6e4a2e, ry);
-        for (const e of [-1, 1]) p.add(new THREE.CylinderGeometry(0.019, 0.019, 0.006, 6).rotateZ(Math.PI / 2), ox + (along ? (e * len) / 2 : 0), y, oz + (along ? 0 : (e * len) / 2), 0xc8a070, ry);
-      }
-    }
-    for (let i = 0; i < 6; i++) { const a = i * 1.05 + 0.3; tube(p, [Math.cos(a) * 0.08, 0.03, Math.sin(a) * 0.08], [Math.cos(a) * 0.012, 0.3, Math.sin(a) * 0.012], 0.012, 0.007, i % 2 ? 0x3a2a20 : 0x4a3424); }
-    const pyre = new THREE.Mesh(p.build(false).body, mats.body);
-    pyre.castShadow = true;
-    f.decor.add(pyre);
+    // sur la place : pas de bûcher au milieu de la fontaine ou des étals ; le feu du clan, lui, a déjà ses pierres et son bois
+    if (f.plaza && !f.plaza.fire) return;
+    if (!f.plaza) this.pyre(f);
     const bed = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.025, 10), this.bedMat);
     bed.position.y = 0.012;
     f.group.add(bed);
-    f.own.push(pyre.geometry, bed.geometry);
+    f.own.push(bed.geometry);
     // les langues de flammes : orangées autour, plus claires dedans, et le cœur, presque blanc ; celles du bord penchent au dehors
     const T: [number, number, number, number, THREE.Material][] = [
       [0.1, 0.42, 0.02, 0, this.flameMat], [0.08, 0.34, 0.075, 1.3, this.amberMat], [0.08, 0.3, 0.075, 2.6, this.flameMat], [0.075, 0.36, 0.075, 3.9, this.amberMat],
@@ -213,6 +215,25 @@ export class Festivities {
     f.group.add(f.halo, f.aura);
   }
 
+  /** Le bûcher du feu de joie : son cercle de pierres, ses rondins entrecroisés et son petit bois */
+  private pyre(f: Fest) {
+    const p = new Parts();
+    for (let i = 0; i < 11; i++) { const a = (i / 11) * Math.PI * 2; p.add(new THREE.IcosahedronGeometry(0.04 + (i % 3) * 0.006, 0).scale(1, 0.7, 1), Math.cos(a) * 0.27, 0.02, Math.sin(a) * 0.27, i % 2 ? 0x8a857c : 0x9d978d); }
+    for (let l = 0; l < 4; l++) {
+      const len = 0.36 - l * 0.035, y = 0.025 + l * 0.04, along = l % 2 === 0;
+      for (const s of [-1, 1]) {
+        const ox = along ? 0 : s * 0.1, oz = along ? s * 0.1 : 0, ry = along ? 0 : Math.PI / 2;
+        p.add(new THREE.CylinderGeometry(0.022, 0.025, len, 6).rotateZ(Math.PI / 2), ox, y, oz, l % 2 ? 0x5e3e26 : 0x6e4a2e, ry);
+        for (const e of [-1, 1]) p.add(new THREE.CylinderGeometry(0.019, 0.019, 0.006, 6).rotateZ(Math.PI / 2), ox + (along ? (e * len) / 2 : 0), y, oz + (along ? 0 : (e * len) / 2), 0xc8a070, ry);
+      }
+    }
+    for (let i = 0; i < 6; i++) { const a = i * 1.05 + 0.3; tube(p, [Math.cos(a) * 0.08, 0.03, Math.sin(a) * 0.08], [Math.cos(a) * 0.012, 0.3, Math.sin(a) * 0.012], 0.012, 0.007, i % 2 ? 0x3a2a20 : 0x4a3424); }
+    const pyre = new THREE.Mesh(p.build(false).body, mats.body);
+    pyre.castShadow = true;
+    f.decor.add(pyre);
+    f.own.push(pyre.geometry);
+  }
+
   /**
    * Le décor de la fête, selon l'âge : la ronde des danseurs autour du feu ; les mâts en cercle et leurs guirlandes (feuillage,
    * fleurs, fanions, lanternes, ampoules, néons), torches en haut des mâts de l'Antiquité et du Moyen Âge ; les deux musiciens
@@ -221,11 +242,15 @@ export class Festivities {
    */
   private decorate(f: Fest) {
     const age = f.age, w = this.world, p = new Parts(), g = new Parts(), at = (x: number, z: number) => w.surfaceAt(f.x + x, f.z + z) - f.y;
-    const free = (x: number, z: number) => this.open(f.x + x, f.z + z);
+    // sur la place, ses propres cases sont libres (la fête s'y tient) ; les mâts se dressent à son bord, la musique et le
+    // festin entre la ronde et les mâts
+    const pl = f.plaza, inPlaza = (x: number, z: number) => !!pl && x >= pl.x0 && x < pl.x0 + pl.size && z >= pl.z0 && z < pl.z0 + pl.size;
+    const free = (x: number, z: number) => inPlaza(f.x + x, f.z + z) || this.open(f.x + x, f.z + z);
+    const R = pl ? pl.size / 2 - 0.07 : 1.5, side = pl ? f.ring + 0.26 : 1.12;
     // les mâts, leurs guirlandes de l'un à l'autre
     const masts: ([number, number, number] | null)[] = [];
     for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2 + 0.2, x = Math.cos(a) * 1.5, z = Math.sin(a) * 1.5, H = MAST_H[age];
+      const a = (i / 7) * Math.PI * 2 + 0.2, x = Math.cos(a) * R, z = Math.sin(a) * R, H = MAST_H[age];
       if (!free(x, z)) { masts.push(null); continue; }
       const y = at(x, z);
       masts.push([x, y + H, z]);
@@ -266,8 +291,8 @@ export class Festivities {
     const room = (a: number) => [0.9, 1.15, 1.35].filter((r) => free(Math.cos(a) * r, Math.sin(a) * r)).length;
     const angles = Array.from({ length: 12 }, (_, i) => (i / 12) * Math.PI * 2).sort((a, b) => room(b) - room(a));
     const ba = angles[0], ta = angles.find((a) => Math.abs(Math.atan2(Math.sin(a - ba), Math.cos(a - ba))) > 1.5) ?? ba + Math.PI;
-    this.musicians(f, p, ba, at);
-    this.feast(p, ta, age, at);
+    this.musicians(f, p, ba, at, side);
+    this.feast(p, ta, age, at, side + 0.03);
     // la ronde des danseurs, habillés à la mode de l'âge
     for (let i = 0; i < 10; i++) {
       const folk = makeFolk({ age, v: Math.floor(f.x * 31 + f.z * 7) + i * 13, role: 'villager' });
@@ -288,8 +313,8 @@ export class Festivities {
   }
 
   /** Les musiciens, côte à côte face au feu : le tambour (assis sur un billot), et la flûte (la trompette dès l'âge industriel) */
-  private musicians(f: Fest, p: Parts, a: number, at: (x: number, z: number) => number) {
-    const cx = Math.cos(a) * 1.12, cz = Math.sin(a) * 1.12, tx = -Math.sin(a), tz = Math.cos(a), face = Math.atan2(-cx, -cz);
+  private musicians(f: Fest, p: Parts, a: number, at: (x: number, z: number) => number, r = 1.12) {
+    const cx = Math.cos(a) * r, cz = Math.sin(a) * r, tx = -Math.sin(a), tz = Math.cos(a), face = Math.atan2(-cx, -cz);
     [-1, 1].forEach((s, i) => {
       const x = cx + tx * s * 0.15, z = cz + tz * s * 0.15, y = at(x, z), drum = i === 0;
       const folk = makeFolk({ age: f.age, v: Math.floor(f.x * 17 + f.z * 5) + i * 7, role: drum ? 'drummer' : 'villager' });
@@ -315,8 +340,8 @@ export class Festivities {
   }
 
   /** Le festin : des peaux au sol, des paniers de fruits et des billots pour s'asseoir ; puis une table, ses bancs, et ce qu'on y sert */
-  private feast(p: Parts, a: number, age: number, at: (x: number, z: number) => number) {
-    const cx = Math.cos(a) * 1.15, cz = Math.sin(a) * 1.15, ux = -Math.sin(a), uz = Math.cos(a), ry = Math.atan2(-uz, ux), y = at(cx, cz);
+  private feast(p: Parts, a: number, age: number, at: (x: number, z: number) => number, r = 1.15) {
+    const cx = Math.cos(a) * r, cz = Math.sin(a) * r, ux = -Math.sin(a), uz = Math.cos(a), ry = Math.atan2(-uz, ux), y = at(cx, cz);
     const put = (u: number, v: number) => [cx + ux * u + Math.cos(a) * v, cz + uz * u + Math.sin(a) * v];
     if (age === 0) {
       for (const [u, c] of [[-0.12, 0xa0784a], [0.13, 0x8a6440]]) { const [x, z] = put(u, 0); p.box(0.2, 0.004, 0.15, x, at(x, z), z, c, ry + u); }
@@ -372,13 +397,14 @@ export class Festivities {
       const night = LIGHTS.night.value;
       (f.halo.material as THREE.MeshBasicMaterial).opacity = (0.34 + Math.sin(f.t * 9) * 0.06 + Math.sin(f.t * 23) * 0.04) * fire * (0.25 + 0.75 * night);
       f.aura.material.opacity = (0.3 + Math.sin(f.t * 11) * 0.05) * fire * (0.45 + 0.55 * night);
-      if (fade > 0) for (let k = 0; k < 2; k++) if (Math.random() < dt * 14) this.ember(f.x + (Math.random() - 0.5) * 0.16, f.y + 0.32, f.z + (Math.random() - 0.5) * 0.16);
-      this.stepSmoke(f, dt, fire);
+      // (sans feu, sur une place qui a sa fontaine ou ses étals au milieu : ni braises ni fumée)
+      if (fade > 0 && f.tongues.length) for (let k = 0; k < 2; k++) if (Math.random() < dt * 14) this.ember(f.x + (Math.random() - 0.5) * 0.16, f.y + 0.32, f.z + (Math.random() - 0.5) * 0.16);
+      if (f.tongues.length) this.stepSmoke(f, dt, fire);
       // la ronde : on tourne en se tenant au pas, puis on s'arrête, face au feu, les bras levés ; et l'on repart
       const turn = f.t % 9, walking = turn < 6.5, k = Math.max(0.001, Math.min(1, fade * 1.5));
       for (const d of f.dancers) {
         if (walking) d.a += dt * 0.42;
-        const x = Math.cos(d.a) * 0.8, z = Math.sin(d.a) * 0.8;
+        const x = Math.cos(d.a) * f.ring, z = Math.sin(d.a) * f.ring;
         d.f.root.position.set(x, this.world.surfaceAt(f.x + x, f.z + z) - f.y, z);
         d.f.root.rotation.y = walking ? Math.atan2(-Math.sin(d.a), Math.cos(d.a)) : Math.atan2(-x, -z);
         d.f.root.scale.setScalar(k * 0.001 + (d.f.root.userData.s0 ??= d.f.root.scale.x) * k);
@@ -407,7 +433,8 @@ export class Festivities {
       // pétales (Antiquité), confettis (âge industriel et moderne) qui tombent sur la place
       if ((f.age === 1 || f.age >= 3) && fade > 0) for (let n = 0; n < 3; n++) if (Math.random() < dt * (f.age >= 3 ? 40 : 25)) {
         const c = (f.age === 1 ? PETALS : CONFETTI)[Math.floor(Math.random() * (f.age === 1 ? PETALS.length : CONFETTI.length))];
-        this.flake(f.x + (Math.random() - 0.5) * 2.4, f.y + 1.2 + Math.random() * 0.8, f.z + (Math.random() - 0.5) * 2.4, c);
+        const sp = f.plaza ? f.plaza.size : 2.4;
+        this.flake(f.x + (Math.random() - 0.5) * sp, f.y + 1.2 + Math.random() * 0.8, f.z + (Math.random() - 0.5) * sp, c);
       }
       if (f.t >= f.dur) {
         this.group.remove(f.group);
