@@ -4,7 +4,8 @@ import { mulberry32, clamp } from '../core/rng';
 /**
  * Jardins : chaque zone d'un seul tenant peinte à l'outil Jardin devient un lieu qui évolue avec les âges et s'organise selon
  * sa taille et sa forme. Lieu de rassemblement autour des feux à la Préhistoire, jardin antique, lices de tournoi au Moyen Âge,
- * jardin à la française ou à l'anglaise à l'âge industriel, parc avec aire de jeux à l'époque moderne.
+ * jardin à la française ou à l'anglaise à l'âge industriel, parc avec aire de jeux à l'époque moderne, jardin bioluminescent
+ * sous sa serre-dôme à l'âge futuriste.
  * Tirage déterministe (même zone, même âge : même jardin) ; partagé par le rendu et par les habitants, qui y prennent place
  */
 
@@ -29,7 +30,7 @@ export interface Item { k: string; x: number; z: number; r: number; s: number; v
 export interface Spot { x: number; z: number; face: number; act: Act; kid?: boolean; seat?: number }
 export interface Layout {
   g: Garden; age: number;
-  /** camp, antique, tournoi, lices, francais, anglais, parc */
+  /** camp, antique, tournoi, lices, francais, anglais, parc, futur */
   style: string;
   items: Item[];
   spots: Spot[];
@@ -188,8 +189,16 @@ export function layoutGarden(w: World, g: Garden, age: number): Layout {
   else if (age === 2) medieval(c);
   // à la française sur un terrain carré ou rectangulaire, à l'anglaise sur une zone aux contours libres
   else if (age === 3) { if (c.size >= 6 && g.fill >= 0.85 && g.wid >= 2.5) french(c); else lawn(c, false); }
-  else park(c);
+  else if (age === 4) park(c);
+  else future(c);
   return out;
+}
+
+/**
+ * Herbe plus riche : touffes et fleurs des champs dans les trous laissés libres (`k` : la sorte de touffe), sans gêner le reste
+ */
+function tufts(c: Ctx, n: number, k = 'tuft') {
+  for (let i = 0; i < n; i++) { const p = c.find(0.06, 0.04); if (p) c.put(k, p[0], p[1], c.rnd() * 6.28, 0.8 + c.rnd() * 0.5, 0.06); }
 }
 
 /** Préhistoire : lieu de rassemblement, feux entourés de rondins, boucherie, taille du silex, séchage des peaux et de la viande */
@@ -236,9 +245,21 @@ function camp(c: Ctx) {
       c.spot(sx, sz, toFire + Math.PI, WORK[k]);
     }
   }
+  // le mât totem du clan, peint d'ocre, au bord du grand feu
+  if (size >= 6) {
+    const [fx, fz] = fires[0], p = c.find(0.14, 0.12, (x, z) => Math.abs(Math.hypot(x - fx, z - fz) - 0.9) + c.rnd() * 0.3);
+    if (p) c.put('totem', p[0], p[1], c.face(p[0], p[1], fx, fz), 1.1, 0.14);
+  }
+  // buissons de baies au bord du camp, où l'on cueille
+  for (let i = 0; i < Math.min(6, Math.floor(size / 4)); i++) {
+    const p = c.find(0.14, 0.1, (x, z) => -Math.min(...fires.map(([fx, fz]) => Math.hypot(x - fx, z - fz))) + c.rnd() * 0.4);
+    if (p) c.put('berrybush', p[0], p[1], c.rnd() * 6.28, 0.9 + c.rnd() * 0.3, 0.14);
+  }
   // os et cailloux qui traînent
   const nCl = Math.min(50, Math.round(size * 1.6));
   for (let i = 0; i < nCl; i++) { const p = c.find(0.07, 0.05); if (p) c.put(['pebbles', 'bones', 'pebbles', 'firewood'][i % 4], p[0], p[1], c.rnd() * 6.28, 0.8 + c.rnd() * 0.4, 0.07); }
+  // des fougères et des herbes hautes qui repoussent dans les coins
+  tufts(c, Math.min(30, size), 'fern');
   kids(c, Math.min(3, Math.ceil(size / 4)));
 }
 
@@ -294,8 +315,17 @@ function antique(c: Ctx) {
     const p = c.find(0.15, 0.12, (px, pz) => Math.abs(Math.hypot(px - x, pz - z) - 1.5) + c.rnd() * 0.4);
     if (p) { const r = c.face(p[0], p[1], x, z); c.put('altar', p[0], p[1], r, 1, 0.15); c.spot(p[0] + Math.sin(r) * 0.22, p[1] + Math.cos(r) * 0.22, r + Math.PI, 'work'); }
   }
+  // la treille : colonnes, poutres et vigne chargée de raisin, un banc à l'ombre
+  if (size >= 8) {
+    const p = c.find(0.34, 0.3, (px, pz) => -Math.hypot(px - x, pz - z) + c.rnd() * 0.6);
+    if (p) { const r = c.face(p[0], p[1], x, z); c.put('pergola', p[0], p[1], r, 1, 0.34); c.spot(p[0], p[1], r, 'sit', { seat: 0.065 }); }
+  }
+  // grands vases fleuris et rosiers
+  for (let i = 0; i < Math.min(6, Math.ceil(size / 4)); i++) { const p = c.find(0.09, 0.07); if (p) c.put('urn', p[0], p[1], c.rnd() * 6.28, 0.9 + c.rnd() * 0.25, 0.09); }
+  for (let i = 0; i < Math.min(8, Math.ceil(size / 3)); i++) { const p = c.find(0.1, 0.08); if (p) c.put('rosebush', p[0], p[1], c.rnd() * 6.28, 0.85 + c.rnd() * 0.3, 0.1); }
   strolls(c, Math.min(4, Math.ceil(size / 3)));
   kids(c, Math.min(2, Math.floor(size / 5)));
+  tufts(c, Math.min(40, Math.round(size * 1.2)));
 }
 
 /** Moyen Âge : tournoi de joute si la zone est longue, sinon lices d'entraînement (quintaine, cibles de tir à l'arc) */
@@ -326,6 +356,7 @@ function medieval(c: Ctx) {
   fairground(c, x, z);
   strolls(c, Math.min(3, Math.ceil(size / 3)));
   kids(c, Math.min(2, Math.floor(size / 4)));
+  tufts(c, Math.min(20, size));
 }
 
 /** Fête autour des lices : palissade ouverte sur les routes, pavillons, échoppes, tonneaux, braseros, guirlandes de fanions */
@@ -430,6 +461,7 @@ function tourney(c: Ctx) {
   for (let i = 0; i < 2; i++) { const p = c.find(0.16, 0.12); if (p) c.put('weaponrack', p[0], p[1], c.face(p[0], p[1], x, z), 1, 0.16, { v: i }); }
   fairground(c, x, z);
   kids(c, Math.min(4, Math.floor(c.size / 4)));
+  tufts(c, Math.min(20, c.size));
   return true;
 }
 
@@ -472,6 +504,7 @@ function french(c: Ctx) {
     const m = (Math.abs(iu) + Math.abs(iv) * 2) % 4;
     if (m === 0) c.put('fl', x, z, c.rnd() * 6.28, 1, 0, { v: Math.abs(iu * 7 + iv * 3) % 5 });
     else if (m === 2 && (iu + iv) % 2 === 0) c.put('lowbox', x, z, 0, 1, 0);
+    else if (m === 2) c.put('fl', x, z, c.rnd() * 6.28, 0.85, 0, { v: Math.abs(iu * 3 + iv * 7) % 5 });
   }
   // bancs sur la place, tournés vers la fontaine ; statues au bout des allées
   for (const a of [0.785, 2.356, 3.927, 5.498]) {
@@ -551,15 +584,22 @@ function lawn(c: Ctx, modern: boolean) {
       if (c.fits(lx, lz, 0.05, 0.04)) c.put(modern ? 'lamp' : 'gaslamp', lx, lz, dir, 1, 0.05);
     }
   }
-  if (!modern) {
-    if (size >= 8) {
-      const p = c.find(0.55, 0.5, (x, z) => c.slope(x, z) + c.rnd() * 0.08);
-      if (p) {
-        const s = clamp(Math.sqrt(size) / 4, 0.85, 1.4);
-        c.put('pond', p[0], p[1], c.rnd() * 6.28, s, 0.62 * s);
-        for (let i = 0; i < 2; i++) { const a = c.rnd() * 6.28, sx = p[0] + Math.cos(a) * 0.68 * s, sz = p[1] + Math.sin(a) * 0.68 * s; c.spot(sx, sz, c.face(sx, sz, p[0], p[1]), 'stroll'); }
-      }
+  // arches de rosiers qui enjambent l'allée
+  if (along.length > 14) for (const f of modern ? [0.5] : [0.3, 0.7]) {
+    const [x, z, dir] = along[Math.floor(along.length * f)];
+    c.put('arch', x, z, dir, 1, 0, { v: modern ? 1 : 0 });
+  }
+  // l'étang, ses canards et, au jardin à l'anglaise, le saule pleureur penché sur l'eau
+  if (size >= (modern ? 12 : 8)) {
+    const p = c.find(0.55, 0.5, (x, z) => c.slope(x, z) + c.rnd() * 0.08);
+    if (p) {
+      const s = clamp(Math.sqrt(size) / 4, 0.85, 1.4);
+      c.put('pond', p[0], p[1], c.rnd() * 6.28, s, 0.62 * s);
+      for (let i = 0; i < 2; i++) { const a = c.rnd() * 6.28, sx = p[0] + Math.cos(a) * 0.68 * s, sz = p[1] + Math.sin(a) * 0.68 * s; c.spot(sx, sz, c.face(sx, sz, p[0], p[1]), 'stroll'); }
+      if (!modern) { const q = c.find(0.26, 0.2, (x, z) => Math.abs(Math.hypot(x - p[0], z - p[1]) - 0.75 * s)); if (q) c.put('willow', q[0], q[1], c.face(q[0], q[1], p[0], p[1]), 1, 0.26); }
     }
+  }
+  if (!modern) {
     if (size >= 10) { const p = c.find(0.42, 0.38); if (p) { c.put('kiosk', p[0], p[1], c.rnd() * 6.28, 1, 0.42); c.spot(p[0] + 0.08, p[1], c.rnd() * 6.28, 'stroll', { seat: 0.05 }); } }
     if (size >= 18) { const p = c.find(0.38, 0.34); if (p) c.put('folly', p[0], p[1], c.rnd() * 6.28, 1, 0.38); }
   } else {
@@ -571,6 +611,12 @@ function lawn(c: Ctx, modern: boolean) {
       c.put('picnic', p[0], p[1], r, 1, 0.3);
       for (const s of [1, -1]) c.spot(p[0] + Math.sin(r) * s * 0.13, p[1] + Math.cos(r) * s * 0.13, r + (s > 0 ? Math.PI : 0), 'sit', { seat: 0.06 });
     }
+    // le marchand de glaces et son client ; des prés de fleurs sauvages laissés en friche
+    if (size >= 10) {
+      const p = c.find(0.2, 0.16, along.length ? (x, z) => Math.min(...along.filter((_, i) => i % 4 === 0).map(([ax, az]) => Math.abs(Math.hypot(x - ax, z - az) - 0.3))) : undefined);
+      if (p) { const r = c.rnd() * 6.28; c.put('icecream', p[0], p[1], r, 1, 0.2); c.spot(p[0] - Math.sin(r) * 0.14, p[1] - Math.cos(r) * 0.14, r, 'work'); c.spot(p[0] + Math.sin(r) * 0.2, p[1] + Math.cos(r) * 0.2, r + Math.PI, 'stroll'); }
+    }
+    for (let i = 0; i < Math.min(5, Math.floor(size / 6)); i++) { const p = c.find(0.3, 0.24); if (p) c.put('meadow', p[0], p[1], c.rnd() * 6.28, 0.9 + c.rnd() * 0.3, 0.3); }
   }
   // bosquets : la moitié des arbres près d'un autre
   const trees: [number, number][] = [];
@@ -583,12 +629,13 @@ function lawn(c: Ctx, modern: boolean) {
     c.put('tree', p[0], p[1], c.rnd() * 6.28, 0.8 + c.rnd() * 0.45, 0.3, { v: Math.floor(c.rnd() * 3) });
   }
   for (let i = 0; i < clamp(Math.round(size / 2), 1, 30); i++) { const p = c.find(0.12, 0.1); if (p) c.put('bush', p[0], p[1], c.rnd() * 6.28, 0.8 + c.rnd() * 0.5, 0.12); }
-  for (let i = 0; i < clamp(Math.round(size / 4), 0, 12); i++) { const p = c.find(0.24, 0.2); if (p) c.put('bed', p[0], p[1], c.rnd() * 6.28, 0.9 + c.rnd() * 0.3, 0.24); }
+  for (let i = 0; i < clamp(Math.round(size / 3), 0, 14); i++) { const p = c.find(0.24, 0.2); if (p) c.put('bed', p[0], p[1], c.rnd() * 6.28, 0.9 + c.rnd() * 0.3, 0.24); }
   for (let i = 0; i < Math.min(6, Math.ceil(size / 3)) && along.length; i++) {
     const [x, z, dir] = along[Math.floor(c.rnd() * along.length)];
     c.spot(x, z, dir + (c.rnd() < 0.5 ? 0 : Math.PI), 'stroll');
   }
   kids(c, Math.min(3, Math.ceil(size / 5)));
+  tufts(c, Math.min(50, Math.round(size * 1.5)));
 }
 
 /** Époque moderne : un vrai parc, aire de jeux (toboggan, balançoires, tourniquet…) au milieu des arbres */
@@ -628,6 +675,97 @@ function park(c: Ctx) {
     c.block(x, z, pr + 0.05);
   }
   lawn(c, true);
+}
+
+/**
+ * Âge futuriste : un jardin bioluminescent, rien de commun avec le parc moderne. Au milieu, la serre-dôme de verre et ses
+ * plantes qui luisent ; autour, allées de lumière en rayons et en anneau, bornes lumineuses ; arbres-lumière, massifs
+ * hexagonaux aux fleurs phosphorescentes que soignent des drones-jardiniers, jardinières qui flottent, bassin anti-gravité
+ * (une bulle d'eau suspendue dans ses anneaux), bancs-cocons, trampoline lumineux et gyroscope pour les enfants
+ */
+function future(c: Ctx) {
+  c.out.style = 'futur';
+  const size = c.size;
+  const ctr = c.center(size >= 6 ? 0.6 : 0.25) ?? c.center(0.15);
+  if (!ctr) return;
+  const [x, z] = ctr, D = (px: number, pz: number) => Math.hypot(px - x, pz - z);
+  // la serre-dôme sur un grand jardin, sinon un grand arbre-lumière
+  let core = 0.22;
+  let s = clamp(Math.sqrt(size) / 4, 0.75, 1.4);
+  while (s > 0.62 && !c.inside(x, z, 0.68 * s)) s -= 0.04;
+  if (size >= 6 && s > 0.62) {
+    core = 0.68 * s;
+    c.put('dome', x, z, c.along, s, core + 0.04);
+    // on y flâne entre les plantes, sous le verre
+    c.spot(x + 0.28 * s, z + 0.1 * s, 1.2, 'stroll');
+  } else c.put('lighttree', x, z, c.rnd() * 6.28, 1.35, 0.24, { v: 0 });
+  // l'anneau de lumière autour, puis les allées en rayons jusqu'au bord, bordées de bornes lumineuses
+  const ring = core + 0.2, step = 0.2;
+  for (let a = 0; a < Math.PI * 2 - 1e-3; a += step / ring) {
+    const px = x + Math.cos(a) * ring, pz = z + Math.sin(a) * ring;
+    if (c.inside(px, pz, 0.04)) { c.path(px, pz); c.block(px, pz, 0.1); }
+  }
+  for (const [su, sv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let d = ring + step, i = 0; d < 9; d += step, i++) {
+    const [px, pz] = c.at(x, z, su * d, sv * d);
+    if (!c.inside(px, pz, 0.04)) break;
+    c.path(px, pz);
+    c.block(px, pz, 0.1);
+    if (i % 3 === 1) for (const side of [1, -1]) {
+      const [lx, lz] = c.at(px, pz, -sv * side * 0.18, su * side * 0.18);
+      if (c.fits(lx, lz, 0.03, 0.03)) c.put('pathlight', lx, lz, 0, 1, 0.04, { v: Math.abs(i) % 4 });
+    }
+  }
+  // les bancs-cocons sur l'anneau, tournés vers le dôme
+  for (const a of [0.785, 2.356, 3.927, 5.498]) {
+    const [bx, bz] = c.at(x, z, Math.cos(a) * (ring + 0.24), Math.sin(a) * (ring + 0.24));
+    if (!c.fits(bx, bz, 0.12, 0.08)) continue;
+    const r = c.face(bx, bz, x, z);
+    c.put('podbench', bx, bz, r, 1, 0.13, { v: Math.floor(a) % 4 });
+    c.spot(bx + Math.sin(r) * 0.03, bz + Math.cos(r) * 0.03, r, 'sit', { seat: 0.065 });
+  }
+  // le bassin anti-gravité : on s'arrête autour pour regarder la bulle d'eau qui flotte
+  if (size >= 10) {
+    const p = c.find(0.5, 0.45, (px, pz) => Math.abs(D(px, pz) - (core + 1.3)) + c.rnd() * 0.3);
+    if (p) {
+      c.put('gravpool', p[0], p[1], c.rnd() * 6.28, 1, 0.52);
+      for (let i = 0; i < 2; i++) { const a = c.rnd() * 6.28, sx = p[0] + Math.cos(a) * 0.56, sz = p[1] + Math.sin(a) * 0.56; c.spot(sx, sz, c.face(sx, sz, p[0], p[1]), 'stroll'); }
+    }
+  }
+  // le trampoline lumineux et le gyroscope des enfants
+  const play = size >= 9 ? ['hoverpad', 'gyro'] : size >= 4 ? ['hoverpad'] : [];
+  for (const k of play) {
+    const r = k === 'gyro' ? 0.26 : 0.28, p = c.find(r, r * 0.85, (px, pz) => Math.abs(D(px, pz) - (core + 0.9)) + c.rnd() * 0.4);
+    if (!p) continue;
+    c.put(k, p[0], p[1], c.rnd() * 6.28, 1, r, { v: Math.floor(c.rnd() * 4) });
+    for (let i = 0; i < 2; i++) { const a = c.rnd() * 6.28, sx = p[0] + Math.cos(a) * (r + 0.05), sz = p[1] + Math.sin(a) * (r + 0.05); c.spot(sx, sz, c.face(sx, sz, p[0], p[1]), 'play', { kid: true }); }
+  }
+  // massifs hexagonaux phosphorescents ; les drones-jardiniers tournent au-dessus des premiers
+  const beds: [number, number][] = [];
+  for (let i = 0; i < clamp(Math.floor(size / 4), size >= 3 ? 1 : 0, 10); i++) {
+    const p = c.find(0.22, 0.18);
+    if (!p) continue;
+    beds.push(p);
+    c.put('hexbed', p[0], p[1], c.rnd() * 6.28, 0.9 + c.rnd() * 0.25, 0.22, { v: i % 4 });
+  }
+  for (let i = 0; i < Math.min(3, Math.ceil(beds.length / 2)); i++) c.put('drone', beds[i][0], beds[i][1], c.rnd() * 6.28, 1, 0, { v: i });
+  // les jardinières qui flottent
+  for (let i = 0; i < (size >= 8 ? Math.min(4, Math.floor(size / 8)) : 0); i++) { const p = c.find(0.18, 0.15); if (p) c.put('floater', p[0], p[1], c.rnd() * 6.28, 1, 0.18, { v: i % 4 }); }
+  // les arbres-lumière, en bosquets
+  const trees: [number, number][] = [];
+  for (let i = 0; i < clamp(Math.round(size / 2.6), 1, 18); i++) {
+    const near = trees.length && i % 2 ? trees[Math.floor(c.rnd() * trees.length)] : null;
+    const p = c.find(0.2, 0.15, near ? (px, pz) => Math.abs(Math.hypot(px - near[0], pz - near[1]) - 0.5) + c.rnd() * 0.2 : undefined);
+    if (!p) break;
+    trees.push(p);
+    c.put('lighttree', p[0], p[1], c.rnd() * 6.28, 0.8 + c.rnd() * 0.4, 0.2, { v: i % 4 });
+  }
+  // buissons de cristal, herbes lumineuses
+  for (let i = 0; i < clamp(Math.round(size / 3), 0, 14); i++) { const p = c.find(0.1, 0.08); if (p) c.put('crystal', p[0], p[1], c.rnd() * 6.28, 0.8 + c.rnd() * 0.5, 0.1, { v: i % 4 }); }
+  const p = c.out.paths;
+  for (let i = 0; i < Math.min(6, Math.ceil(size / 3)) && p.length; i++) { const j = Math.floor(c.rnd() * (p.length / 2)) * 2; c.spot(p[j], p[j + 1], c.rnd() * 6.28, 'stroll'); }
+  strolls(c, Math.min(3, Math.ceil(size / 5)));
+  kids(c, Math.min(2, Math.floor(size / 6)));
+  tufts(c, Math.min(45, Math.round(size * 1.3)), 'glowgrass');
 }
 
 /**

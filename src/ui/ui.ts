@@ -184,6 +184,7 @@ const GARDEN_BY_AGE: { icon: string; label: string; desc: string }[] = [
   { icon: 'shield', label: 'Lices', desc: 'Des lices : sur une zone longue, un tournoi où deux chevaliers joutent devant les gradins ; sur une petite zone, quintaine et tir à l’arc.' },
   { icon: 'leaf', label: 'Jardin public', desc: 'Un jardin public : à la française sur un terrain rectangulaire, à l’anglaise (étang, kiosque) sur une zone aux contours libres.' },
   { icon: 'slide', label: 'Parc', desc: 'Un parc et son aire de jeux : toboggan, balançoires, bascule, tourniquet, bac à sable.' },
+  { icon: 'leaf', label: 'Jardin lumineux', desc: 'Un jardin bioluminescent : serre-dôme de verre, arbres-lumière, allées qui brillent, bassin anti-gravité, jardinières qui flottent et drones-jardiniers.' },
 ];
 /** Biomes que peint le pinceau, et leur teinte de pastille (null : rendre la terre à son climat) */
 const BIOME_CHOICES: { b: number | null; label: string; color: string }[] = [

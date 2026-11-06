@@ -664,17 +664,18 @@ describe('jardins', () => {
 
   it('change de visage à chaque âge, toujours le même pour une zone donnée', () => {
     const w = continent(), g = garden(w, 4, 3);
-    const styles = [0, 1, 2, 3, 4].map((a) => layoutGarden(w, g, a).style);
+    const styles = [0, 1, 2, 3, 4, 5].map((a) => layoutGarden(w, g, a).style);
     expect(styles[0]).toBe('camp');
     expect(styles[1]).toBe('antique');
     expect(styles[4]).toBe('parc');
-    expect(new Set(styles).size).toBe(5);
+    expect(styles[5]).toBe('futur');
+    expect(new Set(styles).size).toBe(6);
     expect(layoutGarden(w, g, 2)).toEqual(layoutGarden(w, g, 2));
   });
 
   it('se remplit selon la taille et reste dans la zone', () => {
     const w = continent(), small = garden(w, 2, 1), big = garden(w, 6, 5);
-    for (let a = 0; a <= 4; a++) {
+    for (let a = 0; a <= 5; a++) {
       const s = layoutGarden(w, small, a), b = layoutGarden(w, big, a);
       expect(b.items.length).toBeGreaterThan(s.items.length);
       for (const l of [s, b]) for (const it of l.items) expect(l.g.set.has(w.ci(Math.floor(it.x), Math.floor(it.z)))).toBe(true);
@@ -684,6 +685,33 @@ describe('jardins', () => {
     expect(layoutGarden(w, big, 0).items.filter((i) => i.k === 'fire').length).toBeGreaterThan(0);
     expect(layoutGarden(w, big, 0).spots.some((s) => s.act === 'sit')).toBe(true);
     expect(layoutGarden(w, big, 4).spots.some((s) => s.kid && s.act === 'play')).toBe(true);
+  });
+
+  it('à l’âge futuriste, un jardin lumineux qui ne ressemble pas au parc moderne', () => {
+    const w = continent(), big = garden(w, 6, 5), small = garden(w, 2, 1);
+    const f = layoutGarden(w, big, 5), m = layoutGarden(w, big, 4);
+    expect(f.style).toBe('futur');
+    const kinds = new Set(f.items.map((i) => i.k)), modern = new Set(m.items.map((i) => i.k));
+    for (const k of ['dome', 'lighttree', 'hexbed', 'drone', 'pathlight', 'podbench', 'gravpool', 'hoverpad']) expect(kinds.has(k), k).toBe(true);
+    // rien du parc moderne : ni toboggan, ni arbres ordinaires, ni lampadaires
+    for (const k of ['slide', 'swings', 'tree', 'lamp', 'bench']) expect(kinds.has(k), k).toBe(false);
+    expect([...kinds].filter((k) => modern.has(k) && k !== 'pond').length).toBeLessThan(3);
+    // on s'y assoit, les enfants y jouent, et ça reste dans la zone même petite
+    expect(f.spots.some((s) => s.act === 'sit')).toBe(true);
+    expect(f.spots.some((s) => s.kid && s.act === 'play')).toBe(true);
+    expect(f.paths.length).toBeGreaterThan(20);
+    const s = layoutGarden(w, small, 5);
+    expect(s.items.length).toBeGreaterThan(0);
+    for (const l of [f, s]) for (const it of l.items) expect(l.g.set.has(w.ci(Math.floor(it.x), Math.floor(it.z)))).toBe(true);
+    expect(layoutGarden(w, big, 5)).toEqual(f);
+  });
+
+  it('tous les âges ont de l’herbe plus riche et des détails propres', () => {
+    const w = continent(), big = garden(w, 6, 5);
+    const has = (a: number, k: string) => layoutGarden(w, big, a).items.some((i) => i.k === k);
+    expect(has(0, 'fern') && has(0, 'berrybush') && has(0, 'totem')).toBe(true);
+    expect(has(1, 'tuft') && has(1, 'urn') && has(1, 'rosebush')).toBe(true);
+    expect(has(5, 'glowgrass')).toBe(true);
   });
 
   it('un jardin long accueille un tournoi au Moyen Âge, un petit des lices d’entraînement', () => {
