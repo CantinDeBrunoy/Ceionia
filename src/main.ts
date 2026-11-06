@@ -56,6 +56,7 @@ import { RailEditState, TrackEditor } from './build/trackEdit';
 import { ExpeditionView, followPoint } from './render/expeditionView';
 import { Festivities } from './render/festivities';
 import { Trophies, trophiesWon } from './render/trophies';
+import { HomeButton, awayFromHome } from './ui/homeButton';
 import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -130,6 +131,8 @@ class Game implements UIHost {
   /** les trophées des gros monstres vaincus, sur la grande place ; quand on les remet à jour */
   trophies: Trophies;
   private trophyT = 0;
+  /** le bouton « Retourner au village », quand la vue s'éloigne de la grande place */
+  private homeBtn: HomeButton;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
@@ -335,6 +338,7 @@ class Game implements UIHost {
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
     this.spaceCast = new SpaceCast(uiRoot);
+    this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
     this.expeditions.onNews = (m, depths) => this.ui.toast(m, depths ? () => this.ui.openExpeditions('depths') : undefined);
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
     // le camp souterrain attaqué : un clic sur le message y descend ; l'issue, un clic ouvre la fiche du camp
@@ -562,6 +566,14 @@ class Game implements UIHost {
   festAt(x: number, z: number) {
     const b = this.plazaNear(x, z);
     this.fest.start(x, z, this.sim.age, b ? { x0: b.x, z0: b.z, size: sizeOf(b), fire: b.age === 0 } : null);
+  }
+
+  /** La vue s'est éloignée du cœur du village, où la ramène « Retourner au village » (en surface seulement) */
+  private awayFromHome() {
+    const c = this.mode === 'surface' ? this.villageCenter() : null;
+    if (!c) return false;
+    const v = this.cam.view(), p = new THREE.Vector3(c[0], this.world.surfaceAt(c[0], c[1]), c[1]).project(this.cam.camera);
+    return awayFromHome(Math.hypot(v.x - c[0], v.z - c[1]), v.dist, p.z < 1 ? p : null, this.homeBtn.shown);
   }
 
   /** Le cœur du village : le milieu de ses bâtiments (la médiane, qu'un avant-poste lointain ne décale pas) */
@@ -1171,6 +1183,7 @@ class Game implements UIHost {
 
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); }
+    if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
