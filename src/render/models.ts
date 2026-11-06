@@ -11669,7 +11669,7 @@ export function shark(p: Parts, big = false) {
   // l'aileron dorsal (le seul qu'on voie quand il rôde), l'aileron de la queue, les pectorales
   p.add(new THREE.ConeGeometry(0.045, 0.15, 3).scale(0.28, 1, 1), 0, 0.095, -0.01, back, 0, false, 0, -0.32);
   p.add(new THREE.ConeGeometry(0.03, 0.08, 3).scale(0.28, 1, 1), 0, 0.075, -0.16, back, 0, false, 0, -0.5);
-  for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.03, 0.12, 3).scale(1, 1, 0.3), s * 0.07, -0.035, 0.07, back, 0, false, s * 1.25, 0.2);
+  for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.03, 0.12, 3).scale(1, 1, 0.3), s * 0.095, -0.045, 0.07, back, 0, false, -s * 1.9, 0.2);
   p.add(new THREE.ConeGeometry(0.04, 0.13, 3).scale(0.28, 1, 1), 0, 0.045, -0.265, back, 0, false, 0, -0.75);
   p.add(new THREE.ConeGeometry(0.03, 0.09, 3).scale(0.28, 1, 1), 0, -0.035, -0.255, back, 0, false, 0, 2.4);
   for (const s of [-1, 1]) p.box(0.01, 0.01, 0.01, s * 0.045, 0.02, 0.2, 0x1a1a1e);
