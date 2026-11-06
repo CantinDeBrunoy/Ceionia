@@ -1,12 +1,27 @@
+import { mapDef } from '../world/mapgen';
+
 export interface Settings {
   dayLen: number;
   seasonLen: number;
   speed: number;
   musicVol: number;
   sfxVol: number;
-  muteMusic: boolean;
-  muteSfx: boolean;
+  /** son activé : coupé par défaut tant que le joueur ne l'a pas allumé dans les réglages */
+  music?: boolean;
+  sfx?: boolean;
+  /** qualité graphique : halo, brume et densité des particules */
+  quality?: Quality;
+  /** catastrophes naturelles : lave et incendies détruisent les bâtiments, le volcan se réveille de lui-même */
+  disasters?: boolean;
+  /** routes posées d'elles-mêmes jusqu'aux nouveaux bâtiments */
+  autoRoads?: boolean;
+  /** ressources illimitées : bois, pierre et minerai ne manquent jamais (rien ne se paie) */
+  unlimited?: boolean;
+  /** flèches d'amélioration au-dessus des bâtiments : masquées si vrai */
+  hideUpBadges?: boolean;
 }
+
+export type Quality = 'high' | 'medium' | 'low';
 
 export interface SaveData {
   v: 1;
@@ -42,6 +57,10 @@ export function deleteSlot(map: number) {
 
 export function validate(d: any): SaveData {
   if (!d || d.v !== 1 || typeof d.map !== 'number' || !d.world || !Array.isArray(d.world.heights)) throw new Error('Fichier de sauvegarde invalide');
+  // seule reste la carte du continent ; les cartes sont passées de 48 à 96 puis 192 cases de côté
+  const def = mapDef(d.map);
+  if (!def) throw new Error('Sauvegarde d’une carte qui n’existe plus (seul le continent reste)');
+  if (d.world.n !== def.size) throw new Error('Sauvegarde d’une ancienne version (carte plus petite)');
   return d as SaveData;
 }
 
@@ -49,7 +68,7 @@ export function exportSave(d: SaveData) {
   const blob = new Blob([JSON.stringify(d)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `village-lowpoly-carte${d.map + 1}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `ceionia-carte${d.map + 1}-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);

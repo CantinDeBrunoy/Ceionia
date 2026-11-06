@@ -1,5 +1,10 @@
 import { clamp } from './rng';
 
+/** Écart de cadence entre le jour et la nuit : 0,6 donne environ 70 % du cycle au jour et 30 % à la nuit */
+const NIGHT_SKIP = 0.6;
+/** Part de la saison sur laquelle le décor passe d'une saison à l'autre */
+const BLEND = 0.3;
+
 export class GameTime {
   hour = 9;
   /** 0..4 : 0 printemps, 1 été, 2 automne, 3 hiver */
@@ -14,7 +19,8 @@ export class GameTime {
   update(dt: number): number {
     if (this.paused || this.speed <= 0) return 0;
     const g = dt * this.speed;
-    this.hour += (g * 24) / this.dayLen;
+    // les heures de nuit filent plus vite que celles du jour (un tiers du cycle environ), la journée garde sa durée
+    this.hour += (g * 24) / this.dayLen / (1 + NIGHT_SKIP * Math.sin(((this.hour - 6) / 24) * Math.PI * 2));
     while (this.hour >= 24) { this.hour -= 24; this.days++; }
     this.seasonT += g / this.seasonLen;
     while (this.seasonT >= 4) this.seasonT -= 4;
@@ -24,10 +30,14 @@ export class GameTime {
   get season() { return Math.floor(this.seasonT) % 4; }
   get frac() { return this.seasonT - Math.floor(this.seasonT); }
 
-  /** Transition vers la saison suivante sur les derniers 30 % */
+  /**
+   * Transition du décor d'une saison à la suivante sur 30 % de saison, centrée sur le changement : à mi-chemin quand la
+   * saison affichée change, qui est donc toujours celle qui domine le décor (partie sur les derniers 30 %, la transition
+   * montrait l'automne en « Été » et la neige en « Automne »)
+   */
   mix(): { a: number; b: number; t: number } {
-    const a = this.season;
-    const f = clamp((this.frac - 0.7) / 0.3, 0, 1);
+    const s = (this.seasonT + 4 - BLEND / 2) % 4, a = Math.floor(s);
+    const f = clamp((s - a - (1 - BLEND)) / BLEND, 0, 1);
     return { a, b: (a + 1) % 4, t: f * f * (3 - 2 * f) };
   }
 
