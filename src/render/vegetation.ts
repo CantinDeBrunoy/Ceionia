@@ -832,11 +832,25 @@ export class VegView {
     }
   }
 
-  /** Fond marin : laminaires qui ondulent sous la surface, coraux colorés sur les hauts-fonds */
+  /**
+   * Eau près du rivage : une case de terre ferme (ou de lac) à `r` cases au plus. Nénuphars, roseaux et algues n'y poussent
+   * que là, jamais en pleine mer (sur les hauts-fonds du récif, au large)
+   */
+  private nearShore(cx: number, cz: number, r: number) {
+    const w = this.world;
+    for (let dz = -r; dz <= r; dz++)
+      for (let dx = -r; dx <= r; dx++) {
+        const x = cx + dx, z = cz + dz;
+        if (w.inCells(x, z) && (w.cellAvg(x, z) > SEA + 0.02 || w.lake[w.ci(x, z)])) return true;
+      }
+    return false;
+  }
+
+  /** Fond marin : laminaires qui ondulent sous la surface (près du rivage), coraux colorés sur les hauts-fonds */
   private seabed(cx: number, cz: number, depth: number, s: SeasonState) {
     const w = this.world, col = this.col;
     if (s.snow > 0.9) return;
-    if (depth > 0.3 && depth < 2.2 && hash2(cx, cz, 601) < 0.3) {
+    if (depth > 0.3 && depth < 2.2 && hash2(cx, cz, 601) < 0.3 && this.nearShore(cx, cz, 3)) {
       const n = 2 + Math.floor(hash2(cx, cz, 602) * 3);
       for (let i = 0; i < n; i++) {
         const px = cx + 0.15 + hash2(cx, cz, 603 + i) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 610 + i) * 0.7;
@@ -869,8 +883,8 @@ export class VegView {
     const w = this.world, col = this.col, k = w.ci(cx, cz);
     if (w.occ[k] || w.road[k] || w.lake[k]) return;
     const avg = w.cellAvg(cx, cz), slope = w.cellSlope(cx, cz), b = w.biome[k];
-    // marais : roseaux sur les berges et dans l'eau peu profonde, nénuphars sur les mares
-    if (b === BIOME_MARSH && avg > -0.7 && avg < 0.7 && s.snow < 0.85) {
+    // marais : roseaux sur les berges et dans l'eau peu profonde, nénuphars sur les mares (au bord, jamais au large)
+    if (b === BIOME_MARSH && avg > -0.7 && avg < 0.7 && s.snow < 0.85 && (avg > SEA + 0.02 || this.nearShore(cx, cz, 2))) {
       if (avg < 0.02 && hash2(cx, cz, 701) < 0.45) {
         const n = 1 + Math.floor(hash2(cx, cz, 702) * 3);
         for (let i = 0; i < n; i++) {

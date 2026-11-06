@@ -520,6 +520,14 @@ export function lineOf(k: KindId): KindId[] {
   return out;
 }
 
+/**
+ * Lignée d'un genre exigé parmi d'autres (`reqs`) : sans ceux qui sont eux-mêmes exigés. Chaque équipement compte ainsi à
+ * part : quand une mission demande le stade et le terrain de football, le stade (amélioré d'un terrain) ne vaut pas les deux
+ */
+export function reqLine(k: KindId, reqs: readonly KindId[]): KindId[] {
+  return lineOf(k).filter((x) => x === k || !reqs.includes(x));
+}
+
 export interface Building {
   id: number;
   kind: KindId;

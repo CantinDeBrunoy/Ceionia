@@ -6,7 +6,7 @@ import { MISSIONS, Mission } from '../src/sim/missions';
 import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
 import { Expeditions, ActiveExpedition, FATE_AT, FATED, nextEventAt } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
-import { KindId } from '../src/build/catalog';
+import { KindId, lineOf, reqLine } from '../src/build/catalog';
 import * as THREE from 'three';
 import { ExpeditionScene } from '../src/render/expeditionScenes';
 import { beastInfo } from '../src/render/beasts';
@@ -77,6 +77,25 @@ describe('la chasse au monstre des mers', () => {
       expect(EVENT_BY[id].options.some((o) => !o.needs)).toBe(true);
     }
   });
+
+  it('le tourbillon ne tombe qu’en plein combat, une fois le kraken sorti de l’eau, jamais à l’arrivée', () => {
+    const m = mission('monster'), at = (k?: number) => eventsFor({ ...ctx(m, 1, k === undefined), at: k }).map((e) => e.id);
+    expect(at()).not.toContain('maelstrom');
+    expect(at(0.3)).not.toContain('maelstrom');
+    expect(at(0.55)).toContain('maelstrom');
+    expect(at(0.75)).toContain('maelstrom');
+    // la tête du kraken se dresse à mi-combat (voir la scène) : le tourbillon ne vient pas avant
+    expect(EVENT_BY.maelstrom.from).toBeGreaterThanOrEqual(0.5);
+    // sur le vrai fil d'une chasse : jamais le premier imprévu à l'arrivée
+    for (const seed of [3, 7, 11, 19, 23, 29]) {
+      const v = village(1, seed), a = v.ex.start(m, 1, 1)!;
+      let atK = -1;
+      play(v, a, () => a.phase === 'back' || a.phase === 'home', () => {
+        if (a.wait?.id === 'maelstrom' && atK < 0) atK = a.phase === 'work' ? a.t / Math.max(1, a.c.work + a.extra) : 0;
+      });
+      if (atK >= 0) expect(atK).toBeGreaterThanOrEqual(0.5);
+    }
+  }, 60000);
 
   it('même d’un village loin de la côte, la chasse prend le large (pas une rivière)', () => {
     for (const ci of [0, 1]) {
@@ -247,6 +266,20 @@ describe('organiser les JO', () => {
     expect(ids(m, 0, true)).toContain('flame');
     expect(ids(m, 0, false)).not.toContain('flame');
     expect(ids(m, 0, false)).toContain('record');
+  });
+
+  it('chaque équipement compte à part : le stade seul ne vaut pas le terrain de football', () => {
+    const v = village(4), m = mission('games'), [x, z] = v.at;
+    build(v.w, 'stadium', x + 8, z, 4);
+    for (const k of ['basket', 'tennis', 'waterpark'] as KindId[]) build(v.w, k, x - 6, z + 6, 4);
+    // le stade (qui compte d'ordinaire comme un terrain de football amélioré) ne suffit pas aux JO
+    expect(v.ex.has('football')).toBe(true);
+    expect(v.ex.missing(m)).toEqual(['bâtir : terrain de football']);
+    expect(reqLine('football', m.requires!.kinds!)).toEqual(['football']);
+    // ailleurs, la lignée reste entière
+    expect(reqLine('football', ['football'])).toEqual(lineOf('football'));
+    build(v.w, 'football', x - 6, z - 6, 4);
+    expect(v.ex.missing(m)).toEqual([]);
   });
 
   it('sans stade ni bassins, on ne peut pas partir ; tout bâti, l’équipe se rend au pied du stade', () => {

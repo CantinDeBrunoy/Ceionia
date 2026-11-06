@@ -19,6 +19,21 @@ import { Building, sizeOf } from '../build/catalog';
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
 export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34], wolf: ['wolf', 0.3] };
 
+/** Longueur du loup articulé à l'échelle 1 (de la truffe au bout de la queue) */
+const WOLF_LEN = 0.34;
+/**
+ * Le loup des expéditions : la bête articulée de la faune (trot, galop, hurlement, morsure), longue de `len` ; ses gestes
+ * répondent aussi aux noms de ceux des modèles importés (course, coup de tête, sursaut) qu'emploient les scènes
+ */
+function wolfActor(len: number, seed: number): Actor {
+  const a = makeBeast('wolf', Math.floor(Math.abs(seed * 7)) % 3, len / WOLF_LEN, 0.92 + (Math.abs(seed * 13) % 1) * 0.14);
+  for (const [alias, clip] of [['Run', 'Gallop'], ['Headbutt', 'Attack'], ['Jump_Start', 'Hit'], ['Idle_Eating', 'Eating'], ['WalkSlow', 'Walk']]) {
+    const c = a.actions.get(clip);
+    if (c && !a.actions.has(alias)) a.actions.set(alias, c);
+  }
+  return a;
+}
+
 // ---------------- Accessoires (géométries partagées, faites à la première demande) ----------------
 const cache = new Map<string, THREE.BufferGeometry>();
 function geo(key: string, make: (p: Parts) => void) {
@@ -1559,7 +1574,7 @@ export class ExpeditionScene {
   /** Une bête de l'imprévu (loup, meneur du troupeau, laie, cerf…), à la taille voulue */
   private sBeast(s: Staging, k: HerdKind | 'wolf' | 'deer', x: number, z: number, size = 1): Beast {
     const [name, len]: [ModelName, number] = k === 'deer' ? ['deer', 0.3] : ANIMAL[k];
-    const actor = hasModel(name) ? makeActor(name, len * size) : null;
+    const actor = k === 'wolf' ? wolfActor(len * size, x + z) : hasModel(name) ? makeActor(name, len * size) : null;
     const obj: THREE.Object3D = actor ? actor.root : new THREE.Mesh(new THREE.IcosahedronGeometry(len * size * 0.5, 0), mats.body);
     if (actor) { actor.mixer.setTime(x * 3); s.own.push({ dispose: () => actor.mixer.stopAllAction() }); } else s.own.push((obj as THREE.Mesh).geometry);
     obj.position.set(x, this.world.surfaceAt(x, z), z);
@@ -1793,6 +1808,8 @@ export class ExpeditionScene {
       const r = p < 0 ? 1.7 : p === 0 ? 1.9 : p === 1 ? 2.4 : 1.1;
       pack.forEach((b, i) => {
         if (leave) { this.sFlee(b, cx, cz, 1.6, dt); return; }
+        // à leur arrivée, ils s'assoient face à l'équipe et hurlent ensemble, avant de rôder
+        if (p < 0 && s.t > 0.8 + i * 0.3 && s.t < 6.3 + i * 0.3) { this.sFace(b, cx, cz); this.sMove(b, b.x, b.z, 0, dt, ['Idle_2', 'Idle']); return; }
         b.wait += dt * (0.32 + i * 0.05);
         // (sur la terre ferme : là où le cercle passe dans l'eau, ils rôdent plus près)
         const [x, z] = this.near(cx + Math.cos(b.wait) * r, cz + Math.sin(b.wait) * r, cx, cz);
@@ -1813,6 +1830,8 @@ export class ExpeditionScene {
       const lead = this.beasts[0], [cx, cz] = lead ? [lead.x, lead.z] : this.focus, stay = s.pick === 0 ? 2 : s.pick === 1 ? 10 : 12, flee = s.pick >= 0 && s.after > stay;
       extra.forEach((b, i) => {
         if (flee) { this.sFlee(b, tx, tz, 1.6, dt); return; }
+        // la meute appelle : les deux loups s'assoient et hurlent avant de tourner autour du chef
+        if (s.pick < 0 && s.t > 0.5 + i * 0.4 && s.t < 6 + i * 0.4) { this.sFace(b, tx, tz); this.sMove(b, b.x, b.z, 0, dt, ['Idle_2', 'Idle']); return; }
         const ang = this.t * 0.6 + i * Math.PI;
         this.sMove(b, cx + Math.cos(ang) * 0.6, cz + Math.sin(ang) * 0.6, 0.9, dt, ['Idle'], true);
       });
@@ -2819,7 +2838,7 @@ export class ExpeditionScene {
 
   private addBeast(k: HerdKind | 'wolf', cx: number, cz: number, r: number, ang: number) {
     const [name, len] = ANIMAL[k];
-    const actor = hasModel(name) ? makeActor(name, len) : null;
+    const actor = k === 'wolf' ? wolfActor(len, cx + cz) : hasModel(name) ? makeActor(name, len) : null;
     const obj: THREE.Object3D = actor ? actor.root : new THREE.Mesh(new THREE.IcosahedronGeometry(len * 0.5, 0), mats.body);
     if (actor) actor.mixer.setTime(ang);
     const [x, z] = this.near(cx + Math.cos(ang) * r, cz + Math.sin(ang) * r, cx, cz);

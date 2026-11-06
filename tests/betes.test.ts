@@ -24,8 +24,22 @@ describe('bêtes articulées', () => {
     expect(BEAST_KINDS.has('wolf')).toBe(true);
     const { bones, clips } = beastInfo('wolf');
     for (const b of ['eL', 'eR', 'jaw', 'tail1', 'tail2']) expect(bones).toContain(b);
-    for (const n of ['Sleep', 'Eating', 'Idle_2', 'Idle_3']) expect(clips).toContain(n);
+    // (morsure et sursaut : pour la chasse au loup des expéditions)
+    for (const n of ['Sleep', 'Eating', 'Idle_2', 'Idle_3', 'Attack', 'Hit']) expect(clips).toContain(n);
     for (const coat of [0, 1, 2]) expect(makeBeast('wolf', coat, 1).actions.has('Idle_2')).toBe(true);
+  });
+
+  it('le dragon a des ailes à os (bras, avant-bras, main, trois doigts) et une membrane qui suit plusieurs os', () => {
+    const { bones, clips } = beastInfo('dragon');
+    for (const L of ['L', 'R']) for (const b of ['1', '2', '3', 'a', 'b', 'c']) expect(bones).toContain(`w${L}${b}`);
+    for (const n of ['Fly', 'Attack', 'Death', 'Idle_2']) expect(clips).toContain(n);
+    let shared = 0;
+    makeBeast('dragon', 0, 1).root.traverse((o) => {
+      const sw = (o as any).geometry?.attributes?.skinWeight;
+      if (sw) for (let i = 0; i < sw.count; i++) if (sw.getY(i) > 0) shared++;
+    });
+    // les sommets du bord de fuite, entre deux doigts, suivent les deux
+    expect(shared).toBeGreaterThan(0);
   });
 
   it('chaque bête se clone avec son squelette et ses animations', { timeout: 30000 }, () => {

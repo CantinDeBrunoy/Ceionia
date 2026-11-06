@@ -49,6 +49,8 @@ export interface ExpEvent {
   ages?: [number, number];
   /** il survient en chemin : à l'arrivée de l'équipe seulement, pas au milieu du travail */
   arrive?: boolean;
+  /** il survient au cœur du combat : jamais à l'arrivée, et pas avant cette part du travail (le monstre a surgi de l'eau) */
+  from?: number;
   /** en pleine mer (requins, houle) ou sur l'eau douce (crocodiles) ; `warm` : seulement sous un climat chaud */
   water?: 'sea' | 'fresh';
   warm?: boolean;
@@ -157,7 +159,7 @@ export const EVENTS: ExpEvent[] = [
   },
   {
     // le kraken creuse la mer : un tourbillon tourne autour de la galère
-    id: 'maelstrom', where: ['river'], scenes: ['kraken'], title: 'Un tourbillon se creuse',
+    id: 'maelstrom', where: ['river'], scenes: ['kraken'], from: 0.5, title: 'Un tourbillon se creuse',
     text: 'La mer se met à tourner autour du kraken : un immense tourbillon d’écume aspire la galère vers son cœur.',
     options: [
       { label: 'Ramer hors du tourbillon', risk: 0.85, work: 5, text: 'Tous aux rames : la galère s’est arrachée au tourbillon.' },
@@ -516,7 +518,7 @@ export const EVENTS: ExpEvent[] = [
 export const EVENT_BY: Record<string, ExpEvent> = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 
 /** Où en est l'équipe quand l'imprévu survient : sa destination, sa mission, ce qu'elle y fait, l'âge, et si elle arrive */
-export interface EventCtx { dest: DestKind; mission: string; scene: Scene; age: number; arrive: boolean; /** au large (la mer) ; climat chaud */ sea?: boolean; warm?: boolean }
+export interface EventCtx { dest: DestKind; mission: string; scene: Scene; age: number; arrive: boolean; /** au large (la mer) ; climat chaud */ sea?: boolean; warm?: boolean; /** part du travail où il tombe (pendant le travail) */ at?: number }
 
 /** Imprévus qui peuvent survenir à cette équipe, à ce moment-là (sans tenir compte de ceux déjà vus) */
 export function eventsFor(ctx: EventCtx): ExpEvent[] {
@@ -524,6 +526,7 @@ export function eventsFor(ctx: EventCtx): ExpEvent[] {
     && (!e.missions || e.missions.includes(ctx.mission)) && (!e.scenes || e.scenes.includes(ctx.scene))
     && !e.not?.includes(ctx.mission) && !e.notScenes?.includes(ctx.scene)
     && (!e.ages || (ctx.age >= e.ages[0] && ctx.age <= e.ages[1])) && (!e.arrive || ctx.arrive)
+    && (e.from === undefined || (!ctx.arrive && (ctx.at ?? 1) >= e.from))
     && (!e.water || (e.water === 'sea') === !!ctx.sea) && (!e.warm || !!ctx.warm));
 }
 
