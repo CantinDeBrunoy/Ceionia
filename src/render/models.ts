@@ -680,6 +680,11 @@ function modernHouse(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number,
     p.cyl(0.05, 0.05, 0.09, 8, cx + ww * 0.25, H + 0.03, zc - 0.1, 0x8a8f96); p.cone(0.055, 0.03, 8, cx + ww * 0.25, H + 0.12, zc - 0.1, 0x5d6168);
     p.cyl(0.004, 0.004, 0.2, 4, cx + ww * 0.35, H + 0.03, zc + 0.12, 0x8a8f96);
   }
+  // le dos sur le jardin : baie coulissante et bandeau vitré de l'étage, fenêtres du pavillon, bandeaux des appartements
+  const zb = zc - d / 2 - 0.006;
+  if (kind === 0) { ribbonWindows(p, cx + w * 0.12, zb, w * 0.4, 0.05, Math.PI, 0.2, frame); ribbonWindows(p, cx, zb, w * 0.55, 0.39, Math.PI, 0.1, frame); }
+  else if (kind === 1) { wallWindows(p, cx, zb, w * 0.8, 0.13, Math.PI, 2, 0.09, 0.11, C.white); p.add(slab(0.09, 0.2, 0.01, F_PZ).translate(0, 0.1, 0), cx, 0.03, zb, 0x5a3e2c, Math.PI); }
+  else for (let f = 0; f < 2; f++) ribbonWindows(p, cx, zb, Math.min(w, 0.66) * 0.8, 0.37 + f * 0.33, Math.PI, 0.16, frame);
   modernYard(p, o, x0, x1, cx, d, zc, kind === 0 ? cx + w * 0.3 : kind === 1 ? (w > 0.6 ? cx - w * 0.2 : cx + w * 0.22) : cx, kind);
 }
 const of3 = (v: number, a: number[]) => a[(v >> 2) % a.length];
