@@ -2074,7 +2074,8 @@ function farm(p: Parts, age: number) {
     stones(p, bx, bz + 0.19, 0.48, 0, 0.05, 0, C.darkstone, 0.8, 330);
     p.box(0.44, 0.28, 0.34, bx, 0.05, bz, red);
     roof(p, bx, 0.33, bz, { w: 0.44, d: 0.34, h: 0.2, color: C.roofdark, wall: red, len: 0.52, courses: true });
-    for (let u = -0.2; u <= 0.2; u += 0.045) for (const s of [-1, 1]) p.box(0.01, 0.28, 0.008, bx + u, 0.05, bz + s * 0.173, dark(red, 0.82));
+    dressBack(p, 3, bx, bz, 0.44, 0.35, 0.05, 0.33, 75, 0, 0.5);
+    for (let u = -0.2; u <= 0.2; u += 0.045) for (const s of [-1, 1]) p.add(slab(0.01, 0.28, 0.008, (s > 0 ? F_PZ : F_NZ) | F_PX | F_NX), bx + u, 0.19, bz + s * 0.173, dark(red, 0.82));
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.02, 0.28, 0.02, bx + sx * 0.22, 0.05, bz + sz * 0.17, C.white);
     p.box(0.46, 0.02, 0.36, bx, 0.33, bz, C.white);
     p.box(0.18, 0.21, 0.014, bx, 0.05, zf + 0.004, C.white); p.box(0.16, 0.19, 0.016, bx, 0.05, zf + 0.008, dark(red, 0.78));
@@ -2562,6 +2563,7 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     sink(0.012);
     const brick = 0xa85e50, hx = -0.08, hz = -0.16, W = 0.62, D = 0.42, H = 0.24;
     p.box(W, H, D, hx, 0.012, hz, brick);
+    dressBack(p, 3, hx, hz, W, D, 0.012, 0.252, 73, 2, 0);
     stones(p, hx, hz + D / 2, W, 0.012, H, 0, dark(brick, 0.86), 0.45, 370);
     stones(p, hx - W / 2, hz, D, 0.012, H, -Math.PI / 2, dark(brick, 0.86), 0.45, 371);
     for (const x of [hx - W / 2, hx + W / 2]) quoins(p, x, hz + D / 2, 0.012, H, x < hx ? -1 : 1, 1, 0xd8d0c0);
@@ -3577,11 +3579,18 @@ function wallWindows(p: Parts, cx: number, cz: number, len: number, y: number, r
  * une cour de service : amphores et bûcher, tonneaux et caisses, ou bidons, caisses et tas de charbon
  */
 function dressBack(p: Parts, age: number, cx: number, cz: number, w: number, d: number, y0: number, y1: number, seed: number, sides = 2, half = 1, frame = -1) {
-  const fr = frame >= 0 ? frame : age === 1 ? 0xe8dcc4 : age === 2 ? C.darkwood : 0xf2efe6;
+  const fr = frame >= 0 ? frame : age === 1 ? 0xe8dcc4 : age === 2 ? C.darkwood : age >= 4 ? 0xd8dde2 : 0xf2efe6;
   const [ww, wh] = age === 1 ? [0.05, 0.08] : age === 2 ? [0.06, 0.09] : [0.07, 0.11];
   const sh = age === 2 ? SHUTTERS[seed % 4] : -1, zb = cz - d / 2;
-  const floors = y1 - y0 > 0.42 ? [y0 + (y1 - y0) * 0.2, y0 + (y1 - y0) * 0.62] : [y0 + (y1 - y0) * (age === 1 ? 0.5 : 0.35)];
+  // (à l'époque moderne, un bandeau vitré par étage, tous les 22 cm)
+  const floors = age >= 4 ? Array.from({ length: Math.max(1, Math.floor((y1 - y0) / 0.22)) }, (_, k) => y0 + 0.08 + k * 0.22)
+    : y1 - y0 > 0.42 ? [y0 + (y1 - y0) * 0.2, y0 + (y1 - y0) * 0.62] : [y0 + (y1 - y0) * (age === 1 ? 0.5 : 0.35)];
   for (const y of floors) {
+    if (age >= 4) {
+      ribbonWindows(p, cx, zb - 0.006, w * 0.88, y, Math.PI, 0.12, fr);
+      for (const s of [-1, 1]) if (sides === 2 || sides === s) ribbonWindows(p, cx + s * (w / 2 + 0.006), cz, d * 0.8, y, (s * Math.PI) / 2, 0.12, fr);
+      continue;
+    }
     wallWindows(p, cx, zb - 0.006, w * 0.9, y, Math.PI, Math.max(1, Math.round(w / 0.26)), ww, wh, fr, sh);
     for (const s of [-1, 1]) if (sides === 2 || sides === s) wallWindows(p, cx + s * (w / 2 + 0.006), cz, d * 0.8, y, (s * Math.PI) / 2, Math.max(1, Math.round(d / 0.3)), ww, wh, fr, sh);
   }
@@ -3601,6 +3610,18 @@ function dressBack(p: Parts, age: number, cx: number, cz: number, w: number, d: 
     if (metal) p.cone(0.08, 0.06, 6, cx + w * 0.32, y0, yz + 0.01, 0x2e2e32);
     else for (let i = 0; i < 4; i++) log(p, 0.16, 0.02, cx + w * 0.34 + (i % 3) * 0.042 + (i > 2 ? 0.021 : 0), y0 + (i > 2 ? 0.04 : 0), zb - 0.1, Math.PI / 2, 0x8a6a48);
   }
+}
+
+/**
+ * Bandeau vitré d'un étage moderne sur un mur (face de centre cx, cz tournée selon ry, voir wallWindows) : la vitre éclairée
+ * la nuit, haute de h, son appui et ses montants tous les 10 cm
+ */
+function ribbonWindows(p: Parts, cx: number, cz: number, len: number, y: number, ry: number, h = 0.12, frame = 0xd8dde2) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  p.add(slab(len, h, 0.01, F_PZ).translate(0, h / 2, 0.003), cx, y, cz, C.glass, ry, true);
+  p.add(slab(len + 0.02, 0.012, 0.022, F_PZ | F_PY).translate(0, -0.006, 0.006), cx, y, cz, frame, ry);
+  const n = Math.max(1, Math.round(len / 0.1));
+  for (let k = 1; k < n; k++) { const u = -len / 2 + (len * k) / n; p.add(slab(0.008, h, 0.006, F_PZ).translate(0, h / 2, 0.01), cx + u * c, y, cz - u * s, frame, ry); }
 }
 
 /** Descente d'eau le long d'un mur : tuyau de la gouttière (à hauteur y1) jusqu'au sol, coude et sabot au pied */
@@ -3966,6 +3987,9 @@ function health(p: Parts, age: number) {
     p.box(0.42, 1.2, 0.56, 0.68, 0.03, -0.55, 0xe8eef2);
     for (const x of [0.56, 0.68, 0.8]) p.box(0.06, 1.0, 0.02, x, 0.12, -0.265, 0x9fd0e4, 0, true);
     p.box(0.46, 0.04, 0.6, 0.68, 1.23, -0.55, 0xe4e2dc);
+    // le dos et le flanc du bloc, le dos de la tour : bandeaux vitrés, descentes d'eau
+    dressBack(p, 4, -0.2, -0.5, 1.4, 0.72, 0.03, 0.83, 75, -1, 0);
+    for (let k = 0; k < 5; k++) ribbonWindows(p, 0.68, -0.836, 0.36, 0.11 + k * 0.22, Math.PI, 0.12);
     p.box(0.26, 0.26, 0.02, 0.68, 0.88, -0.255, C.white); p.box(0.18, 0.06, 0.012, 0.68, 0.98, -0.243, 0xd84a3e); p.box(0.06, 0.18, 0.012, 0.68, 0.92, -0.243, 0xd84a3e);
     p.cyl(0.3, 0.3, 0.015, 16, -0.45, 0.87, -0.5, 0x8a8f96);
     for (const dx of [-0.07, 0.07]) p.box(0.03, 0.006, 0.18, -0.45 + dx, 0.888, -0.5, C.white);
@@ -4222,6 +4246,7 @@ function school(p: Parts, age: number) {
     p.box(1.04, 0.06, 0.54, 0, 0.04, -0.62, trim);
     p.box(1.0, 0.5, 0.5, 0, 0.1, -0.62, stone);
     p.box(1.04, 0.035, 0.54, 0, 0.58, -0.62, trim);
+    dressBack(p, 3, 0, -0.62, 1.0, 0.5, 0.1, 0.58, 77, 0, 1);
     // perron et colonnade : bases, fûts cannelés, chapiteaux, architrave, frise à triglyphes, fronton sculpté
     for (let k = 0; k < 4; k++) p.box(0.9 - k * 0.04, 0.016, 0.1, 0, 0.04 + k * 0.016, -0.18 - k * 0.035, trim);
     for (let i = 0; i < 6; i++) {
@@ -5496,6 +5521,7 @@ function lumber(p: Parts, age: number) {
     p.box(0.48, 0.28, 0.3, -0.08, 0.012, -0.22, C.brick);
     stones(p, -0.08, -0.07, 0.48, 0.012, 0.29, 0, dark(C.brick, 0.86), 0.45, 401);
     roof(p, -0.08, 0.292, -0.22, { w: 0.48, d: 0.3, h: 0.14, color: C.slate, wall: C.brick, courses: true });
+    dressBack(p, 3, -0.08, -0.22, 0.48, 0.3, 0.012, 0.292, 72, 2, 0.5);
     windows(p, [-0.22, 0.06], 0.1, -0.065, 0.07, 0.08, C.cream);
     p.box(0.12, 0.17, 0.012, -0.08, 0.012, -0.066, 0x3f5a4a);
     p.cyl(0.035, 0.045, 0.5, 8, 0.12, 0.3, -0.3, C.darkbrick); smoke(0.12, 0.84, -0.3, 2);
@@ -7985,10 +8011,11 @@ function theater(p: Parts, age: number) {
     // la salle sous sa coque d'aluminium, posée en biais sur un socle blanc
     p.box(1.3, 0.42, 0.9, 0, 0.02, -0.3, C.white);
     p.add(new THREE.CylinderGeometry(0.5, 0.5, 1.4, 18, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).scale(1, 0.55, 1), 0, 0.44, -0.3, 0xc8ccd2);
-    for (let k = 0; k < 7; k++) p.add(new THREE.TorusGeometry(0.5, 0.006, 3, 18, Math.PI).rotateY(Math.PI / 2).scale(1, 0.55, 1), -0.6 + k * 0.2, 0.44, -0.3, 0xa8aeb6);
+    for (let k = 0; k < 7; k++) p.add(new THREE.TorusGeometry(0.5, 0.006, 3, 12, Math.PI).rotateY(Math.PI / 2).scale(1, 0.55, 1), -0.6 + k * 0.2, 0.44, -0.3, 0xa8aeb6);
     // foyer vitré, auvent, enseigne lumineuse
     p.box(1.4, 0.3, 0.3, 0, 0.02, 0.32, C.glass, 0, true);
     for (let k = 0; k <= 10; k++) p.box(0.01, 0.3, 0.012, -0.7 + k * 0.14, 0.02, 0.475, C.metal);
+    dressBack(p, 4, 0, -0.3, 1.3, 0.9, 0.02, 0.44, 79, 2, 0);
     p.box(1.5, 0.025, 0.46, 0, 0.32, 0.36, C.white);
     p.box(0.62, 0.08, 0.02, 0, 0.35, 0.6, 0x2a2a2e);
     for (let k = 0; k < 7; k++) p.box(0.05, 0.04, 0.006, -0.2 + k * 0.066, 0.37, 0.612, 0xcfe8ff, 0, true);
@@ -8878,6 +8905,7 @@ function lab(p: Parts, age: number) {
     for (let k = 0; k < 7; k++) p.box(0.004, 0.003, 0.46, -0.42 + k * 0.14, 0.012, 0.25, 0xc4c0b8);
     p.box(0.62, 0.4, 0.4, -0.1, y0, -0.18, wall);
     p.box(0.6, 0.3, 0.012, -0.1, 0.06, 0.024, C.glass, 0, true); for (let k = 0; k <= 6; k++) p.box(0.012, 0.3, 0.016, -0.4 + k * 0.1, 0.06, 0.026, 0xd8dde2);
+    dressBack(p, 4, -0.1, -0.18, 0.62, 0.4, y0, y0 + 0.4, 81, 2, 0.5);
     p.box(0.64, 0.05, 0.016, -0.1, y0, 0.024, 0x6a7078);
     p.box(0.64, 0.022, 0.04, -0.1, 0.2, 0.034, 0xf4f6f8);
     for (const y of [0.25, 0.285, 0.32]) p.box(0.6, 0.008, 0.045, -0.1, y, 0.058, C.white);
