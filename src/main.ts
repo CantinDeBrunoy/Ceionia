@@ -6,6 +6,9 @@ import type { UnderView } from './render/underView';
 /** Le monde souterrain (décor, créatures) est chargé à part, en arrière-plan après le démarrage */
 let underModule: Promise<typeof import('./render/underView')> | null = null;
 const loadUnder = () => (underModule ??= import('./render/underView'));
+import type { HellMode } from './hellMode';
+let hellModule: Promise<typeof import('./hellMode')> | null = null;
+const loadHell = () => (hellModule ??= import('./hellMode'));
 import { newWorld, addDefaultDecor, mapDef, newSeed, CONTINENT } from './world/mapgen';
 import { GEN } from './world/continent';
 import { TerrainView, SNOWY } from './render/terrainView';
@@ -208,7 +211,9 @@ class Game implements UIHost {
   /** monde souterrain (créé à la première descente) */
   under: Underground;
   private underView: UnderView | null = null;
-  private mode: 'surface' | 'under' = 'surface';
+  private mode: 'surface' | 'under' | 'hell' = 'surface';
+  /** monde des Enfers (mode développeur : `__game.enterHell()`), créé à la première visite */
+  hellMode: HellMode | null = null;
   private surfaceView: ReturnType<CameraRig['view']> | null = null;
   private surfaceZoom = { min: 10, max: 0 };
   private fading = false;
@@ -460,6 +465,46 @@ class Game implements UIHost {
   toMenu() { this.saveNow(); this.running = false; location.reload(); }
   setPhoto(on: boolean) { document.body.classList.toggle('photo', on); }
   underZone() { return this.mode === 'under' ? UZ_NAMES[this.under.zoneAt(this.cam.target.x, this.cam.target.z)] : null; }
+
+  // ---------- Monde des Enfers (mode développeur, avant le portail) ----------
+  /** Entre dans les Enfers, devant le portail ; un clic sur le portail ramène à la surface */
+  async enterHell() {
+    if (this.mode !== 'surface') return;
+    this.tools.setTool('none');
+    this.fadeThrough(async () => {
+      const { HellMode } = await loadHell();
+      this.hellMode ??= new HellMode(this.world.seed);
+      const hm = this.hellMode;
+      hm.view.fx.onClash = (k) => this.audio.sfxClash(k);
+      hm.view.build();
+      this.surfaceView = this.cam.view();
+      this.surfaceZoom = { min: this.cam.minDist, max: this.cam.maxDist };
+      this.mode = 'hell';
+      document.body.classList.add('under');
+      this.cam.minDist = 2.4; this.cam.maxDist = 30; this.cam.minPitch = 0.95;
+      const [x, z] = hm.map.arrival;
+      this.cam.jump({ x, z: z + 4, dist: 14, pitch: 1.05, yaw: Math.PI }, hm.view.groundY(x, z));
+      this.cam.handler = { down: (e) => { const p = hm.view.pick(this.cam.ray(e.x, e.y, canvas.clientWidth, canvas.clientHeight)); if (p && hm.view.portalAt(p.x, p.z)) this.exitHell(); }, move: () => {}, up: () => {}, cancel: () => {}, hover: () => {} };
+      this.ui.banner('Monde des Enfers', ` : le royaume démoniaque est tout au fond. Le portail ramène à la surface.`);
+      this.ui.update();
+    }, 'Passage du portail…');
+  }
+
+  /** Quitte les Enfers pour la surface */
+  exitHell() {
+    if (this.mode !== 'hell') return;
+    this.fadeThrough(() => {
+      this.mode = 'surface';
+      document.body.classList.remove('under');
+      this.hellMode?.view.leave();
+      this.cam.minDist = this.surfaceZoom.min; this.cam.minPitch = 0.25;
+      this.cam.maxDist = this.surfaceZoom.max || this.cam.maxDist;
+      const v = this.surfaceView ?? this.cam.view();
+      this.cam.jump(v, this.world.hAt(v.x, v.z));
+      this.cam.handler = this.tools;
+      canvas.style.cursor = '';
+    }, 'Retour à la surface…');
+  }
 
   // ---------- Monde souterrain ----------
   /** Fondu au noir, bascule, puis retour à l'image */
@@ -1052,8 +1097,9 @@ class Game implements UIHost {
   }
 
   private renderer_render() {
-    const under = this.mode === 'under' && this.underView;
-    const scene = under ? this.underView!.scene : this.scene;
+    const hell = this.mode === 'hell' ? this.hellMode : null;
+    const under = (this.mode === 'under' && this.underView) || !!hell;
+    const scene = hell ? hell.scene : under ? this.underView!.scene : this.scene;
     // la carte des ombres ne se refait qu'une image sur deux (sur trois en qualité réduite) quand la vue ne bouge pas : seuls
     // les passants et les véhicules y bougent ; dès que la caméra se déplace, elle suit à chaque image
     const c = this.cam.camera, moved = c.position.distanceToSquared(this.shadowPos) > 1e-6 || 1 - Math.abs(c.quaternion.dot(this.shadowQ)) > 1e-9;
@@ -1063,7 +1109,7 @@ class Game implements UIHost {
     if (!this.glow || !this.gfx.glow) { renderer.render(scene, this.cam.camera); return; }
     // le halo vient avec la nuit ; sous terre, il entoure cristaux, lave et torches
     const night = Math.min(1, Math.max(0, (this.env.night - 0.35) / 0.45));
-    this.glow.render(scene, this.cam.camera, under ? 0.3 : night * 0.8, under ? 2 : 1.3);
+    this.glow.render(scene, this.cam.camera, hell ? hell.view.bloom[0] : under ? 0.3 : night * 0.8, hell ? hell.view.bloom[1] : under ? 2 : 1.3);
   }
 
   private frame() {
@@ -1079,9 +1125,10 @@ class Game implements UIHost {
 
     const gdt = this.time.update(dt);
     const uv = this.mode === 'under' ? this.underView : null;
-    this.cam.update(dt, uv ? (x, z) => uv.groundY(x, z) : (x, z) => w.hAt(x, z));
+    const hv = this.mode === 'hell' ? this.hellMode : null;
+    this.cam.update(dt, uv ? (x, z) => uv.groundY(x, z) : hv ? (x, z) => hv.view.groundY(x, z) : (x, z) => w.hAt(x, z));
     // le sol tremble près d'un volcan en éruption
-    let shake = uv ? 0 : this.eruptions.shakeAt(this.cam.target.x, this.cam.target.z);
+    let shake = uv || hv ? 0 : this.eruptions.shakeAt(this.cam.target.x, this.cam.target.z);
     if (this.quake && !uv) {
       const v = this.quake.cell, d = Math.hypot((v % N) + 0.5 - this.cam.target.x, Math.floor(v / N) + 0.5 - this.cam.target.z);
       shake = Math.max(shake, (1 - this.quake.t / 18) * 0.7 * Math.max(0, 1 - d / 70));
@@ -1090,7 +1137,7 @@ class Game implements UIHost {
       const t = this.elapsed, a = shake * 0.12 * Math.min(1, this.cam.dist / 30);
       this.cam.camera.position.add(new THREE.Vector3(Math.sin(t * 47) + Math.sin(t * 29) * 0.5, Math.sin(t * 53) * 0.6, Math.sin(t * 41) + Math.sin(t * 23) * 0.5).multiplyScalar(a));
     }
-    if (!uv) this.tools.update(dt);
+    if (this.mode === 'surface') this.tools.update(dt);
 
     // maillages dépendant du monde (limités en fréquence)
     this.terrainTimer -= dt;
@@ -1135,9 +1182,9 @@ class Game implements UIHost {
     this.terrain.stepRecolor();
 
     this.env.update(dt, this.time, this.season, this.cam.target, gdt, this.cam.dist);
-    if (!uv) this.atmosphere.update(dt, this.time, this.season, this.env, this.cam.camera, this.cam.target);
+    if (!uv && !hv) this.atmosphere.update(dt, this.time, this.season, this.env, this.cam.camera, this.cam.target);
     else this.atmosphere.hideMist();
-    SNOW.value = uv ? 0 : this.season.snow;
+    SNOW.value = uv || hv ? 0 : this.season.snow;
     this.sim.rain = this.env.rainK;
     this.sim.season = this.time.season;
     this.sim.update(gdt, dt);
@@ -1198,7 +1245,8 @@ class Game implements UIHost {
       if (p) this.cam.follow(p[0], p[1]);
     }
     // la surface ne s'anime que lorsqu'on la regarde
-    if (uv) {
+    if (hv) hv.update(dt, gdt, this.cam.camera, this.cam.target, this.cam.dist);
+    else if (uv) {
       // les troupes armées en train de parcourir les galeries
       uv.setTroops(this.expeditions.active.filter((a) => a.entry >= 0 && a.phase === 'work').map((a) => ({
         id: a.id, kind: a.c.scene === 'scout' ? 'scouts' : a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
@@ -1261,7 +1309,7 @@ class Game implements UIHost {
     audio.update(dt, {
       age: this.sim.age, season: this.time.season, daylight: this.env.daylight,
       rain: this.env.rainK, snow: this.env.weatherKind === 'snow' ? this.env.weatherK : 0, fog: this.env.weatherKind === 'fog' ? this.env.weatherK : 0,
-      pop: this.sim.pop, camDist: this.cam.dist, under: uv ? 1 : 0,
+      pop: this.sim.pop, camDist: this.cam.dist, under: uv || hv ? 1 : 0,
       ...this.ambience(),
     });
 
