@@ -228,7 +228,7 @@ void main() {
   float b2 = 0.5 + 0.5 * sin(a * 5.0 - r * 16.0 + spin * 1.3);
   vec3 violet = vec3(0.42, 0.1, 0.72), red = vec3(1.0, 0.16, 0.08), orange = vec3(1.0, 0.58, 0.14);
   vec3 c = mix(violet, red, b1);
-  c = mix(c, orange, pow(b2, 4.0) * 0.7);
+  c = mix(c, orange, pow(max(b2, 0.0), 4.0) * 0.7);
   float core = smoothstep(0.5, 0.0, r) * (0.8 + 0.2 * sin(uTime * 3.0));
   c += vec3(1.0, 0.8, 0.5) * core * uOpen;
   // fermé : un voile violet sombre, à peine animé

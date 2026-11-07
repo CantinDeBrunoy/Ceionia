@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+const BASE_C = new THREE.Color(1, 1, 1), FIRE_C = new THREE.Color(1.6, 0.55, 0.25), EMBER_C = new THREE.Color(1, 0.5, 0.15);
 
 /**
  * Effets des combats : étincelles d'un coup porté (or pour une lame, blanches pour un choc, rouges pour une morsure), éclair
@@ -7,6 +10,13 @@ import * as THREE from 'three';
  */
 
 const CAP = 1500;
+/** Flèches en vol au plus */
+const ARROWS = 128;
+/** Densité des étincelles et de la poussière (qualité graphique : réduite, elles se font plus rares ; les flèches restent) */
+let density = 1;
+export function setFxDensity(d: number) { density = Math.max(0.35, Math.min(1, d)); }
+const few = (n: number) => Math.max(1, Math.round(n * density));
+interface Arrow { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; t: number; dur: number; arc: number; fire: boolean }
 
 /** `fly` : sans pesanteur (traçante) ; `big` : grosse lueur (bouche du canon, explosion) */
 interface Spark { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; c: THREE.Color; dust: boolean; fly?: boolean; big?: boolean }
@@ -47,6 +57,70 @@ export class CombatFx {
     this.dust = new THREE.Points(mk(), new THREE.PointsMaterial({ size: 0.12, map: tex, vertexColors: true, transparent: true, depthWrite: false, opacity: 0.7 }));
     this.flare = new THREE.Points(mk(), new THREE.PointsMaterial({ size: 0.34, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     for (const p of [this.glow, this.dust, this.flare]) { p.frustumCulled = false; this.group.add(p); }
+    // les flèches : hampe de bois, pointe de fer, empennage blanc (le long de +z), toutes en un maillage instancié
+    const part = (g: THREE.BufferGeometry, c: number) => {
+      const n = g.index ? g.toNonIndexed() : g, col = new THREE.Color(c), a = new Float32Array(n.attributes.position.count * 3);
+      for (let i = 0; i < a.length; i += 3) { a[i] = col.r; a[i + 1] = col.g; a[i + 2] = col.b; }
+      n.deleteAttribute('uv'); n.deleteAttribute('normal');
+      n.setAttribute('color', new THREE.BufferAttribute(a, 3));
+      return n;
+    };
+    const geo = mergeGeometries([
+      part(new THREE.CylinderGeometry(0.011, 0.011, 0.34, 4).rotateX(Math.PI / 2), 0x8a6238),
+      part(new THREE.ConeGeometry(0.026, 0.07, 4).rotateX(Math.PI / 2).translate(0, 0, 0.2), 0xd8dce2),
+      part(new THREE.BoxGeometry(0.06, 0.005, 0.07).translate(0, 0, -0.15), 0xf4f0e6),
+      part(new THREE.BoxGeometry(0.005, 0.06, 0.07).translate(0, 0, -0.15), 0xd84a3e),
+    ])!;
+    geo.computeVertexNormals();
+    this.arrowMesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), ARROWS);
+    this.arrowMesh.count = 0;
+    this.arrowMesh.frustumCulled = false;
+    this.arrowMesh.setColorAt(0, new THREE.Color(1, 1, 1));
+    this.group.add(this.arrowMesh);
+  }
+
+  private arrows: Arrow[] = [];
+  private arrowMesh: THREE.InstancedMesh;
+  private am = new THREE.Matrix4();
+  private aq = new THREE.Quaternion();
+  private av = new THREE.Vector3();
+  private aw = new THREE.Vector3();
+  private one = new THREE.Vector3(1, 1, 1);
+  private fwd = new THREE.Vector3(0, 0, 1);
+
+  /**
+   * Une flèche tirée de (x0, y0, z0) vers (x1, y1, z1) : elle vole en cloche, pointe en avant, et se plante dans un petit
+   * nuage (une flèche de feu des démons : rougeoyante, une traînée de braises, une gerbe à l'impact)
+   */
+  arrow(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, fire = false) {
+    if (this.arrows.length >= ARROWS) this.arrows.shift();
+    const d = Math.hypot(x1 - x0, z1 - z0);
+    this.arrows.push({ x0, y0, z0, x1, y1, z1, t: 0, dur: Math.max(0.25, d / 9), arc: Math.min(1.4, d * 0.16), fire });
+  }
+
+  private stepArrows(dt: number) {
+    const m = this.am, v = this.av, w = this.aw, q = this.aq, white = BASE_C, fire = FIRE_C;
+    let n = 0;
+    for (let i = this.arrows.length - 1; i >= 0; i--) {
+      const a = this.arrows[i];
+      a.t += dt;
+      const u = Math.min(1, a.t / a.dur), at = (k: number, out: THREE.Vector3) => out.set(a.x0 + (a.x1 - a.x0) * k, a.y0 + (a.y1 - a.y0) * k + Math.sin(k * Math.PI) * a.arc, a.z0 + (a.z1 - a.z0) * k);
+      if (u >= 1) {
+        // à l'impact : un éclat (de feu, ou de bois et de poussière)
+        if (a.fire) this.hit(a.x1, a.y1, a.z1, 0xff7a2a, 6, 'bite'); else { this.chips(a.x1, a.y1, a.z1, 0xf4f0e6, 3); this.flash(a.x1, a.y1, a.z1, 0xfff0c0); }
+        this.arrows.splice(i, 1);
+        continue;
+      }
+      at(u, v); at(Math.min(1, u + 0.04), w);
+      q.setFromUnitVectors(this.fwd, w.sub(v).normalize());
+      this.arrowMesh.setMatrixAt(n, m.compose(v, q, this.one));
+      this.arrowMesh.setColorAt(n, a.fire ? fire : white);
+      n++;
+      if (a.fire && this.sparks.length < CAP && Math.random() < 0.6) this.sparks.push({ x: v.x, y: v.y, z: v.z, vx: 0, vy: 0.2, vz: 0, life: 0.18, max: 0.18, c: EMBER_C, dust: false, fly: true });
+    }
+    this.arrowMesh.count = n;
+    this.arrowMesh.instanceMatrix.needsUpdate = true;
+    if (this.arrowMesh.instanceColor) this.arrowMesh.instanceColor.needsUpdate = true;
   }
 
   private sound(kind: 'blade' | 'shot' | 'bite') {
@@ -58,6 +132,7 @@ export class CombatFx {
   /** Un coup qui porte en (x, y, z) : gerbe d'étincelles (couleur, nombre), un petit éclair au point d'impact */
   hit(x: number, y: number, z: number, color = 0xffd27a, n = 14, kind: 'blade' | 'shot' | 'bite' = 'blade') {
     const c = new THREE.Color(color);
+    n = few(n);
     for (let i = 0; i < n && this.sparks.length < CAP; i++) {
       const a = Math.random() * Math.PI * 2, u = Math.random() * 0.8 + 0.2, sp = 0.6 + Math.random() * 0.9;
       this.sparks.push({ x, y, z, vx: Math.cos(a) * sp * u, vy: 0.5 + Math.random() * 1.1, vz: Math.sin(a) * sp * u, life: 0.25 + Math.random() * 0.3, max: 0.55, c, dust: false });
@@ -115,6 +190,7 @@ export class CombatFx {
   /** Éclats de roche sous la pioche : ils sautent et retombent, sans éclair ni bruit */
   chips(x: number, y: number, z: number, color = 0xb8ab94, n = 6) {
     const c = new THREE.Color(color);
+    n = few(n);
     for (let i = 0; i < n && this.sparks.length < CAP; i++) {
       const a = Math.random() * Math.PI * 2, sp = 0.3 + Math.random() * 0.6;
       this.sparks.push({ x, y, z, vx: Math.cos(a) * sp, vy: 0.4 + Math.random() * 0.8, vz: Math.sin(a) * sp, life: 0.35 + Math.random() * 0.3, max: 0.65, c, dust: false });
@@ -124,6 +200,7 @@ export class CombatFx {
   /** Poussière soulevée au sol (une bête qui tombe, une lance qui se plante) */
   puff(x: number, y: number, z: number, n = 8) {
     const c = new THREE.Color(0xc8b8a0);
+    n = few(n);
     for (let i = 0; i < n && this.sparks.length < CAP; i++) {
       const a = Math.random() * Math.PI * 2, sp = 0.2 + Math.random() * 0.3;
       this.sparks.push({ x, y, z, vx: Math.cos(a) * sp, vy: 0.15 + Math.random() * 0.2, vz: Math.sin(a) * sp, life: 0.6 + Math.random() * 0.4, max: 1, c, dust: true });
@@ -144,6 +221,7 @@ export class CombatFx {
   update(dt: number) {
     dt = Math.min(dt, 0.05);
     this.soundT -= dt;
+    this.stepArrows(dt);
     // lances : arc de vol, puis plantées quelques secondes
     for (let i = this.spears.length - 1; i >= 0; i--) {
       const s = this.spears[i];

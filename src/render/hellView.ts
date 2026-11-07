@@ -10,6 +10,7 @@ import { baseGeo, BASE_FLAG } from './hellBase';
 import { BASE_DEFS, BASE_R } from '../sim/hellBase';
 import type { KingFight } from '../sim/kingdom';
 import { KingFx } from './kingFx';
+import { RuinSmoke } from './isleRuins';
 
 /**
  * Le monde des Enfers, vu comme le monde souterrain (galeries en coupe, le dessus des parois est la tranche sombre de la
@@ -48,7 +49,10 @@ export class HellView {
   private fog = new THREE.Fog(BG, 14, 44);
   private d = new THREE.Object3D();
   /** bâtiments : maillage debout, ruines, barre de vie */
-  private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[] }>();
+  private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[]; rise?: number; smokeT?: number }>();
+  /** la fumée des ruines */
+  private smoke = new RuinSmoke(0x2a2228);
+  private housesSeen = new Set<number>();
   private portalDisc: THREE.Mesh | null = null;
   private built = false;
   /** la base avancée : lumières de ses feux (braseros, camp, forge), où la brume recule, matériaux, fantôme de pose */
@@ -481,6 +485,7 @@ export class HellView {
       if (this.hell.buildings.has(id)) continue;
       this.content.remove(h.up, h.ruin);
       this.houses.delete(id);
+      this.smoke.stop(id);
       this.baseSources.delete(id);
     }
     // la brume recule autour des braseros debout (les plus proches de la vue)
@@ -558,13 +563,26 @@ export class HellView {
     });
     caveLights.uLN.value = this.active.length;
     // les bâtiments : étendards qui flottent ; ruines quand ils tombent (une partie reprise d'une sauvegarde aussi)
+    if (!this.smoke.group.parent) this.content.add(this.smoke.group);
     for (const [id, h] of this.houses) {
       const b = this.hell.buildings.get(id);
-      if (b?.down && !h.down) { h.down = true; h.up.visible = false; h.ruin.visible = true; this.lightTimer = 0; }
-      // une forteresse relevée (la zone reperdue)
-      else if (b && !b.down && h.down) { h.down = false; h.up.visible = true; h.ruin.visible = false; }
+      // abattu : ses ruines fument (celles de la base du joueur, et les forteresses tant que dure la bataille)
+      if (b?.down && !h.down) { h.down = true; h.up.visible = false; h.ruin.visible = true; this.lightTimer = 0; h.smokeT = 0; if (b.zone !== Z_KINGDOM && this.housesSeen.has(id)) this.smoke.start(id, b.site.x, h.ruin.position.y, b.site.z, Math.max(0.6, b.site.r * 0.7)); }
+      // relevé (une forteresse, la zone reperdue ; un bâtiment de la base rebâti) : il resurgit
+      else if (b && !b.down && h.down) { h.down = false; h.up.visible = true; h.ruin.visible = false; h.rise = 0; this.smoke.stop(id); for (let i = 0; i < 5; i++) this.units.fx.puff(b.site.x + Math.sin(i * 1.3) * b.site.r, h.up.position.y + 0.2, b.site.z + Math.cos(i * 1.3) * b.site.r, 6); }
+      if (h.rise !== undefined) {
+        h.rise = Math.min(1, h.rise + dt / 0.6);
+        const k = h.rise, s = 1 + 2.7 * Math.pow(k - 1, 3) + 1.7 * Math.pow(k - 1, 2);
+        h.up.scale.set(1, Math.max(0.02, s), 1);
+        if (k >= 1) { h.up.scale.set(1, 1, 1); h.rise = undefined; }
+      }
+      // les ruines qui ont fini de fumer (une fois la zone tenue, la fumée s'éteint au bout d'un moment)
+      if (h.down && this.smoke.has(id) && (h.smokeT = (h.smokeT ?? 0) + dt) > 90) this.smoke.stop(id);
       if (h.up.visible) h.flags.forEach((f, i) => { f.rotation.y = Math.sin(t * 2.3 + i + id) * 0.35; });
+      // (déjà vu debout : sa chute fumera ; une ruine trouvée en arrivant, non)
+      if (!h.down) this.housesSeen.add(id);
     }
+    this.smoke.update(dt);
     if (this.portalDisc) this.portalDisc.rotation.z = 0;
     this.kingFx.update(dt, this.fight, events);
     this.stepCollapse(dt);

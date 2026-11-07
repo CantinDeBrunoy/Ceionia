@@ -155,10 +155,11 @@ void main(){
       fragmentShader: `uniform float uTime; uniform float uAlpha; varying vec2 vA; varying float vK;
 void main(){
   float x = vA.x * 9.0 + vK * 3.0;
-  float band = pow(0.5 + 0.5 * sin(x * 6.0 + sin(x * 1.3 + uTime * 0.25) * 3.0 + uTime * 0.35), 3.0);
+  float band = pow(max(0.0, 0.5 + 0.5 * sin(x * 6.0 + sin(x * 1.3 + uTime * 0.25) * 3.0 + uTime * 0.35)), 3.0);
   float fold = 0.6 + 0.4 * sin(x * 2.1 - uTime * 0.2);
   float y = vA.y;
-  float a = uAlpha * (0.25 + band) * fold * smoothstep(0.0, 0.1, y) * pow(1.0 - y, 1.2) * smoothstep(0.0, 0.08, vA.x) * smoothstep(1.0, 0.92, vA.x);
+  // (jamais la puissance d'un nombre négatif : un NaN, de nuit, gagnait tout l'écran par le halo)
+  float a = uAlpha * (0.25 + band) * fold * smoothstep(0.0, 0.1, y) * pow(max(0.0, 1.0 - y), 1.2) * smoothstep(0.0, 0.08, vA.x) * smoothstep(1.0, 0.92, vA.x);
   vec3 c = mix(vec3(0.2, 1.0, 0.6), vec3(0.7, 0.35, 1.0), smoothstep(0.35, 1.0, y)) * 1.3;
   gl_FragColor = vec4(c, min(1.0, a));
 }`,
