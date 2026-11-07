@@ -389,6 +389,7 @@ class Game implements UIHost {
       toast: (m) => this.ui.toast(m),
       changed: () => { this.propsDirty = true; this.ui?.refreshTools(); },
       erupt: (cell) => this.erupt(cell),
+      openPortal: () => { if (this.war.ensure()) void this.enterHell(); },
       get autoRoads() { return host.autoRoads; },
     });
     this.cam.handler = this.tools;
@@ -596,6 +597,7 @@ class Game implements UIHost {
       pick: (x, y) => { const p = this.terrain.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x - ox, p.z - oz] : null; },
       screen: (x, z) => this.toScreen(v.set(x + ox, w.hAt(x + ox, z + oz) + 0.3, z + oz)),
       focus: (x, z) => this.cam.goTo(x + ox, z + oz, this.cam.dist),
+      atPortal: (x, z) => { const p = this.world.portal; return !!p && this.world.portalOpen && Math.hypot(x + ox - p.x, z + oz - p.z) < 2.6; },
     };
   }
 

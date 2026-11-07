@@ -48,6 +48,8 @@ export interface ToolHost {
   getAge(): number;
   toast(msg: string): void;
   changed(): void;
+  /** un clic sur le portail des Enfers (hors bâtiment) : on y passe */
+  openPortal?(): void;
   /** fait entrer en éruption le volcan posé sur la case */
   erupt(cell: number): void;
   /** routes automatiques jusqu'aux nouveaux bâtiments (réglage) */
@@ -440,7 +442,9 @@ export class ToolController implements ToolInput {
     if (this.tool === 'none' && this.downAt && Math.hypot(e.x - this.downAt[0], e.y - this.downAt[1]) < 8) {
       this.pickAt(e);
       const c = this.cell(), b = c ? this.hitBuilding : undefined;
+      const pt = this.h.world.portal, hp = this.hit;
       if (this.picking && this.pickStop) this.pickStop(b);
+      else if (!b && pt && hp && this.h.world.portalOpen && this.h.openPortal && Math.hypot(hp.x - pt.x, hp.z - pt.z) < 2.6) this.h.openPortal();
       else this.select(b ? b.id : null);
     }
     this.downAt = null;

@@ -26,6 +26,8 @@ export interface Theater {
   pick(x: number, y: number): [number, number] | null;
   /** pixel du canevas d'un point de la bataille (null : hors de la vue) */
   screen(x: number, z: number): [number, number] | null;
+  /** le point de la bataille est sur le portail (un clic dessus mène aux Enfers) */
+  atPortal?(x: number, z: number): boolean;
   /** centre la vue sur un point de la bataille */
   focus(x: number, z: number): void;
   /** le fantôme d'un bâtiment de la base avancée à poser (null : aucun) et le cercle de la base (Enfers seulement) */
@@ -239,6 +241,8 @@ export class CommandUI implements ToolInput {
     // attaquer en marchant, armé : le clic donne l'ordre
     if (this.cmd.armed && this.cmd.selected.size) { this.orderAt(x, y); return; }
     const u = unitAt(this.units(), p[0], p[1], 0.5);
+    // un clic sur le portail (sans unité dessus) : on passe dans les Enfers
+    if (!u && t.kind === 'isle' && t.atPortal?.(p[0], p[1])) { this.host.click(); this.host.goHell(); return; }
     const now = performance.now();
     if (u) {
       // double-clic : toutes celles de la même sorte, en vue
