@@ -4,7 +4,7 @@ import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
 import { CAMP_JOY } from './depths';
-import { allServed, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
+import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -26,12 +26,16 @@ export interface AgeProgress {
   items: { label: string; have: number; need: number; kind?: KindId }[];
 }
 
+/** Les deux conditions du chemin de fer, en fin d'âge industriel (leur libellé commence par « chemin de fer ») */
+export const RAIL_FIRST = 'chemin de fer : une première ligne', RAIL_LINKED = 'chemin de fer : deux gares reliées';
+
 /**
  * Bâtiments que demande l'âge `n`, par genre : en partie normale, autant qu'il en faut au village ; en défi, ce qu'il en faut
  * de plus que n'en demandaient déjà les âges d'avant (un genre qu'ils demandaient déjà autant n'est plus demandé)
  */
-export function reqKindsOf(n: number, d: Difficulty): Partial<Record<KindId, number>> {
-  const req = AGES[n].reqKinds;
+export function reqKindsOf(n: number, d: Difficulty, late = false): Partial<Record<KindId, number>> {
+  // (`late` : ceux de la fin de l'âge, après ses expéditions)
+  const req = late ? AGES[n].reqLate ?? {} : AGES[n].reqKinds;
   if (!rulesOf(d).newOnly) return req;
   const out: Partial<Record<KindId, number>> = {};
   for (const [k, c] of Object.entries(req) as [KindId, number][]) {
@@ -43,7 +47,7 @@ export function reqKindsOf(n: number, d: Difficulty): Partial<Record<KindId, num
 
 /** Combien de bâtiments de ce genre les âges d'avant `n` ont déjà demandés (ceux-là ne comptent plus, en défi) */
 export function usedBefore(k: KindId, n: number): number {
-  return Math.max(0, ...AGES.slice(0, n).map((a) => a.reqKinds[k] ?? 0));
+  return Math.max(0, ...AGES.slice(0, n).map((a) => Math.max(a.reqKinds[k] ?? 0, a.reqLate?.[k] ?? 0)));
 }
 
 /** Simulation légère : besoins par présence, population, passage d'âge */
@@ -61,6 +65,8 @@ export class Sim {
   messageKind: KindId | null = null;
   /** le conseil renvoie au menu Expéditions (un clic dessus l'ouvre) */
   messageExp = false;
+  /** le conseil propose de tracer une ligne de chemin de fer depuis cette gare (un clic dessus commence le tracé) */
+  messageRail: number | null = null;
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
   moisture = 0.7;
@@ -210,17 +216,26 @@ export class Sim {
     // en défi, passé la préhistoire, les bâtiments d'avant qui ont servi aux âges passés (changés d'office en leur version du
     // nouvel âge) ne font pas avancer vers le suivant ; ceux bâtis en avance, avant que le jeu ne les demande, comptent déjà
     const fresh = rulesOf(w.difficulty).newOnly && this.age > 0;
-    for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty)) as [KindId, number][]) {
-      const line = lineOf(k), sum = (r: Record<string, number>) => line.reduce((n, x) => n + (r[x] ?? 0), 0);
-      const used = fresh ? Math.min(sum(w.ageBase), usedBefore(k, n)) : 0;
-      const have = Math.max(0, sum(this.counts) - used);
-      items.push({ label: fresh ? DIFF_TEXT.more(this.nameOf(k)) : this.nameOf(k), have, need: c, kind: k });
-    }
+    const kinds = (late: boolean) => {
+      for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty, late)) as [KindId, number][]) {
+        const line = lineOf(k), sum = (r: Record<string, number>) => line.reduce((n, x) => n + (r[x] ?? 0), 0);
+        const used = fresh ? Math.min(sum(w.ageBase), usedBefore(k, n)) : 0;
+        const have = Math.max(0, sum(this.counts) - used);
+        items.push({ label: fresh ? DIFF_TEXT.more(this.nameOf(k)) : this.nameOf(k), have, need: c, kind: k });
+      }
+    };
+    kinds(false);
     if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
     // les briques de la briqueterie (en réserve : on peut en dépenser pour bâtir, il faudra alors en recuire)
     if (req.reqBrick) items.push({ label: 'briques (briqueterie)', have: w.unlimited ? req.reqBrick : Math.floor(w.brick), need: req.reqBrick });
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
     for (const m of mandatoriesFor(this.age)) items.push({ label: `expédition « ${m.title} »`, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
+    // la fin de l'âge : la raffinerie (ouverte par l'expédition « L'or noir ») et ses puits, puis le chemin de fer
+    kinds(true);
+    if (req.reqRail) {
+      const r = railNet(w);
+      items.push({ label: RAIL_FIRST, have: r.lines, need: 1 }, { label: RAIL_LINKED, have: r.linked, need: 2 });
+    }
     let sum = 0;
     for (const it of items) sum += Math.min(1, it.have / it.need);
     return { next: n, ratio: sum / items.length, items };
@@ -246,7 +261,7 @@ export class Sim {
       }
       return about(k, text);
     };
-    this.messageKind = null; this.messageExp = false;
+    this.messageKind = null; this.messageExp = false; this.messageRail = null;
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
     if (w.buildings.size === 0) return about('gather', `Pour commencer, posez « ${this.nameOf('gather')} » au centre du futur village : c’est la place du village (3 × 3), sans entrée, qu’on rejoint de tous côtés. On y fêtera le retour des expéditions, et elle grandira avec les âges.`);
     if (!this.counts.house) return about('house', `Autour de la place, le centre du village : « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
@@ -282,7 +297,14 @@ export class Sim {
         this.messageExp = true;
         return `Pour l’âge suivant : réussissez ${left.length > 1 ? `les expéditions ${left.slice(0, -1).join(', ')} et ${left[left.length - 1]}` : `l’${miss.label}`} (menu Expéditions).`;
       }
-      if (miss?.kind) { const n = miss.need - miss.have; return build(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}.`); }
+      if (miss?.kind) {
+        const n = miss.need - miss.have, m = KINDS[miss.kind].reqMission;
+        // un bâtiment qu'une expédition doit d'abord débloquer : c'est elle qu'on conseille
+        if (m && !w.exp.done.includes(m)) { this.messageExp = true; return `Pour l’âge suivant : il faut ${say(miss.kind)}, que débloque l’expédition « ${MISSIONS.find((x) => x.id === m)?.title ?? m} » (menu Expéditions).`; }
+        const why = miss.kind === 'refinery' ? ' : elle tirera le carburant du pétrole brut des puits' : miss.kind === 'oilwell' ? ', sur un gisement (les taches sombres où le brut suinte) : la raffinerie en raffine le brut' : '';
+        return build(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}${why}.`);
+      }
+      if (miss.label.startsWith('chemin de fer')) return this.railAgeTip(say, build, miss.label === RAIL_FIRST);
       if (miss.label.startsWith('briques')) return this.counts.brickworks ? `Pour l’âge suivant : il faut encore ${miss.need - miss.have} briques (la briqueterie en cuit chaque jour).` : about('brickworks', `Pour l’âge suivant : il faut ${miss.need} briques : ${say('brickworks')}.`);
       if (miss) { this.messageExp = true; return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`; }
     }
@@ -317,6 +339,29 @@ export class Sim {
     this.messageKind = 'station';
     const names = [...new Set(prod.map((b) => this.nameOf(b.kind).toLowerCase()))].slice(0, 3).join(', ');
     return `Astuce : posez « ${this.nameOf('station')} » (${this.whereOf('station')}) à ${RAIL_REACH} cases au plus d’un bâtiment qui produit (${names}) et reliez-la à une autre gare par un train de marchandises : il produira ${Math.round(FREIGHT_BONUS * 100)} % de plus.`;
+  }
+
+  /**
+   * La prochaine étape du chemin de fer, dans l'ordre des conseils du rail : la briqueterie (les briques), la gare centrale,
+   * une petite gare (il en faut deux à relier) ; puis tracer une ligne depuis une gare (`stop`, la gare centrale d'abord)
+   */
+  railNext(): { kind: KindId } | { stop: number } {
+    const st = [...this.world.buildings.values()].filter(isStation).sort((a, b) => a.id - b.id);
+    if (st.length < 2) return { kind: !this.built('brickworks') ? 'brickworks' : !this.built('terminal') ? 'terminal' : 'station' };
+    return { stop: (st.find((b) => b.kind === 'terminal') ?? st[0]).id };
+  }
+
+  /** Le conseil d'âge du chemin de fer (`first` : aucune ligne encore ; sinon, il reste à relier deux gares) */
+  private railAgeTip(say: (k: KindId) => string, build: (k: KindId, text: string) => string, first: boolean) {
+    const nx = this.railNext(), goal = first ? 'votre premier chemin de fer' : 'deux gares reliées par le rail';
+    if ('kind' in nx) {
+      const k = nx.kind;
+      return build(k, `Pour l’âge suivant, ${goal} : ${k === 'brickworks' ? `bâtissez d’abord ${say(k)}, il faudra des briques pour les gares`
+        : k === 'terminal' ? `bâtissez ${say(k)}, la grande gare d’où partiront les lignes` : `il faut une autre gare à relier : ${say(k)}`}.`);
+    }
+    this.messageRail = nx.stop;
+    const b = this.world.buildings.get(nx.stop)!, name = this.nameOf(b.kind);
+    return `Pour l’âge suivant, ${goal} : tracez une ligne de « ${name} » à une autre gare (cliquez ici, ou sur la gare puis « Nouvelle ligne ») ; la voie se pose d’elle-même.`;
   }
 
   /** Un bâtiment du village produit-il cette ressource ? */

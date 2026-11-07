@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
-import { KINDS, KindId, Building } from '../src/build/catalog';
+import { AGES, KINDS, KindId, Building } from '../src/build/catalog';
 import { Expeditions } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import { Railway, isTerminus, LANES } from '../src/sim/railway';
 import { MISSIONS } from '../src/sim/missions';
 import { BRICK_PRICE, CAR_FUEL, YIELD } from '../src/sim/economy';
-import { gap, railBoost, servedStations, spaceRail, railWant, FREIGHT_BONUS, RAIL_REACH } from '../src/sim/freight';
+import { gap, railBoost, railNet, servedStations, spaceRail, railWant, FREIGHT_BONUS, RAIL_REACH } from '../src/sim/freight';
 import { getModel } from '../src/render/models';
-import { Sim } from '../src/sim/sim';
+import { Sim, reqKindsOf, RAIL_FIRST, RAIL_LINKED } from '../src/sim/sim';
 
 /** Le continent des tests, toujours la même graine */
 function continent() {
@@ -236,5 +236,144 @@ describe('la raffinerie et le carburant', () => {
     expect(ex.cars()).toBe(false);
     w.unlimited = true;
     expect(ex.cars()).toBe(true);
+  });
+});
+
+describe('fin de l’âge industriel : le pétrole, puis le chemin de fer', () => {
+  /** Un village industriel : ses conditions, dans l'ordre ; le conseil du moment, tout le reste étant réuni */
+  function village() {
+    const w = continent();
+    const sim = new Sim(w);
+    sim.age = 3;
+    w.wood = w.stone = w.brick = 999;
+    w.place('house', ...spot(w, 'house', 120, 120), 0, true, 3, false);
+    sim.recalc();
+    const labels = () => sim.ageProgress()!.items.map((i) => i.label);
+    const item = (label: string) => sim.ageProgress()!.items.find((i) => i.label === label)!;
+    // seules restent les conditions qu'on veut voir : le reste est réuni
+    const only = (keep: (l: string) => boolean) => { const real = Sim.prototype.ageProgress.bind(sim); sim.ageProgress = () => { const ap = real(); return { ...ap!, items: ap!.items.filter((i) => keep(i.label)) }; }; };
+    const say = () => { sim.recalc(); sim.pop = AGES[4].reqPop; return (sim as unknown as { computeMessage(): string }).computeMessage(); };
+    return { w, sim, labels, item, only, say };
+  }
+  const oilSpot = (w: World, n: number) => {
+    const out: [number, number][] = [];
+    for (let k = 0; k < N * N && out.length < n; k++) {
+      const x = k % N, z = Math.floor(k / N);
+      if (w.oil[k] && w.canPlace('oilwell', x, z) === null && !out.some(([a, b]) => Math.abs(a - x) < 2 && Math.abs(b - z) < 2)) out.push([x, z]);
+    }
+    return out;
+  };
+
+  it('l’époque moderne exige la raffinerie, des puits, une ligne et deux gares reliées, après les expéditions de l’âge', () => {
+    expect(AGES[4].reqLate).toEqual({ refinery: 1, oilwell: 2 });
+    expect(AGES[4].reqRail).toBe(true);
+    for (const n of [1, 2, 3, 5]) { expect(AGES[n].reqLate, `âge ${n}`).toBeUndefined(); expect(AGES[n].reqRail).toBeFalsy(); }
+    // en défi aussi : aucun âge d'avant ne les demandait
+    expect(reqKindsOf(4, 'challenge', true)).toEqual({ refinery: 1, oilwell: 2 });
+    const { labels } = village();
+    const l = labels(), at = (s: string) => l.findIndex((x) => x.startsWith(s));
+    expect(at('Raffinerie')).toBeGreaterThan(Math.max(at('expédition « Le tracé'), at('expédition « L’or noir')));
+    expect(at('Puits de pétrole')).toBe(at('Raffinerie') + 1);
+    expect(l.slice(-2)).toEqual([RAIL_FIRST, RAIL_LINKED]);
+    // pas avant : le Moyen Âge n'en dit rien
+    const { sim } = village();
+    sim.age = 2;
+    expect(sim.ageProgress()!.items.some((i) => i.label.startsWith('chemin de fer') || i.kind === 'refinery')).toBe(false);
+  });
+
+  it('le compte du chemin de fer : lignes en service, et le plus grand groupe de gares reliées', () => {
+    const w = continent();
+    const a = w.place('station', ...spot(w, 'station', 40, 40), 0, true, 3, false);
+    const b = w.place('station', ...spot(w, 'station', 60, 60), 0, true, 3, false);
+    const c = w.place('station', ...spot(w, 'station', 80, 40), 0, true, 3, false);
+    expect(railNet(w)).toEqual({ lines: 0, linked: 0 });
+    w.lines.push({ id: 1, stops: [a.id, b.id], color: 0 });
+    expect(railNet(w)).toEqual({ lines: 1, linked: 2 });
+    // la voie ne passe pas : rien
+    w.lines[0].ok = false;
+    expect(railNet(w)).toEqual({ lines: 0, linked: 0 });
+    w.lines[0].ok = true;
+    // une autre ligne part de b : un même réseau de trois gares
+    w.lines.push({ id: 2, stops: [b.id, c.id], color: 1 });
+    expect(railNet(w)).toEqual({ lines: 2, linked: 3 });
+    // une gare démolie : sa ligne n'a plus qu'un arrêt
+    w.removeBuilding(c.id);
+    expect(railNet(w)).toEqual({ lines: 1, linked: 2 });
+  });
+
+  it('le conseil : l’expédition « L’or noir », la raffinerie, les puits, puis briqueterie, gare centrale, petite gare et la ligne', () => {
+    const { w, sim, only, say, item } = village();
+    only((l) => l === 'Raffinerie' || l === 'Puits de pétrole' || l.startsWith('chemin de fer'));
+    expect(say()).toMatch(/« Raffinerie » .*, que débloque l’expédition « L’or noir »/);
+    expect(sim.messageExp).toBe(true);
+    w.exp.done.push('oil');
+    expect(say()).toMatch(/^Pour l’âge suivant : il manque « Raffinerie » \(Bâtir › Production\) : elle tirera le carburant/);
+    expect(sim.messageKind).toBe('refinery');
+    w.place('refinery', ...spot(w, 'refinery', 100, 40), 0, true, 3, false);
+    expect(say()).toMatch(/^Pour l’âge suivant : il manque 2 × « Puits de pétrole » .*gisement/);
+    expect(sim.messageKind).toBe('oilwell');
+    for (const [x, z] of oilSpot(w, 2)) w.place('oilwell', x, z, 0, true, 3, false);
+    sim.recalc();
+    expect(item('Puits de pétrole')).toMatchObject({ have: 2, need: 2 });
+    // le chemin de fer, dans l'ordre des conseils du rail
+    expect(say()).toMatch(/^Pour l’âge suivant, votre premier chemin de fer : bâtissez d’abord « Briqueterie »/);
+    expect(sim.messageKind).toBe('brickworks');
+    w.place('brickworks', ...spot(w, 'brickworks', 40, 100), 0, true, 3, false);
+    expect(say()).toMatch(/bâtissez « Gare centrale »/);
+    expect(sim.messageKind).toBe('terminal');
+    const t = w.place('terminal', ...spot(w, 'terminal', 40, 40), 0, true, 3, false);
+    expect(say()).toMatch(/il faut une autre gare à relier : « Petite gare »/);
+    expect(sim.messageKind).toBe('station');
+    const s = w.place('station', ...spot(w, 'station', 70, 70), 0, true, 3, false);
+    expect(say()).toMatch(/^Pour l’âge suivant, votre premier chemin de fer : tracez une ligne de « Gare centrale » à une autre gare/);
+    expect(sim.messageKind).toBeNull();
+    expect(sim.messageRail).toBe(t.id);
+    expect(sim.railNext()).toEqual({ stop: t.id });
+    expect(item(RAIL_FIRST)).toMatchObject({ have: 0, need: 1 });
+    w.lines.push({ id: 1, stops: [t.id, s.id], color: 0 });
+    expect(item(RAIL_FIRST)).toMatchObject({ have: 1, need: 1 });
+    expect(item(RAIL_LINKED)).toMatchObject({ have: 2, need: 2 });
+    expect(say()).toMatch(/Tout est prêt pour l’âge suivant/);
+    expect(sim.messageRail).toBeNull();
+  });
+
+  it('une ligne dont l’autre gare est démolie ne compte plus : le conseil revient à la gare, puis au tracé', () => {
+    const { w, sim, only, say, item } = village();
+    only((l) => l.startsWith('chemin de fer'));
+    w.place('brickworks', ...spot(w, 'brickworks', 40, 100), 0, true, 3, false);
+    const t = w.place('terminal', ...spot(w, 'terminal', 40, 40), 0, true, 3, false);
+    const s = w.place('station', ...spot(w, 'station', 70, 70), 0, true, 3, false);
+    w.lines.push({ id: 1, stops: [t.id, s.id], color: 0 });
+    expect(item(RAIL_LINKED).have).toBe(2);
+    w.removeBuilding(s.id);
+    expect(item(RAIL_FIRST).have).toBe(0);
+    expect(item(RAIL_LINKED).have).toBe(0);
+    expect(say()).toMatch(/il faut une autre gare à relier : « Petite gare »/);
+    w.place('station', ...spot(w, 'station', 70, 70), 0, true, 3, false);
+    expect(say()).toMatch(/votre premier chemin de fer : tracez une ligne de « Gare centrale »/);
+    expect(sim.messageRail).toBe(t.id);
+  });
+
+  it('un village qui a déjà sa raffinerie, ses puits et deux gares reliées passe, sauvegarde relue comprise', () => {
+    const { w } = village();
+    w.exp.done.push('oil', 'railway');
+    w.place('refinery', ...spot(w, 'refinery', 100, 40), 0, true, 3, false);
+    for (const [x, z] of oilSpot(w, 2)) w.place('oilwell', x, z, 0, true, 3, false);
+    const t = w.place('terminal', ...spot(w, 'terminal', 40, 40), 0, true, 3, false);
+    const s = w.place('station', ...spot(w, 'station', 70, 70), 0, true, 3, false);
+    w.lines.push({ id: 1, stops: [t.id, s.id], color: 0, ok: true });
+    const r = new World();
+    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    const sim = new Sim(r);
+    sim.age = 3;
+    sim.recalc();
+    const items = sim.ageProgress()!.items;
+    for (const l of ['Raffinerie', 'Puits de pétrole', RAIL_FIRST, RAIL_LINKED]) {
+      const it = items.find((i) => i.label === l)!;
+      expect(it.have, l).toBeGreaterThanOrEqual(it.need);
+    }
+    // une partie déjà à l'époque moderne n'a rien à refaire
+    sim.age = 4;
+    expect(sim.ageProgress()!.items.some((i) => i.label.startsWith('chemin de fer') || i.kind === 'refinery' || i.kind === 'oilwell')).toBe(false);
   });
 });

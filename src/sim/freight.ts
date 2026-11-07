@@ -79,6 +79,30 @@ export function spaceRail(w: World) {
   return false;
 }
 
+/**
+ * Le chemin de fer du village : `lines`, les lignes en service (deux arrêts encore debout au moins, une voie qui passe) ;
+ * `linked`, le plus grand groupe de gares reliées entre elles par le rail (deux lignes qui partagent une gare font un même
+ * réseau ; une ligne qui passe par un avant-poste relie quand même ses gares). Une ligne relue d'une sauvegarde, pas encore
+ * reposée, compte : sa voie n'a pas été déclarée impossible
+ */
+export function railNet(w: World): { lines: number; linked: number } {
+  const up = new Map<number, number>();
+  const root = (a: number) => { while (up.get(a) !== a) a = up.get(a)!; return a; };
+  let lines = 0;
+  for (const l of w.lines) {
+    if (l.ok === false) continue;
+    const stops = l.stops.map((id) => w.buildings.get(id)).filter((b): b is Building => !!b);
+    if (stops.length < 2) continue;
+    lines++;
+    const st = stops.filter(isStation);
+    for (const b of st) if (!up.has(b.id)) up.set(b.id, b.id);
+    for (let i = 1; i < st.length; i++) up.set(root(st[i].id), root(st[0].id));
+  }
+  const size = new Map<number, number>();
+  for (const id of up.keys()) { const r = root(id); size.set(r, (size.get(r) ?? 0) + 1); }
+  return { lines, linked: Math.max(0, ...size.values()) };
+}
+
 /** Un bâtiment que le rail sert, avec la gare qui le sert (pour l'animation de « boost ») */
 export interface Boosted { b: Building; station: Building; freight: boolean }
 
