@@ -134,6 +134,8 @@ class Game implements UIHost {
   trainCam: number | null = null;
   /** ligne en cours de tracé : ses arrêts dans l'ordre, ses points de passage, et la ligne qu'elle remplacera (null : une nouvelle) */
   railEdit: RailEditState | null = null;
+  /** clé du dernier calcul des arrêts possibles mis en valeur */
+  private candCk = '';
   /** éditeur du tracé de la voie (la ligne en cours de tracé) */
   trackEdit: TrackEditor;
   expView: ExpeditionView;
@@ -1239,6 +1241,10 @@ class Game implements UIHost {
       if (this.railView.lightsVersion !== this.railLightsV) { this.railLightsV = this.railView.lightsVersion; this.refreshHalos(); }
       // la ligne en cours de tracé : une borne à chaque arrêt ; la voie prévue entre eux, que l'on saisit pour la déplacer
       this.railView.setPreview(this.railEdit ? this.railEdit.stops.map((id) => this.world.buildings.get(id)).filter((b): b is Building => !!b) : [], this.railEdit?.color ?? 0, false);
+      // pendant le tracé : les gares et avant-postes qu'on peut encore ajouter à la ligne sont mis en valeur
+      const re = this.railEdit;
+      const ck = re ? `${this.world.version}|${this.railway.version}|${re.stops.join('.')}` : '';
+      if (ck !== this.candCk) { this.candCk = ck; this.railView.setCandidates(re ? [...this.world.buildings.values()].filter((b) => !re.stops.includes(b.id) && !!this.railway.stopOf(b)) : []); }
       this.trackEdit.update();
       const tr = this.trainCam === null ? undefined : this.railway.trains.get(this.trainCam), tp = tr ? this.railway.trainAt(tr) : null;
       if (tp) this.cam.follow(tp[0], tp[1]);

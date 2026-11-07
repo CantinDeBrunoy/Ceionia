@@ -247,13 +247,19 @@ export class RailView {
   private puffs = new Puffs(240, 0);
   private preview = new THREE.Group();
   private previewKey = '';
+  /** gares et avant-postes que la ligne en cours de tracé peut encore relier : un anneau doré qui pulse et une flèche qui sautille */
+  private cands = new THREE.Group();
+  private candKey = '';
+  private candT = 0;
+  private candMat = new THREE.MeshBasicMaterial({ color: 0xffc83a, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  private candArrow = new THREE.MeshBasicMaterial({ color: 0xffb000, depthTest: false });
   private v = new THREE.Vector3();
 
   /** torrents du relief (donnés par le jeu) : la voie les enjambe sur un ponceau */
   streams: Streams | null = null;
 
   constructor(private world: World, private rail: Railway) {
-    this.group.add(this.puffs.mesh, this.preview);
+    this.group.add(this.puffs.mesh, this.preview, this.cands);
   }
 
   update(dt: number, age: number) {
@@ -267,6 +273,31 @@ export class RailView {
     }
     for (const [id, sh] of this.shows) if (!live.has(id)) { this.group.remove(sh.group); this.shows.delete(id); }
     this.puffs.update(dt);
+    if (this.cands.children.length) {
+      this.candT += dt;
+      this.candMat.opacity = 0.38 + 0.26 * Math.sin(this.candT * 4);
+      for (const o of this.cands.children) if (o.userData.bob !== undefined) o.position.y = o.userData.bob + 0.12 * Math.abs(Math.sin(this.candT * 4));
+    }
+  }
+
+  /** Met en valeur les bâtiments que la ligne en cours de tracé peut relier (liste vide : plus rien) */
+  setCandidates(list: Building[]) {
+    const key = list.map((b) => b.id).join('.');
+    if (key === this.candKey) return;
+    this.candKey = key;
+    for (const o of [...this.cands.children]) { this.cands.remove(o); (o as THREE.Mesh).geometry?.dispose(); }
+    const w = this.world;
+    for (const b of list) {
+      const sz = sizeOf(b), x = b.x + sz / 2, z = b.z + sz / 2, y = w.hAt(x, z), r = sz * 0.75 + 0.55;
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.22, r, 40).rotateX(-Math.PI / 2), this.candMat);
+      ring.position.set(x, y + 0.08, z); ring.renderOrder = 6;
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(r - 0.22, 40).rotateX(-Math.PI / 2), this.candMat);
+      disc.position.set(x, y + 0.07, z); disc.renderOrder = 6;
+      const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 4).rotateX(Math.PI), this.candArrow);
+      const top = y + 1.9 + sz * 0.3;
+      arrow.position.set(x, top, z); arrow.userData.bob = top; arrow.renderOrder = 9;
+      this.cands.add(ring, disc, arrow);
+    }
   }
 
   /**
