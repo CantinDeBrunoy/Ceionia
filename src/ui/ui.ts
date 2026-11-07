@@ -14,6 +14,7 @@ import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, splitIntro, mandatoriesFor, isLegendary, isMilitary, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
+import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
 import { securityCuts, SECURITY_MAX } from '../sim/security';
 import { priceIn, canPay, costLabel, Resource, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
@@ -754,6 +755,8 @@ export class UI {
       for (const k of list) count.set(k, (count.get(k) ?? 0) + 1);
       stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => `${n} ${names[k][n > 1 ? 1 : 0]}`).join(', ')}` : `${ic('pen', 14, 2)} aucune bête pour l’instant`);
     }
+    // une défense de l'île du portail : la contamination de l'île, que son halo doré repousse
+    if ((b.kind === 'watchtower' || b.kind === 'barracks') && h.world.onPortalIsland(b.x, b.z)) { const bl = isleBlight(h.world); if (bl) stats.push(`🔥 Contamination de l’île : ${Math.round(bl.level * 100)} % · son halo doré la repousse alentour (on s’y soigne plus vite)`); }
     if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${(YIELD.brickworks!.brick![a] ?? 0) * railBoost(h.world, b)} briques cuites par jour · ${Math.floor(h.world.brick)} en réserve au village`);
     if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${(YIELD.oilwell!.crude![a] ?? 0) * railBoost(h.world, b)} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
     if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE * railBoost(h.world, b)} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE * railBoost(h.world, b)} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);

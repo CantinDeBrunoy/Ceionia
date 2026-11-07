@@ -338,7 +338,10 @@ export class CommandUI implements ToolInput {
     }).join('')}${w.army.queue.length ? `<small class="q">${w.army.queue.map((q) => `${TROOPS[q.kind].icon}${Math.ceil(q.left)}s`).join(' ')}</small>` : ''}</div>` : '';
     const next = w.nextWaveIn(), raid = isle && w.isle?.raid;
     const status = isle ? (raid ? `<span class="wst hot">🔥 Incursion : ${w.isle!.raiders().length} démons</span>` : next !== null ? `<span class="wst">Prochaine vague : ${Math.ceil(next)} s <button data-a="wave" title="Sonner le cor : faire venir la prochaine vague tout de suite">🎺</button></span>` : '') : '';
-    const html = `<div class="trow">${cards || `<span class="tnone">${isle ? 'Aucune troupe sur l’île : recrutez à la caserne.' : 'Aucune troupe ici.'}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}${wounded ? `<span class="twd" title="Blessés qui se soignent à la caserne">🩹 ${wounded}</span>` : ''}${status}</div>
+    // la contamination de l'île : elle recule à chaque défense, chaque vague repoussée, chaque zone des Enfers conquise
+    const bl = isle && w.blight ? Math.round(w.blight.level * 100) : -1;
+    const blight = bl >= 0 ? `<span class="tsup tblight${bl > 60 ? ' low' : ''}" title="Contamination de l’île : les Enfers débordent par le portail (près de lui, les démons frappent un peu plus fort). Elle recule à chaque tour de garde ou caserne bâtie, chaque vague repoussée, chaque zone des Enfers conquise ; l’île sécurisée reverdit. Les troupes se soignent plus vite dans la zone purifiée (anneaux dorés autour des défenses).">🔥 Contamination <i><b style="width:${bl}%"></b></i>${bl}%</span>` : '';
+    const html = `<div class="trow">${cards || `<span class="tnone">${isle ? 'Aucune troupe sur l’île : recrutez à la caserne.' : 'Aucune troupe ici.'}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}${wounded ? `<span class="twd" title="Blessés qui se soignent à la caserne">🩹 ${wounded}</span>` : ''}${blight}${status}</div>
       <div class="trow">
         <button data-a="attack" class="${sel.armed ? 'on' : ''}" title="Attaquer en marchant : A puis clic au sol (on combat ce qu’on croise)">⚔️ <kbd>A</kbd></button>
         <button data-a="hold" title="Tenir la position (H)">🛡️ <kbd>H</kbd></button>

@@ -8,6 +8,7 @@ import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES } from '../world/hell';
 import type { BaseKind } from './hell';
 import { GEAR_BY } from './gear';
+import { Blight, isleBlight } from '../world/blight';
 
 /**
  * La guerre contre les Enfers, côté simulation : la faction démoniaque (elle vit même quand on ne la regarde pas, à pas
@@ -210,6 +211,7 @@ export class War {
     }
     const f = this.faction!, isle = this.isle!, w = this.world;
     isle.syncDefenses(age);
+    isle.blight = this.refreshBlight();
     // l'armée : recrues qui arrivent, blessés qui guérissent
     const d = isleDefenses(w);
     const { joined, healed } = stepArmy(this.army, dt, this.barracks(), age, healK);
@@ -263,6 +265,19 @@ export class War {
     for (const [id, u] of this.unitOf) { const t = this.army.troops.find((x) => x.id === id); if (t) { t.hp = Math.round(u.hp); t.x = +u.x.toFixed(2); t.z = +u.z.toFixed(2); } }
     return arrived;
   }
+
+  /** Zones des Enfers conquises (elles font reculer la contamination de l'île) */
+  conqueredZones() { return this.faction ? this.faction.conquered.filter(Boolean).length : 0; }
+
+  /** La contamination de l'île, refaite seulement quand ce dont elle dépend change (bâtiments, vagues, zones conquises) */
+  refreshBlight() {
+    const w = this.world, k = `${w.version}|${w.portalOpen}|${w.isleGuard.waves}|${this.conqueredZones()}`;
+    if (k !== this.blightKey) { this.blightKey = k; this.blight = isleBlight(w, this.conqueredZones()); }
+    return this.blight;
+  }
+  /** la contamination de l'île du portail (jauge, bonus des démons, soins) */
+  blight: Blight | null = null;
+  private blightKey = '';
 
   /** Un pas de la faction des Enfers, et de la base avancée */
   private stepHell(dt: number) {
