@@ -1424,6 +1424,17 @@ export class UI {
     ov.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
       // l'équipement qui manque : le fabriquer d'ici, ou aller à sa fiche dans l'onglet Équipement
+      const mkAll = t.closest<HTMLButtonElement>('button[data-mkall]');
+      if (mkAll) {
+        const box = mkAll.closest('.gearNeed'), age = h.sim.age;
+        let n = 0, last: string | null = null;
+        box?.querySelectorAll<HTMLButtonElement>('button[data-mk]').forEach((b) => {
+          const id = b.dataset.mk as GearId, g = GEAR_BY[id], left = Number(b.dataset.left ?? 1);
+          for (let i = 0; i < left; i++) { if (ex.craft(id, age)) n++; else { last = ex.whyCraft(g, age); break; } }
+        });
+        if (n) { h.audio.sfxClick(); key = ''; tick(); } else this.toast(last ?? 'Impossible à fabriquer pour l’instant.');
+        return;
+      }
       const mk = t.closest<HTMLButtonElement>('button[data-mk]'), gg = t.closest<HTMLButtonElement>('button[data-geargo]');
       if (mk) {
         if (mk.disabled) return;
@@ -1514,11 +1525,14 @@ export class UI {
     const rows = gaps.map((g) => {
       const price = gearCostLabel(gearCost(g.gear, h.world.difficulty)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
       const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
-      const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
+      const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" data-left="${left}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
       const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
       return `<div class="gnrow" title="${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <button type="button" class="gnlink" data-geargo="${g.gear.id}" title="Voir dans l’onglet Équipement">${left > 0 ? left : g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</button> ${left > 0 ? '<em>à fabriquer</em>' : ''}${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
     }).join('');
-    return `<div class="gearNeed"><small class="gnh">${ic('hammer', 13, 2)} Équipement nécessaire</small>${rows}</div>`;
+    // « Tout fabriquer » : toutes les pièces qui manquent, d'un seul clic
+    const todo = gaps.some((g) => g.need - g.have - g.queued > 0);
+    const all = todo ? `<button type="button" class="mkAll" data-mkall="1" title="Met en fabrication tout l’équipement qui manque">${ic('hammer', 14, 2)} Tout fabriquer</button>` : '';
+    return `<div class="gearNeed"><small class="gnh">${ic('hammer', 13, 2)} Équipement nécessaire${all}</small>${rows}</div>`;
   }
 
   /** Chemin de fer : chaque ligne, où en est son train et ses voyageurs */
