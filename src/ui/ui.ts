@@ -1369,7 +1369,7 @@ export class UI {
     const arsenal = () => {
       if (!ov.isConnected) { clearInterval(iv); return; }
       const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${ex.active.length}`;
-      if (k !== key) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
+      if (k !== key && !ov.querySelector('.arsenal button:active')) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
       ov.querySelectorAll<HTMLElement>('.queue .bar i, .cbar i').forEach((bar) => (bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`));
       const rb = ov.querySelector<HTMLElement>('.railBox'), rh = this.railHtml();
       if (rb && rb.dataset.html !== rh) { rb.dataset.html = rh; rb.innerHTML = rh; }
@@ -1436,7 +1436,8 @@ export class UI {
     const tick = () => {
       if (!ov.isConnected) { clearInterval(iv); return; }
       const k = stamp();
-      if (k !== key) { key = k; root.innerHTML = body(); }
+      // pas de redessin pendant qu'un bouton est enfoncé : le bouton remplacé sous le doigt perdait le clic ("rien ne se passe")
+      if (k !== key && !root.querySelector('button:active')) { key = k; root.innerHTML = body(); }
       ov.querySelectorAll<HTMLElement>('.gnbar i').forEach((i) => (i.style.width = `${Math.round(ex.craftProgress() * 100)}%`));
     };
     const iv = setInterval(tick, 300);
@@ -1472,7 +1473,15 @@ export class UI {
       const b = t.closest<HTMLButtonElement>('button.choice[data-m]');
       if (!b || b.disabled) return;
       const ci = +b.dataset.c!, a = ex.start(m, ci, h.sim.age);
-      if (!a) { this.toast(ex.why(m, m.choices[ci]) ?? ex.lastFail ?? 'Aucun chemin praticable vers cette destination.'); return; }
+      if (!a) {
+        // le refus s'affiche dans la fenêtre même (le message du haut passait derrière) et en message
+        const why = ex.why(m, m.choices[ci]) ?? ex.lastFail ?? 'Aucun chemin praticable vers cette destination.';
+        this.toast(why);
+        let f = ov.querySelector<HTMLElement>('.failMsg');
+        if (!f) { f = document.createElement('p'); f.className = 'failMsg'; root.prepend(f); }
+        f.textContent = why;
+        return;
+      }
       close();
       closeMain();
       h.audio.sfxClick();

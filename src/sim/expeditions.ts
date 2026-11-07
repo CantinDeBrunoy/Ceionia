@@ -855,7 +855,7 @@ export class Expeditions {
     const air = plan || c.troop || c.mounts || sea || m.farewell || c.fuel || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest);
     const mounts = motor || air ? 0 : this.mountsFor(c);
     const party = this.agents.recruit(c.party);
-    if (!party) return null;
+    if (!party) { this.lastFail = 'Pas assez d’habitants prêts à partir à cet instant : réessayez dans un moment.'; return null; }
     this.world.exp.riding += mounts;
     if (c.fuel && !this.world.unlimited) this.world.fuel = Math.max(0, this.world.fuel - c.fuel);
     // l'équipe emporte le meilleur équipement en réserve contre les dangers du voyage

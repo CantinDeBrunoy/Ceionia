@@ -875,3 +875,4 @@ button.bgo:hover { background: #0f9270; }
 @media (prefers-reduced-motion: reduce) { #toast.show { animation: none; } }
 /* barres de fabrication : pas de transition (la barre est redessinée avec sa largeur, elle repartait de zéro à chaque rafraîchissement) */
 .cbar > i, .queue .bar > i { transition: none; }
+.failMsg { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: #fdecea; color: #a4281f; font-weight: 700; font-size: 13px; }
