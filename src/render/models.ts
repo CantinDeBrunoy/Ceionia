@@ -11000,11 +11000,15 @@ function oilwell(p: Parts) {
   figure(p, 0.25, 0.38, 0xf28a3c, -0.5, false, 0xf2c23a);
 }
 
-/** Grand réservoir de stockage : cuve blanche cerclée de couleur, toit en cône aplati et son garde-corps, escalier qui tourne autour */
-function oilTank(p: Parts, x: number, z: number, r: number, h: number, y0: number, band = 0x3a6ab8) {
-  p.cyl(r, r, h, 18, x, y0, z, 0xeceae4);
-  p.cyl(r * 1.01, r * 1.01, 0.03, 18, x, y0 + h * 0.66, z, band);
-  p.cyl(r * 0.78, r * 1.01, 0.05, 18, x, y0 + h, z, 0xd8d4cc);
+/**
+ * Grand réservoir de stockage : cuve peinte (blanche par défaut) cerclée de couleur, toit en cône aplati et son garde-corps,
+ * escalier qui tourne autour ; `stripes` : des bandes alternées (cuve blanche et rouge, comme un phare)
+ */
+function oilTank(p: Parts, x: number, z: number, r: number, h: number, y0: number, band = 0x3a6ab8, body = 0xeceae4, roof = 0xd8d4cc, stripes = 0) {
+  p.cyl(r, r, h, 18, x, y0, z, body);
+  for (let k = 0; k < stripes; k++) p.cyl(r * 1.008, r * 1.008, h / (stripes * 2 + 1), 18, x, y0 + ((2 * k + 1) * h) / (stripes * 2 + 1), z, band);
+  if (!stripes) p.cyl(r * 1.01, r * 1.01, 0.03, 18, x, y0 + h * 0.66, z, band);
+  p.cyl(r * 0.78, r * 1.01, 0.05, 18, x, y0 + h, z, roof);
   p.add(new THREE.TorusGeometry(r * 0.98, 0.004, 3, 18).rotateX(Math.PI / 2), x, y0 + h + 0.03, z, 0x8a8f96);
   for (let k = 0; k < 7; k++) {
     const a = 0.4 + k * 0.32;
@@ -11020,10 +11024,12 @@ function gasSphere(p: Parts, x: number, z: number, r: number, y0: number) {
 }
 
 /** Colonne de distillation : fût d'acier clair sur son socle, passerelles à garde-corps jaune, échelle, dôme et feu rouge au sommet */
-function distillColumn(p: Parts, x: number, z: number, r: number, h: number, y0: number) {
+function distillColumn(p: Parts, x: number, z: number, r: number, h: number, y0: number, band = 0) {
   p.cyl(r * 1.3, r * 1.35, 0.06, 10, x, y0, z, 0x9d9890);
-  p.cyl(r, r, h, 12, x, y0 + 0.06, z, 0xdfe3e8);
-  p.sphere(r, x, y0 + 0.06 + h, z, 0xdfe3e8, 1, 0.6);
+  p.cyl(r, r, h, 12, x, y0 + 0.06, z, 0xf2f0ea);
+  p.sphere(r, x, y0 + 0.06 + h, z, 0xf2f0ea, 1, 0.6);
+  // (la bande de couleur, sous le dôme, et un liseré au pied)
+  if (band) { p.cyl(r * 1.02, r * 1.02, 0.1, 12, x, y0 + h - 0.06, z, band); p.cyl(r * 1.02, r * 1.02, 0.04, 12, x, y0 + 0.12, z, band); }
   for (let y = 0.3; y < h - 0.05; y += 0.28) {
     p.cyl(r + 0.05, r + 0.05, 0.012, 12, x, y0 + 0.06 + y, z, 0x5d6878);
     p.add(new THREE.TorusGeometry(r + 0.05, 0.004, 3, 14).rotateX(Math.PI / 2), x, y0 + 0.06 + y + 0.045, z, 0xf2c23a);
@@ -11050,29 +11056,43 @@ function tanker(p: Parts, x: number, z: number, y0: number) {
  */
 function refinery(p: Parts) {
   sink(0.012);
-  const y0 = 0.012, steel = 0x5d6878;
-  p.box(2.92, 0.012, 2.92, 0, 0, 0, 0xbdb8ae);
-  // voie d'accès bitumée devant, ses tirets
-  p.box(2.9, 0.006, 0.34, 0, y0, 1.22, 0x5d6169);
-  for (let x = -1.3; x <= 1.31; x += 0.26) p.box(0.12, 0.003, 0.02, x, y0 + 0.006, 1.22, C.white);
-  // parc de stockage : cuvette de rétention (muret), trois grands réservoirs, une sphère de gaz
+  const y0 = 0.012, steel = 0x5d6878, red = 0xd84a3e, blue = 0x3a6ab8, white = 0xf4f2ee, gravel = 0xd9cfb6;
+  // pas de grande dalle : l'herbe reste, avec des aires de gravier sous les installations (taches aux tons variés), une
+  // petite route d'accès devant, jusqu'au poste de chargement
+  for (const [x, z, r, sx, k] of [[0.82, -0.85, 0.6, 1.05, 1], [0.86, -0.38, 0.4, 1.25, 1.04], [-0.25, 0.62, 0.42, 1.4, 1.02],
+    [0.9, 0.62, 0.38, 1.3, 1.06], [-1.15, 0.6, 0.28, 1, 1.03]] as number[][])
+    p.add(new THREE.CylinderGeometry(r, r * 0.97, 0.004, 14).scale(sx, 1, 1), x, y0 + 0.002, z, dark(gravel, k));
+  // gravillons épars, un peu plus foncés
+  for (let k = 0; k < 16; k++) { const x = -1.3 + hash2(k, 3, 611) * 2.6, z = -1.3 + hash2(k, 7, 613) * 2.5; p.box(0.03, 0.01, 0.024, x, y0, z, dark(gravel, 0.8 + hash2(k, 9, 617) * 0.12), k); }
+  p.box(1.9, 0.006, 0.3, -0.5, y0, 1.24, 0x5d6169);
+  p.box(1.9, 0.004, 0.34, -0.5, y0 - 0.001, 1.24, 0xb4ae9e);
+  for (let x = -1.3; x <= 0.31; x += 0.26) p.box(0.12, 0.003, 0.02, x, y0 + 0.006, 1.24, C.white);
+  // flaques de brut luisantes, près du parc et du poste de chargement
+  for (const [x, z, r, sx] of [[-0.12, -0.2, 0.09, 1.6], [-1.3, 0.2, 0.07, 1.3], [0.05, 0.92, 0.06, 1.8]]) p.add(new THREE.CircleGeometry(r, 10).rotateX(-Math.PI / 2).scale(sx, 1, 1), x, y0 + 0.007, z, 0x1c1814);
+  // parc de stockage : cuvette de rétention (muret de béton, sol de gravier), trois grands réservoirs peints, une sphère de gaz
   const bx = -0.78, bz = -0.78, bw = 1.3;
-  for (const s of [-1, 1]) { p.box(bw, 0.05, 0.03, bx, y0, bz + (s * bw) / 2, 0xa8a49c); p.box(0.03, 0.05, bw, bx + (s * bw) / 2, y0, bz, 0xa8a49c); }
-  p.box(bw - 0.03, 0.004, bw - 0.03, bx, y0, bz, 0xa29a8a);
-  oilTank(p, -1.1, -1.1, 0.27, 0.42, y0);
-  oilTank(p, -0.48, -1.1, 0.27, 0.42, y0, 0xd84a3e);
-  oilTank(p, -1.1, -0.48, 0.22, 0.32, y0);
-  gasSphere(p, -0.46, -0.46, 0.17, y0);
-  // colonnes de distillation, reliées en haut par des tuyaux
-  distillColumn(p, 0.45, -1.0, 0.1, 1.45, y0);
-  distillColumn(p, 0.85, -1.15, 0.075, 1.05, y0);
-  distillColumn(p, 1.2, -0.95, 0.065, 0.8, y0);
+  for (const s of [-1, 1]) { p.box(bw, 0.05, 0.03, bx, y0, bz + (s * bw) / 2, 0xd8d4cc); p.box(0.03, 0.05, bw, bx + (s * bw) / 2, y0, bz, 0xd8d4cc); }
+  p.box(bw - 0.03, 0.005, bw - 0.03, bx, y0, bz, 0xddd5c0);
+  oilTank(p, -1.1, -1.1, 0.27, 0.44, y0, white, red, 0xf4f2ee);
+  oilTank(p, -0.48, -1.1, 0.27, 0.44, y0, red, white, 0xd8d4cc, 2);
+  oilTank(p, -1.1, -0.48, 0.22, 0.34, y0, white, blue, 0xeceae4);
+  gasSphere(p, -0.46, -0.46, 0.18, y0);
+  // colonnes de distillation blanches à bande de couleur, reliées en haut par des tuyaux
+  distillColumn(p, 0.45, -1.0, 0.1, 1.45, y0, red);
+  distillColumn(p, 0.85, -1.15, 0.075, 1.05, y0, blue);
+  distillColumn(p, 1.2, -0.95, 0.065, 0.8, y0, 0xf2c23a);
   pipeRun(p, [[0.55, y0 + 1.2, -1.0], [0.7, y0 + 1.2, -1.0], [0.79, y0 + 0.95, -1.12]], 0.014, 0xc4cad2);
   pipeRun(p, [[0.92, y0 + 0.7, -1.12], [1.05, y0 + 0.7, -1.12], [1.15, y0 + 0.6, -0.98]], 0.012, 0xf2c23a);
-  // four de chauffe : caisson et ses deux cheminées qui fument ; échangeurs couchés sur leurs berceaux
-  p.box(0.4, 0.32, 0.28, 0.75, y0, -0.45, 0x8a8f96);
-  p.box(0.42, 0.03, 0.3, 0.75, y0 + 0.32, -0.45, steel);
-  for (const x of [0.65, 0.85]) { p.cyl(0.03, 0.035, 0.45, 8, x, y0 + 0.35, -0.45, 0xa85e50); p.cyl(0.036, 0.036, 0.02, 8, x, y0 + 0.78, -0.45, 0x3c3c40); smoke(x, y0 + 0.82, -0.45, 2); }
+  // four de chauffe : caisson de brique et sa ceinture d'acier, deux cheminées rayées rouge et blanc qui fument ; échangeurs
+  // couchés sur leurs berceaux
+  p.box(0.4, 0.32, 0.28, 0.75, y0, -0.45, 0xc0583f);
+  p.box(0.41, 0.04, 0.29, 0.75, y0 + 0.14, -0.45, steel);
+  p.box(0.42, 0.03, 0.3, 0.75, y0 + 0.32, -0.45, 0x3c3c40);
+  for (const x of [0.67, 0.83]) p.box(0.06, 0.05, 0.012, x, y0 + 0.04, -0.304, 0xff7a2a, 0, true);
+  for (const x of [0.65, 0.85]) {
+    for (let k = 0; k < 4; k++) p.cyl(0.033 - k * 0.0013, 0.035 - k * 0.0013, 0.1125, 8, x, y0 + 0.35 + k * 0.1125, -0.45, k % 2 ? white : red);
+    p.cyl(0.036, 0.036, 0.02, 8, x, y0 + 0.78, -0.45, 0x3c3c40); smoke(x, y0 + 0.82, -0.45, 2);
+  }
   for (const z of [-0.55, -0.38]) {
     for (const x of [1.12, 1.36]) p.box(0.04, 0.06, 0.1, x, y0, z, 0x9d9890);
     p.add(new THREE.CylinderGeometry(0.05, 0.05, 0.36, 10).rotateZ(Math.PI / 2), 1.24, y0 + 0.1, z, 0xd8dde2);
@@ -11091,8 +11111,8 @@ function refinery(p: Parts) {
   pipeRun(p, [[-0.85, y0 + 0.05, -0.48], [-0.85, y0 + 0.05, -0.1], [-0.85, y0 + 0.216, -0.06]], 0.016, 0x8a8f96);
   // torchère : haut fût cerclé de rouge sur son trépied de poutrelles ; la flamme danse au sommet et fume
   const fx = -1.18, fz = 0.62, fh = 1.9;
-  p.cyl(0.03, 0.04, fh, 6, fx, y0, fz, 0xc4cad2);
-  for (const y of [0.35, 0.75, 1.15, 1.55]) p.cyl(0.042, 0.042, 0.08, 6, fx, y0 + y, fz, 0xd84a3e);
+  // (le fût rayé rouge et blanc, comme une cheminée qu'on voit de loin)
+  for (let k = 0; k < 6; k++) p.cyl(0.04 - ((k + 1) * 0.01) / 6, 0.04 - (k * 0.01) / 6, fh / 6, 8, fx, y0 + (k * fh) / 6, fz, k % 2 ? white : red);
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2 + 0.3;
     pipe(p, [fx + Math.cos(a) * 0.24, y0, fz + Math.sin(a) * 0.24], [fx + Math.cos(a) * 0.035, y0 + 1.15, fz + Math.sin(a) * 0.035], 0.008, steel);
@@ -11124,6 +11144,18 @@ function refinery(p: Parts) {
   for (const sx of [-0.15, 0.15]) p.box(0.1, 0.01, 0.03, lx + sx, y0 + 0.29, lz, 0xfff4d8, 0, true);
   pipeRun(p, [[lx + 0.05, y0 + 0.216, 0.1], [lx + 0.05, y0 + 0.26, 0.5], [lx + 0.05, y0 + 0.2, 0.6]], 0.012, 0x6a6e74);
   tanker(p, lx, lz, y0);
+  // au sol : une cuve couchée jaune sur ses berceaux, des fûts bleus, rouges et jaunes, une palette de caisses ; la conduite
+  // posée sur traverses qui longe le parc de stockage
+  p.add(new THREE.CylinderGeometry(0.08, 0.08, 0.38, 12).rotateZ(Math.PI / 2), 0.3, y0 + 0.11, 1.0, 0xf2c23a);
+  for (const s of [-1, 1]) { p.add(new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI).rotateY(s * Math.PI / 2), 0.3 + s * 0.19, y0 + 0.11, 1.0, 0xf2c23a); p.box(0.04, 0.06, 0.16, 0.3 + s * 0.12, y0, 1.0, 0x8a8f96); }
+  p.box(0.39, 0.012, 0.012, 0.3, y0 + 0.185, 1.0, 0x3c3c40);
+  for (const [x, z, c] of [[-1.32, 0.26, blue], [-1.24, 0.23, blue], [-1.28, 0.32, red], [-1.38, 0.34, 0xf2c23a], [0.62, 1.12, red], [0.7, 1.08, blue], [0.66, 1.2, blue]] as number[][]) {
+    p.cyl(0.03, 0.03, 0.08, 8, x, y0, z, c);
+    p.cyl(0.031, 0.031, 0.007, 8, x, y0 + 0.074, z, dark(c, 0.7));
+  }
+  p.box(0.16, 0.02, 0.13, 1.25, y0, 0.12, C.wood);
+  for (const [x, z, h] of [[1.21, 0.09, 0.07], [1.29, 0.09, 0.06], [1.24, 0.16, 0.07]]) p.box(0.07, h, 0.06, x, y0 + 0.02, z, 0xc8955a);
+  for (const x of [-0.85, -0.48]) for (let z = -0.62; z <= -0.15; z += 0.16) p.box(0.09, 0.03, 0.03, x, y0, z, 0x8a6a4a);
   // ouvriers en combinaison et casque, lampadaires
   for (const [x, z, c, r] of [[-0.62, 0.98, 0xf28a3c, 0.6], [0.2, -0.22, 0xf28a3c, 2.2], [0.42, 0.95, 0x3a5a8a, Math.PI], [-0.05, 0.4, 0xf28a3c, -1.2]] as number[][]) figure(p, x, z, c, r, false, 0xf2c23a);
   for (const [x, z] of [[-0.7, 1.0], [0.3, 1.0], [1.38, -0.12], [-0.05, -0.2]]) lampPost(p, x, z, 0.34);
