@@ -77,15 +77,3 @@ export const REFINE_CRUDE = 12, FUEL_PER_CRUDE = 0.75;
 export const CAR_FUEL = 2;
 
 export const RES_NAME: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', crude: 'pétrole brut', fuel: 'carburant', brick: 'briques' };
-
-/** Nombre maximal d'habitations (maisons) que le village peut compter, selon l'âge ; au-delà, on passe à l'âge suivant */
-export const HOUSE_CAP = [10, 16, 18, 24, 28, 40];
-
-/** Pourquoi on ne peut plus bâtir de maison à cet âge (null : c'est permis ; pas de limite en ressources illimitées / bac à sable) */
-export function houseLimit(w: World, kind: KindId, age: number): string | null {
-  if (kind !== 'house' || w.unlimited) return null;
-  const cap = HOUSE_CAP[Math.min(age, HOUSE_CAP.length - 1)];
-  let n = 0;
-  for (const b of w.buildings.values()) if (b.kind === 'house') n++;
-  return n >= cap ? `Limite de ${cap} habitations à cet âge${age < HOUSE_CAP.length - 1 ? ' : passez à l’âge suivant pour en bâtir davantage' : ''}` : null;
-}
