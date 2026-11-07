@@ -1476,8 +1476,6 @@ class Game implements UIHost {
     });
 
     this.uiTimer -= dt;
-    // le mode ordres de l'île se range tout seul après 5 s sans ordre ni clic (retour au curseur normal)
-    if (this.isleCmd && this.command.idleExpired()) { this.leaveIsle(); this.ui.toast('Retour au curseur normal (5 s sans ordre).'); }
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.on; this.command.render(); this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
