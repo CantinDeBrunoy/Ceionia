@@ -406,12 +406,14 @@ export class Agents {
     for (const p of findPlots(w)) { this.plots.set(p.key, p); for (const k of p.cells) this.plotAt.set(k, p); }
     this.farms = [...w.buildings.values()].filter((b) => b.kind === 'farm');
     this.plotsDirty = true;
-    const houses = [...w.buildings.values()].filter(isHome);
-    for (let i = 0; i < w.veg.length; i++) {
-      if (w.veg[i] !== 1) continue;
-      const x = i % N, z = (i / N) | 0;
-      if (houses.some((h) => Math.abs(h.x - x) + Math.abs(h.z - z) < 12)) this.woods.push(i);
+    // lisières à moins de douze cases (à vol d'oiseau, en losange) d'une maison : chaque maison marque son losange, puis on
+    // lit la marque (plutôt que toutes les maisons pour chaque case de forêt : des millions de comparaisons sur un grand village)
+    const nearHome = new Uint8Array(N * N);
+    for (const h of w.buildings.values()) {
+      if (!isHome(h)) continue;
+      for (let dz = -11; dz <= 11; dz++) for (let dx = -11 + Math.abs(dz); dx <= 11 - Math.abs(dz); dx++) if (w.inCells(h.x + dx, h.z + dz)) nearHome[(h.z + dz) * N + h.x + dx] = 1;
     }
+    for (let i = 0; i < w.veg.length; i++) if (w.veg[i] === 1 && nearHome[i]) this.woods.push(i);
     this.assignJobs();
   }
 
