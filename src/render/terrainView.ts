@@ -58,7 +58,7 @@ const OIL_SOIL = new THREE.Color(0x5a4c3e);
 const OIL_TAR = new THREE.Color(0x1c1814);
 const ICE = new THREE.Color(0xcfe6f4);
 /** Sol contaminé de l'île du portail : noirci, veiné de rouge braise, cendre violacée en lisière ; herbe drue des halos */
-const BLIGHT_CHAR = new THREE.Color(0x3a2a31), BLIGHT_EMBER = new THREE.Color(0x86342a), BLIGHT_ASH = new THREE.Color(0x6e5a66);
+const BLIGHT_CHAR = new THREE.Color(0x2c2128), BLIGHT_EMBER = new THREE.Color(0x86342a), BLIGHT_ASH = new THREE.Color(0x6e5a66);
 const PURE_GRASS = new THREE.Color(0x6fcf5a);
 /** Halos de purification au plus, pour la lueur de nuit */
 const MAX_HALOS = 8;
@@ -219,7 +219,7 @@ ${BLIGHT_GLSL}
   float bk = blightK(vPos.xz);
   if (bk > 0.0) {
     float sp = texture2D(uDetail, vPos.xz * 0.37 + 0.13).b;
-    totalEmissiveRadiance += vec3(1.0, 0.2, 0.06) * bk * (0.03 + uBlightNight * (0.1 + 0.5 * smoothstep(0.55, 0.75, sp)));
+    totalEmissiveRadiance += vec3(0.95, 0.13, 0.05) * bk * (0.015 + uBlightNight * (0.035 + 0.3 * smoothstep(0.6, 0.78, sp)));
   }`)
         .replace('void main() {', `void main() {
   // grottes : le versant qui traverse le tunnel est ouvert (la butte rocheuse recouvre l'ouverture)
@@ -681,13 +681,13 @@ ${BLIGHT_GLSL}
           const b = blightAt(bl, x, z);
           if (b > 0) {
             const k = smoothstep(0.03, 0.6, b), pv = patch[i] * 0.5 + this.wobble[i] * 0.5;
-            this.cliff.copy(BLIGHT_ASH).lerp(BLIGHT_CHAR, smoothstep(0.15, 0.5, b)).lerp(BLIGHT_EMBER, clamp(pv * 0.9 + b - 0.75, 0, 0.55));
-            tmp.lerp(this.cliff, k * 0.9);
+            this.cliff.copy(BLIGHT_ASH).lerp(BLIGHT_CHAR, smoothstep(0.15, 0.5, b)).lerp(BLIGHT_EMBER, clamp(pv * 1.2 + b - 0.9, 0, 0.3));
+            tmp.lerp(this.cliff, k * 0.94);
             cover *= 1 - k;
             rock = Math.max(rock * (1 - k), k * 0.65); grass *= 1 - k * 0.8; sand *= 1 - k * 0.6;
           }
           const pu = purityAt(bl, x, z) * (1 - smoothstep(0.03, 0.4, b));
-          if (pu > 0 && h > 0.2) tmp.lerp(PURE_GRASS, pu * 0.28 * (1 - cover));
+          if (pu > 0 && h > 0.2) tmp.lerp(PURE_GRASS, pu * 0.2 * (1 - cover));
         }
       }
       // occlusion ambiante cuite dans les couleurs : vallons, pieds de falaise et fonds de cratère plus sombres, crêtes un peu plus claires

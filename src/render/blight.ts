@@ -68,11 +68,11 @@ export class BlightView {
     this.crystals.castShadow = true;
     this.crystals.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_CRYSTALS * 3), 3);
     // brume rouge basse : deux voiles qui épousent le sol autour du portail
-    this.fog = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ uniforms: this.fogU, vertexShader: FOG_VS, fragmentShader: FOG_FS, transparent: true, depthWrite: false }));
+    this.fog = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ uniforms: this.fogU, vertexShader: FOG_VS, fragmentShader: FOG_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     this.fog.renderOrder = 4;
     // anneaux dorés des halos de purification
     this.rings = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({
-      uniforms: this.ringU, vertexShader: RING_VS, fragmentShader: RING_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: this.ringU, vertexShader: RING_VS, fragmentShader: RING_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
     }));
     this.rings.renderOrder = 1;
@@ -134,12 +134,12 @@ export class BlightView {
         const t0 = i / n, t1 = (i + 1) / n;
         // le zigzag, rappelé vers la direction qui s'éloigne du portail
         const out = Math.atan2(z - b.z, x - b.x);
-        a += (rnd() - 0.5) * 0.7;
-        a += Math.atan2(Math.sin(out - a), Math.cos(out - a)) * 0.25;
+        a += (rnd() - 0.5) * 1.1;
+        a += Math.atan2(Math.sin(out - a), Math.cos(out - a)) * 0.2;
         const nx = x + Math.cos(a) * step, nz = z + Math.sin(a) * step;
         // la fissure s'arrête où la contamination faiblit (lisière, halo d'une défense), au rivage, contre un bâtiment
         const mx = (x + nx) / 2, mz = (z + nz) / 2, ci = Math.floor(mx), cj = Math.floor(mz);
-        if (blightAt(b, mx, mz) < 0.14 || w.hAt(mx, mz) < SEA + 0.08 || !w.inCells(ci, cj) || w.occ[w.ci(ci, cj)] || w.road[w.ci(ci, cj)]) return;
+        if (blightAt(b, mx, mz) < 0.2 || w.hAt(mx, mz) < SEA + 0.08 || !w.inCells(ci, cj) || w.occ[w.ci(ci, cj)] || w.road[w.ci(ci, cj)]) return;
         const wa = w0 * (1 - t0 * 0.8), wb = w0 * (1 - t1 * 0.8), px = -Math.sin(a), pz = Math.cos(a);
         const d0 = Math.hypot(x - b.x, z - b.z), d1 = Math.hypot(nx - b.x, nz - b.z);
         const h0 = (1 - t0) * (depth ? 0.6 : 1), h1 = (1 - t1) * (depth ? 0.6 : 1);
@@ -284,14 +284,16 @@ varying float vSide;
 varying float vDist;
 void main() {
   float s = abs(vSide);
-  float core = 1.0 - smoothstep(0.05, 0.6, s);
+  float core = 1.0 - smoothstep(0.08, 0.42, s);
   float pulse = 0.7 + 0.3 * sin(vDist * 3.2 - uTime * 2.2);
-  vec3 hot = mix(vec3(0.95, 0.2, 0.05), vec3(1.0, 0.72, 0.22), core * vHeat * pulse);
-  float k = (0.55 + 0.45 * vHeat) * pulse * (1.0 + uNight * 1.3) * (0.5 + 0.5 * uLevel);
-  vec3 c = mix(vec3(0.09, 0.03, 0.04), hot * k * 1.5, core);
-  float a = (1.0 - smoothstep(0.75, 1.0, s)) * (0.45 + 0.55 * vHeat) * min(1.0, 0.35 + uLevel);
+  // rouge sombre au bout, orangé, jaune au cœur le plus chaud (couleurs franches : sans le rendu des tons, qui les délave)
+  // (couleurs linéaires : elles s'éclaircissent à l'affichage)
+  vec3 hot = mix(vec3(0.5, 0.02, 0.0), vec3(1.0, 0.2, 0.0), vHeat * pulse);
+  hot = mix(hot, vec3(1.0, 0.6, 0.08), (1.0 - smoothstep(0.0, 0.16, s)) * vHeat * pulse * 0.7);
+  float k = (0.6 + 0.4 * vHeat) * pulse * (0.85 + uNight * 0.35) * (0.55 + 0.45 * uLevel);
+  vec3 c = mix(vec3(0.012, 0.004, 0.006), min(hot * k, vec3(1.0)), core);
+  float a = (1.0 - smoothstep(0.7, 1.0, s)) * (0.5 + 0.5 * vHeat) * min(1.0, 0.35 + uLevel);
   gl_FragColor = vec4(c, a);
-  #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
 
@@ -320,10 +322,10 @@ float n2(vec2 p) {
 void main() {
   float n = n2(vXZ * 0.7 + vec2(uTime * 0.12, uTime * 0.07)) * 0.6 + n2(vXZ * 1.6 - vec2(uTime * 0.09, -uTime * 0.05)) * 0.4;
   float fall = pow(1.0 - vRel, 1.3);
-  vec3 c = mix(vec3(0.75, 0.3, 0.38), vec3(1.0, 0.3, 0.2), uNight);
-  float a = uLevel * 0.3 * fall * smoothstep(0.25, 0.8, n) * (1.0 + uNight * 0.4);
-  gl_FragColor = vec4(c * (1.0 + uNight * 0.6), a);
-  #include <tonemapping_fragment>
+  // voile lumineux (mélange additif) : rose le jour, rouge braise la nuit
+  vec3 c = mix(vec3(0.9, 0.25, 0.4), vec3(1.0, 0.22, 0.1), uNight);
+  float a = uLevel * 0.22 * fall * smoothstep(0.25, 0.8, n) * (1.0 + uNight * 0.5);
+  gl_FragColor = vec4(c, a);
   #include <colorspace_fragment>
 }`;
 
@@ -340,8 +342,7 @@ const RING_FS = /* glsl */ `
 uniform float uTime;
 varying float vAng;
 void main() {
-  float sh = 0.6 + 0.4 * sin(vAng * 3.0 - uTime * 1.4);
-  gl_FragColor = vec4(vec3(1.0, 0.8, 0.36) * sh * 0.55, 1.0);
-  #include <tonemapping_fragment>
+  float sh = 0.7 + 0.3 * sin(vAng * 3.0 - uTime * 1.4);
+  gl_FragColor = vec4(mix(vec3(0.85, 0.5, 0.08), vec3(1.0, 0.9, 0.5), sh), 0.45 + 0.35 * sh);
   #include <colorspace_fragment>
 }`;

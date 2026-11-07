@@ -961,9 +961,11 @@ class Game implements UIHost {
     this.veg.blight = b;
     const p = w.portal;
     if (p) {
-      const R = Math.ceil(p.r + 4);
-      w.markVeg(Math.max(0, p.x - R), Math.max(0, p.z - R), Math.min(N - 1, p.x + R), Math.min(N - 1, p.z + R));
-      w.vegDirty = true;
+      // une seule passe sur les sommets de l'île (teintes seules, le relief n'a pas bougé), puis ses tuiles de végétation
+      const R = Math.ceil(p.r + 4), rect: [number, number, number, number] = [Math.max(0, p.x - R), Math.max(0, p.z - R), Math.min(N - 1, p.x + R), Math.min(N - 1, p.z + R)];
+      this.terrain.update(this.season, rect, true);
+      w.markVeg(...rect);
+      this.veg.rebuild(this.season);
     }
   }
 
