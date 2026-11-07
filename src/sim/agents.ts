@@ -168,6 +168,8 @@ function jeepGeo(v: number) {
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
 const MAX_AGENTS = 90;
+/** Distance à la caméra au-delà de laquelle un habitant n'est plus qu'une petite figure instanciée */
+const FOLK_FAR = 30;
 /** Écart à l'axe de la rue où l'on marche : le trottoir (la chaussée fait 0,3 de demi-largeur), dès la rue pavée (âge 3) */
 export const SIDEWALK = 0.37;
 export const sidewalkAt = (age: number) => (age >= 3 ? SIDEWALK : 0);
@@ -359,6 +361,12 @@ export class Agents {
   /** population du village (donnée à chaque image) */
   private popTarget = 0;
   private pathBudget = 0;
+  /**
+   * la caméra (donnée par le jeu) et la part de qualité : au-delà de `FOLK_FAR × detail` de la caméra, un habitant n'est
+   * plus que la petite figure instanciée (cône, tête, outil) au lieu de ses cinq maillages articulés et de leurs ombres
+   */
+  camera: THREE.Camera | null = null;
+  detail = 1;
 
   constructor(private world: World) {
     this.body = new THREE.InstancedMesh(new THREE.ConeGeometry(0.075, 0.2, 6).translate(0, 0.1, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
@@ -1390,9 +1398,13 @@ export class Agents {
   private render(age: number, dt: number) {
     const w = this.world, d = this.d;
     const palette = BODY_COLS[Math.min(age, 5)];
+    const cam = this.camera?.position, farSq = (FOLK_FAR * this.detail) ** 2;
     let n = 0;
     for (const a of this.agents) {
-      if (this.animateActor(a, age, dt)) continue;
+      // loin de la caméra (hors expédition : montures, soldats et voitures gardent leur figure), la petite figure instanciée
+      const far = !!cam && !a.kit && (a.x - cam.x) ** 2 + (a.z - cam.z) ** 2 > farSq;
+      if (far) { if (a.actor) a.actor.root.visible = false; }
+      else if (this.animateActor(a, age, dt)) continue;
       if (a.hidden) continue;
       const bob = a.state === 'walking' ? Math.abs(Math.sin(a.phase)) * 0.025 : a.state === 'doing' ? Math.abs(Math.sin(a.phase * 0.6)) * 0.012 : 0;
       d.position.set(a.x, this.groundY(a) + 0.02 + bob, a.z);
