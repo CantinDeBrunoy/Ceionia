@@ -12,9 +12,9 @@ const GOLD = new THREE.Color(1, 0.78, 0.2), SMOKE = new THREE.Color(0.62, 0.62, 
 export interface Fx { id: number; x: number; z: number; r: number; ax: number; az: number; bx: number; bz: number; freight: boolean; gy: number; phase: number; cart: number; emit: number }
 
 /**
- * Bâtiments boostés par le rail, rendus vivants : une flaque dorée qui pulse au sol, des étincelles qui montent, une
+ * Bâtiments boostés par le rail, rendus vivants : des étincelles qui montent, une
  * fumée plus dense, et (pour les ateliers) un petit chariot qui fait la navette jusqu'à la gare qui les sert. Tout est
- * mutualisé (une flaque instanciée, un jeu de bouffées, deux maillages de chariots), plafonné, et limité aux bâtiments
+ * mutualisé (un jeu de bouffées, deux maillages de chariots), plafonné, et limité aux bâtiments
  * proches de la caméra ; le travail s'arrête la nuit
  */
 export class RailBoost {
@@ -24,22 +24,17 @@ export class RailBoost {
   /** ceux qu'on anime (près de la caméra, plafonnés) */
   active: Fx[] = [];
   private puffs = new Puffs(320, 0);
-  private ring: THREE.InstancedMesh;
   private body: THREE.InstancedMesh;
   private load: THREE.InstancedMesh;
   private dummy = new THREE.Object3D();
-  private ringMat: THREE.MeshBasicMaterial;
   private t = 0;
   private scan = 0;
 
   constructor(private world: World) {
-    this.ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.7, 0.12), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
-    this.ring = new THREE.InstancedMesh(new THREE.RingGeometry(0.82, 1, 40).rotateX(-Math.PI / 2), this.ringMat, MAX_FX);
     this.body = new THREE.InstancedMesh(new THREE.BoxGeometry(0.2, 0.09, 0.13).translate(0, 0.09, 0), new THREE.MeshStandardMaterial({ color: 0x7a4a26, roughness: 0.9 }), MAX_CARTS);
     this.load = new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.07, 0.1).translate(0, 0.17, 0), new THREE.MeshStandardMaterial({ color: 0xe0b030, roughness: 0.6, emissive: 0x4a3000 }), MAX_CARTS);
-    for (const m of [this.ring, this.body, this.load]) { m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); }
-    this.ring.renderOrder = 2;
-    this.group.add(this.puffs.mesh, this.ring, this.body, this.load);
+    for (const m of [this.body, this.load]) { m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); }
+    this.group.add(this.puffs.mesh, this.body, this.load);
   }
 
   /**
@@ -59,19 +54,12 @@ export class RailBoost {
     this.scan -= dt;
     if (this.scan <= 0) { this.scan = 0.6; this.boosted = boostedBuildings(this.world); this.refresh(cx, cz, dist); }
     this.puffs.update(dt);
-    // le travail s'arrête en pleine nuit : plus d'étincelles ni de chariot, la flaque s'assoupit
+    // le travail s'arrête en pleine nuit : plus d'étincelles ni de chariot, les étincelles s'arrêtent
     const work = 1 - Math.min(1, Math.max(0, (night - 0.5) / 0.3));
     const w = this.world, d = this.dummy;
-    const pulse = 0.5 + 0.5 * Math.sin(this.t * 2.2);
-    this.ringMat.opacity = (0.28 + 0.22 * pulse) * (0.3 + 0.7 * work);
-    let n = 0, c = 0;
+    let c = 0;
     for (const f of this.active) {
       const y = w.surfaceAt(f.x, f.z);
-      d.position.set(f.x, f.gy + 0.06, f.z);
-      d.rotation.set(0, 0, 0);
-      d.scale.setScalar(f.r * (1 + 0.05 * Math.sin(this.t * 2.2 + f.phase)));
-      d.updateMatrix();
-      this.ring.setMatrixAt(n++, d.matrix);
       if (work <= 0) continue;
       // étincelles dorées qui montent du bâtiment, fumée plus dense au-dessus
       f.emit += dt * work;
@@ -98,8 +86,8 @@ export class RailBoost {
         c++;
       }
     }
-    this.ring.count = n; this.body.count = c; this.load.count = c;
-    for (const m of [this.ring, this.body, this.load]) m.instanceMatrix.needsUpdate = true;
+    this.body.count = c; this.load.count = c;
+    for (const m of [this.body, this.load]) m.instanceMatrix.needsUpdate = true;
   }
 
   /** Le point le plus haut du sol sous la flaque : on la pose dessus pour que le relief ne la mange pas */
