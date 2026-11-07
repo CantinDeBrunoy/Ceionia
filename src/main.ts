@@ -274,6 +274,7 @@ class Game implements UIHost {
     this.buildings = new BuildingView(w);
     this.env = new Environment(this.scene, renderer, coarse);
     this.agents = new Agents(w);
+    this.agents.camera = this.cam.camera;
     this.fauna = new Fauna(w, this.veg);
     this.fauna.people = () => this.agents.agents;
     this.eruptions = new Eruptions(w);
@@ -743,6 +744,7 @@ class Game implements UIHost {
     this.glow?.setSize(innerWidth, innerHeight);
     this.env.setShadowSize(p.shadowSize);
     this.fauna.detail = p.faunaDetail;
+    this.agents.detail = p.faunaDetail;
     this.veg.lodDist = p.vegLod;
   }
 
@@ -1037,10 +1039,9 @@ class Game implements UIHost {
       // la neige des routes suit la saison sans les refaire (shader) ; elles ne se refont que lorsqu'elle franchit un seuil où
       // leurs décors changent : sur un grand village, les refaire coûte un à-coup, et à ×4 la neige bouge quatre fois plus vite
       const s = this.season.snow;
-      if (force || this.propsDirty || roadSnowStep(this.roads.builtSnow, s)) {
-        this.roads.rebuild(this.sim.age, s);
-        this.propsDirty = false;
-      } else this.roads.setSnow(s);
+      if (force) { this.roads.rebuild(this.sim.age, s); this.propsDirty = false; }
+      else if (this.propsDirty || roadSnowStep(this.roads.builtSnow, s)) { this.roads.rebuildSoon(this.sim.age, s); this.propsDirty = false; }
+      else this.roads.setSnow(s);
     }
   }
 
@@ -1100,7 +1101,8 @@ class Game implements UIHost {
     if ((this.propsDirty || w.roadsDirty || w.vegDirty) && this.propsTimer <= 0) {
       this.propsTimer = 0.12;
       const roadsChanged = w.roadsDirty;
-      if (w.roadsDirty || this.propsDirty) { w.roadsDirty = false; this.roads.rebuild(this.sim.age, this.season.snow); this.buildings.refreshAll(); }
+      // les chemins se refont au fil des images (pas d'à-coup à la pose) ; les bâtiments se tournent vers la rue tout de suite
+      if (w.roadsDirty || this.propsDirty) { w.roadsDirty = false; this.roads.rebuildSoon(this.sim.age, this.season.snow); this.buildings.refreshAll(); }
       // l'herbe des prairies dépend aussi des routes
       if (w.vegDirty || roadsChanged || this.propsDirty) {
         // le sol se teinte sous les champs, jardins et forêts
@@ -1122,6 +1124,8 @@ class Game implements UIHost {
       w.basaltRect = null;
     }
     this.refreshSeason();
+    // les chemins en cours de reconstruction avancent un peu à chaque image ; prêts, leurs lanternes éclairent
+    if (this.roads.step()) this.refreshHalos();
     this.terrain.stepRecolor();
 
     this.env.update(dt, this.time, this.season, this.cam.target, gdt, this.cam.dist);

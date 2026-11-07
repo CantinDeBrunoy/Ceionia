@@ -817,7 +817,45 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     attr.needsUpdate = true;
   }
 
+  /** reconstruction répartie sur plusieurs images, en cours ; combien de fois elle a été relancée avant d'aboutir */
+  private pending: Generator<void, void, void> | null = null;
+  private restarts = 0;
+  /** une reconstruction est-elle en attente ? */
+  get busy() { return !!this.pending; }
+
+  /** Refait tout d'un coup (chargement, tests) */
   rebuild(age: number, snow: number) {
+    this.pending = null;
+    this.restarts = 0;
+    const g = this.build(age, snow);
+    while (!g.next().done);
+  }
+
+  /**
+   * Refait les chemins au fil des images (voir `step`) : sur un grand village, tout refaire d'un coup coûte un à-coup de
+   * 100 à 200 ms à chaque bâtiment posé ; les chemins actuels restent affichés jusqu'à ce que les nouveaux soient prêts
+   */
+  rebuildSoon(age: number, snow: number) {
+    this.restarts = this.pending ? this.restarts + 1 : 0;
+    this.pending = this.build(age, snow);
+  }
+
+  /**
+   * Avance la reconstruction en attente pendant `budget` ms au plus (davantage quand elle a été relancée sans aboutir :
+   * en traçant une route cellule par cellule, elle doit finir par s'afficher) ; vrai si elle vient de s'achever
+   */
+  step(budget = 8) {
+    const g = this.pending;
+    if (!g) return false;
+    const t0 = performance.now(), limit = Math.min(60, budget * 2 ** this.restarts);
+    let r = g.next();
+    while (!r.done && performance.now() - t0 < limit) r = g.next();
+    if (!r.done) return false;
+    if (this.pending === g) { this.pending = null; this.restarts = 0; }
+    return true;
+  }
+
+  private *build(age: number, snow: number): Generator<void, void, void> {
     const w = this.world, a = Math.min(age, 4), town = a >= 3, j = town ? 0 : 0.08;
     const u = this.u;
     u.uStyle.value = a;
@@ -829,7 +867,6 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     u.uRim.value.set(RIM_COL[a]);
     u.uCurb.value.set(CURB_COL[a]);
     u.uSnow.value = snow;
-    this.builtSnow = snow;
     // neige retenue selon le biome (moyenne des cases voisines, pour une transition douce) ; la neige de saison s'y applique
     // dans le shader (uSnow) : qu'elle tombe ou fonde ne demande pas de refaire les chemins
     const snowCell = new Map<number, number>();
@@ -874,17 +911,23 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     this.islands.clear();
     const plan = town ? this.streets(age) : null;
     const yards = town ? new Map<number, number[]>() : this.yards();
+    // (le plan est fait : le reste se répartit sur plusieurs images, par paquets de cases)
+    yield;
+    let batch = 0;
     if (plan) {
       for (const [k, st] of plan.cells) {
+        if (++batch % 24 === 0) yield;
         const cx = k % N, cz = Math.floor(k / N);
         if (st.plaza) emit(cx, cz, 4, () => 1, () => -1, 1, 0, 0);
         else emit(cx, cz, 8, (x, z) => st.road(x - cx - 0.5, z - cz - 0.5), (x, z) => st.pave(x - cx - 0.5, z - cz - 0.5), 0, 0.06, 0.02);
       }
       for (const [k, p] of plan.pave) {
+        if (++batch % 24 === 0) yield;
         const cx = k % N, cz = Math.floor(k / N), sdf = rectSdf(p.rects);
         emit(cx, cz, 4, () => 1, (x, z) => sdf(x - cx - 0.5, z - cz - 0.5), p.kind, 0, 0.02);
       }
       for (const [k, sp] of plan.spill) {
+        if (++batch % 24 === 0) yield;
         const cx = k % N, cz = Math.floor(k / N);
         emit(cx, cz, 8, (x, z) => sp.road(x - cx - 0.5, z - cz - 0.5), (x, z) => sp.pave(x - cx - 0.5, z - cz - 0.5), sp.kind, 0.06, 0.02);
       }
@@ -895,6 +938,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && w.bridgeY(cx + dx, cz + dz) === null) cells.add(w.ci(cx + dx, cz + dz));
       }
       for (const k of cells) {
+        if (++batch % 24 === 0) yield;
         const cx = k % N, cz = Math.floor(k / N), seg: number[] = [], circ: number[] = [];
         for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
           if (!w.inCells(cx + dx, cz + dz)) continue;
@@ -948,8 +992,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     g.setAttribute('aSnow', new THREE.Float32BufferAttribute(sa, 1));
     g.setIndex(idx);
     g.computeVertexNormals();
-    this.path.geometry.dispose();
-    this.path.geometry = g;
+    yield;
 
     // ponts et cailloux
     const sp: number[] = [], sc: number[] = [];
@@ -1125,6 +1168,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         for (let v = 0; v < pp.count; v++) { sp.push(x + pp.getX(v) * s * 1.2, y + pp.getY(v) * s * 0.55, z + pp.getZ(v) * s); sc.push(cl.r, cl.g, cl.b); }
       }
     }
+    yield;
     // petits objets : une géométrie de base étirée, tournée, posée
     const gp: number[] = [], gc: number[] = [];
     const put = (geo: THREE.BufferGeometry, x: number, y: number, z: number, sx: number, sy: number, sz: number, ry: number, cl: THREE.Color | number, glow = false) => {
@@ -1158,6 +1202,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     // places des lanternes : sur le trottoir en ville (côté maisons, ou coin d'un carrefour), au bord du chemin ailleurs
     const lamps = new Map<number, [number, number, number, number]>();
     for (const k of this.lightCells(lines)) {
+      if (++batch % 32 === 0) yield;
       const cx = k % N, cz = Math.floor(k / N), st = plan?.cells.get(k);
       if (st?.round) continue;
       const roadAt = (dx: number, dz: number) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1;
@@ -1237,6 +1282,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       }
       for (const [k, st] of plan.cells) {
         if (st.plaza || st.round) continue;
+        if (++batch % 32 === 0) yield;
         const cx = k % N, cz = Math.floor(k / N), ox = cx + 0.5, oz = cz + 0.5, y = (x: number, z: number) => w.hAt(x, z) + 0.024;
         if (st.curve) {
           // route en courbe : ligne médiane pointillée le long de sa ligne, lignes de rive continues à la campagne
@@ -1409,12 +1455,14 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       }
     }
     // éclairage des chemins : torches à la Préhistoire, puis lanternes pendues, réverbères à gaz, lampadaires
-    this.lights = [];
+    yield;
+    const lights: number[] = [];
     for (const [, [x, z, sx, sz]] of lamps) {
+      if (++batch % 32 === 0) yield;
       const y = w.hAt(x, z) + (town ? 0.02 : 0);
       // le bras de la lanterne se tend vers le chemin
       const ry = Math.atan2(-sx, -sz) - Math.PI / 2;
-      this.lights.push(x - sx * 0.08, z - sz * 0.08);
+      lights.push(x - sx * 0.08, z - sz * 0.08);
       if (age === 0) {
         // torche : pieu de bois, tête de paille ficelée, flamme
         put(this.cube, x, y, z, 0.022, 0.3, 0.022, ry, 0x7a5a3e);
@@ -1435,6 +1483,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         put(this.cube, x + -sx * 0.07, y + 0.41, z + -sz * 0.07, 0.04, 0.008, 0.04, 0, 0xfff1c9, true);
       }
     }
+    yield;
     // tonneaux, caisses, sacs (ou bacs à fleurs) au pied des maisons et des ateliers, à côté de la porte
     if (age >= 1 && snow < 0.6) for (const b of w.buildings.values()) {
       if (!CLUTTER.includes(b.kind) || hash2(b.x, b.z, 71) > 0.6) continue;
@@ -1451,6 +1500,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         else put(this.ico, x, y + 0.03, z, 0.04, 0.035, 0.035, ry, SACK);
       }
     }
+    yield;
     // les places et les grandes cours (aux premiers âges) : bancs, fontaine ou puits, bacs fleuris, caisses du marché, posés là
     // où le sol est plein, au milieu des chemins (au moins trois cases de route autour), à l'écart les uns des autres
     if (!town && age >= 0) {
@@ -1530,6 +1580,11 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         }
       }
     }
+    // tout est prêt : les nouveaux chemins et leurs décors remplacent les anciens d'un coup
+    this.path.geometry.dispose();
+    this.path.geometry = g;
+    this.lights = lights;
+    this.builtSnow = snow;
     const gg = new THREE.BufferGeometry();
     gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
     gg.setAttribute('color', new THREE.Float32BufferAttribute(gc, 3));
