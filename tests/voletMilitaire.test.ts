@@ -6,7 +6,8 @@ import { zoneOrigins } from '../src/build/zones';
 import { TROOPS } from '../src/sim/army';
 import { War } from '../src/sim/war';
 import { HELL_ZONES, HellMap, zoneOf, zoneThe, zoneTo } from '../src/world/hell';
-import { Hell } from '../src/sim/hell';
+import { Hell, demonStats } from '../src/sim/hell';
+import { Command } from '../src/sim/command';
 import { troopStats, newArmy, onlyGearMissing, gearToCraft, RecruitCtx } from '../src/sim/army';
 import { emptyStock } from '../src/sim/gear';
 import { RAID_LIMIT } from '../src/sim/isleBattle';
@@ -162,6 +163,28 @@ describe('volet militaire : rien ne reste coincé', () => {
     for (let i = 0; i < 10; i++) war.update(0.4, 1);
     expect(war.faction!.time - t0).toBeCloseTo(4, 1);
   }, 30000);
+});
+
+describe('volet militaire : l’équilibre de la première zone des Enfers', () => {
+  it('sans démon-chef, avec un gardien moins coriace : une garnison pleine de l’Antiquité peut la prendre', () => {
+    const h = new Hell(new HellMap(2));
+    expect(h.garrison(1).some((u) => u.kind === 'chief')).toBe(false);
+    expect(h.garrison(2).some((u) => u.kind === 'chief')).toBe(true);
+    expect(demonStats('guardian', 1).hp).toBeLessThan(demonStats('guardian', 2).hp * 0.7);
+    // douze soldats et archers de l'Antiquité, droit sur la forteresse : ils l'abattent
+    const m = h.map as HellMap, c = new Command(), [ax, az] = m.arrival;
+    const kinds = [...Array(8).fill('soldier'), ...Array(4).fill('archer')] as ('soldier' | 'archer')[];
+    kinds.forEach((k, i) => h.addPlayerUnit(k, troopStats(k, 1), ax + (i % 4) * 0.6 - 1, az + 1 + Math.floor(i / 4) * 0.6));
+    const fort = [...h.buildings.values()].find((b) => b.kind === 'fortress' && b.zone === 1)!;
+    for (let t = 0; t < 600 && !fort.down && h.alive('player').length; t += 0.05) {
+      if (Math.round(t * 20) % 100 === 0) {
+        c.select(h.alive('player').map((u) => u.id));
+        if (h.garrison(1).length) { c.armed = 'attack'; c.orderAt(h, fort.site.x, fort.site.z - 5); } else c.orderAt(h, fort.site.x, fort.site.z);
+      }
+      h.step(0.05);
+    }
+    expect(fort.down).toBe(true);
+  }, 60000);
 });
 
 describe('volet militaire : la base avancée', () => {

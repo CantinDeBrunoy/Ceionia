@@ -179,7 +179,8 @@ export interface RaidWave {
 function garrisonOf(kind: HellSiteKind, zone: number): DemonKind[] {
   const deep = Math.floor((zone - 1) / 2);
   switch (kind) {
-    case 'fortress': return ['guardian', 'chief', ...rep('brute', 1 + deep), ...rep('archer', 2 + deep), ...rep('imp', 2)];
+    // (la première zone, sans démon-chef : la première expédition se gagne avec la garnison pleine de l'Antiquité)
+    case 'fortress': return ['guardian', ...(zone >= 2 ? ['chief' as const] : []), ...rep('brute', 1 + deep), ...rep('archer', 2 + deep), ...rep('imp', 2)];
     case 'outpost': return ['archer', ...rep('imp', 2 + (zone >= 3 ? 1 : 0))];
     case 'forge': return ['brute', 'imp'];
     case 'kingdom': return ['king', ...rep('elite', 4), 'chief', ...rep('brute', 2), ...rep('archer', 3), ...rep('imp', 3)];
@@ -191,7 +192,9 @@ const rep = (v: DemonKind, n: number): DemonKind[] => Array.from({ length: n }, 
 /** Les démons des zones profondes sont plus coriaces */
 export function demonStats(kind: DemonKind, zone: number): UnitStats {
   const s = DEMONS[kind], lv = Math.max(0, zone - 1);
-  return { ...s, hp: Math.round(s.hp * (1 + 0.12 * lv)), dmg: Math.round(s.dmg * (1 + 0.1 * lv) * 10) / 10 };
+  // le gardien de la première zone, moins coriace : la première expédition se gagne avec la garnison pleine de l'Antiquité
+  const first = kind === 'guardian' && zone === 1 ? 0.7 : 1;
+  return { ...s, hp: Math.round(s.hp * (1 + 0.12 * lv) * first), dmg: Math.round(s.dmg * (1 + 0.1 * lv) * first * 10) / 10 };
 }
 
 /**
