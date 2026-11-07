@@ -25,8 +25,6 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // source chaude, galerie, grotte, jongleurs, abbaye, étoiles filantes, cratère, pont, sondage, sommet, camp de base, plongée
   | 'corral' | 'salt' | 'roundup' | 'pebbles' | 'hops' | 'pass' | 'smoke' | 'swarm' | 'trade' | 'spring' | 'gallery' | 'cave'
   | 'troupe' | 'abbey' | 'stars' | 'crater' | 'bridge' | 'drill' | 'summit' | 'basecamp' | 'dive'
-  // repérage : on entre dans la grotte relever les galeries, on balise le chemin jusqu'à l'entrée
-  | 'scout'
   // la course automobile, la montgolfière qu'on gonfle
   | 'race' | 'balloon'
   // la chasse au mammouth : les fosses, le ravin ou la harde qu'on suit de loin (selon la destination)
@@ -55,8 +53,6 @@ export type Effect =
   | { t: 'perk'; id: string }
   /** habitants blessés, qui se reposent chez eux quelques jours */
   | { t: 'injured'; n: number; days: number }
-  /** filons du monde souterrain abattus par la troupe, et galeries prises jusqu'à `reach` cases au-delà du front */
-  | { t: 'veins'; n: number; reach: number }
   /** bêtes perdues en route */
   | { t: 'unherd'; kind: HerdKind; n: number };
 
@@ -96,7 +92,7 @@ export interface Choice {
   mounts?: number;
   /** carburant brûlé par les véhicules de la troupe (pris au départ, raffiné du pétrole brut des puits) */
   fuel?: number;
-  /** troupe de l'expédition armée, telle qu'on la voit sous terre */
+  /** troupe (moteur du monde souterrain, gardé pour les Enfers : telle qu'on la verrait sous terre) */
   troop?: 'cavalry' | 'armor' | 'miners';
   /**
    * ce qui change avec les âges (à partir de l'âge donné) : nom et récit (chevaliers, puis cuirassiers et fusiliers…), et à
@@ -122,7 +118,7 @@ export interface Mission {
   choices: Choice[];
   /** bâtiment que sa réussite permet de construire */
   unlocks?: KindId;
-  /** se refait autant de fois qu'on veut (l'expédition armée dans les profondeurs) */
+  /** se refait autant de fois qu'on veut */
   repeat?: boolean;
   /** ce qu'il faut avant de partir : missions réussies, bâtiments bâtis */
   requires?: { missions?: string[]; kinds?: KindId[] };
@@ -425,111 +421,6 @@ export const MISSIONS: Mission[] = [
         win: [{ t: 'ore', n: 12 }, food(-3, 4)], lose: [],
         winText: 'Les nomades ont échangé leur minerai contre des vivres : il faudra se serrer un peu la ceinture.',
         loseText: 'Les nomades n’ont rien voulu échanger : leur minerai partira ailleurs.',
-      },
-    ],
-  },
-  {
-    // facultative : rien n'en dépend (l'avant-poste se bâtit sans elle) ; son plan des galeries rend les expéditions armées plus sûres
-    id: 'scout', age: 2, mandatory: false, icon: '🔦', title: 'Repérer les profondeurs',
-    intro: 'Avant d’envoyer une troupe sous terre, mieux vaut savoir où l’on met les pieds. Des éclaireurs vont reconnaître une grotte, relever le plan des premières galeries et baliser le chemin jusqu’à l’entrée : les expéditions armées y seront plus sûres.',
-    choices: [
-      {
-        label: 'Deux éclaireurs à la corde', text: 'Légers et rapides : ils descendent jusqu’à la première salle et remontent avec un plan.',
-        dest: 'cave', scene: 'scout', doing: 'relève le plan des galeries et balise l’entrée', danger: ['dark', 'fall'], party: 2, work: 20, risk: 0.3,
-        win: [{ t: 'perk', id: 'map' }, joy(1)], lose: [hurt(1, 2)],
-        winText: 'Les éclaireurs ont dressé le plan des premières galeries et balisé l’entrée de la grotte : les expéditions armées sauront par où passer.',
-        loseText: 'Une corde a lâché dans le puits : un éclaireur s’est foulé la cheville, et le plan reste à faire.',
-      },
-      {
-        label: 'Patrouille armée', text: 'Quatre hommes, lances et torches : plus lent, mais on ne se laisse pas surprendre par ce qui rôde en bas.',
-        dest: 'cave', scene: 'scout', doing: 'reconnaît les galeries, lances en avant, et balise l’entrée', danger: ['monster', 'dark'], party: 4, work: 28, risk: 0.18,
-        win: [{ t: 'perk', id: 'map' }, { t: 'ore', n: 2 }], lose: [hurt(2, 2)],
-        winText: 'La patrouille a repoussé une bande de squelettes, relevé les galeries et ramassé quelques pierres de minerai : le plan est fait.',
-        loseText: 'Des araignées ont surgi du plafond : la patrouille a battu en retraite avec deux blessés, sans plan.',
-      },
-      {
-        label: 'Suivre un vieux mineur nomade', text: 'Il connaît chaque grotte du pays ; il demandera des vivres pour sa peine.',
-        dest: 'cave', scene: 'scout', doing: 'suit le vieux mineur dans les galeries et balise l’entrée', danger: ['dark'], party: 2, work: 14, risk: 0.08,
-        win: [{ t: 'perk', id: 'map' }, food(-2, 3)], lose: [],
-        winText: 'Le vieux mineur a tout montré : les puits, les salles, les passages sûrs. Il repart avec ses vivres, et le plan des galeries est fait.',
-        loseText: 'Le vieux mineur a filé avec les vivres au premier tournant.',
-      },
-    ],
-  },
-  {
-    // il suffit d'un avant-poste devant une grotte ou une faille ; la charge de cavalerie demande en plus ses chevaux à l'écurie
-    id: 'deep', age: 2, mandatory: false, repeat: true, icon: '⚔️', title: 'Expédition armée dans les profondeurs',
-    requires: { kinds: ['outpost'] },
-    intro: 'Sous les grottes et les failles, les galeries regorgent de minerai… et de créatures. Il suffit d’un avant-poste bâti tout contre une grotte ou une faille : la troupe en part, descend au-delà des galeries déjà tenues, abat les filons qu’elle y trouve et, si elle l’emporte, plante ses lanternes : le village tient ces galeries à son tour. Longue et dangereuse ; on peut y retourner tant qu’il reste des galeries à prendre.',
-    choices: [
-      {
-        label: 'Charge de cavalerie', text: 'Trois chevaux de l’écurie et leurs cavaliers foncent dans les grandes galeries : rapides, mais les bêtes craignent le noir.',
-        dest: 'cave', scene: 'mine', doing: 'charge dans les galeries et abat les filons', troop: 'cavalry', mounts: 3, danger: ['monster', 'dark'], party: 4, work: 34, risk: 0.5, carry: 'cart',
-        win: [{ t: 'veins', n: 4, reach: 12 }], lose: [hurt(2, 3), { t: 'unherd', kind: 'horse', n: 1 }],
-        winText: 'Les cavaliers ont chargé la horde de squelettes et tenu la grande galerie !',
-        loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cavaliers rentrent blessés, les sacoches vides.',
-        ages: {
-          3: {
-            label: 'Charge des cuirassiers', text: 'Trois cuirassiers, sabre au clair, foncent dans les grandes galeries ; des fusiliers les suivent et les couvrent : rapides, mais les chevaux craignent le noir.',
-            doing: 'charge sabre au clair, les fusiliers en soutien, et abat les filons',
-            winText: 'Les cuirassiers ont enfoncé la horde, les fusiliers ont tenu la galerie !',
-            loseText: 'Un cheval s’est emballé dans le noir et n’est jamais revenu ; deux cuirassiers rentrent blessés, les fontes vides.',
-          },
-          // plus de chevaux à l'époque moderne : les chars et les transports de troupes roulent au carburant de la raffinerie
-          4: {
-            label: 'Blindés en tête', text: 'Trois chars d’assaut et deux transports de troupes ouvrent la route dans les grandes galeries, phares braqués, des drones en éclaireurs et la section dans leur sillage : rapides et redoutables, mais gourmands en carburant.',
-            doing: 'ouvre la route aux blindés et abat les filons',
-            winText: 'Les blindés ont dégagé la grande galerie, la section l’a tenue !',
-            loseText: 'Un blindé s’est embourbé dans le noir ; deux soldats rentrent blessés, les soutes vides.',
-            mounts: 0, fuel: 12, lose: [hurt(2, 3)],
-          },
-          5: {
-            label: 'Glisseurs en tête', text: 'Trois glisseurs à coussin magnétique ouvrent la route dans les grandes galeries, l’escouade en exo-armure dans leur sillage : rapides, mais l’obscurité reste traîtresse.',
-            doing: 'ouvre la route aux glisseurs et abat les filons',
-            winText: 'Les glisseurs ont balayé la grande galerie, l’escouade l’a tenue !',
-            loseText: 'Un glisseur a perdu son champ magnétique dans le noir ; deux soldats rentrent blessés, les soutes vides.',
-          },
-        },
-      },
-      {
-        // à pied, à tous les âges (comme les mineurs) : ni chevaux, ni carburant
-        label: 'Hommes d’armes en armure', text: 'Lents et lourds, à pied : ils avancent bouclier contre bouclier et tiennent chaque galerie le temps qu’on la vide.',
-        dest: 'cave', scene: 'mine', doing: 'avance bouclier contre bouclier et abat les filons', troop: 'armor', danger: ['monster', 'dark', 'fall'], party: 5, work: 48, risk: 0.45, carry: 'cart',
-        win: [{ t: 'veins', n: 6, reach: 9 }], lose: [hurt(2, 4)],
-        winText: 'Pas un monstre n’a percé le mur de boucliers : la troupe a tenu chaque galerie le temps qu’on la vide.',
-        loseText: 'Les araignées géantes ont attaqué par le plafond : la troupe a reculé, deux blessés sous leurs armures cabossées.',
-        ages: {
-          3: {
-            label: 'Ligne de fusiliers', text: 'Une compagnie d’infanterie avance à pied, en ligne, baïonnette au canon : elle tire par salves et tient chaque galerie le temps qu’on la vide.',
-            doing: 'avance en ligne, tire par salves et abat les filons',
-            winText: 'Pas une créature n’a franchi la ligne de feu : chaque galerie a été tenue le temps qu’on la vide.',
-            loseText: 'Les araignées géantes ont attaqué par le plafond : la ligne a reculé, deux blessés.',
-          },
-          4: {
-            label: 'Section d’infanterie', text: 'Casques, gilets et fusils d’assaut : la section progresse à pied, par bonds, se couvre, et tient chaque galerie le temps qu’on la vide.',
-            doing: 'progresse par bonds, se couvre et abat les filons',
-            winText: 'Pas une créature n’a passé la section : chaque galerie a été tenue le temps qu’on la vide.',
-            loseText: 'Les araignées géantes ont attaqué par le plafond : la section a décroché, deux blessés.',
-          },
-          5: {
-            label: 'Escouade en exo-armure', text: 'Exo-armures, boucliers d’énergie et fusils à impulsions : l’escouade avance pas à pas et tient chaque galerie le temps qu’on la vide.',
-            doing: 'avance sous ses boucliers d’énergie et abat les filons',
-            winText: 'Pas une créature n’a percé les boucliers d’énergie : chaque galerie a été tenue le temps qu’on la vide.',
-            loseText: 'Les araignées géantes ont attaqué par le plafond : l’escouade a décroché, deux blessés dans leurs exo-armures cabossées.',
-          },
-        },
-      },
-      {
-        label: 'Mineurs et quelques gardes', text: 'Peu de soldats, beaucoup de pioches, tout le monde à pied : on file droit aux premiers filons et on remonte ce qu’on peut.',
-        dest: 'cave', scene: 'mine', doing: 'abat les filons sous la garde des soldats', troop: 'miners', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.55, carry: 'cart',
-        win: [{ t: 'veins', n: 3, reach: 6 }], lose: [hurt(2, 3)],
-        winText: 'Les gardes ont tenu bon pendant que les pioches chantaient.',
-        loseText: 'Des zombies ont surgi d’une galerie latérale : les mineurs ont tout lâché pour fuir, deux blessés.',
-        ages: {
-          3: { label: 'Mineurs et gendarmes', text: 'Peu de soldats, beaucoup de pioches et de lampes à carbure : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'Les gendarmes ont tenu bon pendant que les pioches chantaient.' },
-          4: { label: 'Mineurs et escorte', text: 'Des mineurs casqués à la lampe frontale et une escorte armée, à pied, les marteaux-piqueurs sur batteries : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les marteaux-piqueurs grondaient.' },
-          5: { label: 'Robots foreurs et escorte', text: 'Des robots foreurs, des mineurs en combinaison et une escorte : on file droit aux premiers filons et on remonte ce qu’on peut.', winText: 'L’escorte a tenu bon pendant que les robots foraient.' },
-        },
       },
     ],
   },
@@ -894,7 +785,7 @@ export function penHerds(w: World, flock: HerdKind[] = w.exp.herd) {
 const LEGENDS = new Set(['megalodon', 'kraken', 'dragon', 'games', 'moon', 'colony']);
 export const isLegendary = (m: Mission) => m.id === 'mammoth' || m.choices.some((c) => c.win.some((e) => e.t === 'perk' && LEGENDS.has(e.id)));
 /** Expéditions armées : une troupe de soldats, ou une chasse aux bêtes dangereuses */
-export const isMilitary = (m: Mission) => m.id === 'deep' || m.id === 'wolf' || m.choices.some((c) => !!c.troop);
+export const isMilitary = (m: Mission) => m.id === 'wolf' || m.choices.some((c) => !!c.troop);
 export const mandatoriesFor = (age: number) => MISSIONS.filter((m) => m.age === age && m.mandatory);
 /** La première mission obligatoire de l'âge */
 export const mandatoryFor = (age: number) => mandatoriesFor(age)[0] ?? null;
@@ -920,9 +811,8 @@ export interface ExpState {
   craftT: number;
   /** chevaux partis avec une troupe (pas sauvegardé : une expédition en route ne l'est pas) */
   riding: number;
-  /** embuscades repoussées sous terre, et niveau du camp souterrain (quêtes accomplies) */
+  /** combats gagnés par les troupes (embuscades repoussées) */
   wins: number;
-  camp: number;
   /** derniers imprévus survenus, du plus ancien au plus récent : les prochaines expéditions en tirent d'autres */
   recent: string[];
 }
@@ -930,21 +820,20 @@ export interface ExpState {
 /** Imprévus récents dont on se souvient (les deux ou trois dernières expéditions) */
 export const RECENT_EVENTS = 6;
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, camp: 0, recent: [] });
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, recent: [] });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
   const s = newExpState();
   if (!d || typeof d !== 'object') return s;
   const ids = new Set(MISSIONS.map((m) => m.id));
-  s.perks = Array.isArray(d.perks) ? d.perks.filter((x: any) => typeof x === 'string') : [];
+  // (le plan des galeries du monde souterrain, retiré, s'oublie)
+  s.perks = Array.isArray(d.perks) ? d.perks.filter((x: any) => typeof x === 'string' && x !== 'map') : [];
   const was: string[] = Array.isArray(d.done) ? d.done : [];
   // (les sauvegardes d'avant la séparation : « le monstre des mers » réussi vaut le kraken, l'obligatoire de l'Antiquité, quelle
   // qu'ait été la proie ; et le mégalodon s'il en a rapporté les dents. Le trophée, lui, suit le savoir-faire rapporté)
   const old = was.includes('monster') ? ['kraken', ...(s.perks.includes('megalodon') ? ['megalodon'] : [])] : [];
   s.done = [...new Set([...was, ...old])].filter((x: any) => ids.has(x));
-  // (les sauvegardes d'avant le plan des galeries : le repérage réussi l'a dressé)
-  if (s.done.includes('scout') && !s.perks.includes('map')) s.perks.push('map');
   s.herd = Array.isArray(d.herd) ? d.herd.filter((x: any) => ['sheep', 'cow', 'pig', 'horse'].includes(x)) : [];
   for (const k of Object.keys(s.bonus) as NeedKey[]) s.bonus[k] = +d.bonus?.[k] || 0;
   s.temp = Array.isArray(d.temp) ? d.temp.filter((t: any) => t && t.need in s.bonus && isFinite(t.n) && isFinite(t.until)) : [];
@@ -953,7 +842,6 @@ export function readExpState(d: any): ExpState {
   s.craft = Array.isArray(d.craft) ? d.craft.filter((x: any) => x in GEAR_BY) : [];
   s.craftT = +d.craftT || 0;
   s.wins = Math.max(0, Math.floor(+d.wins || 0));
-  s.camp = Math.max(0, Math.floor(+d.camp || 0));
   // (les sauvegardes d'avant ne s'en souviennent pas : rien d'évité)
   s.recent = Array.isArray(d.recent) ? d.recent.filter((x: any) => typeof x === 'string').slice(-RECENT_EVENTS) : [];
   return s;
@@ -984,7 +872,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
 
 const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: '🔨', joy: '😊' };
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
-const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', map: 'plan des galeries : expéditions armées plus sûres (risque −20 %)', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', dragon: 'le trésor du dragon : sa légende court dans tout le pays', games: 'les Jeux du village : le monde entier connaît son stade', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
+const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', dragon: 'le trésor du dragon : sa légende court dans tout le pays', games: 'les Jeux du village : le monde entier connaît son stade', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';
@@ -1001,7 +889,6 @@ export function effectSummary(effects: Effect[]) {
     else if (e.t === 'need') out.push(`${e.n > 0 ? '+' : '−'}${Math.abs(e.n)} ${NEED_ICON[e.need]}${e.days ? ` (${e.days} j)` : ''}`);
     else if (e.t === 'perk') out.push(PERK_NAME[e.id] ?? e.id);
     else if (e.t === 'injured') out.push(`${e.n} blessé${e.n > 1 ? 's' : ''} (${e.days} j)`);
-    else if (e.t === 'veins') out.push(`${e.n} filons au plus, et les galeries jusqu’à ${e.reach} cases au-delà du front`);
     else if (e.t === 'unherd') out.push(`−${e.n} ${HERD_NAME[e.kind][e.n > 1 ? 1 : 0]}`);
   }
   return out.join(' · ') || 'rien';

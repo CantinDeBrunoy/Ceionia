@@ -360,7 +360,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'vein', where: ['mountain', 'cave'], scenes: ['mine', 'pass', 'gallery', 'cave', 'scout', 'drill'], title: 'Un éclat dans la roche',
+    id: 'vein', where: ['mountain', 'cave'], scenes: ['mine', 'pass', 'gallery', 'cave', 'drill'], title: 'Un éclat dans la roche',
     text: 'Au détour d’un rocher, quelque chose brille dans la paroi.',
     options: [
       { label: 'Creuser un peu', risk: 1.1, work: 7, bonus: [{ t: 'ore', n: 2 }], text: 'On a creusé : une belle veine de minerai.' },
@@ -369,7 +369,7 @@ export const EVENTS: ExpEvent[] = [
   },
   // ---------------- Grottes et galeries ----------------
   {
-    id: 'rockfall', where: ['mountain', 'cave'], scenes: ['gallery', 'cave', 'scout', 'drill'], title: 'Ça craque au-dessus',
+    id: 'rockfall', where: ['mountain', 'cave'], scenes: ['gallery', 'cave', 'drill'], title: 'Ça craque au-dessus',
     text: 'Un grondement sourd, et des pierres dégringolent de la paroi au-dessus de l’entrée.',
     options: [
       { label: 'Étayer avant de continuer', risk: 0.75, work: 7, text: 'On a étayé l’entrée avec des poutres avant d’aller plus loin.' },
@@ -378,7 +378,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'dark', where: ['cave'], scenes: ['cave', 'scout'], title: 'Les torches faiblissent',
+    id: 'dark', where: ['cave'], scenes: ['cave'], title: 'Les torches faiblissent',
     text: 'Au fond de la grotte, les torches de fortune crépitent et baissent : bientôt, on n’y verra plus rien.',
     options: [
       { label: 'Allumer les bonnes torches', needs: ['torch'], risk: 0.6, text: 'À la lueur des bonnes torches, les parois scintillaient.' },
@@ -387,7 +387,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'bats', where: ['cave'], scenes: ['cave', 'scout', 'dragon'], title: 'Une nuée de chauves-souris',
+    id: 'bats', where: ['cave'], scenes: ['cave', 'dragon'], title: 'Une nuée de chauves-souris',
     text: 'Un grand battement d’ailes : des centaines de chauves-souris jaillissent de la grotte !',
     options: [
       { wait: true, label: 'Se plaquer au sol', risk: 0.85, work: 3, text: 'À plat ventre, on a laissé passer la nuée.' },
@@ -483,34 +483,6 @@ export const EVENTS: ExpEvent[] = [
       { wait: true, label: 'Attendre qu’elles passent', risk: 0.9, work: 5, text: 'On a attendu que les vaches finissent leur repas.' },
       { label: 'Les mener plus loin', risk: 0.95, work: 2, text: 'On a mené les vaches un peu plus loin, dans un meilleur pré.' },
       { label: 'Faire siffler la locomotive', risk: 1.1, work: -2, bonus: [joy(1, 3)], text: 'Un coup de sifflet : les vaches ont détalé, et tout le chantier a ri.' },
-    ],
-  },
-  // ---------------- Sous terre, avec la troupe armée (on la suit dans les galeries) ----------------
-  {
-    id: 'echo', where: ['cave'], missions: ['deep'], title: 'Des grattements dans le noir',
-    text: 'Des bruits de griffes résonnent dans une galerie voisine : quelque chose suit la troupe.',
-    options: [
-      { label: 'Serrer les rangs', risk: 0.8, work: 4, text: 'Rangs serrés, la troupe a avancé sans se laisser surprendre.' },
-      { label: 'Tendre une embuscade', needs: WEAPONS, risk: 0.75, text: 'La troupe a tendu une embuscade : ce qui la suivait a détalé.' },
-      { label: 'Presser le pas', risk: 1.2, work: -4, text: 'On a pressé le pas, sans se retourner.' },
-    ],
-  },
-  {
-    id: 'tired', where: ['cave'], missions: ['deep'], title: 'La troupe est fourbue',
-    text: 'Après des heures de marche dans les galeries, les soldats tombent de fatigue.',
-    options: [
-      { wait: true, label: 'Faire halte et manger', risk: 0.85, work: 6, text: 'Une halte, un repas chaud : la troupe est repartie d’un bon pas.' },
-      { label: 'Chanter pour se donner du courage', risk: 0.95, bonus: [joy(1, 4)], text: 'On a chanté à pleine voix dans les galeries.' },
-      { label: 'Continuer coûte que coûte', risk: 1.2, work: -3, text: 'On a continué, les jambes en coton.' },
-    ],
-  },
-  {
-    id: 'crossroads', where: ['cave'], missions: ['deep'], title: 'Un carrefour de galeries',
-    text: 'Trois galeries s’ouvrent devant la troupe, et le plan des éclaireurs s’arrête là.',
-    options: [
-      { scout: true, label: 'Envoyer un éclaireur devant', risk: 0.8, work: 8, text: 'L’éclaireur est revenu : on a pris la bonne galerie.' },
-      { label: 'Suivre la plus large', risk: 1.05, text: 'On a suivi la plus large, au jugé.' },
-      { label: 'Couper par la plus étroite', risk: 1.25, work: -4, text: 'On s’est faufilé par la plus étroite, en file indienne.' },
     ],
   },
 ];

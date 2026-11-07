@@ -48,8 +48,6 @@ export interface ToolHost {
   getAge(): number;
   toast(msg: string): void;
   changed(): void;
-  /** descend dans le monde souterrain par l'entrée (case) donnée */
-  enterUnder(cell: number): void;
   /** fait entrer en éruption le volcan posé sur la case */
   erupt(cell: number): void;
   /** routes automatiques jusqu'aux nouveaux bâtiments (réglage) */
@@ -383,10 +381,8 @@ export class ToolController implements ToolInput {
     if (!this.hit) return;
     if (this.overlay?.down(this.hit)) { this.overlayHeld = true; this.pressed = false; return; }
     const t = this.tool;
-    // outil « Voir » : un clic sur une grotte ou une faille fait descendre sous terre, un clic sur un volcan le fait entrer en éruption
+    // outil « Voir » : un clic sur un volcan le fait entrer en éruption
     if (t === 'none') {
-      const cell = this.h.world.entranceAt(this.hit.x, this.hit.z);
-      if (cell >= 0) { this.pressed = false; this.h.enterUnder(cell); return; }
       const vol = this.h.world.volcanoAt(this.hit.x, this.hit.z);
       if (vol >= 0) { this.pressed = false; this.h.erupt(vol); return; }
       // un bâtiment se choisit au relâcher, si le pointeur n'a presque pas bougé
@@ -516,7 +512,7 @@ export class ToolController implements ToolInput {
     if (!hit) return;
     const w = this.h.world;
     if (SINGLE_TOOLS.includes(this.tool)) {
-      // une seule entrée du souterrain sous le curseur
+      // une seule grotte (ou faille) sous le curseur
       const cx = Math.floor(hit.x), cz = Math.floor(hit.z), cave = this.tool === 'cave';
       if (w.setVeg(cx, cz, cave ? VEG_CAVE : VEG_FISSURE)) { this.mark(); this.h.audio.sfxPlace(); }
       else this.h.toast(cave ? 'Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.'
@@ -673,7 +669,7 @@ export class ToolController implements ToolInput {
 
   /**
    * Le pinceau de démolition sur un disque : routes, plantations (forêts, champs, jardins, rochers) et petits bâtiments partent
-   * sans confirmation ; les grands bâtiments (2 × 2 et plus) et les entrées du souterrain restent : on les vise un à un
+   * sans confirmation ; les grands bâtiments (2 × 2 et plus), les grottes et les failles restent : on les vise un à un
    */
   private bulldozeDisc(hx: number, hz: number, r: number) {
     const w = this.h.world;

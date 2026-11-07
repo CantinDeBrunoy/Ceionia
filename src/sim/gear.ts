@@ -10,9 +10,9 @@ import type { World } from '../world/world';
 
 /** Dangers d'une expédition */
 export type Danger = 'beast' | 'fall' | 'water' | 'dark' | 'weather' | 'monster';
-export const DANGER_NAME: Record<Danger, string> = { beast: 'bêtes sauvages', fall: 'chutes', water: 'eau vive', dark: 'obscurité', weather: 'intempéries', monster: 'créatures des profondeurs' };
+export const DANGER_NAME: Record<Danger, string> = { beast: 'bêtes sauvages', fall: 'chutes', water: 'eau vive', dark: 'obscurité', weather: 'intempéries', monster: 'créatures des grottes' };
 /** « Contre les bêtes sauvages », « Sur l'eau vive »… */
-export const DANGER_VS: Record<Danger, string> = { beast: 'Contre les bêtes sauvages', fall: 'Contre les chutes', water: 'Sur l’eau vive', dark: 'Dans le noir', weather: 'Contre les intempéries', monster: 'Contre les créatures des profondeurs' };
+export const DANGER_VS: Record<Danger, string> = { beast: 'Contre les bêtes sauvages', fall: 'Contre les chutes', water: 'Sur l’eau vive', dark: 'Dans le noir', weather: 'Contre les intempéries', monster: 'Contre les créatures des grottes' };
 
 export type GearId = 'spear' | 'bow' | 'sword' | 'rifle' | 'rope' | 'torch' | 'boat' | 'kit' | 'armor';
 
@@ -48,7 +48,7 @@ export const GEAR: Gear[] = [
   { id: 'rope', name: 'Corde', plural: 'Cordes', icon: 'rope', age: 0, ore: 0, time: 8, guards: 'fall', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'On s’encorde deux par deux pour les passages au-dessus du vide.' },
   { id: 'torch', name: 'Torche', plural: 'Torches', icon: 'torch', age: 0, ore: 0, time: 6, guards: 'dark', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'Pour ne pas se perdre dans les galeries.' },
   { id: 'boat', name: 'Barque', plural: 'Barques', icon: 'boat', age: 1, ore: 0, time: 30, guards: 'water', cut: 0.5, per: (n) => Math.ceil(n / 3), desc: 'Trois places : on traverse, on pêche au large, on passe les crues.' },
-  { id: 'armor', name: 'Armure', plural: 'Armures', icon: 'shield', age: 2, ore: 2, time: 28, needs: 'workshop', guards: 'monster', cut: 0.6, per: (n) => n, desc: 'Cotte de mailles, casque et bouclier : griffes et crocs glissent dessus. De quoi descendre dans les profondeurs.' },
+  { id: 'armor', name: 'Armure', plural: 'Armures', icon: 'shield', age: 2, ore: 2, time: 28, needs: 'workshop', guards: 'monster', cut: 0.6, per: (n) => n, desc: 'Cotte de mailles, casque et bouclier : griffes et crocs glissent dessus. De quoi affronter les monstres.' },
   { id: 'kit', name: 'Trousse de soins', plural: 'Trousses de soins', icon: 'kit', age: 2, ore: 1, time: 16, needs: 'health', guards: null, cut: 0.1, per: () => 1, desc: 'Un peu plus sûr partout ; les blessés guérissent deux fois plus vite.' },
 ];
 export const GEAR_BY = Object.fromEntries(GEAR.map((g) => [g.id, g])) as Record<GearId, Gear>;

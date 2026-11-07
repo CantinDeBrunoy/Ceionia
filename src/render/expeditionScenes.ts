@@ -711,7 +711,7 @@ const BEHAVIOR: Record<Scene, string> = {
   herd: 'herd', corral: 'herd', salt: 'herd', roundup: 'herd', boat: 'boat', dive: 'boat', fish: 'fish',
   mine: 'mine', pass: 'mine', crater: 'mine', gather: 'gather', pebbles: 'gather', hops: 'gather', hunt: 'hunt',
   build: 'build', bridge: 'build', drill: 'build', summit: 'build', basecamp: 'build', rails: 'rails', camp: 'camp',
-  smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', scout: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
+  smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
   race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch', mammoth: 'mammoth', megalodon: 'boat', kraken: 'boat',
   dragon: 'dragon', games: 'games',
 };
@@ -1153,7 +1153,7 @@ export class ExpeditionScene {
       this.bath = { at: [[px - 0.11, pz + 0.04], [px + 0.12, pz - 0.05]], y: py + 0.024 - 0.07, in: new Set() };
       for (let i = 0; i < 6; i++) { const ang = i * 1.05 + 0.3; this.spots.push([px + Math.cos(ang) * 0.5, pz + Math.sin(ang) * 0.5]); }
       this.focus = [px, pz];
-    } else if (st === 'gallery' || st === 'cave' || st === 'scout') {
+    } else if (st === 'gallery' || st === 'cave') {
       // l'entrée : dans la pente pour une galerie ou un tunnel ; la bouche de la grotte voisine, sinon une entrée de grotte au
       // bord de la faille ou au pied de la paroi ; tas de minerai et wagonnet. Torches plantées de part et d'autre de la bouche
       let mx = cx, mz = cz, real = false, fissure = false;
@@ -1185,20 +1185,12 @@ export class ExpeditionScene {
       if (st !== 'gallery') for (const s of [-1, 1]) { const tx = mx + Math.sin(face) * ahead + Math.cos(face) * s * side, tz = mz + Math.cos(face) * ahead - Math.sin(face) * s * side; this.put(stakeTorchGeo(), tx, tz, 0); this.flameAt(tx, y(tx, tz) + 0.26, tz, 0.6); }
       const found = st !== 'gallery';
       const hx = cx - Math.sin(face) * 0.3, hz = cz - Math.cos(face) * 0.3;
-      if (st === 'scout') {
-        // les éclaireurs reviennent reporter leurs relevés sur la table aux plans, et balisent le chemin jusqu'à l'entrée de
-        // la grotte : des piquets à fanion qui sortent de terre au fil du travail, de part et d'autre du chemin
-        this.put(mapTableGeo(), hx, hz, face + Math.PI / 2);
-        for (let i = 0; i < 4; i++) {
-          const t = 0.25 + i * 0.18, s = i % 2 ? 1 : -1, x = cx + (mx - cx) * t + Math.cos(face) * s * 0.16, z = cz + (mz - cz) * t - Math.sin(face) * s * 0.16;
-          this.grows.push({ obj: this.put(stakeFlagGeo(), x, z, face), from: 0.001, to: 1 });
-        }
-      } else this.grows.push({ obj: this.put(rocksGeo(), hx, hz, 0), from: 0.25, to: 1.1 });
+      this.grows.push({ obj: this.put(rocksGeo(), hx, hz, 0), from: 0.25, to: 1.1 });
       if (!found) {
         for (let i = 0; i < 3; i++) { const t = 0.15 + i * 0.3, x = mx + (cx - mx) * t, z = mz + (cz - mz) * t; this.put(trackGeo(), x, z, face + Math.PI); }
         this.cartRun = { obj: this.put(cartGeo(), mx, mz, face), a: [mx + Math.sin(face) * 0.12, mz + Math.cos(face) * 0.12], b: [hx + Math.sin(face) * 0.1, hz + Math.cos(face) * 0.1] };
       }
-      if (st !== 'scout') this.emits.push({ x: hx, y: y(hx, hz) + 0.1, z: hz, kind: 'puff', every: 0.7, t: 0 });
+      this.emits.push({ x: hx, y: y(hx, hz) + 0.1, z: hz, kind: 'puff', every: 0.7, t: 0 });
       this.mouth = { at: [mx + Math.sin(face) * lip, mz + Math.cos(face) * lip], heap: [hx, hz] };
       this.focus = [(mx + hx) / 2, (mz + hz) / 2];
       // on explore la grotte à la lueur des torches : chacun a la sienne

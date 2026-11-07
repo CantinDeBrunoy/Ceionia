@@ -5593,7 +5593,7 @@ function mine(p: Parts, age: number) {
 
 /** Observatoire (1 × 1) : tour blanche à coupole d'argent qui tourne lentement, fente ouverte sur la lunette ; annexe et antenne */
 /**
- * Avant-poste (2 × 2) devant une grotte ou une faille, d'où partent les troupes armées vers les profondeurs : palissade de
+ * Avant-poste (2 × 2 ; le bâtiment a été retiré du jeu avec le monde souterrain, le modèle reste pour les Enfers) : palissade de
  * pieux, tour de guet, tentes, feu de camp, table aux plans, râtelier d'armes ; muraille de pierre, tour crénelée, caserne et
  * wagonnets à l'âge industriel ; clôture grillagée, conteneurs, préfabriqués et projecteurs ensuite
  */
@@ -11792,7 +11792,6 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'tavern': tavern(p, Math.max(2, age), o); break;
     case 'mine': mine(p, Math.max(2, age)); break;
     case 'observatory': observatory(p); break;
-    case 'outpost': outpost(p, Math.max(2, age)); break;
     case 'lumber': lumber(p, age); break;
     case 'quarry': quarry(p, age); break;
     case 'barber': barber(p, Math.max(1, age)); break;

@@ -1,6 +1,5 @@
 import { World, N, RailLine, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_VOLCANO, mergeVia } from '../world/world';
 import { Building, KINDS, sizeOf } from '../build/catalog';
-import { ORE_KINDS, oreVeins } from '../world/underground';
 import { Agents, Heap } from './agents';
 import type { Expeditions } from './expeditions';
 import { FREIGHT_KINDS, gap, isStation, RAIL_REACH } from './freight';
@@ -8,16 +7,12 @@ import { FREIGHT_KINDS, gap, isStation, RAIL_REACH } from './freight';
 /** Couleurs des lignes, dans l'ordre où on les trace */
 /** Jamais de rouge : il est réservé au tracé impossible de l’éditeur */
 export const LINE_COLORS = [0x3c7fd8, 0x4fa860, 0xe8b83c, 0x9a5ad8, 0xe87ab0, 0xe0852c];
-/** Longueur du train (deux locomotives, la voiture des voyageurs et des mineurs, deux wagons de minerai), en cases */
+/** Longueur du train (deux locomotives, la voiture des voyageurs, deux wagons de marchandises), en cases */
 export const TRAIN_LEN = 2.3;
 /** vitesse de pointe (cases par seconde de jeu), accélération, arrêt à quai, attente des retardataires */
 const SPEED = 1.8, ACCEL = 0.7, DWELL = 6, BOARD_MAX = 30;
 /** un train n'entre pas sur un quai occupé : il attend au sien, au plus tant (puis part, pour ne jamais rester bloqué) */
 const WAIT_MAX = 120;
-/** jours-mineur pour abattre un filon ; pierre taillée par mineur et par jour quand les galeries tenues n'en ont plus */
-const VEIN_WORK = 1, STONE_DAY = 3, MAX_SHIFT = 8;
-/** pas des mineurs dans les galeries (cases par seconde de jeu) : la vue les fait marcher au même pas */
-export const MINER_SPEED = 0.6;
 /** la voie dépasse un peu le bout du quai : le train, plus long que lui, s'y arrête à cheval */
 export const OVER = 0.3;
 
@@ -36,12 +31,11 @@ const LANE_ORDER = [1, 0, 2];
 export const isTerminus = (b: Building) => b.kind === 'terminal' && sizeOf(b) === 3;
 
 /**
- * Arrêt d'une ligne : le quai d'une gare (sa voie, le long de x dans le repère du modèle, en z = 0.34) ou l'embranchement
- * posé au pied d'un avant-poste ; milieu, axe (unitaire) et demi-longueur du quai
+ * Arrêt d'une ligne : le quai d'une gare (sa voie, le long de x dans le repère du modèle, en z = 0.34) ; milieu, axe (unitaire)
+ * et demi-longueur du quai
  */
 export interface Stop {
   b: Building;
-  post: boolean;
   /** voie de la gare (0 … LANES - 1 à la gare centrale ; 0 ailleurs) */
   lane: number;
   /** bouts du quai par où une voie peut partir (1 : vers +u, -1 : vers -u) ; absent : les deux */
@@ -49,8 +43,6 @@ export interface Stop {
   c: [number, number];
   u: [number, number];
   half: number;
-  /** case de galerie sous l'avant-poste (-1 pour une gare) */
-  entry: number;
   /** où les voyageurs attendent le train, à côté du quai (null : pas de place) */
   board: [number, number] | null;
 }
@@ -75,7 +67,7 @@ export interface Leg {
   ea: number; eb: number;
 }
 
-/** Habitants qui vont prendre le train : à quel arrêt ils descendront (-1 : la relève des mineurs) */
+/** Habitants qui vont prendre le train : à quel arrêt ils descendront */
 export interface Group { ids: number[]; to: number }
 
 export interface Train {
@@ -100,35 +92,17 @@ export interface Train {
   /** il attend que le quai suivant se libère */
   waiting: boolean;
   legs: Map<string, Leg>;
-  /** voyageurs qui vont au quai, à bord ; relève des mineurs à bord, équipe au fond, équipe relevée qui remonte */
+  /** voyageurs qui vont au quai, à bord */
   boarding: Group[];
   aboard: Group[];
-  relief: number[];
-  crew: number[];
-  back: number[];
-  /** avant-poste de la ligne où descendent les mineurs (rang dans `stops`, -1 : aucun) */
-  mine: number;
-  cargo: { ore: number; stone: number };
-  pile: { ore: number; stone: number };
-  vein: number;
-  dig: number;
-  veinOre: number;
-  spot: number;
-  walk: number;
-  veinsLeft: boolean;
-  pickT: number;
-  dist: { key: string; d: Int32Array } | null;
-  /** remonté depuis le début de la partie, filons abattus, voyageurs menés à bon port */
-  delivered: { ore: number; stone: number };
-  dug: number;
+  /** voyageurs menés à bon port depuis le début de la partie */
   carried: number;
 }
 
 /**
- * Chemin de fer : des lignes tracées par le joueur d'une gare à l'autre (A → B → … → X), avec des avant-postes pour arrêts.
- * La voie se pose d'elle-même entre deux arrêts successifs ; sur chaque ligne, un train fait la navette d'un bout à l'autre.
- * Il prend et dépose des voyageurs aux gares, descend une équipe de mineurs à l'avant-poste et remonte celle d'avant avec
- * ce qu'elle a tiré des galeries tenues (minerai des filons, pierre taillée)
+ * Chemin de fer : des lignes tracées par le joueur d'une gare à l'autre (A → B → … → X). La voie se pose d'elle-même entre
+ * deux arrêts successifs ; sur chaque ligne, un train fait la navette d'un bout à l'autre. Il prend et dépose des voyageurs
+ * aux gares
  */
 export class Railway {
   trains = new Map<number, Train>();
@@ -139,9 +113,6 @@ export class Railway {
   private stops = new Map<string, Stop | null>();
   private lanes = new Map<string, number>();
   private segs = new Map<string, Seg | null>();
-  /** cases des embranchements d'avant-postes : aucune autre voie n'y passe */
-  private spurs = new Map<number, number>();
-  private entries = new Map<number, number>();
   /** tracés calculés pour l'éditeur de ligne (le même tronçon se redemande à chaque image) */
   private plans = new Map<string, { seg: Seg | null; pieces: (number[] | null)[] }>();
   private key = '';
@@ -155,7 +126,6 @@ export class Railway {
     if ((this.refreshT -= dt) <= 0) { this.refreshT = 2; this.refresh(); }
     for (const tr of this.trains.values()) {
       if (tr.why) continue;
-      this.mineStep(tr, dt);
       this.step(tr, dt);
     }
   }
@@ -235,10 +205,10 @@ export class Railway {
   /** Lignes qui s'arrêtent à ce bâtiment */
   linesAt(b: Building) { return this.world.lines.filter((l) => l.stops.includes(b.id)); }
 
-  /** Nom d'un arrêt : gare centrale, petite gare (numérotée s'il y en a plusieurs), avant-poste */
+  /** Nom d'un arrêt : gare centrale, petite gare (numérotée s'il y en a plusieurs) */
   stopName(b: Building) {
     const same = [...this.world.buildings.values()].filter((x) => x.kind === b.kind).sort((p, q) => p.id - q.id), k = same.indexOf(b) + 1;
-    const base = b.kind === 'terminal' ? KINDS.terminal.names[Math.max(3, b.age)] : b.kind === 'outpost' ? 'Avant-poste' : KINDS[b.kind].names[Math.max(b.age, KINDS[b.kind].minAge)];
+    const base = b.kind === 'terminal' ? KINDS.terminal.names[Math.max(3, b.age)] : KINDS[b.kind].names[Math.max(b.age, KINDS[b.kind].minAge)];
     return same.length > 1 ? `${base} ${k}` : base;
   }
 
@@ -267,32 +237,16 @@ export class Railway {
   }
 
   /** Habitants assis dans le train */
-  seated(tr: Train) { return tr.aboard.reduce((n, g) => n + g.ids.length, 0) + tr.relief.length + tr.back.length; }
-
-  /** Mineurs par équipe : deux, plus un par niveau du camp souterrain, sans vider le village */
-  shiftSize() { return Math.max(0, Math.min(MAX_SHIFT, 2 + this.ex.camp(), this.agents.available() - 2)); }
-
-  /** Ce que les mineurs de toutes les lignes tirent des galeries chaque jour, à peu près */
-  daily(): { ore: number; stone: number } {
-    const out = { ore: 0, stone: 0 };
-    for (const tr of this.trains.values()) { const d = this.trainDaily(tr); out.ore += d.ore; out.stone += d.stone; }
-    return out;
-  }
-
-  trainDaily(tr: Train): { ore: number; stone: number } {
-    const n = tr.crew.length;
-    if (!n || tr.why) return { ore: 0, stone: 0 };
-    return tr.vein >= 0 || tr.veinsLeft ? { ore: Math.round((n / VEIN_WORK) * 3.5), stone: Math.round((n / VEIN_WORK) * 2) } : { ore: 0, stone: n * STONE_DAY };
-  }
+  seated(tr: Train) { return tr.aboard.reduce((n, g) => n + g.ids.length, 0); }
 
   private step(tr: Train, dt: number) {
     tr.t += dt;
     if (tr.phase === 'dwell') {
-      // on attend les voyageurs et la relève sur le quai, puis on part
+      // on attend les voyageurs sur le quai, puis on part
       if (tr.t < DWELL || (tr.t <= BOARD_MAX && !tr.boarding.every((g) => this.agents.partyDone(g.ids)))) return;
       for (const g of tr.boarding) {
         this.agents.partyHide(g.ids, true);
-        if (g.to < 0) tr.relief.push(...g.ids); else tr.aboard.push(g);
+        tr.aboard.push(g);
       }
       tr.boarding = [];
       // au bout de la ligne, demi-tour ; le quai suivant doit être libre (un autre train y est, ou y va)
@@ -316,40 +270,18 @@ export class Railway {
     this.arrive(tr);
   }
 
-  /** À quai : relève des mineurs à l'avant-poste ; à une gare, on décharge, les voyageurs descendent et d'autres montent */
+  /** À quai : les voyageurs descendent et d'autres montent */
   private arrive(tr: Train) {
-    const st = tr.stops[tr.at], w = this.world;
-    if (st.post) {
-      if (tr.at === tr.mine) {
-        // l'équipe d'avant monte à bord avec ce qui attendait au camp, la relève descend au travail
-        tr.back.push(...tr.crew);
-        tr.crew = tr.relief; tr.relief = [];
-        const ore = Math.floor(tr.pile.ore), stone = Math.floor(tr.pile.stone);
-        tr.cargo.ore += ore; tr.cargo.stone += stone; tr.pile.ore -= ore; tr.pile.stone -= stone;
-      }
-      return;
-    }
-    // le minerai et la pierre rentrent au village
-    const c = tr.cargo, off = [...tr.back], home = tr.back.length;
-    w.ore += c.ore; w.stone += c.stone;
-    tr.delivered.ore += c.ore; tr.delivered.stone += c.stone;
-    if ((c.ore || c.stone) && this.newsT <= 0) {
-      this.newsT = 120;
-      const got = [c.ore ? `+${c.ore} minerai` : '', c.stone ? `+${c.stone} pierre` : ''].filter(Boolean).join(', ');
-      this.onNews?.(`🚂 Le train remonte des profondeurs à ${this.stopName(st.b)} : ${got}${home ? ` ; ${home} mineur${home > 1 ? 's' : ''} rentre${home > 1 ? 'nt' : ''} au village` : ''}.`);
-    }
-    tr.cargo = { ore: 0, stone: 0 };
-    tr.back = [];
-    // on descend : voyageurs arrivés, mineurs relevés
+    const st = tr.stops[tr.at], off: number[] = [];
+    // on descend : voyageurs arrivés
     tr.aboard = tr.aboard.filter((g) => { if (g.to !== tr.at) return true; off.push(...g.ids); tr.carried += g.ids.length; return false; });
     this.release(off, st.board);
     if (!st.board) return;
-    // on monte : la relève des mineurs si l'avant-poste est devant, quelques voyageurs pour une gare plus loin
+    // on monte : quelques voyageurs pour une gare plus loin
     const n = tr.stops.length, dir = tr.at + tr.dir < 0 || tr.at + tr.dir >= n ? -tr.dir : tr.dir, ahead: number[] = [];
     for (let k = tr.at + dir; k >= 0 && k < n; k += dir) ahead.push(k);
-    if (tr.mine >= 0 && ahead.includes(tr.mine) && !tr.relief.length) this.call(tr, st, this.shiftSize(), -1);
-    // (un train de marchandises ne prend pas de voyageurs : seulement la relève des mineurs)
-    const dest = tr.line.freight ? [] : ahead.filter((k) => !tr.stops[k].post);
+    // (un train de marchandises ne prend pas de voyageurs)
+    const dest = tr.line.freight ? [] : ahead;
     if (dest.length && this.agents.available() > 8 && this.rnd() < 0.85) this.call(tr, st, 1 + Math.floor(this.rnd() * 3), dest[Math.floor(this.rnd() * dest.length)]);
   }
 
@@ -369,57 +301,6 @@ export class Railway {
     this.agents.dismiss(ids);
   }
 
-  // ---------- Les mineurs au fond ----------
-
-  private mineStep(tr: Train, dt: number) {
-    const n = tr.crew.length, w = this.world;
-    if (!n || !this.ex.under || tr.mine < 0) return;
-    const day = dt / this.dayLen();
-    if ((tr.vein < 0 || w.mined.has(tr.vein) || !w.claimed.has(tr.vein)) && (tr.pickT -= dt) <= 0) {
-      tr.pickT = 3;
-      tr.vein = this.pickVein(tr);
-      tr.veinsLeft = tr.vein >= 0;
-      tr.dig = 0;
-    }
-    // plus de filon dans les galeries tenues : on taille la roche au camp
-    if (tr.vein < 0 || w.mined.has(tr.vein)) { tr.vein = -1; tr.spot = -1; tr.pile.stone += day * n * STONE_DAY; return; }
-    // en chemin vers le filon
-    if (tr.walk > 0) { tr.walk -= dt; return; }
-    tr.dig += (day * n) / VEIN_WORK;
-    if (tr.dig < 1) return;
-    const camp = this.ex.camp();
-    tr.pile.ore += ORE_KINDS[tr.veinOre].amount + 1 + (camp >= 3 ? 1 : 0) + (camp >= 8 ? 1 : 0);
-    tr.pile.stone += 2;
-    w.mined.add(tr.vein);
-    w.version++;
-    tr.dug++;
-    // on passe aussitôt au filon suivant
-    tr.spot = tr.vein;
-    tr.dig = 0; tr.pickT = 3;
-    tr.vein = this.pickVein(tr);
-    tr.veinsLeft = tr.vein >= 0;
-  }
-
-  /**
-   * Filon encore en place dans les galeries tenues, le plus proche de là où sont les mineurs (hors de ceux qu'une troupe
-   * ou les mineurs d'une autre ligne vont abattre) ; on compte le chemin à faire jusqu'à lui
-   */
-  private pickVein(tr: Train) {
-    const u = this.ex.under, w = this.world, entry = tr.stops[tr.mine]?.entry ?? -1;
-    if (!u || entry < 0) return -1;
-    // (les tunnels creusés changent les chemins sans régénérer le souterrain)
-    const from = tr.spot >= 0 ? tr.spot : entry, key = `${from}|${u.version}|${u.carved}`;
-    if (tr.dist?.key !== key) tr.dist = { key, d: u.distances(from) };
-    const d = tr.dist.d, taken = new Set([...this.ex.active.flatMap((a) => a.targets), ...[...this.trains.values()].filter((o) => o !== tr).map((o) => o.vein)]);
-    let best = -1;
-    for (const v of oreVeins(u, w.mined)) {
-      if (!w.claimed.has(v.k) || taken.has(v.k) || d[v.k] < 0) continue;
-      if (best < 0 || d[v.k] < d[best]) { best = v.k; tr.veinOre = v.ore; }
-    }
-    if (best >= 0) tr.walk = d[best] / MINER_SPEED;
-    return best;
-  }
-
   // ---------- Le réseau ----------
 
   /** Voies à dessiner : tronçons, arrêts desservis et bouts de quai où arrive une voie */
@@ -435,16 +316,13 @@ export class Railway {
   refresh(force = false) {
     const w = this.world;
     const keyOf = () => {
-      let key = `${w.visVersion}|${[...this.entries].join(',')}|${w.lines.map((l) => `${l.id}:${l.stops.join('.')}/${l.via?.map((v) => v.join(',')).join('/') ?? ''}`).join(';')}|`;
+      let key = `${w.visVersion}|${w.lines.map((l) => `${l.id}:${l.stops.join('.')}/${l.via?.map((v) => v.join(',')).join('/') ?? ''}`).join(';')}|`;
       for (const b of w.buildings.values()) key += `${b.id}:${b.x},${b.z},${b.rot},${b.age};`;
       return key;
     };
-    this.entries = new Map(this.ex.under ? this.ex.outposts().map((p) => [p.b.id, p.entry]) : []);
-    let key = keyOf();
+    const key = keyOf();
     if (key === this.key && !force) return;
-    this.stops.clear(); this.segs.clear(); this.spurs.clear(); this.lanes.clear();
-    for (const b of w.buildings.values()) if (b.kind === 'outpost') this.stopOf(b);
-    if (this.autoLine()) key = keyOf();
+    this.stops.clear(); this.segs.clear(); this.lanes.clear();
     this.key = key;
     this.version++;
     // à la gare centrale, chaque ligne a sa voie (celle du milieu d'abord) : les trains de plusieurs lignes y sont à quai ensemble
@@ -468,10 +346,9 @@ export class Railway {
       if (tr && tr.sig !== sig) { this.reset(tr); tr = undefined; }
       if (!tr) { tr = this.newTrain(l, stops, sig); this.trains.set(l.id, tr); }
       tr.line = l; tr.stops = stops; tr.via = via; tr.legs.clear();
-      tr.mine = stops.findIndex((s) => s.post);
       const was = tr.why;
       const twin = this.sameAs(l.stops, l.id);
-      tr.why = stops.length < 2 ? (l.stops.length >= 2 ? 'Il lui manque des arrêts en service (gare démolie, avant-poste sans place pour un quai…).' : 'Il faut au moins deux arrêts.')
+      tr.why = stops.length < 2 ? (l.stops.length >= 2 ? 'Il lui manque des arrêts en service (gare démolie…).' : 'Il faut au moins deux arrêts.')
         : twin && twin.id < l.id ? 'Même parcours qu’une autre ligne : sur une voie unique, un seul train peut y rouler. Fermez l’une des deux.' : null;
       for (let i = 0; !tr.why && i + 1 < stops.length; i++) {
         if (this.seg(stops[i], stops[i + 1], via[i])) continue;
@@ -492,23 +369,10 @@ export class Railway {
     for (const [id, tr] of this.trains) if (!live.has(id)) { this.reset(tr); this.trains.delete(id); }
   }
 
-  /** Tant que le joueur n'a tracé aucune ligne, la première relie d'elle-même la gare à l'avant-poste */
-  private autoLine() {
-    const w = this.world;
-    if (!w.linesAuto || w.lines.length) return false;
-    const all = [...w.buildings.values()], st = all.find((b) => isStation(b) && this.stopOf(b)), post = all.find((b) => b.kind === 'outpost' && this.stopOf(b));
-    if (!st || !post) return false;
-    w.lines.push({ id: 1, stops: [st.id, post.id], color: LINE_COLORS[0] });
-    w.linesAuto = false;
-    this.onNews?.('🚂 Une première ligne relie la gare à l’avant-poste. Choisissez une gare pour en tracer d’autres, de gare en gare.');
-    return true;
-  }
-
   private newTrain(line: RailLine, stops: Stop[], sig: string): Train {
     return {
       line, stops, via: [], why: null, sig, at: 0, dir: 1, leg: null, s: 0, speed: 0, t: 0, phase: 'dwell', flip: false, arrived: null, waiting: false, legs: new Map(),
-      boarding: [], aboard: [], relief: [], crew: [], back: [], mine: -1, cargo: { ore: 0, stone: 0 }, pile: { ore: 0, stone: 0 },
-      vein: -1, dig: 0, veinOre: 0, spot: -1, walk: 0, veinsLeft: false, pickT: 0, dist: null, delivered: { ore: 0, stone: 0 }, dug: 0, carried: 0,
+      boarding: [], aboard: [], carried: 0,
     };
   }
 
@@ -543,14 +407,11 @@ export class Railway {
     this.arrive(tr);
   }
 
-  /** Ligne fermée ou changée : tout le monde rentre au village, la cargaison aussi */
+  /** Ligne fermée ou changée : tout le monde rentre au village */
   private reset(tr: Train) {
     const at = tr.stops.find((s) => s.board)?.board ?? null;
-    for (const ids of [tr.relief, tr.crew, tr.back, ...tr.aboard.map((g) => g.ids), ...tr.boarding.map((g) => g.ids)]) this.release(ids, at);
-    tr.relief = []; tr.crew = []; tr.back = []; tr.aboard = []; tr.boarding = [];
-    this.world.ore += tr.cargo.ore; this.world.stone += tr.cargo.stone;
-    tr.cargo = { ore: 0, stone: 0 };
-    tr.vein = -1; tr.dig = 0; tr.spot = -1; tr.walk = 0;
+    for (const ids of [...tr.aboard.map((g) => g.ids), ...tr.boarding.map((g) => g.ids)]) this.release(ids, at);
+    tr.aboard = []; tr.boarding = [];
     tr.leg = null; tr.phase = 'dwell'; tr.at = 0; tr.dir = 1;
   }
 
@@ -573,13 +434,12 @@ export class Railway {
   // ---------- Arrêts ----------
 
   /**
-   * L'arrêt que fait ce bâtiment (gare, ou avant-poste qui garde une entrée et a la place d'un quai), ou null ; à la gare
-   * centrale, le quai de cette voie (celle du milieu par défaut)
+   * L'arrêt que fait ce bâtiment (une gare), ou null ; à la gare centrale, le quai de cette voie (celle du milieu par défaut)
    */
   stopOf(b: Building, lane?: number): Stop | null {
     const ln = isTerminus(b) ? lane ?? LANE_ORDER[0] : 0, key = `${b.id}:${ln}`;
     if (this.stops.has(key)) return this.stops.get(key)!;
-    const s = isTerminus(b) ? this.terminusStop(b, ln) : isStation(b) ? this.stationStop(b) : b.kind === 'outpost' ? this.postStop(b) : null;
+    const s = isTerminus(b) ? this.terminusStop(b, ln) : isStation(b) ? this.stationStop(b) : null;
     this.stops.set(key, s);
     return s;
   }
@@ -598,7 +458,7 @@ export class Railway {
       const p = at(lx, lz), x = Math.floor(p[0]), z = Math.floor(p[1]);
       if (w.inCells(x, z) && !w.occ[z * N + x] && !w.decor[z * N + x] && !w.isWet(x, z)) { board = p; break; }
     }
-    return { b, post: false, lane, ends: [-1], c, u, half: TERM_HALF, entry: -1, board };
+    return { b, lane, ends: [-1], c, u, half: TERM_HALF, board };
   }
 
   private stationStop(b: Building): Stop {
@@ -612,39 +472,7 @@ export class Railway {
       const x = Math.floor(p[0]), z = Math.floor(p[1]);
       if (w.inCells(x, z) && !w.occ[z * N + x] && !w.decor[z * N + x] && !w.isWet(x, z)) board = p;
     }
-    return { b, post: false, lane: 0, c, u, half, entry: -1, board };
-  }
-
-  /**
-   * Embranchement au pied de l'avant-poste : un quai droit sur une bande de terrain libre et à peu près plate tout autour
-   * (jusqu'à quatre cases, dans un sens ou dans l'autre), au plus près des murs et loin de la grotte
-   */
-  private postStop(b: Building): Stop | null {
-    const w = this.world, entry = this.entries.get(b.id) ?? -1;
-    if (entry < 0) return null;
-    const s = KINDS.outpost.size, cave = w.outpostEntrance(b.x, b.z, s), kx = (cave % N) + 0.5, kz = Math.floor(cave / N) + 0.5, half = 1.2;
-    const ox = b.x + s / 2, oz = b.z + s / 2;
-    let best: Stop | null = null, score = -Infinity;
-    for (let cz = b.z - 4; cz < b.z + s + 4; cz++) for (let cx = b.x - 4; cx < b.x + s + 4; cx++) for (const u of [[1, 0], [0, 1]] as [number, number][]) {
-      // le milieu du quai au milieu d'une case, ou entre deux cases dans le sens de la voie
-      for (const off of [0, 0.5]) {
-        const c: [number, number] = [cx + 0.5 + u[0] * off, cz + 0.5 + u[1] * off];
-        const d = Math.hypot(c[0] - ox, c[1] - oz), sc = -d + Math.hypot(c[0] - kx, c[1] - kz) * 0.3;
-        if (sc <= score) continue;
-        let ok = true, lo = Infinity, hi = -Infinity;
-        for (let t = -half - OVER + 0.05; t < half + OVER && ok; t += 0.25) {
-          const x = Math.floor(c[0] + u[0] * t), z = Math.floor(c[1] + u[1] * t);
-          ok = w.inCells(x, z) && !w.road[z * N + x] && !w.isWet(x, z) && isFinite(this.cost(z * N + x)) && w.cellSlope(x, z) < 0.6;
-          if (ok) { const h = w.cellAvg(x, z); lo = Math.min(lo, h); hi = Math.max(hi, h); }
-        }
-        if (!ok || hi - lo > 0.45) continue;
-        score = sc;
-        best = { b, post: true, lane: 0, c, u, half, entry, board: null };
-      }
-    }
-    // les cases que couvre le quai (pas celle où il s'arrête pile sur la limite : la voie en repart)
-    if (best) for (let t = -half - OVER + 0.05; t < half + OVER; t += 0.25) this.spurs.set(Math.floor(best.c[1] + best.u[1] * t) * N + Math.floor(best.c[0] + best.u[0] * t), b.id);
-    return best;
+    return { b, lane: 0, c, u, half, board };
   }
 
   // ---------- La voie ----------
@@ -710,12 +538,11 @@ export class Railway {
     const w = this.world;
     const cellOf = (p: [number, number]) => (w.inCells(Math.floor(p[0]), Math.floor(p[1])) ? Math.floor(p[1]) * N + Math.floor(p[0]) : -1);
     const along = (s: Stop, k: number): [number, number] => [s.c[0] + s.u[0] * k, s.c[1] + s.u[1] * k];
-    // on ne traverse pas l'embranchement d'un avant-poste
-    const cost = (k: number) => (this.spurs.has(k) ? Infinity : this.cost(k));
+    const cost = (k: number) => this.cost(k);
     // sorties : dans l'axe du quai, sur deux cases si l'on peut (la courbe qui suit en est plus douce)
     const exits = (s: Stop) => [1, -1].filter((sg) => !s.ends || s.ends.includes(sg)).flatMap((sg) => {
-      // au-delà de l'emprise de la gare, ou du bout de l'embranchement de l'avant-poste
-      const e = s.half + (s.post ? OVER : 0) + 0.55, p1 = along(s, sg * e), p2 = along(s, sg * (e + 1)), k1 = cellOf(p1), k2 = cellOf(p2);
+      // au-delà de l'emprise de la gare
+      const e = s.half + 0.55, p1 = along(s, sg * e), p2 = along(s, sg * (e + 1)), k1 = cellOf(p1), k2 = cellOf(p2);
       if (k1 < 0 || !isFinite(cost(k1))) return [];
       const far = k2 >= 0 && isFinite(cost(k2));
       return [{ sg, k: far ? k2 : k1, p: far ? p2 : p1 }];

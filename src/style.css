@@ -532,37 +532,13 @@ body.dockMin #items, body.dockMin #dockBottom { display: none; }
 body.dockMin #dockTop { border-bottom: none; }
 body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 
-/* monde souterrain : barre dédiée à la place des outils de surface */
+/* monde souterrain (moteur gardé pour les Enfers, hors de portée du joueur) : barre dédiée à la place des outils de surface */
 #underBar { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 16px); display: none; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 8px 10px; align-items: center; }
 #underBar > button { white-space: nowrap; }
 #underZone { font-weight: 800; padding: 0 8px; line-height: 1.2; }
 #underZone small { display: block; font-size: 11px; font-weight: 600; color: var(--ink2); }
-#campQuest { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 170px; text-align: left; line-height: 1.15; }
-#campQuest span { display: flex; align-items: center; gap: 5px; font-weight: 800; }
-#campQuest small { font-size: 11px; font-weight: 600; color: var(--ink2); }
-#campQuest .bar, .quests .bar { display: block; width: 100%; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
-#campQuest .bar i, .quests .bar i { display: block; height: 100%; background: var(--accent); }
 .campStats { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 10px; font-size: 12.5px; }
 .campStats > b { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 14px; }
-/* le camp souterrain, vu d'un clic : ce qu'il contient, et le gros bouton de l'expédition armée */
-.campModal { width: min(520px, 94vw); }
-.campModal .campStats span { display: inline-flex; align-items: center; gap: 5px; }
-.campCols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 520px) { .campCols { grid-template-columns: 1fr; } }
-.campCols h4, .campQ b { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 13.5px; }
-.campCols ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
-.campQ { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 10px 0; display: grid; gap: 4px; font-size: 12.5px; }
-.campQ small { color: var(--ink2); }
-.campQ .bar { display: block; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.campQ .bar i { display: block; height: 100%; background: var(--accent); }
-.campGo { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; margin-top: 6px; font-size: 16px; font-weight: 800; background: var(--accent); color: #fff; border-color: transparent; }
-.troopPick { display: grid; gap: 8px; margin: 8px 0; }
-.troop { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 12px; align-items: center; text-align: left; padding: 10px 12px; }
-.troop b { grid-column: 1 / -1; font-size: 14px; }
-.troop span { font-size: 12.5px; font-weight: 600; color: var(--ink2); }
-.troop .risk { color: #b0541a; }
-.troop .why { grid-column: 1 / -1; color: #c0392b; font-size: 11.5px; }
-.campBack { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
 .lineDot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px #fff8, 0 1px 2px #0003; }
 .rcard { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
 .rhead { display: flex; align-items: center; gap: 8px; }
@@ -592,22 +568,6 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 .railBox h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 14px; }
 .railBox .campStats { margin: 6px 0 8px; }
 .trainBtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
-.send { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; background: var(--accent-soft); }
-.send h4 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; }
-.send .choices { display: grid; gap: 8px; margin-top: 8px; }
-.send.dig { border-color: #c98a2e; background: rgba(232, 160, 60, 0.12); }
-.send.dig p { margin: 6px 0 0; }
-.digGo { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 7px 14px; font-weight: 700; }
-.quests { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.quests li { border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; display: grid; gap: 5px; }
-.quests li p { margin: 0; font-size: 12.5px; }
-.quests .qh { display: flex; align-items: center; gap: 6px; }
-.quests .qh b { display: flex; align-items: center; gap: 6px; }
-.quests .gain { color: #3a5a8a; font-weight: 600; }
-.quests li.done { opacity: 0.75; }
-.quests li.done .qh b { color: #0d7a5f; }
-.quests li.cur { border-color: var(--accent); background: var(--accent-soft); }
-.quests li.todo { opacity: 0.6; }
 body.under #underBar { display: flex; }
 body.under #dock, body.under #fx-tilt-top, body.under #fx-tilt-bottom { display: none; }
 body.under #fx-vignette { background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(8, 6, 12, 0.55) 100%); }
@@ -771,7 +731,6 @@ button.sendBtn:disabled { background: rgba(15, 27, 45, 0.12); color: var(--ink2)
 .decide .story { font-size: 14px; line-height: 1.5; margin: 4px 0 8px; }
 .decide .choice small { color: var(--ink2); }
 .unlock { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 0; font-size: 12.5px; color: #0d7a5f; font-weight: 600; }
-.held { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 0; font-size: 12.5px; color: #3a5a8a; font-weight: 600; }
 .req { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0 0; font-size: 12px; font-weight: 600; }
 .req .ok { color: #0d7a5f; }
 .req .no { color: #b4473c; }
@@ -839,17 +798,6 @@ button.bgo:hover { background: #0f9270; }
 .cdet .gain em { color: var(--bad); font-style: normal; }
 
 .gnbar { flex: 1 0 100%; height: 5px; }
-.dhead { display: flex; align-items: center; gap: 8px; margin: 2px 0 4px; font-size: 16px; }
-.dsteps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; }
-.dstep { display: flex; gap: 12px; align-items: center; text-align: left; background: none; border: 0; box-shadow: none; width: 100%; padding: 6px 4px; border-radius: 12px; color: inherit; font: inherit; }
-.dstep:hover { background: var(--accent-soft); }
-.dstep b { font-size: 14px; }
-.dstep small { display: block; color: var(--ink2); font-size: 12px; }
-.ddot { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; font-weight: 800; border: 3px solid var(--line); background: var(--panel, #fff); color: var(--ink2); }
-.dstep.done .ddot { background: #2f9e5a; border-color: #2f9e5a; color: #fff; }
-.dstep.cur .ddot { border-color: var(--accent); color: var(--accent); }
-.dtip { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 13px; line-height: 1.45; color: var(--ink2); }
-.dtip[hidden] { display: none; }
 /* expéditions obligatoires : fond chaud et bord franc pour les repérer d'un coup d'œil ; le déblocage est une pastille verte */
 .mission.must { background: linear-gradient(160deg, #fff4dc, #ffe6b0); border: 2px solid #f0b44a; box-shadow: 0 2px 10px rgba(240, 180, 74, 0.28); }
 .mission.must.done { background: #fff; border: 1px solid #e4e1d4; box-shadow: none; }

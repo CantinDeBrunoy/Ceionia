@@ -145,7 +145,7 @@ export function ic(name: string, size = 20, stroke = 1.8): string {
 export const KIND_ICON: Record<KindId, string> = {
   house: 'house', well: 'well', lamp: 'lamp', farm: 'barn', pen: 'pen', pier: 'fish', workshop: 'anvil', mill: 'windmill',
   health: 'hospital', school: 'book', fire: 'flame', gather: 'campfire', temple: 'columns', landmark: 'castle',
-  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', outpost: 'outpost', lumber: 'axe', quarry: 'rock', station: 'train', barber: 'scissors', alpine: 'alpine', police: 'police', terminal: 'train',
+  stable: 'horse', apiary: 'hive', baths: 'bath', tavern: 'mug', mine: 'pickaxe', observatory: 'telescope', lumber: 'axe', quarry: 'rock', station: 'train', barber: 'scissors', alpine: 'alpine', police: 'police', terminal: 'train',
   harbor: 'anchor', airport: 'plane', heliport: 'heli', watertower: 'well', stadium: 'stadium', football: 'ball', basket: 'hoop', tennis: 'racket', waterpark: 'slide', funfair: 'ferris', zoo: 'paw',
   theater: 'masks', acropolis: 'acropolis', forum: 'arch', senate: 'dome',
   carworks: 'car', lab: 'flask', aerodrome: 'balloon', manor: 'manor', oilwell: 'pumpjack', refinery: 'refinery', brickworks: 'kiln',

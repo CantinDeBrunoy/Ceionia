@@ -203,7 +203,7 @@ function shapeBiomes(world: World, seed: number, wind: number | null) {
 }
 
 /**
- * Décors présents d'office : une ou deux grottes au pied des collines, failles en terrain plat (entrées du monde souterrain)
+ * Décors présents d'office : une ou deux grottes au pied des collines, failles en terrain plat
  * et quelques épaves au bord de l'eau, ajoutés à toute carte qui n'en a pas (y compris les anciennes sauvegardes)
  */
 export function addDefaultDecor(world: World, seed: number) {

@@ -82,7 +82,7 @@ export function spaceRail(w: World) {
 /**
  * Le chemin de fer du village : `lines`, les lignes en service (deux arrêts encore debout au moins, une voie qui passe) ;
  * `linked`, le plus grand groupe de gares reliées entre elles par le rail (deux lignes qui partagent une gare font un même
- * réseau ; une ligne qui passe par un avant-poste relie quand même ses gares). Une ligne relue d'une sauvegarde, pas encore
+ * réseau ; une ligne qui passe par un arrêt hors service relie quand même ses gares). Une ligne relue d'une sauvegarde, pas encore
  * reposée, compte : sa voie n'a pas été déclarée impossible
  */
 export function railNet(w: World): { lines: number; linked: number } {

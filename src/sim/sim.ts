@@ -2,7 +2,6 @@ import { World } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { priceIn, YIELD } from './economy';
-import { CAMP_JOY } from './depths';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -131,7 +130,7 @@ export class Sim {
     this.food.cap = down(this.baseFood + this.fieldsFood + needBonus(e, 'food'));
     this.water.cap = down(this.baseWater + needBonus(e, 'water'));
     this.jobs.cap = down(this.baseJobs + needBonus(e, 'jobs'));
-    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy') + (e.camp >= 7 ? CAMP_JOY : 0));
+    this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy'));
     this.housing.demand = p;
     this.food.demand = up(n + 1);
     this.water.demand = n + 1;
@@ -200,7 +199,7 @@ export class Sim {
       }
     };
     kinds(false);
-    if (req.reqOre) items.push({ label: 'minerai (monde souterrain)', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
+    if (req.reqOre) items.push({ label: 'minerai', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
     // les briques de la briqueterie (en réserve : on peut en dépenser pour bâtir, il faudra alors en recuire)
     if (req.reqBrick) items.push({ label: 'briques (briqueterie)', have: w.unlimited ? req.reqBrick : Math.floor(w.brick), need: req.reqBrick });
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
@@ -279,7 +278,12 @@ export class Sim {
       }
       if (miss.label.startsWith('chemin de fer')) return this.railAgeTip(say, build, miss.label === RAIL_FIRST);
       if (miss.label.startsWith('briques')) return this.counts.brickworks ? `Pour l’âge suivant : il faut encore ${miss.need - miss.have} briques (la briqueterie en cuit chaque jour).` : about('brickworks', `Pour l’âge suivant : il faut ${miss.need} briques : ${say('brickworks')}.`);
-      if (miss) { this.messageExp = true; return `Pour l’âge suivant : extrayez encore ${miss.need - miss.have} minerai dans le monde souterrain.`; }
+      if (miss) {
+        // le minerai vient des mines, creusées dans la montagne (la mine se débloque par une expédition)
+        const n = miss.need - miss.have, m = KINDS.mine.reqMission;
+        if (m && !w.exp.done.includes(m)) { this.messageExp = true; return `Pour l’âge suivant : il faut encore ${n} minerai : l’expédition « ${MISSIONS.find((x) => x.id === m)?.title ?? m} » débloque la mine (menu Expéditions).`; }
+        return this.counts.mine ? `Pour l’âge suivant : il faut encore ${n} minerai (la mine en extrait chaque jour ; une autre mine irait plus vite).` : build('mine', `Pour l’âge suivant : il faut encore ${n} minerai : bâtissez ${say('mine')}.`);
+      }
     }
     if (full) return room();
     // au dernier âge, la conquête de l'espace : le cosmodrome, puis chaque expédition spatiale à son tour

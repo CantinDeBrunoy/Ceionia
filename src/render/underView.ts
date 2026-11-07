@@ -11,10 +11,8 @@ import { groundDetailTexture } from './textures';
 import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight';
 import { UnderMobs, Mob, MobKind } from './mobs';
 import { CombatFx } from './combatFx';
-import { campLayout, buildCamp, stepCamp, Camp } from './camp';
-import { CAMP_QUESTS, CAMP_GUARDS } from '../sim/depths';
-import { MINER_SPEED } from '../sim/railway';
-import { DIG_WALK, DIG_WALK_MAX, foesOf } from '../sim/expeditions';
+import { campLayout, buildCamp, stepCamp, Camp, CAMP_LEVELS, CAMP_GUARDS } from './camp';
+import { foesOf } from '../sim/expeditions';
 import { hash2, smoothstep } from '../core/rng';
 
 const BG = new THREE.Color(0x09070c);
@@ -119,6 +117,12 @@ const CHIP = 0xb8ab94;
  * Monde souterrain : galeries en coupe (le dessus des parois est la tranche sombre de la roche), décor par zone,
  * lacs, lave, puits de jour aux entrées, torches des galeries tenues et créatures ; seules les sources de lumière l'éclairent
  */
+/**
+ * Pas des mineurs dans les galeries (cases par seconde de jeu) ; pas de ceux qui se rendent au front d'un tunnel, et leur marche
+ * au plus (secondes). (Le monde souterrain a été retiré du jeu : le moteur reste pour les Enfers, ces réglages avec lui)
+ */
+const MINER_SPEED = 0.6, DIG_WALK = 2.4, DIG_WALK_MAX = 25;
+
 export class UnderView {
   scene = new THREE.Scene();
   /** étincelles, éclairs et poussière des combats sous terre */
@@ -151,6 +155,12 @@ export class UnderView {
   private claimSources: Source[] = [];
   private claimedN = -1;
   private claimBuilt = -1;
+  /**
+   * bases (donné par le jeu) : cases de galerie sous leurs puits, de la plus ancienne à la plus récente ; le camp se dresse sous
+   * la première, au niveau `campLevel` (0 : pas de camp)
+   */
+  bases: number[] = [];
+  campLevel = 0;
   /** camp souterrain : ses pièces, ses lumières, ses gardes ; reconstruit quand il grandit */
   private camp: Camp | null = null;
   private campKey = '';
@@ -1635,11 +1645,9 @@ export class UnderView {
       }
       if (nb < MAX_CLAIM && b.front >= 0 && b.front !== b.lamp) { const x = (b.front % N) + 0.5, z = Math.floor(b.front / N) + 0.5; put(this.bannerPole, nb, x, z, 0); put(this.bannerCloth, nb, x, z, hash2(b.front, 2, 611) * 6.28); nb++; }
     }
-    // sous chaque avant-poste, la bannière du village au pied du puits de jour
-    for (const b of w.buildings.values()) {
-      if (b.kind !== 'outpost' || nb >= MAX_CLAIM) continue;
-      const cell = w.outpostEntrance(b.x, b.z, 2), ent = u.entrances.find((e) => e.cell === cell), k = ent ? u.under(ent) : -1;
-      if (k < 0) continue;
+    // sous chaque base, la bannière du village au pied du puits de jour
+    for (const k of this.bases) {
+      if (k < 0 || nb >= MAX_CLAIM) continue;
       const x = (k % N) + 0.5 + 0.35, z = Math.floor(k / N) + 0.5 + 0.35;
       put(this.bannerPole, nb, x, z, 0); put(this.bannerCloth, nb, x, z, 0.6); nb++;
     }
@@ -1675,20 +1683,12 @@ export class UnderView {
 
   // ---------- Camp souterrain ----------
 
-  /** Case de galerie sous le puits du premier avant-poste (le plus ancien qui garde une entrée), ou -1 */
-  private campCenter() {
-    const w = this.world, u = this.under;
-    const posts = [...w.buildings.values()].filter((b) => b.kind === 'outpost').sort((a, b) => a.id - b.id);
-    for (const b of posts) {
-      const cell = w.outpostEntrance(b.x, b.z, 2), ent = u.entrances.find((e) => e.cell === cell), k = ent ? u.under(ent) : -1;
-      if (k >= 0) return k;
-    }
-    return -1;
-  }
+  /** Case de galerie sous le puits de la première base, ou -1 */
+  private campCenter() { return this.bases.find((k) => k >= 0) ?? -1; }
 
   /** (Re)construit le camp s'il a grandi, ou si le souterrain ou l'avant-poste ont changé */
   private refreshCamp() {
-    const level = Math.min(CAMP_QUESTS.length, this.world.exp.camp), center = level ? this.campCenter() : -1;
+    const level = Math.min(CAMP_LEVELS, this.campLevel), center = level ? this.campCenter() : -1;
     const key = `${level}|${this.under.version}|${center}|${Math.min(this.age, 5)}`;
     if (key === this.campKey) return;
     this.campKey = key;

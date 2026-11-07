@@ -11,13 +11,11 @@ import { MAPS, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
-import { depthIncome, HELD_PER_STONE, VEINS_PER_ORE } from '../sim/depths';
 import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, splitIntro, mandatoriesFor, isLegendary, isMilitary, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
 import { securityCuts, SECURITY_MAX } from '../sim/security';
-import { CAMP_QUESTS } from '../sim/depths';
 import { priceIn, canPay, costLabel, Resource, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty } from '../sim/difficulty';
@@ -42,14 +40,8 @@ export interface UIHost {
   toMenu(): void;
   setPhoto(on: boolean): void;
   capture(): void;
-  /** monde souterrain : descendre par l'entrée la plus proche, remonter, creuser des tunnels */
-  enterNearest(): void;
+  /** monde souterrain (moteur gardé pour les Enfers, hors de portée du joueur) : remonter, et la zone où l'on est */
   exitUnder(): void;
-  digMode: boolean;
-  /** descendre là où un tunnel rejoindrait d'autres galeries, en mode Creuser */
-  digTunnel(): void;
-  /** le camp souterrain vu de près : ses gardes, ses patrouilles et la dernière attaque (ou la dernière rencontre) */
-  campInfo(): { guards: number; patrols: number; last: string };
   underZone(): string | null;
   /** brouillard visible (0 … 1), et le dissiper */
   fogLevel(): number;
@@ -66,7 +58,7 @@ export interface UIHost {
   setHideUpBadges(on: boolean): void;
   /** expéditions, et celle que la caméra suit (son numéro) */
   expeditions: Expeditions;
-  /** chemin de fer de la gare à l'avant-poste, et la caméra qui suit le train */
+  /** chemin de fer de gare en gare, et la caméra qui suit le train */
   railway: Railway;
   followTrain(line: number): void;
   /** incendies, malaises, cambriolages en cours, et la caméra qui en suit un */
@@ -175,13 +167,13 @@ const DECO_NOTE = 'Décoratif : rend le village plus heureux, ne produit rien.';
 
 /** À quoi sert chaque outil (fiche au survol) */
 const TOOL_DESC: Record<string, string> = {
-  none: 'Regarder le village. Un clic sur un volcan le réveille, sur une grotte ou une faille on descend sous terre.',
+  none: 'Regarder le village. Un clic sur un volcan le réveille.',
   raise: 'Monter le terrain sous le pinceau.', lower: 'Baisser le terrain sous le pinceau.', flatten: 'Aplanir à la hauteur du premier clic.',
   cliff: 'Tailler des falaises nettes, en gradins.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
   mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut.',
   forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: `Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille. ${DECO_NOTE}`,
   biome: 'Peindre un biome (tempéré, taïga, désert, tropical, marais) ou rendre la terre à son climat : le sol, les arbres, l’herbe, les bêtes et la neige suivent.',
-  rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte vers le monde souterrain (un clic).', fissure: 'Ouvrir une faille vers le monde souterrain (un clic).',
+  rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte dans la roche (un clic) : les expéditions vers une grotte s’y rendent.', fissure: 'Ouvrir une faille dans le sol (un clic).',
   erase: 'Effacer forêts, champs, jardins et rochers.',
   road: 'Tracer une route : en ligne, en glissant case par case ; en libre, d’un clic au point A puis au point B, une belle courbe qui contourne les obstacles (R pour changer de mode). Sur l’eau peu profonde, elle devient un pont.',
   bulldoze: 'Démolir un bâtiment, une route ou un décor. Élargissez le pinceau pour effacer d’un coup tout un parc, une forêt ou des routes (les petits bâtiments partent aussi ; les grands se démolissent un à un, avec confirmation).', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
@@ -232,10 +224,10 @@ const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon
 const RES_META: Record<Resource, { label: string; icon: string; use: string; more: string; kind: KindId }> = {
   wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Nature › Forêt).' },
   stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Nature › Rochers). La mine en donne aussi.' },
-  ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; les expéditions armées en remontent du monde souterrain.' },
+  ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; certaines expéditions en rapportent aussi.' },
   brick: { label: 'Briques', icon: 'brick', kind: 'brickworks', use: 'Sert à passer à l’époque moderne et à bâtir gares, usines et raffineries.', more: 'Une briqueterie (Bâtir › Production, dès l’âge industriel) en cuit chaque jour ; elle se pose où l’on veut, l’argile ne manque jamais.' },
   crude: { label: 'Pétrole brut', icon: 'crude', kind: 'oilwell', use: 'La raffinerie en fait du carburant.', more: 'Un puits de pétrole se fore sur un gisement : les taches sombres où le brut suinte.' },
-  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage) et les blindés de l’expédition armée.', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 50 % de plus.' },
+  fuel: { label: 'Carburant', icon: 'fuel', kind: 'refinery', use: 'Fait rouler les automobiles du village (2 par jour pour chaque usine automobile ; sans carburant, elles restent au garage).', more: 'La raffinerie (débloquée par l’expédition « L’or noir ») en tire du pétrole brut des puits. Une gare de marchandises à côté d’elle la fait raffiner 50 % de plus.' },
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
@@ -333,7 +325,6 @@ const tabOfTool = (tool: ToolId, current: string) =>
 /** Ce que change un bâtiment débloqué par une expédition, dit au retour de l'équipe */
 const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
   pen: ' Les bêtes ramenées y vivront.', stable: ' Les chevaux ramenés y vivront.', mine: ' Elle rapportera du minerai chaque jour.',
-  outpost: ' Bâtissez-le tout contre une grotte ou une faille : sa garnison tiendra les galeries dessous, et les expéditions armées partiront de là.',
   carworks: ' Les automobiles remplacent désormais les charrettes sur les routes ; les écuries gardent leurs chevaux pour la cavalerie.',
   aerodrome: ' Montgolfières et dirigeable prendront l’air depuis son terrain.',
 };
@@ -390,8 +381,6 @@ export class UI {
       <div id="expList"></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
-        <button id="campQuest" title="Quêtes du camp souterrain"></button>
-        <button id="bDig" title="Creuser un tunnel dans la roche (C)">${ic('pickaxe', 18)} Creuser</button>
         <button id="bUp" title="Remonter à la surface (U)">${ic('up', 18)} Remonter</button>
       </div>
       <div id="selCard" class="panel"></div>
@@ -408,7 +397,6 @@ export class UI {
               <button id="bRedo" title="Rétablir (Ctrl+Y)" aria-label="Rétablir">${ic('redo', 17, 2)}</button>
               <button id="bRot" title="Tourner le bâtiment (R)" aria-label="Tourner le bâtiment">${ic('rotate', 17, 2)}</button>
               <button id="bHome" title="Revenir au village (V) — une seconde fois : vue d'ensemble" aria-label="Revenir au village">${ic('target', 17, 2)}</button>
-              <button id="bUnder" title="Explorer le monde souterrain (U)" aria-label="Monde souterrain">${ic('pickaxe', 17, 2)}</button>
             </div>
           </div>
           <div id="items"></div>
@@ -521,10 +509,7 @@ export class UI {
     $('#bRedo').onclick = () => host.tools.redo();
     $('#bRot').onclick = () => host.tools.rotate();
     $('#bHome').onclick = () => { host.goHome(); host.audio.sfxClick(); };
-    $('#bUnder').onclick = () => host.enterNearest();
     $('#bUp').onclick = () => host.exitUnder();
-    $('#campQuest').onclick = () => this.openExpeditions('depths');
-    $('#bDig').onclick = () => { host.digMode = !host.digMode; host.audio.sfxClick(); this.update(); };
     $('#biomes').innerHTML = BIOME_CHOICES.map((c) => `<button data-b="${c.b ?? ''}" title="${c.b === null ? 'Rendre la terre au biome de son climat' : `Peindre : ${c.label.toLowerCase()}`}"><i style="background:${c.color}"></i>${c.label}</button>`).join('');
     $('#biomes').onclick = (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-b]');
@@ -748,7 +733,7 @@ export class UI {
   }
 
   /**
-   * Fiche du bâtiment choisi d'un clic : ce qu'il est et ce qu'il apporte, ses habitants, ses bêtes ou ses galeries ;
+   * Fiche du bâtiment choisi d'un clic : ce qu'il est et ce qu'il apporte, ses habitants ou ses bêtes ;
    * le déplacer, le tourner (R), le démolir
    */
   private renderSelection() {
@@ -766,26 +751,25 @@ export class UI {
     if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${(YIELD.brickworks!.brick![a] ?? 0) * railBoost(h.world, b)} briques cuites par jour · ${Math.floor(h.world.brick)} en réserve au village`);
     if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${(YIELD.oilwell!.crude![a] ?? 0) * railBoost(h.world, b)} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
     if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE * railBoost(h.world, b)} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE * railBoost(h.world, b)} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);
-    if (b.kind === 'outpost') stats.push(`${ic('outpost', 14, 2)} ${h.expeditions.held()} cases de galeries tenues sous terre · camp niveau ${h.expeditions.camp()}`);
     if (b.kind === 'carworks' && !h.world.unlimited) stats.push(h.expeditions.cars() ? `${ic('fuel', 14, 2)} Les voitures brûlent ${CAR_FUEL} carburant par jour · ${Math.floor(h.world.fuel)} au village` : `${ic('fuel', 14, 2)} Plus de carburant : les voitures restent au garage. La raffinerie en tire du pétrole brut des puits.`);
     // ce que le rail lui apporte (ou lui apporterait), et pour une gare, les bâtiments qu'elle sert
     // (en pastille courte : l'explication entière passe en info-bulle)
     const railLine = railStat(h, b);
     const railChip = railLine ? `<span class="eff rail" title="${attr(railLine[1])}">${railLine[0]}</span>` : '';
-    // gare ou avant-poste : les lignes qui s'y arrêtent, une ligne compacte chacune (noms courts, le reste en info-bulle) ;
+    // gare : les lignes qui s'y arrêtent, une ligne compacte chacune (noms courts, le reste en info-bulle) ;
     // au-delà de trois, la liste défile ; en tracer une nouvelle d'ici
-    const r = h.railway, stop = isStation(b) || b.kind === 'outpost' ? r.stopOf(b) : null, lines = stop ? r.linesAt(b) : [];
+    const r = h.railway, stop = isStation(b) ? r.stopOf(b) : null, lines = stop ? r.linesAt(b) : [];
     const rails = stop ? `<div class="rails"><div class="rhead"><b>${ic('train', 14, 2)} Chemin de fer${lines.length ? ` <small>· ${lines.length} ligne${lines.length > 1 ? 's' : ''}</small>` : ''}</b>
-      <button data-act="newline" class="newline" title="Tracer une nouvelle ligne depuis ${b.kind === 'outpost' ? 'cet avant-poste' : 'cette gare'}">${ic('train', 14, 2)} Nouvelle ligne</button></div>
+      <button data-act="newline" class="newline" title="Tracer une nouvelle ligne depuis cette gare">${ic('train', 14, 2)} Nouvelle ligne</button></div>
       ${lines.length ? `<div class="rlist${lines.length > 3 ? ' many' : ''}">${lines.map((l) => {
       const tr = r.trains.get(l.id), stops = l.stops.map((id) => h.world.buildings.get(id));
       const short = stops.map((s) => (!s ? '?' : s.id === b.id ? '<b>ici</b>' : shortStop(r.stopName(s)))).join(' → ');
-      const tip = `${r.lineLabel(l)}\n${l.freight ? 'Marchandises' : 'Voyageurs'}${tr ? ` · train ${trainWhere(r, tr)}` : ' · pas de train'}${tr && tr.crew.length ? ` · ${tr.crew.length} mineurs au fond` : ''}`;
+      const tip = `${r.lineLabel(l)}\n${l.freight ? 'Marchandises' : 'Voyageurs'}${tr ? ` · train ${trainWhere(r, tr)}` : ' · pas de train'}`;
       return `<div class="rline" title="${attr(tip)}">${dot(l.color)}<span class="grow">${short}</span>
         <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? 'Train de marchandises : les ateliers et carrières à côté de ses gares produisent 50 % de plus. Cliquer pour en faire un train de voyageurs' : 'Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises'}" aria-label="${l.freight ? 'Train de marchandises' : 'Train de voyageurs'}">${l.freight ? '📦' : '🧳'}</button>
         <button data-act="follow:${l.id}" title="Suivre le train" aria-label="Suivre le train">${ic('eye', 14, 2)}</button><button data-act="edit:${l.id}" title="Modifier la ligne : ses arrêts et le tracé de sa voie" aria-label="Modifier la ligne">${ic('road', 14, 2)}</button><button data-act="drop:${l.id}" title="Fermer la ligne" aria-label="Fermer la ligne">${ic('close', 14, 2)}</button></div>`;
     }).join('')}</div>` : ''}</div>`
-      : b.kind === 'outpost' && h.sim.age >= 3 ? `<p class="stat">${ic('train', 14, 2)} Cet avant-poste n’a pas la place d’un quai à son pied : le train ne peut pas s’y arrêter.</p>` : '';
+      : '';
     // améliorations : ce qu'il peut devenir à cet âge, et leur prix (ou ce qui manque pour les débloquer)
     const ups = UPGRADES.filter((u) => u.from === b.kind && h.sim.age >= KINDS[u.to].minAge).map((u) => {
       const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
@@ -849,7 +833,7 @@ export class UI {
     const names = e.stops.map((id) => h.world.buildings.get(id)).map((b) => (b ? h.railway.stopName(b) : '?'));
     box.innerHTML = `<div class="rhead">${dot(e.color)}<b>${e.line !== null ? 'Modifier la ligne' : 'Nouvelle ligne'}</b></div>
       <p>${names.length ? names.join(' → ') : '—'}</p>
-      <small>${e.stops.length < 2 ? 'Cliquez la gare ou l’avant-poste suivant.' : 'Cliquez d’autres arrêts pour prolonger la ligne, ou validez.'} Recliquer le dernier arrêt le retire.</small>
+      <small>${e.stops.length < 2 ? 'Cliquez la gare suivante.' : 'Cliquez d’autres arrêts pour prolonger la ligne, ou validez.'} Recliquer le dernier arrêt le retire.</small>
       ${e.stops.length >= 2 ? `<small class="rtip">${ic('hand', 13, 2)} Saisissez la voie prévue et glissez-la pour la faire passer où vous voulez ; glissez un point pour le déplacer, un clic sur un point le retire.${points ? ` ${points} point${points > 1 ? 's' : ''} de passage.` : ''}</small>` : ''}
       ${trouble ? `<small class="rbad">${ic('alert', 13, 2)} ${trouble}</small>` : ''}
       <div class="acts"><button data-r="undo" ${e.stops.length ? '' : 'disabled'}>${ic('undo', 15, 2)} Retirer le dernier</button><button data-r="auto" ${points ? '' : 'disabled'} title="Retirer tous les points de passage : la voie se pose d’elle-même">${ic('restart', 15, 2)} Tracé auto</button><button data-r="ok" class="primary" ${e.stops.length >= 2 && !trouble ? '' : 'disabled'}>${ic('check', 15, 2)} Valider <kbd>Entrée</kbd></button><button data-r="cancel">${ic('close', 15, 2)} Annuler <kbd>Échap</kbd></button></div>`;
@@ -905,8 +889,7 @@ export class UI {
    */
   private resKey = '';
   private renderResources() {
-    const w = this.host.world, day = this.host.expeditions.daily(), rail = this.host.railway.daily();
-    day.ore += rail.ore; day.stone += rail.stone;
+    const w = this.host.world, day = this.host.expeditions.daily();
     const items: [Resource, string, string][] = [['wood', 'tree', 'Bois'], ['stone', 'rock', 'Pierre'], ['ore', 'pickaxe', 'Minerai']];
     // les briques paraissent avec la briqueterie, dès l'âge industriel (ou dès qu'on en a : une partie plus ancienne)
     if (this.host.sim.age >= 3 || w.brick >= 1 || day.brick) items.push(['brick', 'brick', 'Briques']);
@@ -919,7 +902,7 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}/j`;
-    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments (les galeries tenues du monde souterrain en rapportent aussi)', ore: ' — pour passer les âges et s’équiper ; les filons abattus du monde souterrain en rapportent chaque jour (onglet Profondeurs)', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les automobiles et les blindés de l’expédition armée' };
+    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', ore: ' — pour passer les âges et s’équiper ; la mine en extrait chaque jour', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les automobiles' };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');
@@ -1067,19 +1050,8 @@ export class UI {
     ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
     if (zone) {
-      // en mode Creuser : ce que les mineurs ont encore à percer
-      const digs = this.host.expeditions.digs().length, s = digs > 1 ? 's' : '';
-      const tip = this.host.digMode ? (!digs ? 'Cliquez sur la roche tout contre une galerie tenue'
-        : `${this.host.expeditions.digWalking() ? 'Les mineurs se rendent au chantier' : 'Les mineurs creusent'} : ${digs} case${s} de roche · un clic sur une case prévue l’annule`)
-        : 'Filon des galeries tenues : les mineurs l’abattent · Puits de lumière : remonter';
-      const zh = `⛏️ ${zone}<small>${tip}</small>`;
+      const zh = `⛏️ ${zone}<small>Puits de lumière : remonter</small>`;
       if ($('#underZone').dataset.v !== zh) { $('#underZone').innerHTML = zh; $('#underZone').dataset.v = zh; }
-      $('#bDig').classList.toggle('active', this.host.digMode);
-      // la quête en cours du camp souterrain, et où en est son objectif
-      const ex = this.host.expeditions, cq = ex.campQuest(), lvl = ex.camp();
-      const q = cq ? `<span>${ic('outpost', 16, 2)} Camp · niveau ${lvl}</span><small>${cq.q.title} : ${cq.cur} / ${cq.max}</small><i class="bar"><i style="width:${Math.round((cq.cur / cq.max) * 100)}%"></i></i>`
-        : `<span>${ic('outpost', 16, 2)} Camp achevé</span><small>Toutes ses quêtes sont accomplies</small>`;
-      if ($('#campQuest').dataset.v !== q) { $('#campQuest').innerHTML = q; $('#campQuest').dataset.v = q; }
     }
     this.updateExpeditions();
     this.renderSelection();
@@ -1311,7 +1283,7 @@ export class UI {
     this.offerPending();
   }
 
-  openExpeditions(tab: 'missions' | 'gear' | 'depths' = 'missions') {
+  openExpeditions(tab: 'missions' | 'gear' | 'rail' = 'missions') {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
     const next = max < partyLimit(1e9) ? `Une équipe de plus à ${max * 30} habitants (le village en compte ${pop}).` : 'Le village envoie autant d’équipes qu’il le peut.';
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
@@ -1322,20 +1294,20 @@ export class UI {
     const card = (m: Mission) => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, leg = isLegendary(m), mil = isMilitary(m);
       const tags = `${m.mandatory ? '<span class="mtag must">★ Obligatoire</span>' : ''}${leg ? '<span class="mtag leg">✨ Légendaire</span>' : ''}${mil ? '<span class="mtag mil">⚔️ Militaire</span>' : ''}`;
-      const label = run ? 'Équipe en route…' : m.id === 'deep' && ex.tunnelNeeded() ? 'Creuser un tunnel' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe';
+      const label = run ? 'Équipe en route…' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe';
       return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
         <div class="mhead"><b class="mbadge">${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${tags ? `<div class="mtags">${tags}</div>` : ''}
         <p class="mtext">${splitIntro(m.intro).head}</p>
         ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} Bâtir</button>` : ''}</p>` : ''}
         ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m)}</p>` : ''}
-        <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${ic(m.id === 'deep' && ex.tunnelNeeded() ? 'pickaxe' : 'compass', 16, 2)} ${label}</button></div>`;
+        <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${ic('compass', 16, 2)} ${label}</button></div>`;
     };
     const sorted = ex.list(age).sort((a, b) => rank(a) - rank(b));
     const cards = sorted.map(card).join('');
     const nMil = sorted.filter(isMilitary).length, nLeg = sorted.filter(isLegendary).length;
     const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} Expéditions`, `
-      <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button><button data-tab="depths" class="${tab === 'depths' ? 'on' : ''}">${ic('outpost', 16, 2)}Profondeurs</button></div>
+      <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button><button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('train', 16, 2)}Chemin de fer</button></div>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
         <p class="hint">Envoyez de petites équipes chercher ce qui manque au village.</p><details class="cdet"><summary>En savoir plus</summary><p class="hint">Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p></details>
@@ -1344,7 +1316,7 @@ export class UI {
         <p class="emptyMsg" hidden></p>
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
-      <section data-sec="depths" ${tab === 'depths' ? '' : 'hidden'}>${this.depthsHtml()}</section>`);
+      <section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>`);
     ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
       ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((sec) => (sec.hidden = sec.dataset.sec !== b.dataset.tab));
@@ -1361,7 +1333,7 @@ export class UI {
       const em = ov.querySelector<HTMLElement>('.emptyMsg');
       if (em) {
         em.hidden = shown > 0;
-        em.textContent = f === 'mil' ? 'Aucune expédition militaire à cet âge. Les expéditions armées (le loup des bois, les galeries des profondeurs…) apparaissent au fil des âges : revenez après avoir progressé.'
+        em.textContent = f === 'mil' ? 'Aucune expédition militaire à cet âge. Les expéditions armées (le loup des bois…) apparaissent au fil des âges : revenez après avoir progressé.'
           : f === 'leg' ? 'Aucune expédition légendaire à cet âge. Les grands exploits (mammouth, kraken, mégalodon, dragon, JO…) arrivent à des âges précis.'
           : 'Aucune expédition disponible pour le moment.';
       }
@@ -1385,13 +1357,6 @@ export class UI {
     });
     const iv = setInterval(arsenal, 300);
     arsenal();
-    // creuser un tunnel : la fenêtre se ferme, on descend sous terre en mode Creuser
-    ov.addEventListener('click', (e) => {
-      if (!(e.target as HTMLElement).closest('[data-dig]')) return;
-      close();
-      h.audio.sfxClick();
-      h.digTunnel();
-    });
     // ce qui manque à une mission : un bâtiment se prend en main (la fenêtre se ferme), une expédition s'amène sous les yeux
     ov.addEventListener('click', (e) => {
       const go = (e.target as HTMLElement).closest<HTMLElement>('.go[data-kind], .go[data-goto]');
@@ -1399,14 +1364,13 @@ export class UI {
       h.audio.sfxClick();
       if (go.dataset.kind) { close(); this.pick(go.dataset.kind as KindId); } else this.gotoMission(go.dataset.goto!);
     });
-    // « Envoyer une équipe » : la petite fenêtre de départ s'ouvre par-dessus (un tunnel à creuser, lui, se creuse tout de suite)
+    // « Envoyer une équipe » : la petite fenêtre de départ s'ouvre par-dessus
     ov.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-send]');
       if (!b || b.disabled) return;
       const m = MISSIONS.find((x) => x.id === b.dataset.send);
       if (!m) return;
       h.audio.sfxClick();
-      if (m.id === 'deep' && ex.tunnelNeeded()) { close(); h.digTunnel(); return; }
       this.openSend(m, ov, close);
     });
   }
@@ -1421,11 +1385,10 @@ export class UI {
     const body = () => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, max = ex.slots();
       const req = m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => ex.hasFor(k, m.requires!.kinds!)).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : '';
-      const held = m.choices.some((c) => c.win.some((e) => e.t === 'veins')) ? `<p class="held">${ic('outpost', 15, 2)} Galeries tenues sous terre : <b>${ex.held()}</b> cases${ex.held() ? ' — chaque victoire pousse le front plus loin' : ' — un avant-poste en tiendra les premières'}</p>` : '';
-      const choices = run ? `<p class="hint">${ic('clock', 15, 2)} Une équipe est déjà en route pour cette mission.</p>` : m.id === 'deep' && ex.tunnelNeeded() ? this.tunnelHtml() : `<div class="choices">${this.choiceButtons(m)}</div>`;
+      const choices = run ? `<p class="hint">${ic('clock', 15, 2)} Une équipe est déjà en route pour cette mission.</p>` : `<div class="choices">${this.choiceButtons(m)}</div>`;
       return `<p class="sintro">${m.intro}</p>
         ${redo ? `<p class="hint">${ic('restart', 14, 2)} Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>` : ''}
-        ${req}${held}
+        ${req}
         <p class="slots">${ic('compass', 14, 2)} Équipes en route : <b>${ex.active.length} / ${max}</b>${ex.active.length >= max ? ' — attendez le retour d’une équipe' : ''}</p>
         ${choices}`;
     };
@@ -1470,7 +1433,6 @@ export class UI {
         if (go.dataset.kind) { closeMain(); this.pick(go.dataset.kind as KindId); } else this.gotoMission(go.dataset.goto!);
         return;
       }
-      if (t.closest('[data-dig]')) { close(); closeMain(); h.audio.sfxClick(); h.digTunnel(); return; }
       // « Partir »
       const b = t.closest<HTMLButtonElement>('button.choice[data-m]');
       if (!b || b.disabled) return;
@@ -1544,109 +1506,19 @@ export class UI {
     return `<div class="gearNeed"><small class="gnh">${ic('hammer', 13, 2)} Équipement nécessaire</small>${rows}</div>`;
   }
 
-  /** Profondeurs : le camp souterrain, ses quêtes (accomplies, en cours, à venir), ce qu'elles lui apportent ; on y lance l'expédition armée */
-  private depthsHtml() {
-    const ex = this.host.expeditions, lvl = ex.camp(), st = ex.depthStats();
-    // l'expédition armée qui fait avancer les quêtes, lancée d'ici
-    const deep = MISSIONS.find((m) => m.id === 'deep')!, age = this.host.sim.age, miss = ex.missing(deep);
-    const send = age < deep.age ? `<p class="hint">${ic('sword', 15, 2)} Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`
-      : miss.length ? `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><p class="req">${this.needsHtml(deep) || miss.join(', ')}</p></div>`
-      : ex.running(deep) ? `<p class="hint">${ic('sword', 15, 2)} Une expédition armée est déjà dans les galeries.</p>`
-      : ex.tunnelNeeded() ? this.tunnelHtml()
-      : `<div class="send"><h4>${ic('sword', 16, 2)} Envoyer une expédition armée</h4><button class="sendBtn" title="Victorieuse, la troupe abat les filons de son chemin et prend les galeries : c’est ce qui fait avancer les quêtes." data-send="deep">${ic('sword', 16, 2)} Choisir la troupe</button></div>`;
-    const quests = CAMP_QUESTS.map((q, i) => {
-      const [cur, max] = q.goal(st), done = i < lvl, now = i === lvl;
-      const state = done ? 'accomplie' : now ? `${Math.min(cur, max)} / ${max}` : cur >= max ? 'objectif atteint' : 'à venir';
-      const detail = `${q.title} : ${q.text} ${done ? 'Le camp a gagné' : 'Le camp y gagnera'} : ${q.builds}. ${q.perk}`;
-      return `<li><button type="button" class="dstep ${done ? 'done' : now ? 'cur' : ''}" data-dtip="${detail.replace(/"/g, '&quot;')}"><span class="ddot">${done ? '✓' : i + 1}</span><span><b>${q.title}</b><small>${state}</small></span></button></li>`;
-    }).join('');
-    const inc = depthIncome(this.host.world, lvl);
-    const rente = `<p class="hint" title="Chaque tranche de ${HELD_PER_STONE} cases de galeries tenues rapporte 1 pierre par jour ; chaque tranche de ${VEINS_PER_ORE} filons abattus, 1 minerai par jour, pour toujours.">${ic('pickaxe', 15, 2)} Rente du sous-sol : <b>+${inc.stone} pierre/j</b>, <b>+${inc.ore} minerai/j</b> <small>(${st.held} galeries tenues, ${st.veins} filons abattus)</small></p>`;
-    return `<h4 class="dhead">${ic('outpost', 18, 2)} Camp souterrain <span class="mtag">niveau ${lvl} / ${CAMP_QUESTS.length}</span></h4>
-      <p class="hint">Touchez une étape pour voir ce qu’elle apporte.</p>
-      <ul class="dsteps">${quests}</ul>
-      <p class="dtip" hidden></p>
-      ${send}
-      ${rente}
-      <div class="railBox">${this.railHtml()}</div>`;
-  }
-
-  /**
-   * Un clic sur le camp souterrain : ce qu'il contient (niveau, bâtiments, gardes, mineurs, réserves, quête en cours), et un
-   * gros bouton « Lancer une expédition armée » qui ouvre un menu simple : une ligne par troupe (hommes, durée, risque)
-   */
-  openCamp() {
-    this.closeTop();
-    const h = this.host, ex = h.expeditions, lvl = ex.camp(), w = h.world, deep = MISSIONS.find((m) => m.id === 'deep')!, age = h.sim.age;
-    const cq = ex.campQuest(), st = ex.depthStats();
-    const builds = CAMP_QUESTS.slice(0, lvl).map((q) => `<li>${q.builds}</li>`).join('') || '<li>quelques caisses au pied du puits : le camp se dressera avec sa première quête</li>';
-    const miners = [...h.railway.trains.values()].reduce((s, t) => s + t.crew.length, 0);
-    const gear = (Object.entries(ex.state.gear) as [GearId, number][]).filter(([, n]) => n > 0).map(([g, n]) => `${n} ${(n > 1 ? GEAR_BY[g].plural : GEAR_BY[g].name).toLowerCase()}`).join(', ');
-    const digs = ex.digs().length, pat = h.campInfo();
-    const body = () => `<div class="campCard">
-        <div class="campStats"><span>${ic('outpost', 16, 2)} Niveau <b>${lvl} / ${CAMP_QUESTS.length}</b></span><span>Gardes : <b>${pat.guards}</b></span><span>Patrouilles : <b>${pat.patrols}</b></span><span>Mineurs : <b>${3 + miners}</b>${digs ? ` · ${digs} case${digs > 1 ? 's' : ''} à creuser` : ''}</span></div>
-        <div class="campCols">
-          <div><h4>${ic('house', 15, 2)} Bâtiments</h4><ul>${builds}</ul></div>
-          <div><h4>${ic('kit', 15, 2)} Réserves</h4><ul><li>Minerai : <b>${Math.floor(w.ore)}</b></li><li>Pierre : <b>${Math.floor(w.stone)}</b></li><li>Équipement : ${gear || 'rien en réserve'}</li><li>Galeries tenues : <b>${st.held}</b> · filons abattus : <b>${st.veins}</b></li></ul></div>
-        </div>
-        ${cq ? `<div class="campQ"><b>${ic('compass', 15, 2)} Quête : ${cq.q.title}</b> <small>${cq.cur} / ${cq.max}</small><i class="bar"><i style="width:${Math.round((cq.cur / cq.max) * 100)}%"></i></i><small>${cq.q.text}</small></div>` : '<p class="hint">Toutes les quêtes du camp sont accomplies.</p>'}
-        ${pat.last ? `<p class="hint">${ic('sword', 14, 2)} ${pat.last}</p>` : ''}
-        <button class="campGo" data-go="1">${ic('sword', 20, 2)} Lancer une expédition armée</button>
-      </div>`;
-    const menu = () => {
-      if (age < deep.age) return `<p class="hint">Les expéditions armées viendront à l’âge ${AGES[deep.age].name}.</p>`;
-      const miss = ex.missing(deep);
-      if (miss.length) return `<p class="hint">Il faut d’abord ${miss.join(', ')}.</p>`;
-      if (ex.running(deep)) return `<p class="hint">Une expédition armée est déjà dans les galeries.</p>`;
-      if (ex.tunnelNeeded()) return this.tunnelHtml();
-      return `<p class="hint">Choisissez la troupe : victorieuse, elle abat les filons de son chemin et prend les galeries jusqu’à son front.</p><div class="troopPick">${deep.choices.map((c0, i) => {
-        const c = choiceAt(c0, age), why = ex.why(deep, c), pv = ex.preview(c);
-        return `<button class="troop" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}"><b>${c.label}</b><span>👥 ${c.party} hommes</span><span>⏳ ${workLabel(c.work)}</span><span class="risk">⚠️ ${pct(pv.risk)} · ${riskLabel(pv.risk)}</span>${why ? `<small class="why">${why}</small>` : ''}</button>`;
-      }).join('')}</div>`;
-    };
-    const { ov, close } = modal(this.root, 'campModal', `${ic('outpost', 22)} Camp souterrain`, `<div class="campBody">${body()}</div>`);
-    const root = $('.campBody', ov);
-    ov.addEventListener('click', (e) => {
-      const t = e.target as HTMLElement;
-      if (t.closest('[data-go]')) { h.audio.sfxClick(); root.innerHTML = `${menu()}<button class="campBack" data-back="1">${ic('undo', 15, 2)} Retour au camp</button>`; return; }
-      if (t.closest('[data-back]')) { h.audio.sfxClick(); root.innerHTML = body(); return; }
-      if (t.closest('[data-dig]')) { close(); h.audio.sfxClick(); h.digTunnel(); return; }
-      const b = t.closest<HTMLButtonElement>('button.troop[data-c]');
-      if (!b || b.disabled) return;
-      const ci = +b.dataset.c!, a = ex.start(deep, ci, age);
-      if (!a) { this.toast(ex.why(deep, deep.choices[ci]) ?? 'Aucun chemin praticable dans les galeries.'); return; }
-      close();
-      h.audio.sfxClick();
-      h.follow(a.id);
-      this.update();
-    });
-  }
-
-  /**
-   * Toutes les galeries à portée sont prises : à la place des choix grisés de l'expédition armée, on propose de creuser un
-   * tunnel vers de nouvelles galeries (le bouton descend sous terre, en mode Creuser)
-   */
-  private tunnelHtml() {
-    const n = this.host.expeditions.digs().length;
-    return `<div class="send dig"><h4>${ic('pickaxe', 16, 2)} Creusez un tunnel vers de nouvelles galeries</h4>
-      <p class="hint">Toutes les galeries que l’on peut atteindre depuis l’avant-poste sont tenues, et leurs filons abattus. Les mineurs du camp percent la roche case par case : quand le tunnel débouche sur d’autres galeries, l’expédition armée peut repartir les prendre.</p>
-      ${n ? `<p class="hint"><b>Les mineurs creusent : encore ${n} case${n > 1 ? 's' : ''} de roche.</b></p>` : ''}
-      <button class="digGo" data-dig="1">${ic('pickaxe', 16, 2)} ${n ? 'Voir le chantier' : 'Creuser un tunnel'}</button></div>`;
-  }
-
-  /** Chemin de fer : chaque ligne, où en est son train, ses voyageurs, ses mineurs et ce qu'ils remontent */
+  /** Chemin de fer : chaque ligne, où en est son train et ses voyageurs */
   private railHtml() {
     const h = this.host, r = h.railway, age = h.sim.age, head = `<h4>${ic('train', 16, 2)} Chemin de fer</h4>`;
-    const how = '<p class="hint">Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares ; à un avant-poste, il descend une équipe de mineurs et remonte celle d’avant avec le minerai des galeries tenues (la pierre taillée quand il n’y a plus de filon).</p>';
+    const how = '<p class="hint">Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares ; un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.</p>';
     if (age < 3) return `${head}<p class="hint">Le chemin de fer viendra avec les gares, à l’âge industriel.</p>`;
-    if (!h.world.lines.length) return `${head}${how}<p class="hint">Aucune ligne pour l’instant : bâtissez une gare (petite gare, ou la gare centrale) et un avant-poste.</p>`;
+    if (!h.world.lines.length) return `${head}${how}<p class="hint">Aucune ligne pour l’instant : bâtissez deux gares (petite gare, ou la gare centrale).</p>`;
     const lines = h.world.lines.map((l) => {
       const tr = r.trains.get(l.id);
       if (!tr) return '';
-      const day = r.trainDaily(tr), seated = r.seated(tr);
+      const seated = r.seated(tr);
       return `<div class="rcard"><div class="rhead">${dot(l.color)}<b>${r.lineLabel(l)}</b></div>
         <div class="campStats"><span>Train : <b>${trainWhere(r, tr)}</b>${seated ? ` (${seated} à bord)` : ''}</span><span>Voyageurs arrivés : <b>${tr.carried}</b></span>
-        ${tr.mine >= 0 ? `<span>Mineurs au fond : <b>${tr.crew.length}</b></span><span>Au camp : <b>${Math.floor(tr.pile.ore)} minerai · ${Math.floor(tr.pile.stone)} pierre</b></span><span>Par jour : <b>≈ ${day.ore} minerai · ${day.stone} pierre</b></span><span>Remonté : <b>${tr.delivered.ore} minerai · ${tr.delivered.stone} pierre</b></span><span>Filons abattus : <b>${tr.dug}</b></span>` : ''}</div>
+        </div>
         ${tr.why ? '' : `<button class="trainBtn" data-train="${l.id}">${ic('eye', 16, 2)} Suivre le train</button>`}</div>`;
     }).join('');
     return `${head}${how}${lines}`;
@@ -1973,7 +1845,7 @@ export function showCredits(root: HTMLElement) {
     <p>Ceionia est un jeu libre de droits d’image et de son : la géométrie des bâtiments, des habitants, des véhicules et de la musique est dessinée et générée par le jeu lui-même. Certains modèles 3D, gratuits, viennent d’artistes à qui nous disons merci.</p>
     <h4>Modèles sous licence CC0 (domaine public)</h4>
     <ul class="credits">
-      <li>${a('https://quaternius.com', 'Quaternius')} : animaux de ferme et sauvages, faune marine, arbres (Ultimate Nature), palmiers, cactus, créatures du souterrain, décors, puits, fermes, tour de pierre, enclos.</li>
+      <li>${a('https://quaternius.com', 'Quaternius')} : animaux de ferme et sauvages, faune marine, arbres (Ultimate Nature), palmiers, cactus, créatures des grottes, décors, puits, fermes, tour de pierre, enclos.</li>
       <li>${a('https://kenney.nl', 'Kenney')} : Survival Kit, épave de navire.</li>
       <li>Kay Lousberg (crâne, os), MiniPoly (coraux), Mohabins (algues), iPoly3D (cristaux), MilkAndBanana (jarre), reyshapes (cruche), via ${a('https://poly.pizza', 'Poly Pizza')}.</li>
     </ul>

@@ -4,7 +4,7 @@ import type { World } from '../world/world';
 /**
  * Ressources du village : le bois des bûcherons, la pierre des carrières et des mines, le minerai des mines et des
  * profondeurs ; dès l'âge industriel, le pétrole brut des puits, que la raffinerie change en carburant (les automobiles en
- * brûlent chaque jour, et à l'époque moderne les blindés de l'expédition armée) ; dès l'âge industriel, les briques de la briqueterie, qu'exigent quelques grands bâtiments
+ * brûlent chaque jour) ; dès l'âge industriel, les briques de la briqueterie, qu'exigent quelques grands bâtiments
  * (gares, usines, raffineries) et le passage à l'époque moderne. Bois et pierre ne servent qu'à bâtir les grands bâtiments
  * (2 × 2) ; la production est généreuse, pour ne jamais bloquer le village. Les petits bâtiments restent gratuits
  */

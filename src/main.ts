@@ -1,9 +1,12 @@
 import './style.css';
 import * as THREE from 'three';
-import { World, N, VEG_CAVE, VEG_FISSURE, VEG_VOLCANO, setMapSize } from './world/world';
+import { World, N, VEG_VOLCANO, setMapSize } from './world/world';
 import { Underground, UZ_NAMES } from './world/underground';
 import type { UnderView } from './render/underView';
-/** Le monde souterrain (décor, créatures) est chargé à part, en arrière-plan après le démarrage */
+/**
+ * Le monde souterrain (décor, créatures) est chargé à part, à la première descente. Il n'est plus accessible au joueur (retiré
+ * du jeu) : le moteur (vue, troupes, combats, caméra) reste pour les Enfers ; `__game.enterUnder(case)` y descend encore
+ */
 let underModule: Promise<typeof import('./render/underView')> | null = null;
 const loadUnder = () => (underModule ??= import('./render/underView'));
 import { newWorld, addDefaultDecor, mapDef, newSeed, CONTINENT } from './world/mapgen';
@@ -18,7 +21,6 @@ import { Fairground } from './render/fairground';
 import { ZooView } from './render/zoo';
 import { AlpineView } from './render/alpine';
 import { Emergencies } from './render/emergency';
-import { Hoists } from './render/hoists';
 import { Transports } from './render/transports';
 import { VegView, syncChunks } from './render/vegetation';
 import { Environment } from './render/env';
@@ -50,8 +52,7 @@ import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { RailBoost } from './render/railBoost';
 import { UpgradeBadges } from './render/upgradeBadges';
-import { Expeditions, RAID_TIME, FOE_NAME, isBelow } from './sim/expeditions';
-import { CAMP_GUARDS } from './sim/depths';
+import { Expeditions, isBelow } from './sim/expeditions';
 import { Railway, LINE_COLORS } from './sim/railway';
 import { RailView } from './render/railway';
 import { RailEditState, TrackEditor } from './build/trackEdit';
@@ -121,7 +122,6 @@ class Game implements UIHost {
   zoo: ZooView;
   alpine: AlpineView;
   emergencies: Emergencies;
-  hoists: Hoists;
   transports: Transports;
   gardens: GardenView;
   halos: Halos;
@@ -212,11 +212,7 @@ class Game implements UIHost {
   private surfaceView: ReturnType<CameraRig['view']> | null = null;
   private surfaceZoom = { min: 10, max: 0 };
   private fading = false;
-  /** mode Creuser : un clic sur la roche y fait creuser un tunnel par les mineurs du camp */
-  digMode = false;
-  /** ce que montre la case visée en mode Creuser (case, file, roche) */
-  private digHover = '';
-  /** entrées sous terre : créatures, puits de jour, torches, creusement */
+  /** entrées sous terre : créatures, puits de jour */
   private underInput: ToolInput = {
     down: (e) => this.underClick(e),
     move: () => {},
@@ -224,18 +220,7 @@ class Game implements UIHost {
     cancel: () => {},
     hover: (e) => {
       const uv = this.underView, p = uv?.pick(this.cam.ray(e.x, e.y, canvas.clientWidth, canvas.clientHeight));
-      // en mode Creuser, la case visée et le tunnel qu'on y creuserait (en rouge si l'on ne peut pas)
-      if (uv && this.digMode) {
-        // (recalculé seulement quand la case visée, la file ou la roche changent)
-        const k = p ? this.digCell(p) : -1, key = `${k}|${this.world.digs.join(',')}|${this.under.carved}|${uv.digCursorShown()}`;
-        if (key !== this.digHover) {
-          this.digHover = key;
-          const plan = k < 0 || this.world.digs.includes(k) ? null : this.expeditions.digPlan(k);
-          if (k < 0 || !plan) uv.digCursor(k < 0 ? [] : [k], true);
-          else uv.digCursor(typeof plan === 'string' ? [k] : plan, typeof plan !== 'string');
-        }
-      }
-      canvas.style.cursor = this.digMode ? 'crosshair' : p && (uv!.entranceAt(p.x, p.z) || uv!.veinNear(p.x, p.z) || uv!.campAt(p.x, p.z)) ? 'pointer' : '';
+      canvas.style.cursor = p && uv!.entranceAt(p.x, p.z) ? 'pointer' : '';
     },
   };
 
@@ -299,7 +284,6 @@ class Game implements UIHost {
     // les pompiers et les voisins au seau : ils restent tant que ça brûle, et leur eau éteint le feu
     this.fires.pails = (b) => this.agents.pails(b);
     this.agents.burning = (id) => this.fires.burning.some((b) => b.id === id);
-    this.hoists = new Hoists(w);
     this.transports = new Transports(w, this.buildings);
     // jardins : lieux qui changent avec les âges ; leurs feux fument et crépitent comme les foyers
     this.gardens = new GardenView(w);
@@ -322,7 +306,7 @@ class Game implements UIHost {
     this.scene.add(this.trophies.group);
     this.parade.onPop = () => this.audio.sfxBang(0.12);
     this.expView.fx.onClash = (k) => this.audio.sfxClash(k);
-    // le train descend des mineurs au pied de la grotte et remonte minerai et pierre des galeries tenues
+    // le chemin de fer : un train par ligne, de gare en gare
     this.railway = new Railway(w, this.agents, this.expeditions, () => this.time.dayLen);
     // les scènes des expéditions ne se posent pas sur les voies ferrées
     this.expeditions.avoidCells = () => {
@@ -348,10 +332,8 @@ class Game implements UIHost {
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.hoists.group, this.transports.group, this.gardens.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.gardens.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group);
     this.applyQuality();
-    // le monde souterrain se charge en arrière-plan, une fois la partie lancée
-    setTimeout(() => void loadUnder(), 4000);
 
     const host = this;
     this.tools = new ToolController({
@@ -359,7 +341,6 @@ class Game implements UIHost {
       getAge: () => this.sim.age,
       toast: (m) => this.ui.toast(m),
       changed: () => { this.propsDirty = true; this.ui?.refreshTools(); },
-      enterUnder: (cell) => this.enterUnder(cell),
       erupt: (cell) => this.erupt(cell),
       get autoRoads() { return host.autoRoads; },
     });
@@ -367,22 +348,14 @@ class Game implements UIHost {
     this.ui = new UI(uiRoot, host);
     this.spaceCast = new SpaceCast(uiRoot);
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
-    this.expeditions.onNews = (m, depths) => this.ui.toast(m, depths ? () => this.ui.openExpeditions('depths') : undefined);
-    this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
-    // le camp souterrain attaqué : un clic sur le message y descend ; l'issue, un clic ouvre la fiche du camp
-    this.expeditions.onRaid = (m, start) => this.ui.toast(m, start ? () => this.goCamp() : () => { this.goCamp(); this.ui.openCamp(); });
+    this.expeditions.onNews = (m) => this.ui.toast(m);
+    this.railway.onNews = (m) => this.ui.toast(m);
     // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
     this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
-    // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
+    // tracer une ligne : un clic sur une gare l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
     this.tools.overlay = this.trackEdit;
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
-    // une quête du camp souterrain accomplie : il grandit de lui-même
-    this.expeditions.onCamp = (q) => {
-      audio.sfxAgeUp();
-      this.ui.toast(`⛺ Quête accomplie : « ${q.title} » — le camp souterrain s’agrandit : ${q.builds}.`, () => this.ui.openExpeditions('depths'));
-      this.ui.update();
-    };
     this.expeditions.onReport = (r) => {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
@@ -535,7 +508,7 @@ class Game implements UIHost {
    * voyage se montre en plein écran (le jeu attend), puis vient l'écran de fin
    */
   private stepFarewell(dt: number) {
-    const a = this.expeditions.active.find((e) => e.m.farewell && !e.fromCamp), ag = this.agents;
+    const a = this.expeditions.active.find((e) => e.m.farewell), ag = this.agents;
     let f = this.farewell;
     if (!a) { if (f) { ag.dismiss(f.crowd); this.farewell = null; } this.parade.stop(); return; }
     if (!f || f.id !== a.id) {
@@ -654,14 +627,14 @@ class Game implements UIHost {
     this.ui.update();
   }
 
-  /** Un clic pendant le tracé : une gare ou un avant-poste s'ajoute aux arrêts (recliquer le dernier le retire) */
+  /** Un clic pendant le tracé : une gare s'ajoute aux arrêts (recliquer le dernier le retire) */
   railPick(b: Building | undefined) {
     const e = this.railEdit;
     if (!e || !b) return;
     if (e.stops[e.stops.length - 1] === b.id) { this.railUndo(); audio.sfxClick(); return; }
     if (e.stops.includes(b.id)) { this.ui.toast(`${this.railway.stopName(b)} est déjà sur la ligne.`); return; }
     if (!this.railway.stopOf(b)) {
-      this.ui.toast(b.kind === 'outpost' ? 'Cet avant-poste ne garde aucune entrée, ou n’a pas la place d’un quai à son pied.' : 'Cliquez une gare ou un avant-poste.');
+      this.ui.toast('Cliquez une gare.');
       return;
     }
     e.stops.push(b.id);
@@ -785,7 +758,10 @@ class Game implements UIHost {
     }
   }
 
-  /** Descend par l'entrée (grotte ou faille) de la case donnée */
+  /**
+   * Descend par l'entrée (grotte ou faille) de la case donnée. Le joueur n'y a plus accès (monde souterrain retiré du jeu) :
+   * le moteur reste pour les Enfers (`__game.enterUnder(case)` pour l'essayer)
+   */
   async enterUnder(cell: number) {
     if (this.mode === 'under') return;
     this.tools.setTool('none');
@@ -807,23 +783,9 @@ class Game implements UIHost {
       this.cam.jump({ x, z, dist: 11, pitch: 1.05 }, this.underView.groundY(x, z));
       this.cam.handler = this.underInput;
       canvas.style.cursor = '';
-      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : un clic sur un filon des galeries tenues, les mineurs du camp l’abattent. Le puits de lumière ramène à la surface.`);
+      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : le puits de lumière ramène à la surface.`);
       this.ui.update();
     }, 'Descente sous terre…');
-  }
-
-  /** Descend par l'entrée la plus proche du centre de la vue */
-  enterNearest() {
-    if (this.mode === 'under') { this.exitUnder(); return; }
-    const w = this.world, t = this.cam.target;
-    let best = -1, bd = Infinity;
-    for (let k = 0; k < N * N; k++) {
-      if (w.veg[k] !== VEG_CAVE && w.veg[k] !== VEG_FISSURE) continue;
-      const d = Math.hypot((k % N) + 0.5 - t.x, Math.floor(k / N) + 0.5 - t.z);
-      if (d < bd) { bd = d; best = k; }
-    }
-    if (best < 0) { this.ui.toast('Aucune entrée : posez une grotte ou une faille (onglet Nature).'); return; }
-    this.enterUnder(best);
   }
 
   /** Remonte à la surface, devant l'entrée empruntée (ou celle donnée) ; remonter soi-même cesse de suivre la troupe */
@@ -834,7 +796,6 @@ class Game implements UIHost {
       this.mode = 'surface';
       document.body.classList.remove('under');
       this.underView?.leave();
-      this.digMode = false;
       this.cam.minDist = this.surfaceZoom.min;
       this.cam.minPitch = 0.25;
       this.cam.maxDist = this.surfaceZoom.max || this.cam.maxDist;
@@ -852,92 +813,15 @@ class Game implements UIHost {
     if (!uv) return;
     const ray = this.cam.ray(e.x, e.y, canvas.clientWidth, canvas.clientHeight);
     const p = uv.pick(ray);
-    // creuser : la roche cliquée (et le tunnel jusqu'à elle) entre dans la file des mineurs ; une case prévue s'annule
-    if (this.digMode) {
-      if (!p) return;
-      const r = this.expeditions.planDig(this.digCell(p));
-      if (typeof r === 'string') { this.ui.toast(r); audio.sfxClick(); }
-      else if (r) audio.sfxMine(); else audio.sfxDestroy();
-      // la case visée se redessine : prévue, elle n'est plus qu'un contour (un clic l'annulerait)
-      this.underInput.hover(e);
-      this.ui.update();
-      return;
-    }
     // une créature cliquée sursaute et détale
     const mob = uv.mobs.hit(ray);
     if (mob) { uv.mobs.scare(mob.x, mob.z, 0.6); audio.sfxClick(); return; }
     if (!p) return;
     const ent = uv.entranceAt(p.x, p.z);
-    // le camp : ce qu'il contient, et l'expédition armée qu'on lance d'un clic (au cœur du puits, on remonte)
-    if (uv.campAt(p.x, p.z) && !(ent && Math.hypot(ent.x - p.x, ent.z - p.z) < 0.65)) { audio.sfxClick(); this.ui.openCamp(); return; }
     if (ent) { this.exitUnder(ent.cell); return; }
-    // un filon dans la paroi : dans les galeries tenues, les mineurs du camp vont l'abattre ; plus loin, il faut une
-    // expédition armée (créatures, galeries profondes)
-    const ore = uv.veinAt(p.x, p.z);
-    if (ore) {
-      const deep = MISSIONS.find((m) => m.id === 'deep')!, miss = this.expeditions.missing(deep);
-      if (this.world.claimed.has(ore.k)) {
-        const r = this.expeditions.mineVein(ore.k, ore.wall);
-        if (r === true) { audio.sfxMine(); this.ui.toast(`⛏️ Les mineurs du camp vont abattre le filon de ${ore.name} (${ore.amount} minerai).`); this.ui.update(); return; }
-        audio.sfxClick();
-        this.ui.toast(`⛏️ Filon de ${ore.name} : ${r}`);
-        return;
-      }
-      audio.sfxClick();
-      if (this.sim.age < deep.age) this.ui.toast(`⛏️ Filon de ${ore.name} (${ore.amount} minerai) : il faudra une expédition armée, à l’âge ${AGES[deep.age].name}.`);
-      else if (miss.length) this.ui.toast(`⛏️ Filon de ${ore.name} : seule une expédition armée peut l’abattre. Il faut d’abord ${miss.join(', ')}.`);
-      else this.ui.toast(`⛏️ Filon de ${ore.name} (${ore.amount} minerai) : envoyez une expédition armée pour l’abattre.`, () => this.ui.openExpeditions());
-      return;
-    }
     if (uv.mobs.scare(p.x, p.z)) { audio.sfxClick(); return; }
-    // des cristaux : ils tintent, et l'on dit où se trouve le minerai
-    if (uv.crystalNear(p.x, p.z)) { audio.sfxClick(); this.ui.toast('✨ Les cristaux éclairent les galeries. Le minerai, lui, est dans les filons : les taches colorées des parois.'); }
-  }
-
-  /** Case visée en mode Creuser : celle du point cliqué ; sur le flanc d'une paroi, la roche la plus proche plutôt que le sol */
-  private digCell(p: THREE.Vector3) {
-    const u = this.under, cx = Math.floor(p.x), cz = Math.floor(p.z), k = cz * N + cx;
-    if (cx < 0 || cz < 0 || cx >= N || cz >= N) return -1;
-    if (!u.open[k] || p.y < 0.45) return k;
-    let best = k, bd = Infinity;
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const n = k + dz * N + dx, d = Math.hypot(cx + dx + 0.5 - p.x, cz + dz + 0.5 - p.z);
-      if (!u.open[n] && d < bd) { bd = d; best = n; }
-    }
-    return best;
-  }
-
-  /**
-   * Creuser un tunnel (depuis l'onglet Profondeurs) : la vue descend sous terre là où la roche est la plus mince vers d'autres
-   * galeries, en mode Creuser
-   */
-  digTunnel() {
-    const hint = this.expeditions.tunnelHint(), at = hint[0] ?? this.expeditions.outposts()[0]?.entry ?? -1;
-    this.digMode = true;
-    const tip = hint.length ? `⛏️ Creuser : les marques montrent le passage le plus court (${hint.length} case${hint.length > 1 ? 's' : ''} de roche). Cliquez sur la dernière marque, les mineurs creusent jusque-là.` : '⛏️ Creuser : cliquez sur la roche tout contre une galerie tenue.';
-    if (this.mode === 'under') {
-      if (at >= 0) this.cam.goTo((at % N) + 0.5, Math.floor(at / N) + 0.5, 12);
-      this.ui.toast(tip);
-      this.ui.update();
-      return;
-    }
-    if (at < 0) { this.enterNearest(); return; }
-    this.enterUnder(at);
-    setTimeout(() => this.ui.toast(tip), 1200);
-  }
-  /** Le camp souterrain vu de près : ses gardes, ses patrouilles, et la dernière nouvelle de ses combats */
-  campInfo() {
-    const ex = this.expeditions, lvl = ex.camp(), raid = ex.raid;
-    const last = raid ? `Le camp est attaqué : ${raid.n} ${FOE_NAME[raid.kind]} montent des galeries !` : [ex.campNews, this.underView?.patrolNews ?? ''].filter(Boolean).join(' ');
-    return { guards: CAMP_GUARDS[lvl] ?? 0, patrols: ex.patrols(), last };
-  }
-
-  /** Va voir le camp souterrain (une attaque) : on descend sous terre au besoin, la vue se pose sur le camp */
-  goCamp() {
-    const k = this.expeditions.campCell();
-    if (k < 0) return;
-    if (this.mode === 'under') this.cam.goTo((k % N) + 0.5, Math.floor(k / N) + 0.5, 10);
-    else this.enterUnder(k);
+    // des cristaux : ils tintent
+    if (uv.crystalNear(p.x, p.z)) audio.sfxClick();
   }
 
   capture() {
@@ -966,15 +850,12 @@ class Game implements UIHost {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       // Échap ferme d'abord la fenêtre ouverte
       if (k === 'escape' && this.ui.closeTop()) return;
-      // sous terre : U remonte, C bascule le creusement, les outils de surface sont inactifs
+      // sous terre : U ou Échap remonte, les outils de surface sont inactifs
       if (this.mode === 'under') {
-        if (k === 'escape' && this.digMode) { this.digMode = false; this.ui.update(); }
-        else if (k === 'u' || k === 'escape') this.exitUnder();
-        else if (k === 'c') { this.digMode = !this.digMode; this.ui.update(); }
+        if (k === 'u' || k === 'escape') this.exitUnder();
         else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
         return;
       }
-      if (k === 'u') { this.enterNearest(); return; }
       // R tourne le bâtiment en main ou celui qu'on a choisi ; sinon c'est l'outil Route
       if (k === 'r' && (this.tools.holding() || this.tools.selected !== null)) { this.tools.rotate(); return; }
       const tool = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) ? undefined : map[k];
@@ -1160,12 +1041,12 @@ class Game implements UIHost {
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);
     // une équipe rentre victorieuse : tout le village fait la fête au cœur du village, à la mode de son âge
-    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !a.fromCamp && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
+    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
     this.fest.update(dt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe
     const followed = this.following === null ? null : this.expeditions.active.find((e) => e.id === this.following);
-    // une troupe armée suivie : quand elle est sous terre, la vue y descend avec elle ; elle remonte quand l'expédition est finie
+    // une troupe suivie : quand elle est sous terre, la vue y descend avec elle ; elle remonte quand l'expédition est finie
     const below = !!followed && isBelow(followed);
     if (below && this.mode === 'surface' && !this.autoUnder) { this.autoUnder = true; this.enterUnder(followed!.entry); }
     else if (this.autoUnder && !below && this.mode === 'under') { this.autoUnder = false; this.exitUnder(undefined, true); }
@@ -1199,20 +1080,12 @@ class Game implements UIHost {
     }
     // la surface ne s'anime que lorsqu'on la regarde
     if (uv) {
-      // les troupes armées en train de parcourir les galeries
+      // les troupes en train de parcourir les galeries
       uv.setTroops(this.expeditions.active.filter((a) => a.entry >= 0 && a.phase === 'work').map((a) => ({
-        id: a.id, kind: a.c.scene === 'scout' ? 'scouts' : a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
+        id: a.id, kind: a.c.troop ?? 'miners', n: a.party.length, entry: a.entry, targets: a.targets, front: a.front, ambush: a.ambush, progress: Math.min(1, a.t / Math.max(1, a.c.work + a.extra)), age: this.sim.age,
         halt: a.hold > 0 || !!a.wait, scout: a.scout ? a.scout.t / Math.max(0.01, a.scout.dur) : -1,
       })), dt);
       uv.age = this.sim.age;
-      // les patrouilles du camp, et l'attaque du camp en cours
-      uv.patrolN = this.expeditions.patrols();
-      const raid = this.expeditions.raid;
-      uv.setRaid(raid ? { ...raid, dur: RAID_TIME } : null);
-      // les mineurs descendus par les trains, une équipe par ligne
-      uv.setMiners([...this.railway.trains.values()].filter((t) => !t.why && t.mine >= 0 && t.crew.length).map((t) => ({ id: t.line.id, n: t.crew.length, entry: t.stops[t.mine].entry, vein: t.vein })), this.sim.age, gdt);
-      // les mineurs du camp au front du tunnel ; en mode Creuser, le passage conseillé
-      uv.setDigs(this.world.digs, this.expeditions.digProgress(), this.digMode ? this.expeditions.tunnelHint() : null, this.sim.age, gdt);
       uv.update(dt, this.cam.camera, this.cam.target, this.cam.dist, this.env.daylight);
     }
     else {
@@ -1233,7 +1106,6 @@ class Game implements UIHost {
       this.alpine.update(gdt, this.sim.age, this.season.snow);
       this.emergencies.motor = this.traffic.motor;
       this.emergencies.update(gdt, this.sim.age);
-      this.hoists.update(gdt);
       this.seeps.update(dt);
       this.transports.update(gdt, this.sim.age);
       this.railView.update(dt, this.sim.age);
@@ -1241,7 +1113,7 @@ class Game implements UIHost {
       if (this.railView.lightsVersion !== this.railLightsV) { this.railLightsV = this.railView.lightsVersion; this.refreshHalos(); }
       // la ligne en cours de tracé : une borne à chaque arrêt ; la voie prévue entre eux, que l'on saisit pour la déplacer
       this.railView.setPreview(this.railEdit ? this.railEdit.stops.map((id) => this.world.buildings.get(id)).filter((b): b is Building => !!b) : [], this.railEdit?.color ?? 0, false);
-      // pendant le tracé : les gares et avant-postes qu'on peut encore ajouter à la ligne sont mis en valeur
+      // pendant le tracé : les gares qu'on peut encore ajouter à la ligne sont mis en valeur
       const re = this.railEdit;
       const ck = re ? `${this.world.version}|${this.railway.version}|${re.stops.join('.')}` : '';
       if (ck !== this.candCk) { this.candCk = ck; this.railView.setCandidates(re ? [...this.world.buildings.values()].filter((b) => !re.stops.includes(b.id) && !!this.railway.stopOf(b)) : []); }
