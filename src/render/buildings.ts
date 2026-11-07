@@ -33,7 +33,7 @@ interface Entry {
   key: string;
   /** cheminées du modèle affiché (repère du bâtiment) */
   smoke: number[];
-  anim: null | { type: 'pop' | 'evolve'; t: number; swapped: boolean; to: number };
+  anim: null | { type: 'pop' | 'evolve' | 'fall'; t: number; swapped: boolean; to: number };
   /** fondation sous les murs quand le sol de l'emprise n'est pas plat, et sa hauteur */
   plinth: THREE.Mesh | null;
   plinthH: number;
@@ -207,6 +207,7 @@ export class BuildingView implements WorldListener {
   onReset() {
     for (const e of this.entries.values()) this.disposeEntry(e);
     this.entries.clear();
+    this.ruined.clear();
     for (const b of this.world.buildings.values()) this.create(b, false);
     this.refreshAll();
   }
@@ -220,6 +221,7 @@ export class BuildingView implements WorldListener {
   onRemove(b: Building) {
     const e = this.entries.get(b.id);
     if (e) { this.disposeEntry(e); this.entries.delete(b.id); }
+    this.ruined.delete(b.id);
     this.refreshNear(b);
   }
 
@@ -421,12 +423,22 @@ export class BuildingView implements WorldListener {
 
   refreshAll() { for (const e of this.entries.values()) this.refresh(e.b); }
 
+  /** Bâtiments abattus (les défenses de l'île pendant une incursion) : ils ne s'affichent plus, leurs ruines les remplacent */
+  private ruined = new Set<number>();
+  /** Abat un bâtiment (il s'affaisse et disparaît) ou le relève (il resurgit) */
+  setRuined(id: number, on: boolean) {
+    const e = this.entries.get(id);
+    if (!e || this.ruined.has(id) === on) return;
+    if (on) { this.ruined.add(id); e.anim = { type: 'fall', t: 0, swapped: true, to: e.b.age }; }
+    else { this.ruined.delete(id); e.anim = { type: 'pop', t: 0, swapped: true, to: e.b.age }; e.group.scale.setScalar(0.001); }
+  }
+
   /** Cheminées de tous les bâtiments en monde : (x, y, z, sorte) à la suite */
   chimneys(out: number[]) {
     out.length = 0;
     const v = new THREE.Vector3();
     for (const e of this.entries.values()) {
-      if (!e.smoke.length || e.anim) continue;
+      if (!e.smoke.length || e.anim || this.ruined.has(e.b.id)) continue;
       e.group.updateMatrixWorld();
       for (let i = 0; i < e.smoke.length; i += 4) {
         v.set(e.smoke[i] + e.body.position.x, e.smoke[i + 1], e.smoke[i + 2] + e.body.position.z).applyMatrix4(e.group.matrixWorld);
@@ -469,7 +481,7 @@ export class BuildingView implements WorldListener {
     if (this.evoTimer <= 0) {
       this.evoTimer = 0.06;
       for (const e of this.entries.values()) {
-        if (!e.anim && e.b.age < worldAge) { e.anim = { type: 'evolve', t: 0, swapped: false, to: worldAge }; break; }
+        if (!e.anim && e.b.age < worldAge && !this.ruined.has(e.b.id)) { e.anim = { type: 'evolve', t: 0, swapped: false, to: worldAge }; break; }
       }
     }
     for (const e of this.entries.values()) {
@@ -478,7 +490,12 @@ export class BuildingView implements WorldListener {
       a.t += dt;
       // la dernière image de l'animation doit aussi passer dans le lot
       e.moved = true;
-      if (a.type === 'pop') {
+      if (a.type === 'fall') {
+        // abattu : il s'affaisse sur lui-même, puis ne reste que sa ruine
+        const k = Math.min(1, a.t / 0.45);
+        e.group.scale.set(1 + 0.12 * k, Math.max(0.001, 1 - k * k), 1 + 0.12 * k);
+        if (k >= 1) { e.anim = null; e.group.scale.setScalar(0.001); }
+      } else if (a.type === 'pop') {
         const k = Math.min(1, a.t / 0.5);
         e.group.scale.setScalar(Math.max(0.001, easeOutBack(k)));
         if (k >= 1) { e.anim = null; e.group.scale.setScalar(1); }

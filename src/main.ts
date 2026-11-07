@@ -71,6 +71,7 @@ import { isleBlight } from './world/blight';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { holdIsle, isleDefenses } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
+import { IsleRuins } from './render/isleRuins';
 import { War } from './sim/war';
 import { KingdomStage } from './kingdomStage';
 import { WarTips, WarTipState } from './ui/warTips';
@@ -243,6 +244,8 @@ class Game implements UIHost {
   private isleLayer: BattleLayer | null = null;
   /** la galère qui traverse vers l'île du portail (recrues, convois, soldats renvoyés au village) */
   private ferry: IsleFerry | null = null;
+  /** les ruines des défenses de l'île abattues pendant une incursion */
+  private isleRuins: IsleRuins | null = null;
   /** on commande la garnison de l'île (la vue reste en surface) */
   isleCmd = false;
   private surfaceView: ReturnType<CameraRig['view']> | null = null;
@@ -683,6 +686,10 @@ class Game implements UIHost {
       this.ferry.update(dt, w, this.sim.age);
       this.ferry.group.visible = this.mode === 'surface';
     }
+    // les défenses de l'île abattues : en ruines fumantes, jusqu'à leur relève
+    if (!this.isleRuins) { this.isleRuins = new IsleRuins(this.world, this.buildings); this.scene.add(this.isleRuins.group); }
+    this.isleRuins.update(dt, isle, this.isleLayer?.fx ?? null);
+    this.isleRuins.group.visible = this.mode === 'surface';
     if (this.mode !== 'hell') w.hellFx.length = 0;
     this.kingStage.update(dt);
     // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
