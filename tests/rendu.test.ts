@@ -212,7 +212,7 @@ describe('maisons et tours', () => {
 
   it('les bâtiments « Night City » de l’âge futuriste restent sous le plafond (3 000 triangles par case, 4 500 en 2 × 2)', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
-    const kinds: KindId[] = ['health', 'fire', 'police', 'tavern', 'barber', 'manor', 'theater', 'lab', 'baths'];
+    const kinds: KindId[] = ['health', 'fire', 'police', 'tavern', 'barber', 'manor', 'theater', 'lab', 'baths', 'farm', 'temple', 'school', 'research', 'vfarm'];
     for (const kind of kinds)
       for (let v = 0; v < 3; v++) {
         const m = getModel(kind, 5, { v, L: false, R: false, F: true });
@@ -277,6 +277,39 @@ describe('maisons et tours', () => {
     for (const r of ZOO_RESIDENTS) {
       expect(BEAST_KINDS.has(r.kind)).toBe(true);
       for (const [x, z] of r.spots) { expect(Math.abs(x)).toBeLessThan(1.4); expect(Math.abs(z)).toBeLessThan(1.4); }
+    }
+  });
+
+  it('Night City : à l’âge futuriste, les bâtiments sont nettement plus hauts qu’à l’âge moderne, sans écraser leurs voisins', () => {
+    const top = (kind: KindId, age: number, tier?: number) => {
+      let h = 0;
+      for (let v = 0; v < 6; v++) {
+        const g = getModel(kind, age, { v, L: false, R: false, F: v % 2 === 0, tier }).body;
+        g.computeBoundingBox();
+        h = Math.max(h, g.boundingBox!.max.y);
+      }
+      return h;
+    };
+    // de 1,5 à 3,5 fois la hauteur moderne (le dôme des arts remplace un clocher déjà haut : il le dépasse seulement)
+    for (const kind of ['health', 'police', 'fire', 'tavern', 'barber', 'lab', 'manor', 'theater', 'baths', 'school', 'farm', 'watertower', 'carworks'] as KindId[]) {
+      const k = top(kind, 5) / top(kind, 4);
+      expect(k, kind).toBeGreaterThan(1.5);
+      expect(k, kind).toBeLessThan(3.5);
+    }
+    expect(top('temple', 5)).toBeGreaterThan(top('temple', 4) * 1.3);
+    // les maisons deviennent de vraies tours, même au plus bas de la ligne d'horizon ; les bureaux aussi
+    const house4 = top('house', 4);
+    expect(top('house', 5, 0)).toBeGreaterThan(house4 * 1.6);
+    expect(top('house', 5, 3)).toBeLessThan(house4 * 4.2);
+    expect(top('workshop', 5, 0)).toBeGreaterThan(top('workshop', 4) * 1.8);
+    // l'arcologie, l'icône de l'âge, domine les plus hauts gratte-ciel
+    expect(top('arcology', 5)).toBeGreaterThan(top('house', 5, 3) * 1.3);
+    // les gratte-ciel restent légers : 3 000 triangles pour les immeubles et les tours, 4 000 pour les grandes tours et les
+    // gratte-ciel (moins nombreux), passerelles et enseignes comprises
+    const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
+    for (let tier = 0; tier < 4; tier++) for (let v = 0; v < 6; v++) for (const [L, R] of [[false, false], [true, true]]) {
+      const m = getModel('house', 5, { v, L, R, F: v % 2 === 0, tier });
+      expect(tris(m.body) + tris(m.glow), `rang ${tier}, variante ${v}`).toBeLessThan(tier < 2 ? 3000 : 4000);
     }
   });
 
