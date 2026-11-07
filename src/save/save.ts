@@ -79,6 +79,23 @@ export async function readSaveFile(file: File): Promise<SaveData> {
   return validate(JSON.parse(text));
 }
 
+/** Quand la partie a été sauvegardée, dit simplement (« sauvegardé il y a 5 min », « hier », « le 3 mars ») ; `now` pour les tests */
+export function savedAgo(at: number, now = Date.now()): string {
+  if (!Number.isFinite(at) || at <= 0) return '';
+  const min = Math.floor((now - at) / 60000);
+  if (min < 1) return 'sauvegardé à l’instant';
+  if (min < 60) return `sauvegardé il y a ${min} min`;
+  const d0 = new Date(now), d1 = new Date(at);
+  // jours de calendrier entre les deux minuits (arrondis : un changement d'heure ne décale rien)
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((midnight(d0) - midnight(d1)) / 86400000);
+  if (days <= 0) return `sauvegardé il y a ${Math.floor(min / 60)} h`;
+  if (days === 1) return 'sauvegardé hier';
+  if (days < 7) return `sauvegardé il y a ${days} jours`;
+  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  return `sauvegardé le ${d1.getDate() === 1 ? '1er' : d1.getDate()} ${mois[d1.getMonth()]}${d1.getFullYear() !== d0.getFullYear() ? ` ${d1.getFullYear()}` : ''}`;
+}
+
 export function loadSettings(): Partial<Settings> {
   try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch { return {}; }
 }

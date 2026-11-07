@@ -6,8 +6,8 @@ import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
 import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
-import { loadSlot, SaveData } from '../save/save';
-import { MAPS, genHeights, newSeed } from '../world/mapgen';
+import { loadSlot, SaveData, savedAgo } from '../save/save';
+import { MAPS, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
@@ -18,9 +18,9 @@ import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
 import { securityCuts, SECURITY_MAX } from '../sim/security';
 import { CAMP_QUESTS } from '../sim/depths';
-import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
+import { priceIn, canPay, costLabel, Resource, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
-import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '../sim/difficulty';
+import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
@@ -248,7 +248,7 @@ const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.rou
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
 const NEED_RULE: Record<NeedId, string> = {
   housing: 'Chaque habitant occupe une place. Le village grandit tant qu’il reste des places libres et que les autres besoins sont comblés.',
-  food: 'Chaque habitant mange une part (une part et quart en défi), plus une part de réserve pour le village ; on compte en parts entières.',
+  food: 'Chaque habitant mange une part, plus une part de réserve pour le village ; on compte en parts entières.',
   water: 'Chaque habitant boit une part, plus une part de réserve pour le village.',
   jobs: 'À partir de 6 habitants, la moitié d’entre eux cherche du travail.',
   joy: 'À partir de 6 habitants, chacun demande 0,3 de bien-être.',
@@ -285,7 +285,7 @@ export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer')
 }
 
 /**
- * Choix de la difficulté d'une nouvelle partie : trois cartes (celle de `current` choisie d'avance), puis « Commencer » ;
+ * Choix de la difficulté d'une nouvelle partie (« Recommencer cette carte ») : deux cartes (celle de `current` choisie d'avance), puis « Commencer » ;
  * `note` prévient de ce qui sera écrasé. Rend la difficulté choisie, ou null si le joueur renonce
  */
 export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty; note?: string; ok?: string } = {}): Promise<Difficulty | null> {
@@ -737,11 +737,11 @@ export class UI {
     const d: KindDef = KINDS[k], age = this.host.sim.age, lock = this.lockOf(k), a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
-    // les grands bâtiments se paient en bois et en pierre, tous en défi (sauf en ressources illimitées) ; le premier bûcheron du défi est offert
-    const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
+    // les grands bâtiments se paient en bois et en pierre (sauf en ressources illimitées)
+    const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost);
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} dans le village` : 'pas encore construit'}</small></div></div>
       ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
-      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois${cost.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`}`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
+      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois${cost.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`}`}</p>` : ''}
       ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés'} · R : tourner · Échap : lâcher</p>` : ''}`;
   }
 
@@ -1523,7 +1523,7 @@ export class UI {
     const gaps = gearGaps(c, st.gear, st.craft, age, (g) => !g.needs || ex.has(g.needs));
     if (!gaps.length) return '';
     const rows = gaps.map((g) => {
-      const price = gearCostLabel(gearCost(g.gear, h.world.difficulty)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
+      const price = gearCostLabel(gearCost(g.gear)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
       const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
       const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
       const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
@@ -1649,7 +1649,7 @@ export class UI {
       <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Réserve : <b>${Math.floor(h.world.wood)}</b> bois, <b>${Math.floor(h.world.stone)}</b> pierre, <b>${Math.floor(ex.ore)}</b> minerai.</p>
       <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => !ex.whyCraft(g, age)) ? '' : 'disabled'} title="Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent">${ic('hammer', 16, 2)} Tout fabriquer</button></div>
       <div class="gearGrid">${GEAR.map((g) => {
-        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
+        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g));
         return `<div class="gear ${locked ? 'locked' : ''}" data-gear="${g.id}">
           <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt">${n} en réserve${st.craft.includes(g.id) ? ` · ${st.craft.filter((x) => x === g.id).length} en fabrication` : ''}${out ? ` · ${out} en route` : ''}</span></div></div>
           <small class="gdesc">${g.desc}</small>
@@ -1778,7 +1778,7 @@ export class UI {
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
     const tabs = [['time', 'clock', 'Temps et météo'], ['look', 'palette', 'Image et son'], ['game', 'houses', 'Partie']];
-    // au bac à sable et en défi, la difficulté impose le réglage des ressources
+    // au bac à sable, la difficulté impose le réglage des ressources
     const forced = DIFF_TEXT.resForced[h.world.difficulty];
     const { ov, close } = modal(this.root, 'settings', `${ic('gear', 22)} Réglages`, `
       <div class="tabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 16, 2)}${l}</button>`).join('')}</div>
@@ -1965,47 +1965,70 @@ export function showCredits(root: HTMLElement) {
     <p class="hint">Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : ${a('https://creativecommons.org/publicdomain/zero/1.0/deed.fr', 'CC0')} et ${a('https://creativecommons.org/licenses/by/3.0/deed.fr', 'CC-BY 3.0')}.</p>`);
 }
 
+/** Paysage de collines en facettes, derrière l'écran d'accueil (calé en bas, rogné sur les côtés selon l'écran) */
+const MENU_LAND = `<svg class="mLand" viewBox="0 0 1280 800" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  <polygon points="0,520 180,400 330,470 520,360 700,450 880,380 1060,460 1280,390 1280,800 0,800" fill="#b9d6a6"/>
+  <polygon points="0,600 220,500 420,570 640,490 860,560 1080,500 1280,560 1280,800 0,800" fill="#a3c98f"/>
+  <polygon points="520,360 600,410 700,450 560,450" fill="#c8dfb6"/><polygon points="880,380 960,430 1060,460 900,455" fill="#c8dfb6"/>
+  <polygon points="0,690 260,620 520,670 800,610 1040,660 1280,620 1280,800 0,800" fill="#8fbc7a"/>
+  <g fill="#6aa563"><polygon points="120,640 140,590 160,640"/><polygon points="170,650 188,606 206,650"/><polygon points="1090,640 1110,586 1130,640"/><polygon points="1140,652 1158,610 1176,652"/><polygon points="1210,640 1228,596 1246,640"/></g>
+  <polygon points="1000,560 1030,540 1060,560 1060,600 1000,600" fill="#f2d3a8"/><polygon points="995,562 1030,534 1065,562" fill="#d98d6c"/>
+  <polygon points="80,590 108,570 136,590 136,628 80,628" fill="#f2d3a8"/><polygon points="75,592 108,564 141,592" fill="#c9785a"/>
+</svg>`;
+
+/**
+ * L'écran d'accueil : le titre, « Reprendre mon village » s'il existe une sauvegarde de la carte, puis les deux modes côte à
+ * côte (empilés sur téléphone), chacun avec son bouton qui lance aussitôt une nouvelle partie (une confirmation seulement si
+ * elle écrase la sauvegarde) ; le tutoriel, l'import d'une sauvegarde et les crédits ; s'il y a plusieurs cartes, un sélecteur
+ */
 export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
   const ov = document.createElement('div');
   ov.className = 'overlay';
   ov.id = 'menu';
-  ov.innerHTML = `
-    <h1>Ceionia</h1>
-    <p class="sub">Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.</p>
-    <div class="maps"></div>
-    <div class="row" style="justify-content:center"><button id="mImport">${ic('upload', 16)} Importer une sauvegarde (JSON)</button><button id="mCredits">Crédits</button></div>
-    <input type="file" id="mFile" accept="application/json,.json" style="display:none">
-    <p class="hint">Souris : clic gauche = outil, clic droit + glisser = tourner, molette = zoom, clic milieu ou Maj + clic droit = déplacer, ZQSD/flèches = déplacement, A/E = rotation (WASD et Q/E en QWERTY).<br>Tactile : un doigt = outil, deux doigts = déplacer / zoomer / tourner.</p>`;
-  const maps = $('.maps', ov);
-  for (const m of MAPS) {
-    const save = loadSlot(m.id);
-    const card = document.createElement('div');
-    card.className = 'card panel';
-    card.innerHTML = `<canvas></canvas><h3>${m.name}</h3><p>${m.desc}</p><div class="stat"></div><div class="btns"></div>`;
-    // chaque nouvelle partie a son continent : sans sauvegarde, l'aperçu montre celui de la graine tirée pour elle
-    const seed = newSeed();
-    const heights = save ? (save.world.heights as number[]).map((v) => v / 100) : genHeights(m.id, seed);
-    drawPreview($('canvas', card) as HTMLCanvasElement, heights);
-    if (save) $('.stat', card).textContent = `${AGES[save.age].name} · ${Math.floor(save.pop)} hab. · ${SEASONS[Math.floor(save.seasonT) % 4]} · ${DIFF_TEXT.name[readDifficulty(save.world.difficulty)]}`;
-    const btns = $('.btns', card);
-    if (save) {
-      btns.innerHTML = `<button class="active" data-m="continue">Continuer</button><button data-m="new">Nouvelle</button>`;
-    } else btns.innerHTML = `<button class="active" data-m="new">Jouer</button>`;
-    btns.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = async () => {
-      const mode = b.dataset.m as 'continue' | 'new';
-      if (mode === 'continue') { host.start(m.id, mode); return; }
-      // une nouvelle partie : le joueur choisit sa difficulté (la fenêtre prévient s'il écrase une sauvegarde)
-      const d = await chooseDifficulty(root, { note: save ? DIFF_TEXT.overwrite : undefined });
-      if (d) host.start(m.id, mode, seed, d);
-    }));
-    maps.appendChild(card);
-  }
+  ov.innerHTML = `${MENU_LAND}
+    <div class="mInner">
+      <header><h1>Ceionia</h1><p class="sub">Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.</p></header>
+      ${MAPS.length > 1 ? `<label class="mMap">Carte <select id="mMapSel">${MAPS.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select></label>` : ''}
+      <div class="mResume panel" hidden></div>
+      <div class="mModes">${DIFFICULTIES.map((d) => `<div class="mMode ${d}">
+        <div class="mHead"><b>${ic(DIFF_TEXT.icon[d], 30, 1.9)}</b><div><h2>${DIFF_TEXT.name[d]}</h2><em>${DIFF_TEXT.tagline[d]}</em></div></div>
+        <ul>${DIFF_TEXT.points[d].map((x) => `<li>${ic('check', 18, 2.6)}<span>${x}</span></li>`).join('')}</ul><p class="mSum">${DIFF_TEXT.summary[d]}</p>
+        <button class="mPlay" data-d="${d}">${DIFF_TEXT.play(d)}</button></div>`).join('')}</div>
+      <div class="mFoot"></div>
+      <div class="mLinks"><button id="mImport">${ic('upload', 16)} Importer une sauvegarde</button><button id="mCredits">Crédits</button></div>
+      <p class="mKeys">Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher<br><span>Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.</span></p>
+    </div>
+    <input type="file" id="mFile" accept="application/json,.json" style="display:none">`;
+  // la carte choisie (le continent par défaut) : sa sauvegarde, et la graine de sa prochaine partie (chacune a son continent)
+  const sel = ov.querySelector<HTMLSelectElement>('#mMapSel');
+  const mapId = () => (sel ? +sel.value : MAPS[0].id);
+  let save: SaveData | null = null, seed = newSeed();
+  const resume = $('.mResume', ov);
+  const draw = () => {
+    save = loadSlot(mapId());
+    seed = newSeed();
+    resume.hidden = !save;
+    ov.classList.toggle('hasSave', !!save);
+    if (!save) { resume.innerHTML = ''; return; }
+    // sur téléphone, le résumé se raccourcit : « Normal · Médiéval · 142 habitants » (les <i> et la date s'effacent)
+    const d = readDifficulty(save.world.difficulty), when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
+    resume.innerHTML = `<b>${ic('house', 40, 1.8)}</b><div class="grow"><h3>Reprendre mon village</h3><p><span><i>Mode </i>${DIFF_TEXT.name[d]}</span><span><i>âge </i>${AGES[save.age]?.name ?? ''}</span><span>${pop} habitant${pop > 1 ? 's' : ''}</span>${when ? `<span class="when">${when}</span>` : ''}</p></div><button class="active mGo">Continuer</button>`;
+    $('.mGo', resume).onclick = () => host.start(mapId(), 'continue');
+  };
+  draw();
+  if (sel) sel.onchange = draw;
+  ov.querySelectorAll<HTMLButtonElement>('.mPlay').forEach((b) => (b.onclick = async () => {
+    const d = b.dataset.d as Difficulty;
+    // une nouvelle partie dans ce mode, tout de suite ; seule une sauvegarde de la carte qu'elle écraserait demande confirmation
+    if (save && !(await confirmBox(root, DIFF_TEXT.overwrite, DIFF_TEXT.play(d)))) return;
+    host.start(mapId(), 'new', seed, d);
+  }));
   const f = $<HTMLInputElement>('#mFile', ov);
   $('#mImport', ov).onclick = () => f.click();
   $('#mCredits', ov).onclick = () => showCredits(root);
   f.onchange = () => { if (f.files?.[0]) host.importFile(f.files[0]); };
   // le tutoriel guidé, pour la partie qu'on lance
-  maps.after(menuToggle());
+  $('.mFoot', ov).appendChild(menuToggle());
   root.appendChild(ov);
   return ov;
 }
