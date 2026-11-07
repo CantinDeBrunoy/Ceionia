@@ -54,6 +54,9 @@ export interface ToolHost {
   autoRoads: boolean;
 }
 
+/** Bâtiments de zone dont la surbrillance verte reste visible pendant la pose et à la sélection */
+const STAY_ZONE: KindId[] = ['lumber', 'quarry'];
+
 export class ToolController implements ToolInput {
   tool: ToolId = 'none';
   kind: KindId = 'house';
@@ -454,7 +457,10 @@ export class ToolController implements ToolInput {
   get freeStage(): 0 | 1 | 2 { return this.tool !== 'road' || this.roadMode !== 'free' ? 0 : this.freeFrom ? 2 : 1; }
 
   update(dt: number) {
-    this.zones.set(this.holding() && !this.zonesOff ? this.kind : null);
+    // bûcheron et pierrier : la zone verte reste affichée après la pose (on en pose souvent plusieurs) et tant que l'un d'eux est sélectionné
+    const sel = this.tool === 'none' ? this.selectedBuilding() : undefined;
+    const stay = this.holding() && STAY_ZONE.includes(this.kind) ? this.kind : sel && STAY_ZONE.includes(sel.kind as KindId) ? (sel.kind as KindId) : null;
+    this.zones.set(stay ?? (this.holding() && !this.zonesOff ? this.kind : null), !!stay);
     this.zones.update(dt);
     // la pastille du point A bat doucement : on ne la perd pas de vue
     if (this.freePulse.visible) {

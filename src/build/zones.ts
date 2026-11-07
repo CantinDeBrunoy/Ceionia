@@ -89,6 +89,7 @@ export class ZoneHighlight {
   private edgeMat: THREE.LineBasicMaterial;
   private scan: ZoneScan | null = null;
   private kind: KindId | null = null;
+  private green = false;
   private version = -1;
   private world: World | null = null;
   private t = 0;
@@ -108,11 +109,14 @@ export class ZoneHighlight {
     scene.add(this.mesh);
   }
 
-  /** Bâtiment en main (null : rien en main) ; sans contrainte de terrain, rien ne s'affiche */
-  set(kind: KindId | null) {
+  /** Bâtiment en main (null : rien en main) ; sans contrainte de terrain, rien ne s'affiche. `green` : voile vert (bûcheron, pierrier) */
+  set(kind: KindId | null, green = false) {
     if (kind && !isZoned(kind)) kind = null;
-    if (kind === this.kind) return;
+    if (kind === this.kind && green === this.green) return;
     this.kind = kind;
+    this.green = green;
+    this.mat.color.setHex(green ? 0x35e070 : 0xffd45a);
+    this.edgeMat.color.setHex(green ? 0xc4ffd6 : 0xfff1b0);
     this.scan = null; this.version = -1; this.warned = false;
     this.mesh.visible = false;
   }

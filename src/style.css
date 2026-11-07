@@ -603,6 +603,10 @@ body.photo #photoBar { display: flex; }
 #tuto[data-side="right"] .tArrow { left: 0; }
 #tuto[data-side="left"] .tArrow { left: 100%; }
 #tuto:not([data-side]) .tArrow, #tuto[data-side=""] .tArrow { display: none; }
+/* l'élément que la bulle montre : un halo doré qui bat, bien plus voyant que l'anneau seul */
+.tHi { animation: tutoHi 1s ease-in-out infinite !important; position: relative; z-index: 2; }
+@keyframes tutoHi { 0%, 100% { box-shadow: 0 0 0 3px rgba(255, 190, 40, 0.95), 0 0 10px 2px rgba(255, 190, 40, 0.45); } 50% { box-shadow: 0 0 0 5px rgba(255, 190, 40, 1), 0 0 24px 8px rgba(255, 190, 40, 0.7); } }
+@media (prefers-reduced-motion: reduce) { .tHi { animation: none !important; box-shadow: 0 0 0 4px rgba(255, 190, 40, 1); } }
 #tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; box-shadow: 0 0 0 3px var(--accent), 0 0 0 7px rgba(47, 111, 237, 0.22); transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease; animation: tutoRing 1.5s ease-in-out infinite; }
 @keyframes tutoRing { 50% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 13px rgba(47, 111, 237, 0.06); } }
 .tutoToggle { justify-content: center; }

@@ -36,64 +36,85 @@ export const TUTO_TEXT = {
     hintNew: 'Une bulle vous guide pas à pas : caméra, construction, besoins, âges, expéditions et incidents.',
   },
   steps: {
+    welcome: {
+      title: 'Bienvenue !',
+      text: 'Votre but : faire grandir un village, des premiers feux de camp jusqu’aux étoiles.',
+      tasks: [] as string[],
+    },
     camera: {
-      title: 'Bienvenue ! Regardez autour de vous',
-      text: 'Faites tourner la vue (clic droit et glisser, ou A / E), zoomez (molette, vers le point visé) et déplacez-vous (clic milieu, Maj + clic droit, ou ZQSD / flèches). Perdu ? V, ou le bouton {target} en bas à droite, ramène la vue sur le village.',
-      touch: 'Avec deux doigts : glissez pour déplacer la vue, pincez pour zoomer, tournez-les pour faire pivoter. Perdu ? Le bouton {target} en bas à droite ramène la vue sur le village.',
-      tasks: ['Se déplacer', 'Tourner la vue', 'Zoomer'],
-      paused: 'Le jeu est en pause pendant que vous prenez vos repères : vous le relancerez un peu plus loin. Un seul des trois gestes suffit pour continuer.',
+      title: 'Regardez autour de vous',
+      text: 'Faites glisser la vue avec le clic droit, et zoomez à la molette.',
+      touch: 'Glissez à deux doigts pour bouger, zoomer et tourner la vue.',
+      tasks: ['Bouger la vue'],
+      paused: 'Le jeu est en pause pour l’instant.',
     },
-    dock: {
-      title: 'La barre de construction',
-      text: 'En bas, l’onglet « Bâtir » range les bâtiments par rayons : Habitat, Production, Services, Vie & culture. « Relief » et « Nature » sculptent et décorent le terrain. Survolez une vignette pour lire sa fiche, cliquez pour prendre le bâtiment en main.',
-      tasks: ['Prendre un bâtiment en main'],
+    fire: {
+      title: 'Le cœur du village',
+      text: 'Prenez le feu de camp dans l’onglet « Bâtir », puis cliquez sur le terrain pour le poser.',
+      tasks: [] as string[],
     },
-    place: {
-      title: 'Premières constructions',
-      text: 'Un village commence par sa place, au centre (à la Préhistoire, un feu de camp) : une grande place de 3 × 3 cases, sans entrée, qu’on rejoint de tous côtés. On y fêtera le retour des expéditions, et elle grandit avec les âges. Autour, il faut de quoi loger, nourrir et abreuver : une maison, une ferme (à la Préhistoire, un séchoir à grains) et un puits (leur nom change avec les âges). Le bâtiment en main se pose d’un clic sur le terrain ; R le tourne, Échap le lâche.',
-      tasks: ['la place', 'logement', 'nourriture', 'eau'],
-      kindTask: (name: string, what: string) => `${name} (${what})`,
+    habitat: {
+      title: 'Les habitats',
+      text: 'Les habitants ont besoin d’un toit et d’eau : ouvrez le rayon « Habitat » et posez-les.',
+      tasks: [] as string[],
     },
-    work: {
-      title: 'Les bâtiments qui travaillent',
-      text: 'Un bûcheron et un séchoir : les premiers bâtiments qui travaillent pour vous. Le bûcheron coupe du bois et la carrière taille de la pierre (au rayon Production, groupe Matériaux) : sans eux, impossible de bâtir les grands bâtiments. Posez-les près d’une forêt et de rochers. Le séchoir à grains nourrit le village.',
-      tasks: ['bois', 'pierre'],
-      kindTask: (name: string, what: string) => `${name} (${what})`,
+    food: {
+      title: 'De quoi manger',
+      text: 'Posez de quoi nourrir le village, au rayon « Production ».',
+      tasks: [] as string[],
+    },
+    wood: {
+      title: 'Le bois',
+      text: 'Posez un bûcheron près des arbres, dans la zone verte.',
+      tasks: [] as string[],
+    },
+    stone: {
+      title: 'La pierre',
+      text: 'Posez un pierrier près des rochers, dans la zone verte.',
+      tasks: [] as string[],
     },
     road: {
-      title: 'Tracer une route',
-      text: 'Prenez l’outil Route {road} (touche R), en haut à gauche de la barre, puis glissez sur le terrain. Habitants et charrettes circulent sur les routes ; sur l’eau peu profonde, la route devient un pont.',
+      title: 'Les routes',
+      text: 'Prenez l’outil Route {road} et glissez sur le terrain pour relier vos bâtiments.',
       tasks: ['Prendre l’outil Route', 'Tracer une route'],
     },
     needs: {
-      title: 'Les besoins du village',
-      text: 'En haut, chaque jauge montre un besoin : nourriture, eau, logement, travail, bien-être, santé. Elle vire à l’orange quand il manque quelque chose. Cliquez sur une icône pour voir d’où vient le besoin et quoi bâtir pour le combler ; le compteur d’habitants détaille leur état.',
+      title: 'Les besoins',
+      text: 'Chaque jauge en haut est un besoin : cliquez sur une icône pour savoir quoi bâtir.',
       tasks: ['Ouvrir la fiche d’un besoin'],
     },
     time: {
-      title: 'Pause et vitesse',
-      text: 'Le bouton {pause} (ou Espace) arrête ou relance le temps, pour réfléchir ou bâtir tranquillement ; le bouton ×1 passe à ×2 puis ×4 pour accélérer les jours et les saisons.',
+      title: 'Le temps',
+      text: 'Le bouton {pause} arrête le temps, le bouton ×1 l’accélère.',
       tasks: ['Arrêter ou relancer le temps', 'Changer la vitesse'],
     },
     ages: {
       title: 'Les âges',
-      text: 'Le village traverse six âges : Préhistoire, Antiquité, Médiéval, Industriel, Moderne et Futuriste. Le panneau en haut à gauche montre où il en est : cliquez dessus pour voir ce que demande l’âge suivant (habitants, bâtiments, minerai, expéditions obligatoires ★). Une condition qui nomme un bâtiment se clique pour le bâtir. Quand tout est réuni, le bouton « Passer à … » fait entrer le village dans le nouvel âge.',
+      text: 'Cliquez sur le panneau en haut à gauche pour voir ce qu’il faut pour passer à l’âge suivant.',
       tasks: ['Ouvrir les conditions de l’âge suivant'],
     },
     expeditions: {
       title: 'Les expéditions',
-      text: 'Le bouton {compass} ouvre les expéditions : une petite équipe d’habitants part chercher bêtes, minerai ou semences, et débloque parfois de nouveaux bâtiments. Chaque âge a au moins une expédition obligatoire ★ (la Préhistoire en a deux). Pour débuter, essayez « La grande cueillette ». Une fois l’équipe partie, sa carte s’affiche à gauche : son bouton {eye} la fait suivre (ou lâcher) par la caméra.',
-      choose: 'Choisissez une mission et « Envoyer une équipe », puis l’un de ses choix : « Partir » fait partir l’équipe.',
-      none: 'Aucune équipe ne peut partir pour l’instant (il faut des habitants libres) : « Suivant » passe à la suite.',
+      text: 'Le bouton {compass} envoie une équipe chercher des ressources et de nouveaux bâtiments.',
+      choose: 'Choisissez une mission, puis « Partir ».',
+      none: 'Personne n’est libre pour partir : passez à la suite.',
       tasks: ['Ouvrir les expéditions', 'Lancer une expédition', 'Suivre l’équipe avec {eye}'],
+    },
+    gear: {
+      title: 'L’équipement',
+      text: 'Certaines expéditions demandent du matériel : fabriquez-le dans l’onglet « Équipement ».',
+      tasks: ['Ouvrir l’onglet Équipement', 'Fabriquer une pièce'],
     },
     incidents: {
       title: 'Les incidents',
-      text: 'Incendies, malaises et cambriolages s’affichent en cartes rouges à gauche, sous les expéditions, le temps que pompiers, secours ou gendarmes interviennent. Le bouton {eye} de la carte suit l’intervention à la caméra.',
-      none: 'Aucun incident pour l’instant : sa carte apparaîtra à gauche quand il en arrivera un.',
+      text: 'Incendies et cambriolages s’affichent à gauche : {eye} suit l’intervention.',
+      none: 'Aucun incident pour l’instant : sa carte apparaîtra à gauche.',
       tasks: ['Suivre un incident avec {eye}'],
     },
   },
+  kindTask: (name: string) => `Poser : ${name}`,
+  locked: 'Le tutoriel vous le fera bâtir un peu plus tard.',
+  ok: 'OK',
 };
 
 type StepId = keyof typeof TUTO_TEXT.steps;
@@ -154,10 +175,16 @@ export function menuToggle(): HTMLElement {
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const coarse = () => window.matchMedia('(pointer: coarse)').matches;
-/** les trois premiers bâtiments : de quoi loger, nourrir et abreuver */
-const FIRST: KindId[] = ['gather', 'house', 'farm', 'well'];
-/** puis ceux qui travaillent pour le village : le bûcheron et la carrière (le séchoir à grains est déjà dans les premiers) */
-const WORK: KindId[] = ['lumber', 'quarry'];
+/** ce que le tutoriel laisse bâtir à chaque étape (le reste est verrouillé) : on ajoute un bâtiment après l'autre */
+const GATE: Partial<Record<StepId, KindId[]>> = {
+  welcome: ['gather'], camera: ['gather'], fire: ['gather'],
+  habitat: ['gather', 'house', 'well'],
+  food: ['gather', 'house', 'well', 'farm'],
+  wood: ['gather', 'house', 'well', 'farm', 'lumber'],
+  stone: ['gather', 'house', 'well', 'farm', 'lumber', 'quarry'],
+};
+/** les bâtiments que le tutoriel fait poser : un village qui en compte d'autres n'est plus un village neuf */
+const GUIDED = new Set<string>(['gather', 'house', 'well', 'farm', 'lumber', 'quarry']);
 
 export class Tutorial {
   /** la bulle est affichée */
@@ -186,48 +213,40 @@ export class Tutorial {
     const h = host, T = TUTO_TEXT.steps, q = (s: string) => ui.root.querySelector(s);
     const count = () => { const n: Record<string, number> = {}; for (const b of h.world.buildings.values()) n[b.kind] = (n[b.kind] ?? 0) + 1; return n; };
     const roads = () => { let n = 0; const r = h.world.road; for (let k = 0; k < r.length; k++) if (r[k]) n++; return n; };
+    const name = (k: KindId) => KINDS[k].names[Math.max(h.sim.age, KINDS[k].minAge)];
+    const built = (ks: KindId[]) => { const n = count(); return ks.map((k) => (n[k] ?? 0) > 0); };
+    // le prochain bâtiment à poser : l'onglet Bâtir, son rayon, puis sa vignette
+    const aim = (ks: KindId[]) => () => {
+      const k = ks.find((_, j) => !this.ticks[j]);
+      if (!k) return null;
+      const cat = KINDS[k].cat;
+      return ui.tab !== 'build' ? q('#modes [data-t="build"]') : ui.cat !== cat ? q(`#subcats [data-c="${cat}"]`) : q(`#items [data-kind="${k}"]`);
+    };
+    /** une étape de construction : poser ces bâtiments (déjà bâtis avant d'arriver : elle passe d'elle-même) */
+    const make = (id: StepId, ks: KindId[]): Step => ({
+      id, begin: () => (this.base.kinds = count()),
+      check: () => built(ks), anchor: aim(ks),
+      tasks: () => ks.map((k) => TUTO_TEXT.kindTask(name(k))),
+    });
     this.steps = [
+      // une phrase d'accueil, qui reste jusqu'au « OK »
+      { id: 'welcome', anchor: () => null, check: () => [], read: true },
       {
-        id: 'camera', anchor: () => null,
+        id: 'camera', anchor: () => null, read: true,
         begin: () => (this.base.view = h.cam.view()),
         text: () => (coarse() ? T.camera.touch : T.camera.text),
-        // une seule des trois suffit : un enfant zoome tout de suite, mais tourner la vue au clic droit ne se devine pas
-        need: 1,
         note: () => (h.time.paused ? T.camera.paused : ''),
+        // un seul geste suffit : un enfant zoome tout de suite, mais tourner la vue au clic droit ne se devine pas
         check: () => {
           const v = h.cam.view(), b = this.base.view!;
-          return [Math.hypot(v.x - b.x, v.z - b.z) > 3, Math.abs(v.yaw - b.yaw) > 0.35, Math.abs(Math.log(v.dist / b.dist)) > 0.15];
+          return [Math.hypot(v.x - b.x, v.z - b.z) > 3 || Math.abs(v.yaw - b.yaw) > 0.35 || Math.abs(Math.log(v.dist / b.dist)) > 0.15];
         },
       },
-      {
-        id: 'dock', anchor: () => (ui.tab === 'build' ? q('#dockMain') : q('#modes [data-t="build"]')),
-        check: () => [h.tools.tool === 'build'],
-      },
-      {
-        id: 'place',
-        begin: () => (this.base.kinds = count()),
-        // déjà bâtis avant d'arriver à l'étape : elle passe d'elle-même
-        check: () => { const n = count(); return FIRST.map((k) => (n[k] ?? 0) > 0); },
-        // le prochain bâtiment à poser : l'onglet Bâtir, son rayon, puis sa vignette
-        anchor: () => {
-          const k = FIRST.find((_, j) => !this.ticks[j]);
-          if (!k) return null;
-          const cat = KINDS[k].cat;
-          return ui.tab !== 'build' ? q('#modes [data-t="build"]') : ui.cat !== cat ? q(`#subcats [data-c="${cat}"]`) : q(`#items [data-kind="${k}"]`);
-        },
-        tasks: () => FIRST.map((k, j) => T.place.kindTask(KINDS[k].names[Math.max(h.sim.age, KINDS[k].minAge)], T.place.tasks[j])),
-      },
-      {
-        id: 'work',
-        // le bûcheron, puis la carrière : l'onglet Bâtir, le rayon Production, la vignette
-        check: () => { const n = count(); return WORK.map((k) => (n[k] ?? 0) > 0); },
-        anchor: () => {
-          const k = WORK.find((_, j) => !this.ticks[j]);
-          if (!k) return null;
-          return ui.tab !== 'build' ? q('#modes [data-t="build"]') : ui.cat !== KINDS[k].cat ? q(`#subcats [data-c="${KINDS[k].cat}"]`) : q(`#items [data-kind="${k}"]`);
-        },
-        tasks: () => WORK.map((k, j) => T.work.kindTask(KINDS[k].names[Math.max(h.sim.age, KINDS[k].minAge)], T.work.tasks[j])),
-      },
+      make('fire', ['gather']),
+      make('habitat', ['house', 'well']),
+      make('food', ['farm']),
+      make('wood', ['lumber']),
+      make('stone', ['quarry']),
       {
         id: 'road', anchor: () => q('#quickL [data-tool="road"]'),
         begin: () => (this.base.roads = roads()),
@@ -276,6 +295,20 @@ export class Tutorial {
           if (!m || this.ticks[1]) return '';
           return m.querySelector('button.choice:not([disabled]), button[data-send]:not([disabled])') ? T.expeditions.choose : T.expeditions.none;
         },
+      },
+      {
+        // le bouton de la boussole, puis l'onglet Équipement de la fenêtre, puis une pièce à fabriquer
+        id: 'gear', read: true,
+        anchor: () => {
+          const m = q('.expModal');
+          if (!m) return q('#bExp');
+          const tab = m.querySelector('[data-tab="gear"]');
+          if (!tab?.classList.contains('on')) return tab;
+          const b = [...m.querySelectorAll('button[data-craft]:not([disabled])')].find((x) => x.getClientRects().length);
+          if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+          return b ?? m.querySelector('.arsenal');
+        },
+        check: () => { const st = h.expeditions.state; return [!!q('.expModal [data-tab="gear"].on'), st.craft.length > 0 || Object.values(st.gear).some((n) => (n as number) > 0)]; },
       },
       {
         id: 'incidents', anchor: () => q('#expList .expCard.incident .cam'),
@@ -347,6 +380,7 @@ export class Tutorial {
   stop() {
     this.on = false;
     this.box.hidden = this.ring.hidden = true;
+    this.light(null);
     writeState({ on: false, step: this.i });
   }
 
@@ -371,11 +405,32 @@ export class Tutorial {
     }
     // une fenêtre ouverte (réglages, récit, décision) cache la bulle, sauf celle des expéditions à leur étape
     const ov = this.ui.root.querySelector('.overlay'), body = document.body.classList;
-    const away = (!!ov && !(s.id === 'expeditions' && ov.querySelector('.expModal'))) || body.contains('photo') || body.contains('under');
+    const away = (!!ov && !((s.id === 'expeditions' || s.id === 'gear') && ov.querySelector('.expModal'))) || body.contains('photo') || body.contains('under');
     this.box.hidden = away;
-    if (away) { this.ring.hidden = true; return; }
+    if (away) { this.ring.hidden = true; this.light(null); return; }
     this.render(s, all);
     this.place();
+  }
+
+  /** l'élément montré : il luit et bat (en plus de l'anneau), pour qu'on le trouve du premier coup */
+  private lit: Element | null = null;
+  private light(a: Element | null) {
+    if (a === this.lit) return;
+    this.lit?.classList.remove('tHi');
+    this.lit = a;
+    a?.classList.add('tHi');
+  }
+
+  /**
+   * Ce que le tutoriel laisse bâtir : pendant les premières étapes, un bâtiment après l'autre (le reste est verrouillé, voir
+   * `UI.lockOf`). Libre dès qu'il est fini, mis de côté, ou que le village compte déjà d'autres bâtiments
+   */
+  lock(k: KindId): string | null {
+    if (!this.on) return null;
+    const ok = GATE[this.steps[this.i].id];
+    if (!ok || ok.includes(k)) return null;
+    for (const b of this.host.world.buildings.values()) if (!GUIDED.has(b.kind)) return null;
+    return TUTO_TEXT.locked;
   }
 
   private render(s: Step, all: boolean) {
@@ -384,14 +439,15 @@ export class Tutorial {
     const key = `${this.i}|${this.ticks.join()}|${all}|${note}|${tasks.join()}`;
     if (key === this.key) return;
     this.key = key;
-    this.box.classList.toggle('done', all);
+    const fin = all && tasks.length > 0;
+    this.box.classList.toggle('done', fin);
     this.body.innerHTML = `
-      <div class="tHead"><span>${T.stepOf(this.i + 1, n)}</span>${all ? `<b>${ic('check', 14, 2.6)} ${T.wellDone}</b>` : ''}</div>
+      <div class="tHead"><span>${T.stepOf(this.i + 1, n)}</span>${fin ? `<b>${ic('check', 14, 2.6)} ${T.wellDone}</b>` : ''}</div>
       <h4>${st.title}</h4>
       <p>${fmt(s.text?.() ?? st.text)}</p>
       ${note ? `<p class="tNote">${fmt(note)}</p>` : ''}
       <ul>${tasks.map((t, j) => `<li class="${this.ticks[j] ? 'ok' : ''}"><i>${this.ticks[j] ? ic('check', 12, 3) : ''}</i>${fmt(t)}</li>`).join('')}</ul>
-      <div class="tActs"><button class="tSkip">${T.skip}</button><span class="grow"></span><button class="tNext ${all ? 'active' : ''}">${last ? T.finish : T.next}</button></div>`;
+      <div class="tActs"><button class="tSkip">${T.skip}</button><span class="grow"></span><button class="tNext ${all ? 'active' : ''}">${last ? T.finish : s.read ? T.ok : T.next}</button></div>`;
   }
 
   /**
@@ -403,6 +459,7 @@ export class Tutorial {
     const a = this.steps[this.i].anchor(), r = a?.getBoundingClientRect();
     const seen = !!r && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < H && r.right > 0 && r.left < W;
     ring.hidden = !seen;
+    this.light(seen ? a : null);
     const w = box.offsetWidth, h = box.offsetHeight;
     if (!seen) {
       const top = (document.getElementById('hud')?.getBoundingClientRect().bottom ?? 80) + 12;
