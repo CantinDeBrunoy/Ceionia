@@ -66,6 +66,8 @@ import { HomeButton, awayFromHome } from './ui/homeButton';
 import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
 import { PortalView } from './render/portal';
+import { BlightView } from './render/blight';
+import { isleBlight } from './world/blight';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { holdIsle } from './world/portal';
 import { War } from './sim/war';
@@ -173,6 +175,10 @@ class Game implements UIHost {
   railBoost: RailBoost;
   /** le portail des Enfers, sur son île (voir world/portal) */
   portalView: PortalView;
+  /** la contamination de l'île du portail (fissures, cristaux, braises, brume, halos dorés) et sa signature affichée */
+  blightView: BlightView;
+  private blightKey = '';
+  private blightT = 0;
   /** la caméra suit l'expédition */
   /** expédition que la caméra suit (son numéro), ou null */
   following: number | null = null;
@@ -347,6 +353,8 @@ class Game implements UIHost {
     this.railBoost = new RailBoost(w);
     this.portalView = new PortalView(w);
     this.scene.add(this.portalView.group);
+    this.blightView = new BlightView(w);
+    this.scene.add(this.blightView.group);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
@@ -932,6 +940,31 @@ class Game implements UIHost {
     this.fauna.detail = p.faunaDetail;
     this.agents.detail = p.faunaDetail;
     this.veg.lodDist = p.vegLod;
+    this.blightView.density = p.density;
+    this.blightView.mist = p.mist;
+  }
+
+  /**
+   * La contamination de l'île du portail (quelques fois par seconde) : quand elle change (défense posée, vague repoussée, zone
+   * conquise, portail ouvert, nouvelle partie), la teinte du sol et la végétation de l'île se refont une fois, les décors aussi
+   */
+  private syncBlight(dt: number) {
+    if ((this.blightT -= dt) > 0) return;
+    this.blightT = 0.5;
+    const w = this.world, b = isleBlight(w, this.war.conqueredZones());
+    this.blightView.set(b);
+    // (sans la version du relief : refaire l'île la change, on tournerait en rond)
+    const key = b ? b.key : '';
+    if (key === this.blightKey) return;
+    this.blightKey = key;
+    this.terrain.setBlight(b);
+    this.veg.blight = b;
+    const p = w.portal;
+    if (p) {
+      const R = Math.ceil(p.r + 4);
+      w.markVeg(Math.max(0, p.x - R), Math.max(0, p.z - R), Math.min(N - 1, p.x + R), Math.min(N - 1, p.z + R));
+      w.vegDirty = true;
+    }
   }
 
   /** Le réglage « Auto » juge chaque image : s'il change de palier, les réglages suivent (sans à-coup visible) */
@@ -1343,6 +1376,9 @@ class Game implements UIHost {
       const waking = this.expeditions.active.find((a) => a.m.id === 'portal' && a.phase === 'work');
       const wk = waking ? Math.min(1, Math.max(0, (waking.t / Math.max(1, waking.c.work + waking.extra) - ISLE_UP) / (ISLE_WAKE - ISLE_UP))) : 0;
       if (this.portalView.update(dt, w.portalOpen, wk, this.env.night)) this.refreshHalos();
+      this.syncBlight(dt);
+      this.blightView.update(dt, this.env.night, this.cam.target, this.cam.dist);
+      this.terrain.setNight(this.env.night);
       this.transports.update(gdt, this.sim.age);
       this.railView.update(dt, this.sim.age);
       this.railBoost.update(dt, this.cam.target.x, this.cam.target.z, this.cam.dist, this.env.night);

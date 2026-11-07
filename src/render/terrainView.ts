@@ -3,6 +3,7 @@ import { World, N, SEA, VR, VS, VEG_CAVE, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
 import { groundDetailTexture, waterNormalTexture } from './textures';
+import { Blight, blightAt, purityAt } from '../world/blight';
 
 export interface GroundPalette {
   grass: THREE.Color;
@@ -56,6 +57,11 @@ const LAVA_MOSS = new THREE.Color(0x6f7a4a);
 const OIL_SOIL = new THREE.Color(0x5a4c3e);
 const OIL_TAR = new THREE.Color(0x1c1814);
 const ICE = new THREE.Color(0xcfe6f4);
+/** Sol contaminé de l'île du portail : noirci, veiné de rouge braise, cendre violacée en lisière ; herbe drue des halos */
+const BLIGHT_CHAR = new THREE.Color(0x3a2a31), BLIGHT_EMBER = new THREE.Color(0x86342a), BLIGHT_ASH = new THREE.Color(0x6e5a66);
+const PURE_GRASS = new THREE.Color(0x6fcf5a);
+/** Halos de purification au plus, pour la lueur de nuit */
+const MAX_HALOS = 8;
 const MAX_CAVES = 24;
 /** Lignes de cases reteintes par image quand la saison change */
 const RECOLOR_ROWS = 6;
@@ -73,6 +79,28 @@ const SKIRT_BOTTOM = -3.5;
 const FACE_MIX = 0.3;
 /** Sous-cases par côté (selon la taille de la carte) */
 const subCells = () => N * VR;
+
+/**
+ * Contamination de l'île du portail dans les shaders (sol et eau) : son intensité au point, comme `blightAt` (sans le bord
+ * festonné : la lueur reste en deçà de la teinte des sommets), éteinte dans les halos des défenses
+ */
+const BLIGHT_GLSL = /* glsl */ `
+uniform vec4 uBlight;
+uniform float uBlightNight;
+uniform vec3 uHalos[${MAX_HALOS}];
+uniform int uHaloN;
+float blightK(vec2 p) {
+  if (uBlight.w <= 0.0) return 0.0;
+  float d = distance(p, uBlight.xy);
+  if (d > uBlight.z) return 0.0;
+  float b = (0.35 + 0.65 * uBlight.w) * (1.0 - smoothstep(min(1.6, uBlight.z * 0.6), uBlight.z, d));
+  for (int i = 0; i < ${MAX_HALOS}; i++) {
+    if (i >= uHaloN) break;
+    vec3 h = uHalos[i];
+    b *= 1.0 - 0.9 * (1.0 - smoothstep(h.z * 0.55, h.z, distance(p, h.xy)));
+  }
+  return b;
+}`;
 
 export class TerrainView {
   group = new THREE.Group();
@@ -143,6 +171,15 @@ export class TerrainView {
   private cliff = new THREE.Color();
   /** grottes (x, y du seuil, z, cap) : le relief est ouvert à l'intérieur de leur tunnel */
   private caveU = { uCaves: { value: Array.from({ length: MAX_CAVES }, () => new THREE.Vector4()) }, uCaveN: { value: 0 } };
+  /** contamination de l'île du portail : teinte du sol (sommets), lueur de nuit du sol et de l'eau (shaders) */
+  private blight: Blight | null = null;
+  private blightU = {
+    /** centre (x, z), rayon, intensité */
+    uBlight: { value: new THREE.Vector4() },
+    uBlightNight: { value: 0 },
+    uHalos: { value: Array.from({ length: MAX_HALOS }, () => new THREE.Vector3()) },
+    uHaloN: { value: 0 },
+  };
 
   constructor(private world: World) {
     const detail = groundDetailTexture();
@@ -154,7 +191,7 @@ export class TerrainView {
     const topMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
     topMat.onBeforeCompile = (sh) => {
       sh.uniforms.uDetail = { value: detail };
-      Object.assign(sh.uniforms, this.caveU);
+      Object.assign(sh.uniforms, this.caveU, this.blightU);
       sh.vertexShader = 'attribute vec4 surf;\nvarying vec4 vSurf;\nvarying vec3 vPos;\nvarying vec3 vNrm;\n'
         + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSurf = surf;\n  vPos = position;\n  vNrm = normal;');
       const T = CAVE_TUNNEL, f = (v: number) => v.toFixed(3);
@@ -175,7 +212,15 @@ float snN(vec2 p) {
   f = f * f * (3.0 - 2.0 * f);
   return mix(mix(snH(i), snH(i + vec2(1.0, 0.0)), f.x), mix(snH(i + vec2(0.0, 1.0)), snH(i + vec2(1.0, 1.0)), f.x), f.y);
 }
+${BLIGHT_GLSL}
 ` + sh.fragmentShader
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  // sol contaminé de l'île du portail : des veines de braise qui rougeoient, à peine le jour, nettement la nuit
+  float bk = blightK(vPos.xz);
+  if (bk > 0.0) {
+    float sp = texture2D(uDetail, vPos.xz * 0.37 + 0.13).b;
+    totalEmissiveRadiance += vec3(1.0, 0.2, 0.06) * bk * (0.03 + uBlightNight * (0.1 + 0.5 * smoothstep(0.55, 0.75, sp)));
+  }`)
         .replace('void main() {', `void main() {
   // grottes : le versant qui traverse le tunnel est ouvert (la butte rocheuse recouvre l'ouverture)
   for (int i = 0; i < ${MAX_CAVES}; i++) {
@@ -243,7 +288,7 @@ float snN(vec2 p) {
     normalMap.repeat.set(9 * N / 48, 9 * N / 48);
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, roughness: 0.1, metalness: 0, depthWrite: false, normalMap, normalScale: new THREE.Vector2(0.4, 0.4) });
     this.waterMat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, this.waterU);
+      Object.assign(sh.uniforms, this.waterU, this.blightU);
       // houle calculée par la carte graphique (même vague que les canards de la faune) : plus de sommets à recopier à chaque image
       sh.vertexShader = 'uniform float uTime;\nuniform float uCalm;\nvarying vec2 vWater;\n' + sh.vertexShader
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
@@ -253,8 +298,22 @@ float snN(vec2 p) {
         .replace('#include <begin_vertex>', `#include <begin_vertex>
   transformed.y = ${SEA.toFixed(4)} + (sin(wA) + sin(wB) + sin(wC)) * wK;
   vWater = (modelMatrix * vec4(transformed, 1.0)).xz;`);
-      sh.fragmentShader = `uniform float uTime;\nuniform sampler2D uHeight;\nuniform sampler2D uDetail;\nuniform sampler2D uFlow;\nuniform vec3 uShallow;\nuniform vec3 uDeep;\nvarying vec2 vWater;\n`
+      sh.fragmentShader = `uniform float uTime;\nuniform sampler2D uHeight;\nuniform sampler2D uDetail;\nuniform sampler2D uFlow;\nuniform vec3 uShallow;\nuniform vec3 uDeep;\nvarying vec2 vWater;\n${BLIGHT_GLSL}\n`
         + sh.fragmentShader
+          .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  // autour de l'île du portail, près de lui : une eau un peu rougeâtre, écumeuse, qui luit la nuit
+  if (uBlight.w > 0.0) {
+    float wd = distance(vWater, uBlight.xy);
+    float wb = uBlight.w * (1.0 - smoothstep(uBlight.z * 0.7, uBlight.z * 1.2 + 2.5, wd));
+    if (wb > 0.0) {
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.2, 0.26), wb * 0.38);
+      float fn = texture2D(uDetail, vWater * 0.8 - vec2(uTime * 0.03, uTime * 0.017)).b;
+      float froth = smoothstep(0.58, 0.74, fn) * wb * 0.45;
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.78, 0.74), froth);
+      diffuseColor.a = max(diffuseColor.a, froth * 0.85);
+      totalEmissiveRadiance += vec3(0.7, 0.1, 0.06) * wb * uBlightNight * 0.3;
+    }
+  }`)
           .replace('#include <color_fragment>', `#include <color_fragment>
   // relief sous l'eau (r) et part de marais (g, négatif au fond des ravins : pas d'eau) : eau dormante, sombre et sans écume
   vec2 hg = texture2D(uHeight, (vWater * ${VR.toFixed(1)} + 0.5) / ${VS.toFixed(1)}).rg;
@@ -442,7 +501,7 @@ float snN(vec2 p) {
     // le courant des rivières (toute la carte) ne change que si le relief a bougé près de l'eau
     if (!colorsOnly && (!rect || this.waterNear(rect, 6))) this.computeFlow();
     const vis = w.vis, vnor = this.vnor, vcol = this.vcol, vsurf = this.vsurf;
-    const vw = this.vegW, yw = this.yardW, patch = this.patch, tmp = this.tmp;
+    const vw = this.vegW, yw = this.yardW, patch = this.patch, tmp = this.tmp, bl = this.blight;
 
     // grottes : tunnel à ouvrir dans le relief ; volcans : hauteur du pied et du bord du cratère, pour teinter le cône selon l'altitude
     let nCaves = 0;
@@ -614,6 +673,23 @@ float snN(vec2 p) {
         tmp.lerp(RAVINE_WALL, smoothstep(0, 0.3, rv) * 0.85).lerp(RAVINE_DEEP, smoothstep(0.3, 1, rv) * 0.85);
         rock = Math.max(rock, rv); grass *= 1 - rv; sand *= 1 - rv;
       }
+      // l'île du portail contaminée : sol noirci veiné de braise près du portail, cendre violacée vers la lisière (la neige
+      // n'y tient pas) ; dans les halos des défenses, l'herbe repousse drue
+      if (bl && h > -0.6) {
+        const x = (i % VS) / VR, z = Math.floor(i / VS) / VR;
+        if (Math.abs(x - bl.x) < bl.r + 3 && Math.abs(z - bl.z) < bl.r + 3) {
+          const b = blightAt(bl, x, z);
+          if (b > 0) {
+            const k = smoothstep(0.03, 0.6, b), pv = patch[i] * 0.5 + this.wobble[i] * 0.5;
+            this.cliff.copy(BLIGHT_ASH).lerp(BLIGHT_CHAR, smoothstep(0.15, 0.5, b)).lerp(BLIGHT_EMBER, clamp(pv * 0.9 + b - 0.75, 0, 0.55));
+            tmp.lerp(this.cliff, k * 0.9);
+            cover *= 1 - k;
+            rock = Math.max(rock * (1 - k), k * 0.65); grass *= 1 - k * 0.8; sand *= 1 - k * 0.6;
+          }
+          const pu = purityAt(bl, x, z) * (1 - smoothstep(0.03, 0.4, b));
+          if (pu > 0 && h > 0.2) tmp.lerp(PURE_GRASS, pu * 0.28 * (1 - cover));
+        }
+      }
       // occlusion ambiante cuite dans les couleurs : vallons, pieds de falaise et fonds de cratère plus sombres, crêtes un peu plus claires
       const xi = i % VS, zi = (i / VS) | 0;
       if (xi > 2 && zi > 2 && xi < VS - 3 && zi < VS - 3) {
@@ -770,6 +846,23 @@ float snN(vec2 p) {
     this.skirt.geometry.attributes.color.needsUpdate = true;
     this.skirt.geometry.attributes.normal.needsUpdate = true;
   }
+
+  /**
+   * La contamination de l'île du portail change (nouvelle partie, défense posée, vague repoussée) : les shaders la suivent
+   * tout de suite ; la teinte des sommets, elle, se refait à la prochaine mise à jour de la zone de l'île (à demander)
+   */
+  setBlight(b: Blight | null) {
+    this.blight = b;
+    const u = this.blightU;
+    if (!b) { u.uBlight.value.set(0, 0, 0, 0); u.uHaloN.value = 0; return; }
+    u.uBlight.value.set(b.x, b.z, b.radius, b.level);
+    const n = Math.min(MAX_HALOS, b.halos.length);
+    for (let i = 0; i < n; i++) u.uHalos.value[i].set(...b.halos[i]);
+    u.uHaloN.value = n;
+  }
+
+  /** La nuit (0 … 1) : le sol contaminé et l'eau autour du portail rougeoient */
+  setNight(night: number) { this.blightU.uBlightNight.value = night; }
 
   animateWater(t: number, calm = 1) {
     this.waterU.uTime.value = t;

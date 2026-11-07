@@ -13,6 +13,7 @@ import { bakeStatic, splitTrees, meshVariants, MeshPart, ModelName } from './ass
 import { broadleafShape, pineShape, bushShape, rockShapes } from './treeShapes';
 import { addSnow } from './snow';
 import { SHADOW_LAYER } from './materials';
+import { Blight, blightAt, purityAt } from '../world/blight';
 
 /**
  * Tuiles de CH×CH cases : un maillage instancié par tuile et par couche (élagage hors champ, reconstruction partielle) ;
@@ -55,6 +56,10 @@ const WILD_HUES = [[0.13, 0.58, 0.75, 0.13, 0.58], [0.58, 0.62, 0.58, 0.75], [0.
 const TUFT_TINT = [[1, 1, 1], [0.78, 0.9, 0.88], [1.05, 0.92, 0.62], [0.82, 1.08, 0.74], [0.86, 0.94, 0.68]].map(([r, g, b]) => new THREE.Color(r, g, b));
 /** Sous-bois par biome */
 const SHRUB_COLORS = [0x6fa860, 0x5f8f62, 0xa09060, 0x4fa04a, 0x6f8f4e].map((c) => new THREE.Color(c));
+/** Île du portail contaminée : bois mort noir violacé, troncs calcinés, herbe brûlée, obsidienne ; fleurs vives des halos */
+const DEAD_WOOD = new THREE.Color(0.42, 0.32, 0.42), CHARRED = new THREE.Color(0.2, 0.16, 0.17);
+const BURNT_GRASS = new THREE.Color(0.42, 0.3, 0.22), OBSIDIAN = new THREE.Color(0.2, 0.16, 0.26);
+const PURE_HUES = [0.13, 0.92, 0.75, 0.58, 0.05];
 
 interface Part { geo: THREE.BufferGeometry; mat: THREE.Material }
 interface LayerOpts {
@@ -215,6 +220,8 @@ export class VegView {
   group = new THREE.Group();
   /** distance à partir de laquelle les arbres passent en version simplifiée (qualité graphique) */
   lodDist = LOD_DIST;
+  /** contamination de l'île du portail (arbres morts, herbe brûlée, obsidienne ; fleurs des halos) : à suivre par le jeu */
+  blight: Blight | null = null;
   /** perchoirs (cimes) et fleurs de chaque tuile, [x, y, z, …] : la faune s'y pose et les butine */
   perches: number[][] = Array.from({ length: NC * NC }, () => []);
   flowers: number[][] = Array.from({ length: NC * NC }, () => []);
@@ -686,6 +693,8 @@ export class VegView {
   /** Forêt : essences du biome (feuillus et sapins, taïga enneigée, palmiers, cactus, saules du marais) */
   private forest(cx: number, cz: number, s: SeasonState) {
     const w = this.world, col = this.col, b = w.biome[w.ci(cx, cz)];
+    // l'île du portail contaminée : arbres morts tordus et troncs calcinés
+    if (this.blighted(cx, cz) > 0.2) { this.deadGrove(cx, cz); return; }
     const edgeDist = this.edge(cx, cz);
     const pick = <T,>(list: T[], h: number) => list[Math.floor(h * list.length)];
     // grands arbres importés : moins d'instances par case (une seule pour les palmiers et les cactus)
@@ -931,6 +940,9 @@ export class VegView {
     }
     if (avg < -0.12) { this.seabed(cx, cz, -avg, s); return; }
     if (avg < 0.12) return;
+    // l'île du portail contaminée : herbe brûlée, rochers d'obsidienne
+    const bk = this.blighted(cx, cz);
+    if (bk > 0.15 && slope <= 1.4) { this.ashland(cx, cz, bk); return; }
     const rough = avg < 0.32 || slope > 0.9;
     const stones = b === BIOME_DESERT || b === BIOME_TAIGA ? 0.04 : 0.012;
     if (slope <= 1.4 && hash2(cx, cz, 301) < (rough ? 0.1 : stones)) {
@@ -994,6 +1006,57 @@ export class VegView {
         const px = cx + 0.15 + hash2(cx, cz, 333 + i) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 337 + i) * 0.7;
         this.flower(px, w.hAt(px, pz) - 0.03, pz, 0.55, hue, hue === 0.58 ? 0.1 : 0.8, hue === 0.58 ? 0.96 : 0.68);
       }
+    }
+    // l'île purifiée : des fleurs vives repoussent dans les halos des défenses
+    const pu = this.blight && w.onPortalIsland(cx, cz) ? purityAt(this.blight, cx + 0.5, cz + 0.5) * (1 - bk * 4) : 0;
+    if (pu > 0.25 && s.snow < 0.3 && hash2(cx, cz, 1501) < pu * 0.7) {
+      const m = 2 + Math.floor(hash2(cx, cz, 1502) * 3), hue = PURE_HUES[Math.floor(hash2(cx, cz, 1503) * PURE_HUES.length)];
+      for (let i = 0; i < m; i++) {
+        const px = cx + 0.12 + hash2(cx, cz, 1504 + i) * 0.76, pz = cz + 0.12 + hash2(cx, cz, 1510 + i) * 0.76;
+        if (this.room(px, pz) < 0.05) continue;
+        this.flower(px, w.hAt(px, pz) - 0.03, pz, 0.6, hue, hue === 0.58 ? 0.1 : 0.85, hue === 0.58 ? 0.96 : 0.66);
+      }
+    }
+  }
+
+  /** Contamination de l'île du portail au milieu d'une case (0 ailleurs) */
+  private blighted(cx: number, cz: number) {
+    return this.blight ? blightAt(this.blight, cx + 0.5, cz + 0.5) : 0;
+  }
+
+  /** Bosquet contaminé : arbres morts tordus, noir violacé, et troncs calcinés ; un bloc d'obsidienne de temps en temps */
+  private deadGrove(cx: number, cz: number) {
+    const w = this.world, col = this.col, cnt = hash2(cx, cz, 1) > 0.5 ? 2 : 1;
+    for (let k = 0; k < cnt; k++) {
+      const px = cx + 0.15 + hash2(cx, cz, 10 + k) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 20 + k) * 0.7, y = w.hAt(px, pz);
+      const sc = 0.7 + hash2(cx, cz, 30 + k) * 0.5, rot = hash2(cx, cz, 50 + k) * 6.28;
+      col.copy(DEAD_WOOD).multiplyScalar(0.8 + hash2(cx, cz, 60 + k) * 0.35);
+      if (this.deadTrees.length && hash2(cx, cz, 40 + k) < 0.7) { this.tree(this.deadTrees[0], px, y, pz, rot, sc, col); continue; }
+      // tronc calciné : le fût d'un feuillu, sans feuillage, couché un peu de travers
+      const f = this.fit(px, pz, this.trunk.reach, sc * 0.8);
+      if (f) this.trunk.put(this.at(px, y - 0.02, pz, rot, f, f * (0.45 + hash2(cx, cz, 70 + k) * 0.3), f), col.copy(CHARRED));
+    }
+    if (hash2(cx, cz, 80) < 0.25) this.obsidian(cx, cz, 81);
+  }
+
+  /** Lande contaminée : rares touffes d'herbe brûlée, cailloux et blocs d'obsidienne */
+  private ashland(cx: number, cz: number, bk: number) {
+    const w = this.world, col = this.col;
+    const n = Math.round((1 + Math.floor(hash2(cx, cz, 310) * 3)) * (1.2 - bk));
+    for (let i = 0; i < n; i++) {
+      const px = cx + 0.1 + hash2(cx, cz, 340 + i) * 0.8, pz = cz + 0.1 + hash2(cx, cz, 350 + i) * 0.8, sc = 0.8 + hash2(cx, cz, 370 + i) * 0.4;
+      this.tuft.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(cx, cz, 360 + i) * 6.28, sc, sc * 0.45, sc), col.copy(BURNT_GRASS).multiplyScalar(0.8 + hash2(cx, cz, 380 + i) * 0.3));
+    }
+    if (hash2(cx, cz, 301) < 0.05 + bk * 0.1) this.obsidian(cx, cz, 302);
+  }
+
+  /** Bloc d'obsidienne (noir, reflets violets) : le plus souvent un gros, parfois deux petits */
+  private obsidian(cx: number, cz: number, salt: number) {
+    const n = hash2(cx, cz, salt) < 0.6 ? 1 : 2;
+    for (let i = 0; i < n; i++) {
+      const px = cx + 0.2 + hash2(cx, cz, salt + 1 + i) * 0.6, pz = cz + 0.2 + hash2(cx, cz, salt + 3 + i) * 0.6;
+      const sc = n === 1 ? 1 + hash2(cx, cz, salt + 5) * 1.3 : 0.5 + hash2(cx, cz, salt + 6 + i) * 0.5;
+      this.placeRock(px, pz, sc, sc * (1 + hash2(cx, cz, salt + 8 + i) * 0.5), hash2(cx, cz, salt + 10 + i), hash2(cx, cz, salt + 12 + i), this.col.copy(OBSIDIAN).multiplyScalar(0.85 + hash2(cx, cz, salt + 14 + i) * 0.3));
     }
   }
 

@@ -866,6 +866,9 @@ body.commanding #dock { display: none; }
 #troopBar .tsup i b { display: block; height: 100%; background: #3fbf5a; }
 #troopBar .tsup.low { color: #c0392b; }
 #troopBar .tsup.low i b { background: #e0a020; }
+/* jauge de contamination de l'île du portail : rouge-violet qui recule */
+#troopBar .tblight { margin-left: 6px; font-size: 0.92em; }
+#troopBar .tblight i b, #troopBar .tblight.low i b { background: linear-gradient(90deg, #8a3fd0, #e0442a); }
 #selBox { display: none; position: absolute; z-index: 8; border: 1.5px solid #7dff8a; background: rgba(125, 255, 138, 0.12); pointer-events: none; }
 #warAlert { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); z-index: 9; padding: 8px 10px 8px 14px; align-items: center; gap: 10px; font-weight: 800; color: #9a1e12; border-color: rgba(200, 60, 40, 0.5); }
 #warAlert.show { display: flex; animation: rise 0.16s ease-out; }
