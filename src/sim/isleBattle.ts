@@ -2,6 +2,7 @@ import type { World } from '../world/world';
 import type { HellZoneInfo } from '../world/hell';
 import { sizeOf } from '../build/catalog';
 import { CombatMap, Hell, HellBuilding, HellUnit, RaidWave, PlayerSiteKind } from './hell';
+import { Blight, demonBoost, healBoost } from '../world/blight';
 
 /**
  * Les combats sur l'île du portail : une petite carte de cases taillée autour de l'île (sa terre, moins le portail et les
@@ -148,6 +149,8 @@ export class IsleBattle {
   defs = new Map<number, HellBuilding>();
   /** la vague en cours sur l'île */
   raid: RaidWave | null = null;
+  /** la contamination de l'île (bonus des démons près du portail, soins dans la zone purifiée) ; null : sans effet */
+  blight: Blight | null = null;
 
   constructor(private world: World) {
     this.map = new IsleMap(world);
@@ -226,12 +229,17 @@ export class IsleBattle {
     this.sim.rally = this.rallyPoint();
   }
 
-  /** Un pas de combat ; hors incursion, les défenses se réparent et les blessures légères se referment */
+  /**
+   * Un pas de combat ; hors incursion, les défenses se réparent et les blessures légères se referment (plus vite dans la zone
+   * purifiée). Tant que la contamination est forte, les démons près du portail frappent un peu plus fort
+   */
   step(dt: number, regen = 0) {
+    const bl = this.blight, ox = this.map.ox, oz = this.map.oz;
+    if (bl) for (const u of this.sim.alive('hell')) u.boost = demonBoost(bl, u.x + ox, u.z + oz);
     this.sim.step(dt);
     if (this.raid || dt <= 0) return;
     for (const b of this.defs.values()) if (!b.down) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * REPAIR * dt);
-    if (regen > 0) for (const u of this.sim.alive('player')) u.hp = Math.min(u.maxHp, u.hp + regen * dt);
+    if (regen > 0) for (const u of this.sim.alive('player')) u.hp = Math.min(u.maxHp, u.hp + regen * healBoost(bl, u.x + ox, u.z + oz) * dt);
   }
 
   /** Coordonnées du monde d'un point de la carte de l'île */
