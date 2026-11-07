@@ -114,6 +114,7 @@ export class War {
    */
   recruitHell(kind: TroopKind, age: number, pop: number): string | null {
     const b = this.base, w = this.world;
+    if (this.portalOut) return 'Le portail est éteint : la guerre est finie.';
     if (!b || !b.posts()) return 'Il faut une caserne avancée dans la base.';
     const ctx = this.recruitCtx(age, pop), miss = TROOPS[kind].gear.filter((g) => (ctx.stock[g] ?? 0) < 1);
     if (miss.length && !w.unlimited && b.countOf('smithy') && w.ore >= miss.length * SMITHY_ORE) {
@@ -184,17 +185,49 @@ export class War {
     return null;
   }
 
+  /** Le portail est éteint (le royaume est tombé) : on ne passe plus dans les Enfers */
+  get portalOut() { return !!this.faction?.victory; }
+
+  /** Des troupes (valides ou blessées) sont dans les Enfers, ou la base avancée y a des bâtiments : on peut aller les voir */
+  hellPresence() { return !this.portalOut && (this.army.troops.some((t) => t.where === 'hell') || this.army.queue.some((r) => r.at === 'hell') || !!this.base?.buildings().length); }
+
+  /** Les renforts : les troupes valides de l'île passent le portail vers les Enfers ; renvoie leur nombre */
+  callGarrison() {
+    if (!this.isle || this.portalOut) return 0;
+    const us = this.troopsIn(this.isle.sim).filter((u) => !this.crossing.has(u.id));
+    this.sendThroughPortal(us);
+    return us.length;
+  }
+
   /** Envoie des unités passer le portail (de l'île vers les Enfers, ou l'inverse) */
   sendThroughPortal(units: HellUnit[]) {
     for (const u of units) {
       const t = this.troopOf.get(u.id), sim = this.simOf(u);
       if (!t || !sim) continue;
+      // (le portail éteint : plus personne ne part pour les Enfers)
+      if (t.where === 'isle' && this.portalOut) continue;
       const goal = t.where === 'isle' ? this.isle!.map.portal : this.hellMap!.arrival;
       // devant l'arche (le portail lui-même est une emprise)
       const [gx, gz] = t.where === 'isle' ? this.isle!.map.freeNear(goal[0], goal[1] + 1.5, 3) : goal;
       sim.order([u.id], { kind: 'move', x: gx, z: gz });
       this.crossing.add(u.id);
     }
+  }
+
+  /** Le portail éteint : toutes les troupes des Enfers (blessées comprises, et les recrues en route) rentrent sur l'île */
+  private bringHome(age: number) {
+    let n = 0;
+    for (const t of this.army.troops) {
+      if (t.where !== 'hell') continue;
+      const u = this.unitOf.get(t.id);
+      if (u) t.hp = Math.max(1, Math.round(u.hp));
+      this.undeploy(t);
+      t.where = 'isle'; t.x = undefined; t.z = undefined;
+      if (t.heal <= 0) this.deploy(t, age);
+      n++;
+    }
+    for (const r of this.army.queue) if (r.at === 'hell') { delete r.at; n++; }
+    if (n) this.news.push({ kind: 'info', text: '🌀 Avant que le portail ne s’éteigne, les troupes des Enfers sont rentrées sur l’île.' });
   }
 
   /** Une troupe passe le portail */
@@ -225,6 +258,8 @@ export class War {
     const { joined, healed } = stepArmy(this.army, dt, this.barracks(), age, healK);
     for (const t of joined) this.news.push(t.where === 'hell' ? { kind: 'portal', text: `⚔️ Un ${TROOPS[t.kind].name.toLowerCase()} a rejoint la base avancée des Enfers.` } : { kind: 'troop', text: `⚔️ Un ${TROOPS[t.kind].name.toLowerCase()} a débarqué sur l’île du portail : il rejoint la garnison.` });
     for (const t of healed) if (t.where === 'hell') this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} sort de l’infirmerie avancée, prêt à se battre.` });
+    // le royaume tombé, le portail s'éteint : les troupes des Enfers rentrent sur l'île (une fois la vue revenue à la surface)
+    if (f.victory && !this.hellInView) this.bringHome(age);
     // les troupes valides sans unité prennent place ; celles qui n'existent plus quittent le combat
     for (const t of ready(this.army)) if (!this.unitOf.has(t.id)) this.deploy(t, age);
     for (const [id, u] of [...this.unitOf]) {

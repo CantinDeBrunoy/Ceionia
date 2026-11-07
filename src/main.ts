@@ -392,7 +392,7 @@ class Game implements UIHost {
       age: () => this.sim.age, pop: () => this.sim.pop,
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
-      leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(),
+      leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(),
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });

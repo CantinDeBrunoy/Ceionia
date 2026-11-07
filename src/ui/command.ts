@@ -43,6 +43,8 @@ export interface CommandHost {
   leaveIsle(): void;
   /** quitter les Enfers par le portail */
   leaveHell(): void;
+  /** aller dans les Enfers (depuis l'île) */
+  goHell(): void;
   canvas: HTMLCanvasElement;
   /** les touches de déplacement de la caméra (on retire celles qu'un ordre a prises) */
   camKeys: Set<string>;
@@ -315,6 +317,8 @@ export class CommandUI implements ToolInput {
       const why = w.recruit(a.slice(4) as TroopKind, this.host.age(), this.host.pop());
       this.host.toast(why ?? `Recrue en route : ${TROOPS[a.slice(4) as TroopKind].name.toLowerCase()} (la galère l’amène sur l’île).`);
     }
+    else if (a === 'goHell') { this.host.goHell(); return; }
+    else if (a === 'garrison') { const n = w.callGarrison(); this.host.toast(n ? `🌀 ${n} troupe${n > 1 ? 's' : ''} de l’île passe${n > 1 ? 'nt' : ''} le portail : elle${n > 1 ? 's' : ''} arrive${n > 1 ? 'nt' : ''} au seuil des Enfers.` : 'Aucune troupe valide sur l’île.'); }
     else if (a === 'wave') { w.callWave(); this.host.toast('🎺 Le cor sonne : la prochaine vague arrive !'); }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
     else if (a === 'convoy') { const why = w.sendConvoy(); this.host.toast(why ?? '📦 Convoi parti du village : il passe le portail et rejoint l’expédition.'); }
@@ -355,12 +359,12 @@ export class CommandUI implements ToolInput {
     // la contamination de l'île : elle recule à chaque défense, chaque vague repoussée, chaque zone des Enfers conquise
     const bl = isle && w.blight ? Math.round(w.blight.level * 100) : -1;
     const blight = bl >= 0 ? `<span class="tsup tblight${bl > 60 ? ' low' : ''}" title="Contamination de l’île : les Enfers débordent par le portail (près de lui, les démons frappent un peu plus fort). Elle recule à chaque tour de garde ou caserne bâtie, chaque vague repoussée, chaque zone des Enfers conquise ; l’île sécurisée reverdit. Les troupes se soignent plus vite dans la zone purifiée (anneaux dorés autour des défenses).">🔥 Contamination <i><b style="width:${bl}%"></b></i>${bl}%</span>` : '';
-    const html = `<div class="trow">${cards || `<span class="tnone">${isle ? 'Aucune troupe sur l’île : recrutez à la caserne.' : 'Aucune troupe ici.'}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}${wounded ? `<span class="twd" title="Blessés qui se soignent à la caserne">🩹 ${wounded}</span>` : ''}${blight}${status}</div>
+    const html = `<div class="trow">${cards || `<span class="tnone">${isle ? 'Aucune troupe sur l’île : recrutez à la caserne.' : w.army.troops.some((x) => x.where === 'hell') ? 'Aucune troupe debout ici : les blessés se soignent.' : 'Aucune troupe ici : faites venir la garnison de l’île (🌀 Renforts).'}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}${wounded ? `<span class="twd" title="Blessés qui se soignent à la caserne">🩹 ${wounded}</span>` : ''}${blight}${status}</div>
       <div class="trow">
         <button data-a="attack" class="${sel.armed ? 'on' : ''}" title="Attaquer en marchant : A puis clic au sol (on combat ce qu’on croise)">⚔️ <kbd>A</kbd></button>
         <button data-a="hold" title="Tenir la position (H)">🛡️ <kbd>H</kbd></button>
         <button data-a="retreat" title="${isle ? 'Se replier vers la caserne (R)' : 'Se replier vers le portail (R)'}">↩️ <kbd>R</kbd></button>
-        <button data-a="portal" title="${isle ? 'Passer le portail : les troupes choisies partent en expédition dans les Enfers (facultatif)' : 'Rentrer sur l’île par le portail'}">🌀 ${isle ? 'Enfers' : 'Île'}</button>
+        ${isle && w.portalOut ? '' : `<button data-a="portal" title="${isle ? 'Passer le portail : les troupes choisies partent en expédition dans les Enfers (facultatif)' : 'Rentrer sur l’île par le portail'}">🌀 ${isle ? 'Enfers' : 'Île'}</button>`}${this.hellLinks(isle)}
         <span class="grps">${groups}</span>
         <button data-a="pause" class="${this.host.paused() ? 'on' : ''}" title="Pause active (Espace) : les ordres se donnent en pause">${this.host.paused() ? '▶' : '⏸'}</button>
         ${rec}
@@ -368,6 +372,17 @@ export class CommandUI implements ToolInput {
         <button data-a="leave" class="tx" title="${isle ? 'Quitter le commandement (Échap)' : 'Quitter les Enfers'}">✕</button>
       </div>${isle ? '' : this.baseRow()}${this.helpOpen ? `<ul class="thelp">${CONTROLS_HELP.map(([k, t]) => `<li><b>${k}</b><span>${t}</span></li>`).join('')}</ul>` : ''}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
+  }
+
+  /**
+   * Les passages entre l'île et les Enfers : de l'île, aller voir les troupes et la base des Enfers (sans quoi on n'y entrait
+   * qu'en cliquant la nouvelle d'un passage) ; des Enfers, faire venir en renfort les troupes valides de l'île
+   */
+  private hellLinks(isle: boolean) {
+    const w = this.host.war;
+    if (isle) return w.hellPresence() ? '<button data-a="goHell" title="Aller dans les Enfers, auprès des troupes et de la base avancée">🔥 Voir les Enfers</button>' : '';
+    const n = w.portalOut || !w.isle ? 0 : w.troopsIn(w.isle.sim).filter((u) => !w.crossing.has(u.id)).length;
+    return n ? `<button data-a="garrison" title="Renforts : les ${n} troupe${n > 1 ? 's' : ''} valide${n > 1 ? 's' : ''} de l’île passent le portail et vous rejoignent">🌀 Renforts +${n}</button>` : '';
   }
 
   /**
