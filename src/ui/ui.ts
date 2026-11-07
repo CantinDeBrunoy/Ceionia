@@ -701,6 +701,8 @@ export class UI {
     if (d.maxAge !== undefined && h.sim.age > d.maxAge) return `On ne le bâtit plus qu’à l’âge : ${AGES[d.maxAge].name} (c’est trop tard)`;
     // un village neuf commence par sa place : le reste se bâtit autour
     if (k !== 'gather' && h.world.buildings.size === 0) return `Posez d’abord ${h.sim.nameOf('gather').toLowerCase()}, la place au centre du village`;
+    const guide = this.tutorial?.lock(k);
+    if (guide) return guide;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
       return `Débloqué par l’expédition « ${m?.title ?? d.reqMission} »`;
