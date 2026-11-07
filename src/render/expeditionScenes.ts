@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents } from '../sim/agents';
-import { ActiveExpedition, seaClearance, SEA_CLEAR, SEA_CLEAR_MIN, openWater, seaRoomMap, offing } from '../sim/expeditions';
+import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntSpot } from '../sim/expeditions';
 import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
 import { Act } from '../world/gardens';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
@@ -2945,7 +2945,7 @@ export class ExpeditionScene {
     const war = this.story === 'megalodon' || this.story === 'kraken';
     if (this.offshore && war) {
       const sea = openWater(this.world), room = seaRoomMap(sea), [cx, cz] = a.dest;
-      const o = offing(this.world, cx, cz, SEA_CLEAR, sea, room) ?? offing(this.world, cx, cz, SEA_CLEAR_MIN, sea, room);
+      const o = huntSpot(this.world, cx, cz, sea, room);
       if (o) { [wx, wz] = o.moor; out = o.at; wat.level = SEA; }
       else { const at = this.openSpot(wx, wz); if (at) out = at; }
     }

@@ -194,7 +194,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
 
   it('mégalodon et kraken : le combat se tient en haute mer, loin de toute rive ou falaise', () => {
     for (const ci of [0, 1]) {
-      const r = sail(ci ? 'kraken' : 'megalodon', 0, 1), { out, home } = r.s.boat!;
+      const r = sail(ci ? 'kraken' : 'megalodon', 0, 1), { home } = r.s.boat!, out = (r.scene as unknown as { arena: [number, number] }).arena;
       // un point d'eau dégagé tout autour (aucune rive, aucun rocher dans le rayon du combat et de la caméra)
       expect(seaClearance(r.v.w, out[0], out[1], SEA_CLEAR, openWater(r.v.w))).toBeGreaterThanOrEqual(SEA_CLEAR_MIN);
       expect(Math.hypot(out[0] - home[0], out[1] - home[1])).toBeGreaterThan(2);
@@ -332,12 +332,13 @@ describe('la chasse au monstre se tient en vraie haute mer, jamais dans une flaq
     stubCanvas();
     const a = v.ex.start(mission(id), 0, 1);
     expect(a, v.ex.lastFail ?? '').not.toBeNull();
-    const scene = new ExpeditionScene(v.w, v.agents, new THREE.Group(), a!, null), bt = (scene as unknown as { boat: { home: [number, number]; out: [number, number] } }).boat;
+    const scene = new ExpeditionScene(v.w, v.agents, new THREE.Group(), a!, null), sc = scene as unknown as { boat: { home: [number, number] }; arena: [number, number] }, bt = { home: sc.boat.home, out: sc.arena };
     scene.dispose(a!);
     return bt;
   }
 
   it('sur plusieurs continents générés, d’où que parte le village : un point de haute mer reliée au large, dégagé de tout', () => {
+    let hunts = 0, inside = 0;
     for (const seed of [2026, 42, 77, 123]) for (const f of [0.15, 0.5, 0.85]) {
       setMapSize(192);
       const w = new World();
@@ -354,8 +355,12 @@ describe('la chasse au monstre se tient en vraie haute mer, jamais dans une flaq
         expect(seaClearance(w, out[0], out[1], SEA_CLEAR, sea), `${seed} ${f} ${id}`).toBeGreaterThanOrEqual(SEA_CLEAR_MIN);
         // le mouillage aussi est en haute mer : la galère y file tout droit, sans passer par la terre
         for (let k = 0; k <= 1; k += 0.05) expect(sea[w.ci(Math.floor(home[0] + (out[0] - home[0]) * k), Math.floor(home[1] + (out[1] - home[1]) * k))], `${seed} ${f} ${id}`).toBe(1);
+        // d'ordinaire assez loin du bord de la carte pour que la vue ne montre pas le bout du monde
+        hunts++;
+        if (Math.min(out[0], out[1], N - out[0], N - out[1]) >= SEA_CLEAR + 8) inside++;
       }
     }
+    expect(inside / hunts).toBeGreaterThan(0.75);
   }, 120000);
 
   /** Une carte plate de terre ferme (hauteur 1), où l'on creuse de l'eau */
