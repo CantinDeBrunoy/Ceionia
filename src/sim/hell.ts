@@ -40,8 +40,13 @@ export const LEASH = 16;
 export const ALERT_TIME = 12;
 /** Une forge envoie un renfort toutes les FORGE_EVERY secondes, tant que la garnison de sa zone est entamée */
 export const FORGE_EVERY = 45;
-/** Incursions : la première après RAID_FIRST secondes, puis toutes les RAID_EVERY (de moins en moins, jusqu'à RAID_MIN) */
-export const RAID_FIRST = 240, RAID_EVERY = 210, RAID_MIN = 120;
+/**
+ * Incursions sur l'île du portail : la première RAID_FIRST secondes après son ouverture, puis toutes les RAID_EVERY (un peu
+ * moins à chaque niveau, jusqu'à RAID_MIN) ; au plus RAID_MAX démons (RAID_SECURED_MAX une fois l'île sécurisée). L'île est
+ * sécurisée après SECURE_WAVES vagues repoussées : réglé pour qu'une tour de garde, une caserne et sa garnison suffisent,
+ * sans aucune expédition dans les Enfers (facultatives)
+ */
+export const RAID_FIRST = 300, RAID_EVERY = 240, RAID_MIN = 150, RAID_MAX = 10, RAID_SECURED_MAX = 6, SECURE_WAVES = 5;
 
 export type Side = 'hell' | 'player';
 /**
@@ -96,7 +101,9 @@ export type HellEvent =
   | { type: 'spawn'; id: number; kind: DemonKind; x: number; z: number }
   | { type: 'conquered'; zone: number }
   | { type: 'victory' }
-  | { type: 'raid'; wave: number; n: number };
+  | { type: 'raid'; wave: number; n: number }
+  | { type: 'raidEnd'; wave: number; repelled: boolean }
+  | { type: 'secured' };
 
 /**
  * Une incursion : la vague de démons qui passe le portail. Elle n'attaque QUE l'île du portail (jamais l'île principale) :
@@ -104,6 +111,8 @@ export type HellEvent =
  */
 export interface RaidWave {
   wave: number;
+  /** niveau de difficulté (vagues repoussées + 1) */
+  level: number;
   target: 'portal-island';
   units: { kind: DemonKind; name: string; stats: UnitStats }[];
 }
@@ -126,13 +135,28 @@ export function demonStats(kind: DemonKind, zone: number): UnitStats {
   return { ...s, hp: Math.round(s.hp * (1 + 0.12 * lv)), dmg: Math.round(s.dmg * (1 + 0.1 * lv) * 10) / 10 };
 }
 
-/** Taille d'une vague : elle croît d'une vague à l'autre ; chaque zone conquise l'affaiblit */
-export function raidSize(wave: number, conquered = 0) {
-  return Math.max(2, Math.min(24, 3 + 2 * (wave - 1)) - 2 * conquered);
+/**
+ * Taille d'une vague selon son niveau (vagues déjà repoussées + 1) : deux diablotins d'abord, un de plus à chaque niveau,
+ * au plus RAID_MAX ; une fois l'île sécurisée, de simples escarmouches ; chaque zone des Enfers conquise l'affaiblit
+ */
+export function raidSize(level: number, conquered = 0, secured = false) {
+  return Math.max(2, Math.min(secured ? RAID_SECURED_MAX : RAID_MAX, 1 + level) - conquered);
 }
 
-/** Temps jusqu'à la vague suivante */
-export function raidInterval(wave: number) { return Math.max(RAID_MIN, RAID_EVERY - 10 * wave); }
+/** Composition d'une vague : diablotins ; une brute dès le niveau 3, des archers dès le 4, un chef dès le 7 */
+export function raidKinds(level: number, n: number): DemonKind[] {
+  const kinds: DemonKind[] = level >= 7 ? ['chief'] : [];
+  for (let i = kinds.length; i < n; i++) kinds.push(level >= 4 && i % 4 === 2 ? 'archer' : level >= 3 && i % 4 === 3 ? 'brute' : 'imp');
+  return kinds;
+}
+
+/** Temps jusqu'à la vague suivante (deux fois plus long une fois l'île sécurisée) */
+export function raidInterval(level: number, secured = false) { return Math.max(RAID_MIN, RAID_EVERY - 10 * level) * (secured ? 2 : 1); }
+
+/** Force d'une vague (pour régler les défenses de l'île) : vie totale, dégâts par seconde */
+export function raidStrength(w: RaidWave) {
+  return { hp: w.units.reduce((s, u) => s + u.stats.hp, 0), dps: w.units.reduce((s, u) => s + u.stats.dmg / u.stats.cooldown, 0) };
+}
 
 export class Hell {
   units = new Map<number, HellUnit>();
@@ -148,6 +172,12 @@ export class Hell {
   /** incursions : numéro de la dernière vague, moment de la suivante (-1 : pas encore fixé) */
   wave = 0;
   nextRaid = -1;
+  /** vague en cours sur l'île (l'île signale son issue par `endRaid`) */
+  activeRaid: RaidWave | null = null;
+  /** vagues repoussées, vagues qui ont submergé l'île ; depuis quand l'île tient (-1 : pas encore menacée) */
+  raidsRepelled = 0;
+  raidsLost = 0;
+  heldSince = -1;
   private nextId = 1;
   private rnd: () => number;
   /** garnison initiale de chaque zone (les forges la complètent jusque-là) */
@@ -570,39 +600,63 @@ export class Hell {
   // ---------- Incursions ----------
 
   /**
-   * Une incursion est-elle due ? `time` : temps de jeu (secondes) ; le premier appel fixe la première vague. Plus aucune
-   * une fois le royaume détruit
+   * Une incursion est-elle due ? `time` : temps de jeu (secondes) ; le premier appel fixe la première vague (l'île vient
+   * d'ouvrir). Jamais pendant une incursion en cours ; plus aucune une fois le royaume détruit
    */
   raidDue(time: number) {
-    if (this.victory) return false;
-    if (this.nextRaid < 0) { this.nextRaid = time + RAID_FIRST; return false; }
+    if (this.victory || this.activeRaid) return false;
+    if (this.nextRaid < 0) { this.nextRaid = time + RAID_FIRST; this.heldSince = time; return false; }
     return time >= this.nextRaid;
   }
 
+  /** Niveau de la prochaine vague : il ne monte qu'avec les vagues repoussées (une défaite ne rend pas la suivante plus dure) */
+  get raidLevel() { return this.raidsRepelled + 1; }
+
+  /** L'île du portail est sécurisée : SECURE_WAVES vagues repoussées (acquis pour de bon, l'étape du passage d'âge) */
+  get islandSecured() { return this.raidsRepelled >= SECURE_WAVES; }
+
+  /** Depuis combien de temps l'île tient (depuis la première menace, ou la dernière vague qui l'a submergée), en secondes */
+  heldFor(time: number) { return this.heldSince < 0 ? 0 : Math.max(0, time - this.heldSince); }
+  /** …en jours de jeu (`dayLen` : durée d'un jour, en secondes) */
+  daysHeld(time: number, dayLen: number) { return Math.floor(this.heldFor(time) / Math.max(1, dayLen)); }
+
   /**
-   * La vague suivante passe le portail : ses démons (de plus en plus nombreux, brutes puis archers et un chef s'y mêlent),
-   * à placer sur l'île du portail — jamais sur l'île principale ; fixe la vague d'après
+   * La vague suivante passe le portail : ses démons (quelques diablotins d'abord ; des brutes, des archers, puis un chef s'y
+   * mêlent à mesure qu'on les repousse), à placer sur l'île du portail — jamais sur l'île principale ; fixe la vague d'après.
+   * L'île signale ensuite son issue par `endRaid`
    */
   spawnRaid(time = this.nextRaid): RaidWave {
     this.wave++;
-    const conq = this.conquered.filter(Boolean).length, n = raidSize(this.wave, conq), w = this.wave;
-    const kinds: DemonKind[] = [];
-    if (w >= 5) kinds.push('chief');
-    for (let i = kinds.length; i < n; i++) kinds.push(w >= 3 && i % 4 === 2 ? 'archer' : w >= 2 && i % 4 === 3 ? 'brute' : 'imp');
-    this.nextRaid = Math.max(time, 0) + raidInterval(w);
-    this.events.push({ type: 'raid', wave: w, n });
-    // la vague vient des zones encore tenues : ses démons ont la force de la zone libre la plus proche du portail
-    let lvl = 1;
-    while (lvl < Z_KINGDOM && this.conquered[lvl]) lvl++;
-    return { wave: w, target: 'portal-island', units: kinds.map((k) => ({ kind: k, name: DEMONS[k].name, stats: demonStats(k, lvl) })) };
+    const lv = this.raidLevel, conq = this.conquered.filter(Boolean).length, n = raidSize(lv, conq, this.islandSecured);
+    const kinds = raidKinds(lv, n);
+    this.nextRaid = Math.max(time, 0) + raidInterval(lv, this.islandSecured);
+    this.events.push({ type: 'raid', wave: this.wave, n });
+    const w: RaidWave = { wave: this.wave, level: lv, target: 'portal-island', units: kinds.map((k) => ({ kind: k, name: DEMONS[k].name, stats: demonStats(k, 1) })) };
+    this.activeRaid = w;
+    return w;
   }
 
+  /**
+   * Issue de l'incursion en cours, signalée par l'île : repoussée (tous ses démons abattus ou renvoyés au portail), ou l'île
+   * submergée (sa garnison vaincue). Renvoie true si cette victoire vient de sécuriser l'île
+   */
+  endRaid(repelled: boolean, time: number): boolean {
+    if (!this.activeRaid) return false;
+    const was = this.islandSecured, wave = this.activeRaid.wave;
+    this.activeRaid = null;
+    if (repelled) this.raidsRepelled++;
+    else { this.raidsLost++; this.heldSince = time; }
+    this.events.push({ type: 'raidEnd', wave, repelled });
+    if (!was && this.islandSecured) { this.events.push({ type: 'secured' }); return true; }
+    return false;
+  }
   // ---------- Sauvegarde ----------
 
   /** État à sauvegarder : unités vivantes, vie des bâtiments, zones conquises, incursions */
   save(): HellSave {
     return {
       time: this.time, wave: this.wave, nextRaid: this.nextRaid, victory: this.victory, conquered: [...this.conquered],
+      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, heldSince: this.heldSince,
       buildings: [...this.buildings.values()].map((b) => [b.id, Math.max(0, Math.round(b.hp))]),
       units: this.alive().map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
     };
@@ -612,6 +666,7 @@ export class Hell {
   static load(map: HellMap, s: HellSave): Hell {
     const h = new Hell(map);
     h.time = s.time; h.wave = s.wave; h.nextRaid = s.nextRaid; h.victory = s.victory;
+    h.raidsRepelled = s.raidsRepelled ?? 0; h.raidsLost = s.raidsLost ?? 0; h.heldSince = s.heldSince ?? -1;
     s.conquered.forEach((c, i) => (h.conquered[i] = c));
     for (const [id, hp] of s.buildings) { const b = h.buildings.get(id); if (b) { b.hp = hp; if (hp <= 0) { b.down = true; map.unblock(b.site); } } }
     h.units.clear();
@@ -626,6 +681,7 @@ export class Hell {
 
 export interface HellSave {
   time: number; wave: number; nextRaid: number; victory: boolean; conquered: boolean[];
+  raidsRepelled?: number; raidsLost?: number; heldSince?: number;
   buildings: [number, number][];
   units: { side: Side; kind: string; zone: number; x: number; z: number; hp: number; home: [number, number]; stats?: UnitStats; patrol: boolean }[];
 }

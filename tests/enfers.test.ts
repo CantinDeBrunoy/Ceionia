@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { HellMap, HW, HL, HELL_ZONES, HPOOL_LAVA, HPOOL_CHASM, Z_RIVER, Z_CLIFFS, Z_KINGDOM } from '../src/world/hell';
-import { Hell, HellUnit, PLAYER_UNITS, LEASH, RAID_FIRST, raidSize, DEMONS } from '../src/sim/hell';
+import { Hell, HellUnit, PLAYER_UNITS, LEASH, RAID_FIRST, SECURE_WAVES, raidSize, raidKinds, raidStrength, DEMONS } from '../src/sim/hell';
 
 const map = (seed = 1) => new HellMap(seed);
 /** Fait tourner la simulation `t` secondes par pas de 1/20 s */
@@ -183,23 +183,54 @@ describe('Faction des Enfers', () => {
     expect(h.raidDue(100 + RAID_FIRST)).toBe(true);
     const sizes: number[] = [];
     let t = 100 + RAID_FIRST;
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < SECURE_WAVES; i++) {
       const w = h.spawnRaid(t);
       expect(w.target).toBe('portal-island');
       sizes.push(w.units.length);
-      expect(h.raidDue(t + 1)).toBe(false);
+      // pas de nouvelle vague tant que celle-ci n'est pas finie
+      expect(h.raidDue(h.nextRaid + 1)).toBe(false);
+      h.endRaid(true, t + 30);
+      expect(h.raidDue(t + 31)).toBe(false);
       t = h.nextRaid;
       expect(h.raidDue(t)).toBe(true);
     }
     for (let i = 1; i < sizes.length; i++) expect(sizes[i]).toBeGreaterThan(sizes[i - 1]);
-    const last = h.spawnRaid(t);
-    expect(last.units.some((u) => u.kind === 'brute')).toBe(true);
-    expect(last.units.some((u) => u.kind === 'archer')).toBe(true);
-    expect(last.units.some((u) => u.kind === 'chief')).toBe(true);
+    expect(sizes[0]).toBeLessThanOrEqual(3);
     // chaque zone conquise affaiblit les vagues
     expect(raidSize(6, 2)).toBeLessThan(raidSize(6, 0));
   });
 
+  it('les vagues restent abordables ; une défaite ne les durcit pas ; l’île se sécurise en repoussant des vagues', () => {
+    const h = new Hell(map(1));
+    h.raidDue(0);
+    let t = RAID_FIRST;
+    // une défaite : la vague suivante a le même niveau, l'île « tient » depuis ce moment
+    const w1 = h.spawnRaid(t);
+    h.endRaid(false, t + 40);
+    expect(h.raidsLost).toBe(1);
+    expect(h.heldFor(t + 100)).toBe(60);
+    t = h.nextRaid;
+    expect(h.spawnRaid(t).units.length).toBe(w1.units.length);
+    let secured = h.endRaid(true, t + 20);
+    expect(secured).toBe(false);
+    while (!h.islandSecured) { t = h.nextRaid; h.spawnRaid(t); secured = h.endRaid(true, t + 20); }
+    expect(secured).toBe(true);
+    expect(h.raidsRepelled).toBe(SECURE_WAVES);
+    expect(h.events.some((e) => e.type === 'secured')).toBe(true);
+    // jusqu'à la sécurisation, la plus grosse vague reste modeste (diablotins, une brute, un archer) : une tour et une
+    // caserne en viennent à bout
+    const hardest = raidStrength({ wave: 0, level: SECURE_WAVES, target: 'portal-island', units: raidKinds(SECURE_WAVES, raidSize(SECURE_WAVES)).map((k) => ({ kind: k, name: k, stats: DEMONS[k] })) });
+    expect(hardest.hp).toBeLessThan(400);
+    expect(raidKinds(SECURE_WAVES, raidSize(SECURE_WAVES))).not.toContain('chief');
+    // l'île sécurisée : escarmouches plus rares et plus petites
+    const gap = h.nextRaid - t;
+    t = h.nextRaid;
+    const w = h.spawnRaid(t);
+    expect(w.units.length).toBeLessThanOrEqual(6);
+    expect(h.nextRaid - t).toBeGreaterThan(gap);
+    // plus tard, un chef mène les vagues
+    expect(raidKinds(8, raidSize(8))).toContain('chief');
+  });
   it('une forge renvoie des renforts à sa zone entamée', () => {
     const h = new Hell(map(1));
     const before = h.garrison(2).length;
@@ -214,11 +245,12 @@ describe('Faction des Enfers', () => {
     const fort = h.standing(2).find((b) => b.kind === 'fortress')!;
     h.damage(fort, 1e6, -1);
     h.addPlayerUnit('archer', PLAYER_UNITS.archer, h.map.arrival[0], h.map.arrival[1]);
-    h.raidDue(10); h.spawnRaid(300);
+    h.raidDue(10); h.spawnRaid(300); h.endRaid(true, 330);
     const s = JSON.parse(JSON.stringify(h.save()));
     const g = Hell.load(map(4), s);
     expect(g.conquered[2]).toBe(true);
     expect(g.wave).toBe(1);
+    expect(g.raidsRepelled).toBe(1);
     expect(g.alive('player')).toHaveLength(1);
     expect(g.alive().length).toBe(h.alive().length);
     expect(g.map.walkableAt(fort.site.x, fort.site.z)).toBe(true);
