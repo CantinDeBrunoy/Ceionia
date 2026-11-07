@@ -68,6 +68,9 @@ import { OilSeeps } from './render/oilSeeps';
 import { PortalView } from './render/portal';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { holdIsle } from './world/portal';
+import { War } from './sim/war';
+import { BattleLayer } from './render/battleUnits';
+import { CommandUI, Theater } from './ui/command';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
@@ -219,6 +222,14 @@ class Game implements UIHost {
   private mode: 'surface' | 'under' | 'hell' = 'surface';
   /** monde des Enfers (mode développeur : `__game.enterHell()`), créé à la première visite */
   hellMode: HellMode | null = null;
+  /** la guerre contre les Enfers : faction, incursions sur l'île du portail, armée (voir sim/war) */
+  war: War;
+  /** le contrôle direct des troupes (dans les Enfers, et sur l'île quand on la commande) */
+  command!: CommandUI;
+  /** les combattants de l'île du portail, dans la scène de la surface */
+  private isleLayer: BattleLayer | null = null;
+  /** on commande la garnison de l'île (la vue reste en surface) */
+  isleCmd = false;
   private surfaceView: ReturnType<CameraRig['view']> | null = null;
   private surfaceZoom = { min: 10, max: 0 };
   private fading = false;
@@ -241,6 +252,7 @@ class Game implements UIHost {
     const settings = { ...loadSettings(), ...(save?.settings ?? {}) } as Partial<Settings>;
     this.sim = new Sim(w);
     this.under = new Underground(w);
+    this.war = new War(w);
     if (save) {
       try {
         w.mapId = save.map; w.seed = save.seed;
@@ -257,6 +269,7 @@ class Game implements UIHost {
       w.difficulty = difficulty;
       w.wood = rulesOf(difficulty).startWood; w.stone = rulesOf(difficulty).startStone;
     }
+    this.war.load(w.war);
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
     if (settings.quality) this.quality = settings.quality;
@@ -359,6 +372,15 @@ class Game implements UIHost {
     this.cam.handler = this.tools;
     this.ui = new UI(uiRoot, host);
     this.spaceCast = new SpaceCast(uiRoot);
+    // le contrôle des troupes : ses ordres au clic droit (sans glisser), la barre des troupes, l'alerte d'incursion
+    this.command = new CommandUI(uiRoot, {
+      war: this.war, canvas, camKeys: this.cam.keys,
+      age: () => this.sim.age, pop: () => this.sim.pop,
+      paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
+      toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
+      leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(),
+    });
+    this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.railway.onNews = (m) => this.ui.toast(m);
@@ -378,6 +400,8 @@ class Game implements UIHost {
     this.sim.onAgeUp = (age) => {
       // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
       this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
+      // la garnison gagne en vie et en force avec l'âge
+      this.war.ageUp(age);
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
@@ -423,6 +447,7 @@ class Game implements UIHost {
     return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
   }
   buildSave(): SaveData {
+    this.world.war = this.war.save();
     return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, seasonT: this.time.seasonT, hour: this.time.hour, settings: this.settings(), savedAt: Date.now() };
   }
   saveNow() { if (this.running) saveSlot(this.buildSave()); }
@@ -444,28 +469,33 @@ class Game implements UIHost {
   }
   toMenu() { this.saveNow(); this.running = false; location.reload(); }
   setPhoto(on: boolean) { document.body.classList.toggle('photo', on); }
-  underZone() { return this.mode === 'under' ? UZ_NAMES[this.under.zoneAt(this.cam.target.x, this.cam.target.z)] : null; }
+  underZone() { return this.mode === 'under' ? UZ_NAMES[this.under.zoneAt(this.cam.target.x, this.cam.target.z)] : this.mode === 'hell' && this.hellMode ? `🔥 ${this.hellMode.zoneName(this.cam.target.z)}` : null; }
 
-  // ---------- Monde des Enfers (mode développeur, avant le portail) ----------
-  /** Entre dans les Enfers, devant le portail ; un clic sur le portail ramène à la surface */
+  // ---------- Monde des Enfers (expéditions facultatives, par le portail de l'île) ----------
+  /** Entre dans les Enfers, devant le portail : on y commande les troupes qui l'ont passé */
   async enterHell() {
     if (this.mode !== 'surface') return;
+    this.leaveIsle(true);
     this.tools.setTool('none');
     this.fadeThrough(async () => {
       const { HellMode } = await loadHell();
-      this.hellMode ??= new HellMode(this.world.seed);
+      const f = this.war.ensureFaction();
+      if (!this.hellMode || this.hellMode.hell !== f) this.hellMode = new HellMode(this.war.hellMap!, f);
       const hm = this.hellMode;
       hm.view.fx.onClash = (k) => this.audio.sfxClash(k);
       hm.view.build();
       this.surfaceView = this.cam.view();
       this.surfaceZoom = { min: this.cam.minDist, max: this.cam.maxDist };
       this.mode = 'hell';
-      document.body.classList.add('under');
+      this.war.hellInView = true;
+      this.war.hellFx.length = 0;
+      document.body.classList.add('under', 'hell');
       this.cam.minDist = 2.4; this.cam.maxDist = 30; this.cam.minPitch = 0.95;
       const [x, z] = hm.map.arrival;
       this.cam.jump({ x, z: z + 4, dist: 14, pitch: 1.05, yaw: Math.PI }, hm.view.groundY(x, z));
-      this.cam.handler = { down: (e) => { const p = hm.view.pick(this.cam.ray(e.x, e.y, canvas.clientWidth, canvas.clientHeight)); if (p && hm.view.portalAt(p.x, p.z)) this.exitHell(); }, move: () => {}, up: () => {}, cancel: () => {}, hover: () => {} };
-      this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Le portail ramène à la surface.`);
+      this.cam.handler = this.command;
+      this.command.setTheater(this.hellTheater(hm));
+      this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.`);
       this.ui.update();
     }, 'Passage du portail…');
   }
@@ -475,8 +505,10 @@ class Game implements UIHost {
     if (this.mode !== 'hell') return;
     this.fadeThrough(() => {
       this.mode = 'surface';
-      document.body.classList.remove('under');
+      this.war.hellInView = false;
+      document.body.classList.remove('under', 'hell');
       this.hellMode?.view.leave();
+      this.command.setTheater(null);
       this.cam.minDist = this.surfaceZoom.min; this.cam.minPitch = 0.25;
       this.cam.maxDist = this.surfaceZoom.max || this.cam.maxDist;
       const v = this.surfaceView ?? this.cam.view();
@@ -484,6 +516,125 @@ class Game implements UIHost {
       this.cam.handler = this.tools;
       canvas.style.cursor = '';
     }, 'Retour à la surface…');
+  }
+
+  /** Le théâtre des Enfers pour le contrôle des troupes */
+  private hellTheater(hm: HellMode): Theater {
+    const v = new THREE.Vector3();
+    return {
+      kind: 'hell', sim: hm.hell, layer: hm.view.units,
+      pick: (x, y) => { const p = hm.view.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x, p.z] : null; },
+      screen: (x, z) => this.toScreen(v.set(x, hm.view.groundY(x, z) + 0.3, z)),
+      focus: (x, z) => this.cam.goTo(x, z, this.cam.dist),
+    };
+  }
+
+  /** Un point de la scène à l'écran (pixels du canevas), null derrière la caméra */
+  private toScreen(v: THREE.Vector3): [number, number] | null {
+    v.project(this.cam.camera);
+    if (v.z > 1) return null;
+    return [(v.x + 1) / 2 * canvas.clientWidth, (1 - v.y) / 2 * canvas.clientHeight];
+  }
+
+  // ---------- L'île du portail : sa garnison au combat ----------
+
+  /** Le théâtre de l'île (coordonnées de la carte de l'île, posée sur le monde) */
+  private isleTheater(): Theater | null {
+    const isle = this.war.isle, layer = this.isleLayer;
+    if (!isle || !layer) return null;
+    const v = new THREE.Vector3(), w = this.world, { ox, oz } = isle.map;
+    return {
+      kind: 'isle', sim: isle.sim, layer,
+      pick: (x, y) => { const p = this.terrain.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x - ox, p.z - oz] : null; },
+      screen: (x, z) => this.toScreen(v.set(x + ox, w.hAt(x + ox, z + oz) + 0.3, z + oz)),
+      focus: (x, z) => this.cam.goTo(x + ox, z + oz, this.cam.dist),
+    };
+  }
+
+  /** Prend le commandement de la garnison de l'île (la vue y va) */
+  commandIsle() {
+    if (this.mode === 'hell') { this.exitHell(); setTimeout(() => this.commandIsle(), 900); return; }
+    if (this.mode !== 'surface' || !this.war.ensure()) return;
+    this.syncIsleLayer();
+    const t = this.isleTheater(), p = this.world.portal;
+    if (!t || !p) return;
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.tools.setTool('none');
+    this.tools.select(null);
+    this.isleCmd = true;
+    this.cam.handler = this.command;
+    this.command.setTheater(t);
+    this.cam.goTo(p.x, p.z + 1, Math.min(Math.max(this.cam.dist, 18), 26));
+    this.ui.update();
+  }
+
+  /** Quitte le commandement de l'île (`quiet` : sans rien dire) */
+  leaveIsle(quiet = false) {
+    if (!this.isleCmd) return;
+    this.isleCmd = false;
+    this.command.setTheater(null);
+    if (this.mode === 'surface') this.cam.handler = this.tools;
+    canvas.style.cursor = '';
+    if (!quiet) this.ui.update();
+  }
+
+  /** « Voir l'île » : la vue va sur l'île du portail, au commandement */
+  viewIsle() { this.commandIsle(); }
+
+  /** La vue va sur l'île du portail (pour y bâtir ses défenses) */
+  goIsle() {
+    const p = this.world.portal;
+    if (!p || this.mode !== 'surface') return;
+    this.follow(null); this.trainCam = null; this.incidentCam = null;
+    this.cam.goTo(p.x, p.z, Math.min(Math.max(this.cam.dist, 20), 32));
+  }
+
+  /** Les combattants de l'île dans la scène de la surface (refaits si la bataille a changé : partie rechargée) */
+  private syncIsleLayer() {
+    const isle = this.war.isle;
+    if (this.isleLayer && (!isle || this.isleLayer.hell !== isle.sim)) { this.scene.remove(this.isleLayer.group); this.isleLayer.dispose(); this.isleLayer = null; }
+    if (!isle || this.isleLayer) return;
+    const w = this.world, { ox, oz } = isle.map;
+    this.isleLayer = new BattleLayer(isle.sim, (x, z) => w.hAt(x + ox, z + oz));
+    this.isleLayer.group.position.set(ox, 0, oz);
+    this.isleLayer.fx.onClash = (k) => this.audio.sfxClash(k);
+    this.scene.add(this.isleLayer.group);
+  }
+
+  /** La vue regarde l'île du portail (de près) */
+  private lookingAtIsle() {
+    const p = this.world.portal;
+    return this.mode === 'surface' && !!p && Math.hypot(this.cam.target.x - p.x, this.cam.target.z - p.z) < p.r + 10 && this.cam.dist < 70;
+  }
+
+  /** La guerre : un pas, ses nouvelles, l'alerte d'incursion, les combattants de l'île à l'écran */
+  private stepWar(dt: number, gdt: number) {
+    const w = this.war, healK = (this.sim.counts.health ?? 0) > 0 ? 1.5 : 1;
+    const raid = w.update(gdt, this.sim.age, healK);
+    if (raid) audio.sfxRumble(4);
+    const said = new Set<string>();
+    for (const n of w.news.splice(0)) {
+      // (plusieurs soldats au même moment : une seule nouvelle)
+      if (said.has(n.text)) continue;
+      said.add(n.text);
+      if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(`${n.text} Cliquez ici pour voir l’île.`, () => this.viewIsle());
+      else if (n.kind === 'portal' && this.mode !== 'hell') this.ui.toast(`${n.text} Cliquez ici pour y entrer.`, () => this.enterHell());
+      else this.ui.toast(n.text);
+      if (n.kind === 'repelled' || n.kind === 'secured') audio.sfxAgeUp();
+    }
+    // l'alerte reste tant que dure l'incursion, si l'on ne regarde pas l'île
+    const isle = w.isle;
+    this.command.alert(isle?.raid && !(this.isleCmd && this.lookingAtIsle()) ? `🔥 Incursion sur l’île du portail : ${isle.raiders().length} démon${isle.raiders().length > 1 ? 's' : ''} !` : null, () => this.viewIsle());
+    this.syncIsleLayer();
+    if (this.isleLayer) {
+      this.isleLayer.age = this.sim.age;
+      if (this.mode === 'surface') this.isleLayer.update(dt, this.cam.camera, w.isleFx);
+      else w.isleFx.length = 0;
+      this.isleLayer.group.visible = this.mode === 'surface';
+    }
+    if (this.mode !== 'hell') w.hellFx.length = 0;
+    // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
+    if (this.isleCmd && this.command.theater?.sim !== isle?.sim) { const t = this.isleTheater(); if (t) this.command.setTheater(t); else this.leaveIsle(); }
   }
 
   // ---------- Monde souterrain ----------
@@ -899,6 +1050,16 @@ class Game implements UIHost {
       const k = e.key.toLowerCase();
       // chiffres par touche physique : en AZERTY, la rangée du haut marche sans Maj
       const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code)?.[1];
+      // en commandement (Enfers, île) : les touches des troupes passent d'abord (H, R, A, groupes, Espace, Échap)
+      if (this.command.active) {
+        if (k === 'escape' && this.ui.closeTop()) return;
+        if (this.command.key(e)) return;
+      }
+      if (this.mode === 'hell') {
+        if (k === 'u' || k === 'escape') this.exitHell();
+        else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? this.tools.redo() : this.tools.undo(); return; }
       if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); this.tools.redo(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -913,6 +1074,8 @@ class Game implements UIHost {
       // R tourne le bâtiment en main ou celui qu'on a choisi ; sinon c'est l'outil Route
       if (k === 'r' && (this.tools.holding() || this.tools.selected !== null)) { this.tools.rotate(); return; }
       const tool = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) ? undefined : map[k];
+      // un outil de construction pris en main : on quitte le commandement de l'île
+      if (this.isleCmd && (tool || k === 'b')) this.leaveIsle(true);
       // R, l'outil Route déjà en main : on passe du tracé en ligne au tracé libre, et retour
       if (tool === 'road' && this.tools.tool === 'road') {
         this.tools.setRoadMode(this.tools.roadMode === 'line' ? 'free' : 'line');
@@ -931,6 +1094,9 @@ class Game implements UIHost {
       else if (k === '[' || e.code === 'BracketLeft') { this.tools.radius = Math.max(1, this.tools.radius - 0.5); this.ui.refreshTools(); }
       else if (k === ']' || e.code === 'BracketRight') { this.tools.radius = Math.min(8, this.tools.radius + 0.5); this.ui.refreshTools(); }
     });
+    // Maj : la sélection des troupes s'ajoute à la précédente
+    window.addEventListener('keyup', (e) => { if (e.key === 'Shift') this.command.setShift(false); });
+    window.addEventListener('keydown', (e) => { if (e.key === 'Shift') this.command.setShift(true); });
   }
 
   private onResize() {
@@ -1095,6 +1261,8 @@ class Game implements UIHost {
     this.expeditions.update(gdt);
     // les jours tenus sur l'île du portail, défenses debout
     holdIsle(w, gdt, this.time.dayLen);
+    // la guerre : la faction des Enfers, ses incursions sur l'île, la garnison
+    this.stepWar(dt, gdt);
     this.stepFarewell(dt);
     this.railway.update(gdt);
     this.expView.update(gdt);
@@ -1138,7 +1306,7 @@ class Game implements UIHost {
       if (p) this.cam.follow(p[0], p[1]);
     }
     // la surface ne s'anime que lorsqu'on la regarde
-    if (hv) hv.update(dt, gdt, this.cam.camera, this.cam.target, this.cam.dist);
+    if (hv) { hv.view.units.age = this.sim.age; hv.update(dt, this.war.hellFx, this.cam.camera, this.cam.target, this.cam.dist); }
     else if (uv) {
       // les troupes en train de parcourir les galeries
       uv.setTroops(this.expeditions.active.filter((a) => a.entry >= 0 && a.phase === 'work').map((a) => ({
@@ -1202,7 +1370,7 @@ class Game implements UIHost {
     });
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.command.render(); }
     if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;

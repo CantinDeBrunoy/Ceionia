@@ -1,5 +1,32 @@
-﻿import { HellMap, HellSite, HellSiteKind, HW, Z_KINGDOM, HELL_ZONE_N } from '../world/hell';
+﻿import { HellSite, HellSiteKind, HellZoneInfo, Z_KINGDOM, HELL_ZONE_N } from '../world/hell';
 import { mulberry32 } from '../core/rng';
+
+/**
+ * La carte où se battent les unités : celle des Enfers (`HellMap`), ou celle de l'île du portail (`IsleMap`, voir
+ * `isleBattle.ts`) ; cases numérotées `z * W + x`
+ */
+export interface CombatMap {
+  readonly W: number;
+  readonly L: number;
+  readonly seed: number;
+  version: number;
+  zones: HellZoneInfo[];
+  /** point d'arrivée (le portail des Enfers) : on s'y replie */
+  arrival: [number, number];
+  cell(x: number, z: number): number;
+  walkable(cx: number, cz: number): boolean;
+  walkableAt(x: number, z: number): boolean;
+  nearestWalkable(x: number, z: number, max?: number): number;
+  route(from: number, to: number): number[] | null;
+  lineClear(x0: number, z0: number, x1: number, z1: number): boolean;
+  unblock(site: { x: number; z: number; r: number }): void;
+}
+
+/** Bâtiments du joueur pris dans les combats : la tour de garde (elle tire) et la caserne, sur l'île du portail */
+export type PlayerSiteKind = 'watchtower' | 'barracks';
+export type SiteKind = HellSiteKind | PlayerSiteKind;
+/** Emplacement d'un bâtiment au combat (démoniaque, ou du joueur) */
+export interface CombatSite { kind: SiteKind; x: number; z: number; zone: number; r: number }
 
 /**
  * La faction des Enfers : ses démons (garnisons par zone, patrouilles, alerte, riposte), ses bâtiments (avant-postes qui
@@ -19,19 +46,17 @@ export const DEMONS: Record<DemonKind, UnitStats & { name: string; plural: strin
   guardian: { name: 'gardien de la zone', plural: 'gardiens', hp: 650, dmg: 28, range: 0.9, speed: 1.3, cooldown: 2, sight: 8, radius: 0.55 },
   king: { name: 'roi des Enfers', plural: 'rois des Enfers', hp: 1600, dmg: 40, range: 1.2, speed: 1.1, cooldown: 2.2, sight: 10, radius: 0.75 },
 };
-/** Bâtiments démoniaques : vie, armure (retranchée de chaque coup reçu), tir (dégâts, portée, temps entre deux flèches de feu) */
-export const SITES: Record<HellSiteKind, { name: string; hp: number; armor: number; dmg: number; range: number; cooldown: number }> = {
+/**
+ * Bâtiments : vie, armure (retranchée de chaque coup reçu), tir (dégâts, portée, temps entre deux flèches de feu). Les
+ * démoniaques, puis ceux du joueur sur l'île du portail (la tour de garde tire sur les démons à portée)
+ */
+export const SITES: Record<SiteKind, { name: string; hp: number; armor: number; dmg: number; range: number; cooldown: number }> = {
   outpost: { name: 'avant-poste', hp: 300, armor: 2, dmg: 6, range: 6, cooldown: 2 },
   forge: { name: 'forge infernale', hp: 420, armor: 3, dmg: 0, range: 0, cooldown: 0 },
   fortress: { name: 'forteresse', hp: 1200, armor: 5, dmg: 10, range: 7, cooldown: 1.6 },
   kingdom: { name: 'citadelle du royaume', hp: 4000, armor: 8, dmg: 16, range: 8, cooldown: 1.4 },
-};
-
-/** Troupes du joueur par défaut (essais, mode développeur) : le contrôle des troupes y mettra l'équipement du village */
-export const PLAYER_UNITS: Record<'soldier' | 'archer' | 'knight', UnitStats & { name: string }> = {
-  soldier: { name: 'soldat', hp: 110, dmg: 12, range: 0.6, speed: 2, cooldown: 1.1, sight: 6, radius: 0.28 },
-  archer: { name: 'archer', hp: 65, dmg: 8, range: 5.5, speed: 2, cooldown: 1.4, sight: 7, radius: 0.26 },
-  knight: { name: 'chevalier', hp: 220, dmg: 20, range: 0.7, speed: 2.4, cooldown: 1.3, sight: 6, radius: 0.36 },
+  watchtower: { name: 'tour de garde', hp: 360, armor: 3, dmg: 9, range: 6.5, cooldown: 1.5 },
+  barracks: { name: 'caserne', hp: 520, armor: 4, dmg: 0, range: 0, cooldown: 0 },
 };
 
 /** Les démons s'éloignent au plus de LEASH cases de leur poste ; au-delà, ils y retournent */
@@ -83,8 +108,10 @@ export interface HellUnit {
 }
 
 export interface HellBuilding {
-  id: number; side: Side; kind: HellSiteKind; site: HellSite; zone: number;
+  id: number; side: Side; kind: SiteKind; site: CombatSite; zone: number;
   hp: number; maxHp: number; armor: number; cool: number;
+  /** multiplie ses dégâts (la tour de garde gagne en force avec les âges) */
+  power?: number;
   /** abattu (ses ruines restent) */
   down: boolean;
   /** forge : temps avant le prochain renfort ; pour la vue : temps depuis le dernier tir, le dernier coup reçu */
@@ -96,7 +123,7 @@ export type HellEvent =
   | { type: 'hit'; x: number; z: number; target: number; source: number; dmg: number; ranged: boolean }
   | { type: 'shot'; x0: number; z0: number; y0: number; x1: number; z1: number; source: number; target: number; fire: boolean }
   | { type: 'death'; id: number; kind: string; side: Side; x: number; z: number }
-  | { type: 'destroyed'; id: number; kind: HellSiteKind; x: number; z: number; zone: number }
+  | { type: 'destroyed'; id: number; kind: SiteKind; x: number; z: number; zone: number }
   | { type: 'alert'; zone: number; x: number; z: number }
   | { type: 'spawn'; id: number; kind: DemonKind; x: number; z: number }
   | { type: 'conquered'; zone: number }
@@ -178,13 +205,15 @@ export class Hell {
   raidsRepelled = 0;
   raidsLost = 0;
   heldSince = -1;
+  /** où se replient les unités du joueur (null : le point d'arrivée de la carte, le portail des Enfers) */
+  rally: [number, number] | null = null;
   private nextId = 1;
   private rnd: () => number;
   /** garnison initiale de chaque zone (les forges la complètent jusque-là) */
   private cap: number[] = [];
   private mapV = -1;
 
-  constructor(readonly map: HellMap, seed = map.seed) {
+  constructor(readonly map: CombatMap, seed = map.seed) {
     this.rnd = mulberry32(seed * 977 + 13);
     this.populate();
   }
@@ -233,16 +262,16 @@ export class Hell {
     const out: [number, number][] = [];
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + 0.4, rr = s.r + 1.2 + (i % 2) * 0.9;
-      const c = this.map.nearestWalkable(s.x + Math.sin(a) * rr, s.z + Math.cos(a) * rr, 3);
-      if (c >= 0) out.push([(c % HW) + 0.5 + (this.rnd() - 0.5) * 0.4, Math.floor(c / HW) + 0.5 + (this.rnd() - 0.5) * 0.4]);
+      const c = this.map.nearestWalkable(s.x + Math.sin(a) * rr, s.z + Math.cos(a) * rr, 3), W = this.map.W;
+      if (c >= 0) out.push([(c % W) + 0.5 + (this.rnd() - 0.5) * 0.4, Math.floor(c / W) + 0.5 + (this.rnd() - 0.5) * 0.4]);
     }
     return out.length ? out : [this.frontOf(s)];
   }
 
   /** Point libre devant un bâtiment, côté portail (nord) */
-  private frontOf(s: HellSite): [number, number] {
-    const c = this.map.nearestWalkable(s.x, s.z - s.r - 1.2, 4);
-    return c >= 0 ? [(c % HW) + 0.5, Math.floor(c / HW) + 0.5] : [s.x, s.z - s.r - 1];
+  private frontOf(s: CombatSite): [number, number] {
+    const c = this.map.nearestWalkable(s.x, s.z - s.r - 1.2, 4), W = this.map.W;
+    return c >= 0 ? [(c % W) + 0.5, Math.floor(c / W) + 0.5] : [s.x, s.z - s.r - 1];
   }
 
   /** Fait apparaître un démon (garnison de la zone `zone`) */
@@ -259,6 +288,30 @@ export class Hell {
     const u = this.addUnit('player', kind, stats, x, z, -1);
     u.state = 'idle';
     return u;
+  }
+
+  /**
+   * Un démon d'une incursion (zone -1) : sans poste ni laisse, il fond sur la défense la plus proche (unité ou bâtiment du
+   * joueur), quelle que soit la distance
+   */
+  addRaider(kind: DemonKind, stats: UnitStats, x: number, z: number): HellUnit {
+    const u = this.addUnit('hell', kind, stats, x, z, -1);
+    u.state = 'chase';
+    return u;
+  }
+
+  /**
+   * Un bâtiment du joueur au combat (tour de garde, caserne) : son emprise (rayon `r`) bloque le passage ; `power` multiplie
+   * ses dégâts, `hpK` sa vie
+   */
+  addPlayerBuilding(kind: PlayerSiteKind, x: number, z: number, r: number, power = 1, hpK = 1): HellBuilding {
+    const st = SITES[kind], hp = Math.round(st.hp * hpK);
+    const b: HellBuilding = {
+      id: this.nextId++, side: 'player', kind, site: { kind, x, z, zone: -1, r }, zone: -1, hp, maxHp: hp, armor: st.armor, cool: 0, power,
+      down: false, spawnT: 0, swing: 9, hurt: 9, target: null,
+    };
+    this.buildings.set(b.id, b);
+    return b;
   }
 
   private addUnit(side: Side, kind: string, stats: UnitStats, x: number, z: number, zone: number): HellUnit {
@@ -354,6 +407,16 @@ export class Hell {
   }
 
   private thinkDemon(u: HellUnit, dt: number, live: HellUnit[]) {
+    // un démon d'incursion : droit sur la défense la plus proche (il ne lâche sa cible que pour une plus proche qui le gêne)
+    if (u.zone < 0) {
+      let t = this.entity(u.target);
+      const near = this.nearestFoe(u, live, t ? Math.min(this.gap(u, t), u.stats.sight) : Infinity);
+      if (near) t = near;
+      u.target = t ? t.id : null;
+      if (t) this.fight(u, t, dt, true);
+      else u.state = 'guard';
+      return;
+    }
     const dHome = Math.hypot(u.x - u.home[0], u.z - u.home[1]);
     // trop loin de son poste : il y retourne, sans se laisser distraire
     if (u.state === 'return') {
@@ -395,7 +458,7 @@ export class Hell {
     const o = u.order;
     // repli et déplacement : on marche sans combattre
     if (o && (o.kind === 'move' || o.kind === 'retreat')) {
-      const [gx, gz] = o.kind === 'retreat' ? this.map.arrival : [o.x ?? u.x, o.z ?? u.z];
+      const [gx, gz] = o.kind === 'retreat' ? this.rally ?? this.map.arrival : [o.x ?? u.x, o.z ?? u.z];
       if (Math.hypot(gx - u.x, gz - u.z) < 0.6) { u.order = null; u.state = 'idle'; u.path = null; return; }
       u.state = o.kind === 'retreat' ? 'retreat' : 'move';
       this.moveTo(u, gx, gz, dt, o.kind === 'retreat' ? 1.15 : 1);
@@ -442,7 +505,7 @@ export class Hell {
     // un bâtiment : on vise le point libre de son pourtour le plus proche
     if ('site' in t) {
       const a = Math.atan2(u.x - tx, u.z - tz), c = this.map.nearestWalkable(tx + Math.sin(a) * (tr + 0.6), tz + Math.cos(a) * (tr + 0.6), 3);
-      if (c >= 0) { this.moveTo(u, (c % HW) + 0.5, Math.floor(c / HW) + 0.5, dt); return; }
+      if (c >= 0) { this.moveTo(u, (c % this.map.W) + 0.5, Math.floor(c / this.map.W) + 0.5, dt); return; }
     }
     this.moveTo(u, tx, tz, dt);
   }
@@ -511,9 +574,9 @@ export class Hell {
       b.target = t ? t.id : null;
       if (t && b.cool <= 0) {
         b.cool = st.cooldown; b.swing = 0;
-        const y0 = b.kind === 'kingdom' ? 4.2 : b.kind === 'fortress' ? 2.6 : 1.8;
-        this.events.push({ type: 'shot', x0: b.site.x, z0: b.site.z, y0, x1: t.x, z1: t.z, source: b.id, target: t.id, fire: true });
-        this.damage(t, st.dmg * (1 + 0.1 * Math.max(0, b.zone - 1)), b.id, true);
+        const y0 = b.kind === 'kingdom' ? 4.2 : b.kind === 'fortress' ? 2.6 : b.kind === 'watchtower' ? 2.4 : 1.8;
+        this.events.push({ type: 'shot', x0: b.site.x, z0: b.site.z, y0, x1: t.x, z1: t.z, source: b.id, target: t.id, fire: b.side === 'hell' });
+        this.damage(t, st.dmg * (1 + 0.1 * Math.max(0, b.zone - 1)) * (b.power ?? 1), b.id, true);
         if (b.side === 'hell') this.raiseAlert(b.zone, t.x, t.z);
       }
     }
@@ -539,7 +602,7 @@ export class Hell {
    * change de case, au plus deux fois par seconde) en coupant les virages ; glisse le long des obstacles
    */
   moveTo(u: HellUnit, gx: number, gz: number, dt: number, pace = 1) {
-    const m = this.map, d = Math.hypot(gx - u.x, gz - u.z);
+    const m = this.map, d = Math.hypot(gx - u.x, gz - u.z), HW = m.W;
     if (d < 0.05) return;
     let wx = gx, wz = gz;
     if (!(d < 12 && m.lineClear(u.x, u.z, gx, gz))) {
@@ -574,7 +637,7 @@ export class Hell {
   }
 
   private cellClear(u: HellUnit, k: number) {
-    const x = (k % HW) + 0.5, z = Math.floor(k / HW) + 0.5;
+    const x = (k % this.map.W) + 0.5, z = Math.floor(k / this.map.W) + 0.5;
     return Math.hypot(x - u.x, z - u.z) < 7 && this.map.lineClear(u.x, u.z, x, z);
   }
 
@@ -652,18 +715,21 @@ export class Hell {
   }
   // ---------- Sauvegarde ----------
 
-  /** État à sauvegarder : unités vivantes, vie des bâtiments, zones conquises, incursions */
-  save(): HellSave {
+  /**
+   * État à sauvegarder : unités vivantes, vie des bâtiments, zones conquises, incursions (`players` : avec les unités du
+   * joueur ; sans elles quand l'armée les sauvegarde elle-même)
+   */
+  save(players = true): HellSave {
     return {
       time: this.time, wave: this.wave, nextRaid: this.nextRaid, victory: this.victory, conquered: [...this.conquered],
       raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, heldSince: this.heldSince,
       buildings: [...this.buildings.values()].map((b) => [b.id, Math.max(0, Math.round(b.hp))]),
-      units: this.alive().map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
+      units: this.alive().filter((u) => players || u.side !== 'player').map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
     };
   }
 
   /** Reprend un état sauvegardé sur une carte neuve (même graine) */
-  static load(map: HellMap, s: HellSave): Hell {
+  static load(map: CombatMap, s: HellSave): Hell {
     const h = new Hell(map);
     h.time = s.time; h.wave = s.wave; h.nextRaid = s.nextRaid; h.victory = s.victory;
     h.raidsRepelled = s.raidsRepelled ?? 0; h.raidsLost = s.raidsLost ?? 0; h.heldSince = s.heldSince ?? -1;

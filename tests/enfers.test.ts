@@ -1,6 +1,7 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { HellMap, HW, HL, HELL_ZONES, HPOOL_LAVA, HPOOL_CHASM, Z_RIVER, Z_CLIFFS, Z_KINGDOM } from '../src/world/hell';
-import { Hell, HellUnit, PLAYER_UNITS, LEASH, RAID_FIRST, SECURE_WAVES, raidSize, raidKinds, raidStrength, DEMONS } from '../src/sim/hell';
+import { troopStats } from '../src/sim/army';
+import { Hell, HellUnit, LEASH, RAID_FIRST, SECURE_WAVES, raidSize, raidKinds, raidStrength, DEMONS } from '../src/sim/hell';
 
 const map = (seed = 1) => new HellMap(seed);
 /** Fait tourner la simulation `t` secondes par pas de 1/20 s */
@@ -86,7 +87,7 @@ describe('Faction des Enfers', () => {
 
   it('une unité du joueur va où on l’envoie, par le chemin (ponts compris)', () => {
     const h = empty(2), m = h.map;
-    const [ax, az] = m.arrival, u = h.addPlayerUnit('soldier', PLAYER_UNITS.soldier, ax, az);
+    const [ax, az] = m.arrival, u = h.addPlayerUnit('soldier', troopStats('soldier', 1), ax, az);
     // de l'autre côté de la rivière de lave
     const goal = cellPos(m, m.nearestWalkable(m.spine[HELL_ZONES[Z_CLIFFS].z0 - 4] + 0.5, HELL_ZONES[Z_CLIFFS].z0 - 4, 4));
     h.order([u.id], { kind: 'move', x: goal[0], z: goal[1] });
@@ -99,7 +100,7 @@ describe('Faction des Enfers', () => {
     const h = new Hell(map(1)), m = h.map;
     const post = m.zones[1].sites.find((s) => s.kind === 'outpost')!;
     const near = cellPos(m, m.nearestWalkable(post.x, post.z - 9, 4));
-    const u = h.addPlayerUnit('knight', { ...PLAYER_UNITS.knight, hp: 5000 }, near[0], near[1]);
+    const u = h.addPlayerUnit('knight', { ...troopStats('knight', 1), hp: 5000 }, near[0], near[1]);
     h.order([u.id], { kind: 'hold' });
     run(h, 6);
     const alerts = h.events.filter((e) => e.type === 'alert');
@@ -116,7 +117,7 @@ describe('Faction des Enfers', () => {
   it('combat : une troupe solide vient à bout de diablotins ; un soldat seul tombe face à une brute', () => {
     const h = empty(1), m = h.map;
     const [x, z] = cellPos(m, m.nearestWalkable(m.spine[30] + 0.5, 30.5));
-    const squad: HellUnit[] = [0, 1, 2, 3].map((i) => h.addPlayerUnit('soldier', PLAYER_UNITS.soldier, x + (i % 2) * 0.6, z - 3 - Math.floor(i / 2) * 0.6));
+    const squad: HellUnit[] = [0, 1, 2, 3].map((i) => h.addPlayerUnit('soldier', troopStats('soldier', 1), x + (i % 2) * 0.6, z - 3 - Math.floor(i / 2) * 0.6));
     const imps = [0, 1, 2].map((i) => h.spawn('imp', x + i * 0.5, z + 1, 1));
     run(h, 30, () => imps.every((d) => d.hp <= 0));
     expect(imps.every((d) => d.hp <= 0)).toBe(true);
@@ -124,7 +125,7 @@ describe('Faction des Enfers', () => {
     expect(h.events.filter((e) => e.type === 'death' && e.side === 'hell')).toHaveLength(3);
 
     const h2 = empty(1);
-    const lone = h2.addPlayerUnit('soldier', PLAYER_UNITS.soldier, x, z - 2);
+    const lone = h2.addPlayerUnit('soldier', troopStats('soldier', 1), x, z - 2);
     const brute = h2.spawn('brute', x, z + 1, 3);
     run(h2, 60, () => lone.hp <= 0);
     expect(lone.hp).toBe(0);
@@ -135,7 +136,7 @@ describe('Faction des Enfers', () => {
     const h = empty(1), m = h.map;
     const [x, z] = cellPos(m, m.nearestWalkable(m.spine[34] + 0.5, 34.5));
     const archer = h.spawn('archer', x, z + 4, 1);
-    const u = h.addPlayerUnit('soldier', { ...PLAYER_UNITS.soldier, hp: 9999 }, x, z);
+    const u = h.addPlayerUnit('soldier', { ...troopStats('soldier', 1), hp: 9999 }, x, z);
     h.order([u.id], { kind: 'hold' });
     run(h, 4);
     expect(h.events.some((e) => e.type === 'shot' && e.source === archer.id)).toBe(true);
@@ -167,7 +168,7 @@ describe('Faction des Enfers', () => {
     for (const u of h.alive('hell')) u.hp = 0;
     const post = h.standing(1).find((b) => b.kind === 'outpost')!;
     const p = cellPos(m, m.nearestWalkable(post.site.x, post.site.z - 3, 3));
-    const u = h.addPlayerUnit('soldier', { ...PLAYER_UNITS.soldier, hp: 9999 }, p[0], p[1]);
+    const u = h.addPlayerUnit('soldier', { ...troopStats('soldier', 1), hp: 9999 }, p[0], p[1]);
     h.order([u.id], { kind: 'hold' });
     run(h, 5);
     expect(u.hp).toBeLessThan(9999);
@@ -244,7 +245,7 @@ describe('Faction des Enfers', () => {
     const h = new Hell(map(4));
     const fort = h.standing(2).find((b) => b.kind === 'fortress')!;
     h.damage(fort, 1e6, -1);
-    h.addPlayerUnit('archer', PLAYER_UNITS.archer, h.map.arrival[0], h.map.arrival[1]);
+    h.addPlayerUnit('archer', troopStats('archer', 1), h.map.arrival[0], h.map.arrival[1]);
     h.raidDue(10); h.spawnRaid(300); h.endRaid(true, 330);
     const s = JSON.parse(JSON.stringify(h.save()));
     const g = Hell.load(map(4), s);
