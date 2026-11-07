@@ -219,4 +219,18 @@ describe('volet militaire : passages entre l’île et les Enfers', () => {
     expect(war.callGarrison()).toBe(0);
     expect(war.recruitHell('soldier', 1, 80)).toMatch(/éteint/);
   }, 30000);
+
+  it('partie quittée pendant la cinématique de la victoire : l’écran des récompenses n’est pas perdu', () => {
+    const w = setup(), war = new War(w);
+    tick(war, 1);
+    war.reward = { ore: 250, gear: [['sword', 4]], joy: 3 };
+    const back = new War(w);
+    back.load(JSON.parse(JSON.stringify(war.save())));
+    expect(back.reward).toEqual(war.reward);
+    // une sauvegarde abîmée ou plus ancienne : rien
+    back.load({ reward: { ore: 'x' } });
+    expect(back.reward).toBeNull();
+    back.load({});
+    expect(back.reward).toBeNull();
+  }, 30000);
 });

@@ -32,6 +32,8 @@ export interface WarSave {
   raid?: { w: RaidWave; units: { kind: DemonKind; x: number; z: number; hp: number }[]; t?: number } | null;
   /** le combat du roi des Enfers */
   king?: KingSave | null;
+  /** les récompenses de la chute du royaume, quand son écran de victoire n'a pas encore été vu (partie quittée pendant la cinématique) */
+  reward?: KingdomReward | null;
 }
 
 export class War {
@@ -416,6 +418,7 @@ export class War {
       faction: f ? f.save(false) : this.pending?.faction ?? null,
       base: this.base ? this.base.save() : this.pending?.base ?? null,
       king: this.king ? this.king.save() : this.pending?.king ?? null,
+      reward: this.reward,
       raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })), t: Math.round(isle.raidT) } : null,
     };
   }
@@ -429,7 +432,9 @@ export class War {
     const base = o.base && typeof o.base === 'object' ? (o.base as HellBaseSave) : null;
     const king = o.king && typeof o.king === 'object' ? (o.king as KingSave) : null;
     this.pending = { army: this.army, faction: fac && Array.isArray(fac.units) && Array.isArray(fac.buildings) ? fac : null, raid, base, king };
-    this.faction = null; this.hellMap = null; this.isle = null; this.base = null; this.king = null; this.reward = null;
+    this.faction = null; this.hellMap = null; this.isle = null; this.base = null; this.king = null;
+    const rw = o.reward as KingdomReward | null | undefined;
+    this.reward = rw && typeof rw === 'object' && Number.isFinite(rw.ore) && Number.isFinite(rw.joy) && Array.isArray(rw.gear) ? { ore: rw.ore, joy: rw.joy, gear: rw.gear.filter((g) => Array.isArray(g) && typeof g[0] === 'string' && Number.isFinite(g[1])) } : null;
     this.unitOf.clear(); this.troopOf.clear(); this.crossing.clear();
   }
 }
