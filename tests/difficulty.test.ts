@@ -209,6 +209,17 @@ describe('expéditions et sauvegarde selon la difficulté', () => {
     }
   });
 
+  it('le tutoriel reste jouable en Normal : ses six bâtiments se paient avec la réserve de départ (bûcheron et carrière offerts)', () => {
+    const r = DIFFICULTY.normal;
+    let wood = r.startWood, stone = r.startStone;
+    for (const k of ['gather', 'house', 'well', 'farm', 'lumber', 'quarry'] as KindId[]) {
+      const c = costOf(k, 0, 'normal', PRODUCERS.includes(k) ? 0 : 1);
+      wood -= c?.wood ?? 0; stone -= c?.stone ?? 0;
+      expect(wood, k).toBeGreaterThanOrEqual(0);
+      expect(stone, k).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   it('une sauvegarde d’avant le changement de noms : « normal » se relit en facile, le Défi en normal', () => {
     // sans marqueur de version : « normal » était le mode facile, « challenge » le défi (aujourd'hui Normal)
     expect(readDifficulty('normal')).toBe('easy');
