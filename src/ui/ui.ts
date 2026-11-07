@@ -43,6 +43,10 @@ export interface UIHost {
   /** monde souterrain (moteur gardé pour les Enfers, hors de portée du joueur) : remonter, et la zone où l'on est */
   exitUnder(): void;
   underZone(): string | null;
+  /** prendre le commandement de la garnison de l'île du portail (tour de garde, caserne) */
+  commandIsle?(): void;
+  /** la vue va sur l'île du portail (pour y bâtir) */
+  goIsle?(): void;
   /** brouillard visible (0 … 1), et le dissiper */
   fogLevel(): number;
   dispelFog(): void;
@@ -231,7 +235,7 @@ const RES_META: Record<Resource, { label: string; icon: string; use: string; mor
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
-const reqOf = (label: string) => (label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
+const reqOf = (label: string) => (label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${v < 2 && g.one ? g.one : g.label}`;
@@ -474,7 +478,8 @@ export class UI {
       if ((e.target as HTMLElement).closest('#ageGo')) { this.host.sim.advance(); return; }
       // une condition qui demande un bâtiment : on le prend en main (le bon onglet et le bon rayon s'ouvrent)
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
-      if (k) { this.pick(k); return; }
+      // (les défenses de l'île : la vue y va, l'outil en main)
+      if (k) { this.pick(k); if (k === 'watchtower' || k === 'barracks') this.host.goIsle?.(); return; }
       // une condition sans bâtiment : on montre comment l'obtenir
       const req = (e.target as HTMLElement).closest<HTMLElement>('[data-req]')?.dataset.req;
       if (req === 'ore') { this.openRes('ore'); return; }
@@ -485,6 +490,7 @@ export class UI {
         return;
       }
       if (req === 'pop') { this.openNeed('housing'); return; }
+      if (req === 'isle') { this.host.audio.sfxClick(); this.host.commandIsle?.(); return; }
       // le chemin de fer : la gare qui manque, ou le tracé d'une ligne depuis une gare
       if (req === 'rail') { const nx = this.host.sim.railNext(); this.host.audio.sfxClick(); if ('kind' in nx) this.pick(nx.kind); else this.host.startRailEdit({ stop: nx.stop }); return; }
       $('#agePanel').classList.toggle('open');
@@ -492,7 +498,7 @@ export class UI {
     };
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
     $('#helpBtn').onclick = () => { this.help = !this.help; try { localStorage.setItem('ceionia.aides', this.help ? '1' : '0'); } catch { /* sans stockage */ } this.host.audio.sfxClick(); this.renderMessage(); };
-    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.toast('Le brouillard se lève.'); };
     $('#bSpeed').onclick = () => {
@@ -795,6 +801,7 @@ export class UI {
     const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = b.auto ? 'façade tournée vers la route' : 'orientée à la main';
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 24, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small title="${attr(`${AGES[b.age].name}${size ? ` · ${size} cases` : ''} · ${facing}`)}">${AGES[b.age].name}${size ? ` · ${size}` : ''}</small></div><button class="x" data-act="close" title="Fermer (Échap)" aria-label="Fermer">${ic('close', 16, 2)}</button></div>
       ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${upgrades}
+      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle ? '<div class="acts"><button data-act="command" class="primary" title="Choisir les troupes, leur donner des ordres, recruter à la caserne">⚔️ Commander la garnison</button></div>' : ''}
       <div class="acts"><button data-act="move">${ic('hand', 16, 2)} Déplacer</button><button data-act="rot">${ic('rotate', 16, 2)} Tourner <kbd>R</kbd></button><button data-act="del" class="danger">${ic('demolish', 16, 2)} Démolir</button></div>`;
     box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
     box.scrollTop = scroll;
@@ -807,6 +814,7 @@ export class UI {
       else if (act === 'move') { tl.moveSelected(); h.audio.sfxClick(); }
       else if (act === 'rot') tl.rotateSelected();
       else if (act === 'del' && await confirmBox(this.root, `Démolir : ${d.names[a].toLowerCase()} ? (Ctrl+Z pour annuler)`, 'Démolir')) tl.demolishSelected();
+      else if (act === 'command') { h.audio.sfxClick(); tl.select(null); h.commandIsle?.(); }
       else if (act === 'newline') { h.audio.sfxClick(); h.startRailEdit({ stop: b.id }); }
       else if (act?.startsWith('up:')) tl.upgradeSelected(act.slice(3) as KindId);
       else if (act?.startsWith('follow:')) h.followTrain(+act.slice(7));
@@ -1050,7 +1058,7 @@ export class UI {
     ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
     if (zone) {
-      const zh = `⛏️ ${zone}<small>Puits de lumière : remonter</small>`;
+      const zh = zone.startsWith('🔥') ? `${zone}<small>Le portail ramène sur l’île</small>` : `⛏️ ${zone}<small>Puits de lumière : remonter</small>`;
       if ($('#underZone').dataset.v !== zh) { $('#underZone').innerHTML = zh; $('#underZone').dataset.v = zh; }
     }
     this.updateExpeditions();
@@ -1279,7 +1287,7 @@ export class UI {
     for (const [key, card] of this.incCards) if (!liveI.has(key)) { card.remove(); this.incCards.delete(key); }
     const max = ex.slots();
     $('#expBadge').textContent = ex.active.length ? `${ex.active.length}/${max}` : '';
-    $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => !ex.done(m) && !ex.running(m)));
+    $('#bExp').classList.toggle('ping', mandatoriesFor(h.sim.age).some((m) => (m.id !== 'portal' || !!h.world.portal) && !ex.done(m) && !ex.running(m)));
     this.offerPending();
   }
 

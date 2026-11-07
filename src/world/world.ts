@@ -237,6 +237,8 @@ export class World {
    * sécurisée (`isleSecured`, voir `portal.ts`) quand l'un ou l'autre suffit : la condition d'âge s'y branchera
    */
   isleGuard: IsleGuard = { waves: 0, days: 0 };
+  /** la guerre contre les Enfers (armée, faction, vague en cours), sauvegardée telle quelle (voir `sim/war.ts`) */
+  war: unknown = null;
 
   /** le portail est ouvert : l'expédition « Le portail de l'autre rive » a réussi (on peut bâtir sur l'île) */
   get portalOpen() { return !!this.portal && this.exp.done.includes('portal'); }
@@ -1291,6 +1293,7 @@ export class World {
       linesAuto: this.linesAuto,
       portal: this.portal,
       isleGuard: { waves: this.isleGuard.waves, days: Math.round(this.isleGuard.days * 100) / 100 },
+      ...(this.war ? { war: this.war } : {}),
       // routes en courbe (au centième) ; celles dont il ne reste aucune case de route s'oublient
       curves: this.curves.filter((c) => rasterize(c.pts, N).some((k) => this.road[k])).map((c) => c.pts.map((v) => Math.round(v * 100))),
     };
@@ -1408,6 +1411,7 @@ export class World {
     this.portal = readPortal(d.portal, N);
     const g = d.isleGuard ?? {};
     this.isleGuard = { waves: Math.max(0, Math.floor(+g.waves || 0)), days: Math.max(0, +g.days || 0) };
+    this.war = d.war && typeof d.war === 'object' ? d.war : null;
     this.curves = [];
     for (const c of Array.isArray(d.curves) ? d.curves : []) {
       if (!Array.isArray(c) || c.length < 4 || c.length % 2 || !c.every((v) => Number.isFinite(+v))) continue;

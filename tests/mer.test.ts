@@ -80,7 +80,7 @@ describe('le récif, la pêche au large et la chasse au monstre', () => {
     expect(mega.mandatory).toBe(false);
     expect(isLegendary(kraken) && isLegendary(mega)).toBe(true);
     expect(kraken.icon).not.toBe(mega.icon);
-    expect(mandatoriesFor(1).map((m) => m.id)).toEqual(['seeds', 'kraken']);
+    expect(mandatoriesFor(1).map((m) => m.id)).toEqual(['seeds', 'kraken', 'portal']);
     for (const c of kraken.choices) expect(c.scene).toBe('kraken');
     for (const c of mega.choices) expect(c.scene).toBe('megalodon');
     for (const c of [...kraken.choices, ...mega.choices]) {
@@ -117,7 +117,8 @@ describe('le récif, la pêche au large et la chasse au monstre', () => {
     expect(readExpState({ done: ['seeds', 'monster'], perks: ['seeds', 'kraken'] }).done).toEqual(['seeds', 'kraken']);
     const mega = readExpState({ done: ['seeds', 'monster'], perks: ['megalodon'] });
     expect(mega.done).toEqual(['seeds', 'kraken', 'megalodon']);
-    expect(mandatoriesFor(1).every((m) => mega.done.includes(m.id))).toBe(true);
+    // (le portail n'est demandé que sur une carte qui a son île : pas dans ces anciennes parties)
+    expect(mandatoriesFor(1).filter((m) => m.id !== 'portal').every((m) => mega.done.includes(m.id))).toBe(true);
     expect(mega.perks).toEqual(['megalodon']);
     // rien à faire pour les nouvelles
     expect(readExpState({ done: ['megalodon'], perks: ['megalodon'] }).done).toEqual(['megalodon']);

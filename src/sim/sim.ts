@@ -3,6 +3,7 @@ import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catal
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { priceIn, YIELD } from './economy';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
+import { isleSteps, ISLE_AGE } from '../world/portal';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -50,6 +51,8 @@ export class Sim {
   messageExp = false;
   /** le conseil propose de tracer une ligne de chemin de fer depuis cette gare (un clic dessus commence le tracé) */
   messageRail: number | null = null;
+  /** le conseil mène à l'île du portail (un clic dessus y prend le commandement de la garnison) */
+  messageIsle = false;
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
   moisture = 0.7;
@@ -203,7 +206,10 @@ export class Sim {
     // les briques de la briqueterie (en réserve : on peut en dépenser pour bâtir, il faudra alors en recuire)
     if (req.reqBrick) items.push({ label: 'briques (briqueterie)', have: w.unlimited ? req.reqBrick : Math.floor(w.brick), need: req.reqBrick });
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
-    for (const m of mandatoriesFor(this.age)) items.push({ label: `expédition « ${m.title} »`, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
+    // (le portail : seulement sur une carte qui a son île)
+    for (const m of mandatoriesFor(this.age)) if (m.id !== 'portal' || w.portal) items.push({ label: `expédition « ${m.title} »`, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
+    // quitter l'Antiquité : sécuriser l'île du portail (tour de garde, caserne, vagues repoussées) ; les Enfers restent facultatifs
+    if (n === ISLE_AGE && w.portal) items.push(...isleSteps(w));
     // la fin de l'âge : la raffinerie (ouverte par l'expédition « L'or noir ») et ses puits, puis le chemin de fer
     kinds(true);
     if (req.reqRail) {
@@ -235,7 +241,7 @@ export class Sim {
       }
       return about(k, text);
     };
-    this.messageKind = null; this.messageExp = false; this.messageRail = null;
+    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false;
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
     if (w.buildings.size === 0) return about('gather', `Pour commencer, posez « ${this.nameOf('gather')} » au centre : c’est la place du village.`);
     if (!this.counts.house) return about('house', `Autour de la place, le centre du village : « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
@@ -269,11 +275,16 @@ export class Sim {
         this.messageExp = true;
         return `Pour l’âge suivant : réussissez ${left.length > 1 ? `les expéditions ${left.slice(0, -1).join(', ')} et ${left[left.length - 1]}` : `l’${miss.label}`} (menu Expéditions).`;
       }
+      // l'île du portail à sécuriser : ses défenses, puis les vagues de démons à repousser
+      if (miss.label.startsWith('île du portail') && !miss.kind) {
+        this.messageIsle = true;
+        return `Pour l’âge suivant : sécurisez l’île du portail, repoussez les vagues de démons (${miss.have}/${miss.need}) ; recrutez une garnison à la caserne et donnez-lui vos ordres (cliquez ici).`;
+      }
       if (miss?.kind) {
         const n = miss.need - miss.have, m = KINDS[miss.kind].reqMission;
         // un bâtiment qu'une expédition doit d'abord débloquer : c'est elle qu'on conseille
         if (m && !w.exp.done.includes(m)) { this.messageExp = true; return `Pour l’âge suivant : il faut ${say(miss.kind)}, que débloque l’expédition « ${MISSIONS.find((x) => x.id === m)?.title ?? m} » (menu Expéditions).`; }
-        const why = miss.kind === 'refinery' ? ' : elle tirera le carburant du pétrole brut des puits' : miss.kind === 'oilwell' ? ', sur un gisement (les taches sombres où le brut suinte) : la raffinerie en raffine le brut' : '';
+        const why = miss.kind === 'watchtower' || miss.kind === 'barracks' ? ', sur l’île du portail (elle se sécurise ainsi)' : miss.kind === 'refinery' ? ' : elle tirera le carburant du pétrole brut des puits' : miss.kind === 'oilwell' ? ', sur un gisement (les taches sombres où le brut suinte) : la raffinerie en raffine le brut' : '';
         return build(miss.kind, `Pour l’âge suivant : il manque ${n > 1 ? `${n} × ` : ''}${say(miss.kind)}${why}.`);
       }
       if (miss.label.startsWith('chemin de fer')) return this.railAgeTip(say, build, miss.label === RAIL_FIRST);

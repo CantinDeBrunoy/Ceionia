@@ -144,11 +144,13 @@ function carveStrait(w: World, dl: Float32Array, M: number, C: number, seed: num
 }
 
 /**
- * Sécuriser l'île : l'étape (plus ou moins) obligatoire du volet militaire, que le chantier des Enfers branchera sur la
- * condition d'âge (les expéditions dans les Enfers, elles, restent facultatives). Il faut le portail ouvert, au moins une tour
- * de garde et une caserne debout sur l'île, puis repousser `waves` vagues de démons ou tenir `days` jours
+ * Sécuriser l'île : l'étape obligatoire du volet militaire pour quitter l'Antiquité (les expéditions dans les Enfers, elles,
+ * restent facultatives). Il faut le portail ouvert, au moins une tour de garde et une caserne debout sur l'île, puis repousser
+ * `waves` vagues de démons (les jours tenus, `days`, ne sont plus qu'un relevé). `waves` vaut `SECURE_WAVES` (sim/hell)
  */
-export const ISLE_SECURE = { waves: 3, days: 6 };
+export const ISLE_SECURE = { waves: 5, days: 6 };
+/** L'âge que la sécurisation de l'île ouvre : le Moyen Âge (on la demande pour quitter l'Antiquité) */
+export const ISLE_AGE = 2;
 
 /** Les défenses debout sur l'île du portail : tours de garde et casernes */
 export function isleDefenses(w: World) {
@@ -179,14 +181,27 @@ export function holdIsle(w: World, dt: number, dayLen: number) {
 /** Une vague de démons repoussée sur l'île du portail (l'IA des Enfers l'appellera) */
 export function repelWave(w: World) { w.isleGuard.waves++; }
 
-/** Où en est la sécurisation de l'île, de 0 à 1 (la meilleure des deux voies : vagues ou jours tenus), 0 sans défenses */
+/** Où en est la sécurisation de l'île, de 0 à 1 (les vagues repoussées), 0 sans défenses */
 export function isleProgress(w: World) {
   if (!isleManned(w)) return 0;
-  return Math.min(1, Math.max(w.isleGuard.waves / ISLE_SECURE.waves, w.isleGuard.days / ISLE_SECURE.days));
+  return Math.min(1, w.isleGuard.waves / ISLE_SECURE.waves);
 }
 
-/** L'île du portail est sécurisée (indicateur pour la condition d'âge) */
+/** L'île du portail est sécurisée (la condition d'âge) */
 export const isleSecured = (w: World) => isleProgress(w) >= 1;
+
+/**
+ * Les étapes de la sécurisation de l'île, pour le panneau d'âge et le conseil : tour de garde bâtie, caserne bâtie, vagues
+ * repoussées (leur libellé commence par « île du portail »)
+ */
+export function isleSteps(w: World): { label: string; have: number; need: number; kind?: 'watchtower' | 'barracks' }[] {
+  const d = isleDefenses(w);
+  return [
+    { label: 'île du portail : une tour de garde', have: Math.min(1, d.towers), need: 1, kind: 'watchtower' },
+    { label: 'île du portail : une caserne', have: Math.min(1, d.barracks), need: 1, kind: 'barracks' },
+    { label: 'île du portail : vagues de démons repoussées', have: Math.min(ISLE_SECURE.waves, w.isleGuard.waves), need: ISLE_SECURE.waves },
+  ];
+}
 
 /** Lit l'île du portail d'une sauvegarde (absente, ou abîmée : pas d'île, et la mission du portail n'est pas disponible) */
 export function readPortal(d: unknown, n: number): PortalSite | null {

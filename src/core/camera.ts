@@ -30,6 +30,9 @@ export class CameraRig {
   private last = { x: 0, y: 0 };
   keys = new Set<string>();
   handler: ToolInput | null = null;
+  /** clic droit sans glisser (le contrôle des troupes y donne ses ordres ; le glisser fait toujours tourner la vue) */
+  rightClick: ((e: PointerInfo) => void) | null = null;
+  private rightAt: { x: number; y: number; moved: number } | null = null;
   enabled = true;
   /** bornes du zoom (resserrées sous terre) : on peut s'approcher tout près des habitants */
   minDist = 3.2;
@@ -87,7 +90,7 @@ export class CameraRig {
       return;
     }
     if (e.button === 0) { this.mode = 'tool'; this.handler?.down(i); }
-    else if (e.button === 2) this.mode = e.shiftKey ? 'pan' : 'rotate';
+    else if (e.button === 2) { this.mode = e.shiftKey ? 'pan' : 'rotate'; this.rightAt = { x: i.x, y: i.y, moved: 0 }; }
     else if (e.button === 1) this.mode = 'pan';
   }
 
@@ -116,6 +119,7 @@ export class CameraRig {
     }
     const dx = i.x - this.last.x, dy = i.y - this.last.y;
     this.last = { x: i.x, y: i.y };
+    if (this.rightAt) this.rightAt.moved += Math.abs(dx) + Math.abs(dy);
     if (this.mode === 'rotate') {
       this.goal.yaw -= dx * 0.006;
       this.goal.pitch = clamp(this.goal.pitch + dy * 0.005, this.minPitch, 1.5);
@@ -128,6 +132,10 @@ export class CameraRig {
     if (!p) return;
     const i = this.info(e);
     this.pointers.delete(e.pointerId);
+    // un clic droit sans glisser (le glisser fait tourner la vue) : un ordre aux troupes, en commandement
+    const ra = this.rightAt;
+    this.rightAt = null;
+    if (ra && e.button === 2 && !cancelled && ra.moved < 6) this.rightClick?.(i);
     if (this.mode === 'tool') {
       if (cancelled) this.handler?.cancel(); else this.handler?.up(i);
     }
