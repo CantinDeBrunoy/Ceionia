@@ -1006,7 +1006,9 @@ class Game implements UIHost {
     if (force || key !== this.seasonKey) {
       // les teintes du sol changent par bandes, sur quelques images (un balayage de la carte sur deux suffit : les teintes
       // n'y bougent que d'un soixantième de saison)
-      if (force || Math.abs(key - this.groundKey) >= 2) {
+      // en accéléré, un balayage tous les deux soixantièmes passerait son temps à recommencer (à ×4, sans arrêt) : on espace
+      // les balayages d'autant, la teinte change par pas un peu plus grands
+      if (force || Math.abs(key - this.groundKey) >= 2 * Math.max(1, this.time.speed)) {
         this.groundKey = key;
         if (force) this.terrain.update(this.season); else this.terrain.recolor(this.season);
       }

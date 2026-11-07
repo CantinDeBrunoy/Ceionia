@@ -188,6 +188,13 @@ function rectSdf(rects: number[][]) {
  * quart de cercle, carrefours aux coins arrondis, bordures et trottoirs du côté des maisons, places pavées, passages
  * piétons, ligne médiane. Les ponts sont des ouvrages (tablier, rampes, piles, garde-corps)
  */
+/** Sommets d'une boîte (coins 0 à 7), deux triangles par face, dans l'ordre des faces */
+const BOX_TRIS = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 4, 7, 3], [1, 2, 6, 5], [3, 7, 6, 2], [0, 1, 5, 4]].flatMap((f) => [f[0], f[1], f[2], f[0], f[2], f[3]]);
+
+/** Couleurs des petits objets, par valeur hexadécimale (sans en recréer une à chaque objet posé) */
+const HEX_COLS = new Map<number, THREE.Color>();
+const hexCol = (c: number) => { let v = HEX_COLS.get(c); if (!v) HEX_COLS.set(c, (v = new THREE.Color(c))); return v; };
+
 /** Seuils de neige où les décors des chemins changent (buissons blanchis, bancs et pots rentrés…) */
 const SNOW_STEPS = [0, 0.5, 0.6];
 /** La neige est passée d'un côté à l'autre d'un seuil depuis que les chemins ont été faits : il faut les refaire */
@@ -686,7 +693,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
    * une case sur deux environ le long des rues — des rues bien éclairées, sans en mettre sur chaque case
    */
   private lightCells(lines: Map<number, number[][]>) {
-    const w = this.world, GAP = 1.75, out: number[] = [];
+    const w = this.world, out: number[] = [];
     const score = (k: number) => {
       const cx = k % N, cz = Math.floor(k / N);
       const dirs = D4.filter(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1);
@@ -695,9 +702,15 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       return (dirs.length >= 3 ? 3 : 0) + (door ? 2 : 0) + (bend ? 1 : 0) + hash2(cx, cz, 61) * 0.5;
     };
     const cand = [...lines.keys()].map((k) => [k, score(k)]).sort((a, b) => b[1] - a[1]);
+    // pas deux lumières à moins de 1,75 case : entre cases, cela revient à aucune des huit voisines (regardées dans une grille,
+    // pas en parcourant toutes les lumières déjà posées : sur un grand village, ce parcours coûtait des dizaines de ms)
+    const lit = new Uint8Array(N * N);
     for (const [k] of cand) {
       const x = k % N, z = Math.floor(k / N);
-      if (out.some((o) => Math.hypot((o % N) - x, Math.floor(o / N) - z) < GAP)) continue;
+      let near = false;
+      for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(x + dx, z + dz) && lit[w.ci(x + dx, z + dz)]) { near = true; break; }
+      if (near) continue;
+      lit[k] = 1;
       out.push(k);
     }
     return out;
@@ -845,7 +858,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       for (let jz = 0; jz < sub; jz++)
         for (let ix = 0; ix < sub; ix++) {
           const q = jz * n + ix;
-          if ([q, q + 1, q + n, q + n + 1].some((v) => R[v] < rCut || P[v] < pCut)) quads.push(q);
+          if (R[q] < rCut || P[q] < pCut || R[q + 1] < rCut || P[q + 1] < pCut || R[q + n] < rCut || P[q + n] < pCut || R[q + n + 1] < rCut || P[q + n + 1] < pCut) quads.push(q);
         }
       if (!quads.length) return;
       const v0 = ra.length;
@@ -943,8 +956,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, cl: THREE.Color) => {
       const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
       noteDeck(cl, 36);
-      for (const f of [[0, 3, 2, 1], [4, 5, 6, 7], [0, 4, 7, 3], [1, 2, 6, 5], [3, 7, 6, 2], [0, 1, 5, 4]])
-        for (const i of [f[0], f[1], f[2], f[0], f[2], f[3]]) { sp.push(...v[i]); sc.push(cl.r, cl.g, cl.b); }
+      for (const i of BOX_TRIS) { const p = v[i]; sp.push(p[0], p[1], p[2]); sc.push(cl.r, cl.g, cl.b); }
     };
     // tablier des ponts : teinte sans neige ; ses sommets sont notés pour que la neige s'y pose ensuite sans tout refaire
     const deck = DECK_COL[a].clone(), pile = PILE_COL[a];
@@ -1116,10 +1128,10 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     // petits objets : une géométrie de base étirée, tournée, posée
     const gp: number[] = [], gc: number[] = [];
     const put = (geo: THREE.BufferGeometry, x: number, y: number, z: number, sx: number, sy: number, sz: number, ry: number, cl: THREE.Color | number, glow = false) => {
-      const p = geo.attributes.position, co = Math.cos(ry), si = Math.sin(ry), col = typeof cl === 'number' ? new THREE.Color(cl) : cl;
-      const P = glow ? gp : sp, Cc = glow ? gc : sc;
+      const p = geo.attributes.position, co = Math.cos(ry), si = Math.sin(ry), col = typeof cl === 'number' ? hexCol(cl) : cl;
+      const P = glow ? gp : sp, Cc = glow ? gc : sc, arr = p.array;
       for (let v = 0; v < p.count; v++) {
-        const lx = p.getX(v) * sx, ly = p.getY(v) * sy, lz = p.getZ(v) * sz;
+        const lx = arr[v * 3] * sx, ly = arr[v * 3 + 1] * sy, lz = arr[v * 3 + 2] * sz;
         P.push(x + lx * co + lz * si, y + ly, z - lx * si + lz * co);
         Cc.push(col.r, col.g, col.b);
       }
