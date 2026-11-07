@@ -226,7 +226,7 @@ export class BattleLayer {
       const u = this.hell.units.get(id);
       if (!u || u.hp <= 0 || n >= RINGS) continue;
       v.set(u.x, this.groundY(u.x, u.z) + 0.03, u.z);
-      s.setScalar(u.stats.radius * 1.5 + 0.05);
+      s.setScalar(u.stats.radius * 1.05 + 0.04);
       this.rings.setMatrixAt(n++, m.compose(v, q, s));
     }
     this.rings.count = n;
