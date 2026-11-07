@@ -34,8 +34,11 @@ const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 /** Tenue d'une époque : couleurs des pièces du corps, coiffe, ce que tient chaque main */
 interface Kit {
   leg: number; boot: number; hip: number; torso: number; arm: number; hand: number;
-  /** ce que tient la main droite : une arme d'épaule (on met en joue) ou une lame, une hache, un pic (on frappe) */
-  hold?: 'rifle' | 'blade';
+  /** ce que tient la main droite : une arme d'épaule (on met en joue) ou une lame, une hache, un pic (on frappe), une lance
+   * (portée droite, couchée pour frapper) */
+  hold?: 'rifle' | 'blade' | 'spear' | 'arrow';
+  /** ce que tient la main gauche : un bouclier (par défaut), un arc (tenu droit, bandé au combat) */
+  leftHold?: 'shield' | 'bow';
   dress(p: Parts): void;
   head(p: Parts): void;
   right(p: Parts): void;
@@ -194,6 +197,173 @@ const future: Kit = {
 
 /** Tenue de l'époque (avant l'Antiquité, le légionnaire) */
 const KITS = [roman, roman, knight, napoleonic, modern, future];
+
+// ---------- Les troupes de la garnison (île du portail, Enfers) : lancier, archer, chevalier, chacun reconnaissable ----------
+
+/** Lance : hampe de frêne, fer en feuille, talon (le long de +y depuis la main) */
+function spear(p: Parts, wood = 0x8a6a44, iron = STEEL) {
+  p.box(0.009, 0.3, 0.009, 0, -0.07, 0, wood);
+  p.add(new THREE.ConeGeometry(0.011, 0.05, 4).scale(1, 1, 0.5), 0, 0.255, 0, iron);
+  p.box(0.012, 0.012, 0.012, 0, 0.226, 0, dark(iron, 0.8));
+  p.box(0.011, 0.014, 0.011, 0, -0.08, 0, dark(iron, 0.7));
+}
+
+/** Lancier antique : le légionnaire, la lance (hasta) à la place du glaive */
+const romanSpear: Kit = { ...roman, hold: 'spear', right: (p) => spear(p) };
+
+/** Homme d'armes du Moyen Âge : chapel de fer, gambison matelassé, tabard rouge et blanc, rondache, lance */
+const manAtArms: Kit = {
+  leg: 0x6a5a48, boot: LEATHER, hip: 0xd8cfb8, torso: 0xd8cfb8, arm: 0xc8bea4, hand: LEATHER, hold: 'spear',
+  dress(p) {
+    p.box(0.082, 0.11, 0.056, 0, 0.1, 0, 0xd8cfb8);
+    for (const y of [0.125, 0.15, 0.175]) p.box(0.084, 0.004, 0.058, 0, y, 0, 0xb8ae94);
+    p.box(0.07, 0.1, 0.06, 0, 0.1, 0, 0xc23a32);
+    p.box(0.02, 0.1, 0.061, 0, 0.1, 0, WHITE);
+    p.box(0.088, 0.01, 0.062, 0, 0.13, 0, LEATHER);
+  },
+  head(p) {
+    p.sphere(0.03, 0, 0.25, 0, STEEL, 1, 0.75);
+    p.cyl(0.048, 0.042, 0.01, 10, 0, 0.238, 0, STEEL);
+  },
+  right: (p) => spear(p),
+  left(p) {
+    // rondache de bois peinte, bordée de fer, ombilic
+    p.add(new THREE.CylinderGeometry(0.042, 0.042, 0.01, 12).rotateZ(Math.PI / 2), 0.01, -0.035, 0.008, 0xc23a32);
+    p.add(new THREE.TorusGeometry(0.041, 0.004, 4, 14).rotateY(Math.PI / 2), 0.016, -0.035, 0.008, 0x8a8f96);
+    p.box(0.012, 0.012, 0.012, 0.016, -0.041, 0.008, 0xd8dce2);
+  },
+};
+
+/** Les lanciers : soldats à lance de l'Antiquité et du Moyen Âge, puis le fusil à baïonnette, le fusil d'assaut, l'arme à impulsions */
+const SPEARMEN = [romanSpear, romanSpear, manAtArms, napoleonic, modern, future];
+
+/** Couleurs d'un archer selon l'époque : tunique, capuchon et pèlerine, chausses, épaules, arc, corde (`neon` : corde lumineuse) */
+interface ArcherLook { tunic: number; hood: number; leg: number; boot: number; arm: number; shoulder: number; bow: number; string: number; neon?: boolean; mail?: boolean }
+
+/** Archer : capuchon pointu et pèlerine, tunique ceinturée, carquois garni dans le dos, arc tenu dans la main gauche */
+function archerKit(o: ArcherLook): Kit {
+  return {
+    leg: o.leg, boot: o.boot, hip: o.tunic, torso: o.tunic, arm: o.arm, hand: LEATHER, hold: 'arrow', leftHold: 'bow',
+    dress(p) {
+      // tunique qui descend en jupe, ceinture, pèlerine sur les épaules (cotte de mailles au Moyen Âge)
+      p.box(0.08, 0.13, 0.055, 0, 0.08, 0, o.tunic);
+      p.box(0.084, 0.01, 0.058, 0, 0.13, 0, LEATHER);
+      p.box(0.012, 0.012, 0.004, 0, 0.13, 0.03, GOLD);
+      if (o.mail) p.box(0.086, 0.03, 0.06, 0, 0.16, 0, 0x9aa0a8);
+      p.box(0.094, 0.032, 0.064, 0, 0.182, 0, o.shoulder);
+      // carquois de cuir en travers du dos, garni de flèches empennées de blanc et de rouge
+      p.add(new THREE.CylinderGeometry(0.014, 0.012, 0.1, 6), 0.02, 0.17, -0.04, 0x6a4026, 0, false, -0.35);
+      for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.004, 0.026, 0.008), 0.034 + (k % 2) * 0.008 - 0.004, 0.232 + (k >> 1) * 0.004, -0.044 + (k % 2 ? 0.006 : -0.004), k % 2 ? 0xd84a3e : 0xf4f0e6, 0, false, -0.35);
+    },
+    head(p) {
+      // le capuchon : il couvre le crâne, la nuque et les joues (le visage reste dégagé), pointe tombant dans le dos
+      p.add(new THREE.IcosahedronGeometry(0.031, 1).scale(1.05, 1, 0.82), 0, 0.243, -0.009, o.hood);
+      p.add(new THREE.ConeGeometry(0.012, 0.05, 5).rotateX(-2.2), 0, 0.255, -0.04, o.hood);
+      p.box(0.05, 0.012, 0.004, 0, 0.262, 0.016, dark(o.hood, 0.8));
+    },
+    // (la main droite est vide : elle tire la corde ; une flèche encochée au combat)
+    right(p) { p.box(0.003, 0.08, 0.003, 0, -0.01, 0, 0x8a6a44); p.add(new THREE.ConeGeometry(0.005, 0.014, 4), 0, 0.077, 0, STEEL); p.box(0.008, 0.016, 0.002, 0, -0.01, 0, WHITE); },
+    left(p) {
+      // l'arc, tenu droit, ses branches courbées vers l'avant de l'archer, sa corde tendue de bout en bout
+      const r = 0.08, arc = 2.1;
+      p.add(new THREE.TorusGeometry(r, 0.009, 4, 10, arc).rotateZ(-arc / 2).rotateY(-Math.PI / 2).translate(0, 0, -r * 0.82), 0, 0, 0.02, o.bow);
+      p.box(0.003, 2 * r * Math.sin(arc / 2), 0.003, 0, -r * Math.sin(arc / 2), 0.02 - r * 0.82 + r * Math.cos(arc / 2) - 0.001, o.string, 0, o.neon ? 'neon' : false);
+      p.box(0.008, 0.016, 0.008, 0, -0.008, 0.02 + r * 0.18, LEATHER);
+    },
+  };
+}
+
+/** Les archers : tunique antique, cotte de mailles et capuchon vert au Moyen Âge, chasseur de l'âge industriel, treillis moderne, armure futuriste à corde lumineuse */
+const ARCHERS = [
+  archerKit({ tunic: 0xc89a4a, hood: 0x4a7a3a, leg: SKIN, boot: LEATHER, arm: SKIN, shoulder: 0x4a7a3a, bow: 0x7a4a26, string: 0xf0ece0 }),
+  archerKit({ tunic: 0xc89a4a, hood: 0x4a7a3a, leg: SKIN, boot: LEATHER, arm: SKIN, shoulder: 0x4a7a3a, bow: 0x7a4a26, string: 0xf0ece0 }),
+  archerKit({ tunic: 0x7a5a3a, hood: 0x2f6a34, leg: 0x5a4a3a, boot: LEATHER, arm: 0x8f949c, shoulder: 0x2f6a34, bow: 0x6a3a1e, string: 0xf0ece0, mail: true }),
+  archerKit({ tunic: 0x2e4a32, hood: 0x22382a, leg: 0x3a3a34, boot: BLACK, arm: 0x2e4a32, shoulder: 0x22382a, bow: 0x5a3a24, string: 0xf0ece0 }),
+  archerKit({ tunic: 0x5a6a46, hood: 0x4a5236, leg: 0x5a6a46, boot: 0x2e2a24, arm: 0x5a6a46, shoulder: 0x3e4a32, bow: 0x2a2a2e, string: 0xc8c8c8 }),
+  archerKit({ tunic: 0xe8ecf0, hood: 0xd0d8e0, leg: 0xe8ecf0, boot: 0x3a4250, arm: 0xdfe4ea, shoulder: 0xd0d8e0, bow: 0x3a4250, string: 0x5af0ff, neon: true }),
+];
+
+/** Chevalier : armure de plates, cape rouge, grand heaume à plumet, écu armorié, épée */
+const paladin: Kit = {
+  ...knight,
+  dress(p) {
+    knight.dress(p);
+    // plastron qui dépasse du tabard, cape rouge dans le dos, grandes épaulières
+    p.box(0.07, 0.03, 0.062, 0, 0.17, 0, STEEL);
+    p.box(0.09, 0.15, 0.008, 0, 0.06, -0.034, 0xb8322c);
+    for (const s of [-1, 1]) p.sphere(0.026, s * 0.05, 0.2, 0, dark(STEEL, 0.9), 0, 0.7);
+  },
+  head(p) {
+    // grand heaume à fente en croix, plumet rouge et blanc
+    p.cyl(0.031, 0.032, 0.062, 8, 0, 0.216, 0, STEEL);
+    p.cyl(0.024, 0.031, 0.012, 8, 0, 0.278, 0, STEEL);
+    p.box(0.044, 0.006, 0.01, 0, 0.252, 0.029, 0x2a2e34); p.box(0.006, 0.026, 0.01, 0, 0.234, 0.029, 0x2a2e34);
+    p.add(new THREE.IcosahedronGeometry(0.02, 0).scale(0.7, 1.5, 1.2), 0, 0.31, -0.006, 0xd8443a);
+    p.add(new THREE.IcosahedronGeometry(0.014, 0).scale(0.7, 1.4, 1.2), 0, 0.32, 0.01, WHITE);
+  },
+  left(p) {
+    // écu bleu au lion d'or (un losange d'or au milieu), plus grand que celui de l'homme d'armes
+    p.box(0.012, 0.09, 0.07, 0.008, -0.05, 0.008, BLUE);
+    p.add(new THREE.ConeGeometry(0.035, 0.035, 4).rotateZ(Math.PI).rotateY(Math.PI / 4), 0.008, -0.1, 0.008, BLUE);
+    p.add(new THREE.BoxGeometry(0.013, 0.09, 0.006), 0.008, -0.05, 0.044, GOLD); p.add(new THREE.BoxGeometry(0.013, 0.09, 0.006), 0.008, -0.05, -0.028, GOLD);
+    p.add(new THREE.BoxGeometry(0.014, 0.024, 0.024), 0.008, -0.045, 0.008, GOLD, 0, false, Math.PI / 4);
+  },
+};
+
+/** Cuirassier de l'âge industriel : cuirasse d'acier sur l'habit bleu, casque à crinière noire, sabre, sans bouclier */
+const cuirassier: Kit = {
+  leg: WHITE, boot: BLACK, hip: 0x2c3e6a, torso: 0x2c3e6a, arm: 0x2c3e6a, hand: WHITE, hold: 'blade',
+  dress(p) {
+    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0x2c3e6a);
+    p.box(0.086, 0.075, 0.062, 0, 0.13, 0, 0xd8dce2);
+    p.box(0.088, 0.006, 0.064, 0, 0.2, 0, GOLD);
+    for (const s of [-1, 1]) p.box(0.028, 0.012, 0.042, s * 0.048, 0.205, 0, 0xd8443a);
+    p.box(0.088, 0.01, 0.064, 0, 0.125, 0, WHITE);
+  },
+  head(p) {
+    p.sphere(0.032, 0, 0.25, 0, 0xd8dce2, 1, 0.85);
+    p.box(0.012, 0.016, 0.06, 0, 0.274, -0.004, GOLD);
+    p.add(new THREE.BoxGeometry(0.012, 0.07, 0.016), 0, 0.23, -0.04, BLACK, 0, false, 0, 0.4);
+    p.box(0.05, 0.004, 0.022, 0, 0.236, 0.028, 0x2a2a2e);
+  },
+  right(p) {
+    // sabre droit à garde de laiton
+    p.box(0.01, 0.024, 0.01, 0, -0.014, 0, BLACK); p.box(0.03, 0.008, 0.014, 0, 0.0, 0, GOLD);
+    p.box(0.008, 0.12, 0.004, 0, 0.004, 0, STEEL);
+  },
+  left() {},
+};
+
+/** Grand bouclier rectangulaire (moderne : polycarbonate fumé ; futuriste : champ de force) */
+function bigShield(p: Parts, c: number, rim: number, glow: boolean) {
+  p.box(0.008, 0.13, 0.075, 0.01, -0.08, 0.008, c, 0, glow ? 'neon' : false);
+  p.box(0.01, 0.006, 0.077, 0.01, 0.048, 0.008, rim); p.box(0.01, 0.006, 0.077, 0.01, -0.082, 0.008, rim);
+}
+
+/** Lourd moderne : treillis, gilet épais, casque à visière, grand bouclier, matraque-épée */
+const heavyNow: Kit = {
+  ...modern, hold: 'blade',
+  head(p) {
+    modern.head(p);
+    p.box(0.05, 0.024, 0.006, 0, 0.222, 0.031, 0x6a8090);
+  },
+  right(p) { p.box(0.01, 0.024, 0.01, 0, -0.014, 0, BLACK); p.box(0.012, 0.1, 0.006, 0, 0.004, 0, 0x3c3c40); },
+  left: (p) => bigShield(p, 0x8aa0b0, 0x2a2a2e, false),
+};
+
+/** Chevalier futuriste : exo-armure à liserés d'or, lame d'énergie, bouclier de champ de force */
+const heavyFuture: Kit = {
+  ...future, hold: 'blade',
+  dress(p) {
+    future.dress(p);
+    for (const s of [-1, 1]) p.box(0.036, 0.03, 0.064, s * 0.05, 0.19, 0, 0xe8c66a);
+  },
+  right(p) { p.box(0.01, 0.024, 0.01, 0, -0.014, 0, 0x3a4250); p.box(0.03, 0.008, 0.012, 0, 0.0, 0, 0xe8c66a); p.box(0.01, 0.12, 0.004, 0, 0.006, 0, 0x5af0ff, 0, 'neon'); },
+  left: (p) => bigShield(p, 0x5af0ff, 0xe8c66a, true),
+};
+
+/** Les chevaliers : chevalier en armure (dès l'Antiquité s'il le faut), cuirassier, lourd moderne, chevalier futuriste */
+const KNIGHTS = [paladin, paladin, paladin, cuirassier, heavyNow, heavyFuture];
 
 const NAVY = 0x22305a, BUFF = 0xe8c060, SILVER = 0xd8dce2, SIENNA = 0x8a5a3a;
 
@@ -478,7 +648,17 @@ const MINERS = [miner2, miner2, miner2, miner3, miner4, miner4];
 const FIREMEN = [fireman, fireman, fireman, fireman, firemanNow, firemanNow];
 
 /** Qui est-ce : un soldat de l'époque, un gendarme, un mineur */
-export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police';
+export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight';
+/** Les troupes de la garnison (leurs géométries sont partagées d'un soldat à l'autre : `makeSoldier` les garde en cache) */
+const TROOP_ROLES: Partial<Record<SoldierRole, Kit[]>> = { spearman: SPEARMEN, archer: ARCHERS, knight: KNIGHTS };
+const troopGeo = new Map<string, THREE.BufferGeometry>();
+/** Géométrie partagée d'une pièce de troupe (`key` : rôle, époque, teint, pièce), faite à la première demande */
+function shared(key: string | null, make: () => THREE.BufferGeometry) {
+  if (!key) return make();
+  let g = troopGeo.get(key);
+  if (!g) { g = make(); troopGeo.set(key, g); }
+  return g;
+}
 
 /** Torche du garde, flamme à part (elle vacille) */
 function torch(): Parts {
@@ -490,29 +670,40 @@ function torch(): Parts {
 
 /** Fantassin de l'époque `age` ; `v` varie son teint ; `withTorch` : une torche dans la main gauche à la place de l'écu */
 export function makeSoldier(age: number, v = 0, withTorch = false, role: SoldierRole = 'soldier'): Soldier {
-  const era = Math.min(5, Math.max(0, age)), kit = (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : role === 'fireman' ? FIREMEN : role === 'medic' ? MEDICS : role === 'police' ? POLICE : KITS)[era], skin = SKINS[((v % SKINS.length) + SKINS.length) % SKINS.length];
+  const era = Math.min(5, Math.max(0, age)), kit = (TROOP_ROLES[role] ?? (role === 'gendarme' ? GENDARMES : role === 'miner' ? MINERS : role === 'fireman' ? FIREMEN : role === 'medic' ? MEDICS : role === 'police' ? POLICE : KITS))[era], si = ((v % SKINS.length) + SKINS.length) % SKINS.length, skin = SKINS[si];
   const tint = (c: number) => (c === SKIN ? skin : c);
-  const p = new Parts();
-  kit.dress(p);
-  p.box(0.042, 0.042, 0.042, 0, 0.212, 0, skin);
-  p.box(0.03, 0.006, 0.004, 0, 0.226, 0.021, dark(skin, 0.6));
-  kit.head(p);
+  // les troupes partagent leurs géométries (une par rôle, époque, teint et pièce) : une recrue de plus ne coûte presque rien
+  const ck = TROOP_ROLES[role] && !withTorch ? `${role}|${era}|${si}|` : null;
+  let glowG: THREE.BufferGeometry | null = null;
+  const hullG = shared(ck && ck + 'body', () => {
+    const p = new Parts();
+    kit.dress(p);
+    p.box(0.042, 0.042, 0.042, 0, 0.212, 0, skin);
+    p.box(0.03, 0.006, 0.004, 0, 0.226, 0.021, dark(skin, 0.6));
+    kit.head(p);
+    const built = p.build(false);
+    if (built.glow) glowG = built.glow;
+    return built.body;
+  });
+  if (ck) glowG = troopGeo.get(ck + 'glow') ?? (glowG ? (troopGeo.set(ck + 'glow', glowG), glowG) : null);
   // dessiné pour des habitants de 0,3, ramené à leur taille
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
   root.scale.setScalar(HUMAN_K);
-  const built = p.build(false), hull = new THREE.Mesh(built.body, mats.body);
+  const hull = new THREE.Mesh(hullG, mats.body);
   hull.castShadow = true;
   body.add(hull);
-  if (built.glow) body.add(new THREE.Mesh(built.glow, mats.glow));
+  if (glowG) body.add(new THREE.Mesh(glowG, mats.glow));
   // jambes (pivot à la hanche) et bras (pivot à l'épaule), ce que tient chaque main au bout du bras
   const legs: THREE.Object3D[] = [], arms: THREE.Object3D[] = [];
   for (const s of [-1, 1]) {
-    const lp = new Parts();
-    lp.box(0.03, 0.07, 0.034, 0, -0.075, 0, tint(kit.leg));
-    lp.box(0.032, 0.03, 0.044, 0, -0.1, 0.006, kit.boot);
-    if (kit === modern) lp.box(0.032, 0.014, 0.01, 0, -0.06, 0.018, 0x2e2a24);
-    const leg = new THREE.Mesh(lp.build(false).body, mats.body);
+    const leg = new THREE.Mesh(shared(ck && ck + 'leg', () => {
+      const lp = new Parts();
+      lp.box(0.03, 0.07, 0.034, 0, -0.075, 0, tint(kit.leg));
+      lp.box(0.032, 0.03, 0.044, 0, -0.1, 0.006, kit.boot);
+      if (kit === modern || kit === heavyNow) lp.box(0.032, 0.014, 0.01, 0, -0.06, 0.018, 0x2e2a24);
+      return lp.build(false).body;
+    }), mats.body);
     leg.position.set(s * 0.02, 0.1, 0);
     leg.castShadow = true;
     root.add(leg);
@@ -520,18 +711,32 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
   }
   let flame: THREE.Object3D | null = null;
   for (const s of [-1, 1]) {
-    const ap = new Parts();
-    ap.box(0.024, 0.075, 0.028, 0, -0.035, 0, tint(kit.arm));
-    ap.box(0.024, 0.022, 0.024, 0, -0.078, 0.004, tint(kit.hand));
-    const held = new Parts();
-    if (s < 0) kit.right(held);
-    else if (withTorch) {
-      const t = torch(); for (const g of t.body) held.body.push(g);
-    } else kit.left(held);
+    const armG = shared(ck && ck + 'arm', () => {
+      const ap = new Parts();
+      ap.box(0.024, 0.075, 0.028, 0, -0.035, 0, tint(kit.arm));
+      ap.box(0.024, 0.022, 0.024, 0, -0.078, 0.004, tint(kit.hand));
+      return ap.build(false).body;
+    });
+    // ce que tient la main (et ses parties lumineuses : lame d'énergie, corde lumineuse)
+    const side = s < 0 ? 'R' : 'L', hk = ck && ck + 'held' + side;
+    let heldG: THREE.BufferGeometry | null = hk ? troopGeo.get(hk) ?? null : null, heldGlow: THREE.BufferGeometry | null = hk ? troopGeo.get(hk + 'glow') ?? null : null;
+    if (!heldG && !(hk && troopGeo.has(hk + 'none'))) {
+      const held = new Parts();
+      if (s < 0) kit.right(held);
+      else if (withTorch) {
+        const t = torch(); for (const g of t.body) held.body.push(g);
+      } else kit.left(held);
+      if (held.body.length) {
+        const built = held.build(false);
+        heldG = built.body; heldGlow = built.glow;
+        if (hk) { troopGeo.set(hk, heldG); if (heldGlow) troopGeo.set(hk + 'glow', heldGlow); }
+      } else if (hk) troopGeo.set(hk + 'none', new THREE.BufferGeometry());
+    }
     const arm = new THREE.Group();
-    arm.add(new THREE.Mesh(ap.build(false).body, mats.body));
-    if (held.body.length) {
-      const hm = new THREE.Mesh(held.build(false).body, mats.body);
+    arm.add(new THREE.Mesh(armG, mats.body));
+    if (heldG) {
+      const hm = new THREE.Mesh(heldG, mats.body);
+      if (heldGlow) hm.add(new THREE.Mesh(heldGlow, mats.glow));
       hm.position.set(0, -0.085, 0.012);
       hm.castShadow = true;
       arm.add(hm);
@@ -543,7 +748,7 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
       }
     }
     arm.position.set(s * 0.055, 0.205, 0);
-    arm.userData.hold = s < 0 ? (kit.hold ?? (kit === napoleonic || kit === modern ? 'rifle' : 'blade')) : withTorch ? 'torch' : 'shield';
+    arm.userData.hold = s < 0 ? (kit.hold ?? (kit === napoleonic || kit === modern ? 'rifle' : 'blade')) : withTorch ? 'torch' : kit.leftHold ?? 'shield';
     body.add(arm);
     arms.push(arm);
   }
@@ -558,8 +763,16 @@ export function soldierStep(s: Soldier, phase: number, mode: SoldierMode) {
   for (const l of s.legs) l.position.y = kneel ? 0.035 : 0.1;
   s.legs[0].rotation.x = kneel ? -1.35 : walk ? sw * stride : mode === 'fight' ? -0.25 : 0;
   s.legs[1].rotation.x = kneel ? -1.15 : walk ? -sw * stride : mode === 'fight' ? 0.3 : 0;
-  const [right, left] = s.arms, rifle = right.userData.hold === 'rifle';
-  if (kneel) {
+  const [right, left] = s.arms, rifle = right.userData.hold === 'rifle', bow = left.userData.hold === 'bow', pike = right.userData.hold === 'spear';
+  if (bow && mode === 'fight') {
+    // l'archer bande son arc : bras gauche tendu devant, la main droite tire la corde jusqu'à la joue, puis lâche
+    const draw = (phase * 0.9) % 1;
+    left.rotation.x = -1.5; right.rotation.x = -1.25 - Math.min(1, draw * 1.6) * 0.25 + (draw > 0.85 ? 0.2 : 0); right.rotation.z = 0.35;
+  } else if (pike && mode === 'fight') {
+    // le lancier pique : la lance couchée part en avant et revient, le bouclier devant
+    const beat = Math.max(0, Math.sin(phase * 1.6));
+    right.rotation.x = -0.75 - beat * 0.45; left.rotation.x = -0.9; right.rotation.z = 0;
+  } else if (kneel) {
     // penché sur le blessé : les mains au travail
     right.rotation.x = -1 + Math.sin(phase * 1.3) * 0.25; left.rotation.x = -0.9 - Math.sin(phase * 1.1) * 0.2; right.rotation.z = 0;
   } else if (mode === 'carry') {
@@ -584,7 +797,11 @@ export function soldierStep(s: Soldier, phase: number, mode: SoldierMode) {
   // ce que tiennent les mains : la lame pointe devant ; le fusil se porte à l'épaule, se couche à l'horizontale pour viser ;
   // la torche reste droite
   const rh = right.userData.held as THREE.Object3D | undefined, lh = left.userData.held as THREE.Object3D | undefined;
-  if (rh) rh.rotation.x = rifle ? (mode === 'fight' ? Math.PI / 2 - right.rotation.x : 0) : Math.PI / 2;
-  if (lh) lh.rotation.x = left.userData.hold === 'torch' ? -left.rotation.x : 0;
+  // la lance se porte droite et se couche pour frapper ; l'arc reste droit, la flèche encochée vise devant
+  const fight = mode === 'fight';
+  if (rh) rh.rotation.x = rifle || (bow && fight) ? (fight ? Math.PI / 2 - right.rotation.x : 0) : pike ? (fight ? Math.PI / 2 - right.rotation.x : -right.rotation.x) : bow ? -right.rotation.x + Math.PI : Math.PI / 2;
+  if (lh) lh.rotation.x = left.userData.hold === 'torch' || bow ? -left.rotation.x : 0;
+  // (la flèche n'est encochée qu'au combat)
+  if (rh && bow) rh.visible = fight;
   if (s.flame) s.flame.scale.set(0.9 + Math.sin(phase * 7) * 0.12, 0.85 + Math.sin(phase * 5.3) * 0.25, 0.9 + Math.cos(phase * 6.1) * 0.12);
 }

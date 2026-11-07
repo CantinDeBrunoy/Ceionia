@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Hell, HellEvent, DemonKind, DEMONS } from '../sim/hell';
 import { caveLit } from './caveLight';
 import { CombatFx } from './combatFx';
-import { makeSoldier, soldierStep, Soldier } from './soldiers';
+import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
 
 /**
  * Les combattants d'une bataille (dans les Enfers ou sur l'île du portail) : démons en pièces animées (un maillage instancié
@@ -25,6 +25,8 @@ const BAR_BG = new THREE.Color(0x1a0a0c), HELL_C = new THREE.Color(0xff4a3a), PL
 const BARS = 600, RINGS = 120;
 /** Taille des soldats du joueur (au-dessus de celle des habitants : on les lit de loin) */
 const TROOP_K: Record<string, number> = { soldier: 1.6, archer: 1.5, knight: 1.85 };
+/** Le modèle de chaque troupe : lancier (lance et bouclier), archer (arc, carquois, capuchon), chevalier (armure, écu, épée) */
+const TROOP_ROLE: Record<string, SoldierRole> = { soldier: 'spearman', archer: 'archer', knight: 'knight' };
 
 export class BattleLayer {
   group = new THREE.Group();
@@ -169,7 +171,7 @@ export class BattleLayer {
       const age = u.kind === 'knight' ? Math.max(2, this.age) : this.age;
       let t = this.troops.get(u.id);
       if (t && (t.age !== age || t.kind !== u.kind)) { this.group.remove(t.s.root); t = undefined; }
-      if (!t) { t = { s: makeSoldier(age, u.id), kind: u.kind, age }; this.group.add(t.s.root); this.troops.set(u.id, t); }
+      if (!t) { t = { s: makeSoldier(age, u.id, false, TROOP_ROLE[u.kind] ?? 'spearman'), kind: u.kind, age }; this.group.add(t.s.root); this.troops.set(u.id, t); }
       const s = t.s, dead = u.hp <= 0;
       s.root.position.set(u.x, this.groundY(u.x, u.z) - (dead ? Math.max(0, u.hurt - 1.2) * 0.3 : 0), u.z);
       s.root.rotation.set(dead ? -Math.min(1, u.hurt / 0.5) * 1.4 : 0, u.heading, 0, 'YXZ');
