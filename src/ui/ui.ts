@@ -1636,6 +1636,7 @@ export class UI {
     const per = (id: GearId) => ({ spear: 'une par membre', bow: 'un par membre', sword: 'une par membre', rifle: 'un par membre', rope: 'une pour deux', torch: 'une pour deux', boat: 'une pour trois', kit: 'une par équipe', armor: 'une par membre' }[id]);
     el.innerHTML = `
       <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Réserve : <b>${Math.floor(h.world.wood)}</b> bois, <b>${Math.floor(h.world.stone)}</b> pierre, <b>${Math.floor(ex.ore)}</b> minerai.</p>
+      <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => !ex.whyCraft(g, age)) ? '' : 'disabled'} title="Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent">${ic('hammer', 16, 2)} Tout fabriquer</button></div>
       <div class="gearGrid">${GEAR.map((g) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
         return `<div class="gear ${locked ? 'locked' : ''}" data-gear="${g.id}">
@@ -1652,6 +1653,11 @@ export class UI {
     el.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => (b.onclick = () => {
       if (ex.craft(b.dataset.craft as GearId, age)) { h.audio.sfxClick(); changed(); }
     }));
+    el.querySelector<HTMLButtonElement>('[data-craftall]')?.addEventListener('click', () => {
+      let n = 0;
+      for (const g of GEAR) if (!ex.whyCraft(g, age) && ex.craft(g.id, age)) n++;
+      if (n) { h.audio.sfxClick(); changed(); }
+    });
     el.querySelectorAll<HTMLButtonElement>('[data-cancel]').forEach((b) => (b.onclick = () => { ex.cancelCraft(+b.dataset.cancel!); changed(); }));
   }
 

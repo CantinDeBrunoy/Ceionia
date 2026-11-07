@@ -82,7 +82,7 @@ export const TUTO_TEXT = {
     },
     expeditions: {
       title: 'Les expéditions',
-      text: 'Le bouton {compass} ouvre les expéditions : une petite équipe d’habitants part chercher bêtes, minerai ou semences, et débloque parfois de nouveaux bâtiments. Chaque âge a au moins une expédition obligatoire ★ (la Préhistoire en a deux). Une fois l’équipe partie, sa carte s’affiche à gauche : son bouton {eye} la fait suivre (ou lâcher) par la caméra.',
+      text: 'Le bouton {compass} ouvre les expéditions : une petite équipe d’habitants part chercher bêtes, minerai ou semences, et débloque parfois de nouveaux bâtiments. Chaque âge a au moins une expédition obligatoire ★ (la Préhistoire en a deux). Pour débuter, essayez « La grande cueillette ». Une fois l’équipe partie, sa carte s’affiche à gauche : son bouton {eye} la fait suivre (ou lâcher) par la caméra.',
       choose: 'Choisissez une mission et « Envoyer une équipe », puis l’un de ses choix : « Partir » fait partir l’équipe.',
       none: 'Aucune équipe ne peut partir pour l’instant (il faut des habitants libres) : « Suivant » passe à la suite.',
       tasks: ['Ouvrir les expéditions', 'Lancer une expédition', 'Suivre l’équipe avec {eye}'],
@@ -261,7 +261,9 @@ export class Tutorial {
           // la fenêtre de départ d'une mission, sinon la liste des missions (le bouton « Envoyer une équipe »)
           const m = q('.sendModal') ?? q('.expModal');
           if (m && !this.ticks[1]) {
-            const b = [...m.querySelectorAll('button.choice:not([disabled]), button[data-send]:not([disabled])')].find((x) => x.getClientRects().length);
+            // la liste : on désigne d'abord « La grande cueillette », la plus simple pour débuter
+            const first = q('.sendModal') ? null : m.querySelector('button[data-send="berries"]:not([disabled])');
+            const b = first && first.getClientRects().length ? first : [...m.querySelectorAll('button.choice:not([disabled]), button[data-send]:not([disabled])')].find((x) => x.getClientRects().length);
             if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
             return b ?? m.querySelector('.mtitle');
           }
