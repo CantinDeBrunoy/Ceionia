@@ -79,6 +79,9 @@
   async function scenario({ dist = 14, night = false, winter = false, quality = 'medium', pop } = {}) {
     const g = G();
     if (pop !== undefined) g.sim.pop = pop;
+    // ni tutoriel ni interface sur les captures (mode photo)
+    try { g.tutorial?.stop(); } catch { /* déjà arrêté */ }
+    document.body.classList.add('photo');
     g.setQuality(quality);
     g.time.hour = night ? 23 : 12;
     g.time.seasonT = winter ? 3.3 : 1.4;
@@ -225,6 +228,7 @@
     { name: 'âge3 près jour été réduit', age: 3, dist: 14, quality: 'low' },
     { name: 'âge3 loin jour été réduit', age: 3, dist: 90, quality: 'low' },
     { name: 'âge1 près jour été normal', age: 1, dist: 14, quality: 'medium' },
+    { name: 'âge1 très près jour été haute', age: 1, dist: 7, quality: 'high' },
     { name: 'âge5 près jour été normal', age: 5, dist: 14, quality: 'medium' },
     { name: 'âge5 moyen nuit été haute', age: 5, dist: 34, night: true, quality: 'high' },
   ];

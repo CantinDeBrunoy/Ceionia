@@ -450,11 +450,15 @@ export function mergeSkinned(root: THREE.Object3D): boolean {
     const mats = Array.isArray(p.material) ? p.material : [p.material];
     const g = p.geometry.toNonIndexed();
     const n = g.attributes.position.count, col = new Float32Array(n * 3);
-    // la couleur du matériau, sommet par sommet (par groupe quand il y a plusieurs matériaux)
+    // la couleur du matériau, sommet par sommet (par groupe quand il y a plusieurs matériaux), multipliée par les couleurs
+    // de sommets que le modèle a déjà (les taches de la vache)
+    const prev = mats.every((m) => m.vertexColors) ? g.attributes.color : null;
     const groups = g.groups.length ? g.groups : [{ start: 0, count: n, materialIndex: 0 }];
     for (const gr of groups) {
       const c = (mats[Math.min(gr.materialIndex ?? 0, mats.length - 1)] as THREE.MeshStandardMaterial).color;
-      for (let i = gr.start; i < gr.start + gr.count && i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      for (let i = gr.start; i < gr.start + gr.count && i < n; i++) {
+        col[i * 3] = c.r * (prev ? prev.getX(i) : 1); col[i * 3 + 1] = c.g * (prev ? prev.getY(i) : 1); col[i * 3 + 2] = c.b * (prev ? prev.getZ(i) : 1);
+      }
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     // seuls les attributs communs se fondent
@@ -480,7 +484,14 @@ export function mergeSkinned(root: THREE.Object3D): boolean {
 export function makeActor(name: ModelName, size: number, fit: 'length' | 'height' = 'length'): Actor | null {
   const gltf = loaded.get(name);
   if (!gltf) return null;
-  if (!merged.has(name)) { merged.add(name); mergeSkinned(gltf.scene); }
+  // une fois par modèle : simplification en grosses facettes (pièce par pièce, pour que les taches de la vache restent
+  // nettes), puis fusion des pièces en un seul maillage
+  if (!merged.has(name)) {
+    merged.add(name);
+    const div = CHUNKY[name];
+    if (div) gltf.scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry = chunky(m.geometry, div); });
+    mergeSkinned(gltf.scene);
+  }
   let box = boxes.get(name);
   if (!box) {
     gltf.scene.updateMatrixWorld(true);
@@ -495,8 +506,6 @@ export function makeActor(name: ModelName, size: number, fit: 'length' | 'height
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
-    const div = CHUNKY[name];
-    if (div) m.geometry = chunky(m.geometry, div);
     // glTF sans metallicFactor = métal par défaut : sans carte d'environnement il paraît presque noir ; les bêtes en
     // facettes, comme le reste du décor (leurs normales lissées les faisaient paraître en plastique)
     for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]) {

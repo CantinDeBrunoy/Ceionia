@@ -17,6 +17,8 @@ function rig(colors: number[], opts: { map?: boolean; twoBones?: boolean } = {})
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(Float32Array.from({ length: n * 4 }, (_, k) => (k % 4 === 0 ? 1 : 0)), 4));
     const mat = new THREE.MeshStandardMaterial({ color: c });
     if (opts.map && i === 1) mat.map = new THREE.Texture();
+    // le troisième morceau a déjà ses couleurs de sommets (à moitié éteintes)
+    if (i === 2) { mat.vertexColors = true; g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(n * 3).fill(0.5), 3)); }
     const m = new THREE.SkinnedMesh(g, mat);
     root.add(m);
     m.bind(opts.twoBones && i === 1 ? other : skeleton, new THREE.Matrix4());
@@ -41,7 +43,7 @@ describe('fusion des maillages articulés d’un modèle', () => {
     const col = g.attributes.color;
     expect(col.getX(0)).toBeCloseTo(1); expect(col.getY(0)).toBeCloseTo(0);
     expect(col.getY(36)).toBeCloseTo(1); expect(col.getX(36)).toBeCloseTo(0);
-    expect(col.getZ(72)).toBeCloseTo(1);
+    expect(col.getZ(72)).toBeCloseTo(0.5);
     expect(m.skeleton).toBe(parts[0].skeleton);
   });
   it('ne touche pas à un modèle d’un seul morceau, ni à un modèle texturé, ni à des squelettes différents', () => {
