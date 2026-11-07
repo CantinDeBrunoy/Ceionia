@@ -1356,8 +1356,7 @@ export class UI {
       if (!ov.isConnected) { clearInterval(iv); return; }
       const st = ex.state, k = `${JSON.stringify(st.gear)}|${st.craft.join()}|${Math.floor(ex.ore)}|${Math.floor(h.world.wood)}|${Math.floor(h.world.stone)}|${ex.active.length}`;
       if (k !== key) { key = k; this.renderArsenal($('.arsenal', ov) as HTMLElement, () => (key = '')); }
-      const bar = ov.querySelector<HTMLElement>('.queue .bar i');
-      if (bar) bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`;
+      ov.querySelectorAll<HTMLElement>('.queue .bar i, .cbar i').forEach((bar) => (bar.style.width = `${Math.round(ex.craftProgress() * 100)}%`));
       const rb = ov.querySelector<HTMLElement>('.railBox'), rh = this.railHtml();
       if (rb && rb.dataset.html !== rh) { rb.dataset.html = rh; rb.innerHTML = rh; }
     };
@@ -1640,11 +1639,12 @@ export class UI {
       <div class="gearGrid">${GEAR.map((g) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
         return `<div class="gear ${locked ? 'locked' : ''}" data-gear="${g.id}">
-          <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt">${n} en réserve${out ? ` · ${out} en route` : ''}</span></div></div>
+          <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt">${n} en réserve${st.craft.includes(g.id) ? ` · ${st.craft.filter((x) => x === g.id).length} en fabrication` : ''}${out ? ` · ${out} en route` : ''}</span></div></div>
           <small class="gdesc">${g.desc}</small>
           <small class="gd">${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} : −${Math.round(g.cut * 100)} % de risque · ${per(g.id)}</small>
           ${why ? `<small class="why">${why}</small>` : ''}
           <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 16, 2)} ${price || 'Fabriquer'}</button>
+          ${st.craft[0] === g.id ? '<div class="bar gnbar cbar"><i></i></div>' : ''}
         </div>`;
       }).join('')}</div>
       <h4>Fabrication</h4>
