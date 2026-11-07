@@ -25,7 +25,7 @@ export const BASE_DEFS: Record<BaseKind, BaseDef> = {
   smithy: { kind: 'smithy', name: 'Forge', icon: '⚒️', r: 1, max: 1, cost: { wood: 20, stone: 30, ore: 10 }, desc: 'Répare et affûte l’équipement des troupes de la base (+20 % de dégâts, coups reçus adoucis) ; forge contre du minerai les lances, arcs et armures qui manquent à la réserve du village pour recruter sur place.' },
   infirmary: { kind: 'infirmary', name: 'Infirmerie', icon: '🩹', r: 1, max: 1, cost: { wood: 30, stone: 20, ore: 0 }, desc: 'Soigne vite les troupes de la base ; un soldat tombé dans les Enfers y est soigné (deux fois plus vite) au lieu de rentrer sur l’île.' },
   tower: { kind: 'tower', name: 'Tour de guet', icon: '🏹', r: 0.6, max: 4, cost: { wood: 20, stone: 30, ore: 0 }, desc: 'Ses archers tirent sur les démons qui approchent.' },
-  palisade: { kind: 'palisade', name: 'Palissade', icon: '🪵', r: 0.5, max: 20, cost: { wood: 8, stone: 0, ore: 0 }, desc: 'Un pan de pieux : bloque le passage et ralentit les démons qui la longent. Laissez toujours un passage.' },
+  palisade: { kind: 'palisade', name: 'Palissade', icon: '🚧', r: 0.5, max: 20, cost: { wood: 8, stone: 0, ore: 0 }, desc: 'Un pan de pieux : bloque le passage et ralentit les démons qui la longent. Laissez toujours un passage.' },
   brazier: { kind: 'brazier', name: 'Brasero', icon: '🔥', r: 0.35, max: 8, cost: { wood: 6, stone: 0, ore: 2 }, desc: 'Éclaire la base et fait reculer la brume rouge.' },
 };
 export const BASE_KINDS = Object.keys(BASE_DEFS) as BaseKind[];

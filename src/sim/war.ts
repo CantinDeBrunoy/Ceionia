@@ -139,8 +139,11 @@ export class War {
     let u: HellUnit | null = null;
     if (t.where === 'hell' && this.faction && this.hellMap) {
       // au camp de base le plus avancé (sinon devant le portail)
-      const [ax, az] = this.base?.spawnPoint() ?? this.hellMap.arrival, i = this.unitOf.size;
-      u = this.faction.addPlayerUnit(t.kind, st, t.x ?? ax + ((i % 3) - 1) * 0.6, t.z ?? az + Math.floor(i / 3) * 0.5);
+      const m = this.hellMap, [ax, az] = this.base?.spawnPoint() ?? m.arrival, i = this.unitOf.size % 12;
+      let x = t.x ?? ax + ((i % 3) - 1) * 0.6, z = t.z ?? az + Math.floor(i / 3) * 0.5;
+      // jamais dans une emprise (un bâtiment de la base, une forteresse relevée)
+      if (!m.walkableAt(x, z)) { const c = m.nearestWalkable(x, z, 4); if (c >= 0) { x = (c % m.W) + 0.5; z = Math.floor(c / m.W) + 0.5; } }
+      u = this.faction.addPlayerUnit(t.kind, st, x, z);
     } else if (this.isle) {
       const [rx, rz] = this.isle.rallyPoint(), n = this.isle.sim.alive('player').length;
       const [x, z] = t.x !== undefined && t.z !== undefined && this.isle.map.walkableAt(t.x, t.z) ? [t.x, t.z] : this.isle.map.freeNear(rx + ((n % 4) - 1.5) * 0.6, rz + Math.floor(n / 4) * 0.6);

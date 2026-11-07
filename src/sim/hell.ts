@@ -702,7 +702,8 @@ export class Hell {
       const zn = zoneOfZ(Math.floor(nz));
       if (zn > this.frontier && zn > zoneOfZ(Math.floor(u.z))) { u.path = null; return; }
     }
-    if (m.walkableAt(nx, nz)) { u.x = nx; u.z = nz; }
+    // (pris dans une emprise, une zone reperdue dont la forteresse se relève : il en sort)
+    if (m.walkableAt(nx, nz) || !m.walkableAt(u.x, u.z)) { u.x = nx; u.z = nz; }
     else if (m.walkableAt(nx, u.z)) u.x = nx;
     else if (m.walkableAt(u.x, nz)) u.z = nz;
     else { u.path = null; return; }
