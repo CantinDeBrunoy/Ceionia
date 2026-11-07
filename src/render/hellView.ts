@@ -8,6 +8,8 @@ import { BattleLayer, paint, merge } from './battleUnits';
 import { hash2, smoothstep } from '../core/rng';
 import { baseGeo, BASE_FLAG } from './hellBase';
 import { BASE_DEFS, BASE_R } from '../sim/hellBase';
+import type { KingFight } from '../sim/kingdom';
+import { KingFx } from './kingFx';
 
 /**
  * Le monde des Enfers, vu comme le monde souterrain (galeries en coupe, le dessus des parois est la tranche sombre de la
@@ -59,6 +61,13 @@ export class HellView {
   private rangeRing: THREE.Mesh | null = null;
   /** la brume qui ferme chaque zone (de la deuxième au royaume) tant que la précédente n'est pas conquise */
   private seals: THREE.Mesh[] = [];
+  /** le combat du roi (ses boules de feu, ses plaques de sol en feu) et ses effets */
+  fight: KingFight | null = null;
+  private kingFx: KingFx;
+  /** l'effondrement du royaume (la victoire) : depuis quand (-1 : pas commencé), la lave qui monte, le prochain nuage */
+  private collapseT = -1;
+  private lavaRise: THREE.Mesh | null = null;
+  private dustT = 0;
 
   constructor(readonly map: HellMap, public hell: Hell) {
     this.scene.background = BG;
@@ -71,7 +80,8 @@ export class HellView {
     const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 });
     const ground = new THREE.Mesh(this.groundGeo, caveLit(groundMat, 'hell-ground'));
     this.units = new BattleLayer(hell, (x, z) => this.map.groundY(x, z), (ev) => { const h = this.houses.get(ev.id); if (h) { h.up.visible = false; h.ruin.visible = true; h.down = true; } });
-    this.scene.add(ground, this.content, this.units.group);
+    this.kingFx = new KingFx((x, z) => this.map.groundY(x, z), this.units.fx);
+    this.scene.add(ground, this.content, this.units.group, this.kingFx.group);
   }
 
   groundY(x: number, z: number) { return this.map.groundY(x, z); }
@@ -396,7 +406,7 @@ export class HellView {
       ruin.visible = false;
       this.content.add(up, ruin);
       this.houses.set(b.id, { up, ruin, down: false, flags });
-      const h = b.kind === 'kingdom' ? 5.4 : b.kind === 'fortress' ? 2.6 : 1.4;
+      const h = b.kind === 'kingdom' ? 5.4 : b.kind === 'fortress' || b.kind === 'spire' ? 2.6 : 1.4;
       this.sources.push({ x: b.site.x, y: y + h, z: b.site.z - b.site.r - 0.3, r: b.kind === 'kingdom' ? 9 : 4.5, c: new THREE.Color(1, 0.45, 0.2).multiplyScalar(b.kind === 'kingdom' ? 2 : 1.4), flicker: 0.25 });
     }
   }
@@ -556,7 +566,45 @@ export class HellView {
       if (h.up.visible) h.flags.forEach((f, i) => { f.rotation.y = Math.sin(t * 2.3 + i + id) * 0.35; });
     }
     if (this.portalDisc) this.portalDisc.rotation.z = 0;
+    this.kingFx.update(dt, this.fight, events);
+    this.stepCollapse(dt);
     this.units.update(dt, camera, events);
+  }
+
+  /** Le royaume s'effondre (la cinématique de la victoire) : ses ruines s'enfoncent, la lave monte, poussière et jets de feu */
+  startCollapse() { if (this.collapseT < 0) { this.collapseT = 0; this.lightTimer = 0; } }
+
+  private stepCollapse(dt: number) {
+    // un royaume déjà tombé (une partie reprise) : englouti d'emblée
+    if (this.collapseT < 0 && this.hell.victory) this.collapseT = 30;
+    if (this.collapseT < 0) return;
+    const cit =[...this.hell.buildings.values()].find((b) => b.kind === 'kingdom');
+    if (!cit) return;
+    this.collapseT += dt;
+    const t = this.collapseT, { x, z } = cit.site, y0 = this.map.groundY(x, z);
+    for (const [id, h] of this.houses) {
+      const b = this.hell.buildings.get(id);
+      if (!b || b.zone !== Z_KINGDOM || b.side !== 'hell') continue;
+      h.ruin.position.y = this.map.groundY(b.site.x, b.site.z) - Math.min(1.8, t * 0.4);
+      h.ruin.rotation.z = Math.sin(t * 11 + id) * 0.04 * Math.min(1, t);
+    }
+    // la lave monte dans l'enceinte et la noie
+    if (!this.lavaRise) {
+      this.lavaRise = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), lavaMaterial(this.uTime, 0));
+      this.lavaRise.renderOrder = 2;
+      this.content.add(this.lavaRise);
+      this.sources.push({ x, y: y0 + 1.2, z, r: 11, c: new THREE.Color(1, 0.4, 0.12).multiplyScalar(2.2), flicker: 0.2 });
+    }
+    this.lavaRise.position.set(x, HLAVA_Y + Math.min(0.5, t * 0.12), z);
+    this.lavaRise.scale.setScalar(Math.min(10, 0.5 + t * t * 0.3));
+    // poussière qui monte, jets de lave
+    this.dustT -= dt;
+    if (this.dustT > 0 || t > 9) return;
+    this.dustT = 0.06;
+    const fx = this.units.fx, a = Math.random() * Math.PI * 2, d = Math.random() * Math.min(9, 2 + t * 2), px = x + Math.sin(a) * d, pz = z + Math.cos(a) * d;
+    fx.puff(px, y0 + 0.4 + Math.random() * 1.5, pz, 12);
+    if (Math.random() < 0.35) fx.chips(px, y0 + 0.3, pz, 0xff8a2a, 14);
+    if (Math.random() < 0.12) fx.boom(px, y0 + 0.6, pz);
   }
 
   /** Sortie des Enfers : la surface ne reçoit plus ces lumières */
@@ -668,6 +716,18 @@ function houseGeo(kind: HellSiteKind): [THREE.BufferGeometry, THREE.BufferGeomet
     shine.push(paint(new THREE.BoxGeometry(0.18, 0.12, 0.05).translate(-0.25, 1.8, -0.47), EYE), paint(new THREE.BoxGeometry(0.18, 0.12, 0.05).translate(0.25, 1.8, -0.47), EYE));
     flags.push([-1.5, 2.7, -1.5], [1.5, 2.7, -1.5]);
     for (const x of [-1.5, 1.5]) solid.push(paint(new THREE.CylinderGeometry(0.025, 0.025, 0.8, 4).translate(x, 2.6, -1.5), DARK));
+  } else if (kind === 'spire') {
+    // une tour de la citadelle : fût sombre sur un socle, meurtrières de lave, chemin de ronde, toit rouge cornu
+    solid.push(paint(new THREE.CylinderGeometry(0.75, 0.9, 0.4, 6).translate(0, 0.2, 0), STONE));
+    solid.push(paint(new THREE.CylinderGeometry(0.5, 0.66, 2.4, 6).translate(0, 1.6, 0), DARK, (y) => 0.8 + y * 0.4));
+    solid.push(paint(new THREE.CylinderGeometry(0.72, 0.6, 0.3, 6).translate(0, 2.95, 0), STONE));
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; solid.push(paint(new THREE.BoxGeometry(0.22, 0.24, 0.2).translate(0, 3.2, 0.62).rotateY(a), STONE)); }
+    solid.push(paint(new THREE.ConeGeometry(0.62, 1.3, 6).translate(0, 3.85, 0), RED));
+    solid.push(horn(-0.4, 3.3, 0, 1.5, 0.7), horn(0.4, 3.3, 0, 1.5, -0.7));
+    for (const y of [1.2, 2.1]) shine.push(paint(new THREE.BoxGeometry(0.12, 0.3, 0.06).translate(0, y, -0.6), LAVA));
+    shine.push(paint(new THREE.BoxGeometry(0.16, 0.1, 0.05).translate(0, 3.45, -0.5), EYE));
+    flags.push([0, 4.7, 0]);
+    solid.push(paint(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 4).translate(0, 4.6, 0), DARK));
   } else {
     // la citadelle : enceinte octogonale, six tours, une flèche immense couronnée de cornes et d'un œil de lave
     for (let i = 0; i < 8; i++) {

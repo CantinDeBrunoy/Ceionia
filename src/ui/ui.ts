@@ -868,6 +868,8 @@ export class UI {
    */
   /** Les conseils se cachent à partir de l’Antiquité ; un bouton les remet (choix gardé d’une partie à l’autre) */
   private help = (() => { try { return localStorage.getItem('ceionia.aides') === '1'; } catch { return false; } })();
+  /** Affiche ou masque les aides (conseils, et bulles du volet militaire tant qu'elles ne sont pas masquées : voir `warTips.ts`) */
+  setHelp(on: boolean) { this.help = on; try { localStorage.setItem('ceionia.aides', on ? '1' : '0'); } catch { /* sans stockage */ } this.renderMessage(); }
 
   private renderMessage() {
     const { sim } = this.host, el = $('#msg'), k = sim.messageKind;

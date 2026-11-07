@@ -2,6 +2,7 @@ import type { World } from './world';
 import { sizeOf } from '../build/catalog';
 import { hash2, smoothstep, lerp, clamp } from '../core/rng';
 import { isleDefenses, isleSecured, ISLE_SECURE } from './portal';
+import { hellFallen } from '../sim/kingdom';
 
 /**
  * La contamination de l'île du portail : le monde des Enfers déborde par le portail sur l'île (sol noirci, fissures de lave,
@@ -47,6 +48,8 @@ export interface Blight {
 export function blightLevel(w: World, conquered = 0): number {
   if (!w.portal) return 0;
   if (!w.portalOpen) return BLIGHT_DORMANT;
+  // le royaume des Enfers est tombé : l'île se purifie pour de bon
+  if (hellFallen(w)) return 0.03;
   const S = BLIGHT_STEP, z = Math.min(S.zoneMax, Math.max(0, conquered));
   if (isleSecured(w)) return Math.max(BLIGHT_FLOOR, BLIGHT_SECURED - 0.015 * z);
   const d = isleDefenses(w), waves = Math.min(ISLE_SECURE.waves, w.isleGuard.waves);

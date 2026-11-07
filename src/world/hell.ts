@@ -39,8 +39,11 @@ export function zoneOfZ(z: number) {
 }
 export const zoneEnd = (i: number) => (i + 1 < HELL_ZONES.length ? HELL_ZONES[i + 1].z0 : HL);
 
-/** Bâtiments démoniaques : avant-poste (tour de guet), forge (renforts), forteresse (une par zone), royaume (la citadelle) */
-export type HellSiteKind = 'outpost' | 'forge' | 'fortress' | 'kingdom';
+/**
+ * Bâtiments démoniaques : avant-poste (tour de guet), forge (renforts), forteresse (une par zone), royaume (la citadelle) et
+ * ses tours, au-delà des douves
+ */
+export type HellSiteKind = 'outpost' | 'forge' | 'fortress' | 'kingdom' | 'spire';
 /** Un emplacement de bâtiment : centre, zone, rayon de son emprise (les cases couvertes sont bloquées) */
 export interface HellSite { kind: HellSiteKind; x: number; z: number; zone: number; r: number }
 export interface HellZoneInfo {
@@ -300,6 +303,8 @@ export class HellMap {
       sites.push({ kind: 'forge', x: sx(zm) + 0.5 + sm * 4.6, z: zm + 0.5, zone: zi, r: 1.1 });
     }
     sites.push({ kind: 'kingdom', x: king[0], z: king[1] + 2, zone: Z_KINGDOM, r: 4.2 });
+    // les tours de la citadelle, au-delà des douves : deux face aux arrivants, de part et d'autre du pont, deux sur les flancs
+    for (const a of [-0.66, 0.66, -1.83, 1.83]) sites.push({ kind: 'spire', x: king[0] + Math.sin(a) * 11.2, z: king[1] + 2 - Math.cos(a) * 11.2, zone: Z_KINGDOM, r: 0.8 });
     // les douves de lave autour de la citadelle, deux ponts (au nord, face aux arrivants, et au sud)
     for (let z = Math.floor(king[1] - 12); z <= king[1] + 13; z++)
       for (let x = Math.floor(king[0] - 12); x <= king[0] + 12; x++) {

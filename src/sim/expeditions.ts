@@ -8,6 +8,7 @@ import { ExpEvent, pickEvent, waitTime } from './events';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
 import { securityK } from './security';
+import { FORGE_PERK, FORGE_RISK, FORGE_CRAFT } from './kingdom';
 import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
 
@@ -313,7 +314,9 @@ export class Expeditions {
   riskOf(c: Choice) {
     // un train de voyageurs amène les équipes au cosmodrome : les expéditions spatiales sont plus sûres
     const rail = c.dest === 'spaceport' && spaceRail(this.world);
-    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (rail ? SPACE_RAIL_RISK : 1) * securityK(dangersOf(c), (k) => this.has(k));
+    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (rail ? SPACE_RAIL_RISK : 1) * securityK(dangersOf(c), (k) => this.has(k))
+      // la forge infernale, rapportée de la chute du royaume des Enfers, équipe mieux les équipes
+      * (this.world.exp.perks.includes(FORGE_PERK) ? FORGE_RISK : 1);
   }
 
   /**
@@ -851,7 +854,7 @@ export class Expeditions {
     const s = this.world.exp;
     if (!s.craft.length) return;
     const g = GEAR_BY[s.craft[0]];
-    s.craftT += dt * (this.has('workshop') ? 1.5 : 1);
+    s.craftT += dt * (this.has('workshop') ? 1.5 : 1) * (s.perks.includes(FORGE_PERK) ? FORGE_CRAFT : 1);
     if (s.craftT < g.time) return;
     s.craftT = 0;
     s.craft.shift();
