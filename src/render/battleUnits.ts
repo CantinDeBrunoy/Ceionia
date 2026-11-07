@@ -44,12 +44,16 @@ export class BattleLayer {
   private barFill: THREE.InstancedMesh;
   private rings: THREE.InstancedMesh;
   private markMesh: THREE.Mesh;
+  private pin: THREE.Mesh;
   private m4 = new THREE.Matrix4();
   private m5 = new THREE.Matrix4();
   private q = new THREE.Quaternion();
   private v = new THREE.Vector3();
   private s = new THREE.Vector3();
   private e = new THREE.Euler();
+  private e2 = new THREE.Vector3();
+  /** distance de la caméra au centre de la bataille (taille de la marque d'ordre) */
+  private camDist = 14;
   private white = new THREE.Color(1, 1, 1);
   private flash = new THREE.Color(2.2, 1.7, 1.5);
 
@@ -65,9 +69,12 @@ export class BattleLayer {
     const ring = new THREE.RingGeometry(0.78, 1, 24).rotateX(-Math.PI / 2);
     this.rings = new THREE.InstancedMesh(ring, new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.85, depthWrite: false, fog: false }), RINGS);
     this.rings.count = 0; this.rings.frustumCulled = false; this.rings.renderOrder = 9;
-    this.markMesh = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.4, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, depthWrite: false, fog: false }));
+    this.markMesh = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.4, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, depthWrite: false, depthTest: false, fog: false }));
     this.markMesh.visible = false; this.markMesh.renderOrder = 9;
-    this.group.add(this.rings, this.markMesh, this.fx.group);
+    // la flèche de l'ordre, pointe en bas (toujours visible, par-dessus le relief)
+    this.pin = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.4, 4).rotateX(Math.PI).translate(0, 0.2, 0), new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+    this.pin.visible = false; this.pin.renderOrder = 12;
+    this.group.add(this.rings, this.markMesh, this.pin, this.fx.group);
     for (const k of KINDS) this.rigs[k] = this.makeRig(k);
   }
 
@@ -177,6 +184,8 @@ export class BattleLayer {
       s.root.rotation.set(dead ? -Math.min(1, u.hurt / 0.5) * 1.4 : 0, u.heading, 0, 'YXZ');
       s.root.scale.setScalar(TROOP_K[u.kind] ?? 1.6);
       soldierStep(s, u.moving ? u.walk : this.uTime, dead ? 'idle' : u.state === 'attack' ? 'fight' : u.moving ? (u.state === 'retreat' ? 'run' : 'walk') : 'guard');
+      // touché : il recule d'un coup, le buste rejeté en arrière
+      if (!dead && u.hurt < 0.18) s.body.rotation.x -= 0.4 * (1 - u.hurt / 0.18);
     }
     for (const [id, t] of this.troops) if (!seen.has(id)) { this.group.remove(t.s.root); this.troops.delete(id); }
   }
@@ -185,16 +194,20 @@ export class BattleLayer {
   private drawBars(camera: THREE.Camera) {
     let n = 0;
     const q = camera.quaternion, m = this.m4, off = this.m5, v = this.v, s = this.s;
-    const put = (x: number, y: number, z: number, w: number, frac: number, c: THREE.Color) => {
+    // la caméra dans le repère de la bataille : de loin, les barres grossissent un peu (lisibles), de près elles restent fines
+    const cam = this.e2.copy(camera.position);
+    this.group.worldToLocal(cam);
+    const put = (x: number, y: number, z: number, w0: number, frac: number, c: THREE.Color) => {
       if (n >= BARS) return;
+      const k = Math.min(2.6, Math.max(0.75, Math.hypot(cam.x - x, cam.y - y, cam.z - z) / 14)), w = w0 * k;
       // la jauge part du bord gauche du fond (le plan va de 0 à 1 en x)
-      v.set(x, y, z);
+      v.set(x, y + 0.06 * (k - 1), z);
       s.set(1, 1, 1);
       m.compose(v, q, s);
-      off.makeTranslation(-(w + 0.04) / 2, 0, 0).multiply(BAR_S.makeScale(w + 0.04, 0.09, 1));
+      off.makeTranslation(-(w + 0.04 * k) / 2, 0, 0).multiply(BAR_S.makeScale(w + 0.04 * k, 0.1 * k, 1));
       this.barBg.setMatrixAt(n, BAR_M.multiplyMatrices(m, off));
       this.barBg.setColorAt(n, BAR_BG);
-      off.makeTranslation(-w / 2, 0, 0.001).multiply(BAR_S.makeScale(Math.max(0.001, w * frac), 0.06, 1));
+      off.makeTranslation(-w / 2, 0, 0.001).multiply(BAR_S.makeScale(Math.max(0.001, w * frac), 0.065 * k, 1));
       this.barFill.setMatrixAt(n, BAR_M.multiplyMatrices(m, off));
       this.barFill.setColorAt(n, c);
       n++;
@@ -209,7 +222,7 @@ export class BattleLayer {
     }
     for (const b of this.hell.buildings.values()) {
       if (b.down || (b.hp >= b.maxHp && b.kind !== 'kingdom')) continue;
-      const h = b.kind === 'kingdom' ? 7.2 : b.kind === 'fortress' || b.kind === 'spire' ? 3.6 : b.kind === 'watchtower' || b.kind === 'tower' ? 2.6 : b.kind === 'palisade' || b.kind === 'brazier' ? 1.3 : 2.2;
+      const h = b.kind === 'kingdom' ? 7.2 : b.kind === 'fortress' || b.kind === 'spire' ? 3.6 : b.kind === 'tower' ? 2.6 : b.kind === 'watchtower' ? 1.9 : b.kind === 'barracks' ? 1.5 : b.kind === 'palisade' || b.kind === 'brazier' ? 1.3 : 2.2;
       const frac = b.hp / b.maxHp;
       put(b.site.x, this.groundY(b.site.x, b.site.z) + h, b.site.z, b.kind === 'kingdom' ? 3 : 1.6, frac, b.side === 'hell' ? HELL_C : frac > 0.35 ? PLAYER_C : WEAK_C);
     }
@@ -233,14 +246,26 @@ export class BattleLayer {
     }
     this.rings.count = n;
     this.rings.instanceMatrix.needsUpdate = true;
-    const k = this.mark;
+    // la marque de l'ordre : un anneau qui s'élargit et une flèche qui se plante en rebondissant (verte : aller, tenir ; rouge :
+    // attaquer ; ambre : se replier), à la taille de la vue
+    const k = this.mark, LIFE = 1.2;
     if (k) k.t += 1 / 60;
-    this.markMesh.visible = !!k && k.t < 0.8;
-    if (k && this.markMesh.visible) {
-      this.markMesh.position.set(k.x, this.groundY(k.x, k.z) + 0.04, k.z);
-      this.markMesh.scale.setScalar(1 + k.t * 1.2);
-      (this.markMesh.material as THREE.MeshBasicMaterial).color.set(k.kind === 'attack' ? 0xff5a4a : 0x7dff8a);
-      (this.markMesh.material as THREE.MeshBasicMaterial).opacity = 1 - k.t / 0.8;
+    // (la caméra dans le repère de la bataille, relevée par `drawBars`)
+    if (k) this.camDist = Math.hypot(this.e2.x - k.x, this.e2.y - this.groundY(k.x, k.z), this.e2.z - k.z);
+    const on = !!k && k.t < LIFE;
+    this.markMesh.visible = this.pin.visible = on;
+    if (k && on) {
+      const y = this.groundY(k.x, k.z), sz = Math.min(2.4, Math.max(0.8, this.camDist / 14)), fade = 1 - Math.max(0, k.t - 0.5) / (LIFE - 0.5);
+      const col = k.kind === 'attack' ? 0xff5a4a : k.kind === 'retreat' ? 0xffc040 : 0x7dff8a;
+      this.markMesh.position.set(k.x, y + 0.04, k.z);
+      this.markMesh.scale.setScalar(sz * (1 + Math.min(1, k.t / 0.5) * 0.6));
+      const mm = this.markMesh.material as THREE.MeshBasicMaterial, pm = this.pin.material as THREE.MeshBasicMaterial;
+      mm.color.set(col); pm.color.set(col);
+      mm.opacity = fade; pm.opacity = fade;
+      const drop = Math.max(0, 1 - k.t / 0.25), bounce = k.t > 0.25 ? Math.abs(Math.sin((k.t - 0.25) * 9)) * 0.12 * Math.max(0, 1 - (k.t - 0.25) * 2) : 0;
+      this.pin.position.set(k.x, y + (0.18 + drop * 0.9 + bounce) * sz, k.z);
+      this.pin.scale.setScalar(sz);
+      this.pin.rotation.y = k.t * 3;
     }
   }
 
@@ -252,8 +277,10 @@ export class BattleLayer {
         const t = h.units.get(ev.target), y = t ? this.groundY(ev.x, ev.z) + (t.side === 'hell' ? SCALE[t.kind as DemonKind] ?? 0.4 : 0.4) * 0.6 : this.groundY(ev.x, ev.z) + 1;
         if (!ev.ranged) this.fx.hit(ev.x, y, ev.z, t?.side === 'player' ? 0xff7a3a : 0xffd27a, 10, t?.side === 'player' ? 'bite' : 'blade');
       } else if (ev.type === 'shot') {
-        const y0 = this.groundY(ev.x0, ev.z0) + ev.y0, y1 = this.groundY(ev.x1, ev.z1) + 0.3;
-        this.fx.tracer(ev.x0, y0, ev.z0, ev.x1, y1, ev.z1, ev.fire ? 0xff6a1a : 0xfff0c0, ev.fire ? 9 : 13);
+        // une vraie flèche qui vole en cloche (de feu pour les démons), plantée à mi-hauteur de sa cible
+        const t = h.units.get(ev.target), th = t ? (t.side === 'hell' ? SCALE[t.kind as DemonKind] ?? 0.4 : 0.45) * 0.55 : 0.3;
+        const y0 = this.groundY(ev.x0, ev.z0) + ev.y0, y1 = this.groundY(ev.x1, ev.z1) + th;
+        this.fx.arrow(ev.x0, y0, ev.z0, ev.x1, y1, ev.z1, ev.fire);
       } else if (ev.type === 'death') {
         const y = this.groundY(ev.x, ev.z) + 0.2;
         if (ev.side === 'hell') { this.fx.hit(ev.x, y, ev.z, 0xb05aff, 18, 'bite'); this.fx.puff(ev.x, y, ev.z, 10); }

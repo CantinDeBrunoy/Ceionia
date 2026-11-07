@@ -72,6 +72,7 @@ import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { holdIsle, isleDefenses } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
 import { IsleRuins } from './render/isleRuins';
+import { setFxDensity } from './render/combatFx';
 import { War } from './sim/war';
 import { KingdomStage } from './kingdomStage';
 import { WarTips, WarTipState } from './ui/warTips';
@@ -989,6 +990,7 @@ class Game implements UIHost {
     this.veg.lodDist = p.vegLod;
     this.blightView.density = p.density;
     this.blightView.mist = p.mist;
+    setFxDensity(p.density);
   }
 
   /**
