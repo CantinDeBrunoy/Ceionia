@@ -66,6 +66,7 @@ export const CONTROLS_HELP: [string, string][] = [
   ['H · R', 'tenir la position · se replier'],
   ['Ctrl + 1…5', 'former un groupe ; 1…5 le rappelle, deux fois pour y aller'],
   ['Espace', 'pause active : les ordres se donnent en pause'],
+  ['🌀 · 🔥', 'passer le portail ; « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île'],
 ];
 
 export class CommandUI implements ToolInput {
