@@ -88,7 +88,7 @@ export class ToolController implements ToolInput {
   private downAt: [number, number] | null = null;
   private lastToast = 0;
   /** mode de tracé des routes ; en mode libre, le point A choisi (centre de sa case) et la route prévue jusqu'au pointeur */
-  roadMode: RoadMode = 'line';
+  roadMode: RoadMode = 'free';
   private freeFrom: [number, number] | null = null;
   private freePlan: RoadPlan | null = null;
   private freeKey = '';

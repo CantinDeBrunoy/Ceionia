@@ -383,9 +383,13 @@ export class Expeditions {
     }
     if (!this.base()) return 'Il faut d’abord un village : une maison au moins.';
     const free = this.agents.available();
-    if (free < c.party) return `Il faut ${c.party} habitants disponibles (${free} pour l’instant).`;
+    if (free < this.need(c)) return `Il faut ${c.party} habitants disponibles (${free} pour l’instant).`;
     return null;
   }
+
+  /** tutoriel en cours : une équipe plus petite suffit (au moins un habitant), le village débute à peine */
+  lenient = false;
+  need(c: Choice) { return this.lenient ? Math.min(c.party, Math.max(1, this.agents.available())) : c.party; }
 
   /** pourquoi le dernier départ a échoué alors que `why` ne disait rien (pas de haute mer à portée…), ou null */
   lastFail: string | null = null;
@@ -401,7 +405,8 @@ export class Expeditions {
     // la galère du portail part de la côte qui fait face à l'île
     else if (c.scene === 'portal') {
       dest = this.portalShore(base);
-      if (!dest) { this.lastFail = 'Aucune côte d’où la galère puisse gagner l’île du portail : le village n’a pas accès à la mer qui y mène.'; return null; }
+      // sans rive idéale, les habitants se débrouillent : la rive la plus proche, ou le village même
+      if (!dest) dest = this.portalShore(base, true) ?? base;
     }
     this.lastFail = null;
     while (kind && !dest) {
@@ -429,7 +434,7 @@ export class Expeditions {
     // la montagne et le bout du monde se gagnent en l'air quand le village a de quoi s'envoler : pas de chevaux, pas de voiture
     const air = c.troop || c.mounts || sea || m.farewell || c.fuel || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest);
     const mounts = motor || air ? 0 : this.mountsFor(c);
-    const party = this.agents.recruit(c.party);
+    const party = this.agents.recruit(this.need(c));
     if (!party) { this.lastFail = 'Pas assez d’habitants prêts à partir à cet instant : réessayez dans un moment.'; return null; }
     this.world.exp.riding += mounts;
     if (c.fuel && !this.world.unlimited) this.world.fuel = Math.max(0, this.world.fuel - c.fuel);
@@ -1005,7 +1010,7 @@ export class Expeditions {
    * D'où part la galère du portail : la rive du continent la plus proche de l'île, atteignable à pied depuis le village, d'où
    * l'on gagne l'île tout droit sur l'eau (sans toucher d'autre terre en chemin) ; null sans île ou sans telle rive
    */
-  portalShore(base: [number, number]): [number, number] | null {
+  portalShore(base: [number, number], loose = false): [number, number] | null {
     const w = this.world, p = w.portal;
     if (!p) return null;
     const cand: [number, number, number][] = [];
@@ -1033,7 +1038,7 @@ export class Expeditions {
     // (une rive injoignable est souvent celle d'un îlot : on n'essaie plus ses voisines)
     const failed: [number, number][] = [];
     for (const [x, z] of cand) {
-      if (failed.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 8) || !clear(x, z)) continue;
+      if (failed.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 8) || (!loose && !clear(x, z))) continue;
       if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
       failed.push([x, z]);
       if (failed.length >= 40) break;

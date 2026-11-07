@@ -75,7 +75,7 @@ export const TUTO_TEXT = {
     },
     road: {
       title: 'Les routes',
-      text: 'Prenez l’outil Route {road} et glissez sur le terrain pour relier vos bâtiments.',
+      text: 'Prenez l’outil Route {road} puis cliquez un point A et un point B pour les relier.',
       tasks: ['Prendre l’outil Route', 'Tracer une route'],
     },
     needs: {
