@@ -1,4 +1,4 @@
-import { HellMap, HELL_ZONES, HELL_ZONE_N, zoneOfZ } from '../world/hell';
+import { HellMap, HELL_ZONES, HELL_ZONE_N, zoneOfZ, zoneThe } from '../world/hell';
 import { Hell, HellBuilding, HellEvent, BaseKind, DemonKind, demonStats, raidKinds } from './hell';
 
 /**
@@ -134,8 +134,8 @@ export class HellBase {
     const d = BASE_DEFS[kind], h = this.hell, m = this.map;
     const cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5, zone = zoneOfZ(Math.floor(cz));
     if (!m.inside(cx, cz)) return 'Hors de la carte';
-    if (zone > h.frontier) return `La brume barre ${HELL_ZONES[zone].name} : conquérez d’abord la zone d’avant.`;
-    if (!h.held(zone)) return `Il faut d’abord conquérir ${HELL_ZONES[zone].name} : abattez sa forteresse.`;
+    if (zone > h.frontier) return `La brume barre ${zoneThe(zone)} : conquérez d’abord la zone d’avant.`;
+    if (!h.held(zone)) return `Il faut d’abord conquérir ${zoneThe(zone)} : abattez sa forteresse.`;
     const camp = this.camp(zone);
     if (kind === 'camp') { if (camp) return 'Cette zone a déjà son camp de base.'; }
     else if (!camp) return 'Posez d’abord un camp de base dans cette zone.';

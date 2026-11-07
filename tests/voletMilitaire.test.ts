@@ -5,6 +5,7 @@ import { GEN } from '../src/world/continent';
 import { zoneOrigins } from '../src/build/zones';
 import { TROOPS } from '../src/sim/army';
 import { War } from '../src/sim/war';
+import { HELL_ZONES, zoneOf, zoneThe, zoneTo } from '../src/world/hell';
 
 /**
  * Le volet militaire joué de bout en bout : les blocages et les petits défauts relevés en jouant (accès aux Enfers, retour
@@ -25,6 +26,18 @@ const setup = () => {
 };
 /** La guerre au pas de 1/10 s pendant `t` secondes (jusqu'à `until`) */
 const tick = (war: War, t: number, until?: () => boolean) => { for (let i = 0; i < t * 10; i++) { war.update(0.1, 1); if (until?.()) return true; } return false; };
+
+describe('volet militaire : les textes', () => {
+  it('les noms des zones prennent leur article (« des Grottes de braise », « de la Rivière de lave »)', () => {
+    expect(zoneThe(1)).toBe('les Grottes de braise');
+    expect(zoneOf(1)).toBe('des Grottes de braise');
+    expect(zoneOf(2)).toBe('de la Rivière de lave');
+    expect(zoneOf(0)).toBe('du Seuil du portail');
+    expect(zoneTo(3)).toBe('aux Falaises cendrées');
+    expect(zoneTo(6)).toBe('au Royaume démoniaque');
+    for (let i = 0; i < HELL_ZONES.length; i++) expect(zoneThe(i)).toMatch(/^(le|la|les) /);
+  });
+});
 
 describe('volet militaire : passages entre l’île et les Enfers', () => {
   beforeAll(() => setMapSize(192));

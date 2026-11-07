@@ -5,7 +5,7 @@ import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demon
 import { IsleBattle } from './isleBattle';
 import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
-import { HELL_ZONES } from '../world/hell';
+import { HELL_ZONES, zoneOf, zoneThe } from '../world/hell';
 import type { BaseKind } from './hell';
 import { GEAR_BY } from './gear';
 import { Blight, isleBlight } from '../world/blight';
@@ -346,12 +346,11 @@ export class War {
   private baseNews() {
     const b = this.base;
     if (!b) return;
-    const zn = (z: number) => HELL_ZONES[z].name;
     for (const e of b.events.splice(0)) {
-      if (e.type === 'counter') this.news.push({ kind: 'counter', text: `🔥 Contre-attaque ! ${e.n} démons marchent sur la base de ${zn(e.zone)}.` });
-      else if (e.type === 'counterEnd') this.news.push({ kind: 'repelled', text: `🛡️ Contre-attaque repoussée : la base de ${zn(e.zone)} tient bon.` });
-      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base est tombé : ${zn(e.zone)} est reperdue, sa forteresse se relève. Reprenez-la quand vous voudrez.` });
-      else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base de ${zn(e.zone)} est tombé. Rebâtissez-le pour rouvrir la base.` });
+      if (e.type === 'counter') this.news.push({ kind: 'counter', text: `🔥 Contre-attaque ! ${e.n} démons marchent sur la base ${zoneOf(e.zone)}.` });
+      else if (e.type === 'counterEnd') this.news.push({ kind: 'repelled', text: `🛡️ Contre-attaque repoussée : la base ${zoneOf(e.zone)} tient bon.` });
+      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base est tombé : la zone ${zoneOf(e.zone)} est reperdue, sa forteresse se relève. Reprenez-la quand vous voudrez.` });
+      else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base ${zoneOf(e.zone)} est tombé. Rebâtissez-le pour rouvrir la base.` });
       else if (e.type === 'convoy') this.news.push({ kind: 'info', text: `📦 Un convoi de ravitaillement est arrivé dans les Enfers (+${e.amount} vivres).` });
       else if (e.type === 'lowSupply') this.news.push({ kind: 'supply', text: '🍞 Les vivres de l’expédition baissent.' });
       else if (e.type === 'hungry') this.news.push({ kind: 'supply', text: '🍞 Plus de vivres dans les Enfers : les troupes s’affaiblissent peu à peu.' });
@@ -378,8 +377,8 @@ export class War {
       }
       // la progression dans les Enfers
       if (sim === this.faction) {
-        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: `🏴 ${HELL_ZONES[e.zone].name} conquise ! La brume se lève sur ${HELL_ZONES[e.zone + 1].name} ; vous pouvez bâtir une base avancée ici.` });
-        else if (e.type === 'sealed') this.news.push({ kind: 'info', text: `🌫️ La brume infernale barre ${HELL_ZONES[e.zone].name} : abattez d’abord la forteresse de ${HELL_ZONES[e.zone - 1].name}.` });
+        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: `🏴 La zone ${zoneOf(e.zone)} est conquise ! La brume se lève sur ${zoneThe(e.zone + 1)} ; vous pouvez bâtir une base avancée ici.` });
+        else if (e.type === 'sealed') this.news.push({ kind: 'info', text: `🌫️ La brume infernale barre ${zoneThe(e.zone)} : abattez d’abord la forteresse ${zoneOf(e.zone - 1)}.` });
         // le combat du roi
         else if (e.type === 'boss') this.news.push({ kind: 'boss', text: e.phase === 1 ? '👑 Le roi des Enfers se lève de son trône ! Gare à ses boules de feu : écartez-vous des cercles rouges.' : e.phase === 2 ? '😡 Le roi des Enfers enrage : le sol s’embrase par plaques, sortez des zones qui rougeoient !' : '👑 Le roi des Enfers est abattu ! Sa citadelle vacille : abattez-la.' });
         else if (e.type === 'victory') this.conquerKingdom();

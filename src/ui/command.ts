@@ -6,7 +6,7 @@ import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy } from '.
 import type { War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
 import { BASE_DEFS, BASE_KINDS, SUPPLY_MAX, CONVOY_COST, costText, canAfford } from '../sim/hellBase';
-import { HELL_ZONES, zoneOfZ } from '../world/hell';
+import { HELL_ZONES, zoneOfZ, zoneTo } from '../world/hell';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle,
@@ -397,14 +397,14 @@ export class CommandUI implements ToolInput {
     const enRoute = b.convoys.length ? `<small>📦 ${b.convoys.map((c) => `${Math.ceil(c.left)}s`).join(' ')}</small>` : '';
     const gauge = `<span class="tsup${low ? ' low' : ''}" title="Vivres et équipement de l’expédition : chaque troupe en consomme ; à vide, elles s’affaiblissent peu à peu${b.weak > 0 ? ` (en ce moment : −${Math.round(b.weak * 100)} % de force)` : ''}">🍞 <i><b style="width:${sup}%"></b></i>${sup}%</span>
       <button data-a="convoy" title="Envoyer un convoi de ravitaillement depuis le village (${costText(CONVOY_COST)}) : il arrive par le portail">📦 Ravitailler</button>${enRoute}`;
-    const zone = HELL_ZONES[Math.min(HELL_ZONES.length - 1, Math.max(0, w.faction?.frontier ?? 0))];
+    const zi = Math.min(HELL_ZONES.length - 1, Math.max(0, w.faction?.frontier ?? 0));
     const builds = BASE_KINDS.map((k) => {
       const d = BASE_DEFS[k], afford = canAfford(world, d.cost);
       return `<button data-a="build:${k}" class="tb${this.placing === k ? ' on' : ''}${afford ? '' : ' off'}" title="${`${d.name} (${costText(d.cost)}) : ${d.desc}`.replace(/"/g, '&quot;')}">${d.icon}</button>`;
     }).join('');
     const posts = b.posts(), ctx = w.recruitCtx(this.host.age(), this.host.pop());
     const rec = posts ? `<span class="trec"><b>Caserne avancée</b>${TROOP_KINDS.filter((k) => this.host.age() >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? 'off' : ''}" title="Recruter sur place : ${TROOPS[k].desc.replace(/"/g, '&quot;')}">${TROOPS[k].icon} +</button>`).join('')}</span>` : '';
-    return `<div class="trow tbase"><b class="tbt" title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’à ${zone.name}">🏕️ Base</b>${builds}<span class="tsep"></span>${gauge}${rec}</div>`;
+    return `<div class="trow tbase"><b class="tbt" title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">🏕️ Base</b>${builds}<span class="tsep"></span>${gauge}${rec}</div>`;
   }
 
   /** L'alerte d'incursion (bannière et bouton « Voir l'île »), quand on ne regarde pas l'île */
