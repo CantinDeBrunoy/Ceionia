@@ -1271,7 +1271,7 @@ export class UI {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, leg = isLegendary(m), mil = isMilitary(m);
       const tags = `${m.mandatory ? '<span class="mtag must">★ Obligatoire</span>' : ''}${leg ? '<span class="mtag leg">✨ Légendaire</span>' : ''}${mil ? '<span class="mtag mil">⚔️ Militaire</span>' : ''}`;
       const label = run ? 'Équipe en route…' : m.id === 'deep' && ex.tunnelNeeded() ? 'Creuser un tunnel' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe';
-      return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
+      return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
         <div class="mhead"><b class="mbadge">${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${tags ? `<div class="mtags">${tags}</div>` : ''}
         <p class="mtext">${splitIntro(m.intro).head}</p>

@@ -774,3 +774,8 @@ button.bgo:hover { background: #0f9270; }
 .dstep.cur .ddot { border-color: var(--accent); color: var(--accent); }
 .dtip { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 13px; line-height: 1.45; color: var(--ink2); }
 .dtip[hidden] { display: none; }
+/* expéditions obligatoires : fond chaud et bord franc pour les repérer d'un coup d'œil ; le déblocage est une pastille verte */
+.mission.must { background: linear-gradient(160deg, #fff4dc, #ffe6b0); border: 2px solid #f0b44a; box-shadow: 0 2px 10px rgba(240, 180, 74, 0.28); }
+.mission.must.done { background: #fff; border: 1px solid #e4e1d4; box-shadow: none; }
+.mission.must.leg { border-color: #e0a21e; }
+.mission .unlock { padding: 6px 10px; border-radius: 10px; background: rgba(18, 163, 126, 0.14); border: 1px solid rgba(18, 163, 126, 0.35); color: #0a6a52; font-weight: 700; }
