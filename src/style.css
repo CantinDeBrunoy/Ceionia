@@ -855,7 +855,7 @@ button.bgo:hover { background: #0f9270; }
 /* barres de fabrication : l'élément <i> est en ligne par défaut, sans display la barre n'avait aucune hauteur */
 .queue .qi { display: inline-flex; align-items: center; gap: 6px; }
 .queue .qi .bar { display: block; width: 70px; height: 6px; }
-.gear .cbar { display: block; width: 100%; height: 6px; margin-top: 6px; }
+.gear .cbar { display: block; flex: none; width: 100%; height: 6px; margin-top: 6px; }
 .craftAll { display: flex; justify-content: flex-end; margin: 0 0 8px; }
 .craftAll button { min-height: 38px; padding: 0 16px; border-radius: 12px; }
 .msgRow { display: flex; align-items: center; gap: 6px; min-width: 0; }
