@@ -7181,6 +7181,7 @@ function lighthouse(p: Parts, age: number) {
   }
   // le faisceau : deux bras de lumière qui tournent autour de la lanterne
   const beam = turning([X, top + 0.09, Z], [0, 1, 0], 0.35);
+  beam.cyl(0.03, 0.03, 0.02, 6, 0, -0.01, 0, 0x3a3f48);
   for (const s of [-1, 1]) { beam.box(0.8, 0.02, 0.05, s * 0.5, 0, 0, fut ? 0xbff4ff : 0xfff1b0, 0, true); beam.box(0.3, 0.012, 0.025, s * 1.0, 0, 0, fut ? 0xbff4ff : 0xfff1b0, 0, true); }
   // le logis du gardien : murs, toit, porte, fenêtres allumées, cheminée qui fume (au futur, un module blanc)
   if (!fut) {
