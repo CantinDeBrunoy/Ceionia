@@ -9613,7 +9613,7 @@ const F = {
 };
 const NEONS = [F.neon, F.pink, F.mint, F.gold];
 /** Hauteur des tours d'habitation futuristes selon leur rang dans la ligne d'horizon (immeuble bas, tour, grande tour, gratte-ciel) */
-export const FUTURE_HOUSE_H = [2.1, 2.8, 3.6, 4.5];
+export const FUTURE_HOUSE_H = [2.0, 2.7, 3.4, 3.9];
 
 /** Anneau lumineux couché, de rayon r, à la hauteur y */
 function neonRing(p: Parts, r: number, y: number, x: number, z: number, color: number, tube = 0.006, seg = 28) {
@@ -9713,7 +9713,7 @@ function futureHouse(p: Parts, o: ModelOpts) {
   const w = x1 - x0, cx = (x0 + x1) / 2, d = 0.5, zc = -0.04;
   // la hauteur suit le rang de la tour dans la ligne d'horizon (immeuble bas, tour, grande tour, gratte-ciel), nuancée d'une
   // maison à l'autre : plus de rangées de clones à la même hauteur
-  // (« Night City » : de vraies tours, de 1,7 à 3,7 fois la maison moderne, sans toucher à l'emprise d'une case)
+  // (« Night City » : de vraies tours, de 1,6 à 3,2 fois la maison moderne (et la flèche des gratte-ciel), sans toucher à l'emprise d'une case)
   const tier = o.tier ?? 1, H = FUTURE_HOUSE_H[tier] + ((o.v >> 1) % 3) * 0.12;
   const kind = o.v % 3, accent = NEONS[(o.v >> 1) % 4], y0 = 0.23;
   towerPodium(p, o, x0, x1, cx, d, zc, accent);
@@ -10023,7 +10023,7 @@ function arcology(p: Parts, v: number) {
     p.cyl(r - 0.03, r - 0.03, 0.012, 20, 0, y + 0.26, 0, F.leaf2);
     for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2 + i; p.sphere(0.05, Math.cos(a) * (r - 0.1), y + 0.3, Math.sin(a) * (r - 0.1), k % 2 ? F.leaf : F.leaf2, 0, 0.8); }
   }
-  // la grande tour, l'icône de l'âge : elle domine les gratte-ciel d'habitation (4,5 au plus) de près d'un tiers
+  // la grande tour, l'icône de l'âge : elle domine de loin les gratte-ciel d'habitation (3,9 au plus, flèche comprise moins de 5)
   const H = 6.0, R = 0.4, y0 = 0.8;
   p.cyl(R * 0.82, R, H - y0, 14, 0, y0, 0, F.glass);
   for (let y = y0 + 0.2; y < H; y += 0.2) p.cyl(R - (y - y0) / (H - y0) * R * 0.18 + 0.012, R - (y - y0) / (H - y0) * R * 0.18 + 0.012, 0.016, 14, 0, y, 0, F.white);
