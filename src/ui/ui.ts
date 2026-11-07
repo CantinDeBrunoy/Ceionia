@@ -230,7 +230,7 @@ const RES_META: Record<Resource, { label: string; icon: string; use: string; mor
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
-const reqOf = (label: string) => (label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : 'pop');
+const reqOf = (label: string) => (label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${v < 2 && g.one ? g.one : g.label}`;
@@ -486,11 +486,13 @@ export class UI {
         return;
       }
       if (req === 'pop') { this.openNeed('housing'); return; }
+      // le chemin de fer : la gare qui manque, ou le tracé d'une ligne depuis une gare
+      if (req === 'rail') { const nx = this.host.sim.railNext(); this.host.audio.sfxClick(); if ('kind' in nx) this.pick(nx.kind); else this.host.startRailEdit({ stop: nx.stop }); return; }
       $('#agePanel').classList.toggle('open');
       this.update();
     };
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
-    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.toast('Le brouillard se lève.'); };
     $('#bSpeed').onclick = () => {
@@ -842,13 +844,13 @@ export class UI {
     const { sim } = this.host, el = $('#msg'), k = sim.messageKind;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
-    const ready = !k && sim.ready, exp = !k && sim.messageExp, key = `${tone}|${k}|${ready}|${exp}|${sim.message}`;
+    const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;
     if (el.dataset.v === key) return;
     el.dataset.v = key;
-    el.className = `tone-${tone}${k || ready || exp ? ' link' : ''}`;
-    el.title = k === 'farm' && !sim.food.ok ? 'Cliquer pour tracer un champ' : k ? `Cliquer pour bâtir « ${sim.nameOf(k)} »` : exp ? 'Cliquer pour ouvrir les expéditions' : ready ? 'Cliquer pour passer à l’âge suivant' : '';
+    el.className = `tone-${tone}${k || ready || exp || rail ? ' link' : ''}`;
+    el.title = k === 'farm' && !sim.food.ok ? 'Cliquer pour tracer un champ' : k ? `Cliquer pour bâtir « ${sim.nameOf(k)} »` : exp ? 'Cliquer pour ouvrir les expéditions' : rail ? 'Cliquer pour tracer une ligne depuis cette gare' : ready ? 'Cliquer pour passer à l’âge suivant' : '';
     const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}Bâtir</b>` : exp ? `<b class="go">${ic('compass', 12, 2.4)}Ouvrir</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}Passer</b>` : ''}`;
+    el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}Bâtir</b>` : exp ? `<b class="go">${ic('compass', 12, 2.4)}Ouvrir</b>` : rail ? `<b class="go">${ic('train', 12, 2.4)}Tracer</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}Passer</b>` : ''}`;
     void el.offsetWidth;
     el.classList.add('flash');
   }
