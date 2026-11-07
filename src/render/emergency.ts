@@ -8,6 +8,7 @@ import type { Fires } from './fires';
 import { makeSoldier, soldierStep, Soldier, SoldierMode } from './soldiers';
 import { makeFolk, folkStep, Folk, FolkPose } from './folk';
 import { makeDraftHorse, rideStep, Rider } from './riders';
+import { fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 
 /** Portée des secours (cases) : celle de la caserne pour les incendies, la même pour l'hôpital et la police */
 const RANGE = 14;
@@ -249,27 +250,13 @@ export function unitGeo(service: Service, age: number, motor: boolean): UnitGeo 
       lights.push([0, 0.22, -0.06, 0]);
     }
   } else if (service === 'fire') {
-    // fourgon pompe-tonne : cabine avancée vitrée, caisse à rideaux, bande blanche, pare-chocs, chevrons rouge et jaune ;
-    // la grande échelle sur sa tourelle, qui se dresse vers le feu
-    p.box(0.16, 0.13, 0.13, 0, 0.04, 0.135, RED);
-    p.box(0.152, 0.055, 0.004, 0, 0.11, 0.201, GLASS); for (const s of [-1, 1]) p.box(0.004, 0.045, 0.08, s * 0.081, 0.11, 0.15, GLASS);
-    p.box(0.162, 0.006, 0.13, 0, 0.17, 0.135, dark(RED, 0.8));
-    p.box(0.16, 0.12, 0.3, 0, 0.04, -0.08, RED);
-    for (const s of [-1, 1]) for (const z of [-0.18, -0.08, 0.02]) { p.box(0.004, 0.08, 0.085, s * 0.081, 0.06, z, 0xc4c8ce); for (let k = 0; k < 6; k++) p.box(0.005, 0.003, 0.085, s * 0.082, 0.065 + k * 0.012, z, 0x9aa0a8); }
-    p.box(0.164, 0.012, 0.44, 0, 0.145, -0.01, WHITE);
-    p.box(0.17, 0.02, 0.014, 0, 0.03, 0.205, 0x2a2a2e); p.box(0.17, 0.02, 0.014, 0, 0.03, -0.235, 0x2a2a2e);
-    for (let k = 0; k < 6; k++) p.box(0.026, 0.05, 0.004, -0.065 + k * 0.026, 0.07, -0.232, k % 2 ? 0xf2c23a : 0xd8382e);
-    for (const s of [-1, 1]) { p.box(0.006, 0.03, 0.012, s * 0.09, 0.12, 0.19, 0x2a2a2e); p.box(0.024, 0.014, 0.004, s * 0.06, 0.06, 0.202, 0xfff1c9, 0, true); }
-    for (const z of [-0.14, 0.12]) for (const s of [-1, 1]) tyre(p, s * 0.08, z, 0.04);
-    p.cyl(0.04, 0.045, 0.02, 10, 0, 0.16, -0.14, 0x8a8f96);
-    lights.push([-0.05, 0.18, 0.17, 0], [0.05, 0.18, 0.17, 1], [-0.05, 0.18, 0.1, 1], [0.05, 0.18, 0.1, 0]);
-    // l'échelle (repère de son pied, sur la tourelle), couchée vers l'avant
+    // fourgon pompe-tonne (voir `fireEngine`, le même que ceux garés devant la caserne) ; la grande échelle sur sa tourelle,
+    // qui se dresse vers le feu
+    fireEngine(p, 0, 0, 0, lights);
     const lp = new Parts();
-    for (const s of [-1, 1]) lp.box(0.008, 0.012, 0.36, s * 0.03, 0, 0.18, 0xd8dde2);
-    for (let k = 0; k < 10; k++) lp.box(0.06, 0.006, 0.006, 0, 0.003, 0.02 + k * 0.036, 0xb8bcc2);
-    lp.box(0.05, 0.03, 0.05, 0, -0.01, 0, 0x8a8f96);
+    fireLadder(lp);
     out.ladder = lp.build(false).body;
-    out.ladderAt = [0, 0.18, -0.14];
+    out.ladderAt = [...LADDER_AT];
   } else if (service === 'health') {
     // ambulance : fourgon blanc, capot, pare-brise, damier jaune et vert, étoile de vie bleue, rampes avant et arrière
     p.box(0.15, 0.16, 0.28, 0, 0.035, -0.06, WHITE);
