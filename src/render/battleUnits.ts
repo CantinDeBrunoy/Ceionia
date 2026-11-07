@@ -129,8 +129,10 @@ export class BattleLayer {
       const sink = dead ? Math.max(0, u.hurt - 1.2) * 0.6 : 0, shrink = dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1.6)) : 1;
       const walk = u.moving ? u.walk : 0, bob = u.moving ? Math.abs(Math.sin(walk)) * 0.05 : Math.sin(t * 2 + u.id) * 0.012;
       const hover = kind === 'imp' ? 0.12 + Math.sin(t * 6 + u.id) * 0.04 : 0;
-      v.set(u.x, this.groundY(u.x, u.z) + (bob + hover) * sc - sink, u.z);
       const atk = u.swing < 0.5 ? Math.sin((u.swing / 0.5) * Math.PI) : 0;
+      // le coup se voit : un bond vers la cible quand il frappe, un recul net quand il est touché (affichage seulement)
+      const push = dead ? 0 : (u.stats.range <= 2 ? atk * 0.22 * (sc + 0.5) : 0) - (u.hurt < 0.16 ? (1 - u.hurt / 0.16) * 0.14 : 0);
+      v.set(u.x + Math.sin(u.heading) * push, this.groundY(u.x, u.z) + (bob + hover) * sc - sink, u.z + Math.cos(u.heading) * push);
       e.set(-fall * 1.4 + atk * 0.18, u.heading, 0, 'YXZ');
       q.setFromEuler(e);
       s.setScalar(sc * shrink);
@@ -180,7 +182,9 @@ export class BattleLayer {
       if (t && (t.age !== age || t.kind !== u.kind)) { this.group.remove(t.s.root); t = undefined; }
       if (!t) { t = { s: makeSoldier(age, u.id, false, TROOP_ROLE[u.kind] ?? 'spearman'), kind: u.kind, age }; this.group.add(t.s.root); this.troops.set(u.id, t); }
       const s = t.s, dead = u.hp <= 0;
-      s.root.position.set(u.x, this.groundY(u.x, u.z) - (dead ? Math.max(0, u.hurt - 1.2) * 0.3 : 0), u.z);
+      // le coup se voit : un bond vers la cible quand il frappe, un recul net quand il est touché (affichage seulement)
+      const swing = u.stats.range <= 2 && u.swing < 0.4 ? Math.sin((u.swing / 0.4) * Math.PI) * 0.18 : 0, push = dead ? 0 : swing - (u.hurt < 0.16 ? (1 - u.hurt / 0.16) * 0.12 : 0);
+      s.root.position.set(u.x + Math.sin(u.heading) * push, this.groundY(u.x, u.z) - (dead ? Math.max(0, u.hurt - 1.2) * 0.3 : 0), u.z + Math.cos(u.heading) * push);
       s.root.rotation.set(dead ? -Math.min(1, u.hurt / 0.5) * 1.4 : 0, u.heading, 0, 'YXZ');
       s.root.scale.setScalar(TROOP_K[u.kind] ?? 1.6);
       soldierStep(s, u.moving ? u.walk : this.uTime, dead ? 'idle' : u.state === 'attack' ? 'fight' : u.moving ? (u.state === 'retreat' ? 'run' : 'walk') : 'guard');
@@ -215,10 +219,11 @@ export class BattleLayer {
     for (const u of this.hell.units.values()) {
       if (u.hp <= 0) continue;
       const boss = u.kind === 'guardian' || u.kind === 'king' || u.kind === 'chief' || u.kind === 'elite';
-      if (u.hp >= u.maxHp && !boss && u.state !== 'attack' && !this.selected.has(u.id)) continue;
+      // (une petite barre seulement sur les blessés, les chefs et les choisis : pas de barre pleine sur chaque combattant)
+      if (u.hp >= u.maxHp && !boss && !this.selected.has(u.id)) continue;
       const sc = u.side === 'hell' ? SCALE[u.kind as DemonKind] ?? 0.4 : 0.45;
       const frac = u.hp / u.maxHp;
-      put(u.x, this.groundY(u.x, u.z) + sc * 1.25 + 0.15, u.z, boss ? 0.9 : 0.5, frac, u.side === 'hell' ? HELL_C : frac > 0.35 ? PLAYER_C : WEAK_C);
+      put(u.x, this.groundY(u.x, u.z) + sc * 1.25 + 0.15, u.z, boss ? 0.9 : 0.36, frac, u.side === 'hell' ? HELL_C : frac > 0.35 ? PLAYER_C : WEAK_C);
     }
     for (const b of this.hell.buildings.values()) {
       if (b.down || (b.hp >= b.maxHp && b.kind !== 'kingdom')) continue;
@@ -275,7 +280,12 @@ export class BattleLayer {
     for (const ev of events.splice(0)) {
       if (ev.type === 'hit') {
         const t = h.units.get(ev.target), y = t ? this.groundY(ev.x, ev.z) + (t.side === 'hell' ? SCALE[t.kind as DemonKind] ?? 0.4 : 0.4) * 0.6 : this.groundY(ev.x, ev.z) + 1;
-        if (!ev.ranged) this.fx.hit(ev.x, y, ev.z, t?.side === 'player' ? 0xff7a3a : 0xffd27a, 10, t?.side === 'player' ? 'bite' : 'blade');
+        if (!ev.ranged) {
+          // un petit éclat d'impact net (étincelles, éclair, un souffle de poussière aux pieds), sans rien de sanglant
+          this.fx.hit(ev.x, y, ev.z, t?.side === 'player' ? 0xff7a3a : 0xffd27a, 14, t?.side === 'player' ? 'bite' : 'blade');
+          this.fx.flash(ev.x, y + 0.1, ev.z, 0xffffff);
+          if (ev.dmg >= 8) this.fx.puff(ev.x, this.groundY(ev.x, ev.z) + 0.05, ev.z, 2);
+        }
       } else if (ev.type === 'shot') {
         // une vraie flèche qui vole en cloche (de feu pour les démons), plantée à mi-hauteur de sa cible
         const t = h.units.get(ev.target), th = t ? (t.side === 'hell' ? SCALE[t.kind as DemonKind] ?? 0.4 : 0.45) * 0.55 : 0.3;

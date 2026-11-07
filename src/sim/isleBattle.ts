@@ -208,7 +208,7 @@ export class IsleBattle {
     this.raidT = 0;
     const [px, pz] = this.map.portal, out: HellUnit[] = [];
     w.units.forEach((u, i) => {
-      const a = i * 2.4, r = 1.4 + (i % 3) * 0.45;
+      const a = i * 2.4, r = 1.8 + (i % 4) * 0.6 + Math.floor(i / 8) * 0.5;
       const [x, z] = this.map.freeNear(px + Math.sin(a) * r, pz + Math.cos(a) * r, 4);
       out.push(this.sim.addRaider(u.kind, u.stats, x, z));
     });

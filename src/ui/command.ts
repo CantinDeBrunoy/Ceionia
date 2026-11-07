@@ -56,6 +56,8 @@ export interface CommandHost {
 }
 
 const LONG_PRESS = 450, DRAG = 6, DOUBLE = 320;
+/** Sans ordre ni clic pendant ce temps (ms), le mode ordres de l'île se range de lui-même */
+export const IDLE_MS = 5000;
 
 /** Le rappel des contrôles (le bouton « ? » de la barre des troupes) : touche ou geste, ce qu'il fait */
 export const CONTROLS_HELP: [string, string][] = [
@@ -78,6 +80,7 @@ export class CommandUI implements ToolInput {
   private start: { x: number; y: number; touch: boolean } | null = null;
   private dragging = false;
   private press = 0;
+  private lastAct = performance.now();
   private pressed = false;
   private lastClick = { t: 0, kind: '' };
   private lastGroup = { n: -1, t: 0 };
@@ -108,6 +111,7 @@ export class CommandUI implements ToolInput {
     this.placing = null;
     this.theater?.ghost?.(null);
     this.theater = t;
+    this.touch();
     this.cmd.clear();
     this.cmd.groups = {};
     if (t) t.layer.selected = this.cmd.selected;
@@ -127,7 +131,18 @@ export class CommandUI implements ToolInput {
 
   // ---------- Souris et doigts ----------
 
+  /** Un ordre, un clic ou une touche en mode ordres : le minuteur d'inactivité repart de zéro */
+  touch() { this.lastAct = performance.now(); }
+
+  /** Le mode ordres de l'île est resté 5 s sans ordre ni clic (pas en pause, pas pendant un glisser) : on le range */
+  idleExpired(now = performance.now()): boolean {
+    const t = this.theater;
+    if (!t || t.kind !== 'isle' || this.host.paused() || this.start || this.placing) { if (t) this.lastAct = now; return false; }
+    return now - this.lastAct >= IDLE_MS;
+  }
+
   down(e: PointerInfo) {
+    this.touch();
     this.start = { x: e.x, y: e.y, touch: e.touch };
     this.dragging = false;
     this.pressed = false;
@@ -261,6 +276,7 @@ export class CommandUI implements ToolInput {
   key(e: KeyboardEvent): boolean {
     const t = this.theater;
     if (!t) return false;
+    this.touch();
     const k = e.key.toLowerCase(), digit = /^(?:Digit|Numpad)([1-5])$/.exec(e.code)?.[1];
     this.shift = e.shiftKey;
     if (digit) {
@@ -305,6 +321,7 @@ export class CommandUI implements ToolInput {
   private onBar(e: MouseEvent) {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-a]');
     if (!el || !this.theater) return;
+    this.touch();
     const a = el.dataset.a!, w = this.host.war;
     if (a === 'all') this.selectAll();
     else if (a.startsWith('kind:')) { const k = a.slice(5); this.cmd.select(this.units().filter((u) => u.kind === k).map((u) => u.id), e.shiftKey); }

@@ -11946,25 +11946,61 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
 
 // ---------------- Monstres et dents de l'eau des expéditions (requin, crocodile, mégalodon, kraken) ----------------
 /**
- * Requin, museau vers +z, centré sur l'origine, long d'un demi-mètre de jeu (0,5) : dos gris bleu, ventre blanc, grand aileron
- * dorsal, nageoires, queue en croissant. `big` : le mégalodon (même corps, plus sombre et balafré, rangée de grandes dents) ;
- * la scène le grossit
+ * Requin, museau vers +z, centré sur l'origine, long d'un demi-mètre de jeu (0,5) : corps élancé en fuseau, dos gris bleu
+ * qui s'éclaircit sur les flancs jusqu'au ventre blanc, grand aileron dorsal, pectorales en faux, queue en croissant, yeux,
+ * cinq fentes de branchies de chaque côté, gueule bordée de dents. `big` : le mégalodon (plus sombre, balafré, plus de
+ * grandes dents, aileron plus haut) ; la scène le grossit et le fait onduler
  */
 export function shark(p: Parts, big = false) {
-  const back = big ? 0x4a5663 : 0x6e7e8e, belly = big ? 0xcfd2d0 : 0xeef0f0;
-  p.add(new THREE.IcosahedronGeometry(0.1, 1).scale(0.58, 0.6, 2.4), 0, 0, 0, back);
-  p.add(new THREE.IcosahedronGeometry(0.09, 1).scale(0.52, 0.36, 2.2), 0, -0.03, 0.01, belly);
-  p.add(new THREE.ConeGeometry(0.042, 0.1, 6).rotateX(Math.PI / 2), 0, 0.002, 0.27, back);
-  // l'aileron dorsal (le seul qu'on voie quand il rôde), l'aileron de la queue, les pectorales
-  p.add(new THREE.ConeGeometry(0.045, 0.15, 3).scale(0.28, 1, 1), 0, 0.095, -0.01, back, 0, false, 0, -0.32);
-  p.add(new THREE.ConeGeometry(0.03, 0.08, 3).scale(0.28, 1, 1), 0, 0.075, -0.16, back, 0, false, 0, -0.5);
-  for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.03, 0.12, 3).scale(1, 1, 0.3), s * 0.095, -0.045, 0.07, back, 0, false, -s * 1.9, 0.2);
-  p.add(new THREE.ConeGeometry(0.04, 0.13, 3).scale(0.28, 1, 1), 0, 0.045, -0.265, back, 0, false, 0, -0.75);
-  p.add(new THREE.ConeGeometry(0.03, 0.09, 3).scale(0.28, 1, 1), 0, -0.035, -0.255, back, 0, false, 0, 2.4);
-  for (const s of [-1, 1]) p.box(0.01, 0.01, 0.01, s * 0.045, 0.02, 0.2, 0x1a1a1e);
-  // la gueule : un sourire de dents blanches sous le museau
-  for (let i = 0; i < (big ? 7 : 4); i++) for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(big ? 0.008 : 0.005, big ? 0.03 : 0.02, 3).rotateX(Math.PI), s * (0.012 + i * 0.006), -0.03, 0.17 + i * 0.012 + (big ? 0.02 : 0), 0xffffff);
-  if (big) for (let i = 0; i < 3; i++) p.box(0.004, 0.025, 0.04, 0.052, 0.01 - i * 0.012, 0.08 - i * 0.02, 0x2f3944, 0.3);
+  const back = big ? 0x3b4a58 : 0x62778a, flank = big ? 0x65798b : 0x8ea3b4, belly = big ? 0xdfe4e6 : 0xf0f3f3, fin = big ? 0x2f3d49 : 0x52677a;
+  // le corps : des sections (z, demi-largeur, haut, bas) reliées par des anneaux, teintées du dos au ventre
+  const st: number[][] = [[0.3, 0.004, 0.004, 0.004], [0.27, 0.036, 0.034, 0.028], [0.2, 0.068, 0.066, 0.054], [0.1, 0.092, 0.094, 0.074], [0, 0.092, 0.096, 0.072], [-0.1, 0.07, 0.07, 0.054], [-0.19, 0.04, 0.042, 0.032], [-0.265, 0.02, 0.024, 0.018]];
+  const SEG = 8, pos: number[] = [], col: number[] = [], cb = new THREE.Color(back), cf = new THREE.Color(flank), cl = new THREE.Color(belly), tmp = new THREE.Color();
+  const vert = (i: number, j: number) => {
+    const [z, w, t, bo] = st[i], a = (j / SEG) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);
+    return { x: w * sn, y: c >= 0 ? t * c : bo * c, z, c };
+  };
+  const shade = (c: number) => (c > 0.45 ? tmp.copy(cb) : c > -0.1 ? tmp.copy(cb).lerp(cf, (0.45 - c) / 0.55) : c > -0.55 ? tmp.copy(cf).lerp(cl, (-0.1 - c) / 0.45) : tmp.copy(cl));
+  const push = (v: { x: number; y: number; z: number; c: number }) => { pos.push(v.x, v.y, v.z); const k = shade(v.c); col.push(k.r, k.g, k.b); };
+  for (let i = 0; i < st.length - 1; i++) for (let j = 0; j < SEG; j++) {
+    const a = vert(i, j), b = vert(i, j + 1), c = vert(i + 1, j), d = vert(i + 1, j + 1);
+    push(a); push(c); push(b); push(b); push(c); push(d);
+  }
+  // le bout de la queue : un bouchon
+  const last = st.length - 1;
+  for (let j = 0; j < SEG; j++) { const a = vert(last, j), b = vert(last, j + 1); push(a); push(b); push({ x: 0, y: 0, z: st[last][0] - 0.01, c: 0 }); }
+  const body = new THREE.BufferGeometry();
+  body.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  body.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  body.computeVertexNormals();
+  p.body.push(body);
+  // le grand aileron dorsal, un second plus petit, l'aileron anal
+  p.add(new THREE.ConeGeometry(0.058, big ? 0.24 : 0.2, 3).scale(0.2, 1, 1), 0, 0.09 + (big ? 0.12 : 0.1) * 0.82, 0.03, fin, 0, false, 0, -0.38);
+  p.add(new THREE.ConeGeometry(0.026, 0.07, 3).scale(0.2, 1, 1), 0, 0.075, -0.12, fin, 0, false, 0, -0.5);
+  p.add(new THREE.ConeGeometry(0.02, 0.06, 3).scale(0.2, 1, 1), 0, -0.095, -0.13, fin, 0, false, 0, 0.5);
+  // les pectorales : grandes, en faux, vers l'arrière et le bas
+  for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.04, 0.18, 3).scale(1, 1, 0.22), s * 0.12, -0.07, 0.07, fin, 0, false, -s * 2.0, -0.35);
+  // la queue en croissant : un grand lobe en haut, un plus court en bas
+  p.add(new THREE.ConeGeometry(0.04, 0.17, 3).scale(0.22, 1, 1), 0, 0.075, -0.318, fin, 0, false, 0, -0.65);
+  p.add(new THREE.ConeGeometry(0.03, 0.12, 3).scale(0.22, 1, 1), 0, -0.05, -0.305, fin, 0, false, 0, -2.5);
+  // les yeux (un point noir cerclé de clair), les narines, cinq fentes de branchies de chaque côté
+  for (const s of [-1, 1]) {
+    p.sphere(0.013, s * 0.058, 0.026, 0.205, 0xe9eef0);
+    p.sphere(0.009, s * 0.063, 0.026, 0.209, 0x14181c);
+    p.box(0.004, 0.006, 0.008, s * 0.015, 0.028, 0.285, 0x2a3640);
+    for (let i = 0; i < 5; i++) p.box(0.006, 0.042 - i * 0.002, 0.004, s * (0.088 - i * 0.002), -0.012, 0.135 - i * 0.014, 0x2b3844, 0, false, s * 0.12);
+  }
+  // la gueule : un bandeau sombre sous le museau, une rangée de dents en haut (pointes vers le bas) et en bas (vers le haut)
+  p.box(0.07, 0.012, 0.1, 0, -0.066, 0.17, 0x5a2a36);
+  p.box(0.06, 0.012, 0.09, 0, -0.078, 0.17, belly);
+  const teeth = big ? 8 : 5, size = big ? 1.25 : 1;
+  for (let i = 0; i < teeth; i++) for (const s of [-1, 1]) {
+    const z = 0.245 - i * (big ? 0.02 : 0.028), x = s * (0.012 + i * (big ? 0.0065 : 0.009));
+    p.add(new THREE.ConeGeometry(0.0085 * size, 0.032 * size, 3).rotateX(Math.PI), x, -0.07, z, 0xffffff);
+    if (i % 2 === 0) p.add(new THREE.ConeGeometry(0.007 * size, 0.024 * size, 3), x * 0.9, -0.064, z - 0.01, 0xfdfdf2);
+  }
+  // le mégalodon : des balafres claires sur le flanc, de vieilles cicatrices
+  if (big) for (let i = 0; i < 3; i++) for (const s of [-1, 1]) p.box(0.004, 0.026, 0.05, s * 0.088, 0 - i * 0.012, 0.06 - i * 0.045, 0xb9c4cc, 0.35 * s);
 }
 
 /**

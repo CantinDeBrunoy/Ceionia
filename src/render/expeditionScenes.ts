@@ -3219,7 +3219,9 @@ export class ExpeditionScene {
         if (m.death > 0.4 && m.death - dt <= 0.4) this.splash(x, z, m.level, true);
       } else if (lost) y -= m.death * 0.12;
       m.obj.position.set(x, y, z);
-      m.obj.rotation.set(pitch, Math.atan2(-sn * 1.15, c) + shake, roll, 'YXZ');
+      // (vivant : il ondule en nageant, la queue d'un côté puis de l'autre, le corps qui roule un peu)
+      const swim = won ? 0 : lost ? 0.5 : 1, sway = Math.sin(this.t * 3.1) * swim;
+      m.obj.rotation.set(pitch, Math.atan2(-sn * 1.15, c) + shake + sway * 0.09, roll + sway * 0.05, 'YXZ');
       // l'écume de son sillage (pas une fois mort)
       if (m.obj.visible && !won && !over && Math.random() < dt * 5) this.puffAt(x - Math.sin(m.obj.rotation.y) * 0.3, m.level + 0.01, z - Math.cos(m.obj.rotation.y) * 0.3);
       this.rough = m.breach >= 0 && m.breach < 0.6 ? 0.8 : won && m.death < 1.5 ? 0.6 : Math.max(0, this.rough - dt * 0.5);

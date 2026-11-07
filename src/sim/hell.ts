@@ -249,6 +249,8 @@ export class Hell {
   readonly gate: boolean;
   private nextId = 1;
   private rnd: () => number;
+  /** nombre d'unités qui visent chaque cible (remis à chaque pas) */
+  private load = new Map<number, number>();
   /** garnison initiale de chaque zone (les forges la complètent jusque-là) */
   private cap: number[] = [];
   private mapV = -1;
@@ -452,6 +454,10 @@ export class Hell {
     if (this.map.version !== this.mapV) { this.mapV = this.map.version; for (const u of this.units.values()) u.path = null; }
     for (let z = 0; z < HELL_ZONE_N; z++) this.alert[z] = Math.max(0, this.alert[z] - dt);
     const live = this.alive();
+    // combien d'unités visent chaque cible (pour répartir les assaillants au lieu de les voir tous sur la même)
+    this.load.clear();
+    for (const u of live) if (u.target !== null) this.load.set(u.target, (this.load.get(u.target) ?? 0) + 1);
+    for (const b of this.buildings.values()) if (!b.down && b.target !== null) this.load.set(b.target, (this.load.get(b.target) ?? 0) + 1);
     for (const u of live) {
       u.cool -= dt; u.swing += dt; u.hurt += dt; u.repath -= dt;
       if (u.blockedT !== undefined && (u.blockedT -= dt) <= 0) { u.blocked = undefined; u.blockedT = undefined; }
@@ -467,16 +473,18 @@ export class Hell {
 
   /** Ennemi le plus proche en vue (unité, ou bâtiment du joueur) */
   private nearestFoe(u: HellUnit, live: HellUnit[], range: number): HellUnit | HellBuilding | null {
-    let best: HellUnit | HellBuilding | null = null, bd = range;
+    let best: HellUnit | HellBuilding | null = null, bs = Infinity;
+    // (une cible déjà assaillie par plusieurs compte comme un peu plus loin : la mêlée s'étale sur plusieurs cibles)
+    const crowd = (id: number) => Math.max(0, (this.load.get(id) ?? 0) - (u.target === id ? 1 : 0)) * 0.4;
     for (const o of live) {
       if (o.side === u.side || o.hp <= 0 || o.id === u.blocked) continue;
-      const d = this.gap(u, o);
-      if (d < bd) { bd = d; best = o; }
+      const d = this.gap(u, o), sc = d + (d < 4 ? crowd(o.id) : 0);
+      if (d < range && sc < bs) { bs = sc; best = o; }
     }
     for (const b of this.buildings.values()) {
       if (b.down || b.side === u.side || b.id === u.blocked) continue;
-      const d = this.gap(u, b);
-      if (d < bd) { bd = d; best = b; }
+      const d = this.gap(u, b), sc = d + (d < 4 ? crowd(b.id) : 0);
+      if (d < range && sc < bs) { bs = sc; best = b; }
     }
     return best;
   }
@@ -592,7 +600,17 @@ export class Hell {
     if ('site' in t) {
       const a = Math.atan2(u.x - tx, u.z - tz), c = this.map.nearestWalkable(tx + Math.sin(a) * (tr + 0.6), tz + Math.cos(a) * (tr + 0.6), 3);
       ok = c >= 0 ? this.moveTo(u, (c % this.map.W) + 0.5, Math.floor(c / this.map.W) + 0.5, dt) : this.moveTo(u, tx, tz, dt);
-    } else ok = this.moveTo(u, tx, tz, dt);
+    } else {
+      // un adversaire au corps à corps : on vise sa « place » autour de lui (selon l'unité, d'un côté ou de l'autre) et non son
+      // centre, pour que les assaillants l'entourent au lieu de s'empiler sur lui
+      let gx = tx, gz = tz;
+      if (u.stats.range <= 2 && gap < 4) {
+        const a = Math.atan2(u.x - tx, u.z - tz) + (((u.id * 0.618034) % 1) - 0.5) * 2.4, r = tr + u.stats.radius + u.stats.range * 0.8;
+        const px = tx + Math.sin(a) * r, pz = tz + Math.cos(a) * r;
+        if (this.map.walkableAt(px, pz)) { gx = px; gz = pz; }
+      }
+      ok = this.moveTo(u, gx, gz, dt);
+    }
     // hors d'atteinte : on la laisse de côté un moment (sinon l'unité reste plantée devant, sans se battre contre ce qui
     // l'attaque) ; l'ordre de l'attaquer tombe
     if (!ok) {
@@ -743,16 +761,17 @@ export class Hell {
   /** Les unités ne s'empilent pas : celles qui se chevauchent s'écartent (sans entrer dans la roche ni la lave) */
   private separate(live: HellUnit[]) {
     const m = this.map;
-    for (let i = 0; i < live.length; i++) {
+    // deux passes, avec un peu de marge entre les corps : on voit qui est qui dans la mêlée
+    for (let pass = 0; pass < 2; pass++) for (let i = 0; i < live.length; i++) {
       const a = live[i];
       for (let j = i + 1; j < live.length; j++) {
-        const b = live[j], dx = b.x - a.x, dz = b.z - a.z, min = a.stats.radius + b.stats.radius;
+        const b = live[j], dx = b.x - a.x, dz = b.z - a.z, min = (a.stats.radius + b.stats.radius) * 1.2 + 0.04;
         if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
         const d = Math.hypot(dx, dz);
         if (d >= min) continue;
         const push = (min - d) * 0.5, ux = d > 1e-4 ? dx / d : 1, uz = d > 1e-4 ? dz / d : 0;
         // le plus lourd bouge moins
-        const wa = b.stats.radius / min, wb = a.stats.radius / min;
+        const wa = b.stats.radius / (a.stats.radius + b.stats.radius), wb = a.stats.radius / (a.stats.radius + b.stats.radius);
         if (m.walkableAt(a.x - ux * push * wa, a.z - uz * push * wa)) { a.x -= ux * push * wa; a.z -= uz * push * wa; }
         if (m.walkableAt(b.x + ux * push * wb, b.z + uz * push * wb)) { b.x += ux * push * wb; b.z += uz * push * wb; }
       }
