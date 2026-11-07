@@ -89,6 +89,8 @@ export interface ActiveExpedition {
 export const FATED = new Set<string>(['megalodon', 'kraken', 'dragon']);
 /** Part du travail où se joue l'issue d'une chasse au monstre (après le dernier imprévu, qui survient aux trois quarts au plus) */
 export const FATE_AT = 0.8;
+/** Phare et chantier naval veillent sur les expéditions en mer : risque en moins (les deux se cumulent) */
+export const LIGHTHOUSE_RISK = 0.88, SHIPYARD_RISK = 0.9;
 /** Les chasses en haute mer : jamais sur une simple rivière */
 const OPEN_SEA = new Set<string>(['megalodon', 'kraken']);
 /**
@@ -316,7 +318,9 @@ export class Expeditions {
     const rail = c.dest === 'spaceport' && spaceRail(this.world);
     return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (rail ? SPACE_RAIL_RISK : 1) * securityK(dangersOf(c), (k) => this.has(k))
       // la forge infernale, rapportée de la chute du royaume des Enfers, équipe mieux les équipes
-      * (this.world.exp.perks.includes(FORGE_PERK) ? FORGE_RISK : 1);
+      * (this.world.exp.perks.includes(FORGE_PERK) ? FORGE_RISK : 1)
+      // en mer : le feu du phare guide les marins, le chantier naval répare et arme les bateaux
+      * (c.sea ? (this.has('lighthouse') ? LIGHTHOUSE_RISK : 1) * (this.has('shipyard') ? SHIPYARD_RISK : 1) : 1);
   }
 
   /**

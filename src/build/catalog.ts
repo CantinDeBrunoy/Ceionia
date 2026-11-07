@@ -3,7 +3,9 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   | 'harbor' | 'airport' | 'heliport' | 'watertower' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'zoo' | 'theater' | 'acropolis' | 'forum' | 'senate'
   | 'carworks' | 'lab' | 'aerodrome' | 'manor' | 'oilwell' | 'refinery' | 'brickworks'
   | 'arcology' | 'vfarm' | 'fusion' | 'spaceport' | 'research' | 'maglev'
-  | 'watchtower' | 'barracks';
+  | 'watchtower' | 'barracks'
+  // le volet maritime : chantier naval, phare, halle aux poissons, ferme marine
+  | 'shipyard' | 'lighthouse' | 'fishmarket' | 'offshore';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -123,6 +125,35 @@ export const KINDS: Record<KindId, KindDef> = {
     desc: 'Quais, entrepôts et grues : les navires marchands y accostent, déchargent et repartent.',
     jobs: [0, 0, 6, 10, 14, 16], food: [0, 0, 4, 6, 8, 10],
     perk: 'Grande zone portuaire de 3 × 3 à poser au bord de la mer ou d’un lac : il suffit qu’un côté touche l’eau, le quai s’y tourne de lui-même et le bassin devant est creusé pour les grands navires (cogue, vapeur, porte-conteneurs) qui entrent, s’amarrent au quai et repartent au large.',
+  },
+  shipyard: {
+    id: 'shipyard', size: 3, minAge: 2, icon: '🚢', cat: 'prod',
+    names: ['', '', 'Chantier naval', 'Chantier à vapeur', 'Grand chantier naval', 'Chantier robotisé'],
+    desc: 'Sur sa cale, une coque en construction : charpentiers, scie de long et grue ; des navires neufs y sont mis à l’eau.',
+    jobs: [0, 0, 6, 9, 12, 14], joy: [0, 0, 1, 1, 2, 2],
+    reqMission: 'caravel',
+    perk: 'À poser près de la mer (à 5 cases de l’eau au plus). Débloqué par l’expédition « La caravelle ». Les expéditions en mer sont plus sûres (risque −10 %), et des navires de l’époque (caravelle, vapeur, cargo, navire futuriste) sortent du chantier pour sillonner la mer.',
+  },
+  lighthouse: {
+    id: 'lighthouse', size: 2, minAge: 2, icon: '🗼', cat: 'service',
+    names: ['', '', 'Phare', 'Phare à lentille', 'Phare électrique', 'Phare automatisé'],
+    desc: 'Une haute tour rayée sur la côte : son feu guide les marins, la nuit, par-dessus les récifs.',
+    jobs: [0, 0, 2, 3, 3, 3], joy: [0, 0, 2, 3, 4, 4],
+    perk: 'À poser près de la mer (à 5 cases de l’eau au plus). Son faisceau balaie la mer la nuit ; les expéditions en mer sont plus sûres (risque −12 %).',
+  },
+  fishmarket: {
+    id: 'fishmarket', size: 2, minAge: 2, icon: '🐟', cat: 'prod',
+    names: ['', '', 'Halle aux poissons', 'Criée', 'Marché de la mer', 'Marché aquacole'],
+    desc: 'Les bateaux y déchargent leur pêche : étals sous la halle, poissons sur la glace, mareyeurs et mouettes.',
+    food: [0, 0, 6, 9, 13, 18], jobs: [0, 0, 3, 4, 5, 6], joy: [0, 0, 1, 1, 2, 2],
+    perk: 'À poser près de la mer (à 5 cases de l’eau au plus). Un marché de plus pour nourrir le village avec ce que donne la mer.',
+  },
+  offshore: {
+    id: 'offshore', size: 3, minAge: 4, icon: '🌬️', cat: 'prod',
+    names: ['', '', '', '', 'Plateforme offshore', 'Ferme marine'],
+    desc: 'Une plateforme sur pilotis : éoliennes, héliplate-forme et cages d’élevage de poissons et d’algues.',
+    food: [0, 0, 0, 0, 14, 28], jobs: [0, 0, 0, 0, 8, 12], joy: [0, 0, 0, 0, 1, 3],
+    perk: 'À poser près de la mer (à 5 cases de l’eau au plus). Les poissons et algues d’élevage nourrissent le village ; l’éolienne tourne dans le vent du large.',
   },
   airport: {
     id: 'airport', size: 4, minAge: 4, icon: '✈️', cat: 'service',
@@ -434,7 +465,7 @@ export const KINDS: Record<KindId, KindDef> = {
 /** Les défenses : elles ne se bâtissent que sur l'île du portail, et l'on n'y bâtit qu'elles */
 export const DEFENSES: KindId[] = ['watchtower', 'barracks'];
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'watchtower', 'barracks', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -455,11 +486,11 @@ export const BUILD_SUBS: Record<BuildCat, BuildSub[]> = {
 /** Le groupe de chaque bâtiment dans son rayon (n'a aucun effet sur le jeu ni sur la sauvegarde) */
 export const KIND_SUB: Record<KindId, string> = {
   house: 'logis', manor: 'logis', arcology: 'logis', well: 'eau', watertower: 'eau', lamp: 'lumiere',
-  farm: 'nourriture', vfarm: 'nourriture', pen: 'nourriture', stable: 'nourriture', apiary: 'nourriture', pier: 'nourriture',
+  farm: 'nourriture', vfarm: 'nourriture', pen: 'nourriture', stable: 'nourriture', apiary: 'nourriture', pier: 'nourriture', fishmarket: 'nourriture', offshore: 'nourriture',
   lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
-  workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie',
+  workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie', shipyard: 'industrie',
   health: 'sante', school: 'savoir', observatory: 'savoir', lab: 'savoir', research: 'savoir',
-  police: 'securite', fire: 'securite', senate: 'securite', watchtower: 'securite', barracks: 'securite',
+  police: 'securite', fire: 'securite', senate: 'securite', watchtower: 'securite', barracks: 'securite', lighthouse: 'securite',
   station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
@@ -514,6 +545,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs', oilwell: 'puits de pétrole', refinery: 'raffineries', brickworks: 'briqueteries',
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
   watchtower: 'tours de garde', barracks: 'casernes de la garnison',
+  shipyard: 'chantiers navals', lighthouse: 'phares', fishmarket: 'halles aux poissons', offshore: 'fermes marines',
 };
 
 /**

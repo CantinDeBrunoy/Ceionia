@@ -130,7 +130,7 @@ export const EVENTS: ExpEvent[] = [
   },
   // ---------------- Les dents de l'eau : le requin au large, le crocodile des eaux douces chaudes ----------------
   {
-    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive'], title: 'Un aileron dans l’eau',
+    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive', 'voyage', 'wreck', 'trawl'], title: 'Un aileron dans l’eau',
     text: 'Un grand aileron gris fend l’eau et tourne autour du bateau : un requin !',
     options: [
       { label: 'Fuir vers la rive', risk: 0.9, work: 6, text: 'On a mis le cap sur la rive à toute vitesse, l’aileron sur les talons.' },
@@ -185,6 +185,25 @@ export const EVENTS: ExpEvent[] = [
       { label: 'Fouiller l’épave', risk: 1.1, work: 5, bonus: [{ t: 'ore', n: 2 }], text: 'Dans l’épave, des lingots de métal : un petit trésor.' },
       { label: 'Charger les harpons', needs: WEAPONS, risk: 0.75, work: 3, text: 'Les harpons chargés et prêts, on a avancé, l’œil sur l’eau.' },
       { label: 'Passer sans s’arrêter', risk: 0.95, text: 'On est passé en silence, sans quitter l’eau des yeux.' },
+    ],
+  },
+  // ---------------- Le volet maritime : épave à la dérive, grain en plein voyage ----------------
+  {
+    id: 'derelict', where: ['river'], scenes: ['voyage', 'wreck', 'trawl'], arrive: true, water: 'sea', ages: [2, 5], title: 'Une coque à la dérive',
+    text: 'Une coque abandonnée dérive sur l’eau, mâts brisés et voiles en lambeaux : un navire perdu dans une tempête, il y a longtemps.',
+    options: [
+      { label: 'L’accoster et fouiller la cale', risk: 1.1, work: 5, bonus: [{ t: 'ore', n: 3 }], text: 'Dans la cale, des barres de métal et un coffre scellé : un petit trésor.' },
+      { label: 'Relever son nom pour les cartes', risk: 0.85, work: 3, bonus: [joy(1, 4)], text: 'On a noté son nom et sa position sur la carte : les marins s’en souviendront.' },
+      { label: 'Passer au large', risk: 0.95, text: 'On a gardé ses distances, par superstition.' },
+    ],
+  },
+  {
+    id: 'squall', where: ['river'], scenes: ['voyage', 'wreck', 'trawl'], water: 'sea', from: 0.4, title: 'Un grain se lève',
+    text: 'Le ciel se couvre d’un coup : la pluie tombe en rideau, le vent se lève et les vagues grossissent autour du bateau.',
+    options: [
+      { label: 'Réduire la toile et tenir le cap', risk: 0.85, work: 4, text: 'Voile réduite, barre bien tenue : le bateau a traversé le grain sans une avarie.' },
+      { wait: true, label: 'Se mettre à la cape', risk: 0.9, work: 6, text: 'On s’est mis à la cape, face aux vagues, en attendant que le grain passe.' },
+      { label: 'Forcer l’allure pour le devancer', risk: 1.25, work: -3, text: 'On a forcé l’allure : trempés, mais on a distancé le grain.' },
     ],
   },
   // ---------------- Le dragon dans sa grotte ----------------

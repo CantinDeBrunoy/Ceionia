@@ -10,6 +10,9 @@ import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
 const QUAY_MAX = 0.32;
+/** Bâtiments de la mer : chantier naval, phare, halle aux poissons, ferme marine (de l'eau à moins de SEA_REACH cases de leur emprise) */
+export const SEASIDE: KindId[] = ['shipyard', 'lighthouse', 'fishmarket', 'offshore'];
+export const SEA_REACH = 5;
 const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor', 'airport', 'waterpark', 'terminal'];
 /**
  * Places passées en 3 × 3 (la place du village, de 1 × 1 ; le forum, son amélioration, de 2 × 2) : les sauvegardes d'avant
@@ -821,6 +824,14 @@ export class World {
   }
 
   // ---------- Constructions ----------
+  /** De l'eau (mer ou lac) à `reach` cases au plus de l'emprise s × s en (x, z) ? */
+  waterNear(x: number, z: number, s: number, reach: number): boolean {
+    for (let cz = z - reach; cz < z + s + reach; cz++)
+      for (let cx = x - reach; cx < x + s + reach; cx++)
+        if (this.inCells(cx, cz) && (this.lake[this.ci(cx, cz)] || this.cellAvg(cx, cz) < -0.05)) return true;
+    return false;
+  }
+
   canPlace(kind: KindId, x: number, z: number, size = KINDS[kind].size): string | null {
     const s = size;
     if (!this.inCells(x, z) || !this.inCells(x + s - 1, z + s - 1)) return 'Hors de la carte';
@@ -852,6 +863,8 @@ export class World {
     if (kind === 'oilwell' && !this.onOil(x, z, s)) return 'Un puits de pétrole ne se fore que sur un gisement (les taches sombres où le brut suinte)';
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
     if (kind === 'pier' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.inCells(x + dx, z + dz) && (this.cellAvg(x + dx, z + dz) < -0.05 || this.lake[this.ci(x + dx, z + dz)]))) return 'À poser au bord de l’eau';
+    // les bâtiments de la mer : de l'eau (mer ou lac) à quelques cases
+    if (SEASIDE.includes(kind) && !this.waterNear(x, z, s, SEA_REACH)) return 'À poser près de l’eau : la mer à 5 cases au plus';
     // le port : il lui suffit de toucher l'eau d'un côté (une case d'eau contre le quai) et d'avoir un pied sur la terre ferme
     if (kind === 'harbor') {
       // le niveau de l'eau qui borde le quai : la mer, ou la surface d'un lac (souvent perché bien plus haut)

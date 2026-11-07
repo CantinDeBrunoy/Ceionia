@@ -36,7 +36,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // le dragon dans sa grotte (Moyen Âge) ; les grands Jeux au stade (époque moderne)
   | 'dragon' | 'games'
   // la traversée en galère jusqu'à l'île du portail, qu'on explore et dont on réveille l'arche
-  | 'portal';
+  | 'portal'
+  // le volet maritime : voyage de découverte ou de commerce au large, chasse à l'épave, pêche en haute mer
+  | 'voyage' | 'wreck' | 'trawl';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -523,6 +525,49 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // obligatoire (le volet maritime du Moyen Âge) : la caravelle ouvre le chantier naval, d'où sortiront les navires du village
+    id: 'caravel', age: 2, mandatory: true, icon: '⛵', title: 'La caravelle', unlocks: 'shipyard',
+    intro: 'Les charpentiers ont dessiné une caravelle : trois mâts, des voiles latines, de quoi tenir la haute mer. Avant de lui bâtir un chantier, il faut l’essayer et tracer une première route au large.',
+    choices: [
+      {
+        label: 'Longer la côte à la voile', text: 'Prudent : on garde la terre en vue, sondes et cartes en main.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'longe la côte à la voile, la sonde à la main', danger: ['water', 'weather'], party: 3, work: 24, risk: 0.25, carry: 'sacks',
+        win: [{ t: 'perk', id: 'caravel' }, joy(2, 5), food(2, 5)], lose: [hurt(1, 2)],
+        winText: 'La caravelle a tenu la mer : la côte est cartographiée, les marins sont fiers. Les charpentiers réclament leur chantier naval.',
+        loseText: 'Un grain a couché les voiles et brisé une vergue ; un marin s’est blessé. La caravelle est rentrée à la rame.',
+      },
+      {
+        label: 'Prendre le large, cap à l’ouest', text: 'Audacieux : trois jours hors de vue de la terre, pour trouver de nouvelles routes.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'file droit vers l’ouest, loin de toute terre', danger: ['water', 'weather'], party: 4, work: 34, risk: 0.4, carry: 'sacks',
+        win: [{ t: 'perk', id: 'caravel' }, joy(3, 6), jobs(2), { t: 'ore', n: 6 }], lose: [hurt(2, 3), joy(-1, 3)],
+        winText: 'Cap à l’ouest, la caravelle a trouvé des eaux riches et des routes nouvelles. Le village veut son chantier naval pour en bâtir d’autres !',
+        loseText: 'La tempête a repoussé la caravelle : deux marins blessés, mais le navire a tenu.',
+      },
+    ],
+  },
+  {
+    // facultative : il faut le chantier naval (ouvert par la caravelle) pour armer le navire marchand
+    id: 'spice', age: 2, mandatory: false, icon: '🌶️', title: 'La route des épices',
+    requires: { kinds: ['shipyard'] },
+    intro: 'Loin au large, des comptoirs vendent poivre, cannelle et soieries à prix d’or. Un navire marchand sorti du chantier naval pourrait en rapporter plein la cale.',
+    choices: [
+      {
+        label: 'Charger le poivre aux comptoirs proches', text: 'Une traversée courte, sans histoires : on troque de la laine et du fer contre des sacs d’épices.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'fog', doing: 'troque laine et fer contre des sacs d’épices', danger: ['water'], party: 3, work: 22, risk: 0.2, carry: 'sacks',
+        win: [food(3, 8), joy(2, 6), jobs(1)], lose: [hurt(1, 1)],
+        winText: 'Des sacs de poivre et de cannelle plein la cale : les tables du village sentent bon, et les marchands sont ravis.',
+        loseText: 'Pris dans la brume, le navire a perdu sa route et il est rentré à vide.',
+      },
+      {
+        label: 'Pousser jusqu’aux îles aux épices', text: 'Une longue route, des pirates peut-être, mais un chargement de soies, de safran et de gingembre.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'pousse jusqu’aux îles aux épices et charge la cale', danger: ['water', 'weather'], party: 4, work: 36, risk: 0.4, carry: 'sacks',
+        win: [food(5, 8), joy(4, 8), jobs(2), { t: 'ore', n: 10 }, { t: 'perk', id: 'spices' }], lose: [hurt(2, 3), joy(-1, 3)],
+        winText: 'Les îles aux épices ! La cale déborde de soies et de safran : le marché du village n’a jamais été aussi animé.',
+        loseText: 'Des pirates ont donné la chasse au navire : deux marins blessés, la cargaison jetée à la mer.',
+      },
+    ],
+  },
   // ---------------- Âge industriel ----------------
   {
     id: 'railway', age: 3, mandatory: true, icon: '🚂', title: 'Le tracé du chemin de fer',
@@ -632,6 +677,28 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // facultative : une épave à draguer, il faut le chantier naval pour armer le bateau de relevage
+    id: 'galleon', age: 3, mandatory: false, icon: '💰', title: 'Le galion englouti',
+    requires: { kinds: ['shipyard'] },
+    intro: 'Les vieux pêcheurs parlent d’un galion englouti au large avec sa cargaison d’or. Un bateau à vapeur et des scaphandriers pourraient le retrouver.',
+    choices: [
+      {
+        label: 'Draguer le fond au large', text: 'Les chaînes de la drague raclent le fond : lent, mais sans plongeur à risquer.',
+        dest: 'river', sea: true, scene: 'wreck', fail: 'storm', doing: 'drague le fond à la recherche du galion', danger: ['water', 'weather'], party: 3, work: 26, risk: 0.2, carry: 'sacks',
+        win: [{ t: 'ore', n: 10 }, joy(2, 6), { t: 'perk', id: 'galleon' }], lose: [hurt(1, 1)],
+        winText: 'La drague a ramené des bordages noircis, des canons et quelques lingots : le galion repose bien là.',
+        loseText: 'La chaîne de la drague s’est rompue dans une houle : rien remonté, un matelot blessé.',
+      },
+      {
+        label: 'Envoyer le scaphandrier', text: 'Casque de cuivre et pompe à bras : il descend jusqu’au pont du galion, au risque de sa vie.',
+        dest: 'river', sea: true, scene: 'wreck', fail: 'capsize', doing: 'descend le scaphandrier jusqu’au pont du galion', danger: ['water'], party: 4, work: 34, risk: 0.4, carry: 'sacks',
+        win: [{ t: 'ore', n: 22 }, joy(4, 6), joy(1), { t: 'perk', id: 'galleon' }], lose: [hurt(2, 3), joy(-1, 3)],
+        winText: 'Le scaphandrier a ouvert les coffres du galion : de l’or et de l’argent, remontés à la pompe. Le village en parlera longtemps.',
+        loseText: 'Le tuyau d’air s’est emmêlé : le scaphandrier a été remonté de justesse, et deux marins sont blessés.',
+      },
+    ],
+  },
   // ---------------- Époque moderne ----------------
   {
     id: 'summit', age: 4, mandatory: true, icon: '🏔️', title: 'Expédition au sommet',
@@ -708,7 +775,51 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // facultative : le chalutier a besoin d'un marché où décharger la pêche
+    id: 'trawl', age: 4, mandatory: false, icon: '🎣', title: 'La pêche en haute mer',
+    requires: { kinds: ['fishmarket'] },
+    intro: 'Le marché de la mer réclame plus de poisson : un chalutier pourrait ratisser les grands fonds, loin au large, et en rapporter des tonnes.',
+    choices: [
+      {
+        label: 'Chaluter sur le plateau', text: 'Une pêche régulière, au large mais pas trop loin : de bonnes prises sans risque inutile.',
+        dest: 'river', sea: true, scene: 'trawl', fail: 'storm', doing: 'chalute sur le plateau, les filets pleins', danger: ['water', 'weather'], party: 3, work: 22, risk: 0.2, carry: 'sacks',
+        win: [food(6, 8), jobs(1)], lose: [hurt(1, 1)],
+        winText: 'Les filets sont remontés pleins à craquer : le marché de la mer n’a jamais autant vendu.',
+        loseText: 'Le filet s’est pris dans une épave : un marin blessé, la pêche perdue.',
+      },
+      {
+        label: 'Suivre les thons au grand large', text: 'Plus loin, plus long : des bancs de thons géants, à condition de tenir la mer.',
+        dest: 'river', sea: true, scene: 'trawl', fail: 'storm', doing: 'suit les bancs de thons au grand large', danger: ['water', 'weather'], party: 4, work: 32, risk: 0.35, carry: 'sacks',
+        win: [food(10, 8), food(1), joy(2, 6), jobs(2)], lose: [hurt(2, 2), joy(-1, 3)],
+        winText: 'Des thons par centaines ! La criée a vendu jusqu’au dernier, et le village mange du poisson toute la semaine.',
+        loseText: 'Une lame a emporté les filets : deux marins blessés, rien à vendre.',
+      },
+    ],
+  },
   // ---------------- Âge futuriste : la conquête de l'espace ----------------
+  {
+    // facultative : explorer les îles flottantes, depuis la ferme marine
+    id: 'seafarm', age: 5, mandatory: false, icon: '🏝️', title: 'Les îles flottantes',
+    requires: { kinds: ['offshore'] },
+    intro: 'Au large, des îles de culture dérivent au gré des courants : algues géantes, coraux et bancs rares. L’hydroglisseur du village peut les rejoindre et les ancrer près de la ferme marine.',
+    choices: [
+      {
+        label: 'Ancrer les îles de culture', text: 'On les remorque jusqu’à la ferme marine : lent et sûr.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'fog', doing: 'remorque les îles de culture vers la ferme marine', danger: ['water'], party: 3, work: 26, risk: 0.15, carry: 'sacks',
+        win: [food(6, 10), jobs(2), joy(2, 6)], lose: [],
+        winText: 'Les îles de culture sont ancrées devant la ferme marine : algues et poissons à foison.',
+        loseText: 'Le brouillard a dispersé les îles : il faudra les retrouver.',
+      },
+      {
+        label: 'Explorer l’archipel des récifs vivants', text: 'Un archipel de coraux et de bancs rares, loin de toute route.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'explore l’archipel des récifs vivants', danger: ['water', 'weather'], party: 4, work: 34, risk: 0.3, carry: 'sacks',
+        win: [food(8, 10), joy(4, 8), jobs(3), { t: 'ore', n: 12 }], lose: [hurt(1, 2), joy(-1, 3)],
+        winText: 'Un archipel intact, riche en coraux, en perles et en minerais rares : de quoi nourrir et enrichir le village.',
+        loseText: 'Une tempête magnétique a brouillé les instruments : le navire est rentré sans rien, un marin blessé.',
+      },
+    ],
+  },
   {
     id: 'rocket', age: 5, mandatory: false, icon: '🚀', title: 'Premier vol de fusée',
     requires: { kinds: ['spaceport'] },
@@ -840,12 +951,14 @@ export interface ExpState {
   wins: number;
   /** derniers imprévus survenus, du plus ancien au plus récent : les prochaines expéditions en tirent d'autres */
   recent: string[];
+  /** 1 une fois le volet maritime connu de la partie (les anciennes sauvegardes n'ont pas ce champ : voir `readExpState`) */
+  sea: number;
 }
 
 /** Imprévus récents dont on se souvient (les deux ou trois dernières expéditions) */
 export const RECENT_EVENTS = 6;
 
-export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, recent: [] });
+export const newExpState = (): ExpState => ({ done: [], perks: [], herd: [], bonus: { food: 0, water: 0, jobs: 0, joy: 0 }, temp: [], clock: 0, gear: emptyStock(), craft: [], craftT: 0, riding: 0, wins: 0, recent: [], sea: 1 });
 
 /** Relit l'état sauvegardé (anciennes sauvegardes : état vierge) */
 export function readExpState(d: any): ExpState {
@@ -868,6 +981,12 @@ export function readExpState(d: any): ExpState {
   s.craftT = +d.craftT || 0;
   s.wins = Math.max(0, Math.floor(+d.wins || 0));
   // (les sauvegardes d'avant ne s'en souviennent pas : rien d'évité)
+  // (les sauvegardes d'avant le volet maritime : la caravelle, obligatoire au Moyen Âge, ne bloque pas qui a déjà fini les autres
+  // obligatoires de cet âge ou ouvert l'âge suivant ; son chantier naval est alors disponible)
+  if (!d.sea) {
+    const ageOf = (id: string) => MISSIONS.find((m) => m.id === id)?.age ?? 0;
+    if (!s.done.includes('caravel') && (['mine', 'dragon'].every((x) => s.done.includes(x)) || s.done.some((x) => ageOf(x) >= 3))) s.done.push('caravel');
+  }
   s.recent = Array.isArray(d.recent) ? d.recent.filter((x: any) => typeof x === 'string').slice(-RECENT_EVENTS) : [];
   return s;
 }
@@ -899,6 +1018,9 @@ const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: 
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
 const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', dragon: 'le trésor du dragon : sa légende court dans tout le pays', games: 'les Jeux du village : le monde entier connaît son stade', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
+PERK_NAME.caravel = 'la caravelle a tenu la mer : le chantier naval est ouvert';
+PERK_NAME.spices = 'les épices des îles lointaines garnissent les tables du village';
+PERK_NAME.galleon = 'le trésor du galion englouti est au village';
 PERK_NAME.portal = 'le portail de l’autre rive est ouvert : tours de garde et caserne sur son île';
 PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place du village';
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
