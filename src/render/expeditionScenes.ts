@@ -2854,10 +2854,15 @@ export class ExpeditionScene {
       for (let dx = -1.5; dx <= 1.5; dx += 0.25) {
         const x = cx + dx, z = cz + dz, d = Math.hypot(dx, dz);
         if (d > 1.5 || !this.free(x, z)) continue;
-        let ok = true;
-        for (let i = 0; i < 8 && ok; i++) ok = this.free(x + Math.cos(i * 0.785) * r, z + Math.sin(i * 0.785) * r);
+        let ok = true, trees = 0;
+        for (let i = 0; i < 8 && ok; i++) {
+          const px = x + Math.cos(i * 0.785) * r, pz = z + Math.sin(i * 0.785) * r;
+          ok = this.free(px, pz);
+          // (pas sous les arbres, s'il y a mieux)
+          if (this.world.veg[this.world.ci(Math.floor(px), Math.floor(pz))] === VEG_FOREST) trees++;
+        }
         if (!ok) continue;
-        const [lo, hi] = this.relief(x, z, r), s = hi - lo + d * 0.02;
+        const [lo, hi] = this.relief(x, z, r), s = hi - lo + d * 0.02 + trees * 0.1;
         if (s < bs) { bs = s; best = [x, z]; }
       }
     return best ?? this.near(cx, cz, cx, cz);
@@ -3661,13 +3666,13 @@ export class ExpeditionScene {
     riders.forEach((id, i) => {
       // les hommes d'armes de la galère, répartis le long du bordage, face au monstre dès qu'il paraît ; sinon deux à bord :
       // le pêcheur à l'arrière
-      const lz = (war ? 0.12 - i * 0.08 : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading);
+      const lz = (war ? 0.16 - i * 0.12 : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading), side = war ? (i % 2 ? -0.035 : 0.035) * sc : 0;
       if (this.story === 'dive' && i === 1 && u > 0.97) {
         // le plongeur se met à l'eau, masque au ras de l'eau, à côté de la barque
         this.agents.ride(id, { x: px + cz * 0.2, z: pz - sx * 0.2, y: y - 0.13, heading: heading + Math.PI / 2 });
         return;
       }
-      const rx = px + sx * lz, rz = pz + cz * lz;
+      const rx = px + sx * lz + cz * side, rz = pz + cz * lz - sx * side;
       const face = war ? (mon && !back ? Math.atan2(mon.x - rx, mon.z - rz) : heading + (i % 2 ? -1 : 1) * Math.PI / 2) : heading + (i ? Math.PI / 2 : 0);
       // (au combat, les hommes d'armes se dressent, harpon au poing, et frappent)
       this.agents.ride(id, war && mon && !back ? { x: rx, z: rz, y: y + seat * WAR_STAND, heading: face, act: 'work' } : { x: rx, z: rz, y: y + seat, heading: face });
