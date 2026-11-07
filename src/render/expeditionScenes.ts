@@ -718,6 +718,8 @@ const BEHAVIOR: Record<Scene, string> = {
   dragon: 'dragon', games: 'games',
   // la galère traverse jusqu'à l'île du portail, l'équipe y débarque (voir `stepIsle`)
   portal: 'boat',
+  // le volet maritime : au large, en bateau (voyage, chasse à l'épave, pêche en haute mer)
+  voyage: 'boat', wreck: 'boat', trawl: 'boat',
 };
 /**
  * L'expédition du portail, en part du travail : la galère touche l'île, l'équipe arrive à l'arche, le tourbillon s'éveille,
@@ -1503,7 +1505,7 @@ export class ExpeditionScene {
       birds: () => this.stageBirds(s, a, fail), swarm: () => this.stageSwarm(s, a, fail), wheel: () => this.stageWheel(s, a), tasting: () => this.stageTasting(s, a),
       puncture: () => this.stagePuncture(s), gust: () => this.stageGust(s), clouds: () => this.stageClouds(s), cows: () => this.stageCows(s, a),
       tusks: () => this.stageTusks(s, a), blizzard: () => this.stageBlizzard(s, a, fail),
-      shark: () => this.stageShark(s), croc: () => this.stageCroc(s, a), swell: () => this.stageSwell(s), wreck: () => this.stageWreck(s), maelstrom: () => this.stageMaelstrom(s),
+      shark: () => this.stageShark(s), croc: () => this.stageCroc(s, a), swell: () => this.stageSwell(s), wreck: () => this.stageWreck(s), derelict: () => this.stageWreck(s), squall: () => this.stageSwell(s), maelstrom: () => this.stageMaelstrom(s),
       // les échecs, joués au départ de l'équipe
       rocks: () => this.stageRocks(s, a, 'fail'), capsize: () => this.stageCapsize(s), scatter: () => this.stageScatter(s, a), charge: () => this.stageCharge(s, a),
       stings: () => this.stageSwarm(s, a, true), blast: () => this.stageBlast(s), gone: () => this.stageGone(s),
@@ -3049,7 +3051,7 @@ export class ExpeditionScene {
     const bt = this.boat;
     if (!bt) return;
     const war = this.story === 'megalodon' || this.story === 'kraken', [cx, cz] = this.arena ?? bt.out, room =this.seaRoom(cx, cz, war ? SEA_CLEAR : 2.4), level = bt.y;
-    const reef = this.story === 'dive', fishing = this.story === 'boat';
+    const reef = this.story === 'dive', fishing = this.story === 'boat' || this.story === 'trawl' || this.story === 'voyage' || this.story === 'wreck';
     if (this.story === 'megalodon' || this.story === 'kraken') { this.makeMonster(cx, cz, level, room); return; }
     if (!this.offshore || (!reef && !fishing)) return;
     const plan: [SwimKind, number][] = reef ? [['whale', 1], ['dolphin', 3], ['manta', 2], ['school', 3]] : [['dolphin', 2], ['school', 2]];

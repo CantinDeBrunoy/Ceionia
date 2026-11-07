@@ -6,6 +6,7 @@ import { mats } from './materials';
 import { Puffs } from './particles';
 import { airliner, freighter } from './models';
 import type { BuildingView } from './buildings';
+import { SeaTraffic } from './seaTraffic';
 
 const SMOKE = new THREE.Color(0.32, 0.3, 0.3);
 
@@ -157,12 +158,16 @@ export class Transports {
   private planeGeo: THREE.BufferGeometry;
   private smoke = new Puffs(160, 0);
   private v = new THREE.Vector3();
+  /** les navires des chantiers navals et les bateaux de pêche, qui sillonnent la mer */
+  private sea: SeaTraffic;
 
   constructor(private world: World, private buildings: BuildingView) {
     const p = new Parts();
     airliner(p, 0, 0, 0);
     this.planeGeo = p.build(false).body;
     this.group.add(this.smoke.mesh);
+    this.sea = new SeaTraffic(world, shipRoute);
+    this.group.add(this.sea.group);
   }
 
   private waterY(x: number, z: number) {
@@ -183,6 +188,7 @@ export class Transports {
     for (const [id, s] of this.ships) if (!liveS.has(id)) { this.group.remove(s.root); this.ships.delete(id); }
     for (const [id, p] of this.planes) if (!liveP.has(id)) { this.group.remove(p.root); this.planes.delete(id); }
     this.smoke.update(dt);
+    this.sea.update(dt, age);
   }
 
   // ---------- Navires ----------

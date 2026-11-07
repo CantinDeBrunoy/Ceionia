@@ -9,6 +9,10 @@ import { KINDS, KindId } from './catalog';
 export const ZONED: Partial<Record<KindId, string>> = {
   harbor: 'il faut une rive, au bord de la mer ou d’un lac',
   pier: 'il faut une rive, au bord de l’eau',
+  shipyard: 'il faut de l’eau (mer ou lac) à moins de 5 cases',
+  lighthouse: 'il faut de l’eau (mer ou lac) à moins de 5 cases',
+  fishmarket: 'il faut de l’eau (mer ou lac) à moins de 5 cases',
+  offshore: 'il faut de l’eau (mer ou lac) à moins de 5 cases',
   mine: 'il faut une montagne',
   alpine: 'il faut une montagne',
   quarry: 'il faut des rochers ou une montagne',

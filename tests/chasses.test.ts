@@ -143,7 +143,7 @@ describe('chasser le dragon (Moyen Âge)', () => {
     expect(m.age).toBe(2);
     expect(m.mandatory).toBe(true);
     // le passage à l'âge industriel tient au filon et au dragon
-    expect(MISSIONS.filter((x) => x.age === 2 && x.mandatory).map((x) => x.id)).toEqual(['mine', 'dragon']);
+    expect(MISSIONS.filter((x) => x.age === 2 && x.mandatory).map((x) => x.id)).toEqual(['mine', 'dragon', 'caravel']);
     for (const c of m.choices) {
       expect(c.dest).toBe('cave');
       expect(c.scene).toBe('dragon');

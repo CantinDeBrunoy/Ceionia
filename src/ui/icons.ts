@@ -128,6 +128,10 @@ const P: Record<string, string> = {
   maglev: '<path d="M4 14V9a5 5 0 0 1 5-5h9l3 5v5z"/><path d="M4 9h17M9 4v5M14 4v5"/><path d="M3 18h18M6 21h12"/><path d="M7 14v4M17 14v4"/>',
   // tour de garde crénelée, sa meurtrière et son drapeau
   watchtower: '<path d="M8 21V8h8v13"/><path d="M7 8V5h2v1.5h2V5h2v1.5h2V5h2v3"/><path d="M12 11v3"/><path d="M12 5V2l3 1-3 1"/><path d="M5 21h14"/>',
+  // navire à voile, phare (tour, lanterne, rayons), éolienne en mer
+  ship: '<path d="M3 16h18l-2.5 4h-13z"/><path d="M12 3v13"/><path d="M12 4l6 9h-6"/><path d="M12 6l-5 7h5"/>',
+  lighthouse: '<path d="M9 21l1-13h4l1 13"/><path d="M10 8l2-4 2 4"/><path d="M10.4 12.5h3.2M9.8 16.5h4.4"/><path d="M3 21h18"/><path d="M4 5l4 1.5M20 5l-4 1.5"/>',
+  turbine: '<path d="M12 11v10"/><path d="M9 21h6"/><circle cx="12" cy="10" r="1.2"/><path d="M12 8.8V3M13 10.6l5 3M11 10.6l-5 3"/><path d="M3 21c2-1 3-1 4.5 0s3 1 4.5 0 3-1 4.5 0 3 1 4.5 0"/>',
   tower: '<path d="M8 21V4l4-2 4 2v17"/><path d="M8 8c2 0 2 2 4 2s2-2 4-2M8 13c2 0 2 2 4 2s2-2 4-2"/><path d="M5 21h14"/><path d="M11 21v-3h2v3"/>',
   // pétrole : chevalet de pompage, raffinerie (colonnes, réservoir, torchère), goutte de brut, pompe à carburant
   // briques : un pan de mur en appareil croisé ; briqueterie : le four et sa haute cheminée
@@ -153,6 +157,7 @@ export const KIND_ICON: Record<KindId, string> = {
   carworks: 'car', lab: 'flask', aerodrome: 'balloon', manor: 'manor', oilwell: 'pumpjack', refinery: 'refinery', brickworks: 'kiln',
   arcology: 'arcology', vfarm: 'tower', fusion: 'atom', spaceport: 'rocket', research: 'qubit', maglev: 'maglev',
   watchtower: 'watchtower', barracks: 'shield',
+  shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
 /** Icône de chaque groupe de lecture de la barre de construction */
