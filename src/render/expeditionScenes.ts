@@ -329,6 +329,10 @@ const poolGeo = (reeds: boolean) => geo(`pool${+reeds}`, (p) => {
   for (let i = 0; i < 13; i++) { const a = (i / 13) * Math.PI * 2; p.sphere(0.05 + (i % 3) * 0.012, Math.cos(a) * 0.34, 0.02, Math.sin(a) * 0.34, i % 2 ? 0x9d9890 : 0xb8b2a8, 0, 0.7); }
   if (reeds) for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2 + 0.3; p.box(0.008, 0.16 + (i % 3) * 0.04, 0.008, Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4, 0x6a8a4a, 0, false, (i % 2 ? 0.15 : -0.15)); p.box(0.014, 0.04, 0.014, Math.cos(a) * 0.4, 0.16 + (i % 3) * 0.04, Math.sin(a) * 0.4, 0x6a4a2e); }
 });
+/** Rayon au sol du bassin de la source chaude, pierres et roseaux compris */
+const POOL_R = 0.42;
+/** Le socle du bassin, haut de 1 (étiré à la hauteur voulue) : un tertre de pierres grises, plus large au pied */
+const poolBaseGeo = () => geo('poolBase', (p) => p.cyl(0.37, 0.44, 1, 13, 0, 0, 0, 0x8d877c));
 const oakGeo = () => geo('oak', (p) => {
   p.cyl(0.08, 0.12, 0.42, 8, 0, 0, 0, 0x6a4a34);
   for (const a of [0.4, 2.3, 4.2]) p.box(0.05, 0.04, 0.14, Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1, 0x5a3e2e, -a);
@@ -1139,9 +1143,12 @@ export class ExpeditionScene {
       this.spots.push([cx - 0.24, cz - 0.08], [cx - 0.24, cz + 0.1], [kx + 0.15, kz + 0.12]);
       this.focus = [cx + 0.28, cz];
     } else if (st === 'spring') {
-      // la source chaude : bassin fumant cerclé de pierres (de roseaux au bord de la rivière) ; on s'y baigne à tour de rôle
-      const [px, pz] = this.near(cx, cz, cx, cz), py = y(px, pz);
-      this.put(poolGeo(a.c.dest === 'river'), px, pz, 0);
+      // la source chaude : bassin fumant cerclé de pierres (de roseaux au bord de la rivière) ; on s'y baigne à tour de rôle. Sur
+      // le replat le plus plat à portée, posé au plus haut du sol sous lui (jamais à moitié enterré dans la pente) ; un socle de
+      // pierres le soutient du côté où le sol descend
+      const [px, pz] = this.flatSpot(cx, cz, POOL_R), [lo, hi] = this.relief(px, pz, POOL_R), py = hi + 0.004;
+      this.put(poolGeo(a.c.dest === 'river'), px, pz, 0).position.y = py;
+      if (py - lo > 0.015) { const base = this.put(poolBaseGeo(), px, pz, 0.3); base.position.y = lo - 0.03; base.scale.y = py - lo + 0.03; }
       this.emits.push({ x: px, y: py + 0.05, z: pz, kind: 'steam', every: 0.18, t: 0 });
       this.bath = { at: [[px - 0.11, pz + 0.04], [px + 0.12, pz - 0.05]], y: py + 0.024 - 0.07, in: new Set() };
       for (let i = 0; i < 6; i++) { const ang = i * 1.05 + 0.3; this.spots.push([px + Math.cos(ang) * 0.5, pz + Math.sin(ang) * 0.5]); }
@@ -2824,6 +2831,36 @@ export class ExpeditionScene {
   private near(x: number, z: number, cx: number, cz: number): [number, number] {
     for (let k = 1; k >= 0; k -= 0.25) { const px = cx + (x - cx) * k, pz = cz + (z - cz) * k; if (this.free(px, pz)) return [px, pz]; }
     return [cx, cz];
+  }
+
+  /** Le sol sous un disque de rayon `r` en (x, z) : sa hauteur la plus basse et la plus haute */
+  private relief(x: number, z: number, r: number): [number, number] {
+    let lo = Infinity, hi = -Infinity;
+    for (const [rr, n] of [[0, 1], [r * 0.5, 6], [r, 12]] as [number, number][])
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2, h = this.world.surfaceAt(x + Math.cos(a) * rr, z + Math.sin(a) * rr);
+        lo = Math.min(lo, h); hi = Math.max(hi, h);
+      }
+    return [lo, hi];
+  }
+
+  /**
+   * Le point le plus plat près de (cx, cz) où un disque de rayon `r` tient tout entier sur la terre ferme, hors de tout (le
+   * plus proche, à pente égale) ; à défaut, le point libre le plus proche
+   */
+  private flatSpot(cx: number, cz: number, r: number): [number, number] {
+    let best: [number, number] | null = null, bs = Infinity;
+    for (let dz = -1.5; dz <= 1.5; dz += 0.25)
+      for (let dx = -1.5; dx <= 1.5; dx += 0.25) {
+        const x = cx + dx, z = cz + dz, d = Math.hypot(dx, dz);
+        if (d > 1.5 || !this.free(x, z)) continue;
+        let ok = true;
+        for (let i = 0; i < 8 && ok; i++) ok = this.free(x + Math.cos(i * 0.785) * r, z + Math.sin(i * 0.785) * r);
+        if (!ok) continue;
+        const [lo, hi] = this.relief(x, z, r), s = hi - lo + d * 0.02;
+        if (s < bs) { bs = s; best = [x, z]; }
+      }
+    return best ?? this.near(cx, cz, cx, cz);
   }
 
   private put(g: THREE.BufferGeometry, x: number, z: number, ry: number) {
