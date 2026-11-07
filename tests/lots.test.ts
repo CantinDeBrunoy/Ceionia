@@ -69,6 +69,25 @@ describe('lot de géométries', () => {
     expect(() => geos.forEach((g) => b.add(g))).not.toThrow();
     expect(b.instanceCount).toBe(5);
   });
+
+  it('reprend la place des géométries retirées au lieu de grandir sans fin', () => {
+    const n = mergeLit(model().body, null)!.attributes.position.count;
+    const b = new GeoBatch(mats.lit, 4, n * 3);
+    // des géométries propres à un bâtiment (posé en pente) qui changent sans cesse
+    for (let k = 0; k < 40; k++) {
+      const i = b.add(mergeLit(model().body, null)!);
+      b.remove(i, b['geos'].keys().next().value!);
+    }
+    expect(b.geometryCount).toBe(0);
+    expect(b['maxVerts']).toBe(n * 3);
+  });
+
+  it('refuse une géométrie aux attributs différents, sans rien casser', () => {
+    const b = new GeoBatch(mats.lit, 4, 1024);
+    b.add(mergeLit(model().body, null)!);
+    expect(b.add(new THREE.BoxGeometry(1, 1, 1).toNonIndexed())).toBe(-1);
+    expect(b.instanceCount).toBe(1);
+  });
 });
 
 describe('bâtiments dans le lot', () => {
