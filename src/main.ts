@@ -61,6 +61,9 @@ import { Trophies, trophiesWon } from './render/trophies';
 import { HomeButton, awayFromHome } from './ui/homeButton';
 import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
+import { PortalView } from './render/portal';
+import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
+import { holdIsle } from './world/portal';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
@@ -162,6 +165,8 @@ class Game implements UIHost {
   /** flaques de brut sur les gisements de pétrole */
   seeps: OilSeeps;
   railBoost: RailBoost;
+  /** le portail des Enfers, sur son île (voir world/portal) */
+  portalView: PortalView;
   /** la caméra suit l'expédition */
   /** expédition que la caméra suit (son numéro), ou null */
   following: number | null = null;
@@ -338,6 +343,8 @@ class Game implements UIHost {
     this.pens = new PenView(w);
     this.seeps = new OilSeeps(w);
     this.railBoost = new RailBoost(w);
+    this.portalView = new PortalView(w);
+    this.scene.add(this.portalView.group);
     this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
@@ -1019,6 +1026,7 @@ class Game implements UIHost {
       else if (b.kind === 'workshop' && b.age === 2) pts.push(b.x + 0.5, b.z + 0.5, 0.75, 0.45);
     }
     this.gardens.lights(pts);
+    this.portalView.lights(pts);
     for (let i = 0; i < this.roads.lights.length; i += 2) pts.push(this.roads.lights[i], this.roads.lights[i + 1], 0.75, 0.5);
     for (let i = 0; i < this.railView.lights.length; i += 2) pts.push(this.railView.lights[i], this.railView.lights[i + 1], 0.95, 0.6);
     this.halos.set(pts);
@@ -1155,6 +1163,8 @@ class Game implements UIHost {
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
     this.expeditions.update(gdt);
+    // les jours tenus sur l'île du portail, défenses debout
+    holdIsle(w, gdt, this.time.dayLen);
     this.stepFarewell(dt);
     this.railway.update(gdt);
     this.expView.update(gdt);
@@ -1235,6 +1245,10 @@ class Game implements UIHost {
       this.emergencies.update(gdt, this.sim.age);
       this.hoists.update(gdt);
       this.seeps.update(dt);
+      // le portail : il s'éveille pendant l'expédition qui l'ouvre, et brûle ensuite ; ses halos s'allument avec lui
+      const waking = this.expeditions.active.find((a) => a.m.id === 'portal' && a.phase === 'work');
+      const wk = waking ? Math.min(1, Math.max(0, (waking.t / Math.max(1, waking.c.work + waking.extra) - ISLE_UP) / (ISLE_WAKE - ISLE_UP))) : 0;
+      if (this.portalView.update(dt, w.portalOpen, wk, this.env.night)) this.refreshHalos();
       this.transports.update(gdt, this.sim.age);
       this.railView.update(dt, this.sim.age);
       this.railBoost.update(dt, this.cam.target.x, this.cam.target.z, this.cam.dist, this.env.night);

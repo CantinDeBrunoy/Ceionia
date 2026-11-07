@@ -71,6 +71,8 @@ export interface RailLine { id: number; stops: number[]; color: number; via?: nu
  * l'île, en cases
  */
 export interface PortalSite { x: number; z: number; r: number }
+/** La garde de l'île du portail : vagues de démons repoussées, jours tenus (voir `World.isleGuard`) */
+export interface IsleGuard { waves: number; days: number }
 
 /** Case d'une route en courbe : les courbes qui y passent, et le point de leur ligne le plus proche du centre de la case */
 export interface CurveCell { ids: number[]; at: [number, number] }
@@ -228,6 +230,11 @@ export class World {
   digs: number[] = [];
   /** l'île du portail (sauvegardée) ; null sur une carte d'avant l'île : la mission du portail n'y est pas disponible */
   portal: PortalSite | null = null;
+  /**
+   * La garde de l'île du portail (sauvegardée) : vagues de démons repoussées, jours tenus avec ses défenses debout ; l'île est
+   * sécurisée (`isleSecured`, voir `portal.ts`) quand l'un ou l'autre suffit : la condition d'âge s'y branchera
+   */
+  isleGuard: IsleGuard = { waves: 0, days: 0 };
 
   /** le portail est ouvert : l'expédition « Le portail de l'autre rive » a réussi (on peut bâtir sur l'île) */
   get portalOpen() { return !!this.portal && this.exp.done.includes('portal'); }
@@ -1287,6 +1294,7 @@ export class World {
       }),
       linesAuto: this.linesAuto,
       portal: this.portal,
+      isleGuard: { waves: this.isleGuard.waves, days: Math.round(this.isleGuard.days * 100) / 100 },
       // routes en courbe (au centième) ; celles dont il ne reste aucune case de route s'oublient
       curves: this.curves.filter((c) => rasterize(c.pts, N).some((k) => this.road[k])).map((c) => c.pts.map((v) => Math.round(v * 100))),
     };
@@ -1405,6 +1413,8 @@ export class World {
     this.linesAuto = d.linesAuto ?? !Array.isArray(d.lines);
     // une partie d'avant l'île du portail n'en a pas : elle se joue sans
     this.portal = readPortal(d.portal, N);
+    const g = d.isleGuard ?? {};
+    this.isleGuard = { waves: Math.max(0, Math.floor(+g.waves || 0)), days: Math.max(0, +g.days || 0) };
     this.curves = [];
     for (const c of Array.isArray(d.curves) ? d.curves : []) {
       if (!Array.isArray(c) || c.length < 4 || c.length % 2 || !c.every((v) => Number.isFinite(+v))) continue;

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize, VEG_VOLCANO } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
-import { landDistance, ISLE_R, STRAIT_MIN, PORTAL_CELLS } from '../src/world/portal';
-import { zoneOrigins } from '../src/build/zones';
+import { landDistance, ISLE_R, STRAIT_MIN, PORTAL_CELLS, ISLE_SECURE, holdIsle, repelWave, isleDefenses, isleManned, isleProgress, isleSecured } from '../src/world/portal';
+import { zoneOrigins, isZoned as isleZoned } from '../src/build/zones';
 
 /** Les cases de terre reliées (à pied, de proche en proche) à la case donnée */
 function landFrom(w: World, cx: number, cz: number) {
@@ -129,5 +129,34 @@ describe('l’île du portail', () => {
     delete json.portal;
     old.fromJSON(json);
     expect(old.canPlace('watchtower', p.x + 2, p.z)).toMatch(/pas d’île/);
+  });
+
+  it('l’île se sécurise : défenses debout, puis vagues repoussées ou jours tenus ; le compte se sauvegarde', () => {
+    const w = new World();
+    newWorld(w, 3, 2026, GEN);
+    expect(isleZoned('watchtower') && isleZoned('barracks')).toBe(true);
+    // sans portail ouvert ni défenses, le temps ne compte pas
+    holdIsle(w, 1000, 100);
+    expect(w.isleGuard.days).toBe(0);
+    expect(isleSecured(w)).toBe(false);
+    w.exp.done.push('portal');
+    const t = zoneOrigins(w, 'watchtower')[0];
+    w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false);
+    holdIsle(w, 1000, 100);
+    expect(isleManned(w)).toBe(false);
+    expect(w.isleGuard.days).toBe(0);
+    const c = zoneOrigins(w, 'barracks')[0];
+    w.place('barracks', c % N, Math.floor(c / N), 0, true, 1, false);
+    expect(isleDefenses(w)).toEqual({ towers: 1, barracks: 1 });
+    holdIsle(w, 300, 100);
+    expect(w.isleGuard.days).toBeCloseTo(3);
+    expect(isleProgress(w)).toBeCloseTo(3 / ISLE_SECURE.days);
+    // les vagues repoussées suffisent aussi
+    for (let i = 0; i < ISLE_SECURE.waves; i++) repelWave(w);
+    expect(isleSecured(w)).toBe(true);
+    const v = new World();
+    v.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(v.isleGuard).toEqual({ waves: ISLE_SECURE.waves, days: 3 });
+    expect(isleSecured(v)).toBe(true);
   });
 });

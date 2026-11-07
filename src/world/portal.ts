@@ -52,6 +52,7 @@ export function isleRadius(p: PortalSite, seed: number, a: number) {
  */
 export function addPortalIsland(w: World, seed: number): PortalSite | null {
   w.portal = null;
+  w.isleGuard = { waves: 0, days: 0 };
   const n = w.n, rnd = mulberry32(seed * 31 + 9001);
   let R = lerp(ISLE_R[0], ISLE_R[1], rnd());
   const dl = landDistance(w), M = Math.ceil(ISLE_R[1]) + 3;
@@ -141,6 +142,51 @@ function carveStrait(w: World, dl: Float32Array, M: number, C: number, seed: num
     }
   return best;
 }
+
+/**
+ * Sécuriser l'île : l'étape (plus ou moins) obligatoire du volet militaire, que le chantier des Enfers branchera sur la
+ * condition d'âge (les expéditions dans les Enfers, elles, restent facultatives). Il faut le portail ouvert, au moins une tour
+ * de garde et une caserne debout sur l'île, puis repousser `waves` vagues de démons ou tenir `days` jours
+ */
+export const ISLE_SECURE = { waves: 3, days: 6 };
+
+/** Les défenses debout sur l'île du portail : tours de garde et casernes */
+export function isleDefenses(w: World) {
+  let towers = 0, barracks = 0;
+  for (const b of w.buildings.values()) {
+    if (!w.onPortalIsland(b.x, b.z)) continue;
+    if (b.kind === 'watchtower') towers++;
+    else if (b.kind === 'barracks') barracks++;
+  }
+  return { towers, barracks };
+}
+
+/** L'île a ses défenses : portail ouvert, une tour de garde et une caserne au moins */
+export function isleManned(w: World) {
+  if (!w.portalOpen) return false;
+  const d = isleDefenses(w);
+  return d.towers >= 1 && d.barracks >= 1;
+}
+
+/**
+ * Le temps passe sur l'île : chaque jour de jeu où elle a ses défenses compte comme un jour tenu (`dt` en secondes de jeu,
+ * `dayLen` : durée d'un jour). Les vagues repoussées s'ajoutent à part (`repelWave`), quand les démons attaqueront
+ */
+export function holdIsle(w: World, dt: number, dayLen: number) {
+  if (dt > 0 && dayLen > 0 && isleManned(w)) w.isleGuard.days += dt / dayLen;
+}
+
+/** Une vague de démons repoussée sur l'île du portail (l'IA des Enfers l'appellera) */
+export function repelWave(w: World) { w.isleGuard.waves++; }
+
+/** Où en est la sécurisation de l'île, de 0 à 1 (la meilleure des deux voies : vagues ou jours tenus), 0 sans défenses */
+export function isleProgress(w: World) {
+  if (!isleManned(w)) return 0;
+  return Math.min(1, Math.max(w.isleGuard.waves / ISLE_SECURE.waves, w.isleGuard.days / ISLE_SECURE.days));
+}
+
+/** L'île du portail est sécurisée (indicateur pour la condition d'âge) */
+export const isleSecured = (w: World) => isleProgress(w) >= 1;
 
 /** Lit l'île du portail d'une sauvegarde (absente, ou abîmée : pas d'île, et la mission du portail n'est pas disponible) */
 export function readPortal(d: unknown, n: number): PortalSite | null {
