@@ -168,6 +168,8 @@ function jeepGeo(v: number) {
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
 const MAX_AGENTS = 90;
+/** Distance à la caméra au-delà de laquelle un habitant n'est plus qu'une petite figure instanciée */
+const FOLK_FAR = 30;
 /** Écart à l'axe de la rue où l'on marche : le trottoir (la chaussée fait 0,3 de demi-largeur), dès la rue pavée (âge 3) */
 export const SIDEWALK = 0.37;
 export const sidewalkAt = (age: number) => (age >= 3 ? SIDEWALK : 0);
@@ -359,6 +361,12 @@ export class Agents {
   /** population du village (donnée à chaque image) */
   private popTarget = 0;
   private pathBudget = 0;
+  /**
+   * la caméra (donnée par le jeu) et la part de qualité : au-delà de `FOLK_FAR × detail` de la caméra, un habitant n'est
+   * plus que la petite figure instanciée (cône, tête, outil) au lieu de ses cinq maillages articulés et de leurs ombres
+   */
+  camera: THREE.Camera | null = null;
+  detail = 1;
 
   constructor(private world: World) {
     this.body = new THREE.InstancedMesh(new THREE.ConeGeometry(0.075, 0.2, 6).translate(0, 0.1, 0).scale(HUMAN_K, HUMAN_K, HUMAN_K), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), MAX_AGENTS);
@@ -398,12 +406,14 @@ export class Agents {
     for (const p of findPlots(w)) { this.plots.set(p.key, p); for (const k of p.cells) this.plotAt.set(k, p); }
     this.farms = [...w.buildings.values()].filter((b) => b.kind === 'farm');
     this.plotsDirty = true;
-    const houses = [...w.buildings.values()].filter(isHome);
-    for (let i = 0; i < w.veg.length; i++) {
-      if (w.veg[i] !== 1) continue;
-      const x = i % N, z = (i / N) | 0;
-      if (houses.some((h) => Math.abs(h.x - x) + Math.abs(h.z - z) < 12)) this.woods.push(i);
+    // lisières à moins de douze cases (à vol d'oiseau, en losange) d'une maison : chaque maison marque son losange, puis on
+    // lit la marque (plutôt que toutes les maisons pour chaque case de forêt : des millions de comparaisons sur un grand village)
+    const nearHome = new Uint8Array(N * N);
+    for (const h of w.buildings.values()) {
+      if (!isHome(h)) continue;
+      for (let dz = -11; dz <= 11; dz++) for (let dx = -11 + Math.abs(dz); dx <= 11 - Math.abs(dz); dx++) if (w.inCells(h.x + dx, h.z + dz)) nearHome[(h.z + dz) * N + h.x + dx] = 1;
     }
+    for (let i = 0; i < w.veg.length; i++) if (w.veg[i] === 1 && nearHome[i]) this.woods.push(i);
     this.assignJobs();
   }
 
@@ -1390,9 +1400,13 @@ export class Agents {
   private render(age: number, dt: number) {
     const w = this.world, d = this.d;
     const palette = BODY_COLS[Math.min(age, 5)];
+    const cam = this.camera?.position, farSq = (FOLK_FAR * this.detail) ** 2;
     let n = 0;
     for (const a of this.agents) {
-      if (this.animateActor(a, age, dt)) continue;
+      // loin de la caméra (hors expédition : montures, soldats et voitures gardent leur figure), la petite figure instanciée
+      const far = !!cam && !a.kit && (a.x - cam.x) ** 2 + (a.z - cam.z) ** 2 > farSq;
+      if (far) { if (a.actor) a.actor.root.visible = false; }
+      else if (this.animateActor(a, age, dt)) continue;
       if (a.hidden) continue;
       const bob = a.state === 'walking' ? Math.abs(Math.sin(a.phase)) * 0.025 : a.state === 'doing' ? Math.abs(Math.sin(a.phase * 0.6)) * 0.012 : 0;
       d.position.set(a.x, this.groundY(a) + 0.02 + bob, a.z);

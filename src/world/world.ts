@@ -156,6 +156,8 @@ export class World {
   private temp = new Float32Array(N * N);
   private wet = new Float32Array(N * N);
   private climateKey = '';
+  /** distances à l'eau déjà calculées (un recalcul partiel des biomes peut s'y fier) */
+  private biomesDone = false;
   /** Distance (en cases, plafonnée) à l'eau la plus proche */
   waterDist = new Uint8Array(N * N);
   /** Vie sauvage, non sauvegardée : herbe broutée (0 intacte … 1 rase) et fleurs semées par les abeilles */
@@ -478,7 +480,7 @@ export class World {
 
   /** Recalcule le relief affiché : suréchantillonnage puis flou binomial, sauf sous les bâtiments ; sommets et falaises gardent leurs arêtes */
   updateVis(rect: [number, number, number, number] | null = null) {
-    this.computeBiomes();
+    this.computeBiomes(rect);
     this.computeDecor();
     // fenêtre recalculée (sous-sommets) : la zone retouchée et deux cases de marge (lissage) ; plus large, la fenêtre de calcul,
     // qui rétrécit d'un sommet à chaque passe de lissage pour que l'intérieur soit exact
@@ -613,30 +615,46 @@ export class World {
    * l'humidité monte près de l'eau ; le côté chaud se partage entre désert (sec) et tropiques (humide),
    * les basses terres humides au bord de l'eau deviennent des marais
    */
-  computeBiomes() {
+  /**
+   * Biomes de chaque case ; `rect` (cases, bornes incluses) : seule cette zone a changé de relief. Si aucune case n'y a
+   * changé d'état (eau ou terre), les distances à l'eau restent bonnes partout : seuls les biomes de la zone sont refaits
+   * (sur un grand village, tout refaire à chaque bâtiment posé coûtait un à-coup)
+   */
+  computeBiomes(rect: [number, number, number, number] | null = null) {
     const key = `${this.mapId}|${this.seed}|${this.gen}`;
     if (key !== this.climateKey) {
       this.climateKey = key;
       fillClimate(this.gen, this.seed, N, this.temp, this.wet);
+      rect = null;
     }
-    // distance à l'eau : parcours en largeur depuis les cases d'eau
-    const dist = this.waterDist, queue = new Int32Array(N * N);
-    let head = 0, tail = 0;
-    for (let k = 0; k < N * N; k++) {
-      if (this.isWaterCell(k % N, Math.floor(k / N))) { dist[k] = 0; queue[tail++] = k; } else dist[k] = 255;
-    }
-    while (head < tail) {
-      const k = queue[head++], cx = k % N, cz = Math.floor(k / N), d = dist[k];
-      if (d >= 12) continue;
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const x = cx + dx, z = cz + dz;
-        if (!this.inCells(x, z) || dist[z * N + x] <= d + 1) continue;
-        dist[z * N + x] = d + 1;
-        queue[tail++] = z * N + x;
+    const dist = this.waterDist;
+    let x0 = 0, z0 = 0, x1 = N - 1, z1 = N - 1;
+    if (rect && this.biomesDone) {
+      x0 = Math.max(0, rect[0] - 1); z0 = Math.max(0, rect[1] - 1); x1 = Math.min(N - 1, rect[2] + 1); z1 = Math.min(N - 1, rect[3] + 1);
+      for (let cz = z0; cz <= z1 && rect; cz++) for (let cx = x0; cx <= x1; cx++) if (this.isWaterCell(cx, cz) !== (dist[cz * N + cx] === 0)) { rect = null; break; }
+    } else rect = null;
+    if (!rect) {
+      x0 = 0; z0 = 0; x1 = N - 1; z1 = N - 1;
+      // distance à l'eau : parcours en largeur depuis les cases d'eau
+      const queue = new Int32Array(N * N);
+      let head = 0, tail = 0;
+      for (let k = 0; k < N * N; k++) {
+        if (this.isWaterCell(k % N, Math.floor(k / N))) { dist[k] = 0; queue[tail++] = k; } else dist[k] = 255;
       }
+      while (head < tail) {
+        const k = queue[head++], cx = k % N, cz = Math.floor(k / N), d = dist[k];
+        if (d >= 12) continue;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const x = cx + dx, z = cz + dz;
+          if (!this.inCells(x, z) || dist[z * N + x] <= d + 1) continue;
+          dist[z * N + x] = d + 1;
+          queue[tail++] = z * N + x;
+        }
+      }
+      this.biomesDone = true;
     }
-    for (let k = 0; k < N * N; k++) {
-      const h = this.cellAvg(k % N, Math.floor(k / N)), d = dist[k];
+    for (let cz = z0; cz <= z1; cz++) for (let cx = x0; cx <= x1; cx++) {
+      const k = cz * N + cx, h = this.cellAvg(cx, cz), d = dist[k];
       const t = this.temp[k] - Math.max(0, h - 2.6) * 0.22;
       const m = this.wet[k] + (d <= 2 ? 0.25 : d <= 5 ? 0.1 : 0);
       let b = BIOME_TEMPERATE;

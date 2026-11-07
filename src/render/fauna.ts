@@ -8,6 +8,7 @@ import { Parts } from './parts';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { CH, NC } from './vegetation';
 import { makeBeast, BEAST_KINDS, GESTURES, beastYaw, BeastKind } from './beasts';
+import { Impostors } from './impostors';
 
 type Kind = 'sheep' | 'cow' | 'pig' | 'hen' | 'rabbit' | 'deer' | 'horse' | 'llama' | 'fox' | 'wolf' | 'frog'
   | 'duck' | 'duckling' | 'bird' | 'songbird' | 'bee' | 'butterfly' | 'bat' | 'fish' | 'dolphin' | 'whale' | 'manta'
@@ -104,10 +105,23 @@ interface Critter {
   gestK?: number;
   /** temps cumulé depuis la dernière réflexion (bête loin de la vue, voir `FAR_WALK`) */
   lag?: number;
+  /** cadence de réflexion en cours (une image sur `every`), revue toutes les quelques images */
+  every?: number;
+  /** bête articulée : sorte de sa silhouette lointaine et taille de son modèle, vue à la dernière image, ombre portée en cours */
+  actorKey?: string;
+  actorSize?: number;
+  seen?: boolean;
+  shadow?: boolean;
 }
 
 /** Au-delà de cette distance à la caméra, les bêtes à terre et dans l'eau ne réfléchissent qu'une image sur trois */
 const FAR_WALK = 70;
+/**
+ * Bêtes articulées, selon leur distance à la caméra (× la part de qualité `detail`) : au-delà de `SHADOW_D` plus d'ombre
+ * portée, au-delà de `SLOW_D` l'animation n'avance qu'une image sur deux, au-delà de `IMPOSTOR_D` la bête n'est plus qu'une
+ * silhouette figée dessinée par lots (voir `Impostors`), au-delà de `HIDE_D` (ou `HIDE_TINY_D` pour les petites) plus rien
+ */
+const SHADOW_D = 24, SLOW_D = 22, IMPOSTOR_D = 36, HIDE_D = 130, HIDE_TINY_D = 45;
 
 /** Modèles animés Quaternius par espèce : longueur du corps visée, variante pour le premier du groupe (le cerf), correction de cap */
 const MODELS: Partial<Record<Kind, { name: ModelName; length: number; lead?: ModelName; yaw?: number; pick?: ModelName[] }>> = {
@@ -493,6 +507,8 @@ export class Fauna {
   private lastVersion = -1;
   private lastAge = -1;
   private refreshTimer = 0;
+  /** recensement en cours, réparti sur plusieurs images */
+  private refreshing: Generator<void, void, void> | null = null;
   private lifeTimer = 0;
   /** niveau de broutage et de floraison affiché par case (la végétation se refait quand il change) */
   private shownGraze = new Uint8Array(N * N);
@@ -518,8 +534,11 @@ export class Fauna {
   private leads = new Map<string, Critter>();
   /** qualité graphique : part de la distance à laquelle les bêtes articulées restent affichées et animées à chaque image */
   detail = 1;
+  /** silhouettes figées des bêtes articulées lointaines, dessinées par lots */
+  readonly impostors = new Impostors();
 
   constructor(private world: World, private veg: { perches: number[][]; flowers: number[][] }) {
+    this.group.add(this.impostors.group);
     for (const k of KIND_LIST) {
       const sp = SPECS[k];
       if (!sp.geo) continue;
@@ -572,7 +591,17 @@ export class Fauna {
     return null;
   }
 
+  /** Recensement et réconciliation d'un coup (première fois, visiteurs, tests) */
   private refresh() {
+    const g = this.refreshGen();
+    while (!g.next().done);
+  }
+
+  /**
+   * Recensement des lieux de vie (toute la carte) puis réconciliation des bêtes : en pas, pour se répartir sur plusieurs
+   * images quand le monde change (sur un grand village, tout d'un coup coûtait un à-coup de 30 ms à chaque bâtiment posé)
+   */
+  private *refreshGen(): Generator<void, void, void> {
     const w = this.world;
     const src: Source[] = [];
     this.flockAlt.clear();
@@ -584,7 +613,8 @@ export class Fauna {
     const pond = (k: number) => { const x = k % N, z = Math.floor(k / N); return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => w.inCells(x + dx, z + dz) && !!w.lake[w.ci(x + dx, z + dz)]); };
     /** mer : hauts-fonds pour les bancs de poissons, large pour les dauphins */
     const shallows: number[] = [], deep: number[] = [];
-    for (let cz = 0; cz < N; cz++)
+    for (let cz = 0; cz < N; cz++) {
+      if (cz && cz % 24 === 0) yield;
       for (let cx = 0; cx < N; cx++) {
         const k = w.ci(cx, cz), v = w.veg[k], b = w.biome[k];
         if (v === 1) {
@@ -608,6 +638,8 @@ export class Fauna {
           if (w.waterDist[k] === 0 && [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.cellAvg(cx + dx, cz + dz) > 0.1)) shore.push(k);
         }
       }
+    }
+    yield;
     for (const b of w.buildings.values()) {
       const s = sizeOf(b);
       const hens = b.kind === 'farm' ? (b.age < 4 ? 4 : 0) : b.kind === 'house' && b.age <= 2 && hash2(b.x, b.z, 41) < 0.55 ? 3 : 0;
@@ -684,6 +716,7 @@ export class Fauna {
         src.push({ key: `${prefix}${i}`, kind, hx: x, hz: z, n: n(i), radius });
       }
     };
+    yield;
     const [mT, mTa, mD, mTr, mM] = meadow;
     const grass = mT.concat(mM), green = mT.concat(mTr), all = mT.concat(mTa, mTr, mM);
     group('sheep', 'sheep', grass, Math.min(12, Math.floor(grass.length / 90)), (i) => 3 + (i % 4), 2.2, 0);
@@ -774,6 +807,7 @@ export class Fauna {
     // et deux vols plus petits qui tournent au-dessus du village
     if (vc) for (let i = 0; i < 3; i++) src.push({ key: `vbirds${i}`, kind: 'bird', hx: vc[0], hz: vc[1], n: 4 + i, radius: 9 + i * 6 });
     // montagnes : bouquetins sur les hauts pâturages, aigles qui tournoient autour des plus hauts sommets
+    yield;
     const alp: number[] = [], tops: number[] = [], volcanoes: number[] = [];
     for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_VOLCANO) volcanoes.push(k);
     for (let k = 0; k < N * N; k++) {
@@ -794,6 +828,7 @@ export class Fauna {
     // mouettes : au-dessus des rivages
     group('gull', 'gull', shore, Math.min(N > 128 ? 9 : 5, Math.floor(shore.length / 60)), () => 3, 3, 270);
 
+    yield;
     // réconciliation : on garde les bêtes existantes, on ajoute ou retire l'écart
     const want = new Map(src.map((s) => [s.key, s]));
     for (const c of this.critters) if ((!want.has(c.key) || want.get(c.key)!.kind !== baseKind(c.kind)) && c.actor) { c.actor.mixer.stopAllAction(); this.group.remove(c.actor.root); }
@@ -820,12 +855,16 @@ export class Fauna {
         const md = MODELS[kind];
         if (BEAST_KINDS.has(kind)) {
           // bête articulée dessinée par le jeu : sa robe suit sa couleur, sa nuance varie un peu
-          c.actor = makeBeast(kind as BeastKind, Math.max(0, sp.colors.indexOf(c.col)), c.size, 0.9 + this.rnd() * 0.16);
+          const coat = Math.max(0, sp.colors.indexOf(c.col));
+          c.actor = makeBeast(kind as BeastKind, coat, c.size, 0.9 + this.rnd() * 0.16);
+          c.actorKey = `beast:${kind}:${coat}`; c.actorSize = c.size;
           this.group.add(c.actor.root);
           c.actor.mixer.setTime(this.rnd() * 3);
         } else if (md && !PROCEDURAL.has(kind)) {
           const name = md.pick ? md.pick[Math.floor(hash2(s.key.length, s.key.charCodeAt(s.key.length - 1), 9) * md.pick.length)] : i === 0 && md.lead ? md.lead : md.name;
-          c.actor = makeActor(name, md.length * (0.9 + this.rnd() * 0.2));
+          const size = md.length * (0.9 + this.rnd() * 0.2);
+          c.actor = makeActor(name, size);
+          c.actorKey = `model:${name}`; c.actorSize = size;
           if (c.actor) { this.group.add(c.actor.root); c.actor.mixer.setTime(this.rnd() * 3); }
         }
         // une bête qu'une expédition vient de ramener (sans place à l'enclos) part de là où l'équipe l'a laissée, et gagne son
@@ -925,8 +964,16 @@ export class Fauna {
     this.refreshTimer -= dt;
     // la sculpture change le monde à chaque image : recensement au plus deux fois par seconde
     if ((w.version !== this.lastVersion && this.refreshTimer <= 0) || age !== this.lastAge) {
+      const first = this.lastVersion < 0;
       this.lastVersion = w.version; this.lastAge = age; this.refreshTimer = 0.5;
-      this.refresh();
+      // la première fois d'un coup ; ensuite, quelques millisecondes par image
+      if (first) this.refresh(); else this.refreshing = this.refreshGen();
+    }
+    if (this.refreshing) {
+      const t0 = performance.now();
+      let r = this.refreshing.next();
+      while (!r.done && performance.now() - t0 < 4) r = this.refreshing.next();
+      if (r.done) this.refreshing = null;
     }
     this.t += dt;
     this.uTime.value = this.t;
@@ -950,7 +997,9 @@ export class Fauna {
       // grands pas ; le temps en retard est rattrapé dès son retour dans le champ, sans à-coup
       let step = dt;
       if (cam && c.kind !== 'duckling') {
-        const every = c.run ? 1 : this.pace(c, cam);
+        // la cadence (champ, distance) n'est revue qu'une image sur quatre : des milliers de bêtes, la plupart hors champ
+        if (c.every === undefined || (this.frame + c.slot) % 4 === 0) c.every = this.pace(c, cam);
+        const every = c.run ? 1 : c.every;
         c.lag = (c.lag ?? 0) + dt;
         if (every > 1 && (this.frame + c.slot + c.key.length) % every) continue;
         step = Math.min(0.25, c.lag);
@@ -1444,11 +1493,15 @@ export class Fauna {
 
   // ---------- Rendu ----------
 
-  /** Animal importé : position, cap et animation selon ce qu'il fait (marche, course, broute, boit, mange, dort) */
-  private animateActor(c: Critter, a: Actor, dt: number, visible: boolean, far: boolean) {
-    // hors champ, la bête quitte la scène : ses dizaines d'os ne sont plus parcourus à chaque image par le moteur
-    if (visible !== (a.root.parent === this.group)) {
-      if (visible) this.group.add(a.root); else this.group.remove(a.root);
+  /**
+   * Animal importé : position, cap et animation selon ce qu'il fait (marche, course, broute, boit, mange, dort) ; au loin
+   * (`silhouette`), sa silhouette figée prend sa place dans les lots instanciés, et il quitte la scène
+   */
+  private animateActor(c: Critter, a: Actor, dt: number, visible: boolean, far: boolean, silhouette: boolean, d: number) {
+    // hors champ ou en silhouette, la bête quitte la scène : ses dizaines d'os ne sont plus parcourus à chaque image par le moteur
+    const want = visible && !silhouette;
+    if (want !== (a.root.parent === this.group)) {
+      if (want) this.group.add(a.root); else this.group.remove(a.root);
     }
     if (!visible) return;
     const swimmer = SWIMMERS.has(c.kind);
@@ -1460,6 +1513,14 @@ export class Fauna {
     const wet = c.kind === 'frog' ? SEA - 0.01 : c.kind === 'croc' ? SEA - 0.035 : c.kind === 'turtle' ? SEA - 0.018 : -Infinity;
     a.root.position.set(c.x, (swimmer ? c.y : Math.max(ground, wet)) + bob, c.z);
     a.root.rotation.set(swimmer ? c.pitch : 0, c.heading + (MODELS[c.kind]?.yaw ?? beastYaw(c.kind)), gait ? Math.sin(c.phase * 0.9) * 0.07 : 0, 'YXZ');
+    if (silhouette) {
+      a.root.updateMatrix();
+      this.impostors.put(c.actorKey ?? c.kind, a, a.root.matrix, c.actorSize ?? 1);
+      return;
+    }
+    // l'ombre portée ne vaut son appel de dessin que de près
+    const shadow = d < SHADOW_D * this.detail;
+    if (c.shadow !== shadow) { c.shadow = shadow; a.root.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = shadow; }); }
     if (swimmer) play(a, ['Swimming_Fast', 'Swimming_Normal', 'Swim', 'Idle'].slice(c.rush > 0.3 ? 0 : 1));
     else if (c.moving && c.run) play(a, ['Gallop', 'Run', 'Jump', 'Walk', 'Idle'], 0.15);
     else if (c.moving) play(a, c.kind === 'frog' ? ['Jump', 'Walk'] : ['Walk', 'WalkSlow', 'Idle']);
@@ -1470,9 +1531,9 @@ export class Fauna {
     else if (beast) this.idleBeast(c, a);
     else play(a, ['Idle', 'Idle_2']);
     const speedUp = c.run ? 1.3 : 1;
-    // au loin, l'animation n'avance qu'une image sur trois
+    // un peu loin, l'animation n'avance qu'une image sur deux
     if (!far) a.mixer.update(dt * speedUp);
-    else if ((this.frame + c.slot) % 3 === 0) a.mixer.update(dt * 3 * speedUp);
+    else if ((this.frame + c.slot) % 2 === 0) a.mixer.update(dt * 2 * speedUp);
   }
 
   /**
@@ -1500,21 +1561,26 @@ export class Fauna {
     if (camera) this.frustum.setFromProjectionMatrix(this.pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     const counts = {} as Record<Kind, number>;
     for (const k of KIND_LIST) counts[k] = 0;
+    this.impostors.begin();
     for (const c of this.critters) {
       if (c.actor) {
-        // hors champ : ni affiché ni animé
-        let visible = !c.hidden;
-        let far = false;
+        // hors champ : ni affiché ni animé (une bête hors champ ne revérifie qu'une image sur trois si elle y rentre)
+        let visible = !c.hidden, far = false, silhouette = false, d = 0;
         if (visible && camera) {
-          this.sphere.center.set(c.x, SWIMMERS.has(c.kind) ? c.y : w.hAt(c.x, c.z), c.z);
-          this.sphere.radius = (MODELS[c.kind]?.length ?? 0.3) * 1.5 + 0.2;
-          visible = this.frustum.intersectsSphere(this.sphere);
-          const d = this.sphere.center.distanceTo(camera.position);
-          far = d > 60 * this.detail;
-          // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points (les petites, plus tôt)
-          if (d > (TINY.has(c.kind) ? 45 : 130) * this.detail) visible = false;
+          if (!c.seen && (this.frame + c.slot) % 3) visible = false;
+          else {
+            this.sphere.center.set(c.x, SWIMMERS.has(c.kind) ? c.y : w.hAt(c.x, c.z), c.z);
+            this.sphere.radius = (MODELS[c.kind]?.length ?? 0.3) * 1.5 + 0.2;
+            visible = this.frustum.intersectsSphere(this.sphere);
+            d = this.sphere.center.distanceTo(camera.position);
+            far = d > SLOW_D * this.detail;
+            silhouette = d > IMPOSTOR_D * this.detail;
+            // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points (les petites, plus tôt)
+            if (d > (TINY.has(c.kind) ? HIDE_TINY_D : HIDE_D) * this.detail) visible = false;
+          }
         }
-        this.animateActor(c, c.actor, dt, visible, far);
+        c.seen = visible;
+        this.animateActor(c, c.actor, dt, visible, far, silhouette, d);
         continue;
       }
       if (c.hidden) continue;
@@ -1542,6 +1608,7 @@ export class Fauna {
       this.flaps[c.kind]?.setX(n, c.flap);
       counts[c.kind] = n + 1;
     }
+    this.impostors.end();
     for (const k of KIND_LIST) {
       const m = this.meshes[k];
       if (!m) continue;

@@ -423,11 +423,75 @@ function chunky(g: THREE.BufferGeometry, n: number): THREE.BufferGeometry {
 
 /** Boîte englobante de chaque modèle animé, mesurée une fois (l'échelle dépend de la taille demandée) */
 const boxes = new Map<ModelName, THREE.Box3>();
+/** Modèles dont les maillages articulés ont déjà été fondus en un seul */
+const merged = new Set<ModelName>();
+
+/**
+ * Fond en un seul maillage les maillages articulés d'un modèle importé qui partagent squelette et matrice d'attache, et
+ * dont les matériaux ne sont que des couleurs unies (la couleur passe dans les sommets) : une poule en cinq morceaux coûtait
+ * cinq appels de dessin, dix avec son ombre ; elle n'en coûte plus qu'un (deux). Le modèle en cache est modifié une fois :
+ * tous ses clones en profitent. Sans effet si le modèle ne s'y prête pas (textures, squelettes différents)
+ */
+export function mergeSkinned(root: THREE.Object3D): boolean {
+  const parts: THREE.SkinnedMesh[] = [];
+  root.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) parts.push(o as THREE.SkinnedMesh); });
+  if (parts.length < 2) return false;
+  const first = parts[0], bones = first.skeleton.bones;
+  const flat = (m: THREE.Material) => m instanceof THREE.MeshStandardMaterial && !m.map && !m.alphaMap && !m.emissiveMap && !m.transparent;
+  for (const p of parts) {
+    const mats = Array.isArray(p.material) ? p.material : [p.material];
+    if (p.parent !== first.parent || p.skeleton.bones.length !== bones.length || p.skeleton.bones.some((b, i) => b !== bones[i])) return false;
+    if (p.bindMatrix.elements.some((e, i) => Math.abs(e - first.bindMatrix.elements[i]) > 1e-5)) return false;
+    if (!mats.every(flat) || p.geometry.morphAttributes.position || !p.geometry.attributes.skinIndex || !p.geometry.attributes.position) return false;
+    if (!p.matrix.equals(first.matrix)) return false;
+  }
+  const geos: THREE.BufferGeometry[] = [];
+  for (const p of parts) {
+    const mats = Array.isArray(p.material) ? p.material : [p.material];
+    const g = p.geometry.toNonIndexed();
+    const n = g.attributes.position.count, col = new Float32Array(n * 3);
+    // la couleur du matériau, sommet par sommet (par groupe quand il y a plusieurs matériaux), multipliée par les couleurs
+    // de sommets que le modèle a déjà (les taches de la vache)
+    const prev = mats.every((m) => m.vertexColors) ? g.attributes.color : null;
+    const groups = g.groups.length ? g.groups : [{ start: 0, count: n, materialIndex: 0 }];
+    for (const gr of groups) {
+      const c = (mats[Math.min(gr.materialIndex ?? 0, mats.length - 1)] as THREE.MeshStandardMaterial).color;
+      for (let i = gr.start; i < gr.start + gr.count && i < n; i++) {
+        col[i * 3] = c.r * (prev ? prev.getX(i) : 1); col[i * 3 + 1] = c.g * (prev ? prev.getY(i) : 1); col[i * 3 + 2] = c.b * (prev ? prev.getZ(i) : 1);
+      }
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // seuls les attributs communs se fondent
+    for (const a of Object.keys(g.attributes)) if (!['position', 'normal', 'skinIndex', 'skinWeight', 'color'].includes(a)) g.deleteAttribute(a);
+    g.clearGroups();
+    geos.push(g);
+  }
+  const all = mergeGeometries(geos, false);
+  if (!all) return false;
+  const ref = (Array.isArray(first.material) ? first.material[0] : first.material) as THREE.MeshStandardMaterial;
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: ref.flatShading, metalness: 0, roughness: 0.9, side: ref.side });
+  const mesh = new THREE.SkinnedMesh(all, mat);
+  mesh.name = first.name;
+  mesh.position.copy(first.position); mesh.quaternion.copy(first.quaternion); mesh.scale.copy(first.scale);
+  mesh.bind(first.skeleton, first.bindMatrix);
+  const parent = first.parent!;
+  for (const p of parts) parent.remove(p);
+  parent.add(mesh);
+  return true;
+}
 
 /** Personnage animé : clone indépendant (squelette compris) ramené à la taille voulue (longueur du corps ou hauteur), pieds à y = 0 */
 export function makeActor(name: ModelName, size: number, fit: 'length' | 'height' = 'length'): Actor | null {
   const gltf = loaded.get(name);
   if (!gltf) return null;
+  // une fois par modèle : simplification en grosses facettes (pièce par pièce, pour que les taches de la vache restent
+  // nettes), puis fusion des pièces en un seul maillage
+  if (!merged.has(name)) {
+    merged.add(name);
+    const div = CHUNKY[name];
+    if (div) gltf.scene.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry = chunky(m.geometry, div); });
+    mergeSkinned(gltf.scene);
+  }
   let box = boxes.get(name);
   if (!box) {
     gltf.scene.updateMatrixWorld(true);
@@ -442,8 +506,6 @@ export function makeActor(name: ModelName, size: number, fit: 'length' | 'height
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
-    const div = CHUNKY[name];
-    if (div) m.geometry = chunky(m.geometry, div);
     // glTF sans metallicFactor = métal par défaut : sans carte d'environnement il paraît presque noir ; les bêtes en
     // facettes, comme le reste du décor (leurs normales lissées les faisaient paraître en plastique)
     for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]) {

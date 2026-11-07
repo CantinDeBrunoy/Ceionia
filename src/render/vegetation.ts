@@ -180,10 +180,12 @@ class Layer {
   /** Visibilité d'une tuile selon sa distance à la caméra */
   view(ch: number, dist: number, lodDist = LOD_DIST) {
     const has = this.n[ch] > 0;
-    const hide = (this.o.detail && dist > DETAIL_DIST) || (this.o.small && dist > SMALL_DIST);
+    // en qualité réduite (lodDist plus court), menus détails et ombres s'arrêtent plus près, dans la même proportion
+    const k = lodDist / LOD_DIST;
+    const hide = (this.o.detail && dist > DETAIL_DIST * k) || (this.o.small && dist > SMALL_DIST);
     const lod = !!this.far[ch].length, far = lod && dist > lodDist;
     // les ombres des tuiles lointaines, à peine visibles, doubleraient les appels de dessin
-    const shadow = this.o.shadow !== false && dist < SHADOW_DIST;
+    const shadow = this.o.shadow !== false && dist < SHADOW_DIST * k;
     // de près, l'ombre portée vient de la version simplifiée, rangée sur le calque des seules ombres : trois fois moins
     // de triangles à dessiner dans la carte des ombres, pour une silhouette au sol presque identique
     for (const m of this.near[ch]) { m.visible = has && !hide && !far; m.castShadow = shadow && !lod; }
@@ -513,13 +515,15 @@ export class VegView {
     w.vegRect = null;
     // les parcelles ont pu changer : leurs sillons seront recalculés
     this.plotAngle.clear();
-    this.rebuildSpecial();
+    // les décors uniques (grottes, failles, volcans, épaves) ne se refont que si la zone en touche un
+    if (this.specialNear(r)) this.rebuildSpecial();
     const urgent: number[] = [];
     for (let cz = Math.floor(r[1] / CH); cz <= Math.floor(r[3] / CH); cz++)
       for (let cx = Math.floor(r[0] / CH); cx <= Math.floor(r[2] / CH); cx++) urgent.push(cz * NC + cx);
-    // petite retouche : immédiate ; carte entière : au fil des images
+    // petite retouche : devant, et tout de suite si c'est court (une grande tuile se finit à l'image suivante) ; carte
+    // entière : au fil des images
     for (const ch of urgent) this.enqueue(ch, urgent.length <= 6);
-    if (urgent.length <= 6) this.flush(Infinity, urgent.length);
+    if (urgent.length <= 6) this.flush(8, urgent.length + (this.current ? 1 : 0));
   }
 
   /** Avance les reconstructions en attente et règle la visibilité des tuiles selon la caméra */
@@ -539,28 +543,43 @@ export class VegView {
     }
   }
 
+  /**
+   * Avance les reconstructions en attente : `budget` ms au plus par appel (une grande tuile se fait en plusieurs fois, ligne
+   * par ligne : ses anciens décors restent affichés jusqu'à ce qu'elle soit prête), `max` tuiles au plus
+   */
   private flush(budget: number, max = Infinity) {
     if (!this.season) return;
     const t0 = performance.now();
     let done = 0;
-    while (this.queue.length && done < max && (done === 0 || performance.now() - t0 < budget)) {
-      const ch = this.queue.shift()!;
-      this.queued[ch] = 0;
-      this.rebuildChunk(ch, this.season);
+    while ((this.current || this.queue.length) && done < max) {
+      if (!this.current) {
+        const ch = this.queue.shift()!;
+        this.queued[ch] = 0;
+        this.current = this.buildChunk(ch, this.season);
+      }
+      // (au moins un pas par appel, pour avancer même quand les images sont lentes)
+      let r = this.current.next();
+      while (!r.done && performance.now() - t0 < budget) r = this.current.next();
+      if (!r.done) return;
+      this.current = null;
       done++;
     }
   }
+  /** tuile en cours de reconstruction (d'une image à l'autre) */
+  private current: Generator<void, void, void> | null = null;
 
   // ---------- Tuiles ----------
 
-  private rebuildChunk(ch: number, s: SeasonState) {
+  private *buildChunk(ch: number, s: SeasonState): Generator<void, void, void> {
     const w = this.world;
     Layer.chunk = ch;
     for (const l of this.layers) l.begin(ch);
     this.perches[ch] = [];
     this.flowers[ch] = [];
     const x0 = (ch % NC) * CH, z0 = Math.floor(ch / NC) * CH;
-    for (let cz = z0; cz < Math.min(N, z0 + CH); cz++)
+    for (let cz = z0; cz < Math.min(N, z0 + CH); cz++) {
+      // une ligne de cases par pas (les perchoirs et les fleurs ne sont lus qu'une fois la tuile finie)
+      if (cz > z0 && (cz - z0) % 2 === 0) yield;
       for (let cx = x0; cx < Math.min(N, x0 + CH); cx++) {
         const k = w.ci(cx, cz), t = w.veg[k];
         // l'emprise des grottes et des failles reste dégagée
@@ -571,6 +590,7 @@ export class VegView {
         // les jardins ont leur propre décor, qui change avec les âges (GardenView)
         else if (t === VEG_ROCKS) this.rockery(cx, cz, s);
       }
+    }
     for (const l of this.layers) l.end(ch);
   }
 
@@ -1025,6 +1045,14 @@ export class VegView {
   // ---------- Décors uniques ----------
 
   /** Grottes, failles, épaves, volcans (lave et fumée) de toute la carte */
+  /** Un décor unique (grotte, faille, volcan, épave) ou son emprise à moins de trois cases de la zone ? */
+  private specialNear(r: [number, number, number, number]) {
+    const w = this.world;
+    for (let cz = Math.max(0, r[1] - 3); cz <= Math.min(N - 1, r[3] + 3); cz++)
+      for (let cx = Math.max(0, r[0] - 3); cx <= Math.min(N - 1, r[2] + 3); cx++) { const k = w.ci(cx, cz); if (w.veg[k] >= VEG_CAVE || w.decor[k]) return true; }
+    return false;
+  }
+
   private rebuildSpecial() {
     const w = this.world, d = this.dummy, col = this.col, s = this.season;
     let nWr = 0, nL = 0, nSm = 0, nSp = 0;
