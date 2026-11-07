@@ -123,7 +123,6 @@ export class WarTips {
   private show(id: WarTipId) {
     this.shown = id;
     this.el.dataset.tip = id;
-    this.el.classList.toggle('low', id === 'orders' || id === 'hell' || id === 'base' || id === 'kingdom');
     this.el.innerHTML = `<p class="wtText"></p><button class="wtX" title="Fermer" aria-label="Fermer">✕</button><button class="wtOff">Masquer les aides</button>`;
     this.el.querySelector('.wtText')!.textContent = WAR_TIP_TEXT[id];
     this.el.hidden = false;
