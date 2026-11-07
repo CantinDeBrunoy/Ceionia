@@ -95,6 +95,9 @@ export type Side = 'hell' | 'player';
  * Ce que fait une unité : garde à son poste, patrouille, poursuite, attaque, retour au poste ; pour le joueur : marche vers
  * un point, tient sa position, se replie (vers le portail)
  */
+/** Durée (s) pendant laquelle un mort reste affiché (chute puis fondu) avant d'être retiré */
+export const DEAD_LIFE = 2;
+
 export type UnitState = 'guard' | 'patrol' | 'chase' | 'attack' | 'return' | 'move' | 'hold' | 'retreat' | 'idle' | 'dead';
 /**
  * Ordre donné à une unité du joueur (contrôle direct, chantier 4) : se déplacer (sans combattre en route), attaquer (une
@@ -468,6 +471,8 @@ export class Hell {
     this.load.clear();
     for (const u of live) if (u.target !== null) this.load.set(u.target, (this.load.get(u.target) ?? 0) + 1);
     for (const b of this.buildings.values()) if (!b.down && b.target !== null) this.load.set(b.target, (this.load.get(b.target) ?? 0) + 1);
+    // le chrono « touché » court aussi pour les morts : il pilote leur chute puis leur retrait
+    for (const u of this.units.values()) if (u.hp <= 0) u.hurt += dt;
     for (const u of live) {
       u.cool -= dt; u.swing += dt; u.hurt += dt; u.repath -= dt;
       if (u.blockedT !== undefined && (u.blockedT -= dt) <= 0) { u.blocked = undefined; u.blockedT = undefined; }
@@ -478,7 +483,7 @@ export class Hell {
     this.separate(live);
     for (const b of this.buildings.values()) if (!b.down) this.thinkBuilding(b, dt, live);
     // les morts disparaissent un peu après (la vue montre leur chute)
-    for (const u of [...this.units.values()]) if (u.hp <= 0 && u.hurt > 3) this.units.delete(u.id);
+    for (const u of [...this.units.values()]) if (u.hp <= 0 && u.hurt > DEAD_LIFE) this.units.delete(u.id);
   }
 
   /** Ennemi le plus proche en vue (unité, ou bâtiment du joueur) */

@@ -124,9 +124,9 @@ export class BattleLayer {
       const kind = u.kind as DemonKind, rig = this.rigs[kind];
       if (!rig || counts[kind] >= CAP[kind]) continue;
       const i = counts[kind]++, sc = SCALE[kind];
-      const dead = u.hp <= 0, fall = dead ? Math.min(1, u.hurt / 0.5) : 0;
+      const dead = u.hp <= 0, fall = dead ? Math.min(1, u.hurt / 0.4) : 0;
       // les morts basculent, puis s'enfoncent dans un nuage de fumée violette
-      const sink = dead ? Math.max(0, u.hurt - 1.2) * 0.6 : 0, shrink = dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1.6)) : 1;
+      const sink = dead ? Math.max(0, u.hurt - 0.7) * 0.8 : 0, shrink = dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1) / 0.9) : 1;
       const walk = u.moving ? u.walk : 0, bob = u.moving ? Math.abs(Math.sin(walk)) * 0.05 : Math.sin(t * 2 + u.id) * 0.012;
       const hover = kind === 'imp' ? 0.12 + Math.sin(t * 6 + u.id) * 0.04 : 0;
       const atk = u.swing < 0.5 ? Math.sin((u.swing / 0.5) * Math.PI) : 0;
@@ -184,9 +184,9 @@ export class BattleLayer {
       const s = t.s, dead = u.hp <= 0;
       // le coup se voit : un bond vers la cible quand il frappe, un recul net quand il est touché (affichage seulement)
       const swing = u.stats.range <= 2 && u.swing < 0.4 ? Math.sin((u.swing / 0.4) * Math.PI) * 0.18 : 0, push = dead ? 0 : swing - (u.hurt < 0.16 ? (1 - u.hurt / 0.16) * 0.12 : 0);
-      s.root.position.set(u.x + Math.sin(u.heading) * push, this.groundY(u.x, u.z) - (dead ? Math.max(0, u.hurt - 1.2) * 0.3 : 0), u.z + Math.cos(u.heading) * push);
-      s.root.rotation.set(dead ? -Math.min(1, u.hurt / 0.5) * 1.4 : 0, u.heading, 0, 'YXZ');
-      s.root.scale.setScalar(TROOP_K[u.kind] ?? 1.6);
+      s.root.position.set(u.x + Math.sin(u.heading) * push, this.groundY(u.x, u.z) - (dead ? Math.max(0, u.hurt - 0.7) * 0.4 : 0), u.z + Math.cos(u.heading) * push);
+      s.root.rotation.set(dead ? -Math.min(1, u.hurt / 0.4) * 1.4 : 0, u.heading, 0, 'YXZ');
+      s.root.scale.setScalar((TROOP_K[u.kind] ?? 1.6) * (dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1) / 0.9) : 1));
       soldierStep(s, u.moving ? u.walk : this.uTime, dead ? 'idle' : u.state === 'attack' ? 'fight' : u.moving ? (u.state === 'retreat' ? 'run' : 'walk') : 'guard');
       // touché : il recule d'un coup, le buste rejeté en arrière
       if (!dead && u.hurt < 0.18) s.body.rotation.x -= 0.4 * (1 - u.hurt / 0.18);
