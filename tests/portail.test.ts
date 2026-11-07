@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize, VEG_VOLCANO } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
-import { landDistance, ISLE_R, STRAIT_MIN, PORTAL_CELLS, ISLE_SECURE, holdIsle, repelWave, isleDefenses, isleManned, isleProgress, isleSecured } from '../src/world/portal';
+import { landDistance, ISLE_R, STRAIT_MIN, PORTAL_CELLS, ISLE_SECURE, holdIsle, repelWave, isleDefenses, isleManned, isleProgress, isleSecured, isleSteps } from '../src/world/portal';
+import { SECURE_WAVES } from '../src/sim/hell';
 import { zoneOrigins, isZoned as isleZoned } from '../src/build/zones';
 
 /** Les cases de terre reliées (à pied, de proche en proche) à la case donnée */
@@ -131,10 +132,11 @@ describe('l’île du portail', () => {
     expect(old.canPlace('watchtower', p.x + 2, p.z)).toMatch(/pas d’île/);
   });
 
-  it('l’île se sécurise : défenses debout, puis vagues repoussées ou jours tenus ; le compte se sauvegarde', () => {
+  it('l’île se sécurise : défenses debout, puis vagues repoussées (les jours tenus ne sont qu’un relevé) ; le compte se sauvegarde', () => {
     const w = new World();
     newWorld(w, 3, 2026, GEN);
     expect(isleZoned('watchtower') && isleZoned('barracks')).toBe(true);
+    expect(ISLE_SECURE.waves).toBe(SECURE_WAVES);
     // sans portail ouvert ni défenses, le temps ne compte pas
     holdIsle(w, 1000, 100);
     expect(w.isleGuard.days).toBe(0);
@@ -145,18 +147,24 @@ describe('l’île du portail', () => {
     holdIsle(w, 1000, 100);
     expect(isleManned(w)).toBe(false);
     expect(w.isleGuard.days).toBe(0);
+    expect(isleSteps(w).map((x) => x.have)).toEqual([1, 0, 0]);
     const c = zoneOrigins(w, 'barracks')[0];
     w.place('barracks', c % N, Math.floor(c / N), 0, true, 1, false);
     expect(isleDefenses(w)).toEqual({ towers: 1, barracks: 1 });
     holdIsle(w, 300, 100);
     expect(w.isleGuard.days).toBeCloseTo(3);
-    expect(isleProgress(w)).toBeCloseTo(3 / ISLE_SECURE.days);
-    // les vagues repoussées suffisent aussi
-    for (let i = 0; i < ISLE_SECURE.waves; i++) repelWave(w);
+    // tenir des jours ne suffit plus : il faut repousser les vagues
+    holdIsle(w, 10000, 100);
+    expect(isleProgress(w)).toBe(0);
+    for (let i = 0; i < ISLE_SECURE.waves - 1; i++) repelWave(w);
+    expect(isleSecured(w)).toBe(false);
+    expect(isleSteps(w)[2]).toMatchObject({ have: ISLE_SECURE.waves - 1, need: ISLE_SECURE.waves });
+    repelWave(w);
     expect(isleSecured(w)).toBe(true);
+    expect(isleSteps(w).every((x) => x.have >= x.need)).toBe(true);
     const v = new World();
     v.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
-    expect(v.isleGuard).toEqual({ waves: ISLE_SECURE.waves, days: 3 });
+    expect(v.isleGuard.waves).toBe(ISLE_SECURE.waves);
     expect(isleSecured(v)).toBe(true);
   });
 });
