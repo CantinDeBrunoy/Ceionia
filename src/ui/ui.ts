@@ -311,15 +311,17 @@ export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty
 }
 
 /** Fenêtre du jeu : titre, contenu, bouton de fermeture ; se ferme aussi d'un clic à côté */
-function modal(root: HTMLElement, cls: string, title: string, body: string, onClose?: () => void): { ov: HTMLElement; close: () => void } {
+/** `sticky` : une fenêtre qu'on ne peut pas écarter (ni croix, ni clic à côté, ni Échap) : seule sa propre réponse la ferme */
+function modal(root: HTMLElement, cls: string, title: string, body: string, onClose?: () => void, sticky = false): { ov: HTMLElement; close: () => void } {
   const ov = document.createElement('div');
   ov.className = 'overlay';
   ov.innerHTML = `<div class="modal panel ${cls}"><div class="mtitle"><h3>${title}</h3><button class="x" title="Fermer" aria-label="Fermer">${ic('close', 16, 2)}</button></div>${body}</div>`;
   root.appendChild(ov);
   // Échap ferme la fenêtre du dessus (voir closeTop)
-  (ov as HTMLElement & { close?: () => void }).close = () => close();
+  (ov as HTMLElement & { close?: () => void }).close = () => { if (!sticky) close(); };
   const close = () => { if (!ov.isConnected) return; ov.remove(); onClose?.(); };
-  ov.addEventListener('pointerdown', (e) => { if (e.target === ov) close(); });
+  if (sticky) ov.classList.add('sticky');
+  else ov.addEventListener('pointerdown', (e) => { if (e.target === ov) close(); });
   $('.x', ov).onclick = close;
   return { ov, close };
 }
@@ -1688,7 +1690,7 @@ export class UI {
    */
   expEvent(a: ActiveExpedition) {
     this.toast(`${a.m.icon} « ${a.m.title} » : ${a.wait?.title.toLowerCase()} — une décision vous attend (cliquez ici).`, () => this.showDecision(a));
-    if (!this.root.querySelector('.overlay') && this.host.tools.tool === 'none') this.showDecision(a);
+    this.forceDecision(a);
     this.update();
   }
 
@@ -1701,9 +1703,17 @@ export class UI {
    */
   private offerPending() {
     const h = this.host;
-    if (this.root.querySelector('.overlay') || h.tools.tool !== 'none') return;
-    const a = h.expeditions.active.find((e) => e.wait && this.offered.get(e) !== e.wait);
-    if (a) this.showDecision(a);
+    // une décision en attente passe avant tout : elle écarte ce qui était ouvert et pose le bâtiment en main
+    const a = h.expeditions.active.find((e) => e.wait && (this.offered.get(e) !== e.wait || !this.root.querySelector('.decide')));
+    if (a) this.forceDecision(a);
+  }
+
+  /** Ouvre la décision d'une équipe tout de suite : les fenêtres ouvertes se ferment (sauf le menu), l'outil en main se range */
+  private forceDecision(a: ActiveExpedition) {
+    if (this.root.querySelector('.decide')) return;
+    this.root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay').forEach((o) => { if (o.id !== 'menu' && !o.classList.contains('victory')) o.close?.(); });
+    if (this.host.tools.tool !== 'none') this.host.tools.setTool('none');
+    this.showDecision(a);
   }
 
   /** l'état de la pause avant qu'une décision n'arrête le jeu (null : aucune décision ouverte) */
@@ -1744,12 +1754,12 @@ export class UI {
       <p class="story">${ev.text}</p>
       <button class="look">${ic('eye', 16, 2)} Voir l’équipe</button>
       ${opts}
-      <p class="hint">Risque d’échec de l’expédition pour l’instant : ${pct(ex.chance(a))}. Le jeu est en pause pendant que vous choisissez. Sans réponse, l’équipe finit par prendre d’elle-même la voie la plus sûre.</p>`, () => {
+      <p class="hint">Risque d’échec de l’expédition pour l’instant : ${pct(ex.chance(a))}. Le jeu reste en pause : l’équipe attend votre choix pour continuer.</p>`, () => {
       clearInterval(iv);
       if (this.root.querySelector('.decide')) return;
       if (this.pausedFor === false) h.time.paused = false;
       this.pausedFor = null;
-    });
+    }, true);
     // l'équipe a tranché d'elle-même (le jeu relancé à la main) : la fenêtre n'a plus lieu d'être
     const iv = setInterval(() => { if (a.wait !== ev || !ex.active.includes(a)) close(); }, 500);
     // la scène reste visible à côté de la fenêtre : un clic y emmène la caméra, pour voir l'imprévu avant de choisir
