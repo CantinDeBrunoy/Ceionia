@@ -276,7 +276,7 @@ export class HellView {
         if (r(26) < (zi === Z_BONES ? 0.12 : 0.012) && !onPath) {
           bones.push(this.item(cx, y + 0.03, cz, r(27) * 6, 0.07, 0.07, 0.4 + r(28) * 0.3, new THREE.Color(0xeee2c8)));
         }
-        if ((zi === Z_CRYSTAL ? r(29) < 0.16 && wd <= 2 : zi === Z_PORTAL ? r(29) < 0.08 && wd <= 2 : r(29) < 0.012 && wd === 1) && !onPath) {
+        if ((zi === Z_CRYSTAL ? r(29) < 0.26 && wd <= 2 : zi === Z_PORTAL ? r(29) < 0.08 && wd <= 2 : r(29) < 0.012 && wd === 1) && !onPath) {
           const base = CRYST[zi === Z_CRYSTAL ? Math.floor(r(30) * 3) : zi === Z_PORTAL ? 0 : 3];
           for (let i = 0, n = 2 + Math.floor(r(31) * 3); i < n; i++) {
             const s = 0.12 + r(32 + i) * 0.14, h = s * (2.5 + r(36 + i) * 2.5);
