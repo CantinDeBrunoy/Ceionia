@@ -1264,8 +1264,8 @@ export class UI {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
     const next = max < partyLimit(1e9) ? `Une équipe de plus à ${max * 30} habitants (le village en compte ${pop}).` : 'Le village envoie autant d’équipes qu’il le peut.';
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
-    // d'abord l'expédition obligatoire qui reste à faire, puis les autres à faire, puis ce qu'on peut refaire
-    const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : m.mandatory && !ex.done(m) ? 0 : 1);
+    // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
+    const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);
     // une carte compacte par mission : pastille, titre, âge, étiquettes, une phrase, ce qu'elle débloque ; un seul bouton ouvre
     // la petite fenêtre de départ (les choix, l'équipement, le risque)
     const card = (m: Mission) => {

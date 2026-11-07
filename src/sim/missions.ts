@@ -634,7 +634,7 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'motorcar', age: 3, mandatory: false, icon: '🚗', title: 'La course automobile', unlocks: 'carworks',
+    id: 'motorcar', age: 3, mandatory: true, icon: '🚗', title: 'La course automobile', unlocks: 'carworks',
     intro: 'Un ingénieur de passage a monté une drôle de voiture sans chevaux. Il cherche une équipe pour la mener à la grande course de la région.',
     choices: [
       {
