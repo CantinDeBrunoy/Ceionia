@@ -608,9 +608,10 @@ export class ToolController implements ToolInput {
     this.mark();
     this.h.world.addCurve(plan.pts);
     this.h.audio.sfxPlace();
-    this.freeFrom = [c.x + 0.5, c.z + 0.5];
+    // la route est posée de A à B : on sort de l'outil (on ne reste pas coincé en mode route)
+    this.freeFrom = null;
     this.freeKey = '';
-    this.refreshVisuals();
+    this.setTool('none');
   }
 
   /** Aperçu de la route libre : un ruban vert de A jusqu'au pointeur, rouge si elle ne passe pas */

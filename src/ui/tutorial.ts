@@ -204,6 +204,8 @@ export class Tutorial {
   /** clics repérés pendant l'étape : l'œil d'une équipe, celui d'un incident */
   private clicks = new Set<'exp' | 'inc'>();
   /** état au début de l'étape */
+  /** l'outil Route a été pris pendant cette étape */
+  private roadTool = false;
   private base: { view?: { x: number; z: number; yaw: number; dist: number }; kinds?: Record<string, number>; roads?: number; paused?: boolean; speed?: number } = {};
   /** choix d'expédition déjà amenés sous les yeux */
   private shown = new WeakSet<Element>();
@@ -249,12 +251,14 @@ export class Tutorial {
       make('stone', ['quarry']),
       {
         id: 'road', anchor: () => q('#quickL [data-tool="road"]'),
-        begin: () => (this.base.roads = roads()),
+        begin: () => { this.base.roads = roads(); this.roadTool = false; },
         check: () => {
           const n = roads(), on = h.tools.tool === 'road';
           // les chemins posés d'eux-mêmes jusqu'aux nouveaux bâtiments ne comptent pas : seule compte la route tracée à l'outil
-          if (!on) this.base.roads = n;
-          return [on, on && n > this.base.roads!];
+          // (la route libre rend la main une fois posée : l'outil pris puis quitté compte aussi)
+          if (on) this.roadTool = true;
+          if (!on && !this.roadTool) this.base.roads = n;
+          return [on || this.roadTool, this.roadTool && n > this.base.roads!];
         },
       },
       {
