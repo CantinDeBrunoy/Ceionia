@@ -2,15 +2,17 @@ import { World, PortalSite, VEG_FOREST, VEG_ROCKS, VEG_VOLCANO, VEG_CAVE, VEG_FI
 import { mulberry32, hash2, smoothstep, lerp } from '../core/rng';
 
 /**
- * L'île du portail : une petite île au large du continent, de 12 à 17 cases de diamètre, séparée de lui par un bras de mer ;
+ * L'île du portail : une île au large du continent, de 22 à 30 cases de diamètre (assez grande pour s’y battre), séparée de lui par un bras de mer ;
  * en son centre, sur un replat, le portail qui mène aux Enfers. On y va en galère (expédition « Le portail de l'autre rive »),
  * on n'y bâtit que des défenses, et les démons n'attaqueront qu'elle, jamais le continent
  */
 
 /** Rayon de l'île (en cases), au plus petit et au plus grand */
-export const ISLE_R: [number, number] = [6, 8.5];
+export const ISLE_R: [number, number] = [11, 15];
+/** Rayon plancher quand la mer manque de place (l'île rétrécit plutôt que de reculer la côte) */
+export const ISLE_MIN = 8;
 /** Largeur du bras de mer entre l'île et la terre la plus proche (cases), au moins */
-export const STRAIT_MIN = 10;
+export const STRAIT_MIN = 8;
 /** Altitude du replat central (où se dresse le portail) */
 export const ISLE_TOP = 1.15;
 
@@ -65,8 +67,10 @@ export function addPortalIsland(w: World, seed: number): PortalSite | null {
     }
   if (best < 0) return null;
   // la mer manque un peu de place : une île plus petite ; beaucoup : la côte la plus basse recule pour lui faire de la place
-  if (dl[best] < R + STRAIT_MIN) R = Math.max(ISLE_R[0], dl[best] - STRAIT_MIN);
+  if (dl[best] < R + STRAIT_MIN) R = Math.max(ISLE_MIN, dl[best] - STRAIT_MIN);
   if (dl[best] < R + STRAIT_MIN) best = carveStrait(w, dl, M, R + STRAIT_MIN, seed);
+  // toujours pas de place : une île plus petite et un bras de mer plus étroit, plutôt que pas d'île du tout
+  if (best < 0) { R = ISLE_MIN; best = carveStrait(w, dl, M, R + 6, seed); }
   if (best < 0) return null;
   // le centre du portail : un sommet du relief (le coin commun des quatre cases du portail)
   const p: PortalSite = { x: (best % n) + 1, z: Math.floor(best / n) + 1, r: Math.round(R * 10) / 10 };

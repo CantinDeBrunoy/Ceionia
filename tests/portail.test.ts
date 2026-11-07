@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize, VEG_VOLCANO } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
-import { landDistance, ISLE_R, STRAIT_MIN, PORTAL_CELLS, ISLE_SECURE, holdIsle, repelWave, isleDefenses, isleManned, isleProgress, isleSecured, isleSteps } from '../src/world/portal';
+import { landDistance, ISLE_R, ISLE_MIN, STRAIT_MIN, PORTAL_CELLS, ISLE_SECURE, holdIsle, repelWave, isleDefenses, isleManned, isleProgress, isleSecured, isleSteps } from '../src/world/portal';
 import { SECURE_WAVES } from '../src/sim/hell';
 import { zoneOrigins, isZoned as isleZoned } from '../src/build/zones';
 
@@ -27,21 +27,21 @@ describe('l’île du portail', () => {
   // (1184, 2920 : un continent qui laisse peu de large, dont la côte recule pour faire place à l'île)
   const seeds = [1, 2, 3, 7, 42, 99, 123, 555, 2026, 31337, 77777, 4242, 1184, 2920];
 
-  it('chaque continent généré a son île, petite, au large, séparée du continent par un bras de mer', () => {
+  it('chaque continent généré a son île, au large, séparée du continent par un bras de mer', () => {
     for (const seed of seeds) {
       const w = new World();
       newWorld(w, 3, seed, GEN);
       const p = w.portal!;
       expect(p, `graine ${seed}`).toBeTruthy();
-      expect(p.r).toBeGreaterThanOrEqual(ISLE_R[0]);
+      expect(p.r).toBeGreaterThanOrEqual(ISLE_MIN);
       expect(p.r).toBeLessThanOrEqual(ISLE_R[1]);
       // l'île : la terre autour du portail, d'un seul tenant, de 12 à 18 cases de diamètre
       const isle = landFrom(w, p.x, p.z);
       let x0 = N, x1 = 0, z0 = N, z1 = 0, n = 0;
       for (let k = 0; k < N * N; k++) if (isle[k]) { n++; const x = k % N, z = (k - x) / N; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
       expect(x1 - x0 + 1, `graine ${seed}`).toBeGreaterThanOrEqual(11);
-      expect(x1 - x0 + 1, `graine ${seed}`).toBeLessThanOrEqual(19);
-      expect(z1 - z0 + 1, `graine ${seed}`).toBeLessThanOrEqual(19);
+      expect(x1 - x0 + 1, `graine ${seed}`).toBeLessThanOrEqual(33);
+      expect(z1 - z0 + 1, `graine ${seed}`).toBeLessThanOrEqual(33);
       // elle reste entière dans la carte, avec de la mer tout autour
       expect(Math.min(x0, z0)).toBeGreaterThanOrEqual(2);
       expect(Math.max(x1, z1)).toBeLessThanOrEqual(N - 3);

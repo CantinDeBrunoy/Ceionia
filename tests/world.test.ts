@@ -530,7 +530,7 @@ describe('routes automatiques', () => {
       for (let x = 10; x < N - 10 - len; x++) {
         let ok = true;
         for (let i = 0; i <= len && ok; i++) for (let j = -1; j <= 1 && ok; j++)
-          ok = w.cellAvg(x + i, z + j) > 0.5 && w.cellSlope(x + i, z + j) < 0.6 && !w.occ[w.ci(x + i, z + j)] && !w.road[w.ci(x + i, z + j)] && !w.isWet(x + i, z + j);
+          ok = w.cellAvg(x + i, z + j) > 0.5 && w.cellSlope(x + i, z + j) < 0.6 && !w.occ[w.ci(x + i, z + j)] && !w.road[w.ci(x + i, z + j)] && !w.isWet(x + i, z + j) && !w.onPortalIsland(x + i, z + j);
         if (!ok) continue;
         for (let i = 0; i <= len; i++) for (let j = -1; j <= 1; j++) { w.veg[w.ci(x + i, z + j)] = 0; w.decor[w.ci(x + i, z + j)] = 0; }
         return [x, z];
