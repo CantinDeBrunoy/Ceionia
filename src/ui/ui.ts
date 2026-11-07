@@ -6,7 +6,7 @@ import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
 import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
-import { loadSlot, SaveData } from '../save/save';
+import { loadSlot, SaveData, Quality } from '../save/save';
 import { MAPS, genHeights, newSeed } from '../world/mapgen';
 import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expeditions';
 import type { ExpEvent } from '../sim/events';
@@ -55,8 +55,8 @@ export interface UIHost {
   fogLevel(): number;
   dispelFog(): void;
   /** qualité graphique et catastrophes naturelles */
-  quality: 'high' | 'medium' | 'low';
-  setQuality(q: 'high' | 'medium' | 'low'): void;
+  quality: Quality;
+  setQuality(q: Quality): void;
   disasters: boolean;
   setDisasters(on: boolean): void;
   autoRoads: boolean;
@@ -1795,7 +1795,7 @@ export class UI {
       </section>
       <section data-sec="look" hidden>
         <h4>Graphismes</h4>
-        <div class="row">${[['high', 'Haute (halo de nuit)'], ['medium', 'Normale'], ['low', 'Réduite']].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+        <div class="row">${[['auto', 'Auto'], ['high', 'Haute (halo de nuit)'], ['medium', 'Normale'], ['low', 'Réduite']].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}" title="${k === 'auto' ? 'La qualité baisse d’elle-même si le jeu saccade, et remonte quand tout est fluide' : ''}">${l}</button>`).join('')}</div>
         <h4>Audio</h4>
         <div class="row"><label>Musique</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" aria-label="Couper la musique" class="${a.muteMusic ? 'active' : ''}">${ic(a.muteMusic ? 'mute' : 'volume', 18)}</button></div>
         <div class="row"><label>Sons</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" aria-label="Couper les sons" class="${a.muteSfx ? 'active' : ''}">${ic(a.muteSfx ? 'mute' : 'volume', 18)}</button></div>
@@ -1862,7 +1862,7 @@ export class UI {
       ov.querySelectorAll('[data-w]').forEach((x) => x.classList.toggle('active', x === b));
     }));
     ov.querySelectorAll<HTMLButtonElement>('[data-q]').forEach((b) => (b.onclick = () => {
-      h.setQuality(b.dataset.q as 'high' | 'medium' | 'low');
+      h.setQuality(b.dataset.q as Quality);
       ov.querySelectorAll('[data-q]').forEach((x) => x.classList.toggle('active', x === b));
     }));
     q('#gDisasters').onclick = () => {

@@ -63,6 +63,7 @@ import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, isDifficulty, rulesOf } from './sim/difficulty';
+import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
@@ -101,8 +102,11 @@ class Game implements UIHost {
   life: AmbientLife;
   /** halo lumineux de nuit et sous terre (absent en qualité réduite) */
   private glow = coarse ? null : new Glow(renderer);
-  /** qualité graphique choisie dans les réglages */
-  quality: Quality = coarse ? 'low' : 'high';
+  /** qualité graphique choisie dans les réglages (« auto » : elle s'ajuste d'elle-même aux images qui traînent) */
+  quality: Quality = 'auto';
+  /** le contrôleur du réglage « Auto » (son palier), et les réglages graphiques en vigueur */
+  private adaptive = new AdaptiveQuality();
+  gfx: GfxParams = paramsAt(coarse ? 'low' : 'high', 0);
   /** routes automatiques jusqu'aux nouveaux bâtiments */
   autoRoads = true;
   hideUpBadges = false;
@@ -256,6 +260,7 @@ class Game implements UIHost {
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
     if (settings.quality) this.quality = settings.quality;
+    this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? 0)));
     this.autoRoads = settings.autoRoads ?? true;
     this.hideUpBadges = settings.hideUpBadges ?? false;
     w.disasters = settings.disasters ?? true;
@@ -423,7 +428,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
   }
   buildSave(): SaveData {
     return { v: 1, map: this.world.mapId, seed: this.world.seed, world: this.world.toJSON(), age: this.sim.age, pop: this.sim.pop, seasonT: this.time.seasonT, hour: this.time.hour, settings: this.settings(), savedAt: Date.now() };
@@ -728,15 +733,26 @@ class Game implements UIHost {
    * d'écran, plafonnée), taille de la carte des ombres, distance d'affichage des bêtes et des arbres détaillés
    */
   private applyQuality() {
-    const q = this.quality, k = { high: 1, medium: 0.7, low: 0.35 }[q];
-    this.atmosphere.mistEnabled = q !== 'low';
-    this.life.density = k;
-    this.streams.density = k;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, { high: 1.5, medium: 1.25, low: coarse ? 1.25 : 1 }[q]));
+    const q = this.quality;
+    // en « Auto », on part de la qualité haute (réduite sur un petit écran tactile) et le contrôleur descend par paliers
+    const p = this.gfx = q === 'auto' ? paramsAt(coarse ? 'low' : 'high', this.adaptive.level) : paramsAt(q, 0);
+    this.atmosphere.mistEnabled = p.mist;
+    this.life.density = p.density;
+    this.streams.density = p.density;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? Math.max(p.pixelRatio, 1) : p.pixelRatio));
     this.glow?.setSize(innerWidth, innerHeight);
-    this.env.setShadowSize({ high: 2048, medium: 1536, low: 1024 }[q]);
-    this.fauna.detail = { high: 1, medium: 0.8, low: 0.6 }[q];
-    this.veg.lodDist = { high: 48, medium: 40, low: 32 }[q];
+    this.env.setShadowSize(p.shadowSize);
+    this.fauna.detail = p.faunaDetail;
+    this.veg.lodDist = p.vegLod;
+  }
+
+  /** Le réglage « Auto » juge chaque image : s'il change de palier, les réglages suivent (sans à-coup visible) */
+  private adapt(frameMs: number) {
+    if (this.quality !== 'auto' || document.hidden) return;
+    const l = this.adaptive.step(frameMs);
+    if (l < 0) return;
+    this.applyQuality();
+    saveSettings(this.settings());
   }
 
   /** Sons de l'environnement autour du point visé : plus forts quand la caméra est proche */
@@ -1036,8 +1052,8 @@ class Game implements UIHost {
     const c = this.cam.camera, moved = c.position.distanceToSquared(this.shadowPos) > 1e-6 || 1 - Math.abs(c.quaternion.dot(this.shadowQ)) > 1e-9;
     this.shadowPos.copy(c.position); this.shadowQ.copy(c.quaternion);
     renderer.shadowMap.autoUpdate = false;
-    renderer.shadowMap.needsUpdate = moved || !!under || ++this.shadowN % (this.quality === 'low' ? 3 : 2) === 0;
-    if (!this.glow || this.quality !== 'high') { renderer.render(scene, this.cam.camera); return; }
+    renderer.shadowMap.needsUpdate = moved || !!under || ++this.shadowN % this.gfx.shadowEvery === 0;
+    if (!this.glow || !this.gfx.glow) { renderer.render(scene, this.cam.camera); return; }
     // le halo vient avec la nuit ; sous terre, il entoure cristaux, lave et torches
     const night = Math.min(1, Math.max(0, (this.env.night - 0.35) / 0.45));
     this.glow.render(scene, this.cam.camera, under ? 0.3 : night * 0.8, under ? 2 : 1.3);
@@ -1048,6 +1064,7 @@ class Game implements UIHost {
     requestAnimationFrame(() => this.frame());
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastTime) / 1000);
+    this.adapt(now - this.lastTime);
     this.lastTime = now;
     this.elapsed += dt;
     stepWind(this.elapsed, this.env.rainK);

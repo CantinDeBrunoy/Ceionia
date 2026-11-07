@@ -76,6 +76,7 @@ await cdp.send('Page.navigate', { url });
 for (let i = 0; i < 300 && !(await cdp.eval('!!window.__game')); i++) await sleep(500);
 if (!(await cdp.eval('!!window.__game'))) throw new Error('le jeu ne démarre pas');
 await sleep(1500);
+for (let i = 0; i < 20 && (await cdp.eval('document.hidden')); i++) { await cdp.send('Page.bringToFront'); await sleep(500); }
 if (await cdp.eval('document.hidden')) throw new Error('la page est cachée : pas d’images (fenêtre Chrome masquée ?)');
 await cdp.eval(page);
 await cdp.eval('(() => { window.__game.saveNow = () => {}; Storage.prototype.setItem = () => {}; })()');
@@ -87,8 +88,9 @@ const report = { url, seed, gpu: gpuInfo, date: new Date().toISOString(), runs: 
 const fmt = (v) => (v == null ? '–' : typeof v === 'number' ? String(v) : v);
 for (const th of throttles) {
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: th });
-  const scen = only ? `__bench.SCENARIOS.filter((s) => s.name.includes(${JSON.stringify(only)}))` : '__bench.SCENARIOS';
-  const res = await cdp.eval(`__bench.run({ seconds: ${seconds}, scenarios: ${scen}, ablation: ${args['no-ablation'] ? 'false' : 'true'} })`, true);
+  const scen = only ? `__bench.SCENARIOS.filter((s) => ${JSON.stringify(only.split(','))}.some((p) => s.name.includes(p)))` : '__bench.SCENARIOS';
+  const ablateOn = args['ablate-on'] ? `${scen}.map((s) => s.name).filter((n) => ${JSON.stringify(String(args['ablate-on']).split(','))}.some((p) => n.includes(p)))` : 'undefined';
+  const res = await cdp.eval(`__bench.run({ seconds: ${seconds}, scenarios: ${scen}, ablation: ${args['no-ablation'] ? 'false' : 'true'}, ablateOn: ${ablateOn} })`, true);
   report.runs[`x${th}`] = res;
   console.log(`\n### Processeur bridé ×${th}\n`);
   console.log('| scénario | CPU ms (p95) | image ms (p95) | GPU ms | appels | triangles | rendu | faune | végé. | villageois | trafic |');
@@ -96,14 +98,14 @@ for (const th of throttles) {
   for (const [name, m] of Object.entries(res.scenarios)) {
     console.log(`| ${name} | ${m.cpu} (${m.cpuP95}) | ${m.wall} (${m.wallP95}) | ${fmt(m.gpu)} | ${fmt(m.calls)} | ${fmt(m.tris)} | ${fmt(m.subs.rendu)} | ${fmt(m.subs.faune)} | ${fmt(m.subs['végétation'])} | ${fmt(m.subs.villageois)} | ${fmt(m.subs.trafic)} |`);
   }
-  if (res.ablation) {
-    console.log('\nAblation (scénario de référence, ce que chaque poste coûte) :');
+  for (const [name, ab] of Object.entries(res.ablation ?? {})) {
+    console.log(`\nAblation « ${name} » (ce que chaque poste coûte) :`);
     console.log('| poste | CPU ms | GPU ms | image ms | appels | triangles |');
     console.log('|---|---|---|---|---|---|');
-    for (const [k, v] of Object.entries(res.ablation)) if (k !== 'base') console.log(`| ${k} | ${v.cpu} | ${fmt(v.gpu)} | ${v.wall} | ${v.calls} | ${v.tris} |`);
-    console.log('\nÀ-coups :', JSON.stringify(res.hitches));
+    for (const [k, v] of Object.entries(ab)) if (k !== 'base') console.log(`| ${k} | ${v.cpu} | ${fmt(v.gpu)} | ${v.wall} | ${v.calls} | ${v.tris} |`);
   }
-  console.log('\nSous-systèmes (scénario de référence) :', JSON.stringify(Object.values(res.scenarios)[0]?.subs));
+  if (res.hitches) console.log('\nÀ-coups :', JSON.stringify(res.hitches));
+  for (const [name, m] of Object.entries(res.scenarios)) console.log(`\n${name} — sous-systèmes : ${JSON.stringify(m.subs)}\n  en scène : ${JSON.stringify(m.counts)}`);
 }
 if (args.out) writeFileSync(String(args.out), JSON.stringify(report, null, 1));
 kill();

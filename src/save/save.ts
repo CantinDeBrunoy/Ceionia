@@ -11,6 +11,8 @@ export interface Settings {
   sfx?: boolean;
   /** qualité graphique : halo, brume, densité des particules, finesse de l'image, ombres, distance d'affichage des détails */
   quality?: Quality;
+  /** réglage « Auto » : palier atteint à la dernière partie (on repart de là) */
+  autoLevel?: number;
   /** catastrophes naturelles : lave et incendies détruisent les bâtiments, le volcan se réveille de lui-même */
   disasters?: boolean;
   /** routes posées d'elles-mêmes jusqu'aux nouveaux bâtiments */
@@ -21,7 +23,8 @@ export interface Settings {
   hideUpBadges?: boolean;
 }
 
-export type Quality = 'high' | 'medium' | 'low';
+/** « auto » : la qualité s'ajuste d'elle-même aux images qui traînent (voir `render/adaptive`) */
+export type Quality = 'auto' | 'high' | 'medium' | 'low';
 
 export interface SaveData {
   v: 1;

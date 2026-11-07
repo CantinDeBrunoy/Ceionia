@@ -137,7 +137,20 @@
     if (r) { r.info.autoReset = true; info = { calls: Math.round(mean(calls)), tris: Math.round(mean(tris)), programs: r.info.programs?.length ?? 0 }; }
     const n = cpu.length || 1;
     const subs = Object.fromEntries(Object.entries(sub).map(([k, v]) => [k, r1(v / n)]).sort((a, b) => b[1] - a[1]));
-    return { frames: cpu.length, cpu: r1(mean(cpu)), cpuP95: r1(pct(cpu, 0.95)), wall: r1(mean(wall)), wallP95: r1(pct(wall, 0.95)), gpu: gpuMs.length ? r1(mean(gpuMs)) : null, gpuP95: gpuMs.length ? r1(pct(gpuMs, 0.95)) : null, ...info, subs, pixelRatio: r?.getPixelRatio(), size: [canvas().width, canvas().height] };
+    return { frames: cpu.length, cpu: r1(mean(cpu)), cpuP95: r1(pct(cpu, 0.95)), wall: r1(mean(wall)), wallP95: r1(pct(wall, 0.95)), gpu: gpuMs.length ? r1(mean(gpuMs)) : null, gpuP95: gpuMs.length ? r1(pct(gpuMs, 0.95)) : null, ...info, subs, pixelRatio: r?.getPixelRatio(), size: [canvas().width, canvas().height], counts: counts() };
+  }
+
+  /** Ce qui est en scène : bêtes articulées (affichées), villageois, objets visibles par groupe */
+  function counts() {
+    const g = G(), out = {};
+    const crit = g.fauna.critters ?? [];
+    out.bêtes = crit.length;
+    out.bêtesArticulées = crit.filter((c) => c.actor).length;
+    out.bêtesAffichées = crit.filter((c) => c.actor && c.actor.root.parent).length;
+    out.villageois = g.agents.agents.length;
+    const walk = (o) => { let n = 0; o.traverse((m) => { if ((m.isMesh || m.isPoints || m.isLine) && m.visible) n++; }); return n; };
+    out.maillages = { faune: walk(g.fauna.group), végétation: walk(g.veg.group), villageois: walk(g.agents.group), bâtiments: walk(g.buildings.group), jardins: walk(g.gardens.group), trafic: walk(g.traffic.group), vie: walk(g.life.group), scène: walk(g.scene) };
+    return out;
   }
 
   /** Coût de chaque poste : on le cache, on mesure, on compare au total */
@@ -176,10 +189,19 @@
     let t = performance.now();
     g.roads.rebuild(g.sim.age, g.season.snow);
     out['routes.rebuild (direct)'] = r1(performance.now() - t);
-    // pose d'un bâtiment : la pire image des dix suivantes
+    // pose d'un bâtiment : la pire image des dix suivantes, et ce qu'elle a coûté par poste
     let spot = null;
     for (let z = cz - 30; z < cz + 30 && !spot; z++) for (let x = cx - 30; x < cx + 30 && !spot; x++) if (w.canPlace('house', x, z) === null) spot = [x, z];
-    if (spot) { const b = w.place('house', spot[0], spot[1], 0, true, g.sim.age, false); out['pose bâtiment (pire image)'] = await worst(12); w.removeBuilding(b.id); await frames(12); }
+    if (spot) {
+      const parts = {}, restore = [];
+      const wrap = (obj, name) => { const o = obj[name]; restore.push(() => { delete obj[name]; }); obj[name] = function (...a) { const t = performance.now(); try { return o.apply(this, a); } finally { parts[name] = r1((parts[name] ?? 0) + performance.now() - t); } }; };
+      wrap(g.roads, 'rebuild'); wrap(g.buildings, 'refreshAll'); wrap(g.veg, 'rebuild'); wrap(g.terrain, 'update'); wrap(g.gardens, 'sync'); wrap(g.buildings, 'syncHeights'); wrap(g.fauna, 'update'); wrap(g.sim, 'update'); wrap(g.agents, 'update');
+      const b = w.place('house', spot[0], spot[1], 0, true, g.sim.age, false);
+      out['pose bâtiment (pire image)'] = await worst(12);
+      out['pose bâtiment (postes)'] = parts;
+      for (const f of restore) f();
+      w.removeBuilding(b.id); await frames(12);
+    }
     // un pas de neige : la végétation et les routes suivent
     const s = g.season, snow0 = s.snow;
     s.snow = snow0 > 0.5 ? 0.2 : 0.8;
@@ -201,19 +223,19 @@
     { name: 'âge5 moyen nuit été haute', age: 5, dist: 34, night: true, quality: 'high' },
   ];
 
-  /** Tout le banc : chaque scénario, puis l'ablation et les à-coups sur le scénario de référence */
-  async function run({ seconds = 3, scenarios = SCENARIOS, ablation = true, buildings = 600, pop = 500 } = {}) {
-    const out = { scenarios: {}, ablation: null, hitches: null };
+  /** Tout le banc : chaque scénario, l'ablation sur ceux de `ablateOn` (noms), les à-coups sur le scénario de référence */
+  async function run({ seconds = 3, scenarios = SCENARIOS, ablation = true, ablateOn = [SCENARIOS[0].name, SCENARIOS[2].name], buildings = 600, pop = 500 } = {}) {
+    const out = { scenarios: {}, ablation: {}, hitches: null };
     let age = -1;
     for (const s of scenarios) {
       if (s.age !== age) { age = s.age; setup({ buildings, pop, age }); await frames(30); }
       await scenario(s);
       out.scenarios[s.name] = await measure(seconds);
+      if (ablation && ablateOn.includes(s.name)) out.ablation[s.name] = await ablate(2);
     }
     if (ablation) {
       if (age !== 3) { setup({ buildings, pop, age: 3 }); await frames(30); }
       await scenario(SCENARIOS[0]);
-      out.ablation = await ablate(1.5);
       out.hitches = await hitches();
     }
     return out;
