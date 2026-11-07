@@ -116,6 +116,24 @@ export function recruitWhy(a: Army, kind: TroopKind, c: RecruitCtx): string | nu
   return null;
 }
 
+/** Seul l'équipement manque pour recruter cette troupe (caserne, place et habitants sont là) */
+export function onlyGearMissing(a: Army, kind: TroopKind, c: RecruitCtx) {
+  return recruitWhy(a, kind, c) !== null && recruitWhy(a, kind, { ...c, unlimited: true }) === null;
+}
+
+/**
+ * Les pièces à faire fabriquer pour recruter cette troupe : celles qui manquent, une fois comptées la réserve, les pièces déjà en
+ * fabrication (`crafting`) et celles promises aux recrues qui attendent déjà leur équipement (`waiting`)
+ */
+export function gearToCraft(kind: TroopKind, stock: Stock, crafting: readonly GearId[], waiting: readonly TroopKind[] = []): GearId[] {
+  const out: GearId[] = [];
+  for (const g of TROOPS[kind].gear) {
+    const need = 1 + waiting.filter((k) => TROOPS[k].gear.includes(g)).length;
+    if ((stock[g] ?? 0) + crafting.filter((x) => x === g).length < need) out.push(g);
+  }
+  return out;
+}
+
 /** Enrôle une recrue : son équipement quitte la réserve, elle se met en route. Renvoie la raison d'un refus, ou null */
 export function recruit(a: Army, kind: TroopKind, c: RecruitCtx, at?: TroopWhere): string | null {
   const why = recruitWhy(a, kind, c);

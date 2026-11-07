@@ -31,6 +31,15 @@ export const HELL_ZONES: { name: string; z0: number }[] = [
 ];
 export const Z_PORTAL = 0, Z_EMBER = 1, Z_RIVER = 2, Z_CLIFFS = 3, Z_BONES = 4, Z_CRYSTAL = 5, Z_KINGDOM = 6;
 export const HELL_ZONE_N = HELL_ZONES.length;
+/** L'article de chaque zone (pour les phrases : « les Grottes de braise », « la Rivière de lave ») */
+const ZONE_ART: ('le' | 'la' | 'les')[] = ['le', 'les', 'la', 'les', 'la', 'la', 'le'];
+const art = (i: number) => ZONE_ART[i] ?? 'la';
+/** Le nom d'une zone avec son article : « les Grottes de braise » */
+export const zoneThe = (i: number) => `${art(i)} ${HELL_ZONES[i].name}`;
+/** …après « de » : « des Grottes de braise », « de la Rivière de lave », « du Seuil du portail » */
+export const zoneOf = (i: number) => ({ le: 'du', la: 'de la', les: 'des' })[art(i)] + ` ${HELL_ZONES[i].name}`;
+/** …après « à » : « aux Grottes de braise », « à la Rivière de lave », « au Royaume démoniaque » */
+export const zoneTo = (i: number) => ({ le: 'au', la: 'à la', les: 'aux' })[art(i)] + ` ${HELL_ZONES[i].name}`;
 /** Zone d'une rangée de cases */
 export function zoneOfZ(z: number) {
   let i = 0;

@@ -1,4 +1,4 @@
-import { HellMap, HELL_ZONES, HELL_ZONE_N, zoneOfZ } from '../world/hell';
+import { HellMap, HELL_ZONES, HELL_ZONE_N, zoneOfZ, zoneOf, zoneThe } from '../world/hell';
 import { Hell, HellBuilding, HellEvent, BaseKind, DemonKind, demonStats, raidKinds } from './hell';
 
 /**
@@ -33,6 +33,8 @@ export const isBaseKind = (k: unknown): k is BaseKind => typeof k === 'string' &
 
 /** Les bâtiments d'une base tiennent à BASE_R cases au plus de son camp ; soins et forge agissent à CARE_R cases d'eux */
 export const BASE_R = 8, CARE_R = 6;
+/** Un camp de base se pose à CAMP_MARGIN rangées au moins de la zone suivante, si elle est encore aux démons */
+export const CAMP_MARGIN = 6;
 /** Soins par seconde (points de vie) près du camp (ravitaillé) et de l'infirmerie */
 export const CAMP_REGEN = 2, INFIRMARY_REGEN = 6;
 /** La forge : dégâts portés, dégâts reçus des troupes de la base ; minerai pour forger une pièce d'équipement manquante */
@@ -134,10 +136,14 @@ export class HellBase {
     const d = BASE_DEFS[kind], h = this.hell, m = this.map;
     const cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5, zone = zoneOfZ(Math.floor(cz));
     if (!m.inside(cx, cz)) return 'Hors de la carte';
-    if (zone > h.frontier) return `La brume barre ${HELL_ZONES[zone].name} : conquérez d’abord la zone d’avant.`;
-    if (!h.held(zone)) return `Il faut d’abord conquérir ${HELL_ZONES[zone].name} : abattez sa forteresse.`;
+    if (zone > h.frontier) return `La brume barre ${zoneThe(zone)} : conquérez d’abord la zone d’avant.`;
+    if (!h.held(zone)) return `Il faut d’abord conquérir ${zoneThe(zone)} : abattez sa forteresse.`;
     const camp = this.camp(zone);
-    if (kind === 'camp') { if (camp) return 'Cette zone a déjà son camp de base.'; }
+    if (kind === 'camp') {
+      if (camp) return 'Cette zone a déjà son camp de base.';
+      // tout contre une zone encore aux démons, sa garnison en alerte le rasait aussitôt, et la zone était reperdue
+      if (zone + 1 < HELL_ZONE_N && !h.conquered[zone + 1] && HELL_ZONES[zone + 1].z0 - cz < CAMP_MARGIN) return `Trop près ${zoneOf(zone + 1)} : ses démons raseraient le camp. Posez-le un peu plus en arrière.`;
+    }
     else if (!camp) return 'Posez d’abord un camp de base dans cette zone.';
     else if (Math.hypot(camp.site.x - cx, camp.site.z - cz) > BASE_R) return `Trop loin du camp de base (${BASE_R} cases au plus).`;
     if (this.countOf(kind, zone) >= d.max) return `Au plus ${d.max === 1 ? 'un bâtiment de ce genre' : `${d.max} de ce genre`} par base.`;
@@ -309,7 +315,13 @@ export class HellBase {
     b.events.length = 0;
     // les démons d'une contre-attaque en cours (repris par la faction, sans zone) la poursuivent
     const zones = Array.isArray(o.active) ? o.active.filter((z) => Number.isInteger(z)) : [];
-    if (zones.length) for (const u of hell.alive('hell')) if (u.zone < 0) b.attackers.set(u.id, zones[0]);
+    // (avec leur force : celle de la zone d'où ils viennent, la faction les reprend sans zone)
+    if (zones.length) for (const u of hell.alive('hell')) {
+      if (u.zone >= 0) continue;
+      b.attackers.set(u.id, zones[0]);
+      const st = demonStats(u.kind as DemonKind, Math.min(HELL_ZONE_N - 1, zones[0] + 1));
+      u.stats = st; u.maxHp = st.hp; u.hp = Math.min(u.hp, st.hp);
+    }
     return b;
   }
 }

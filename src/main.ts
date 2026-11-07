@@ -31,6 +31,7 @@ import { computeSeason, makeSeasonState } from './render/season';
 import { CameraRig, PointerInfo, ToolInput } from './core/camera';
 import { GameTime } from './core/time';
 import { Sim } from './sim/sim';
+import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
 import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
@@ -399,7 +400,9 @@ class Game implements UIHost {
       age: () => this.sim.age, pop: () => this.sim.pop,
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
-      leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(),
+      leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(),
+      craft: (id) => { const why = this.expeditions.whyCraft(GEAR_BY[id], this.sim.age); if (!why) this.expeditions.craft(id, this.sim.age); return why; },
+      crafting: () => this.world.exp.craft,
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
@@ -525,14 +528,23 @@ class Game implements UIHost {
       this.war.hellFx.length = 0;
       document.body.classList.add('under', 'hell');
       this.cam.minDist = 2.4; this.cam.maxDist = 30; this.cam.minPitch = 0.95;
-      // (à la base avancée la plus loin, s'il y en a une)
-      const [x, z] = this.war.base?.spawnPoint() ?? hm.map.arrival;
-      this.cam.jump({ x, z: z + 4, dist: 14, pitch: 1.05, yaw: Math.PI }, hm.view.groundY(x, z));
+      // (à la base avancée la plus loin, s'il y en a une) ; sur les troupes les plus avancées s'il y en a : la vue se pose sur
+      // elles (elle visait quatre cases devant, et sur un petit écran la barre des troupes les cachait)
+      const [x, z] = this.hellFocus(hm);
+      this.cam.jump({ x, z: z + 1, dist: 14, pitch: 1.05, yaw: Math.PI }, hm.view.groundY(x, z));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
       this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.`);
       this.ui.update();
     }, 'Passage du portail…');
+  }
+
+  /** Où regarder en entrant dans les Enfers : le groupe des troupes les plus avancées, sinon le camp le plus avancé, sinon le portail */
+  private hellFocus(hm: HellMode): [number, number] {
+    const us = this.war.troopsIn(hm.hell);
+    if (!us.length) return this.war.base?.spawnPoint() ?? hm.map.arrival;
+    const lead = us.reduce((a, u) => (u.z > a.z ? u : a)), near = us.filter((u) => Math.hypot(u.x - lead.x, u.z - lead.z) < 8);
+    return [near.reduce((s, u) => s + u.x, 0) / near.length, near.reduce((s, u) => s + u.z, 0) / near.length];
   }
 
   /** Quitte les Enfers pour la surface */

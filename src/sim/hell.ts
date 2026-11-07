@@ -127,6 +127,8 @@ export interface HellUnit {
    * démons qui longent une palissade)
    */
   boost?: number; guard?: number; paceK?: number;
+  /** une cible hors d'atteinte (aucun chemin : lave, paroi) qu'on laisse de côté quelques secondes, pour en viser une autre */
+  blocked?: number; blockedT?: number;
 }
 
 export interface HellBuilding {
@@ -177,7 +179,8 @@ export interface RaidWave {
 function garrisonOf(kind: HellSiteKind, zone: number): DemonKind[] {
   const deep = Math.floor((zone - 1) / 2);
   switch (kind) {
-    case 'fortress': return ['guardian', 'chief', ...rep('brute', 1 + deep), ...rep('archer', 2 + deep), ...rep('imp', 2)];
+    // (la première zone, sans démon-chef : la première expédition se gagne avec la garnison pleine de l'Antiquité)
+    case 'fortress': return ['guardian', ...(zone >= 2 ? ['chief' as const] : []), ...rep('brute', 1 + deep), ...rep('archer', 2 + deep), ...rep('imp', 2)];
     case 'outpost': return ['archer', ...rep('imp', 2 + (zone >= 3 ? 1 : 0))];
     case 'forge': return ['brute', 'imp'];
     case 'kingdom': return ['king', ...rep('elite', 4), 'chief', ...rep('brute', 2), ...rep('archer', 3), ...rep('imp', 3)];
@@ -189,7 +192,9 @@ const rep = (v: DemonKind, n: number): DemonKind[] => Array.from({ length: n }, 
 /** Les démons des zones profondes sont plus coriaces */
 export function demonStats(kind: DemonKind, zone: number): UnitStats {
   const s = DEMONS[kind], lv = Math.max(0, zone - 1);
-  return { ...s, hp: Math.round(s.hp * (1 + 0.12 * lv)), dmg: Math.round(s.dmg * (1 + 0.1 * lv) * 10) / 10 };
+  // le gardien de la première zone, moins coriace : la première expédition se gagne avec la garnison pleine de l'Antiquité
+  const first = kind === 'guardian' && zone === 1 ? 0.7 : 1;
+  return { ...s, hp: Math.round(s.hp * (1 + 0.12 * lv) * first), dmg: Math.round(s.dmg * (1 + 0.1 * lv) * first * 10) / 10 };
 }
 
 /**
@@ -449,6 +454,7 @@ export class Hell {
     const live = this.alive();
     for (const u of live) {
       u.cool -= dt; u.swing += dt; u.hurt += dt; u.repath -= dt;
+      if (u.blockedT !== undefined && (u.blockedT -= dt) <= 0) { u.blocked = undefined; u.blockedT = undefined; }
       u.moving = false;
       if (u.side === 'hell') this.thinkDemon(u, dt, live);
       else this.thinkPlayer(u, dt, live);
@@ -463,12 +469,12 @@ export class Hell {
   private nearestFoe(u: HellUnit, live: HellUnit[], range: number): HellUnit | HellBuilding | null {
     let best: HellUnit | HellBuilding | null = null, bd = range;
     for (const o of live) {
-      if (o.side === u.side || o.hp <= 0) continue;
+      if (o.side === u.side || o.hp <= 0 || o.id === u.blocked) continue;
       const d = this.gap(u, o);
       if (d < bd) { bd = d; best = o; }
     }
     for (const b of this.buildings.values()) {
-      if (b.down || b.side === u.side) continue;
+      if (b.down || b.side === u.side || b.id === u.blocked) continue;
       const d = this.gap(u, b);
       if (d < bd) { bd = d; best = b; }
     }
@@ -538,7 +544,9 @@ export class Hell {
       const [gx, gz] = o.kind === 'retreat' ? this.rally ?? this.map.arrival : [o.x ?? u.x, o.z ?? u.z];
       if (Math.hypot(gx - u.x, gz - u.z) < 0.6) { u.order = null; u.state = 'idle'; u.path = null; return; }
       u.state = o.kind === 'retreat' ? 'retreat' : 'move';
-      this.moveTo(u, gx, gz, dt, o.kind === 'retreat' ? 1.15 : 1);
+      // un but hors d'atteinte (de l'autre côté de la lave, dans la roche) : l'ordre tombe, l'unité ne reste pas plantée là
+      // sans se défendre
+      if (!this.moveTo(u, gx, gz, dt, o.kind === 'retreat' ? 1.15 : 1)) { u.order = null; u.state = 'idle'; }
       return;
     }
     // tenir : on frappe ce qui est à portée, sans bouger
@@ -560,7 +568,7 @@ export class Hell {
       const gx = u.order.x, gz = u.order.z ?? u.z;
       if (Math.hypot(gx - u.x, gz - u.z) < 0.8) { u.order = null; u.state = 'idle'; return; }
       u.state = 'chase';
-      this.moveTo(u, gx, gz, dt);
+      if (!this.moveTo(u, gx, gz, dt)) { u.order = null; u.state = 'idle'; }
       return;
     }
     u.state = 'idle';
@@ -580,11 +588,17 @@ export class Hell {
     if (!mobile) return;
     u.state = 'chase';
     // un bâtiment : on vise le point libre de son pourtour le plus proche
+    let ok: boolean;
     if ('site' in t) {
       const a = Math.atan2(u.x - tx, u.z - tz), c = this.map.nearestWalkable(tx + Math.sin(a) * (tr + 0.6), tz + Math.cos(a) * (tr + 0.6), 3);
-      if (c >= 0) { this.moveTo(u, (c % this.map.W) + 0.5, Math.floor(c / this.map.W) + 0.5, dt); return; }
+      ok = c >= 0 ? this.moveTo(u, (c % this.map.W) + 0.5, Math.floor(c / this.map.W) + 0.5, dt) : this.moveTo(u, tx, tz, dt);
+    } else ok = this.moveTo(u, tx, tz, dt);
+    // hors d'atteinte : on la laisse de côté un moment (sinon l'unité reste plantée devant, sans se battre contre ce qui
+    // l'attaque) ; l'ordre de l'attaquer tombe
+    if (!ok) {
+      u.blocked = t.id; u.blockedT = 4; u.target = null; u.path = null;
+      if (u.order?.kind === 'attack' && u.order.target === t.id) u.order = u.order.x !== undefined ? { kind: 'attack', x: u.order.x, z: u.order.z } : null;
     }
-    this.moveTo(u, tx, tz, dt);
   }
 
   /** Un coup porté : au corps à corps, il porte tout de suite ; à distance, une flèche de feu (la vue la fait voler) */
@@ -676,11 +690,12 @@ export class Hell {
 
   /**
    * Avance vers un point : tout droit si la ligne est libre, sinon par le chemin de case en case (recalculé quand le but
-   * change de case, au plus deux fois par seconde) en coupant les virages ; glisse le long des obstacles
+   * change de case, au plus deux fois par seconde) en coupant les virages ; glisse le long des obstacles. Renvoie false si le
+   * but est hors d'atteinte (aucun chemin)
    */
-  moveTo(u: HellUnit, gx: number, gz: number, dt: number, pace = 1) {
+  moveTo(u: HellUnit, gx: number, gz: number, dt: number, pace = 1): boolean {
     const m = this.map, d = Math.hypot(gx - u.x, gz - u.z), HW = m.W;
-    if (d < 0.05) return;
+    if (d < 0.05) return true;
     let wx = gx, wz = gz;
     if (!(d < 12 && m.lineClear(u.x, u.z, gx, gz))) {
       const gc = m.cell(Math.min(m.W - 1, Math.max(0, gx)), Math.min(m.L - 1, Math.max(0, gz)));
@@ -690,7 +705,7 @@ export class Hell {
         u.goal = gc; u.repath = 0.5;
         u.path = from >= 0 && to >= 0 ? m.route(from, to) : null;
         u.pathI = 1;
-        if (!u.path) return;
+        if (!u.path) return false;
       }
       const p = u.path;
       // on coupe les virages : on vise l'étape la plus lointaine visible (quelques-unes devant au plus)
@@ -702,21 +717,22 @@ export class Hell {
       }
     }
     const dd = Math.hypot(wx - u.x, wz - u.z);
-    if (dd < 1e-4) return;
+    if (dd < 1e-4) return true;
     const step = Math.min(dd, u.stats.speed * pace * (u.paceK ?? 1) * dt), nx = u.x + ((wx - u.x) / dd) * step, nz = u.z + ((wz - u.z) / dd) * step;
     u.heading = Math.atan2(wx - u.x, wz - u.z);
     // la brume d'une zone fermée repousse le joueur (on peut toujours en revenir)
     if (u.side === 'player' && this.gate && nz > u.z) {
       const zn = zoneOfZ(Math.floor(nz));
-      if (zn > this.frontier && zn > zoneOfZ(Math.floor(u.z))) { u.path = null; return; }
+      if (zn > this.frontier && zn > zoneOfZ(Math.floor(u.z))) { u.path = null; return true; }
     }
     // (pris dans une emprise, une zone reperdue dont la forteresse se relève : il en sort)
     if (m.walkableAt(nx, nz) || !m.walkableAt(u.x, u.z)) { u.x = nx; u.z = nz; }
     else if (m.walkableAt(nx, u.z)) u.x = nx;
     else if (m.walkableAt(u.x, nz)) u.z = nz;
-    else { u.path = null; return; }
+    else { u.path = null; return true; }
     u.moving = true;
     u.walk += step * 2.6;
+    return true;
   }
 
   private cellClear(u: HellUnit, k: number) {
@@ -822,6 +838,8 @@ export class Hell {
     for (const r of s.units) {
       const u = r.side === 'player' ? h.addPlayerUnit(r.kind, r.stats ?? DEMONS.imp, r.x, r.z) : h.spawn(r.kind as DemonKind, r.x, r.z, r.zone);
       u.hp = r.hp; u.home = [r.home[0], r.home[1]];
+      // (jamais plus de vie que sa vie pleine : la barre de vie déborderait)
+      u.maxHp = Math.max(u.maxHp, u.hp);
       if (r.patrol) { const zn = map.zones[r.zone]; u.patrol = zn.patrol; u.state = 'patrol'; }
     }
     return h;

@@ -138,6 +138,11 @@ export class IsleMap implements CombatMap {
 export const defenseK = (age: number) => 1 + 0.25 * Math.max(0, age - 1);
 /** Les défenses se réparent entre deux vagues (part de leur vie par seconde de jeu) ; une défense rasée se relève à REBUILD */
 export const REPAIR = 0.02, REBUILD = 0.4;
+/**
+ * Une vague qui traîne (un démon coincé hors d'atteinte, qui ne meurt jamais) : au bout de RAID_LIMIT secondes de jeu, si l'île
+ * tient encore, ses derniers démons repassent le portail et elle compte pour repoussée (sinon plus aucune vague ne venait)
+ */
+export const RAID_LIMIT = 180;
 
 /** Issue d'une incursion sur l'île */
 export type RaidOutcome = 'repelled' | 'lost';
@@ -147,8 +152,9 @@ export class IsleBattle {
   sim: Hell;
   /** défenses : bâtiment du monde → bâtiment au combat */
   defs = new Map<number, HellBuilding>();
-  /** la vague en cours sur l'île */
+  /** la vague en cours sur l'île, et depuis quand elle dure (secondes de jeu) */
   raid: RaidWave | null = null;
+  raidT = 0;
   /** la contamination de l'île (bonus des démons près du portail, soins dans la zone purifiée) ; null : sans effet */
   blight: Blight | null = null;
 
@@ -159,9 +165,14 @@ export class IsleBattle {
     this.sim.buildings.clear();
   }
 
-  /** Point de ralliement de la garnison : devant la première caserne debout (sinon devant le portail) */
+  /**
+   * Point de ralliement de la garnison : devant la première caserne debout ; sinon au pied d'une tour debout, sinon devant les
+   * ruines d'une caserne (le repli menait droit au portail, d'où sortent les démons) ; sans défense, devant le portail
+   */
   rallyPoint(): [number, number] {
-    for (const b of this.defs.values()) if (b.kind === 'barracks' && !b.down) return this.map.freeNear(b.site.x, b.site.z + b.site.r + 0.8);
+    const defs = [...this.defs.values()];
+    const b = defs.find((d) => d.kind === 'barracks' && !d.down) ?? defs.find((d) => !d.down) ?? defs.find((d) => d.kind === 'barracks');
+    if (b) return this.map.freeNear(b.site.x, b.site.z + b.site.r + 0.8);
     return this.map.freeNear(this.map.arrival[0], this.map.arrival[1]);
   }
 
@@ -194,6 +205,7 @@ export class IsleBattle {
   /** Une vague passe le portail : ses démons apparaissent devant l'arche, en grappe */
   startRaid(w: RaidWave): HellUnit[] {
     this.raid = w;
+    this.raidT = 0;
     const [px, pz] = this.map.portal, out: HellUnit[] = [];
     w.units.forEach((u, i) => {
       const a = i * 2.4, r = 1.4 + (i % 3) * 0.45;
@@ -216,12 +228,15 @@ export class IsleBattle {
     if (this.defs.size && !this.standing().length) return 'lost';
     // sans aucune défense ni garnison, l'île est submergée
     if (!this.defs.size && !this.sim.alive('player').length) return 'lost';
+    // la vague traîne : l'île a tenu
+    if (this.raidT >= RAID_LIMIT) return 'repelled';
     return null;
   }
 
   /** Fin de la vague : les démons restants repassent le portail ; les défenses rasées se relèvent (réparables) */
   endRaid() {
     this.raid = null;
+    this.raidT = 0;
     for (const u of this.sim.alive('hell')) this.sim.units.delete(u.id);
     let up = false;
     for (const b of this.defs.values()) if (b.down) { b.down = false; b.hp = Math.round(b.maxHp * REBUILD); up = true; }
@@ -237,6 +252,7 @@ export class IsleBattle {
     const bl = this.blight, ox = this.map.ox, oz = this.map.oz;
     if (bl) for (const u of this.sim.alive('hell')) u.boost = demonBoost(bl, u.x + ox, u.z + oz);
     this.sim.step(dt);
+    if (this.raid && dt > 0) this.raidT += dt;
     if (this.raid || dt <= 0) return;
     for (const b of this.defs.values()) if (!b.down) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * REPAIR * dt);
     if (regen > 0) for (const u of this.sim.alive('player')) u.hp = Math.min(u.maxHp, u.hp + regen * healBoost(bl, u.x + ox, u.z + oz) * dt);

@@ -117,6 +117,8 @@ export class KingdomStage {
     }
     this.bar.set(bar);
     this.stepFinale(dt);
+    // une partie quittée pendant la cinématique : l'écran de victoire (et ses récompenses, déjà touchées) au retour
+    if (!this.fin && h.war.reward && h.mode() === 'surface') this.endFinale();
   }
 
   // ---------- La victoire ----------

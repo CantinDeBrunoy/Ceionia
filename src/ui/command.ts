@@ -2,11 +2,12 @@ import type { Hell, HellUnit } from '../sim/hell';
 import { Command, unitAt, foeAt, inRect } from '../sim/command';
 import type { BattleLayer } from '../render/battleUnits';
 import type { PointerInfo, ToolInput } from '../core/camera';
-import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy } from '../sim/army';
+import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGearMissing, gearToCraft } from '../sim/army';
+import { GEAR_BY, GearId } from '../sim/gear';
 import type { War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
 import { BASE_DEFS, BASE_KINDS, SUPPLY_MAX, CONVOY_COST, costText, canAfford } from '../sim/hellBase';
-import { HELL_ZONES, zoneOfZ } from '../world/hell';
+import { HELL_ZONES, zoneOfZ, zoneTo } from '../world/hell';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle,
@@ -43,6 +44,12 @@ export interface CommandHost {
   leaveIsle(): void;
   /** quitter les Enfers par le portail */
   leaveHell(): void;
+  /** aller dans les Enfers (depuis l'île) */
+  goHell(): void;
+  /** met une pièce d'équipement en fabrication à l'atelier du village : null, ou la raison du refus */
+  craft(id: GearId): string | null;
+  /** les pièces en fabrication (la file de l'atelier) */
+  crafting(): readonly GearId[];
   canvas: HTMLCanvasElement;
   /** les touches de déplacement de la caméra (on retire celles qu'un ordre a prises) */
   camKeys: Set<string>;
@@ -59,6 +66,7 @@ export const CONTROLS_HELP: [string, string][] = [
   ['H · R', 'tenir la position · se replier'],
   ['Ctrl + 1…5', 'former un groupe ; 1…5 le rappelle, deux fois pour y aller'],
   ['Espace', 'pause active : les ordres se donnent en pause'],
+  ['🌀 · 🔥', 'passer le portail ; « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île'],
 ];
 
 export class CommandUI implements ToolInput {
@@ -311,10 +319,9 @@ export class CommandUI implements ToolInput {
       if (!us.length) this.host.toast('Choisissez d’abord des troupes (clic, ou glisser un cadre).');
       else { w.sendThroughPortal(us); this.host.toast(this.theater.kind === 'isle' ? `${us.length} soldat${us.length > 1 ? 's' : ''} en route vers le portail des Enfers.` : `${us.length} soldat${us.length > 1 ? 's' : ''} en route pour rentrer sur l’île.`); }
     }
-    else if (a.startsWith('rec:')) {
-      const why = w.recruit(a.slice(4) as TroopKind, this.host.age(), this.host.pop());
-      this.host.toast(why ?? `Recrue en route : ${TROOPS[a.slice(4) as TroopKind].name.toLowerCase()} (la galère l’amène sur l’île).`);
-    }
+    else if (a.startsWith('rec:')) this.recruitOrCraft(a.slice(4) as TroopKind);
+    else if (a === 'goHell') { this.host.goHell(); return; }
+    else if (a === 'garrison') { const n = w.callGarrison(); this.host.toast(n ? `🌀 ${n} troupe${n > 1 ? 's' : ''} de l’île passe${n > 1 ? 'nt' : ''} le portail : elle${n > 1 ? 's' : ''} arrive${n > 1 ? 'nt' : ''} au seuil des Enfers.` : 'Aucune troupe valide sur l’île.'); }
     else if (a === 'wave') { w.callWave(); this.host.toast('🎺 Le cor sonne : la prochaine vague arrive !'); }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
     else if (a === 'convoy') { const why = w.sendConvoy(); this.host.toast(why ?? '📦 Convoi parti du village : il passe le portail et rejoint l’expédition.'); }
@@ -328,9 +335,44 @@ export class CommandUI implements ToolInput {
     this.render();
   }
 
+  /** recrues qui attendent que l'atelier du village ait fabriqué leur équipement (elles partent dès qu'il est prêt) */
+  waiting: TroopKind[] = [];
+
+  /**
+   * Recruter à la caserne de l'île ; s'il ne manque que l'équipement (lance, arc…), l'atelier du village le fabrique et la recrue
+   * part dès qu'il est prêt (on devait aller le commander soi-même dans le menu des expéditions)
+   */
+  recruitOrCraft(kind: TroopKind) {
+    const w = this.host.war, ctx = w.recruitCtx(this.host.age(), this.host.pop());
+    const why = recruitWhy(w.army, kind, ctx);
+    if (why && onlyGearMissing(w.army, kind, ctx) && armySize(w.army) + this.waiting.length < armyCap(ctx)) {
+      const list = gearToCraft(kind, ctx.stock, this.host.crafting(), this.waiting);
+      for (const g of list) { const no = this.host.craft(g); if (no) { this.host.toast(`${why.replace(/ \(à fabriquer.*\)$/, '')} : ${no.charAt(0).toLowerCase()}${no.slice(1)}.`); return; } }
+      this.waiting.push(kind);
+      this.host.toast(list.length ? `🛠️ L’atelier fabrique ${list.map((g) => `1 ${GEAR_BY[g].name.toLowerCase()}`).join(' et ')} : la recrue (${TROOPS[kind].name.toLowerCase()}) partira dès que ce sera prêt.` : `🛠️ La recrue (${TROOPS[kind].name.toLowerCase()}) partira dès que son équipement sortira de l’atelier.`);
+      return;
+    }
+    const no = w.recruit(kind, this.host.age(), this.host.pop());
+    this.host.toast(no ?? `Recrue en route : ${TROOPS[kind].name.toLowerCase()} (la galère l’amène sur l’île).`);
+  }
+
+  /** Les recrues qui attendaient leur équipement partent quand il est prêt (ou renoncent si autre chose manque) */
+  private stepWaiting() {
+    if (!this.waiting.length) return;
+    const w = this.host.war, ctx = w.recruitCtx(this.host.age(), this.host.pop());
+    for (let i = 0; i < this.waiting.length;) {
+      const kind = this.waiting[i], why = recruitWhy(w.army, kind, ctx);
+      if (!why) { w.recruit(kind, this.host.age(), this.host.pop()); this.waiting.splice(i, 1); this.host.toast(`⚔️ Équipement prêt : la recrue (${TROOPS[kind].name.toLowerCase()}) est en route pour l’île.`); this.barKey = ''; continue; }
+      // plus de caserne, garnison au complet, ou l'équipement n'est plus en fabrication (commande annulée) : elle renonce
+      if (!onlyGearMissing(w.army, kind, ctx) || gearToCraft(kind, ctx.stock, this.host.crafting(), this.waiting.slice(0, i)).length) { this.waiting.splice(i, 1); this.host.toast(`Recrue annulée (${TROOPS[kind].name.toLowerCase()}) : ${why.charAt(0).toLowerCase()}${why.slice(1)}.`); this.barKey = ''; continue; }
+      i++;
+    }
+  }
+
   /** Remet la barre à jour (appelée souvent : ne refait le contenu que s'il a changé) */
   render() {
     const t = this.theater;
+    this.stepWaiting();
     this.bar.style.display = t ? '' : 'none';
     if (!t) return;
     const us = this.units(), sel = this.cmd;
@@ -348,19 +390,22 @@ export class CommandUI implements ToolInput {
     const rec = isle ? `<div class="trec"><b>Caserne <small>${armySize(w.army)}/${armyCap(ctx)}</small></b>${TROOP_KINDS.map((k) => {
       const why = recruitWhy(w.army, k, ctx);
       if (this.host.age() < TROOPS[k].age) return '';
-      return `<button data-a="rec:${k}" class="${why ? 'off' : ''}" title="${(why ?? `Recruter : ${TROOPS[k].desc} (${TROOPS[k].gear.map((g) => g === 'spear' ? 'une lance' : g === 'bow' ? 'un arc' : g === 'sword' ? 'une épée' : 'une armure').join(' et ')} de la réserve, ${TROOPS[k].time} s)`).replace(/"/g, '&quot;')}">${TROOPS[k].icon} +</button>`;
-    }).join('')}${w.army.queue.length ? `<small class="q">${w.army.queue.map((q) => `${TROOPS[q.kind].icon}${Math.ceil(q.left)}s`).join(' ')}</small>` : ''}</div>` : '';
+      // il ne manque que l'équipement : un clic le fait fabriquer, la recrue part dès qu'il est prêt
+      const craft = !!why && onlyGearMissing(w.army, k, ctx);
+      const tip = craft ? `${why!.replace(/ \(à fabriquer.*\)$/, '')} : cliquez, l’atelier du village fabrique l’équipement et la recrue part dès qu’il est prêt` : why ?? `Recruter : ${TROOPS[k].desc} (${TROOPS[k].gear.map((g) => g === 'spear' ? 'une lance' : g === 'bow' ? 'un arc' : g === 'sword' ? 'une épée' : 'une armure').join(' et ')} de la réserve, ${TROOPS[k].time} s)`;
+      return `<button data-a="rec:${k}" class="${why ? (craft ? 'craft' : 'off') : ''}" title="${tip.replace(/"/g, '&quot;')}">${TROOPS[k].icon} +</button>`;
+    }).join('')}${w.army.queue.length || this.waiting.length ? `<small class="q">${[...this.waiting.map((k) => `${TROOPS[k].icon}🛠️`), ...w.army.queue.map((q) => `${TROOPS[q.kind].icon}${Math.ceil(q.left)}s`)].join(' ')}</small>` : ''}</div>` : '';
     const next = w.nextWaveIn(), raid = isle && w.isle?.raid;
     const status = isle ? (raid ? `<span class="wst hot">🔥 Incursion : ${w.isle!.raiders().length} démons</span>` : next !== null ? `<span class="wst">Prochaine vague : ${Math.ceil(next)} s <button data-a="wave" title="Sonner le cor : faire venir la prochaine vague tout de suite">🎺</button></span>` : '') : '';
     // la contamination de l'île : elle recule à chaque défense, chaque vague repoussée, chaque zone des Enfers conquise
     const bl = isle && w.blight ? Math.round(w.blight.level * 100) : -1;
     const blight = bl >= 0 ? `<span class="tsup tblight${bl > 60 ? ' low' : ''}" title="Contamination de l’île : les Enfers débordent par le portail (près de lui, les démons frappent un peu plus fort). Elle recule à chaque tour de garde ou caserne bâtie, chaque vague repoussée, chaque zone des Enfers conquise ; l’île sécurisée reverdit. Les troupes se soignent plus vite dans la zone purifiée (anneaux dorés autour des défenses).">🔥 Contamination <i><b style="width:${bl}%"></b></i>${bl}%</span>` : '';
-    const html = `<div class="trow">${cards || `<span class="tnone">${isle ? 'Aucune troupe sur l’île : recrutez à la caserne.' : 'Aucune troupe ici.'}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}${wounded ? `<span class="twd" title="Blessés qui se soignent à la caserne">🩹 ${wounded}</span>` : ''}${blight}${status}</div>
+    const html = `<div class="trow">${cards || `<span class="tnone">${isle ? 'Aucune troupe sur l’île : recrutez à la caserne.' : w.army.troops.some((x) => x.where === 'hell') ? 'Aucune troupe debout ici : les blessés se soignent.' : 'Aucune troupe ici : faites venir la garnison de l’île (🌀 Renforts).'}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}${wounded ? `<span class="twd" title="Blessés qui se soignent à la caserne">🩹 ${wounded}</span>` : ''}${blight}${status}</div>
       <div class="trow">
         <button data-a="attack" class="${sel.armed ? 'on' : ''}" title="Attaquer en marchant : A puis clic au sol (on combat ce qu’on croise)">⚔️ <kbd>A</kbd></button>
         <button data-a="hold" title="Tenir la position (H)">🛡️ <kbd>H</kbd></button>
         <button data-a="retreat" title="${isle ? 'Se replier vers la caserne (R)' : 'Se replier vers le portail (R)'}">↩️ <kbd>R</kbd></button>
-        <button data-a="portal" title="${isle ? 'Passer le portail : les troupes choisies partent en expédition dans les Enfers (facultatif)' : 'Rentrer sur l’île par le portail'}">🌀 ${isle ? 'Enfers' : 'Île'}</button>
+        ${isle && w.portalOut ? '' : `<button data-a="portal" title="${isle ? 'Passer le portail : les troupes choisies partent en expédition dans les Enfers (facultatif)' : 'Rentrer sur l’île par le portail'}">🌀 ${isle ? 'Enfers' : 'Île'}</button>`}${this.hellLinks(isle)}
         <span class="grps">${groups}</span>
         <button data-a="pause" class="${this.host.paused() ? 'on' : ''}" title="Pause active (Espace) : les ordres se donnent en pause">${this.host.paused() ? '▶' : '⏸'}</button>
         ${rec}
@@ -368,6 +413,17 @@ export class CommandUI implements ToolInput {
         <button data-a="leave" class="tx" title="${isle ? 'Quitter le commandement (Échap)' : 'Quitter les Enfers'}">✕</button>
       </div>${isle ? '' : this.baseRow()}${this.helpOpen ? `<ul class="thelp">${CONTROLS_HELP.map(([k, t]) => `<li><b>${k}</b><span>${t}</span></li>`).join('')}</ul>` : ''}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
+  }
+
+  /**
+   * Les passages entre l'île et les Enfers : de l'île, aller voir les troupes et la base des Enfers (sans quoi on n'y entrait
+   * qu'en cliquant la nouvelle d'un passage) ; des Enfers, faire venir en renfort les troupes valides de l'île
+   */
+  private hellLinks(isle: boolean) {
+    const w = this.host.war;
+    if (isle) return w.hellPresence() ? '<button data-a="goHell" title="Aller dans les Enfers, auprès des troupes et de la base avancée">🔥 Voir les Enfers</button>' : '';
+    const n = w.portalOut || !w.isle ? 0 : w.troopsIn(w.isle.sim).filter((u) => !w.crossing.has(u.id)).length;
+    return n ? `<button data-a="garrison" title="Renforts : les ${n} troupe${n > 1 ? 's' : ''} valide${n > 1 ? 's' : ''} de l’île passent le portail et vous rejoignent">🌀 Renforts +${n}</button>` : '';
   }
 
   /**
@@ -382,14 +438,14 @@ export class CommandUI implements ToolInput {
     const enRoute = b.convoys.length ? `<small>📦 ${b.convoys.map((c) => `${Math.ceil(c.left)}s`).join(' ')}</small>` : '';
     const gauge = `<span class="tsup${low ? ' low' : ''}" title="Vivres et équipement de l’expédition : chaque troupe en consomme ; à vide, elles s’affaiblissent peu à peu${b.weak > 0 ? ` (en ce moment : −${Math.round(b.weak * 100)} % de force)` : ''}">🍞 <i><b style="width:${sup}%"></b></i>${sup}%</span>
       <button data-a="convoy" title="Envoyer un convoi de ravitaillement depuis le village (${costText(CONVOY_COST)}) : il arrive par le portail">📦 Ravitailler</button>${enRoute}`;
-    const zone = HELL_ZONES[Math.min(HELL_ZONES.length - 1, Math.max(0, w.faction?.frontier ?? 0))];
+    const zi = Math.min(HELL_ZONES.length - 1, Math.max(0, w.faction?.frontier ?? 0));
     const builds = BASE_KINDS.map((k) => {
       const d = BASE_DEFS[k], afford = canAfford(world, d.cost);
       return `<button data-a="build:${k}" class="tb${this.placing === k ? ' on' : ''}${afford ? '' : ' off'}" title="${`${d.name} (${costText(d.cost)}) : ${d.desc}`.replace(/"/g, '&quot;')}">${d.icon}</button>`;
     }).join('');
     const posts = b.posts(), ctx = w.recruitCtx(this.host.age(), this.host.pop());
     const rec = posts ? `<span class="trec"><b>Caserne avancée</b>${TROOP_KINDS.filter((k) => this.host.age() >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? 'off' : ''}" title="Recruter sur place : ${TROOPS[k].desc.replace(/"/g, '&quot;')}">${TROOPS[k].icon} +</button>`).join('')}</span>` : '';
-    return `<div class="trow tbase"><b class="tbt" title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’à ${zone.name}">🏕️ Base</b>${builds}<span class="tsep"></span>${gauge}${rec}</div>`;
+    return `<div class="trow tbase"><b class="tbt" title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">🏕️ Base</b>${builds}<span class="tsep"></span>${gauge}${rec}</div>`;
   }
 
   /** L'alerte d'incursion (bannière et bouton « Voir l'île »), quand on ne regarde pas l'île */
