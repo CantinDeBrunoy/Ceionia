@@ -69,6 +69,7 @@ import { PortalView } from './render/portal';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { holdIsle } from './world/portal';
 import { War } from './sim/war';
+import { KingdomStage } from './kingdomStage';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater } from './ui/command';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -155,6 +156,8 @@ class Game implements UIHost {
   private trophyT = 0;
   /** le bouton « Retourner au village », quand la vue s'éloigne de la grande place */
   private homeBtn: HomeButton;
+  /** la mise en scène du royaume des Enfers (combat du roi, victoire) */
+  kingStage: KingdomStage;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
@@ -382,6 +385,12 @@ class Game implements UIHost {
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
+    // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
+    this.kingStage = new KingdomStage({
+      war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
+      mode: () => this.mode, hellView: () => (this.mode === 'hell' ? this.hellMode?.view ?? null : null),
+      exitHell: () => this.exitHell(), goHome: () => this.goHome(), setPhoto: (on) => this.setPhoto(on),
+    });
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.railway.onNews = (m) => this.ui.toast(m);
     // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
@@ -480,8 +489,9 @@ class Game implements UIHost {
     this.fadeThrough(async () => {
       const { HellMode } = await loadHell();
       const f = this.war.ensureFaction();
-      if (!this.hellMode || this.hellMode.hell !== f) this.hellMode = new HellMode(this.war.hellMap!, f);
+      if (!this.hellMode || this.hellMode.hell !== f) this.hellMode = new HellMode(this.war.hellMap!, f, this.war.king);
       const hm = this.hellMode;
+      hm.view.fight = this.war.king;
       hm.view.fx.onClash = (k) => this.audio.sfxClash(k);
       hm.view.build();
       this.surfaceView = this.cam.view();
@@ -619,6 +629,8 @@ class Game implements UIHost {
       // (plusieurs soldats au même moment : une seule nouvelle)
       if (said.has(n.text)) continue;
       said.add(n.text);
+      // le combat du roi, la chute du royaume : la mise en scène s'en charge
+      if (this.kingStage.news(n)) continue;
       if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(`${n.text} Cliquez ici pour voir l’île.`, () => this.viewIsle());
       else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell') this.ui.toast(`${n.text} Cliquez ici pour y aller.`, () => this.enterHell());
       // les vivres de la base avancée : un clic envoie un convoi
@@ -637,6 +649,7 @@ class Game implements UIHost {
       this.isleLayer.group.visible = this.mode === 'surface';
     }
     if (this.mode !== 'hell') w.hellFx.length = 0;
+    this.kingStage.update(dt);
     // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
     if (this.isleCmd && this.command.theater?.sim !== isle?.sim) { const t = this.isleTheater(); if (t) this.command.setTheater(t); else this.leaveIsle(); }
   }
@@ -1194,6 +1207,8 @@ class Game implements UIHost {
       const v = this.quake.cell, d = Math.hypot((v % N) + 0.5 - this.cam.target.x, Math.floor(v / N) + 0.5 - this.cam.target.z);
       shake = Math.max(shake, (1 - this.quake.t / 18) * 0.7 * Math.max(0, 1 - d / 70));
     }
+    // les cris du roi des Enfers, l'effondrement de son royaume
+    shake = Math.max(shake, this.kingStage.shake());
     if (shake > 0) {
       const t = this.elapsed, a = shake * 0.12 * Math.min(1, this.cam.dist / 30);
       this.cam.camera.position.add(new THREE.Vector3(Math.sin(t * 47) + Math.sin(t * 29) * 0.5, Math.sin(t * 53) * 0.6, Math.sin(t * 41) + Math.sin(t * 23) * 0.5).multiplyScalar(a));
@@ -1342,7 +1357,8 @@ class Game implements UIHost {
       // le portail : il s'éveille pendant l'expédition qui l'ouvre, et brûle ensuite ; ses halos s'allument avec lui
       const waking = this.expeditions.active.find((a) => a.m.id === 'portal' && a.phase === 'work');
       const wk = waking ? Math.min(1, Math.max(0, (waking.t / Math.max(1, waking.c.work + waking.extra) - ISLE_UP) / (ISLE_WAKE - ISLE_UP))) : 0;
-      if (this.portalView.update(dt, w.portalOpen, wk, this.env.night)) this.refreshHalos();
+      // (le royaume des Enfers tombé : le portail s'éteint dans une explosion de lumière dorée)
+      if (this.portalView.update(dt, w.portalOpen && this.kingStage.portalLit(), wk, this.env.night)) this.refreshHalos();
       this.transports.update(gdt, this.sim.age);
       this.railView.update(dt, this.sim.age);
       this.railBoost.update(dt, this.cam.target.x, this.cam.target.z, this.cam.dist, this.env.night);

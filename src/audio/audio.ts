@@ -447,6 +447,42 @@ export class AudioEngine {
     for (let i = 0; i < 16; i++) this.tone(i % 4 === 0 ? 70 : 115, t + i * 0.22, 0.18, 'sine', i % 4 === 0 ? 0.3 : 0.14, this.sfxG, 0, 0.003);
     [0, 2, 4, 7, 4, 2, 0, -3].forEach((iv, i) => this.tone(mtof(72 + iv), t + i * 0.44, 0.4, 'triangle', 0.12, this.sfxG, 2500, 0.02));
   }
+  /** Cri du roi des Enfers : un rugissement grave et rauque qui monte puis retombe, sous un souffle (force 0 … 1) */
+  sfxRoar(k = 1) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    for (const [f0, v] of [[70, 0.22], [104, 0.14], [158, 0.07]] as const) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0 * 0.8, t); o.frequency.linearRampToValueAtTime(f0 * 1.25, t + 0.35); o.frequency.exponentialRampToValueAtTime(f0 * 0.6, t + 1.6);
+      const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 24; lg.gain.value = f0 * 0.08; lfo.connect(lg); lg.connect(o.frequency);
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v * k, t + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
+      o.connect(f); f.connect(g); g.connect(this.sfxG);
+      o.start(t); lfo.start(t); o.stop(t + 1.8); lfo.stop(t + 1.8);
+    }
+    this.burst(t, 1.4, 400, 0.35 * k);
+  }
+  /** Tambour de guerre (le combat du roi) : un coup grave, `accent` plus fort sur le premier temps */
+  sfxWarDrum(accent = false) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(accent ? 90 : 120, t); o.frequency.exponentialRampToValueAtTime(accent ? 42 : 60, t + 0.3);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(accent ? 0.42 : 0.24, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(g); g.connect(this.musicG);
+    o.start(t); o.stop(t + 0.5);
+    this.burst(t, 0.06, 900, accent ? 0.14 : 0.07);
+  }
+  /** Le portail s'éteint dans une explosion de lumière dorée : un souffle qui monte, un accord clair qui scintille */
+  sfxGoldBurst() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.burst(t, 1.6, 2600, 0.3);
+    this.tone(55, t, 1.4, 'sine', 0.3, this.sfxG, 0, 0.02);
+    [0, 4, 7, 11, 14, 19, 24].forEach((iv, i) => this.tone(mtof(67 + iv), t + 0.15 + i * 0.07, 2.4, 'triangle', 0.12, this.sfxG, 4000, 0.01));
+  }
   sfxAgeUp() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

@@ -3,16 +3,19 @@ import { HellMap, HELL_ZONES } from './world/hell';
 import { Hell, HellEvent, HellUnit } from './sim/hell';
 import { HellView } from './render/hellView';
 import { TroopKind, troopStats } from './sim/army';
+import type { KingFight } from './sim/kingdom';
 
 /**
  * Le monde des Enfers à l'écran : la vue de la carte et de la faction (que la guerre fait vivre, voir `sim/war.ts`). On y
- * entre par le portail de l'île (ou `__game.enterHell()`) ; le contrôle des troupes y commande les unités du joueur
+ * entre par le portail de l'île (ou `__game.enterHell()`) ; le contrôle des troupes y commande les unités du joueur ; au
+ * royaume, la vue montre le combat du roi (`fight`)
  */
 export class HellMode {
   view: HellView;
 
-  constructor(readonly map: HellMap, readonly hell: Hell) {
+  constructor(readonly map: HellMap, readonly hell: Hell, fight: KingFight | null = null) {
     this.view = new HellView(this.map, this.hell);
+    this.view.fight = fight;
   }
 
   get scene() { return this.view.scene; }
