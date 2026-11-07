@@ -86,6 +86,7 @@ console.log('GPU :', gpuInfo.renderer, gpuInfo.timer ? '(chronomètre GPU)' : '(
 const only = args.only ? String(args.only) : null;
 // --eval "expression" (ou --eval-file fichier.js) : une mesure à la main, sur le village de test déjà bâti (âge 3), puis on s'arrête
 if (args.eval || args['eval-file']) {
+  if (args.throttle) await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttles[0] });
   await cdp.eval('(async () => { __bench.setup({ age: 3 }); await __bench.frames(30); await __bench.scenario(__bench.SCENARIOS[0]); })()', true);
   const expr = args['eval-file'] ? readFileSync(String(args['eval-file']), 'utf8') : String(args.eval);
   console.log(JSON.stringify(await cdp.eval(expr, true), null, 1));
