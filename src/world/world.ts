@@ -1,4 +1,5 @@
-import { Building, KINDS, KindId, hasDoor, sizeOf, smallSize } from '../build/catalog';
+import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize } from '../build/catalog';
+import { readPortal } from './portal';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -64,6 +65,12 @@ export interface Snapshot {
  * (sinon de voyageurs) ; `ok` (non sauvegardé) : faux tant que son train ne peut pas rouler
  */
 export interface RailLine { id: number; stops: number[]; color: number; via?: number[][]; freight?: boolean; ok?: boolean }
+
+/**
+ * L'île du portail (voir `portal.ts`) : le centre du portail (un sommet du relief, au coin de ses quatre cases) et le rayon de
+ * l'île, en cases
+ */
+export interface PortalSite { x: number; z: number; r: number }
 
 /** Case d'une route en courbe : les courbes qui y passent, et le point de leur ligne le plus proche du centre de la case */
 export interface CurveCell { ids: number[]; at: [number, number] }
@@ -219,6 +226,53 @@ export class World {
   /** cases de roche percées par les mineurs du camp (tunnels), et celles qu'ils ont encore à creuser, dans l'ordre */
   dug = new Set<number>();
   digs: number[] = [];
+  /** l'île du portail (sauvegardée) ; null sur une carte d'avant l'île : la mission du portail n'y est pas disponible */
+  portal: PortalSite | null = null;
+
+  /** le portail est ouvert : l'expédition « Le portail de l'autre rive » a réussi (on peut bâtir sur l'île) */
+  get portalOpen() { return !!this.portal && this.exp.done.includes('portal'); }
+
+  /** La case est sur l'île du portail ou dans ses eaux (le bras de mer qui la sépare du continent est bien plus large) */
+  onPortalIsland(cx: number, cz: number) {
+    const p = this.portal;
+    return !!p && Math.hypot(cx + 0.5 - p.x, cz + 0.5 - p.z) <= p.r + 2;
+  }
+
+  /** La case est sous le portail lui-même (ses quatre cases autour de son centre) */
+  inPortal(cx: number, cz: number) {
+    const p = this.portal;
+    return !!p && cx >= p.x - 1 && cx <= p.x && cz >= p.z - 1 && cz <= p.z;
+  }
+
+  /**
+   * Les cases de terre de l'île du portail (null sans île) : les incursions des démons ne visent qu'elles, jamais le continent
+   */
+  get portalIsland(): Uint8Array | null {
+    const p = this.portal;
+    if (!p) return null;
+    const m = new Uint8Array(N * N), R = Math.ceil(p.r + 2);
+    for (let cz = p.z - R; cz < p.z + R; cz++)
+      for (let cx = p.x - R; cx < p.x + R; cx++) if (this.inCells(cx, cz) && this.onPortalIsland(cx, cz) && this.cellAvg(cx, cz) > 0.05) m[this.ci(cx, cz)] = 1;
+    return m;
+  }
+
+  /**
+   * Règle de l'île du portail pour un bâtiment : sur l'île, seulement des défenses (tour de garde, caserne), une fois le
+   * portail ouvert ; les défenses, seulement sur l'île ; rien sur le portail lui-même
+   */
+  private portalRule(kind: KindId, x: number, z: number, s: number): string | null {
+    let on = 0;
+    for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
+      if (this.inPortal(x + i, z + j)) return 'Le portail se dresse ici';
+      if (this.onPortalIsland(x + i, z + j)) on++;
+    }
+    if (DEFENSES.includes(kind)) {
+      if (!this.portal) return 'Cette carte n’a pas d’île du portail (partie commencée avant elle)';
+      if (on < s * s) return 'Ne se bâtit que sur l’île du portail';
+      if (!this.portalOpen) return 'Il faut d’abord ouvrir le portail (expédition « Le portail de l’autre rive »)';
+    } else if (on) return 'Sur l’île du portail, on ne bâtit que des défenses';
+    return null;
+  }
 
   /**
    * La lave recouvre la case : les arbres brûlent, le sol devient basalte puis cendre fertile ; les routes sont épargnées,
@@ -774,6 +828,9 @@ export class World {
         if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return 'L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'; continue; }
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return 'Trop proche de l’eau';
       }
+    // l'île du portail : des défenses seulement (et les défenses nulle part ailleurs)
+    const isle = this.portalRule(kind, x, z, s);
+    if (isle) return isle;
     // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
     const high = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
     if (kind === 'mine' && !high) return 'Une mine ne se creuse que dans la montagne';
@@ -1229,6 +1286,7 @@ export class World {
         return { c: l.color, s: kept.map((i) => order.get(l.stops[i])!), ...(via ? { v: via } : {}), ...(l.freight ? { f: 1 } : {}) };
       }),
       linesAuto: this.linesAuto,
+      portal: this.portal,
       // routes en courbe (au centième) ; celles dont il ne reste aucune case de route s'oublient
       curves: this.curves.filter((c) => rasterize(c.pts, N).some((k) => this.road[k])).map((c) => c.pts.map((v) => Math.round(v * 100))),
     };
@@ -1345,6 +1403,8 @@ export class World {
       if (stops.length >= 2) this.lines.push({ id: this.lines.length + 1, stops, color: Number.isFinite(+l.c) ? +l.c : 0xd8553c, ...(via ? { via } : {}), ...(l.f ? { freight: true } : {}) });
     }
     this.linesAuto = d.linesAuto ?? !Array.isArray(d.lines);
+    // une partie d'avant l'île du portail n'en a pas : elle se joue sans
+    this.portal = readPortal(d.portal, N);
     this.curves = [];
     for (const c of Array.isArray(d.curves) ? d.curves : []) {
       if (!Array.isArray(c) || c.length < 4 || c.length % 2 || !c.every((v) => Number.isFinite(+v))) continue;

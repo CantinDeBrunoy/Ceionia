@@ -11745,6 +11745,77 @@ function zooBig(p: Parts, age: number) {
   }
 }
 
+/** Teintes des défenses de l'île du portail selon l'âge : pierre des murs, pierre sombre des chaînages, toit */
+const DEF_TONES: [number, number, number][] = [[0xb8b0a2, 0x8c8478, C.terracotta], [0xb8b0a2, 0x8c8478, C.terracotta], [0xa9a39a, 0x7e776e, 0x6f6a8a], [0x9d9890, 0x6f6a64, C.slate], [0x8f949a, 0x60666e, 0x4f5866], [0x9aa3ad, 0x5a626c, 0x4a6a8a]];
+
+/**
+ * La tour de garde de l'île du portail : fût octogonal de pierre sur son socle, chaînages, meurtrières, porte cloutée, plate-
+ * forme crénelée, toit pointu sur poteaux, brasero de veille et oriflamme
+ */
+function watchtower(p: Parts, age: number) {
+  const [wall, dk, roofC] = DEF_TONES[Math.max(1, Math.min(5, age))], H = 1.0;
+  p.box(0.66, 0.06, 0.66, 0, 0, 0, dk);
+  p.cyl(0.25, 0.3, H, 8, 0, 0.06, 0, wall, false, Math.PI / 8);
+  for (const y of [0.32, 0.66]) p.cyl(0.29, 0.3, 0.035, 8, 0, 0.06 + y, 0, dk, false, Math.PI / 8);
+  // la porte cloutée, face à l'entrée, ses ferrures et le brasero de la porte
+  p.box(0.15, 0.24, 0.03, 0, 0.06, 0.27, C.darkwood);
+  for (const y of [0.11, 0.22]) p.box(0.15, 0.012, 0.035, 0, 0.06 + y, 0.27, C.metal);
+  p.box(0.19, 0.03, 0.04, 0, 0.3, 0.27, dk);
+  // meurtrières sur trois faces, à deux hauteurs
+  for (const a of [Math.PI / 2, Math.PI, -Math.PI / 2]) for (const y of [0.45, 0.8]) p.box(0.025, 0.1, 0.04, Math.sin(a) * 0.255, 0.06 + y, Math.cos(a) * 0.255, 0x2a2622, a);
+  // la plate-forme en encorbellement et ses créneaux
+  p.cyl(0.36, 0.28, 0.08, 8, 0, 0.06 + H, 0, dk, false, Math.PI / 8);
+  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; p.box(0.1, 0.1, 0.05, Math.sin(a) * 0.33, 0.14 + H, Math.cos(a) * 0.33, wall, a); }
+  // toit pointu sur quatre poteaux
+  for (const [x, z] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) p.box(0.03, 0.22, 0.03, x, 0.14 + H, z, C.darkwood);
+  p.cone(0.36, 0.34, 8, 0, 0.36 + H, 0, roofC, false, Math.PI / 8);
+  // le brasero de veille, qui luit la nuit, et l'oriflamme rouge au sommet
+  p.cyl(0.06, 0.04, 0.05, 6, 0, 0.14 + H, 0, C.metal);
+  p.box(0.07, 0.06, 0.07, 0, 0.19 + H, 0, C.flame, 0, true);
+  p.cyl(0.008, 0.008, 0.26, 4, 0, 0.66 + H, 0, C.darkwood);
+  p.box(0.16, 0.08, 0.012, 0.088, 0.82 + H, 0, 0xc8402e);
+}
+
+/**
+ * La caserne de la garnison (2 × 2) : le corps de logis au fond, cour d'exercice en terre battue ceinte d'une palissade,
+ * mannequins d'entraînement, râtelier de lances, bannière et deux braseros à l'entrée
+ */
+function barracks(p: Parts, age: number) {
+  const [wall, dk, roofC] = DEF_TONES[Math.max(1, Math.min(5, age))], R = 0.88;
+  p.box(1.84, 0.012, 1.84, 0, 0, 0, 0x8cbf6c);
+  p.box(1.7, 0.008, 1.0, 0, 0.012, 0.36, dark(C.dirt, 0.95));
+  // le logis : soubassement, murs de pierre, chaînages, toit, portes et fenêtres
+  const bz = -0.5, W = 1.56, D = 0.62, H = 0.42, zf = bz + D / 2;
+  p.box(W + 0.05, 0.05, D + 0.05, 0, 0, bz, dk);
+  p.box(W, H - 0.05, D, 0, 0.05, bz, wall);
+  for (const s of [-1, 1]) p.box(0.06, H - 0.05, D + 0.02, s * (W / 2 - 0.02), 0.05, bz, dk);
+  roof(p, 0, H, bz, { w: W, d: D, h: 0.28, color: roofC, wall, len: W + 0.12, ov: 0.08, tiles: age <= 1, courses: age >= 2 });
+  p.box(0.22, 0.28, 0.02, 0, 0.05, zf + 0.005, C.darkwood);
+  for (const x of [-0.5, -0.25, 0.25, 0.5]) p.box(0.1, 0.1, 0.02, x, 0.2, zf + 0.005, 0x3a3430, 0, true);
+  // la palissade de pieux autour de la cour, ouverte devant
+  const post = C.darkwood;
+  for (const [x0, z0, x1, z1] of [[-R, -0.12, -R, R], [R, -0.12, R, R], [-R, R, -0.26, R], [0.26, R, R, R]]) {
+    const len = Math.hypot(x1 - x0, z1 - z0), k = Math.max(1, Math.round(len / 0.09));
+    for (let i = 0; i <= k; i++) p.cyl(0.028, 0.03, 0.2 + (i % 2) * 0.03, 5, x0 + ((x1 - x0) * i) / k, 0, z0 + ((z1 - z0) * i) / k, post);
+  }
+  // les braseros de l'entrée
+  for (const s of [-1, 1]) { p.cyl(0.035, 0.05, 0.16, 6, s * 0.3, 0, R, C.metal); p.box(0.06, 0.05, 0.06, s * 0.3, 0.16, R, C.flame, 0, true); }
+  // mannequins d'entraînement (poteau, traverse, tête de paille) et cibles
+  for (const [x, z] of [[-0.45, 0.35], [-0.15, 0.55], [0.5, 0.3]]) {
+    p.cyl(0.015, 0.015, 0.2, 4, x, 0, z, C.wood);
+    p.box(0.14, 0.02, 0.02, x, 0.15, z, C.wood);
+    p.cyl(0.04, 0.045, 0.09, 6, x, 0.08, z, C.thatch);
+    p.sphere(0.035, x, 0.24, z, C.thatch);
+  }
+  // le râtelier de lances contre le logis
+  p.box(0.4, 0.02, 0.04, -0.4, 0.1, zf + 0.06, C.darkwood);
+  for (let i = 0; i < 6; i++) { const x = -0.57 + i * 0.07; p.cyl(0.006, 0.006, 0.34, 3, x, 0.02, zf + 0.07, C.wood); p.cone(0.012, 0.04, 4, x, 0.36, zf + 0.07, C.metal); }
+  // la bannière rouge à la porte de la cour
+  p.cyl(0.012, 0.012, 0.62, 5, 0.62, 0, 0.62, C.darkwood);
+  p.box(0.012, 0.22, 0.14, 0.62, 0.36, 0.69, 0xc8402e);
+  p.box(0.014, 0.04, 0.04, 0.62, 0.45, 0.69, C.gold);
+}
+
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? smallSize(kind) : KINDS[kind].size;
   const imported = importedModel(kind, age, o.v, size);
@@ -11826,6 +11897,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'spaceport': spaceport(p); break;
     case 'research': research(p); break;
     case 'maglev': maglev(p); break;
+    case 'watchtower': watchtower(p, age); break;
+    case 'barracks': barracks(p, age); break;
   }
   if (extras) futureExtras(p, kind, kind === 'forum' && size === 3 ? 2 : size);
   lifeK = 1;

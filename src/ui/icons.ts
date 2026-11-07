@@ -126,6 +126,8 @@ const P: Record<string, string> = {
   rocket: '<path d="M12 2c3 2.5 4.5 6 4.5 10v5h-9v-5C7.5 8 9 4.5 12 2z"/><circle cx="12" cy="10" r="1.8"/><path d="M7.5 13l-3 3v3l3-2M16.5 13l3 3v3l-3-2"/><path d="M10 20.5l2 1.5 2-1.5"/>',
   qubit: '<circle cx="12" cy="12" r="4"/><path d="M2 12a10 4 0 0 0 20 0a10 4 0 0 0-20 0"/><path d="M12 2v3M12 19v3"/><path d="M12 8l1.5 4-1.5 4"/>',
   maglev: '<path d="M4 14V9a5 5 0 0 1 5-5h9l3 5v5z"/><path d="M4 9h17M9 4v5M14 4v5"/><path d="M3 18h18M6 21h12"/><path d="M7 14v4M17 14v4"/>',
+  // tour de garde crénelée, sa meurtrière et son drapeau
+  watchtower: '<path d="M8 21V8h8v13"/><path d="M7 8V5h2v1.5h2V5h2v1.5h2V5h2v3"/><path d="M12 11v3"/><path d="M12 5V2l3 1-3 1"/><path d="M5 21h14"/>',
   tower: '<path d="M8 21V4l4-2 4 2v17"/><path d="M8 8c2 0 2 2 4 2s2-2 4-2M8 13c2 0 2 2 4 2s2-2 4-2"/><path d="M5 21h14"/><path d="M11 21v-3h2v3"/>',
   // pétrole : chevalet de pompage, raffinerie (colonnes, réservoir, torchère), goutte de brut, pompe à carburant
   // briques : un pan de mur en appareil croisé ; briqueterie : le four et sa haute cheminée
@@ -150,6 +152,7 @@ export const KIND_ICON: Record<KindId, string> = {
   theater: 'masks', acropolis: 'acropolis', forum: 'arch', senate: 'dome',
   carworks: 'car', lab: 'flask', aerodrome: 'balloon', manor: 'manor', oilwell: 'pumpjack', refinery: 'refinery', brickworks: 'kiln',
   arcology: 'arcology', vfarm: 'tower', fusion: 'atom', spaceport: 'rocket', research: 'qubit', maglev: 'maglev',
+  watchtower: 'watchtower', barracks: 'shield',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
 /** Icône de chaque groupe de lecture de la barre de construction */

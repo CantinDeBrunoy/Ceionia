@@ -390,7 +390,8 @@ describe('eau', () => {
   it('le ponton de pêche se pose au bord de l’eau, pas dans les terres', () => {
     const [ix, iz] = flatLand(w, 1.5);
     expect(w.canPlace('pier', ix, iz)).not.toBeNull();
-    const shore = findCell((x, z) => w.cellAvg(x, z) > 0.1 && w.cellSlope(x, z) < 0.5 && !w.occ[w.ci(x, z)] && !w.road[w.ci(x, z)] && !w.decor[w.ci(x, z)]
+    // (pas sur l'île du portail, où l'on ne bâtit que des défenses)
+    const shore = findCell((x, z) => w.cellAvg(x, z) > 0.1 && w.cellSlope(x, z) < 0.5 && !w.occ[w.ci(x, z)] && !w.road[w.ci(x, z)] && !w.decor[w.ci(x, z)] && !w.onPortalIsland(x, z)
       && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => w.cellAvg(x + a, z + b) < -0.3));
     expect(w.canPlace('pier', shore[0], shore[1])).toBeNull();
   });
