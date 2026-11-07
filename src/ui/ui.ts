@@ -1233,8 +1233,10 @@ export class UI {
     list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
-    // la hauteur de la barre du bas : la fiche d'un bâtiment s'arrête au-dessus et défile plutôt que de passer dessous
-    const dm = $('#dockMain').getBoundingClientRect(), dockH = dm.height ? Math.max(0, Math.round(innerHeight - dm.top)) : 0;
+    // la hauteur de la barre du bas, quand elle s'étend sous la fiche d'un bâtiment (à droite) : la fiche s'arrête au-dessus
+    // et défile plutôt que de passer dessous
+    const dm = $('#dockMain').getBoundingClientRect(), sc = $('#selCard').getBoundingClientRect();
+    const dockH = dm.height && (!sc.width || dm.right > sc.left) ? Math.max(0, Math.round(innerHeight - dm.top)) : 0;
     if (this.root.style.getPropertyValue('--dockH') !== `${dockH}px`) this.root.style.setProperty('--dockH', `${dockH}px`);
     const live = new Set<number>();
     for (const a of ex.active) {

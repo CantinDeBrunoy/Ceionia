@@ -515,11 +515,11 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 .rcard { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
 .rhead { display: flex; align-items: center; gap: 8px; }
 /* chemin de fer de la fiche : un titre avec le compteur et « Nouvelle ligne », puis une ligne compacte par ligne de rail */
-#selCard .rails { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: grid; gap: 5px; }
+#selCard .rails { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
 #selCard .rails .rhead { justify-content: space-between; }
 #selCard .rails .rhead > b { display: flex; align-items: center; gap: 6px; }
 #selCard .rails .rhead small { font-weight: 600; }
-#selCard .rlist { display: grid; gap: 3px; }
+#selCard .rlist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
 #selCard .rlist.many { max-height: 104px; overflow-y: auto; padding-right: 2px; }
 #selCard .rline { display: flex; align-items: center; gap: 4px; min-height: 30px; }
 #selCard .rline .lineDot { margin-right: 3px; }

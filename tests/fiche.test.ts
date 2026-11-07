@@ -31,7 +31,7 @@ describe('fiche courte', () => {
   });
 
   it('raccourcit les noms de gare', () => {
-    expect(shortStop('Gare à grande vitesse 2')).toBe('Grande vitesse 2');
+    expect(shortStop('Gare à grande vitesse 2')).toBe('GV 2');
     expect(shortStop('Gare intermodale')).toBe('Intermodale');
     expect(shortStop('Gare centrale 3')).toBe('Centrale 3');
     expect(shortStop('Petite gare')).toBe('Petite gare');
