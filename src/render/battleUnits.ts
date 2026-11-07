@@ -12,9 +12,9 @@ import { makeSoldier, soldierStep, Soldier } from './soldiers';
  */
 
 /** Échelle des modèles de démons (le modèle mesure 1 de haut) */
-export const SCALE: Record<DemonKind, number> = { imp: 0.32, archer: 0.36, brute: 0.52, chief: 0.56, guardian: 0.95, king: 1.5 };
+export const SCALE: Record<DemonKind, number> = { imp: 0.32, archer: 0.36, brute: 0.52, chief: 0.56, guardian: 0.95, king: 1.5, elite: 0.64 };
 /** Instances au plus, par sorte de démon */
-const CAP: Record<DemonKind, number> = { imp: 160, archer: 96, brute: 96, chief: 32, guardian: 12, king: 4 };
+const CAP: Record<DemonKind, number> = { imp: 160, archer: 96, brute: 96, chief: 32, guardian: 12, king: 4, elite: 24 };
 const KINDS = Object.keys(DEMONS) as DemonKind[];
 const PARTS = ['body', 'glow', 'legL', 'legR', 'armL', 'armR', 'wingL', 'wingR'] as const;
 type PartName = typeof PARTS[number];
@@ -199,7 +199,7 @@ export class BattleLayer {
     };
     for (const u of this.hell.units.values()) {
       if (u.hp <= 0) continue;
-      const boss = u.kind === 'guardian' || u.kind === 'king' || u.kind === 'chief';
+      const boss = u.kind === 'guardian' || u.kind === 'king' || u.kind === 'chief' || u.kind === 'elite';
       if (u.hp >= u.maxHp && !boss && u.state !== 'attack' && !this.selected.has(u.id)) continue;
       const sc = u.side === 'hell' ? SCALE[u.kind as DemonKind] ?? 0.4 : 0.45;
       const frac = u.hp / u.maxHp;
@@ -207,7 +207,7 @@ export class BattleLayer {
     }
     for (const b of this.hell.buildings.values()) {
       if (b.down || (b.hp >= b.maxHp && b.kind !== 'kingdom')) continue;
-      const h = b.kind === 'kingdom' ? 7.2 : b.kind === 'fortress' ? 3.6 : b.kind === 'watchtower' || b.kind === 'tower' ? 2.6 : b.kind === 'palisade' || b.kind === 'brazier' ? 1.3 : 2.2;
+      const h = b.kind === 'kingdom' ? 7.2 : b.kind === 'fortress' || b.kind === 'spire' ? 3.6 : b.kind === 'watchtower' || b.kind === 'tower' ? 2.6 : b.kind === 'palisade' || b.kind === 'brazier' ? 1.3 : 2.2;
       const frac = b.hp / b.maxHp;
       put(b.site.x, this.groundY(b.site.x, b.site.z) + h, b.site.z, b.kind === 'kingdom' ? 3 : 1.6, frac, b.side === 'hell' ? HELL_C : frac > 0.35 ? PLAYER_C : WEAK_C);
     }
@@ -297,6 +297,8 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
     chief: { skin: 0xc02a3a, dark: 0x6a1420, horn: 0xf4e4c8, eye: 0xfff04a, wing: 0x5a1a6a, belly: 0xe06a6a, hip: 0.4, sh: 0.7, w: 0.22, head: 0.17, torso: 0.24, limb: 0.07, wings: 0.45 },
     guardian: { skin: 0x4a3638, dark: 0x2a1e22, horn: 0xd8c8b0, eye: 0xffd030, wing: 0, belly: 0x5e4446, hip: 0.34, sh: 0.68, w: 0.3, head: 0.15, torso: 0.34, limb: 0.11, wings: 0 },
     king: { skin: 0xd02838, dark: 0x5a0e1e, horn: 0x2a1a20, eye: 0xfff4a0, wing: 0x3a1450, belly: 0xf07a5a, hip: 0.4, sh: 0.7, w: 0.24, head: 0.16, torso: 0.25, limb: 0.075, wings: 0.75 },
+    // la garde d'élite : armure noire à liserés d'or, casque à cornes dorées, hallebarde
+    elite: { skin: 0x7a2a52, dark: 0x2a1828, horn: 0xe8b84a, eye: 0xffe04a, wing: 0, belly: 0x3a2a3a, hip: 0.38, sh: 0.68, w: 0.26, head: 0.15, torso: 0.29, limb: 0.085, wings: 0 },
   }[kind];
   const out: Partial<Record<PartName, { geo: THREE.BufferGeometry; pivot: THREE.Vector3 }>> = {};
   const S = spec, headY = S.sh + S.head * 0.9;
@@ -319,6 +321,13 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
   }
   if (kind === 'king') for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; body.push(paint(new THREE.ConeGeometry(0.035, 0.12, 4).translate(Math.sin(a) * S.head * 0.75, headY + S.head * 0.95, Math.cos(a) * S.head * 0.75), 0xf0c040)); }
   if (kind === 'guardian') for (const sd of [-1, 1]) body.push(paint(new THREE.IcosahedronGeometry(S.limb * 1.6, 0).translate(sd * S.w * 1.05, S.sh + 0.03, 0), 0x3a2a2c));
+  if (kind === 'elite') {
+    // épaulières d'or, plastron sombre liseré d'or, casque
+    for (const sd of [-1, 1]) body.push(paint(new THREE.IcosahedronGeometry(S.limb * 1.7, 0).translate(sd * S.w * 1.02, S.sh + 0.03, 0), 0xe0b040));
+    body.push(paint(new THREE.BoxGeometry(S.w * 1.5, (S.sh - S.hip) * 0.7, 0.04).translate(0, (S.sh + S.hip) / 2 + 0.02, S.torso * 0.72), 0x2a1828));
+    body.push(paint(new THREE.BoxGeometry(S.w * 1.55, 0.025, 0.05).translate(0, S.sh - 0.04, S.torso * 0.74), 0xe0b040));
+    body.push(paint(new THREE.IcosahedronGeometry(S.head * 1.08, 1).scale(1, 0.7, 1).translate(0, headY + S.head * 0.3, 0), 0x2a1828));
+  }
   out.body = { geo: merge(body), pivot: new THREE.Vector3() };
   // les lueurs : yeux, et pour le gardien des fissures de lave sur le torse
   const glow: THREE.BufferGeometry[] = [-1, 1].map((sd) => paint(new THREE.IcosahedronGeometry(S.head * 0.2, 0).scale(1.2, 0.8, 0.6).translate(sd * S.head * 0.38, headY + S.head * 0.12, S.head * 0.88 + (kind === 'brute' || kind === 'guardian' ? 0.08 : 0.02)), S.eye));
@@ -348,6 +357,7 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
     chief: [paint(new THREE.CylinderGeometry(0.018, 0.018, 0.6, 4).rotateX(Math.PI / 2).translate(0, handY, 0.2), 0x3a2a24), paint(new THREE.CylinderGeometry(0.12, 0.12, 0.02, 3, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).translate(0, handY + 0.05, 0.45), 0xd8d8e0)],
     guardian: [],
     king: [paint(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 5).rotateX(Math.PI / 2).translate(0, handY, 0.25), 0xe0b040), paint(new THREE.IcosahedronGeometry(0.07, 1).translate(0, handY, 0.66), 0xff3a6a)],
+    elite: [paint(new THREE.CylinderGeometry(0.016, 0.016, 0.75, 4).rotateX(Math.PI / 2).translate(0, handY, 0.22), 0x3a2a24), paint(new THREE.CylinderGeometry(0.11, 0.11, 0.02, 3, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).translate(0, handY + 0.04, 0.55), 0xe8c060), paint(new THREE.ConeGeometry(0.025, 0.12, 4).rotateX(Math.PI / 2).translate(0, handY, 0.64), 0xd8d8e0)],
   };
   const weaponL = kind === 'archer' ? [paint(new THREE.TorusGeometry(0.22, 0.014, 4, 10, Math.PI * 0.9).rotateY(Math.PI / 2).rotateX(Math.PI / 2).translate(0, handY, 0.06), 0x6a3a1e), paint(new THREE.CylinderGeometry(0.01, 0.01, 0.34, 3).rotateX(Math.PI / 2).translate(0.02, handY, 0.12), 0xff8a2a)] : [];
   out.armL = { geo: arm(weaponL), pivot: new THREE.Vector3(-S.w - S.limb * 0.6, S.sh - 0.02, 0) };

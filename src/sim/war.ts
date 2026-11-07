@@ -1,13 +1,14 @@
 import type { World } from '../world/world';
 import { HellMap } from '../world/hell';
-import { isleDefenses, repelWave } from '../world/portal';
-import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats } from './hell';
+import { isleDefenses, repelWave, ISLE_SECURE } from '../world/portal';
+import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats, SECURE_WAVES } from './hell';
 import { IsleBattle } from './isleBattle';
 import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES } from '../world/hell';
 import type { BaseKind } from './hell';
 import { GEAR_BY } from './gear';
+import { KingFight, KingSave, KingdomReward, claimKingdom } from './kingdom';
 
 /**
  * La guerre contre les Enfers, côté simulation : la faction démoniaque (elle vit même quand on ne la regarde pas, à pas
@@ -19,7 +20,7 @@ import { GEAR_BY } from './gear';
 /** Pas de la simulation allégée (faction hors de vue) */
 export const COARSE = 0.25;
 
-export interface WarNews { text: string; kind: 'raid' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'supply' | 'zone' }
+export interface WarNews { text: string; kind: 'raid' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'supply' | 'zone' | 'boss' | 'victory' }
 
 export interface WarSave {
   army: Army;
@@ -28,6 +29,8 @@ export interface WarSave {
   base?: HellBaseSave | null;
   /** la vague en cours : sa description, ses démons encore debout (positions sur l'île) */
   raid?: { w: RaidWave; units: { kind: DemonKind; x: number; z: number; hp: number }[] } | null;
+  /** le combat du roi des Enfers */
+  king?: KingSave | null;
 }
 
 export class War {
@@ -37,6 +40,10 @@ export class War {
   faction: Hell | null = null;
   /** la base avancée du joueur dans les Enfers (avec la faction) */
   base: HellBase | null = null;
+  /** le combat du roi, au royaume (avec la faction) */
+  king: KingFight | null = null;
+  /** ce qu'a rapporté la chute du royaume, quand elle vient d'arriver (l'écran de victoire le lit, puis le remet à null) */
+  reward: KingdomReward | null = null;
   isle: IsleBattle | null = null;
   /** troupe → unité au combat (sur l'île ou dans les Enfers), et l'inverse */
   unitOf = new Map<number, HellUnit>();
@@ -84,6 +91,7 @@ export class War {
       // les unités du joueur viennent de l'armée, pas de la sauvegarde de la faction
       for (const u of this.faction.alive('player')) this.faction.units.delete(u.id);
       this.base = HellBase.load(this.faction, this.hellMap, p?.base);
+      this.king = KingFight.load(this.faction, p?.king);
     }
     return this.faction;
   }
@@ -268,6 +276,20 @@ export class War {
   private stepHell(dt: number) {
     this.faction!.step(dt);
     this.base?.step(dt);
+    this.king?.step(dt);
+  }
+
+  /**
+   * La citadelle est tombée : le royaume s'effondre, le village touche ses récompenses (une fois), plus aucune incursion ne
+   * viendra sur l'île du portail (elle compte pour sécurisée)
+   */
+  private conquerKingdom() {
+    const f = this.faction!;
+    this.king?.collapse();
+    f.raidsRepelled = Math.max(f.raidsRepelled, SECURE_WAVES);
+    const r = claimKingdom(this.world, ISLE_SECURE.waves);
+    if (r) this.reward = r;
+    this.news.push({ kind: 'victory', text: '👑 Le royaume des Enfers est tombé ! Le portail s’éteint : plus aucune incursion ne menacera l’île.' });
   }
 
   /** Les nouvelles de la base avancée : contre-attaques, zones, ravitaillement */
@@ -308,6 +330,9 @@ export class War {
       if (sim === this.faction) {
         if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: `🏴 ${HELL_ZONES[e.zone].name} conquise ! La brume se lève sur ${HELL_ZONES[e.zone + 1].name} ; vous pouvez bâtir une base avancée ici.` });
         else if (e.type === 'sealed') this.news.push({ kind: 'info', text: `🌫️ La brume infernale barre ${HELL_ZONES[e.zone].name} : abattez d’abord la forteresse de ${HELL_ZONES[e.zone - 1].name}.` });
+        // le combat du roi
+        else if (e.type === 'boss') this.news.push({ kind: 'boss', text: e.phase === 1 ? '👑 Le roi des Enfers se lève de son trône ! Gare à ses boules de feu : écartez-vous des cercles rouges.' : e.phase === 2 ? '😡 Le roi des Enfers enrage : le sol s’embrase par plaques, sortez des zones qui rougeoient !' : '👑 Le roi des Enfers est abattu ! Sa citadelle vacille : abattez-la.' });
+        else if (e.type === 'victory') this.conquerKingdom();
       }
       fx.push(e);
     }
@@ -328,7 +353,7 @@ export class War {
   /** Appelle la prochaine vague tout de suite (sonner le cor) */
   callWave() { if (this.faction && !this.faction.activeRaid && this.faction.nextRaid >= 0) this.faction.nextRaid = this.faction.time; }
   /** Secondes de jeu avant la prochaine vague (null : pas encore d'incursion prévue, ou une en cours) */
-  nextWaveIn() { const f = this.faction; return !f || f.activeRaid || f.nextRaid < 0 ? null : Math.max(0, f.nextRaid - f.time); }
+  nextWaveIn() { const f = this.faction; return !f || f.victory || f.activeRaid || f.nextRaid < 0 ? null : Math.max(0, f.nextRaid - f.time); }
 
   /** Relevé des unités (pour la barre des troupes) : unités du joueur d'une simulation, avec leur troupe */
   troopsIn(sim: Hell | null) { return sim ? sim.alive('player').filter((u) => this.troopOf.has(u.id)) : []; }
@@ -339,6 +364,7 @@ export class War {
       army: JSON.parse(JSON.stringify(this.army)),
       faction: f ? f.save(false) : this.pending?.faction ?? null,
       base: this.base ? this.base.save() : this.pending?.base ?? null,
+      king: this.king ? this.king.save() : this.pending?.king ?? null,
       raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })) } : null,
     };
   }
@@ -350,8 +376,9 @@ export class War {
     const r = o.raid && typeof o.raid === 'object' ? (o.raid as WarSave['raid']) : null;
     const raid = r && r.w && Array.isArray(r.units) ? { w: r.w, units: r.units.filter((u) => u && u.kind in DEMONS) } : null;
     const base = o.base && typeof o.base === 'object' ? (o.base as HellBaseSave) : null;
-    this.pending = { army: this.army, faction: fac && Array.isArray(fac.units) && Array.isArray(fac.buildings) ? fac : null, raid, base };
-    this.faction = null; this.hellMap = null; this.isle = null; this.base = null;
+    const king = o.king && typeof o.king === 'object' ? (o.king as KingSave) : null;
+    this.pending = { army: this.army, faction: fac && Array.isArray(fac.units) && Array.isArray(fac.buildings) ? fac : null, raid, base, king };
+    this.faction = null; this.hellMap = null; this.isle = null; this.base = null; this.king = null; this.reward = null;
     this.unitOf.clear(); this.troopOf.clear(); this.crossing.clear();
   }
 }

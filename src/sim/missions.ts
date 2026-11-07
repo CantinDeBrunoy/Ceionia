@@ -900,6 +900,8 @@ const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'mouto
 const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', dragon: 'le trésor du dragon : sa légende court dans tout le pays', games: 'les Jeux du village : le monde entier connaît son stade', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
 
 PERK_NAME.portal = 'le portail de l’autre rive est ouvert : tours de garde et caserne sur son île';
+PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place du village';
+PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

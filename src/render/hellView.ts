@@ -396,7 +396,7 @@ export class HellView {
       ruin.visible = false;
       this.content.add(up, ruin);
       this.houses.set(b.id, { up, ruin, down: false, flags });
-      const h = b.kind === 'kingdom' ? 5.4 : b.kind === 'fortress' ? 2.6 : 1.4;
+      const h = b.kind === 'kingdom' ? 5.4 : b.kind === 'fortress' || b.kind === 'spire' ? 2.6 : 1.4;
       this.sources.push({ x: b.site.x, y: y + h, z: b.site.z - b.site.r - 0.3, r: b.kind === 'kingdom' ? 9 : 4.5, c: new THREE.Color(1, 0.45, 0.2).multiplyScalar(b.kind === 'kingdom' ? 2 : 1.4), flicker: 0.25 });
     }
   }
@@ -668,6 +668,18 @@ function houseGeo(kind: HellSiteKind): [THREE.BufferGeometry, THREE.BufferGeomet
     shine.push(paint(new THREE.BoxGeometry(0.18, 0.12, 0.05).translate(-0.25, 1.8, -0.47), EYE), paint(new THREE.BoxGeometry(0.18, 0.12, 0.05).translate(0.25, 1.8, -0.47), EYE));
     flags.push([-1.5, 2.7, -1.5], [1.5, 2.7, -1.5]);
     for (const x of [-1.5, 1.5]) solid.push(paint(new THREE.CylinderGeometry(0.025, 0.025, 0.8, 4).translate(x, 2.6, -1.5), DARK));
+  } else if (kind === 'spire') {
+    // une tour de la citadelle : fût sombre sur un socle, meurtrières de lave, chemin de ronde, toit rouge cornu
+    solid.push(paint(new THREE.CylinderGeometry(0.75, 0.9, 0.4, 6).translate(0, 0.2, 0), STONE));
+    solid.push(paint(new THREE.CylinderGeometry(0.5, 0.66, 2.4, 6).translate(0, 1.6, 0), DARK, (y) => 0.8 + y * 0.4));
+    solid.push(paint(new THREE.CylinderGeometry(0.72, 0.6, 0.3, 6).translate(0, 2.95, 0), STONE));
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; solid.push(paint(new THREE.BoxGeometry(0.22, 0.24, 0.2).translate(0, 3.2, 0.62).rotateY(a), STONE)); }
+    solid.push(paint(new THREE.ConeGeometry(0.62, 1.3, 6).translate(0, 3.85, 0), RED));
+    solid.push(horn(-0.4, 3.3, 0, 1.5, 0.7), horn(0.4, 3.3, 0, 1.5, -0.7));
+    for (const y of [1.2, 2.1]) shine.push(paint(new THREE.BoxGeometry(0.12, 0.3, 0.06).translate(0, y, -0.6), LAVA));
+    shine.push(paint(new THREE.BoxGeometry(0.16, 0.1, 0.05).translate(0, 3.45, -0.5), EYE));
+    flags.push([0, 4.7, 0]);
+    solid.push(paint(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 4).translate(0, 4.6, 0), DARK));
   } else {
     // la citadelle : enceinte octogonale, six tours, une flèche immense couronnée de cornes et d'un œil de lave
     for (let i = 0; i < 8; i++) {

@@ -14,7 +14,7 @@ import { tube } from './festivities';
  */
 
 /** Les trophées possibles, dans l'ordre (chacun a sa place sur la place du village) ; un nouveau monstre s'ajoute au bout */
-export const TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon'] as const;
+export const TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon', 'hellking'] as const;
 export type TrophyId = (typeof TROPHIES)[number];
 
 /**
@@ -32,12 +32,12 @@ export function trophiesWon(s: { done: readonly string[]; perks: readonly string
  * son pourtour, là où ne sont ni bancs, ni étals, ni statues, ni habitants
  */
 const SLOTS: [number, number][][] = [
-  [[0.92, 0.3], [-0.95, 0.22], [0.32, -0.86], [-0.08, 0.95]],
-  [[-0.85, 0.72], [0.78, 0.82], [-0.88, -0.72], [0.95, -0.72]],
-  [[-0.75, 0.85], [0.85, 0.45], [-0.75, -0.45], [0.82, -0.62]],
-  [[-0.25, -0.94], [0.94, -0.15], [-0.94, 0.15], [-0.2, 0.94]],
-  [[0.78, -0.78], [-0.8, -0.62], [0.6, 0.8], [-0.86, 0.3]],
-  [[0.6, -0.65], [-0.65, 0.6], [0.66, 0.52], [-0.62, -0.66]],
+  [[0.92, 0.3], [-0.95, 0.22], [0.32, -0.86], [-0.08, 0.95], [-0.6, -0.75]],
+  [[-0.85, 0.72], [0.78, 0.82], [-0.88, -0.72], [0.95, -0.72], [0.05, -0.95]],
+  [[-0.75, 0.85], [0.85, 0.45], [-0.75, -0.45], [0.82, -0.62], [0.1, 0.95]],
+  [[-0.25, -0.94], [0.94, -0.15], [-0.94, 0.15], [-0.2, 0.94], [0.62, 0.72]],
+  [[0.78, -0.78], [-0.8, -0.62], [0.6, 0.8], [-0.86, 0.3], [-0.25, 0.92]],
+  [[0.6, -0.65], [-0.65, 0.6], [0.66, 0.52], [-0.62, -0.66], [0, -0.92]],
 ];
 export function trophySlot(id: TrophyId, age: number): [number, number] {
   const s = SLOTS[Math.max(0, Math.min(5, age))];
@@ -163,7 +163,35 @@ function dragon(p: Parts, age: number) {
   }
 }
 
-const DRAW: Record<TrophyId, (p: Parts, age: number) => void> = { mammoth, kraken, megalodon, dragon };
+/**
+ * La couronne du roi des Enfers (la chute de son royaume) : un anneau d'or hérissé de pointes, deux cornes noires recourbées,
+ * un rubis qui luit, posée sur un coussin pourpre
+ */
+function hellking(p: Parts, age: number) {
+  const y = plinth(p, age, 0.3), gold = 0xe8b84a, horn = 0x2a1a20;
+  // le coussin, ses glands d'or aux coins
+  p.add(new THREE.IcosahedronGeometry(0.11, 1).scale(1.1, 0.32, 1.1), 0, y + 0.03, 0, 0x6a2a8a);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.sphere(0.014, sx * 0.09, y + 0.025, sz * 0.09, gold);
+  // l'anneau et ses pointes
+  const cy = y + 0.055;
+  p.add(new THREE.CylinderGeometry(0.075, 0.068, 0.055, 12, 1, true), 0, cy + 0.0275, 0, gold);
+  p.add(new THREE.TorusGeometry(0.072, 0.008, 4, 14).rotateX(Math.PI / 2), 0, cy + 0.003, 0, gold);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    p.cone(0.014, 0.05 + (i % 2) * 0.02, 4, Math.sin(a) * 0.07, cy + 0.05, Math.cos(a) * 0.07, gold);
+  }
+  // les deux cornes, de part et d'autre, qui se relèvent vers l'arrière
+  for (const s of [-1, 1]) {
+    const pts: number[][] = [];
+    for (let k = 0; k <= 6; k++) { const t = k / 6; pts.push([s * (0.07 + t * 0.07), cy + 0.03 + Math.sin(t * 1.9) * 0.13, -t * 0.04]); }
+    curve(p, pts, 0.016, 0.004, () => horn, 5);
+  }
+  // le rubis, devant, et deux petites pierres violettes
+  p.add(new THREE.OctahedronGeometry(0.02, 0), 0, cy + 0.03, 0.078, 0xff3a6a, 0, true);
+  for (const s of [-1, 1]) p.sphere(0.009, s * 0.045, cy + 0.028, 0.062, 0xb050e0);
+}
+
+const DRAW: Record<TrophyId, (p: Parts, age: number) => void> = { mammoth, kraken, megalodon, dragon, hellking };
 
 /** Ajoute à `p` le trophée de ce monstre, posé en (0, 0, 0), sa face (sa plaque) vers +z, pour une place de cet âge */
 export function trophyParts(p: Parts, id: TrophyId, age: number) { DRAW[id](p, Math.max(0, Math.min(5, age))); }

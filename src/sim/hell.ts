@@ -42,7 +42,7 @@ export interface CombatSite { kind: SiteKind; x: number; z: number; zone: number
  * et leur donne des ordres. Temps en secondes de jeu, distances en cases
  */
 
-export type DemonKind = 'imp' | 'brute' | 'archer' | 'chief' | 'guardian' | 'king';
+export type DemonKind = 'imp' | 'brute' | 'archer' | 'chief' | 'guardian' | 'king' | 'elite';
 /** Caractéristiques d'une unité : vie, dégâts par coup, portée (cases, depuis le bord de la cible), vitesse (cases/s), temps entre deux coups, vue, rayon */
 export interface UnitStats { hp: number; dmg: number; range: number; speed: number; cooldown: number; sight: number; radius: number }
 export const DEMONS: Record<DemonKind, UnitStats & { name: string; plural: string }> = {
@@ -52,6 +52,8 @@ export const DEMONS: Record<DemonKind, UnitStats & { name: string; plural: strin
   chief: { name: 'démon-chef', plural: 'démons-chefs', hp: 220, dmg: 16, range: 0.7, speed: 1.8, cooldown: 1.2, sight: 8, radius: 0.34 },
   guardian: { name: 'gardien de la zone', plural: 'gardiens', hp: 650, dmg: 28, range: 0.9, speed: 1.3, cooldown: 2, sight: 8, radius: 0.55 },
   king: { name: 'roi des Enfers', plural: 'rois des Enfers', hp: 1600, dmg: 40, range: 1.2, speed: 1.1, cooldown: 2.2, sight: 10, radius: 0.75 },
+  /** la garde du roi, dans la citadelle */
+  elite: { name: 'garde d’élite', plural: 'gardes d’élite', hp: 300, dmg: 18, range: 0.8, speed: 1.6, cooldown: 1.3, sight: 8, radius: 0.38 },
 };
 /**
  * Bâtiments : vie, armure (retranchée de chaque coup reçu), tir (dégâts, portée, temps entre deux flèches de feu). Les
@@ -62,6 +64,7 @@ export const SITES: Record<SiteKind, { name: string; hp: number; armor: number; 
   forge: { name: 'forge infernale', hp: 420, armor: 3, dmg: 0, range: 0, cooldown: 0 },
   fortress: { name: 'forteresse', hp: 1200, armor: 5, dmg: 10, range: 7, cooldown: 1.6 },
   kingdom: { name: 'citadelle du royaume', hp: 4000, armor: 8, dmg: 16, range: 8, cooldown: 1.4 },
+  spire: { name: 'tour de la citadelle', hp: 520, armor: 4, dmg: 9, range: 7, cooldown: 1.7 },
   watchtower: { name: 'tour de garde', hp: 360, armor: 3, dmg: 9, range: 6.5, cooldown: 1.5 },
   barracks: { name: 'caserne', hp: 520, armor: 4, dmg: 0, range: 0, cooldown: 0 },
   camp: { name: 'camp de base', hp: 500, armor: 3, dmg: 0, range: 0, cooldown: 0 },
@@ -150,6 +153,10 @@ export type HellEvent =
   | { type: 'lost'; zone: number }
   | { type: 'sealed'; zone: number }
   | { type: 'victory' }
+  /** le combat du roi (voir `kingdom.ts`) : une phase qui commence (1 : réveil, 2 : rage, 3 : le roi abattu), un cri, une boule de feu qui s'écrase */
+  | { type: 'boss'; phase: number }
+  | { type: 'roar'; x: number; z: number }
+  | { type: 'blast'; x: number; z: number; r: number }
   | { type: 'raid'; wave: number; n: number }
   | { type: 'raidEnd'; wave: number; repelled: boolean }
   | { type: 'secured' };
@@ -173,7 +180,8 @@ function garrisonOf(kind: HellSiteKind, zone: number): DemonKind[] {
     case 'fortress': return ['guardian', 'chief', ...rep('brute', 1 + deep), ...rep('archer', 2 + deep), ...rep('imp', 2)];
     case 'outpost': return ['archer', ...rep('imp', 2 + (zone >= 3 ? 1 : 0))];
     case 'forge': return ['brute', 'imp'];
-    case 'kingdom': return ['king', 'chief', 'chief', ...rep('brute', 4), ...rep('archer', 4), ...rep('imp', 4)];
+    case 'kingdom': return ['king', ...rep('elite', 4), 'chief', ...rep('brute', 3), ...rep('archer', 4), ...rep('imp', 4)];
+    case 'spire': return ['archer'];
   }
 }
 const rep = (v: DemonKind, n: number): DemonKind[] => Array.from({ length: n }, () => v);
@@ -643,7 +651,7 @@ export class Hell {
       b.target = t ? t.id : null;
       if (t && b.cool <= 0) {
         b.cool = st.cooldown; b.swing = 0;
-        const y0 = b.kind === 'kingdom' ? 4.2 : b.kind === 'fortress' ? 2.6 : b.kind === 'watchtower' || b.kind === 'tower' ? 2.4 : 1.8;
+        const y0 = b.kind === 'kingdom' ? 4.2 : b.kind === 'fortress' || b.kind === 'spire' ? 2.6 : b.kind === 'watchtower' || b.kind === 'tower' ? 2.4 : 1.8;
         this.events.push({ type: 'shot', x0: b.site.x, z0: b.site.z, y0, x1: t.x, z1: t.z, source: b.id, target: t.id, fire: b.side === 'hell' });
         this.damage(t, st.dmg * (1 + 0.1 * Math.max(0, b.zone - 1)) * (b.power ?? 1), b.id, true);
         if (b.side === 'hell') this.raiseAlert(b.zone, t.x, t.z);
