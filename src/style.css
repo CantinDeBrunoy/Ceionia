@@ -274,15 +274,34 @@ button.pop:hover { background: var(--accent-soft); }
 .effs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .eff { display: inline-flex; align-items: center; gap: 5px; background: rgba(255, 255, 255, 0.8); border: 1px solid var(--line); border-radius: 8px; padding: 2px 8px; font-weight: 700; font-size: 12px; }
 #info .perk { color: var(--accent-ink); font-weight: 700; }
-#selCard { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); right: var(--gap); width: min(340px, 92vw); padding: 12px 14px 13px; font-size: 12.5px; line-height: 1.45; z-index: 5; }
+/* fiche du bâtiment choisi : courte, et jamais plus haute que l'écran (entre la barre du haut et celle du bas) ; elle défile au besoin */
+#selCard { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); right: var(--gap); width: min(330px, 92vw); max-height: calc(100dvh - var(--hudB, 82px) - var(--dockH, 0px) - 22px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 11px; font-size: 12.5px; line-height: 1.4; z-index: 5; }
 #selCard.show { display: block; animation: rise 0.16s ease-out; }
-#selCard .ihead { display: flex; gap: 12px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+#selCard .ihead { display: flex; gap: 10px; align-items: center; padding-bottom: 7px; border-bottom: 1px solid var(--line); }
 #selCard .ihead > b { line-height: 0; }
-#selCard h4 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
+#selCard .ihead .grow { min-width: 0; }
+#selCard h4 { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#selCard .ihead small { display: block; font-size: 11.5px; line-height: 1.2; cursor: help; }
 #selCard small { color: var(--ink2); }
-#selCard p { margin: 8px 0 0; }
+#selCard p { margin: 7px 0 0; }
 #selCard .stat { display: flex; align-items: center; gap: 6px; font-weight: 700; }
-#selCard .perk { color: var(--accent-ink); font-weight: 700; }
+#selCard .effs { gap: 5px; margin-top: 7px; }
+#selCard .eff.rail { cursor: help; }
+/* la description : son début ; « En savoir plus » déplie la suite */
+#selCard .desc { margin-top: 7px; }
+#selCard details > summary { cursor: pointer; list-style: none; }
+#selCard details > summary::-webkit-details-marker { display: none; }
+#selCard .more { display: inline; }
+#selCard .more > summary { display: inline; margin-left: 4px; color: var(--accent-ink); font-weight: 700; font-size: 11.5px; white-space: nowrap; }
+#selCard .more > summary:hover { text-decoration: underline; }
+#selCard .more[open] > summary { display: none; }
+/* le conseil : une ligne repliée, tout le texte déplié */
+#selCard .perk { margin-top: 7px; padding: 5px 8px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; font-size: 12px; }
+#selCard .perk > summary { display: flex; gap: 5px; font-weight: 700; }
+#selCard .perk > summary span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#selCard .perk > summary::after { content: '▾'; opacity: 0.7; }
+#selCard .perk[open] > summary span { white-space: normal; }
+#selCard .perk[open] > summary::after { content: '▴'; }
 #selCard .x { min-width: 0; width: 32px; height: 32px; padding: 0; }
 #selCard .acts { display: flex; gap: 6px; margin-top: 11px; }
 #selCard .acts button { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 12.5px; }
@@ -408,7 +427,7 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   #subcats { justify-content: flex-start; }
   #subcats button { padding: 0 10px; font-size: 12px; }
   #info { display: none !important; }
-  #selCard { top: auto; bottom: 210px; right: 50%; transform: translateX(50%); }
+  #selCard { top: auto; bottom: 210px; right: 50%; transform: translateX(50%); max-height: calc(100dvh - var(--hudB, 82px) - 220px); }
 }
 .newAge { max-width: 520px; }
 .newKinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin: 8px 0 12px; }
@@ -495,14 +514,19 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 .lineDot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px #fff8, 0 1px 2px #0003; }
 .rcard { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
 .rhead { display: flex; align-items: center; gap: 8px; }
-#selCard .rails { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: grid; gap: 6px; }
-#selCard .rails > b { display: flex; align-items: center; gap: 6px; }
-#selCard .rline { display: flex; align-items: center; gap: 8px; }
-#selCard .rline span { display: block; font-weight: 600; }
-#selCard .rline small { display: block; color: var(--ink2); }
-#selCard .rline button { padding: 4px 6px; }
-#selCard .rline button.ltype { font-size: 14px; line-height: 1; }
-#selCard .newline { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; }
+/* chemin de fer de la fiche : un titre avec le compteur et « Nouvelle ligne », puis une ligne compacte par ligne de rail */
+#selCard .rails { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
+#selCard .rails .rhead { justify-content: space-between; }
+#selCard .rails .rhead > b { display: flex; align-items: center; gap: 6px; }
+#selCard .rails .rhead small { font-weight: 600; }
+#selCard .rlist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
+#selCard .rlist.many { max-height: 104px; overflow-y: auto; padding-right: 2px; }
+#selCard .rline { display: flex; align-items: center; gap: 4px; min-height: 30px; }
+#selCard .rline .lineDot { margin-right: 3px; }
+#selCard .rline > span { min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#selCard .rline button { min-width: 0; width: 28px; height: 28px; padding: 0; flex: none; }
+#selCard .rline button.ltype { font-size: 13px; line-height: 1; }
+#selCard .newline { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 3px 9px; min-height: 0; font-size: 12px; }
 #railEdit { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); width: min(460px, 92vw); padding: 10px 14px 12px; font-size: 12.5px; z-index: 6; }
 #railEdit.show { display: block; animation: rise 0.16s ease-out; }
 #railEdit p { margin: 6px 0 2px; font-weight: 600; font-size: 13.5px; }

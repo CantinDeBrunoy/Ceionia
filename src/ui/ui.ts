@@ -24,6 +24,7 @@ import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '..
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
+import { brief, shortStop } from './brief';
 
 export interface UIHost {
   tools: ToolController;
@@ -101,22 +102,30 @@ function trainWhere(r: Railway, tr: Train) {
   return next ? `de ${name} vers ${r.stopName(next.b)}` : `parti de ${name}`;
 }
 const dot = (c: number) => `<i class="lineDot" style="background:${hex(c)}"></i>`;
+/** Texte sûr dans un attribut (info-bulle) */
+const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+/** Un texte long en fiche : son début, et la suite repliée derrière « En savoir plus » (data-k garde l'état ouvert d'un rendu à l'autre) */
+function folded(text: string, k: string) {
+  const [head, rest] = brief(text);
+  return `<div class="desc">${head}${rest ? `<details class="more" data-k="${k}"><summary>En savoir plus</summary>${rest}</details>` : ''}</div>`;
+}
 
 /**
  * Ce que le rail apporte à ce bâtiment, pour sa fiche : une gare de marchandises voisine à un atelier ou une carrière (ou
  * ce qu'il faudrait pour en avoir une), une gare de voyageurs au cosmodrome ; pour une gare, les bâtiments qu'elle sert
  */
-function railStat(h: UIHost, b: Building): string | null {
-  const w = h.world, r = h.railway, want = railWant(b.kind), t = ic('train', 14, 2);
+function railStat(h: UIHost, b: Building): [string, string] | null {
+  const w = h.world, r = h.railway, want = railWant(b.kind), t = ic('train', 14, 2), bonus = Math.round(FREIGHT_BONUS * 100);
+  // [pastille courte, explication complète en info-bulle]
   if (want === 'freight') {
     const st = railStation(w, b);
-    return st ? `${t} ⚡ Boosté : servi par la gare de marchandises voisine (${r.stopName(st)}), dont le chariot fait la navette ; produit ${Math.round(FREIGHT_BONUS * 100)} % de plus`
-      : `${t} Une gare à ${RAIL_REACH} cases au plus, desservie par un train de marchandises, le ferait produire ${Math.round(FREIGHT_BONUS * 100)} % de plus`;
+    return st ? [`${t} ⚡ +${bonus} % par le rail`, `Boosté : servi par la gare de marchandises voisine (${r.stopName(st)}), dont le chariot fait la navette ; produit ${bonus} % de plus`]
+      : [`${t} +${bonus} % avec une gare`, `Une gare à ${RAIL_REACH} cases au plus, desservie par un train de marchandises, le ferait produire ${bonus} % de plus`];
   }
   if (want === 'passenger') {
     const st = railStation(w, b);
-    return st ? `${t} ⚡ Boosté : servi par la gare de voyageurs voisine (${r.stopName(st)}) ; les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite`
-      : `${t} Une gare à ${RAIL_REACH} cases au plus, desservie par un train de voyageurs, y amènerait les équipes : expéditions spatiales plus sûres et lancements préparés plus vite`;
+    return st ? [`${t} ⚡ Servi par le train`, `Boosté : servi par la gare de voyageurs voisine (${r.stopName(st)}) ; les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite`]
+      : [`${t} À relier au train`, `Une gare à ${RAIL_REACH} cases au plus, desservie par un train de voyageurs, y amènerait les équipes : expéditions spatiales plus sûres et lancements préparés plus vite`];
   }
   if (!isStation(b)) return null;
   const near = [...w.buildings.values()].filter((o) => railWant(o.kind) && gap(o, b) <= RAIL_REACH);
@@ -125,8 +134,8 @@ function railStat(h: UIHost, b: Building): string | null {
   const lines = r.linesAt(b), freight = lines.some((l) => l.freight), pass = lines.some((l) => !l.freight);
   const prod = near.some((o) => railWant(o.kind) === 'freight'), space = near.some((o) => railWant(o.kind) === 'passenger');
   const served = (prod && freight) || (space && pass);
-  return served ? `${t} Sert ses voisins : ${names}`
-    : `${t} À côté : ${names}. ${prod ? 'Une ligne de marchandises d’ici les ferait produire 50 % de plus' : 'Une ligne de voyageurs d’ici y amènerait les équipes'} (bouton 📦 / 🧳 d’une ligne : marchandises ou voyageurs).`;
+  return served ? [`${t} Sert ses voisins`, `Sert ses voisins : ${names}`]
+    : [`${t} Voisins à servir`, `À côté : ${names}. ${prod ? 'Une ligne de marchandises d’ici les ferait produire 50 % de plus' : 'Une ligne de voyageurs d’ici y amènerait les équipes'} (bouton 📦 / 🧳 d’une ligne : marchandises ou voyageurs).`];
 }
 /** Le conseil du rail sur la fiche d'un bâtiment qu'on s'apprête à bâtir */
 function railTip(k: KindId) {
@@ -757,16 +766,22 @@ export class UI {
     if (b.kind === 'outpost') stats.push(`${ic('outpost', 14, 2)} ${h.expeditions.held()} cases de galeries tenues sous terre · camp niveau ${h.expeditions.camp()}`);
     if (b.kind === 'carworks' && !h.world.unlimited) stats.push(h.expeditions.cars() ? `${ic('fuel', 14, 2)} Les voitures brûlent ${CAR_FUEL} carburant par jour · ${Math.floor(h.world.fuel)} au village` : `${ic('fuel', 14, 2)} Plus de carburant : les voitures restent au garage. La raffinerie en tire du pétrole brut des puits.`);
     // ce que le rail lui apporte (ou lui apporterait), et pour une gare, les bâtiments qu'elle sert
+    // (en pastille courte : l'explication entière passe en info-bulle)
     const railLine = railStat(h, b);
-    if (railLine) stats.push(railLine);
-    // gare ou avant-poste : les lignes qui s'y arrêtent, où en sont leurs trains ; en tracer une nouvelle d'ici
+    const railChip = railLine ? `<span class="eff rail" title="${attr(railLine[1])}">${railLine[0]}</span>` : '';
+    // gare ou avant-poste : les lignes qui s'y arrêtent, une ligne compacte chacune (noms courts, le reste en info-bulle) ;
+    // au-delà de trois, la liste défile ; en tracer une nouvelle d'ici
     const r = h.railway, stop = isStation(b) || b.kind === 'outpost' ? r.stopOf(b) : null, lines = stop ? r.linesAt(b) : [];
-    const rails = stop ? `<div class="rails"><b>${ic('train', 14, 2)} Chemin de fer</b>${lines.map((l) => {
-      const tr = r.trains.get(l.id);
-      return `<div class="rline">${dot(l.color)}<div class="grow"><span>${r.lineLabel(l)}</span><small>${l.freight ? 'Marchandises' : 'Voyageurs'}${tr ? ` · ${trainWhere(r, tr)}` : ''}${tr && tr.crew.length ? ` · ${tr.crew.length} mineurs au fond` : ''}</small></div>
+    const rails = stop ? `<div class="rails"><div class="rhead"><b>${ic('train', 14, 2)} Chemin de fer${lines.length ? ` <small>· ${lines.length} ligne${lines.length > 1 ? 's' : ''}</small>` : ''}</b>
+      <button data-act="newline" class="newline" title="Tracer une nouvelle ligne depuis ${b.kind === 'outpost' ? 'cet avant-poste' : 'cette gare'}">${ic('train', 14, 2)} Nouvelle ligne</button></div>
+      ${lines.length ? `<div class="rlist${lines.length > 3 ? ' many' : ''}">${lines.map((l) => {
+      const tr = r.trains.get(l.id), stops = l.stops.map((id) => h.world.buildings.get(id));
+      const short = stops.map((s) => (!s ? '?' : s.id === b.id ? '<b>ici</b>' : shortStop(r.stopName(s)))).join(' → ');
+      const tip = `${r.lineLabel(l)}\n${l.freight ? 'Marchandises' : 'Voyageurs'}${tr ? ` · train ${trainWhere(r, tr)}` : ' · pas de train'}${tr && tr.crew.length ? ` · ${tr.crew.length} mineurs au fond` : ''}`;
+      return `<div class="rline" title="${attr(tip)}">${dot(l.color)}<span class="grow">${short}</span>
         <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? 'Train de marchandises : les ateliers et carrières à côté de ses gares produisent 50 % de plus. Cliquer pour en faire un train de voyageurs' : 'Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises'}" aria-label="${l.freight ? 'Train de marchandises' : 'Train de voyageurs'}">${l.freight ? '📦' : '🧳'}</button>
-        <button data-act="follow:${l.id}" title="Suivre le train" aria-label="Suivre le train">${ic('eye', 15, 2)}</button><button data-act="edit:${l.id}" title="Modifier la ligne : ses arrêts et le tracé de sa voie" aria-label="Modifier la ligne">${ic('road', 15, 2)}</button><button data-act="drop:${l.id}" title="Fermer la ligne" aria-label="Fermer la ligne">${ic('close', 15, 2)}</button></div>`;
-    }).join('')}<button data-act="newline" class="newline">${ic('train', 15, 2)} Nouvelle ligne depuis ${b.kind === 'outpost' ? 'cet avant-poste' : 'cette gare'}</button></div>`
+        <button data-act="follow:${l.id}" title="Suivre le train" aria-label="Suivre le train">${ic('eye', 14, 2)}</button><button data-act="edit:${l.id}" title="Modifier la ligne : ses arrêts et le tracé de sa voie" aria-label="Modifier la ligne">${ic('road', 14, 2)}</button><button data-act="drop:${l.id}" title="Fermer la ligne" aria-label="Fermer la ligne">${ic('close', 14, 2)}</button></div>`;
+    }).join('')}</div>` : ''}</div>`
       : b.kind === 'outpost' && h.sim.age >= 3 ? `<p class="stat">${ic('train', 14, 2)} Cet avant-poste n’a pas la place d’un quai à son pied : le train ne peut pas s’y arrêter.</p>` : '';
     // améliorations : ce qu'il peut devenir à cet âge, et leur prix (ou ce qui manque pour les débloquer)
     const ups = UPGRADES.filter((u) => u.from === b.kind && h.sim.age >= KINDS[u.to].minAge).map((u) => {
@@ -778,13 +793,26 @@ export class UI {
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} Améliorer : ${name}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
     }).join('');
     const upgrades = ups ? `<div class="acts ups">${ups}</div>` : '';
-    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${rails}|${upgrades}`;
+    const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${railChip}|${rails}|${upgrades}`;
     if (key === this.selKey) return;
+    const same = box.dataset.id === String(b.id) && box.classList.contains('show');
     this.selKey = key;
+    box.dataset.id = String(b.id);
+    // d'un rendu à l'autre du même bâtiment (les trains roulent), on garde ce qui est déplié et où l'on a défilé
+    const opened = same ? [...box.querySelectorAll<HTMLDetailsElement>('details[open]')].map((x) => x.dataset.k) : [];
+    const scroll = same ? box.scrollTop : 0, listScroll = same ? box.querySelector('.rlist')?.scrollTop ?? 0 : 0;
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
-    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${AGES[b.age].name}${sizeOf(b) > 1 ? ` · ${sizeOf(b)} × ${sizeOf(b)}` : ''} · ${b.auto ? 'façade tournée vers la route' : 'orientée à la main'}</small></div><button class="x" data-act="close" title="Fermer (Échap)" aria-label="Fermer">${ic('close', 16, 2)}</button></div>
-      <p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${rails}${upgrades}
+    // le conseil : replié, son début sur une ligne ; déplié, tout le texte
+    const [perkHead, perkRest] = d.perk ? brief(d.perk, 90) : ['', ''];
+    const perk = d.perk ? `<details class="perk" data-k="perk"><summary>✦ <span>${perkHead}</span></summary>${perkRest}</details>` : '';
+    const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = b.auto ? 'façade tournée vers la route' : 'orientée à la main';
+    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 24, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small title="${attr(`${AGES[b.age].name}${size ? ` · ${size} cases` : ''} · ${facing}`)}">${AGES[b.age].name}${size ? ` · ${size}` : ''}</small></div><button class="x" data-act="close" title="Fermer (Échap)" aria-label="Fermer">${ic('close', 16, 2)}</button></div>
+      ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${upgrades}
       <div class="acts"><button data-act="move">${ic('hand', 16, 2)} Déplacer</button><button data-act="rot">${ic('rotate', 16, 2)} Tourner <kbd>R</kbd></button><button data-act="del" class="danger">${ic('demolish', 16, 2)} Démolir</button></div>`;
+    box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
+    box.scrollTop = scroll;
+    const rl = box.querySelector('.rlist');
+    if (rl) rl.scrollTop = listScroll;
     box.classList.add('show');
     box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((el) => (el.onclick = async () => {
       const act = el.dataset.act;
@@ -1206,6 +1234,11 @@ export class UI {
     list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
+    // la hauteur de la barre du bas, quand elle s'étend sous la fiche d'un bâtiment (à droite) : la fiche s'arrête au-dessus
+    // et défile plutôt que de passer dessous
+    const dm = $('#dockMain').getBoundingClientRect(), sc = $('#selCard').getBoundingClientRect();
+    const dockH = dm.height && (!sc.width || dm.right > sc.left) ? Math.max(0, Math.round(innerHeight - dm.top)) : 0;
+    if (this.root.style.getPropertyValue('--dockH') !== `${dockH}px`) this.root.style.setProperty('--dockH', `${dockH}px`);
     const live = new Set<number>();
     for (const a of ex.active) {
       live.add(a.id);
