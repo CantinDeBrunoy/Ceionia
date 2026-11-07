@@ -515,13 +515,15 @@ export class VegView {
     w.vegRect = null;
     // les parcelles ont pu changer : leurs sillons seront recalculés
     this.plotAngle.clear();
-    this.rebuildSpecial();
+    // les décors uniques (grottes, failles, volcans, épaves) ne se refont que si la zone en touche un
+    if (this.specialNear(r)) this.rebuildSpecial();
     const urgent: number[] = [];
     for (let cz = Math.floor(r[1] / CH); cz <= Math.floor(r[3] / CH); cz++)
       for (let cx = Math.floor(r[0] / CH); cx <= Math.floor(r[2] / CH); cx++) urgent.push(cz * NC + cx);
-    // petite retouche : immédiate ; carte entière : au fil des images
+    // petite retouche : devant, et tout de suite si c'est court (une grande tuile se finit à l'image suivante) ; carte
+    // entière : au fil des images
     for (const ch of urgent) this.enqueue(ch, urgent.length <= 6);
-    if (urgent.length <= 6) this.flush(Infinity, urgent.length + (this.current ? 1 : 0));
+    if (urgent.length <= 6) this.flush(8, urgent.length + (this.current ? 1 : 0));
   }
 
   /** Avance les reconstructions en attente et règle la visibilité des tuiles selon la caméra */
@@ -1043,6 +1045,14 @@ export class VegView {
   // ---------- Décors uniques ----------
 
   /** Grottes, failles, épaves, volcans (lave et fumée) de toute la carte */
+  /** Un décor unique (grotte, faille, volcan, épave) ou son emprise à moins de trois cases de la zone ? */
+  private specialNear(r: [number, number, number, number]) {
+    const w = this.world;
+    for (let cz = Math.max(0, r[1] - 3); cz <= Math.min(N - 1, r[3] + 3); cz++)
+      for (let cx = Math.max(0, r[0] - 3); cx <= Math.min(N - 1, r[2] + 3); cx++) { const k = w.ci(cx, cz); if (w.veg[k] >= VEG_CAVE || w.decor[k]) return true; }
+    return false;
+  }
+
   private rebuildSpecial() {
     const w = this.world, d = this.dummy, col = this.col, s = this.season;
     let nWr = 0, nL = 0, nSm = 0, nSp = 0;

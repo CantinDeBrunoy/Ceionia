@@ -507,6 +507,8 @@ export class Fauna {
   private lastVersion = -1;
   private lastAge = -1;
   private refreshTimer = 0;
+  /** recensement en cours, réparti sur plusieurs images */
+  private refreshing: Generator<void, void, void> | null = null;
   private lifeTimer = 0;
   /** niveau de broutage et de floraison affiché par case (la végétation se refait quand il change) */
   private shownGraze = new Uint8Array(N * N);
@@ -589,7 +591,17 @@ export class Fauna {
     return null;
   }
 
+  /** Recensement et réconciliation d'un coup (première fois, visiteurs, tests) */
   private refresh() {
+    const g = this.refreshGen();
+    while (!g.next().done);
+  }
+
+  /**
+   * Recensement des lieux de vie (toute la carte) puis réconciliation des bêtes : en pas, pour se répartir sur plusieurs
+   * images quand le monde change (sur un grand village, tout d'un coup coûtait un à-coup de 30 ms à chaque bâtiment posé)
+   */
+  private *refreshGen(): Generator<void, void, void> {
     const w = this.world;
     const src: Source[] = [];
     this.flockAlt.clear();
@@ -601,7 +613,8 @@ export class Fauna {
     const pond = (k: number) => { const x = k % N, z = Math.floor(k / N); return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => w.inCells(x + dx, z + dz) && !!w.lake[w.ci(x + dx, z + dz)]); };
     /** mer : hauts-fonds pour les bancs de poissons, large pour les dauphins */
     const shallows: number[] = [], deep: number[] = [];
-    for (let cz = 0; cz < N; cz++)
+    for (let cz = 0; cz < N; cz++) {
+      if (cz && cz % 24 === 0) yield;
       for (let cx = 0; cx < N; cx++) {
         const k = w.ci(cx, cz), v = w.veg[k], b = w.biome[k];
         if (v === 1) {
@@ -625,6 +638,8 @@ export class Fauna {
           if (w.waterDist[k] === 0 && [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.cellAvg(cx + dx, cz + dz) > 0.1)) shore.push(k);
         }
       }
+    }
+    yield;
     for (const b of w.buildings.values()) {
       const s = sizeOf(b);
       const hens = b.kind === 'farm' ? (b.age < 4 ? 4 : 0) : b.kind === 'house' && b.age <= 2 && hash2(b.x, b.z, 41) < 0.55 ? 3 : 0;
@@ -701,6 +716,7 @@ export class Fauna {
         src.push({ key: `${prefix}${i}`, kind, hx: x, hz: z, n: n(i), radius });
       }
     };
+    yield;
     const [mT, mTa, mD, mTr, mM] = meadow;
     const grass = mT.concat(mM), green = mT.concat(mTr), all = mT.concat(mTa, mTr, mM);
     group('sheep', 'sheep', grass, Math.min(12, Math.floor(grass.length / 90)), (i) => 3 + (i % 4), 2.2, 0);
@@ -791,6 +807,7 @@ export class Fauna {
     // et deux vols plus petits qui tournent au-dessus du village
     if (vc) for (let i = 0; i < 3; i++) src.push({ key: `vbirds${i}`, kind: 'bird', hx: vc[0], hz: vc[1], n: 4 + i, radius: 9 + i * 6 });
     // montagnes : bouquetins sur les hauts pâturages, aigles qui tournoient autour des plus hauts sommets
+    yield;
     const alp: number[] = [], tops: number[] = [], volcanoes: number[] = [];
     for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_VOLCANO) volcanoes.push(k);
     for (let k = 0; k < N * N; k++) {
@@ -811,6 +828,7 @@ export class Fauna {
     // mouettes : au-dessus des rivages
     group('gull', 'gull', shore, Math.min(N > 128 ? 9 : 5, Math.floor(shore.length / 60)), () => 3, 3, 270);
 
+    yield;
     // réconciliation : on garde les bêtes existantes, on ajoute ou retire l'écart
     const want = new Map(src.map((s) => [s.key, s]));
     for (const c of this.critters) if ((!want.has(c.key) || want.get(c.key)!.kind !== baseKind(c.kind)) && c.actor) { c.actor.mixer.stopAllAction(); this.group.remove(c.actor.root); }
@@ -946,8 +964,16 @@ export class Fauna {
     this.refreshTimer -= dt;
     // la sculpture change le monde à chaque image : recensement au plus deux fois par seconde
     if ((w.version !== this.lastVersion && this.refreshTimer <= 0) || age !== this.lastAge) {
+      const first = this.lastVersion < 0;
       this.lastVersion = w.version; this.lastAge = age; this.refreshTimer = 0.5;
-      this.refresh();
+      // la première fois d'un coup ; ensuite, quelques millisecondes par image
+      if (first) this.refresh(); else this.refreshing = this.refreshGen();
+    }
+    if (this.refreshing) {
+      const t0 = performance.now();
+      let r = this.refreshing.next();
+      while (!r.done && performance.now() - t0 < 4) r = this.refreshing.next();
+      if (r.done) this.refreshing = null;
     }
     this.t += dt;
     this.uTime.value = this.t;

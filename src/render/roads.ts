@@ -881,14 +881,17 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       }
       return v;
     };
+    // (chaque étape du plan est un pas : rien ne traîne plus de quelques millisecondes)
     this.findBridged();
     this.findCurved(age);
+    yield;
     const lines = this.skeleton(age), hw0 = HW[a];
+    yield;
     // largeur qui varie un peu le long des chemins de terre (pas en ville)
     const half = (x: number, z: number) => hw0 * (1 + WIDTH_VAR[a] * this.noise.noise2(x * 0.6, z * 0.6));
 
     // surface : une grille fine par case ; chaque sommet porte ses distances signées au bord de la chaussée et des abords
-    const pos: number[] = [], col: number[] = [], ra: number[] = [], pa: number[] = [], ka: number[] = [], sa: number[] = [], idx: number[] = [];
+    const pos: number[] = [], nor: number[] = [], col: number[] = [], ra: number[] = [], pa: number[] = [], ka: number[] = [], sa: number[] = [], idx: number[] = [];
     const emit = (cx: number, cz: number, sub: number, road: (x: number, z: number) => number, pave: (x: number, z: number) => number, kind: number, rCut: number, pCut: number) => {
       const n = sub + 1, R = new Float32Array(n * n), P = new Float32Array(n * n), quads: number[] = [];
       for (let jz = 0; jz < n; jz++) for (let ix = 0; ix < n; ix++) { R[jz * n + ix] = road(cx + ix / sub, cz + jz / sub); P[jz * n + ix] = pave(cx + ix / sub, cz + jz / sub); }
@@ -898,18 +901,29 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
           if (R[q] < rCut || P[q] < pCut || R[q + 1] < rCut || P[q + 1] < pCut || R[q + n] < rCut || P[q + n] < pCut || R[q + n + 1] < rCut || P[q + n + 1] < pCut) quads.push(q);
         }
       if (!quads.length) return;
-      const v0 = ra.length;
+      const v0 = ra.length, H = new Float32Array(n * n);
       for (let jz = 0; jz < n; jz++)
         for (let ix = 0; ix < n; ix++) {
-          const x = cx + ix / sub, z = cz + jz / sub, t = 0.96 + 0.06 * this.noise.noise2(x * 5.3, z * 5.3);
-          pos.push(x, w.hAt(x, z) + 0.02, z);
+          const x = cx + ix / sub, z = cz + jz / sub, t = 0.96 + 0.06 * this.noise.noise2(x * 5.3, z * 5.3), h = w.hAt(x, z);
+          H[jz * n + ix] = h;
+          pos.push(x, h + 0.02, z);
           col.push(t, t, t);
           ra.push(R[jz * n + ix]); pa.push(P[jz * n + ix]); ka.push(kind); sa.push(snowAt(x, z));
+        }
+      // normales lissées de la grille (différences centrées sur ses hauteurs) : calculées case par case, au fil des pas,
+      // plutôt que d'un coup sur toute la surface (des centaines de milliers de triangles : 20 ms)
+      for (let jz = 0; jz < n; jz++)
+        for (let ix = 0; ix < n; ix++) {
+          const xl = Math.max(0, ix - 1), xr = Math.min(n - 1, ix + 1), zl = Math.max(0, jz - 1), zr = Math.min(n - 1, jz + 1);
+          const dx = (H[jz * n + xr] - H[jz * n + xl]) * sub / (xr - xl), dz = (H[zr * n + ix] - H[zl * n + ix]) * sub / (zr - zl);
+          const l = Math.hypot(dx, 1, dz);
+          nor.push(-dx / l, 1 / l, -dz / l);
         }
       for (const q of quads) { const v = v0 + q; idx.push(v, v + n + 1, v + 1, v, v + n, v + n + 1); }
     };
     this.islands.clear();
     const plan = town ? this.streets(age) : null;
+    yield;
     const yards = town ? new Map<number, number[]>() : this.yards();
     // (le plan est fait : le reste se répartit sur plusieurs images, par paquets de cases)
     yield;
@@ -990,8 +1004,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     g.setAttribute('aPave', new THREE.Float32BufferAttribute(pa, 1));
     g.setAttribute('aKind', new THREE.Float32BufferAttribute(ka, 1));
     g.setAttribute('aSnow', new THREE.Float32BufferAttribute(sa, 1));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
     g.setIndex(idx);
-    g.computeVertexNormals();
     yield;
 
     // ponts et cailloux
@@ -1159,6 +1173,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     if (!town && snow < 0.5) {
       const pebble = unindexed(new THREE.IcosahedronGeometry(1, 0)), pp = pebble.attributes.position;
       for (const [k, ls] of lines) for (const l of ls) for (let i = 0; i + 3 < l.length; i += 2) {
+        if (++batch % 64 === 0) yield;
         const r = hash2(k, i, 41);
         if (r > 0.45) continue;
         const ax = l[i], az = l[i + 1], dx = l[i + 2] - ax, dz = l[i + 3] - az, len = Math.hypot(dx, dz) || 1;
@@ -1580,30 +1595,34 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         }
       }
     }
-    // tout est prêt : les nouveaux chemins et leurs décors remplacent les anciens d'un coup
-    this.path.geometry.dispose();
-    this.path.geometry = g;
-    this.lights = lights;
-    this.builtSnow = snow;
+    // les géométries des décors, une par pas
+    yield;
     const gg = new THREE.BufferGeometry();
     gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
     gg.setAttribute('color', new THREE.Float32BufferAttribute(gc, 3));
     gg.setAttribute('aLight', new THREE.Float32BufferAttribute(new Float32Array(gp.length / 3), 1));
     gg.computeVertexNormals();
-    this.glow.geometry.dispose();
-    this.glow.geometry = gg;
+    yield;
     const sg = new THREE.BufferGeometry();
     sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
     sg.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
     sg.computeVertexNormals();
-    this.solid.geometry.dispose();
-    this.solid.geometry = sg;
-    this.deckV = deckV; this.deckBase.copy(deck);
-    this.paintDeck(snow);
+    yield;
     const mg = new THREE.BufferGeometry();
     mg.setAttribute('position', new THREE.Float32BufferAttribute(mp, 3));
     mg.setAttribute('color', new THREE.Float32BufferAttribute(mc, 3));
     mg.computeVertexNormals();
+    // tout est prêt : les nouveaux chemins et leurs décors remplacent les anciens d'un coup
+    this.path.geometry.dispose();
+    this.path.geometry = g;
+    this.lights = lights;
+    this.builtSnow = snow;
+    this.glow.geometry.dispose();
+    this.glow.geometry = gg;
+    this.solid.geometry.dispose();
+    this.solid.geometry = sg;
+    this.deckV = deckV; this.deckBase.copy(deck);
+    this.paintDeck(snow);
     this.marks.geometry.dispose();
     this.marks.geometry = mg;
   }

@@ -308,6 +308,14 @@ float snN(vec2 p) {
    * Courant des rivières : l'eau descend la vallée. Pour chaque case d'eau, hauteur moyenne des berges alentour ; le courant
    * suit la pente de ces berges (des hautes vallées vers les basses), seulement dans les chenaux étroits
    */
+  /** De l'eau à moins de `r` cases de la zone (cases, bornes incluses) ? */
+  private waterNear(rect: [number, number, number, number], r: number) {
+    const w = this.world;
+    for (let cz = Math.max(0, rect[1] - r); cz <= Math.min(N - 1, rect[3] + r); cz++)
+      for (let cx = Math.max(0, rect[0] - r); cx <= Math.min(N - 1, rect[2] + r); cx++) if (w.cellAvg(cx, cz) < 0.08 || w.lake[w.ci(cx, cz)]) return true;
+    return false;
+  }
+
   private computeFlow() {
     const w = this.world, R = 4, S = N + 1;
     const wet = (k: number) => w.cellAvg(k % N, Math.floor(k / N)) < -0.05 && !w.lake[k];
@@ -431,7 +439,8 @@ float snN(vec2 p) {
       x0 = Math.max(0, a - 1); z0 = Math.max(0, b - 1); x1 = Math.min(VS - 1, c + 1); z1 = Math.min(VS - 1, d + 1);
     }
     const full = x0 === 0 && z0 === 0 && x1 === VS - 1 && z1 === VS - 1;
-    if (!colorsOnly) this.computeFlow();
+    // le courant des rivières (toute la carte) ne change que si le relief a bougé près de l'eau
+    if (!colorsOnly && (!rect || this.waterNear(rect, 6))) this.computeFlow();
     const vis = w.vis, vnor = this.vnor, vcol = this.vcol, vsurf = this.vsurf;
     const vw = this.vegW, yw = this.yardW, patch = this.patch, tmp = this.tmp;
 
