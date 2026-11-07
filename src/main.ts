@@ -485,7 +485,7 @@ class Game implements UIHost {
       const [x, z] = hm.map.arrival;
       this.cam.jump({ x, z: z + 4, dist: 14, pitch: 1.05, yaw: Math.PI }, hm.view.groundY(x, z));
       this.cam.handler = { down: (e) => { const p = hm.view.pick(this.cam.ray(e.x, e.y, canvas.clientWidth, canvas.clientHeight)); if (p && hm.view.portalAt(p.x, p.z)) this.exitHell(); }, move: () => {}, up: () => {}, cancel: () => {}, hover: () => {} };
-      this.ui.banner('Monde des Enfers', ` : le royaume démoniaque est tout au fond. Le portail ramène à la surface.`);
+      this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Le portail ramène à la surface.`);
       this.ui.update();
     }, 'Passage du portail…');
   }
@@ -860,6 +860,7 @@ class Game implements UIHost {
   /** Descend par l'entrée la plus proche du centre de la vue */
   enterNearest() {
     if (this.mode === 'under') { this.exitUnder(); return; }
+    if (this.mode === 'hell') { this.exitHell(); return; }
     const w = this.world, t = this.cam.target;
     let best = -1, bd = Infinity;
     for (let k = 0; k < N * N; k++) {
@@ -873,6 +874,8 @@ class Game implements UIHost {
 
   /** Remonte à la surface, devant l'entrée empruntée (ou celle donnée) ; remonter soi-même cesse de suivre la troupe */
   exitUnder(cell?: number, auto = false) {
+    // (le bouton Remonter sert aussi à quitter les Enfers)
+    if (this.mode === 'hell') { this.exitHell(); return; }
     if (this.mode !== 'under') return;
     if (!auto && this.autoUnder) { this.autoUnder = false; this.following = null; }
     this.fadeThrough(() => {

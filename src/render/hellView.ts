@@ -49,7 +49,7 @@ export class HellView {
   private sources: Source[] = [];
   private active: Source[] = [];
   private lightTimer = 0;
-  private lantern: Source = { x: 0, y: 0, z: 0, r: 8, c: new THREE.Color(1, 0.7, 0.55).multiplyScalar(0.55), flicker: 0 };
+  private lantern: Source = { x: 0, y: 0, z: 0, r: 8, c: new THREE.Color(1, 0.7, 0.55).multiplyScalar(0.3), flicker: 0 };
   private fog = new THREE.Fog(BG, 14, 44);
   private d = new THREE.Object3D();
   private rigs = {} as Record<DemonKind, Rig>;
@@ -74,8 +74,8 @@ export class HellView {
     this.scene.background = BG;
     this.scene.fog = this.fog;
     // lumière chaude d'en bas (la lave), violette d'en haut : les reliefs se lisent sans rien de noir
-    this.scene.add(new THREE.HemisphereLight(0xc89ab8, 0x6a2418, 1.5));
-    const dir = new THREE.DirectionalLight(0xffc8a8, 2.2);
+    this.scene.add(new THREE.HemisphereLight(0xb08ab8, 0x4a1820, 1.05));
+    const dir = new THREE.DirectionalLight(0xffc8a8, 1.7);
     dir.position.set(-0.5, 0.8, 0.4);
     this.scene.add(dir);
     const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 });
@@ -86,7 +86,7 @@ export class HellView {
     const barMat = (o: number) => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: o, depthTest: false, depthWrite: false, fog: false });
     this.barBg = new THREE.InstancedMesh(plane, barMat(0.75), 600);
     this.barFill = new THREE.InstancedMesh(plane, barMat(1), 600);
-    for (const b of [this.barBg, this.barFill]) { b.count = 0; b.frustumCulled = false; b.renderOrder = 10; b.setColorAt(0, this.white); this.scene.add(b); }
+    for (const b of [this.barBg, this.barFill]) { b.count = 0; b.frustumCulled = false; b.renderOrder = b === this.barFill ? 11 : 10; b.setColorAt(0, this.white); this.scene.add(b); }
     for (const k of KINDS) this.rigs[k] = this.makeRig(k);
   }
 
@@ -208,13 +208,13 @@ export class HellView {
       }
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      const mesh = new THREE.Mesh(g, lavaMaterial(this.uTime, kind === HPOOL_CHASM ? 0.45 : 0));
+      const mesh = new THREE.Mesh(g, lavaMaterial(this.uTime, kind === HPOOL_CHASM ? 0.62 : 0));
       this.content.add(mesh);
       const step = kind === HPOOL_LAVA ? LAVA_STEP : 4;
       for (const k of cells) {
         const x = k % HW, z = Math.floor(k / HW);
         if (m.pool[k] === kind && x % step === 0 && z % step === 0)
-          this.sources.push({ x: x + 0.5, y: y + (kind === HPOOL_LAVA ? 0.6 : 1.4), z: z + 0.5, r: kind === HPOOL_LAVA ? 4 : 4.6, c: new THREE.Color(1, 0.38, 0.1).multiplyScalar(kind === HPOOL_LAVA ? 1.7 : 1.3), flicker: 0.15 });
+          this.sources.push({ x: x + 0.5, y: y + (kind === HPOOL_LAVA ? 0.6 : 1.4), z: z + 0.5, r: kind === HPOOL_LAVA ? 4 : 4.6, c: new THREE.Color(1, 0.38, 0.1).multiplyScalar(kind === HPOOL_LAVA ? 1.35 : 1.1), flicker: 0.15 });
       }
     }
   }
@@ -271,8 +271,8 @@ export class HellView {
             stal.push(this.item(cx + (r(8 + i) - 0.5) * 0.5, y - 0.02, cz + (r(11 + i) - 0.5) * 0.5, r(14 + i) * 6, 0.12 + r(17 + i) * 0.08, h, 0.12 + r(17 + i) * 0.08, new THREE.Color(WALL[zi]).multiplyScalar(1.1 + r(20) * 0.3)));
           }
         }
-        if ((zi === Z_EMBER || zi === Z_KINGDOM || zi === Z_PORTAL) && r(21) < 0.07)
-          cracks.push(this.item(cx, y + 0.012, cz, r(22) * 6, 0.05 + r(23) * 0.05, 0.02, 0.5 + r(24) * 0.6, new THREE.Color(1, 0.42 + r(25) * 0.2, 0.12)));
+        if ((zi === Z_EMBER || zi === Z_KINGDOM || zi === Z_PORTAL) && r(21) < 0.05)
+          cracks.push(this.item(cx, y + 0.012, cz, r(22) * 6, 0.025 + r(23) * 0.02, 0.02, 0.22 + r(24) * 0.3, new THREE.Color(1, 0.3 + r(25) * 0.15, 0.06)));
         if (r(26) < (zi === Z_BONES ? 0.12 : 0.012) && !onPath) {
           bones.push(this.item(cx, y + 0.03, cz, r(27) * 6, 0.07, 0.07, 0.4 + r(28) * 0.3, new THREE.Color(0xeee2c8)));
         }
@@ -514,15 +514,15 @@ export class HellView {
     const q = camera.quaternion, m = this.m4, off = this.m5, v = this.v, s = this.s;
     const put = (x: number, y: number, z: number, w: number, frac: number, c: THREE.Color) => {
       if (n >= 600) return;
+      // la jauge part du bord gauche du fond (le plan va de 0 à 1 en x)
       v.set(x, y, z);
-      s.set(w + 0.04, 0.09, 1);
+      s.set(1, 1, 1);
       m.compose(v, q, s);
-      off.makeTranslation(-0.5, 0, 0);
-      this.barBg.setMatrixAt(n, m.clone().multiply(off.clone().scale(new THREE.Vector3(1, 1, 1))));
+      off.makeTranslation(-(w + 0.04) / 2, 0, 0).multiply(BAR_S.makeScale(w + 0.04, 0.09, 1));
+      this.barBg.setMatrixAt(n, BAR_M.multiplyMatrices(m, off));
       this.barBg.setColorAt(n, BAR_BG);
-      s.set(w * Math.max(0, frac), 0.06, 1);
-      m.compose(v, q, s);
-      this.barFill.setMatrixAt(n, m.multiply(off));
+      off.makeTranslation(-w / 2, 0, 0.001).multiply(BAR_S.makeScale(Math.max(0.001, w * frac), 0.06, 1));
+      this.barFill.setMatrixAt(n, BAR_M.multiplyMatrices(m, off));
       this.barFill.setColorAt(n, c);
       n++;
     };
@@ -639,6 +639,7 @@ export class HellView {
   }
 }
 
+const BAR_M = new THREE.Matrix4(), BAR_S = new THREE.Matrix4();
 const BAR_BG = new THREE.Color(0x1a0a0c), HELL_C = new THREE.Color(0xff4a3a), PLAYER_C = new THREE.Color(0x5adf6a), WEAK_C = new THREE.Color(0xffc040);
 
 /** Teinte de la zone en une rangée (fondue sur trois cases de part et d'autre des frontières) */
@@ -865,14 +866,15 @@ float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
 void main() {
-  vec2 q = vP * 0.8 + vec2(uTime * 0.09, uTime * 0.05);
+  vec2 q = vP * 1.1 + vec2(uTime * 0.09, uTime * 0.05);
   float f = n(q) * 0.5 + n(q * 2.3 - uTime * 0.07) * 0.32 + n(q * 5.1 + uTime * 0.15) * 0.18;
-  float crust = smoothstep(0.52, 0.66, n(vP * 1.6 + vec2(uTime * 0.03, -uTime * 0.02)));
-  float vein = 1.0 - smoothstep(0.0, 0.06, abs(f - 0.5));
-  vec3 hot = mix(vec3(0.95, 0.28, 0.04), vec3(1.0, 0.78, 0.25), smoothstep(0.42, 0.8, f));
-  vec3 c = mix(hot, vec3(0.3, 0.07, 0.04), crust * 0.8) + vec3(1.0, 0.6, 0.2) * vein * 0.35;
+  // plaques de croûte sombre, petites, bordées de fonte vive
+  float cr = n(vP * 2.4 + vec2(uTime * 0.03, -uTime * 0.02));
+  float crust = smoothstep(0.5, 0.6, cr), rim = smoothstep(0.42, 0.5, cr) * (1.0 - crust);
+  vec3 hot = mix(vec3(0.85, 0.2, 0.03), vec3(1.0, 0.62, 0.15), smoothstep(0.5, 0.85, f));
+  vec3 c = mix(hot, vec3(0.22, 0.05, 0.04), crust * 0.85) + vec3(1.0, 0.55, 0.15) * rim * 0.5;
   c *= 1.0 - uDeep;
-  gl_FragColor = vec4(c * 1.25, 1.0);
+  gl_FragColor = vec4(c * 1.1, 1.0);
 }`,
   });
 }
@@ -913,7 +915,7 @@ float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 void main() {
   vec2 q = vP * 0.12 + vec2(uTime * 0.02, uTime * 0.012);
   float m = n(q) * 0.6 + n(q * 2.7 - uTime * 0.015) * 0.4;
-  gl_FragColor = vec4(0.75, 0.16, 0.22, smoothstep(0.35, 0.85, m) * 0.16);
+  gl_FragColor = vec4(0.75, 0.16, 0.22, smoothstep(0.35, 0.85, m) * 0.11);
 }`,
   });
 }
