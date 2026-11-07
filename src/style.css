@@ -149,6 +149,9 @@ button.pop:hover { background: var(--accent-soft); }
 #census .hint.ok { color: var(--good); font-weight: 700; }
 #msg { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 4px 5px 4px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.25; color: var(--ink2); white-space: nowrap; pointer-events: none; }
 #msg span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* un long conseil passe sur deux lignes (au lieu de déborder sur tout le bandeau) */
+#msg { white-space: normal; border-radius: 16px; align-items: center; }
+#msg span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow: hidden; word-break: normal; }
 #msg:not(.link) { padding-right: 11px; }
 #msg.tone-warn { background: #fdecd2; color: #8a4b06; box-shadow: inset 0 0 0 1.5px rgba(217, 138, 28, 0.6); }
 #msg.tone-warn > .ic { color: var(--warn); animation: pulse 1.4s infinite; }

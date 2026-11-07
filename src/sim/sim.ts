@@ -334,7 +334,7 @@ export class Sim {
     }
     this.messageRail = nx.stop;
     const b = this.world.buildings.get(nx.stop)!, name = this.nameOf(b.kind);
-    return `Pour l’âge suivant, ${goal} : tracez une ligne de « ${name} » à une autre gare (cliquez ici, ou sur la gare puis « Nouvelle ligne ») ; la voie se pose d’elle-même.`;
+    return `Pour l’âge suivant, ${goal} : tracez une ligne de « ${name} » à une autre gare (cliquez ici).`;
   }
 
   /** Un bâtiment du village produit-il cette ressource ? */
