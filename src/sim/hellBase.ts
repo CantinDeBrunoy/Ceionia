@@ -309,7 +309,13 @@ export class HellBase {
     b.events.length = 0;
     // les démons d'une contre-attaque en cours (repris par la faction, sans zone) la poursuivent
     const zones = Array.isArray(o.active) ? o.active.filter((z) => Number.isInteger(z)) : [];
-    if (zones.length) for (const u of hell.alive('hell')) if (u.zone < 0) b.attackers.set(u.id, zones[0]);
+    // (avec leur force : celle de la zone d'où ils viennent, la faction les reprend sans zone)
+    if (zones.length) for (const u of hell.alive('hell')) {
+      if (u.zone >= 0) continue;
+      b.attackers.set(u.id, zones[0]);
+      const st = demonStats(u.kind as DemonKind, Math.min(HELL_ZONE_N - 1, zones[0] + 1));
+      u.stats = st; u.maxHp = st.hp; u.hp = Math.min(u.hp, st.hp);
+    }
     return b;
   }
 }

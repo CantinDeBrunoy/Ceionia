@@ -29,7 +29,7 @@ export interface WarSave {
   /** la base avancée dans les Enfers */
   base?: HellBaseSave | null;
   /** la vague en cours : sa description, ses démons encore debout (positions sur l'île) */
-  raid?: { w: RaidWave; units: { kind: DemonKind; x: number; z: number; hp: number }[] } | null;
+  raid?: { w: RaidWave; units: { kind: DemonKind; x: number; z: number; hp: number }[]; t?: number } | null;
   /** le combat du roi des Enfers */
   king?: KingSave | null;
 }
@@ -76,6 +76,7 @@ export class War {
       if (r) {
         this.faction!.activeRaid = r.w;
         this.isle.raid = r.w;
+        this.isle.raidT = Number.isFinite(r.t) ? r.t! : 0;
         for (const u of r.units) { const h = this.isle.sim.addRaider(u.kind, demonStats(u.kind, 1), u.x, u.z); h.hp = Math.min(h.maxHp, u.hp); }
       }
     }
@@ -266,8 +267,9 @@ export class War {
       const t = this.troopOf.get(u.id);
       if (!t || !this.army.troops.includes(t) || t.heal > 0) { this.unitOf.delete(id); this.troopOf.delete(u.id); isle.sim.units.delete(u.id); f.units.delete(u.id); }
     }
-    // la faction : à chaque image quand on la regarde, à pas allégés sinon
-    if (this.hellInView) this.stepHell(Math.min(dt, COARSE));
+    // la faction : à chaque image quand on la regarde (en plusieurs pas si l'image est longue : à ×4 sur une machine lente, le
+    // temps des Enfers prenait du retard), à pas allégés sinon
+    if (this.hellInView) for (let left = Math.min(dt, 4 * COARSE); left > 1e-6; left -= COARSE) this.stepHell(Math.min(left, COARSE));
     else {
       this.acc += dt;
       for (let i = 0; i < 4 && this.acc >= COARSE; i++) { this.acc -= COARSE; this.stepHell(COARSE); }
@@ -275,7 +277,7 @@ export class War {
     }
     this.baseNews();
     // l'île : le combat (les blessures légères se referment hors incursion)
-    isle.step(Math.min(dt, COARSE), REGEN);
+    for (let left = Math.min(dt, 4 * COARSE); left > 1e-6; left -= COARSE) isle.step(Math.min(left, COARSE), REGEN);
     this.collect(f, this.hellFx);
     this.collect(isle.sim, this.isleFx);
     // le passage du portail : arrivées devant l'arche
@@ -414,7 +416,7 @@ export class War {
       faction: f ? f.save(false) : this.pending?.faction ?? null,
       base: this.base ? this.base.save() : this.pending?.base ?? null,
       king: this.king ? this.king.save() : this.pending?.king ?? null,
-      raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })) } : null,
+      raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })), t: Math.round(isle.raidT) } : null,
     };
   }
 
@@ -423,7 +425,7 @@ export class War {
     this.army = readArmy(o.army);
     const fac = o.faction && typeof o.faction === 'object' ? (o.faction as HellSave) : null;
     const r = o.raid && typeof o.raid === 'object' ? (o.raid as WarSave['raid']) : null;
-    const raid = r && r.w && Array.isArray(r.units) ? { w: r.w, units: r.units.filter((u) => u && u.kind in DEMONS) } : null;
+    const raid = r && r.w && Array.isArray(r.units) ? { w: r.w, units: r.units.filter((u) => u && u.kind in DEMONS), t: r.t } : null;
     const base = o.base && typeof o.base === 'object' ? (o.base as HellBaseSave) : null;
     const king = o.king && typeof o.king === 'object' ? (o.king as KingSave) : null;
     this.pending = { army: this.army, faction: fac && Array.isArray(fac.units) && Array.isArray(fac.buildings) ? fac : null, raid, base, king };
