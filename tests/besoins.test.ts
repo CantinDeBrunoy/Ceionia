@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { World, setMapSize, VEG_FIELD } from '../src/world/world';
 import { Sim, NeedId } from '../src/sim/sim';
 import { KINDS, KindId } from '../src/build/catalog';
-import { DIFFICULTIES, Difficulty } from '../src/sim/difficulty';
+import { DIFFICULTY, DIFFICULTIES, Difficulty } from '../src/sim/difficulty';
 import { mulberry32 } from '../src/core/rng';
 
 /** Un monde plat où l'on pose les bâtiments à la main (genre, âge, nombre), en rangées, et `fields` cases de champ */
@@ -25,10 +25,10 @@ describe('jauges des besoins', () => {
   beforeAll(() => setMapSize(96));
 
   it('la jauge de nourriture ne ment plus : plus de « 170 / 170, il manque 0.0 » quand un habitant a faim', () => {
-    const w = village('normal', [['house', 5, 9], ['farm', 3, 7], ['well', 5, 2]], 10);
+    const w = village('normal', [['house', 5, 7], ['farm', 3, 7], ['well', 5, 2]], 10);
     const sim = new Sim(w);
-    sim.pop = 169;
-    // sept fermes à silo (140) et des champs qui donnent 29,98 : 169,98 pour un besoin de 169 + 1 = 170
+    sim.pop = 135;
+    // sept fermes à silo (140) et des champs qui donnent 29,98 : 169,98 pour un besoin de (135 + 1) × 1,25 = 170
     sim.moisture = (29.98 / 30 - 0.55) / 0.55;
     sim.update(0, 1);
     const d = sim.needDetail('food');
@@ -47,11 +47,12 @@ describe('jauges des besoins', () => {
       const w = village(d, [['house', 5, 8], ['farm', pick(6), 1 + pick(5)], ['well', 2, 1], ['workshop', 3, pick(4)], ['health', 3, pick(2)]], pick(40));
       const sim = new Sim(w);
       sim.recalc();
-      sim.pop = pick(150);
+      // une disette en Normal laisse un nombre d'habitants à virgule (on n'en affiche que la partie entière)
+      sim.pop = pick(150) + (d === 'normal' ? rnd() : 0);
       sim.moisture = rnd();
       sim.update(0, 1);
       const n = Math.floor(sim.pop);
-      expect(sim.food.demand).toBe(n + 1);
+      expect(sim.food.demand).toBe(Math.ceil((n + 1) * DIFFICULTY[d].foodK - 1e-9));
       for (const need of ['food', 'water', 'jobs', 'health'] as NeedId[]) {
         const nd = sim.needDetail(need), what = `${need}, ${d}, ${sim.pop} habitants`;
         expect(Number.isInteger(nd.cap), what).toBe(true);

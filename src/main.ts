@@ -80,7 +80,7 @@ import { WarTips, WarTipState } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater } from './ui/command';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
-import { Difficulty, isDifficulty, rulesOf } from './sim/difficulty';
+import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
 
@@ -266,7 +266,7 @@ class Game implements UIHost {
   };
 
   /** `seed` : graine d'une nouvelle partie (tirée au hasard sans elle) ; `difficulty` : la sienne (normale sans elle) */
-  constructor(mapId: number, mode: 'continue' | 'new', seed?: number, difficulty: Difficulty = 'normal') {
+  constructor(mapId: number, mode: 'continue' | 'new', seed?: number, difficulty: Difficulty = DEFAULT_DIFFICULTY) {
     const w = this.world;
     const save = mode === 'continue' ? loadSlot(mapId) : null;
     const settings = { ...loadSettings(), ...(save?.settings ?? {}) } as Partial<Settings>;

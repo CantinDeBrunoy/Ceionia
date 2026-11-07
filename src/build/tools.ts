@@ -724,7 +724,7 @@ export class ToolController implements ToolInput {
     if (!hit) return;
     const w = this.h.world;
     const o = footprintOrigin(this.kind, hit.x, hit.z);
-    // un grand bâtiment neuf se paie en bois et en pierre (déplacer est gratuit)
+    // un grand bâtiment neuf se paie en bois et en pierre, et tous en Normal (déplacer est gratuit)
     const cost = this.moveOrigin ? null : priceIn(w, this.kind, this.h.getAge());
     const where = w.canPlace(this.kind, o.x, o.z), reason = where ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
     if (reason) {

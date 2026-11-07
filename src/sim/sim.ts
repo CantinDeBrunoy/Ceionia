@@ -1,6 +1,7 @@
 import { World } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
+import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 import { isleSteps, ISLE_AGE } from '../world/portal';
@@ -28,10 +29,25 @@ export interface AgeProgress {
 /** Les deux conditions du chemin de fer, en fin d'âge industriel (leur libellé commence par « chemin de fer ») */
 export const RAIL_FIRST = 'chemin de fer : une première ligne', RAIL_LINKED = 'chemin de fer : deux gares reliées';
 
-/** Bâtiments que demande l'âge `n`, par genre : autant qu'il en faut au village (tout le village compte) */
-export function reqKindsOf(n: number, late = false): Partial<Record<KindId, number>> {
+/**
+ * Bâtiments que demande l'âge `n`, par genre : en Facile, autant qu'il en faut au village ; en Normal, ce qu'il en faut
+ * de plus que n'en demandaient déjà les âges d'avant (un genre qu'ils demandaient déjà autant n'est plus demandé)
+ */
+export function reqKindsOf(n: number, d: Difficulty, late = false): Partial<Record<KindId, number>> {
   // (`late` : ceux de la fin de l'âge, après ses expéditions)
-  return late ? AGES[n].reqLate ?? {} : AGES[n].reqKinds;
+  const req = late ? AGES[n].reqLate ?? {} : AGES[n].reqKinds;
+  if (!rulesOf(d).newOnly) return req;
+  const out: Partial<Record<KindId, number>> = {};
+  for (const [k, c] of Object.entries(req) as [KindId, number][]) {
+    const before = usedBefore(k, n);
+    if (c > before) out[k] = c - before;
+  }
+  return out;
+}
+
+/** Combien de bâtiments de ce genre les âges d'avant `n` ont déjà demandés (ceux-là ne comptent plus, en Normal) */
+export function usedBefore(k: KindId, n: number): number {
+  return Math.max(0, ...AGES.slice(0, n).map((a) => Math.max(a.reqKinds[k] ?? 0, a.reqLate?.[k] ?? 0)));
 }
 
 /** Simulation légère : besoins par présence, population, passage d'âge */
@@ -65,6 +81,10 @@ export class Sim {
   private baseJobs = 0;
   private baseJoy = 0;
   private grow = 0;
+  /** secondes de jeu pendant lesquelles le village se remet d'un manque (en Normal, il grandit alors plus lentement) */
+  recovering = 0;
+  /** habitants partis pendant la disette en cours (défi) */
+  fled = 0;
   /** d'où vient chaque besoin : apports des bâtiments par sorte (et des maisons au bord de l'eau), puis la terre cultivée */
   private src: Record<NeedId, Map<string, { n: number; v: number }>> = { housing: new Map(), food: new Map(), water: new Map(), jobs: new Map(), joy: new Map(), health: new Map() };
   private land = { fields: 0, fertile: 0, gardens: 0, forests: 0 };
@@ -135,7 +155,7 @@ export class Sim {
     this.jobs.cap = down(this.baseJobs + needBonus(e, 'jobs'));
     this.joy.cap = Math.max(0, this.baseJoy + needBonus(e, 'joy'));
     this.housing.demand = p;
-    this.food.demand = up(n + 1);
+    this.food.demand = up((n + 1) * rulesOf(this.world.difficulty).foodK);
     this.water.demand = n + 1;
     this.jobs.demand = n >= 6 ? up(n * 0.5) : 0;
     this.joy.demand = p >= 6 ? p * 0.3 : 0;
@@ -195,10 +215,15 @@ export class Sim {
     if (n >= AGES.length) return null;
     const req = AGES[n], w = this.world;
     const items: AgeProgress['items'] = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
+    // en Normal, passé la préhistoire, les bâtiments d'avant qui ont servi aux âges passés (changés d'office en leur version du
+    // nouvel âge) ne font pas avancer vers le suivant ; ceux bâtis en avance, avant que le jeu ne les demande, comptent déjà
+    const fresh = rulesOf(w.difficulty).newOnly && this.age > 0;
     const kinds = (late: boolean) => {
-      for (const [k, c] of Object.entries(reqKindsOf(n, late)) as [KindId, number][]) {
-        const have = lineOf(k).reduce((n, x) => n + (this.counts[x] ?? 0), 0);
-        items.push({ label: this.nameOf(k), have, need: c, kind: k });
+      for (const [k, c] of Object.entries(reqKindsOf(n, w.difficulty, late)) as [KindId, number][]) {
+        const line = lineOf(k), sum = (r: Record<string, number>) => line.reduce((n, x) => n + (r[x] ?? 0), 0);
+        const used = fresh ? Math.min(sum(w.ageBase), usedBefore(k, n)) : 0;
+        const have = Math.max(0, sum(this.counts) - used);
+        items.push({ label: fresh ? DIFF_TEXT.more(this.nameOf(k)) : this.nameOf(k), have, need: c, kind: k });
       }
     };
     kinds(false);
@@ -246,6 +271,7 @@ export class Sim {
     if (w.buildings.size === 0) return about('gather', `Pour commencer, posez « ${this.nameOf('gather')} » au centre : c’est la place du village.`);
     if (!this.counts.house) return about('house', `Autour de la place, le centre du village : « ${this.nameOf('house')} », « ${this.nameOf('farm')} » et « ${this.nameOf('well')} ».`);
     if (!this.counts.house) return about('house', `Pour accueillir des habitants : ${say('house')}.`);
+    if (!this.food.ok && this.fled >= 1) return about('farm', DIFF_TEXT.famine(say('farm')));
     if (!this.food.ok) return about('farm', this.drought ? `Sécheresse : les champs donnent moins ; ${say('farm')} ou « ${this.nameOf('pier')} » de plus aiderait.` : `Il manque de quoi manger : ${say('farm')} ou un champ.`);
     if (!this.water.ok) return about('well', `Il manque de l’eau : ${say('well')}.`);
     // à la Préhistoire, dans les premières minutes, les premiers bâtiments qui travaillent pour le village : le bûcheron (bois), puis le pierrier (pierre) ; le séchoir à grains nourrit déjà
@@ -255,6 +281,7 @@ export class Sim {
     if (!this.jobs.ok) return about('workshop', `Les habitants cherchent du travail : ${say('workshop')}.`);
     if (!this.joy.ok) return about('gather', `Les habitants aimeraient un lieu de rencontre : ${say('gather')}, un jardin ou un lieu de culte.`);
     if (!this.health.ok) return about('health', `Les habitants tombent malades : il faut ${say('health')}.`);
+    if (this.recovering > 0 && this.housing.ok) return DIFF_TEXT.recovering;
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
     const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;
     const room = () => build('house', `Village plein (${Math.floor(p)}/${this.housing.cap} places) : ${say('house')} de plus, +${per} places, pour qu’il grandisse.`);
@@ -376,8 +403,10 @@ export class Sim {
       else this.moisture = Math.max(0, this.moisture - dt * [0.0015, 0.004, 0.0015, 0][this.season]);
     }
     this.evaluate();
+    const r = rulesOf(this.world.difficulty);
+    if (dt > 0) this.hardship(dt);
     if (dt > 0 && this.canGrow) {
-      this.grow += dt * 0.55;
+      this.grow += dt * 0.55 * r.growK * (this.recovering > 0 ? r.recoverK : 1);
       while (this.grow >= 1) {
         this.grow -= 1;
         if (this.pop + 1 <= this.housing.cap) this.pop++;
@@ -387,6 +416,22 @@ export class Sim {
     }
     // le passage d'âge n'est plus forcé : c'est le joueur qui le décide (bouton « Passer à l'ère suivante »)
     this.message = this.computeMessage();
+  }
+
+  /**
+   * Les rigueurs de la difficulté : en Normal, la disette fait partir des habitants (d'autant plus que le manque est grand),
+   * et tout besoin non comblé laisse le village affaibli un moment ; en Facile ou au bac à sable, rien de tout cela
+   */
+  private hardship(dt: number) {
+    const r = rulesOf(this.world.difficulty);
+    if (r.famine > 0 && !this.food.ok && this.pop > 0) {
+      const lack = 1 - this.food.cap / this.food.demand, gone = Math.min(this.pop, dt * r.famine * lack * this.pop);
+      this.pop -= gone;
+      this.fled += gone;
+      this.evaluate();
+    } else if (this.food.ok) this.fled = 0;
+    const unmet = !(this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok && this.health.ok);
+    this.recovering = r.recoverT > 0 && unmet ? r.recoverT : Math.max(0, this.recovering - dt);
   }
 
   /** Tout est réuni pour l'âge suivant : le bouton « Passer à l'ère suivante » s'allume */
@@ -399,6 +444,7 @@ export class Sim {
     const ap = this.ageProgress();
     if (!ap || !ap.items.every((i) => i.have >= i.need)) return false;
     this.age = ap.next;
+    this.world.ageBase = { ...this.counts };
     this.onAgeUp?.(this.age);
     this.message = this.computeMessage();
     return true;

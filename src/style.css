@@ -373,9 +373,12 @@ body.under #selCard, body.photo #selCard { display: none; }
 .mResume p i { font-style: normal; }
 .mSum { display: none; }
 .mResume .mGo { min-height: 52px; padding: 0 28px; border-radius: 14px; font-size: 16px; font-weight: 800; }
-.mModes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; width: min(820px, 100%); }
+.mModes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch; width: min(1080px, 100%); }
 .mMode { display: flex; flex-direction: column; padding: 22px 24px 24px; border-radius: 22px; background: #fff; border: 2px solid #d6e4dd; box-shadow: 0 14px 36px rgba(30, 50, 90, 0.16); text-align: left; --tone: var(--good); --tone-ink: #0d7a5f; --tone-soft: #dff3ea; }
-.mMode.normal { border-color: var(--accent); --tone: var(--accent); --tone-ink: #1f5fd6; --tone-soft: #e3edff; }
+.mMode { position: relative; }
+.mMode.easy { --tone: #d98a1f; --tone-ink: #9a5b00; --tone-soft: #fdf0d9; }
+.mMode.normal { border-color: var(--accent); --tone: var(--accent); --tone-ink: #1f5fd6; --tone-soft: #e3edff; box-shadow: 0 18px 44px rgba(47, 111, 237, 0.3); }
+.mBadge { position: absolute; top: -12px; right: 18px; padding: 4px 12px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 800; box-shadow: 0 4px 10px rgba(47, 111, 237, 0.35); }
 .mHead { display: flex; align-items: center; gap: 14px; }
 .mHead > b { display: flex; align-items: center; justify-content: center; flex: none; width: 56px; height: 56px; border-radius: 16px; background: var(--tone-soft); color: var(--tone-ink); }
 .mHead h2 { margin: 0; font-size: 26px; font-weight: 800; line-height: 1.1; }
@@ -406,6 +409,7 @@ body.under #selCard, body.photo #selCard { display: none; }
   .mSum { display: block; margin: 10px 0 12px; font-size: 13.5px; line-height: 1.4; color: #41506e; }
   .mResume .mGo { min-height: 48px; padding: 0 20px; font-size: 15px; border-radius: 12px; }
   .mModes { grid-template-columns: 1fr; gap: 12px; }
+  .mMode.normal { order: -1; }
   .mMode { padding: 16px; border-radius: 20px; }
   .mHead { gap: 12px; }
   .mHead > b { width: 46px; height: 46px; border-radius: 14px; }
@@ -423,6 +427,7 @@ body.under #selCard, body.photo #selCard { display: none; }
 .diff { flex: 1 1 200px; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; padding: 14px; text-align: left; border-radius: 14px; border-width: 2px; }
 .diff b { color: var(--accent); }
 .diff.sandbox b { color: var(--good); }
+.diff.easy b { color: #d98a1f; }
 .diff strong { font-size: 17px; font-weight: 800; }
 .diff em { font-style: normal; font-size: 12.5px; color: var(--ink2); }
 .diff ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--ink); }
@@ -430,6 +435,7 @@ body.under #selCard, body.photo #selCard { display: none; }
 .hint.warn { display: flex; align-items: center; gap: 6px; color: var(--warn); font-weight: 700; }
 .diffTag { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; padding: 6px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); }
 .diffTag.sandbox { background: rgba(18, 163, 126, 0.12); color: var(--good); }
+.diffTag.easy { background: rgba(217, 138, 31, 0.14); color: #9a5b00; }
 ul.dpoints { margin: 4px 0; padding-left: 18px; }
 .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--ink2); font-weight: 700; }
 .hint { font-size: 12px; color: var(--ink2); max-width: 640px; line-height: 1.55; margin: 6px 0; }

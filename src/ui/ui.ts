@@ -17,9 +17,9 @@ import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
 import { securityCuts, SECURITY_MAX } from '../sim/security';
-import { priceIn, canPay, costLabel, Resource, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
+import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
-import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty } from '../sim/difficulty';
+import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
@@ -245,7 +245,7 @@ const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.rou
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
 const NEED_RULE: Record<NeedId, string> = {
   housing: 'Chaque habitant occupe une place. Le village grandit tant qu’il reste des places libres et que les autres besoins sont comblés.',
-  food: 'Chaque habitant mange une part, plus une part de réserve pour le village ; on compte en parts entières.',
+  food: 'Chaque habitant mange une part (une part et quart en Normal), plus une part de réserve pour le village ; on compte en parts entières.',
   water: 'Chaque habitant boit une part, plus une part de réserve pour le village.',
   jobs: 'À partir de 6 habitants, la moitié d’entre eux cherche du travail.',
   joy: 'À partir de 6 habitants, chacun demande 0,3 de bien-être.',
@@ -282,12 +282,12 @@ export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer')
 }
 
 /**
- * Choix de la difficulté d'une nouvelle partie (« Recommencer cette carte ») : deux cartes (celle de `current` choisie d'avance), puis « Commencer » ;
+ * Choix de la difficulté d'une nouvelle partie : trois cartes (celle de `current` choisie d'avance), puis « Commencer » ;
  * `note` prévient de ce qui sera écrasé. Rend la difficulté choisie, ou null si le joueur renonce
  */
 export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty; note?: string; ok?: string } = {}): Promise<Difficulty | null> {
   const T = DIFF_TEXT;
-  let pick: Difficulty = opts.current ?? 'normal';
+  let pick: Difficulty = opts.current ?? DEFAULT_DIFFICULTY;
   return new Promise((resolve) => {
     const ov = document.createElement('div');
     ov.className = 'overlay';
@@ -733,11 +733,11 @@ export class UI {
     const d: KindDef = KINDS[k], age = this.host.sim.age, lock = this.lockOf(k), a = Math.max(age, d.minAge);
     const n = this.host.sim.counts[k] ?? 0;
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
-    // les grands bâtiments se paient en bois et en pierre (sauf en ressources illimitées)
-    const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost);
+    // les grands bâtiments se paient en bois et en pierre, tous en Normal (sauf en ressources illimitées) ; le premier bûcheron est offert
+    const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} ${k === 'watchtower' || k === 'barracks' ? 'sur l’île du portail' : 'dans le village'}` : 'pas encore construit'}</small></div></div>
       ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
-      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois${cost.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`}`}</p>` : ''}
+      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois${cost.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`}`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
       ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés'} · R : tourner · Échap : lâcher</p>` : ''}`;
   }
 
@@ -1512,7 +1512,7 @@ export class UI {
     const gaps = gearGaps(c, st.gear, st.craft, age, (g) => !g.needs || ex.has(g.needs));
     if (!gaps.length) return '';
     const rows = gaps.map((g) => {
-      const price = gearCostLabel(gearCost(g.gear)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
+      const price = gearCostLabel(gearCost(g.gear, h.world.difficulty)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
       const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
       const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
       const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
@@ -1548,7 +1548,7 @@ export class UI {
       <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Réserve : <b>${Math.floor(h.world.wood)}</b> bois, <b>${Math.floor(h.world.stone)}</b> pierre, <b>${Math.floor(ex.ore)}</b> minerai.</p>
       <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => !ex.whyCraft(g, age)) ? '' : 'disabled'} title="Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent">${ic('hammer', 16, 2)} Tout fabriquer</button></div>
       <div class="gearGrid">${GEAR.map((g) => {
-        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g));
+        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
         return `<div class="gear ${locked ? 'locked' : ''}" data-gear="${g.id}">
           <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt">${n} en réserve${st.craft.includes(g.id) ? ` · ${st.craft.filter((x) => x === g.id).length} en fabrication` : ''}${out ? ` · ${out} en route` : ''}</span></div></div>
           <small class="gdesc">${g.desc}</small>
@@ -1685,7 +1685,7 @@ export class UI {
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
     const tabs = [['time', 'clock', 'Temps et météo'], ['look', 'palette', 'Image et son'], ['game', 'houses', 'Partie']];
-    // au bac à sable, la difficulté impose le réglage des ressources
+    // au bac à sable et en Normal, la difficulté impose le réglage des ressources
     const forced = DIFF_TEXT.resForced[h.world.difficulty];
     const { ov, close } = modal(this.root, 'settings', `${ic('gear', 22)} Réglages`, `
       <div class="tabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 16, 2)}${l}</button>`).join('')}</div>
@@ -1897,7 +1897,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
       <header><h1>Ceionia</h1><p class="sub">Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.</p></header>
       ${MAPS.length > 1 ? `<label class="mMap">Carte <select id="mMapSel">${MAPS.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select></label>` : ''}
       <div class="mResume panel" hidden></div>
-      <div class="mModes">${DIFFICULTIES.map((d) => `<div class="mMode ${d}">
+      <div class="mModes">${DIFFICULTIES.map((d) => `<div class="mMode ${d}">${d === DEFAULT_DIFFICULTY ? `<span class="mBadge">${DIFF_TEXT.recommended}</span>` : ''}
         <div class="mHead"><b>${ic(DIFF_TEXT.icon[d], 30, 1.9)}</b><div><h2>${DIFF_TEXT.name[d]}</h2><em>${DIFF_TEXT.tagline[d]}</em></div></div>
         <ul>${DIFF_TEXT.points[d].map((x) => `<li>${ic('check', 18, 2.6)}<span>${x}</span></li>`).join('')}</ul><p class="mSum">${DIFF_TEXT.summary[d]}</p>
         <button class="mPlay" data-d="${d}">${DIFF_TEXT.play(d)}</button></div>`).join('')}</div>
@@ -1918,7 +1918,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     ov.classList.toggle('hasSave', !!save);
     if (!save) { resume.innerHTML = ''; return; }
     // sur téléphone, le résumé se raccourcit : « Normal · Médiéval · 142 habitants » (les <i> et la date s'effacent)
-    const d = readDifficulty(save.world.difficulty), when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
+    const d = readDifficulty(save.world.difficulty, save.world.diffV), when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
     resume.innerHTML = `<b>${ic('house', 40, 1.8)}</b><div class="grow"><h3>Reprendre mon village</h3><p><span><i>Mode </i>${DIFF_TEXT.name[d]}</span><span><i>âge </i>${AGES[save.age]?.name ?? ''}</span><span>${pop} habitant${pop > 1 ? 's' : ''}</span>${when ? `<span class="when">${when}</span>` : ''}</p></div><button class="active mGo">Continuer</button>`;
     $('.mGo', resume).onclick = () => host.start(mapId(), 'continue');
   };

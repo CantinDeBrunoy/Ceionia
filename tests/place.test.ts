@@ -29,11 +29,13 @@ function plazaSpot(w: World, m = 3): [number, number] {
 const cellsOf = (w: World, id: number) => [...w.occ.keys()].filter((k) => w.occ[k] === id).sort((a, b) => a - b);
 
 describe('la place du village (3 × 3)', () => {
-  it('est une place de 3 × 3, offerte en partie normale, et la première pose', () => {
+  it('est une place de 3 × 3, offerte en Facile, et la première pose', () => {
     expect(KINDS.gather.size).toBe(3);
     // le forum, son amélioration, garde la même emprise
     expect(KINDS.forum.size).toBe(3);
     expect(costOf('gather', 0)).toBeNull();
+    // en Normal, elle coûte ce que coûtait le feu de camp d'une case
+    expect(costOf('gather', 0, 'hard')).toEqual(costOf('lamp', 0, 'hard'));
   });
 
   it('n’a pas de porte : ni case réservée devant, ni chemin à elle ; on la rejoint de n’importe quel côté', () => {
