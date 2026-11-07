@@ -67,9 +67,10 @@ import { PenView } from './render/pens';
 import { OilSeeps } from './render/oilSeeps';
 import { PortalView } from './render/portal';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
-import { holdIsle } from './world/portal';
+import { holdIsle, isleDefenses } from './world/portal';
 import { War } from './sim/war';
 import { KingdomStage } from './kingdomStage';
+import { WarTips, WarTipState } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater } from './ui/command';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -158,6 +159,8 @@ class Game implements UIHost {
   private homeBtn: HomeButton;
   /** la mise en scène du royaume des Enfers (combat du roi, victoire) */
   kingStage: KingdomStage;
+  /** les aides du volet militaire */
+  warTips!: WarTips;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
@@ -443,6 +446,12 @@ class Game implements UIHost {
     this.refreshHalos();
     this.ui.update();
     this.tutorial = new Tutorial(this.ui, this, !save);
+    // les aides du volet militaire (bulles facultatives, au moment utile)
+    this.warTips = new WarTips({
+      root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
+      busy: () => this.tutorial.on || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
+      act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
+    });
     this.ui.toast(save ? 'Bon retour dans votre village !' : w.buildings.size ? 'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.' : `Commencez par « ${this.sim.nameOf('gather')} », la place au centre du village (Bâtir › Vie & culture).`);
     requestAnimationFrame(() => this.frame());
   }
@@ -611,6 +620,16 @@ class Game implements UIHost {
     this.isleLayer.group.position.set(ox, 0, oz);
     this.isleLayer.fx.onClash = (k) => this.audio.sfxClash(k);
     this.scene.add(this.isleLayer.group);
+  }
+
+  /** Ce que regardent les aides du volet militaire */
+  private warTipState(): WarTipState {
+    const w = this.world, war = this.war, d = w.portal ? isleDefenses(w) : { towers: 0, barracks: 0 };
+    return {
+      age: this.sim.age, portalOpen: w.portalOpen, portalUnderway: this.expeditions.active.some((a) => a.m.id === 'portal'),
+      towers: d.towers, barracks: d.barracks, isleTroops: war.army.troops.filter((t) => t.where === 'isle' && t.heal <= 0).length,
+      commanding: this.command.theater?.kind ?? null, frontier: war.faction?.frontier ?? 1, camp: !!war.base?.countOf('camp'), victory: !!war.faction?.victory,
+    };
   }
 
   /** La vue regarde l'île du portail (de près) */
@@ -1390,7 +1409,7 @@ class Game implements UIHost {
     });
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.command.render(); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.command.render(); this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;

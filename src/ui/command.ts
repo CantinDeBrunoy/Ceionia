@@ -50,6 +50,17 @@ export interface CommandHost {
 
 const LONG_PRESS = 450, DRAG = 6, DOUBLE = 320;
 
+/** Le rappel des contrôles (le bouton « ? » de la barre des troupes) : touche ou geste, ce qu'il fait */
+export const CONTROLS_HELP: [string, string][] = [
+  ['Clic', 'choisir une troupe (double-clic : toutes celles de la même sorte ; Maj : ajouter)'],
+  ['Glisser', 'tracer un cadre autour des troupes à choisir'],
+  ['Clic droit', 'aller là, ou attaquer l’ennemi visé (au doigt : appui long)'],
+  ['A puis clic', 'attaquer en marchant : on combat ce qu’on croise'],
+  ['H · R', 'tenir la position · se replier'],
+  ['Ctrl + 1…5', 'former un groupe ; 1…5 le rappelle, deux fois pour y aller'],
+  ['Espace', 'pause active : les ordres se donnent en pause'],
+];
+
 export class CommandUI implements ToolInput {
   cmd = new Command();
   theater: Theater | null = null;
@@ -65,6 +76,8 @@ export class CommandUI implements ToolInput {
   private barKey = '';
   /** le bâtiment de la base avancée qu'on pose (clic au sol ; Échap ou clic droit : on arrête) */
   placing: BaseKind | null = null;
+  /** l'aide « ? » des contrôles est dépliée */
+  helpOpen = false;
 
   constructor(root: HTMLElement, private host: CommandHost) {
     this.bar = document.createElement('div');
@@ -291,6 +304,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'retreat') this.retreat();
     else if (a === 'attack') { if (this.cmd.selected.size) this.cmd.armed = this.cmd.armed ? null : 'attack'; }
     else if (a === 'pause') this.host.togglePause();
+    else if (a === 'help') this.helpOpen = !this.helpOpen;
     else if (a.startsWith('grp:')) { const n = +a.slice(4); if (e.shiftKey || e.ctrlKey) this.cmd.setGroup(n); else if (this.cmd.recall(n)) this.focusSelection(); }
     else if (a === 'portal') {
       const us = this.units().filter((u) => this.cmd.selected.has(u.id));
@@ -347,8 +361,9 @@ export class CommandUI implements ToolInput {
         <span class="grps">${groups}</span>
         <button data-a="pause" class="${this.host.paused() ? 'on' : ''}" title="Pause active (Espace) : les ordres se donnent en pause">${this.host.paused() ? '▶' : '⏸'}</button>
         ${rec}
+        <button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="Rappel des contrôles">?</button>
         <button data-a="leave" class="tx" title="${isle ? 'Quitter le commandement (Échap)' : 'Quitter les Enfers'}">✕</button>
-      </div>${isle ? '' : this.baseRow()}`;
+      </div>${isle ? '' : this.baseRow()}${this.helpOpen ? `<ul class="thelp">${CONTROLS_HELP.map(([k, t]) => `<li><b>${k}</b><span>${t}</span></li>`).join('')}</ul>` : ''}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
   }
 
