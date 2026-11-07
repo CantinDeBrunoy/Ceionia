@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Parts } from './parts';
+import { Parts, type Glow } from './parts';
 import { KindId, KINDS, smallSize } from '../build/catalog';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { bakeFit, hasModel, ModelName } from './assets';
@@ -9612,6 +9612,8 @@ const F = {
   leaf: 0x6fc87a, leaf2: 0x58b068, neon: 0x5af0ff, pink: 0xff5ad8, mint: 0x7affc0, gold: 0xffd25a, warm: 0xfff1c9,
 };
 const NEONS = [F.neon, F.pink, F.mint, F.gold];
+/** Hauteur des tours d'habitation futuristes selon leur rang dans la ligne d'horizon (immeuble bas, tour, grande tour, gratte-ciel) */
+export const FUTURE_HOUSE_H = [2.1, 2.8, 3.6, 4.5];
 
 /** Anneau lumineux couché, de rayon r, à la hauteur y */
 function neonRing(p: Parts, r: number, y: number, x: number, z: number, color: number, tube = 0.006, seg = 28) {
@@ -9653,12 +9655,20 @@ function holoSign(x: number, y: number, z: number, s: number, color: number) {
   q.add(new THREE.TorusGeometry(0.13 * s, 0.005, 4, 24), 0, 0.065 * s, 0, color, 0, 'neon');
 }
 
+/**
+ * Vitre allumée posée à plat sur une façade (normale de cap ry), base à la hauteur y : deux triangles au lieu des douze d'une
+ * boîte, ce qui laisse aux tours de la nuit leurs centaines de fenêtres sans alourdir la ville
+ */
+function pane(p: Parts, w: number, h: number, x: number, y: number, z: number, color: number, ry: number, glow: Glow) {
+  p.add(new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0.003), x, y, z, color, ry, glow);
+}
+
 /** Fenêtres allumées la nuit sur une façade plane (normale de cap `ry`), au hasard réglé par `seed` */
 function lights(p: Parts, cx: number, cz: number, ry: number, half: number, y0: number, y1: number, step: number, seed: number) {
   const ux = Math.cos(ry), uz = -Math.sin(ry);
   for (let y = y0; y < y1; y += step) for (let u = -half + 0.04; u < half - 0.02; u += 0.07) {
     if (Math.abs(Math.round(u * 40) * 7 + Math.round(y * 30) * 3 + seed) % 5 > 1) continue;
-    p.box(0.045, 0.055, 0.005, cx + ux * u, y, cz + uz * u, F.warm, ry, true);
+    pane(p, 0.045, 0.055, cx + ux * u, y, cz + uz * u, F.warm, ry, true);
   }
 }
 
@@ -9689,7 +9699,7 @@ function towerPodium(p: Parts, o: ModelOpts, x0: number, x1: number, cx: number,
 function spire(p: Parts, x: number, y: number, z: number, h: number, accent: number) {
   p.cyl(0.07, 0.09, 0.06, 8, x, y, z, F.white);
   p.cyl(0.008, 0.04, h, 8, x, y + 0.06, z, F.pearl);
-  for (let k = 0; k < 3; k++) neonRing(p, 0.06 - k * 0.014, y + 0.14 + k * h * 0.22, x, z, accent, 0.005);
+  for (let k = 0; k < 3; k++) neonRing(p, 0.06 - k * 0.014, y + 0.14 + k * h * 0.22, x, z, accent, 0.005, 14);
   p.sphere(0.016, x, y + h + 0.07, z, 0xff4a3a);
 }
 
@@ -9703,9 +9713,15 @@ function futureHouse(p: Parts, o: ModelOpts) {
   const w = x1 - x0, cx = (x0 + x1) / 2, d = 0.5, zc = -0.04;
   // la hauteur suit le rang de la tour dans la ligne d'horizon (immeuble bas, tour, grande tour, gratte-ciel), nuancée d'une
   // maison à l'autre : plus de rangées de clones à la même hauteur
-  const tier = o.tier ?? 1, H = [1.3, 1.85, 2.55, 3.4][tier] + ((o.v >> 1) % 3) * 0.1;
+  // (« Night City » : de vraies tours, de 1,7 à 3,7 fois la maison moderne, sans toucher à l'emprise d'une case)
+  const tier = o.tier ?? 1, H = FUTURE_HOUSE_H[tier] + ((o.v >> 1) % 3) * 0.12;
   const kind = o.v % 3, accent = NEONS[(o.v >> 1) % 4], y0 = 0.23;
   towerPodium(p, o, x0, x1, cx, d, zc, accent);
+  // les tours accolées se tiennent par une passerelle vitrée, chacune en dessine la moitié jusqu'à la limite de sa case
+  if (o.L) skyBridge(p, x0, zc, cx, zc, 1.05, accent);
+  if (o.R) skyBridge(p, cx, zc, x1, zc, 1.05, accent);
+  // l'enseigne verticale de la rue, accrochée au flanc de la tour, une maison sur deux
+  if (o.v % 2) vSign(p, cx + 0.3, 0.32, zc + 0.12, 0.5 + tier * 0.12, CYBER[o.v % 4], Math.PI / 2, o.v);
   if (kind === 0) {
     // les gratte-ciel s'affinent en gradins vers le haut
     const r0 = 0.21, step = tier === 3 ? y0 + (H - y0) * 0.62 : Infinity, rAt = (y: number) => (y > step ? r0 * 0.78 : r0);
@@ -9713,9 +9729,9 @@ function futureHouse(p: Parts, o: ModelOpts) {
     if (step < H) { p.cyl(r0 + 0.04, r0 + 0.04, 0.03, 12, cx, step, zc, F.white); p.cyl(r0 * 0.78, r0 * 0.78, H - step, 12, cx, step, zc, F.glass); }
     for (let y = y0 + 0.14, i = 0; y < H - 0.05; y += 0.15, i++) {
       const r = rAt(y);
-      p.cyl(r + 0.055, r + 0.055, 0.02, 12, cx, y, zc, F.white);
+      p.cyl(r + 0.055, r + 0.055, 0.02, 10, cx, y, zc, F.white);
       if ((i + o.v) % 3 === 0) for (let k = 0; k < 3; k++) { const a = k * 2.1 + i; p.sphere(0.026, cx + Math.cos(a) * (r + 0.035), y + 0.035, zc + Math.sin(a) * (r + 0.035), F.leaf, 0, 0.8); }
-      for (let k = 0; k < 8; k++) if ((k * 3 + i * 5 + o.v) % 7 < 2) { const a = k * 0.785 + 0.4; p.box(0.05, 0.07, 0.006, cx + Math.cos(a) * (r + 0.002), y - 0.1, zc + Math.sin(a) * (r + 0.002), F.warm, Math.PI / 2 - a, true); }
+      for (let k = 0; k < 8; k++) if ((k * 3 + i * 5 + o.v) % 7 < 2) { const a = k * 0.785 + 0.4; pane(p, 0.05, 0.07, cx + Math.cos(a) * (r + 0.002), y - 0.1, zc + Math.sin(a) * (r + 0.002), F.warm, Math.PI / 2 - a, true); }
     }
     const r = rAt(H);
     p.cyl(r + 0.05, r + 0.04, 0.05, 12, cx, H, zc, F.white);
@@ -9769,7 +9785,8 @@ function futureHouse(p: Parts, o: ModelOpts) {
  */
 function futureOffice(p: Parts, v: number, tier = 1) {
   // le nombre d'étages suit le rang de la tour dans la ligne d'horizon
-  const n = [10, 14, 18, 22][tier] + (v % 3), glass = [0x5a8aa8, 0x4a8a9a, 0x6a88a8][v % 3], accent = [F.neon, F.pink, F.mint][v % 3];
+  // (les plus basses gagnent des étages ; les gratte-ciel, déjà trois fois plus hauts que le bureau moderne, restent tels quels)
+  const n = [14, 17, 20, 22][tier] + (v % 3), glass = [0x5a8aa8, 0x4a8a9a, 0x6a88a8][v % 3], accent = [F.neon, F.pink, F.mint][v % 3];
   p.box(0.94, 0.012, 0.86, 0, 0, 0.04, 0xd8dde2);
   p.box(0.6, 0.13, 0.5, 0, 0.012, -0.02, F.smoke); p.box(0.58, 0.11, 0.504, 0, 0.022, -0.02, F.glass2, 0, true);
   p.add(new THREE.CylinderGeometry(0.2, 0.2, 0.014, 14, 1, false, -Math.PI / 2, Math.PI), 0, 0.15, 0.23, F.white);
@@ -10511,7 +10528,7 @@ function cyberLights(p: Parts, cx: number, cz: number, ry: number, half: number,
   for (let y = y0; y < y1; y += step) for (let u = -half + 0.04; u < half - 0.03; u += 0.075) {
     const h = hash2(Math.round(u * 50) + seed * 13, Math.round(y * 40), 977);
     if (h > 0.28) continue;
-    p.box(0.045, 0.05, 0.005, cx + ux * u, y, cz + uz * u, h < 0.05 ? NC.pink : h < 0.1 ? NC.cyan : NC.warm, ry, h < 0.1 ? 'neon' : true);
+    pane(p, 0.045, 0.05, cx + ux * u, y, cz + uz * u, h < 0.05 ? NC.pink : h < 0.1 ? NC.cyan : NC.warm, ry, h < 0.1 ? 'neon' : true);
   }
 }
 
