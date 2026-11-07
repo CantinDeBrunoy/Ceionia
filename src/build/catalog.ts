@@ -8,7 +8,7 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   | 'shipyard' | 'lighthouse' | 'fishmarket' | 'offshore';
 
 /** Rayons de la barre de construction */
-export type BuildCat = 'home' | 'prod' | 'service' | 'life';
+export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'war';
 
 export interface KindDef {
   id: KindId;
@@ -447,14 +447,14 @@ export const KINDS: Record<KindId, KindDef> = {
   },
   // les défenses de l'île du portail (seulement là, voir `World.portalRule`) ; leur garnison viendra avec le contrôle des troupes
   watchtower: {
-    id: 'watchtower', size: 1, minAge: 1, icon: '🏹', cat: 'service',
+    id: 'watchtower', size: 1, minAge: 1, icon: '🏹', cat: 'war',
     names: ['', 'Tour de garde', 'Tour de guet', 'Tour de garde', 'Poste de défense', 'Tour de défense'],
     desc: 'Une tour de pierre et ses archers, qui guettent le portail des Enfers depuis l’île de l’autre rive.',
     perk: 'Ne se bâtit que sur l’île du portail, une fois le portail ouvert (expédition « Le portail de l’autre rive »). Ses guetteurs voient venir les démons de loin.',
     reqMission: 'portal',
   },
   barracks: {
-    id: 'barracks', size: 2, minAge: 1, icon: '⚔️', cat: 'service',
+    id: 'barracks', size: 2, minAge: 1, icon: '⚔️', cat: 'war',
     names: ['', 'Caserne', 'Caserne', 'Caserne', 'Base militaire', 'Base de défense'],
     desc: 'Le quartier de la garnison de l’île du portail : dortoirs, cour d’exercice et râteliers d’armes.',
     perk: 'Ne se bâtit que sur l’île du portail, une fois le portail ouvert (expédition « Le portail de l’autre rive ») et une première tour de garde dressée. La garnison y loge et s’y entraîne pour défendre l’île.',
@@ -472,6 +472,7 @@ export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'prod', icon: '🌾', label: 'Production' },
   { id: 'service', icon: '🏥', label: 'Services' },
   { id: 'life', icon: '🎭', label: 'Vie & culture' },
+  { id: 'war', icon: '⚔️', label: 'Militaire' },
 ];
 
 /** Groupes de lecture d'un rayon (titres dans la rangée de vignettes) */
@@ -480,6 +481,7 @@ export const BUILD_SUBS: Record<BuildCat, BuildSub[]> = {
   home: [{ id: 'logis', label: 'Logements' }, { id: 'eau', label: 'Eau' }, { id: 'lumiere', label: 'Éclairage' }],
   prod: [{ id: 'nourriture', label: 'Nourriture' }, { id: 'materiaux', label: 'Matériaux' }, { id: 'industrie', label: 'Industrie' }],
   service: [{ id: 'sante', label: 'Santé' }, { id: 'savoir', label: 'Savoir' }, { id: 'securite', label: 'Sécurité' }, { id: 'transport', label: 'Transport' }],
+  war: [{ id: 'defense', label: 'Défense de l’île' }],
   life: [{ id: 'parcs', label: 'Parcs et décor' }, { id: 'detente', label: 'Détente' }, { id: 'culte', label: 'Culte' }, { id: 'monuments', label: 'Monuments' }],
 };
 
@@ -490,7 +492,7 @@ export const KIND_SUB: Record<KindId, string> = {
   lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
   workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie', shipyard: 'industrie',
   health: 'sante', school: 'savoir', observatory: 'savoir', lab: 'savoir', research: 'savoir',
-  police: 'securite', fire: 'securite', senate: 'securite', watchtower: 'securite', barracks: 'securite', lighthouse: 'securite',
+  police: 'securite', fire: 'securite', senate: 'securite', watchtower: 'defense', barracks: 'defense', lighthouse: 'securite',
   station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',

@@ -159,10 +159,10 @@ export const KIND_ICON: Record<KindId, string> = {
   watchtower: 'watchtower', barracks: 'shield',
   shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
 };
-export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns' };
+export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */
 export const SUB_ICON: Record<string, string> = {
   logis: 'house', eau: 'drop', lumiere: 'lamp', nourriture: 'bread', materiaux: 'rock', industrie: 'anvil', sante: 'heart', savoir: 'book',
-  securite: 'shield', transport: 'train', parcs: 'leaf', detente: 'smile', culte: 'columns', monuments: 'castle',
+  securite: 'shield', defense: 'sword', transport: 'train', parcs: 'leaf', detente: 'smile', culte: 'columns', monuments: 'castle',
 };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];
