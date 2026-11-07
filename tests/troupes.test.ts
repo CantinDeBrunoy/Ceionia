@@ -4,7 +4,7 @@ import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { zoneOrigins } from '../src/build/zones';
 import { HellMap } from '../src/world/hell';
-import { Hell, HellUnit, RAID_FIRST, SECURE_WAVES } from '../src/sim/hell';
+import { Hell, HellUnit, RAID_FIRST, SECURE_WAVES, demonStats } from '../src/sim/hell';
 import { Command, formation, unitAt, foeAt, inRect, SPACING } from '../src/sim/command';
 import { TROOPS, newArmy, recruit, recruitWhy, cancelRecruit, dismiss, stepArmy, wound, troopStats, readArmy, troopCap, armyCap, RecruitCtx, HEAL_TIME } from '../src/sim/army';
 import { emptyStock } from '../src/sim/gear';
@@ -329,4 +329,19 @@ describe('la condition d’âge : sécuriser l’île du portail pour quitter l�
     s2.age = 1;
     expect(s2.ageProgress()!.items.some((i) => i.label.includes('portail'))).toBe(false);
   }, 30000);
+});
+
+describe('lisibilité de la mêlée', () => {
+  it('les assaillants entourent leur cible au lieu de s empiler dessus', () => {
+    const h = emptyHell(), [ax, az] = h.map.arrival;
+    const s = h.addPlayerUnit('soldier', troopStats('soldier', 1), ax, az);
+    s.order = { kind: 'hold' };
+    const imps = [0, 1, 2, 3, 4, 5].map((i) => h.addRaider('imp', demonStats('imp', 1), ax + Math.sin(i) * 3, az + 3 + Math.cos(i) * 0.5));
+    run(h, 3);
+    const ds = [s, ...imps].filter((u) => u.hp > 0);
+    for (let i = 0; i < ds.length; i++) for (let j = i + 1; j < ds.length; j++) expect(Math.hypot(ds[i].x - ds[j].x, ds[i].z - ds[j].z)).toBeGreaterThan((ds[i].stats.radius + ds[j].stats.radius) * 0.95);
+    // ils ne sont pas tous du même côté du soldat
+    const near = imps.filter((u) => u.hp > 0 && Math.hypot(u.x - s.x, u.z - s.z) < 1.5);
+    if (near.length > 2) { const angs = near.map((u) => Math.atan2(u.x - s.x, u.z - s.z)); expect(Math.max(...angs) - Math.min(...angs)).toBeGreaterThan(0.5); }
+  });
 });
