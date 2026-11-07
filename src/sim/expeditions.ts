@@ -3,12 +3,13 @@ import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, ORE_KINDS, oreVeins, troopRoute, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { AGES, KINDS, KindId, Building, sizeOf, lineOf, reqLine } from '../build/catalog';
-import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear } from './gear';
+import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear, dangersOf } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { CAMP_QUESTS, CAMP_GUARDS, CampQuest, depthStats, depthIncome } from './depths';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
 import { rulesOf } from './difficulty';
+import { securityK } from './security';
 import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
 
@@ -253,13 +254,14 @@ export class Expeditions {
 
   /**
    * Risque réel d'un choix : une école prépare mieux les équipes, un observatoire leur lit le ciel, un institut de recherche
-   * les équipe, le plan des galeries (le repérage des profondeurs) guide les troupes armées ; le défi est plus risqué
+   * les équipe, le plan des galeries (le repérage des profondeurs) guide les troupes armées ; pompiers et police veillent
+   * (voir `securityK`) ; le défi est plus risqué
    */
   riskOf(c: Choice) {
     const map = this.world.exp.perks.includes('map') && c.win.some((e) => e.t === 'veins');
     // un train de voyageurs amène les équipes au cosmodrome : les expéditions spatiales sont plus sûres
     const rail = c.dest === 'spaceport' && spaceRail(this.world);
-    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (map ? 0.8 : 1) * (rail ? SPACE_RAIL_RISK : 1) * rulesOf(this.world.difficulty).riskK;
+    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (map ? 0.8 : 1) * (rail ? SPACE_RAIL_RISK : 1) * securityK(dangersOf(c), (k) => this.has(k)) * rulesOf(this.world.difficulty).riskK;
   }
 
   /**
