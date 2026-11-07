@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { World, WorldListener } from '../world/world';
 import { Building, KINDS, sizeOf } from '../build/catalog';
 import { getModel, ModelOpts } from './models';
-import { mats, crowdMat, CROWD } from './materials';
+import { mats, crowdMat, CROWD, mergeLit } from './materials';
+import { GeoBatch } from './batch';
 import { hash2 } from '../core/rng';
 import { Simplex } from '../world/noise';
 import { facingRoadRot } from '../build/placement';
@@ -39,10 +40,11 @@ interface Entry {
   /** ailes du moulin, pales de l'éolienne, qui tournent autour de leur moyeu */
   rotor: THREE.Mesh | null;
   spin: { axis: THREE.Vector3; speed: number; phase: number } | null;
-  /** drapeaux, enseignes, linge, cloches qui se balancent */
-  sways: { mesh: THREE.Mesh; axis: THREE.Vector3; amp: number; freq: number; phase: number; spin?: number; steady?: boolean }[];
-  /** personnages animés du bâtiment */
+  /** drapeaux, enseignes, linge, cloches qui se balancent (dans le lot des pièces mobiles quand elles y entrent) */
+  sways: ({ mesh: THREE.Mesh; axis: THREE.Vector3; amp: number; freq: number; phase: number; spin?: number; steady?: boolean } & Slot)[];
+  /** personnages animés du bâtiment (dans le lot des personnages : `crowdSlot`) */
   crowd: THREE.Mesh | null;
+  crowdSlot: Slot;
   /** tête tournée face au vent (éolienne, roue de pompage) : son pivot, sa tête, le cap du rotor, déjà orientée ou non */
   turn: THREE.Group | null;
   vane: THREE.Mesh | null;
@@ -51,6 +53,26 @@ interface Entry {
   /** murs de soutènement du port côté terre et terre-plein qui couvre le talus, et pour quel terrain */
   /** lieu de rencontre posé sur la pente : son modèle épouse le sol (géométries propres à ce bâtiment), et pour quel sol */
   draped?: { key: string; body: THREE.BufferGeometry; glow: THREE.BufferGeometry | null; crowd: THREE.BufferGeometry | null } | null;
+  /** instance du corps dans le lot des corps (-1 : dessiné par `body`), sa géométrie dans le lot, place à y recopier */
+  inst: number;
+  shown: THREE.BufferGeometry | null;
+  moved: boolean;
+}
+
+/** Place d'un maillage dans un lot : son instance (-1 : hors du lot) et la géométrie qu'elle y montre */
+interface Slot { inst: number; shown: THREE.BufferGeometry | null }
+
+/**
+ * Met `geo` dans le lot à la place `s` (l'y ajoute ou change sa géométrie) ; avec null, ou si `geo` n'y entre pas, l'en retire.
+ * Rend vrai si la géométrie est dans le lot (sinon, au maillage de la dessiner lui-même)
+ */
+function slot(batch: GeoBatch, s: Slot, geo: THREE.BufferGeometry | null): boolean {
+  if (geo) {
+    if (s.inst >= 0 && s.shown && batch.swap(s.inst, s.shown, geo)) { s.shown = geo; return true; }
+    if (s.inst < 0) { const id = batch.add(geo); if (id >= 0) { s.inst = id; s.shown = geo; return true; } }
+  }
+  if (s.inst >= 0) { batch.remove(s.inst, s.shown!); s.inst = -1; s.shown = null; }
+  return false;
 }
 
 /**
@@ -100,6 +122,21 @@ function footprint(g: THREE.BufferGeometry): [number, number, number, number] {
   return f;
 }
 
+/**
+ * Corps et lumières d'un modèle fondus en un maillage (`mats.lit`), un par paire de géométries partagées : chaque bâtiment
+ * (et chaque pièce qui se balance avec ses ampoules) ne coûte plus qu'un appel de dessin au lieu de deux
+ */
+const litCache = new WeakMap<THREE.BufferGeometry, { glow: THREE.BufferGeometry | null; geo: THREE.BufferGeometry | null }>();
+/** `body` seul (sans `glow`) : mis au format `lit`, sans lumière, pour entrer dans le lot des corps */
+function litOf(body: THREE.BufferGeometry, glow: THREE.BufferGeometry | null | undefined) {
+  glow ??= null;
+  const known = litCache.get(body);
+  if (known && known.glow === glow) return known.geo;
+  const geo = mergeLit(body, glow);
+  litCache.set(body, { glow, geo });
+  return geo;
+}
+
 const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
 export class BuildingView implements WorldListener {
@@ -109,13 +146,55 @@ export class BuildingView implements WorldListener {
   private spinT = 0;
   private q = new THREE.Quaternion();
   onPlaced: ((b: Building) => void) | null = null;
+  /**
+   * Les corps de tous les bâtiments (lumières comprises), leurs pièces qui se balancent ou tournent, leurs personnages :
+   * trois lots dessinés chacun en un seul appel (voir `show`), au lieu d'un maillage (et de son ombre) par pièce
+   */
+  private batch = new GeoBatch(mats.lit, 512, 1 << 19);
+  private swayBatch = new GeoBatch(mats.lit, 256, 1 << 16);
+  private crowdBatch = new GeoBatch(crowdMat, 128, 1 << 16);
 
   constructor(private world: World) {
+    this.group.add(this.batch.mesh, this.swayBatch.mesh, this.crowdBatch.mesh);
     world.listeners.push(this);
     this.onReset();
   }
 
-  private disposeEntry(e: Entry) { this.group.remove(e.group); e.plinth?.geometry.dispose(); this.undrape(e); }
+  private disposeEntry(e: Entry) {
+    this.group.remove(e.group); e.plinth?.geometry.dispose(); this.undrape(e);
+    slot(this.batch, e, null);
+    slot(this.crowdBatch, e.crowdSlot, null);
+    for (const sw of e.sways) slot(this.swayBatch, sw, null);
+  }
+
+  /**
+   * Le corps affiché : au format `lit`, il entre dans le lot des corps (le maillage du bâtiment reste, caché, pour porter sa
+   * place) ; sinon le maillage du bâtiment le dessine lui-même
+   */
+  private show(e: Entry, geo: THREE.BufferGeometry, lit: boolean) {
+    e.body.geometry = geo;
+    e.body.material = lit ? mats.lit : mats.body;
+    e.body.visible = !slot(this.batch, e, lit ? geo : null);
+    e.moved = true;
+  }
+
+  /** Les personnages affichés (null : aucun), dans leur lot si possible */
+  private showCrowd(e: Entry, geo: THREE.BufferGeometry | null) {
+    if (e.crowd) { if (geo) e.crowd.geometry = geo; e.crowd.visible = !!geo && !slot(this.crowdBatch, e.crowdSlot, geo); }
+    if (!geo) slot(this.crowdBatch, e.crowdSlot, null);
+    e.moved = true;
+  }
+
+  /** Recopie dans les lots la place des corps qui ont bougé (et de ceux qui s'animent ou se tournent face au vent) */
+  private syncBatch() {
+    for (const e of this.entries.values()) {
+      if (!(e.moved || e.anim || (e.turn && e.body.parent === e.turn))) continue;
+      e.moved = false;
+      if (e.inst >= 0) { e.body.updateWorldMatrix(true, false); this.batch.setMatrix(e.inst, e.body.matrixWorld); }
+      const c = e.crowdSlot;
+      if (c.inst >= 0 && e.crowd) { e.crowd.updateWorldMatrix(true, false); this.crowdBatch.setMatrix(c.inst, e.crowd.matrixWorld); }
+    }
+  }
 
 
   /** Rend au bâtiment son modèle partagé (et libère sa copie déformée) */
@@ -151,7 +230,7 @@ export class BuildingView implements WorldListener {
     const body = new THREE.Mesh(new THREE.BufferGeometry(), mats.body);
     body.castShadow = true; body.receiveShadow = true;
     group.add(body);
-    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null, sways: [], crowd: null, turn: null, vane: null, face: 0, aimed: false };
+    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null, sways: [], crowd: null, turn: null, vane: null, face: 0, aimed: false, inst: -1, shown: null, moved: true, crowdSlot: { inst: -1, shown: null } };
     if (animate) group.scale.setScalar(0.001);
     this.group.add(group);
     this.entries.set(b.id, e);
@@ -192,14 +271,17 @@ export class BuildingView implements WorldListener {
     const o = this.opts(b);
     const m = getModel(b.kind, b.age, o);
     const key = `${b.kind}|${b.age}|${o.v}|${+o.L}${+o.R}${+o.F}|${o.row ?? ''}|${o.tier ?? ''}`;
+    // corps et lumières en un seul maillage quand ils se fondent, dessiné avec tous les autres dans le lot des corps (sinon,
+    // deux maillages à part comme avant)
+    const lit = litOf(m.body, m.glow), bodyG = lit ?? m.body, glowG = lit ? null : m.glow;
     if (key !== e.key) {
       e.key = key;
       this.undrape(e);
-      e.body.geometry = m.body;
+      this.show(e, bodyG, !!lit);
       e.smoke = m.smoke;
-      if (m.glow) {
-        if (!e.glow) { e.glow = new THREE.Mesh(m.glow, mats.glow); e.glow.castShadow = false; e.group.add(e.glow); }
-        e.glow.geometry = m.glow;
+      if (glowG) {
+        if (!e.glow) { e.glow = new THREE.Mesh(glowG, mats.glow); e.glow.castShadow = false; e.group.add(e.glow); }
+        e.glow.geometry = glowG;
         e.glow.visible = true;
       } else if (e.glow) e.glow.visible = false;
       if (m.rotor) {
@@ -210,23 +292,24 @@ export class BuildingView implements WorldListener {
         e.spin = { axis: new THREE.Vector3(...m.rotor.axis), speed: m.rotor.speed * (0.85 + hash2(b.x, b.z, 11) * 0.3), phase: hash2(b.x, b.z, 12) * 6.28 };
       } else if (e.rotor) { e.rotor.visible = false; e.spin = null; }
       // les pièces qui se balancent, chacune à son rythme
-      for (const sw of e.sways) e.group.remove(sw.mesh);
+      for (const sw of e.sways) { e.group.remove(sw.mesh); slot(this.swayBatch, sw, null); }
       e.sways = (m.sways ?? []).map((sw, i) => {
-        const mesh = new THREE.Mesh(sw.geo, mats.body);
+        // les ampoules d'un manège (les néons d'un hologramme) tournent avec lui, fondues dans son maillage si possible ; la
+        // pièce entre dans le lot des pièces mobiles (son maillage, caché, porte sa place et son angle)
+        const swLit = litOf(sw.geo, sw.glow);
+        const mesh = new THREE.Mesh(swLit ?? sw.geo, swLit ? mats.lit : mats.body);
         mesh.castShadow = true;
         mesh.position.set(...sw.pivot);
         mesh.userData.pivot = sw.pivot;
         e.group.add(mesh);
-        // les ampoules d'un manège tournent avec lui
-        if (sw.glow) mesh.add(new THREE.Mesh(sw.glow, mats.glow));
-        return { mesh, axis: new THREE.Vector3(...sw.axis).normalize(), amp: sw.amp, freq: sw.freq * (0.85 + hash2(b.x + i, b.z, 13) * 0.3), phase: hash2(b.x, b.z + i, 14) * 6.28, spin: sw.spin, steady: sw.steady };
+        if (sw.glow && !swLit) mesh.add(new THREE.Mesh(sw.glow, mats.glow));
+        const s: Slot = { inst: -1, shown: null };
+        mesh.visible = !slot(this.swayBatch, s, swLit);
+        return { mesh, ...s, axis: new THREE.Vector3(...sw.axis).normalize(), amp: sw.amp, freq: sw.freq * (0.85 + hash2(b.x + i, b.z, 13) * 0.3), phase: hash2(b.x, b.z + i, 14) * 6.28, spin: sw.spin, steady: sw.steady };
       });
       // les personnages du bâtiment, animés
-      if (m.crowd) {
-        if (!e.crowd) { e.crowd = new THREE.Mesh(m.crowd, crowdMat); e.crowd.castShadow = true; e.group.add(e.crowd); }
-        e.crowd.geometry = m.crowd;
-        e.crowd.visible = true;
-      } else if (e.crowd) e.crowd.visible = false;
+      if (m.crowd && !e.crowd) { e.crowd = new THREE.Mesh(m.crowd, crowdMat); e.crowd.castShadow = true; e.group.add(e.crowd); }
+      this.showCrowd(e, m.crowd ?? null);
       // tête face au vent : le rotor et la tête (ou tout le modèle) pendus à un pivot sur l'axe du mât
       const v = m.vane;
       if (v) {
@@ -281,16 +364,16 @@ export class BuildingView implements WorldListener {
       if (e.draped?.key !== dk) {
         this.undrape(e);
         const ry = b.rot * Math.PI / 2;
-        e.draped = { key: dk, body: drape(m.body, w, b.x + s / 2, b.z + s / 2, ry, base), glow: m.glow ? drape(m.glow, w, b.x + s / 2, b.z + s / 2, ry, base) : null, crowd: m.crowd ? drape(m.crowd, w, b.x + s / 2, b.z + s / 2, ry, base) : null };
-        e.body.geometry = e.draped.body;
+        e.draped = { key: dk, body: drape(bodyG, w, b.x + s / 2, b.z + s / 2, ry, base), glow: glowG ? drape(glowG, w, b.x + s / 2, b.z + s / 2, ry, base) : null, crowd: m.crowd ? drape(m.crowd, w, b.x + s / 2, b.z + s / 2, ry, base) : null };
+        this.show(e, e.draped.body, !!lit);
         if (e.glow && e.draped.glow) e.glow.geometry = e.draped.glow;
-        if (e.crowd && e.draped.crowd) e.crowd.geometry = e.draped.crowd;
+        if (e.crowd && e.draped.crowd) this.showCrowd(e, e.draped.crowd);
       }
     } else if (e.draped) {
       this.undrape(e);
-      e.body.geometry = m.body;
-      if (e.glow && m.glow) e.glow.geometry = m.glow;
-      if (e.crowd && m.crowd) e.crowd.geometry = m.crowd;
+      this.show(e, bodyG, !!lit);
+      if (e.glow && glowG) e.glow.geometry = glowG;
+      if (e.crowd && m.crowd) this.showCrowd(e, m.crowd);
     }
     // la hauteur et la sorte de socle (butte ou fondation) : refait quand l'une ou l'autre change
     const pk = ph + (early && ph > 0 ? 100 : 0) + (rocky && ph > 0 ? 200 : 0);
@@ -316,6 +399,7 @@ export class BuildingView implements WorldListener {
       }
     }
     e.group.rotation.y = b.rot * Math.PI / 2;
+    e.moved = true;
     const off = b.kind === 'lamp' ? 0.32 : 0;
     if (!m.vane?.whole) {
       e.body.position.set(off, 0, off);
@@ -354,7 +438,7 @@ export class BuildingView implements WorldListener {
 
   /** Appelé quand le relief change : replace verticalement */
   syncHeights() {
-    for (const e of this.entries.values()) e.group.position.y = this.world.h(e.b.x, e.b.z);
+    for (const e of this.entries.values()) { e.group.position.y = this.world.h(e.b.x, e.b.z); e.moved = true; }
   }
 
   private swayT = 0;
@@ -365,7 +449,10 @@ export class BuildingView implements WorldListener {
     CROWD.time.value += dt;
     const gust = 0.55 + wind.speed * 0.9;
     // les manèges tournent sans fin, à leur vitesse
-    for (const e of this.entries.values()) for (const sw of e.sways) sw.mesh.quaternion.setFromAxisAngle(sw.axis, sw.spin ? this.swayT * sw.spin * 6.28 + sw.phase : (Math.sin(this.swayT * sw.freq * 6.28 + sw.phase) + (sw.steady ? 0 : Math.sin(this.swayT * sw.freq * 11.3 + sw.phase * 2) * 0.3)) * sw.amp * (sw.steady ? 1 : gust));
+    for (const e of this.entries.values()) for (const sw of e.sways) {
+      sw.mesh.quaternion.setFromAxisAngle(sw.axis, sw.spin ? this.swayT * sw.spin * 6.28 + sw.phase : (Math.sin(this.swayT * sw.freq * 6.28 + sw.phase) + (sw.steady ? 0 : Math.sin(this.swayT * sw.freq * 11.3 + sw.phase * 2) * 0.3)) * sw.amp * (sw.steady ? 1 : gust));
+      if (sw.inst >= 0) { sw.mesh.updateWorldMatrix(true, false); this.swayBatch.setMatrix(sw.inst, sw.mesh.matrixWorld); }
+    }
     // les ailes et les pales tournent, chaque moulin à son rythme (les éoliennes plus vite quand le vent forcit) ; les
     // éoliennes et les roues de pompage se tournent lentement face au vent, le rotor du côté d'où il vient
     for (const e of this.entries.values()) {
@@ -389,6 +476,8 @@ export class BuildingView implements WorldListener {
       const a = e.anim;
       if (!a) continue;
       a.t += dt;
+      // la dernière image de l'animation doit aussi passer dans le lot
+      e.moved = true;
       if (a.type === 'pop') {
         const k = Math.min(1, a.t / 0.5);
         e.group.scale.setScalar(Math.max(0.001, easeOutBack(k)));
@@ -404,5 +493,6 @@ export class BuildingView implements WorldListener {
         }
       }
     }
+    this.syncBatch();
   }
 }

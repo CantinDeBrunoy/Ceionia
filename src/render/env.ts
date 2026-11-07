@@ -253,7 +253,7 @@ export class Environment {
 
     // lumières des bâtiments (fenêtres, lampadaires) la nuit
     const night = clamp(1 - day * 1.15 + overcast * 0.25 * day, 0, 1);
-    mats.glow.emissiveIntensity = night * 2.1;
+    mats.glow.emissiveIntensity = mats.lit.emissiveIntensity = night * 2.1;
     LIGHTS.hour.value = time.hour; LIGHTS.time.value = this.time; LIGHTS.night.value = night;
 
     // nuages

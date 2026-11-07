@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 import { addSnow } from './snow';
 
@@ -6,7 +7,14 @@ export const mats = {
   body: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0 }),
   glow: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8, metalness: 0, emissive: new THREE.Color(0xffc46b), emissiveIntensity: 0 }),
   ghost: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.62, emissive: new THREE.Color(0x40ff70), emissiveIntensity: 0.55, depthWrite: false }),
+  /**
+   * Corps et lumières d'un bâtiment dans un seul maillage (un appel de dessin au lieu de deux) : les sommets sans graine
+   * (`aLight` nul) sont le corps, mat et sans éclat ; les autres sont les lumières, comme avec `glow` (voir `mergeLit`)
+   */
+  lit: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92, metalness: 0, emissive: new THREE.Color(0xffc46b), emissiveIntensity: 0 }),
 };
+/** Graine des lumières fixes (sans graine dans `glow`) une fois fondues dans un maillage `lit` */
+export const LIT_FIXED = -100;
 /** Heure du jour, temps écoulé (s) et nuit (0 … 1), pour les lumières des bâtiments */
 export const LIGHTS = { hour: { value: 20 }, time: { value: 0 }, night: { value: 0 } };
 /** Calque vu par la seule caméra des ombres : silhouettes simplifiées qui projettent l'ombre d'objets détaillés */
@@ -19,16 +27,23 @@ export const SHADOW_LAYER = 1;
  * peine, chacune de son côté. Les néons (graine ≥ 2) luisent de leur propre couleur et palpitent doucement. Les lumières sans
  * graine (lanternes des rues) restent fixes
  */
-function addLights(mat: THREE.Material) {
+function addLights(mat: THREE.Material, lit = false) {
   const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
   mat.onBeforeCompile = (sh, r) => {
     prev.call(mat, sh, r);
     Object.assign(sh.uniforms, { uLightHour: LIGHTS.hour, uLightTime: LIGHTS.time, uLightNight: LIGHTS.night });
-    sh.vertexShader = 'attribute float aLight;\nuniform float uLightHour;\nuniform float uLightTime;\nuniform float uLightNight;\nvarying vec3 vLightK;\n' +
+    // maillage `lit` : le corps (graine nulle) ne luit pas, une lumière fixe (LIT_FIXED) luit toujours ; `vLit` les distingue
+    sh.vertexShader = 'attribute float aLight;\nuniform float uLightHour;\nuniform float uLightTime;\nuniform float uLightNight;\nvarying vec3 vLightK;\nvarying float vLit;\n' +
       sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-  vLightK = vec3(1.0);
-  if (aLight != 0.0) {
-    float lSeed = fract(abs(aLight) + fract(sin(dot(modelMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453));
+  vLit = aLight != 0.0 ? 1.0 : 0.0;
+  vLightK = vec3(${lit ? 'vLit' : '1.0'});
+  if (aLight != 0.0 && aLight > ${LIT_FIXED / 2}.0) {
+    // la place du bâtiment (dans un lot, celle de son instance)
+    vec2 lPos = modelMatrix[3].xz;
+    #ifdef USE_BATCHING
+    lPos = (modelMatrix * batchingMatrix[3]).xz;
+    #endif
+    float lSeed = fract(abs(aLight) + fract(sin(dot(lPos, vec2(12.9898, 78.233))) * 43758.5453));
     if (aLight >= 2.0) {
       // la couleur du néon, rapportée à l'éclat chaud du matériau (0xffc46b en couleurs linéaires)
       vLightK = color.rgb / vec3(1.0, 0.552, 0.147) * (0.7 + 0.12 * sin(uLightTime * 1.7 + lSeed * 40.0));
@@ -44,23 +59,30 @@ function addLights(mat: THREE.Material) {
       vLightK = vec3(0.92 + 0.08 * sin(lT * 2.7) * sin(lT * 1.7 + 1.3));
     }
   }`);
-    sh.fragmentShader = 'varying vec3 vLightK;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= vLightK;');
+    let frag = 'varying vec3 vLightK;\nvarying float vLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= vLightK;');
+    // les lumières d'un maillage `lit` gardent le grain un peu plus lisse du matériau `glow`
+    if (lit) frag = frag.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.8, vLit);');
+    sh.fragmentShader = frag;
   };
-  mat.customProgramCacheKey = () => `${key}|lights`;
+  mat.customProgramCacheKey = () => `${key}|lights${lit ? '|lit' : ''}`;
 }
 addLights(mats.glow);
+addLights(mats.lit, true);
 
 /**
  * L'eau des bâtiments (fontaines, piscines, bassins, abreuvoirs, puits) : les faces horizontales d'un bleu d'eau se rident et
  * scintillent, des vaguelettes qui passent et des reflets qui s'allument et s'éteignent, chacune à sa place
  */
-function addWater(mat: THREE.Material) {
+function addWater(mat: THREE.Material, lit = false) {
   const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
   mat.onBeforeCompile = (sh, r) => {
     prev.call(mat, sh, r);
     sh.uniforms.uWaterT = LIGHTS.time;
     sh.vertexShader = 'varying vec3 vWaterPos;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
   vec4 wW = vec4(transformed, 1.0);
+  #ifdef USE_BATCHING
+  wW = batchingMatrix * wW;
+  #endif
   #ifdef USE_INSTANCING
   wW = instanceMatrix * wW;
   #endif
@@ -69,7 +91,7 @@ function addWater(mat: THREE.Material) {
   {
     vec3 wc = vColor.rgb;
     float wUp = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
-    float wMask = step(0.3, (wc.b - wc.r) / max(wc.b, 0.01)) * step(0.22, (wc.g - wc.r) / max(wc.g, 0.01)) * step(0.45, wc.b) * step(0.8, wUp);
+    float wMask = step(0.3, (wc.b - wc.r) / max(wc.b, 0.01)) * step(0.22, (wc.g - wc.r) / max(wc.g, 0.01)) * step(0.45, wc.b) * step(0.8, wUp)${lit ? ' * (1.0 - vLit)' : ''};
     if (wMask > 0.0) {
       vec2 q = vWaterPos.xz;
       float t = uWaterT;
@@ -95,10 +117,46 @@ function addWater(mat: THREE.Material) {
   mat.customProgramCacheKey = () => `${key}|water`;
 }
 addWater(mats.body);
+addWater(mats.lit, true);
 
 // neige sur les toits, les rebords et le dessus de tout ce qui est bâti ou posé dehors
 addSnow(mats.body);
 addSnow(mats.glow);
+addSnow(mats.lit);
+
+/**
+ * Corps et lumières d'un modèle fondus en un seul maillage pour `mats.lit` : le corps prend une graine nulle, les lumières
+ * gardent la leur (LIT_FIXED pour une lumière fixe, sans graine). Sans lumières, le corps seul mis au même format (pour les
+ * lots de `GeoBatch`, qui veulent tous les mêmes attributs). Null si ça ne se fond pas (attributs manquants)
+ */
+export function mergeLit(body: THREE.BufferGeometry, glow: THREE.BufferGeometry | null): THREE.BufferGeometry | null {
+  const parts = (glow ? [body, glow] : [body]).map((g, i) => {
+    const src = g.index ? g.toNonIndexed() : g;
+    const pos = src.attributes.position, nor = src.attributes.normal, col = src.attributes.color;
+    if (!pos || !nor || !col || col.itemSize !== 3) return null;
+    const out = new THREE.BufferGeometry();
+    // tout en flottants simples, pour que les géométries d'un même lot se ressemblent
+    const f32 = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute) => {
+      if (a instanceof THREE.BufferAttribute && a.array instanceof Float32Array && !a.normalized) return a;
+      const v = new Float32Array(a.count * a.itemSize);
+      for (let j = 0; j < a.count; j++) for (let c = 0; c < a.itemSize; c++) v[j * a.itemSize + c] = a.getComponent(j, c);
+      return new THREE.BufferAttribute(v, a.itemSize);
+    };
+    out.setAttribute('position', f32(pos));
+    out.setAttribute('normal', f32(nor));
+    out.setAttribute('color', f32(col));
+    // dans `glow`, une graine nulle est une lumière fixe : ici elle devient LIT_FIXED (le zéro est réservé au corps)
+    const seed = src.attributes.aLight, k = new Float32Array(pos.count);
+    if (i === 1) for (let v = 0; v < pos.count; v++) k[v] = (seed ? seed.getX(v) : 0) || LIT_FIXED;
+    out.setAttribute('aLight', new THREE.BufferAttribute(k, 1));
+    return out;
+  });
+  if (parts.some((p) => !p)) return null;
+  const merged = parts.length === 1 ? parts[0] : mergeGeometries(parts as THREE.BufferGeometry[], false);
+  if (!merged) return null;
+  merged.computeBoundingSphere();
+  return merged;
+}
 
 /** Temps (s) qui anime les personnages des bâtiments */
 export const CROWD = { time: { value: 0 } };
