@@ -321,7 +321,9 @@ float n2(vec2 p) {
 }
 void main() {
   float n = n2(vXZ * 0.7 + vec2(uTime * 0.12, uTime * 0.07)) * 0.6 + n2(vXZ * 1.6 - vec2(uTime * 0.09, -uTime * 0.05)) * 0.4;
-  float fall = pow(1.0 - vRel, 1.3);
+  // (vRel interpolé peut dépasser 1 d'un rien : la puissance d'un nombre négatif est indéfinie, un NaN qui, la nuit, gagnait
+  // tout l'écran par le halo)
+  float fall = pow(max(0.0, 1.0 - vRel), 1.3);
   // voile lumineux (mélange additif) : rose le jour, rouge braise la nuit
   vec3 c = mix(vec3(0.9, 0.25, 0.4), vec3(1.0, 0.22, 0.1), uNight);
   float a = uLevel * 0.22 * fall * smoothstep(0.25, 0.8, n) * (1.0 + uNight * 0.5);

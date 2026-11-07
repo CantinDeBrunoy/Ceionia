@@ -24,6 +24,8 @@ export class CameraRig {
   pitch = 0.85;
   dist = homeFor();
   private goal = { yaw: 0.75, pitch: 0.85, dist: homeFor(), x: N / 2, z: N / 2 };
+  /** la dernière vue valable (voir `update`) */
+  private sane = { yaw: 0.75, pitch: 0.85, dist: homeFor(), x: N / 2, z: N / 2 };
   private pointers = new Map<number, { x: number; y: number; touch: boolean; button: number }>();
   private mode: 'none' | 'tool' | 'rotate' | 'pan' | 'gesture' = 'none';
   private gest = { d: 0, a: 0, mx: 0, my: 0 };
@@ -237,6 +239,13 @@ export class CameraRig {
     if (k.has('KeyE')) this.goal.yaw -= dt * 1.4;
     if (k.has('Equal') || k.has('NumpadAdd')) this.goal.dist = clamp(this.goal.dist * (1 - dt * 1.2), this.minDist, this.maxDist);
     if (k.has('Minus') || k.has('NumpadSubtract')) this.goal.dist = clamp(this.goal.dist * (1 + dt * 1.2), this.minDist, this.maxDist);
+    // un point de visée non fini (une unité suivie sans position, un calcul raté) figeait la vue sur un écran vide : on revient
+    // à la dernière vue valable
+    const g = this.goal;
+    if (![g.x, g.z, g.yaw, g.pitch, g.dist].every(Number.isFinite)) Object.assign(this.goal, this.sane);
+    if (![this.target.x, this.target.y, this.target.z, this.yaw, this.pitch, this.dist].every(Number.isFinite)) {
+      this.target.set(this.sane.x, 0, this.sane.z); this.yaw = this.sane.yaw; this.pitch = this.sane.pitch; this.dist = this.sane.dist;
+    } else this.sane = { x: this.target.x, z: this.target.z, yaw: this.yaw, pitch: this.pitch, dist: this.dist };
     const f = 1 - Math.exp(-dt * 10);
     // en suivant une équipe, la vue colle à elle (des cavaliers au galop la distanceraient)
     this.tracking = Math.max(0, this.tracking - dt);
@@ -246,7 +255,8 @@ export class CameraRig {
     this.dist += (this.goal.dist - this.dist) * f;
     this.target.x += (this.goal.x - this.target.x) * ft;
     this.target.z += (this.goal.z - this.target.z) * ft;
-    this.target.y += (Math.max(0, groundY(this.target.x, this.target.z)) + (this.tracking > 0 ? this.lift : 0) - this.target.y) * f;
+    const gy = groundY(this.target.x, this.target.z);
+    this.target.y += ((Number.isFinite(gy) ? Math.max(0, gy) : this.target.y) + (this.tracking > 0 ? this.lift : 0) - this.target.y) * f;
     this.apply(1);
     // la caméra passe par-dessus les sommets au lieu de les traverser
     const p = this.camera.position, floor = groundY(p.x, p.z) + 1.5;
