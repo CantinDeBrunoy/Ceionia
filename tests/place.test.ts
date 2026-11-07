@@ -34,6 +34,8 @@ describe('la place du village (3 × 3)', () => {
     // le forum, son amélioration, garde la même emprise
     expect(KINDS.forum.size).toBe(3);
     expect(costOf('gather', 0)).toBeNull();
+    // en défi, elle coûte ce que coûtait le feu de camp d'une case
+    expect(costOf('gather', 0, 'hard')).toEqual(costOf('lamp', 0, 'hard'));
   });
 
   it('n’a pas de porte : ni case réservée devant, ni chemin à elle ; on la rejoint de n’importe quel côté', () => {

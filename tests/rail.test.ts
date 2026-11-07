@@ -268,7 +268,8 @@ describe('fin de l’âge industriel : le pétrole, puis le chemin de fer', () =
     expect(AGES[4].reqLate).toEqual({ refinery: 1, oilwell: 2 });
     expect(AGES[4].reqRail).toBe(true);
     for (const n of [1, 2, 3, 5]) { expect(AGES[n].reqLate, `âge ${n}`).toBeUndefined(); expect(AGES[n].reqRail).toBeFalsy(); }
-    expect(reqKindsOf(4, true)).toEqual({ refinery: 1, oilwell: 2 });
+    // en défi aussi : aucun âge d'avant ne les demandait
+    expect(reqKindsOf(4, 'challenge', true)).toEqual({ refinery: 1, oilwell: 2 });
     const { labels } = village();
     const l = labels(), at = (s: string) => l.findIndex((x) => x.startsWith(s));
     expect(at('Raffinerie')).toBeGreaterThan(Math.max(at('expédition « Le tracé'), at('expédition « L’or noir')));

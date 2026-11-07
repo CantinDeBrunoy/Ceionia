@@ -7,6 +7,7 @@ import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear, da
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
+import { rulesOf } from './difficulty';
 import { securityK } from './security';
 import { FORGE_PERK, FORGE_RISK, FORGE_CRAFT } from './kingdom';
 import { hash2 } from '../core/rng';
@@ -316,7 +317,7 @@ export class Expeditions {
   riskOf(c: Choice) {
     // un train de voyageurs amène les équipes au cosmodrome : les expéditions spatiales sont plus sûres
     const rail = c.dest === 'spaceport' && spaceRail(this.world);
-    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (rail ? SPACE_RAIL_RISK : 1) * securityK(dangersOf(c), (k) => this.has(k))
+    return c.risk * (this.has('school') ? 0.7 : 1) * (this.has('observatory') ? 0.85 : 1) * (this.has('research') ? 0.8 : 1) * (rail ? SPACE_RAIL_RISK : 1) * securityK(dangersOf(c), (k) => this.has(k)) * rulesOf(this.world.difficulty).riskK
       // la forge infernale, rapportée de la chute du royaume des Enfers, équipe mieux les équipes
       * (this.world.exp.perks.includes(FORGE_PERK) ? FORGE_RISK : 1)
       // en mer : le feu du phare guide les marins, le chantier naval répare et arme les bateaux

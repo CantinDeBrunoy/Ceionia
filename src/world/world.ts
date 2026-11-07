@@ -213,9 +213,14 @@ export class World {
   exp: ExpState = newExpState();
   /** difficulté de la partie (sauvegardée) */
   difficulty: Difficulty = 'normal';
+  /**
+   * bâtiments du village, par genre, quand il est entré dans son âge (sauvegardés) : en défi, seuls ceux bâtis depuis comptent
+   * pour l'âge d'après
+   */
+  ageBase: Partial<Record<KindId, number>> = {};
   /** ressources illimitées (réglage) : bois, pierre et minerai ne manquent jamais */
   unlimitedSetting = false;
-  /** ressources illimitées : toujours au bac à sable, selon le réglage en partie normale */
+  /** ressources illimitées : toujours au bac à sable, jamais en défi, selon le réglage en partie normale */
   get unlimited() { return rulesOf(this.difficulty).unlimited ?? this.unlimitedSetting; }
   set unlimited(on: boolean) { this.unlimitedSetting = on; }
   /** lignes de chemin de fer (`linesAuto` : drapeau des anciennes sauvegardes, gardé tel quel) */
@@ -1297,6 +1302,7 @@ export class World {
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       exp: this.exp,
       difficulty: this.difficulty,
+      ageBase: this.ageBase,
       // arrêts des lignes : par rang dans la liste des bâtiments (les numéros changent au chargement) ; points de passage des
       // tronçons : par case
       lines: this.lines.map((l) => {
@@ -1408,8 +1414,10 @@ export class World {
     // (`claimed`, `mined`, `dug`, `digs`) sont ignorés
     this.mined = new Set(); this.claimed = new Set(); this.dug = new Set(); this.digs = [];
     this.exp = readExpState(d.exp);
-    // une ancienne partie en « Défi » (mode retiré) se reprend en partie normale : tout le village compte pour l'âge suivant
     this.difficulty = readDifficulty(d.difficulty);
+    // une ancienne sauvegarde n'en a pas : tout le village compte pour l'âge suivant
+    this.ageBase = {};
+    for (const [k, n] of Object.entries(d.ageBase ?? {})) { const v = Math.floor(+(n as number)); if (KINDS[k as KindId] && Number.isFinite(v) && v > 0) this.ageBase[k as KindId] = v; }
     this.lines = [];
     for (const l of Array.isArray(d.lines) ? d.lines : []) {
       const all: number[] = (Array.isArray(l?.s) ? l.s : []).map((i: number) => ids[i] ?? -1);
