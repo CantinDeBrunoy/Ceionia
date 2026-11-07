@@ -227,7 +227,7 @@ function along(pts: [number, number][], cum: number[], s: number): [number, numb
 
 /**
  * Chemin de fer : les voies de chaque ligne (ballast, traverses et rails posés sur le relief adouci, platelage aux routes),
- * l'embranchement et le quai de chargement au pied des avant-postes, des butoirs aux bouts de quai sans suite, un train par
+ * des butoirs aux bouts de quai sans suite, un train par
  * ligne à ses couleurs (fumée de la locomotive de tête), et l'aperçu de la ligne qu'on est en train de tracer
  */
 export class RailView {
@@ -247,7 +247,7 @@ export class RailView {
   private puffs = new Puffs(240, 0);
   private preview = new THREE.Group();
   private previewKey = '';
-  /** gares et avant-postes que la ligne en cours de tracé peut encore relier : un anneau doré qui pulse et une flèche qui sautille */
+  /** gares que la ligne en cours de tracé peut encore relier : un anneau doré qui pulse et une flèche qui sautille */
   private cands = new THREE.Group();
   private candKey = '';
   private candT = 0;
@@ -335,20 +335,15 @@ export class RailView {
     return null;
   }
 
-  /** Hauteur des rails à quai : la dalle d'une gare ; le relief adouci le long de l'embranchement d'un avant-poste */
+  /** Hauteur des rails à quai : la dalle d'une gare */
   private yOfStop(s: Stop) {
     const w = this.world;
-    if (!s.post) {
-      // comme la vue des bâtiments : le bâtiment se pose à la médiane des hauteurs des coins de son emprise
-      const hs: number[] = [], n = sizeOf(s.b);
-      for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) hs.push(w.h(s.b.x + i, s.b.z + j));
-      hs.sort((p, q) => p - q);
-      const mid = hs.length >> 1;
-      return (hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2) + 0.044;
-    }
-    let y = -Infinity;
-    for (let t = -s.half - OVER; t <= s.half + OVER + 1e-6; t += 0.2) y = Math.max(y, w.hAt(s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t));
-    return y + 0.04;
+    // comme la vue des bâtiments : le bâtiment se pose à la médiane des hauteurs des coins de son emprise
+    const hs: number[] = [], n = sizeOf(s.b);
+    for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) hs.push(w.h(s.b.x + i, s.b.z + j));
+    hs.sort((p, q) => p - q);
+    const mid = hs.length >> 1;
+    return (hs.length % 2 ? hs[mid] : (hs[mid - 1] + hs[mid]) / 2) + 0.044;
   }
 
   /** Hauteurs d'un tronçon au pas STEP : relief adouci, jamais sous le sol, raccordé à la hauteur des quais à ses bouts */
@@ -532,21 +527,7 @@ export class RailView {
     for (const s of net.stops) {
       const y = this.stopY.get(s.b.id)!, used = net.used.get(stopKey(s)) ?? new Set<number>(), h = Math.atan2(s.u[0], s.u[1]);
       const pt = (t: number): [number, number, number] => [s.c[0] + s.u[0] * t, s.c[1] + s.u[1] * t, h];
-      if (s.post) {
-        // embranchement de l'avant-poste, quai de planches côté murs, wagonnet et tas de minerai
-        lay(pt, () => y, -s.half - OVER, s.half + OVER);
-        const sx = s.b.x + 1 - s.c[0], sz = s.b.z + 1 - s.c[1], side = Math.cos(h) * sx - Math.sin(h) * sz > 0 ? 1 : -1;
-        for (let t = -s.half; t < s.half; t += 0.3) {
-          const [qx, qz] = pt(t + 0.15);
-          m.block(qx + Math.cos(h) * side * 0.36, y - 0.06, qz - Math.sin(h) * side * 0.36, h, 0.26, 0.1, 0.29, dark(0xa07a56, 0.9 + hash2(Math.floor(t * 10), 5, 93) * 0.2));
-        }
-        const [ox, oz] = pt(s.half * 0.5), [cx, cz] = pt(-s.half * 0.4);
-        m.block(ox + Math.cos(h) * side * 0.4, y + 0.04, oz - Math.sin(h) * side * 0.4, h + 0.3, 0.1, 0.08, 0.1, 0xa07a56);
-        m.block(ox + Math.cos(h) * side * 0.4, y + 0.12, oz - Math.sin(h) * side * 0.4, h + 0.9, 0.07, 0.06, 0.07, 0x8a6a46);
-        m.block(cx + Math.cos(h) * side * 0.4, y + 0.04, cz - Math.sin(h) * side * 0.4, h, 0.16, 0.06, 0.2, 0x4a4a50);
-        m.block(cx + Math.cos(h) * side * 0.4, y + 0.1, cz - Math.sin(h) * side * 0.4, h + 0.4, 0.12, 0.05, 0.14, 0x6a6660);
-        for (const e of [1, -1]) if (!used.has(e)) { const [bx, bz] = pt(e * (s.half + OVER)); buffer(bx, y, bz, h); }
-      } else {
+      {
         // gare : à l'époque moderne, la caténaire passe au-dessus de la voie du quai, tendue entre deux portiques aux bouts
         // du quai, où elle rejoint celle des lignes (la gare centrale a ses voies, ses butoirs et sa halle dans son modèle)
         if (s.ends) {
@@ -654,7 +635,7 @@ export class RailView {
   /** Chaque voiture posée sur ses deux essieux, penchée dans les pentes ; fumée de la locomotive de tête */
   private place(tr: Train, dt: number) {
     const sh = this.show(tr), leg = tr.leg!, r = this.rail, k = tr.flip ? -1 : 1;
-    const seated = r.seated(tr), loaded = tr.line.freight || tr.cargo.ore + tr.cargo.stone > 0, kinds = this.kinds(tr);
+    const seated = r.seated(tr), loaded = !!tr.line.freight, kinds = this.kinds(tr);
     CARS.forEach((d, i) => {
       const car = sh.cars[i], s = tr.s + (d.at - TRAIN_LEN / 2) * k;
       const f = r.at(leg, s + d.half), b = r.at(leg, s - d.half), yf = this.legY(leg, s + d.half), yb = this.legY(leg, s - d.half);

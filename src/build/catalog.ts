@@ -1,5 +1,5 @@
 export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | 'gather' | 'temple' | 'mill' | 'landmark' | 'lamp' | 'health' | 'school' | 'fire'
-  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'outpost' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
+  | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
   | 'harbor' | 'airport' | 'heliport' | 'watertower' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'zoo' | 'theater' | 'acropolis' | 'forum' | 'senate'
   | 'carworks' | 'lab' | 'aerodrome' | 'manor' | 'oilwell' | 'refinery' | 'brickworks'
   | 'arcology' | 'vfarm' | 'fusion' | 'spaceport' | 'research' | 'maglev';
@@ -75,7 +75,7 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', 'Mine', 'Mine de charbon', 'Carrière', 'Mine robotisée'],
     desc: 'Tire du minerai de la terre, jour après jour.',
     jobs: [0, 0, 3, 6, 8, 8],
-    perk: 'Débloquée par l’expédition « Le filon de la montagne ». Ne se creuse que dans la montagne. Rapporte chaque jour du minerai (3 au Moyen Âge, 5 à l’âge industriel, 8 à l’époque moderne, 10 ensuite) et de la pierre.',
+    perk: 'Débloquée par l’expédition « Le filon de la montagne ». Ne se creuse que dans la montagne. Rapporte chaque jour du minerai (6 au Moyen Âge, 10 à l’âge industriel, 16 à l’époque moderne, 20 ensuite), de quoi passer les âges, et de la pierre.',
     reqMission: 'mine',
   },
   oilwell: {
@@ -100,20 +100,13 @@ export const KINDS: Record<KindId, KindDef> = {
     jobs: [0, 0, 0, 6, 8, 8],
     perk: 'Bâtiment de 2 × 2 cases, qui se pose n’importe où. Cuit chaque jour des briques (8 à l’âge industriel, 12 à l’époque moderne, 16 ensuite), dont ont besoin les gares, les usines et les raffineries, et que réclame le passage à l’époque moderne.',
   },
-  outpost: {
-    id: 'outpost', size: 2, minAge: 2, icon: '🚩', cat: 'service',
-    names: ['', '', 'Avant-poste', 'Avant-poste fortifié', 'Base avancée', 'Base souterraine'],
-    desc: 'Camp retranché devant une grotte ou une faille : les expéditions armées partent d’ici vers les profondeurs, et sa garnison tient les premières galeries.',
-    jobs: [0, 0, 3, 4, 5, 6],
-    perk: 'À bâtir tout contre une grotte ou une faille : les expéditions armées en partent. Chaque expédition armée qui revient victorieuse étend les galeries tenues sous terre.',
-  },
   station: {
     id: 'station', size: 2, minAge: 3, icon: '🚉', cat: 'service',
     names: ['', '', '', 'Petite gare', 'Gare moderne', 'Gare à grande vitesse'],
-    desc: 'Un arrêt du chemin de fer : les voyageurs y montent et en descendent, les mineurs y prennent le train pour l’avant-poste.',
+    desc: 'Un arrêt du chemin de fer : les voyageurs y montent et en descendent.',
     jobs: [0, 0, 0, 3, 5, 6], joy: [0, 0, 0, 3, 4, 5],
     reqKind: 'terminal',
-    perk: 'On les bâtit une fois la gare centrale au village, pour la prolonger. Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares et les avant-postes à relier : un train fera la navette entre eux. Train de marchandises : briqueterie, mine, carrière, scierie, puits et raffinerie à 8 cases de la gare produisent 75 % de plus. Train de voyageurs : il amène les équipes au cosmodrome voisin.',
+    perk: 'On les bâtit une fois la gare centrale au village, pour la prolonger. Choisissez une gare (d’un clic) puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier : un train fera la navette entre elles. Train de marchandises : briqueterie, mine, carrière, scierie, puits et raffinerie à 8 cases de la gare produisent 75 % de plus. Train de voyageurs : il amène les équipes au cosmodrome voisin.',
   },
   terminal: {
     id: 'terminal', size: 3, minAge: 3, icon: '🚉', cat: 'service',
@@ -417,12 +410,12 @@ export const KINDS: Record<KindId, KindDef> = {
     id: 'maglev', size: 2, minAge: 5, icon: '🚄', cat: 'service',
     names: ['', '', '', '', '', 'Gare maglev'],
     desc: 'La gare de l’âge futuriste : les rames à grande vitesse des lignes s’y arrêtent, et la navette à sustentation magnétique file sans un bruit sur son anneau suspendu.',
-    perk: 'Une gare comme les autres pour le chemin de fer : choisissez-la puis « Nouvelle ligne » pour la relier aux autres gares et aux avant-postes.',
+    perk: 'Une gare comme les autres pour le chemin de fer : choisissez-la puis « Nouvelle ligne » pour la relier aux autres gares.',
     jobs: [0, 0, 0, 0, 0, 8], joy: [0, 0, 0, 0, 0, 9],
   },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'outpost', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -447,7 +440,7 @@ export const KIND_SUB: Record<KindId, string> = {
   lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
   workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie',
   health: 'sante', school: 'savoir', observatory: 'savoir', lab: 'savoir', research: 'savoir',
-  police: 'securite', fire: 'securite', outpost: 'securite', senate: 'securite',
+  police: 'securite', fire: 'securite', senate: 'securite',
   station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
@@ -461,7 +454,7 @@ export interface AgeDef {
   /** Prérequis pour ATTEINDRE cet âge */
   reqPop: number;
   reqKinds: Partial<Record<KindId, number>>;
-  /** minerai tiré du monde souterrain */
+  /** minerai en réserve (la mine en extrait chaque jour) */
   reqOre?: number;
   /** briques en réserve au village (la briqueterie en cuit) */
   reqBrick?: number;
@@ -495,7 +488,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   house: 'maisons', farm: 'fermes', pen: 'enclos', pier: 'pontons de pêche', well: 'puits', workshop: 'ateliers', gather: 'lieux de rencontre',
   temple: 'lieux de culte', mill: 'moulins/usines', landmark: 'bâtiments majeurs', lamp: 'lampadaires',
   health: 'lieux de soins', school: 'écoles', fire: 'casernes',
-  stable: 'écuries', apiary: 'ruchers', baths: 'thermes et piscines', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', outpost: 'avant-postes', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
+  stable: 'écuries', apiary: 'ruchers', baths: 'thermes et piscines', tavern: 'tavernes', mine: 'mines', observatory: 'observatoires', lumber: 'bûcherons', quarry: 'carrières', station: 'gares',
   barber: 'coiffeurs', alpine: 'clubs alpins', police: 'commissariats', terminal: 'gares centrales',
   theater: 'théâtres', acropolis: 'acropoles', forum: 'forums et marchés', senate: 'sénats',
   harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions', zoo: 'zoos',

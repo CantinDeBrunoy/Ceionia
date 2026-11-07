@@ -7,8 +7,8 @@ import { hash2 } from '../core/rng';
 import { HUMAN_K } from './assets';
 
 /**
- * Camp souterrain : il se dresse de lui-même au pied du puits du premier avant-poste et grandit avec ses quêtes (voir
- * sim/depths). Chaque pièce est posée sur le sol dégagé, sans en chevaucher une autre, tournée vers le puits ; sa place ne
+ * Camp souterrain, au pied du puits d'une base, qui grandit par niveaux (`CAMP_LEVELS`) : moteur gardé pour les Enfers (le
+ * jeu ne le dresse plus depuis le retrait du monde souterrain). Chaque pièce est posée sur le sol dégagé, sans en chevaucher une autre, tournée vers le puits ; sa place ne
  * change pas quand le camp grandit. Feux et braseros vacillent, la roue du monte-charge tourne
  */
 
@@ -64,6 +64,10 @@ const PIECES: { kind: CampPiece; level: number; r: number; near: [number, number
   { kind: 'keep', level: 9, r: 0.7, near: [3, 10] },
   { kind: 'statue', level: 9, r: 0.22, near: [1, 5] },
 ];
+
+/** Niveaux du camp (chacun ajoute ses pièces), et ses gardes à chaque niveau */
+export const CAMP_LEVELS = 9;
+export const CAMP_GUARDS = [0, 2, 4, 4, 6, 6, 8, 8, 8, 12];
 
 export interface Placed { kind: CampPiece; x: number; z: number; ry: number; r: number }
 /**

@@ -22,7 +22,7 @@
     ['house', 1, 0], ['house', 1, 0], ['house', 1, 0], ['house', 1, 0], ['house', 1, 0], ['house', 1, 0], ['farm', 1, 0], ['farm', 1, 0],
     ['well', 1, 0], ['lamp', 1, 0], ['lumber', 1, 0], ['quarry', 1, 0], ['workshop', 2, 0], ['school', 2, 0], ['health', 2, 0], ['fire', 2, 0],
     ['temple', 2, 1], ['barber', 1, 1], ['theater', 2, 1], ['police', 2, 1], ['senate', 2, 1], ['mill', 2, 2], ['manor', 2, 2], ['landmark', 2, 2],
-    ['outpost', 2, 2], ['brickworks', 2, 3], ['watertower', 1, 3], ['lab', 1, 3], ['tennis', 1, 3], ['football', 2, 3], ['alpine', 2, 3],
+    ['brickworks', 2, 3], ['watertower', 1, 3], ['lab', 1, 3], ['tennis', 1, 3], ['football', 2, 3], ['alpine', 2, 3],
     ['basket', 1, 4], ['heliport', 2, 4], ['vfarm', 1, 5], ['research', 2, 5], ['maglev', 2, 5],
   ];
 

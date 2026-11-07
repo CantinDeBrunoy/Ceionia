@@ -23,8 +23,8 @@ export function brief(text: string, max = 120): [string, string] {
 
 /**
  * Nom court d'un arrêt pour une ligne de la fiche : sans le mot « Gare » ni sa préposition (« Gare intermodale » →
- * « Intermodale »), la grande vitesse en sigle (« Gare à grande vitesse 2 » → « GV 2 ») ; « Petite gare » ou
- * « Avant-poste » restent tels quels
+ * « Intermodale »), la grande vitesse en sigle (« Gare à grande vitesse 2 » → « GV 2 ») ; « Petite gare » reste tel
+ * quel
  */
 export function shortStop(name: string): string {
   const s = name.replace(/^Gare\s+(?:(?:à|de|du|des)\s+)?/i, '').replace(/^grande vitesse\b/i, 'GV');

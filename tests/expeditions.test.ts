@@ -7,8 +7,7 @@ import { MISSIONS, Mission, choiceAt, readExpState, RECENT_EVENTS, effectSummary
 import { EVENTS, EVENT_BY, eventsFor, pickEvent, EventCtx } from '../src/sim/events';
 import { Expeditions, Report, ActiveExpedition, nextEventAt } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
-import { Underground } from '../src/world/underground';
-import { AGES } from '../src/build/catalog';
+import { AGES, KINDS } from '../src/build/catalog';
 import { ExpeditionScene } from '../src/render/expeditionScenes';
 import { ExpeditionView, along, stepWalker, Walker } from '../src/render/expeditionView';
 import { PenView, ARRIVALS, penWay } from '../src/render/pens';
@@ -85,9 +84,6 @@ describe('imprévus des expéditions', () => {
     // la pirogue a ses rapides, pas une crue qu'on passerait « en barque » ou « à gué »
     expect(ids('seeds', 1)).toContain('rapids');
     expect(ids('seeds', 1)).not.toContain('flood');
-    // sous terre, la troupe armée a ses propres imprévus, pas les torches qui faiblissent des explorateurs
-    expect(ids('deep', 0)).toEqual(expect.arrayContaining(['echo', 'tired', 'crossroads']));
-    expect(ids('deep', 0)).not.toContain('dark');
     // les loups et la laie ne rôdent plus à l'époque moderne
     expect(ids('summit', 1)).not.toContain('wolves');
     // une bête menée à la corde est de l'espèce que la mission ramène
@@ -145,7 +141,7 @@ describe('imprévus des expéditions', () => {
   });
 
   it('le choix du joueur est celui que retient le récit, et la scène sait lequel jouer', () => {
-    const v = village(2), a = v.ex.start(mission('scout'), 0)!;
+    const v = village(2), a = v.ex.start(mission('mine'), 1)!;
     play(v, () => !!a.wait, 2);
     const ev = a.wait!, i = ev.options.findIndex((_, j) => v.ex.canTake(a, j) && j > 0) >= 0 ? ev.options.findIndex((_, j) => v.ex.canTake(a, j) && j > 0) : 0;
     expect(v.ex.decide(a, i)).toBe(true);
@@ -178,94 +174,27 @@ describe('comptes rendus des expéditions', () => {
     expect(v.w.outpostEntrance(Math.floor(x), Math.floor(z), 1)).toBeGreaterThanOrEqual(0);
   });
 
-  it('l’expédition armée compte les filons qu’elle abat vraiment : récit, détail du minerai, compteur des profondeurs', () => {
-    const w = continent();
-    const [x, z] = flatLand(w);
-    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
-    const agents = new Agents(w);
-    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 30, 0);
-    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
-    ex.under = new Underground(w);
-    w.exp.done.push('horses', 'mine', 'scout');
-    const free = (k: 'stable' | 'outpost') => { for (let zz = 10; zz < N - 10; zz++) for (let xx = 10; xx < N - 10; xx++) if (w.canPlace(k, xx, zz) === null) return [xx, zz]; throw new Error('pas de place'); };
-    const [sx, sz] = free('stable');
-    w.place('stable', sx, sz, 0, true, 2, false);
-    const [px, pz] = free('outpost');
-    w.place('outpost', px, pz, 0, true, 2, false);
-    ex.update(1.1);
-    const deep = mission('deep'), armor = deep.choices.findIndex((c) => c.troop === 'armor');
-    // les récits n'annoncent plus un nombre de filons fixé d'avance
-    for (const c of deep.choices) for (const age of [2, 3, 4, 5]) expect(choiceAt(c, age).winText).not.toMatch(/six filons|trois filons|filons remontent/);
-    const reports: Report[] = [];
-    ex.onReport = (r) => reports.push(r);
-    const run = (a: ActiveExpedition) => { for (let i = 0; i < 80000 && ex.active.includes(a); i++) { agents.update(0.05, 10, 2, false, 30, 0); ex.update(0.05); if (a.wait) ex.decide(a, a.wait.options.findIndex((_, j) => ex.canTake(a, j))); } };
-    // une première troupe : ses filons sont abattus, comptés, et le détail du minerai fait le total
-    const ore0 = w.ore, mined0 = w.mined.size, a = ex.start(deep, armor)!;
-    expect(a.targets.length).toBeGreaterThan(0);
-    run(a);
-    const r = reports[0], n = w.mined.size - mined0;
-    expect(r.ok).toBe(true);
-    expect(n).toBe(a.targets.length);
-    expect(ex.depthStats().veins).toBe(w.mined.size);
-    const m = /\+(\d+) minerai : (\d+) filons? abattus? \(([^)]*)\)(?:, et (\d+) trouvés? en chemin)?/.exec(r.summary)!;
-    expect(m).not.toBeNull();
-    expect(+m[2]).toBe(n);
-    // le détail compte des filons (« 2 de charbon, 1 d'or… ») : il fait le nombre de filons ; le total fait le minerai gagné
-    expect(m[3].split(', ').reduce((s, p) => s + parseInt(p, 10), 0)).toBe(n);
-    expect(+m[1]).toBe(w.ore - ore0);
-    expect(r.summary.match(/minerai/g)!.length).toBe(1);
-    expect(r.text).toMatch(new RegExp(`filons? abattus?`));
-    // une troupe qui ne trouve aucun filon sur son chemin ne prétend pas en avoir abattu
-    const b = ex.start(deep, armor)!;
-    b.targets = [];
-    run(b);
-    const r2 = reports[1];
-    expect(r2.ok).toBe(true);
-    expect(r2.text).toMatch(/pas un filon/);
-    expect(r2.summary).not.toMatch(/filons? abattus?/);
-  });
-
-  it('le repérage des profondeurs est facultatif : son plan rend les troupes armées plus sûres, et une ancienne partie le garde', () => {
-    const scout = mission('scout'), deep = mission('deep'), armor = deep.choices.find((c) => c.troop === 'armor')!, gallery = mission('mine').choices[0];
-    expect(scout.mandatory).toBe(false);
-    expect(scout.unlocks).toBeUndefined();
-    expect(MISSIONS.some((m) => m.requires?.missions?.includes('scout'))).toBe(false);
-    for (const c of scout.choices) expect(c.win).toContainEqual({ t: 'perk', id: 'map' });
-    const v = village(2), risk = v.ex.riskOf(armor), other = v.ex.riskOf(gallery);
-    v.w.exp.perks.push('map');
-    expect(v.ex.riskOf(armor)).toBeCloseTo(risk * 0.8);
-    expect(v.ex.riskOf(gallery)).toBeCloseTo(other);
-    // une sauvegarde d'avant : le repérage réussi y a dressé le plan
-    expect(readExpState({ done: ['scout'] }).perks).toContain('map');
-    expect(readExpState({ done: ['herd'] }).perks).not.toContain('map');
-  });
-
-  it('à chaque âge, deux troupes armées partent à pied : ni chevaux emmenés d’office, ni carburant', () => {
-    const deep = mission('deep');
-    for (let age = 2; age <= 5; age++) {
-      const foot = deep.choices.map((c) => choiceAt(c, age)).filter((c) => !c.mounts && !c.fuel);
-      expect(foot.length, `âge ${age}`).toBeGreaterThanOrEqual(2);
-    }
-    // une écurie pleine : la cavalerie emmène ses trois chevaux, les troupes à pied aucun ; une équipe ordinaire part à cheval
-    const v = village(3);
-    let spot: number[] | null = null;
-    for (let z = 10; z < N - 10 && !spot; z++) for (let x = 10; x < N - 10 && !spot; x++) if (v.w.canPlace('stable', x, z) === null) spot = [x, z];
-    v.w.place('stable', spot![0], spot![1], 0, true, 3, false);
-    v.w.exp.herd.push('horse', 'horse', 'horse', 'horse');
-    for (const c of deep.choices.map((q) => choiceAt(q, 3))) {
-      expect(v.ex.mountsFor(c)).toBe(c.troop === 'cavalry' ? 3 : 0);
-      if (c.troop !== 'cavalry') expect(v.ex.preview(c).label).not.toMatch(/cheva/);
-    }
-    expect(v.ex.mountsFor(mission('herd').choices[0])).toBeGreaterThan(0);
-  });
-
   it('les conditions nomment les bâtiments comme à l’âge du village (un haras à l’âge industriel)', () => {
-    const v = village(3), deep = mission('deep');
-    expect(v.ex.missing(deep)).toEqual(['bâtir : avant-poste fortifié']);
-    // la charge, sans chevaux : au haras, pas « à l'écurie »
-    const free = { ...deep, requires: undefined };
-    expect(v.ex.why(free, choiceAt(deep.choices[0], 3))).toBe('Il faut 3 chevaux au haras (0 pour l’instant).');
-    expect(village(2).ex.why(free, choiceAt(deep.choices[0], 2))).toBe('Il faut 3 chevaux à l’écurie (0 pour l’instant).');
+    // un choix qui emmène trois chevaux, sans chevaux : au haras, pas « à l'écurie »
+    const m = mission('herd'), c = { ...m.choices[0], mounts: 3 };
+    expect(village(3).ex.why(m, c)).toBe('Il faut 3 chevaux au haras (0 pour l’instant).');
+    expect(village(2).ex.why(m, c)).toBe('Il faut 3 chevaux à l’écurie (0 pour l’instant).');
+  });
+
+  it('le monde souterrain est retiré : ni repérage, ni expédition armée dans les profondeurs, ni avant-poste', () => {
+    expect(MISSIONS.find((m) => m.id === 'scout' || m.id === 'deep')).toBeUndefined();
+    expect('outpost' in KINDS).toBe(false);
+    expect(MISSIONS.some((m) => m.requires?.kinds?.includes('outpost' as never))).toBe(false);
+    for (const m of MISSIONS) for (const c of m.choices) for (const e of [...c.win, ...c.lose]) expect(['herd', 'ore', 'need', 'perk', 'injured', 'unherd']).toContain(e.t);
+    // une ancienne partie : ses missions retirées et le plan des galeries s'oublient, le reste demeure
+    const s = readExpState({ done: ['herd', 'scout', 'deep'], perks: ['map', 'seeds'], camp: 4, wins: 3 });
+    expect(s.done).toEqual(['herd']);
+    expect(s.perks).toEqual(['seeds']);
+    expect('camp' in s).toBe(false);
+    // une équipe ne descend jamais sous terre
+    const v = village(2), a = v.ex.start(mission('mine'), 1, 2)!;
+    expect(a.entry).toBe(-1);
+    expect(a.ambush).toEqual([]);
   });
 
   it('le filon de la montagne rapporte de quoi passer à l’âge industriel, quel que soit le choix', () => {
@@ -307,80 +236,6 @@ describe('les imprévus se déclenchent, où que soit la caméra', () => {
     expect(ks[0]).toBeGreaterThanOrEqual(0.55);
     expect(ks[1]).toBeGreaterThanOrEqual(0.75);
     expect(nextEventAt({ seen: [], arriveMiss: false })).toBeLessThan(nextEventAt({ seen: ['a'] }));
-  }, 120000);
-});
-
-describe('le repérage des profondeurs et l’éclaireur envoyé devant', () => {
-  /** Un village de l'âge médiéval avec son avant-poste devant une grotte ou une faille, et le monde souterrain */
-  function withPost() {
-    const v = village(2);
-    v.ex.under = new Underground(v.w);
-    const free = () => { for (let zz = 10; zz < N - 10; zz++) for (let xx = 10; xx < N - 10; xx++) if (v.w.canPlace('outpost', xx, zz) === null) return [xx, zz]; throw new Error('pas de place'); };
-    const [px, pz] = free();
-    v.w.place('outpost', px, pz, 0, true, 2, false);
-    expect(v.ex.outposts().length).toBe(1);
-    return v;
-  }
-  const hidden = (v: ReturnType<typeof village>, a: ActiveExpedition) => a.party.filter((id) => v.agents.agents.find((g) => g.id === id)!.hidden).length;
-
-  it('les éclaireurs (pas une troupe) quittent le village, gagnent l’avant-poste, descendent dans les galeries puis remontent', () => {
-    const v = withPost(), scout = mission('scout'), post = v.ex.outposts()[0];
-    const a = v.ex.start(scout, 0, 2)!;
-    expect(a).toBeTruthy();
-    expect(a.c.troop).toBeUndefined();
-    expect(a.party.length).toBe(2);
-    // ils vont à l'avant-poste, et descendront par l'entrée qu'il garde
-    expect(Math.hypot(a.dest[0] - post.b.x - 1, a.dest[1] - post.b.z - 1)).toBeLessThan(3);
-    expect(a.entry).toBe(post.entry);
-    expect(a.targets.length).toBe(1);
-    expect(a.front).toBe(a.entry);
-    expect(a.ambush).toEqual([]);
-    // ils partent vraiment : ils marchent, loin du village
-    const start = v.agents.partyPositions(a.party).map(([x, z]) => [x, z]);
-    play(v, () => a.phase === 'work', 2, () => 0);
-    expect(a.phase).toBe('work');
-    const moved = a.party.map((id, i) => { const g = v.agents.agents.find((x) => x.id === id)!; return Math.hypot(g.x - start[i][0], g.z - start[i][1]); });
-    expect(Math.min(...moved)).toBeGreaterThan(2);
-    // sous terre : on ne les voit plus en surface ; ils remontent ensuite et rentrent à pied
-    expect(hidden(v, a)).toBe(a.party.length);
-    play(v, () => a.phase === 'back', 2, () => 0);
-    play(v, () => a.phase !== 'back' || a.t > 2, 2, () => 0);
-    expect(hidden(v, a)).toBe(0);
-    play(v, () => !v.ex.active.includes(a), 2, () => 0);
-    expect(v.ex.active.includes(a)).toBe(false);
-  }, 120000);
-
-  it('sans avant-poste, ils descendent par la grotte trouvée ; sans monde souterrain, la scène reste en surface', () => {
-    const v = village(2);
-    v.ex.under = new Underground(v.w);
-    const a = v.ex.start(mission('scout'), 0, 2)!;
-    expect(a.site).toBe('cave');
-    expect(a.entry).toBeGreaterThanOrEqual(0);
-    const plain = village(2), b = plain.ex.start(mission('scout'), 0, 2)!;
-    expect(b.entry).toBe(-1);
-  });
-
-  it('« Envoyer un éclaireur devant » : la troupe s’arrête, l’éclaireur part et revient, puis la troupe repart', () => {
-    const v = withPost(), deep = mission('deep'), armor = deep.choices.findIndex((c) => c.troop === 'armor');
-    const a = v.ex.start(deep, armor, 2)!;
-    play(v, () => a.phase === 'work', 2, () => 0);
-    if (a.wait) v.ex.decide(a, 0);
-    while (a.hold > 0) play(v, () => a.hold <= 0, 2);
-    const cross = EVENT_BY.crossroads, i = cross.options.findIndex((o) => o.scout);
-    expect(cross.options[i].label).toBe('Envoyer un éclaireur devant');
-    a.wait = cross; a.seen.push(cross.id); a.picks.push(-1);
-    const t0 = a.t;
-    expect(v.ex.decide(a, i)).toBe(true);
-    expect(a.hold).toBeGreaterThan(0);
-    expect(a.scout).toEqual({ t: 0, dur: a.hold });
-    // la troupe ne bouge plus pendant que l'éclaireur va et vient
-    for (let k = 0; k < 40; k++) { v.agents.update(0.05, 10, 2, false, 40, 0); v.ex.update(0.05); }
-    expect(a.t).toBeCloseTo(t0, 5);
-    expect(a.scout!.t).toBeGreaterThan(1.5);
-    play(v, () => a.hold <= 0, 2);
-    expect(a.scout ?? null).toBeNull();
-    for (let k = 0; k < 20; k++) { v.agents.update(0.05, 10, 2, false, 40, 0); v.ex.update(0.05); }
-    expect(a.t).toBeGreaterThan(t0);
   }, 120000);
 });
 

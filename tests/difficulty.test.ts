@@ -196,12 +196,10 @@ describe('un bâtiment posé avant d’être demandé compte déjà', () => {
     expect(sim.built('gather')).toBe(1);
   });
 
-  it('pour une expédition : l’avant-poste ou le cosmodrome déjà là ; une gare devenue gare centrale reste une gare', () => {
+  it('pour une expédition : le cosmodrome déjà là ; une gare devenue gare centrale reste une gare', () => {
     const w = flatWorld('normal');
-    put(w, [['house', 2], ['outpost', 2], ['terminal', 3]]);
+    put(w, [['house', 2], ['terminal', 3]]);
     const ex = new Expeditions(w, new Agents(w), () => 100);
-    const deep = MISSIONS.find((m) => m.id === 'deep')!;
-    expect(ex.missing(deep)).toEqual([]);
     expect(ex.has('station')).toBe(true);
     expect(ex.has('terminal')).toBe(true);
     expect(ex.has('maglev')).toBe(false);

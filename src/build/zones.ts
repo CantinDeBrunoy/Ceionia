@@ -13,7 +13,6 @@ export const ZONED: Partial<Record<KindId, string>> = {
   alpine: 'il faut une montagne',
   quarry: 'il faut des rochers ou une montagne',
   lumber: 'il faut une forêt',
-  outpost: 'il faut une grotte ou une faille',
   oilwell: 'il faut un gisement de pétrole (les taches sombres)',
 };
 

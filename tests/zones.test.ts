@@ -16,8 +16,8 @@ function continent() {
 describe('emplacements des bâtiments à terrain précis', () => {
   const w = continent();
 
-  it('la liste suit les règles de canPlace : ports, ponton, mine, club alpin, carrière, bûcheron, avant-poste, puits', () => {
-    expect(Object.keys(ZONED).sort()).toEqual(['alpine', 'harbor', 'lumber', 'mine', 'oilwell', 'outpost', 'pier', 'quarry']);
+  it('la liste suit les règles de canPlace : ports, ponton, mine, club alpin, carrière, bûcheron, puits', () => {
+    expect(Object.keys(ZONED).sort()).toEqual(['alpine', 'harbor', 'lumber', 'mine', 'oilwell', 'pier', 'quarry']);
     expect(isZoned('house')).toBe(false);
   });
 
@@ -48,9 +48,9 @@ describe('emplacements des bâtiments à terrain précis', () => {
 
   it('sans emplacement, le message dit ce qui manque', () => {
     const flat = new World();
-    const sc = new ZoneScan(flat, 'outpost');
+    const sc = new ZoneScan(flat, 'mine');
     while (!sc.step(5000));
     expect(sc.origins).toBe(0);
-    expect(sc.emptyMessage('Avant-poste')).toMatch(/^Aucun emplacement pour « Avant-poste » : il faut une grotte ou une faille\./);
+    expect(sc.emptyMessage('Mine')).toMatch(/^Aucun emplacement pour « Mine » : il faut une montagne\./);
   });
 });

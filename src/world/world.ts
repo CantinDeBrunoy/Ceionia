@@ -55,7 +55,7 @@ export interface Snapshot {
 }
 
 /**
- * Ligne de chemin de fer : ses arrêts dans l'ordre (gares et avant-postes, par numéro de bâtiment) et sa couleur ; `via` :
+ * Ligne de chemin de fer : ses arrêts dans l'ordre (gares, par numéro de bâtiment) et sa couleur ; `via` :
  * pour chaque tronçon (de l'arrêt i au suivant), les cases par où le joueur fait passer la voie, dans l'ordre (absent ou
  * vide : la voie se pose d'elle-même)
  */
@@ -77,7 +77,7 @@ export interface WorldListener {
 
 /**
  * Vegetation: 0 rien, 1 forêt, 2 champ, 3 jardin ; décors sans effet sur la simulation : 4 rocaille, 5 entrée de grotte,
- * 6 épave, 7 cratère de volcan, 8 faille ; grottes et failles mènent au monde souterrain
+ * 6 épave, 7 cratère de volcan, 8 faille (grottes et failles : le moteur du monde souterrain y voit ses entrées)
  */
 export const VEG_FOREST = 1, VEG_FIELD = 2, VEG_GARDEN = 3, VEG_ROCKS = 4, VEG_CAVE = 5, VEG_WRECK = 6, VEG_VOLCANO = 7, VEG_FISSURE = 8;
 /** Rayon de l'emprise d'une grotte (butte rocheuse autour de l'ouverture) */
@@ -185,12 +185,12 @@ export class World {
   disasters = true;
   /** Bâtiments perdus (lave), à annoncer */
   losses: string[] = [];
-  /** Minerai extrait du monde souterrain, et filons déjà exploités (cases du souterrain) */
+  /** Minerai en réserve (la mine en extrait chaque jour) */
   ore = 0;
   /** bois et pierre, pour bâtir les grands bâtiments */
   wood = START_WOOD;
   stone = START_STONE;
-  /** pétrole brut tiré des puits, et carburant qu'en fait la raffinerie (les blindés de l'expédition armée le brûlent) */
+  /** pétrole brut tiré des puits, et carburant qu'en fait la raffinerie */
   crude = 0;
   fuel = 0;
   /** briques de la briqueterie (les anciennes sauvegardes n'en ont pas : zéro) */
@@ -206,17 +206,19 @@ export class World {
   /** ressources illimitées : toujours au bac à sable, selon le réglage en partie normale */
   get unlimited() { return rulesOf(this.difficulty).unlimited ?? this.unlimitedSetting; }
   set unlimited(on: boolean) { this.unlimitedSetting = on; }
-  /** lignes de chemin de fer ; tant que le joueur n'en a tracé aucune, la première (gare ↔ avant-poste) se trace d'elle-même */
+  /** lignes de chemin de fer (`linesAuto` : drapeau des anciennes sauvegardes, gardé tel quel) */
   lines: RailLine[] = [];
   linesAuto = true;
   /** routes tracées en courbe (mode libre) : leurs cases sont des routes ordinaires, la vue les dessine courbes */
   curves: RoadCurve[] = [];
   /** cases des courbes (recalculées quand elles changent) */
   private curveMap: Map<number, CurveCell> | null = null;
+  /**
+   * Moteur du monde souterrain (gardé pour les Enfers, hors de portée du joueur ; ni sauvegardé ni relu) : filons exploités,
+   * galeries tenues, cases de roche percées (tunnels) et celles encore à creuser, dans l'ordre
+   */
   mined = new Set<number>();
-  /** galeries du souterrain que le village tient (garnisons des avant-postes, conquêtes des expéditions armées) */
   claimed = new Set<number>();
-  /** cases de roche percées par les mineurs du camp (tunnels), et celles qu'ils ont encore à creuser, dans l'ordre */
   dug = new Set<number>();
   digs: number[] = [];
 
@@ -445,7 +447,7 @@ export class World {
     return n;
   }
 
-  /** Entrée (grotte ou faille) que tiendrait un avant-poste posé en (x, z) : la plus proche à deux cases de son emprise, ou -1 */
+  /** Entrée (grotte ou faille) la plus proche, à deux cases au plus d'une emprise posée en (x, z), ou -1 (le lieu des expéditions vers une grotte) */
   outpostEntrance(x: number, z: number, s = 2) {
     let best = -1, bd = Infinity;
     for (let cz = z - 2; cz < z + s + 2; cz++)
@@ -780,8 +782,6 @@ export class World {
     if (kind === 'alpine' && !high) return 'Un club alpin ne se pose que dans la montagne';
     if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return 'À poser en lisière ou dans une forêt';
     if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return 'À poser près des rochers ou dans la montagne (des rochers se posent avec Nature › Rochers)';
-    // l'avant-poste se dresse tout contre une grotte ou une faille
-    if (kind === 'outpost' && this.outpostEntrance(x, z, s) < 0) return 'À bâtir tout contre une grotte ou une faille';
     // le puits de pétrole se fore sur un gisement
     if (kind === 'oilwell' && !this.onOil(x, z, s)) return 'Un puits de pétrole ne se fore que sur un gisement (les taches sombres où le brut suinte)';
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
@@ -1216,10 +1216,6 @@ export class World {
       fuel: this.fuel,
       brick: this.brick,
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
-      mined: [...this.mined],
-      claimed: [...this.claimed],
-      dug: [...this.dug],
-      digs: this.digs,
       exp: this.exp,
       difficulty: this.difficulty,
       // arrêts des lignes : par rang dans la liste des bâtiments (les numéros changent au chargement) ; points de passage des
@@ -1326,12 +1322,9 @@ export class World {
     // une ancienne sauvegarde n'a pas de gisements : ils se tirent de la graine au chargement (addDefaultDecor)
     this.oil.fill(0);
     for (const k of Array.isArray(d.oil) ? d.oil : []) if (k >= 0 && k < N * N) this.oil[k] = 1;
-    this.mined =new Set((d.mined ?? []).filter((k: number) => k >= 0 && k < N * N));
-    this.claimed = new Set((d.claimed ?? []).filter((k: number) => k >= 0 && k < N * N));
-    // tunnels creusés et file des mineurs (les anciennes sauvegardes n'en ont pas)
-    const cells = (a: unknown): number[] => (Array.isArray(a) ? a : []).filter((k): k is number => Number.isInteger(k) && k >= 0 && k < N * N);
-    this.dug = new Set(cells(d.dug));
-    this.digs = [...new Set(cells(d.digs))].filter((k) => !this.dug.has(k));
+    // le monde souterrain a été retiré du jeu : les galeries tenues, filons abattus et tunnels des anciennes sauvegardes
+    // (`claimed`, `mined`, `dug`, `digs`) sont ignorés
+    this.mined = new Set(); this.claimed = new Set(); this.dug = new Set(); this.digs = [];
     this.exp = readExpState(d.exp);
     // une ancienne partie en « Défi » (mode retiré) se reprend en partie normale : tout le village compte pour l'âge suivant
     this.difficulty = readDifficulty(d.difficulty);
