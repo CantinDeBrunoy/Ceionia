@@ -5,6 +5,8 @@ import { Heap } from '../sim/agents';
 
 /** Longueur maximale d'un chemin d'accès, et d'une jonction entre un hameau et le village */
 const MAX_LINK = 14, MAX_JOIN = 18;
+/** Le ponton et le port sont au bord de l’eau, souvent loin du village : leur chemin d’accès peut être plus long */
+const MAX_SHORE = 30;
 /** Un hameau isolé se relie au reste quand il compte autant de bâtiments */
 const HAMLET = 3;
 /** Surcoût d'un virage : les chemins vont droit, en L plutôt qu'en escalier */
@@ -69,7 +71,7 @@ export function autoRoad(w: World, b: Building): number {
   // une porte ailleurs que sur la façade se paie, davantage si la façade regarde une route toute proche
   const other = nearRoadSide(w, b.x, b.z, sizeOf(b)) < 0 ? SIDE : AIMED;
   const first = (k: number, price: (k: number) => number) => price(k) + ((side.get(k) ?? b.rot) === b.rot ? 0 : other);
-  const path = wisest(w, starts, goal, MAX_LINK, first, b.id, shore);
+  const path = wisest(w, starts, goal, shore ? MAX_SHORE : MAX_LINK, first, b.id, shore);
   if (path) {
     added += lay(w, path);
     // la façade se tourne vers le chemin (et celle du voisin qui l'accueille, sans route encore)
