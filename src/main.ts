@@ -64,13 +64,16 @@ import { OilSeeps } from './render/oilSeeps';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
+import { weakGpu, probeRenderer } from './render/gpu';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
 const coarse = window.matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
 if (coarse) document.body.classList.add('low-fx');
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !coarse, powerPreference: 'high-performance' });
+// puce graphique modeste (intégrée, logicielle) : pas d'anticrénelage multi-échantillons, et le réglage « Auto » part plus bas
+const weak = weakGpu(probeRenderer(), navigator.hardwareConcurrency ?? 8);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !coarse && !weak, powerPreference: 'high-performance' });
 // finesse de l'image plafonnée (1,5 pixel par point d'écran au plus) : voir `applyQuality`
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.toneMapping = THREE.NeutralToneMapping;
@@ -260,7 +263,7 @@ class Game implements UIHost {
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
     if (settings.quality) this.quality = settings.quality;
-    this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? 0)));
+    this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? (weak ? 2 : 0))));
     this.autoRoads = settings.autoRoads ?? true;
     this.hideUpBadges = settings.hideUpBadges ?? false;
     w.disasters = settings.disasters ?? true;
