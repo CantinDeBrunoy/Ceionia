@@ -352,17 +352,68 @@ body.under #selCard, body.photo #selCard { display: none; }
 /* les réglages restent calés en haut : changer d'onglet ne fait plus sauter la barre d'onglets */
 .overlay > .modal.settings { align-self: flex-start; margin-top: max(12px, 6vh); }
 
-#menu { background: radial-gradient(ellipse at 50% 15%, #f5f9ff 0%, #dbe7f5 55%, #b9cde6 100%); backdrop-filter: none; flex-direction: column; gap: 14px; text-align: center; }
-#menu h1 { font-size: clamp(32px, 6vw, 56px); font-weight: 800; margin: 0; letter-spacing: -0.03em; color: var(--ink); }
-#menu p.sub { margin: 0; color: var(--ink2); }
-.maps { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin: 8px 0; }
-.card { width: 214px; padding: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; border-radius: 18px; }
-.card canvas { width: 160px; height: 160px; border-radius: 12px; image-rendering: auto; background: #cfe0ee; }
-.card h3 { margin: 0; font-weight: 800; }
-.card p { margin: 0; font-size: 12.5px; color: var(--ink2); min-height: 32px; }
-.card .stat { font-size: 12px; color: var(--good); font-weight: 700; min-height: 16px; }
-.card .btns { display: flex; gap: 6px; width: 100%; }
-.card .btns button { flex: 1; padding: 6px 4px; }
+/* ---------- Écran d'accueil : titre, reprise de la partie, les deux modes, sur un paysage de collines en facettes ---------- */
+#menu { display: block; padding: 0; background: linear-gradient(180deg, #cfe3f5 0%, #eaf2f8 46%, #dcebd2 100%); backdrop-filter: none; -webkit-backdrop-filter: none; }
+#menu .mLand { position: fixed; left: 0; bottom: 0; width: 100%; height: 100%; pointer-events: none; }
+.mInner { position: relative; min-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 72px 24px 22px; }
+.mInner header { text-align: center; }
+#menu h1 { margin: 0; font-size: clamp(52px, 7vw, 84px); line-height: 1; font-weight: 800; letter-spacing: -0.02em; color: #1b2a4a; }
+#menu p.sub { margin: 12px auto 0; max-width: 560px; font-size: 18px; line-height: 1.45; font-weight: 600; color: #4a5876; }
+.mMap { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--ink2); }
+.mMap select { font: inherit; font-weight: 700; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.85); color: var(--ink); }
+.mResume { display: flex; align-items: center; gap: 20px; width: min(720px, 100%); padding: 16px 18px 16px 22px; border-radius: 20px; background: #fff; box-shadow: 0 14px 36px rgba(30, 50, 90, 0.18); text-align: left; }
+.mResume > b { color: var(--accent); }
+.mResume h3 { margin: 0; font-size: 19px; font-weight: 800; }
+.mResume p { margin: 2px 0 0; font-size: 14px; color: #5a6783; }
+.mResume p span { white-space: nowrap; }
+.mResume p span + span::before { content: ' · '; }
+.mResume p i { font-style: normal; }
+.mSum { display: none; }
+.mResume .mGo { min-height: 52px; padding: 0 28px; border-radius: 14px; font-size: 16px; font-weight: 800; }
+.mModes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; width: min(820px, 100%); }
+.mMode { display: flex; flex-direction: column; padding: 22px 24px 24px; border-radius: 22px; background: #fff; border: 2px solid #d6e4dd; box-shadow: 0 14px 36px rgba(30, 50, 90, 0.16); text-align: left; --tone: var(--good); --tone-ink: #0d7a5f; --tone-soft: #dff3ea; }
+.mMode.normal { border-color: var(--accent); --tone: var(--accent); --tone-ink: #1f5fd6; --tone-soft: #e3edff; }
+.mHead { display: flex; align-items: center; gap: 14px; }
+.mHead > b { display: flex; align-items: center; justify-content: center; flex: none; width: 56px; height: 56px; border-radius: 16px; background: var(--tone-soft); color: var(--tone-ink); }
+.mHead h2 { margin: 0; font-size: 26px; font-weight: 800; line-height: 1.1; }
+.mHead em { display: block; margin-top: 2px; font-style: normal; font-size: 14px; font-weight: 700; color: var(--tone-ink); }
+.mMode ul { flex: 1; display: flex; flex-direction: column; gap: 9px; margin: 16px 0 18px; padding: 0; list-style: none; font-size: 14.5px; line-height: 1.4; color: #41506e; }
+.mMode li { display: flex; gap: 10px; align-items: flex-start; }
+.mMode li svg { color: var(--tone-ink); margin-top: 1px; }
+.mPlay { width: 100%; min-height: 52px; border: 0; border-radius: 14px; font-size: 16px; font-weight: 800; color: #fff; background: var(--tone); box-shadow: 0 6px 16px rgba(30, 50, 90, 0.2); }
+.mPlay:hover { background: var(--tone); filter: brightness(1.07); }
+.mFoot { margin-top: auto; }
+.mFoot .tutoToggle { margin: 0; }
+.mFoot .tutoToggle button { min-height: 44px; padding: 0 12px 0 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.9); color: #33415c; }
+.mLinks { position: absolute; top: 12px; right: 24px; display: flex; gap: 10px; }
+.mLinks button { min-height: 44px; padding: 0 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.85); color: #33415c; font-size: 14px; }
+.mKeys { margin: -8px 0 0; font-size: 12px; line-height: 1.6; color: #4a5876; text-align: center; max-width: 900px; }
+.mKeys span { color: #5a6783; }
+@media (hover: none) and (pointer: coarse) { .mKeys { display: none; } }
+@media (max-width: 720px) {
+  .mInner { gap: 14px; padding: 28px 16px 22px; }
+  #menu h1 { font-size: 56px; }
+  #menu p.sub { margin-top: 8px; font-size: 15px; line-height: 1.4; }
+  .mResume { gap: 12px; padding: 12px 12px 12px 16px; border-radius: 18px; }
+  .mResume > b { display: none; }
+  .mResume h3 { font-size: 16px; }
+  .mResume p { font-size: 12.5px; }
+  .mResume p i, .mResume p .when { display: none; }
+  .mMode ul { display: none; }
+  .mSum { display: block; margin: 10px 0 12px; font-size: 13.5px; line-height: 1.4; color: #41506e; }
+  .mResume .mGo { min-height: 48px; padding: 0 20px; font-size: 15px; border-radius: 12px; }
+  .mModes { grid-template-columns: 1fr; gap: 12px; }
+  .mMode { padding: 16px; border-radius: 20px; }
+  .mHead { gap: 12px; }
+  .mHead > b { width: 46px; height: 46px; border-radius: 14px; }
+  .mHead > b svg { width: 24px; height: 24px; }
+  .mHead h2 { font-size: 21px; }
+  .mHead em { font-size: 13px; }
+  .mPlay { min-height: 48px; font-size: 15px; border-radius: 12px; }
+  .mLinks { position: static; order: 1; }
+  .mLinks button { font-size: 13px; padding: 0 14px; }
+  .mKeys { order: 2; }
+}
 /* choix de la difficulté (nouvelle partie) et son rappel dans les réglages */
 .diffpick { max-width: 760px; text-align: left; }
 .diffs { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 4px; }

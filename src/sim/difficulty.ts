@@ -42,10 +42,13 @@ export const DIFF_TEXT = {
     sandbox: ['Tout est gratuit : bois, pierre et minerai ne manquent jamais', 'Personne ne meurt de faim ni ne quitte le village', 'Pour créer et sculpter sans compter'],
     normal: ['Les grands bâtiments se paient en bois et en pierre', 'Les petits restent gratuits', 'Le village grandit quand ses besoins sont comblés'],
   } as Record<Difficulty, string[]>,
+  /** les points clés en une phrase, pour l'écran d'accueil sur téléphone */
+  summary: {
+    sandbox: 'Tout est gratuit et personne ne souffre : pour créer et sculpter sans compter.',
+    normal: 'Les grands bâtiments se paient en bois et en pierre, les petits sont gratuits. Le village grandit quand ses besoins sont comblés.',
+  } as Record<Difficulty, string>,
   /** bouton de l'écran d'accueil qui lance une nouvelle partie dans ce mode */
   play: (d: Difficulty) => `Jouer en ${DIFF_TEXT.name[d]}`,
-  /** le mode, en tête du résumé d'une sauvegarde (« Mode Normal ») */
-  mode: (d: Difficulty) => `Mode ${DIFF_TEXT.name[d]}`,
   choose: 'Choisissez la difficulté',
   chooseSub: 'Elle vaut pour toute la partie : on peut en changer en la recommençant.',
   start: 'Commencer',
