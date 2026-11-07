@@ -842,13 +842,13 @@ export class UI {
     const { sim } = this.host, el = $('#msg'), k = sim.messageKind;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
-    const ready = !k && sim.ready, key = `${tone}|${k}|${ready}|${sim.message}`;
+    const ready = !k && sim.ready, exp = !k && sim.messageExp, key = `${tone}|${k}|${ready}|${exp}|${sim.message}`;
     if (el.dataset.v === key) return;
     el.dataset.v = key;
-    el.className = `tone-${tone}${k || ready ? ' link' : ''}`;
-    el.title = k === 'farm' && !sim.food.ok ? 'Cliquer pour tracer un champ' : k ? `Cliquer pour bâtir « ${sim.nameOf(k)} »` : ready ? 'Cliquer pour passer à l’âge suivant' : '';
+    el.className = `tone-${tone}${k || ready || exp ? ' link' : ''}`;
+    el.title = k === 'farm' && !sim.food.ok ? 'Cliquer pour tracer un champ' : k ? `Cliquer pour bâtir « ${sim.nameOf(k)} »` : exp ? 'Cliquer pour ouvrir les expéditions' : ready ? 'Cliquer pour passer à l’âge suivant' : '';
     const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}Bâtir</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}Passer</b>` : ''}`;
+    el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}Bâtir</b>` : exp ? `<b class="go">${ic('compass', 12, 2.4)}Ouvrir</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}Passer</b>` : ''}`;
     void el.offsetWidth;
     el.classList.add('flash');
   }
