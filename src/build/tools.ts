@@ -364,12 +364,12 @@ export class ToolController implements ToolInput {
   hover(e: PointerInfo) {
     this.pickAt(e);
     this.refreshVisuals();
-    // une grotte ou une faille sous le curseur : on peut y descendre ; un volcan : on peut le réveiller
+    // un volcan sous le curseur : on peut le réveiller (les grottes et failles ne mènent plus nulle part : pas de curseur main)
     const w = this.h.world, hit = this.hit;
     // l'éditeur du tracé d'une voie choisit son curseur (une poignée, la voie)
     const over = this.overlay?.hover(hit) ?? '';
     // et un bâtiment : un clic ouvre sa fiche
-    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.entranceAt(hit.x, hit.z) >= 0 || w.volcanoAt(hit.x, hit.z) >= 0 || this.hitBuilding) ? 'pointer' : '');
+    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.volcanoAt(hit.x, hit.z) >= 0 || this.hitBuilding) ? 'pointer' : '');
   }
 
   down(e: PointerInfo) {
