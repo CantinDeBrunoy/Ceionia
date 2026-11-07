@@ -371,7 +371,7 @@ export class UI {
         </div>
         <div id="needsPanel" class="panel">
           <div class="needsRow"><div id="needs"></div><div id="res"></div></div>
-          <div id="msg"></div>
+          <div class="msgRow"><div id="msg"></div><button id="helpBtn" type="button" aria-pressed="false"></button></div>
         </div>
         <div id="timePanel" class="panel">
           <div id="clock"></div>
@@ -501,6 +501,7 @@ export class UI {
       this.update();
     };
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
+    $('#helpBtn').onclick = () => { this.help = !this.help; try { localStorage.setItem('ceionia.aides', this.help ? '1' : '0'); } catch { /* sans stockage */ } this.host.audio.sfxClick(); this.renderMessage(); };
     $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.toast('Le brouillard se lève.'); };
@@ -868,8 +869,20 @@ export class UI {
    * Le conseil du moment, en pastille : orange quand un besoin manque, bleue pour avancer vers l'âge suivant, verte quand tout
    * va bien ; un bouton « Bâtir » quand il nomme un bâtiment, et la pastille s'anime un instant à chaque nouveau conseil
    */
+  /** Les conseils se cachent à partir de l’Antiquité ; un bouton les remet (choix gardé d’une partie à l’autre) */
+  private help = (() => { try { return localStorage.getItem('ceionia.aides') === '1'; } catch { return false; } })();
+
   private renderMessage() {
     const { sim } = this.host, el = $('#msg'), k = sim.messageKind;
+    const hb = $('#helpBtn') as HTMLButtonElement, late = sim.age >= 1;
+    hb.hidden = !late;
+    hb.setAttribute('aria-pressed', String(this.help));
+    hb.classList.toggle('on', this.help);
+    hb.title = this.help ? 'Masquer les conseils' : 'Afficher les conseils';
+    hb.innerHTML = ic('target', 16, 2);
+    // à partir de l’Antiquité, seuls restent visibles un besoin à combler (orange) ou le passage d’âge
+    const quiet = late && !this.help && !(sim.ready && !k) && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) && !sim.drought;
+    el.hidden = quiet;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
     const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;
