@@ -7,7 +7,7 @@ import { GEAR_BY, GearId } from '../sim/gear';
 import type { War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
 import { BASE_DEFS, BASE_KINDS, SUPPLY_MAX, CONVOY_COST, costText, canAfford } from '../sim/hellBase';
-import { HELL_ZONES, zoneOfZ, zoneTo } from '../world/hell';
+import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle,
@@ -413,7 +413,7 @@ export class CommandUI implements ToolInput {
       return `<button data-a="rec:${k}" class="${why ? (craft ? 'craft' : 'off') : ''}" title="${tip.replace(/"/g, '&quot;')}">${TROOPS[k].icon} +</button>`;
     }).join('')}${w.army.queue.length || this.waiting.length ? `<small class="q">${[...this.waiting.map((k) => `${TROOPS[k].icon}🛠️`), ...w.army.queue.map((q) => `${TROOPS[q.kind].icon}${Math.ceil(q.left)}s`)].join(' ')}</small>` : ''}</div>` : '';
     const next = w.nextWaveIn(), raid = isle && w.isle?.raid;
-    const status = isle ? (raid ? `<span class="wst hot">🔥 Incursion : ${w.isle!.raiders().length} démons</span>` : next !== null ? `<span class="wst">Prochaine vague : ${Math.ceil(next)} s <button data-a="wave" title="Sonner le cor : faire venir la prochaine vague tout de suite">🎺</button></span>` : '') : '';
+    const status = isle ? (raid ? `<span class="wst hot">🔥 Incursion : ${w.isle!.raiders().length} démons</span>` : next !== null ? `<span class="wst">Prochaine vague : ${Math.ceil(next)} s <button data-a="wave" title="Sonner le cor : faire venir la prochaine vague tout de suite">🎺</button></span>` : '') : this.hellGate();
     // la contamination de l'île : elle recule à chaque défense, chaque vague repoussée, chaque zone des Enfers conquise
     const bl = isle && w.blight ? Math.round(w.blight.level * 100) : -1;
     const blight = bl >= 0 ? `<span class="tsup tblight${bl > 60 ? ' low' : ''}" title="Contamination de l’île : les Enfers débordent par le portail (près de lui, les démons frappent un peu plus fort). Elle recule à chaque tour de garde ou caserne bâtie, chaque vague repoussée, chaque zone des Enfers conquise ; l’île sécurisée reverdit. Les troupes se soignent plus vite dans la zone purifiée (anneaux dorés autour des défenses).">🔥 Contamination <i><b style="width:${bl}%"></b></i>${bl}%</span>` : '';
@@ -463,6 +463,21 @@ export class CommandUI implements ToolInput {
     const posts = b.posts(), ctx = w.recruitCtx(this.host.age(), this.host.pop());
     const rec = posts ? `<span class="trec"><b>Caserne avancée</b>${TROOP_KINDS.filter((k) => this.host.age() >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? 'off' : ''}" title="Recruter sur place : ${TROOPS[k].desc.replace(/"/g, '&quot;')}">${TROOPS[k].icon} +</button>`).join('')}</span>` : '';
     return `<div class="trow tbase"><b class="tbt" title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">🏕️ Base</b>${builds}<span class="tsep"></span>${gauge}${rec}</div>`;
+  }
+
+  /**
+   * Dans les Enfers : la zone suivante, et pourquoi elle est fermée (l'âge du village, ou la forteresse d'avant) ; l'infobulle
+   * donne l'âge de chaque zone
+   */
+  private hellGate() {
+    const f = this.host.war.faction;
+    if (!f || !f.gate) return '';
+    const next = f.frontier + 1, age = this.host.age();
+    const tip = HELL_ZONES.map((z, i) => i ? `${zoneThe(i)} : ${zoneAgeText(i)}${ZONE_AGE[i] > age ? ' (verrouillée)' : ''}` : '').filter(Boolean).join(' ; ');
+    const t = `Les démons deviennent trop forts pour un village trop jeune : chaque zone demande un âge. ${tip}`.replace(/"/g, '&quot;');
+    if (next >= HELL_ZONES.length) return `<span class="wst" title="${t}">👑 Royaume ouvert</span>`;
+    if (ZONE_AGE[next] > age) return `<span class="wst" title="${t}">🔒 ${zoneThe(next)} : ${zoneAgeText(next)}</span>`;
+    return `<span class="wst" title="${t}">🌫️ Abattez la forteresse pour ouvrir ${zoneThe(next)}</span>`;
   }
 
   /** L'alerte d'incursion (bannière et bouton « Voir l'île »), quand on ne regarde pas l'île */

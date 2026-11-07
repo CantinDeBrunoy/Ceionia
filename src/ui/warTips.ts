@@ -6,7 +6,7 @@
  * joueur a masqué les aides (le bouton des conseils, ou « Masquer les aides » dans la bulle)
  */
 
-export type WarTipId = 'portal' | 'isle' | 'garrison' | 'orders' | 'hell' | 'base' | 'kingdom';
+export type WarTipId = 'portal' | 'isle' | 'garrison' | 'orders' | 'hell' | 'ageLock' | 'base' | 'kingdom';
 
 /** Ce que les aides regardent de la partie */
 export interface WarTipState {
@@ -23,6 +23,8 @@ export interface WarTipState {
   commanding: 'isle' | 'hell' | null;
   /** la dernière zone ouverte des Enfers (1 : seule la première) */
   frontier: number;
+  /** la zone suivante est fermée faute d'âge (les démons y sont trop forts) */
+  ageLock?: boolean;
   /** la base avancée a un camp */
   camp: boolean;
   /** le royaume est tombé */
@@ -34,7 +36,8 @@ export const WAR_TIP_TEXT: Record<WarTipId, string> = {
   isle: '🗼 Portail ouvert ! Posez une tour de garde et une caserne sur son île. Cliquez pour y aller.',
   garrison: '⚔️ Vos soldats gardent l’île. Cliquez pour les commander.',
   orders: '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. 🎺 : vague suivante. « ? » : aide.',
-  hell: '🔥 Les Enfers (facultatif) : abattez chaque forteresse pour lever la brume. 🌀 Île : retour.',
+  hell: '🔥 Les Enfers (facultatif) : abattez les forteresses ; chaque âge ouvre une zone. 🌀 Île : retour.',
+  ageLock: '🔒 Les démons d’après sont trop forts : montez d’âge pour ouvrir la zone suivante.',
   base: '🏕️ Zone conquise ! Posez un camp de base (rangée « Base »), puis caserne et infirmerie.',
   kingdom: '👑 Le royaume est ouvert ! Fuyez les cercles rouges des boules de feu. Combat facultatif.',
 };
@@ -42,7 +45,7 @@ export const WAR_TIP_TEXT: Record<WarTipId, string> = {
 export const WAR_TIP_MAX = 100;
 
 /** L'ordre où on les vérifie (la première qui convient s'affiche) */
-const ORDER: WarTipId[] = ['kingdom', 'base', 'hell', 'orders', 'garrison', 'isle', 'portal'];
+const ORDER: WarTipId[] = ['kingdom', 'base', 'hell', 'ageLock', 'orders', 'garrison', 'isle', 'portal'];
 
 /** Le moment de chaque aide */
 const WHEN: Record<WarTipId, (s: WarTipState) => boolean> = {
@@ -51,6 +54,7 @@ const WHEN: Record<WarTipId, (s: WarTipState) => boolean> = {
   garrison: (s) => s.portalOpen && s.isleTroops > 0 && s.commanding === null,
   orders: (s) => s.commanding === 'isle',
   hell: (s) => s.commanding === 'hell',
+  ageLock: (s) => s.commanding === 'hell' && !!s.ageLock && !s.victory,
   base: (s) => s.commanding === 'hell' && s.frontier >= 2 && !s.camp && !s.victory,
   kingdom: (s) => s.commanding === 'hell' && s.frontier >= 6 && !s.victory,
 };

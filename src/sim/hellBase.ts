@@ -1,4 +1,4 @@
-import { HellMap, HELL_ZONES, HELL_ZONE_N, zoneOfZ, zoneOf, zoneThe } from '../world/hell';
+import { HellMap, HELL_ZONES, HELL_ZONE_N, Z_KINGDOM, ZONE_AGE, zoneOfZ, zoneOf, zoneThe } from '../world/hell';
 import { Hell, HellBuilding, HellEvent, BaseKind, DemonKind, demonStats, raidKinds } from './hell';
 
 /**
@@ -55,9 +55,19 @@ export const WEAK_MAX = 0.4, WEAK_TIME = 240;
  * après la pose de son camp, puis une toutes les COUNTER_EVERY secondes une fois la précédente repoussée
  */
 export const COUNTER_FIRST = 180, COUNTER_EVERY = 300, COUNTER_MAX = 10;
+/** Un village en retard d'âge sur la zone d'après (ses démons y sont plus forts que lui) : deux démons de plus par âge de retard */
+export const LAG_BONUS = 2;
+/**
+ * Reprise d'une zone conquise que personne ne garde (ni camp de base, ni troupe) : la plus profonde est visée RECLAIM_FIRST
+ * secondes après qu'elle a été laissée seule, le joueur est prévenu RECLAIM_WARN secondes avant ; une fois reprise, la
+ * suivante n'est visée qu'après RECLAIM_COOLDOWN secondes. Un camp ou des troupes sur place annulent la menace
+ */
+export const RECLAIM_FIRST = 420, RECLAIM_WARN = 150, RECLAIM_COOLDOWN = 600;
 
-/** Taille d'une contre-attaque : selon la zone de la base et le nombre de vagues déjà venues */
-export function counterSize(zone: number, n: number) { return Math.min(COUNTER_MAX, 2 + zone + n); }
+/** Taille d'une contre-attaque : selon la zone de la base, le nombre de vagues déjà venues et le retard d'âge */
+export function counterSize(zone: number, n: number, lag = 0) { return Math.min(COUNTER_MAX + lag * LAG_BONUS, 2 + zone + n + lag * LAG_BONUS); }
+/** Le retard d'âge d'un village (`age`) devant la zone `zone` (0 : à niveau) */
+export const ageLag = (zone: number, age: number) => Math.max(0, (ZONE_AGE[zone] ?? 0) - age);
 
 /** Ce que le village paie (le monde : son bois, sa pierre, son minerai ; le bac à sable ne paie rien) */
 export interface Purse { wood: number; stone: number; ore: number; unlimited?: boolean }
@@ -73,6 +83,7 @@ export type BaseEvent =
   | { type: 'counterEnd'; zone: number }
   | { type: 'campLost'; zone: number }
   | { type: 'zoneLost'; zone: number }
+  | { type: 'reclaimWarn'; zone: number }
   | { type: 'convoy'; amount: number }
   | { type: 'lowSupply' }
   | { type: 'hungry' };
@@ -83,6 +94,8 @@ export interface HellBaseSave {
   next: number[]; count: number[];
   /** zones dont une contre-attaque est en cours */
   active: number[];
+  /** zone conquise non gardée que les démons s'apprêtent à reprendre, et quand */
+  reclaim?: { zone: number; at: number } | null;
   buildings: { kind: BaseKind; x: number; z: number; hp: number }[];
 }
 
@@ -98,6 +111,9 @@ export class HellBase {
   attackers = new Map<number, number>();
   /** ce qui s'est passé (le jeu en tire ses nouvelles) */
   events: BaseEvent[] = [];
+  /** la zone laissée seule que les démons vont reprendre (`at` : le moment) ; `cool` : pas de nouvelle menace avant ce moment */
+  reclaim: { zone: number; at: number; warned: boolean } | null = null;
+  private cool = 0;
   private reach = { v: -1, n: 0 };
   private warned = false;
   /** événements de la faction déjà lus (elle en garde plusieurs pas, jusqu'à ce que la guerre les relève) */
@@ -222,6 +238,7 @@ export class HellBase {
       if (this.next[zone] === -1) this.next[zone] = now + COUNTER_FIRST;
       if (this.next[zone] >= 0 && now >= this.next[zone] && !live.has(zone)) this.counter(zone);
     }
+    this.stepReclaim(now);
     // le ravitaillement
     const troops = h.alive('player');
     if (troops.length) this.supply = Math.max(0, this.supply - troops.length * SUPPLY_DRAIN * dt);
@@ -252,9 +269,31 @@ export class HellBase {
     h.rally = this.front() ? this.spawnPoint() : null;
   }
 
+  /** Une zone conquise que personne ne garde finit par être reprise par les démons (une à la fois, avec préavis) */
+  private stepReclaim(now: number) {
+    const h = this.hell;
+    let target = -1;
+    if (h.gate && !h.victory) {
+      const troops = h.alive('player');
+      for (let z = Z_KINGDOM - 1; z >= 1 && target < 0; z--) {
+        if (h.conquered[z] && !this.camp(z) && !troops.some((u) => zoneOfZ(Math.floor(u.z)) === z)) target = z;
+      }
+    }
+    if (target < 0) { this.reclaim = null; return; }
+    if (now < this.cool) return;
+    if (!this.reclaim || this.reclaim.zone !== target) { this.reclaim = { zone: target, at: now + RECLAIM_FIRST, warned: false }; return; }
+    const r = this.reclaim;
+    if (!r.warned && now >= r.at - RECLAIM_WARN) { r.warned = true; this.events.push({ type: 'reclaimWarn', zone: target }); }
+    if (now >= r.at) {
+      this.reclaim = null; this.cool = now + RECLAIM_COOLDOWN;
+      this.hell.retake(target);
+      this.events.push({ type: 'zoneLost', zone: target });
+    }
+  }
+
   /** Une contre-attaque sur la base d'une zone : des démons de la zone d'après, devant sa forteresse ou à son entrée */
   private counter(zone: number) {
-    const h = this.hell, m = this.map, from = zone + 1, n = counterSize(zone, this.count[zone]);
+    const h = this.hell, m = this.map, from = zone + 1, n = counterSize(zone, this.count[zone], ageLag(from, h.age));
     const fort = h.standing(from).find((b) => b.kind === 'fortress' || b.kind === 'kingdom');
     const z0 = HELL_ZONES[from].z0 + 3, sx = fort ? fort.site.x : m.spine[z0] + 0.5, sz = fort ? fort.site.z - fort.site.r - 1.5 : z0 + 0.5;
     const kinds: DemonKind[] = raidKinds(zone + this.count[zone] + 1, n);
@@ -292,6 +331,7 @@ export class HellBase {
     return {
       supply: +this.supply.toFixed(2), weak: +this.weak.toFixed(3), convoys: this.convoys.map((c) => ({ ...c })), next: [...this.next], count: [...this.count],
       active: [...new Set(this.attackers.values())],
+      reclaim: this.reclaim ? { zone: this.reclaim.zone, at: this.reclaim.at } : null,
       buildings: this.buildings().map((b) => ({ kind: b.kind as BaseKind, x: b.site.x, z: b.site.z, hp: Math.round(b.hp) })),
     };
   }
@@ -308,6 +348,7 @@ export class HellBase {
       const src = o[key];
       if (Array.isArray(src)) src.forEach((v, i) => { if (i < HELL_ZONE_N && Number.isFinite(v)) arr[i] = v; });
     }
+    if (o.reclaim && Number.isInteger(o.reclaim.zone) && Number.isFinite(o.reclaim.at) && o.reclaim.zone >= 1 && o.reclaim.zone < Z_KINGDOM) b.reclaim = { zone: o.reclaim.zone, at: o.reclaim.at, warned: false };
     // camps d'abord (les autres bâtiments se posent autour)
     const list = Array.isArray(o.buildings) ? o.buildings.filter((r) => r && isBaseKind(r.kind) && Number.isFinite(r.x) && Number.isFinite(r.z)) : [];
     list.sort((p, q) => (p.kind === 'camp' ? 0 : 1) - (q.kind === 'camp' ? 0 : 1));
