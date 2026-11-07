@@ -10642,7 +10642,7 @@ function cyberTree(p: Parts, x: number, z: number, accent: number, s = 1, y = 0.
 function futureHealth(p: Parts, v: number) {
   const mint = 0x5affb0, accent = [NC.cyan, mint, NC.violet][v % 3];
   cyberGround(p, 0, 0, 1.92, 1.92, accent, 31 + v);
-  const T = cyberTower(p, -0.4, 0.012, -0.38, 0.86, 0.74, 1.75, accent, 40 + v);
+  const T = cyberTower(p, -0.4, 0.012, -0.38, 0.86, 0.74, 2.7, accent, 40 + v);
   // la grande croix menthe en façade, dans son caisson
   const zf = -0.38 + 0.37 + 0.012;
   p.box(0.36, 0.36, 0.012, -0.4, 0.42, zf - 0.004, NC.dark);
@@ -10653,9 +10653,9 @@ function futureHealth(p: Parts, v: number) {
   q.add(new THREE.TorusGeometry(0.16, 0.005, 4, 20), 0, 0, 0, mint, 0, 'neon');
   p.cyl(0.05, 0.07, 0.03, 10, -0.4 - T.w * 0.05, T.top, T.zc, NC.steel);
   // l'aile des soins, ses bandeaux vitrés, l'aire des ambulances sur le toit
-  const wx = 0.5, wz = -0.42, wh = 0.46;
+  const wx = 0.5, wz = -0.42, wh = 0.82;
   p.box(0.82, wh, 0.82, wx, 0.012, wz, NC.glass2);
-  for (const y of [0.1, 0.25, 0.38]) { p.box(0.8, 0.06, 0.006, wx, y, wz + 0.413, 0x9ad8ff, 0, true); p.box(0.006, 0.06, 0.6, wx + 0.413, y, wz, NC.warm, 0, true); }
+  for (let y = 0.1; y < wh - 0.06; y += 0.14) { p.box(0.8, 0.06, 0.006, wx, y, wz + 0.413, 0x9ad8ff, 0, true); p.box(0.006, 0.06, 0.6, wx + 0.413, y, wz, NC.warm, 0, true); }
   p.box(0.86, 0.024, 0.86, wx, wh + 0.012, wz, NC.dark);
   p.box(0.86, 0.008, 0.006, wx, wh + 0.02, wz + 0.433, accent, 0, 'neon');
   p.cyl(0.3, 0.3, 0.012, 16, wx, wh + 0.036, wz, 0x2a2e36);
@@ -10665,15 +10665,15 @@ function futureHealth(p: Parts, v: number) {
   for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.02, 0.012, 0.02, wx + Math.cos(a) * 0.34, wh + 0.036, wz + Math.sin(a) * 0.34, k % 2 ? mint : NC.warm, 0, 'neon'); }
   steamVent(p, wx + 0.33, wh + 0.036, wz - 0.33);
   flyCar(p, wx + 0.02, wh + 0.07, wz + 0.02, 0.3, F.white);
-  { const a = turning([0.1, 1.05, -0.1], [0, 1, 0], 0.045); flyCar(a, 0.62, 0, 0, Math.PI, F.white, 2, 0.25); }
-  skyBridge(p, -0.4 + 0.43, -0.25, wx - 0.41, -0.25, 0.3, accent);
+  { const a = turning([0.1, wh + 0.6, -0.1], [0, 1, 0], 0.045); flyCar(a, 0.62, 0, 0, Math.PI, F.white, 2, 0.25); }
+  skyBridge(p, -0.4 + 0.43, -0.25, wx - 0.41, -0.25, 0.3, accent); skyBridge(p, -0.4 + 0.43, -0.5, wx - 0.41, -0.5, wh - 0.22, accent);
   // l'auvent clair de l'entrée, ses portes, sa pluie de lumière ; l'enseigne verticale
   p.box(0.7, 0.024, 0.3, -0.35, 0.3, 0.12, NC.light);
   p.box(0.7, 0.008, 0.006, -0.35, 0.296, 0.27, mint, 0, 'neon');
   for (const x of [-0.66, -0.04]) p.cyl(0.01, 0.01, 0.29, 5, x, 0.012, 0.25, NC.steel);
   lightRain(p, -0.35, 0.296, 0.27, 0.6, 0, mint, v);
   p.box(0.3, 0.2, 0.01, -0.35, 0.012, zf, 0x9ad8ff, 0, true);
-  vSign(p, -0.83, 0.5, -0.05, 0.62, NC.cyan, -Math.PI / 2, v);
+  vSign(p, -0.83, 0.5, -0.05, 1.0, NC.cyan, -Math.PI / 2, v);
   // le jardin de soins : pelouse, bacs plantés, bancs, une infirmière qui pousse un fauteuil, un robot de soins, un patient
   p.box(0.74, 0.006, 0.42, 0.5, 0.012, 0.5, 0x7ac87a);
   for (const [x, z] of [[0.24, 0.36], [0.76, 0.36], [0.76, 0.7]]) cyberTree(p, x, z, accent, 1.1);
@@ -10710,13 +10710,13 @@ function futureFire(p: Parts, v: number) {
   flyCar(p, gx, 0.03, gz + 0.5, 0, 0xd83a3a);
   for (const d of [-0.025, 0.025]) p.box(0.016, 0.01, 0.016, gx + d, 0.15, gz + 0.5, d < 0 ? red : NC.blue, 0, 'neon');
   // l'étage : dortoir vitré en retrait, ses fenêtres
-  const T = cyberTower(p, gx - 0.12, gh + 0.012, gz - 0.12, 1.0, 0.6, 0.5, red, 60 + v, 2);
+  const T = cyberTower(p, gx - 0.12, gh + 0.012, gz - 0.12, 1.0, 0.6, 1.3, red, 60 + v);
   // l'auvent clair de la remise, sa pluie de lumière
   p.box(gw + 0.04, 0.02, 0.14, gx, gh - 0.02, gz + 0.52, NC.light);
   p.box(gw + 0.04, 0.008, 0.006, gx, gh - 0.024, gz + 0.592, red, 0, 'neon');
   lightRain(p, gx, gh - 0.024, gz + 0.592, gw - 0.1, 0, accent, v + 3);
   // la tour de séchage, ses arêtes rouges, sa citerne d'eau claire qui luit la nuit
-  const tx = 0.72, tz = -0.62, th = 1.45;
+  const tx = 0.72, tz = -0.62, th = 2.5;
   p.box(0.26, th, 0.26, tx, 0.012, tz, NC.glass);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.012, th, 0.012, tx + sx * 0.13, 0.012, tz + sz * 0.13, red, 0, 'neon');
   for (let y = 0.15; y < th; y += 0.15) p.box(0.27, 0.012, 0.27, tx, y, tz, NC.slab);
@@ -10758,15 +10758,15 @@ function futurePolice(p: Parts, v: number) {
   p.box(1.24, 0.008, 0.006, -0.3, 0.316, 0.062, blue, 0, 'neon');
   for (let k = 0; k < 3; k++) { p.box(0.5 - k * 0.06, 0.02, 0.06, -0.3, 0.012 + k * 0.02, 0.12 - k * 0.04, NC.concrete); p.box(0.5 - k * 0.06, 0.004, 0.004, -0.3, 0.032 + k * 0.02, 0.15 - k * 0.04, blue, 0, 'neon'); }
   p.box(0.24, 0.22, 0.01, -0.3, 0.07, 0.046, 0x0e1014);
-  const T = cyberTower(p, -0.42, 0.33, -0.48, 0.72, 0.56, 1.75, v % 2 ? red : blue, 90 + v);
-  for (const s of [-1, 1]) p.box(0.01, 1.75 * 0.48, 0.01, -0.42 + s * 0.36, 0.33, -0.48 - 0.28, v % 2 ? blue : red, 0, 'neon');
+  const TH = 2.6, T = cyberTower(p, -0.42, 0.33, -0.48, 0.72, 0.56, TH, v % 2 ? red : blue, 90 + v);
+  for (const s of [-1, 1]) p.box(0.01, TH * 0.48, 0.01, -0.42 + s * 0.36, 0.33, -0.48 - 0.28, v % 2 ? blue : red, 0, 'neon');
   // l'insigne holographique (bouclier hexagonal et son étoile d'or) qui tourne au sommet
   const q = turning([-0.42, T.top + 0.3, T.zc], [0, 1, 0], 0.09);
   q.add(new THREE.CylinderGeometry(0.12, 0.12, 0.012, 6).rotateX(Math.PI / 2), 0, 0, 0, blue, 0, 'neon');
   q.add(new THREE.CylinderGeometry(0.06, 0.06, 0.016, 5).rotateX(Math.PI / 2), 0, 0, 0, NC.amber, 0, 'neon');
   q.add(new THREE.TorusGeometry(0.15, 0.004, 4, 6), 0, 0, 0, 0xffffff, 0, 'neon');
   p.cyl(0.04, 0.06, 0.06, 8, -0.42, T.top, T.zc, NC.steel);
-  vSign(p, -0.3 + 0.6 + 0.006, 0.36, -0.15, 0.7, blue, Math.PI / 2, v + 11);
+  vSign(p, -0.3 + 0.6 + 0.006, 0.36, -0.15, 1.0, blue, Math.PI / 2, v + 11);
   // l'aire des patrouilles volantes : dalle, balises, deux voitures noires et blanches à leurs rampes de gyrophares
   const ax = 0.56, az = -0.45;
   p.box(0.7, 0.18, 0.9, ax, 0.012, az, NC.glass);
@@ -10777,7 +10777,7 @@ function futurePolice(p: Parts, v: number) {
     p.box(0.05, 0.012, 0.016, ax + Math.sin(r) * 0.0, 0.335, az + z + 0.45, red, r, 'neon');
     p.box(0.05, 0.012, 0.016, ax + Math.sin(r) * 0.0, 0.335, az + z + 0.43, blue, r, 'neon');
   }
-  { const a = turning([-0.1, 1.25, -0.2], [0, 1, 0], 0.05); flyCar(a, 0.75, 0, 0, Math.PI, 0x1e2a44, 2, 0.25); a.box(0.05, 0.012, 0.03, 0.75, 0.115, 0, red, 0, 'neon'); }
+  { const a = turning([-0.1, 1.9, -0.2], [0, 1, 0], 0.05); flyCar(a, 0.75, 0, 0, Math.PI, 0x1e2a44, 2, 0.25); a.box(0.05, 0.012, 0.03, 0.75, 0.115, 0, red, 0, 'neon'); }
   // projecteurs du toit
   for (const s of [-1, 1]) { const x = -0.42 + s * 0.3; p.cyl(0.012, 0.016, 0.05, 6, x, 0.33, 0.0, NC.steel); p.add(new THREE.CylinderGeometry(0.026, 0.018, 0.05, 8).rotateX(-0.9), x, 0.4, 0.0, NC.dark); p.add(new THREE.CircleGeometry(0.022, 8).rotateX(-0.9 + Math.PI / 2), x, 0.41, 0.022, 0xeaf4ff, 0, 'neon'); }
   // le parvis : barrières lumineuses, robot d'accueil, agents, borne, arbres en bacs
@@ -10944,20 +10944,24 @@ function futureTheater(p: Parts, v: number) {
 function futureLab(p: Parts, v: number) {
   const accent = [NC.cyan, 0x5affb0, NC.violet][v % 3];
   cyberGround(p, 0, 0, 0.94, 0.94, accent, 161 + v);
-  p.cyl(0.24, 0.26, 0.9, 6, -0.08, 0.012, -0.12, NC.glass);
-  for (let y = 0.15; y < 0.9; y += 0.15) p.cyl(0.255, 0.255, 0.014, 6, -0.08, y, -0.12, NC.slab);
-  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.01, 0.9, 0.01, -0.08 + Math.cos(a) * 0.25, 0.012, -0.12 + Math.sin(a) * 0.25, accent, 0, 'neon'); }
-  cyberLights(p, -0.08, -0.12 + 0.218, 0, 0.11, 0.08, 0.86, 0.15, 170 + v);
+  // la tour, près de deux fois plus haute que l'étage du laboratoire moderne ; à mi-hauteur, la salle blanche en surplomb
+  const LH = 1.6;
+  p.cyl(0.24, 0.26, LH, 6, -0.08, 0.012, -0.12, NC.glass);
+  for (let y = 0.15; y < LH; y += 0.15) p.cyl(0.255, 0.255, 0.014, 6, -0.08, y, -0.12, NC.slab);
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.01, LH, 0.01, -0.08 + Math.cos(a) * 0.25, 0.012, -0.12 + Math.sin(a) * 0.25, accent, 0, 'neon'); }
+  cyberLights(p, -0.08, -0.12 + 0.218, 0, 0.11, 0.08, LH - 0.04, 0.15, 170 + v);
+  p.box(0.26, 0.2, 0.3, 0.2, 0.92, -0.14, NC.dark); p.box(0.004, 0.08, 0.26, 0.332, 0.98, -0.14, accent, 0, 'neon');
+  p.box(0.24, 0.006, 0.006, 0.2, 0.92, 0.012, accent, 0, 'neon'); p.box(0.006, 0.006, 0.28, 0.33, 0.92, -0.14, accent, 0, 'neon');
   // les colonnes de liquide
   for (const x of [0.25, 0.34]) { p.cyl(0.03, 0.03, 0.4, 8, x, 0.012, 0.0, 0x3cc4e8, 'neon'); p.cyl(0.034, 0.034, 0.02, 8, x, 0.412, 0.0, NC.steel); p.cyl(0.034, 0.034, 0.02, 8, x, 0.012, 0.0, NC.steel); }
   // la serre rose
   p.box(0.26, 0.14, 0.2, 0.26, 0.012, -0.3, 0xd0ece4); p.box(0.24, 0.006, 0.18, 0.26, 0.13, -0.3, NC.pink, 0, 'neon');
   // toit : parabole et feu
-  p.cyl(0.2, 0.22, 0.03, 6, -0.08, 0.912, -0.12, NC.dark);
-  p.cyl(0.008, 0.012, 0.12, 5, -0.08, 0.94, -0.12, NC.steel);
-  p.add(new THREE.SphereGeometry(0.1, 10, 4, 0, Math.PI * 2, 0, Math.PI / 3).rotateX(Math.PI).rotateX(-0.8), -0.08, 1.12, -0.12, F.white, 0.6);
-  p.sphere(0.012, -0.08, 1.2, -0.12, 0xff4a3a);
-  vSign(p, -0.33, 0.25, 0.0, 0.4, accent, -Math.PI / 2, v + 29);
+  p.cyl(0.2, 0.22, 0.03, 6, -0.08, LH + 0.012, -0.12, NC.dark);
+  p.cyl(0.008, 0.012, 0.12, 5, -0.08, LH + 0.04, -0.12, NC.steel);
+  p.add(new THREE.SphereGeometry(0.1, 10, 4, 0, Math.PI * 2, 0, Math.PI / 3).rotateX(Math.PI).rotateX(-0.8), -0.08, LH + 0.22, -0.12, F.white, 0.6);
+  p.sphere(0.012, -0.08, LH + 0.3, -0.12, 0xff4a3a);
+  vSign(p, -0.33, 0.25, 0.0, 0.7, accent, -Math.PI / 2, v + 29);
   figure(p, 0.15, 0.3, F.white, 2.6, false, 0x2a2420); figure(p, 0.3, 0.26, F.white, -2.2, false, 0xc8a070);
   cyberTree(p, -0.36, 0.36, accent);
 }
