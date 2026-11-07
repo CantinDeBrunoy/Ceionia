@@ -31,6 +31,7 @@ import { computeSeason, makeSeasonState } from './render/season';
 import { CameraRig, PointerInfo, ToolInput } from './core/camera';
 import { GameTime } from './core/time';
 import { Sim } from './sim/sim';
+import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
 import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
@@ -393,6 +394,8 @@ class Game implements UIHost {
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
       leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(),
+      craft: (id) => { const why = this.expeditions.whyCraft(GEAR_BY[id], this.sim.age); if (!why) this.expeditions.craft(id, this.sim.age); return why; },
+      crafting: () => this.world.exp.craft,
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });

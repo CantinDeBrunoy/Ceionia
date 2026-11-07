@@ -7,7 +7,8 @@ import { TROOPS } from '../src/sim/army';
 import { War } from '../src/sim/war';
 import { HELL_ZONES, HellMap, zoneOf, zoneThe, zoneTo } from '../src/world/hell';
 import { Hell } from '../src/sim/hell';
-import { troopStats } from '../src/sim/army';
+import { troopStats, newArmy, onlyGearMissing, gearToCraft, RecruitCtx } from '../src/sim/army';
+import { emptyStock } from '../src/sim/gear';
 import { RAID_LIMIT } from '../src/sim/isleBattle';
 
 /**
@@ -39,6 +40,29 @@ describe('volet militaire : les textes', () => {
     expect(zoneTo(3)).toBe('aux Falaises cendrées');
     expect(zoneTo(6)).toBe('au Royaume démoniaque');
     for (let i = 0; i < HELL_ZONES.length; i++) expect(zoneThe(i)).toMatch(/^(le|la|les) /);
+  });
+});
+
+describe('volet militaire : recruter sans équipement en réserve', () => {
+  const ctx = (o: Partial<RecruitCtx> = {}): RecruitCtx => ({ age: 2, pop: 80, barracks: 1, stock: emptyStock(), ...o });
+
+  it('seul l’équipement manque : un clic le fera fabriquer (pas s’il manque la caserne ou de la place)', () => {
+    const a = newArmy();
+    expect(onlyGearMissing(a, 'soldier', ctx())).toBe(true);
+    expect(onlyGearMissing(a, 'soldier', ctx({ barracks: 0 }))).toBe(false);
+    expect(onlyGearMissing(a, 'soldier', ctx({ pop: 3 }))).toBe(false);
+    const s = emptyStock(); s.spear = 1;
+    expect(onlyGearMissing(a, 'soldier', ctx({ stock: s }))).toBe(false);
+  });
+
+  it('les pièces à fabriquer tiennent compte de la réserve, de l’atelier et des recrues qui attendent déjà', () => {
+    const s = emptyStock(); s.sword = 1;
+    expect(gearToCraft('knight', s, [])).toEqual(['armor']);
+    expect(gearToCraft('knight', s, ['armor'])).toEqual([]);
+    // une autre recrue attend déjà l'épée et l'armure : il en faut deux de chaque
+    expect(gearToCraft('knight', s, ['armor'], ['knight'])).toEqual(['sword', 'armor']);
+    expect(gearToCraft('soldier', emptyStock(), ['spear'], ['soldier'])).toEqual(['spear']);
+    expect(gearToCraft('archer', emptyStock(), ['spear'], ['soldier'])).toEqual(['bow']);
   });
 });
 

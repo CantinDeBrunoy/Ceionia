@@ -856,6 +856,8 @@ body.commanding #dock { display: none; }
 #troopBar .trec { display: inline-flex; align-items: center; gap: 4px; padding-left: 8px; border-left: 1px solid var(--line); }
 #troopBar .trec small { color: var(--ink2); font-weight: 600; }
 #troopBar .trec button.off { opacity: 0.45; }
+/* il ne manque que l'équipement : un clic le fait fabriquer */
+#troopBar .trec button.craft { opacity: 0.8; border-style: dashed; }
 #troopBar .tx { margin-left: 4px; }
 #troopBar .tbase .tbt { color: var(--ink2); margin-right: 2px; }
 #troopBar .tbase .tb { font-size: 16px; padding: 3px 7px; }
