@@ -75,7 +75,7 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', 'Mine', 'Mine de charbon', 'Carrière', 'Mine robotisée'],
     desc: 'Tire du minerai de la terre, jour après jour.',
     jobs: [0, 0, 3, 6, 8, 8],
-    perk: 'Débloquée par l’expédition « Le filon de la montagne ». Ne se creuse que dans la montagne. Rapporte chaque jour du minerai (3 au Moyen Âge, 5 à l’âge industriel, 8 à l’époque moderne, 10 ensuite) et de la pierre.',
+    perk: 'Débloquée par l’expédition « Le filon de la montagne ». Ne se creuse que dans la montagne. Rapporte chaque jour du minerai (6 au Moyen Âge, 10 à l’âge industriel, 16 à l’époque moderne, 20 ensuite), de quoi passer les âges, et de la pierre.',
     reqMission: 'mine',
   },
   oilwell: {
