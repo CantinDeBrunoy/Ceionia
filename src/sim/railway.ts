@@ -6,7 +6,8 @@ import type { Expeditions } from './expeditions';
 import { FREIGHT_KINDS, gap, isStation, RAIL_REACH } from './freight';
 
 /** Couleurs des lignes, dans l'ordre où on les trace */
-export const LINE_COLORS = [0xd8553c, 0x3c7fd8, 0xe8b83c, 0x4fa860, 0x9a5ad8, 0xe87ab0];
+/** Jamais de rouge : il est réservé au tracé impossible de l’éditeur */
+export const LINE_COLORS = [0x3c7fd8, 0x4fa860, 0xe8b83c, 0x9a5ad8, 0xe87ab0, 0xe0852c];
 /** Longueur du train (deux locomotives, la voiture des voyageurs et des mineurs, deux wagons de minerai), en cases */
 export const TRAIN_LEN = 2.3;
 /** vitesse de pointe (cases par seconde de jeu), accélération, arrêt à quai, attente des retardataires */
