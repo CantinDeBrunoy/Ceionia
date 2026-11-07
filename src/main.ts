@@ -491,7 +491,8 @@ class Game implements UIHost {
       this.war.hellFx.length = 0;
       document.body.classList.add('under', 'hell');
       this.cam.minDist = 2.4; this.cam.maxDist = 30; this.cam.minPitch = 0.95;
-      const [x, z] = hm.map.arrival;
+      // (à la base avancée la plus loin, s'il y en a une)
+      const [x, z] = this.war.base?.spawnPoint() ?? hm.map.arrival;
       this.cam.jump({ x, z: z + 4, dist: 14, pitch: 1.05, yaw: Math.PI }, hm.view.groundY(x, z));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
@@ -526,6 +527,7 @@ class Game implements UIHost {
       pick: (x, y) => { const p = hm.view.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x, p.z] : null; },
       screen: (x, z) => this.toScreen(v.set(x, hm.view.groundY(x, z) + 0.3, z)),
       focus: (x, z) => this.cam.goTo(x, z, this.cam.dist),
+      ghost: (kind, x, z, ok, camp) => hm.view.ghost(kind, x, z, ok, camp),
     };
   }
 
@@ -618,7 +620,9 @@ class Game implements UIHost {
       if (said.has(n.text)) continue;
       said.add(n.text);
       if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(`${n.text} Cliquez ici pour voir l’île.`, () => this.viewIsle());
-      else if (n.kind === 'portal' && this.mode !== 'hell') this.ui.toast(`${n.text} Cliquez ici pour y entrer.`, () => this.enterHell());
+      else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell') this.ui.toast(`${n.text} Cliquez ici pour y aller.`, () => this.enterHell());
+      // les vivres de la base avancée : un clic envoie un convoi
+      else if (n.kind === 'supply') this.ui.toast(`${n.text} Cliquez ici pour envoyer un convoi de ravitaillement.`, () => { const why = w.sendConvoy(); this.ui.toast(why ?? '📦 Convoi parti du village : il passe le portail.'); });
       else this.ui.toast(n.text);
       if (n.kind === 'repelled' || n.kind === 'secured') audio.sfxAgeUp();
     }

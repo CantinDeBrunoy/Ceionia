@@ -4,6 +4,9 @@ import type { BattleLayer } from '../render/battleUnits';
 import type { PointerInfo, ToolInput } from '../core/camera';
 import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy } from '../sim/army';
 import type { War } from '../sim/war';
+import type { BaseKind } from '../sim/hell';
+import { BASE_DEFS, BASE_KINDS, SUPPLY_MAX, CONVOY_COST, costText, canAfford } from '../sim/hellBase';
+import { HELL_ZONES, zoneOfZ } from '../world/hell';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle,
@@ -24,6 +27,8 @@ export interface Theater {
   screen(x: number, z: number): [number, number] | null;
   /** centre la vue sur un point de la bataille */
   focus(x: number, z: number): void;
+  /** le fantôme d'un bâtiment de la base avancée à poser (null : aucun) et le cercle de la base (Enfers seulement) */
+  ghost?(kind: BaseKind | null, x?: number, z?: number, ok?: boolean, camp?: [number, number] | null): void;
 }
 
 export interface CommandHost {
@@ -58,6 +63,8 @@ export class CommandUI implements ToolInput {
   private lastClick = { t: 0, kind: '' };
   private lastGroup = { n: -1, t: 0 };
   private barKey = '';
+  /** le bâtiment de la base avancée qu'on pose (clic au sol ; Échap ou clic droit : on arrête) */
+  placing: BaseKind | null = null;
 
   constructor(root: HTMLElement, private host: CommandHost) {
     this.bar = document.createElement('div');
@@ -77,6 +84,8 @@ export class CommandUI implements ToolInput {
   /** Prend le commandement d'une bataille (null : on le quitte) */
   setTheater(t: Theater | null) {
     if (this.theater?.layer && this.theater !== t) this.theater.layer.selected = new Set();
+    this.placing = null;
+    this.theater?.ghost?.(null);
     this.theater = t;
     this.cmd.clear();
     this.cmd.groups = {};
@@ -141,6 +150,16 @@ export class CommandUI implements ToolInput {
     if (!t) return;
     const p = t.pick(e.x, e.y);
     let cur = '';
+    // la pose d'un bâtiment de la base : son fantôme suit le curseur
+    if (this.placing) {
+      const b = this.host.war.base;
+      if (p && b) {
+        const camp = b.camp(zoneOfZ(Math.floor(p[1])));
+        t.ghost?.(this.placing, p[0], p[1], this.host.war.canBuildBase(this.placing, p[0], p[1]) === null, this.placing === 'camp' || !camp ? null : [camp.site.x, camp.site.z]);
+      }
+      this.host.canvas.style.cursor = 'copy';
+      return;
+    }
     if (this.cmd.armed) cur = 'crosshair';
     else if (p) {
       if (this.cmd.selected.size && foeAt(t.sim, p[0], p[1], 0.6)) cur = 'crosshair';
@@ -150,7 +169,28 @@ export class CommandUI implements ToolInput {
   }
 
   /** Clic droit (sans glisser : un glisser fait tourner la vue) */
-  rightClick(e: PointerInfo) { this.orderAt(e.x, e.y); }
+  rightClick(e: PointerInfo) { if (this.placing) { this.stopPlacing(); return; } this.orderAt(e.x, e.y); }
+
+  /** Commence (ou arrête) la pose d'un bâtiment de la base avancée */
+  startPlacing(kind: BaseKind | null) {
+    this.placing = this.placing === kind ? null : kind;
+    if (!this.placing) this.stopPlacing();
+    else { this.cmd.armed = null; this.host.toast(`${BASE_DEFS[kind!].icon} ${BASE_DEFS[kind!].name} : cliquez au sol pour le poser (${costText(BASE_DEFS[kind!].cost)}). Échap ou clic droit : arrêter.`); }
+    this.render();
+  }
+  stopPlacing() { this.placing = null; this.theater?.ghost?.(null); this.host.canvas.style.cursor = ''; this.render(); }
+
+  private placeAt(x: number, y: number) {
+    const t = this.theater!, p = t.pick(x, y), kind = this.placing!;
+    if (!p) return;
+    const r = this.host.war.buildBase(kind, p[0], p[1]);
+    if (typeof r === 'string') { this.host.toast(r); return; }
+    this.host.click();
+    this.host.toast(`${BASE_DEFS[kind].icon} ${BASE_DEFS[kind].name} : c’est posé${kind === 'camp' ? ' ! La base peut s’étendre autour (cercle vert).' : '.'}`);
+    // palissades et braseros s'enchaînent ; le reste se pose une fois
+    if (kind !== 'palisade' && kind !== 'brazier' && !this.shift) this.stopPlacing();
+    else this.render();
+  }
 
   private shift = false;
   /** Maj enfoncée (sélection ajoutée) */
@@ -159,6 +199,7 @@ export class CommandUI implements ToolInput {
   private clickAt(x: number, y: number, add: boolean) {
     const t = this.theater!, p = t.pick(x, y);
     if (!p) return;
+    if (this.placing) { this.placeAt(x, y); return; }
     // attaquer en marchant, armé : le clic donne l'ordre
     if (this.cmd.armed && this.cmd.selected.size) { this.orderAt(x, y); return; }
     const u = unitAt(this.units(), p[0], p[1], 0.5);
@@ -218,6 +259,7 @@ export class CommandUI implements ToolInput {
     if (k === 'a') { if (this.cmd.selected.size) { this.cmd.armed = 'attack'; this.host.canvas.style.cursor = 'crosshair'; this.render(); } return take(); }
     if (k === ' ') { e.preventDefault(); this.host.togglePause(); this.render(); return true; }
     if (k === 'escape') {
+      if (this.placing) { this.stopPlacing(); return true; }
       if (this.cmd.armed) this.cmd.armed = null;
       else if (this.cmd.selected.size) this.cmd.clear();
       else if (t.kind === 'isle') this.host.leaveIsle();
@@ -260,6 +302,12 @@ export class CommandUI implements ToolInput {
       this.host.toast(why ?? `Recrue en route : ${TROOPS[a.slice(4) as TroopKind].name.toLowerCase()} (la galère l’amène sur l’île).`);
     }
     else if (a === 'wave') { w.callWave(); this.host.toast('🎺 Le cor sonne : la prochaine vague arrive !'); }
+    else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
+    else if (a === 'convoy') { const why = w.sendConvoy(); this.host.toast(why ?? '📦 Convoi parti du village : il passe le portail et rejoint l’expédition.'); }
+    else if (a.startsWith('rech:')) {
+      const k = a.slice(5) as TroopKind, why = w.recruitHell(k, this.host.age(), this.host.pop());
+      this.host.toast(why ?? `Recrue en route à la caserne avancée : ${TROOPS[k].name.toLowerCase()} (elle arrivera au camp).`);
+    }
     else if (a === 'leave') { if (this.theater.kind === 'isle') this.host.leaveIsle(); else this.host.leaveHell(); return; }
     this.host.click();
     this.barKey = '';
@@ -300,8 +348,30 @@ export class CommandUI implements ToolInput {
         <button data-a="pause" class="${this.host.paused() ? 'on' : ''}" title="Pause active (Espace) : les ordres se donnent en pause">${this.host.paused() ? '▶' : '⏸'}</button>
         ${rec}
         <button data-a="leave" class="tx" title="${isle ? 'Quitter le commandement (Échap)' : 'Quitter les Enfers'}">✕</button>
-      </div>`;
+      </div>${isle ? '' : this.baseRow()}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
+  }
+
+  /**
+   * La rangée de la base avancée (Enfers) : la jauge de vivres et le convoi, les bâtiments à poser (un petit menu à elle, pas
+   * celui du village), la caserne avancée (recrues sur place)
+   */
+  private baseRow() {
+    const w = this.host.war, b = w.base;
+    if (!b) return '';
+    const world = w.purse;
+    const sup = Math.round((b.supply / SUPPLY_MAX) * 100), low = sup < 25;
+    const enRoute = b.convoys.length ? `<small>📦 ${b.convoys.map((c) => `${Math.ceil(c.left)}s`).join(' ')}</small>` : '';
+    const gauge = `<span class="tsup${low ? ' low' : ''}" title="Vivres et équipement de l’expédition : chaque troupe en consomme ; à vide, elles s’affaiblissent peu à peu${b.weak > 0 ? ` (en ce moment : −${Math.round(b.weak * 100)} % de force)` : ''}">🍞 <i><b style="width:${sup}%"></b></i>${sup}%</span>
+      <button data-a="convoy" title="Envoyer un convoi de ravitaillement depuis le village (${costText(CONVOY_COST)}) : il arrive par le portail">📦 Ravitailler</button>${enRoute}`;
+    const zone = HELL_ZONES[Math.min(HELL_ZONES.length - 1, Math.max(0, w.faction?.frontier ?? 0))];
+    const builds = BASE_KINDS.map((k) => {
+      const d = BASE_DEFS[k], afford = canAfford(world, d.cost);
+      return `<button data-a="build:${k}" class="tb${this.placing === k ? ' on' : ''}${afford ? '' : ' off'}" title="${`${d.name} (${costText(d.cost)}) : ${d.desc}`.replace(/"/g, '&quot;')}">${d.icon}</button>`;
+    }).join('');
+    const posts = b.posts(), ctx = w.recruitCtx(this.host.age(), this.host.pop());
+    const rec = posts ? `<span class="trec"><b>Caserne avancée</b>${TROOP_KINDS.filter((k) => this.host.age() >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? 'off' : ''}" title="Recruter sur place : ${TROOPS[k].desc.replace(/"/g, '&quot;')}">${TROOPS[k].icon} +</button>`).join('')}</span>` : '';
+    return `<div class="trow tbase"><b class="tbt" title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’à ${zone.name}">🏕️ Base</b>${builds}<span class="tsep"></span>${gauge}${rec}</div>`;
   }
 
   /** L'alerte d'incursion (bannière et bouton « Voir l'île »), quand on ne regarde pas l'île */

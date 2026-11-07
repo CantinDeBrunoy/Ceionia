@@ -4,7 +4,7 @@ import { isleDefenses, repelWave } from '../world/portal';
 import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats } from './hell';
 import { IsleBattle } from './isleBattle';
 import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME } from './army';
-import { HellBase, HellBaseSave, SMITHY_ORE } from './hellBase';
+import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES } from '../world/hell';
 import type { BaseKind } from './hell';
 import { GEAR_BY } from './gear';
@@ -126,6 +126,8 @@ export class War {
     if (!b) return 'Les Enfers ne sont pas ouverts.';
     return b.build(kind, x, z, this.world);
   }
+  /** Ce que le village peut payer (bois, pierre, minerai ; le bac à sable, tout) */
+  get purse(): Purse { return this.world; }
   /** Ce qu'il manque pour bâtir là (null : on peut) */
   canBuildBase(kind: BaseKind, x: number, z: number) { return this.base ? this.base.canBuild(kind, x, z, this.world) : 'Les Enfers ne sont pas ouverts.'; }
   /** Envoie un convoi de ravitaillement depuis le village : null, ou la raison du refus */
@@ -298,6 +300,11 @@ export class War {
             this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} est tombé : on le ramène blessé à la caserne, il s’y soigne.` });
           }
         }
+      }
+      // la progression dans les Enfers
+      if (sim === this.faction) {
+        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: `🏴 ${HELL_ZONES[e.zone].name} conquise ! La brume se lève sur ${HELL_ZONES[e.zone + 1].name} ; vous pouvez bâtir une base avancée ici.` });
+        else if (e.type === 'sealed') this.news.push({ kind: 'info', text: `🌫️ La brume infernale barre ${HELL_ZONES[e.zone].name} : abattez d’abord la forteresse de ${HELL_ZONES[e.zone - 1].name}.` });
       }
       fx.push(e);
     }
