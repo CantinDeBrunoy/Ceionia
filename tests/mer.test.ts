@@ -283,6 +283,32 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
     }
   });
 
+  it('deux galères encadrent le monstre, l’équipage partagé entre elles, sans pêcheur à la ligne', () => {
+    for (const id of ['megalodon', 'kraken']) {
+      const r = sail(id, 0, 1);
+      type Sc = { escort: { obj: THREE.Object3D; riders: number[] } | null; arena: [number, number] | null; rods: Map<number, unknown>; boat: { obj: THREE.Object3D; riders: number[] } };
+      const s = r.scene as unknown as Sc;
+      expect(s.escort, id).not.toBeNull();
+      // toute la troupe embarque, une moitié sur chaque galère
+      expect(s.boat.riders.length).toBe(r.a.party.length);
+      expect(s.escort!.riders.length).toBe(Math.floor(r.a.party.length / 2));
+      let flank = 0, rods = 0, apart = Infinity;
+      run(r, (k) => {
+        rods += s.rods.size;
+        if (k < 0.3 || k > 0.8) return;
+        const a = s.boat.obj.position, b = s.escort!.obj.position, [cx, cz] = s.arena!;
+        apart = Math.min(apart, Math.hypot(a.x - b.x, a.z - b.z));
+        // le point de combat, entre les deux galères
+        if (Math.hypot((a.x + b.x) / 2 - cx, (a.z + b.z) / 2 - cz) < 0.4) flank++;
+      });
+      expect(rods, id).toBe(0);
+      expect(flank, id).toBeGreaterThan(0);
+      expect(apart, id).toBeGreaterThan(2);
+      expect(r.s.monster!.hits, id).toBeGreaterThan(0);
+      r.scene.dispose(r.a);
+    }
+  });
+
   it('le kraken a tout son corps : la tête et ses bras, qui ondulent autour d’elle', () => {
     const r = sail('kraken', 0, 1), m = r.s.monster as unknown as { obj: THREE.Group; arms: THREE.Object3D[] };
     expect(m.arms.length).toBe(8);
