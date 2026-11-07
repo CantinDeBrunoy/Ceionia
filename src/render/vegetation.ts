@@ -521,7 +521,7 @@ export class VegView {
       for (let cx = Math.floor(r[0] / CH); cx <= Math.floor(r[2] / CH); cx++) urgent.push(cz * NC + cx);
     // petite retouche : immédiate ; carte entière : au fil des images
     for (const ch of urgent) this.enqueue(ch, urgent.length <= 6);
-    if (urgent.length <= 6) this.flush(Infinity, urgent.length);
+    if (urgent.length <= 6) this.flush(Infinity, urgent.length + (this.current ? 1 : 0));
   }
 
   /** Avance les reconstructions en attente et règle la visibilité des tuiles selon la caméra */
@@ -541,28 +541,43 @@ export class VegView {
     }
   }
 
+  /**
+   * Avance les reconstructions en attente : `budget` ms au plus par appel (une grande tuile se fait en plusieurs fois, ligne
+   * par ligne : ses anciens décors restent affichés jusqu'à ce qu'elle soit prête), `max` tuiles au plus
+   */
   private flush(budget: number, max = Infinity) {
     if (!this.season) return;
     const t0 = performance.now();
     let done = 0;
-    while (this.queue.length && done < max && (done === 0 || performance.now() - t0 < budget)) {
-      const ch = this.queue.shift()!;
-      this.queued[ch] = 0;
-      this.rebuildChunk(ch, this.season);
+    while ((this.current || this.queue.length) && done < max) {
+      if (!this.current) {
+        const ch = this.queue.shift()!;
+        this.queued[ch] = 0;
+        this.current = this.buildChunk(ch, this.season);
+      }
+      // (au moins un pas par appel, pour avancer même quand les images sont lentes)
+      let r = this.current.next();
+      while (!r.done && performance.now() - t0 < budget) r = this.current.next();
+      if (!r.done) return;
+      this.current = null;
       done++;
     }
   }
+  /** tuile en cours de reconstruction (d'une image à l'autre) */
+  private current: Generator<void, void, void> | null = null;
 
   // ---------- Tuiles ----------
 
-  private rebuildChunk(ch: number, s: SeasonState) {
+  private *buildChunk(ch: number, s: SeasonState): Generator<void, void, void> {
     const w = this.world;
     Layer.chunk = ch;
     for (const l of this.layers) l.begin(ch);
     this.perches[ch] = [];
     this.flowers[ch] = [];
     const x0 = (ch % NC) * CH, z0 = Math.floor(ch / NC) * CH;
-    for (let cz = z0; cz < Math.min(N, z0 + CH); cz++)
+    for (let cz = z0; cz < Math.min(N, z0 + CH); cz++) {
+      // une ligne de cases par pas (les perchoirs et les fleurs ne sont lus qu'une fois la tuile finie)
+      if (cz > z0 && (cz - z0) % 2 === 0) yield;
       for (let cx = x0; cx < Math.min(N, x0 + CH); cx++) {
         const k = w.ci(cx, cz), t = w.veg[k];
         // l'emprise des grottes et des failles reste dégagée
@@ -573,6 +588,7 @@ export class VegView {
         // les jardins ont leur propre décor, qui change avec les âges (GardenView)
         else if (t === VEG_ROCKS) this.rockery(cx, cz, s);
       }
+    }
     for (const l of this.layers) l.end(ch);
   }
 

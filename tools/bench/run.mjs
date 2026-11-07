@@ -83,6 +83,15 @@ await cdp.eval('(() => { window.__game.saveNow = () => {}; Storage.prototype.set
 const gpuInfo = await cdp.eval(`(() => { const gl = document.getElementById('view').getContext('webgl2'); const d = gl.getExtension('WEBGL_debug_renderer_info'); return { renderer: d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), timer: !!gl.getExtension('EXT_disjoint_timer_query_webgl2') }; })()`);
 console.log('GPU :', gpuInfo.renderer, gpuInfo.timer ? '(chronomètre GPU)' : '(pas de chronomètre GPU)');
 
+// --eval "expression" (ou --eval-file fichier.js) : une mesure à la main, sur le village de test déjà bâti (âge 3), puis on s'arrête
+if (args.eval || args['eval-file']) {
+  await cdp.eval('(async () => { __bench.setup({ age: 3 }); await __bench.frames(30); await __bench.scenario(__bench.SCENARIOS[0]); })()', true);
+  const expr = args['eval-file'] ? readFileSync(String(args['eval-file']), 'utf8') : String(args.eval);
+  console.log(JSON.stringify(await cdp.eval(expr, true), null, 1));
+  kill();
+  process.exit(0);
+}
+
 const only = args.only ? String(args.only) : null;
 const report = { url, seed, gpu: gpuInfo, date: new Date().toISOString(), runs: {} };
 const fmt = (v) => (v == null ? '–' : typeof v === 'number' ? String(v) : v);
