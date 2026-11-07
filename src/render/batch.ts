@@ -56,19 +56,29 @@ export class GeoBatch {
     this.used -= k.n;
   }
 
-  /** Nouvelle instance de la géométrie : son numéro */
+  /** La géométrie, si elle peut entrer dans le lot (mêmes attributs que les autres) ; -1 sinon */
+  private tryAcquire(g: THREE.BufferGeometry) {
+    try { return this.acquire(g); } catch { return -1; }
+  }
+
+  /** Nouvelle instance de la géométrie : son numéro (-1 si la géométrie ne peut pas entrer dans le lot) */
   add(g: THREE.BufferGeometry) {
     if (this.live >= this.maxInst) { this.maxInst *= 2; this.mesh.setInstanceCount(this.maxInst); }
-    const id = this.mesh.addInstance(this.acquire(g));
+    const geo = this.tryAcquire(g);
+    if (geo < 0) return -1;
+    const id = this.mesh.addInstance(geo);
     this.live++;
     return id;
   }
 
-  /** L'instance prend une autre géométrie (l'ancienne quitte le lot si plus personne ne s'en sert) */
+  /** L'instance prend une autre géométrie (l'ancienne quitte le lot si plus personne ne s'en sert) ; false si elle n'y entre pas */
   swap(inst: number, from: THREE.BufferGeometry, to: THREE.BufferGeometry) {
-    if (from === to) return;
-    this.mesh.setGeometryIdAt(inst, this.acquire(to));
+    if (from === to) return true;
+    const geo = this.tryAcquire(to);
+    if (geo < 0) return false;
+    this.mesh.setGeometryIdAt(inst, geo);
     this.release(from);
+    return true;
   }
 
   remove(inst: number, g: THREE.BufferGeometry) {

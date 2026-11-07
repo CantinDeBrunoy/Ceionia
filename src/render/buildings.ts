@@ -40,10 +40,11 @@ interface Entry {
   /** ailes du moulin, pales de l'éolienne, qui tournent autour de leur moyeu */
   rotor: THREE.Mesh | null;
   spin: { axis: THREE.Vector3; speed: number; phase: number } | null;
-  /** drapeaux, enseignes, linge, cloches qui se balancent */
-  sways: { mesh: THREE.Mesh; axis: THREE.Vector3; amp: number; freq: number; phase: number; spin?: number; steady?: boolean }[];
-  /** personnages animés du bâtiment */
+  /** drapeaux, enseignes, linge, cloches qui se balancent (dans le lot des pièces mobiles quand elles y entrent) */
+  sways: ({ mesh: THREE.Mesh; axis: THREE.Vector3; amp: number; freq: number; phase: number; spin?: number; steady?: boolean } & Slot)[];
+  /** personnages animés du bâtiment (dans le lot des personnages : `crowdSlot`) */
   crowd: THREE.Mesh | null;
+  crowdSlot: Slot;
   /** tête tournée face au vent (éolienne, roue de pompage) : son pivot, sa tête, le cap du rotor, déjà orientée ou non */
   turn: THREE.Group | null;
   vane: THREE.Mesh | null;
@@ -56,6 +57,22 @@ interface Entry {
   inst: number;
   shown: THREE.BufferGeometry | null;
   moved: boolean;
+}
+
+/** Place d'un maillage dans un lot : son instance (-1 : hors du lot) et la géométrie qu'elle y montre */
+interface Slot { inst: number; shown: THREE.BufferGeometry | null }
+
+/**
+ * Met `geo` dans le lot à la place `s` (l'y ajoute ou change sa géométrie) ; avec null, ou si `geo` n'y entre pas, l'en retire.
+ * Rend vrai si la géométrie est dans le lot (sinon, au maillage de la dessiner lui-même)
+ */
+function slot(batch: GeoBatch, s: Slot, geo: THREE.BufferGeometry | null): boolean {
+  if (geo) {
+    if (s.inst >= 0 && s.shown && batch.swap(s.inst, s.shown, geo)) { s.shown = geo; return true; }
+    if (s.inst < 0) { const id = batch.add(geo); if (id >= 0) { s.inst = id; s.shown = geo; return true; } }
+  }
+  if (s.inst >= 0) { batch.remove(s.inst, s.shown!); s.inst = -1; s.shown = null; }
+  return false;
 }
 
 /**
@@ -120,7 +137,7 @@ function litOf(body: THREE.BufferGeometry, glow: THREE.BufferGeometry | null | u
   return geo;
 }
 
-const easeOutBack =(t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
 export class BuildingView implements WorldListener {
   group = new THREE.Group();
@@ -129,18 +146,25 @@ export class BuildingView implements WorldListener {
   private spinT = 0;
   private q = new THREE.Quaternion();
   onPlaced: ((b: Building) => void) | null = null;
-  /** les corps de tous les bâtiments (lumières comprises), en un seul appel de dessin : voir `show` */
+  /**
+   * Les corps de tous les bâtiments (lumières comprises), leurs pièces qui se balancent ou tournent, leurs personnages :
+   * trois lots dessinés chacun en un seul appel (voir `show`), au lieu d'un maillage (et de son ombre) par pièce
+   */
   private batch = new GeoBatch(mats.lit, 512, 1 << 19);
+  private swayBatch = new GeoBatch(mats.lit, 256, 1 << 16);
+  private crowdBatch = new GeoBatch(crowdMat, 128, 1 << 16);
 
   constructor(private world: World) {
-    this.group.add(this.batch.mesh);
+    this.group.add(this.batch.mesh, this.swayBatch.mesh, this.crowdBatch.mesh);
     world.listeners.push(this);
     this.onReset();
   }
 
   private disposeEntry(e: Entry) {
     this.group.remove(e.group); e.plinth?.geometry.dispose(); this.undrape(e);
-    if (e.inst >= 0) { this.batch.remove(e.inst, e.shown!); e.inst = -1; e.shown = null; }
+    slot(this.batch, e, null);
+    slot(this.crowdBatch, e.crowdSlot, null);
+    for (const sw of e.sways) slot(this.swayBatch, sw, null);
   }
 
   /**
@@ -150,21 +174,25 @@ export class BuildingView implements WorldListener {
   private show(e: Entry, geo: THREE.BufferGeometry, lit: boolean) {
     e.body.geometry = geo;
     e.body.material = lit ? mats.lit : mats.body;
-    if (lit) {
-      if (e.inst < 0) e.inst = this.batch.add(geo); else this.batch.swap(e.inst, e.shown!, geo);
-      e.shown = geo;
-      e.moved = true;
-    } else if (e.inst >= 0) { this.batch.remove(e.inst, e.shown!); e.inst = -1; e.shown = null; }
-    e.body.visible = !lit;
+    e.body.visible = !slot(this.batch, e, lit ? geo : null);
+    e.moved = true;
   }
 
-  /** Recopie dans le lot la place des corps qui ont bougé (et de ceux qui s'animent ou se tournent face au vent) */
+  /** Les personnages affichés (null : aucun), dans leur lot si possible */
+  private showCrowd(e: Entry, geo: THREE.BufferGeometry | null) {
+    if (e.crowd) { if (geo) e.crowd.geometry = geo; e.crowd.visible = !!geo && !slot(this.crowdBatch, e.crowdSlot, geo); }
+    if (!geo) slot(this.crowdBatch, e.crowdSlot, null);
+    e.moved = true;
+  }
+
+  /** Recopie dans les lots la place des corps qui ont bougé (et de ceux qui s'animent ou se tournent face au vent) */
   private syncBatch() {
     for (const e of this.entries.values()) {
-      if (e.inst < 0 || !(e.moved || e.anim || (e.turn && e.body.parent === e.turn))) continue;
+      if (!(e.moved || e.anim || (e.turn && e.body.parent === e.turn))) continue;
       e.moved = false;
-      e.body.updateWorldMatrix(true, false);
-      this.batch.setMatrix(e.inst, e.body.matrixWorld);
+      if (e.inst >= 0) { e.body.updateWorldMatrix(true, false); this.batch.setMatrix(e.inst, e.body.matrixWorld); }
+      const c = e.crowdSlot;
+      if (c.inst >= 0 && e.crowd) { e.crowd.updateWorldMatrix(true, false); this.crowdBatch.setMatrix(c.inst, e.crowd.matrixWorld); }
     }
   }
 
@@ -202,7 +230,7 @@ export class BuildingView implements WorldListener {
     const body = new THREE.Mesh(new THREE.BufferGeometry(), mats.body);
     body.castShadow = true; body.receiveShadow = true;
     group.add(body);
-    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null, sways: [], crowd: null, turn: null, vane: null, face: 0, aimed: false, inst: -1, shown: null, moved: true };
+    const e: Entry = { b, group, body, glow: null, key: '', smoke: [], anim: animate ? { type: 'pop', t: 0, swapped: true, to: b.age } : null, plinth: null, plinthH: 0, rotor: null, spin: null, sways: [], crowd: null, turn: null, vane: null, face: 0, aimed: false, inst: -1, shown: null, moved: true, crowdSlot: { inst: -1, shown: null } };
     if (animate) group.scale.setScalar(0.001);
     this.group.add(group);
     this.entries.set(b.id, e);
@@ -264,24 +292,24 @@ export class BuildingView implements WorldListener {
         e.spin = { axis: new THREE.Vector3(...m.rotor.axis), speed: m.rotor.speed * (0.85 + hash2(b.x, b.z, 11) * 0.3), phase: hash2(b.x, b.z, 12) * 6.28 };
       } else if (e.rotor) { e.rotor.visible = false; e.spin = null; }
       // les pièces qui se balancent, chacune à son rythme
-      for (const sw of e.sways) e.group.remove(sw.mesh);
+      for (const sw of e.sways) { e.group.remove(sw.mesh); slot(this.swayBatch, sw, null); }
       e.sways = (m.sways ?? []).map((sw, i) => {
-        // les ampoules d'un manège (les néons d'un hologramme) tournent avec lui, fondues dans son maillage si possible
-        const swLit = sw.glow ? litOf(sw.geo, sw.glow) : null;
+        // les ampoules d'un manège (les néons d'un hologramme) tournent avec lui, fondues dans son maillage si possible ; la
+        // pièce entre dans le lot des pièces mobiles (son maillage, caché, porte sa place et son angle)
+        const swLit = litOf(sw.geo, sw.glow);
         const mesh = new THREE.Mesh(swLit ?? sw.geo, swLit ? mats.lit : mats.body);
         mesh.castShadow = true;
         mesh.position.set(...sw.pivot);
         mesh.userData.pivot = sw.pivot;
         e.group.add(mesh);
         if (sw.glow && !swLit) mesh.add(new THREE.Mesh(sw.glow, mats.glow));
-        return { mesh, axis: new THREE.Vector3(...sw.axis).normalize(), amp: sw.amp, freq: sw.freq * (0.85 + hash2(b.x + i, b.z, 13) * 0.3), phase: hash2(b.x, b.z + i, 14) * 6.28, spin: sw.spin, steady: sw.steady };
+        const s: Slot = { inst: -1, shown: null };
+        mesh.visible = !slot(this.swayBatch, s, swLit);
+        return { mesh, ...s, axis: new THREE.Vector3(...sw.axis).normalize(), amp: sw.amp, freq: sw.freq * (0.85 + hash2(b.x + i, b.z, 13) * 0.3), phase: hash2(b.x, b.z + i, 14) * 6.28, spin: sw.spin, steady: sw.steady };
       });
       // les personnages du bâtiment, animés
-      if (m.crowd) {
-        if (!e.crowd) { e.crowd = new THREE.Mesh(m.crowd, crowdMat); e.crowd.castShadow = true; e.group.add(e.crowd); }
-        e.crowd.geometry = m.crowd;
-        e.crowd.visible = true;
-      } else if (e.crowd) e.crowd.visible = false;
+      if (m.crowd && !e.crowd) { e.crowd = new THREE.Mesh(m.crowd, crowdMat); e.crowd.castShadow = true; e.group.add(e.crowd); }
+      this.showCrowd(e, m.crowd ?? null);
       // tête face au vent : le rotor et la tête (ou tout le modèle) pendus à un pivot sur l'axe du mât
       const v = m.vane;
       if (v) {
@@ -339,13 +367,13 @@ export class BuildingView implements WorldListener {
         e.draped = { key: dk, body: drape(bodyG, w, b.x + s / 2, b.z + s / 2, ry, base), glow: glowG ? drape(glowG, w, b.x + s / 2, b.z + s / 2, ry, base) : null, crowd: m.crowd ? drape(m.crowd, w, b.x + s / 2, b.z + s / 2, ry, base) : null };
         this.show(e, e.draped.body, !!lit);
         if (e.glow && e.draped.glow) e.glow.geometry = e.draped.glow;
-        if (e.crowd && e.draped.crowd) e.crowd.geometry = e.draped.crowd;
+        if (e.crowd && e.draped.crowd) this.showCrowd(e, e.draped.crowd);
       }
     } else if (e.draped) {
       this.undrape(e);
       this.show(e, bodyG, !!lit);
       if (e.glow && glowG) e.glow.geometry = glowG;
-      if (e.crowd && m.crowd) e.crowd.geometry = m.crowd;
+      if (e.crowd && m.crowd) this.showCrowd(e, m.crowd);
     }
     // la hauteur et la sorte de socle (butte ou fondation) : refait quand l'une ou l'autre change
     const pk = ph + (early && ph > 0 ? 100 : 0) + (rocky && ph > 0 ? 200 : 0);
@@ -421,7 +449,10 @@ export class BuildingView implements WorldListener {
     CROWD.time.value += dt;
     const gust = 0.55 + wind.speed * 0.9;
     // les manèges tournent sans fin, à leur vitesse
-    for (const e of this.entries.values()) for (const sw of e.sways) sw.mesh.quaternion.setFromAxisAngle(sw.axis, sw.spin ? this.swayT * sw.spin * 6.28 + sw.phase : (Math.sin(this.swayT * sw.freq * 6.28 + sw.phase) + (sw.steady ? 0 : Math.sin(this.swayT * sw.freq * 11.3 + sw.phase * 2) * 0.3)) * sw.amp * (sw.steady ? 1 : gust));
+    for (const e of this.entries.values()) for (const sw of e.sways) {
+      sw.mesh.quaternion.setFromAxisAngle(sw.axis, sw.spin ? this.swayT * sw.spin * 6.28 + sw.phase : (Math.sin(this.swayT * sw.freq * 6.28 + sw.phase) + (sw.steady ? 0 : Math.sin(this.swayT * sw.freq * 11.3 + sw.phase * 2) * 0.3)) * sw.amp * (sw.steady ? 1 : gust));
+      if (sw.inst >= 0) { sw.mesh.updateWorldMatrix(true, false); this.swayBatch.setMatrix(sw.inst, sw.mesh.matrixWorld); }
+    }
     // les ailes et les pales tournent, chaque moulin à son rythme (les éoliennes plus vite quand le vent forcit) ; les
     // éoliennes et les roues de pompage se tournent lentement face au vent, le rotor du côté d'où il vient
     for (const e of this.entries.values()) {
