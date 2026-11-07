@@ -1475,10 +1475,8 @@ export class UI {
       close();
       closeMain();
       h.audio.sfxClick();
-      // la caméra reste où elle est : l'œil de la carte de l'équipe (à gauche) la fait suivre ; le grand départ des colons,
-      // lui, se suit d'office (c'est la fin de la partie)
-      if (m.farewell) h.follow(a.id);
-      else this.toast(`${m.icon} ${a.fromCamp ? 'La troupe descend du camp souterrain…' : ex.status(a)} Cliquez ici ou sur l’œil de sa carte pour la suivre.`, () => { h.follow(a.id); this.update(); });
+      // la caméra suit l'équipe d'office ; l'œil de sa carte (à gauche) la lâche ou la reprend
+      h.follow(a.id);
       this.update();
     });
   }
@@ -1607,7 +1605,7 @@ export class UI {
       if (!a) { this.toast(ex.why(deep, deep.choices[ci]) ?? 'Aucun chemin praticable dans les galeries.'); return; }
       close();
       h.audio.sfxClick();
-      this.toast(`${deep.icon} ${a.fromCamp ? 'La troupe se rassemble au camp et s’enfonce dans les galeries…' : ex.status(a)} Cliquez ici pour la suivre.`, () => { h.follow(a.id); this.update(); });
+      h.follow(a.id);
       this.update();
     });
   }

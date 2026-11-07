@@ -270,7 +270,7 @@ export class Tutorial {
           if (!this.ticks[1]) return q('#bExp');
           return this.ticks[2] ? null : q('#expList .expCard:not(.incident) .cam');
         },
-        check: () => [!!q('.expModal'), h.expeditions.active.length > 0, this.clicks.has('exp')],
+        check: () => [!!q('.expModal'), h.expeditions.active.length > 0, this.clicks.has('exp') || h.following !== null],
         note: () => {
           const m = q('.sendModal') ?? q('.expModal');
           if (!m || this.ticks[1]) return '';
