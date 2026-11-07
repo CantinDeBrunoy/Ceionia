@@ -180,10 +180,12 @@ class Layer {
   /** Visibilité d'une tuile selon sa distance à la caméra */
   view(ch: number, dist: number, lodDist = LOD_DIST) {
     const has = this.n[ch] > 0;
-    const hide = (this.o.detail && dist > DETAIL_DIST) || (this.o.small && dist > SMALL_DIST);
+    // en qualité réduite (lodDist plus court), menus détails et ombres s'arrêtent plus près, dans la même proportion
+    const k = lodDist / LOD_DIST;
+    const hide = (this.o.detail && dist > DETAIL_DIST * k) || (this.o.small && dist > SMALL_DIST);
     const lod = !!this.far[ch].length, far = lod && dist > lodDist;
     // les ombres des tuiles lointaines, à peine visibles, doubleraient les appels de dessin
-    const shadow = this.o.shadow !== false && dist < SHADOW_DIST;
+    const shadow = this.o.shadow !== false && dist < SHADOW_DIST * k;
     // de près, l'ombre portée vient de la version simplifiée, rangée sur le calque des seules ombres : trois fois moins
     // de triangles à dessiner dans la carte des ombres, pour une silhouette au sol presque identique
     for (const m of this.near[ch]) { m.visible = has && !hide && !far; m.castShadow = shadow && !lod; }

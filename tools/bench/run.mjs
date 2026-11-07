@@ -76,8 +76,8 @@ await cdp.send('Page.navigate', { url });
 for (let i = 0; i < 300 && !(await cdp.eval('!!window.__game')); i++) await sleep(500);
 if (!(await cdp.eval('!!window.__game'))) throw new Error('le jeu ne démarre pas');
 await sleep(1500);
-for (let i = 0; i < 20 && (await cdp.eval('document.hidden')); i++) { await cdp.send('Page.bringToFront'); await sleep(500); }
-if (await cdp.eval('document.hidden')) throw new Error('la page est cachée : pas d’images (fenêtre Chrome masquée ?)');
+for (let i = 0; i < 6 && (await cdp.eval('document.hidden')); i++) { await cdp.send('Page.bringToFront'); await sleep(500); }
+if (await cdp.eval('document.hidden')) console.warn('fenêtre masquée : les images tournent au minuteur (mesures CPU valables, GPU moins)');
 await cdp.eval(page);
 await cdp.eval('(() => { window.__game.saveNow = () => {}; Storage.prototype.setItem = () => {}; })()');
 const gpuInfo = await cdp.eval(`(() => { const gl = document.getElementById('view').getContext('webgl2'); const d = gl.getExtension('WEBGL_debug_renderer_info'); return { renderer: d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), timer: !!gl.getExtension('EXT_disjoint_timer_query_webgl2') }; })()`);

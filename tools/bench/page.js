@@ -6,6 +6,12 @@
  */
 (() => {
   const G = () => window.__game;
+  // fenêtre masquée (occultée par une autre) : requestAnimationFrame s'arrête ; on continue au minuteur pour mesurer quand même
+  if (!window.__benchRaf) {
+    const raf = window.requestAnimationFrame.bind(window);
+    window.__benchRaf = raf;
+    window.requestAnimationFrame = (cb) => (document.hidden ? setTimeout(() => cb(performance.now()), 1) : raf(cb));
+  }
   const renderer = () => G().glow?.renderer ?? window.__renderer;
   const canvas = () => document.getElementById('view');
   const frames = (n) => new Promise((res) => { let k = 0; const f = () => (++k >= n ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); });

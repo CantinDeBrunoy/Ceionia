@@ -58,7 +58,7 @@ const OIL_TAR = new THREE.Color(0x1c1814);
 const ICE = new THREE.Color(0xcfe6f4);
 const MAX_CAVES = 24;
 /** Lignes de cases reteintes par image quand la saison change */
-const RECOLOR_ROWS = 12;
+const RECOLOR_ROWS = 6;
 /** Part de la neige de saison qui tient dans chaque biome */
 /** Neige que retient chaque biome (tempéré, taïga, désert, tropical, marais) */
 export const SNOWY = [1, 1, 0.15, 0.2, 1];
