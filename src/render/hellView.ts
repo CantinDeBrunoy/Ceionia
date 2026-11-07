@@ -2,10 +2,12 @@
 import { VR } from '../world/world';
 import { HellMap, HW, HL, HVW, HVL, HWALL, HPOOL_LAVA, HPOOL_CHASM, HLAVA_Y, HCHASM_Y, HELL_ZONES, Z_PORTAL, Z_EMBER, Z_BONES, Z_CRYSTAL, Z_KINGDOM, HellSiteKind } from '../world/hell';
 import { ROCK_ISO, FLOOR_ISO } from '../world/underground';
-import { Hell, HellUnit, HellEvent, DemonKind, DEMONS } from '../sim/hell';
+import { Hell, HellUnit, HellEvent, DemonKind, DEMONS, BaseKind } from '../sim/hell';
 import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight';
 import { BattleLayer, paint, merge } from './battleUnits';
 import { hash2, smoothstep } from '../core/rng';
+import { baseGeo, BASE_FLAG } from './hellBase';
+import { BASE_DEFS, BASE_R } from '../sim/hellBase';
 
 /**
  * Le monde des Enfers, vu comme le monde souterrain (galeries en coupe, le dessus des parois est la tranche sombre de la
@@ -47,6 +49,16 @@ export class HellView {
   private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[] }>();
   private portalDisc: THREE.Mesh | null = null;
   private built = false;
+  /** la base avancée : lumières de ses feux (braseros, camp, forge), où la brume recule, matériaux, fantôme de pose */
+  private baseSources = new Map<number, Source>();
+  private uClear = { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, 0)) };
+  private baseMats: { lit: THREE.Material; glow: THREE.Material; flag: THREE.Material; ruin: THREE.Material } | null = null;
+  private baseGeos = new Map<BaseKind, ReturnType<typeof baseGeo>>();
+  private ghostMesh: THREE.Mesh | null = null;
+  private ghostKind: BaseKind | null = null;
+  private rangeRing: THREE.Mesh | null = null;
+  /** la brume qui ferme chaque zone (de la deuxième au royaume) tant que la précédente n'est pas conquise */
+  private seals: THREE.Mesh[] = [];
 
   constructor(readonly map: HellMap, public hell: Hell) {
     this.scene.background = BG;
@@ -76,6 +88,7 @@ export class HellView {
     this.buildMist();
     this.buildPortal();
     this.buildHouses();
+    this.buildSeals();
   }
 
   // ---------- Relief ----------
@@ -320,7 +333,7 @@ export class HellView {
   /** Brume rouge qui traîne au ras du sol et monte des abîmes */
   private buildMist() {
     const g = new THREE.PlaneGeometry(HW + 20, HL + 20, 1, 1).rotateX(-Math.PI / 2).translate(HW / 2, 0.75, HL / 2);
-    const mesh = new THREE.Mesh(g, mistMaterial(this.uTime));
+    const mesh = new THREE.Mesh(g, mistMaterial(this.uTime, this.uClear));
     mesh.renderOrder = 3;
     this.content.add(mesh);
   }
@@ -362,6 +375,7 @@ export class HellView {
     const glow = glowMaterial(1.1, 'hell-house-glow', { roughness: 0.6 });
     const ruinMat = caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), 'hell-ruin');
     for (const b of this.hell.buildings.values()) {
+      if (b.side !== 'hell') continue;
       const [solid, shine, flagY] = houseGeo(b.kind as HellSiteKind);
       const up = new THREE.Group();
       up.add(new THREE.Mesh(solid, lit), new THREE.Mesh(shine, glow));
@@ -387,6 +401,113 @@ export class HellView {
     }
   }
 
+  // ---------- Base avancée du joueur ----------
+
+  /**
+   * La brume qui ferme une zone : un rideau rouge et violet qui tourbillonne en travers de la faille, à l'entrée de chaque
+   * zone (de la deuxième au royaume) ; il se lève quand la zone d'avant est conquise
+   */
+  private buildSeals() {
+    for (let i = 2; i < HELL_ZONES.length; i++) {
+      const z = HELL_ZONES[i].z0;
+      // de paroi à paroi, sur la largeur ouverte de la rangée
+      let x0 = HW, x1 = 0;
+      for (let x = 0; x < HW; x++) if (this.map.open[z * HW + x] || this.map.open[(z - 1) * HW + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x + 1); }
+      if (x1 <= x0) { this.seals.push(new THREE.Mesh()); continue; }
+      const g = new THREE.PlaneGeometry(x1 - x0 + 2, HWALL + 0.6, 1, 1).translate((x0 + x1) / 2, (HWALL + 0.6) / 2 - 0.2, z);
+      const m = new THREE.Mesh(g, sealMaterial(this.uTime));
+      m.renderOrder = 4;
+      m.visible = false;
+      this.content.add(m);
+      this.seals.push(m);
+    }
+  }
+
+  private mats() {
+    return (this.baseMats ??= {
+      lit: caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true }), 'hell-base'),
+      glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
+      flag: caveLit(new THREE.MeshStandardMaterial({ color: BASE_FLAG, side: THREE.DoubleSide, roughness: 0.9 }), 'hell-base-flag'),
+      ruin: caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), 'hell-ruin'),
+    });
+  }
+  private geoOf(kind: BaseKind) {
+    let g = this.baseGeos.get(kind);
+    if (!g) { g = baseGeo(kind); this.baseGeos.set(kind, g); }
+    return g;
+  }
+
+  /** Les bâtiments de la base : posés, abattus (ruines), ôtés ; leurs feux éclairent, les braseros chassent la brume */
+  private syncBase() {
+    const mats = this.mats();
+    for (const b of this.hell.buildings.values()) {
+      if (b.side !== 'player' || !(b.kind in BASE_DEFS) || this.houses.has(b.id)) continue;
+      const kind = b.kind as BaseKind, g = this.geoOf(kind);
+      const up = new THREE.Group();
+      up.add(new THREE.Mesh(g.solid, mats.lit));
+      if (g.shine) up.add(new THREE.Mesh(g.shine, mats.glow));
+      const flags: THREE.Object3D[] = [];
+      if (g.flag) {
+        const f = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.24, 3, 1).translate(0.18, 0, 0), mats.flag);
+        f.position.set(...g.flag);
+        up.add(f);
+        flags.push(f);
+      }
+      const y = this.map.groundY(b.site.x, b.site.z);
+      up.position.set(b.site.x, y, b.site.z);
+      // face au portail ; la palissade suit la faille en travers
+      up.rotation.y = kind === 'palisade' ? 0 : Math.PI + (hash2(b.site.x, b.site.z, 5) - 0.5) * 0.3;
+      const ruin = new THREE.Mesh(ruinGeo(Math.max(0.5, b.site.r), b.id), mats.ruin);
+      ruin.position.copy(up.position);
+      ruin.scale.setScalar(0.7);
+      ruin.visible = false;
+      this.content.add(up, ruin);
+      this.houses.set(b.id, { up, ruin, down: false, flags });
+      if (g.fire) this.baseSources.set(b.id, { x: b.site.x, y: y + g.fire + 0.5, z: b.site.z, r: kind === 'brazier' ? 5.5 : 3.6, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(kind === 'brazier' ? 1.7 : 1.2), flicker: 0.3 });
+      this.lightTimer = 0;
+    }
+    // ôtés de la bataille (une ruine remplacée, une partie reprise)
+    for (const [id, h] of this.houses) {
+      if (this.hell.buildings.has(id)) continue;
+      this.content.remove(h.up, h.ruin);
+      this.houses.delete(id);
+      this.baseSources.delete(id);
+    }
+    // la brume recule autour des braseros debout (les plus proches de la vue)
+    const braziers = [...this.hell.buildings.values()].filter((b) => b.kind === 'brazier' && !b.down);
+    this.uClear.value.forEach((v, i) => { const b = braziers[i]; v.set(b ? b.site.x : 0, b ? b.site.z : 0, b ? 4.5 : 0); });
+  }
+
+  /**
+   * Le fantôme d'un bâtiment à poser, sous le curseur (vert : on peut ; rouge : non), et le cercle où la base peut s'étendre
+   * autour de son camp ; `kind` null : rien
+   */
+  ghost(kind: BaseKind | null, x = 0, z = 0, ok = false, camp: [number, number] | null = null) {
+    if (kind !== this.ghostKind) {
+      if (this.ghostMesh) { this.content.remove(this.ghostMesh); this.ghostMesh = null; }
+      this.ghostKind = kind;
+      if (kind) {
+        const g = this.geoOf(kind), parts = g.shine ? merge([g.solid, g.shine]) : g.solid;
+        this.ghostMesh = new THREE.Mesh(parts, new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.5, depthWrite: false, fog: false }));
+        this.ghostMesh.renderOrder = 8;
+        this.content.add(this.ghostMesh);
+      }
+    }
+    if (!this.rangeRing) {
+      this.rangeRing = new THREE.Mesh(new THREE.RingGeometry(BASE_R - 0.08, BASE_R + 0.08, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.45, depthWrite: false, fog: false }));
+      this.rangeRing.renderOrder = 8;
+      this.content.add(this.rangeRing);
+    }
+    this.rangeRing.visible = !!kind && !!camp;
+    if (camp) this.rangeRing.position.set(camp[0], this.map.groundY(camp[0], camp[1]) + 0.06, camp[1]);
+    const m = this.ghostMesh;
+    if (!m || !kind) return;
+    const cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5;
+    m.position.set(cx, this.map.groundY(cx, cz) + 0.02, cz);
+    m.rotation.y = kind === 'palisade' ? 0 : Math.PI;
+    (m.material as THREE.MeshBasicMaterial).color.set(ok ? 0x7dff8a : 0xff5a4a);
+  }
+
   // ---------- Image ----------
 
   /** Point du relief sous un rayon */
@@ -404,8 +525,12 @@ export class HellView {
 
   update(dt: number, camera: THREE.PerspectiveCamera, target: THREE.Vector3, dist: number, events: HellEvent[] = []) {
     this.build();
+    this.syncBase();
     this.uTime.value += dt;
     const t = this.uTime.value;
+    // la brume ferme les zones d'après la dernière ouverte
+    const front = this.hell.frontier;
+    this.seals.forEach((m, i) => { m.visible = i + 2 > front; });
     this.fog.near = dist * 1.4;
     this.fog.far = dist * 3 + 14;
     Object.assign(this.lantern, { x: target.x, y: this.groundY(target.x, target.z) + 1.6, z: target.z });
@@ -413,7 +538,8 @@ export class HellView {
     if (this.lightTimer <= 0) {
       this.lightTimer = LIGHT_PICK;
       const dd = (s: Source) => Math.hypot(s.x - target.x, s.z - target.z) - s.r;
-      this.active = [this.lantern, ...this.sources.filter((s) => dd(s) < dist * 1.3).sort((a, b) => dd(a) - dd(b)).slice(0, MAX_CAVE_LIGHTS - 1)];
+      const all = this.baseSources.size ? [...this.sources, ...[...this.baseSources].filter(([id]) => !this.hell.buildings.get(id)?.down).map(([, s]) => s)] : this.sources;
+      this.active = [this.lantern, ...all.filter((s) => dd(s) < dist * 1.3).sort((a, b) => dd(a) - dd(b)).slice(0, MAX_CAVE_LIGHTS - 1)];
     }
     this.active.forEach((s, i) => {
       caveLights.uL.value[i].set(s.x, s.y, s.z, s.r);
@@ -424,7 +550,9 @@ export class HellView {
     // les bâtiments : étendards qui flottent ; ruines quand ils tombent (une partie reprise d'une sauvegarde aussi)
     for (const [id, h] of this.houses) {
       const b = this.hell.buildings.get(id);
-      if (b?.down && !h.down) { h.down = true; h.up.visible = false; h.ruin.visible = true; }
+      if (b?.down && !h.down) { h.down = true; h.up.visible = false; h.ruin.visible = true; this.lightTimer = 0; }
+      // une forteresse relevée (la zone reperdue)
+      else if (b && !b.down && h.down) { h.down = false; h.up.visible = true; h.ruin.visible = false; }
       if (h.up.visible) h.flags.forEach((f, i) => { f.rotation.y = Math.sin(t * 2.3 + i + id) * 0.35; });
     }
     if (this.portalDisc) this.portalDisc.rotation.z = 0;
@@ -614,21 +742,44 @@ void main() { float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0
   });
 }
 
-/** Brume rouge : un voile qui dérive lentement, plus dense par nappes */
-function mistMaterial(uTime: { value: number }) {
+/** Brume rouge : un voile qui dérive lentement, plus dense par nappes ; elle recule autour des braseros (`uClear` : x, z, rayon) */
+function mistMaterial(uTime: { value: number }, uClear: { value: THREE.Vector3[] }) {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime },
+    uniforms: { uTime, uClear },
     transparent: true, depthWrite: false,
     vertexShader: `varying vec2 vP;
 void main() { vec4 wp = modelMatrix * vec4(position, 1.0); vP = wp.xz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
-    fragmentShader: `uniform float uTime; varying vec2 vP;
+    fragmentShader: `uniform float uTime; uniform vec3 uClear[8]; varying vec2 vP;
 float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
 void main() {
   vec2 q = vP * 0.12 + vec2(uTime * 0.02, uTime * 0.012);
   float m = n(q) * 0.6 + n(q * 2.7 - uTime * 0.015) * 0.4;
-  gl_FragColor = vec4(0.75, 0.16, 0.22, smoothstep(0.35, 0.85, m) * 0.11);
+  float clear = 1.0;
+  for (int i = 0; i < 8; i++) if (uClear[i].z > 0.0) clear *= smoothstep(uClear[i].z * 0.4, uClear[i].z, distance(vP, uClear[i].xy));
+  gl_FragColor = vec4(0.75, 0.16, 0.22, smoothstep(0.35, 0.85, m) * 0.11 * clear);
+}`,
+  });
+}
+
+/** Le rideau de brume qui ferme une zone : volutes rouges et violettes qui montent, plus denses au sol, bords fondus */
+function sealMaterial(uTime: { value: number }) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime },
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: `varying vec2 vP; varying vec2 vUv;
+void main() { vUv = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vP = vec2(wp.x, wp.y); gl_Position = projectionMatrix * viewMatrix * wp; }`,
+    fragmentShader: `uniform float uTime; varying vec2 vP; varying vec2 vUv;
+float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
+void main() {
+  vec2 q = vec2(vP.x * 0.7, vP.y * 1.2 - uTime * 0.35);
+  float m = n(q) * 0.55 + n(q * 2.3 + vec2(uTime * 0.2, 0.0)) * 0.3 + n(q * 5.0 - uTime * 0.4) * 0.15;
+  vec3 c = mix(vec3(0.55, 0.12, 0.7), vec3(1.0, 0.3, 0.25), smoothstep(0.3, 0.8, m));
+  float a = smoothstep(0.2, 0.75, m) * (1.0 - smoothstep(0.35, 1.0, vUv.y)) * smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
+  gl_FragColor = vec4(c * 1.2, a * 0.85);
 }`,
   });
 }

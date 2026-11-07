@@ -88,6 +88,8 @@ describe('Faction des Enfers', () => {
   it('une unité du joueur va où on l’envoie, par le chemin (ponts compris)', () => {
     const h = empty(2), m = h.map;
     const [ax, az] = m.arrival, u = h.addPlayerUnit('soldier', troopStats('soldier', 1), ax, az);
+    // (la rivière de lave s'ouvre une fois les grottes de braise conquises)
+    h.conquered[1] = true;
     // de l'autre côté de la rivière de lave
     const goal = cellPos(m, m.nearestWalkable(m.spine[HELL_ZONES[Z_CLIFFS].z0 - 4] + 0.5, HELL_ZONES[Z_CLIFFS].z0 - 4, 4));
     h.order([u.id], { kind: 'move', x: goal[0], z: goal[1] });

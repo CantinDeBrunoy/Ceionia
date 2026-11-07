@@ -186,10 +186,23 @@ export class HellMap {
     this.version++;
   }
 
-  private footprint(s: HellSite, v: number) {
+  /** Remet l'emprise d'un bâtiment (relevé, ou posé par le joueur) */
+  reblock(site: { x: number; z: number; r: number }) {
+    this.footprint(site, 1);
+    this.version++;
+  }
+
+  /** Cases couvertes par une emprise */
+  footprintCells(s: { x: number; z: number; r: number }) {
+    const out: number[] = [];
     for (let z = Math.floor(s.z - s.r - 1); z <= s.z + s.r + 1; z++)
       for (let x = Math.floor(s.x - s.r - 1); x <= s.x + s.r + 1; x++)
-        if (this.inside(x, z) && Math.hypot(x + 0.5 - s.x, z + 0.5 - s.z) <= s.r) this.block[z * HW + x] = v;
+        if (this.inside(x, z) && Math.hypot(x + 0.5 - s.x, z + 0.5 - s.z) <= s.r) out.push(z * HW + x);
+    return out;
+  }
+
+  private footprint(s: { x: number; z: number; r: number }, v: number) {
+    for (const k of this.footprintCells(s)) this.block[k] = v;
   }
 
   // ---------- Génération ----------

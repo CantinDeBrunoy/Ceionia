@@ -207,7 +207,7 @@ export class BattleLayer {
     }
     for (const b of this.hell.buildings.values()) {
       if (b.down || (b.hp >= b.maxHp && b.kind !== 'kingdom')) continue;
-      const h = b.kind === 'kingdom' ? 7.2 : b.kind === 'fortress' ? 3.6 : b.kind === 'watchtower' ? 2.6 : 2.2;
+      const h = b.kind === 'kingdom' ? 7.2 : b.kind === 'fortress' ? 3.6 : b.kind === 'watchtower' || b.kind === 'tower' ? 2.6 : b.kind === 'palisade' || b.kind === 'brazier' ? 1.3 : 2.2;
       const frac = b.hp / b.maxHp;
       put(b.site.x, this.groundY(b.site.x, b.site.z) + h, b.site.z, b.kind === 'kingdom' ? 3 : 1.6, frac, b.side === 'hell' ? HELL_C : frac > 0.35 ? PLAYER_C : WEAK_C);
     }
