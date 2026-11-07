@@ -3,7 +3,11 @@ import { HellMap } from '../world/hell';
 import { isleDefenses, repelWave } from '../world/portal';
 import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats } from './hell';
 import { IsleBattle } from './isleBattle';
-import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy } from './army';
+import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME } from './army';
+import { HellBase, HellBaseSave, SMITHY_ORE } from './hellBase';
+import { HELL_ZONES } from '../world/hell';
+import type { BaseKind } from './hell';
+import { GEAR_BY } from './gear';
 
 /**
  * La guerre contre les Enfers, côté simulation : la faction démoniaque (elle vit même quand on ne la regarde pas, à pas
@@ -15,11 +19,13 @@ import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats
 /** Pas de la simulation allégée (faction hors de vue) */
 export const COARSE = 0.25;
 
-export interface WarNews { text: string; kind: 'raid' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' }
+export interface WarNews { text: string; kind: 'raid' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'supply' | 'zone' }
 
 export interface WarSave {
   army: Army;
   faction: HellSave | null;
+  /** la base avancée dans les Enfers */
+  base?: HellBaseSave | null;
   /** la vague en cours : sa description, ses démons encore debout (positions sur l'île) */
   raid?: { w: RaidWave; units: { kind: DemonKind; x: number; z: number; hp: number }[] } | null;
 }
@@ -29,6 +35,8 @@ export class War {
   /** la faction des Enfers (créée à l'ouverture du portail) et sa carte */
   hellMap: HellMap | null = null;
   faction: Hell | null = null;
+  /** la base avancée du joueur dans les Enfers (avec la faction) */
+  base: HellBase | null = null;
   isle: IsleBattle | null = null;
   /** troupe → unité au combat (sur l'île ou dans les Enfers), et l'inverse */
   unitOf = new Map<number, HellUnit>();
@@ -75,24 +83,61 @@ export class War {
       this.faction = p?.faction ? Hell.load(this.hellMap, p.faction) : new Hell(this.hellMap);
       // les unités du joueur viennent de l'armée, pas de la sauvegarde de la faction
       for (const u of this.faction.alive('player')) this.faction.units.delete(u.id);
+      this.base = HellBase.load(this.faction, this.hellMap, p?.base);
     }
     return this.faction;
   }
 
+  /** Casernes : celles de l'île et les casernes avancées des Enfers */
+  private barracks() { return isleDefenses(this.world).barracks + (this.base?.posts() ?? 0); }
+
   /** Contexte de recrutement */
   recruitCtx(age: number, pop: number): RecruitCtx {
-    return { age, pop, stock: this.world.exp.gear, barracks: isleDefenses(this.world).barracks, unlimited: this.world.unlimited };
+    return { age, pop, stock: this.world.exp.gear, barracks: this.barracks(), unlimited: this.world.unlimited };
   }
 
   /** Enrôle une recrue à la caserne (null : c'est fait ; sinon la raison du refus) */
   recruit(kind: TroopKind, age: number, pop: number) { return recruit(this.army, kind, this.recruitCtx(age, pop)); }
+
+  /**
+   * Enrôle une recrue à la caserne avancée des Enfers : elle arrive au camp. La forge de la base fabrique contre du minerai les
+   * pièces d'équipement qui manquent à la réserve du village
+   */
+  recruitHell(kind: TroopKind, age: number, pop: number): string | null {
+    const b = this.base, w = this.world;
+    if (!b || !b.posts()) return 'Il faut une caserne avancée dans la base.';
+    const ctx = this.recruitCtx(age, pop), miss = TROOPS[kind].gear.filter((g) => (ctx.stock[g] ?? 0) < 1);
+    if (miss.length && !w.unlimited && b.countOf('smithy') && w.ore >= miss.length * SMITHY_ORE) {
+      // la forge forge ce qui manque, pour cette recrue (on le rend si elle est refusée)
+      w.ore -= miss.length * SMITHY_ORE;
+      for (const g of miss) ctx.stock[g] = (ctx.stock[g] ?? 0) + 1;
+      const why = recruit(this.army, kind, ctx, 'hell');
+      if (why) { w.ore += miss.length * SMITHY_ORE; for (const g of miss) ctx.stock[g]--; }
+      return why;
+    }
+    const why = recruit(this.army, kind, ctx, 'hell');
+    if (why && miss.length && b.countOf('smithy')) return `${why} (ou ${miss.length * SMITHY_ORE} minerai pour que la forge les fabrique : ${miss.map((g) => GEAR_BY[g].name.toLowerCase()).join(', ')})`;
+    return why;
+  }
+
+  /** Bâtit dans la base avancée, payé par le village : le bâtiment, ou la raison du refus */
+  buildBase(kind: BaseKind, x: number, z: number) {
+    const b = this.ensureFaction() && this.base;
+    if (!b) return 'Les Enfers ne sont pas ouverts.';
+    return b.build(kind, x, z, this.world);
+  }
+  /** Ce qu'il manque pour bâtir là (null : on peut) */
+  canBuildBase(kind: BaseKind, x: number, z: number) { return this.base ? this.base.canBuild(kind, x, z, this.world) : 'Les Enfers ne sont pas ouverts.'; }
+  /** Envoie un convoi de ravitaillement depuis le village : null, ou la raison du refus */
+  sendConvoy() { return this.base ? this.base.sendConvoy(this.world) : 'Les Enfers ne sont pas ouverts.'; }
 
   /** L'unité au combat d'une troupe valide, posée sur l'île ou dans les Enfers */
   private deploy(t: Troop, age: number) {
     const st = troopStats(t.kind, age);
     let u: HellUnit | null = null;
     if (t.where === 'hell' && this.faction && this.hellMap) {
-      const [ax, az] = this.hellMap.arrival, i = this.unitOf.size;
+      // au camp de base le plus avancé (sinon devant le portail)
+      const [ax, az] = this.base?.spawnPoint() ?? this.hellMap.arrival, i = this.unitOf.size;
       u = this.faction.addPlayerUnit(t.kind, st, t.x ?? ax + ((i % 3) - 1) * 0.6, t.z ?? az + Math.floor(i / 3) * 0.5);
     } else if (this.isle) {
       const [rx, rz] = this.isle.rallyPoint(), n = this.isle.sim.alive('player').length;
@@ -155,16 +200,16 @@ export class War {
   update(dt: number, age: number, healK = 1): RaidWave | null {
     if (!this.ensure()) {
       // (mode développeur : les Enfers visités sans portail ouvert)
-      if (this.faction && this.hellInView) { this.faction.step(Math.min(dt, COARSE)); this.collect(this.faction, this.hellFx); }
+      if (this.faction && this.hellInView) { this.stepHell(Math.min(dt, COARSE)); this.collect(this.faction, this.hellFx); this.baseNews(); }
       return null;
     }
     const f = this.faction!, isle = this.isle!, w = this.world;
     isle.syncDefenses(age);
     // l'armée : recrues qui arrivent, blessés qui guérissent
     const d = isleDefenses(w);
-    const { joined, healed } = stepArmy(this.army, dt, d.barracks, age, healK);
-    for (const t of joined) this.news.push({ kind: 'troop', text: `⚔️ Un ${TROOPS[t.kind].name.toLowerCase()} a débarqué sur l’île du portail : il rejoint la garnison.` });
-    void healed;
+    const { joined, healed } = stepArmy(this.army, dt, this.barracks(), age, healK);
+    for (const t of joined) this.news.push(t.where === 'hell' ? { kind: 'portal', text: `⚔️ Un ${TROOPS[t.kind].name.toLowerCase()} a rejoint la base avancée des Enfers.` } : { kind: 'troop', text: `⚔️ Un ${TROOPS[t.kind].name.toLowerCase()} a débarqué sur l’île du portail : il rejoint la garnison.` });
+    for (const t of healed) if (t.where === 'hell') this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} sort de l’infirmerie avancée, prêt à se battre.` });
     // les troupes valides sans unité prennent place ; celles qui n'existent plus quittent le combat
     for (const t of ready(this.army)) if (!this.unitOf.has(t.id)) this.deploy(t, age);
     for (const [id, u] of [...this.unitOf]) {
@@ -172,12 +217,13 @@ export class War {
       if (!t || !this.army.troops.includes(t) || t.heal > 0) { this.unitOf.delete(id); this.troopOf.delete(u.id); isle.sim.units.delete(u.id); f.units.delete(u.id); }
     }
     // la faction : à chaque image quand on la regarde, à pas allégés sinon
-    if (this.hellInView) f.step(Math.min(dt, COARSE));
+    if (this.hellInView) this.stepHell(Math.min(dt, COARSE));
     else {
       this.acc += dt;
-      for (let i = 0; i < 4 && this.acc >= COARSE; i++) { this.acc -= COARSE; f.step(COARSE); }
+      for (let i = 0; i < 4 && this.acc >= COARSE; i++) { this.acc -= COARSE; this.stepHell(COARSE); }
       if (this.acc > COARSE) this.acc = 0;
     }
+    this.baseNews();
     // l'île : le combat (les blessures légères se referment hors incursion)
     isle.step(Math.min(dt, COARSE), REGEN);
     this.collect(f, this.hellFx);
@@ -213,6 +259,29 @@ export class War {
     return arrived;
   }
 
+  /** Un pas de la faction des Enfers, et de la base avancée */
+  private stepHell(dt: number) {
+    this.faction!.step(dt);
+    this.base?.step(dt);
+  }
+
+  /** Les nouvelles de la base avancée : contre-attaques, zones, ravitaillement */
+  private baseNews() {
+    const b = this.base;
+    if (!b) return;
+    const zn = (z: number) => HELL_ZONES[z].name;
+    for (const e of b.events.splice(0)) {
+      if (e.type === 'counter') this.news.push({ kind: 'counter', text: `🔥 Contre-attaque ! ${e.n} démons marchent sur la base de ${zn(e.zone)}.` });
+      else if (e.type === 'counterEnd') this.news.push({ kind: 'repelled', text: `🛡️ Contre-attaque repoussée : la base de ${zn(e.zone)} tient bon.` });
+      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base est tombé : ${zn(e.zone)} est reperdue, sa forteresse se relève. Reprenez-la quand vous voudrez.` });
+      else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base de ${zn(e.zone)} est tombé. Rebâtissez-le pour rouvrir la base.` });
+      else if (e.type === 'convoy') this.news.push({ kind: 'info', text: `📦 Un convoi de ravitaillement est arrivé dans les Enfers (+${e.amount} vivres).` });
+      else if (e.type === 'lowSupply') this.news.push({ kind: 'supply', text: '🍞 Les vivres de l’expédition baissent.' });
+      else if (e.type === 'hungry') this.news.push({ kind: 'supply', text: '🍞 Plus de vivres dans les Enfers : les troupes s’affaiblissent peu à peu.' });
+      // (une construction : l'interface le dit elle-même)
+    }
+  }
+
   /** Les événements de combat : les soldats abattus sont ramenés blessés à la caserne ; le reste va aux vues */
   private collect(sim: Hell, fx: HellEvent[]) {
     for (const e of sim.events.splice(0)) {
@@ -220,8 +289,14 @@ export class War {
         const t = this.troopOf.get(e.id);
         if (t) {
           this.unitOf.delete(t.id); this.troopOf.delete(e.id); this.crossing.delete(e.id);
-          wound(this.army, t.id);
-          this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} est tombé : on le ramène blessé à la caserne, il s’y soigne.` });
+          // dans les Enfers, l'infirmerie de la base le soigne sur place (deux fois plus vite)
+          if (sim === this.faction && this.base?.countOf('infirmary')) {
+            wound(this.army, t.id, HEAL_TIME / 2, 'hell');
+            this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} est tombé : on le porte à l’infirmerie de la base, il s’y soigne.` });
+          } else {
+            wound(this.army, t.id);
+            this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} est tombé : on le ramène blessé à la caserne, il s’y soigne.` });
+          }
         }
       }
       fx.push(e);
@@ -253,6 +328,7 @@ export class War {
     return {
       army: JSON.parse(JSON.stringify(this.army)),
       faction: f ? f.save(false) : this.pending?.faction ?? null,
+      base: this.base ? this.base.save() : this.pending?.base ?? null,
       raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })) } : null,
     };
   }
@@ -263,8 +339,9 @@ export class War {
     const fac = o.faction && typeof o.faction === 'object' ? (o.faction as HellSave) : null;
     const r = o.raid && typeof o.raid === 'object' ? (o.raid as WarSave['raid']) : null;
     const raid = r && r.w && Array.isArray(r.units) ? { w: r.w, units: r.units.filter((u) => u && u.kind in DEMONS) } : null;
-    this.pending = { army: this.army, faction: fac && Array.isArray(fac.units) && Array.isArray(fac.buildings) ? fac : null, raid };
-    this.faction = null; this.hellMap = null; this.isle = null;
+    const base = o.base && typeof o.base === 'object' ? (o.base as HellBaseSave) : null;
+    this.pending = { army: this.army, faction: fac && Array.isArray(fac.units) && Array.isArray(fac.buildings) ? fac : null, raid, base };
+    this.faction = null; this.hellMap = null; this.isle = null; this.base = null;
     this.unitOf.clear(); this.troopOf.clear(); this.crossing.clear();
   }
 }

@@ -83,8 +83,8 @@ export interface Troop {
   z?: number;
 }
 
-/** Une recrue en route : sorte, temps restant */
-export interface Recruit { kind: TroopKind; left: number }
+/** Une recrue en route : sorte, temps restant ; recrutée à la caserne avancée des Enfers, elle y arrive (`at`) */
+export interface Recruit { kind: TroopKind; left: number; at?: TroopWhere }
 
 export interface Army {
   troops: Troop[];
@@ -117,11 +117,12 @@ export function recruitWhy(a: Army, kind: TroopKind, c: RecruitCtx): string | nu
 }
 
 /** Enrôle une recrue : son équipement quitte la réserve, elle se met en route. Renvoie la raison d'un refus, ou null */
-export function recruit(a: Army, kind: TroopKind, c: RecruitCtx): string | null {
+export function recruit(a: Army, kind: TroopKind, c: RecruitCtx, at?: TroopWhere): string | null {
   const why = recruitWhy(a, kind, c);
   if (why) return why;
   if (!c.unlimited) for (const g of TROOPS[kind].gear) c.stock[g]--;
-  a.queue.push({ kind, left: TROOPS[kind].time });
+  // à la caserne avancée, pas de traversée : un peu plus vite
+  a.queue.push(at === 'hell' ? { kind, left: Math.round(TROOPS[kind].time * 0.75), at } : { kind, left: TROOPS[kind].time });
   return null;
 }
 
@@ -154,7 +155,7 @@ export function stepArmy(a: Army, dt: number, barracks: number, age: number, hea
   for (let i = 0; i < Math.min(barracks, a.queue.length); i++) a.queue[i].left -= dt;
   while (a.queue.length && a.queue[0].left <= 0) {
     const r = a.queue.shift()!, st = troopStats(r.kind, age);
-    const t: Troop = { id: a.nextId++, kind: r.kind, hp: st.hp, maxHp: st.hp, where: 'isle', heal: 0 };
+    const t: Troop = { id: a.nextId++, kind: r.kind, hp: st.hp, maxHp: st.hp, where: r.at ?? 'isle', heal: 0 };
     a.troops.push(t);
     joined.push(t);
   }
@@ -162,23 +163,27 @@ export function stepArmy(a: Army, dt: number, barracks: number, age: number, hea
   for (let i = a.queue.length - 1; i >= 0; i--) {
     if (a.queue[i].left > 0) continue;
     const r = a.queue.splice(i, 1)[0], st = troopStats(r.kind, age);
-    const t: Troop = { id: a.nextId++, kind: r.kind, hp: st.hp, maxHp: st.hp, where: 'isle', heal: 0 };
+    const t: Troop = { id: a.nextId++, kind: r.kind, hp: st.hp, maxHp: st.hp, where: r.at ?? 'isle', heal: 0 };
     a.troops.push(t);
     joined.push(t);
   }
   for (const t of a.troops) {
     if (t.heal <= 0) continue;
     t.heal -= dt * healK;
-    if (t.heal <= 0) { t.heal = 0; t.hp = t.maxHp; t.where = 'isle'; healed.push(t); }
+    // (il reste où on le soigne : à la caserne de l'île, ou à l'infirmerie de la base avancée)
+    if (t.heal <= 0) { t.heal = 0; t.hp = t.maxHp; healed.push(t); }
   }
   return { joined, healed };
 }
 
-/** Un soldat abattu : ramené blessé à la caserne de l'île (des Enfers aussi, par le portail), il s'y soigne */
-export function wound(a: Army, id: number, healTime = HEAL_TIME) {
+/**
+ * Un soldat abattu : ramené blessé à la caserne de l'île (des Enfers aussi, par le portail), il s'y soigne ; ou soigné sur
+ * place, à l'infirmerie de la base avancée (`where` : 'hell')
+ */
+export function wound(a: Army, id: number, healTime = HEAL_TIME, where: TroopWhere = 'isle') {
   const t = a.troops.find((x) => x.id === id);
   if (!t) return;
-  t.hp = 0; t.heal = healTime; t.where = 'isle';
+  t.hp = 0; t.heal = healTime; t.where = where;
   t.x = undefined; t.z = undefined;
 }
 
@@ -209,7 +214,7 @@ export function readArmy(d: unknown): Army {
     });
     a.nextId = Math.max(a.nextId, id + 1);
   }
-  for (const r of Array.isArray(o.queue) ? o.queue : []) if (r && isTroopKind(r.kind)) a.queue.push({ kind: r.kind, left: Math.max(0, +r.left || 0) });
+  for (const r of Array.isArray(o.queue) ? o.queue : []) if (r && isTroopKind(r.kind)) a.queue.push({ kind: r.kind, left: Math.max(0, +r.left || 0), ...(r.at === 'hell' ? { at: 'hell' as const } : {}) });
   if (Number.isInteger(o.nextId)) a.nextId = Math.max(a.nextId, o.nextId as number);
   return a;
 }
