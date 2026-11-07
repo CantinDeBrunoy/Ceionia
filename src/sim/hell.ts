@@ -1,4 +1,4 @@
-﻿import { HellSite, HellSiteKind, HellZoneInfo, Z_KINGDOM, HELL_ZONE_N, HELL_ZONES, zoneOfZ } from '../world/hell';
+﻿import { HellSite, HellSiteKind, HellZoneInfo, Z_KINGDOM, HELL_ZONE_N, HELL_ZONES, zoneOfZ, zoneCapOfAge } from '../world/hell';
 import { mulberry32 } from '../core/rng';
 
 /**
@@ -153,7 +153,7 @@ export type HellEvent =
   | { type: 'conquered'; zone: number }
   /** une zone reperdue (sa base est tombée : la forteresse se relève) ; un ordre arrêté par la brume d'une zone fermée */
   | { type: 'lost'; zone: number }
-  | { type: 'sealed'; zone: number }
+  | { type: 'sealed'; zone: number; /** fermée faute d'âge (et non faute de conquête) */ byAge?: boolean }
   | { type: 'victory' }
   /** le combat du roi (voir `kingdom.ts`) : une phase qui commence (1 : réveil, 2 : rage, 3 : le roi abattu), un cri, une boule de feu qui s'écrase */
   | { type: 'boss'; phase: number }
@@ -247,6 +247,8 @@ export class Hell {
    * précédente est conquise ; une brume infernale lui barre le passage. Les démons, eux, passent
    */
   readonly gate: boolean;
+  /** l'âge du village : il plafonne les zones où le joueur peut aller (les démons y sont trop forts au-delà) ; 99 : sans limite */
+  age = 99;
   private nextId = 1;
   private rnd: () => number;
   /** nombre d'unités qui visent chaque cible (remis à chaque pas) */
@@ -267,10 +269,18 @@ export class Hell {
    */
   get frontier() {
     if (!this.gate) return HELL_ZONE_N - 1;
+    const c = this.conquestFrontier;
+    // l'âge plafonne l'accès ; une zone déjà conquise reste toujours ouverte (ancienne sauvegarde, âge en retard)
+    return Math.min(c, Math.max(this.ageCap, c - 1));
+  }
+  /** La première zone non conquise (la dernière que les conquêtes ouvrent), sans compter l'âge */
+  get conquestFrontier() {
     let i = 1;
     while (i < Z_KINGDOM && this.conquered[i]) i++;
     return i;
   }
+  /** La dernière zone où l'âge du village permet d'entrer */
+  get ageCap() { return zoneCapOfAge(this.age); }
   /** Zone tenue par le joueur (on peut y bâtir sa base) : le seuil, et les zones conquises encore ouvertes */
   held(zone: number) { return zone >= 0 && zone <= this.frontier && (zone === 0 || this.conquered[zone]); }
 
@@ -402,13 +412,13 @@ export class Hell {
   order(ids: number[], o: HellOrder) {
     // un but au-delà de la brume : on s'arrête devant (la zone s'ouvrira quand la précédente sera conquise)
     if (this.gate && o.z !== undefined && zoneOfZ(Math.floor(o.z)) > this.frontier) {
-      const f = this.frontier, W = this.map.W, ox = o.x ?? W / 2;
+      const f = this.frontier, W = this.map.W, ox = o.x ?? W / 2, byAge = f + 1 <= this.conquestFrontier;
       let best: [number, number] | null = null;
       // la case libre la plus proche du but, sur les rangées juste avant la brume
       for (let z = HELL_ZONES[f + 1].z0 - 2; z > HELL_ZONES[f + 1].z0 - 12 && !best; z--)
         for (let x = 0; x < W; x++) if (this.map.walkable(x, z) && (!best || Math.abs(x + 0.5 - ox) < Math.abs(best[0] - ox))) best = [x + 0.5, z + 0.5];
       o = { ...o, ...(best ? { x: best[0], z: best[1] } : {}) };
-      this.events.push({ type: 'sealed', zone: f + 1 });
+      this.events.push({ type: 'sealed', zone: f + 1, byAge });
     }
     for (const id of ids) {
       const u = this.units.get(id);

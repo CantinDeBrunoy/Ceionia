@@ -655,7 +655,7 @@ class Game implements UIHost {
     return {
       age: this.sim.age, portalOpen: w.portalOpen, portalUnderway: this.expeditions.active.some((a) => a.m.id === 'portal'),
       towers: d.towers, barracks: d.barracks, isleTroops: war.army.troops.filter((t) => t.where === 'isle' && t.heal <= 0).length,
-      commanding: this.command.theater?.kind ?? null, frontier: war.faction?.frontier ?? 1, camp: !!war.base?.countOf('camp'), victory: !!war.faction?.victory,
+      commanding: this.command.theater?.kind ?? null, frontier: war.faction?.frontier ?? 1, ageLock: !!war.faction && war.faction.gate && war.faction.conquestFrontier > war.faction.frontier, camp: !!war.base?.countOf('camp'), victory: !!war.faction?.victory,
     };
   }
 

@@ -31,6 +31,21 @@ export const HELL_ZONES: { name: string; z0: number }[] = [
 ];
 export const Z_PORTAL = 0, Z_EMBER = 1, Z_RIVER = 2, Z_CLIFFS = 3, Z_BONES = 4, Z_CRYSTAL = 5, Z_KINGDOM = 6;
 export const HELL_ZONE_N = HELL_ZONES.length;
+/**
+ * L'âge minimum (rang dans AGES) pour entrer dans chaque zone : les deux premières zones dès l'Antiquité, puis une de plus à
+ * chaque âge, le royaume exige l'âge Futuriste. Au-delà, les démons sont trop forts : la brume reste fermée
+ */
+export const ZONE_AGE = [1, 1, 1, 2, 3, 4, 5];
+/** Le nom de chaque âge, pour les phrases (même ordre que AGES) */
+const AGE_WORD = ['Préhistoire', 'Antiquité', 'Médiéval', 'Industriel', 'Moderne', 'Futuriste'];
+/** « l’âge Médiéval » : l'âge qu'il faut pour entrer dans la zone */
+export const zoneAgeText = (i: number) => `l’âge ${AGE_WORD[ZONE_AGE[i] ?? 5]}`;
+/** La dernière zone où l'on peut entrer à cet âge */
+export function zoneCapOfAge(age: number) {
+  let z = 0;
+  for (let i = 1; i < HELL_ZONE_N; i++) if (ZONE_AGE[i] <= age) z = i;
+  return z;
+}
 /** L'article de chaque zone (pour les phrases : « les Grottes de braise », « la Rivière de lave ») */
 const ZONE_ART: ('le' | 'la' | 'les')[] = ['le', 'les', 'la', 'les', 'la', 'la', 'le'];
 const art = (i: number) => ZONE_ART[i] ?? 'la';
