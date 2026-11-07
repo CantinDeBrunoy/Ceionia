@@ -30,12 +30,12 @@ export class KingFx {
     const flat = (color: number, opacity: number, add = false) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, fog: false, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending });
     for (let i = 0; i < RINGS; i++) {
       const ring = new THREE.Mesh(ringGeo, flat(0xff3a2a, 0.9)), disc = new THREE.Mesh(discGeo, flat(0xff2a1a, 0.18));
-      const orb = new THREE.Mesh(orbGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.1, 0.3), fog: false }));
+      const orb = new THREE.Mesh(orbGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.45, 0.08), fog: false }));
       for (const m of [ring, disc, orb]) { m.visible = false; m.renderOrder = 7; this.group.add(m); }
       this.rings.push(ring); this.discs.push(disc); this.orbs.push(orb);
     }
     for (let i = 0; i < PATCHES; i++) {
-      const fill = new THREE.Mesh(discGeo, flat(0xff6a1a, 0.5, true)), rim = new THREE.Mesh(ringGeo, flat(0xff4a1a, 0.8));
+      const fill = new THREE.Mesh(discGeo, flat(0xff6a1a, 0.5)), rim = new THREE.Mesh(ringGeo, flat(0xffc040, 0.8));
       for (const m of [fill, rim]) { m.visible = false; m.renderOrder = 6; this.group.add(m); }
       this.patches.push({ fill, rim });
     }
@@ -95,14 +95,14 @@ export class KingFx {
       if (warm) {
         const k = p.age / PATCH_WARM;
         fill.scale.setScalar(p.r * (0.3 + 0.7 * k));
-        fm.color.setRGB(0.7, 0.18, 0.05);
-        fm.opacity = 0.25 + 0.25 * Math.abs(Math.sin(t * 9));
+        fm.color.setRGB(0.55, 0.08, 0.04);
+        fm.opacity = 0.35 + 0.3 * Math.abs(Math.sin(t * 9));
         rm.opacity = 0.5 + 0.5 * Math.abs(Math.sin(t * 9));
       } else {
         fill.scale.setScalar(p.r);
         const fl = 0.85 + Math.sin(t * 17 + i) * 0.1 + Math.sin(t * 7.3 + i * 3) * 0.08;
-        fm.color.setRGB(1.6 * fl, 0.62 * fl, 0.12);
-        fm.opacity = 0.75 * fade;
+        fm.color.setRGB(1.25 * fl, 0.5 * fl, 0.06);
+        fm.opacity = 0.9 * fade;
         rm.opacity = 0.9 * fade;
         if (ember && Math.random() < 0.6) { const a = Math.random() * 6.28, d = Math.random() * p.r; this.fx.chips(p.x + Math.sin(a) * d, y + 0.05, p.z + Math.cos(a) * d, 0xffa040, 2); }
       }

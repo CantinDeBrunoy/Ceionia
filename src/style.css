@@ -891,3 +891,6 @@ body.commanding #dock { display: none; }
 .kwRewards li { display: flex; gap: 8px; align-items: flex-start; padding: 7px 9px; border-radius: 10px; background: var(--accent-soft); font-size: 12.5px; line-height: 1.35; color: var(--ink); }
 .kwRewards b { font-size: 16px; line-height: 1.1; }
 @media (max-width: 560px) { .kwRewards { grid-template-columns: 1fr; } }
+/* la cinématique de la victoire : l'interface s'efface */
+body.cinematic #hud, body.cinematic #dock, body.cinematic #expList, body.cinematic #troopBar, body.cinematic #underBar, body.cinematic #bossBar, body.cinematic #selCard,
+body.cinematic #warAlert, body.cinematic #tuto, body.cinematic #tutoRing, body.cinematic #warTip, body.cinematic #homeBtn { display: none !important; }

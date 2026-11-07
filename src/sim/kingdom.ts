@@ -31,8 +31,8 @@ export const ROAR_EVERY = 9;
 export const KING_REACH = 13;
 /** La rage : dégâts, allure, cadence du roi */
 const RAGE = { dmg: 1.35, speed: 1.3, cooldown: 0.8 };
-/** L'armure de la citadelle une fois son roi abattu */
-export const CITADEL_ARMOR_FALLEN = 3;
+/** L'armure de la citadelle une fois son roi abattu, et la force de ses tirs */
+export const CITADEL_ARMOR_FALLEN = 3, CITADEL_POWER_FALLEN = 0.5;
 
 export type KingPhase = 0 | 1 | 2 | 3;
 /** Une boule de feu qui tombe : où elle s'écrasera, dans combien de temps */
@@ -179,9 +179,16 @@ export class KingFight {
   private fall() {
     this.phase = 3;
     this.fireballs.length = 0; this.patches.length = 0;
-    const c = this.citadel;
-    if (c) c.armor = Math.min(c.armor, CITADEL_ARMOR_FALLEN);
+    this.shake();
     this.hell.events.push({ type: 'boss', phase: 3 });
+  }
+
+  /** Sans son roi, la citadelle vacille : son armure tombe, ses tirs faiblissent */
+  private shake() {
+    const c = this.citadel;
+    if (!c || c.down) return;
+    c.armor = Math.min(c.armor, CITADEL_ARMOR_FALLEN);
+    c.power = CITADEL_POWER_FALLEN;
   }
 
   /**
@@ -213,7 +220,7 @@ export class KingFight {
     // le roi n'est plus là (abattu avant la sauvegarde) : le combat est fini
     f.phase = f.fallen || (ph > 0 && !k) ? 3 : ph;
     if (f.phase === 2 && k) f.boost(k);
-    if (f.phase === 3) { const c = f.citadel; if (c && !c.down) c.armor = Math.min(c.armor, CITADEL_ARMOR_FALLEN); }
+    if (f.phase === 3) f.shake();
     return f;
   }
 }

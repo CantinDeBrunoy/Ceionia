@@ -21,9 +21,9 @@ export class GoldenBurst {
   /** (x, y, z) : le pied du portail, sur le monde */
   constructor(x: number, y: number, z: number) {
     const add = (color: THREE.Color, opacity: number) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
-    this.pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 30, 16, 1, true).translate(0, 15, 0), add(new THREE.Color(2.2, 1.7, 0.7), 0.8));
-    this.shell = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 3), add(new THREE.Color(2, 1.5, 0.6), 0.6));
-    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 64).rotateX(-Math.PI / 2), add(new THREE.Color(2, 1.6, 0.7), 0.9));
+    this.pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 30, 16, 1, true).translate(0, 15, 0), add(new THREE.Color(1.4, 0.95, 0.25), 0.8));
+    this.shell = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 3), add(new THREE.Color(1.1, 0.75, 0.2), 0.5));
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 64).rotateX(-Math.PI / 2), add(new THREE.Color(1.4, 1, 0.3), 0.9));
     this.shell.position.y = 1.2;
     this.ring.position.y = 0.08;
     const g = new THREE.BufferGeometry(), pos = new Float32Array(SPARKS * 3);
@@ -33,7 +33,7 @@ export class GoldenBurst {
       this.vel.set([Math.cos(a) * out, up, Math.sin(a) * out], i * 3);
     }
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.sparks = new THREE.Points(g, new THREE.PointsMaterial({ color: new THREE.Color(2.4, 1.8, 0.7), size: 0.16, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.sparks = new THREE.Points(g, new THREE.PointsMaterial({ color: new THREE.Color(1.8, 1.25, 0.35), size: 0.16, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.sparks.frustumCulled = false;
     for (const m of [this.pillar, this.shell, this.ring, this.sparks]) { m.renderOrder = 12; this.group.add(m); }
     this.group.position.set(x, y, z);

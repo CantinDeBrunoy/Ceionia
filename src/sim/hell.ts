@@ -64,7 +64,7 @@ export const SITES: Record<SiteKind, { name: string; hp: number; armor: number; 
   forge: { name: 'forge infernale', hp: 420, armor: 3, dmg: 0, range: 0, cooldown: 0 },
   fortress: { name: 'forteresse', hp: 1200, armor: 5, dmg: 10, range: 7, cooldown: 1.6 },
   kingdom: { name: 'citadelle du royaume', hp: 4000, armor: 8, dmg: 16, range: 8, cooldown: 1.4 },
-  spire: { name: 'tour de la citadelle', hp: 520, armor: 4, dmg: 9, range: 7, cooldown: 1.7 },
+  spire: { name: 'tour de la citadelle', hp: 520, armor: 4, dmg: 7, range: 7, cooldown: 1.8 },
   watchtower: { name: 'tour de garde', hp: 360, armor: 3, dmg: 9, range: 6.5, cooldown: 1.5 },
   barracks: { name: 'caserne', hp: 520, armor: 4, dmg: 0, range: 0, cooldown: 0 },
   camp: { name: 'camp de base', hp: 500, armor: 3, dmg: 0, range: 0, cooldown: 0 },
@@ -180,8 +180,8 @@ function garrisonOf(kind: HellSiteKind, zone: number): DemonKind[] {
     case 'fortress': return ['guardian', 'chief', ...rep('brute', 1 + deep), ...rep('archer', 2 + deep), ...rep('imp', 2)];
     case 'outpost': return ['archer', ...rep('imp', 2 + (zone >= 3 ? 1 : 0))];
     case 'forge': return ['brute', 'imp'];
-    case 'kingdom': return ['king', ...rep('elite', 4), 'chief', ...rep('brute', 3), ...rep('archer', 4), ...rep('imp', 4)];
-    case 'spire': return ['archer'];
+    case 'kingdom': return ['king', ...rep('elite', 4), 'chief', ...rep('brute', 2), ...rep('archer', 3), ...rep('imp', 3)];
+    case 'spire': return [];
   }
 }
 const rep = (v: DemonKind, n: number): DemonKind[] => Array.from({ length: n }, () => v);

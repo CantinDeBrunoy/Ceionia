@@ -25,7 +25,6 @@ export interface StageHost {
   exitHell(): void;
   /** la vue revient sur la grande place */
   goHome(): void;
-  setPhoto(on: boolean): void;
   ui: { root: HTMLElement; banner(title: string, sub: string): void; toast(m: string, act?: () => void): void };
   audio: { sfxRoar(k?: number): void; sfxWarDrum(accent?: boolean): void; sfxGoldBurst(): void; sfxRumble(dur: number): void; sfxAgeUp(): void };
 }
@@ -48,7 +47,17 @@ export class KingdomStage {
 
   constructor(private host: StageHost) {
     this.bar = new BossBar(host.ui.root);
-    this.bar.onFocus = () => { const k = host.war.king?.king; if (k && host.mode() === 'hell') host.cam.goTo(k.x, k.z + 3, 16); };
+    this.bar.onFocus = () => this.focusFight();
+  }
+
+  /** La vue va sur le combat : entre le roi et les soldats qui l'affrontent, d'assez haut pour voir les cercles au sol */
+  focusFight() {
+    const h = this.host, k = h.war.king?.king;
+    if (!k || h.mode() !== 'hell') return;
+    const near = h.war.faction?.alive('player').filter((u) => Math.hypot(u.x - k.x, u.z - k.z) < 16) ?? [];
+    const x = near.length ? (k.x + near.reduce((s, u) => s + u.x, 0) / near.length) / 2 : k.x;
+    const z = near.length ? (k.z + near.reduce((s, u) => s + u.z, 0) / near.length) / 2 : k.z;
+    h.cam.goTo(x, z, Math.max(16, Math.min(22, h.cam.dist)));
   }
 
   /** La cinématique de la victoire est en cours */
@@ -68,9 +77,8 @@ export class KingdomStage {
     const h = this.host;
     if (n.kind === 'boss') {
       h.ui.toast(n.text);
-      const k = h.war.king?.king;
-      // le roi se lève, enrage : la vue va sur lui
-      if (h.mode() === 'hell' && k && !n.text.startsWith('👑 Le roi des Enfers est abattu')) h.cam.goTo(k.x, k.z + 3, Math.max(14, Math.min(20, h.cam.dist)));
+      // le roi se lève, enrage : la vue va sur le combat
+      if (h.mode() === 'hell' && h.war.king?.king && !n.text.startsWith('👑 Le roi des Enfers est abattu')) this.focusFight();
       return true;
     }
     if (n.kind === 'victory') { this.startFinale(); h.ui.toast(n.text); return true; }
@@ -116,7 +124,8 @@ export class KingdomStage {
   private startFinale() {
     if (this.fin) return;
     const h = this.host, hv = h.hellView();
-    h.setPhoto(true);
+    // l'interface s'efface le temps de la cinématique
+    document.body.classList.add('cinematic');
     if (h.mode() === 'hell' && hv) {
       hv.startCollapse();
       h.audio.sfxRumble(COLLAPSE);
@@ -159,7 +168,7 @@ export class KingdomStage {
     const h = this.host;
     if (this.fin?.burst) { h.scene.remove(this.fin.burst.group); this.fin.burst.dispose(); }
     this.fin = null;
-    h.setPhoto(false);
+    document.body.classList.remove('cinematic');
     h.audio.sfxAgeUp();
     const r = h.war.reward;
     h.war.reward = null;

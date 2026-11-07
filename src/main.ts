@@ -389,7 +389,7 @@ class Game implements UIHost {
     this.kingStage = new KingdomStage({
       war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
       mode: () => this.mode, hellView: () => (this.mode === 'hell' ? this.hellMode?.view ?? null : null),
-      exitHell: () => this.exitHell(), goHome: () => this.goHome(), setPhoto: (on) => this.setPhoto(on),
+      exitHell: () => this.exitHell(), goHome: () => this.goHome(),
     });
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.railway.onNews = (m) => this.ui.toast(m);

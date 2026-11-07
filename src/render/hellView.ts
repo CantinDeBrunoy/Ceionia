@@ -596,11 +596,11 @@ export class HellView {
       this.sources.push({ x, y: y0 + 1.2, z, r: 11, c: new THREE.Color(1, 0.4, 0.12).multiplyScalar(2.2), flicker: 0.2 });
     }
     this.lavaRise.position.set(x, HLAVA_Y + Math.min(0.5, t * 0.12), z);
-    this.lavaRise.scale.setScalar(Math.min(10, 0.5 + t * 2.2));
+    this.lavaRise.scale.setScalar(Math.min(10, 0.5 + t * t * 0.3));
     // poussière qui monte, jets de lave
     this.dustT -= dt;
     if (this.dustT > 0 || t > 9) return;
-    this.dustT = 0.12;
+    this.dustT = 0.06;
     const fx = this.units.fx, a = Math.random() * Math.PI * 2, d = Math.random() * Math.min(9, 2 + t * 2), px = x + Math.sin(a) * d, pz = z + Math.cos(a) * d;
     fx.puff(px, y0 + 0.4 + Math.random() * 1.5, pz, 12);
     if (Math.random() < 0.35) fx.chips(px, y0 + 0.3, pz, 0xff8a2a, 14);
