@@ -882,7 +882,8 @@ export class UI {
     hb.innerHTML = ic('target', 16, 2);
     // à partir de l’Antiquité, seuls restent visibles un besoin à combler (orange) ou le passage d’âge
     const quiet = late && !this.help && !(sim.ready && !k) && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) && !sim.drought;
-    el.hidden = quiet;
+    // pendant le tutoriel guidé, sa propre bulle suffit : pas de conseil en plus
+    el.hidden = quiet || !!this.tutorial?.on;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
     const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;
