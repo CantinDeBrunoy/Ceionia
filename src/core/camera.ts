@@ -219,6 +219,7 @@ export class CameraRig {
     if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
     if (fx || fz) {
+      this.onPan?.();
       const c = Math.cos(this.goal.yaw), s = Math.sin(this.goal.yaw);
       this.goal.x += (fx * c + fz * s) * sp * 0.6;
       this.goal.z += (-fx * s + fz * c) * sp * 0.6;

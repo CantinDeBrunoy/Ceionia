@@ -369,7 +369,8 @@ class Game implements UIHost {
     this.railway.onNews = (m) => this.ui.toast(m, () => this.ui.openExpeditions('depths'));
     // le camp souterrain attaqué : un clic sur le message y descend ; l'issue, un clic ouvre la fiche du camp
     this.expeditions.onRaid = (m, start) => this.ui.toast(m, start ? () => this.goCamp() : () => { this.goCamp(); this.ui.openCamp(); });
-    this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; };
+    // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
+    this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
     // tracer une ligne : un clic sur une gare ou un avant-poste l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
     this.tools.overlay = this.trackEdit;
