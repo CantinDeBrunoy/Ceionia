@@ -10,6 +10,7 @@ import { Hell } from '../src/sim/hell';
 import { troopStats, newArmy, onlyGearMissing, gearToCraft, RecruitCtx } from '../src/sim/army';
 import { emptyStock } from '../src/sim/gear';
 import { RAID_LIMIT } from '../src/sim/isleBattle';
+import { HellBase, CAMP_MARGIN } from '../src/sim/hellBase';
 
 /**
  * Le volet militaire joué de bout en bout : les blocages et les petits défauts relevés en jouant (accès aux Enfers, retour
@@ -148,6 +149,23 @@ describe('volet militaire : rien ne reste coincé', () => {
     for (let i = 0; i < 10; i++) war.update(0.4, 1);
     expect(war.faction!.time - t0).toBeCloseTo(4, 1);
   }, 30000);
+});
+
+describe('volet militaire : la base avancée', () => {
+  it('pas de camp tout contre une zone encore aux démons (sa garnison le rasait, la zone était reperdue)', () => {
+    const m = new HellMap(3), h = new Hell(m);
+    for (let z = 1; z <= 5; z++) h.conquered[z] = true;
+    const b = new HellBase(h, m), z6 = HELL_ZONES[6].z0;
+    const at = (z0: number, z1: number) => { for (let z = z0; z <= z1; z++) for (let x = 2; x < m.W - 2; x++) if (m.walkable(x, z)) return [x + 0.5, z + 0.5] as const; return null; };
+    const near = at(z6 - 3, z6 - 1)!;
+    expect(b.canBuild('camp', near[0], near[1])).toMatch(/Trop près du Royaume/);
+    let ok = false;
+    for (let z = z6 - CAMP_MARGIN - 4; z <= z6 - CAMP_MARGIN && !ok; z++) for (let x = 2; x < m.W - 2 && !ok; x++) ok = b.canBuild('camp', x + 0.5, z + 0.5) === null;
+    expect(ok).toBe(true);
+    // la zone d'après conquise : on peut camper au bord
+    h.conquered[6] = true;
+    expect(b.canBuild('camp', near[0], near[1]) ?? '').not.toMatch(/Trop près/);
+  });
 });
 
 describe('volet militaire : passages entre l’île et les Enfers', () => {
