@@ -10,7 +10,7 @@ import { newWorld, addDefaultDecor, mapDef, newSeed, CONTINENT } from './world/m
 import { GEN } from './world/continent';
 import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
-import { RoadView } from './render/roads';
+import { RoadView, roadSnowStep } from './render/roads';
 import { stepWind } from './render/wind';
 import { Helis } from './render/helis';
 import { Airships } from './render/airships';
@@ -186,7 +186,6 @@ class Game implements UIHost {
   /** créneau de saison des dernières teintes du sol */
   private groundKey = -9;
   /** neige sur les routes à leur dernière reconstruction pour la saison */
-  private roadSnow = -1;
   /** dernière version des biomes peints prise en compte pour la neige des toits */
   private biomeV = 0;
   private terrainTimer = 0;
@@ -1017,13 +1016,13 @@ class Game implements UIHost {
       setSnowMap(N, (k) => SNOWY[w.biome[k]] ?? 1);
       this.veg.applySeason(this.season);
       this.gardens.applySeason(this.season);
-      // les routes ne se refont que si la neige qui les couvre a changé : sur un grand village, les refaire coûte un à-coup
-      const s = this.season.snow, last = this.roadSnow;
-      if (force || this.propsDirty || Math.abs(s - last) > 0.02 || [0, 0.5, 0.6].some((t) => (s > t) !== (last > t))) {
+      // la neige des routes suit la saison sans les refaire (shader) ; elles ne se refont que lorsqu'elle franchit un seuil où
+      // leurs décors changent : sur un grand village, les refaire coûte un à-coup, et à ×4 la neige bouge quatre fois plus vite
+      const s = this.season.snow;
+      if (force || this.propsDirty || roadSnowStep(this.roads.builtSnow, s)) {
         this.roads.rebuild(this.sim.age, s);
-        this.roadSnow = s;
         this.propsDirty = false;
-      }
+      } else this.roads.setSnow(s);
     }
   }
 
