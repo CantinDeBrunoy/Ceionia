@@ -188,6 +188,18 @@ function rectSdf(rects: number[][]) {
  * quart de cercle, carrefours aux coins arrondis, bordures et trottoirs du côté des maisons, places pavées, passages
  * piétons, ligne médiane. Les ponts sont des ouvrages (tablier, rampes, piles, garde-corps)
  */
+/** Sommets d'une boîte (coins 0 à 7), deux triangles par face, dans l'ordre des faces */
+const BOX_TRIS = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 4, 7, 3], [1, 2, 6, 5], [3, 7, 6, 2], [0, 1, 5, 4]].flatMap((f) => [f[0], f[1], f[2], f[0], f[2], f[3]]);
+
+/** Couleurs des petits objets, par valeur hexadécimale (sans en recréer une à chaque objet posé) */
+const HEX_COLS = new Map<number, THREE.Color>();
+const hexCol = (c: number) => { let v = HEX_COLS.get(c); if (!v) HEX_COLS.set(c, (v = new THREE.Color(c))); return v; };
+
+/** Seuils de neige où les décors des chemins changent (buissons blanchis, bancs et pots rentrés…) */
+const SNOW_STEPS = [0, 0.5, 0.6];
+/** La neige est passée d'un côté à l'autre d'un seuil depuis que les chemins ont été faits : il faut les refaire */
+export const roadSnowStep = (built: number, snow: number) => SNOW_STEPS.some((t) => (snow > t) !== (built > t));
+
 export class RoadView {
   group = new THREE.Group();
   /** lanternes posées le long des chemins (x, z à la suite) : leur halo de lumière la nuit */
@@ -209,7 +221,7 @@ export class RoadView {
   private noise = new Simplex(9137);
   /** revêtements (âge : terre, terre, dalles, pavés, asphalte), couleurs et neige, pour le shader */
   private u = {
-    uStyle: { value: 0 }, uYardA: { value: 1 }, uFray: { value: 0 }, uSnowCol: { value: SNOW.clone() },
+    uStyle: { value: 0 }, uYardA: { value: 1 }, uFray: { value: 0 }, uSnowCol: { value: SNOW.clone() }, uSnow: { value: 0 },
     uRoad: { value: new THREE.Color() }, uSide: { value: new THREE.Color() }, uPlaza: { value: new THREE.Color() },
     uRim: { value: new THREE.Color() }, uCurb: { value: new THREE.Color() },
   };
@@ -221,7 +233,8 @@ export class RoadView {
     pathMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.u);
       sh.vertexShader = 'attribute float aRoad;\nattribute float aPave;\nattribute float aKind;\nattribute float aSnow;\nvarying vec3 vRoadPos;\nvarying float vRoad;\nvarying float vPave;\nvarying float vKind;\nvarying float vSnow;\n'
-        + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvRoadPos = position; vRoad = aRoad; vPave = aPave; vKind = aKind; vSnow = aSnow;');
+        + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvRoadPos = position; vRoad = aRoad; vPave = aPave; vKind = aKind; vSnow = aSnow * uSnow;');
+      sh.vertexShader = 'uniform float uSnow;\n' + sh.vertexShader;
       sh.fragmentShader = `uniform float uStyle;
 uniform vec3 uSnowCol;
 uniform float uYardA;
@@ -680,7 +693,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
    * une case sur deux environ le long des rues — des rues bien éclairées, sans en mettre sur chaque case
    */
   private lightCells(lines: Map<number, number[][]>) {
-    const w = this.world, GAP = 1.75, out: number[] = [];
+    const w = this.world, out: number[] = [];
     const score = (k: number) => {
       const cx = k % N, cz = Math.floor(k / N);
       const dirs = D4.filter(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.road[w.ci(cx + dx, cz + dz)] === 1);
@@ -689,9 +702,15 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       return (dirs.length >= 3 ? 3 : 0) + (door ? 2 : 0) + (bend ? 1 : 0) + hash2(cx, cz, 61) * 0.5;
     };
     const cand = [...lines.keys()].map((k) => [k, score(k)]).sort((a, b) => b[1] - a[1]);
+    // pas deux lumières à moins de 1,75 case : entre cases, cela revient à aucune des huit voisines (regardées dans une grille,
+    // pas en parcourant toutes les lumières déjà posées : sur un grand village, ce parcours coûtait des dizaines de ms)
+    const lit = new Uint8Array(N * N);
     for (const [k] of cand) {
       const x = k % N, z = Math.floor(k / N);
-      if (out.some((o) => Math.hypot((o % N) - x, Math.floor(o / N) - z) < GAP)) continue;
+      let near = false;
+      for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(x + dx, z + dz) && lit[w.ci(x + dx, z + dz)]) { near = true; break; }
+      if (near) continue;
+      lit[k] = 1;
       out.push(k);
     }
     return out;
@@ -772,6 +791,32 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     return lines;
   }
 
+  /** neige avec laquelle les chemins ont été refaits (les seuils des décors en dépendent) */
+  builtSnow = 0;
+  /** sommets du tablier des ponts (indice, facteur de teinte à la suite) et teinte du tablier sans neige */
+  private deckV: number[] = [];
+  private deckBase = new THREE.Color();
+
+  /**
+   * La neige de saison monte ou fond : chemins (shader) et tabliers des ponts (teinte des sommets) la suivent sans refaire la
+   * géométrie (sur un grand village, refaire les chemins coûte un à-coup de plus de 100 ms ; à ×4 la neige bouge vite)
+   */
+  setSnow(snow: number) {
+    if (this.u.uSnow.value === snow) return;
+    this.u.uSnow.value = snow;
+    this.paintDeck(snow);
+  }
+
+  private paintDeck(snow: number) {
+    const d = this.deckV;
+    if (!d.length) return;
+    const attr = this.solid.geometry.getAttribute('color') as THREE.BufferAttribute, c = attr.array as Float32Array;
+    const b = this.deckBase, t = snow * 0.6;
+    const r = b.r + (SNOW.r - b.r) * t, g = b.g + (SNOW.g - b.g) * t, bl = b.b + (SNOW.b - b.b) * t;
+    for (let i = 0; i < d.length; i += 2) { const v = d[i] * 3, m = d[i + 1]; c[v] = r * m; c[v + 1] = g * m; c[v + 2] = bl * m; }
+    attr.needsUpdate = true;
+  }
+
   rebuild(age: number, snow: number) {
     const w = this.world, a = Math.min(age, 4), town = a >= 3, j = town ? 0 : 0.08;
     const u = this.u;
@@ -783,13 +828,21 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     u.uPlaza.value.set(PLAZA_COL[a]);
     u.uRim.value.set(RIM_COL[a]);
     u.uCurb.value.set(CURB_COL[a]);
-    // neige de saison, retenue selon le biome (moyenne des cases voisines, pour une transition douce)
+    u.uSnow.value = snow;
+    this.builtSnow = snow;
+    // neige retenue selon le biome (moyenne des cases voisines, pour une transition douce) ; la neige de saison s'y applique
+    // dans le shader (uSnow) : qu'elle tombe ou fonde ne demande pas de refaire les chemins
+    const snowCell = new Map<number, number>();
     const snowAt = (x: number, z: number) => {
-      if (snow <= 0) return 0;
-      const cx = Math.floor(x), cz = Math.floor(z);
-      let k = 0, n = 0;
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz)) { k += SNOWY[w.biome[w.ci(cx + dx, cz + dz)]] ?? 1; n++; }
-      return snow * (n ? k / n : 1);
+      const cx = Math.floor(x), cz = Math.floor(z), key = (cz + 1) * (N + 2) + cx + 1;
+      let v = snowCell.get(key);
+      if (v === undefined) {
+        let k = 0, n = 0;
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz)) { k += SNOWY[w.biome[w.ci(cx + dx, cz + dz)]] ?? 1; n++; }
+        v = n ? k / n : 1;
+        snowCell.set(key, v);
+      }
+      return v;
     };
     this.findBridged();
     this.findCurved(age);
@@ -805,7 +858,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       for (let jz = 0; jz < sub; jz++)
         for (let ix = 0; ix < sub; ix++) {
           const q = jz * n + ix;
-          if ([q, q + 1, q + n, q + n + 1].some((v) => R[v] < rCut || P[v] < pCut)) quads.push(q);
+          if (R[q] < rCut || P[q] < pCut || R[q + 1] < rCut || P[q + 1] < pCut || R[q + n] < rCut || P[q + n] < pCut || R[q + n + 1] < rCut || P[q + n + 1] < pCut) quads.push(q);
         }
       if (!quads.length) return;
       const v0 = ra.length;
@@ -902,10 +955,17 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const sp: number[] = [], sc: number[] = [];
     const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, cl: THREE.Color) => {
       const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
-      for (const f of [[0, 3, 2, 1], [4, 5, 6, 7], [0, 4, 7, 3], [1, 2, 6, 5], [3, 7, 6, 2], [0, 1, 5, 4]])
-        for (const i of [f[0], f[1], f[2], f[0], f[2], f[3]]) { sp.push(...v[i]); sc.push(cl.r, cl.g, cl.b); }
+      noteDeck(cl, 36);
+      for (const i of BOX_TRIS) { const p = v[i]; sp.push(p[0], p[1], p[2]); sc.push(cl.r, cl.g, cl.b); }
     };
-    const deck = DECK_COL[a].clone().lerp(SNOW, snow * 0.6), pile = PILE_COL[a];
+    // tablier des ponts : teinte sans neige ; ses sommets sont notés pour que la neige s'y pose ensuite sans tout refaire
+    const deck = DECK_COL[a].clone(), pile = PILE_COL[a];
+    const deckV: number[] = [], plank = new THREE.Color();
+    let plankM = 1;
+    const noteDeck = (cl: THREE.Color, n: number) => {
+      const m = cl === deck ? 1 : cl === plank ? plankM : 0;
+      if (m) for (let i = 0, v = sc.length / 3; i < n; i++) deckV.push(v + i, m);
+    };
     /** Pont : tablier au-dessus de l'eau, rampes vers les rives, piles et garde-corps */
     const bridge = (cx: number, cz: number, y: number, has: (dx: number, dz: number) => boolean) => {
       const ew = has(-1, 0) || has(1, 0), ns = has(0, -1) || has(0, 1);
@@ -921,6 +981,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         const quad = dx
           ? [[ex, y, z0], [fx, w.hAt(fx, cz + 0.5) + 0.04, z0], [fx, w.hAt(fx, cz + 0.5) + 0.04, z1], [ex, y, z1]]
           : [[x0, y, ez], [x0, w.hAt(cx + 0.5, fz) + 0.04, fz], [x1, w.hAt(cx + 0.5, fz) + 0.04, fz], [x1, y, ez]];
+        noteDeck(deck, 6);
         for (const i of [0, 1, 2, 0, 2, 3]) { sp.push(...quad[i]); sc.push(deck.r, deck.g, deck.b); }
       };
       ramp(-1, 0); ramp(1, 0); ramp(0, -1); ramp(0, 1);
@@ -936,11 +997,11 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const obox = (x: number, z: number, ux: number, uz: number, hu: number, hv: number, y0: number, y1: number, cl: THREE.Color) => {
       const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([p, q]) => [x + ux * hu * p - uz * hv * q, z + uz * hu * p + ux * hv * q]);
       const v = [...c.map(([px, pz]) => [px, y0, pz]), ...c.map(([px, pz]) => [px, y1, pz])];
+      noteDeck(cl, 36);
       for (const f of [[0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [1, 5, 6, 2], [2, 6, 7, 3], [3, 7, 4, 0]])
         for (const i of [f[0], f[1], f[2], f[0], f[2], f[3]]) { sp.push(...v[i]); sc.push(cl.r, cl.g, cl.b); }
     };
-    const quad = (q: number[][], cl: THREE.Color) => { for (const i of [0, 1, 2, 0, 2, 3]) { sp.push(...q[i]); sc.push(cl.r, cl.g, cl.b); } };
-    const plank = new THREE.Color();
+    const quad = (q: number[][], cl: THREE.Color) => { noteDeck(cl, 6); for (const i of [0, 1, 2, 0, 2, 3]) { sp.push(...q[i]); sc.push(cl.r, cl.g, cl.b); } };
     /**
      * Pont simple : un axe qui part du pied de la rampe, sur le chemin de la rive, coupe les virages comme les habitants
      * (diagonale d'un tracé en escalier), rejoint l'autre rive ; adouci, puis tablier en ruban, garde-corps et piles
@@ -993,7 +1054,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       let run = 0, nextPost = 0.05, nextPile = 0.35;
       for (let i = 0; i + 1 < n; i++) {
         // tablier : planches de bois à la teinte qui varie, dalles de pierre, chaussée d'acier
-        plank.copy(deck).multiplyScalar(a <= 2 ? 0.88 + 0.16 * hash2(i, cells[0], 81) : 0.96 + 0.06 * hash2(i, cells[0], 81));
+        plankM = a <= 2 ? 0.88 + 0.16 * hash2(i, cells[0], 81) : 0.96 + 0.06 * hash2(i, cells[0], 81);
+        plank.copy(deck).multiplyScalar(plankM);
         const l0 = L[i], l1 = L[i + 1], r0 = R[i], r1 = R[i + 1], down = (v: number[]) => [v[0], v[1] - th, v[2]];
         quad([l0, l1, r1, r0], plank);
         quad([down(l0), down(r0), down(r1), down(l1)], pile);
@@ -1066,10 +1128,10 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     // petits objets : une géométrie de base étirée, tournée, posée
     const gp: number[] = [], gc: number[] = [];
     const put = (geo: THREE.BufferGeometry, x: number, y: number, z: number, sx: number, sy: number, sz: number, ry: number, cl: THREE.Color | number, glow = false) => {
-      const p = geo.attributes.position, co = Math.cos(ry), si = Math.sin(ry), col = typeof cl === 'number' ? new THREE.Color(cl) : cl;
-      const P = glow ? gp : sp, Cc = glow ? gc : sc;
+      const p = geo.attributes.position, co = Math.cos(ry), si = Math.sin(ry), col = typeof cl === 'number' ? hexCol(cl) : cl;
+      const P = glow ? gp : sp, Cc = glow ? gc : sc, arr = p.array;
       for (let v = 0; v < p.count; v++) {
-        const lx = p.getX(v) * sx, ly = p.getY(v) * sy, lz = p.getZ(v) * sz;
+        const lx = arr[v * 3] * sx, ly = arr[v * 3 + 1] * sy, lz = arr[v * 3 + 2] * sz;
         P.push(x + lx * co + lz * si, y + ly, z - lx * si + lz * co);
         Cc.push(col.r, col.g, col.b);
       }
@@ -1481,6 +1543,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     sg.computeVertexNormals();
     this.solid.geometry.dispose();
     this.solid.geometry = sg;
+    this.deckV = deckV; this.deckBase.copy(deck);
+    this.paintDeck(snow);
     const mg = new THREE.BufferGeometry();
     mg.setAttribute('position', new THREE.Float32BufferAttribute(mp, 3));
     mg.setAttribute('color', new THREE.Float32BufferAttribute(mc, 3));
