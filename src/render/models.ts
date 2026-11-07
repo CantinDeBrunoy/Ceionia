@@ -2483,7 +2483,7 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     hearth(p, 0.38, 0.4);
     // le tailleur assis à l'établi, l'apprenti qui le regarde ; éclats de débitage tout autour, rognons de silex bruts en
     // tas, outils finis sur leur peau, coupe-vent de branchages au fond, sol piétiné
-    trampled(p, 0.02, 0.16, 0.36, 690, 0);
+    trampled(p, 0.02, 0.16, 0.26, 690, 0);
     caveSeated(p, 0.02, 0.17, Math.PI, 3);
     caveFolk(p, -0.36, 0.16, 1.9, 2);
     for (let i = 0; i < 18; i++) {
@@ -2496,7 +2496,7 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     const busy = [[-0.22, -0.26, 0.2], [0.02, 0.1, 0.2], [0.28, -0.18, 0.1], [0.24, 0.28, 0.1], [-0.26, 0.28, 0.14], [-0.3, 0, 0.1], [-0.06, -0.38, 0.06], [0.4, -0.05, 0.06], [0.38, 0.4, 0.1]];
     campGround(p, 633, busy, null);
     // autour : éclats de silex jusque dans l'herbe, rognons et cailloux, souche, fougères au pied du coupe-vent, fagot
-    workGround(p, 642, busy, { patches: 7, flints: 16, pebbles: 6, stumps: 1, ferns: 4, fagots: 1 });
+    workGround(p, 642, busy, { patches: 3, flints: 16, pebbles: 6, stumps: 1, ferns: 5, fagots: 1 });
   } else if (age === 0) {
     p.cone(0.38, 0.5, 5, -0.12, 0, -0.1, C.hide);
     p.box(0.16, 0.1, 0.12, 0.28, 0, 0.2, C.darkstone); p.box(0.1, 0.06, 0.08, 0.28, 0.1, 0.2, C.stone);
