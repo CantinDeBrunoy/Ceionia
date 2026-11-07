@@ -314,8 +314,6 @@ describe('sauvegarde', () => {
     w.basalt[w.ci(5, 5)] = 0.42;
     w.ash[w.ci(6, 6)] = 1;
     w.ore = 17;
-    w.mined.add(123);
-    w.claimed.add(456);
     const data = JSON.parse(JSON.stringify(w.toJSON()));
     const r = new World();
     r.fromJSON(data);
@@ -325,8 +323,6 @@ describe('sauvegarde', () => {
     expect(r.basalt[r.ci(5, 5)]).toBeCloseTo(0.42, 2);
     expect(r.ash[r.ci(6, 6)]).toBe(1);
     expect(r.ore).toBe(17);
-    expect(r.mined.has(123)).toBe(true);
-    expect(r.claimed.has(456)).toBe(true);
   });
 
   it('un biome peint au pinceau tient malgré le climat et le relief, se sauvegarde et s’annule', () => {
@@ -351,14 +347,50 @@ describe('sauvegarde', () => {
     expect(w.biome[k]).toBe(before);
   });
 
+  it('une ancienne sauvegarde du monde souterrain (camp, galeries, tunnels, avant-poste, troupes) se charge et reste jouable', () => {
+    const v = continent(), [x, z] = flatLand(v);
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2]]) if (v.canPlace('house', x + dx, z + dz) === null) v.place('house', x + dx, z + dz, 0, true, 2, false);
+    const data = JSON.parse(JSON.stringify(v.toJSON()));
+    const houses = data.buildings.length;
+    // ce qu'en gardait une partie d'avant : galeries tenues, filons abattus, tunnels et file des mineurs, niveau du camp,
+    // missions et plan des galeries, un avant-poste (et sa ligne de chemin de fer), une troupe en route
+    Object.assign(data, { mined: [10, 11], claimed: [12, 13, 14], dug: [15], digs: [16, 17] });
+    data.exp = { ...data.exp, camp: 6, wins: 4, done: ['herd', 'scout', 'deep'], perks: ['map', 'seeds'], active: [{ m: 'deep', entry: 12 }] };
+    data.buildings.push(['outpost', x + 6, z, 0, 1, 2]);
+    data.lines = [{ c: 0x3c7fd8, s: [0, houses] }];
+    data.linesAuto = false;
+    const r = new World();
+    expect(() => r.fromJSON(data)).not.toThrow();
+    expect([...r.buildings.values()].map((b) => b.kind)).not.toContain('outpost');
+    expect(r.buildings.size).toBe(houses);
+    expect([r.mined.size, r.claimed.size, r.dug.size, r.digs.length]).toEqual([0, 0, 0, 0]);
+    expect(r.exp.done).toEqual(['herd']);
+    expect(r.exp.perks).toEqual(['seeds']);
+    expect('camp' in r.exp).toBe(false);
+    expect(r.exp.wins).toBe(4);
+    // la ligne qui menait à l'avant-poste n'a plus qu'un arrêt : elle s'oublie
+    expect(r.lines).toEqual([]);
+    // la partie tourne : expéditions, chemin de fer, besoins et conseil de l'âge suivant
+    const agents = new Agents(r), ex = new Expeditions(r, agents, () => 100, () => 0.5), rail = new Railway(r, agents, ex, () => 100), sim = new Sim(r);
+    sim.age = 2;
+    for (let i = 0; i < 40; i++) { agents.update(0.5, 10, 2, false, 20, 0); ex.update(0.5); rail.update(0.5); sim.update(0.5, 0.5); }
+    expect(ex.start(MISSIONS.find((m) => m.id === 'herd')!, 0)).not.toBeNull();
+    expect(sim.ageProgress()).not.toBeNull();
+    expect(sim.message.length).toBeGreaterThan(0);
+    // et elle se sauvegarde sans ses anciens champs
+    const out = JSON.parse(JSON.stringify(r.toJSON()));
+    for (const k of ['mined', 'claimed', 'dug', 'digs']) expect(k in out).toBe(false);
+    expect('camp' in out.exp).toBe(false);
+  });
+
   it('refuse une sauvegarde d’une autre taille de carte', () => {
     const data = w.toJSON();
     expect(() => new World().fromJSON({ ...data, n: 48 })).toThrow();
   });
 
   it('lit une ancienne sauvegarde sans lave, cendres ni minerai', () => {
-    const { basalt, ash, ore, mined, claimed, ...old } = w.toJSON();
-    void basalt; void ash; void ore; void mined; void claimed;
+    const { basalt, ash, ore, ...old } = w.toJSON();
+    void basalt; void ash; void ore;
     const r = new World();
     r.fromJSON(old);
     expect(r.ore).toBe(0);
@@ -1046,114 +1078,6 @@ describe('expéditions', () => {
     expect(r.rest).toEqual([]);
   });
 
-  it('l’expédition armée part d’un avant-poste bâti devant une grotte : elle abat des filons et prend des galeries', () => {
-    const w = continent();
-    const [x, z] = flatLand(w);
-    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
-    const agents = new Agents(w);
-    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 2, false, 30, 0);
-    const ex = new Expeditions(w, agents, () => 100, () => 0.99);
-    ex.under = new Underground(w);
-    const deep = MISSIONS.find((m) => m.id === 'deep')!;
-    const cav = deep.choices.findIndex((c) => c.troop === 'cavalry'), armor = deep.choices[deep.choices.findIndex((c) => c.troop === 'armor')];
-    expect(deep.repeat).toBe(true);
-    // il ne faut qu'un avant-poste : ni mission réussie, ni écurie (seule la charge de cavalerie demande des chevaux)
-    expect(deep.requires).toEqual({ kinds: ['outpost'] });
-    expect(ex.why(deep, armor)).toBe('Il faut d’abord bâtir : avant-poste.');
-    expect(KINDS.outpost.reqMission).toBeUndefined();
-    let spot: number[] | null = null;
-    for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
-    w.place('stable', spot![0], spot![1], 0, true, 2, false);
-    // l'avant-poste ne se bâtit que tout contre une grotte ou une faille ; sa garnison tient aussitôt les galeries dessous
-    let open: number[] | null = null;
-    for (let zz = 10; zz < N - 10 && !open; zz++) for (let xx = 10; xx < N - 10 && !open; xx++) if (w.canPlace('stable', xx, zz) === null && w.canPlace('outpost', xx, zz) !== null) open = [xx, zz];
-    expect(w.canPlace('outpost', open![0], open![1])).toMatch(/grotte ou une faille/);
-    let post: number[] | null = null;
-    for (let zz = 10; zz < N - 10 && !post; zz++) for (let xx = 10; xx < N - 10 && !post; xx++) if (w.canPlace('outpost', xx, zz) === null) post = [xx, zz];
-    expect(post).not.toBeNull();
-    w.place('outpost', post![0], post![1], 0, true, 2, false);
-    expect(w.claimed.size).toBe(0);
-    ex.update(1.1);
-    const hold = w.claimed.size;
-    expect(hold).toBeGreaterThan(10);
-    // la garnison tient les galeries : la première quête du camp souterrain est accomplie
-    expect(w.exp.camp).toBe(1);
-    expect(ex.why(deep, deep.choices[cav])).toMatch(/3 chevaux/);
-    w.exp.herd.push('horse', 'horse', 'horse');
-    expect(ex.why(deep, deep.choices[cav])).toBeNull();
-    const ore = w.ore, mined = w.mined.size;
-    const a = ex.start(deep, cav)!;
-    expect(a.targets.length).toBeGreaterThan(0);
-    expect(a.targets.length).toBeLessThanOrEqual(4);
-    expect(a.take.length).toBeGreaterThan(0);
-    expect(a.take.every((k) => !w.claimed.has(k))).toBe(true);
-    // le camp souterrain dressé, la troupe y descend aussitôt, sans marcher depuis le village
-    expect(a.fromCamp).toBe(true);
-    expect(a.phase).toBe('work');
-    // des créatures l'attendent dans les galeries sauvages, sur son chemin, avant la fin du parcours
-    expect(a.ambush.length).toBeGreaterThan(0);
-    expect(a.ambush.every((m) => !w.claimed.has(m.cell) && m.t0 > 0 && m.t0 < a.routeLen && m.n >= 2)).toBe(true);
-    expect(a.might).toBeGreaterThan(4);
-    // les chevaux partent avec la troupe, et reviennent avec elle
-    expect([...penHerds(w).stables.values()].flat().length).toBe(0);
-    let report: Report | null = null;
-    ex.onReport = (r) => (report = r);
-    for (let i = 0; i < 60000 && !report; i++) { agents.update(0.05, 10, 2, false, 30, 0); ex.update(0.05); }
-    expect(report!.ok).toBe(true);
-    expect(w.mined.size - mined).toBe(a.targets.length);
-    expect(w.ore).toBeGreaterThan(ore);
-    expect(report!.summary).toMatch(/minerai/);
-    // victoire : les galeries prises sont tenues, la prochaine troupe partira de plus loin
-    expect(w.claimed.size).toBe(hold + a.take.length);
-    expect(report!.summary).toMatch(/galeries prises/);
-    // chaque embuscade a eu lieu et se lit dans le récit
-    expect(a.ambush.every((m) => m.state === 'done' && m.result)).toBe(true);
-    expect(report!.notes.filter((n) => /Embuscade/.test(n)).length).toBe(a.ambush.length);
-    const next = ex.campaign(deep.choices[cav])!;
-    expect(next.take.every((k) => !w.claimed.has(k))).toBe(true);
-    expect([...penHerds(w).stables.values()].flat().length).toBe(3);
-    // on peut y retourner
-    expect(ex.list(2)).toContain(deep);
-  });
-
-  it('le camp souterrain grandit quête après quête, et chacune lui apporte son avantage', () => {
-    const w = continent();
-    const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
-    ex.under = new Underground(w);
-    ex.under.sync();
-    const done: string[] = [];
-    ex.onCamp = (q) => done.push(q.id);
-    ex.update(1.1);
-    expect(w.exp.camp).toBe(0);
-    expect(ex.campQuest()!.q.id).toBe('camp');
-    // une case tenue : le premier camp ; la quête suivante attend 150 cases
-    const u = ex.under;
-    const open = [...Array(N * N).keys()].filter((k) => u.open[k]);
-    w.claimed.add(open[0]);
-    ex.update(1.1);
-    expect(w.exp.camp).toBe(1);
-    expect(ex.campQuest()).toMatchObject({ cur: 1, max: 150 });
-    // galeries tenues dans trois zones, filons abattus, embuscades repoussées : tout s'accomplit, dans l'ordre
-    const zones = [...new Set(open.map((k) => u.zone[k]))].slice(0, 3);
-    expect(zones.length).toBe(3);
-    for (const z of zones) open.filter((k) => u.zone[k] === z).slice(0, 220).forEach((k) => w.claimed.add(k));
-    for (let k = 0; k < 20; k++) w.mined.add(open[open.length - 1 - k]);
-    w.exp.wins = 3;
-    ex.update(1.1);
-    expect(done).toEqual(['camp', 'hold', 'veins', 'horde', 'zones', 'base']);
-    // la suite attend les cinq zones
-    expect(ex.campQuest()!.q.id).toBe('all');
-    // le monte-charge remonte deux minerai par jour
-    const ore = w.ore;
-    for (let i = 0; i < 100; i++) ex.update(1);
-    // + la rente du sous-sol : 20 filons abattus = 5 minerai par jour
-    expect(w.ore - ore).toBeCloseTo(7, 5);
-    // le niveau du camp et les embuscades repoussées se sauvegardent
-    const r = new World();
-    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
-    expect([r.exp.camp, r.exp.wins]).toEqual([6, 3]);
-  });
-
   it('une mission réussie se refait : de nouveau des bêtes, mais ses bonus durables ne durent que quelques jours', () => {
     const w = continent();
     const ex = new Expeditions(w, new Agents(w), () => 100);
@@ -1206,11 +1130,11 @@ describe('expéditions', () => {
     const pick = longer >= 0 ? longer : a.wait!.options.findIndex((_, i) => ex.canTake(a, i));
     expect(ex.decide(a, pick)).toBe(true);
     expect(ex.progress(a)).toBeCloseTo(before, 5);
-    // l'expédition armée : chevaliers au Moyen Âge, cuirassiers et fusiliers à l'âge industriel
-    const deep = MISSIONS.find((q) => q.id === 'deep')!;
-    expect(choiceAt(deep.choices[1], 2).label).toBe('Hommes d’armes en armure');
-    expect(choiceAt(deep.choices[1], 3).label).toBe('Ligne de fusiliers');
-    expect(choiceAt(deep.choices[0], 4).label).toBe('Blindés en tête');
+    // les libellés d'un choix suivent l'âge (le plus proche, en dessous ou égal)
+    const c = { ...m.choices[0], ages: { 3: { label: 'Âge industriel' }, 5: { label: 'Âge futuriste' } } };
+    expect(choiceAt(c, 2).label).toBe(m.choices[0].label);
+    expect(choiceAt(c, 4).label).toBe('Âge industriel');
+    expect(choiceAt(c, 5).label).toBe('Âge futuriste');
   });
 
   it('une mine ne se creuse que dans la montagne, et rapporte généreusement minerai et pierre', () => {
@@ -1291,58 +1215,30 @@ describe('expéditions', () => {
     expect(onWater).toBeGreaterThan(0);
   });
 
-  it('le chemin de fer : la première ligne relie la gare à l’avant-poste, d’autres se tracent de gare en gare', () => {
+  it('le chemin de fer se trace de gare en gare : aucune ligne d’office, des voyageurs vont de l’une à l’autre', () => {
     const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 3, false);
     const agents = new Agents(w);
     for (let i = 0; i < 20; i++) agents.update(0.1, 10, 3, false, 40, 0);
     const ex = new Expeditions(w, agents, () => 100, () => 0.5);
-    ex.under = new Underground(w);
-    let post: number[] | null = null;
-    for (let zz = 10; zz < N - 10 && !post; zz++) for (let xx = 10; xx < N - 10 && !post; xx++) if (w.canPlace('outpost', xx, zz) === null) post = [xx, zz];
-    const outpost = w.place('outpost', post![0], post![1], 0, true, 3, false);
-    ex.update(1.1);
     const rail = new Railway(w, agents, ex, () => 100, () => 0.3);
     rail.update(0.1);
     expect(w.lines.length).toBe(0);
-    // la gare, à quelques cases de l'avant-poste, là où une voie peut passer : la première ligne se trace d'elle-même
     const near = (cx: number, cz: number, kind: 'terminal' | 'station' | 'maglev') => {
       const out: number[][] = [];
       for (let dz = -24; dz <= 24; dz++) for (let dx = -24; dx <= 24; dx++) if (Math.hypot(dx, dz) >= 8 && w.canPlace(kind, cx + dx, cz + dz) === null) out.push([cx + dx, cz + dz, Math.hypot(dx, dz)]);
       return out.sort((a, b) => a[2] - b[2]).slice(0, 30);
     };
+    // la gare centrale, près du village : seule, elle n'a pas de ligne (plus de ligne tracée d'office)
     let station = null;
-    for (const [sx, sz] of near(post![0], post![1], 'terminal')) {
-      station = w.place('terminal', sx, sz, 0, true, 3, false);
-      rail.update(2.1);
-      if (w.lines.length && !rail.trains.get(w.lines[0].id)!.why) break;
-      w.lines = []; w.linesAuto = true;
-      w.removeBuilding(station.id);
-      station = null;
-      rail.update(2.1);
-    }
+    for (const [sx, sz] of near(x, z, 'terminal')) { station = w.place('terminal', sx, sz, 0, true, 3, false); if (station) break; }
     expect(station).not.toBeNull();
-    const first = w.lines[0], tr = rail.trains.get(first.id)!;
-    expect(first.stops).toEqual([station!.id, outpost.id]);
+    rail.update(2.1);
+    expect(w.lines.length).toBe(0);
     expect(rail.stopName(station!)).toBe('Gare centrale');
-    // la voie ne passe ni sur un bâtiment ni dans l'eau
-    for (const g of rail.network().segs) for (let s = 0.4; s < g.len - 0.4; s += 0.25) {
-      const k = Math.max(1, g.cum.findIndex((c) => c >= s)), f = (s - g.cum[k - 1]) / (g.cum[k] - g.cum[k - 1]), a = g.pts[k - 1], c = g.pts[k];
-      const cx = Math.floor(a[0] + (c[0] - a[0]) * f), cz = Math.floor(a[1] + (c[1] - a[1]) * f);
-      expect(w.occ[cz * N + cx]).toBe(0);
-      expect(w.isWet(cx, cz)).toBe(false);
-    }
-    // la relève attend sur le quai, le train la descend au pied de la grotte et en remonte avec le minerai et la pierre
-    const run = (steps: number, each?: () => void) => { for (let t = 0; t < steps; t++) { agents.update(0.5, 10, 3, false, 40, 0); ex.update(0.5); rail.update(0.5); each?.(); } };
-    const ore = w.ore, stone = w.stone;
-    let crew = 0;
-    run(900, () => { crew = Math.max(crew, tr.crew.length); });
-    expect(crew).toBeGreaterThanOrEqual(2);
-    expect(tr.delivered.ore + tr.delivered.stone).toBeGreaterThan(0);
-    // la rente du sous-sol (galeries tenues, filons abattus) s'ajoute à ce que les trains livrent
-    expect(w.ore - ore + w.stone - stone).toBeGreaterThanOrEqual(tr.delivered.ore + tr.delivered.stone);
-    // une petite gare plus loin : une seconde ligne de la gare centrale à elle, des voyageurs vont de l'une à l'autre
+    const run = (steps: number) => { for (let t = 0; t < steps; t++) { agents.update(0.5, 10, 3, false, 40, 0); ex.update(0.5); rail.update(0.5); } };
+    // une petite gare plus loin : une ligne de la gare centrale à elle, des voyageurs vont de l'une à l'autre
     let line2 = null, small = null;
     for (const [sx, sz] of near(station!.x, station!.z, 'station')) {
       small = w.place('station', sx, sz, 0, true, 3, false);
@@ -1353,8 +1249,14 @@ describe('expéditions', () => {
       line2 = small = null;
     }
     expect(line2).not.toBeNull();
-    expect(line2!.color).not.toBe(first.color);
     expect(rail.lineLabel(line2!)).toBe('Gare centrale → Petite gare');
+    // la voie ne passe ni sur un bâtiment ni dans l'eau
+    for (const g of rail.network().segs) for (let s = 0.4; s < g.len - 0.4; s += 0.25) {
+      const k = Math.max(1, g.cum.findIndex((c) => c >= s)), f = (s - g.cum[k - 1]) / (g.cum[k] - g.cum[k - 1]), a = g.pts[k - 1], c = g.pts[k];
+      const cx = Math.floor(a[0] + (c[0] - a[0]) * f), cz = Math.floor(a[1] + (c[1] - a[1]) * f);
+      expect(w.occ[cz * N + cx]).toBe(0);
+      expect(w.isWet(cx, cz)).toBe(false);
+    }
     const tr2 = rail.trains.get(line2!.id)!;
     run(600);
     expect(tr2.carried).toBeGreaterThan(0);
@@ -1369,13 +1271,14 @@ describe('expéditions', () => {
       line3 = mag = null;
     }
     expect(line3).not.toBeNull();
+    expect(line3!.color).not.toBe(line2!.color);
     expect(rail.lineLabel(line3!)).toBe('Petite gare → Gare maglev');
     rail.removeLine(line3!.id);
     w.removeBuilding(mag!.id);
     // les lignes se sauvegardent avec leurs arrêts, même si les numéros des bâtiments changent au chargement
     const w2 = new World();
     w2.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
-    expect(w2.lines.map((l) => l.stops.map((id) => w2.buildings.get(id)!.kind))).toEqual([['terminal', 'outpost'], ['terminal', 'station']]);
+    expect(w2.lines.map((l) => l.stops.map((id) => w2.buildings.get(id)!.kind))).toEqual([['terminal', 'station']]);
     expect(w2.linesAuto).toBe(false);
     // la gare démolie : ses lignes ne roulent plus, tout le monde rentre au village
     w.removeBuilding(station!.id);
@@ -1383,7 +1286,7 @@ describe('expéditions', () => {
     for (const l of w.lines) {
       const t = rail.trains.get(l.id)!;
       expect(t.why).not.toBeNull();
-      expect(t.relief.length + t.crew.length + t.back.length + t.aboard.length + t.boarding.length).toBe(0);
+      expect(t.aboard.length + t.boarding.length).toBe(0);
     }
   }, 20000);
 });
@@ -1487,55 +1390,24 @@ describe('pétrole', () => {
     expect([r.crude, r.fuel]).toEqual([7, fuel]);
   });
 
-  it('à l’époque moderne, l’expédition armée roule au carburant : plus de chevaux pour les blindés', () => {
+  it('un choix qui roule au carburant le demande avant de partir, et le prend au départ', () => {
     const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 4, false);
     const agents = new Agents(w);
     for (let i = 0; i < 20; i++) agents.update(0.1, 10, 4, false, 30, 0);
     const ex = new Expeditions(w, agents, () => 100, () => 0.99);
-    ex.under = new Underground(w);
-    w.exp.done.push('horses', 'mine', 'scout');
-    let spot: number[] | null = null;
-    for (let zz = 10; zz < N - 10 && !spot; zz++) for (let xx = 10; xx < N - 10 && !spot; xx++) if (w.canPlace('stable', xx, zz) === null) spot = [xx, zz];
-    w.place('stable', spot![0], spot![1], 0, true, 4, false);
-    let post: number[] | null = null;
-    for (let zz = 10; zz < N - 10 && !post; zz++) for (let xx = 10; xx < N - 10 && !post; xx++) if (w.canPlace('outpost', xx, zz) === null) post = [xx, zz];
-    w.place('outpost', post![0], post![1], 0, true, 4, false);
-    ex.update(1.1);
-    const deep = MISSIONS.find((m) => m.id === 'deep')!, cav = deep.choices.findIndex((c) => c.troop === 'cavalry');
-    // à l'âge industriel, la charge demande toujours ses chevaux ; à l'époque moderne, du carburant pour ses blindés
-    expect(ex.why(deep, choiceAt(deep.choices[cav], 3))).toMatch(/3 chevaux/);
-    const c = choiceAt(deep.choices[cav], 4);
-    expect(c.label).toBe('Blindés en tête');
-    expect([c.mounts, c.fuel]).toEqual([0, 12]);
-    expect(c.lose.some((e) => e.t === 'unherd')).toBe(false);
-    expect(ex.why(deep, c)).toMatch(/12 carburant.*0 pour l’instant.*raffinerie/);
+    const herd = MISSIONS.find((m) => m.id === 'herd')!, m = { ...herd, choices: [{ ...herd.choices[0], fuel: 12, mounts: 0 }] }, c = m.choices[0];
+    expect(ex.why(m, c)).toMatch(/12 carburant.*0 pour l’instant.*raffinerie/);
     expect(ex.preview(c).label).toMatch(/12 carburant/);
-    // les autres troupes modernes vont à pied : ni carburant, ni chevaux (il y en a pourtant à l'écurie)
-    w.exp.herd.push('horse', 'horse', 'horse');
-    for (const o of deep.choices.filter((q) => q.troop !== 'cavalry').map((q) => choiceAt(q, 4))) {
-      expect(o.fuel ?? 0).toBe(0);
-      expect(ex.mountsFor(o)).toBe(0);
-      expect(ex.preview(o).label).not.toMatch(/chev|carburant/);
-    }
-    w.exp.herd.length = 0;
     w.fuel = 20;
-    expect(ex.why(deep, c)).toBeNull();
-    const a = ex.start(deep, cav, 4)!;
-    expect(a).not.toBeNull();
+    expect(ex.why(m, c)).toBeNull();
+    expect(ex.start(m, 0, 4)).not.toBeNull();
     expect(w.fuel).toBe(8);
-    expect(a.mounts).toBe(0);
-    expect(w.exp.riding).toBe(0);
-    const kits = a.party.map((id) => agents.agents.find((g) => g.id === id)!.kit!);
-    expect(kits.filter((k) => k.tank && k.rider).length).toBe(3);
-    expect(kits.some((k) => k.horse)).toBe(false);
-    // ses chars la rendent plus forte au combat qu'une charge à cheval
-    expect(a.might).toBeGreaterThan(4 + 3 * 0.9);
-    // une seule expédition armée à la fois ; en ressources illimitées, le carburant ne manque jamais
-    expect(ex.why(deep, choiceAt(deep.choices[deep.choices.findIndex((q) => q.troop === 'armor')], 4))).toMatch(/déjà en route/);
+    // en ressources illimitées, le carburant ne manque jamais
     w.unlimited = true;
     w.fuel = 0;
-    expect(ex.why({ ...deep, id: 'deep2' }, c) ?? '').not.toMatch(/carburant/);
+    expect(ex.why({ ...m, id: 'herd2' }, c) ?? '').not.toMatch(/carburant/);
   });
+
 });
