@@ -262,8 +262,8 @@ button.pop:hover { background: var(--accent-soft); }
 #info.show { display: block; animation: rise 0.16s ease-out; }
 /* la fiche ne prend jamais les clics : ils passent à la carte en dessous */
 #dock > #info { pointer-events: none; }
-/* le bâtiment en main : fiche réduite dans le coin bas gauche, hors du milieu de l'écran où l'on bâtit */
-#info.held { position: absolute; left: var(--gap); bottom: calc(100% + 8px); width: min(300px, 34vw); padding: 9px 12px 10px; }
+/* le bâtiment en main : fiche réduite dans le coin bas droit (la gauche porte les cartes des équipes), hors du milieu de l'écran où l'on bâtit */
+#info.held { position: absolute; right: var(--gap); bottom: calc(100% + 8px); width: min(300px, 34vw); padding: 9px 12px 10px; }
 #info.held .ihead { padding-bottom: 6px; }
 #info.held h4 { font-size: 14.5px; }
 #info .ihead { display: flex; gap: 12px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
