@@ -933,7 +933,11 @@ body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
   #troopBar .tdock { top: calc(var(--hudB, 82px) + 78px); padding: 7px; gap: 6px; border-radius: 14px; max-height: calc(100dvh - var(--hudB, 82px) - 78px - 150px); }
   #troopBar .tleft { left: 6px; width: 104px; }
   #troopBar .tright { right: 6px; width: 138px; }
-  #troopBar .tbase { width: 190px; }
+  #troopBar .tbase { width: 158px; }
+  #troopBar .tbuilds { grid-template-columns: 1fr; }
+  #troopBar .tbuilds .trb { min-height: 38px; }
+  body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 100px); max-height: calc(100dvh - var(--hudB, 82px) - 100px - 150px); }
+  body.under #troopBar .tstate { top: calc(var(--hudB, 82px) + 66px); }
   #troopBar .tord { min-height: 44px; font-size: 13px; padding: 0 8px; gap: 5px; }
   #troopBar .tord kbd { display: none; }
   #troopBar .trb { min-height: 44px; padding: 3px 8px; }
