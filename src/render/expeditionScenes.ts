@@ -165,6 +165,8 @@ const BOAT_MAKE: Record<BoatKind, (p: Parts) => void> = {
   },
 };
 const boatGeo = (kind: BoatKind = 'rowboat') => geo(`boat:${kind}`, BOAT_MAKE[kind]);
+/** La galère de guerre (partagée avec la traversée vers l'île du portail, voir `isleFerry`) */
+export const galleyGeo = () => boatGeo('galley');
 /** Hauteur du siège des passagers au-dessus de l'eau selon l'embarcation, et haut de la cheminée du vapeur (pour sa fumée) */
 const BOAT_SEAT: Record<BoatKind, number> = { canoe: 0.0, rowboat: 0.03, sail: 0.05, steam: 0.06, launch: 0.06, hover: 0.07, galley: 0.05 };
 const STEAM_FUNNEL: [number, number, number] = [0, 0.26, -0.02];

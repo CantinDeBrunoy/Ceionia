@@ -70,6 +70,7 @@ import { BlightView } from './render/blight';
 import { isleBlight } from './world/blight';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { holdIsle, isleDefenses } from './world/portal';
+import { IsleFerry } from './render/isleFerry';
 import { War } from './sim/war';
 import { KingdomStage } from './kingdomStage';
 import { WarTips, WarTipState } from './ui/warTips';
@@ -240,6 +241,8 @@ class Game implements UIHost {
   command!: CommandUI;
   /** les combattants de l'île du portail, dans la scène de la surface */
   private isleLayer: BattleLayer | null = null;
+  /** la galère qui traverse vers l'île du portail (recrues, convois, soldats renvoyés au village) */
+  private ferry: IsleFerry | null = null;
   /** on commande la garnison de l'île (la vue reste en surface) */
   isleCmd = false;
   private surfaceView: ReturnType<CameraRig['view']> | null = null;
@@ -674,6 +677,11 @@ class Game implements UIHost {
       if (this.mode === 'surface') this.isleLayer.update(dt, this.cam.camera, w.isleFx);
       else w.isleFx.length = 0;
       this.isleLayer.group.visible = this.mode === 'surface';
+    }
+    if (w.active) {
+      if (!this.ferry) { this.ferry = new IsleFerry(this.world); this.scene.add(this.ferry.group); }
+      this.ferry.update(dt, w, this.sim.age);
+      this.ferry.group.visible = this.mode === 'surface';
     }
     if (this.mode !== 'hell') w.hellFx.length = 0;
     this.kingStage.update(dt);
