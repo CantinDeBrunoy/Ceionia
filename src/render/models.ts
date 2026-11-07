@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { bakeFit, hasModel, ModelName } from './assets';
 import { hash2 } from '../core/rng';
 import { drawRocket } from './rocket';
+import { decal, fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 
 /**
  * Bâtiments importés (CC0), par sorte puis par âge : leurs variantes ; null ou absent, le modèle procédural. Il ne reste que
@@ -279,6 +280,18 @@ function attach(names: ModelName[], v: number, width: number, x: number, z: numb
   if (!g) return false;
   attachOut.push(g.scale(1, sy, 1).translate(x, 0, z));
   return true;
+}
+/**
+ * Pièces du modèle en cours tenues hors de l'ombre factice du pied des murs (voir Parts.build), qui noircirait en entier ce
+ * qui reste près du sol (un véhicule garé, une dalle peinte) : elles gardent leurs couleurs franches ; leurs lumières vont
+ * avec celles du modèle
+ */
+function unshaded(p: Parts, draw: (q: Parts) => void) {
+  const q = new Parts();
+  draw(q);
+  const b = q.build(false);
+  attachOut.push(b.body);
+  if (b.glow) p.glow.push(b.glow);
 }
 
 /** Recolore le rouge vif d'un modèle importé (toiles, tuiles) : peaux tannées, chaume… pour la Préhistoire */
@@ -4803,15 +4816,23 @@ function firehouse(p: Parts, age: number, v: number) {
     for (let y = 0.25; y < 1.25; y += 0.24) p.box(0.14, 0.1, 0.02, 0.72, y, -0.455, 0x9fd0e4, 0, true);
     p.box(0.36, 0.04, 0.36, 0.72, 1.33, -0.62, 0xd84a3e);
     p.cyl(0.006, 0.006, 0.36, 4, -0.7, 0.62, -0.7, C.metal);
-    for (const x of [-0.72, -0.36, 0.0, 0.36]) for (let z = 0.0; z < 0.5; z += 0.12) p.box(0.26, 0.004, 0.05, x, 0.032, z, (z / 0.12) % 2 < 1 ? 0xd84a3e : C.white);
-    for (const x of [-0.54, 0.18]) {
-      p.box(0.18, 0.13, 0.36, x, 0.045, 0.46, 0xd84a3e); p.box(0.18, 0.12, 0.12, x, 0.045, 0.7, 0xd84a3e);
-      p.box(0.17, 0.05, 0.02, x, 0.12, 0.765, 0x9fd0e4);
-      p.add(new THREE.BoxGeometry(0.06, 0.03, 0.42), x, 0.2, 0.44, C.metal, 0, false, 0, 0.12);
-      for (let z = 0.28; z < 0.62; z += 0.06) p.box(0.07, 0.008, 0.008, x, 0.2 + (0.62 - z) * 0.12, z, C.metal);
-      for (const z of [0.36, 0.56, 0.7]) p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 8).rotateZ(Math.PI / 2), x, 0.04, z, 0x3c3c40);
-      p.box(0.03, 0.025, 0.03, x - 0.04, 0.18, 0.72, 0x6aa8ff, 0, true); p.box(0.03, 0.025, 0.03, x + 0.04, 0.18, 0.72, 0xff6a5a, 0, true);
-    }
+    // la cour : dalle de béton clair à joints, devant chaque porte une aire hachurée rouge et blanc (à laisser libre) et la
+    // place du camion bordée de jaune, caniveau au bord de la rue ; deux fourgons pompe-tonne garés, échelle couchée
+    unshaded(p, (q) => {
+      // (marquages peints à plat, deux triangles chacun : le modèle a un plafond de triangles)
+      q.box(1.84, 0.006, 0.86, 0, 0.026, 0.2, 0xd6d4ce);
+      for (let k = 1; k < 4; k++) decal(q, 1.84, 0.006, 0, 0.0325, -0.23 + k * 0.21, 'y', 0xb4b2ac);
+      for (const x of [-0.54, -0.18, 0.18, 0.54]) decal(q, 0.006, 0.86, x, 0.0325, 0.2, 'y', 0xb4b2ac);
+      for (const x of [-0.72, -0.36, 0.0, 0.36]) {
+        decal(q, 0.3, 0.14, x, 0.033, -0.15, 'y', 0xe0402e);
+        for (let k = 0; k < 5; k++) decal(q, 0.024, 0.12, x - 0.12 + k * 0.06, 0.0335, -0.15, 'y', C.white, false, 0.6);
+        decal(q, 0.3, 0.012, x, 0.0335, -0.076, 'y', C.white);
+        for (const s of [-1, 1]) decal(q, 0.014, 0.68, x + s * 0.15, 0.033, 0.27, 'y', 0xf4c430);
+        decal(q, 0.314, 0.014, x, 0.033, 0.61, 'y', 0xf4c430);
+      }
+      decal(q, 1.84, 0.024, 0, 0.033, 0.64, 'y', 0x7c7a76);
+      for (const x of [-0.72, 0.0]) { fireEngine(q, x, 0.032, 0.36, undefined, true); fireLadder(q, x, 0.032 + LADDER_AT[1], 0.36 + LADDER_AT[2], true); }
+    });
     // tour d'entraînement : fenêtres sur les côtés, balcons à garde-corps, tuyaux qui sèchent, sirène et antenne
     for (let y = 0.25; y < 1.25; y += 0.24) {
       for (const sx of [-1, 1]) p.box(0.02, 0.1, 0.14, 0.72 + sx * 0.161, y, -0.62, 0x9fd0e4, 0, true);
