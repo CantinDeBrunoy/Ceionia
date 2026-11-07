@@ -10,9 +10,11 @@ describe('les trophées de la grande place', () => {
   it('un trophée par gros monstre vaincu, et seulement ceux-là', () => {
     expect(trophiesWon({ done: [], perks: [] })).toEqual([]);
     expect(trophiesWon({ done: ['herd', 'mammoth'], perks: ['furs'] })).toEqual(['mammoth']);
-    // le monstre des mers : le trophée de la proie choisie (mégalodon ou kraken), pas les deux
-    expect(trophiesWon({ done: ['mammoth', 'monster'], perks: ['furs', 'kraken'] })).toEqual(['mammoth', 'kraken']);
-    expect(trophiesWon({ done: ['monster'], perks: ['megalodon', 'kraken'] })).toEqual(['kraken', 'megalodon']);
+    // le kraken et le mégalodon : chacun son expédition, chacun son trophée
+    expect(trophiesWon({ done: ['mammoth', 'kraken'], perks: ['furs', 'kraken'] })).toEqual(['mammoth', 'kraken']);
+    expect(trophiesWon({ done: ['kraken', 'megalodon'], perks: ['megalodon', 'kraken'] })).toEqual(['kraken', 'megalodon']);
+    // une ancienne sauvegarde : le « monstre des mers » (le mégalodon) compte le kraken réussi, mais pas son trophée
+    expect(trophiesWon({ done: ['kraken', 'megalodon'], perks: ['megalodon'] })).toEqual(['megalodon']);
     // le dragon, quand son expédition existera
     expect(trophiesWon({ done: ['dragon'], perks: [] })).toEqual(['dragon']);
   });

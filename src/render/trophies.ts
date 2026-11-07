@@ -18,11 +18,13 @@ export const TROPHIES = ['mammoth', 'kraken', 'megalodon', 'dragon'] as const;
 export type TrophyId = (typeof TROPHIES)[number];
 
 /**
- * Les trophées gagnés : une mission de ce nom réussie (le mammouth, le dragon), ou un trophée rapporté d'une expédition qui en
- * offrait plusieurs (le mégalodon ou le kraken du monstre des mers)
+ * Les trophées gagnés : une mission de ce nom réussie (le mammouth, le dragon), ou le trophée rapporté (les dents du mégalodon,
+ * le tentacule du kraken : seulement celui-là, car une ancienne sauvegarde compte le kraken réussi quand son « monstre des mers »
+ * était le mégalodon)
  */
+const BY_PERK = new Set<string>(['kraken', 'megalodon']);
 export function trophiesWon(s: { done: readonly string[]; perks: readonly string[] }): TrophyId[] {
-  return TROPHIES.filter((id) => s.done.includes(id) || s.perks.includes(id));
+  return TROPHIES.filter((id) => (s.done.includes(id) && !BY_PERK.has(id)) || s.perks.includes(id));
 }
 
 /**

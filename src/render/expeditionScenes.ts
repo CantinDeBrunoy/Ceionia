@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents } from '../sim/agents';
-import { ActiveExpedition, seaClearance, SEA_CLEAR } from '../sim/expeditions';
+import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntSpot } from '../sim/expeditions';
 import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
 import { Act } from '../world/gardens';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
@@ -194,6 +194,10 @@ interface Monster {
   /** l'issue est tombée (voir `ActiveExpedition.fate`) : la dernière volée de harpons est partie */
   ended: boolean;
 }
+/** Écart entre le point de combat et chacune des deux galères qui encadrent le monstre des mers */
+const DUEL_GAP = 1.6;
+/** Hauteur des pieds des hommes d'armes debout dans la galère, en part de celle d'un rameur assis */
+const WAR_STAND = 0.5;
 /** Avancement du travail où le mégalodon bondit hors de l'eau (le dernier bond retombe avant l'issue du combat) */
 const MEGA_BREACH = [0.4, 0.56, 0.7];
 const sharkGeo = (big = false) => geo(`shark:${+big}`, (p) => shark(p, big));
@@ -325,6 +329,10 @@ const poolGeo = (reeds: boolean) => geo(`pool${+reeds}`, (p) => {
   for (let i = 0; i < 13; i++) { const a = (i / 13) * Math.PI * 2; p.sphere(0.05 + (i % 3) * 0.012, Math.cos(a) * 0.34, 0.02, Math.sin(a) * 0.34, i % 2 ? 0x9d9890 : 0xb8b2a8, 0, 0.7); }
   if (reeds) for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2 + 0.3; p.box(0.008, 0.16 + (i % 3) * 0.04, 0.008, Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4, 0x6a8a4a, 0, false, (i % 2 ? 0.15 : -0.15)); p.box(0.014, 0.04, 0.014, Math.cos(a) * 0.4, 0.16 + (i % 3) * 0.04, Math.sin(a) * 0.4, 0x6a4a2e); }
 });
+/** Rayon au sol du bassin de la source chaude, pierres et roseaux compris */
+const POOL_R = 0.42;
+/** Le socle du bassin, haut de 1 (étiré à la hauteur voulue) : un tertre de pierres grises, plus large au pied */
+const poolBaseGeo = () => geo('poolBase', (p) => p.cyl(0.37, 0.44, 1, 13, 0, 0, 0, 0x8d877c));
 const oakGeo = () => geo('oak', (p) => {
   p.cyl(0.08, 0.12, 0.42, 8, 0, 0, 0, 0x6a4a34);
   for (const a of [0.4, 2.3, 4.2]) p.box(0.05, 0.04, 0.14, Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1, 0x5a3e2e, -a);
@@ -848,6 +856,14 @@ export class ExpeditionScene {
   private goal = new Map<number, number>();
   private flame: THREE.Mesh | null = null;
   private boat: { obj: THREE.Object3D; home: [number, number]; out: [number, number]; y: number; riders: number[] } | null = null;
+  /**
+   * la chasse au monstre des mers : la seconde galère (ses hommes d'armes, pris parmi ceux de `boat`) et le point de combat,
+   * entre les deux, où se tient le monstre
+   */
+  private escort: { obj: THREE.Object3D; home: [number, number]; out: [number, number]; riders: number[] } | null = null;
+  private arena: [number, number] | null = null;
+  /** la galère d'où part le prochain harpon (l'une, puis l'autre) */
+  private volley = 0;
   /** l'embarcation de l'âge (pirogue, barque, voilier, vapeur, vedette, hydroglisseur, galère de guerre) */
   private boatKind: BoatKind = 'rowboat';
   /** l'expédition prend la mer : sa barque file bien plus loin que la rive, sur l'eau profonde, et revient au bout du travail */
@@ -1127,9 +1143,12 @@ export class ExpeditionScene {
       this.spots.push([cx - 0.24, cz - 0.08], [cx - 0.24, cz + 0.1], [kx + 0.15, kz + 0.12]);
       this.focus = [cx + 0.28, cz];
     } else if (st === 'spring') {
-      // la source chaude : bassin fumant cerclé de pierres (de roseaux au bord de la rivière) ; on s'y baigne à tour de rôle
-      const [px, pz] = this.near(cx, cz, cx, cz), py = y(px, pz);
-      this.put(poolGeo(a.c.dest === 'river'), px, pz, 0);
+      // la source chaude : bassin fumant cerclé de pierres (de roseaux au bord de la rivière) ; on s'y baigne à tour de rôle. Sur
+      // le replat le plus plat à portée, posé au plus haut du sol sous lui (jamais à moitié enterré dans la pente) ; un socle de
+      // pierres le soutient du côté où le sol descend
+      const [px, pz] = this.flatSpot(cx, cz, POOL_R), [lo, hi] = this.relief(px, pz, POOL_R), py = hi + 0.004;
+      this.put(poolGeo(a.c.dest === 'river'), px, pz, 0).position.y = py;
+      if (py - lo > 0.015) { const base = this.put(poolBaseGeo(), px, pz, 0.3); base.position.y = lo - 0.03; base.scale.y = py - lo + 0.03; }
       this.emits.push({ x: px, y: py + 0.05, z: pz, kind: 'steam', every: 0.18, t: 0 });
       this.bath = { at: [[px - 0.11, pz + 0.04], [px + 0.12, pz - 0.05]], y: py + 0.024 - 0.07, in: new Set() };
       for (let i = 0; i < 6; i++) { const ang = i * 1.05 + 0.3; this.spots.push([px + Math.cos(ang) * 0.5, pz + Math.sin(ang) * 0.5]); }
@@ -2814,6 +2833,41 @@ export class ExpeditionScene {
     return [cx, cz];
   }
 
+  /** Le sol sous un disque de rayon `r` en (x, z) : sa hauteur la plus basse et la plus haute */
+  private relief(x: number, z: number, r: number): [number, number] {
+    let lo = Infinity, hi = -Infinity;
+    for (const [rr, n] of [[0, 1], [r * 0.5, 6], [r, 12]] as [number, number][])
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2, h = this.world.surfaceAt(x + Math.cos(a) * rr, z + Math.sin(a) * rr);
+        lo = Math.min(lo, h); hi = Math.max(hi, h);
+      }
+    return [lo, hi];
+  }
+
+  /**
+   * Le point le plus plat près de (cx, cz) où un disque de rayon `r` tient tout entier sur la terre ferme, hors de tout (le
+   * plus proche, à pente égale) ; à défaut, le point libre le plus proche
+   */
+  private flatSpot(cx: number, cz: number, r: number): [number, number] {
+    let best: [number, number] | null = null, bs = Infinity;
+    for (let dz = -1.5; dz <= 1.5; dz += 0.25)
+      for (let dx = -1.5; dx <= 1.5; dx += 0.25) {
+        const x = cx + dx, z = cz + dz, d = Math.hypot(dx, dz);
+        if (d > 1.5 || !this.free(x, z)) continue;
+        let ok = true, trees = 0;
+        for (let i = 0; i < 8 && ok; i++) {
+          const px = x + Math.cos(i * 0.785) * r, pz = z + Math.sin(i * 0.785) * r;
+          ok = this.free(px, pz);
+          // (pas sous les arbres, s'il y a mieux)
+          if (this.world.veg[this.world.ci(Math.floor(px), Math.floor(pz))] === VEG_FOREST) trees++;
+        }
+        if (!ok) continue;
+        const [lo, hi] = this.relief(x, z, r), s = hi - lo + d * 0.02 + trees * 0.1;
+        if (s < bs) { bs = s; best = [x, z]; }
+      }
+    return best ?? this.near(cx, cz, cx, cz);
+  }
+
   private put(g: THREE.BufferGeometry, x: number, z: number, ry: number) {
     const m = new THREE.Mesh(g, mats.body);
     m.castShadow = true; m.receiveShadow = true;
@@ -2884,14 +2938,22 @@ export class ExpeditionScene {
 
   /** La barque, amarrée au bord de l'eau ; deux membres y montent, les autres pêchent depuis la berge */
   private launch(a: ActiveExpedition) {
-    const wat = this.water!, [wx, wz] = wat.wet, [bx, bz] = wat.bank;
+    const wat = this.water!;
+    let [wx, wz] = wat.wet;
+    const [bx, bz] = wat.bank;
     const dx = wx - bx, dz = wz - bz, d = Math.max(0.01, Math.hypot(dx, dz));
     let out: [number, number] = [wx, wz];
     for (let k = 0.4; k <= 2; k += 0.2) { const x = wx + (dx / d) * k, z = wz + (dz / d) * k; if (this.depth(x, z) === null) break; out = [x, z]; }
-    // la chasse au monstre : en haute mer, au point le plus dégagé à portée (aucune rive ni rocher dans le rayon du combat et de
-    // la caméra), pas au bout d'un bras de mer contre la paroi d'en face
+    // la chasse au monstre : en haute mer (reliée au large, pas un étang ni une mer intérieure), au plus proche point dégagé de
+    // tout (aucune rive ni rocher dans le rayon du combat et de la caméra), atteint tout droit depuis le mouillage ; celui-là
+    // même qu'a trouvé l'expédition (voir `offing`)
     const war = this.story === 'megalodon' || this.story === 'kraken';
-    if (this.offshore && war) { const at = this.openSpot(wx, wz); if (at) out = at; }
+    if (this.offshore && war) {
+      const sea = openWater(this.world), room = seaRoomMap(sea), [cx, cz] = a.dest;
+      const o = huntSpot(this.world, cx, cz, sea, room);
+      if (o) { [wx, wz] = o.moor; out = o.at; wat.level = SEA; }
+      else { const at = this.openSpot(wx, wz); if (at) out = at; }
+    }
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
     else if (this.offshore) {
       let best = 0;
@@ -2903,16 +2965,28 @@ export class ExpeditionScene {
         if (score > best) { best = score; out = [wx + ux * run, wz + uz * run]; }
       }
     }
-    const obj = new THREE.Group();
-    const hull = new THREE.Mesh(boatGeo(this.boatKind), mats.body);
-    hull.castShadow = true;
-    obj.add(hull);
-    // la chasse armée : une galère plus grande, toute la troupe à bord
-    obj.scale.setScalar(war ? 1.1 : this.boatKind === 'galley' ? 1 : 1);
-    this.group.add(obj);
-    this.props.push(obj);
+    const hullOf = () => {
+      const obj = new THREE.Group(), hull = new THREE.Mesh(boatGeo(this.boatKind), mats.body);
+      hull.castShadow = true;
+      obj.add(hull);
+      // la chasse armée : des galères plus grandes
+      obj.scale.setScalar(war ? 1.1 : 1);
+      this.group.add(obj);
+      this.props.push(obj);
+      return obj;
+    };
+    const obj = hullOf();
+    // la chasse armée : toute la troupe embarque, sur deux galères (`riders` : tout l'équipage ; la seconde a sa moitié)
     const riders = a.party.slice(0, war ? a.party.length : Math.min(2, a.party.length));
     this.boat = { obj, home: [wx, wz], out, y: wat.level, riders };
+    if (war && this.offshore) {
+      // les deux galères encadrent le monstre, de part et d'autre du point de combat, chacune bord à bord face à lui
+      const [cx, cz] = out, ax = cx - wx, az = cz - wz, al = Math.max(0.01, Math.hypot(ax, az)), px = -az / al, pz = ax / al;
+      this.arena = [cx, cz];
+      this.boat.out = [cx + px * DUEL_GAP, cz + pz * DUEL_GAP];
+      const eh: [number, number] = this.depth(wx - px * 0.45, wz - pz * 0.45) !== null ? [wx - px * 0.45, wz - pz * 0.45] : [wx, wz];
+      this.escort = { obj: hullOf(), home: eh, out: [cx - px * DUEL_GAP, cz - pz * DUEL_GAP], riders: riders.slice(Math.ceil(riders.length / 2)) };
+    }
     this.spots = this.bankSpots(Math.max(1, a.party.length - riders.length));
   }
 
@@ -2959,7 +3033,7 @@ export class ExpeditionScene {
   private populateSea(a: ActiveExpedition) {
     const bt = this.boat;
     if (!bt) return;
-    const war = this.story === 'megalodon' || this.story === 'kraken', [cx, cz] = bt.out, room = this.seaRoom(cx, cz, war ? SEA_CLEAR : 2.4), level = bt.y;
+    const war = this.story === 'megalodon' || this.story === 'kraken', [cx, cz] = this.arena ?? bt.out, room =this.seaRoom(cx, cz, war ? SEA_CLEAR : 2.4), level = bt.y;
     const reef = this.story === 'dive', fishing = this.story === 'boat';
     if (this.story === 'megalodon' || this.story === 'kraken') { this.makeMonster(cx, cz, level, room); return; }
     if (!this.offshore || (!reef && !fishing)) return;
@@ -3145,21 +3219,31 @@ export class ExpeditionScene {
         if (tn.cut > 0) tn.cut -= dt;
         tn.up += (want - tn.up) * Math.min(1, dt * (tn.cut > 0 ? 6 : won ? 1.6 : 1.1));
         tn.ang += dt * 0.12 * (i % 2 ? 1 : -1);
-        const rr = grab ? m.r * 0.42 : tn.r, x = m.cx + Math.cos(tn.ang) * rr, z = m.cz + Math.sin(tn.ang) * rr, o = tn.obj;
+        // deux galères : chacune a sa tentacule qui l'agrippe, sortie de l'eau à son bord, du côté du kraken
+        const gb = grab ? (i === 1 && this.escort ? this.escort.obj : bt.obj).position : null;
+        const rr = grab ? m.r * 0.42 : tn.r;
+        let x = m.cx + Math.cos(tn.ang) * rr, z = m.cz + Math.sin(tn.ang) * rr;
+        if (gb && this.escort) { const gx = m.cx - gb.x, gz = m.cz - gb.z, gl = Math.max(0.01, Math.hypot(gx, gz)); x = gb.x + (gx / gl) * 0.32 + Math.cos(tn.ang) * 0.06; z = gb.z + (gz / gl) * 0.32 + Math.sin(tn.ang) * 0.06; }
+        const o = tn.obj;
         o.visible = tn.up > 0.03 && this.depth(x, z) !== null;
         o.position.set(x, m.level - 0.03, z);
         const s = (grab ? 1.15 : 0.95) * (0.9 + 0.1 * Math.sin(this.t + tn.ph));
         o.scale.set(s, s * Math.max(0.01, tn.up), s);
-        o.rotation.set(Math.sin(this.t * 1.3 + tn.ph) * 0.22 + (tn.cut > 0 ? 0.9 : 0), Math.atan2(m.cx - x, m.cz - z) + Math.sin(this.t * 0.8 + tn.ph) * 0.3 + shake * (i % 2 ? 1 : -1), 0, 'YXZ');
+        const lean = gb && this.escort ? Math.atan2(gb.x - x, gb.z - z) : Math.atan2(m.cx - x, m.cz - z);
+        o.rotation.set(Math.sin(this.t * 1.3 + tn.ph) * 0.22 + (tn.cut > 0 ? 0.9 : 0), lean + Math.sin(this.t * 0.8 + tn.ph) * 0.3 + shake * (i % 2 ? 1 : -1), 0, 'YXZ');
         if (o.visible && tn.up > 0.9 && (!tip || i < tipI)) { tip = new THREE.Vector3(x + Math.sin(o.rotation.y) * 0.25, m.level + 0.42 * s, z + Math.cos(o.rotation.y) * 0.25); tipI = i; }
         if (o.visible && Math.random() < dt * 0.8) this.puffAt(x, m.level + 0.01, z);
       });
       // la tête se dresse au large ; vaincu, elle s'enfonce lentement dans un nuage d'encre et de bulles
       const rise = smooth(Math.min(1, Math.max(0, (k - 0.5) / 0.2))), sink = won ? smooth(Math.min(1, Math.max(0, (m.death - 0.6) / 3))) : 0, head = rise * (1 - sink);
       m.obj.visible = head > 0.02;
-      const hx = m.cx - Math.cos(0.9) * m.r * 1.7, hz = m.cz - Math.sin(0.9) * m.r * 1.7;
+      // (entre les deux galères, au point de combat ; seul contre une galère, au large d'elle)
+      const off = this.escort ? 0 : m.r * 1.7, hx = m.cx - Math.cos(0.9) * off, hz = m.cz - Math.sin(0.9) * off;
       m.obj.position.set(hx, m.level - 0.32 + head * 0.3 + Math.sin(this.t * 1.1) * 0.01, hz);
-      m.obj.rotation.set(sink * 0.35, Math.atan2(m.cx - hx, m.cz - hz) + shake, 0);
+      // (il fait face à une galère, puis se tourne lentement vers l'autre, en face)
+      const foe = this.escort ? bt.obj.position : null;
+      const turn = foe ? Math.atan2(foe.x - hx, foe.z - hz) + Math.PI * (0.5 - 0.5 * Math.cos(this.t * 0.3)) : Math.atan2(m.cx - hx, m.cz - hz);
+      m.obj.rotation.set(sink * 0.35, turn + shake, 0);
       // ses bras ondulent sur l'eau autour de la tête, se tordent quand un harpon le touche
       m.arms.forEach((p, i) => {
         const arm = p.children[0];
@@ -3178,7 +3262,9 @@ export class ExpeditionScene {
   private throwDarts(dt: number, m: Monster, to: THREE.Vector3, ti: number) {
     if ((m.dart -= dt) > 0 || !this.boat) return;
     m.dart = 1.1 + Math.random() * 0.8;
-    const o = this.boat.obj.position, g = new THREE.Mesh(harpoonGeo(), mats.body);
+    // d'une galère, puis de l'autre
+    const from0 = this.escort && this.volley++ % 2 ? this.escort.obj : this.boat.obj;
+    const o = from0.position, g = new THREE.Mesh(harpoonGeo(), mats.body);
     this.group.add(g);
     const from = new THREE.Vector3(o.x + (Math.random() - 0.5) * 0.2, o.y + 0.22, o.z + (Math.random() - 0.5) * 0.2);
     this.darts.push({ obj: g, from, to: to.clone(), t: 0, life: 0.35 + from.distanceTo(to) * 0.3, ti });
@@ -3551,30 +3637,47 @@ export class ExpeditionScene {
       u = ph < 0.3 ? smooth(ph / 0.3) : ph < 0.75 ? 1 : 1 - smooth((ph - 0.75) / 0.25);
       back = ph >= 0.75;
     }
-    const x = bt.home[0] + (bt.out[0] - bt.home[0]) * u, z = bt.home[1] + (bt.out[1] - bt.home[1]) * u;
-    const sway = Math.sin(this.t * 0.4) * 0.12, dir = Math.atan2(bt.out[0] - bt.home[0], bt.out[1] - bt.home[1]);
+    const war = this.story === 'megalodon' || this.story === 'kraken', es = this.escort;
+    // la seconde galère de la chasse part avec la première, avec sa part de l'équipage, et prend le monstre de l'autre côté
+    const crew = es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders;
+    const [px, pz] = this.sail(bt.obj, bt.home, bt.out, bt.y, u, back, dt, crew, war, 0);
+    if (es) this.sail(es.obj, es.home, es.out, bt.y, u, back, dt, es.riders, war, 1.3);
+    // la chasse : la vue garde le combat entier (les deux galères, le monstre entre elles)
+    this.focus = this.arena && es ? [(px + es.obj.position.x) / 2, (pz + es.obj.position.z) / 2] : [px, pz];
+  }
+
+  /**
+   * Une embarcation entre la rive (`home`) et le large (`out`), à `u` du trajet (`back` : elle rentre), qui tangue, et son
+   * équipage `riders` assis à bord ; `ph` : son décalage de houle. Renvoie où elle est
+   */
+  private sail(obj: THREE.Object3D, home: [number, number], out: [number, number], level: number, u: number, back: boolean, dt: number, riders: number[], war: boolean, ph: number): [number, number] {
+    const x = home[0] + (out[0] - home[0]) * u, z = home[1] + (out[1] - home[1]) * u, t = this.t + ph;
+    const sway = Math.sin(t * 0.4) * 0.12, dir = Math.atan2(out[0] - home[0], out[1] - home[1]);
     let px = x + Math.cos(dir) * sway, pz = z - Math.sin(dir) * sway;
     if (this.depth(px, pz) === null) { px = x; pz = z; }
     // dans les rapides, elle tangue et roule bien plus fort
-    const rough = this.rough, heading = dir + (back ? Math.PI : 0) + Math.sin(this.t * 0.4) * 0.15 + Math.sin(this.t * 3.1) * 0.2 * rough;
-    const y = bt.y + 0.005 + Math.sin(this.t * 1.7) * 0.006 + Math.abs(Math.sin(this.t * 4.3)) * 0.02 * rough;
-    bt.obj.position.set(px, y, pz);
-    bt.obj.rotation.set(Math.sin(this.t * 1.3) * (0.03 + 0.12 * rough), heading, Math.sin(this.t * 1.1 + rough * 2) * (0.04 + 0.18 * rough));
-    this.focus = [px, pz];
+    const rough = this.rough, heading = dir + (back ? Math.PI : 0) + Math.sin(t * 0.4) * 0.15 + Math.sin(t * 3.1) * 0.2 * rough;
+    const y = level + 0.005 + Math.sin(t * 1.7) * 0.006 + Math.abs(Math.sin(t * 4.3)) * 0.02 * rough;
+    obj.position.set(px, y, pz);
+    obj.rotation.set(Math.sin(t * 1.3) * (0.03 + 0.12 * rough), heading, Math.sin(t * 1.1 + rough * 2) * (0.04 + 0.18 * rough));
     // le bateau à vapeur fume par sa cheminée
     if (this.boatKind === 'steam' && Math.random() < dt * 4) this.puffAt(px - Math.sin(heading) * 0.02, y + STEAM_FUNNEL[1] + 0.01, pz - Math.cos(heading) * 0.02, 'smoke', -Math.sin(heading) * 0.04, -Math.cos(heading) * 0.04);
-    const war = this.story === 'megalodon' || this.story === 'kraken', sc = bt.obj.scale.x, seat = BOAT_SEAT[this.boatKind];
-    bt.riders.forEach((id, i) => {
-      // les hommes d'armes de la galère, répartis le long du bordage ; sinon deux à bord : le pêcheur à l'arrière
-      const lz = (war ? 0.17 - i * 0.075 : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading);
+    const sc = obj.scale.x, seat = BOAT_SEAT[this.boatKind], m = this.monster, mon = m && m.obj.visible ? m.obj.position : null;
+    riders.forEach((id, i) => {
+      // les hommes d'armes de la galère, répartis le long du bordage, face au monstre dès qu'il paraît ; sinon deux à bord :
+      // le pêcheur à l'arrière
+      const lz = (war ? 0.16 - i * 0.12 : i ? -0.08 : 0.06) * sc, sx = Math.sin(heading), cz = Math.cos(heading), side = war ? (i % 2 ? -0.035 : 0.035) * sc : 0;
       if (this.story === 'dive' && i === 1 && u > 0.97) {
         // le plongeur se met à l'eau, masque au ras de l'eau, à côté de la barque
         this.agents.ride(id, { x: px + cz * 0.2, z: pz - sx * 0.2, y: y - 0.13, heading: heading + Math.PI / 2 });
         return;
       }
-      // le pêcheur, à l'arrière, se tourne vers le bord pour lancer sa ligne
-      this.agents.ride(id, { x: px + sx * lz, z: pz + cz * lz, y: y + seat, heading: heading + (war ? (i % 2 ? -1 : 1) * Math.PI / 2 : i ? Math.PI / 2 : 0) });
+      const rx = px + sx * lz + cz * side, rz = pz + cz * lz - sx * side;
+      const face = war ? (mon && !back ? Math.atan2(mon.x - rx, mon.z - rz) : heading + (i % 2 ? -1 : 1) * Math.PI / 2) : heading + (i ? Math.PI / 2 : 0);
+      // (au combat, les hommes d'armes se dressent, harpon au poing, et frappent)
+      this.agents.ride(id, war && mon && !back ? { x: rx, z: rz, y: y + seat * WAR_STAND, heading: face, act: 'work' } : { x: rx, z: rz, y: y + seat, heading: face });
     });
+    return [px, pz];
   }
 
   /** Chaque membre (hors barque) va d'un point de travail à l'autre, ou reste au camp */
@@ -4226,7 +4329,8 @@ export class ExpeditionScene {
 
   /** Cannes à pêche : le pêcheur à l'arrière de la barque, ceux de la berge une fois en place */
   private stepRods(a: ActiveExpedition) {
-    if (this.kind !== 'boat' && this.kind !== 'fish') return;
+    // (pas de pêcheur à la ligne pendant la chasse au monstre : tout l'équipage est aux harpons)
+    if ((this.kind !== 'boat' && this.kind !== 'fish') || this.monster) return;
     const fishers = this.kind === 'boat' ? [this.boat!.riders[this.boat!.riders.length - 1], ...a.party.filter((id) => !this.boat!.riders.includes(id))] : a.party;
     const w = this.world, wat = this.water!;
     for (const id of a.party) {

@@ -1313,7 +1313,7 @@ export class UI {
       if (em) {
         em.hidden = shown > 0;
         em.textContent = f === 'mil' ? 'Aucune expédition militaire à cet âge. Les expéditions armées (le loup des bois, les galeries des profondeurs…) apparaissent au fil des âges : revenez après avoir progressé.'
-          : f === 'leg' ? 'Aucune expédition légendaire à cet âge. Les grands exploits (mammouth, monstre des mers, dragon, JO…) arrivent à des âges précis.'
+          : f === 'leg' ? 'Aucune expédition légendaire à cet âge. Les grands exploits (mammouth, kraken, mégalodon, dragon, JO…) arrivent à des âges précis.'
           : 'Aucune expédition disponible pour le moment.';
       }
     }));
