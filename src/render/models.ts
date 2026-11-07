@@ -5,7 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { bakeFit, hasModel, ModelName } from './assets';
 import { hash2 } from '../core/rng';
 import { drawRocket } from './rocket';
-import { fireEngine, fireLadder, LADDER_AT } from './fireEngine';
+import { decal, fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 
 /**
  * Bâtiments importés (CC0), par sorte puis par âge : leurs variantes ; null ou absent, le modèle procédural. Il ne reste que
@@ -4819,18 +4819,19 @@ function firehouse(p: Parts, age: number, v: number) {
     // la cour : dalle de béton clair à joints, devant chaque porte une aire hachurée rouge et blanc (à laisser libre) et la
     // place du camion bordée de jaune, caniveau au bord de la rue ; deux fourgons pompe-tonne garés, échelle couchée
     unshaded(p, (q) => {
+      // (marquages peints à plat, deux triangles chacun : le modèle a un plafond de triangles)
       q.box(1.84, 0.006, 0.86, 0, 0.026, 0.2, 0xd6d4ce);
-      for (let k = 1; k < 4; k++) q.box(1.84, 0.002, 0.006, 0, 0.032, -0.23 + k * 0.21, 0xb4b2ac);
-      for (const x of [-0.54, -0.18, 0.18, 0.54]) q.box(0.006, 0.002, 0.86, x, 0.032, 0.2, 0xb4b2ac);
+      for (let k = 1; k < 4; k++) decal(q, 1.84, 0.006, 0, 0.0325, -0.23 + k * 0.21, 'y', 0xb4b2ac);
+      for (const x of [-0.54, -0.18, 0.18, 0.54]) decal(q, 0.006, 0.86, x, 0.0325, 0.2, 'y', 0xb4b2ac);
       for (const x of [-0.72, -0.36, 0.0, 0.36]) {
-        q.box(0.3, 0.003, 0.14, x, 0.032, -0.15, 0xe0402e);
-        for (let k = 0; k < 5; k++) q.add(new THREE.BoxGeometry(0.024, 0.003, 0.12).translate(0, 0.0015, 0), x - 0.12 + k * 0.06, 0.0325, -0.15, C.white, 0.6);
-        q.box(0.3, 0.003, 0.012, x, 0.0325, -0.076, C.white);
-        for (const s of [-1, 1]) q.box(0.014, 0.003, 0.68, x + s * 0.15, 0.032, 0.27, 0xf4c430);
-        q.box(0.314, 0.003, 0.014, x, 0.032, 0.61, 0xf4c430);
+        decal(q, 0.3, 0.14, x, 0.033, -0.15, 'y', 0xe0402e);
+        for (let k = 0; k < 5; k++) decal(q, 0.024, 0.12, x - 0.12 + k * 0.06, 0.0335, -0.15, 'y', C.white, false, 0.6);
+        decal(q, 0.3, 0.012, x, 0.0335, -0.076, 'y', C.white);
+        for (const s of [-1, 1]) decal(q, 0.014, 0.68, x + s * 0.15, 0.033, 0.27, 'y', 0xf4c430);
+        decal(q, 0.314, 0.014, x, 0.033, 0.61, 'y', 0xf4c430);
       }
-      q.box(1.84, 0.004, 0.024, 0, 0.03, 0.64, 0x7c7a76);
-      for (const x of [-0.72, 0.0]) { fireEngine(q, x, 0.032, 0.36); fireLadder(q, x, 0.032 + LADDER_AT[1], 0.36 + LADDER_AT[2]); }
+      decal(q, 1.84, 0.024, 0, 0.033, 0.64, 'y', 0x7c7a76);
+      for (const x of [-0.72, 0.0]) { fireEngine(q, x, 0.032, 0.36, undefined, true); fireLadder(q, x, 0.032 + LADDER_AT[1], 0.36 + LADDER_AT[2], true); }
     });
     // tour d'entraînement : fenêtres sur les côtés, balcons à garde-corps, tuyaux qui sèchent, sirène et antenne
     for (let y = 0.25; y < 1.25; y += 0.24) {
