@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
 import { Agents } from '../sim/agents';
-import { ActiveExpedition, seaClearance, SEA_CLEAR } from '../sim/expeditions';
+import { ActiveExpedition, seaClearance, SEA_CLEAR, SEA_CLEAR_MIN, openWater, seaRoomMap, offing } from '../sim/expeditions';
 import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
 import { Act } from '../world/gardens';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
@@ -2884,14 +2884,22 @@ export class ExpeditionScene {
 
   /** La barque, amarrée au bord de l'eau ; deux membres y montent, les autres pêchent depuis la berge */
   private launch(a: ActiveExpedition) {
-    const wat = this.water!, [wx, wz] = wat.wet, [bx, bz] = wat.bank;
+    const wat = this.water!;
+    let [wx, wz] = wat.wet;
+    const [bx, bz] = wat.bank;
     const dx = wx - bx, dz = wz - bz, d = Math.max(0.01, Math.hypot(dx, dz));
     let out: [number, number] = [wx, wz];
     for (let k = 0.4; k <= 2; k += 0.2) { const x = wx + (dx / d) * k, z = wz + (dz / d) * k; if (this.depth(x, z) === null) break; out = [x, z]; }
-    // la chasse au monstre : en haute mer, au point le plus dégagé à portée (aucune rive ni rocher dans le rayon du combat et de
-    // la caméra), pas au bout d'un bras de mer contre la paroi d'en face
+    // la chasse au monstre : en haute mer (reliée au large, pas un étang ni une mer intérieure), au plus proche point dégagé de
+    // tout (aucune rive ni rocher dans le rayon du combat et de la caméra), atteint tout droit depuis le mouillage ; celui-là
+    // même qu'a trouvé l'expédition (voir `offing`)
     const war = this.story === 'megalodon' || this.story === 'kraken';
-    if (this.offshore && war) { const at = this.openSpot(wx, wz); if (at) out = at; }
+    if (this.offshore && war) {
+      const sea = openWater(this.world), room = seaRoomMap(sea), [cx, cz] = a.dest;
+      const o = offing(this.world, cx, cz, SEA_CLEAR, sea, room) ?? offing(this.world, cx, cz, SEA_CLEAR_MIN, sea, room);
+      if (o) { [wx, wz] = o.moor; out = o.at; wat.level = SEA; }
+      else { const at = this.openSpot(wx, wz); if (at) out = at; }
+    }
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
     else if (this.offshore) {
       let best = 0;

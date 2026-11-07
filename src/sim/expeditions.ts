@@ -92,26 +92,105 @@ export const FATED = new Set<string>(['megalodon', 'kraken', 'dragon']);
 export const FATE_AT = 0.8;
 /** Les chasses en haute mer : jamais sur une simple rivière */
 const OPEN_SEA = new Set<string>(['megalodon', 'kraken']);
-/** Le dégagement voulu autour du point de combat (cases d'eau libre, dans tous les sens), au mieux puis au pire */
-export const SEA_CLEAR = 7, SEA_CLEAR_MIN = 5;
+/**
+ * Le dégagement voulu autour du point de combat (cases de haute mer libre, dans tous les sens), au mieux puis au pire : de quoi
+ * tenir toute la scène (les deux galères, le monstre qui tourne autour, ses bonds, ses tentacules) et la vue tout autour
+ */
+export const SEA_CLEAR = 8, SEA_CLEAR_MIN = 6;
+
+/**
+ * La haute mer : les cases d'eau de mer (hors lacs) reliées au large, c'est-à-dire au bord de la carte. Une mer intérieure, un
+ * étang côtier sous le niveau de la mer n'en sont pas, si grands soient-ils
+ */
+export function openWater(w: World): Uint8Array {
+  const m = new Uint8Array(N * N), st: number[] = [];
+  const add = (x: number, z: number) => {
+    if (!w.inCells(x, z)) return;
+    const k = w.ci(x, z);
+    if (m[k] || w.lake[k] || w.cellAvg(x, z) >= -0.1) return;
+    m[k] = 1; st.push(k);
+  };
+  for (let i = 0; i < N; i++) { add(i, 0); add(i, N - 1); add(0, i); add(N - 1, i); }
+  while (st.length) {
+    const k = st.pop()!, x = k % N, z = (k - x) / N;
+    add(x + 1, z); add(x - 1, z); add(x, z + 1); add(x, z - 1);
+  }
+  return m;
+}
 
 /**
  * Le dégagement d'un point de mer : la distance, au plus `max`, dont on peut s'en écarter dans toutes les directions sans
- * rencontrer ni rive, ni lac, ni rocher qui perce l'eau (0 si le point n'est pas en mer)
+ * rencontrer ni rive, ni lac, ni rocher qui perce l'eau (0 si le point n'est pas en mer) ; avec `sea` (voir `openWater`),
+ * seulement de la haute mer
  */
-export function seaClearance(w: World, x: number, z: number, max = 8): number {
+export function seaClearance(w: World, x: number, z: number, max = 8, sea?: Uint8Array): number {
   let room = max;
   for (let d = 0; d < 16 && room > 0; d++) {
     const ux = Math.cos((d * Math.PI) / 8), uz = Math.sin((d * Math.PI) / 8);
     let run = 0;
     for (let k = 0.5; k <= room; k += 0.5) {
       const cx = Math.floor(x + ux * k), cz = Math.floor(z + uz * k);
-      if (!w.inCells(cx, cz) || w.lake[w.ci(cx, cz)] || w.hAt(x + ux * k, z + uz * k) >= -0.1) break;
+      if (!w.inCells(cx, cz) || w.lake[w.ci(cx, cz)] || (sea && !sea[w.ci(cx, cz)]) || w.hAt(x + ux * k, z + uz * k) >= -0.1) break;
       run = k;
     }
     room = Math.min(room, run);
   }
+  // (le point lui-même aussi)
+  const cx = Math.floor(x), cz = Math.floor(z);
+  if (sea && (!w.inCells(cx, cz) || !sea[w.ci(cx, cz)])) return 0;
   return room;
+}
+
+/** Jusqu'où, depuis la côte, la troupe va chercher la haute mer (cases) */
+export const OFFING_REACH = 24;
+
+/**
+ * Le large de chaque case : à combien de cases (environ, par le milieu des cases) commence ce qui n'est pas la haute mer
+ * (`sea`, voir `openWater`) ou le bord de la carte ; 0 hors de la haute mer
+ */
+export function seaRoomMap(sea: Uint8Array): Float32Array {
+  const r = new Float32Array(N * N), D = Math.SQRT2;
+  for (let k = 0; k < N * N; k++) r[k] = sea[k] ? 1e9 : 0;
+  const at = (x: number, z: number) => (x < 0 || z < 0 || x >= N || z >= N ? 0 : r[z * N + x]);
+  for (let z = 0; z < N; z++)
+    for (let x = 0; x < N; x++) {
+      const k = z * N + x;
+      if (r[k]) r[k] = Math.min(r[k], at(x - 1, z) + 1, at(x, z - 1) + 1, at(x - 1, z - 1) + D, at(x + 1, z - 1) + D);
+    }
+  for (let z = N - 1; z >= 0; z--)
+    for (let x = N - 1; x >= 0; x--) {
+      const k = z * N + x;
+      if (r[k]) r[k] = Math.min(r[k], at(x + 1, z) + 1, at(x, z + 1) + 1, at(x + 1, z + 1) + D, at(x - 1, z + 1) + D);
+    }
+  return r;
+}
+
+/**
+ * Le point de combat d'une chasse en haute mer, depuis la côte (x, z) : tout droit sur la haute mer (`sea`, voir `openWater`)
+ * depuis le mouillage, le plus proche point dégagé de `clear` cases tout autour ; et le mouillage (le premier point d'eau
+ * sur ce cap). Rien si la côte ne donne pas sur une telle étendue. `room` : le large de chaque case (voir `seaRoomMap`), pour
+ * écarter vite les points trop près d'une rive
+ */
+export function offing(w: World, x: number, z: number, clear: number, sea: Uint8Array, room = seaRoomMap(sea), reach = OFFING_REACH): { at: [number, number]; moor: [number, number] } | null {
+  let best: { at: [number, number]; moor: [number, number] } | null = null, bd = Infinity;
+  const open = (px: number, pz: number) => { const cx = Math.floor(px), cz = Math.floor(pz); return w.inCells(cx, cz) && sea[w.ci(cx, cz)] === 1 && w.hAt(px, pz) < -0.1; };
+  for (let d = 0; d < 16; d++) {
+    const ux = Math.cos((d * Math.PI) / 8), uz = Math.sin((d * Math.PI) / 8);
+    let moor: [number, number] | null = null;
+    for (let s = 0.5; s <= reach && s < bd; s += 0.5) {
+      const px = x + ux * s, pz = z + uz * s;
+      if (!open(px, pz)) {
+        // une bande de rive avant la mer (trois cases au plus) ; une fois au large, la terre arrête le cap
+        if (moor || s > 3) break;
+        continue;
+      }
+      moor ??= [px, pz];
+      // (à chaque case)
+      if (s % 1 || room[w.ci(Math.floor(px), Math.floor(pz))] < clear) continue;
+      if (seaClearance(w, px, pz, clear, sea) >= clear) { best = { at: [px, pz], moor }; bd = s; break; }
+    }
+  }
+  return best;
 }
 
 /**
@@ -739,10 +818,10 @@ export class Expeditions {
       // la chasse au monstre des mers se fait en haute mer : une côte d'où l'on gagne une vaste étendue d'eau profonde, sans
       // rive ni falaise tout autour
       dest = this.findDest(kind, base, false, sea && kind === 'river', 8, monster ? SEA_CLEAR : 0);
-      // faute de mieux, une côte moins dégagée
+      // faute de mieux, une haute mer un peu moins dégagée ; jamais une mer intérieure ni un étang
       if (!dest && monster) {
         dest = this.findDest(kind, base, false, true, 5, SEA_CLEAR_MIN);
-        if (!dest) { this.lastFail = 'Aucune côte ne s’ouvre sur le large à portée du village : le monstre ne quitte pas la haute mer.'; return null; }
+        if (!dest) { this.lastFail = 'Aucune haute mer atteignable : aucune côte à portée du village ne s’ouvre sur le large, et le monstre ne quitte pas la haute mer.'; return null; }
         break;
       }
       // pas de côte ouverte sur le large à portée : la rivière la plus proche fera l'affaire
@@ -1338,7 +1417,7 @@ export class Expeditions {
     // le rayon du gros du village (huit bâtiments sur dix en deçà) : on part au-delà
     const reach = ds.length ? ds[Math.floor(ds.length * 0.8)] : 0;
     const ideal = { plain: 18, forest: 15, river: 15, mountain: 22, cave: 18, far: 32, spaceport: 0 }[kind] + (kind === 'cave' ? 0 : reach * 0.7);
-    const outside: [number, number, number][] = [], rails = this.avoidCells?.() ?? null;
+    const outside: [number, number, number][] = [], rails = this.avoidCells?.() ?? null, high = clear ? openWater(w) : null, room = high ? seaRoomMap(high) : null;
     // dénivelé autour d'une case : de combien le terrain monte dans un rayon de trois cases (une paroi, une pente de montagne)
     const rise = (x: number, z: number) => {
       let top = -Infinity;
@@ -1354,7 +1433,7 @@ export class Expeditions {
         const sand = w.biome[k] === BIOME_DESERT && (kind === 'cave' || kind === 'mountain') ? 15 : 0;
         if (kind === 'forest') ok = w.veg[k] === VEG_FOREST && d > 8;
         else if (kind === 'plain') ok = w.veg[k] === 0 && !w.road[k] && slope < 0.5 && h < 3 && d > 10;
-        else if (kind === 'river') ok = sea ? w.nearWater(x, z, 2) && d > 7 && this.openSea(x, z, seaLen, clear) : w.nearWater(x, z, 1) && d > 7;
+        else if (kind === 'river') ok = sea ? w.nearWater(x, z, 2) && d > 7 && (high ? !!offing(w, x + 0.5, z + 0.5, clear, high, room!) : this.openSea(x, z, seaLen)) : w.nearWater(x, z, 1) && d > 7;
         else if (kind === 'mountain') {
           // un replat où l'on tient debout, mais au pied d'une paroi ou haut dans le massif (au pied d'une simple butte, s'il le faut)
           const up = slope < 1.2 && (h > 1 || loose) && d > 9 ? rise(x, z) : 0;
@@ -1390,15 +1469,10 @@ export class Expeditions {
    * La côte s'ouvre-t-elle sur le large ? Tout droit depuis cette case, huit cases de mer au moins (pas un lac), dont de
    * l'eau profonde : de quoi aller bien plus loin que la rive
    */
-  private openSea(x: number, z: number, len = 8, clear = 0): boolean {
+  private openSea(x: number, z: number, len = 8): boolean {
     const w = this.world;
     for (let d = 0; d < 8; d++) {
       const dx = Math.round(Math.cos((d * Math.PI) / 4)), dz = Math.round(Math.sin((d * Math.PI) / 4));
-      // une chasse au monstre : quelque part sur ce cap, une étendue d'eau profonde dégagée de `clear` cases tout autour
-      if (clear) {
-        if (w.cellAvg(x + dx * 2, z + dz * 2) < -0.1) for (let s = 3; s <= len + 14; s += 2) if (seaClearance(w, x + dx * s + 0.5, z + dz * s + 0.5, clear) >= clear) return true;
-        continue;
-      }
       let wet = 0, deep = false;
       for (let s = 1; s <= len + 4; s++) {
         const cx = x + dx * s, cz = z + dz * s;

@@ -5,7 +5,8 @@ import { newWorld } from '../src/world/mapgen';
 import { mulberry32 } from '../src/core/rng';
 import { MISSIONS, boatKindFor, BoatKind, choiceAt, isLegendary, mandatoriesFor, readExpState } from '../src/sim/missions';
 import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
-import { Expeditions, ActiveExpedition, seaClearance, SEA_CLEAR_MIN } from '../src/sim/expeditions';
+import { Expeditions, ActiveExpedition, seaClearance, SEA_CLEAR, SEA_CLEAR_MIN, openWater } from '../src/sim/expeditions';
+import { GEN } from '../src/world/continent';
 import { Agents } from '../src/sim/agents';
 import { ExpeditionScene } from '../src/render/expeditionScenes';
 import { shipRoute } from '../src/render/transports';
@@ -195,7 +196,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
     for (const ci of [0, 1]) {
       const r = sail(ci ? 'kraken' : 'megalodon', 0, 1), { out, home } = r.s.boat!;
       // un point d'eau dégagé tout autour (aucune rive, aucun rocher dans le rayon du combat et de la caméra)
-      expect(seaClearance(r.v.w, out[0], out[1], 8)).toBeGreaterThanOrEqual(SEA_CLEAR_MIN);
+      expect(seaClearance(r.v.w, out[0], out[1], SEA_CLEAR, openWater(r.v.w))).toBeGreaterThanOrEqual(SEA_CLEAR_MIN);
       expect(Math.hypot(out[0] - home[0], out[1] - home[1])).toBeGreaterThan(2);
       // pendant le combat, ni le monstre ni la galère ne frôlent la rive
       const seen: number[] = [];
@@ -287,6 +288,84 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
     expect(m.arms.length).toBe(8);
     for (const arm of m.arms) expect(arm.parent).toBe(m.obj);
     r.scene.dispose(r.a);
+  });
+});
+
+describe('la chasse au monstre se tient en vraie haute mer, jamais dans une flaque', () => {
+  /** Un village de quatre maisons en (x, z) */
+  function settle(w: World, x: number, z: number, seed = 7) {
+    for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 1, false);
+    const agents = new Agents(w);
+    for (let i = 0; i < 20; i++) agents.update(0.1, 10, 1, false, 40, 0);
+    const ex = new Expeditions(w, agents, () => 100, mulberry32(seed));
+    ex.pop = () => 60;
+    return { w, agents, ex };
+  }
+  /** Le point de combat de la scène : en haute mer, dégagé tout autour, loin de la rive */
+  function arena(v: ReturnType<typeof settle>, id: string) {
+    stubCanvas();
+    const a = v.ex.start(mission(id), 0, 1);
+    expect(a, v.ex.lastFail ?? '').not.toBeNull();
+    const scene = new ExpeditionScene(v.w, v.agents, new THREE.Group(), a!, null), bt = (scene as unknown as { boat: { home: [number, number]; out: [number, number] } }).boat;
+    scene.dispose(a!);
+    return bt;
+  }
+
+  it('sur plusieurs continents générés, d’où que parte le village : un point de haute mer reliée au large, dégagé de tout', () => {
+    for (const seed of [2026, 42, 77, 123]) for (const f of [0.15, 0.5, 0.85]) {
+      setMapSize(192);
+      const w = new World();
+      newWorld(w, 3, seed, GEN);
+      w.updateVis();
+      const sea = openWater(w);
+      // trois villages : au nord, au milieu, au sud des terres bâtissables
+      const spots: [number, number][] = [];
+      for (let z = 10; z < N - 10; z += 3) for (let x = 10; x < N - 10; x += 3) if (w.cellAvg(x, z) > 0.6 && w.cellAvg(x, z) < 3 && w.cellSlope(x, z) < 0.2 && [0, 2].every((d) => w.canPlace('house', x + d, z + d) === null)) spots.push([x, z]);
+      const [x, z] = spots[Math.floor(spots.length * f)];
+      const v = settle(w, x, z);
+      for (const id of ['megalodon', 'kraken']) {
+        const { out, home } = arena(v, id);
+        expect(seaClearance(w, out[0], out[1], SEA_CLEAR, sea), `${seed} ${f} ${id}`).toBeGreaterThanOrEqual(SEA_CLEAR_MIN);
+        // le mouillage aussi est en haute mer : la galère y file tout droit, sans passer par la terre
+        for (let k = 0; k <= 1; k += 0.05) expect(sea[w.ci(Math.floor(home[0] + (out[0] - home[0]) * k), Math.floor(home[1] + (out[1] - home[1]) * k))], `${seed} ${f} ${id}`).toBe(1);
+      }
+    }
+  }, 120000);
+
+  /** Une carte plate de terre ferme (hauteur 1), où l'on creuse de l'eau */
+  function flat(dig: (x: number, z: number) => boolean) {
+    setMapSize(96);
+    const w = new World(), heights = new Float32Array((N + 1) * (N + 1));
+    for (let z = 0; z <= N; z++) for (let x = 0; x <= N; x++) heights[z * (N + 1) + x] = dig(x, z) ? -1.6 : 1;
+    w.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), buildings: [], nextId: 1 });
+    w.updateVis();
+    return w;
+  }
+
+  it('une mer intérieure, si grande soit-elle, n’est pas la haute mer : « Aucune haute mer atteignable »', () => {
+    // un grand bassin de 34 cases de côté, sous le niveau de la mer, sans issue vers le large
+    const w = flat((x, z) => x >= 50 && x <= 84 && z >= 30 && z <= 64);
+    expect(openWater(w).some((c) => c === 1)).toBe(false);
+    const v = settle(w, 40, 44);
+    for (const id of ['megalodon', 'kraken']) {
+      expect(v.ex.start(mission(id), 0, 1)).toBeNull();
+      expect(v.ex.lastFail).toMatch(/Aucune haute mer atteignable/);
+    }
+  });
+
+  it('le même bassin ouvert sur le large : la chasse y part, au milieu de l’eau', () => {
+    const w = flat((x, z) => x >= 50 && z >= 30 && z <= 64);
+    const v = settle(w, 40, 44), sea = openWater(w);
+    const { out } = arena(v, 'megalodon');
+    expect(seaClearance(w, out[0], out[1], SEA_CLEAR, sea)).toBeGreaterThanOrEqual(SEA_CLEAR_MIN);
+  });
+
+  it('un étroit bras de mer (moins large que la scène) ne suffit pas', () => {
+    // un chenal de 8 cases de large, ouvert sur le bord de la carte
+    const w = flat((x, z) => x >= 50 && z >= 40 && z <= 48);
+    const v = settle(w, 40, 44);
+    expect(v.ex.start(mission('kraken'), 0, 1)).toBeNull();
+    expect(v.ex.lastFail).toMatch(/Aucune haute mer atteignable/);
   });
 });
 
