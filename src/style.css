@@ -873,3 +873,5 @@ button.bgo:hover { background: #0f9270; }
 @keyframes toastBounce { 0% { transform: translateX(-50%) translateY(-14px); } 45% { transform: translateX(-50%) translateY(6px); } 70% { transform: translateX(-50%) translateY(-3px); } 100% { transform: translateX(-50%) translateY(0); } }
 #toast.show { animation: toastBounce 0.5s ease-out; }
 @media (prefers-reduced-motion: reduce) { #toast.show { animation: none; } }
+/* barres de fabrication : pas de transition (la barre est redessinée avec sa largeur, elle repartait de zéro à chaque rafraîchissement) */
+.cbar > i, .queue .bar > i { transition: none; }

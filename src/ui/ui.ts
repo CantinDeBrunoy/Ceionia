@@ -1657,11 +1657,11 @@ export class UI {
           <small class="gd">${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} : −${Math.round(g.cut * 100)} % de risque · ${per(g.id)}</small>
           ${why ? `<small class="why">${why}</small>` : ''}
           <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 16, 2)} ${price || 'Fabriquer'}</button>
-          ${st.craft[0] === g.id ? '<div class="bar gnbar cbar"><i></i></div>' : ''}
+          ${st.craft[0] === g.id ? `<div class="bar gnbar cbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}
         </div>`;
       }).join('')}</div>
       <h4>Fabrication</h4>
-      <div class="queue">${st.craft.length ? st.craft.map((id, i) => `<span class="qi">${ic(GEAR_BY[id].icon, 16, 2)} ${GEAR_BY[id].name}${i === 0 ? '<i class="bar"><i></i></i>' : ''}<button data-cancel="${i}" title="Annuler" aria-label="Annuler">${ic('close', 14, 2)}</button></span>`).join('') : '<small>Rien en cours.</small>'}</div>`;
+      <div class="queue">${st.craft.length ? st.craft.map((id, i) => `<span class="qi">${ic(GEAR_BY[id].icon, 16, 2)} ${GEAR_BY[id].name}${i === 0 ? `<i class="bar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></i>` : ''}<button data-cancel="${i}" title="Annuler" aria-label="Annuler">${ic('close', 14, 2)}</button></span>`).join('') : '<small>Rien en cours.</small>'}</div>`;
     el.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => (b.onclick = () => {
       if (ex.craft(b.dataset.craft as GearId, age)) { h.audio.sfxClick(); changed(); }
     }));

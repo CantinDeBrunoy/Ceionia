@@ -10,7 +10,7 @@ import { facingRoadRot, footprintOrigin } from './placement';
 import { autoRoad } from './autoroads';
 import { planRoad, RoadPlan } from './freeRoad';
 import { sampleCurve } from '../world/curves';
-import { priceIn, canPay, pay, shortLabel } from '../sim/economy';
+import { priceIn, canPay, pay, shortLabel, houseLimit } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
@@ -724,7 +724,7 @@ export class ToolController implements ToolInput {
     const o = footprintOrigin(this.kind, hit.x, hit.z);
     // un grand bâtiment neuf se paie en bois et en pierre (déplacer est gratuit)
     const cost = this.moveOrigin ? null : priceIn(w, this.kind, this.h.getAge());
-    const where = w.canPlace(this.kind, o.x, o.z), reason = where ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+    const where = w.canPlace(this.kind, o.x, o.z), reason = where ?? houseLimit(w, this.kind, this.h.getAge()) ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
     if (reason) {
       const now = performance.now();
       // un grand bâtiment refusé ici : les points verts montrent où il tient
@@ -820,7 +820,7 @@ export class ToolController implements ToolInput {
         this.ghostBody.position.set(off, 0, off); this.ghostGlow.position.set(off, 0, off);
       }
       const cost = this.moveOrigin ? null : priceIn(w, kind, age);
-      this.placeWhy = reason ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+      this.placeWhy = reason ?? houseLimit(w, kind, age) ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
       if (s >= 2) this.showSpots(kind, o.x, o.z);
       setGhostValid(!this.placeWhy);
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
