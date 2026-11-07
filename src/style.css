@@ -842,54 +842,123 @@ button.bgo:hover { background: #0f9270; }
 .failMsg { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: #fdecea; color: #a4281f; font-weight: 700; font-size: 13px; }
 
 /* ---------- Contrôle des troupes (Enfers, île du portail) ---------- */
-#troopBar { display: none; position: absolute; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 16px); padding: 8px 10px; z-index: 7; font-size: 12.5px; }
-body.commanding #troopBar { display: block; }
 body.commanding.under #underBar { top: calc(var(--hudB, 82px) + 10px); bottom: auto; }
 body.commanding #dock { display: none; }
-#troopBar .trow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
-#troopBar .trow + .trow { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
-#troopBar button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; white-space: nowrap; }
+/* l'interface de commandement : ordres à gauche, caserne (île) ou base avancée (Enfers) à droite, troupes en bas, ruban d'état en haut,
+   Aide et Quitter en bas à droite ; le conteneur ne gêne pas le jeu, seuls ses panneaux captent la souris */
+#troopBar { display: none; position: absolute; inset: 0; z-index: 7; pointer-events: none; font-size: 13px; }
+body.commanding #troopBar { display: block; }
+#troopBar > * { pointer-events: auto; }
+#troopBar button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; white-space: nowrap; }
 #troopBar button.on { background: var(--accent); color: #fff; }
-#troopBar kbd { font-size: 10.5px; opacity: 0.75; }
-#troopBar .tcard { position: relative; flex-direction: column; gap: 0; min-width: 64px; padding: 4px 8px 7px; line-height: 1.15; }
-#troopBar .tcard .ti { font-size: 18px; }
-#troopBar .tcard small { color: var(--ink2); font-size: 10.5px; }
-#troopBar .tcard i { position: absolute; left: 6px; bottom: 3px; height: 3px; max-width: calc(100% - 12px); border-radius: 2px; background: #3fbf5a; }
-#troopBar .tcard i.low { background: #e0a020; }
-#troopBar .tcard.on small { color: #fff; }
-#troopBar .tnone, #troopBar .twd { color: var(--ink2); font-weight: 600; }
-#troopBar .wst { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: var(--ink2); }
+#troopBar kbd { margin-left: auto; font-size: 10.5px; opacity: 0.55; font-weight: 600; }
+#troopBar .tstate { position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
+#troopBar .tstate > * { pointer-events: auto; }
+#troopBar .tchip { padding: 7px 14px; border-radius: 12px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); font-size: 14px; font-weight: 700; color: var(--ink); }
+#troopBar .tchip:empty { display: none; }
+body.under #troopBar .tstate { top: calc(var(--hudB, 82px) + 66px); }
+body:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) + 58px); }
+body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) + 114px); }
+#troopBar .wst { display: inline-flex; align-items: center; gap: 6px; }
+#troopBar .wst b { color: #c8482b; }
 #troopBar .wst.hot { color: #c0392b; }
-#troopBar .wst button { padding: 2px 6px; }
-#troopBar .grps { display: inline-flex; gap: 3px; }
-#troopBar .grp { min-width: 26px; justify-content: center; padding: 4px 6px; color: var(--ink2); }
-#troopBar .grp.has { color: var(--ink); font-weight: 800; }
-#troopBar .grp small { font-size: 9.5px; color: var(--accent-ink); }
-#troopBar .trec { display: inline-flex; align-items: center; gap: 4px; padding-left: 8px; border-left: 1px solid var(--line); }
-#troopBar .trec small { color: var(--ink2); font-weight: 600; }
-#troopBar .trec button.off { opacity: 0.45; }
-/* il ne manque que l'équipement : un clic le fait fabriquer */
-#troopBar .trec button.craft { opacity: 0.8; border-style: dashed; }
-#troopBar .tx { margin-left: 4px; }
-#troopBar .tbase .tbt { color: var(--ink2); margin-right: 2px; }
-#troopBar .tbase .tb { font-size: 16px; padding: 3px 7px; }
-#troopBar .tbase .tb.off { opacity: 0.45; }
-#troopBar .tbase .tsep { width: 1px; align-self: stretch; background: var(--line); margin: 0 3px; }
-#troopBar .tsup { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: var(--ink2); }
-#troopBar .tsup i { display: inline-block; width: 64px; height: 7px; border-radius: 4px; background: rgba(0, 0, 0, 0.18); overflow: hidden; }
+#troopBar .wst button { padding: 3px 9px; font-weight: 700; }
+#troopBar .twd { color: var(--ink2); }
+#troopBar .tdock { position: absolute; top: calc(var(--hudB, 82px) + 64px); display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 18px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); max-height: calc(100dvh - var(--hudB, 82px) - 64px - 100px); overflow-y: auto; overscroll-behavior: contain; }
+body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
+#troopBar .tleft { left: 12px; width: 140px; }
+#troopBar .tright { right: 12px; width: 210px; }
+#troopBar .tdock h5 { margin: 0; padding: 0 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink2); }
+#troopBar .tdock h5 small { font-size: 12px; letter-spacing: 0; color: var(--ink); }
+#troopBar .tord { min-height: 56px; border: 0; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 800; padding: 0 12px; background: #5b6b8c; }
+#troopBar .tord .oi { font-size: 20px; line-height: 1; }
+#troopBar .tord kbd { color: #fff; }
+#troopBar .tord.atk { background: #c8482b; }
+#troopBar .tord.hld { background: #2b6cf0; }
+#troopBar .tord.rtr { background: #5b6b8c; }
+#troopBar .tord.prt, #troopBar .tord.gth, #troopBar .tord.gar { background: #7a3fb0; white-space: normal; line-height: 1.15; }
+#troopBar .tord.tps { background: #8a94a8; min-height: 44px; font-size: 14px; }
+#troopBar .tord.on { background: var(--ink); outline: 3px solid #ffd54a; }
+#troopBar .trb { flex-direction: column; align-items: flex-start; gap: 1px; min-height: 52px; justify-content: center; padding: 4px 12px; border-radius: 12px; border: 2px solid #12a37e; background: #e6f7f1; color: var(--ink); text-align: left; white-space: normal; }
+#troopBar .trb b { font-size: 14px; font-weight: 800; }
+#troopBar .trb small { font-size: 11.5px; font-weight: 700; color: var(--ink2); line-height: 1.2; }
+#troopBar .trb.craft { border: 2px dashed #d6a24a; background: #fff8e6; }
+#troopBar .trb.craft small { color: #8a5a00; }
+#troopBar .trb.off { opacity: 0.55; border-color: var(--line); background: var(--glass); }
+#troopBar .trb.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+#troopBar .trb.on small { color: #fff; }
+#troopBar .tdock .q { color: var(--ink2); font-weight: 600; }
+#troopBar .tbase { width: 250px; }
+#troopBar .tbuilds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#troopBar .tbuilds .trb { border-color: #c9a45a; background: #fff8e6; min-height: 48px; padding: 4px 8px; }
+#troopBar .tbuilds .trb b { font-size: 12.5px; }
+#troopBar .tbuilds .trb.off { background: var(--glass); border-color: var(--line); }
+#troopBar .tbuilds .trb.on { background: var(--accent); border-color: var(--accent); }
+#troopBar .tsup { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ink2); }
+#troopBar .tchip .tsup { display: inline-flex; color: var(--ink); }
+#troopBar .tsup i { display: inline-block; width: 64px; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.18); overflow: hidden; }
 #troopBar .tsup i b { display: block; height: 100%; background: #3fbf5a; }
 #troopBar .tsup.low { color: #c0392b; }
 #troopBar .tsup.low i b { background: #e0a020; }
 /* jauge de contamination de l'île du portail : rouge-violet qui recule */
-#troopBar .tblight { margin-left: 6px; font-size: 0.92em; }
 #troopBar .tblight i b, #troopBar .tblight.low i b { background: linear-gradient(90deg, #8a3fd0, #e0442a); }
+#troopBar .tblight { color: #7a3fb0; }
+#troopBar .tbot { position: absolute; left: 172px; right: 200px; bottom: max(12px, env(safe-area-inset-bottom)); padding: 8px 12px 10px; border-radius: 18px; display: flex; flex-direction: column; gap: 6px; }
+#troopBar .thint { font-size: 13px; font-weight: 700; color: var(--ink2); text-align: center; }
+#troopBar .tcards { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+#troopBar .tcard { position: relative; flex-direction: column; gap: 0; min-width: 96px; min-height: 60px; padding: 4px 16px 9px; line-height: 1.15; border: 2px solid var(--line); border-radius: 14px; }
+#troopBar .tcard b { font-size: 22px; font-weight: 800; }
+#troopBar .tcard .tn { font-size: 13px; font-weight: 800; }
+#troopBar .tcard i { position: absolute; left: 10px; bottom: 4px; height: 4px; max-width: calc(100% - 20px); border-radius: 2px; background: #3fbf5a; }
+#troopBar .tcard i.low { background: #e0a020; }
+#troopBar .tcard.on { border-color: #2b6cf0; background: #2b6cf0; }
+#troopBar .tall { min-height: 60px; padding: 0 20px; border: 2px solid var(--line); border-radius: 14px; font-size: 15px; font-weight: 800; }
+#troopBar .tnone { color: var(--ink2); font-weight: 600; }
+#troopBar .tgl { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--ink2); }
+#troopBar .grps { display: inline-flex; gap: 4px; }
+#troopBar .grp { min-width: 44px; min-height: 44px; justify-content: center; padding: 4px 6px; font-weight: 800; color: var(--ink2); }
+#troopBar .grp.has { color: var(--ink); }
+#troopBar .grp small { font-size: 10px; color: var(--accent-ink); }
+#troopBar .tcorner { position: absolute; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; gap: 8px; }
+#troopBar .tcorner button { min-height: 60px; padding: 0 18px; font-size: 14px; font-weight: 800; border-radius: 14px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); color: var(--ink); }
+#troopBar .tcorner button.on { background: var(--accent); color: #fff; }
+#troopBar .thelp { position: absolute; right: 12px; bottom: 84px; list-style: none; margin: 0; padding: 10px 14px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; width: min(460px, calc(100vw - 24px)); }
+#troopBar .thelp li { display: contents; }
+#troopBar .thelp b { color: var(--ink); white-space: nowrap; }
+#troopBar .thelp span { color: var(--ink2); }
+@media (max-width: 640px) {
+  #troopBar { font-size: 11.5px; }
+  #troopBar .tstate { gap: 5px; }
+  #troopBar .tchip { padding: 5px 9px; font-size: 12px; }
+  #troopBar .tdock { top: calc(var(--hudB, 82px) + 78px); padding: 7px; gap: 6px; border-radius: 14px; max-height: calc(100dvh - var(--hudB, 82px) - 78px - 150px); }
+  #troopBar .tleft { left: 6px; width: 104px; }
+  #troopBar .tright { right: 6px; width: 138px; }
+  #troopBar .tbase { width: 158px; }
+  #troopBar .tbuilds { grid-template-columns: 1fr; }
+  #troopBar .tbuilds .trb { min-height: 38px; }
+  body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 100px); max-height: calc(100dvh - var(--hudB, 82px) - 100px - 150px); }
+  body.under #troopBar .tstate { top: calc(var(--hudB, 82px) + 66px); }
+  #troopBar .tord { min-height: 44px; font-size: 13px; padding: 0 8px; gap: 5px; }
+  #troopBar .tord kbd { display: none; }
+  #troopBar .trb { min-height: 44px; padding: 3px 8px; }
+  #troopBar .trb small { font-size: 10.5px; }
+  #troopBar .tbuilds .trb b { font-size: 11px; }
+  #troopBar .tbot { left: 6px; right: 6px; bottom: 58px; padding: 6px 8px 8px; }
+  #troopBar .thint { font-size: 11.5px; }
+  #troopBar .tcard { min-width: 72px; min-height: 50px; padding: 3px 8px 8px; }
+  #troopBar .tcard b { font-size: 18px; }
+  #troopBar .tall { min-height: 50px; padding: 0 12px; }
+  #troopBar .tgl { display: none; }
+  #troopBar .tcorner { right: 6px; bottom: 6px; }
+  #troopBar .tcorner button { min-height: 44px; padding: 0 14px; }
+  #troopBar .thelp { bottom: 56px; right: 6px; }
+}
 #selBox { display: none; position: absolute; z-index: 8; border: 1.5px solid #7dff8a; background: rgba(125, 255, 138, 0.12); pointer-events: none; }
 #warAlert { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); z-index: 9; padding: 8px 10px 8px 14px; align-items: center; gap: 10px; font-weight: 800; color: #9a1e12; border-color: rgba(200, 60, 40, 0.5); }
 #warAlert.show { display: flex; animation: riseCentered 0.16s ease-out; }
 /* (centrée : l'apparition garde son décalage de moitié, elle ne glisse plus de la droite) */
 @keyframes riseCentered { from { opacity: 0; transform: translate(-50%, 6px); } }
 #warAlert button { padding: 5px 10px; font-weight: 700; }
-@media (max-width: 640px) { #troopBar { font-size: 11.5px; padding: 6px; } #troopBar .tcard { min-width: 54px; } }
 /* ---------- Le royaume des Enfers : barre de vie du roi, écran de victoire ---------- */
 #bossBar { position: absolute; top: calc(var(--hudB, 82px) + 66px); left: 50%; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 10px; width: min(460px, calc(100vw - 24px)); padding: 7px 12px 8px 8px; border-color: rgba(200, 60, 40, 0.5); }
 #bossBar[hidden] { display: none; }
@@ -910,12 +979,6 @@ body.commanding #dock { display: none; }
 .kwRewards li { display: flex; gap: 8px; align-items: flex-start; padding: 7px 9px; border-radius: 10px; background: var(--accent-soft); font-size: 12.5px; line-height: 1.35; color: var(--ink); }
 .kwRewards b { font-size: 16px; line-height: 1.1; }
 @media (max-width: 560px) { .kwRewards { grid-template-columns: 1fr; } }
-/* l'aide « ? » de la barre des troupes */
-#troopBar .thb { font-weight: 800; min-width: 28px; justify-content: center; }
-#troopBar .thelp { list-style: none; margin: 6px 0 0; padding: 6px 2px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; max-width: 560px; }
-#troopBar .thelp li { display: contents; }
-#troopBar .thelp b { color: var(--ink); white-space: nowrap; }
-#troopBar .thelp span { color: var(--ink2); }
 /* les aides du volet militaire : une petite bulle, deux lignes au plus, cliquable */
 #warTip { position: absolute; top: calc(var(--hudB, 82px) + 12px); right: 12px; z-index: 9; width: min(400px, calc(100vw - 24px)); padding: 9px 30px 7px 12px; cursor: pointer; border-color: rgba(70, 110, 220, 0.45); animation: rise 0.2s ease-out; }
 #warTip[hidden] { display: none; }
