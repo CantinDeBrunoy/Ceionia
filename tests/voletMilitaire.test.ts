@@ -256,6 +256,19 @@ describe('volet militaire : passages entre l’île et les Enfers', () => {
     expect(war.recruitHell('soldier', 1, 80)).toMatch(/éteint/);
   }, 30000);
 
+  it('une ancienne sauvegarde (troupe dans les Enfers, sans faction ni base ni roi) se reprend : la troupe y est, on peut y aller', () => {
+    const w = setup(), war = new War(w);
+    war.load({ army: { troops: [{ id: 3, kind: 'soldier', hp: 50, maxHp: 110, where: 'hell', heal: 0 }, { id: 4, kind: 'archer', hp: 0, maxHp: 65, where: 'isle', heal: 30 }], queue: [], nextId: 5 }, faction: null, raid: { w: null } });
+    war.update(0.1, 1);
+    expect(war.troopsIn(war.faction)).toHaveLength(1);
+    expect(war.troopsIn(war.faction)[0].hp).toBe(50);
+    expect(war.hellPresence()).toBe(true);
+    expect(war.isle!.raid).toBeNull();
+    // le blessé guérit sur l'île
+    tick(war, 31);
+    expect(war.troopsIn(war.isle!.sim)).toHaveLength(1);
+  }, 30000);
+
   it('partie quittée pendant la cinématique de la victoire : l’écran des récompenses n’est pas perdu', () => {
     const w = setup(), war = new War(w);
     tick(war, 1);
