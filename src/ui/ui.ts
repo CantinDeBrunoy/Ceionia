@@ -795,8 +795,9 @@ export class UI {
     const upgrades = ups ? `<div class="acts ups">${ups}</div>` : '';
     const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${railChip}|${rails}|${upgrades}`;
     if (key === this.selKey) return;
-    const same = this.selKey.split('|', 1)[0] === String(b.id);
+    const same = box.dataset.id === String(b.id) && box.classList.contains('show');
     this.selKey = key;
+    box.dataset.id = String(b.id);
     // d'un rendu à l'autre du même bâtiment (les trains roulent), on garde ce qui est déplié et où l'on a défilé
     const opened = same ? [...box.querySelectorAll<HTMLDetailsElement>('details[open]')].map((x) => x.dataset.k) : [];
     const scroll = same ? box.scrollTop : 0, listScroll = same ? box.querySelector('.rlist')?.scrollTop ?? 0 : 0;
