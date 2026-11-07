@@ -16,6 +16,7 @@ import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, splitIntro, mandatoriesFor, isLegendary, isMilitary, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps } from '../sim/gear';
+import { securityCuts, SECURITY_MAX } from '../sim/security';
 import { CAMP_QUESTS } from '../sim/depths';
 import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
@@ -1450,12 +1451,22 @@ export class UI {
         <p class="ctext">${c.text}</p>
         <div class="cstats"><span>👥 ${c.party} habitant${c.party > 1 ? 's' : ''}</span><span>⏳ ${workLabel(c.work)}</span><span>${DEST_ICON[c.dest]}</span>${c.mounts ? `<span>🐎 ${c.mounts} chevaux</span>` : ''}${c.fuel ? `<span>⛽ ${c.fuel} carburant</span>` : ''}</div>
         <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')}</small>
+        ${this.securityHtml(c)}
         <small class="kit ${pv.label ? 'ready' : ''}">${ic('kit', 13, 2)} ${pv.label ? `Prêt : on emporte ${pv.label}` : 'Aucun équipement en réserve pour ces dangers'}</small>
         ${this.gearNeedHtml(c)}
         <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
         <button class="choice depart" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">${ic('compass', 16, 2)} Partir</button>
         ${why ? `<small class="why">${why}</small>` : ''}</div>`;
     }).join('');
+  }
+
+  /** Sous un choix : ce que les pompiers et la police du village retirent à son risque (rien sans eux) */
+  private securityHtml(c: Choice) {
+    const ex = this.host.expeditions, age = this.host.sim.age;
+    const cuts = securityCuts(dangersOf(c), (k) => ex.has(k));
+    if (!cuts.length) return '';
+    const capped = cuts.reduce((p, s) => p * (1 - s.cut), 1) < 1 - SECURITY_MAX;
+    return `<small class="kit ready">${ic('shield', 13, 2)} Veillent sur l’équipe : ${cuts.map((s) => `${KINDS[s.kind].names[Math.max(age, KINDS[s.kind].minAge)].toLowerCase()} −${Math.round(s.cut * 100)} %`).join(', ')}${capped ? ` (−${Math.round(SECURITY_MAX * 100)} % au plus)` : ''}</small>`;
   }
 
   /**

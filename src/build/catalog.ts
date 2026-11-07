@@ -369,14 +369,14 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', 'Poste des gardes', 'Maison du guet', 'Poste de police', 'Commissariat', 'Centrale de sécurité'],
     desc: 'Veille sur la tranquillité du village, de jour comme de nuit.',
     joy: [0, 2, 3, 4, 5, 6], jobs: [0, 2, 3, 5, 7, 8],
-    perk: 'Les rondes rassurent les habitants : un peu de bien-être. À l’âge industriel, le fourgon de la police fait sa tournée ; à l’époque moderne, une voiture de patrouille sillonne les rues, gyrophare allumé.',
+    perk: 'Les rondes rassurent les habitants : un peu de bien-être. Des gardes escortent les expéditions : risque −5 %, −10 % face aux bêtes sauvages et aux créatures (avec les pompiers, −15 % au plus). À l’âge industriel, le fourgon de la police fait sa tournée ; à l’époque moderne, une voiture de patrouille sillonne les rues, gyrophare allumé.',
   },
   fire: {
     id: 'fire', size: 2, minAge: 0, icon: '🚒', cat: 'service',
     names: ['Guetteurs', 'Poste des vigiles', 'Tour de guet', 'Caserne de pompiers', 'Centre de secours', 'Base de drones de secours'],
     desc: 'Veille sur les environs.',
     jobs: [1, 2, 3, 5, 7, 8],
-    perk: 'Les incendies à 14 cases sont éteints en quelques instants, même loin de l’eau.',
+    perk: 'Les incendies à 14 cases sont éteints en quelques instants, même loin de l’eau. Les secours veillent sur les expéditions : risque −5 %, −10 % face aux chutes, à l’eau vive et aux intempéries (avec la police, −15 % au plus).',
   },
   arcology: {
     id: 'arcology', size: 3, minAge: 5, icon: '🏙️', cat: 'home',
