@@ -1209,6 +1209,75 @@ function campGround(p: Parts, seed: number, busy: number[][] = [], door: [number
   }
 }
 
+/** Ce que `workGround` sème autour d'un atelier ou d'un camp (des nombres : combien) */
+interface WorkGround {
+  /** demi-côté de la zone (de -half à half), hauteur du sol */
+  half?: number; y?: number;
+  /** petites taches de terre battue, et leur teinte (terre, argile, poussière de pierre…) */
+  patches?: number; tint?: number;
+  stumps?: number; ferns?: number;
+  /** copeaux de bois (ou tessons, de la couleur `chip`), éclats de silex, cailloux */
+  chips?: number; chip?: number; flints?: number; pebbles?: number;
+  fagots?: number;
+}
+
+/**
+ * Abords d'un bâtiment sans dalle sous lui : le vrai sol se voit entre quelques petites taches de terre battue
+ * irrégulières (jamais un disque plein), souches, fougères, copeaux, éclats de silex, cailloux et fagots, selon le métier.
+ * Rien dans les cercles `busy` ([x, z, r]). Pièces très légères (cônes ouverts, tétraèdres, disques à 5 ou 6 côtés)
+ */
+function workGround(p: Parts, seed: number, busy: number[][], o: WorkGround) {
+  const half = o.half ?? 0.46, y = o.y ?? 0, h = (i: number, k: number) => hash2(i, k, seed);
+  const free = (x: number, z: number, m: number) => Math.abs(x) < half - m && Math.abs(z) < half - m && busy.every(([bx, bz, r]) => Math.hypot(x - bx, z - bz) > r + m);
+  const spot = (i: number, m: number, inside = false): [number, number] | null => {
+    for (let t = 0; t < 8; t++) {
+      const x = (h(i, 60 + t) * 2 - 1) * half, z = (h(i, 70 + t) * 2 - 1) * half;
+      // les taches de terre se posent aussi sous les objets (c'est le sol qu'on piétine autour d'eux)
+      if (inside ? Math.abs(x) < half - m && Math.abs(z) < half - m : free(x, z, m)) return [x, z];
+    }
+    return null;
+  };
+  // terre battue : petites taches irrégulières de deux ou trois tons, qui se chevauchent par endroits
+  for (let i = 0; i < (o.patches ?? 0); i++) {
+    const r = (0.05 + h(i, 1) * 0.06) * Math.max(1, half / 0.46), at = spot(500 + i, r * 1.3, true);
+    if (!at) continue;
+    p.add(new THREE.CircleGeometry(r, 5 + (i % 2)).rotateX(-Math.PI / 2).scale(1.2 + h(i, 2) * 0.6, 1, 0.7 + h(i, 3) * 0.3), at[0], y + 0.002 + (i % 4) * 0.0005, at[1], dark(o.tint ?? C.dirt, 0.66 + h(i, 4) * 0.3), h(i, 5) * 3);
+  }
+  // souches : le tronc scié, sa tranche claire, deux racines qui plongent
+  for (let i = 0; i < (o.stumps ?? 0); i++) {
+    const at = spot(600 + i, 0.05);
+    if (!at) continue;
+    const r = 0.03 + h(i, 10) * 0.015, ht = 0.03 + h(i, 11) * 0.03;
+    p.cyl(r, r * 1.2, ht, 7, at[0], y, at[1], 0x6a4a30);
+    p.cyl(r * 0.92, r * 0.92, 0.003, 7, at[0], y + ht, at[1], 0xd2b080);
+    for (let k = 0; k < 2; k++) { const a = h(i, 12) * 6.283 + k * 2.6; p.add(new THREE.CylinderGeometry(0, 0.009, 0.05, 3, 1, true).rotateZ(Math.PI / 2), at[0] + Math.cos(a) * r * 1.4, y + 0.006, at[1] - Math.sin(a) * r * 1.4, 0x5a3e28, a, false, 0.25); }
+  }
+  // fougères : six frondes en éventail, aplaties, d'un vert plus ou moins sombre
+  for (let i = 0; i < (o.ferns ?? 0); i++) {
+    const at = spot(700 + i, 0.04);
+    if (!at) continue;
+    const c = [0x5f8a3e, 0x6f9a48, 0x7fa250][i % 3], len = 0.06 + h(i, 20) * 0.04;
+    for (let k = 0; k < 6; k++) p.add(new THREE.CylinderGeometry(0, 0.011, len, 3, 1, true).scale(1, 1, 0.3).translate(0, len / 2, 0), at[0], y, at[1], dark(c, 0.9 + (k % 2) * 0.12), (k / 6) * 6.283 + h(i, 21), false, 0.95 + (k % 2) * 0.3);
+  }
+  // copeaux (ou tessons), éclats de silex, cailloux
+  for (let i = 0; i < (o.chips ?? 0); i++) {
+    const at = spot(800 + i, 0.01);
+    if (at) p.add(new THREE.TetrahedronGeometry(0.008 + h(i, 30) * 0.006, 0).scale(1.6, 0.3, 1), at[0], y + 0.003, at[1], dark(o.chip ?? 0xd8b88a, 0.85 + h(i, 31) * 0.2), h(i, 32) * 6);
+  }
+  for (let i = 0; i < (o.flints ?? 0); i++) {
+    const at = spot(900 + i, 0.01);
+    if (at) p.add(new THREE.OctahedronGeometry(0.007 + h(i, 40) * 0.006, 0).scale(1.4, 0.35, 1), at[0], y + 0.003, at[1], h(i, 41) > 0.5 ? FLINT : 0x8a8478, h(i, 42) * 6);
+  }
+  for (let i = 0; i < (o.pebbles ?? 0); i++) {
+    const at = spot(1000 + i, 0.015);
+    if (at) p.add(new THREE.DodecahedronGeometry(0.012 + h(i, 50) * 0.014, 0).scale(1.2, 0.55, 1), at[0], y + 0.004, at[1], dark(C.stone, 0.7 + h(i, 51) * 0.3), h(i, 52) * 6);
+  }
+  for (let i = 0; i < (o.fagots ?? 0); i++) {
+    const at = spot(1100 + i, 0.12);
+    if (at) fagot(p, at[0], at[1], h(i, 60) * 3);
+  }
+}
+
 /** Tas d'os : os longs aux têtes renflées, côtes en arc, un crâne de cerf et ses bois */
 function bonePile(p: Parts, x: number, z: number, ry = 0, antlers = true) {
   const c = Math.cos(ry), s = Math.sin(ry);
@@ -2306,8 +2375,8 @@ function medievalWell(p: Parts) {
 function well(p: Parts, age: number) {
   // Préhistoire : margelle de pierre, seau et petit toit de chaume (puits de Quaternius, tuiles recolorées)
   if (age === 0 && attach(['p_well'], 0, 0.6, 0, 0, Math.PI, unRed(C.thatch))) {
-    // sol piétiné et humide autour de la margelle, eau sombre juste sous son rebord
-    p.cyl(0.36, 0.37, 0.008, 10, 0, 0, 0, dark(C.dirt, 0.82));
+    // sol piétiné et humide autour de la margelle (des taches de boue, pas un disque plein), eau sombre sous son rebord
+    for (let i = 0; i < 6; i++) { const a = i * 1.05 + 0.3, d = 0.2 + (i % 3) * 0.04; p.add(new THREE.CircleGeometry(0.07 + (i % 2) * 0.03, 6).rotateX(-Math.PI / 2).scale(1.5, 1, 0.8), Math.cos(a) * d, 0.002 + i * 0.0004, Math.sin(a) * d, dark(C.dirt, 0.62 + (i % 3) * 0.08), a + Math.PI / 2); }
     waterPool(p, 0, 0.17 + 0.012, 0.052, 0.155, 14);
     // jarres à eau, auge creusée dans un tronc, touffes de roseaux, pierres plates pour ne pas patauger
     pots(p, 0.3, 0.22, 3);
@@ -2316,13 +2385,16 @@ function well(p: Parts, age: number) {
     for (const [x, z] of [[-0.36, -0.3], [0.34, -0.34], [-0.4, 0.0]]) for (let k = 0; k < 5; k++) p.add(new THREE.BoxGeometry(0.008, 0.1 + k * 0.012, 0.008).translate(0, 0.05, 0), x + Math.cos(k * 1.7) * 0.025, 0, z + Math.sin(k * 1.7) * 0.025, k % 2 ? 0x6f9e4e : 0x8aae5a, 0, false, Math.cos(k) * 0.2);
     for (const [x, z] of [[0.05, 0.38], [0.14, 0.44], [-0.06, 0.43]]) p.sphere(0.03, x, 0.004, z, C.stone, 0, 0.35);
     // la porteuse d'eau et son outre, une autre outre qui attend, la flaque boueuse, coupe-vent de branchages au fond
-    trampled(p, 0, 0.36, 0.16, 660, 0.008);
+    trampled(p, 0, 0.36, 0.16, 660, 0);
     caveFolk(p, -0.15, 0.38, Math.PI - 0.3, 2);
     p.add(new THREE.IcosahedronGeometry(0.026, 0).scale(1.3, 0.8, 1), -0.19, 0.09, 0.4, 0x9a7a52);
     waterSkin(p, 0.23, 0.4, 0.4);
     p.add(new THREE.CircleGeometry(0.06, 8).rotateX(-Math.PI / 2).scale(1.4, 1, 0.8), 0.16, 0.01, 0.3, 0x5a8aa0, 0.4);
     branchFence(p, -0.24, -0.44, 0.22, -0.45, 661, 0.12);
-    campGround(p, 632, [[0, 0, 0.36], [0.32, 0.24, 0.1], [-0.3, 0.26, 0.13], [-0.15, 0.38, 0.06], [0.23, 0.4, 0.05], [0, -0.45, 0.06]], [0, 0.32]);
+    const busy = [[0, 0, 0.36], [0.32, 0.24, 0.1], [-0.3, 0.26, 0.13], [-0.15, 0.38, 0.06], [0.23, 0.4, 0.05], [0, -0.45, 0.06]];
+    campGround(p, 632, busy, [0, 0.32]);
+    // fougères qui aiment l'eau, cailloux
+    workGround(p, 646, busy, { ferns: 3, pebbles: 4 });
     return;
   }
   if (age === 1) { antiqueWell(p); return; }
@@ -2393,8 +2465,8 @@ function well(p: Parts, age: number) {
 
 function workshop(p: Parts, age: number, o: ModelOpts) {
   if (age === 0 && hasModel('p_roof')) {
-    // atelier du tailleur de pierre : appentis de bois, établi dessous, meule, blocs à tailler, rondins, éclats au sol
-    p.cyl(0.47, 0.48, 0.01, 12, 0, 0, 0, dark(C.dirt, 0.95));
+    // atelier du tailleur de pierre : appentis de bois, établi dessous, meule, blocs à tailler, rondins, éclats au sol (pas de
+    // disque de terre sous l'atelier : le pré se voit entre les taches de terre battue)
     attach(['p_roof'], 0, 0.36, -0.22, -0.26, 0, toWood, 0.6);
     attach(['p_workbench'], 0, 0.24, 0.02, 0.04, 0, toWood);
     attach(['p_grind'], 0, 0.2, 0.28, -0.18, -0.7, toWood);
@@ -2411,7 +2483,7 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     hearth(p, 0.38, 0.4);
     // le tailleur assis à l'établi, l'apprenti qui le regarde ; éclats de débitage tout autour, rognons de silex bruts en
     // tas, outils finis sur leur peau, coupe-vent de branchages au fond, sol piétiné
-    trampled(p, 0.02, 0.16, 0.36, 690, 0.01);
+    trampled(p, 0.02, 0.16, 0.36, 690, 0);
     caveSeated(p, 0.02, 0.17, Math.PI, 3);
     caveFolk(p, -0.36, 0.16, 1.9, 2);
     for (let i = 0; i < 18; i++) {
@@ -2421,7 +2493,10 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     for (let k = 0; k < 5; k++) p.add(new THREE.DodecahedronGeometry(0.022 - k * 0.002, 0), 0.43 + (k % 2) * 0.03 - 0.015, 0.02 + (k > 2 ? 0.025 : 0), 0.13 + (k % 3) * 0.025, k % 2 ? 0x4a4640 : 0x6a6458, k);
     flintKit(p, -0.02, 0.42, 0.1);
     branchFence(p, 0.08, -0.46, 0.44, -0.42, 692, 0.14);
-    campGround(p, 633, [[-0.22, -0.26, 0.2], [0.02, 0.1, 0.2], [0.28, -0.18, 0.1], [0.24, 0.28, 0.1], [-0.26, 0.28, 0.14], [-0.3, 0, 0.1], [-0.06, -0.38, 0.06], [0.4, -0.05, 0.06], [0.38, 0.4, 0.1]], null);
+    const busy = [[-0.22, -0.26, 0.2], [0.02, 0.1, 0.2], [0.28, -0.18, 0.1], [0.24, 0.28, 0.1], [-0.26, 0.28, 0.14], [-0.3, 0, 0.1], [-0.06, -0.38, 0.06], [0.4, -0.05, 0.06], [0.38, 0.4, 0.1]];
+    campGround(p, 633, busy, null);
+    // autour : éclats de silex jusque dans l'herbe, rognons et cailloux, souche, fougères au pied du coupe-vent, fagot
+    workGround(p, 642, busy, { patches: 7, flints: 16, pebbles: 6, stumps: 1, ferns: 4, fagots: 1 });
   } else if (age === 0) {
     p.cone(0.38, 0.5, 5, -0.12, 0, -0.1, C.hide);
     p.box(0.16, 0.1, 0.12, 0.28, 0, 0.2, C.darkstone); p.box(0.1, 0.06, 0.08, 0.28, 0.1, 0.2, C.stone);
@@ -2431,8 +2506,9 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     // atelier du potier : maison de terre au toit de tuiles et son auvent, étagères de pots qui sèchent, le potier à son tour,
     // fosse d'argile et auge, four en ruche qui rougeoie et son bois, amphores couchées et debout, tessons, étal des vases
     const clay = 0xb8704e, raw = 0xd9b48a, mud = 0xe6d2ae;
-    p.cyl(0.47, 0.48, 0.01, 12, 0, 0, 0, dark(C.dirt, 0.95));
-    for (const [x, z, r] of [[-0.3, 0.22, 0.12], [0.0, 0.08, 0.09], [0.3, -0.1, 0.08]]) p.add(new THREE.CircleGeometry(r, 8).rotateX(-Math.PI / 2), x, 0.011, z, dark(clay, 1.08));
+    // pas de disque de terre sous l'atelier : taches de terre battue et d'argile dans le pré, tessons, cailloux, touffes
+    workGround(p, 654, [[-0.14, -0.3, 0.2], [0.31, -0.24, 0.16], [-0.02, 0.08, 0.1], [-0.33, 0.39, 0.08], [0.16, 0.22, 0.14]], { patches: 8, chips: 8, chip: clay, pebbles: 4, ferns: 2 });
+    for (const [x, z, r] of [[-0.3, 0.22, 0.12], [0.0, 0.08, 0.09], [0.3, -0.1, 0.08]]) p.add(new THREE.CircleGeometry(r, 8).rotateX(-Math.PI / 2), x, 0.004, z, dark(clay, 1.08));
     p.box(0.6, 0.22, 0.24, -0.14, 0.01, -0.33, mud);
     dressBack(p, 1, -0.14, -0.33, 0.6, 0.24, 0.01, 0.23, 56, 2, 0.54, 0xc8a070);
     roof(p, -0.14, 0.23, -0.33, { w: 0.6, d: 0.24, h: 0.1, color: C.terracotta, wall: mud, tiles: true, ov: 0.03 });
@@ -2493,8 +2569,8 @@ function workshop(p: Parts, age: number, o: ModelOpts) {
     attach(['a_jug'], 0, 0.05, 0.12, 0.42);
     // le sol de l'atelier : terre foncée détrempée de barbotine autour du tour et de la fosse, traces de pas vers l'étal
     for (const [x, z, r, k] of [[-0.02, 0.1, 0.1, 0.62], [-0.2, 0.3, 0.07, 0.66], [0.2, 0.34, 0.06, 0.7], [0.4, -0.02, 0.07, 0.72], [-0.42, 0.06, 0.06, 0.7], [0.1, -0.02, 0.06, 0.68]])
-      p.add(new THREE.CircleGeometry(r, 7).rotateX(-Math.PI / 2).scale(1.3, 1, 0.8), x, 0.0125 + k * 0.001, z, dark(C.dirt, k), x * 7);
-    for (let k = 0; k < 6; k++) p.add(new THREE.CircleGeometry(0.01, 5).rotateX(-Math.PI / 2).scale(0.7, 1, 1.4), -0.1 + (k % 2) * 0.03 + k * 0.012, 0.0145, 0.2 + k * 0.045, dark(C.dirt, 0.5), 0.2);
+      p.add(new THREE.CircleGeometry(r, 7).rotateX(-Math.PI / 2).scale(1.3, 1, 0.8), x, 0.0045 + k * 0.001, z, dark(C.dirt, k), x * 7);
+    for (let k = 0; k < 6; k++) p.add(new THREE.CircleGeometry(0.01, 5).rotateX(-Math.PI / 2).scale(0.7, 1, 1.4), -0.1 + (k % 2) * 0.03 + k * 0.012, 0.0065, 0.2 + k * 0.045, dark(C.dirt, 0.5), 0.2);
     // un second banc de travail : planche sur tréteaux, pains d'argile, boudins, estèque et fil à couper
     p.box(0.15, 0.012, 0.05, 0.14, 0.05, 0.035, C.wood);
     for (const x of [0.08, 0.2]) p.box(0.012, 0.04, 0.04, x, 0.01, 0.035, C.darkwood);
@@ -3947,8 +4023,8 @@ function horse(p: Parts, x: number, z: number, ry: number, coat = 0x7a5236, y = 
 
 function health(p: Parts, age: number) {
   if (age === 0) {
-    // deux huttes de peaux, un grand séchoir à herbes, la marmite sur le feu, nattes des malades, carrés de simples
-    p.cyl(0.86, 0.88, 0.012, 14, 0, 0, 0, dark(C.dirt, 0.92));
+    // deux huttes de peaux, un grand séchoir à herbes, la marmite sur le feu, nattes des malades, carrés de simples (sans
+    // disque de terre sous le camp : le pré se voit entre les taches de terre battue)
     // tentes de peaux (Survival Kit de Kenney, toiles recolorées), sinon huttes coniques
     const tents = attach(['p_tent'], 0, 0.62, -0.44, -0.46, 0.25, unRed(C.hide)) && attach(['p_tent'], 0, 0.5, 0.46, -0.52, -0.4, unRed(0xc9a98a));
     if (!tents) {
@@ -3979,7 +4055,7 @@ function health(p: Parts, age: number) {
     // le guérisseur penché sur un malade couché sous sa fourrure, la femme qui broie les simples au mortier, bols de
     // tisane, herbes qui fument dans une coupe (les fumigations), crânes et amulettes d'os au poteau, sol piétiné, haie de
     // branchages autour du jardin des simples
-    trampled(p, -0.2, 0.2, 0.42, 700, 0.012); trampled(p, 0.3, -0.1, 0.3, 701, 0.012);
+    trampled(p, -0.2, 0.2, 0.42, 700, 0); trampled(p, 0.3, -0.1, 0.3, 701, 0);
     pallet(p, -0.3, 0.66, 0.1); caveSeated(p, -0.32, 0.66, 0.1, 2, -0.05);
     caveFolk(p, -0.12, 0.62, -1.7, 4);
     p.cyl(0.03, 0.022, 0.035, 7, 0.3, 0, 0.27, 0x8a7a68); p.cyl(0.024, 0.024, 0.004, 7, 0.3, 0.035, 0.27, 0x6f9e4e);
@@ -3991,7 +4067,9 @@ function health(p: Parts, age: number) {
     skull(p, 0.78, 0.38, -0.04, 0); for (let k = 0; k < 3; k++) p.box(0.006, 0.05, 0.006, 0.76 + k * 0.02, 0.27, -0.045, k % 2 ? BONE : 0xc8a070);
     branchFence(p, 0.33, 0.44, 0.85, 0.44, 702, 0.1); branchFence(p, 0.33, 0.44, 0.33, 0.86, 703, 0.1);
     const busy = [[-0.44, -0.46, 0.34], [0.46, -0.52, 0.3], [-0.22, 0.32, 0.15], [-0.62, 0.02, 0.16], [-0.66, 0.3, 0.16], [0.6, 0.66, 0.3], [-0.3, 0.66, 0.16], [0.05, 0.4, 0.12], [0.3, 0.27, 0.1], [0.12, 0.6, 0.06]];
-    campGround(p, 636, busy, [-0.1, 0.5], 0.84, 0.012); campGround(p, 637, busy, null, 0.84, 0.012);
+    campGround(p, 636, busy, [-0.1, 0.5], 0.84, 0); campGround(p, 637, busy, null, 0.84, 0);
+    // fougères et simples sauvages au bord du camp, souche, fagots pour le feu des tisanes
+    workGround(p, 643, busy, { half: 0.84, patches: 8, ferns: 7, stumps: 1, fagots: 2, pebbles: 5 });
   } else if (age === 1) {
     // sanctuaire d'Asclépios : temple à colonnes, portique, bassin de l'eau sacrée, cyprès et jardin des simples
     p.box(1.76, 0.05, 1.16, 0, 0, -0.36, C.stone); p.box(1.66, 0.05, 1.06, 0, 0.05, -0.36, 0xe6dccb);
@@ -4249,8 +4327,8 @@ function health(p: Parts, age: number) {
 /** Écoles (2 × 2) : cercle des anciens, académie à portiques, école du monastère, école communale, université */
 function school(p: Parts, age: number) {
   if (age === 0) {
-    // grand cercle de rondins autour du feu, pierres levées peintes, totem, auvent de peau de l'ancien
-    p.cyl(0.86, 0.88, 0.012, 14, 0, 0, 0, dark(C.dirt, 0.88));
+    // grand cercle de rondins autour du feu, pierres levées peintes, totem, auvent de peau de l'ancien (sans disque de terre
+    // sous le cercle : le sol battu de `trampled` et du campement suffit)
     for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + 0.2; log(p, 0.3, 0.04, Math.cos(a) * 0.5, 0, 0.05 + Math.sin(a) * 0.5, -a + Math.PI / 2); }
     campfire(p, 0, 0.05, 1.2);
     for (const [x, z, h, r] of [[-0.48, -0.72, 0.42, 0.08], [0, -0.82, 0.55, -0.04], [0.48, -0.72, 0.38, 0.1]] as [number, number, number, number][]) {
@@ -4265,7 +4343,7 @@ function school(p: Parts, age: number) {
     p.box(0.2, 0.015, 0.14, 0.68, 0, 0.4, 0xd9b99b);
     // la leçon : le sol battu du cercle, les enfants et les anciens assis sur les rondins face au feu, l'ancien debout qui
     // raconte en montrant les pierres peintes ; sous l'auvent, l'ancienne qui peint à l'ocre ; pots d'ocre, tambour, os
-    trampled(p, 0, 0.05, 0.62, 710, 0.012);
+    trampled(p, 0, 0.05, 0.62, 710, 0);
     for (const i of [0, 2, 3, 5, 6]) {
       const a = (i / 8) * Math.PI * 2 + 0.2, x = Math.cos(a) * 0.5, z = 0.05 + Math.sin(a) * 0.5;
       caveSeated(p, x, z, Math.atan2(-x, 0.05 - z), i, 0.01);
@@ -4277,7 +4355,9 @@ function school(p: Parts, age: number) {
     bonePile(p, 0.74, -0.3, 2.4);
     pallet(p, -0.66, -0.5, 0.6, 0x8a6a4a);
     const busy = [[0, 0.05, 0.62], [-0.48, -0.72, 0.13], [0, -0.82, 0.13], [0.48, -0.72, 0.13], [-0.72, 0.5, 0.1], [0.68, 0.42, 0.26], [-0.42, -0.38, 0.07], [0.74, -0.3, 0.1], [-0.66, -0.5, 0.16]];
-    campGround(p, 638, busy, [0, 0.55], 0.84, 0.012); campGround(p, 639, busy, null, 0.84, 0.012);
+    campGround(p, 638, busy, [0, 0.55], 0.84, 0); campGround(p, 639, busy, null, 0.84, 0);
+    // fougères et souches au bord du cercle, fagots pour la veillée, cailloux
+    workGround(p, 644, busy, { half: 0.84, patches: 6, ferns: 7, stumps: 2, fagots: 2, pebbles: 6 });
   } else if (age === 1) {
     // académie : portiques en U autour d'une cour dallée, colonnes à chapiteaux et toits de tuiles, oliviers, statue,
     // bancs, cadran solaire
@@ -4519,7 +4599,7 @@ function school(p: Parts, age: number) {
 function firehouse(p: Parts, age: number, v: number) {
   if (age === 0) {
     // haute plateforme de guet, hutte, bûcher du signal sur son cercle de pierres, outres d'eau, fosses de sable, tambour
-    p.cyl(0.86, 0.88, 0.012, 14, 0, 0, 0, dark(C.dirt, 0.9));
+    // (sans disque de terre sous le poste : le pré se voit entre les taches de terre battue)
     for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) pole(p, 0.022, 1.0, -0.42 + x * 0.14, -0.42 + z * 0.14, C.wood, z * 0.06, -x * 0.06);
     p.box(0.42, 0.03, 0.42, -0.42, 0.96, -0.42, C.wood);
     for (const [x, z, w, d] of [[0, 0.2, 0.42, 0.02], [0, -0.2, 0.42, 0.02], [0.2, 0, 0.02, 0.42], [-0.2, 0, 0.02, 0.42]]) p.box(w, 0.09, d, -0.42 + x, 0.99, -0.42 + z, C.darkwood);
@@ -4538,7 +4618,7 @@ function firehouse(p: Parts, age: number, v: number) {
     pole(p, 0.005, 0.32, -0.33, -0.36, C.wood, 0, -0.1, 0.99);
     caveFolk(p, -0.1, 0.12, 2.2, 3, 'run');
     caveSeated(p, 0.1, 0.44, Math.PI, 0);
-    trampled(p, 0.0, 0.2, 0.6, 720, 0.012);
+    trampled(p, 0.0, 0.2, 0.6, 720, 0);
     for (const x of [0.66, 0.84]) pole(p, 0.008, 0.2, x, 0.12, C.darkwood);
     p.box(0.22, 0.012, 0.012, 0.75, 0.16, 0.12, C.darkwood);
     for (let k = 0; k < 4; k++) {
@@ -4549,7 +4629,9 @@ function firehouse(p: Parts, age: number, v: number) {
     bonePile(p, -0.1, -0.7, 0.3);
     branchFence(p, -0.86, 0.0, -0.86, 0.36, 721, 0.14); branchFence(p, 0.2, -0.86, 0.75, -0.86, 722, 0.14);
     const busy = [[-0.42, -0.42, 0.24], [0.5, -0.5, 0.32], [0.42, 0.32, 0.22], [-0.6, 0.52, 0.14], [-0.12, 0.66, 0.2], [0.1, 0.32, 0.09], [0.76, 0.1, 0.12], [0.68, -0.1, 0.15], [-0.1, -0.7, 0.1], [0.1, 0.44, 0.06]];
-    campGround(p, 640, busy, [0.5, -0.2], 0.84, 0.012); campGround(p, 641, busy, null, 0.84, 0.012);
+    campGround(p, 640, busy, [0.5, -0.2], 0.84, 0); campGround(p, 641, busy, null, 0.84, 0);
+    // fagots de réserve pour le bûcher du signal, souches des arbres abattus pour dégager la vue, fougères, cailloux
+    workGround(p, 645, busy, { half: 0.84, patches: 7, fagots: 3, stumps: 3, ferns: 5, pebbles: 5 });
   } else if (age === 1) {
     // poste des vigiles : tour de guet de pierre au toit de tuiles, caserne tuilée, grande citerne, amphores d'eau,
     // râtelier de seaux, échelle, tonneaux
@@ -4926,7 +5008,9 @@ function boxHive(p: Parts, x: number, z: number, body: number, ry = 0) {
 /** Rucher (1 × 1) : des ruches dans un pré fleuri, et leurs abeilles qui tournent autour */
 function apiary(p: Parts, age: number) {
   const grass = age === 0 ? 0x9cb86a : 0x8cbf6c, FL = [0xf2e27a, 0xffffff, 0xd88ab8, 0xb9a6e6, 0xf29a6a];
-  p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, grass);
+  // aux premiers âges, pas de disque d'herbe : les fleurs poussent dans le pré, entre fougères et taches de terre
+  if (age >= 2) p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, grass);
+  else workGround(p, 647 + age, [[-0.2, -0.12, 0.12], [0.05, -0.22, 0.12], [0.25, -0.06, 0.12], [0, -0.2, age ? 0.36 : 0], [0.36, 0.17, 0.08], [0.24, 0.22, 0.08], [-0.32, 0.28, 0.1]], { patches: 4, ferns: 3, stumps: age ? 0 : 1, pebbles: 3 });
   for (let i = 0; i < 30; i++) {
     const a = i * 2.4, r = 0.2 + (i % 7) * 0.035, x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (z < 0.05 && Math.abs(x) < 0.34 && r < 0.36) continue;
@@ -4947,7 +5031,7 @@ function apiary(p: Parts, age: number) {
     bees(0.03, 0.2, -0.12);
     // le chemin piétiné, la récolteuse et sa torche d'herbes qui enfume les abeilles, rayons de miel sur une pierre plate,
     // coupe-vent de branchages derrière les troncs
-    trampled(p, 0.1, 0.32, 0.14, 630, 0.012);
+    trampled(p, 0.1, 0.32, 0.14, 630, 0);
     caveFolk(p, 0.36, 0.17, -2.7, 4);
     p.add(new THREE.CylinderGeometry(0.008, 0.012, 0.09, 5), 0.31, 0.13, 0.13, 0xb89a5a, 0, false, 0.6, 0.3);
     p.sphere(0.012, 0.285, 0.17, 0.115, 0xff8a3a); smoke(0.28, 0.19, 0.11, 0);
@@ -5668,7 +5752,9 @@ function logPile(p: Parts, x: number, z: number, n: number, len: number, ry = 0)
  * sa grande scie, scierie à vapeur de brique qui fume, scierie mécanique au toit de tôle ; toujours des grumes et du bois débité
  */
 function lumber(p: Parts, age: number) {
-  p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, 0x9cae6c);
+  // aux premiers âges, pas de disque d'herbe : les copeaux tombent dans le pré, entre souches, fougères et terre battue
+  if (age >= 2) p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, 0x9cae6c);
+  else workGround(p, 650 + age, [[-0.08, -0.22, 0.28], [0.3, 0.3, 0.07], [-0.34, 0.28, 0.07], [0.36, -0.06, 0.07], [0.12, 0.28, 0.08], [-0.3, 0.06, 0.1]], { patches: 6, ferns: 4, stumps: 2, chips: 10, pebbles: 3 });
   for (let i = 0; i < 14; i++) p.cyl(0.012, 0.016, 0.004, 5, -0.4 + hash2(i, 2, 78) * 0.8, 0.012, -0.4 + hash2(i, 3, 78) * 0.8, 0xc8a878);
   // souches et billot à la hache
   for (const [x, z] of [[0.3, 0.3], [-0.34, 0.28], [0.36, -0.06]]) { p.cyl(0.05, 0.06, 0.06, 8, x, 0.012, z, 0x7a5636); p.cyl(0.046, 0.046, 0.004, 8, x, 0.072, z, 0xd8b88a); }
@@ -5685,7 +5771,7 @@ function lumber(p: Parts, age: number) {
     if (age === 0) {
       // le bûcheron à son billot, l'autre qui rapporte une branche sur l'épaule ; hache de pierre plantée dans une souche,
       // fagots, lanières d'écorce qui sèchent, copeaux, sol piétiné
-      trampled(p, 0.04, 0.16, 0.3, 640, 0.012);
+      trampled(p, 0.04, 0.16, 0.3, 640, 0);
       caveFolk(p, 0.12, 0.41, Math.PI, 1);
       caveFolk(p, -0.15, 0.17, 1.1, 3);
       p.add(new THREE.CylinderGeometry(0.014, 0.018, 0.34, 5).rotateZ(Math.PI / 2), -0.15, 0.16, 0.17, 0x7a5636, 1.1 - Math.PI / 2, false, 0.15);
@@ -5694,7 +5780,7 @@ function lumber(p: Parts, age: number) {
       fagot(p, 0.05, 0.06, 0.3); fagot(p, 0.22, 0.12, -0.9);
       for (let k = 0; k < 4; k++) p.add(new THREE.BoxGeometry(0.1, 0.004, 0.022), -0.16 + k * 0.03, 0.014 + k * 0.001, 0.36, k % 2 ? 0x6a4a34 : 0x8a6a4a, 0.3 + k * 0.4);
       for (let k = 0; k < 8; k++) p.box(0.014, 0.004, 0.008, 0.12 + Math.cos(k * 2.2) * 0.07, 0.013, 0.28 + Math.sin(k * 2.2) * 0.07, 0xd8b88a, k);
-      campGround(p, 634, [[-0.12, -0.22, 0.2], [0.12, -0.22, 0.2], [0.3, 0.3, 0.07], [-0.34, 0.28, 0.07], [0.36, -0.06, 0.07], [0.12, 0.3, 0.1], [-0.3, 0.08, 0.1], [0.12, 0.1, 0.13], [-0.15, 0.17, 0.08]], [0, 0.0], 0.44, 0.012);
+      campGround(p, 634, [[-0.12, -0.22, 0.2], [0.12, -0.22, 0.2], [0.3, 0.3, 0.07], [-0.34, 0.28, 0.07], [0.36, -0.06, 0.07], [0.12, 0.3, 0.1], [-0.3, 0.08, 0.1], [0.12, 0.1, 0.13], [-0.15, 0.17, 0.08]], [0, 0.0], 0.44, 0);
     }
   } else if (age === 2) {
     // scierie à colombages : grande scie de long sur son chevalet, planches empilées
@@ -5763,7 +5849,10 @@ function lumber(p: Parts, age: number) {
  */
 function quarry(p: Parts, age: number) {
   const rock = 0xa8a296, cut = 0xc8c2b4;
-  p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, 0xb0a890);
+  // aux premiers âges, pas de disque de poussière : le carreau se perd dans le pré, en taches de poussière de pierre et de
+  // terre, cailloux et quelques fougères au bord
+  if (age >= 2) p.cyl(0.46, 0.47, 0.012, 14, 0, 0, 0, 0xb0a890);
+  else workGround(p, 652 + age, [[0, -0.3, 0.2], [-0.22, 0.12, 0.12], [0.22, 0.2, 0.1]], { patches: 7, tint: 0xb0a890, pebbles: 6, ferns: 3 });
   // front de taille : rochers anguleux au fond, entaillés de gradins aux arêtes nettes (plus nombreux avec les âges)
   for (let i = 0; i < 6; i++) {
     const h = (k: number) => hash2(i, k, 402);
@@ -5801,7 +5890,7 @@ function quarry(p: Parts, age: number) {
     p.add(new THREE.CylinderGeometry(0.004, 0.006, 0.14, 4).rotateZ(Math.PI / 2), -0.3, 0.012, 0.38, 0xc8b08a, -0.4);
     p.add(new THREE.CylinderGeometry(0.003, 0.004, 0.05, 3).rotateZ(Math.PI / 2), -0.27, 0.012, 0.355, 0xc8b08a, 0.6);
     wickerBasket(p, 0.06, 0.38, 0xb8b0a0);
-    campGround(p, 635, [[-0.3, -0.28, 0.18], [0, -0.28, 0.18], [0.3, -0.28, 0.18], [-0.22, 0.12, 0.12], [0.38, -0.03, 0.08], [0.32, 0.2, 0.13], [0.06, 0.38, 0.06], [-0.34, 0.32, 0.07], [-0.06, 0.12, 0.07]], [0.1, 0.2], 0.44, 0.012);
+    campGround(p, 635, [[-0.3, -0.28, 0.18], [0, -0.28, 0.18], [0.3, -0.28, 0.18], [-0.22, 0.12, 0.12], [0.38, -0.03, 0.08], [0.32, 0.2, 0.13], [0.06, 0.38, 0.06], [-0.34, 0.32, 0.07], [-0.06, 0.12, 0.07]], [0.1, 0.2], 0.44, 0);
     return;
   }
   if (age <= 2) {

@@ -188,6 +188,28 @@ describe('maisons et tours', () => {
       }
   });
 
+  it('les bâtiments de la Préhistoire (et l’atelier, le bûcheron, la carrière, le rucher antiques) ne reposent pas sur un disque de terre plat', () => {
+    // un socle plat se trahit par de grands triangles tournés vers le ciel au ras du sol (les taches de terre battue sont
+    // petites) ; l'enclos garde son pré, qui est son sol
+    const cases: [KindId, number][] = [];
+    for (const kind of KIND_ORDER) if (KINDS[kind].minAge === 0 && kind !== 'pen') cases.push([kind, 0]);
+    cases.push(['workshop', 1], ['lumber', 1], ['quarry', 1], ['apiary', 1]);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    for (const [kind, age] of cases)
+      for (let v = 0; v < 3; v++) {
+        const pos = getModel(kind, age, { v, L: false, R: false, F: true }).body.attributes.position, s = KINDS[kind].size;
+        let big = 0;
+        for (let t = 0; t + 2 < pos.count; t += 3) {
+          a.fromBufferAttribute(pos, t); b.fromBufferAttribute(pos, t + 1); c.fromBufferAttribute(pos, t + 2);
+          if ((a.y + b.y + c.y) / 3 > 0.03) continue;
+          const n = b.clone().sub(a).cross(c.clone().sub(a));
+          if (n.y <= 0) continue;
+          big = Math.max(big, n.length() / 2 / (s * s));
+        }
+        expect(big, `${kind} à l’âge ${age}, variante ${v}`).toBeLessThan(0.03);
+      }
+  });
+
   it('les bâtiments « Night City » de l’âge futuriste restent sous le plafond (3 000 triangles par case, 4 500 en 2 × 2)', () => {
     const tris = (g: THREE.BufferGeometry | null | undefined) => (g ? g.attributes.position.count / 3 : 0);
     const kinds: KindId[] = ['health', 'fire', 'police', 'tavern', 'barber', 'manor', 'theater', 'lab', 'baths'];
