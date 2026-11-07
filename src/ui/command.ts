@@ -391,7 +391,7 @@ export class CommandUI implements ToolInput {
       if (this.host.age() < TROOPS[k].age) return '';
       // il ne manque que l'équipement : un clic le fait fabriquer, la recrue part dès qu'il est prêt
       const craft = !!why && onlyGearMissing(w.army, k, ctx);
-      const tip = craft ? `${why!.replace(/ \(à fabriquer.*\)$/, '')} : cliquez, l’atelier du village le fabrique et la recrue part dès qu’il est prêt` : why ?? `Recruter : ${TROOPS[k].desc} (${TROOPS[k].gear.map((g) => g === 'spear' ? 'une lance' : g === 'bow' ? 'un arc' : g === 'sword' ? 'une épée' : 'une armure').join(' et ')} de la réserve, ${TROOPS[k].time} s)`;
+      const tip = craft ? `${why!.replace(/ \(à fabriquer.*\)$/, '')} : cliquez, l’atelier du village fabrique l’équipement et la recrue part dès qu’il est prêt` : why ?? `Recruter : ${TROOPS[k].desc} (${TROOPS[k].gear.map((g) => g === 'spear' ? 'une lance' : g === 'bow' ? 'un arc' : g === 'sword' ? 'une épée' : 'une armure').join(' et ')} de la réserve, ${TROOPS[k].time} s)`;
       return `<button data-a="rec:${k}" class="${why ? (craft ? 'craft' : 'off') : ''}" title="${tip.replace(/"/g, '&quot;')}">${TROOPS[k].icon} +</button>`;
     }).join('')}${w.army.queue.length || this.waiting.length ? `<small class="q">${[...this.waiting.map((k) => `${TROOPS[k].icon}🛠️`), ...w.army.queue.map((q) => `${TROOPS[q.kind].icon}${Math.ceil(q.left)}s`)].join(' ')}</small>` : ''}</div>` : '';
     const next = w.nextWaveIn(), raid = isle && w.isle?.raid;

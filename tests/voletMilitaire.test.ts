@@ -127,6 +127,19 @@ describe('volet militaire : rien ne reste coincé', () => {
     expect(war.nextWaveIn()).not.toBeNull();
   }, 30000);
 
+  it('la caserne abattue, le repli mène à la tour de garde, pas au portail d’où sortent les démons', () => {
+    const w = setup(), war = new War(w);
+    tick(war, 1);
+    const isle = war.isle!, bar = [...isle.defs.values()].find((b) => b.kind === 'barracks')!, tower = [...isle.defs.values()].find((b) => b.kind === 'watchtower')!;
+    const near = (p: [number, number], b: { site: { x: number; z: number; r: number } }) => Math.hypot(p[0] - b.site.x, p[1] - b.site.z) < b.site.r + 3;
+    expect(near(isle.rallyPoint(), bar)).toBe(true);
+    bar.down = true;
+    expect(near(isle.rallyPoint(), tower)).toBe(true);
+    // tout est tombé : devant les ruines de la caserne
+    tower.down = true;
+    expect(near(isle.rallyPoint(), bar)).toBe(true);
+  }, 30000);
+
   it('la durée d’une vague en cours se sauvegarde', () => {
     const w = setup(), war = new War(w);
     tick(war, 1);

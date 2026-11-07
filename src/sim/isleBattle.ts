@@ -165,9 +165,14 @@ export class IsleBattle {
     this.sim.buildings.clear();
   }
 
-  /** Point de ralliement de la garnison : devant la première caserne debout (sinon devant le portail) */
+  /**
+   * Point de ralliement de la garnison : devant la première caserne debout ; sinon au pied d'une tour debout, sinon devant les
+   * ruines d'une caserne (le repli menait droit au portail, d'où sortent les démons) ; sans défense, devant le portail
+   */
   rallyPoint(): [number, number] {
-    for (const b of this.defs.values()) if (b.kind === 'barracks' && !b.down) return this.map.freeNear(b.site.x, b.site.z + b.site.r + 0.8);
+    const defs = [...this.defs.values()];
+    const b = defs.find((d) => d.kind === 'barracks' && !d.down) ?? defs.find((d) => !d.down) ?? defs.find((d) => d.kind === 'barracks');
+    if (b) return this.map.freeNear(b.site.x, b.site.z + b.site.r + 0.8);
     return this.map.freeNear(this.map.arrival[0], this.map.arrival[1]);
   }
 

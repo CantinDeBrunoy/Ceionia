@@ -101,7 +101,7 @@ export class War {
   }
 
   /** Casernes : celles de l'île et les casernes avancées des Enfers */
-  private barracks() { return isleDefenses(this.world).barracks + (this.base?.posts() ?? 0); }
+  private barracks() { return isleDefenses(this.world).barracks + (this.portalOut ? 0 : this.base?.posts() ?? 0); }
 
   /** Contexte de recrutement */
   recruitCtx(age: number, pop: number): RecruitCtx {
