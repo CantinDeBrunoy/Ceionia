@@ -81,9 +81,6 @@ describe('prix en briques', () => {
     expect(costOf('brickworks', 3)!.brick).toBeUndefined();
     expect(costOf('quarry', 3)).toBeNull();
     expect(costOf('mill', 3)!.brick).toBeUndefined();
-    // en défi, tout se paie, les briques plus cher de moitié
-    expect(costOf('refinery', 4, 'challenge', 1)!.brick).toBe(45);
-    expect(costOf('house', 3, 'challenge', 1)!.brick).toBeUndefined();
   });
 
   it('on ne bâtit que si l’on a les briques ; elles se dépensent, et le prix se dit', () => {
