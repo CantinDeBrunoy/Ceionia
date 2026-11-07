@@ -59,18 +59,18 @@ function play(v: ReturnType<typeof village>, a: ActiveExpedition, until: () => b
 
 describe('la chasse au monstre des mers', () => {
   it('l’épave ne flotte qu’en chemin, jamais en plein combat ; le kraken a son tourbillon, le mégalodon sa charge', () => {
-    const m = mission('monster');
+    const mega = mission('megalodon'), kraken = mission('kraken');
     expect(EVENT_BY.wreck.arrive).toBe(true);
-    for (const ci of [0, 1]) {
+    for (const m of [mega, kraken]) for (const ci of [0, 1]) {
       expect(ids(m, ci, true)).toContain('wreck');
       expect(ids(m, ci, false)).not.toContain('wreck');
       // la tempête peut surgir à tout moment
       expect(ids(m, ci, false)).toContain('swell');
     }
-    expect(ids(m, 1, false)).toContain('maelstrom');
-    expect(ids(m, 0, false)).not.toContain('maelstrom');
-    expect(ids(m, 0, false)).toContain('lunge');
-    expect(ids(m, 1, false)).not.toContain('lunge');
+    expect(ids(kraken, 0, false)).toContain('maelstrom');
+    expect(ids(mega, 0, false)).not.toContain('maelstrom');
+    expect(ids(mega, 0, false)).toContain('lunge');
+    expect(ids(kraken, 0, false)).not.toContain('lunge');
     // le tourbillon et la charge offrent de se battre (harpons) ou non
     for (const id of ['maelstrom', 'lunge']) {
       expect(EVENT_BY[id].options.some((o) => o.needs?.includes('spear'))).toBe(true);
@@ -79,7 +79,7 @@ describe('la chasse au monstre des mers', () => {
   });
 
   it('le tourbillon ne tombe qu’en plein combat, une fois le kraken sorti de l’eau, jamais à l’arrivée', () => {
-    const m = mission('monster'), at = (k?: number) => eventsFor({ ...ctx(m, 1, k === undefined), at: k }).map((e) => e.id);
+    const m = mission('kraken'), at = (k?: number) => eventsFor({ ...ctx(m, 0, k === undefined), at: k }).map((e) => e.id);
     expect(at()).not.toContain('maelstrom');
     expect(at(0.3)).not.toContain('maelstrom');
     expect(at(0.55)).toContain('maelstrom');
@@ -88,7 +88,7 @@ describe('la chasse au monstre des mers', () => {
     expect(EVENT_BY.maelstrom.from).toBeGreaterThanOrEqual(0.5);
     // sur le vrai fil d'une chasse : jamais le premier imprévu à l'arrivée
     for (const seed of [3, 7, 11, 19, 23, 29]) {
-      const v = village(1, seed), a = v.ex.start(m, 1, 1)!;
+      const v = village(1, seed), a = v.ex.start(m, 0, 1)!;
       let atK = -1;
       play(v, a, () => a.phase === 'back' || a.phase === 'home', () => {
         if (a.wait?.id === 'maelstrom' && atK < 0) atK = a.phase === 'work' ? a.t / Math.max(1, a.c.work + a.extra) : 0;
@@ -99,7 +99,7 @@ describe('la chasse au monstre des mers', () => {
 
   it('même d’un village loin de la côte, la chasse prend le large (pas une rivière)', () => {
     for (const ci of [0, 1]) {
-      const v = village(1), a = v.ex.start(mission('monster'), ci, 1)!;
+      const v = village(1), a = v.ex.start(mission(ci ? 'kraken' : 'megalodon'), 0, 1)!;
       expect(a, v.ex.lastFail ?? '').not.toBeNull();
       expect(a.sea).toBe(true);
       expect(a.site).toBe('river');
@@ -108,7 +108,7 @@ describe('la chasse au monstre des mers', () => {
 
   it('le monstre meurt sous les yeux de l’équipe : l’issue se tire avant la fin du travail, après le dernier imprévu, et c’est elle qui compte', { timeout: 30000 }, () => {
     for (const seed of [3, 7, 11, 19]) for (const ci of [0, 1]) {
-      const v = village(1, seed), a = v.ex.start(mission('monster'), ci, 1)!;
+      const v = village(1, seed), a = v.ex.start(mission(ci ? 'kraken' : 'megalodon'), 0, 1)!;
       expect(a).not.toBeNull();
       let fatedAt = -1, lastEvent = -1, events = 0;
       play(v, a, () => a.phase === 'back' || a.phase === 'home', () => {

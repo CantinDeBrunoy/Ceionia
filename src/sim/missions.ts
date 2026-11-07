@@ -357,23 +357,45 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    // expédition armée en mer : une galère, des hommes d'armes à pied (pas de chevaux), des harpons ; facultative, refaisable
-    id: 'monster', age: 1, mandatory: true, icon: '🦈', title: 'Chasser le monstre des mers',
-    intro: 'Un monstre géant rôde au large et coule les barques des pêcheurs. Une troupe d’hommes d’armes embarque sur une galère, harpons en main : il est temps de le chasser !',
+    // expédition armée en haute mer : deux galères, des hommes d'armes à pied (pas de chevaux), des harpons ; l'obligatoire de
+    // l'Antiquité (l'ancienne « chasse au monstre des mers », voir `readExpState`)
+    id: 'kraken', age: 1, mandatory: true, icon: '🐙', title: 'Chasser le kraken',
+    intro: 'Un géant à tentacules rôde au large et attrape les navires. Une troupe d’hommes d’armes embarque sur deux galères, harpons en main : il est temps de le chasser !',
     choices: [
       {
-        label: 'Le mégalodon', text: 'Un requin gros comme une maison : son aileron fend l’eau. Ses dents valent de l’or… s’il ne vous croque pas.',
-        dest: 'river', sea: true, scene: 'megalodon', fail: 'capsize', doing: 'harponne le mégalodon depuis la galère', danger: ['monster', 'water'], party: 5, work: 34, risk: 0.45, carry: 'sacks',
-        win: [food(5, 5), joy(3, 5), joy(1), { t: 'ore', n: 6 }, { t: 'perk', id: 'megalodon' }], lose: [hurt(2, 3), joy(-2, 3)],
-        winText: 'Les harpons ont frappé juste : le mégalodon est vaincu ! Sa viande nourrit le village, et ses dents géantes ornent la place.',
-        loseText: 'Un coup de queue, et la galère a chaviré : les hommes d’armes rentrent à la nage, deux sont blessés.',
-      },
-      {
-        label: 'Le kraken', text: 'Un géant à tentacules qui attrape les navires. Plus risqué, mais quelle gloire !',
+        label: 'Trancher ses tentacules', text: 'Les deux galères foncent sur lui, harpons et haches en main. Plus risqué, mais quelle gloire !',
         dest: 'river', sea: true, scene: 'kraken', fail: 'capsize', doing: 'tranche les tentacules du kraken, harpons en main', danger: ['monster', 'water'], party: 5, work: 38, risk: 0.55, carry: 'sacks',
         win: [food(3, 5), joy(5, 6), joy(2), { t: 'ore', n: 10 }, { t: 'perk', id: 'kraken' }], lose: [hurt(3, 4), joy(-3, 4)],
-        winText: 'Le kraken a lâché la galère et fui dans les profondeurs, un tentacule en moins : la légende est née ! Des perles et du minerai remontent avec lui.',
-        loseText: 'Les tentacules ont brisé les rames et secoué la galère : trois blessés, et le kraken est toujours là.',
+        winText: 'Le kraken a lâché les galères et fui dans les profondeurs, un tentacule en moins : la légende est née ! Des perles et du minerai remontent avec lui.',
+        loseText: 'Les tentacules ont brisé les rames et secoué les galères : trois blessés, et le kraken est toujours là.',
+      },
+      {
+        label: 'Le prendre en tenaille', text: 'Une galère de chaque côté : il ne sait plus où frapper. Plus long, un peu plus sûr.',
+        dest: 'river', sea: true, scene: 'kraken', fail: 'capsize', doing: 'prend le kraken en tenaille entre ses deux galères', danger: ['monster', 'water'], party: 6, work: 44, risk: 0.45, carry: 'sacks',
+        win: [food(3, 5), joy(4, 6), joy(2), { t: 'ore', n: 8 }, { t: 'perk', id: 'kraken' }], lose: [hurt(2, 4), joy(-2, 4)],
+        winText: 'Pris entre les deux galères, le kraken a plongé pour ne plus revenir : la légende est née ! Des perles et du minerai remontent avec lui.',
+        loseText: 'Le kraken a glissé entre les deux galères et en a secoué une : deux blessés, et il rôde toujours.',
+      },
+    ],
+  },
+  {
+    // expédition légendaire facultative : le mégalodon, en haute mer, contre deux galères
+    id: 'megalodon', age: 1, mandatory: false, icon: '🦈', title: 'Chasser le mégalodon',
+    intro: 'Un requin gros comme une maison fend la haute mer de son aileron et coule les barques des pêcheurs. Deux galères d’hommes d’armes partent le chasser, harpons en main.',
+    choices: [
+      {
+        label: 'Le harponner au large', text: 'Les deux galères l’encadrent et le criblent de harpons. Ses dents valent de l’or… s’il ne vous croque pas.',
+        dest: 'river', sea: true, scene: 'megalodon', fail: 'capsize', doing: 'harponne le mégalodon depuis ses deux galères', danger: ['monster', 'water'], party: 5, work: 34, risk: 0.45, carry: 'sacks',
+        win: [food(5, 5), joy(3, 5), joy(1), { t: 'ore', n: 6 }, { t: 'perk', id: 'megalodon' }], lose: [hurt(2, 3), joy(-2, 3)],
+        winText: 'Les harpons ont frappé juste : le mégalodon est vaincu ! Sa viande nourrit le village, et ses dents géantes ornent la place.',
+        loseText: 'Un coup de queue, et une galère a chaviré : les hommes d’armes rentrent à la nage, deux sont blessés.',
+      },
+      {
+        label: 'L’appâter avec une carcasse', text: 'Une baleine morte traînée entre les galères : il viendra à elle. Plus long, plus sûr.',
+        dest: 'river', sea: true, scene: 'megalodon', fail: 'capsize', doing: 'attire le mégalodon vers l’appât, harpons levés', danger: ['monster', 'water'], party: 5, work: 40, risk: 0.35, carry: 'sacks',
+        win: [food(4, 5), joy(3, 5), joy(1), { t: 'ore', n: 5 }, { t: 'perk', id: 'megalodon' }], lose: [hurt(1, 3), joy(-1, 3)],
+        winText: 'Le mégalodon a mordu à l’appât, et les harpons ont fait le reste : ses dents géantes ornent la place.',
+        loseText: 'Le mégalodon a emporté l’appât d’un coup de mâchoire et filé vers le large ; un rameur blessé.',
       },
     ],
   },
@@ -915,8 +937,12 @@ export function readExpState(d: any): ExpState {
   const s = newExpState();
   if (!d || typeof d !== 'object') return s;
   const ids = new Set(MISSIONS.map((m) => m.id));
-  s.done = Array.isArray(d.done) ? d.done.filter((x: any) => ids.has(x)) : [];
   s.perks = Array.isArray(d.perks) ? d.perks.filter((x: any) => typeof x === 'string') : [];
+  const was: string[] = Array.isArray(d.done) ? d.done : [];
+  // (les sauvegardes d'avant la séparation : « le monstre des mers » réussi vaut le kraken, l'obligatoire de l'Antiquité, quelle
+  // qu'ait été la proie ; et le mégalodon s'il en a rapporté les dents. Le trophée, lui, suit le savoir-faire rapporté)
+  const old = was.includes('monster') ? ['kraken', ...(s.perks.includes('megalodon') ? ['megalodon'] : [])] : [];
+  s.done = [...new Set([...was, ...old])].filter((x: any) => ids.has(x));
   // (les sauvegardes d'avant le plan des galeries : le repérage réussi l'a dressé)
   if (s.done.includes('scout') && !s.perks.includes('map')) s.perks.push('map');
   s.herd = Array.isArray(d.herd) ? d.herd.filter((x: any) => ['sheep', 'cow', 'pig', 'horse'].includes(x)) : [];

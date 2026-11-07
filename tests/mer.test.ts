@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { mulberry32 } from '../src/core/rng';
-import { MISSIONS, boatKindFor, BoatKind, choiceAt } from '../src/sim/missions';
+import { MISSIONS, boatKindFor, BoatKind, choiceAt, isLegendary, mandatoriesFor, readExpState } from '../src/sim/missions';
 import { EVENT_BY, eventsFor, EventCtx } from '../src/sim/events';
 import { Expeditions, ActiveExpedition, seaClearance, SEA_CLEAR_MIN } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
@@ -71,12 +71,18 @@ describe('le récif, la pêche au large et la chasse au monstre', () => {
     }
   });
 
-  it('la chasse au monstre : mission armée de l’Antiquité, galère et troupe à pied, deux monstres, des trophées', () => {
-    const m = mission('monster');
-    expect(m.age).toBe(1);
-    expect(m.mandatory).toBe(true);
-    expect(m.choices.map((c) => c.scene)).toEqual(['megalodon', 'kraken']);
-    for (const c of m.choices) {
+  it('la chasse au monstre : deux expéditions armées de l’Antiquité (le kraken obligatoire, le mégalodon légendaire), galères et troupe à pied, des trophées', () => {
+    const kraken = mission('kraken'), mega = mission('megalodon');
+    expect(MISSIONS.some((m) => m.id === 'monster')).toBe(false);
+    expect([kraken.age, mega.age]).toEqual([1, 1]);
+    expect(kraken.mandatory).toBe(true);
+    expect(mega.mandatory).toBe(false);
+    expect(isLegendary(kraken) && isLegendary(mega)).toBe(true);
+    expect(kraken.icon).not.toBe(mega.icon);
+    expect(mandatoriesFor(1).map((m) => m.id)).toEqual(['seeds', 'kraken']);
+    for (const c of kraken.choices) expect(c.scene).toBe('kraken');
+    for (const c of mega.choices) expect(c.scene).toBe('megalodon');
+    for (const c of [...kraken.choices, ...mega.choices]) {
       expect(c.sea).toBe(true);
       // à pied : ni chevaux, ni carburant ; une vraie troupe et un vrai risque
       expect(c.mounts ?? 0).toBe(0);
@@ -95,16 +101,25 @@ describe('le récif, la pêche au large et la chasse au monstre', () => {
       expect(choiceAt(c, 4).party).toBe(c.party);
     }
     // le trophée est propre à chaque monstre
-    const perks = m.choices.map((c) => c.win.find((e) => e.t === 'perk')).map((e) => (e as { id: string }).id);
-    expect(new Set(perks).size).toBe(2);
+    for (const m of [kraken, mega]) for (const c of m.choices) expect(c.win.some((e) => e.t === 'perk' && e.id === m.id)).toBe(true);
     // des imprévus de mer pour la galère, pas ceux du requin ni de la rivière
-    for (let ci = 0; ci < 2; ci++) {
-      const got = ids(sea('monster', ci, 1));
+    for (const id of ['megalodon', 'kraken']) {
+      const got = ids(sea(id, 0, 1));
       expect(got).toEqual(expect.arrayContaining(['swell', 'wreck']));
       expect(got).not.toContain('shark');
       expect(got).not.toContain('flood');
       expect(got).not.toContain('traveler');
     }
+  });
+
+  it('les anciennes sauvegardes : « le monstre des mers » réussi vaut le kraken (l’Antiquité reste franchie), et le mégalodon s’il en a les dents', () => {
+    expect(readExpState({ done: ['seeds', 'monster'], perks: ['seeds', 'kraken'] }).done).toEqual(['seeds', 'kraken']);
+    const mega = readExpState({ done: ['seeds', 'monster'], perks: ['megalodon'] });
+    expect(mega.done).toEqual(['seeds', 'kraken', 'megalodon']);
+    expect(mandatoriesFor(1).every((m) => mega.done.includes(m.id))).toBe(true);
+    expect(mega.perks).toEqual(['megalodon']);
+    // rien à faire pour les nouvelles
+    expect(readExpState({ done: ['megalodon'], perks: ['megalodon'] }).done).toEqual(['megalodon']);
   });
 });
 
@@ -178,7 +193,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
 
   it('mégalodon et kraken : le combat se tient en haute mer, loin de toute rive ou falaise', () => {
     for (const ci of [0, 1]) {
-      const r = sail('monster', ci, 1), { out, home } = r.s.boat!;
+      const r = sail(ci ? 'kraken' : 'megalodon', 0, 1), { out, home } = r.s.boat!;
       // un point d'eau dégagé tout autour (aucune rive, aucun rocher dans le rayon du combat et de la caméra)
       expect(seaClearance(r.v.w, out[0], out[1], 8)).toBeGreaterThanOrEqual(SEA_CLEAR_MIN);
       expect(Math.hypot(out[0] - home[0], out[1] - home[1])).toBeGreaterThan(2);
@@ -202,7 +217,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
   });
 
   it('le requin, le crocodile, la houle et l’épave se jouent sur la scène, pour chaque option, puis s’effacent', () => {
-    for (const [id, mid, ci, age] of [['shark', 'reef', 0, 4], ['croc', 'fishing', 0, 1], ['swell', 'monster', 0, 1], ['wreck', 'monster', 1, 1], ['maelstrom', 'monster', 1, 1]] as [string, string, number, number][]) {
+    for (const [id, mid, ci, age] of [['shark', 'reef', 0, 4], ['croc', 'fishing', 0, 1], ['swell', 'megalodon', 0, 1], ['wreck', 'kraken', 0, 1], ['maelstrom', 'kraken', 0, 1]] as [string, string, number, number][]) {
       for (let pick = 0; pick < EVENT_BY[id].options.length; pick++) {
         const r = sail(mid, ci, age), st = () => (r.scene as unknown as { stagings: { id: string; objs: THREE.Object3D[] }[] }).stagings;
         r.a.wait = EVENT_BY[id];
@@ -223,7 +238,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
 
   it('le mégalodon et le kraken : toute la troupe à bord de la galère, le monstre paraît, les harpons le frappent', () => {
     for (const [ci, kind] of [[0, 'megalodon'], [1, 'kraken']] as [number, string][]) {
-      const r = sail('monster', ci, 1);
+      const r = sail(ci ? 'kraken' : 'megalodon', 0, 1);
       expect(r.s.monster?.kind).toBe(kind);
       expect(r.a.party.length).toBeGreaterThanOrEqual(5);
       let seen = false, darts = 0;
@@ -241,7 +256,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
 
   it('le monstre vaincu meurt sous les yeux de la troupe : le mégalodon se retourne pendant le combat, la galère au large', () => {
     for (const [ci, kind] of [[0, 'megalodon'], [1, 'kraken']] as [number, string][]) {
-      const r = sail('monster', ci, 1), { home } = r.s.boat!;
+      const r = sail(ci ? 'kraken' : 'megalodon', 0, 1), { home } = r.s.boat!;
       // l'issue est tirée d'avance : vaincu
       let rolled = -1, sunk = -1, farAtDeath = 0;
       const { v, a, scene } = r;
@@ -268,7 +283,7 @@ describe('en mer : la barque file au large, la faune et le monstre sont de la pa
   });
 
   it('le kraken a tout son corps : la tête et ses bras, qui ondulent autour d’elle', () => {
-    const r = sail('monster', 1, 1), m = r.s.monster as unknown as { obj: THREE.Group; arms: THREE.Object3D[] };
+    const r = sail('kraken', 0, 1), m = r.s.monster as unknown as { obj: THREE.Group; arms: THREE.Object3D[] };
     expect(m.arms.length).toBe(8);
     for (const arm of m.arms) expect(arm.parent).toBe(m.obj);
     r.scene.dispose(r.a);
