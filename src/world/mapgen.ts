@@ -1,5 +1,6 @@
 import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
 import { raiseVolcano } from './terraform';
+import { addPortalIsland } from './portal';
 import { Simplex } from './noise';
 import { mulberry32, smoothstep, clamp, lerp, hash2 } from '../core/rng';
 import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, continentPlan, fixedHeight, plannedHeight, toPlan, fromPlan } from './continent';
@@ -95,6 +96,8 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
     carveTarns(world, seed + 1, true, Math.floor(lr() * 5), 1, 3.2, 0.6);
   }
   addDefaultDecor(world, seed);
+  // l'île du portail, au large, une fois le continent achevé (pas sur le continent figé de la version 1, qui ne change plus)
+  if (plan) addPortalIsland(world, seed);
   if (v3) clearStart(world);
 }
 

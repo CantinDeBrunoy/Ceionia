@@ -17,7 +17,8 @@ describe('emplacements des bâtiments à terrain précis', () => {
   const w = continent();
 
   it('la liste suit les règles de canPlace : ports, ponton, mine, club alpin, carrière, bûcheron, puits', () => {
-    expect(Object.keys(ZONED).sort()).toEqual(['alpine', 'harbor', 'lumber', 'mine', 'oilwell', 'pier', 'quarry']);
+    // (et les défenses de l'île du portail : tour de garde, caserne)
+    expect(Object.keys(ZONED).sort()).toEqual(['alpine', 'barracks', 'harbor', 'lumber', 'mine', 'oilwell', 'pier', 'quarry', 'watchtower']);
     expect(isZoned('house')).toBe(false);
   });
 

@@ -34,7 +34,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // la chasse en mer : le mégalodon (aileron géant) et le kraken (tentacules), la galère et ses harpons
   | 'megalodon' | 'kraken'
   // le dragon dans sa grotte (Moyen Âge) ; les grands Jeux au stade (époque moderne)
-  | 'dragon' | 'games';
+  | 'dragon' | 'games'
+  // la traversée en galère jusqu'à l'île du portail, qu'on explore et dont on réveille l'arche
+  | 'portal';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -371,6 +373,30 @@ export const MISSIONS: Mission[] = [
         win: [food(3, 5), joy(4, 6), joy(2), { t: 'ore', n: 8 }, { t: 'perk', id: 'kraken' }], lose: [hurt(2, 4), joy(-2, 4)],
         winText: 'Pris entre les deux galères, le kraken a plongé pour ne plus revenir : la légende est née ! Des perles et du minerai remontent avec lui.',
         loseText: 'Le kraken a glissé entre les deux galères et en a secoué une : deux blessés, et il rôde toujours.',
+      },
+    ],
+  },
+  {
+    // l'île du portail (voir `world/portal.ts`) : la galère traverse le bras de mer, l'équipe débarque, explore l'île et
+    // réveille le portail ; facultative pour l'instant : l'étape obligatoire sera ensuite de sécuriser l'île (`isleSecured`,
+    // condition d'âge à brancher), jamais la conquête des Enfers. Sans île (partie d'avant elle), elle n'est pas
+    // disponible (`Expeditions.why`)
+    id: 'portal', age: 1, mandatory: false, icon: '🌀', title: 'Le portail de l’autre rive', unlocks: 'watchtower',
+    intro: 'Au large, de l’autre côté du bras de mer, une petite île rougeoie certaines nuits. Les pêcheurs jurent qu’une arche de pierre noire s’y dresse, et qu’on entend gronder au-delà… Une galère pourrait y mener quelques braves.',
+    choices: [
+      {
+        label: 'Traverser à la rame et réveiller l’arche', text: 'La galère file droit vers l’île ; l’équipe débarque, cherche l’arche et allume ses braseros.',
+        dest: 'river', sea: true, scene: 'portal', fail: 'storm', doing: 'explore l’île et réveille le portail', danger: ['water', 'weather'], party: 4, work: 30, risk: 0.25, carry: 'sacks',
+        win: [{ t: 'perk', id: 'portal' }, joy(2, 4)], lose: [hurt(1, 2)],
+        winText: 'Les braseros flambent, les runes s’allument, et entre les pierres de l’arche un tourbillon rouge et violet s’est mis à tourner : le portail est ouvert ! Sur l’île, on peut maintenant bâtir des tours de garde, puis une caserne.',
+        loseText: 'Une tempête s’est levée sur le bras de mer : la galère a dû rebrousser chemin, et un rameur s’est blessé. Il faudra retenter la traversée.',
+      },
+      {
+        label: 'Attendre une mer d’huile', text: 'Plus long, plus sûr : on guette le calme plat avant de traverser, et l’on prend le temps d’étudier les runes.',
+        dest: 'river', sea: true, scene: 'portal', fail: 'fog', doing: 'déchiffre les runes de l’arche et réveille le portail', danger: ['water'], party: 3, work: 44, risk: 0.12, carry: 'sacks',
+        win: [{ t: 'perk', id: 'portal' }, joy(1, 4)], lose: [],
+        winText: 'Par une mer d’huile, l’équipe a gagné l’île et déchiffré les runes une à une : l’arche s’est éveillée dans un grondement, un tourbillon rouge et violet entre ses pierres. Le portail est ouvert ! On peut y bâtir des tours de garde, puis une caserne.',
+        loseText: 'La brume est tombée sur le bras de mer : impossible de trouver l’île. La galère est rentrée au port, bredouille.',
       },
     ],
   },
@@ -873,6 +899,8 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
 const NEED_ICON: Record<NeedKey, string> = { food: '🍞', water: '💧', jobs: '🔨', joy: '😊' };
 const HERD_NAME: Record<HerdKind, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] };
 const PERK_NAME: Record<string, string> = { seeds: 'blé des collines : champs +30 %', furs: 'peaux de mammouth : des fourrures pour tout le camp', megalodon: 'dents de mégalodon : un trophée sur la place du village', kraken: 'tentacule de kraken : un trophée sur la place du village', dragon: 'le trésor du dragon : sa légende court dans tout le pays', games: 'les Jeux du village : le monde entier connaît son stade', moon: 'le drapeau du village sur la Lune', colony: 'une colonie sur une autre planète' };
+
+PERK_NAME.portal = 'le portail de l’autre rive est ouvert : tours de garde et caserne sur son île';
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';

@@ -2,7 +2,8 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   | 'stable' | 'apiary' | 'baths' | 'tavern' | 'mine' | 'observatory' | 'lumber' | 'quarry' | 'station' | 'barber' | 'alpine' | 'police' | 'terminal'
   | 'harbor' | 'airport' | 'heliport' | 'watertower' | 'stadium' | 'football' | 'basket' | 'tennis' | 'waterpark' | 'funfair' | 'zoo' | 'theater' | 'acropolis' | 'forum' | 'senate'
   | 'carworks' | 'lab' | 'aerodrome' | 'manor' | 'oilwell' | 'refinery' | 'brickworks'
-  | 'arcology' | 'vfarm' | 'fusion' | 'spaceport' | 'research' | 'maglev';
+  | 'arcology' | 'vfarm' | 'fusion' | 'spaceport' | 'research' | 'maglev'
+  | 'watchtower' | 'barracks';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life';
@@ -413,9 +414,27 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Une gare comme les autres pour le chemin de fer : choisissez-la puis « Nouvelle ligne » pour la relier aux autres gares.',
     jobs: [0, 0, 0, 0, 0, 8], joy: [0, 0, 0, 0, 0, 9],
   },
+  // les défenses de l'île du portail (seulement là, voir `World.portalRule`) ; leur garnison viendra avec le contrôle des troupes
+  watchtower: {
+    id: 'watchtower', size: 1, minAge: 1, icon: '🏹', cat: 'service',
+    names: ['', 'Tour de garde', 'Tour de guet', 'Tour de garde', 'Poste de défense', 'Tour de défense'],
+    desc: 'Une tour de pierre et ses archers, qui guettent le portail des Enfers depuis l’île de l’autre rive.',
+    perk: 'Ne se bâtit que sur l’île du portail, une fois le portail ouvert (expédition « Le portail de l’autre rive »). Ses guetteurs voient venir les démons de loin.',
+    reqMission: 'portal',
+  },
+  barracks: {
+    id: 'barracks', size: 2, minAge: 1, icon: '⚔️', cat: 'service',
+    names: ['', 'Caserne', 'Caserne', 'Caserne', 'Base militaire', 'Base de défense'],
+    desc: 'Le quartier de la garnison de l’île du portail : dortoirs, cour d’exercice et râteliers d’armes.',
+    perk: 'Ne se bâtit que sur l’île du portail, une fois le portail ouvert (expédition « Le portail de l’autre rive ») et une première tour de garde dressée. La garnison y loge et s’y entraîne pour défendre l’île.',
+    reqKind: 'watchtower',
+  },
 };
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
+/** Les défenses : elles ne se bâtissent que sur l'île du portail, et l'on n'y bâtit qu'elles */
+export const DEFENSES: KindId[] = ['watchtower', 'barracks'];
+
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'watchtower', 'barracks', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -440,7 +459,7 @@ export const KIND_SUB: Record<KindId, string> = {
   lumber: 'materiaux', quarry: 'materiaux', mine: 'materiaux', brickworks: 'materiaux',
   workshop: 'industrie', carworks: 'industrie', mill: 'industrie', oilwell: 'industrie', refinery: 'industrie', fusion: 'industrie', harbor: 'industrie',
   health: 'sante', school: 'savoir', observatory: 'savoir', lab: 'savoir', research: 'savoir',
-  police: 'securite', fire: 'securite', senate: 'securite',
+  police: 'securite', fire: 'securite', senate: 'securite', watchtower: 'securite', barracks: 'securite',
   station: 'transport', terminal: 'transport', maglev: 'transport', airport: 'transport', heliport: 'transport', spaceport: 'transport',
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
@@ -494,6 +513,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   harbor: 'ports', airport: 'aéroports', heliport: 'héliports', watertower: 'châteaux d’eau', stadium: 'stades', football: 'terrains de football', basket: 'terrains de basket', tennis: 'courts de tennis', waterpark: 'parcs aquatiques', funfair: 'parcs d’attractions', zoo: 'zoos',
   carworks: 'usines automobiles', lab: 'laboratoires', aerodrome: 'aérodromes', manor: 'manoirs', oilwell: 'puits de pétrole', refinery: 'raffineries', brickworks: 'briqueteries',
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
+  watchtower: 'tours de garde', barracks: 'casernes de la garnison',
 };
 
 /**

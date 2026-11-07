@@ -14,6 +14,9 @@ export const ZONED: Partial<Record<KindId, string>> = {
   quarry: 'il faut des rochers ou une montagne',
   lumber: 'il faut une forêt',
   oilwell: 'il faut un gisement de pétrole (les taches sombres)',
+  // les défenses : seulement sur l'île du portail, une fois le portail ouvert
+  watchtower: 'il faut l’île du portail, une fois le portail ouvert',
+  barracks: 'il faut l’île du portail, une fois le portail ouvert',
 };
 
 export const isZoned = (kind: KindId) => kind in ZONED;

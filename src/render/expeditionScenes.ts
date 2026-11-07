@@ -714,7 +714,14 @@ const BEHAVIOR: Record<Scene, string> = {
   smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
   race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch', mammoth: 'mammoth', megalodon: 'boat', kraken: 'boat',
   dragon: 'dragon', games: 'games',
+  // la galère traverse jusqu'à l'île du portail, l'équipe y débarque (voir `stepIsle`)
+  portal: 'boat',
 };
+/**
+ * L'expédition du portail, en part du travail : la galère touche l'île, l'équipe arrive à l'arche, le tourbillon s'éveille,
+ * elle redescend, elle remonte à bord (la galère rentre ensuite)
+ */
+export const ISLE_LAND = 0.22, ISLE_UP = 0.34, ISLE_WAKE = 0.6, ISLE_DOWN = 0.7, ISLE_BACK = 0.8;
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
 const LINE = new THREE.LineBasicMaterial({ color: 0xf2f2f2, transparent: true, opacity: 0.8 });
@@ -856,6 +863,8 @@ export class ExpeditionScene {
   private goal = new Map<number, number>();
   private flame: THREE.Mesh | null = null;
   private boat: { obj: THREE.Object3D; home: [number, number]; out: [number, number]; y: number; riders: number[] } | null = null;
+  /** l'île du portail : où l'équipe débarque, et le portail qu'elle va réveiller */
+  private isle: { land: [number, number]; gate: [number, number] } | null = null;
   /**
    * la chasse au monstre des mers : la seconde galère (ses hommes d'armes, pris parmi ceux de `boat`) et le point de combat,
    * entre les deux, où se tient le monstre
@@ -965,7 +974,7 @@ export class ExpeditionScene {
     const [cx, cz] = a.dest;
     this.story = a.c.scene;
     this.offshore = !!a.sea;
-    this.boatKind = boatKindFor(a.age, this.story === 'megalodon' || this.story === 'kraken');
+    this.boatKind = boatKindFor(a.age, this.story === 'megalodon' || this.story === 'kraken' || this.story === 'portal');
     let kind = BEHAVIOR[this.story] ?? 'camp';
     if (kind === 'boat' || kind === 'fish' || this.story === 'bridge') { this.water = this.findWater(cx, cz); if (!this.water && kind !== 'build') kind = 'camp'; }
     this.kind = kind;
@@ -2946,6 +2955,17 @@ export class ExpeditionScene {
       if (o) { [wx, wz] = o.moor; out = o.at; wat.level = SEA; }
       else { const at = this.openSpot(wx, wz); if (at) out = at; }
     }
+    // l'île du portail : tout droit jusqu'à sa plage, au plus près du portail (le dernier point d'eau avant la terre de l'île)
+    else if (this.story === 'portal' && this.world.portal) {
+      const p = this.world.portal, dx = p.x - wx, dz = p.z - wz, L = Math.max(0.01, Math.hypot(dx, dz));
+      let land: [number, number] = [p.x, p.z];
+      for (let k = 0.5; k < L; k += 0.25) {
+        const x = wx + (dx / L) * k, z = wz + (dz / L) * k;
+        if (this.depth(x, z) === null && this.world.onPortalIsland(Math.floor(x), Math.floor(z))) { land = [x + (dx / L) * 0.4, z + (dz / L) * 0.4]; break; }
+        out = [x, z];
+      }
+      this.isle = { land, gate: [p.x, p.z] };
+    }
     // au large : le plus long trajet tout droit sur l'eau profonde, dans toutes les directions (la rive vers le large d'abord)
     else if (this.offshore) {
       let best = 0;
@@ -2968,8 +2988,9 @@ export class ExpeditionScene {
       return obj;
     };
     const obj = hullOf();
-    // la chasse armée : toute la troupe embarque, sur deux galères (`riders` : tout l'équipage ; la seconde a sa moitié)
-    const riders = a.party.slice(0, war ? a.party.length : Math.min(2, a.party.length));
+    // la chasse armée : toute la troupe embarque, sur deux galères (`riders` : tout l'équipage ; la seconde a sa moitié) ;
+    // l'équipe du portail aussi, sur une seule
+    const riders = a.party.slice(0, war || this.isle ? a.party.length : Math.min(2, a.party.length));
     this.boat = { obj, home: [wx, wz], out, y: wat.level, riders };
     if (war && this.offshore) {
       // les deux galères encadrent le monstre, de part et d'autre du point de combat, chacune bord à bord face à lui
@@ -3620,8 +3641,8 @@ export class ExpeditionScene {
     if (this.offshore) {
       // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
       // (la galère de la chasse reste sur place jusqu'à ce que le monstre soit mort ou enfui, voir `FATE_AT`)
-      const k = this.workK, home = this.monster ? 0.87 : 0.8;
-      u = k < 0.2 ? smooth(k / 0.2) : k < home ? 1 : 1 - smooth(Math.min(1, (k - home) / (0.97 - home)));
+      const k = this.workK, home = this.monster ? 0.87 : 0.8, go = this.isle ? ISLE_LAND : 0.2;
+      u = k < go ? smooth(k / go) : k < home ? 1 : 1 - smooth(Math.min(1, (k - home) / (0.97 - home)));
       back = k >= home;
     } else {
       // aller-retour lent (une vingtaine de secondes), pause au large le temps de pêcher
@@ -3631,11 +3652,35 @@ export class ExpeditionScene {
     }
     const war = this.story === 'megalodon' || this.story === 'kraken', es = this.escort;
     // la seconde galère de la chasse part avec la première, avec sa part de l'équipage, et prend le monstre de l'autre côté
-    const crew = es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders;
-    const [px, pz] = this.sail(bt.obj, bt.home, bt.out, bt.y, u, back, dt, crew, war, 0);
+    // (l'équipe du portail débarque sur l'île le temps du travail : la galère l'attend, vide, au bord de la plage)
+    const ashore = !!this.isle && this.offshore && this.workK >= ISLE_LAND && this.workK < ISLE_BACK;
+    const crew = ashore ? [] : es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders;
+    const [px, pz] = this.sail(bt.obj, bt.home, bt.out, bt.y, u, back, dt, crew, war || !!this.isle, 0);
     if (es) this.sail(es.obj, es.home, es.out, bt.y, u, back, dt, es.riders, war, 1.3);
     // la chasse : la vue garde le combat entier (les deux galères, le monstre entre elles)
     this.focus = this.arena && es ? [(px + es.obj.position.x) / 2, (pz + es.obj.position.z) / 2] : [px, pz];
+    if (ashore) this.stepIsle(this.workK);
+  }
+
+  /**
+   * L'équipe du portail sur l'île : elle débarque, monte jusqu'à l'arche, s'y affaire en arc de cercle face à elle (on
+   * allume les braseros, on déchiffre les runes), acclame le tourbillon qui s'éveille, puis redescend à la galère
+   */
+  private stepIsle(k: number) {
+    const { land, gate } = this.isle!, riders = this.boat!.riders, w = this.world, n = riders.length;
+    const toBeach = Math.atan2(land[1] - gate[1], land[0] - gate[0]);
+    const t = k < ISLE_UP ? smooth((k - ISLE_LAND) / (ISLE_UP - ISLE_LAND)) : k < ISLE_DOWN ? 1 : 1 - smooth((k - ISLE_DOWN) / (ISLE_BACK - ISLE_DOWN));
+    const moving = k < ISLE_UP || k >= ISLE_DOWN;
+    riders.forEach((id, i) => {
+      const off = i - (n - 1) / 2, ang = toBeach + off * 0.5;
+      // sa place devant l'arche, et d'où il part sur la plage (côte à côte)
+      const sx = gate[0] + Math.cos(ang) * 1.5, sz = gate[1] + Math.sin(ang) * 1.5;
+      const bx = land[0] - Math.sin(toBeach) * off * 0.18, bz = land[1] + Math.cos(toBeach) * off * 0.18;
+      const x = bx + (sx - bx) * t, z = bz + (sz - bz) * t;
+      const heading = moving ? Math.atan2(k < ISLE_UP ? sx - bx : bx - sx, k < ISLE_UP ? sz - bz : bz - sz) : Math.atan2(gate[0] - x, gate[1] - z);
+      this.agents.ride(id, { x, z, y: w.surfaceAt(x, z), heading, act: moving ? 'stroll' : k > ISLE_WAKE ? 'cheer' : 'work' });
+    });
+    this.focus = [gate[0] + Math.cos(toBeach) * 1.2, gate[1] + Math.sin(toBeach) * 1.2];
   }
 
   /**

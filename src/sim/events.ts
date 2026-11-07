@@ -206,6 +206,34 @@ export const EVENTS: ExpEvent[] = [
       { label: 'Charger à travers les flammes', risk: 1.3, work: -4, text: 'On a chargé à travers les flammes, les barbes roussies.' },
     ],
   },
+  // ---------------- La traversée vers l'île du portail ----------------
+  {
+    id: 'crossing', where: ['river'], scenes: ['portal'], arrive: true, title: 'La houle du bras de mer',
+    text: 'À mi-chemin de l’île, le vent forcit : de longues vagues soulèvent la galère et la poussent de travers.',
+    options: [
+      { label: 'Ramer en cadence, face aux vagues', risk: 0.85, work: 4, text: 'Tous aux rames, en cadence : la galère a tenu son cap jusqu’à la plage.' },
+      { wait: true, label: 'Attendre que le vent tombe', risk: 0.9, work: 6, text: 'On a laissé passer le coup de vent avant de reprendre la traversée.' },
+      { label: 'Hisser la voile et filer', risk: 1.2, work: -4, text: 'Voile hissée, la galère a filé vers l’île en embarquant des paquets de mer.' },
+    ],
+  },
+  {
+    id: 'runes', where: ['river'], scenes: ['portal'], arrive: true, title: 'Des runes sur la plage',
+    text: 'Sur les rochers de la plage, des signes inconnus sont gravés dans la pierre noire, et ils luisent doucement.',
+    options: [
+      { label: 'Recopier les runes avant de monter', risk: 0.8, work: 5, text: 'Les runes recopiées ont guidé l’équipe : elle savait où poser les mains sur l’arche.' },
+      { label: 'Les éclairer à la torche', needs: ['torch'], risk: 0.7, work: 2, text: 'À la lueur des torches, les runes ont montré le chemin jusqu’à l’arche.' },
+      { label: 'Monter tout droit à l’arche', risk: 1.1, work: -3, text: 'On a filé droit sur l’arche, sans s’attarder sur ces drôles de signes.' },
+    ],
+  },
+  {
+    id: 'rumble', where: ['river'], scenes: ['portal'], from: 0.4, title: 'L’arche gronde',
+    text: 'Un grondement sourd monte de l’arche ; des étincelles rouges jaillissent entre ses pierres et les braseros crachent des flammes.',
+    options: [
+      { label: 'Reculer et laisser l’arche s’apaiser', wait: true, risk: 0.85, work: 6, text: 'On a reculé le temps que l’arche s’apaise, puis on s’est remis à l’ouvrage.' },
+      { label: 'Lever les boucliers et continuer', needs: ['armor'], risk: 0.75, work: 2, text: 'Derrière les boucliers, l’équipe a continué malgré la pluie d’étincelles.' },
+      { label: 'Finir au plus vite', risk: 1.25, work: -4, text: 'On a fini en hâte, les étincelles plein les cheveux.' },
+    ],
+  },
   // ---------------- Les grands Jeux du village ----------------
   {
     id: 'flame', where: ['plain'], scenes: ['games'], arrive: true, title: 'La flamme vacille',

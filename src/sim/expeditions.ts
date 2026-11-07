@@ -358,6 +358,8 @@ export class Expeditions {
   /** Pourquoi l'on ne peut pas partir (ou null) */
   why(m: Mission, c: Choice): string | null {
     if (this.running(m)) return 'Cette expédition est déjà en route.';
+    // une partie commencée avant l'île du portail n'en a pas
+    if (c.scene === 'portal' && !this.world.portal) return 'Cette carte n’a pas d’île du portail : la partie a commencé avant elle. Une nouvelle partie en aura une.';
     const miss = this.missing(m);
     if (miss.length) return `Il faut d’abord ${miss.join(', ')}.`;
     if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return `Il faut ${c.mounts} chevaux ${this.at('stable')} (${n} pour l’instant).`; }
@@ -389,6 +391,11 @@ export class Expeditions {
     let kind: DestKind | null = c.dest, dest: [number, number] | null = null, sea = !!c.sea;
     // les grands Jeux se tiennent au pied du stade
     if (c.scene === 'games') dest = this.padSide(base, 'stadium');
+    // la galère du portail part de la côte qui fait face à l'île
+    else if (c.scene === 'portal') {
+      dest = this.portalShore(base);
+      if (!dest) { this.lastFail = 'Aucune côte d’où la galère puisse gagner l’île du portail : le village n’a pas accès à la mer qui y mène.'; return null; }
+    }
     this.lastFail = null;
     while (kind && !dest) {
       const monster = sea && kind === 'river' && OPEN_SEA.has(c.scene);
@@ -985,6 +992,46 @@ export class Expeditions {
       if (wet >= len && deep) return true;
     }
     return false;
+  }
+
+  /**
+   * D'où part la galère du portail : la rive du continent la plus proche de l'île, atteignable à pied depuis le village, d'où
+   * l'on gagne l'île tout droit sur l'eau (sans toucher d'autre terre en chemin) ; null sans île ou sans telle rive
+   */
+  portalShore(base: [number, number]): [number, number] | null {
+    const w = this.world, p = w.portal;
+    if (!p) return null;
+    const cand: [number, number, number][] = [];
+    for (let z = 1; z < N - 1; z++)
+      for (let x = 1; x < N - 1; x++) {
+        const k = w.ci(x, z);
+        if (w.onPortalIsland(x, z) || w.occ[k] || w.lake[k] || w.decor[k] || w.cellAvg(x, z) < 0.12) continue;
+        if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => w.cellAvg(x + dx, z + dz) < -0.3 && !w.lake[w.ci(x + dx, z + dz)])) continue;
+        cand.push([x + 0.5, z + 0.5, Math.hypot(x + 0.5 - p.x, z + 0.5 - p.z)]);
+      }
+    cand.sort((a, b) => a[2] - b[2]);
+    // tout droit sur l'eau : passé la rive, rien que la mer jusqu'à l'île
+    const clear = (x: number, z: number) => {
+      const dx = p.x - x, dz = p.z - z, L = Math.hypot(dx, dz);
+      let wet = false;
+      for (let s = 0.5; s < L; s += 0.5) {
+        const cx = Math.floor(x + (dx / L) * s), cz = Math.floor(z + (dz / L) * s);
+        if (w.onPortalIsland(cx, cz)) return wet;
+        if (w.cellAvg(cx, cz) < -0.1) wet = true;
+        else if (wet || s > 3.5) return false;
+      }
+      return wet;
+    };
+    const from = w.ci(Math.floor(base[0]), Math.floor(base[1]));
+    // (une rive injoignable est souvent celle d'un îlot : on n'essaie plus ses voisines)
+    const failed: [number, number][] = [];
+    for (const [x, z] of cand) {
+      if (failed.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 8) || !clear(x, z)) continue;
+      if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
+      failed.push([x, z]);
+      if (failed.length >= 40) break;
+    }
+    return null;
   }
 
   /** Le climat de l'endroit est chaud (désert, tropiques, marais) : les crocodiles y hantent les eaux douces */
