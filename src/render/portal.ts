@@ -28,7 +28,7 @@ export class PortalView {
   private vortex: THREE.Mesh;
   private vortexMat: THREE.ShaderMaterial;
   private flames: THREE.Mesh[] = [];
-  private flameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 0.95, 0.3), transparent: true, opacity: 0.95, depthWrite: false });
+  private flameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.7, 0.55, 0.12), transparent: true, opacity: 0.95, depthWrite: false });
   private sparks: THREE.Points;
   private smoke: THREE.Points;
   private sparkV = new Float32Array(SPARKS * 4);
@@ -232,9 +232,9 @@ void main() {
   float core = smoothstep(0.5, 0.0, r) * (0.8 + 0.2 * sin(uTime * 3.0));
   c += vec3(1.0, 0.8, 0.5) * core * uOpen;
   // fermé : un voile violet sombre, à peine animé
-  vec3 shut = vec3(0.12, 0.05, 0.18) * (0.7 + 0.3 * b1);
+  vec3 shut = vec3(0.035, 0.012, 0.06) * (0.6 + 0.6 * b1);
   c = mix(shut, c * (1.0 + uNight * 1.4), uOpen);
-  float alpha = mix(0.75, 0.95, uOpen) * smoothstep(1.25, 0.9, r);
+  float alpha = mix(0.9, 0.95, uOpen) * smoothstep(1.25, 0.9, r);
   gl_FragColor = vec4(c, alpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

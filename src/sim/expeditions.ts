@@ -1529,16 +1529,18 @@ export class Expeditions {
         const cx = Math.floor(x + (dx / L) * s), cz = Math.floor(z + (dz / L) * s);
         if (w.onPortalIsland(cx, cz)) return wet;
         if (w.cellAvg(cx, cz) < -0.1) wet = true;
-        else if (wet || s > 2) return false;
+        else if (wet || s > 3.5) return false;
       }
       return wet;
     };
     const from = w.ci(Math.floor(base[0]), Math.floor(base[1]));
-    let tried = 0;
+    // (une rive injoignable est souvent celle d'un îlot : on n'essaie plus ses voisines)
+    const failed: [number, number][] = [];
     for (const [x, z] of cand) {
-      if (!clear(x, z)) continue;
+      if (failed.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < 8) || !clear(x, z)) continue;
       if (this.agents.findPath(from, w.ci(Math.floor(x), Math.floor(z)))) return [x, z];
-      if (++tried >= 40) break;
+      failed.push([x, z]);
+      if (failed.length >= 40) break;
     }
     return null;
   }
