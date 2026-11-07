@@ -730,7 +730,7 @@ export class ToolController implements ToolInput {
     if (reason) {
       const now = performance.now();
       // un grand bâtiment refusé ici : les points verts montrent où il tient
-      const tip = where && KINDS[this.kind].size >= 2 ? (this.spots.count ? ' Visez un point vert : il y tient.' : ' Aucune place assez grande par ici : essayez plus loin du village.') : '';
+      const tip = '';
       if (now - this.lastToast > 1200) { this.h.toast(reason + (tip ? `.${tip}` : '')); this.lastToast = now; }
       return;
     }
@@ -823,7 +823,7 @@ export class ToolController implements ToolInput {
       }
       const cost = this.moveOrigin ? null : priceIn(w, kind, age);
       this.placeWhy = reason ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
-      if (s >= 2) this.showSpots(kind, o.x, o.z);
+      // (les points verts des emplacements libres induisaient en erreur : retirés, `showSpots` n’est plus appelé)
       setGhostValid(!this.placeWhy);
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
