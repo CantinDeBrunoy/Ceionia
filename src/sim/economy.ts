@@ -7,7 +7,7 @@ import type { World } from '../world/world';
  * profondeurs ; dès l'âge industriel, le pétrole brut des puits, que la raffinerie change en carburant (les automobiles en
  * brûlent chaque jour) ; dès l'âge industriel, les briques de la briqueterie, qu'exigent quelques grands bâtiments
  * (gares, usines, raffineries) et le passage à l'époque moderne. Bois et pierre ne servent qu'à bâtir les grands bâtiments
- * (2 × 2) ; la production est généreuse, pour ne jamais bloquer le village. Les petits bâtiments restent gratuits (sauf en défi, où tout se paie, et
+ * (2 × 2) ; la production est généreuse, pour ne jamais bloquer le village. Les petits bâtiments restent gratuits (sauf en Normal, où tout se paie, et
  * plus cher)
  */
 
@@ -18,26 +18,26 @@ export type Resource = 'wood' | 'stone' | 'ore' | 'crude' | 'fuel' | 'brick';
 /** Stock au départ d'une partie (et d'une ancienne sauvegarde qui n'en avait pas) */
 export const START_WOOD = 100, START_STONE = 100;
 
-/** Ceux qui produisent bois et pierre : en défi, le premier est offert, pour ne jamais rester sans rien pour bâtir */
+/** Ceux qui produisent bois et pierre : en Normal, le premier est offert, pour ne jamais rester sans rien pour bâtir */
 export const PRODUCERS: KindId[] = ['lumber', 'quarry'];
 
 /**
- * Briques qu'exigent, en plus du bois et de la pierre, les grands bâtiments industriels (en partie normale) : les gares sont de
+ * Briques qu'exigent, en plus du bois et de la pierre, les grands bâtiments industriels (en Facile) : les gares sont de
  * brique, l'usine automobile et la raffinerie de grands ateliers de brique. La briqueterie elle-même n'en demande pas (sans
- * quoi on n'en ferait jamais) ; en défi, le prix est plus lourd de moitié
+ * quoi on n'en ferait jamais) ; en Normal, le prix est plus lourd de moitié
  */
 export const BRICK_PRICE: Partial<Record<KindId, number>> = { station: 10, terminal: 30, carworks: 20, refinery: 30 };
 
 /**
- * Prix d'un bâtiment à l'âge du village (null : gratuit) ; les enclos ne demandent presque pas de pierre. En partie normale,
- * seuls les grands bâtiments se paient ; en défi, tous, selon leur emprise et l'âge (`owned` : combien le village en a déjà)
+ * Prix d'un bâtiment à l'âge du village (null : gratuit) ; les enclos ne demandent presque pas de pierre. En Facile,
+ * seuls les grands bâtiments se paient ; en Normal, tous, selon leur emprise et l'âge (`owned` : combien le village en a déjà)
  */
-export function costOf(kind: KindId, age: number, diff: Difficulty = 'normal', owned = 1): Cost | null {
+export function costOf(kind: KindId, age: number, diff: Difficulty = 'easy', owned = 1): Cost | null {
   const d = KINDS[kind], p = rulesOf(diff).price;
   const a = Math.max(age, d.minAge), pens = kind === 'pen' || kind === 'stable';
   const brick = BRICK_PRICE[kind];
   // la place du village, première pose de la partie, se paie comme un petit bâtiment malgré ses 3 × 3 cases (une place
-  // dégagée, sans murs) : gratuite en partie normale
+  // dégagée, sans murs) : gratuite en Facile
   const plaza = kind === 'gather';
   if (!p) {
     if (d.size < 2 || plaza) return null;

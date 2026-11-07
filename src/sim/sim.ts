@@ -30,7 +30,7 @@ export interface AgeProgress {
 export const RAIL_FIRST = 'chemin de fer : une première ligne', RAIL_LINKED = 'chemin de fer : deux gares reliées';
 
 /**
- * Bâtiments que demande l'âge `n`, par genre : en partie normale, autant qu'il en faut au village ; en défi, ce qu'il en faut
+ * Bâtiments que demande l'âge `n`, par genre : en Facile, autant qu'il en faut au village ; en Normal, ce qu'il en faut
  * de plus que n'en demandaient déjà les âges d'avant (un genre qu'ils demandaient déjà autant n'est plus demandé)
  */
 export function reqKindsOf(n: number, d: Difficulty, late = false): Partial<Record<KindId, number>> {
@@ -45,7 +45,7 @@ export function reqKindsOf(n: number, d: Difficulty, late = false): Partial<Reco
   return out;
 }
 
-/** Combien de bâtiments de ce genre les âges d'avant `n` ont déjà demandés (ceux-là ne comptent plus, en défi) */
+/** Combien de bâtiments de ce genre les âges d'avant `n` ont déjà demandés (ceux-là ne comptent plus, en Normal) */
 export function usedBefore(k: KindId, n: number): number {
   return Math.max(0, ...AGES.slice(0, n).map((a) => Math.max(a.reqKinds[k] ?? 0, a.reqLate?.[k] ?? 0)));
 }
@@ -81,7 +81,7 @@ export class Sim {
   private baseJobs = 0;
   private baseJoy = 0;
   private grow = 0;
-  /** secondes de jeu pendant lesquelles le village se remet d'un manque (en défi, il grandit alors plus lentement) */
+  /** secondes de jeu pendant lesquelles le village se remet d'un manque (en Normal, il grandit alors plus lentement) */
   recovering = 0;
   /** habitants partis pendant la disette en cours (défi) */
   fled = 0;
@@ -215,7 +215,7 @@ export class Sim {
     if (n >= AGES.length) return null;
     const req = AGES[n], w = this.world;
     const items: AgeProgress['items'] = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
-    // en défi, passé la préhistoire, les bâtiments d'avant qui ont servi aux âges passés (changés d'office en leur version du
+    // en Normal, passé la préhistoire, les bâtiments d'avant qui ont servi aux âges passés (changés d'office en leur version du
     // nouvel âge) ne font pas avancer vers le suivant ; ceux bâtis en avance, avant que le jeu ne les demande, comptent déjà
     const fresh = rulesOf(w.difficulty).newOnly && this.age > 0;
     const kinds = (late: boolean) => {
@@ -419,8 +419,8 @@ export class Sim {
   }
 
   /**
-   * Les rigueurs de la difficulté : en défi, la disette fait partir des habitants (d'autant plus que le manque est grand),
-   * et tout besoin non comblé laisse le village affaibli un moment ; en partie normale ou au bac à sable, rien de tout cela
+   * Les rigueurs de la difficulté : en Normal, la disette fait partir des habitants (d'autant plus que le manque est grand),
+   * et tout besoin non comblé laisse le village affaibli un moment ; en Facile ou au bac à sable, rien de tout cela
    */
   private hardship(dt: number) {
     const r = rulesOf(this.world.difficulty);

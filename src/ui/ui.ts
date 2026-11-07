@@ -19,7 +19,7 @@ import { GEAR, GEAR_BY, GearId, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gea
 import { securityCuts, SECURITY_MAX } from '../sim/security';
 import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
-import { Difficulty, DIFFICULTIES, DIFF_TEXT, readDifficulty, rulesOf } from '../sim/difficulty';
+import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
@@ -245,7 +245,7 @@ const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.rou
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
 const NEED_RULE: Record<NeedId, string> = {
   housing: 'Chaque habitant occupe une place. Le village grandit tant qu’il reste des places libres et que les autres besoins sont comblés.',
-  food: 'Chaque habitant mange une part (une part et quart en défi), plus une part de réserve pour le village ; on compte en parts entières.',
+  food: 'Chaque habitant mange une part (une part et quart en Normal), plus une part de réserve pour le village ; on compte en parts entières.',
   water: 'Chaque habitant boit une part, plus une part de réserve pour le village.',
   jobs: 'À partir de 6 habitants, la moitié d’entre eux cherche du travail.',
   joy: 'À partir de 6 habitants, chacun demande 0,3 de bien-être.',
@@ -287,7 +287,7 @@ export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer')
  */
 export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty; note?: string; ok?: string } = {}): Promise<Difficulty | null> {
   const T = DIFF_TEXT;
-  let pick: Difficulty = opts.current ?? 'normal';
+  let pick: Difficulty = opts.current ?? DEFAULT_DIFFICULTY;
   return new Promise((resolve) => {
     const ov = document.createElement('div');
     ov.className = 'overlay';
@@ -1685,7 +1685,7 @@ export class UI {
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
     const tabs = [['time', 'clock', 'Temps et météo'], ['look', 'palette', 'Image et son'], ['game', 'houses', 'Partie']];
-    // au bac à sable et en défi, la difficulté impose le réglage des ressources
+    // au bac à sable et en Normal, la difficulté impose le réglage des ressources
     const forced = DIFF_TEXT.resForced[h.world.difficulty];
     const { ov, close } = modal(this.root, 'settings', `${ic('gear', 22)} Réglages`, `
       <div class="tabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 16, 2)}${l}</button>`).join('')}</div>
@@ -1897,7 +1897,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
       <header><h1>Ceionia</h1><p class="sub">Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.</p></header>
       ${MAPS.length > 1 ? `<label class="mMap">Carte <select id="mMapSel">${MAPS.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select></label>` : ''}
       <div class="mResume panel" hidden></div>
-      <div class="mModes">${DIFFICULTIES.map((d) => `<div class="mMode ${d}">
+      <div class="mModes">${DIFFICULTIES.map((d) => `<div class="mMode ${d}">${d === DEFAULT_DIFFICULTY ? `<span class="mBadge">${DIFF_TEXT.recommended}</span>` : ''}
         <div class="mHead"><b>${ic(DIFF_TEXT.icon[d], 30, 1.9)}</b><div><h2>${DIFF_TEXT.name[d]}</h2><em>${DIFF_TEXT.tagline[d]}</em></div></div>
         <ul>${DIFF_TEXT.points[d].map((x) => `<li>${ic('check', 18, 2.6)}<span>${x}</span></li>`).join('')}</ul><p class="mSum">${DIFF_TEXT.summary[d]}</p>
         <button class="mPlay" data-d="${d}">${DIFF_TEXT.play(d)}</button></div>`).join('')}</div>
@@ -1918,7 +1918,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     ov.classList.toggle('hasSave', !!save);
     if (!save) { resume.innerHTML = ''; return; }
     // sur téléphone, le résumé se raccourcit : « Normal · Médiéval · 142 habitants » (les <i> et la date s'effacent)
-    const d = readDifficulty(save.world.difficulty), when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
+    const d = readDifficulty(save.world.difficulty, save.world.diffV), when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
     resume.innerHTML = `<b>${ic('house', 40, 1.8)}</b><div class="grow"><h3>Reprendre mon village</h3><p><span><i>Mode </i>${DIFF_TEXT.name[d]}</span><span><i>âge </i>${AGES[save.age]?.name ?? ''}</span><span>${pop} habitant${pop > 1 ? 's' : ''}</span>${when ? `<span class="when">${when}</span>` : ''}</p></div><button class="active mGo">Continuer</button>`;
     $('.mGo', resume).onclick = () => host.start(mapId(), 'continue');
   };

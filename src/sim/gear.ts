@@ -6,7 +6,7 @@ import { Difficulty, rulesOf } from './difficulty';
 /**
  * Équipement des expéditions : armes contre les bêtes sauvages, cordes contre les chutes, torches dans le noir, barques sur
  * l'eau vive, trousse de soins. Le village les fabrique (du minerai pour le métal, un atelier pour les épées et les fusils ;
- * en défi, du bois et de la pierre pour le reste) ; une équipe emporte le meilleur de ce qu'il y a en réserve contre les
+ * en Normal, du bois et de la pierre pour le reste) ; une équipe emporte le meilleur de ce qu'il y a en réserve contre les
  * dangers de sa destination, et le rapporte au retour
  */
 
@@ -28,7 +28,7 @@ export interface Gear {
   age: number;
   /** minerai par pièce */
   ore: number;
-  /** bois et pierre par pièce, en défi seulement (les pièces sans métal, gratuites ailleurs) */
+  /** bois et pierre par pièce, en Normal seulement (les pièces sans métal, gratuites ailleurs) */
   wood?: number;
   stone?: number;
   /** temps de fabrication d'une pièce (secondes de jeu) */
@@ -60,7 +60,7 @@ export const GEAR_BY = Object.fromEntries(GEAR.map((g) => [g.id, g])) as Record<
 
 export interface GearCost { wood: number; stone: number; ore: number }
 
-/** Prix d'une pièce : son minerai, et en défi le bois et la pierre des pièces sans métal */
+/** Prix d'une pièce : son minerai, et en Normal le bois et la pierre des pièces sans métal */
 export function gearCost(g: Gear, d: Difficulty): GearCost {
   const p = rulesOf(d).gearPrice;
   return { wood: p ? g.wood ?? 0 : 0, stone: p ? g.stone ?? 0 : 0, ore: g.ore };

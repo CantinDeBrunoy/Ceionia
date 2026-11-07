@@ -2,7 +2,7 @@ import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize } from '.
 import { readPortal } from './portal';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
-import { Difficulty, readDifficulty, rulesOf } from '../sim/difficulty';
+import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/difficulty';
 import { GEN, GEN_FIXED, fillClimate } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
@@ -212,15 +212,16 @@ export class World {
   /** expéditions : missions réussies, bêtes ramenées, savoir-faire et bonus (sauvegardé) */
   exp: ExpState = newExpState();
   /** difficulté de la partie (sauvegardée) */
-  difficulty: Difficulty = 'normal';
+  /** (Facile par défaut ici : une partie neuve reçoit la sienne, `Normal` sans choix, à sa création dans `Game`) */
+  difficulty: Difficulty = 'easy';
   /**
-   * bâtiments du village, par genre, quand il est entré dans son âge (sauvegardés) : en défi, seuls ceux bâtis depuis comptent
+   * bâtiments du village, par genre, quand il est entré dans son âge (sauvegardés) : en Normal, seuls ceux bâtis depuis comptent
    * pour l'âge d'après
    */
   ageBase: Partial<Record<KindId, number>> = {};
   /** ressources illimitées (réglage) : bois, pierre et minerai ne manquent jamais */
   unlimitedSetting = false;
-  /** ressources illimitées : toujours au bac à sable, jamais en défi, selon le réglage en partie normale */
+  /** ressources illimitées : toujours au bac à sable, jamais en Normal, selon le réglage en Facile */
   get unlimited() { return rulesOf(this.difficulty).unlimited ?? this.unlimitedSetting; }
   set unlimited(on: boolean) { this.unlimitedSetting = on; }
   /** lignes de chemin de fer (`linesAuto` : drapeau des anciennes sauvegardes, gardé tel quel) */
@@ -1302,6 +1303,7 @@ export class World {
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       exp: this.exp,
       difficulty: this.difficulty,
+      diffV: DIFF_VERSION,
       ageBase: this.ageBase,
       // arrêts des lignes : par rang dans la liste des bâtiments (les numéros changent au chargement) ; points de passage des
       // tronçons : par case
@@ -1414,7 +1416,7 @@ export class World {
     // (`claimed`, `mined`, `dug`, `digs`) sont ignorés
     this.mined = new Set(); this.claimed = new Set(); this.dug = new Set(); this.digs = [];
     this.exp = readExpState(d.exp);
-    this.difficulty = readDifficulty(d.difficulty);
+    this.difficulty = readDifficulty(d.difficulty, d.diffV);
     // une ancienne sauvegarde n'en a pas : tout le village compte pour l'âge suivant
     this.ageBase = {};
     for (const [k, n] of Object.entries(d.ageBase ?? {})) { const v = Math.floor(+(n as number)); if (KINDS[k as KindId] && Number.isFinite(v) && v > 0) this.ageBase[k as KindId] = v; }
