@@ -345,3 +345,17 @@ describe('lisibilité de la mêlée', () => {
     if (near.length > 2) { const angs = near.map((u) => Math.atan2(u.x - s.x, u.z - s.z)); expect(Math.max(...angs) - Math.min(...angs)).toBeGreaterThan(0.5); }
   });
 });
+
+describe('les morts disparaissent', () => {
+  it('un démon et un soldat abattus restent un instant (chute) puis sont retirés', () => {
+    const h = emptyHell(), [ax, az] = h.map.arrival;
+    const d = h.spawn('brute', ax + 8, az, 0), s = h.addPlayerUnit('soldier', troopStats('soldier', 1), ax, az);
+    h.damage(d, 1e6, s.id); h.damage(s, 1e6, d.id);
+    run(h, 0.5);
+    expect(h.units.has(d.id)).toBe(true);
+    expect(h.alive()).toHaveLength(0);
+    run(h, 2);
+    expect(h.units.has(d.id)).toBe(false);
+    expect(h.units.has(s.id)).toBe(false);
+  });
+});
