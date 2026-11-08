@@ -55,6 +55,8 @@ export class BattleLayer {
   private troops = new Map<number, { s?: Soldier; r?: Rider; kind: string; age: number; key: string }>();
   /** dernier tir de chaque unité du joueur (secondes) : le recul du canon */
   private shotAt = new Map<number, number>();
+  /** actions différées (l'explosion d'une roquette à son arrivée) : date (`uTime`), action */
+  private later: { t: number; f: () => void }[] = [];
   private barBg: THREE.InstancedMesh;
   private barFill: THREE.InstancedMesh;
   private rings: THREE.InstancedMesh;
@@ -96,6 +98,7 @@ export class BattleLayer {
   /** Une image : les coups, les morts, les unités, les barres et les cercles */
   update(dt: number, camera: THREE.Camera, events: HellEvent[]) {
     this.uTime += dt;
+    for (let i = this.later.length - 1; i >= 0; i--) if (this.later[i].t <= this.uTime) this.later.splice(i, 1)[0].f();
     this.playEvents(events);
     this.drawDemons();
     this.drawTroops();
@@ -321,8 +324,16 @@ export class BattleLayer {
         // une vraie flèche qui vole en cloche (de feu pour les démons), plantée à mi-hauteur de sa cible
         const t = h.units.get(ev.target), th = t ? (t.side === 'hell' ? SCALE[t.kind as DemonKind] ?? 0.4 : 0.45) * 0.55 : 0.3;
         const y0 = this.groundY(ev.x0, ev.z0) + ev.y0, y1 = this.groundY(ev.x1, ev.z1) + th, su = h.units.get(ev.source);
-        const gun = su?.side === 'player' && ((su.kind === 'archer' && this.age >= 3) || (su.kind === 'cavalry' && this.age >= 4));
-        if (gun) {
+        const gun = su?.side === 'player' && ((su.kind === 'archer' && this.age >= 3) || (su.kind === 'cavalry' && this.age >= 4)), rocket = su?.side === 'player' && su.kind === 'knight' && this.age >= 4;
+        if (rocket) {
+          // roquette (bazooka, lanceur de missiles) : souffle arrière à l'épaule, ogive qui file en laissant une traînée de fumée, explosion à l'arrivée
+          const dx = ev.x1 - ev.x0, dz = ev.z1 - ev.z0, d = Math.hypot(dx, dz) || 1, mx = ev.x0 + (dx / d) * 0.4, mz = ev.z0 + (dz / d) * 0.4, my = this.groundY(mx, mz) + 0.7, fly = Math.max(0.25, d / 9), neon = this.age >= 5;
+          this.shotAt.set(su!.id, this.uTime);
+          this.fx.blast(mx - (dx / d) * 0.5, my, mz - (dz / d) * 0.5, -dx, -dz);
+          this.fx.tracer(mx, my, mz, ev.x1, y1, ev.z1, neon ? 0x5af0ff : 0xffa040, d / fly);
+          for (let k = 1; k <= 5; k++) { const u = k / 6; this.later.push({ t: this.uTime + fly * u, f: () => this.fx.puff(mx + (ev.x1 - mx) * u, my + (y1 - my) * u, mz + (ev.z1 - mz) * u, 3) }); }
+          this.later.push({ t: this.uTime + fly, f: () => { this.fx.boom(ev.x1, y1, ev.z1); this.fx.puff(ev.x1, y1, ev.z1, 8); } });
+        } else if (gun) {
           // arme à poudre (puis à impulsions) : éclair et fumée à la bouche, balle droite, bruit du coup (le char : un coup de canon)
           const dx = ev.x1 - ev.x0, dz = ev.z1 - ev.z0, d = Math.hypot(dx, dz) || 1, mx = ev.x0 + (dx / d) * 0.45, mz = ev.z0 + (dz / d) * 0.45, tank = su!.kind === 'cavalry', my = this.groundY(mx, mz) + (tank ? 0.6 : 0.62);
           this.shotAt.set(su!.id, this.uTime);

@@ -445,8 +445,30 @@ const halberdier: Kit = {
   left() {},
 };
 
-/** Les chevaliers : chevalier en armure (dès l'Antiquité s'il le faut), hallebardier (âge industriel), lourd moderne, chevalier futuriste */
-const KNIGHTS = [paladin, paladin, paladin, halberdier, heavyNow, heavyFuture];
+/** Lance-roquettes sur l'épaule (le long de +y depuis la main) : long tube, cône arrière, poignée, roquette engagée à l'avant */
+function bazookaTube(p: Parts, tube: number, band: number, neon = false) {
+  p.cyl(0.016, 0.016, 0.2, 8, 0, 0.03, 0.01, tube);
+  p.cyl(0.022, 0.016, 0.03, 8, 0, -0.08, 0.01, dark(tube, 0.7));
+  p.cyl(0.022, 0.018, 0.02, 8, 0, 0.14, 0.01, dark(tube, 0.8));
+  p.add(new THREE.ConeGeometry(0.014, 0.04, 6), 0, 0.17, 0.01, 0xb8322c);
+  p.box(0.005, 0.03, 0.02, 0, 0.02, 0.0, BLACK);
+  p.box(0.034, 0.008, 0.034, 0, 0.06, 0.01, band, 0, neon ? 'neon' : false);
+}
+
+/** Bazooka moderne : treillis, gilet, casque, lance-roquettes vert sur l'épaule */
+const bazooka: Kit = {
+  ...modern, hold: 'rifle',
+  right: (p) => bazookaTube(p, 0x4a5a3a, 0xe8c66a),
+};
+
+/** Exo-lanceur futuriste : exo-armure, lanceur de missiles à bandes lumineuses */
+const exoLauncher: Kit = {
+  ...future, hold: 'rifle',
+  right: (p) => bazookaTube(p, 0xe8ecf0, 0x5af0ff, true),
+};
+
+/** Les chevaliers : chevalier en armure (dès l'Antiquité s'il le faut), hallebardier (âge industriel), bazooka (moderne), exo-lanceur (futuriste) */
+const KNIGHTS = [paladin, paladin, paladin, halberdier, bazooka, exoLauncher];
 
 const NAVY = 0x22305a, BUFF = 0xe8c060, SILVER = 0xd8dce2, SIENNA = 0x8a5a3a;
 

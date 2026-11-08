@@ -35,9 +35,13 @@ describe('évolution des troupes avec l’âge', () => {
     expect(troopName('knight', 3)).toBe('Hallebardier');
     expect(troopStats('knight', 3).big).toBeGreaterThan(1);
     expect(troopStats('knight', 2).big).toBeUndefined();
+    // à l'âge moderne : le bazooka tire de loin (roquette), à l'équipement existant
+    expect(troopName('knight', 4)).toBe('Bazooka');
+    expect(troopStats('knight', 4).range).toBeGreaterThan(troopStats('knight', 3).range * 5);
+    expect(troopForm('knight', 4).gear).toEqual(['rifle', 'armor']);
     expect(troopForm('cavalry', 3).mount).toBe(true);
     const f = troopForm('cavalry', 4);
-    expect(f.name).toBe('Char léger');
+    expect(f.name).toBe('Char');
     expect(f.mount).toBeFalsy();
     // pas d'écurie ni de cheval requis pour un char
     expect(recruitWhy(newArmy(), 'cavalry', ctx(4, { stables: 0, horses: 0, unlimited: true }))).toBeNull();

@@ -74,8 +74,8 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
     desc: 'Épée et armure (à partir du Moyen Âge) : le plus solide de la garnison.',
     forms: [
       { from: 3, name: 'Hallebardier', plural: 'Hallebardiers', icon: '🪓', gear: ['sword', 'armor'], adj: { hp: 1.1, dmg: 1.15, speed: 0.95, big: 1.6 }, desc: 'Cuirasse et hallebarde (forgée à l’atelier) : lourd, son arme d’hast fend les grandes créatures.' },
-      { from: 4, name: 'Fantassin lourd', plural: 'Fantassins lourds', icon: '🛡️', gear: ['sword', 'armor'], adj: { hp: 1.2, dmg: 1.2, big: 1.4 }, desc: 'Casque à visière, grand bouclier et matraque-épée : le plus solide de la garnison.' },
-      { from: 5, name: 'Exo-chevalier', plural: 'Exo-chevaliers', icon: '🤖', gear: ['sword', 'armor'], adj: { hp: 1.35, dmg: 1.35, big: 1.4 }, desc: 'Exo-armure, lame d’énergie et champ de force : presque rien ne l’arrête.' },
+      { from: 4, name: 'Bazooka', plural: 'Bazookas', icon: '🚀', gear: ['rifle', 'armor'], adj: { hp: 1.0, dmg: 3.2, range: 8, cooldown: 1.7, big: 1.5 }, desc: 'Lance-roquettes sur l’épaule (fusil et armure de l’atelier) : roquette lourde à moyenne portée, cadence lente, redoutable contre les grandes créatures.' },
+      { from: 5, name: 'Exo-lanceur', plural: 'Exo-lanceurs', icon: '☄️', gear: ['rifle', 'armor'], adj: { hp: 1.2, dmg: 3.8, range: 10, cooldown: 1.5, big: 1.4 }, desc: 'Exo-armure et lanceur de missiles à tête chercheuse : portée longue, coup dévastateur.' },
     ],
   },
   cavalry: {
@@ -83,7 +83,7 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
     base: { hp: 150, dmg: 16, range: 0.8, speed: 3.2, cooldown: 1.2, sight: 6, radius: 0.4 },
     desc: 'Un cheval de l’écurie et une lance : rapide, il charge et frappe fort au corps à corps, mais ne tient pas la ligne.',
     forms: [
-      { from: 4, name: 'Char léger', plural: 'Chars légers', icon: '🚜', gear: ['rifle', 'armor'], adj: { hp: 1.6, dmg: 1.0, range: 5.5, cooldown: 1.5, speed: 0.95, radius: 1.15 }, desc: 'Plus de cheval : un blindé à chenilles (fusil et armure de l’atelier), canon à moyenne portée.' },
+      { from: 4, name: 'Char', plural: 'Chars', icon: '🚜', gear: ['rifle', 'armor'], adj: { hp: 1.6, dmg: 1.0, range: 5.5, cooldown: 1.5, speed: 0.95, radius: 1.15 }, desc: 'Plus de cheval : un blindé à chenilles (fusil et armure de l’atelier), canon à moyenne portée.' },
       { from: 5, name: 'Blindé futuriste', plural: 'Blindés futuristes', icon: '🛸', gear: ['rifle', 'armor'], adj: { hp: 2.4, dmg: 1.5, range: 8, cooldown: 1.6, speed: 1.0, radius: 1.2 }, desc: 'Un blindé lourd à canon longue portée.' },
     ],
   },
