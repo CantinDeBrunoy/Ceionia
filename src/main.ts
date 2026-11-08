@@ -30,6 +30,7 @@ import { Environment } from './render/env';
 import { computeSeason, makeSeasonState } from './render/season';
 import { CameraRig, PointerInfo, ToolInput } from './core/camera';
 import { GameTime } from './core/time';
+import { SurfaceGate } from './core/surface';
 import { Sim } from './sim/sim';
 import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
@@ -252,6 +253,11 @@ class Game implements UIHost {
   private isleRuins: IsleRuins | null = null;
   /** on commande la garnison de l'île (la vue reste en surface) */
   isleCmd = false;
+  /** les actions du village demandées depuis les Enfers ou le commandement de l'île : on remonte d'abord (`ensureSurface`) */
+  private surfaceGate = new SurfaceGate({
+    mode: () => this.mode, isle: () => this.isleCmd, fading: () => this.fading,
+    exitHell: () => this.exitHell(), leaveIsle: () => this.leaveIsle(), later: (fn, ms) => { setTimeout(fn, ms); },
+  });
   private surfaceView: ReturnType<CameraRig['view']> | null = null;
   private surfaceZoom = { min: 10, max: 0 };
   private fading = false;
@@ -395,6 +401,9 @@ class Game implements UIHost {
       get autoRoads() { return host.autoRoads; },
     });
     this.cam.handler = this.tools;
+    // prendre un outil du village (barre du bas, vignette) depuis les Enfers ou le commandement de l'île : on remonte d'abord
+    const setTool = this.tools.setTool.bind(this.tools);
+    this.tools.setTool = (t, kind) => { if (t === 'none' || this.mode === 'under') setTool(t, kind); else this.ensureSurface(() => setTool(t, kind)); };
     this.ui = new UI(uiRoot, host);
     this.spaceCast = new SpaceCast(uiRoot);
     // le contrôle des troupes : ses ordres au clic droit (sans glisser), la barre des troupes, l'alerte d'incursion
@@ -518,6 +527,7 @@ class Game implements UIHost {
   /** Entre dans les Enfers, devant le portail : on y commande les troupes qui l'ont passé */
   async enterHell() {
     if (this.mode !== 'surface') return;
+    this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
     this.fadeThrough(async () => {
@@ -610,7 +620,7 @@ class Game implements UIHost {
 
   /** Prend le commandement de la garnison de l'île (la vue y va) */
   commandIsle() {
-    if (this.mode === 'hell') { this.exitHell(); setTimeout(() => this.commandIsle(), 900); return; }
+    if (this.mode === 'hell') { this.ensureSurface(() => this.commandIsle(), true); return; }
     if (this.mode !== 'surface' || !this.war.ensure()) return;
     this.syncIsleLayer();
     const t = this.isleTheater(), p = this.world.portal;
@@ -642,6 +652,7 @@ class Game implements UIHost {
 
   /** La vue va sur l'île du portail (pour y bâtir ses défenses) */
   goIsle() {
+    if (this.mode === 'hell') { this.ensureSurface(() => this.goIsle(), true); return; }
     const p = this.world.portal;
     if (!p || this.mode !== 'surface') return;
     this.follow(null); this.trainCam = null; this.incidentCam = null;
@@ -757,7 +768,7 @@ class Game implements UIHost {
     this.quake = { cell, t: 18 };
     audio.sfxRumble(18);
     // le message mène au volcan qui se réveille (on ne savait pas lequel)
-    this.ui.toast('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.', () => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); });
+    this.ui.toast('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.', () => this.ensureSurface(() => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); }));
   }
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
@@ -776,6 +787,7 @@ class Game implements UIHost {
   followIncident(key: string | null) {
     const i = key ? this.incidents().find((x) => x.key === key) : undefined;
     if (!i) { this.incidentCam = null; return; }
+    if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.followIncident(key)); return; }
     // une seule chose suivie à la fois : la vue lâche l'équipe (et sa descente sous terre) ou le train
     this.follow(null); this.trainCam = null;
     this.incidentCam = i.key;
@@ -895,6 +907,7 @@ class Game implements UIHost {
 
   /** Ramène la vue sur le village ; si elle y est déjà, passe à la vue d'ensemble. La vue cesse de suivre quoi que ce soit */
   goHome() {
+    if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.goHome()); return; }
     // la vue suivait quelque chose : elle revient au village, même si l'équipe en partait à peine
     const tracked = this.following !== null || this.trainCam !== null || this.incidentCam !== null;
     this.follow(null); this.trainCam = null; this.incidentCam = null;
@@ -908,6 +921,7 @@ class Game implements UIHost {
   followTrain(line: number) {
     const tr = this.railway.trains.get(line), p = tr ? this.railway.trainAt(tr) : null;
     if (!p) return;
+    if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.followTrain(line)); return; }
     // une seule chose suivie à la fois
     this.follow(null); this.incidentCam = null;
     if (this.mode === 'under') this.exitUnder(Math.floor(p[1]) * N + Math.floor(p[0]));
@@ -919,6 +933,7 @@ class Game implements UIHost {
 
   /** Commence une ligne à partir de cette gare, ou reprend une ligne existante (ses arrêts, le tracé de sa voie) */
   startRailEdit(from: { stop?: number; line?: number }) {
+    if (this.mode === 'hell' || this.isleCmd) { this.ensureSurface(() => this.startRailEdit(from)); return; }
     const l = from.line !== undefined ? this.world.lines.find((x) => x.id === from.line) : undefined;
     const used = new Set(this.world.lines.map((x) => x.color));
     this.railEdit = l ? { stops: [...l.stops], line: l.id, color: l.color, via: l.stops.slice(1).map((_, i) => [...(l.via?.[i] ?? [])]) }
@@ -991,6 +1006,8 @@ class Game implements UIHost {
   /** La caméra suit l'expédition donnée (null : elle redevient libre) */
   follow(id: number | null) {
     const a = this.expeditions.active.find((e) => e.id === id);
+    // l'équipe est au village : depuis les Enfers (ou le commandement de l'île), la vue remonte d'abord
+    if (a && (this.mode === 'hell' || this.isleCmd)) { this.ensureSurface(() => this.follow(id)); return; }
     this.following = a ? a.id : null;
     // une seule chose suivie à la fois : suivre l'équipe lâche le train et l'incident
     if (a) { this.trainCam = null; this.incidentCam = null; }
@@ -1078,13 +1095,20 @@ class Game implements UIHost {
     return { stream: stream * zoom, cascade: cascade * zoom, coast: coast * zoom, fire: Math.max(this.life.fireNear(f), this.fires.nearness(f.x, f.z)) * zoom, alt: Math.max(0, w.hAt(f.x, f.z)), frogs: this.fauna.frogsNear(f.x, f.z, 9) * zoom };
   }
 
+  /**
+   * Fait l'action au village : depuis les Enfers ou le commandement de l'île, on remonte d'abord (fondu), puis elle s'exécute une
+   * fois. `keepIsle` : on reste au commandement de l'île (aller sur l'île, y commander)
+   */
+  ensureSurface(then: () => void, keepIsle = false) { this.surfaceGate.ensure(then, keepIsle); }
+
   /** Réveille le volcan de la case donnée : éruption, grondement et animaux qui détalent */
   erupt(cell: number) {
     if (!this.eruptions.start(cell)) return;
     audio.sfxEruption(ERUPTION_DUR);
     this.ui.toast('Le volcan entre en éruption !');
     // la première éruption de la partie : la vue file sur le volcan pour ne pas la manquer
-    if (!this.volcanoSeen) {
+    // (pas depuis les Enfers ni le commandement de l'île : la vue n'y est pas arrachée, le message mène au volcan)
+    if (!this.volcanoSeen && this.mode === 'surface' && !this.isleCmd) {
       this.volcanoSeen = true;
       this.follow(null);
       this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 34);
@@ -1186,7 +1210,10 @@ class Game implements UIHost {
         if (this.command.key(e)) return;
       }
       if (this.mode === 'hell') {
-        if (k === 'u' || k === 'escape') this.exitHell();
+        // une touche d'outil ou de bâtiment du village (B, R, X, chiffres…) ramène à la surface, puis prend l'outil
+        const vt = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) || e.ctrlKey || e.metaKey || e.altKey ? undefined : map[k];
+        if (vt || (k === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey)) this.tools.setTool(vt ?? 'build', vt ? undefined : this.tools.kind);
+        else if (k === 'u' || k === 'escape') this.exitHell();
         else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
         return;
       }
