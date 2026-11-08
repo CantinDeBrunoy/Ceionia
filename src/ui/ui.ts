@@ -1632,7 +1632,7 @@ export class UI {
     };
     el.innerHTML = `
       <p class="hint" title="Elle le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier.">Chaque équipe emporte le meilleur équipement en réserve.</p>
-      <div class="mpills stock"><span title="Bois">🪵 ${Math.floor(h.world.wood)}</span><span title="Pierre">🪨 ${Math.floor(h.world.stone)}</span><span title="Minerai">⛏️ ${Math.floor(ex.ore)}</span>${age >= 4 ? `<span title="Carburant">⛽ ${Math.floor(h.world.fuel)}</span>` : ''}</div>
+      <div class="mpills stock"><span>${Math.floor(h.world.wood)} bois</span><span>${Math.floor(h.world.stone)} pierre</span><span>⛏️ ${Math.floor(ex.ore)} minerai</span>${age >= 4 ? `<span>⛽ ${Math.floor(h.world.fuel)}</span>` : ''}</div>
       <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => shown(g) && !ex.whyCraft(g, age)) ? '' : 'disabled'} title="Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent">${ic('hammer', 16, 2)} Tout fabriquer</button></div>
       <div class="gearGrid">${GEAR.filter(shown).map(card).join('')}</div>
       ${GEAR.some((g) => !shown(g)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary title="Dépassées à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore">Anciennes armes et outils</summary><div class="gearGrid">${GEAR.filter((g) => !shown(g)).map(card).join('')}</div></details>` : ''}
