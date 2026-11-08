@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
-import { zoneOrigins } from '../src/build/zones';
+import { isleOrigins, zoneOrigins } from '../src/build/zones';
 import { War, waveForce, clockText, invasionTroops } from '../src/sim/war';
 import { DEMON_POWER, INVASION_DELAY } from '../src/sim/hell';
 import { TroopKind, troopStats } from '../src/sim/army';
@@ -20,11 +20,11 @@ const island = (towers = 1, barracks = 1, difficulty: Difficulty = 'normal') => 
   w.difficulty = difficulty;
   w.exp.done.push('portal');
   if (towers) {
-    const t = zoneOrigins(w, 'watchtower')[0];
+    const t = isleOrigins(w, 'watchtower')[0];
     w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false);
   }
   if (barracks) {
-    const c = zoneOrigins(w, 'barracks').find((k) => w.canPlace('barracks', k % N, Math.floor(k / N)) === null)!;
+    const c = isleOrigins(w, 'barracks').find((k) => w.canPlace('barracks', k % N, Math.floor(k / N)) === null)!;
     w.place('barracks', c % N, Math.floor(c / N), 0, true, 1, false);
   }
   return w;

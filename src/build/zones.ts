@@ -19,9 +19,6 @@ export const ZONED: Partial<Record<KindId, string>> = {
   quarry: 'il faut des rochers ou une montagne',
   lumber: 'il faut une forêt',
   oilwell: 'il faut un gisement de pétrole (les taches sombres)',
-  // les défenses : seulement sur l'île du portail, une fois le portail ouvert
-  watchtower: 'il faut l’île du portail, une fois le portail ouvert',
-  barracks: 'il faut l’île du portail, une fois le portail ouvert',
 };
 
 export const isZoned = (kind: KindId) => kind in ZONED;
@@ -77,6 +74,11 @@ export function zoneOrigins(w: World, kind: KindId): number[] {
   const out: number[] = [], s = KINDS[kind].size;
   for (let z = 0; z + s <= N; z++) for (let x = 0; x + s <= N; x++) if (w.canPlace(kind, x, z) === null) out.push(z * N + x);
   return out;
+}
+
+/** Les emprises valides d'un bâtiment sur l'île du portail seulement (les défenses s'y posent, et au village : tests, outils) */
+export function isleOrigins(w: World, kind: KindId): number[] {
+  return zoneOrigins(w, kind).filter((k) => w.onPortalIsland(k % N, Math.floor(k / N)));
 }
 
 /** Emprises examinées par image : la carte entière en une dizaine d'images, sans à-coup */

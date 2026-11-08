@@ -16,6 +16,8 @@ import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
 import { isStart, startRefusal, START_KIND } from './startLock';
+import { traceRampart, layRampart, rampartCost, RampartTrace } from './rampart';
+import { costLabel } from '../sim/economy';
 import { tr } from '../i18n';
 
 export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
@@ -107,6 +109,10 @@ export class ToolController implements ToolInput {
   private freePulse: THREE.Mesh;
   private freeArrow: THREE.Mesh;
   private pulseT = 0;
+  /** le tracé d'un rempart (point A dans `freeFrom`) : une tuile par case, verte si le pan s'y pose, rouge sinon */
+  private wallCells: THREE.InstancedMesh;
+  private wallTrace: RampartTrace | null = null;
+  private wallKey = '';
 
   private ring: THREE.LineLoop;
   private marker: THREE.Mesh;
@@ -154,6 +160,9 @@ export class ToolController implements ToolInput {
     this.freeArrow.renderOrder = 10; this.freeArrow.visible = false;
     this.spots = new THREE.InstancedMesh(new THREE.CircleGeometry(0.15, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x40e070, transparent: true, opacity: 0.8, depthTest: false, depthWrite: false }), MAX_SPOTS);
     this.spots.renderOrder = 8; this.spots.visible = false; this.spots.frustumCulled = false; this.spots.count = 0;
+    this.wallCells = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.86, 0.86).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, side: THREE.DoubleSide }), 64);
+    this.wallCells.renderOrder = 9; this.wallCells.visible = false; this.wallCells.frustumCulled = false; this.wallCells.count = 0;
+    h.scene.add(this.wallCells);
     // la flèche de l'entrée : un chevron jaune qui pointe vers la rue (vers +z avant d'être tourné avec le bâtiment)
     const arrow = new THREE.Shape([new THREE.Vector2(-0.22, 0), new THREE.Vector2(0, 0.26), new THREE.Vector2(0.22, 0), new THREE.Vector2(0.09, 0), new THREE.Vector2(0.09, -0.16), new THREE.Vector2(-0.09, -0.16), new THREE.Vector2(-0.09, 0)]);
     this.door = new THREE.Mesh(new THREE.ShapeGeometry(arrow).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd04a, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
@@ -174,8 +183,8 @@ export class ToolController implements ToolInput {
     if (t !== 'none') this.selected = null;
     // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route
     if (t !== this.tool || (kind && kind !== this.kind)) this.rotManual = false;
+    if (t !== this.tool || (kind && kind !== this.kind)) this.freeFrom = null;
     if (t !== this.tool) {
-      this.freeFrom = null;
       // chaque pinceau retrouve sa propre taille
       this.radii[this.tool] = this.radius;
       this.radius = this.radii[t] ?? 3;
@@ -420,6 +429,7 @@ export class ToolController implements ToolInput {
     else if (t === 'road' && this.roadMode === 'free') this.freeDown(e);
     else if (t === 'road') this.applyRoad();
     else if (t === 'bulldoze') this.applyBulldoze();
+    else if (this.tracingWall) this.wallDown(e);
     else if (t === 'build' && !e.touch) this.tryPlace();
     else if (t === 'move' && !this.moveOrigin) this.pickUp();
     else if (t === 'move' && this.moveOrigin && !e.touch) this.tryPlace();
@@ -445,10 +455,10 @@ export class ToolController implements ToolInput {
       this.pressed = false;
       return;
     }
-    // route libre tracée d'un seul glissé : on relâche sur le point B
-    if (this.freeDrag && this.freeFrom && this.tool === 'road' && Math.hypot(e.x - this.freeDrag[0], e.y - this.freeDrag[1]) > 12) {
+    // route libre (ou rempart) tracée d'un seul glissé : on relâche sur le point B
+    if (this.freeDrag && this.freeFrom && (this.tool === 'road' || this.tracingWall) && Math.hypot(e.x - this.freeDrag[0], e.y - this.freeDrag[1]) > 12) {
       this.pickAt(e);
-      this.freeLay();
+      if (this.tracingWall) this.wallLay(); else this.freeLay();
     }
     this.freeDrag = null;
     if (this.tool === 'none' && this.downAt && Math.hypot(e.x - this.downAt[0], e.y - this.downAt[1]) < 8) {
@@ -462,15 +472,18 @@ export class ToolController implements ToolInput {
     this.downAt = null;
     if (this.pressed) {
       this.pickAt(e);
-      if ((this.tool === 'build' || (this.tool === 'move' && this.moveOrigin)) && e.touch && this.hit) this.tryPlace();
+      if ((this.tool === 'build' || (this.tool === 'move' && this.moveOrigin)) && e.touch && this.hit && !this.tracingWall) this.tryPlace();
     }
     this.pressed = false;
     this.endStroke();
     this.refreshVisuals();
   }
 
-  /** Route libre : 0 rien, 1 le point A est à choisir, 2 le point A est posé, le point B reste à cliquer */
-  get freeStage(): 0 | 1 | 2 { return this.tool !== 'road' || this.roadMode !== 'free' ? 0 : this.freeFrom ? 2 : 1; }
+  /** Route libre ou rempart : 0 rien, 1 le point A est à choisir, 2 le point A est posé, le point B reste à cliquer */
+  get freeStage(): 0 | 1 | 2 { return !(this.tool === 'road' && this.roadMode === 'free') && !this.tracingWall ? 0 : this.freeFrom ? 2 : 1; }
+
+  /** Un rempart en main : il se trace d'un point A à un point B, comme la route libre */
+  get tracingWall() { return this.tool === 'build' && this.kind === 'wall'; }
 
   update(dt: number) {
     // bûcheron et pierrier : la zone verte reste affichée après la pose (on en pose souvent plusieurs) et tant que l'un d'eux est sélectionné
@@ -670,6 +683,80 @@ export class ToolController implements ToolInput {
     this.freeArrow.visible = true;
   }
 
+  /**
+   * Rempart : un premier clic choisit le point A, un second (ou le relâcher d'un glissé) le point B, et les pans se posent d'un
+   * trait de l'un à l'autre, en sautant les routes ; B devient le point A du mur suivant (Échap, ou un clic sur A, arrête là)
+   */
+  private wallDown(e: PointerInfo) {
+    const c = this.cell(), w = this.h.world;
+    if (!c || !w.inCells(c.x, c.z)) return;
+    if (!this.freeFrom) {
+      const here = w.buildingAt(c.x, c.z);
+      if (!(here && (here.kind === 'wall' || here.kind === 'gate' || here.kind === 'watchtower')) && w.canPlace('wall', c.x, c.z) !== null) { this.h.toast(tr('Un rempart part d’une case libre (ou d’un pan déjà posé) : pas d’une route, d’un bâtiment ni de l’eau.')); return; }
+      this.freeFrom = [c.x + 0.5, c.z + 0.5];
+      this.freeDrag = [e.x, e.y];
+      this.h.audio.sfxClick();
+      this.refreshVisuals();
+      return;
+    }
+    if (Math.floor(this.freeFrom[0]) === c.x && Math.floor(this.freeFrom[1]) === c.z) { this.freeFrom = null; this.refreshVisuals(); return; }
+    this.wallLay();
+  }
+
+  /** Pose les pans du tracé de A jusqu'au pointeur (annulable d'un coup) ; dit ce qui a été posé, sauté, ou ce qui manque */
+  private wallLay() {
+    const c = this.cell(), A = this.freeFrom, w = this.h.world;
+    if (!c || !A || (Math.floor(A[0]) === c.x && Math.floor(A[1]) === c.z)) return;
+    const t = traceRampart(w, A, [c.x + 0.5, c.z + 0.5]);
+    if (t.why) { this.h.toast(t.why); return; }
+    const cost = rampartCost(w, t, this.h.getAge());
+    if (cost && !canPay(w, cost)) { this.h.toast(shortLabel(w, cost)); return; }
+    if (!this.pre) this.beginStroke();
+    this.mark();
+    const r = layRampart(w, t, this.h.getAge());
+    this.endStroke();
+    if (r.built) this.h.audio.sfxPlace();
+    const msg = r.built === 0 ? tr('Rien à poser ici : le tracé ne passe que sur des routes, des bâtiments ou de l’eau.')
+      : (r.built > 1 ? tr('{n} pans posés', { n: r.built }) : tr('Un pan posé')) + (r.skipped ? tr(' ({n} cases sautées : routes, bâtiments ou eau)', { n: r.skipped }) : '') + tr('. Cliquez plus loin pour prolonger le mur ; Échap : arrêter.');
+    this.h.toast(msg);
+    // B devient le point A du mur suivant
+    this.freeFrom = [c.x + 0.5, c.z + 0.5];
+    this.wallKey = '';
+    this.refreshVisuals();
+  }
+
+  /** Aperçu du rempart : une tuile par case du tracé (verte : un pan s'y posera, rouge : la case est sautée), et le prix */
+  private wallPreview() {
+    const A = this.freeFrom, c = this.cell(), w = this.h.world;
+    this.freeDot.visible = this.freePulse.visible = !!A;
+    if (!A) return;
+    this.freeDot.position.set(A[0], w.surfaceAt(A[0], A[1]) + 0.12, A[1]);
+    this.freePulse.position.set(A[0], w.surfaceAt(A[0], A[1]) + 0.13, A[1]);
+    if (!c || !w.inCells(c.x, c.z) || (Math.floor(A[0]) === c.x && Math.floor(A[1]) === c.z)) return;
+    const key = `${A[0]},${A[1]}>${c.x},${c.z}|${w.version}`;
+    if (key !== this.wallKey) {
+      this.wallKey = key;
+      const t = this.wallTrace = traceRampart(w, A, [c.x + 0.5, c.z + 0.5]);
+      const m = new THREE.Matrix4(), col = new THREE.Color();
+      let n = 0;
+      for (let i = 0; i < t.cells.length && n < 64; i++) {
+        const [x, z] = t.cells[i];
+        this.wallCells.setMatrixAt(n, m.makeTranslation(x, w.surfaceAt(x, z) + 0.1, z));
+        this.wallCells.setColorAt(n, col.setHex(t.had[i] ? 0xfff2c0 : t.ok[i] ? 0x5dff8f : 0xff5a5a));
+        n++;
+      }
+      this.wallCells.count = n;
+      this.wallCells.instanceMatrix.needsUpdate = true;
+      if (this.wallCells.instanceColor) this.wallCells.instanceColor.needsUpdate = true;
+      const cost = rampartCost(w, t, this.h.getAge());
+      this.placeWhy = t.why ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+      this.wallCost = cost ? tr('{n} pans : {cost}', { n: t.ok.filter((o, i) => o && !t.had[i]).length, cost: costLabel(cost) }) : '';
+    }
+    this.wallCells.visible = this.wallCells.count > 0;
+  }
+  /** Le prix du tracé en cours, pour la fiche ('' : rien à payer ou pas de tracé) */
+  wallCost = '';
+
   /** Démolir : une case (pinceau à 1), ou tout un disque de la taille du pinceau (les parcs, les forêts, les routes d'un coup) */
   private applyBulldoze() {
     const c = this.cell();
@@ -777,8 +864,10 @@ export class ToolController implements ToolInput {
     this.placeWhy = null;
     this.spots.visible = false;
     this.door.visible = false;
-    this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = this.freePulse.visible = this.freeArrow.visible = false;
+    this.ring.visible = this.marker.visible = this.ghost.visible = this.freeLine.visible = this.freeDot.visible = this.freePulse.visible = this.freeArrow.visible = this.wallCells.visible = false;
+    this.wallCost = '';
     if (t === 'road' && this.roadMode === 'free') this.freePreview();
+    else if (this.tracingWall) this.wallPreview();
     // le bâtiment sélectionné : son emprise s'éclaire
     const sel = t === 'none' ? this.selectedBuilding() : undefined;
     if (sel) {
@@ -848,9 +937,11 @@ export class ToolController implements ToolInput {
       // sous le curseur, le bâtiment qu'on vient de poser : « Emplacement occupé » n'a rien à dire tant que la souris n'a pas bougé de case
       const cellKey = `${o.x},${o.z}`;
       if (this.placedAt !== cellKey) this.placedAt = null;
-      this.placeWhy = this.placedAt === cellKey && reason === tr('Emplacement occupé') ? null : why0;
+      // (un rempart en cours de tracé : l'aperçu du tracé a déjà dit ce qui manque ; une case occupée par un pan est son point de départ)
+      const tracing = this.tracingWall && this.freeFrom;
+      if (!tracing) this.placeWhy = this.placedAt === cellKey && reason === tr('Emplacement occupé') ? null : this.tracingWall && this.hitBuilding && (this.hitBuilding.kind === 'wall' || this.hitBuilding.kind === 'gate') ? null : why0;
       // (les points verts des emplacements libres induisaient en erreur : retirés, `showSpots` n’est plus appelé)
-      setGhostValid(!why0);
+      setGhostValid(tracing ? !this.placeWhy : !why0);
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);
@@ -865,7 +956,7 @@ export class ToolController implements ToolInput {
         this.door.scale.setScalar(1.8 + s * 0.2);
         this.door.visible = true;
       }
-      this.markerMat.color.setHex(reason ? 0xff5a5a : 0x40e070);
+      this.markerMat.color.setHex(tracing ? (this.placeWhy ? 0xff5a5a : 0x40e070) : reason ? 0xff5a5a : 0x40e070);
       this.marker.scale.set(s, 1, s);
       this.marker.position.set(o.x + s / 2, y + 0.05, o.z + s / 2);
       this.marker.visible = true;

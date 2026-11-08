@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
-import { zoneOrigins } from '../src/build/zones';
+import { isleOrigins, zoneOrigins } from '../src/build/zones';
 import { ISLE_SECURE, isleSecured } from '../src/world/portal';
 import {
   blightLevel, isleBlight, blightAt, purityAt, demonBoost, healBoost, BLIGHT_DORMANT, BLIGHT_SECURED, BLIGHT_FLOOR, BLIGHT_R_MIN, DEMON_BONUS, HEAL_BONUS,
@@ -14,8 +14,8 @@ describe('la contamination de l’île du portail', () => {
   beforeAll(() => setMapSize(192));
 
   const fresh = () => { const w = new World(); newWorld(w, 3, 2026, GEN); return w; };
-  const tower = (w: World) => { const t = zoneOrigins(w, 'watchtower').find((k) => w.canPlace('watchtower', k % N, Math.floor(k / N)) === null)!; w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false); };
-  const barracks = (w: World) => { const c = zoneOrigins(w, 'barracks').find((k) => w.canPlace('barracks', k % N, Math.floor(k / N)) === null)!; w.place('barracks', c % N, Math.floor(c / N), 0, true, 1, false); };
+  const tower = (w: World) => { const t = isleOrigins(w, 'watchtower').find((k) => w.canPlace('watchtower', k % N, Math.floor(k / N)) === null)!; w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false); };
+  const barracks = (w: World) => { const c = isleOrigins(w, 'barracks').find((k) => w.canPlace('barracks', k % N, Math.floor(k / N)) === null)!; w.place('barracks', c % N, Math.floor(c / N), 0, true, 1, false); };
 
   it('sans île, rien ; portail fermé : à demi ; portail ouvert sans défenses : au plus fort', () => {
     const w = fresh();

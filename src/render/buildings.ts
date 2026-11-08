@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { World, WorldListener } from '../world/world';
-import { Building, KINDS, sizeOf } from '../build/catalog';
+import { Building, KINDS, sizeOf, isRampart } from '../build/catalog';
 import { getModel, ModelOpts } from './models';
+import { rampartMask } from '../build/rampart';
 import { mats, crowdMat, CROWD, mergeLit } from './materials';
 import { GeoBatch } from './batch';
 import { hash2 } from '../core/rng';
@@ -242,6 +243,7 @@ export class BuildingView implements WorldListener {
   private opts(b: Building): ModelOpts {
     const o: ModelOpts = { v: Math.floor(hash2(b.x, b.z, 7) * 6), L: false, R: false, F: false, small: !!b.small };
     if (b.kind === 'house' || b.kind === 'workshop') o.tier = skylineTier(b.x, b.z);
+    if (isRampart(b.kind)) { o.mask = rampartMask(this.world, b); return o; }
     if (b.kind !== 'house') return o;
     const w = this.world;
     const f = FRONT[b.rot], r = RIGHT[b.rot];
@@ -272,7 +274,7 @@ export class BuildingView implements WorldListener {
     this.autoRot(b);
     const o = this.opts(b);
     const m = getModel(b.kind, b.age, o);
-    const key = `${b.kind}|${b.age}|${o.v}|${+o.L}${+o.R}${+o.F}|${o.row ?? ''}|${o.tier ?? ''}`;
+    const key = `${b.kind}|${b.age}|${o.v}|${+o.L}${+o.R}${+o.F}|${o.row ?? ''}|${o.tier ?? ''}|${o.mask ?? ''}`;
     // corps et lumières en un seul maillage quand ils se fondent, dessiné avec tous les autres dans le lot des corps (sinon,
     // deux maillages à part comme avant)
     const lit = litOf(m.body, m.glow), bodyG = lit ?? m.body, glowG = lit ? null : m.glow;

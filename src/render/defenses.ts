@@ -33,8 +33,8 @@ function onFace(p: Parts, a: number, r: number, u: number, y: number, w: number,
 }
 const FACES = [0, PI / 2, PI, -PI / 2];
 
-/** Drapeau de la faction : mât, boule dorée, oriflamme rouge à liseré d'or et losange qui flotte au vent */
-function flag(p: Parts, kit: DefKit, x: number, y: number, z: number, h: number, w = 0.16, ht = 0.09, pole = 0x7a6355) {
+/** Drapeau de la faction : mât, boule dorée, oriflamme rouge à liseré d'or et losange qui flotte au vent (les remparts le partagent) */
+export function flag(p: Parts, kit: DefKit, x: number, y: number, z: number, h: number, w = 0.16, ht = 0.09, pole = 0x7a6355) {
   p.cyl(0.008, 0.011, h, 5, x, y, z, pole);
   p.sphere(0.017, x, y + h + 0.008, z, GOLD);
   const f = kit.sway([x, 0, z], [0, 1, 0], 0.35, 0.9), top = y + h - 0.015;

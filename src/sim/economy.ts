@@ -45,8 +45,9 @@ export function costOf(kind: KindId, age: number, diff: Difficulty = 'easy', own
     return { wood: 8 + a * 4, stone: pens ? 2 + a : 6 + a * 4, ...(brick ? { brick } : {}) };
   }
   if (!owned && PRODUCERS.includes(kind)) return null;
-  const s = plaza ? 1 : d.size;
-  return { wood: Math.round(s * (p.wood + a * p.woodAge)), stone: Math.round(s * (pens ? p.penStone + a * p.penStoneAge : p.stone + a * p.stoneAge)), ...(brick ? { brick: Math.round(brick * 1.5) } : {}) };
+  // (un pan de rempart : le tiers d'un petit bâtiment, un mur en compte des dizaines)
+  const s = plaza ? 1 : kind === 'wall' ? 0.34 : d.size;
+  return { wood: Math.max(1, Math.round(s * (p.wood + a * p.woodAge))), stone: Math.max(1, Math.round(s * (pens ? p.penStone + a * p.penStoneAge : p.stone + a * p.stoneAge))), ...(brick ? { brick: Math.round(brick * 1.5) } : {}) };
 }
 
 /** Prix d'un bâtiment neuf dans cette partie : rien en ressources illimitées, sinon selon la difficulté */

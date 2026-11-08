@@ -10,7 +10,7 @@ import {
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
-import { zoneOrigins } from '../src/build/zones';
+import { isleOrigins, zoneOrigins } from '../src/build/zones';
 import { War } from '../src/sim/war';
 
 const run = (h: Hell, b: HellBase | null, t: number, until?: () => boolean) => {
@@ -254,9 +254,9 @@ describe('base avancée : la guerre (armée, caserne avancée, infirmerie)', () 
     const w = new World();
     newWorld(w, 3, 2026, GEN);
     w.exp.done.push('portal');
-    const t = zoneOrigins(w, 'watchtower')[0];
+    const t = isleOrigins(w, 'watchtower')[0];
     w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false);
-    const c = zoneOrigins(w, 'barracks').find((k) => w.canPlace('barracks', k % N, Math.floor(k / N)) === null)!;
+    const c = isleOrigins(w, 'barracks').find((k) => w.canPlace('barracks', k % N, Math.floor(k / N)) === null)!;
     w.place('barracks', c % N, Math.floor(c / N), 0, true, 1, false);
     w.exp.gear.spear = 10; w.exp.gear.bow = 10;
     w.wood = 500; w.stone = 500; w.ore = 50;

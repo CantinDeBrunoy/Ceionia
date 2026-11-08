@@ -280,8 +280,8 @@ export class World {
   }
 
   /**
-   * Règle de l'île du portail pour un bâtiment : sur l'île, seulement des défenses (tour de garde, caserne), une fois le
-   * portail ouvert ; les défenses, seulement sur l'île ; rien sur le portail lui-même
+   * Règle de l'île du portail pour un bâtiment : sur l'île, seulement des défenses (tour de garde, caserne, remparts), une
+   * fois le portail ouvert ; les défenses se bâtissent aussi au village ; rien sur le portail lui-même
    */
   private portalRule(kind: KindId, x: number, z: number, s: number): string | null {
     let on = 0;
@@ -289,11 +289,11 @@ export class World {
       if (this.inPortal(x + i, z + j)) return tr('Le portail se dresse ici');
       if (this.onPortalIsland(x + i, z + j)) on++;
     }
+    if (!on) return null;
     if (DEFENSES.includes(kind)) {
-      if (!this.portal) return tr('Cette carte n’a pas d’île du portail (partie commencée avant elle)');
-      if (on < s * s) return tr('Ne se bâtit que sur l’île du portail');
+      if (on < s * s) return tr('À cheval sur le rivage de l’île : posez-le tout entier sur l’île');
       if (!this.portalOpen) return tr('Il faut d’abord ouvrir le portail (expédition « Le portail de l’autre rive »)');
-    } else if (on) return tr('Sur l’île du portail, on ne bâtit que des défenses');
+    } else return tr('Sur l’île du portail, on ne bâtit que des défenses');
     return null;
   }
 
@@ -864,7 +864,8 @@ export class World {
         const cx = x + i, cz = z + j;
         const k = this.ci(cx, cz);
         if (this.occ[k]) return tr('Emplacement occupé');
-        if (this.road[k] && kind !== 'lamp') return tr('Une route est déjà ici');
+        // (le lampadaire se pose au bord de la rue, la porte de la ville l'enjambe)
+        if (this.road[k] && kind !== 'lamp' && kind !== 'gate') return tr('Une route est déjà ici');
         // la case devant la porte d'un bâtiment reste libre pour son chemin
         if (!this.road[k] && this.doorOf(cx, cz)) return tr('Devant la porte d’un bâtiment : son chemin passe ici');
         if (this.decor[k]) return tr('Une grotte ou une faille est ici');

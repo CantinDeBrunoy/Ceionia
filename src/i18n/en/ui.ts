@@ -124,7 +124,7 @@ registerDict('ui', {
   ' — recliquer pour replier ou déplier la barre': ' — click again to fold or unfold the bar',
   'Habitat': 'Housing', 'Production': 'Production', 'Services': 'Services', 'Vie & culture': 'Life & culture', 'Militaire': 'Military',
   'Logements': 'Homes', 'Éclairage': 'Lighting', 'Matériaux': 'Materials', 'Industrie': 'Industry', 'Savoir': 'Knowledge', 'Transport': 'Transport',
-  'Défense de l’île': 'Island defence', 'Parcs et décor': 'Parks and decor', 'Détente': 'Leisure', 'Culte': 'Worship', 'Monuments': 'Monuments',
+  'Défense': 'Defence', 'Remparts': 'Ramparts', 'Parcs et décor': 'Parks and decor', 'Détente': 'Leisure', 'Culte': 'Worship', 'Monuments': 'Monuments',
   'Décor': 'Decor',
   'Rien à bâtir dans ce rayon avant l’âge {age}.': 'Nothing to build in this category before the age {age}.',
   'Voir': 'View', 'Monter': 'Raise', 'Baisser': 'Lower', 'Aplanir': 'Flatten', 'Falaise': 'Cliff', 'Montagne': 'Mountain', 'Volcan': 'Volcano',

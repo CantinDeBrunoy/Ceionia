@@ -18,7 +18,7 @@ describe('emplacements des bâtiments à terrain précis', () => {
 
   it('la liste suit les règles de canPlace : ports, ponton, mine, club alpin, carrière, bûcheron, puits', () => {
     // (et les défenses de l'île du portail : tour de garde, caserne)
-    expect(Object.keys(ZONED).sort()).toEqual(['alpine', 'barracks', 'fishmarket', 'harbor', 'lighthouse', 'lumber', 'mine', 'offshore', 'oilwell', 'pier', 'quarry', 'shipyard', 'watchtower']);
+    expect(Object.keys(ZONED).sort()).toEqual(['alpine', 'fishmarket', 'harbor', 'lighthouse', 'lumber', 'mine', 'offshore', 'oilwell', 'pier', 'quarry', 'shipyard']);
     expect(isZoned('house')).toBe(false);
   });
 
