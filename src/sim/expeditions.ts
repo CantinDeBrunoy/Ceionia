@@ -428,10 +428,10 @@ export class Expeditions {
       if (!dest) kind = FALLBACK[kind];
     }
     if (!dest || !kind) return null;
-    // une fois la course automobile gagnée, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval ;
+    // une fois la course automobile gagnée ET l'usine automobile bâtie, les équipes (hors troupes armées) partent en petites voitures d'époque, pas à cheval ;
     // à l'époque moderne, la troupe qui brûle du carburant roule : des blindés pour la charge, des véhicules pour les autres
     const armored = !!c.fuel && c.troop === 'cavalry';
-    const motor = (age >= 3 && this.world.exp.done.includes('motorcar') && !c.troop && !c.mounts) || (!!c.fuel && !armored);
+    const motor = (age >= 3 && this.world.exp.done.includes('motorcar') && this.has('carworks') && !c.troop && !c.mounts) || (!!c.fuel && !armored);
     // la montagne et le bout du monde se gagnent en l'air quand le village a de quoi s'envoler : pas de chevaux, pas de voiture
     const air = c.troop || c.mounts || sea || m.farewell || c.fuel || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest);
     const mounts = motor || air ? 0 : this.mountsFor(c);
