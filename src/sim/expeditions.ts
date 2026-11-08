@@ -11,6 +11,7 @@ import { rulesOf } from './difficulty';
 import { securityK } from './security';
 import { FORGE_PERK, FORGE_RISK, FORGE_CRAFT } from './kingdom';
 import { hash2 } from '../core/rng';
+import { tr } from '../i18n';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
 
 /**
@@ -761,14 +762,14 @@ export class Expeditions {
   // ---------------- Fabrication de l'équipement ----------------
   /** Pourquoi le village ne peut pas fabriquer cette pièce (ou null) */
   whyCraft(g: Gear, age: number): string | null {
-    if (age < g.age) return `Connu à l’âge ${AGES[g.age].name}`;
+    if (age < g.age) return tr('Connu à l’âge {age}', { age: AGES[g.age].name });
     if (g.needs && !this.has(g.needs)) {
       const name = KINDS[g.needs].names[Math.min(age, AGES.length - 1)].toLowerCase();
       // l'atelier porte le nom de l'âge (une forge au Moyen Âge) : on dit les deux
-      return g.needs === 'workshop' ? `Il faut un atelier pour fabriquer ${g.plural.toLowerCase()} : bâtissez-en un (à votre âge : ${name})` : `Il faut : ${name}`;
+      return g.needs === 'workshop' ? tr('Il faut un atelier pour fabriquer {items} : bâtissez-en un (à votre âge : {name})', { items: g.plural.toLowerCase(), name }) : tr('Il faut : {name}', { name });
     }
     const lack = gearShort(this.world, g); if (lack) return lack;
-    if (this.world.exp.craft.length >= MAX_CRAFT) return `La file de fabrication est pleine (${MAX_CRAFT} pièces) : attendez qu’une pièce sorte`;
+    if (this.world.exp.craft.length >= MAX_CRAFT) return tr('La file de fabrication est pleine ({n} pièces) : attendez qu’une pièce sorte', { n: MAX_CRAFT });
     return null;
   }
 
@@ -782,9 +783,9 @@ export class Expeditions {
     const w = this.world, tot = { wood: 0, stone: 0, ore: 0, fuel: 0 };
     for (const id of ids) { const c = gearCost(GEAR_BY[id], w.difficulty); tot.wood += c.wood; tot.stone += c.stone; tot.ore += c.ore; tot.fuel += c.fuel ?? 0; }
     if (!w.unlimited && (w.wood < tot.wood || w.stone < tot.stone || w.ore < tot.ore || w.fuel < tot.fuel)) {
-      return `Il faut ${gearCostLabel({ wood: tot.wood, stone: tot.stone, ore: tot.ore, ...(tot.fuel ? { fuel: tot.fuel } : {}) })} en tout pour ${ids.map((i) => GEAR_BY[i].name.toLowerCase()).join(' et ')}`;
+      return tr('Il faut {cost} en tout pour {items}', { cost: gearCostLabel({ wood: tot.wood, stone: tot.stone, ore: tot.ore, ...(tot.fuel ? { fuel: tot.fuel } : {}) }), items: ids.map((i) => GEAR_BY[i].name.toLowerCase()).join(tr(' et ')) });
     }
-    if (w.exp.craft.length + ids.length > MAX_CRAFT) return `La file de fabrication est pleine (${MAX_CRAFT} pièces) : attendez qu’une pièce sorte`;
+    if (w.exp.craft.length + ids.length > MAX_CRAFT) return tr('La file de fabrication est pleine ({n} pièces) : attendez qu’une pièce sorte', { n: MAX_CRAFT });
     return null;
   }
 

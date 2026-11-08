@@ -2,6 +2,7 @@ import type { KindId } from '../build/catalog';
 import type { Choice, DestKind } from './missions';
 import type { World } from '../world/world';
 import { Difficulty, rulesOf } from './difficulty';
+import { tr, localize } from '../i18n';
 
 /**
  * Équipement des expéditions : armes contre les bêtes sauvages, cordes contre les chutes, torches dans le noir, barques sur
@@ -71,6 +72,10 @@ export const GEAR: Gear[] = [
   { id: 'kit', name: 'Trousse de soins', plural: 'Trousses de soins', icon: 'kit', age: 2, ore: 1, time: 16, needs: 'health', guards: null, cut: 0.1, per: () => 1, desc: 'Un peu plus sûr partout ; les blessés guérissent deux fois plus vite.' },
 ];
 export const GEAR_BY = Object.fromEntries(GEAR.map((g) => [g.id, g])) as Record<GearId, Gear>;
+// noms, pluriels et descriptions lus dans la langue courante (dictionnaire src/i18n/en/gear.ts)
+for (const g of GEAR) localize(g, ['name', 'plural', 'desc']);
+localize(DANGER_NAME, Object.keys(DANGER_NAME) as Danger[]);
+localize(DANGER_VS, Object.keys(DANGER_VS) as Danger[]);
 
 export interface GearCost { wood: number; stone: number; ore: number; fuel?: number }
 
@@ -82,15 +87,15 @@ export function gearCost(g: Gear, d: Difficulty): GearCost {
 
 /** « 2 bois et 1 pierre », « 1 minerai » ; vide pour une pièce gratuite */
 export function gearCostLabel(c: GearCost) {
-  const parts = [c.wood ? `${c.wood} bois` : '', c.stone ? `${c.stone} pierre` : '', c.ore ? `${c.ore} minerai` : '', c.fuel ? `${c.fuel} carburant` : ''].filter(Boolean);
-  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} et ${parts[parts.length - 1]}` : parts.join('');
+  const parts = [c.wood ? tr('{n} bois', { n: c.wood }) : '', c.stone ? tr('{n} pierre', { n: c.stone }) : '', c.ore ? tr('{n} minerai', { n: c.ore }) : '', c.fuel ? tr('{n} carburant', { n: c.fuel }) : ''].filter(Boolean);
+  return parts.length > 1 ? tr('{list} et {last}', { list: parts.slice(0, -1).join(', '), last: parts[parts.length - 1] }) : parts.join('');
 }
 
 /** Ce qui manque au village pour fabriquer cette pièce, à dire au joueur (null : de quoi payer, ou ressources illimitées) */
 export function gearShort(w: World, g: Gear): string | null {
   if (w.unlimited) return null;
   const c = gearCost(g, w.difficulty);
-  return w.wood < c.wood || w.stone < c.stone || w.ore < c.ore || w.fuel < (c.fuel ?? 0) ? `Il faut ${gearCostLabel(c)}` : null;
+  return w.wood < c.wood || w.stone < c.stone || w.ore < c.ore || w.fuel < (c.fuel ?? 0) ? tr('Il faut {cost}', { cost: gearCostLabel(c) }) : null;
 }
 
 /** Prélève le prix d'une pièce mise en fabrication ; `back` : le rend (pièce annulée). Rien en ressources illimitées */

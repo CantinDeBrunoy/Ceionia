@@ -3,6 +3,7 @@ import { World } from '../world/world';
 import { Building, KINDS, sizeOf } from '../build/catalog';
 import { FIRE_RANGE } from '../sim/coverage';
 import { Puffs } from './particles';
+import { tr } from '../i18n';
 
 const MAX_FLAMES = 120, FLAMES_PER_FIRE = 7;
 /** Délai avant que les habitants éteignent un feu (un point d'eau tout près), durée au bout de laquelle le bâtiment est perdu */
@@ -55,8 +56,8 @@ export class Fires {
       const b = f.b, s = sizeOf(b), crew = this.crewNear(b), spray = crew ? this.responder?.spraying(b) ?? null : null, water = crew || this.waterNear(b);
       const pails = water ? this.pails?.(b).length ?? 0 : 0;
       const progress = Math.min(1, Math.max(spray !== null ? spray / SPRAY_OUT : 0, f.doused / DOUSE, water && spray === null ? f.t / (crew ? CREW : PUT_OUT) : 0));
-      const status = spray !== null && spray > 0 ? 'Le camion des pompiers arrose' : pails ? `${pails} seau${pails > 1 ? 'x' : ''} jeté${pails > 1 ? 's' : ''} sur les flammes` : crew ? 'Les pompiers accourent' : water ? 'On fait la chaîne depuis le puits' : 'Ça brûle, pas d’eau à portée !';
-      return { key: `fire:${b.id}`, icon: '🔥', title: `Incendie : ${KINDS[b.kind].names[b.age].toLowerCase()}`, status, progress, x: b.x + s / 2, z: b.z + s / 2 };
+      const status = spray !== null && spray > 0 ? tr('Le camion des pompiers arrose') : pails ? (pails > 1 ? tr('{n} seaux jetés sur les flammes', { n: pails }) : tr('{n} seau jeté sur les flammes', { n: pails })) : crew ? tr('Les pompiers accourent') : water ? tr('On fait la chaîne depuis le puits') : tr('Ça brûle, pas d’eau à portée !');
+      return { key: `fire:${b.id}`, icon: '🔥', title: tr('Incendie : {b}', { b: KINDS[b.kind].names[b.age].toLowerCase() }), status, progress, x: b.x + s / 2, z: b.z + s / 2 };
     });
   }
 
@@ -67,7 +68,7 @@ export class Fires {
   ignite(b: Building) {
     if (!this.world.disasters || b.kind === 'lamp' || this.list.some((f) => f.b.id === b.id)) return false;
     this.list.push({ b, t: 0, seed: Math.random() * 10, doused: 0, throw: 0 });
-    this.news.push(`🔥 Incendie : ${KINDS[b.kind].names[b.age]}`);
+    this.news.push(tr('🔥 Incendie : {b}', { b: KINDS[b.kind].names[b.age] }));
     return true;
   }
 
@@ -104,13 +105,13 @@ export class Fires {
           this.smoke.spawn(px, y0, pz, (cx - px) * k + (Math.random() - 0.5) * 0.4, (ground + 0.32 - y0) * k + 0.35 + Math.random() * 0.25, (cz - pz) * k + (Math.random() - 0.5) * 0.4, 0.035, 0.5, WATER, 0, { grow: 1.4, drag: 0.6, wind: 0.05, alpha: 0.8 });
         }
       }
-      if (f.doused > DOUSE) { this.news.push(crew ? `🚒 Les pompiers ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}` : `💧 Les habitants ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
-      if (crew && (spray === null ? f.t > CREW : spray > SPRAY_OUT)) { this.news.push(`🚒 Les pompiers ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
-      if (water && spray === null && f.t > PUT_OUT) { this.news.push(`💧 Les habitants ont éteint l’incendie : ${KINDS[b.kind].names[b.age]}`); this.list.splice(i, 1); continue; }
+      if (f.doused > DOUSE) { this.news.push(crew ? tr('🚒 Les pompiers ont éteint l’incendie : {b}', { b: KINDS[b.kind].names[b.age] }) : tr('💧 Les habitants ont éteint l’incendie : {b}', { b: KINDS[b.kind].names[b.age] })); this.list.splice(i, 1); continue; }
+      if (crew && (spray === null ? f.t > CREW : spray > SPRAY_OUT)) { this.news.push(tr('🚒 Les pompiers ont éteint l’incendie : {b}', { b: KINDS[b.kind].names[b.age] })); this.list.splice(i, 1); continue; }
+      if (water && spray === null && f.t > PUT_OUT) { this.news.push(tr('💧 Les habitants ont éteint l’incendie : {b}', { b: KINDS[b.kind].names[b.age] })); this.list.splice(i, 1); continue; }
       if (f.t > (spray === null ? BURN_DOWN : BURN_DOWN * 2)) {
         this.list.splice(i, 1);
-        if (w.disasters) { this.news.push(`🔥 ${KINDS[b.kind].names[b.age]} a brûlé`); w.removeBuilding(b.id); }
-        else this.news.push(`💧 L’incendie s’est éteint : ${KINDS[b.kind].names[b.age]}`);
+        if (w.disasters) { this.news.push(tr('🔥 {b} a brûlé', { b: KINDS[b.kind].names[b.age] })); w.removeBuilding(b.id); }
+        else this.news.push(tr('💧 L’incendie s’est éteint : {b}', { b: KINDS[b.kind].names[b.age] }));
         continue;
       }
       // les flammes faiblissent sous la lance, sous les seaux, ou à mesure qu'on fait la chaîne depuis le puits

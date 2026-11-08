@@ -1,5 +1,6 @@
 import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize } from '../build/catalog';
 import { readPortal } from './portal';
+import { tr } from '../i18n';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -285,14 +286,14 @@ export class World {
   private portalRule(kind: KindId, x: number, z: number, s: number): string | null {
     let on = 0;
     for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) {
-      if (this.inPortal(x + i, z + j)) return 'Le portail se dresse ici';
+      if (this.inPortal(x + i, z + j)) return tr('Le portail se dresse ici');
       if (this.onPortalIsland(x + i, z + j)) on++;
     }
     if (DEFENSES.includes(kind)) {
-      if (!this.portal) return 'Cette carte n’a pas d’île du portail (partie commencée avant elle)';
-      if (on < s * s) return 'Ne se bâtit que sur l’île du portail';
-      if (!this.portalOpen) return 'Il faut d’abord ouvrir le portail (expédition « Le portail de l’autre rive »)';
-    } else if (on) return 'Sur l’île du portail, on ne bâtit que des défenses';
+      if (!this.portal) return tr('Cette carte n’a pas d’île du portail (partie commencée avant elle)');
+      if (on < s * s) return tr('Ne se bâtit que sur l’île du portail');
+      if (!this.portalOpen) return tr('Il faut d’abord ouvrir le portail (expédition « Le portail de l’autre rive »)');
+    } else if (on) return tr('Sur l’île du portail, on ne bâtit que des défenses');
     return null;
   }
 
@@ -856,39 +857,39 @@ export class World {
 
   canPlace(kind: KindId, x: number, z: number, size = KINDS[kind].size): string | null {
     const s = size;
-    if (!this.inCells(x, z) || !this.inCells(x + s - 1, z + s - 1)) return 'Hors de la carte';
+    if (!this.inCells(x, z) || !this.inCells(x + s - 1, z + s - 1)) return tr('Hors de la carte');
     let mn = 99, mx = -99;
     for (let j = 0; j < s; j++)
       for (let i = 0; i < s; i++) {
         const cx = x + i, cz = z + j;
         const k = this.ci(cx, cz);
-        if (this.occ[k]) return 'Emplacement occupé';
-        if (this.road[k] && kind !== 'lamp') return 'Une route est déjà ici';
+        if (this.occ[k]) return tr('Emplacement occupé');
+        if (this.road[k] && kind !== 'lamp') return tr('Une route est déjà ici');
         // la case devant la porte d'un bâtiment reste libre pour son chemin
-        if (!this.road[k] && this.doorOf(cx, cz)) return 'Devant la porte d’un bâtiment : son chemin passe ici';
-        if (this.decor[k]) return 'Une grotte ou une faille est ici';
-        if (this.lake[k]) return 'Un lac est ici';
+        if (!this.road[k] && this.doorOf(cx, cz)) return tr('Devant la porte d’un bâtiment : son chemin passe ici');
+        if (this.decor[k]) return tr('Une grotte ou une faille est ici');
+        if (this.lake[k]) return tr('Un lac est ici');
         // le port bâtit son quai sur la rive, et même un peu dans l'eau peu profonde (il le remblaie) ; pas en eau profonde
-        if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return 'L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'; continue; }
-        if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return 'Trop proche de l’eau';
+        if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return tr('L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'); continue; }
+        if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return tr('Trop proche de l’eau');
       }
     // l'île du portail : des défenses seulement (et les défenses nulle part ailleurs)
     const isle = this.portalRule(kind, x, z, s);
     if (isle) return isle;
     // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
     const high = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
-    if (kind === 'mine' && !high) return 'Une mine ne se creuse que dans la montagne';
-    if (kind === 'alpine' && !high) return 'Un club alpin ne se pose que dans la montagne';
+    if (kind === 'mine' && !high) return tr('Une mine ne se creuse que dans la montagne');
+    if (kind === 'alpine' && !high) return tr('Un club alpin ne se pose que dans la montagne');
     // une station de ski : au pied d'une grosse montagne, pas d'une simple colline
-    if (kind === 'alpine' && !this.bigPeakNear(x + s / 2, z + s / 2)) return 'Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline';
-    if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return 'À poser en lisière ou dans une forêt';
-    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return 'À poser près des rochers ou dans la montagne (des rochers se posent avec Nature › Rochers)';
+    if (kind === 'alpine' && !this.bigPeakNear(x + s / 2, z + s / 2)) return tr('Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline');
+    if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return tr('À poser en lisière ou dans une forêt');
+    if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return tr('À poser près des rochers ou dans la montagne (des rochers se posent avec Nature › Rochers)');
     // le puits de pétrole se fore sur un gisement
-    if (kind === 'oilwell' && !this.onOil(x, z, s)) return 'Un puits de pétrole ne se fore que sur un gisement (les taches sombres où le brut suinte)';
+    if (kind === 'oilwell' && !this.onOil(x, z, s)) return tr('Un puits de pétrole ne se fore que sur un gisement (les taches sombres où le brut suinte)');
     // le ponton de pêche s'avance sur l'eau : il lui faut une rive
-    if (kind === 'pier' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.inCells(x + dx, z + dz) && (this.cellAvg(x + dx, z + dz) < -0.05 || this.lake[this.ci(x + dx, z + dz)]))) return 'À poser au bord de l’eau';
+    if (kind === 'pier' && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.inCells(x + dx, z + dz) && (this.cellAvg(x + dx, z + dz) < -0.05 || this.lake[this.ci(x + dx, z + dz)]))) return tr('À poser au bord de l’eau');
     // les bâtiments de la mer : de l'eau (mer ou lac) à quelques cases
-    if (SEASIDE.includes(kind) && !this.waterNear(x, z, s, SEA_REACH)) return 'À poser près de l’eau : la mer à 5 cases au plus';
+    if (SEASIDE.includes(kind) && !this.waterNear(x, z, s, SEA_REACH)) return tr('À poser près de l’eau : la mer à 5 cases au plus');
     // le port : il lui suffit de toucher l'eau d'un côté (une case d'eau contre le quai) et d'avoir un pied sur la terre ferme
     if (kind === 'harbor') {
       // le niveau de l'eau qui borde le quai : la mer, ou la surface d'un lac (souvent perché bien plus haut)
@@ -902,9 +903,9 @@ export class World {
       const side = [[0, s, 1, 0], [0, -1, 1, 0], [s, 0, 0, 1], [-1, 0, 0, 1]].some(([ox, oz, ux, uz]) => { for (let i = 0; i < s; i++) if (wet(x + ox + ux * i, z + oz + uz * i)) return true; return false; });
       let landed = false;
       for (let j = 0; j < s && !landed; j++) for (let i = 0; i < s; i++) if (this.cellAvg(x + i, z + j) >= level + 0.02) { landed = true; break; }
-      if (!side) return 'À poser au bord de l’eau : un côté du quai doit toucher l’eau';
-      if (!landed) return 'Le quai doit s’appuyer sur la rive';
-      if (this.flatTarget(x, z, s) - level > 0.6) return 'Le quai serait trop haut au-dessus de l’eau : posez-le plus près de la rive';
+      if (!side) return tr('À poser au bord de l’eau : un côté du quai doit toucher l’eau');
+      if (!landed) return tr('Le quai doit s’appuyer sur la rive');
+      if (this.flatTarget(x, z, s) - level > 0.6) return tr('Le quai serait trop haut au-dessus de l’eau : posez-le plus près de la rive');
     }
     for (let j = 0; j <= s; j++)
       for (let i = 0; i <= s; i++) {
@@ -914,8 +915,8 @@ export class World {
     const target = this.flatTarget(x, z, s);
     // la mine et la carrière s'accrochent à la pente
     const steep = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? 1.7 : kind === 'harbor' ? 2.2 : 1;
-    if (mx - target > 0.85 * s * steep || target - mn > 0.85 * s * steep) return 'Terrain trop pentu';
-    if (target < 0.05 && kind !== 'pier' && kind !== 'harbor') return 'Trop proche de l\u2019eau';
+    if (mx - target > 0.85 * s * steep || target - mn > 0.85 * s * steep) return tr('Terrain trop pentu');
+    if (target < 0.05 && kind !== 'pier' && kind !== 'harbor') return tr('Trop proche de l’eau');
     return null;
   }
 

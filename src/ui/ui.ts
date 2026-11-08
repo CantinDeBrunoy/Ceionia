@@ -1584,14 +1584,14 @@ export class UI {
           const id = b.dataset.mk as GearId, g = GEAR_BY[id], left = Number(b.dataset.left ?? 1);
           for (let i = 0; i < left; i++) { if (ex.craft(id, age)) n++; else { last = ex.whyCraft(g, age); break; } }
         });
-        if (n) { h.audio.sfxClick(); key = ''; tick(); } else this.toast(last ?? 'Impossible à fabriquer pour l’instant.');
+        if (n) { h.audio.sfxClick(); key = ''; tick(); } else this.toast(last ?? tr('Impossible à fabriquer pour l’instant.'));
         return;
       }
       const mk = t.closest<HTMLButtonElement>('button[data-mk]'), gg = t.closest<HTMLButtonElement>('button[data-geargo]');
       if (mk) {
         if (mk.disabled) return;
         const id = mk.dataset.mk as GearId;
-        if (ex.craft(id, h.sim.age)) { h.audio.sfxClick(); key = ''; tick(); } else this.toast(ex.whyCraft(GEAR_BY[id], h.sim.age) ?? 'Impossible à fabriquer pour l’instant.');
+        if (ex.craft(id, h.sim.age)) { h.audio.sfxClick(); key = ''; tick(); } else this.toast(ex.whyCraft(GEAR_BY[id], h.sim.age) ?? tr('Impossible à fabriquer pour l’instant.'));
         return;
       }
       if (gg) {
@@ -1663,8 +1663,8 @@ export class UI {
     // pompiers et police : −x % de risque en tout, le détail en infobulle
     const cuts = securityCuts(dangersOf(c), (k) => ex.has(k));
     const total = Math.round((1 - Math.max(1 - SECURITY_MAX, cuts.reduce((p, s) => p * (1 - s.cut), 1))) * 100);
-    const guard = cuts.length ? `<span class="kitem" title="Veillent sur l’équipe : ${cuts.map((s) => `${KINDS[s.kind].names[Math.max(age, KINDS[s.kind].minAge)].toLowerCase()} −${Math.round(s.cut * 100)} %`).join(', ')}">${ic('shield', 14, 2)}−${total} %</span>` : '';
-    return items || guard ? `<div class="ckit" title="Emporté, depuis la réserve">${ic('kit', 14, 2)}${items}${guard}</div>` : '';
+    const guard = cuts.length ? `<span class="kitem" title="${tr('Veillent sur l’équipe : {list}', { list: cuts.map((s) => tr('{name} −{n} %', { name: KINDS[s.kind].names[Math.max(age, KINDS[s.kind].minAge)].toLowerCase(), n: Math.round(s.cut * 100) })).join(', ') })}">${ic('shield', 14, 2)}−${total} %</span>` : '';
+    return items || guard ? `<div class="ckit" title="${tr('Emporté, depuis la réserve')}">${ic('kit', 14, 2)}${items}${guard}</div>` : '';
   }
 
   /**
@@ -1677,15 +1677,15 @@ export class UI {
     if (!gaps.length) return '';
     const rows = gaps.map((g) => {
       const price = gearCostLabel(gearCost(g.gear, h.world.difficulty)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
-      const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
-      const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" data-left="${left}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)}${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq" title="En fabrication">${ic('clock', 13, 2)}</span>`;
+      const state = `${tr('{n} en réserve', { n: g.have })}${g.queued ? `, ${tr('{n} en fabrication', { n: g.queued })}` : ''}`;
+      const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" data-left="${left}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.gear.time, price }) : tr('Fabriquer : {t} s', { t: g.gear.time }))}">${ic('hammer', 14, 2)}${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq" title="${tr('En fabrication')}">${ic('clock', 13, 2)}</span>`;
       const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
-      return `<div class="gnrow" title="À fabriquer pour partir bien équipé : ${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <button type="button" class="gnlink" data-geargo="${g.gear.id}" title="${(g.need > 1 ? g.gear.plural : g.gear.name)} : voir dans l’onglet Équipement">×${left > 0 ? left : g.need}</button>${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
+      return `<div class="gnrow" title="${tr('À fabriquer pour partir bien équipé : {state} · {dangers}', { state, dangers: g.dangers.map((d) => DANGER_NAME[d]).join(', ') })}"><span>${ic(g.gear.icon, 15, 2)} <button type="button" class="gnlink" data-geargo="${g.gear.id}" title="${tr('{name} : voir dans l’onglet Équipement', { name: g.need > 1 ? g.gear.plural : g.gear.name })}">×${left > 0 ? left : g.need}</button>${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
     }).join('');
     // « Tout fabriquer » : toutes les pièces qui manquent, d'un seul clic (utile dès qu'il y en a plusieurs)
     const todo = gaps.filter((g) => g.need - g.have - g.queued > 0).length;
-    const all = todo > 1 ? `<button type="button" class="mkAll" data-mkall="1" title="Met en fabrication tout l’équipement qui manque">${ic('hammer', 14, 2)} Tout</button>` : '';
-    return `<div class="gearNeed" title="Équipement à fabriquer">${all}${rows}</div>`;
+    const all = todo > 1 ? `<button type="button" class="mkAll" data-mkall="1" title="${tr('Met en fabrication tout l’équipement qui manque')}">${ic('hammer', 14, 2)} ${tr('Tout')}</button>` : '';
+    return `<div class="gearNeed" title="${tr('Équipement à fabriquer')}">${all}${rows}</div>`;
   }
 
   /** Chemin de fer : chaque ligne, où en est son train et ses voyageurs */
@@ -1710,7 +1710,7 @@ export class UI {
   private renderArsenal(el: HTMLElement, changed: () => void) {
     const h = this.host, ex = h.expeditions, age = h.sim.age, st = ex.state;
     const away = (id: GearId) => ex.active.reduce((n, a) => n + (a.gear[id] ?? 0), 0);
-    const per = (g: Gear) => g.per(1) === 1 && g.per(2) === 2 ? 'un par membre' : g.id === 'kit' ? 'une par équipe' : g.per(3) === 1 ? 'une pour trois' : 'une pour deux';
+    const per = (g: Gear) => tr(g.per(1) === 1 && g.per(2) === 2 ? 'un par membre' : g.id === 'kit' ? 'une par équipe' : g.per(3) === 1 ? 'une pour trois' : 'une pour deux');
     const oldOpen = !!el.querySelector<HTMLDetailsElement>('details.oldGear')?.open;
     // une pièce dépassée pour les expéditions mais que les troupes de l'âge exigent (la lance du soldat) reste en vue
     const troops = troopGearNeeded(age), shown = (g: Gear) => !gearObsolete(g, age) || troops.has(g.id);
@@ -1718,22 +1718,22 @@ export class UI {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
         const vs = g.guards ? `${DANGER_ICON[g.guards]}${g.also ? DANGER_ICON[g.also] : ''}` : '🛡️';
         return `<div class="gear ${locked ? 'locked' : !shown(g) ? 'old' : ''}" data-gear="${g.id}" title="${g.desc}">
-          <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt" title="En réserve${st.craft.includes(g.id) ? ', en fabrication' : ''}${out ? ', en route' : ''}">${n}${st.craft.includes(g.id) ? ` · ⏳${st.craft.filter((x) => x === g.id).length}` : ''}${out ? ` · 🧭${out}` : ''}</span></div></div>
-          <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} · ${per(g)}">${vs} −${Math.round(g.cut * 100)} % de risque</small>
-          ${gearObsolete(g, age) && troops.has(g.id) ? '<small class="gd">Pour recruter à la caserne.</small>' : ''}
+          <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt" title="${tr('En réserve')}${st.craft.includes(g.id) ? tr(', en fabrication') : ''}${out ? tr(', en route') : ''}">${n}${st.craft.includes(g.id) ? ` · ⏳${st.craft.filter((x) => x === g.id).length}` : ''}${out ? ` · 🧭${out}` : ''}</span></div></div>
+          <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : tr('Utile partout')}${g.also ? tr(' et les {d}', { d: DANGER_NAME[g.also] }) : ''} · ${per(g)}">${vs} ${tr('−{n} % de risque', { n: Math.round(g.cut * 100) })}</small>
+          ${gearObsolete(g, age) && troops.has(g.id) ? `<small class="gd">${tr('Pour recruter à la caserne.')}</small>` : ''}
           ${why ? `<small class="why">${why}</small>` : ''}
-          <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 16, 2)} ${price || 'Fabriquer'}</button>
+          <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.time, price }) : tr('Fabriquer : {t} s', { t: g.time }))}">${ic('hammer', 16, 2)} ${price || tr('Fabriquer')}</button>
           ${st.craft[0] === g.id ? `<div class="bar gnbar cbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}
         </div>`;
     };
     el.innerHTML = `
-      <p class="hint" title="Elle le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier.">Chaque équipe emporte le meilleur équipement en réserve.</p>
-      <div class="mpills stock"><span>${Math.floor(h.world.wood)} bois</span><span>${Math.floor(h.world.stone)} pierre</span><span>⛏️ ${Math.floor(ex.ore)} minerai</span>${age >= 4 ? `<span>⛽ ${Math.floor(h.world.fuel)}</span>` : ''}</div>
-      <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => shown(g) && !ex.whyCraft(g, age)) ? '' : 'disabled'} title="Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent">${ic('hammer', 16, 2)} Tout fabriquer</button></div>
+      <p class="hint" title="${tr('Elle le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier.')}">${tr('Chaque équipe emporte le meilleur équipement en réserve.')}</p>
+      <div class="mpills stock"><span>${tr('{n} bois', { n: Math.floor(h.world.wood) })}</span><span>${tr('{n} pierre', { n: Math.floor(h.world.stone) })}</span><span>⛏️ ${tr('{n} minerai', { n: Math.floor(ex.ore) })}</span>${age >= 4 ? `<span>⛽ ${Math.floor(h.world.fuel)}</span>` : ''}</div>
+      <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => shown(g) && !ex.whyCraft(g, age)) ? '' : 'disabled'} title="${tr('Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent')}">${ic('hammer', 16, 2)} ${tr('Tout fabriquer')}</button></div>
       <div class="gearGrid">${GEAR.filter(shown).map(card).join('')}</div>
-      ${GEAR.some((g) => !shown(g)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary title="Dépassées à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore">Anciennes armes et outils</summary><div class="gearGrid">${GEAR.filter((g) => !shown(g)).map(card).join('')}</div></details>` : ''}
-      <h4>Fabrication</h4>
-      <div class="queue">${st.craft.length ? st.craft.map((id, i) => `<span class="qi">${ic(GEAR_BY[id].icon, 16, 2)} ${GEAR_BY[id].name}${i === 0 ? `<i class="bar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></i>` : ''}<button data-cancel="${i}" title="Annuler" aria-label="Annuler">${ic('close', 14, 2)}</button></span>`).join('') : '<small>Rien en cours.</small>'}</div>`;
+      ${GEAR.some((g) => !shown(g)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary title="${tr('Dépassées à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore')}">${tr('Anciennes armes et outils')}</summary><div class="gearGrid">${GEAR.filter((g) => !shown(g)).map(card).join('')}</div></details>` : ''}
+      <h4>${tr('Fabrication')}</h4>
+      <div class="queue">${st.craft.length ? st.craft.map((id, i) => `<span class="qi">${ic(GEAR_BY[id].icon, 16, 2)} ${GEAR_BY[id].name}${i === 0 ? `<i class="bar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></i>` : ''}<button data-cancel="${i}" title="${tr('Annuler')}" aria-label="${tr('Annuler')}">${ic('close', 14, 2)}</button></span>`).join('') : `<small>${tr('Rien en cours.')}</small>`}</div>`;
     el.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => (b.onclick = () => {
       if (ex.craft(b.dataset.craft as GearId, age)) { h.audio.sfxClick(); changed(); }
     }));
@@ -1750,7 +1750,7 @@ export class UI {
    * bâtir (sinon le message et la carte de l'équipe, qui clignote, y mènent)
    */
   expEvent(a: ActiveExpedition) {
-    this.toast(`${a.m.icon} « ${a.m.title} » : ${a.wait?.title.toLowerCase()} — une décision vous attend (cliquez ici).`, () => this.showDecision(a));
+    this.toast(tr('{icon} « {mission} » : {event} — une décision vous attend (cliquez ici).', { icon: a.m.icon, mission: a.m.title, event: a.wait?.title.toLowerCase() ?? '' }), () => this.showDecision(a));
     this.forceDecision(a);
     this.update();
   }
@@ -1800,11 +1800,11 @@ export class UI {
     const opts = ev.options.map((o, i) => {
       const ok = ex.canTake(a, i), hints: string[] = [];
       // « des armes » plutôt que la liste de toutes les armes possibles
-      const names = (gs: GearId[]) => (gs.length > 2 ? 'des armes' : gs.map((g) => GEAR_BY[g].plural.toLowerCase()).join(' ou '));
-      if (o.needs) hints.push(ok ? `avec ${names(o.needs.filter((g) => (a.gear[g] ?? 0) > 0))}` : `demande ${names(o.needs)}, non emportées`);
-      if (o.risk < 0.98) hints.push(o.risk <= 0.7 ? 'bien plus sûr' : 'plus sûr');
-      else if (o.risk > 1.02) hints.push(o.risk >= 1.25 ? 'bien plus risqué' : 'plus risqué');
-      if (o.work) hints.push(o.work > 0 ? 'plus long' : 'plus rapide');
+      const names = (gs: GearId[]) => (gs.length > 2 ? tr('des armes') : gs.map((g) => GEAR_BY[g].plural.toLowerCase()).join(tr(' ou ')));
+      if (o.needs) hints.push(ok ? tr('avec {items}', { items: names(o.needs.filter((g) => (a.gear[g] ?? 0) > 0)) }) : tr('demande {items}, non emportées', { items: names(o.needs) }));
+      if (o.risk < 0.98) hints.push(o.risk <= 0.7 ? tr('bien plus sûr') : tr('plus sûr'));
+      else if (o.risk > 1.02) hints.push(o.risk >= 1.25 ? tr('bien plus risqué') : tr('plus risqué'));
+      if (o.work) hints.push(o.work > 0 ? tr('plus long') : tr('plus rapide'));
       return `<button class="choice opt" data-o="${i}" ${ok ? '' : 'disabled'}><b>${o.label}</b><small>${hints.join(' · ')}${o.bonus ? `${hints.length ? ' · ' : ''}✅ ${chipsHtml(o.bonus)}` : ''}</small></button>`;
     }).join('');
     // le jeu s'arrête le temps de la décision ; il reprend à la fermeture s'il tournait
@@ -1812,9 +1812,9 @@ export class UI {
     const { ov, close } = modal(this.root, 'decide', `${a.m.icon} ${a.m.title}`, `
       <h4 class="evt">${ic('alert', 18, 2)} ${ev.title}</h4>
       <p class="story">${ev.text}</p>
-      <button class="look">${ic('eye', 16, 2)} Voir l’équipe</button>
+      <button class="look">${ic('eye', 16, 2)} ${tr('Voir l’équipe')}</button>
       ${opts}
-      <p class="hint" title="Le jeu reste en pause : l’équipe attend votre choix pour continuer.">⚠️ Risque d’échec : ${pct(ex.chance(a))} · ⏸ jeu en pause</p>`, () => {
+      <p class="hint" title="${tr('Le jeu reste en pause : l’équipe attend votre choix pour continuer.')}">⚠️ ${tr('Risque d’échec : {p} · ⏸ jeu en pause', { p: pct(ex.chance(a)) })}</p>`, () => {
       clearInterval(iv);
       if (this.root.querySelector('.decide')) return;
       if (this.pausedFor === false) h.time.paused = false;

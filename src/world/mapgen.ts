@@ -3,6 +3,7 @@ import { raiseVolcano } from './terraform';
 import { addPortalIsland } from './portal';
 import { Simplex } from './noise';
 import { mulberry32, smoothstep, clamp, lerp, hash2 } from '../core/rng';
+import { localize } from '../i18n';
 import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, continentPlan, fixedHeight, plannedHeight, toPlan, fromPlan } from './continent';
 
 /** Carte jouable : `size` cases de côté */
@@ -13,6 +14,7 @@ export const CONTINENT = 3;
 export const MAPS: MapDef[] = [
   { id: CONTINENT, name: 'Continent', desc: 'Un grand continent, différent à chaque partie : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192 },
 ];
+for (const m of MAPS) localize(m, ['name', 'desc']);
 /** La carte de ce numéro (null : une carte qui n'existe plus) */
 export const mapDef = (id: number) => MAPS.find((m) => m.id === id) ?? null;
 /** Graine d'une nouvelle partie : chacune a son continent (`defaultSeed` ne sert plus qu'aux tests et en secours) */
