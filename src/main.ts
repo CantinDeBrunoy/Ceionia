@@ -469,6 +469,8 @@ class Game implements UIHost {
     if (!w.buildings.size) { const [sx, sz] = w.startSpot(), S = KINDS.gather.size; this.cam.homeAt = [sx + S / 2, sz + S / 2]; }
     this.cam.reset();
     this.cam.dist = this.cam.homeDist();
+    // une partie neuve s'ouvre près de la place à venir : de la vue d'ensemble, les premiers bâtiments seraient invisibles
+    if (!w.buildings.size && this.cam.homeAt) this.cam.jump({ x: this.cam.homeAt[0], z: this.cam.homeAt[1], dist: 34 }, w.surfaceAt(this.cam.homeAt[0], this.cam.homeAt[1]));
     window.addEventListener('resize', () => this.onResize());
     this.bindKeys();
     const unlock = () => { audio.start(); audio.applyVolumes(); };

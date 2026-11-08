@@ -614,7 +614,7 @@ registerDict('catalog', {
   'Devant la porte d’un bâtiment : son chemin passe ici': 'In front of a building’s door: its path goes here',
   'Une grotte ou une faille est ici': 'A cave or a fissure is here',
   'Un lac est ici': 'A lake is here',
-  'Trop proche de l’eau': 'Too close to the water',
+  'Trop proche de l’eau : reculez sur la terre ferme': 'Too close to the water: move back onto dry land',
   'Terrain trop pentu': 'Ground too steep',
   'L’eau est trop profonde ici pour un quai : posez-le plus près de la rive': 'The water is too deep here for a quay: place it closer to the shore',
   'Le portail se dresse ici': 'The portal stands here',

@@ -7,7 +7,7 @@ import { N } from '../world/world';
 
 export type WeatherKind = 'clear' | 'rain' | 'snow' | 'fog';
 
-const NIGHT_TOP = new THREE.Color(0x16204a), NIGHT_HZ = new THREE.Color(0x36436f);
+const NIGHT_TOP = new THREE.Color(0x202c5c), NIGHT_HZ = new THREE.Color(0x44537f);
 const DAY_TOP = new THREE.Color(0x62b4f0), DAY_HZ = new THREE.Color(0xd2eaf8);
 const DUSK_TOP = new THREE.Color(0x8d86c4), DUSK_HZ = new THREE.Color(0xf7b49a);
 const GREY = new THREE.Color(0xb9c0ca);
@@ -224,7 +224,7 @@ export class Environment {
     this.fog.far = lerp(lerp(220, 120, Math.max(rainK, snowK)), 70, fogK) + away * 1.6;
 
     const sunI = smoothstep(0.0, 0.18, elev) * 2.75 * (1 - overcast * 0.6);
-    const moonI = smoothstep(0.0, 0.18, -elev) * 1.3 * (1 - overcast * 0.4);
+    const moonI = smoothstep(0.0, 0.18, -elev) * 1.9 * (1 - overcast * 0.4);
     const useSun = elev > 0;
     const ld = useSun ? dir : dir.clone().negate();
     // ombres portées autour du point visé, sur une zone qui s'élargit avec le dézoom (calée sur les texels pour ne pas scintiller)
@@ -242,9 +242,9 @@ export class Environment {
     this.sun.intensity = useSun ? sunI : moonI;
     this.sun.color.setHex(useSun ? 0xffe9c8 : 0x9fb2ff).lerp(new THREE.Color(0xffb27a), useSun ? twi * 0.7 : 0);
     // la nuit reste lisible : on voit ce qu'on bâtit au clair de lune
-    this.hemi.intensity = lerp(0.62, 0.72, day) * (1 + overcast * 0.25);
+    this.hemi.intensity = lerp(0.88, 0.72, day) * (1 + overcast * 0.25);
     this.hemi.color.copy(top).lerp(new THREE.Color(0xffffff), 0.45);
-    this.hemi.groundColor.setHex(0xd9c6a8).lerp(new THREE.Color(0x515a7c), 1 - day);
+    this.hemi.groundColor.setHex(0xd9c6a8).lerp(new THREE.Color(0x7581a8), 1 - day);
     this.sunMesh.position.copy(this.center).addScaledVector(dir, 400);
     this.moonMesh.position.copy(this.center).addScaledVector(dir, -400);
     this.sunMesh.visible = elev > -0.08 && overcast < 0.9;

@@ -756,6 +756,7 @@ export class ToolController implements ToolInput {
     // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
     if (this.h.autoRoads) autoRoad(w, b);
     this.moveOrigin = null;
+    this.placedAt = `${o.x},${o.z}`;
     // (la zone des emplacements reste affichée après la pose : on en pose souvent plusieurs, mines, ports…)
     if (this.tool === 'move') { this.tool = 'none'; this.h.changed(); }
     this.h.audio.sfxPlace();
@@ -764,6 +765,8 @@ export class ToolController implements ToolInput {
   // ---------- Visuels ----------
   /** Pourquoi le bâtiment en main ne se poserait pas sous le curseur (null : il se pose), montré dès le survol */
   placeWhy: string | null = null;
+  /** la case (origine) du dernier bâtiment posé : tant que le curseur y reste, pas de refus « occupé » */
+  private placedAt: string | null = null;
 
   private refreshVisuals() {
     const hit = this.hit, t = this.tool, w = this.h.world;
@@ -837,9 +840,13 @@ export class ToolController implements ToolInput {
         this.ghostBody.position.set(off, 0, off); this.ghostGlow.position.set(off, 0, off);
       }
       const cost = this.moveOrigin ? null : priceIn(w, kind, age);
-      this.placeWhy = reason ? tr(reason) : (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+      const why0 = reason ? tr(reason) : (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+      // sous le curseur, le bâtiment qu'on vient de poser : « Emplacement occupé » n'a rien à dire tant que la souris n'a pas bougé de case
+      const cellKey = `${o.x},${o.z}`;
+      if (this.placedAt !== cellKey) this.placedAt = null;
+      this.placeWhy = this.placedAt === cellKey && reason === tr('Emplacement occupé') ? null : why0;
       // (les points verts des emplacements libres induisaient en erreur : retirés, `showSpots` n’est plus appelé)
-      setGhostValid(!this.placeWhy);
+      setGhostValid(!why0);
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);
       const y = w.flatTarget(o.x, o.z, s);
       this.ghost.position.set(o.x + s / 2, y, o.z + s / 2);

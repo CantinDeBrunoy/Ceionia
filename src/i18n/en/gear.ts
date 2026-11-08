@@ -139,7 +139,7 @@ registerDict('gear', {
   'Hors de la carte': 'Off the map',
   'Emplacement occupé': 'Spot already taken',
   'Une route est déjà ici': 'There is already a road here',
-  'Trop proche de l’eau': 'Too close to the water',
+  'Trop proche de l’eau : reculez sur la terre ferme': 'Too close to the water: move back onto dry land',
   'Une mine ne se creuse que dans la montagne': 'A mine can only be dug in the mountains',
   'Un club alpin ne se pose que dans la montagne': 'An alpine club can only be placed in the mountains',
   'Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline': 'A ski resort goes at the foot of a big mountain, not on a mere hill',

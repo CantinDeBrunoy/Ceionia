@@ -27,7 +27,7 @@ export const ZONED: Partial<Record<KindId, string>> = {
 export const isZoned = (kind: KindId) => kind in ZONED;
 
 /** Refus communs à tous les bâtiments : ils ne disent rien de ce qui manque au bâtiment en main */
-const GENERIC = new Set(['Hors de la carte', 'Emplacement occupé', 'Une route est déjà ici', 'Devant la porte d’un bâtiment : son chemin passe ici', 'Une grotte ou une faille est ici', 'Un lac est ici', 'Trop proche de l’eau', 'Terrain trop pentu']);
+const GENERIC = new Set(['Hors de la carte', 'Emplacement occupé', 'Une route est déjà ici', 'Devant la porte d’un bâtiment : son chemin passe ici', 'Une grotte ou une faille est ici', 'Un lac est ici', 'Trop proche de l’eau : reculez sur la terre ferme', 'Terrain trop pentu']);
 
 /**
  * Recherche, sur toute la carte, des emplacements où le bâtiment se pose : par tranches (`step`), pour ne pas figer une

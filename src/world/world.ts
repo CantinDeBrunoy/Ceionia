@@ -871,7 +871,7 @@ export class World {
         if (this.lake[k]) return tr('Un lac est ici');
         // le port bâtit son quai sur la rive, et même un peu dans l'eau peu profonde (il le remblaie) ; pas en eau profonde
         if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return tr('L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'); continue; }
-        if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return tr('Trop proche de l’eau');
+        if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return tr('Trop proche de l’eau : reculez sur la terre ferme');
       }
     // l'île du portail : des défenses seulement (et les défenses nulle part ailleurs)
     const isle = this.portalRule(kind, x, z, s);
@@ -916,7 +916,7 @@ export class World {
     // la mine et la carrière s'accrochent à la pente
     const steep = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? 1.7 : kind === 'harbor' ? 2.2 : 1;
     if (mx - target > 0.85 * s * steep || target - mn > 0.85 * s * steep) return tr('Terrain trop pentu');
-    if (target < 0.05 && kind !== 'pier' && kind !== 'harbor') return tr('Trop proche de l’eau');
+    if (target < 0.05 && kind !== 'pier' && kind !== 'harbor') return tr('Trop proche de l’eau : reculez sur la terre ferme');
     return null;
   }
 
