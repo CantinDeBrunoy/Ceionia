@@ -7,6 +7,7 @@ import { hash2 } from '../core/rng';
 import { drawRocket } from './rocket';
 import { decal, fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 import { defTower, defBarracks, type DefKit } from './defenses';
+import { circus, type CircusKit } from './circus';
 
 /**
  * Bâtiments importés (CC0), par sorte puis par âge : leurs variantes ; null ou absent, le modèle procédural. Il ne reste que
@@ -12437,6 +12438,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'lab': futureLab(p, o.v); return true;
     case 'baths': futureBaths(p, o.v); return true;
     case 'zoo': zooBig(p, 5); return true;
+    case 'circus': sink(0.012); circus(p, 5, CIRCUS_KIT); return true;
     case 'watchtower': defTower(p, 5, DEF_KIT); return true;
     case 'barracks': defBarracks(p, 5, DEF_KIT); return true;
   }
@@ -13275,6 +13277,8 @@ function zooBig(p: Parts, age: number) {
 
 /** Les aides du moteur de modèles dont les défenses de l'île du portail (defenses.ts) ont besoin */
 const DEF_KIT: DefKit = { sway, smoke, turn: turning, pipe, roof };
+/** Les aides dont le cirque (circus.ts) a besoin */
+const CIRCUS_KIT: CircusKit = { sway, turn: turning, smoke };
 
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? smallSize(kind) : KINDS[kind].size;
@@ -13347,6 +13351,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'waterpark': if (size >= 3) waterparkBig(p); else waterpark(p); break;
     case 'funfair': if (size === 3) funfairBig(p, Math.max(3, age)); else funfair(p, Math.max(3, age)); break;
     case 'zoo': zooBig(p, Math.max(4, age)); break;
+    case 'circus': sink(0.012); circus(p, Math.max(2, age), CIRCUS_KIT); break;
     case 'theater': theater(p, Math.max(1, age)); break;
     case 'acropolis': acropolis(p, age); break;
     case 'forum': forum(p, Math.max(1, age)); break;
