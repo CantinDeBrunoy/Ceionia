@@ -125,7 +125,7 @@ describe('le portail, cible d’un ordre de déplacement', () => {
     const sent: number[][] = [];
     const [px, pz] = m.portal;
     const host: any = {
-      war: { portalOut: false, sendThroughPortal: (l: { id: number }[]) => sent.push(l.map((u) => u.id)) },
+      war: { portalOut: false, hellWhy: () => null, sendThroughPortal: (l: { id: number }[]) => sent.push(l.map((u) => u.id)) },
       canvas: { style: {} }, camKeys: new Set(), toast() {}, click() {}, age: () => 1, pop: () => 10, paused: () => false,
     };
     const ui = new CommandUI(fakeEl() as unknown as HTMLElement, host);

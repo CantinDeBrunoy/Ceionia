@@ -77,7 +77,7 @@ import { holdIsle, isleDefenses } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
 import { IsleRuins } from './render/isleRuins';
 import { setFxDensity } from './render/combatFx';
-import { War } from './sim/war';
+import { War, clockText } from './sim/war';
 import { KingdomStage } from './kingdomStage';
 import { WarTips, WarTipState, WAR_TIP_TEXT } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
@@ -542,6 +542,9 @@ class Game implements UIHost {
   /** Entre dans les Enfers, devant le portail : on y commande les troupes qui l'ont passé */
   async enterHell() {
     if (this.mode !== 'surface') return;
+    // (fermés tant que l'invasion du portail n'est pas repoussée)
+    const closed = this.war.hellWhy();
+    if (closed) { this.ui.toast(closed, undefined, 'danger'); return; }
     this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
@@ -732,15 +735,32 @@ class Game implements UIHost {
       // le combat du roi, la chute du royaume : la mise en scène s'en charge
       if (this.kingStage.news(n)) continue;
       // l'incursion elle-même a son alerte en haut (« Voir l'île ») : pas de message en double ; l'avertissement qui la précède reste
-      if (n.kind === 'raid' && n.text.startsWith('🔥')) this.ui.info(n.text);
+      if (n.kind === 'invasion') {
+        // l'annonce de l'invasion : bannière, message qui mène à l'île ; le compte à rebours reste affiché en haut
+        this.ui.banner(trx('Les démons vont attaquer !'), trx('Préparez la garnison de l’île.'));
+        this.ui.toast(trx('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
+      } else if (n.kind === 'invasionStart') {
+        // la vague arrive : la vue se place sur l'île, où l'on défend
+        this.ui.info(n.text);
+        if (this.mode === 'surface' && !(this.isleCmd && this.lookingAtIsle())) this.viewIsle();
+      } else if (n.kind === 'invasionDone') {
+        this.ui.banner(trx('Invasion repoussée !'), trx('Le portail est affaibli. Menez vos troupes aux Enfers : suivez le guide.'));
+        this.ui.toast(n.text);
+      } else if (n.kind === 'raid' && n.text.startsWith('🔥')) this.ui.info(n.text);
       else if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(trx('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
       else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell' && (n.kind !== 'zone' || /repris|reprendre|tombé|retaken|retake|has fallen/.test(n.text))) this.ui.toast(trx('{text} Cliquez ici pour y aller.', { text: n.text }), () => this.enterHell());
       else this.ui.toast(n.text, undefined, n.kind === 'boss' || n.kind === 'counter' || (n.kind === 'zone' && /repris|reprendre|tombé|retaken|retake|has fallen/.test(n.text)) ? 'danger' : 'info');
-      if (n.kind === 'repelled' || n.kind === 'secured') audio.sfxAgeUp();
+      if (n.kind === 'repelled' || n.kind === 'secured' || n.kind === 'invasionDone') audio.sfxAgeUp();
     }
-    // l'alerte reste tant que dure l'incursion, si l'on ne regarde pas l'île
-    const isle = w.isle;
-    this.command.alert(isle?.raid && !(this.isleCmd && this.lookingAtIsle()) ? trx('🔥 Incursion sur l’île du portail : {n} !', { n: nplural(isle.raiders().length, 'démon', 'démons') }) : null, () => this.viewIsle());
+    // l'alerte reste tant que dure l'incursion, si l'on ne regarde pas l'île ; avant l'invasion, son compte à rebours (toujours) ;
+    // après sa victoire, le guidage vers les Enfers quand on n'est pas au commandement de l'île
+    const isle = w.isle, watching = this.isleCmd && this.lookingAtIsle();
+    const left = w.inv === 'coming' ? w.nextWaveIn() : null;
+    this.command.alert(
+      isle?.raid && !watching ? (w.inv === 'raid' ? trx('🔥 Invasion du portail : {n} !', { n: nplural(isle.raiders().length, 'démon', 'démons') }) : trx('🔥 Incursion sur l’île du portail : {n} !', { n: nplural(isle.raiders().length, 'démon', 'démons') }))
+        : left !== null ? trx('⚠️ Les démons vont attaquer : préparez la garnison ! {t}', { t: clockText(left) })
+        : w.guideStep(0) && !watching && this.mode === 'surface' ? trx('🌀 Menez vos troupes aux Enfers : allez sur l’île.') : null,
+      () => this.viewIsle());
     this.syncIsleLayer();
     if (this.isleLayer) {
       this.isleLayer.age = this.sim.age;

@@ -179,7 +179,7 @@ describe('la défense de l’île du portail', () => {
   const tick = (war: War, t: number, until?: () => boolean) => { for (let i = 0; i < t * 10; i++) { war.update(0.1, 1); if (until?.()) return true; } return false; };
 
   it('les vagues arrivent à l’heure, sortent du portail, ne touchent que l’île ; la garnison et la tour les repoussent', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     for (let i = 0; i < 4; i++) expect(war.recruit('soldier', 1, 80)).toBeNull();
     for (let i = 0; i < 2; i++) expect(war.recruit('archer', 1, 80)).toBeNull();
     expect(w.exp.gear.spear).toBe(6);
@@ -216,7 +216,7 @@ describe('la défense de l’île du portail', () => {
   }, 60000);
 
   it('la tour de garde tire seule sur les démons à portée ; les défenses tombées font perdre la vague, puis se relèvent', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     tick(war, 1);
     const isle = war.isle!, tower = [...isle.defs.values()].find((b) => b.kind === 'watchtower')!;
     war.callWave();
@@ -242,14 +242,14 @@ describe('la défense de l’île du portail', () => {
     const w = new World();
     newWorld(w, 3, 2026, GEN);
     w.exp.done.push('portal');
-    const war = new War(w);
+    const war = new War(w); war.skipInvasion();
     tick(war, RAID_FIRST + 30);
     expect(war.faction!.wave).toBe(0);
     expect(war.nextWaveIn()).toBeNull();
   }, 30000);
 
   it('des troupes passent le portail vers les Enfers, et en reviennent', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     war.recruit('soldier', 1, 80); war.recruit('soldier', 1, 80);
     tick(war, 2 * TROOPS.soldier.time + 2);
     const us = war.isle!.sim.alive('player');
@@ -267,7 +267,7 @@ describe('la défense de l’île du portail', () => {
   }, 30000);
 
   it('se sauvegarde et se reprend : armée, recrues en route, faction, vague en cours', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     war.recruit('soldier', 1, 80); war.recruit('archer', 1, 80);
     tick(war, TROOPS.soldier.time + 1);
     war.recruit('soldier', 1, 80);
@@ -414,7 +414,7 @@ describe('la cavalerie : écurie, cheval, équipement', () => {
     setMapSize(192);
     const w = new World();
     newWorld(w, 3, 2026, GEN);
-    const war = new War(w);
+    const war = new War(w); war.skipInvasion();
     expect(war.recruitCtx(1, 80)).toMatchObject({ stables: 0, horses: 0 });
     const s = zoneOrigins(w, 'stable').find((k) => w.canPlace('stable', k % N, Math.floor(k / N)) === null)!;
     w.place('stable', s % N, Math.floor(s / N), 0, true, 1, false);

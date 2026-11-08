@@ -107,6 +107,8 @@ export const FORGE_EVERY = 45;
  */
 /** Répit (s) laissé à l'île après la chute du dernier poste avancé, avant l'incursion suivante */
 export const FRONT_RESPITE = 120;
+/** L'invasion : sa taille (démons, avant Facile), son niveau de composition, et le compte à rebours qui l'annonce (s de jeu) */
+export const INVASION_SIZE = 6, INVASION_LEVEL = 4, INVASION_DELAY = 40;
 export const RAID_FIRST = 300, RAID_EVERY = 240, RAID_MIN = 150, RAID_MAX = 10, RAID_SECURED_MAX = 6, SECURE_WAVES = 5;
 
 export type Side = 'hell' | 'player';
@@ -939,6 +941,19 @@ export class Hell {
     return planWave({
       level: lv, age: tierAge(this.age), power: this.armyPower, legacy: raidKinds(lv, raidSize(lv, conq, sec)), powers: DEMON_POWER, balance: this.balance,
       secured: sec, conquered: conq, losses: this.lossStreak,
+    });
+  }
+
+  /**
+   * L'invasion : la première grosse vague, à repousser avant d'aller dans les Enfers. Un peu plus du double de la première
+   * vague normale (INVASION_SIZE démons au niveau INVASION_LEVEL : diablotins, un archer, une brute), mais gagnable avec une
+   * tour, une caserne et une petite garnison ; plus petite en Facile (×0,6) et au bac à sable
+   */
+  planInvasion(): DemonKind[] {
+    const lv = INVASION_LEVEL, n = this.balance.legacy ? INVASION_SIZE - 2 : INVASION_SIZE;
+    return planWave({
+      level: lv, age: tierAge(this.age), power: this.armyPower, legacy: raidKinds(lv, n), powers: DEMON_POWER, balance: this.balance,
+      conquered: this.conquered.filter(Boolean).length,
     });
   }
 
