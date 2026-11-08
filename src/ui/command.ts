@@ -12,12 +12,13 @@ import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } f
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 
 /**
- * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle,
- * double-clic = toutes celles de la même sorte en vue, Maj pour ajouter), ordres (clic droit ou appui long : se rendre, ou
+ * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle
+ * avec Maj ou Ctrl + glissé ; le glissé seul déplace la vue, double-clic = toutes celles de la même sorte en vue, Maj pour ajouter), ordres (clic droit ou appui long : se rendre, ou
  * attaquer l'ennemi visé ; A puis clic : attaquer en marchant ; H : tenir ; R : se replier), groupes (Ctrl ou Maj + 1…5 pour
  * le former, 1…5 pour le rappeler, deux fois pour y aller), pause active (Espace : les ordres se donnent en pause). L'interface :
- * à gauche le bouton de passage du portail (les ordres : A, H, R, Espace), à droite la caserne (île) ou la base avancée (Enfers), en bas les cartes de troupes,
- * (groupes au clavier seulement), en haut le ruban d'état, en bas à droite Aide et Quitter
+ * tout en bas, d'un seul bandeau : le bouton de passage du portail à gauche (les ordres : A, H, R, Espace), les cartes de troupes
+ * au centre, la caserne (île) ou le menu de la base avancée (Enfers, onglets Bâtir / Recruter) à droite, puis Aide et Quitter ;
+ * (groupes au clavier seulement) ; en haut le ruban d'état (île) ou la frise du front avec le nom de la zone (Enfers)
  */
 
 /** Le théâtre des opérations : la bataille commandée, et comment passer de l'écran au sol */
