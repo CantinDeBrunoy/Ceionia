@@ -306,11 +306,14 @@ export function findCrossings(w: World): Crossing[] {
   return out;
 }
 
-/** Franchissement par case portée */
-export function crossingMap(w: World): Map<number, Crossing> {
-  const out = new Map<number, Crossing>();
-  for (const cr of findCrossings(w)) for (const c of cr.cells) out.set(c, cr);
-  return out;
+/** Franchissement par case portée (`cells`), et par case de rive où arrive une rampe (`banks`) */
+export function crossingMap(w: World): { cells: Map<number, Crossing>; banks: Map<number, Crossing> } {
+  const cells = new Map<number, Crossing>(), banks = new Map<number, Crossing>();
+  for (const cr of findCrossings(w)) {
+    for (const c of cr.cells) cells.set(c, cr);
+    for (const sp of cr.spans) for (const e of [sp.from, sp.to]) if (e.kind === 'bank') banks.set(e.cell, cr);
+  }
+  return { cells, banks };
 }
 
 /** Point de l'axe du franchissement le plus proche de (x, z), et la hauteur du tablier en ce point */

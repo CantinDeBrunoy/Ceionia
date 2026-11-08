@@ -813,8 +813,9 @@ export class World {
   }
 
   /** Franchissements d'eau par les routes (voir `crossings.ts`), recalculés quand les routes ou le relief changent */
-  private crossCache: { v: number; vis: number; map: Map<number, Crossing> } | null = null;
-  crossings(): Map<number, Crossing> {
+  private crossCache: { v: number; vis: number; map: ReturnType<typeof crossingMap> } | null = null;
+  crossings(): Map<number, Crossing> { return this.crossMaps().cells; }
+  private crossMaps() {
     const c = this.crossCache;
     if (!c || c.v !== this.version || c.vis !== this.visVersion) this.crossCache = { v: this.version, vis: this.visVersion, map: crossingMap(this) };
     return this.crossCache!.map;
@@ -843,10 +844,17 @@ export class World {
     return [x, z];
   }
 
-  /** Sol où l'on marche : tablier des ponts, sinon le relief affiché */
+  /** Sol où l'on marche : tablier des ponts (et sa rampe, sur la case de la rive), sinon le relief affiché */
   surfaceAt(x: number, z: number) {
-    const cr = this.crossingAt(Math.floor(x), Math.floor(z));
-    return cr ? Math.max(nearestOnDeck(cr, x, z).y, this.hAt(x, z)) : this.hAt(x, z);
+    const cx = Math.floor(x), cz = Math.floor(z), h = this.hAt(x, z);
+    if (!this.inCells(cx, cz)) return h;
+    const m = this.crossMaps(), k = this.ci(cx, cz), cr = m.cells.get(k);
+    if (cr) return Math.max(nearestOnDeck(cr, x, z).y, h);
+    const bank = m.banks.get(k);
+    if (!bank) return h;
+    // sur la rive, seulement sous l'emprise de la rampe
+    const d = nearestOnDeck(bank, x, z);
+    return d.d <= 0.34 ? Math.max(d.y, h) : h;
   }
 
   // ---------- Constructions ----------

@@ -203,6 +203,19 @@ describe('franchissements : hauteurs', () => {
     }
   });
 
+  it('sur la case de la rive, on marche sur la rampe du tablier (sous son emprise seulement), puis sur le chemin', () => {
+    const w = streams([20], 0.12);
+    row(w, 10, 8, 34);
+    const [cr] = findCrossings(w), sp = cr.spans[0], f = sp.pts[0];
+    // le pied de rampe est dans la case de la rive : là, le sol où l'on marche est le tablier (au-dessus du relief)
+    expect(cr.cells.has(w.ci(Math.floor(f[0]), 10))).toBe(false);
+    for (const p of sp.pts) expect(Math.abs(w.surfaceAt(p[0], p[2]) - p[1])).toBeLessThan(1e-6);
+    // à côté de la rampe, sur l'herbe de la même case, le relief
+    expect(w.surfaceAt(f[0], 10.95)).toBeCloseTo(w.hAt(f[0], 10.95), 6);
+    // plus loin sur le chemin, le relief
+    expect(w.surfaceAt(9.5, 10.5)).toBeCloseTo(w.hAt(9.5, 10.5), 6);
+  });
+
   it('le profil se met à jour quand la route ou le relief changent', () => {
     const w = streams([20]);
     expect(w.bridgeY(20, 10)).toBeNull();
