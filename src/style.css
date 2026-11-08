@@ -1235,6 +1235,8 @@ body.cinematic #bannerWrap { display: none !important; }
 .sendModal .gearNeed .mk, .sendModal .gearNeed .mkAll { display: inline-flex; flex-direction: row; align-items: center; gap: 5px; min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid #e0c47a; background: #fff; font-size: 13px; font-weight: 800; color: #7a5300; margin-left: auto; }
 .sendModal .gearNeed .mk:disabled { opacity: 0.55; }
 .sendModal .cbox button.depart { min-height: 48px; margin: 0; border-radius: 14px; font-size: 16px; }
+.upchk { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-height: 36px; font-size: 13px; font-weight: 700; color: var(--ink2); cursor: pointer; }
+.upchk input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 .cdtl { align-self: center; width: 100%; }
 .cdtl > summary { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 44px; list-style: none; cursor: pointer; font-size: 13px; font-weight: 800; color: #2b6cf0; }
 .cdtl > summary::-webkit-details-marker { display: none; }

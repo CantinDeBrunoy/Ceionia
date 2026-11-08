@@ -878,7 +878,9 @@ export class UI {
       return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: tr(locked) }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${tr(locked)}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} ${tr('Améliorer : {name}', { name })}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
     }).join('');
-    const upgrades = ups ? `<div class="acts ups">${ups}</div>` : '';
+    // la case à cocher des flèches d'amélioration : elle vaut pour tous les bâtiments (même réglage que Réglages › Partie)
+    const upChk = `<label class="upchk" title="${attr(tr('Montre ou cache la flèche au-dessus de chaque bâtiment qui peut être amélioré, pour tous les bâtiments.'))}"><input type="checkbox" data-act="badges" ${h.hideUpBadges ? '' : 'checked'}> ${tr('Afficher les flèches d’amélioration')}</label>`;
+    const upgrades = ups ? `<div class="acts ups">${ups}</div>${upChk}` : '';
     const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${railChip}|${rails}|${upgrades}`;
     if (key === this.selKey) return;
     const same = box.dataset.id === String(b.id) && box.classList.contains('show');
@@ -909,6 +911,7 @@ export class UI {
       else if (act === 'del') tl.demolishSelected();
       else if (act === 'command') { h.audio.sfxClick(); tl.select(null); h.commandIsle?.(); }
       else if (act === 'newline') { h.audio.sfxClick(); h.startRailEdit({ stop: b.id }); }
+      else if (act === 'badges') { h.setHideUpBadges(!h.hideUpBadges); h.audio.sfxClick(); this.selKey = ''; }
       else if (act?.startsWith('up:')) tl.upgradeSelected(act.slice(3) as KindId);
       else if (act?.startsWith('follow:')) h.followTrain(+act.slice(7));
       else if (act?.startsWith('cargo:')) { const l = h.world.lines.find((x) => x.id === +act.slice(6)); if (l) { h.audio.sfxClick(); h.railway.setFreight(l.id, !l.freight); this.selKey = ''; this.renderSelection(); } }

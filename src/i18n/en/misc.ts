@@ -2,6 +2,8 @@ import { registerDict } from '../index';
 
 /** Textes français -> anglais : divers (ce qui ne rentre dans aucune autre zone) */
 registerDict('misc', {
+  'Afficher les flèches d’amélioration': 'Show upgrade arrows',
+  'Montre ou cache la flèche au-dessus de chaque bâtiment qui peut être amélioré, pour tous les bâtiments.': 'Shows or hides the arrow above every building that can be upgraded, for all buildings.',
   'La place du village a disparu : reposez-la (le bouton qui luit) pour retrouver son bien-être et partir en expédition.': 'The village square is gone: build it again (the glowing button) to get its well-being back and send expeditions.',
   'Le volcan est rasé.': 'The volcano has been levelled.',
   '🔥 Contamination de l’île : {n} % · la caserne la fait reculer, sans halo autour d’elle': '🔥 Island contamination: {n}% · the barracks push it back, with no halo around them',
