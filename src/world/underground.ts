@@ -1,13 +1,14 @@
 import { World, N, VR, VS, VEG_CAVE, VEG_FISSURE, VEG_VOLCANO, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
 import { Simplex } from './noise';
 import { hash2 } from '../core/rng';
+import { localize } from '../i18n';
 
 /**
  * Zones du monde souterrain, tirées du biome de surface : galeries de pierre à minerais (tempéré), glace (taïga),
  * grotte luxuriante aux champignons lumineux (marais, tropiques), magma (désert, volcans) ; poches de cristaux partout
  */
 export const UZ_STONE = 0, UZ_CRYSTAL = 1, UZ_ICE = 2, UZ_LUSH = 3, UZ_MAGMA = 4;
-export const UZ_NAMES = ['Galeries', 'Grotte de cristal', 'Grotte de glace', 'Grotte luxuriante', 'Cavernes de magma'];
+export const UZ_NAMES = localize(['Galeries', 'Grotte de cristal', 'Grotte de glace', 'Grotte luxuriante', 'Cavernes de magma'], [0, 1, 2, 3, 4]);
 /** Hauteur des parois : leur dessus est la coupe sombre de la roche */
 export const UWALL = 1.6;
 export const POOL_WATER = 1, POOL_LAVA = 2;
@@ -21,6 +22,7 @@ export const ORE_KINDS: { name: string; amount: number; w: number }[] = [
   { name: 'charbon', amount: 1, w: 40 }, { name: 'fer', amount: 2, w: 28 }, { name: 'or', amount: 3, w: 10 }, { name: 'rubis', amount: 3, w: 8 },
   { name: 'lapis-lazuli', amount: 2, w: 7 }, { name: 'diamant', amount: 5, w: 5 }, { name: 'émeraude', amount: 5, w: 2 },
 ];
+for (const o of ORE_KINDS) localize(o, ['name']);
 const ORE_W = ORE_KINDS.reduce((s, o) => s + o.w, 0);
 
 /**

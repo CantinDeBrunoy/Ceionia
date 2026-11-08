@@ -1,5 +1,6 @@
 import type { DestKind, Effect, Scene } from './missions';
 import type { GearId } from './gear';
+import { localize } from '../i18n';
 
 /**
  * Décisions en cours d'expédition : une fois sur place (et parfois à mi-chemin du travail), l'équipe tombe sur un imprévu et
@@ -536,6 +537,9 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
 ];
+
+// textes lus à l'affichage dans la langue courante (dictionnaire src/i18n/en/events.ts)
+for (const e of EVENTS) { localize(e, ['title', 'text']); for (const o of e.options) localize(o, ['label', 'text']); }
 
 export const EVENT_BY: Record<string, ExpEvent> = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 

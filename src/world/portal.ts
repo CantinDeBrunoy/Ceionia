@@ -1,5 +1,6 @@
 import { World, PortalSite, VEG_FOREST, VEG_ROCKS, VEG_VOLCANO, VEG_CAVE, VEG_FISSURE, VEG_WRECK } from './world';
 import { mulberry32, hash2, smoothstep, lerp } from '../core/rng';
+import { tr } from '../i18n';
 
 /**
  * L'île du portail : une île au large du continent, de 22 à 30 cases de diamètre (assez grande pour s’y battre), séparée de lui par un bras de mer ;
@@ -201,9 +202,9 @@ export const isleSecured = (w: World) => isleProgress(w) >= 1;
 export function isleSteps(w: World): { label: string; have: number; need: number; kind?: 'watchtower' | 'barracks' }[] {
   const d = isleDefenses(w);
   return [
-    { label: 'île du portail : une tour de garde', have: Math.min(1, d.towers), need: 1, kind: 'watchtower' },
-    { label: 'île du portail : une caserne', have: Math.min(1, d.barracks), need: 1, kind: 'barracks' },
-    { label: 'île du portail : vagues de démons repoussées', have: Math.min(ISLE_SECURE.waves, w.isleGuard.waves), need: ISLE_SECURE.waves },
+    { label: tr('île du portail : une tour de garde'), have: Math.min(1, d.towers), need: 1, kind: 'watchtower' },
+    { label: tr('île du portail : une caserne'), have: Math.min(1, d.barracks), need: 1, kind: 'barracks' },
+    { label: tr('île du portail : vagues de démons repoussées'), have: Math.min(ISLE_SECURE.waves, w.isleGuard.waves), need: ISLE_SECURE.waves },
   ];
 }
 
