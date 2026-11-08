@@ -994,6 +994,14 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar .tbuilds .trb.on, #troopBar .tmrow .trb.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 #troopBar .tbuilds .trb.on small, #troopBar .tbuilds .trb.on small.co { color: #fff; }
 #troopBar .tbuilds .trb.off { opacity: 0.6; background: var(--glass); border-color: var(--line); box-shadow: none; }
+/* recruter dans les Enfers : prêt (vert), à fabriquer (pointillé orange), impossible (gris, la raison écrite sur le bouton) */
+#troopBar .tbuilds .trb.rh small { max-width: 132px; white-space: normal; text-align: center; font-weight: 700; }
+#troopBar .tbuilds .trb.rh.go { border: 2px solid #12a37e; background: #e6f7f1; }
+#troopBar .tbuilds .trb.rh.go small { color: #0a6b52; }
+#troopBar .tbuilds .trb.rh.craft { border: 2px dashed #d6a24a; background: #fff8e6; }
+#troopBar .tbuilds .trb.rh.craft small { color: #8a5a00; }
+#troopBar .tbuilds .trb.rh.off { opacity: 1; border: 2px solid var(--line); background: var(--glass); color: var(--ink2); }
+#troopBar .tbuilds .trb.rh.off small { color: #a23b2a; }
 #troopBar .tcorner { flex: none; display: flex; flex-direction: column; gap: 4px; }
 #troopBar .tcorner button { min-height: 32px; padding: 0 14px; font-size: 13px; font-weight: 800; border-radius: 10px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); color: var(--ink); justify-content: center; }
 #troopBar .tcorner button.on { background: var(--accent); color: #fff; }

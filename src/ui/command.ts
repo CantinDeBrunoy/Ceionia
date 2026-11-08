@@ -9,6 +9,7 @@ import type { BaseKind } from '../sim/hell';
 import { BASE_DEFS, costText, canAfford, COUNTER_WARN } from '../sim/hellBase';
 import type { BaseCost } from '../sim/hellBase';
 import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
+import { planHellRecruit, orderHellRecruit, stepHellWaiting } from '../sim/recruitPlan';
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 
 /**
@@ -408,10 +409,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'garrison') { const n = w.callGarrison(); this.host.toast(n ? `🌀 ${n} troupe${n > 1 ? 's' : ''} de l’île passe${n > 1 ? 'nt' : ''} le portail : elle${n > 1 ? 's' : ''} arrive${n > 1 ? 'nt' : ''} au seuil des Enfers.` : 'Aucune troupe valide sur l’île.'); }
     else if (a === 'wave') { w.callWave(); this.host.toast('🎺 Le cor sonne : la prochaine vague arrive !'); }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
-    else if (a.startsWith('rech:')) {
-      const k = a.slice(5) as TroopKind, why = w.recruitHell(k, this.host.age(), this.host.pop());
-      this.host.toast(why ?? `Recrue en route à la caserne avancée : ${troopName(k, this.host.age()).toLowerCase()} (elle arrivera au camp).`);
-    }
+    else if (a.startsWith('rech:')) { this.recruitHell(a.slice(5) as TroopKind); if (this.placing) { this.render(); return; } }
     else if (a === 'leave') { if (this.theater.kind === 'isle') this.host.leaveIsle(); else this.host.leaveHell(); return; }
     this.host.click();
     this.barKey = '';
@@ -442,8 +440,32 @@ export class CommandUI implements ToolInput {
     this.host.toast(no ?? `Recrue en route : ${troopName(kind, this.host.age()).toLowerCase()} (la galère l’amène sur l’île).`);
   }
 
+  /** recrues des Enfers qui attendent que l'atelier du village ait fabriqué leur équipement (elles partent au camp dès qu'il est prêt) */
+  waitingHell: TroopKind[] = [];
+
+  /** Le plan d'un clic « Recruter » dans les Enfers (prêt, à fabriquer, impossible + raison) */
+  hellPlan(kind: TroopKind) { return planHellRecruit(this.host.war, kind, this.host.age(), this.host.pop(), this.host, [...this.waiting, ...this.waitingHell]); }
+
+  /**
+   * Recruter à la caserne avancée des Enfers, d'un seul clic : l'équipement en réserve est pris ; sinon l'atelier du village le
+   * fabrique (prix payé tout de suite) et la recrue part au camp dès qu'il est prêt ; sans caserne avancée, on passe à sa pose
+   */
+  recruitHell(kind: TroopKind) {
+    const r = orderHellRecruit(this.host.war, kind, this.host.age(), this.host.pop(), this.host, [...this.waiting, ...this.waitingHell]);
+    this.host.toast(r.msg);
+    if (r.waits) this.waitingHell.push(kind);
+    if (r.openPost) { this.menuTab = 'build'; if (this.placing !== 'post') this.startPlacing(this.host.war.base?.buildings().some((x) => x.kind === 'camp') ? 'post' : 'camp'); }
+  }
+
   /** Les recrues qui attendaient leur équipement partent quand il est prêt (ou renoncent si autre chose manque) */
   private stepWaiting() {
+    for (let i = 0; i < this.waitingHell.length;) {
+      const kind = this.waitingHell[i], r = stepHellWaiting(this.host.war, kind, this.host.age(), this.host.pop(), this.host, [...this.waiting, ...this.waitingHell.slice(0, i)]);
+      if (!r) { i++; continue; }
+      this.waitingHell.splice(i, 1);
+      this.host.toast(r.go ? `⚔️ Équipement prêt : la recrue (${troopName(kind, this.host.age()).toLowerCase()}) est en route pour le camp.` : `Recrue annulée (${troopName(kind, this.host.age()).toLowerCase()}) : ${r.why}.`);
+      this.barKey = '';
+    }
     if (!this.waiting.length) return;
     const w = this.host.war, ctx = w.recruitCtx(this.host.age(), this.host.pop());
     for (let i = 0; i < this.waiting.length;) {
@@ -562,14 +584,23 @@ export class CommandUI implements ToolInput {
       return `<button data-a="build:${k}" class="trb tb${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${d.name} (${costText(d.cost)}) : ${legend}. ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}"><b>${d.icon} ${CommandUI.BSHORT[k]}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></button>`;
     };
     const fam = (cls: string, title: string, tip: string, inner: string) => `<div class="tfam ${cls}" title="${tip}"><h6>${title}</h6><div class="tbuilds">${inner}</div></div>`;
-    const posts = b.posts(), ctx = w.recruitCtx(age, this.host.pop());
     const tab = this.menuTab;
     const inner = tab === 'build'
       ? `${fam('hold', 'Tenir', 'Tenir la zone', btn('camp', hasCamp ? 'point de repli' : 'à poser d’abord', hasCamp ? '' : ' first') + btn('post', 'recrues sur place') + btn('smithy', '+20 % de force') + btn('infirmary', 'soins rapides'))}${
         fam('def', 'Défendre', 'Se défendre', btn('tower', 'archers') + btn('palisade', 'glisser pour tracer') + btn('gate', 'sur un mur'))}${
         fam('lit', 'Éclairer', 'Éclairer : repousse la brume', btn('brazier', 'repousse la brume'))}`
-      : posts ? `<div class="tfam"><div class="tbuilds">${TROOP_KINDS.filter((k) => age >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="trb tb${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? ' off' : ''}" title="Recruter sur place (caserne avancée) : ${troopLabel(k, age)}. ${troopForm(k, age).desc.replace(/"/g, '&quot;')}"><b>${troopForm(k, age).icon} ${troopForm(k, age).name}</b></button>`).join('')}</div></div>` : '<span class="tnone">Bâtissez d’abord la Caserne (onglet Bâtir).</span>';
-    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5 title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">Ma base</h5><span class="ttabs"><button data-a="tab:build" class="${tab === 'build' ? 'on' : ''}">Bâtir</button><button data-a="tab:rec" class="${tab === 'rec' ? 'on' : ''}">Recruter</button></span></div><div class="tmrow">${inner}</div></div>`;
+      : `<div class="tfam"><div class="tbuilds">${TROOP_KINDS.filter((k) => age >= TROOPS[k].age).map((k) => {
+        const p = this.hellPlan(k), fm = troopForm(k, age);
+        return `<button data-a="rech:${k}" class="trb tb rh ${p.state === 'ready' ? 'go' : p.state === 'craft' ? 'craft' : 'off'}" title="${`${troopLabel(k, age)}. ${fm.desc} — ${p.tip}`.replace(/"/g, '&quot;')}"><b>${fm.icon} ${fm.name}</b><small class="co">${p.sub}</small></button>`;
+      }).join('')}</div></div>`;
+    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5 title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">Ma base</h5><span class="ttabs"><button data-a="tab:build" class="${tab === 'build' ? 'on' : ''}">Bâtir</button><button data-a="tab:rec" class="${tab === 'rec' ? 'on' : ''}">Recruter</button></span>${this.hellQueue()}</div><div class="tmrow">${inner}</div></div>`;
+  }
+
+  /** La file des recrues des Enfers : « En route : 🛡️ 12 s » (et 🛠️ pour celles qui attendent l'atelier) */
+  private hellQueue() {
+    const w = this.host.war, age = this.host.age();
+    const l = [...this.waitingHell.map((k) => `${troopForm(k, age).icon}🛠️`), ...w.army.queue.filter((q) => q.at === 'hell').map((q) => `${troopForm(q.kind, age).icon} ${Math.ceil(q.left)} s`)];
+    return l.length ? `<small class="q">En route : ${l.join(' · ')}</small>` : '';
   }
 
   /** Le nom court de chaque zone dans la frise (le nom entier est dans l'infobulle) */
