@@ -475,14 +475,14 @@ export const MISSIONS: Mission[] = [
     ],
   },
   {
-    id: 'fair', age: 2, mandatory: false, icon: '🎪', title: 'Les jongleurs du carrefour',
+    id: 'fair', age: 2, mandatory: false, icon: '🎪', title: 'Les jongleurs du carrefour', unlocks: 'circus',
     intro: 'Une troupe de jongleurs et de musiciens passe dans la région. Il faudrait aller les chercher au grand carrefour.',
     choices: [
       {
         label: 'Aller à leur rencontre', text: 'Une belle balade, avec un peu de chance au bout.',
         dest: 'far', scene: 'troupe', fail: 'gone', doing: 'applaudit les jongleurs et les invite au village', danger: ['weather'], party: 2, work: 10, risk: 0.15, carry: 'guests',
         win: [joy(5, 5)], lose: [],
-        winText: 'La troupe est arrivée en musique : fête au village pendant des jours !',
+        winText: 'La troupe s’installe au village : le cirque peut ouvrir !',
         loseText: 'Les jongleurs avaient promis d’aller jouer ailleurs : ils sont repartis sur la route.',
       },
     ],

@@ -216,7 +216,7 @@ registerDict('missions', {
   'Aller à leur rencontre': 'Go and Meet Them',
   'Une belle balade, avec un peu de chance au bout.': 'A lovely walk, with a bit of luck at the end.',
   'applaudit les jongleurs et les invite au village': 'applauds the jugglers and invites them to the village',
-  'La troupe est arrivée en musique : fête au village pendant des jours !': 'The troupe arrived with music: a party in the village for days!',
+  'La troupe s’installe au village : le cirque peut ouvrir !': 'The troupe is settling into the village: the circus can open!',
   'Les jongleurs avaient promis d’aller jouer ailleurs : ils sont repartis sur la route.': 'The jugglers had promised to play elsewhere: they are back on the road.',
   'Le maître brasseur': 'The Master Brewer',
   'À l’abbaye voisine, un frère brasse une bière dont on parle jusqu’au château. S’il nous apprenait son secret, le village aurait sa taverne.': 'At the nearby abbey, a brother brews a beer that is famous all the way to the castle. If he taught us his secret, the village would have its own tavern.',
