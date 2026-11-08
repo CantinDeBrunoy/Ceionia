@@ -1257,7 +1257,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         const sa = spanA + 0.1, sb = spanB - 0.1, m = Math.max(2, Math.round((sb - sa) / 0.5)), hgt = 0.26;
         for (const sd of [L, R]) {
           const top = (s: number) => up(onS(s, sd), hgt), bot = (s: number) => up(onS(s, sd), 0.04);
-          beam(top(sa), top(sb), 0.012, 0.012, steel);
+          // membrure haute en tronçons courts, pour suivre la courbe du tablier
+          for (let s = sa; s < sb - 1e-6; s += 0.25) beam(top(s), top(Math.min(sb, s + 0.25)), 0.012, 0.012, steel);
           for (let k = 0; k <= m; k++) {
             const s = sa + ((sb - sa) * k) / m;
             if (!fut) beam(bot(s), top(s), 0.01, 0.01, steel);
