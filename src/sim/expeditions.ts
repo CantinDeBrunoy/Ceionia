@@ -3,7 +3,7 @@ import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
-import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear, dangersOf } from './gear';
+import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
@@ -453,12 +453,13 @@ export class Expeditions {
     };
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval s'il y en a assez ; on part en selle
     const kits = party.map((): Kit => ({}));
-    for (const g of ['rifle', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
+    for (const g of ['plasma', 'assault', 'rifle', 'crossbow', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
     kits.forEach((kt, i) => {
       // les chasseurs du mammouth ont toujours leurs lances de chasse au poing (les armes du village, emportées en plus, rendent la chasse plus sûre)
-      if (c.scene === 'mammoth' || c.scene === 'megalodon' || c.scene === 'kraken' || c.scene === 'dragon') kt.weapon ??= 'spear';
-      if (i < (take.armor ?? 0)) kt.armor = true;
+      if (c.scene === 'mammoth' || c.scene === 'megalodon' || c.scene === 'kraken' || c.scene === 'dragon') kt.weapon ??= huntWeapon(age);
+      if (i < (take.armor ?? 0) + (take.energyArmor ?? 0)) kt.armor = true;
       if (kits.length - 1 - i < (take.torch ?? 0)) kt.torch = true;
+      else if (kits.length - 1 - i < (take.lamp ?? 0)) kt.lamp = true;
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
       // la charge de cavalerie part en cavaliers de l'époque (en chars à l'époque moderne) ; les autres équipes à cheval
       // restent des habitants en selle

@@ -59,7 +59,10 @@ export interface ExpEvent {
   options: EventOption[];
 }
 
-const WEAPONS: GearId[] = ['spear', 'bow', 'sword', 'rifle'];
+/** Les armes de toutes les époques (la lance au plasma) : une équipe armée, quelle que soit son arme, peut tenir tête */
+const WEAPONS: GearId[] = ['spear', 'bow', 'sword', 'crossbow', 'rifle', 'assault', 'grenade', 'plasma'];
+const ARMORS: GearId[] = ['armor', 'energyArmor'];
+const LIGHTS: GearId[] = ['torch', 'lamp'];
 const food = (n: number, days?: number): Effect => ({ t: 'need', need: 'food', n, days });
 const joy = (n: number, days?: number): Effect => ({ t: 'need', need: 'joy', n, days });
 
@@ -134,7 +137,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Un grand aileron gris fend l’eau et tourne autour du bateau : un requin !',
     options: [
       { label: 'Fuir vers la rive', risk: 0.9, work: 6, text: 'On a mis le cap sur la rive à toute vitesse, l’aileron sur les talons.' },
-      { label: 'Se battre à la lance', needs: WEAPONS, risk: 0.6, text: 'Un bon coup de lance sur le museau : le requin a filé dans les profondeurs.' },
+      { label: 'Se battre, armes en main', needs: WEAPONS, risk: 0.6, text: 'Un bon coup bien placé sur le museau : le requin a filé dans les profondeurs.' },
       { label: 'Jeter des appâts', risk: 0.8, work: 3, text: 'On a jeté des poissons au loin : le requin s’est rué dessus, et on a pu continuer.' },
     ],
   },
@@ -143,7 +146,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Ce que l’on prenait pour un tronc flottant ouvre un œil, puis une gueule pleine de dents : un crocodile glisse vers l’équipe.',
     options: [
       { label: 'Fuir loin de l’eau', risk: 0.9, work: 5, text: 'On a couru loin de la berge : le crocodile a claqué des mâchoires dans le vide.' },
-      { label: 'Se battre à la lance', needs: WEAPONS, risk: 0.65, text: 'Les lances pointées l’ont fait reculer : le crocodile a replongé dans l’eau brune.' },
+      { label: 'Se battre, armes en main', needs: WEAPONS, risk: 0.65, text: 'Les armes pointées l’ont fait reculer : le crocodile a replongé dans l’eau brune.' },
       { label: 'Lui jeter de la viande', risk: 0.8, work: 3, text: 'Un morceau de viande lancé au loin : le crocodile l’a avalé d’un coup, et on l’a laissé digérer.' },
     ],
   },
@@ -212,7 +215,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Des os rongés et des boucliers fondus jonchent l’entrée de la grotte : d’autres sont venus avant vous…',
     options: [
       { label: 'Fouiller les boucliers fondus', risk: 1.05, work: 4, bonus: [{ t: 'ore', n: 2 }], text: 'Sous les os, du bon métal à refondre.' },
-      { label: 'Serrer les rangs, boucliers levés', needs: ['armor'], risk: 0.8, work: 2, text: 'Boucliers levés, rangs serrés : la troupe est entrée sans trembler.' },
+      { label: 'Serrer les rangs, boucliers levés', needs: ARMORS, risk: 0.8, work: 2, text: 'Boucliers levés, rangs serrés : la troupe est entrée sans trembler.' },
       { label: 'Avancer sans un regard', risk: 1, text: 'On a enjambé les os sans un mot.' },
     ],
   },
@@ -220,7 +223,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'flames', where: ['cave'], scenes: ['dragon'], title: 'Le dragon crache le feu',
     text: 'Le dragon gonfle sa poitrine : un torrent de flammes jaillit de sa gueule et balaie l’entrée de la grotte !',
     options: [
-      { label: 'Lever les boucliers', needs: ['armor'], risk: 0.75, work: 2, text: 'Les flammes ont léché les boucliers sans les percer.' },
+      { label: 'Lever les boucliers', needs: ARMORS, risk: 0.75, work: 2, text: 'Les flammes ont léché les boucliers sans les percer.' },
       { label: 'Se jeter derrière les rochers', risk: 0.85, work: 4, text: 'Tout le monde s’est jeté derrière les rochers : le feu est passé au-dessus des têtes.' },
       { label: 'Charger à travers les flammes', risk: 1.3, work: -4, text: 'On a chargé à travers les flammes, les barbes roussies.' },
     ],
@@ -240,7 +243,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Sur les rochers de la plage, des signes inconnus sont gravés dans la pierre noire, et ils luisent doucement.',
     options: [
       { label: 'Recopier les runes avant de monter', risk: 0.8, work: 5, text: 'Les runes recopiées ont guidé l’équipe : elle savait où poser les mains sur l’arche.' },
-      { label: 'Les éclairer à la torche', needs: ['torch'], risk: 0.7, work: 2, text: 'À la lueur des torches, les runes ont montré le chemin jusqu’à l’arche.' },
+      { label: 'Les éclairer à la torche', needs: LIGHTS, risk: 0.7, work: 2, text: 'À la lueur des torches, les runes ont montré le chemin jusqu’à l’arche.' },
       { label: 'Monter tout droit à l’arche', risk: 1.1, work: -3, text: 'On a filé droit sur l’arche, sans s’attarder sur ces drôles de signes.' },
     ],
   },
@@ -249,7 +252,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Un grondement sourd monte de l’arche ; des étincelles rouges jaillissent entre ses pierres et les braseros crachent des flammes.',
     options: [
       { label: 'Reculer et laisser l’arche s’apaiser', wait: true, risk: 0.85, work: 6, text: 'On a reculé le temps que l’arche s’apaise, puis on s’est remis à l’ouvrage.' },
-      { label: 'Lever les boucliers et continuer', needs: ['armor'], risk: 0.75, work: 2, text: 'Derrière les boucliers, l’équipe a continué malgré la pluie d’étincelles.' },
+      { label: 'Lever les boucliers et continuer', needs: ARMORS, risk: 0.75, work: 2, text: 'Derrière les boucliers, l’équipe a continué malgré la pluie d’étincelles.' },
       { label: 'Finir au plus vite', risk: 1.25, work: -4, text: 'On a fini en hâte, les étincelles plein les cheveux.' },
     ],
   },
@@ -338,7 +341,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Un vieux sanglier aux défenses jaunes gratte le sol et fonce sur les branchages de l’enclos.',
     options: [
       { label: 'Renforcer l’enclos', risk: 0.8, work: 6, text: 'On a doublé les branchages : le vieux sanglier s’y est cassé le groin.' },
-      { label: 'Le repousser, armes en main', needs: WEAPONS, risk: 0.7, text: 'Lances pointées, on a repoussé le vieux sanglier dans les fourrés.' },
+      { label: 'Le repousser, armes en main', needs: WEAPONS, risk: 0.7, text: 'Armes pointées, on a repoussé le vieux sanglier dans les fourrés.' },
       { label: 'Lui ouvrir l’enclos', risk: 1.15, work: -3, text: 'On a laissé sortir le vieux sanglier… et deux bêtes avec lui.' },
     ],
   },
@@ -357,7 +360,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Le plus vieux mammouth de la harde a flairé les chasseurs : il lève la trompe, barrit à faire trembler le sol… et fonce droit sur eux !',
     options: [
       { label: 'Se jeter derrière les rochers', risk: 0.8, work: 5, text: 'Tout le monde s’est jeté derrière les rochers : le vieux mâle est passé en trombe, sans toucher personne.' },
-      { label: 'Serrer les rangs, lances pointées', risk: 0.85, text: 'Serrés en hérisson, lances pointées : le vieux mâle a pilé net, puis fait demi-tour en grondant.' },
+      { label: 'Serrer les rangs, armes pointées', risk: 0.85, text: 'Serrés en hérisson, armes pointées : le vieux mâle a pilé net, puis fait demi-tour en grondant.' },
       { label: 'Tenir bon en criant plus fort que lui', risk: 1.25, work: -3, text: 'On a tenu bon en criant à pleins poumons : le vieux mâle a fait demi-tour… à deux pas des chasseurs.' },
     ],
   },
@@ -428,7 +431,7 @@ export const EVENTS: ExpEvent[] = [
     id: 'dark', where: ['cave'], scenes: ['cave'], title: 'Les torches faiblissent',
     text: 'Au fond de la grotte, les torches de fortune crépitent et baissent : bientôt, on n’y verra plus rien.',
     options: [
-      { label: 'Allumer les bonnes torches', needs: ['torch'], risk: 0.6, text: 'À la lueur des bonnes torches, les parois scintillaient.' },
+      { label: 'Allumer les bonnes torches', needs: LIGHTS, risk: 0.6, text: 'À la lueur des bonnes torches, les parois scintillaient.' },
       { label: 'Suivre le courant d’air', risk: 1.1, bonus: [{ t: 'ore', n: 1 }], text: 'On a suivi le courant d’air… jusqu’à une veine inconnue.' },
       { label: 'Ressortir refaire des torches', risk: 0.9, work: 6, text: 'On est ressorti refaire des torches pour mieux repartir.' },
     ],
@@ -438,7 +441,7 @@ export const EVENTS: ExpEvent[] = [
     text: 'Un grand battement d’ailes : des centaines de chauves-souris jaillissent de la grotte !',
     options: [
       { wait: true, label: 'Se plaquer au sol', risk: 0.85, work: 3, text: 'À plat ventre, on a laissé passer la nuée.' },
-      { label: 'Agiter les torches', needs: ['torch'], risk: 0.75, text: 'Les torches agitées ont écarté les chauves-souris.' },
+      { label: 'Agiter les torches', needs: LIGHTS, risk: 0.75, text: 'Les torches agitées ont écarté les chauves-souris.' },
       { label: 'Foncer à travers', risk: 1.2, work: -3, text: 'On a foncé à travers la nuée, les bras devant les yeux.' },
     ],
   },

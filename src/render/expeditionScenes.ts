@@ -1003,7 +1003,13 @@ export class ExpeditionScene {
   /** une fusée est sur le pas de tir ou dans le ciel : celle qui attendait au cosmodrome s'efface */
   get launching() { return !!this.rocket; }
 
+  /** l'âge de l'expédition : ce que tire l'équipe (lances, puis balles, puis plasma) */
+  private ammo: 'spear' | 'bullet' | 'plasma' = 'spear';
+  /** Un coup d'arme de l'équipe, de l'époque : lance (jusqu'au Moyen Âge), balle (industriel, moderne), plasma (futuriste) */
+  private fire(from: THREE.Vector3, to: THREE.Vector3, onLand: (() => void) | null = null) { this.combat?.throw(from, to, onLand, this.ammo); }
+
   constructor(private world: World, private agents: Agents, private group: THREE.Group, a: ActiveExpedition, private combat: CombatFx | null = null) {
+    this.ammo = a.age >= 5 ? 'plasma' : a.age >= 3 ? 'bullet' : 'spear';
     const [cx, cz] = a.dest;
     this.story = a.c.scene;
     this.offshore = !!a.sea;
@@ -2514,7 +2520,7 @@ export class ExpeditionScene {
       if (s.pick === 1 && !thrown) {
         thrown = true;
         const p = this.agents.partyPositions(a.party)[0], g = this.world.surfaceAt.bind(this.world);
-        if (p) this.combat?.throw(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), new THREE.Vector3(herd[0].x, g(herd[0].x, herd[0].z) + 0.1, herd[0].z));
+        if (p) this.fire(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), new THREE.Vector3(herd[0].x, g(herd[0].x, herd[0].z) + 0.1, herd[0].z));
       }
       if (flee && s.after > start + 4) { for (const b of herd) b.obj.visible = false; return false; }
       return true;
@@ -2778,7 +2784,7 @@ export class ExpeditionScene {
     if (a.phase === 'work' && !this.kindled) { this.kindled = true; this.torchK = this.torchTo; }
     const to = a.phase === 'work' ? this.torchTo : 0;
     this.torchK += Math.sign(to - this.torchK) * Math.min(Math.abs(to - this.torchK), dt * 0.9);
-    const real = a.gear.torch ?? 0;
+    const real = (a.gear.torch ?? 0) + (a.gear.lamp ?? 0);
     a.party.forEach((id, i) => {
       if (a.party.length - 1 - i < real) return;
       const p = this.agents.partyPositions([id])[0];
@@ -3520,7 +3526,7 @@ export class ExpeditionScene {
           t = 2.4 + Math.random() * 1.6;
           const lx = b.x + (tx - b.x) * 0.25, lz = b.z + (tz - b.z) * 0.25;
           const to = new THREE.Vector3(lx + (Math.random() - 0.5) * 0.3, g(lx, lz) + 0.04, lz + (Math.random() - 0.5) * 0.3);
-          this.combat?.throw(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), to, () => {
+          this.fire(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), to, () => {
             if (Math.hypot(b.x - to.x, b.z - to.z) < 0.32) { this.combat?.hit(b.x, g(b.x, b.z) + 0.12, b.z, 0xffd27a, 12); h.flinch = 0.4; }
           });
           this.agents.partyAct([id], 'work');
@@ -3635,7 +3641,7 @@ export class ExpeditionScene {
       if (t <= 0 && Math.hypot(p[0] - b.x, p[1] - b.z) < 1.6 && this.agents.memberDone(id)) {
         t = 2.6 + Math.random() * 2;
         const to = new THREE.Vector3(b.x + (Math.random() - 0.5) * 0.3, g(b.x, b.z) + 0.04, b.z + (Math.random() - 0.5) * 0.3);
-        this.combat?.throw(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), to, () => { this.combat?.puff(to.x, to.y, to.z, 6); m.trumpet = 1; });
+        this.fire(new THREE.Vector3(p[0], g(p[0], p[1]) + 0.17, p[1]), to, () => { this.combat?.puff(to.x, to.y, to.z, 6); m.trumpet = 1; });
         this.agents.partyAct([id], 'work');
       }
       this.spearT.set(id, t);
@@ -4187,7 +4193,7 @@ export class ExpeditionScene {
       d.ended = true;
       // la dernière charge : toutes les lances volent d'un coup
       const at = new THREE.Vector3(d.x, w.surfaceAt(d.x, d.z) + 0.3, d.z);
-      for (const p of this.agents.partyPositions(a.party)) this.combat?.throw(new THREE.Vector3(p[0], w.surfaceAt(p[0], p[1]) + 0.17, p[1]), at, () => this.combat?.puff(at.x, at.y, at.z, 6));
+      for (const p of this.agents.partyPositions(a.party)) this.fire(new THREE.Vector3(p[0], w.surfaceAt(p[0], p[1]) + 0.17, p[1]), at, () => this.combat?.puff(at.x, at.y, at.z, 6));
       d.actor.root.visible = true;
       if (fate) this.dragonDo(d, 'dead', ['Death']);
       else this.dragonDo(d, 'roar', ['Idle_2', 'Idle']);
@@ -4292,7 +4298,7 @@ export class ExpeditionScene {
         const p = this.agents.partyPositions([id])[0];
         if (p) {
           const to = new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.3, w.surfaceAt(d.x, d.z) + 0.25, d.z + (Math.random() - 0.5) * 0.3);
-          this.combat?.throw(new THREE.Vector3(p[0], w.surfaceAt(p[0], p[1]) + 0.17, p[1]), to, () => {
+          this.fire(new THREE.Vector3(p[0], w.surfaceAt(p[0], p[1]) + 0.17, p[1]), to, () => {
             this.combat?.puff(to.x, to.y, to.z, 5);
             d.hits++;
             if (d.act === 'prowl' || d.act === 'breath') this.dragonDo(d, 'hit', ['Hit']);
