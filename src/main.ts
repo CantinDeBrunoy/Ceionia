@@ -1,4 +1,6 @@
 import './style.css';
+import './i18n/en';
+import { onLangChange, tr as trx } from './i18n';
 import * as THREE from 'three';
 import { World, N, VEG_VOLCANO, setMapSize } from './world/world';
 import { Underground, UZ_NAMES } from './world/underground';
@@ -474,6 +476,8 @@ class Game implements UIHost {
     window.addEventListener('keydown', unlock, { once: true });
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveNow(); });
     window.addEventListener('pagehide', () => this.saveNow());
+    // changer de langue en jeu : on sauvegarde, la page recharge et reprend la partie dans la nouvelle langue
+    onLangChange(() => { this.saveNow(); sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`); this.running = false; location.reload(); });
 
     this.refreshSeason(true);
     this.gardens.sync(this.sim.age);
@@ -1552,7 +1556,7 @@ async function boot() {
   const loading = document.createElement('div');
   loading.className = 'loading';
   uiRoot.appendChild(loading);
-  await loadModels((done, total) => { loading.textContent = `Chargement des modèles… ${done}/${total}`; });
+  await loadModels((done, total) => { loading.textContent = `${trx('Chargement des modèles…')} ${done}/${total}`; });
   loading.remove();
 
   let started = false;
@@ -1561,6 +1565,8 @@ async function boot() {
     started = true;
     // les anciennes cartes (île, vallée, plateaux) n'existent plus : on joue sur le continent
     if (!mapDef(map)) map = CONTINENT;
+    // l'accueil peut avoir été redessiné (changement de langue) : on retire celui qui est à l'écran
+    document.getElementById('menu')?.remove();
     menu?.remove();
     // tailles des tableaux du monde, des vues et de la caméra
     setMapSize(mapDef(map)!.size);
@@ -1579,7 +1585,7 @@ async function boot() {
     start: (map, mode, seed, difficulty) => start(map, mode, seed, difficulty),
     importFile: async (f) => {
       try { const d = await readSaveFile(f); saveSlot(d); start(d.map, 'continue'); }
-      catch (e) { alert('Import impossible : ' + (e as Error).message); }
+      catch (e) { alert(trx('Import impossible : {why}', { why: (e as Error).message })); }
     },
   });
   void KINDS;

@@ -415,6 +415,13 @@ body.under:has(#warAlert.show) #toasts { top: calc(var(--hudB, 82px) + 122px); }
 .mFoot .tutoToggle button { min-height: 44px; padding: 0 12px 0 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.9); color: #33415c; }
 .mLinks { position: absolute; top: 12px; right: 24px; display: flex; gap: 10px; }
 .mLinks button { min-height: 44px; padding: 0 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.85); color: #33415c; font-size: 14px; }
+.mLinks .langPick { display: flex; gap: 0; margin: 0; }
+.mLinks .langPick button { border-radius: 0; min-height: 44px; padding: 0 12px; background: rgba(255, 255, 255, 0.85); color: #33415c; font-size: 14px; }
+.mLinks .langPick button:first-child { border-radius: 12px 0 0 12px; }
+.mLinks .langPick button:last-child { border-radius: 0 12px 12px 0; }
+.mLinks .langPick button.active { background: #33415c; color: #fff; }
+.langPick button b { font-size: 11px; letter-spacing: 0.05em; opacity: 0.7; margin-right: 4px; }
+@media (max-width: 600px) { .mLinks { right: 10px; top: 8px; gap: 6px; flex-wrap: wrap; justify-content: flex-end; } .mLinks button { padding: 0 10px; } }
 .mKeys { margin: -8px 0 0; font-size: 12px; line-height: 1.6; color: #4a5876; text-align: center; max-width: 900px; }
 .mKeys span { color: #5a6783; }
 @media (hover: none) and (pointer: coarse) { .mKeys { display: none; } }
