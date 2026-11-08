@@ -584,10 +584,13 @@ export class UI {
    * Tant que rien n'est bâti, l'onglet Bâtir, le rayon Vie & culture et la vignette de la place du village luisent doucement :
    * le joueur voit tout de suite par où commencer (les autres bâtiments restent grisés jusque-là)
    */
+  private firstArmed = false;
   private markFirst() {
     const first = this.host.world.buildings.size === 0;
     const sel = ['#modes [data-t="build"]', `#subcats [data-c="${KINDS.gather.cat}"]`, '#items [data-kind="gather"]'];
     for (const s of sel) this.root.querySelector(s)?.classList.toggle('first', first);
+    // la place du village est déjà en main : le premier clic sur le terrain la pose (une vignette qui luit sans être prise déroute)
+    if (first && !this.firstArmed && this.host.tools.tool === 'none') { this.firstArmed = true; this.host.tools.setTool('build', START_KIND); }
     // village vide : les onglets Relief et Nature, les autres rayons et les outils rapides sont grisés (voir startLock)
     const shut = (s: string, on: boolean) => this.root.querySelectorAll<HTMLElement>(s).forEach((b) => { b.classList.toggle('locked', on); b.setAttribute('aria-disabled', String(on)); });
     shut('#modes button:not([data-t="build"])', first);
