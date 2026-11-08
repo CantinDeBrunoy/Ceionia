@@ -510,7 +510,7 @@ export const MISSIONS: Mission[] = [
     intro: 'Un dragon s’est terré dans une grotte au pied de la montagne : il enlève les moutons et roussit les toits. On dit qu’il dort sur un tas d’or… Des chevaliers sont prêts à l’en déloger.',
     choices: [
       {
-        label: 'L’affronter dans sa grotte', text: 'Lances, épées et boucliers : on le défie à l’entrée de son antre. Le plus court, et le plus dangereux.',
+        label: 'L’affronter dans sa grotte', text: 'Épées, arbalètes et boucliers : on le défie à l’entrée de son antre. Le plus court, et le plus dangereux.',
         dest: 'cave', scene: 'dragon', doing: 'affronte le dragon à l’entrée de sa grotte', danger: ['monster', 'dark'], party: 5, work: 32, risk: 0.45, carry: 'cart',
         win: [{ t: 'ore', n: 16 }, joy(4, 6), joy(2), { t: 'perk', id: 'dragon' }], lose: [hurt(2, 3), joy(-2, 3)],
         winText: 'Le dragon s’est effondré devant sa grotte ! Les chevaliers rentrent avec son trésor : de l’or et du fer plein le chariot.',
@@ -518,9 +518,9 @@ export const MISSIONS: Mission[] = [
       },
       {
         label: 'L’enfumer hors de sa grotte', text: 'Un grand feu d’herbes humides devant l’entrée : à moitié étouffé, il sortira affaibli. Plus long, plus sûr.',
-        dest: 'cave', scene: 'dragon', doing: 'enfume la grotte du dragon et l’attend, lances pointées', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.3, carry: 'cart',
+        dest: 'cave', scene: 'dragon', doing: 'enfume la grotte du dragon et l’attend, arbalètes braquées', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.3, carry: 'cart',
         win: [{ t: 'ore', n: 12 }, joy(3, 6), joy(2), { t: 'perk', id: 'dragon' }], lose: [hurt(1, 2), joy(-1, 3)],
-        winText: 'Le dragon est sorti en toussant, et les lances ont fait le reste ! Son trésor rentre au village sur le chariot.',
+        winText: 'Le dragon est sorti en toussant, et les carreaux d’arbalète ont fait le reste ! Son trésor rentre au village sur le chariot.',
         loseText: 'Le dragon a jailli de la fumée et s’est envolé par-dessus la montagne : un chevalier brûlé.',
       },
     ],

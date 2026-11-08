@@ -16,7 +16,7 @@ export const DANGER_NAME: Record<Danger, string> = { beast: 'bêtes sauvages', f
 /** « Contre les bêtes sauvages », « Sur l'eau vive »… */
 export const DANGER_VS: Record<Danger, string> = { beast: 'Contre les bêtes sauvages', fall: 'Contre les chutes', water: 'Sur l’eau vive', dark: 'Dans le noir', weather: 'Contre les intempéries', monster: 'Contre les créatures des grottes' };
 
-export type GearId = 'spear' | 'bow' | 'sword' | 'rifle' | 'rope' | 'torch' | 'boat' | 'kit' | 'armor';
+export type GearId = 'spear' | 'bow' | 'sword' | 'crossbow' | 'rifle' | 'assault' | 'grenade' | 'plasma' | 'rope' | 'torch' | 'lamp' | 'boat' | 'kit' | 'armor' | 'energyArmor' | 'fieldShield';
 
 export interface Gear {
   id: GearId;
@@ -26,8 +26,15 @@ export interface Gear {
   icon: string;
   /** âge à partir duquel on sait le fabriquer */
   age: number;
+  /**
+   * dernier âge où les expéditions l'exigent et le proposent (absent : toujours) ; au-delà, une pièce plus moderne la remplace :
+   * elle reste fabricable (les troupes en ont besoin) et en réserve, et part encore en dernier recours, mais n'est plus demandée
+   */
+  last?: number;
   /** minerai par pièce */
   ore: number;
+  /** carburant par pièce (les armes et machines de l'ère moderne) */
+  fuel?: number;
   /** bois et pierre par pièce, en Normal seulement (les pièces sans métal, gratuites ailleurs) */
   wood?: number;
   stone?: number;
@@ -46,29 +53,36 @@ export interface Gear {
 }
 
 export const GEAR: Gear[] = [
-  { id: 'spear', name: 'Lance', plural: 'Lances', icon: 'spear', age: 0, ore: 0, wood: 2, stone: 1, time: 10, guards: 'beast', also: 'monster', cut: 0.25, per: (n) => n, desc: 'Un bâton durci au feu, une pointe de silex : les bêtes y regardent à deux fois.' },
-  { id: 'bow', name: 'Arc', plural: 'Arcs', icon: 'bow', age: 1, ore: 0, wood: 4, time: 14, guards: 'beast', also: 'monster', cut: 0.38, per: (n) => n, desc: 'Tient les bêtes à distance, et rapporte parfois le dîner.' },
-  { id: 'sword', name: 'Épée', plural: 'Épées', icon: 'sword', age: 2, ore: 1, time: 18, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.5, per: (n) => n, desc: 'Forgée à l’atelier : loups et sangliers n’ont qu’à bien se tenir.' },
-  { id: 'rifle', name: 'Fusil', plural: 'Fusils', icon: 'rifle', age: 3, ore: 2, time: 22, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.65, per: (n) => n, desc: 'Un coup en l’air suffit souvent à disperser une meute.' },
+  { id: 'spear', name: 'Lance', plural: 'Lances', icon: 'spear', age: 0, last: 1, ore: 0, wood: 2, stone: 1, time: 10, guards: 'beast', also: 'monster', cut: 0.25, per: (n) => n, desc: 'Un bâton durci au feu, une pointe de silex : les bêtes y regardent à deux fois.' },
+  { id: 'bow', name: 'Arc', plural: 'Arcs', icon: 'bow', age: 1, last: 1, ore: 0, wood: 4, time: 14, guards: 'beast', also: 'monster', cut: 0.38, per: (n) => n, desc: 'Tient les bêtes à distance, et rapporte parfois le dîner.' },
+  { id: 'sword', name: 'Épée', plural: 'Épées', icon: 'sword', age: 2, last: 2, ore: 1, time: 18, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.5, per: (n) => n, desc: 'Forgée à l’atelier : loups et sangliers n’ont qu’à bien se tenir.' },
+  { id: 'crossbow', name: 'Arbalète', plural: 'Arbalètes', icon: 'crossbow', age: 2, last: 2, ore: 1, wood: 3, time: 20, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.56, per: (n) => n, desc: 'Un carreau d’acier tendu d’un cran : sanglier et loup y réfléchissent à deux fois.' },
+  { id: 'rifle', name: 'Fusil', plural: 'Fusils', icon: 'rifle', age: 3, last: 3, ore: 2, time: 22, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.65, per: (n) => n, desc: 'Un coup en l’air suffit souvent à disperser une meute.' },
+  { id: 'assault', name: 'Fusil d’assaut', plural: 'Fusils d’assaut', icon: 'assault', age: 4, last: 4, ore: 3, fuel: 1, time: 26, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.76, per: (n) => n, desc: 'Rafales et chargeur long : une meute n’approche pas.' },
+  { id: 'grenade', name: 'Grenades', plural: 'Grenades', icon: 'grenade', age: 4, last: 4, ore: 2, fuel: 1, time: 20, needs: 'workshop', guards: 'monster', also: 'beast', cut: 0.7, per: (n) => Math.ceil(n / 2), desc: 'Une grenade (et une roquette pour les plus gros) : de quoi déloger la pire créature de son trou.' },
+  { id: 'plasma', name: 'Fusil à plasma', plural: 'Fusils à plasma', icon: 'plasma', age: 5, ore: 4, fuel: 2, time: 30, needs: 'workshop', guards: 'beast', also: 'monster', cut: 0.86, per: (n) => n, desc: 'Un trait de plasma bleu, sans bruit ni recul : rien ne reste debout devant.' },
   { id: 'rope', name: 'Corde', plural: 'Cordes', icon: 'rope', age: 0, ore: 0, wood: 2, time: 8, guards: 'fall', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'On s’encorde deux par deux pour les passages au-dessus du vide.' },
-  { id: 'torch', name: 'Torche', plural: 'Torches', icon: 'torch', age: 0, ore: 0, wood: 1, time: 6, guards: 'dark', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'Pour ne pas se perdre dans les galeries.' },
+  { id: 'torch', name: 'Torche', plural: 'Torches', icon: 'torch', age: 0, last: 2, ore: 0, wood: 1, time: 6, guards: 'dark', cut: 0.45, per: (n) => Math.ceil(n / 2), desc: 'Pour ne pas se perdre dans les galeries.' },
+  { id: 'lamp', name: 'Lampe frontale', plural: 'Lampes frontales', icon: 'flashlight', age: 3, ore: 1, time: 8, guards: 'dark', cut: 0.6, per: (n) => Math.ceil(n / 2), desc: 'Un faisceau blanc et franc : les galeries n’ont plus de secrets.' },
   { id: 'boat', name: 'Barque', plural: 'Barques', icon: 'boat', age: 1, ore: 0, wood: 10, time: 30, guards: 'water', cut: 0.5, per: (n) => Math.ceil(n / 3), desc: 'Trois places : on traverse, on pêche au large, on passe les crues.' },
-  { id: 'armor', name: 'Armure', plural: 'Armures', icon: 'shield', age: 2, ore: 2, time: 28, needs: 'workshop', guards: 'monster', cut: 0.6, per: (n) => n, desc: 'Cotte de mailles, casque et bouclier : griffes et crocs glissent dessus. De quoi affronter les monstres.' },
+  { id: 'armor', name: 'Armure', plural: 'Armures', icon: 'shield', age: 2, last: 4, ore: 2, time: 28, needs: 'workshop', guards: 'monster', cut: 0.6, per: (n) => n, desc: 'Cotte de mailles, casque et bouclier : griffes et crocs glissent dessus. De quoi affronter les monstres.' },
+  { id: 'energyArmor', name: 'Armure énergétique', plural: 'Armures énergétiques', icon: 'energyArmor', age: 5, ore: 4, fuel: 1, time: 34, needs: 'workshop', guards: 'monster', cut: 0.82, per: (n) => n, desc: 'Une exo-armure à champ de force : griffes, crocs et flammes glissent dessus.' },
+  { id: 'fieldShield', name: 'Bouclier de champ', plural: 'Boucliers de champ', icon: 'fieldShield', age: 5, ore: 3, fuel: 2, time: 32, needs: 'workshop', guards: 'weather', also: 'fall', cut: 0.5, per: (n) => Math.ceil(n / 2), desc: 'Une bulle d’énergie pour deux : le vent, la pluie et les éboulis rebondissent dessus.' },
   { id: 'kit', name: 'Trousse de soins', plural: 'Trousses de soins', icon: 'kit', age: 2, ore: 1, time: 16, needs: 'health', guards: null, cut: 0.1, per: () => 1, desc: 'Un peu plus sûr partout ; les blessés guérissent deux fois plus vite.' },
 ];
 export const GEAR_BY = Object.fromEntries(GEAR.map((g) => [g.id, g])) as Record<GearId, Gear>;
 
-export interface GearCost { wood: number; stone: number; ore: number }
+export interface GearCost { wood: number; stone: number; ore: number; fuel?: number }
 
 /** Prix d'une pièce : son minerai, et en Normal le bois et la pierre des pièces sans métal */
 export function gearCost(g: Gear, d: Difficulty): GearCost {
   const p = rulesOf(d).gearPrice;
-  return { wood: p ? g.wood ?? 0 : 0, stone: p ? g.stone ?? 0 : 0, ore: g.ore };
+  return { wood: p ? g.wood ?? 0 : 0, stone: p ? g.stone ?? 0 : 0, ore: g.ore, ...(g.fuel ? { fuel: g.fuel } : {}) };
 }
 
 /** « 2 bois et 1 pierre », « 1 minerai » ; vide pour une pièce gratuite */
 export function gearCostLabel(c: GearCost) {
-  const parts = [c.wood ? `${c.wood} bois` : '', c.stone ? `${c.stone} pierre` : '', c.ore ? `${c.ore} minerai` : ''].filter(Boolean);
+  const parts = [c.wood ? `${c.wood} bois` : '', c.stone ? `${c.stone} pierre` : '', c.ore ? `${c.ore} minerai` : '', c.fuel ? `${c.fuel} carburant` : ''].filter(Boolean);
   return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} et ${parts[parts.length - 1]}` : parts.join('');
 }
 
@@ -76,18 +90,18 @@ export function gearCostLabel(c: GearCost) {
 export function gearShort(w: World, g: Gear): string | null {
   if (w.unlimited) return null;
   const c = gearCost(g, w.difficulty);
-  return w.wood < c.wood || w.stone < c.stone || w.ore < c.ore ? `Il faut ${gearCostLabel(c)}` : null;
+  return w.wood < c.wood || w.stone < c.stone || w.ore < c.ore || w.fuel < (c.fuel ?? 0) ? `Il faut ${gearCostLabel(c)}` : null;
 }
 
 /** Prélève le prix d'une pièce mise en fabrication ; `back` : le rend (pièce annulée). Rien en ressources illimitées */
 export function payGear(w: World, g: Gear, back = false) {
   if (w.unlimited) return;
   const c = gearCost(g, w.difficulty), s = back ? -1 : 1;
-  w.wood -= s * c.wood; w.stone -= s * c.stone; w.ore -= s * c.ore;
+  w.wood -= s * c.wood; w.stone -= s * c.stone; w.ore -= s * c.ore; w.fuel -= s * (c.fuel ?? 0);
 }
 
 export type Stock = Record<GearId, number>;
-export const emptyStock = (): Stock => ({ spear: 0, bow: 0, sword: 0, rifle: 0, rope: 0, torch: 0, boat: 0, kit: 0, armor: 0 });
+export const emptyStock = (): Stock => (Object.fromEntries(GEAR.map((g) => [g.id, 0])) as Stock);
 
 /** Dangers selon la destination, quand le choix ne les précise pas */
 const DEST_DANGER: Record<DestKind, Danger[]> = {
@@ -95,6 +109,14 @@ const DEST_DANGER: Record<DestKind, Danger[]> = {
   spaceport: ['weather'],
 };
 export const dangersOf = (c: Choice): Danger[] => c.danger ?? DEST_DANGER[c.dest];
+
+/** Une pièce d'actualité à cet âge : connue, et pas encore remplacée par une plus moderne */
+export const gearCurrent = (g: Gear, age: number) => age >= g.age && (g.last === undefined || age <= g.last);
+/** Une pièce dépassée à cet âge (« anciennes armes ») */
+export const gearObsolete = (g: Gear, age: number) => g.last !== undefined && age > g.last;
+
+/** L'arme que tient une équipe de chasse sans rien emporter du village : celle des habitants de l'époque */
+export const huntWeapon = (age: number): 'spear' | 'sword' | 'rifle' | 'assault' | 'plasma' => (['spear', 'spear', 'sword', 'rifle', 'assault', 'plasma'] as const)[Math.max(0, Math.min(5, age))];
 
 export type Pack = Partial<Record<GearId, number>>;
 
@@ -127,7 +149,7 @@ export interface GearGap { dangers: Danger[]; gear: Gear; need: number; have: nu
 export function gearGaps(c: Choice, stock: Stock, queue: GearId[], age: number, usable: (g: Gear) => boolean): GearGap[] {
   const out: GearGap[] = [];
   for (const d of dangersOf(c)) {
-    const cands = GEAR.filter((g) => (g.guards === d || g.also === d) && g.age <= age);
+    const cands = GEAR.filter((g) => (g.guards === d || g.also === d) && gearCurrent(g, age));
     if (!cands.length || cands.some((g) => stock[g.id] >= g.per(c.party))) continue;
     const pool = cands.filter(usable), pick = [...(pool.length ? pool : cands)].sort((a, b) => b.cut - a.cut)[0];
     const dup = out.find((o) => o.gear.id === pick.id);

@@ -15,7 +15,7 @@ import { rigGeo, droneGeo, propellerGeo, PROP_SPOTS, seatOf } from '../render/fa
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
 /** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie),
  * avec `tank` le blindé de l'époque moderne, qui roule au carburant, sans cheval */
-export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'rifle'; torch?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean; car?: boolean; tank?: boolean }
+export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'crossbow' | 'rifle' | 'assault' | 'plasma'; torch?: boolean; lamp?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean; car?: boolean; tank?: boolean }
 
 /** Objets tenus en main (géométries partagées, en unités du monde ; le long de +y, la poignée à l'origine) */
 const propCache = new Map<string, THREE.BufferGeometry>();
@@ -26,7 +26,7 @@ function propGeo(key: string, make: (p: Parts) => void) {
 }
 /** Comment se tient chaque accessoire : droit (torche, seau, panier, livre, bouclier), en outil (qui frappe), pointé (arme) */
 const HOLD: Record<string, FolkHold> = {
-  sword: 'point', spear: 'point', bow: 'upright', rifle: 'point', torch: 'upright', shield: 'upright', rope: 'upright',
+  sword: 'point', spear: 'point', bow: 'upright', rifle: 'point', crossbow: 'point', assault: 'point', plasma: 'point', torch: 'upright', lamp: 'upright', shield: 'upright', rope: 'upright',
   hoe: 'tool', axe: 'tool', pick: 'tool', hammer: 'tool', rod: 'tool', bucket: 'upright', book: 'upright', crook: 'upright', basket: 'upright',
   stick: 'tool', spade: 'tool', sickle: 'tool', flint: 'tool', scythe: 'tool', sack: 'upright', sheaf: 'upright', crate: 'upright',
 };
@@ -40,6 +40,11 @@ const PROPS = {
   spear: () => propGeo('spear', (p) => { p.cyl(0.005, 0.006, 0.34, 5, 0, -0.12, 0, 0x8a6a4a); p.cone(0.014, 0.05, 4, 0, 0.22, 0, 0xb8bec6); }),
   bow: () => propGeo('bow', (p) => { p.add(new THREE.TorusGeometry(0.1, 0.006, 4, 12, Math.PI).rotateZ(-Math.PI / 2), 0.02, 0.02, 0, 0x8a5a34); p.box(0.002, 0.2, 0.002, 0.02, -0.08, 0, 0xf2f2e8); }),
   rifle: () => propGeo('rifle', (p) => { p.box(0.018, 0.08, 0.022, 0, -0.04, 0, 0x6a4a34); p.box(0.01, 0.16, 0.01, 0, 0.04, 0, 0x3c3c40); }),
+  // arbalète : fût de bois, arc d'acier en travers ; fusil d'assaut : court, noir, chargeur courbe ; fusil à plasma : blanc, cœur bleu
+  crossbow: () => propGeo('crossbow', (p) => { p.box(0.012, 0.13, 0.014, 0, 0, 0, 0x6a4a34); p.box(0.1, 0.008, 0.008, 0, 0.05, 0, 0x6a6e76); p.box(0.002, 0.04, 0.002, 0, 0.032, 0, 0xf2f2e8); }),
+  assault: () => propGeo('assault', (p) => { p.box(0.016, 0.1, 0.02, 0, -0.03, 0, 0x2e3036); p.box(0.009, 0.1, 0.009, 0, 0.065, 0, 0x1e2024); p.box(0.01, 0.045, 0.014, 0.014, -0.02, 0, 0x2e3036); p.box(0.012, 0.03, 0.012, 0, -0.1, 0, 0x4a3e34); }),
+  plasma: () => propGeo('plasma', (p) => { p.box(0.02, 0.1, 0.026, 0, -0.03, 0, 0xe8ecf2); p.box(0.012, 0.11, 0.012, 0, 0.07, 0, 0xc8d0da); p.box(0.016, 0.04, 0.016, 0, 0.0, 0, 0x4ad0ff); p.cone(0.012, 0.03, 5, 0, 0.14, 0, 0x6ae8ff); }),
+  lamp: () => propGeo('lamp', (p) => { p.cyl(0.011, 0.011, 0.07, 6, 0, -0.03, 0, 0x2e3036); p.cyl(0.018, 0.011, 0.025, 6, 0, 0.02, 0, 0xf4f0d0); }),
   torch: () => propGeo('torch', (p) => { p.box(0.009, 0.1, 0.009, 0, -0.03, 0, 0x6a4a34); p.cyl(0.013, 0.01, 0.02, 6, 0, 0.065, 0, 0x4a3a2e); }),
   shield: () => propGeo('shield', (p) => { p.add(new THREE.CylinderGeometry(0.055, 0.055, 0.01, 10).rotateZ(Math.PI / 2), 0, 0.02, 0, 0x4a6aa8); p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.014, 8).rotateZ(Math.PI / 2), 0, 0.02, 0, 0xe8c66a); }),
   rope: () => propGeo('rope', (p) => { for (const r of [0.034, 0.028]) p.add(new THREE.TorusGeometry(r, 0.006, 4, 12), 0, 0, 0, 0xc9b48a); }),
@@ -1315,6 +1320,7 @@ export class Agents {
     if (!k) { if (a.tool) hold(a.tool, 0); if (a.tool2) hold(a.tool2, 1); return; }
     if (k.weapon) hold(k.weapon, 0);
     if (k.torch) hold('torch', 1, true);
+    else if (k.lamp) hold('lamp', 1);
     else if (k.armor) hold('shield', 1);
     if (k.rope) {
       const r = new THREE.Mesh(PROPS.rope(), mats.body);

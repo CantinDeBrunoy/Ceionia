@@ -715,6 +715,10 @@ button.sendBtn:disabled { background: rgba(15, 27, 45, 0.12); color: var(--ink2)
 .gearGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); gap: 8px; }
 .gear { display: flex; flex-direction: column; gap: 4px; align-items: stretch; background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
 .gear.locked { opacity: 0.55; }
+.gear.old { opacity: 0.6; }
+.oldGear { margin-top: 10px; }
+.oldGear summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--ink2); margin-bottom: 8px; }
+.oldGear summary small { font-weight: 500; }
 .gear .gi { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); }
 .gear b { font-size: 13.5px; }
 .gear .cnt { font-size: 12px; font-weight: 700; color: var(--accent-ink); margin-left: 4px; }

@@ -20,7 +20,7 @@ interface Arrow { x0: number; y0: number; z0: number; x1: number; y1: number; z1
 
 /** `fly` : sans pesanteur (traçante) ; `big` : grosse lueur (bouche du canon, explosion) */
 interface Spark { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; max: number; c: THREE.Color; dust: boolean; fly?: boolean; big?: boolean }
-interface Spear { mesh: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; stuck: number; onLand: (() => void) | null }
+interface Spear { mesh: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; stuck: number; onLand: (() => void) | null; /** tir tendu (balle, plasma) : pas d'arc, il claque à l'arrivée */ flat?: boolean; land?: number }
 
 function dotTexture() {
   const c = document.createElement('canvas');
@@ -246,7 +246,8 @@ export class CombatFx {
   }
 
   /** Une lance lancée de `from` vers `to` : elle vole en arc, se plante, puis disparaît ; `onLand` à l'arrivée */
-  throw(from: THREE.Vector3, to: THREE.Vector3, onLand: (() => void) | null = null) {
+  throw(from: THREE.Vector3, to: THREE.Vector3, onLand: (() => void) | null = null, ammo: 'spear' | 'bullet' | 'plasma' = 'spear') {
+    if (ammo !== 'spear') return this.shoot(from, to, onLand, ammo);
     const mesh = new THREE.Group();
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.3, 5).rotateX(Math.PI / 2), this.shaftMat);
     const tip = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.05, 4).rotateX(Math.PI / 2).translate(0, 0, 0.17), this.tipMat);
@@ -254,6 +255,16 @@ export class CombatFx {
     mesh.position.copy(from);
     this.group.add(mesh);
     this.spears.push({ mesh, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(0.35, from.distanceTo(to) / 3.2), stuck: 0, onLand });
+  }
+
+  /** Un tir d'arme à feu ou à plasma : un trait rapide et tendu (jaune, ou bleu pour le plasma), qui claque à l'arrivée */
+  private shoot(from: THREE.Vector3, to: THREE.Vector3, onLand: (() => void) | null, ammo: 'bullet' | 'plasma') {
+    const plasma = ammo === 'plasma', color = plasma ? 0x6ae0ff : 0xffd878;
+    const mesh = new THREE.Group();
+    mesh.add(new THREE.Mesh(new THREE.CylinderGeometry(plasma ? 0.012 : 0.006, plasma ? 0.012 : 0.006, plasma ? 0.16 : 0.09, 5).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color })));
+    mesh.position.copy(from);
+    this.group.add(mesh);
+    this.spears.push({ mesh, from: from.clone(), to: to.clone(), t: 0, dur: Math.max(0.12, from.distanceTo(to) / (plasma ? 9 : 14)), stuck: 0, onLand, flat: true, land: color });
   }
 
   update(dt: number) {
@@ -269,14 +280,18 @@ export class CombatFx {
         continue;
       }
       s.t += dt;
-      const u = Math.min(1, s.t / s.dur), arc = Math.sin(u * Math.PI) * s.from.distanceTo(s.to) * 0.25;
+      const u = Math.min(1, s.t / s.dur), arc = s.flat ? 0 : Math.sin(u * Math.PI) * s.from.distanceTo(s.to) * 0.25;
       const p = new THREE.Vector3().lerpVectors(s.from, s.to, u);
       p.y += arc;
       const ahead = new THREE.Vector3().lerpVectors(s.from, s.to, Math.min(1, u + 0.05));
-      ahead.y += Math.sin(Math.min(1, u + 0.05) * Math.PI) * s.from.distanceTo(s.to) * 0.25;
+      if (!s.flat) ahead.y += Math.sin(Math.min(1, u + 0.05) * Math.PI) * s.from.distanceTo(s.to) * 0.25;
       s.mesh.position.copy(p);
       if (u < 1) s.mesh.lookAt(ahead);
-      if (u >= 1) { s.stuck = 4; s.mesh.position.y -= 0.03; this.puff(p.x, p.y - 0.03, p.z, 5); s.onLand?.(); }
+      if (u >= 1) {
+        if (s.flat) { s.stuck = 0.08; this.hit(p.x, p.y, p.z, s.land ?? 0xffd878, 6, 'shot'); s.mesh.visible = false; }
+        else { s.stuck = 4; s.mesh.position.y -= 0.03; this.puff(p.x, p.y - 0.03, p.z, 5); }
+        s.onLand?.();
+      }
     }
     const gpos = this.glow.geometry.attributes.position as THREE.BufferAttribute, gcol = this.glow.geometry.attributes.color as THREE.BufferAttribute;
     const dpos = this.dust.geometry.attributes.position as THREE.BufferAttribute, dcol = this.dust.geometry.attributes.color as THREE.BufferAttribute;
