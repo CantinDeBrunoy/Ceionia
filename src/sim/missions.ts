@@ -1047,6 +1047,26 @@ export function effectSummary(effects: Effect[]) {
   return out.join(' · ') || 'rien';
 }
 
+const HERD_ICON: Record<HerdKind, string> = { sheep: '🐑', cow: '🐄', pig: '🐖', horse: '🐎' };
+
+/** Les effets en pastilles (« 🐑 4 », « ⛏️ +3 », « 🍞 +3 ») : une icône, un chiffre, et la phrase complète en infobulle */
+export function effectChips(effects: Effect[]): { icon: string; n: string; title: string }[] {
+  const out: { icon: string; n: string; title: string }[] = [];
+  for (const e of effects) {
+    const title = effectSummary([e]);
+    if (e.t === 'herd') {
+      const n: Partial<Record<HerdKind, number>> = {};
+      for (const k of e.kinds) n[k] = (n[k] ?? 0) + 1;
+      for (const [k, c] of Object.entries(n) as [HerdKind, number][]) out.push({ icon: HERD_ICON[k], n: `${c}`, title: `${c} ${HERD_NAME[k][c > 1 ? 1 : 0]}` });
+    } else if (e.t === 'ore') out.push({ icon: '⛏️', n: `+${e.n}`, title });
+    else if (e.t === 'need') out.push({ icon: NEED_ICON[e.need], n: `${e.n > 0 ? '+' : '−'}${Math.abs(e.n)}${e.days ? ` · ${e.days} j` : ''}`, title });
+    else if (e.t === 'perk') out.push({ icon: '⭐', n: '', title });
+    else if (e.t === 'injured') out.push({ icon: '🤕', n: `${e.n}`, title });
+    else if (e.t === 'unherd') out.push({ icon: HERD_ICON[e.kind], n: `−${e.n}`, title });
+  }
+  return out;
+}
+
 /** Une intro en deux temps : sa première phrase (ce qu'on affiche) et le reste (replié sous « En savoir plus »). Rien n'est perdu : head + rest = le texte */
 export function splitIntro(text: string): { head: string; rest: string } {
   const m = /^.*?[.!?…](?=\s|$)/s.exec(text);

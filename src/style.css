@@ -813,6 +813,28 @@ button.bgo:hover { background: #0f9270; }
 .cdet .gain { color: #0d7a5f; }
 .cdet .gain em { color: var(--bad); font-style: normal; }
 
+/* menu Expéditions, version courte : pastilles et icônes plutôt que des phrases */
+.mpills { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 6px 0 0; }
+.mpills span { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); white-space: nowrap; }
+.mpills .crisk.low { color: #0d7a5f; background: rgba(18, 163, 126, 0.12); }
+.mpills .crisk.mid { color: #a05c00; background: #fff0cf; }
+.mpills .crisk.high { color: #a8323a; background: #fbe1e4; }
+.mpills.stock { margin: 0 0 8px; }
+.chip { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: #fff; border: 1px solid #e4e1d4; color: var(--ink); white-space: nowrap; }
+.mpills .chip { background: #fff; }
+.mstory { margin: 2px 0 0; font-size: 12px; }
+.mstory summary { cursor: pointer; font-weight: 700; color: var(--accent, #2b6cd8); list-style: none; padding: 2px 0; }
+.mstory summary::-webkit-details-marker { display: none; }
+.mstory p { margin: 2px 0 4px; font-size: 12.5px; line-height: 1.4; color: var(--ink2); }
+.mstory ul { margin: 2px 0 4px; padding-left: 18px; font-size: 12.5px; }
+.cbox .ckit { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; font-weight: 700; color: #0d7a5f; }
+.cbox .ckit .kitem { display: inline-flex; align-items: center; gap: 2px; }
+.cbox .cgain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 12px; font-weight: 700; }
+.cbox .cgain > span { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.sendModal .gearNeed { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.gearNeed .gnlink { font-weight: 800; }
+.unote { cursor: help; opacity: 0.7; }
+
 .gnbar { flex: 1 0 100%; height: 5px; }
 /* expéditions obligatoires : fond chaud et bord franc pour les repérer d'un coup d'œil ; le déblocage est une pastille verte */
 .mission.must { background: linear-gradient(160deg, #fff4dc, #ffe6b0); border: 2px solid #f0b44a; box-shadow: 0 2px 10px rgba(240, 180, 74, 0.28); }

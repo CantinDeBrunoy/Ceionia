@@ -13,7 +13,7 @@ import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expedi
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { effectSummary, splitIntro, mandatoriesFor, isLegendary, isMilitary, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
+import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps, gearObsolete } from '../sim/gear';
@@ -145,6 +145,10 @@ function railTip(k: KindId) {
 const riskLabel = (r: number) => (r <= 0.12 ? 'faible' : r <= 0.22 ? 'mesuré' : r <= 0.32 ? 'élevé' : 'très élevé');
 const pct = (r: number) => `${Math.round(r * 100)} %`;
 const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
+/** Les gains en pastilles d'icônes (la phrase complète en infobulle) */
+const chipsHtml = (effects: Parameters<typeof effectChips>[0]) => effectChips(effects).map((c) => `<span class="chip" title="${c.title}">${c.icon}${c.n ? ` ${c.n}` : ''}</span>`).join('') || '<span class="chip" title="rien">∅</span>';
+/** Un danger en icône (le nom en infobulle) */
+const DANGER_ICON: Record<string, string> = { beast: '🐺', fall: '🧗', water: '🌊', dark: '🌑', weather: '⛈️', monster: '👹' };
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
 const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> = {
@@ -685,6 +689,16 @@ export class UI {
       out.push(`<button class="go" data-kind="${k}">${ic('hammer', 14, 2)} Bâtir « ${KINDS[k].names[Math.max(age, KINDS[k].minAge)]} »</button>`);
     }
     return out.join('');
+  }
+
+  /** Sur la carte d'une mission : équipe, durée et risque (de tous ses choix) en pastilles, et ce qu'elle peut rapporter en icônes */
+  private missionPills(m: Mission) {
+    const age = this.host.sim.age, cs = m.choices.map((c) => choiceAt(c, age));
+    const range = (a: number[], f: (n: number) => string) => { const lo = Math.min(...a), hi = Math.max(...a); return lo === hi ? f(lo) : `${f(lo)}–${f(hi)}`; };
+    const risks = cs.map((c) => this.host.expeditions.preview(c).risk);
+    const lvl = Math.max(...risks) <= 0.12 ? 'low' : Math.max(...risks) <= 0.22 ? 'mid' : 'high';
+    const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(c.win)).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
+    return `<div class="mpills"><span title="Habitants dans l’équipe">👥 ${range(cs.map((c) => c.party), String)}</span><span title="Durée">⏳ ${['courte', 'moyenne', 'longue'].filter((l) => cs.some((c) => workLabel(c.work) === l)).join('–')}</span><span class="crisk ${lvl}" title="Risque d’échec">⚠️ ${range(risks, (r) => `${Math.round(r * 100)}`)} %</span>${gains.map((c) => `<span class="chip" title="${c.title}">${c.icon}</span>`).join('')}</div>`;
   }
 
   /** Ouvre les expéditions sur une mission : l'onglet des missions, sa carte amenée sous les yeux et mise en avant */
@@ -1338,7 +1352,7 @@ export class UI {
 
   openExpeditions(tab: 'missions' | 'gear' | 'rail' = 'missions') {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
-    const next = max < partyLimit(1e9) ? `Une équipe de plus à ${max * 30} habitants (le village en compte ${pop}).` : 'Le village envoie autant d’équipes qu’il le peut.';
+    const next = max < partyLimit(1e9) ? `Équipe en plus à ${max * 30} habitants (vous : ${pop})` : 'Équipes au maximum';
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
     const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);
@@ -1352,6 +1366,8 @@ export class UI {
         <div class="mhead"><b class="mbadge">${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div>${done ? '<span class="okb">✓ réussie</span>' : run ? '<span class="runb">en route…</span>' : ''}</div>
         ${tags ? `<div class="mtags">${tags}</div>` : ''}
         <p class="mtext">${splitIntro(m.intro).head}</p>
+        ${splitIntro(m.intro).rest ? `<details class="mstory"><summary>Lire l’histoire</summary><p>${splitIntro(m.intro).rest}</p></details>` : ''}
+        ${this.missionPills(m)}
         ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${done ? 'A débloqué' : 'Débloque'} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} Bâtir</button>` : ''}</p>` : ''}
         ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m)}</p>` : ''}
         <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${ic('compass', 16, 2)} ${label}</button></div>`;
@@ -1438,11 +1454,13 @@ export class UI {
     const body = () => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, max = ex.slots();
       const req = m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => ex.hasFor(k, m.requires!.kinds!)).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : '';
-      const choices = run ? `<p class="hint">${ic('clock', 15, 2)} Une équipe est déjà en route pour cette mission.</p>` : `<div class="choices">${this.choiceButtons(m)}</div>`;
-      return `<p class="sintro">${m.intro}</p>
-        ${redo ? `<p class="hint">${ic('restart', 14, 2)} Déjà réussie : on en rapporte de nouveau bêtes, minerai et vivres ; ses bonus durables ne durent plus que ${REDO_DAYS} jours.</p>` : ''}
+      const choices = run ? `<p class="hint">${ic('clock', 15, 2)} Une équipe est déjà en route.</p>` : `<div class="choices">${this.choiceButtons(m)}</div>`;
+      const si = splitIntro(m.intro);
+      return `<p class="sintro">${si.head}</p>
+        ${si.rest ? `<details class="mstory"><summary>Lire l’histoire</summary><p>${si.rest}</p></details>` : ''}
+        ${redo ? `<p class="hint" title="Ses bonus durables ne durent plus que ${REDO_DAYS} jours">${ic('restart', 14, 2)} Déjà réussie : bonus de ${REDO_DAYS} jours seulement.</p>` : ''}
         ${req}
-        <p class="slots">${ic('compass', 14, 2)} Équipes en route : <b>${ex.active.length} / ${max}</b>${ex.active.length >= max ? ' — attendez le retour d’une équipe' : ''}</p>
+        <p class="slots">${ic('compass', 14, 2)} Équipes : <b>${ex.active.length} / ${max}</b>${ex.active.length >= max ? ' — attendez un retour' : ''}</p>
         ${choices}`;
     };
     const { ov, close } = modal(this.root, 'sendModal', `${m.icon} ${m.title}`, `<div class="sendBody">${body()}</div>`, () => clearInterval(iv));
@@ -1530,26 +1548,27 @@ export class UI {
       const c = choiceAt(c0, this.host.sim.age), why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c);
       const lvl = pv.risk <= 0.12 ? 'low' : pv.risk <= 0.22 ? 'mid' : 'high';
       return `<div class="cbox ${why ? 'off' : ''}">
-        <div class="chead"><b>${c.label}</b><span class="crisk ${lvl}" title="Risque d’échec">⚠️ ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''} · ${riskLabel(pv.risk)}</span></div>
+        <div class="chead"><b>${c.label}</b><span class="crisk ${lvl}" title="Risque d’échec : ${riskLabel(pv.risk)}">⚠️ ${pct(pv.risk)}${pv.risk < base - 0.005 ? ` <s>${pct(base)}</s>` : ''}</span></div>
         <p class="ctext">${c.text}</p>
-        <div class="cstats"><span>👥 ${c.party} habitant${c.party > 1 ? 's' : ''}</span><span>⏳ ${workLabel(c.work)}</span><span>${DEST_ICON[c.dest]}</span>${c.mounts ? `<span>🐎 ${c.mounts} chevaux</span>` : ''}${c.fuel ? `<span>⛽ ${c.fuel} carburant</span>` : ''}</div>
-        <small class="kit">Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')}</small>
-        ${this.securityHtml(c)}
-        <small class="kit ${pv.label ? 'ready' : ''}">${ic('kit', 13, 2)} ${pv.label ? `Prêt : on emporte ${pv.label}` : 'Aucun équipement en réserve pour ces dangers'}</small>
+        <div class="cstats"><span title="Habitants dans l’équipe">👥 ${c.party}</span><span title="Durée">⏳ ${workLabel(c.work)}</span><span>${DEST_ICON[c.dest]}</span>${c.mounts ? `<span title="Chevaux emmenés">🐎 ${c.mounts}</span>` : ''}${c.fuel ? `<span title="Carburant brûlé">⛽ ${c.fuel}</span>` : ''}<span title="Dangers : ${dangersOf(c).map((d) => DANGER_NAME[d]).join(', ')}">${dangersOf(c).map((d) => DANGER_ICON[d]).join('')}</span></div>
+        ${this.kitHtml(c, pv)}
         ${this.gearNeedHtml(c)}
-        <small class="gain">Si tout va bien : ${effectSummary(done ? redoEffects(c.win) : c.win)}${c.lose.length ? ` <em>— sinon : ${effectSummary(c.lose)}</em>` : ''}</small>
+        <div class="cgain"><span class="gwin" title="Si tout va bien">✅ ${chipsHtml(done ? redoEffects(c.win) : c.win)}</span>${c.lose.length ? `<span class="glose" title="Sinon">❌ ${chipsHtml(c.lose)}</span>` : ''}</div>
         <button class="choice depart" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">${ic('compass', 16, 2)} Partir</button>
         ${why ? `<small class="why">${why}</small>` : ''}</div>`;
     }).join('');
   }
 
-  /** Sous un choix : ce que les pompiers et la police du village retirent à son risque (rien sans eux) */
-  private securityHtml(c: Choice) {
+  /** Sous un choix : ce que l'équipe emporte, et ce que les pompiers et la police du village retirent à son risque (rien sans eux) */
+  private kitHtml(c: Choice, pv: { take: Partial<Record<GearId, number>> }) {
     const ex = this.host.expeditions, age = this.host.sim.age;
+    // ce que l'équipe emporte : icônes et quantités
+    const items = GEAR.filter((g) => (pv.take[g.id] ?? 0) > 0).map((g) => `<span class="kitem" title="${g.name}">${ic(g.icon, 14, 2)}×${pv.take[g.id]}</span>`).join('');
+    // pompiers et police : −x % de risque en tout, le détail en infobulle
     const cuts = securityCuts(dangersOf(c), (k) => ex.has(k));
-    if (!cuts.length) return '';
-    const capped = cuts.reduce((p, s) => p * (1 - s.cut), 1) < 1 - SECURITY_MAX;
-    return `<small class="kit ready">${ic('shield', 13, 2)} Veillent sur l’équipe : ${cuts.map((s) => `${KINDS[s.kind].names[Math.max(age, KINDS[s.kind].minAge)].toLowerCase()} −${Math.round(s.cut * 100)} %`).join(', ')}${capped ? ` (−${Math.round(SECURITY_MAX * 100)} % au plus)` : ''}</small>`;
+    const total = Math.round((1 - Math.max(1 - SECURITY_MAX, cuts.reduce((p, s) => p * (1 - s.cut), 1))) * 100);
+    const guard = cuts.length ? `<span class="kitem" title="Veillent sur l’équipe : ${cuts.map((s) => `${KINDS[s.kind].names[Math.max(age, KINDS[s.kind].minAge)].toLowerCase()} −${Math.round(s.cut * 100)} %`).join(', ')}">${ic('shield', 14, 2)}−${total} %</span>` : '';
+    return items || guard ? `<div class="ckit" title="Emporté, depuis la réserve">${ic('kit', 14, 2)}${items}${guard}</div>` : '';
   }
 
   /**
@@ -1563,14 +1582,14 @@ export class UI {
     const rows = gaps.map((g) => {
       const price = gearCostLabel(gearCost(g.gear, h.world.difficulty)), left = g.need - g.have - g.queued, why = ex.whyCraft(g.gear, age);
       const state = `${g.have} en réserve${g.queued ? `, ${g.queued} en fabrication` : ''}`;
-      const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" data-left="${left}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)} Fabriquer${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq">${ic('clock', 13, 2)} en fabrication</span>`;
+      const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" data-left="${left}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.gear.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 14, 2)}${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq" title="En fabrication">${ic('clock', 13, 2)}</span>`;
       const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
-      return `<div class="gnrow" title="${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <button type="button" class="gnlink" data-geargo="${g.gear.id}" title="Voir dans l’onglet Équipement">${left > 0 ? left : g.need} × ${(g.need > 1 ? g.gear.plural : g.gear.name).toLowerCase()}</button> ${left > 0 ? '<em>à fabriquer</em>' : ''}${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
+      return `<div class="gnrow" title="À fabriquer pour partir bien équipé : ${state} · ${g.dangers.map((d) => DANGER_NAME[d]).join(', ')}"><span>${ic(g.gear.icon, 15, 2)} <button type="button" class="gnlink" data-geargo="${g.gear.id}" title="${(g.need > 1 ? g.gear.plural : g.gear.name)} : voir dans l’onglet Équipement">×${left > 0 ? left : g.need}</button>${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
     }).join('');
-    // « Tout fabriquer » : toutes les pièces qui manquent, d'un seul clic
-    const todo = gaps.some((g) => g.need - g.have - g.queued > 0);
-    const all = todo ? `<button type="button" class="mkAll" data-mkall="1" title="Met en fabrication tout l’équipement qui manque">${ic('hammer', 14, 2)} Tout fabriquer</button>` : '';
-    return `<div class="gearNeed"><small class="gnh">${ic('hammer', 13, 2)} Équipement nécessaire${all}</small>${rows}</div>`;
+    // « Tout fabriquer » : toutes les pièces qui manquent, d'un seul clic (utile dès qu'il y en a plusieurs)
+    const todo = gaps.filter((g) => g.need - g.have - g.queued > 0).length;
+    const all = todo > 1 ? `<button type="button" class="mkAll" data-mkall="1" title="Met en fabrication tout l’équipement qui manque">${ic('hammer', 14, 2)} Tout</button>` : '';
+    return `<div class="gearNeed" title="Équipement à fabriquer">${all}${rows}</div>`;
   }
 
   /** Chemin de fer : chaque ligne, où en est son train et ses voyageurs */
@@ -1601,21 +1620,22 @@ export class UI {
     const troops = troopGearNeeded(age), shown = (g: Gear) => !gearObsolete(g, age) || troops.has(g.id);
     const card = (g: Gear) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
-        return `<div class="gear ${locked ? 'locked' : !shown(g) ? 'old' : ''}" data-gear="${g.id}">
-          <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt">${n} en réserve${st.craft.includes(g.id) ? ` · ${st.craft.filter((x) => x === g.id).length} en fabrication` : ''}${out ? ` · ${out} en route` : ''}</span></div></div>
-          <small class="gdesc">${g.desc}</small>
-          <small class="gd">${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} : −${Math.round(g.cut * 100)} % de risque · ${per(g)}</small>
-          ${gearObsolete(g, age) && troops.has(g.id) ? '<small class="gd">Les troupes de la caserne s’en servent : à fabriquer pour recruter.</small>' : ''}
+        const vs = g.guards ? `${DANGER_ICON[g.guards]}${g.also ? DANGER_ICON[g.also] : ''}` : '🛡️';
+        return `<div class="gear ${locked ? 'locked' : !shown(g) ? 'old' : ''}" data-gear="${g.id}" title="${g.desc}">
+          <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt" title="En réserve${st.craft.includes(g.id) ? ', en fabrication' : ''}${out ? ', en route' : ''}">${n}${st.craft.includes(g.id) ? ` · ⏳${st.craft.filter((x) => x === g.id).length}` : ''}${out ? ` · 🧭${out}` : ''}</span></div></div>
+          <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} · ${per(g)}">${vs} −${Math.round(g.cut * 100)} % de risque</small>
+          ${gearObsolete(g, age) && troops.has(g.id) ? '<small class="gd">Pour recruter à la caserne.</small>' : ''}
           ${why ? `<small class="why">${why}</small>` : ''}
           <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 16, 2)} ${price || 'Fabriquer'}</button>
           ${st.craft[0] === g.id ? `<div class="bar gnbar cbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}
         </div>`;
     };
     el.innerHTML = `
-      <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Réserve : <b>${Math.floor(h.world.wood)}</b> bois, <b>${Math.floor(h.world.stone)}</b> pierre, <b>${Math.floor(ex.ore)}</b> minerai${age >= 4 ? `, <b>${Math.floor(h.world.fuel)}</b> carburant` : ''}.</p>
+      <p class="hint" title="Elle le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier.">Chaque équipe emporte le meilleur équipement en réserve.</p>
+      <div class="mpills stock"><span title="Bois">🪵 ${Math.floor(h.world.wood)}</span><span title="Pierre">🪨 ${Math.floor(h.world.stone)}</span><span title="Minerai">⛏️ ${Math.floor(ex.ore)}</span>${age >= 4 ? `<span title="Carburant">⛽ ${Math.floor(h.world.fuel)}</span>` : ''}</div>
       <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => shown(g) && !ex.whyCraft(g, age)) ? '' : 'disabled'} title="Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent">${ic('hammer', 16, 2)} Tout fabriquer</button></div>
       <div class="gearGrid">${GEAR.filter(shown).map(card).join('')}</div>
-      ${GEAR.some((g) => !shown(g)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary>Anciennes armes et outils <small>(dépassés à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore)</small></summary><div class="gearGrid">${GEAR.filter((g) => !shown(g)).map(card).join('')}</div></details>` : ''}
+      ${GEAR.some((g) => !shown(g)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary title="Dépassées à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore">Anciennes armes et outils</summary><div class="gearGrid">${GEAR.filter((g) => !shown(g)).map(card).join('')}</div></details>` : ''}
       <h4>Fabrication</h4>
       <div class="queue">${st.craft.length ? st.craft.map((id, i) => `<span class="qi">${ic(GEAR_BY[id].icon, 16, 2)} ${GEAR_BY[id].name}${i === 0 ? `<i class="bar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></i>` : ''}<button data-cancel="${i}" title="Annuler" aria-label="Annuler">${ic('close', 14, 2)}</button></span>`).join('') : '<small>Rien en cours.</small>'}</div>`;
     el.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => (b.onclick = () => {
@@ -1689,8 +1709,7 @@ export class UI {
       if (o.risk < 0.98) hints.push(o.risk <= 0.7 ? 'bien plus sûr' : 'plus sûr');
       else if (o.risk > 1.02) hints.push(o.risk >= 1.25 ? 'bien plus risqué' : 'plus risqué');
       if (o.work) hints.push(o.work > 0 ? 'plus long' : 'plus rapide');
-      if (o.bonus) hints.push(`si tout va bien : ${effectSummary(o.bonus)}`);
-      return `<button class="choice opt" data-o="${i}" ${ok ? '' : 'disabled'}><b>${o.label}</b><small>${hints.join(' · ') || 'sans effet particulier'}</small></button>`;
+      return `<button class="choice opt" data-o="${i}" ${ok ? '' : 'disabled'}><b>${o.label}</b><small>${hints.join(' · ')}${o.bonus ? `${hints.length ? ' · ' : ''}✅ ${chipsHtml(o.bonus)}` : ''}</small></button>`;
     }).join('');
     // le jeu s'arrête le temps de la décision ; il reprend à la fermeture s'il tournait
     if (this.pausedFor === null) { this.pausedFor = h.time.paused; h.time.paused = true; }
@@ -1699,7 +1718,7 @@ export class UI {
       <p class="story">${ev.text}</p>
       <button class="look">${ic('eye', 16, 2)} Voir l’équipe</button>
       ${opts}
-      <p class="hint">Risque d’échec de l’expédition pour l’instant : ${pct(ex.chance(a))}. Le jeu reste en pause : l’équipe attend votre choix pour continuer.</p>`, () => {
+      <p class="hint" title="Le jeu reste en pause : l’équipe attend votre choix pour continuer.">⚠️ Risque d’échec : ${pct(ex.chance(a))} · ⏸ jeu en pause</p>`, () => {
       clearInterval(iv);
       if (this.root.querySelector('.decide')) return;
       if (this.pausedFor === false) h.time.paused = false;
@@ -1725,12 +1744,15 @@ export class UI {
     const { ov, close } = modal(this.root, `report ${r.ok ? 'win' : 'lose'}`, `${r.m.icon} ${r.m.title}`, `
       <h2>${r.ok ? 'Réussite !' : 'Échec…'}</h2>
       <p class="story"></p>
-      ${r.notes.length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}
-      <p class="sum">${r.summary === 'rien' ? 'Rien de gagné, rien de perdu.' : r.summary}</p>
-      ${r.ok && r.m.unlocks && !r.redo ? `<p class="unlock">${ic(KIND_ICON[r.m.unlocks], 18, 2)} Nouveau : vous pouvez bâtir <b>${KINDS[r.m.unlocks].names[this.host.sim.age].toLowerCase()}</b> (rayon ${BUILD_CATS.find((c) => c.id === KINDS[r.m.unlocks!].cat)!.label}).${UNLOCK_NOTE[r.m.unlocks] ?? ''}</p>` : ''}
-      ${r.ok && r.m.mandatory && !r.redo && r.m.age === this.host.sim.age ? '<p class="hint">Expédition obligatoire réussie : l’âge suivant se rapproche.</p>' : !r.ok && r.m.mandatory && !r.redo ? '<p class="hint">On pourra retenter l’expédition, avec le même choix ou un autre.</p>' : ''}
+      <p class="sum">${r.summary === 'rien' ? 'Rien gagné, rien perdu.' : r.summary}</p>
+      ${r.notes.length ? `<details class="mstory"><summary>Le détail</summary><ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join('')}</ul></details>` : ''}
+      ${r.ok && r.m.unlocks && !r.redo ? `<p class="unlock">${ic(KIND_ICON[r.m.unlocks], 18, 2)} Nouveau : <b>${KINDS[r.m.unlocks].names[this.host.sim.age].toLowerCase()}</b> à bâtir${UNLOCK_NOTE[r.m.unlocks] ? `<span class="unote" title="Rayon ${BUILD_CATS.find((c) => c.id === KINDS[r.m.unlocks!].cat)!.label}.${UNLOCK_NOTE[r.m.unlocks]}"> ⓘ</span>` : ''}</p>` : ''}
+      ${r.ok && r.m.mandatory && !r.redo && r.m.age === this.host.sim.age ? '<p class="hint">Obligatoire réussie : l’âge suivant approche.</p>' : !r.ok && r.m.mandatory && !r.redo ? '<p class="hint">On peut retenter, avec le même choix ou un autre.</p>' : ''}
       <div class="row"><span class="grow"></span>${build ? `<button class="build bgo">${ic(KIND_ICON[build], 16, 2)} Bâtir ${KINDS[build].names[this.host.sim.age].toLowerCase()}</button>` : ''}<button class="active ok">Fermer</button></div>`);
-    $('.story', ov).textContent = `« ${r.c.label} » : ${r.text}`;
+    // une ou deux phrases ; le reste du récit est sous « Lire la suite »
+    const rt = splitIntro(r.text), rt2 = splitIntro(rt.rest);
+    $('.story', ov).textContent = `« ${r.c.label} » : ${rt.head}${rt2.head ? ` ${rt2.head}` : ''}`;
+    if (rt2.rest) $('.story', ov).insertAdjacentHTML('afterend', `<details class="mstory"><summary>Lire la suite</summary><p>${rt2.rest}</p></details>`);
     $('.ok', ov).onclick = close;
     // le bâtiment que l'expédition vient de débloquer : on le prend en main d'un clic
     ov.querySelector<HTMLButtonElement>('.build')?.addEventListener('click', () => { close(); this.host.audio.sfxClick(); this.pick(build!); });
