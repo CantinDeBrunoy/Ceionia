@@ -7205,60 +7205,276 @@ function lighthouse(p: Parts, age: number) {
 }
 
 /**
- * Chantier naval (3 × 3) : sur sa cale, la coque en construction, ses membrures, son échafaudage et ses planches. Au Moyen
- * Âge, charpentiers, grue à poulie et hangar de bois ; à l'âge industriel, coque de tôle, grue qui fume, hangar de brique ;
- * à l'époque moderne, cale sèche de béton, portique jaune et coque bleue ; au futur, coque blanche aux liserés lumineux
+ * Chantier naval (3 × 3) : une cale en pente vers l'eau (au bord +z) où se construit un navire, coque à demi planchée sur ses
+ * couples, entourée d'échafaudages et d'échelles ; grue et palan, tas de troncs et de planches, scie de long, tonneaux de poix,
+ * forge, hangar à voiles, cordages, lanternes, fanions, fumées et étincelles. Moyen Âge : charpente de bois, grue à écureuil,
+ * hangar de planches ; industriel : coque de tôle rivetée, grue à vapeur, atelier de brique et haute cheminée, rails ;
+ * moderne : cale sèche de béton, portique jaune, blocs de coque en acier, projecteurs, soudure ; futur : dock blanc aux
+ * liserés lumineux, coque profilée, bras robotisés, hologramme du navire, dôme de verre
  */
 function shipyard(p: Parts, age: number) {
-  const fut = age >= 5, X = -0.55;
-  p.box(2.9, 0.012, 2.9, 0, 0, 0, age <= 2 ? C.dirt : 0xb8b4ac);
-  // la cale : deux rails de bois ou de fer où glisse la coque ; en cale sèche (époque moderne), un bassin de béton
-  if (age >= 4) { p.box(1.0, 0.03, 2.5, X, 0.012, 0, 0x8a8f96); p.box(0.8, 0.012, 2.3, X, 0.042, 0, 0x4f6a86); }
-  else for (const s of [-1, 1]) { p.box(0.08, 0.04, 2.4, X + s * 0.28, 0.012, 0.05, age <= 2 ? C.darkwood : C.metal); for (let i = 0; i < 12; i++) p.box(0.7, 0.02, 0.05, X, 0.012, -1.1 + i * 0.2, age <= 2 ? C.wood : 0x6a6e76); }
-  // la coque : quille, étrave, étambot, membrures, premiers rangs du bordé
-  const hull = fut ? 0xf2f6fa : age === 4 ? 0x23305a : age === 3 ? 0x3a3f48 : C.wood, ribs = age <= 2 ? C.darkwood : C.metal;
-  const y0 = age >= 4 ? 0.1 : 0.16, L = age <= 2 ? 1.5 : 1.9;
-  p.box(0.06, 0.06, L, X, y0, 0, ribs);
-  p.add(new THREE.BoxGeometry(0.05, 0.4, 0.06), X, y0 + 0.2, L / 2 + 0.04, ribs, 0, false, 0, -0.5);
-  p.add(new THREE.BoxGeometry(0.05, 0.3, 0.06), X, y0 + 0.14, -L / 2 - 0.04, ribs, 0, false, 0, 0.35);
-  const m = age <= 2 ? 10 : 12;
-  for (let i = 0; i < m; i++) {
-    const z = -L / 2 + 0.15 + (i * (L - 0.3)) / (m - 1), w = 0.2 - Math.abs(z / (L / 2)) * 0.1;
-    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.025, 0.3, 0.03), X + s * w * 0.6, y0 + 0.18, z, ribs, 0, false, s * 0.55);
-  }
-  for (let r = 0; r < (age <= 2 ? 2 : 3); r++) for (const s of [-1, 1])
-    p.add(new THREE.BoxGeometry(0.02, 0.07, L * (0.78 - r * 0.12)), X + s * (0.13 + r * 0.035), y0 + 0.08 + r * 0.075, 0, dark(hull, 1 - r * 0.05), 0, false, s * 0.55);
-  if (fut) for (const s of [-1, 1]) p.box(0.012, 0.012, L * 0.7, X + s * 0.21, y0 + 0.3, 0, 0x6ae4ff, 0, 'neon');
-  // l'échafaudage le long de la coque : montants, plateaux, lisses
-  for (const z of [-0.6, 0, 0.6]) for (const s of [-1, 1]) p.cyl(0.012, 0.012, 0.5, 4, X + s * 0.42, 0.012, z, age <= 2 ? C.darkwood : C.metal);
-  for (const s of [-1, 1]) { p.box(0.1, 0.014, 1.4, X + s * 0.42, 0.3, 0, age <= 2 ? C.wood : 0xa8aeb6); p.box(0.01, 0.012, 1.4, X + s * 0.47, 0.38, 0, C.darkwood); }
-  // le hangar : planches (puis brique, tôle, verre), grande porte, fenêtres allumées
-  const hx = 0.85, hz = -0.75, wall = age <= 2 ? 0x8a6a48 : age === 3 ? C.darkbrick : age === 4 ? 0xcfd4da : 0xe8eef4;
-  p.box(1.0, 0.5, 0.8, hx, 0.012, hz, wall);
-  p.gable(1.1, 0.24, 0.9, hx, 0.512, hz, age <= 2 ? C.thatch : age === 3 ? 0x6f7c96 : age === 4 ? 0x8a96a2 : 0xbfe0ee, Math.PI / 2);
-  p.box(0.4, 0.34, 0.02, hx, 0.012, hz + 0.41, 0x2a2420);
-  for (const s of [-1, 1]) p.box(0.17, 0.34, 0.02, hx + s * 0.2, 0.012, hz + 0.42, dark(wall, 0.85));
-  for (const x of [-0.3, 0.3]) p.box(0.1, 0.07, 0.02, hx + x, 0.32, hz + 0.41, C.win, 0, true);
-  if (age === 3) { p.cyl(0.04, 0.045, 0.34, 8, hx + 0.3, 0.5, hz - 0.2, 0x3a3f48); smoke(hx + 0.3, 0.86, hz - 0.2, 0); }
-  // la grue : mât et flèche (poulie de bois, grue à vapeur), ou portique à cheval sur la cale ; pièce suspendue
-  if (age <= 3) {
-    const cx = 0.2, cz = 0.5;
-    p.cyl(0.03, 0.04, 0.8, 6, cx, 0.012, cz, age <= 2 ? C.darkwood : 0x3a3f48);
-    p.add(new THREE.BoxGeometry(0.04, 0.04, 0.8), cx, 0.82, cz - 0.15, age <= 2 ? C.wood : 0xb8322c, 0, false, 0, 0.3);
-    p.cyl(0.003, 0.003, 0.4, 3, cx, 0.4, cz - 0.5, 0x3a3030); p.box(0.1, 0.1, 0.1, cx, 0.3, cz - 0.5, C.wood);
+  const fut = age >= 5, old = age <= 2, ind = age === 3, dry = age >= 4;
+  const X = -0.5, Z0 = -1.15, Z1 = 1.2, ZC = 0.02;
+  const wood = old ? C.wood : 0xa8aeb6, dwood = old ? C.darkwood : C.metal;
+  // le sol : terre battue, puis dalle ; l'eau au bout de la cale (bord +z)
+  p.box(2.9, 0.012, 2.9, 0, 0, 0, old ? C.dirt : ind ? 0xa8a49c : fut ? 0xdfe6ec : 0xb8b4ac);
+  p.box(2.9, 0.012, 0.4, 0, 0.012, 1.25, fut ? 0x7fe0f0 : C.water);
+  if (old) for (const [x, z, w] of [[0.1, 0.1, 0.5], [-1.1, 0.6, 0.35], [0.5, 0.95, 0.4], [-0.9, -0.9, 0.3]]) p.box(w, 0.006, 0.28, x, 0.012, z, 0xb89868);
+  // la cale : en pente (haut côté terre, bas côté eau) ; en époque moderne, une cale sèche horizontale
+  const drop = dry ? 0 : 0.17, ang = dry ? 0 : Math.atan2(drop, Z1 - Z0);
+  const slip = (z: number) => (dry ? 0.05 : 0.04 + drop * (1 - (z - Z0) / (Z1 - Z0)));
+  // pièce posée sur la cale, inclinée comme elle : w × h × d, centrée en (x, z), à hy au-dessus du plan de la cale
+  const pb = (w: number, h: number, d: number, x: number, z: number, hy: number, c: number, rz = 0, glow = false) =>
+    p.add(new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0), x, slip(z) + hy, z, c, 0, glow, rz, ang);
+  if (dry) {
+    // bassin de béton : fond, murs, bajoyers, marches, eau basse à la porte
+    p.box(1.1, 0.04, 2.5, X, 0.012, 0.0, fut ? 0xdde8f0 : 0x8a8f96);
+    for (const s of [-1, 1]) { p.box(0.1, 0.12, 2.5, X + s * 0.6, 0.012, 0, fut ? 0xf2f6fa : 0xa8aeb6); p.box(0.1, 0.012, 2.5, X + s * 0.6, 0.132, 0, fut ? 0x6ae4ff : 0xf2c23a, 0, fut ? 'neon' : false); }
+    p.box(1.1, 0.024, 0.34, X, 0.052, 1.0, fut ? 0x7fe0f0 : 0x4f6a86);
+    p.box(1.1, 0.1, 0.05, X, 0.012, 1.16, fut ? 0xdde8f0 : 0x6a707a);
+    for (let i = 0; i < 7; i++) p.box(0.5, 0.012, 0.1, X, 0.052, -1.15 + i * 0.32, 0x9a9fa6);
   } else {
-    const gold = fut ? 0xdde8f0 : 0xf2c23a;
-    for (const s of [-1, 1]) p.box(0.06, 1.0, 0.06, X + s * 0.58, 0.012, 0.2, gold);
-    p.box(1.2, 0.06, 0.08, X, 1.0, 0.2, gold);
-    p.cyl(0.003, 0.003, 0.35, 3, X, 0.62, 0.2, 0x3a3030); p.box(0.14, 0.1, 0.1, X, 0.52, 0.2, fut ? 0x6ae4ff : 0xd84a3e, 0, fut ? 'neon' : false);
+    // les ber : deux glissières de bois (ou de fer) sur des traverses graissées, à plat sur la pente
+    for (let i = 0; i < 14; i++) pb(0.86, 0.018, 0.07, X, Z0 + 0.06 + i * 0.17, -0.012, dwood);
+    for (const s of [-1, 1]) pb(0.07, 0.03, 2.4, X + s * 0.33, (Z0 + Z1) / 2, 0.0, ind ? 0x5d6168 : C.darkwood);
+    for (const s of [-1, 1]) pb(0.02, 0.012, 2.4, X + s * 0.33, (Z0 + Z1) / 2, 0.03, 0x3a2e24);
   }
-  // planches empilées, tonneaux de poix, cordage, enclume
-  for (let i = 0; i < 4; i++) p.box(0.5, 0.025, 0.12, 0.55, 0.012 + i * 0.026, 1.05, age <= 2 ? C.wood : 0xa8aeb6);
-  for (const [x, z] of [[1.1, 0.4], [1.2, 0.55]]) p.cyl(0.06, 0.06, 0.1, 8, x, 0.012, z, 0x3a2a1c);
-  p.cyl(0.07, 0.07, 0.04, 8, 1.1, 0.012, 1.1, 0xb48a68);
-  p.box(0.1, 0.06, 0.06, 0.9, 0.012, 0.25, 0x3a3f48);
-  // les ouvriers
-  for (const [x, z, c] of [[-0.1, 0.4, 0x6a8ac8], [-1.05, -0.3, 0xc8a04a], [1.0, 0.2, 0x8a6a48]] as [number, number, number][]) figure(p, x, z, c, 1.2);
+  // les tins : blocs sous la quille
+  for (let i = 0; i < 7; i++) pb(0.14, 0.05, 0.1, X, -0.85 + i * 0.28, 0.0, dwood);
+  // la coque : quille, étrave, étambot, couples (membrures), carlingue, bordé à demi posé, ponts
+  const hull = fut ? 0xf2f6fa : age === 4 ? 0x23305a : ind ? 0x3a3f48 : 0x9a6a44, ribs = old ? C.darkwood : ind ? 0x4a4f58 : fut ? 0xc4ccd6 : 0x6a707a;
+  const L = old ? 1.7 : 2.0, hy0 = 0.07, H = old ? 0.32 : 0.36, m = old ? 11 : 13;
+  const zb = ZC + L / 2, zs = ZC - L / 2;
+  const half = (z: number) => { const t = Math.abs((z - ZC) / (L / 2)); return 0.2 * (1 - Math.pow(t, 2.6) * 0.65); };
+  pb(0.06, 0.05, L, X, ZC, hy0, ribs);
+  p.add(new THREE.BoxGeometry(0.05, 0.42, 0.06).translate(0, 0.21, 0), X, slip(zb) + hy0 + 0.02, zb + 0.07, ribs, 0, false, 0, ang - 0.5);
+  p.add(new THREE.BoxGeometry(0.05, 0.34, 0.06).translate(0, 0.17, 0), X, slip(zs) + hy0 + 0.02, zs - 0.05, ribs, 0, false, 0, ang + 0.3);
+  pb(0.03, 0.04, L * 0.8, X, ZC, hy0 + 0.05, ribs);
+  for (let i = 0; i < m; i++) {
+    const z = zs + 0.12 + (i * (L - 0.24)) / (m - 1), w = half(z);
+    pb(w * 1.5, 0.02, 0.03, X, z, hy0 + 0.04, ribs);
+    for (const s of [-1, 1]) pb(0.024, H * (0.8 + 0.2 * (w / 0.2)), 0.03, X + s * w * 0.42, z, hy0 + 0.04, ribs, s * 0.6);
+    if (i % 3 === 1) pb(w * 1.6, 0.016, 0.026, X, z, hy0 + H * 0.75, ribs);
+  }
+  // le bordé : tribord (côté +x) bien avancé, bâbord seulement à l'arrière ; par tronçons qui suivent la forme de la coque
+  const seg = 7;
+  for (let k = 0; k < seg; k++) {
+    const za = zs + 0.05 + (k * (L - 0.1)) / seg, zb2 = zs + 0.05 + ((k + 1) * (L - 0.1)) / seg, zm = (za + zb2) / 2, w = half(zm), len = (zb2 - za) * 1.02;
+    for (const s of [-1, 1]) {
+      const rows = s > 0 ? (k < seg - 1 ? (age >= 3 ? 5 : 4) : 2) : k < 3 ? 2 : 0;
+      for (let r = 0; r < rows; r++) {
+        const y = hy0 + 0.05 + r * 0.055, c = fut ? (r % 2 ? 0xe6edf3 : hull) : age === 4 ? (r < 1 ? 0xb0392e : r % 2 ? hull : dark(hull, 1.18)) : old ? (r % 2 ? hull : dark(hull, 0.9)) : (r % 2 ? hull : dark(hull, 1.12));
+        pb(0.016, 0.052, len, X + s * (w * (0.5 + r * 0.06) + 0.012), zm, y, c, s * 0.6);
+      }
+    }
+  }
+  // les rivets de la coque de tôle (industriel et suivants) : une rangée de petits points sur chaque virure du tribord
+  if (!old) for (let k = 0; k < seg - 1; k++) for (let r = 0; r < 4; r++) for (let j = 0; j < 3; j++) {
+    const z = zs + 0.1 + (k * (L - 0.1)) / seg + j * 0.09, w = half(z), y = hy0 + 0.075 + r * 0.055;
+    pb(0.012, 0.012, 0.012, X + w * (0.5 + r * 0.06) + 0.025, z, y, fut ? 0xc4ccd6 : 0x23272e);
+  }
+  // le pont : barrots, dunette à l'arrière avec sa rambarde, mât en cours de dressage ou bloc de passerelle
+  for (let i = 0; i < 4; i++) pb(0.3, 0.014, 0.03, X, zs + 0.3 + i * 0.28, hy0 + H * 0.78, wood);
+  pb(0.3, 0.012, 0.3, X, zs + 0.2, hy0 + H * 0.78 + 0.07, wood);
+  for (const s of [-1, 1]) for (const dz of [0.06, 0.34]) pb(0.014, 0.07, 0.014, X + s * 0.15, zs + dz, hy0 + H * 0.78 + 0.07, ribs);
+  if (old) {
+    p.cyl(0.011, 0.014, 0.62, 6, X, slip(ZC + 0.2) + hy0 + 0.1, ZC + 0.2, 0x6a4a30);
+    p.add(new THREE.BoxGeometry(0.38, 0.012, 0.012), X, slip(ZC + 0.2) + hy0 + 0.55, ZC + 0.2, 0x6a4a30);
+  } else {
+    pb(0.2, 0.1, 0.18, X, zs + 0.45, hy0 + H * 0.78, fut ? 0xf2f6fa : age === 4 ? 0xece8de : 0x6a707a);
+    pb(0.205, 0.015, 0.185, X, zs + 0.45, hy0 + H * 0.78 + 0.1, fut ? 0x6ae4ff : 0xd84a3e, 0, false);
+    if (!fut) pb(0.07, 0.2, 0.07, X, zs + 0.7, hy0 + H * 0.78, 0x2a2a2e);
+  }
+  if (fut) for (const s of [-1, 1]) pb(0.012, 0.012, L * 0.62, X + s * 0.14, ZC + 0.05, hy0 + 0.27, 0x6ae4ff, 0, true);
+  // l'échafaudage le long de la coque : montants, plateaux à deux hauteurs, lisses, croix de Saint-André, échelles
+  const sx = 0.43;
+  for (const z of [-0.65, -0.1, 0.45, 0.95]) for (const s of [-1, 1]) {
+    p.cyl(0.011, 0.012, 0.55, 5, X + s * sx, slip(z) - 0.01, z, dwood);
+    p.add(new THREE.BoxGeometry(0.012, 0.012, 0.28), X + s * (sx - 0.01), slip(z) + 0.3, z + 0.14, dwood, 0, false, 0, -0.5 * 0);
+  }
+  for (const s of [-1, 1]) for (const [lvl, z0, z1] of [[0.2, -0.65, 0.95], [0.38, -0.1, 0.95]] as [number, number, number][]) {
+    const zm = (z0 + z1) / 2;
+    p.add(new THREE.BoxGeometry(0.13, 0.014, z1 - z0).translate(0, 0, 0), X + s * (sx - 0.05), slip(zm) + lvl, zm, wood, 0, false, 0, ang);
+    p.add(new THREE.BoxGeometry(0.008, 0.07, z1 - z0).translate(0, 0.035, 0), X + s * (sx + 0.01), slip(zm) + lvl, zm, dwood, 0, false, 0, ang);
+  }
+  for (const s of [-1, 1]) for (const [za, zb3] of [[-0.65, -0.1], [-0.1, 0.45], [0.45, 0.95]] as [number, number][]) {
+    const dz = zb3 - za, zm = (za + zb3) / 2, a = Math.atan2(0.4, dz);
+    p.add(new THREE.BoxGeometry(0.01, 0.01, Math.hypot(dz, 0.4)), X + s * sx, slip(zm) + 0.28, zm, dwood, 0, false, 0, a);
+  }
+  const ladder = (x: number, z: number, h: number, lean: number) => {
+    for (const d of [-0.025, 0.025]) p.add(new THREE.BoxGeometry(0.01, h, 0.01).translate(0, h / 2, 0), x + d, slip(z), z, dwood, 0, false, 0, lean);
+    for (let i = 1; i < Math.floor(h / 0.06); i++) p.add(new THREE.BoxGeometry(0.06, 0.007, 0.008), x, slip(z) + i * 0.06 * Math.cos(lean), z - i * 0.06 * Math.sin(lean), dwood);
+  };
+  ladder(X - 0.52, 0.15, 0.42, -0.25); ladder(X + 0.52, 0.65, 0.36, -0.25); ladder(X + 0.52, -0.45, 0.4, -0.25);
+  // la grue et son palan
+  const cx = 0.28, cz = 0.62;
+  if (old) {
+    // grue à écureuil : bâti en A, grand tambour à marcher, flèche pivotante, palan et pièce de bordé suspendue
+    for (const s of [-1, 1]) { p.add(new THREE.BoxGeometry(0.035, 0.84, 0.035).translate(0, 0.42, 0), cx + s * 0.12, 0.012, cz, C.darkwood, 0, false, s * 0.12); p.add(new THREE.BoxGeometry(0.03, 0.03, 0.34), cx + s * 0.1, 0.05, cz, C.darkwood); }
+    p.box(0.3, 0.03, 0.04, cx, 0.74, cz, C.darkwood);
+    p.add(new THREE.BoxGeometry(0.03, 0.03, 0.9), cx, 0.84, cz - 0.3, C.wood, 0, false, 0, 0.32);
+    p.add(new THREE.BoxGeometry(0.02, 0.5, 0.02), cx, 0.72, cz - 0.04, C.wood, 0, false, 0, -0.55);
+    const wh = turning([cx + 0.24, 0.3, cz + 0.2], [1, 0, 0], -0.16);
+    wh.add(new THREE.TorusGeometry(0.26, 0.02, 4, 18).rotateY(Math.PI / 2), 0, 0, 0, C.wood);
+    for (let i = 0; i < 5; i++) wh.add(new THREE.BoxGeometry(0.014, 0.52, 0.014), 0, 0, 0, C.darkwood, 0, false, (i * Math.PI) / 5, 0);
+    wh.cyl(0.03, 0.03, 0.34, 6, -0.06, 0, 0, C.darkwood);
+    const load = swing([cx, 0.84 + 0.2, cz - 0.62], [1, 0, 0], 0.07, 0.3);
+    load.cyl(0.003, 0.003, 0.34, 3, 0, -0.34, 0, 0x3a3030);
+    load.box(0.05, 0.05, 0.05, 0, -0.39, 0, C.darkwood);
+    load.box(0.22, 0.03, 0.06, 0, -0.45, 0, C.wood);
+    load.box(0.03, 0.025, 0.07, 0.06, -0.42, 0, 0x9a6a44);
+  } else if (ind) {
+    // grue à vapeur : châssis rouge sur rails, chaudière noire et cheminée qui fume, flèche treillis, crochet
+    for (const z of [cz - 0.1, cz + 0.12]) p.box(0.34, 0.012, 0.012, cx, 0.012, z, 0x4a4f58);
+    for (const [dx, dz] of [[-0.1, -0.1], [0.1, -0.1], [-0.1, 0.12], [0.1, 0.12]]) p.cyl(0.025, 0.025, 0.02, 8, cx + dx, 0.012, cz + dz, 0x3a3f48);
+    p.box(0.28, 0.1, 0.34, cx, 0.03, cz, 0xb8322c);
+    p.cyl(0.07, 0.07, 0.2, 10, cx + 0.04, 0.13, cz + 0.06, 0x2a2a2e);
+    p.cyl(0.026, 0.03, 0.26, 8, cx + 0.04, 0.33, cz + 0.06, 0x2a2a2e);
+    p.cyl(0.032, 0.026, 0.02, 8, cx + 0.04, 0.59, cz + 0.06, 0x8a2a24);
+    smoke(cx + 0.04, 0.62, cz + 0.06, 2);
+    p.box(0.18, 0.2, 0.16, cx - 0.04, 0.13, cz - 0.1, 0xb8322c);
+    p.box(0.06, 0.06, 0.012, cx - 0.04, 0.21, cz - 0.185, C.win, 0, true);
+    for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.02, 0.02, 1.0), cx + s * 0.05, 0.62, cz - 0.28, 0xb8322c, 0, false, 0, 0.45);
+    p.add(new THREE.BoxGeometry(0.11, 0.012, 0.012), cx, 0.55, cz - 0.32, 0x8a2a24);
+    const hook = swing([cx, 0.76, cz - 0.62], [1, 0, 0], 0.05, 0.3);
+    hook.cyl(0.003, 0.003, 0.36, 3, 0, -0.36, 0, 0x2a2a2e);
+    hook.box(0.04, 0.06, 0.04, 0, -0.43, 0, 0x2a2a2e);
+    hook.box(0.2, 0.025, 0.07, 0, -0.5, 0, 0x4a4f58);
+  } else {
+    // portique jaune (moderne) ou blanc aux néons (futur) à cheval sur la cale, chariot et bloc de coque suspendu
+    const gold = fut ? 0xf2f6fa : 0xf2c23a;
+    for (const s of [-1, 1]) for (const z of [-0.2, 0.9]) { p.box(0.07, 1.0, 0.07, X + s * 0.78, 0.012, z, gold); p.box(0.1, 0.03, 0.12, X + s * 0.78, 0.0, z, 0x4a4f58); }
+    for (const z of [-0.2, 0.9]) { p.box(1.64, 0.08, 0.09, X, 1.0, z, gold); if (fut) p.box(1.6, 0.012, 0.012, X, 1.07, z, 0x6ae4ff, 0, 'neon'); }
+    for (const s of [-1, 1]) p.box(0.06, 0.05, 1.18, X + s * 0.78, 1.0, 0.35, gold);
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) p.add(new THREE.BoxGeometry(0.014, 0.014, 0.4), X + s * 0.78, 0.2 + i * 0.22, -0.2 + 0.0, dark(gold, 0.85), 0, false, 0, i % 2 ? 0.7 : -0.7);
+    p.box(0.22, 0.07, 0.13, X + 0.1, 1.08, 0.35, fut ? 0x6ae4ff : 0xd84a3e, 0, fut ? 'neon' : false);
+    p.box(0.1, 0.08, 0.1, X + 0.1, 1.15, 0.35, 0x2a2a2e);
+    const blk = swing([X + 0.1, 1.04, 0.35], [1, 0, 0], 0.04, 0.3);
+    blk.cyl(0.003, 0.003, 0.4, 3, -0.02, -0.42, 0, 0x2a2a2e); blk.cyl(0.003, 0.003, 0.4, 3, 0.02, -0.42, 0, 0x2a2a2e);
+    blk.box(0.2, 0.09, 0.14, 0, -0.52, 0, fut ? 0xdde8f0 : 0x23305a);
+    blk.box(0.2, 0.012, 0.14, 0, -0.43, 0, fut ? 0x6ae4ff : 0xb0392e, 0, fut ? 'neon' : false);
+  }
+  // le tas de troncs, de planches et de poutres, la scie de long
+  const logs = (x: number, z: number, n: number) => {
+    for (let i = 0; i < n; i++) for (let j = 0; j < n - i; j++)
+      p.add(new THREE.CylinderGeometry(0.035, 0.035, 0.46, 7).rotateZ(Math.PI / 2), x + (j + i * 0.5 - (n - 1) / 2) * 0.07, 0.05 + i * 0.062, z, (i + j) % 2 ? 0x7a5a3c : 0x6a4a30);
+    for (const s of [-1, 1]) p.cyl(0.012, 0.012, 0.1, 4, x + s * 0.2, 0.012, z + 0.06, dwood);
+  };
+  if (old) {
+    logs(-1.05, -0.95, 4);
+    for (let i = 0; i < 6; i++) p.box(0.56, 0.022, 0.14, -0.2, 0.012 + i * 0.024, -1.2, 0xc9a46c);
+    // le chevalet de la scie de long : un tronc en travers, la lame verticale, le scieur en haut et celui du fosse
+    for (const dx of [-0.2, 0.2]) { p.add(new THREE.BoxGeometry(0.03, 0.22, 0.03), -1.05 + dx, 0.11, -0.45, dwood, 0, false, 0.4); p.add(new THREE.BoxGeometry(0.03, 0.22, 0.03), -1.05 + dx, 0.11, -0.45, dwood, 0, false, -0.4); }
+    p.add(new THREE.CylinderGeometry(0.04, 0.04, 0.6, 7).rotateZ(Math.PI / 2), -1.05, 0.23, -0.45, 0x7a5a3c);
+    p.box(0.008, 0.2, 0.012, -1.1, 0.2, -0.45, 0xb8bcc4);
+    p.box(0.02, 0.03, 0.02, -1.1, 0.4, -0.45, dwood);
+    figure(p, -1.17, -0.45, 0x8a6a48, Math.PI / 2, false, 0x4a3426, 'idle', 0.0);
+    figure(p, -0.95, -0.45, 0x6a8ac8, -Math.PI / 2, false, 0x4a3426, 'idle', 0.0);
+  } else if (ind) {
+    for (let i = 0; i < 5; i++) p.box(0.5, 0.025, 0.18, -1.0, 0.012 + i * 0.027, -0.95, 0x8a9096);
+    logs(-0.2, -1.2, 3);
+    p.box(0.1, 0.07, 0.06, -1.1, 0.012, -0.5, 0x3a3f48); p.box(0.04, 0.05, 0.04, -1.1, 0.082, -0.5, 0x2a2a2e);
+  } else {
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) p.box(0.32, 0.12, 0.13, -1.05 + i * 0.01, 0.012 + j * 0.12, -0.85 + i * 0.16, [0x3c7fd8, 0xd84a3e, 0xf2c23a, 0x6a9ac8][(i + j) % 4]);
+    for (let i = 0; i < 5; i++) p.cyl(0.03, 0.03, 0.3, 8, -0.15 + i * 0.07, 0.012, -1.15, fut ? 0xdde8f0 : 0xa8aeb6);
+  }
+  // les tonneaux de poix, la chaudière à poix (marmite sur son feu) ou le fût d'huile, les amarres en rouleaux
+  for (const [x, z] of [[1.15, 0.25], [1.25, 0.4], [1.08, 0.4]] as [number, number][]) { p.cyl(0.055, 0.06, 0.11, 8, x, 0.012, z, old ? 0x3a2a1c : ind ? 0x2a2a2e : fut ? 0xdde8f0 : 0xd84a3e); p.cyl(0.058, 0.058, 0.008, 8, x, 0.06, z, 0x2a2a2e); }
+  if (old) {
+    p.cyl(0.08, 0.06, 0.07, 8, 0.8, 0.012, 1.05, 0x2a2a2e);
+    p.cone(0.06, 0.1, 6, 0.8, 0.03, 1.05, C.flame, true);
+    smoke(0.8, 0.14, 1.05, 1);
+    for (const [x, z] of [[1.05, 1.05], [0.6, 1.2]] as [number, number][]) { p.add(new THREE.TorusGeometry(0.07, 0.025, 4, 10).rotateX(Math.PI / 2), x, 0.04, z, 0xb89868); p.add(new THREE.TorusGeometry(0.045, 0.02, 4, 10).rotateX(Math.PI / 2), x, 0.08, z, 0xa88858); }
+  } else if (ind) {
+    p.cyl(0.08, 0.06, 0.07, 8, 0.8, 0.012, 1.05, 0x2a2a2e); p.cone(0.06, 0.1, 6, 0.8, 0.03, 1.05, C.flame, true);
+    smoke(0.8, 0.14, 1.05, 1);
+    p.add(new THREE.TorusGeometry(0.07, 0.025, 4, 10).rotateX(Math.PI / 2), 1.05, 0.04, 1.05, 0xb89868);
+  } else {
+    for (let i = 0; i < 4; i++) p.box(0.4, 0.1, 0.1, 0.6, 0.012, 1.0 + (i % 2) * 0.01, [0x3c7fd8, 0xd84a3e, 0xf2c23a, 0x3a9a5a][i]);
+  }
+  // la forge : trois murs de pierre (ou de brique), la forge allumée, l'enclume, la haute cheminée qui fume
+  const fx = 1.0, fz = -0.15, fwall = old ? C.darkstone : ind ? C.darkbrick : fut ? 0xe8eef4 : 0xcfd4da;
+  p.box(0.5, 0.3, 0.06, fx, 0.012, fz - 0.2, fwall);
+  p.box(0.06, 0.3, 0.4, fx + 0.22, 0.012, fz, fwall);
+  p.box(0.4, 0.14, 0.14, fx - 0.04, 0.012, fz - 0.1, C.darkstone);
+  p.box(0.2, 0.04, 0.08, fx - 0.04, 0.12, fz - 0.1, 0xff9a3a, 0, !fut);
+  p.cyl(0.05, 0.06, 0.4, 7, fx - 0.04, 0.3, fz - 0.17, ind ? C.darkbrick : C.darkstone);
+  smoke(fx - 0.04, 0.72, fz - 0.17, 2);
+  p.box(0.1, 0.04, 0.06, fx - 0.14, 0.012, fz + 0.12, 0x3a3f48); p.box(0.04, 0.05, 0.04, fx - 0.14, 0.052, fz + 0.12, 0x2a2a2e);
+  p.add(new THREE.BoxGeometry(0.1, 0.03, 0.1), fx + 0.08, 0.012, fz + 0.1, 0x6a4a34);
+  figure(p, fx - 0.04, fz + 0.14, 0x8a4a3a, Math.PI, false, 0x2a2420);
+  // des étincelles qui jaillissent (points chauds qui scintillent)
+  const sparks: [number, number, number][] = [[-0.06, 0.16, 0.1], [0.0, 0.2, 0.15], [0.05, 0.17, 0.08], [-0.1, 0.22, 0.2], [0.08, 0.2, 0.18]];
+  for (const [dx, y, dz] of sparks) p.box(0.012, 0.012, 0.012, fx - 0.04 + dx, y, fz + dz, fut ? 0x6ae4ff : 0xffd070, 0, fut ? 'neon' : true);
+  // le hangar à voiles (ou l'atelier) : murs, toit, grande porte, fenêtres, toile de voile qui sèche ou qu'on coud
+  const hx = 0.2, hz = -0.85, wall = old ? 0x8a6a48 : ind ? C.darkbrick : age === 4 ? 0xcfd4da : 0xe8eef4;
+  p.box(0.9, 0.46, 0.7, hx, 0.012, hz, wall);
+  if (fut) { p.add(new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.55, 0.8), hx, 0.46, hz, 0xbfe0ee); p.add(new THREE.TorusGeometry(0.5, 0.01, 3, 20).rotateX(Math.PI / 2).scale(1, 1, 0.8), hx, 0.47, hz, 0x6ae4ff, 0, 'neon'); }
+  else p.gable(1.0, 0.24, 0.8, hx, 0.472, hz, old ? C.thatch : ind ? 0x6f7c96 : 0x8a96a2, Math.PI / 2);
+  p.box(0.34, 0.32, 0.02, hx, 0.012, hz + 0.36, 0x2a2420);
+  for (const s of [-1, 1]) p.box(0.15, 0.32, 0.02, hx + s * 0.18, 0.012, hz + 0.37, dark(wall, 0.85));
+  for (const x of [-0.32, 0.32]) p.box(0.1, 0.07, 0.02, hx + x, 0.28, hz + 0.36, C.win, 0, true);
+  if (ind) { p.cyl(0.05, 0.06, 0.5, 8, hx + 0.32, 0.46, hz - 0.2, C.darkbrick); p.cyl(0.062, 0.055, 0.03, 8, hx + 0.32, 0.96, hz - 0.2, 0x2a2420); smoke(hx + 0.32, 1.0, hz - 0.2, 2); }
+  // la voile qu'on coud, étendue devant le hangar sur un séchoir, avec un petit tas de toile
+  if (old || ind) {
+    for (const s of [-1, 1]) p.cyl(0.008, 0.008, 0.34, 4, hx - 0.55 + s * 0.12, 0.012, hz + 0.35, dwood);
+    p.add(new THREE.BoxGeometry(0.26, 0.012, 0.012), hx - 0.55, 0.34, hz + 0.35, dwood);
+    const sw = sway([hx - 0.55, 0.34, hz + 0.35], [1, 0, 0], 0.08, 0.5);
+    sw.box(0.22, 0.2, 0.006, 0, -0.2, 0, 0xf4ecdc); sw.box(0.22, 0.012, 0.007, 0, -0.1, 0, 0xc8443a);
+  }
+  // cordages : rouleaux, haubans qui tombent de la grue, câbles par terre
+  for (const [x, z] of [[-0.95, 0.9], [-0.8, 1.05]] as [number, number][]) { p.add(new THREE.TorusGeometry(0.06, 0.02, 4, 10).rotateX(Math.PI / 2), x, 0.04, z, old ? 0xb89868 : 0x6a6e76); p.add(new THREE.TorusGeometry(0.04, 0.018, 4, 10).rotateX(Math.PI / 2), x, 0.075, z, old ? 0xa88858 : 0x5a5e66); }
+  // lanternes sur poteaux (lumière chaude, ou blanche et bleue aux époques récentes) et fanions sur la coque
+  const lamp = (x: number, z: number, h: number) => {
+    p.cyl(0.01, 0.012, h, 5, x, 0.012, z, dwood);
+    if (old) { p.box(0.04, 0.05, 0.04, x, 0.012 + h, z, 0xffc060, 0, true); p.box(0.05, 0.012, 0.05, x, 0.07 + h, z, dwood); }
+    else if (dry) { p.box(0.08, 0.02, 0.05, x, 0.012 + h, z, 0xdde8f0, 0, true); p.add(new THREE.BoxGeometry(0.1, 0.012, 0.07), x, h + 0.04, z, 0x3a3f48); }
+    else { p.box(0.04, 0.05, 0.04, x, 0.012 + h, z, 0xffe0a0, 0, true); p.cone(0.04, 0.03, 4, x, 0.062 + h, z, 0x3a3f48); }
+  };
+  for (const [x, z] of [[-1.3, 1.1], [0.0, 1.2], [-0.5, -1.3], [1.3, 0.9]] as [number, number][]) lamp(x, z, dry ? 0.7 : 0.36);
+  const flag = (x: number, y: number, z: number, c: number, w = 0.12, h = 0.07) => { const f = sway([x, y, z], [0, 1, 0], 0.35, 0.7); f.box(w, h, 0.006, w / 2, -h / 2 - 0.0, 0, c); p.cyl(0.004, 0.004, 0.14, 4, x, y - 0.1, z, dwood); };
+  flag(X, slip(ZC + 0.2) + hy0 + (old ? 0.7 : 0.32), ZC + 0.2, fut ? 0x6ae4ff : 0xc8443a);
+  flag(X, slip(zs - 0.05) + hy0 + 0.4, zs - 0.05, 0xf4ecdc, 0.1, 0.06);
+  flag(hx, old ? 0.86 : 0.74, hz, old ? 0x3a6ab8 : 0xc8443a);
+  // les ouvriers au travail sur les plateaux et au pied de la cale
+  for (const [x, z, c, y] of [[X + 0.34, 0.0, 0x6a8ac8, 0.38], [X - 0.34, 0.55, 0xc8a04a, 0.2], [X + 0.4, 0.8, 0x8a6a48, 0.0], [X - 0.55, -0.1, 0xc87a4a, 0.0]] as [number, number, number, number][])
+    figure(p, x, z, c, Math.PI / 2, false, 0x4a3426, 'idle', y === 0 ? 0 : slip(z) + y - 0.012);
+  if (fut) {
+    // bras robotisés articulés au-dessus de la coque, qui oscillent ; hologramme du navire sur son socle, liserés au sol
+    for (const [i, z] of [[0, -0.5], [1, 0.1], [2, 0.7]] as [number, number][]) {
+      p.cyl(0.05, 0.06, 0.06, 8, X + 0.62, 0.012, z, 0x8a96a2); p.cyl(0.03, 0.04, 0.14, 8, X + 0.62, 0.07, z, 0xf2f6fa);
+      const arm = swing([X + 0.62, 0.22, z], [0, 0, 1], 0.5, 0.2 + i * 0.05);
+      arm.add(new THREE.BoxGeometry(0.03, 0.03, 0.03), 0, 0, 0, 0x6ae4ff, 0, 'neon');
+      arm.box(0.03, 0.34, 0.03, 0, 0, 0, 0xf2f6fa); arm.add(new THREE.BoxGeometry(0.03, 0.03, 0.03), 0, 0.34, 0, 0x6ae4ff, 0, 'neon');
+      arm.add(new THREE.BoxGeometry(0.2, 0.026, 0.026), -0.1, 0.35, 0, 0xdde8f0, 0.0, false, 0.5);
+      arm.add(new THREE.BoxGeometry(0.014, 0.016, 0.02), -0.19, 0.33, 0, 0xff4fc8, 0, 'neon');
+    }
+    p.cyl(0.14, 0.16, 0.05, 10, -1.15, 0.012, 0.35, 0x2f4a66);
+    p.cyl(0.13, 0.13, 0.006, 10, -1.15, 0.062, 0.35, 0x6ae4ff, 'neon');
+    const holo = turning([-1.15, 0.32, 0.35], [0, 1, 0], 0.12);
+    holo.add(new THREE.IcosahedronGeometry(0.05, 0).scale(1.2, 0.5, 3), 0, 0, 0, 0x6ae4ff, 0, 'neon');
+    holo.add(new THREE.ConeGeometry(0.02, 0.07, 4).rotateX(Math.PI / 2), 0, 0, 0.17, 0x6ae4ff, 0, 'neon');
+    holo.box(0.006, 0.12, 0.006, 0, 0.0, 0.0, 0xffffff, 0, 'neon');
+    holoBoard(p, -0.85, 0.0, -0.45, 0.4, 0.2, 0x6ae4ff, Math.PI / 2, 5);
+    for (const s of [-1, 1]) p.box(0.012, 0.004, 2.4, X + s * 0.78, 0.012, 0.1, 0x6ae4ff, 0, 'neon');
+    for (const z of [-1.2, 1.0]) p.box(1.0, 0.004, 0.012, X, 0.012, z, 0xff4fc8, 0, 'neon');
+  } else if (dry) {
+    // projecteurs sur mât, tas de tubes et conteneurs, soudure au chalumeau (étincelles vives) à la coque
+    for (const s of [-1, 1]) { p.cyl(0.015, 0.02, 0.9, 6, X + s * 0.9, 0.012, 1.05, 0x6a707a); p.box(0.14, 0.05, 0.05, X + s * 0.9, 0.9, 1.05, 0xdde8f0, 0, true); }
+    for (const [dz, y] of [[0.0, 0.2], [0.04, 0.3], [-0.04, 0.1]]) p.box(0.012, 0.012, 0.012, X + 0.2, hy0 + 0.2 + y, ZC + 0.4 + dz, 0xfff0a0, 0, true);
+    p.box(0.3, 0.14, 0.14, 1.1, 0.012, 0.9, 0xd84a3e); p.box(0.3, 0.14, 0.14, 1.1, 0.152, 0.9, 0x3c7fd8);
+  } else if (ind) {
+    // un wagonnet de plaques d'acier sur ses rails, rails qui filent vers le hangar
+    for (const s of [-1, 1]) p.box(0.012, 0.012, 1.6, -0.1 + s * 0.06, 0.012, 0.15, 0x4a4f58);
+    for (let i = 0; i < 10; i++) p.box(0.2, 0.008, 0.02, -0.1, 0.012, -0.55 + i * 0.16, 0x6a4a34);
+    p.box(0.16, 0.05, 0.22, -0.1, 0.03, 0.4, 0x4a3426);
+    for (let i = 0; i < 3; i++) p.box(0.14, 0.012, 0.2, -0.1, 0.08 + i * 0.013, 0.4, 0x8a9096);
+    p.box(0.2, 0.02, 0.012, -0.1, 0.02, 0.4 + 0.12, 0x8a9096);
+  } else {
+    // un petit auvent contre le hangar : une table à tracer les formes de la coque, un compas géant
+    p.box(0.3, 0.08, 0.16, -0.55, 0.012, -1.15, wood);
+    p.box(0.26, 0.004, 0.12, -0.55, 0.092, -1.15, 0xf4ecdc);
+  }
 }
 
 /**
