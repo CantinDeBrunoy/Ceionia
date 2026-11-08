@@ -6,6 +6,7 @@ import { bakeFit, hasModel, ModelName } from './assets';
 import { hash2 } from '../core/rng';
 import { drawRocket } from './rocket';
 import { decal, fireEngine, fireLadder, LADDER_AT } from './fireEngine';
+import { defTower, defBarracks, type DefKit } from './defenses';
 
 /**
  * Bâtiments importés (CC0), par sorte puis par âge : leurs variantes ; null ou absent, le modèle procédural. Il ne reste que
@@ -12436,7 +12437,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'lab': futureLab(p, o.v); return true;
     case 'baths': futureBaths(p, o.v); return true;
     case 'zoo': zooBig(p, 5); return true;
-    case 'watchtower': futureWatchtower(p); return true;
+    case 'watchtower': defTower(p, 5, DEF_KIT); return true;
     case 'barracks': futureBarracks(p); return true;
   }
   return false;
@@ -13272,6 +13273,9 @@ function zooBig(p: Parts, age: number) {
   }
 }
 
+/** Les aides du moteur de modèles dont les défenses de l'île du portail (defenses.ts) ont besoin */
+const DEF_KIT: DefKit = { sway, smoke, turn: turning, pipe, roof };
+
 /** Teintes des défenses de l'île du portail selon l'âge : pierre des murs, pierre sombre des chaînages, toit */
 const DEF_TONES: [number, number, number][] = [[0xb8b0a2, 0x8c8478, C.terracotta], [0xb8b0a2, 0x8c8478, C.terracotta], [0xa9a39a, 0x7e776e, 0x6f6a8a], [0x9d9890, 0x6f6a64, C.slate], [0x8f949a, 0x60666e, 0x4f5866], [0x9aa3ad, 0x5a626c, 0x4a6a8a]];
 
@@ -13533,7 +13537,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'spaceport': spaceport(p); break;
     case 'research': research(p); break;
     case 'maglev': maglev(p); break;
-    case 'watchtower': if (age === 2) watchtower(p, age); else ageWatchtower(p, age); break;
+    case 'watchtower': defTower(p, age, DEF_KIT); break;
     case 'barracks': if (age === 2) barracks(p, age); else ageBarracks(p, age); break;
   }
   if (extras) futureExtras(p, kind, kind === 'forum' && size === 3 ? 2 : size);
