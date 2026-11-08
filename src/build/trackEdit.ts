@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { Railway } from '../sim/railway';
+import { tr } from '../i18n';
 import type { Overlay } from './tools';
 
 /**
@@ -90,7 +91,7 @@ export class TrackEditor implements Overlay {
     for (let i = 0; i + 1 < e.stops.length; i++) {
       if (!e.via[i]?.length) continue;
       const a = w.buildings.get(e.stops[i]), b = w.buildings.get(e.stops[i + 1]), plan = a && b ? this.rail.plan(a, b, e.via[i]) : null;
-      if (a && b && !plan?.seg) return `La voie ne passe pas entre ${this.rail.stopName(a)} et ${this.rail.stopName(b)} (en rouge) : déplacez ou retirez le point de passage.`;
+      if (a && b && !plan?.seg) return tr('La voie ne passe pas entre {a} et {b} (en rouge) : déplacez ou retirez le point de passage.', { a: this.rail.stopName(a), b: this.rail.stopName(b) });
     }
     return null;
   }

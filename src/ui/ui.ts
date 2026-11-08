@@ -1,4 +1,4 @@
-import { tr, plural, getLang, setLang, LANGS, type Lang } from '../i18n';
+import { tr, plural, nplural, getLang, setLang, LANGS, type Lang } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building } from '../build/catalog';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
@@ -21,7 +21,7 @@ import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps, gearObsolete } from '../sim/gear';
 import { troopGearNeeded } from '../sim/army';
 import { securityCuts, SECURITY_MAX } from '../sim/security';
-import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
+import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
@@ -93,15 +93,15 @@ export interface UIHost {
 
 const DEST_ICON: Record<DestKind, string> = { plain: '🌾 plaine', forest: '🌲 forêt', river: '🏞️ rivière', mountain: '⛰️ montagne', cave: '🕳️ grotte', far: '🧭 au loin', spaceport: '🚀 cosmodrome' };
 /** Où en est le train d'une ligne, en clair */
-function trainWhere(r: Railway, tr: Train) {
-  if (tr.why) return tr.why;
-  const st = tr.stops[tr.at], name = st ? r.stopName(st.b) : '';
-  if (tr.phase === 'dwell') {
-    const dir = tr.at + tr.dir < 0 || tr.at + tr.dir >= tr.stops.length ? -tr.dir : tr.dir, nx = tr.stops[tr.at + dir];
-    return tr.waiting && nx ? `à quai à ${name}, attend que le quai de ${r.stopName(nx.b)} se libère` : `à quai à ${name}`;
+function trainWhere(r: Railway, t: Train) {
+  if (t.why) return t.why;
+  const st = t.stops[t.at], name = st ? r.stopName(st.b) : '';
+  if (t.phase === 'dwell') {
+    const dir = t.at + t.dir < 0 || t.at + t.dir >= t.stops.length ? -t.dir : t.dir, nx = t.stops[t.at + dir];
+    return t.waiting && nx ? tr('à quai à {name}, attend que le quai de {next} se libère', { name, next: r.stopName(nx.b) }) : tr('à quai à {name}', { name });
   }
-  const next = tr.stops[tr.at + tr.dir];
-  return next ? `de ${name} vers ${r.stopName(next.b)}` : `parti de ${name}`;
+  const next = t.stops[t.at + t.dir];
+  return next ? tr('de {name} vers {next}', { name, next: r.stopName(next.b) }) : tr('parti de {name}', { name });
 }
 const dot = (c: number) => `<i class="lineDot" style="background:${hex(c)}"></i>`;
 /** Texte sûr dans un attribut (info-bulle) */
@@ -121,13 +121,13 @@ function railStat(h: UIHost, b: Building): [string, string] | null {
   // [pastille courte, explication complète en info-bulle]
   if (want === 'freight') {
     const st = railStation(w, b);
-    return st ? [`${t} ⚡ +${bonus} % par le rail`, `Boosté : servi par la gare de marchandises voisine (${r.stopName(st)}), dont le chariot fait la navette ; produit ${bonus} % de plus`]
-      : [`${t} +${bonus} % avec une gare`, `Une gare à ${RAIL_REACH} cases au plus, desservie par un train de marchandises, le ferait produire ${bonus} % de plus`];
+    return st ? [`${t} ⚡ ${tr('+{n} % par le rail', { n: bonus })}`, tr('Boosté : servi par la gare de marchandises voisine ({name}), dont le chariot fait la navette ; produit {n} % de plus', { name: r.stopName(st), n: bonus })]
+      : [`${t} ${tr('+{n} % avec une gare', { n: bonus })}`, tr('Une gare à {r} cases au plus, desservie par un train de marchandises, le ferait produire {n} % de plus', { r: RAIL_REACH, n: bonus })];
   }
   if (want === 'passenger') {
     const st = railStation(w, b);
-    return st ? [`${t} ⚡ Servi par le train`, `Boosté : servi par la gare de voyageurs voisine (${r.stopName(st)}) ; les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite`]
-      : [`${t} À relier au train`, `Une gare à ${RAIL_REACH} cases au plus, desservie par un train de voyageurs, y amènerait les équipes : expéditions spatiales plus sûres et lancements préparés plus vite`];
+    return st ? [`${t} ⚡ ${tr('Servi par le train')}`, tr('Boosté : servi par la gare de voyageurs voisine ({name}) ; les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite', { name: r.stopName(st) })]
+      : [`${t} ${tr('À relier au train')}`, tr('Une gare à {r} cases au plus, desservie par un train de voyageurs, y amènerait les équipes : expéditions spatiales plus sûres et lancements préparés plus vite', { r: RAIL_REACH })];
   }
   if (!isStation(b)) return null;
   const near = [...w.buildings.values()].filter((o) => railWant(o.kind) && gap(o, b) <= RAIL_REACH);
@@ -136,14 +136,14 @@ function railStat(h: UIHost, b: Building): [string, string] | null {
   const lines = r.linesAt(b), freight = lines.some((l) => l.freight), pass = lines.some((l) => !l.freight);
   const prod = near.some((o) => railWant(o.kind) === 'freight'), space = near.some((o) => railWant(o.kind) === 'passenger');
   const served = (prod && freight) || (space && pass);
-  return served ? [`${t} Sert ses voisins`, `Sert ses voisins : ${names}`]
-    : [`${t} Voisins à servir`, `À côté : ${names}. ${prod ? 'Une ligne de marchandises d’ici les ferait produire 50 % de plus' : 'Une ligne de voyageurs d’ici y amènerait les équipes'} (bouton 📦 / 🧳 d’une ligne : marchandises ou voyageurs).`];
+  return served ? [`${t} ${tr('Sert ses voisins')}`, tr('Sert ses voisins : {names}', { names })]
+    : [`${t} ${tr('Voisins à servir')}`, tr('À côté : {names}. {tip} (bouton 📦 / 🧳 d’une ligne : marchandises ou voyageurs).', { names, tip: prod ? tr('Une ligne de marchandises d’ici les ferait produire {n} % de plus', { n: bonus }) : tr('Une ligne de voyageurs d’ici y amènerait les équipes') })];
 }
 /** Le conseil du rail sur la fiche d'un bâtiment qu'on s'apprête à bâtir */
 function railTip(k: KindId) {
   const want = railWant(k);
-  return want === 'freight' ? `<p class="perk">🚂 Posé à ${RAIL_REACH} cases au plus d’une gare desservie par un train de marchandises, il produit ${Math.round(FREIGHT_BONUS * 100)} % de plus.</p>`
-    : want === 'passenger' ? `<p class="perk">🚂 Une gare de voyageurs à ${RAIL_REACH} cases au plus y amène les équipes : expéditions spatiales plus sûres et lancements préparés plus vite.</p>` : '';
+  return want === 'freight' ? `<p class="perk">🚂 ${tr('Posé à {r} cases au plus d’une gare desservie par un train de marchandises, il produit {n} % de plus.', { r: RAIL_REACH, n: Math.round(FREIGHT_BONUS * 100) })}</p>`
+    : want === 'passenger' ? `<p class="perk">🚂 ${tr('Une gare de voyageurs à {r} cases au plus y amène les équipes : expéditions spatiales plus sûres et lancements préparés plus vite.', { r: RAIL_REACH })}</p>` : '';
 }
 const riskLabel = (r: number) => tr(r <= 0.12 ? 'faible' : r <= 0.22 ? 'mesuré' : r <= 0.32 ? 'élevé' : 'très élevé');
 const pct = (r: number) => `${Math.round(r * 100)} %`;
@@ -250,7 +250,7 @@ const RES_META: Record<Resource, { label: string; icon: string; use: string; mor
 const reqOf = (label: string) => (label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
 /** « +1 emploi », « +3 emplois » */
-const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${v < 2 && g.one ? g.one : g.label}`;
+const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
 /** une décimale quand il y en a une (« 2,4 » de bien-être ne s'affiche plus « 2 » en rouge) */
 const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
 /** Ce que demande chaque besoin, en clair, pour sa fiche */
@@ -267,7 +267,7 @@ const givesOf = (k: KindId, a: number): string[] => {
   const out: string[] = [];
   const y = YIELD[k];
   for (const r of Object.keys(y ?? {}) as Resource[]) if (y![r]![a]) out.push(RES_META[r].label);
-  for (const g of MAIN.map((m) => GIVES.find((x) => x.k === m)!)) if (KINDS[k][g.k]?.[a]) out.push(g.label[0].toUpperCase() + g.label.slice(1));
+  for (const g of MAIN.map((m) => GIVES.find((x) => x.k === m)!)) if (KINDS[k][g.k]?.[a]) { const l = tr(g.label); out.push(l[0].toUpperCase() + l.slice(1)); }
   return out;
 };
 /** Apport principal d'un bâtiment, sur sa vignette */
@@ -521,7 +521,7 @@ export class UI {
       if (req === 'ore') { this.openRes('ore'); return; }
       if (req === 'brick') { this.openRes('brick'); return; }
       if (req === 'exp') {
-        const t = /« (.+) »/.exec((e.target as HTMLElement).closest<HTMLElement>('[data-req]')!.textContent ?? '')?.[1], m = MISSIONS.find((x) => x.title === t);
+        const t = /[«“]\s*(.+?)\s*[»”]/.exec((e.target as HTMLElement).closest<HTMLElement>('[data-req]')!.textContent ?? '')?.[1], m = MISSIONS.find((x) => x.title === t);
         if (m) this.gotoMission(m.id); else this.openExpeditions();
         return;
       }
@@ -788,7 +788,7 @@ export class UI {
     box.classList.toggle('held', brief);
     if (tool) {
       const i = this.toolInfo(tool);
-      box.innerHTML = `<div class="ihead"><b>${ic(i.icon, 28, 1.6)}</b><div class="grow"><h4>${i.label}</h4>${i.key ? `<small>Raccourci : ${i.key}</small>` : ''}</div></div><p>${i.desc}</p>`;
+      box.innerHTML = `<div class="ihead"><b>${ic(i.icon, 28, 1.6)}</b><div class="grow"><h4>${i.label}</h4>${i.key ? `<small>${tr('Raccourci : {key}', { key: i.key })}</small>` : ''}</div></div><p>${i.desc}</p>`;
       return;
     }
     if (!k) return;
@@ -797,10 +797,10 @@ export class UI {
     const effs = GIVES.map((g) => (d[g.k]?.[a] ? `<span class="eff">${ic(g.icon, 14, 2)} ${give(g, d[g.k]![a])}</span>` : '')).join('');
     // les grands bâtiments se paient en bois et en pierre, tous en Normal (sauf en ressources illimitées) ; le premier bûcheron est offert
     const w = this.host.world, cost = priceIn(w, k, age), rich = canPay(w, cost), gift = !cost && !w.unlimited && !!rulesOf(w.difficulty).price && PRODUCERS.includes(k);
-    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? `Grand bâtiment (${d.size} × ${d.size}) · ` : ''}${n ? `${n} ${k === 'watchtower' || k === 'barracks' ? 'sur l’île du portail' : 'dans le village'}` : 'pas encore construit'}</small></div></div>
+    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? tr('Grand bâtiment ({n} × {n}) · ', { n: d.size }) : ''}${n ? tr(k === 'watchtower' || k === 'barracks' ? '{n} sur l’île du portail' : '{n} dans le village', { n }) : tr('pas encore construit')}</small></div></div>
       ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
-      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} Coût : ${costLabel(cost)}${rich ? '' : ` — vous avez ${Math.floor(w.wood)} bois${cost.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`}`}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés'} · R : tourner · Échap : lâcher</p>` : ''}`;
+      ${cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${tr('Coût : {cost}', { cost: costLabel(cost) })}${rich ? '' : tr(' — vous avez {have}', { have: haveLabel(w, cost) })}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
+      ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${tr(hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner · Échap : lâcher')}</p>` : ''}`;
   }
 
   /**
@@ -812,19 +812,19 @@ export class UI {
     const b = tl.selected !== null ? h.world.buildings.get(tl.selected) : undefined;
     if (!b) { if (this.selKey) { this.selKey = ''; box.classList.remove('show'); } return; }
     const d = KINDS[b.kind], a = Math.max(b.age, d.minAge), stats: string[] = [];
-    if (b.kind === 'house') { const n = h.agents.agents.filter((x) => x.home === b.id).length; stats.push(`${ic('house', 14, 2)} ${n} habitant${n > 1 ? 's' : ''}`); }
+    if (b.kind === 'house') { const n = h.agents.agents.filter((x) => x.home === b.id).length; stats.push(`${ic('house', 14, 2)} ${nplural(n, 'habitant', 'habitants')}`); }
     if (b.kind === 'pen' || b.kind === 'stable') {
       const herds = penHerds(h.world), list = (b.kind === 'pen' ? herds.pens : herds.stables).get(b.id) ?? [];
       const names: Record<string, [string, string]> = { sheep: ['mouton', 'moutons'], cow: ['vache', 'vaches'], pig: ['cochon', 'cochons'], horse: ['cheval', 'chevaux'] }, count = new Map<string, number>();
       for (const k of list) count.set(k, (count.get(k) ?? 0) + 1);
-      stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => `${n} ${names[k][n > 1 ? 1 : 0]}`).join(', ')}` : `${ic('pen', 14, 2)} aucune bête pour l’instant`);
+      stats.push(list.length ? `${ic('pen', 14, 2)} ${[...count].map(([k, n]) => nplural(n, names[k][0], names[k][1])).join(', ')}` : `${ic('pen', 14, 2)} ${tr('aucune bête pour l’instant')}`);
     }
     // une défense de l'île du portail : la contamination de l'île, que son halo doré repousse
-    if ((b.kind === 'watchtower' || b.kind === 'barracks') && h.world.onPortalIsland(b.x, b.z)) { const bl = isleBlight(h.world); if (bl) stats.push(`🔥 Contamination de l’île : ${Math.round(bl.level * 100)} % · son halo doré la repousse alentour (on s’y soigne plus vite)`); }
-    if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${(YIELD.brickworks!.brick![a] ?? 0) * railBoost(h.world, b)} briques cuites par jour · ${Math.floor(h.world.brick)} en réserve au village`);
-    if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${(YIELD.oilwell!.crude![a] ?? 0) * railBoost(h.world, b)} barils de pétrole brut par jour · ${Math.floor(h.world.crude)} en réserve au village`);
-    if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} Raffine jusqu’à ${REFINE_CRUDE * railBoost(h.world, b)} barils de brut par jour (${REFINE_CRUDE * FUEL_PER_CRUDE * railBoost(h.world, b)} de carburant) · ${Math.floor(h.world.crude)} brut et ${Math.floor(h.world.fuel)} carburant au village`);
-    if (b.kind === 'carworks' && !h.world.unlimited) stats.push(h.expeditions.cars() ? `${ic('fuel', 14, 2)} Les voitures brûlent ${CAR_FUEL} carburant par jour · ${Math.floor(h.world.fuel)} au village` : `${ic('fuel', 14, 2)} Plus de carburant : les voitures restent au garage. La raffinerie en tire du pétrole brut des puits.`);
+    if ((b.kind === 'watchtower' || b.kind === 'barracks') && h.world.onPortalIsland(b.x, b.z)) { const bl = isleBlight(h.world); if (bl) stats.push(tr('🔥 Contamination de l’île : {n} % · son halo doré la repousse alentour (on s’y soigne plus vite)', { n: Math.round(bl.level * 100) })); }
+    if (b.kind === 'brickworks') stats.push(`${ic('brick', 14, 2)} ${tr('{n} briques cuites par jour · {stock} en réserve au village', { n: (YIELD.brickworks!.brick![a] ?? 0) * railBoost(h.world, b), stock: Math.floor(h.world.brick) })}`);
+    if (b.kind === 'oilwell') stats.push(`${ic('crude', 14, 2)} ${tr('{n} barils de pétrole brut par jour · {stock} en réserve au village', { n: (YIELD.oilwell!.crude![a] ?? 0) * railBoost(h.world, b), stock: Math.floor(h.world.crude) })}`);
+    if (b.kind === 'refinery') stats.push(`${ic('fuel', 14, 2)} ${tr('Raffine jusqu’à {n} barils de brut par jour ({fuel} de carburant) · {crude} brut et {stock} carburant au village', { n: REFINE_CRUDE * railBoost(h.world, b), fuel: REFINE_CRUDE * FUEL_PER_CRUDE * railBoost(h.world, b), crude: Math.floor(h.world.crude), stock: Math.floor(h.world.fuel) })}`);
+    if (b.kind === 'carworks' && !h.world.unlimited) stats.push(h.expeditions.cars() ? `${ic('fuel', 14, 2)} ${tr('Les voitures brûlent {n} carburant par jour · {stock} au village', { n: CAR_FUEL, stock: Math.floor(h.world.fuel) })}` : `${ic('fuel', 14, 2)} ${tr('Plus de carburant : les voitures restent au garage. La raffinerie en tire du pétrole brut des puits.')}`);
     // ce que le rail lui apporte (ou lui apporterait), et pour une gare, les bâtiments qu'elle sert
     // (en pastille courte : l'explication entière passe en info-bulle)
     const railLine = railStat(h, b);
@@ -832,15 +832,15 @@ export class UI {
     // gare : les lignes qui s'y arrêtent, une ligne compacte chacune (noms courts, le reste en info-bulle) ;
     // au-delà de trois, la liste défile ; en tracer une nouvelle d'ici
     const r = h.railway, stop = isStation(b) ? r.stopOf(b) : null, lines = stop ? r.linesAt(b) : [];
-    const rails = stop ? `<div class="rails"><div class="rhead"><b>${ic('train', 14, 2)} Chemin de fer${lines.length ? ` <small>· ${lines.length} ligne${lines.length > 1 ? 's' : ''}</small>` : ''}</b>
-      <button data-act="newline" class="newline" title="Tracer une nouvelle ligne depuis cette gare">${ic('train', 14, 2)} Nouvelle ligne</button></div>
+    const rails = stop ? `<div class="rails"><div class="rhead"><b>${ic('train', 14, 2)} ${tr('Chemin de fer')}${lines.length ? ` <small>· ${nplural(lines.length, 'ligne', 'lignes')}</small>` : ''}</b>
+      <button data-act="newline" class="newline" title="${tr('Tracer une nouvelle ligne depuis cette gare')}">${ic('train', 14, 2)} ${tr('Nouvelle ligne')}</button></div>
       ${lines.length ? `<div class="rlist${lines.length > 3 ? ' many' : ''}">${lines.map((l) => {
-      const tr = r.trains.get(l.id), stops = l.stops.map((id) => h.world.buildings.get(id));
-      const short = stops.map((s) => (!s ? '?' : s.id === b.id ? '<b>ici</b>' : shortStop(r.stopName(s)))).join(' → ');
-      const tip = `${r.lineLabel(l)}\n${l.freight ? 'Marchandises' : 'Voyageurs'}${tr ? ` · train ${trainWhere(r, tr)}` : ' · pas de train'}`;
+      const train = r.trains.get(l.id), stops = l.stops.map((id) => h.world.buildings.get(id));
+      const short = stops.map((s) => (!s ? '?' : s.id === b.id ? `<b>${tr('ici')}</b>` : shortStop(r.stopName(s)))).join(' → ');
+      const tip = `${r.lineLabel(l)}\n${tr(l.freight ? 'Marchandises' : 'Voyageurs')}${train ? tr(' · train {where}', { where: trainWhere(r, train) }) : tr(' · pas de train')}`;
       return `<div class="rline" title="${attr(tip)}">${dot(l.color)}<span class="grow">${short}</span>
-        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? 'Train de marchandises : les ateliers et carrières à côté de ses gares produisent 50 % de plus. Cliquer pour en faire un train de voyageurs' : 'Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises'}" aria-label="${l.freight ? 'Train de marchandises' : 'Train de voyageurs'}">${l.freight ? '📦' : '🧳'}</button>
-        <button data-act="follow:${l.id}" title="Suivre le train" aria-label="Suivre le train">${ic('eye', 14, 2)}</button><button data-act="edit:${l.id}" title="Modifier la ligne : ses arrêts et le tracé de sa voie" aria-label="Modifier la ligne">${ic('road', 14, 2)}</button><button data-act="drop:${l.id}" title="Fermer la ligne" aria-label="Fermer la ligne">${ic('close', 14, 2)}</button></div>`;
+        <button data-act="cargo:${l.id}" class="ltype" title="${l.freight ? tr('Train de marchandises : les ateliers et carrières à côté de ses gares produisent {n} % de plus. Cliquer pour en faire un train de voyageurs', { n: Math.round(FREIGHT_BONUS * 100) }) : tr('Train de voyageurs : il emmène les habitants de gare en gare et les équipes au cosmodrome. Cliquer pour en faire un train de marchandises')}" aria-label="${tr(l.freight ? 'Train de marchandises' : 'Train de voyageurs')}">${l.freight ? '📦' : '🧳'}</button>
+        <button data-act="follow:${l.id}" title="${tr('Suivre le train')}" aria-label="${tr('Suivre le train')}">${ic('eye', 14, 2)}</button><button data-act="edit:${l.id}" title="${tr('Modifier la ligne : ses arrêts et le tracé de sa voie')}" aria-label="${tr('Modifier la ligne')}">${ic('road', 14, 2)}</button><button data-act="drop:${l.id}" title="${tr('Fermer la ligne')}" aria-label="${tr('Fermer la ligne')}">${ic('close', 14, 2)}</button></div>`;
     }).join('')}</div>` : ''}</div>`
       : '';
     // améliorations : ce qu'il peut devenir à cet âge, et leur prix (ou ce qui manque pour les débloquer)
@@ -848,9 +848,9 @@ export class UI {
       const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
       const locked = to.reqMission && !h.expeditions.state.done.includes(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
       const first = !locked && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
-      if (first) return `<button disabled title="Il faut d’abord « ${first} » au village">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${first} d’abord</small></button>`;
-      return locked ? `<button disabled title="Débloqué par l’expédition « ${locked} »">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${locked}</small></button>`
-        : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} Améliorer : ${name}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
+      if (first) return `<button disabled title="${attr(tr('Il faut d’abord « {name} » au village', { name: first }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${tr('{name} d’abord', { name: first })}</small></button>`;
+      return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: locked }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${locked}</small></button>`
+        : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} ${tr('Améliorer : {name}', { name })}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
     }).join('');
     const upgrades = ups ? `<div class="acts ups">${ups}</div>` : '';
     const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${railChip}|${rails}|${upgrades}`;
@@ -865,11 +865,11 @@ export class UI {
     // le conseil : replié, son début sur une ligne ; déplié, tout le texte
     const [perkHead, perkRest] = d.perk ? brief(d.perk, 90) : ['', ''];
     const perk = d.perk ? `<details class="perk" data-k="perk"><summary>✦ <span>${perkHead}</span></summary>${perkRest}</details>` : '';
-    const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = b.auto ? 'façade tournée vers la route' : 'orientée à la main';
-    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 24, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small title="${attr(`${AGES[b.age].name}${size ? ` · ${size} cases` : ''} · ${facing}`)}">${AGES[b.age].name}${size ? ` · ${size}` : ''}</small></div><button class="x" data-act="close" title="Fermer (Échap)" aria-label="Fermer">${ic('close', 16, 2)}</button></div>
+    const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = tr(b.auto ? 'façade tournée vers la route' : 'orientée à la main');
+    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 24, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small title="${attr(`${AGES[b.age].name}${size ? tr(' · {size} cases', { size }) : ''} · ${facing}`)}">${AGES[b.age].name}${size ? ` · ${size}` : ''}</small></div><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
       ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${upgrades}
-      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle ? '<div class="acts"><button data-act="command" class="primary" title="Choisir les troupes, leur donner des ordres, recruter à la caserne">⚔️ Commander la garnison</button></div>' : ''}
-      <div class="acts"><button data-act="move">${ic('hand', 16, 2)} Déplacer</button><button data-act="rot">${ic('rotate', 16, 2)} Tourner <kbd>R</kbd></button><button data-act="del" class="danger">${ic('demolish', 16, 2)} Démolir</button></div>`;
+      ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
+      <div class="acts"><button data-act="move">${ic('hand', 16, 2)} ${tr('Déplacer')}</button><button data-act="rot">${ic('rotate', 16, 2)} ${tr('Tourner')} <kbd>R</kbd></button><button data-act="del" class="danger">${ic('demolish', 16, 2)} ${tr('Démolir')}</button></div>`;
     box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
     box.scrollTop = scroll;
     const rl = box.querySelector('.rlist');
@@ -889,7 +889,7 @@ export class UI {
       else if (act?.startsWith('edit:')) { h.audio.sfxClick(); h.startRailEdit({ line: +act.slice(5) }); }
       else if (act?.startsWith('drop:')) {
         const l = h.world.lines.find((x) => x.id === +act.slice(5));
-        if (l && await confirmBox(this.root, `Fermer la ligne ${r.lineLabel(l)} ? Ses voies seront retirées.`, 'Fermer la ligne')) h.railway.removeLine(l.id);
+        if (l && await confirmBox(this.root, tr('Fermer la ligne {line} ? Ses voies seront retirées.', { line: r.lineLabel(l) }), tr('Fermer la ligne'))) h.railway.removeLine(l.id);
       }
       this.renderSelection();
     }));
@@ -906,12 +906,12 @@ export class UI {
     box.classList.toggle('show', !!e);
     if (!e) return;
     const names = e.stops.map((id) => h.world.buildings.get(id)).map((b) => (b ? h.railway.stopName(b) : '?'));
-    box.innerHTML = `<div class="rhead">${dot(e.color)}<b>${e.line !== null ? 'Modifier la ligne' : 'Nouvelle ligne'}</b></div>
+    box.innerHTML = `<div class="rhead">${dot(e.color)}<b>${tr(e.line !== null ? 'Modifier la ligne' : 'Nouvelle ligne')}</b></div>
       <p>${names.length ? names.join(' → ') : '—'}</p>
-      <small>${e.stops.length < 2 ? 'Cliquez la gare suivante.' : 'Cliquez d’autres arrêts pour prolonger la ligne, ou validez.'} Recliquer le dernier arrêt le retire.</small>
-      ${e.stops.length >= 2 ? `<small class="rtip">${ic('hand', 13, 2)} Saisissez la voie prévue et glissez-la pour la faire passer où vous voulez ; glissez un point pour le déplacer, un clic sur un point le retire.${points ? ` ${points} point${points > 1 ? 's' : ''} de passage.` : ''}</small>` : ''}
+      <small>${tr(e.stops.length < 2 ? 'Cliquez la gare suivante.' : 'Cliquez d’autres arrêts pour prolonger la ligne, ou validez.')} ${tr('Recliquer le dernier arrêt le retire.')}</small>
+      ${e.stops.length >= 2 ? `<small class="rtip">${ic('hand', 13, 2)} ${tr('Saisissez la voie prévue et glissez-la pour la faire passer où vous voulez ; glissez un point pour le déplacer, un clic sur un point le retire.')}${points ? ` ${tr(points > 1 ? '{n} points de passage.' : '{n} point de passage.', { n: points })}` : ''}</small>` : ''}
       ${trouble ? `<small class="rbad">${ic('alert', 13, 2)} ${trouble}</small>` : ''}
-      <div class="acts"><button data-r="undo" ${e.stops.length ? '' : 'disabled'}>${ic('undo', 15, 2)} Retirer le dernier</button><button data-r="auto" ${points ? '' : 'disabled'} title="Retirer tous les points de passage : la voie se pose d’elle-même">${ic('restart', 15, 2)} Tracé auto</button><button data-r="ok" class="primary" ${e.stops.length >= 2 && !trouble ? '' : 'disabled'}>${ic('check', 15, 2)} Valider <kbd>Entrée</kbd></button><button data-r="cancel">${ic('close', 15, 2)} Annuler <kbd>Échap</kbd></button></div>`;
+      <div class="acts"><button data-r="undo" ${e.stops.length ? '' : 'disabled'}>${ic('undo', 15, 2)} ${tr('Retirer le dernier')}</button><button data-r="auto" ${points ? '' : 'disabled'} title="${tr('Retirer tous les points de passage : la voie se pose d’elle-même')}">${ic('restart', 15, 2)} ${tr('Tracé auto')}</button><button data-r="ok" class="primary" ${e.stops.length >= 2 && !trouble ? '' : 'disabled'}>${ic('check', 15, 2)} ${tr('Valider')} <kbd>${tr('Entrée')}</kbd></button><button data-r="cancel">${ic('close', 15, 2)} ${tr('Annuler')} <kbd>${tr('Échap')}</kbd></button></div>`;
     box.querySelectorAll<HTMLButtonElement>('[data-r]').forEach((b) => (b.onclick = () => {
       const r = b.dataset.r;
       if (r === 'undo') h.railUndo(); else if (r === 'auto') h.railAuto(); else if (r === 'ok') h.railFinish(); else h.railCancel();
@@ -1153,7 +1153,7 @@ export class UI {
     go.hidden = !ready;
     if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = tr('Toutes les conditions sont réunies : passer à l’âge suivant ({age})', { age: AGES[ap!.next].name }); }
     $('#ageReq').innerHTML = ap
-      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: i.mission }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
       : tr('Dernier âge atteint : profitez de votre village !');
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
@@ -1303,9 +1303,12 @@ export class UI {
       ? d.rows.map((r) => `<div class="crow"><span>${r.label}${r.n ? `<i>× ${r.n}</i>` : ''}</span><em class="${r.v < 0 ? 'neg' : ''}">${r.v < 0 ? '−' : '+'}${num(Math.abs(r.v))}</em></div>`).join('')
       : `<div class="crow"><span class="none">${tr('Rien ne le fournit encore.')}</span></div>`;
     let tip: string;
-    if (housing) tip = d.ok ? `${Math.floor(d.cap - p)} place${d.cap - p >= 2 ? 's' : ''} libre${d.cap - p >= 2 ? 's' : ''} : le village va grandir.` : `Le village est plein : chaque « ${name} » de plus loge ${d.per} habitants.`;
-    else if (d.ok) tip = d.demand > 0 ? `Comblé, avec ${num(d.cap - d.demand)} d’avance.` : 'Pas encore demandé : le village est trop petit.';
-    else { const miss = d.demand - d.cap, n = d.per > 0 ? Math.ceil(miss / d.per - 1e-6) : 0; tip = `Il manque ${num(miss)}${n ? ` : ${n > 1 ? `${n} × ` : ''}« ${name} » (+${d.per} chacun) suffirai${n > 1 ? 'ent' : 't'}` : ''}.`; }
+    if (housing) tip = d.ok ? tr(d.cap - p >= 2 ? '{n} places libres : le village va grandir.' : '{n} place libre : le village va grandir.', { n: Math.floor(d.cap - p) }) : tr('Le village est plein : chaque « {name} » de plus loge {per} habitants.', { name, per: d.per });
+    else if (d.ok) tip = d.demand > 0 ? tr('Comblé, avec {n} d’avance.', { n: num(d.cap - d.demand) }) : tr('Pas encore demandé : le village est trop petit.');
+    else {
+      const miss = d.demand - d.cap, n = d.per > 0 ? Math.ceil(miss / d.per - 1e-6) : 0;
+      tip = !n ? tr('Il manque {miss}.', { miss: num(miss) }) : n > 1 ? tr('Il manque {miss} : {n} × « {name} » (+{per} chacun) suffiraient.', { miss: num(miss), n, name, per: d.per }) : tr('Il manque {miss} : « {name} » (+{per} chacun) suffirait.', { miss: num(miss), name, per: d.per });
+    }
     const html = `
       <h4>${ic(meta.icon, 18, 2)} ${tr(meta.label)}<em class="${state}">${num(have)} / ${num(want)}</em></h4>
       <div class="sub">${tr(housing ? 'habitants / places' : 'disponible / nécessaire')}</div>
@@ -1348,28 +1351,28 @@ export class UI {
   /** Fiche des habitants : répartition en barre, puis le détail, et ce qui manquerait */
   private renderCensus() {
     const c = this.census(), p = Math.max(1, c.p);
-    const seg = (n: number, cls: string, label: string) => (n > 0 ? `<i class="${cls}" style="width:${(n / p) * 100}%" title="${label} : ${n}"></i>` : '');
-    const row = (icon: string, label: string, n: number, cls = '', note = '') => `<div class="crow ${cls}"><b>${ic(icon, 16, 2)}</b><span>${label}${note ? `<small>${note}</small>` : ''}</span><em>${n}</em></div>`;
+    const seg = (n: number, cls: string, label: string) => (n > 0 ? `<i class="${cls}" style="width:${(n / p) * 100}%" title="${tr('{label} : {n}', { label: tr(label), n })}"></i>` : '');
+    const row = (icon: string, label: string, n: number, cls = '', note = '') => `<div class="crow ${cls}"><b>${ic(icon, 16, 2)}</b><span>${tr(label)}${note ? `<small>${note}</small>` : ''}</span><em>${n}</em></div>`;
     const tips: string[] = [];
-    if (c.jobless) tips.push('Un atelier, une ferme ou un moulin de plus donnerait du travail.');
-    if (c.untreated) tips.push('Un lieu de soins soignerait les malades.');
-    if (c.hungry) tips.push('Une ferme, un champ ou un ponton de pêche nourrirait tout le monde.');
-    if (c.thirsty) tips.push('Un point d’eau ou un puits de plus abreuverait tout le monde.');
-    if (c.unhappy) tips.push('Un lieu de rencontre, un jardin ou un lieu de culte rendrait le village plus heureux.');
+    if (c.jobless) tips.push(tr('Un atelier, une ferme ou un moulin de plus donnerait du travail.'));
+    if (c.untreated) tips.push(tr('Un lieu de soins soignerait les malades.'));
+    if (c.hungry) tips.push(tr('Une ferme, un champ ou un ponton de pêche nourrirait tout le monde.'));
+    if (c.thirsty) tips.push(tr('Un point d’eau ou un puits de plus abreuverait tout le monde.'));
+    if (c.unhappy) tips.push(tr('Un lieu de rencontre, un jardin ou un lieu de culte rendrait le village plus heureux.'));
     const html = `
-      <h4>${ic('houses', 18, 2)} ${c.p} habitants <small>pour ${c.places} places${c.away ? `, dont ${c.away} en expédition` : ''}</small></h4>
+      <h4>${ic('houses', 18, 2)} ${nplural(c.p, 'habitant', 'habitants')} <small>${tr('pour {n} places', { n: c.places })}${c.away ? tr(', dont {n} en expédition', { n: c.away }) : ''}</small></h4>
       <div class="cbar">${seg(c.employed, 'work', 'Au travail')}${seg(c.jobless, 'idle', 'Sans emploi')}${seg(c.others, 'kids', 'Enfants et anciens')}</div>
       ${row('hammer', 'Au travail', c.employed)}
       ${row('alert', 'Sans emploi', c.jobless, c.jobless ? 'warn' : '')}
       ${row('smile', 'Enfants et anciens', c.others)}
-      ${row('health', 'Malades soignés', c.cared, '', c.sick ? `sur ${c.sick} à soigner` : 'aucun malade pour l’instant')}
+      ${row('health', 'Malades soignés', c.cared, '', c.sick ? tr('sur {n} à soigner', { n: c.sick }) : tr('aucun malade pour l’instant'))}
       ${c.untreated ? row('health', 'Malades sans soins', c.untreated, 'warn') : ''}
-      ${row('kit', 'Blessés au repos', c.injured, c.injured ? 'note' : '', c.injured ? 'au retour d’une expédition' : '')}
-      ${row('compass', 'En expédition', c.away, '', c.away ? 'déjà comptés parmi les habitants ci-dessus' : '')}
+      ${row('kit', 'Blessés au repos', c.injured, c.injured ? 'note' : '', c.injured ? tr('au retour d’une expédition') : '')}
+      ${row('compass', 'En expédition', c.away, '', c.away ? tr('déjà comptés parmi les habitants ci-dessus') : '')}
       ${c.hungry ? row('bread', 'Ont faim', c.hungry, 'warn') : ''}
       ${c.thirsty ? row('drop', 'Ont soif', c.thirsty, 'warn') : ''}
       ${c.unhappy ? row('smile', 'Mécontents', c.unhappy, 'warn') : ''}
-      ${tips.length ? `<p class="hint">${tips.join(' ')}</p>` : '<p class="hint ok">Tout le monde va bien.</p>'}`;
+      ${tips.length ? `<p class="hint">${tips.join(' ')}</p>` : `<p class="hint ok">${tr('Tout le monde va bien.')}</p>`}`;
     const box = $('#census');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }

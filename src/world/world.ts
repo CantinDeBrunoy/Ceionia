@@ -6,6 +6,7 @@ import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/diffic
 import { GEN, GEN_FIXED, fillClimate } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
+import { tr } from '../i18n';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
@@ -307,7 +308,7 @@ export class World {
     if (this.occ[k] || v === VEG_FIELD || v === VEG_GARDEN) {
       if (!this.disasters) return;
       const b = this.buildings.get(this.occ[k]);
-      if (b) { this.losses.push(`🌋 La lave a englouti : ${KINDS[b.kind].names[b.age]}`); this.removeBuilding(b.id); }
+      if (b) { this.losses.push(tr('🌋 La lave a englouti : {name}', { name: KINDS[b.kind].names[b.age] })); this.removeBuilding(b.id); }
     }
     this.basalt[k] = 1;
     this.ash[k] = 1;

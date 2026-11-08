@@ -1,6 +1,7 @@
 import { World, N, RailLine, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_VOLCANO, mergeVia } from '../world/world';
 import { Building, KINDS, sizeOf } from '../build/catalog';
 import { Agents, Heap } from './agents';
+import { tr as tx } from '../i18n';
 import type { Expeditions } from './expeditions';
 import { FREIGHT_KINDS, gap, isStation, RAIL_REACH } from './freight';
 
@@ -214,7 +215,7 @@ export class Railway {
 
   /** Arrêts d'une ligne, en clair */
   lineLabel(l: RailLine) {
-    return l.stops.map((id) => this.world.buildings.get(id)).map((b) => (b ? this.stopName(b) : 'arrêt démoli')).join(' → ');
+    return l.stops.map((id) => this.world.buildings.get(id)).map((b) => (b ? this.stopName(b) : tx('arrêt démoli'))).join(' → ');
   }
 
   // ---------- Le train ----------
@@ -348,13 +349,13 @@ export class Railway {
       tr.line = l; tr.stops = stops; tr.via = via; tr.legs.clear();
       const was = tr.why;
       const twin = this.sameAs(l.stops, l.id);
-      tr.why = stops.length < 2 ? (l.stops.length >= 2 ? 'Il lui manque des arrêts en service (gare démolie…).' : 'Il faut au moins deux arrêts.')
-        : twin && twin.id < l.id ? 'Même parcours qu’une autre ligne : sur une voie unique, un seul train peut y rouler. Fermez l’une des deux.' : null;
+      tr.why = stops.length < 2 ? (l.stops.length >= 2 ? tx('Il lui manque des arrêts en service (gare démolie…).') : tx('Il faut au moins deux arrêts.'))
+        : twin && twin.id < l.id ? tx('Même parcours qu’une autre ligne : sur une voie unique, un seul train peut y rouler. Fermez l’une des deux.') : null;
       for (let i = 0; !tr.why && i + 1 < stops.length; i++) {
         if (this.seg(stops[i], stops[i + 1], via[i])) continue;
         const a = this.stopName(stops[i].b), b = this.stopName(stops[i + 1].b);
-        tr.why = via[i]?.length ? `La voie ne passe pas par les points choisis entre ${a} et ${b} : un point est sur un obstacle, ou de l’eau, des bâtiments, des pentes trop raides barrent le chemin.`
-          : `Pas de voie possible entre ${a} et ${b} : de l’eau, des bâtiments ou des pentes trop raides barrent le chemin.`;
+        tr.why = via[i]?.length ? tx('La voie ne passe pas par les points choisis entre {a} et {b} : un point est sur un obstacle, ou de l’eau, des bâtiments, des pentes trop raides barrent le chemin.', { a, b })
+          : tx('Pas de voie possible entre {a} et {b} : de l’eau, des bâtiments ou des pentes trop raides barrent le chemin.', { a, b });
       }
       l.ok = !tr.why;
       if (tr.why) { this.reset(tr); continue; }

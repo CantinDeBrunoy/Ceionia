@@ -1,4 +1,5 @@
 import { KINDS, KindId } from '../build/catalog';
+import { tr } from '../i18n';
 import { Difficulty, rulesOf } from './difficulty';
 import type { World } from '../world/world';
 
@@ -64,12 +65,17 @@ export function pay(w: World, c: Cost | null) {
 }
 
 export const costLabel = (c: Cost) => {
-  const parts = [c.wood ? `${c.wood} bois` : '', c.stone ? `${c.stone} pierre` : '', c.brick ? `${c.brick} brique${c.brick > 1 ? 's' : ''}` : ''].filter(Boolean);
-  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} et ${parts[parts.length - 1]}` : parts[0] ?? '';
+  const parts = [c.wood ? tr('{n} bois', { n: c.wood }) : '', c.stone ? tr('{n} pierre', { n: c.stone }) : '', c.brick ? tr(c.brick > 1 ? '{n} briques' : '{n} brique', { n: c.brick }) : ''].filter(Boolean);
+  return parts.length > 1 ? tr('{list} et {last}', { list: parts.slice(0, -1).join(', '), last: parts[parts.length - 1] }) : parts[0] ?? '';
 };
 
+/** Ce que le village a en réserve des matériaux de ce prix (bois, pierre, et briques s'il en faut) */
+export const haveLabel = (w: World, c: Cost) => c.brick
+  ? tr(Math.floor(w.brick) > 1 ? '{wood} bois, {stone} pierre et {brick} briques' : '{wood} bois, {stone} pierre et {brick} brique', { wood: Math.floor(w.wood), stone: Math.floor(w.stone), brick: Math.floor(w.brick) })
+  : tr('{wood} bois et {stone} pierre', { wood: Math.floor(w.wood), stone: Math.floor(w.stone) });
+
 /** Ce qui manque pour payer, à dire au joueur */
-export const shortLabel = (w: World, c: Cost) => `Il faut ${costLabel(c)} (vous avez ${Math.floor(w.wood)} bois${c.brick ? `, ${Math.floor(w.stone)} pierre et ${Math.floor(w.brick)} brique${Math.floor(w.brick) > 1 ? 's' : ''}` : ` et ${Math.floor(w.stone)} pierre`})`;
+export const shortLabel = (w: World, c: Cost) => tr('Il faut {cost} (vous avez {have})', { cost: costLabel(c), have: haveLabel(w, c) });
 
 /** Production par jour d'un bâtiment, selon son âge */
 export const YIELD: Partial<Record<KindId, Partial<Record<Resource, number[]>>>> = {

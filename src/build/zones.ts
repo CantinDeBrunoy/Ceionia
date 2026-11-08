@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World, N, SEA } from '../world/world';
 import { KINDS, KindId } from './catalog';
+import { tr } from '../i18n';
 
 /**
  * Bâtiments qui ne se posent qu'à des endroits précis (règles de `World.canPlace`) : ce qu'il leur faut, dit au joueur
@@ -66,8 +67,8 @@ export class ZoneScan {
   emptyMessage(name: string) {
     let best = '', n = 0;
     for (const [r, k] of this.why) if (k > n) { n = k; best = r; }
-    const need = ZONED[this.kind] ?? 'la place manque';
-    return `Aucun emplacement pour « ${name} » : ${need}.${best ? ` (${best})` : ''}`;
+    const need = tr(ZONED[this.kind] ?? 'la place manque');
+    return tr('Aucun emplacement pour « {name} » : {need}.', { name, need }) + (best ? ` (${tr(best)})` : '');
   }
 }
 
