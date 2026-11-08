@@ -14,6 +14,7 @@ import { priceIn, canPay, pay, shortLabel } from '../sim/economy';
 import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
+import { CoverageView } from '../render/coverageView';
 
 export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
@@ -119,6 +120,8 @@ export class ToolController implements ToolInput {
   private radii: Partial<Record<ToolId, number>> = { bulldoze: 1 };
   /** emplacements possibles du bâtiment en main quand il ne se pose qu'à des endroits précis (port, mine, bûcheron…) */
   private zones: ZoneHighlight;
+  /** couverture des pompiers et de la police, surlignée depuis la fiche du besoin Sécurité */
+  readonly coverage: CoverageView;
   /** la surbrillance s'éteint une fois le bâtiment posé, jusqu'au prochain choix dans la barre */
   private zonesOff = false;
 
@@ -153,6 +156,7 @@ export class ToolController implements ToolInput {
     this.door.renderOrder = 10; this.door.visible = false;
     h.scene.add(this.ring, this.marker, this.ghost, this.freeLine, this.freeDot, this.freePulse, this.freeArrow, this.spots, this.door);
     this.zones = new ZoneHighlight(() => this.h.world, h.scene);
+    this.coverage = new CoverageView(() => this.h.world, h.scene);
     this.zones.onEmpty = (m) => this.h.toast(m);
   }
 
@@ -466,6 +470,7 @@ export class ToolController implements ToolInput {
     const stay = this.holding() && STAY_ZONE.includes(this.kind) ? this.kind : sel && STAY_ZONE.includes(sel.kind as KindId) ? (sel.kind as KindId) : null;
     this.zones.set(stay ?? (this.holding() && !this.zonesOff ? this.kind : null), !!stay);
     this.zones.update(dt);
+    this.coverage.update(dt);
     // la pastille du point A bat doucement : on ne la perd pas de vue
     if (this.freePulse.visible) {
       this.pulseT += dt;

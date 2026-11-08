@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World } from '../world/world';
 import { Building, KINDS, sizeOf } from '../build/catalog';
+import { FIRE_RANGE } from '../sim/coverage';
 import { Puffs } from './particles';
 
 const MAX_FLAMES = 120, FLAMES_PER_FIRE = 7;
@@ -10,7 +11,7 @@ const PUT_OUT = 30, BURN_DOWN = 70;
  * Avec une caserne à portée : les pompiers accourent avec leurs seaux (au plus tard, le feu est éteint au bout de CREW
  * secondes) ; le camion arrose SPRAY_OUT secondes. L'eau des seaux l'éteint aussi : DOUSE seaux × secondes en tout
  */
-const CREW = 40, CREW_RANGE = 14, SPRAY_OUT = 14, DOUSE = 18;
+const CREW = 40, CREW_RANGE = FIRE_RANGE, SPRAY_OUT = 14, DOUSE = 18;
 const WATER = new THREE.Color(0.78, 0.9, 1);
 const SMOKE = new THREE.Color(0.22, 0.2, 0.2), STEAM = new THREE.Color(0.95, 0.96, 0.97);
 

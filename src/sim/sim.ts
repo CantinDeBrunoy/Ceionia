@@ -1,3 +1,4 @@
+import { Coverage, computeCoverage } from './coverage';
 import { World } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
@@ -87,6 +88,8 @@ export class Sim {
   fled = 0;
   /** d'où vient chaque besoin : apports des bâtiments par sorte (et des maisons au bord de l'eau), puis la terre cultivée */
   private src: Record<NeedId, Map<string, { n: number; v: number }>> = { housing: new Map(), food: new Map(), water: new Map(), jobs: new Map(), joy: new Map(), health: new Map() };
+  /** couverture des pompiers et de la police (indicateur et petit bonus de bien-être), refaite à chaque recalcul */
+  coverage: Coverage = computeCoverage([]);
   private land = { fields: 0, fertile: 0, gardens: 0, forests: 0 };
   private lastVersion = -1;
   private recalcTimer = 0;
@@ -131,6 +134,8 @@ export class Sim {
     // un emploi pour deux champs (des emplois entiers, comme les autres)
     J += Math.floor(fields / 2);
     Jy += gardens * 0.8 + forests * 0.08;
+    this.coverage = computeCoverage(w.buildings.values());
+    Jy += this.coverage.joy;
     this.counts = counts;
     this.housing.cap = H;
     this.food.cap = F;
@@ -176,6 +181,7 @@ export class Sim {
     if (k === 'food' && L.fields) rows.push({ label: L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)', n: L.fields, v: this.fieldsFood });
     if (k === 'jobs' && L.fields >= 2) rows.push({ label: 'Champs', n: L.fields, v: Math.floor(L.fields / 2) });
     if (k === 'joy' && L.gardens) rows.push({ label: 'Jardins', n: L.gardens, v: L.gardens * 0.8 });
+    if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: 'Sécurité (pompiers et police)', n: this.coverage.both, v: this.coverage.joy });
     if (k === 'joy' && L.forests) rows.push({ label: 'Forêts où l’on se promène', n: L.forests, v: L.forests * 0.08 });
     if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)', n: 0, v: b }); }
     rows.sort((a, b) => b.v - a.v);

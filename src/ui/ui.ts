@@ -1,6 +1,7 @@
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building } from '../build/catalog';
 import { Sim, NeedId } from '../sim/sim';
+import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
@@ -221,6 +222,8 @@ const NEEDS: { k: 'food' | 'water' | 'housing' | 'jobs' | 'joy' | 'health'; icon
   { k: 'jobs', icon: 'hammer', label: 'Travail' }, { k: 'joy', icon: 'smile', label: 'Bien-être' }, { k: 'health', icon: 'heart', label: 'Santé' },
 ];
 /** Ce qu'un bâtiment apporte, pour sa fiche et sa vignette */
+/** Le 7e besoin de la barre : la sécurité (couverture des pompiers et de la police), un indicateur qui ne bloque pas la croissance */
+const SECURITY_NEED = { k: 'security' as const, icon: 'shield', label: 'Sécurité' };
 const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string; one?: string }[] = [
   { k: 'housing', icon: 'house', label: 'logements', one: 'logement' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
   { k: 'jobs', icon: 'hammer', label: 'emplois', one: 'emploi' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
@@ -341,7 +344,7 @@ export class UI {
   cat: BuildCat = 'home';
   private lastAge = -1;
   /** le besoin dont la fiche est ouverte */
-  private needOpen: NeedId | null = null;
+  private needOpen: NeedId | 'security' | null = null;
   /** ressource dont la fiche est ouverte (même panneau que celle d'un besoin) */
   private resOpen: Resource | null = null;
   private toastTimer = 0;
@@ -439,6 +442,7 @@ export class UI {
       }
     }, { passive: false });
     $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${ic(n.icon, 20)}</b><div class="bar"><i></i></div><span>${n.label}</span></div>`).join('')
+      + `<div class="need" id="n-security"><b>${ic(SECURITY_NEED.icon, 20)}</b><div class="bar"><i></i></div><span>${SECURITY_NEED.label}</span></div>`
       + `<button class="pop" id="pop" title="État des habitants" aria-label="État des habitants" aria-expanded="false">0<small>habitants</small></button>`;
     // fiche des habitants : un clic sur le compteur l'ouvre, un clic ailleurs la ferme
     const census = document.createElement('div');
@@ -454,6 +458,7 @@ export class UI {
     needInfo.hidden = true;
     root.appendChild(needInfo);
     for (const n of NEEDS) $('#n-' + n.k).onclick = () => { this.needOpen === n.k ? this.closeNeed() : this.openNeed(n.k); this.host.audio.sfxClick(); };
+    $('#n-security').onclick = () => { this.needOpen === 'security' ? this.closeNeed() : this.openNeed('security'); this.host.audio.sfxClick(); };
     // fiche d'une ressource : un clic sur son stock (d'où elle vient, à quoi elle sert, quoi bâtir pour en avoir plus)
     $('#res').onclick = (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.res[data-r]');
@@ -464,12 +469,14 @@ export class UI {
     };
     needInfo.onclick = (e) => {
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
-      if (k) { this.closeNeed(); this.pick(k); }
+      if (k) { this.closeNeed(); this.pick(k); return; }
+      // Sécurité : surligner (ou non) sur la carte les zones couvertes et les habitations sans protection
+      if ((e.target as HTMLElement).closest('[data-cover]')) { const cv = this.host.tools.coverage; cv.set(!cv.active); this.renderNeed(); }
     };
     document.addEventListener('pointerdown', (e) => {
       const t = e.target as HTMLElement;
       if (!census.hidden && !census.contains(t) && !t.closest('#pop')) this.closeCensus();
-      if ((this.needOpen || this.resOpen) && !needInfo.contains(t) && !t.closest('.need, .res')) this.closeNeed();
+      if ((this.needOpen || this.resOpen) && !needInfo.contains(t) && !t.closest('.need, .res') && !(this.host.tools.coverage.active && t.tagName === 'CANVAS')) this.closeNeed();
       // la liste des conditions d'âge se replie dès qu'on clique ailleurs
       if (!t.closest('#agePanel') && $('#agePanel').classList.contains('open')) { $('#agePanel').classList.remove('open'); this.update(); }
     });
@@ -1045,6 +1052,7 @@ export class UI {
       el.classList.toggle('full', !need.ok && housing);
       el.title = housing ? `${n.label} : ${Math.floor(sim.pop)} habitants pour ${need.cap} places` : `${n.label} : ${num(need.cap)} pour un besoin de ${num(need.demand)}`;
     }
+    { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('#n-security').title = `Sécurité : ${Math.round(s * 100)} % des habitations couvertes (pompiers ${Math.round(sim.coverage.fireShare * 100)} %, police ${Math.round(sim.coverage.policeShare * 100)} %)`; }
     // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
     const cs = this.census(), alert = cs.untreated ? `${cs.untreated} sans soins` : cs.hungry ? `${cs.hungry} ${cs.hungry > 1 ? 'ont' : 'a'} faim` : cs.thirsty ? `${cs.thirsty} ${cs.thirsty > 1 ? 'ont' : 'a'} soif`
       : cs.jobless ? `${cs.jobless} sans emploi` : cs.injured ? `${cs.injured} blessé${cs.injured > 1 ? 's' : ''}` : '';
@@ -1105,8 +1113,9 @@ export class UI {
 
   private closeCensus() { $('#census').hidden = true; $('#pop').setAttribute('aria-expanded', 'false'); }
 
-  private openNeed(k: NeedId) {
+  private openNeed(k: NeedId | 'security') {
     this.closeCensus();
+    if (k !== 'security') this.host.tools.coverage.set(false);
     this.resOpen = null;
     document.querySelectorAll('.res.open').forEach((el) => el.classList.remove('open'));
     this.needOpen = k;
@@ -1122,6 +1131,7 @@ export class UI {
 
   private closeNeed() {
     this.needOpen = null;
+    this.host.tools.coverage.set(false);
     this.resOpen = null;
     $('#needInfo').hidden = true;
     document.querySelectorAll('.need.open, .res.open').forEach((el) => el.classList.remove('open'));
@@ -1131,6 +1141,7 @@ export class UI {
   private openRes(r: Resource) {
     this.closeCensus();
     this.needOpen = null;
+    this.host.tools.coverage.set(false);
     document.querySelectorAll('.need.open').forEach((el) => el.classList.remove('open'));
     this.resOpen = r;
     const box = $('#needInfo'), el = $(`#res .res[data-r="${r}"]`);
@@ -1172,6 +1183,7 @@ export class UI {
    * puis ce qui manque et le bâtiment qui le comblerait, à bâtir d'un clic
    */
   private renderNeed() {
+    if (this.needOpen === 'security') { this.renderSecurity(); return; }
     const { sim } = this.host, k = this.needOpen!, meta = NEEDS.find((n) => n.k === k)!, d = sim.needDetail(k), p = Math.floor(sim.pop);
     const housing = k === 'housing', have = housing ? p : d.cap, want = housing ? d.cap : d.demand;
     const fill = housing ? (d.cap > 0 ? Math.min(1, p / d.cap) : 0) : d.demand <= 0 ? 1 : Math.min(1, d.cap / d.demand);
@@ -1193,6 +1205,32 @@ export class UI {
       <div class="crow total"><span>${housing ? 'Habitants' : `Nécessaire (${p} habitants)`}</span><em>${num(housing ? p : d.demand)}</em></div>
       <p class="hint ${state}">${tip}</p>
       ${d.per > 0 && (!d.ok || housing) ? `<button class="primary" data-kind="${d.kind}" title="${where}">${ic('hammer', 15, 2.2)} Bâtir « ${name} »</button>` : ''}`;
+    const box = $('#needInfo');
+    if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
+  }
+
+  /** Fiche du besoin Sécurité : couverture des pompiers et de la police, rayons, conseils, et le bouton de surbrillance sur la carte */
+  private renderSecurity() {
+    const { sim, world } = this.host, c = sim.coverage, pc = (v: number) => `${Math.round(v * 100)} %`;
+    const all = [...world.buildings.values()], on = this.host.tools.coverage.active;
+    const state = c.share >= 0.8 ? 'ok' : c.share >= 0.4 ? 'full' : 'warn';
+    const tips = coverageTips(c, all);
+    const row = (icon: string, label: string, v: string, note = '') => `<div class="crow"><b>${ic(icon, 16, 2)}</b><span>${label}${note ? `<small>${note}</small>` : ''}</span><em>${v}</em></div>`;
+    const html = `
+      <h4>${ic(SECURITY_NEED.icon, 18, 2)} ${SECURITY_NEED.label}<em class="${state}">${pc(c.share)}</em></h4>
+      <div class="sub">couverture moyenne des habitations</div>
+      <div class="bar ${state}"><i style="width:${Math.round(c.share * 100)}%"></i></div>
+      <p class="hint">Chaque caserne de pompiers et chaque poste de police protège les maisons à sa portée : ${FIRE_RANGE} cases pour les pompiers, ${policeRange(1)} à ${policeRange(5)} cases pour la police (selon l’âge du poste). Ce n’est pas obligatoire pour grandir : c’est un bonus, +${COVER_JOY} de bien-être par maison protégée par les deux (jusqu’à +${COVER_JOY_MAX}), et des incendies éteints en un clin d’œil.</p>
+      <div class="src">
+        ${row('flame', 'Couverture des pompiers', pc(c.fireShare), `${c.stations.fire.length} caserne${c.stations.fire.length > 1 ? 's' : ''}`)}
+        ${row('shield', 'Couverture de la police', pc(c.policeShare), `${c.stations.police.length} poste${c.stations.police.length > 1 ? 's' : ''}`)}
+      </div>
+      <div class="crow total"><span>Maisons protégées par les deux</span><em>${c.both} / ${c.homes}</em></div>
+      <div class="crow total"><span>Postes de sécurité</span><em>${c.stations.fire.length + c.stations.police.length}</em></div>
+      ${tips.length ? `<p class="hint ${state}">${tips.join(' ')}</p>` : '<p class="hint ok">Tout le village est bien protégé !</p>'}
+      <button class="primary" data-cover title="Cercles verts : portée des postes. Rond orange : maison mal protégée. Rond rouge : aucune protection.">${ic('eye', 15, 2.2)} ${on ? 'Masquer la carte de couverture' : 'Montrer sur la carte'}</button>
+      <button data-kind="fire">${ic('hammer', 15, 2.2)} Bâtir « ${sim.nameOf('fire')} »</button>
+      <button data-kind="police">${ic('hammer', 15, 2.2)} Bâtir « ${sim.nameOf('police')} »</button>`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
