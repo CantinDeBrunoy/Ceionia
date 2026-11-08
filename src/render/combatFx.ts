@@ -207,6 +207,19 @@ export class CombatFx {
     }
   }
 
+  /** Un filet de fumée (cheminée, brasero, forge) qui monte et se dissipe, teinté de `c` */
+  plume(x: number, y: number, z: number, c = 0x3a3036) {
+    if (this.sparks.length >= CAP) return;
+    const col = new THREE.Color(c);
+    this.sparks.push({ x, y, z, vx: (Math.random() - 0.5) * 0.08, vy: 0.28 + Math.random() * 0.15, vz: (Math.random() - 0.5) * 0.08, life: 1.6 + Math.random() * 0.8, max: 2.4, c: col, dust: true });
+  }
+
+  /** Une braise ou une étincelle qui jaillit d'une forge, d'un foyer, d'une torchère */
+  ember(x: number, y: number, z: number, c = 0xffb040) {
+    if (this.sparks.length >= CAP) return;
+    this.sparks.push({ x, y, z, vx: (Math.random() - 0.5) * 0.4, vy: 0.5 + Math.random() * 0.6, vz: (Math.random() - 0.5) * 0.4, life: 0.5 + Math.random() * 0.5, max: 1, c: new THREE.Color(c), dust: false });
+  }
+
   /** Une lance lancée de `from` vers `to` : elle vole en arc, se plante, puis disparaît ; `onLand` à l'arrivée */
   throw(from: THREE.Vector3, to: THREE.Vector3, onLand: (() => void) | null = null) {
     const mesh = new THREE.Group();
