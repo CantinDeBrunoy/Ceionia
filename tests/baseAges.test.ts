@@ -18,10 +18,33 @@ describe('bâtiments de la base des Enfers selon l’âge', () => {
       for (let age = 1; age <= BASE_AGE_MAX; age++) {
         const g = baseAgeGeo(kind, age);
         expect(g, `${kind} âge ${age}`).not.toBeNull();
-        expect(g!.solid.attributes.position.count).toBeGreaterThan(30);
+        // un vrai modèle (des centaines de pièces), pas une boîte : les bâtiments importants dépassent 2500 sommets, le brasero 400
+        expect(g!.solid.attributes.position.count, `${kind} âge ${age}`).toBeGreaterThan(kind === 'brazier' ? 400 : 2500);
         counts.add(g!.solid.attributes.position.count);
       }
       expect(counts.size, kind).toBe(BASE_AGE_MAX);
+    }
+  });
+
+  it('chaque bâtiment porte le drapeau de la faction, les grands plusieurs oriflammes', () => {
+    for (const kind of ['camp', 'post', 'smithy', 'infirmary', 'tower', 'brazier'] as const) {
+      for (let age = 1; age <= BASE_AGE_MAX; age++) {
+        const g = baseAgeGeo(kind, age)!;
+        expect(g.flag, `${kind} âge ${age}`).not.toBeNull();
+        if (kind === 'camp') expect((g.flags ?? []).length, `camp âge ${age}`).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
+  it('les bâtiments sont agrandis (environ 40 %) et gardent leur façade au même endroit', () => {
+    for (const kind of ['camp', 'post', 'smithy', 'infirmary'] as const) {
+      for (let age = 1; age <= BASE_AGE_MAX; age++) {
+        const g = baseAgeGeo(kind, age)!;
+        g.solid.computeBoundingBox();
+        const b = g.solid.boundingBox!;
+        expect(b.max.x - b.min.x, `${kind} âge ${age}`).toBeGreaterThan(2.4);
+        expect(b.min.z, `${kind} âge ${age}`).toBeLessThan(-0.9);
+      }
     }
   });
 
