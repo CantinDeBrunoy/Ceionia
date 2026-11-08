@@ -115,7 +115,7 @@ describe('volet militaire : rien ne reste coincé', () => {
   });
 
   it('une vague qui traîne (un démon coincé) finit par compter pour repoussée : les vagues suivantes viennent', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     tick(war, 1);
     war.callWave();
     tick(war, 1, () => !!war.isle!.raid);
@@ -129,7 +129,7 @@ describe('volet militaire : rien ne reste coincé', () => {
   }, 30000);
 
   it('la caserne abattue, le repli mène à la tour de garde, pas au portail d’où sortent les démons', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     tick(war, 1);
     const isle = war.isle!, bar = [...isle.defs.values()].find((b) => b.kind === 'barracks')!, tower = [...isle.defs.values()].find((b) => b.kind === 'watchtower')!;
     const near = (p: [number, number], b: { site: { x: number; z: number; r: number } }) => Math.hypot(p[0] - b.site.x, p[1] - b.site.z) < b.site.r + 3;
@@ -142,7 +142,7 @@ describe('volet militaire : rien ne reste coincé', () => {
   }, 30000);
 
   it('la durée d’une vague en cours se sauvegarde', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     tick(war, 1);
     war.callWave();
     tick(war, 3, () => !!war.isle!.raid);
@@ -156,7 +156,7 @@ describe('volet militaire : rien ne reste coincé', () => {
   }, 30000);
 
   it('vue des Enfers à ×4 sur une machine lente : le temps de la faction suit celui du jeu', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     tick(war, 1);
     war.hellInView = true;
     const t0 = war.faction!.time;
@@ -208,7 +208,7 @@ describe('volet militaire : passages entre l’île et les Enfers', () => {
   beforeAll(() => setMapSize(192));
 
   it('on peut toujours aller voir les troupes des Enfers, et faire venir la garnison de l’île en renfort', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     war.recruit('soldier', 1, 80); war.recruit('soldier', 1, 80); war.recruit('archer', 1, 80);
     tick(war, 2 * TROOPS.soldier.time + TROOPS.archer.time + 2);
     // rien dans les Enfers : pas de bouton pour y aller
@@ -226,7 +226,7 @@ describe('volet militaire : passages entre l’île et les Enfers', () => {
   }, 30000);
 
   it('le royaume tombé, le portail s’éteint : les troupes des Enfers rentrent sur l’île, plus personne n’y part', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     war.recruit('soldier', 1, 80); war.recruit('soldier', 1, 80);
     tick(war, 2 * TROOPS.soldier.time + 2);
     war.sendThroughPortal(war.isle!.sim.alive('player'));
@@ -257,7 +257,7 @@ describe('volet militaire : passages entre l’île et les Enfers', () => {
   }, 30000);
 
   it('une ancienne sauvegarde (troupe dans les Enfers, sans faction ni base ni roi) se reprend : la troupe y est, on peut y aller', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     war.load({ army: { troops: [{ id: 3, kind: 'soldier', hp: 50, maxHp: 110, where: 'hell', heal: 0 }, { id: 4, kind: 'archer', hp: 0, maxHp: 65, where: 'isle', heal: 30 }], queue: [], nextId: 5 }, faction: null, raid: { w: null } });
     war.update(0.1, 1);
     expect(war.troopsIn(war.faction)).toHaveLength(1);
@@ -270,7 +270,7 @@ describe('volet militaire : passages entre l’île et les Enfers', () => {
   }, 30000);
 
   it('partie quittée pendant la cinématique de la victoire : l’écran des récompenses n’est pas perdu', () => {
-    const w = setup(), war = new War(w);
+    const w = setup(), war = new War(w); war.skipInvasion();
     tick(war, 1);
     war.reward = { ore: 250, gear: [['sword', 4]], joy: 3 };
     const back = new War(w);

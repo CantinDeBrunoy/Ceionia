@@ -5,7 +5,7 @@ import type { PointerInfo, ToolInput } from '../core/camera';
 import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGearMissing, gearToCraft, troopForm, troopName, troopLabel, gearName, andJoin } from '../sim/army';
 import type { GearId } from '../sim/gear';
 import { tr, plural, nplural, pct } from '../i18n';
-import type { War } from '../sim/war';
+import { clockText, type War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
 import { BASE_DEFS, costText, canAfford, COUNTER_WARN } from '../sim/hellBase';
 import type { BaseCost } from '../sim/hellBase';
@@ -444,6 +444,8 @@ export class CommandUI implements ToolInput {
     if (!t) return 0;
     const us = this.units().filter((u) => this.cmd.selected.has(u.id));
     if (!us.length) return 0;
+    const closed = t.kind === 'isle' ? this.host.war.hellWhy() : null;
+    if (closed) { this.host.toast(closed); return 0; }
     this.host.war.sendThroughPortal(us);
     this.host.click();
     this.host.toast(t.kind === 'isle' ? tr('{n} en route vers le portail des Enfers.', { n: nplural(us.length, 'soldat', 'soldats') }) : tr('{n} en route pour rentrer sur l’île.', { n: nplural(us.length, 'soldat', 'soldats') }));
@@ -536,13 +538,14 @@ export class CommandUI implements ToolInput {
     else if (a.startsWith('grp:')) { const n = +a.slice(4); if (e.shiftKey || e.ctrlKey) this.cmd.setGroup(n); else if (this.cmd.recall(n)) this.focusSelection(); }
     else if (a === 'portal') {
       const us = this.units().filter((u) => this.cmd.selected.has(u.id));
-      if (!us.length) this.host.toast(tr('Choisissez d’abord des troupes (clic, ou glisser pour un cadre).'));
+      if (this.theater.kind === 'isle' && w.hellWhy()) this.host.toast(w.hellWhy()!);
+      else if (!us.length) this.host.toast(tr('Choisissez d’abord des troupes (clic, ou glisser pour un cadre).'));
       else { w.sendThroughPortal(us); this.host.toast(this.theater.kind === 'isle' ? tr('{n} en route vers le portail des Enfers.', { n: nplural(us.length, 'soldat', 'soldats') }) : tr('{n} en route pour rentrer sur l’île.', { n: nplural(us.length, 'soldat', 'soldats') })); }
     }
     else if (a.startsWith('rec:')) this.recruitOrCraft(a.slice(4) as TroopKind);
     else if (a === 'goHell') { this.host.goHell(); return; }
     else if (a === 'garrison') { const n = w.callGarrison(); this.host.toast(n > 1 ? tr('🌀 {n} troupes de l’île passent le portail : elles arrivent au seuil des Enfers.', { n }) : n ? tr('🌀 1 troupe de l’île passe le portail : elle arrive au seuil des Enfers.') : tr('Aucune troupe valide sur l’île.')); }
-    else if (a === 'wave') { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la prochaine vague arrive !')); }
+    else if (a === 'wave') { const why = w.callWhy(); if (why) this.host.toast(why); else { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la prochaine vague arrive !')); } }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
     else if (a.startsWith('rech:')) { this.recruitHell(a.slice(5) as TroopKind); if (this.placing) { this.render(); return; } }
     else if (a === 'leave') { if (this.theater.kind === 'isle') this.host.leaveIsle(); else this.host.leaveHell(); return; }
@@ -664,19 +667,22 @@ export class CommandUI implements ToolInput {
     // en haut : le ruban d'état (vague et cor, contamination, garnison, zone suivante)
     const next = w.nextWaveIn(), raid = isle && w.isle?.raid;
     const wounded = w.army.troops.filter((x) => x.heal > 0).length;
-    const status = isle ? (raid ? `<span class="wst hot">${tr('🔥 Incursion : {n} démons', { n: w.isle!.raiders().length })}</span>` : next !== null ? `<span class="wst">${tr('Prochaine vague dans {t}', { t: `<b>${Math.ceil(next)} s</b>` })} <button data-a="wave" title="${tr('Sonner le cor : faire venir la prochaine vague tout de suite')}">${tr('🎺 Cor')}</button></span>` : '') : '';
+    const status = isle ? this.waveStatus(next, !!raid) : '';
+    // après la victoire sur l'invasion : le guidage pas à pas vers les Enfers (choisir les troupes, puis les envoyer)
+    const step = isle ? w.guideStep(sel.selected.size) : null;
+    const guide = step ? `<span class="wst guide">${step === 'select' ? tr('➡️ Vers les Enfers : choisissez vos troupes (bouton « Tous »).') : tr('➡️ Vers les Enfers : envoyez-les avec « Envoyer aux Enfers ».')}</span>` : '';
     // la contamination de l'île : elle recule à chaque défense, chaque vague repoussée, chaque zone des Enfers conquise
     const bl = isle && w.blight ? Math.round(w.blight.level * 100) : -1;
     const blight = bl >= 0 ? `<span class="tsup tblight${bl > 60 ? ' low' : ''}" title="${tr('Contamination de l’île : les Enfers débordent par le portail (près de lui, les démons frappent un peu plus fort). Elle recule à chaque tour de garde ou caserne bâtie, chaque vague repoussée, chaque zone des Enfers conquise ; l’île sécurisée reverdit. Les troupes se soignent plus vite dans la zone purifiée (anneaux dorés autour des défenses).')}">🔥 ${tr('Contamination')} <i><b style="width:${bl}%"></b></i>${pct(bl)}</span>` : '';
     const garrison = `<span class="wst" title="${isle ? tr('Soldats de la garnison de l’île, sur le maximum que la caserne peut loger') : tr('Soldats de l’armée, sur le maximum')}">🛡️ ${isle ? tr('Garnison') : tr('Armée')} <b>${armySize(w.army)} / ${armyCap(ctx)}</b></span>`;
-    const ribbon = [status, blight, garrison, wounded ? `<span class="twd" title="${tr('Blessés qui se soignent à la caserne')}">🩹 ${nplural(wounded, 'blessé', 'blessés')}</span>` : ''].filter(Boolean).map((x) => `<div class="tchip">${x}</div>`).join('');
+    const ribbon = [guide, status, blight, garrison, wounded ? `<span class="twd" title="${tr('Blessés qui se soignent à la caserne')}">🩹 ${nplural(wounded, 'blessé', 'blessés')}</span>` : ''].filter(Boolean).map((x) => `<div class="tchip">${x}</div>`).join('');
     const none = isle ? tr('Aucune troupe sur l’île : recrutez à la caserne (à droite).') : w.army.troops.some((x) => x.where === 'hell') ? tr('Aucune troupe debout ici : les blessés se soignent.') : tr('Aucune troupe ici : faites venir la garnison de l’île (Renforts, à gauche).');
     // dans les Enfers : une seule frise compacte (le front, l'alerte, l'armée) ; sur l'île, le ruban de pastilles
     this.bar.classList.toggle('inhell', !isle);
     const html = `${isle ? `<div class="tstate">${ribbon}</div>` : this.frontBar(wounded)}
       <div class="tfoot">
-        ${this.passDock(isle)}
-        <div class="tbot panel"><div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button>` : ''}</div><div class="thint">${this.hint()}</div></div>
+        ${this.passDock(isle, step)}
+        <div class="tbot panel"><div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall${step === 'select' ? ' guide' : ''}" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button>` : ''}</div><div class="thint">${this.hint()}</div></div>
         ${rec}
         <div class="tcorner"><button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="${tr('Rappel des contrôles')}">${tr('Aide')}</button><button data-a="leave" class="tx${isle ? '' : ' go'}" title="${isle ? tr('Quitter le commandement (Échap)') : tr('Quitter les Enfers et revenir sur l’île')}">${isle ? tr('Quitter') : tr('↩ Retourner sur l’île')}</button></div>
       </div>${this.helpOpen ? `<ul class="thelp panel">${CONTROLS_HELP.map(([k, t]) => `<li><b>${tr(k)}</b><span>${tr(t)}</span></li>`).join('')}</ul>` : ''}`;
@@ -684,12 +690,26 @@ export class CommandUI implements ToolInput {
   }
 
   /**
+   * La pastille des vagues : « Vague en cours », ou le compte à rebours (m:ss), la force prévue (petite, moyenne, grosse) et le
+   * bouton qui la fait venir tout de suite ; avant l'invasion, ce qu'il lui faut pour être annoncée
+   */
+  private waveStatus(next: number | null, raid: boolean) {
+    const w = this.host.war;
+    if (raid) return `<span class="wst hot">${w.inv === 'raid' ? tr('🔥 Invasion : {n} démons', { n: w.isle!.raiders().length }) : tr('🔥 Vague en cours : {n} démons', { n: w.isle!.raiders().length })}</span>`;
+    if (next === null) return w.active && w.inv === 'wait' ? `<span class="wst hot">${tr('⚠️ Invasion à venir : une tour de garde, une caserne et {n} soldats sur l’île.', { n: w.invasionNeed() })}</span>` : '';
+    const f = w.nextForce(), force = f === 'big' ? tr('Grosse vague') : f === 'medium' ? tr('Vague moyenne') : f === 'small' ? tr('Petite vague') : '';
+    const why = w.callWhy(), t = `<b>${clockText(next)}</b>`;
+    const label = w.inv === 'coming' ? tr('⚠️ Invasion dans {t}', { t }) : tr('Prochaine vague dans {t}', { t });
+    return `<span class="wst${w.inv === 'coming' ? ' hot' : ''}">${label}${force ? ` · ${force}` : ''} <button data-a="wave" class="${why ? 'off' : ''}" title="${why ?? tr('Sonner le cor : faire venir la prochaine vague tout de suite, sans attendre')}">${tr('🎺 Appeler la prochaine vague')}</button></span>`;
+  }
+
+  /**
    * Le seul dock de gauche : UN bouton pour faire passer les troupes choisies d'un monde à l'autre (les ordres se donnent au
    * clavier : A, H, R, Espace, et au clic droit) ; à côté, en plus discret, le lien « Voir les Enfers » (île) ou « Renforts » (Enfers)
    */
-  private passDock(isle: boolean) {
-    const w = this.host.war, n = this.cmd.selected.size;
-    const main = isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}" title="${isle ? tr('Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)') : tr('Les troupes choisies repassent le portail et rentrent sur l’île')}"><span class="oi">🌀</span><span>${isle ? tr('Envoyer aux Enfers') : tr('Renvoyer les troupes sur l’île')}<small>${n > 1 ? tr('{n} troupes choisies', { n }) : n ? tr('{n} troupe choisie', { n }) : tr('choisir des troupes')}</small></span></button>`;
+  private passDock(isle: boolean, step: 'select' | 'send' | null = null) {
+    const w = this.host.war, n = this.cmd.selected.size, closed = isle ? w.hellWhy() : null;
+    const main = isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}${closed ? ' closed' : ''}${step === 'send' ? ' guide' : ''}" title="${isle ? (closed ?? tr('Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)')) : tr('Les troupes choisies repassent le portail et rentrent sur l’île')}"><span class="oi">🌀</span><span>${isle ? tr('Envoyer aux Enfers') : tr('Renvoyer les troupes sur l’île')}<small>${n > 1 ? tr('{n} troupes choisies', { n }) : n ? tr('{n} troupe choisie', { n }) : tr('choisir des troupes')}</small></span></button>`;
     const links = this.hellLinks(isle);
     return main || links ? `<div class="tfl">${main}${links}</div>` : '';
   }
@@ -700,7 +720,7 @@ export class CommandUI implements ToolInput {
    */
   private hellLinks(isle: boolean) {
     const w = this.host.war;
-    if (isle) return w.hellPresence() ? `<button data-a="goHell" class="tord gth sm" title="${tr('Aller dans les Enfers, auprès des troupes et de la base avancée')}"><span class="oi">🔥</span>${tr('Voir les Enfers')}</button>` : '';
+    if (isle) return w.hellPresence() || w.hellWhy() ? `<button data-a="goHell" class="tord gth sm${w.hellWhy() ? ' closed' : ''}" title="${w.hellWhy() ?? tr('Aller dans les Enfers, auprès des troupes et de la base avancée')}"><span class="oi">🔥</span>${tr('Voir les Enfers')}</button>` : '';
     const n = w.portalOut || !w.isle ? 0 : w.troopsIn(w.isle.sim).filter((u) => !w.crossing.has(u.id)).length;
     return n ? `<button data-a="garrison" class="tord gar sm" title="${tr('Renforts : les {n} de l’île passent le portail et vous rejoignent', { n: `${n} ${plural(n, 'troupe', 'troupes')} ${plural(n, 'valide', 'valides')}` })}"><span class="oi">🌀</span>${tr('Renforts')} +${n}</button>` : '';
   }

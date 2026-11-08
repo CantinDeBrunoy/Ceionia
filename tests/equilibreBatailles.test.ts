@@ -112,7 +112,7 @@ describe('équilibre : batailles sur l’île du portail', () => {
   const fight = (age: number, n: number, level: number, difficulty: Difficulty = 'normal') => {
     const w = island(age);
     w.difficulty = difficulty;
-    const war = new War(w);
+    const war = new War(w); war.skipInvasion();
     const tick = (t: number, until?: () => boolean) => { for (let i = 0; i < t * 10; i++) { war.update(0.1, age); if (until?.()) return; } };
     tick(1);
     for (let i = 0; i < n; i++) {
@@ -156,7 +156,7 @@ describe('équilibre : batailles sur l’île du portail', () => {
   }, 180000);
 
   it('l’annonce : la vague est composée avant d’arriver, et c’est elle qui arrive', () => {
-    const w = island(3), war = new War(w);
+    const w = island(3), war = new War(w); war.skipInvasion();
     for (let i = 0; i < 20; i++) war.army.troops.push({ id: war.army.nextId++, kind: 'soldier', hp: 130, maxHp: 130, where: 'isle', heal: 0 });
     for (let i = 0; i < 20; i++) war.update(0.1, 3);
     const f = war.faction!;
@@ -172,7 +172,7 @@ describe('équilibre : batailles sur l’île du portail', () => {
   }, 30000);
 
   it('beaucoup de monde (100+ unités) : la simulation reste rapide', () => {
-    const w = island(4), war = new War(w);
+    const w = island(4), war = new War(w); war.skipInvasion();
     for (let i = 0; i < 80; i++) war.army.troops.push({ id: war.army.nextId++, kind: 'soldier', hp: 150, maxHp: 150, where: 'isle', heal: 0 });
     for (let i = 0; i < 20; i++) war.update(0.1, 4);
     war.faction!.raidsRepelled = 4;
