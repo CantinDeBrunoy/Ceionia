@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { BaseKind } from '../sim/hell';
 import { paint, merge } from './battleUnits';
+import { baseAgeGeo, BaseParts } from './hellBaseAges';
 
 /**
  * Les bâtiments de la base avancée du joueur dans les Enfers, en low-poly : bois clair, toile beige, pierre grise et
@@ -10,6 +11,9 @@ import { paint, merge } from './battleUnits';
 
 const WOOD = 0x9a6a3c, DARKWOOD = 0x6a4426, CLOTH = 0xe8dcc0, STONE = 0x8a8590, DARK = 0x4a4650, BLUE = 0x2e6ad8, GOLD = 0xf0c040;
 const FIRE = 0xffa040, EMBER = 0xff6a20;
+
+/** Les bâtiments selon l'âge du village (voir hellBaseAges.ts) ; null : ce genre n'a pas de variantes d'âge (palissade) */
+export const baseGeoAged = (kind: BaseKind, age: number): BaseParts | null => baseAgeGeo(kind, age);
 
 export function baseGeo(kind: BaseKind): { solid: THREE.BufferGeometry; shine: THREE.BufferGeometry | null; fire: number; flag: [number, number, number] | null } {
   const solid: THREE.BufferGeometry[] = [], shine: THREE.BufferGeometry[] = [];

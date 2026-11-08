@@ -6,7 +6,8 @@ import { Hell, HellUnit, HellEvent, DemonKind, DEMONS, BaseKind } from '../sim/h
 import { caveLights, caveLit, glowMaterial, MAX_CAVE_LIGHTS } from './caveLight';
 import { BattleLayer, paint, merge } from './battleUnits';
 import { hash2, smoothstep } from '../core/rng';
-import { baseGeo, BASE_FLAG } from './hellBase';
+import { baseGeo, BASE_FLAG, baseGeoAged } from './hellBase';
+import { baseAgeOf, BaseParts } from './hellBaseAges';
 import { BASE_DEFS, BASE_R } from '../sim/hellBase';
 import type { KingFight } from '../sim/kingdom';
 import { KingFx } from './kingFx';
@@ -30,6 +31,8 @@ const FACE_MIX = 0.85;
 const LAVA_STEP = 3;
 const LIGHT_PICK = 0.25;
 interface Source { x: number; y: number; z: number; r: number; c: THREE.Color; flicker: number }
+/** Ce qu'un bâtiment de la base porte pour son âge : ses maillages qui s'animent (flammes, champ d'énergie, pièces qui tournent) et ses points de fumée */
+interface BaseDress { kind: BaseKind; age: number; parts: BaseParts; flame: THREE.Mesh | null; field: THREE.Mesh | null; spins: { m: THREE.Mesh }[]; puffT: number; x: number; y: number; z: number }
 interface Item { m: THREE.Matrix4; c: THREE.Color }
 
 export class HellView {
@@ -49,7 +52,9 @@ export class HellView {
   private fog = new THREE.Fog(BG, 14, 44);
   private d = new THREE.Object3D();
   /** bâtiments : maillage debout, ruines, barre de vie */
-  private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[]; rise?: number; smokeT?: number }>();
+  private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[]; rise?: number; smokeT?: number; base?: BaseDress }>();
+  /** l'âge du village (la sim, via main.ts) : les bâtiments de la base prennent la variante de leur âge sans être rebâtis */
+  age = 1;
   /** la fumée des ruines */
   private smoke = new RuinSmoke(0x2a2228);
   private housesSeen = new Set<number>();
@@ -58,8 +63,9 @@ export class HellView {
   /** la base avancée : lumières de ses feux (braseros, camp, forge), où la brume recule, matériaux, fantôme de pose */
   private baseSources = new Map<number, Source>();
   private uClear = { value: Array.from({ length: 8 }, () => new THREE.Vector3(0, 0, 0)) };
-  private baseMats: { lit: THREE.Material; glow: THREE.Material; flag: THREE.Material; ruin: THREE.Material } | null = null;
-  private baseGeos = new Map<BaseKind, ReturnType<typeof baseGeo>>();
+  private baseMats: { lit: THREE.Material; glow: THREE.Material; flag: THREE.Material; ruin: THREE.Material; field: THREE.Material } | null = null;
+  private baseGeos = new Map<string, BaseParts>();
+  private ghostAge = 0;
   private ghostMesh: THREE.Mesh | null = null;
   private ghostKind: BaseKind | null = null;
   private rangeRing: THREE.Mesh | null = null;
@@ -443,12 +449,47 @@ export class HellView {
       glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
       flag: caveLit(new THREE.MeshStandardMaterial({ color: BASE_FLAG, side: THREE.DoubleSide, roughness: 0.9 }), 'hell-base-flag'),
       ruin: caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), 'hell-ruin'),
+      field: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }),
     });
   }
-  private geoOf(kind: BaseKind) {
-    let g = this.baseGeos.get(kind);
-    if (!g) { g = baseGeo(kind); this.baseGeos.set(kind, g); }
+  /** Les pièces d'un bâtiment de la base pour un âge (la palissade n'a pas de variantes d'âge) */
+  private geoOf(kind: BaseKind, age = baseAgeOf(this.age)): BaseParts {
+    const key = `${kind}:${age}`;
+    let g = this.baseGeos.get(key);
+    if (!g) {
+      g = baseGeoAged(kind, age) ?? (() => { const o = baseGeo(kind); return { solid: o.solid, shine: o.shine, flame: null, field: null, spin: [], flameY: 0, fire: o.fire, flag: o.flag, smoke: [], sparks: [] } as BaseParts; })();
+      this.baseGeos.set(key, g);
+    }
     return g;
+  }
+
+  /** Habille (ou rhabille, quand le village change d'âge) un bâtiment de la base de la variante de l'âge courant */
+  private dressBase(id: number, kind: BaseKind, x: number, y: number, z: number) {
+    const h = this.houses.get(id);
+    const age = baseAgeOf(this.age);
+    if (!h || h.base?.age === age) return;
+    const mats = this.mats(), g = this.geoOf(kind, age), upgrade = !!h.base;
+    for (const c of [...h.up.children]) h.up.remove(c);
+    h.flags.length = 0;
+    h.up.add(new THREE.Mesh(g.solid, mats.lit));
+    if (g.shine) h.up.add(new THREE.Mesh(g.shine, mats.glow));
+    const dress: BaseDress = { kind, age, parts: g, flame: null, field: null, spins: [], puffT: Math.random(), x, y, z };
+    if (g.flame) { dress.flame = new THREE.Mesh(g.flame, mats.glow); h.up.add(dress.flame); }
+    if (g.field) { dress.field = new THREE.Mesh(g.field, mats.field); dress.field.renderOrder = 6; h.up.add(dress.field); }
+    for (const s of g.spin) { const m = new THREE.Mesh(s.geo, mats.glow); m.position.set(s.x, 0, s.z); h.up.add(m); dress.spins.push({ m }); }
+    if (g.flag) {
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.24, 3, 1).translate(0.18, 0, 0), mats.flag);
+      f.position.set(...g.flag);
+      h.up.add(f);
+      h.flags.push(f);
+    }
+    h.base = dress;
+    // la lumière du feu suit la variante (un âge sans feu n'éclaire plus)
+    if (g.fire) this.baseSources.set(id, { x, y: y + g.fire + 0.5, z, r: kind === 'brazier' ? 5.5 : 3.6, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(kind === 'brazier' ? 1.7 : 1.2), flicker: 0.3 });
+    else this.baseSources.delete(id);
+    this.lightTimer = 0;
+    // un bâtiment qui monte de niveau : nuage de poussière, il « sort de terre » comme au relèvement
+    if (upgrade) { h.rise = 0; for (let i = 0; i < 6; i++) this.units.fx.puff(x + Math.sin(i * 1.1) * 0.6, y + 0.2, z + Math.cos(i * 1.1) * 0.6, 6); }
   }
 
   /** Les bâtiments de la base : posés, abattus (ruines), ôtés ; leurs feux éclairent, les braseros chassent la brume */
@@ -456,17 +497,8 @@ export class HellView {
     const mats = this.mats();
     for (const b of this.hell.buildings.values()) {
       if (b.side !== 'player' || !(b.kind in BASE_DEFS) || this.houses.has(b.id)) continue;
-      const kind = b.kind as BaseKind, g = this.geoOf(kind);
+      const kind = b.kind as BaseKind;
       const up = new THREE.Group();
-      up.add(new THREE.Mesh(g.solid, mats.lit));
-      if (g.shine) up.add(new THREE.Mesh(g.shine, mats.glow));
-      const flags: THREE.Object3D[] = [];
-      if (g.flag) {
-        const f = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.24, 3, 1).translate(0.18, 0, 0), mats.flag);
-        f.position.set(...g.flag);
-        up.add(f);
-        flags.push(f);
-      }
       const y = this.map.groundY(b.site.x, b.site.z);
       up.position.set(b.site.x, y, b.site.z);
       // face au portail ; la palissade suit la faille en travers
@@ -476,9 +508,13 @@ export class HellView {
       ruin.scale.setScalar(0.7);
       ruin.visible = false;
       this.content.add(up, ruin);
-      this.houses.set(b.id, { up, ruin, down: false, flags });
-      if (g.fire) this.baseSources.set(b.id, { x: b.site.x, y: y + g.fire + 0.5, z: b.site.z, r: kind === 'brazier' ? 5.5 : 3.6, c: new THREE.Color(1, 0.62, 0.3).multiplyScalar(kind === 'brazier' ? 1.7 : 1.2), flicker: 0.3 });
-      this.lightTimer = 0;
+      this.houses.set(b.id, { up, ruin, down: false, flags: [] });
+      this.dressBase(b.id, kind, b.site.x, y, b.site.z);
+    }
+    // le village a changé d'âge : les bâtiments déjà posés prennent la variante d'après
+    for (const [id, h] of this.houses) {
+      const b = this.hell.buildings.get(id);
+      if (b && b.side === 'player' && b.kind in BASE_DEFS && h.base && h.base.age !== baseAgeOf(this.age)) this.dressBase(id, h.base.kind, h.base.x, h.base.y, h.base.z);
     }
     // ôtés de la bataille (une ruine remplacée, une partie reprise)
     for (const [id, h] of this.houses) {
@@ -498,7 +534,8 @@ export class HellView {
    * autour de son camp ; `kind` null : rien
    */
   ghost(kind: BaseKind | null, x = 0, z = 0, ok = false, camp: [number, number] | null = null) {
-    if (kind !== this.ghostKind) {
+    if (kind !== this.ghostKind || (kind && this.ghostAge !== baseAgeOf(this.age))) {
+      this.ghostAge = baseAgeOf(this.age);
       if (this.ghostMesh) { this.content.remove(this.ghostMesh); this.ghostMesh = null; }
       this.ghostKind = kind;
       if (kind) {
@@ -579,6 +616,7 @@ export class HellView {
       // les ruines qui ont fini de fumer (une fois la zone tenue, la fumée s'éteint au bout d'un moment)
       if (h.down && this.smoke.has(id) && (h.smokeT = (h.smokeT ?? 0) + dt) > 90) this.smoke.stop(id);
       if (h.up.visible) h.flags.forEach((f, i) => { f.rotation.y = Math.sin(t * 2.3 + i + id) * 0.35; });
+      if (h.base && h.up.visible && !h.down) this.animBase(h.base, h.up.rotation.y, id, dt, t, Math.hypot(h.base.x - target.x, h.base.z - target.z) < dist * 1.6 + 6);
       // (déjà vu debout : sa chute fumera ; une ruine trouvée en arrivant, non)
       if (!h.down) this.housesSeen.add(id);
     }
@@ -587,6 +625,27 @@ export class HellView {
     this.kingFx.update(dt, this.fight, events);
     this.stepCollapse(dt);
     this.units.update(dt, camera, events);
+  }
+
+  /** Les détails animés d'un bâtiment de la base : flammes qui vacillent, champs d'énergie, radars et hologrammes qui tournent, fumée et étincelles (seulement près de la vue) */
+  private animBase(d: BaseDress, yaw: number, id: number, dt: number, t: number, near: boolean) {
+    const p = d.parts;
+    if (d.flame) {
+      const s = 1 + Math.sin(t * 11 + id) * 0.18 + Math.sin(t * 17.3 + id * 2) * 0.12;
+      d.flame.scale.set(1 - (s - 1) * 0.4, s, 1 - (s - 1) * 0.4);
+      d.flame.position.y = p.flameY * (1 - s);
+    }
+    if (d.field) { d.field.rotation.y = t * 0.15; d.field.scale.setScalar(1 + Math.sin(t * 1.7 + id) * 0.015); }
+    d.spins.forEach((s, i) => { s.m.rotation.y = t * (0.9 + i * 0.35) * (i % 2 ? -1 : 1); });
+    if (!near || (!p.smoke.length && !p.sparks.length)) return;
+    d.puffT -= dt;
+    if (d.puffT > 0) return;
+    d.puffT = 0.16 + Math.random() * 0.2;
+    const co = Math.cos(yaw), si = Math.sin(yaw), fx = this.units.fx;
+    const at = (v: [number, number, number]): [number, number, number] => [d.x + v[0] * co + v[2] * si, d.y + v[1], d.z - v[0] * si + v[2] * co];
+    const col = d.age === 1 ? 0x5a4a48 : d.age === 2 ? 0x4a4048 : d.age === 3 ? 0x2c2a2e : d.age === 4 ? 0x6a6a70 : 0x9ad0e8;
+    for (const v of p.smoke) { const w = at(v); fx.plume(w[0], w[1], w[2], col); }
+    for (const v of p.sparks) if (Math.random() < 0.55) { const w = at(v); fx.ember(w[0], w[1], w[2], d.age === 5 ? 0x70e8ff : 0xffb040); }
   }
 
   /** Le royaume s'effondre (la cinématique de la victoire) : ses ruines s'enfoncent, la lave monte, poussière et jets de feu */

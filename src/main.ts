@@ -1413,7 +1413,7 @@ class Game implements UIHost {
       if (p) this.cam.follow(p[0], p[1]);
     }
     // la surface ne s'anime que lorsqu'on la regarde
-    if (hv) { hv.view.units.age = this.sim.age; hv.update(dt, this.war.hellFx, this.cam.camera, this.cam.target, this.cam.dist); }
+    if (hv) { hv.view.units.age = this.sim.age; hv.view.age = this.sim.age; hv.update(dt, this.war.hellFx, this.cam.camera, this.cam.target, this.cam.dist); }
     else if (uv) {
       // les troupes en train de parcourir les galeries
       uv.setTroops(this.expeditions.active.filter((a) => a.entry >= 0 && a.phase === 'work').map((a) => ({
