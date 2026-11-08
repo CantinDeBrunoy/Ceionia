@@ -651,7 +651,7 @@ export class CommandUI implements ToolInput {
     const btn = (k: BaseKind, legend: string, extra = '') => {
       const d = BASE_DEFS[k], afford = canAfford(world, d.cost), locked = k !== 'camp' && !hasCamp;
       const why = locked ? tr('d’abord le Camp') : afford ? '' : tr('manque {x}', { x: miss(d.cost) });
-      return `<button data-a="build:${k}" class="trb tb${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${d.name} (${costText(d.cost)}) : ${tr(legend)}. ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}"><b>${d.icon} ${tr(CommandUI.BSHORT[k])}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></button>`;
+      return `<button data-a="build:${k}" class="trb tb${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${tr('{name} ({cost}) : {legend}', { name: d.name, cost: costText(d.cost), legend: tr(legend) })}. ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}"><b>${d.icon} ${tr(CommandUI.BSHORT[k])}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></button>`;
     };
     const fam = (cls: string, title: string, tip: string, inner: string) => `<div class="tfam ${cls}" title="${tr(tip)}"><h6>${tr(title)}</h6><div class="tbuilds">${inner}</div></div>`;
     const tab = this.menuTab;
@@ -703,7 +703,7 @@ export class CommandUI implements ToolInput {
       nodes = HELL_ZONES.map((zd, i) => {
         const held = f.held(i) || f.victory, ageLock = ZONE_AGE[i] > age;
         const st = hot.has(i) ? 'hot' : held ? 'ok' : ageLock ? 'lock' : i === f.frontier + 1 ? 'next' : 'shut';
-        const tip = `${zd.name} : ${st === 'hot' ? tr('attaquée') : st === 'ok' ? tr('tenue') : st === 'next' ? tr('à conquérir : abattez sa forteresse') : ageLock ? tr('verrouillée : demande {age}', { age: zoneAgeText(i) }) : tr('fermée : abattez d’abord la forteresse de la zone d’avant')} (${zoneAgeText(i)})`;
+        const tip = tr('{name} : {state} ({age})', { name: zd.name, state: st === 'hot' ? tr('attaquée') : st === 'ok' ? tr('tenue') : st === 'next' ? tr('à conquérir : abattez sa forteresse') : ageLock ? tr('verrouillée : demande {age}', { age: zoneAgeText(i) }) : tr('fermée : abattez d’abord la forteresse de la zone d’avant'), age: zoneAgeText(i) });
         const link = i ? `<i class="zl${held ? ' ok' : ''}"></i>` : '';
         return `${link}<span class="zn ${st}" title="${tip.replace(/"/g, '&quot;')}"><span class="zc">${i ? i : 'P'}</span><span class="zt">${tr(CommandUI.ZSHORT[i])}</span></span>`;
       }).join('');

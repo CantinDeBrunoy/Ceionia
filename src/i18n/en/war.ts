@@ -140,6 +140,8 @@ registerDict('war', {
   'attaquée': 'under attack',
   'tenue': 'held',
   'à conquérir : abattez sa forteresse': 'to conquer: take down its fortress',
+  '{name} : {state} ({age})': '{name}: {state} ({age})',
+  '{name} ({cost}) : {legend}': '{name} ({cost}): {legend}',
   'verrouillée : demande {age}': 'locked: needs {age}',
   'fermée : abattez d’abord la forteresse de la zone d’avant': 'closed: take down the previous zone’s fortress first',
   'La zone où se trouve la vue ; le portail ramène sur l’île (bouton Rentrer sur l’île)': 'The zone the view is in; the portal leads back to the island (Back to the island button)',
