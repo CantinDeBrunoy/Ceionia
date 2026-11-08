@@ -3,6 +3,7 @@ import type { War } from '../sim/war';
 import type { HellBase } from '../sim/hellBase';
 import { BASE_DEFS, costText } from '../sim/hellBase';
 import { Heap } from '../sim/agents';
+import { tr } from '../i18n';
 
 /**
  * La pose des murs de la base avancée (palissades, portes), sur le modèle de la route libre du village : un clic au point A,
@@ -87,12 +88,12 @@ export interface WallTrace { cells: Cell[]; why: string | null }
 export function traceWall(base: HellBase | null, a: Cell, b: Cell): WallTrace {
   const line = wallLine(a, b);
   if (!base) return { cells: line, why: null };
-  const tooLong = (c: Cell[]) => (c.length > WALL_MAX ? `Trop long : ${WALL_MAX} pans au plus d’un coup (cliquez plus près, puis prolongez).` : null);
+  const tooLong = (c: Cell[]) => (c.length > WALL_MAX ? tr('Trop long : {n} pans au plus d’un coup (cliquez plus près, puis prolongez).', { n: WALL_MAX }) : null);
   const walls = base.wallCellSet();
   if (line.every(([x, z]) => base.wallOk(x, z, walls))) return { cells: line.slice(0, WALL_MAX), why: tooLong(line) };
   const route = wallRoute(base, a, b);
   if (route) return { cells: route.slice(0, WALL_MAX), why: tooLong(route) };
-  return { cells: line.slice(0, WALL_MAX), why: 'Pas de passage : lave, paroi, bâtiment ou limite du camp barrent le mur.' };
+  return { cells: line.slice(0, WALL_MAX), why: tr('Pas de passage : lave, paroi, bâtiment ou limite du camp barrent le mur.') };
 }
 
 export class WallPlan {
@@ -142,16 +143,16 @@ export class WallPlan {
 
   /** L'aperçu du tracé (par case : posable ou non) pour l'écran, avec ce qu'il coûte et ce qui refuse (gardé tant que rien ne change) */
   preview(war: War, kind: BaseKind, p: [number, number]): { cells: GhostCell[]; n: number; cost: string; why: string | null; trace: WallTrace } {
-    const tr = this.trace(war.base, p), c = cellOf(p);
+    const tw = this.trace(war.base, p), c = cellOf(p);
     const key = `${kind}|${this.a?.join(',')}|${this.built}|${c.join(',')}|${war.base?.map.version}|${war.base?.hell.buildings.size}`;
     if (key === this.key && this.cache) return this.cache;
     this.key = key;
-    const plan = war.planBaseLine(kind, tr.cells);
+    const plan = war.planBaseLine(kind, tw.cells), same = tr('Il y a déjà un pan ici.');
     const out = !plan
-      ? { cells: tr.cells.map(([x, z]): GhostCell => ({ x, z, ok: false })), n: 0, cost: '', why: null as string | null, trace: tr }
+      ? { cells: tw.cells.map(([x, z]): GhostCell => ({ x, z, ok: false })), n: 0, cost: '', why: null as string | null, trace: tw }
       : {
-        cells: tr.cells.map(([x, z], i): GhostCell => ({ x, z, ok: !tr.why && (plan.why[i] === null || !!plan.why[i]?.startsWith('Il y a déjà un pan')) })),
-        n: plan.n, cost: costText(plan.cost), why: tr.why ?? plan.why.find((w) => w !== null && !w.startsWith('Il y a déjà un pan')) ?? null, trace: tr,
+        cells: tw.cells.map(([x, z], i): GhostCell => ({ x, z, ok: !tw.why && (plan.why[i] === null || plan.why[i] === same) })),
+        n: plan.n, cost: costText(plan.cost), why: tw.why ?? plan.why.find((w) => w !== null && w !== same) ?? null, trace: tw,
       };
     this.cache = out;
     return out;
@@ -159,23 +160,23 @@ export class WallPlan {
 
   /** Pose le mur tracé : un message pour le joueur ; B devient le point A du suivant */
   build(war: War, kind: BaseKind, p: [number, number]): string {
-    const tr = this.trace(war.base, p);
-    if (tr.why) return tr.why;
-    const r = war.buildBaseLine(kind, tr.cells);
+    const tw = this.trace(war.base, p);
+    if (tw.why) return tw.why;
+    const r = war.buildBaseLine(kind, tw.cells);
     const d = BASE_DEFS[kind];
-    if (r.built > 0 || (r.why === null && tr.cells.length)) {
+    if (r.built > 0 || (r.why === null && tw.cells.length)) {
       // (B, même s'il existait déjà : le mur suivant part de là)
-      this.a = tr.cells[tr.cells.length - 1]; this.built = true; this.key = '';
-      return r.built ? `${d.icon} ${r.built > 1 ? `${r.built} pans de ${d.name.toLowerCase()} posés` : `${d.name} : c’est posé`}${r.why ? ` (${r.why})` : ''}. Cliquez plus loin pour prolonger le mur ; G : porte ici ; Échap : arrêter.` : 'Déjà posé.';
+      this.a = tw.cells[tw.cells.length - 1]; this.built = true; this.key = '';
+      return r.built ? `${d.icon} ${r.built > 1 ? tr('{n} pans de {name} posés', { n: r.built, name: d.name.toLowerCase() }) : tr('{name} : c’est posé', { name: d.name })}${r.why ? ` (${r.why})` : ''}${tr('. Cliquez plus loin pour prolonger le mur ; G : porte ici ; Échap : arrêter.')}` : tr('Déjà posé.');
     }
-    return r.why ?? 'Rien à poser ici.';
+    return r.why ?? tr('Rien à poser ici.');
   }
 
   /** « Porte ici » : le mur jusqu'au pointeur, dont la dernière case est une porte (une ouverture qui se ferme aux démons) */
   buildWithGate(war: War, p: [number, number]): string {
-    const tr = this.trace(war.base, p);
-    if (tr.why) return tr.why;
-    const gate = tr.cells[tr.cells.length - 1], walls = tr.cells.slice(0, -1);
+    const tw = this.trace(war.base, p);
+    if (tw.why) return tw.why;
+    const gate = tw.cells[tw.cells.length - 1], walls = tw.cells.slice(0, -1);
     if (walls.length) {
       const r = war.buildBaseLine('palisade', walls);
       if (r.built === 0 && r.why) return r.why;
@@ -183,6 +184,6 @@ export class WallPlan {
     const g = war.buildBase('gate', gate[0], gate[1]);
     if (typeof g === 'string') return g;
     this.a = gate; this.built = true; this.key = '';
-    return `${BASE_DEFS.gate.icon} Porte posée. Cliquez plus loin pour prolonger le mur ; Échap : arrêter.`;
+    return `${BASE_DEFS.gate.icon} ${tr('Porte posée. Cliquez plus loin pour prolonger le mur ; Échap : arrêter.')}`;
   }
 }

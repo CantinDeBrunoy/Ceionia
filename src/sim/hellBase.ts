@@ -1,6 +1,7 @@
 import { HellMap, HELL_ZONES, HELL_ZONE_N, Z_KINGDOM, ZONE_AGE, zoneOfZ, zoneOf, zoneThe } from '../world/hell';
 import { Hell, HellBuilding, HellEvent, BaseKind, DemonKind, demonStats, raidKinds, DEMON_POWER } from './hell';
 import { planWave, tierAge } from './hellBalance';
+import { tr, localize } from '../i18n';
 
 /**
  * La base avancée du joueur dans les Enfers (expéditions facultatives) : dans une zone tenue (le seuil du portail, ou une zone
@@ -28,6 +29,8 @@ export const BASE_DEFS: Record<BaseKind, BaseDef> = {
   gate: { kind: 'gate', name: 'Porte', icon: '🚪', r: 0.5, max: 8, cost: { wood: 14, stone: 0, ore: 0 }, desc: 'À poser sur un mur de palissade : vos troupes la franchissent librement, pas les démons, qui doivent l’abattre.' },
   brazier: { kind: 'brazier', name: 'Brasero', icon: '🔥', r: 0.35, max: 8, cost: { wood: 6, stone: 0, ore: 2 }, desc: 'Éclaire la base et fait reculer la brume rouge.' },
 };
+// noms et descriptions des bâtiments : rendus dans la langue courante (dictionnaire src/i18n/en/war.ts)
+for (const d of Object.values(BASE_DEFS)) localize(d, ['name', 'desc']);
 export const BASE_KINDS = Object.keys(BASE_DEFS) as BaseKind[];
 export const isBaseKind = (k: unknown): k is BaseKind => typeof k === 'string' && k in BASE_DEFS;
 
@@ -71,7 +74,7 @@ export interface Purse { wood: number; stone: number; ore: number; unlimited?: b
 export const canAfford = (p: Purse, c: BaseCost) => !!p.unlimited || (p.wood >= c.wood && p.stone >= c.stone && p.ore >= c.ore);
 export function pay(p: Purse, c: BaseCost) { if (p.unlimited) return; p.wood -= c.wood; p.stone -= c.stone; p.ore -= c.ore; }
 export function costText(c: BaseCost) {
-  return [c.wood ? `${c.wood} bois` : '', c.stone ? `${c.stone} pierre` : '', c.ore ? `${c.ore} minerai` : ''].filter(Boolean).join(', ') || 'gratuit';
+  return [c.wood ? `${c.wood} ${tr('bois')}` : '', c.stone ? `${c.stone} ${tr('pierre')}` : '', c.ore ? `${c.ore} ${tr('minerai')}` : ''].filter(Boolean).join(', ') || tr('gratuit');
 }
 
 export type BaseEvent =
@@ -165,29 +168,29 @@ export class HellBase {
   canBuild(kind: BaseKind, x: number, z: number, purse?: Purse, planned = 0): string | null {
     const d = BASE_DEFS[kind], h = this.hell, m = this.map;
     const cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5, zone = zoneOfZ(Math.floor(cz));
-    if (!m.inside(cx, cz)) return 'Hors de la carte';
-    if (zone > h.frontier) return `La brume barre ${zoneThe(zone)} : conquérez d’abord la zone d’avant.`;
-    if (!h.held(zone)) return `Il faut d’abord conquérir ${zoneThe(zone)} : abattez sa forteresse.`;
+    if (!m.inside(cx, cz)) return tr('Hors de la carte');
+    if (zone > h.frontier) return tr('La brume barre {zone} : conquérez d’abord la zone d’avant.', { zone: zoneThe(zone) });
+    if (!h.held(zone)) return tr('Il faut d’abord conquérir {zone} : abattez sa forteresse.', { zone: zoneThe(zone) });
     const camp = this.camp(zone);
     if (kind === 'camp') {
-      if (camp) return 'Cette zone a déjà son camp de base.';
+      if (camp) return tr('Cette zone a déjà son camp de base.');
       // tout contre une zone encore aux démons, sa garnison en alerte le rasait aussitôt, et la zone était reperdue
-      if (zone + 1 < HELL_ZONE_N && !h.conquered[zone + 1] && HELL_ZONES[zone + 1].z0 - cz < CAMP_MARGIN) return `Trop près ${zoneOf(zone + 1)} : ses démons raseraient le camp. Posez-le un peu plus en arrière.`;
+      if (zone + 1 < HELL_ZONE_N && !h.conquered[zone + 1] && HELL_ZONES[zone + 1].z0 - cz < CAMP_MARGIN) return tr('Trop près {zone} : ses démons raseraient le camp. Posez-le un peu plus en arrière.', { zone: zoneOf(zone + 1) });
     }
-    else if (!camp) return 'Posez d’abord un camp de base dans cette zone.';
-    else if (Math.hypot(camp.site.x - cx, camp.site.z - cz) > BASE_R) return `Trop loin du camp de base (${BASE_R} cases au plus).`;
-    if (this.countOf(kind, zone) + planned >= d.max) return `Au plus ${d.max === 1 ? 'un bâtiment de ce genre' : `${d.max} de ce genre`} par base.`;
-    if (Math.hypot(m.portal[0] - cx, m.portal[1] - cz) < 3.2) return 'Trop près du portail : laissez le passage.';
+    else if (!camp) return tr('Posez d’abord un camp de base dans cette zone.');
+    else if (Math.hypot(camp.site.x - cx, camp.site.z - cz) > BASE_R) return tr('Trop loin du camp de base ({n} cases au plus).', { n: BASE_R });
+    if (this.countOf(kind, zone) + planned >= d.max) return d.max === 1 ? tr('Au plus un bâtiment de ce genre par base.') : tr('Au plus {n} de ce genre par base.', { n: d.max });
+    if (Math.hypot(m.portal[0] - cx, m.portal[1] - cz) < 3.2) return tr('Trop près du portail : laissez le passage.');
     const cells = m.footprintCells({ x: cx, z: cz, r: d.r });
-    for (const k of cells) if (m.gate[k]) return 'Il y a déjà une porte ici.';
+    for (const k of cells) if (m.gate[k]) return tr('Il y a déjà une porte ici.');
     // une porte se pose sur un pan de palissade (elle le remplace), ou dans son prolongement
     const wall = kind === 'gate' ? this.wallAt(cx, cz) : null;
-    if (kind === 'gate' && !wall && !this.wallNear(cx, cz)) return 'Une porte se pose sur une palissade, ou à son bout.';
-    for (const k of cells) if (!wall && (!m.walkable(k % m.W, Math.floor(k / m.W)) || m.bridge[k])) return 'Il faut un sol libre (ni lave, ni pont, ni paroi, ni bâtiment).';
+    if (kind === 'gate' && !wall && !this.wallNear(cx, cz)) return tr('Une porte se pose sur une palissade, ou à son bout.');
+    for (const k of cells) if (!wall && (!m.walkable(k % m.W, Math.floor(k / m.W)) || m.bridge[k])) return tr('Il faut un sol libre (ni lave, ni pont, ni paroi, ni bâtiment).');
     // les troupes au combat ne se laissent pas emmurer : il faut une place libre (une porte laisse passer les nôtres)
-    for (const u of h.alive()) if ((kind !== 'gate' || u.side === 'hell') && Math.hypot(u.x - cx, u.z - cz) < d.r + u.stats.radius - 0.1 && cells.includes(m.cell(u.x, u.z))) return 'Des troupes se tiennent là : choisissez une place libre.';
-    if (purse && !canAfford(purse, d.cost)) return `Il faut ${costText(d.cost)}.`;
-    if (kind !== 'gate' && !this.keepsPath(cells)) return 'Laissez un passage : ce bâtiment fermerait le chemin.';
+    for (const u of h.alive()) if ((kind !== 'gate' || u.side === 'hell') && Math.hypot(u.x - cx, u.z - cz) < d.r + u.stats.radius - 0.1 && cells.includes(m.cell(u.x, u.z))) return tr('Des troupes se tiennent là : choisissez une place libre.');
+    if (purse && !canAfford(purse, d.cost)) return tr('Il faut {cost}.', { cost: costText(d.cost) });
+    if (kind !== 'gate' && !this.keepsPath(cells)) return tr('Laissez un passage : ce bâtiment fermerait le chemin.');
     return null;
   }
 
@@ -236,8 +239,8 @@ export class HellBase {
     try {
       for (const [x, z] of cells) {
         const sum: BaseCost = { wood: cost.wood + d.cost.wood, stone: cost.stone + d.cost.stone, ore: cost.ore + d.cost.ore };
-        let r = this.sameWall(kind, x, z) ? 'Il y a déjà un pan ici.' : this.canBuild(kind, x, z, undefined, n);
-        if (!r && purse && !canAfford(purse, sum)) r = `Il faut ${costText(sum)}.`;
+        let r = this.sameWall(kind, x, z) ? tr('Il y a déjà un pan ici.') : this.canBuild(kind, x, z, undefined, n);
+        if (!r && purse && !canAfford(purse, sum)) r = tr('Il faut {cost}.', { cost: costText(sum) });
         why.push(r);
         if (r) continue;
         n++; cost.wood = sum.wood; cost.stone = sum.stone; cost.ore = sum.ore;

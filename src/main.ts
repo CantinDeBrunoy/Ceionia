@@ -1,6 +1,6 @@
 import './style.css';
 import './i18n/en';
-import { onLangChange, tr as trx } from './i18n';
+import { onLangChange, tr as trx, nplural } from './i18n';
 import * as THREE from 'three';
 import { World, N, VEG_VOLCANO, setMapSize } from './world/world';
 import { Underground, UZ_NAMES } from './world/underground';
@@ -556,7 +556,7 @@ class Game implements UIHost {
       this.cam.jump({ x, z: z + 1.5, dist: 15, pitch: 0.72, yaw: Math.PI }, hm.view.groundY(x, z));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
-      this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.`, 'hell');
+      this.ui.banner(trx('Monde des Enfers'), trx('{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.', { zone: hm.zoneName(z) }), 'hell');
       this.ui.update();
     }, 'Passage du portail…');
   }
@@ -705,14 +705,14 @@ class Game implements UIHost {
       if (this.kingStage.news(n)) continue;
       // l'incursion elle-même a son alerte en haut (« Voir l'île ») : pas de message en double ; l'avertissement qui la précède reste
       if (n.kind === 'raid' && n.text.startsWith('🔥')) this.ui.info(n.text);
-      else if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(`${n.text} Cliquez ici pour voir l’île.`, () => this.viewIsle(), 'danger');
-      else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell' && (n.kind !== 'zone' || /repris|reprendre|tombé/.test(n.text))) this.ui.toast(`${n.text} Cliquez ici pour y aller.`, () => this.enterHell());
-      else this.ui.toast(n.text, undefined, n.kind === 'boss' || n.kind === 'counter' || (n.kind === 'zone' && /repris|reprendre|tombé/.test(n.text)) ? 'danger' : 'info');
+      else if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(trx('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
+      else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell' && (n.kind !== 'zone' || /repris|reprendre|tombé|retaken|retake|has fallen/.test(n.text))) this.ui.toast(trx('{text} Cliquez ici pour y aller.', { text: n.text }), () => this.enterHell());
+      else this.ui.toast(n.text, undefined, n.kind === 'boss' || n.kind === 'counter' || (n.kind === 'zone' && /repris|reprendre|tombé|retaken|retake|has fallen/.test(n.text)) ? 'danger' : 'info');
       if (n.kind === 'repelled' || n.kind === 'secured') audio.sfxAgeUp();
     }
     // l'alerte reste tant que dure l'incursion, si l'on ne regarde pas l'île
     const isle = w.isle;
-    this.command.alert(isle?.raid && !(this.isleCmd && this.lookingAtIsle()) ? `🔥 Incursion sur l’île du portail : ${isle.raiders().length} démon${isle.raiders().length > 1 ? 's' : ''} !` : null, () => this.viewIsle());
+    this.command.alert(isle?.raid && !(this.isleCmd && this.lookingAtIsle()) ? trx('🔥 Incursion sur l’île du portail : {n} !', { n: nplural(isle.raiders().length, 'démon', 'démons') }) : null, () => this.viewIsle());
     this.syncIsleLayer();
     if (this.isleLayer) {
       this.isleLayer.age = this.sim.age;
