@@ -17,6 +17,7 @@ import { effectSummary, splitIntro, mandatoriesFor, isLegendary, isMilitary, Des
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps, gearObsolete } from '../sim/gear';
+import { troopGearNeeded } from '../sim/army';
 import { securityCuts, SECURITY_MAX } from '../sim/security';
 import { priceIn, canPay, costLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
@@ -1596,12 +1597,15 @@ export class UI {
     const away = (id: GearId) => ex.active.reduce((n, a) => n + (a.gear[id] ?? 0), 0);
     const per = (g: Gear) => g.per(1) === 1 && g.per(2) === 2 ? 'un par membre' : g.id === 'kit' ? 'une par équipe' : g.per(3) === 1 ? 'une pour trois' : 'une pour deux';
     const oldOpen = !!el.querySelector<HTMLDetailsElement>('details.oldGear')?.open;
+    // une pièce dépassée pour les expéditions mais que les troupes de l'âge exigent (la lance du soldat) reste en vue
+    const troops = troopGearNeeded(age), shown = (g: Gear) => !gearObsolete(g, age) || troops.has(g.id);
     const card = (g: Gear) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
-        return `<div class="gear ${locked ? 'locked' : gearObsolete(g, age) ? 'old' : ''}" data-gear="${g.id}">
+        return `<div class="gear ${locked ? 'locked' : !shown(g) ? 'old' : ''}" data-gear="${g.id}">
           <div class="gtop"><div class="gi">${ic(g.icon, 22, 1.8)}</div><div class="grow"><b>${g.name}</b><span class="cnt">${n} en réserve${st.craft.includes(g.id) ? ` · ${st.craft.filter((x) => x === g.id).length} en fabrication` : ''}${out ? ` · ${out} en route` : ''}</span></div></div>
           <small class="gdesc">${g.desc}</small>
           <small class="gd">${g.guards ? DANGER_VS[g.guards] : 'Utile partout'}${g.also ? ` et les ${DANGER_NAME[g.also]}` : ''} : −${Math.round(g.cut * 100)} % de risque · ${per(g)}</small>
+          ${gearObsolete(g, age) && troops.has(g.id) ? '<small class="gd">Les troupes de la caserne s’en servent : à fabriquer pour recruter.</small>' : ''}
           ${why ? `<small class="why">${why}</small>` : ''}
           <button data-craft="${g.id}" ${why ? 'disabled' : ''} title="${why ?? `Fabriquer : ${g.time} s${price ? `, ${price}` : ''}`}">${ic('hammer', 16, 2)} ${price || 'Fabriquer'}</button>
           ${st.craft[0] === g.id ? `<div class="bar gnbar cbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}
@@ -1609,9 +1613,9 @@ export class UI {
     };
     el.innerHTML = `
       <p class="hint">Chaque équipe emporte le meilleur équipement en réserve contre les dangers de sa destination, et le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier. Réserve : <b>${Math.floor(h.world.wood)}</b> bois, <b>${Math.floor(h.world.stone)}</b> pierre, <b>${Math.floor(ex.ore)}</b> minerai${age >= 4 ? `, <b>${Math.floor(h.world.fuel)}</b> carburant` : ''}.</p>
-      <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => !gearObsolete(g, age) && !ex.whyCraft(g, age)) ? '' : 'disabled'} title="Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent">${ic('hammer', 16, 2)} Tout fabriquer</button></div>
-      <div class="gearGrid">${GEAR.filter((g) => !gearObsolete(g, age)).map(card).join('')}</div>
-      ${GEAR.some((g) => gearObsolete(g, age)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary>Anciennes armes et outils <small>(dépassés à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore)</small></summary><div class="gearGrid">${GEAR.filter((g) => gearObsolete(g, age)).map(card).join('')}</div></details>` : ''}
+      <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => shown(g) && !ex.whyCraft(g, age)) ? '' : 'disabled'} title="Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent">${ic('hammer', 16, 2)} Tout fabriquer</button></div>
+      <div class="gearGrid">${GEAR.filter(shown).map(card).join('')}</div>
+      ${GEAR.some((g) => !shown(g)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary>Anciennes armes et outils <small>(dépassés à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore)</small></summary><div class="gearGrid">${GEAR.filter((g) => !shown(g)).map(card).join('')}</div></details>` : ''}
       <h4>Fabrication</h4>
       <div class="queue">${st.craft.length ? st.craft.map((id, i) => `<span class="qi">${ic(GEAR_BY[id].icon, 16, 2)} ${GEAR_BY[id].name}${i === 0 ? `<i class="bar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></i>` : ''}<button data-cancel="${i}" title="Annuler" aria-label="Annuler">${ic('close', 14, 2)}</button></span>`).join('') : '<small>Rien en cours.</small>'}</div>`;
     el.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => (b.onclick = () => {
@@ -1619,7 +1623,7 @@ export class UI {
     }));
     el.querySelector<HTMLButtonElement>('[data-craftall]')?.addEventListener('click', () => {
       let n = 0;
-      for (const g of GEAR) if (!gearObsolete(g, age) && !ex.whyCraft(g, age) && ex.craft(g.id, age)) n++;
+      for (const g of GEAR) if (shown(g) && !ex.whyCraft(g, age) && ex.craft(g.id, age)) n++;
       if (n) { h.audio.sfxClick(); changed(); }
     });
     el.querySelectorAll<HTMLButtonElement>('[data-cancel]').forEach((b) => (b.onclick = () => { ex.cancelCraft(+b.dataset.cancel!); changed(); }));

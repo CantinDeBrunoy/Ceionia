@@ -3,7 +3,7 @@ import { Agents, Kit } from './agents';
 import { MISSIONS, Mission, Choice, DestKind, Effect, applyEffects, effectSummary, penHerds, redoEffects, choiceAt, RECENT_EVENTS } from './missions';
 import { Underground, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '../world/underground';
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
-import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, payGear, dangersOf, huntWeapon } from './gear';
+import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
@@ -762,9 +762,29 @@ export class Expeditions {
   /** Pourquoi le village ne peut pas fabriquer cette pièce (ou null) */
   whyCraft(g: Gear, age: number): string | null {
     if (age < g.age) return `Connu à l’âge ${AGES[g.age].name}`;
-    if (g.needs && !this.has(g.needs)) return `Il faut : ${KINDS[g.needs].names[Math.min(age, AGES.length - 1)].toLowerCase()}`;
+    if (g.needs && !this.has(g.needs)) {
+      const name = KINDS[g.needs].names[Math.min(age, AGES.length - 1)].toLowerCase();
+      // l'atelier porte le nom de l'âge (une forge au Moyen Âge) : on dit les deux
+      return g.needs === 'workshop' ? `Il faut un atelier pour fabriquer ${g.plural.toLowerCase()} : bâtissez-en un (à votre âge : ${name})` : `Il faut : ${name}`;
+    }
     const lack = gearShort(this.world, g); if (lack) return lack;
-    if (this.world.exp.craft.length >= MAX_CRAFT) return 'L’atelier a déjà assez de travail';
+    if (this.world.exp.craft.length >= MAX_CRAFT) return `La file de fabrication est pleine (${MAX_CRAFT} pièces) : attendez qu’une pièce sorte`;
+    return null;
+  }
+
+  /**
+   * Pourquoi le village ne peut pas fabriquer tout ce lot de pièces d'un coup (ou null) : l'atelier, le total du prix et la
+   * place dans la file, pour ne rien commander à moitié
+   */
+  whyCraftAll(ids: readonly GearId[], age: number): string | null {
+    if (!ids.length) return null;
+    for (const id of ids) { const g = GEAR_BY[id]; if (age < g.age || (g.needs && !this.has(g.needs))) return this.whyCraft(g, age); }
+    const w = this.world, tot = { wood: 0, stone: 0, ore: 0, fuel: 0 };
+    for (const id of ids) { const c = gearCost(GEAR_BY[id], w.difficulty); tot.wood += c.wood; tot.stone += c.stone; tot.ore += c.ore; tot.fuel += c.fuel ?? 0; }
+    if (!w.unlimited && (w.wood < tot.wood || w.stone < tot.stone || w.ore < tot.ore || w.fuel < tot.fuel)) {
+      return `Il faut ${gearCostLabel({ wood: tot.wood, stone: tot.stone, ore: tot.ore, ...(tot.fuel ? { fuel: tot.fuel } : {}) })} en tout pour ${ids.map((i) => GEAR_BY[i].name.toLowerCase()).join(' et ')}`;
+    }
+    if (w.exp.craft.length + ids.length > MAX_CRAFT) return `La file de fabrication est pleine (${MAX_CRAFT} pièces) : attendez qu’une pièce sorte`;
     return null;
   }
 

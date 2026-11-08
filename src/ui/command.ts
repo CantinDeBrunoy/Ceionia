@@ -52,6 +52,10 @@ export interface CommandHost {
   goHell(): void;
   /** met une pièce d'équipement en fabrication à l'atelier du village : null, ou la raison du refus */
   craft(id: GearId): string | null;
+  /** pourquoi tout ce lot de pièces ne peut pas être mis en fabrication d'un coup (atelier, prix total, file pleine) ; null : possible */
+  craftCheck(ids: readonly GearId[]): string | null;
+  /** pourquoi tout ce lot de pièces ne peut pas être mis en fabrication d'un coup (atelier, prix total, file pleine) ; null : possible */
+  craftCheck(ids: readonly GearId[]): string | null;
   /** les pièces en fabrication (la file de l'atelier) */
   crafting(): readonly GearId[];
   canvas: HTMLCanvasElement;
@@ -400,6 +404,9 @@ export class CommandUI implements ToolInput {
     const why = recruitWhy(w.army, kind, ctx);
     if (why && onlyGearMissing(w.army, kind, ctx) && armySize(w.army) + this.waiting.length < armyCap(ctx)) {
       const list = gearToCraft(kind, ctx.stock, this.host.crafting(), this.waiting, this.host.age());
+      // tout ou rien : on ne commande pas l'épée si l'armure ne peut pas suivre
+      const lot = this.host.craftCheck(list);
+      if (lot) { this.host.toast(`${why.replace(/ \(à fabriquer.*\)$/, '')} : ${lot.charAt(0).toLowerCase()}${lot.slice(1)}.`); return; }
       for (const g of list) { const no = this.host.craft(g); if (no) { this.host.toast(`${why.replace(/ \(à fabriquer.*\)$/, '')} : ${no.charAt(0).toLowerCase()}${no.slice(1)}.`); return; } }
       this.waiting.push(kind);
       this.host.toast(list.length ? `🛠️ L’atelier fabrique ${list.map((g) => `1 ${GEAR_BY[g].name.toLowerCase()}`).join(' et ')} : la recrue (${troopName(kind, this.host.age()).toLowerCase()}) partira dès que ce sera prêt.` : `🛠️ La recrue (${troopName(kind, this.host.age()).toLowerCase()}) partira dès que son équipement sortira de l’atelier.`);
