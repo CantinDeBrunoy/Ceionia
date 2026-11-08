@@ -11,6 +11,8 @@ const MAX_SHORE = 30;
 const HAMLET = 3;
 /** Surcoût d'un virage : les chemins vont droit, en L plutôt qu'en escalier */
 const TURN = 0.6;
+/** Eau : surcoût de chaque case de pont, et de chaque nouveau franchissement (on évite les ponts, on n'en fait qu'au besoin) */
+const WET = 8, CROSS = 14;
 /** Surcoût d'une case au milieu d'un terrain libre, selon les emplacements de 3 × 3 et de 2 × 2 qu'elle gâcherait */
 const OPEN3 = 1.6, OPEN2 = 0.6;
 /**
@@ -225,6 +227,8 @@ function cheapest(w: World, starts: number[], goal: (k: number) => boolean, max:
         if (extra === Infinity) continue;
         step = price(n) + extra;
       }
+      // un nouveau franchissement d'eau coûte très cher : on préfère rejoindre la route de son côté de l'eau, ou en réutiliser un pont
+      if (!isGoal && w.isWet(nx, nz) && !w.isWet(x, z)) step += CROSS;
       if (nd !== d) step += TURN;
       const ns = loc(n) * 4 + nd, nv = dist[st] + step;
       if (nv < dist[ns]) { dist[ns] = nv; prev[ns] = st; steps[ns] = steps[st] + 1; heap.push(nv, ns); }
@@ -249,7 +253,7 @@ function cost(w: World, k: number, spoil: (x: number, z: number) => number) {
   if (v === VEG_FOREST) c += 0.8;
   else if (v === VEG_ROCKS) c += 0.8;
   else if (v === VEG_FIELD || v === VEG_GARDEN) c += 6;
-  if (w.isWet(x, z)) c += 4;
+  if (w.isWet(x, z)) c += WET;
   return c + spoil(x, z);
 }
 
