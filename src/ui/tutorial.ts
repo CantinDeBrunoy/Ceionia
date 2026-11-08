@@ -341,6 +341,8 @@ export class Tutorial {
     this.arrow = this.box.querySelector('.tArrow')!;
     this.box.hidden = this.ring.hidden = true;
     ui.root.append(this.ring, this.box);
+    // un clic sur la bulle ne tombe jamais sur la carte (ni ne pose un bâtiment avec l'outil en main)
+    for (const t of ['pointerdown', 'pointerup', 'mousedown', 'touchstart']) this.box.addEventListener(t, (e) => e.stopPropagation());
     this.box.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button');
       if (!b) return;
@@ -386,6 +388,10 @@ export class Tutorial {
   }
 
   next() {
+    // une étape de pose terminée : l'outil rentre (sinon le prochain clic, sur « Suivant » ou à côté, poserait un bâtiment de trop)
+    if (['fire', 'habitat', 'food', 'wood', 'stone'].includes(this.steps[this.i]?.id) && this.host.tools.tool === 'build') this.host.tools.setTool('none');
+    // le feu de camp posé, le temps repart (il était arrêté le temps de regarder autour de soi)
+    if (this.steps[this.i]?.id === 'fire' && this.host.time.paused) this.host.time.paused = false;
     if (this.i >= this.steps.length - 1) { this.finish(); return; }
     this.show(this.i + 1);
   }
@@ -398,7 +404,7 @@ export class Tutorial {
     writeState({ on: false, step: this.i });
   }
 
-  skip() { this.stop(); this.ui.info(TUTO_TEXT.skipped); }
+  skip() { this.stop(); if (this.host.time.paused) this.host.time.paused = false; this.ui.info(TUTO_TEXT.skipped); }
 
   finish() {
     this.stop();
