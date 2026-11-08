@@ -175,7 +175,7 @@ function bigTop(f: Fr, st: Style, kit: CircusKit) {
       // mur, puis frange festonnée pendue au bord du toit
       f.add(new THREE.CylinderGeometry(r, r, hw, 1, 1, true, ts, dth).translate(0, hw / 2, 0), 0, 0, cz, col);
       f.box(wide * 0.96, 0.04, 0.012, sx * (r + 0.008), hw - 0.045, cz + cx * (r + 0.008), col2, false);
-      f.sub(sx * (r + 0.012), cz + cx * (r + 0.012), tm).add(new THREE.ConeGeometry(wide * 0.4, 0.075, 3).rotateX(PI), 0, hw - 0.12, 0, col2);
+      f.sub(sx * (r + 0.012), cz + cx * (r + 0.012), tm).add(new THREE.ConeGeometry(wide * 0.42, 0.08, 4).rotateX(PI).rotateY(PI / 4).scale(1, 1, 0.15), 0, hw - 0.12, 0, col2);
       if (st.age === 2 && k % 4 === 3) f.box(wide * 0.5, 0.07, 0.01, sx * (r + 0.013), 0.1 + 0.08 * H(k, 7), cz + cx * (r + 0.013), [0x4a78a8, 0x7a9a4a, 0xc8a050][k % 3]);
     }
     // toit en deux étages : jupe évasée, puis cône du faîte
@@ -303,14 +303,17 @@ function wagon(f: Fr, st: Style, kit: CircusKit, x: number, z: number, ry: numbe
   }
   if (age === 4) {
     // caravane en aluminium : coque ovale, bandeau de couleur, hublots éclairés, auvent rayé et fauteuil
-    g.box(0.58, 0.04, 0.22, 0, 0.04, 0, 0x3a3a40);
-    g.ball(1, 0, 0.17, 0, 0xdfe5ea, false, 0.3, 0.135, 0.135, 2);
-    g.box(0.54, 0.02, 0.262, 0, 0.115, 0, o.trim, 'neon');
-    for (let k = 0; k < 3; k++) { g.add(new THREE.CylinderGeometry(0.028, 0.028, 0.02, 10).rotateX(PI / 2), -0.1 + k * 0.1, 0.18, 0.125, 0xd8f4ff, true); g.add(new THREE.TorusGeometry(0.03, 0.005, 4, 10), -0.1 + k * 0.1, 0.18, 0.131, 0x8a929a); }
-    g.box(0.07, 0.13, 0.014, 0.19, 0.075, 0.1, 0x8a929a);
+    g.box(0.54, 0.03, 0.2, 0, 0.045, 0, 0x6a727a);
+    g.box(0.5, 0.13, 0.25, 0, 0.07, 0, 0xdfe5ea);
+    g.add(new THREE.CylinderGeometry(0.125, 0.125, 0.5, 12, 1, false, 0, PI).rotateZ(PI / 2).scale(1, 0.72, 1), 0, 0.2, 0, 0xeef2f5);
+    for (const sg of [-1, 1]) g.add(new THREE.CircleGeometry(0.125, 12, 0, PI).rotateY(sg * PI / 2).scale(1, 0.72, 1), sg * 0.25, 0.2, 0, 0xc9d0d6);
+    g.box(0.5, 0.018, 0.253, 0, 0.13, 0, o.trim, 'neon');
+    g.box(0.5, 0.006, 0.255, 0, 0.17, 0, 0xaab2ba);
+    for (let k = 0; k < 3; k++) { g.add(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 10).rotateX(PI / 2), -0.1 + k * 0.1, 0.165, 0.126, 0xd8f4ff, true); g.add(new THREE.TorusGeometry(0.032, 0.005, 4, 10), -0.1 + k * 0.1, 0.165, 0.136, 0x8a929a); }
+    g.box(0.07, 0.13, 0.012, 0.19, 0.075, 0.123, 0x8a929a);
     g.box(0.1, 0.04, 0.08, -0.12, 0.26, 0, 0xe8ecef); g.cyl(0.0, 0.035, 0.03, 8, 0.12, 0.26, 0, 0xc8d0d8);
-    for (const s of [-1, 1]) { g.cyl(0.05, 0.05, 0.04, 10, s * 0.18, 0.0, 0, 0x2a2a30); g.cyl(0.026, 0.026, 0.044, 8, s * 0.18, 0.0, 0, 0xd8dce0); }
-    for (const s of [-1, 1]) g.box(0.17, 0.014, 0.275, s * 0.18, 0.11, 0, 0x3a3a40);
+    for (const s of [-1, 1]) for (const z of [-0.135, 0.135]) { g.add(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 10).rotateX(PI / 2), s * 0.17, 0.055, z, 0x2a2a30); g.add(new THREE.CylinderGeometry(0.03, 0.03, 0.044, 8).rotateX(PI / 2), s * 0.17, 0.055, z, 0xd8dce0); }
+    for (const s of [-1, 1]) g.box(0.15, 0.014, 0.275, s * 0.17, 0.115, 0, 0x8a929a);
     g.tube([-0.29, 0.07, 0], [-0.46, 0.06, 0], 0.012, 0x4a4a52, false, 5);
     for (let k = 0; k < 4; k++) g.box(0.07, 0.012, 0.1, -0.1 + k * 0.07, 0.205 - k * 0.0, 0.18, k % 2 ? 0xf4f4f0 : o.trim);
     for (const s of [-1, 1]) g.tube([s * 0.14 - 0.0, 0.0, 0.215], [s * 0.14, 0.2, 0.215], 0.004, 0xb8c0c8, false, 4);
@@ -600,7 +603,7 @@ export function circus(p: Parts, age: number, kit: CircusKit) {
   if (st.age === 4) for (const s of [-1, 1]) {
     const g = f.sub(s * 1.0, 0.62, 0), sw = kit.sway(g.w(0, 0.14, 0), [0, 0, 1], 0.35, 0.22 + 0.04 * s);
     g.cyl(0.03, 0.04, 0.03, 8, 0, 0, 0, 0x3a3a42); g.box(0.06, 0.06, 0.06, 0, 0.03, 0, 0x8a929a);
-    sw.add(new THREE.CylinderGeometry(0.05, 0.012, 0.7, 6).translate(0, 0.45, 0), 0, 0, 0, 0xfff4c0, 0, 'neon');
+    sw.add(new THREE.CylinderGeometry(0.022, 0.006, 0.6, 5).translate(0, 0.4, 0), 0, 0, 0, 0xfff4c0, 0, 'neon');
     sw.add(new THREE.CylinderGeometry(0.03, 0.04, 0.09, 8).translate(0, 0.045, 0), 0, 0, 0, 0x4a525a);
   }
   if (st.age === 5) for (const s of [-1, 1]) {
