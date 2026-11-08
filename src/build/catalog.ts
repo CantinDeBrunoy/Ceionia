@@ -327,7 +327,7 @@ export const KINDS: Record<KindId, KindDef> = {
     names: ['', '', 'Chapiteau de la troupe', 'Cirque', 'Grand cirque', 'Cirque holographique'],
     desc: 'Un grand chapiteau à rayures, des roulottes colorées, une ménagerie rigolote : jongleurs et funambules font rire tout le village.',
     joy: [0, 0, 10, 14, 18, 24], jobs: [0, 0, 2, 3, 4, 5],
-    perk: 'Débloqué par l’expédition « Les jongleurs du carrefour ». Grand bâtiment de 3 × 3 cases.',
+    perk: 'La troupe s’installe au village : fêtes et rires toute l’année.',
     reqMission: 'fair',
   },
   zoo: {

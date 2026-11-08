@@ -165,7 +165,7 @@ registerDict('catalog', {
   'Grand cirque': 'Grand circus',
   'Cirque holographique': 'Holographic circus',
   'Un grand chapiteau à rayures, des roulottes colorées, une ménagerie rigolote : jongleurs et funambules font rire tout le village.': 'A big striped tent, colorful wagons, a funny menagerie: jugglers and tightrope walkers make the whole village laugh.',
-  'Débloqué par l’expédition « Les jongleurs du carrefour ». Grand bâtiment de 3 × 3 cases.': 'Unlocked by the expedition “The Jugglers at the Crossroads”. A large 3 × 3 building.',
+  'La troupe s’installe au village : fêtes et rires toute l’année.': 'The troupe settles in the village: parties and laughter all year round.',
   'Zoo': 'Zoo',
   'Parc zoologique': 'Zoological park',
   'Thermes': 'Thermal baths',
