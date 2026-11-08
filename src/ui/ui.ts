@@ -1737,7 +1737,6 @@ export class UI {
     el.innerHTML = `
       <p class="hint" title="${tr('Elle le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier.')}">${tr('Chaque équipe emporte le meilleur équipement en réserve.')}</p>
       <div class="mpills stock"><span>${tr('{n} bois', { n: Math.floor(h.world.wood) })}</span><span>${tr('{n} pierre', { n: Math.floor(h.world.stone) })}</span><span>⛏️ ${tr('{n} minerai', { n: Math.floor(ex.ore) })}</span>${age >= 4 ? `<span>⛽ ${Math.floor(h.world.fuel)}</span>` : ''}</div>
-      <div class="craftAll"><button type="button" data-craftall ${GEAR.some((g) => shown(g) && !ex.whyCraft(g, age)) ? '' : 'disabled'} title="${tr('Met en fabrication une pièce de chaque équipement disponible, tant que les ressources suffisent')}">${ic('hammer', 16, 2)} ${tr('Tout fabriquer')}</button></div>
       <div class="gearGrid">${GEAR.filter(shown).map(card).join('')}</div>
       ${GEAR.some((g) => !shown(g)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary title="${tr('Dépassées à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore')}">${tr('Anciennes armes et outils')}</summary><div class="gearGrid">${GEAR.filter((g) => !shown(g)).map(card).join('')}</div></details>` : ''}
       <h4>${tr('Fabrication')}</h4>
@@ -1745,11 +1744,6 @@ export class UI {
     el.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => (b.onclick = () => {
       if (ex.craft(b.dataset.craft as GearId, age)) { h.audio.sfxClick(); changed(); }
     }));
-    el.querySelector<HTMLButtonElement>('[data-craftall]')?.addEventListener('click', () => {
-      let n = 0;
-      for (const g of GEAR) if (shown(g) && !ex.whyCraft(g, age) && ex.craft(g.id, age)) n++;
-      if (n) { h.audio.sfxClick(); changed(); }
-    });
     el.querySelectorAll<HTMLButtonElement>('[data-cancel]').forEach((b) => (b.onclick = () => { ex.cancelCraft(+b.dataset.cancel!); changed(); }));
   }
 

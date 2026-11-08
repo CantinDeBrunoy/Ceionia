@@ -259,7 +259,7 @@ registerDict('catalog', {
   'La réserve d’eau du quartier, perchée en hauteur : elle alimente trois fois plus de maisons qu’un puits.': 'The neighborhood’s water reserve, perched up high: it supplies three times as many houses as a well.',
   'Amélioration du puits (sur sa fiche) ou à bâtir dès l’âge industriel : cuve d’acier rivetée sur sa tour de brique, puis château d’eau de béton en corolle.': 'An upgrade of the well (on its card), or build it from the Industrial Age: a riveted steel tank on its brick tower, then a concrete water tower flaring like a corolla.',
   'Offre du travail.': 'Provides jobs.',
-  'La place du village (3 × 3), son centre : on s’y retrouve de tous côtés, sans porte ni chemin d’accès. Accueille les trois premiers habitants et augmente le bien-être.': 'The village square (3 × 3), its heart: people gather from every side, with no door or access path. Welcomes the first three inhabitants and boosts well-being.',
+  'La place du village (3 × 3), son centre : on s’y retrouve de tous côtés, sans porte ni chemin d’accès. Accueille les quatre premiers habitants et augmente le bien-être.': 'The village square (3 × 3), its heart: people gather from every side, with no door or access path. Welcomes the first four inhabitants and boosts well-being.',
   'À poser en premier, au cœur du futur village : les maisons, la ferme et le puits viendront autour. On y fête le retour des expéditions.': 'Place it first, at the heart of the future village: the houses, the farm and the well will go around it. The return of expeditions is celebrated here.',
   'Lieu de culte : beaucoup de bien-être.': 'A place of worship: lots of well-being.',
   'Travail et un peu de nourriture.': 'Jobs and a little food.',
