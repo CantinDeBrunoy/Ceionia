@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { HellMap, HW, HELL_ZONES, Z_EMBER, Z_RIVER, Z_CLIFFS, Z_BONES } from '../src/world/hell';
 import { Hell } from '../src/sim/hell';
+import { Balance, BALANCE_LEGACY } from '../src/sim/hellBalance';
 import { troopStats, TROOPS, HEAL_TIME } from '../src/sim/army';
 import {
   HellBase, BASE_DEFS, BASE_R, COUNTER_FIRST, SUPPLY_MAX, SUPPLY_DRAIN, CONVOY_COST, CONVOY_TIME, CONVOY_AMOUNT, WEAK_MAX, WEAK_TIME,
@@ -18,8 +19,8 @@ const run = (h: Hell, b: HellBase | null, t: number, until?: () => boolean) => {
 };
 const cellPos = (m: HellMap, k: number): [number, number] => [(k % HW) + 0.5, Math.floor(k / HW) + 0.5];
 /** La faction, la base ; la zone `upTo` et celles d'avant conquises (forteresses abattues, garnisons balayées) */
-const setup = (upTo = 0, seed = 1) => {
-  const m = new HellMap(seed), h = new Hell(m), b = new HellBase(h, m);
+const setup = (upTo = 0, seed = 1, balance?: Balance) => {
+  const m = new HellMap(seed), h = new Hell(m, seed, balance), b = new HellBase(h, m);
   for (let z = 1; z <= upTo; z++) {
     for (const s of h.standing(z)) h.damage(s, 1e6, -1);
     for (const u of h.garrison(z)) u.hp = 0;
@@ -189,8 +190,8 @@ describe('base avancée : effets, ravitaillement', () => {
 });
 
 describe('base avancée : contre-attaques', () => {
-  it('la faction contre-attaque la base du front, des vagues locales selon la zone', () => {
-    const { m, h, b } = setup(Z_EMBER);
+  it('la faction contre-attaque la base du front, des vagues locales selon la zone (ancien équilibre : celui du bac à sable)', () => {
+    const { m, h, b } = setup(Z_EMBER, 1, BALANCE_LEGACY);
     const p = { ...rich(), unlimited: true };
     const fort = [...h.buildings.values()].find((s) => s.kind === 'fortress' && s.zone === Z_EMBER)!;
     b.build('camp', ...spot(b, 'camp', fort.site.x, fort.site.z), p);

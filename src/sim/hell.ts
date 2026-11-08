@@ -1,5 +1,6 @@
-﻿import { HellSite, HellSiteKind, HellZoneInfo, Z_KINGDOM, HELL_ZONE_N, HELL_ZONES, zoneOfZ, zoneCapOfAge } from '../world/hell';
+﻿import { HellSite, HellSiteKind, HellZoneInfo, Z_KINGDOM, HELL_ZONE_N, HELL_ZONES, ZONE_AGE, zoneOfZ, zoneCapOfAge } from '../world/hell';
 import { mulberry32 } from '../core/rng';
+import { Balance, BALANCE_NORMAL, planWave, powerOf, compose, tierAge, GARRISON_RATIO, MAX_UNIT_POWER } from './hellBalance';
 
 /**
  * La carte où se battent les unités : celle des Enfers (`HellMap`), ou celle de l'île du portail (`IsleMap`, voir
@@ -43,7 +44,7 @@ export interface CombatSite { kind: SiteKind; x: number; z: number; zone: number
  * et leur donne des ordres. Temps en secondes de jeu, distances en cases
  */
 
-export type DemonKind = 'imp' | 'brute' | 'archer' | 'chief' | 'guardian' | 'king' | 'elite';
+export type DemonKind = 'imp' | 'brute' | 'archer' | 'chief' | 'guardian' | 'king' | 'elite' | 'golem' | 'horned' | 'lord' | 'titan';
 /** Caractéristiques d'une unité : vie, dégâts par coup, portée (cases, depuis le bord de la cible), vitesse (cases/s), temps entre deux coups, vue, rayon */
 export interface UnitStats { hp: number; dmg: number; range: number; speed: number; cooldown: number; sight: number; radius: number }
 export const DEMONS: Record<DemonKind, UnitStats & { name: string; plural: string }> = {
@@ -55,6 +56,14 @@ export const DEMONS: Record<DemonKind, UnitStats & { name: string; plural: strin
   king: { name: 'roi des Enfers', plural: 'rois des Enfers', hp: 1600, dmg: 40, range: 1.2, speed: 1.1, cooldown: 2.2, sight: 10, radius: 0.75 },
   /** la garde du roi, dans la citadelle */
   elite: { name: 'garde d’élite', plural: 'gardes d’élite', hp: 300, dmg: 18, range: 0.8, speed: 1.6, cooldown: 1.3, sight: 8, radius: 0.38 },
+  /**
+   * Les gros monstres, qui viennent avec l'âge (voir `hellBalance.ts`) : golem de lave (Moyen Âge), démon cornu géant
+   * (Industriel), seigneur-démon (Moderne), titan infernal (Futuriste). De plus en plus massifs, lents et lourds de coups
+   */
+  golem: { name: 'golem de lave', plural: 'golems de lave', hp: 340, dmg: 24, range: 0.8, speed: 1.0, cooldown: 1.9, sight: 7, radius: 0.5 },
+  horned: { name: 'démon cornu', plural: 'démons cornus', hp: 620, dmg: 36, range: 0.9, speed: 1.15, cooldown: 1.9, sight: 8, radius: 0.6 },
+  lord: { name: 'seigneur-démon', plural: 'seigneurs-démons', hp: 1100, dmg: 52, range: 1.0, speed: 1.2, cooldown: 2.0, sight: 9, radius: 0.72 },
+  titan: { name: 'titan infernal', plural: 'titans infernaux', hp: 2200, dmg: 85, range: 1.3, speed: 0.95, cooldown: 2.4, sight: 10, radius: 0.95 },
 };
 /**
  * Bâtiments : vie, armure (retranchée de chaque coup reçu), tir (dégâts, portée, temps entre deux flèches de feu). Les
@@ -183,8 +192,23 @@ export interface RaidWave {
 }
 
 /** Garnison d'un bâtiment, selon sa sorte et sa zone */
-function garrisonOf(kind: HellSiteKind, zone: number): DemonKind[] {
+function garrisonOf(kind: HellSiteKind, zone: number, legacy = false): DemonKind[] {
   const deep = Math.floor((zone - 1) / 2);
+  if (!legacy) {
+    // les gros monstres arrivent avec les zones (donc avec l'âge qu'il faut pour y entrer) ; la zone 1 reste celle d'avant
+    const z = Math.max(1, Math.min(zone, 5));
+    const FORT: Record<number, [number, number, number, number, number, number, number]> = {
+      // diablotins, archers, brutes, démons-chefs, golems, démons cornus, seigneurs
+      1: [2, 2, 1, 0, 0, 0, 0], 2: [4, 3, 2, 1, 0, 0, 0], 3: [5, 4, 3, 2, 2, 0, 0], 4: [6, 5, 3, 2, 3, 1, 0], 5: [6, 6, 3, 3, 3, 2, 1],
+    };
+    switch (kind) {
+      case 'fortress': { const f = FORT[z]; return ['guardian', ...rep('chief', f[3]), ...rep('golem', f[4]), ...rep('horned', f[5]), ...rep('lord', f[6]), ...rep('brute', f[2]), ...rep('archer', f[1]), ...rep('imp', f[0])]; }
+      case 'outpost': return ['archer', ...rep('imp', 2 + (zone >= 3 ? 1 : 0)), ...(zone >= 2 ? rep('brute', 1) : []), ...(zone >= 3 ? rep('golem', zone >= 5 ? 2 : 1) : []), ...(zone >= 5 ? ['horned' as const] : [])];
+      case 'forge': return ['brute', 'imp', ...(zone >= 3 ? ['golem' as const] : []), ...(zone >= 5 ? ['horned' as const] : [])];
+      case 'kingdom': return ['king', ...rep('elite', 6), ...rep('chief', 2), ...rep('brute', 3), ...rep('archer', 5), ...rep('imp', 4), ...rep('golem', 3), ...rep('horned', 2), ...rep('lord', 2), 'titan'];
+      case 'spire': return [];
+    }
+  }
   switch (kind) {
     // (la première zone, sans démon-chef : la première expédition se gagne avec la garnison pleine de l'Antiquité)
     case 'fortress': return ['guardian', ...(zone >= 2 ? ['chief' as const] : []), ...rep('brute', 1 + deep), ...rep('archer', 2 + deep), ...rep('imp', 2)];
@@ -196,13 +220,22 @@ function garrisonOf(kind: HellSiteKind, zone: number): DemonKind[] {
 }
 const rep = (v: DemonKind, n: number): DemonKind[] => Array.from({ length: n }, () => v);
 
-/** Les démons des zones profondes sont plus coriaces */
-export function demonStats(kind: DemonKind, zone: number): UnitStats {
+/**
+ * Les démons des zones profondes sont plus coriaces ; les chefs de zone (gardien, roi, garde du roi) bien davantage. `legacy` :
+ * l'ancien équilibre (bac à sable)
+ */
+export function demonStats(kind: DemonKind, zone: number, legacy = false): UnitStats {
   const s = DEMONS[kind], lv = Math.max(0, zone - 1);
   // le gardien de la première zone, moins coriace : la première expédition se gagne avec la garnison pleine de l'Antiquité
   const first = kind === 'guardian' && zone === 1 ? 0.7 : 1;
-  return { ...s, hp: Math.round(s.hp * (1 + 0.12 * lv) * first), dmg: Math.round(s.dmg * (1 + 0.1 * lv) * first * 10) / 10 };
+  if (legacy) return { ...s, hp: Math.round(s.hp * (1 + 0.12 * lv) * first), dmg: Math.round(s.dmg * (1 + 0.1 * lv) * first * 10) / 10 };
+  const hpK = kind === 'guardian' ? 1 + 0.5 * lv : kind === 'king' ? 2.8 : kind === 'elite' ? 1.3 + 0.1 * lv : 1 + 0.15 * lv;
+  const dmgK = kind === 'guardian' ? 1 + 0.2 * lv : kind === 'king' ? 1.35 : kind === 'elite' ? 1.15 + 0.08 * lv : 1 + 0.12 * lv;
+  return { ...s, hp: Math.round(s.hp * hpK * first), dmg: Math.round(s.dmg * dmgK * first * 10) / 10 };
 }
+
+/** La puissance de chaque sorte de démon à la zone 1 (celle dont se servent les vagues) */
+export const DEMON_POWER = Object.fromEntries((Object.keys(DEMONS) as DemonKind[]).map((k) => [k, powerOf(DEMONS[k])])) as Record<DemonKind, number>;
 
 /**
  * Taille d'une vague selon son niveau (vagues déjà repoussées + 1) : deux diablotins d'abord, un de plus à chaque niveau,
@@ -268,8 +301,19 @@ export class Hell {
   /** garnison initiale de chaque zone (les forges la complètent jusque-là) */
   private cap: number[] = [];
   private mapV = -1;
+  /**
+   * Puissance de toute l'armée du joueur (sur l'île et dans les Enfers, blessés compris : voir `hellBalance.ts`), remise à jour
+   * par la guerre ; règle la taille des incursions. 0 : inconnue (seul le plancher d'âge compte)
+   */
+  armyPower = 0;
+  /** défaites d'affilée (elles allègent la vague suivante) ; la vague annoncée d'avance (sa composition, fixée à l'annonce) */
+  lossStreak = 0;
+  planned: DemonKind[] | null = null;
+  /** puissance du joueur au dernier renfort de chaque zone (0 : pas encore renforcée) */
+  private reinforced: number[] = Array.from({ length: HELL_ZONE_N }, () => 0);
 
-  constructor(readonly map: CombatMap, seed = map.seed) {
+  /** `balance` : l'équilibre de la partie (Normal par défaut ; Facile ×0,6 ; bac à sable : l'ancien) */
+  constructor(readonly map: CombatMap, seed = map.seed, readonly balance: Balance = BALANCE_NORMAL) {
     this.rnd = mulberry32(seed * 977 + 13);
     this.gate = map.zones.length === HELL_ZONE_N;
     this.populate();
@@ -322,7 +366,7 @@ export class Hell {
       let n = 0;
       for (const s of zn.sites) {
         // les postes de garde : en cercle autour du bâtiment
-        const g = garrisonOf(s.kind, zn.id), ring = this.postsAround(s, g.length);
+        const g = this.garrisonSized(garrisonOf(s.kind, zn.id, this.balance.legacy)), ring = this.postsAround(s, g.length);
         let post = 0;
         const nextPost = () => ring[post++ % ring.length];
         const st = SITES[s.kind];
@@ -341,7 +385,8 @@ export class Hell {
       }
       // une patrouille par zone (deux diablotins, une brute plus loin) le long de la faille
       if (zn.id > 0 && zn.id < Z_KINGDOM && zn.patrol.length) {
-        const kinds: DemonKind[] = zn.id >= 3 ? ['brute', 'imp', 'imp'] : ['imp', 'imp'];
+        const kinds: DemonKind[] = this.balance.legacy ? (zn.id >= 3 ? ['brute', 'imp', 'imp'] : ['imp', 'imp'])
+          : this.garrisonSized(zn.id >= 4 ? ['golem', 'brute', 'imp', 'imp'] : zn.id >= 2 ? ['brute', 'imp', 'imp'] : ['imp', 'imp']);
         kinds.forEach((k, i) => {
           const p = zn.patrol[0], u = this.spawn(k, p[0] + (i % 2 ? 0.6 : -0.6), p[1] - i * 0.7, zn.id);
           u.patrol = zn.patrol; u.patrolI = 1; u.state = 'patrol';
@@ -352,8 +397,45 @@ export class Hell {
     }
   }
 
-  /** 
- postes de garde libres autour d'un bâtiment */
+  /** Une garnison à la taille de la partie (Facile : ×0,6 sur les troupes ordinaires ; les chefs restent) */
+  private garrisonSized(g: DemonKind[]): DemonKind[] {
+    const k = this.balance.k;
+    if (k >= 1 || this.balance.legacy) return g;
+    let i = 0;
+    return g.filter((d) => d === 'guardian' || d === 'king' || d === 'titan' || d === 'lord' || (Math.floor(++i * k) > Math.floor((i - 1) * k)));
+  }
+
+  /** La puissance du joueur présent dans cette simulation (ses unités vivantes) */
+  playerPower() { let p = 0; for (const u of this.units.values()) if (u.hp > 0 && u.side === 'player') p += Math.min(MAX_UNIT_POWER, powerOf(u.stats)); return p; }
+
+  /**
+   * Une zone qui voit le joueur pour la première fois (ou le revoit bien plus nombreux) se renforce : des démons sortent des
+   * postes, de quoi tenir tête à une part de sa puissance (sinon une grosse armée traverserait une garnison pensée pour peu de
+   * troupes). Les sortes suivent la zone (donc l'âge qu'il faut pour y entrer), pas moins que l'âge du village moins un
+   */
+  private reinforce(zone: number) {
+    if (this.balance.legacy || zone < 1 || zone >= HELL_ZONE_N) return;
+    const pp = this.playerPower();
+    if (pp <= 0 || pp < this.reinforced[zone] * 1.3) return;
+    this.reinforced[zone] = pp;
+    let have = 0;
+    for (const u of this.units.values()) if (u.hp > 0 && u.side === 'hell' && u.zone === zone) have += powerOf(u.stats);
+    const want = pp * GARRISON_RATIO * this.balance.k - have;
+    if (want <= 0) return;
+    const age = Math.min(5, Math.max(ZONE_AGE[zone] ?? 1, tierAge(this.age) - 1));
+    const kinds = compose(want, 4 + zone, age, DEMON_POWER).slice(0, 80);
+    const zn = this.map.zones[zone], fort = zn.sites.find((s) => s.kind === 'fortress' || s.kind === 'kingdom');
+    const ring = fort ? this.postsAround(fort as HellSite, Math.min(kinds.length, 16)) : zn.posts;
+    kinds.forEach((k, i) => {
+      const p = ring[i % ring.length] ?? this.frontOf(fort ?? zn.sites[0]);
+      const u = this.spawn(k, p[0] + (this.rnd() - 0.5) * 1.4, p[1] + (this.rnd() - 0.5) * 1.4, zone);
+      if (!this.map.walkableAt(u.x, u.z, true)) { u.x = p[0]; u.z = p[1]; }
+      u.home = [u.x, u.z];
+    });
+    this.cap[zone] = (this.cap[zone] ?? 0) + kinds.length;
+  }
+
+  /** postes de garde libres autour d'un bâtiment */
   private postsAround(s: HellSite, n: number): [number, number][] {
     const out: [number, number][] = [];
     for (let i = 0; i < n; i++) {
@@ -372,7 +454,7 @@ export class Hell {
 
   /** Fait apparaître un démon (garnison de la zone `zone`) */
   spawn(kind: DemonKind, x: number, z: number, zone: number): HellUnit {
-    const stats = demonStats(kind, zone);
+    const stats = demonStats(kind, zone, this.balance.legacy);
     return this.addUnit('hell', kind, stats, x, z, zone);
   }
 
@@ -516,7 +598,7 @@ export class Hell {
   /** Lance l'alerte dans une zone : toute la garnison accourt vers l'ennemi vu */
   raiseAlert(zone: number, x: number, z: number) {
     if (zone < 0 || zone >= HELL_ZONE_N || (this.conquered[zone] && zone !== Z_KINGDOM)) return;
-    if (this.alert[zone] <= 0) this.events.push({ type: 'alert', zone, x, z });
+    if (this.alert[zone] <= 0) { this.events.push({ type: 'alert', zone, x, z }); this.reinforce(zone); }
     this.alert[zone] = ALERT_TIME;
     this.alertAt[zone] = [x, z];
   }
@@ -718,7 +800,11 @@ export class Hell {
       if (b.spawnT <= 0) {
         b.spawnT = FORGE_EVERY;
         if (this.garrison(b.zone).length < (this.cap[b.zone] ?? 0)) {
-          const kind: DemonKind = this.rnd() < 0.35 ? 'brute' : 'imp', p = this.frontOf(b.site);
+          const r = this.rnd(), z = b.zone;
+          // (les forges des zones profondes envoient aussi de gros monstres)
+          const kind: DemonKind = this.balance.legacy ? (r < 0.35 ? 'brute' : 'imp')
+            : z >= 5 && r < 0.12 ? 'horned' : z >= 3 && r < 0.3 ? 'golem' : r < 0.45 ? 'brute' : 'imp';
+          const p = this.frontOf(b.site);
           const zn = this.map.zones[b.zone], post = zn.posts[Math.floor(this.rnd() * zn.posts.length)] ?? p;
           const u = this.spawn(kind, p[0], p[1], b.zone);
           u.home = [post[0], post[1]];
@@ -782,6 +868,13 @@ export class Hell {
     return Math.hypot(x - u.x, z - u.z) < 7 && this.map.lineClear(u.x, u.z, x, z, u.side === 'hell');
   }
 
+  /** La brume d'une zone fermée : la mêlée ne pousse pas une unité du joueur au-delà (comme sa marche) */
+  private fogOk(u: HellUnit, nz: number) {
+    if (u.side !== 'player' || !this.gate || nz <= u.z) return true;
+    const zn = zoneOfZ(Math.floor(nz));
+    return !(zn > this.frontier && zn > zoneOfZ(Math.floor(u.z)));
+  }
+
   /** Les unités ne s'empilent pas : celles qui se chevauchent s'écartent (sans entrer dans la roche ni la lave) */
   private separate(live: HellUnit[]) {
     const m = this.map;
@@ -796,8 +889,8 @@ export class Hell {
         const push = (min - d) * 0.5, ux = d > 1e-4 ? dx / d : 1, uz = d > 1e-4 ? dz / d : 0;
         // le plus lourd bouge moins
         const wa = b.stats.radius / (a.stats.radius + b.stats.radius), wb = a.stats.radius / (a.stats.radius + b.stats.radius);
-        if (m.walkableAt(a.x - ux * push * wa, a.z - uz * push * wa, a.side === 'hell')) { a.x -= ux * push * wa; a.z -= uz * push * wa; }
-        if (m.walkableAt(b.x + ux * push * wb, b.z + uz * push * wb, b.side === 'hell')) { b.x += ux * push * wb; b.z += uz * push * wb; }
+        if (m.walkableAt(a.x - ux * push * wa, a.z - uz * push * wa, a.side === 'hell') && this.fogOk(a, a.z - uz * push * wa)) { a.x -= ux * push * wa; a.z -= uz * push * wa; }
+        if (m.walkableAt(b.x + ux * push * wb, b.z + uz * push * wb, b.side === 'hell') && this.fogOk(b, b.z + uz * push * wb)) { b.x += ux * push * wb; b.z += uz * push * wb; }
       }
     }
   }
@@ -828,17 +921,29 @@ export class Hell {
   daysHeld(time: number, dayLen: number) { return Math.floor(this.heldFor(time) / Math.max(1, dayLen)); }
 
   /**
+   * La composition de la prochaine vague, selon l'armée du joueur (`armyPower`), l'âge, le niveau et la difficulté (voir
+   * `hellBalance.ts`) ; la guerre l'annonce un peu avant (`planned`) puis la vague qui passe le portail est celle-là
+   */
+  planRaid(): DemonKind[] {
+    const lv = this.raidLevel, conq = this.conquered.filter(Boolean).length, sec = this.islandSecured;
+    return planWave({
+      level: lv, age: tierAge(this.age), power: this.armyPower, legacy: raidKinds(lv, raidSize(lv, conq, sec)), powers: DEMON_POWER, balance: this.balance,
+      secured: sec, conquered: conq, losses: this.lossStreak,
+    });
+  }
+
+  /**
    * La vague suivante passe le portail : ses démons (quelques diablotins d'abord ; des brutes, des archers, puis un chef s'y
    * mêlent à mesure qu'on les repousse), à placer sur l'île du portail — jamais sur l'île principale ; fixe la vague d'après.
    * L'île signale ensuite son issue par `endRaid`
    */
   spawnRaid(time = this.nextRaid): RaidWave {
     this.wave++;
-    const lv = this.raidLevel, conq = this.conquered.filter(Boolean).length, n = raidSize(lv, conq, this.islandSecured);
-    const kinds = raidKinds(lv, n);
+    const lv = this.raidLevel, kinds = this.planned ?? this.planRaid();
+    this.planned = null;
     this.nextRaid = Math.max(time, 0) + raidInterval(lv, this.islandSecured);
-    this.events.push({ type: 'raid', wave: this.wave, n });
-    const w: RaidWave = { wave: this.wave, level: lv, target: 'portal-island', units: kinds.map((k) => ({ kind: k, name: DEMONS[k].name, stats: demonStats(k, 1) })) };
+    this.events.push({ type: 'raid', wave: this.wave, n: kinds.length });
+    const w: RaidWave = { wave: this.wave, level: lv, target: 'portal-island', units: kinds.map((k) => ({ kind: k, name: DEMONS[k].name, stats: demonStats(k, 1, this.balance.legacy) })) };
     this.activeRaid = w;
     return w;
   }
@@ -851,8 +956,8 @@ export class Hell {
     if (!this.activeRaid) return false;
     const was = this.islandSecured, wave = this.activeRaid.wave;
     this.activeRaid = null;
-    if (repelled) this.raidsRepelled++;
-    else { this.raidsLost++; this.heldSince = time; }
+    if (repelled) { this.raidsRepelled++; this.lossStreak = 0; }
+    else { this.raidsLost++; this.lossStreak++; this.heldSince = time; }
     this.events.push({ type: 'raidEnd', wave, repelled });
     if (!was && this.islandSecured) { this.events.push({ type: 'secured' }); return true; }
     return false;
@@ -866,15 +971,17 @@ export class Hell {
   save(players = true): HellSave {
     return {
       time: this.time, wave: this.wave, nextRaid: this.nextRaid, victory: this.victory, conquered: [...this.conquered],
-      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, heldSince: this.heldSince,
+      raidsRepelled: this.raidsRepelled, raidsLost: this.raidsLost, heldSince: this.heldSince, reinforced: this.reinforced.map((p) => Math.round(p)),
       buildings: [...this.buildings.values()].filter((b) => b.side === 'hell').map((b) => [b.id, Math.max(0, Math.round(b.hp))]),
       units: this.alive().filter((u) => players || u.side !== 'player').map((u) => ({ side: u.side, kind: u.kind, zone: u.zone, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp), home: u.home, stats: u.side === 'player' ? u.stats : undefined, patrol: !!u.patrol })),
     };
   }
 
   /** Reprend un état sauvegardé sur une carte neuve (même graine) */
-  static load(map: CombatMap, s: HellSave): Hell {
-    const h = new Hell(map);
+  static load(map: CombatMap, s: HellSave, balance: Balance = BALANCE_NORMAL): Hell {
+    const h = new Hell(map, map.seed, balance);
+    // (une ancienne sauvegarde : aucune zone renforcée ; les zones déjà parcourues le seront à la première alerte)
+    if (Array.isArray(s.reinforced)) s.reinforced.forEach((p, i) => { if (i < HELL_ZONE_N && Number.isFinite(p)) h.reinforced[i] = p; });
     h.time = s.time; h.wave = s.wave; h.nextRaid = s.nextRaid; h.victory = s.victory;
     h.raidsRepelled = s.raidsRepelled ?? 0; h.raidsLost = s.raidsLost ?? 0; h.heldSince = s.heldSince ?? -1;
     s.conquered.forEach((c, i) => (h.conquered[i] = c));
@@ -894,6 +1001,8 @@ export class Hell {
 export interface HellSave {
   time: number; wave: number; nextRaid: number; victory: boolean; conquered: boolean[];
   raidsRepelled?: number; raidsLost?: number; heldSince?: number;
+  /** puissance du joueur au dernier renfort de chaque zone */
+  reinforced?: number[];
   buildings: [number, number][];
   units: { side: Side; kind: string; zone: number; x: number; z: number; hp: number; home: [number, number]; stats?: UnitStats; patrol: boolean }[];
 }

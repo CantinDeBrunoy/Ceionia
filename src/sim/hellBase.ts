@@ -1,5 +1,6 @@
 import { HellMap, HELL_ZONES, HELL_ZONE_N, Z_KINGDOM, ZONE_AGE, zoneOfZ, zoneOf, zoneThe } from '../world/hell';
-import { Hell, HellBuilding, HellEvent, BaseKind, DemonKind, demonStats, raidKinds } from './hell';
+import { Hell, HellBuilding, HellEvent, BaseKind, DemonKind, demonStats, raidKinds, DEMON_POWER } from './hell';
+import { planWave, tierAge } from './hellBalance';
 
 /**
  * La base avancée du joueur dans les Enfers (expéditions facultatives) : dans une zone tenue (le seuil du portail, ou une zone
@@ -402,14 +403,21 @@ export class HellBase {
 
   /** Une contre-attaque sur la base d'une zone : des démons de la zone d'après, devant sa forteresse ou à son entrée */
   private counter(zone: number) {
-    const h = this.hell, m = this.map, from = zone + 1, n = counterSize(zone, this.count[zone], ageLag(from, h.age));
+    const h = this.hell, m = this.map, from = zone + 1, n0 = counterSize(zone, this.count[zone], ageLag(from, h.age));
     const fort = h.standing(from).find((b) => b.kind === 'fortress' || b.kind === 'kingdom');
     const z0 = HELL_ZONES[from].z0 + 3, sx = fort ? fort.site.x : m.spine[z0] + 0.5, sz = fort ? fort.site.z - fort.site.r - 1.5 : z0 + 0.5;
-    const kinds: DemonKind[] = raidKinds(zone + this.count[zone] + 1, n);
+    // la taille suit la puissance des troupes du joueur dans les Enfers (voir `hellBalance.ts`), l'âge de la zone visée et celui du
+    // village ; sans troupe sur place, le plancher (l'ancienne taille) tient
+    const lv = zone + this.count[zone] + 1, legacy = raidKinds(lv, n0);
+    const kinds: DemonKind[] = planWave({
+      level: lv, age: Math.min(5, Math.max(ZONE_AGE[from] ?? 1, tierAge(h.age) - 1)), power: h.playerPower(), legacy, powers: DEMON_POWER, balance: h.balance,
+      losses: h.lossStreak,
+    });
+    const n = kinds.length, side = Math.ceil(Math.sqrt(n * 1.6));
     kinds.forEach((k, i) => {
-      const c = m.nearestWalkable(sx + ((i % 4) - 1.5) * 0.7, sz - Math.floor(i / 4) * 0.7, 4);
+      const c = m.nearestWalkable(sx + ((i % side) - (side - 1) / 2) * 0.8, sz - Math.floor(i / side) * 0.8, 5);
       const [x, z] = c >= 0 ? [(c % m.W) + 0.5, Math.floor(c / m.W) + 0.5] : [sx, sz];
-      const u = h.addRaider(k, demonStats(k, from), x, z);
+      const u = h.addRaider(k, demonStats(k, from, h.balance.legacy), x, z);
       this.attackers.set(u.id, zone);
     });
     this.count[zone]++;
@@ -469,7 +477,7 @@ export class HellBase {
     if (zones.length) for (const u of hell.alive('hell')) {
       if (u.zone >= 0) continue;
       b.attackers.set(u.id, zones[0]);
-      const st = demonStats(u.kind as DemonKind, Math.min(HELL_ZONE_N - 1, zones[0] + 1));
+      const st = demonStats(u.kind as DemonKind, Math.min(HELL_ZONE_N - 1, zones[0] + 1), hell.balance.legacy);
       u.stats = st; u.maxHp = st.hp; u.hp = Math.min(u.hp, st.hp);
     }
     return b;
