@@ -101,14 +101,14 @@ const RAW = {
     easy: ['Les grands bâtiments se paient en bois et en pierre', 'Les petits restent gratuits', 'Le village grandit quand ses besoins sont comblés'],
     normal: [
       'Chaque bâtiment se paie, plus cher selon sa taille et l’âge', 'Pour passer d’âge, il faut bâtir du neuf : les bâtiments d’avant ne comptent pas',
-      'On mange plus ; la disette fait fuir des habitants, et le village met du temps à s’en remettre', 'Les expéditions sont plus risquées, et leur équipement se paie',
+      'On mange plus qu’en Facile', 'Les expéditions sont plus risquées, et leur équipement se paie',
     ],
   } as Record<Difficulty, string[]>,
   /** les points clés en une phrase, pour l'écran d'accueil sur téléphone */
   summary: {
     sandbox: 'Tout est gratuit et personne ne souffre : pour créer et sculpter sans compter.',
     easy: 'Les grands bâtiments se paient en bois et en pierre, les petits sont gratuits. Le village grandit quand ses besoins sont comblés.',
-    normal: 'Tout se paie, on mange plus et la disette fait peur : chaque pierre compte. Le mode conseillé.',
+    normal: 'Tout se paie et on mange plus : chaque pierre compte. Le mode conseillé.',
   } as Record<Difficulty, string>,
   /** mode mis en avant à l'accueil */
   recommended: 'Conseillé',
