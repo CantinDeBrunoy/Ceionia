@@ -875,11 +875,11 @@ export class CommandUI implements ToolInput {
   alert(text: string | null, onView?: () => void) {
     const el = this.alertEl;
     if (!text) { el.classList.remove('show'); return; }
-    if (el.dataset.v !== text) {
-      el.dataset.v = text;
-      el.innerHTML = `<span>${text}</span><button>${tr('Voir l’île')}</button>`;
-      el.querySelector('button')!.onclick = () => { this.host.click(); onView?.(); };
-    }
+    // le bouton reste en place (le compte à rebours change le texte chaque seconde : un bouton refait à chaque fois perdrait des clics)
+    if (!el.querySelector('button')) el.innerHTML = `<span></span><button>${tr('Voir l’île')}</button>`;
+    const span = el.querySelector('span')!;
+    if (span.textContent !== text) span.textContent = text;
+    el.querySelector('button')!.onclick = () => { this.host.click(); onView?.(); };
     el.classList.add('show');
   }
 }
