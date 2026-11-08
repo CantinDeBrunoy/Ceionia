@@ -303,7 +303,7 @@ const trackGeo = () => geo('track', (p) => {
   for (const z of [0.07, 0.22]) p.box(0.17, 0.014, 0.035, 0, 0, z, 0x5a4232);
   for (const s of [-1, 1]) p.box(0.012, 0.016, 0.3, s * 0.05, 0.014, 0.15, 0x8a8f96);
 });
-const foamGeo = () => geo('foam', (p) => p.sphere(0.04, 0, 0, 0, 0xf4fafc, 0));
+const foamGeo = () => geo('foam', (p) => p.sphere(0.026, 0, 0, 0, 0xffffff, 0));
 const puffGeo = () => geo('puff', (p) => p.sphere(0.03, 0, 0, 0, 0xb8b2a8, 0));
 /** Tronçon de la voie qu'on pose (le long de +z, de 0 à 0,3) : ballast, quatre traverses, deux rails et leurs éclisses */
 const laidGeo = () => geo('laid', (p) => {
@@ -3187,7 +3187,7 @@ export class ExpeditionScene {
   /** Une gerbe d'écume et un rond dans l'eau en (x, z) */
   private splash(x: number, z: number, level: number, big = false) {
     // la gerbe : des gouttes d'écume blanche qui jaillissent, retombent en arc (et un petit nuage bas)
-    const n = big ? 18 : 6;
+    const n = big ? 28 : 8;
     for (let i = 0; i < n; i++) {
       const o = new THREE.Mesh(foamGeo(), mats.body), a = Math.random() * Math.PI * 2, v = big ? 0.1 + Math.random() * 0.4 : 0.06 + Math.random() * 0.16;
       this.group.add(o);
