@@ -25,11 +25,12 @@ import { KingFight, KingSave, KingdomReward, claimKingdom } from './kingdom';
 export const COARSE = 0.25;
 /**
  * L'invasion : la première grosse vague, que le joueur doit repousser pour ouvrir les Enfers. `wait` : pas encore annoncée (il
- * manque la tour, la caserne ou la garnison) ; `coming` : annoncée, compte à rebours ; `raid` : la vague est sur l'île ; `done` :
+ * manque la tour, la caserne ou la garnison) ; `ready` : tout est prêt, le joueur choisit d'affronter les démons (rien ne part
+ * sans son clic) ; `coming` : choisie, compte à rebours de 10 s ; `raid` : la vague est sur l'île ; `done` :
  * repoussée (les Enfers s'ouvrent). Après une défaite, on revient à `wait` : elle sera ré-annoncée
  */
-export type Invasion = 'wait' | 'coming' | 'raid' | 'done';
-const INVASIONS: Invasion[] = ['wait', 'coming', 'raid', 'done'];
+export type Invasion = 'wait' | 'ready' | 'coming' | 'raid' | 'done';
+const INVASIONS: Invasion[] = ['wait', 'ready', 'coming', 'raid', 'done'];
 /** La force d'une vague, pour le joueur */
 export type WaveForce = 'small' | 'medium' | 'big';
 /** Soldats valides à la garnison pour que l'invasion soit annoncée (moins en Facile et au bac à sable) */
@@ -56,7 +57,7 @@ export function bigOf(kinds: DemonKind[]) {
   return parts.length ? tr(', dont {list}', { list: parts.length > 1 ? tr('{a} et {b}', { a: parts.slice(0, -1).join(', '), b: parts[parts.length - 1] }) : parts[0] }) : '';
 }
 
-export interface WarNews { text: string; kind: 'raid' | 'invasion' | 'invasionStart' | 'invasionDone' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'zone' | 'boss' | 'victory' }
+export interface WarNews { text: string; kind: 'raid' | 'invasion' | 'invasionReady' | 'portalSealed' | 'invasionStart' | 'invasionDone' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'zone' | 'boss' | 'victory' }
 
 export interface WarSave {
   army: Army;
@@ -74,6 +75,8 @@ export interface WarSave {
   /** l'invasion du portail (absent d'une ancienne sauvegarde : déduit de l'historique de la partie) et les Enfers déjà visités */
   invasion?: Invasion;
   visited?: boolean;
+  sealed?: boolean;
+  choiceSeen?: boolean;
 }
 
 export class War {
@@ -96,6 +99,10 @@ export class War {
   private legacyInv = false;
   /** le joueur est déjà allé dans les Enfers (ou y a envoyé une troupe) : le guidage vers eux s'efface */
   visited = false;
+  /** « Se préparer d'abord » : le portail est refermé (sans vague, sans passage) jusqu'à ce que le joueur le rouvre en affrontant les démons */
+  sealed = false;
+  /** la carte du choix s'est déjà ouverte toute seule (une seule fois par partie) */
+  choiceSeen = false;
   /** troupe → unité au combat (sur l'île ou dans les Enfers), et l'inverse */
   unitOf = new Map<number, HellUnit>();
   troopOf = new Map<number, Troop>();
@@ -375,7 +382,7 @@ export class War {
     let arrived: RaidWave | null = null;
     // l'invasion d'abord : tant qu'elle n'est pas annoncée, aucune vague ne vient ; elle l'est quand tout est prêt
     this.stepInvasion(d, f);
-    const waiting = this.inv === 'wait';
+    const waiting = this.inv === 'wait' || this.inv === 'ready';
     // (annoncée un moment d'avance : la vague est composée à l'annonce, le joueur sait ce qui vient)
     const left = this.nextWaveIn();
     if (!waiting && d.towers > 0 && left !== null && left <= WARN_TIME && !f.planned) {
@@ -515,9 +522,9 @@ export class War {
   }
 
   /** Appelle la prochaine vague tout de suite (sonner le cor) ; sans effet tant que l'invasion n'est pas annoncée */
-  callWave() { if (this.faction && this.inv !== 'wait' && !this.faction.activeRaid && this.faction.nextRaid >= 0 && this.faction.frontPosts <= 0) this.faction.nextRaid = this.faction.time; }
+  callWave() { if (this.faction && this.inv !== 'wait' && this.inv !== 'ready' && !this.faction.activeRaid && this.faction.nextRaid >= 0 && this.faction.frontPosts <= 0) this.faction.nextRaid = this.faction.time; }
   /** Secondes de jeu avant la prochaine vague (null : pas encore d'incursion prévue, ou une en cours) */
-  nextWaveIn() { const f = this.faction; return !f || f.victory || f.activeRaid || this.inv === 'wait' || f.nextRaid < 0 || f.frontPosts > 0 ? null : Math.max(0, f.nextRaid - f.time); }
+  nextWaveIn() { const f = this.faction; return !f || f.victory || f.activeRaid || this.inv === 'wait' || this.inv === 'ready' || f.nextRaid < 0 || f.frontPosts > 0 ? null : Math.max(0, f.nextRaid - f.time); }
   /** Soldats valides de la garnison de l'île */
   garrison() { return this.army.troops.filter((t) => t.where === 'isle' && t.heal <= 0).length; }
   /** Le bouton « Appeler la prochaine vague » : null si on peut, sinon la raison (une phrase) */
@@ -538,7 +545,9 @@ export class War {
 
   /** Les Enfers sont fermés tant que l'invasion n'est pas repoussée : la raison en une phrase (null : ouverts) */
   hellWhy(): string | null {
-    return this.active && this.inv !== 'done' && !this.portalOut ? tr('Repoussez d’abord l’invasion du portail.') : null;
+    if (!this.active || this.inv === 'done' || this.portalOut) return null;
+    if (this.closed) return tr('Le portail est refermé : rouvrez-le depuis l’île.');
+    return this.inv === 'ready' ? tr('Affrontez d’abord les démons de l’île.') : tr('Repoussez d’abord l’invasion du portail.');
   }
 
   /** Après la victoire : l'étape du guidage vers les Enfers (choisir les troupes, puis les envoyer) ; null : rien à guider */
@@ -550,6 +559,29 @@ export class War {
   /** Une partie en cours : l'invasion compte pour faite (tests, mode développeur) */
   skipInvasion() { this.inv = 'done'; this.legacyInv = false; }
 
+  /** Le portail est refermé (« Se préparer d'abord ») : aucune vague, aucun passage, le tourbillon éteint */
+  get closed() { return this.sealed && this.inv === 'ready' && this.active; }
+
+  /** « Se préparer d'abord » : referme le portail (l'invasion attend que le joueur le rouvre) ; false si ce n'est pas possible */
+  sealPortal(): boolean {
+    if (this.inv !== 'ready' || this.sealed) return false;
+    this.sealed = true;
+    this.news.push({ kind: 'portalSealed', text: tr('🔒 Le portail est refermé. Rouvrez-le quand vous serez prêt.') });
+    return true;
+  }
+
+  /** Le choix « Affronter les démons » : l'invasion est prête, elle part (compte à rebours INVASION_DELAY) ; false si elle ne l'est pas */
+  startInvasion(): boolean {
+    const f = this.faction;
+    if (!f || this.inv !== 'ready') return false;
+    this.sealed = false;
+    this.inv = 'coming';
+    f.nextRaid = f.time + INVASION_DELAY;
+    f.planned = f.planInvasion();
+    this.news.push({ kind: 'invasion', text: tr('⚠️ Les démons vont attaquer : préparez la garnison ! La grosse vague arrive dans {t}.', { t: `${INVASION_DELAY} s` }) });
+    return true;
+  }
+
   /** Ce que la garnison doit compter pour que l'invasion soit annoncée */
   invasionNeed() { return invasionTroops(this.world.difficulty); }
 
@@ -557,11 +589,11 @@ export class War {
   private stepInvasion(d: { towers: number; barracks: number }, f: Hell) {
     const ready = d.towers >= 1 && d.barracks >= 1;
     if (this.inv === 'wait' && ready && this.garrison() >= this.invasionNeed()) {
-      this.inv = 'coming';
-      f.nextRaid = f.time + INVASION_DELAY;
-      f.planned = f.planInvasion();
-      this.news.push({ kind: 'invasion', text: tr('⚠️ Les démons vont attaquer : préparez la garnison ! La grosse vague arrive dans {t}.', { t: `${INVASION_DELAY} s` }) });
-    } else if (this.inv === 'coming' && !ready) {
+      // tout est prêt : c'est au joueur de choisir d'affronter les démons (rien ne se lance tout seul)
+      this.inv = 'ready';
+      this.news.push({ kind: 'invasionReady', text: tr('⚔️ Les démons rôdent autour du portail : affrontez-les quand vous êtes prêt.') });
+    } else if (this.inv === 'ready' && !ready) { this.inv = 'wait'; this.sealed = false; }
+    else if (this.inv === 'coming' && !ready) {
       // (la tour ou la caserne a disparu : le compte à rebours s'arrête, il repart quand elles sont rebâties)
       this.inv = 'wait';
       f.planned = null; f.nextRaid = -1;
@@ -592,6 +624,8 @@ export class War {
       endSeen: this.endSeen || undefined,
       invasion: this.legacyInv ? undefined : this.inv,
       visited: this.visited || undefined,
+      sealed: this.sealed || undefined,
+      choiceSeen: this.choiceSeen || undefined,
       raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })), t: Math.round(isle.raidT) } : null,
     };
   }
@@ -609,7 +643,9 @@ export class War {
     this.endSeen = o.endSeen === true;
     // (sans l'état de l'invasion : une ancienne partie, qu'on ne bloque jamais ; voir `readLegacyInvasion`)
     const iv = INVASIONS.find((x) => x === o.invasion);
-    this.inv = iv ?? 'wait'; this.legacyInv = !iv; this.visited = o.visited === true;
+    // (un compte à rebours en cours au chargement : remplacé par le choix, pas de vague surprise)
+    this.inv = iv === 'coming' ? 'ready' : iv ?? 'wait'; this.legacyInv = !iv; this.visited = o.visited === true;
+    this.sealed = o.sealed === true; this.choiceSeen = o.choiceSeen === true;
     const rw = o.reward as KingdomReward | null | undefined;
     this.reward = rw && typeof rw === 'object' && Number.isFinite(rw.ore) && Number.isFinite(rw.joy) && Array.isArray(rw.gear) ? { ore: rw.ore, joy: rw.joy, gear: rw.gear.filter((g) => Array.isArray(g) && typeof g[0] === 'string' && Number.isFinite(g[1])) } : null;
     this.unitOf.clear(); this.troopOf.clear(); this.crossing.clear();

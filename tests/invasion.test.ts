@@ -50,17 +50,33 @@ describe('l’invasion : quand elle est annoncée', () => {
     }
   });
 
-  it('une seule fois quand tour + caserne + garnison sont réunies : compte à rebours, puis la grosse vague', () => {
+  it('pas de vague sans choix : tout prêt, le joueur décide ; « Affronter » lance la vague après 10 s', () => {
     const war = new War(island());
     enlist(war, 3);
     tick(war, 2);
+    expect(war.inv).toBe('ready');
+    expect(said(war, 'invasionReady')).toBe(1);
+    // des minutes passent (« Se préparer d'abord » : la carte se ferme, rien ne change côté simulation) : rien ne vient
+    tick(war, 200);
+    expect(war.inv).toBe('ready');
+    expect(war.isle!.raid).toBeNull();
+    expect(war.nextWaveIn()).toBeNull();
+    expect(said(war, 'invasion')).toBe(0);
+    expect(said(war, 'invasionReady')).toBe(1);
+    war.callWave();
+    tick(war, 5);
+    expect(war.isle!.raid).toBeNull();
+    // le choix : le compte à rebours de 10 s, puis la grosse vague
+    expect(INVASION_DELAY).toBe(10);
+    expect(war.startInvasion()).toBe(true);
+    expect(war.startInvasion()).toBe(false);
     expect(war.inv).toBe('coming');
     expect(said(war, 'invasion')).toBe(1);
     const left = war.nextWaveIn()!;
-    expect(left).toBeGreaterThan(INVASION_DELAY - 5);
+    expect(left).toBeGreaterThan(INVASION_DELAY - 1);
     expect(left).toBeLessThanOrEqual(INVASION_DELAY);
     // pas de nouvelle annonce pendant l'attente ; la vague annoncée est celle qui arrive
-    tick(war, 20);
+    tick(war, 3);
     expect(said(war, 'invasion')).toBe(1);
     const plan = [...war.faction!.planned!];
     tick(war, 30, () => !!war.isle!.raid);
@@ -81,13 +97,14 @@ describe('l’invasion : quand elle est annoncée', () => {
     const war = new War(island(1, 1, 'easy'));
     enlist(war, 2);
     tick(war, 2);
-    expect(war.inv).toBe('coming');
+    expect(war.inv).toBe('ready');
   });
 
   it('défaite : elle est ré-annoncée quand la garnison est de nouveau là, sans plus', () => {
     const war = new War(island());
     enlist(war, 3);
     tick(war, 2);
+    war.startInvasion();
     war.faction!.nextRaid = war.faction!.time;
     tick(war, 2);
     expect(war.inv).toBe('raid');
@@ -105,6 +122,8 @@ describe('les Enfers restent fermés tant que l’invasion n’est pas repoussé
     const war = new War(island());
     enlist(war, 3);
     tick(war, 2);
+    expect(war.hellWhy()).toBe('Affrontez d’abord les démons de l’île.');
+    war.startInvasion();
     expect(war.hellWhy()).toBe('Repoussez d’abord l’invasion du portail.');
     // « Envoyer aux Enfers » : personne ne passe
     war.sendThroughPortal(war.isle!.sim.alive('player'));
@@ -130,6 +149,67 @@ describe('les Enfers restent fermés tant que l’invasion n’est pas repoussé
     expect(war.guideStep(3)).toBe('send');
     war.visited = true;
     expect(war.guideStep(3)).toBeNull();
+  });
+});
+
+describe('« Se préparer d’abord » referme le portail', () => {
+  const ready = () => {
+    const war = new War(island());
+    enlist(war, 3);
+    tick(war, 2);
+    return war;
+  };
+
+  it('refermé : aucune vague, aucun passage, le bon message ; le portail reste « ouvert » pour le reste du jeu', () => {
+    const war = ready();
+    expect(war.closed).toBe(false);
+    expect(war.sealPortal()).toBe(true);
+    expect(said(war, 'portalSealed')).toBe(1);
+    expect(war.sealPortal()).toBe(false);
+    expect(war.closed).toBe(true);
+    expect(war.world.portalOpen).toBe(true);
+    tick(war, 300);
+    expect(war.isle!.raid).toBeNull();
+    expect(war.nextWaveIn()).toBeNull();
+    war.callWave();
+    tick(war, 5);
+    expect(war.isle!.raid).toBeNull();
+    expect(war.hellWhy()).toBe('Le portail est refermé : rouvrez-le depuis l’île.');
+    war.sendThroughPortal(war.isle!.sim.alive('player'));
+    expect(war.crossing.size).toBe(0);
+  });
+
+  it('rouvrir par le choix lance l’invasion (10 s) ; la carte ne revient pas seule', () => {
+    const war = ready();
+    war.sealPortal();
+    tick(war, 120);
+    // (la carte automatique, c'est `choiceSeen` : une fois par partie, que l'interface pose en l'ouvrant)
+    war.choiceSeen = true;
+    expect(war.inv).toBe('ready');
+    expect(war.startInvasion()).toBe(true);
+    expect(war.closed).toBe(false);
+    expect(war.inv).toBe('coming');
+    expect(war.nextWaveIn()!).toBeLessThanOrEqual(INVASION_DELAY);
+    expect(war.hellWhy()).toBe('Repoussez d’abord l’invasion du portail.');
+  });
+
+  it('la sauvegarde et le rechargement gardent l’état ; une ancienne sauvegarde n’est pas scellée', () => {
+    const war = ready();
+    war.sealPortal();
+    war.choiceSeen = true;
+    const s = JSON.parse(JSON.stringify(war.save())) as Record<string, unknown>;
+    expect(s.sealed).toBe(true);
+    const back = new War(island());
+    back.load(s);
+    tick(back, 2);
+    expect(back.closed).toBe(true);
+    expect(back.choiceSeen).toBe(true);
+    delete s.sealed; delete s.choiceSeen;
+    const old = new War(island());
+    old.load(s);
+    tick(old, 2);
+    expect(old.closed).toBe(false);
+    expect(old.choiceSeen).toBe(false);
   });
 });
 
@@ -171,15 +251,31 @@ describe('les sauvegardes', () => {
     expect(back.inv).toBe('wait');
   });
 
-  it('l’état se sauvegarde : l’invasion annoncée le reste, la grosse vague aussi', () => {
+  it('le choix « prête » se sauvegarde ; un compte à rebours en cours au chargement devient le choix (pas de vague surprise)', () => {
     const war = new War(island());
     enlist(war, 3);
     tick(war, 2);
+    expect(reload(war).inv).toBe('ready');
+    war.startInvasion();
     expect(war.inv).toBe('coming');
-    const plan = [...war.faction!.planned!];
     const back = reload(war);
-    expect(back.inv).toBe('coming');
-    expect(back.faction!.planned).toEqual(plan);
+    expect(back.inv).toBe('ready');
+    tick(back, 60);
+    expect(back.isle!.raid).toBeNull();
+    expect(back.inv).toBe('ready');
+  });
+
+  it('une invasion déjà lancée, repoussée ou comptée comme faite ne change pas', () => {
+    const war = new War(island());
+    enlist(war, 3);
+    tick(war, 2);
+    war.startInvasion();
+    war.faction!.nextRaid = war.faction!.time;
+    tick(war, 3, () => !!war.isle!.raid);
+    expect(war.inv).toBe('raid');
+    expect(reload(war).inv).toBe('raid');
+    war.skipInvasion();
+    expect(reload(war).inv).toBe('done');
   });
 });
 
@@ -216,6 +312,7 @@ describe('l’invasion est gagnable, et grosse', () => {
     const war = new War(island(1, 1, difficulty));
     enlist(war, soldiers);
     tick(war, 2);
+    war.startInvasion();
     const plan = [...war.faction!.planned!];
     war.faction!.nextRaid = war.faction!.time;
     tick(war, 3, () => !!war.isle!.raid);
