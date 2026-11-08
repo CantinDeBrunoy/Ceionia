@@ -81,7 +81,7 @@ describe('âge futuriste', () => {
     sim.age = 5;
     sim.recalc();
     // six tours d'habitation à 20 places
-    expect(sim.housing.cap).toBe(6 * KINDS.house.housing![5]);
+    expect(sim.housing.cap).toBe(6 * KINDS.house.housing![5] + KINDS.gather.housing![5]);
   });
 
   it('une ancienne partie de l’époque moderne se relit telle quelle, l’âge futuriste devant elle', () => {

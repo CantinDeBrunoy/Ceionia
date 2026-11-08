@@ -212,8 +212,10 @@ export const KINDS: Record<KindId, KindDef> = {
   gather: {
     id: 'gather', size: 3, minAge: 0, icon: '🔥', cat: 'life',
     names: ['Feu de camp', 'Agora', 'Marché', 'Parc', 'Place', 'Agora holographique'],
-    desc: 'La place du village (3 × 3), son centre : on s’y retrouve de tous côtés, sans porte ni chemin d’accès. Augmente le bien-être.',
+    desc: 'La place du village (3 × 3), son centre : on s’y retrouve de tous côtés, sans porte ni chemin d’accès. Accueille les trois premiers habitants et augmente le bien-être.',
     joy: [4, 6, 8, 10, 12, 15],
+    // les fondateurs : trois habitants, de quoi manger et boire, de quoi lancer la première expédition
+    housing: [3, 3, 3, 3, 3, 3], food: [6, 0, 0, 0, 0, 0], water: [4, 0, 0, 0, 0, 0],
     perk: 'À poser en premier, au cœur du futur village : les maisons, la ferme et le puits viendront autour. On y fête le retour des expéditions.',
   },
   temple: {

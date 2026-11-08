@@ -403,6 +403,8 @@ export class Sim {
       this.recalcTimer = 0.25;
       this.recalc();
     }
+    // les fondateurs : la place du village posée dans un village sans maison ni habitant accueille tout de suite trois habitants
+    if (this.pop === 0 && this.age === 0 && (this.counts.gather ?? 0) > 0 && !(this.counts.house ?? 0)) { this.pop = 3; this.evaluate(); }
     if (this.pop > this.housing.cap) this.pop = Math.max(this.housing.cap, 0);
     // horloge des expéditions : les effets passagers s'éteignent
     const e = this.world.exp;
