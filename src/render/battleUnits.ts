@@ -4,6 +4,7 @@ import { Hell, HellEvent, DemonKind, DEMONS } from '../sim/hell';
 import { caveLit } from './caveLight';
 import { CombatFx } from './combatFx';
 import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
+import { makeRider, rideStep, Rider } from './riders';
 
 /**
  * Les combattants d'une bataille (dans les Enfers ou sur l'île du portail) : démons en pièces animées (un maillage instancié
@@ -24,7 +25,7 @@ const BAR_M = new THREE.Matrix4(), BAR_S = new THREE.Matrix4();
 const BAR_BG = new THREE.Color(0x1a0a0c), HELL_C = new THREE.Color(0xff4a3a), PLAYER_C = new THREE.Color(0x5adf6a), WEAK_C = new THREE.Color(0xffc040);
 const BARS = 600, RINGS = 120;
 /** Taille des soldats du joueur (au-dessus de celle des habitants : on les lit de loin) */
-const TROOP_K: Record<string, number> = { soldier: 1.6, archer: 1.5, knight: 1.85 };
+const TROOP_K: Record<string, number> = { soldier: 1.6, archer: 1.5, knight: 1.85, cavalry: 1.5 };
 /** Le modèle de chaque troupe : lancier (lance et bouclier), archer (arc, carquois, capuchon), chevalier (armure, écu, épée) */
 const TROOP_ROLE: Record<string, SoldierRole> = { soldier: 'spearman', archer: 'archer', knight: 'knight' };
 
@@ -39,7 +40,8 @@ export class BattleLayer {
   age = 1;
   private uTime = 0;
   private rigs = {} as Record<DemonKind, Rig>;
-  private troops = new Map<number, { s: Soldier; kind: string; age: number }>();
+  /** (le cavalier : `r`, cheval et cavalier de `riders.ts` ; les autres : `s`) */
+  private troops = new Map<number, { s?: Soldier; r?: Rider; kind: string; age: number }>();
   private barBg: THREE.InstancedMesh;
   private barFill: THREE.InstancedMesh;
   private rings: THREE.InstancedMesh;
@@ -91,7 +93,7 @@ export class BattleLayer {
 
   /** Retire les soldats (on change de bataille) */
   dispose() {
-    for (const t of this.troops.values()) this.group.remove(t.s.root);
+    for (const t of this.troops.values()) this.group.remove((t.s ?? t.r!).root);
     this.troops.clear();
   }
 
@@ -171,27 +173,40 @@ export class BattleLayer {
     }
   }
 
-  /** Les unités du joueur : des soldats de l'époque (le chevalier, en armure du Moyen Âge au moins, un peu plus grand) */
+  /** Les unités du joueur : des soldats de l'époque (le chevalier, en armure du Moyen Âge au moins, un peu plus grand) ; le cavalier, à cheval */
   private drawTroops() {
     const seen = new Set<number>();
     for (const u of this.hell.units.values()) {
       if (u.side !== 'player') continue;
       seen.add(u.id);
-      const age = u.kind === 'knight' ? Math.max(2, this.age) : this.age;
+      const horse = u.kind === 'cavalry', age = u.kind === 'knight' ? Math.max(2, this.age) : horse ? Math.min(3, this.age) : this.age;
       let t = this.troops.get(u.id);
-      if (t && (t.age !== age || t.kind !== u.kind)) { this.group.remove(t.s.root); t = undefined; }
-      if (!t) { t = { s: makeSoldier(age, u.id, false, TROOP_ROLE[u.kind] ?? 'spearman'), kind: u.kind, age }; this.group.add(t.s.root); this.troops.set(u.id, t); }
-      const s = t.s, dead = u.hp <= 0;
+      if (t && (t.age !== age || t.kind !== u.kind)) { this.group.remove((t.s ?? t.r!).root); t = undefined; }
+      if (!t) {
+        t = horse ? { r: makeRider(age, u.id), kind: u.kind, age } : { s: makeSoldier(age, u.id, false, TROOP_ROLE[u.kind] ?? 'spearman'), kind: u.kind, age };
+        this.group.add((t.s ?? t.r!).root);
+        this.troops.set(u.id, t);
+      }
+      const root = (t.s ?? t.r!).root, dead = u.hp <= 0;
       // le coup se voit : un bond vers la cible quand il frappe, un recul net quand il est touché (affichage seulement)
-      const swing = u.stats.range <= 2 && u.swing < 0.4 ? Math.sin((u.swing / 0.4) * Math.PI) * 0.18 : 0, push = dead ? 0 : swing - (u.hurt < 0.16 ? (1 - u.hurt / 0.16) * 0.12 : 0);
-      s.root.position.set(u.x + Math.sin(u.heading) * push, this.groundY(u.x, u.z) - (dead ? Math.max(0, u.hurt - 0.7) * 0.4 : 0), u.z + Math.cos(u.heading) * push);
-      s.root.rotation.set(dead ? -Math.min(1, u.hurt / 0.4) * 1.4 : 0, u.heading, 0, 'YXZ');
-      s.root.scale.setScalar((TROOP_K[u.kind] ?? 1.6) * (dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1) / 0.9) : 1));
-      soldierStep(s, u.moving ? u.walk : this.uTime, dead ? 'idle' : u.state === 'attack' ? 'fight' : u.moving ? (u.state === 'retreat' ? 'run' : 'walk') : 'guard');
-      // touché : il recule d'un coup, le buste rejeté en arrière
-      if (!dead && u.hurt < 0.18) s.body.rotation.x -= 0.4 * (1 - u.hurt / 0.18);
+      const swing = u.stats.range <= 2 && u.swing < 0.4 ? Math.sin((u.swing / 0.4) * Math.PI) * (horse ? 0.26 : 0.18) : 0, push = dead ? 0 : swing - (u.hurt < 0.16 ? (1 - u.hurt / 0.16) * 0.12 : 0);
+      root.position.set(u.x + Math.sin(u.heading) * push, this.groundY(u.x, u.z) - (dead ? Math.max(0, u.hurt - 0.7) * 0.4 : 0), u.z + Math.cos(u.heading) * push);
+      // (mort : le cavalier bascule sur le côté, comme une bête qui s'écroule)
+      if (horse) root.rotation.set(0, u.heading, dead ? Math.min(1, u.hurt / 0.4) * 1.4 : 0, 'YXZ');
+      else root.rotation.set(dead ? -Math.min(1, u.hurt / 0.4) * 1.4 : 0, u.heading, 0, 'YXZ');
+      root.scale.setScalar((TROOP_K[u.kind] ?? 1.6) * (dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1) / 0.9) : 1));
+      if (t.r) {
+        // galop à la marche (calé sur la distance parcourue), lance couchée à la charge, coups à l'attaque
+        rideStep(t.r, u.moving ? u.walk * 1.4 : this.uTime * 2, dead ? 0 : u.moving ? 1 : 0, dead ? 'rest' : u.state === 'attack' ? 'fight' : u.moving ? 'charge' : 'rest');
+        if (!dead && u.hurt < 0.18) t.r.body.rotation.x -= 0.25 * (1 - u.hurt / 0.18);
+      } else {
+        const s = t.s!;
+        soldierStep(s, u.moving ? u.walk : this.uTime, dead ? 'idle' : u.state === 'attack' ? 'fight' : u.moving ? (u.state === 'retreat' ? 'run' : 'walk') : 'guard');
+        // touché : il recule d'un coup, le buste rejeté en arrière
+        if (!dead && u.hurt < 0.18) s.body.rotation.x -= 0.4 * (1 - u.hurt / 0.18);
+      }
     }
-    for (const [id, t] of this.troops) if (!seen.has(id)) { this.group.remove(t.s.root); this.troops.delete(id); }
+    for (const [id, t] of this.troops) if (!seen.has(id)) { this.group.remove((t.s ?? t.r!).root); this.troops.delete(id); }
   }
 
   /** Barres de vie : unités blessées, au combat ou choisies, les chefs toujours ; bâtiments entamés, la citadelle toujours */
