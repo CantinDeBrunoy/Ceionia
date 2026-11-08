@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NotifQueue, durationOf, levelOf, DEDUP_MS, HISTORY_MAX } from '../src/ui/notifs';
+import { NotifQueue, durationOf, levelOf, DEDUP_MS, HISTORY_MAX, WAIT_MAX_MS } from '../src/ui/notifs';
 
 const q = () => new NotifQueue();
 
@@ -97,6 +97,17 @@ describe('la file des notifications', () => {
     const b = n.push('Autre chose', 20_000, { level: 'notice' })!;
     n.dismiss(b.id);
     expect(n.visible).toHaveLength(0);
+  });
+
+  it('un message qui a trop attendu est périmé (il reste dans la cloche), sauf une décision', () => {
+    const n = q();
+    n.push('Un', 0, { level: 'notice' }); n.push('Deux', 0, { level: 'notice' });
+    n.push('Trop tard', 100, { level: 'notice' }); n.push('Une décision', 100, { level: 'action', act: () => {} });
+    n.tick(WAIT_MAX_MS - 1000);
+    n.tick(WAIT_MAX_MS + 500);
+    expect(n.waiting.map((w) => w.text)).not.toContain('Trop tard');
+    expect(n.history.map((h) => h.text)).toContain('Trop tard');
+    expect([...n.visible, ...n.waiting].map((w) => w.text)).toContain('Une décision');
   });
 
   it('le niveau deviné : refus et consignes restent des messages, les annonces rassurantes vont dans la cloche', () => {

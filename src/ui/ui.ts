@@ -927,9 +927,9 @@ export class UI {
     // à partir de l’Antiquité, seuls restent visibles un besoin à combler (orange) ou le passage d’âge
     const quiet = late && !this.help && !(sim.ready && !k) && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) && !sim.drought;
     // pendant le tutoriel guidé, sa propre bulle suffit : pas de conseil en plus
-    // (et en plein commandement, un conseil de village qui ne parle pas d'un besoin criant se tait)
+    // (et en plein commandement, le conseil du village se tait : le combat a ses propres aides)
     const fighting = !!document.getElementById('troopBar') && document.getElementById('troopBar')!.style.display !== 'none';
-    el.hidden = quiet || !!this.tutorial?.on || (fighting && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok));
+    el.hidden = quiet || !!this.tutorial?.on || fighting;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
     const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;
@@ -1030,7 +1030,8 @@ export class UI {
   /** Appelée quatre fois par seconde : horloge de la file, bannière retenue, cloche */
   private tickNotifs() {
     const now = performance.now();
-    this.notifs.max = window.matchMedia('(max-width: 600px)').matches ? 1 : 2;
+    // une bannière à l'écran : un seul message en plus, pas deux
+    this.notifs.max = window.matchMedia('(max-width: 600px)').matches || this.banners.showing() ? 1 : 2;
     const open = !!this.root.querySelector('.overlay');
     this.notifs.setBlocked(open, now);
     this.notifs.tick(now, this.toastHover);

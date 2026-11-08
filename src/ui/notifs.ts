@@ -21,6 +21,8 @@ export interface NotifItem {
   count: number;
   /** instant d'apparition à l'écran puis de disparition (ms) ; 0 tant qu'il attend */
   shownAt: number;
+  /** instant d'arrivée dans la file (ms) */
+  queuedAt: number;
   until: number;
 }
 
@@ -31,6 +33,8 @@ export const PRIORITY: Record<NotifLevel, number> = { info: 0, notice: 1, danger
 /** Le même message en moins de ce temps n'est pas redit */
 export const DEDUP_MS = 10_000;
 export const HISTORY_MAX = 30;
+/** Un message qui attend sa place plus longtemps que cela n'est plus dit à l'écran (il reste dans la cloche) */
+export const WAIT_MAX_MS = 8000;
 
 /** Temps d'affichage : de 3 à 5 s selon la longueur du texte ; un message qui mène quelque part reste un peu plus */
 export function durationOf(text: string, level: NotifLevel, hasAct = false): number {
@@ -88,7 +92,7 @@ export class NotifQueue {
     const last = this.recent.get(key);
     if (last !== undefined && now - last < DEDUP_MS) { this.noteHistory(level, key, now, 0); return null; }
     this.recent.set(key, now);
-    const it: NotifItem = { id: this.nextId++, text: key, level, act: opts.act, count: 1, shownAt: 0, until: 0 };
+    const it: NotifItem = { id: this.nextId++, text: key, level, act: opts.act, count: 1, shownAt: 0, until: 0, queuedAt: now };
     this.noteHistory(level, key, now, it.id);
     if (level === 'info') return null;
     // un message automatique attend la fermeture de la fenêtre ; la réponse à un geste du joueur passe tout de suite
@@ -106,6 +110,8 @@ export class NotifQueue {
 
   /** Avance l'horloge : retire ce qui a fait son temps, place ce qui attend. `paused` : la souris est sur un message qui mène quelque part */
   tick(now: number, hovered: ReadonlySet<number> = new Set()) {
+    // un message qui a trop attendu est périmé : il reste dans la cloche (sauf une décision, qui attend son tour)
+    this.waiting = this.waiting.filter((w) => w.level === 'action' || now - w.queuedAt < WAIT_MAX_MS);
     const before = this.visible.length;
     this.visible = this.visible.filter((v) => v.until > now || hovered.has(v.id));
     if (this.visible.length !== before) this.dirty = true;
