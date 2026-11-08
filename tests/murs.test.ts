@@ -2,9 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { HellMap } from '../src/world/hell';
 import { Hell } from '../src/sim/hell';
 import { HellBase, BASE_DEFS, BASE_R, Purse } from '../src/sim/hellBase';
-import { wallCells, WallPlan } from '../src/ui/wallPlan';
+import { wallLine, traceWall, WallPlan, WALL_MAX } from '../src/ui/wallPlan';
 import { palisadeGeo, gateGeo, gateAlongX, WALL_E, WALL_W, WALL_N, WALL_S } from '../src/render/hellBase';
 
+/** Une « guerre » réduite à la base (ce que WallPlan lui demande) */
+const warOf = (b: HellBase, p: Purse) => ({
+  base: b, planBaseLine: (k: any, c: any) => b.planLine(k, c, p), buildBaseLine: (k: any, c: any) => b.buildLine(k, c, p), buildBase: (k: any, x: number, z: number) => b.build(k, x, z, p),
+}) as any;
 const rich = (): Purse => ({ wood: 9999, stone: 9999, ore: 9999 });
 /** La base avec son camp au seuil du portail ; `row` : la ligne de cases où l'on pose les murs, devant le camp */
 const setup = () => {
@@ -21,13 +25,54 @@ const setup = () => {
 };
 
 describe('murs : la palissade se trace en ligne', () => {
-  it('une ligne droite sur l’axe le plus long, de case en case, sans trous', () => {
-    expect(wallCells([5.5, 5.5], [9.5, 6.5])).toEqual([[5.5, 5.5], [6.5, 5.5], [7.5, 5.5], [8.5, 5.5], [9.5, 5.5]]);
-    expect(wallCells([5.5, 5.5], [4.5, 9.5]).map((c) => c[1])).toEqual([5.5, 6.5, 7.5, 8.5, 9.5]);
-    expect(wallCells([5.5, 5.5], [5.5, 5.5])).toEqual([[5.5, 5.5]]);
-    expect(wallCells([5.5, 5.5], [200, 5.5]).length).toBeLessThanOrEqual(30);
+  it('une ligne libre : droite, diagonale ou quelconque, de cases raccordées par un côté, sans trous', () => {
+    expect(wallLine([5.5, 5.5], [9.5, 5.5])).toEqual([[5.5, 5.5], [6.5, 5.5], [7.5, 5.5], [8.5, 5.5], [9.5, 5.5]]);
+    expect(wallLine([5.5, 5.5], [5.5, 5.5])).toEqual([[5.5, 5.5]]);
+    for (const [bx, bz] of [[9.5, 9.5], [9.5, 6.5], [2.5, 8.5], [3.5, 1.5], [6.5, 11.5], [5.5, 0.5]] as [number, number][]) {
+      const l = wallLine([5.5, 5.5], [bx, bz]);
+      expect(l[0]).toEqual([5.5, 5.5]);
+      expect(l[l.length - 1]).toEqual([bx, bz]);
+      for (let i = 1; i < l.length; i++) expect(Math.abs(l[i][0] - l[i - 1][0]) + Math.abs(l[i][1] - l[i - 1][1])).toBe(1);
+    }
+    // une diagonale franche n'est pas ramenée à l'axe dominant : elle va réellement d'un point à l'autre
+    const d = wallLine([5.5, 5.5], [9.5, 9.5]);
+    expect(d.length).toBe(9);
+    expect(d.every(([x, z]) => Math.abs(x - z) <= 1)).toBe(true);
     // à l'envers aussi
-    expect(wallCells([9.5, 5.5], [6.5, 5.5]).map((c) => c[0])).toEqual([9.5, 8.5, 7.5, 6.5]);
+    expect(wallLine([9.5, 5.5], [6.5, 5.5]).map((c) => c[0])).toEqual([9.5, 8.5, 7.5, 6.5]);
+  });
+
+  it('une diagonale se pose et ferme le passage aux marcheurs (pas de trou en biais)', () => {
+    const { m, b, cx, cz } = setup(), p = rich();
+    const tr = traceWall(b, [cx - 5, cz - 1], [cx + 3, cz + 3]);
+    expect(tr.why).toBeNull();
+    expect(tr.cells.length).toBeGreaterThan(7);
+    expect(b.buildLine('palisade', tr.cells, p).built).toBe(tr.cells.length);
+    // deux pans en diagonale ont toujours un pan voisin entre eux : rien ne se glisse en biais
+    const walls = new Set(tr.cells.map(([x, z]) => `${Math.floor(x)},${Math.floor(z)}`));
+    for (const [x, z] of tr.cells) for (const [dx, dz] of [[1, 1], [1, -1]]) {
+      const ax = Math.floor(x), az = Math.floor(z);
+      if (!walls.has(`${ax + dx},${az + dz}`)) continue;
+      expect(m.walkable(ax + dx, az) && m.walkable(ax, az + dz)).toBe(false);
+    }
+  });
+
+  it('un obstacle sur la ligne : le mur le contourne ; sans passage, la ligne est refusée avec la raison', () => {
+    const { b, cx, cz } = setup(), p = rich();
+    const a: [number, number] = [cx - 3, cz], c: [number, number] = [cx + 3, cz];
+    expect(traceWall(b, a, c).cells.length).toBe(7);
+    const t = b.build('tower', cx, cz, p);
+    if (typeof t === 'string') throw new Error(t);
+    const tr = traceWall(b, a, c);
+    expect(tr.why).toBeNull();
+    expect(tr.cells.length).toBeGreaterThan(7);
+    expect(tr.cells.some(([x, z]) => Math.floor(x) === Math.floor(cx) && Math.floor(z) === Math.floor(cz))).toBe(false);
+    expect(tr.cells[0]).toEqual(a);
+    expect(tr.cells[tr.cells.length - 1]).toEqual(c);
+    // hors de la portée du camp : refusé
+    expect(traceWall(b, a, [cx + BASE_R + 4, cz]).why).toMatch(/passage/);
+    // trop long
+    expect(traceWall(b, a, [cx + 3, cz + 2 + WALL_MAX]).why).not.toBeNull();
   });
 
   it('le coût est proportionnel à la longueur, et la pose suit l’aperçu', () => {
@@ -68,16 +113,33 @@ describe('murs : la palissade se trace en ligne', () => {
     expect(plan.why.some((w) => w !== null)).toBe(true);
   });
 
-  it('un clic prolonge le mur depuis la dernière case posée ; un glissé trace la ligne', () => {
-    const w = new WallPlan();
-    w.press([5.2, 5.2]); w.drag([8.7, 5.6]);
-    expect(w.line([8.7, 5.6]).length).toBe(4);
-    expect(w.release([8.7, 5.6]).length).toBe(4);
-    w.anchor = [8.5, 5.5];
-    w.press([8.4, 9.2]);
-    expect(w.release([8.4, 9.2])).toEqual([[8.5, 5.5], [8.5, 6.5], [8.5, 7.5], [8.5, 8.5], [8.5, 9.5]]);
+  it('A puis B (ou un glissé) pose le mur ; B devient le A du suivant ; un clic sur A abandonne', () => {
+    const { b, cx, cz } = setup(), p = rich(), w = new WallPlan(), war = warOf(b, p);
+    const pt = (x: number, z: number): [number, number] => [x, z];
+    expect(w.press(pt(cx - 3, cz - 1))).toBe('start');
+    expect(w.release(pt(cx - 3, cz - 1))).toBe(false);
+    expect(w.a).toEqual([cx - 3, cz - 1]);
+    const pv = w.preview(war, 'palisade', pt(cx + 3, cz + 2));
+    expect(pv.cells.length).toBeGreaterThan(5);
+    expect(pv.cells.every((c) => c.ok)).toBe(true);
+    expect(pv.cost).toBe(`${pv.n * 8} bois`);
+    expect(w.press(pt(cx + 3, cz + 2))).toBe('lay');
+    expect(w.build(war, 'palisade', pt(cx + 3, cz + 2))).toMatch(/posés/);
+    expect(b.countOf('palisade')).toBe(pv.n);
+    expect(w.a).toEqual([cx + 3, cz + 2]);
+    // le mur suivant part de B sans le reposer
+    const before = b.countOf('palisade');
+    expect(w.build(war, 'palisade', pt(cx + 3, cz + 3))).toMatch(/posé/);
+    expect(b.countOf('palisade')).toBe(before + 1);
+    // un glissé : appui sur A, relâché ailleurs
     w.reset();
-    expect(w.anchor).toBeNull();
+    expect(w.press(pt(cx - 3, cz))).toBe('start');
+    w.drag(pt(cx - 3, cz + 3));
+    expect(w.release(pt(cx - 3, cz + 3))).toBe(true);
+    // un clic sur A abandonne le tracé
+    w.reset(); w.press(pt(cx, cz + 1)); w.release(pt(cx, cz + 1));
+    expect(w.press(pt(cx, cz + 1))).toBe('same');
+    expect(w.a).toBeNull();
   });
 });
 
@@ -96,6 +158,32 @@ describe('murs : la porte', () => {
     // une seule porte par case
     expect(b.canBuild('gate', cx, cz, p)).toMatch(/porte/);
     expect(b.canBuild('palisade', cx, cz, p)).toMatch(/porte/);
+  });
+
+  it('une porte s’insère entre deux points d’un mur en le coupant (survol : le pan le plus proche)', () => {
+    const { b, cx, cz, row } = setup(), p = rich();
+    b.buildLine('palisade', row(7), p);
+    expect(b.wallNearest(cx + 0.2, cz + 0.9, 1.2)!.site.x).toBe(cx);
+    expect(b.wallNearest(cx, cz + 5, 1.2)).toBeNull();
+    const g = b.build('gate', cx + 1, cz, p);
+    expect(typeof g).not.toBe('string');
+    expect(b.countOf('palisade')).toBe(6);
+    expect(b.gateAt(cx + 1, cz)).not.toBeNull();
+    // un mur tracé par-dessus la porte la garde (pas de pan reposé, pas de coût)
+    const plan = b.planLine('palisade', row(7), p);
+    expect(plan.n).toBe(0);
+  });
+
+  it('« porte ici » : le mur s’arrête au point visé par une porte, et le suivant part de là', () => {
+    const { b, cx, cz } = setup(), p = rich(), w = new WallPlan(), war = warOf(b, p);
+    w.press([cx - 2, cz]); w.release([cx - 2, cz]);
+    expect(w.buildWithGate(war, [cx + 1, cz])).toMatch(/Porte posée/);
+    expect(b.countOf('palisade')).toBe(3);
+    expect(b.countOf('gate')).toBe(1);
+    expect(b.gateAt(cx + 1, cz)).not.toBeNull();
+    expect(w.build(war, 'palisade', [cx + 4, cz])).toMatch(/posés/);
+    expect(b.countOf('palisade')).toBe(6);
+    expect(b.countOf('gate')).toBe(1);
   });
 
   it('les nôtres la franchissent, les démons non, jusqu’à ce qu’elle tombe', () => {

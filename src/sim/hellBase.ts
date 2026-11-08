@@ -32,7 +32,7 @@ export const BASE_KINDS = Object.keys(BASE_DEFS) as BaseKind[];
 export const isBaseKind = (k: unknown): k is BaseKind => typeof k === 'string' && k in BASE_DEFS;
 
 /** Les bâtiments d'une base tiennent à BASE_R cases au plus de son camp ; soins et forge agissent à CARE_R cases d'eux */
-export const BASE_R = 8, CARE_R = 6;
+export const BASE_R = 14, CARE_R = 9;
 /** Un camp de base se pose à CAMP_MARGIN rangées au moins de la zone suivante, si elle est encore aux démons */
 export const CAMP_MARGIN = 6;
 /** Soins par seconde (points de vie) près du camp et de l'infirmerie */
@@ -193,6 +193,34 @@ export class HellBase {
 
   /** Le pan de palissade debout dans cette case (centre `cx`, `cz`), s'il y en a un */
   wallAt(cx: number, cz: number) { return this.buildings().find((b) => b.kind === 'palisade' && Math.abs(b.site.x - cx) < 0.5 && Math.abs(b.site.z - cz) < 0.5) ?? null; }
+  /** La porte debout dans cette case, s'il y en a une */
+  gateAt(cx: number, cz: number) { return this.buildings().find((b) => b.kind === 'gate' && Math.abs(b.site.x - cx) < 0.5 && Math.abs(b.site.z - cz) < 0.5) ?? null; }
+  /** Le pan de palissade debout le plus proche d'un point, à `r` cases au plus (pour insérer une porte d'un survol) */
+  wallNearest(x: number, z: number, r = 1.2) {
+    let best: HellBuilding | null = null, bd = r;
+    for (const b of this.buildings()) { if (b.kind !== 'palisade') continue; const d = Math.hypot(b.site.x - x, b.site.z - z); if (d <= bd) { bd = d; best = b; } }
+    return best;
+  }
+  /** Les cases (`x,z` entières) qui portent un pan ou une porte */
+  wallCellSet() {
+    const s = new Set<string>();
+    for (const b of this.buildings()) if (b.kind === 'palisade' || b.kind === 'gate') s.add(`${Math.floor(b.site.x)},${Math.floor(b.site.z)}`);
+    return s;
+  }
+  /**
+   * Un mur peut-il passer par cette case ? (test léger pour chercher un tracé : la zone tenue, la portée du camp, un sol libre ;
+   * `walls` : les cases déjà murées, que le tracé peut longer ou reprendre) ; la pose, elle, refait tous les contrôles
+   */
+  wallOk(x: number, z: number, walls?: Set<string>) {
+    const m = this.map, h = this.hell, cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5;
+    if (!m.inside(cx, cz)) return false;
+    const zone = zoneOfZ(Math.floor(cz)), camp = this.camp(zone);
+    if (zone > h.frontier || !h.held(zone) || !camp || Math.hypot(camp.site.x - cx, camp.site.z - cz) > BASE_R) return false;
+    if (Math.hypot(m.portal[0] - cx, m.portal[1] - cz) < 3.2) return false;
+    if (walls?.has(`${Math.floor(x)},${Math.floor(z)}`)) return true;
+    const k = m.cell(cx, cz);
+    return m.walkable(Math.floor(x), Math.floor(z)) && !m.bridge[k] && !m.gate[k];
+  }
   /** Un pan de palissade ou une porte touche cette case par un côté */
   private wallNear(cx: number, cz: number) {
     return this.buildings().some((b) => (b.kind === 'palisade' || b.kind === 'gate') && Math.abs(Math.abs(b.site.x - cx) + Math.abs(b.site.z - cz) - 1) < 0.2);
@@ -222,7 +250,10 @@ export class HellBase {
     return { why, cost, n };
   }
   /** Un pan de palissade tient déjà dans cette case (on ne le repose pas) */
-  private sameWall(kind: BaseKind, x: number, z: number) { return kind === 'palisade' && !!this.wallAt(Math.floor(x) + 0.5, Math.floor(z) + 0.5); }
+  private sameWall(kind: BaseKind, x: number, z: number) {
+    const cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5;
+    return kind === 'palisade' && (!!this.wallAt(cx, cz) || !!this.gateAt(cx, cz));
+  }
 
   /** Bâtit une ligne (payée par `purse`) : combien de cases posées, et la première raison de refus rencontrée */
   buildLine(kind: BaseKind, cells: [number, number][], purse?: Purse): { built: number; why: string | null } {
