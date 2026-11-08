@@ -100,7 +100,7 @@ export function makeHoverTank(v = 0): Rider {
   }
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
-  root.scale.setScalar(((1 + HUMAN_K) / 2) * 1.35);
+  root.scale.setScalar(((1 + HUMAN_K) / 2) * 1.25);
   hang(p, body);
   body.position.y = HOVER;
 
@@ -208,7 +208,7 @@ export function hoverStep(r: Rider, t: number, gait: number, elev: number, recoi
   for (const f of h.flares) { f.visible = recoil > 0.55; f.rotation.z = t * 9; }
   // bouclier : frémissement léger, puis éclat de filet qui scintille à l'impact
   h.fill.opacity = 0.035 + Math.sin(w * 3.1) * 0.012 + hit * 0.3;
-  h.wire.opacity = 0.1 + Math.sin(w * 2.2) * 0.04 + hit * (0.45 + 0.4 * Math.abs(Math.sin(t * 60)));
+  h.wire.opacity = 0.06 + Math.sin(w * 2.2) * 0.025 + hit * (0.45 + 0.4 * Math.abs(Math.sin(t * 60)));
 }
 
 // ---------- Drones de combat du pilote ----------

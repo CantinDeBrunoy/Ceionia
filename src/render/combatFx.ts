@@ -200,7 +200,7 @@ export class CombatFx {
   /** Tête d'une boule de plasma en un point de sa course : gros éclat cyan, braise violette qui reste derrière (la traînée) */
   plasmaBead(x: number, y: number, z: number) {
     if (this.sparks.length >= CAP - 3) return;
-    this.sparks.push({ x, y, z, vx: 0, vy: 0, vz: 0, life: 0.1, max: 0.1, c: new THREE.Color(0x8af4ff), dust: false, big: true });
+    this.sparks.push({ x, y, z, vx: 0, vy: 0, vz: 0, life: 0.1, max: 0.1, c: new THREE.Color(0x1fb4ff), dust: false, big: true });
     for (let i = 0; i < 2; i++) this.sparks.push({ x: x + (Math.random() - 0.5) * 0.04, y: y + (Math.random() - 0.5) * 0.04, z: z + (Math.random() - 0.5) * 0.04, vx: 0, vy: 0.05, vz: 0, life: 0.3 + Math.random() * 0.15, max: 0.45, c: new THREE.Color(0xb070ff), dust: false, fly: true });
   }
 
