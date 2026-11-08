@@ -65,7 +65,7 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
     forms: [
       { from: 3, name: 'Tirailleur', plural: 'Tirailleurs', icon: '🔫', gear: ['rifle'], adj: { dmg: 2.2, range: 1.45, cooldown: 1.7 }, desc: 'Un fusil à la place de l’arc (à fabriquer à l’atelier) : portée longue, coup dur, mais cadence lente. La poudre fait du bruit et de la fumée.' },
       { from: 4, name: 'Tireur d’élite', plural: 'Tireurs d’élite', icon: '🎯', gear: ['rifle'], adj: { hp: 1.1, dmg: 2.7, range: 1.7, cooldown: 1.45 }, desc: 'Fusil à lunette : très longue portée, chaque balle compte.' },
-      { from: 5, name: 'Tireur à impulsions', plural: 'Tireurs à impulsions', icon: '⚡', gear: ['rifle'], adj: { hp: 1.2, dmg: 3.1, range: 1.9, cooldown: 1.0 }, desc: 'Fusil à impulsions : portée immense, cadence soutenue, traits d’énergie.' },
+      { from: 5, name: 'Pilote de drones', plural: 'Pilotes de drones', icon: '🤖', gear: ['rifle'], adj: { hp: 1.2, dmg: 1.5, range: 1.9, cooldown: 0.5 }, desc: 'Combinaison à visière et deux drones de combat qui l’escortent (le fusil de la réserve devient son émetteur de pilotage) : portée immense, vie moyenne, dégâts modérés mais cadence rapide.' },
     ],
   },
   knight: {
@@ -84,7 +84,7 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
     desc: 'Un cheval de l’écurie et une lance : rapide, il charge et frappe fort au corps à corps, mais ne tient pas la ligne.',
     forms: [
       { from: 4, name: 'Char', plural: 'Chars', icon: '🚜', gear: ['rifle', 'armor'], adj: { hp: 1.6, dmg: 1.0, range: 5.5, cooldown: 1.5, speed: 0.95, radius: 1.15 }, desc: 'Plus de cheval : un blindé à chenilles (fusil et armure de l’atelier), canon à moyenne portée.' },
-      { from: 5, name: 'Blindé futuriste', plural: 'Blindés futuristes', icon: '🛸', gear: ['rifle', 'armor'], adj: { hp: 2.4, dmg: 1.5, range: 8, cooldown: 1.6, speed: 1.0, radius: 1.2 }, desc: 'Un blindé lourd à canon longue portée.' },
+      { from: 5, name: 'Char antigrav', plural: 'Chars antigrav', icon: '🛸', gear: ['rifle', 'armor'], adj: { hp: 2.4, dmg: 1.5, range: 8, cooldown: 1.6, speed: 1.0, radius: 1.2 }, desc: 'Un char qui flotte sur un coussin d’énergie (fusil et armure de l’atelier) : bouclier énergétique, deux canons à plasma à longue portée.' },
     ],
   },
 };

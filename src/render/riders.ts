@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Parts } from './parts';
 import { mats } from './materials';
 import { HUMAN_K } from './assets';
+import type { HoverParts } from './futureTroops';
 
 /**
  * Cavaliers de la charge de cavalerie, dans le style des chevaliers qui joutent dans les jardins : cheval low-poly aux jambes
@@ -27,6 +28,8 @@ export interface Rider {
   gun?: 'cannon' | 'mg';
   /** flamme de bouche, montrée un instant après chaque tir */
   flare?: THREE.Object3D;
+  /** char antigrav de l'âge futuriste (voir `futureTroops.ts`) : coussin d'énergie, bouclier, flammes de plasma */
+  hover?: HoverParts;
 }
 
 /** Ce que fait le cavalier : en route (arme haute), à la charge (lance couchée, sabre en avant), au combat */

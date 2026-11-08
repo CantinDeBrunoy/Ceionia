@@ -4,7 +4,8 @@ import { Hell, HellEvent, DemonKind, DEMONS } from '../sim/hell';
 import { caveLit } from './caveLight';
 import { CombatFx } from './combatFx';
 import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
-import { makeRider, makeArmor, rideStep, armorStep, Rider } from './riders';
+import { makeRider, rideStep, armorStep, Rider } from './riders';
+import { makeHoverTank, hoverStep, makeEscort, escortStep, escortFire, Escort } from './futureTroops';
 
 /**
  * Les combattants d'une bataille (dans les Enfers ou sur l'île du portail) : démons en pièces animées (un maillage instancié
@@ -33,9 +34,10 @@ const TROOP_ROLE: Record<string, SoldierRole> = { soldier: 'spearman', archer: '
  * Le visage d'une troupe à l'âge du village (comme `troopForm` côté simulation) : l'archer prend le fusil à l'âge industriel, le
  * chevalier devient hallebardier puis lourd, le cavalier un char (`mount` : modèle de monture ; `era` : âge du modèle)
  */
-export function troopLook(kind: string, age: number): { role: SoldierRole; era: number; mount?: 'horse' | 'tank' | 'mbt' } {
-  if (kind === 'cavalry') return age >= 5 ? { role: 'spearman', era: age, mount: 'mbt' } : age >= 4 ? { role: 'spearman', era: age, mount: 'tank' } : { role: 'spearman', era: Math.min(3, age), mount: 'horse' };
-  if (kind === 'archer') return { role: age >= 3 ? 'gunner' : 'archer', era: age };
+export function troopLook(kind: string, age: number): { role: SoldierRole; era: number; mount?: 'horse' | 'tank' | 'hover'; drones?: number } {
+  if (kind === 'cavalry') return age >= 5 ? { role: 'spearman', era: age, mount: 'hover' } : age >= 4 ? { role: 'spearman', era: age, mount: 'tank' } : { role: 'spearman', era: Math.min(3, age), mount: 'horse' };
+  // (à l'âge futuriste, l'archer est pilote de drones : deux drones de combat volent autour de lui)
+  if (kind === 'archer') return { role: age >= 3 ? 'gunner' : 'archer', era: age, ...(age >= 5 ? { drones: 2 } : {}) };
   if (kind === 'knight') return { role: 'knight', era: Math.max(2, age) };
   return { role: TROOP_ROLE[kind] ?? 'spearman', era: age };
 }
@@ -52,7 +54,7 @@ export class BattleLayer {
   private uTime = 0;
   private rigs = {} as Record<DemonKind, Rig>;
   /** (le cavalier : `r`, cheval et cavalier de `riders.ts` ; les autres : `s`) */
-  private troops = new Map<number, { s?: Soldier; r?: Rider; kind: string; age: number; key: string }>();
+  private troops = new Map<number, { s?: Soldier; r?: Rider; e?: Escort; kind: string; age: number; key: string }>();
   /** dernier tir de chaque unité du joueur (secondes) : le recul du canon */
   private shotAt = new Map<number, number>();
   /** actions différées (l'explosion d'une roquette à son arrivée) : date (`uTime`), action */
@@ -197,10 +199,12 @@ export class BattleLayer {
       seen.add(u.id);
       const look = troopLook(u.kind, this.age), horse = !!look.mount, age = look.era, key = `${look.role}${look.mount ?? ''}${age}`;
       let t = this.troops.get(u.id);
-      if (t && (t.key !== key || t.kind !== u.kind)) { this.group.remove((t.s ?? t.r!).root); t = undefined; }
+      if (t && (t.key !== key || t.kind !== u.kind)) { this.dropTroop(t); t = undefined; }
       if (!t) {
-        t = horse ? { r: look.mount === 'mbt' ? makeArmor('mbt', u.id) : makeRider(age, u.id), kind: u.kind, age, key } : { s: makeSoldier(age, u.id, false, look.role), kind: u.kind, age, key };
+        t = horse ? { r: look.mount === 'hover' ? makeHoverTank(u.id) : makeRider(age, u.id), kind: u.kind, age, key } : { s: makeSoldier(age, u.id, false, look.role), kind: u.kind, age, key };
+        if (look.drones) t.e = makeEscort();
         this.group.add((t.s ?? t.r!).root);
+        if (t.e) this.group.add(t.e.root);
         this.troops.set(u.id, t);
       }
       const root = (t.s ?? t.r!).root, dead = u.hp <= 0;
@@ -211,8 +215,11 @@ export class BattleLayer {
       if (horse) root.rotation.set(0, u.heading, dead ? Math.min(1, u.hurt / 0.4) * 1.4 : 0, 'YXZ');
       else root.rotation.set(dead ? -Math.min(1, u.hurt / 0.4) * 1.4 : 0, u.heading, 0, 'YXZ');
       root.scale.setScalar((TROOP_K[u.kind] ?? 1.6) * (dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1) / 0.9) : 1));
-      if (t.r?.turret) {
-        // blindé (char, blindé futuriste) : chenilles, recul du canon juste après chaque tir
+      if (t.r?.hover) {
+        // char antigrav : il flotte et tangue, recul des canons à plasma à chaque tir, le bouclier scintille quand il est touché
+        hoverStep(t.r, this.uTime, u.moving ? 1 : 0, u.state === 'attack' ? -0.03 : -0.06, dead ? 0 : Math.max(0, 1 - (this.uTime - (this.shotAt.get(u.id) ?? -9)) / 0.3), dead ? 0 : u.hurt < 0.4 ? 1 - u.hurt / 0.4 : 0);
+      } else if (t.r?.turret) {
+        // blindé (char) : chenilles, recul du canon juste après chaque tir
         armorStep(t.r, u.moving ? u.walk * 1.4 : this.uTime * 2, dead ? 0 : u.moving ? 1 : 0, u.state === 'attack' ? -0.05 : -0.1, Math.max(0, 1 - (this.uTime - (this.shotAt.get(u.id) ?? -9)) / 0.3));
       } else if (t.r) {
         // galop à la marche (calé sur la distance parcourue), lance couchée à la charge, coups à l'attaque
@@ -224,8 +231,16 @@ export class BattleLayer {
         // touché : il recule d'un coup, le buste rejeté en arrière
         if (!dead && u.hurt < 0.18) s.body.rotation.x -= 0.4 * (1 - u.hurt / 0.18);
       }
+      // les drones du pilote le suivent (position lissée, hors du pilote : repère de la bataille) et se posent s'il tombe
+      if (t.e) escortStep(t.e, root.position.x, root.position.y, root.position.z, u.heading, !dead && u.state === 'attack', dead, this.uTime, 1 / 60, root.scale.x * 0.26);
     }
-    for (const [id, t] of this.troops) if (!seen.has(id)) { this.group.remove((t.s ?? t.r!).root); this.troops.delete(id); }
+    for (const [id, t] of this.troops) if (!seen.has(id)) { this.dropTroop(t); this.troops.delete(id); }
+  }
+
+  /** Retire une troupe de la scène (et ses drones) */
+  private dropTroop(t: { s?: Soldier; r?: Rider; e?: Escort }) {
+    this.group.remove((t.s ?? t.r!).root);
+    if (t.e) this.group.remove(t.e.root);
   }
 
   /** Barres de vie : unités blessées, au combat ou choisies, les chefs toujours ; bâtiments entamés, la citadelle toujours */
@@ -325,7 +340,21 @@ export class BattleLayer {
         const t = h.units.get(ev.target), th = t ? (t.side === 'hell' ? SCALE[t.kind as DemonKind] ?? 0.4 : 0.45) * 0.55 : 0.3;
         const y0 = this.groundY(ev.x0, ev.z0) + ev.y0, y1 = this.groundY(ev.x1, ev.z1) + th, su = h.units.get(ev.source);
         const gun = su?.side === 'player' && ((su.kind === 'archer' && this.age >= 3) || (su.kind === 'cavalry' && this.age >= 4)), rocket = su?.side === 'player' && su.kind === 'knight' && this.age >= 4;
-        if (rocket) {
+        const esc = su?.side === 'player' && su.kind === 'archer' && this.age >= 5 ? this.troops.get(su.id)?.e : undefined, plasma = su?.side === 'player' && su.kind === 'cavalry' && this.age >= 5;
+        if (esc) {
+          // pilote de drones : un des deux drones tire un rayon fin (cyan ou rouge) sur la cible, étincelles à l'impact
+          const d = escortFire(esc, this.uTime, ev.x1, y1, ev.z1);
+          this.fx.flash(d.pos.x, d.pos.y - 0.02, d.pos.z, d.color);
+          this.fx.hit(ev.x1, y1, ev.z1, d.color, 7, 'shot');
+        } else if (plasma) {
+          // char antigrav : boule de plasma cyan et violet qui file en laissant une traînée, onde de choc à la bouche et à l'impact
+          const dx = ev.x1 - ev.x0, dz = ev.z1 - ev.z0, d = Math.hypot(dx, dz) || 1, mx = ev.x0 + (dx / d) * 0.55, mz = ev.z0 + (dz / d) * 0.55, my = this.groundY(mx, mz) + 0.75, fly = Math.max(0.2, d / 13);
+          this.shotAt.set(su!.id, this.uTime);
+          this.fx.ring(mx, this.groundY(mx, mz) + 0.1, mz, 0xb070ff, 1.8, 14);
+          this.fx.plasmaBead(mx, my, mz);
+          for (let k = 1; k <= 9; k++) { const u = k / 10; this.later.push({ t: this.uTime + fly * u, f: () => this.fx.plasmaBead(mx + (ev.x1 - mx) * u, my + (y1 - my) * u, mz + (ev.z1 - mz) * u) }); }
+          this.later.push({ t: this.uTime + fly, f: () => this.fx.plasmaHit(ev.x1, y1, ev.z1, this.groundY(ev.x1, ev.z1)) });
+        } else if (rocket) {
           // roquette (bazooka, lanceur de missiles) : souffle arrière à l'épaule, ogive qui file en laissant une traînée de fumée, explosion à l'arrivée
           const dx = ev.x1 - ev.x0, dz = ev.z1 - ev.z0, d = Math.hypot(dx, dz) || 1, mx = ev.x0 + (dx / d) * 0.4, mz = ev.z0 + (dz / d) * 0.4, my = this.groundY(mx, mz) + 0.7, fly = Math.max(0.25, d / 9), neon = this.age >= 5;
           this.shotAt.set(su!.id, this.uTime);
