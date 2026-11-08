@@ -570,6 +570,15 @@ export class HellView {
     return g;
   }
 
+  /** Le tissu d'un drapeau de la base (les bâtiments sont grands : drapeaux plus larges qu'avant), un par taille */
+  private baseFlagGeo(k: number) {
+    const key = `flag${k}`;
+    let g = this.flagGeos.get(key);
+    if (!g) this.flagGeos.set(key, g = new THREE.PlaneGeometry(0.52 * k, 0.34 * k, 4, 1).translate(0.26 * k, 0, 0));
+    return g;
+  }
+  private flagGeos = new Map<string, THREE.BufferGeometry>();
+
   /** Habille (ou rhabille, quand le village change d'âge) un bâtiment de la base de la variante de l'âge courant */
   private dressBase(id: number, kind: BaseKind, x: number, y: number, z: number) {
     const h = this.houses.get(id);
@@ -584,9 +593,11 @@ export class HellView {
     if (g.flame) { dress.flame = new THREE.Mesh(g.flame, mats.glow); h.up.add(dress.flame); }
     if (g.field) { dress.field = new THREE.Mesh(g.field, mats.field); dress.field.renderOrder = 6; h.up.add(dress.field); }
     for (const s of g.spin) { const m = new THREE.Mesh(s.geo, mats.glow); m.position.set(s.x, 0, s.z); h.up.add(m); dress.spins.push({ m }); }
-    if (g.flag) {
-      const f = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.24, 3, 1).translate(0.18, 0, 0), mats.flag);
-      f.position.set(...g.flag);
+    // le drapeau de faction (bleu) au mât, et les oriflammes des autres mâts (même maillage, un peu plus petits)
+    for (const [i, p] of [g.flag, ...(g.flags ?? [])].entries()) {
+      if (!p) continue;
+      const f = new THREE.Mesh(this.baseFlagGeo(i === 0 ? 1 : 0.8), mats.flag);
+      f.position.set(...p);
       h.up.add(f);
       h.flags.push(f);
     }
@@ -611,7 +622,7 @@ export class HellView {
       const y = this.map.groundY(b.site.x, b.site.z);
       up.position.set(b.site.x, y, b.site.z);
       // face au portail ; la palissade suit la faille en travers
-      up.rotation.y = wall ? 0 : Math.PI + (hash2(b.site.x, b.site.z, 5) - 0.5) * 0.3;
+      up.rotation.y = wall ? 0 : (hash2(b.site.x, b.site.z, 5) - 0.5) * 0.3;
       const ruin = new THREE.Mesh(ruinGeo(Math.max(0.5, b.site.r), b.id), mats.ruin);
       ruin.position.copy(up.position);
       ruin.scale.setScalar(0.7);
