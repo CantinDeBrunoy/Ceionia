@@ -3229,7 +3229,7 @@ export class ExpeditionScene {
       if (!won) m.ang += dt * (lost ? 0.9 : k > 0.72 ? 0.3 : 0.65);
       const c = Math.cos(m.ang), sn = Math.sin(m.ang), x = m.cx + c * rad * 1.15, z = m.cz + sn * rad;
       if (this.depth(x, z) === null) { m.obj.visible = false; this.stepDarts(dt); return; }
-      let y = m.level - 0.1 + Math.sin(this.t * 1.4) * 0.006, pitch = 0, roll = 0;
+      let y = m.level - 0.07 + Math.sin(this.t * 1.4) * 0.006, pitch = 0, roll = 0;
       if (m.breach < 0 && fate === undefined && m.done < MEGA_BREACH.length && k >= MEGA_BREACH[m.done]) { m.breach = 0; m.done++; this.splash(x, z, m.level, true); }
       if (m.breach >= 0) {
         // il jaillit de l'eau, gueule ouverte, et retombe dans une grande gerbe : la galère roule
