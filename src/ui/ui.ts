@@ -1464,7 +1464,7 @@ export class UI {
         <p class="mtext">${splitIntro(m.intro).head}</p>
         ${splitIntro(m.intro).rest ? `<details class="mstory"><summary>${tr('Lire l’histoire')}</summary><p>${splitIntro(m.intro).rest}</p></details>` : ''}
         ${this.missionPills(m)}
-        ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué' : 'Débloque')} : <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
+        ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
         ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m)}</p>` : ''}
         <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${ic('compass', 16, 2)} ${label}</button></div>`;
     };
