@@ -550,7 +550,7 @@ export const MISSIONS: Mission[] = [
     // facultative : il faut le chantier naval (ouvert par la caravelle) pour armer le navire marchand
     id: 'spice', age: 2, mandatory: false, icon: '🌶️', title: 'La route des épices',
     requires: { kinds: ['shipyard'] },
-    intro: 'Loin au large, des comptoirs vendent poivre, cannelle et soieries à prix d’or. Un navire marchand sorti du chantier naval pourrait en rapporter plein la cale.',
+    intro: 'Le but : rapporter des épices au village. Un navire marchand part du chantier naval vers des comptoirs lointains, y troque laine et fer contre poivre, safran et soieries, puis revient. Au retour : de quoi mieux manger, du bonheur, et des échanges qui rapportent du minerai. Route courte et sûre, ou longue et risquée mais plus riche.',
     choices: [
       {
         label: 'Charger le poivre aux comptoirs proches', text: 'Une traversée courte, sans histoires : on troque de la laine et du fer contre des sacs d’épices.',
