@@ -770,6 +770,8 @@ export class UI {
     if (guide) return guide;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
+      // le portail : on dit où il mène (le public ne sait pas qu'il y a des Enfers derrière la faille violette)
+      if (d.reqMission === 'portal') return tr('Débloqué par l’expédition « {title} » : la faille violette mène aux Enfers', { title: tr(m?.title ?? d.reqMission) });
       return tr('Débloqué par l’expédition « {title} »', { title: tr(m?.title ?? d.reqMission) });
     }
     if (d.reqKind && !h.sim.built(d.reqKind)) return tr('Il faut d’abord « {name} » au village', { name: h.sim.nameOf(d.reqKind) });

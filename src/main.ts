@@ -79,9 +79,10 @@ import { IsleRuins } from './render/isleRuins';
 import { setFxDensity } from './render/combatFx';
 import { War } from './sim/war';
 import { KingdomStage } from './kingdomStage';
-import { WarTips, WarTipState } from './ui/warTips';
+import { WarTips, WarTipState, WAR_TIP_TEXT } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
-import { CommandUI, Theater } from './ui/command';
+import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
+import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
@@ -241,6 +242,8 @@ class Game implements UIHost {
   under: Underground;
   private underView: UnderView | null = null;
   private mode: 'surface' | 'under' | 'hell' = 'surface';
+  /** la vue suit les troupes envoyées dans les Enfers (un geste sur la vue reprend la main) */
+  hellFollow = false;
   /** monde des Enfers (mode développeur : `__game.enterHell()`), créé à la première visite */
   hellMode: HellMode | null = null;
   /** la guerre contre les Enfers : faction, incursions sur l'île du portail, armée (voir sim/war) */
@@ -416,6 +419,7 @@ class Game implements UIHost {
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
       leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(),
+      following: () => this.hellFollow, follow: (on) => { this.hellFollow = on; },
       craft: (id) => { const why = this.expeditions.whyCraft(GEAR_BY[id], this.sim.age); if (!why) this.expeditions.craft(id, this.sim.age); return why; },
       crafting: () => this.world.exp.craft, craftCheck: (ids) => this.expeditions.whyCraftAll(ids, this.sim.age),
     });
@@ -433,7 +437,7 @@ class Game implements UIHost {
     this.expeditions.onNews = (m) => this.ui.toast(m, undefined, m.startsWith('⚔️') ? 'danger' : 'info');
     this.railway.onNews = (m) => this.ui.info(m);
     // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
-    this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
+    this.cam.onPan = () => { this.hellFollow = false; this.trainCam = null; this.incidentCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
     // tracer une ligne : un clic sur une gare l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
     this.tools.pickStop = (b) => this.railPick(b);
     this.tools.overlay = this.trackEdit;
@@ -451,6 +455,11 @@ class Game implements UIHost {
       // la garnison gagne en vie et en force avec l'âge
       this.war.ageUp(age);
       this.ui.banner(trx('Nouvel âge : {name}', { name: AGES[age].name }), AGES[age].tagline);
+      // l'Antiquité : la faille violette du rivage mène aux Enfers (dit une fois, en une phrase ; un clic mène à l'expédition)
+      if (age === 1 && !this.world.portalOpen && this.world.portal) {
+        this.warTips.markSeen('portal');
+        setTimeout(() => this.ui.toast(WAR_TIP_TEXT.portal, () => this.ui.gotoMission('portal')), 6500);
+      }
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
       setTimeout(() => this.ui.showNewAge(age), 3600);
@@ -551,11 +560,17 @@ class Game implements UIHost {
       this.war.hellFx.length = 0;
       document.body.classList.add('under', 'hell');
       this.cam.minDist = 2.4; this.cam.maxDist = 34; this.cam.minPitch = 0.28;
+      // la carte des Enfers est bien plus longue que celle du village : la vue peut aller jusqu'au royaume
+      this.cam.bounds = [2, hm.map.W - 2, 2, hm.map.L - 2];
+      this.hellFollow = false;
       // (à la base avancée la plus loin, s'il y en a une) ; sur les troupes les plus avancées s'il y en a : la vue se pose sur
       // elles (elle visait quatre cases devant, et sur un petit écran la barre des troupes les cachait)
       const [x, z] = this.hellFocus(hm);
       // vue en perspective de trois quarts (pas presque de dessus) ; le clic droit glissé l'incline de 0,28 à 1,5
-      this.cam.jump({ x, z: z + 1.5, dist: 15, pitch: 0.72, yaw: Math.PI }, hm.view.groundY(x, z));
+      // et l'objectif (l'avant-poste, la forteresse) doit entrer dans l'image : la vue se place entre les troupes et lui
+      const goal = nextGoal(f, [x, z]), gd = goal.x === undefined ? 0 : Math.hypot(goal.x - x, goal.z! - z);
+      const vx = goal.x !== undefined && gd < 45 ? x + (goal.x - x) * 0.45 : x, vz = goal.x !== undefined && gd < 45 ? z + (goal.z! - z) * 0.45 : z + 1.5;
+      this.cam.jump({ x: vx, z: vz, dist: Math.min(30, Math.max(15, 11 + gd * 0.55)), pitch: 0.72, yaw: Math.PI }, hm.view.groundY(vx, vz));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
       this.ui.banner(trx('Monde des Enfers'), trx('{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.', { zone: hm.zoneName(z) }), 'hell');
@@ -580,6 +595,7 @@ class Game implements UIHost {
       document.body.classList.remove('under', 'hell');
       this.hellMode?.view.leave();
       this.command.setTheater(null);
+      this.cam.bounds = null; this.hellFollow = false;
       this.cam.minDist = this.surfaceZoom.min; this.cam.minPitch = 0.25;
       this.cam.maxDist = this.surfaceZoom.max || this.cam.maxDist;
       const v = this.surfaceView ?? this.cam.view();
@@ -596,9 +612,19 @@ class Game implements UIHost {
       kind: 'hell', sim: hm.hell, layer: hm.view.units,
       pick: (x, y) => { const p = hm.view.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x, p.z] : null; },
       screen: (x, z) => this.toScreen(v.set(x, hm.view.groundY(x, z) + 0.3, z)),
+      screenRaw: (x, z) => this.toScreenRaw(v.set(x, hm.view.groundY(x, z) + 0.3, z)),
       focus: (x, z, d) => this.cam.goTo(x, z, d === undefined ? this.cam.dist : Math.max(this.cam.dist, d)),
+      // le portail des Enfers (celui du point d'arrivée) : un ordre dessus ramène les troupes choisies sur l'île
+      atPortal: (x, z) => Math.hypot(x - hm.map.portal[0], z - hm.map.portal[1]) < PORTAL_REACH,
       ghost: (kind, x, z, ok, camp, line) => hm.view.ghost(kind, x, z, ok, camp, line),
     };
+  }
+
+  /** Un point de la scène à l'écran même hors de la vue ; derrière la caméra, de l'autre côté (pour une flèche vers lui) */
+  private toScreenRaw(v: THREE.Vector3): [number, number] {
+    v.project(this.cam.camera);
+    const k = v.z > 1 ? -1 : 1;
+    return [(k * v.x + 1) / 2 * canvas.clientWidth, (1 - k * v.y) / 2 * canvas.clientHeight];
   }
 
   /** Un point de la scène à l'écran (pixels du canevas), null derrière la caméra */
@@ -620,7 +646,7 @@ class Game implements UIHost {
       pick: (x, y) => { const p = this.terrain.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x - ox, p.z - oz] : null; },
       screen: (x, z) => this.toScreen(v.set(x + ox, w.hAt(x + ox, z + oz) + 0.3, z + oz)),
       focus: (x, z, d) => this.cam.goTo(x + ox, z + oz, d === undefined ? this.cam.dist : Math.max(this.cam.dist, d)),
-      atPortal: (x, z) => { const p = this.world.portal; return !!p && this.world.portalOpen && Math.hypot(x + ox - p.x, z + oz - p.z) < 2.6; },
+      atPortal: (x, z) => { const p = this.world.portal; return !!p && this.world.portalOpen && Math.hypot(x + ox - p.x, z + oz - p.z) < PORTAL_REACH; },
     };
   }
 
@@ -1221,7 +1247,7 @@ class Game implements UIHost {
         // une touche d'outil ou de bâtiment du village (B, R, X, chiffres…) ramène à la surface, puis prend l'outil
         const vt = digit !== undefined ? map[digit] : /^[0-9]$/.test(k) || e.ctrlKey || e.metaKey || e.altKey ? undefined : map[k];
         if (vt || (k === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey)) this.tools.setTool(vt ?? 'build', vt ? undefined : this.tools.kind);
-        else if (k === 'u' || k === 'escape') this.exitHell();
+        // (Échap n'y quitte pas les Enfers : il désélectionne ; le bouton « Retourner sur l'île » ramène à la surface)
         else if (k === ' ') { e.preventDefault(); this.time.paused = !this.time.paused; }
         return;
       }
@@ -1474,6 +1500,12 @@ class Game implements UIHost {
       if (p) this.cam.follow(p[0], p[1]);
     }
     // la surface ne s'anime que lorsqu'on la regarde
+    if (hv) {
+      // la vue suit les troupes envoyées ; le marqueur d'objectif
+      const fp = this.hellFollow ? this.command.followPoint() : null;
+      if (fp && Math.hypot(fp[0] - this.cam.target.x, fp[1] - this.cam.target.z) > 2.5) this.cam.glide(fp[0], fp[1]);
+      this.command.frame();
+    }
     if (hv) { hv.view.units.age = this.sim.age; hv.view.age = this.sim.age; hv.update(dt, this.war.hellFx, this.cam.camera, this.cam.target, this.cam.dist); }
     else if (uv) {
       // les troupes en train de parcourir les galeries

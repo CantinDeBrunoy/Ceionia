@@ -34,7 +34,7 @@ export interface WarTipState {
 }
 
 export const WAR_TIP_TEXT: Record<WarTipId, string> = {
-  portal: '🌀 Expédition obligatoire : « Le portail de l’autre rive ». Cliquez pour la voir.',
+  portal: '🌀 La faille violette mène aux Enfers ! Réussissez l’expédition « Le portail de l’autre rive ».',
   isle: '🗼 Portail ouvert ! Posez une tour de garde et une caserne sur son île. Cliquez pour y aller.',
   garrison: '⚔️ Vos soldats gardent l’île. Cliquez pour les commander.',
   orders: '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. 🎺 : vague suivante. « ? » : aide.',
@@ -112,6 +112,9 @@ export class WarTips {
       this.close();
     });
   }
+
+  /** Une aide déjà dite autrement (une notification) : elle ne se montre plus */
+  markSeen(id: WarTipId) { this.seen.add(id); writeSeen([...this.seen]); }
 
   /** Appelée quatre fois par seconde */
   update(dt: number) {

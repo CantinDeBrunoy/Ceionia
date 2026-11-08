@@ -183,7 +183,9 @@ export type HellEvent =
   | { type: 'blast'; x: number; z: number; r: number }
   | { type: 'raid'; wave: number; n: number }
   | { type: 'raidEnd'; wave: number; repelled: boolean }
-  | { type: 'secured' };
+  | { type: 'secured' }
+  /** une troupe passe le portail (lueur courte, d'un côté comme de l'autre) */
+  | { type: 'portal'; x: number; z: number };
 
 /**
  * Une incursion : la vague de démons qui passe le portail. Elle n'attaque QUE l'île du portail (jamais l'île principale) :

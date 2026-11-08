@@ -48,6 +48,7 @@ registerDict('ui', {
   'Disponible à l’âge : {age}': 'Available in the age: {age}',
   'On ne le bâtit plus qu’à l’âge : {age} (c’est trop tard)': 'Can only be built in the age: {age} (too late now)',
   'Débloqué par l’expédition « {title} »': 'Unlocked by the expedition “{title}”',
+  'Débloqué par l’expédition « {title} » : la faille violette mène aux Enfers': 'Unlocked by the expedition “{title}”: the purple rift leads to Hell',
   'Il faut d’abord « {name} » au village': 'The village needs “{name}” first',
   'Bâtir › {cat}': 'Build › {cat}',
   'Préhistoire': 'Prehistory', 'Antiquité': 'Antiquity', 'Médiéval': 'Medieval', 'Industriel': 'Industrial', 'Moderne': 'Modern', 'Futuriste': 'Futuristic',

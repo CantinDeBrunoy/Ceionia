@@ -400,6 +400,12 @@ export class BattleLayer {
         const y = this.groundY(ev.x, ev.z) + 0.2;
         if (ev.side === 'hell') { this.fx.hit(ev.x, y, ev.z, 0xb05aff, 18, 'bite'); this.fx.puff(ev.x, y, ev.z, 10); }
         else this.fx.puff(ev.x, y, ev.z, 6);
+      } else if (ev.type === 'portal') {
+        // le passage du portail : une lueur violette, un anneau et quelques étincelles
+        const y = this.groundY(ev.x, ev.z) + 0.5;
+        this.fx.flash(ev.x, y, ev.z, 0xc07aff);
+        this.fx.ring(ev.x, this.groundY(ev.x, ev.z) + 0.1, ev.z, 0xb070ff, 1.6, 14);
+        this.fx.hit(ev.x, y, ev.z, 0xe0a0ff, 12, 'shot');
       } else if (ev.type === 'destroyed') {
         const y = this.groundY(ev.x, ev.z);
         this.fx.boom(ev.x, y + 1, ev.z);
