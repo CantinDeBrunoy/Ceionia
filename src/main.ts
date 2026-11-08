@@ -554,7 +554,7 @@ class Game implements UIHost {
     if (this.mode !== 'surface') return;
     // (fermés tant que l'invasion du portail n'est pas repoussée)
     const closed = this.war.hellWhy();
-    if (closed) { this.ui.toast(closed, undefined, 'danger'); return; }
+    if (closed) { this.ui.toast(closed, this.war.inv === 'ready' ? () => this.viewIsle() : undefined, 'danger'); return; }
     this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
@@ -745,7 +745,15 @@ class Game implements UIHost {
       // le combat du roi, la chute du royaume : la mise en scène s'en charge
       if (this.kingStage.news(n)) continue;
       // l'incursion elle-même a son alerte en haut (« Voir l'île ») : pas de message en double ; l'avertissement qui la précède reste
-      if (n.kind === 'invasion') {
+      if (n.kind === 'invasionReady') {
+        // tout est prêt : la carte du choix s'ouvre si l'on commande l'île, sinon un message y mène
+        if (this.isleCmd) this.command.openChoice();
+        else this.ui.toast(trx('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
+      } else if (n.kind === 'portalSealed') {
+        // le portail se referme : un éclat doré, puis le tourbillon s'éteint (voir `portalView`)
+        audio.sfxGoldBurst();
+        this.ui.toast(n.text);
+      } else if (n.kind === 'invasion') {
         // l'annonce de l'invasion : bannière, message qui mène à l'île ; le compte à rebours reste affiché en haut
         this.ui.banner(trx('Les démons vont attaquer !'), trx('Préparez la garnison de l’île.'));
         this.ui.toast(trx('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
@@ -1575,7 +1583,7 @@ class Game implements UIHost {
       const waking = this.expeditions.active.find((a) => a.m.id === 'portal' && a.phase === 'work');
       const wk = waking ? Math.min(1, Math.max(0, (waking.t / Math.max(1, waking.c.work + waking.extra) - ISLE_UP) / (ISLE_WAKE - ISLE_UP))) : 0;
       // (le royaume des Enfers tombé : le portail s'éteint dans une explosion de lumière dorée)
-      if (this.portalView.update(dt, w.portalOpen && this.kingStage.portalLit(), wk, this.env.night)) this.refreshHalos();
+      if (this.portalView.update(dt, w.portalOpen && !this.war.closed && this.kingStage.portalLit(), wk, this.env.night)) this.refreshHalos();
       this.syncBlight(dt);
       this.blightView.update(dt, this.env.night, this.cam.target, this.cam.dist);
       this.terrain.setNight(this.env.night);

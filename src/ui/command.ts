@@ -139,6 +139,8 @@ export class CommandUI implements ToolInput {
   private goalEl: HTMLElement;
   /** le curseur est sur le portail, des troupes choisies : un ordre y fait passer le portail */
   private overPortal = false;
+  /** la carte « Affronter les démons » est ouverte ; le joueur l'a refermée avec « Se préparer d'abord » */
+  private choiceOpen = false;
 
   constructor(root: HTMLElement, private host: CommandHost) {
     this.bar = document.createElement('div');
@@ -169,6 +171,10 @@ export class CommandUI implements ToolInput {
     this.cmd.clear();
     this.cmd.groups = {};
     if (t) t.layer.selected = this.cmd.selected;
+    // sur l'île, quand l'invasion est prête : la carte du choix s'ouvre (sauf si le joueur a dit « Se préparer d'abord »)
+    const war = this.host.war;
+    this.choiceOpen = t?.kind === 'isle' && war.inv === 'ready' && !war.closed && !war.choiceSeen;
+    if (this.choiceOpen) war.choiceSeen = true;
     this.box.style.display = 'none';
     this.barKey = '';
     document.body.classList.toggle('commanding', !!t);
@@ -445,7 +451,7 @@ export class CommandUI implements ToolInput {
     const us = this.units().filter((u) => this.cmd.selected.has(u.id));
     if (!us.length) return 0;
     const closed = t.kind === 'isle' ? this.host.war.hellWhy() : null;
-    if (closed) { this.host.toast(closed); return 0; }
+    if (closed) { this.host.toast(closed); if (!this.host.war.closed) this.openChoice(); return 0; }
     this.host.war.sendThroughPortal(us);
     this.host.click();
     this.host.toast(t.kind === 'isle' ? tr('{n} en route vers le portail des Enfers.', { n: nplural(us.length, 'soldat', 'soldats') }) : tr('{n} en route pour rentrer sur l’île.', { n: nplural(us.length, 'soldat', 'soldats') }));
@@ -538,13 +544,17 @@ export class CommandUI implements ToolInput {
     else if (a.startsWith('grp:')) { const n = +a.slice(4); if (e.shiftKey || e.ctrlKey) this.cmd.setGroup(n); else if (this.cmd.recall(n)) this.focusSelection(); }
     else if (a === 'portal') {
       const us = this.units().filter((u) => this.cmd.selected.has(u.id));
-      if (this.theater.kind === 'isle' && w.hellWhy()) this.host.toast(w.hellWhy()!);
+      if (this.theater.kind === 'isle' && w.hellWhy()) { this.host.toast(w.hellWhy()!); if (!w.closed) this.openChoice(); }
       else if (!us.length) this.host.toast(tr('Choisissez d’abord des troupes (clic, ou glisser pour un cadre).'));
       else { w.sendThroughPortal(us); this.host.toast(this.theater.kind === 'isle' ? tr('{n} en route vers le portail des Enfers.', { n: nplural(us.length, 'soldat', 'soldats') }) : tr('{n} en route pour rentrer sur l’île.', { n: nplural(us.length, 'soldat', 'soldats') })); }
     }
     else if (a.startsWith('rec:')) this.recruitOrCraft(a.slice(4) as TroopKind);
     else if (a === 'goHell') { this.host.goHell(); return; }
     else if (a === 'garrison') { const n = w.callGarrison(); this.host.toast(n > 1 ? tr('🌀 {n} troupes de l’île passent le portail : elles arrivent au seuil des Enfers.', { n }) : n ? tr('🌀 1 troupe de l’île passe le portail : elle arrive au seuil des Enfers.') : tr('Aucune troupe valide sur l’île.')); }
+    else if (a === 'choice') this.choiceOpen = true;
+    else if (a === 'later') { this.choiceOpen = false; w.sealPortal(); }
+    else if (a === 'keep') this.choiceOpen = false;
+    else if (a === 'fight') { this.choiceOpen = false; w.startInvasion(); }
     else if (a === 'wave') { const why = w.callWhy(); if (why) this.host.toast(why); else { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la prochaine vague arrive !')); } }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
     else if (a.startsWith('rech:')) { this.recruitHell(a.slice(5) as TroopKind); if (this.placing) { this.render(); return; } }
@@ -679,7 +689,8 @@ export class CommandUI implements ToolInput {
     const none = isle ? tr('Aucune troupe sur l’île : recrutez à la caserne (à droite).') : w.army.troops.some((x) => x.where === 'hell') ? tr('Aucune troupe debout ici : les blessés se soignent.') : tr('Aucune troupe ici : faites venir la garnison de l’île (Renforts, à gauche).');
     // dans les Enfers : une seule frise compacte (le front, l'alerte, l'armée) ; sur l'île, le ruban de pastilles
     this.bar.classList.toggle('inhell', !isle);
-    const html = `${isle ? `<div class="tstate">${ribbon}</div>` : this.frontBar(wounded)}
+    if (w.inv !== 'ready') this.choiceOpen = false;
+    const html = `${isle && this.choiceOpen ? this.choiceCard() : ''}${isle ? `<div class="tstate">${ribbon}</div>` : this.frontBar(wounded)}
       <div class="tfoot">
         ${this.passDock(isle, step)}
         <div class="tbot panel"><div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall${step === 'select' ? ' guide' : ''}" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button>` : ''}</div><div class="thint">${this.hint()}</div></div>
@@ -689,12 +700,26 @@ export class CommandUI implements ToolInput {
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
   }
 
+  /** Ouvre la carte du choix (si l'invasion est prête) */
+  openChoice() {
+    if (this.theater?.kind !== 'isle' || this.host.war.inv !== 'ready') return;
+    this.host.war.choiceSeen = true; this.choiceOpen = true; this.barKey = ''; this.render();
+  }
+
+  /** La carte du choix : deux gros boutons, une phrase */
+  private choiceCard() {
+    const closed = this.host.war.closed;
+    return `<div class="tchoice panel"><h4>${closed ? tr('🔒 Portail fermé') : tr('⚔️ Invasion prête')}</h4><p>${tr('Les démons rôdent autour du portail.')}</p><small>${tr('La vague arrive 10 s après votre choix.')}</small><div class="tcbtn"><button data-a="fight" class="go">${tr('Affronter les démons')}</button>${closed ? `<button data-a="keep">${tr('Garder le portail fermé')}</button>` : `<button data-a="later">${tr('Se préparer d’abord')}</button>`}</div></div>`;
+  }
+
   /**
    * La pastille des vagues : « Vague en cours », ou le compte à rebours (m:ss), la force prévue (petite, moyenne, grosse) et le
    * bouton qui la fait venir tout de suite ; avant l'invasion, ce qu'il lui faut pour être annoncée
    */
   private waveStatus(next: number | null, raid: boolean) {
     const w = this.host.war;
+    if (w.closed) return `<span class="wst hot">${tr('🔒 Portail fermé')} · <button data-a="choice">${tr('Rouvrir')}</button></span>`;
+    if (w.inv === 'ready' && !raid) return `<span class="wst hot">${tr('⚔️ Invasion prête')} · <button data-a="choice">${tr('Affronter')}</button></span>`;
     if (raid) return `<span class="wst hot">${w.inv === 'raid' ? tr('🔥 Invasion : {n} démons', { n: w.isle!.raiders().length }) : tr('🔥 Vague en cours : {n} démons', { n: w.isle!.raiders().length })}</span>`;
     if (next === null) return w.active && w.inv === 'wait' ? `<span class="wst hot">${tr('⚠️ Invasion à venir : une tour de garde, une caserne et {n} soldats sur l’île.', { n: w.invasionNeed() })}</span>` : '';
     const f = w.nextForce(), force = f === 'big' ? tr('Grosse vague') : f === 'medium' ? tr('Vague moyenne') : f === 'small' ? tr('Petite vague') : '';
