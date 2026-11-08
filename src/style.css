@@ -1000,9 +1000,11 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar .tmh h5 { margin: 0; padding: 0 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink2); white-space: nowrap; }
 #troopBar .tmh h5 small { font-size: 12px; letter-spacing: 0; color: var(--ink); }
 #troopBar .tmh .q { color: var(--ink2); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#troopBar .ttabs { display: inline-flex; gap: 4px; margin-left: auto; }
-#troopBar .ttabs button { min-height: 24px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 800; background: transparent; border: 1px solid var(--line); color: var(--ink2); }
-#troopBar .ttabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* les deux onglets Bâtir / Recruter : grands, contrastés, on voit tout de suite lequel est ouvert */
+#troopBar .ttabs { display: inline-flex; gap: 6px; margin-left: auto; padding: 3px; border-radius: 999px; background: rgba(15, 27, 45, 0.1); }
+#troopBar .ttabs button { min-height: 34px; padding: 0 18px; border-radius: 999px; font-size: 14px; font-weight: 800; background: #fff; border: 2px solid transparent; color: var(--ink); box-shadow: 0 1px 3px rgba(15, 27, 45, 0.25); cursor: pointer; }
+#troopBar .ttabs button:hover { border-color: var(--accent); }
+#troopBar .ttabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(47, 111, 237, 0.55); }
 #troopBar .tmrow { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: 1px; }
 #troopBar .tfam { flex: none; display: flex; flex-direction: column; gap: 2px; }
 #troopBar .tfam + .tfam { padding-left: 8px; border-left: 1px solid var(--line); }
