@@ -25,7 +25,8 @@ export const BASE_DEFS: Record<BaseKind, BaseDef> = {
   smithy: { kind: 'smithy', name: 'Forge', icon: '⚒️', r: 1, max: 1, cost: { wood: 20, stone: 30, ore: 10 }, desc: 'Répare et affûte l’équipement des troupes de la base (+20 % de dégâts, coups reçus adoucis) ; forge contre du minerai les lances, arcs et armures qui manquent à la réserve du village pour recruter sur place.' },
   infirmary: { kind: 'infirmary', name: 'Infirmerie', icon: '🩹', r: 1, max: 1, cost: { wood: 30, stone: 20, ore: 0 }, desc: 'Soigne vite les troupes de la base ; un soldat tombé dans les Enfers y est soigné (deux fois plus vite) au lieu de rentrer sur l’île.' },
   tower: { kind: 'tower', name: 'Tour de guet', icon: '🏹', r: 0.6, max: 4, cost: { wood: 20, stone: 30, ore: 0 }, desc: 'Ses archers tirent sur les démons qui approchent.' },
-  palisade: { kind: 'palisade', name: 'Palissade', icon: '🚧', r: 0.5, max: 20, cost: { wood: 8, stone: 0, ore: 0 }, desc: 'Un pan de pieux : bloque le passage et ralentit les démons qui la longent. Laissez toujours un passage.' },
+  palisade: { kind: 'palisade', name: 'Palissade', icon: '🚧', r: 0.5, max: 60, cost: { wood: 8, stone: 0, ore: 0 }, desc: 'Cliquez et glissez pour tracer un mur de pieux : il bloque le passage et ralentit les démons qui le longent. Un clic de plus prolonge le mur ; Échap arrête. Laissez toujours un passage, ou posez une porte.' },
+  gate: { kind: 'gate', name: 'Porte', icon: '🚪', r: 0.5, max: 8, cost: { wood: 14, stone: 0, ore: 0 }, desc: 'À poser sur un mur de palissade : vos troupes la franchissent librement, pas les démons, qui doivent l’abattre.' },
   brazier: { kind: 'brazier', name: 'Brasero', icon: '🔥', r: 0.35, max: 8, cost: { wood: 6, stone: 0, ore: 2 }, desc: 'Éclaire la base et fait reculer la brume rouge.' },
 };
 export const BASE_KINDS = Object.keys(BASE_DEFS) as BaseKind[];
@@ -181,7 +182,7 @@ export class HellBase {
   posts() { return this.countOf('post'); }
 
   /** Ce qu'il manque pour bâtir ici (null : on peut) ; `x`, `z` ramenés au centre de la case */
-  canBuild(kind: BaseKind, x: number, z: number, purse?: Purse): string | null {
+  canBuild(kind: BaseKind, x: number, z: number, purse?: Purse, planned = 0): string | null {
     const d = BASE_DEFS[kind], h = this.hell, m = this.map;
     const cx = Math.floor(x) + 0.5, cz = Math.floor(z) + 0.5, zone = zoneOfZ(Math.floor(cz));
     if (!m.inside(cx, cz)) return 'Hors de la carte';
@@ -195,15 +196,64 @@ export class HellBase {
     }
     else if (!camp) return 'Posez d’abord un camp de base dans cette zone.';
     else if (Math.hypot(camp.site.x - cx, camp.site.z - cz) > BASE_R) return `Trop loin du camp de base (${BASE_R} cases au plus).`;
-    if (this.countOf(kind, zone) >= d.max) return `Au plus ${d.max === 1 ? 'un bâtiment de ce genre' : `${d.max} de ce genre`} par base.`;
+    if (this.countOf(kind, zone) + planned >= d.max) return `Au plus ${d.max === 1 ? 'un bâtiment de ce genre' : `${d.max} de ce genre`} par base.`;
     if (Math.hypot(m.portal[0] - cx, m.portal[1] - cz) < 3.2) return 'Trop près du portail : laissez le passage.';
     const cells = m.footprintCells({ x: cx, z: cz, r: d.r });
-    for (const k of cells) if (!m.walkable(k % m.W, Math.floor(k / m.W)) || m.bridge[k]) return 'Il faut un sol libre (ni lave, ni pont, ni paroi, ni bâtiment).';
-    // les troupes au combat ne se laissent pas emmurer : il faut une place libre
-    for (const u of h.alive()) if (Math.hypot(u.x - cx, u.z - cz) < d.r + u.stats.radius - 0.1 && cells.includes(m.cell(u.x, u.z))) return 'Des troupes se tiennent là : choisissez une place libre.';
+    for (const k of cells) if (m.gate[k]) return 'Il y a déjà une porte ici.';
+    // une porte se pose sur un pan de palissade (elle le remplace), ou dans son prolongement
+    const wall = kind === 'gate' ? this.wallAt(cx, cz) : null;
+    if (kind === 'gate' && !wall && !this.wallNear(cx, cz)) return 'Une porte se pose sur une palissade, ou à son bout.';
+    for (const k of cells) if (!wall && (!m.walkable(k % m.W, Math.floor(k / m.W)) || m.bridge[k])) return 'Il faut un sol libre (ni lave, ni pont, ni paroi, ni bâtiment).';
+    // les troupes au combat ne se laissent pas emmurer : il faut une place libre (une porte laisse passer les nôtres)
+    for (const u of h.alive()) if ((kind !== 'gate' || u.side === 'hell') && Math.hypot(u.x - cx, u.z - cz) < d.r + u.stats.radius - 0.1 && cells.includes(m.cell(u.x, u.z))) return 'Des troupes se tiennent là : choisissez une place libre.';
     if (purse && !canAfford(purse, d.cost)) return `Il faut ${costText(d.cost)}.`;
-    if (!this.keepsPath(cells)) return 'Laissez un passage : ce bâtiment fermerait le chemin.';
+    if (kind !== 'gate' && !this.keepsPath(cells)) return 'Laissez un passage : ce bâtiment fermerait le chemin.';
     return null;
+  }
+
+  /** Le pan de palissade debout dans cette case (centre `cx`, `cz`), s'il y en a un */
+  wallAt(cx: number, cz: number) { return this.buildings().find((b) => b.kind === 'palisade' && Math.abs(b.site.x - cx) < 0.5 && Math.abs(b.site.z - cz) < 0.5) ?? null; }
+  /** Un pan de palissade ou une porte touche cette case par un côté */
+  private wallNear(cx: number, cz: number) {
+    return this.buildings().some((b) => (b.kind === 'palisade' || b.kind === 'gate') && Math.abs(Math.abs(b.site.x - cx) + Math.abs(b.site.z - cz) - 1) < 0.2);
+  }
+
+  /**
+   * Pose en ligne (palissade glissée) : pour chaque case, la raison du refus (null : on peut) ; ce que cela coûte ; les cases
+   * se comptent l'une après l'autre (argent, nombre permis, passage laissé libre), comme à la pose
+   */
+  planLine(kind: BaseKind, cells: [number, number][], purse?: Purse): { why: (string | null)[]; cost: BaseCost; n: number } {
+    const d = BASE_DEFS[kind], m = this.map, cost: BaseCost = { wood: 0, stone: 0, ore: 0 }, why: (string | null)[] = [], blocked: number[] = [];
+    let n = 0;
+    try {
+      for (const [x, z] of cells) {
+        const sum: BaseCost = { wood: cost.wood + d.cost.wood, stone: cost.stone + d.cost.stone, ore: cost.ore + d.cost.ore };
+        let r = this.sameWall(kind, x, z) ? 'Il y a déjà un pan ici.' : this.canBuild(kind, x, z, undefined, n);
+        if (!r && purse && !canAfford(purse, sum)) r = `Il faut ${costText(sum)}.`;
+        why.push(r);
+        if (r) continue;
+        n++; cost.wood = sum.wood; cost.stone = sum.stone; cost.ore = sum.ore;
+        // (la case compte comme prise pour la suivante : le passage doit rester libre)
+        if (kind !== 'gate') for (const k of m.footprintCells({ x: Math.floor(x) + 0.5, z: Math.floor(z) + 0.5, r: d.r })) { blocked.push(k, m.block[k]); m.block[k] = 1; }
+        // (l'accessibilité de la carte est à refaire avec cette case prise)
+        this.reach.v = -1;
+      }
+    } finally { for (let i = blocked.length - 2; i >= 0; i -= 2) m.block[blocked[i]] = blocked[i + 1]; this.reach.v = -1; }
+    return { why, cost, n };
+  }
+  /** Un pan de palissade tient déjà dans cette case (on ne le repose pas) */
+  private sameWall(kind: BaseKind, x: number, z: number) { return kind === 'palisade' && !!this.wallAt(Math.floor(x) + 0.5, Math.floor(z) + 0.5); }
+
+  /** Bâtit une ligne (payée par `purse`) : combien de cases posées, et la première raison de refus rencontrée */
+  buildLine(kind: BaseKind, cells: [number, number][], purse?: Purse): { built: number; why: string | null } {
+    let built = 0, why: string | null = null;
+    for (const [x, z] of cells) {
+      if (this.sameWall(kind, x, z)) continue;
+      const r = this.build(kind, x, z, purse);
+      if (typeof r === 'string') { why ??= r; if (purse && !canAfford(purse, BASE_DEFS[kind].cost)) break; continue; }
+      built++;
+    }
+    return { built, why };
   }
 
   /** La carte reste d'un seul tenant (depuis le portail) si l'on bouche ces cases */
@@ -229,6 +279,8 @@ export class HellBase {
   /** Pose un bâtiment (sans contrôle : sauvegarde reprise) */
   private place(kind: BaseKind, x: number, z: number, hp?: number) {
     const d = BASE_DEFS[kind], zone = zoneOfZ(Math.floor(z));
+    // une porte remplace le pan de palissade qu'elle coupe
+    if (kind === 'gate') { const w = this.wallAt(x, z); if (w) { this.map.unblock(w.site as never); this.hell.buildings.delete(w.id); } }
     // les ruines d'un bâtiment de la base au même endroit disparaissent
     for (const b of this.buildings(true)) if (b.down && Math.hypot(b.site.x - x, b.site.z - z) < b.site.r + d.r) this.hell.buildings.delete(b.id);
     const b = this.hell.addPlayerBuilding(kind, x, z, d.r);

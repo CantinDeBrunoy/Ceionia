@@ -144,6 +144,13 @@ export class War {
     if (!b) return 'Les Enfers ne sont pas ouverts.';
     return b.build(kind, x, z, this.world);
   }
+  /** Pose une ligne de palissades (ou une case) : combien de cases posées, et la première raison de refus */
+  buildBaseLine(kind: BaseKind, cells: [number, number][]) {
+    const b = this.ensureFaction() && this.base;
+    return b ? b.buildLine(kind, cells, this.world) : { built: 0, why: 'Les Enfers ne sont pas ouverts.' as string | null };
+  }
+  /** L'aperçu d'une ligne à poser : refus par case, coût */
+  planBaseLine(kind: BaseKind, cells: [number, number][]) { return this.base?.planLine(kind, cells, this.world) ?? null; }
   /** Ce que le village peut payer (bois, pierre, minerai ; le bac à sable, tout) */
   get purse(): Purse { return this.world; }
   /** Ce qu'il manque pour bâtir là (null : on peut) */

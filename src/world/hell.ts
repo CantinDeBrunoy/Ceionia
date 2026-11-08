@@ -97,6 +97,8 @@ export class HellMap {
   bridge = new Uint8Array(HW * HL);
   /** emprise d'un bâtiment (on n'y marche pas tant qu'il tient debout) */
   block = new Uint8Array(HW * HL);
+  /** porte du joueur : on y passe librement, sauf les démons (elle se tient comme un mur pour eux) */
+  gate = new Uint8Array(HW * HL);
   floor = new Float32Array(HW * HL);
   wallDist = new Uint8Array(HW * HL);
   vis = new Float32Array(HVW * HVL);
@@ -120,13 +122,16 @@ export class HellMap {
   inside(x: number, z: number) { return x >= 0 && z >= 0 && x < HW && z < HL; }
   cell(x: number, z: number) { return Math.floor(z) * HW + Math.floor(x); }
 
-  /** Case où l'on marche : ouverte, hors des bassins (sauf sur un pont), hors des emprises de bâtiment */
-  walkable(cx: number, cz: number) {
+  /**
+   * Case où l'on marche : ouverte, hors des bassins (sauf sur un pont), hors des emprises de bâtiment ; `foe` : pour un démon
+   * (les portes du joueur lui sont fermées)
+   */
+  walkable(cx: number, cz: number, foe = false) {
     if (cx < 0 || cz < 0 || cx >= HW || cz >= HL) return false;
     const k = cz * HW + cx;
-    return this.open[k] === 1 && this.block[k] === 0 && (this.pool[k] === 0 || this.bridge[k] === 1);
+    return this.open[k] === 1 && this.block[k] === 0 && (this.pool[k] === 0 || this.bridge[k] === 1) && !(foe && this.gate[k] === 1);
   }
-  walkableAt(x: number, z: number) { return this.walkable(Math.floor(x), Math.floor(z)); }
+  walkableAt(x: number, z: number, foe = false) { return this.walkable(Math.floor(x), Math.floor(z), foe); }
 
   zoneAt(z: number) { return zoneOfZ(Math.min(HL - 1, Math.max(0, Math.floor(z)))); }
 
@@ -148,7 +153,7 @@ export class HellMap {
   }
 
   /** Distance en pas depuis une ou plusieurs cases, -1 hors d'atteinte */
-  distances(from: number | number[]) {
+  distances(from: number | number[], foe = false) {
     const d = new Int32Array(HW * HL).fill(-1), q = new Int32Array(HW * HL);
     let h = 0, t = 0;
     for (const f of typeof from === 'number' ? [from] : from) if (f >= 0 && f < HW * HL && d[f] < 0) { d[f] = 0; q[t++] = f; }
@@ -156,7 +161,7 @@ export class HellMap {
       const k = q[h++], x = k % HW, z = (k - x) / HW;
       for (const [dx, dz] of DIRS) {
         const nx = x + dx, nz = z + dz, n = nz * HW + nx;
-        if (!this.walkable(nx, nz) || d[n] >= 0) continue;
+        if (!this.walkable(nx, nz, foe) || d[n] >= 0) continue;
         d[n] = d[k] + 1; q[t++] = n;
       }
     }
@@ -164,9 +169,9 @@ export class HellMap {
   }
 
   /** Chemin de case en case (bornes comprises), ou null ; `to` peut être une case bloquée (on s'arrête devant) */
-  route(from: number, to: number): number[] | null {
+  route(from: number, to: number, foe = false): number[] | null {
     if (from === to) return [from];
-    const d = this.distances(to);
+    const d = this.distances(to, foe);
     // but sur une emprise (un bâtiment à attaquer) : on vise la case libre voisine la plus proche
     if (d[from] < 0) return null;
     const out = [from];
@@ -176,7 +181,7 @@ export class HellMap {
       for (const [dx, dz] of DIRS) {
         const n = (z + dz) * HW + x + dx;
         if (x + dx < 0 || z + dz < 0 || x + dx >= HW || z + dz >= HL) continue;
-        if ((this.walkable(x + dx, z + dz) || n === to) && d[n] === d[k] - 1) { next = n; break; }
+        if ((this.walkable(x + dx, z + dz, foe) || n === to) && d[n] === d[k] - 1) { next = n; break; }
       }
       if (next < 0) return null;
       out.push(next); k = next;
@@ -185,12 +190,12 @@ export class HellMap {
   }
 
   /** Case où l'on marche la plus proche d'un point (dans un rayon de `max` cases), -1 sinon */
-  nearestWalkable(x: number, z: number, max = 6) {
+  nearestWalkable(x: number, z: number, max = 6, foe = false) {
     const cx = Math.floor(x), cz = Math.floor(z);
     let best = -1, bd = Infinity;
     for (let dz = -max; dz <= max; dz++)
       for (let dx = -max; dx <= max; dx++) {
-        if (!this.walkable(cx + dx, cz + dz)) continue;
+        if (!this.walkable(cx + dx, cz + dz, foe)) continue;
         const d = Math.hypot(cx + dx + 0.5 - x, cz + dz + 0.5 - z);
         if (d < bd) { bd = d; best = (cz + dz) * HW + cx + dx; }
       }
@@ -198,11 +203,11 @@ export class HellMap {
   }
 
   /** Ligne droite praticable entre deux points (aucune case infranchissable traversée) */
-  lineClear(x0: number, z0: number, x1: number, z1: number) {
+  lineClear(x0: number, z0: number, x1: number, z1: number, foe = false) {
     const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d * 3);
     for (let i = 1; i <= n; i++) {
       const t = i / n;
-      if (!this.walkableAt(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return false;
+      if (!this.walkableAt(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, foe)) return false;
     }
     return true;
   }
@@ -229,7 +234,9 @@ export class HellMap {
   }
 
   private footprint(s: { x: number; z: number; r: number }, v: number) {
-    for (const k of this.footprintCells(s)) this.block[k] = v;
+    // une porte ne bloque que les démons (marque à part) ; le reste, tout le monde
+    const gate = (s as { kind?: string }).kind === 'gate';
+    for (const k of this.footprintCells(s)) { if (gate) this.gate[k] = v; else this.block[k] = v; }
   }
 
   // ---------- Génération ----------

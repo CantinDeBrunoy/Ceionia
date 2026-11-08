@@ -575,7 +575,7 @@ class Game implements UIHost {
       pick: (x, y) => { const p = hm.view.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x, p.z] : null; },
       screen: (x, z) => this.toScreen(v.set(x, hm.view.groundY(x, z) + 0.3, z)),
       focus: (x, z) => this.cam.goTo(x, z, this.cam.dist),
-      ghost: (kind, x, z, ok, camp) => hm.view.ghost(kind, x, z, ok, camp),
+      ghost: (kind, x, z, ok, camp, line) => hm.view.ghost(kind, x, z, ok, camp, line),
     };
   }
 
