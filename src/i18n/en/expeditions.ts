@@ -2,6 +2,8 @@ import { registerDict } from '../index';
 
 /** Textes français -> anglais : expéditions (messages, comptes rendus) */
 registerDict('expeditions', {
+  'À fabriquer avant de partir : l’équipe l’emporte et risque moins': 'Craft before leaving: the team takes it along and runs less risk',
+  'protège de : {d}': 'protects against: {d}',
   // destinations et créatures des galeries
   'la plaine': 'the plain',
   'la forêt': 'the forest',

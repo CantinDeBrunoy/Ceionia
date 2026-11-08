@@ -1688,12 +1688,12 @@ export class UI {
       const state = `${tr('{n} en réserve', { n: g.have })}${g.queued ? `, ${tr('{n} en fabrication', { n: g.queued })}` : ''}`;
       const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" data-left="${left}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.gear.time, price }) : tr('Fabriquer : {t} s', { t: g.gear.time }))}">${ic('hammer', 14, 2)}${price ? ` <small>${price}</small>` : ''}</button>` : `<span class="mkq" title="${tr('En fabrication')}">${ic('clock', 13, 2)}</span>`;
       const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
-      return `<div class="gnrow" title="${tr('À fabriquer pour partir bien équipé : {state} · {dangers}', { state, dangers: g.dangers.map((d) => DANGER_NAME[d]).join(', ') })}"><span>${ic(g.gear.icon, 15, 2)} <button type="button" class="gnlink" data-geargo="${g.gear.id}" title="${tr('{name} : voir dans l’onglet Équipement', { name: g.need > 1 ? g.gear.plural : g.gear.name })}">×${left > 0 ? left : g.need}</button>${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
+      return `<div class="gnrow" title="${tr('À fabriquer pour partir bien équipé : {state} · {dangers}', { state, dangers: g.dangers.map((d) => DANGER_NAME[d]).join(', ') })}"><span>${ic(g.gear.icon, 15, 2)} <button type="button" class="gnlink" data-geargo="${g.gear.id}" title="${tr('{name} : voir dans l’onglet Équipement', { name: g.need > 1 ? g.gear.plural : g.gear.name })}">${g.need > 1 ? g.gear.plural : g.gear.name} ×${left > 0 ? left : g.need}</button> <small class="gnfor">${tr('protège de : {d}', { d: g.dangers.map((d) => tr(DANGER_NAME[d])).join(', ') })}</small>${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
     }).join('');
     // « Tout fabriquer » : toutes les pièces qui manquent, d'un seul clic (utile dès qu'il y en a plusieurs)
     const todo = gaps.filter((g) => g.need - g.have - g.queued > 0).length;
     const all = todo > 1 ? `<button type="button" class="mkAll" data-mkall="1" title="${tr('Met en fabrication tout l’équipement qui manque')}">${ic('hammer', 14, 2)} ${tr('Tout')}</button>` : '';
-    return `<div class="gearNeed" title="${tr('Équipement à fabriquer')}">${all}${rows}</div>`;
+    return `<div class="gearNeed" title="${tr('Équipement à fabriquer')}"><p class="gnh">${ic('hammer', 14, 2)} ${tr('À fabriquer avant de partir : l’équipe l’emporte et risque moins')}</p>${all}${rows}</div>`;
   }
 
   /** Chemin de fer : chaque ligne, où en est son train et ses voyageurs */
