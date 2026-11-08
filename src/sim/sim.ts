@@ -6,7 +6,6 @@ import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
-import { isleSteps, ISLE_AGE } from '../world/portal';
 
 export interface Need { cap: number; demand: number; ok: boolean }
 
@@ -240,8 +239,7 @@ export class Sim {
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
     // (le portail : seulement sur une carte qui a son île)
     for (const m of mandatoriesFor(this.age)) if (m.id !== 'portal' || w.portal) items.push({ label: `expédition « ${m.title} »`, mission: m.title, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
-    // quitter l'Antiquité : sécuriser l'île du portail (tour de garde, caserne, vagues repoussées) ; les Enfers restent facultatifs
-    if (n === ISLE_AGE && w.portal) items.push(...isleSteps(w));
+    // (l'île du portail, l'invasion et les Enfers sont facultatifs : rien d'eux ne conditionne le passage d'âge)
     // la fin de l'âge : la raffinerie (ouverte par l'expédition « L'or noir ») et ses puits, puis le chemin de fer
     kinds(true);
     if (req.reqRail) {

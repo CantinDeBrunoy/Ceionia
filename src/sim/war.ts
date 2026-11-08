@@ -29,6 +29,7 @@ export const COARSE = 0.25;
  * sans son clic) ; `coming` : choisie, compte à rebours de 10 s ; `raid` : la vague est sur l'île ; `done` :
  * repoussée (les Enfers s'ouvrent). Après une défaite, on revient à `wait` : elle sera ré-annoncée
  */
+export type Pve = 'ask' | 'on' | 'off';
 export type Invasion = 'wait' | 'ready' | 'coming' | 'raid' | 'done';
 const INVASIONS: Invasion[] = ['wait', 'ready', 'coming', 'raid', 'done'];
 /** La force d'une vague, pour le joueur */
@@ -75,6 +76,8 @@ export interface WarSave {
   /** l'invasion du portail (absent d'une ancienne sauvegarde : déduit de l'historique de la partie) et les Enfers déjà visités */
   invasion?: Invasion;
   visited?: boolean;
+  /** le choix du joueur sur le PvE (absent d'une ancienne sauvegarde : déduit, voir `readLegacyPve`) ; la carte du choix s'est ouverte */
+  pve?: Pve;
   sealed?: boolean;
   choiceSeen?: boolean;
 }
@@ -99,8 +102,12 @@ export class War {
   private legacyInv = false;
   /** le joueur est déjà allé dans les Enfers (ou y a envoyé une troupe) : le guidage vers eux s'efface */
   visited = false;
-  /** « Se préparer d'abord » : le portail est refermé (sans vague, sans passage) jusqu'à ce que le joueur le rouvre en affrontant les démons */
-  sealed = false;
+  /**
+   * Le PvE (l'invasion, les Enfers, le royaume) est une option : `ask` : le joueur n'a pas encore choisi (le portail vient de
+   * s'ouvrir) ; `on` : il affronte les démons ; `off` : il a refermé le portail (ni vague ni passage, le jeu continue sans PvE)
+   */
+  pve: Pve = 'ask';
+  private legacyPve = false;
   /** la carte du choix s'est déjà ouverte toute seule (une seule fois par partie) */
   choiceSeen = false;
   /** troupe → unité au combat (sur l'île ou dans les Enfers), et l'inverse */
@@ -338,8 +345,11 @@ export class War {
     f.age = age;
     f.armyPower = this.power(age);
     if (this.legacyInv) this.readLegacyInvasion(age);
+    if (this.legacyPve) this.readLegacyPve();
     // une vague déjà repoussée (ou le royaume tombé) : l'invasion est faite, quoi qu'en dise l'état
     if (this.inv !== 'done' && (f.raidsRepelled > 0 || f.victory)) this.inv = 'done';
+    // (une invasion déjà repoussée : le joueur joue le PvE, quoi qu'en dise le choix)
+    if (this.pve === 'ask' && (this.inv === 'done' || this.inv === 'raid' || this.inv === 'coming')) this.pve = 'on';
     if (this.hellInView) this.visited = true;
     isle.syncDefenses(age);
     isle.blight = this.refreshBlight();
@@ -381,8 +391,8 @@ export class War {
     // les incursions : une fois la première tour de garde dressée, à l'heure dite
     let arrived: RaidWave | null = null;
     // l'invasion d'abord : tant qu'elle n'est pas annoncée, aucune vague ne vient ; elle l'est quand tout est prêt
-    this.stepInvasion(d, f);
-    const waiting = this.inv === 'wait' || this.inv === 'ready';
+    if (this.pve === 'on') this.stepInvasion(d, f);
+    const waiting = this.pve !== 'on' || this.inv === 'wait' || this.inv === 'ready';
     // (annoncée un moment d'avance : la vague est composée à l'annonce, le joueur sait ce qui vient)
     const left = this.nextWaveIn();
     if (!waiting && d.towers > 0 && left !== null && left <= WARN_TIME && !f.planned) {
@@ -546,7 +556,7 @@ export class War {
   /** Les Enfers sont fermés tant que l'invasion n'est pas repoussée : la raison en une phrase (null : ouverts) */
   hellWhy(): string | null {
     if (!this.active || this.inv === 'done' || this.portalOut) return null;
-    if (this.closed) return tr('Le portail est refermé : rouvrez-le depuis l’île.');
+    if (this.pve !== 'on') return tr('Le portail est refermé : rouvrez-le quand vous voulez.');
     return this.inv === 'ready' ? tr('Affrontez d’abord les démons de l’île.') : tr('Repoussez d’abord l’invasion du portail.');
   }
 
@@ -557,24 +567,31 @@ export class War {
   }
 
   /** Une partie en cours : l'invasion compte pour faite (tests, mode développeur) */
-  skipInvasion() { this.inv = 'done'; this.legacyInv = false; }
+  skipInvasion() { this.inv = 'done'; this.legacyInv = false; this.legacyPve = false; this.pve = 'on'; }
 
-  /** Le portail est refermé (« Se préparer d'abord ») : aucune vague, aucun passage, le tourbillon éteint */
-  get closed() { return this.sealed && this.inv === 'ready' && this.active; }
+  /** Le portail est refermé : aucune vague, aucun passage, le tourbillon éteint */
+  get closed() { return this.pve === 'off' && this.active; }
 
-  /** « Se préparer d'abord » : referme le portail (l'invasion attend que le joueur le rouvre) ; false si ce n'est pas possible */
-  sealPortal(): boolean {
-    if (this.inv !== 'ready' || this.sealed) return false;
-    this.sealed = true;
+  /** « Refermer le portail » : le jeu continue sans PvE ; false si ce n'est pas possible (une vague en cours, ou l'invasion déjà repoussée) */
+  closePortal(): boolean {
+    if (this.pve === 'off' || this.inv === 'raid' || this.inv === 'coming' || this.inv === 'done') return false;
+    this.pve = 'off';
+    this.choiceSeen = true;
     this.news.push({ kind: 'portalSealed', text: tr('🔒 Le portail est refermé. Rouvrez-le quand vous serez prêt.') });
     return true;
   }
 
-  /** Le choix « Affronter les démons » : l'invasion est prête, elle part (compte à rebours INVASION_DELAY) ; false si elle ne l'est pas */
+  /** « Affronter les démons » : le joueur joue le PvE (le portail se rouvre au besoin) ; le guidage prend le relais */
+  acceptPve(): boolean {
+    if (this.pve === 'on') return false;
+    this.pve = 'on'; this.choiceSeen = true;
+    return true;
+  }
+
+  /** Le moment de l'invasion, « Affronter » dans la barre : elle part (compte à rebours INVASION_DELAY) ; false si elle n'est pas prête */
   startInvasion(): boolean {
     const f = this.faction;
     if (!f || this.inv !== 'ready') return false;
-    this.sealed = false;
     this.inv = 'coming';
     f.nextRaid = f.time + INVASION_DELAY;
     f.planned = f.planInvasion();
@@ -592,13 +609,25 @@ export class War {
       // tout est prêt : c'est au joueur de choisir d'affronter les démons (rien ne se lance tout seul)
       this.inv = 'ready';
       this.news.push({ kind: 'invasionReady', text: tr('⚔️ Les démons rôdent autour du portail : affrontez-les quand vous êtes prêt.') });
-    } else if (this.inv === 'ready' && !ready) { this.inv = 'wait'; this.sealed = false; }
+    } else if (this.inv === 'ready' && !ready) this.inv = 'wait';
     else if (this.inv === 'coming' && !ready) {
       // (la tour ou la caserne a disparu : le compte à rebours s'arrête, il repart quand elles sont rebâties)
       this.inv = 'wait';
       f.planned = null; f.nextRaid = -1;
     } else if (this.inv === 'coming' && !f.planned) f.planned = f.planInvasion();
   }
+
+  /**
+   * Le choix PvE d'une sauvegarde qui n'en a pas : la partie qui joue déjà le PvE (défenses sur l'île, troupes, invasion lancée
+   * ou faite) le continue ; le portail refermé de la version d'avant le reste ; sinon la carte du choix s'ouvre une fois
+   */
+  private readLegacyPve() {
+    this.legacyPve = false;
+    const d = isleDefenses(this.world);
+    const playing = this.inv !== 'wait' || d.towers > 0 || d.barracks > 0 || this.army.troops.length > 0 || this.visited;
+    this.pve = this.wasSealed ? 'off' : playing ? 'on' : 'ask';
+  }
+  private wasSealed = false;
 
   /** Une ancienne sauvegarde (sans l'état de l'invasion) : faite si la partie a déjà vu une vague repoussée ou les Enfers ; ne bloque jamais */
   private readLegacyInvasion(age: number) {
@@ -624,7 +653,7 @@ export class War {
       endSeen: this.endSeen || undefined,
       invasion: this.legacyInv ? undefined : this.inv,
       visited: this.visited || undefined,
-      sealed: this.sealed || undefined,
+      pve: this.legacyPve ? undefined : this.pve,
       choiceSeen: this.choiceSeen || undefined,
       raid: isle?.raid ? { w: isle.raid, units: isle.raiders().map((u) => ({ kind: u.kind as DemonKind, x: +u.x.toFixed(2), z: +u.z.toFixed(2), hp: Math.round(u.hp) })), t: Math.round(isle.raidT) } : null,
     };
@@ -645,7 +674,9 @@ export class War {
     const iv = INVASIONS.find((x) => x === o.invasion);
     // (un compte à rebours en cours au chargement : remplacé par le choix, pas de vague surprise)
     this.inv = iv === 'coming' ? 'ready' : iv ?? 'wait'; this.legacyInv = !iv; this.visited = o.visited === true;
-    this.sealed = o.sealed === true; this.choiceSeen = o.choiceSeen === true;
+    this.choiceSeen = o.choiceSeen === true;
+    const pv = (['ask', 'on', 'off'] as Pve[]).find((x) => x === o.pve);
+    this.pve = pv ?? 'ask'; this.legacyPve = !pv; this.wasSealed = o.sealed === true;
     const rw = o.reward as KingdomReward | null | undefined;
     this.reward = rw && typeof rw === 'object' && Number.isFinite(rw.ore) && Number.isFinite(rw.joy) && Array.isArray(rw.gear) ? { ore: rw.ore, joy: rw.joy, gear: rw.gear.filter((g) => Array.isArray(g) && typeof g[0] === 'string' && Number.isFinite(g[1])) } : null;
     this.unitOf.clear(); this.troopOf.clear(); this.crossing.clear();

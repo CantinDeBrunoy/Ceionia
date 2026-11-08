@@ -17,6 +17,8 @@ export interface WarTipState {
   portalOpen: boolean;
   /** une équipe est en route pour l'ouvrir */
   portalUnderway: boolean;
+  /** le joueur a choisi d'affronter les démons (faux : pas encore choisi, ou portail refermé : plus d'aide sur l'île) */
+  pve?: boolean;
   towers: number;
   barracks: number;
   /** troupes valides sur l'île */
@@ -54,8 +56,8 @@ const ORDER: WarTipId[] = ['kingdom', 'base', 'hell', 'ageLock', 'orders', 'garr
 /** Le moment de chaque aide */
 const WHEN: Record<WarTipId, (s: WarTipState) => boolean> = {
   portal: (s) => s.age >= 1 && !s.portalOpen && !s.portalUnderway,
-  isle: (s) => s.portalOpen && (s.towers === 0 || s.barracks === 0) && s.commanding === null,
-  garrison: (s) => s.portalOpen && s.isleTroops > 0 && s.commanding === null,
+  isle: (s) => s.pve !== false && s.portalOpen && (s.towers === 0 || s.barracks === 0) && s.commanding === null,
+  garrison: (s) => s.pve !== false && s.portalOpen && s.isleTroops > 0 && s.commanding === null,
   orders: (s) => s.commanding === 'isle',
   hell: (s) => s.commanding === 'hell',
   ageLock: (s) => s.commanding === 'hell' && !!s.ageLock && !s.victory,

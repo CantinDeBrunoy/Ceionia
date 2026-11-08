@@ -85,6 +85,7 @@ import { KingdomStage } from './kingdomStage';
 import { WarTips, WarTipState, WAR_TIP_TEXT } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
+import { PortalChoice } from './ui/portalChoice';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
@@ -180,6 +181,8 @@ class Game implements UIHost {
   kingStage: KingdomStage;
   /** les aides du volet militaire */
   warTips!: WarTips;
+  /** la carte du choix du portail (affronter les démons ou refermer le portail) */
+  portalChoice!: PortalChoice;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
@@ -435,13 +438,14 @@ class Game implements UIHost {
       age: () => this.sim.age, pop: () => this.sim.pop,
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
-      leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(),
+      leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(), openPortalChoice: () => this.portalChoice.show(),
       following: () => this.hellFollow, follow: (on) => { this.hellFollow = on; },
       craft: (id) => { const why = this.expeditions.whyCraft(GEAR_BY[id], this.sim.age); if (!why) this.expeditions.craft(id, this.sim.age); return why; },
       crafting: () => this.world.exp.craft, craftCheck: (ids) => this.expeditions.whyCraftAll(ids, this.sim.age),
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
+    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, click: () => audio.sfxClick(), toast: (m) => this.ui.toast(m) });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
       war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
@@ -561,7 +565,7 @@ class Game implements UIHost {
     if (this.mode !== 'surface') return;
     // (fermés tant que l'invasion du portail n'est pas repoussée)
     const closed = this.war.hellWhy();
-    if (closed) { this.ui.toast(closed, this.war.inv === 'ready' ? () => this.viewIsle() : undefined, 'danger'); return; }
+    if (closed) { this.ui.toast(closed, this.war.pve === 'on' ? undefined : () => this.portalChoice.show()); return; }
     this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
@@ -723,12 +727,22 @@ class Game implements UIHost {
     this.scene.add(this.isleLayer.group);
   }
 
+  /** La ligne du rayon Militaire : le PvE à choisir, ou le portail refermé à rouvrir (rien une fois qu'on affronte les démons) */
+  pveLine() {
+    const w = this.war;
+    if (!w.active) return null;
+    if (w.pve === 'off') return { text: trx('🔒 Portail fermé'), button: trx('Rouvrir') };
+    if (w.pve === 'ask') return { text: trx('🌀 Les Enfers'), button: trx('Affronter…') };
+    return null;
+  }
+  openPortalChoice() { this.portalChoice.show(); }
+
   /** Ce que regardent les aides du volet militaire */
   private warTipState(): WarTipState {
     const w = this.world, war = this.war, d = w.portal ? isleDefenses(w) : { towers: 0, barracks: 0 };
     return {
       age: this.sim.age, portalOpen: w.portalOpen, portalUnderway: this.expeditions.active.some((a) => a.m.id === 'portal'),
-      towers: d.towers, barracks: d.barracks, isleTroops: war.army.troops.filter((t) => t.where === 'isle' && t.heal <= 0).length,
+      pve: war.pve === 'on', towers: d.towers, barracks: d.barracks, isleTroops: war.army.troops.filter((t) => t.where === 'isle' && t.heal <= 0).length,
       commanding: this.command.theater?.kind ?? null, frontier: war.faction?.frontier ?? 1, ageLock: !!war.faction && war.faction.gate && war.faction.conquestFrontier > war.faction.frontier, camp: !!war.base?.countOf('camp'), victory: !!war.faction?.victory,
     };
   }
@@ -744,6 +758,8 @@ class Game implements UIHost {
     const w = this.war, healK = (this.sim.counts.health ?? 0) > 0 ? 1.5 : 1;
     const raid = w.update(gdt, this.sim.age, healK);
     if (raid) audio.sfxRumble(4);
+    // le portail vient de s'ouvrir (ou la partie chargée n'a jamais choisi) : la carte du choix s'ouvre une seule fois, hors fenêtre
+    if (w.active && w.pve === 'ask' && !w.choiceSeen && !this.portalChoice.visible && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading) this.portalChoice.show();
     const said = new Set<string>();
     for (const n of w.news.splice(0)) {
       // (plusieurs soldats au même moment : une seule nouvelle)
@@ -753,9 +769,8 @@ class Game implements UIHost {
       if (this.kingStage.news(n)) continue;
       // l'incursion elle-même a son alerte en haut (« Voir l'île ») : pas de message en double ; l'avertissement qui la précède reste
       if (n.kind === 'invasionReady') {
-        // tout est prêt : la carte du choix s'ouvre si l'on commande l'île, sinon un message y mène
-        if (this.isleCmd) this.command.openChoice();
-        else this.ui.toast(trx('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
+        // tout est prêt : un message mène à l'île, où le bouton « Affronter » attend
+        this.ui.toast(trx('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle());
       } else if (n.kind === 'portalSealed') {
         // le portail se referme : un éclat doré, puis le tourbillon s'éteint (voir `portalView`)
         audio.sfxGoldBurst();
