@@ -364,7 +364,7 @@ describe('équipement des expéditions selon la difficulté', () => {
       const c = gearCost(g, 'normal');
       expect(c.wood + c.stone + c.ore, g.id).toBeGreaterThan(0);
       expect(c.ore).toBe(g.ore);
-      for (const d of ['easy', 'sandbox'] as Difficulty[]) expect(gearCost(g, d)).toEqual({ wood: 0, stone: 0, ore: g.ore });
+      for (const d of ['easy', 'sandbox'] as Difficulty[]) expect(gearCost(g, d)).toEqual({ wood: 0, stone: 0, ore: g.ore, ...(g.fuel ? { fuel: g.fuel } : {}) });
     }
     // le bois du manche et la pierre de la pointe pour la lance ; le minerai seul pour l'épée
     expect(gearCost(GEAR_BY.spear, 'normal')).toEqual({ wood: 2, stone: 1, ore: 0 });
