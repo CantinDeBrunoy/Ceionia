@@ -33,7 +33,7 @@ export interface Theater {
   /** le point de la bataille est sur le portail (un clic dessus mène aux Enfers) */
   atPortal?(x: number, z: number): boolean;
   /** centre la vue sur un point de la bataille */
-  focus(x: number, z: number): void;
+  focus(x: number, z: number, dist?: number): void;
   /** le fantôme d'un bâtiment de la base avancée à poser (null : aucun) et le cercle de la base (Enfers seulement) */
   ghost?(kind: BaseKind | null, x?: number, z?: number, ok?: boolean, camp?: [number, number] | null, line?: { x: number; z: number; ok: boolean }[]): void;
 }
@@ -364,7 +364,18 @@ export class CommandUI implements ToolInput {
 
   hold() { const t = this.theater; if (t && this.cmd.hold(t.sim)) this.host.click(); this.render(); }
   retreat() { const t = this.theater; if (t && this.cmd.retreat(t.sim)) this.host.click(); this.render(); }
-  selectAll() { this.cmd.select(this.units().map((u) => u.id)); this.render(); }
+  /** Toutes les troupes du joueur, même hors de l'écran ; la vue se centre sur l'armée et recule au besoin pour la montrer entière */
+  selectAll() {
+    const us = this.units();
+    this.cmd.select(us.map((u) => u.id));
+    const t = this.theater;
+    if (t && us.length) {
+      const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cz = us.reduce((s, u) => s + u.z, 0) / us.length;
+      const r = Math.max(...us.map((u) => Math.hypot(u.x - cx, u.z - cz)));
+      t.focus(cx, cz, 7 + r * 2.4);
+    }
+    this.render();
+  }
   private focusSelection() {
     const t = this.theater, us = this.units().filter((u) => this.cmd.selected.has(u.id));
     if (!t || !us.length) return;
