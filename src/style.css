@@ -934,19 +934,19 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar .tfoot > * { pointer-events: auto; }
 #troopBar .tfl { flex: none; display: flex; flex-direction: column; gap: 6px; width: 176px; }
 #troopBar .tfl .tord { min-height: 56px; }
-#troopBar .tbot { flex: 1 1 0; min-width: 0; padding: 7px 10px 6px; border-radius: 16px; display: flex; flex-direction: column; gap: 3px; }
+#troopBar .tbot { flex: 1 1 0; min-width: 300px; padding: 7px 10px 6px; border-radius: 16px; display: flex; flex-direction: column; gap: 3px; }
 #troopBar .thint { font-size: 11.5px; font-weight: 600; line-height: 1.25; color: var(--ink2); text-align: center; opacity: 0.85; }
-#troopBar .tcards { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
-#troopBar .tcard { position: relative; flex-direction: column; gap: 0; min-width: 84px; min-height: 52px; padding: 3px 12px 8px; line-height: 1.1; border: 2px solid var(--line); border-radius: 12px; }
+#troopBar .tcards { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; }
+#troopBar .tcard { position: relative; flex-direction: column; gap: 0; min-width: 72px; min-height: 50px; padding: 3px 8px 8px; line-height: 1.1; border: 2px solid var(--line); border-radius: 12px; }
 #troopBar .tcard b { font-size: 19px; font-weight: 800; }
-#troopBar .tcard .tn { font-size: 12px; font-weight: 800; }
+#troopBar .tcard .tn { font-size: 11.5px; font-weight: 800; white-space: nowrap; }
 #troopBar .tcard i { position: absolute; left: 10px; bottom: 3px; height: 4px; max-width: calc(100% - 20px); border-radius: 2px; background: #3fbf5a; }
 #troopBar .tcard i.low { background: #e0a020; }
 #troopBar .tcard.on { border-color: #2b6cf0; background: #2b6cf0; }
-#troopBar .tall { min-height: 52px; padding: 0 16px; border: 2px solid var(--line); border-radius: 12px; font-size: 14px; font-weight: 800; }
+#troopBar .tall { min-height: 50px; padding: 0 12px; border: 2px solid var(--line); border-radius: 12px; font-size: 14px; font-weight: 800; }
 #troopBar .tnone { color: var(--ink2); font-weight: 600; font-size: 12.5px; }
-#troopBar .tmenu { flex: 0 1 auto; min-width: 0; max-width: 52vw; padding: 6px 8px 7px; border-radius: 16px; display: flex; flex-direction: column; gap: 4px; }
-#troopBar .tbase { flex: 0 1 540px; }
+#troopBar .tmenu { flex: 0 1 auto; min-width: 0; max-width: 56vw; padding: 6px 8px 7px; border-radius: 16px; display: flex; flex-direction: column; gap: 4px; }
+#troopBar .tbase { flex: 0 1 470px; }
 #troopBar .tmh { display: flex; align-items: center; gap: 10px; min-height: 22px; }
 #troopBar .tmh h5 { margin: 0; padding: 0 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink2); white-space: nowrap; }
 #troopBar .tmh h5 small { font-size: 12px; letter-spacing: 0; color: var(--ink); }
@@ -962,7 +962,7 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar .tfam.def h6 { color: #c8482b; }
 #troopBar .tfam.lit h6 { color: #b46a00; }
 #troopBar .tbuilds { display: flex; gap: 5px; }
-#troopBar .tmrow .trb { flex: none; min-height: 44px; padding: 3px 9px; gap: 0; border-radius: 10px; align-items: center; text-align: center; }
+#troopBar .tmrow .trb { flex: none; min-height: 44px; padding: 3px 6px; gap: 0; border-radius: 10px; align-items: center; text-align: center; }
 #troopBar .tmrow .trb b { font-size: 12.5px; }
 #troopBar .tmrow .trb small { font-size: 10.5px; line-height: 1.2; max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #troopBar .tbuilds .trb { border-color: #c9a45a; background: #fff8e6; }
@@ -1008,7 +1008,7 @@ body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
   #troopBar .tfl { order: 1; width: 112px; flex-direction: column; }
   #troopBar .tfl .tord { min-height: 44px; }
   #troopBar .tfl .tord.prt { min-height: 50px; }
-  #troopBar .tbot { order: 2; flex: 1 1 0; padding: 5px 6px 5px; }
+  #troopBar .tbot { order: 2; flex: 1 1 0; min-width: 0; padding: 5px 6px 5px; }
   #troopBar .tcorner { order: 3; flex-direction: column; gap: 3px; }
   #troopBar .tcorner button { min-height: 30px; padding: 0 9px; font-size: 12px; }
   #troopBar .tmenu { order: 4; flex: 1 1 100%; max-width: none; padding: 4px 6px 5px; }
@@ -1016,7 +1016,9 @@ body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
   #troopBar .tcard b { font-size: 16px; }
   #troopBar .tcard .tn { font-size: 11px; }
   #troopBar .tall { min-height: 44px; padding: 0 9px; font-size: 12.5px; }
-  #troopBar .thint { font-size: 10.5px; }
+  #troopBar .tcards { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+  #troopBar .tcard, #troopBar .tall { flex: none; }
+  #troopBar .thint { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #troopBar .tmrow .trb { min-height: 40px; padding: 2px 7px; }
   #troopBar .tmrow .trb b { font-size: 11.5px; }
   #troopBar .thelp { bottom: 200px; right: 6px; }

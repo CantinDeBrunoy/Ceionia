@@ -448,7 +448,7 @@ export class CommandUI implements ToolInput {
     const n = this.cmd.selected.size;
     if (this.placing) return `Cliquez au sol pour poser : ${BASE_DEFS[this.placing].name}. Échap ou clic droit pour arrêter.`;
     if (this.cmd.armed) return 'Cliquez à l’endroit à attaquer : les soldats combattront ce qu’ils croisent.';
-    if (n) return `${n} soldat${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} : clic droit où les envoyer · A attaquer · H tenir · R replier · Espace pause · glisser : déplacer la vue · Maj + glisser : cadre · clic droit glissé : tourner.`;
+    if (n) return `${n} soldat${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} : clic droit : envoyer · A attaquer · H tenir · R replier · glisser : déplacer la vue · Maj + glisser : cadre.`;
     return 'Choisissez des soldats (clic), puis clic droit où les envoyer · glisser : déplacer la vue · Maj + glisser : sélectionner · clic droit glissé : tourner.';
   }
 
@@ -529,8 +529,8 @@ export class CommandUI implements ToolInput {
   private menuTab: 'build' | 'rec' = 'build';
   /** Les noms courts des bâtiments de la base dans la barre du bas (le nom entier est dans l'infobulle) */
   private static BSHORT: Record<BaseKind, string> = { camp: 'Camp', post: 'Caserne', smithy: 'Forge', infirmary: 'Infirmerie', tower: 'Tour', palisade: 'Mur', gate: 'Porte', brazier: 'Brasero' };
-  /** Un coût en pastilles courtes (🪵 bois, 🪨 pierre, ⛏️ minerai) */
-  private static costIcons(c: BaseCost) { return [c.wood ? `🪵${c.wood}` : '', c.stone ? `🪨${c.stone}` : '', c.ore ? `⛏️${c.ore}` : ''].filter(Boolean).join(' ') || 'gratuit'; }
+  /** Un coût en pastilles courtes (🌲 bois, ⛰️ pierre, ⛏️ minerai) */
+  private static costIcons(c: BaseCost) { return [c.wood ? `🌲${c.wood}` : '', c.stone ? `⛰️${c.stone}` : '', c.ore ? `⛏️${c.ore}` : ''].filter(Boolean).join(' ') || 'gratuit'; }
 
   /**
    * Le menu « Ma base » des Enfers, à droite de la barre du bas : deux onglets (Bâtir : tenir la zone, se défendre, éclairer ;
