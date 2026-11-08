@@ -8326,43 +8326,186 @@ function stadium(p: Parts, age: number) {
   if (age >= 4) { for (const [x, z] of [[-0.88, -0.6], [0.88, -0.6], [-0.88, 0.8], [0.88, 0.8]]) floodlight(p, x, z, 0.8); p.box(0.3, 0.14, 0.02, 0, 0.62, -0.95, 0x2a2a2e); p.box(0.26, 0.1, 0.006, 0, 0.64, -0.938, 0xffd27a, 0, true); }
 }
 
-/** Terrain de football (2 × 2) : pelouse rayée, lignes, surfaces et rond central, buts et leurs filets, joueurs des deux équipes, ballon, bancs, petite tribune, projecteurs */
-function football(p: Parts, age: number) {
-  p.box(1.9, 0.012, 1.9, 0, 0, 0, 0x8fc47e);
-  for (let k = 0; k < 8; k++) p.box(0.2, 0.006, 1.2, -0.7 + k * 0.2, 0.012, 0.05, k % 2 ? 0x5fa84e : 0x6dba5c);
-  const L = (w: number, d: number, x: number, z: number) => p.box(w, 0.004, d, x, 0.019, z, C.white);
-  L(1.62, 0.012, 0, -0.55); L(1.62, 0.012, 0, 0.65); L(0.012, 1.2, -0.81, 0.05); L(0.012, 1.2, 0.81, 0.05); L(0.012, 1.2, 0, 0.05);
-  ellipseRing(p, 0.16, 0.16, 0.021, 0.004, C.white, 0, 0.05);
+/** Aplatissement de l'ovale d'un stade : le petit axe (z) vaut OV fois le grand (x) */
+const OV = 0.82;
+/**
+ * Solide de révolution elliptique : le profil (rayon, hauteur) tourne autour de l'axe vertical de t0 à t1, en ovale (z aplati
+ * de OV). Sert aux gradins, murs et toits annulaires des stades ; le sens des faces se déduit de l'aire du profil
+ */
+function ovalLoft(p: Parts, prof: [number, number][], color: number, n = 48, t0 = 0, t1 = Math.PI * 2, glow: boolean | 'neon' = false) {
+  let area = 0;
+  for (let i = 0; i < prof.length; i++) { const a = prof[i], b = prof[(i + 1) % prof.length]; area += a[0] * b[1] - b[0] * a[1]; }
+  const pos: number[] = [];
+  const P = (j: number, i: number) => { const t = t0 + ((t1 - t0) * i) / n; return [prof[j][0] * Math.cos(t), prof[j][1], OV * prof[j][0] * Math.sin(t)]; };
+  for (let i = 0; i < n; i++) for (let j = 0; j < prof.length; j++) {
+    const j2 = (j + 1) % prof.length, A = P(j, i), B = P(j2, i), C = P(j2, i + 1), D = P(j, i + 1);
+    if (area < 0) pos.push(...A, ...D, ...C, ...A, ...C, ...B); else pos.push(...A, ...C, ...D, ...A, ...B, ...C);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  p.add(g, 0, 0, 0, color, 0, glow);
+}
+/** Bande d'un ovale, de ra à rb, face visible vers le haut : les sièges d'une marche */
+function ovalBand(p: Parts, ra: number, rb: number, y: number, color: number, n = 48) {
+  const pos: number[] = [];
+  const P = (r: number, i: number) => { const t = (i / n) * Math.PI * 2; return [r * Math.cos(t), y, OV * r * Math.sin(t)]; };
+  for (let i = 0; i < n; i++) { const A = P(ra, i), B = P(ra, i + 1), C = P(rb, i + 1), D = P(rb, i); pos.push(...A, ...B, ...C, ...A, ...C, ...D); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  p.add(g, 0, 0, 0, color);
+}
+/** Poutre ou câble tendu entre deux points : boîte fine orientée de a vers b */
+function stay(p: Parts, a: [number, number, number], b: [number, number, number], w: number, color: number, glow: boolean | 'neon' = false) {
+  const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
+  const g = new THREE.BoxGeometry(w, len, w).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+  p.add(g, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2, color, 0, glow);
+}
+
+/**
+ * Stade de football (3 × 3, ou son plan réduit sur 2 × 2), qui grandit avec les âges : à l'âge industriel, stade de brique à
+ * anneau de gradins de bois et tribune d'honneur couverte de bois ; à l'époque moderne, grand stade ovale à trois niveaux de
+ * gradins, façade à nervures, toit annulaire suspendu par des haubans à des mâts, projecteurs, grands tableaux, parvis,
+ * passerelles, foule animée ; à l'âge futuriste, toit rétractable (volets repliés), liserés et écrans holographiques.
+ * Pelouse rayée, lignes et buts partout ; aucune piste d'athlétisme
+ */
+function stadiumFoot(p: Parts, age: number) {
+  sink(0.012);
+  const old = age < 4, fut = age >= 5, y0 = 0.012, TAU = Math.PI * 2;
+  const cx = (r: number, t: number) => r * Math.cos(t), cz = (r: number, t: number) => OV * r * Math.sin(t);
+  // orientation d'une pièce posée sur l'ovale : son axe x suit le rayon (rad), ou sa face regarde la pelouse (face)
+  const rad = (t: number) => -Math.atan2(OV * Math.sin(t), Math.cos(t));
+  const face = (t: number) => Math.atan2(-Math.cos(t), -OV * Math.sin(t));
+  const concrete = old ? 0xa8714f : 0xd8d6d0;
+  // le sol : gazon (âge industriel) ou parvis dallé ; carrés de verdure aux angles
+  p.box(2.92, 0.012, 2.92, 0, 0, 0, old ? 0x8fc47e : fut ? 0xdde4ec : 0xcfcac2);
+  if (!old) for (const s of [-1, 1]) for (const t of [-1, 1]) p.box(0.3, 0.03, 0.3, s * 1.3, y0, t * 1.3, 0x7fb87f);
+  // la pelouse rayée, ses lignes, ses surfaces, ses buts, ses drapeaux de coin
+  const hx = old ? 0.55 : 0.62, hz = old ? 0.36 : 0.4, r0 = old ? 0.86 : 0.9;
+  p.add(new THREE.CylinderGeometry(1, 1, 0.01, 48).scale(r0, 1, r0 * OV), 0, y0, 0, old ? 0x6f9a52 : 0x5aa04c);
+  const bands = 10;
+  for (let k = 0; k < bands; k++) p.box((2 * hx) / bands, 0.004, 2 * hz, -hx + ((k + 0.5) * 2 * hx) / bands, y0 + 0.01, 0, k % 2 ? 0x5fa84e : 0x74bc62);
+  const L = (w: number, d: number, x: number, z: number) => p.box(w, 0.004, d, x, y0 + 0.014, z, C.white);
+  L(2 * hx, 0.01, 0, -hz); L(2 * hx, 0.01, 0, hz); L(0.01, 2 * hz, -hx, 0); L(0.01, 2 * hz, hx, 0); L(0.01, 2 * hz, 0, 0);
+  ellipseRing(p, 0.13, 0.13, y0 + 0.016, 0.004, C.white);
   for (const sx of [-1, 1]) {
-    L(0.012, 0.5, sx * 0.6, 0.05); L(0.21, 0.012, sx * 0.705, -0.2); L(0.21, 0.012, sx * 0.705, 0.3);
-    p.box(0.014, 0.1, 0.014, sx * 0.82, 0.012, -0.08, C.white); p.box(0.014, 0.1, 0.014, sx * 0.82, 0.012, 0.18, C.white); p.box(0.014, 0.014, 0.27, sx * 0.82, 0.11, 0.05, C.white);
-    p.box(0.06, 0.1, 0.26, sx * 0.85, 0.012, 0.05, 0xdfe4ea);
+    L(0.2, 0.01, sx * (hx - 0.1), -0.2); L(0.2, 0.01, sx * (hx - 0.1), 0.2); L(0.01, 0.4, sx * (hx - 0.2), 0); L(0.08, 0.01, sx * (hx - 0.04), -0.09); L(0.08, 0.01, sx * (hx - 0.04), 0.09);
+    for (const dz of [-0.09, 0.09]) p.box(0.012, 0.07, 0.012, sx * hx, y0 + 0.01, dz, C.white);
+    p.box(0.012, 0.012, 0.19, sx * hx, y0 + 0.08, 0, C.white); p.box(0.05, 0.07, 0.19, sx * (hx + 0.03), y0 + 0.01, 0, 0xdfe4ea);
   }
-  [[-0.3, -0.1, 0xd84a3e], [-0.5, 0.25, 0xd84a3e], [-0.15, 0.35, 0xd84a3e], [0.25, 0.0, 0x3a6ab8], [0.45, 0.3, 0x3a6ab8], [0.1, -0.25, 0x3a6ab8], [-0.75, 0.05, 0x2a2a2e], [0.75, 0.05, 0x4fa860]]
+  for (const [x, z] of [[-hx, -hz], [hx, -hz], [-hx, hz], [hx, hz]]) { p.cyl(0.003, 0.003, 0.08, 4, x, y0, z, C.white); sway([x, y0 + 0.08, z], [0, 1, 0], 0.5, 1.3).box(0.026, 0.02, 0.003, 0.014, 0, 0, 0xf2c23a); }
+  [[-0.3, -0.1, 0xd84a3e], [-0.42, 0.2, 0xd84a3e], [-0.12, 0.25, 0xd84a3e], [0.22, 0.0, 0x3a6ab8], [0.38, 0.22, 0x3a6ab8], [0.08, -0.22, 0x3a6ab8], [-0.58, 0.03, 0x2a2a2e], [0.58, 0.03, 0x4fa860]]
     .forEach(([x, z, c], i) => athlete(p, x, z, c, i < 3 ? Math.PI / 2 : -Math.PI / 2));
-  p.sphere(0.018, 0.05, 0.03, 0.1, C.white, 1);
-  for (const x of [-0.35, 0.35]) { p.box(0.26, 0.04, 0.06, x, 0.012, 0.8, 0x3a6ab8); p.box(0.28, 0.1, 0.012, x, 0.012, 0.83, 0xcfe2f0); }
-  bleachers(p, 0, -0.72, 1.0, 2, age);
-  if (age >= 4) for (const [x, z] of [[-0.9, -0.62], [0.9, -0.62], [-0.9, 0.75], [0.9, 0.75]]) floodlight(p, x, z, 0.75);
-  // supporters sur les gradins ; à l'âge industriel, la tribune a son toit de bois sur poteaux
-  for (let r = 0; r < 2; r++) crowd(p, -0.45, 0.45, 0.012 + 0.05 * (r + 1) + 0.012, -0.72 - r * 0.08 + 0.01, 340 + r);
-  if (age < 4) {
-    for (const x of [-0.5, 0, 0.5]) p.box(0.02, 0.36, 0.02, x, 0.012, -0.66, C.darkwood);
-    p.add(new THREE.BoxGeometry(1.08, 0.02, 0.32), 0, 0.38, -0.78, 0x8a5a44, 0, false, 0, -0.12);
+  p.sphere(0.016, 0.04, y0 + 0.03, 0.1, C.white, 1);
+
+  // les gradins : marches pleines, sièges en bandes, spectateurs en points colorés ; chaque secteur se lève à son tour (la ola)
+  const palette = old ? [0xd84a3e, 0xe8c07a, 0x3a6ab8, 0xf4f2ee, 0x6a8a52] : [0x3a6ab8, 0xf4f2ee, 0xd84a3e, 0x3a6ab8, 0xf2c23a, 0x2a4a8a];
+  const tier = (rIn: number, yb: number, rows: number, dr: number, dy: number, seatA: number, seatB: number, sectors: number, thin = 1) => {
+    const prof: [number, number][] = [[rIn, y0]];
+    for (let s = 0; s < rows; s++) prof.push([rIn + s * dr, yb + (s + 1) * dy], [rIn + (s + 1) * dr, yb + (s + 1) * dy]);
+    prof.push([rIn + rows * dr, y0]);
+    ovalLoft(p, prof, concrete);
+    for (let s = 0; s < rows; s++) ovalBand(p, rIn + s * dr + 0.004, rIn + (s + 1) * dr - 0.004, yb + (s + 1) * dy + 0.003, s % 2 ? seatA : seatB);
+    const per = TAU / sectors;
+    for (let q = 0; q < sectors; q++) {
+      const ta = q * per, draw = (g: Parts) => {
+        for (let s = 0; s < rows; s++) {
+          const r = rIn + (s + 0.55) * dr, y = yb + (s + 1) * dy + 0.004, steps = Math.max(2, Math.round((r * per) / (0.05 * thin)));
+          for (let i = 0; i < steps; i++) {
+            if (hash2(q * 97 + i, s * 13 + Math.round(rIn * 100), 61) < 0.14) continue;
+            const t = ta + ((i + 0.5) / steps) * per;
+            g.box(0.026, 0.034, 0.02, cx(r, t), y, cz(r, t), palette[Math.floor(hash2(q * 31 + i, s, 62) * palette.length)], rad(t));
+            g.box(0.018, 0.016, 0.018, cx(r, t), y + 0.036, cz(r, t), hash2(q + i, s, 63) < 0.5 ? 0xe8b894 : 0x4a3426);
+          }
+        }
+      };
+      const tm = ta + per / 2, rm = rIn + (rows * dr) / 2;
+      if (p === mainParts) animPart(draw, [cx(rm, tm), yb, cz(rm, tm)], [0, 0, 1], 0, 0.3, -tm * 1.5, 0.012); else draw(p);
+    }
+  };
+
+  if (old) {
+    // un anneau de gradins de bois, mur de brique à arcades, tribune d'honneur couverte (côté nord)
+    tier(r0, y0, 6, 0.045, 0.028, C.wood, C.darkwood, 16);
+    const ro = r0 + 6 * 0.045;
+    ovalLoft(p, [[ro, y0], [ro, 0.3], [ro + 0.06, 0.3], [ro + 0.06, y0]], C.brick);
+    ovalLoft(p, [[ro - 0.01, 0.3], [ro - 0.01, 0.33], [ro + 0.07, 0.33], [ro + 0.07, 0.3]], C.darkbrick);
+    for (let k = 0; k < 40; k++) { const t = (k + 0.5) * (TAU / 40); p.box(0.02, 0.13, 0.034, cx(ro + 0.062, t), y0, cz(ro + 0.062, t), C.darkbrick, rad(t)); }
+    for (let k = 0; k <= 8; k++) { const t = Math.PI * (1.18 + (k * 0.64) / 8); p.box(0.024, 0.46, 0.024, cx(ro + 0.02, t), y0, cz(ro + 0.02, t), C.darkwood); }
+    ovalLoft(p, [[r0 + 0.1, 0.5], [ro + 0.1, 0.42], [ro + 0.1, 0.45], [r0 + 0.1, 0.53]], 0x8a5a44, 16, Math.PI * 1.18, Math.PI * 1.82);
+    for (let k = 0; k < 8; k++) { const t = Math.PI * (1.2 + (k * 0.6) / 7); p.box(0.05, 0.03, 0.008, cx(ro + 0.1, t), 0.4, cz(ro + 0.1, t), k % 2 ? C.white : 0x3a6ab8, face(t)); }
+    // tableau d'affichage de bois, entrée, réverbères, drapeaux, passants
+    for (const dz of [-0.14, 0.14]) p.box(0.02, 0.3, 0.02, -1.26, y0, dz, C.darkwood);
+    p.box(0.03, 0.14, 0.34, -1.26, 0.26, 0, 0x2c3a30);
+    for (let k = 0; k < 4; k++) p.box(0.006, 0.06, 0.05, -1.243, 0.3, -0.12 + k * 0.08, C.white);
+    p.box(0.4, 0.22, 0.1, 0, y0, 1.12, 0xa85e50); p.box(0.46, 0.03, 0.14, 0, 0.23, 1.12, 0x8a5a44); p.box(0.1, 0.12, 0.01, 0, 0.04, 1.171, C.door); p.box(0.3, 0.05, 0.006, 0, 0.17, 1.171, C.gold);
+    for (const s of [-1, 1]) lampPost(p, s * 0.5, 1.2, 0.34);
+    [[-1.15, 0.8, 0xd84a3e], [1.15, 0.8, 0x3a6ab8], [-1.15, -0.8, 0x3a6ab8], [1.15, -0.8, 0xd84a3e]].forEach(([x, z, c]) => { p.cyl(0.004, 0.004, 0.3, 4, x, y0, z, C.metal); sway([x, 0.3, z], [0, 1, 0], 0.4, 1.1).box(0.1, 0.06, 0.004, 0.05, 0, 0, c); });
+    [[-0.3, 1.25, 0xd84a3e, 0.3], [0.25, 1.3, 0x3a6ab8, 2.5], [0.6, 1.2, 0xf2c23a, 1]].forEach(([x, z, c, r]) => figure(p, x, z, c, r));
+    return;
   }
-  // main courante blanche autour du terrain (panneaux publicitaires à l'époque moderne)
-  for (const z of [-0.6, 0.71]) {
-    if (age >= 4) for (let k = 0; k < 8; k++) p.box(0.19, 0.045, 0.012, -0.7 + k * 0.2, 0.012, z, [0x3a6ab8, 0xd84a3e, 0xf2c23a, 0x4fa860][k % 4]);
-    else { p.box(1.7, 0.01, 0.01, 0, 0.06, z, C.white); for (let k = 0; k <= 8; k++) p.box(0.01, 0.06, 0.01, -0.85 + k * 0.2125, 0.012, z, C.white); }
+
+  // grand stade : trois niveaux séparés de passages
+  tier(r0, y0, 5, 0.032, 0.028, 0xf4f2ee, 0x3a6ab8, 20);
+  ovalLoft(p, [[1.06, y0], [1.06, 0.17], [1.1, 0.17], [1.1, y0]], 0xbcb8b0);
+  tier(1.1, 0.19, 5, 0.026, 0.03, 0xf4f2ee, 0xd84a3e, 24, 1.1);
+  ovalLoft(p, [[1.23, y0], [1.23, 0.34], [1.26, 0.34], [1.26, y0]], 0xbcb8b0);
+  tier(1.26, 0.36, 5, 0.022, 0.034, 0xf4f2ee, 0x3a6ab8, 12, 1.3);
+  const rf = 1.37, neon = fut ? 'neon' : false;
+  // façade : mur, nervures verticales en saillie, bandeaux (lumineux au futur)
+  ovalLoft(p, [[rf, y0], [rf, 0.6], [rf + 0.04, 0.6], [rf + 0.04, y0]], fut ? 0xe4eef6 : 0xe6e2da);
+  for (let k = 0; k < 56; k++) { const t = (k + 0.5) * (TAU / 56); p.box(0.024, 0.6, 0.03, cx(rf + 0.05, t), y0, cz(rf + 0.05, t), fut ? 0xc8dbe8 : 0xc4c0b8, rad(t)); }
+  for (const [a, b] of [[0.2, 0.24], [0.5, 0.54]]) ovalLoft(p, [[rf - 0.005, a], [rf - 0.005, b], [rf + 0.07, b], [rf + 0.07, a]], fut ? 0x4ab8e0 : 0x3a6ab8, 48, 0, TAU, neon);
+  // le toit annulaire (la « soucoupe »), sa couronne, ses mâts, haubans et projecteurs
+  const ri = 1.2, ro2 = 1.47;
+  ovalLoft(p, [[ri, 0.86], [ro2, 0.78], [ro2, 0.81], [ri, 0.89]], C.white);
+  ellipseRing(p, ri, ri * OV, 0.89, 0.012, 0x9aa3ad); ellipseRing(p, ro2, ro2 * OV, 0.81, 0.01, 0x9aa3ad);
+  for (let k = 0; k < 24; k++) { const t = (k + 0.5) * (TAU / 24); stay(p, [cx(ri, t), 0.88, cz(ri, t)], [cx(ro2, t), 0.8, cz(ro2, t)], 0.008, 0xbcc4cc); }
+  const NM = 16;
+  for (let k = 0; k < NM; k++) {
+    const t = (k + 0.5) * (TAU / NM), mx = cx(ro2 + 0.005, t), mz = cz(ro2 + 0.005, t), top = 1.12;
+    p.cyl(0.011, 0.016, top - y0, 5, mx, y0, mz, fut ? 0xf0f4f8 : 0x9aa3ad);
+    for (const dt of [-0.1, 0.1]) stay(p, [mx, top, mz], [cx(ri, t + dt), 0.89, cz(ri, t + dt)], 0.005, 0xd0d6dc);
+    stay(p, [mx, top, mz], [cx(ro2, t), 0.81, cz(ro2, t)], 0.005, 0xd0d6dc);
+    p.box(0.07, 0.035, 0.02, mx - cx(0.04, t), top - 0.03, mz - cz(0.04, t), 0x5d6878, face(t));
+    p.box(0.06, 0.025, 0.008, mx - cx(0.06, t), top - 0.03, mz - cz(0.06, t), fut ? 0x9ae8ff : 0xfff4d8, face(t), fut ? 'neon' : true);
   }
-  // drapeaux de coin qui flottent
-  for (const [x, z] of [[-0.81, -0.55], [0.81, -0.55], [-0.81, 0.65], [0.81, 0.65]]) { p.cyl(0.003, 0.003, 0.1, 4, x, 0.012, z, C.white); sway([x, 0.1, z], [0, 1, 0], 0.5, 1.3).box(0.03, 0.022, 0.003, 0.016, 0, 0, 0xf2c23a); }
-  // tableau d'affichage, guichet et son drapeau
-  for (const dz of [-0.12, 0.12]) p.box(0.02, 0.3, 0.02, -0.93, 0.012, 0.05 + dz, age >= 4 ? 0x9aa3ad : C.darkwood);
-  p.box(0.03, 0.14, 0.3, -0.93, 0.25, 0.05, 0x2a2a2e);
-  if (age >= 4) p.box(0.006, 0.1, 0.26, -0.913, 0.27, 0.05, 0xffd27a, 0, true); else for (let k = 0; k < 4; k++) p.box(0.006, 0.05, 0.05, -0.913, 0.29, -0.06 + k * 0.073, C.white);
-  p.box(0.18, 0.16, 0.12, 0.8, 0.012, 0.88, age >= 4 ? 0xe8eaee : 0xd8c8a8); p.box(0.2, 0.02, 0.14, 0.8, 0.17, 0.88, age >= 4 ? 0x3a6ab8 : 0x8a5a44); p.box(0.06, 0.05, 0.006, 0.8, 0.08, 0.943, C.glass, 0, true);
-  p.cyl(0.004, 0.004, 0.24, 4, 0.9, 0.19, 0.88, C.metal); sway([0.9, 0.19, 0.88], [0, 1, 0], 0.45, 1.2).box(0.07, 0.04, 0.003, 0.035, 0.2, 0, 0x3a6ab8);
+  // grands tableaux d'affichage suspendus au toit aux deux bouts, face à la pelouse
+  for (const s of [-1, 1]) {
+    for (const dz of [-0.12, 0.12]) p.box(0.012, 0.1, 0.012, s * 1.17, 0.77, dz, 0x9aa3ad);
+    p.box(0.035, 0.15, 0.4, s * 1.16, 0.64, 0, 0x2a2a2e);
+    p.box(0.006, 0.12, 0.36, s * 1.14, 0.655, 0, fut ? 0x9ae8ff : 0xffd27a, 0, fut ? 'neon' : true);
+  }
+  if (fut) {
+    // volets du toit rétractable repliés aux deux bouts, rails lumineux ; écrans holographiques, ballon et anneau flottants
+    for (const [a, b] of [[-0.62, 0.62], [Math.PI - 0.62, Math.PI + 0.62]]) {
+      ovalLoft(p, [[ri + 0.02, 0.9], [ro2 - 0.04, 0.9], [ro2 - 0.04, 0.94], [ri + 0.02, 0.94]], 0xe4eef6, 16, a, b);
+      for (const e of [a, b]) stay(p, [cx(ri + 0.02, e), 0.9, cz(ri + 0.02, e)], [cx(ro2 - 0.04, e), 0.9, cz(ro2 - 0.04, e)], 0.012, 0x4ab8e0, 'neon');
+    }
+    ellipseRing(p, ri, ri * OV, 0.915, 0.008, 0x4ab8e0);
+    for (const [x, z] of [[-0.5, -0.58], [0.5, -0.58], [-0.5, 0.58], [0.5, 0.58]]) { p.box(0.14, 0.01, 0.14, x, y0 + 0.1, z, 0x2a3a4a); p.box(0.004, 0.18, 0.16, x, y0 + 0.11, z, 0x7ae8ff, z < 0 ? 0.4 : -0.4, 'neon'); }
+    p.add(new THREE.TorusGeometry(0.2, 0.006, 4, 24).rotateX(Math.PI / 2), 0, 0.55, 0, 0x7ae8ff, 0, 'neon');
+    p.add(new THREE.IcosahedronGeometry(0.035, 1), 0, 0.55, 0, 0xffffff, 0, 'neon');
+  } else {
+    // fanions au sommet de quatre mâts
+    [[0, 0x3a6ab8], [4, 0xf4f2ee], [8, 0xd84a3e], [12, 0x3a6ab8]].forEach(([k, c]) => { const t = (k + 0.5) * (TAU / NM); sway([cx(ro2 + 0.005, t), 1.12, cz(ro2 + 0.005, t)], [0, 1, 0], 0.4, 1.2).box(0.1, 0.05, 0.004, 0.05, 0, 0, c); });
+  }
+  // passerelles : quatre ponts entre le parvis et les passages, garde-corps et piles
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const a = [sx * 1.0, sz * 0.8], b = [sx * 1.4, sz * 1.38], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz), ry = -Math.atan2(dz, dx), mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+    p.box(len, 0.02, 0.1, mx, 0.34, mz, 0xe8e4dc, ry);
+    for (const off of [-0.05, 0.05]) p.box(len, 0.014, 0.008, mx - (dz / len) * off, 0.4, mz + (dx / len) * off, 0x9aa3ad, ry);
+    for (const f of [0.55, 0.9]) p.box(0.02, 0.32, 0.02, a[0] + dx * f, y0, a[1] + dz * f, 0x9aa3ad);
+  }
+  // entrée principale : escalier, portique et enseigne lumineuse, guichets
+  for (let k = 0; k < 4; k++) p.box(0.9, 0.03 * (k + 1), 0.06, 0, y0, 1.4 - k * 0.05, 0xe8e4dc);
+  for (const s of [-1, 1]) { p.box(0.07, 0.34, 0.07, s * 0.42, y0, 1.24, fut ? 0xf0f4f8 : 0xd8d6d0); p.box(0.2, 0.14, 0.12, s * 0.7, y0, 1.3, fut ? 0xe4eef6 : 0xe8eaee); p.box(0.1, 0.05, 0.01, s * 0.7, 0.07, 1.361, C.glass, 0, true); }
+  p.box(0.92, 0.07, 0.1, 0, 0.34, 1.24, fut ? 0x4ab8e0 : 0x3a6ab8);
+  for (let k = 0; k < 8; k++) p.box(0.06, 0.035, 0.006, -0.28 + k * 0.08, 0.355, 1.292, fut ? 0xbff4ff : 0xffe8b0, 0, fut ? 'neon' : true);
+  // mâts à drapeaux sur le parvis, passants
+  ([[-0.7, 1.42, 0x3a6ab8], [-0.35, 1.44, 0xf4f2ee], [0.35, 1.44, 0xd84a3e], [0.7, 1.42, 0x3a6ab8], [-1.44, 0.2, 0xf4f2ee], [1.44, 0.2, 0xd84a3e], [-1.44, -0.3, 0x3a6ab8], [1.44, -0.3, 0xf4f2ee]] as number[][]).forEach(([x, z, c]) => {
+    p.cyl(0.005, 0.006, 0.42, 5, x, y0, z, 0xbcc4cc); sway([x, 0.42, z], [0, 1, 0], 0.45, 1.2).box(0.1, 0.06, 0.004, 0.05, 0, 0, c);
+  });
+  ([[-0.2, 1.1, 0xd84a3e, 0.3], [0.1, 1.15, 0x3a6ab8, 2.5], [0.55, 1.12, 0xf2c23a, 1], [-0.6, 1.14, 0x4fa860, 0.4], [-1.2, 1.2, 0x3a6ab8, 1], [1.15, 1.1, 0xf4f2ee, 2]] as number[][]).forEach(([x, z, c, r]) => figure(p, x, z, c, r));
 }
 
 /** Terrain de basket (1 case) : bitume peint, lignes et raquettes, deux paniers, grillage, joueurs, ballon */
@@ -12771,7 +12914,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'aerodrome': aerodrome(p, Math.max(3, age)); break;
     case 'manor': manor(p, Math.max(2, age)); break;
     case 'stadium': if (size === 3) stadiumBig(p, Math.max(3, age)); else stadium(p, Math.max(3, age)); break;
-    case 'football': football(p, Math.max(3, age)); break;
+    case 'football': if (size >= 3) stadiumFoot(p, Math.max(3, age)); else placed(p, 0, 0, 0, 0.64, () => stadiumFoot(p, Math.max(3, age))); break;
     case 'basket': basket(p); break;
     case 'tennis': tennis(p, Math.max(3, age)); break;
     case 'waterpark': if (size >= 3) waterparkBig(p); else waterpark(p); break;

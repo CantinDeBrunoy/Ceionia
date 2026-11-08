@@ -13,7 +13,7 @@ const QUAY_MAX = 0.32;
 /** Bâtiments de la mer : chantier naval, phare, halle aux poissons, ferme marine (de l'eau à moins de SEA_REACH cases de leur emprise) */
 export const SEASIDE: KindId[] = ['shipyard', 'lighthouse', 'fishmarket', 'offshore'];
 export const SEA_REACH = 5;
-const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'funfair', 'harbor', 'airport', 'waterpark', 'terminal'];
+const GREW: KindId[] = ['health', 'school', 'fire', 'temple', 'workshop', 'mill', 'stadium', 'football', 'funfair', 'harbor', 'airport', 'waterpark', 'terminal'];
 /**
  * Places passées en 3 × 3 (la place du village, de 1 × 1 ; le forum, son amélioration, de 2 × 2) : les sauvegardes d'avant
  * (sans la marque `plaza3`) les font grandir autour de leur ancienne emprise, recentrée, s'ils ont la place
