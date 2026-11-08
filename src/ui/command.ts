@@ -4,7 +4,7 @@ import type { BattleLayer } from '../render/battleUnits';
 import type { PointerInfo, ToolInput } from '../core/camera';
 import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGearMissing, gearToCraft, troopForm, troopName, troopLabel, gearName, andJoin } from '../sim/army';
 import type { GearId } from '../sim/gear';
-import { tr, plural, nplural } from '../i18n';
+import { tr, plural, nplural, pct } from '../i18n';
 import type { War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
 import { BASE_DEFS, costText, canAfford, COUNTER_WARN } from '../sim/hellBase';
@@ -591,7 +591,7 @@ export class CommandUI implements ToolInput {
     const status = isle ? (raid ? `<span class="wst hot">${tr('🔥 Incursion : {n} démons', { n: w.isle!.raiders().length })}</span>` : next !== null ? `<span class="wst">${tr('Prochaine vague dans {t}', { t: `<b>${Math.ceil(next)} s</b>` })} <button data-a="wave" title="${tr('Sonner le cor : faire venir la prochaine vague tout de suite')}">${tr('🎺 Cor')}</button></span>` : '') : '';
     // la contamination de l'île : elle recule à chaque défense, chaque vague repoussée, chaque zone des Enfers conquise
     const bl = isle && w.blight ? Math.round(w.blight.level * 100) : -1;
-    const blight = bl >= 0 ? `<span class="tsup tblight${bl > 60 ? ' low' : ''}" title="${tr('Contamination de l’île : les Enfers débordent par le portail (près de lui, les démons frappent un peu plus fort). Elle recule à chaque tour de garde ou caserne bâtie, chaque vague repoussée, chaque zone des Enfers conquise ; l’île sécurisée reverdit. Les troupes se soignent plus vite dans la zone purifiée (anneaux dorés autour des défenses).')}">🔥 ${tr('Contamination')} <i><b style="width:${bl}%"></b></i>${bl} %</span>` : '';
+    const blight = bl >= 0 ? `<span class="tsup tblight${bl > 60 ? ' low' : ''}" title="${tr('Contamination de l’île : les Enfers débordent par le portail (près de lui, les démons frappent un peu plus fort). Elle recule à chaque tour de garde ou caserne bâtie, chaque vague repoussée, chaque zone des Enfers conquise ; l’île sécurisée reverdit. Les troupes se soignent plus vite dans la zone purifiée (anneaux dorés autour des défenses).')}">🔥 ${tr('Contamination')} <i><b style="width:${bl}%"></b></i>${pct(bl)}</span>` : '';
     const garrison = `<span class="wst" title="${isle ? tr('Soldats de la garnison de l’île, sur le maximum que la caserne peut loger') : tr('Soldats de l’armée, sur le maximum')}">🛡️ ${isle ? tr('Garnison') : tr('Armée')} <b>${armySize(w.army)} / ${armyCap(ctx)}</b></span>`;
     const ribbon = [status, blight, garrison, wounded ? `<span class="twd" title="${tr('Blessés qui se soignent à la caserne')}">🩹 ${nplural(wounded, 'blessé', 'blessés')}</span>` : ''].filter(Boolean).map((x) => `<div class="tchip">${x}</div>`).join('');
     const none = isle ? tr('Aucune troupe sur l’île : recrutez à la caserne (à droite).') : w.army.troops.some((x) => x.where === 'hell') ? tr('Aucune troupe debout ici : les blessés se soignent.') : tr('Aucune troupe ici : faites venir la garnison de l’île (Renforts, à gauche).');

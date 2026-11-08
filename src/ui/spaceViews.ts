@@ -115,11 +115,11 @@ export class SpaceCast {
     // la mire de la retransmission
     c.fillStyle = 'rgba(255,255,255,0.08)';
     for (let y = (time * 30) % 4; y < H; y += 4) c.fillRect(0, y, W, 1);
-    this.cap.textContent = u < land - 0.08 ? `Descente vers ${craters ? 'les grands cratères' : 'la mer de la Tranquillité'}… altitude ${Math.max(0, Math.round(alt * 1.1))} m`
-      : u < 0.55 ? 'Contact ! Le module s’est posé.'
-      : u < 0.66 ? 'L’écoutille s’ouvre, l’astronaute descend l’échelle…'
-      : u < 0.82 ? '« Un petit pas pour un habitant… »'
-      : '« … un grand bond pour le village ! »';
+    this.cap.textContent = u < land - 0.08 ? tr('Descente vers {where}… altitude {alt} m', { where: tr(craters ? 'les grands cratères' : 'la mer de la Tranquillité'), alt: Math.max(0, Math.round(alt * 1.1)) })
+      : u < 0.55 ? tr('Contact ! Le module s’est posé.')
+      : u < 0.66 ? tr('L’écoutille s’ouvre, l’astronaute descend l’échelle…')
+      : u < 0.82 ? tr('« Un petit pas pour un habitant… »')
+      : tr('« … un grand bond pour le village ! »');
   }
 
   /** Le module lunaire, ses pieds posés en (x, y) : étage de descente doré, étage de remontée, hublot, antenne, échelle */
@@ -230,7 +230,7 @@ export const VOYAGE_S = 24;
 export function showVoyage(root: HTMLElement, jump: boolean, onDone: () => void) {
   const ov = document.createElement('div');
   ov.className = 'overlay voyage';
-  ov.innerHTML = '<canvas width="960" height="540"></canvas><p class="cap"></p><button class="skip">Passer ›</button>';
+  ov.innerHTML = `<canvas width="960" height="540"></canvas><p class="cap"></p><button class="skip">${tr('Passer ›')}</button>`;
   root.appendChild(ov);
   const cv = ov.querySelector('canvas')!, c = cv.getContext('2d'), cap = ov.querySelector('.cap')!, t0 = performance.now();
   let raf = 0, ended = false;
@@ -245,7 +245,7 @@ export function showVoyage(root: HTMLElement, jump: boolean, onDone: () => void)
     if (!ov.isConnected || ended) return;
     const t = (performance.now() - t0) / 1000;
     if (c) cap.textContent = drawVoyage(c, Math.min(1, t / VOYAGE_S), t, jump);
-    else cap.textContent = 'Le vaisseau colonial file vers l’étoile voisine…';
+    else cap.textContent = tr('Le vaisseau colonial file vers l’étoile voisine…');
     if (t >= VOYAGE_S) end(); else raf = requestAnimationFrame(frame);
   };
   frame();

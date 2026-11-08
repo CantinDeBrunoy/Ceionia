@@ -1,4 +1,5 @@
 import { ic } from './icons';
+import { tr } from '../i18n';
 
 /**
  * La vue s'est éloignée de la grande place : la place sort de l'écran (`ndc` : sa position à l'écran, de -1 à 1, null quand
@@ -18,8 +19,8 @@ export class HomeButton {
     const b = (this.el = document.createElement('button'));
     b.id = 'homeBack';
     b.type = 'button';
-    b.title = 'Ramener la vue sur la grande place (touche V)';
-    b.innerHTML = `${ic('house', 15, 2)}Retourner au village`;
+    b.title = tr('Ramener la vue sur la grande place (touche V)');
+    b.innerHTML = `${ic('house', 15, 2)}${tr('Retourner au village')}`;
     b.onclick = onClick;
     (root.querySelector('#dock') ?? root).prepend(b);
   }

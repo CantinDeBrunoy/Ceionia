@@ -33,6 +33,8 @@ export const getLang = (): Lang => lang;
 /** Le deux-points de la langue : avec une espace insécable devant en français (« Nom : valeur »), collé en anglais (« Name: value ») */
 export const colon = (): string => (lang === 'en' ? ': ' : ' : ');
 export const isEnglish = () => lang === 'en';
+/** Un pourcentage : « 20 % » en français (espace avant le signe), « 20% » en anglais */
+export const pct = (n: number): string => (lang === 'en' ? `${n}%` : `${n} %`);
 
 /** Change la langue (mémorisée, <html lang> à jour) et prévient les abonnés ; sans effet si elle ne change pas */
 export function setLang(l: Lang, persist = true) {

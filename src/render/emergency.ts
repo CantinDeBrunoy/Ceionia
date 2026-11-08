@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { tr } from '../i18n';
 import { World, N } from '../world/world';
 import { Building, KindId, sizeOf } from '../build/catalog';
 import { Parts } from './parts';
@@ -486,11 +487,11 @@ export class Emergencies {
     return this.units.filter((u) => u.service !== 'fire' && u.target && (u.state === 'go' || u.state === 'work')).map((u) => {
       const health = u.service === 'health', go = u.state === 'go' || !u.crew, st = u.crew?.stage ?? 0;
       const progress = go ? 0.35 * (u.path.length ? u.i / u.path.length : 0) : 0.35 + 0.65 * Math.min(1, st / 4);
-      const status = health
+      const status = tr(health
         ? go ? 'L’ambulance arrive, sirène hurlante' : st < 1 ? 'Les ambulanciers accourent avec la civière' : st < 2 ? 'Premiers soins au blessé' : 'On l’emporte sur la civière'
-        : go ? 'La police accourt' : st < 1 ? 'Les agents frappent à la porte' : st < 2 ? 'Le cambrioleur s’enfuit par la rue !' : st < 3 ? 'Rattrapé : il lève les mains' : 'On l’emmène au poste';
+        : go ? 'La police accourt' : st < 1 ? 'Les agents frappent à la porte' : st < 2 ? 'Le cambrioleur s’enfuit par la rue !' : st < 3 ? 'Rattrapé : il lève les mains' : 'On l’emmène au poste');
       const p = u.crew?.thief && st >= 1 ? u.crew.thief : null;
-      return { key: `unit:${u.service}:${u.target!.id}`, icon: health ? '🚑' : '🚓', title: health ? 'Un habitant a fait un malaise' : 'Cambriolage', status, progress, x: p ? p.x : u.x, z: p ? p.z : u.z };
+      return { key: `unit:${u.service}:${u.target!.id}`, icon: health ? '🚑' : '🚓', title: tr(health ? 'Un habitant a fait un malaise' : 'Cambriolage'), status, progress, x: p ? p.x : u.x, z: p ? p.z : u.z };
     });
   }
 
@@ -877,7 +878,7 @@ export class Emergencies {
       if (!near.length) continue;
       const h = near[Math.floor(Math.random() * near.length)];
       if (sv === 'blaze') { this.ignite?.(h); continue; }
-      if (this.dispatch(service, this.stationFor(service, h)!, h)) this.news.push(service === 'health' ? '🚑 Un habitant a fait un malaise : l’ambulance arrive' : '🚓 Cambriolage signalé : la police arrive');
+      if (this.dispatch(service, this.stationFor(service, h)!, h)) this.news.push(tr(service === 'health' ? '🚑 Un habitant a fait un malaise : l’ambulance arrive' : '🚓 Cambriolage signalé : la police arrive'));
     }
     // à l'époque moderne, la voiture de patrouille fait sa ronde
     if (age >= 4) for (const st of w.buildings.values()) {
