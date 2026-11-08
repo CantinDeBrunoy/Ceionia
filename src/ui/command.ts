@@ -204,6 +204,8 @@ export class CommandUI implements ToolInput {
     else if (p) {
       if (this.cmd.selected.size && foeAt(t.sim, p[0], p[1], 0.6)) cur = 'crosshair';
       else if (unitAt(this.units(), p[0], p[1], 0.5)) cur = 'pointer';
+      // le portail : un clic mène aux Enfers
+      else if (t.kind === 'isle' && t.atPortal?.(p[0], p[1])) cur = 'pointer';
     }
     this.host.canvas.style.cursor = cur;
   }

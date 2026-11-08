@@ -374,7 +374,7 @@ export class ToolController implements ToolInput {
     // l'éditeur du tracé d'une voie choisit son curseur (une poignée, la voie)
     const over = this.overlay?.hover(hit) ?? '';
     // et un bâtiment : un clic ouvre sa fiche
-    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.volcanoAt(hit.x, hit.z) >= 0 || this.hitBuilding) ? 'pointer' : '');
+    this.h.canvas.style.cursor = over || (this.tool === 'none' && hit && (w.volcanoAt(hit.x, hit.z) >= 0 || this.hitBuilding || (!!w.portal && w.portalOpen && !!this.h.openPortal && Math.hypot(hit.x - w.portal.x, hit.z - w.portal.z) < 2.6)) ? 'pointer' : '');
   }
 
   down(e: PointerInfo) {
