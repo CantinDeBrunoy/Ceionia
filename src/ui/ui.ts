@@ -1,3 +1,4 @@
+import { tr, plural, getLang, setLang, LANGS, type Lang } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building } from '../build/catalog';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
@@ -108,7 +109,7 @@ const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').rep
 /** Un texte long en fiche : son début, et la suite repliée derrière « En savoir plus » (data-k garde l'état ouvert d'un rendu à l'autre) */
 function folded(text: string, k: string) {
   const [head, rest] = brief(text);
-  return `<div class="desc">${head}${rest ? `<details class="more" data-k="${k}"><summary>En savoir plus</summary>${rest}</details>` : ''}</div>`;
+  return `<div class="desc">${head}${rest ? `<details class="more" data-k="${k}"><summary>${tr('En savoir plus')}</summary>${rest}</details>` : ''}</div>`;
 }
 
 /**
@@ -144,7 +145,7 @@ function railTip(k: KindId) {
   return want === 'freight' ? `<p class="perk">🚂 Posé à ${RAIL_REACH} cases au plus d’une gare desservie par un train de marchandises, il produit ${Math.round(FREIGHT_BONUS * 100)} % de plus.</p>`
     : want === 'passenger' ? `<p class="perk">🚂 Une gare de voyageurs à ${RAIL_REACH} cases au plus y amène les équipes : expéditions spatiales plus sûres et lancements préparés plus vite.</p>` : '';
 }
-const riskLabel = (r: number) => (r <= 0.12 ? 'faible' : r <= 0.22 ? 'mesuré' : r <= 0.32 ? 'élevé' : 'très élevé');
+const riskLabel = (r: number) => tr(r <= 0.12 ? 'faible' : r <= 0.22 ? 'mesuré' : r <= 0.32 ? 'élevé' : 'très élevé');
 const pct = (r: number) => `${Math.round(r * 100)} %`;
 const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
 /** Les gains en pastilles d'icônes (la phrase complète en infobulle) */
@@ -276,13 +277,31 @@ const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: 'rain', sno
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
+/** Noms des langues, chacun dans sa propre langue */
+const LANG_NAME: Record<string, string> = { fr: 'Français', en: 'English' };
+/** Sélecteur de langue (menu principal et réglages) : un bouton par langue, celle en cours est enfoncée */
+function langPicker(cur: string, cls = '') {
+  return `<div class="row langPick ${cls}" role="group" aria-label="${tr('Langue')}">${LANGS.map((l) => `<button type="button" data-lang="${l}" class="${l === cur ? 'active' : ''}" aria-pressed="${l === cur}" lang="${l}"><b>${l.toUpperCase()}</b> ${LANG_NAME[l]}</button>`).join('')}</div>`;
+}
+/** Branche le sélecteur : un clic change la langue (mémorisée) ; `after` redessine l'écran (en jeu, la page recharge d'elle-même) */
+function bindLangPicker(root: HTMLElement, after?: (l: Lang) => void) {
+  root.querySelectorAll<HTMLButtonElement>('[data-lang]').forEach((b) => (b.onclick = () => {
+    const l = b.dataset.lang as Lang;
+    if (l === getLang()) return;
+    setLang(l);
+    after?.(l);
+  }));
+}
+
 /** Confirmation dans le jeu (le confirm() natif est bloqué dans certains navigateurs intégrés) */
 export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer'): Promise<boolean> {
+  ok = tr(ok);
+  message = tr(message);
   return new Promise((resolve) => {
     const ov = document.createElement('div');
     ov.className = 'overlay';
     ov.style.zIndex = '40';
-    ov.innerHTML = `<div class="modal panel" style="max-width:380px"><p></p><div class="row"><span class="grow"></span><button data-r="0">Annuler</button><button data-r="1" class="active">${ok}</button></div></div>`;
+    ov.innerHTML = `<div class="modal panel" style="max-width:380px"><p></p><div class="row"><span class="grow"></span><button data-r="0">${tr('Annuler')}</button><button data-r="1" class="active">${ok}</button></div></div>`;
     $('p', ov).textContent = message;
     const done = (r: boolean) => { ov.remove(); resolve(r); };
     ov.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => done(b.dataset.r === '1')));
@@ -322,7 +341,7 @@ export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty
 function modal(root: HTMLElement, cls: string, title: string, body: string, onClose?: () => void, sticky = false): { ov: HTMLElement; close: () => void } {
   const ov = document.createElement('div');
   ov.className = 'overlay';
-  ov.innerHTML = `<div class="modal panel ${cls}"><div class="mtitle"><h3>${title}</h3><button class="x" title="Fermer" aria-label="Fermer">${ic('close', 16, 2)}</button></div>${body}</div>`;
+  ov.innerHTML = `<div class="modal panel ${cls}"><div class="mtitle"><h3>${title}</h3><button class="x" title="${tr('Fermer')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>${body}</div>`;
   root.appendChild(ov);
   // Échap ferme la fenêtre du dessus (voir closeTop)
   (ov as HTMLElement & { close?: () => void }).close = () => { if (!sticky) close(); };
@@ -370,7 +389,7 @@ export class UI {
     this.root = root;
     root.innerHTML = `
       <header id="hud">
-        <div id="agePanel" class="panel" title="Voir ce qu'il faut pour l'âge suivant">
+        <div id="agePanel" class="panel" title="${tr('Voir ce qu\'il faut pour l\'âge suivant')}">
           <div class="ageTop"><b id="ageName"></b><em id="agePct"></em><small id="ageSub"></small></div>
           <div class="bar ageGauge"><i id="ageBar"></i></div>
           <div id="ageNext"></div>
@@ -383,21 +402,21 @@ export class UI {
         </div>
         <div id="timePanel" class="panel">
           <div id="clock"></div>
-          <button id="bPause" title="Pause (Espace)" aria-label="Pause">${ic('pause', 18, 2.2)}</button>
-          <button id="bSpeed" title="Vitesse">×1</button>
-          <button id="bFog" title="Dissiper le brouillard" aria-label="Dissiper le brouillard" hidden>${ic('fog', 18, 2)}</button>
+          <button id="bPause" title="${tr('Pause (Espace)')}" aria-label="${tr('Pause')}">${ic('pause', 18, 2.2)}</button>
+          <button id="bSpeed" title="${tr('Vitesse')}">×1</button>
+          <button id="bFog" title="${tr('Dissiper le brouillard')}" aria-label="${tr('Dissiper le brouillard')}" hidden>${ic('fog', 18, 2)}</button>
         </div>
         <nav id="menuBtns" class="panel">
-          <button id="bExp" title="Expéditions" aria-label="Expéditions">${ic('compass')}<span id="expBadge"></span></button>
-          <button id="bBell" title="Notifications" aria-label="Notifications" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
-          <button id="bPhoto" title="Mode photo (P)" aria-label="Mode photo">${ic('camera')}</button>
-          <button id="bSettings" title="Réglages" aria-label="Réglages">${ic('gear')}</button>
+          <button id="bExp" title="${tr('Expéditions')}" aria-label="${tr('Expéditions')}">${ic('compass')}<span id="expBadge"></span></button>
+          <button id="bBell" title="${tr('Notifications')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
+          <button id="bPhoto" title="${tr('Mode photo (P)')}" aria-label="${tr('Mode photo')}">${ic('camera')}</button>
+          <button id="bSettings" title="${tr('Réglages')}" aria-label="${tr('Réglages')}">${ic('gear')}</button>
         </nav>
       </header>
       <div id="expList"></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
-        <button id="bUp" title="Remonter à la surface (U)">${ic('up', 18)} Remonter</button>
+        <button id="bUp" title="${tr('Remonter à la surface (U)')}">${ic('up', 18)} ${tr('Remonter')}</button>
       </div>
       <div id="selCard" class="panel"></div>
       <div id="railEdit" class="panel"></div>
@@ -409,10 +428,10 @@ export class UI {
             <div class="quick" id="quickL"></div>
             <div id="modes"></div>
             <div class="quick" id="quickR">
-              <button id="bUndo" title="Annuler (Ctrl+Z)" aria-label="Annuler">${ic('undo', 17, 2)}</button>
-              <button id="bRedo" title="Rétablir (Ctrl+Y)" aria-label="Rétablir">${ic('redo', 17, 2)}</button>
-              <button id="bRot" title="Tourner le bâtiment (R)" aria-label="Tourner le bâtiment">${ic('rotate', 17, 2)}</button>
-              <button id="bHome" title="Revenir au village (V) — une seconde fois : vue d'ensemble" aria-label="Revenir au village">${ic('target', 17, 2)}</button>
+              <button id="bUndo" title="${tr('Annuler (Ctrl+Z)')}" aria-label="${tr('Annuler')}">${ic('undo', 17, 2)}</button>
+              <button id="bRedo" title="${tr('Rétablir (Ctrl+Y)')}" aria-label="${tr('Rétablir')}">${ic('redo', 17, 2)}</button>
+              <button id="bRot" title="${tr('Tourner le bâtiment (R)')}" aria-label="${tr('Tourner le bâtiment')}">${ic('rotate', 17, 2)}</button>
+              <button id="bHome" title="${tr('Revenir au village (V) — une seconde fois : vue d\'ensemble')}" aria-label="${tr('Revenir au village')}">${ic('target', 17, 2)}</button>
             </div>
           </div>
           <div id="items"></div>
@@ -420,7 +439,7 @@ export class UI {
             <div id="subcats"></div>
             <div id="biomes"></div>
             <div id="roadModes"></div>
-            <div id="brush"><span>Taille du pinceau</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
+            <div id="brush"><span>${tr('Taille du pinceau')}</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
           </div>
         </div>
       </footer>
@@ -428,7 +447,7 @@ export class UI {
       <div id="notifPanel" class="panel" hidden></div>
       <div id="cursorHint"></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
-      <div id="photoBar" class="panel"><button id="pCap">${ic('camera', 18)} Capturer</button><button id="pExit">Quitter</button></div>
+      <div id="photoBar" class="panel"><button id="pCap">${ic('camera', 18)} ${tr('Capturer')}</button><button id="pExit">${tr('Quitter')}</button></div>
     `;
     // dans les bandeaux qui défilent de côté (vignettes de la barre de construction, rayons…), la molette les fait défiler
     // horizontalement ; une liste qui défile de haut en bas garde son défilement habituel
@@ -450,9 +469,9 @@ export class UI {
         return;
       }
     }, { passive: false });
-    $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${ic(n.icon, 20)}</b><div class="bar"><i></i></div><span>${n.label}</span></div>`).join('')
-      + `<div class="need" id="n-security"><b>${ic(SECURITY_NEED.icon, 20)}</b><div class="bar"><i></i></div><span>${SECURITY_NEED.label}</span></div>`
-      + `<button class="pop" id="pop" title="État des habitants" aria-label="État des habitants" aria-expanded="false">0<small>habitants</small></button>`;
+    $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${ic(n.icon, 20)}</b><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('')
+      + `<div class="need" id="n-security"><b>${ic(SECURITY_NEED.icon, 20)}</b><div class="bar"><i></i></div><span>${tr(SECURITY_NEED.label)}</span></div>`
+      + `<button class="pop" id="pop" title="${tr('État des habitants')}" aria-label="${tr('État des habitants')}" aria-expanded="false">0<small>${tr('habitants')}</small></button>`;
     // fiche des habitants : un clic sur le compteur l'ouvre, un clic ailleurs la ferme
     const census = document.createElement('div');
     census.id = 'census';
@@ -537,7 +556,7 @@ export class UI {
     $('#bRot').onclick = () => host.tools.rotate();
     $('#bHome').onclick = () => { host.goHome(); host.audio.sfxClick(); };
     $('#bUp').onclick = () => host.exitUnder();
-    $('#biomes').innerHTML = BIOME_CHOICES.map((c) => `<button data-b="${c.b ?? ''}" title="${c.b === null ? 'Rendre la terre au biome de son climat' : `Peindre : ${c.label.toLowerCase()}`}"><i style="background:${c.color}"></i>${c.label}</button>`).join('');
+    $('#biomes').innerHTML = BIOME_CHOICES.map((c) => `<button data-b="${c.b ?? ''}" title="${c.b === null ? tr('Rendre la terre au biome de son climat') : tr('Peindre : {biome}', { biome: tr(c.label).toLowerCase() })}"><i style="background:${c.color}"></i>${tr(c.label)}</button>`).join('');
     $('#biomes').onclick = (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-b]');
       if (!b) return;
@@ -546,7 +565,7 @@ export class UI {
       this.refreshTools();
     };
     // l'outil Route : tracer en ligne (en glissant) ou en libre (d'un point A à un point B, en courbe)
-    $('#roadModes').innerHTML = `<span>Tracé</span>${ROAD_MODES.map((m) => `<button data-m="${m.id}" title="${m.title}">${ic(m.icon, 15, 2)}${m.label}</button>`).join('')}`;
+    $('#roadModes').innerHTML = `<span>${tr('Tracé')}</span>${ROAD_MODES.map((m) => `<button data-m="${m.id}" title="${tr(m.title)}">${ic(m.icon, 15, 2)}${tr(m.label)}</button>`).join('')}`;
     $('#roadModes').onclick = (e) => {
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-m]');
       if (!b) return;
@@ -586,7 +605,7 @@ export class UI {
    */
   private renderDock() {
     const modes = $('#modes');
-    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${t.label}${t.id === this.tab ? ' — recliquer pour replier ou déplier la barre' : ''}"><b>${ic(t.icon, 20)}</b><span>${t.label}</span></button>`).join('');
+    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${tr(t.label)}${t.id === this.tab ? tr(' — recliquer pour replier ou déplier la barre') : ''}"><b>${ic(t.icon, 20)}</b><span>${tr(t.label)}</span></button>`).join('');
     modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
       const why = b.dataset.t !== 'build' ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
@@ -635,7 +654,7 @@ export class UI {
     const sub = $('#subcats');
     sub.innerHTML = build
       ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label} : ${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
-      : `<span class="mhint">${ic(t.icon, 16, 2)}${t.hint}</span>`;
+      : `<span class="mhint">${ic(t.icon, 16, 2)}${tr(t.hint)}</span>`;
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
       const why = b.dataset.c !== KINDS.gather.cat ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
@@ -665,10 +684,10 @@ export class UI {
         const tiles = kinds.filter((k) => KIND_SUB[k] === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
         // les champs nourrissent (groupe Nourriture) ; le jardin est un décor : bien en vue dans Parcs et décor
         // (masqués tant que le village est vide : on ne pose d'abord que le feu de camp)
-        if (this.cat === 'prod' && sub.id === 'nourriture' && !isStart(this.host.world)) tiles.push(toolTile('field', 'Nourriture'));
-        if (this.cat === 'life' && sub.id === 'parcs' && !isStart(this.host.world)) tiles.unshift(toolTile('garden', 'Décor', true));
+        if (this.cat === 'prod' && sub.id === 'nourriture' && !isStart(this.host.world)) tiles.push(toolTile('field', tr('Nourriture')));
+        if (this.cat === 'life' && sub.id === 'parcs' && !isStart(this.host.world)) tiles.unshift(toolTile('garden', tr('Décor'), true));
         return tiles.length ? `<div class="grp" data-sub="${sub.id}"><div class="gh">${ic(SUB_ICON[sub.id] ?? 'leaf', 13, 2)}<span>${sub.label}</span></div><div class="gt">${tiles.join('')}</div></div>` : '';
-      }).join('') || `<span class="mhint">Rien à bâtir dans ce rayon avant l’âge ${AGES[Math.min(age + 2, AGES.length - 1)].name}.</span>`;
+      }).join('') || `<span class="mhint">${tr('Rien à bâtir dans ce rayon avant l’âge {age}.', { age: AGES[Math.min(age + 2, AGES.length - 1)].name })}</span>`;
     } else {
       html = t.tools.map((id) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
     }
@@ -740,17 +759,17 @@ export class UI {
   /** Pourquoi ce bâtiment n'est pas encore constructible : un âge à venir, ou une expédition à réussir (null s'il l'est) */
   private lockOf(k: KindId): string | null {
     const d = KINDS[k], h = this.host;
-    if (d.minAge > h.sim.age) return `Disponible à l’âge : ${AGES[d.minAge].name}`;
-    if (d.maxAge !== undefined && h.sim.age > d.maxAge) return `On ne le bâtit plus qu’à l’âge : ${AGES[d.maxAge].name} (c’est trop tard)`;
+    if (d.minAge > h.sim.age) return tr('Disponible à l’âge : {age}', { age: AGES[d.minAge].name });
+    if (d.maxAge !== undefined && h.sim.age > d.maxAge) return tr('On ne le bâtit plus qu’à l’âge : {age} (c’est trop tard)', { age: AGES[d.maxAge].name });
     // un village neuf commence par sa place : le reste se bâtit autour
     if (k !== START_KIND && isStart(h.world)) return startMessage(h.sim.nameOf(START_KIND));
     const guide = this.tutorial?.lock(k);
     if (guide) return guide;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
-      return `Débloqué par l’expédition « ${m?.title ?? d.reqMission} »`;
+      return tr('Débloqué par l’expédition « {title} »', { title: m?.title ?? d.reqMission });
     }
-    if (d.reqKind && !h.sim.built(d.reqKind)) return `Il faut d’abord « ${h.sim.nameOf(d.reqKind)} » au village`;
+    if (d.reqKind && !h.sim.built(d.reqKind)) return tr('Il faut d’abord « {name} » au village', { name: h.sim.nameOf(d.reqKind) });
     return null;
   }
 
@@ -902,9 +921,9 @@ export class UI {
   /** Nom, icône, raccourci et fiche d'un outil ; le jardin prend ceux de l'âge du village (campement, jardin, lices, parc…) */
   private toolInfo(id: string) {
     const base = TOOL_INFO[id];
-    if (id !== 'garden') return { ...base, desc: TOOL_DESC[id] ?? '' };
+    if (id !== 'garden') return { ...base, label: tr(base.label), key: base.key === 'Échap' ? tr('Échap') : base.key, desc: tr(TOOL_DESC[id] ?? '') };
     const g = GARDEN_BY_AGE[Math.min(this.host.sim.age, GARDEN_BY_AGE.length - 1)];
-    return { ...base, icon: g.icon, label: g.label, desc: `${g.desc} ${DECO_NOTE}` };
+    return { ...base, key: base.key === 'Échap' ? tr('Échap') : base.key, icon: g.icon, label: tr(g.label), desc: `${tr(g.desc)} ${tr(DECO_NOTE)}` };
   }
 
   /**
@@ -922,7 +941,7 @@ export class UI {
     hb.hidden = !late;
     hb.setAttribute('aria-pressed', String(this.help));
     hb.classList.toggle('on', this.help);
-    hb.title = this.help ? 'Masquer les conseils' : 'Afficher les conseils';
+    hb.title = tr(this.help ? 'Masquer les conseils' : 'Afficher les conseils');
     hb.innerHTML = ic('target', 16, 2);
     // à partir de l’Antiquité, seuls restent visibles un besoin à combler (orange) ou le passage d’âge
     const quiet = late && !this.help && !(sim.ready && !k) && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) && !sim.drought;
@@ -936,9 +955,9 @@ export class UI {
     if (el.dataset.v === key) return;
     el.dataset.v = key;
     el.className = `tone-${tone}${k || ready || exp || rail ? ' link' : ''}`;
-    el.title = k === 'farm' && !sim.food.ok ? 'Cliquer pour tracer un champ' : k ? `Cliquer pour bâtir « ${sim.nameOf(k)} »` : exp ? 'Cliquer pour ouvrir les expéditions' : rail ? 'Cliquer pour tracer une ligne depuis cette gare' : ready ? 'Cliquer pour passer à l’âge suivant' : '';
-    const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}Bâtir</b>` : exp ? `<b class="go">${ic('compass', 12, 2.4)}Ouvrir</b>` : rail ? `<b class="go">${ic('train', 12, 2.4)}Tracer</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}Passer</b>` : ''}`;
+    el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
+    const text = tr(sim.message).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}${tr('Bâtir')}</b>` : exp ? `<b class="go">${ic('compass', 12, 2.4)}${tr('Ouvrir')}</b>` : rail ? `<b class="go">${ic('train', 12, 2.4)}${tr('Tracer')}</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}${tr('Passer')}</b>` : ''}`;
     void el.offsetWidth;
     el.classList.add('flash');
   }
@@ -950,25 +969,25 @@ export class UI {
   private resKey = '';
   private renderResources() {
     const w = this.host.world, day = this.host.expeditions.daily();
-    const items: [Resource, string, string][] = [['wood', 'tree', 'Bois'], ['stone', 'rock', 'Pierre'], ['ore', 'pickaxe', 'Minerai']];
+    const items: [Resource, string, string][] = [['wood', 'tree', tr('Bois')], ['stone', 'rock', tr('Pierre')], ['ore', 'pickaxe', tr('Minerai')]];
     // les briques paraissent avec la briqueterie, dès l'âge industriel (ou dès qu'on en a : une partie plus ancienne)
-    if (this.host.sim.age >= 3 || w.brick >= 1 || day.brick) items.push(['brick', 'brick', 'Briques']);
-    if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel || this.host.expeditions.state.done.includes('oil')) items.push(['crude', 'crude', 'Brut'], ['fuel', 'fuel', 'Carburant']);
-    const key = `${w.unlimited}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
+    if (this.host.sim.age >= 3 || w.brick >= 1 || day.brick) items.push(['brick', 'brick', tr('Briques')]);
+    if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel || this.host.expeditions.state.done.includes('oil')) items.push(['crude', 'crude', tr('Brut')], ['fuel', 'fuel', tr('Carburant')]);
+    const key = `${w.unlimited}|${getLang()}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
     if (key === this.resKey) return;
     this.resKey = key;
     // la fiche du bâtiment en main dit si l'on a encore de quoi le payer
     this.renderInfo();
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
-    const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}/j`;
-    const use: Partial<Record<Resource, string>> = { wood: ' — pour bâtir les grands bâtiments', stone: ' — pour bâtir les grands bâtiments', ore: ' — pour passer les âges et s’équiper ; la mine en extrait chaque jour', brick: ' — pour passer à l’époque moderne et bâtir gares, usines et raffineries', crude: ' — la raffinerie en fait du carburant', fuel: ' — pour les automobiles' };
+    const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}${tr('/j')}`;
+    const use: Partial<Record<Resource, string>> = { wood: tr(' — pour bâtir les grands bâtiments'), stone: tr(' — pour bâtir les grands bâtiments'), ore: tr(' — pour passer les âges et s’équiper ; la mine en extrait chaque jour'), brick: tr(' — pour passer à l’époque moderne et bâtir gares, usines et raffineries'), crude: tr(' — la raffinerie en fait du carburant'), fuel: tr(' — pour les automobiles') };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
-    const flow = (r: Resource) => (r === 'crude' && drawn ? `, ${drawn} tirés des puits par jour et ${drawn - day.crude} raffinés` : day[r] ? `, ${per(day[r]).replace('/j', '')} par jour` : ', rien n’en produit pour l’instant');
+    const flow = (r: Resource) => (r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
-      ? `<div class="res" data-r="${r}" title="${label} : illimité (${DIFF_TEXT.resInfinite[w.difficulty]})">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
-      : `<div class="res" data-r="${r}" title="${label} : ${Math.floor(w[r])} en réserve${flow(r)}${use[r] ?? ''}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
+      ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
+      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -1076,8 +1095,8 @@ export class UI {
   private renderNotifPanel() {
     const p = $('#notifPanel'), h = this.notifs.history;
     const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    p.innerHTML = `<div class="npHead"><b>Notifications</b>${h.length ? '<button class="npClear" type="button">Tout effacer</button>' : ''}</div>`
-      + (h.length ? `<ul>${h.map((x) => `<li class="${x.level}">${esc(x.text)}${x.count > 1 ? ` <em>×${x.count}</em>` : ''}</li>`).join('')}</ul>` : '<p class="npNone">Rien de nouveau.</p>');
+    p.innerHTML = `<div class="npHead"><b>${tr('Notifications')}</b>${h.length ? `<button class="npClear" type="button">${tr('Tout effacer')}</button>` : ''}</div>`
+      + (h.length ? `<ul>${h.map((x) => `<li class="${x.level}">${esc(x.text)}${x.count > 1 ? ` <em>×${x.count}</em>` : ''}</li>`).join('')}</ul>` : `<p class="npNone">${tr('Rien de nouveau.')}</p>`);
     p.querySelector<HTMLElement>('.npClear')?.addEventListener('click', () => { this.notifs.clearHistory(); this.renderNotifPanel(); this.renderNotifs(); });
   }
 
@@ -1126,29 +1145,29 @@ export class UI {
     $('#agePanel').classList.toggle('ready', pct >= 100);
     // où en est l'âge : le pourcentage, l'âge visé et les conditions remplies (le détail s'ouvre d'un clic)
     const met = ap ? ap.items.filter((i) => i.have >= i.need).length : 0;
-    const next = ap ? `<span>Vers ${AGES[ap.next].name}</span><span>${met}/${ap.items.length} conditions ▾</span>` : '<span>Dernier âge atteint</span>';
+    const next = ap ? `<span>${tr('Vers {age}', { age: AGES[ap.next].name })}</span><span>${tr('{met}/{n} conditions ▾', { met, n: ap.items.length })}</span>` : `<span>${tr('Dernier âge atteint')}</span>`;
     $('#agePct').textContent = ap ? `${pct} %` : '';
     if ($('#ageNext').dataset.v !== next) { $('#ageNext').innerHTML = next; $('#ageNext').dataset.v = next; }
     // tout est réuni : un bouton pour passer à l'âge suivant (ce n'est plus automatique)
-    const go = $('#ageGo'), ready = !!ap && sim.ready, label = ap ? `${ic('up', 15, 2.4)} Passer à : ${AGES[ap.next].name}` : '';
+    const go = $('#ageGo'), ready = !!ap && sim.ready, label = ap ? `${ic('up', 15, 2.4)} ${tr('Passer à : {age}', { age: AGES[ap.next].name })}` : '';
     go.hidden = !ready;
-    if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = `Toutes les conditions sont réunies : passer à l’âge suivant (${AGES[ap!.next].name})`; }
+    if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = tr('Toutes les conditions sont réunies : passer à l’âge suivant ({age})', { age: AGES[ap!.next].name }); }
     $('#ageReq').innerHTML = ap
-      ? `<b>Vers : ${AGES[ap.next].name}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} — cliquer pour le bâtir"` : ` data-req="${reqOf(i.label)}" title="Cliquer pour savoir comment l’obtenir"`}>${i.have >= i.need ? '✓' : '•'} ${i.label}${i.kind ? ` <small>${sim.whereOf(i.kind).replace('Bâtir › ', '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
-      : 'Dernier âge atteint : profitez de votre village !';
+      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      : tr('Dernier âge atteint : profitez de votre village !');
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
       const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);
       $('i', el).style.width = `${Math.round(fill * 100)}%`;
       el.classList.toggle('warn', !need.ok && !housing);
       el.classList.toggle('full', !need.ok && housing);
-      el.title = housing ? `${n.label} : ${Math.floor(sim.pop)} habitants pour ${need.cap} places` : `${n.label} : ${num(need.cap)} pour un besoin de ${num(need.demand)}`;
+      el.title = housing ? tr('{need} : {pop} habitants pour {cap} places', { need: tr(n.label), pop: Math.floor(sim.pop), cap: need.cap }) : tr('{need} : {cap} pour un besoin de {demand}', { need: tr(n.label), cap: num(need.cap), demand: num(need.demand) });
     }
-    { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('#n-security').title = `Sécurité : ${Math.round(s * 100)} % des habitations couvertes (pompiers ${Math.round(sim.coverage.fireShare * 100)} %, police ${Math.round(sim.coverage.policeShare * 100)} %)`; }
+    { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('#n-security').title = tr('Sécurité : {pct} % des habitations couvertes (pompiers {fire} %, police {police} %)', { pct: Math.round(s * 100), fire: Math.round(sim.coverage.fireShare * 100), police: Math.round(sim.coverage.policeShare * 100) }); }
     // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
-    const cs = this.census(), alert = cs.untreated ? `${cs.untreated} sans soins` : cs.hungry ? `${cs.hungry} ${cs.hungry > 1 ? 'ont' : 'a'} faim` : cs.thirsty ? `${cs.thirsty} ${cs.thirsty > 1 ? 'ont' : 'a'} soif`
-      : cs.jobless ? `${cs.jobless} sans emploi` : cs.injured ? `${cs.injured} blessé${cs.injured > 1 ? 's' : ''}` : '';
-    const popHtml = `${cs.p}<small>habitants</small>${alert ? `<small class="alert">${alert}</small>` : ''}`;
+    const cs = this.census(), alert = cs.untreated ? tr('{n} sans soins', { n: cs.untreated }) : cs.hungry ? tr(cs.hungry > 1 ? '{n} ont faim' : '{n} a faim', { n: cs.hungry }) : cs.thirsty ? tr(cs.thirsty > 1 ? '{n} ont soif' : '{n} a soif', { n: cs.thirsty })
+      : cs.jobless ? tr('{n} sans emploi', { n: cs.jobless }) : cs.injured ? `${cs.injured} ${plural(cs.injured, 'blessé', 'blessés')}` : '';
+    const popHtml = `${cs.p}<small>${tr('habitants')}</small>${alert ? `<small class="alert">${alert}</small>` : ''}`;
     if ($('#pop').dataset.v !== popHtml) { $('#pop').innerHTML = popHtml; $('#pop').dataset.v = popHtml; }
     if (!$('#census').hidden) this.renderCensus();
     if (this.needOpen) this.renderNeed();
@@ -1165,7 +1184,7 @@ export class UI {
     ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
     if (zone) {
-      const zh = zone.startsWith('🔥') ? `${zone}<small>Le portail ramène sur l’île</small>` : `⛏️ ${zone}<small>Puits de lumière : remonter</small>`;
+      const zh = zone.startsWith('🔥') ? `${zone}<small>${tr('Le portail ramène sur l’île')}</small>` : `⛏️ ${zone}<small>${tr('Puits de lumière : remonter')}</small>`;
       if ($('#underZone').dataset.v !== zh) { $('#underZone').innerHTML = zh; $('#underZone').dataset.v = zh; }
     }
     this.updateExpeditions();
@@ -1257,15 +1276,15 @@ export class UI {
       for (const b of w.buildings.values()) if (b.kind === k && per[b.age]) { n++; v += per[b.age]; }
       if (n) rows.push(`<div class="crow"><span>${KINDS[k].names[Math.max(age, KINDS[k].minAge)]}<i>× ${n}</i></span><em>+${num(v)}</em></div>`);
     }
-    if (r === 'fuel' && day > 0) rows.push(`<div class="crow"><span>Raffinerie (du pétrole brut)</span><em>+${num(day)}</em></div>`);
+    if (r === 'fuel' && day > 0) rows.push(`<div class="crow"><span>${tr('Raffinerie (du pétrole brut)')}</span><em>+${num(day)}</em></div>`);
     const k = meta.kind, lock = this.lockOf(k), name = KINDS[k].names[Math.max(age, KINDS[k].minAge)];
     const html = `
-      <h4>${ic(meta.icon, 18, 2)} ${meta.label}<em class="${day > 0 ? 'ok' : 'warn'}">${w.unlimited ? '∞' : Math.floor(w[r])}</em></h4>
-      <div class="sub">${day ? `${day > 0 ? '+' : '−'}${num(Math.abs(day))} par jour` : 'rien n’en produit pour l’instant'}</div>
-      <p class="hint">${meta.use}</p>
-      <div class="src">${rows.join('') || '<div class="crow"><span class="none">Aucun bâtiment n’en produit encore.</span></div>'}</div>
-      <p class="hint ${day > 0 ? 'ok' : 'warn'}">${meta.more}</p>
-      ${lock ? `<p class="hint warn">🔒 ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} Bâtir « ${name} »</button>`}`;
+      <h4>${ic(meta.icon, 18, 2)} ${tr(meta.label)}<em class="${day > 0 ? 'ok' : 'warn'}">${w.unlimited ? '∞' : Math.floor(w[r])}</em></h4>
+      <div class="sub">${day ? tr('{sign}{n} par jour', { sign: day > 0 ? '+' : '−', n: num(Math.abs(day)) }) : tr('rien n’en produit pour l’instant')}</div>
+      <p class="hint">${tr(meta.use)}</p>
+      <div class="src">${rows.join('') || `<div class="crow"><span class="none">${tr('Aucun bâtiment n’en produit encore.')}</span></div>`}</div>
+      <p class="hint ${day > 0 ? 'ok' : 'warn'}">${tr(meta.more)}</p>
+      ${lock ? `<p class="hint warn">🔒 ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
@@ -1282,21 +1301,21 @@ export class UI {
     const state = d.ok ? 'ok' : housing ? 'full' : 'warn', name = sim.nameOf(d.kind), where = sim.whereOf(d.kind);
     const rows = d.rows.length
       ? d.rows.map((r) => `<div class="crow"><span>${r.label}${r.n ? `<i>× ${r.n}</i>` : ''}</span><em class="${r.v < 0 ? 'neg' : ''}">${r.v < 0 ? '−' : '+'}${num(Math.abs(r.v))}</em></div>`).join('')
-      : '<div class="crow"><span class="none">Rien ne le fournit encore.</span></div>';
+      : `<div class="crow"><span class="none">${tr('Rien ne le fournit encore.')}</span></div>`;
     let tip: string;
     if (housing) tip = d.ok ? `${Math.floor(d.cap - p)} place${d.cap - p >= 2 ? 's' : ''} libre${d.cap - p >= 2 ? 's' : ''} : le village va grandir.` : `Le village est plein : chaque « ${name} » de plus loge ${d.per} habitants.`;
     else if (d.ok) tip = d.demand > 0 ? `Comblé, avec ${num(d.cap - d.demand)} d’avance.` : 'Pas encore demandé : le village est trop petit.';
     else { const miss = d.demand - d.cap, n = d.per > 0 ? Math.ceil(miss / d.per - 1e-6) : 0; tip = `Il manque ${num(miss)}${n ? ` : ${n > 1 ? `${n} × ` : ''}« ${name} » (+${d.per} chacun) suffirai${n > 1 ? 'ent' : 't'}` : ''}.`; }
     const html = `
-      <h4>${ic(meta.icon, 18, 2)} ${meta.label}<em class="${state}">${num(have)} / ${num(want)}</em></h4>
-      <div class="sub">${housing ? 'habitants / places' : 'disponible / nécessaire'}</div>
+      <h4>${ic(meta.icon, 18, 2)} ${tr(meta.label)}<em class="${state}">${num(have)} / ${num(want)}</em></h4>
+      <div class="sub">${tr(housing ? 'habitants / places' : 'disponible / nécessaire')}</div>
       <div class="bar ${state}"><i style="width:${Math.round(fill * 100)}%"></i></div>
-      <p class="hint">${NEED_RULE[k]}</p>
+      <p class="hint">${tr(NEED_RULE[k])}</p>
       <div class="src">${rows}</div>
-      <div class="crow total"><span>${housing ? 'Places' : 'Disponible'}</span><em>${num(d.cap)}</em></div>
-      <div class="crow total"><span>${housing ? 'Habitants' : `Nécessaire (${p} habitants)`}</span><em>${num(housing ? p : d.demand)}</em></div>
+      <div class="crow total"><span>${tr(housing ? 'Places' : 'Disponible')}</span><em>${num(d.cap)}</em></div>
+      <div class="crow total"><span>${housing ? tr('Habitants') : tr('Nécessaire ({p} habitants)', { p })}</span><em>${num(housing ? p : d.demand)}</em></div>
       <p class="hint ${state}">${tip}</p>
-      ${d.per > 0 && (!d.ok || housing) ? `<button class="primary" data-kind="${d.kind}" title="${where}">${ic('hammer', 15, 2.2)} Bâtir « ${name} »</button>` : ''}`;
+      ${d.per > 0 && (!d.ok || housing) ? `<button class="primary" data-kind="${d.kind}" title="${where}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>` : ''}`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
@@ -1456,7 +1475,7 @@ export class UI {
       <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}Missions</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}Équipement</button><button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('train', 16, 2)}Chemin de fer</button></div>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>Équipes en route : ${ex.active.length} / ${max}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
-        <p class="hint">Envoyez de petites équipes chercher ce qui manque au village.</p><details class="cdet"><summary>En savoir plus</summary><p class="hint">Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p></details>
+        <p class="hint">Envoyez de petites équipes chercher ce qui manque au village.</p><details class="cdet"><summary>${tr('En savoir plus')}</summary><p class="hint">Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.</p></details>
         <div class="subtabs"><button data-f="all" class="on">Toutes <small>${sorted.length}</small></button><button data-f="mil">⚔️ Militaires <small>${nMil}</small></button><button data-f="leg">✨ Légendaires <small>${nLeg}</small></button></div>
         <div class="missions">${cards}</div>
         <p class="emptyMsg" hidden></p>
@@ -1841,50 +1860,54 @@ export class UI {
   // ---------------- Réglages ----------------
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
-    const tabs = [['time', 'clock', 'Temps et météo'], ['look', 'palette', 'Image et son'], ['game', 'houses', 'Partie']];
+    const tabs = [['time', 'clock', tr('Temps et météo')], ['look', 'palette', tr('Image et son')], ['game', 'houses', tr('Partie')]];
+    const lang = getLang();
     // au bac à sable et en Normal, la difficulté impose le réglage des ressources
     const forced = DIFF_TEXT.resForced[h.world.difficulty];
-    const { ov, close } = modal(this.root, 'settings', `${ic('gear', 22)} Réglages`, `
+    const { ov, close } = modal(this.root, 'settings', `${ic('gear', 22)} ${tr('Réglages')}`, `
       <div class="tabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 16, 2)}${l}</button>`).join('')}</div>
       <section data-sec="time">
-        <h4>Vitesse</h4>
-        <div class="row"><button data-sp="0">${ic('pause', 16, 2.2)} Pause</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button></div>
-        <div class="row"><label>Durée du jour</label><input id="sDay" type="range" min="30" max="400" step="10" value="${t.dayLen}"><span id="vDay">${t.dayLen}s</span></div>
-        <div class="row"><label>Durée saison</label><input id="sSeason" type="range" min="30" max="600" step="10" value="${t.seasonLen}"><span id="vSeason">${t.seasonLen}s</span></div>
-        <h4>Saison et heure</h4>
+        <h4>${tr('Vitesse')}</h4>
+        <div class="row"><button data-sp="0">${ic('pause', 16, 2.2)} ${tr('Pause')}</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button></div>
+        <div class="row"><label>${tr('Durée du jour')}</label><input id="sDay" type="range" min="30" max="400" step="10" value="${t.dayLen}"><span id="vDay">${t.dayLen}s</span></div>
+        <div class="row"><label>${tr('Durée saison')}</label><input id="sSeason" type="range" min="30" max="600" step="10" value="${t.seasonLen}"><span id="vSeason">${t.seasonLen}s</span></div>
+        <h4>${tr('Saison et heure')}</h4>
         <div class="row">${SEASONS.map((s, i) => `<button data-season="${i}" class="${t.season === i ? 'active' : ''}">${ic(SEASON_ICONS[i], 16)} ${s}</button>`).join('')}</div>
-        <div class="row"><label>Heure</label><input id="sHour" type="range" min="0" max="23.9" step="0.1" value="${t.hour.toFixed(1)}"><span id="vHour">${Math.floor(t.hour)}h</span></div>
-        <h4>Météo</h4>
-        <div class="row">${[['auto', '', 'Auto'], ['clear', 'sun', 'Clair'], ['rain', 'rain', 'Pluie'], ['snow', 'snow', 'Neige'], ['fog', 'fog', 'Brume']].map(([k, i, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${i ? ic(i, 16) + ' ' : ''}${l}</button>`).join('')}</div>
+        <div class="row"><label>${tr('Heure')}</label><input id="sHour" type="range" min="0" max="23.9" step="0.1" value="${t.hour.toFixed(1)}"><span id="vHour">${Math.floor(t.hour)}h</span></div>
+        <h4>${tr('Météo')}</h4>
+        <div class="row">${[['auto', '', tr('Auto')], ['clear', 'sun', tr('Clair')], ['rain', 'rain', tr('Pluie')], ['snow', 'snow', tr('Neige')], ['fog', 'fog', tr('Brume')]].map(([k, i, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${i ? ic(i, 16) + ' ' : ''}${l}</button>`).join('')}</div>
       </section>
       <section data-sec="look" hidden>
-        <h4>Graphismes</h4>
-        <div class="row">${[['auto', 'Auto'], ['high', 'Haute (halo de nuit)'], ['medium', 'Normale'], ['low', 'Réduite']].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}" title="${k === 'auto' ? 'La qualité baisse d’elle-même si le jeu saccade, et remonte quand tout est fluide' : ''}">${l}</button>`).join('')}</div>
-        <h4>Audio</h4>
-        <div class="row"><label>Musique</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" aria-label="Couper la musique" class="${a.muteMusic ? 'active' : ''}">${ic(a.muteMusic ? 'mute' : 'volume', 18)}</button></div>
-        <div class="row"><label>Sons</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" aria-label="Couper les sons" class="${a.muteSfx ? 'active' : ''}">${ic(a.muteSfx ? 'mute' : 'volume', 18)}</button></div>
+        <h4>${tr('Graphismes')}</h4>
+        <div class="row">${[['auto', tr('Auto')], ['high', tr('Haute (halo de nuit)')], ['medium', tr('Normale')], ['low', tr('Réduite')]].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}" title="${k === 'auto' ? tr('La qualité baisse d’elle-même si le jeu saccade, et remonte quand tout est fluide') : ''}">${l}</button>`).join('')}</div>
+        <h4>${tr('Audio')}</h4>
+        <div class="row"><label>${tr('Musique')}</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" aria-label="${tr('Couper la musique')}" class="${a.muteMusic ? 'active' : ''}">${ic(a.muteMusic ? 'mute' : 'volume', 18)}</button></div>
+        <div class="row"><label>${tr('Sons')}</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" aria-label="${tr('Couper les sons')}" class="${a.muteSfx ? 'active' : ''}">${ic(a.muteSfx ? 'mute' : 'volume', 18)}</button></div>
       </section>
       <section data-sec="game" hidden>
-        <h4>Règles</h4>
+        <h4>${tr('Règles')}</h4>
         <div class="row"><label>${DIFF_TEXT.setting}</label><span class="diffTag ${h.world.difficulty}">${ic(DIFF_TEXT.icon[h.world.difficulty], 16, 2)}${DIFF_TEXT.name[h.world.difficulty]}</span></div>
         <ul class="hint dpoints">${DIFF_TEXT.points[h.world.difficulty].map((x) => `<li>${x}</li>`).join('')}</ul>
         <p class="hint">${DIFF_TEXT.settingHint}</p>
-        <div class="row"><label>Catastrophes</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${h.disasters ? 'Activées' : 'Désactivées'}</button></div>
-        <p class="hint">Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.</p>
-        <div class="row"><label>Routes auto</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${h.autoRoads ? 'Activées' : 'Désactivées'}</button></div>
-        <p class="hint">Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.</p>
-        <div class="row"><label>Flèches d’amélioration</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${h.hideUpBadges ? 'Masquées' : 'Affichées'}</button></div>
-        <p class="hint">Une flèche dorée flotte au-dessus des bâtiments qu’on peut améliorer et dont on a de quoi payer l’amélioration.</p>
-        <div class="row"><label>Ressources</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? (h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
-        <p class="hint">Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.</p>
-        <h4>Sauvegarde</h4>
-        <div class="row"><button id="gSave">${ic('save', 16)} Sauvegarder</button><button id="gExport">${ic('download', 16)} Exporter</button><button id="gImport">${ic('upload', 16)} Importer</button></div>
+        <div class="row"><label>${tr('Catastrophes')}</label><button id="gDisasters" class="${h.disasters ? 'active' : ''}">${tr(h.disasters ? 'Activées' : 'Désactivées')}</button></div>
+        <p class="hint">${tr('Activées : le volcan se réveille de lui-même, la lave et les incendies peuvent détruire des bâtiments. Désactivées : ni éruption spontanée, ni incendie.')}</p>
+        <div class="row"><label>${tr('Routes auto')}</label><button id="gRoads" class="${h.autoRoads ? 'active' : ''}">${tr(h.autoRoads ? 'Activées' : 'Désactivées')}</button></div>
+        <p class="hint">${tr('Un chemin relie chaque nouveau bâtiment à la route la plus proche, s’il n’y touche pas déjà.')}</p>
+        <div class="row"><label>${tr('Flèches d’amélioration')}</label><button id="gBadges" class="${h.hideUpBadges ? '' : 'active'}">${tr(h.hideUpBadges ? 'Masquées' : 'Affichées')}</button></div>
+        <p class="hint">${tr('Une flèche dorée flotte au-dessus des bâtiments qu’on peut améliorer et dont on a de quoi payer l’amélioration.')}</p>
+        <div class="row"><label>${tr('Ressources')}</label><button id="gUnlimited" class="${h.world.unlimited ? 'active' : ''}" ${forced ? 'disabled' : ''}>${forced ?? tr(h.world.unlimited ? 'Illimitées' : 'Normales')}</button></div>
+        <p class="hint">${tr('Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.')}</p>
+        <h4>${tr('Sauvegarde')}</h4>
+        <div class="row"><button id="gSave">${ic('save', 16)} ${tr('Sauvegarder')}</button><button id="gExport">${ic('download', 16)} ${tr('Exporter')}</button><button id="gImport">${ic('upload', 16)} ${tr('Importer')}</button></div>
         ${this.tutorial?.settingsHtml() ?? ''}
-        <h4>Quitter</h4>
-        <div class="row"><button id="gCredits">Crédits</button><button id="gNew">${ic('restart', 16)} Recommencer cette carte</button><button id="gMenu">${ic('house', 16)} Menu principal</button></div>
+        <h4>${tr('Langue')}</h4>
+        ${langPicker(lang)}
+        <h4>${tr('Quitter')}</h4>
+        <div class="row"><button id="gCredits">${tr('Crédits')}</button><button id="gNew">${ic('restart', 16)} ${tr('Recommencer cette carte')}</button><button id="gMenu">${ic('house', 16)} ${tr('Menu principal')}</button></div>
         <input type="file" id="fImport" accept="application/json,.json" style="display:none">
       </section>
-      <div class="row foot"><span class="grow"></span><button id="gClose" class="active">Fermer</button></div>`);
+      <div class="row foot"><span class="grow"></span><button id="gClose" class="active">${tr('Fermer')}</button></div>`);
+    bindLangPicker(ov);
     const q = <T extends HTMLElement>(s: string) => $(s, ov) as T;
     q('#gClose').onclick = close;
     q('#gCredits').onclick = () => showCredits(this.root);
@@ -1931,7 +1954,7 @@ export class UI {
     }));
     q('#gDisasters').onclick = () => {
       h.setDisasters(!h.disasters);
-      q('#gDisasters').textContent = h.disasters ? 'Activées' : 'Désactivées';
+      q('#gDisasters').textContent = tr(h.disasters ? 'Activées' : 'Désactivées');
       q('#gDisasters').classList.toggle('active', h.disasters);
     };
     q('#gUnlimited').onclick = () => {
@@ -1939,25 +1962,25 @@ export class UI {
       const b = q<HTMLButtonElement>('#gUnlimited');
       if (!h.world.unlimited && !b.dataset.sure) {
         b.dataset.sure = '1';
-        b.textContent = 'Sûr ? Recliquez pour tout rendre illimité';
-        setTimeout(() => { if (b.dataset.sure) { delete b.dataset.sure; b.textContent = h.world.unlimited ? 'Illimitées' : 'Normales'; } }, 4000);
+        b.textContent = tr('Sûr ? Recliquez pour tout rendre illimité');
+        setTimeout(() => { if (b.dataset.sure) { delete b.dataset.sure; b.textContent = tr(h.world.unlimited ? 'Illimitées' : 'Normales'); } }, 4000);
         return;
       }
       delete b.dataset.sure;
       h.world.unlimited = !h.world.unlimited;
       h.applySettings();
-      q('#gUnlimited').textContent = h.world.unlimited ? 'Illimitées' : 'Normales';
+      q('#gUnlimited').textContent = tr(h.world.unlimited ? 'Illimitées' : 'Normales');
       q('#gUnlimited').classList.toggle('active', h.world.unlimited);
       this.update();
     };
     q('#gBadges').onclick = () => {
       h.setHideUpBadges(!h.hideUpBadges);
-      q('#gBadges').textContent = h.hideUpBadges ? 'Masquées' : 'Affichées';
+      q('#gBadges').textContent = tr(h.hideUpBadges ? 'Masquées' : 'Affichées');
       q('#gBadges').classList.toggle('active', !h.hideUpBadges);
     };
     q('#gRoads').onclick = () => {
       h.setAutoRoads(!h.autoRoads);
-      q('#gRoads').textContent = h.autoRoads ? 'Activées' : 'Désactivées';
+      q('#gRoads').textContent = tr(h.autoRoads ? 'Activées' : 'Désactivées');
       q('#gRoads').classList.toggle('active', h.autoRoads);
     };
     rng('#sMusic', (v) => (a.musicVol = v));
@@ -2014,19 +2037,19 @@ export function drawPreview(canvas: HTMLCanvasElement, heights: ArrayLike<number
 export function showCredits(root: HTMLElement) {
   const a = (href: string, t: string) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${t}</a>`;
   modal(root, 'credits', 'Crédits', `
-    <p>Ceionia est un jeu libre de droits d’image et de son : la géométrie des bâtiments, des habitants, des véhicules et de la musique est dessinée et générée par le jeu lui-même. Certains modèles 3D, gratuits, viennent d’artistes à qui nous disons merci.</p>
-    <h4>Modèles sous licence CC0 (domaine public)</h4>
+    <p>${tr('Ceionia est un jeu libre de droits d’image et de son : la géométrie des bâtiments, des habitants, des véhicules et de la musique est dessinée et générée par le jeu lui-même. Certains modèles 3D, gratuits, viennent d’artistes à qui nous disons merci.')}</p>
+    <h4>${tr('Modèles sous licence CC0 (domaine public)')}</h4>
     <ul class="credits">
-      <li>${a('https://quaternius.com', 'Quaternius')} : animaux de ferme et sauvages, faune marine, arbres (Ultimate Nature), palmiers, cactus, créatures des grottes, décors, puits, fermes, tour de pierre, enclos.</li>
-      <li>${a('https://kenney.nl', 'Kenney')} : Survival Kit, épave de navire.</li>
-      <li>Kay Lousberg (crâne, os), MiniPoly (coraux), Mohabins (algues), iPoly3D (cristaux), MilkAndBanana (jarre), reyshapes (cruche), via ${a('https://poly.pizza', 'Poly Pizza')}.</li>
+      <li>${a('https://quaternius.com', 'Quaternius')} : ${tr('animaux de ferme et sauvages, faune marine, arbres (Ultimate Nature), palmiers, cactus, créatures des grottes, décors, puits, fermes, tour de pierre, enclos.')}</li>
+      <li>${a('https://kenney.nl', 'Kenney')} : ${tr('Survival Kit, épave de navire.')}</li>
+      <li>${tr('Kay Lousberg (crâne, os), MiniPoly (coraux), Mohabins (algues), iPoly3D (cristaux), MilkAndBanana (jarre), reyshapes (cruche), via {src}.', { src: a('https://poly.pizza', 'Poly Pizza') })}</li>
     </ul>
-    <h4>Modèles sous licence CC-BY 3.0</h4>
+    <h4>${tr('Modèles sous licence CC-BY 3.0')}</h4>
     <ul class="credits">
-      <li>« Greek Temple » par ${a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)')} : temple et asclépiéion de l’Antiquité.</li>
-      <li>« Amphora » par ${a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira')} et « Eight Vases » par ${a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner')} : atelier du potier.</li>
+      <li>${tr('« Greek Temple » par {author} : temple et asclépiéion de l’Antiquité.', { author: a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)') })}</li>
+      <li>${tr('« Amphora » par {a1} et « Eight Vases » par {a2} : atelier du potier.', { a1: a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira'), a2: a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner') })}</li>
     </ul>
-    <p class="hint">Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : ${a('https://creativecommons.org/publicdomain/zero/1.0/deed.fr', 'CC0')} et ${a('https://creativecommons.org/licenses/by/3.0/deed.fr', 'CC-BY 3.0')}.</p>`);
+    <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>`);
 }
 
 /** Paysage de collines en facettes, derrière l'écran d'accueil (calé en bas, rogné sur les côtés selon l'écran) */
@@ -2051,16 +2074,16 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
   ov.id = 'menu';
   ov.innerHTML = `${MENU_LAND}
     <div class="mInner">
-      <header><h1>Ceionia</h1><p class="sub">Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.</p></header>
-      ${MAPS.length > 1 ? `<label class="mMap">Carte <select id="mMapSel">${MAPS.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select></label>` : ''}
+      <header><h1>Ceionia</h1><p class="sub">${tr('Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.')}</p></header>
+      ${MAPS.length > 1 ? `<label class="mMap">${tr('Carte')} <select id="mMapSel">${MAPS.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select></label>` : ''}
       <div class="mResume panel" hidden></div>
       <div class="mModes">${DIFFICULTIES.map((d) => `<div class="mMode ${d}">${d === DEFAULT_DIFFICULTY ? `<span class="mBadge">${DIFF_TEXT.recommended}</span>` : ''}
         <div class="mHead"><b>${ic(DIFF_TEXT.icon[d], 30, 1.9)}</b><div><h2>${DIFF_TEXT.name[d]}</h2><em>${DIFF_TEXT.tagline[d]}</em></div></div>
         <ul>${DIFF_TEXT.points[d].map((x) => `<li>${ic('check', 18, 2.6)}<span>${x}</span></li>`).join('')}</ul><p class="mSum">${DIFF_TEXT.summary[d]}</p>
         <button class="mPlay" data-d="${d}">${DIFF_TEXT.play(d)}</button></div>`).join('')}</div>
       <div class="mFoot"></div>
-      <div class="mLinks"><button id="mImport">${ic('upload', 16)} Importer une sauvegarde</button><button id="mCredits">Crédits</button></div>
-      <p class="mKeys">Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher<br><span>Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.</span></p>
+      <div class="mLinks">${langPicker(getLang(), 'mLang')}<button id="mImport">${ic('upload', 16)} ${tr('Importer une sauvegarde')}</button><button id="mCredits">${tr('Crédits')}</button></div>
+      <p class="mKeys">${tr('Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher')}<br><span>${tr('Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.')}</span></p>
     </div>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">`;
   // la carte choisie (le continent par défaut) : sa sauvegarde, et la graine de sa prochaine partie (chacune a son continent)
@@ -2076,11 +2099,13 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     if (!save) { resume.innerHTML = ''; return; }
     // sur téléphone, le résumé se raccourcit : « Normal · Médiéval · 142 habitants » (les <i> et la date s'effacent)
     const d = readDifficulty(save.world.difficulty, save.world.diffV), when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
-    resume.innerHTML = `<b>${ic('house', 40, 1.8)}</b><div class="grow"><h3>Reprendre mon village</h3><p><span><i>Mode </i>${DIFF_TEXT.name[d]}</span><span><i>âge </i>${AGES[save.age]?.name ?? ''}</span><span>${pop} habitant${pop > 1 ? 's' : ''}</span>${when ? `<span class="when">${when}</span>` : ''}</p></div><button class="active mGo">Continuer</button>`;
+    resume.innerHTML = `<b>${ic('house', 40, 1.8)}</b><div class="grow"><h3>${tr('Reprendre mon village')}</h3><p><span><i>${tr('Mode')} </i>${DIFF_TEXT.name[d]}</span><span><i>${tr('âge')} </i>${AGES[save.age]?.name ?? ''}</span><span>${pop} ${plural(pop, 'habitant', 'habitants')}</span>${when ? `<span class="when">${when}</span>` : ''}</p></div><button class="active mGo">${tr('Continuer')}</button>`;
     $('.mGo', resume).onclick = () => host.start(mapId(), 'continue');
   };
   draw();
   if (sel) sel.onchange = draw;
+  // la langue change à chaud : l'accueil est redessiné dans la nouvelle langue
+  bindLangPicker(ov, () => { ov.remove(); showMenu(root, host); });
   ov.querySelectorAll<HTMLButtonElement>('.mPlay').forEach((b) => (b.onclick = async () => {
     const d = b.dataset.d as Difficulty;
     // une nouvelle partie dans ce mode, tout de suite ; seule une sauvegarde de la carte qu'elle écraserait demande confirmation

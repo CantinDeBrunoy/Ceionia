@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { Coverage, computeCoverage } from './coverage';
 import { World } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catalog';
@@ -213,7 +214,7 @@ export class Sim {
 
   /** Où le trouver : l'onglet Bâtir et son rayon */
   whereOf(k: KindId) {
-    return `Bâtir › ${BUILD_CATS.find((c) => c.id === KINDS[k].cat)!.label}`;
+    return tr('Bâtir › {cat}', { cat: BUILD_CATS.find((c) => c.id === KINDS[k].cat)!.label });
   }
 
   ageProgress(): AgeProgress | null {

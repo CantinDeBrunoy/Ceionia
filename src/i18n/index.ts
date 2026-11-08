@@ -23,6 +23,8 @@ function detect(): Lang {
 }
 
 let lang: Lang = detect();
+/** change à chaque changement de langue ou de dictionnaire : invalide les textes localisés gardés en mémoire */
+let version = 0;
 const listeners = new Set<(l: Lang) => void>();
 const applyHtmlLang = () => { if (typeof document !== 'undefined') document.documentElement.lang = lang; };
 applyHtmlLang();
@@ -34,6 +36,7 @@ export const isEnglish = () => lang === 'en';
 export function setLang(l: Lang, persist = true) {
   if (!isLang(l) || l === lang) return;
   lang = l;
+  version++;
   if (persist) { try { localStorage.setItem(LANG_KEY, l); } catch { /* ignoré */ } }
   applyHtmlLang();
   for (const f of [...listeners]) f(l);
@@ -63,6 +66,7 @@ export function registerDict(name: string, dict: Record<string, string>) {
     EN.set(k, dict[k]);
     missing.delete(k);
   }
+  version++;
 }
 /** Clés présentes dans plusieurs dictionnaires avec des valeurs différentes (à régler : la dernière enregistrée l'emporte) */
 export const i18nDuplicates = () => duplicates.slice();
@@ -85,6 +89,7 @@ export function fmt(template: string, params?: Record<string, string | number>):
  * Le texte doit être un littéral SANS interpolation `${…}` : pour une valeur variable, un placeholder {n} et `params`.
  */
 export function tr(fr: string, params?: Record<string, string | number>): string {
+  if (!fr) return fr;
   let s = fr;
   if (lang === 'en') {
     const e = EN.get(fr);
@@ -96,6 +101,31 @@ export function tr(fr: string, params?: Record<string, string | number>): string
 export const trf = tr;
 /** Traduit chaque texte d'une liste (SEASONS, noms par âge, points d'une fiche…) */
 export const trs = (list: readonly string[]): string[] => list.map((x) => tr(x));
+
+// ---------------- Données localisées ----------------
+/**
+ * Remplace des champs de texte d'un objet de données (nom, description, liste de noms par âge, ou les indices d'un tableau) par des
+ * accesseurs qui rendent la traduction dans la langue courante : tout le code qui lit `KINDS.house.names[age]` ou `SEASONS[i]`
+ * reçoit la bonne langue sans changer. En français les valeurs d'origine sont rendues telles quelles.
+ * À appeler une fois, à la fin du fichier qui définit les données : `localize(KINDS.house, ['names', 'desc'])`
+ */
+export function localize<T extends object>(o: T, fields: readonly (keyof T | number)[]): T {
+  for (const f of fields) {
+    const raw = (o as Record<PropertyKey, unknown>)[f as PropertyKey];
+    if (typeof raw !== 'string' && !Array.isArray(raw)) continue;
+    let cache: { v: number; val: unknown } | null = null;
+    Object.defineProperty(o, f as PropertyKey, {
+      enumerable: true, configurable: true,
+      get() {
+        if (lang === 'fr') return raw;
+        if (!cache || cache.v !== version) cache = { v: version, val: typeof raw === 'string' ? tr(raw) : (raw as string[]).map((x) => tr(x)) };
+        return cache.val;
+      },
+      set(v) { Object.defineProperty(o, f as PropertyKey, { value: v, writable: true, enumerable: true, configurable: true }); },
+    });
+  }
+  return o;
+}
 
 // ---------------- Clés stables (rares) ----------------
 const KEYED = new Map<string, { fr: string; en: string }>();

@@ -10,6 +10,8 @@
  * Sans DOM ni horloge propre : le temps (en ms) est donné à chaque appel, pour pouvoir tout tester.
  */
 
+import { tr } from '../i18n';
+
 export type NotifLevel = 'info' | 'notice' | 'danger' | 'action';
 
 export interface NotifItem {
@@ -42,8 +44,8 @@ export function durationOf(text: string, level: NotifLevel, hasAct = false): num
   return hasAct || level === 'action' ? Math.max(base, 6500) : base;
 }
 
-const DANGER = /incendie|feu\b|flamme|brûl|incursion|attaqu|assaut|pill|cambriol|vol(é|eur)|perdu|détruit|ruine|s[’']effondr|éruption|volcan|tremble|inond|famine|épidémie|contamin|démons? |démon\b|échec|tombe|meurt|mort/i;
-const INFO = /bon retour|sauvegard|bravo|félicit|c[’']est posé|recrue en route|équipement (prêt|commandé)|fabrique|groupe \d|le cor sonne|passe(nt)? par le portail|brouillard se lève|adieu|part (vers|en)|prêt pour les prochaines|ligne (ouverte|modifiée)|choisissez un bâtiment|commencez par/i;
+const DANGER = /incendie|feu\b|flamme|brûl|incursion|attaqu|assaut|pill|cambriol|vol(é|eur)|perdu|détruit|ruine|s[’']effondr|éruption|volcan|tremble|inond|famine|épidémie|contamin|démons? |démon\b|échec|tombe|meurt|mort|fire|flame|burn|raid|attack|assault|robb|burglar|lost|destroyed|collapse|eruption|volcano|earthquake|flood|famine|epidemic|contaminat|demon|failed|dies|dead/i;
+const INFO = /bon retour|sauvegard|bravo|félicit|c[’']est posé|recrue en route|équipement (prêt|commandé)|fabrique|groupe \d|le cor sonne|passe(nt)? par le portail|brouillard se lève|adieu|part (vers|en)|prêt pour les prochaines|ligne (ouverte|modifiée)|choisissez un bâtiment|commencez par|welcome back|saved|well done|congratulations|it.s placed|recruit on the way|equipment (ready|ordered)|fog lifts|farewell|line (opened|modified)|choose a building|start with/i;
 
 /**
  * Le niveau d'un message dont l'appelant n'a rien dit : une phrase de refus ou de consigne reste un message (notice), les
@@ -78,7 +80,8 @@ export class NotifQueue {
   /** Un message arrive. Rend l'élément s'il est (ou sera) à l'écran, null sinon (cloche seulement ou doublon) */
   push(text: string, now: number, opts: { level?: NotifLevel; act?: () => void } = {}): NotifItem | null {
     const level = opts.level ?? levelOf(text, !!opts.act);
-    const key = text.trim();
+    // le texte affiché est la traduction (le niveau a été jugé sur le texte reçu, français ou anglais)
+    const key = tr(text.trim());
     // doublon : à l'écran ou en attente, on compte ; déjà disparu depuis peu, on se tait
     const live = this.visible.find((v) => v.text === key) ?? this.waiting.find((v) => v.text === key) ?? this.held.find((v) => v.text === key);
     if (live) {
@@ -218,8 +221,8 @@ export class Banners {
 
   private display(title: string, sub: string) {
     const b = this.el();
-    b.querySelector('h2')!.textContent = title;
-    b.querySelector('p')!.textContent = sub;
+    b.querySelector('h2')!.textContent = tr(title);
+    b.querySelector('p')!.textContent = tr(sub);
     b.classList.add('show');
     this.on = true;
     clearTimeout(this.timer);

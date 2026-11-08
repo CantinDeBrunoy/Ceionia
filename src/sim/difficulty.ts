@@ -5,6 +5,8 @@
  * `DIFFICULTY`, tous les textes dans `DIFF_TEXT`
  */
 
+import { tr } from '../i18n';
+
 export type Difficulty = 'sandbox' | 'easy' | 'normal';
 
 export const DIFFICULTIES: Difficulty[] = ['sandbox', 'easy', 'normal'];
@@ -86,7 +88,7 @@ export function readDifficulty(v: unknown, ver?: unknown): Difficulty {
 export const rulesOf = (d: Difficulty) => DIFFICULTY[d] ?? DIFFICULTY.easy;
 
 /** Textes de la difficulté, réunis ici pour la traduction */
-export const DIFF_TEXT = {
+const RAW = {
   name: { sandbox: 'Bac à sable', easy: 'Facile', normal: 'Normal' } as Record<Difficulty, string>,
   icon: { sandbox: 'palette', easy: 'house', normal: 'peaks' } as Record<Difficulty, string>,
   tagline: {
@@ -111,7 +113,7 @@ export const DIFF_TEXT = {
   /** mode mis en avant à l'accueil */
   recommended: 'Conseillé',
   /** bouton de l'écran d'accueil qui lance une nouvelle partie dans ce mode */
-  play: (d: Difficulty) => `Jouer en ${DIFF_TEXT.name[d]}`,
+  play: (d: Difficulty) => `Jouer en ${RAW.name[d]}`,
   choose: 'Choisissez la difficulté',
   chooseSub: 'Elle vaut pour toute la partie : on peut en changer en la recommençant.',
   start: 'Commencer',
@@ -131,4 +133,34 @@ export const DIFF_TEXT = {
   recovering: 'Le village se remet d’un manque : il grandit plus lentement pour l’instant.',
   /** condition d'âge en Normal : les bâtiments à bâtir en plus de ceux qu'avait le village en entrant dans l'âge */
   more: (name: string) => `${name} (en plus)`,
+};
+
+/** Une table de textes, traduite à chaque lecture (la langue peut changer) */
+const trRec = <T extends Record<string, string>>(o: T): T => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, tr(v)])) as T;
+const trRecs = <T extends Record<string, string[]>>(o: T): T => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v.map((x) => tr(x))])) as T;
+
+/** Textes de la difficulté dans la langue courante (les dictionnaires sont dans src/i18n/en/menu.ts) */
+export const DIFF_TEXT = {
+  get name() { return trRec(RAW.name); },
+  icon: RAW.icon,
+  get tagline() { return trRec(RAW.tagline); },
+  get points() { return trRecs(RAW.points); },
+  get summary() { return trRec(RAW.summary); },
+  get recommended() { return tr(RAW.recommended); },
+  play: (d: Difficulty) => tr('Jouer en {name}', { name: tr(RAW.name[d]) }),
+  get choose() { return tr(RAW.choose); },
+  get chooseSub() { return tr(RAW.chooseSub); },
+  get start() { return tr(RAW.start); },
+  get cancel() { return tr(RAW.cancel); },
+  get overwrite() { return tr(RAW.overwrite); },
+  get restart() { return tr(RAW.restart); },
+  get restartNote() { return tr(RAW.restartNote); },
+  get setting() { return tr(RAW.setting); },
+  get settingHint() { return tr(RAW.settingHint); },
+  get resForced() { return trRec(RAW.resForced as Record<string, string>) as Partial<Record<Difficulty, string>>; },
+  get resInfinite() { return trRec(RAW.resInfinite); },
+  get firstFree() { return tr(RAW.firstFree); },
+  famine: (fix: string) => tr('Disette : des habitants quittent le village faute de manger. Vite, {fix} ou un champ.', { fix }),
+  get recovering() { return tr(RAW.recovering); },
+  more: (name: string) => tr('{name} (en plus)', { name }),
 };

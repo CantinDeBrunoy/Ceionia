@@ -88,6 +88,28 @@ function scan() {
   return found;
 }
 
+describe('i18n : données localisées', () => {
+  it('les noms par âge, les âges, les saisons et DIFF_TEXT suivent la langue', async () => {
+    const { KINDS, AGES, SEASONS, BUILD_CATS } = await import('../src/build/catalog');
+    const { DIFF_TEXT } = await import('../src/sim/difficulty');
+    registerDict('test', { Hutte: 'Hut', 'Maison antique': 'Ancient house' });
+    expect(KINDS.house.names[0]).toBe('Hutte');
+    expect(SEASONS[0]).toBe('Printemps');
+    expect(DIFF_TEXT.name.easy).toBe('Facile');
+    expect(DIFF_TEXT.play('easy')).toBe('Jouer en Facile');
+    setLang('en', false);
+    expect(KINDS.house.names.slice(0, 2)).toEqual(['Hut', 'Ancient house']);
+    expect(AGES[0].name).toBe('Prehistory');
+    expect(SEASONS[1]).toBe('Summer');
+    expect(BUILD_CATS[0].label).toBe('Housing');
+    expect(DIFF_TEXT.name.easy).toBe('Easy');
+    expect(DIFF_TEXT.play('easy')).toBe('Play Easy');
+    expect(DIFF_TEXT.points.sandbox.length).toBe(3);
+    setLang('fr', false);
+    expect(KINDS.house.names[0]).toBe('Hutte');
+  });
+});
+
 describe('i18n : couverture', () => {
   it('aucun tr() ne contient d\'interpolation ${…} : il faut un placeholder {n} et des params', () => {
     expect(scan().filter((f) => f.interpolated).map((f) => `${f.file} : ${f.text}`)).toEqual([]);
