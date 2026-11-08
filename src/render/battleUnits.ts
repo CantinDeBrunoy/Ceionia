@@ -13,9 +13,16 @@ import { makeRider, makeArmor, rideStep, armorStep, Rider } from './riders';
  */
 
 /** Échelle des modèles de démons (le modèle mesure 1 de haut) */
-export const SCALE: Record<DemonKind, number> = { imp: 0.32, archer: 0.36, brute: 0.52, chief: 0.56, guardian: 0.95, king: 1.5, elite: 0.64 };
-/** Instances au plus, par sorte de démon */
-const CAP: Record<DemonKind, number> = { imp: 160, archer: 96, brute: 96, chief: 32, guardian: 12, king: 4, elite: 24 };
+export const SCALE: Record<DemonKind, number> = {
+  imp: 0.32, archer: 0.36, brute: 0.52, chief: 0.56, guardian: 0.95, king: 1.5, elite: 0.64,
+  // les gros monstres de l'âge : de plus en plus imposants (golem de lave, démon cornu, seigneur-démon, titan)
+  golem: 0.85, horned: 1.15, lord: 1.45, titan: 2.2,
+};
+/** Instances au plus, par sorte de démon (un seul maillage instancié par pièce et par sorte : aucune lumière par unité) */
+const CAP: Record<DemonKind, number> = { imp: 200, archer: 160, brute: 120, chief: 48, guardian: 16, king: 4, elite: 32, golem: 80, horned: 64, lord: 48, titan: 24 };
+/** Les très gros monstres : barre de vie toujours affichée, pas lourde marche lente */
+const HEAVY: DemonKind[] = ['brute', 'guardian', 'golem', 'titan'];
+const BIGS: DemonKind[] = ['golem', 'horned', 'lord', 'titan'];
 const KINDS = Object.keys(DEMONS) as DemonKind[];
 const PARTS = ['body', 'glow', 'legL', 'legR', 'armL', 'armR', 'wingL', 'wingR'] as const;
 type PartName = typeof PARTS[number];
@@ -165,7 +172,7 @@ export class BattleLayer {
         local.premultiply(root);
         p.mesh.setMatrixAt(i, local);
       };
-      const sw = Math.sin(walk), stride = kind === 'imp' ? 0.9 : kind === 'brute' || kind === 'guardian' ? 0.45 : 0.65;
+      const sw = Math.sin(walk), stride = kind === 'imp' ? 0.9 : kind === 'titan' || kind === 'golem' ? 0.38 : HEAVY.includes(kind) ? 0.45 : 0.65;
       pose('body', 0);
       pose('glow', 0);
       pose('legL', sw * stride);
@@ -252,12 +259,12 @@ export class BattleLayer {
     };
     for (const u of this.hell.units.values()) {
       if (u.hp <= 0) continue;
-      const boss = u.kind === 'guardian' || u.kind === 'king' || u.kind === 'chief' || u.kind === 'elite';
+      const boss = u.kind === 'guardian' || u.kind === 'king' || u.kind === 'chief' || u.kind === 'elite' || BIGS.includes(u.kind as DemonKind);
       // (une petite barre seulement sur les blessés, les chefs et les choisis : pas de barre pleine sur chaque combattant)
       if (u.hp >= u.maxHp && !boss && !this.selected.has(u.id)) continue;
       const sc = u.side === 'hell' ? SCALE[u.kind as DemonKind] ?? 0.4 : 0.45;
       const frac = u.hp / u.maxHp;
-      put(u.x, this.groundY(u.x, u.z) + sc * 1.25 + 0.15, u.z, boss ? 0.9 : 0.36, frac, u.side === 'hell' ? HELL_C : frac > 0.35 ? PLAYER_C : WEAK_C);
+      put(u.x, this.groundY(u.x, u.z) + sc * 1.25 + 0.15, u.z, boss ? Math.min(2.2, 0.9 + sc * 0.4) : 0.36, frac, u.side === 'hell' ? HELL_C : frac > 0.35 ? PLAYER_C : WEAK_C);
     }
     for (const b of this.hell.buildings.values()) {
       if (b.down || (b.hp >= b.maxHp && b.kind !== 'kingdom')) continue;
@@ -374,33 +381,54 @@ export function paint(g: THREE.BufferGeometry, c: number | THREE.Color, f: (y: n
 
 export function merge(list: THREE.BufferGeometry[]) { return mergeGeometries(list)!; }
 
+/** Les couleurs et les mesures d'un démon (hauteurs : hanche, épaule ; rayons ; ailes : envergure, 0 sans) */
+interface DemonSpec { skin: number; dark: number; horn: number; eye: number; wing: number; belly: number; hip: number; sh: number; w: number; head: number; torso: number; limb: number; wings: number }
+const SPECS: Record<DemonKind, DemonSpec> = {
+  imp: { skin: 0xe8503a, dark: 0xa02a24, horn: 0xf4e4c8, eye: 0xfff04a, wing: 0x8a3ab0, belly: 0xf59a6a, hip: 0.36, sh: 0.64, w: 0.2, head: 0.21, torso: 0.2, limb: 0.055, wings: 0.5 },
+  archer: { skin: 0xf0803a, dark: 0x5a2a4a, horn: 0xf4e4c8, eye: 0xfff04a, wing: 0, belly: 0xf8b070, hip: 0.4, sh: 0.68, w: 0.17, head: 0.17, torso: 0.17, limb: 0.045, wings: 0 },
+  brute: { skin: 0x9a3a6a, dark: 0x5a1e40, horn: 0xeadcc0, eye: 0xffb030, wing: 0, belly: 0xc06a90, hip: 0.32, sh: 0.66, w: 0.3, head: 0.15, torso: 0.33, limb: 0.1, wings: 0 },
+  chief: { skin: 0xc02a3a, dark: 0x6a1420, horn: 0xf4e4c8, eye: 0xfff04a, wing: 0x5a1a6a, belly: 0xe06a6a, hip: 0.4, sh: 0.7, w: 0.22, head: 0.17, torso: 0.24, limb: 0.07, wings: 0.45 },
+  guardian: { skin: 0x4a3638, dark: 0x2a1e22, horn: 0xd8c8b0, eye: 0xffd030, wing: 0, belly: 0x5e4446, hip: 0.34, sh: 0.68, w: 0.3, head: 0.15, torso: 0.34, limb: 0.11, wings: 0 },
+  king: { skin: 0xd02838, dark: 0x5a0e1e, horn: 0x2a1a20, eye: 0xfff4a0, wing: 0x3a1450, belly: 0xf07a5a, hip: 0.4, sh: 0.7, w: 0.24, head: 0.16, torso: 0.25, limb: 0.075, wings: 0.75 },
+  // la garde d'élite : armure noire à liserés d'or, casque à cornes dorées, hallebarde
+  elite: { skin: 0x7a2a52, dark: 0x2a1828, horn: 0xe8b84a, eye: 0xffe04a, wing: 0, belly: 0x3a2a3a, hip: 0.38, sh: 0.68, w: 0.26, head: 0.15, torso: 0.29, limb: 0.085, wings: 0 },
+  // le golem de lave : un tas de basalte noir, la lave qui luit dans les fissures, de gros poings
+  golem: { skin: 0x3c3036, dark: 0x241c22, horn: 0x5a4a50, eye: 0xffa030, wing: 0, belly: 0x4c3c42, hip: 0.34, sh: 0.66, w: 0.34, head: 0.14, torso: 0.4, limb: 0.13, wings: 0 },
+  // le démon cornu géant : pourpre, de grandes cornes recourbées, des ailes de cuir, une queue pointue
+  horned: { skin: 0x7a1c3a, dark: 0x3a0e22, horn: 0xefe0c0, eye: 0xffe040, wing: 0x4a1a5a, belly: 0xa84a62, hip: 0.36, sh: 0.7, w: 0.3, head: 0.16, torso: 0.33, limb: 0.1, wings: 0.55 },
+  // le seigneur-démon : armure noire et or, épaulières à pointes, couronne de cornes, cape, grandes ailes
+  lord: { skin: 0x5a1a4a, dark: 0x180c18, horn: 0xe8b84a, eye: 0xff7a9a, wing: 0x2a0a38, belly: 0x2a1a2a, hip: 0.38, sh: 0.7, w: 0.28, head: 0.16, torso: 0.3, limb: 0.09, wings: 0.85 },
+  // le titan infernal : colosse de lave refroidie, quatre cornes, couronne de flammes, cœur ardent, pointes aux épaules
+  titan: { skin: 0x2e1c1e, dark: 0x140c0e, horn: 0x6a5048, eye: 0xfff0a0, wing: 0, belly: 0x3a2428, hip: 0.34, sh: 0.68, w: 0.37, head: 0.15, torso: 0.42, limb: 0.14, wings: 0 },
+};
+
 /**
  * Les pièces d'un démon (1 de haut, face à +z) : corps (buste, tête, cornes), lueurs (yeux, fissures de lave), jambes et bras
  * (pivot à la hanche, à l'épaule), ailes (pivot dans le dos) ; chacune peinte de ses couleurs
  */
 export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THREE.BufferGeometry; pivot: THREE.Vector3 }>> {
-  const spec = {
-    imp: { skin: 0xe8503a, dark: 0xa02a24, horn: 0xf4e4c8, eye: 0xfff04a, wing: 0x8a3ab0, belly: 0xf59a6a, hip: 0.36, sh: 0.64, w: 0.2, head: 0.21, torso: 0.2, limb: 0.055, wings: 0.5 },
-    archer: { skin: 0xf0803a, dark: 0x5a2a4a, horn: 0xf4e4c8, eye: 0xfff04a, wing: 0, belly: 0xf8b070, hip: 0.4, sh: 0.68, w: 0.17, head: 0.17, torso: 0.17, limb: 0.045, wings: 0 },
-    brute: { skin: 0x9a3a6a, dark: 0x5a1e40, horn: 0xeadcc0, eye: 0xffb030, wing: 0, belly: 0xc06a90, hip: 0.32, sh: 0.66, w: 0.3, head: 0.15, torso: 0.33, limb: 0.1, wings: 0 },
-    chief: { skin: 0xc02a3a, dark: 0x6a1420, horn: 0xf4e4c8, eye: 0xfff04a, wing: 0x5a1a6a, belly: 0xe06a6a, hip: 0.4, sh: 0.7, w: 0.22, head: 0.17, torso: 0.24, limb: 0.07, wings: 0.45 },
-    guardian: { skin: 0x4a3638, dark: 0x2a1e22, horn: 0xd8c8b0, eye: 0xffd030, wing: 0, belly: 0x5e4446, hip: 0.34, sh: 0.68, w: 0.3, head: 0.15, torso: 0.34, limb: 0.11, wings: 0 },
-    king: { skin: 0xd02838, dark: 0x5a0e1e, horn: 0x2a1a20, eye: 0xfff4a0, wing: 0x3a1450, belly: 0xf07a5a, hip: 0.4, sh: 0.7, w: 0.24, head: 0.16, torso: 0.25, limb: 0.075, wings: 0.75 },
-    // la garde d'élite : armure noire à liserés d'or, casque à cornes dorées, hallebarde
-    elite: { skin: 0x7a2a52, dark: 0x2a1828, horn: 0xe8b84a, eye: 0xffe04a, wing: 0, belly: 0x3a2a3a, hip: 0.38, sh: 0.68, w: 0.26, head: 0.15, torso: 0.29, limb: 0.085, wings: 0 },
-  }[kind];
   const out: Partial<Record<PartName, { geo: THREE.BufferGeometry; pivot: THREE.Vector3 }>> = {};
-  const S = spec, headY = S.sh + S.head * 0.9;
+  const S = SPECS[kind], headY = S.sh + S.head * 0.9;
+  const heavy = kind === 'brute' || kind === 'guardian' || kind === 'golem' || kind === 'titan';
+  const headZ = heavy ? 0.08 : 0.02;
   // le corps : buste, ventre, tête, cornes (et queue pour le diablotin)
   const body: THREE.BufferGeometry[] = [
     paint(new THREE.IcosahedronGeometry(1, 0).scale(S.torso, (S.sh - S.hip) * 0.75, S.torso * 0.8).translate(0, (S.sh + S.hip) / 2, 0), S.skin),
     paint(new THREE.IcosahedronGeometry(1, 0).scale(S.torso * 0.6, (S.sh - S.hip) * 0.45, S.torso * 0.3).translate(0, (S.sh + S.hip) / 2 - 0.02, S.torso * 0.55), S.belly),
-    paint(new THREE.IcosahedronGeometry(S.head, 1).scale(1, 0.95, 0.95).translate(0, headY, kind === 'brute' || kind === 'guardian' ? 0.08 : 0.02), S.skin),
+    paint(new THREE.IcosahedronGeometry(S.head, 1).scale(1, 0.95, 0.95).translate(0, headY, headZ), S.skin),
     paint(new THREE.BoxGeometry(S.w * 2.1, S.limb * 1.5, S.torso * 1.1).translate(0, S.hip, 0), S.dark),
   ];
-  const hornL = kind === 'brute' || kind === 'guardian' || kind === 'king' ? 0.32 : 0.2;
-  for (const sd of [-1, 1]) body.push(paint(new THREE.ConeGeometry(S.head * 0.28, hornL, 5).translate(0, hornL / 2, 0).rotateZ(-sd * (kind === 'brute' ? 1.1 : 0.45)).translate(sd * S.head * 0.6, headY + S.head * 0.55, 0), S.horn, (t) => 0.8 + t * 0.3));
-  if (kind === 'imp' || kind === 'chief' || kind === 'king')
+  const bigHorn = kind === 'brute' || kind === 'guardian' || kind === 'king';
+  const hornL = kind === 'horned' ? 0.55 : kind === 'golem' ? 0.12 : kind === 'titan' ? 0.5 : kind === 'lord' ? 0.34 : bigHorn ? 0.32 : 0.2;
+  // (le démon cornu : cornes énormes, d'abord vers l'extérieur puis vers l'avant ; le titan : deux paires ; les autres : une paire)
+  const hornAngle = kind === 'brute' ? 1.1 : kind === 'horned' ? 0.95 : kind === 'titan' ? 0.7 : 0.45;
+  for (const sd of [-1, 1]) body.push(paint(new THREE.ConeGeometry(S.head * (kind === 'horned' ? 0.4 : 0.28), hornL, 5).translate(0, hornL / 2, 0).rotateZ(-sd * hornAngle).translate(sd * S.head * 0.6, headY + S.head * 0.55, 0), S.horn, (t) => 0.8 + t * 0.3));
+  if (kind === 'horned') for (const sd of [-1, 1]) body.push(
+    // la pointe recourbée vers l'avant au bout de chaque corne, et une petite corne sur le front
+    paint(new THREE.ConeGeometry(S.head * 0.2, 0.26, 5).rotateX(Math.PI / 2).translate(sd * (S.head * 0.6 + 0.4), headY + S.head * 0.55 + 0.24, 0.12), S.horn, (t) => 0.8 + t * 0.3),
+    paint(new THREE.ConeGeometry(S.head * 0.14, 0.14, 4).translate(sd * S.head * 0.28, headY + S.head * 0.85, S.head * 0.4), S.horn));
+  if (kind === 'titan') for (const sd of [-1, 1]) body.push(paint(new THREE.ConeGeometry(S.head * 0.22, 0.3, 5).translate(0, 0.15, 0).rotateZ(-sd * 1.15).translate(sd * S.head * 0.75, headY - S.head * 0.05, -0.03), S.horn, (t) => 0.8 + t * 0.3));
+  if (kind === 'imp' || kind === 'chief' || kind === 'king' || kind === 'horned' || kind === 'lord')
     body.push(paint(new THREE.CylinderGeometry(0.012, 0.03, 0.4, 4).rotateX(-1.1).translate(0, S.hip + 0.05, -S.torso - 0.16), S.dark), paint(new THREE.ConeGeometry(0.05, 0.08, 3).rotateX(-2.2).translate(0, S.hip + 0.22, -S.torso - 0.32), S.dark));
   if (kind === 'archer') body.push(paint(new THREE.ConeGeometry(S.head * 1.25, S.head * 1.6, 6).translate(0, headY + S.head * 0.35, -0.03), S.dark), paint(new THREE.CylinderGeometry(0.05, 0.05, 0.36, 5).rotateX(0.4).translate(0.08, S.sh - 0.05, -S.torso), 0x5a3a24));
   if (kind === 'chief' || kind === 'king') {
@@ -417,11 +445,54 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
     body.push(paint(new THREE.BoxGeometry(S.w * 1.55, 0.025, 0.05).translate(0, S.sh - 0.04, S.torso * 0.74), 0xe0b040));
     body.push(paint(new THREE.IcosahedronGeometry(S.head * 1.08, 1).scale(1, 0.7, 1).translate(0, headY + S.head * 0.3, 0), 0x2a1828));
   }
+  if (kind === 'golem') {
+    // un amas de roches : gros blocs aux épaules, plaques de basalte sur le dos et le torse, une tête enfoncée dans les épaules
+    for (const sd of [-1, 1]) body.push(paint(new THREE.IcosahedronGeometry(S.limb * 2.3, 0).scale(1.1, 0.9, 1).translate(sd * S.w * 1.12, S.sh + 0.02, 0), 0x4a3c42, (t) => 0.7 + t * 0.4));
+    for (let i = 0; i < 5; i++) body.push(paint(new THREE.IcosahedronGeometry(0.1 + (i % 2) * 0.03, 0).scale(1, 0.7, 0.6).translate((i - 2) * 0.14, S.hip + 0.12 + (i % 3) * 0.1, -S.torso * 0.75), 0x4a3c42, (t) => 0.7 + t * 0.4));
+    body.push(paint(new THREE.IcosahedronGeometry(S.torso * 0.55, 0).scale(1.3, 0.55, 0.5).translate(0, S.sh - 0.07, S.torso * 0.5), 0x4a3c42));
+  }
+  if (kind === 'horned') {
+    // plastron rouge sombre à crête, épaulières à pointes
+    body.push(paint(new THREE.BoxGeometry(S.w * 1.5, (S.sh - S.hip) * 0.7, 0.05).translate(0, (S.sh + S.hip) / 2 + 0.02, S.torso * 0.72), 0x5a1428));
+    for (const sd of [-1, 1]) body.push(paint(new THREE.IcosahedronGeometry(S.limb * 1.7, 0).translate(sd * S.w * 1.05, S.sh + 0.03, 0), 0x3a0e22), paint(new THREE.ConeGeometry(S.limb * 0.8, 0.22, 4).rotateZ(-sd * 0.8).translate(sd * (S.w * 1.05 + 0.08), S.sh + 0.14, 0), S.horn));
+  }
+  if (kind === 'lord') {
+    // couronne de cornes dorées, épaulières à longues pointes, plastron noir et or, cape
+    for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; body.push(paint(new THREE.ConeGeometry(0.035, 0.16, 4).translate(Math.sin(a) * S.head * 0.8, headY + S.head * 0.95, Math.cos(a) * S.head * 0.8), 0xf0c040)); }
+    for (const sd of [-1, 1]) body.push(paint(new THREE.IcosahedronGeometry(S.limb * 2, 0).translate(sd * S.w * 1.05, S.sh + 0.03, 0), 0x20102a), paint(new THREE.ConeGeometry(S.limb * 0.9, 0.34, 5).translate(0, 0.17, 0).rotateZ(-sd * 0.9).translate(sd * (S.w * 1.05 + 0.04), S.sh + 0.08, 0), 0xe0b040), paint(new THREE.ConeGeometry(S.limb * 0.6, 0.22, 4).translate(0, 0.11, 0).rotateZ(-sd * 0.2).translate(sd * S.w * 1.05, S.sh + 0.12, 0), 0xe0b040));
+    body.push(paint(new THREE.BoxGeometry(S.w * 1.6, (S.sh - S.hip) * 0.75, 0.05).translate(0, (S.sh + S.hip) / 2 + 0.02, S.torso * 0.72), 0x20102a), paint(new THREE.BoxGeometry(S.w * 1.65, 0.03, 0.06).translate(0, S.sh - 0.05, S.torso * 0.74), 0xe0b040), paint(new THREE.BoxGeometry(S.w * 2.4, S.sh * 0.95, 0.03).translate(0, S.sh * 0.5, -S.torso * 0.95), 0x4a1068));
+  }
+  if (kind === 'titan') {
+    // des pointes de basalte sur les épaules et le dos, une ceinture de crânes, des brassards ; une couronne de flammes (ci-dessous, lueurs)
+    for (const sd of [-1, 1]) {
+      body.push(paint(new THREE.IcosahedronGeometry(S.limb * 2.4, 0).scale(1.1, 0.9, 1).translate(sd * S.w * 1.1, S.sh + 0.02, 0), 0x3a2628, (t) => 0.7 + t * 0.4));
+      for (let i = 0; i < 3; i++) body.push(paint(new THREE.ConeGeometry(S.limb * 0.75, 0.3 - i * 0.05, 5).translate(0, (0.3 - i * 0.05) / 2, 0).rotateZ(-sd * (0.5 + i * 0.4)).translate(sd * (S.w * 1.1 + i * 0.07), S.sh + 0.12, -0.04 * i), S.horn, (t) => 0.8 + t * 0.3));
+    }
+    for (let i = 0; i < 5; i++) body.push(paint(new THREE.ConeGeometry(0.06, 0.2, 4).translate(0, 0.1, 0).rotateX(-0.4).translate((i - 2) * 0.15, S.hip + 0.2 + (i % 2) * 0.12, -S.torso * 0.75), S.horn, (t) => 0.8 + t * 0.3));
+    body.push(paint(new THREE.BoxGeometry(S.w * 2.2, 0.06, S.torso * 1.2).translate(0, S.hip + 0.05, 0), 0x6a5048));
+  }
   out.body = { geo: merge(body), pivot: new THREE.Vector3() };
-  // les lueurs : yeux, et pour le gardien des fissures de lave sur le torse
-  const glow: THREE.BufferGeometry[] = [-1, 1].map((sd) => paint(new THREE.IcosahedronGeometry(S.head * 0.2, 0).scale(1.2, 0.8, 0.6).translate(sd * S.head * 0.38, headY + S.head * 0.12, S.head * 0.88 + (kind === 'brute' || kind === 'guardian' ? 0.08 : 0.02)), S.eye));
-  if (kind === 'guardian') for (let i = 0; i < 5; i++) glow.push(paint(new THREE.BoxGeometry(0.03, 0.16, 0.02).rotateZ((i - 2) * 0.5).translate((i - 2) * 0.09, S.hip + 0.12 + (i % 2) * 0.12, S.torso * 0.8), 0xff7a1a));
+  // les lueurs : yeux, et pour les gros monstres des fissures de lave, le cœur ardent, la couronne de flammes
+  const glow: THREE.BufferGeometry[] = [-1, 1].map((sd) => paint(new THREE.IcosahedronGeometry(S.head * 0.2, 0).scale(1.2, 0.8, 0.6).translate(sd * S.head * 0.38, headY + S.head * 0.12, S.head * 0.88 + headZ), S.eye));
+  const crack = (n: number, spread: number, y0: number, z: number, c: number, len = 0.16) => { for (let i = 0; i < n; i++) glow.push(paint(new THREE.BoxGeometry(0.03, len, 0.02).rotateZ((i - (n - 1) / 2) * 0.5).translate((i - (n - 1) / 2) * spread, y0 + (i % 2) * 0.12, z), c)); };
+  if (kind === 'guardian') crack(5, 0.09, S.hip + 0.12, S.torso * 0.8, 0xff7a1a);
   if (kind === 'king') glow.push(paint(new THREE.IcosahedronGeometry(0.035, 0).translate(0, headY + S.head * 0.95, S.head * 0.78), 0xff3a6a));
+  if (kind === 'golem') {
+    // lave : fissures sur le torse, sur le dos, le ventre qui rougeoie, la bouche
+    crack(7, 0.1, S.hip + 0.08, S.torso * 0.82, 0xff8a1a, 0.2);
+    crack(4, 0.14, S.hip + 0.1, -S.torso * 0.8, 0xff7a1a, 0.18);
+    glow.push(paint(new THREE.BoxGeometry(S.head * 0.9, 0.025, 0.02).translate(0, headY - S.head * 0.3, S.head * 0.92 + headZ), 0xff9a2a), paint(new THREE.IcosahedronGeometry(0.1, 0).scale(1.4, 0.7, 0.5).translate(0, (S.sh + S.hip) / 2 - 0.02, S.torso * 0.82), 0xffb040));
+  }
+  if (kind === 'horned') glow.push(paint(new THREE.BoxGeometry(S.head * 0.8, 0.02, 0.02).translate(0, headY - S.head * 0.32, S.head * 0.9 + headZ), 0xff8a2a), ...[-1, 1].map((sd) => paint(new THREE.IcosahedronGeometry(0.03, 0).translate(sd * 0.1, (S.sh + S.hip) / 2 + 0.02, S.torso * 0.78), 0xff5a2a)));
+  if (kind === 'lord') glow.push(paint(new THREE.OctahedronGeometry(0.06, 0).scale(1, 1.4, 0.6).translate(0, (S.sh + S.hip) / 2 + 0.03, S.torso * 0.78), 0xff3a6a), paint(new THREE.IcosahedronGeometry(0.035, 0).translate(0, headY + S.head * 1.0, S.head * 0.3), 0xff3a6a));
+  if (kind === 'titan') {
+    // le cœur ardent au milieu de la poitrine, fissures partout, la couronne de flammes (pointes qui luisent), la bouche
+    glow.push(paint(new THREE.IcosahedronGeometry(0.11, 0).scale(1, 1, 0.5).translate(0, (S.sh + S.hip) / 2 + 0.05, S.torso * 0.8), 0xffc040));
+    crack(9, 0.085, S.hip + 0.04, S.torso * 0.84, 0xff7a1a, 0.22);
+    crack(5, 0.15, S.hip + 0.06, -S.torso * 0.82, 0xff6a1a, 0.2);
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; glow.push(paint(new THREE.ConeGeometry(0.035, 0.16 + (i % 2) * 0.06, 4).translate(Math.sin(a) * S.head * 0.7, headY + S.head * 1.0, Math.cos(a) * S.head * 0.7), i % 2 ? 0xffd040 : 0xff8a1a)); }
+    glow.push(paint(new THREE.BoxGeometry(S.head * 1.0, 0.03, 0.02).translate(0, headY - S.head * 0.35, S.head * 0.92 + headZ), 0xffa030));
+  }
   out.glow = { geo: merge(glow), pivot: new THREE.Vector3() };
   // jambes : pivot à la hanche, vers le bas ; pieds griffus
   const leg = () => merge([
@@ -431,10 +502,13 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
   out.legL = { geo: leg(), pivot: new THREE.Vector3(-S.w * 0.55, S.hip, 0) };
   out.legR = { geo: leg(), pivot: new THREE.Vector3(S.w * 0.55, S.hip, 0) };
   // bras : pivot à l'épaule ; l'arme dans la main droite (arc dans la gauche pour l'archer)
-  const armLen = S.sh - S.hip + (kind === 'brute' || kind === 'guardian' ? 0.12 : 0.02);
-  const arm = (weapon: THREE.BufferGeometry[]) => merge([
+  const armLen = S.sh - S.hip + (heavy ? 0.12 : 0.02);
+  const fist = kind === 'guardian' || kind === 'brute' ? 1.7 : kind === 'golem' || kind === 'titan' ? 2.1 : 1.2;
+  const arm = (weapon: THREE.BufferGeometry[], lavaFist = false) => merge([
     paint(new THREE.CylinderGeometry(S.limb * 0.9, S.limb * 0.75, armLen, 5).translate(0, -armLen / 2, 0), S.skin),
-    paint(new THREE.IcosahedronGeometry(S.limb * (kind === 'guardian' || kind === 'brute' ? 1.7 : 1.2), 0).translate(0, -armLen, 0), S.dark),
+    paint(new THREE.IcosahedronGeometry(S.limb * fist, 0).translate(0, -armLen, 0), lavaFist ? 0xff7a2a : S.dark, lavaFist ? (t) => 0.75 + t * 0.5 : undefined),
+    // (brassard)
+    ...(kind === 'titan' || kind === 'lord' || kind === 'horned' ? [paint(new THREE.CylinderGeometry(S.limb * 1.15, S.limb * 1.05, armLen * 0.22, 6).translate(0, -armLen * 0.75, 0), kind === 'lord' ? 0xe0b040 : S.dark)] : []),
     ...weapon,
   ]);
   const handY = -armLen;
@@ -447,10 +521,15 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
     guardian: [],
     king: [paint(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 5).rotateX(Math.PI / 2).translate(0, handY, 0.25), 0xe0b040), paint(new THREE.IcosahedronGeometry(0.07, 1).translate(0, handY, 0.66), 0xff3a6a)],
     elite: [paint(new THREE.CylinderGeometry(0.016, 0.016, 0.75, 4).rotateX(Math.PI / 2).translate(0, handY, 0.22), 0x3a2a24), paint(new THREE.CylinderGeometry(0.11, 0.11, 0.02, 3, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).translate(0, handY + 0.04, 0.55), 0xe8c060), paint(new THREE.ConeGeometry(0.025, 0.12, 4).rotateX(Math.PI / 2).translate(0, handY, 0.64), 0xd8d8e0)],
+    // le golem frappe du poing de lave ; le démon cornu, d'une grande hache de pierre ; le seigneur, d'une épée de flamme ; le titan, d'un maillet de basalte
+    golem: [],
+    horned: [paint(new THREE.CylinderGeometry(0.025, 0.025, 0.85, 5).rotateX(Math.PI / 2).translate(0, handY, 0.3), 0x4a3224), paint(new THREE.BoxGeometry(0.03, 0.3, 0.26).translate(0, handY + 0.04, 0.68), 0x6a6068), paint(new THREE.ConeGeometry(0.07, 0.14, 4).rotateX(Math.PI / 2).translate(0, handY + 0.2, 0.68), 0x6a6068)],
+    lord: [paint(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 5).rotateX(Math.PI / 2).translate(0, handY, 0.06), 0x20102a), paint(new THREE.BoxGeometry(0.2, 0.025, 0.03).translate(0, handY, 0.15), 0xe0b040), paint(new THREE.BoxGeometry(0.05, 0.015, 0.9).translate(0, handY, 0.62), 0xffc060, (t) => 0.8 + t * 0.4), paint(new THREE.ConeGeometry(0.03, 0.14, 4).rotateX(Math.PI / 2).translate(0, handY, 1.14), 0xfff0a0)],
+    titan: [paint(new THREE.CylinderGeometry(0.035, 0.035, 0.95, 5).rotateX(Math.PI / 2).translate(0, handY, 0.35), 0x3a2a24), paint(new THREE.IcosahedronGeometry(0.2, 0).scale(1, 1, 1.3).translate(0, handY, 0.95), 0x3a2628), ...[0, 1, 2, 3, 4].map((i) => paint(new THREE.ConeGeometry(0.04, 0.12, 4).rotateZ(Math.PI / 2 + (i * Math.PI * 2) / 5).translate(Math.cos((i * Math.PI * 2) / 5) * 0.2, handY + Math.sin((i * Math.PI * 2) / 5) * 0.2, 0.95), 0xff8a2a))],
   };
   const weaponL = kind === 'archer' ? [paint(new THREE.TorusGeometry(0.22, 0.014, 4, 10, Math.PI * 0.9).rotateY(Math.PI / 2).rotateX(Math.PI / 2).translate(0, handY, 0.06), 0x6a3a1e), paint(new THREE.CylinderGeometry(0.01, 0.01, 0.34, 3).rotateX(Math.PI / 2).translate(0.02, handY, 0.12), 0xff8a2a)] : [];
-  out.armL = { geo: arm(weaponL), pivot: new THREE.Vector3(-S.w - S.limb * 0.6, S.sh - 0.02, 0) };
-  out.armR = { geo: arm(weaponR[kind]), pivot: new THREE.Vector3(S.w + S.limb * 0.6, S.sh - 0.02, 0) };
+  out.armL = { geo: arm(weaponL, kind === 'golem' || kind === 'titan'), pivot: new THREE.Vector3(-S.w - S.limb * 0.6, S.sh - 0.02, 0) };
+  out.armR = { geo: arm(weaponR[kind], kind === 'golem'), pivot: new THREE.Vector3(S.w + S.limb * 0.6, S.sh - 0.02, 0) };
   // ailes de chauve-souris : membrane en éventail, pivot dans le dos
   if (S.wings) {
     const wing = (sd: number) => {

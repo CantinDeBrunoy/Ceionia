@@ -1,9 +1,10 @@
 import type { World } from '../world/world';
 import { HellMap } from '../world/hell';
 import { isleDefenses, repelWave, ISLE_SECURE } from '../world/portal';
-import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats, SECURE_WAVES } from './hell';
-import { IsleBattle } from './isleBattle';
-import { Army, Troop, TroopKind, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName } from './army';
+import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats, SECURE_WAVES, SITES, DEMON_POWER } from './hell';
+import { IsleBattle, defenseK } from './isleBattle';
+import { balanceOf, powerOf } from './hellBalance';
+import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES, zoneOf, zoneThe, zoneAgeText } from '../world/hell';
 import type { BaseKind } from './hell';
@@ -21,6 +22,16 @@ import { KingFight, KingSave, KingdomReward, claimKingdom } from './kingdom';
 
 /** Pas de la simulation allégée (faction hors de vue) */
 export const COARSE = 0.25;
+/** L'incursion est annoncée (avec sa composition) cette durée (s) avant d'arriver */
+export const WARN_TIME = 40;
+
+/** « , dont 2 golems de lave et 1 démon cornu » : les gros monstres d'une vague (ceux qui pèsent plus de deux brutes) */
+export function bigOf(kinds: DemonKind[]) {
+  const counts = new Map<DemonKind, number>();
+  for (const k of kinds) if (DEMON_POWER[k] >= DEMON_POWER.brute * 1.5 && k !== 'chief') counts.set(k, (counts.get(k) ?? 0) + 1);
+  const parts = [...counts].sort((a, b) => DEMON_POWER[a[0]] - DEMON_POWER[b[0]]).map(([k, n]) => `${n} ${n > 1 ? DEMONS[k].plural : DEMONS[k].name}`);
+  return parts.length ? `, dont ${parts.length > 1 ? `${parts.slice(0, -1).join(', ')} et ${parts[parts.length - 1]}` : parts[0]}` : '';
+}
 
 export interface WarNews { text: string; kind: 'raid' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'supply' | 'zone' | 'boss' | 'victory' }
 
@@ -80,7 +91,7 @@ export class War {
         this.faction!.activeRaid = r.w;
         this.isle.raid = r.w;
         this.isle.raidT = Number.isFinite(r.t) ? r.t! : 0;
-        for (const u of r.units) { const h = this.isle.sim.addRaider(u.kind, demonStats(u.kind, 1), u.x, u.z); h.hp = Math.min(h.maxHp, u.hp); }
+        for (const u of r.units) { const h = this.isle.sim.addRaider(u.kind, demonStats(u.kind, 1, this.faction!.balance.legacy), u.x, u.z); h.hp = Math.min(h.maxHp, u.hp); }
       }
     }
     this.pending = null;
@@ -92,7 +103,9 @@ export class War {
     if (!this.faction) {
       this.hellMap = new HellMap(this.world.seed);
       const p = this.pending;
-      this.faction = p?.faction ? Hell.load(this.hellMap, p.faction) : new Hell(this.hellMap);
+      // (l'équilibre suit la difficulté de la partie : plein en Normal, ×0,6 en Facile, l'ancien en bac à sable)
+      const bal = balanceOf(this.world.difficulty);
+      this.faction = p?.faction ? Hell.load(this.hellMap, p.faction, bal) : new Hell(this.hellMap, this.hellMap.seed, bal);
       // les unités du joueur viennent de l'armée, pas de la sauvegarde de la faction
       for (const u of this.faction.alive('player')) this.faction.units.delete(u.id);
       this.base = HellBase.load(this.faction, this.hellMap, p?.base);
@@ -270,6 +283,7 @@ export class War {
     }
     const f = this.faction!, isle = this.isle!, w = this.world;
     f.age = age;
+    f.armyPower = this.power(age);
     isle.syncDefenses(age);
     isle.blight = this.refreshBlight();
     // l'armée : recrues qui arrivent, blessés qui guérissent
@@ -309,10 +323,16 @@ export class War {
     }
     // les incursions : une fois la première tour de garde dressée, à l'heure dite
     let arrived: RaidWave | null = null;
+    // (annoncée un moment d'avance : la vague est composée à l'annonce, le joueur sait ce qui vient)
+    const left = this.nextWaveIn();
+    if (d.towers > 0 && left !== null && left <= WARN_TIME && !f.planned) {
+      f.planned = f.planRaid();
+      this.news.push({ kind: 'raid', text: `⚠️ Les démons se rassemblent devant le portail : une vague de ${f.planned.length} démons${bigOf(f.planned)} arrive dans quelques instants. Prépare ta garnison !` });
+    }
     if (d.towers > 0 && f.raidDue(f.time)) {
       arrived = f.spawnRaid(f.time);
       isle.startRaid(arrived);
-      this.news.push({ kind: 'raid', text: `🔥 Incursion ! ${arrived.units.length} démons sortent du portail et attaquent l’île.` });
+      this.news.push({ kind: 'raid', text: `🔥 Incursion ! ${arrived.units.length} démons${bigOf(arrived.units.map((u) => u.kind))} sortent du portail et attaquent l’île.` });
     }
     const out = isle.outcome();
     if (out) {
@@ -327,6 +347,18 @@ export class War {
     // les relevés de la garnison (vie, position) pour la sauvegarde
     for (const [id, u] of this.unitOf) { const t = this.army.troops.find((x) => x.id === id); if (t) { t.hp = Math.round(u.hp); t.x = +u.x.toFixed(2); t.z = +u.z.toFixed(2); } }
     return arrived;
+  }
+
+  /**
+   * La puissance du joueur dans la guerre : son armée (blessés pour moitié, recrues en route pour moitié) et les tours de
+   * l'île, mesurée comme celle des démons (voir `hellBalance.ts`) ; elle règle la taille des incursions
+   */
+  power(age: number) {
+    let p = 0;
+    for (const t of this.army.troops) p += powerOf(troopStats(t.kind, age)) * (t.heal > 0 ? 0.5 : 1);
+    for (const r of this.army.queue) p += powerOf(troopStats(r.kind, age)) * 0.5;
+    const tw = SITES.watchtower;
+    return p + isleDefenses(this.world).towers * powerOf({ hp: tw.hp, dmg: tw.dmg, cooldown: tw.cooldown }) * defenseK(age);
   }
 
   /** Zones des Enfers conquises (elles font reculer la contamination de l'île) */
