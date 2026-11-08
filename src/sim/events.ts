@@ -133,7 +133,7 @@ export const EVENTS: ExpEvent[] = [
   },
   // ---------------- Les dents de l'eau : le requin au large, le crocodile des eaux douces chaudes ----------------
   {
-    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive', 'voyage', 'wreck', 'trawl'], title: 'Un aileron dans l’eau',
+    id: 'shark', where: ['river'], water: 'sea', scenes: ['boat', 'dive', 'voyage', 'wreck', 'trawl', 'isles'], title: 'Un aileron dans l’eau',
     text: 'Un grand aileron gris fend l’eau et tourne autour du bateau : un requin !',
     options: [
       { label: 'Fuir vers la rive', risk: 0.9, work: 6, text: 'On a mis le cap sur la rive à toute vitesse, l’aileron sur les talons.' },
@@ -192,7 +192,7 @@ export const EVENTS: ExpEvent[] = [
   },
   // ---------------- Le volet maritime : épave à la dérive, grain en plein voyage ----------------
   {
-    id: 'derelict', where: ['river'], scenes: ['voyage', 'wreck', 'trawl'], arrive: true, water: 'sea', ages: [2, 5], title: 'Une coque à la dérive',
+    id: 'derelict', where: ['river'], scenes: ['voyage', 'wreck', 'trawl', 'isles'], arrive: true, water: 'sea', ages: [2, 5], title: 'Une coque à la dérive',
     text: 'Une coque abandonnée dérive sur l’eau, mâts brisés et voiles en lambeaux : un navire perdu dans une tempête, il y a longtemps.',
     options: [
       { label: 'L’accoster et fouiller la cale', risk: 1.1, work: 5, bonus: [{ t: 'ore', n: 3 }], text: 'Dans la cale, des barres de métal et un coffre scellé : un petit trésor.' },
@@ -201,7 +201,7 @@ export const EVENTS: ExpEvent[] = [
     ],
   },
   {
-    id: 'squall', where: ['river'], scenes: ['voyage', 'wreck', 'trawl'], water: 'sea', from: 0.4, title: 'Un grain se lève',
+    id: 'squall', where: ['river'], scenes: ['voyage', 'wreck', 'trawl', 'isles'], water: 'sea', from: 0.4, title: 'Un grain se lève',
     text: 'Le ciel se couvre d’un coup : la pluie tombe en rideau, le vent se lève et les vagues grossissent autour du bateau.',
     options: [
       { label: 'Réduire la toile et tenir le cap', risk: 0.85, work: 4, text: 'Voile réduite, barre bien tenue : le bateau a traversé le grain sans une avarie.' },
