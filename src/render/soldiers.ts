@@ -439,6 +439,14 @@ const dronePilot: Kit = {
 /** Les tireurs (l'archer, une fois le fusil connu) : tirailleur, tireur d'élite, pilote de drones */
 const GUNNERS = [tirailleur, tirailleur, tirailleur, tirailleur, sniper, dronePilot];
 
+/**
+ * Fusilier de l'âge industriel (le soldat n'est plus lancier) : l'habit bleu, le shako et les buffleteries, mais un long fusil sans
+ * baïonnette, épaulé pour tirer. Moderne et futuriste : le fusil d'assaut et le fusil à impulsions de la tenue d'époque
+ */
+const fusilier: Kit = { ...napoleonic, hold: 'rifle', right: (p) => longRifle(p, { wood: 0x7a5236, metal: 0x5a5f66, len: 0.15 }), left() {} };
+/** Les fusiliers (avant l'âge industriel, personne : le rôle n'y sert pas) */
+const RIFLEMEN = [fusilier, fusilier, fusilier, fusilier, { ...modern, hold: 'rifle' as const }, future];
+
 /** Hallebardier de l'âge industriel (le chevalier devenu piquier) : cuirasse et tassettes sur l'habit rouge, morion à crête, hallebarde */
 const halberdier: Kit = {
   leg: 0x4a3e34, boot: LEATHER, hip: 0x9a2e2a, torso: STEEL, arm: 0x9a2e2a, hand: LEATHER, hold: 'spear',
@@ -776,9 +784,9 @@ const MINERS = [miner2, miner2, miner2, miner3, miner4, miner4];
 const FIREMEN = [fireman, fireman, fireman, fireman, firemanNow, firemanNow];
 
 /** Qui est-ce : un soldat de l'époque, un gendarme, un mineur */
-export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight' | 'gunner';
+export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight' | 'gunner' | 'rifleman';
 /** Les troupes de la garnison (leurs géométries sont partagées d'un soldat à l'autre : `makeSoldier` les garde en cache) */
-const TROOP_ROLES: Partial<Record<SoldierRole, Kit[]>> = { spearman: SPEARMEN, archer: ARCHERS, knight: KNIGHTS, gunner: GUNNERS };
+const TROOP_ROLES: Partial<Record<SoldierRole, Kit[]>> = { spearman: SPEARMEN, archer: ARCHERS, knight: KNIGHTS, gunner: GUNNERS, rifleman: RIFLEMEN };
 const troopGeo = new Map<string, THREE.BufferGeometry>();
 /** Géométrie partagée d'une pièce de troupe (`key` : rôle, époque, teint, pièce), faite à la première demande */
 function shared(key: string | null, make: () => THREE.BufferGeometry) {
@@ -884,7 +892,8 @@ export function makeSoldier(age: number, v = 0, withTorch = false, role: Soldier
 }
 
 /** Le soldat au rythme de `phase` : pas cadencé, garde, coups portés, bras levés */
-export function soldierStep(s: Soldier, phase: number, mode: SoldierMode) {
+/** `kick` (0 à 1) : le recul d'un coup de feu qui vient de partir (le buste et l'arme rejetés en arrière) */
+export function soldierStep(s: Soldier, phase: number, mode: SoldierMode, kick = 0) {
   const run = mode === 'run', walk = mode === 'walk' || mode === 'carry' || run, kneel = mode === 'kneel', sw = Math.sin(phase), stride = run ? 0.95 : 0.6;
   s.body.position.y = kneel ? -0.065 : walk ? Math.abs(sw) * (run ? 0.012 : 0.006) : Math.sin(phase * 0.3) * 0.0015;
   s.body.rotation.x = mode === 'fight' ? 0.12 : kneel ? 0.35 : run ? 0.16 : 0;
@@ -922,6 +931,7 @@ export function soldierStep(s: Soldier, phase: number, mode: SoldierMode) {
     left.rotation.x = walk ? sw * 0.45 : mode === 'guard' ? -0.7 : -0.1;
     right.rotation.z = 0;
   }
+  if (kick > 0 && rifle && mode === 'fight') { s.body.rotation.x -= kick * 0.1; right.rotation.x += kick * 0.14; left.rotation.x += kick * 0.1; }
   // ce que tiennent les mains : la lame pointe devant ; le fusil se porte à l'épaule, se couche à l'horizontale pour viser ;
   // la torche reste droite
   const rh = right.userData.held as THREE.Object3D | undefined, lh = left.userData.held as THREE.Object3D | undefined;

@@ -46,6 +46,8 @@ export function troopLook(kind: string, age: number): { role: SoldierRole; era: 
   // (à l'âge futuriste, l'archer est pilote de drones : deux drones de combat volent autour de lui)
   if (kind === 'archer') return { role: age >= 3 ? 'gunner' : 'archer', era: age, ...(age >= 5 ? { drones: 2 } : {}) };
   if (kind === 'knight') return { role: 'knight', era: Math.max(2, age) };
+  // le soldat n'est un lancier que jusqu'au Moyen Âge : dès l'âge industriel, il tire au fusil (fusilier, fantassin, soldat à impulsions)
+  if (kind === 'soldier' && age >= 3) return { role: 'rifleman', era: age };
   return { role: TROOP_ROLE[kind] ?? 'spearman', era: age };
 }
 
@@ -234,7 +236,9 @@ export class BattleLayer {
         if (!dead && u.hurt < 0.18) t.r.body.rotation.x -= 0.25 * (1 - u.hurt / 0.18);
       } else {
         const s = t.s!;
-        soldierStep(s, u.moving ? u.walk : this.uTime, dead ? 'idle' : u.state === 'attack' ? 'fight' : u.moving ? (u.state === 'retreat' ? 'run' : 'walk') : 'guard');
+        // (le tireur au fusil : un recul de l'épaule juste après chaque coup)
+        const kick = dead || !this.shotAt.has(u.id) ? 0 : Math.max(0, 1 - (this.uTime - this.shotAt.get(u.id)!) / 0.22);
+        soldierStep(s, u.moving ? u.walk : this.uTime, dead ? 'idle' : u.state === 'attack' ? 'fight' : u.moving ? (u.state === 'retreat' ? 'run' : 'walk') : 'guard', kick);
         // touché : il recule d'un coup, le buste rejeté en arrière
         if (!dead && u.hurt < 0.18) s.body.rotation.x -= 0.4 * (1 - u.hurt / 0.18);
       }
@@ -346,7 +350,7 @@ export class BattleLayer {
         // une vraie flèche qui vole en cloche (de feu pour les démons), plantée à mi-hauteur de sa cible
         const t = h.units.get(ev.target), th = t ? (t.side === 'hell' ? SCALE[t.kind as DemonKind] ?? 0.4 : 0.45) * 0.55 : 0.3;
         const y0 = this.groundY(ev.x0, ev.z0) + ev.y0, y1 = this.groundY(ev.x1, ev.z1) + th, su = h.units.get(ev.source);
-        const gun = su?.side === 'player' && ((su.kind === 'archer' && this.age >= 3) || (su.kind === 'cavalry' && this.age >= 4)), rocket = su?.side === 'player' && su.kind === 'knight' && this.age >= 4;
+        const gun = su?.side === 'player' && (((su.kind === 'archer' || su.kind === 'soldier') && this.age >= 3) || (su.kind === 'cavalry' && this.age >= 4)), rocket = su?.side === 'player' && su.kind === 'knight' && this.age >= 4;
         const esc = su?.side === 'player' && su.kind === 'archer' && this.age >= 5 ? this.troops.get(su.id)?.e : undefined, plasma = su?.side === 'player' && su.kind === 'cavalry' && this.age >= 5;
         if (esc) {
           // pilote de drones : un des deux drones tire un rayon fin (cyan ou rouge) sur la cible, étincelles à l'impact

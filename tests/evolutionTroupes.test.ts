@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TROOPS, TROOP_KINDS, troopForm, troopName, troopLabel, troopStats, newArmy, recruit, recruitWhy, onlyGearMissing, gearToCraft, cancelRecruit, dismiss, stepArmy, readArmy, RecruitCtx } from '../src/sim/army';
 import { emptyStock } from '../src/sim/gear';
+import { powerOf } from '../src/sim/hellBalance';
 import { troopLook } from '../src/render/battleUnits';
 
 const ctx = (age: number, extra: Partial<RecruitCtx> = {}): RecruitCtx => ({ age, pop: 200, stock: emptyStock(), barracks: 3, stables: 1, horses: 3, ...extra });
@@ -118,5 +119,56 @@ describe('évolution des troupes avec l’âge', () => {
     expect(troopLook('archer', 5)).toMatchObject({ role: 'gunner', drones: 2 });
     expect(troopLook('archer', 4).drones).toBeUndefined();
     expect(troopLook('knight', 1).era).toBe(2);
+  });
+
+  it('dès l’âge industriel, le soldat tire au fusil : à distance, sans lance, fusil requis', () => {
+    // avant : lancier au corps à corps
+    expect(troopForm('soldier', 2).gear).toEqual(['spear']);
+    expect(troopStats('soldier', 2).range).toBeLessThan(1);
+    expect(troopLook('soldier', 2).role).toBe('spearman');
+    for (const age of [3, 4, 5]) {
+      const st = troopStats('soldier', age), arch = troopStats('archer', age);
+      expect(troopForm('soldier', age).gear).toEqual(['rifle']);
+      expect(troopLook('soldier', age).role).toBe('rifleman');
+      // moyenne portée : bien au-delà du corps à corps (la simulation tire au-delà de 2), en deçà du tireur
+      expect(st.range).toBeGreaterThan(3.4);
+      expect(st.range).toBeLessThanOrEqual(4.6);
+      expect(st.range).toBeLessThan(arch.range);
+      // un peu moins fort par coup que l'ancien coup de lance, plus vite, vie d'infanterie
+      expect(st.dmg).toBeLessThan(troopStats('archer', age).dmg);
+      if (age < 5) expect(st.cooldown).toBeLessThan(arch.cooldown);
+      expect(st.hp).toBeGreaterThan(arch.hp * 1.5);
+    }
+    // la lance n'est plus requise : sans fusil, la caserne dit « fusil » et propose de le fabriquer
+    const a = newArmy(), c = ctx(3);
+    c.stock.spear = 9;
+    expect(recruitWhy(a, 'soldier', c)).toContain('1 fusil');
+    expect(onlyGearMissing(a, 'soldier', c)).toBe(true);
+    expect(gearToCraft('soldier', c.stock, [], [], 3)).toEqual(['rifle']);
+    c.stock.rifle = 1;
+    expect(recruit(a, 'soldier', c)).toBeNull();
+    expect(c.stock.rifle).toBe(0);
+    expect(c.stock.spear).toBe(9);
+    // l'âge 2 demande encore la lance
+    expect(gearToCraft('soldier', emptyStock(), [], [], 2)).toEqual(['spear']);
+  });
+
+  it('le passage au fusil garde la puissance du soldat dans ses bornes', () => {
+    // (ancien lancier : 46, 55, 66 de puissance à ces âges)
+    const old = { 3: 46.2, 4: 55, 5: 66.3 } as Record<number, number>;
+    for (const age of [3, 4, 5]) {
+      const p = powerOf(troopStats('soldier', age));
+      expect(p).toBeGreaterThan(old[age] * 0.9);
+      expect(p).toBeLessThan(old[age] * 1.02);
+    }
+  });
+
+  it('une ancienne sauvegarde de soldat se relit (équipement noté : la lance revient au renvoi)', () => {
+    const a = readArmy({ troops: [{ id: 1, kind: 'soldier', hp: 100, maxHp: 140, where: 'isle', heal: 0, gear: ['spear'] }], queue: [{ kind: 'soldier', left: 5, gear: ['spear'] }], nextId: 2 });
+    const st = emptyStock();
+    dismiss(a, 1, st);
+    expect(st.spear).toBe(1);
+    expect(st.rifle).toBe(0);
+    expect(a.queue[0].gear).toEqual(['spear']);
   });
 });
