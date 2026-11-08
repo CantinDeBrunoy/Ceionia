@@ -16,6 +16,7 @@ import { SPACEPAD, shark, crocodile, tentacle, krakenHead, harpoon } from './mod
 import { makeBeast } from './beasts';
 import { Building, sizeOf } from '../build/catalog';
 import { FloatIsles, FLOAT_LAND, FLOAT_BACK } from './floatIsles';
+import { Salvage } from './galleon';
 
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
 export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34], wolf: ['wolf', 0.3] };
@@ -899,6 +900,8 @@ export class ExpeditionScene {
   private goal = new Map<number, number>();
   private flame: THREE.Mesh | null = null;
   private boat: { obj: THREE.Object3D; home: [number, number]; out: [number, number]; y: number; riders: number[] } | null = null;
+  /** le galion englouti : l'épave, la gabare et sa grue, le butin, le scaphandrier (voir `Salvage`) */
+  private salv: Salvage | null = null;
   /** l'île du portail : où l'équipe débarque, et le portail qu'elle va réveiller */
   private isle: { land: [number, number]; gate: [number, number] } | null = null;
   /** les îles flottantes (scène `isles`) : l'archipel, que l'équipe visite à pied */
@@ -1043,6 +1046,7 @@ export class ExpeditionScene {
     else if (kind === 'boat') {
       this.launch(a); this.populateSea(a);
       if (this.story === 'isles' && this.boat) this.float = new FloatIsles(this.group, this.props, this.boat.home, this.boat.out, this.boat.y, (x, z) => this.world.surfaceAt(x, z), a.party.length);
+      if (this.story === 'wreck' && this.offshore) this.salvage(a);
     }
     else if (kind === 'fish') this.spots = this.bankSpots(a.party.length);
     else if (kind === 'mine') {
@@ -2281,7 +2285,8 @@ export class ExpeditionScene {
     const loot = new THREE.Mesh(rocksGeo(), mats.body);
     loot.scale.setScalar(0.45); loot.position.set(0.02, 0.06, 0); loot.visible = false;
     wreck.add(loot);
-    const ang = 0.7 + Math.random() * 1.2;
+    // (au galion englouti, elle dérive du côté opposé à l'épave et à la gabare)
+    const ang = this.salv ? this.salv.away + (Math.random() - 0.5) * 0.8 : 0.7 + Math.random() * 1.2;
     let d = 1.25;
     return (dt: number) => {
       const o = bt.obj.position;
@@ -3037,7 +3042,8 @@ export class ExpeditionScene {
     const obj = hullOf();
     // la chasse armée : toute la troupe embarque, sur deux galères (`riders` : tout l'équipage ; la seconde a sa moitié) ;
     // l'équipe du portail aussi, sur une seule
-    const riders = a.party.slice(0, war || this.isle || this.story === 'isles' ? a.party.length : Math.min(2, a.party.length));
+    // (au galion englouti, tout l'équipage est à bord de la gabare de relevage)
+    const riders = a.party.slice(0, war || this.isle || this.story === 'isles' || (this.story === 'wreck' && this.offshore) ? a.party.length : Math.min(2, a.party.length));
     this.boat = { obj, home: [wx, wz], out, y: wat.level, riders };
     if (war && this.offshore) {
       // les deux galères encadrent le monstre, de part et d'autre du point de combat, chacune bord à bord face à lui
@@ -3087,6 +3093,21 @@ export class ExpeditionScene {
   }
 
   /**
+   * Le galion englouti : le bateau attend au mouillage, l'épave à demi coulée à son flanc, la gabare de relevage amarrée
+   * entre les deux (voir `Salvage`). L'équipe y travaille toute entière
+   */
+  private salvage(a: ActiveExpedition) {
+    const bt = this.boat!;
+    // (le bateau est déjà au mouillage de départ, avant l'arrivée de l'équipe)
+    bt.obj.position.set(bt.home[0], bt.y, bt.home[1]);
+    bt.obj.rotation.y = Math.atan2(bt.out[0] - bt.home[0], bt.out[1] - bt.home[1]);
+    const diver = /scaphandr|plong/i.test(`${a.c.label} ${a.c.doing ?? ''}`);
+    this.salv = new Salvage({ world: this.world, agents: this.agents, group: this.group, depth: (x, z) => this.depth(x, z), splash: (x, z, lv, big) => this.splash(x, z, lv, big) }, bt, a.party, diver, a.age);
+    for (const o of this.salv.objs) this.props.push(o);
+    this.focus = this.salv.focus;
+  }
+
+  /**
    * Autour de la barque, au large : le récif grouille de vie (une baleine qui bondit, des dauphins qui sautent, des raies
    * qui planent, des bancs de poissons) ; en pêche au large, quelques dauphins et des bancs ; la chasse au monstre a le sien
    */
@@ -3097,7 +3118,8 @@ export class ExpeditionScene {
     const reef = this.story === 'dive', fishing = this.story === 'boat' || this.story === 'trawl' || this.story === 'voyage' || this.story === 'wreck';
     if (this.story === 'megalodon' || this.story === 'kraken') { this.makeMonster(cx, cz, level, room); return; }
     if (!this.offshore || (!reef && !fishing)) return;
-    const plan: [SwimKind, number][] = reef ? [['whale', 1], ['dolphin', 3], ['manta', 2], ['school', 3]] : [['dolphin', 2], ['school', 2]];
+    // (au galion englouti, ni dauphins ni baleine dans les câbles de la grue : les bancs de l'épave suffisent)
+    const plan: [SwimKind, number][] = reef ? [['whale', 1], ['dolphin', 3], ['manta', 2], ['school', 3]] : this.story === 'wreck' ? [['school', 2]] : [['dolphin', 2], ['school', 2]];
     let i = 0;
     for (const [kind, n] of plan) for (let j = 0; j < n; j++, i++) this.addSwimmer(kind, cx, cz, level, room, i, j);
     void a;
@@ -3365,6 +3387,7 @@ export class ExpeditionScene {
     this.workK = k;
     if (this.boat && onSite) this.stepBoat(dt);
     if (this.float) this.float.update(dt, k, onSite, (x, y, z) => this.puffAt(x, y, z));
+    { const gone = a.phase === 'back' || a.phase === 'home'; this.salv?.update(dt, k, onSite, gone, gone && !a.ok); }
     if (this.swimmers.length) this.stepSwimmers(dt);
     if (this.monster) this.stepMonster(dt, a, k);
     if (this.balloon) this.stepBalloon(k, onSite);
@@ -3705,11 +3728,11 @@ export class ExpeditionScene {
     // (l'équipe du portail débarque sur l'île le temps du travail : la galère l'attend, vide, au bord de la plage)
     const ashore = !!this.isle && this.offshore && this.workK >= ISLE_LAND && this.workK < ISLE_BACK;
     const afloat = !!this.float && this.offshore && this.workK >= FLOAT_LAND && this.workK < FLOAT_BACK;
-    const crew = ashore || afloat ? [] : es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders;
-    const [px, pz] = this.sail(bt.obj, bt.home, bt.out, bt.y, u, back, dt, crew, war || !!this.isle, 0);
+    const crew = ashore || afloat || this.salv ? [] : es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders;
+    const [px, pz] = this.sail(bt.obj, bt.home, bt.out, bt.y, u, back, dt, crew, war || !!this.isle, 0, this.salv ? 0.2 : 1);
     if (es) this.sail(es.obj, es.home, es.out, bt.y, u, back, dt, es.riders, war, 1.3);
     // la chasse : la vue garde le combat entier (les deux galères, le monstre entre elles)
-    this.focus = this.arena && es ? [(px + es.obj.position.x) / 2, (pz + es.obj.position.z) / 2] : [px, pz];
+    this.focus = this.arena && es ? [(px + es.obj.position.x) / 2, (pz + es.obj.position.z) / 2] : this.salv ? this.salv.focus : [px, pz];
     if (ashore) this.stepIsle(this.workK);
     if (this.float) this.stepFloat(afloat);
   }
@@ -3750,16 +3773,17 @@ export class ExpeditionScene {
    * Une embarcation entre la rive (`home`) et le large (`out`), à `u` du trajet (`back` : elle rentre), qui tangue, et son
    * équipage `riders` assis à bord ; `ph` : son décalage de houle. Renvoie où elle est
    */
-  private sail(obj: THREE.Object3D, home: [number, number], out: [number, number], level: number, u: number, back: boolean, dt: number, riders: number[], war: boolean, ph: number): [number, number] {
+  private sail(obj: THREE.Object3D, home: [number, number], out: [number, number], level: number, u: number, back: boolean, dt: number, riders: number[], war: boolean, ph: number, calm = 1): [number, number] {
     const x = home[0] + (out[0] - home[0]) * u, z = home[1] + (out[1] - home[1]) * u, t = this.t + ph;
-    const sway = Math.sin(t * 0.4) * 0.12, dir = Math.atan2(out[0] - home[0], out[1] - home[1]);
+    // (au mouillage, le bateau de relevage reste bien en place : `calm` amortit sa houle)
+    const sway = Math.sin(t * 0.4) * 0.12 * calm, dir = Math.atan2(out[0] - home[0], out[1] - home[1]);
     let px = x + Math.cos(dir) * sway, pz = z - Math.sin(dir) * sway;
     if (this.depth(px, pz) === null) { px = x; pz = z; }
     // dans les rapides, elle tangue et roule bien plus fort
-    const rough = this.rough, heading = dir + (back ? Math.PI : 0) + Math.sin(t * 0.4) * 0.15 + Math.sin(t * 3.1) * 0.2 * rough;
+    const rough = this.rough, heading = dir + (back ? Math.PI : 0) + Math.sin(t * 0.4) * 0.15 * calm + Math.sin(t * 3.1) * 0.2 * rough;
     const y = level + 0.005 + Math.sin(t * 1.7) * 0.006 + Math.abs(Math.sin(t * 4.3)) * 0.02 * rough;
     obj.position.set(px, y, pz);
-    obj.rotation.set(Math.sin(t * 1.3) * (0.03 + 0.12 * rough), heading, Math.sin(t * 1.1 + rough * 2) * (0.04 + 0.18 * rough));
+    obj.rotation.set(Math.sin(t * 1.3) * (0.03 * calm + 0.12 * rough), heading, Math.sin(t * 1.1 + rough * 2) * (0.04 * calm + 0.18 * rough));
     // le bateau à vapeur fume par sa cheminée
     if (this.boatKind === 'steam' && Math.random() < dt * 4) this.puffAt(px - Math.sin(heading) * 0.02, y + STEAM_FUNNEL[1] + 0.01, pz - Math.cos(heading) * 0.02, 'smoke', -Math.sin(heading) * 0.04, -Math.cos(heading) * 0.04);
     const sc = obj.scale.x, seat = BOAT_SEAT[this.boatKind], m = this.monster, mon = m && m.obj.visible ? m.obj.position : null;
@@ -4432,7 +4456,7 @@ export class ExpeditionScene {
     // (pas de pêcheur à la ligne pendant la chasse au monstre : tout l'équipage est aux harpons)
     if ((this.kind !== 'boat' && this.kind !== 'fish') || this.monster) return;
     // l'outil selon l'ouvrage : longue-vue au grand voyage (rien à pêcher), gaffe et grappin sur l'épave, canne ailleurs
-    const gear = this.story === 'isles' ? 'none' : this.story === 'voyage' ? (a.age <= 3 ? 'glass' : 'none') : this.story === 'wreck' ? 'gaffe' : 'rod';
+    const gear = this.story === 'isles' ? 'none' : this.story === 'voyage' ? (a.age <= 3 ? 'glass' : 'none') : this.story === 'wreck' ? (this.salv ? 'none' : 'gaffe') : 'rod';
     const fishers = this.kind === 'boat' ? [this.boat!.riders[this.boat!.riders.length - 1], ...a.party.filter((id) => !this.boat!.riders.includes(id))] : a.party;
     const w = this.world, wat = this.water!;
     for (const id of a.party) {
@@ -4549,6 +4573,7 @@ export class ExpeditionScene {
       if (this.race?.driver != null) this.agents.ride(this.race.driver, null);
       if (this.games || this.dragon) for (const id of a.party) this.agents.ride(id, null);
       if (this.mouth) this.agents.partyHide(a.party, false);
+      if (this.salv) this.agents.partyHide(a.party, false);
     }
     for (const s of this.stagings) this.unstage(s);
     this.stagings = [];
@@ -4562,6 +4587,7 @@ export class ExpeditionScene {
     for (const f of this.fx) this.group.remove(f.obj);
     for (const r of this.rods.values()) r.line.geometry.dispose();
     this.flame?.geometry.dispose();
+    this.salv?.dispose();
     void a;
   }
 }
