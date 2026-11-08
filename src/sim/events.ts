@@ -189,7 +189,8 @@ export const EVENTS: ExpEvent[] = [
   },
   // ---------------- Le volet maritime : épave à la dérive, grain en plein voyage ----------------
   {
-    id: 'derelict', where: ['river'], scenes: ['voyage', 'wreck', 'trawl'], arrive: true, water: 'sea', ages: [2, 5], title: 'Une coque à la dérive',
+    // (pas au galion englouti : la scène a déjà son épave, sur son banc de sable)
+    id: 'derelict', where: ['river'], scenes: ['voyage', 'trawl'], arrive: true, water: 'sea', ages: [2, 5], title: 'Une coque à la dérive',
     text: 'Une coque abandonnée dérive sur l’eau, mâts brisés et voiles en lambeaux : un navire perdu dans une tempête, il y a longtemps.',
     options: [
       { label: 'L’accoster et fouiller la cale', risk: 1.1, work: 5, bonus: [{ t: 'ore', n: 3 }], text: 'Dans la cale, des barres de métal et un coffre scellé : un petit trésor.' },
