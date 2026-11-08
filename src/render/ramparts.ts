@@ -36,6 +36,77 @@ function pour(p: Parts, sub: Parts, ry: number) {
   for (const g of sub.glow) p.glow.push(ry ? g.rotateY(ry) : g);
 }
 
+/** Miroir d'une géométrie (x → −x, ou z → −z) : les triangles sont retournés pour que les faces restent tournées dehors */
+function mirror(g: THREE.BufferGeometry, axis: 'x' | 'z') {
+  g.scale(axis === 'x' ? -1 : 1, 1, axis === 'z' ? -1 : 1);
+  for (const name of ['position', 'normal', 'color', 'aLight']) {
+    const a = g.getAttribute(name) as THREE.BufferAttribute | undefined;
+    if (!a) continue;
+    const arr = a.array as Float32Array, n = a.itemSize;
+    for (let t = 0; t + 3 * n <= arr.length; t += 3 * n) for (let k = 0; k < n; k++) { const tmp = arr[t + n + k]; arr[t + n + k] = arr[t + 2 * n + k]; arr[t + 2 * n + k] = tmp; }
+    a.needsUpdate = true;
+  }
+  return g;
+}
+
+/**
+ * Oriente un bras dessiné vers +x (face extérieure vers +z, chemin de ronde vers −z) sur le côté `bit` : à l'est tel quel, au
+ * nord tourné d'un quart de tour, à l'ouest et au sud en miroir (et non tourné d'un demi-tour) : le chemin de ronde reste du
+ * même côté tout le long d'un mur droit, au lieu de passer d'un bord à l'autre à chaque case
+ */
+function orient(p: Parts, sub: Parts, bit: number) {
+  for (const [list, into] of [[sub.body, p.body], [sub.glow, p.glow]] as const) {
+    for (const g of list) {
+      if (bit === WALL_E) into.push(g);
+      else if (bit === WALL_N) into.push(g.rotateY(PI / 2));
+      else if (bit === WALL_W) into.push(mirror(g, 'x'));
+      else into.push(mirror(g.rotateY(PI / 2), 'z'));
+    }
+  }
+}
+
+/**
+ * Le chemin de ronde de chaque âge (repère du bras est : x le long du mur, z < 0 vers l'intérieur) : hauteur où marche la
+ * sentinelle et son écart à l'axe du mur ; `gate` : le dessus de la porte, où elle passe ; `frame` : la couleur de la porte
+ * percée dans la tour ; `tower` : où se tient la sentinelle d'une tour de garde (dans le repère de la tour)
+ */
+export interface Walkway { y: number; z: number; gate: number; frame: number; tower: [number, number, number] }
+const WALK_ANTIQUE: Walkway = { y: 0.325, z: -0.155, gate: 0.8, frame: 0x6a4426, tower: [0, 1.1, 0.2] };
+export const WALK: Walkway[] = [
+  WALK_ANTIQUE, WALK_ANTIQUE,
+  { y: 0.43, z: -0.02, gate: 0.89, frame: 0x6f6a66, tower: [0, 1.065, 0.24] },
+  { y: 0.44, z: -0.04, gate: 0.92, frame: 0x8a8590, tower: [0, 1.18, 0.26] },
+  // moderne : la passerelle d'acier à l'intérieur ; la sentinelle de la tour sur le toit du blockhaus
+  { y: 0.52, z: -0.13, gate: 1.01, frame: 0x4a4650, tower: [0.22, 0.37, 0.22] },
+  // futuriste : sur la passerelle lumineuse ; la tour n'a pas de plate-forme, la sentinelle garde son embase
+  { y: 0.675, z: -0.1, gate: 1.03, frame: 0x4a5664, tower: [0.25, 0.08, 0.25] },
+];
+/** Rayon de la tour de garde de chaque âge à la hauteur du chemin de ronde : le mur vient s'y souder */
+export const TOWER_R = [0.25, 0.25, 0.263, 0.25, 0.15, 0.15];
+/** Dans le masque d'un rempart, les bits << TOWER_SHIFT disent qu'une tour de garde est le voisin de ce côté */
+export const TOWER_SHIFT = 4;
+
+/**
+ * Le raccord d'un bras à une tour de garde voisine : le mur continue au-delà du bord de la case jusqu'à la face de la tour (les
+ * pièces qui finiraient à l'intérieur de la tour sont retirées), et une porte de chemin de ronde est percée dans cette face,
+ * avec sa marche
+ */
+function towerJoin(a: number, sub: Parts) {
+  const ext = new Parts(), face = 1 - TOWER_R[a], wk = WALK[a];
+  ARMS[a](ext, 9);
+  for (const k of ['body', 'glow'] as const) for (const g of ext[k]) {
+    g.translate(0.5, 0, 0);
+    g.computeBoundingBox();
+    if (g.boundingBox!.min.x > face + 0.04) { g.dispose(); continue; }
+    sub[k].push(g);
+  }
+  const dz = a <= 1 ? wk.z : wk.z * 0.5;
+  sub.box(0.03, 0.26, 0.13, face + 0.012, wk.y - 0.005, dz, 0x24201c);
+  for (const s of [-1, 1]) sub.box(0.05, 0.28, 0.025, face + 0.01, wk.y - 0.01, dz + s * 0.077, wk.frame);
+  sub.box(0.05, 0.03, 0.18, face + 0.01, wk.y + 0.26, dz, wk.frame);
+  sub.box(0.14, 0.02, 0.15, face - 0.06, wk.y - 0.02, dz, dk(wk.frame, 1.1));
+}
+
 /** Torche murale : support, coupelle, flamme qui luit la nuit */
 function torch(p: Parts, x: number, y: number, z: number, wood = 0x6e523c) {
   p.cyl(0.009, 0.012, 0.12, 5, x, y, z, wood);
@@ -106,8 +177,9 @@ function armBrick(p: Parts, side: number) {
   // chaperon de pierre, pilastre à mi-chemin, grille de fer à pointes au sommet
   p.box(0.5, 0.04, 0.2, 0.25, 0.4, 0, cap);
   p.box(0.1, 0.46, 0.2, 0.25, 0, 0, dk(brick, 0.85)); p.box(0.12, 0.03, 0.22, 0.25, 0.46, 0, cap);
-  for (const y of [0.48, 0.58]) p.box(0.5, 0.012, 0.012, 0.25, y, 0, iron);
-  for (let i = 0; i < 5; i++) { const x = 0.05 + i * 0.1; p.cyl(0.007, 0.007, 0.2, 4, x, 0.44, 0, iron); p.cone(0.012, 0.035, 4, x, 0.64, 0, iron); }
+  // (la grille sur le bord extérieur : derrière, le chaperon fait chemin de ronde)
+  for (const y of [0.48, 0.58]) p.box(0.5, 0.012, 0.012, 0.25, y, 0.06, iron);
+  for (let i = 0; i < 5; i++) { const x = 0.05 + i * 0.1; p.cyl(0.007, 0.007, 0.2, 4, x, 0.44, 0.06, iron); p.cone(0.012, 0.035, 4, x, 0.64, 0.06, iron); }
   // la lanterne à gaz sur le pilastre, côté rue
   lantern(p, 0.25, 0.58, 0.19, iron);
   void side;
@@ -128,6 +200,10 @@ function armConcrete(p: Parts, side: number) {
   // un panneau d'avertissement rouge, un petit témoin lumineux
   p.box(0.06, 0.05, 0.006, 0.25, 0.3, 0.054, 0xd8dde2); p.box(0.05, 0.04, 0.004, 0.25, 0.305, 0.058, 0xd84a3e);
   p.box(0.012, 0.012, 0.01, 0.25, 0.44, 0.054, 0x5ae08a, 0, true);
+  // la passerelle d'acier du chemin de ronde, côté intérieur : caillebotis sur ses consoles, lisse de garde-corps
+  p.box(0.5, 0.02, 0.16, 0.25, 0.5, -0.13, steel);
+  for (const x of [0.12, 0.38]) { p.box(0.03, 0.03, 0.12, x, 0.47, -0.11, 0x4a4650); p.box(0.012, 0.14, 0.012, x, 0.52, -0.2, 0x4a4650); }
+  p.box(0.5, 0.01, 0.01, 0.25, 0.65, -0.2, 0x8e9092);
   void side;
 }
 
@@ -143,6 +219,10 @@ function armEnergy(p: Parts, side: number) {
   }
   for (let i = 0; i < 4; i++) p.box(0.5, 0.012, 0.016, 0.25, 0.14 + i * 0.13, 0, cyan, 0, 'neon');
   for (let i = 0; i < 3; i++) p.box(0.012, 0.5, 0.01, 0.08 + i * 0.17, 0.1, 0, 0x9af4ff, 0, 'neon');
+  // la passerelle lumineuse du chemin de ronde, en encorbellement côté intérieur
+  p.box(0.5, 0.015, 0.16, 0.25, 0.66, -0.1, white);
+  p.box(0.5, 0.008, 0.012, 0.25, 0.675, -0.174, cyan, 0, 'neon');
+  for (const x of [0.12, 0.38]) p.box(0.03, 0.03, 0.1, x, 0.63, -0.1, dkc);
   void side;
 }
 
@@ -242,15 +322,19 @@ const ARMS = [armPalisade, armPalisade, armStone, armBrick, armConcrete, armEner
 const NODES = [nodePalisade, nodePalisade, nodeStone, nodeBrick, nodeConcrete, nodeEnergy];
 export const rampartAge = (age: number) => Math.max(1, Math.min(5, age));
 
-/** Un pan de rempart à l'âge `age`, selon ses côtés reliés (`mask` : WALL_N, E, S, W ; aucun : un court pan d'est en ouest) */
+/**
+ * Un pan de rempart à l'âge `age`, selon ses côtés reliés (`mask` : WALL_N, E, S, W ; aucun : un court pan d'est en ouest) ;
+ * les bits << TOWER_SHIFT disent qu'une tour de garde est de ce côté : le bras s'y soude
+ */
 export function rampartWall(p: Parts, age: number, mask: number, kit: DefKit) {
-  const a = rampartAge(age), m = mask & 15 ? mask & 15 : WALL_E | WALL_W;
+  const a = rampartAge(age), m = mask & 15 ? mask & 15 : WALL_E | WALL_W, towers = (mask >> TOWER_SHIFT) & 15;
   NODES[a](p, kit, nodeKind(m));
-  for (const [bit, rot] of DIRS) {
+  for (const [bit] of DIRS) {
     if (!(m & bit)) continue;
     const sub = new Parts();
     ARMS[a](sub, bit);
-    pour(p, sub, rot);
+    if (towers & bit) towerJoin(a, sub);
+    orient(p, sub, bit);
   }
 }
 
@@ -394,12 +478,32 @@ function gateEnergy(p: Parts, kit: DefKit) {
 
 const GATES = [gatePalisade, gatePalisade, gateStone, gateBrick, gateConcrete, gateEnergy];
 
-/** La porte de la ville à l'âge `age` ; `mask` : ses côtés reliés (le mur court d'est en ouest, sinon elle se tourne) */
+/** Le raccord d'une porte à une tour de garde voisine du côté `s` : une passerelle du haut de la porte à la face de la tour, et la porte percée dans la tour */
+function gateJoin(a: number, p: Parts, s: number) {
+  const face = 1 - TOWER_R[a], wk = WALK[a], y = wk.gate - 0.03, x0 = 0.5, x1 = face + 0.02;
+  p.box(x1 - x0, 0.03, 0.16, s * (x0 + x1) / 2, y, 0, dk(wk.frame, 1.1));
+  for (const z of [-0.08, 0.08]) { p.box(x1 - x0, 0.012, 0.012, s * (x0 + x1) / 2, y + 0.14, z, wk.frame); for (const x of [x0 + 0.04, x1 - 0.04]) p.box(0.012, 0.14, 0.012, s * x, y + 0.03, z, wk.frame); }
+  p.box(0.03, 0.26, 0.13, s * (face + 0.012), y + 0.03, 0, 0x24201c);
+  for (const t of [-1, 1]) p.box(0.05, 0.28, 0.025, s * (face + 0.01), y + 0.025, t * 0.077, wk.frame);
+  p.box(0.05, 0.03, 0.18, s * (face + 0.01), y + 0.295, 0, wk.frame);
+}
+
+/**
+ * La porte de la ville à l'âge `age` ; `mask` : ses côtés reliés (le mur court d'est en ouest, sinon elle se tourne) ; une
+ * tour de garde voisine dans l'axe du mur (bits << TOWER_SHIFT) : une passerelle l'y relie
+ */
 export function rampartGate(p: Parts, age: number, mask: number, kit: DefKit) {
-  const a = rampartAge(age);
-  if (gateAlongX(mask)) { GATES[a](p, kit); return; }
-  // le mur court du nord au sud : la porte tourne d'un quart de tour, et le pied de ses drapeaux avec elle
+  const a = rampartAge(age), towers = (mask >> TOWER_SHIFT) & 15;
+  if (gateAlongX(mask)) {
+    GATES[a](p, kit);
+    if (towers & WALL_E) gateJoin(a, p, 1);
+    if (towers & WALL_W) gateJoin(a, p, -1);
+    return;
+  }
+  // le mur court du nord au sud : la porte tourne d'un quart de tour (+x devient le sud), et le pied de ses drapeaux avec elle
   const sub = new Parts(), rk: DefKit = { ...kit, sway: (pv, axis, amp, freq) => kit.sway([-pv[2], pv[1], pv[0]], axis, amp, freq) };
   GATES[a](sub, rk);
+  if (towers & WALL_S) gateJoin(a, sub, 1);
+  if (towers & WALL_N) gateJoin(a, sub, -1);
   pour(p, sub, -PI / 2);
 }

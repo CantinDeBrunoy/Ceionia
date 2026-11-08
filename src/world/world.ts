@@ -1,4 +1,4 @@
-import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize } from '../build/catalog';
+import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize, isRampart } from '../build/catalog';
 import { readPortal } from './portal';
 import { tr } from '../i18n';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
@@ -894,8 +894,9 @@ export class World {
         if (this.occ[k]) return tr('Emplacement occupé');
         // (le lampadaire se pose au bord de la rue, la porte de la ville l'enjambe)
         if (this.road[k] && kind !== 'lamp' && kind !== 'gate') return tr('Une route est déjà ici');
-        // la case devant la porte d'un bâtiment reste libre pour son chemin
-        if (!this.road[k] && this.doorOf(cx, cz)) return tr('Devant la porte d’un bâtiment : son chemin passe ici');
+        // la case devant la porte d'un bâtiment reste libre pour son chemin (sauf un rempart devant une tour de garde : le mur
+        // vient se souder à la tour de tous côtés, on y monte par le chemin de ronde)
+        if (!this.road[k]) { const d = this.doorOf(cx, cz); if (d && !(isRampart(kind) && d.kind === 'watchtower')) return tr('Devant la porte d’un bâtiment : son chemin passe ici'); }
         if (this.decor[k]) return tr('Une grotte ou une faille est ici');
         if (this.lake[k]) return tr('Un lac est ici');
         // le port bâtit son quai sur la rive, et même un peu dans l'eau peu profonde (il le remblaie) ; pas en eau profonde
