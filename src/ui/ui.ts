@@ -1459,6 +1459,9 @@ export class UI {
 
   openExpeditions(tab: 'missions' | 'gear' | 'rail' = 'missions') {
     const h = this.host, ex = h.expeditions, age = h.sim.age, max = ex.slots(), pop = Math.floor(h.sim.pop);
+    // le chemin de fer ne vient qu'à l'âge industriel : avant, pas d'onglet
+    const railOn = age >= 3;
+    if (tab === 'rail' && !railOn) tab = 'missions';
     const next = max < partyLimit(1e9) ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: max * 30, pop }) : tr('Équipes au maximum');
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
@@ -1483,7 +1486,7 @@ export class UI {
     const cards = sorted.map(card).join('');
     const nMil = sorted.filter(isMilitary).length, nLeg = sorted.filter(isLegendary).length;
     const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} ${tr('Expéditions')}`, `
-      <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}${tr('Missions')}</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}${tr('Équipement')}</button><button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('train', 16, 2)}${tr('Chemin de fer')}</button></div>
+      <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}${tr('Missions')}</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}${tr('Équipement')}</button>${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('train', 16, 2)}${tr('Chemin de fer')}</button>` : ''}</div>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
         <div class="teams"><div class="row"><b>${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
         <p class="hint">${tr('Envoyez de petites équipes chercher ce qui manque au village.')}</p><details class="cdet"><summary>${tr('En savoir plus')}</summary><p class="hint">${tr('Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.')}</p></details>
@@ -1492,7 +1495,7 @@ export class UI {
         <p class="emptyMsg" hidden></p>
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
-      <section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>`);
+      ${railOn ? `<section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>` : ''}`);
     ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
       ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((sec) => (sec.hidden = sec.dataset.sec !== b.dataset.tab));
