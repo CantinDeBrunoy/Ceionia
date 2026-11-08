@@ -677,3 +677,17 @@ registerDict('catalog', {
   'Masquer la carte de couverture': 'Hide the coverage map',
   'Montrer sur la carte': 'Show on the map',
 });
+
+/** Recensement des habitants (libellés des lignes) */
+registerDict('catalog', {
+  'Au travail': 'At work',
+  'Sans emploi': 'Jobless',
+  'Enfants et anciens': 'Children and elders',
+  'Malades soignés': 'Sick people treated',
+  'Malades sans soins': 'Sick people without care',
+  'Blessés au repos': 'Injured, resting',
+  'En expédition': 'On expedition',
+  'Ont faim': 'Hungry',
+  'Ont soif': 'Thirsty',
+  'Mécontents': 'Unhappy',
+});

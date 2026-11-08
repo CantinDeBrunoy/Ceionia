@@ -956,7 +956,7 @@ export class UI {
     el.dataset.v = key;
     el.className = `tone-${tone}${k || ready || exp || rail ? ' link' : ''}`;
     el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
-    const text = tr(sim.message).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}${tr('Bâtir')}</b>` : exp ? `<b class="go">${ic('compass', 12, 2.4)}${tr('Ouvrir')}</b>` : rail ? `<b class="go">${ic('train', 12, 2.4)}${tr('Tracer')}</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}${tr('Passer')}</b>` : ''}`;
     void el.offsetWidth;
     el.classList.add('flash');
