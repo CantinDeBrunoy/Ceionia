@@ -1,4 +1,4 @@
-import { tr, plural, nplural, getLang, setLang, LANGS, type Lang } from '../i18n';
+import { tr, plural, nplural, getLang, setLang, colon, LANGS, type Lang } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building } from '../build/catalog';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
@@ -266,7 +266,7 @@ const NEED_RULE: Record<NeedId, string> = {
 const givesOf = (k: KindId, a: number): string[] => {
   const out: string[] = [];
   const y = YIELD[k];
-  for (const r of Object.keys(y ?? {}) as Resource[]) if (y![r]![a]) out.push(RES_META[r].label);
+  for (const r of Object.keys(y ?? {}) as Resource[]) if (y![r]![a]) out.push(tr(RES_META[r].label));
   for (const g of MAIN.map((m) => GIVES.find((x) => x.k === m)!)) if (KINDS[k][g.k]?.[a]) { const l = tr(g.label); out.push(l[0].toUpperCase() + l.slice(1)); }
   return out;
 };
@@ -653,7 +653,7 @@ export class UI {
     const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label} : ${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
       : `<span class="mhint">${ic(t.icon, 16, 2)}${tr(t.hint)}</span>`;
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
       const why = b.dataset.c !== KINDS.gather.cat ? this.startWhy() : null;
@@ -678,7 +678,7 @@ export class UI {
       };
       const toolTile = (id: string, sub: string, deco = false) => {
         const i = this.toolInfo(id);
-        return `<button class="tile${deco ? ' deco' : ''}" data-tool="${id}" title="${i.label} : ${sub}" aria-label="${i.label} : ${sub}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span><small class="gv">${sub}</small>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`;
+        return `<button class="tile${deco ? ' deco' : ''}" data-tool="${id}" title="${i.label}${colon()}${sub}" aria-label="${i.label}${colon()}${sub}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span><small class="gv">${sub}</small>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`;
       };
       html = BUILD_SUBS[this.cat].map((sub) => {
         const tiles = kinds.filter((k) => KIND_SUB[k] === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
@@ -1022,7 +1022,7 @@ export class UI {
   private cursorXY: [number, number] | null = null;
   private hintTxt = '';
   private renderCursorHint() {
-    const el = $('#cursorHint'), st = this.host.tools.freeStage, txt = st === 1 ? 'Cliquez le point A' : st === 2 ? 'Cliquez le point B' : '';
+    const el = $('#cursorHint'), st = this.host.tools.freeStage, txt = st === 1 ? tr('Cliquez le point A') : st === 2 ? tr('Cliquez le point B') : '';
     if (txt !== this.hintTxt) { this.hintTxt = txt; el.textContent = txt; el.classList.toggle('show', !!txt); el.classList.toggle('b', st === 2); }
     if (txt && this.cursorXY) el.style.transform = `translate(${this.cursorXY[0] + 18}px, ${this.cursorXY[1] + 20}px)`;
   }

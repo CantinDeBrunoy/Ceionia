@@ -30,6 +30,8 @@ const applyHtmlLang = () => { if (typeof document !== 'undefined') document.docu
 applyHtmlLang();
 
 export const getLang = (): Lang => lang;
+/** Le deux-points de la langue : avec une espace insécable devant en français (« Nom : valeur »), collé en anglais (« Name: value ») */
+export const colon = (): string => (lang === 'en' ? ': ' : ' : ');
 export const isEnglish = () => lang === 'en';
 
 /** Change la langue (mémorisée, <html lang> à jour) et prévient les abonnés ; sans effet si elle ne change pas */

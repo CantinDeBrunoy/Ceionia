@@ -2,7 +2,7 @@ import { KINDS, KindId } from '../build/catalog';
 import { MAPS } from '../world/mapgen';
 import { loadSlot } from '../save/save';
 import { ic } from './icons';
-import { tr, localize } from '../i18n';
+import { tr, localize, colon } from '../i18n';
 import type { UI, UIHost } from './ui';
 
 /**
@@ -176,7 +176,7 @@ export function menuToggle(): HTMLElement {
   row.className = 'row tutoToggle';
   const draw = () => {
     const on = tutorialOn();
-    row.innerHTML = `<button class="${on ? 'on' : ''}" aria-pressed="${on}" title="${T.title}">${ic('book', 17, 2)}${T.label} : ${on ? T.on : T.off}<i class="sw"></i></button>`;
+    row.innerHTML = `<button class="${on ? 'on' : ''}" aria-pressed="${on}" title="${T.title}">${ic('book', 17, 2)}${T.label}${colon()}${on ? T.on : T.off}<i class="sw"></i></button>`;
     (row.firstElementChild as HTMLButtonElement).onclick = () => { writeState({ on: !on, step: readState()?.step ?? 0 }); draw(); };
   };
   draw();

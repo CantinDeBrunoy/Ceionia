@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { mapDef } from '../world/mapgen';
 
 export interface Settings {
@@ -86,17 +87,18 @@ export async function readSaveFile(file: File): Promise<SaveData> {
 export function savedAgo(at: number, now = Date.now()): string {
   if (!Number.isFinite(at) || at <= 0) return '';
   const min = Math.floor((now - at) / 60000);
-  if (min < 1) return 'sauvegardé à l’instant';
-  if (min < 60) return `sauvegardé il y a ${min} min`;
+  if (min < 1) return tr('sauvegardé à l’instant');
+  if (min < 60) return tr('sauvegardé il y a {n} min', { n: min });
   const d0 = new Date(now), d1 = new Date(at);
   // jours de calendrier entre les deux minuits (arrondis : un changement d'heure ne décale rien)
   const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const days = Math.round((midnight(d0) - midnight(d1)) / 86400000);
-  if (days <= 0) return `sauvegardé il y a ${Math.floor(min / 60)} h`;
-  if (days === 1) return 'sauvegardé hier';
-  if (days < 7) return `sauvegardé il y a ${days} jours`;
-  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  return `sauvegardé le ${d1.getDate() === 1 ? '1er' : d1.getDate()} ${mois[d1.getMonth()]}${d1.getFullYear() !== d0.getFullYear() ? ` ${d1.getFullYear()}` : ''}`;
+  if (days <= 0) return tr('sauvegardé il y a {n} h', { n: Math.floor(min / 60) });
+  if (days === 1) return tr('sauvegardé hier');
+  if (days < 7) return tr('sauvegardé il y a {n} jours', { n: days });
+  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'].map((m) => tr(m));
+  const y = d1.getFullYear() !== d0.getFullYear() ? ` ${d1.getFullYear()}` : '';
+  return tr('sauvegardé le {d} {m}{y}', { d: d1.getDate() === 1 ? tr('1er') : d1.getDate(), m: mois[d1.getMonth()], y });
 }
 
 export function loadSettings(): Partial<Settings> {
