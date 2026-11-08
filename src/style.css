@@ -931,9 +931,63 @@ body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
 #troopBar .thelp li { display: contents; }
 #troopBar .thelp b { color: var(--ink); white-space: nowrap; }
 #troopBar .thelp span { color: var(--ink2); }
+/* Enfers : la frise du front (une ligne), « Ma base » en trois familles */
+#troopBar .tfrise { align-items: center; gap: 10px; padding: 5px 12px; border-radius: 14px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); flex-wrap: nowrap; max-width: calc(100vw - 24px); }
+#troopBar .tfz { display: flex; align-items: center; }
+#troopBar .zn { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 60px; flex: none; cursor: help; }
+#troopBar .zc { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; background: #12a37e; box-sizing: border-box; }
+#troopBar .zt { font-size: 10.5px; font-weight: 800; color: var(--ink); line-height: 1.1; }
+#troopBar .zn.hot .zc { background: #d63a2a; animation: zpulse 1s ease-in-out infinite; }
+#troopBar .zn.hot .zt { color: #b3321f; }
+#troopBar .zn.next .zc { background: #fff; color: var(--ink2); border: 2px solid #12a37e; }
+#troopBar .zn.lock .zc, #troopBar .zn.shut .zc { background: #c3cbda; border: 2px dashed #8a94a8; color: #5a6783; }
+#troopBar .zn.lock .zt, #troopBar .zn.shut .zt { color: var(--ink2); font-weight: 700; }
+#troopBar .zl { flex: 1 1 10px; min-width: 8px; height: 4px; margin: 0 -8px 12px; border-radius: 2px; background: repeating-linear-gradient(90deg, #b3bdd0 0 6px, transparent 6px 10px); }
+#troopBar .zl.ok { background: #12a37e; }
+@keyframes zpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(214, 58, 42, 0.6); } 50% { box-shadow: 0 0 0 5px rgba(214, 58, 42, 0); } }
+#troopBar .tfs { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--line); font-size: 13px; font-weight: 700; white-space: nowrap; }
+#troopBar .tfa { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; background: #ffe3d8; color: #a53a1c; box-shadow: var(--lift); font-size: 12.5px; font-weight: 800; max-width: min(560px, calc(100vw - 24px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#troopBar.inhell .tleft { width: 170px; }
+#troopBar.inhell .tdock { top: calc(var(--hudB, 82px) + 72px); max-height: calc(100dvh - var(--hudB, 82px) - 72px - 100px); }
+#troopBar.inhell .tbase { width: 300px; gap: 6px; }
+#troopBar .tfam { display: flex; flex-direction: column; gap: 4px; }
+#troopBar .tfam h6 { margin: 0; font-size: 12px; font-weight: 800; color: var(--ink2); }
+#troopBar .tfam.hold h6 { color: #0d7a5f; }
+#troopBar .tfam.def h6 { color: #c8482b; }
+#troopBar .tfam.lit h6 { color: #b46a00; }
+#troopBar .tfam .tbuilds { display: grid; gap: 6px; }
+#troopBar .tfam.hold .tbuilds { grid-template-columns: 1fr 1fr; }
+#troopBar .tfam.def .tbuilds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#troopBar .tfam.lit .tbuilds { grid-template-columns: 1fr; }
+#troopBar .tfam .trb { min-height: 52px; padding: 4px 8px; gap: 0; }
+#troopBar .tfam .trb b { font-size: 13px; }
+#troopBar .tfam .trb small { font-size: 11px; line-height: 1.2; white-space: normal; }
+#troopBar .tfam .trb small.co { color: #7a5300; }
+#troopBar .tfam .trb small.lg em { font-style: normal; color: #a53a1c; }
+#troopBar .tfam .trb.first { border-color: #f2c14e; background: #fff1c9; box-shadow: 0 0 0 3px rgba(242, 193, 78, 0.55); }
+#troopBar .tfam.def .trb, #troopBar .tfam.lit .trb { border-color: #d6dff0; background: #fff; }
+#troopBar .tfam.def .trb.on, #troopBar .tfam.lit .trb.on, #troopBar .tfam .trb.on { background: var(--accent); border-color: var(--accent); }
+#troopBar .tfam .trb.off { opacity: 0.6; background: var(--glass); border-color: var(--line); box-shadow: none; }
+#troopBar .tfam .trb.on small, #troopBar .tfam .trb.on small.co { color: #fff; }
+#troopBar .trec { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#troopBar .trec .trb { min-height: 44px; }
 @media (max-width: 640px) {
   #troopBar { font-size: 11.5px; }
   #troopBar .tstate { gap: 5px; }
+  #troopBar .tfrise { flex-wrap: wrap; justify-content: center; gap: 4px 8px; padding: 4px 8px; }
+  #troopBar .zn { width: 24px; }
+  #troopBar .zt { display: none; }
+  #troopBar .zc { width: 18px; height: 18px; font-size: 10px; }
+  #troopBar .zl { flex: 0 0 8px; margin: 0 -2px; }
+  #troopBar .tfs { padding-left: 8px; gap: 6px; font-size: 11.5px; }
+  #troopBar .tfa { font-size: 11px; }
+  #troopBar.inhell .tleft { width: 124px; }
+  #troopBar.inhell .tdock { top: calc(var(--hudB, 82px) + 66px); max-height: calc(100dvh - var(--hudB, 82px) - 66px - 150px); }
+  #troopBar.inhell .tbase { width: 168px; }
+  #troopBar .tfam.hold .tbuilds, #troopBar .tfam.def .tbuilds, #troopBar .trec { grid-template-columns: 1fr; }
+  #troopBar .tfam .trb { min-height: 40px; }
+  #troopBar .tfam .trb:not(.off) small.lg { display: none; }
+  #troopBar .tfam .trb small.co { font-size: 10px; }
   #troopBar .tchip { padding: 5px 9px; font-size: 12px; }
   #troopBar .tdock { top: calc(var(--hudB, 82px) + 78px); padding: 7px; gap: 6px; border-radius: 14px; max-height: calc(100dvh - var(--hudB, 82px) - 78px - 150px); }
   #troopBar .tleft { left: 6px; width: 124px; }

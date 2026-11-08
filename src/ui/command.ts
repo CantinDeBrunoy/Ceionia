@@ -6,8 +6,9 @@ import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGear
 import { GEAR_BY, GearId } from '../sim/gear';
 import type { War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
-import { BASE_DEFS, BASE_KINDS, costText, canAfford } from '../sim/hellBase';
-import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
+import { BASE_DEFS, costText, canAfford, COUNTER_WARN } from '../sim/hellBase';
+import type { BaseCost } from '../sim/hellBase';
+import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 
 /**
@@ -452,7 +453,7 @@ export class CommandUI implements ToolInput {
       const of = us.filter((u) => u.kind === k);
       if (!of.length) return '';
       const hp = of.reduce((s, u) => s + u.hp, 0) / of.reduce((s, u) => s + u.maxHp, 0), on = of.filter((u) => sel.selected.has(u.id)).length;
-      return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${troopForm(k, age).plural}${troopForm(k, age).name !== TROOPS[k].name ? ` (ex-${TROOPS[k].plural.toLowerCase()})` : ''} : choisir (Maj : ajouter)"><b>${on ? `${on} / ` : ''}${of.length}</b><span class="tn"><span class="ti">${troopForm(k, age).icon}</span> ${troopForm(k, age).plural}</span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
+      return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${troopForm(k, age).plural}${troopForm(k, age).name !== TROOPS[k].name ? ` (ex-${TROOPS[k].plural.toLowerCase()})` : ''} : choisir (Maj : ajouter)"><b>${isle ? `${on ? `${on} / ` : ''}` : `${on} / `}${of.length}</b><span class="tn"><span class="ti">${troopForm(k, age).icon}</span> ${troopForm(k, age).plural}</span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
     }).join('');
     const ctx = w.recruitCtx(this.host.age(), this.host.pop());
     // à droite, sur l'île : la caserne (recruter, effectif)
@@ -469,14 +470,16 @@ export class CommandUI implements ToolInput {
     // en haut : le ruban d'état (vague et cor, contamination, garnison, zone suivante)
     const next = w.nextWaveIn(), raid = isle && w.isle?.raid;
     const wounded = w.army.troops.filter((x) => x.heal > 0).length;
-    const status = isle ? (raid ? `<span class="wst hot">🔥 Incursion : ${w.isle!.raiders().length} démons</span>` : next !== null ? `<span class="wst">Prochaine vague dans <b>${Math.ceil(next)} s</b> <button data-a="wave" title="Sonner le cor : faire venir la prochaine vague tout de suite">🎺 Cor</button></span>` : '') : this.hellGate();
+    const status = isle ? (raid ? `<span class="wst hot">🔥 Incursion : ${w.isle!.raiders().length} démons</span>` : next !== null ? `<span class="wst">Prochaine vague dans <b>${Math.ceil(next)} s</b> <button data-a="wave" title="Sonner le cor : faire venir la prochaine vague tout de suite">🎺 Cor</button></span>` : '') : '';
     // la contamination de l'île : elle recule à chaque défense, chaque vague repoussée, chaque zone des Enfers conquise
     const bl = isle && w.blight ? Math.round(w.blight.level * 100) : -1;
     const blight = bl >= 0 ? `<span class="tsup tblight${bl > 60 ? ' low' : ''}" title="Contamination de l’île : les Enfers débordent par le portail (près de lui, les démons frappent un peu plus fort). Elle recule à chaque tour de garde ou caserne bâtie, chaque vague repoussée, chaque zone des Enfers conquise ; l’île sécurisée reverdit. Les troupes se soignent plus vite dans la zone purifiée (anneaux dorés autour des défenses).">🔥 Contamination <i><b style="width:${bl}%"></b></i>${bl} %</span>` : '';
     const garrison = `<span class="wst" title="${isle ? 'Soldats de la garnison de l’île, sur le maximum que la caserne peut loger' : 'Soldats de l’armée, sur le maximum'}">🛡️ ${isle ? 'Garnison' : 'Armée'} <b>${armySize(w.army)} / ${armyCap(ctx)}</b></span>`;
     const ribbon = [status, blight, garrison, wounded ? `<span class="twd" title="Blessés qui se soignent à la caserne">🩹 ${wounded} blessé${wounded > 1 ? 's' : ''}</span>` : ''].filter(Boolean).map((x) => `<div class="tchip">${x}</div>`).join('');
     const none = isle ? 'Aucune troupe sur l’île : recrutez à la caserne (à droite).' : w.army.troops.some((x) => x.where === 'hell') ? 'Aucune troupe debout ici : les blessés se soignent.' : 'Aucune troupe ici : faites venir la garnison de l’île (Renforts, à gauche).';
-    const html = `<div class="tstate">${ribbon}</div>
+    // dans les Enfers : une seule frise compacte (le front, l'alerte, l'armée) ; sur l'île, le ruban de pastilles
+    this.bar.classList.toggle('inhell', !isle);
+    const html = `${isle ? `<div class="tstate">${ribbon}</div>` : this.frontBar(wounded)}
       ${this.passDock(isle)}
       ${rec}
       <div class="tbot panel"><div class="thint">${this.hint()}</div>
@@ -508,35 +511,68 @@ export class CommandUI implements ToolInput {
   }
 
   /**
-   * Le dock droit des Enfers, la base avancée : les bâtiments à poser (un petit menu à elle, pas celui du village), la caserne avancée (recrues sur place)
+   * Le dock droit des Enfers, « Ma base » en trois familles (tenir la zone, se défendre, éclairer) : nom, courte légende et coût
+   * en clair ; grisé avec la raison quand on ne peut pas (le camp d'abord : les autres s'ouvrent après lui) ; puis « Recruter ici »
    */
   private baseRow() {
     const w = this.host.war, b = w.base;
     if (!b) return '';
-    const world = w.purse;
+    const world = w.purse, age = this.host.age();
     const zi = Math.min(HELL_ZONES.length - 1, Math.max(0, w.faction?.frontier ?? 0));
-    const builds = BASE_KINDS.map((k) => {
-      const d = BASE_DEFS[k], afford = canAfford(world, d.cost);
-      return `<button data-a="build:${k}" class="trb tb${this.placing === k ? ' on' : ''}${afford ? '' : ' off'}" title="${`${d.name} (${costText(d.cost)}) : ${d.desc}`.replace(/"/g, '&quot;')}"><b>${d.icon} ${d.name}</b><small>${costText(d.cost)}</small></button>`;
-    }).join('');
-    const posts = b.posts(), ctx = w.recruitCtx(this.host.age(), this.host.pop());
-    const rec = posts ? `<h5>Recruter ici</h5>${TROOP_KINDS.filter((k) => this.host.age() >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="trb${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? ' off' : ''}" title="Recruter sur place : ${troopLabel(k, this.host.age())}. ${troopForm(k, this.host.age()).desc.replace(/"/g, '&quot;')}"><b>${troopForm(k, this.host.age()).icon} + ${troopForm(k, this.host.age()).name}</b><small>caserne avancée</small></button>`).join('')}` : '';
-    return `<div class="tdock tright tbase"><h5 title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">Base avancée</h5><div class="tbuilds">${builds}</div>${rec}</div>`;
+    const hasCamp = b.buildings().some((x) => x.kind === 'camp');
+    const miss = (c: BaseCost) => costText({ wood: Math.max(0, c.wood - world.wood), stone: Math.max(0, c.stone - world.stone), ore: Math.max(0, c.ore - world.ore) });
+    const btn = (k: BaseKind, legend: string, extra = '') => {
+      const d = BASE_DEFS[k], afford = canAfford(world, d.cost), locked = k !== 'camp' && !hasCamp;
+      const why = locked ? 'd’abord le Camp' : afford ? '' : `manque ${miss(d.cost)}`;
+      return `<button data-a="build:${k}" class="trb tb${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${d.name} (${costText(d.cost)}) : ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}"><b>${d.icon} ${d.name}</b><small class="lg">${why ? `<em>${why}</em>` : legend}</small><small class="co">${costText(d.cost)}</small></button>`;
+    };
+    const fam = (cls: string, title: string, inner: string) => `<div class="tfam ${cls}"><h6>${title}</h6><div class="tbuilds">${inner}</div></div>`;
+    const posts = b.posts(), ctx = w.recruitCtx(age, this.host.pop());
+    const rec = posts ? `<div class="tfam"><h6>Recruter ici</h6><div class="trec">${TROOP_KINDS.filter((k) => age >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="trb${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? ' off' : ''}" title="Recruter sur place : ${troopLabel(k, age)}. ${troopForm(k, age).desc.replace(/"/g, '&quot;')}"><b>${troopForm(k, age).icon} + ${troopForm(k, age).name}</b><small>caserne avancée</small></button>`).join('')}</div></div>` : '';
+    return `<div class="tdock tright tbase"><h5 title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">Ma base</h5>${
+      fam('hold', 'Tenir la zone', btn('camp', hasCamp ? 'point de repli' : 'à poser d’abord', hasCamp ? '' : ' first') + btn('post', 'recrues sur place') + btn('smithy', '+20 % de force') + btn('infirmary', 'soins rapides'))}${
+      fam('def', 'Se défendre', btn('tower', 'archers') + btn('palisade', 'glisser pour tracer') + btn('gate', 'sur un mur'))}${
+      fam('lit', 'Éclairer', btn('brazier', 'repousse la brume'))}${rec}</div>`;
   }
 
+  /** Le nom court de chaque zone dans la frise (le nom entier est dans l'infobulle) */
+  private static ZSHORT = ['Portail', 'Braise', 'Lave', 'Cendres', 'Gorge', 'Cristaux', 'Royaume'];
+
   /**
-   * Dans les Enfers : la zone suivante, et pourquoi elle est fermée (l'âge du village, ou la forteresse d'avant) ; l'infobulle
-   * donne l'âge de chaque zone
+   * La frise du front, en haut des Enfers : du portail au royaume, un rond par zone (vert : tenue, rouge qui pulse : attaquée,
+   * gris pointillé : verrouillée par l'âge ou fermée par la forteresse d'avant) ; à côté, l'armée et les blessés, et la pastille
+   * d'alerte quand une contre-attaque ou une reprise est annoncée
    */
-  private hellGate() {
-    const f = this.host.war.faction;
-    if (!f || !f.gate) return '';
-    const next = f.frontier + 1, age = this.host.age();
-    const tip = HELL_ZONES.map((z, i) => i ? `${zoneThe(i)} : ${zoneAgeText(i)}${ZONE_AGE[i] > age ? ' (verrouillée)' : ''}` : '').filter(Boolean).join(' ; ');
-    const t = `Les démons deviennent trop forts pour un village trop jeune : chaque zone demande un âge. ${tip}`.replace(/"/g, '&quot;');
-    if (next >= HELL_ZONES.length) return `<span class="wst" title="${t}">👑 Royaume ouvert</span>`;
-    if (ZONE_AGE[next] > age) return `<span class="wst" title="${t}">🔒 ${zoneThe(next)} : ${zoneAgeText(next)}</span>`;
-    return `<span class="wst" title="${t}">🌫️ Abattez la forteresse pour ouvrir ${zoneThe(next)}</span>`;
+  private frontBar(wounded: number) {
+    const w = this.host.war, f = w.faction, base = w.base, age = this.host.age(), ctx = w.recruitCtx(age, this.host.pop());
+    const att = new Map<number, number>();
+    if (base) for (const z of base.attackers.values()) att.set(z, (att.get(z) ?? 0) + 1);
+    // les alertes : assaut en cours, assaut annoncé (préavis), reprise annoncée ; la plus pressante d'abord
+    const alerts: { zone: number; text: string; rank: number }[] = [];
+    if (f && base) {
+      for (const [z, n] of att) alerts.push({ zone: z, rank: -1, text: `Les démons attaquent ta base ${zoneOf(z)} : ${n} démon${n > 1 ? 's' : ''}` });
+      for (let z = 0; z < HELL_ZONES.length; z++) {
+        const at = base.next[z];
+        if (at >= 0 && !att.has(z) && f.time >= at - COUNTER_WARN) { const s = Math.max(0, Math.ceil(at - f.time)); alerts.push({ zone: z, rank: s, text: `Les démons marchent sur ta base ${zoneOf(z)} dans ${s} s` }); }
+      }
+      const r = base.reclaim;
+      if (r && r.warned) { const s = Math.max(0, Math.ceil(r.at - f.time)); alerts.push({ zone: r.zone, rank: s, text: `Les démons vont reprendre ${zoneThe(r.zone)} dans ${s} s` }); }
+    }
+    alerts.sort((a, b) => a.rank - b.rank);
+    const hot = new Set(alerts.map((a) => a.zone));
+    let nodes = '';
+    if (f && f.gate) {
+      nodes = HELL_ZONES.map((zd, i) => {
+        const held = f.held(i) || f.victory, ageLock = ZONE_AGE[i] > age;
+        const st = hot.has(i) ? 'hot' : held ? 'ok' : ageLock ? 'lock' : i === f.frontier + 1 ? 'next' : 'shut';
+        const tip = `${zd.name} : ${st === 'hot' ? 'attaquée' : st === 'ok' ? 'tenue' : st === 'next' ? 'à conquérir : abattez sa forteresse' : ageLock ? `verrouillée : demande ${zoneAgeText(i)}` : 'fermée : abattez d’abord la forteresse de la zone d’avant'} (${zoneAgeText(i)})`;
+        const link = i ? `<i class="zl${held ? ' ok' : ''}"></i>` : '';
+        return `${link}<span class="zn ${st}" title="${tip.replace(/"/g, '&quot;')}"><span class="zc">${i ? i : 'P'}</span><span class="zt">${CommandUI.ZSHORT[i]}</span></span>`;
+      }).join('');
+    }
+    const garr = `<span class="tfi" title="Soldats de l’armée, sur le maximum">🛡️ <b>${armySize(w.army)} / ${armyCap(ctx)}</b></span>${wounded ? `<span class="tfi" title="Blessés qui se soignent à la caserne">🩹 ${wounded}</span>` : ''}`;
+    const al = alerts[0];
+    return `<div class="tstate tfrise"><div class="tfz">${nodes}</div><div class="tfs">${garr}</div>${al ? `<span class="tfa" title="${al.text.replace(/"/g, '&quot;')}">⚠️ ${al.text}</span>` : ''}</div>`;
   }
 
   /** L'alerte d'incursion (bannière et bouton « Voir l'île »), quand on ne regarde pas l'île */
