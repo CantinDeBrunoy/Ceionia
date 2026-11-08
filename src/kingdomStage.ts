@@ -208,7 +208,7 @@ export class KingdomStage {
         const left = h.raiders();
         fin.fx!.dissolve(left.length ? left : [0, 1, 2, 3].map((i) => ({ x: p.x + Math.cos(i * 1.6 + 0.5) * 3.4, z: p.z + Math.sin(i * 1.6 + 0.5) * 3.4 })));
       }
-      if (cur.local >= 0.8) fin.fx!.raiseSoldiers();
+      if (cur.local >= 0.8) fin.fx!.raiseSoldiers(fin.yaw);
       if (!fin.burst && cur.local >= BURST_AT) {
         fin.burst = new GoldenBurst(p.x, gy, p.z);
         h.scene.add(fin.burst.group);

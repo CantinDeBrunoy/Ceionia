@@ -9,6 +9,8 @@ import { makeFolk, folkStep, holdFolk, Folk } from './folk';
  */
 
 const ASH = 160, GREEN = 220, SOLDIERS = 8;
+/** les soldats sont grossis : les habitants sont minuscules (une fraction de case), la caméra est haute */
+const SIZE = 2.6;
 
 const additive = (color: THREE.Color, opacity: number) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide });
 
@@ -25,7 +27,7 @@ export class KingdomEndFx {
   private ringAt = -1;
   private soldiers: { f: Folk; a: number; r: number; ph: number }[] = [];
   private soldiersOn = false;
-  private spearGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.9, 5);
+  private spearGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.34, 5);
   private spearMat = new THREE.MeshBasicMaterial({ color: 0xe8d8a0 });
 
   /** (px, pz) : le portail ; radius : le rayon de l'île ; ground : la hauteur du sol ; age : l'âge du village (la tenue des soldats) */
@@ -60,16 +62,16 @@ export class KingdomEndFx {
     a.needsUpdate = true;
   }
 
-  /** Les soldats se rangent autour du portail, face à lui, et lèvent leurs armes */
-  raiseSoldiers() {
+  /** Les soldats se rangent en arc devant la caméra (son angle `yaw`), face au portail, et lèvent leurs armes */
+  raiseSoldiers(yaw: number) {
     if (this.soldiersOn) return;
     this.soldiersOn = true;
     for (let i = 0; i < SOLDIERS; i++) {
-      const f = makeFolk({ age: this.age, v: 40 + i * 11, role: 'villager' });
+      const f = makeFolk({ age: this.age, v: 40 + i * 11, role: 'villager', size: SIZE });
       const spear = new THREE.Mesh(this.spearGeo, this.spearMat);
-      spear.position.y = 0.3;
+      spear.position.y = 0.1;
       holdFolk(f, 0, spear, 'upright');
-      const a = -Math.PI / 2 + ((i + 0.5) / SOLDIERS - 0.5) * 2.4 + 0.4, r = 5.2 + (i % 2) * 0.9;
+      const a = yaw + ((i + 0.5) / SOLDIERS - 0.5) * 2.2, r = 4.6 + (i % 2) * 0.9;
       f.root.position.set(this.px + Math.sin(a) * r, 0, this.pz + Math.cos(a) * r);
       f.root.position.y = this.ground(f.root.position.x, f.root.position.z);
       f.root.rotation.y = Math.atan2(this.px - f.root.position.x, this.pz - f.root.position.z);
@@ -109,7 +111,7 @@ export class KingdomEndFx {
     // les soldats : bras levés, petits sauts d'allégresse
     for (const s of this.soldiers) {
       folkStep(s.f, this.t * 6 + s.ph, 'cheer');
-      s.f.root.position.y = this.ground(s.f.root.position.x, s.f.root.position.z) + Math.max(0, Math.sin(this.t * 6 + s.ph)) * 0.12;
+      s.f.root.position.y = this.ground(s.f.root.position.x, s.f.root.position.z) + Math.max(0, Math.sin(this.t * 6 + s.ph)) * 0.16;
     }
     // l'île qui reverdit
     if (this.ringAt >= 0) {

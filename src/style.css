@@ -1013,6 +1013,7 @@ body.under #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 122px); }
 body.cinematic #hud, body.cinematic #dock, body.cinematic #expList, body.cinematic #troopBar, body.cinematic #underBar, body.cinematic #bossBar, body.cinematic #selCard,
 body.cinematic #warAlert, body.cinematic #tuto, body.cinematic #tutoRing, body.cinematic #warTip, body.cinematic #homeBtn { display: none !important; }
 /* la cinématique de fin du volet militaire : voile (lumière ou noir), bandeaux de texte, bouton « Passer », bandes de cinéma */
+body.cinematic #bannerWrap { display: none !important; }
 #kingCine { position: absolute; inset: 0; z-index: 35; pointer-events: none !important; }
 #kingCine .kc-veil { position: absolute; inset: 0; opacity: 0; }
 #kingCine .kc-bar { position: absolute; left: 0; right: 0; height: 7vh; background: #000; }
