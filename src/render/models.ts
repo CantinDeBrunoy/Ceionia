@@ -7717,7 +7717,7 @@ function fishmarket(p: Parts, age: number) {
     p.add(new THREE.TorusGeometry(0.022, 0.007, 3, 8, Math.PI * 1.4), P(-0.03, 0.02)[0], g + 0.02, P(-0.03, 0.02)[1], 0xd8884a, ry + Math.PI / 2, false, 0, Math.PI / 2);
   };
 
-  // ---- le sol : herbe, dallage de pavés (mouillés), flaques, taches de glace
+  // ---- le sol : herbe, dallage de pavés, taches de glace (pas de flaques : aucune eau dessinée)
   p.box(1.9, 0.012, 1.9, 0, 0, 0, 0x9ccf92);
   p.box(1.84, 0.02, 1.76, 0, 0.012, 0.02, dark(baseC, 0.82));
   if (fut) {
@@ -7727,8 +7727,6 @@ function fishmarket(p: Parts, age: number) {
   } else {
     for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) p.box(0.19, 0.008, 0.19, -0.8 + i * 0.2, g, -0.8 + j * 0.2, dark(baseC, 0.88 + hash2(i, j, 31) * 0.22));
   }
-  for (const [x, z, sx, sz, ry] of [[-0.35, 0.58, 0.16, 0.06, 0.3], [0.4, 0.72, 0.12, 0.06, -0.2], [0.0, 0.02, 0.2, 0.05, 0.1], [-0.82, 0.3, 0.08, 0.1, 0]])
-    p.add(new THREE.CylinderGeometry(1, 1, 0.004, 10).scale(sx, 1, sz), x, g + 0.01, z, fut ? 0x9ad8f0 : 0xa8cce0, ry);
   for (const [x, z] of [[-0.64, 0.5], [-0.2, 0.5], [0.24, 0.5]]) p.box(0.14, 0.004, 0.08, x + 0.05, g + 0.008, z + 0.04, 0xeaf6fc, 0.2);
 
   // ---- la halle : murs du fond et de gauche, soubassement, charpente, toit
@@ -7864,14 +7862,13 @@ function fishmarket(p: Parts, age: number) {
     p.box(0.1, 0.04, 0.008, ax + 0.1, g + 0.26, -0.478, 0x1f7ac0); p.box(0.07, 0.016, 0.01, ax + 0.1, g + 0.27, -0.474, 0xf4f4f0);
     for (const dx of [-0.08, 0.08]) { p.box(0.12, 0.06, 0.12, ax - 0.02 + dx, g + 0.4, -0.7, 0xc4c8ce); p.cyl(0.04, 0.04, 0.006, 8, ax - 0.02 + dx, g + 0.46, -0.7, 0x3a3f48); }
   } else {
-    // viviers cylindriques lumineux, poissons-silhouettes, tuyauterie vers la halle
+    // viviers cylindriques lumineux (verre et néon), tuyauterie vers la halle
     for (const [x, z] of [[ax - 0.08, -0.68], [ax + 0.12, -0.5]]) {
       p.cyl(0.15, 0.15, 0.3, 14, x, g, z, 0xbfe0ee);
       p.cyl(0.13, 0.13, 0.26, 14, x, g + 0.02, z, 0x4ff0ff, 'neon');
       p.cyl(0.16, 0.16, 0.014, 14, x, g + 0.3, z, 0xdde8f0);
       p.cyl(0.16, 0.16, 0.014, 14, x, g, z, 0xdde8f0);
       p.add(new THREE.TorusGeometry(0.15, 0.007, 3, 16).rotateX(Math.PI / 2), x, g + 0.16, z, 0x2e3440);
-      for (let i = 0; i < 3; i++) { const a = i * 2.1 + x * 5; fish(x + Math.cos(a) * 0.07, g + 0.1 + i * 0.07, z + Math.sin(a) * 0.07, 0x1a3a5a, a, 0.9); }
     }
     p.box(0.18, 0.02, 0.02, ax - 0.18, g + 0.12, -0.55, 0x8a96a2);
     p.box(0.02, 0.02, 0.3, ax - 0.27, g + 0.12, -0.65, 0x8a96a2);
