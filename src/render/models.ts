@@ -10518,8 +10518,8 @@ function carworks(p: Parts, age: number) {
   // bureaux à l'avant gauche
   p.box(0.36, 0.3, 0.3, -0.72, y0, 0.1, modern ? 0xd8e4ec : 0xd8c8a8);
   windows(p, [-0.82, -0.72, -0.62], 0.08, 0.255, 0.05, 0.07, C.white); windows(p, [-0.82, -0.72, -0.62], 0.2, 0.255, 0.05, 0.07, C.white);
-  if (modern) p.box(0.38, 0.03, 0.32, -0.72, 0.31, 0.1, 0x3a6ab8);
-  else roof(p, -0.72, 0.31, 0.1, { w: 0.36, d: 0.3, h: 0.12, color: C.slate, wall: 0xd8c8a8, courses: true });
+  if (modern) p.box(0.38, 0.03, 0.32, -0.72, 0.31, 0.1, 0x5a5d62);
+  else roof(p, -0.72, 0.31, 0.1, { w: 0.36, d: 0.3, h: 0.12, color: 0x4a5650, wall: 0xd8c8a8, courses: true });
   // autos neuves rangées dans la cour
   const colors = modern ? [0xd84a3e, 0x3a6ab8, 0xf2c23a, 0xf4f2ee, 0x4fa860] : [0x1e1e22, 0x3a2a24, 0x1e2a24, 0x2a2a3e, 0x4a1e1e];
   for (let k = 0; k < 4; k++) oldCar(p, -0.9 + k * 0.17, 0.62, 0, colors[k], false);
@@ -10565,7 +10565,7 @@ function lab(p: Parts, age: number) {
     p.box(0.24, 0.014, 0.13, -0.25, 0.175, 0.095, 0xf4f6f8);
     p.box(0.22, 0.035, 0.008, -0.25, 0.19, 0.162, 0x2a3a4a); for (let k = 0; k < 3; k++) p.box(0.03, 0.022, 0.004, -0.29 + k * 0.04, 0.197, 0.168, 0x9de0ff, 0, true);
     // toit : acrotère bleu, panneaux solaires, cheminées d'extraction, ventilation, antenne
-    p.box(0.64, 0.025, 0.42, -0.1, 0.41, -0.18, 0x3a6ab8);
+    p.box(0.64, 0.025, 0.42, -0.1, 0.41, -0.18, 0x5a5d62);
     for (let k = 0; k < 3; k++) p.add(new THREE.BoxGeometry(0.16, 0.012, 0.12), -0.3 + k * 0.18, 0.46, -0.2, 0x2c3e5a, 0, false, 0, 0.35);
     for (let k = 0; k < 3; k++) for (let j = 1; j < 4; j++) p.add(new THREE.BoxGeometry(0.004, 0.013, 0.12), -0.38 + k * 0.18 + j * 0.04, 0.46, -0.2, 0x8a9ab8, 0, false, 0, 0.35);
     for (const x of [-0.06, 0.04]) { p.cyl(0.014, 0.014, 0.16, 6, x, 0.435, -0.34, 0xc4cad2); p.cyl(0.022, 0.022, 0.012, 6, x, 0.595, -0.34, 0x5d6168); }
@@ -10681,7 +10681,7 @@ function aerodrome(p: Parts, age: number) {
   // club-house, sa terrasse, son drapeau ; fûts d'essence
   p.box(0.5, 0.24, 0.3, -0.05, y0, -1.1, modern ? 0xe8eaee : 0xd8c8a8);
   windows(p, [-0.2, -0.05, 0.1], 0.08, -0.946, 0.07, 0.09, C.white);
-  if (modern) p.box(0.52, 0.03, 0.32, -0.05, 0.25, -1.1, 0x3a6ab8); else roof(p, -0.05, 0.252, -1.1, { w: 0.5, d: 0.3, h: 0.12, color: 0xb8644a, wall: 0xd8c8a8, tiles: true });
+  if (modern) p.box(0.52, 0.03, 0.32, -0.05, 0.25, -1.1, 0x5a5d62); else roof(p, -0.05, 0.252, -1.1, { w: 0.5, d: 0.3, h: 0.12, color: 0xb8644a, wall: 0xd8c8a8, tiles: true });
   for (const x of [-0.2, 0.1]) { p.cyl(0.04, 0.04, 0.006, 8, x, 0.08, -0.82, C.white); p.cyl(0.005, 0.005, 0.07, 4, x, y0, -0.82, 0x3c3c40); p.cyl(0.003, 0.003, 0.18, 3, x, 0.08, -0.82, 0x3c3c40); p.cone(0.07, 0.04, 8, x, 0.25, -0.82, x < 0 ? 0xd84a3e : 0xf2c23a); }
   p.cyl(0.004, 0.004, 0.5, 4, 0.3, y0, -1.1, C.metal); sway([0.3, 0.5, -1.1], [0, 1, 0], 0.4, 1.1).box(0.1, 0.06, 0.004, 0.05, 0, 0, 0x3a6ab8);
   for (const [x, z] of [[-0.25, -0.45], [-0.18, -0.48], [-0.22, -0.38]]) { p.cyl(0.026, 0.026, 0.07, 8, x, y0, z, 0xb83a32); p.cyl(0.027, 0.027, 0.006, 8, x, y0 + 0.05, z, 0x3c3c40); }
@@ -12569,13 +12569,188 @@ function tanker(p: Parts, x: number, z: number, y0: number) {
   for (const wx of [x + 0.2, x - 0.06, x - 0.15]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8).rotateX(Math.PI / 2), wx, y0 + 0.03, z + s * 0.065, 0x2a2a2e);
 }
 
+/** Cuve de tôle rivetée : virole brune, bandes de joint et rangs de rivets, toit conique, cerceau de fer, échelle */
+function rivetTank(p: Parts, x: number, z: number, r: number, h: number, y0: number, body = 0x5a4636) {
+  p.cyl(r * 1.06, r * 1.08, 0.03, 16, x, y0, z, 0x8a7a68);
+  p.cyl(r, r, h, 16, x, y0 + 0.03, z, body);
+  const rows = 3;
+  for (let k = 0; k <= rows; k++) {
+    const y = y0 + 0.03 + (k * (h - 0.012)) / rows;
+    p.cyl(r * 1.012, r * 1.012, 0.012, 16, x, y, z, dark(body, 0.68));
+    // rivets : une couronne de petites têtes rondes sur chaque joint
+    for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2 + k * 0.2; p.box(0.012, 0.012, 0.012, x + Math.cos(a) * r * 1.02, y + 0.012, z + Math.sin(a) * r * 1.02, 0x2a241e, -a); }
+  }
+  p.cone(r * 1.04, 0.13, 16, x, y0 + 0.03 + h, z, dark(body, 0.8));
+  p.cyl(0.02, 0.02, 0.03, 6, x, y0 + 0.03 + h + 0.12, z, 0x2a241e);
+  p.box(0.012, h, 0.03, x + r * 0.98, y0 + 0.03, z + 0.02, 0x2a241e);
+  for (let k = 0; k < 6; k++) p.box(0.034, 0.008, 0.02, x + r * 1.0, y0 + 0.06 + (k / 5) * (h - 0.06), z + 0.02, 0x4a4a4e);
+}
+
+/** Alambic de cuivre : fourneau de brique et sa gueule rougeoyante, chaudière ventrue, chapiteau, col de cygne */
+function copperStill(p: Parts, x: number, z: number, y0: number, cop = 0xb8703a) {
+  p.box(0.22, 0.1, 0.2, x, y0, z, 0x9a4a38);
+  p.box(0.07, 0.05, 0.012, x, y0 + 0.01, z + 0.1, 0xff7a2a, 0, true);
+  p.box(0.09, 0.01, 0.02, x, y0, z + 0.105, 0x2a2a2e);
+  p.sphere(0.11, x, y0 + 0.19, z, cop, 1, 0.9);
+  p.add(new THREE.TorusGeometry(0.11, 0.008, 3, 14).rotateX(Math.PI / 2), x, y0 + 0.19, z, dark(cop, 0.7));
+  p.cone(0.06, 0.1, 10, x, y0 + 0.27, z, dark(cop, 1.12));
+  p.sphere(0.015, x, y0 + 0.38, z, cop);
+  pipeRun(p, [[x, y0 + 0.38, z], [x + 0.06, y0 + 0.44, z - 0.03], [x + 0.14, y0 + 0.4, z - 0.06], [x + 0.14, y0 + 0.16, z - 0.06]], 0.008, cop);
+}
+
+/** Baril de bois cerclé de fer, couché le long de z (ou debout) */
+function oilBarrel(p: Parts, x: number, y: number, z: number, lying = true, c = 0x8a5a36) {
+  const parts = [new THREE.CylinderGeometry(0.03, 0.03, 0.085, 8), new THREE.CylinderGeometry(0.0325, 0.0325, 0.008, 8).translate(0, -0.026, 0), new THREE.CylinderGeometry(0.0325, 0.0325, 0.008, 8).translate(0, 0.026, 0)];
+  const cols = [c, 0x2a2a2e, 0x2a2a2e];
+  parts.forEach((q, i) => { if (lying) q.rotateX(Math.PI / 2); p.add(q, x, y + 0.03, z, cols[i]); });
+}
+
+/** Wagon-citerne : cuve noire rivetée sur son châssis de bois et ses roues de fonte, tampons aux deux bouts, le long de x */
+function tankWagon(p: Parts, x: number, z: number, y0: number, body = 0x2e2a26) {
+  p.box(0.5, 0.025, 0.12, x, y0 + 0.045, z, 0x6a4a30);
+  p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.4, 14).rotateZ(Math.PI / 2), x, y0 + 0.125, z, body);
+  for (const k of [-0.12, 0, 0.12]) p.add(new THREE.CylinderGeometry(0.073, 0.073, 0.012, 14).rotateZ(Math.PI / 2), x + k, y0 + 0.125, z, 0x4a4036);
+  p.cyl(0.02, 0.02, 0.025, 6, x, y0 + 0.19, z, 0x2a2a2e);
+  for (const dx of [-0.17, 0.17]) for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.014, 10).rotateX(Math.PI / 2), x + dx, y0 + 0.032, z + s * 0.062, 0x1e1e22);
+  for (const s of [-1, 1]) { p.box(0.03, 0.02, 0.02, x + s * 0.27, y0 + 0.05, z - 0.03, 0x3c3c40); p.box(0.03, 0.02, 0.02, x + s * 0.27, y0 + 0.05, z + 0.03, 0x3c3c40); }
+}
+
 /**
- * Raffinerie (3 × 3) : parc de grands réservoirs blancs dans leur cuvette de rétention et sphère de gaz, au fond à gauche ;
+ * Raffinerie de l'âge industriel (3 × 3), façon fin XIXe : parc de cuves de tôle rivetée dans leur cuvette de brique ; la
+ * distillerie de brique rouge, sous son toit d'ardoise sombre, ses alambics de cuivre sur leurs fourneaux et deux hautes
+ * cheminées de brique qui crachent une fumée noire ; passerelle de bois et de fer sur poutrelles en treillis qui porte les
+ * tuyaux de fonte ; derrick de bois d'un puits à côté ; torchère à gaz ; voie ferrée et wagons-citernes, barils, charrette
+ * à cheval, bureau de brique, ouvriers à casquette, lampadaires à gaz
+ */
+function refineryIndustrial(p: Parts) {
+  sink(0.012);
+  const y0 = 0.012, brick = 0xa04a38, iron = 0x2e2c2a, cast = 0x3a3836, rust = 0x7a4a34, cop = 0xb8703a, roofC = 0x4a5650;
+  // sol : terre noircie de suie et de brut, ornières, flaques de brut
+  for (const [x, z, r, sx, k] of [[0, 0, 1.3, 1.1, 1], [-0.8, -0.8, 0.6, 1.1, 0.9], [0.9, -0.3, 0.5, 1, 0.94], [0.1, 0.6, 0.55, 1.5, 1.05], [-1.1, 0.5, 0.35, 1, 0.9]] as number[][])
+    p.add(new THREE.CylinderGeometry(r, r * 0.96, 0.004, 14).scale(sx, 1, 1), x, y0 + 0.002, z, dark(0x85755c, k));
+  for (let k = 0; k < 16; k++) { const x = -1.3 + hash2(k, 3, 711) * 2.6, z = -1.3 + hash2(k, 7, 713) * 2.5; p.box(0.03, 0.01, 0.024, x, y0, z, dark(0x55483a, 0.8 + hash2(k, 9, 717) * 0.3), k); }
+  for (const [x, z, r, sx] of [[-0.1, -0.2, 0.09, 1.7], [-1.25, 0.15, 0.07, 1.3], [0.7, 0.2, 0.06, 1.8]]) p.add(new THREE.CircleGeometry(r, 10).rotateX(-Math.PI / 2).scale(sx, 1, 1), x, y0 + 0.007, z, 0x16110d);
+  // parc de cuves : cuvette de briques, trois cuves de tôle rivetée
+  const bx = -0.78, bz = -0.78, bw = 1.3;
+  for (const s of [-1, 1]) { p.box(bw, 0.05, 0.035, bx, y0, bz + (s * bw) / 2, brick); p.box(0.035, 0.05, bw, bx + (s * bw) / 2, y0, bz, brick); }
+  p.box(bw - 0.03, 0.005, bw - 0.03, bx, y0, bz, 0x4a3e32);
+  rivetTank(p, -1.1, -1.1, 0.27, 0.42, y0);
+  rivetTank(p, -0.48, -1.1, 0.24, 0.36, y0, 0x4a3a2e);
+  rivetTank(p, -1.1, -0.48, 0.2, 0.3, y0, 0x3e3830);
+  // gazomètre : cloche de tôle dans sa cuve, sur ses guides en poutrelles
+  p.cyl(0.18, 0.18, 0.1, 14, -0.46, y0, -0.46, 0x4a4036);
+  p.cyl(0.165, 0.165, 0.2, 14, -0.46, y0 + 0.1, -0.46, 0x3e3830);
+  p.cone(0.17, 0.05, 14, -0.46, y0 + 0.3, -0.46, 0x2e2a26);
+  for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; p.box(0.012, 0.36, 0.012, -0.46 + Math.cos(a) * 0.2, y0, -0.46 + Math.sin(a) * 0.2, iron); }
+  p.add(new THREE.TorusGeometry(0.2, 0.006, 3, 14).rotateX(Math.PI / 2), -0.46, y0 + 0.36, -0.46, iron);
+  // la distillerie : bâtisse de brique, fenêtres cintrées éclairées, toit d'ardoise gris-vert sombre, lanterneau
+  const dx = 0.3, dz = -0.95, dw = 0.95, dd = 0.5, dh = 0.34, df = dz + dd / 2;
+  p.box(dw, dh, dd, dx, y0, dz, brick);
+  stones(p, dx, df, dw, y0, dh, 0, dark(brick, 0.84), 0.5, 740);
+  p.box(dw + 0.02, 0.025, dd + 0.02, dx, y0, dz, 0x6a5a4a);
+  for (const x of [dx - 0.3, dx, dx + 0.3]) { p.box(0.09, 0.14, 0.012, x, y0 + 0.14, df + 0.004, 0xffd488, 0, true); archTop(p, x, y0 + 0.28, df + 0.006, 0.045, 0xe2d8c4); p.box(0.01, 0.14, 0.014, x, y0 + 0.14, df + 0.008, iron); }
+  roof(p, dx, y0 + dh, dz, { w: dw, d: dd, h: 0.17, color: roofC, wall: brick, len: dw + 0.1, courses: true });
+  p.box(0.22, 0.05, 0.1, dx - 0.1, y0 + dh + 0.14, dz, 0x2a2a2e);
+  p.cyl(0.02, 0.02, 0.08, 6, dx + 0.2, y0 + dh + 0.14, dz + 0.04, iron); smoke(dx + 0.2, y0 + dh + 0.26, dz + 0.04, 0);
+  // deux hautes cheminées de brique, coniques, cerclées de fer, couronne de pierre
+  for (const [cx, cz, ch] of [[dx + 0.58, -1.2, 1.55], [dx - 0.52, -1.28, 1.25]] as number[][]) {
+    p.box(0.2, 0.12, 0.2, cx, y0, cz, dark(brick, 0.85));
+    p.cyl(0.045, 0.085, ch, 12, cx, y0 + 0.12, cz, dark(brick, 0.9));
+    for (const y of [0.3, 0.62, 0.96, ch - 0.18]) p.cyl(0.082 - y * 0.024, 0.082 - y * 0.024, 0.016, 12, cx, y0 + y, cz, iron);
+    p.cyl(0.058, 0.046, 0.05, 12, cx, y0 + ch + 0.08, cz, 0xd8c8a8);
+    smoke(cx, y0 + ch + 0.16, cz, 2);
+  }
+  // les alambics de cuivre devant, sur leurs fourneaux
+  for (const x of [dx - 0.34, dx - 0.02, dx + 0.3]) copperStill(p, x, -0.55, y0, cop);
+  // passerelle et rack sur poutrelles en treillis : fers, croix de Saint-André, platelage de planches, garde-corps de fer,
+  // tuyaux de fonte à brides qui filent vers les cuves, les alambics et le derrick
+  const rz = 0.02, rh = 0.3;
+  for (let x = -1.2; x <= 1.31; x += 0.3) {
+    for (const d of [-0.1, 0.1]) p.box(0.022, rh, 0.022, x, y0, rz + d, iron);
+    p.box(0.022, 0.022, 0.22, x, y0 + rh, rz, iron);
+    p.box(0.022, 0.022, 0.22, x, y0 + 0.14, rz, iron);
+    if (x < 1.2) {
+      pipe(p, [x, y0 + 0.02, rz - 0.1], [x + 0.3, y0 + rh - 0.01, rz - 0.1], 0.006, iron);
+      pipe(p, [x + 0.3, y0 + 0.02, rz - 0.1], [x, y0 + rh - 0.01, rz - 0.1], 0.006, iron);
+      pipe(p, [x, y0 + 0.02, rz + 0.1], [x + 0.3, y0 + rh - 0.01, rz + 0.1], 0.006, iron);
+    }
+  }
+  for (let x = -1.35; x < 1.4; x += 0.1) p.box(0.09, 0.012, 0.24, x, y0 + rh + 0.022, rz, C.wood);
+  for (const d of [-0.115, 0.115]) { p.box(2.8, 0.012, 0.012, 0.05, y0 + rh + 0.12, rz + d, iron); for (let x = -1.3; x <= 1.4; x += 0.28) p.box(0.012, 0.1, 0.012, x, y0 + rh + 0.034, rz + d, iron); }
+  [[cast, 0.02], [rust, 0.05], [cast, 0.08]].forEach(([c, d], k) => {
+    pipe(p, [-1.34, y0 + rh + 0.05, rz - 0.07 + d], [1.42, y0 + rh + 0.05, rz - 0.07 + d], 0.018, c);
+    for (let x = -1.2; x < 1.4; x += 0.35 + k * 0.02) p.cyl(0.024, 0.024, 0.012, 8, x, y0 + rh + 0.044, rz - 0.07 + d, 0x8a7a68);
+  });
+  pipeRun(p, [[0.14, y0 + rh + 0.05, rz - 0.07], [0.14, y0 + rh + 0.05, -0.38], [0.14, y0 + 0.22, -0.38]], 0.014, cast);
+  pipeRun(p, [[-0.48, y0 + 0.05, -0.82], [-0.48, y0 + 0.05, -0.1], [-0.48, y0 + rh + 0.05, rz - 0.07]], 0.016, cast);
+  pipeRun(p, [[-0.85, y0 + 0.05, -0.48], [-0.85, y0 + 0.05, -0.1], [-0.85, y0 + rh + 0.05, rz - 0.04]], 0.016, rust);
+  for (const x of [-0.85, -0.48]) for (let z = -0.62; z <= -0.15; z += 0.16) p.box(0.09, 0.03, 0.03, x, y0, z, 0x6a4a30);
+  // derrick de bois d'un puits de pétrole : pylône à quatre jambes qui s'amincit, traverses et croix, couronne, poulie, câble,
+  // cabane de la machine à vapeur et sa cheminée
+  const wx = 1.1, wz = -0.42, wh = 1.3, half = (t: number) => 0.16 - 0.125 * t;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) pipe(p, [wx + sx * 0.16, y0, wz + sz * 0.16], [wx + sx * 0.035, y0 + wh, wz + sz * 0.035], 0.012, 0x6a4a30);
+  for (const t of [0.2, 0.45, 0.7, 0.92]) {
+    const h = half(t);
+    for (const [a, b, c2, d] of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]]) pipe(p, [wx + a * h, y0 + wh * t, wz + b * h], [wx + c2 * h, y0 + wh * t, wz + d * h], 0.007, 0x7a5a3c);
+    if (t < 0.9) {
+      const h2 = half(t + 0.22);
+      pipe(p, [wx - h, y0 + wh * t, wz + h], [wx + h2, y0 + wh * (t + 0.22), wz + h2], 0.006, 0x6a4a30);
+      pipe(p, [wx + h, y0 + wh * t, wz + h], [wx - h2, y0 + wh * (t + 0.22), wz + h2], 0.006, 0x6a4a30);
+    }
+  }
+  p.box(0.11, 0.05, 0.11, wx - 0.055, y0 + wh, wz - 0.055, 0x4a3a2c);
+  p.cyl(0.03, 0.03, 0.02, 8, wx, y0 + wh + 0.05, wz, iron);
+  pipe(p, [wx, y0 + wh, wz], [wx, y0 + 0.05, wz], 0.003, 0x1e1e22);
+  p.box(0.06, 0.07, 0.06, wx - 0.03, y0, wz - 0.03, 0x3a3a3e);
+  p.box(0.26, 0.2, 0.22, wx + 0.38, y0, wz + 0.05, C.wood);
+  for (let k = 1; k < 9; k++) p.box(0.004, 0.2, 0.004, wx + 0.38 - 0.13 + k * 0.029, y0, wz + 0.164, C.darkwood);
+  roof(p, wx + 0.38, y0 + 0.2, wz + 0.05, { w: 0.26, d: 0.22, h: 0.09, color: roofC, wall: C.wood, len: 0.3 });
+  p.cyl(0.016, 0.02, 0.2, 8, wx + 0.46, y0 + 0.2, wz + 0.1, iron); smoke(wx + 0.46, y0 + 0.42, wz + 0.1, 2);
+  p.box(0.07, 0.07, 0.012, wx + 0.35, y0 + 0.02, wz + 0.165, 0xffb35a, 0, true);
+  pipeRun(p, [[wx, y0 + 0.02, wz + 0.08], [wx - 0.2, y0 + 0.02, wz + 0.4], [0.9, y0 + 0.02, 0.0], [0.6, y0 + 0.02, rz]], 0.012, cast);
+  // torchère à gaz : cheminée de tôle haubanée, la flamme jaune danse au sommet
+  const fx = -1.2, fz = 0.62, fh = 1.1;
+  p.cyl(0.03, 0.04, fh, 8, fx, y0, fz, iron);
+  for (const y of [0.3, 0.6, 0.9]) p.cyl(0.036, 0.036, 0.01, 8, fx, y0 + y, fz, rust);
+  for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI * 2 + 0.3; pipe(p, [fx + Math.cos(a) * 0.3, y0, fz + Math.sin(a) * 0.3], [fx, y0 + fh * 0.85, fz], 0.0035, 0x1e1e22); }
+  const F = sway([fx, y0 + fh, fz], [1, 0, 0], 0.18, 1.3);
+  F.cyl(0.04, 0.03, 0.02, 6, 0, 0, 0, iron);
+  F.add(new THREE.IcosahedronGeometry(0.07, 0).scale(1, 0.8, 1), 0, 0.07, 0, 0xff7a2a, 0, true);
+  F.cone(0.08, 0.28, 7, 0, 0.02, 0, 0xff8a3a, true);
+  F.cone(0.05, 0.38, 6, 0.01, 0.04, 0, 0xffc04a, true);
+  smoke(fx, y0 + fh + 0.45, fz, 2);
+  // bureau de brique du contremaître : toit d'ardoise grise (rien de bleu), cheminée, porte, enseigne à la goutte
+  p.box(0.5, 0.24, 0.32, 0.95, y0, 0.62, brick);
+  stones(p, 0.95, 0.78, 0.5, y0, 0.24, 0, dark(brick, 0.84), 0.5, 760);
+  windows(p, [0.8, 1.1], y0 + 0.09, 0.783, 0.07, 0.09, 0xe2d8c4);
+  p.box(0.08, 0.15, 0.012, 0.95, y0, 0.783, 0x2a2a2e);
+  roof(p, 0.95, y0 + 0.24, 0.62, { w: 0.5, d: 0.32, h: 0.12, color: roofC, wall: brick, len: 0.6, courses: true });
+  p.cyl(0.018, 0.022, 0.16, 6, 1.12, y0 + 0.3, 0.55, brick); smoke(1.12, y0 + 0.5, 0.55, 0);
+  p.box(0.2, 0.07, 0.012, 0.95, y0 + 0.26, 0.785, 0x2c2420); p.sphere(0.02, 0.88, y0 + 0.3, 0.792, 0x0a0806, 0, 1.3);
+  // voie ferrée et wagons-citernes noirs ; un tas de charbon
+  const tz = 1.2;
+  for (let x = -1.4; x <= 1.4; x += 0.1) p.box(0.04, 0.012, 0.2, x, y0, tz, 0x4a3a2c);
+  for (const d of [-0.07, 0.07]) p.box(2.9, 0.014, 0.014, 0, y0 + 0.012, tz + d, 0x6a6a70);
+  tankWagon(p, -0.7, tz, y0 + 0.012); tankWagon(p, -0.12, tz, y0 + 0.012, 0x3a2e24);
+  p.box(0.06, 0.02, 0.02, -0.41, y0 + 0.06, tz, 0x3c3c40);
+  p.sphere(0.12, 0.62, y0 - 0.02, 1.0, 0x1c1c1e, 1, 0.6); p.sphere(0.07, 0.72, y0 - 0.01, 0.95, 0x2a2a2c, 1, 0.6);
+  // barils de bois empilés (pyramide de 6), charrette à cheval qui en charge
+  for (const [x, y] of [[-1.28, 0], [-1.2, 0], [-1.12, 0], [-1.24, 0.055], [-1.16, 0.055], [-1.2, 0.11]]) oilBarrel(p, x, y0 + y, 0.98);
+  for (const [x, z] of [[-1.3, 0.78], [-1.24, 0.82], [-1.34, 0.86]]) oilBarrel(p, x, y0, z, false);
+  cart(p, -0.45, 0.62); horse(p, -0.2, 0.62, 0, 0x5a3a26);
+  for (const k of [0, 1, 2]) oilBarrel(p, -0.5 + k * 0.05, y0 + 0.13, 0.62, false);
+  // ouvriers à casquette et gilet sombres, lampadaires à gaz
+  for (const [x, z, c, r] of [[-0.6, 0.9, 0x5a4a3a, 0.6], [0.4, -0.22, 0x3a3a3e, 2.2], [0.62, 0.95, 0x6a5a48, Math.PI], [0.2, 0.4, 0x3a4a5a, -1.2]] as number[][]) figure(p, x, z, c, r, false, 0x2a2420);
+  for (const [x, z] of [[-0.7, 1.0], [0.3, 1.0], [1.38, 0.1], [-0.05, -0.2]]) lampPost(p, x, z, 0.34);
+}
+
+/**
+ * Raffinerie moderne (3 × 3, âges 4 et 5) : parc de grands réservoirs blancs dans leur cuvette de rétention et sphère de gaz, au fond à gauche ;
  * colonnes de distillation et leurs passerelles reliées par des tuyaux, four et ses cheminées qui fument, échangeurs, au
  * fond à droite ; rack de tuyaux de couleur qui court d'un bout à l'autre ; haute torchère haubanée et sa flamme qui danse ;
  * salle de contrôle vitrée, poste de chargement où un camion-citerne fait le plein, ouvriers casqués, lampadaires
  */
-function refinery(p: Parts) {
+function refineryModern(p: Parts) {
   sink(0.012);
   const y0 = 0.012, steel = 0x5d6878, red = 0xd84a3e, blue = 0x3a6ab8, white = 0xf4f2ee, gravel = 0xd9cfb6;
   // pas de grande dalle : l'herbe reste, avec des aires de gravier sous les installations (taches aux tons variés), une
@@ -12652,7 +12827,7 @@ function refinery(p: Parts) {
   // salle de contrôle : bandeau vitré, toit bleu, porte, antenne, enseigne à la goutte de pétrole
   p.box(0.62, 0.26, 0.34, 0.9, y0, 0.6, 0xeceef0);
   p.box(0.58, 0.08, 0.012, 0.92, y0 + 0.13, 0.774, C.glass, 0, true);
-  p.box(0.64, 0.03, 0.36, 0.9, y0 + 0.26, 0.6, 0x3a6ab8);
+  p.box(0.64, 0.03, 0.36, 0.9, y0 + 0.26, 0.6, 0x4a4e54);
   p.box(0.08, 0.12, 0.012, 0.68, y0, 0.774, 0x2a2a2e);
   p.cyl(0.006, 0.006, 0.22, 4, 1.12, y0 + 0.29, 0.52, 0x9aa3ad);
   p.box(0.26, 0.1, 0.016, 0.95, y0 + 0.29, 0.66, C.white);
@@ -12758,7 +12933,7 @@ function brickworks(p: Parts, age: number) {
       p.box(0.046, 0.044, 0.026, sx - sw / 2 + 0.075 + i * 0.056, y0 + y + 0.01, sz - 0.1 + r * 0.17, dark(raw, 0.92 + hash2(i, r + y * 10, 484) * 0.16));
     }
   }
-  if (modern) p.box(sw + 0.1, 0.03, sd + 0.1, sx, y0 + sh, sz, 0x6f7c96);
+  if (modern) p.box(sw + 0.1, 0.03, sd + 0.1, sx, y0 + sh, sz, 0x5a5d62);
   else roof(p, sx, y0 + sh, sz, { w: sw, d: sd, h: 0.14, color: C.brown, wall: C.wood, len: sw + 0.12, rows: true });
   // le hangar de moulage : planches, porte, fenêtres éclairées, toit d'ardoise (plat et métallique de nos jours), tuyau de poêle
   const hx = -0.55, hz = 0.46, hw = 0.72, hd = 0.46, hh = 0.28, hf = hz + hd / 2;
@@ -12768,8 +12943,8 @@ function brickworks(p: Parts, age: number) {
   p.box(0.11, 0.18, 0.014, hx, y0, hf + 0.004, 0x4a3a30);
   p.box(0.16, 0.03, 0.02, hx, y0 + 0.2, hf + 0.012, 0x2c3e4a);
   for (let k = 0; k < 3; k++) p.box(0.034, 0.02, 0.004, hx - 0.05 + k * 0.05, y0 + 0.205, hf + 0.024, C.gold);
-  if (modern) p.box(hw + 0.04, 0.035, hd + 0.04, hx, y0 + hh, hz, 0x6f7c96);
-  else roof(p, hx, y0 + hh, hz, { w: hw, d: hd, h: 0.14, color: C.slate, wall: 0xc9a878, len: hw + 0.1, courses: true });
+  if (modern) p.box(hw + 0.04, 0.035, hd + 0.04, hx, y0 + hh, hz, 0x5a5d62);
+  else roof(p, hx, y0 + hh, hz, { w: hw, d: hd, h: 0.14, color: 0x4a5650, wall: 0xc9a878, len: hw + 0.1, courses: true });
   p.cyl(0.014, 0.014, 0.13, 6, hx + 0.22, y0 + hh + 0.05, hz - 0.1, iron);
   smoke(hx + 0.22, y0 + hh + 0.2, hz - 0.1, 0);
   // devant le hangar : table de moulage, briques crues qui sèchent au sol, seau d'eau
@@ -13242,7 +13417,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'forum': forum(p, Math.max(1, age)); break;
     case 'senate': senate(p, Math.max(1, age)); break;
     case 'oilwell': oilwell(p); break;
-    case 'refinery': refinery(p); break;
+    case 'refinery': if (age >= 4) refineryModern(p); else refineryIndustrial(p); break;
     case 'brickworks': brickworks(p, Math.max(3, age)); break;
     case 'arcology': arcology(p, o.v); break;
     case 'vfarm': vfarm(p); break;
