@@ -813,12 +813,21 @@ export class World {
   }
 
   /** Franchissements d'eau par les routes (voir `crossings.ts`), recalculés quand les routes ou le relief changent */
-  private crossCache: { v: number; vis: number; map: ReturnType<typeof crossingMap> } | null = null;
+  private crossCache: { v: number; vis: number; t: number; map: ReturnType<typeof crossingMap> } | null = null;
   crossings(): Map<number, Crossing> { return this.crossMaps().cells; }
   private crossMaps() {
     const c = this.crossCache;
-    if (!c || c.v !== this.version || c.vis !== this.visVersion) this.crossCache = { v: this.version, vis: this.visVersion, map: crossingMap(this) };
+    if (!c || c.v !== this.version || c.vis !== this.visVersion || c.t !== this.torrentVersion) this.crossCache = { v: this.version, vis: this.visVersion, t: this.torrentVersion, map: crossingMap(this) };
     return this.crossCache!.map;
+  }
+
+  /** Cases traversées par un torrent (ruisseau de montagne, calculé par le rendu d'après le relief) : une route y passe sur un pont */
+  torrents = new Set<number>();
+  torrentVersion = 0;
+  setTorrents(cells: Set<number>) {
+    if (cells.size === this.torrents.size && [...cells].every((k) => this.torrents.has(k))) return;
+    this.torrents = cells;
+    this.torrentVersion++;
   }
   /** Le pont qui porte la case, s'il y en a un */
   crossingAt(cx: number, cz: number): Crossing | undefined {
