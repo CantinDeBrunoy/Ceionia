@@ -7,6 +7,7 @@ import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/diffic
 import { GEN, GEN_FIXED, fillClimate } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
+import { Crossing, crossingMap, nearestOnDeck } from './crossings';
 
 /** Bâtiments passés de 1 × 1 à 2 × 2 : une ancienne sauvegarde les fait grandir sur place s'ils ont la place */
 /** Hauteur du quai d'un port au-dessus de la mer, au plus : plus haut, le navire ne serait plus qu'un jouet à son pied */
@@ -811,31 +812,49 @@ export class World {
     return this.lake[this.ci(cx, cz)] === 1 || this.cellAvg(cx, cz) < 0.02 || this.cellMin(cx, cz) <= -0.2;
   }
 
+  /** Franchissements d'eau par les routes (voir `crossings.ts`), recalculés quand les routes ou le relief changent */
+  private crossCache: { v: number; vis: number; map: ReturnType<typeof crossingMap> } | null = null;
+  crossings(): Map<number, Crossing> { return this.crossMaps().cells; }
+  private crossMaps() {
+    const c = this.crossCache;
+    if (!c || c.v !== this.version || c.vis !== this.visVersion) this.crossCache = { v: this.version, vis: this.visVersion, map: crossingMap(this) };
+    return this.crossCache!.map;
+  }
+  /** Le pont qui porte la case, s'il y en a un */
+  crossingAt(cx: number, cz: number): Crossing | undefined {
+    return this.inCells(cx, cz) ? this.crossings().get(this.ci(cx, cz)) : undefined;
+  }
+
+  /** Hauteur du tablier du pont au centre de la case (null si la case n'est pas portée par un pont) */
   bridgeY(cx: number, cz: number): number | null {
-    if (!this.inCells(cx, cz)) return null;
-    const k = this.ci(cx, cz);
-    if (!this.road[k] || !this.realWater(cx, cz)) return null;
-    // tablier mince, presque au ras de l'eau : il ne monte que si la rive est plus haute (le dessin le relève alors)
-    return (this.lake[k] ? this.lakeLevel[k] : SEA) + 0.24;
+    const cr = this.crossingAt(cx, cz);
+    return cr ? nearestOnDeck(cr, cx + 0.5, cz + 0.5).y : null;
   }
 
   /**
-   * Point de passage d'un trajet (suite de cases voisines) à sa i-ième case : le centre de la case, sauf dans un virage
-   * sur un pont, où l'on coupe au plus court comme le tablier (un pont en escalier devient une diagonale)
+   * Point de passage d'un trajet (suite de cases voisines) à sa i-ième case : le centre de la case, sauf sur un pont, où
+   * l'on suit l'axe du tablier (un pont en escalier est une diagonale), et sur une route en courbe, où l'on suit sa ligne
    */
   passPoint(path: number[], i: number): [number, number] {
-    const c = path[i], x = (c % N) + 0.5, z = Math.floor(c / N) + 0.5, p = path[i - 1], n = path[i + 1];
-    // sur une route en courbe, on suit sa ligne
+    const c = path[i], x = (c % N) + 0.5, z = Math.floor(c / N) + 0.5;
+    const cr = this.crossingAt(c % N, Math.floor(c / N));
+    if (cr) { const p = nearestOnDeck(cr, x, z); return [p.x, p.z]; }
     const cc = this.curveAt(c);
     if (cc) return [cc.at[0], cc.at[1]];
-    if (p === undefined || n === undefined || n - c === c - p || this.bridgeY(c % N, Math.floor(c / N)) === null) return [x, z];
-    return [x * 0.5 + ((p % N) + (n % N) + 1) * 0.25, z * 0.5 + (Math.floor(p / N) + Math.floor(n / N) + 1) * 0.25];
+    return [x, z];
   }
 
-  /** Sol où l'on marche : tablier des ponts, sinon le relief affiché */
+  /** Sol où l'on marche : tablier des ponts (et sa rampe, sur la case de la rive), sinon le relief affiché */
   surfaceAt(x: number, z: number) {
-    const b = this.bridgeY(Math.floor(x), Math.floor(z));
-    return b === null ? this.hAt(x, z) : Math.max(b, this.hAt(x, z));
+    const cx = Math.floor(x), cz = Math.floor(z), h = this.hAt(x, z);
+    if (!this.inCells(cx, cz)) return h;
+    const m = this.crossMaps(), k = this.ci(cx, cz), cr = m.cells.get(k);
+    if (cr) return Math.max(nearestOnDeck(cr, x, z).y, h);
+    const bank = m.banks.get(k);
+    if (!bank) return h;
+    // sur la rive, seulement sous l'emprise de la rampe
+    const d = nearestOnDeck(bank, x, z);
+    return d.d <= 0.34 ? Math.max(d.y, h) : h;
   }
 
   // ---------- Constructions ----------

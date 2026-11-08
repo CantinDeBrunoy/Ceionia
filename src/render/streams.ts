@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { World, N, VR, VS, SEA, VEG_VOLCANO, VEG_FOREST, VEG_FIELD, VEG_GARDEN } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Puffs } from './particles';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /** Lac retenu dans un creux du relief : niveau de l'eau, sous-sommets noyés, sommet par où il déborde */
 interface Lake { level: number; cells: number[]; outlet: number }
@@ -22,8 +21,6 @@ export class Streams {
   group = new THREE.Group();
   private lakeMesh: THREE.Mesh;
   private flowMesh: THREE.Mesh;
-  /** passerelles de bois là où un torrent croise une route */
-  private bridgeMesh: THREE.Mesh;
   private paths: [number, number][][] = [];
   private roadsVersion = -1;
   private sprays: Spray[] = [];
@@ -62,10 +59,7 @@ export class Streams {
     this.lakeMesh.receiveShadow = true;
     this.flowMesh = new THREE.Mesh(new THREE.BufferGeometry(), torrentMaterial(this.uTime, this.uFrozen));
     this.flowMesh.renderOrder = 2;
-    this.bridgeMesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: 0x9a7452, flatShading: true, roughness: 0.9 }));
-    this.bridgeMesh.castShadow = true;
-    this.bridgeMesh.receiveShadow = true;
-    this.group.add(this.lakeMesh, this.flowMesh, this.bridgeMesh, this.puffs.mesh);
+    this.group.add(this.lakeMesh, this.flowMesh, this.puffs.mesh);
   }
 
   /** Proximité du torrent et de la cascade les plus proches (0 loin … 1 tout près) ; rien quand tout est gelé */
@@ -100,8 +94,8 @@ export class Streams {
       const end = performance.now() + 4;
       while (performance.now() < end) if (this.job.next().done) { this.job = null; break; }
     }
-    // une route posée ou retirée : les passerelles suivent
-    if (w.version !== this.roadsVersion) { this.roadsVersion = w.version; this.buildBridges(); }
+    // une route posée ou retirée : le torrent passe sous la chaussée (les dalles sont dessinées avec les chemins)
+    if (w.version !== this.roadsVersion && !this.job) { this.roadsVersion = w.version; this.reflow(); }
     // embruns au pied des cascades proches (rien quand elles sont gelées)
     if (this.uFrozen.value < 0.5) {
       for (const s of this.sprays) {
@@ -226,42 +220,17 @@ export class Streams {
       for (let k = 0; k <= n; k++) this.streamCells.add(Math.floor(az + ((bz - az) * k) / n) * N + Math.floor(ax + ((bx - ax) * k) / n));
     }
     this.version++;
+    this.roadsVersion = w.version;
     this.flowMesh.geometry.dispose();
     this.flowMesh.geometry = geos.length ? mergeRibbons(geos) : new THREE.BufferGeometry();
-    this.buildBridges();
     for (const g of geos) g.dispose();
   }
 
-  /** Passerelles de planches avec garde-corps, dans l'axe de la route, là où un torrent la croise */
-  private buildBridges() {
-    const w = this.world, geos: THREE.BufferGeometry[] = [], seen = new Set<number>();
-    for (const p of this.paths)
-      for (let i = 1; i < p.length - 1; i++) {
-        const [px, pz] = p[i], k = Math.floor(pz) * N + Math.floor(px);
-        if (!w.road[k] || seen.has(k) || w.isWet(k % N, Math.floor(k / N))) continue;
-        seen.add(k);
-        const tx = p[i + 1][0] - p[i - 1][0], tz = p[i + 1][1] - p[i - 1][1], tl = Math.hypot(tx, tz) || 1, sx = tx / tl, sz = tz / tl;
-        // le tablier suit l'axe de la route (et non le travers du courant) : d'une seule pièce, plat, de la largeur de la chaussée
-        const rd = (dx: number, dz: number) => w.inCells((k % N) + dx, Math.floor(k / N) + dz) && w.road[k + dz * N + dx] === 1;
-        const ew = rd(1, 0) || rd(-1, 0), ns = rd(0, 1) || rd(0, -1);
-        // route dans les deux sens (carrefour) : l'axe le plus en travers du courant ; sans voisine : en travers
-        let rx = -sz, rz = sx;
-        if (ew && !ns) { rx = 1; rz = 0; } else if (ns && !ew) { rx = 0; rz = 1; } else if (ew && ns) { if (Math.abs(sz) > Math.abs(sx)) { rx = 1; rz = 0; } else { rx = 0; rz = 1; } }
-        // le tablier passe au-dessus du sol le plus haut sous lui (le torrent, posé sur le relief et tiré vers la vue, ne doit
-        // jamais le traverser), porté par quatre pieux fins jusqu'au sol
-        let top = -Infinity, low = Infinity;
-        // s : le long de la route, o : en travers
-        for (const s of [-0.5, -0.25, 0, 0.25, 0.5]) for (const o of [-0.25, 0, 0.25]) { const h = w.hAt(px + rx * s - rz * o, pz + rz * s + rx * o); top = Math.max(top, h); low = Math.min(low, h); }
-        const a = Math.atan2(-rz, rx), y = top + 0.1;
-        for (const [bx, by, bz, oy, oz] of [[1.0, 0.1, 0.5, -0.05, 0], [1.0, 0.025, 0.025, 0.11, 0.235], [1.0, 0.025, 0.025, 0.11, -0.235]])
-          geos.push(new THREE.BoxGeometry(bx, by, bz).translate(0, oy, oz).rotateY(a).translate(px, y, pz));
-        // poteaux de garde-corps réguliers
-        for (const ox of [-0.47, -0.16, 0.16, 0.47]) for (const oz of [-0.235, 0.235]) geos.push(new THREE.BoxGeometry(0.025, 0.1, 0.025).translate(ox, 0.05, oz).rotateY(a).translate(px, y, pz));
-        const leg = Math.max(0.05, y - 0.1 - low);
-        if (leg > 0.2) for (const ox of [-0.45, 0.45]) for (const oz of [-0.2, 0.2]) geos.push(new THREE.BoxGeometry(0.04, leg, 0.04).translate(ox, -0.1 - leg / 2, oz).rotateY(a).translate(px, y, pz));
-      }
-    this.bridgeMesh.geometry.dispose();
-    this.bridgeMesh.geometry = geos.length ? mergeGeometries(geos)! : new THREE.BufferGeometry();
+  /** Redessine les rubans des torrents sur les mêmes tracés (une route les enjambe désormais, ou ne les enjambe plus) */
+  private reflow() {
+    const geos = this.paths.map((p) => this.ribbon(p, [], []));
+    this.flowMesh.geometry.dispose();
+    this.flowMesh.geometry = geos.length ? mergeRibbons(geos) : new THREE.BufferGeometry();
     for (const g of geos) g.dispose();
   }
 
@@ -380,9 +349,12 @@ export class Streams {
       if (slope > 1.1) fall += slope * tl * 0.5;
       else if (fall > 0.6) { sprays.push({ x: px, y: w.hAt(px, pz), z: pz, k: Math.min(3, fall) }); fall = 0; } else fall = 0;
       if (i % 3 === 0) samples.push(px, pz, slope);
+      // sous une route (hors pont), le torrent passe dans une buse : il plonge sous la chaussée, que sa dalle recouvre
+      const cx = Math.min(N - 1, Math.max(0, Math.floor(px))), cz = Math.min(N - 1, Math.max(0, Math.floor(pz)));
+      const under = w.road[cz * N + cx] === 1 && !w.isWet(cx, cz);
       for (let j = 0; j < 3; j++) {
         const o = (j - 1) * hw, vx = px - (tz / tl) * o, vz = pz + (tx / tl) * o, k = i * 3 + j;
-        pos[k * 3] = vx; pos[k * 3 + 1] = w.hAt(vx, vz) + 0.035 + Math.min(0.06, slope * 0.02); pos[k * 3 + 2] = vz;
+        pos[k * 3] = vx; pos[k * 3 + 1] = w.hAt(vx, vz) + (under ? -0.06 : 0.035 + Math.min(0.06, slope * 0.02)); pos[k * 3 + 2] = vz;
         along[k] = dist; side[k] = j - 1; steep[k] = smoothstep(0.5, 1.6, slope);
       }
     }
