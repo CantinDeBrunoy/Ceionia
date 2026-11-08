@@ -38,7 +38,9 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   // la traversée en galère jusqu'à l'île du portail, qu'on explore et dont on réveille l'arche
   | 'portal'
   // le volet maritime : voyage de découverte ou de commerce au large, chasse à l'épave, pêche en haute mer
-  | 'voyage' | 'wreck' | 'trawl';
+  | 'voyage' | 'wreck' | 'trawl'
+  // les îles flottantes de l'âge futuriste (archipel de plateformes, balises, cultures, drone-barge)
+  | 'isles';
 
 /**
  * Ce que montre un échec, quand l'équipe repart : l'orage ou la brume, des pierres qui dévalent, la pirogue qui chavire, la
@@ -806,14 +808,14 @@ export const MISSIONS: Mission[] = [
     choices: [
       {
         label: 'Ancrer les îles de culture', text: 'On les remorque jusqu’à la ferme marine : lent et sûr.',
-        dest: 'river', sea: true, scene: 'voyage', fail: 'fog', doing: 'remorque les îles de culture vers la ferme marine', danger: ['water'], party: 3, work: 26, risk: 0.15, carry: 'sacks',
+        dest: 'river', sea: true, scene: 'isles', fail: 'fog', doing: 'remorque les îles de culture vers la ferme marine', danger: ['water'], party: 3, work: 26, risk: 0.15, carry: 'sacks',
         win: [food(6, 10), jobs(2), joy(2, 6)], lose: [],
         winText: 'Les îles de culture sont ancrées devant la ferme marine : algues et poissons à foison.',
         loseText: 'Le brouillard a dispersé les îles : il faudra les retrouver.',
       },
       {
         label: 'Explorer l’archipel des récifs vivants', text: 'Un archipel de coraux et de bancs rares, loin de toute route.',
-        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'explore l’archipel des récifs vivants', danger: ['water', 'weather'], party: 4, work: 34, risk: 0.3, carry: 'sacks',
+        dest: 'river', sea: true, scene: 'isles', fail: 'storm', doing: 'explore l’archipel des récifs vivants', danger: ['water', 'weather'], party: 4, work: 34, risk: 0.3, carry: 'sacks',
         win: [food(8, 10), joy(4, 8), jobs(3), { t: 'ore', n: 12 }], lose: [hurt(1, 2), joy(-1, 3)],
         winText: 'Un archipel intact, riche en coraux, en perles et en minerais rares : de quoi nourrir et enrichir le village.',
         loseText: 'Une tempête magnétique a brouillé les instruments : le navire est rentré sans rien, un marin blessé.',
