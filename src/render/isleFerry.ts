@@ -3,7 +3,6 @@ import { World, SEA } from '../world/world';
 import { ferryRoute, FerryRoute } from '../world/ferry';
 import type { War } from '../sim/war';
 import { TROOPS, TroopKind, Recruit } from '../sim/army';
-import { CONVOY_TIME } from '../sim/hellBase';
 import { galleyGeo } from './expeditionScenes';
 import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
 import { troopLook } from './battleUnits';
@@ -12,15 +11,15 @@ import { mats } from './materials';
 
 /**
  * La galère qui traverse le bras de mer entre le continent et l'île du portail : elle emmène les recrues (dans les dernières
- * secondes de leur recrutement), les convois de ravitaillement des Enfers (leurs caisses), et ramène au village les soldats
+ * secondes de leur recrutement), et ramène au village les soldats
  * qu'on y renvoie. Elle part du mouillage de la rive (ou du port), accoste au large de la plage de l'île, ses passagers
  * débarquent (ils gagnent la plage à gué), puis elle repart à vide. Pour la vue seulement : la simulation n'en dépend pas, et
- * la traversée suit le temps de jeu (pause, vitesse) quand elle accompagne une recrue ou un convoi
+ * la traversée suit le temps de jeu (pause, vitesse) quand elle accompagne une recrue  
  */
 
 /** Taille de la galère (le modèle des expéditions est fait pour des habitants) : ses soldats ont ainsi celle de la garnison */
 const K = 2.2;
-/** Secondes de jeu de traversée (la fin du recrutement, le début du convoi) */
+/** Secondes de jeu de traversée (la fin du recrutement) */
 export const CROSS = 8;
 /** Secondes : débarquer (ou embarquer), et le retour à vide */
 const WALK = 1.6, BACK = 7, GROW = 0.5;
@@ -33,7 +32,7 @@ interface Walker { s: Soldier; a: THREE.Vector3; b: THREE.Vector3 }
 interface Trip {
   boat: THREE.Group;
   riders: Soldier[];
-  /** vers l'île (recrues, convoi), ou vers le village (soldats renvoyés) */
+  /** vers l'île (recrues), ou vers le village (soldats renvoyés) */
   home: boolean;
   phase: Phase;
   /** secondes dans la phase ; avancement de la traversée (0 … 1) */
@@ -51,7 +50,7 @@ interface Trip {
 }
 
 let crateGeo: THREE.BufferGeometry | null = null;
-/** Les caisses et tonneaux d'un convoi, sur le pont (repère de la galère) */
+/** Les caisses et tonneaux sur le pont (repère de la galère) */
 function crates() {
   if (!crateGeo) {
     const p = new Parts();
@@ -72,7 +71,7 @@ export class IsleFerry {
   private trips: Trip[] = [];
   private route: FerryRoute | null = null;
   private routeKey = '';
-  /** recrues et convois déjà à bord d'une galère ; la garnison de l'île à l'image d'avant (pour voir qui rentre au village) */
+  /** recrues déjà à bord d'une galère ; la garnison de l'île à l'image d'avant (pour voir qui rentre au village) */
   private carried = new WeakSet<object>();
   private army: unknown = null;
   private isle = new Map<number, TroopKind>();
@@ -86,7 +85,7 @@ export class IsleFerry {
     return this.route;
   }
 
-  /** Une image : les nouveaux passagers (recrues, convois, renvoyés), puis les galères en route */
+  /** Une image : les nouveaux passagers (recrues, renvoyés), puis les galères en route */
   update(dt: number, war: War, age: number) {
     if (war.active) this.watch(war, age);
     for (let i = this.trips.length - 1; i >= 0; i--) if (!this.step(this.trips[i], dt)) this.drop(i);
@@ -108,13 +107,6 @@ export class IsleFerry {
       const t = this.start(false, k, false);
       if (t) { this.board(t, r.kind, age, i); this.carried.add(r); }
     });
-    // les convois de ravitaillement : leurs caisses traversent au début de leur route (elles passent ensuite le portail)
-    for (const c of war.base?.convoys ?? []) {
-      if (this.carried.has(c)) continue;
-      this.carried.add(c);
-      const list = war.base!.convoys;
-      this.start(false, () => (list.includes(c) ? Math.min(1, Math.max(0, (CONVOY_TIME - c.left) / CROSS)) : null), true);
-    }
     // les soldats de l'île renvoyés au village : une galère les ramène (pas ceux d'une partie rechargée)
     const now = new Map<number, TroopKind>();
     for (const t of a.troops) if (t.where === 'isle') now.set(t.id, t.kind);
@@ -202,7 +194,7 @@ export class IsleFerry {
     if (t.phase === 'sail') {
       const k = t.drive ? t.drive() : Math.min(1, t.t / CROSS);
       if (k !== null) t.k = Math.max(t.k, k);
-      // la chose est arrivée (recrue enrôlée, convoi passé) : la galère finit sa route en hâte
+      // la chose est arrivée (recrue enrôlée) : la galère finit sa route en hâte
       else t.k = Math.min(1, t.k + dt / 1.2);
       this.place(t, t.k);
       if (t.k >= 1) this.unload(t);

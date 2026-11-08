@@ -5,9 +5,7 @@ import { planWave, tierAge } from './hellBalance';
 /**
  * La base avancée du joueur dans les Enfers (expéditions facultatives) : dans une zone tenue (le seuil du portail, ou une zone
  * dont la forteresse est abattue), un camp de base puis quelques bâtiments militaires autour (caserne avancée, forge,
- * infirmerie, tour de guet, palissades, braseros), payés en bois, pierre et minerai du village ; le ravitaillement (une jauge
- * de vivres et d'équipement, remplie par des convois venus du village par le portail : sans elle, les troupes s'affaiblissent
- * lentement) ; les contre-attaques de la faction sur les bases du front (si le camp tombe, la zone est reperdue). Simulation
+ * infirmerie, tour de guet, palissades, braseros), payés en bois, pierre et minerai du village ; les contre-attaques de la faction sur les bases du front (si le camp tombe, la zone est reperdue). Simulation
  * pure : elle agit sur la faction (`Hell`) et sa carte. Temps en secondes de jeu, distances en cases
  */
 
@@ -37,21 +35,12 @@ export const isBaseKind = (k: unknown): k is BaseKind => typeof k === 'string' &
 export const BASE_R = 8, CARE_R = 6;
 /** Un camp de base se pose à CAMP_MARGIN rangées au moins de la zone suivante, si elle est encore aux démons */
 export const CAMP_MARGIN = 6;
-/** Soins par seconde (points de vie) près du camp (ravitaillé) et de l'infirmerie */
+/** Soins par seconde (points de vie) près du camp et de l'infirmerie */
 export const CAMP_REGEN = 2, INFIRMARY_REGEN = 6;
 /** La forge : dégâts portés, dégâts reçus des troupes de la base ; minerai pour forger une pièce d'équipement manquante */
 export const SMITHY_BOOST = 1.2, SMITHY_GUARD = 0.85, SMITHY_ORE = 4;
 /** Les démons qui longent une palissade (à moins d'une case de son bord) vont à cette allure */
 export const PALISADE_SLOW = 0.55;
-/**
- * Ravitaillement : une jauge de SUPPLY_MAX, que chaque troupe dans les Enfers consomme (SUPPLY_DRAIN par seconde) ; un convoi
- * (CONVOY_COST, du village) arrive CONVOY_TIME secondes après son départ et la remonte de CONVOY_AMOUNT ; au plus CONVOY_MAX en
- * route. Jauge vide : les troupes s'affaiblissent peu à peu (jusqu'à WEAK_MAX de dégâts en moins, en WEAK_TIME secondes),
- * puis reprennent des forces une fois ravitaillées. Prévenu sous SUPPLY_LOW
- */
-export const SUPPLY_MAX = 100, SUPPLY_DRAIN = 0.02, SUPPLY_LOW = 25;
-export const CONVOY_COST: BaseCost = { wood: 25, stone: 0, ore: 0 }, CONVOY_TIME = 20, CONVOY_AMOUNT = 50, CONVOY_MAX = 2;
-export const WEAK_MAX = 0.4, WEAK_TIME = 240;
 /**
  * Contre-attaques : une base du front (la zone d'après n'est pas conquise) reçoit une première vague COUNTER_FIRST secondes
  * après la pose de son camp, puis une toutes les COUNTER_EVERY secondes une fois la précédente repoussée
@@ -94,14 +83,9 @@ export type BaseEvent =
   | { type: 'counterEnd'; zone: number }
   | { type: 'campLost'; zone: number }
   | { type: 'zoneLost'; zone: number }
-  | { type: 'reclaimWarn'; zone: number }
-  | { type: 'convoy'; amount: number }
-  | { type: 'lowSupply' }
-  | { type: 'hungry' };
+  | { type: 'reclaimWarn'; zone: number };
 
 export interface HellBaseSave {
-  supply: number; weak: number;
-  convoys: { left: number; amount: number }[];
   next: number[]; count: number[];
   /** zones dont une contre-attaque est en cours */
   active: number[];
@@ -111,10 +95,6 @@ export interface HellBaseSave {
 }
 
 export class HellBase {
-  supply = SUPPLY_MAX;
-  /** affaiblissement des troupes, faute de vivres (0 à WEAK_MAX) */
-  weak = 0;
-  convoys: { left: number; amount: number }[] = [];
   /** contre-attaques, par zone : moment de la prochaine (-1 : pas de base au front), vagues déjà venues */
   next: number[] = Array.from({ length: HELL_ZONE_N }, () => -1);
   count: number[] = Array.from({ length: HELL_ZONE_N }, () => 0);
@@ -130,7 +110,6 @@ export class HellBase {
   private abandoned = 0;
   private hadFront = false;
   private reach = { v: -1, n: 0 };
-  private warned = false;
   /** événements de la faction déjà lus (elle en garde plusieurs pas, jusqu'à ce que la guerre les relève) */
   private seen = new WeakSet<HellEvent>();
 
@@ -292,16 +271,6 @@ export class HellBase {
     return b;
   }
 
-  /** Envoie un convoi de ravitaillement depuis le village (payé par `purse`) : null, ou la raison du refus */
-  sendConvoy(purse?: Purse): string | null {
-    if (this.convoys.length >= CONVOY_MAX) return 'Deux convois sont déjà en route.';
-    if (this.supply + this.convoys.reduce((s, c) => s + c.amount, 0) >= SUPPLY_MAX) return 'Les réserves de la base sont pleines.';
-    if (purse && !canAfford(purse, CONVOY_COST)) return `Il faut ${costText(CONVOY_COST)} pour un convoi.`;
-    if (purse) pay(purse, CONVOY_COST);
-    this.convoys.push({ left: CONVOY_TIME, amount: CONVOY_AMOUNT });
-    return null;
-  }
-
   // ---------- Pas de simulation ----------
 
   /** Un pas (juste après celui de la faction, dont il lit les événements sans les consommer) */
@@ -333,28 +302,14 @@ export class HellBase {
     }
     this.stepSiege(live, deepest, now, dt);
     this.stepReclaim(now);
-    // le ravitaillement
+    // les effets sur les troupes : forge, soins
     const troops = h.alive('player');
-    if (troops.length) this.supply = Math.max(0, this.supply - troops.length * SUPPLY_DRAIN * dt);
-    for (const c of [...this.convoys]) {
-      c.left -= dt;
-      if (c.left > 0) continue;
-      this.convoys.splice(this.convoys.indexOf(c), 1);
-      this.supply = Math.min(SUPPLY_MAX, this.supply + c.amount);
-      this.events.push({ type: 'convoy', amount: c.amount });
-    }
-    if (this.supply < SUPPLY_LOW && troops.length && !this.warned && !this.convoys.length) { this.warned = true; this.events.push({ type: 'lowSupply' }); }
-    if (this.supply >= SUPPLY_LOW) this.warned = false;
-    const wasWeak = this.weak;
-    this.weak = this.supply <= 0 && troops.length ? Math.min(WEAK_MAX, this.weak + (WEAK_MAX / WEAK_TIME) * dt) : Math.max(0, this.weak - (WEAK_MAX / 60) * dt);
-    if (wasWeak === 0 && this.weak > 0) this.events.push({ type: 'hungry' });
-    // les effets sur les troupes : forge, soins, faim
     for (const u of troops) {
       const forge = this.near('smithy', u.x, u.z);
-      u.boost = (1 - this.weak) * (forge ? SMITHY_BOOST : 1);
+      u.boost = forge ? SMITHY_BOOST : 1;
       u.guard = forge ? SMITHY_GUARD : 1;
       if (u.state === 'attack' || u.hp >= u.maxHp) continue;
-      const regen = this.near('infirmary', u.x, u.z) ? INFIRMARY_REGEN : this.supply > 0 && this.near('camp', u.x, u.z) ? CAMP_REGEN : 0;
+      const regen = this.near('infirmary', u.x, u.z) ? INFIRMARY_REGEN : this.near('camp', u.x, u.z) ? CAMP_REGEN : 0;
       if (regen) u.hp = Math.min(u.maxHp, u.hp + regen * dt);
     }
     // les palissades ralentissent les démons qui les longent
@@ -446,7 +401,7 @@ export class HellBase {
 
   save(): HellBaseSave {
     return {
-      supply: +this.supply.toFixed(2), weak: +this.weak.toFixed(3), convoys: this.convoys.map((c) => ({ ...c })), next: [...this.next], count: [...this.count],
+      next: [...this.next], count: [...this.count],
       active: [...new Set(this.attackers.values())],
       reclaim: this.reclaim ? { zone: this.reclaim.zone, at: this.reclaim.at } : null,
       buildings: this.buildings().map((b) => ({ kind: b.kind as BaseKind, x: b.site.x, z: b.site.z, hp: Math.round(b.hp) })),
@@ -458,9 +413,6 @@ export class HellBase {
     const b = new HellBase(hell, map);
     if (!d || typeof d !== 'object') return b;
     const o = d as Partial<HellBaseSave>;
-    if (Number.isFinite(o.supply)) b.supply = Math.min(SUPPLY_MAX, Math.max(0, o.supply!));
-    if (Number.isFinite(o.weak)) b.weak = Math.min(WEAK_MAX, Math.max(0, o.weak!));
-    if (Array.isArray(o.convoys)) b.convoys = o.convoys.filter((c) => c && Number.isFinite(c.left) && Number.isFinite(c.amount)).slice(0, CONVOY_MAX).map((c) => ({ left: c.left, amount: c.amount }));
     for (const [key, arr] of [['next', b.next], ['count', b.count]] as const) {
       const src = o[key];
       if (Array.isArray(src)) src.forEach((v, i) => { if (i < HELL_ZONE_N && Number.isFinite(v)) arr[i] = v; });

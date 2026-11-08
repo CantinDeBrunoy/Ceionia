@@ -141,7 +141,7 @@ export interface HellUnit {
   /** pour la vue : la marche (phase des pas), le temps depuis le dernier coup porté et depuis le dernier coup reçu */
   walk: number; moving: boolean; swing: number; hurt: number;
   /**
-   * effets de la base avancée (remis à chaque pas par elle) : dégâts portés (forge, faim), dégâts reçus (forge), allure (les
+   * effets de la base avancée (remis à chaque pas par elle) : dégâts portés (forge), dégâts reçus (forge), allure (les
    * démons qui longent une palissade)
    */
   boost?: number; guard?: number; paceK?: number;

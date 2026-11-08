@@ -246,7 +246,7 @@ class Game implements UIHost {
   command!: CommandUI;
   /** les combattants de l'île du portail, dans la scène de la surface */
   private isleLayer: BattleLayer | null = null;
-  /** la galère qui traverse vers l'île du portail (recrues, convois, soldats renvoyés au village) */
+  /** la galère qui traverse vers l'île du portail (recrues, soldats renvoyés au village) */
   private ferry: IsleFerry | null = null;
   /** les ruines des défenses de l'île abattues pendant une incursion */
   private isleRuins: IsleRuins | null = null;
@@ -689,8 +689,6 @@ class Game implements UIHost {
       if (this.kingStage.news(n)) continue;
       if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(`${n.text} Cliquez ici pour voir l’île.`, () => this.viewIsle());
       else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell') this.ui.toast(`${n.text} Cliquez ici pour y aller.`, () => this.enterHell());
-      // les vivres de la base avancée : un clic envoie un convoi
-      else if (n.kind === 'supply') this.ui.toast(`${n.text} Cliquez ici pour envoyer un convoi de ravitaillement.`, () => { const why = w.sendConvoy(); this.ui.toast(why ?? '📦 Convoi parti du village : il passe le portail.'); });
       else this.ui.toast(n.text);
       if (n.kind === 'repelled' || n.kind === 'secured') audio.sfxAgeUp();
     }
