@@ -29,6 +29,16 @@ Règles :
 - Attention aux variables locales nommées `tr` (ex. des trains dans `main.ts`) : elles masquent la fonction ; les renommer.
 - Les noms propres, nombres et unités sans mot ne se traduisent pas. Un texte sans traduction reste en français : rien ne casse.
 
+## Données statiques : `localize` (déjà branché)
+
+`src/i18n/data.ts` remplace, à l'import, les champs de texte des données du jeu par des accesseurs qui rendent la langue courante :
+`KINDS[k].names` / `desc` / `perk`, `AGES[i].name` / `tagline`, `SEASONS`, `BUILD_CATS[].label`, `BUILD_SUBS[][].label`. Tout le code existant
+qui lit `KINDS.house.names[age]` reçoit donc l'anglais **sans changer** ; il suffit d'ajouter les entrées au dictionnaire (clé = texte français
+exact du catalogue). Pour localiser un champ de plus (ex. `UPGRADES`), ajouter une ligne dans `data.ts`. `DIFF_TEXT` (src/sim/difficulty.ts) est
+déjà traduit à la lecture (ses textes sont dans `en/menu.ts`). Les notifications (`ui.toast`/`info`/bannières) passent aussi par `tr`, donc
+un message statique français qu'on leur passe est traduit tout seul ; un message à variables doit être construit avec `tr('… {n} …', { n })`
+avant l'appel (et les regex de `levelOf` dans notifs.ts connaissent des mots anglais pour le classement).
+
 ## Dictionnaires
 
 `src/i18n/en/<zone>.ts`, un fichier par zone, chacun de la forme :

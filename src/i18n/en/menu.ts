@@ -101,7 +101,7 @@ registerDict('menu', {
   'Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.':
     'Normal: wood, stone and ore are earned and spent. Unlimited: they never run out — large buildings cost nothing, nor does gear, and the ore required to change age is taken as given.',
   'Sûr ? Recliquez pour tout rendre illimité': 'Sure? Click again to make everything unlimited',
-  'Sauvegarde': 'Save',
+  'Sauvegarde': 'Saves',
   'Sauvegarder': 'Save',
   'Exporter': 'Export',
   'Importer': 'Import',
