@@ -6,7 +6,7 @@ import { N } from '../world/world';
 const maxDistFor = () => 150 * (N / 48) * 0.8;
 const homeFor = () => 62 * (N / 48) * 0.8;
 
-export interface PointerInfo { x: number; y: number; touch: boolean; button: number }
+export interface PointerInfo { x: number; y: number; touch: boolean; button: number; shift?: boolean; ctrl?: boolean }
 
 export interface ToolInput {
   down(e: PointerInfo): void;
@@ -63,9 +63,9 @@ export class CameraRig {
     this.apply(1);
   }
 
-  private info(e: PointerEvent): { x: number; y: number; touch: boolean; button: number } {
+  private info(e: PointerEvent): { x: number; y: number; touch: boolean; button: number; shift: boolean; ctrl: boolean } {
     const r = this.el.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top, touch: e.pointerType === 'touch', button: e.button };
+    return { x: e.clientX - r.left, y: e.clientY - r.top, touch: e.pointerType === 'touch', button: e.button, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey };
   }
 
   private touches() { return [...this.pointers.values()].filter((p) => p.touch); }
@@ -150,6 +150,9 @@ export class CameraRig {
 
   /** le joueur fait glisser la vue (on cesse alors de suivre le train) */
   onPan: (() => void) | null = null;
+
+  /** Déplace la vue de dx, dy pixels (le glissé du bouton gauche sur le sol vide, en commandement) */
+  panBy(dx: number, dy: number) { this.panScreen(dx, dy); }
 
   private panScreen(dx: number, dy: number) {
     this.onPan?.();

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Hell, HellEvent, DemonKind, DEMONS } from '../sim/hell';
 import { caveLit } from './caveLight';
@@ -69,6 +69,8 @@ export class BattleLayer {
   private barBg: THREE.InstancedMesh;
   private barFill: THREE.InstancedMesh;
   private rings: THREE.InstancedMesh;
+  /** socles pâles sous les troupes du joueur non choisies (on repère toujours ses hommes) */
+  private soft: THREE.InstancedMesh;
   private markMesh: THREE.Mesh;
   private pin: THREE.Mesh;
   private m4 = new THREE.Matrix4();
@@ -95,6 +97,9 @@ export class BattleLayer {
     const ring = new THREE.RingGeometry(0.78, 1, 24).rotateX(-Math.PI / 2);
     this.rings = new THREE.InstancedMesh(ring, new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.85, depthWrite: false, fog: false }), RINGS);
     this.rings.count = 0; this.rings.frustumCulled = false; this.rings.renderOrder = 9;
+    this.soft = new THREE.InstancedMesh(new THREE.RingGeometry(0.6, 1, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.45, depthWrite: false, fog: false }), RINGS);
+    this.soft.count = 0; this.soft.frustumCulled = false; this.soft.renderOrder = 8;
+    this.group.add(this.soft);
     this.markMesh = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.4, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, depthWrite: false, depthTest: false, fog: false }));
     this.markMesh.visible = false; this.markMesh.renderOrder = 9;
     // la flèche de l'ordre, pointe en bas (toujours visible, par-dessus le relief)
@@ -307,6 +312,16 @@ export class BattleLayer {
     }
     this.rings.count = n;
     this.rings.instanceMatrix.needsUpdate = true;
+    // un petit socle pâle sous chaque troupe du joueur non choisie
+    let kn = 0;
+    for (const u of this.hell.alive('player')) {
+      if (this.selected.has(u.id) || kn >= RINGS) continue;
+      v.set(u.x, this.groundY(u.x, u.z) + 0.025, u.z);
+      s.setScalar(u.stats.radius * 0.75 + 0.03);
+      this.soft.setMatrixAt(kn++, m.compose(v, q, s));
+    }
+    this.soft.count = kn;
+    this.soft.instanceMatrix.needsUpdate = true;
     // la marque de l'ordre : un anneau qui s'élargit et une flèche qui se plante en rebondissant (verte : aller, tenir ; rouge :
     // attaquer ; ambre : se replier), à la taille de la vue
     const k = this.mark, LIFE = 1.2;

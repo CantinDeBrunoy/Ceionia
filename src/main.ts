@@ -400,6 +400,7 @@ class Game implements UIHost {
     // le contrôle des troupes : ses ordres au clic droit (sans glisser), la barre des troupes, l'alerte d'incursion
     this.command = new CommandUI(uiRoot, {
       war: this.war, canvas, camKeys: this.cam.keys,
+      pan: (dx, dy) => this.cam.panBy(dx, dy), zoneName: () => (this.mode === 'hell' && this.hellMode ? this.hellMode.zoneName(this.cam.target.z) : null),
       age: () => this.sim.age, pop: () => this.sim.pop,
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
@@ -579,7 +580,7 @@ class Game implements UIHost {
       kind: 'hell', sim: hm.hell, layer: hm.view.units,
       pick: (x, y) => { const p = hm.view.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x, p.z] : null; },
       screen: (x, z) => this.toScreen(v.set(x, hm.view.groundY(x, z) + 0.3, z)),
-      focus: (x, z) => this.cam.goTo(x, z, this.cam.dist),
+      focus: (x, z, d) => this.cam.goTo(x, z, d === undefined ? this.cam.dist : Math.max(this.cam.dist, d)),
       ghost: (kind, x, z, ok, camp, line) => hm.view.ghost(kind, x, z, ok, camp, line),
     };
   }
@@ -602,7 +603,7 @@ class Game implements UIHost {
       kind: 'isle', sim: isle.sim, layer,
       pick: (x, y) => { const p = this.terrain.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x - ox, p.z - oz] : null; },
       screen: (x, z) => this.toScreen(v.set(x + ox, w.hAt(x + ox, z + oz) + 0.3, z + oz)),
-      focus: (x, z) => this.cam.goTo(x + ox, z + oz, this.cam.dist),
+      focus: (x, z, d) => this.cam.goTo(x + ox, z + oz, d === undefined ? this.cam.dist : Math.max(this.cam.dist, d)),
       atPortal: (x, z) => { const p = this.world.portal; return !!p && this.world.portalOpen && Math.hypot(x + ox - p.x, z + oz - p.z) < 2.6; },
     };
   }
