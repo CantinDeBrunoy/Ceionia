@@ -14,7 +14,7 @@ export const ZONED: Partial<Record<KindId, string>> = {
   fishmarket: 'il faut de l’eau (mer ou lac) à moins de 5 cases',
   offshore: 'il faut de l’eau (mer ou lac) à moins de 5 cases',
   mine: 'il faut une montagne',
-  alpine: 'il faut une montagne',
+  alpine: 'il faut une grosse montagne',
   quarry: 'il faut des rochers ou une montagne',
   lumber: 'il faut une forêt',
   oilwell: 'il faut un gisement de pétrole (les taches sombres)',

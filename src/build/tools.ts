@@ -287,7 +287,7 @@ export class ToolController implements ToolInput {
   /** Démolit le bâtiment sélectionné (annulable) */
   demolishSelected() {
     const b = this.selectedBuilding();
-    if (!b || (sizeOf(b) >= 2 && !this.confirmed(b, true))) return;
+    if (!b) return;
     this.beginStroke();
     this.mark();
     this.endStroke();
@@ -662,8 +662,7 @@ export class ToolController implements ToolInput {
     const w = this.h.world, disc = this.radius > 1 && !!this.hit;
     const b = this.hitBuilding;
     if (b) {
-      // un grand bâtiment ne se démolit qu'au second clic : on le regretterait
-      if (sizeOf(b) >= 2 && !this.confirmed(b)) return;
+      // (plus de double confirmation : Ctrl+Z annule)
       this.mark(); w.removeBuilding(b.id); this.h.audio.sfxDestroy();
       if (!disc) return;
     }
@@ -698,7 +697,7 @@ export class ToolController implements ToolInput {
         else if (w.veg[k] && !w.decor[k]) { this.mark(); w.setVeg(cx, cz, 0); any = true; }
       }
     if (any) this.h.audio.sfxDestroy();
-    else if (big && performance.now() - this.lastToast > 1500) { this.h.toast('Les grands bâtiments se démolissent un à un : un clic dessus, avec confirmation.'); this.lastToast = performance.now(); }
+    else if (big && performance.now() - this.lastToast > 1500) { this.h.toast('Les grands bâtiments se démolissent un à un : un clic dessus (Ctrl+Z annule).'); this.lastToast = performance.now(); }
   }
 
   private pickUp(chosen?: Building) {

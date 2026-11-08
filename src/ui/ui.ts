@@ -181,7 +181,7 @@ const TOOL_DESC: Record<string, string> = {
   rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte dans la roche (un clic) : les expéditions vers une grotte s’y rendent.', fissure: 'Ouvrir une faille dans le sol (un clic).',
   erase: 'Effacer forêts, champs, jardins et rochers.',
   road: 'Tracer une route : en ligne, en glissant case par case ; en libre, d’un clic au point A puis au point B, une belle courbe qui contourne les obstacles (R pour changer de mode). Sur l’eau peu profonde, elle devient un pont.',
-  bulldoze: 'Démolir un bâtiment, une route ou un décor. Élargissez le pinceau pour effacer d’un coup tout un parc, une forêt ou des routes (les petits bâtiments partent aussi ; les grands se démolissent un à un, avec confirmation).', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
+  bulldoze: 'Démolir un bâtiment, une route ou un décor. Élargissez le pinceau pour effacer d’un coup tout un parc, une forêt ou des routes (les petits bâtiments partent aussi ; les grands se démolissent un à un).', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
 };
 
 /** Le jardin change de nature avec les âges : son nom, son icône et sa fiche aussi */
@@ -818,7 +818,7 @@ export class UI {
       if (act === 'close') tl.select(null);
       else if (act === 'move') { tl.moveSelected(); h.audio.sfxClick(); }
       else if (act === 'rot') tl.rotateSelected();
-      else if (act === 'del' && await confirmBox(this.root, `Démolir : ${d.names[a].toLowerCase()} ? (Ctrl+Z pour annuler)`, 'Démolir')) tl.demolishSelected();
+      else if (act === 'del') tl.demolishSelected();
       else if (act === 'command') { h.audio.sfxClick(); tl.select(null); h.commandIsle?.(); }
       else if (act === 'newline') { h.audio.sfxClick(); h.startRailEdit({ stop: b.id }); }
       else if (act?.startsWith('up:')) tl.upgradeSelected(act.slice(3) as KindId);

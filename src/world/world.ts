@@ -31,6 +31,8 @@ export const MIN_H = -2.4;
 export const TREE_LINE = 5.8;
 /** Altitude à partir de laquelle on est dans la montagne (mines, carrières) */
 export const MOUNTAIN_H = 2.4;
+/** Station de ski : un sommet d'au moins ALPINE_PEAK à moins de ALPINE_REACH cases */
+export const ALPINE_PEAK = 5.2, ALPINE_REACH = 7;
 export const SNOW_LINE: [number, number] = [7, 8.2];
 /** Relief affiché : VR sous-sommets par case, lissé (la grille de jeu reste N×N) */
 export const VR = 2;
@@ -838,6 +840,14 @@ export class World {
     return false;
   }
 
+  /** Une grosse montagne (sommet d'au moins ALPINE_PEAK) à moins de ALPINE_REACH cases */
+  bigPeakNear(cx: number, cz: number): boolean {
+    for (let z = Math.floor(cz - ALPINE_REACH); z <= Math.ceil(cz + ALPINE_REACH); z++)
+      for (let x = Math.floor(cx - ALPINE_REACH); x <= Math.ceil(cx + ALPINE_REACH); x++)
+        if (this.inCells(x, z) && Math.hypot(x + 0.5 - cx, z + 0.5 - cz) <= ALPINE_REACH && this.cellAvg(x, z) >= ALPINE_PEAK) return true;
+    return false;
+  }
+
   canPlace(kind: KindId, x: number, z: number, size = KINDS[kind].size): string | null {
     const s = size;
     if (!this.inCells(x, z) || !this.inCells(x + s - 1, z + s - 1)) return 'Hors de la carte';
@@ -863,6 +873,8 @@ export class World {
     const high = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
     if (kind === 'mine' && !high) return 'Une mine ne se creuse que dans la montagne';
     if (kind === 'alpine' && !high) return 'Un club alpin ne se pose que dans la montagne';
+    // une station de ski : au pied d'une grosse montagne, pas d'une simple colline
+    if (kind === 'alpine' && !this.bigPeakNear(x + s / 2, z + s / 2)) return 'Une station de ski se pose au pied d’une grosse montagne, pas sur une simple colline';
     if (kind === 'lumber' && this.vegAround(x, z, s, 3, VEG_FOREST) < 5) return 'À poser en lisière ou dans une forêt';
     if (kind === 'quarry' && !high && this.vegAround(x, z, s, 3, VEG_ROCKS) < 2) return 'À poser près des rochers ou dans la montagne (des rochers se posent avec Nature › Rochers)';
     // le puits de pétrole se fore sur un gisement
