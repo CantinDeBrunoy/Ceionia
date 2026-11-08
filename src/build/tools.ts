@@ -746,7 +746,7 @@ export class ToolController implements ToolInput {
     // un chemin d'accès jusqu'au réseau (annulé avec le bâtiment)
     if (this.h.autoRoads) autoRoad(w, b);
     this.moveOrigin = null;
-    this.zonesOff = true;
+    // (la zone des emplacements reste affichée après la pose : on en pose souvent plusieurs, mines, ports…)
     if (this.tool === 'move') { this.tool = 'none'; this.h.changed(); }
     this.h.audio.sfxPlace();
   }
