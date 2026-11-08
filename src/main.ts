@@ -398,6 +398,7 @@ class Game implements UIHost {
     const host = this;
     this.tools = new ToolController({
       world: w, terrain: this.terrain, cam: this.cam, canvas, scene: this.scene, audio,
+      wetCell: (k) => this.streams.covers(k),
       getAge: () => this.sim.age,
       toast: (m) => this.ui.toast(m),
       changed: () => { this.propsDirty = true; this.ui?.refreshTools(); },

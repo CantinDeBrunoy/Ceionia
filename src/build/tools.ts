@@ -43,6 +43,8 @@ export interface Overlay {
 
 export interface ToolHost {
   world: World;
+  /** vrai si un torrent ou un ruisseau passe par cette case (rien ne se plante dans l'eau) */
+  wetCell?: (k: number) => boolean;
   terrain: TerrainView;
   cam: CameraRig;
   canvas: HTMLCanvasElement;
@@ -550,6 +552,8 @@ export class ToolController implements ToolInput {
         const k = w.ci(cx, cz);
         if (type === 0 ? w.veg[k] !== 0 : w.veg[k] !== type) {
           const prev = w.veg[k];
+          // ni champ, ni forêt, ni jardin, ni rochers dans l'eau : lac, torrent ou ruisseau qui passe par la case, rive mouillée
+          if (type !== 0 && (w.lake[k] || this.h.wetCell?.(k) || w.cellMin(cx, cz) < 0.05)) continue;
           if (type === 0 || (!w.occ[k] && !w.road[k])) {
             // simule pour savoir s'il y a changement
             if (w.setVeg(cx, cz, type) || prev !== w.veg[k]) this.mark();
