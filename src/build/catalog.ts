@@ -291,9 +291,9 @@ export const KINDS: Record<KindId, KindDef> = {
     joy: [0, 0, 0, 8, 12, 15], jobs: [0, 0, 0, 1, 2, 3],
   },
   football: {
-    id: 'football', size: 2, minAge: 3, icon: '⚽', cat: 'life',
-    names: ['', '', '', 'Terrain de football', 'Terrain de football', 'Terrain de football'],
-    desc: 'Un match le dimanche, des parties improvisées tous les soirs.',
+    id: 'football', size: 3, minAge: 3, icon: '⚽', cat: 'life',
+    names: ['', '', '', 'Stade de football', 'Grand stade de football', 'Stade de football futuriste'],
+    desc: 'Un match le dimanche, des parties improvisées tous les soirs. Il grandit avec les âges : stade de brique aux gradins de bois, puis grand stade couvert à trois niveaux, puis stade au toit rétractable.',
     joy: [0, 0, 0, 6, 8, 10],
   },
   basket: {
@@ -559,7 +559,6 @@ export const UPGRADES: { from: KindId; to: KindId }[] = [
   { from: 'well', to: 'watertower' },
   // à l'âge futuriste, la gare intermodale devient la gare maglev (ses lignes s'y arrêtent toujours)
   { from: 'terminal', to: 'maglev' },
-  { from: 'football', to: 'stadium' },
   { from: 'pier', to: 'harbor' },
   { from: 'workshop', to: 'carworks' },
   { from: 'farm', to: 'vfarm' },

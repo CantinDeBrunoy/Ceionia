@@ -273,9 +273,9 @@ describe('organiser les JO', () => {
     build(v.w, 'stadium', x + 8, z, 4);
     for (const k of ['basket', 'tennis', 'waterpark'] as KindId[]) build(v.w, k, x - 6, z + 6, 4);
     v.w.place('alpine', x + 20, z + 20, 0, true, 4, false);
-    // le stade (qui compte d'ordinaire comme un terrain de football amélioré) ne suffit pas aux JO
-    expect(v.ex.has('football')).toBe(true);
-    expect(v.ex.missing(m)).toEqual(['bâtir : terrain de football']);
+    // le stade des Jeux et le stade de football sont deux bâtiments : l'un ne devient plus l'autre
+    expect(v.ex.has('football')).toBe(false);
+    expect(v.ex.missing(m)).toEqual(['bâtir : grand stade de football']);
     expect(reqLine('football', m.requires!.kinds!)).toEqual(['football']);
     // ailleurs, la lignée reste entière
     expect(reqLine('football', ['football'])).toEqual(lineOf('football'));
