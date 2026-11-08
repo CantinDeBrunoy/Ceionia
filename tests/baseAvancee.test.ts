@@ -4,7 +4,7 @@ import { Hell } from '../src/sim/hell';
 import { Balance, BALANCE_LEGACY } from '../src/sim/hellBalance';
 import { troopStats, TROOPS, HEAL_TIME } from '../src/sim/army';
 import {
-  HellBase, BASE_DEFS, BASE_R, COUNTER_FIRST, SUPPLY_MAX, SUPPLY_DRAIN, CONVOY_COST, CONVOY_TIME, CONVOY_AMOUNT, WEAK_MAX, WEAK_TIME,
+  HellBase, BASE_DEFS, BASE_R, COUNTER_FIRST, 
   SMITHY_BOOST, PALISADE_SLOW, counterSize, Purse,
 } from '../src/sim/hellBase';
 import { World, N, setMapSize } from '../src/world/world';
@@ -131,34 +131,14 @@ describe('base avancée : construction', () => {
   });
 });
 
-describe('base avancée : effets, ravitaillement', () => {
-  it('la jauge baisse avec les troupes ; un convoi la remonte ; à vide, elles s’affaiblissent', () => {
+describe('base avancée : effets', () => {
+  it('plus de vivres : les troupes ne s’affaiblissent jamais, même longtemps dans les Enfers', () => {
     const { m, h, b } = setup();
     const [ax, az] = m.arrival;
     const us = [0, 1, 2, 3, 4].map((i) => h.addPlayerUnit('soldier', troopStats('soldier', 1), ax + (i % 3) * 0.6, az + 1));
-    run(h, b, 10);
-    expect(b.supply).toBeCloseTo(SUPPLY_MAX - 5 * SUPPLY_DRAIN * 10, 0);
-    // un convoi : payé, il arrive au bout de son trajet
-    const p = rich();
-    b.supply = 30;
-    expect(b.sendConvoy(p)).toBeNull();
-    expect(p.wood).toBe(9999 - CONVOY_COST.wood);
-    expect(b.sendConvoy({ wood: 0, stone: 0, ore: 0 })).toMatch(/Il faut/);
-    run(h, b, CONVOY_TIME + 1);
-    expect(b.supply).toBeGreaterThan(30 + CONVOY_AMOUNT - 5);
-    expect(b.convoys).toHaveLength(0);
-    // à vide : les troupes frappent de moins en moins fort, jusqu'à un plancher
-    b.supply = 0;
-    run(h, b, WEAK_TIME / 2);
-    expect(b.weak).toBeGreaterThan(0);
-    expect(us[0].boost!).toBeLessThan(1);
-    run(h, b, WEAK_TIME);
-    expect(b.weak).toBeCloseTo(WEAK_MAX, 5);
-    expect(us[0].boost!).toBeCloseTo(1 - WEAK_MAX, 5);
-    // ravitaillées, elles reprennent des forces
-    b.supply = SUPPLY_MAX;
-    run(h, b, 70);
-    expect(b.weak).toBe(0);
+    run(h, b, 600);
+    expect('supply' in b).toBe(false);
+    expect(us[0].boost!).toBe(1);
   });
 
   it('le camp et l’infirmerie soignent, la forge renforce, la palissade ralentit les démons', () => {
@@ -244,7 +224,7 @@ describe('base avancée : contre-attaques', () => {
 });
 
 describe('base avancée : sauvegarde', () => {
-  it('la base, sa jauge, ses convois et une zone reperdue se reprennent', () => {
+  it('la base et une zone reperdue se reprennent', () => {
     const { m, h, b } = setup(Z_EMBER);
     const p = { ...rich(), unlimited: true };
     const [ax, az] = m.arrival;
@@ -252,18 +232,17 @@ describe('base avancée : sauvegarde', () => {
     b.build('brazier', ...spot(b, 'brazier', ax + 2, az + 3), p);
     const fort = [...h.buildings.values()].find((s) => s.kind === 'fortress' && s.zone === Z_EMBER)!;
     b.build('camp', ...spot(b, 'camp', fort.site.x, fort.site.z), p);
-    b.supply = 42; b.sendConvoy();
     run(h, b, 1);
     const hs = JSON.parse(JSON.stringify(h.save())), bs = JSON.parse(JSON.stringify(b.save()));
     const m2 = new HellMap(1), h2 = Hell.load(m2, hs), b2 = HellBase.load(h2, m2, bs);
     expect(b2.buildings().map((x) => x.kind).sort()).toEqual(b.buildings().map((x) => x.kind).sort());
-    expect(b2.supply).toBeCloseTo(b.supply, 1);
-    expect(b2.convoys).toHaveLength(1);
     expect(h2.frontier).toBe(Z_RIVER);
     for (const x of b2.buildings()) expect(m2.walkableAt(x.site.x, x.site.z)).toBe(false);
     // une vieille sauvegarde, sans base : une base vide
-    const b3 = HellBase.load(h2, m2, undefined);
-    expect(b3.supply).toBe(SUPPLY_MAX);
+    expect(HellBase.load(h2, m2, undefined)).toBeInstanceOf(HellBase);
+    // une ancienne sauvegarde avec vivres, convois et faiblesse : les champs sont ignorés
+    const b4 = HellBase.load(h2, m2, { ...bs, supply: 3, weak: 0.4, convoys: [{ left: 5, amount: 50 }] });
+    expect(b4.buildings().length).toBe(b2.buildings().length);
   });
 });
 

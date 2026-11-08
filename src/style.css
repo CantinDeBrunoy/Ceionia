@@ -910,11 +910,6 @@ body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
 #troopBar .tsup.mid { color: #a86a00; }
 #troopBar .tsup.mid i b { background: #e0a020; }
 #troopBar .tsup.low i b { background: #d63a2a; }
-#troopBar .tsupx { font-size: 11.5px; font-weight: 600; line-height: 1.25; color: var(--ink2); }
-#troopBar .tsupx.low { color: #c0392b; font-weight: 800; }
-#troopBar .tconv.soon { border-color: #e0a020; background: #fff3d6; }
-#troopBar .tconv.urgent { border-color: #d63a2a; background: #ffe3de; animation: convPulse 1.1s ease-in-out infinite; }
-@keyframes convPulse { 50% { box-shadow: 0 0 0 4px rgba(214, 58, 42, 0.35); } }
 /* jauge de contamination de l'île du portail : rouge-violet qui recule */
 #troopBar .tblight i b, #troopBar .tblight.low i b { background: linear-gradient(90deg, #8a3fd0, #e0442a); }
 #troopBar .tblight { color: #7a3fb0; }

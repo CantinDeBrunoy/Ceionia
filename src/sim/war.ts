@@ -33,7 +33,7 @@ export function bigOf(kinds: DemonKind[]) {
   return parts.length ? `, dont ${parts.length > 1 ? `${parts.slice(0, -1).join(', ')} et ${parts[parts.length - 1]}` : parts[0]}` : '';
 }
 
-export interface WarNews { text: string; kind: 'raid' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'supply' | 'zone' | 'boss' | 'victory' }
+export interface WarNews { text: string; kind: 'raid' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'zone' | 'boss' | 'victory' }
 
 export interface WarSave {
   army: Army;
@@ -175,8 +175,6 @@ export class War {
   get purse(): Purse { return this.world; }
   /** Ce qu'il manque pour bâtir là (null : on peut) */
   canBuildBase(kind: BaseKind, x: number, z: number) { return this.base ? this.base.canBuild(kind, x, z, this.world) : 'Les Enfers ne sont pas ouverts.'; }
-  /** Envoie un convoi de ravitaillement depuis le village : null, ou la raison du refus */
-  sendConvoy() { return this.base ? this.base.sendConvoy(this.world) : 'Les Enfers ne sont pas ouverts.'; }
 
   /** L'unité au combat d'une troupe valide, posée sur l'île ou dans les Enfers */
   private deploy(t: Troop, age: number) {
@@ -398,7 +396,7 @@ export class War {
     this.news.push({ kind: 'victory', text: '👑 Le royaume des Enfers est tombé ! Le portail s’éteint : plus aucune incursion ne menacera l’île.' });
   }
 
-  /** Les nouvelles de la base avancée : contre-attaques, zones, ravitaillement */
+  /** Les nouvelles de la base avancée : contre-attaques, zones */
   private baseNews() {
     const b = this.base;
     if (!b) return;
@@ -410,9 +408,6 @@ export class War {
       else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: `💥 Les démons ont repris la zone ${zoneOf(e.zone)} : sa forteresse se relève, le front recule. Tu peux la reprendre quand tu voudras.` });
       else if (e.type === 'reclaimWarn') this.news.push({ kind: 'zone', text: `⚠️ Les démons se rassemblent pour reprendre la zone ${zoneOf(e.zone)}, que personne ne garde ! Posez-y un camp de base ou envoyez des troupes.` });
       else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base ${zoneOf(e.zone)} est tombé. Rebâtissez-le pour rouvrir la base.` });
-      else if (e.type === 'convoy') this.news.push({ kind: 'info', text: `📦 Un convoi de ravitaillement est arrivé dans les Enfers (+${e.amount} vivres).` });
-      else if (e.type === 'lowSupply') this.news.push({ kind: 'supply', text: '🍞 Les vivres de l’expédition baissent.' });
-      else if (e.type === 'hungry') this.news.push({ kind: 'supply', text: '🍞 Plus de vivres dans les Enfers : les troupes s’affaiblissent peu à peu.' });
       // (une construction : l'interface le dit elle-même)
     }
   }

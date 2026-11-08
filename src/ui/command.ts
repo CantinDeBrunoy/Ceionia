@@ -6,7 +6,7 @@ import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGear
 import { GEAR_BY, GearId } from '../sim/gear';
 import type { War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
-import { BASE_DEFS, BASE_KINDS, SUPPLY_MAX, CONVOY_COST, costText, canAfford } from '../sim/hellBase';
+import { BASE_DEFS, BASE_KINDS, costText, canAfford } from '../sim/hellBase';
 import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 
@@ -378,7 +378,6 @@ export class CommandUI implements ToolInput {
     else if (a === 'garrison') { const n = w.callGarrison(); this.host.toast(n ? `🌀 ${n} troupe${n > 1 ? 's' : ''} de l’île passe${n > 1 ? 'nt' : ''} le portail : elle${n > 1 ? 's' : ''} arrive${n > 1 ? 'nt' : ''} au seuil des Enfers.` : 'Aucune troupe valide sur l’île.'); }
     else if (a === 'wave') { w.callWave(); this.host.toast('🎺 Le cor sonne : la prochaine vague arrive !'); }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
-    else if (a === 'convoy') { const why = w.sendConvoy(); this.host.toast(why ?? '📦 Convoi parti du village : il passe le portail et rejoint l’expédition.'); }
     else if (a.startsWith('rech:')) {
       const k = a.slice(5) as TroopKind, why = w.recruitHell(k, this.host.age(), this.host.pop());
       this.host.toast(why ?? `Recrue en route à la caserne avancée : ${troopName(k, this.host.age()).toLowerCase()} (elle arrivera au camp).`);
@@ -504,18 +503,12 @@ export class CommandUI implements ToolInput {
   }
 
   /**
-   * Le dock droit des Enfers, la base avancée : les bâtiments à poser (un petit menu à elle, pas celui du village), la jauge
-   * de vivres et le convoi, la caserne avancée (recrues sur place)
+   * Le dock droit des Enfers, la base avancée : les bâtiments à poser (un petit menu à elle, pas celui du village), la caserne avancée (recrues sur place)
    */
   private baseRow() {
     const w = this.host.war, b = w.base;
     if (!b) return '';
     const world = w.purse;
-    const sup = Math.round((b.supply / SUPPLY_MAX) * 100), low = sup < 25, lvl = sup < 25 ? 'low' : sup < 50 ? 'mid' : 'ok';
-    const enRoute = b.convoys.length ? `<small class="q">Convoi en route : ${b.convoys.map((c) => `${Math.ceil(c.left)} s`).join(' · ')}</small>` : '';
-    const gauge = `<span class="tsup ${lvl}" title="Vivres et équipement de l’expédition : chaque troupe en consomme ; à vide, elles s’affaiblissent peu à peu${b.weak > 0 ? ` (en ce moment : −${Math.round(b.weak * 100)} % de force)` : ''}">🍞 Vivres <i><b style="width:${sup}%"></b></i>${sup} %</span>
-      <small class="tsupx${low ? ' low' : ''}">${low ? 'Presque plus de vivres ! ' : ''}Les soldats mangent : à zéro, ils s’affaiblissent.</small>
-      <button data-a="convoy" class="trb tconv${low ? ' urgent' : sup < 50 ? ' soon' : ''}" title="Un convoi part du village avec des vivres : il passe le portail et réapprovisionne la base avancée"><b>📦 Envoyer des vivres à la base</b><small>${costText(CONVOY_COST)}</small></button>${enRoute}`;
     const zi = Math.min(HELL_ZONES.length - 1, Math.max(0, w.faction?.frontier ?? 0));
     const builds = BASE_KINDS.map((k) => {
       const d = BASE_DEFS[k], afford = canAfford(world, d.cost);
@@ -523,7 +516,7 @@ export class CommandUI implements ToolInput {
     }).join('');
     const posts = b.posts(), ctx = w.recruitCtx(this.host.age(), this.host.pop());
     const rec = posts ? `<h5>Recruter ici</h5>${TROOP_KINDS.filter((k) => this.host.age() >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="trb${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? ' off' : ''}" title="Recruter sur place : ${troopLabel(k, this.host.age())}. ${troopForm(k, this.host.age()).desc.replace(/"/g, '&quot;')}"><b>${troopForm(k, this.host.age()).icon} + ${troopForm(k, this.host.age()).name}</b><small>caserne avancée</small></button>`).join('')}` : '';
-    return `<div class="tdock tright tbase"><h5 title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">Base avancée</h5><div class="tbuilds">${builds}</div>${gauge}${rec}</div>`;
+    return `<div class="tdock tright tbase"><h5 title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">Base avancée</h5><div class="tbuilds">${builds}</div>${rec}</div>`;
   }
 
   /**

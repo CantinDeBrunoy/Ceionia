@@ -1,7 +1,7 @@
 import type { World } from './world';
 
 /**
- * La traversée en galère entre le continent et l'île du portail (pour la vue seulement : les recrues, les convois, les
+ * La traversée en galère entre le continent et l'île du portail (pour la vue seulement : les recrues, les
  * soldats renvoyés au village) : la rive du continent d'où l'on part (au port s'il y en a un sur la bonne côte, sinon la
  * rive la plus proche de l'île), le mouillage au large de cette rive, celui au large de la plage de l'île, et cette plage.
  * Tout droit sur l'eau entre les deux mouillages
