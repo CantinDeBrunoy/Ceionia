@@ -22,7 +22,6 @@ export class Streams {
   private lakeMesh: THREE.Mesh;
   private flowMesh: THREE.Mesh;
   private paths: [number, number][][] = [];
-  private roadsVersion = -1;
   private sprays: Spray[] = [];
   /** points le long des torrents (x, z, raideur), pour le son de l'eau vive */
   private samples: number[] = [];
@@ -94,8 +93,6 @@ export class Streams {
       const end = performance.now() + 4;
       while (performance.now() < end) if (this.job.next().done) { this.job = null; break; }
     }
-    // une route posée ou retirée : le torrent passe sous la chaussée (les dalles sont dessinées avec les chemins)
-    if (w.version !== this.roadsVersion && !this.job) { this.roadsVersion = w.version; this.reflow(); }
     // embruns au pied des cascades proches (rien quand elles sont gelées)
     if (this.uFrozen.value < 0.5) {
       for (const s of this.sprays) {
@@ -215,20 +212,19 @@ export class Streams {
     }
     this.sprays = sprays; this.samples = samples; this.paths = paths;
     this.streamCells = new Set();
+    // cases que le ruban traverse vraiment (près de leur centre) : une route qui y passe reçoit un pont (voir `crossings.ts`)
+    const crossed = new Set<number>();
     for (const p of paths) for (let i = 1; i < p.length; i++) {
-      const [ax, az] = p[i - 1], [bx, bz] = p[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.25));
-      for (let k = 0; k <= n; k++) this.streamCells.add(Math.floor(az + ((bz - az) * k) / n) * N + Math.floor(ax + ((bx - ax) * k) / n));
+      const [ax, az] = p[i - 1], [bx, bz] = p[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.1));
+      for (let k = 0; k <= n; k++) {
+        const x = ax + ((bx - ax) * k) / n, z = az + ((bz - az) * k) / n, cx = Math.floor(x), cz = Math.floor(z);
+        if (cx < 0 || cz < 0 || cx >= N || cz >= N) continue;
+        this.streamCells.add(cz * N + cx);
+        if (Math.hypot(x - cx - 0.5, z - cz - 0.5) <= 0.45) crossed.add(cz * N + cx);
+      }
     }
+    w.setTorrents(crossed);
     this.version++;
-    this.roadsVersion = w.version;
-    this.flowMesh.geometry.dispose();
-    this.flowMesh.geometry = geos.length ? mergeRibbons(geos) : new THREE.BufferGeometry();
-    for (const g of geos) g.dispose();
-  }
-
-  /** Redessine les rubans des torrents sur les mêmes tracés (une route les enjambe désormais, ou ne les enjambe plus) */
-  private reflow() {
-    const geos = this.paths.map((p) => this.ribbon(p, [], []));
     this.flowMesh.geometry.dispose();
     this.flowMesh.geometry = geos.length ? mergeRibbons(geos) : new THREE.BufferGeometry();
     for (const g of geos) g.dispose();
@@ -349,12 +345,10 @@ export class Streams {
       if (slope > 1.1) fall += slope * tl * 0.5;
       else if (fall > 0.6) { sprays.push({ x: px, y: w.hAt(px, pz), z: pz, k: Math.min(3, fall) }); fall = 0; } else fall = 0;
       if (i % 3 === 0) samples.push(px, pz, slope);
-      // sous une route (hors pont), le torrent passe dans une buse : il plonge sous la chaussée, que sa dalle recouvre
-      const cx = Math.min(N - 1, Math.max(0, Math.floor(px))), cz = Math.min(N - 1, Math.max(0, Math.floor(pz)));
-      const under = w.road[cz * N + cx] === 1 && !w.isWet(cx, cz);
+      // (sous une route, le ruban reste tel quel : c'est le pont qui s'élève au-dessus de lui, l'eau se voit passer dessous)
       for (let j = 0; j < 3; j++) {
         const o = (j - 1) * hw, vx = px - (tz / tl) * o, vz = pz + (tx / tl) * o, k = i * 3 + j;
-        pos[k * 3] = vx; pos[k * 3 + 1] = w.hAt(vx, vz) + (under ? -0.06 : 0.035 + Math.min(0.06, slope * 0.02)); pos[k * 3 + 2] = vz;
+        pos[k * 3] = vx; pos[k * 3 + 1] = w.hAt(vx, vz) + 0.035 + Math.min(0.06, slope * 0.02); pos[k * 3 + 2] = vz;
         along[k] = dist; side[k] = j - 1; steep[k] = smoothstep(0.5, 1.6, slope);
       }
     }

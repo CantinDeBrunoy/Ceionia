@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { World, N, setMapSize, SEA } from '../src/world/world';
-import { DECK_CLEAR, RAMP_IN, carriedGroups, deckProfile, findCrossings, nearestOnDeck } from '../src/world/crossings';
+import { DECK_CLEAR, RAMP_IN, TORRENT_WATER, carriedGroups, deckProfile, findCrossings, nearestOnDeck } from '../src/world/crossings';
 import { RoadView } from '../src/render/roads';
-import type { Streams } from '../src/render/streams';
+import { Streams } from '../src/render/streams';
 
 /** Terrain plat de 48 cases à la hauteur `h` ; `carve(x, z)` renvoie la hauteur à donner au sommet (ou undefined) */
 function flat(carve: (x: number, z: number) => number | undefined, h = 0.55): World {
@@ -87,13 +87,57 @@ describe('franchissements : détection', () => {
     }
   });
 
-  it('deux bras rapprochés (deux cases sèches) : un seul pont ; trois cases sèches : deux ponts', () => {
-    const w = streams([16, 21]);
-    row(w, 12, 6, 34);
-    expect(carriedGroups(w).length).toBe(1);
-    const w2 = streams([16, 22]);
+  it('un ruisseau qui serpente et recoupe la route jusqu\'à quatre cases plus loin : un seul pont, d\'un seul tronçon ; au-delà, deux ponts', () => {
+    for (const far of [21, 22, 23]) {
+      const w = streams([16, far]);
+      row(w, 12, 6, 34);
+      const cr = findCrossings(w);
+      expect(cr.length).toBe(1);
+      expect(cr[0].spans.length).toBe(1);
+      // le tablier est continu de la première rive à la dernière : toutes les cases d'eau et celles entre elles sont portées
+      for (let x = 15; x <= far + 1; x++) expect(cr[0].cells.has(w.ci(x, 12))).toBe(true);
+      for (let i = 1; i < cr[0].spans[0].pts.length; i++) expect(Math.abs(cr[0].spans[0].pts[i][1] - cr[0].spans[0].pts[i - 1][1])).toBeLessThan(0.1);
+    }
+    const w2 = streams([16, 24]);
     row(w2, 12, 6, 34);
     expect(carriedGroups(w2).length).toBe(2);
+  });
+
+  it('un torrent sous un chemin : un pont, un seul, même quand le torrent serpente et recoupe le chemin trois cases plus loin', () => {
+    const w = flat(() => undefined);
+    row(w, 10, 8, 34);
+    w.setTorrents(new Set([w.ci(20, 10), w.ci(21, 10), w.ci(24, 10)]));
+    const cr = findCrossings(w);
+    expect(cr.length).toBe(1);
+    expect(cr[0].spans.length).toBe(1);
+    for (let x = 20; x <= 24; x++) expect(cr[0].cells.has(w.ci(x, 10))).toBe(true);
+    expect(w.bridgeY(22, 10)).not.toBeNull();
+    // les garde-corps (portée sur l'eau) vont d'un bord à l'autre d'un seul tenant
+    const sp = cr[0].spans[0];
+    expect(sp.a).toBeLessThan(sp.b);
+    const wetS = sp.S.filter((_, i) => sp.wet[i]);
+    expect(Math.min(...wetS)).toBeGreaterThanOrEqual(sp.a);
+    expect(Math.max(...wetS)).toBeLessThanOrEqual(sp.b);
+  });
+
+  it('le tablier passe au-dessus d\'un torrent avec un jour : l\'eau (ruban posé sur le sol, 0,1 au plus) coule dessous', () => {
+    const w = flat(() => undefined);
+    row(w, 10, 8, 34);
+    w.setTorrents(new Set([w.ci(20, 10)]));
+    const [cr] = findCrossings(w), sp = cr.spans[0];
+    sp.pts.forEach((p, i) => {
+      if (!sp.wet[i]) return;
+      // dessus du tablier à TORRENT_WATER + DECK_CLEAR au-dessus du sol : le dessous (épaisseur ≤ 0,12) reste au-dessus du ruban (≤ sol + 0,1)
+      expect(p[1] - w.hAt(p[0], p[2])).toBeGreaterThanOrEqual(TORRENT_WATER + DECK_CLEAR - 1e-6);
+      expect(p[1] - 0.12).toBeGreaterThan(w.hAt(p[0], p[2]) + 0.1);
+    });
+    // et il redescend sur le chemin des deux côtés
+    const f0 = sp.pts[0], f1 = sp.pts[sp.pts.length - 1];
+    expect(f0[1]).toBeCloseTo(w.hAt(f0[0], f0[2]) + 0.04, 6);
+    expect(f1[1]).toBeCloseTo(w.hAt(f1[0], f1[2]) + 0.04, 6);
+    // retirer le torrent retire le pont
+    w.setTorrents(new Set());
+    expect(w.bridgeY(20, 10)).toBeNull();
   });
 
   it('une flaque ou une rive qui trempe à peine ne fait pas de pont', () => {
@@ -255,18 +299,39 @@ describe('franchissements : dessin', () => {
     for (const ww of [w, w2]) for (const age of [0, 4]) { const v = new RoadView(ww); expect(() => v.rebuild(age, 0)).not.toThrow(); expect(deckVerts(v)).toBeGreaterThan(0); }
   });
 
-  it('un torrent sous une route reçoit une dalle dans l\'axe du chemin, pas un pont', () => {
+  it('un torrent sous une route se dessine comme un pont (du style de l\'âge), et seulement s\'il y a un torrent', () => {
     const w = flat(() => undefined);
     row(w, 10, 8, 34);
-    const k = w.ci(20, 10);
     const a = new RoadView(w);
-    a.rebuild(3, 0);
-    const b = new RoadView(w);
-    b.streams = { version: 7, covers: (c: number) => c === k } as unknown as Streams;
-    b.rebuild(3, 0);
-    expect(findCrossings(w).length).toBe(0);
+    a.rebuild(1, 0);
     expect(deckVerts(a)).toBe(0);
+    w.setTorrents(new Set([w.ci(20, 10)]));
+    const b = new RoadView(w);
+    b.streams = { version: 7 } as unknown as Streams;
+    b.rebuild(1, 0);
     expect(deckVerts(b)).toBeGreaterThan(0);
     expect(b.builtStreams).toBe(7);
+  });
+
+  it('le ruban d\'un torrent n\'est jamais interrompu ni enfoncé sous une route : il reste posé sur le sol d\'un bout à l\'autre', () => {
+    // une montagne conique au milieu d'une plaine : des torrents en descendent jusqu'au bord ; une route en fait le tour
+    const w = flat((x, z) => Math.max(0.3, 4.5 - Math.hypot(x - 24, z - 24) / 4));
+    for (let x = 4; x < N - 4; x++) { w.road[w.ci(x, 36)] = 1; w.road[w.ci(x, 12)] = 1; }
+    for (let z = 4; z < N - 4; z++) { w.road[w.ci(12, z)] = 1; w.road[w.ci(36, z)] = 1; }
+    w.version++;
+    const s = new Streams(w, null);
+    s.rebuild();
+    expect(w.torrents.size).toBeGreaterThan(0);
+    // au moins un torrent passe sous une route, et cette case est un pont
+    const under = [...w.torrents].filter((k) => w.road[k]);
+    expect(under.length).toBeGreaterThan(0);
+    for (const k of under) expect(w.bridgeY(k % N, Math.floor(k / N))).not.toBeNull();
+    const pos = ((s as unknown as { flowMesh: THREE.Mesh }).flowMesh.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+    expect(pos.length).toBeGreaterThan(0);
+    for (let i = 0; i < pos.length; i += 3) {
+      const h = w.hAt(pos[i], pos[i + 2]);
+      expect(pos[i + 1]).toBeGreaterThanOrEqual(h + 0.035 - 1e-6);
+      expect(pos[i + 1]).toBeLessThanOrEqual(h + 0.1 + 1e-6);
+    }
   });
 });

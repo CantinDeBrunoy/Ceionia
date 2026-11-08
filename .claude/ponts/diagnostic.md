@@ -17,6 +17,17 @@ escalier donne une diagonale droite ; les jonctions sur l'eau deviennent des pla
 torrent plonge sous la route, qui reçoit une petite dalle du style de l'âge. Reste imparfait : une grille de routes posée sur
 l'eau le long d'un ruisseau (capture 06/10) fait une plateforme dense de garde-corps, cohérente mais chargée.
 
+## Retour de l'utilisateur (v2) : « deux ponts sur la petite rivière, et ils coupent l'eau »
+
+Captures `v2-avant-*` : le « petit ruisseau sinueux » est un torrent (`streams.ts`, ruban drapé sur le relief). Chaque case de
+chemin qu'il touchait recevait **sa propre dalle** le long de sa ligne de chemin (deux groupes de garde-corps décalés), et le
+ruban **plongeait sous la chaussée** (l'eau semblait coupée). Remède : les cases de torrent deviennent des cases d'eau comme
+les autres (`World.torrents`, posées par `Streams`), donc UN franchissement par groupe (profil, garde-corps continus, piles),
+avec un « niveau d'eau » = sol + 0,05 : le tablier passe à 0,29 au-dessus du sol et l'on voit l'eau couler dessous ; le
+ruban n'est plus enfoncé. Deux bras d'un même ruisseau à quatre cases au plus le long de la route ne font plus qu'un pont au
+tablier continu (`MAX_DRY_GAP` 2 → 4). Captures `v2-apres-*` : ruisseau sinueux à deux bras (un seul pont, l'eau passe deux
+fois dessous), torrent le long du chemin, chemin qui croise un torrent (vue à ras de l'eau : le ruban continu sous le tablier).
+
 ## Remède
 
 Un seul module (`src/world/crossings.ts`) détecte chaque franchissement une fois (cases d'eau portées, tronçons entre rives et nœuds, axe simplifié par les milieux de bords) et calcule **un profil unique** : la corde entre les deux pieds de rampe (hauteur de la chaussée des rives), relevée juste ce qu'il faut au-dessus de l'eau (+0,24) et jamais sous le sol. `World.surfaceAt`, `bridgeY` et `passPoint` lisent ce même profil (habitants et véhicules sur le tablier). `roads.ts` ne fait plus que dessiner ce profil, avec un style par âge ; les torrents reçoivent une dalle ou une passerelle du même style, et le torrent passe sous la route.

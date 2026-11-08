@@ -367,7 +367,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     this.bridged = new Set(map.keys());
     this.crossings = [...new Set(map.values())];
   }
-  /** torrents (les routes qui les croisent reçoivent une dalle ou une passerelle) */
+  /** torrents : quand ils bougent (relief sculpté), les ponts qui les franchissent se refont avec les chemins */
   streams: Streams | null = null;
   /** version des torrents avec laquelle les chemins ont été faits */
   builtStreams = -1;
@@ -1207,32 +1207,13 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     for (const cr of this.crossings) {
       if (++batch % 3 === 0) yield;
       for (const sp of cr.spans) {
-        // (une simple rampe d'un plateau à la rive n'a ni lanterne ni poteau d'extrémité)
+        // (une simple rampe d'un plateau à la rive, ou le raccord de deux plateaux, n'a ni garde-corps ni lanterne : le plateau a les siens)
         const nA = sp.from.kind === 'node', nB = sp.to.kind === 'node', ramp = !sp.cells.length;
-        deckRibbon(sp.pts, sp.S, sp.a, sp.b, sp.cells[0] ?? sp.from.cell, { rails: !(nA && nB), lampA: !nA && !ramp, lampB: !nB && !ramp, trimA: nA ? dhw + 0.02 : undefined, trimB: nB ? dhw + 0.02 : undefined });
+        deckRibbon(sp.pts, sp.S, sp.a, sp.b, sp.cells[0] ?? sp.from.cell, { rails: !ramp, lampA: !nA && !ramp, lampB: !nB && !ramp, trimA: nA ? dhw + 0.02 : undefined, trimB: nB ? dhw + 0.02 : undefined });
       }
       for (const [k, y] of cr.nodes) nodePlate(k, y);
     }
-    // torrents sous la route : une petite dalle (ou passerelle) du même style, dans l'axe du chemin, à peine bombée
-    const torrents = this.streams;
-    if (torrents) for (const [k, ls] of lines) {
-      if (!torrents.covers(k) || this.bridged.has(k)) continue;
-      if (++batch % 8 === 0) yield;
-      for (const l of ls) {
-        let len = 0;
-        for (let i = 0; i + 3 < l.length; i += 2) len += Math.hypot(l[i + 2] - l[i], l[i + 3] - l[i + 1]);
-        if (len < 0.6) continue;
-        const P: number[][] = [], S: number[] = [];
-        let acc = 0;
-        for (let i = 0; i + 3 < l.length; i += 2) {
-          const ax = l[i], az = l[i + 1], dx = l[i + 2] - ax, dz = l[i + 3] - az, sl = Math.hypot(dx, dz), m = Math.max(1, Math.ceil(sl / 0.2));
-          for (let q = i === 0 ? 0 : 1; q <= m; q++) { const t = q / m; P.push([ax + dx * t, 0, az + dz * t]); S.push(acc + sl * t); }
-          acc += sl;
-        }
-        for (let i = 0; i < P.length; i++) { const c = Math.max(0, Math.min(1, Math.min(S[i], acc - S[i]) / 0.35)); P[i][1] = w.hAt(P[i][0], P[i][2]) + 0.025 + 0.045 * c * c * (3 - 2 * c); }
-        deckRibbon(P, S, 0.15, acc - 0.15, k, { small: true });
-      }
-    }
+    // (les torrents sous la route sont des franchissements comme les autres : voir `World.torrents`)
     // cailloux au bord des chemins de terre (et quelques-uns dessus), pas en ville ni sous la neige
     if (!town && snow < 0.5) {
       const pebble = unindexed(new THREE.IcosahedronGeometry(1, 0)), pp = pebble.attributes.position;
