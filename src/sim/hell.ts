@@ -88,6 +88,8 @@ export const FORGE_EVERY = 45;
  * sécurisée après SECURE_WAVES vagues repoussées : réglé pour qu'une tour de garde, une caserne et sa garnison suffisent,
  * sans aucune expédition dans les Enfers (facultatives)
  */
+/** Répit (s) laissé à l'île après la chute du dernier poste avancé, avant l'incursion suivante */
+export const FRONT_RESPITE = 120;
 export const RAID_FIRST = 300, RAID_EVERY = 240, RAID_MIN = 150, RAID_MAX = 10, RAID_SECURED_MAX = 6, SECURE_WAVES = 5;
 
 export type Side = 'hell' | 'player';
@@ -243,6 +245,11 @@ export class Hell {
   raidsRepelled = 0;
   raidsLost = 0;
   heldSince = -1;
+  /**
+   * postes avancés du joueur encore tenus dans les Enfers (rempli par la base) : tant qu'il y en a, les démons doivent d'abord
+   * les reprendre un à un, et aucune incursion ne vise l'île du portail
+   */
+  frontPosts = 0;
   /** où se replient les unités du joueur (null : le point d'arrivée de la carte, le portail des Enfers) */
   rally: [number, number] | null = null;
   /**
@@ -802,6 +809,8 @@ export class Hell {
   raidDue(time: number) {
     if (this.victory || this.activeRaid) return false;
     if (this.nextRaid < 0) { this.nextRaid = time + RAID_FIRST; this.heldSince = time; return false; }
+    // le front tient : l'île attend ; une fois le dernier poste tombé, un répit avant la première incursion
+    if (this.frontPosts > 0) { this.nextRaid = Math.max(this.nextRaid, time + FRONT_RESPITE); return false; }
     return time >= this.nextRaid;
   }
 

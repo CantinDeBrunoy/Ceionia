@@ -63,6 +63,12 @@ export const LAG_BONUS = 2;
  * suivante n'est visée qu'après RECLAIM_COOLDOWN secondes. Un camp ou des troupes sur place annulent la menace
  */
 export const RECLAIM_FIRST = 420, RECLAIM_WARN = 150, RECLAIM_COOLDOWN = 600;
+/**
+ * Le front : les démons ne remontent vers l'île du portail qu'après avoir repris tous les postes avancés du joueur (ses zones
+ * conquises), un par un, le plus profond d'abord. Chaque assaut est annoncé COUNTER_WARN secondes avant. Un poste sans camp
+ * dont les troupes sont toutes parties ou tombées pendant un assaut est perdu après FRONT_GRACE secondes
+ */
+export const COUNTER_WARN = 45, FRONT_GRACE = 30;
 
 /** Taille d'une contre-attaque : selon la zone de la base, le nombre de vagues déjà venues et le retard d'âge */
 export function counterSize(zone: number, n: number, lag = 0) { return Math.min(COUNTER_MAX + lag * LAG_BONUS, 2 + zone + n + lag * LAG_BONUS); }
@@ -79,7 +85,10 @@ export function costText(c: BaseCost) {
 
 export type BaseEvent =
   | { type: 'built'; kind: BaseKind; zone: number }
+  | { type: 'counterWarn'; zone: number }
   | { type: 'counter'; zone: number; n: number }
+  /** le dernier poste avancé est tombé : les incursions sur l'île reprennent (après un temps de répit) */
+  | { type: 'frontCleared' }
   | { type: 'counterEnd'; zone: number }
   | { type: 'campLost'; zone: number }
   | { type: 'zoneLost'; zone: number }
@@ -114,6 +123,10 @@ export class HellBase {
   /** la zone laissée seule que les démons vont reprendre (`at` : le moment) ; `cool` : pas de nouvelle menace avant ce moment */
   reclaim: { zone: number; at: number; warned: boolean } | null = null;
   private cool = 0;
+  /** zones dont l'assaut à venir a été annoncé ; temps passé sans personne pour garder un poste assiégé */
+  private warnedCounter: boolean[] = Array.from({ length: HELL_ZONE_N }, () => false);
+  private abandoned = 0;
+  private hadFront = false;
   private reach = { v: -1, n: 0 };
   private warned = false;
   /** événements de la faction déjà lus (elle en garde plusieurs pas, jusqu'à ce que la guerre les relève) */
@@ -129,6 +142,26 @@ export class HellBase {
   camp(zone: number) { return this.buildings().find((b) => b.kind === 'camp' && b.zone === zone) ?? null; }
   /** Bâtiments debout d'une sorte, dans une zone (ou partout) */
   countOf(kind: BaseKind, zone?: number) { return this.buildings().filter((b) => b.kind === kind && (zone === undefined || b.zone === zone)).length; }
+  /**
+   * Le poste avancé le plus profond : la zone conquise la plus lointaine du portail (sans le royaume), 0 s'il n'y en a aucun.
+   * Les démons doivent le reprendre avant de remonter vers les zones d'avant, puis vers l'île du portail
+   */
+  deepestPost() {
+    const h = this.hell;
+    if (h.victory) return 0;
+    for (let z = Z_KINGDOM - 1; z >= 1; z--) if (h.conquered[z]) return z;
+    return 0;
+  }
+  /** Nombre de postes avancés tenus (zones conquises) ; tant qu'il y en a, aucune incursion ne vise l'île */
+  outposts() {
+    const h = this.hell;
+    if (h.victory) return 0;
+    let n = 0;
+    for (let z = 1; z < Z_KINGDOM; z++) if (h.conquered[z]) n++;
+    return n;
+  }
+  /** Des troupes du joueur se tiennent dans cette zone (elles comptent pour sa défense) */
+  troopsIn(zone: number) { return this.hell.alive('player').some((u) => zoneOfZ(Math.floor(u.z)) === zone); }
   /** La base la plus avancée (son camp) */
   front(): HellBuilding | null {
     let best: HellBuilding | null = null;
@@ -231,13 +264,21 @@ export class HellBase {
     // les contre-attaques en cours : repoussées quand leurs démons sont tous abattus
     const live = new Set<number>();
     for (const [id, zone] of this.attackers) { const u = h.units.get(id); if (u && u.hp > 0) live.add(zone); else this.attackers.delete(id); }
+    // le front : l'assaut vise le poste le plus profond (son camp, ou à défaut les troupes qui le tiennent) ; les autres suivent
+    const deepest = this.deepestPost();
     for (let zone = 0; zone < HELL_ZONE_N; zone++) {
-      const camp = this.camp(zone), front = !!camp && h.held(zone) && zone + 1 < HELL_ZONE_N && !h.conquered[zone + 1] && !h.victory;
-      if (this.next[zone] === -2 && !live.has(zone)) { this.events.push({ type: 'counterEnd', zone }); this.next[zone] = now + COUNTER_EVERY; }
-      if (!front) { if (!live.has(zone)) this.next[zone] = -1; continue; }
+      const camp = this.camp(zone), guarded = !!camp || (zone >= 1 && h.conquered[zone] && this.troopsIn(zone));
+      const front = guarded && h.held(zone) && zone + 1 < HELL_ZONE_N && zone === deepest && !h.victory;
+      if (this.next[zone] === -2 && !live.has(zone)) { this.events.push({ type: 'counterEnd', zone }); this.next[zone] = now + COUNTER_EVERY; this.warnedCounter[zone] = false; }
+      if (!front) { if (!live.has(zone)) { this.next[zone] = -1; this.warnedCounter[zone] = false; } continue; }
       if (this.next[zone] === -1) this.next[zone] = now + COUNTER_FIRST;
-      if (this.next[zone] >= 0 && now >= this.next[zone] && !live.has(zone)) this.counter(zone);
+      if (this.next[zone] >= 0 && !live.has(zone)) {
+        // préavis : les démons se rassemblent avant de marcher
+        if (!this.warnedCounter[zone] && now >= this.next[zone] - COUNTER_WARN) { this.warnedCounter[zone] = true; this.events.push({ type: 'counterWarn', zone }); }
+        if (now >= this.next[zone]) { this.warnedCounter[zone] = false; this.counter(zone); }
+      }
     }
+    this.stepSiege(live, deepest, now, dt);
     this.stepReclaim(now);
     // le ravitaillement
     const troops = h.alive('player');
@@ -267,6 +308,23 @@ export class HellBase {
     const walls = this.buildings().filter((b) => b.kind === 'palisade');
     for (const u of h.alive('hell')) u.paceK = walls.length && walls.some((b) => Math.hypot(b.site.x - u.x, b.site.z - u.z) - b.site.r < 1) ? PALISADE_SLOW : 1;
     h.rally = this.front() ? this.spawnPoint() : null;
+    // le front pour les incursions : tant qu'un poste avancé tient, l'île du portail est tranquille
+    h.frontPosts = this.outposts();
+    if (h.frontPosts > 0) this.hadFront = true;
+    else if (this.hadFront) { this.hadFront = false; if (!h.victory) this.events.push({ type: 'frontCleared' }); }
+  }
+
+  /**
+   * Un poste assiégé (assaut en cours) que personne ne garde plus (ni camp, ni troupe) : après FRONT_GRACE secondes, les démons
+   * le reprennent, et le front recule jusqu'au poste suivant
+   */
+  private stepSiege(live: Set<number>, deepest: number, now: number, dt: number) {
+    if (deepest < 1 || !live.has(deepest) || this.camp(deepest) || this.troopsIn(deepest)) { this.abandoned = 0; return; }
+    this.abandoned += dt;
+    if (this.abandoned < FRONT_GRACE) return;
+    this.abandoned = 0;
+    this.fall(deepest);
+    this.cool = Math.max(this.cool, now + COUNTER_FIRST / 2);
   }
 
   /** Une zone conquise que personne ne garde finit par être reprise par les démons (une à la fois, avec préavis) */
@@ -274,10 +332,9 @@ export class HellBase {
     const h = this.hell;
     let target = -1;
     if (h.gate && !h.victory) {
-      const troops = h.alive('player');
-      for (let z = Z_KINGDOM - 1; z >= 1 && target < 0; z--) {
-        if (h.conquered[z] && !this.camp(z) && !troops.some((u) => zoneOfZ(Math.floor(u.z)) === z)) target = z;
-      }
+      // le plus profond d'abord : un poste en retrait n'est repris qu'une fois les postes plus avancés tombés
+      const z = this.deepestPost();
+      if (z >= 1 && !this.camp(z) && !this.troopsIn(z) && !this.attackers.size) target = z;
     }
     if (target < 0) { this.reclaim = null; return; }
     if (now < this.cool) return;
