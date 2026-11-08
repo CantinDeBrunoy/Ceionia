@@ -855,7 +855,7 @@ class Game implements UIHost {
       f.voyage = true;
       const was = this.time.paused;
       this.time.paused = true;
-      showVoyage(uiRoot, a.c.label.includes('saut'), () => { this.expeditions.landNow(a); this.time.paused = was; });
+      showVoyage(uiRoot, /saut|jump/i.test(a.c.label), () => { this.expeditions.landNow(a); this.time.paused = was; });
     }
   }
 

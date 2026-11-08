@@ -3106,7 +3106,7 @@ export class ExpeditionScene {
     // (le bateau est déjà au mouillage de départ, avant l'arrivée de l'équipe)
     bt.obj.position.set(bt.home[0], bt.y, bt.home[1]);
     bt.obj.rotation.y = Math.atan2(bt.out[0] - bt.home[0], bt.out[1] - bt.home[1]);
-    const diver = /scaphandr|plong/i.test(`${a.c.label} ${a.c.doing ?? ''}`);
+    const diver = /scaphandr|plong|diver|dive/i.test(`${a.c.label} ${a.c.doing ?? ''}`);
     this.salv = new Salvage({ world: this.world, agents: this.agents, group: this.group, depth: (x, z) => this.depth(x, z), splash: (x, z, lv, big) => this.splash(x, z, lv, big) }, bt, a.party, diver, a.age);
     for (const o of this.salv.objs) this.props.push(o);
     this.focus = this.salv.focus;
@@ -4220,7 +4220,7 @@ export class ExpeditionScene {
     const hoard = this.put(hoardGeo(), mx + fx * 0.7 - fz * 0.5, mz + fz * 0.7 + fx * 0.5, face);
     hoard.scale.setScalar(1.6);
     for (let i = 0; i < 4; i++) { const [bx, bz] = this.near(mx + fx * (1.5 + i * 0.15) + fz * (i - 1.5) * 0.2, mz + fz * (0.6 + i * 0.15) - fx * (i - 1.5) * 0.2, cx, cz); this.put(pebbleGeo(), bx, bz, i).scale.set(1.4, 0.4, 0.4); }
-    const smoke = /enfum/.test(a.c.doing ?? '');
+    const smoke = /enfum|smok/.test(a.c.doing ?? '');
     if (smoke) { const [sx, sz] = this.near(mx + fx * 0.85, mz + fz * 0.85, cx, cz); this.fireAt(sx, sz); this.emits.push({ x: sx, y: y(sx, sz) + 0.08, z: sz, kind: 'smoke', every: 0.15, t: 0 }); }
     // le dragon, couché en travers de l'entrée, tête vers l'équipe (enfumé : encore dans le noir de la grotte)
     const actor = makeBeast('dragon', Math.floor(Math.abs(cx * 7 + cz * 3)) % 3, 1.5);

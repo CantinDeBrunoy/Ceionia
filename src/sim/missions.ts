@@ -1,6 +1,7 @@
 import type { World } from '../world/world';
 import { Danger, GearId, Stock, emptyStock, GEAR_BY } from './gear';
 import type { KindId } from '../build/catalog';
+import { tr, plural } from '../i18n';
 
 /**
  * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant, deux à la
@@ -1037,14 +1038,14 @@ export function effectSummary(effects: Effect[]) {
     if (e.t === 'herd') {
       const n: Partial<Record<HerdKind, number>> = {};
       for (const k of e.kinds) n[k] = (n[k] ?? 0) + 1;
-      for (const [k, c] of Object.entries(n) as [HerdKind, number][]) out.push(`${c} ${HERD_NAME[k][c > 1 ? 1 : 0]}`);
-    } else if (e.t === 'ore') out.push(`+${e.n} minerai`);
-    else if (e.t === 'need') out.push(`${e.n > 0 ? '+' : '−'}${Math.abs(e.n)} ${NEED_ICON[e.need]}${e.days ? ` (${e.days} j)` : ''}`);
-    else if (e.t === 'perk') out.push(PERK_NAME[e.id] ?? e.id);
-    else if (e.t === 'injured') out.push(`${e.n} blessé${e.n > 1 ? 's' : ''} (${e.days} j)`);
-    else if (e.t === 'unherd') out.push(`−${e.n} ${HERD_NAME[e.kind][e.n > 1 ? 1 : 0]}`);
+      for (const [k, c] of Object.entries(n) as [HerdKind, number][]) out.push(`${c} ${plural(c, ...HERD_NAME[k])}`);
+    } else if (e.t === 'ore') out.push(tr('+{n} minerai', { n: e.n }));
+    else if (e.t === 'need') out.push(`${e.n > 0 ? '+' : '−'}${Math.abs(e.n)} ${NEED_ICON[e.need]}${e.days ? ` (${tr('{n} j', { n: e.days })})` : ''}`);
+    else if (e.t === 'perk') out.push(PERK_NAME[e.id] ? tr(PERK_NAME[e.id]) : e.id);
+    else if (e.t === 'injured') out.push(`${e.n} ${plural(e.n, 'blessé', 'blessés')} (${tr('{n} j', { n: e.days })})`);
+    else if (e.t === 'unherd') out.push(`−${e.n} ${plural(e.n, ...HERD_NAME[e.kind])}`);
   }
-  return out.join(' · ') || 'rien';
+  return out.join(' · ') || tr('rien');
 }
 
 const HERD_ICON: Record<HerdKind, string> = { sheep: '🐑', cow: '🐄', pig: '🐖', horse: '🐎' };
@@ -1057,9 +1058,9 @@ export function effectChips(effects: Effect[]): { icon: string; n: string; title
     if (e.t === 'herd') {
       const n: Partial<Record<HerdKind, number>> = {};
       for (const k of e.kinds) n[k] = (n[k] ?? 0) + 1;
-      for (const [k, c] of Object.entries(n) as [HerdKind, number][]) out.push({ icon: HERD_ICON[k], n: `${c}`, title: `${c} ${HERD_NAME[k][c > 1 ? 1 : 0]}` });
+      for (const [k, c] of Object.entries(n) as [HerdKind, number][]) out.push({ icon: HERD_ICON[k], n: `${c}`, title: `${c} ${plural(c, ...HERD_NAME[k])}` });
     } else if (e.t === 'ore') out.push({ icon: '⛏️', n: `+${e.n}`, title });
-    else if (e.t === 'need') out.push({ icon: NEED_ICON[e.need], n: `${e.n > 0 ? '+' : '−'}${Math.abs(e.n)}${e.days ? ` · ${e.days} j` : ''}`, title });
+    else if (e.t === 'need') out.push({ icon: NEED_ICON[e.need], n: `${e.n > 0 ? '+' : '−'}${Math.abs(e.n)}${e.days ? ` · ${tr('{n} j', { n: e.days })}` : ''}`, title });
     else if (e.t === 'perk') out.push({ icon: '⭐', n: '', title });
     else if (e.t === 'injured') out.push({ icon: '🤕', n: `${e.n}`, title });
     else if (e.t === 'unherd') out.push({ icon: HERD_ICON[e.kind], n: `−${e.n}`, title });

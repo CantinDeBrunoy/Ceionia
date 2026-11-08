@@ -12,6 +12,7 @@ import { securityK } from './security';
 import { FORGE_PERK, FORGE_RISK, FORGE_CRAFT } from './kingdom';
 import { hash2 } from '../core/rng';
 import { AirTrip, AirKind, AirPose, airTrip, airSeats, flightPose } from './airlift';
+import { tr, plural, isEnglish } from '../i18n';
 
 /**
  * Étapes d'une expédition : aller, travail sur place, retour, fête (ou mine déconfite) au village ; « gather » (le rassemblement
@@ -230,7 +231,7 @@ export interface Report { m: Mission; c: Choice; ok: boolean; text: string; summ
 
 const DEST_NAME: Record<DestKind, string> = { plain: 'la plaine', forest: 'la forêt', river: 'la rivière', mountain: 'la montagne', cave: 'la grotte', far: 'les terres au-delà des collines', spaceport: 'le cosmodrome' };
 /** Où va l'équipe, en deux mots (la mer pour une expédition qui prend le large) */
-const destName = (c: Choice) => (c.sea ? 'la mer' : DEST_NAME[c.dest]);
+const destName = (c: Choice) => tr(c.sea ? 'la mer' : DEST_NAME[c.dest]);
 /**
  * Repli quand le village n'a pas de tel endroit à portée ; une grotte introuvable se cherche dans la montagne, puis au pied
  * de la moindre paroi (l'équipe y trouve une entrée), jamais dans la plaine ou le désert lointain
@@ -265,6 +266,7 @@ const FOES: Record<number, FoeKind[]> = {
  */
 const LATE_FOES: [FoeKind, number, number[]][] = [['golem', 2, [UZ_STONE, UZ_CRYSTAL, UZ_MAGMA]], ['worm', 3, [UZ_STONE, UZ_MAGMA, UZ_LUSH, UZ_ICE]]];
 const FOE_MIGHT: Record<FoeKind, number> = { zombie: 0.8, skeleton: 1, spider: 1.15, golem: 1.6, worm: 1.8 };
+/** (à passer par `tr` pour l'afficher) */
 export const FOE_NAME: Record<FoeKind, string> = { zombie: 'zombies', skeleton: 'squelettes', spider: 'araignées géantes', golem: 'gardiens de pierre', worm: 'vers des profondeurs' };
 /** Créatures d'une embuscade dans cette zone, à l'âge donné */
 export function foesOf(zone: number, age: number): FoeKind[] {
@@ -335,12 +337,12 @@ export class Expeditions {
   /** Nom d'un bâtiment tel qu'on le bâtit à l'âge du village (« haras » plutôt qu'« écurie » à l'âge industriel), en minuscules */
   private nameOf(k: KindId) { const d = KINDS[k]; return (d.names[Math.max(this.age(), d.minAge)] || d.names.find((n) => n)!).toLowerCase(); }
   /** « à l'écurie », « au haras », « au centre équestre » */
-  private at(k: KindId) { const n = this.nameOf(k); return /^[aeiouyéèê]/.test(n) ? `à l’${n}` : `au ${n}`; }
+  private at(k: KindId) { const n = this.nameOf(k); return isEnglish() ? `at the ${n}` : /^[aeiouyéèê]/.test(n) ? `à l’${n}` : `au ${n}`; }
 
   /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux, carburant), et son risque avec cet équipement */
   preview(c: Choice) {
     const l = loadout(c, this.world.exp.gear), n = this.mountsFor(c);
-    return { take: l.take, label: [packLabel(l.take), n ? `${n} cheva${n > 1 ? 'ux' : 'l'}` : '', c.fuel ? `${c.fuel} carburant` : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
+    return { take: l.take, label: [packLabel(l.take), n ? `${n} ${plural(n, 'cheval', 'chevaux')}` : '', c.fuel ? tr('{n} carburant', { n: c.fuel }) : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
   }
 
   /** Risque d'une équipe en route : celui du choix, équipement et décisions compris */
@@ -355,8 +357,8 @@ export class Expeditions {
   /** Ce qui manque avant de pouvoir tenter la mission : missions à réussir, bâtiments à bâtir (vide : rien) */
   missing(m: Mission): string[] {
     const out: string[] = [];
-    for (const id of m.requires?.missions ?? []) if (!this.world.exp.done.includes(id)) out.push(`réussir « ${MISSIONS.find((x) => x.id === id)?.title ?? id} »`);
-    for (const k of m.requires?.kinds ?? []) if (!this.hasFor(k, m.requires!.kinds!)) out.push(`bâtir : ${this.nameOf(k)}`);
+    for (const id of m.requires?.missions ?? []) if (!this.world.exp.done.includes(id)) out.push(tr('réussir « {title} »', { title: MISSIONS.find((x) => x.id === id)?.title ?? id }));
+    for (const k of m.requires?.kinds ?? []) if (!this.hasFor(k, m.requires!.kinds!)) out.push(tr('bâtir : {name}', { name: this.nameOf(k) }));
     return out;
   }
 
@@ -365,26 +367,26 @@ export class Expeditions {
 
   /** Pourquoi l'on ne peut pas partir (ou null) */
   why(m: Mission, c: Choice): string | null {
-    if (this.running(m)) return 'Cette expédition est déjà en route.';
+    if (this.running(m)) return tr('Cette expédition est déjà en route.');
     // une partie commencée avant l'île du portail n'en a pas
-    if (c.scene === 'portal' && !this.world.portal) return 'Cette carte n’a pas d’île du portail : la partie a commencé avant elle. Une nouvelle partie en aura une.';
+    if (c.scene === 'portal' && !this.world.portal) return tr('Cette carte n’a pas d’île du portail : la partie a commencé avant elle. Une nouvelle partie en aura une.');
     const miss = this.missing(m);
-    if (miss.length) return `Il faut d’abord ${miss.join(', ')}.`;
-    if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return `Il faut ${c.mounts} chevaux ${this.at('stable')} (${n} pour l’instant).`; }
+    if (miss.length) return tr('Il faut d’abord {list}.', { list: miss.join(', ') });
+    if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return tr('Il faut {m} chevaux {at} ({n} pour l’instant).', { m: c.mounts, at: this.at('stable'), n }); }
     // les blindés roulent au carburant : la raffinerie le tire du pétrole brut des puits
     if (c.fuel && !this.world.unlimited && this.world.fuel < c.fuel) {
       const n = Math.floor(this.world.fuel);
-      return `Il faut ${c.fuel} carburant pour les véhicules (${n} pour l’instant) : ${this.has('refinery') ? 'la raffinerie en tire du pétrole brut des puits' : 'forez des puits de pétrole sur un gisement et bâtissez une raffinerie'}.`;
+      return tr('Il faut {fuel} carburant pour les véhicules ({n} pour l’instant) : {how}.', { fuel: c.fuel, n, how: tr(this.has('refinery') ? 'la raffinerie en tire du pétrole brut des puits' : 'forez des puits de pétrole sur un gisement et bâtissez une raffinerie') });
     }
     const max = this.slots();
     if (this.active.length >= max) {
       return max < MAX_TEAMS
-        ? `Toutes les équipes sont en route (${this.active.length}/${max}) : à ${max * PER_TEAM} habitants, le village pourra en envoyer une de plus.`
-        : `Toutes les équipes sont en route (${max}/${max}).`;
+        ? tr('Toutes les équipes sont en route ({n}/{max}) : à {pop} habitants, le village pourra en envoyer une de plus.', { n: this.active.length, max, pop: max * PER_TEAM })
+        : tr('Toutes les équipes sont en route ({n}/{max}).', { n: max, max });
     }
-    if (!this.base()) return 'Il faut d’abord un village : une maison au moins.';
+    if (!this.base()) return tr('Il faut d’abord un village : une maison au moins.');
     const free = this.agents.available();
-    if (free < this.need(c)) return `Il faut ${c.party} habitants disponibles (${free} pour l’instant).`;
+    if (free < this.need(c)) return tr('Il faut {n} habitants disponibles ({free} pour l’instant).', { n: c.party, free });
     return null;
   }
 
@@ -418,7 +420,7 @@ export class Expeditions {
       // faute de mieux, une haute mer un peu moins dégagée (voir `OFFING_LEVELS`) ; jamais une mer intérieure ni un étang
       if (!dest && monster) {
         for (let lv = 1; lv < OFFING_LEVELS.length && !dest; lv++) dest = this.findDest(kind, base, false, true, 5, lv);
-        if (!dest) { this.lastFail = 'Aucune haute mer atteignable : aucune côte à portée du village ne s’ouvre sur le large, et le monstre ne quitte pas la haute mer.'; return null; }
+        if (!dest) { this.lastFail = tr('Aucune haute mer atteignable : aucune côte à portée du village ne s’ouvre sur le large, et le monstre ne quitte pas la haute mer.'); return null; }
         break;
       }
       // pas de côte ouverte sur le large à portée : la rivière la plus proche fera l'affaire
@@ -436,7 +438,7 @@ export class Expeditions {
     const air = c.troop || c.mounts || sea || m.farewell || c.fuel || c.scene === 'balloon' ? null : this.airFor(kind, age, base, dest);
     const mounts = motor || air ? 0 : this.mountsFor(c);
     const party = this.agents.recruit(this.need(c));
-    if (!party) { this.lastFail = 'Pas assez d’habitants prêts à partir à cet instant : réessayez dans un moment.'; return null; }
+    if (!party) { this.lastFail = tr('Pas assez d’habitants prêts à partir à cet instant : réessayez dans un moment.'); return null; }
     this.world.exp.riding += mounts;
     if (c.fuel && !this.world.unlimited) this.world.fuel = Math.max(0, this.world.fuel - c.fuel);
     // l'équipe emporte le meilleur équipement en réserve contre les dangers du voyage
@@ -478,7 +480,7 @@ export class Expeditions {
     } else {
       // elle part aussitôt, chacun de là où il est, sans se rassembler d'abord au village (à l'aire d'envol s'il faut voler)
       this.agents.partyGo(party, air ? air.pad[0] : dest[0], air ? air.pad[1] : dest[1]);
-      this.onNews?.(`${m.icon} L’expédition « ${m.title} » part ${air ? (air.kind === 'heli' ? 'en hélicoptère ' : 'en montgolfière ') : ''}vers ${destName(c)}.`);
+      this.onNews?.(tr(!air ? '{icon} L’expédition « {title} » part vers {dest}.' : air.kind === 'heli' ? '{icon} L’expédition « {title} » part en hélicoptère vers {dest}.' : '{icon} L’expédition « {title} » part en montgolfière vers {dest}.', { icon: m.icon, title: m.title, dest: destName(c) }));
     }
     return a;
   }
@@ -513,7 +515,7 @@ export class Expeditions {
       if (a.phase === 'gather' && ((ag.partyDone(a.party) && a.t > (a.m.farewell ? 20 : 0)) || a.t > 40)) {
         a.phase = 'out'; a.t = 0;
         ag.partyGo(a.party, a.dest[0], a.dest[1]);
-        this.onNews?.(`${a.m.icon} L’expédition « ${a.m.title} » part vers ${destName(a.c)}.`);
+        this.onNews?.(tr('{icon} L’expédition « {title} » part vers {dest}.', { icon: a.m.icon, title: a.m.title, dest: destName(a.c) }));
       } else if (a.phase === 'out' && this.arrived(a, dt)) {
         a.phase = 'work'; a.t = 0;
         ag.partyAct(a.party, 'work');
@@ -538,7 +540,7 @@ export class Expeditions {
         // en l'air : l'équipe rejoint d'abord l'appareil posé non loin ; sinon, elle rentre à pied
         if (a.air) { a.air.leg = 'fetch'; a.air.t = 0; ag.partyGo(a.party, a.air.land[0], a.air.land[1]); }
         else this.goHome(a);
-        this.onNews?.(a.ok ? `${a.m.icon} « ${a.m.title} » : l’équipe rentre… et elle n’a pas l’air bredouille !` : `${a.m.icon} « ${a.m.title} » : l’équipe rentre, la mine basse.`);
+        this.onNews?.(tr(a.ok ? '{icon} « {title} » : l’équipe rentre… et elle n’a pas l’air bredouille !' : '{icon} « {title} » : l’équipe rentre, la mine basse.', { icon: a.m.icon, title: a.m.title }));
       } else if (a.phase === 'back' && this.returned(a, dt)) {
         a.phase = 'home'; a.t = 0;
         ag.partyAct(a.party, a.ok ? 'cheer' : 'stroll');
@@ -550,24 +552,24 @@ export class Expeditions {
   private ambushStep(a: ActiveExpedition) {
     const s = Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) * a.routeLen;
     for (const m of a.ambush) {
-      const name = FOE_NAME[m.kind];
+      const name = tr(FOE_NAME[m.kind]);
       if (m.state === 'wait' && s >= m.t0) {
         m.state = 'fight';
         // l'issue : la force de la troupe contre le nombre et la férocité des créatures (plus grandes dans le magma)
         const threat = m.n * FOE_MIGHT[m.kind] * (this.under?.zone[m.cell] === UZ_MAGMA ? 1.25 : 1) * 0.9;
         const win = a.might / (a.might + threat), r = this.rnd();
         m.result = r < win ? 'clean' : r < win + (1 - win) * 0.65 ? 'hurt' : 'rout';
-        this.onNews?.(`⚔️ « ${a.m.title} » : ${m.n} ${name} surgissent des galeries et chargent la troupe !`);
+        this.onNews?.(tr('⚔️ « {title} » : {n} {name} surgissent des galeries et chargent la troupe !', { title: a.m.title, n: m.n, name }));
       } else if (m.state === 'fight' && s >= m.t0 + FIGHT_HALT) {
         m.state = 'done';
-        const text = m.result === 'clean' ? `la troupe a taillé en pièces les ${m.n} ${name} qui l'attendaient dans le noir`
-          : m.result === 'hurt' ? `${m.n} ${name} repoussés, mais un soldat est blessé`
-          : `les ${name} étaient trop nombreux : la troupe a dû reculer, deux blessés`;
+        const text = m.result === 'clean' ? tr('la troupe a taillé en pièces les {n} {name} qui l\'attendaient dans le noir', { n: m.n, name })
+          : m.result === 'hurt' ? tr('{n} {name} repoussés, mais un soldat est blessé', { n: m.n, name })
+          : tr('les {name} étaient trop nombreux : la troupe a dû reculer, deux blessés', { name });
         if (m.result !== 'rout') this.world.exp.wins++;
         if (m.result === 'hurt') { a.hurt += 1; a.riskK *= 1.06; }
         if (m.result === 'rout') { a.hurt += 2; a.riskK *= 1.2; }
-        a.notes.push(`Embuscade dans les galeries : ${text}.`);
-        this.onNews?.(`⚔️ « ${a.m.title} » : ${text}.`);
+        a.notes.push(tr('Embuscade dans les galeries : {text}.', { text }));
+        this.onNews?.(tr('⚔️ « {title} » : {text}.', { title: a.m.title, text }));
       }
     }
   }
@@ -747,28 +749,28 @@ export class Expeditions {
     if (!a.ok && carried.length && this.rnd() < 0.5) {
       const g = carried[Math.floor(this.rnd() * carried.length)];
       gear[g]--;
-      lost = `${GEAR_BY[g].name.toLowerCase()} perdue en route`;
+      lost = tr('{name} perdue en route', { name: GEAR_BY[g].name.toLowerCase() });
     }
     // les blessés guérissent deux fois plus vite avec un lieu de soins, et encore deux fois plus vite avec une trousse
     const injured = Math.min(a.party.length, res.injured + a.hurt), days = Math.max(res.days, a.hurt ? 1 : 0);
     this.agents.dismiss(a.party, injured, days * this.dayLen() * (this.has('health') ? 0.5 : 1) * (a.gear.kit ? 0.5 : 1));
     this.active.splice(this.active.indexOf(a), 1);
     this.world.version++;
-    const summary = [effectSummary(eff), lost].filter((x) => x && x !== 'rien').join(' · ') || 'rien';
+    const summary = [effectSummary(eff), lost].filter((x) => x && x !== tr('rien')).join(' · ') || tr('rien');
     this.onReport?.({ m: a.m, c: a.c, ok: a.ok, text, summary, notes: a.notes, redo: a.redo });
   }
 
   // ---------------- Fabrication de l'équipement ----------------
   /** Pourquoi le village ne peut pas fabriquer cette pièce (ou null) */
   whyCraft(g: Gear, age: number): string | null {
-    if (age < g.age) return `Connu à l’âge ${AGES[g.age].name}`;
+    if (age < g.age) return tr('Connu à l’âge {age}', { age: AGES[g.age].name });
     if (g.needs && !this.has(g.needs)) {
       const name = KINDS[g.needs].names[Math.min(age, AGES.length - 1)].toLowerCase();
       // l'atelier porte le nom de l'âge (une forge au Moyen Âge) : on dit les deux
-      return g.needs === 'workshop' ? `Il faut un atelier pour fabriquer ${g.plural.toLowerCase()} : bâtissez-en un (à votre âge : ${name})` : `Il faut : ${name}`;
+      return g.needs === 'workshop' ? tr('Il faut un atelier pour fabriquer {what} : bâtissez-en un (à votre âge : {name})', { what: g.plural.toLowerCase(), name }) : tr('Il faut : {name}', { name });
     }
     const lack = gearShort(this.world, g); if (lack) return lack;
-    if (this.world.exp.craft.length >= MAX_CRAFT) return `La file de fabrication est pleine (${MAX_CRAFT} pièces) : attendez qu’une pièce sorte`;
+    if (this.world.exp.craft.length >= MAX_CRAFT) return tr('La file de fabrication est pleine ({n} pièces) : attendez qu’une pièce sorte', { n: MAX_CRAFT });
     return null;
   }
 
@@ -782,9 +784,9 @@ export class Expeditions {
     const w = this.world, tot = { wood: 0, stone: 0, ore: 0, fuel: 0 };
     for (const id of ids) { const c = gearCost(GEAR_BY[id], w.difficulty); tot.wood += c.wood; tot.stone += c.stone; tot.ore += c.ore; tot.fuel += c.fuel ?? 0; }
     if (!w.unlimited && (w.wood < tot.wood || w.stone < tot.stone || w.ore < tot.ore || w.fuel < tot.fuel)) {
-      return `Il faut ${gearCostLabel({ wood: tot.wood, stone: tot.stone, ore: tot.ore, ...(tot.fuel ? { fuel: tot.fuel } : {}) })} en tout pour ${ids.map((i) => GEAR_BY[i].name.toLowerCase()).join(' et ')}`;
+      return tr('Il faut {cost} en tout pour {list}', { cost: gearCostLabel({ wood: tot.wood, stone: tot.stone, ore: tot.ore, ...(tot.fuel ? { fuel: tot.fuel } : {}) }), list: ids.map((i) => GEAR_BY[i].name.toLowerCase()).join(tr(' et ')) });
     }
-    if (w.exp.craft.length + ids.length > MAX_CRAFT) return `La file de fabrication est pleine (${MAX_CRAFT} pièces) : attendez qu’une pièce sorte`;
+    if (w.exp.craft.length + ids.length > MAX_CRAFT) return tr('La file de fabrication est pleine ({n} pièces) : attendez qu’une pièce sorte', { n: MAX_CRAFT });
     return null;
   }
 
@@ -890,13 +892,13 @@ export class Expeditions {
     s.craftT = 0;
     s.craft.shift();
     s.gear[g.id]++;
-    if (!s.craft.length) this.onNews?.('L’équipement commandé est prêt pour les prochaines expéditions.');
+    if (!s.craft.length) this.onNews?.(tr('L’équipement commandé est prêt pour les prochaines expéditions.'));
   }
 
   /** La troupe en plein combat contre une embuscade : ce qu'en dit sa carte (ou null) */
   fighting(a: ActiveExpedition) {
     const m = a.ambush.find((x) => x.state === 'fight');
-    return m ? `⚔️ Attaquée par ${m.n} ${FOE_NAME[m.kind]} !` : null;
+    return m ? tr('⚔️ Attaquée par {n} {name} !', { n: m.n, name: tr(FOE_NAME[m.kind]) }) : null;
   }
 
   /** Avancement d'une expédition (0 … 1) */
@@ -908,11 +910,11 @@ export class Expeditions {
   /** Ce que fait l'équipe */
   status(a: ActiveExpedition) {
     return {
-      gather: 'Rassemblement au village…',
-      out: `${a.air ? (a.air.kind === 'heli' ? 'En hélicoptère' : 'En montgolfière') : 'En route'} vers ${destName(a.c)}…`,
-      work: a.wait ? `Décision à prendre : ${a.wait.title.toLowerCase()}` : this.fighting(a) ?? `Sur place, l’équipe ${a.c.doing ?? a.c.label.toLowerCase()}…`,
-      back: a.air ? `Retour au village en ${a.air.kind === 'heli' ? 'hélicoptère' : 'montgolfière'}…` : 'Retour au village…',
-      home: a.ok ? 'De retour : le village fait la fête !' : 'De retour, bredouilles.',
+      gather: tr('Rassemblement au village…'),
+      out: tr(a.air ? (a.air.kind === 'heli' ? 'En hélicoptère vers {dest}…' : 'En montgolfière vers {dest}…') : 'En route vers {dest}…', { dest: destName(a.c) }),
+      work: a.wait ? tr('Décision à prendre : {title}', { title: tr(a.wait.title).toLowerCase() }) : this.fighting(a) ?? tr('Sur place, l’équipe {doing}…', { doing: a.c.doing ?? a.c.label.toLowerCase() }),
+      back: tr(a.air ? (a.air.kind === 'heli' ? 'Retour au village en hélicoptère…' : 'Retour au village en montgolfière…') : 'Retour au village…'),
+      home: tr(a.ok ? 'De retour : le village fait la fête !' : 'De retour, bredouilles.'),
     }[a.phase];
   }
 
