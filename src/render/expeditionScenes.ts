@@ -2270,7 +2270,8 @@ export class ExpeditionScene {
     const loot = new THREE.Mesh(rocksGeo(), mats.body);
     loot.scale.setScalar(0.45); loot.position.set(0.02, 0.06, 0); loot.visible = false;
     wreck.add(loot);
-    const ang = 0.7 + Math.random() * 1.2;
+    // (au galion englouti, elle dérive du côté opposé à l'épave et à la gabare)
+    const ang = this.salv ? this.salv.away + (Math.random() - 0.5) * 0.8 : 0.7 + Math.random() * 1.2;
     let d = 1.25;
     return (dt: number) => {
       const o = bt.obj.position;
@@ -3102,7 +3103,8 @@ export class ExpeditionScene {
     const reef = this.story === 'dive', fishing = this.story === 'boat' || this.story === 'trawl' || this.story === 'voyage' || this.story === 'wreck';
     if (this.story === 'megalodon' || this.story === 'kraken') { this.makeMonster(cx, cz, level, room); return; }
     if (!this.offshore || (!reef && !fishing)) return;
-    const plan: [SwimKind, number][] = reef ? [['whale', 1], ['dolphin', 3], ['manta', 2], ['school', 3]] : [['dolphin', 2], ['school', 2]];
+    // (au galion englouti, ni dauphins ni baleine dans les câbles de la grue : les bancs de l'épave suffisent)
+    const plan: [SwimKind, number][] = reef ? [['whale', 1], ['dolphin', 3], ['manta', 2], ['school', 3]] : this.story === 'wreck' ? [['school', 2]] : [['dolphin', 2], ['school', 2]];
     let i = 0;
     for (const [kind, n] of plan) for (let j = 0; j < n; j++, i++) this.addSwimmer(kind, cx, cz, level, room, i, j);
     void a;
@@ -3369,7 +3371,7 @@ export class ExpeditionScene {
     else for (const b of this.beasts) this.stepBeast(b, dt, a);
     this.workK = k;
     if (this.boat && onSite) this.stepBoat(dt);
-    this.salv?.update(dt, k, onSite, a.phase === 'back' || a.phase === 'home');
+    { const gone = a.phase === 'back' || a.phase === 'home'; this.salv?.update(dt, k, onSite, gone, gone && !a.ok); }
     if (this.swimmers.length) this.stepSwimmers(dt);
     if (this.monster) this.stepMonster(dt, a, k);
     if (this.balloon) this.stepBalloon(k, onSite);

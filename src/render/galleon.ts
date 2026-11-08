@@ -109,6 +109,8 @@ function galleon(p: Parts) {
     if (i % 3 === 1) continue;
     p.box(w * 0.96, 0.006, 0.056, 0, 0.146, z, i % 2 ? 0x8a6a4a : 0x7a5a40);
   }
+  // le tableau arrière, planche à planche, sous la dunette
+  for (let r = 0; r < 5; r++) p.box(half(-0.29) * 1.5 - r * 0.004, 0.028, 0.008, 0, 0.012 + r * 0.03, -0.292, r % 2 ? plank : wood);
   // la dunette : tableau arrière aux fenêtres et au liseré d'or, murs, un morceau de toit
   p.box(0.2, 0.1, 0.012, 0, 0.145, -0.305, plank);
   p.box(0.2, 0.01, 0.014, 0, 0.222, -0.305, trim);
@@ -169,26 +171,30 @@ function galleon(p: Parts) {
   }
 }
 
-/** Le banc de sable sous l'épave (hauteur 0,5, dessus plat de rayon 0,6), ses rochers, ses coraux et ses algues */
-function mound(p: Parts) {
-  const sand = 0xd6c594, sand2 = 0xc3b080;
-  p.add(new THREE.CylinderGeometry(0.6, 1.05, 0.5, 10).translate(0, 0.25, 0), 0, 0, 0, sand);
-  p.add(new THREE.CylinderGeometry(1.05, 1.3, 0.1, 10).translate(0, 0.05, 0), 0, 0, 0, sand2, 0.2);
+/** Le banc de sable sous l'épave, de hauteur `H` (dessus plat de rayon 0,6), ses rochers, ses coraux et ses touffes d'algues */
+function mound(p: Parts, H: number) {
+  const sand = 0xd6c594, sand2 = 0xc3b080, top = 0.6, bot = 0.75 + Math.min(H, 1) * 0.95;
+  const r = (y: number) => bot + (top - bot) * (y / H);
+  p.add(new THREE.CylinderGeometry(top, bot, H, 10).translate(0, H / 2, 0), 0, 0, 0, sand);
+  p.add(new THREE.CylinderGeometry(bot, bot + 0.25, 0.08, 10).translate(0, 0.04, 0), 0, 0, 0, sand2, 0.2);
   // rochers sur les flancs
   for (let i = 0; i < 11; i++) {
-    const a = i * 0.57 + 0.3, y = (i % 3) * 0.12 + 0.04, r = 1.07 - 0.9 * y, rad = 0.07 + (i % 4) * 0.03;
-    p.add(new THREE.IcosahedronGeometry(rad, 0).scale(1, 0.7, 1), Math.cos(a) * r, y + rad * 0.3, Math.sin(a) * r, i % 2 ? 0x80796f : 0x6c675f);
+    const a = i * 0.57 + 0.3, y = H * ((i % 3) * 0.3 + 0.1), rr = r(y) + 0.02, rad = 0.07 + (i % 4) * 0.03;
+    p.add(new THREE.IcosahedronGeometry(rad, 0).scale(1, 0.7, 1), Math.cos(a) * rr, y + rad * 0.3, Math.sin(a) * rr, i % 2 ? 0x80796f : 0x6c675f);
   }
-  // coraux en buissons, tubes et éventails à l'orée du plateau et sur les flancs
+  // coraux en buissons, sur les flancs
   const cols = [0xe8774a, 0xe0508a, 0x9a5ac8, 0xf0c04a];
   for (let i = 0; i < 12; i++) {
-    const a = i * 0.52 + 0.1, y = (i % 2) * 0.22 + 0.28, r = 1.07 - 0.9 * y - 0.03, x = Math.cos(a) * r, z = Math.sin(a) * r, c = cols[i % 4];
+    const a = i * 0.52 + 0.1, y = H * (0.3 + (i % 3) * 0.22), rr = r(y) - 0.02, x = Math.cos(a) * rr, z = Math.sin(a) * rr, c = cols[i % 4];
     for (let j = 0; j < 3; j++) p.add(new THREE.ConeGeometry(0.018, 0.1 + j * 0.03, 5).translate(0, 0.05, 0), x + (j - 1) * 0.03, y, z + (j % 2) * 0.025, c, 0, false, (j - 1) * 0.3, (j % 2) * 0.2);
   }
-  // les algues : des tiges en zigzag
-  for (let i = 0; i < 9; i++) {
-    const a = i * 0.7 + 0.5, y = 0.5 - (i % 3) * 0.09, r = 1.07 - 0.9 * y - 0.05, x = Math.cos(a) * r, z = Math.sin(a) * r;
-    for (let j = 0; j < 4; j++) p.box(0.012, 0.085, 0.012, x + Math.sin(j * 1.7 + i) * 0.014, y + j * 0.08, z + Math.cos(j * 1.3 + i) * 0.014, j % 2 ? 0x56a05c : 0x3f8a52, 0, false, Math.sin(j * 2 + i) * 0.16);
+  // les algues : des touffes de longues lames qui ondulent au courant (ici, penchées), au bord du plateau et sur les flancs hauts
+  for (let i = 0; i < 12; i++) {
+    const a = i * 0.55 + 0.5, y = H * (i % 3 === 0 ? 0.62 : 0.97), rr = r(y) - 0.04, x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+    for (let j = 0; j < 4; j++) {
+      const lean = 0.18 + j * 0.05, h = 0.12 + ((i + j) % 3) * 0.05;
+      p.add(new THREE.ConeGeometry(0.013, h, 4).translate(0, h / 2, 0), x + Math.sin(j * 1.9 + i) * 0.03, y, z + Math.cos(j * 1.9 + i) * 0.03, (i + j) % 2 ? 0x56a05c : 0x3f8a52, 0, false, Math.cos(i + j * 2) * lean, Math.sin(i + j * 2) * lean);
+    }
   }
 }
 
@@ -325,8 +331,8 @@ const V = new THREE.Vector3(), V2 = new THREE.Vector3(), TW = new THREE.Vector3(
 /** Rangs de butin (deux pièces par charge) selon l'ouvrage : à la drague, des bordages et de la ferraille ; au scaphandrier, l'or */
 const LOOT_DREDGE: LootKind[][] = [['planks', 'cannon'], ['amphora', 'ingots'], ['planks', 'cannon'], ['ingots', 'amphora'], ['planks', 'chest'], ['cannon', 'ingots']];
 const LOOT_DIVER: LootKind[][] = [['chest', 'amphora'], ['cannon', 'ingots'], ['amphora', 'chest'], ['ingots', 'cannon'], ['chest', 'ingots'], ['amphora', 'cannon']];
-/** Les points du fond où la grue accroche (dans le repère de l'épave) : l'avant de la cale, le milieu, la poupe… puis le coffre doré */
-const PICKS: [number, number][] = [[0.03, 0.14], [0.0, -0.04], [0.04, 0.2], [0.02, 0.06], [0.04, -0.12], [0.0, 0.17], [0.03, 0.02]];
+/** Les points du fond où la grue accroche (dans le repère de l'épave) : le butin répandu sur le sable, côté brèche… puis le coffre doré */
+const PICKS: [number, number][] = [[0.17, 0.14], [0.2, -0.04], [0.16, 0.22], [0.19, 0.06], [0.18, -0.12], [0.15, 0.18], [0.17, 0.02]];
 const WRECK_K = 1.6;
 const BOOM_Y = 0.3, BOOM_MAX = 0.56, PIVOT: [number, number] = [0.02, 0.17], LEN_TOP = 0.06;
 const FISH_N = 24, BUBBLE_N = 40;
@@ -370,6 +376,8 @@ export class Salvage {
   /** les sources de bulles (position, actif) : le plongeur, les écoutilles de l'épave, le crochet */
   private src: { p: THREE.Vector3; on: boolean }[] = [];
   private wreckAt = new THREE.Vector3();
+  /** l'angle (dans le plan du sol) qui s'éloigne de l'épave et de la gabare : on y met ce qui dérive (une coque abandonnée…) */
+  readonly away: number;
   /** les débris qui flottent autour de l'épave : tonneaux et planches */
   private flot: { m: THREE.Mesh; x: number; z: number; ph: number }[] = [];
   /** où en est le crochet (angle, portée de la flèche) et la charge */
@@ -384,6 +392,7 @@ export class Salvage {
     const spot = (s: number): [number, number] => [bt.out[0] + px * s * 0.78 + fx * 0.1, bt.out[1] + pz * s * 0.78 + fz * 0.1];
     const clear = (s: number) => { const [x, z] = spot(s); let n = 0; for (const [dx, dz] of [[0, 0], [fx * 0.45, fz * 0.45], [-fx * 0.45, -fz * 0.45], [px * s * 0.4, pz * s * 0.4], [-px * s * 0.4, -pz * s * 0.4]]) if (h.depth(x + dx, z + dz) !== null) n++; return n; };
     this.s = clear(1) >= clear(-1) ? 1 : -1;
+    this.away = Math.atan2(-pz * this.s, -px * this.s);
     const [cx, cz] = spot(this.s);
     this.floor = h.world.hAt(cx, cz);
     const keel = Math.max(this.level - 0.2, this.floor + 0.02), psi = dir + (this.s > 0 ? Math.PI : 0);
@@ -391,23 +400,24 @@ export class Salvage {
     this.wreckAt.set(cx, keel, cz);
 
     // le banc de sable, l'épave dessus (gîte vers la brèche, étrave qui plonge)
-    this.mound = new THREE.Mesh(geo('salvMound', mound), mats.body);
+    const mh = Math.max(0.1, Math.round((keel - this.floor) * 10) / 10);
+    this.mound = new THREE.Mesh(geo(`salvMound:${mh}`, (p) => mound(p, mh)), mats.body);
     this.mound.receiveShadow = true;
-    this.mound.position.set(cx, this.floor, cz);
-    this.mound.scale.y = Math.max(0.05, (keel - this.floor) / 0.5);
+    this.mound.position.set(cx, keel - mh, cz);
     this.mound.rotation.y = psi;
     const hull = new THREE.Mesh(geo('salvGalleon', galleon), mats.body);
     hull.castShadow = true;
     this.wreck.add(hull);
     this.vault = new THREE.Mesh(goldChestGeo(), mats.body);
-    this.vault.position.set(0.03, 0.026, 0.02);
+    this.vault.position.set(PICKS[NH][0], -0.02, PICKS[NH][1]);
     this.vault.rotation.y = 0.5;
+    this.vault.rotation.z = 0.12;
     this.wreck.add(this.vault);
     this.wreck.position.set(cx, keel, cz);
     this.wreck.scale.setScalar(WRECK_K);
     this.wreck.rotation.set(0.1, psi, -0.2, 'YXZ');
     this.wreck.updateMatrixWorld(true);
-    this.pickW = PICKS.map(([x, z]) => new THREE.Vector3(x, 0.05, z).applyMatrix4(this.wreck.matrixWorld));
+    this.pickW = PICKS.map(([x, z]) => { const v = new THREE.Vector3(x, 0, z).applyMatrix4(this.wreck.matrixWorld); v.y = keel + 0.05; return v; });
     // des éclats d'or sur le sable et dans la cale (ils scintillent)
     for (const [x, y, z] of [[0.02, 0.07, 0.1], [0.16, 0.03, 0.08], [0.18, 0.03, 0.15], [0.14, 0.03, -0.01], [-0.03, 0.06, -0.02]]) this.addGlint(this.wreck, x, y, z, 1);
     this.add(this.mound, this.wreck);
@@ -523,9 +533,9 @@ export class Salvage {
 
   /**
    * À chaque image : `k` l'avancement du travail (0 avant l'arrivée de l'équipe), `onSite` qu'elle y travaille, `away` qu'elle est
-   * repartie
+   * repartie (`lost` : bredouille, le butin n'est pas rentré)
    */
-  update(dt: number, k: number, onSite: boolean, away: boolean) {
+  update(dt: number, k: number, onSite: boolean, away: boolean, lost = false) {
     this.t += dt;
     const t = this.t, lv = this.level;
     if (away) k = 1;
@@ -574,7 +584,7 @@ export class Salvage {
     this.prizeCarry.visible = prize;
     this.vault.visible = !(h && h.i >= NH && craneAt(h.f).loaded) && !(done && onSite) && !away;
     // ---- le butin sur le pont : il se pose pièce à pièce
-    const loot = onSite || away ? lootAt(k) : { items: 0, prize: false };
+    const loot = lost || !(onSite || away) ? { items: 0, prize: false } : lootAt(k);
     this.slots.forEach((sl, i) => {
       const on = i < loot.items;
       if (on && !sl.m.visible) sl.t = 0;
