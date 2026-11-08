@@ -2,6 +2,7 @@ import type { ActiveExpedition } from '../sim/expeditions';
 import { L_GONE } from '../render/expeditionScenes';
 import { drawVoyage } from './voyageArt';
 import { ic } from './icons';
+import { tr } from '../i18n';
 
 /**
  * Les grands moments de la conquête de l'espace, en images. Pendant l'expédition « Un homme sur la Lune », une fois la fusée
@@ -162,13 +163,13 @@ export function showVictory(root: HTMLElement, s: VictoryStats, onClose?: () => 
   ov.className = 'overlay victory';
   ov.innerHTML = `<div class="modal panel victoryCard">
     <canvas width="1040" height="400"></canvas>
-    <h2>Fin de partie : une nouvelle planète</h2>
-    <p class="story">De la première hutte au vaisseau colonial, ${s.name} a traversé tous les âges. Les colons se sont posés sur la planète bleue de l’étoile voisine et y ont allumé leur premier feu de camp : l’histoire recommence, là-bas, parmi les étoiles.</p>
+    <h2>${tr('Fin de partie : une nouvelle planète')}</h2>
+    <p class="story">${tr('De la première hutte au vaisseau colonial, {name} a traversé tous les âges. Les colons se sont posés sur la planète bleue de l’étoile voisine et y ont allumé leur premier feu de camp : l’histoire recommence, là-bas, parmi les étoiles.', { name: s.name })}</p>
     <div class="vstats">
-      <span><b>${Math.floor(s.pop)}</b>habitants</span><span><b>${s.buildings}</b>bâtiments</span>
-      <span><b>${s.missions}</b>expéditions réussies</span><span><b>${s.days}</b>jours</span>
+      <span><b>${Math.floor(s.pop)}</b>${tr('habitants')}</span><span><b>${s.buildings}</b>${tr('bâtiments')}</span>
+      <span><b>${s.missions}</b>${tr('expéditions réussies')}</span><span><b>${s.days}</b>${tr('jours')}</span>
     </div>
-    <div class="row">${onMenu ? `<button class="toMenu">${ic('house', 16)} Revenir au menu</button>` : ''}<span class="grow"></span><button class="active ok">Continuer à bâtir</button></div>
+    <div class="row">${onMenu ? `<button class="toMenu">${ic('house', 16)} ${tr('Revenir au menu')}</button>` : ''}<span class="grow"></span><button class="active ok">${tr('Continuer à bâtir')}</button></div>
   </div>`;
   root.appendChild(ov);
   const cv = ov.querySelector('canvas')!, c = cv.getContext('2d'), t0 = performance.now();

@@ -1109,14 +1109,14 @@ export class UI {
     if (!fresh.length && !shut.length) return;
     const lockedTile = (k: KindId) => {
       const m = MISSIONS.find((x) => x.id === KINDS[k].reqMission);
-      return `<button class="newKind shut" data-mission="${KINDS[k].reqMission}" title="Un clic mène à l’expédition"><b>${ic(KIND_ICON[k], 26, 1.6)}</b><span>${KINDS[k].names[age] || KINDS[k].names[KINDS[k].minAge]}</span><small>Expédition « ${m?.title ?? KINDS[k].reqMission} »</small></button>`;
+      return `<button class="newKind shut" data-mission="${KINDS[k].reqMission}" title="${tr('Un clic mène à l’expédition')}"><b>${ic(KIND_ICON[k], 26, 1.6)}</b><span>${KINDS[k].names[age] || KINDS[k].names[KINDS[k].minAge]}</span><small>${tr('Expédition « {title} »', { title: tr(m?.title ?? KINDS[k].reqMission!) })}</small></button>`;
     };
     const tile = (k: KindId) => `<button class="newKind" data-kind="${k}" title="${this.host.sim.whereOf(k)}"><b>${ic(KIND_ICON[k], 26, 1.6)}</b><span>${KINDS[k].names[age]}</span><small>${BUILD_CATS.find((c) => c.id === KINDS[k].cat)!.label}</small></button>`;
     const { ov, close } = modal(this.root, 'newAge', `${ic('up', 22)} ${AGES[age].name}`, `
-      <p class="hint">${AGES[age].tagline}. Nouveaux bâtiments à votre disposition :</p>
+      <p class="hint">${tr('{tagline}. Nouveaux bâtiments à votre disposition :', { tagline: AGES[age].tagline })}</p>
       ${fresh.length ? `<div class="newKinds">${fresh.map(tile).join('')}</div>` : ''}
-      ${shut.length ? `<p class="hint">À débloquer par des expéditions :</p><div class="newKinds">${shut.map(lockedTile).join('')}</div>` : ''}
-      <div class="row"><span class="grow"></span><button class="active ok">C’est parti</button></div>`);
+      ${shut.length ? `<p class="hint">${tr('À débloquer par des expéditions :')}</p><div class="newKinds">${shut.map(lockedTile).join('')}</div>` : ''}
+      <div class="row"><span class="grow"></span><button class="active ok">${tr('C’est parti')}</button></div>`);
     $('.ok', ov).onclick = close;
     ov.addEventListener('click', (e) => {
       const t = (e.target as HTMLElement).closest<HTMLElement>('.newKind');
@@ -1153,7 +1153,7 @@ export class UI {
     go.hidden = !ready;
     if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = tr('Toutes les conditions sont réunies : passer à l’âge suivant ({age})', { age: AGES[ap!.next].name }); }
     $('#ageReq').innerHTML = ap
-      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.label.startsWith('expédition « ') ? tr('expédition « {name} »', { name: tr(i.label.slice(13, -2)) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
       : tr('Dernier âge atteint : profitez de votre village !');
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';

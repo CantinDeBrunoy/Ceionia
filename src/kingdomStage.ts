@@ -287,7 +287,7 @@ export class KingdomStage {
     c.veil.style.background = black > flash ? '#000' : 'radial-gradient(circle, #fff6d8 0%, #ffd890 70%, #ffc060 100%)';
     c.veil.style.opacity = String(Math.max(flash, black));
     const cap = endCaptionAt(t);
-    c.cap.textContent = cap ? cap.text : '';
+    c.cap.textContent = cap ? tr(cap.text) : '';
     c.cap.style.opacity = String(cap ? cap.alpha : 0);
   }
 

@@ -2,6 +2,7 @@ import type { KingdomReward } from '../sim/kingdom';
 import { FORGE_CRAFT, FORGE_RISK } from '../sim/kingdom';
 import { GEAR_BY } from '../sim/gear';
 import { ic } from './icons';
+import { tr, t, localize, registerKeys } from '../i18n';
 
 /**
  * L'interface du royaume des Enfers : la barre de vie du roi (ou de sa citadelle) en haut de l'écran pendant le combat, et
@@ -21,14 +22,18 @@ export const KINGDOM_TEXT = {
   story: 'La citadelle s’est effondrée dans la lave, le roi des Enfers n’est plus. Sur l’île, le portail s’est éteint dans un éclat de lumière dorée : plus aucun démon ne viendra menacer vos rivages. Le village fête ses héros !',
   rewards: 'Récompenses',
   trophy: 'La couronne du roi : un trophée sur la grande place',
-  forge: (craft: number, risk: number) => `La forge infernale : l’équipement se fabrique ${Math.round((craft - 1) * 100)} % plus vite, les expéditions sont ${Math.round((1 - risk) * 100)} % plus sûres`,
-  ore: (n: number) => `${n} minerai`,
-  joy: (n: number) => `+${n} bien-être, pour toujours`,
+  forge: (craft: number, risk: number) => tr('La forge infernale : l’équipement se fabrique {fast} % plus vite, les expéditions sont {safe} % plus sûres', { fast: Math.round((craft - 1) * 100), safe: Math.round((1 - risk) * 100) }),
+  ore: (n: number) => tr('{n} minerai', { n }),
+  joy: (n: number) => tr('+{n} bien-être, pour toujours', { n }),
   isle: 'L’île du portail est purifiée : fini les incursions',
   cont: 'Continuer',
-  skip: 'Passer',
+  // « Passer » est déjà pris (avancer d'âge) : clé stable
+  get skip() { return t('kingdom.skip'); },
   home: 'Retour au village',
 };
+
+registerKeys({ 'kingdom.skip': { fr: 'Passer', en: 'Skip' } });
+localize(KINGDOM_TEXT, ['king', 'citadel', 'rage', 'wake', 'fallen', 'focus', 'banner', 'bannerSub', 'title', 'story', 'rewards', 'trophy', 'isle', 'cont', 'home']);
 
 /** La barre de vie du boss, en haut au milieu ; un clic sur la couronne centre la vue sur lui */
 export class BossBar {
@@ -71,7 +76,7 @@ export class BossBar {
 export function showKingdomVictory(root: HTMLElement, r: KingdomReward | null, onContinue: () => void, onHome: () => void) {
   const T = KINGDOM_TEXT, ov = document.createElement('div');
   ov.className = 'overlay victory kingdomWin';
-  const gear = r ? r.gear.map(([g, n]) => `${n} ${(n > 1 ? GEAR_BY[g].plural : GEAR_BY[g].name).toLowerCase()}`).join(', ') : '';
+  const gear = r ? r.gear.map(([g, n]) => `${n} ${tr(n > 1 ? GEAR_BY[g].plural : GEAR_BY[g].name).toLowerCase()}`).join(', ') : '';
   const items = r ? [
     ['🏆', T.trophy], ['🔥', T.forge(FORGE_CRAFT, FORGE_RISK)], ['⛏️', T.ore(r.ore)], ['⚔️', gear], ['😊', T.joy(r.joy)], ['🌿', T.isle],
   ] : [['🌿', T.isle]];
