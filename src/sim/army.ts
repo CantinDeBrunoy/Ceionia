@@ -1,5 +1,6 @@
 import type { UnitStats } from './hell';
 import { GEAR_BY, GearId, Stock } from './gear';
+import { tr, localize } from '../i18n';
 
 /**
  * L'armée du joueur : la garnison de l'île du portail. Des habitants du village s'enrôlent à la caserne (sur l'île) : chacun
@@ -107,8 +108,12 @@ export const troopName = (kind: TroopKind, age: number) => troopForm(kind, age).
 /** Son nom avec celui d'origine quand il a changé : « Tirailleur (ex-archer) » */
 export function troopLabel(kind: TroopKind, age: number) {
   const f = troopForm(kind, age), d = TROOPS[kind];
-  return f.name === d.name ? f.name : `${f.name} (ex-${d.name.toLowerCase()})`;
+  return f.name === d.name ? f.name : tr('{name} (ex-{old})', { name: f.name, old: d.name.toLowerCase() });
 }
+/** Le nom d'une pièce d'équipement, en minuscules, dans la langue du jeu : « lance » */
+export const gearName = (g: GearId) => tr(GEAR_BY[g].name).toLowerCase();
+/** Une liste d'éléments reliés par « et » : « lance et armure » */
+export const andJoin = (l: readonly string[]) => l.join(tr(' et '));
 /** Équipement demandé à cet âge (pièces, cheval) */
 export function troopKit(kind: TroopKind, age: number): { gear: GearId[]; mount: boolean } {
   const f = troopForm(kind, age);
@@ -192,16 +197,16 @@ export const armyCap = (c: RecruitCtx) => Math.min(troopCap(c.barracks, c.age), 
 /** Pourquoi l'on ne peut pas recruter cette troupe (null : on peut) */
 export function recruitWhy(a: Army, kind: TroopKind, c: RecruitCtx): string | null {
   const d = TROOPS[kind], f = troopForm(kind, c.age);
-  if (c.age < d.age) return `${d.plural} : à partir du Moyen Âge`;
-  if (f.mount && !(c.stables ?? 0)) return 'Il faut une écurie au village (la cavalerie monte les chevaux de l’écurie)';
-  if (c.barracks <= 0) return 'Il faut une caserne sur l’île du portail';
-  if (armySize(a) >= troopCap(c.barracks, c.age)) return `Garnison au complet (${troopCap(c.barracks, c.age)} places : une autre caserne en ajouterait)`;
-  if (armySize(a) >= Math.floor(c.pop / POP_SHARE)) return `Le village est trop petit pour une recrue de plus (un habitant sur ${POP_SHARE} au plus)`;
+  if (c.age < d.age) return tr('{name} : à partir du Moyen Âge', { name: d.plural });
+  if (f.mount && !(c.stables ?? 0)) return tr('Il faut une écurie au village (la cavalerie monte les chevaux de l’écurie)');
+  if (c.barracks <= 0) return tr('Il faut une caserne sur l’île du portail');
+  if (armySize(a) >= troopCap(c.barracks, c.age)) return tr('Garnison au complet ({n} places : une autre caserne en ajouterait)', { n: troopCap(c.barracks, c.age) });
+  if (armySize(a) >= Math.floor(c.pop / POP_SHARE)) return tr('Le village est trop petit pour une recrue de plus (un habitant sur {n} au plus)', { n: POP_SHARE });
   // (le cheval ne s'achète pas : même en ressources illimitées, il en faut un à l'écurie)
-  if (f.mount && (c.horses ?? 0) < 1) return 'Pas de cheval disponible à l’écurie (en élever, ou attendre le retour d’une expédition montée)';
+  if (f.mount && (c.horses ?? 0) < 1) return tr('Pas de cheval disponible à l’écurie (en élever, ou attendre le retour d’une expédition montée)');
   if (!c.unlimited) {
     const miss = f.gear.filter((g) => (c.stock[g] ?? 0) < 1);
-    if (miss.length) return `${f.name} : il faut ${miss.map((g) => `1 ${GEAR_BY[g].name.toLowerCase()}`).join(' et ')} en réserve (à fabriquer, menu Expéditions › Équipement)`;
+    if (miss.length) return tr('{name} : il faut {items} en réserve (à fabriquer, menu Expéditions › Équipement)', { name: f.name, items: andJoin(miss.map((g) => `1 ${gearName(g)}`)) });
   }
   return null;
 }
@@ -331,3 +336,6 @@ export function readArmy(d: unknown): Army {
   if (Number.isInteger(o.nextId)) a.nextId = Math.max(a.nextId, o.nextId as number);
   return a;
 }
+
+// noms et descriptions des troupes : rendus dans la langue courante (dictionnaire src/i18n/en/army.ts)
+for (const d of Object.values(TROOPS)) { localize(d, ['name', 'plural', 'desc']); for (const f of d.forms ?? []) localize(f, ['name', 'plural', 'desc']); }

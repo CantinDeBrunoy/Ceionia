@@ -1,5 +1,6 @@
 ﻿import { HellSite, HellSiteKind, HellZoneInfo, Z_KINGDOM, HELL_ZONE_N, HELL_ZONES, ZONE_AGE, zoneOfZ, zoneCapOfAge } from '../world/hell';
 import { mulberry32 } from '../core/rng';
+import { localize } from '../i18n';
 import { Balance, BALANCE_NORMAL, planWave, powerOf, compose, tierAge, GARRISON_RATIO, MAX_UNIT_POWER } from './hellBalance';
 
 /**
@@ -88,6 +89,9 @@ export const SITES: Record<SiteKind, { name: string; hp: number; armor: number; 
   gate: { name: 'porte', hp: 300, armor: 4, dmg: 0, range: 0, cooldown: 0 },
   brazier: { name: 'brasero', hp: 120, armor: 1, dmg: 0, range: 0, cooldown: 0 },
 };
+// les noms des démons et des bâtiments se lisent dans la langue courante (dictionnaire src/i18n/en/war.ts)
+for (const d of Object.values(DEMONS)) localize(d, ['name', 'plural']);
+for (const s of Object.values(SITES)) localize(s, ['name']);
 
 /** Les démons s'éloignent au plus de LEASH cases de leur poste ; au-delà, ils y retournent */
 export const LEASH = 16;

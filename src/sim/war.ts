@@ -4,7 +4,8 @@ import { isleDefenses, repelWave, ISLE_SECURE } from '../world/portal';
 import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats, SECURE_WAVES, SITES, DEMON_POWER } from './hell';
 import { IsleBattle, defenseK } from './isleBattle';
 import { balanceOf, powerOf } from './hellBalance';
-import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName } from './army';
+import { tr, plural } from '../i18n';
+import { gearName, Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES, zoneOf, zoneThe, zoneAgeText } from '../world/hell';
 import type { BaseKind } from './hell';
@@ -30,7 +31,7 @@ export function bigOf(kinds: DemonKind[]) {
   const counts = new Map<DemonKind, number>();
   for (const k of kinds) if (DEMON_POWER[k] >= DEMON_POWER.brute * 1.5 && k !== 'chief') counts.set(k, (counts.get(k) ?? 0) + 1);
   const parts = [...counts].sort((a, b) => DEMON_POWER[a[0]] - DEMON_POWER[b[0]]).map(([k, n]) => `${n} ${n > 1 ? DEMONS[k].plural : DEMONS[k].name}`);
-  return parts.length ? `, dont ${parts.length > 1 ? `${parts.slice(0, -1).join(', ')} et ${parts[parts.length - 1]}` : parts[0]}` : '';
+  return parts.length ? tr(', dont {list}', { list: parts.length > 1 ? tr('{a} et {b}', { a: parts.slice(0, -1).join(', '), b: parts[parts.length - 1] }) : parts[0] }) : '';
 }
 
 export interface WarNews { text: string; kind: 'raid' | 'repelled' | 'lost' | 'secured' | 'troop' | 'portal' | 'info' | 'counter' | 'zone' | 'boss' | 'victory' }
@@ -142,8 +143,8 @@ export class War {
    */
   recruitHell(kind: TroopKind, age: number, pop: number): string | null {
     const b = this.base, w = this.world;
-    if (this.portalOut) return 'Le portail est éteint : la guerre est finie.';
-    if (!b || !b.posts()) return 'Il faut une caserne avancée dans la base.';
+    if (this.portalOut) return tr('Le portail est éteint : la guerre est finie.');
+    if (!b || !b.posts()) return tr('Il faut une caserne avancée dans la base.');
     const ctx = this.recruitCtx(age, pop), miss = troopKit(kind, age).gear.filter((g) => (ctx.stock[g] ?? 0) < 1);
     if (miss.length && !w.unlimited && b.countOf('smithy') && w.ore >= miss.length * SMITHY_ORE) {
       // la forge forge ce qui manque, pour cette recrue (on le rend si elle est refusée)
@@ -154,27 +155,27 @@ export class War {
       return why;
     }
     const why = recruit(this.army, kind, ctx, 'hell');
-    if (why && miss.length && b.countOf('smithy')) return `${why} (ou ${miss.length * SMITHY_ORE} minerai pour que la forge les fabrique : ${miss.map((g) => GEAR_BY[g].name.toLowerCase()).join(', ')})`;
+    if (why && miss.length && b.countOf('smithy')) return tr('{why} (ou {n} minerai pour que la forge les fabrique : {items})', { why, n: miss.length * SMITHY_ORE, items: miss.map((g) => gearName(g)).join(', ') });
     return why;
   }
 
   /** Bâtit dans la base avancée, payé par le village : le bâtiment, ou la raison du refus */
   buildBase(kind: BaseKind, x: number, z: number) {
     const b = this.ensureFaction() && this.base;
-    if (!b) return 'Les Enfers ne sont pas ouverts.';
+    if (!b) return tr('Les Enfers ne sont pas ouverts.');
     return b.build(kind, x, z, this.world);
   }
   /** Pose une ligne de palissades (ou une case) : combien de cases posées, et la première raison de refus */
   buildBaseLine(kind: BaseKind, cells: [number, number][]) {
     const b = this.ensureFaction() && this.base;
-    return b ? b.buildLine(kind, cells, this.world) : { built: 0, why: 'Les Enfers ne sont pas ouverts.' as string | null };
+    return b ? b.buildLine(kind, cells, this.world) : { built: 0, why: tr('Les Enfers ne sont pas ouverts.') as string | null };
   }
   /** L'aperçu d'une ligne à poser : refus par case, coût */
   planBaseLine(kind: BaseKind, cells: [number, number][]) { return this.base?.planLine(kind, cells, this.world) ?? null; }
   /** Ce que le village peut payer (bois, pierre, minerai ; le bac à sable, tout) */
   get purse(): Purse { return this.world; }
   /** Ce qu'il manque pour bâtir là (null : on peut) */
-  canBuildBase(kind: BaseKind, x: number, z: number) { return this.base ? this.base.canBuild(kind, x, z, this.world) : 'Les Enfers ne sont pas ouverts.'; }
+  canBuildBase(kind: BaseKind, x: number, z: number) { return this.base ? this.base.canBuild(kind, x, z, this.world) : tr('Les Enfers ne sont pas ouverts.'); }
 
   /** L'unité au combat d'une troupe valide, posée sur l'île ou dans les Enfers */
   private deploy(t: Troop, age: number) {
@@ -260,7 +261,7 @@ export class War {
       n++;
     }
     for (const r of this.army.queue) if (r.at === 'hell') { delete r.at; n++; }
-    if (n) this.news.push({ kind: 'info', text: '🌀 Avant que le portail ne s’éteigne, les troupes des Enfers sont rentrées sur l’île.' });
+    if (n) this.news.push({ kind: 'info', text: tr('🌀 Avant que le portail ne s’éteigne, les troupes des Enfers sont rentrées sur l’île.') });
   }
 
   /** Une troupe passe le portail */
@@ -271,7 +272,7 @@ export class War {
     t.where = t.where === 'isle' ? 'hell' : 'isle';
     t.hp = hp; t.x = undefined; t.z = undefined;
     this.deploy(t, age);
-    this.news.push(t.where === 'hell' ? { kind: 'portal', text: `🌀 Un ${this.nm(t.kind)} a passé le portail : il attend vos ordres dans les Enfers.` } : { kind: 'info', text: `🌀 Un ${this.nm(t.kind)} est rentré des Enfers sur l’île.` });
+    this.news.push(t.where === 'hell' ? { kind: 'portal', text: tr('🌀 Un {troop} a passé le portail : il attend vos ordres dans les Enfers.', { troop: this.nm(t.kind) }) } : { kind: 'info', text: tr('🌀 Un {troop} est rentré des Enfers sur l’île.', { troop: this.nm(t.kind) }) });
   }
 
   /**
@@ -291,8 +292,8 @@ export class War {
     // l'armée : recrues qui arrivent, blessés qui guérissent
     const d = isleDefenses(w);
     const { joined, healed } = stepArmy(this.army, dt, this.barracks(), age, healK);
-    for (const t of joined) this.news.push(t.where === 'hell' ? { kind: 'portal', text: `⚔️ Un ${this.nm(t.kind)} a rejoint la base avancée des Enfers.` } : { kind: 'troop', text: `⚔️ Un ${this.nm(t.kind)} a débarqué sur l’île du portail : il rejoint la garnison.` });
-    for (const t of healed) if (t.where === 'hell') this.news.push({ kind: 'info', text: `🩹 Un ${this.nm(t.kind)} sort de l’infirmerie avancée, prêt à se battre.` });
+    for (const t of joined) this.news.push(t.where === 'hell' ? { kind: 'portal', text: tr('⚔️ Un {troop} a rejoint la base avancée des Enfers.', { troop: this.nm(t.kind) }) } : { kind: 'troop', text: tr('⚔️ Un {troop} a débarqué sur l’île du portail : il rejoint la garnison.', { troop: this.nm(t.kind) }) });
+    for (const t of healed) if (t.where === 'hell') this.news.push({ kind: 'info', text: tr('🩹 Un {troop} sort de l’infirmerie avancée, prêt à se battre.', { troop: this.nm(t.kind) }) });
     // le royaume tombé, le portail s'éteint : les troupes des Enfers rentrent sur l'île (une fois la vue revenue à la surface)
     if (f.victory && !this.hellInView) this.bringHome(age);
     // les troupes valides sans unité prennent place ; celles qui n'existent plus quittent le combat
@@ -329,12 +330,12 @@ export class War {
     const left = this.nextWaveIn();
     if (d.towers > 0 && left !== null && left <= WARN_TIME && !f.planned) {
       f.planned = f.planRaid();
-      this.news.push({ kind: 'raid', text: `⚠️ Les démons se rassemblent devant le portail : une vague de ${f.planned.length} démons${bigOf(f.planned)} arrive dans quelques instants. Prépare ta garnison !` });
+      this.news.push({ kind: 'raid', text: tr('⚠️ Les démons se rassemblent devant le portail : une vague de {n} démons{big} arrive dans quelques instants. Prépare ta garnison !', { n: f.planned.length, big: bigOf(f.planned) }) });
     }
     if (d.towers > 0 && f.raidDue(f.time)) {
       arrived = f.spawnRaid(f.time);
       isle.startRaid(arrived);
-      this.news.push({ kind: 'raid', text: `🔥 Incursion ! ${arrived.units.length} démons${bigOf(arrived.units.map((u) => u.kind))} sortent du portail et attaquent l’île.` });
+      this.news.push({ kind: 'raid', text: tr('🔥 Incursion ! {n} démons{big} sortent du portail et attaquent l’île.', { n: arrived.units.length, big: bigOf(arrived.units.map((u) => u.kind)) }) });
     }
     const out = isle.outcome();
     if (out) {
@@ -342,9 +343,9 @@ export class War {
       isle.endRaid();
       if (out === 'repelled') {
         repelWave(w);
-        this.news.push({ kind: 'repelled', text: `🛡️ Vague repoussée ! L’île tient bon (${w.isleGuard.waves} vague${w.isleGuard.waves > 1 ? 's' : ''} repoussée${w.isleGuard.waves > 1 ? 's' : ''}).` });
-      } else this.news.push({ kind: 'lost', text: '💥 Les démons ont submergé les défenses de l’île, puis sont repartis par le portail. La tour et la caserne se relèvent : on se prépare pour la prochaine vague.' });
-      if (sec) this.news.push({ kind: 'secured', text: '🏰 L’île du portail est sécurisée !' });
+        this.news.push({ kind: 'repelled', text: tr('🛡️ Vague repoussée ! L’île tient bon ({n}).', { n: `${w.isleGuard.waves} ${plural(w.isleGuard.waves, 'vague', 'vagues')} ${plural(w.isleGuard.waves, 'repoussée', 'repoussées')}` }) });
+      } else this.news.push({ kind: 'lost', text: tr('💥 Les démons ont submergé les défenses de l’île, puis sont repartis par le portail. La tour et la caserne se relèvent : on se prépare pour la prochaine vague.') });
+      if (sec) this.news.push({ kind: 'secured', text: tr('🏰 L’île du portail est sécurisée !') });
     }
     // les relevés de la garnison (vie, position) pour la sauvegarde
     for (const [id, u] of this.unitOf) { const t = this.army.troops.find((x) => x.id === id); if (t) { t.hp = Math.round(u.hp); t.x = +u.x.toFixed(2); t.z = +u.z.toFixed(2); } }
@@ -393,7 +394,7 @@ export class War {
     f.raidsRepelled = Math.max(f.raidsRepelled, SECURE_WAVES);
     const r = claimKingdom(this.world, ISLE_SECURE.waves);
     if (r) this.reward = r;
-    this.news.push({ kind: 'victory', text: '👑 Le royaume des Enfers est tombé ! Le portail s’éteint : plus aucune incursion ne menacera l’île.' });
+    this.news.push({ kind: 'victory', text: tr('👑 Le royaume des Enfers est tombé ! Le portail s’éteint : plus aucune incursion ne menacera l’île.') });
   }
 
   /** Les nouvelles de la base avancée : contre-attaques, zones */
@@ -401,13 +402,13 @@ export class War {
     const b = this.base;
     if (!b) return;
     for (const e of b.events.splice(0)) {
-      if (e.type === 'counterWarn') this.news.push({ kind: 'counter', text: `⚠️ Les démons se rassemblent : ils vont marcher sur ta base ${zoneOf(e.zone)}. Prépare tes troupes !` });
-      else if (e.type === 'counter') this.news.push({ kind: 'counter', text: `🔥 Les démons marchent sur ta base ${zoneOf(e.zone)} ! ${e.n} démons approchent : tes troupes sur place comptent pour la défense.` });
-      else if (e.type === 'frontCleared') this.news.push({ kind: 'zone', text: '🌋 Les démons ont repris tous tes postes avancés : le front est revenu au portail. Les incursions sur l’île reprendront bientôt.' });
-      else if (e.type === 'counterEnd') this.news.push({ kind: 'repelled', text: `🛡️ Contre-attaque repoussée : la base ${zoneOf(e.zone)} tient bon.` });
-      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: `💥 Les démons ont repris la zone ${zoneOf(e.zone)} : sa forteresse se relève, le front recule. Tu peux la reprendre quand tu voudras.` });
-      else if (e.type === 'reclaimWarn') this.news.push({ kind: 'zone', text: `⚠️ Les démons se rassemblent pour reprendre la zone ${zoneOf(e.zone)}, que personne ne garde ! Posez-y un camp de base ou envoyez des troupes.` });
-      else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base ${zoneOf(e.zone)} est tombé. Rebâtissez-le pour rouvrir la base.` });
+      if (e.type === 'counterWarn') this.news.push({ kind: 'counter', text: tr('⚠️ Les démons se rassemblent : ils vont marcher sur ta base {zone}. Prépare tes troupes !', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'counter') this.news.push({ kind: 'counter', text: tr('🔥 Les démons marchent sur ta base {zone} ! {n} démons approchent : tes troupes sur place comptent pour la défense.', { zone: zoneOf(e.zone), n: e.n }) });
+      else if (e.type === 'frontCleared') this.news.push({ kind: 'zone', text: tr('🌋 Les démons ont repris tous tes postes avancés : le front est revenu au portail. Les incursions sur l’île reprendront bientôt.') });
+      else if (e.type === 'counterEnd') this.news.push({ kind: 'repelled', text: tr('🛡️ Contre-attaque repoussée : la base {zone} tient bon.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: tr('💥 Les démons ont repris la zone {zone} : sa forteresse se relève, le front recule. Tu peux la reprendre quand tu voudras.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'reclaimWarn') this.news.push({ kind: 'zone', text: tr('⚠️ Les démons se rassemblent pour reprendre la zone {zone}, que personne ne garde ! Posez-y un camp de base ou envoyez des troupes.', { zone: zoneOf(e.zone) }) });
+      else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: tr('💥 Le camp de base {zone} est tombé. Rebâtissez-le pour rouvrir la base.', { zone: zoneOf(e.zone) }) });
       // (une construction : l'interface le dit elle-même)
     }
   }
@@ -422,19 +423,19 @@ export class War {
           // dans les Enfers, l'infirmerie de la base le soigne sur place (deux fois plus vite)
           if (sim === this.faction && this.base?.countOf('infirmary')) {
             wound(this.army, t.id, HEAL_TIME / 2, 'hell');
-            this.news.push({ kind: 'info', text: `🩹 Un ${this.nm(t.kind)} est tombé : on le porte à l’infirmerie de la base, il s’y soigne.` });
+            this.news.push({ kind: 'info', text: tr('🩹 Un {troop} est tombé : on le porte à l’infirmerie de la base, il s’y soigne.', { troop: this.nm(t.kind) }) });
           } else {
             wound(this.army, t.id);
-            this.news.push({ kind: 'info', text: `🩹 Un ${this.nm(t.kind)} est tombé : on le ramène blessé à la caserne, il s’y soigne.` });
+            this.news.push({ kind: 'info', text: tr('🩹 Un {troop} est tombé : on le ramène blessé à la caserne, il s’y soigne.', { troop: this.nm(t.kind) }) });
           }
         }
       }
       // la progression dans les Enfers
       if (sim === this.faction) {
-        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: `🏴 La zone ${zoneOf(e.zone)} est conquise ! La brume se lève sur ${zoneThe(e.zone + 1)} ; vous pouvez bâtir une base avancée ici.` });
-        else if (e.type === 'sealed') this.news.push({ kind: 'info', text: e.byAge ? `🌫️ Les démons ${zoneOf(e.zone)} sont trop forts : montez à ${zoneAgeText(e.zone)} pour y aller.` : `🌫️ La brume infernale barre ${zoneThe(e.zone)} : abattez d’abord la forteresse ${zoneOf(e.zone - 1)}.` });
+        if (e.type === 'conquered' && e.zone + 1 < HELL_ZONES.length) this.news.push({ kind: 'zone', text: tr('🏴 La zone {zone} est conquise ! La brume se lève sur {next} ; vous pouvez bâtir une base avancée ici.', { zone: zoneOf(e.zone), next: zoneThe(e.zone + 1) }) });
+        else if (e.type === 'sealed') this.news.push({ kind: 'info', text: e.byAge ? tr('🌫️ Les démons {zone} sont trop forts : montez à {age} pour y aller.', { zone: zoneOf(e.zone), age: zoneAgeText(e.zone) }) : tr('🌫️ La brume infernale barre {zone} : abattez d’abord la forteresse {prev}.', { zone: zoneThe(e.zone), prev: zoneOf(e.zone - 1) }) });
         // le combat du roi
-        else if (e.type === 'boss') this.news.push({ kind: 'boss', text: e.phase === 1 ? '👑 Le roi des Enfers se lève de son trône ! Gare à ses boules de feu : écartez-vous des cercles rouges.' : e.phase === 2 ? '😡 Le roi des Enfers enrage : le sol s’embrase par plaques, sortez des zones qui rougeoient !' : '👑 Le roi des Enfers est abattu ! Sa citadelle vacille : abattez-la.' });
+        else if (e.type === 'boss') this.news.push({ kind: 'boss', text: e.phase === 1 ? tr('👑 Le roi des Enfers se lève de son trône ! Gare à ses boules de feu : écartez-vous des cercles rouges.') : e.phase === 2 ? tr('😡 Le roi des Enfers enrage : le sol s’embrase par plaques, sortez des zones qui rougeoient !') : tr('👑 Le roi des Enfers est abattu ! Sa citadelle vacille : abattez-la.') });
         else if (e.type === 'victory') this.conquerKingdom();
       }
       fx.push(e);

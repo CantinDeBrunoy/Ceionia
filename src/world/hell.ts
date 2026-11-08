@@ -2,6 +2,7 @@ import { VR } from './world';
 import { Simplex } from './noise';
 import { hash2 } from '../core/rng';
 import { UWALL, ROCK_ISO, FLOOR_ISO, POOL_LAVA } from './underground';
+import { tr, localize, isEnglish } from '../i18n';
 
 /**
  * Le monde des Enfers : une longue faille de cavernes qui mène du portail (où arrive le joueur, au nord) jusqu'au royaume
@@ -29,6 +30,8 @@ export const HELL_ZONES: { name: string; z0: number }[] = [
   { name: 'Forêt de cristaux', z0: 124 },
   { name: 'Royaume démoniaque', z0: 150 },
 ];
+// le nom de chaque zone se lit dans la langue courante (dictionnaire src/i18n/en/war.ts)
+for (const z of HELL_ZONES) localize(z, ['name']);
 export const Z_PORTAL = 0, Z_EMBER = 1, Z_RIVER = 2, Z_CLIFFS = 3, Z_BONES = 4, Z_CRYSTAL = 5, Z_KINGDOM = 6;
 export const HELL_ZONE_N = HELL_ZONES.length;
 /**
@@ -39,7 +42,7 @@ export const ZONE_AGE = [1, 1, 1, 2, 3, 4, 5];
 /** Le nom de chaque âge, pour les phrases (même ordre que AGES) */
 const AGE_WORD = ['Préhistoire', 'Antiquité', 'Médiéval', 'Industriel', 'Moderne', 'Futuriste'];
 /** « l’âge Médiéval » : l'âge qu'il faut pour entrer dans la zone */
-export const zoneAgeText = (i: number) => `l’âge ${AGE_WORD[ZONE_AGE[i] ?? 5]}`;
+export const zoneAgeText = (i: number) => tr('l’âge {age}', { age: tr(AGE_WORD[ZONE_AGE[i] ?? 5]) });
 /** La dernière zone où l'on peut entrer à cet âge */
 export function zoneCapOfAge(age: number) {
   let z = 0;
@@ -50,11 +53,11 @@ export function zoneCapOfAge(age: number) {
 const ZONE_ART: ('le' | 'la' | 'les')[] = ['le', 'les', 'la', 'les', 'la', 'la', 'le'];
 const art = (i: number) => ZONE_ART[i] ?? 'la';
 /** Le nom d'une zone avec son article : « les Grottes de braise » */
-export const zoneThe = (i: number) => `${art(i)} ${HELL_ZONES[i].name}`;
+export const zoneThe = (i: number) => isEnglish() ? `the ${HELL_ZONES[i].name}` : `${art(i)} ${HELL_ZONES[i].name}`;
 /** …après « de » : « des Grottes de braise », « de la Rivière de lave », « du Seuil du portail » */
-export const zoneOf = (i: number) => ({ le: 'du', la: 'de la', les: 'des' })[art(i)] + ` ${HELL_ZONES[i].name}`;
+export const zoneOf = (i: number) => isEnglish() ? zoneThe(i) : ({ le: 'du', la: 'de la', les: 'des' })[art(i)] + ` ${HELL_ZONES[i].name}`;
 /** …après « à » : « aux Grottes de braise », « à la Rivière de lave », « au Royaume démoniaque » */
-export const zoneTo = (i: number) => ({ le: 'au', la: 'à la', les: 'aux' })[art(i)] + ` ${HELL_ZONES[i].name}`;
+export const zoneTo = (i: number) => isEnglish() ? zoneThe(i) : ({ le: 'au', la: 'à la', les: 'aux' })[art(i)] + ` ${HELL_ZONES[i].name}`;
 /** Zone d'une rangée de cases */
 export function zoneOfZ(z: number) {
   let i = 0;

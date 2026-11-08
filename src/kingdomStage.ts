@@ -8,6 +8,7 @@ import { GoldenBurst } from './render/goldenBurst';
 import { KingdomEndFx } from './render/kingdomEndFx';
 import { END_PLAN, EndShot, endShotAt, endShotStart, endFlashAt, endBlackAt, endCaptionAt, shouldPlayKingdomEnd } from './kingdomEnd';
 import { BossBar, KINGDOM_TEXT, showKingdomVictory } from './ui/kingdom';
+import { tr } from './i18n';
 
 /**
  * La mise en scène du royaume des Enfers : la bannière à l'arrivée, la barre de vie du roi (puis de sa citadelle), les
@@ -102,7 +103,7 @@ export class KingdomStage {
     if (n.kind === 'boss') {
       h.ui.toast(n.text, undefined, 'danger');
       // le roi se lève, enrage : la vue va sur le combat
-      if (h.mode() === 'hell' && h.war.king?.king && !n.text.startsWith('👑 Le roi des Enfers est abattu')) this.focusFight();
+      if (h.mode() === 'hell' && h.war.king?.king && !n.text.startsWith(tr('👑 Le roi des Enfers est abattu ! Sa citadelle vacille : abattez-la.'))) this.focusFight();
       return true;
     }
     if (n.kind === 'victory') { this.startFinale(); if (!this.fin) h.ui.toast(n.text, undefined, 'info'); return true; }
