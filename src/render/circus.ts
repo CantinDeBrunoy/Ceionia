@@ -98,11 +98,11 @@ function bulb(f: Fr, x: number, y: number, z: number, c: number, glow: Glow, s =
 }
 
 /** Guirlande entre deux points (repère local) : fil qui pend, ampoules régulières */
-function garland(f: Fr, a: V3, b: V3, n: number, sag: number, glow: Glow, palette: number[], s = 0.018, round = false, wire = 0x2a2a30) {
+function garland(f: Fr, a: V3, b: V3, n: number, sag: number, glow: Glow, palette: number[], s = 0.018, round = false, wire = 0x6a5c4c) {
   let prev: V3 | null = null;
   for (let i = 0; i <= n; i++) {
     const t = i / n, q: V3 = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t];
-    if (prev) f.tube(prev, q, 0.0022, wire, false, 3);
+    if (prev) f.tube(prev, q, 0.0016, wire, false, 3);
     if (i > 0 && i < n) bulb(f, q[0], q[1] - s * 0.7, q[2], palette[i % palette.length], glow, s, round);
     prev = q;
   }
@@ -113,7 +113,7 @@ function bunting(f: Fr, a: V3, b: V3, n: number, sag: number, palette: number[])
   let prev: V3 | null = null;
   for (let i = 0; i <= n; i++) {
     const t = i / n, q: V3 = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t];
-    if (prev) f.tube(prev, q, 0.0022, 0x3a3030, false, 3);
+    if (prev) f.tube(prev, q, 0.0018, 0x6a5c4c, false, 3);
     if (i > 0 && i < n) f.add(new THREE.ConeGeometry(0.02, 0.045, 3).rotateX(PI), q[0], q[1] - 0.036, q[2], palette[i % palette.length]);
     prev = q;
   }
@@ -175,7 +175,7 @@ function bigTop(f: Fr, st: Style, kit: CircusKit) {
       // mur, puis frange festonnée pendue au bord du toit
       f.add(new THREE.CylinderGeometry(r, r, hw, 1, 1, true, ts, dth).translate(0, hw / 2, 0), 0, 0, cz, col);
       f.box(wide * 0.96, 0.04, 0.012, sx * (r + 0.008), hw - 0.045, cz + cx * (r + 0.008), col2, false);
-      f.box(wide * 0.62, wide * 0.62, 0.012, sx * (r + 0.01), hw - 0.1, cz + cx * (r + 0.01), col2, false, PI / 4);
+      f.sub(sx * (r + 0.012), cz + cx * (r + 0.012), tm).add(new THREE.ConeGeometry(wide * 0.4, 0.075, 3).rotateX(PI), 0, hw - 0.12, 0, col2);
       if (st.age === 2 && k % 4 === 3) f.box(wide * 0.5, 0.07, 0.01, sx * (r + 0.013), 0.1 + 0.08 * H(k, 7), cz + cx * (r + 0.013), [0x4a78a8, 0x7a9a4a, 0xc8a050][k % 3]);
     }
     // toit en deux étages : jupe évasée, puis cône du faîte
@@ -189,7 +189,7 @@ function bigTop(f: Fr, st: Style, kit: CircusKit) {
     }
   }
   // moignon de pans à l'entrée : la jupe du toit continue au-dessus de la porte (déjà dessinée), le mur manque : intérieur sombre éclairé
-  f.box(0.5, 0.32, 0.02, 0, 0, cz + r - 0.045, 0x2a1a2a);
+  f.box(0.38, 0.3, 0.02, 0, 0, cz + r - 0.07, 0x2a1a2a);
   f.box(0.26, 0.26, 0.012, 0, 0.02, cz + r - 0.03, st.neon ? 0xffb8f0 : WARM, lamp);
   // entrée drapée : montants, linteau, deux pans de rideau relevés par un cordon, frange dorée
   const door = (s: number) => {
@@ -248,6 +248,7 @@ function booth(f: Fr, st: Style, kit: CircusKit, x: number, z: number) {
     for (let k = 0; k < 12; k++) { const t = (k / 12) * PI * 2; R.box(0.05, 0.03, 0.004, Math.sin(t) * 0.1, 0, Math.cos(t) * 0.1, NEONS[k % 5], t, 'neon'); }
     R.add(new THREE.TorusGeometry(0.1, 0.0025, 4, 24).rotateX(PI / 2), 0, 0.015, 0, 0x4ae8ff, 0, 'neon');
     person(g, 0, -0.01, PI, 0x4ae8ff, { y: 0.05, hair: 0xff4aa8 });
+    queue(f, x, z, st);
     return;
   }
   // corps, soubassement, toit, auvent rayé, comptoir, vitre éclairée, enseigne « billets »
@@ -265,13 +266,17 @@ function booth(f: Fr, st: Style, kit: CircusKit, x: number, z: number) {
   for (let k = 0; k < 5; k++) g.box(0.02, 0.02, 0.005, -0.056 + k * 0.028, 0.22, 0.111, st.neon ? NEONS[k] : a, st.neon ? 'neon' : false);
   person(g, 0, -0.04, PI, a, { y: 0.03, hat: st.age === 3 ? 'top' : 'cap', hatColor: 0x2a2a30 });
   for (let k = 0; k < 4; k++) bulb(g, -0.14 + k * 0.093, 0.255, 0.16, LAMPS[k % 5], lamp, 0.014);
-  // la file d'attente : trois visiteurs, un enfant à ballon
-  const q = f.sub(x, z + 0.28, 0);
-  person(q, -0.04, 0.0, PI, 0x3c7fd8, { arms: 'up' });
-  person(q, -0.18, 0.04, PI + 0.3, 0xf2a03c, {});
-  person(q, 0.12, 0.05, PI - 0.3, 0x4fa860, { hat: 'cap', hatColor: 0xd84a3e });
-  balloon(q, 0.15, 0.1, 0.05, 0.22, 0xd84a3e, false);
-  balloon(q, -0.2, 0.1, 0.04, 0.17, 0x3c7fd8, false);
+  queue(f, x, z, st);
+}
+
+/** La file d'attente devant la billetterie : trois visiteurs, un enfant à ballon (lumineux à l'âge futuriste) */
+function queue(f: Fr, x: number, z: number, st: Style) {
+  const q = f.sub(x, z + 0.28, 0), fut = st.age === 5, neon: Glow = fut ? 'neon' : false;
+  person(q, -0.04, 0.0, PI, fut ? 0x4ae8ff : 0x3c7fd8, { arms: 'up' });
+  person(q, -0.18, 0.04, PI + 0.3, fut ? 0xff4aa8 : 0xf2a03c, {});
+  person(q, 0.12, 0.05, PI - 0.3, fut ? 0x9a6aff : 0x4fa860, { hat: 'cap', hatColor: 0xd84a3e });
+  balloon(q, 0.15, 0.1, 0.05, 0.22, 0xd84a3e, neon);
+  balloon(q, -0.2, 0.1, 0.04, 0.17, 0x3c7fd8, neon);
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -299,8 +304,7 @@ function wagon(f: Fr, st: Style, kit: CircusKit, x: number, z: number, ry: numbe
   if (age === 4) {
     // caravane en aluminium : coque ovale, bandeau de couleur, hublots éclairés, auvent rayé et fauteuil
     g.box(0.58, 0.04, 0.22, 0, 0.04, 0, 0x3a3a40);
-    g.ball(1, 0, 0.15, 0, 0xc9d0d6, false, 0.3, 0.115, 0.13, 2);
-    g.add(new THREE.CylinderGeometry(0.1, 0.1, 0.1, 12, 1, false, 0, PI * 2).rotateZ(PI / 2), 0, 0.15, 0, 0xc9d0d6);
+    g.ball(1, 0, 0.17, 0, 0xdfe5ea, false, 0.3, 0.135, 0.135, 2);
     g.box(0.54, 0.02, 0.262, 0, 0.115, 0, o.trim, 'neon');
     for (let k = 0; k < 3; k++) { g.add(new THREE.CylinderGeometry(0.028, 0.028, 0.02, 10).rotateX(PI / 2), -0.1 + k * 0.1, 0.18, 0.125, 0xd8f4ff, true); g.add(new THREE.TorusGeometry(0.03, 0.005, 4, 10), -0.1 + k * 0.1, 0.18, 0.131, 0x8a929a); }
     g.box(0.07, 0.13, 0.014, 0.19, 0.075, 0.1, 0x8a929a);
@@ -596,7 +600,7 @@ export function circus(p: Parts, age: number, kit: CircusKit) {
   if (st.age === 4) for (const s of [-1, 1]) {
     const g = f.sub(s * 1.0, 0.62, 0), sw = kit.sway(g.w(0, 0.14, 0), [0, 0, 1], 0.35, 0.22 + 0.04 * s);
     g.cyl(0.03, 0.04, 0.03, 8, 0, 0, 0, 0x3a3a42); g.box(0.06, 0.06, 0.06, 0, 0.03, 0, 0x8a929a);
-    sw.add(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 5).translate(0, 0.45, 0), 0, 0, 0, 0xfff4c0, 0, 'neon');
+    sw.add(new THREE.CylinderGeometry(0.05, 0.012, 0.7, 6).translate(0, 0.45, 0), 0, 0, 0, 0xfff4c0, 0, 'neon');
     sw.add(new THREE.CylinderGeometry(0.03, 0.04, 0.09, 8).translate(0, 0.045, 0), 0, 0, 0, 0x4a525a);
   }
   if (st.age === 5) for (const s of [-1, 1]) {
