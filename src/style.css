@@ -322,10 +322,32 @@ body.under #selCard, body.photo #selCard { display: none; }
 #info .keys { color: var(--ink2); font-size: 11.5px; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 
-#toast { position: absolute; top: calc(var(--hudB, 82px) + 14px); left: 50%; transform: translateX(-50%) translateY(-10px); background: rgba(15, 27, 45, 0.88); color: #fff; padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; opacity: 0; transition: all 0.25s; pointer-events: none !important; max-width: 90vw; text-align: center; z-index: 34; box-shadow: 0 8px 24px rgba(15, 27, 45, 0.3); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
-#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* la file des messages : au plus deux (un seul sur un téléphone), empilés en haut au centre, sous la barre du haut */
+#toasts { position: absolute; top: calc(var(--hudB, 82px) + 14px); left: 50%; transform: translateX(-50%); z-index: 34; display: flex; flex-direction: column; align-items: center; gap: 6px; width: max-content; max-width: 90vw; pointer-events: none !important; }
+#toasts:empty { display: none; }
+#toasts .toast { background: rgba(15, 27, 45, 0.88); color: #fff; padding: 8px 16px; border-radius: 12px; font-size: 13px; font-weight: 600; text-align: center; box-shadow: 0 8px 24px rgba(15, 27, 45, 0.3); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); animation: toastIn 0.3s ease-out; }
+#toasts .toast.danger { background: rgba(150, 38, 44, 0.94); }
 /* message qui mène quelque part (une décision d'expédition) : cliquable */
-#toast.act.show { pointer-events: auto !important; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+#toasts .toast.act { pointer-events: auto !important; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { #toasts .toast { animation: none; } }
+/* sous l'alerte d'incursion, qui occupe le haut au centre */
+body:has(#warAlert.show) #toasts { top: calc(var(--hudB, 82px) + 66px); }
+body.under:has(#warAlert.show) #toasts { top: calc(var(--hudB, 82px) + 122px); }
+/* la cloche */
+#bBell { position: relative; }
+#bellBadge:not(:empty) { position: absolute; top: -5px; right: -5px; min-width: 16px; background: var(--bad); color: #fff; font-size: 10px; font-weight: 800; border-radius: 8px; padding: 1px 4px; line-height: 1.3; }
+#bBell.new { color: var(--accent-ink); }
+#notifPanel { position: absolute; top: calc(var(--hudB, 82px) + 6px); right: 10px; z-index: 35; width: min(340px, calc(100vw - 20px)); max-height: min(60vh, 420px); overflow: auto; padding: 10px 12px; font-size: 12.5px; }
+#notifPanel[hidden] { display: none; }
+#notifPanel .npHead { display: flex; align-items: center; justify-content: space-between; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+#notifPanel .npClear { padding: 2px 8px; min-height: 0; font-size: 11.5px; }
+#notifPanel ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+#notifPanel li { padding: 4px 0; border-bottom: 1px solid var(--line); color: var(--ink2); }
+#notifPanel li.danger { color: var(--bad); font-weight: 700; }
+#notifPanel li.action { color: var(--accent-ink); font-weight: 700; }
+#notifPanel li em { font-style: normal; font-weight: 800; color: var(--ink2); }
+#notifPanel .npNone { margin: 8px 0 0; color: var(--ink2); }
 .expCard.ask { cursor: pointer; }
 
 /* messages et annonces passent devant la bulle du tutoriel */
@@ -860,9 +882,6 @@ button.bgo:hover { background: #0f9270; }
 /* toute la fiche du bâtiment en main sautille (pas seulement le texte), pour qu'on la voie */
 #info.held.show { animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), hintBounce 1.6s ease-in-out 0.45s infinite; }
 @media (prefers-reduced-motion: reduce) { #info.held.show { animation: none; } }
-@keyframes toastBounce { 0% { transform: translateX(-50%) translateY(-14px); } 45% { transform: translateX(-50%) translateY(6px); } 70% { transform: translateX(-50%) translateY(-3px); } 100% { transform: translateX(-50%) translateY(0); } }
-#toast.show { animation: toastBounce 0.5s ease-out; }
-@media (prefers-reduced-motion: reduce) { #toast.show { animation: none; } }
 /* barres de fabrication : pas de transition (la barre est redessinée avec sa largeur, elle repartait de zéro à chaque rafraîchissement) */
 .cbar > i, .queue .bar > i { transition: none; }
 .failMsg { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: #fdecea; color: #a4281f; font-weight: 700; font-size: 13px; }

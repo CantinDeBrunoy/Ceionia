@@ -38,7 +38,7 @@ export interface StageHost {
   crowd(on: boolean, x: number, z: number): void;
   /** la vue revient sur la grande place */
   goHome(): void;
-  ui: { root: HTMLElement; banner(title: string, sub: string): void; toast(m: string, act?: () => void): void };
+  ui: { root: HTMLElement; banner(title: string, sub: string): void; toast(m: string, act?: () => void, level?: 'info' | 'notice' | 'danger' | 'action'): void };
   audio: { sfxRoar(k?: number): void; sfxWarDrum(accent?: boolean): void; sfxGoldBurst(): void; sfxRumble(dur: number): void; sfxAgeUp(): void };
 }
 
@@ -100,12 +100,12 @@ export class KingdomStage {
   news(n: WarNews): boolean {
     const h = this.host;
     if (n.kind === 'boss') {
-      h.ui.toast(n.text);
+      h.ui.toast(n.text, undefined, 'danger');
       // le roi se lève, enrage : la vue va sur le combat
       if (h.mode() === 'hell' && h.war.king?.king && !n.text.startsWith('👑 Le roi des Enfers est abattu')) this.focusFight();
       return true;
     }
-    if (n.kind === 'victory') { this.startFinale(); if (!this.fin) h.ui.toast(n.text); return true; }
+    if (n.kind === 'victory') { this.startFinale(); if (!this.fin) h.ui.toast(n.text, undefined, 'info'); return true; }
     return false;
   }
 
