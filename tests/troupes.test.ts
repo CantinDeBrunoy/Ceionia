@@ -296,7 +296,7 @@ describe('la défense de l’île du portail', () => {
   }, 30000);
 });
 
-describe('la condition d’âge : sécuriser l’île du portail pour quitter l’Antiquité', () => {
+describe('la condition d’âge : l’île du portail ne conditionne plus rien (le PvE est facultatif)', () => {
   beforeAll(() => setMapSize(192));
 
   it('le panneau d’âge montre les étapes de l’île ; sans elles, pas de Moyen Âge (les Enfers restent facultatifs)', () => {
@@ -307,18 +307,15 @@ describe('la condition d’âge : sécuriser l’île du portail pour quitter l�
     sim.age = 1;
     const labels = sim.ageProgress()!.items.map((i) => i.label);
     expect(labels).toContain('expédition « Le portail de l’autre rive »');
-    expect(labels.filter((l) => l.startsWith('île du portail'))).toHaveLength(3);
+    // (le PvE est une option : ni défenses, ni vagues repoussées, ni visite des Enfers ne conditionnent l'âge)
     const isle = (ap = sim.ageProgress()!) => ap.items.filter((i) => i.label.startsWith('île du portail'));
-    expect(isle().every((i) => i.have < i.need)).toBe(true);
+    expect(isle()).toHaveLength(0);
     w.exp.done.push('portal');
     const t = isleOrigins(w, 'watchtower')[0];
     w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false);
-    const c = isleOrigins(w, 'barracks').find((k) => w.canPlace('barracks', k % N, Math.floor(k / N)) === null)!;
-    w.place('barracks', c % N, Math.floor(c / N), 0, true, 1, false);
     sim.recalc();
-    expect(isle().map((i) => i.have)).toEqual([1, 1, 0]);
     w.isleGuard.waves = SECURE_WAVES;
-    expect(isle().every((i) => i.have >= i.need)).toBe(true);
+    expect(isle()).toHaveLength(0);
     // à un autre âge, rien de tout ça
     sim.age = 2;
     expect(sim.ageProgress()!.items.some((i) => i.label.startsWith('île du portail'))).toBe(false);

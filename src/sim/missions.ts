@@ -383,8 +383,7 @@ export const MISSIONS: Mission[] = [
   },
   {
     // l'île du portail (voir `world/portal.ts`) : la galère traverse le bras de mer, l'équipe débarque, explore l'île et
-    // réveille le portail ; obligatoire (elle ouvre l'île), puis il faut sécuriser l'île (`isleSecured`, condition d'âge),
-    // jamais la conquête des Enfers. Sans île (partie d'avant elle), elle n'est pas disponible (`Expeditions.why`) ni demandée
+    // réveille le portail ; obligatoire (elle ouvre l'île), jamais la conquête des Enfers : le PvE est facultatif. Sans île (partie d'avant elle), elle n'est pas disponible (`Expeditions.why`) ni demandée
     id: 'portal', age: 1, mandatory: true, icon: '🌀', title: 'Le portail de l’autre rive', unlocks: 'watchtower',
     intro: 'Au large, une petite île rougeoie certaines nuits. Les pêcheurs jurent qu’une arche de pierre noire s’y dresse… Une galère pourrait y mener quelques braves.',
     choices: [

@@ -52,6 +52,9 @@ export interface UIHost {
   underZone(): string | null;
   /** prendre le commandement de la garnison de l'île du portail (tour de garde, caserne) */
   commandIsle?(): void;
+  /** la ligne « Portail refermé · Rouvrir » du rayon Militaire (null : rien à proposer) et l'ouverture de la carte du choix */
+  pveLine?(): { text: string; button: string } | null;
+  openPortalChoice?(): void;
   /** la vue va sur l'île du portail (pour y bâtir) */
   goIsle?(): void;
   /** brouillard visible (0 … 1), et le dissiper */
@@ -643,6 +646,11 @@ export class UI {
   }
 
   /** Prend un bâtiment en main (onglet Bâtir, son rayon), ou dit pourquoi il est encore verrouillé */
+  /** Pourquoi ce bâtiment ne se pose pas encore (âge, expédition, tour de garde d'abord) ; null : il se pose */
+  lockWhy(k: KindId) { return this.lockOf(k); }
+  /** Prend ce bâtiment en main (comme un clic sur sa vignette) */
+  pickBuild(k: KindId) { this.pick(k); }
+
   private pick(k: KindId) {
     const lock = this.lockOf(k);
     if (lock) { this.toast(lock, this.lockGo(k)); return; }
@@ -653,7 +661,7 @@ export class UI {
   /** Ce que montrent les vignettes du rayon ouvert (nombre de chaque bâtiment, cadenas) : elles se redessinent quand ça change */
   private tilesKey = '';
   private tilesNow() {
-    return this.tab === 'build' ? +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab;
+    return this.tab === 'build' ? (this.cat === 'war' ? this.host.pveLine?.()?.button ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab;
   }
 
   /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
@@ -700,9 +708,13 @@ export class UI {
     } else {
       html = t.tools.map((id) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
     }
+    // le portail à rouvrir (ou le PvE à choisir) : une ligne en tête du rayon Militaire
+    const pve = build && this.cat === 'war' ? this.host.pveLine?.() : null;
+    if (pve) html = `<div class="grp pvehead"><span>${pve.text}</span><button data-pve="1">${pve.button}</button></div>${html}`;
     const items = $('#items'), left = items.scrollLeft;
     items.innerHTML = html;
     items.scrollLeft = keep ? left : 0;
+    items.querySelector<HTMLButtonElement>('[data-pve]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openPortalChoice?.(); });
     this.markFirst();
     this.bindTools(items);
     items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {

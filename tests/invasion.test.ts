@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
@@ -35,13 +36,15 @@ const enlist = (war: War, n: number, age = 1) => {
     war.army.troops.push({ id: war.army.nextId++, kind, hp: st.hp, maxHp: st.hp, where: 'isle', heal: 0 });
   }
 };
+/** Une guerre dont le joueur a choisi d'affronter les démons */
+const pveWar = (w: World) => { const v = new War(w); v.acceptPve(); return v; };
 const tick = (war: War, s: number, until?: () => boolean) => { for (let i = 0; i < s * 10; i++) { war.update(0.1, 1); if (until?.()) return; } };
 const said = (war: War, kind: string) => war.news.filter((n) => n.kind === kind).length;
 
 describe('l’invasion : quand elle est annoncée', () => {
   it('jamais sans tour de garde, sans caserne ou sans garnison', () => {
     for (const [t, b, n] of [[0, 1, 5], [1, 0, 5], [1, 1, 0], [1, 1, 1]]) {
-      const war = new War(island(t, b));
+      const war = pveWar(island(t, b));
       enlist(war, n);
       tick(war, 20);
       expect(war.inv, `${t} tour, ${b} caserne, ${n} soldats`).toBe('wait');
@@ -51,7 +54,7 @@ describe('l’invasion : quand elle est annoncée', () => {
   });
 
   it('pas de vague sans choix : tout prêt, le joueur décide ; « Affronter » lance la vague après 10 s', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     enlist(war, 3);
     tick(war, 2);
     expect(war.inv).toBe('ready');
@@ -94,14 +97,14 @@ describe('l’invasion : quand elle est annoncée', () => {
 
   it('la garnison la déclenche : à Facile, deux soldats suffisent', () => {
     expect(invasionTroops('normal')).toBe(3);
-    const war = new War(island(1, 1, 'easy'));
+    const war = pveWar(island(1, 1, 'easy'));
     enlist(war, 2);
     tick(war, 2);
     expect(war.inv).toBe('ready');
   });
 
   it('défaite : elle est ré-annoncée quand la garnison est de nouveau là, sans plus', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     enlist(war, 3);
     tick(war, 2);
     war.startInvasion();
@@ -119,7 +122,7 @@ describe('l’invasion : quand elle est annoncée', () => {
 
 describe('les Enfers restent fermés tant que l’invasion n’est pas repoussée', () => {
   it('refusés avant (avec la phrase), permis après', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     enlist(war, 3);
     tick(war, 2);
     expect(war.hellWhy()).toBe('Affrontez d’abord les démons de l’île.');
@@ -140,7 +143,7 @@ describe('les Enfers restent fermés tant que l’invasion n’est pas repoussé
   });
 
   it('le guidage : choisir les troupes, puis les envoyer, puis plus rien dès qu’on a franchi le portail', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     enlist(war, 3);
     tick(war, 2);
     expect(war.guideStep(0)).toBeNull();
@@ -152,64 +155,107 @@ describe('les Enfers restent fermés tant que l’invasion n’est pas repoussé
   });
 });
 
-describe('« Se préparer d’abord » referme le portail', () => {
-  const ready = () => {
+describe('le PvE est un choix : « Affronter les démons » ou « Fermer le portail »', () => {
+  /** Le portail vient de s'ouvrir : rien n'est choisi */
+  const fresh = () => {
     const war = new War(island());
     enlist(war, 3);
     tick(war, 2);
     return war;
   };
 
-  it('refermé : aucune vague, aucun passage, le bon message ; le portail reste « ouvert » pour le reste du jeu', () => {
-    const war = ready();
-    expect(war.closed).toBe(false);
-    expect(war.sealPortal()).toBe(true);
+  it('avant le choix : aucun PvE (ni annonce, ni vague, ni message qui martèle), les Enfers fermés', () => {
+    const war = fresh();
+    expect(war.pve).toBe('ask');
+    expect(war.choiceSeen).toBe(false);
+    tick(war, 300);
+    expect(war.inv).toBe('wait');
+    expect(said(war, 'invasionReady')).toBe(0);
+    expect(war.isle!.raid).toBeNull();
+    expect(war.nextWaveIn()).toBeNull();
+    expect(war.hellWhy()).toBe('Le portail est refermé : rouvrez-le quand vous voulez.');
+  });
+
+  it('« Affronter » enclenche le PvE : guidage (tour, caserne, garnison), puis l’invasion prête avec son bouton', () => {
+    const war = fresh();
+    expect(war.acceptPve()).toBe(true);
+    expect(war.acceptPve()).toBe(false);
+    expect(war.choiceSeen).toBe(true);
+    tick(war, 2);
+    expect(war.inv).toBe('ready');
+    expect(war.hellWhy()).toBe('Affrontez d’abord les démons de l’île.');
+  });
+
+  it('« Fermer » : le portail se referme, plus de vague ni de passage, mais le jeu n’est bloqué sur rien', () => {
+    const war = fresh();
+    expect(war.closePortal()).toBe(true);
+    expect(war.closePortal()).toBe(false);
     expect(said(war, 'portalSealed')).toBe(1);
-    expect(war.sealPortal()).toBe(false);
     expect(war.closed).toBe(true);
     expect(war.world.portalOpen).toBe(true);
     tick(war, 300);
     expect(war.isle!.raid).toBeNull();
-    expect(war.nextWaveIn()).toBeNull();
     war.callWave();
     tick(war, 5);
     expect(war.isle!.raid).toBeNull();
-    expect(war.hellWhy()).toBe('Le portail est refermé : rouvrez-le depuis l’île.');
+    expect(war.hellWhy()).toBe('Le portail est refermé : rouvrez-le quand vous voulez.');
     war.sendThroughPortal(war.isle!.sim.alive('player'));
     expect(war.crossing.size).toBe(0);
+    // le jeu continue : la mission du portail reste faite, l'âge ne demande rien de l'île
+    expect(war.world.exp.done).toContain('portal');
   });
 
-  it('rouvrir par le choix lance l’invasion (10 s) ; la carte ne revient pas seule', () => {
-    const war = ready();
-    war.sealPortal();
-    tick(war, 120);
-    // (la carte automatique, c'est `choiceSeen` : une fois par partie, que l'interface pose en l'ouvrant)
-    war.choiceSeen = true;
-    expect(war.inv).toBe('ready');
-    expect(war.startInvasion()).toBe(true);
+  it('rouvrir plus tard (« Affronter ») remet le PvE en route', () => {
+    const war = fresh();
+    war.closePortal();
+    tick(war, 20);
+    expect(war.acceptPve()).toBe(true);
     expect(war.closed).toBe(false);
-    expect(war.inv).toBe('coming');
-    expect(war.nextWaveIn()!).toBeLessThanOrEqual(INVASION_DELAY);
-    expect(war.hellWhy()).toBe('Repoussez d’abord l’invasion du portail.');
+    tick(war, 2);
+    expect(war.inv).toBe('ready');
   });
 
-  it('la sauvegarde et le rechargement gardent l’état ; une ancienne sauvegarde n’est pas scellée', () => {
-    const war = ready();
-    war.sealPortal();
-    war.choiceSeen = true;
+  it('on ne referme pas en pleine invasion, ni une fois l’invasion repoussée', () => {
+    const war = pveWar(island());
+    enlist(war, 3);
+    tick(war, 2);
+    war.startInvasion();
+    expect(war.closePortal()).toBe(false);
+    war.skipInvasion();
+    expect(war.closePortal()).toBe(false);
+  });
+
+  it('la sauvegarde garde le choix ; une ancienne sauvegarde sans choix : la carte une fois si rien n’est engagé, sinon PvE en cours', () => {
+    const war = fresh();
+    war.closePortal();
     const s = JSON.parse(JSON.stringify(war.save())) as Record<string, unknown>;
-    expect(s.sealed).toBe(true);
-    const back = new War(island());
-    back.load(s);
-    tick(back, 2);
+    expect(s.pve).toBe('off');
+    const load = (o: Record<string, unknown>, w = island()) => { const b = new War(w); b.load(o); tick(b, 1); return b; };
+    const back = load(s);
     expect(back.closed).toBe(true);
     expect(back.choiceSeen).toBe(true);
-    delete s.sealed; delete s.choiceSeen;
-    const old = new War(island());
-    old.load(s);
-    tick(old, 2);
-    expect(old.closed).toBe(false);
-    expect(old.choiceSeen).toBe(false);
+    // sans l'état neuf : le portail refermé de la version d'avant reste fermé
+    expect(load({ ...s, pve: undefined, sealed: true }).pve).toBe('off');
+    // portail ouvert, rien de commencé, choix jamais fait : « ask » (la carte s'ouvre une fois)
+    const empty = new War(island(0, 0));
+    tick(empty, 1);
+    const e = load({ ...JSON.parse(JSON.stringify(empty.save())), pve: undefined, choiceSeen: undefined }, island(0, 0));
+    expect(e.pve).toBe('ask');
+    expect(e.choiceSeen).toBe(false);
+    // une partie qui a déjà des défenses ou une invasion faite joue le PvE : rien ne change
+    const played = load({ ...s, pve: undefined, sealed: undefined, invasion: 'done' });
+    expect(played.pve).toBe('on');
+    expect(played.hellWhy()).toBeNull();
+  });
+});
+
+describe('rien dans la progression ne dépend du PvE', () => {
+  it('le passage d’âge, les missions et la fin de partie ne lisent ni l’invasion, ni les Enfers, ni les défenses de l’île', () => {
+    const files = ['src/sim/sim.ts', 'src/sim/missions.ts', 'src/sim/expeditions.ts', 'src/ui/tutorial.ts'];
+    for (const f of files) {
+      const src = readFileSync(f, 'utf8');
+      expect(src, f).not.toMatch(/isleSteps|isleSecured|isleGuard|raidsRepelled|war\.inv|hellWhy|isleDefenses|islandSecured/);
+    }
   });
 });
 
@@ -226,7 +272,7 @@ describe('les sauvegardes', () => {
   };
 
   it('une sauvegarde sans l’état neuf passe pour faite si une vague a déjà été repoussée', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     enlist(war, 3);
     tick(war, 1);
     war.faction!.raidsRepelled = 2;
@@ -236,7 +282,7 @@ describe('les sauvegardes', () => {
   });
 
   it('…ou si les Enfers ont déjà été visités (troupes sur place)', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     enlist(war, 3);
     tick(war, 1);
     war.army.troops[0].where = 'hell';
@@ -245,14 +291,14 @@ describe('les sauvegardes', () => {
   });
 
   it('une partie sans rien de tel (portail ouvert, rien vu) attend l’invasion', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     tick(war, 1);
     const back = reload(war, (s) => { delete s.invasion; });
     expect(back.inv).toBe('wait');
   });
 
   it('le choix « prête » se sauvegarde ; un compte à rebours en cours au chargement devient le choix (pas de vague surprise)', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     enlist(war, 3);
     tick(war, 2);
     expect(reload(war).inv).toBe('ready');
@@ -266,7 +312,7 @@ describe('les sauvegardes', () => {
   });
 
   it('une invasion déjà lancée, repoussée ou comptée comme faite ne change pas', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     enlist(war, 3);
     tick(war, 2);
     war.startInvasion();
@@ -281,7 +327,7 @@ describe('les sauvegardes', () => {
 
 describe('les vagues suivantes', () => {
   it('« Appeler la prochaine vague » : désactivé sans garnison ou pendant une vague, sans effet avant l’invasion', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     tick(war, 1);
     war.callWave();
     expect(war.faction!.nextRaid).toBeLessThan(0);
@@ -309,7 +355,7 @@ describe('les vagues suivantes', () => {
 
 describe('l’invasion est gagnable, et grosse', () => {
   const run = (difficulty: Difficulty, soldiers = 3) => {
-    const war = new War(island(1, 1, difficulty));
+    const war = pveWar(island(1, 1, difficulty));
     enlist(war, soldiers);
     tick(war, 2);
     war.startInvasion();
@@ -333,7 +379,7 @@ describe('l’invasion est gagnable, et grosse', () => {
   }, 120000);
 
   it('elle pèse deux à trois fois la première vague normale', () => {
-    const war = new War(island());
+    const war = pveWar(island());
     tick(war, 1);
     const f = war.faction!;
     const first = sumPower(f.planRaid(), DEMON_POWER), big = sumPower(f.planInvasion(), DEMON_POWER);

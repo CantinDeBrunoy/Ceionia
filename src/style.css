@@ -926,13 +926,15 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar .wst button { padding: 3px 9px; font-weight: 700; }
 #troopBar .wst button.off, #troopBar .tord.closed { opacity: 0.5; filter: grayscale(0.6); }
 /* le guidage vers les Enfers : le bouton à presser pulse d'un halo doré */
-#troopBar .tchoice { position: absolute; top: 34%; left: 50%; transform: translateX(-50%); width: min(380px, calc(100vw - 32px)); padding: 16px 18px; text-align: center; pointer-events: auto; z-index: 5; }
-#troopBar .tchoice h4 { margin: 0 0 6px; font-size: 18px; }
-#troopBar .tchoice p { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
-#troopBar .tchoice small { display: block; color: var(--ink2); margin-bottom: 12px; }
-#troopBar .tchoice .tcbtn { display: flex; gap: 10px; }
-#troopBar .tchoice .tcbtn button { flex: 1; min-height: 52px; justify-content: center; white-space: normal; font-size: 15px; font-weight: 800; border-radius: 12px; border: 2px solid var(--line); }
-#troopBar .tchoice .tcbtn .go { background: #c8482b; color: #fff; border-color: #c8482b; }
+#portalChoice { position: fixed; top: 36%; left: 50%; transform: translate(-50%, -50%); width: min(400px, calc(100vw - 32px)); padding: 18px 20px; text-align: center; z-index: 60; pointer-events: auto; }
+#items .pvehead { display: flex; align-items: center; gap: 10px; padding: 4px 12px; font-weight: 700; white-space: nowrap; }
+#items .pvehead button { padding: 6px 12px; border-radius: 10px; border: 2px solid #7a3fb0; background: #f3eafc; color: #4b1f78; font-weight: 800; cursor: pointer; }
+#portalChoice h4 { margin: 0 0 6px; font-size: 19px; }
+#portalChoice p { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+#portalChoice small { display: block; color: var(--ink2); margin-bottom: 12px; }
+#portalChoice .tcbtn { display: flex; gap: 10px; }
+#portalChoice .tcbtn button { flex: 1; min-height: 52px; white-space: normal; font-size: 15px; font-weight: 800; border-radius: 12px; border: 2px solid var(--line); cursor: pointer; }
+#portalChoice .tcbtn .go { background: #c8482b; color: #fff; border-color: #c8482b; }
 #troopBar .wst.guide { color: #7a3fb0; }
 #troopBar button.guide, #troopBar .tord.prt.guide { animation: guidePulse 1.1s ease-in-out infinite; outline: 3px solid #ffd54a; outline-offset: 2px; }
 @keyframes guidePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 213, 74, 0.95); } 50% { box-shadow: 0 0 0 10px rgba(255, 213, 74, 0); } }
