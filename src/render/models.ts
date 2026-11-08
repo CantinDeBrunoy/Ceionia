@@ -7132,7 +7132,7 @@ function heliport(p: Parts) {
  * chaume, ponton de bois ; industriel : brique et bandes rouges et blanches, garde-corps de fonte, lampe à huile, logis de
  * tuiles ; moderne : béton à bandes, antennes, parabole, panneaux solaires, vedette ; futur : fût blanc effilé, anneaux
  * holographiques, module blanc, halo néon. Perron, fenêtres, paratonnerre et girouette, drapeaux, enclos, caisses, bouées,
- * barque et ponton, mouettes, écume autour du rocher
+ * barque à sec et ponton sur la grève, mouettes (pas d'eau dessinée : celle du jeu s'y raccorde)
  */
 function lighthouse(p: Parts, age: number) {
   const X = -0.2, Z = -0.15, fut = age >= 5, old = age <= 2, ind = age === 3, mod = age === 4;
@@ -7140,17 +7140,13 @@ function lighthouse(p: Parts, age: number) {
   const r0 = fut ? 0.17 : 0.2, r1 = fut ? 0.075 : 0.11;
   const rad = (y: number) => r0 + (r1 - r0) * Math.min(1, Math.max(0, (y - base) / (h - base)));
   const metal = ind ? 0x2e3238 : 0x4a4f58, lamp = fut ? 0xbff4ff : 0xfff1b0;
-  // le sol, la mer sur le bord gauche (vaguelettes, écume), les galets du rivage
+  // le sol, la grève de galets sur le bord gauche (sèche : l'eau est celle du jeu), les galets du rivage
   p.box(1.9, 0.012, 1.9, 0, 0, 0, old ? C.green : 0x7cb560);
-  p.box(0.5, 0.02, 1.9, -0.7, 0, 0, fut ? 0x7fe0f0 : C.water);
-  for (const [z, w] of [[-0.8, 0.3], [-0.4, 0.22], [0.0, 0.34], [0.3, 0.2], [0.8, 0.28]]) p.box(w, 0.006, 0.014, -0.76 + ((z * 9) % 0.12), 0.02, z, 0xeaf6fa);
+  p.box(0.5, 0.02, 1.9, -0.7, 0, 0, fut ? 0xdfe6ec : old ? 0xb8ab8a : 0xc9bd9c);
   for (let i = 0; i < 9; i++) p.sphere(0.04 + (i % 3) * 0.012, -0.44 + ((i * 37) % 7) * 0.012, 0.0, -0.9 + i * 0.22, i % 2 ? 0xd6c9a4 : 0xc2b48e, 0, 0.5);
-  p.box(0.04, 0.018, 1.9, -0.45, 0.012, 0, 0xf4f8fa);
-  // le rocher : amas de blocs sous la tour, des rochers épars et l'écume qui les lèche
+  // le rocher : amas de blocs sous la tour, des rochers épars
   for (const [x, z, r] of [[X, Z, 0.5], [X + 0.3, Z + 0.22, 0.28], [X - 0.32, Z + 0.1, 0.24], [X + 0.05, Z - 0.42, 0.26], [X + 0.4, Z - 0.2, 0.2], [X - 0.25, Z - 0.3, 0.22], [-0.52, 0.0, 0.14], [-0.62, -0.62, 0.12]])
     p.sphere(r, x, 0.0, z, dark(C.darkstone, 0.88 + Math.abs((x * 7) % 1) * 0.1), 1, 0.5);
-  p.add(new THREE.TorusGeometry(0.2, 0.01, 3, 12).rotateX(Math.PI / 2).scale(1, 1, 1.6), -0.54, 0.024, -0.62, 0xeaf6fa);
-  p.add(new THREE.TorusGeometry(0.16, 0.01, 3, 12).rotateX(Math.PI / 2).scale(1, 1, 1.4), -0.55, 0.024, 0.0, 0xeaf6fa);
   // le soubassement de la tour : pierre taillée, assises (anneaux) et quelques moellons saillants
   const foot = old ? C.darkstone : ind ? 0x8a3a2e : 0xb8b4ac;
   p.cyl(0.26, 0.29, base, 14, X, 0, Z, foot);
@@ -7302,7 +7298,7 @@ function lighthouse(p: Parts, age: number) {
   }
   p.box(0.04, 0.03, 0.034, ex + 0.2, 0.012, ez + 0.1, 0xf4f0e8); p.box(0.03, 0.012, 0.016, ex + 0.2, 0.042, ez + 0.1, 0xd84a3e);
   p.box(0.024, 0.02, 0.028, ex - 0.25, 0.012, ez - 0.05, 0xa8663a);
-  // le ponton, l'échelle d'accès à l'eau, les bittes, les bouées, les caisses et le filet
+  // le ponton de planches sur la grève, l'échelle, les bittes, les bouées, les caisses et le filet
   const pc = fut ? 0xdfe6ec : old ? C.wood : 0x8a6a48;
   p.box(0.55, 0.022, 0.12, -0.6, 0.025, 0.55, pc);
   for (let i = 0; i < 6; i++) p.box(0.004, 0.003, 0.11, -0.84 + i * 0.09, 0.047, 0.55, dark(pc, 0.8));
@@ -7319,8 +7315,9 @@ function lighthouse(p: Parts, age: number) {
   p.cyl(0.03, 0.032, 0.06, 8, -0.28, 0.012, 0.42, C.wood);
   for (let i = 0; i < 5; i++) p.box(0.006, 0.05, 0.006, -0.1 + i * 0.03, 0.0, 0.62, C.darkwood);
   p.box(0.13, 0.002, 0.07, -0.04, 0.05, 0.62, 0xb8ab92); p.box(0.13, 0.002, 0.01, -0.04, 0.05, 0.62, 0xb8ab92, 0.0);
-  // la barque amarrée au ponton, par âge : bois et voile carrée, coque de tôle, vedette, canot lisse
+  // la barque tirée à sec près du ponton, calée sur deux chantiers : bois et voile carrée, coque de tôle, vedette, canot lisse
   const bx = -0.72, bz = 0.8, hullc = fut ? 0xf2f6fa : mod ? 0xf4f4f0 : ind ? 0x3a3f48 : 0x9a6a44;
+  for (const dz of [-0.1, 0.1]) p.box(0.14, 0.02, 0.025, bx, 0.012, bz + dz, C.darkwood);
   p.add(new THREE.IcosahedronGeometry(1, 1).scale(0.07, 0.035, 0.22), bx, 0.038, bz, hullc, 0.0);
   p.add(new THREE.IcosahedronGeometry(1, 0).scale(0.052, 0.012, 0.19), bx, 0.058, bz, dark(hullc, 0.6), 0.0);
   p.box(0.12, 0.012, 0.014, bx, 0.058, bz - 0.04, C.wood); p.box(0.12, 0.012, 0.014, bx, 0.058, bz + 0.05, C.wood);
@@ -7360,9 +7357,11 @@ function shipyard(p: Parts, age: number) {
   const fut = age >= 5, old = age <= 2, ind = age === 3, dry = age >= 4;
   const X = -0.5, Z0 = -1.15, Z1 = 1.2, ZC = 0.02;
   const wood = old ? C.wood : 0xa8aeb6, dwood = old ? C.darkwood : C.metal;
-  // le sol : terre battue, puis dalle ; l'eau au bout de la cale (bord +z)
+  // le sol : terre battue, puis dalle ; au bout de la cale (bord +z), un quai sec (planches, pierre ou béton) : la cale s'y
+  // arrête, l'eau, s'il y en a, est celle du jeu
   p.box(2.9, 0.012, 2.9, 0, 0, 0, old ? C.dirt : ind ? 0xa8a49c : fut ? 0xdfe6ec : 0xb8b4ac);
-  p.box(2.9, 0.012, 0.4, 0, 0.012, 1.25, fut ? 0x7fe0f0 : C.water);
+  p.box(2.9, 0.012, 0.4, 0, 0.012, 1.25, old ? 0x8a6a48 : ind ? 0x7a746c : fut ? 0xc4ccd6 : 0x8a8f96);
+  for (let i = 0; i < 9; i++) p.box(2.9, 0.004, 0.012, 0, 0.026, 1.07 + i * 0.045, old ? 0x6a4a30 : ind ? 0x5d5852 : fut ? 0x6ae4ff : 0x6a707a, 0, fut ? 'neon' : false);
   if (old) for (const [x, z, w] of [[0.1, 0.1, 0.5], [-1.1, 0.6, 0.35], [0.5, 0.95, 0.4], [-0.9, -0.9, 0.3]]) p.box(w, 0.006, 0.28, x, 0.012, z, 0xb89868);
   // la cale : en pente (haut côté terre, bas côté eau) ; en époque moderne, une cale sèche horizontale
   const drop = dry ? 0 : 0.17, ang = dry ? 0 : Math.atan2(drop, Z1 - Z0);
@@ -7371,10 +7370,10 @@ function shipyard(p: Parts, age: number) {
   const pb = (w: number, h: number, d: number, x: number, z: number, hy: number, c: number, rz = 0, glow = false) =>
     p.add(new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0), x, slip(z) + hy, z, c, 0, glow, rz, ang);
   if (dry) {
-    // bassin de béton : fond, murs, bajoyers, marches, eau basse à la porte
+    // bassin de béton : fond, murs, bajoyers, marches, porte de cale fermée au bout
     p.box(1.1, 0.04, 2.5, X, 0.012, 0.0, fut ? 0xdde8f0 : 0x8a8f96);
     for (const s of [-1, 1]) { p.box(0.1, 0.12, 2.5, X + s * 0.6, 0.012, 0, fut ? 0xf2f6fa : 0xa8aeb6); p.box(0.1, 0.012, 2.5, X + s * 0.6, 0.132, 0, fut ? 0x6ae4ff : 0xf2c23a, 0, fut ? 'neon' : false); }
-    p.box(1.1, 0.024, 0.34, X, 0.052, 1.0, fut ? 0x7fe0f0 : 0x4f6a86);
+    p.box(1.1, 0.024, 0.34, X, 0.052, 1.0, fut ? 0xc4ccd6 : 0x6a707a);
     p.box(1.1, 0.1, 0.05, X, 0.012, 1.16, fut ? 0xdde8f0 : 0x6a707a);
     for (let i = 0; i < 7; i++) p.box(0.5, 0.012, 0.1, X, 0.052, -1.15 + i * 0.32, 0x9a9fa6);
   } else {
