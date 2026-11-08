@@ -15,7 +15,7 @@ import { rigGeo, droneGeo, propellerGeo, PROP_SPOTS, seatOf } from '../render/fa
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
 /** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie),
  * avec `tank` le blindé de l'époque moderne, qui roule au carburant, sans cheval */
-export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'crossbow' | 'rifle' | 'assault' | 'plasma'; torch?: boolean; lamp?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean; car?: boolean; tank?: boolean }
+export interface Kit { weapon?: 'spear' | 'bow' | 'sword' | 'crossbow' | 'rifle' | 'assault' | 'plasma'; torch?: boolean; lamp?: boolean; rope?: boolean; armor?: boolean; horse?: boolean; rider?: boolean; car?: boolean; hover?: boolean; tank?: boolean }
 
 /** Objets tenus en main (géométries partagées, en unités du monde ; le long de +y, la poignée à l'origine) */
 const propCache = new Map<string, THREE.BufferGeometry>();
@@ -171,6 +171,19 @@ function jeepGeo(v: number) {
   const b = p.build(false);
   return b.body;
 }
+/** Voiture du futur à coussin d'air (avant = +z) : coque profilée blanche, verrière bleutée, ailerons, anneaux de sustentation lumineux, sans roues */
+function hoverGeo(v: number) {
+  const p = new Parts(), body = [0xe8eef4, 0xc8d4e0, 0xd8e4ec, 0xb8c8d8][v % 4];
+  p.box(0.14, 0.04, 0.28, 0, 0.07, 0, body);
+  p.box(0.11, 0.035, 0.1, 0, 0.1, 0.1, body);
+  p.box(0.1, 0.04, 0.09, 0, 0.115, -0.02, 0x7ac8f0);
+  p.box(0.15, 0.008, 0.05, 0, 0.12, -0.13, dark(body, 0.8));
+  p.box(0.01, 0.045, 0.05, 0.05, 0.14, -0.13, dark(body, 0.8)); p.box(0.01, 0.045, 0.05, -0.05, 0.14, -0.13, dark(body, 0.8));
+  p.box(0.12, 0.012, 0.22, 0, 0.045, 0, 0x2a3440);
+  for (const sz of [-1, 1]) for (const sx of [-1, 1]) p.add(new THREE.TorusGeometry(0.025, 0.007, 5, 12).rotateX(Math.PI / 2), sx * 0.065, 0.035, sz * 0.085, 0x5ae0ff, 0, true);
+  for (const s of [-1, 1]) p.box(0.025, 0.01, 0.006, s * 0.04, 0.085, 0.152, 0xeaffff, 0, true);
+  return p.build(false).body;
+}
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
 const MAX_AGENTS = 90;
@@ -272,6 +285,7 @@ interface Agent {
   mounted: boolean;
   /** sa petite voiture d'expédition (après la course automobile) */
   car?: THREE.Mesh | null;
+  carHover?: boolean;
   parked: [number, number, number] | null;
   /** cavalier de l'époque, cheval compris, qui le remplace en selle (charge de cavalerie) */
   rider: Rider | null;
@@ -980,7 +994,7 @@ export class Agents {
     if (!a) return;
     a.kit = kit;
     a.mounted = !!kit?.horse || !!kit?.car || !!kit?.tank;
-    if (!kit?.car && a.car) { this.group.remove(a.car); a.car.geometry.dispose(); a.car = null; }
+    if ((!kit?.car || (a.car && a.carHover !== !!kit.hover)) && a.car) { this.group.remove(a.car); a.car.geometry.dispose(); a.car = null; }
     if (!kit?.horse && a.mount) { a.mount.mixer.stopAllAction(); this.group.remove(a.mount.root); a.mount = null; a.parked = null; }
     if (!kit?.rider && a.rider) { this.group.remove(a.rider.root); a.rider = null; }
     if (!kit?.armor && a.soldier) { this.group.remove(a.soldier.root); a.soldier = null; }
@@ -1365,7 +1379,7 @@ export class Agents {
 
   /** Sa voiture : il est au volant en route ; sur place, elle reste garée à côté. Renvoie vrai s'il est au volant */
   private stepCar(a: Agent) {
-    if (!a.car) { a.car = new THREE.Mesh(jeepGeo(a.id), mats.body); a.car.castShadow = true; this.group.add(a.car); }
+    if (!a.car) { a.carHover = !!a.kit?.hover; a.car = new THREE.Mesh(a.carHover ? hoverGeo(a.id) : jeepGeo(a.id), mats.body); a.car.castShadow = true; this.group.add(a.car); }
     const c = a.car, driving = a.mounted && !a.ride && !a.hidden;
     c.visible = !a.hidden;
     if (driving) {
