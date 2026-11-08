@@ -539,9 +539,9 @@ export class HellView {
   }
 
   /** Aperçu d'une ligne de murs à poser : chaque case raccordée à sa voisine, verte (posable) ou rouge */
-  private showLine(kind: 'palisade' | 'gate', line: { x: number; z: number; ok: boolean }[]) {
+  private showLine(kind: 'palisade' | 'gate', line: { x: number; z: number; ok: boolean; gate?: boolean }[]) {
     if (!this.ghostLines.parent) { this.ghostLines.renderOrder = 8; this.content.add(this.ghostLines); }
-    const key = `${kind}|${this.map.version}|${line.map((c) => `${Math.floor(c.x)},${Math.floor(c.z)}${c.ok ? 1 : 0}`).join(';')}`;
+    const key = `${kind}|${this.map.version}|${line.map((c) => `${Math.floor(c.x)},${Math.floor(c.z)}${c.ok ? 1 : 0}${c.gate ? 'g' : ''}`).join(';')}`;
     this.ghostLines.visible = true;
     if (key === this.ghostLineKey) return;
     this.ghostLineKey = key;
@@ -551,7 +551,7 @@ export class HellView {
     for (const c of line) cells.add(`${Math.floor(c.x)},${Math.floor(c.z)}`);
     const has = (x: number, z: number) => cells.has(`${x},${z}`);
     for (const c of line) {
-      const cx = Math.floor(c.x), cz = Math.floor(c.z), m = new THREE.Mesh(this.wallShape(kind, this.wallMask(cx, cz, has)), mats[c.ok ? 0 : 1]);
+      const cx = Math.floor(c.x), cz = Math.floor(c.z), m = new THREE.Mesh(this.wallShape(c.gate ? 'gate' : kind, this.wallMask(cx, cz, has)), mats[c.ok ? 0 : 1]);
       m.position.set(cx + 0.5, this.map.groundY(cx + 0.5, cz + 0.5) + 0.02, cz + 0.5);
       m.renderOrder = 8;
       this.ghostLines.add(m);
@@ -644,7 +644,7 @@ export class HellView {
    * Le fantôme d'un bâtiment à poser, sous le curseur (vert : on peut ; rouge : non), et le cercle où la base peut s'étendre
    * autour de son camp ; `kind` null : rien
    */
-  ghost(kind: BaseKind | null, x = 0, z = 0, ok = false, camp: [number, number] | null = null, line?: { x: number; z: number; ok: boolean }[]) {
+  ghost(kind: BaseKind | null, x = 0, z = 0, ok = false, camp: [number, number] | null = null, line?: { x: number; z: number; ok: boolean; gate?: boolean }[]) {
     // un mur (palissade, porte) : une ligne de cases raccordées plutôt qu'un seul fantôme
     const wallLine = !!kind && !!line?.length && (kind === 'palisade' || kind === 'gate');
     if (wallLine) this.showLine(kind as 'palisade' | 'gate', line!);

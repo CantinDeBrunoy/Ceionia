@@ -165,8 +165,16 @@ export class CommandUI implements ToolInput {
     this.dragging = false;
     this.pressed = false;
     clearTimeout(this.press);
-    // la pose d'un mur : l'appui est le début de la ligne
-    if (isLineKind(this.placing)) { const p = this.theater?.pick(e.x, e.y); if (p) this.wall.press(p); return; }
+    // la pose d'un mur : le premier appui choisit le point A, le suivant le point B (le mur se pose), comme la route libre
+    if (isLineKind(this.placing)) {
+      const p = this.theater?.pick(e.x, e.y);
+      if (!p) return;
+      this.lastP = p;
+      const r = this.wall.press(p);
+      if (r === 'lay') this.placeWall(p);
+      else { if (r === 'start') this.host.click(); this.ghostAt(p); }
+      return;
+    }
     // au doigt : un appui long donne l'ordre (comme le clic droit)
     if (e.touch) this.press = window.setTimeout(() => { if (this.start && !this.dragging) { this.pressed = true; this.orderAt(this.start.x, this.start.y); } }, LONG_PRESS);
   }
@@ -174,8 +182,8 @@ export class CommandUI implements ToolInput {
   move(e: PointerInfo) {
     const s = this.start;
     if (!s) return;
-    // la pose d'un mur : la ligne se trace sous le doigt (pas de rectangle de sélection)
-    if (this.wall.pressing) { const p = this.theater?.pick(e.x, e.y); if (p) { this.wall.drag(p); this.ghostAt(p); } return; }
+    // la pose d'un mur : le tracé suit le doigt (pas de rectangle de sélection)
+    if (isLineKind(this.placing)) { const p = this.theater?.pick(e.x, e.y); if (p) { this.wall.drag(p); this.ghostAt(p); } return; }
     if (!this.dragging && Math.hypot(e.x - s.x, e.y - s.y) > DRAG) { this.dragging = true; clearTimeout(this.press); }
     if (!this.dragging) return;
     // glissé simple sur le sol : on déplace la vue ; le cadre de sélection se trace avec Maj (ou Ctrl) enfoncée
@@ -197,8 +205,8 @@ export class CommandUI implements ToolInput {
     this.start = null;
     this.box.style.display = 'none';
     if (!s || !t || this.pressed) return;
-    // la pose d'un mur : on relâche, la ligne se pose
-    if (this.wall.pressing) { const p = t.pick(e.x, e.y); if (p) this.placeWall(this.wall.release(p)); else this.wall.from = null; return; }
+    // la pose d'un mur : un glissé relâché pose le mur de A à B ; un simple clic laisse A choisi
+    if (isLineKind(this.placing)) { const p = t.pick(e.x, e.y); if (p && this.wall.release(p)) this.placeWall(p); return; }
     const add = this.shift || !!e.shift;
     if (this.dragging && !s.box) { this.host.canvas.style.cursor = ''; return; }
     if (this.dragging) {
@@ -238,24 +246,76 @@ export class CommandUI implements ToolInput {
   private ghostAt(p: [number, number]) {
     const t = this.theater, b = this.host.war.base, kind = this.placing;
     if (!t || !b || !kind) return;
+    this.lastP = p;
     const camp = b.camp(zoneOfZ(Math.floor(p[1])));
     const ring: [number, number] | null = kind === 'camp' || !camp ? null : [camp.site.x, camp.site.z];
-    const line = isWallKind(kind) ? this.wall.preview(this.host.war, kind, this.wall.line(p)).cells : undefined;
-    t.ghost?.(kind, p[0], p[1], line ? line.some((c) => c.ok) : this.host.war.canBuildBase(kind, p[0], p[1]) === null, ring, line);
+    let line: { x: number; z: number; ok: boolean; gate?: boolean }[] | undefined, ok: boolean | null = null;
+    if (kind === 'palisade') {
+      // le tracé de A au pointeur (un ruban de pans raccordés), son coût
+      const pv = this.wall.preview(this.host.war, kind, p);
+      line = pv.cells;
+      this.wallInfo = !this.wall.a ? 'Mur : cliquez pour choisir le début (A), puis la fin (B) ; ou glissez de A à B. G : porte ici.'
+        : pv.why ? pv.why : `Mur de ${pv.cells.length} case${pv.cells.length > 1 ? 's' : ''} : ${pv.n ? pv.cost : 'rien à poser'}. Clic : poser jusqu’ici · G : porte ici · Échap : arrêter.`;
+      this.showInfo();
+    } else if (kind === 'gate') {
+      // la porte s'insère sur le pan de mur survolé (elle le remplace)
+      const [x, z] = this.gateSpot(p);
+      ok = this.host.war.canBuildBase(kind, x, z) === null;
+      line = [{ x, z, ok, gate: true }];
+    }
+    t.ghost?.(kind, p[0], p[1], ok ?? (line ? line.some((c) => c.ok) : this.host.war.canBuildBase(kind, p[0], p[1]) === null), ring, line);
   }
 
-  /** Pose la ligne de palissades tracée */
-  private placeWall(cells: [number, number][]) {
+  /** La phrase d'aide du tracé de mur, mise à jour sous le curseur sans refaire toute la barre */
+  private wallInfo = '';
+  private showInfo() {
+    const el = this.bar.querySelector('.thint');
+    if (el && this.placing === 'palisade' && el.textContent !== this.wallInfo) el.textContent = this.wallInfo;
+  }
+  /** le dernier point du sol visé (pour la touche « porte ici ») */
+  private lastP: [number, number] | null = null;
+
+  /** Où la porte s'insère : le centre du pan de palissade le plus proche du curseur (à une case), sinon la case visée */
+  private gateSpot(p: [number, number]): [number, number] {
+    const w = this.host.war.base?.wallNearest(p[0], p[1], 1.2);
+    return w ? [w.site.x, w.site.z] : [Math.floor(p[0]) + 0.5, Math.floor(p[1]) + 0.5];
+  }
+
+  /** Pose le mur tracé de A au point `p` */
+  private placeWall(p: [number, number]) {
     const kind = this.placing;
     if (!kind) return;
-    const msg = this.wall.build(this.host.war, kind, cells);
-    if (!msg.startsWith('Il ') && !msg.startsWith('Rien')) this.host.click();
+    const msg = this.wall.build(this.host.war, kind, p);
+    if (!msg.startsWith('Il ') && !msg.startsWith('Rien') && !msg.startsWith('Trop') && !msg.startsWith('Pas de')) this.host.click();
     this.host.toast(msg);
+    this.ghostAt(p);
     this.render();
   }
 
-  /** Clic droit (sans glisser : un glisser fait tourner la vue) */
-  rightClick(e: PointerInfo) { if (this.placing) { this.stopPlacing(); return; } this.orderAt(e.x, e.y); }
+  /** Touche G, pendant le tracé d'un mur : il s'arrête au pointeur par une porte (une ouverture que franchissent les nôtres) */
+  private gateHere() {
+    const p = this.lastP;
+    if (this.placing !== 'palisade' || !this.wall.a || !p) { this.host.toast('Porte : commencez un mur (clic au point A), puis G au point voulu ; ou choisissez « Porte » et survolez un pan.'); return; }
+    const msg = this.wall.buildWithGate(this.host.war, p);
+    if (msg.startsWith(`${BASE_DEFS.gate.icon} `)) this.host.click();
+    this.host.toast(msg);
+    this.ghostAt(p);
+    this.render();
+  }
+
+  /** Clic droit (sans glisser : un glisser fait tourner la vue) : un tracé de mur en cours s'abandonne d'abord, puis la pose s'arrête */
+  rightClick(e: PointerInfo) {
+    if (this.placing) { if (this.cancelTrace()) return; this.stopPlacing(); return; }
+    this.orderAt(e.x, e.y);
+  }
+  /** Abandonne le tracé de mur en cours (le point A) : vrai s'il y en avait un */
+  private cancelTrace() {
+    if (!this.wall.a) return false;
+    this.wall.reset();
+    if (this.lastP) this.ghostAt(this.lastP);
+    this.render();
+    return true;
+  }
 
   /** Commence (ou arrête) la pose d'un bâtiment de la base avancée */
   startPlacing(kind: BaseKind | null) {
@@ -263,7 +323,7 @@ export class CommandUI implements ToolInput {
     if (!this.placing) this.stopPlacing();
     else {
       this.cmd.armed = null; this.wall.reset();
-      this.host.toast(kind === 'palisade' ? `${BASE_DEFS.palisade.icon} Palissade : cliquez et glissez pour tracer un mur (${costText(BASE_DEFS.palisade.cost)} le pan). Un clic de plus le prolonge. Échap ou clic droit : arrêter.` : `${BASE_DEFS[kind!].icon} ${BASE_DEFS[kind!].name} : cliquez au sol pour le poser (${costText(BASE_DEFS[kind!].cost)}). Échap ou clic droit : arrêter.`);
+      this.host.toast(kind === 'palisade' ? `${BASE_DEFS.palisade.icon} Palissade : un clic au point A, un clic au point B (ou glissez) : le mur se pose en ligne libre, droite ou en diagonale (${costText(BASE_DEFS.palisade.cost)} le pan). B devient le début du suivant ; G : porte ici ; Échap ou clic droit : arrêter.` : kind === 'gate' ? `${BASE_DEFS.gate.icon} Porte : survolez un pan de mur (elle s’y insère, en le remplaçant) et cliquez (${costText(BASE_DEFS.gate.cost)}). Échap ou clic droit : arrêter.` : `${BASE_DEFS[kind!].icon} ${BASE_DEFS[kind!].name} : cliquez au sol pour le poser (${costText(BASE_DEFS[kind!].cost)}). Échap ou clic droit : arrêter.`);
     }
     this.render();
   }
@@ -272,7 +332,8 @@ export class CommandUI implements ToolInput {
   private placeAt(x: number, y: number) {
     const t = this.theater!, p = t.pick(x, y), kind = this.placing!;
     if (!p) return;
-    const r = this.host.war.buildBase(kind, p[0], p[1]);
+    const [px, pz] = kind === 'gate' ? this.gateSpot(p) : p;
+    const r = this.host.war.buildBase(kind, px, pz);
     if (typeof r === 'string') { this.host.toast(r); return; }
     this.host.click();
     this.host.toast(`${BASE_DEFS[kind].icon} ${BASE_DEFS[kind].name} : c’est posé${kind === 'camp' ? ' ! La base peut s’étendre autour (cercle vert).' : '.'}`);
@@ -346,12 +407,13 @@ export class CommandUI implements ToolInput {
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return false;
     const take = () => { this.host.camKeys.delete(e.code); return true; };
+    if (k === 'g' && isWallKind(this.placing)) { this.gateHere(); return take(); }
     if (k === 'h') { this.hold(); return take(); }
     if (k === 'r') { this.retreat(); return take(); }
     if (k === 'a') { if (this.cmd.selected.size) { this.cmd.armed = 'attack'; this.host.canvas.style.cursor = 'crosshair'; this.render(); } return take(); }
     if (k === ' ') { e.preventDefault(); this.host.togglePause(); this.render(); return true; }
     if (k === 'escape') {
-      if (this.placing) { this.stopPlacing(); return true; }
+      if (this.placing) { if (!this.cancelTrace()) this.stopPlacing(); return true; }
       if (this.cmd.armed) this.cmd.armed = null;
       else if (this.cmd.selected.size) this.cmd.clear();
       else if (t.kind === 'isle') this.host.leaveIsle();
@@ -458,6 +520,8 @@ export class CommandUI implements ToolInput {
   /** La phrase d'aide du moment : ce qu'on peut faire maintenant (remplace l'aide dépliante) */
   private hint(): string {
     const n = this.cmd.selected.size;
+    if (this.placing === 'palisade') return this.wallInfo || 'Mur : cliquez pour choisir le début (A), puis la fin (B).';
+    if (this.placing === 'gate') return 'Porte : survolez un pan de mur et cliquez : elle s’y insère. Échap ou clic droit pour arrêter.';
     if (this.placing) return `Cliquez au sol pour poser : ${BASE_DEFS[this.placing].name}. Échap ou clic droit pour arrêter.`;
     if (this.cmd.armed) return 'Cliquez à l’endroit à attaquer : les soldats combattront ce qu’ils croisent.';
     if (n) return `${n} soldat${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} : clic droit : envoyer · A attaquer · H tenir · R replier · glisser : tracer un cadre.`;
