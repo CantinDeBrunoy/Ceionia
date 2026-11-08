@@ -465,7 +465,7 @@ export class Expeditions {
       if (i >= 1 && i <= (take.rope ?? 0)) kt.rope = true;
       // la charge de cavalerie part en cavaliers de l'époque (en chars à l'époque moderne) ; les autres équipes à cheval
       // restent des habitants en selle
-      if (motor && !air) { kt.car = true; if (age >= 4) kt.hover = true; }
+      if (motor && !air) { kt.car = true; if (age >= 5) kt.hover = true; }
       else if (armored && i < 3) { kt.rider = true; kt.tank = true; }
       else if (i < mounts) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
     });

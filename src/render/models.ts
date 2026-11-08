@@ -12436,6 +12436,8 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'lab': futureLab(p, o.v); return true;
     case 'baths': futureBaths(p, o.v); return true;
     case 'zoo': zooBig(p, 5); return true;
+    case 'watchtower': futureWatchtower(p); return true;
+    case 'barracks': futureBarracks(p); return true;
   }
   return false;
 }
@@ -13339,6 +13341,41 @@ function barracks(p: Parts, age: number) {
   p.cyl(0.012, 0.012, 0.62, 5, 0.62, 0, 0.62, C.darkwood);
   p.box(0.012, 0.22, 0.14, 0.62, 0.36, 0.69, 0xc8402e);
   p.box(0.014, 0.04, 0.04, 0.62, 0.45, 0.69, C.gold);
+}
+
+/** Tour de garde futuriste : mât effilé de composite blanc sur socle, anneaux de bouclier lumineux, nacelle vitrée, antenne à balise */
+function futureWatchtower(p: Parts) {
+  const wall = 0xdfe7ee, dk = 0x4a5664, glow = 0x5ae0ff;
+  p.cyl(0.34, 0.36, 0.06, 10, 0, 0, 0, dk);
+  p.cyl(0.14, 0.24, 0.5, 10, 0, 0.06, 0, wall);
+  p.cyl(0.1, 0.14, 0.5, 10, 0, 0.56, 0, wall);
+  for (const y of [0.3, 0.6, 0.9]) p.add(new THREE.TorusGeometry(0.19 - y * 0.1, 0.012, 4, 14).rotateX(Math.PI / 2), 0, y, 0, glow, 0, true);
+  p.cyl(0.2, 0.1, 0.08, 10, 0, 1.06, 0, dk);
+  p.cyl(0.2, 0.2, 0.12, 10, 0, 1.14, 0, 0x7ac8f0);
+  p.cyl(0.22, 0.2, 0.03, 10, 0, 1.26, 0, wall);
+  p.box(0.16, 0.02, 0.02, 0, 1.31, 0, dk);
+  p.cyl(0.006, 0.006, 0.3, 4, 0, 1.28, 0, dk);
+  p.sphere(0.02, 0, 1.59, 0, 0xff4a4a);
+  p.box(0.1, 0.16, 0.02, 0, 0.06, 0.2, 0x7ac8f0, 0, true);
+}
+
+/** Caserne futuriste (2 × 2) : hangar profilé à toit courbe, baies lumineuses, piste d'entraînement à cibles holographiques, mât de transmission */
+function futureBarracks(p: Parts) {
+  const wall = 0xdfe7ee, dk = 0x4a5664, glow = 0x5ae0ff;
+  p.box(1.84, 0.012, 1.84, 0, 0, 0, 0xb8c4cc);
+  p.box(1.6, 0.008, 0.9, 0, 0.012, 0.4, 0x6a7684);
+  const bz = -0.5;
+  p.box(1.6, 0.05, 0.66, 0, 0, bz, dk);
+  p.box(1.56, 0.34, 0.62, 0, 0.05, bz, wall);
+  p.box(1.56, 0.06, 0.5, 0, 0.39, bz, 0xcdd7e0);
+  for (const x of [-0.5, 0, 0.5]) p.box(0.3, 0.2, 0.02, x, 0.1, bz + 0.31, 0x7ac8f0, 0, true);
+  p.box(1.56, 0.02, 0.02, 0, 0.36, bz + 0.32, glow, 0, true);
+  for (const [x, z] of [[-0.5, 0.45], [0, 0.65], [0.5, 0.4]]) {
+    p.cyl(0.02, 0.03, 0.06, 6, x, 0, z, dk);
+    p.box(0.14, 0.2, 0.01, x, 0.1, z, glow, 0, true);
+  }
+  for (const s of [-1, 1]) { p.cyl(0.03, 0.04, 0.5, 6, s * 0.75, 0, 0.8, dk); p.sphere(0.04, s * 0.75, 0.52, 0.8, glow); }
+  p.cyl(0.01, 0.01, 0.6, 4, 0.72, 0.39, bz, dk); p.sphere(0.025, 0.72, 1.0, bz, 0xff4a4a);
 }
 
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
