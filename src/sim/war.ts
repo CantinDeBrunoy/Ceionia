@@ -144,6 +144,13 @@ export class War {
     if (!b) return 'Les Enfers ne sont pas ouverts.';
     return b.build(kind, x, z, this.world);
   }
+  /** Pose une ligne de palissades (ou une case) : combien de cases posées, et la première raison de refus */
+  buildBaseLine(kind: BaseKind, cells: [number, number][]) {
+    const b = this.ensureFaction() && this.base;
+    return b ? b.buildLine(kind, cells, this.world) : { built: 0, why: 'Les Enfers ne sont pas ouverts.' as string | null };
+  }
+  /** L'aperçu d'une ligne à poser : refus par case, coût */
+  planBaseLine(kind: BaseKind, cells: [number, number][]) { return this.base?.planLine(kind, cells, this.world) ?? null; }
   /** Ce que le village peut payer (bois, pierre, minerai ; le bac à sable, tout) */
   get purse(): Purse { return this.world; }
   /** Ce qu'il manque pour bâtir là (null : on peut) */
@@ -357,9 +364,11 @@ export class War {
     const b = this.base;
     if (!b) return;
     for (const e of b.events.splice(0)) {
-      if (e.type === 'counter') this.news.push({ kind: 'counter', text: `🔥 Contre-attaque ! ${e.n} démons marchent sur la base ${zoneOf(e.zone)}.` });
+      if (e.type === 'counterWarn') this.news.push({ kind: 'counter', text: `⚠️ Les démons se rassemblent : ils vont marcher sur ta base ${zoneOf(e.zone)}. Prépare tes troupes !` });
+      else if (e.type === 'counter') this.news.push({ kind: 'counter', text: `🔥 Les démons marchent sur ta base ${zoneOf(e.zone)} ! ${e.n} démons approchent : tes troupes sur place comptent pour la défense.` });
+      else if (e.type === 'frontCleared') this.news.push({ kind: 'zone', text: '🌋 Les démons ont repris tous tes postes avancés : le front est revenu au portail. Les incursions sur l’île reprendront bientôt.' });
       else if (e.type === 'counterEnd') this.news.push({ kind: 'repelled', text: `🛡️ Contre-attaque repoussée : la base ${zoneOf(e.zone)} tient bon.` });
-      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base est tombé : la zone ${zoneOf(e.zone)} est reperdue, sa forteresse se relève. Reprenez-la quand vous voudrez.` });
+      else if (e.type === 'zoneLost') this.news.push({ kind: 'zone', text: `💥 Les démons ont repris la zone ${zoneOf(e.zone)} : sa forteresse se relève, le front recule. Tu peux la reprendre quand tu voudras.` });
       else if (e.type === 'reclaimWarn') this.news.push({ kind: 'zone', text: `⚠️ Les démons se rassemblent pour reprendre la zone ${zoneOf(e.zone)}, que personne ne garde ! Posez-y un camp de base ou envoyez des troupes.` });
       else if (e.type === 'campLost') this.news.push({ kind: 'zone', text: `💥 Le camp de base ${zoneOf(e.zone)} est tombé. Rebâtissez-le pour rouvrir la base.` });
       else if (e.type === 'convoy') this.news.push({ kind: 'info', text: `📦 Un convoi de ravitaillement est arrivé dans les Enfers (+${e.amount} vivres).` });
@@ -411,9 +420,9 @@ export class War {
   }
 
   /** Appelle la prochaine vague tout de suite (sonner le cor) */
-  callWave() { if (this.faction && !this.faction.activeRaid && this.faction.nextRaid >= 0) this.faction.nextRaid = this.faction.time; }
+  callWave() { if (this.faction && !this.faction.activeRaid && this.faction.nextRaid >= 0 && this.faction.frontPosts <= 0) this.faction.nextRaid = this.faction.time; }
   /** Secondes de jeu avant la prochaine vague (null : pas encore d'incursion prévue, ou une en cours) */
-  nextWaveIn() { const f = this.faction; return !f || f.victory || f.activeRaid || f.nextRaid < 0 ? null : Math.max(0, f.nextRaid - f.time); }
+  nextWaveIn() { const f = this.faction; return !f || f.victory || f.activeRaid || f.nextRaid < 0 || f.frontPosts > 0 ? null : Math.max(0, f.nextRaid - f.time); }
 
   /** Relevé des unités (pour la barre des troupes) : unités du joueur d'une simulation, avec leur troupe */
   troopsIn(sim: Hell | null) { return sim ? sim.alive('player').filter((u) => this.troopOf.has(u.id)) : []; }

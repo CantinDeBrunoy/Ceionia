@@ -8,6 +8,7 @@ import type { War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
 import { BASE_DEFS, BASE_KINDS, SUPPLY_MAX, CONVOY_COST, costText, canAfford } from '../sim/hellBase';
 import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
+import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle,
@@ -32,7 +33,7 @@ export interface Theater {
   /** centre la vue sur un point de la bataille */
   focus(x: number, z: number): void;
   /** le fantôme d'un bâtiment de la base avancée à poser (null : aucun) et le cercle de la base (Enfers seulement) */
-  ghost?(kind: BaseKind | null, x?: number, z?: number, ok?: boolean, camp?: [number, number] | null): void;
+  ghost?(kind: BaseKind | null, x?: number, z?: number, ok?: boolean, camp?: [number, number] | null, line?: { x: number; z: number; ok: boolean }[]): void;
 }
 
 export interface CommandHost {
@@ -91,6 +92,8 @@ export class CommandUI implements ToolInput {
   private barKey = '';
   /** le bâtiment de la base avancée qu'on pose (clic au sol ; Échap ou clic droit : on arrête) */
   placing: BaseKind | null = null;
+  /** la pose des murs (palissade glissée, porte) */
+  wall = new WallPlan();
   /** l'aide « ? » des contrôles est dépliée */
   helpOpen = false;
 
@@ -113,6 +116,7 @@ export class CommandUI implements ToolInput {
   setTheater(t: Theater | null) {
     if (this.theater?.layer && this.theater !== t) this.theater.layer.selected = new Set();
     this.placing = null;
+    this.wall.reset();
     this.theater?.ghost?.(null);
     this.theater = t;
     this.touch();
@@ -151,6 +155,8 @@ export class CommandUI implements ToolInput {
     this.dragging = false;
     this.pressed = false;
     clearTimeout(this.press);
+    // la pose d'un mur : l'appui est le début de la ligne
+    if (isLineKind(this.placing)) { const p = this.theater?.pick(e.x, e.y); if (p) this.wall.press(p); return; }
     // au doigt : un appui long donne l'ordre (comme le clic droit)
     if (e.touch) this.press = window.setTimeout(() => { if (this.start && !this.dragging) { this.pressed = true; this.orderAt(this.start.x, this.start.y); } }, LONG_PRESS);
   }
@@ -158,6 +164,8 @@ export class CommandUI implements ToolInput {
   move(e: PointerInfo) {
     const s = this.start;
     if (!s) return;
+    // la pose d'un mur : la ligne se trace sous le doigt (pas de rectangle de sélection)
+    if (this.wall.pressing) { const p = this.theater?.pick(e.x, e.y); if (p) { this.wall.drag(p); this.ghostAt(p); } return; }
     if (!this.dragging && Math.hypot(e.x - s.x, e.y - s.y) > DRAG) { this.dragging = true; clearTimeout(this.press); }
     if (!this.dragging) return;
     const b = this.box.style;
@@ -172,6 +180,8 @@ export class CommandUI implements ToolInput {
     this.start = null;
     this.box.style.display = 'none';
     if (!s || !t || this.pressed) return;
+    // la pose d'un mur : on relâche, la ligne se pose
+    if (this.wall.pressing) { const p = t.pick(e.x, e.y); if (p) this.placeWall(this.wall.release(p)); else this.wall.from = null; return; }
     const add = this.shift;
     if (this.dragging) {
       const hit = inRect(this.units(), { x0: s.x, y0: s.y, x1: e.x, y1: e.y }, (u) => t.screen(u.x, u.z));
@@ -192,11 +202,7 @@ export class CommandUI implements ToolInput {
     let cur = '';
     // la pose d'un bâtiment de la base : son fantôme suit le curseur
     if (this.placing) {
-      const b = this.host.war.base;
-      if (p && b) {
-        const camp = b.camp(zoneOfZ(Math.floor(p[1])));
-        t.ghost?.(this.placing, p[0], p[1], this.host.war.canBuildBase(this.placing, p[0], p[1]) === null, this.placing === 'camp' || !camp ? null : [camp.site.x, camp.site.z]);
-      }
+      if (p) this.ghostAt(p);
       this.host.canvas.style.cursor = 'copy';
       return;
     }
@@ -210,6 +216,26 @@ export class CommandUI implements ToolInput {
     this.host.canvas.style.cursor = cur;
   }
 
+  /** Le fantôme du bâtiment qu'on pose, sous le curseur (un mur : toute la ligne, raccordée) */
+  private ghostAt(p: [number, number]) {
+    const t = this.theater, b = this.host.war.base, kind = this.placing;
+    if (!t || !b || !kind) return;
+    const camp = b.camp(zoneOfZ(Math.floor(p[1])));
+    const ring: [number, number] | null = kind === 'camp' || !camp ? null : [camp.site.x, camp.site.z];
+    const line = isWallKind(kind) ? this.wall.preview(this.host.war, kind, this.wall.line(p)).cells : undefined;
+    t.ghost?.(kind, p[0], p[1], line ? line.some((c) => c.ok) : this.host.war.canBuildBase(kind, p[0], p[1]) === null, ring, line);
+  }
+
+  /** Pose la ligne de palissades tracée */
+  private placeWall(cells: [number, number][]) {
+    const kind = this.placing;
+    if (!kind) return;
+    const msg = this.wall.build(this.host.war, kind, cells);
+    if (!msg.startsWith('Il ') && !msg.startsWith('Rien')) this.host.click();
+    this.host.toast(msg);
+    this.render();
+  }
+
   /** Clic droit (sans glisser : un glisser fait tourner la vue) */
   rightClick(e: PointerInfo) { if (this.placing) { this.stopPlacing(); return; } this.orderAt(e.x, e.y); }
 
@@ -217,10 +243,13 @@ export class CommandUI implements ToolInput {
   startPlacing(kind: BaseKind | null) {
     this.placing = this.placing === kind ? null : kind;
     if (!this.placing) this.stopPlacing();
-    else { this.cmd.armed = null; this.host.toast(`${BASE_DEFS[kind!].icon} ${BASE_DEFS[kind!].name} : cliquez au sol pour le poser (${costText(BASE_DEFS[kind!].cost)}). Échap ou clic droit : arrêter.`); }
+    else {
+      this.cmd.armed = null; this.wall.reset();
+      this.host.toast(kind === 'palisade' ? `${BASE_DEFS.palisade.icon} Palissade : cliquez et glissez pour tracer un mur (${costText(BASE_DEFS.palisade.cost)} le pan). Un clic de plus le prolonge. Échap ou clic droit : arrêter.` : `${BASE_DEFS[kind!].icon} ${BASE_DEFS[kind!].name} : cliquez au sol pour le poser (${costText(BASE_DEFS[kind!].cost)}). Échap ou clic droit : arrêter.`);
+    }
     this.render();
   }
-  stopPlacing() { this.placing = null; this.theater?.ghost?.(null); this.host.canvas.style.cursor = ''; this.render(); }
+  stopPlacing() { this.placing = null; this.wall.reset(); this.theater?.ghost?.(null); this.host.canvas.style.cursor = ''; this.render(); }
 
   private placeAt(x: number, y: number) {
     const t = this.theater!, p = t.pick(x, y), kind = this.placing!;
@@ -229,8 +258,8 @@ export class CommandUI implements ToolInput {
     if (typeof r === 'string') { this.host.toast(r); return; }
     this.host.click();
     this.host.toast(`${BASE_DEFS[kind].icon} ${BASE_DEFS[kind].name} : c’est posé${kind === 'camp' ? ' ! La base peut s’étendre autour (cercle vert).' : '.'}`);
-    // palissades et braseros s'enchaînent ; le reste se pose une fois
-    if (kind !== 'palisade' && kind !== 'brazier' && !this.shift) this.stopPlacing();
+    // palissades, portes et braseros s'enchaînent ; le reste se pose une fois
+    if (kind !== 'palisade' && kind !== 'gate' && kind !== 'brazier' && !this.shift) this.stopPlacing();
     else this.render();
   }
 

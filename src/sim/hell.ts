@@ -14,11 +14,12 @@ export interface CombatMap {
   /** point d'arrivée (le portail des Enfers) : on s'y replie */
   arrival: [number, number];
   cell(x: number, z: number): number;
-  walkable(cx: number, cz: number): boolean;
-  walkableAt(x: number, z: number): boolean;
-  nearestWalkable(x: number, z: number, max?: number): number;
-  route(from: number, to: number): number[] | null;
-  lineClear(x0: number, z0: number, x1: number, z1: number): boolean;
+  /** (`foe` : pour un démon ; les portes du joueur, dans les Enfers, lui sont fermées) */
+  walkable(cx: number, cz: number, foe?: boolean): boolean;
+  walkableAt(x: number, z: number, foe?: boolean): boolean;
+  nearestWalkable(x: number, z: number, max?: number, foe?: boolean): number;
+  route(from: number, to: number, foe?: boolean): number[] | null;
+  lineClear(x0: number, z0: number, x1: number, z1: number, foe?: boolean): boolean;
   unblock(site: { x: number; z: number; r: number }): void;
   /** remet une emprise (un bâtiment relevé) ; seulement dans les Enfers */
   reblock?(site: { x: number; z: number; r: number }): void;
@@ -26,9 +27,9 @@ export interface CombatMap {
 
 /**
  * Bâtiments de la base avancée du joueur dans les Enfers (voir `hellBase.ts`) : camp de base, caserne avancée, forge,
- * infirmerie, tour de guet, palissade, brasero
+ * infirmerie, tour de guet, palissade, porte, brasero
  */
-export type BaseKind = 'camp' | 'post' | 'smithy' | 'infirmary' | 'tower' | 'palisade' | 'brazier';
+export type BaseKind = 'camp' | 'post' | 'smithy' | 'infirmary' | 'tower' | 'palisade' | 'gate' | 'brazier';
 /** Bâtiments du joueur pris dans les combats : la tour de garde (elle tire) et la caserne, sur l'île du portail ; ceux de la base avancée */
 export type PlayerSiteKind = 'watchtower' | 'barracks' | BaseKind;
 export type SiteKind = HellSiteKind | PlayerSiteKind;
@@ -73,6 +74,7 @@ export const SITES: Record<SiteKind, { name: string; hp: number; armor: number; 
   infirmary: { name: 'infirmerie', hp: 350, armor: 2, dmg: 0, range: 0, cooldown: 0 },
   tower: { name: 'tour de guet', hp: 300, armor: 3, dmg: 8, range: 6.5, cooldown: 1.5 },
   palisade: { name: 'palissade', hp: 260, armor: 4, dmg: 0, range: 0, cooldown: 0 },
+  gate: { name: 'porte', hp: 300, armor: 4, dmg: 0, range: 0, cooldown: 0 },
   brazier: { name: 'brasero', hp: 120, armor: 1, dmg: 0, range: 0, cooldown: 0 },
 };
 
@@ -88,6 +90,8 @@ export const FORGE_EVERY = 45;
  * sécurisée après SECURE_WAVES vagues repoussées : réglé pour qu'une tour de garde, une caserne et sa garnison suffisent,
  * sans aucune expédition dans les Enfers (facultatives)
  */
+/** Répit (s) laissé à l'île après la chute du dernier poste avancé, avant l'incursion suivante */
+export const FRONT_RESPITE = 120;
 export const RAID_FIRST = 300, RAID_EVERY = 240, RAID_MIN = 150, RAID_MAX = 10, RAID_SECURED_MAX = 6, SECURE_WAVES = 5;
 
 export type Side = 'hell' | 'player';
@@ -243,6 +247,11 @@ export class Hell {
   raidsRepelled = 0;
   raidsLost = 0;
   heldSince = -1;
+  /**
+   * postes avancés du joueur encore tenus dans les Enfers (rempli par la base) : tant qu'il y en a, les démons doivent d'abord
+   * les reprendre un à un, et aucune incursion ne vise l'île du portail
+   */
+  frontPosts = 0;
   /** où se replient les unités du joueur (null : le point d'arrivée de la carte, le portail des Enfers) */
   rally: [number, number] | null = null;
   /**
@@ -613,7 +622,7 @@ export class Hell {
     // un bâtiment : on vise le point libre de son pourtour le plus proche
     let ok: boolean;
     if ('site' in t) {
-      const a = Math.atan2(u.x - tx, u.z - tz), c = this.map.nearestWalkable(tx + Math.sin(a) * (tr + 0.6), tz + Math.cos(a) * (tr + 0.6), 3);
+      const a = Math.atan2(u.x - tx, u.z - tz), c = this.map.nearestWalkable(tx + Math.sin(a) * (tr + 0.6), tz + Math.cos(a) * (tr + 0.6), 3, u.side === 'hell');
       ok = c >= 0 ? this.moveTo(u, (c % this.map.W) + 0.5, Math.floor(c / this.map.W) + 0.5, dt) : this.moveTo(u, tx, tz, dt);
     } else {
       // un adversaire au corps à corps : on vise sa « place » autour de lui (selon l'unité, d'un côté ou de l'autre) et non son
@@ -622,7 +631,7 @@ export class Hell {
       if (u.stats.range <= 2 && gap < 4) {
         const a = Math.atan2(u.x - tx, u.z - tz) + (((u.id * 0.618034) % 1) - 0.5) * 2.4, r = tr + u.stats.radius + u.stats.range * 0.8;
         const px = tx + Math.sin(a) * r, pz = tz + Math.cos(a) * r;
-        if (this.map.walkableAt(px, pz)) { gx = px; gz = pz; }
+        if (this.map.walkableAt(px, pz, u.side === 'hell')) { gx = px; gz = pz; }
       }
       ok = this.moveTo(u, gx, gz, dt);
     }
@@ -727,16 +736,16 @@ export class Hell {
    * but est hors d'atteinte (aucun chemin)
    */
   moveTo(u: HellUnit, gx: number, gz: number, dt: number, pace = 1): boolean {
-    const m = this.map, d = Math.hypot(gx - u.x, gz - u.z), HW = m.W;
+    const m = this.map, d = Math.hypot(gx - u.x, gz - u.z), HW = m.W, foe = u.side === 'hell';
     if (d < 0.05) return true;
     let wx = gx, wz = gz;
-    if (!(d < 12 && m.lineClear(u.x, u.z, gx, gz))) {
+    if (!(d < 12 && m.lineClear(u.x, u.z, gx, gz, foe))) {
       const gc = m.cell(Math.min(m.W - 1, Math.max(0, gx)), Math.min(m.L - 1, Math.max(0, gz)));
       if (!u.path || (gc !== u.goal && u.repath <= 0)) {
-        const from = m.walkableAt(u.x, u.z) ? m.cell(u.x, u.z) : m.nearestWalkable(u.x, u.z, 2);
-        const to = m.walkable(gc % HW, Math.floor(gc / HW)) ? gc : m.nearestWalkable(gx, gz, 3);
+        const from = m.walkableAt(u.x, u.z, foe) ? m.cell(u.x, u.z) : m.nearestWalkable(u.x, u.z, 2, foe);
+        const to = m.walkable(gc % HW, Math.floor(gc / HW), foe) ? gc : m.nearestWalkable(gx, gz, 3, foe);
         u.goal = gc; u.repath = 0.5;
-        u.path = from >= 0 && to >= 0 ? m.route(from, to) : null;
+        u.path = from >= 0 && to >= 0 ? m.route(from, to, foe) : null;
         u.pathI = 1;
         if (!u.path) return false;
       }
@@ -759,9 +768,9 @@ export class Hell {
       if (zn > this.frontier && zn > zoneOfZ(Math.floor(u.z))) { u.path = null; return true; }
     }
     // (pris dans une emprise, une zone reperdue dont la forteresse se relève : il en sort)
-    if (m.walkableAt(nx, nz) || !m.walkableAt(u.x, u.z)) { u.x = nx; u.z = nz; }
-    else if (m.walkableAt(nx, u.z)) u.x = nx;
-    else if (m.walkableAt(u.x, nz)) u.z = nz;
+    if (m.walkableAt(nx, nz, foe) || !m.walkableAt(u.x, u.z, foe)) { u.x = nx; u.z = nz; }
+    else if (m.walkableAt(nx, u.z, foe)) u.x = nx;
+    else if (m.walkableAt(u.x, nz, foe)) u.z = nz;
     else { u.path = null; return true; }
     u.moving = true;
     u.walk += step * 2.6;
@@ -770,7 +779,7 @@ export class Hell {
 
   private cellClear(u: HellUnit, k: number) {
     const x = (k % this.map.W) + 0.5, z = Math.floor(k / this.map.W) + 0.5;
-    return Math.hypot(x - u.x, z - u.z) < 7 && this.map.lineClear(u.x, u.z, x, z);
+    return Math.hypot(x - u.x, z - u.z) < 7 && this.map.lineClear(u.x, u.z, x, z, u.side === 'hell');
   }
 
   /** Les unités ne s'empilent pas : celles qui se chevauchent s'écartent (sans entrer dans la roche ni la lave) */
@@ -787,8 +796,8 @@ export class Hell {
         const push = (min - d) * 0.5, ux = d > 1e-4 ? dx / d : 1, uz = d > 1e-4 ? dz / d : 0;
         // le plus lourd bouge moins
         const wa = b.stats.radius / (a.stats.radius + b.stats.radius), wb = a.stats.radius / (a.stats.radius + b.stats.radius);
-        if (m.walkableAt(a.x - ux * push * wa, a.z - uz * push * wa)) { a.x -= ux * push * wa; a.z -= uz * push * wa; }
-        if (m.walkableAt(b.x + ux * push * wb, b.z + uz * push * wb)) { b.x += ux * push * wb; b.z += uz * push * wb; }
+        if (m.walkableAt(a.x - ux * push * wa, a.z - uz * push * wa, a.side === 'hell')) { a.x -= ux * push * wa; a.z -= uz * push * wa; }
+        if (m.walkableAt(b.x + ux * push * wb, b.z + uz * push * wb, b.side === 'hell')) { b.x += ux * push * wb; b.z += uz * push * wb; }
       }
     }
   }
@@ -802,6 +811,8 @@ export class Hell {
   raidDue(time: number) {
     if (this.victory || this.activeRaid) return false;
     if (this.nextRaid < 0) { this.nextRaid = time + RAID_FIRST; this.heldSince = time; return false; }
+    // le front tient : l'île attend ; une fois le dernier poste tombé, un répit avant la première incursion
+    if (this.frontPosts > 0) { this.nextRaid = Math.max(this.nextRaid, time + FRONT_RESPITE); return false; }
     return time >= this.nextRaid;
   }
 

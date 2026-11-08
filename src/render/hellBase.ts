@@ -77,14 +77,14 @@ export function baseGeo(kind: BaseKind): { solid: THREE.BufferGeometry; shine: T
       solid.push(paint(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4).translate(0, 2.6, 0), DARKWOOD));
       break;
     case 'palisade':
-      // un pan de pieux taillés en pointe, deux traverses
-      for (let i = 0; i < 5; i++) {
-        const x = -0.4 + i * 0.2, h = 0.75 + ((i * 37) % 5) * 0.04;
-        solid.push(paint(new THREE.CylinderGeometry(0.085, 0.09, h, 6).translate(x, h / 2, 0), WOOD, (y) => 0.75 + y * 0.3));
-        solid.push(paint(new THREE.ConeGeometry(0.085, 0.18, 6).translate(x, h + 0.09, 0), 0xc89a6a));
-      }
-      for (const y of [0.22, 0.55]) solid.push(paint(new THREE.BoxGeometry(1, 0.06, 0.05).translate(0, y, -0.1), DARKWOOD));
+      // (les murs se posent par la vue, raccordés à leurs voisins : voir `palisadeGeo`)
+      solid.push(palisadeGeo(0));
       break;
+    case 'gate': {
+      const g = gateGeo();
+      solid.push(g.solid, g.leaf.clone().translate(GATE_HINGE, 0, 0));
+      break;
+    }
     case 'brazier':
       // un brasero : pied de pierre, vasque de fer, flammes vives
       solid.push(paint(new THREE.CylinderGeometry(0.1, 0.16, 0.45, 6).translate(0, 0.225, 0), STONE, (y) => 0.8 + y * 0.3));
@@ -98,3 +98,63 @@ export function baseGeo(kind: BaseKind): { solid: THREE.BufferGeometry; shine: T
 
 /** Couleur du drapeau de la base */
 export const BASE_FLAG = BLUE;
+
+// ---------- Murs : palissade et porte, une case chacun, raccordés à leurs voisins ----------
+
+/** Côtés d'une case reliés à un autre pan de mur (le nord est vers le portail, -z) */
+export const WALL_N = 1, WALL_E = 2, WALL_S = 4, WALL_W = 8;
+const WALL_DIRS: [number, number, number][] = [[WALL_N, 0, -1], [WALL_E, 1, 0], [WALL_S, 0, 1], [WALL_W, -1, 0]];
+/** Où le battant d'une porte pivote (charnière, sur l'axe du mur) et jusqu'où il s'ouvre (radians) */
+export const GATE_HINGE = -0.35, GATE_OPEN = 1.75;
+
+/**
+ * Un pan de palissade (la case, centrée sur 0) : un poteau au centre, et vers chaque voisin relié deux pieux pointus et deux
+ * traverses jusqu'au bord de la case ; deux pans voisins se rejoignent donc sans couture, avec un poteau à chaque angle et
+ * à chaque bout. Sans voisin, un court pan d'est en ouest (jamais un poteau seul)
+ */
+export function palisadeGeo(mask: number): THREE.BufferGeometry {
+  const solid: THREE.BufferGeometry[] = [];
+  if (!(mask & 15)) mask = WALL_E | WALL_W;
+  solid.push(paint(new THREE.CylinderGeometry(0.1, 0.115, 1.02, 6).translate(0, 0.51, 0), WOOD, (y) => 0.72 + y * 0.35));
+  solid.push(paint(new THREE.ConeGeometry(0.1, 0.2, 6).translate(0, 1.12, 0), 0xc89a6a));
+  for (const [bit, dx, dz] of WALL_DIRS) {
+    if (!(mask & bit)) continue;
+    for (let i = 1; i <= 2; i++) {
+      const t = i * 0.2, h = 0.74 + ((bit * 7 + i * 5) % 5) * 0.03, x = dx * t, z = dz * t;
+      solid.push(paint(new THREE.CylinderGeometry(0.075, 0.085, h, 6).translate(x, h / 2, z), WOOD, (y) => 0.72 + y * 0.35));
+      solid.push(paint(new THREE.ConeGeometry(0.075, 0.17, 6).translate(x, h + 0.085, z), 0xc89a6a));
+    }
+    // les traverses, côté sud / est des pieux
+    for (const y of [0.22, 0.56]) {
+      const g = dx ? new THREE.BoxGeometry(0.5, 0.055, 0.045).translate(dx * 0.25, y, 0.1) : new THREE.BoxGeometry(0.045, 0.055, 0.5).translate(0.1, y, dz * 0.25);
+      solid.push(paint(g, DARKWOOD));
+    }
+  }
+  return merge(solid);
+}
+
+/**
+ * Une porte (la case, le mur d'est en ouest ; la vue la tourne pour un mur nord-sud) : deux gros montants avec leur linteau,
+ * et le battant (pièce à part, qui pivote autour de sa charnière en `GATE_HINGE`, fermé quand il s'étend vers +x)
+ */
+export function gateGeo(): { solid: THREE.BufferGeometry; leaf: THREE.BufferGeometry } {
+  const solid: THREE.BufferGeometry[] = [], leaf: THREE.BufferGeometry[] = [];
+  for (const x of [-0.41, 0.41]) {
+    solid.push(paint(new THREE.BoxGeometry(0.16, 1.3, 0.18).translate(x, 0.65, 0), WOOD, (y) => 0.7 + y * 0.35));
+    solid.push(paint(new THREE.ConeGeometry(0.13, 0.22, 4).rotateY(Math.PI / 4).translate(x, 1.41, 0), 0xc89a6a));
+  }
+  solid.push(paint(new THREE.BoxGeometry(1, 0.09, 0.12).translate(0, 1.22, 0), DARKWOOD));
+  solid.push(paint(new THREE.BoxGeometry(0.34, 0.07, 0.06).translate(0, 1.04, 0), BLUE));
+  // le battant : planches debout, deux barres, une croix de renfort
+  const L = 0.7;
+  for (let i = 0; i < 5; i++) {
+    const h = 0.82 + ((i * 3) % 2) * 0.05;
+    leaf.push(paint(new THREE.BoxGeometry(L / 5 - 0.012, h, 0.05).translate(0.07 + i * (L / 5), h / 2 + 0.04, 0), WOOD, (y) => 0.75 + y * 0.3));
+  }
+  for (const y of [0.22, 0.7]) leaf.push(paint(new THREE.BoxGeometry(L, 0.07, 0.04).translate(L / 2, y, 0.045), DARKWOOD));
+  leaf.push(paint(new THREE.BoxGeometry(0.86, 0.06, 0.04).rotateZ(0.7).translate(L / 2, 0.46, 0.048), DARKWOOD));
+  return { solid: merge(solid), leaf: merge(leaf) };
+}
+
+/** Axe d'une porte selon ses voisins (true : le mur court d'est en ouest) */
+export const gateAlongX = (mask: number) => !!(mask & (WALL_E | WALL_W)) || !(mask & (WALL_N | WALL_S));

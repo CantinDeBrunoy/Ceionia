@@ -10,8 +10,8 @@ describe('bâtiments de la base des Enfers selon l’âge', () => {
     expect(baseAgeOf(99)).toBe(BASE_AGE_MAX);
   });
 
-  it('chaque bâtiment (hors palissade) a une variante par âge, toutes différentes', () => {
-    for (const kind of BASE_KINDS.filter((k) => k !== 'palisade')) {
+  it('chaque bâtiment (hors palissade et porte) a une variante par âge, toutes différentes', () => {
+    for (const kind of BASE_KINDS.filter((k) => k !== 'palisade' && k !== 'gate')) {
       const counts = new Set<number>();
       for (let age = 1; age <= BASE_AGE_MAX; age++) {
         const g = baseAgeGeo(kind, age);
