@@ -496,10 +496,14 @@ export class Tutorial {
     const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     const order: Side[] = cy < H / 2 ? ['below', 'above', 'right', 'left'] : ['above', 'below', 'right', 'left'];
     const fits = (s: Side) => (s === 'below' ? floor + gap + h <= H - m : s === 'above' ? lid - gap - h >= m : s === 'right' ? r.right + gap + w <= W - m : r.left - gap - w >= m);
-    const side = order.find(fits) ?? order[0];
+    // la bulle évite aussi les fiches ouvertes (besoin, recensement, bâtiment, expédition) : elle prend le côté qui en cache le moins
+    const blockers = ['#needInfo', '#census', '#selCard', '#info', '.expModal', '.expCard'].flatMap((q) => [...this.ui.root.querySelectorAll(q)]).filter((e) => e !== a && !e.contains(a!) && !a!.contains(e) && (e as HTMLElement).offsetParent && !(e as HTMLElement).hidden).map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
+    const pos = (s: Side) => { const v = s === 'below' || s === 'above'; return { x: clamp(v ? cx - w / 2 : s === 'right' ? r.right + gap : r.left - gap - w, m, W - w - m), y: clamp(v ? (s === 'below' ? floor + gap : lid - gap - h) : cy - h / 2, m, H - h - m) }; };
+    const covered = (s: Side) => { const p = pos(s); return blockers.reduce((t, b) => t + Math.max(0, Math.min(p.x + w, b.right) - Math.max(p.x, b.left)) * Math.max(0, Math.min(p.y + h, b.bottom) - Math.max(p.y, b.top)), 0); };
+    const ok = order.filter(fits);
+    const side = (ok.length ? ok : order).reduce((best, s) => (covered(s) < covered(best) ? s : best));
     const vert = side === 'below' || side === 'above';
-    const x = clamp(vert ? cx - w / 2 : side === 'right' ? r.right + gap : r.left - gap - w, m, W - w - m);
-    const y = clamp(vert ? (side === 'below' ? floor + gap : lid - gap - h) : cy - h / 2, m, H - h - m);
+    const { x, y } = pos(side);
     box.style.left = `${x}px`; box.style.top = `${y}px`;
     box.dataset.side = side;
     this.arrow.style.left = vert ? `${clamp(cx - x, 18, w - 18)}px` : '';
