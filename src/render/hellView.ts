@@ -8,6 +8,7 @@ import { BattleLayer, paint, merge } from './battleUnits';
 import { hash2, smoothstep } from '../core/rng';
 import { baseGeo, BASE_FLAG, baseGeoAged, palisadeGeo, gateGeo, gateAlongX, GATE_HINGE, GATE_OPEN, WALL_N, WALL_E, WALL_S, WALL_W } from './hellBase';
 import { baseAgeOf, BaseParts } from './hellBaseAges';
+import { wallPartsAged, gatePartsAged } from './hellWallAges';
 import { BASE_DEFS, BASE_R } from '../sim/hellBase';
 import type { KingFight } from '../sim/kingdom';
 import { KingFx } from './kingFx';
@@ -59,6 +60,7 @@ export class HellView {
   age = 1;
   /** les murs (palissades, portes) raccordés : leur recalcul quand la carte change, les formes déjà faites */
   private wallV = -1;
+  private wallAge = 0;
   private wallGeos = new Map<string, THREE.BufferGeometry>();
   private gateParts: ReturnType<typeof gateGeo> | null = null;
   private ghostLines = new THREE.Group();
@@ -467,30 +469,52 @@ export class HellView {
       field: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }),
     });
   }
-  /** Un mur (palissade ou porte) : ses pièces, dont la forme est donnée ensuite par ses voisins */
+  /** Un mur (palissade ou porte) : ses pièces, dont la forme est donnée ensuite par ses voisins et l'âge (voir `styleWall`) */
   private makeWall(kind: 'palisade' | 'gate', up: THREE.Group, mat: THREE.Material): WallPart {
+    const empty = new THREE.BufferGeometry(), mesh = new THREE.Mesh(empty, mat);
     if (kind === 'palisade') {
-      const mesh = new THREE.Mesh(this.wallShape('palisade', 0), mat);
       up.add(mesh);
-      return { kind, mask: -1, mesh, open: 0 };
+      return { kind, mask: -1, age: 0, mesh, parent: up, extras: [], open: 0, slide: false, fade: false };
     }
-    const parts = (this.gateParts ??= gateGeo());
-    const rig = new THREE.Group(), pivot = new THREE.Group(), mesh = new THREE.Mesh(parts.solid, mat);
+    const rig = new THREE.Group(), pivot = new THREE.Group(), leaf = new THREE.Mesh(empty, mat);
     pivot.position.x = GATE_HINGE;
-    pivot.add(new THREE.Mesh(parts.leaf, mat));
+    pivot.add(leaf);
     rig.add(mesh, pivot);
     up.add(rig);
-    return { kind, mask: -1, mesh, rig, pivot, open: 0 };
+    return { kind, mask: -1, age: 0, mesh, leaf, rig, pivot, parent: rig, extras: [], open: 0, slide: false, fade: false };
   }
 
-  /** La forme d'un mur selon ses côtés reliés (gardée) ; une porte fermée, tournée selon l'axe du mur */
-  private wallShape(kind: 'palisade' | 'gate', mask: number) {
-    const key = kind === 'palisade' ? `p${mask}` : `g${gateAlongX(mask) ? 'x' : 'z'}`;
+  /** Habille un mur de la forme de son âge et de ses voisins (pièces lumineuses et champs d'énergie en maillages à part) */
+  private styleWall(w: WallPart, mask: number, age: number) {
+    const mats = this.mats();
+    w.mask = mask; w.age = age;
+    for (const e of w.extras) w.parent.remove(e);
+    w.extras = [];
+    const extra = (g: THREE.BufferGeometry | null, m: THREE.Material, order = 0) => { if (!g) return; const e = new THREE.Mesh(g, m); e.renderOrder = order; w.parent.add(e); w.extras.push(e); };
+    if (w.kind === 'palisade') {
+      const p = wallPartsAged(age, mask);
+      w.mesh.geometry = p.solid;
+      extra(p.shine, mats.glow); extra(p.field, mats.field, 6);
+      return;
+    }
+    const g = gatePartsAged(age);
+    w.mesh.geometry = g.solid;
+    w.leaf!.geometry = g.leaf;
+    w.leaf!.material = g.leafField ? mats.field : mats.lit;
+    w.leaf!.renderOrder = g.leafField ? 6 : 0;
+    w.slide = g.slide; w.fade = g.fade;
+    extra(g.shine, mats.glow);
+    w.rig!.rotation.y = gateAlongX(mask) ? 0 : -Math.PI / 2;
+  }
+
+  /** La forme d'un mur selon l'âge et ses côtés reliés (gardée), pour l'aperçu ; une porte fermée, tournée selon l'axe du mur */
+  private wallShape(kind: 'palisade' | 'gate', mask: number, age = baseAgeOf(this.age)) {
+    const key = kind === 'palisade' ? `p${age}:${mask}` : `g${age}${gateAlongX(mask) ? 'x' : 'z'}`;
     let g = this.wallGeos.get(key);
     if (!g) {
-      if (kind === 'palisade') g = palisadeGeo(mask);
+      if (kind === 'palisade') g = wallPartsAged(age, mask).solid;
       else {
-        const parts = (this.gateParts ??= gateGeo());
+        const parts = gatePartsAged(age);
         g = merge([parts.solid, parts.leaf.clone().translate(GATE_HINGE, 0, 0)]);
         if (!gateAlongX(mask)) g.rotateY(-Math.PI / 2);
       }
@@ -511,17 +535,17 @@ export class HellView {
 
   /** Les murs se raccordent : quand la carte change (un mur posé, abattu, remplacé par une porte), leurs formes se refont */
   private refreshWalls() {
-    if (this.wallV === this.map.version) return;
-    this.wallV = this.map.version;
+    const age = baseAgeOf(this.age);
+    if (this.wallV === this.map.version && this.wallAge === age) return;
+    this.wallV = this.map.version; this.wallAge = age;
     const cells = this.wallCells(), has = (x: number, z: number) => cells.has(`${x},${z}`);
     for (const [id, h] of this.houses) {
       const w = h.wall, b = this.hell.buildings.get(id);
       if (!w || !b) continue;
       const mask = this.wallMask(Math.floor(b.site.x), Math.floor(b.site.z), has);
-      if (mask === w.mask) continue;
-      w.mask = mask;
-      if (w.kind === 'palisade') w.mesh.geometry = this.wallShape('palisade', mask);
-      else if (w.rig) w.rig.rotation.y = gateAlongX(mask) ? 0 : -Math.PI / 2;
+      // (un mur déjà posé se rhabille quand le village change d'âge, sans rebâtir)
+      if (mask === w.mask && age === w.age) continue;
+      this.styleWall(w, mask, age);
     }
   }
 
@@ -534,14 +558,19 @@ export class HellView {
       friends ??= this.hell.alive('player');
       const near = friends.some((u) => Math.hypot(u.x - b.site.x, u.z - b.site.z) < 1.5);
       w.open += ((near ? 1 : 0) - w.open) * Math.min(1, dt * 6);
-      w.pivot.rotation.y = -w.open * GATE_OPEN;
+      const pv = w.pivot;
+      pv.position.set(GATE_HINGE, 0, 0); pv.rotation.y = 0; pv.scale.set(1, 1, 1); pv.visible = true;
+      // le battant pivote (bois, fonte), coulisse le long du mur (métal) ou s'efface (champ de force)
+      if (w.slide) pv.position.set(GATE_HINGE - w.open * 0.7, 0, -0.17 * Math.min(1, w.open * 5));
+      else if (w.fade) { pv.scale.set(1, Math.max(0.001, 1 - w.open), 1); pv.visible = w.open < 0.97; }
+      else pv.rotation.y = -w.open * GATE_OPEN;
     }
   }
 
   /** Aperçu d'une ligne de murs à poser : chaque case raccordée à sa voisine, verte (posable) ou rouge */
   private showLine(kind: 'palisade' | 'gate', line: { x: number; z: number; ok: boolean; gate?: boolean }[]) {
     if (!this.ghostLines.parent) { this.ghostLines.renderOrder = 8; this.content.add(this.ghostLines); }
-    const key = `${kind}|${this.map.version}|${line.map((c) => `${Math.floor(c.x)},${Math.floor(c.z)}${c.ok ? 1 : 0}${c.gate ? 'g' : ''}`).join(';')}`;
+    const age = baseAgeOf(this.age), key = `${kind}|${age}|${this.map.version}|${line.map((c) => `${Math.floor(c.x)},${Math.floor(c.z)}${c.ok ? 1 : 0}${c.gate ? 'g' : ''}`).join(';')}`;
     this.ghostLines.visible = true;
     if (key === this.ghostLineKey) return;
     this.ghostLineKey = key;
@@ -551,7 +580,7 @@ export class HellView {
     for (const c of line) cells.add(`${Math.floor(c.x)},${Math.floor(c.z)}`);
     const has = (x: number, z: number) => cells.has(`${x},${z}`);
     for (const c of line) {
-      const cx = Math.floor(c.x), cz = Math.floor(c.z), m = new THREE.Mesh(this.wallShape(c.gate ? 'gate' : kind, this.wallMask(cx, cz, has)), mats[c.ok ? 0 : 1]);
+      const cx = Math.floor(c.x), cz = Math.floor(c.z), m = new THREE.Mesh(this.wallShape(c.gate ? 'gate' : kind, this.wallMask(cx, cz, has), age), mats[c.ok ? 0 : 1]);
       m.position.set(cx + 0.5, this.map.groundY(cx + 0.5, cz + 0.5) + 0.02, cz + 0.5);
       m.renderOrder = 8;
       this.ghostLines.add(m);
@@ -904,7 +933,11 @@ function ribGeo() {
 
 /** Ruines d'un bâtiment abattu : un tas de blocs noircis et de braises */
 /** Un mur de la base (palissade, porte) : ses côtés reliés (-1 : pas encore calculé), sa pièce, et pour une porte son pivot et son ouverture (0 à 1) */
-interface WallPart { kind: 'palisade' | 'gate'; mask: number; mesh: THREE.Mesh; rig?: THREE.Group; pivot?: THREE.Group; open: number }
+interface WallPart {
+  kind: 'palisade' | 'gate'; mask: number; age: number; mesh: THREE.Mesh; leaf?: THREE.Mesh; rig?: THREE.Group; pivot?: THREE.Group;
+  /** le groupe qui porte les pièces (celui de la porte tourne selon l'axe du mur) et ses maillages lumineux ou d'énergie */
+  parent: THREE.Object3D; extras: THREE.Mesh[]; open: number; slide: boolean; fade: boolean;
+}
 
 function ruinGeo(r: number, seed: number) {
   const parts: THREE.BufferGeometry[] = [];
