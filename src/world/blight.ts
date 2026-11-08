@@ -65,7 +65,7 @@ export function isleBlight(w: World, conquered = 0): Blight | null {
   const level = blightLevel(w, conquered);
   const halos: [number, number, number][] = [];
   for (const b of w.buildings.values()) {
-    if ((b.kind !== 'watchtower' && b.kind !== 'barracks') || !w.onPortalIsland(b.x, b.z)) continue;
+    if (b.kind !== 'watchtower' || !w.onPortalIsland(b.x, b.z)) continue; // seule la tour de garde a son halo (pas la caserne)
     const s = sizeOf(b);
     halos.push([b.x + s / 2, b.z + s / 2, HALO_R + s / 2]);
   }
