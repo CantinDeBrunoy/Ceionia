@@ -1590,7 +1590,7 @@ export class UI {
       ov.querySelectorAll<HTMLElement>('.gnbar i').forEach((i) => (i.style.width = `${Math.round(ex.craftProgress() * 100)}%`));
     };
     const iv = setInterval(tick, 300);
-    ov.addEventListener('toggle', (e) => { const d = e.target as HTMLDetailsElement; if (d.classList?.contains('cdet')) { if (d.open) openDet.add(+d.dataset.c!); else openDet.delete(+d.dataset.c!); } }, true);
+    ov.addEventListener('toggle', (e) => { const d = e.target as HTMLDetailsElement; if (d.classList?.contains('cdtl')) { if (d.open) openDet.add(+d.dataset.c!); else openDet.delete(+d.dataset.c!); } }, true);
     ov.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
       // l'équipement qui manque : le fabriquer d'ici, ou aller à sa fiche dans l'onglet Équipement
@@ -1671,7 +1671,9 @@ export class UI {
       const phrase = cardPhrase(c.text);
       // les principaux gains (deux, ou trois sans perte) et la première perte ; les autres sous « Détails »
       const pills = (effects: Parameters<typeof effectChips>[0], cls: string, max: number) => effectChips(effects).slice(0, max).map((e) => `<span class="pill ${cls}" title="${e.title}">${e.icon} ${e.n || (cls === 'loss' ? '' : e.title)}</span>`).join('');
-      const lossPills = c.lose.length ? effectChips(c.lose).slice(0, 1).map((e, k) => `<span class="pill loss" title="${e.title}">${e.icon} ${c.lose[k]?.t === 'injured' || e.icon === '🤕' ? tr('Blessés possibles') : e.n || e.title}</span>`).join('') : '';
+      // la principale perte : les blessés d'abord
+      const worst = [...c.lose].sort((a, b) => +(b.t === 'injured') - +(a.t === 'injured'))[0];
+      const lossPills = worst ? effectChips([worst]).map((e) => `<span class="pill loss" title="${e.title}">${e.icon} ${worst.t === 'injured' ? tr('Blessés possibles') : e.n || e.title}</span>`).join('') : '';
       const gains = pills(win, 'gain', c.lose.length ? 2 : 3);
       const dangers = dangersOf(c).map((d) => tr(DANGER_NAME[d])).join(', ');
       const kit = this.kitHtml(c, pv);
@@ -1692,7 +1694,7 @@ export class UI {
         ${this.gearNeedHtml(c)}
         <button class="choice depart" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">${ic('compass', 18, 2)} ${tr('Partir')}</button>
         ${why ? `<small class="why">${why}</small>` : ''}
-        <details class="cdet" data-c="${i}" ${open.has(i) ? 'open' : ''}><summary>${tr('Détails')}</summary><div class="cdbody">${detail}</div></details></div>`;
+        <details class="cdtl" data-c="${i}" ${open.has(i) ? 'open' : ''}><summary>${tr('Détails')}</summary><div class="cdbody">${detail}</div></details></div>`;
     }).join('');
   }
 
@@ -1713,7 +1715,7 @@ export class UI {
     const h = this.host, st = h.expeditions.state;
     return gearGaps(c, st.gear, st.craft, h.sim.age, (g) => !g.needs || h.expeditions.has(g.needs)).map((g) => {
       const state = `${tr('{n} en réserve', { n: g.have })}${g.queued ? `, ${tr('{n} en fabrication', { n: g.queued })}` : ''}`;
-      return `<p class="drow gnfor">${ic(g.gear.icon, 14, 2)} ${g.need > 1 ? g.gear.plural : g.gear.name} : ${state} · ${tr('protège de : {d}', { d: g.dangers.map((d) => tr(DANGER_NAME[d])).join(', ') })}</p>`;
+      return `<p class="drow gnfor">${ic(g.gear.icon, 14, 2)} ${g.need > 1 ? g.gear.plural : g.gear.name}${colon()}${state} · ${tr('protège de : {d}', { d: g.dangers.map((d) => tr(DANGER_NAME[d])).join(', ') })}</p>`;
     }).join('');
   }
 
