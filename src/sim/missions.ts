@@ -531,8 +531,8 @@ export const MISSIONS: Mission[] = [
     intro: 'Les charpentiers ont dessiné une caravelle : trois mâts, des voiles latines, de quoi tenir la haute mer. Avant de lui bâtir un chantier, il faut l’essayer et tracer une première route au large.',
     choices: [
       {
-        label: 'Longer la côte à la voile', text: 'Prudent : on garde la terre en vue, sondes et cartes en main.',
-        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'longe la côte à la voile, la sonde à la main', danger: ['water', 'weather'], party: 3, work: 24, risk: 0.25, carry: 'sacks',
+        label: 'Longer la côte à la voile', text: 'Prudent : on garde la terre en vue, longue-vue et cartes en main.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'longe la côte à la voile, la longue-vue à la main', danger: ['water', 'weather'], party: 3, work: 24, risk: 0.25, carry: 'sacks',
         win: [{ t: 'perk', id: 'caravel' }, joy(2, 5), food(2, 5)], lose: [hurt(1, 2)],
         winText: 'La caravelle a tenu la mer : la côte est cartographiée, les marins sont fiers. Les charpentiers réclament leur chantier naval.',
         loseText: 'Un grain a couché les voiles et brisé une vergue ; un marin s’est blessé. La caravelle est rentrée à la rame.',

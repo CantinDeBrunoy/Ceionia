@@ -81,20 +81,34 @@ const BOAT_MAKE: Record<BoatKind, (p: Parts) => void> = {
     p.box(0.13, 0.01, 0.045, 0, 0.032, -0.08, 0xb08458);
   },
   sail: (p) => {
-    // coque ventrue de bois, pont clair, mât, grand-voile et foc, fanion rouge
-    const side = 0x8a5a38, dark = 0x5f3e28;
-    p.box(0.16, 0.012, 0.36, 0, 0, 0, dark);
-    for (const s of [-1, 1]) p.box(0.016, 0.06, 0.36, s * 0.078, 0, 0, side);
-    p.box(0.16, 0.06, 0.016, 0, 0, -0.18, side);
-    p.box(0.11, 0.06, 0.06, 0, 0, 0.2, side);
-    p.box(0.05, 0.06, 0.05, 0, 0, 0.255, side);
-    p.box(0.14, 0.008, 0.34, 0, 0.045, 0, 0xc9a46c);
-    p.box(0.1, 0.03, 0.08, 0, 0.05, -0.12, 0x9a6a44);
-    p.cyl(0.006, 0.009, 0.4, 5, 0, 0.05, 0.02, 0x5a3e2e);
-    p.box(0.008, 0.008, 0.18, 0, 0.14, -0.08, 0x5a3e2e);
-    sailTri(p, 0, [[0.15, -0.01], [0.43, -0.01], [0.15, -0.17]], 0xf4ecdc);
-    sailTri(p, 0, [[0.14, 0.04], [0.4, 0.03], [0.07, 0.25]], 0xe8dcc0);
-    sailTri(p, 0.003, [[0.42, 0.0], [0.47, 0.0], [0.42, 0.06]], 0xc8443a);
+    // caravelle : coque ventrue de bois, château arrière, pont clair, trois mâts à voiles latines (grand mât, misaine, artimon),
+    // beaupré, flammes rouges et croix peinte sur la grand-voile
+    const side = 0x8a5a38, dark = 0x5f3e28, wood = 0x5a3e2e, cloth = 0xf4ecdc;
+    p.box(0.16, 0.012, 0.4, 0, 0, 0, dark);
+    for (const s of [-1, 1]) { p.box(0.016, 0.06, 0.4, s * 0.078, 0, 0, side); p.box(0.006, 0.006, 0.4, s * 0.082, 0.045, 0, 0xc9a46c); }
+    p.box(0.16, 0.06, 0.016, 0, 0, -0.2, side);
+    p.box(0.11, 0.06, 0.06, 0, 0, 0.22, side);
+    p.box(0.05, 0.06, 0.05, 0, 0, 0.275, side);
+    p.box(0.14, 0.008, 0.38, 0, 0.045, 0, 0xc9a46c);
+    // château arrière, dunette, gouvernail
+    p.box(0.15, 0.04, 0.1, 0, 0.05, -0.145, 0x9a6a44);
+    p.box(0.152, 0.008, 0.104, 0, 0.09, -0.145, 0xb08458);
+    p.box(0.012, 0.07, 0.012, 0, 0.0, -0.215, wood);
+    p.box(0.1, 0.03, 0.06, 0, 0.05, 0.16, 0x9a6a44);
+    // beaupré
+    p.add(new THREE.CylinderGeometry(0.004, 0.006, 0.12, 5).rotateX(Math.PI / 2 - 0.3), 0, 0.075, 0.33, 0x6a4a34);
+    const mast = (z: number, h: number, sz: number, tilt: number) => {
+      p.cyl(0.006, 0.009, h, 5, 0, 0.05, z, wood);
+      p.add(new THREE.CylinderGeometry(0.004, 0.004, sz * 1.5, 4).rotateZ(Math.PI / 2 - 0.35), 0, 0.05 + h * 0.68, z, wood);
+      sailTri(p, 0, [[0.06 + h * 0.2, z - sz * 0.5], [0.05 + h * 0.95, z - sz * 0.05 + tilt], [0.07 + h * 0.2, z + sz * 0.7]], cloth);
+      sailTri(p, 0.002, [[0.05 + h * 0.97, z], [0.05 + h * 1.12, z], [0.05 + h * 0.97, z - 0.06]], 0xc8443a);
+    };
+    mast(0.04, 0.46, 0.2, 0);
+    mast(0.17, 0.34, 0.15, 0);
+    mast(-0.13, 0.3, 0.14, 0);
+    // croix peinte sur la grand-voile
+    p.box(0.004, 0.07, 0.012, 0.004, 0.2, 0.04, 0xc8443a);
+    p.box(0.004, 0.012, 0.06, 0.004, 0.215, 0.04, 0xc8443a);
   },
   steam: (p) => {
     // coque de fer, flottaison rouge, roues à aubes, cabine blanche, cheminée noire à bague rouge
@@ -229,6 +243,21 @@ const swimGeo = (kind: 'dolphin' | 'whale' | 'manta') => geo(`swim:${kind}`, (p)
 });
 const rodGeo = () => geo('rod', (p) => p.add(new THREE.CylinderGeometry(0.003, 0.006, 0.42, 4).translate(0, 0.21, 0), 0, 0, 0, 0x6a4a34));
 const bobberGeo = () => geo('bobber', (p) => { p.sphere(0.014, 0, 0.004, 0, 0xffffff); p.sphere(0.0145, 0, 0.012, 0, 0xd8443a, 0, 0.6); });
+/** Pour les marins du large : la longue-vue de laiton (voyage) et la gaffe à crochet avec son grappin (épave) */
+const glassGeo = () => geo('glass', (p) => {
+  p.add(new THREE.CylinderGeometry(0.007, 0.0045, 0.15, 6).translate(0, 0.075, 0), 0, 0, 0, 0xb08a3c);
+  p.add(new THREE.CylinderGeometry(0.0085, 0.0085, 0.012, 6).translate(0, 0.15, 0), 0, 0, 0, 0x5a3e2e);
+  p.add(new THREE.CylinderGeometry(0.0075, 0.0075, 0.02, 6).translate(0, 0.03, 0), 0, 0, 0, 0x6a4a34);
+});
+const gaffeGeo = () => geo('gaffe', (p) => {
+  p.add(new THREE.CylinderGeometry(0.004, 0.006, 0.5, 5).translate(0, 0.25, 0), 0, 0, 0, 0x6a4a34);
+  p.box(0.006, 0.03, 0.006, 0, 0.5, 0.0, 0x4a4e56);
+  p.box(0.006, 0.006, 0.026, 0, 0.516, 0.013, 0x4a4e56);
+});
+const grappleGeo = () => geo('grapple', (p) => {
+  p.sphere(0.01, 0, 0, 0, 0x3a3e46);
+  for (const r of [0, 1.57, 3.14, 4.71]) p.box(0.004, 0.02, 0.004, Math.sin(r) * 0.012, -0.008, Math.cos(r) * 0.012, 0x3a3e46, r);
+});
 const fishGeo = () => geo('fish', (p) => {
   p.sphere(0.03, 0, 0, 0, 0xc9cdd2, 0, 0.55);
   p.add(new THREE.ConeGeometry(0.02, 0.035, 3).rotateX(-Math.PI / 2), 0, 0, -0.04, 0xa8adb4);
@@ -4374,27 +4403,29 @@ export class ExpeditionScene {
   private stepRods(a: ActiveExpedition) {
     // (pas de pêcheur à la ligne pendant la chasse au monstre : tout l'équipage est aux harpons)
     if ((this.kind !== 'boat' && this.kind !== 'fish') || this.monster) return;
+    // l'outil selon l'ouvrage : longue-vue au grand voyage (rien à pêcher), gaffe et grappin sur l'épave, canne ailleurs
+    const gear = this.story === 'voyage' ? (a.age <= 3 ? 'glass' : 'none') : this.story === 'wreck' ? 'gaffe' : 'rod';
     const fishers = this.kind === 'boat' ? [this.boat!.riders[this.boat!.riders.length - 1], ...a.party.filter((id) => !this.boat!.riders.includes(id))] : a.party;
     const w = this.world, wat = this.water!;
     for (const id of a.party) {
       const p = fishers.includes(id) && (this.boat?.riders.includes(id) || this.agents.memberDone(id)) ? this.agents.partyPositions([id])[0] : undefined;
       let r = this.rods.get(id);
-      if (!p) { if (r) r.rod.visible = r.bob.visible = r.line.visible = false; continue; }
+      if (!p || gear === 'none') { if (r) r.rod.visible = r.bob.visible = r.line.visible = false; continue; }
       if (!r) {
-        r = { rod: new THREE.Mesh(rodGeo(), mats.body), bob: new THREE.Mesh(bobberGeo(), mats.body), line: new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), LINE) };
+        r = { rod: new THREE.Mesh(gear === 'glass' ? glassGeo() : gear === 'gaffe' ? gaffeGeo() : rodGeo(), mats.body), bob: new THREE.Mesh(gear === 'gaffe' ? grappleGeo() : bobberGeo(), mats.body), line: new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), LINE) };
         r.line.userData.flat = true;
         this.group.add(r.rod, r.bob, r.line);
         this.props.push(r.rod, r.bob, r.line);
         this.rods.set(id, r);
       }
-      r.rod.visible = r.bob.visible = r.line.visible = true;
+      r.rod.visible = true; r.bob.visible = r.line.visible = gear !== 'glass';
       const [x, z, h] = p, inBoat = this.boat?.riders.includes(id);
       const base = new THREE.Vector3(x + Math.sin(h) * 0.06, (inBoat ? this.boat!.obj.position.y + 0.06 : w.surfaceAt(x, z)) + 0.1, z + Math.cos(h) * 0.06);
       r.rod.position.copy(base);
-      r.rod.rotation.set(0.9, h, 0, 'YXZ');
-      const tip = new THREE.Vector3(0, 0.42, 0).applyEuler(r.rod.rotation).add(base);
+      r.rod.rotation.set(gear === 'glass' ? 1.25 + Math.sin(this.t * 0.5 + id) * 0.1 : gear === 'gaffe' ? 0.55 : 0.9, h, 0, 'YXZ');
+      const tip = new THREE.Vector3(0, gear === 'gaffe' ? 0.5 : 0.42, 0).applyEuler(r.rod.rotation).add(base);
       const bx = tip.x + Math.sin(h) * 0.12, bz = tip.z + Math.cos(h) * 0.12;
-      r.bob.position.set(bx, wat.level + 0.004 + Math.sin(this.t * 2.3 + id) * 0.004 - (Math.sin(this.t * 0.9 + id) > 0.93 ? 0.012 : 0), bz);
+      r.bob.position.set(bx, gear === 'gaffe' ? wat.level - 0.02 + Math.sin(this.t * 1.1 + id) * 0.012 : wat.level + 0.004 + Math.sin(this.t * 2.3 + id) * 0.004 - (Math.sin(this.t * 0.9 + id) > 0.93 ? 0.012 : 0), bz);
       const lp = r.line.geometry.attributes.position as THREE.BufferAttribute;
       lp.setXYZ(0, tip.x, tip.y, tip.z); lp.setXYZ(1, bx, r.bob.position.y + 0.01, bz); lp.needsUpdate = true;
       r.line.geometry.computeBoundingSphere();
