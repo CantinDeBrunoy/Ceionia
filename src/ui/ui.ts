@@ -661,7 +661,7 @@ export class UI {
     const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}">${ic(CAT_ICON[c.id], 16, 2)}<span class="cl">${c.label}</span></button>`).join('')
       : `<span class="mhint">${ic(t.icon, 16, 2)}${tr(t.hint)}</span>`;
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
       const why = b.dataset.c !== KINDS.gather.cat ? this.startWhy() : null;
