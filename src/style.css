@@ -1012,3 +1012,5 @@ body.under #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 122px); }
 /* la cinématique de la victoire : l'interface s'efface */
 body.cinematic #hud, body.cinematic #dock, body.cinematic #expList, body.cinematic #troopBar, body.cinematic #underBar, body.cinematic #bossBar, body.cinematic #selCard,
 body.cinematic #warAlert, body.cinematic #tuto, body.cinematic #tutoRing, body.cinematic #warTip, body.cinematic #homeBtn { display: none !important; }
+#needInfo .row2 { display: flex; gap: 6px; margin-top: 6px; }
+#needInfo .row2 button { flex: 1; min-width: 0; font-size: 12px; padding: 6px 4px; }

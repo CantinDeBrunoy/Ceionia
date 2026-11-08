@@ -1220,7 +1220,7 @@ export class UI {
       <h4>${ic(SECURITY_NEED.icon, 18, 2)} ${SECURITY_NEED.label}<em class="${state}">${pc(c.share)}</em></h4>
       <div class="sub">couverture moyenne des habitations</div>
       <div class="bar ${state}"><i style="width:${Math.round(c.share * 100)}%"></i></div>
-      <p class="hint">Chaque caserne de pompiers et chaque poste de police protège les maisons à sa portée : ${FIRE_RANGE} cases pour les pompiers, ${policeRange(1)} à ${policeRange(5)} cases pour la police (selon l’âge du poste). Ce n’est pas obligatoire pour grandir : c’est un bonus, +${COVER_JOY} de bien-être par maison protégée par les deux (jusqu’à +${COVER_JOY_MAX}), et des incendies éteints en un clin d’œil.</p>
+      <p class="hint">Pompiers : ${FIRE_RANGE} cases autour de la caserne. Police : ${policeRange(1)} à ${policeRange(5)} cases selon l’âge du poste. Un bonus, pas une obligation : +${COVER_JOY} de bien-être par maison protégée par les deux (jusqu’à +${COVER_JOY_MAX}).</p>
       <div class="src">
         ${row('flame', 'Couverture des pompiers', pc(c.fireShare), `${c.stations.fire.length} caserne${c.stations.fire.length > 1 ? 's' : ''}`)}
         ${row('shield', 'Couverture de la police', pc(c.policeShare), `${c.stations.police.length} poste${c.stations.police.length > 1 ? 's' : ''}`)}
@@ -1229,8 +1229,7 @@ export class UI {
       <div class="crow total"><span>Postes de sécurité</span><em>${c.stations.fire.length + c.stations.police.length}</em></div>
       ${tips.length ? `<p class="hint ${state}">${tips.join(' ')}</p>` : '<p class="hint ok">Tout le village est bien protégé !</p>'}
       <button class="primary" data-cover title="Cercles verts : portée des postes. Rond orange : maison mal protégée. Rond rouge : aucune protection.">${ic('eye', 15, 2.2)} ${on ? 'Masquer la carte de couverture' : 'Montrer sur la carte'}</button>
-      <button data-kind="fire">${ic('hammer', 15, 2.2)} Bâtir « ${sim.nameOf('fire')} »</button>
-      <button data-kind="police">${ic('hammer', 15, 2.2)} Bâtir « ${sim.nameOf('police')} »</button>`;
+      <div class="row2"><button data-kind="fire">${ic('hammer', 14, 2.2)} ${sim.nameOf('fire')}</button><button data-kind="police">${ic('hammer', 14, 2.2)} ${sim.nameOf('police')}</button></div>`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
