@@ -7951,65 +7951,394 @@ function fishmarket(p: Parts, age: number) {
 }
 
 /**
- * Ferme marine (3 × 3) : une plateforme sur pilotis dans son bassin, avec son éolienne qui tourne, sa grue, sa plate-forme
- * d'hélicoptère, ses cages d'élevage flottantes et sa passerelle de la rive. À l'époque moderne, acier jaune et orange ;
- * au futur, coque blanche aux liserés lumineux, dôme de culture d'algues et grande éolienne
+ * Ferme marine (3 × 3) : un bassin de mer où s'élèvent poissons, algues et coquillages. À gauche, la plateforme principale
+ * sur pilotis (béton et acier, garde-corps, liseré de sécurité) porte le bâtiment de contrôle vitré et son radar, les
+ * conteneurs frigorifiques, les réservoirs, le silo d'aliments et son tapis roulant qui file sur pilotis jusqu'aux cages ;
+ * la grue de service (palan, filet) décharge le bateau-nourrisseur amarré (cordages, défenses) ; à droite, l'hélisurface en
+ * encorbellement, la passerelle vers l'éolienne et son transformateur. Dans l'eau : cages circulaires aux flotteurs jaunes
+ * (filet, bancs de poissons qui tournent), tables à coquillages et lignes de bouées d'algues, écume autour des pilotis,
+ * ouvriers en gilet, drone qui rôde, mouettes. Âge 5 : modules blancs hexagonaux aux liserés cyan, serre sous dôme de culture,
+ * bras robotisé, hologramme, cages hexagonales, drones-nourrisseurs et seconde éolienne
  */
 function offshore(p: Parts, age: number) {
-  const fut = age >= 5, steel = fut ? 0xdde8f0 : 0xf2c23a, mod = fut ? 0xf2f6fa : 0xd8dce2, dk = fut ? 0x8a96a2 : 0x5d6168;
+  const fut = age >= 5;
+  const steel = fut ? 0xdde8f0 : 0xf2c23a, mod = fut ? 0xf2f6fa : 0xd8dce2, dk = fut ? 0x8a96a2 : 0x5d6168, conc = fut ? 0xdfe6ec : 0x9a9fa6;
+  const acc = fut ? 0x6ae4ff : 0xf28a3c, cageC = fut ? 0xf4f8fb : 0xf2c23a, glass = fut ? 0xcdeef6 : 0xa8d4e6, pile = fut ? 0xe8eef3 : 0x8a8f96;
+  const nz: Glow = fut ? 'neon' : false, lamp: Glow = fut ? 'neon' : true;
+  const D = 0.56, cx = -0.35, cz = -0.45, PW = 1.3, PD = 1.0, wy = 0.04, BY = D + 0.05, BX = -0.1;
+  const hose = fut ? 0x6ae4ff : 0x2f7fd0;
+  // barre fine d'un point à l'autre (haubans, entretoises, escaliers, cordages)
+  const rod = (q: Parts, x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, t: number, c: number, glow: Glow = false) => {
+    const dx = x2 - x1, dy = y2 - y1, dz = z2 - z1, L = Math.hypot(dx, dy, dz);
+    q.add(new THREE.BoxGeometry(t, t, L).rotateX(-Math.asin(dy / L)).rotateY(Math.atan2(dx, dz)), (x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2, c, 0, glow);
+  };
+  // un poisson (cap +x tourné de ry) : corps aplati, queue, nageoire dorsale
+  const fish = (q: Parts, x: number, y: number, z: number, c: number, ry = 0, s = 1, glow: Glow = false) => {
+    const co = Math.cos(ry), si = Math.sin(ry);
+    q.add(new THREE.IcosahedronGeometry(0.03 * s, 1).scale(1.5, 0.5, 0.6), x, y, z, c, ry, glow);
+    q.add(new THREE.ConeGeometry(0.02 * s, 0.04 * s, 4).rotateZ(-Math.PI / 2), x - co * 0.058 * s, y, z + si * 0.058 * s, dark(c, 0.88), ry, glow);
+    q.add(new THREE.ConeGeometry(0.012 * s, 0.022 * s, 3), x - co * 0.005 * s, y + 0.016 * s, z + si * 0.005 * s, dark(c, 0.8), ry, glow);
+  };
+  const silver = [0xc8d4dc, 0xe8925a, 0x9db4c6, 0xdfe6ec, 0xd8b28c];
+  // une mouette perchée (bec vers +x tourné de ry)
+  const gull = (x: number, y: number, z: number, ry = 0) => {
+    const co = Math.cos(ry), si = Math.sin(ry), P = (u: number, h: number): [number, number, number] => [x + co * u, y + h, z - si * u];
+    p.add(new THREE.IcosahedronGeometry(0.03, 0).scale(1.5, 0.85, 0.9), ...P(0, 0.03), 0xf4f4f0, ry);
+    p.add(new THREE.BoxGeometry(0.06, 0.008, 0.05), ...P(-0.005, 0.054), 0x9aa3ad, ry);
+    p.add(new THREE.ConeGeometry(0.01, 0.034, 3).rotateZ(Math.PI / 2 + 0.2), ...P(-0.05, 0.044), 0x6a727c, ry);
+    p.add(new THREE.IcosahedronGeometry(0.017, 0), ...P(0.043, 0.055), 0xf4f4f0, ry);
+    p.add(new THREE.ConeGeometry(0.006, 0.02, 4).rotateZ(-Math.PI / 2), ...P(0.064, 0.052), 0xf2c23a, ry);
+  };
+  // l'écume au pied d'un pilotis ou d'un flotteur
+  const foam = (x: number, z: number, r: number) => p.add(new THREE.TorusGeometry(r, 0.008, 3, 10).rotateX(Math.PI / 2), x, wy + 0.004, z, 0xf2fafa);
+  // un ouvrier en gilet orange et casque jaune, sur le pont
+  const worker = (x: number, z: number, ry: number) => figure(p, x, z, fut ? 0xffa31a : 0xff7a1a, ry, false, 0xffd23a, 'idle', D - 0.012);
+
+  // ── la mer : bassin, bandes de profondeur, ombre de la plateforme, éclats de lumière
   p.box(2.9, 0.012, 2.9, 0, 0, 0, C.green);
-  // le bassin d'eau profonde où l'on élève poissons et algues
-  p.cyl(1.4, 1.4, 0.03, 18, 0, 0.0, 0, 0x6a90a8);
+  p.cyl(1.4, 1.4, 0.03, 18, 0, 0, 0, 0x6a90a8);
   p.cyl(1.34, 1.34, 0.01, 18, 0, 0.03, 0, C.water);
-  // les pilotis et leurs entretoises, la plateforme
-  const px = 0.62, H = 0.62;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    p.cyl(0.07, 0.09, H, 8, sx * px, 0.0, sz * px, steel);
-    for (const y of [0.18, 0.4]) { p.box(0.02, 0.02, px * 2, sx * px, y, -px, dk); p.box(px * 2, 0.02, 0.02, -px, y, sz * px, dk); }
+  p.cyl(1.12, 1.12, 0.0015, 18, 0, wy, 0, 0x7cc6d8);
+  p.cyl(0.8, 0.8, 0.0015, 18, 0, wy + 0.0015, 0, 0x5fb0cc);
+  p.box(PW + 0.14, 0.0015, PD + 0.14, cx + 0.1, wy + 0.003, cz + 0.08, 0x3f86a4);
+  for (let i = 0; i < 12; i++) {
+    const a = i * 2.4, r = 0.35 + ((i * 0.37) % 0.85);
+    p.box(0.1 + (i % 3) * 0.04, 0.002, 0.008, Math.cos(a) * r, wy + 0.0045, Math.sin(a) * r * 0.9 + 0.1, 0xe4f6fa, a * 0.4);
   }
-  p.box(1.6, 0.06, 1.6, 0, H, 0, dk);
-  p.box(1.5, 0.02, 1.5, 0, H + 0.06, 0, fut ? 0xc8d4dc : 0x8a8f96);
-  // le logement, la torchère et la grue
-  p.box(0.5, 0.26, 0.4, -0.42, H + 0.08, -0.35, mod);
-  for (let i = 0; i < 5; i++) p.box(0.06, 0.05, 0.01, -0.62 + i * 0.09, H + 0.2, -0.145, C.win, 0, true);
-  p.box(0.52, 0.02, 0.42, -0.42, H + 0.34, -0.35, fut ? 0x2a4a8a : 0xd84a3e);
-  p.cyl(0.015, 0.02, 0.5, 5, 0.55, H + 0.08, -0.55, C.metal); p.cone(0.03, 0.07, 5, 0.55, H + 0.58, -0.55, C.flame, true);
-  p.box(0.06, 0.4, 0.06, -0.62, H + 0.08, 0.2, steel); p.box(0.04, 0.04, 0.6, -0.62, H + 0.48, -0.1, steel);
-  p.cyl(0.003, 0.003, 0.2, 3, -0.62, H + 0.28, -0.28, 0x3a3030); p.box(0.07, 0.07, 0.07, -0.62, H + 0.2, -0.28, 0xd84a3e);
-  // garde-corps tout autour, échelle de coupée, caisses de poisson, silo d'aliments, canot de sauvetage, mouettes
-  for (let i = 0; i <= 10; i++) { const t = -0.75 + i * 0.15; for (const [x, z] of [[t, -0.76], [t, 0.76], [-0.76, t], [0.76, t]]) p.box(0.012, 0.07, 0.012, x, H + 0.08, z, steel); }
-  for (const [w, d, x, z] of [[1.52, 0.012, 0, -0.76], [1.52, 0.012, 0, 0.76], [0.012, 1.52, -0.76, 0], [0.012, 1.52, 0.76, 0]]) p.box(w, 0.012, d, x, H + 0.14, z, steel);
-  p.box(0.012, 0.3, 0.012, 0.56, H - 0.3, 0.76, dk); p.box(0.012, 0.3, 0.012, 0.64, H - 0.3, 0.76, dk);
-  for (let i = 0; i < 4; i++) p.box(0.1, 0.008, 0.012, 0.6, H - 0.27 + i * 0.07, 0.76, dk);
-  for (const [x, y, z] of [[-0.2, 0, 0.62], [-0.2, 0.06, 0.62], [-0.34, 0, 0.62]]) { p.box(0.12, 0.06, 0.09, x, H + 0.08 + y, z, fut ? 0xeef4f8 : 0x3c7fd8); p.box(0.1, 0.008, 0.07, x, H + 0.14 + y, z, 0xe4f2fa); }
-  p.cyl(0.07, 0.07, 0.2, 8, -0.05, H + 0.08, -0.62, mod); p.cone(0.075, 0.06, 8, -0.05, H + 0.28, -0.62, dk); p.box(0.01, 0.1, 0.01, -0.05, H + 0.14, -0.55, dk);
-  p.add(new THREE.IcosahedronGeometry(1, 1).scale(0.1, 0.035, 0.05), 0.0, H + 0.1, 0.45, 0xf28a3c); p.box(0.14, 0.01, 0.03, 0.0, H + 0.08, 0.45, dk);
-  for (const [x, z] of [[-0.7, 0.7], [0.7, -0.7]]) { p.sphere(0.03, x, H + 0.1, z, 0xf4f4f0, 0, 0.8); p.sphere(0.018, x + 0.03, H + 0.13, z, 0xf4f4f0); p.cone(0.007, 0.02, 4, x + 0.05, H + 0.125, z, 0xf2c23a); }
-  // la plate-forme d'hélicoptère en encorbellement : disque, H, feux de balisage
-  p.cyl(0.26, 0.26, 0.02, 14, 0.4, H + 0.06, 0.55, 0x3a3f48);
-  p.box(0.14, 0.003, 0.03, 0.4, H + 0.082, 0.55, C.white); p.box(0.03, 0.003, 0.14, 0.4, H + 0.082, 0.55, C.white);
-  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; p.box(0.015, 0.012, 0.015, 0.4 + Math.cos(a) * 0.25, H + 0.08, 0.55 + Math.sin(a) * 0.25, 0x3aff7a, 0, true); }
-  // l'éolienne : mât, nacelle, trois pales qui tournent
-  const tx = 0.35, tz = -0.3, tower = fut ? 1.6 : 1.3;
-  p.cyl(0.025, 0.045, tower, 8, tx, H + 0.06, tz, C.white);
-  const ny = H + 0.06 + tower;
-  p.box(0.07, 0.06, 0.14, tx, ny - 0.03, tz, C.white);
-  const rot = turning([tx, ny, tz + 0.09], [0, 0, 1], fut ? 0.35 : 0.22), bl = fut ? 0.7 : 0.55;
-  for (let i = 0; i < 3; i++) rot.box(0.035, bl, 0.012, 0, 0, 0, fut ? 0xf2f6fa : C.white, 0, fut ? 'neon' : false, (i * Math.PI * 2) / 3);
-  rot.sphere(0.03, 0, -0.015, 0, C.white);
-  p.sphere(0.012, tx, ny + 0.04, tz, 0xff3a2a);
-  // les cages d'élevage flottantes : anneaux, poissons argentés ; la passerelle vers la rive
-  for (const [x, z] of [[-0.95, 0.65], [-0.95, -0.2], [0.95, 0.05], [0.2, 1.0]]) {
-    p.add(new THREE.TorusGeometry(0.24, 0.018, 4, 16).rotateX(Math.PI / 2), x, 0.05, z, fut ? 0x6ae4ff : 0xf28a3c, 0, fut ? 'neon' : false);
-    p.add(new THREE.TorusGeometry(0.16, 0.012, 4, 14).rotateX(Math.PI / 2), x, 0.05, z, dk);
-    for (let i = 0; i < 3; i++) p.add(new THREE.IcosahedronGeometry(0.025, 1).scale(1.6, 0.5, 0.6), x + Math.cos(i * 2.1) * 0.08, 0.06, z + Math.sin(i * 2.1) * 0.08, 0xc8d4dc, i);
+
+  // ── la plateforme principale : pilotis, entretoises, caillebotis, liseré de sécurité
+  const pxs = [-0.95, -0.35, 0.25], pzs = [-0.9, 0.0];
+  for (const x of pxs) for (const z of pzs) {
+    p.cyl(0.045, 0.06, D - 0.08, 8, x, 0, z, pile);
+    p.cyl(0.066, 0.066, 0.03, 8, x, 0.3, z, steel);
+    foam(x, z, 0.085);
   }
-  p.box(0.12, 0.02, 0.9, 0.0, 0.14, 1.0, C.wood); p.box(0.01, 0.07, 0.9, -0.07, 0.15, 1.0, C.darkwood); p.box(0.01, 0.07, 0.9, 0.07, 0.15, 1.0, C.darkwood);
+  for (const z of pzs) p.box(1.2, 0.02, 0.02, -0.35, 0.2, z, dk);
+  for (const x of pxs) p.box(0.02, 0.02, 0.9, x, 0.2, -0.45, dk);
+  rod(p, -0.95, 0.2, 0.0, -0.35, 0.45, 0.0, 0.014, dk); rod(p, -0.35, 0.2, 0.0, 0.25, 0.45, 0.0, 0.014, dk);
+  rod(p, 0.25, 0.2, 0.0, 0.25, 0.45, -0.45, 0.014, dk); rod(p, -0.95, 0.2, -0.9, -0.95, 0.45, -0.45, 0.014, dk);
+  p.box(PW, 0.05, PD, cx, D - 0.07, cz, dk);
+  p.box(PW - 0.02, 0.02, PD - 0.02, cx, D - 0.02, cz, conc);
+  for (const s of [-1, 1]) {
+    p.box(PW - 0.04, 0.004, 0.014, cx, D, cz + s * (PD / 2 - 0.02), steel, 0, nz);
+    p.box(0.014, 0.004, PD - 0.04, cx + s * (PW / 2 - 0.02), D, cz, steel, 0, nz);
+  }
+  for (let i = 0; i < 8; i++) p.box(0.004, 0.003, PD - 0.1, -0.95 + i * 0.17, D, cz, dark(conc, 0.88));
+  for (const [x, z] of [[-0.45, -0.1], [0.05, -0.1]]) p.cyl(0.03, 0.03, 0.004, 8, x, D, z, dark(conc, 0.7));
+  // garde-corps tout autour (ouvert sur l'hélisurface, la passerelle de l'éolienne, la descente et le tapis)
+  const gap = (x: number, z: number) =>
+    (x > 0.29 && ((z > -0.4 && z < 0.1) || (z > -0.78 && z < -0.62))) || (z > 0.04 && ((x > -0.7 && x < -0.54) || (x > -0.17 && x < -0.03)));
+  const rail = (ax1: number, az1: number, ax2: number, az2: number) => {
+    const n = Math.max(1, Math.round(Math.hypot(ax2 - ax1, az2 - az1) / 0.12)), ry = Math.atan2(ax2 - ax1, az2 - az1), len = Math.hypot(ax2 - ax1, az2 - az1) / n;
+    for (let i = 0; i <= n; i++) { const x = ax1 + ((ax2 - ax1) * i) / n, z = az1 + ((az2 - az1) * i) / n; if (!gap(x, z)) p.box(0.012, 0.08, 0.012, x, D, z, steel); }
+    for (let i = 0; i < n; i++) {
+      const mx = ax1 + ((ax2 - ax1) * (i + 0.5)) / n, mz = az1 + ((az2 - az1) * (i + 0.5)) / n;
+      if (gap(mx, mz)) continue;
+      p.box(0.01, 0.01, len, mx, D + 0.075, mz, steel, ry); p.box(0.008, 0.008, len, mx, D + 0.04, mz, steel, ry);
+    }
+  };
+  const x0 = cx - PW / 2 + 0.02, x1 = cx + PW / 2 - 0.02, z0 = cz - PD / 2 + 0.02, z1 = cz + PD / 2 - 0.02;
+  rail(x0, z0, x1, z0); rail(x0, z1, x1, z1); rail(x0, z0, x0, z1); rail(x1, z0, x1, z1);
+  // feux de position aux angles : ambre, cyan au futur
+  for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) p.box(0.022, 0.022, 0.022, x, D + 0.08, z, fut ? 0x6ae4ff : 0xffb15c, 0, lamp);
+  // bouées de sauvetage et bittes d'amarrage
+  p.add(new THREE.TorusGeometry(0.03, 0.009, 4, 10), -0.62, D + 0.06, z1 - 0.01, 0xf4f2ee);
+  p.add(new THREE.TorusGeometry(0.03, 0.009, 4, 10), 0.1, D + 0.06, z1 - 0.01, 0xd84a3e);
+  for (const z of [-0.5, -0.2]) { p.cyl(0.014, 0.018, 0.04, 6, x0 + 0.04, D, z, 0x3a3f48); p.cyl(0.022, 0.016, 0.01, 6, x0 + 0.04, D + 0.04, z, 0x3a3f48); }
+
+  // ── le bâtiment de contrôle : rez-de-pont, passerelle vitrée, toit, mât, radar qui tourne
+  const bx = -0.38, bz = -0.76;
+  p.box(0.5, 0.16, 0.26, bx, D, bz, mod);
+  p.box(0.51, 0.03, 0.27, bx, D, bz, dk);
+  p.box(0.51, 0.012, 0.27, bx, D + 0.1, bz, fut ? 0x6ae4ff : 0xf2c23a, 0, nz);
+  for (let i = 0; i < 3; i++) { p.box(0.08, 0.06, 0.004, bx - 0.18 + i * 0.12, D + 0.065, bz + 0.13, dk); p.box(0.065, 0.045, 0.006, bx - 0.18 + i * 0.12, D + 0.072, bz + 0.132, C.win, 0, true); }
+  p.box(0.006, 0.05, 0.07, bx - 0.252, D + 0.072, bz, C.win, 0, true);
+  p.box(0.066, 0.11, 0.008, bx + 0.2, D, bz + 0.132, fut ? 0x2a4a8a : 0x1f7ac0); p.box(0.024, 0.04, 0.01, bx + 0.2, D + 0.05, bz + 0.135, C.win, 0, true);
+  p.box(0.1, 0.012, 0.06, bx + 0.2, D, bz + 0.16, dk); p.box(0.09, 0.008, 0.04, bx + 0.2, D + 0.125, bz + 0.15, dk);
+  p.add(new THREE.TorusGeometry(0.024, 0.007, 4, 10), bx - 0.22, D + 0.115, bz + 0.133, 0xd84a3e);
+  p.box(0.52, 0.012, 0.28, bx, D + 0.16, bz, dk);
+  p.box(0.07, 0.04, 0.05, bx + 0.17, D + 0.172, bz - 0.06, 0xc8ccd2); p.cyl(0.018, 0.018, 0.004, 8, bx + 0.17, D + 0.212, bz - 0.06, 0x3a3f48);
+  const gb = bx - 0.04;
+  p.box(0.34, 0.1, 0.2, gb, D + 0.172, bz, glass);
+  for (const sx of [-1, 0, 1]) for (const sz of [-1, 1]) p.box(0.012, 0.1, 0.012, gb + sx * 0.166, D + 0.172, bz + sz * 0.096, dk);
+  p.box(0.3, 0.05, 0.006, gb, D + 0.195, bz + 0.1, C.win, 0, true);
+  for (const s of [-1, 1]) p.box(0.006, 0.05, 0.16, gb + s * 0.171, D + 0.195, bz, C.win, 0, true);
+  p.box(0.38, 0.012, 0.24, gb, D + 0.272, bz, mod);
+  for (const s of [-1, 1]) p.box(0.03, 0.016, 0.016, gb + s * 0.13, D + 0.262, bz + 0.126, 0xfff1c9, 0, true);
+  p.cyl(0.006, 0.008, 0.22, 4, bx + 0.1, D + 0.284, bz - 0.05, dk);
+  p.box(0.09, 0.006, 0.006, bx + 0.1, D + 0.42, bz - 0.05, dk); p.box(0.06, 0.006, 0.006, bx + 0.1, D + 0.46, bz - 0.05, dk);
+  p.box(0.016, 0.016, 0.016, bx + 0.1, D + 0.5, bz - 0.05, 0xff3a2a, 0, true);
+  p.cyl(0.008, 0.01, 0.03, 6, gb - 0.08, D + 0.284, bz, dk);
+  { const r = turning([gb - 0.08, D + 0.33, bz], [0, 1, 0], 1.4); r.box(0.16, 0.008, 0.014, 0, 0, 0, 0xc8ccd2); r.box(0.014, 0.02, 0.014, 0.08, 0, 0, dk); }
+
+  // ── les conteneurs frigorifiques : cannelures, bandeau, groupe de froid ; au futur, panneaux solaires sur le toit
+  const reefer = (x: number, y: number, z: number) => {
+    p.box(0.28, 0.11, 0.12, x, y, z, 0xeef2f5);
+    for (let i = 0; i < 6; i++) p.box(0.005, 0.1, 0.004, x - 0.12 + i * 0.048, y + 0.005, z + 0.061, 0xd0d6dc);
+    p.box(0.282, 0.02, 0.122, x, y + 0.04, z, fut ? 0x6ae4ff : 0x1f7ac0, 0, nz);
+    p.box(0.03, 0.09, 0.1, x + 0.155, y + 0.01, z, 0xc8ccd2);
+    p.add(new THREE.CylinderGeometry(0.03, 0.03, 0.006, 8).rotateZ(Math.PI / 2), x + 0.173, y + 0.055, z, 0x3a3f48);
+    p.box(0.012, 0.012, 0.004, x + 0.155, y + 0.09, z + 0.052, 0x3aff7a, 0, true);
+  };
+  reefer(-0.79, D, -0.84); reefer(-0.77, D + 0.11, -0.84); reefer(-0.79, D, -0.7);
+  if (fut) for (const x of [-0.84, -0.7]) p.add(new THREE.BoxGeometry(0.12, 0.006, 0.1), x, D + 0.225, -0.84, 0x2a4a9a);
+  else p.box(0.1, 0.02, 0.08, -0.79, D + 0.11, -0.7, 0xe8832a);
+
+  // ── les réservoirs, le silo d'aliments, les tuyauteries
+  const tank = (x: number, z: number, h: number) => {
+    const c = fut ? 0xf2f6fa : 0xe4e8ee;
+    p.cyl(0.08, 0.08, 0.012, 10, x, D, z, dk);
+    p.cyl(0.075, 0.075, h, 10, x, D + 0.012, z, c);
+    p.cyl(0.078, 0.078, 0.014, 10, x, D + 0.012 + h * 0.55, z, acc, nz);
+    p.sphere(0.075, x, D + 0.012 + h, z, c, 1, 0.35);
+    p.cyl(0.006, 0.006, 0.05, 4, x, D + 0.012 + h + 0.02, z, dk);
+    p.box(0.012, h, 0.004, x + 0.078, D + 0.012, z, dk, 0.4);
+  };
+  tank(0.15, -0.78, 0.2); tank(0.15, -0.56, 0.16);
+  // le silo sur ses pieds, sa trémie au-dessus du tapis
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.box(0.012, 0.1, 0.012, BX + dx * 0.06, D, -0.5 + dz * 0.06, dk);
+  p.cyl(0.075, 0.02, 0.07, 10, BX, D + 0.1, -0.5, 0xc8ccd2);
+  p.cyl(0.075, 0.075, 0.2, 10, BX, D + 0.17, -0.5, fut ? 0xf2f6fa : 0xe4e8ee);
+  p.cyl(0.078, 0.078, 0.016, 10, BX, D + 0.25, -0.5, acc, nz);
+  p.cone(0.08, 0.07, 10, BX, D + 0.37, -0.5, dk);
+  p.cyl(0.006, 0.006, 0.08, 4, BX + 0.03, D + 0.42, -0.5, dk);
+  p.box(0.012, 0.28, 0.005, BX + 0.077, D + 0.1, -0.5, dk); for (let k = 0; k < 5; k++) p.box(0.02, 0.004, 0.008, BX + 0.077, D + 0.13 + k * 0.05, -0.5, dk);
+  p.cyl(0.012, 0.016, 0.04, 6, BX, D + 0.06, -0.5, 0xc8ccd2);
+  // tuyauterie : collecteur le long du bord est (eau et incendie), branchements aux réservoirs, descente à l'eau le long d'un pilotis
+  const pipeX = 0.27;
+  p.box(0.022, 0.022, 0.84, pipeX, D + 0.03, -0.45, hose);
+  p.box(0.022, 0.022, 0.84, pipeX - 0.026, D + 0.03, -0.45, 0xd84a3e);
+  for (const z of [-0.78, -0.56]) { p.box(0.1, 0.02, 0.02, 0.2, D + 0.04, z, hose); p.cyl(0.018, 0.018, 0.014, 6, 0.255, D + 0.032, z, dk); }
+  for (const z of [-0.8, -0.5, -0.2]) { p.box(0.012, 0.03, 0.012, pipeX, D, z, dk); p.box(0.012, 0.03, 0.012, pipeX - 0.026, D, z, dk); }
+  p.cyl(0.013, 0.013, D - wy + 0.02, 6, pipeX + 0.02, wy, 0.0, hose);
+  p.box(0.022, 0.022, 0.04, pipeX + 0.01, D + 0.03, 0.0, hose);
+  p.cyl(0.03, 0.03, 0.04, 8, pipeX + 0.02, wy + 0.02, 0.0, dk);
+  p.box(0.07, 0.014, 0.012, -0.5, D + 0.01, -0.62, hose);
+
+  // ── le tapis roulant d'alimentation : du silo aux cages, sur pilotis ; trémie intermédiaire ; poissons qui voyagent
+  const bz0 = -0.42, bz1 = 0.8, bl = bz1 - bz0, bm = (bz0 + bz1) / 2;
+  p.box(0.012, 0.03, bl, BX - 0.038, BY - 0.03, bm, dk); p.box(0.012, 0.03, bl, BX + 0.038, BY - 0.03, bm, dk);
+  p.box(0.07, 0.01, bl, BX, BY - 0.002, bm, 0x2e3440);
+  for (const s of [-1, 1]) p.box(0.008, 0.03, bl, BX + s * 0.04, BY, bm, steel);
+  if (fut) for (const s of [-1, 1]) p.box(0.006, 0.006, bl, BX + s * 0.046, BY + 0.03, bm, 0x6ae4ff, 0, 'neon');
+  for (let z = bz0 + 0.04; z < bz1; z += 0.1) p.box(0.07, 0.005, 0.012, BX, BY + 0.008, z, 0x4a5058);
+  for (const z of [-0.35, -0.15, 0.05]) { p.box(0.012, BY - D - 0.03, 0.012, BX - 0.03, D, z, dk); p.box(0.012, BY - D - 0.03, 0.012, BX + 0.03, D, z, dk); }
+  for (const z of [0.2, 0.4, 0.6, 0.78]) {
+    p.cyl(0.018, 0.026, BY - wy - 0.03, 6, BX, wy, z, pile);
+    p.box(0.12, 0.012, 0.012, BX, BY - 0.04, z, dk);
+    foam(BX, z, 0.045);
+  }
+  for (const [z, i] of [[0.12, 0], [0.5, 1], [0.66, 2], [-0.2, 3]] as [number, number][]) fish(p, BX, BY + 0.035, z, silver[i], -Math.PI / 2, 0.75, fut);
+  p.cyl(0.035, 0.012, 0.05, 6, BX, BY - 0.045, 0.79, steel);
+  for (const [dx, dz, y] of [[0.0, 0.0, 0.1], [0.012, 0.01, 0.07], [-0.01, 0.0, 0.045]]) p.sphere(0.007, BX + dx, y, 0.8 + dz, 0xd8b060);
+  // la trémie à mi-course : entonnoir sur son portique, au-dessus du tapis
+  for (const s of [-1, 1]) p.box(0.012, 0.1, 0.012, BX + s * 0.07, BY, 0.34, dk);
+  p.box(0.16, 0.012, 0.012, BX, BY + 0.1, 0.34, dk);
+  p.cyl(0.055, 0.018, 0.06, 8, BX, BY + 0.04, 0.34, fut ? 0xf2f6fa : 0xc8ccd2);
+  p.box(0.018, 0.018, 0.018, BX + 0.05, BY + 0.1, 0.34, 0x3aff7a, 0, true);
+
+  // ── les panneaux solaires (en rangée au pont, ou sur les conteneurs au futur) ; la serre sous dôme, le bras, l'hologramme
+  const panel = (x: number, y: number, z: number, tilt: number) => {
+    p.add(new THREE.BoxGeometry(0.13, 0.004, 0.1), x, y, z, 0xc8ccd2, 0, false, 0, tilt);
+    p.add(new THREE.BoxGeometry(0.115, 0.006, 0.085), x, y + 0.003, z, 0x2a4a9a, 0, false, 0, tilt);
+    for (const dx of [-0.02, 0.02]) p.add(new THREE.BoxGeometry(0.003, 0.008, 0.085), x + dx, y + 0.004, z, 0x7a96d0, 0, false, 0, tilt);
+    p.add(new THREE.BoxGeometry(0.115, 0.008, 0.003), x, y + 0.004, z, 0x7a96d0, 0, false, 0, tilt);
+  };
+  if (!fut) {
+    for (const x of [-0.62, -0.48, -0.34]) { panel(x, D + 0.075, -0.32, 0.5); p.box(0.012, 0.07, 0.012, x, D, -0.36, dk); p.box(0.012, 0.04, 0.012, x, D, -0.28, dk); }
+  } else {
+    // module hexagonal et sa serre : ossature de dôme, rangs de plantes, lampes de culture ; sas
+    const gx = -0.5, gz = -0.3;
+    p.cyl(0.25, 0.26, 0.03, 6, gx, D, gz, mod, false, Math.PI / 6);
+    p.add(new THREE.TorusGeometry(0.25, 0.006, 3, 6).rotateX(Math.PI / 2), gx, D + 0.03, gz, 0x6ae4ff, 0, 'neon');
+    for (let k = 0; k < 4; k++) p.add(new THREE.TorusGeometry(0.2, 0.005, 3, 10, Math.PI), gx, D + 0.03, gz, 0xdde8f0, (k * Math.PI) / 4);
+    for (const h of [0.07, 0.13]) p.add(new THREE.TorusGeometry(0.2 * Math.cos(Math.asin(h / 0.2)), 0.004, 3, 12).rotateX(Math.PI / 2), gx, D + 0.03 + h, gz, 0xdde8f0);
+    for (let i = -2; i <= 2; i++) for (const j of [-0.09, 0.07]) { p.sphere(0.025, gx + i * 0.07, D + 0.05, gz + j, i % 2 ? 0x7fd88f : 0x5fc8a0, 0, 0.9); p.cone(0.012, 0.04, 4, gx + i * 0.07, D + 0.07, gz + j, 0xa8e8a8); }
+    p.box(0.3, 0.008, 0.02, gx, D + 0.17, gz - 0.02, 0xff6af0, 0, 'neon');
+    p.box(0.07, 0.07, 0.03, gx, D + 0.03, gz + 0.215, mod); p.box(0.04, 0.05, 0.008, gx, D + 0.04, gz + 0.232, 0x6ae4ff, 0, 'neon');
+    // le bras robotisé qui charge le tapis : socle, deux segments, poignet, pince et sa caisse
+    p.cyl(0.04, 0.05, 0.05, 8, 0.12, D, -0.15, mod); p.add(new THREE.TorusGeometry(0.042, 0.005, 3, 10).rotateX(Math.PI / 2), 0.12, D + 0.05, -0.15, 0x6ae4ff, 0, 'neon');
+    const arm = sway([0.12, D + 0.06, -0.15], [0, 1, 0], 0.55, 0.28);
+    arm.box(0.03, 0.1, 0.03, 0, 0, 0, 0xf2f6fa); arm.sphere(0.026, 0, 0.11, 0, 0xdde8f0, 1);
+    rod(arm, 0, 0.11, 0, -0.1, 0.07, 0, 0.022, 0xf2f6fa);
+    arm.sphere(0.018, -0.1, 0.07, 0, 0x6ae4ff, 1, 1); arm.box(0.03, 0.02, 0.012, -0.11, 0.02, 0, 0xdde8f0);
+    arm.box(0.012, 0.05, 0.012, -0.1, 0.03, 0.02, 0xdde8f0); arm.box(0.012, 0.05, 0.012, -0.1, 0.03, -0.02, 0xdde8f0);
+    arm.box(0.06, 0.04, 0.045, -0.1, 0.0, 0, 0xeef4f8); fish(arm, -0.1, 0.045, 0, 0xffffff, 0, 0.7, true);
+    // l'hologramme d'un banc de poissons au-dessus de son projecteur
+    p.cyl(0.03, 0.04, 0.04, 8, 0.12, D, -0.34, mod); p.add(new THREE.TorusGeometry(0.032, 0.005, 3, 10).rotateX(Math.PI / 2), 0.12, D + 0.04, -0.34, 0x6ae4ff, 0, 'neon');
+    const hg = turning([0.12, D + 0.17, -0.34], [0, 1, 0], 0.8);
+    for (let k = 0; k < 3; k++) { const a = k * 2.1; fish(hg, Math.cos(a) * 0.05, Math.sin(k * 1.7) * 0.03, -Math.sin(a) * 0.05, 0x4ff0ff, a + Math.PI / 2, 0.8, true); }
+    hg.add(new THREE.TorusGeometry(0.07, 0.003, 3, 12).rotateX(Math.PI / 2), 0, -0.06, 0, 0x6ae4ff, 0, 'neon');
+  }
+  // caisses de poisson empilées au bord du tapis (bleues, ou blanches au futur)
+  for (const [x, y, z, r] of [[-0.27, 0, -0.1, 0.1], [-0.27, 0.07, -0.1, -0.06], [-0.26, 0, 0.0, 0.0]] as number[][]) {
+    const c = fut ? 0xeef4f8 : 0x3c7fd8;
+    p.box(0.15, 0.065, 0.1, x, D + y, z, c, r); p.box(0.152, 0.012, 0.102, x, D + y + 0.03, z, dark(c, 0.8), r);
+    p.box(0.13, 0.01, 0.08, x, D + y + 0.065, z, 0xe4f2fa, r);
+  }
+  // le canot de sauvetage sur son berceau, côté mer
+  p.box(0.2, 0.02, 0.06, -0.78, D, -0.08, dk);
+  p.add(new THREE.IcosahedronGeometry(1, 1).scale(0.1, 0.035, 0.05), -0.78, D + 0.045, -0.08, 0xf28a3c);
+  p.box(0.12, 0.01, 0.02, -0.78, D + 0.065, -0.08, 0xf4f2ee);
+
+  // ── la grue de service : fût, tourelle qui pivote, flèche haubanée, palan et filet qui pend sur le bateau
+  const kx = -0.85, kz = -0.35;
+  p.cyl(0.045, 0.06, 0.1, 8, kx, D, kz, steel); p.cyl(0.07, 0.07, 0.012, 8, kx, D, kz, dk);
+  const cr = sway([kx, D + 0.1, kz], [0, 1, 0], 0.4, 0.14);
+  cr.cyl(0.05, 0.05, 0.02, 8, 0, 0, 0, dk);
+  cr.box(0.07, 0.055, 0.07, 0.03, 0.02, 0, steel); cr.box(0.006, 0.03, 0.04, -0.008, 0.035, 0, C.win, 0, true);
+  cr.box(0.016, 0.2, 0.016, 0.0, 0.02, 0.0, steel);
+  rod(cr, 0.0, 0.18, 0, -0.3, 0.1, 0, 0.018, steel);
+  rod(cr, 0.0, 0.2, 0, -0.3, 0.1, 0, 0.005, dk); rod(cr, 0.0, 0.2, 0, 0.1, 0.05, 0, 0.005, dk);
+  cr.box(0.08, 0.05, 0.07, 0.1, 0.0, 0, 0x5d6168);
+  cr.box(0.012, 0.012, 0.012, 0.0, 0.22, 0, 0xff3a2a, 0, true);
+  cr.box(0.004, 0.36, 0.004, -0.3, -0.28, 0, 0x3a3030);
+  cr.box(0.03, 0.04, 0.024, -0.3, -0.32, 0, steel); cr.add(new THREE.TorusGeometry(0.012, 0.003, 3, 8, Math.PI * 1.5), -0.3, -0.335, 0, dk);
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) rod(cr, -0.3, -0.34, 0, -0.3 + dx * 0.04, -0.4, dz * 0.04, 0.003, 0x3a3030);
+  cr.add(new THREE.IcosahedronGeometry(1, 1).scale(0.05, 0.04, 0.05), -0.3, -0.42, 0, 0xe8832a);
+  cr.add(new THREE.TorusGeometry(0.045, 0.003, 3, 10).rotateX(Math.PI / 2), -0.3, -0.41, 0, dark(0xe8832a, 0.7));
+  fish(cr, -0.3, -0.37, 0.0, 0xc8d4dc, 0.4, 0.6);
+
+  // ── le bateau-nourrisseur amarré contre la plateforme : coque, pont, timonerie vitrée, cuve à granulés, défenses, cordages
+  const ax = -1.15, az = -0.35;
+  const bt = sway([ax, wy + 0.005, az], [0, 0, 1], 0.05, 0.35);
+  bt.add(new THREE.IcosahedronGeometry(1, 1).scale(0.075, 0.05, 0.2), 0, 0.012, 0, fut ? 0xf2f6fa : 0x1f7ac0);
+  bt.add(new THREE.IcosahedronGeometry(1, 1).scale(0.077, 0.012, 0.202), 0, 0.03, 0, fut ? 0x6ae4ff : 0xf4f2ee, 0, nz);
+  bt.box(0.11, 0.008, 0.28, 0, 0.044, 0, 0xb8bcc2);
+  bt.box(0.1, 0.07, 0.08, 0, 0.052, -0.1, 0xf4f2ee); bt.box(0.104, 0.012, 0.09, 0, 0.122, -0.1, dk);
+  bt.box(0.09, 0.025, 0.006, 0, 0.09, -0.059, C.win, 0, true); bt.box(0.006, 0.025, 0.05, 0.051, 0.09, -0.1, C.win, 0, true);
+  bt.cyl(0.004, 0.005, 0.1, 4, 0.0, 0.134, -0.1, dk); bt.box(0.012, 0.012, 0.012, 0.0, 0.234, -0.1, 0xff3a2a, 0, true);
+  bt.cyl(0.035, 0.035, 0.06, 8, 0, 0.052, 0.04, 0xe4e8ee); bt.cone(0.037, 0.03, 8, 0, 0.112, 0.04, fut ? 0x6ae4ff : 0xf2c23a);
+  bt.add(new THREE.TorusGeometry(0.02, 0.005, 3, 8, Math.PI), 0.03, 0.095, 0.1, dk, 0, false, 0.4);
+  bt.box(0.05, 0.03, 0.04, -0.02, 0.052, 0.12, 0x3c7fd8);
+  bt.box(0.012, 0.012, 0.012, 0, 0.056, 0.19, 0x3aff7a, 0, true);
+  for (const z of [-0.08, 0.04, 0.14]) bt.sphere(0.014, 0.077, 0.03, z, 0x2a2e34);
+  figure(bt, 0.0, 0.14, 0xff7a1a, 2.4, false, 0xffd23a, 'idle', 0.04);
+  for (const [bx2, bz2, tz] of [[-1.1, -0.2, 0.0], [-1.1, -0.5, -0.9]] as number[][]) rod(p, bx2, wy + 0.07, bz2, -0.95, D - 0.08, tz, 0.004, 0xd8d4cc);
+  foam(ax + 0.04, az + 0.1, 0.1);
+  gull(ax, wy + 0.17, az - 0.1, 1.4);
+
+  // ── l'hélisurface en encorbellement : disque, croix, anneau, feux verts, filet de sécurité, poteau de manche à air
+  const hx = 0.58, hz = -0.1;
+  p.cyl(0.011, 0.014, D - 0.05, 6, 0.5, 0, 0.14, pile);
+  p.cyl(0.05, 0.05, 0.016, 8, 0.5, 0.3, 0.14, steel); foam(0.5, 0.14, 0.07);
+  rod(p, 0.5, 0.31, 0.14, 0.34, D - 0.06, 0.08, 0.016, dk); rod(p, 0.5, 0.31, 0.14, 0.68, D - 0.06, hz, 0.016, dk);
+  p.box(0.38, 0.03, 0.06, hx - 0.05, D - 0.065, hz, dk); p.box(0.06, 0.03, 0.4, hx, D - 0.065, hz, dk);
+  p.cyl(0.27, 0.27, 0.03, fut ? 6 : 14, hx, D - 0.03, hz, fut ? 0x6a727c : 0x3a3f48, false, fut ? Math.PI / 6 : 0);
+  p.add(new THREE.TorusGeometry(0.23, 0.005, 3, fut ? 6 : 16).rotateX(Math.PI / 2), hx, D + 0.002, hz, fut ? 0x6ae4ff : 0xf2c23a, 0, nz);
+  p.box(0.04, 0.003, 0.15, hx - 0.045, D, hz, C.white); p.box(0.04, 0.003, 0.15, hx + 0.045, D, hz, C.white); p.box(0.13, 0.003, 0.035, hx, D, hz, C.white);
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; p.box(0.015, 0.012, 0.015, hx + Math.cos(a) * 0.255, D, hz + Math.sin(a) * 0.255, 0x3aff7a, 0, true); }
+  p.add(new THREE.TorusGeometry(0.285, 0.005, 3, 14).rotateX(Math.PI / 2), hx, D - 0.012, hz, acc, 0, nz);
+  p.cyl(0.005, 0.006, 0.18, 4, hx + 0.24, D, hz - 0.15, dk);
+  { const ws = sway([hx + 0.24, D + 0.17, hz - 0.15], [0, 1, 0], 0.5, 0.5); ws.add(new THREE.ConeGeometry(0.018, 0.08, 6).rotateZ(Math.PI / 2), 0.04, 0, 0, 0xf28a3c); ws.add(new THREE.CylinderGeometry(0.019, 0.019, 0.012, 6).rotateZ(Math.PI / 2), 0.045, 0, 0, C.white); }
+  if (fut) { p.box(0.07, 0.025, 0.07, hx + 0.06, D + 0.06, hz + 0.05, 0xf4f8fb); p.box(0.05, 0.03, 0.05, hx + 0.06, D + 0.03, hz + 0.05, 0x6ae4ff, 0, 'neon'); }
+
+  // ── la passerelle vers l'éolienne, le module de l'éolienne (pilotis, transformateur, garde-corps) et la tour
+  const tx = 1.0, tz = -0.72, tpz = -0.7;
+  p.box(0.5, 0.02, 0.09, 0.55, D - 0.04, tpz, dk);
+  for (const s of [-1, 1]) { p.box(0.5, 0.008, 0.008, 0.55, D + 0.03, tpz + s * 0.04, steel); p.box(0.5, 0.008, 0.008, 0.55, D - 0.005, tpz + s * 0.04, steel); for (let i = 0; i < 5; i++) p.box(0.01, 0.07, 0.01, 0.34 + i * 0.12, D - 0.04, tpz + s * 0.04, steel); }
+  for (const x of [0.45, 0.65]) { p.cyl(0.014, 0.02, D - 0.04 - wy, 6, x, wy, tpz, pile); foam(x, tpz, 0.045); }
+  p.cyl(0.24, 0.24, 0.03, 8, tx, D - 0.05, tz + 0.02, conc, false, Math.PI / 8);
+  p.cyl(0.24, 0.24, 0.02, 8, tx, D - 0.07, tz + 0.02, dk, false, Math.PI / 8);
+  p.add(new THREE.TorusGeometry(0.235, 0.005, 3, 8).rotateX(Math.PI / 2), tx, D - 0.018, tz + 0.02, steel, Math.PI / 8, nz);
+  for (const [dx, dz] of [[-0.13, -0.1], [0.13, -0.1], [0.0, 0.17]]) { p.cyl(0.035, 0.045, D - 0.07 - wy, 8, tx + dx, wy, tz + dz, pile); foam(tx + dx, tz + dz, 0.07); }
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + Math.PI / 8; p.box(0.01, 0.06, 0.01, tx + Math.sin(a) * 0.225, D - 0.02, tz + 0.02 + Math.cos(a) * 0.225, steel); }
+  p.box(0.09, 0.08, 0.07, tx + 0.13, D - 0.02, tz + 0.1, mod); p.box(0.092, 0.012, 0.072, tx + 0.13, D + 0.06, tz + 0.1, dk); p.box(0.02, 0.012, 0.004, tx + 0.13, D + 0.02, tz + 0.137, 0xfff1c9, 0, true);
+  p.box(0.018, 0.012, 0.018, tx + 0.13, D + 0.072, tz + 0.1, 0xff3a2a, 0, true);
+  const turbine = (x: number, z: number, y0: number, tower: number, bl: number, speed: number) => {
+    p.cyl(0.022, 0.04, tower, 8, x, y0, z, C.white);
+    const ny = y0 + tower;
+    p.box(0.07, 0.06, 0.14, x, ny - 0.03, z, C.white);
+    const rot = turning([x, ny, z + 0.09], [0, 0, 1], speed);
+    for (let i = 0; i < 3; i++) rot.box(0.035, bl, 0.012, 0, 0, 0, fut ? 0xf2f6fa : C.white, 0, nz, (i * Math.PI * 2) / 3);
+    rot.sphere(0.03, 0, -0.015, 0, C.white);
+    p.box(0.014, 0.014, 0.014, x, ny + 0.04, z, 0xff3a2a, 0, true);
+  };
+  p.cyl(0.044, 0.044, 0.02, 8, tx - 0.03, D - 0.02, tz, dk);
+  turbine(tx - 0.03, tz, D - 0.02, fut ? 1.4 : 1.15, fut ? 0.65 : 0.5, fut ? 0.3 : 0.22);
   if (fut) {
-    // le dôme de culture d'algues, éclairé de l'intérieur
-    p.add(new THREE.SphereGeometry(0.32, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), -0.1, H + 0.08, 0.35, 0x8fe8c0, 0, 'neon');
-    p.add(new THREE.TorusGeometry(0.32, 0.01, 3, 18).rotateX(Math.PI / 2), -0.1, H + 0.08, 0.35, dk);
+    // la seconde, plus petite, sur son pilotis isolé
+    p.cyl(0.03, 0.04, 0.3, 8, 1.2, 0, -0.15, pile); foam(1.2, -0.15, 0.07);
+    p.cyl(0.07, 0.07, 0.025, 6, 1.2, 0.3, -0.15, mod);
+    p.cyl(0.044, 0.044, 0.02, 8, 1.2, 0.325, -0.15, dk);
+    turbine(1.2, -0.15, 0.325, 0.72, 0.32, 0.4);
   }
+
+  // ── les cages d'élevage : flotteurs jaunes (ou blancs hexagonaux), garde-corps sur potences, filet vu en transparence
+  // (disque clair, rayons et mailles), banc de poissons qui tourne dedans
+  const cage = (x: number, z: number, i: number) => {
+    const seg = fut ? 6 : 16, nst = fut ? 6 : 8;
+    p.add(new THREE.TorusGeometry(0.2, 0.022, 4, seg).rotateX(Math.PI / 2), x, 0.052, z, cageC);
+    p.add(new THREE.TorusGeometry(0.2, 0.006, 3, seg).rotateX(Math.PI / 2), x, 0.07, z, 0x6ae4ff, 0, nz);
+    p.add(new THREE.TorusGeometry(0.15, 0.011, 3, seg).rotateX(Math.PI / 2), x, 0.05, z, dk);
+    for (let k = 0; k < nst; k++) { const a = (k / nst) * Math.PI * 2; p.box(0.008, 0.07, 0.008, x + Math.cos(a) * 0.2, 0.07, z + Math.sin(a) * 0.2, steel); }
+    p.add(new THREE.TorusGeometry(0.2, 0.004, 3, seg).rotateX(Math.PI / 2), x, 0.135, z, dk);
+    foam(x, z, 0.225);
+    p.cyl(0.165, 0.165, 0.002, 14, x, wy + 0.004, z, 0x9ae6e8);
+    for (let k = 0; k < 4; k++) p.box(0.33, 0.002, 0.005, x, wy + 0.0065, z, 0x4f9ab4, (k * Math.PI) / 4);
+    for (const r of [0.06, 0.115]) p.add(new THREE.TorusGeometry(r, 0.0035, 3, 14).rotateX(Math.PI / 2), x, wy + 0.0075, z, 0x4f9ab4);
+    const s = turning([x, 0.056, z], [0, 1, 0], (i % 2 ? 0.7 : -0.55) * (1 + i * 0.08));
+    for (let k = 0; k < 6; k++) {
+      const a = k * 1.05 + i, r = 0.07 + (k % 2) * 0.05;
+      fish(s, Math.cos(a) * r, (k % 3) * 0.006, -Math.sin(a) * r, silver[(k + i) % silver.length], a + Math.PI / 2, 0.62, fut && k % 2 === 0);
+    }
+  };
+  cage(-0.75, 0.85, 0); cage(-0.1, 0.95, 1); cage(0.5, 0.9, 2);
+  gull(-0.55, 0.13, 0.85, 0.5);
+  // des poissons libres dans le bassin, qui font la ronde autour des tables et des lignes
+  { const s = turning([0.05, 0.05, 0.2], [0, 1, 0], 0.3); for (let k = 0; k < 5; k++) { const a = k * 1.25, r = 0.5 + (k % 2) * 0.06; fish(s, Math.cos(a) * r, 0, -Math.sin(a) * r, silver[k], a + Math.PI / 2, 0.6); } }
+
+  // ── les tables à coquillages : cadre flottant, piquets, poches d'huîtres en rangs, coquilles ; descente depuis le pont
+  const table = (x: number, z: number) => {
+    for (const s of [-1, 1]) { p.box(0.4, 0.016, 0.018, x, wy + 0.006, z + s * 0.1, steel); p.box(0.018, 0.016, 0.2, x + s * 0.2, wy + 0.006, z, steel); p.box(0.01, 0.12, 0.01, x + s * 0.2, wy, z - 0.1, C.darkwood); p.box(0.01, 0.12, 0.01, x + s * 0.2, wy, z + 0.1, C.darkwood); }
+    for (let i = 0; i < 6; i++) for (const j of [-0.055, 0.055]) {
+      p.box(0.045, 0.02, 0.07, x - 0.15 + i * 0.06, wy + 0.012, z + j, i % 2 ? 0x4a5058 : 0x5a6068);
+      if ((i + (j > 0 ? 1 : 0)) % 3 === 0) p.add(new THREE.ConeGeometry(0.014, 0.01, 5).scale(1, 0.5, 1), x - 0.15 + i * 0.06, wy + 0.036, z + j, 0xf2ead8);
+    }
+    p.box(0.4, 0.004, 0.006, x, wy + 0.045, z, 0x3a3f48);
+    foam(x - 0.2, z, 0.04); foam(x + 0.2, z, 0.04);
+  };
+  table(-0.55, 0.42); table(0.38, 0.42);
+  // descente du pont à la première table : limons, marches, mains courantes, palier flottant
+  {
+    const sx = -0.62;
+    for (const s of [-1, 1]) { rod(p, sx + s * 0.045, D, 0.07, sx + s * 0.045, wy + 0.04, 0.34, 0.012, dk); rod(p, sx + s * 0.052, D + 0.06, 0.07, sx + s * 0.052, wy + 0.1, 0.34, 0.008, steel); }
+    for (let k = 0; k < 9; k++) { const t = k / 8; p.box(0.1, 0.006, 0.02, sx, D - t * (D - wy - 0.05) - 0.004, 0.09 + t * 0.24, 0xb8bcc2); }
+    p.box(0.22, 0.016, 0.1, sx, wy + 0.01, 0.38, steel);
+  }
+
+  // ── les lignes de bouées d'algues d'élevage : amarres, flotteurs, rideaux d'algues flottantes
+  for (const lx of [0.82, 1.0]) {
+    p.box(0.005, 0.005, 0.66, lx, wy + 0.012, 0.5, 0x6a5a44);
+    for (const z of [0.17, 0.83]) { p.sphere(0.03, lx, wy + 0.012, z, 0xf28a3c, 1, 0.9); p.cyl(0.004, 0.004, 0.08, 4, lx, wy + 0.04, z, dk); p.box(0.02, 0.014, 0.004, lx + 0.01, wy + 0.1, z, 0xd84a3e); foam(lx, z, 0.045); }
+    for (let k = 0; k < 6; k++) {
+      const z = 0.25 + k * 0.1;
+      p.sphere(0.017, lx, wy + 0.012, z, fut && k % 2 ? 0xdde8f0 : 0xf4f2ee, 0, 0.9);
+      p.add(new THREE.IcosahedronGeometry(1, 1).scale(0.035, 0.008, 0.05), lx + (k % 2 ? 0.035 : -0.035), wy + 0.01, z + 0.02, k % 3 ? 0x6a8a3a : 0x8a6a34);
+      p.add(new THREE.IcosahedronGeometry(1, 0).scale(0.02, 0.006, 0.04), lx + (k % 2 ? -0.03 : 0.03), wy + 0.01, z - 0.02, k % 2 ? 0x4a7a3a : 0x7a5a2e);
+    }
+  }
+
+  // ── le drone qui rôde (relevés, puis livraisons) : corps, bras, hélices ; deux au futur, avec leur caisse
+  const drone = (q: Parts, x: number, y: number, z: number, crate: boolean) => {
+    q.box(0.08, 0.025, 0.08, x, y, z, 0xf4f8fb);
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      q.box(0.11, 0.006, 0.006, x + dx * 0.04, y + 0.018, z + dz * 0.04, 0x6a727c, (Math.PI / 4) * dx * dz);
+      q.cyl(0.032, 0.032, 0.004, 8, x + dx * 0.068, y + 0.026, z + dz * 0.068, 0xa8b8c4);
+    }
+    q.box(0.045, 0.02, 0.045, x, y - 0.012, z, fut ? 0x6ae4ff : 0xf28a3c, 0, nz);
+    if (crate) { q.box(0.05, 0.04, 0.05, x, y - 0.055, z, 0xeef4f8); q.box(0.052, 0.01, 0.052, x, y - 0.045, z, 0x6ae4ff, 0, 'neon'); }
+  };
+  {
+    const d1 = turning([-0.2, D + 0.62, -0.3], [0, 1, 0], 0.22); drone(d1, 0.5, 0, 0, fut);
+    if (fut) { const d2 = turning([-0.1, D + 0.4, 0.45], [0, 1, 0], -0.3); drone(d2, 0.62, 0, 0, true); }
+  }
+
+  // ── les ouvriers : à la grue, au tapis, sur la passerelle, au bord de l'hélisurface
+  worker(-0.7, -0.5, 1.6); worker(-0.22, -0.2, 3.2); worker(0.5, -0.7, 1.5); worker(0.12, -0.02, 0.5);
+  // mouettes : au toit du bâtiment, sur le silo, au garde-corps, sur la bitte, au bord de l'hélisurface
+  gull(bx + 0.18, D + 0.172, bz + 0.09, 0.6); gull(BX, D + 0.435, -0.5, 2.2); gull(-0.3, D + 0.08, z1 - 0.01, 3.5);
+  gull(x0 + 0.04, D + 0.04, -0.5, 0.2); gull(hx + 0.12, D + 0.003, hz + 0.08, 2.4);
 }
 
 /**
