@@ -60,7 +60,7 @@ registerDict('gear', {
   ' ou ': ' or ',
   'Il faut {cost}': 'You need {cost}',
   'Il faut {cost} en tout pour {items}': 'You need {cost} in total for {items}',
-  'Connu à l’âge {age}': 'Known from the {age}',
+  'Connu à l’âge {age}': 'Known in the age: {age}',
   'Il faut un atelier pour fabriquer {items} : bâtissez-en un (à votre âge : {name})': 'You need a workshop to make {items}: build one (in your age: {name})',
   'Il faut : {name}': 'You need: {name}',
   'La file de fabrication est pleine ({n} pièces) : attendez qu’une pièce sorte': 'The crafting queue is full ({n} items): wait for one to come out',
