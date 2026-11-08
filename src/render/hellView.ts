@@ -21,6 +21,8 @@ import { RuinSmoke } from './isleRuins';
  */
 
 const BG = new THREE.Color(0x1c0a12);
+/** la teinte de la brume quand l'onde de choc dorée l'a chassée (cinématique de fin) */
+const GOLD_FOG = new THREE.Color(0xc89a58);
 /** Sol et parois, par zone (seuil, braises, rivière, falaises, os, cristaux, royaume) : plus clairs au sol */
 const FLOOR = [0x6e5a66, 0x7a4c40, 0x6e4636, 0x625a5e, 0x7c6a56, 0x5c4c72, 0x6e3440].map((c) => new THREE.Color(c));
 const WALL = [0x4a3a46, 0x56322a, 0x4e2e24, 0x46404a, 0x5a4a3c, 0x3e3256, 0x4c2230].map((c) => new THREE.Color(c));
@@ -84,9 +86,16 @@ export class HellView {
   private collapseT = -1;
   private lavaRise: THREE.Mesh | null = null;
   private dustT = 0;
+  /** la cinématique de fin : les gravats qui tombent dans la lave, l'onde de choc dorée (anneau, durée écoulée) qui chasse la brume rouge */
+  private debris: { m: THREE.Mesh; vx: number; vy: number; vz: number; spin: number }[] = [];
+  private debrisT = 0;
+  private wave: THREE.Mesh | null = null;
+  private waveK = 0;
+  private debrisGeo: THREE.BufferGeometry | null = null;
+  private debrisMat: THREE.Material | null = null;
 
   constructor(readonly map: HellMap, public hell: Hell) {
-    this.scene.background = BG;
+    this.scene.background = BG.clone();
     this.scene.fog = this.fog;
     // lumière chaude d'en bas (la lave), violette d'en haut : les reliefs se lisent sans rien de noir
     this.scene.add(new THREE.HemisphereLight(0xb08ab8, 0x4a1820, 1.05));
@@ -690,8 +699,8 @@ export class HellView {
     // la brume ferme les zones d'après la dernière ouverte
     const front = this.hell.frontier;
     this.seals.forEach((m, i) => { m.visible = i + 2 > front; });
-    this.fog.near = dist * 1.4;
-    this.fog.far = dist * 3 + 14;
+    this.fog.near = dist * 1.4 * (1 + this.waveK * 0.8);
+    this.fog.far = (dist * 3 + 14) * (1 + this.waveK * 1.2);
     Object.assign(this.lantern, { x: target.x, y: this.groundY(target.x, target.z) + 1.6, z: target.z });
     this.lightTimer -= dt;
     if (this.lightTimer <= 0) {
@@ -782,6 +791,7 @@ export class HellView {
     }
     this.lavaRise.position.set(x, HLAVA_Y + Math.min(0.5, t * 0.12), z);
     this.lavaRise.scale.setScalar(Math.min(10, 0.5 + t * t * 0.3));
+    this.stepDebris(dt, t, x, y0, z);
     // poussière qui monte, jets de lave
     this.dustT -= dt;
     if (this.dustT > 0 || t > 9) return;
@@ -790,6 +800,51 @@ export class HellView {
     fx.puff(px, y0 + 0.4 + Math.random() * 1.5, pz, 12);
     if (Math.random() < 0.35) fx.chips(px, y0 + 0.3, pz, 0xff8a2a, 14);
     if (Math.random() < 0.12) fx.boom(px, y0 + 0.6, pz);
+  }
+
+  /**
+   * La cinématique de fin : des blocs de la citadelle se détachent et tombent dans la lave (peu de pièces, un seul matériau),
+   * puis une onde de choc dorée balaie la carte : un anneau qui s'élargit, la brume rouge qui recule et se teinte d'or
+   */
+  private stepDebris(dt: number, t: number, x: number, y0: number, z: number) {
+    const bg = this.scene.background as THREE.Color;
+    // les blocs : une trentaine en tout, lancés du haut de la citadelle entre 0,3 s et 5 s
+    if (t < 5 && this.debris.length < 34 && (this.debrisT -= dt) <= 0) {
+      this.debrisT = 0.13;
+      this.debrisGeo ??= new THREE.DodecahedronGeometry(1, 0);
+      this.debrisMat ??= new THREE.MeshStandardMaterial({ color: 0x4a2a2c, roughness: 0.9, flatShading: true, emissive: 0x401408 });
+      const m = new THREE.Mesh(this.debrisGeo, this.debrisMat), a = Math.random() * Math.PI * 2, r = Math.random() * 3.5, s = 0.25 + Math.random() * 0.55;
+      m.scale.set(s, s * 0.8, s);
+      m.position.set(x + Math.sin(a) * r, y0 + 3.5 + Math.random() * 3, z + Math.cos(a) * r);
+      this.content.add(m);
+      this.debris.push({ m, vx: Math.sin(a) * (0.6 + Math.random() * 2.2), vy: 1 + Math.random() * 3, vz: Math.cos(a) * (0.6 + Math.random() * 2.2), spin: (Math.random() - 0.5) * 6 });
+    }
+    for (const d of this.debris) {
+      if (d.m.position.y < HLAVA_Y - 0.6) { d.m.visible = false; continue; }
+      d.vy -= 11 * dt;
+      d.m.position.x += d.vx * dt; d.m.position.y += d.vy * dt; d.m.position.z += d.vz * dt;
+      d.m.rotation.x += d.spin * dt; d.m.rotation.z += d.spin * 0.7 * dt;
+      // à la lave : une gerbe, puis il s'enfonce
+      if (d.vy < 0 && d.m.position.y < HLAVA_Y + 0.15 && d.vy > -90) { this.units.fx.chips(d.m.position.x, HLAVA_Y + 0.2, d.m.position.z, 0xff8a2a, 8); d.vy = -100; d.vx = d.vz = 0; }
+    }
+    // l'onde de choc dorée, de 3,2 s à 8 s : l'anneau part du roi, la brume recule
+    const w = t - 3.2;
+    if (w > 0) {
+      if (!this.wave) {
+        this.wave = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.05, 0.3), transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide }));
+        this.wave.renderOrder = 12;
+        this.content.add(this.wave);
+      }
+      const k = Math.min(1, w / 4.6);
+      this.wave.position.set(x, y0 + 0.3, z);
+      this.wave.scale.setScalar(1 + k * 70);
+      // l'anneau s'épaissit en s'éloignant (il reste lisible de loin)
+      (this.wave.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - k * k);
+      this.waveK = Math.min(1, w / 3);
+      bg.copy(BG).lerp(GOLD_FOG, this.waveK * 0.55);
+      this.fog.color.copy(bg);
+      for (const m of this.seals) m.visible = false;
+    }
   }
 
   /** Sortie des Enfers : la surface ne reçoit plus ces lumières */

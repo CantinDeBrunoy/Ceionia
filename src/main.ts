@@ -170,6 +170,8 @@ class Game implements UIHost {
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
+  /** les habitants qui fêtent la chute du roi pendant la cinématique de fin (ils sautent de joie sur la place) */
+  private endCrowd: number[] = [];
   /** la caméra a déjà filé sur un volcan en éruption (la première fois seulement) */
   private volcanoSeen = false;
   /** la parade du grand départ : les haies de foule, le char et les confettis le long de la route jusqu'au pas de tir */
@@ -412,6 +414,9 @@ class Game implements UIHost {
       war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
       mode: () => this.mode, hellView: () => (this.mode === 'hell' ? this.hellMode?.view ?? null : null),
       exitHell: () => this.exitHell(), goHome: () => this.goHome(),
+      raiders: () => { const i = this.war.isle; return i ? i.raiders().map((u) => ({ x: u.x + i.map.ox, z: u.z + i.map.oz })) : []; },
+      age: () => this.sim.age,
+      village: () => this.villageCenter(), fest: (x, z) => this.festAt(x, z), crowd: (on, x, z) => this.kingCrowd(on, x, z),
     });
     this.expeditions.onNews = (m) => this.ui.toast(m);
     this.railway.onNews = (m) => this.ui.toast(m);
@@ -837,6 +842,25 @@ class Game implements UIHost {
     }
   }
 
+  /** La foule de la fête de la victoire : des habitants se rassemblent autour de (x, z), bras levés ; false : ils rentrent */
+  private kingCrowd(on: boolean, x: number, z: number) {
+    const ag = this.agents;
+    if (!on) { if (this.endCrowd.length) { ag.dismiss(this.endCrowd); this.endCrowd = []; } return; }
+    if (this.endCrowd.length) return;
+    this.endCrowd = ag.recruit(Math.min(28, ag.available())) ?? [];
+    this.endCrowd.forEach((id, i) => {
+      const a = i * 2.4, r = 2.4 + (i % 4) * 0.7, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+      ag.memberGo(id, px, pz, Math.atan2(x - px, z - pz));
+    });
+  }
+
+  /** Mode développeur : rejoue la cinématique de fin du volet militaire (`__game.playKingdomEnd()`), depuis les Enfers (tous les plans) ou la surface */
+  playKingdomEnd() { this.kingStage.playEnd(true); }
+
+  private stepKingCrowd() {
+    for (const id of this.endCrowd) if (this.agents.memberDone(id)) this.agents.partyAct([id], 'cheer');
+  }
+
   /** La grande place du village (le lieu de rencontre de 3 × 3, sans entrée) la plus proche de (x, z), s'il y en a une */
   plazaNear(x: number, z: number): Building | null {
     let best: Building | null = null, bd = Infinity;
@@ -1015,6 +1039,8 @@ class Game implements UIHost {
    * conquise, portail ouvert, nouvelle partie), la teinte du sol et la végétation de l'île se refont une fois, les décors aussi
    */
   private syncBlight(dt: number) {
+    // (la cinématique de fin du volet militaire lève la contamination elle-même, devant la caméra)
+    if (this.kingStage.holdingBlight()) return;
     if ((this.blightT -= dt) > 0) return;
     this.blightT = 0.5;
     const w = this.world, b = isleBlight(w, this.war.conqueredZones());
@@ -1371,6 +1397,7 @@ class Game implements UIHost {
     // la guerre : la faction des Enfers, ses incursions sur l'île, la garnison
     this.stepWar(dt, gdt);
     this.stepFarewell(dt);
+    this.stepKingCrowd();
     this.railway.update(gdt);
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);
