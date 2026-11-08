@@ -4,12 +4,12 @@ import { GEAR_BY, GearId, Stock } from './gear';
 /**
  * L'armée du joueur : la garnison de l'île du portail. Des habitants du village s'enrôlent à la caserne (sur l'île) : chacun
  * prend en réserve les pièces d'équipement de sa troupe (lance du soldat, arc de l'archer, épée et armure du chevalier, que le
- * village fabrique), traverse le bras de mer en galère et rejoint la garnison au bout de sa durée de recrutement. Un soldat
- * abattu n'est pas perdu : il est ramené blessé à la caserne et s'y soigne. Renvoyé au village, il rapporte son équipement.
+ * village fabrique ; lance et cheval de l'écurie pour le cavalier), traverse le bras de mer en galère et rejoint la garnison au bout de sa durée de recrutement. Un soldat
+ * abattu n'est pas perdu : il est ramené blessé à la caserne et s'y soigne. Renvoyé au village, il rapporte son équipement (et son cheval).
  * Simulation pure (le combat est dans `hell.ts`, l'île dans `isleBattle.ts`)
  */
 
-export type TroopKind = 'soldier' | 'archer' | 'knight';
+export type TroopKind = 'soldier' | 'archer' | 'knight' | 'cavalry';
 
 export interface TroopDef {
   kind: TroopKind;
@@ -20,6 +20,8 @@ export interface TroopDef {
   age: number;
   /** pièces d'équipement prises en réserve, une de chaque */
   gear: GearId[];
+  /** monte un cheval de l'écurie du village (il y manque tant que la recrue est dans l'armée ; rendu au renvoi) */
+  mount?: boolean;
   /** durée du recrutement (secondes de jeu : l'enrôlement, la traversée en galère) */
   time: number;
   /** caractéristiques à son premier âge (elles montent un peu à chaque âge) */
@@ -42,6 +44,11 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
     kind: 'knight', name: 'Chevalier', plural: 'Chevaliers', icon: '⚔️', age: 2, gear: ['sword', 'armor'], time: 40,
     base: { hp: 230, dmg: 20, range: 0.7, speed: 2.3, cooldown: 1.3, sight: 6, radius: 0.34 },
     desc: 'Épée et armure (à partir du Moyen Âge) : le plus solide de la garnison.',
+  },
+  cavalry: {
+    kind: 'cavalry', name: 'Cavalier', plural: 'Cavaliers', icon: '🐎', age: 1, gear: ['spear'], mount: true, time: 34,
+    base: { hp: 150, dmg: 16, range: 0.8, speed: 3.2, cooldown: 1.2, sight: 6, radius: 0.4 },
+    desc: 'Un cheval de l’écurie et une lance : rapide, il charge et frappe fort au corps à corps, mais ne tient pas la ligne.',
   },
 };
 export const TROOP_KINDS = Object.keys(TROOPS) as TroopKind[];
@@ -95,7 +102,11 @@ export interface Army {
 export const newArmy = (): Army => ({ troops: [], queue: [], nextId: 1 });
 
 /** Ce que l'on sait du village pour recruter */
-export interface RecruitCtx { age: number; stock: Stock; barracks: number; pop: number; unlimited?: boolean }
+export interface RecruitCtx {
+  age: number; stock: Stock; barracks: number; pop: number; unlimited?: boolean;
+  /** écuries du village, et chevaux qui s'y trouvent (ni en expédition, ni déjà montés) ; `ride` : prend (+1) ou rend (-1) un cheval */
+  stables?: number; horses?: number; ride?: (d: number) => void;
+}
 
 /** Troupes recrutées et en route */
 export const armySize = (a: Army) => a.troops.length + a.queue.length;
@@ -106,9 +117,12 @@ export const armyCap = (c: RecruitCtx) => Math.min(troopCap(c.barracks, c.age), 
 export function recruitWhy(a: Army, kind: TroopKind, c: RecruitCtx): string | null {
   const d = TROOPS[kind];
   if (c.age < d.age) return `${d.plural} : à partir du Moyen Âge`;
+  if (d.mount && !(c.stables ?? 0)) return 'Il faut une écurie au village (la cavalerie monte les chevaux de l’écurie)';
   if (c.barracks <= 0) return 'Il faut une caserne sur l’île du portail';
   if (armySize(a) >= troopCap(c.barracks, c.age)) return `Garnison au complet (${troopCap(c.barracks, c.age)} places : une autre caserne en ajouterait)`;
   if (armySize(a) >= Math.floor(c.pop / POP_SHARE)) return `Le village est trop petit pour une recrue de plus (un habitant sur ${POP_SHARE} au plus)`;
+  // (le cheval ne s'achète pas : même en ressources illimitées, il en faut un à l'écurie)
+  if (d.mount && (c.horses ?? 0) < 1) return 'Pas de cheval disponible à l’écurie (en élever, ou attendre le retour d’une expédition montée)';
   if (!c.unlimited) {
     const miss = d.gear.filter((g) => (c.stock[g] ?? 0) < 1);
     if (miss.length) return `Il faut ${miss.map((g) => `1 ${GEAR_BY[g].name.toLowerCase()}`).join(' et ')} en réserve (à fabriquer, menu Expéditions › Équipement)`;
@@ -138,27 +152,27 @@ export function gearToCraft(kind: TroopKind, stock: Stock, crafting: readonly Ge
 export function recruit(a: Army, kind: TroopKind, c: RecruitCtx, at?: TroopWhere): string | null {
   const why = recruitWhy(a, kind, c);
   if (why) return why;
-  if (!c.unlimited) for (const g of TROOPS[kind].gear) c.stock[g]--;
+  if (!c.unlimited) { for (const g of TROOPS[kind].gear) c.stock[g]--; if (TROOPS[kind].mount) { c.ride?.(1); if (c.horses) c.horses--; } }
   // à la caserne avancée, pas de traversée : un peu plus vite
   a.queue.push(at === 'hell' ? { kind, left: Math.round(TROOPS[kind].time * 0.75), at } : { kind, left: TROOPS[kind].time });
   return null;
 }
 
 /** Annule une recrue en route : son équipement revient en réserve */
-export function cancelRecruit(a: Army, i: number, stock: Stock, unlimited = false) {
+export function cancelRecruit(a: Army, i: number, stock: Stock, unlimited = false, ride?: (d: number) => void) {
   const r = a.queue[i];
   if (!r) return;
   a.queue.splice(i, 1);
-  if (!unlimited) for (const g of TROOPS[r.kind].gear) stock[g]++;
+  if (!unlimited) { for (const g of TROOPS[r.kind].gear) stock[g]++; if (TROOPS[r.kind].mount) ride?.(-1); }
 }
 
 /** Renvoie un soldat au village : il rapporte son équipement */
-export function dismiss(a: Army, id: number, stock: Stock, unlimited = false) {
+export function dismiss(a: Army, id: number, stock: Stock, unlimited = false, ride?: (d: number) => void) {
   const i = a.troops.findIndex((t) => t.id === id);
   if (i < 0) return null;
   const t = a.troops[i];
   a.troops.splice(i, 1);
-  if (!unlimited) for (const g of TROOPS[t.kind].gear) stock[g]++;
+  if (!unlimited) { for (const g of TROOPS[t.kind].gear) stock[g]++; if (TROOPS[t.kind].mount) ride?.(-1); }
   return t;
 }
 

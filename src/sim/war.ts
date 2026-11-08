@@ -8,6 +8,7 @@ import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES, zoneOf, zoneThe, zoneAgeText } from '../world/hell';
 import type { BaseKind } from './hell';
 import { GEAR_BY } from './gear';
+import { penHerds } from './missions';
 import { Blight, isleBlight } from '../world/blight';
 import { KingFight, KingSave, KingdomReward, claimKingdom } from './kingdom';
 
@@ -105,7 +106,11 @@ export class War {
 
   /** Contexte de recrutement */
   recruitCtx(age: number, pop: number): RecruitCtx {
-    return { age, pop, stock: this.world.exp.gear, barracks: this.barracks(), unlimited: this.world.unlimited };
+    const w = this.world;
+    let stables = 0, horses = 0;
+    for (const [, h] of penHerds(w).stables) { stables++; horses += h.length; }
+    // un cheval monté est un cheval que l'écurie n'a plus (comme les expéditions montées : `exp.riding`)
+    return { age, pop, stock: w.exp.gear, barracks: this.barracks(), unlimited: w.unlimited, stables, horses, ride: (d) => { w.exp.riding = Math.max(0, w.exp.riding + d); } };
   }
 
   /** Enrôle une recrue à la caserne (null : c'est fait ; sinon la raison du refus) */

@@ -6,7 +6,7 @@ import { zoneOrigins } from '../src/build/zones';
 import { HellMap } from '../src/world/hell';
 import { Hell, HellUnit, RAID_FIRST, SECURE_WAVES, demonStats } from '../src/sim/hell';
 import { Command, formation, unitAt, foeAt, inRect, SPACING } from '../src/sim/command';
-import { TROOPS, newArmy, recruit, recruitWhy, cancelRecruit, dismiss, stepArmy, wound, troopStats, readArmy, troopCap, armyCap, RecruitCtx, HEAL_TIME } from '../src/sim/army';
+import { TROOPS, newArmy, recruit, recruitWhy, cancelRecruit, dismiss, stepArmy, wound, troopStats, readArmy, troopCap, armyCap, RecruitCtx, HEAL_TIME, isTroopKind, onlyGearMissing } from '../src/sim/army';
 import { emptyStock } from '../src/sim/gear';
 import { War } from '../src/sim/war';
 import { isleSecured } from '../src/world/portal';
@@ -357,5 +357,73 @@ describe('les morts disparaissent', () => {
     run(h, 2);
     expect(h.units.has(d.id)).toBe(false);
     expect(h.units.has(s.id)).toBe(false);
+  });
+});
+
+describe('la cavalerie : écurie, cheval, équipement', () => {
+  const ctx = (o: Partial<RecruitCtx> = {}): RecruitCtx => ({ age: 1, pop: 80, barracks: 1, stock: { ...emptyStock(), spear: 3 }, stables: 1, horses: 2, ...o });
+
+  it('exige une écurie et un cheval disponible, prend le cheval et une lance, les rend au renvoi', () => {
+    const a = newArmy();
+    expect(TROOPS.cavalry).toMatchObject({ name: 'Cavalier', plural: 'Cavaliers' });
+    expect(isTroopKind('cavalry')).toBe(true);
+    expect(recruitWhy(a, 'cavalry', ctx({ stables: 0, horses: 0 }))).toMatch(/Il faut une écurie/);
+    expect(recruitWhy(a, 'cavalry', ctx({ horses: 0 }))).toMatch(/Pas de cheval disponible/);
+    expect(recruitWhy(a, 'cavalry', ctx({ stock: emptyStock() }))).toMatch(/lance/);
+    // les autres troupes n'ont pas besoin d'écurie
+    expect(recruitWhy(a, 'soldier', ctx({ stables: 0, horses: 0 }))).toBeNull();
+    // le cheval manque : fabriquer de l'équipement n'y changerait rien
+    expect(onlyGearMissing(a, 'cavalry', ctx({ horses: 0, stock: emptyStock() }))).toBe(false);
+    expect(onlyGearMissing(a, 'cavalry', ctx({ stock: emptyStock() }))).toBe(true);
+    let riding = 0;
+    const c = ctx({ ride: (d) => { riding += d; } });
+    expect(recruit(a, 'cavalry', c)).toBeNull();
+    expect(riding).toBe(1);
+    expect(c.stock.spear).toBe(2);
+    expect(c.horses).toBe(1);
+    // annulée : lance et cheval reviennent
+    cancelRecruit(a, 0, c.stock, false, c.ride);
+    expect(riding).toBe(0);
+    expect(c.stock.spear).toBe(3);
+    // arrivée, puis renvoyée au village
+    recruit(a, 'cavalry', c);
+    stepArmy(a, TROOPS.cavalry.time + 1, 1, 1);
+    expect(a.troops[0].kind).toBe('cavalry');
+    dismiss(a, a.troops[0].id, c.stock, false, c.ride);
+    expect(riding).toBe(0);
+    expect(c.stock.spear).toBe(3);
+    // ses caractéristiques : vite, plus solide qu'un archer, moins qu'un chevalier, frappe fort
+    const cv = troopStats('cavalry', 1);
+    expect(cv.speed).toBeGreaterThan(3);
+    expect(cv.hp).toBeGreaterThan(troopStats('archer', 1).hp);
+    expect(cv.hp).toBeLessThan(troopStats('knight', 2).hp);
+    expect(cv.dmg).toBeGreaterThan(troopStats('soldier', 1).dmg);
+  });
+
+  it('anciennes sauvegardes sans cavalerie, nouvelles avec', () => {
+    expect(readArmy({ troops: [{ id: 1, kind: 'soldier', hp: 10, maxHp: 110 }], queue: [] }).troops.map((t) => t.kind)).toEqual(['soldier']);
+    const a = newArmy();
+    a.troops.push({ id: 1, kind: 'cavalry', hp: 100, maxHp: 150, where: 'isle', heal: 0 });
+    a.queue.push({ kind: 'cavalry', left: 5 });
+    const back = readArmy(JSON.parse(JSON.stringify(a)));
+    expect(back.troops[0].kind).toBe('cavalry');
+    expect(back.queue[0].kind).toBe('cavalry');
+  });
+
+  it('la guerre compte écuries et chevaux libres, et le cavalier retire un cheval à l’écurie', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026, GEN);
+    const war = new War(w);
+    expect(war.recruitCtx(1, 80)).toMatchObject({ stables: 0, horses: 0 });
+    const s = zoneOrigins(w, 'stable').find((k) => w.canPlace('stable', k % N, Math.floor(k / N)) === null)!;
+    w.place('stable', s % N, Math.floor(s / N), 0, true, 1, false);
+    w.exp.herd = ['horse', 'horse', 'sheep'];
+    expect(war.recruitCtx(1, 80)).toMatchObject({ stables: 1, horses: 2 });
+    war.recruitCtx(1, 80).ride!(1);
+    expect(w.exp.riding).toBe(1);
+    expect(war.recruitCtx(1, 80).horses).toBe(1);
+    war.recruitCtx(1, 80).ride!(-5);
+    expect(w.exp.riding).toBe(0);
   });
 });
