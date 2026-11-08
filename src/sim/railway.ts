@@ -349,7 +349,7 @@ export class Railway {
       tr.line = l; tr.stops = stops; tr.via = via; tr.legs.clear();
       const was = tr.why;
       const twin = this.sameAs(l.stops, l.id);
-      tr.why = stops.length < 2 ? tx(l.stops.length >= 2 ? 'Il lui manque des arrêts en service (gare démolie…).' : 'Il faut au moins deux arrêts.')
+      tr.why = stops.length < 2 ? (l.stops.length >= 2 ? tx('Il lui manque des arrêts en service (gare démolie…).') : tx('Il faut au moins deux arrêts.'))
         : twin && twin.id < l.id ? tx('Même parcours qu’une autre ligne : sur une voie unique, un seul train peut y rouler. Fermez l’une des deux.') : null;
       for (let i = 0; !tr.why && i + 1 < stops.length; i++) {
         if (this.seg(stops[i], stops[i + 1], via[i])) continue;

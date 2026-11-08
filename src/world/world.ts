@@ -308,7 +308,7 @@ export class World {
     if (this.occ[k] || v === VEG_FIELD || v === VEG_GARDEN) {
       if (!this.disasters) return;
       const b = this.buildings.get(this.occ[k]);
-      if (b) { this.losses.push(`🌋 La lave a englouti : ${KINDS[b.kind].names[b.age]}`); this.removeBuilding(b.id); }
+      if (b) { this.losses.push(tr('🌋 La lave a englouti : {name}', { name: KINDS[b.kind].names[b.age] })); this.removeBuilding(b.id); }
     }
     this.basalt[k] = 1;
     this.ash[k] = 1;

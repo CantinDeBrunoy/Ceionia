@@ -41,7 +41,6 @@ registerDict('war', {
   'Répare et affûte l’équipement des troupes de la base (+20 % de dégâts, coups reçus adoucis) ; forge contre du minerai les lances, arcs et armures qui manquent à la réserve du village pour recruter sur place.': 'Repairs and sharpens the base troops’ gear (+20% damage, softer hits taken); forges, for ore, the spears, bows and armor missing from the village stock so you can recruit on the spot.',
   'Infirmerie': 'Infirmary',
   'Soigne vite les troupes de la base ; un soldat tombé dans les Enfers y est soigné (deux fois plus vite) au lieu de rentrer sur l’île.': 'Heals the base troops quickly; a soldier who falls in Hell is healed here (twice as fast) instead of going back to the island.',
-  'Tour de guet': 'Lookout tower',
   'Ses archers tirent sur les démons qui approchent.': 'Its archers shoot the demons that come near.',
   'Palissade': 'Palisade',
   'Cliquez et glissez pour tracer un mur de pieux : il bloque le passage et ralentit les démons qui le longent. Un clic de plus prolonge le mur ; Échap arrête. Laissez toujours un passage, ou posez une porte.': 'Click and drag to draw a wall of stakes: it blocks the way and slows the demons walking along it. One more click extends the wall; Esc stops. Always leave a gap, or build a gate.',

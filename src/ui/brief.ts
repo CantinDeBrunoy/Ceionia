@@ -1,3 +1,5 @@
+import { getLang } from '../i18n';
+
 /**
  * Raccourcis de texte pour la fiche d'un bâtiment : elle ne montre d'abord que l'essentiel, le reste se déplie
  */
@@ -27,6 +29,8 @@ export function brief(text: string, max = 120): [string, string] {
  * quel
  */
 export function shortStop(name: string): string {
+  // en anglais : « Central station 2 » → « Central 2 », « High-speed station » → « HS »
+  if (getLang() === 'en') { if (/^small station/i.test(name)) return name; const e = name.replace(/\s+station\b/i, '').replace(/^high-speed\b/i, 'HS'); return e === name || !e ? name : e; }
   const s = name.replace(/^Gare\s+(?:(?:à|de|du|des)\s+)?/i, '').replace(/^grande vitesse\b/i, 'GV');
   return s === name || !s ? name : s[0].toUpperCase() + s.slice(1);
 }

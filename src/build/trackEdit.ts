@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { Railway } from '../sim/railway';
-import type { Overlay } from './tools';
 import { tr } from '../i18n';
+import type { Overlay } from './tools';
 
 /**
  * Ligne en cours de tracé : ses arrêts (bâtiments), sa couleur, la ligne qu'on modifie (null : une nouvelle) et, pour chaque

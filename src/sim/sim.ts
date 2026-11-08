@@ -25,7 +25,7 @@ export interface AgeProgress {
   next: number;
   ratio: number;
   /** chaque condition ; `kind` : le bâtiment demandé (nommé comme dans la barre de construction) */
-  items: { label: string; have: number; need: number; kind?: KindId }[];
+  items: { label: string; have: number; need: number; kind?: KindId; /** titre de l'expédition demandée (le libellé la nomme) */ mission?: string }[];
 }
 
 /** Les deux conditions du chemin de fer, en fin d'âge industriel (leur libellé commence par « chemin de fer ») */
@@ -178,13 +178,13 @@ export class Sim {
   /** Le détail d'un besoin pour sa fiche : ce qui le fournit (du plus gros apport au plus petit) et le bâtiment qui le comble */
   needDetail(k: NeedId): NeedDetail {
     const e = this.world.exp, L = this.land;
-    const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? 'Maisons au bord de l’eau' : this.nameOf(key as KindId), n: s.n, v: s.v }));
-    if (k === 'food' && L.fields) rows.push({ label: L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)', n: L.fields, v: this.fieldsFood });
-    if (k === 'jobs' && L.fields >= 2) rows.push({ label: 'Champs', n: L.fields, v: Math.floor(L.fields / 2) });
-    if (k === 'joy' && L.gardens) rows.push({ label: 'Jardins', n: L.gardens, v: L.gardens * 0.8 });
-    if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: 'Sécurité (pompiers et police)', n: this.coverage.both, v: this.coverage.joy });
-    if (k === 'joy' && L.forests) rows.push({ label: 'Forêts où l’on se promène', n: L.forests, v: L.forests * 0.08 });
-    if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)', n: 0, v: b }); }
+    const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? tr('Maisons au bord de l’eau') : this.nameOf(key as KindId), n: s.n, v: s.v }));
+    if (k === 'food' && L.fields) rows.push({ label: tr(L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)'), n: L.fields, v: this.fieldsFood });
+    if (k === 'jobs' && L.fields >= 2) rows.push({ label: tr('Champs'), n: L.fields, v: Math.floor(L.fields / 2) });
+    if (k === 'joy' && L.gardens) rows.push({ label: tr('Jardins'), n: L.gardens, v: L.gardens * 0.8 });
+    if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: tr('Sécurité (pompiers et police)'), n: this.coverage.both, v: this.coverage.joy });
+    if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts où l’on se promène'), n: L.forests, v: L.forests * 0.08 });
+    if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: tr(b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)'), n: 0, v: b }); }
     rows.sort((a, b) => b.v - a.v);
     const kind = ({ housing: 'house', food: 'farm', water: 'well', jobs: 'workshop', joy: 'gather', health: 'health' } as Record<NeedId, KindId>)[k];
     const d = KINDS[kind], per = d[k]?.[Math.max(this.age, d.minAge)] ?? 0;
@@ -239,7 +239,7 @@ export class Sim {
     if (req.reqBrick) items.push({ label: 'briques (briqueterie)', have: w.unlimited ? req.reqBrick : Math.floor(w.brick), need: req.reqBrick });
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
     // (le portail : seulement sur une carte qui a son île)
-    for (const m of mandatoriesFor(this.age)) if (m.id !== 'portal' || w.portal) items.push({ label: `expédition « ${m.title} »`, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
+    for (const m of mandatoriesFor(this.age)) if (m.id !== 'portal' || w.portal) items.push({ label: `expédition « ${m.title} »`, mission: m.title, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
     // quitter l'Antiquité : sécuriser l'île du portail (tour de garde, caserne, vagues repoussées) ; les Enfers restent facultatifs
     if (n === ISLE_AGE && w.portal) items.push(...isleSteps(w));
     // la fin de l'âge : la raffinerie (ouverte par l'expédition « L'or noir ») et ses puits, puis le chemin de fer
@@ -261,51 +261,54 @@ export class Sim {
     const w = this.world;
     const p = this.pop;
     const say = (k: KindId) => tr('« {name} » ({where})', { name: this.nameOf(k), where: this.whereOf(k) });
+    const quote = (k: KindId) => tr('« {name} »', { name: this.nameOf(k) });
     const about = (k: KindId, text: string) => { this.messageKind = k; return text; };
+    // le titre d'une expédition, dans la langue du jeu
+    const title = (id: string) => tr(MISSIONS.find((x) => x.id === id)?.title ?? id);
     // le bâtiment conseillé coûte du bois ou de la pierre que le village n'a pas, et rien n'en produit : on dit d'abord
     // comment en avoir (sinon le joueur attend une ressource qui ne vient jamais)
     const build = (k: KindId, text: string) => {
       const c = priceIn(w, k, this.age);
       for (const [r, prod] of [['stone', 'quarry'], ['wood', 'lumber'], ['brick', 'brickworks']] as const) {
         if (!c || w.unlimited || w[r] >= (c[r] ?? 0) || this.producing(r)) continue;
-        const what = tr({ stone: 'de la pierre', wood: 'du bois', brick: 'des briques' }[r]), where = tr({ stone: 'près des rochers (Nature › Rochers) ou dans la montagne', wood: 'en lisière ou dans une forêt', brick: 'elle se pose où l’on veut et cuit ses briques toute seule' }[r]);
-        return about(prod, tr('Il manque {what} pour « {name} » : {tip}, {where}.', { what, name: this.nameOf(k), tip: say(prod), where }));
+        const what = { stone: tr('de la pierre'), wood: tr('du bois'), brick: tr('des briques') }[r], where = { stone: tr('près des rochers (Nature › Rochers) ou dans la montagne'), wood: tr('en lisière ou dans une forêt'), brick: tr('elle se pose où l’on veut et cuit ses briques toute seule') }[r];
+        return about(prod, tr('Il manque {what} pour {name} : {prod}, {where}.', { what, name: quote(k), prod: say(prod), where }));
       }
       return about(k, text);
     };
     this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false;
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
-    if (w.buildings.size === 0) return about('gather', tr('Pour commencer, posez « {name} » au centre : c’est la place du village.', { name: this.nameOf('gather') }));
-    if (!this.counts.house) return about('house', tr('Autour de la place, le centre du village : « {house} », « {farm} » et « {well} ».', { house: this.nameOf('house'), farm: this.nameOf('farm'), well: this.nameOf('well') }));
-    if (!this.counts.house) return about('house', tr('Pour accueillir des habitants : {tip}.', { tip: say('house') }));
+    if (w.buildings.size === 0) return about('gather', tr('Pour commencer, posez {name} au centre : c’est la place du village.', { name: quote('gather') }));
+    if (!this.counts.house) return about('house', tr('Autour de la place, le centre du village : {house}, {farm} et {well}.', { house: quote('house'), farm: quote('farm'), well: quote('well') }));
+    if (!this.counts.house) return about('house', tr('Pour accueillir des habitants : {k}.', { k: say('house') }));
     if (!this.food.ok && this.fled >= 1) return about('farm', DIFF_TEXT.famine(say('farm')));
-    if (!this.food.ok) return about('farm', this.drought ? tr('Sécheresse : les champs donnent moins ; {tip} ou « {pier} » de plus aiderait.', { tip: say('farm'), pier: this.nameOf('pier') }) : tr('Il manque de quoi manger : {tip} ou un champ.', { tip: say('farm') }));
-    if (!this.water.ok) return about('well', tr('Il manque de l’eau : {tip}.', { tip: say('well') }));
+    if (!this.food.ok) return about('farm', this.drought ? tr('Sécheresse : les champs donnent moins ; {farm} ou {pier} de plus aiderait.', { farm: say('farm'), pier: quote('pier') }) : tr('Il manque de quoi manger : {farm} ou un champ.', { farm: say('farm') }));
+    if (!this.water.ok) return about('well', tr('Il manque de l’eau : {k}.', { k: say('well') }));
     // à la Préhistoire, dans les premières minutes, les premiers bâtiments qui travaillent pour le village : le bûcheron (bois), puis le pierrier (pierre) ; le séchoir à grains nourrit déjà
     const young = this.age === 0 && p < 8;
-    if (young && !this.producing('wood')) return about('lumber', this.counts.farm ? tr('Un bûcheron : le premier bâtiment qui travaille pour vous. {tip}.', { tip: say('lumber') }) : tr('Un bûcheron et un séchoir : les premiers bâtiments qui travaillent pour vous. {tip}, puis {then}.', { tip: say('lumber'), then: say('farm') }));
-    if (young && !this.producing('stone')) return about('quarry', tr('Il vous faut aussi de la pierre pour les grands bâtiments : {tip}.', { tip: say('quarry') }));
-    if (!this.jobs.ok) return about('workshop', tr('Les habitants cherchent du travail : {tip}.', { tip: say('workshop') }));
-    if (!this.joy.ok) return about('gather', tr('Les habitants aimeraient un lieu de rencontre : {tip}, un jardin ou un lieu de culte.', { tip: say('gather') }));
-    if (!this.health.ok) return about('health', tr('Les habitants tombent malades : il faut {tip}.', { tip: say('health') }));
+    if (young && !this.producing('wood')) return about('lumber', this.counts.farm ? tr('Un bûcheron : le premier bâtiment qui travaille pour vous. {lumber}.', { lumber: say('lumber') }) : tr('Un bûcheron et un séchoir : les premiers bâtiments qui travaillent pour vous. {lumber}, puis {farm}.', { lumber: say('lumber'), farm: say('farm') }));
+    if (young && !this.producing('stone')) return about('quarry', tr('Il vous faut aussi de la pierre pour les grands bâtiments : {k}.', { k: say('quarry') }));
+    if (!this.jobs.ok) return about('workshop', tr('Les habitants cherchent du travail : {k}.', { k: say('workshop') }));
+    if (!this.joy.ok) return about('gather', tr('Les habitants aimeraient un lieu de rencontre : {k}, un jardin ou un lieu de culte.', { k: say('gather') }));
+    if (!this.health.ok) return about('health', tr('Les habitants tombent malades : il faut {k}.', { k: say('health') }));
     if (this.recovering > 0 && this.housing.ok) return DIFF_TEXT.recovering;
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
     const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;
-    const room = () => build('house', tr('Village plein ({pop}/{cap} places) : {tip} de plus, +{per} places, pour qu’il grandisse.', { pop: Math.floor(p), cap: this.housing.cap, tip: say('house'), per }));
+    const room = () => build('house', tr('Village plein ({pop}/{cap} places) : {k} de plus, +{per} places, pour qu’il grandisse.', { pop: Math.floor(p), cap: this.housing.cap, k: say('house'), per }));
     // les automobiles à l'arrêt, faute de carburant : on dit d'où il vient
     if (this.counts.carworks && !w.unlimited && w.fuel <= 0) {
       const lack = !this.counts.refinery ? 'refinery' : !this.counts.oilwell ? 'oilwell' : null;
-      return lack ? build(lack, lack === 'refinery' ? tr('Les voitures restent au garage, faute de carburant : {tip} le tire du pétrole brut des puits.', { tip: say('refinery') }) : tr('Les voitures restent au garage, faute de carburant : {tip}, sur les taches sombres où le brut suinte, alimentera la raffinerie.', { tip: say('oilwell') }))
+      return lack ? build(lack, lack === 'refinery' ? tr('Les voitures restent au garage, faute de carburant : {k} le tire du pétrole brut des puits.', { k: say('refinery') }) : tr('Les voitures restent au garage, faute de carburant : {k}, sur les taches sombres où le brut suinte, alimentera la raffinerie.', { k: say('oilwell') }))
         : tr('Les voitures restent au garage, faute de carburant : la raffinerie en refait avec le brut des puits.');
     }
     const ap = this.ageProgress();
     if (ap) {
-      if (p < AGES[ap.next].reqPop) return full ? room() : this.railTip() ?? tr('Le village grandit… ({n}/{need} habitants pour l’âge suivant)', { n: Math.floor(p), need: AGES[ap.next].reqPop });
+      if (p < AGES[ap.next].reqPop) return full ? room() : this.railTip() ?? tr('Le village grandit… ({pop}/{need} habitants pour l’âge suivant)', { pop: Math.floor(p), need: AGES[ap.next].reqPop });
       const miss = ap.items.find((i) => i.have < i.need);
       if (!miss) return tr('Tout est prêt pour l’âge suivant ({age}) : passez-y quand vous voulez.', { age: AGES[ap.next].name });
-      if (miss?.label.startsWith('expédition')) {
+      if (miss?.mission) {
         // toutes celles qui restent à réussir (la Préhistoire en demande deux)
-        const left = ap.items.filter((i) => i.label.startsWith('expédition') && i.have < i.need).map((i) => i.label.slice('expédition '.length)).map((l) => tr('« {name} »', { name: tr(l.slice(2, -2)) }));
+        const left = ap.items.filter((i) => i.mission && i.have < i.need).map((i) => tr('« {name} »', { name: tr(i.mission!) }));
         this.messageExp = true;
         return left.length > 1 ? tr('Pour l’âge suivant : réussissez les expéditions {list} et {last} (menu Expéditions).', { list: left.slice(0, -1).join(', '), last: left[left.length - 1] }) : tr('Pour l’âge suivant : réussissez l’expédition {name} (menu Expéditions).', { name: left[0] });
       }
@@ -317,17 +320,17 @@ export class Sim {
       if (miss?.kind) {
         const n = miss.need - miss.have, m = KINDS[miss.kind].reqMission;
         // un bâtiment qu'une expédition doit d'abord débloquer : c'est elle qu'on conseille
-        if (m && !w.exp.done.includes(m)) { this.messageExp = true; return tr('Pour l’âge suivant : il faut {tip}, que débloque l’expédition « {title} » (menu Expéditions).', { tip: say(miss.kind), title: tr(MISSIONS.find((x) => x.id === m)?.title ?? m) }); }
-        const why = tr(miss.kind === 'watchtower' || miss.kind === 'barracks' ? ', sur l’île du portail (elle se sécurise ainsi)' : miss.kind === 'refinery' ? ' : elle tirera le carburant du pétrole brut des puits' : miss.kind === 'oilwell' ? ', sur un gisement (les taches sombres où le brut suinte) : la raffinerie en raffine le brut' : '');
-        return build(miss.kind, tr('Pour l’âge suivant : il manque {n}{tip}{why}.', { n: n > 1 ? `${n} × ` : '', tip: say(miss.kind), why }));
+        if (m && !w.exp.done.includes(m)) { this.messageExp = true; return tr('Pour l’âge suivant : il faut {k}, que débloque l’expédition « {title} » (menu Expéditions).', { k: say(miss.kind), title: title(m) }); }
+        const why = miss.kind === 'watchtower' || miss.kind === 'barracks' ? tr(', sur l’île du portail (elle se sécurise ainsi)') : miss.kind === 'refinery' ? tr(' : elle tirera le carburant du pétrole brut des puits') : miss.kind === 'oilwell' ? tr(', sur un gisement (les taches sombres où le brut suinte) : la raffinerie en raffine le brut') : '';
+        return build(miss.kind, n > 1 ? tr('Pour l’âge suivant : il manque {n} × {k}{why}.', { n, k: say(miss.kind), why }) : tr('Pour l’âge suivant : il manque {k}{why}.', { k: say(miss.kind), why }));
       }
       if (miss.label.startsWith('chemin de fer')) return this.railAgeTip(say, build, miss.label === RAIL_FIRST);
-      if (miss.label.startsWith('briques')) return this.counts.brickworks ? tr('Pour l’âge suivant : il faut encore {n} briques (la briqueterie en cuit chaque jour).', { n: miss.need - miss.have }) : about('brickworks', tr('Pour l’âge suivant : il faut {n} briques : {tip}.', { n: miss.need, tip: say('brickworks') }));
+      if (miss.label.startsWith('briques')) return this.counts.brickworks ? tr('Pour l’âge suivant : il faut encore {n} briques (la briqueterie en cuit chaque jour).', { n: miss.need - miss.have }) : about('brickworks', tr('Pour l’âge suivant : il faut {n} briques : {k}.', { n: miss.need, k: say('brickworks') }));
       if (miss) {
         // le minerai vient des mines, creusées dans la montagne (la mine se débloque par une expédition)
         const n = miss.need - miss.have, m = KINDS.mine.reqMission;
-        if (m && !w.exp.done.includes(m)) { this.messageExp = true; return tr('Pour l’âge suivant : il faut encore {n} minerai : l’expédition « {title} » débloque la mine (menu Expéditions).', { n, title: tr(MISSIONS.find((x) => x.id === m)?.title ?? m) }); }
-        return this.counts.mine ? tr('Pour l’âge suivant : il faut encore {n} minerai (la mine en extrait chaque jour ; une autre mine irait plus vite).', { n }) : build('mine', tr('Pour l’âge suivant : il faut encore {n} minerai : bâtissez {tip}.', { n, tip: say('mine') }));
+        if (m && !w.exp.done.includes(m)) { this.messageExp = true; return tr('Pour l’âge suivant : il faut encore {n} minerai : l’expédition « {title} » débloque la mine (menu Expéditions).', { n, title: title(m) }); }
+        return this.counts.mine ? tr('Pour l’âge suivant : il faut encore {n} minerai (la mine en extrait chaque jour ; une autre mine irait plus vite).', { n }) : build('mine', tr('Pour l’âge suivant : il faut encore {n} minerai : bâtissez {k}.', { n, k: say('mine') }));
       }
     }
     if (full) return room();
@@ -336,8 +339,8 @@ export class Sim {
       if (w.exp.done.includes(VICTORY)) return tr('Le village a essaimé dans les étoiles : ses colons vivent sur une autre planète.');
       const next = MISSIONS.find((m) => m.age === this.age && m.requires && !w.exp.done.includes(m.id));
       const need = next?.requires?.kinds?.find((k) => !reqLine(k, next.requires!.kinds!).some((x) => this.counts[x]));
-      if (need) return build(need, tr('Pour « {title} » : il faut {tip}.', { title: tr(next!.title), tip: say(need) }));
-      if (next) return tr('Prochaine étape vers les étoiles : l’expédition « {title} » (menu Expéditions).', { title: tr(next.title) }) + (this.counts.spaceport && !spaceRail(w) ? ' ' + tr('Astuce : une gare desservie par un train de voyageurs, à {reach} cases au plus du cosmodrome, y amènerait les équipes (plus sûr, plus rapide).', { reach: RAIL_REACH }) : '');
+      if (need) return build(need, tr('Pour « {title} » : il faut {k}.', { title: tr(next!.title), k: say(need) }));
+      if (next) return tr('Prochaine étape vers les étoiles : l’expédition « {title} » (menu Expéditions).', { title: tr(next.title) }) + (this.counts.spaceport && !spaceRail(w) ? ' ' + tr('Astuce : une gare desservie par un train de voyageurs, à {n} cases au plus du cosmodrome, y amènerait les équipes (plus sûr, plus rapide).', { n: RAIL_REACH }) : '');
     }
     const tip = this.railTip();
     if (tip) return tip;
@@ -360,7 +363,7 @@ export class Sim {
     if (!prod.length || prod.some((b) => railStation(w, b, st))) return null;
     this.messageKind = 'station';
     const names = [...new Set(prod.map((b) => this.nameOf(b.kind).toLowerCase()))].slice(0, 3).join(', ');
-    return tr('Astuce : posez « {name} » ({where}) à {reach} cases au plus d’un bâtiment qui produit ({names}) et reliez-la à une autre gare par un train de marchandises : il produira {pct} % de plus.', { name: this.nameOf('station'), where: this.whereOf('station'), reach: RAIL_REACH, names, pct: Math.round(FREIGHT_BONUS * 100) });
+    return tr('Astuce : posez « {name} » ({where}) à {n} cases au plus d’un bâtiment qui produit ({names}) et reliez-la à une autre gare par un train de marchandises : il produira {pct} % de plus.', { name: this.nameOf('station'), where: this.whereOf('station'), n: RAIL_REACH, names, pct: Math.round(FREIGHT_BONUS * 100) });
   }
 
   /**
@@ -375,11 +378,11 @@ export class Sim {
 
   /** Le conseil d'âge du chemin de fer (`first` : aucune ligne encore ; sinon, il reste à relier deux gares) */
   private railAgeTip(say: (k: KindId) => string, build: (k: KindId, text: string) => string, first: boolean) {
-    const nx = this.railNext(), goal = tr(first ? 'votre premier chemin de fer' : 'deux gares reliées par le rail');
+    const nx = this.railNext(), goal = first ? tr('votre premier chemin de fer') : tr('deux gares reliées par le rail');
     if ('kind' in nx) {
       const k = nx.kind;
-      const step = k === 'brickworks' ? tr('bâtissez d’abord {tip}, il faudra des briques pour les gares', { tip: say(k) })
-        : k === 'terminal' ? tr('bâtissez {tip}, la grande gare d’où partiront les lignes', { tip: say(k) }) : tr('il faut une autre gare à relier : {tip}', { tip: say(k) });
+      const step = k === 'brickworks' ? tr('bâtissez d’abord {k}, il faudra des briques pour les gares', { k: say(k) })
+        : k === 'terminal' ? tr('bâtissez {k}, la grande gare d’où partiront les lignes', { k: say(k) }) : tr('il faut une autre gare à relier : {k}', { k: say(k) });
       return build(k, tr('Pour l’âge suivant, {goal} : {step}.', { goal, step }));
     }
     this.messageRail = nx.stop;

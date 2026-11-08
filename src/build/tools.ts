@@ -16,6 +16,7 @@ import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
 import { isStart, startRefusal, START_KIND } from './startLock';
+import { tr } from '../i18n';
 
 export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
@@ -284,7 +285,7 @@ export class ToolController implements ToolInput {
     this.beginStroke();
     const pre = this.pre;
     const nb = w.upgrade(b.id, to);
-    if (!nb) { this.pre = null; this.h.toast(`Pas assez de place libre autour pour ${KINDS[to].names[Math.max(b.age, KINDS[to].minAge)].toLowerCase()} (${KINDS[to].size} × ${KINDS[to].size}, sans route ni bâtiment derrière).`); return; }
+    if (!nb) { this.pre = null; this.h.toast(tr('Pas assez de place libre autour pour {name} ({size} × {size}, sans route ni bâtiment derrière).', { name: KINDS[to].names[Math.max(b.age, KINDS[to].minAge)].toLowerCase(), size: KINDS[to].size })); return; }
     this.pre = pre;
     this.mark();
     this.endStroke();
@@ -316,7 +317,7 @@ export class ToolController implements ToolInput {
     if (!d || d.id !== b.id || now - d.t >= 6000) {
       this.doomed = { id: b.id, stroke: this.strokeN, t: now };
       const name = KINDS[b.kind].names[Math.max(b.age, KINDS[b.kind].minAge)];
-      this.h.toast(`Démolir « ${name} » ? ${button ? 'Recliquez « Démolir »' : 'Cliquez de nouveau dessus'} pour confirmer (Ctrl+Z l’annulerait).`);
+      this.h.toast(tr(button ? 'Démolir « {name} » ? Recliquez « Démolir » pour confirmer (Ctrl+Z l’annulerait).' : 'Démolir « {name} » ? Cliquez de nouveau dessus pour confirmer (Ctrl+Z l’annulerait).', { name }));
     }
     return false;
   }
@@ -406,11 +407,11 @@ export class ToolController implements ToolInput {
     this.beginStroke();
     if (t === 'volcano') {
       // le volcan se pose d'un seul clic, à l'écart des bâtiments
-      if (this.reliefBlocked()) this.h.toast(`Trop près des bâtiments : un volcan se pose à l’écart du village${this.radius > 3 ? ', ou réduisez la taille du pinceau (il fait la largeur du volcan)' : ''}.`);
+      if (this.reliefBlocked()) this.h.toast(tr(this.radius > 3 ? 'Trop près des bâtiments : un volcan se pose à l’écart du village, ou réduisez la taille du pinceau (il fait la largeur du volcan).' : 'Trop près des bâtiments : un volcan se pose à l’écart du village.'));
       else if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) { this.mark(); this.h.audio.sfxPlace(); }
     } else if (SCULPT_TOOLS.includes(t)) {
       this.ctx.target = this.hit.y;
-      if (this.reliefBlocked()) this.h.toast('Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).');
+      if (this.reliefBlocked()) this.h.toast(tr('Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).'));
     }
     else if (t === 'biome') this.applyBiome();
     else if (VEG_TOOLS.includes(t)) this.applyVeg();
@@ -535,8 +536,8 @@ export class ToolController implements ToolInput {
       // une seule grotte (ou faille) sous le curseur
       const cx = Math.floor(hit.x), cz = Math.floor(hit.z), cave = this.tool === 'cave';
       if (w.setVeg(cx, cz, cave ? VEG_CAVE : VEG_FISSURE)) { this.mark(); this.h.audio.sfxPlace(); }
-      else this.h.toast(cave ? 'Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.'
-        : 'Une faille fend un sol assez plat, à l’écart des bâtiments, des routes et des autres entrées.');
+      else this.h.toast(cave ? tr('Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.')
+        : tr('Une faille fend un sol assez plat, à l’écart des bâtiments, des routes et des autres entrées.'));
       return;
     }
     const r = Math.max(0.6, this.radius * 0.8);
@@ -601,7 +602,7 @@ export class ToolController implements ToolInput {
     const c = this.cell(), w = this.h.world;
     if (!c || !w.inCells(c.x, c.z)) return;
     if (!this.freeFrom) {
-      if (!w.road[w.ci(c.x, c.z)] && !w.canRoad(c.x, c.z)) { this.h.toast('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.'); return; }
+      if (!w.road[w.ci(c.x, c.z)] && !w.canRoad(c.x, c.z)) { this.h.toast(tr('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.')); return; }
       this.freeFrom = [c.x + 0.5, c.z + 0.5];
       this.freeDrag = [e.x, e.y];
       this.h.audio.sfxClick();
@@ -707,7 +708,7 @@ export class ToolController implements ToolInput {
         else if (w.veg[k] && !w.decor[k]) { this.mark(); w.setVeg(cx, cz, 0); any = true; }
       }
     if (any) this.h.audio.sfxDestroy();
-    else if (big && performance.now() - this.lastToast > 1500) { this.h.toast('Les grands bâtiments se démolissent un à un : un clic dessus (Ctrl+Z annule).'); this.lastToast = performance.now(); }
+    else if (big && performance.now() - this.lastToast > 1500) { this.h.toast(tr('Les grands bâtiments se démolissent un à un : un clic dessus (Ctrl+Z annule).')); this.lastToast = performance.now(); }
   }
 
   private pickUp(chosen?: Building) {
@@ -722,7 +723,7 @@ export class ToolController implements ToolInput {
     this.rotManual = !b.auto;
     w.removeBuilding(b.id);
     this.ghostKey = '';
-    this.h.toast('Cliquez pour reposer le bâtiment (Échap pour annuler).');
+    this.h.toast(tr('Cliquez pour reposer le bâtiment (Échap pour annuler).'));
   }
 
   private cancelMove() {
@@ -745,7 +746,7 @@ export class ToolController implements ToolInput {
       const now = performance.now();
       // un grand bâtiment refusé ici : les points verts montrent où il tient
       const tip = '';
-      if (now - this.lastToast > 1200) { this.h.toast(reason + (tip ? `.${tip}` : '')); this.lastToast = now; }
+      if (now - this.lastToast > 1200) { this.h.toast(tr(reason) + (tip ? `.${tip}` : '')); this.lastToast = now; }
       return;
     }
     this.mark();
@@ -836,7 +837,7 @@ export class ToolController implements ToolInput {
         this.ghostBody.position.set(off, 0, off); this.ghostGlow.position.set(off, 0, off);
       }
       const cost = this.moveOrigin ? null : priceIn(w, kind, age);
-      this.placeWhy = reason ?? (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
+      this.placeWhy = reason ? tr(reason) : (cost && !canPay(w, cost) ? shortLabel(w, cost) : null);
       // (les points verts des emplacements libres induisaient en erreur : retirés, `showSpots` n’est plus appelé)
       setGhostValid(!this.placeWhy);
       const rot = this.rotManual ? this.ghostRot : facingRoadRot(w, kind, o.x, o.z, this.ghostRot);

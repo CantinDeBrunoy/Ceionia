@@ -1,4 +1,5 @@
 import type { KindId } from './catalog';
+import { tr } from '../i18n';
 
 /** Le bâtiment de départ : le feu de camp (la place du village), seul à poser dans un village vide */
 export const START_KIND: KindId = 'gather';
@@ -16,4 +17,4 @@ export function startRefusal(w: { buildings: { size: number } }, tool: string, k
   return startMessage(name);
 }
 
-export const startMessage = (name: string) => `Posez d’abord « ${name} » : c’est la place du village`;
+export const startMessage = (name: string) => tr('Posez d’abord « {name} » : c’est la place du village', { name });
