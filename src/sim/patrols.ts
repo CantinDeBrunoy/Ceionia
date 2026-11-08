@@ -49,8 +49,8 @@ export interface PatrolGroup {
   phase: number;
 }
 
-/** Un soldat de la patrouille, pour la vue */
-export interface PatrolMember { x: number; z: number; heading: number; mode: PatrolMode; phase: number }
+/** Un soldat de la patrouille, pour la vue (`y` : sa hauteur quand il ne marche pas au sol, les sentinelles des remparts) */
+export interface PatrolMember { x: number; y?: number; z: number; heading: number; mode: PatrolMode; phase: number }
 
 export class Patrols {
   groups: PatrolGroup[] = [];

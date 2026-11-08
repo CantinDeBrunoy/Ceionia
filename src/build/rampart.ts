@@ -2,6 +2,7 @@ import { World } from '../world/world';
 import { Building, KINDS, isRampart } from './catalog';
 import { wallLine, Cell } from '../ui/wallPlan';
 import { WALL_N, WALL_E, WALL_S, WALL_W } from '../render/hellBase';
+import { TOWER_SHIFT } from '../render/ramparts';
 import { Cost, canPay, pay, priceIn } from '../sim/economy';
 import { tr } from '../i18n';
 
@@ -24,13 +25,16 @@ const joins = (b: Building | undefined) => !!b && (isRampart(b.kind) || b.kind =
  */
 export function rampartMask(w: World, b: Building): number {
   const at = (dx: number, dz: number) => w.buildingAt(b.x + dx, b.z + dz);
-  let m = (joins(at(0, -1)) ? WALL_N : 0) | (joins(at(1, 0)) ? WALL_E : 0) | (joins(at(0, 1)) ? WALL_S : 0) | (joins(at(-1, 0)) ? WALL_W : 0);
+  const n = at(0, -1), e = at(1, 0), s = at(0, 1), o = at(-1, 0);
+  let m = (joins(n) ? WALL_N : 0) | (joins(e) ? WALL_E : 0) | (joins(s) ? WALL_S : 0) | (joins(o) ? WALL_W : 0);
   if (!m && b.kind === 'gate') {
     const road = (dx: number, dz: number) => w.inCells(b.x + dx, b.z + dz) && w.road[w.ci(b.x + dx, b.z + dz)] === 1;
     if (road(0, -1) || road(0, 1)) m = WALL_E | WALL_W;
     else if (road(1, 0) || road(-1, 0)) m = WALL_N | WALL_S;
   }
-  return m;
+  // (les tours de garde voisines, à part : le mur vient se souder à leur face)
+  const tower = (x: Building | undefined) => !!x && x.kind === 'watchtower';
+  return m | (((tower(n) ? WALL_N : 0) | (tower(e) ? WALL_E : 0) | (tower(s) ? WALL_S : 0) | (tower(o) ? WALL_W : 0)) << TOWER_SHIFT);
 }
 
 /** Le tracé d'un mur de `a` à `b` : ses cases (centres), et pour chacune si un pan s'y pose (ou s'il y en a déjà un) */

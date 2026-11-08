@@ -28,3 +28,17 @@ Décisions prises (le plus simple, cohérent avec l'existant) :
   voisins (nœud + bras, comme `hellWallAges.ts`), poteaux, tourelles ou pylônes aux bouts et aux angles, torches ou lampes
   la nuit, drapeaux de la faction (rouge à liseré d'or).
 - **Les Enfers** gardent leurs bâtiments et leurs murs : rien n'y change.
+
+## Suite (v2)
+
+- **Porte sur une rue** : seulement une rue droite (deux voisines face à face) ; la case de la porte est tracée droite par le
+  milieu exact (comme à l'approche d'un pont, `roads.ts`), les battants ouverts sont rabattus contre les piédroits.
+- **Tour de garde soudée aux murs** : un pan voisin d'une tour (bits `<< TOWER_SHIFT` du masque) prolonge son bras jusqu'à la
+  face de la tour (`TOWER_R` par âge) et y perce une porte de chemin de ronde ; la tour remplace le pilier ou la tourelle du
+  pan ; un rempart se pose devant la porte d'une tour (le mur la rejoint de tous côtés). Les bras ouest et sud sont le miroir
+  des bras est et nord : le chemin de ronde reste du même côté (−z d'un mur est-ouest, −x d'un mur nord-sud).
+- **Sentinelles** (`sim/sentinels.ts`) : par chaîne de remparts reliés (pans, portes, tours), une marcheuse dès 3 cases, deux
+  dès 8, une factionnaire par tour, 12 au plus ; elles marchent sur le chemin de ronde de l'âge (`WALK` : hauteur et écart),
+  passent les portes sur leur linteau, font demi-tour aux bouts et devant les tours. Plates-formes des tours : galerie
+  (Antiquité), hourds (Moyen Âge), chemin de ronde de fonte (industriel), toit du blockhaus (moderne) ; la tour futuriste n'a
+  pas de plate-forme : la sentinelle garde son embase. Même vue que les patrouilles des rues (`render/patrols.ts`).

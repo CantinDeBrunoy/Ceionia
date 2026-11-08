@@ -367,6 +367,18 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     this.bridged = new Set(map.keys());
     this.crossings = [...new Set(map.values())];
   }
+  /**
+   * Cases de route sous une porte de rempart : la rue y passe droit, dans l'axe de l'arche, par le milieu exact de la case et de
+   * ses bords, sans détour ni courbe (comme à l'approche d'un pont) ; le chemin de terre cesse de serpenter tout autour
+   */
+  private gated = new Set<number>();
+  private findGated() {
+    const w = this.world;
+    this.gated.clear();
+    for (const b of w.buildings.values()) if (b.kind === 'gate' && w.road[w.ci(b.x, b.z)]) this.gated.add(w.ci(b.x, b.z));
+  }
+  /** La rue y arrive dans l'axe, au milieu exact du bord : un pont ou une porte de rempart */
+  private straightAt(k: number) { return this.bridged.has(k) || this.gated.has(k); }
   /** torrents : quand ils bougent (relief sculpté), les ponts qui les franchissent se refont avec les chemins */
   streams: Streams | null = null;
   /** version des torrents avec laquelle les chemins ont été faits */
@@ -382,7 +394,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const w = this.world, j = age >= 3 ? 0 : 0.08, out = new Map<number, Curved>();
     this.curved = out;
     if (!w.curves.length) return;
-    const cells = w.curveCells(), live = (k: number) => w.road[k] === 1 && !this.bridged.has(k);
+    const cells = w.curveCells(), live = (k: number) => w.road[k] === 1 && !this.straightAt(k);
     for (const [k] of cells) if (live(k)) out.set(k, { pieces: [], branches: [] });
     for (const c of w.curves) {
       // la ligne, coupée case par case (chaque pas revient à la case où il commence)
@@ -403,7 +415,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         const nk = w.ci(nx, nz);
         if (out.has(nk) && cells.get(nk)!.ids.some((id) => mine.includes(id))) continue;
         // au bord d'un pont, pas de détour : la rampe arrive dans l'axe, au milieu exact du bord
-        const e = this.bridged.has(nk) ? this.edgeMid(cx, cz, dx, dz, 0) : this.warp(...this.edgeMid(cx, cz, dx, dz, j), age);
+        const e = this.straightAt(nk) ? this.edgeMid(cx, cz, dx, dz, 0) : this.warp(...this.edgeMid(cx, cz, dx, dz, j), age);
         const p = closestOn(e[0], e[1], cell.pieces) ?? cells.get(k)!.at;
         cell.branches.push([p[0], p[1], (p[0] + e[0]) / 2, (p[1] + e[1]) / 2, e[0], e[1]]);
       }
@@ -688,7 +700,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     const w = this.world, amp = WIGGLE[Math.min(age, 4)];
     if (!amp) return [x, z];
     const cx = Math.floor(x), cz = Math.floor(z);
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && this.bridged.has(w.ci(cx + dx, cz + dz))) return [x, z];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (w.inCells(cx + dx, cz + dz) && this.straightAt(w.ci(cx + dx, cz + dz))) return [x, z];
     const f = 0.38;
     return [x + this.noise.noise2(x * f + 31.7, z * f - 4.3) * amp, z + this.noise.noise2(x * f - 12.9, z * f + 57.3) * amp];
   }
@@ -715,8 +727,9 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         }
         const dirs = D4.filter(([dx, dz]) => has(dx, dz));
         // vers un pont, le bord est pris en son milieu exact : la rampe du tablier y arrive dans l'axe
-        const em = (dx: number, dz: number) => this.edgeMid(cx, cz, dx, dz, this.bridged.has(w.ci(cx + dx, cz + dz)) ? 0 : j);
-        const n = this.node(cx, cz, j), out: number[][] = [];
+        // (sous une porte de rempart, et vers un pont ou une porte : le milieu exact, la rue passe droit sous l'arche)
+        const em = (dx: number, dz: number) => this.edgeMid(cx, cz, dx, dz, this.straightAt(w.ci(cx + dx, cz + dz)) || this.gated.has(k) ? 0 : j);
+        const n = this.node(cx, cz, this.gated.has(k) ? 0 : j), out: number[][] = [];
         if (dirs.length === 2 && dirs[0][0] !== -dirs[1][0]) {
           // virage : une courbe d'un bord à l'autre, tirée par le point de la case
           const a = em(dirs[0][0], dirs[0][1]), b = em(dirs[1][0], dirs[1][1]), l: number[] = [];
@@ -849,6 +862,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     };
     // (chaque étape du plan est un pas : rien ne traîne plus de quelques millisecondes)
     this.findBridged();
+    this.findGated();
     this.findCurved(age);
     yield;
     const lines = this.skeleton(age), hw0 = HW[a];

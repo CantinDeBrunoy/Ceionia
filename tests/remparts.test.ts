@@ -5,7 +5,7 @@ import { GEN } from '../src/world/continent';
 import { getModel } from '../src/render/models';
 import { KINDS, DEFENSES, hasDoor, type KindId } from '../src/build/catalog';
 import { traceRampart, layRampart, rampartCost, rampartMask, RAMPART_MAX } from '../src/build/rampart';
-import { nodeKind } from '../src/render/ramparts';
+import { nodeKind, TOWER_SHIFT, TOWER_R } from '../src/render/ramparts';
 import { WALL_N, WALL_E, WALL_S, WALL_W, gateAlongX } from '../src/render/hellBase';
 import { isleOrigins } from '../src/build/zones';
 import { costOf } from '../src/sim/economy';
@@ -54,7 +54,7 @@ describe('bâtiments militaires au village', () => {
     expect(w.canPlace('wall', sea % N, Math.floor(sea / N))).toMatch(/eau|Hors/);
     w.place('house', sx, sz, 0, true, 1, false);
     expect(w.canPlace('wall', sx, sz)).toBe('Emplacement occupé');
-    w.setRoad(sx + 3, sz, true);
+    for (let z = sz - 2; z <= sz + 2; z++) w.setRoad(sx + 3, z, true);
     expect(w.canPlace('wall', sx + 3, sz)).toBe('Une route est déjà ici');
     expect(w.canPlace('watchtower', sx + 3, sz)).toBe('Une route est déjà ici');
     expect(w.canPlace('gate', sx + 3, sz)).toBeNull();
@@ -64,6 +64,26 @@ describe('bâtiments militaires au village', () => {
     w.removeBuilding(gate.id);
     expect(w.road[w.ci(sx + 3, sz)]).toBe(1);
     expect(w.occ[w.ci(sx + 3, sz)]).toBe(0);
+  });
+
+  it('la porte sur une rue : seulement une rue droite (pas de virage, de carrefour ni d’escalier en diagonale), tournée dans son axe', () => {
+    const { w, sx, sz } = setup();
+    // une rue droite nord-sud, un coude, un carrefour, un escalier en diagonale
+    for (let z = sz - 3; z <= sz + 5; z++) w.setRoad(sx, z, true);
+    expect(w.canPlace('gate', sx, sz)).toBeNull();
+    const g = w.place('gate', sx, sz, 0, false, 2, false);
+    expect(gateAlongX(rampartMask(w, g))).toBe(true);
+    w.setRoad(sx + 1, sz + 2, true); w.setRoad(sx + 2, sz + 2, true);
+    expect(w.canPlace('gate', sx, sz + 2)).toMatch(/rue droite/);
+    for (let x = sx - 3; x <= sx + 3; x++) w.setRoad(x, sz + 4, true);
+    expect(w.canPlace('gate', sx, sz + 4)).toMatch(/rue droite/);
+    for (let i = 0; i < 4; i++) { w.setRoad(sx + 3 + i, sz - 3 + i, true); w.setRoad(sx + 4 + i, sz - 3 + i, true); }
+    expect(w.canPlace('gate', sx + 4, sz - 3)).toMatch(/rue droite/);
+    // une rue droite est-ouest : la porte se tourne
+    for (let x = sx - 3; x <= sx + 3; x++) w.setRoad(x, sz - 2, true);
+    w.setRoad(sx, sz - 3, false); w.setRoad(sx, sz - 1, false);
+    const h = w.place('gate', sx, sz - 2, 0, false, 2, false);
+    expect(gateAlongX(rampartMask(w, h))).toBe(false);
   });
 
   it('ni porte ni chemin d’accès pour les remparts ; un pan est bon marché, gratuit en Facile', () => {
@@ -138,8 +158,26 @@ describe('remparts : le tracé libre', () => {
     expect(nodeKind(WALL_E | WALL_W)).toBe('straight');
     expect(nodeKind(WALL_E)).toBe('end');
     expect(nodeKind(WALL_N | WALL_E | WALL_S)).toBe('junction');
-    w.place('watchtower', sx + 1, sz + 2, 0, false, 1, false);
+    const t = w.place('watchtower', sx + 1, sz + 2, 0, false, 1, false);
     expect(rampartMask(w, c) & WALL_S).toBe(WALL_S);
+    expect((rampartMask(w, c) >> TOWER_SHIFT) & 15).toBe(WALL_S);
+    // la tour démolie : le pan redevient un bout de mur
+    w.removeBuilding(t.id);
+    expect(rampartMask(w, c)).toBe(WALL_N);
+    // une tour au milieu d'un tracé : le tracé la saute et repart de chaque côté, les deux pans voisins se soudent à elle
+    const tw = w.place('watchtower', sx + 1, sz + 5, 0, false, 1, false);
+    const tr = traceRampart(w, [sx - 1.5, sz + 5.5], [sx + 3.5, sz + 5.5]);
+    expect(tr.ok[3]).toBe(false);
+    expect(layRampart(w, tr, 1)).toEqual({ built: 5, skipped: 1, short: false });
+    const west = w.buildingAt(sx, sz + 5)!, east = w.buildingAt(sx + 2, sz + 5)!;
+    expect(rampartMask(w, west)).toBe(WALL_W | WALL_E | (WALL_E << TOWER_SHIFT));
+    expect(rampartMask(w, east)).toBe(WALL_W | WALL_E | (WALL_W << TOWER_SHIFT));
+    expect(nodeKind(rampartMask(w, west))).toBe('straight');
+    // devant la porte de la tour (sa façade, vers +z), un pan se pose quand même : le mur se soude à la tour de tous côtés
+    expect(w.canPlace('house', tw.x, tw.z + 1)).toMatch(/Devant la porte/);
+    expect(w.canPlace('wall', tw.x, tw.z + 1)).toBeNull();
+    const south = w.place('wall', tw.x, tw.z + 1, 0, false, 1, false);
+    expect(rampartMask(w, south)).toBe(WALL_N | (WALL_N << TOWER_SHIFT));
     // la porte en travers d'une rue nord-sud : le mur court d'est en ouest
     for (let z = sz - 3; z < sz + 6; z++) w.setRoad(sx + 4, z, true);
     const g = w.place('gate', sx + 4, sz, 0, false, 1, false);
@@ -183,6 +221,32 @@ describe('remparts : un modèle détaillé et distinct à chaque âge', () => {
       expect(end.box.min.x).toBeGreaterThan(-0.4);
       expect(corner.box.min.z).toBeLessThan(-0.48);
       expect(corner.n).not.toBe(straight.n);
+    }
+  });
+
+  it('les battants ouverts sont rabattus contre les piédroits : rien dans la chaussée (|x| < 0,27) sous l’arche', () => {
+    for (const age of [1, 2, 3, 4, 5]) {
+      const m = getModel('gate', age, { v: 0, L: false, R: false, F: false, mask: WALL_E | WALL_W }), pos = m.body.attributes.position;
+      let inRoad = 0;
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getX(i)) < 0.27 && pos.getY(i) < 0.45 && Math.abs(pos.getZ(i)) < 0.5) inRoad++;
+      expect(inRoad, `âge ${age}`).toBe(0);
+    }
+  });
+
+  it('un pan voisin d’une tour de garde se soude à sa face : le bras dépasse le bord de la case jusqu’à la tour, à chaque âge et dans les quatre sens', () => {
+    for (const age of [1, 2, 3, 4, 5]) {
+      const plain = verts('wall', age, WALL_E | WALL_W);
+      for (const [bit, axis, sign] of [[WALL_E, 'x', 1], [WALL_W, 'x', -1], [WALL_N, 'z', -1], [WALL_S, 'z', 1]] as [number, 'x' | 'z', number][]) {
+        const r = verts('wall', age, WALL_E | WALL_W | WALL_N | WALL_S | (bit << TOWER_SHIFT));
+        const far = sign > 0 ? r.box.max[axis] : -r.box.min[axis];
+        expect(far, `âge ${age} côté ${bit}`).toBeGreaterThan(1 - TOWER_R[age] - 0.02);
+        expect(far).toBeLessThan(1.02);
+        expect(r.n).toBeGreaterThan(plain.n);
+      }
+      // la porte voisine d'une tour : une passerelle jusqu'à elle
+      const g = verts('gate', age, WALL_E | WALL_W), gt = verts('gate', age, WALL_E | WALL_W | (WALL_E << TOWER_SHIFT));
+      expect(gt.box.max.x).toBeGreaterThan(1 - TOWER_R[age] - 0.02);
+      expect(gt.n).toBeGreaterThan(g.n);
     }
   });
 

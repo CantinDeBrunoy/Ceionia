@@ -1,4 +1,4 @@
-import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize } from '../build/catalog';
+import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize, isRampart } from '../build/catalog';
 import { readPortal } from './portal';
 import { tr } from '../i18n';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
@@ -894,17 +894,25 @@ export class World {
         if (this.occ[k]) return tr('Emplacement occupé');
         // (le lampadaire se pose au bord de la rue, la porte de la ville l'enjambe)
         if (this.road[k] && kind !== 'lamp' && kind !== 'gate') return tr('Une route est déjà ici');
-        // la case devant la porte d'un bâtiment reste libre pour son chemin
-        if (!this.road[k] && this.doorOf(cx, cz)) return tr('Devant la porte d’un bâtiment : son chemin passe ici');
+        // la case devant la porte d'un bâtiment reste libre pour son chemin (sauf un rempart devant une tour de garde : le mur
+        // vient se souder à la tour de tous côtés, on y monte par le chemin de ronde)
+        if (!this.road[k]) { const d = this.doorOf(cx, cz); if (d && !(isRampart(kind) && d.kind === 'watchtower')) return tr('Devant la porte d’un bâtiment : son chemin passe ici'); }
         if (this.decor[k]) return tr('Une grotte ou une faille est ici');
         if (this.lake[k]) return tr('Un lac est ici');
         // le port bâtit son quai sur la rive, et même un peu dans l'eau peu profonde (il le remblaie) ; pas en eau profonde
         if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return tr('L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'); continue; }
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return tr('Trop proche de l’eau : reculez sur la terre ferme');
       }
-    // l'île du portail : des défenses seulement (et les défenses nulle part ailleurs)
+    // l'île du portail : des défenses seulement (et les défenses au village aussi)
     const isle = this.portalRule(kind, x, z, s);
     if (isle) return isle;
+    // la porte de rempart sur une rue : seulement une rue droite (deux voisines face à face, ni virage ni carrefour), pour que
+    // la chaussée passe sous l'arche dans son axe
+    if (kind === 'gate' && this.road[this.ci(x, z)]) {
+      const r = (dx: number, dz: number) => this.inCells(x + dx, z + dz) && this.road[this.ci(x + dx, z + dz)] === 1;
+      const ns = r(0, -1) && r(0, 1) && !r(1, 0) && !r(-1, 0), ew = r(1, 0) && r(-1, 0) && !r(0, 1) && !r(0, -1);
+      if (!ns && !ew) return tr('La porte se pose sur une rue droite : pas dans un virage ni à un carrefour');
+    }
     // bâtiments de zone : la mine dans la montagne, les bûcherons en forêt, la carrière près des rochers ou dans la montagne
     const high = kind === 'mine' || kind === 'quarry' || kind === 'alpine' ? this.flatTarget(x, z, s) >= MOUNTAIN_H : false;
     if (kind === 'mine' && !high) return tr('Une mine ne se creuse que dans la montagne');
