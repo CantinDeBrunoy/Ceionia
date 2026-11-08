@@ -372,6 +372,7 @@ class Game implements UIHost {
     };
     this.railView = new RailView(w, this.railway);
     this.railView.streams = this.streams;
+    this.roads.streams = this.streams;
     // on saisit la voie prévue pour la faire passer où l'on veut (rayon de saisie selon le zoom)
     this.trackEdit = new TrackEditor(w, this.railway, () => this.railEdit, () => Math.max(0.55, this.cam.dist * 0.02), () => this.ui.update());
     this.railView.group.add(this.trackEdit.group);
@@ -1401,6 +1402,8 @@ class Game implements UIHost {
       this.propsDirty = true;
     }
     this.propsTimer -= dt;
+    // les torrents ont bougé (relief sculpté) : les dalles qui les franchissent se refont avec les chemins
+    if (this.streams.version !== this.roads.builtStreams && !this.roads.busy) w.roadsDirty = true;
     if ((this.propsDirty || w.roadsDirty || w.vegDirty) && this.propsTimer <= 0) {
       this.propsTimer = 0.12;
       const roadsChanged = w.roadsDirty;

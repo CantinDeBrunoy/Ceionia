@@ -665,19 +665,22 @@ describe('façades et ponts', () => {
     expect(w2.losses).toEqual([]);
   });
 
-  it('sur un pont, on coupe les virages ; ailleurs, on passe au centre des cases', () => {
+  it('sur un pont, on suit l\'axe du tablier (le virage est coupé) ; ailleurs, on passe au centre des cases', () => {
     const w = continent();
     let L: number[] | null = null;
-    for (let z = 2; z < N - 3 && !L; z++) for (let x = 2; x < N - 3 && !L; x++) if (w.isWet(x, z) && w.isWet(x + 1, z) && w.isWet(x + 1, z + 1)) L = [x, z];
+    for (let z = 2; z < N - 3 && !L; z++) for (let x = 2; x < N - 3 && !L; x++) if (w.realWater(x, z) && w.realWater(x + 1, z) && w.realWater(x + 1, z + 1)) L = [x, z];
     const [x, z] = L!;
     const path = [w.ci(x, z), w.ci(x + 1, z), w.ci(x + 1, z + 1)];
     expect(w.passPoint(path, 1)).toEqual([x + 1.5, z + 0.5]);
     for (const c of path) w.road[c] = 1;
+    w.version++;
     expect(w.bridgeY(x + 1, z)).not.toBeNull();
-    expect(w.passPoint(path, 1)).toEqual([x + 1.25, z + 0.75]);
-    // tout droit ou au bout du trajet : le centre
-    expect(w.passPoint(path, 0)).toEqual([x + 0.5, z + 0.5]);
-    expect(w.passPoint(path, 2)).toEqual([x + 1.5, z + 1.5]);
+    // dans le virage, le point de passage est tiré vers l'angle intérieur (entre le centre et le coin), sans sortir de la case
+    const [px, pz] = w.passPoint(path, 1);
+    expect(px).toBeLessThan(x + 1.5); expect(px).toBeGreaterThan(x + 1);
+    expect(pz).toBeGreaterThan(z + 0.5); expect(pz).toBeLessThan(z + 1);
+    // aux bouts du pont, on reste près du centre de la case
+    for (const i of [0, 2]) { const [qx, qz] = w.passPoint(path, i), c = path[i]; expect(Math.hypot(qx - (c % N) - 0.5, qz - Math.floor(c / N) - 0.5)).toBeLessThan(0.3); }
   });
 });
 
