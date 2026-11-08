@@ -53,7 +53,7 @@ export function onLangChange(fn: (l: Lang) => void): () => void {
 const EN = new Map<string, string>();
 /** nom du dictionnaire qui possède chaque clé (pour repérer les doublons) */
 const OWNER = new Map<string, string>();
-const duplicates: { key: string; first: string; second: string }[] = [];
+const duplicates: { key: string; first: string; second: string; a?: string; b?: string }[] = [];
 /** textes passés à tr() sans traduction anglaise */
 const missing = new Set<string>();
 
@@ -62,7 +62,7 @@ export function registerDict(name: string, dict: Record<string, string>) {
   for (const k of Object.keys(dict)) {
     const first = OWNER.get(k);
     if (first === undefined) OWNER.set(k, name);
-    else if (EN.get(k) !== dict[k]) duplicates.push({ key: k, first, second: name });
+    else if (EN.get(k) !== dict[k]) duplicates.push({ key: k, first, second: name, a: EN.get(k), b: dict[k] });
     EN.set(k, dict[k]);
     missing.delete(k);
   }

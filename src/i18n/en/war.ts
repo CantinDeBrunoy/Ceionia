@@ -158,7 +158,6 @@ registerDict('war', {
   'Porte posée. Cliquez plus loin pour prolonger le mur ; Échap : arrêter.': 'Gate built. Click further to extend the wall; Esc: stop.',
 
   // ---- pose d'un bâtiment : refus ----
-  'Hors de la carte': 'Outside the map',
   'La brume barre {zone} : conquérez d’abord la zone d’avant.': 'The mist blocks {zone}: conquer the previous zone first.',
   'Il faut d’abord conquérir {zone} : abattez sa forteresse.': 'You must first conquer {zone}: take down its fortress.',
   'Cette zone a déjà son camp de base.': 'This zone already has its base camp.',
@@ -209,9 +208,7 @@ registerDict('war', {
   '👑 Le roi des Enfers est abattu ! Sa citadelle vacille : abattez-la.': '👑 The King of Hell is slain! His citadel is shaking: tear it down.',
 
   // ---- île du portail, alerte d'incursion, bannière ----
-  'île du portail : une tour de garde': 'portal island: a guard tower',
   'île du portail : une caserne': 'portal island: a barracks',
-  'île du portail : vagues de démons repoussées': 'portal island: waves of demons repelled',
   'Monde des Enfers': 'World of Hell',
   '{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.': '{zone}: the demon kingdom lies at the very end. Optional expedition; the portal leads back to the island.',
   '{text} Cliquez ici pour voir l’île.': '{text} Click here to see the island.',

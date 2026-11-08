@@ -44,7 +44,7 @@ export class SpaceCast {
     const a = active.find((e) => e.m.id === 'moon' && e.phase === 'work');
     const k = a ? Math.min(1, a.t / Math.max(1, a.c.work + a.extra)) : 0, on = !!a && k >= CAST_FROM && k < CAST_TO;
     if (on !== this.shown) { this.shown = on; this.el.classList.toggle('show', on); this.el.setAttribute('aria-hidden', String(!on)); }
-    if (on) this.draw((k - CAST_FROM) / (CAST_TO - CAST_FROM), a!.c.label.includes('cratères'));
+    if (on) this.draw((k - CAST_FROM) / (CAST_TO - CAST_FROM), /cratères|craters/i.test(a!.c.label));
   }
 
   /** L'image de la retransmission à l'instant u (0 … 1) */

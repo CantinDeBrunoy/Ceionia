@@ -855,7 +855,7 @@ class Game implements UIHost {
       f.voyage = true;
       const was = this.time.paused;
       this.time.paused = true;
-      showVoyage(uiRoot, a.c.label.includes('saut'), () => { this.expeditions.landNow(a); this.time.paused = was; });
+      showVoyage(uiRoot, /saut|jump/i.test(a.c.label), () => { this.expeditions.landNow(a); this.time.paused = was; });
     }
   }
 
@@ -956,9 +956,9 @@ class Game implements UIHost {
     const e = this.railEdit;
     if (!e || !b) return;
     if (e.stops[e.stops.length - 1] === b.id) { this.railUndo(); audio.sfxClick(); return; }
-    if (e.stops.includes(b.id)) { this.ui.toast(`${this.railway.stopName(b)} est déjà sur la ligne.`); return; }
+    if (e.stops.includes(b.id)) { this.ui.toast(trx('{name} est déjà sur la ligne.', { name: this.railway.stopName(b) })); return; }
     if (!this.railway.stopOf(b)) {
-      this.ui.toast('Cliquez une gare.');
+      this.ui.toast(trx('Cliquez une gare.'));
       return;
     }
     e.stops.push(b.id);
@@ -993,7 +993,7 @@ class Game implements UIHost {
     const e = this.railEdit;
     if (!e || e.stops.length < 2) return;
     const r = this.railway, twin = r.sameAs(e.stops, e.line ?? undefined), trouble = this.trackEdit.trouble();
-    if (twin) { this.ui.toast(`🚂 Ce parcours existe déjà (${r.lineLabel(twin)}) : sur une voie unique, un seul train peut y rouler.`); return; }
+    if (twin) { this.ui.toast(trx('🚂 Ce parcours existe déjà ({line}) : sur une voie unique, un seul train peut y rouler.', { line: r.lineLabel(twin) })); return; }
     if (trouble) { this.ui.toast(`🚂 ${trouble}`); return; }
     this.railCancel();
     if (e.line !== null) r.setStops(e.line, e.stops, e.via); else r.addLine(e.stops, e.via);
