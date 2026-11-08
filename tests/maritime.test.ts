@@ -57,13 +57,13 @@ describe('les bâtiments de la mer', () => {
     expect(w.canPlace('lighthouse', near![0], near![1])).toBeNull();
   });
 
-  it('chacun a un modèle à tous ses âges (avec le faisceau ou les pales qui tournent)', () => {
+  it('chacun a un modèle à tous ses âges (le phare a un halo fixe, sans pièce tournante)', () => {
     for (const k of NEW) for (let a = KINDS[k].minAge; a <= 5; a++) {
       const m = getModel(k, a, { v: 0, L: false, R: false, F: false });
       expect(m.body.attributes.position.count, `${k} âge ${a}`).toBeGreaterThan(200);
     }
     const o = { v: 0, L: false, R: false, F: false };
-    expect(getModel('lighthouse', 3, o).sways?.some((s) => s.spin && s.glow)).toBe(true);
+    for (let a = 2; a <= 5; a++) { const m = getModel('lighthouse', a, o); expect(m.sways?.some((s) => s.spin) ?? false, `phare âge ${a}`).toBe(false); expect(m.glow, `phare âge ${a}`).not.toBeNull(); }
     expect(getModel('offshore', 4, o).sways?.some((s) => s.spin)).toBe(true);
   });
 });
