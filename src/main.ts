@@ -419,8 +419,8 @@ class Game implements UIHost {
       age: () => this.sim.age,
       village: () => this.villageCenter(), fest: (x, z) => this.festAt(x, z), crowd: (on, x, z) => this.kingCrowd(on, x, z),
     });
-    this.expeditions.onNews = (m) => this.ui.toast(m);
-    this.railway.onNews = (m) => this.ui.toast(m);
+    this.expeditions.onNews = (m) => this.ui.toast(m, undefined, m.startsWith('⚔️') ? 'danger' : 'info');
+    this.railway.onNews = (m) => this.ui.info(m);
     // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
     this.cam.onPan = () => { this.trainCam = null; this.incidentCam = null; if (this.following !== null) { this.follow(null); this.ui.update(); } };
     // tracer une ligne : un clic sur une gare l'ajoute aux arrêts ; la voie prévue se saisit et se déplace
@@ -442,7 +442,7 @@ class Game implements UIHost {
       this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
-      setTimeout(() => this.ui.showNewAge(age), 4600);
+      setTimeout(() => this.ui.showNewAge(age), 3600);
       audio.sfxAgeUp();
       // le sol des jardins change avec eux
       this.terrain.gardenAge = age;
@@ -474,10 +474,10 @@ class Game implements UIHost {
     // les aides du volet militaire (bulles facultatives, au moment utile)
     this.warTips = new WarTips({
       root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
-      busy: () => this.tutorial.on || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
+      busy: () => this.tutorial.on || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
       act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
     });
-    this.ui.toast(save ? 'Bon retour dans votre village !' : w.buildings.size ? 'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.' : `Commencez par « ${this.sim.nameOf('gather')} », la place au centre du village (Bâtir › Vie & culture).`);
+    this.ui.info(save ? 'Bon retour dans votre village !' : w.buildings.size ? 'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.' : `Commencez par « ${this.sim.nameOf('gather')} », la place au centre du village (Bâtir › Vie & culture).`);
     requestAnimationFrame(() => this.frame());
   }
 
@@ -542,7 +542,7 @@ class Game implements UIHost {
       this.cam.jump({ x, z: z + 1.5, dist: 15, pitch: 0.72, yaw: Math.PI }, hm.view.groundY(x, z));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
-      this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.`);
+      this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.`, 'hell');
       this.ui.update();
     }, 'Passage du portail…');
   }
@@ -688,9 +688,11 @@ class Game implements UIHost {
       said.add(n.text);
       // le combat du roi, la chute du royaume : la mise en scène s'en charge
       if (this.kingStage.news(n)) continue;
-      if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(`${n.text} Cliquez ici pour voir l’île.`, () => this.viewIsle());
-      else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell') this.ui.toast(`${n.text} Cliquez ici pour y aller.`, () => this.enterHell());
-      else this.ui.toast(n.text);
+      // l'incursion elle-même a son alerte en haut (« Voir l'île ») : pas de message en double ; l'avertissement qui la précède reste
+      if (n.kind === 'raid' && n.text.startsWith('🔥')) this.ui.info(n.text);
+      else if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(`${n.text} Cliquez ici pour voir l’île.`, () => this.viewIsle(), 'danger');
+      else if ((n.kind === 'portal' || n.kind === 'counter' || n.kind === 'zone') && this.mode !== 'hell' && (n.kind !== 'zone' || /repris|reprendre|tombé/.test(n.text))) this.ui.toast(`${n.text} Cliquez ici pour y aller.`, () => this.enterHell());
+      else this.ui.toast(n.text, undefined, n.kind === 'boss' || n.kind === 'counter' || (n.kind === 'zone' && /repris|reprendre|tombé/.test(n.text)) ? 'danger' : 'info');
       if (n.kind === 'repelled' || n.kind === 'secured') audio.sfxAgeUp();
     }
     // l'alerte reste tant que dure l'incursion, si l'on ne regarde pas l'île
@@ -757,7 +759,7 @@ class Game implements UIHost {
     this.quake = { cell, t: 18 };
     audio.sfxRumble(18);
     // le message mène au volcan qui se réveille (on ne savait pas lequel)
-    this.ui.toast('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.', () => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); });
+    this.ui.toast('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.', () => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); }, 'danger');
   }
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
@@ -805,7 +807,7 @@ class Game implements UIHost {
       const spots = this.parade.start(route, [a.base[0], a.base[1]], [a.dest[0], a.dest[1]], this.sim.age, crowd.length);
       f = this.farewell = { id: a.id, crowd, spots, sent: 0, rel: null, relAt: 0, voyage: false };
       this.festAt(a.base[0], a.base[1]);
-      this.ui.toast(`${a.m.icon} Tout le village sort dire adieu aux colons !`);
+      this.ui.info(`${a.m.icon} Tout le village sort dire adieu aux colons !`);
     }
     // la foule gagne sa place le long de la route, quelques-uns par image (chaque trajet se calcule) ; à défaut de place, elle
     // se range en cercle près du cœur du village
@@ -1082,7 +1084,7 @@ class Game implements UIHost {
   erupt(cell: number) {
     if (!this.eruptions.start(cell)) return;
     audio.sfxEruption(ERUPTION_DUR);
-    this.ui.toast('Le volcan entre en éruption !');
+    this.ui.info('Le volcan entre en éruption !');
     // la première éruption de la partie : la vue file sur le volcan pour ne pas la manquer
     if (!this.volcanoSeen) {
       this.volcanoSeen = true;
@@ -1116,7 +1118,7 @@ class Game implements UIHost {
       this.cam.jump({ x, z, dist: 11, pitch: 1.05 }, this.underView.groundY(x, z));
       this.cam.handler = this.underInput;
       canvas.style.cursor = '';
-      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : le puits de lumière ramène à la surface.`);
+      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : le puits de lumière ramène à la surface.`, 'under');
       this.ui.update();
     }, 'Descente sous terre…');
   }
@@ -1382,9 +1384,9 @@ class Game implements UIHost {
     this.fires.update(dt);
     this.wakeVolcano(gdt, dt);
     // nouvelles du village : incendies, feux éteints, bâtiments perdus
-    for (const m of this.fires.news.splice(0)) this.ui.toast(m);
-    for (const m of this.emergencies.news.splice(0)) this.ui.toast(m);
-    for (const m of w.losses.splice(0)) this.ui.toast(m);
+    for (const m of this.fires.news.splice(0)) this.ui.toast(m, undefined, m.startsWith('🔥') ? 'danger' : 'info');
+    for (const m of this.emergencies.news.splice(0)) this.ui.toast(m, undefined, 'danger');
+    for (const m of w.losses.splice(0)) this.ui.toast(m, undefined, 'danger');
     // pas de tracteur aux champs tant que l'usine automobile n'est pas bâtie
     this.agents.motor = (this.sim.counts.carworks ?? 0) > 0;
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night, this.time.season);

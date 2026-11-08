@@ -27,6 +27,7 @@ import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
+import { NotifQueue, Banners, type NotifLevel } from './notifs';
 
 export interface UIHost {
   tools: ToolController;
@@ -353,8 +354,8 @@ export class UI {
   private needOpen: NeedId | 'security' | null = null;
   /** ressource dont la fiche est ouverte (même panneau que celle d'un besoin) */
   private resOpen: Resource | null = null;
-  private toastTimer = 0;
-  private bannerTimer = 0;
+  private notifs = new NotifQueue();
+  private banners = new Banners(() => document.getElementById('banner')!);
   /** bâtiment ou outil survolé dans la barre (sa fiche s'affiche) */
   private hover: { kind?: KindId; tool?: string } | null = null;
   /** fiche du bâtiment sélectionné : redessinée seulement quand il change */
@@ -388,6 +389,7 @@ export class UI {
         </div>
         <nav id="menuBtns" class="panel">
           <button id="bExp" title="Expéditions" aria-label="Expéditions">${ic('compass')}<span id="expBadge"></span></button>
+          <button id="bBell" title="Notifications" aria-label="Notifications" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
           <button id="bPhoto" title="Mode photo (P)" aria-label="Mode photo">${ic('camera')}</button>
           <button id="bSettings" title="Réglages" aria-label="Réglages">${ic('gear')}</button>
         </nav>
@@ -422,7 +424,8 @@ export class UI {
           </div>
         </div>
       </footer>
-      <div id="toast"></div>
+      <div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div>
+      <div id="notifPanel" class="panel" hidden></div>
       <div id="cursorHint"></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
       <div id="photoBar" class="panel"><button id="pCap">${ic('camera', 18)} Capturer</button><button id="pExit">Quitter</button></div>
@@ -510,11 +513,15 @@ export class UI {
       $('#agePanel').classList.toggle('open');
       this.update();
     };
+    // la cloche : l'historique des messages ; l'horloge de la file tourne quatre fois par seconde
+    $('#bBell').onclick = () => { this.host.audio.sfxClick(); this.toggleNotifPanel(); };
+    window.setInterval(() => this.tickNotifs(), 250);
+    window.addEventListener('pointerdown', (e) => { if (!$('#notifPanel').hidden && !(e.target as HTMLElement).closest('#notifPanel, #bBell')) this.toggleNotifPanel(false); }, true);
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
     $('#helpBtn').onclick = () => { this.help = !this.help; try { localStorage.setItem('ceionia.aides', this.help ? '1' : '0'); } catch { /* sans stockage */ } this.host.audio.sfxClick(); this.renderMessage(); };
     $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
-    $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.toast('Le brouillard se lève.'); };
+    $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info('Le brouillard se lève.'); };
     $('#bSpeed').onclick = () => {
       const seq = [1, 2, 4];
       host.time.speed = seq[(seq.indexOf(host.time.speed) + 1) % seq.length] ?? 1;
@@ -920,7 +927,9 @@ export class UI {
     // à partir de l’Antiquité, seuls restent visibles un besoin à combler (orange) ou le passage d’âge
     const quiet = late && !this.help && !(sim.ready && !k) && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) && !sim.drought;
     // pendant le tutoriel guidé, sa propre bulle suffit : pas de conseil en plus
-    el.hidden = quiet || !!this.tutorial?.on;
+    // (et en plein commandement, un conseil de village qui ne parle pas d'un besoin criant se tait)
+    const fighting = !!document.getElementById('troopBar') && document.getElementById('troopBar')!.style.display !== 'none';
+    el.hidden = quiet || !!this.tutorial?.on || (fighting && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok));
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
     const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;
@@ -999,17 +1008,76 @@ export class UI {
     if (txt && this.cursorXY) el.style.transform = `translate(${this.cursorXY[0] + 18}px, ${this.cursorXY[1] + 20}px)`;
   }
 
-  /** Message bref en haut de l'écran ; avec `act`, un clic dessus y mène (il reste alors affiché plus longtemps) */
-  toast(msg: string, act?: () => void) {
-    const t = $('#toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    t.classList.toggle('act', !!act);
-    t.onclick = act ? () => { t.classList.remove('show'); act(); } : null;
-    clearTimeout(this.toastTimer);
-    // un message qui mène quelque part reste longtemps, et ne s'efface jamais sous la souris (le clic tomberait sur la carte)
-    const hide = () => { if (act && t.matches(':hover')) { this.toastTimer = window.setTimeout(hide, 800); return; } t.classList.remove('show'); };
-    this.toastTimer = window.setTimeout(hide, act ? 12000 : 2600);
+  /**
+   * Message au joueur, par la file des notifications (voir `notifs.ts`) : `level` dit s'il mérite un message à l'écran (action,
+   * danger, geste du joueur) ou seulement une ligne dans la cloche (info) ; sans niveau, il est deviné d'après le texte.
+   * Avec `act`, un clic dessus y mène.
+   */
+  toast(msg: string, act?: () => void, level?: NotifLevel) {
+    this.notifs.push(msg, performance.now(), { level, act });
+    this.renderNotifs();
+  }
+
+  /** Une annonce discrète : seulement dans la cloche */
+  info(msg: string) { this.toast(msg, undefined, 'info'); }
+
+  /** Un message ou une bannière est-il à l'écran ? (les aides et conseils se taisent alors) */
+  popupShowing() { return this.notifs.showing || this.banners.showing(); }
+
+  private toastHover = new Set<number>();
+  private notifKey = '';
+
+  /** Appelée quatre fois par seconde : horloge de la file, bannière retenue, cloche */
+  private tickNotifs() {
+    const now = performance.now();
+    this.notifs.max = window.matchMedia('(max-width: 600px)').matches ? 1 : 2;
+    const open = !!this.root.querySelector('.overlay');
+    this.notifs.setBlocked(open, now);
+    this.notifs.tick(now, this.toastHover);
+    this.banners.tick(open);
+    this.renderNotifs();
+  }
+
+  private renderNotifs() {
+    const q = this.notifs, box = $('#toasts');
+    const key = q.visible.map((v) => `${v.id}:${v.count}`).join('|') + `#${q.unread}`;
+    if (key === this.notifKey && !q.dirty) return;
+    this.notifKey = key;
+    q.dirty = false;
+    const keep = new Set(q.visible.map((v) => String(v.id)));
+    for (const el of Array.from(box.children) as HTMLElement[]) if (!keep.has(el.dataset.id!)) el.remove();
+    for (const v of q.visible) {
+      let el = box.querySelector<HTMLElement>(`[data-id="${v.id}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.dataset.id = String(v.id);
+        // un message qui mène quelque part ne s'efface pas sous la souris (le clic tomberait sur la carte)
+        el.addEventListener('pointerenter', () => { if (v.act) this.toastHover.add(v.id); });
+        el.addEventListener('pointerleave', () => this.toastHover.delete(v.id));
+        el.addEventListener('click', () => { this.toastHover.delete(v.id); this.notifs.dismiss(v.id); this.renderNotifs(); v.act?.(); });
+        box.appendChild(el);
+      }
+      el.className = `toast ${v.level}${v.act ? ' act' : ''}`;
+      el.textContent = v.count > 1 ? `${v.text} ×${v.count}` : v.text;
+    }
+    $('#bellBadge').textContent = q.unread ? String(Math.min(q.unread, 99)) : '';
+    $('#bBell').classList.toggle('new', q.unread > 0);
+    if (!$('#notifPanel').hidden) this.renderNotifPanel();
+  }
+
+  /** La cloche : l'historique des 30 derniers messages ; l'ouvrir les marque lus */
+  toggleNotifPanel(open = $('#notifPanel').hidden) {
+    $('#notifPanel').hidden = !open;
+    $('#bBell').setAttribute('aria-expanded', String(open));
+    if (open) { this.notifs.markRead(); this.renderNotifPanel(); this.renderNotifs(); }
+  }
+
+  private renderNotifPanel() {
+    const p = $('#notifPanel'), h = this.notifs.history;
+    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    p.innerHTML = `<div class="npHead"><b>Notifications</b>${h.length ? '<button class="npClear" type="button">Tout effacer</button>' : ''}</div>`
+      + (h.length ? `<ul>${h.map((x) => `<li class="${x.level}">${esc(x.text)}${x.count > 1 ? ` <em>×${x.count}</em>` : ''}</li>`).join('')}</ul>` : '<p class="npNone">Rien de nouveau.</p>');
+    p.querySelector<HTMLElement>('.npClear')?.addEventListener('click', () => { this.notifs.clearHistory(); this.renderNotifPanel(); this.renderNotifs(); });
   }
 
   /** Fenêtre d'un nouvel âge : les bâtiments qui apparaissent, chacun à bâtir d'un clic (et ses améliorations) */
@@ -1038,14 +1106,8 @@ export class UI {
     });
   }
 
-  banner(title: string, sub: string) {
-    const b = $('#banner');
-    $('h2', b).textContent = title;
-    $('p', b).textContent = sub;
-    b.classList.add('show');
-    clearTimeout(this.bannerTimer);
-    this.bannerTimer = window.setTimeout(() => b.classList.remove('show'), 4200);
-  }
+  /** Bannière d'arrivée, courte ; `once` : seulement la première fois (clé gardée d'une partie à l'autre) */
+  banner(title: string, sub: string, once?: string) { this.banners.show(title, sub, once); }
 
   update() {
     const { sim, time, env } = this.host;
@@ -1743,7 +1805,7 @@ export class UI {
     // la scène reste visible à côté de la fenêtre : un clic y emmène la caméra, pour voir l'imprévu avant de choisir
     ($('.look', ov) as HTMLButtonElement).onclick = () => { h.follow(a.id); this.update(); };
     ov.querySelectorAll<HTMLButtonElement>('button.opt').forEach((b) => (b.onclick = () => {
-      if (a.wait === ev && ex.decide(a, +b.dataset.o!)) { h.audio.sfxClick(); this.toast(`${a.m.icon} ${ev.options[+b.dataset.o!].label}.`); }
+      if (a.wait === ev && ex.decide(a, +b.dataset.o!)) { h.audio.sfxClick(); this.info(`${a.m.icon} ${ev.options[+b.dataset.o!].label}.`); }
       close();
       this.update();
     }));
@@ -1901,7 +1963,7 @@ export class UI {
     rng('#sSfx', (v) => (a.sfxVol = v));
     q('#mMusic').onclick = () => { a.muteMusic = !a.muteMusic; q('#mMusic').innerHTML = ic(a.muteMusic ? 'mute' : 'volume', 18); q('#mMusic').classList.toggle('active', a.muteMusic); h.applySettings(); };
     q('#mSfx').onclick = () => { a.muteSfx = !a.muteSfx; q('#mSfx').innerHTML = ic(a.muteSfx ? 'mute' : 'volume', 18); q('#mSfx').classList.toggle('active', a.muteSfx); h.applySettings(); };
-    q('#gSave').onclick = () => { h.saveNow(); this.toast('Partie sauvegardée'); };
+    q('#gSave').onclick = () => { h.saveNow(); this.info('Partie sauvegardée'); };
     q('#gExport').onclick = () => h.exportSave();
     const fi = q<HTMLInputElement>('#fImport');
     q('#gImport').onclick = () => fi.click();

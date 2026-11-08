@@ -388,13 +388,13 @@ export class Tutorial {
     writeState({ on: false, step: this.i });
   }
 
-  skip() { this.stop(); this.ui.toast(TUTO_TEXT.skipped); }
+  skip() { this.stop(); this.ui.info(TUTO_TEXT.skipped); }
 
   finish() {
     this.stop();
     this.i = 0;
     writeState({ on: false, step: 0 });
-    this.ui.toast(TUTO_TEXT.finished);
+    this.ui.info(TUTO_TEXT.finished);
   }
 
   /** Coche ce que le joueur a fait, passe à l'étape suivante, place la bulle (appelé quatre fois par seconde) */
