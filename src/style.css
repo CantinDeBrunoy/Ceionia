@@ -1177,3 +1177,52 @@ body.cinematic #bannerWrap { display: none !important; }
   #troopBar .tgb { min-height: 24px; padding: 0 7px; font-size: 11px; }
 }
 #troopBar .thelp { width: min(400px, calc(100vw - 24px)); font-size: 12px; padding: 8px 12px; gap: 3px 10px; opacity: 0.96; }
+
+/* Fenêtre de départ : une carte par choix (un style, trois infos, un bouton), le reste sous « Détails » */
+.sendModal { max-width: 520px; }
+.sendModal .sintro { font-size: 14px; font-weight: 700; line-height: 1.4; margin: 2px 0 4px; }
+.sendModal .choices { gap: 12px; }
+.sendModal .cbox { gap: 10px; padding: 14px; border: 2px solid #e4e1d4; border-radius: 18px; }
+.sendModal .cbox.cautious { border-color: #cfe9dc; }
+.sendModal .cbox.bold { border-color: #f3cfc4; }
+.sendModal .ctop { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.cstyle { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: #eef0f5; color: #41506e; }
+.cstyle.cautious { background: #e8f7f1; color: #0b6a52; }
+.cstyle.bold { background: #fdecea; color: #a53a1c; }
+.ceffect { font-size: 13px; font-weight: 800; color: #41506e; }
+.ceffect.good { color: #0b6a52; }
+.sendModal .clabel { font-size: 17px; font-weight: 800; line-height: 1.25; }
+.sendModal .cbox .ctext { font-size: 14px; line-height: 1.35; color: #41506e; }
+.cinfo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; }
+.cinfo .info { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #41506e; }
+.cinfo .dur::first-letter { text-transform: uppercase; }
+.rdots { display: inline-flex; gap: 3px; }
+.rdots i { width: 10px; height: 10px; border-radius: 50%; background: #d9dfeb; }
+.rdots.low i.on { background: #12a37e; }
+.rdots.mid i.on { background: #e08a1e; }
+.rdots.high i.on { background: #c8482b; }
+.cpills { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cpills:empty { display: none; }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.pill.gain { background: #e8f7f1; color: #0b6a52; }
+.pill.loss { background: #fdecea; color: #a53a1c; }
+.sendModal .gearNeed { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; padding: 8px 10px; border-radius: 12px; background: #fff8e6; border: 1px solid #f0dca8; }
+.sendModal .gearNeed .gnrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; font-size: 13px; font-weight: 700; color: #7a5300; }
+.sendModal .gearNeed .gnrow > span { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.sendModal .gearNeed .gnlink { color: #7a5300; font-weight: 800; }
+.sendModal .gearNeed .gnh { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: 12px; font-weight: 800; color: #7a5300; }
+.sendModal .gearNeed .mk, .sendModal .gearNeed .mkAll { display: inline-flex; flex-direction: row; align-items: center; gap: 5px; min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid #e0c47a; background: #fff; font-size: 13px; font-weight: 800; color: #7a5300; margin-left: auto; }
+.sendModal .gearNeed .mk:disabled { opacity: 0.55; }
+.sendModal .cbox button.depart { min-height: 48px; margin: 0; border-radius: 14px; font-size: 16px; }
+.cdet { align-self: center; width: 100%; }
+.cdet > summary { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 44px; list-style: none; cursor: pointer; font-size: 13px; font-weight: 800; color: #2b6cf0; }
+.cdet > summary::-webkit-details-marker { display: none; }
+.cdet > summary::after { content: '▾'; }
+.cdet[open] > summary::after { content: '▴'; }
+.cdbody { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; border-top: 1px solid #eceae0; }
+.cdbody p { margin: 0; font-size: 13px; line-height: 1.4; color: #41506e; }
+.cdbody .drow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.cdbody .cfull { color: #1b2438; }
+@media (max-width: 480px) {
+  .sendModal .cbox { padding: 12px; }
+}

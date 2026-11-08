@@ -2,7 +2,25 @@ import { registerDict } from '../index';
 
 /** Textes français -> anglais : expéditions (messages, comptes rendus) */
 registerDict('expeditions', {
-  'À fabriquer avant de partir : l’équipe l’emporte et risque moins': 'Craft before leaving: the team takes it along and runs less risk',
+  // la carte de choix : style, effet, pastilles
+  'Prudent': 'Cautious',
+  'Audacieux': 'Bold',
+  'Équilibré': 'Balanced',
+  'Moins de blessés': 'Fewer injuries',
+  'Plus de récompenses': 'More rewards',
+  'Plus sûr': 'Safer',
+  'Plus risqué': 'Riskier',
+  'Détails': 'Details',
+  'Risque': 'Risk',
+  'Blessés possibles': 'Injuries possible',
+  'Risque : {p}': 'Risk: {p}',
+  'Risque : {p} avec l’équipement ({b} sans)': 'Risk: {p} with gear ({b} without)',
+  '{list} manque': '{list} missing',
+  '{list} manquent': '{list} missing',
+  '{list} en fabrication': '{list} being crafted',
+  'Fabriquer · {price}': 'Craft · {price}',
+  'Tout fabriquer · {price}': 'Craft all · {price}',
+  'Équipement qui manque': 'Missing gear',
   'protège de : {d}': 'protects against: {d}',
   // destinations et créatures des galeries
   'la plaine': 'the plain',
