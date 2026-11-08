@@ -1,6 +1,6 @@
 import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
-import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building } from '../build/catalog';
+import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
 import { Sim, NeedId } from '../sim/sim';
 import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
@@ -585,10 +585,15 @@ export class UI {
    * le joueur voit tout de suite par où commencer (les autres bâtiments restent grisés jusque-là)
    */
   private firstArmed = false;
+  private plazaLostSaid = false;
   private markFirst() {
     const first = this.host.world.buildings.size === 0;
+    // la place du village a été démolie : on la remet en lumière, sans rien verrouiller ni armer (le joueur reste libre)
+    const counts = this.host.sim.counts as Record<string, number>, lost = !first && lineOf('gather').every((k) => !(counts[k] ?? 0));
+    if (lost && !this.plazaLostSaid) { this.plazaLostSaid = true; this.toast(tr('La place du village a disparu : reposez-la (le bouton qui luit) pour retrouver son bien-être et partir en expédition.')); }
+    if (!lost) this.plazaLostSaid = false;
     const sel = ['#modes [data-t="build"]', `#subcats [data-c="${KINDS.gather.cat}"]`, '#items [data-kind="gather"]'];
-    for (const s of sel) this.root.querySelector(s)?.classList.toggle('first', first);
+    for (const s of sel) this.root.querySelector(s)?.classList.toggle('first', first || lost);
     // la place du village est déjà en main : le premier clic sur le terrain la pose (une vignette qui luit sans être prise déroute)
     if (first && !this.firstArmed && this.host.tools.tool === 'none') { this.firstArmed = true; this.host.tools.setTool('build', START_KIND); }
     // village vide : les onglets Relief et Nature, les autres rayons et les outils rapides sont grisés (voir startLock)

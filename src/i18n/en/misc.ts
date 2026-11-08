@@ -2,6 +2,7 @@ import { registerDict } from '../index';
 
 /** Textes français -> anglais : divers (ce qui ne rentre dans aucune autre zone) */
 registerDict('misc', {
+  'La place du village a disparu : reposez-la (le bouton qui luit) pour retrouver son bien-être et partir en expédition.': 'The village square is gone: build it again (the glowing button) to get its well-being back and send expeditions.',
   'Le volcan est rasé.': 'The volcano has been levelled.',
   '🔥 Contamination de l’île : {n} % · la caserne la fait reculer, sans halo autour d’elle': '🔥 Island contamination: {n}% · the barracks push it back, with no halo around them',
   'Cliquez le point A': 'Click point A',
