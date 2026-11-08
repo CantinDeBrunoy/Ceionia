@@ -407,14 +407,37 @@ const sniper: Kit = {
   right: (p) => longRifle(p, { wood: 0x3c3c40, metal: 0x2a2a2e, len: 0.19, scope: true }),
 };
 
-/** Tireur futuriste : exo-armure, fusil à impulsions long à rail lumineux */
-const exoGunner: Kit = {
+/**
+ * Pilote de drones (l'archer de l'âge futuriste) : combinaison blanche à liserés cyan, casque à grande visière lumineuse et
+ * antenne, deux nids à drones dans le dos (les drones eux-mêmes volent autour de lui : voir `futureTroops.ts`), émetteur de
+ * pilotage à écran lumineux dans la main
+ */
+const dronePilot: Kit = {
   ...future, hold: 'rifle',
-  right: (p) => longRifle(p, { wood: 0xf0f2f4, metal: 0x3a4250, len: 0.18, neon: true }),
+  dress(p) {
+    future.dress(p);
+    // deux nids à drones sur le sac, voyants rouges
+    for (const s of [-1, 1]) { p.box(0.026, 0.034, 0.028, s * 0.03, 0.14, -0.07, 0x3a4250); p.box(0.018, 0.004, 0.004, s * 0.03, 0.17, -0.085, 0xff3a4a, 0, 'neon'); }
+  },
+  head(p) {
+    // casque intégral à visière enveloppante bleutée et antenne de liaison
+    p.sphere(0.038, 0, 0.231, 0, 0xf6f8fa, 1);
+    p.box(0.058, 0.026, 0.014, 0, 0.218, 0.032, 0x1e3a5a);
+    p.box(0.05, 0.005, 0.004, 0, 0.226, 0.04, 0x5af0ff, 0, 'neon');
+    p.box(0.003, 0.05, 0.003, 0.03, 0.26, -0.01, 0x3a4250);
+    p.box(0.008, 0.008, 0.008, 0.03, 0.31, -0.01, 0x5af0ff, 0, 'neon');
+  },
+  right(p) {
+    // émetteur de pilotage : poignée, tablette à écran lumineux, antenne
+    p.box(0.014, 0.034, 0.016, 0, -0.03, -0.004, 0x3a4250);
+    p.box(0.05, 0.008, 0.04, 0, -0.004, 0.026, 0xf0f2f4);
+    p.box(0.04, 0.004, 0.03, 0, 0.002, 0.026, 0x5af0ff, 0, 'neon');
+    p.box(0.003, 0.03, 0.003, 0.022, 0.004, 0.044, 0x3a4250);
+  },
 };
 
-/** Les tireurs (l'archer, une fois le fusil connu) : tirailleur, tireur d'élite, tireur à impulsions */
-const GUNNERS = [tirailleur, tirailleur, tirailleur, tirailleur, sniper, exoGunner];
+/** Les tireurs (l'archer, une fois le fusil connu) : tirailleur, tireur d'élite, pilote de drones */
+const GUNNERS = [tirailleur, tirailleur, tirailleur, tirailleur, sniper, dronePilot];
 
 /** Hallebardier de l'âge industriel (le chevalier devenu piquier) : cuirasse et tassettes sur l'habit rouge, morion à crête, hallebarde */
 const halberdier: Kit = {

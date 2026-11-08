@@ -187,6 +187,31 @@ export class CombatFx {
     this.puff(x, y, z, 16);
   }
 
+  /** Onde de choc : un anneau d'étincelles qui s'élargit à plat autour de (x, y, z) */
+  ring(x: number, y: number, z: number, color = 0x5af0ff, speed = 2.4, n = 20) {
+    const c = new THREE.Color(color);
+    n = few(n);
+    for (let i = 0; i < n && this.sparks.length < CAP; i++) {
+      const a = (i / n) * Math.PI * 2;
+      this.sparks.push({ x, y, z, vx: Math.cos(a) * speed, vy: 0, vz: Math.sin(a) * speed, life: 0.28, max: 0.3, c, dust: false, fly: true });
+    }
+  }
+
+  /** Tête d'une boule de plasma en un point de sa course : gros éclat cyan, braise violette qui reste derrière (la traînée) */
+  plasmaBead(x: number, y: number, z: number) {
+    if (this.sparks.length >= CAP - 3) return;
+    this.sparks.push({ x, y, z, vx: 0, vy: 0, vz: 0, life: 0.1, max: 0.1, c: new THREE.Color(0x1fb4ff), dust: false, big: true });
+    for (let i = 0; i < 2; i++) this.sparks.push({ x: x + (Math.random() - 0.5) * 0.04, y: y + (Math.random() - 0.5) * 0.04, z: z + (Math.random() - 0.5) * 0.04, vx: 0, vy: 0.05, vz: 0, life: 0.3 + Math.random() * 0.15, max: 0.45, c: new THREE.Color(0xb070ff), dust: false, fly: true });
+  }
+
+  /** Impact de plasma : onde au sol, gerbe cyan et violette, grosse lueur */
+  plasmaHit(x: number, y: number, z: number, ground: number) {
+    this.ring(x, ground + 0.05, z, 0x5af0ff, 2.6, 22);
+    this.hit(x, y, z, 0x5af0ff, 14, 'shot');
+    this.hit(x, y, z, 0xb070ff, 8, 'shot');
+    for (let i = 0; i < 3 && this.sparks.length < CAP; i++) this.sparks.push({ x, y, z, vx: 0, vy: 0.2, vz: 0, life: 0.16 + i * 0.04, max: 0.28, c: new THREE.Color(0x9af0ff), dust: false, big: true });
+  }
+
   /** Éclats de roche sous la pioche : ils sautent et retombent, sans éclair ni bruit */
   chips(x: number, y: number, z: number, color = 0xb8ab94, n = 6) {
     const c = new THREE.Color(color);

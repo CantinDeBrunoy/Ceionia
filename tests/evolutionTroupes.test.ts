@@ -85,12 +85,38 @@ describe('évolution des troupes avec l’âge', () => {
     expect(b.troops[0].gear).toBeUndefined();
   });
 
+  it('à l’âge futuriste : pilote de drones (ex-archer) et char antigrav, sans toucher aux âges 3 et 4', () => {
+    expect(troopName('archer', 5)).toBe('Pilote de drones');
+    expect(troopLabel('archer', 5)).toBe('Pilote de drones (ex-archer)');
+    expect(troopName('cavalry', 5)).toBe('Char antigrav');
+    expect(troopLabel('cavalry', 5)).toBe('Char antigrav (ex-cavalier)');
+    // l'équipement reste celui du système existant
+    expect(troopForm('archer', 5).gear).toEqual(['rifle']);
+    expect(troopForm('cavalry', 5).gear).toEqual(['rifle', 'armor']);
+    expect(troopForm('cavalry', 5).mount).toBeFalsy();
+    // pilote : longue portée, vie moyenne, dégâts modérés, cadence rapide
+    const p = troopStats('archer', 5), s = troopStats('archer', 4), t = troopStats('archer', 3);
+    expect(p.range).toBeGreaterThan(s.range);
+    expect(p.cooldown).toBeLessThan(s.cooldown / 2);
+    expect(p.dmg).toBeLessThan(s.dmg);
+    expect(p.hp).toBeGreaterThan(s.hp);
+    expect(p.hp).toBeLessThan(troopStats('soldier', 5).hp * 1.2);
+    expect(p.dmg / p.cooldown).toBeLessThan(40);
+    // âges 3 et 4 intacts
+    expect([troopName('archer', 3), troopName('archer', 4), troopName('knight', 3), troopName('knight', 4), troopName('cavalry', 4), troopName('soldier', 4)]).toEqual(['Tirailleur', 'Tireur d’élite', 'Hallebardier', 'Bazooka', 'Char', 'Fantassin']);
+    expect(t.dmg).toBe(21.8);
+    expect(s.dmg).toBe(29.4);
+    expect(troopStats('cavalry', 4).hp).toBe(Math.round(150 * 1.36 * 1.6));
+  });
+
   it('le modèle 3D suit l’âge', () => {
     expect(troopLook('archer', 2).role).toBe('archer');
     expect(troopLook('archer', 3).role).toBe('gunner');
     expect(troopLook('cavalry', 3).mount).toBe('horse');
     expect(troopLook('cavalry', 4).mount).toBe('tank');
-    expect(troopLook('cavalry', 5).mount).toBe('mbt');
+    expect(troopLook('cavalry', 5).mount).toBe('hover');
+    expect(troopLook('archer', 5)).toMatchObject({ role: 'gunner', drones: 2 });
+    expect(troopLook('archer', 4).drones).toBeUndefined();
     expect(troopLook('knight', 1).era).toBe(2);
   });
 });
