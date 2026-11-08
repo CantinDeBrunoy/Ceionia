@@ -441,7 +441,7 @@ class Game implements UIHost {
     this.expeditions.onReport = (r) => {
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
       // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
-      if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: 'le village', pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
+      if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: trx('le village'), pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
       else this.ui.showReport(r);
       this.ui.update();
     };
@@ -450,7 +450,7 @@ class Game implements UIHost {
       this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
       // la garnison gagne en vie et en force avec l'âge
       this.war.ageUp(age);
-      this.ui.banner(`Nouvel âge : ${AGES[age].name}`, AGES[age].tagline);
+      this.ui.banner(trx('Nouvel âge : {name}', { name: AGES[age].name }), AGES[age].tagline);
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
       setTimeout(() => this.ui.showNewAge(age), 3600);
@@ -556,7 +556,7 @@ class Game implements UIHost {
       this.cam.jump({ x, z: z + 1.5, dist: 15, pitch: 0.72, yaw: Math.PI }, hm.view.groundY(x, z));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
-      this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.`, 'hell');
+      this.ui.banner('Monde des Enfers', trx('{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.', { zone: trx(hm.zoneName(z)) }), 'hell');
       this.ui.update();
     }, 'Passage du portail…');
   }
@@ -1146,7 +1146,7 @@ class Game implements UIHost {
       this.cam.jump({ x, z, dist: 11, pitch: 1.05 }, this.underView.groundY(x, z));
       this.cam.handler = this.underInput;
       canvas.style.cursor = '';
-      this.ui.banner('Monde souterrain', `${UZ_NAMES[this.under.zoneAt(x, z)]} : le puits de lumière ramène à la surface.`, 'under');
+      this.ui.banner('Monde souterrain', trx('{zone} : le puits de lumière ramène à la surface.', { zone: trx(UZ_NAMES[this.under.zoneAt(x, z)]) }), 'under');
       this.ui.update();
     }, 'Descente sous terre…');
   }

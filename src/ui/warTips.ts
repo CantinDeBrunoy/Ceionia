@@ -6,6 +6,8 @@
  * joueur a masqué les aides (le bouton des conseils, ou « Masquer les aides » dans la bulle)
  */
 
+import { tr, localize } from '../i18n';
+
 export type WarTipId = 'portal' | 'isle' | 'garrison' | 'orders' | 'hell' | 'ageLock' | 'base' | 'kingdom';
 
 /** Ce que les aides regardent de la partie */
@@ -41,6 +43,8 @@ export const WAR_TIP_TEXT: Record<WarTipId, string> = {
   base: '🏕️ Zone conquise ! Posez un camp de base (rangée « Base »), puis caserne et infirmerie.',
   kingdom: '👑 Le royaume est ouvert ! Fuyez les cercles rouges des boules de feu. Combat facultatif.',
 };
+// lues dans la langue courante (voir `localize`, src/i18n/index.ts)
+localize(WAR_TIP_TEXT, Object.keys(WAR_TIP_TEXT) as never);
 /** Une aide tient sur deux lignes : au plus ce nombre de caractères */
 export const WAR_TIP_MAX = 100;
 
@@ -127,7 +131,7 @@ export class WarTips {
   private show(id: WarTipId) {
     this.shown = id;
     this.el.dataset.tip = id;
-    this.el.innerHTML = `<p class="wtText"></p><button class="wtX" title="Fermer" aria-label="Fermer">✕</button><button class="wtOff">Masquer les aides</button>`;
+    this.el.innerHTML = `<p class="wtText"></p><button class="wtX" title="${tr('Fermer')}" aria-label="${tr('Fermer')}">✕</button><button class="wtOff">${tr('Masquer les aides')}</button>`;
     this.el.querySelector('.wtText')!.textContent = WAR_TIP_TEXT[id];
     this.el.hidden = false;
   }

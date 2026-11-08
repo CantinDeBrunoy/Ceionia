@@ -8,6 +8,7 @@ import { GoldenBurst } from './render/goldenBurst';
 import { KingdomEndFx } from './render/kingdomEndFx';
 import { END_PLAN, EndShot, endShotAt, endShotStart, endFlashAt, endBlackAt, endCaptionAt, shouldPlayKingdomEnd } from './kingdomEnd';
 import { BossBar, KINGDOM_TEXT, showKingdomVictory } from './ui/kingdom';
+import { tr } from './i18n';
 
 /**
  * La mise en scène du royaume des Enfers : la bannière à l'arrivée, la barre de vie du roi (puis de sa citadelle), les
@@ -286,7 +287,7 @@ export class KingdomStage {
     c.veil.style.background = black > flash ? '#000' : 'radial-gradient(circle, #fff6d8 0%, #ffd890 70%, #ffc060 100%)';
     c.veil.style.opacity = String(Math.max(flash, black));
     const cap = endCaptionAt(t);
-    c.cap.textContent = cap ? cap.text : '';
+    c.cap.textContent = cap ? tr(cap.text) : '';
     c.cap.style.opacity = String(cap ? cap.alpha : 0);
   }
 

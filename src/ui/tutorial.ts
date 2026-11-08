@@ -2,6 +2,7 @@ import { KINDS, KindId } from '../build/catalog';
 import { MAPS } from '../world/mapgen';
 import { loadSlot } from '../save/save';
 import { ic } from './icons';
+import { tr, localize } from '../i18n';
 import type { UI, UIHost } from './ui';
 
 /**
@@ -12,7 +13,7 @@ import type { UI, UIHost } from './ui';
 
 /** Tous les textes du tutoriel, au même endroit (pour la traduction du jeu). `{eye}`, `{compass}`… : icônes dans le texte */
 export const TUTO_TEXT = {
-  stepOf: (i: number, n: number) => `Tutoriel · ${i} / ${n}`,
+  stepOf: (i: number, n: number) => tr('Tutoriel · {i} / {n}', { i, n }),
   next: 'Suivant',
   finish: 'Terminer',
   skip: 'Passer le tutoriel',
@@ -31,8 +32,8 @@ export const TUTO_TEXT = {
     on: 'Activé',
     off: 'Désactivé',
     restart: 'Recommencer',
-    hintOn: (i: number, n: number, title: string) => `Une bulle vous guide pas à pas. Étape ${i} sur ${n} : « ${title} ».`,
-    hintOff: (i: number, n: number, title: string) => `Mis de côté à l’étape ${i} sur ${n} (« ${title} ») : le réactiver le reprend là, « Recommencer » repart du début.`,
+    hintOn: (i: number, n: number, title: string) => tr('Une bulle vous guide pas à pas. Étape {i} sur {n} : « {title} ».', { i, n, title }),
+    hintOff: (i: number, n: number, title: string) => tr('Mis de côté à l’étape {i} sur {n} (« {title} ») : le réactiver le reprend là, « Recommencer » repart du début.', { i, n, title }),
     hintNew: 'Une bulle vous guide pas à pas : caméra, construction, besoins, âges, expéditions et incidents.',
   },
   steps: {
@@ -112,10 +113,19 @@ export const TUTO_TEXT = {
       tasks: ['Suivre un incident avec {eye}'],
     },
   },
-  kindTask: (name: string) => `Poser : ${name}`,
+  kindTask: (name: string) => tr('Poser : {name}', { name }),
   locked: 'Le tutoriel vous le fera bâtir un peu plus tard.',
   ok: 'OK',
 };
+
+// les textes se lisent dans la langue courante (voir `localize`, src/i18n/index.ts) ; les fonctions ci-dessus passent par `tr`
+{
+  const texts = (o: object) => Object.keys(o).filter((k) => { const v = (o as Record<string, unknown>)[k]; return typeof v === 'string' || Array.isArray(v); });
+  localize(TUTO_TEXT, texts(TUTO_TEXT) as never);
+  localize(TUTO_TEXT.menu, texts(TUTO_TEXT.menu) as never);
+  localize(TUTO_TEXT.settings, texts(TUTO_TEXT.settings) as never);
+  for (const st of Object.values(TUTO_TEXT.steps)) localize(st, texts(st) as never);
+}
 
 type StepId = keyof typeof TUTO_TEXT.steps;
 type Side = 'below' | 'above' | 'right' | 'left';
