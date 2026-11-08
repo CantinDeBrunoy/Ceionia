@@ -18,8 +18,16 @@ import { N, SEA, World } from './world';
 
 /** Garde du tablier au-dessus de l'eau */
 export const DECK_CLEAR = 0.24;
-/** Cases sèches au plus qu'un pont enjambe d'un seul tenant entre deux bras d'eau le long de la même route */
-export const MAX_DRY_GAP = 2;
+/**
+ * Un torrent (ruisseau de montagne, drapé sur le relief) n'a pas de niveau d'eau : son « eau » est le sol plus ce
+ * relèvement, si bien que le tablier passe à `DECK_CLEAR` au-dessus et que l'on voit le ruban couler dessous
+ */
+export const TORRENT_WATER = 0.05;
+/**
+ * Cases sèches au plus qu'un pont enjambe d'un seul tenant entre deux bras d'eau le long de la même route : un ruisseau
+ * qui serpente et recoupe la route un peu plus loin ne fait qu'un seul pont, au tablier continu
+ */
+export const MAX_DRY_GAP = 4;
 /** Longueur de la rampe sur la case de la rive (depuis le bord) */
 export const RAMP_IN = 0.45;
 /** Le tablier déborde d'autant l'eau avant de redescendre */
@@ -64,26 +72,34 @@ const xz = (k: number): [number, number] => [k % N, Math.floor(k / N)];
 /** Niveau de l'eau d'une case (lac, sinon la mer) */
 export function waterLevel(w: World, k: number) { return w.lake[k] ? w.lakeLevel[k] : SEA; }
 
+/** La case est de l'eau à franchir : vraie eau (mer, rivière, lac), ou un torrent qui la traverse */
+export function isWater(w: World, k: number) { return w.realWater(k % N, Math.floor(k / N)) || w.torrents.has(k); }
+
+/** « Niveau d'eau » d'une case au point de sol `ground` : celui de la vraie eau, sinon le torrent, juste au-dessus du sol */
+function waterAt(w: World, k: number, ground: number) { return w.realWater(k % N, Math.floor(k / N)) ? waterLevel(w, k) : ground + TORRENT_WATER; }
+
 /**
- * Cases de route portées par un pont : celles qui passent sur l'eau (vraie eau, pas une flaque), et les cases sèches prises
- * entre deux d'entre elles le long de la même route (`MAX_DRY_GAP` au plus, tant que le sol n'y dépasse pas le tablier de
- * plus d'une demi-case) : un ruisseau qui serpente sous la route la mouille par endroits, on n'y jette qu'un seul ouvrage
+ * Cases de route portées par un pont : celles qui passent sur l'eau (vraie eau, pas une flaque, ou un torrent), et les cases
+ * sèches prises entre deux d'entre elles le long de la même route (`MAX_DRY_GAP` au plus, tant que le sol n'y dépasse pas le
+ * tablier de plus d'une demi-case) : un ruisseau qui serpente sous la route la mouille par endroits, on n'y jette qu'un seul
+ * ouvrage
  */
 export function carriedCells(w: World): Set<number> {
   const out = new Set<number>();
   const road = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1;
-  for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) if (road(cx, cz) && w.realWater(cx, cz)) out.add(w.ci(cx, cz));
+  for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) if (road(cx, cz) && isWater(w, w.ci(cx, cz))) out.add(w.ci(cx, cz));
   const nbrs = (k: number) => D4.map(([dx, dz]) => [(k % N) + dx, Math.floor(k / N) + dz]).filter(([x, z]) => road(x, z)).map(([x, z]) => w.ci(x, z));
   for (const k of [...out]) for (const first of nbrs(k)) {
     // on suit la route depuis le pont, case sèche après case sèche, tant qu'elle ne bifurque pas
     const gap: number[] = [];
     let prev = k, cur = first;
+    const deckK = Math.max(waterLevel(w, k), w.cellAvg(k % N, Math.floor(k / N))) + DECK_CLEAR;
     for (let step = 0; step <= MAX_DRY_GAP; step++) {
       if (out.has(cur)) { for (const c of gap) out.add(c); break; }
       const n = nbrs(cur);
       if (n.length !== 2 || step === MAX_DRY_GAP) break;
       // une colline entre deux bras : pas de tablier perché dessus
-      if (w.cellAvg(cur % N, Math.floor(cur / N)) > waterLevel(w, k) + DECK_CLEAR + 0.5) break;
+      if (w.cellAvg(cur % N, Math.floor(cur / N)) > deckK + 0.5) break;
       gap.push(cur);
       const next = n[0] === prev ? n[1] : n[0];
       prev = cur; cur = next;
@@ -234,7 +250,8 @@ export function findCrossings(w: World): Crossing[] {
     const nodeY = new Map<number, number>();
     for (const nd of nodes) {
       const [x, z] = xz(nd);
-      nodeY.set(nd, Math.max(waterLevel(w, nd) + DECK_CLEAR, w.hAt(x + 0.5, z + 0.5) + ABOVE_GROUND, meanBank));
+      const gnd = w.hAt(x + 0.5, z + 0.5);
+      nodeY.set(nd, Math.max(waterAt(w, nd, gnd) + DECK_CLEAR, gnd + ABOVE_GROUND, meanBank));
     }
 
     const buildSpans = () => {
@@ -276,9 +293,9 @@ export function findCrossings(w: World): Crossing[] {
         const n = axis.length, S = [0];
         for (let i = 1; i < n; i++) S.push(S[i - 1] + Math.hypot(axis[i][0] - axis[i - 1][0], axis[i][1] - axis[i - 1][1]));
         const cellAt = (p: number[]) => { const x = Math.floor(p[0]), z = Math.floor(p[1]); return w.inCells(x, z) ? w.ci(x, z) : -1; };
-        const wet = axis.map((p) => { const c = cellAt(p); return c >= 0 && comp.has(c) && w.realWater(c % N, Math.floor(c / N)); });
+        const wet = axis.map((p) => { const c = cellAt(p); return c >= 0 && comp.has(c) && isWater(w, c); });
         const ground = axis.map((p) => w.hAt(p[0], p[1]));
-        const water = axis.map((p) => { const c = cellAt(p); return c >= 0 ? waterLevel(w, c) : SEA; });
+        const water = axis.map((p, i) => { const c = cellAt(p); return c >= 0 ? waterAt(w, c, ground[i]) : SEA; });
         const endY = (e: SpanEnd, first: number, i: number) => {
           if (e.kind === 'bank') return footY(e.cell, first);
           if (e.kind === 'node') return nodeY.get(e.cell)!;

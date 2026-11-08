@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, VEG_FISSURE, Snapshot } from '../world/world';
-import { sculpt, raiseVolcano, SculptTool, brushOnBuilding, volcanoRadius } from '../world/terraform';
+import { sculpt, raiseVolcano, removeVolcano, SculptTool, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
 import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize } from './catalog';
@@ -547,6 +547,8 @@ export class ToolController implements ToolInput {
     const hit = this.hit;
     if (!hit) return;
     const w = this.h.world;
+    // la gomme rase aussi un volcan (la moindre case de son cône suffit)
+    if (this.tool === 'erase' && this.eraseVolcanoUnderCursor()) return;
     if (SINGLE_TOOLS.includes(this.tool)) {
       // une seule grotte (ou faille) sous le curseur
       const cx = Math.floor(hit.x), cz = Math.floor(hit.z), cave = this.tool === 'cave';
@@ -757,10 +759,24 @@ export class ToolController implements ToolInput {
   /** Le prix du tracé en cours, pour la fiche ('' : rien à payer ou pas de tracé) */
   wallCost = '';
 
+  /** Un volcan sous le curseur : il est rasé (annulable avec Ctrl+Z) ; vrai si c'est fait */
+  private eraseVolcanoUnderCursor(): boolean {
+    const hit = this.hit, w = this.h.world;
+    if (!hit) return false;
+    const vol = w.volcanoAt(hit.x, hit.z);
+    if (vol < 0) return false;
+    this.mark();
+    if (!removeVolcano(w, vol)) return false;
+    this.h.audio.sfxDestroy();
+    this.h.toast(tr('Le volcan est rasé.'));
+    return true;
+  }
+
   /** Démolir : une case (pinceau à 1), ou tout un disque de la taille du pinceau (les parcs, les forêts, les routes d'un coup) */
   private applyBulldoze() {
     const c = this.cell();
     if (!c) return;
+    if (!this.hitBuilding && this.eraseVolcanoUnderCursor()) return;
     const w = this.h.world, disc = this.radius > 1 && !!this.hit;
     const b = this.hitBuilding;
     if (b) {

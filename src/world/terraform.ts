@@ -97,6 +97,36 @@ export function raiseVolcano(world: World, wx: number, wz: number, radius: numbe
   return true;
 }
 
+/**
+ * Rase un volcan : le cône retombe au niveau du sol alentour (le pied du volcan), avec un raccord doux ; la case du cratère
+ * perd sa marque de volcan. Les sommets tenus par un bâtiment ne bougent pas. cell : la case du cratère (voir World.volcanoAt).
+ * Renvoie true si un volcan a été effacé
+ */
+export function removeVolcano(world: World, cell: number): boolean {
+  const cx = cell % N, cz = Math.floor(cell / N);
+  if (world.veg[cell] !== VEG_VOLCANO) return false;
+  const f = world.volcanoFrame(cx, cz), R = f.r + 1, wx = cx + 0.5, wz = cz + 0.5;
+  const x0 = Math.max(0, Math.floor(wx - R)), x1 = Math.min(N, Math.ceil(wx + R));
+  const z0 = Math.max(0, Math.floor(wz - R)), z1 = Math.min(N, Math.ceil(wz + R));
+  for (let z = z0; z <= z1; z++)
+    for (let x = x0; x <= x1; x++) {
+      const d = Math.hypot(x - wx, z - wz);
+      if (d > R || locked(world, x, z)) continue;
+      const i = world.vi(x, z), h = world.heights[i];
+      if (h <= f.foot) continue;
+      // plat jusqu'à la moitié du rayon, puis le raccord remonte vers le relief d'origine
+      const t = 1 - smoothstep(R * 0.5, R, d);
+      world.heights[i] = clamp(h + (f.foot - h) * t, MIN_H, MAX_H);
+    }
+  world.veg[cell] = 0;
+  world.vegDirty = true;
+  world.markTerrain(x0 - 1, z0 - 1, x1, z1);
+  world.sanitize(x0 - 1, z0 - 1, x1, z1);
+  world.markVeg(x0, z0, x1, z1);
+  world.version++;
+  return true;
+}
+
 /** Applique un pas de pinceau. Retourne true si le relief a changé. */
 export function sculpt(world: World, tool: SculptTool, wx: number, wz: number, radius: number, dt: number, ctx: SculptCtx): boolean {
   // sur un bâtiment, rien ne bouge : ni fosse autour, ni pilier sous la maison

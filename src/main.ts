@@ -1407,7 +1407,7 @@ class Game implements UIHost {
     const hv = this.mode === 'hell' ? this.hellMode : null;
     this.cam.update(dt, uv ? (x, z) => uv.groundY(x, z) : hv ? (x, z) => hv.view.groundY(x, z) : (x, z) => w.hAt(x, z));
     // le sol tremble près d'un volcan en éruption
-    let shake = uv || hv ? 0 : this.eruptions.shakeAt(this.cam.target.x, this.cam.target.z);
+    let shake = uv || hv || gdt === 0 ? 0 : this.eruptions.shakeAt(this.cam.target.x, this.cam.target.z);
     if (this.quake && !uv) {
       const v = this.quake.cell, d = Math.hypot((v % N) + 0.5 - this.cam.target.x, Math.floor(v / N) + 0.5 - this.cam.target.z);
       shake = Math.max(shake, (1 - this.quake.t / 18) * 0.7 * Math.max(0, 1 - d / 70));
@@ -1471,7 +1471,7 @@ class Game implements UIHost {
     this.sim.rain = this.env.rainK;
     this.sim.season = this.time.season;
     this.sim.update(gdt, dt);
-    this.eruptions.update(dt);
+    this.eruptions.update(gdt);
     this.fauna.alarm = this.eruptions.alarm();
     this.fires.update(dt);
     this.wakeVolcano(gdt, dt);

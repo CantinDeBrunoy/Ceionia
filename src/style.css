@@ -238,14 +238,18 @@ button.pop:hover { background: var(--accent-soft); }
 #items button.tile.first:not(.active) { border-color: #f2b33a; background: #fff8e6; }
 @keyframes firstGlow { 0%, 100% { box-shadow: 0 0 0 2px rgba(242, 179, 58, 0.75), 0 0 8px rgba(242, 179, 58, 0.3); } 50% { box-shadow: 0 0 0 3px rgba(242, 179, 58, 1), 0 0 18px 5px rgba(242, 179, 58, 0.5); } }
 @media (prefers-reduced-motion: reduce) { #modes button.first, #subcats button.first, #items button.tile.first { animation: none; box-shadow: 0 0 0 3px rgba(242, 179, 58, 0.9); } }
-#dockBottom { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 8px; border-top: 1px solid var(--line); background: rgba(255, 255, 255, 0.4); border-radius: 0 0 18px 18px; }
-#subcats { display: flex; gap: 2px; flex: 1; min-width: 0; justify-content: center; overflow-x: auto; scrollbar-width: none; }
-#subcats button { gap: 7px; min-height: 32px; min-width: 0; margin: 4px 0; padding: 0 16px; border: none; border-top: 2px solid transparent; border-radius: 0; box-shadow: none; background: transparent; font-size: 13px; font-weight: 700; color: var(--ink2); white-space: nowrap; }
+#dockBottom { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; min-height: 40px; padding: 0 8px; border-top: 1px solid var(--line); background: rgba(255, 255, 255, 0.4); border-radius: 0 0 18px 18px; }
+/* les rayons ne rétrécissent jamais (pas de libellé écrasé par l'icône voisine) : ils gardent leur largeur, la rangée défile si elle déborde,
+   et le curseur du pinceau passe sur sa propre ligne dès que la place manque (flex-wrap sur #dockBottom) */
+#subcats { display: flex; gap: 2px; flex: 1 1 auto; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+#subcats > :first-child { margin-left: auto; }
+#subcats > :last-child { margin-right: auto; }
+#subcats button { flex: 0 0 auto; gap: 7px; min-height: 32px; min-width: 40px; justify-content: center; margin: 4px 0; padding: 0 16px; border: none; border-top: 2px solid transparent; border-radius: 0; box-shadow: none; background: transparent; font-size: 13px; font-weight: 700; color: var(--ink2); white-space: nowrap; }
 #subcats button:hover { color: var(--ink); background: rgba(255, 255, 255, 0.5); }
 #subcats button.on { color: var(--accent-ink); border-top-color: var(--accent); background: var(--accent-soft); }
 .mhint { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink2); font-weight: 700; padding: 0 12px; }
-#brush { display: none; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--ink2); padding: 0 12px; }
-#brush.show { display: flex; }
+#brush { display: none; flex: 1 1 auto; justify-content: center; align-items: center; gap: 8px; min-height: 36px; font-size: 12px; font-weight: 600; color: var(--ink2); padding: 0 12px; white-space: nowrap; }
+#brush.show { display: flex; animation: rise 0.2s ease-out; }
 #biomes { display: none; gap: 4px; align-items: center; flex-wrap: wrap; padding: 0 6px; }
 #biomes.show { display: flex; }
 #biomes button { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 2px 9px 2px 6px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
@@ -511,7 +515,6 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   #items button.tile { width: 70px; height: 70px; }
   #items .gt { gap: 6px; }
   #items { gap: 8px; }
-  #subcats { justify-content: flex-start; }
   #subcats button { padding: 0 10px; font-size: 12px; }
   #info { display: none !important; }
   #selCard { top: auto; bottom: 210px; right: 50%; transform: translateX(50%); max-height: calc(100dvh - var(--hudB, 82px) - 220px); }
@@ -561,6 +564,11 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   #subcats button { min-height: 26px; margin: 3px 0; }
   #expList { width: min(260px, 40vw); }
   .expCard small { display: none; }
+}
+/* peu de largeur : les rayons n'affichent plus que leur icône (le nom reste en infobulle) */
+@media (max-width: 680px) {
+  #subcats button .cl { display: none; }
+  #subcats button { min-width: 44px; padding: 0 12px; }
 }
 /* la barre du bas repliée (on reclique l'onglet ouvert) : il ne reste que ses onglets et ses outils rapides */
 body.dockMin #items, body.dockMin #dockBottom { display: none; }

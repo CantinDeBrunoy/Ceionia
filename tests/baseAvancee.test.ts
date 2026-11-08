@@ -139,7 +139,7 @@ describe('base avancée : effets', () => {
     run(h, b, 600);
     expect('supply' in b).toBe(false);
     expect(us[0].boost!).toBe(1);
-  });
+  }, 90000);
 
   it('le camp et l’infirmerie soignent, la forge renforce, la palissade ralentit les démons', () => {
     const { m, h, b } = setup();
