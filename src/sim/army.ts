@@ -114,6 +114,13 @@ export function troopKit(kind: TroopKind, age: number): { gear: GearId[]; mount:
   return { gear: f.gear, mount: !!f.mount };
 }
 
+/** Les pièces dont une troupe recrutable à cet âge a besoin (même « dépassées » pour les expéditions : la lance du soldat) */
+export function troopGearNeeded(age: number): Set<GearId> {
+  const out = new Set<GearId>();
+  for (const k of Object.keys(TROOPS) as TroopKind[]) if (age >= TROOPS[k].age) for (const g of troopKit(k, age).gear) out.add(g);
+  return out;
+}
+
 /** Caractéristiques d'une troupe à l'âge du village (elles changent avec sa forme) */
 export function troopStats(kind: TroopKind, age: number): UnitStats {
   const d = TROOPS[kind], k = 1 + AGE_K * Math.max(0, age - d.age), a = troopForm(kind, age).adj ?? {};

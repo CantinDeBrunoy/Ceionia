@@ -405,7 +405,7 @@ class Game implements UIHost {
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
       leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(),
       craft: (id) => { const why = this.expeditions.whyCraft(GEAR_BY[id], this.sim.age); if (!why) this.expeditions.craft(id, this.sim.age); return why; },
-      crafting: () => this.world.exp.craft,
+      crafting: () => this.world.exp.craft, craftCheck: (ids) => this.expeditions.whyCraftAll(ids, this.sim.age),
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });

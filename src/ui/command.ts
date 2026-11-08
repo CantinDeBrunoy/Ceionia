@@ -15,8 +15,8 @@ import { WallPlan, isWallKind, isLineKind } from './wallPlan';
  * double-clic = toutes celles de la même sorte en vue, Maj pour ajouter), ordres (clic droit ou appui long : se rendre, ou
  * attaquer l'ennemi visé ; A puis clic : attaquer en marchant ; H : tenir ; R : se replier), groupes (Ctrl ou Maj + 1…5 pour
  * le former, 1…5 pour le rappeler, deux fois pour y aller), pause active (Espace : les ordres se donnent en pause). L'interface :
- * à gauche le bouton de passage du portail (les ordres : A, H, R, Espace), à droite la caserne (île) ou la base avancée (Enfers), en bas les cartes de troupes et
- * les groupes, en haut le ruban d'état, en bas à droite Aide et Quitter
+ * à gauche le bouton de passage du portail (les ordres : A, H, R, Espace), à droite la caserne (île) ou la base avancée (Enfers), en bas les cartes de troupes,
+ * (groupes au clavier seulement), en haut le ruban d'état, en bas à droite Aide et Quitter
  */
 
 /** Le théâtre des opérations : la bataille commandée, et comment passer de l'écran au sol */
@@ -52,6 +52,10 @@ export interface CommandHost {
   goHell(): void;
   /** met une pièce d'équipement en fabrication à l'atelier du village : null, ou la raison du refus */
   craft(id: GearId): string | null;
+  /** pourquoi tout ce lot de pièces ne peut pas être mis en fabrication d'un coup (atelier, prix total, file pleine) ; null : possible */
+  craftCheck(ids: readonly GearId[]): string | null;
+  /** pourquoi tout ce lot de pièces ne peut pas être mis en fabrication d'un coup (atelier, prix total, file pleine) ; null : possible */
+  craftCheck(ids: readonly GearId[]): string | null;
   /** les pièces en fabrication (la file de l'atelier) */
   crafting(): readonly GearId[];
   canvas: HTMLCanvasElement;
@@ -71,7 +75,6 @@ export const CONTROLS_HELP: [string, string][] = [
   ['A puis clic', 'attaquer en marchant : on combat ce qu’on croise'],
   ['H · R', 'tenir la position · se replier'],
   ['Clic droit glissé', 'tourner la vue ; en le montant ou le descendant, incliner la caméra (clavier : Page haut / Page bas)'],
-  ['Ctrl + 1…5', 'former un groupe ; 1…5 le rappelle, deux fois pour y aller'],
   ['Espace', 'pause active : les ordres se donnent en pause'],
   ['🌀 · 🔥', 'passer le portail ; « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île'],
 ];
@@ -401,6 +404,9 @@ export class CommandUI implements ToolInput {
     const why = recruitWhy(w.army, kind, ctx);
     if (why && onlyGearMissing(w.army, kind, ctx) && armySize(w.army) + this.waiting.length < armyCap(ctx)) {
       const list = gearToCraft(kind, ctx.stock, this.host.crafting(), this.waiting, this.host.age());
+      // tout ou rien : on ne commande pas l'épée si l'armure ne peut pas suivre
+      const lot = this.host.craftCheck(list);
+      if (lot) { this.host.toast(`${why.replace(/ \(à fabriquer.*\)$/, '')} : ${lot.charAt(0).toLowerCase()}${lot.slice(1)}.`); return; }
       for (const g of list) { const no = this.host.craft(g); if (no) { this.host.toast(`${why.replace(/ \(à fabriquer.*\)$/, '')} : ${no.charAt(0).toLowerCase()}${no.slice(1)}.`); return; } }
       this.waiting.push(kind);
       this.host.toast(list.length ? `🛠️ L’atelier fabrique ${list.map((g) => `1 ${GEAR_BY[g].name.toLowerCase()}`).join(' et ')} : la recrue (${troopName(kind, this.host.age()).toLowerCase()}) partira dès que ce sera prêt.` : `🛠️ La recrue (${troopName(kind, this.host.age()).toLowerCase()}) partira dès que son équipement sortira de l’atelier.`);
@@ -449,7 +455,6 @@ export class CommandUI implements ToolInput {
       const hp = of.reduce((s, u) => s + u.hp, 0) / of.reduce((s, u) => s + u.maxHp, 0), on = of.filter((u) => sel.selected.has(u.id)).length;
       return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${troopForm(k, age).plural}${troopForm(k, age).name !== TROOPS[k].name ? ` (ex-${TROOPS[k].plural.toLowerCase()})` : ''} : choisir (Maj : ajouter)"><b>${on ? `${on} / ` : ''}${of.length}</b><span class="tn"><span class="ti">${troopForm(k, age).icon}</span> ${troopForm(k, age).plural}</span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
     }).join('');
-    const groups = [1, 2, 3, 4, 5].map((n) => { const g = sel.groups[n]?.length ?? 0; return `<button class="grp${g ? ' has' : ''}" data-a="grp:${n}" title="Groupe ${n} : Ctrl ou Maj + ${n} pour le former, ${n} pour le rappeler (deux fois : y aller)">${n}${g ? `<small>${g}</small>` : ''}</button>`; }).join('');
     const ctx = w.recruitCtx(this.host.age(), this.host.pop());
     // à droite, sur l'île : la caserne (recruter, effectif)
     const rec = isle ? `<div class="tdock tright"><h5>Caserne <small>${armySize(w.army)} / ${armyCap(ctx)}</small></h5>${TROOP_KINDS.map((k) => {
@@ -476,7 +481,7 @@ export class CommandUI implements ToolInput {
       ${this.passDock(isle)}
       ${rec}
       <div class="tbot panel"><div class="thint">${this.hint()}</div>
-        <div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}<span class="tgl">Groupes</span><span class="grps">${groups}</span></div></div>
+        <div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}</div></div>
       <div class="tcorner"><button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="Rappel des contrôles">Aide</button><button data-a="leave" class="tx" title="${isle ? 'Quitter le commandement (Échap)' : 'Quitter les Enfers'}">Quitter</button></div>${this.helpOpen ? `<ul class="thelp panel">${CONTROLS_HELP.map(([k, t]) => `<li><b>${k}</b><span>${t}</span></li>`).join('')}</ul>` : ''}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
   }

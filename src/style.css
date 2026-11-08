@@ -929,11 +929,6 @@ body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
 #troopBar .tcard.on { border-color: #2b6cf0; background: #2b6cf0; }
 #troopBar .tall { min-height: 60px; padding: 0 20px; border: 2px solid var(--line); border-radius: 14px; font-size: 15px; font-weight: 800; }
 #troopBar .tnone { color: var(--ink2); font-weight: 600; }
-#troopBar .tgl { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--ink2); }
-#troopBar .grps { display: inline-flex; gap: 4px; }
-#troopBar .grp { min-width: 44px; min-height: 44px; justify-content: center; padding: 4px 6px; font-weight: 800; color: var(--ink2); }
-#troopBar .grp.has { color: var(--ink); }
-#troopBar .grp small { font-size: 10px; color: var(--accent-ink); }
 #troopBar .tcorner { position: absolute; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; gap: 8px; }
 #troopBar .tcorner button { min-height: 60px; padding: 0 18px; font-size: 14px; font-weight: 800; border-radius: 14px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); color: var(--ink); }
 #troopBar .tcorner button.on { background: var(--accent); color: #fff; }
@@ -963,8 +958,7 @@ body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
   #troopBar .tcard { min-width: 72px; min-height: 50px; padding: 3px 8px 8px; }
   #troopBar .tcard b { font-size: 18px; }
   #troopBar .tall { min-height: 50px; padding: 0 12px; }
-  #troopBar .tgl { display: none; }
-  #troopBar .tcorner { right: 6px; bottom: 6px; }
+    #troopBar .tcorner { right: 6px; bottom: 6px; }
   #troopBar .tcorner button { min-height: 44px; padding: 0 14px; }
   #troopBar .thelp { bottom: 56px; right: 6px; }
 }

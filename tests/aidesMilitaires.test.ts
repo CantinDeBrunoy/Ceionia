@@ -37,6 +37,6 @@ describe('les aides du volet militaire', () => {
   it('courtes (deux lignes au plus) ; la barre des troupes rappelle tous les contrôles', () => {
     for (const t of Object.values(WAR_TIP_TEXT)) expect(t.length, t).toBeLessThanOrEqual(WAR_TIP_MAX);
     const all = CONTROLS_HELP.map(([k, t]) => `${k} ${t}`).join(' ');
-    for (const w of ['Clic', 'Glisser', 'Clic droit', 'H', 'R', 'A puis clic', '1…5', 'Espace']) expect(all).toContain(w);
+    for (const w of ['Clic', 'Glisser', 'Clic droit', 'H', 'R', 'A puis clic', 'Espace']) expect(all).toContain(w);
   });
 });
