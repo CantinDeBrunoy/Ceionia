@@ -15,6 +15,7 @@ import { hash2 } from '../core/rng';
 import { AudioEngine } from '../audio/audio';
 import { ZoneHighlight } from './zones';
 import { CoverageView } from '../render/coverageView';
+import { isStart, startRefusal, START_KIND } from './startLock';
 
 export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
@@ -162,6 +163,10 @@ export class ToolController implements ToolInput {
 
   // ---------- API ----------
   setTool(t: ToolId, kind?: KindId) {
+    // village vide : seule la place du village se pose (la touche B, sans bâtiment précisé, prend d'office le feu de camp)
+    if (t === 'build' && !kind && isStart(this.h.world)) kind = START_KIND;
+    const why = startRefusal(this.h.world, t, kind, KINDS[START_KIND].names[Math.max(this.h.getAge(), KINDS[START_KIND].minAge)]);
+    if (why) { this.h.toast(why); return; }
     if (this.moveOrigin && (t !== 'move' && !(t === 'build'))) this.cancelMove();
     if (t !== 'none') this.selected = null;
     // nouvel outil ou autre bâtiment : la façade se tourne de nouveau d'elle-même vers la route

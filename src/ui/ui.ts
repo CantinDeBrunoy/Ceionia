@@ -1,5 +1,6 @@
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building } from '../build/catalog';
+import { isStart, startMessage, START_KIND } from '../build/startLock';
 import { Sim, NeedId } from '../sim/sim';
 import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
 import type { Agents } from '../sim/agents';
@@ -557,7 +558,15 @@ export class UI {
     const first = this.host.world.buildings.size === 0;
     const sel = ['#modes [data-t="build"]', `#subcats [data-c="${KINDS.gather.cat}"]`, '#items [data-kind="gather"]'];
     for (const s of sel) this.root.querySelector(s)?.classList.toggle('first', first);
+    // village vide : les onglets Relief et Nature, les autres rayons et les outils rapides sont grisés (voir startLock)
+    const shut = (s: string, on: boolean) => this.root.querySelectorAll<HTMLElement>(s).forEach((b) => { b.classList.toggle('locked', on); b.setAttribute('aria-disabled', String(on)); });
+    shut('#modes button:not([data-t="build"])', first);
+    shut(`#subcats button[data-c]:not([data-c="${KINDS.gather.cat}"])`, first);
+    shut('#quickL button:not([data-tool="none"])', first);
   }
+
+  /** Le message du verrou de départ (null une fois le village commencé) */
+  private startWhy() { return isStart(this.host.world) ? startMessage(this.host.sim.nameOf(START_KIND)) : null; }
 
   // ---------------- Barre du bas (façon Anno 1800) ----------------
   /**
@@ -568,6 +577,8 @@ export class UI {
     const modes = $('#modes');
     modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${t.label}${t.id === this.tab ? ' — recliquer pour replier ou déplier la barre' : ''}"><b>${ic(t.icon, 20)}</b><span>${t.label}</span></button>`).join('');
     modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
+      const why = b.dataset.t !== 'build' ? this.startWhy() : null;
+      if (why) { this.toast(why); return; }
       // l'onglet déjà ouvert : un clic replie la barre (ou la rouvre), pour laisser la place à la carte
       if (b.dataset.t === this.tab) { document.body.classList.toggle('dockMin'); this.host.audio.sfxClick(); return; }
       document.body.classList.remove('dockMin');
@@ -603,7 +614,7 @@ export class UI {
   /** Ce que montrent les vignettes du rayon ouvert (nombre de chaque bâtiment, cadenas) : elles se redessinent quand ça change */
   private tilesKey = '';
   private tilesNow() {
-    return this.tab === 'build' ? KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab;
+    return this.tab === 'build' ? +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab;
   }
 
   /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
@@ -615,6 +626,8 @@ export class UI {
       ? BUILD_CATS.map((c) => `<button data-c="${c.id}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label} : ${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}">${ic(CAT_ICON[c.id], 16, 2)}${c.label}</button>`).join('')
       : `<span class="mhint">${ic(t.icon, 16, 2)}${t.hint}</span>`;
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
+      const why = b.dataset.c !== KINDS.gather.cat ? this.startWhy() : null;
+      if (why) { this.toast(why); return; }
       this.cat = b.dataset.c as BuildCat;
       // le bâtiment en main est d'un autre rayon : on le lâche, sinon refreshTools ramènerait son rayon
       const tl = this.host.tools;
@@ -640,8 +653,9 @@ export class UI {
       html = BUILD_SUBS[this.cat].map((sub) => {
         const tiles = kinds.filter((k) => KIND_SUB[k] === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
         // les champs nourrissent (groupe Nourriture) ; le jardin est un décor : bien en vue dans Parcs et décor
-        if (this.cat === 'prod' && sub.id === 'nourriture') tiles.push(toolTile('field', 'Nourriture'));
-        if (this.cat === 'life' && sub.id === 'parcs') tiles.unshift(toolTile('garden', 'Décor', true));
+        // (masqués tant que le village est vide : on ne pose d'abord que le feu de camp)
+        if (this.cat === 'prod' && sub.id === 'nourriture' && !isStart(this.host.world)) tiles.push(toolTile('field', 'Nourriture'));
+        if (this.cat === 'life' && sub.id === 'parcs' && !isStart(this.host.world)) tiles.unshift(toolTile('garden', 'Décor', true));
         return tiles.length ? `<div class="grp" data-sub="${sub.id}"><div class="gh">${ic(SUB_ICON[sub.id] ?? 'leaf', 13, 2)}<span>${sub.label}</span></div><div class="gt">${tiles.join('')}</div></div>` : '';
       }).join('') || `<span class="mhint">Rien à bâtir dans ce rayon avant l’âge ${AGES[Math.min(age + 2, AGES.length - 1)].name}.</span>`;
     } else {
@@ -708,7 +722,7 @@ export class UI {
     if (d.minAge > h.sim.age) return `Disponible à l’âge : ${AGES[d.minAge].name}`;
     if (d.maxAge !== undefined && h.sim.age > d.maxAge) return `On ne le bâtit plus qu’à l’âge : ${AGES[d.maxAge].name} (c’est trop tard)`;
     // un village neuf commence par sa place : le reste se bâtit autour
-    if (k !== 'gather' && h.world.buildings.size === 0) return `Posez d’abord ${h.sim.nameOf('gather').toLowerCase()}, la place au centre du village`;
+    if (k !== START_KIND && isStart(h.world)) return startMessage(h.sim.nameOf(START_KIND));
     const guide = this.tutorial?.lock(k);
     if (guide) return guide;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
