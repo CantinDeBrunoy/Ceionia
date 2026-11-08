@@ -400,6 +400,7 @@ class Game implements UIHost {
     // le contrôle des troupes : ses ordres au clic droit (sans glisser), la barre des troupes, l'alerte d'incursion
     this.command = new CommandUI(uiRoot, {
       war: this.war, canvas, camKeys: this.cam.keys,
+      pan: (dx, dy) => this.cam.panBy(dx, dy), zoneName: () => (this.mode === 'hell' && this.hellMode ? this.hellMode.zoneName(this.cam.target.z) : null),
       age: () => this.sim.age, pop: () => this.sim.pop,
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
