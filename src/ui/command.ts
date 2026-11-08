@@ -10,7 +10,7 @@ import type { BaseKind } from '../sim/hell';
 import { BASE_DEFS, costText, canAfford, COUNTER_WARN } from '../sim/hellBase';
 import type { BaseCost } from '../sim/hellBase';
 import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
-import { planHellRecruit, orderHellRecruit, stepHellWaiting } from '../sim/recruitPlan';
+import { planHellRecruit, orderHellRecruit, stepHellWaiting, shortWhy } from '../sim/recruitPlan';
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 import { nextGoal, goalLine, zoneLine, HellGoal } from '../sim/objective';
 
@@ -59,6 +59,11 @@ export interface CommandHost {
   goHell(): void;
   /** ouvre la carte du choix du PvE (« Affronter les démons » ou « Refermer le portail ») */
   openPortalChoice(): void;
+  /** les défenses de l'île (onglet Bâtir) : nom, icône, texte ; pourquoi on ne peut pas encore la poser (null : on peut) ; combien sont bâties ; la poser */
+  defenseInfo(kind: string): { name: string; icon: string; desc: string };
+  defenseLock(kind: string): string | null;
+  defenseCount(kind: string): number;
+  buildDefense(kind: string): void;
   /** met une pièce d'équipement en fabrication à l'atelier du village : null, ou la raison du refus */
   craft(id: GearId): string | null;
   /** pourquoi tout ce lot de pièces ne peut pas être mis en fabrication d'un coup (atelier, prix total, file pleine) ; null : possible */
@@ -532,7 +537,8 @@ export class CommandUI implements ToolInput {
     else if (a === 'hold') this.hold();
     else if (a === 'retreat') this.retreat();
     else if (a === 'attack') { if (this.cmd.selected.size) this.cmd.armed = this.cmd.armed ? null : 'attack'; }
-    else if (a === 'tab:build' || a === 'tab:rec') { this.menuTab = a === 'tab:rec' ? 'rec' : 'build'; this.barKey = ''; this.render(); return; }
+    else if (a === 'tab:build' || a === 'tab:rec') { if (this.theater.kind === 'isle') this.isleTab = a === 'tab:rec' ? 'rec' : 'build'; else this.menuTab = a === 'tab:rec' ? 'rec' : 'build'; this.barKey = ''; this.render(); return; }
+    else if (a.startsWith('ibuild:')) { const k = a.slice(7), why = this.host.defenseLock(k); if (why) this.host.toast(why); else { this.host.buildDefense(k); return; } }
     else if (a === 'pause') this.host.togglePause();
     else if (a === 'help') { this.helpOpen = !this.helpOpen; this.helpAt = performance.now(); }
     else if (a === 'goal') { this.centerGoal(); return; }
@@ -657,17 +663,8 @@ export class CommandUI implements ToolInput {
       return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${tr('{who} : choisir (Maj : ajouter)', { who: `${troopForm(k, age).plural}${troopForm(k, age).name !== TROOPS[k].name ? tr(' (ex-{old})', { old: TROOPS[k].plural.toLowerCase() }) : ''}` })}"><b>${isle ? `${on ? `${on} / ` : ''}` : `${on} / `}${of.length}</b><span class="tn"><span class="ti">${troopForm(k, age).icon}</span> ${troopForm(k, age).plural}</span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
     }).join('');
     const ctx = w.recruitCtx(this.host.age(), this.host.pop());
-    // à droite, sur l'île : la caserne (recruter, effectif)
-    const rec = isle ? `<div class="tmenu panel tbarr"><div class="tmh"><h5>${tr('Caserne')} <small>${armySize(w.army)} / ${armyCap(ctx)}</small></h5>${w.army.queue.length || this.waiting.length ? `<small class="q">${tr('En route :')} ${[...this.waiting.map((k) => `${troopForm(k, age).icon}🛠️`), ...w.army.queue.map((q) => `${troopForm(q.kind, age).icon} ${Math.ceil(q.left)} s`)].join(' · ')}</small>` : ''}</div><div class="tmrow">${TROOP_KINDS.map((k) => {
-      const why = recruitWhy(w.army, k, ctx);
-      if (this.host.age() < TROOPS[k].age) return '';
-      // il ne manque que l'équipement : un clic le fait fabriquer, la recrue part dès qu'il est prêt
-      const craft = !!why && onlyGearMissing(w.army, k, ctx);
-      const fm = troopForm(k, age), gear = [...fm.gear.map((g) => gearName(g)), ...(fm.mount ? [tr('cheval')] : [])].join(' + ');
-      const tip = craft ? tr('{why} : cliquez, l’atelier du village fabrique l’équipement et la recrue part dès qu’il est prêt', { why: noCraft(why!) }) : why ?? tr('Recruter : {troop}. {desc} ({items}, {time} s)', { troop: troopLabel(k, age), desc: fm.desc, items: andJoin([...fm.gear.map((g) => `1 ${gearName(g)}`), ...(fm.mount ? [tr('1 cheval de l’écurie')] : [])]), time: TROOPS[k].time });
-      const sub = craft ? tr('à fabriquer') : why ? tr('indisponible') : gear;
-      return `<button data-a="rec:${k}" class="trb${why ? (craft ? ' craft' : ' off') : ''}" title="${`${tr('{name} : {tip}', { name: fm.name, tip })}${fm.name !== TROOPS[k].name ? tr(' (ex-{old})', { old: TROOPS[k].name.toLowerCase() }) : ''}`.replace(/"/g, '&quot;')}"><b>${fm.icon} ${fm.name}</b><small>${sub}</small></button>`;
-    }).join('')}</div></div>` : this.baseRow();
+    // à droite : le même menu que dans les Enfers (« Ma garnison » sur l'île : Bâtir les défenses, Recruter), avec ses deux onglets
+    const rec = isle ? this.isleRow(ctx, age) : this.baseRow();
     // en haut : le ruban d'état (vague et cor, contamination, garnison, zone suivante)
     const next = w.nextWaveIn(), raid = isle && w.isle?.raid;
     const wounded = w.army.troops.filter((x) => x.heal > 0).length;
@@ -688,7 +685,7 @@ export class CommandUI implements ToolInput {
         ${this.passDock(isle, step)}
         <div class="tbot panel"><div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall${step === 'select' ? ' guide' : ''}" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button>` : ''}</div><div class="thint">${this.hint()}</div></div>
         ${rec}
-        <div class="tcorner"><button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="${tr('Rappel des contrôles')}">${tr('Aide')}</button><button data-a="leave" class="tx${isle ? '' : ' go'}" title="${isle ? tr('Quitter le commandement (Échap)') : tr('Quitter les Enfers et revenir sur l’île')}">${isle ? tr('Quitter') : tr('↩ Retourner sur l’île')}</button></div>
+        <div class="tcorner"><button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="${tr('Rappel des contrôles')}">${tr('Aide')}</button><button data-a="leave" class="tx go" title="${isle ? tr('Quitter le commandement (Échap)') : tr('Quitter les Enfers et revenir sur l’île')}">${isle ? tr('↩ Retourner au village') : tr('↩ Retourner sur l’île')}</button></div>
       </div>${this.helpOpen ? `<ul class="thelp panel">${CONTROLS_HELP.map(([k, t]) => `<li><b>${tr(k)}</b><span>${tr(t)}</span></li>`).join('')}</ul>` : ''}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
   }
@@ -708,6 +705,41 @@ export class CommandUI implements ToolInput {
     const why = w.callWhy(), t = `<b>${clockText(next)}</b>`;
     const label = w.inv === 'coming' ? tr('⚠️ Invasion dans {t}', { t }) : tr('Prochaine vague dans {t}', { t });
     return `<span class="wst${w.inv === 'coming' ? ' hot' : ''}">${label}${force ? ` · ${force}` : ''} <button data-a="wave" class="${why ? 'off' : ''}" title="${why ?? tr('Sonner le cor : faire venir la prochaine vague tout de suite, sans attendre')}">${tr('🎺 Appeler la prochaine vague')}</button></span>`;
+  }
+
+  /** L'onglet ouvert du menu de la garnison (île) : recruter d'abord, c'est ce qu'on fait le plus souvent */
+  private isleTab: 'build' | 'rec' = 'rec';
+
+  /**
+   * Le menu de l'île, le même composant que « Ma base » des Enfers : « Ma garnison » avec les onglets Bâtir (les défenses de
+   * l'île : tour de garde, caserne, remparts) et Recruter (les recrues, leur état et la file « en route »)
+   */
+  private isleRow(ctx: ReturnType<War['recruitCtx']>, age: number) {
+    const w = this.host.war, tab = this.isleTab;
+    const queue = w.army.queue.length || this.waiting.length
+      ? `<small class="q">${tr('En route :')} ${[...this.waiting.map((k) => `${troopForm(k, age).icon}🛠️`), ...w.army.queue.map((q) => `${troopForm(q.kind, age).icon} ${Math.ceil(q.left)} s`)].join(' · ')}</small>` : '';
+    const esc = (s: string) => s.replace(/"/g, '&quot;');
+    let inner: string;
+    if (tab === 'rec') {
+      inner = `<div class="tfam"><div class="tbuilds">${TROOP_KINDS.filter((k) => age >= TROOPS[k].age).map((k) => {
+        const why = recruitWhy(w.army, k, ctx);
+        // il ne manque que l'équipement : un clic le fait fabriquer, la recrue part dès qu'il est prêt
+        const craft = !!why && onlyGearMissing(w.army, k, ctx);
+        const fm = troopForm(k, age), gear = [...fm.gear.map((g) => gearName(g)), ...(fm.mount ? [tr('cheval')] : [])].join(' + ');
+        const tip = craft ? tr('{why} : cliquez, l’atelier du village fabrique l’équipement et la recrue part dès qu’il est prêt', { why: noCraft(why!) }) : why ?? tr('Recruter : {troop}. {desc} ({items}, {time} s)', { troop: troopLabel(k, age), desc: fm.desc, items: andJoin([...fm.gear.map((g) => `1 ${gearName(g)}`), ...(fm.mount ? [tr('1 cheval de l’écurie')] : [])]), time: TROOPS[k].time });
+        const sub = craft ? tr('à fabriquer') : why ? shortWhy(noCraft(why)) : gear;
+        return `<button data-a="rec:${k}" class="trb tb rh ${why ? (craft ? 'craft' : 'off') : 'go'}" title="${esc(`${tr('{name} : {tip}', { name: fm.name, tip })}${fm.name !== TROOPS[k].name ? tr(' (ex-{old})', { old: TROOPS[k].name.toLowerCase() }) : ''}`)}"><b>${fm.icon} ${fm.name}</b><small class="co">${sub}</small></button>`;
+      }).join('')}</div></div>`;
+    } else {
+      // (poser une défense : on quitte le commandement, l'outil de construction du village prend la main)
+      const tile = (k: string) => {
+        const d = this.host.defenseInfo(k), why = this.host.defenseLock(k), n = this.host.defenseCount(k);
+        return `<button data-a="ibuild:${k}" class="trb tb${why ? ' off' : ''}" title="${esc(`${d.name}. ${why ?? d.desc}`)}"><b>${d.icon} ${d.name}</b><small class="co">${why ? tr('verrouillé') : n ? tr('{n} en place', { n }) : tr('à poser')}</small></button>`;
+      };
+      const fam = (cls: string, title: string, inner2: string) => `<div class="tfam ${cls}"><h6>${tr(title)}</h6><div class="tbuilds">${inner2}</div></div>`;
+      inner = `${fam('hold', 'Garder l’île', tile('watchtower') + tile('barracks'))}${fam('def', 'Remparts', tile('wall') + tile('gate'))}`;
+    }
+    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5>${tr('Ma garnison')} <small>${armySize(w.army)} / ${armyCap(ctx)}</small></h5><span class="ttabs"><button data-a="tab:build" class="${tab === 'build' ? 'on' : ''}">${tr('Bâtir')}</button><button data-a="tab:rec" class="${tab === 'rec' ? 'on' : ''}">${tr('Recruter')}</button></span>${queue}</div><div class="tmrow">${inner}</div></div>`;
   }
 
   /**

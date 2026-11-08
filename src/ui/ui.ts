@@ -646,6 +646,11 @@ export class UI {
   }
 
   /** Prend un bâtiment en main (onglet Bâtir, son rayon), ou dit pourquoi il est encore verrouillé */
+  /** Pourquoi ce bâtiment ne se pose pas encore (âge, expédition, tour de garde d'abord) ; null : il se pose */
+  lockWhy(k: KindId) { return this.lockOf(k); }
+  /** Prend ce bâtiment en main (comme un clic sur sa vignette) */
+  pickBuild(k: KindId) { this.pick(k); }
+
   private pick(k: KindId) {
     const lock = this.lockOf(k);
     if (lock) { this.toast(lock, this.lockGo(k)); return; }
