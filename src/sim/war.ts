@@ -3,7 +3,7 @@ import { HellMap } from '../world/hell';
 import { isleDefenses, repelWave, ISLE_SECURE } from '../world/portal';
 import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats, SECURE_WAVES } from './hell';
 import { IsleBattle } from './isleBattle';
-import { Army, Troop, TroopKind, TROOPS, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME } from './army';
+import { Army, Troop, TroopKind, newArmy, readArmy, stepArmy, troopStats, wound, ready, REGEN, RecruitCtx, recruit, isTroopKind, ageUp as ageUpArmy, HEAL_TIME, troopKit, troopName } from './army';
 import { HellBase, HellBaseSave, SMITHY_ORE, Purse } from './hellBase';
 import { HELL_ZONES, zoneOf, zoneThe, zoneAgeText } from '../world/hell';
 import type { BaseKind } from './hell';
@@ -101,6 +101,9 @@ export class War {
     return this.faction;
   }
 
+  /** Nom d'une troupe à l'âge du village (« tirailleur »), pour les nouvelles */
+  private nm(k: TroopKind) { return troopName(k, this.faction?.age ?? 1).toLowerCase(); }
+
   /** Casernes : celles de l'île et les casernes avancées des Enfers */
   private barracks() { return isleDefenses(this.world).barracks + (this.portalOut ? 0 : this.base?.posts() ?? 0); }
 
@@ -124,7 +127,7 @@ export class War {
     const b = this.base, w = this.world;
     if (this.portalOut) return 'Le portail est éteint : la guerre est finie.';
     if (!b || !b.posts()) return 'Il faut une caserne avancée dans la base.';
-    const ctx = this.recruitCtx(age, pop), miss = TROOPS[kind].gear.filter((g) => (ctx.stock[g] ?? 0) < 1);
+    const ctx = this.recruitCtx(age, pop), miss = troopKit(kind, age).gear.filter((g) => (ctx.stock[g] ?? 0) < 1);
     if (miss.length && !w.unlimited && b.countOf('smithy') && w.ore >= miss.length * SMITHY_ORE) {
       // la forge forge ce qui manque, pour cette recrue (on le rend si elle est refusée)
       w.ore -= miss.length * SMITHY_ORE;
@@ -253,7 +256,7 @@ export class War {
     t.where = t.where === 'isle' ? 'hell' : 'isle';
     t.hp = hp; t.x = undefined; t.z = undefined;
     this.deploy(t, age);
-    this.news.push(t.where === 'hell' ? { kind: 'portal', text: `🌀 Un ${TROOPS[t.kind].name.toLowerCase()} a passé le portail : il attend vos ordres dans les Enfers.` } : { kind: 'info', text: `🌀 Un ${TROOPS[t.kind].name.toLowerCase()} est rentré des Enfers sur l’île.` });
+    this.news.push(t.where === 'hell' ? { kind: 'portal', text: `🌀 Un ${this.nm(t.kind)} a passé le portail : il attend vos ordres dans les Enfers.` } : { kind: 'info', text: `🌀 Un ${this.nm(t.kind)} est rentré des Enfers sur l’île.` });
   }
 
   /**
@@ -272,8 +275,8 @@ export class War {
     // l'armée : recrues qui arrivent, blessés qui guérissent
     const d = isleDefenses(w);
     const { joined, healed } = stepArmy(this.army, dt, this.barracks(), age, healK);
-    for (const t of joined) this.news.push(t.where === 'hell' ? { kind: 'portal', text: `⚔️ Un ${TROOPS[t.kind].name.toLowerCase()} a rejoint la base avancée des Enfers.` } : { kind: 'troop', text: `⚔️ Un ${TROOPS[t.kind].name.toLowerCase()} a débarqué sur l’île du portail : il rejoint la garnison.` });
-    for (const t of healed) if (t.where === 'hell') this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} sort de l’infirmerie avancée, prêt à se battre.` });
+    for (const t of joined) this.news.push(t.where === 'hell' ? { kind: 'portal', text: `⚔️ Un ${this.nm(t.kind)} a rejoint la base avancée des Enfers.` } : { kind: 'troop', text: `⚔️ Un ${this.nm(t.kind)} a débarqué sur l’île du portail : il rejoint la garnison.` });
+    for (const t of healed) if (t.where === 'hell') this.news.push({ kind: 'info', text: `🩹 Un ${this.nm(t.kind)} sort de l’infirmerie avancée, prêt à se battre.` });
     // le royaume tombé, le portail s'éteint : les troupes des Enfers rentrent sur l'île (une fois la vue revenue à la surface)
     if (f.victory && !this.hellInView) this.bringHome(age);
     // les troupes valides sans unité prennent place ; celles qui n'existent plus quittent le combat
@@ -388,10 +391,10 @@ export class War {
           // dans les Enfers, l'infirmerie de la base le soigne sur place (deux fois plus vite)
           if (sim === this.faction && this.base?.countOf('infirmary')) {
             wound(this.army, t.id, HEAL_TIME / 2, 'hell');
-            this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} est tombé : on le porte à l’infirmerie de la base, il s’y soigne.` });
+            this.news.push({ kind: 'info', text: `🩹 Un ${this.nm(t.kind)} est tombé : on le porte à l’infirmerie de la base, il s’y soigne.` });
           } else {
             wound(this.army, t.id);
-            this.news.push({ kind: 'info', text: `🩹 Un ${TROOPS[t.kind].name.toLowerCase()} est tombé : on le ramène blessé à la caserne, il s’y soigne.` });
+            this.news.push({ kind: 'info', text: `🩹 Un ${this.nm(t.kind)} est tombé : on le ramène blessé à la caserne, il s’y soigne.` });
           }
         }
       }

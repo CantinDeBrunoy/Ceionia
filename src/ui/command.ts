@@ -2,7 +2,7 @@ import type { Hell, HellUnit } from '../sim/hell';
 import { Command, unitAt, foeAt, inRect } from '../sim/command';
 import type { BattleLayer } from '../render/battleUnits';
 import type { PointerInfo, ToolInput } from '../core/camera';
-import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGearMissing, gearToCraft } from '../sim/army';
+import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGearMissing, gearToCraft, troopForm, troopName, troopLabel } from '../sim/army';
 import { GEAR_BY, GearId } from '../sim/gear';
 import type { War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
@@ -381,7 +381,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'convoy') { const why = w.sendConvoy(); this.host.toast(why ?? '📦 Convoi parti du village : il passe le portail et rejoint l’expédition.'); }
     else if (a.startsWith('rech:')) {
       const k = a.slice(5) as TroopKind, why = w.recruitHell(k, this.host.age(), this.host.pop());
-      this.host.toast(why ?? `Recrue en route à la caserne avancée : ${TROOPS[k].name.toLowerCase()} (elle arrivera au camp).`);
+      this.host.toast(why ?? `Recrue en route à la caserne avancée : ${troopName(k, this.host.age()).toLowerCase()} (elle arrivera au camp).`);
     }
     else if (a === 'leave') { if (this.theater.kind === 'isle') this.host.leaveIsle(); else this.host.leaveHell(); return; }
     this.host.click();
@@ -400,14 +400,14 @@ export class CommandUI implements ToolInput {
     const w = this.host.war, ctx = w.recruitCtx(this.host.age(), this.host.pop());
     const why = recruitWhy(w.army, kind, ctx);
     if (why && onlyGearMissing(w.army, kind, ctx) && armySize(w.army) + this.waiting.length < armyCap(ctx)) {
-      const list = gearToCraft(kind, ctx.stock, this.host.crafting(), this.waiting);
+      const list = gearToCraft(kind, ctx.stock, this.host.crafting(), this.waiting, this.host.age());
       for (const g of list) { const no = this.host.craft(g); if (no) { this.host.toast(`${why.replace(/ \(à fabriquer.*\)$/, '')} : ${no.charAt(0).toLowerCase()}${no.slice(1)}.`); return; } }
       this.waiting.push(kind);
-      this.host.toast(list.length ? `🛠️ L’atelier fabrique ${list.map((g) => `1 ${GEAR_BY[g].name.toLowerCase()}`).join(' et ')} : la recrue (${TROOPS[kind].name.toLowerCase()}) partira dès que ce sera prêt.` : `🛠️ La recrue (${TROOPS[kind].name.toLowerCase()}) partira dès que son équipement sortira de l’atelier.`);
+      this.host.toast(list.length ? `🛠️ L’atelier fabrique ${list.map((g) => `1 ${GEAR_BY[g].name.toLowerCase()}`).join(' et ')} : la recrue (${troopName(kind, this.host.age()).toLowerCase()}) partira dès que ce sera prêt.` : `🛠️ La recrue (${troopName(kind, this.host.age()).toLowerCase()}) partira dès que son équipement sortira de l’atelier.`);
       return;
     }
     const no = w.recruit(kind, this.host.age(), this.host.pop());
-    this.host.toast(no ?? `Recrue en route : ${TROOPS[kind].name.toLowerCase()} (la galère l’amène sur l’île).`);
+    this.host.toast(no ?? `Recrue en route : ${troopName(kind, this.host.age()).toLowerCase()} (la galère l’amène sur l’île).`);
   }
 
   /** Les recrues qui attendaient leur équipement partent quand il est prêt (ou renoncent si autre chose manque) */
@@ -416,9 +416,9 @@ export class CommandUI implements ToolInput {
     const w = this.host.war, ctx = w.recruitCtx(this.host.age(), this.host.pop());
     for (let i = 0; i < this.waiting.length;) {
       const kind = this.waiting[i], why = recruitWhy(w.army, kind, ctx);
-      if (!why) { w.recruit(kind, this.host.age(), this.host.pop()); this.waiting.splice(i, 1); this.host.toast(`⚔️ Équipement prêt : la recrue (${TROOPS[kind].name.toLowerCase()}) est en route pour l’île.`); this.barKey = ''; continue; }
+      if (!why) { w.recruit(kind, this.host.age(), this.host.pop()); this.waiting.splice(i, 1); this.host.toast(`⚔️ Équipement prêt : la recrue (${troopName(kind, this.host.age()).toLowerCase()}) est en route pour l’île.`); this.barKey = ''; continue; }
       // plus de caserne, garnison au complet, ou l'équipement n'est plus en fabrication (commande annulée) : elle renonce
-      if (!onlyGearMissing(w.army, kind, ctx) || gearToCraft(kind, ctx.stock, this.host.crafting(), this.waiting.slice(0, i)).length) { this.waiting.splice(i, 1); this.host.toast(`Recrue annulée (${TROOPS[kind].name.toLowerCase()}) : ${why.charAt(0).toLowerCase()}${why.slice(1)}.`); this.barKey = ''; continue; }
+      if (!onlyGearMissing(w.army, kind, ctx) || gearToCraft(kind, ctx.stock, this.host.crafting(), this.waiting.slice(0, i), this.host.age()).length) { this.waiting.splice(i, 1); this.host.toast(`Recrue annulée (${troopName(kind, this.host.age()).toLowerCase()}) : ${why.charAt(0).toLowerCase()}${why.slice(1)}.`); this.barKey = ''; continue; }
       i++;
     }
   }
@@ -441,12 +441,13 @@ export class CommandUI implements ToolInput {
     const us = this.units(), sel = this.cmd;
     this.cmd.prune(new Set(us.map((u) => u.id)));
     const w = this.host.war, isle = t.kind === 'isle';
-    // en bas : une carte par sorte (« choisis / total », nom, vie)
+    // en bas : une carte par sorte (« choisis / total », nom, vie) ; la troupe porte le nom de l'âge du village
+    const age = this.host.age();
     const cards = TROOP_KINDS.map((k) => {
       const of = us.filter((u) => u.kind === k);
       if (!of.length) return '';
       const hp = of.reduce((s, u) => s + u.hp, 0) / of.reduce((s, u) => s + u.maxHp, 0), on = of.filter((u) => sel.selected.has(u.id)).length;
-      return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${TROOPS[k].plural} : choisir (Maj : ajouter)"><b>${on ? `${on} / ` : ''}${of.length}</b><span class="tn"><span class="ti">${TROOPS[k].icon}</span> ${TROOPS[k].plural}</span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
+      return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${troopForm(k, age).plural}${troopForm(k, age).name !== TROOPS[k].name ? ` (ex-${TROOPS[k].plural.toLowerCase()})` : ''} : choisir (Maj : ajouter)"><b>${on ? `${on} / ` : ''}${of.length}</b><span class="tn"><span class="ti">${troopForm(k, age).icon}</span> ${troopForm(k, age).plural}</span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
     }).join('');
     const groups = [1, 2, 3, 4, 5].map((n) => { const g = sel.groups[n]?.length ?? 0; return `<button class="grp${g ? ' has' : ''}" data-a="grp:${n}" title="Groupe ${n} : Ctrl ou Maj + ${n} pour le former, ${n} pour le rappeler (deux fois : y aller)">${n}${g ? `<small>${g}</small>` : ''}</button>`; }).join('');
     const ctx = w.recruitCtx(this.host.age(), this.host.pop());
@@ -456,11 +457,11 @@ export class CommandUI implements ToolInput {
       if (this.host.age() < TROOPS[k].age) return '';
       // il ne manque que l'équipement : un clic le fait fabriquer, la recrue part dès qu'il est prêt
       const craft = !!why && onlyGearMissing(w.army, k, ctx);
-      const gear = [...TROOPS[k].gear.map((g) => GEAR_BY[g].name.toLowerCase()), ...(TROOPS[k].mount ? ['cheval'] : [])].join(' + ');
-      const tip = craft ? `${why!.replace(/ \(à fabriquer.*\)$/, '')} : cliquez, l’atelier du village fabrique l’équipement et la recrue part dès qu’il est prêt` : why ?? `Recruter : ${TROOPS[k].desc} (${[...TROOPS[k].gear.map((g) => g === 'spear' ? 'une lance' : g === 'bow' ? 'un arc' : g === 'sword' ? 'une épée' : 'une armure'), ...(TROOPS[k].mount ? ['un cheval de l’écurie'] : [])].join(' et ')}, ${TROOPS[k].time} s)`;
+      const fm = troopForm(k, age), gear = [...fm.gear.map((g) => GEAR_BY[g].name.toLowerCase()), ...(fm.mount ? ['cheval'] : [])].join(' + ');
+      const tip = craft ? `${why!.replace(/ \(à fabriquer.*\)$/, '')} : cliquez, l’atelier du village fabrique l’équipement et la recrue part dès qu’il est prêt` : why ?? `Recruter : ${troopLabel(k, age)}. ${fm.desc} (${[...fm.gear.map((g) => `1 ${GEAR_BY[g].name.toLowerCase()}`), ...(fm.mount ? ['1 cheval de l’écurie'] : [])].join(' et ')}, ${TROOPS[k].time} s)`;
       const sub = craft ? `fabrique : ${gear}` : why ? why : `coûte : ${gear}`;
-      return `<button data-a="rec:${k}" class="trb${why ? (craft ? ' craft' : ' off') : ''}" title="${tip.replace(/"/g, '&quot;')}"><b>${TROOPS[k].icon} + ${TROOPS[k].name}</b><small>${sub}</small></button>`;
-    }).join('')}${w.army.queue.length || this.waiting.length ? `<small class="q">En route : ${[...this.waiting.map((k) => `${TROOPS[k].icon}🛠️`), ...w.army.queue.map((q) => `${TROOPS[q.kind].icon} ${Math.ceil(q.left)} s`)].join(' · ')}</small>` : ''}</div>` : this.baseRow();
+      return `<button data-a="rec:${k}" class="trb${why ? (craft ? ' craft' : ' off') : ''}" title="${tip.replace(/"/g, '&quot;')}"><b>${fm.icon} + ${fm.name}</b><small>${fm.name !== TROOPS[k].name ? `ex-${TROOPS[k].name.toLowerCase()} · ` : ''}${sub}</small></button>`;
+    }).join('')}${w.army.queue.length || this.waiting.length ? `<small class="q">En route : ${[...this.waiting.map((k) => `${troopForm(k, age).icon}🛠️`), ...w.army.queue.map((q) => `${troopForm(q.kind, age).icon} ${Math.ceil(q.left)} s`)].join(' · ')}</small>` : ''}</div>` : this.baseRow();
     // en haut : le ruban d'état (vague et cor, contamination, garnison, zone suivante)
     const next = w.nextWaveIn(), raid = isle && w.isle?.raid;
     const wounded = w.army.troops.filter((x) => x.heal > 0).length;
@@ -521,7 +522,7 @@ export class CommandUI implements ToolInput {
       return `<button data-a="build:${k}" class="trb tb${this.placing === k ? ' on' : ''}${afford ? '' : ' off'}" title="${`${d.name} (${costText(d.cost)}) : ${d.desc}`.replace(/"/g, '&quot;')}"><b>${d.icon} ${d.name}</b><small>${costText(d.cost)}</small></button>`;
     }).join('');
     const posts = b.posts(), ctx = w.recruitCtx(this.host.age(), this.host.pop());
-    const rec = posts ? `<h5>Recruter ici</h5>${TROOP_KINDS.filter((k) => this.host.age() >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="trb${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? ' off' : ''}" title="Recruter sur place : ${TROOPS[k].desc.replace(/"/g, '&quot;')}"><b>${TROOPS[k].icon} + ${TROOPS[k].name}</b><small>caserne avancée</small></button>`).join('')}` : '';
+    const rec = posts ? `<h5>Recruter ici</h5>${TROOP_KINDS.filter((k) => this.host.age() >= TROOPS[k].age).map((k) => `<button data-a="rech:${k}" class="trb${recruitWhy(w.army, k, ctx) && !b.countOf('smithy') ? ' off' : ''}" title="Recruter sur place : ${troopLabel(k, this.host.age())}. ${troopForm(k, this.host.age()).desc.replace(/"/g, '&quot;')}"><b>${troopForm(k, this.host.age()).icon} + ${troopForm(k, this.host.age()).name}</b><small>caserne avancée</small></button>`).join('')}` : '';
     return `<div class="tdock tright tbase"><h5 title="La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’${zoneTo(zi)}">Base avancée</h5><div class="tbuilds">${builds}</div>${gauge}${rec}</div>`;
   }
 

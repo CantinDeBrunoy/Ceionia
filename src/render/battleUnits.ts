@@ -4,7 +4,7 @@ import { Hell, HellEvent, DemonKind, DEMONS } from '../sim/hell';
 import { caveLit } from './caveLight';
 import { CombatFx } from './combatFx';
 import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
-import { makeRider, rideStep, Rider } from './riders';
+import { makeRider, makeArmor, rideStep, armorStep, Rider } from './riders';
 
 /**
  * Les combattants d'une bataille (dans les Enfers ou sur l'île du portail) : démons en pièces animées (un maillage instancié
@@ -29,6 +29,17 @@ const TROOP_K: Record<string, number> = { soldier: 1.6, archer: 1.5, knight: 1.8
 /** Le modèle de chaque troupe : lancier (lance et bouclier), archer (arc, carquois, capuchon), chevalier (armure, écu, épée) */
 const TROOP_ROLE: Record<string, SoldierRole> = { soldier: 'spearman', archer: 'archer', knight: 'knight' };
 
+/**
+ * Le visage d'une troupe à l'âge du village (comme `troopForm` côté simulation) : l'archer prend le fusil à l'âge industriel, le
+ * chevalier devient hallebardier puis lourd, le cavalier un char (`mount` : modèle de monture ; `era` : âge du modèle)
+ */
+export function troopLook(kind: string, age: number): { role: SoldierRole; era: number; mount?: 'horse' | 'tank' | 'mbt' } {
+  if (kind === 'cavalry') return age >= 5 ? { role: 'spearman', era: age, mount: 'mbt' } : age >= 4 ? { role: 'spearman', era: age, mount: 'tank' } : { role: 'spearman', era: Math.min(3, age), mount: 'horse' };
+  if (kind === 'archer') return { role: age >= 3 ? 'gunner' : 'archer', era: age };
+  if (kind === 'knight') return { role: 'knight', era: Math.max(2, age) };
+  return { role: TROOP_ROLE[kind] ?? 'spearman', era: age };
+}
+
 export class BattleLayer {
   group = new THREE.Group();
   fx = new CombatFx();
@@ -41,7 +52,9 @@ export class BattleLayer {
   private uTime = 0;
   private rigs = {} as Record<DemonKind, Rig>;
   /** (le cavalier : `r`, cheval et cavalier de `riders.ts` ; les autres : `s`) */
-  private troops = new Map<number, { s?: Soldier; r?: Rider; kind: string; age: number }>();
+  private troops = new Map<number, { s?: Soldier; r?: Rider; kind: string; age: number; key: string }>();
+  /** dernier tir de chaque unité du joueur (secondes) : le recul du canon */
+  private shotAt = new Map<number, number>();
   private barBg: THREE.InstancedMesh;
   private barFill: THREE.InstancedMesh;
   private rings: THREE.InstancedMesh;
@@ -179,11 +192,11 @@ export class BattleLayer {
     for (const u of this.hell.units.values()) {
       if (u.side !== 'player') continue;
       seen.add(u.id);
-      const horse = u.kind === 'cavalry', age = u.kind === 'knight' ? Math.max(2, this.age) : horse ? Math.min(3, this.age) : this.age;
+      const look = troopLook(u.kind, this.age), horse = !!look.mount, age = look.era, key = `${look.role}${look.mount ?? ''}${age}`;
       let t = this.troops.get(u.id);
-      if (t && (t.age !== age || t.kind !== u.kind)) { this.group.remove((t.s ?? t.r!).root); t = undefined; }
+      if (t && (t.key !== key || t.kind !== u.kind)) { this.group.remove((t.s ?? t.r!).root); t = undefined; }
       if (!t) {
-        t = horse ? { r: makeRider(age, u.id), kind: u.kind, age } : { s: makeSoldier(age, u.id, false, TROOP_ROLE[u.kind] ?? 'spearman'), kind: u.kind, age };
+        t = horse ? { r: look.mount === 'mbt' ? makeArmor('mbt', u.id) : makeRider(age, u.id), kind: u.kind, age, key } : { s: makeSoldier(age, u.id, false, look.role), kind: u.kind, age, key };
         this.group.add((t.s ?? t.r!).root);
         this.troops.set(u.id, t);
       }
@@ -195,7 +208,10 @@ export class BattleLayer {
       if (horse) root.rotation.set(0, u.heading, dead ? Math.min(1, u.hurt / 0.4) * 1.4 : 0, 'YXZ');
       else root.rotation.set(dead ? -Math.min(1, u.hurt / 0.4) * 1.4 : 0, u.heading, 0, 'YXZ');
       root.scale.setScalar((TROOP_K[u.kind] ?? 1.6) * (dead ? Math.max(0.01, 1 - Math.max(0, u.hurt - 1) / 0.9) : 1));
-      if (t.r) {
+      if (t.r?.turret) {
+        // blindé (char, blindé futuriste) : chenilles, recul du canon juste après chaque tir
+        armorStep(t.r, u.moving ? u.walk * 1.4 : this.uTime * 2, dead ? 0 : u.moving ? 1 : 0, u.state === 'attack' ? -0.05 : -0.1, Math.max(0, 1 - (this.uTime - (this.shotAt.get(u.id) ?? -9)) / 0.3));
+      } else if (t.r) {
         // galop à la marche (calé sur la distance parcourue), lance couchée à la charge, coups à l'attaque
         rideStep(t.r, u.moving ? u.walk * 1.4 : this.uTime * 2, dead ? 0 : u.moving ? 1 : 0, dead ? 'rest' : u.state === 'attack' ? 'fight' : u.moving ? 'charge' : 'rest');
         if (!dead && u.hurt < 0.18) t.r.body.rotation.x -= 0.25 * (1 - u.hurt / 0.18);
@@ -304,8 +320,16 @@ export class BattleLayer {
       } else if (ev.type === 'shot') {
         // une vraie flèche qui vole en cloche (de feu pour les démons), plantée à mi-hauteur de sa cible
         const t = h.units.get(ev.target), th = t ? (t.side === 'hell' ? SCALE[t.kind as DemonKind] ?? 0.4 : 0.45) * 0.55 : 0.3;
-        const y0 = this.groundY(ev.x0, ev.z0) + ev.y0, y1 = this.groundY(ev.x1, ev.z1) + th;
-        this.fx.arrow(ev.x0, y0, ev.z0, ev.x1, y1, ev.z1, ev.fire);
+        const y0 = this.groundY(ev.x0, ev.z0) + ev.y0, y1 = this.groundY(ev.x1, ev.z1) + th, su = h.units.get(ev.source);
+        const gun = su?.side === 'player' && ((su.kind === 'archer' && this.age >= 3) || (su.kind === 'cavalry' && this.age >= 4));
+        if (gun) {
+          // arme à poudre (puis à impulsions) : éclair et fumée à la bouche, balle droite, bruit du coup (le char : un coup de canon)
+          const dx = ev.x1 - ev.x0, dz = ev.z1 - ev.z0, d = Math.hypot(dx, dz) || 1, mx = ev.x0 + (dx / d) * 0.45, mz = ev.z0 + (dz / d) * 0.45, tank = su!.kind === 'cavalry', my = this.groundY(mx, mz) + (tank ? 0.6 : 0.62);
+          this.shotAt.set(su!.id, this.uTime);
+          if (tank) { this.fx.blast(mx, my, mz, dx, dz); this.fx.tracer(mx, my, mz, ev.x1, y1, ev.z1, this.age >= 5 ? 0x5af0ff : 0xffc86a, 16); this.fx.hit(ev.x1, y1, ev.z1, this.age >= 5 ? 0x5af0ff : 0xffc070, 10, 'shot'); }
+          else if (this.age >= 5) { this.fx.flash(mx, my, mz, 0x5af0ff); this.fx.tracer(mx, my, mz, ev.x1, y1, ev.z1, 0x5af0ff, 20); this.fx.hit(ev.x1, y1, ev.z1, 0x5af0ff, 8, 'shot'); }
+          else { this.fx.shot(mx, my, mz, ev.x1, y1, ev.z1); this.fx.puff(mx + (dx / d) * 0.1, my, mz + (dz / d) * 0.1, this.age >= 4 ? 2 : 5); }
+        } else this.fx.arrow(ev.x0, y0, ev.z0, ev.x1, y1, ev.z1, ev.fire);
       } else if (ev.type === 'death') {
         const y = this.groundY(ev.x, ev.z) + 0.2;
         if (ev.side === 'hell') { this.fx.hit(ev.x, y, ev.z, 0xb05aff, 18, 'bite'); this.fx.puff(ev.x, y, ev.z, 10); }

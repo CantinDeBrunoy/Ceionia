@@ -45,7 +45,9 @@ export interface CombatSite { kind: SiteKind; x: number; z: number; zone: number
 
 export type DemonKind = 'imp' | 'brute' | 'archer' | 'chief' | 'guardian' | 'king' | 'elite';
 /** Caractéristiques d'une unité : vie, dégâts par coup, portée (cases, depuis le bord de la cible), vitesse (cases/s), temps entre deux coups, vue, rayon */
-export interface UnitStats { hp: number; dmg: number; range: number; speed: number; cooldown: number; sight: number; radius: number }
+export interface UnitStats { hp: number; dmg: number; range: number; speed: number; cooldown: number; sight: number; radius: number; /** multiplie les dégâts contre les grandes créatures (arme d'hast) */ big?: number }
+/** Les grandes créatures des Enfers */
+const BIG = new Set<string>(['brute', 'chief', 'guardian', 'king', 'elite']);
 export const DEMONS: Record<DemonKind, UnitStats & { name: string; plural: string }> = {
   imp: { name: 'diablotin', plural: 'diablotins', hp: 30, dmg: 4, range: 0.5, speed: 2.6, cooldown: 0.8, sight: 7, radius: 0.22 },
   brute: { name: 'brute', plural: 'brutes', hp: 130, dmg: 14, range: 0.6, speed: 1.25, cooldown: 1.6, sight: 6, radius: 0.36 },
@@ -648,7 +650,9 @@ export class Hell {
     const [tx, tz] = this.posOf(t);
     const ranged = u.stats.range > 2;
     if (ranged) this.events.push({ type: 'shot', x0: u.x, z0: u.z, y0: 0.5, x1: tx, z1: tz, source: u.id, target: t.id, fire: u.side === 'hell' });
-    this.damage(t, u.stats.dmg * (u.boost ?? 1), u.id, ranged);
+    // (l'arme d'hast : un bonus contre les grandes créatures, brutes, chefs, gardiens, rois)
+    const big = u.stats.big && !('site' in t) && BIG.has(t.kind) ? u.stats.big : 1;
+    this.damage(t, u.stats.dmg * (u.boost ?? 1) * big, u.id, ranged);
   }
 
   /** Inflige des dégâts (l'armure des bâtiments en retranche) ; la cible riposte, sa zone donne l'alerte */
