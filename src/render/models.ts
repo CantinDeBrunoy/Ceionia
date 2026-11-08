@@ -13312,67 +13312,214 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
 
 // ---------------- Monstres et dents de l'eau des expéditions (requin, crocodile, mégalodon, kraken) ----------------
 /**
- * Requin, museau vers +z, centré sur l'origine, long d'un demi-mètre de jeu (0,5) : corps élancé en fuseau, dos gris bleu
- * qui s'éclaircit sur les flancs jusqu'au ventre blanc, grand aileron dorsal, pectorales en faux, queue en croissant, yeux,
- * cinq fentes de branchies de chaque côté, gueule bordée de dents. `big` : le mégalodon (plus sombre, balafré, plus de
- * grandes dents, aileron plus haut) ; la scène le grossit et le fait onduler
+ * Requin, museau vers +z, centré sur l'origine, long de 0,6 environ : corps modelé par sections elliptiques (torpille, plus
+ * épais au tiers avant, pédoncule fin), dos ardoise, flancs plus clairs, ventre blanc à ligne nette ; nageoires épaisses de la
+ * couleur du dos (dorsale courbée, pectorales en faux, caudale en croissant au lobe haut plus long) ; museau large, gueule
+ * entrouverte sur deux rangées de grandes dents, narines, gros œil noir à reflet, cinq fentes de branchies de chaque côté.
+ * `big` : le mégalodon (plus sombre, balafré, dents plus grandes, dorsale plus haute). La mâchoire du bas est la dernière
+ * pièce fusionnée (`sharkLayout.jawFrom` = son premier sommet) : `sharkGeometry` en tire les cibles de déformation
  */
+export const sharkLayout = { jawFrom: 0 };
+const SHARK_JAW0 = 0.09, SHARK_JAW1 = 0.62;
+const SHARK_PIVOT = [0, -0.032, 0.105];
 export function shark(p: Parts, big = false) {
-  const back = big ? 0x3b4a58 : 0x62778a, flank = big ? 0x65798b : 0x8ea3b4, belly = big ? 0xdfe4e6 : 0xf0f3f3, fin = big ? 0x2f3d49 : 0x52677a;
-  // le corps : des sections (z, demi-largeur, haut, bas) reliées par des anneaux, teintées du dos au ventre
-  const st: number[][] = [[0.3, 0.004, 0.004, 0.004], [0.27, 0.036, 0.034, 0.028], [0.2, 0.068, 0.066, 0.054], [0.1, 0.092, 0.094, 0.074], [0, 0.092, 0.096, 0.072], [-0.1, 0.07, 0.07, 0.054], [-0.19, 0.04, 0.042, 0.032], [-0.265, 0.02, 0.024, 0.018]];
-  const SEG = 8, pos: number[] = [], col: number[] = [], cb = new THREE.Color(back), cf = new THREE.Color(flank), cl = new THREE.Color(belly), tmp = new THREE.Color();
-  const vert = (i: number, j: number) => {
-    const [z, w, t, bo] = st[i], a = (j / SEG) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);
-    return { x: w * sn, y: c >= 0 ? t * c : bo * c, z, c };
+  const back = big ? 0x667b8f : 0x6a8197, flank = big ? 0xa6b9c9 : 0xb0c3d2, belly = big ? 0xf4f7f7 : 0xf6f8f8, fin = big ? 0x667b8f : 0x6a8197, finEdge = big ? 0x4a5d70 : 0x516a80;
+  const C = (h: number) => new THREE.Color(h), cBack = C(back), cFlank = C(flank), cBelly = C(belly), cFin = C(fin), cEdge = C(finEdge), cMouth = C(0x4f1b26), cGum = C(0x8a3a46);
+  // sections : z, demi-largeur, hauteur du dos, hauteur du ventre
+  const S: number[][] = [
+    [0.3, 0.014, 0.016, 0.012], [0.285, 0.032, 0.036, 0.028], [0.255, 0.055, 0.06, 0.048], [0.215, 0.077, 0.082, 0.072], [0.165, 0.094, 0.1, 0.092], [0.105, 0.106, 0.113, 0.102],
+    [0.04, 0.111, 0.117, 0.104], [-0.04, 0.103, 0.108, 0.094], [-0.12, 0.081, 0.085, 0.073], [-0.19, 0.051, 0.054, 0.045], [-0.235, 0.027, 0.029, 0.024], [-0.262, 0.014, 0.02, 0.016],
+  ];
+  const SEG = 10, JA = [2, 3, 4]; // les trois tronçons de la gueule (de z = 0,255 à 0,105)
+  const ring = (w: number, t: number, b: number, j: number): number[] => { const a = (j / SEG) * Math.PI * 2, c = Math.cos(a); return [w * Math.sin(a), c >= 0 ? t * c : b * c]; };
+  const sec = (z: number) => {
+    let i = 0;
+    while (i < S.length - 2 && z < S[i + 1][0]) i++;
+    const a = S[i], b = S[i + 1], f = Math.min(1, Math.max(0, (a[0] - z) / (a[0] - b[0])));
+    return [1, 2, 3].map((k) => a[k] + (b[k] - a[k]) * f);
   };
-  const shade = (c: number) => (c > 0.45 ? tmp.copy(cb) : c > -0.1 ? tmp.copy(cb).lerp(cf, (0.45 - c) / 0.55) : c > -0.55 ? tmp.copy(cf).lerp(cl, (-0.1 - c) / 0.45) : tmp.copy(cl));
-  const push = (v: { x: number; y: number; z: number; c: number }) => { pos.push(v.x, v.y, v.z); const k = shade(v.c); col.push(k.r, k.g, k.b); };
-  for (let i = 0; i < st.length - 1; i++) for (let j = 0; j < SEG; j++) {
-    const a = vert(i, j), b = vert(i, j + 1), c = vert(i + 1, j), d = vert(i + 1, j + 1);
-    push(a); push(c); push(b); push(b); push(c); push(d);
+  // un point de la peau, à `deg` degrés du dos (sur la facette, pas sur l'ellipse), `out` fois plus loin de l'axe
+  const surf = (z: number, deg: number, out = 1): number[] => {
+    const [w, t, b] = sec(z), k = (deg / 360) * SEG, j = Math.floor(k), f = k - j, A = ring(w, t, b, j), B = ring(w, t, b, j + 1);
+    return [(A[0] + (B[0] - A[0]) * f) * out, (A[1] + (B[1] - A[1]) * f) * out, z];
+  };
+  type Build = { pos: number[]; col: number[] };
+  const nb = (): Build => ({ pos: [], col: [] });
+  const sub = (a: number[], b: number[]) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  // un triangle ; `axis` : si donné, tourné pour regarder à l'opposé de ce point ; `both` : visible des deux côtés
+  const tri = (bd: Build, a: number[], b: number[], c: number[], col: THREE.Color, axis?: number[], both = false) => {
+    if (axis) {
+      const u = sub(b, a), v = sub(c, a), n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const m = [(a[0] + b[0] + c[0]) / 3 - axis[0], (a[1] + b[1] + c[1]) / 3 - axis[1], (a[2] + b[2] + c[2]) / 3 - axis[2]];
+      if (n[0] * m[0] + n[1] * m[1] + n[2] * m[2] < 0) { const t = b; b = c; c = t; }
+    }
+    for (const q of both ? [a, b, c, a, c, b] : [a, b, c]) { bd.pos.push(q[0], q[1], q[2]); bd.col.push(col.r, col.g, col.b); }
+  };
+  const quad = (bd: Build, a: number[], b: number[], c: number[], d: number[], col: THREE.Color, axis?: number[], both = false) => { tri(bd, a, b, c, col, axis, both); tri(bd, b, d, c, col, axis, both); };
+  const flush = (bd: Build) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(bd.pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(bd.col, 3));
+    g.computeVertexNormals();
+    p.body.push(g);
+  };
+  const rotJ = (v: number[], th: number): number[] => {
+    const ry = v[1] - SHARK_PIVOT[1], rz = v[2] - SHARK_PIVOT[2], c = Math.cos(th), s = Math.sin(th);
+    return [v[0], SHARK_PIVOT[1] + ry * c - rz * s, SHARK_PIVOT[2] + ry * s + rz * c];
+  };
+  // la couleur d'une facette selon sa place autour : dos, flanc, ventre (ligne de séparation franche)
+  const faceCol = (j: number) => (j === 0 || j === 1 || j === 8 || j === 9 ? cBack : j === 2 || j === 7 ? cFlank : cBelly);
+  const V = (i: number, j: number): number[] => { const [z, w, t, b] = S[i], r = ring(w, t, b, j); return [r[0], r[1], z]; };
+  const body = nb(), jaw = nb();
+  for (let i = 0; i < S.length - 1; i++) for (let j = 0; j < SEG; j++) {
+    const isJaw = JA.includes(i) && j >= 3 && j <= 6, tgt = isJaw ? jaw : body, ax = [0, 0, (S[i][0] + S[i + 1][0]) / 2];
+    const pts = [V(i, j), V(i, (j + 1) % SEG), V(i + 1, j), V(i + 1, (j + 1) % SEG)].map((v) => (isJaw ? rotJ(v, SHARK_JAW0) : v));
+    quad(tgt, pts[0], pts[1], pts[2], pts[3], faceCol(j), isJaw ? rotJ(ax, SHARK_JAW0) : ax);
   }
-  // le bout de la queue : un bouchon
-  const last = st.length - 1;
-  for (let j = 0; j < SEG; j++) { const a = vert(last, j), b = vert(last, j + 1); push(a); push(b); push({ x: 0, y: 0, z: st[last][0] - 0.01, c: 0 }); }
-  const body = new THREE.BufferGeometry();
-  body.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  body.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  body.computeVertexNormals();
-  p.body.push(body);
-  // le grand aileron dorsal, un second plus petit, l'aileron anal
-  // les nageoires : des plaques minces découpées dans un profil (u, v), jamais des cônes tournés dans tous les sens
-  const plate = (pts: number[][], thick: number) => new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v))), { depth: thick, bevelEnabled: false }).translate(0, 0, -thick / 2);
-  // verticales (dorsale, caudale) : profil (z, y), mince en x ; rotateY(π/2) donne x' = z, z' = -x
-  const vertical = (pts: number[][], thick: number) => plate(pts.map(([z, y]) => [-z, y]), thick).rotateY(Math.PI / 2);
-  // horizontales (pectorales) : profil (x, z), mince en y ; rotateX(π/2) donne y' = -z, z' = y
-  const flat = (pts: number[][], thick: number) => plate(pts, thick).rotateX(Math.PI / 2);
-  // la dorsale triangulaire, haute d'un sixième de la longueur environ et courbée vers l'arrière ; une seconde plus petite, l'anale
-  const dh = big ? 0.11 : 0.1;
-  p.add(vertical([[0.085, 0.082], [-0.012, 0.09 + dh], [-0.03, 0.09 + dh * 0.42], [-0.058, 0.082]], 0.012), 0, 0, 0, fin);
-  p.add(vertical([[-0.115, 0.05], [-0.14, 0.084], [-0.16, 0.044]], 0.008), 0, 0, 0, fin);
-  p.add(vertical([[-0.115, -0.05], [-0.14, -0.08], [-0.158, -0.044]], 0.008), 0, 0, 0, fin);
-  // les pectorales : grandes, en faux, vers l'arrière et le bas
-  for (const s of [-1, 1]) p.add(flat([[0, 0.04], [s * 0.125, -0.05], [s * 0.078, 0], [0, -0.025]], 0.008), s * 0.075, -0.052, 0.07, fin, 0, false, -s * 0.28);
-  // la queue en croissant, dans l'axe : le lobe du haut plus long que celui du bas
-  p.add(vertical([[-0.25, 0.014], [-0.325, 0.125], [-0.31, 0.02], [-0.33, -0.088], [-0.25, -0.014]], 0.012), 0, 0, 0, fin);
-  // les yeux (un point noir cerclé de clair), les narines, cinq fentes de branchies de chaque côté
+  // le museau arrondi et le pédoncule : deux bouchons
+  const nose = [0, -0.002, 0.309], tail = [0, 0, -0.277], last = S.length - 1;
+  for (let j = 0; j < SEG; j++) {
+    tri(body, V(0, j), V(0, (j + 1) % SEG), nose, faceCol(j), [0, 0, 0.29]);
+    tri(body, V(last, j), V(last, (j + 1) % SEG), tail, faceCol(j), [0, 0, -0.25]);
+  }
+  // l'intérieur de la gueule : le fond de la gorge et la paroi du museau (sombres), de chaque côté visibles
+  const rimAt = (z: number, s: number, th = 0) => { const v = surf(z, s > 0 ? 108 : 252); return th ? rotJ(v, th) : v; };
+  const zA = S[2][0], zB = S[5][0];
+  for (const i of JA) { const z0 = S[i][0], z1 = S[i + 1][0]; quad(body, rimAt(z0, -1), rimAt(z0, 1), rimAt(z1, -1), rimAt(z1, 1), cMouth, undefined, true); }
+  const throat = [-0.055, -0.04], deep = [-0.085, -0.072];
+  quad(body, rimAt(zB, -1), rimAt(zB, 1), [-0.05, deep[0], zB], [0.05, deep[0], zB], cMouth, undefined, true);
+  for (let j = 3; j < 7; j++) tri(body, V(2, j), V(2, j + 1), [0, -0.02, zA], cMouth, undefined, true);
+  void throat; void deep;
+  // les matières posées sur la peau : fentes de branchies (sombres) et, pour le mégalodon, de vieilles balafres claires
+  const ribbon = (pts: number[][], wid: number, col: THREE.Color) => {
+    for (let m = 0; m < pts.length - 1; m++) {
+      const a = pts[m], b = pts[m + 1], hw = wid / 2;
+      quad(body, [a[0], a[1], a[2] + hw], [a[0], a[1], a[2] - hw], [b[0], b[1], b[2] + hw], [b[0], b[1], b[2] - hw], col, [0, 0, a[2]], true);
+    }
+  };
+  const slit = (zc: number, s: number, d0: number, d1: number, tilt: number, wid: number, col: THREE.Color) => {
+    const pts: number[][] = [];
+    for (let m = 0; m < 4; m++) { const f = m / 3, z = zc + tilt * (0.5 - f), q = surf(z, s > 0 ? d0 + (d1 - d0) * f : 360 - (d0 + (d1 - d0) * f), 1.012); pts.push(q); }
+    ribbon(pts, wid, col);
+  };
+  const cGill = C(0x1e2a34), cScar = C(big ? 0x9fb1be : 0xc8d2d8);
   for (const s of [-1, 1]) {
-    p.sphere(0.013, s * 0.058, 0.026, 0.205, 0xe9eef0);
-    p.sphere(0.009, s * 0.063, 0.026, 0.209, 0x14181c);
-    p.box(0.004, 0.006, 0.008, s * 0.015, 0.028, 0.285, 0x2a3640);
-    for (let i = 0; i < 5; i++) p.box(0.006, 0.042 - i * 0.002, 0.004, s * (0.088 - i * 0.002), -0.012, 0.135 - i * 0.014, 0x2b3844, 0, false, s * 0.12);
+    for (let i = 0; i < 5; i++) slit(0.148 - i * 0.0155, s, 48 - i * 1.5, 112 - i * 3, 0.01, 0.0042, cGill);
+    if (big) {
+      // trois griffures parallèles en travers du flanc, et une plus vieille, plus bas
+      for (let i = 0; i < 3; i++) slit(0.03 - i * 0.026, s, 40 + i * 3, 100 + i * 3, -0.07, 0.003, cScar);
+      slit(-0.085, s, 70, 110, -0.05, 0.0035, cScar);
+    }
   }
-  // la gueule : un bandeau sombre sous le museau, une rangée de dents en haut (pointes vers le bas) et en bas (vers le haut)
-  p.box(0.07, 0.012, 0.1, 0, -0.066, 0.17, 0x5a2a36);
-  // les dents en U autour de la gueule : le long des deux côtés puis en travers du museau, pointes vers le bas
-  const side = big ? 6 : 4, size = big ? 1.25 : 1, tooth = (x: number, z: number) => p.add(new THREE.ConeGeometry(0.0085 * size, 0.034 * size, 3).translate(0, -0.017 * size, 0), x, -0.064, z, 0xffffff);
-  for (let i = 0; i < side; i++) for (const s of [-1, 1]) tooth(s * 0.036, 0.205 - i * (0.075 / side));
-  for (const x of [-0.024, -0.008, 0.008, 0.024]) tooth(x, 0.222 - Math.abs(x) * 0.5);
-  // les dents du bas, plus petites, entre les autres
-  for (let i = 0; i < side; i++) for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.007 * size, 0.022 * size, 3).translate(0, 0.011 * size, 0), s * 0.03, -0.078,0.205 - (i + 0.5) * (0.075 / side), 0xfdfdf2);
-  // le mégalodon : des balafres claires sur le flanc, de vieilles cicatrices
-  if (big) for (let i = 0; i < 3; i++) for (const s of [-1, 1]) p.box(0.004, 0.026, 0.05, s * 0.088, 0 - i * 0.012, 0.06 - i * 0.045, 0xb9c4cc, 0.35 * s);
+  flush(body);
+  // les nageoires : de vraies plaques épaisses (profil extrudé, biseau léger), colorées du dos vers le bord
+  const plate = (pts: number[][], thick: number) => new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v))), { depth: thick, bevelEnabled: true, bevelThickness: thick * 0.22, bevelSize: thick * 0.22, bevelSegments: 1 }).translate(0, 0, -thick / 2);
+  const vertical = (pts: number[][], thick: number) => plate(pts.map(([z, y]) => [-z, y]), thick).rotateY(Math.PI / 2);
+  const flat = (pts: number[][], thick: number) => plate(pts, thick).rotateX(Math.PI / 2);
+  const tmp = new THREE.Color();
+  const solid = (g: THREE.BufferGeometry, mat: THREE.Matrix4 | null, cf: (x: number, y: number, z: number, ny: number) => THREE.Color) => {
+    const ng = g.index ? g.toNonIndexed() : g.clone();
+    g.dispose();
+    ng.deleteAttribute('uv');
+    if (mat) ng.applyMatrix4(mat);
+    ng.computeVertexNormals();
+    const ps = ng.attributes.position, ns = ng.attributes.normal, arr = new Float32Array(ps.count * 3);
+    for (let i = 0; i < ps.count; i++) { const c = cf(ps.getX(i), ps.getY(i), ps.getZ(i), ns.getY(i)); arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+    ng.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    p.body.push(ng);
+  };
+  const place = (x: number, y: number, z: number, rz = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, rz)), new THREE.Vector3(1, 1, 1));
+  // (le bord libre s'assombrit à mesure qu'on s'éloigne de la base ; le dessous des pectorales blanchit)
+  const edge = (k: number) => tmp.copy(cFin).lerp(cEdge, Math.min(1, Math.max(0, k)));
+  const dh = big ? 0.125 : 0.11, base = 0.098;
+  // la dorsale : haute, bien courbée vers l'arrière, pointe fine
+  solid(vertical([[0.075, base - 0.02], [0.058, base + dh * 0.42], [0.02, base + dh * 0.86], [-0.03, base + dh], [-0.04, base + dh * 0.62], [-0.052, base + dh * 0.3], [-0.066, base - 0.02]], 0.016), null, (x, y) => edge((y - base) / dh - 0.25));
+  // la seconde dorsale et l'anale, petites ; les pelviennes
+  solid(vertical([[-0.128, 0.07], [-0.15, 0.108], [-0.17, 0.07]], 0.012), null, () => cFin);
+  solid(vertical([[-0.13, -0.065], [-0.152, -0.105], [-0.168, -0.062]], 0.012), null, (x, y) => tmp.copy(cFin).lerp(cBelly, 0.4));
+  // les pectorales : larges, en faux, attachées bas sur les flancs, pointe en arrière et vers le bas
+  for (const s of [-1, 1]) {
+    const prof: number[][] = [[-0.015, 0.038], [0.05, 0.026], [0.1, -0.01], [0.15, -0.078], [0.108, -0.044], [0.065, -0.03], [0.02, -0.036], [-0.015, -0.044]];
+    const pts = prof.map(([x, z]) => [s * x, z]);
+    if (s < 0) pts.reverse();
+    solid(flat(pts, 0.022), place(s * 0.092, -0.052, 0.068, -s * 0.34), (x, y, z, ny) => (ny < -0.45 ? tmp.copy(cFin).lerp(cBelly, 0.8) : edge(Math.abs(x) / 0.2 - 0.2)));
+  }
+  // la caudale : un croissant vertical, le lobe du haut plus long que celui du bas
+  solid(vertical([[-0.245, 0.018], [-0.292, 0.065], [-0.345, 0.15], [-0.322, 0.085], [-0.305, 0.02], [-0.318, -0.05], [-0.332, -0.09], [-0.288, -0.05], [-0.245, -0.016]], 0.02), null, (x, y, z, ny) => edge((-0.25 - z) / 0.1 - 0.1));
+  // les yeux : une bille noire enchâssée dans la tête, un reflet blanc ; les narines
+  for (const s of [-1, 1]) {
+    const e = surf(0.2, 80, 1.0), ex = s * (e[0] + 0.001), ey = e[1] + 0.002;
+    p.add(new THREE.IcosahedronGeometry(0.0155, 1), ex, ey, 0.2, 0x0d1115);
+    p.add(new THREE.IcosahedronGeometry(0.0052, 0), ex + s * 0.01, ey + 0.009, 0.209, 0xffffff);
+    const n = surf(0.272, 38, 1.0);
+    p.add(new THREE.IcosahedronGeometry(0.005, 0), s * n[0], n[1] + 0.001, 0.272, 0x1e2a34);
+  }
+  // les dents du haut, deux rangées : le long des deux bords de la gueule puis en travers du museau, pointes vers le bas
+  const th = big ? 1.35 : 1, cTooth = 0xfaf8ee;
+  const tooth = (down: boolean, x: number, y: number, z: number, h: number, w: number, ry: number, rx = 0) => {
+    const g = new THREE.ConeGeometry(w, h, 3).scale(0.45, 1, 1);
+    if (down) g.rotateX(Math.PI).translate(0, -h / 2, 0); else g.translate(0, h / 2, 0);
+    p.add(g, x, y, z, cTooth, ry, false, 0, rx);
+  };
+  const nSide = big ? 8 : 6;
+  for (let i = 0; i < nSide; i++) for (const s of [-1, 1]) {
+    const z = 0.118 + (i + 0.5) * ((0.25 - 0.118) / nSide), r = rimAt(z, s), h = (0.03 + 0.012 * (1 - Math.abs(i - nSide * 0.45) / nSide)) * th;
+    tooth(true, r[0] * 0.98, r[1] + 0.003, z, h, 0.0105 * th, 0);
+    const z2 = z + 0.5 * ((0.25 - 0.118) / nSide), r2 = rimAt(Math.min(0.25, z2), s);
+    tooth(true, r2[0] * 0.8, r2[1] + 0.002, Math.min(0.25, z2), h * 0.78, 0.009 * th, 0);
+  }
+  for (const x of [-0.03, -0.01, 0.01, 0.03]) tooth(true, x, rimAt(0.255, 1)[1] + 0.003, 0.253, 0.026 * th, 0.009 * th, Math.PI / 2);
+  flush(nb());
+  // ------------- la mâchoire du bas : TOUT ce qui suit tourne autour de la charnière (voir sharkGeometry) -------------
+  sharkLayout.jawFrom = p.body.reduce((n, g) => n + g.attributes.position.count, 0);
+  // son plancher (gencive), entre les deux bords
+  for (const i of JA) {
+    const z0 = S[i][0], z1 = S[i + 1][0];
+    quad(jaw, rimAt(z0, -1, SHARK_JAW0), rimAt(z0, 1, SHARK_JAW0), rimAt(z1, -1, SHARK_JAW0), rimAt(z1, 1, SHARK_JAW0), cGum, undefined, true);
+  }
+  flush(jaw);
+  // ses dents, deux rangées, pointes vers le haut, plus petites, entre celles du haut
+  for (let i = 0; i < nSide; i++) for (const s of [-1, 1]) {
+    const dz = (0.25 - 0.118) / nSide, z = 0.118 + (i + 0.25) * dz, r = rimAt(z, s, SHARK_JAW0), h = 0.024 * th;
+    tooth(false, r[0] * 0.96, r[1] - 0.002, r[2], h, 0.0085 * th, 0, SHARK_JAW0);
+    const z2 = Math.min(0.25, z + dz * 0.5), r2 = rimAt(z2, s, SHARK_JAW0);
+    tooth(false, r2[0] * 0.76, r2[1] - 0.002, r2[2], h * 0.8, 0.0075 * th, 0, SHARK_JAW0);
+  }
+  for (const x of [-0.022, 0, 0.022]) { const r = rimAt(0.25, 1, SHARK_JAW0); tooth(false, x, r[1], r[2], 0.02 * th, 0.008 * th, Math.PI / 2, SHARK_JAW0); }
+}
+
+const sharkCache = new Map<boolean, THREE.BufferGeometry>();
+/**
+ * Le requin tout fait, avec ses cibles de déformation : 0 et 1 = les deux phases de l'ondulation latérale (le corps serpente
+ * d'un S qui descend vers la queue), 2 = le dos qui s'arque (bond), 3 = la gueule qui s'ouvre. `sharkSwim` les dose
+ */
+export function sharkGeometry(big = false): THREE.BufferGeometry {
+  let g = sharkCache.get(big);
+  if (g) return g;
+  const p = new Parts();
+  shark(p, big);
+  g = p.build(false).body;
+  const ps = g.attributes.position, n = ps.count, mk = () => new Float32Array(n * 3), w0 = mk(), w1 = mk(), arch = mk(), jaw = mk();
+  for (let i = 0; i < n; i++) {
+    const y = ps.getY(i), z = ps.getZ(i), u = Math.min(1.1, Math.max(0, (0.3 - z) / 0.62)), amp = 0.006 + 0.082 * u * u, ph = Math.PI * 1.7 * u;
+    w0[i * 3] = amp * Math.sin(ph); w1[i * 3] = amp * Math.cos(ph);
+    arch[i * 3 + 1] = 0.085 * (1 - ((u - 0.5) / 0.6) ** 2);
+    if (i >= sharkLayout.jawFrom) {
+      const a = SHARK_JAW1 - SHARK_JAW0, ry = y - SHARK_PIVOT[1], rz = z - SHARK_PIVOT[2], c = Math.cos(a), s = Math.sin(a);
+      jaw[i * 3 + 1] = ry * c - rz * s - ry; jaw[i * 3 + 2] = ry * s + rz * c - rz;
+    }
+  }
+  g.morphAttributes.position = [w0, w1, arch, jaw].map((a) => new THREE.Float32BufferAttribute(a, 3));
+  g.morphTargetsRelative = true;
+  sharkCache.set(big, g);
+  return g;
+}
+/** Règle les cibles d'un requin de `sharkGeometry` : `t` le temps, `speed` la cadence de nage, `amp` l'ampleur, `jaw` et `arch` de 0 à 1 */
+export function sharkSwim(mesh: THREE.Mesh, t: number, amp = 1, jaw = 0, arch = 0, speed = 5.2) {
+  const inf = mesh.morphTargetInfluences;
+  if (!inf || inf.length < 4) return;
+  const w = t * speed;
+  inf[0] = Math.cos(w) * amp; inf[1] = -Math.sin(w) * amp; inf[2] = arch; inf[3] = jaw;
 }
 
 /**
