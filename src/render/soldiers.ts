@@ -362,8 +362,113 @@ const heavyFuture: Kit = {
   left: (p) => bigShield(p, 0x5af0ff, 0xe8c66a, true),
 };
 
-/** Les chevaliers : chevalier en armure (dès l'Antiquité s'il le faut), cuirassier, lourd moderne, chevalier futuriste */
-const KNIGHTS = [paladin, paladin, paladin, cuirassier, heavyNow, heavyFuture];
+/** Long fusil porté droit (le long de +y depuis la main) : crosse, platine, canon de `len` ; lunette ou rail lumineux au besoin */
+function longRifle(p: Parts, o: { wood: number; metal: number; len: number; scope?: boolean; neon?: boolean }) {
+  p.box(0.014, 0.05, 0.02, 0, -0.04, 0, o.wood);
+  p.box(0.01, 0.12, 0.012, 0, 0.0, 0.004, o.wood);
+  p.box(0.005, o.len, 0.005, 0, -0.04 + o.len / 2 + 0.05, 0.012, o.metal);
+  if (o.scope) p.box(0.008, 0.045, 0.008, 0, 0.04, 0.024, 0x2a2a2e);
+  if (o.neon) p.box(0.003, o.len * 0.8, 0.003, 0, o.len / 2, 0.017, 0x5af0ff, 0, 'neon');
+}
+
+/** Tirailleur de l'âge industriel (l'archer devenu tireur) : habit vert à passepoils, buffleteries noires, giberne, shako vert à pompon, long fusil sans baïonnette */
+const tirailleur: Kit = {
+  leg: 0x6a5a48, boot: BLACK, hip: 0x2f5a34, torso: 0x2f5a34, arm: 0x2f5a34, hand: LEATHER, hold: 'rifle',
+  dress(p) {
+    p.box(0.08, 0.1, 0.055, 0, 0.11, 0, 0x2f5a34);
+    p.box(0.084, 0.04, 0.02, 0, 0.09, -0.02, 0x2f5a34);
+    p.box(0.04, 0.06, 0.004, 0, 0.16, 0.028, 0x22402a);
+    p.add(new THREE.BoxGeometry(0.012, 0.11, 0.004), 0, 0.165, 0.03, BLACK, 0, false, 0.62);
+    p.add(new THREE.BoxGeometry(0.012, 0.11, 0.004), 0, 0.165, 0.03, BLACK, 0, false, -0.62);
+    p.box(0.086, 0.008, 0.058, 0, 0.12, 0, BLACK);
+    for (const s of [-1, 1]) p.box(0.028, 0.012, 0.04, s * 0.048, 0.205, 0, 0x22402a);
+    p.box(0.05, 0.03, 0.016, 0, 0.11, -0.034, BLACK);
+    // cornet à poudre et sac de balles au côté
+    p.box(0.02, 0.03, 0.016, 0.046, 0.1, 0.012, LEATHER);
+  },
+  head(p) {
+    p.cyl(0.03, 0.027, 0.055, 8, 0, 0.245, 0, 0x2f5a34);
+    p.box(0.064, 0.006, 0.03, 0, 0.243, 0.02, BLACK);
+    p.box(0.02, 0.02, 0.004, 0, 0.265, 0.029, GOLD);
+    p.sphere(0.011, 0, 0.292, 0.004, 0xe8c66a, 0, 1.2);
+  },
+  right: (p) => longRifle(p, { wood: 0x7a5236, metal: 0x5a5f66, len: 0.16 }),
+  left() {},
+};
+
+/** Tireur d'élite moderne : treillis, filet de camouflage, fusil à lunette */
+const sniper: Kit = {
+  ...modern, hold: 'rifle',
+  head(p) {
+    p.sphere(0.032, 0, 0.252, 0, 0x6a7448, 1, 0.75);
+    p.cyl(0.048, 0.04, 0.008, 9, 0, 0.243, 0, 0x5a6438);
+    p.box(0.07, 0.01, 0.07, 0, 0.268, 0, 0x4a5236);
+  },
+  right: (p) => longRifle(p, { wood: 0x3c3c40, metal: 0x2a2a2e, len: 0.19, scope: true }),
+};
+
+/** Tireur futuriste : exo-armure, fusil à impulsions long à rail lumineux */
+const exoGunner: Kit = {
+  ...future, hold: 'rifle',
+  right: (p) => longRifle(p, { wood: 0xf0f2f4, metal: 0x3a4250, len: 0.18, neon: true }),
+};
+
+/** Les tireurs (l'archer, une fois le fusil connu) : tirailleur, tireur d'élite, tireur à impulsions */
+const GUNNERS = [tirailleur, tirailleur, tirailleur, tirailleur, sniper, exoGunner];
+
+/** Hallebardier de l'âge industriel (le chevalier devenu piquier) : cuirasse et tassettes sur l'habit rouge, morion à crête, hallebarde */
+const halberdier: Kit = {
+  leg: 0x4a3e34, boot: LEATHER, hip: 0x9a2e2a, torso: STEEL, arm: 0x9a2e2a, hand: LEATHER, hold: 'spear',
+  dress(p) {
+    p.box(0.082, 0.1, 0.056, 0, 0.1, 0, 0x9a2e2a);
+    p.box(0.086, 0.07, 0.06, 0, 0.14, 0, STEEL);
+    p.box(0.022, 0.06, 0.062, 0, 0.14, 0, dark(STEEL, 0.8));
+    for (const x of [-0.026, 0, 0.026]) p.box(0.022, 0.05, 0.05, x, 0.07, 0.006, dark(STEEL, 0.9));
+    p.box(0.088, 0.01, 0.062, 0, 0.105, 0, LEATHER);
+    for (const s of [-1, 1]) p.sphere(0.024, s * 0.05, 0.195, 0, STEEL, 0, 0.7);
+    p.box(0.09, 0.15, 0.008, 0, 0.07, -0.034, 0x6a1e1c);
+  },
+  head(p) {
+    // morion : calotte, crête, bord relevé
+    p.sphere(0.03, 0, 0.25, 0, STEEL, 1, 0.8);
+    p.box(0.01, 0.026, 0.07, 0, 0.275, 0, STEEL);
+    p.cyl(0.05, 0.042, 0.008, 10, 0, 0.238, 0, STEEL);
+  },
+  right(p) {
+    // hallebarde : longue hampe, fer de hache, pointe, croc
+    p.box(0.009, 0.34, 0.009, 0, -0.04, 0, 0x7a5a3e);
+    p.box(0.005, 0.045, 0.05, 0, 0.2, 0.026, STEEL);
+    p.add(new THREE.ConeGeometry(0.008, 0.06, 4), 0, 0.26, 0, STEEL);
+    p.box(0.004, 0.012, 0.03, 0, 0.19, -0.018, STEEL);
+    p.box(0.012, 0.012, 0.012, 0, 0.17, 0, dark(STEEL, 0.8));
+  },
+  left() {},
+};
+
+/** Lance-roquettes sur l'épaule (le long de +y depuis la main) : long tube, cône arrière, poignée, roquette engagée à l'avant */
+function bazookaTube(p: Parts, tube: number, band: number, neon = false) {
+  p.cyl(0.016, 0.016, 0.2, 8, 0, 0.03, 0.01, tube);
+  p.cyl(0.022, 0.016, 0.03, 8, 0, -0.08, 0.01, dark(tube, 0.7));
+  p.cyl(0.022, 0.018, 0.02, 8, 0, 0.14, 0.01, dark(tube, 0.8));
+  p.add(new THREE.ConeGeometry(0.014, 0.04, 6), 0, 0.17, 0.01, 0xb8322c);
+  p.box(0.005, 0.03, 0.02, 0, 0.02, 0.0, BLACK);
+  p.box(0.034, 0.008, 0.034, 0, 0.06, 0.01, band, 0, neon ? 'neon' : false);
+}
+
+/** Bazooka moderne : treillis, gilet, casque, lance-roquettes vert sur l'épaule */
+const bazooka: Kit = {
+  ...modern, hold: 'rifle',
+  right: (p) => bazookaTube(p, 0x4a5a3a, 0xe8c66a),
+};
+
+/** Exo-lanceur futuriste : exo-armure, lanceur de missiles à bandes lumineuses */
+const exoLauncher: Kit = {
+  ...future, hold: 'rifle',
+  right: (p) => bazookaTube(p, 0xe8ecf0, 0x5af0ff, true),
+};
+
+/** Les chevaliers : chevalier en armure (dès l'Antiquité s'il le faut), hallebardier (âge industriel), bazooka (moderne), exo-lanceur (futuriste) */
+const KNIGHTS = [paladin, paladin, paladin, halberdier, bazooka, exoLauncher];
 
 const NAVY = 0x22305a, BUFF = 0xe8c060, SILVER = 0xd8dce2, SIENNA = 0x8a5a3a;
 
@@ -648,9 +753,9 @@ const MINERS = [miner2, miner2, miner2, miner3, miner4, miner4];
 const FIREMEN = [fireman, fireman, fireman, fireman, firemanNow, firemanNow];
 
 /** Qui est-ce : un soldat de l'époque, un gendarme, un mineur */
-export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight';
+export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight' | 'gunner';
 /** Les troupes de la garnison (leurs géométries sont partagées d'un soldat à l'autre : `makeSoldier` les garde en cache) */
-const TROOP_ROLES: Partial<Record<SoldierRole, Kit[]>> = { spearman: SPEARMEN, archer: ARCHERS, knight: KNIGHTS };
+const TROOP_ROLES: Partial<Record<SoldierRole, Kit[]>> = { spearman: SPEARMEN, archer: ARCHERS, knight: KNIGHTS, gunner: GUNNERS };
 const troopGeo = new Map<string, THREE.BufferGeometry>();
 /** Géométrie partagée d'une pièce de troupe (`key` : rôle, époque, teint, pièce), faite à la première demande */
 function shared(key: string | null, make: () => THREE.BufferGeometry) {

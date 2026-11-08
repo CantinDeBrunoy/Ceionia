@@ -6,6 +6,7 @@ import { TROOPS, TroopKind, Recruit } from '../sim/army';
 import { CONVOY_TIME } from '../sim/hellBase';
 import { galleyGeo } from './expeditionScenes';
 import { makeSoldier, soldierStep, Soldier, SoldierRole } from './soldiers';
+import { troopLook } from './battleUnits';
 import { Parts } from './parts';
 import { mats } from './materials';
 
@@ -155,14 +156,14 @@ export class IsleFerry {
   }
 
   private board(t: Trip, kind: TroopKind, age: number, v: number) {
-    const s = makeSoldier(kind === 'knight' ? Math.max(2, age) : age, v, false, ROLE[kind]);
+    const l = troopLook(kind, age), s = makeSoldier(l.era, v, false, l.mount ? 'spearman' : l.role);
     this.seat(t, s, t.riders.length);
     t.riders.push(s);
   }
 
   /** Un soldat renvoyé au village : il part de la plage de l'île et monte à bord */
   private walkOn(t: Trip, kind: TroopKind, age: number, v: number, i: number) {
-    const s = makeSoldier(kind === 'knight' ? Math.max(2, age) : age, v, false, ROLE[kind]);
+    const l = troopLook(kind, age), s = makeSoldier(l.era, v, false, l.mount ? 'spearman' : l.role);
     s.root.scale.setScalar(0.7 * K);
     this.group.add(s.root);
     const [bx, bz] = t.route.beach, a = new THREE.Vector3(bx + Math.sin(i * 2.1) * 0.35, 0, bz + Math.cos(i * 2.1) * 0.35);
