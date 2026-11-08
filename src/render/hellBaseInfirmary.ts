@@ -39,10 +39,10 @@ export function buildInfirmary(k: Kit) {
     // grande tente blanche à bandes vertes, auvent de toile sur piquets avec trois lits, herbes qui sèchent, marmite d'infusion, bannière blanche à croix verte
     k.tent(0, 0.55, 1.5, 1.2, 0.95, WHITE, 0xc8e8b8, 8);
     k.flags.push([0, 1.15, 0.55]); cross(0, 0.72, -0.07, 1.1, GREEN, true);
-    k.rb(1.6, 0.03, 0.9, 0, 0.62, -0.62, WHITE, 0.22); for (const x of [-0.75, 0.75]) for (const z of [-1.0, -0.2]) k.cy(0.022, 0.025, 0.6, 5, x, 0, z, DARKWOOD);
-    bed(-0.5, -0.62, 0); bed(0.0, -0.62, 0.0, false); bed(0.5, -0.62, 0.0);
-    for (let i = 0; i < 6; i++) { const x = -0.9 + i * 0.36; k.rod(x, 0.56, -1.12, x, 0.42, -1.12, 0x8a7a4a, 0.01); sh(new THREE.ConeGeometry(0.05, 0.14, 5).rotateX(Math.PI).translate(x, 0.34, -1.12), i % 2 ? 0x6a9a4a : 0xb8a860); }
-    k.rod(-0.9, 0.56, -1.12, 1.0, 0.56, -1.12, 0xd8d0b8, 0.01);
+    k.rb(1.6, 0.03, 0.42, 0, 0.64, -0.3, WHITE, 0.25); for (const x of [-0.75, 0.75]) k.cy(0.022, 0.025, 0.6, 5, x, 0, -0.5, DARKWOOD);
+    bed(-0.5, -0.85, 0); bed(0.0, -0.85, 0.0, false); bed(0.5, -0.85, 0.0);
+    for (let i = 0; i < 6; i++) { const x = -0.9 + i * 0.36; k.rod(x, 0.56, -1.22, x, 0.42, -1.22, 0x8a7a4a, 0.01); sh(new THREE.ConeGeometry(0.05, 0.14, 5).rotateX(Math.PI).translate(x, 0.34, -1.22), i % 2 ? 0x6a9a4a : 0xb8a860); }
+    k.rod(-0.9, 0.56, -1.22, 1.0, 0.56, -1.22, 0xd8d0b8, 0.01); for (const x of [-0.9, 1.0]) k.cy(0.015, 0.018, 0.56, 4, x, 0, -1.22, DARKWOOD);
     k.firepit(1.05, -0.2, 0.14, 0.7); k.st.fire = 0.35; for (let i = 0; i < 3; i++) k.rod(1.05 + Math.sin(i * 2.1) * 0.15, 0, -0.2 + Math.cos(i * 2.1) * 0.15, 1.05, 0.4, -0.2, DARKWOOD, 0.02); sh(new THREE.SphereGeometry(0.1, 7, 5).scale(1, 0.8, 1).translate(1.05, 0.3, -0.2), 0x3a3a42);
     k.pole(-1.1, -0.2, 1.6); k.pole(1.18, -0.9, 1.35); k.bunting(-1.1, -0.2, 1.18, -0.9, 1.25, 10, 0.15);
     k.barrels(-1.15, -0.85, 2); k.sacks(0.85, -1.0, 3); k.crates(-1.1, 0.7, 2, 0.2); k.hay(1.05, 0.7, 1); k.planks(0.0, -1.2, 0.0);
@@ -50,8 +50,7 @@ export function buildInfirmary(k: Kit) {
   } else if (a === 2) {
     // chapelle-hôpital de pierre : clocher à croix dorée, toit de tuiles bleues, vitrail, banderoles blanches, lits sous le cloître, potager d'herbes, puits
     k.bx(1.5, 0.7, 0.95, 0, 0, 0.55, 0xd8d0c0); k.crenels(1.5, 0.95, 0, 0.7, 0.55, 0xb8b0a0, 6, 0.1);
-    k.gable(1.6, 0.58, 1.1, 0, 0.7, 0.55, S.roof);
-    for (let i = 0; i < 4; i++) k.bx(1.6, 0.012, 0.014, 0, 0.74 + i * 0.12, 0.2 + i * 0.1, 0x2a4a88);
+    k.gable(1.6, 0.58, 1.1, 0, 0.7, 0.55, S.roof, 0, true, 'rows');
     k.bx(0.4, 1.1, 0.4, 0.55, 0, 0.9, 0xd8d0c0); k.cn(0.34, 0.5, 4, 0.55, 1.1, 0.9, S.roof); k.gl(0.08, 0.22, 0.02, 0.55, 0.78, 0.69, WARM); cross(0.55, 1.72, 0.9, 0.5, GOLD, false); k.flags.push([0.55, 1.78, 0.9]);
     k.bx(0.3, 0.46, 0.05, -0.2, 0, 0.07, DARKWOOD); k.bx(0.38, 0.06, 0.06, -0.2, 0.46, 0.07, 0xb8b0a0); k.cn(0.19, 0.12, 3, -0.2, 0.5, 0.06, 0xb8b0a0);
     k.steps(-0.2, 0.03, 0.5, 2);
@@ -67,20 +66,19 @@ export function buildInfirmary(k: Kit) {
   } else if (a === 3) {
     // dispensaire de brique : tôle, cheminée de stérilisation à vapeur, enseigne à croix rouge, ambulance hippomobile, lits sous auvent, fenêtres lumineuses
     k.bx(1.55, 0.62, 0.95, 0, 0, 0.55, S.wall); k.bx(1.62, 0.07, 1.02, 0, 0.62, 0.55, WHITE); k.bx(1.6, 0.05, 1.0, 0, 0, 0.55, S.wall2);
-    k.gable(1.7, 0.46, 1.2, 0, 0.69, 0.55, S.roof);
-    for (let i = 0; i < 7; i++) { const x = -0.7 + i * 0.234; k.rb(0.03, 0.02, 0.6, x, 0.9, 0.28, 0x2a4a88, 0.74); k.rb(0.03, 0.02, 0.6, x, 0.9, 0.82, 0x2a4a88, -0.74); }
+    k.gable(1.7, 0.46, 1.2, 0, 0.69, 0.55, S.roof, 0, true, 'ribs');
     k.chimney(0.55, 0.78, 0.8, 0.5, 0.16, S.wall); k.chimney(-0.5, 0.78, 0.85, 0.35, 0.14, S.wall);
     k.door(0, 0.07, 0.32, 0.45, -1); k.steps(0, 0.03, 0.5, 2);
     for (const x of [-0.6, 0.6]) k.win(x, 0.28, 0.08, 0.2, 0.24, -1, 0xfff4d8);
     k.bx(0.46, 0.34, 0.04, 0.0, 0.62, 0.05, WHITE); cross(0, 0.9, 0.04, 0.7, RED, true); k.bx(0.5, 0.04, 0.05, 0, 0.58, 0.05, DARK);
-    k.rb(1.5, 0.03, 0.55, 0, 0.62, -0.38, 0x8a9098, 0.3); for (const x of [-0.7, 0.7]) k.cy(0.022, 0.025, 0.6, 5, x, 0, -0.62, 0x2a2a30);
-    bed(-0.4, -0.38); bed(0.0, -0.38, 0, false); bed(0.4, -0.38);
+    k.rb(1.5, 0.03, 0.34, 0, 0.64, -0.24, 0x8a9098, 0.3); for (const x of [-0.7, 0.7]) k.cy(0.022, 0.025, 0.62, 5, x, 0, -0.4, 0x2a2a30);
+    bed(-0.4, -0.7); bed(0.0, -0.7, 0, false); bed(0.4, -0.7);
     // ambulance hippomobile : caisse blanche à croix, quatre roues, brancards, timon
     k.bx(0.6, 0.28, 0.3, 0.8, 0.1, -0.85, WHITE); k.rb(0.66, 0.03, 0.36, 0.8, 0.4, -0.85, 0x8a9098, 0, 0, 0); cross(0.8, 0.36, -1.0, 0.45, RED, false);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.cy(0.1, 0.1, 0.03, 10, 0.8 + sx * 0.2, 0.0, -0.85 + sz * 0.17, 0x5a3a28, Math.PI / 2 * 0);
     k.rod(1.1, 0.12, -0.85, 1.4, 0.2, -0.85, DARKWOOD, 0.03); k.lamp(0.55, -0.7, 0.45);
     k.pole(-1.15, -0.85, 1.55); k.pole(1.18, -0.2, 1.4); k.barrels(-1.1, -0.2, 2); k.crates(-0.9, -1.1, 3, 0.18); k.planks(0.1, -1.1); k.lamp(-0.6, -1.05, 0.6);
-    shelf(-0.0, 0.5, -0.9, 0.4);
+    shelf(0.0, 0.5, -0.92, 0.4);
   } else if (a === 4) {
     // poste médical de béton : croix verte lumineuse, héliport sur le toit, ambulance, tente blanche annexe, antenne, groupe électrogène
     k.bx(1.5, 0.7, 0.95, 0, 0, 0.55, S.wall); k.bx(1.58, 0.07, 1.03, 0, 0.7, 0.55, 0xe8e8e8); k.bx(1.55, 0.05, 0.02, 0, 0.1, 0.07, 0x80c890);
@@ -112,7 +110,7 @@ export function buildInfirmary(k: Kit) {
     k.holo(0.45, 0.0, -0.75, GREEN, 1);
     for (const s of [-1, 1]) { k.cy(0.05, 0.09, 0.9, 6, s * 0.95, 0, 0.75, 0xdfe6ee); k.gtor(0.08, 0.012, s * 0.95, 0.55, 0.75, GREEN, Math.PI / 2, 10); k.gl(0.06, 0.06, 0.06, s * 0.95, 0.9, 0.75, GREEN); k.flags.push([s * 0.95, 1.0, 0.75]); }
     k.crates(1.1, 0.0, 3, 0.17); k.barrels(-1.1, 0.2, 2); k.lamp(-0.3, -1.1, 0.5); k.lamp(0.3, -1.1, 0.5); k.fence(-1.25, -1.2, -0.7, -1.2, 0.22); k.fence(0.7, -1.2, 1.25, -1.2, 0.22);
-    k.bubble(1.5, 0, 0.2, GREEN); k.st.fire = 0.55; k.sparks.push([0, 1.2, 0]); k.smoke.push([0.5, 1.0, 0.5]);
+    k.bubble(1.3, 0, 0.2, GREEN); k.st.fire = 0.55; k.sparks.push([0, 1.2, 0]); k.smoke.push([0.5, 1.0, 0.5]);
   }
   void BLUE; void CLOTH; void DARK; void WOOD; void STONE; void shelf;
 }

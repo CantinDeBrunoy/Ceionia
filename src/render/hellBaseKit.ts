@@ -21,7 +21,7 @@ export const ST: { wall: number; wall2: number; roof: number; trim: number; acc:
   { wall: WOOD, wall2: DARKWOOD, roof: CLOTH, trim: 0xc89a6a, acc: BLUE },
   { wall: 0xa87848, wall2: DARKWOOD, roof: 0xd8c690, trim: 0xd0a878, acc: BLUE },
   { wall: 0xa49eaa, wall2: 0x6a6672, roof: 0x3a5ea8, trim: 0xd0cad4, acc: BLUE },
-  { wall: 0xc0553a, wall2: 0x7a3828, roof: 0x7a8696, trim: 0x34343c, acc: BLUE },
+  { wall: 0xc0553a, wall2: 0x7a3828, roof: 0x4a72b0, trim: 0x34343c, acc: BLUE },
   { wall: 0xd2d4d8, wall2: 0x9a9ca2, roof: 0x5a6068, trim: 0xe0b030, acc: BLUE },
   { wall: 0xe8eef6, wall2: 0x8a98ac, roof: 0xc4d4e6, trim: CYAN, acc: CYAN },
 ];
@@ -54,8 +54,22 @@ export function makeKit(a: number) {
     const d = new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0), len = d.length();
     solid.push(paint(new THREE.BoxGeometry(t, t, len).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.normalize())).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), c));
   };
+  /** bandes de chaume ou de tuiles (rows : parallèles au faîte) ou nervures de tôle (ribs : dans la pente) posées sur les deux pans d'un toit sans rotation */
+  const roofLines = (w: number, h: number, d: number, x: number, y: number, z: number, c: number, kind: 'rows' | 'ribs') => {
+    const ang = Math.atan2(h, d / 2), len = Math.hypot(h, d / 2), dk = new THREE.Color(c).multiplyScalar(kind === 'ribs' ? 1.25 : 0.72).getHex();
+    for (const sg of [-1, 1]) {
+      if (kind === 'rows') {
+        const n = Math.max(3, Math.round(len / 0.13));
+        for (let i = 1; i < n; i++) { const f = i / n; solid.push(paint(new THREE.BoxGeometry(w * 1.01, 0.022, 0.05).rotateX(sg * ang).translate(x, y + h * f + 0.012, z + sg * (d / 2) * (1 - f)), dk, shade)); }
+      } else {
+        const n = Math.max(4, Math.round(w / 0.13));
+        for (let i = 0; i < n; i++) { const f = 0.5; solid.push(paint(new THREE.BoxGeometry(0.03, 0.02, len).rotateX(sg * ang).translate(x - w / 2 + (i + 0.5) * (w / n), y + h * f + 0.012, z + sg * (d / 2) * (1 - f)), dk, shade)); }
+      }
+    }
+  };
   /** toit à deux pans (faîte le long de x) ; ry le tourne autour du centre de la pièce */
-  const gable = (w: number, h: number, d: number, x: number, y: number, z: number, c: number, ry = 0, ends = true) => {
+  const gable = (w: number, h: number, d: number, x: number, y: number, z: number, c: number, ry = 0, ends = true, rows: 'rows' | 'ribs' | '' = '') => {
+    if (rows) roofLines(w, h, d, x, y, z, c, rows);
     const A = [-w / 2, 0, -d / 2], B = [w / 2, 0, -d / 2], C = [w / 2, 0, d / 2], D = [-w / 2, 0, d / 2], E = [-w / 2, h, 0], F = [w / 2, h, 0];
     const tri = [A, E, F, A, F, B, C, F, E, C, E, D];
     if (ends) tri.push(A, D, E, B, F, C);

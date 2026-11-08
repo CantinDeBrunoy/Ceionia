@@ -73,7 +73,7 @@ export function buildTower(k: Kit) {
     k.bx(0.74, 1.5, 0.74, 0, 0, 0, S.wall); for (let i = 0; i < 5; i++) k.bx(0.78, 0.025, 0.78, 0, 0.18 + i * 0.3, 0, S.wall2);
     k.bx(0.9, 0.1, 0.9, 0, 1.5, 0, S.wall2); for (const [x, z] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) k.bx(0.1, 0.18, 0.1, x, 1.6, z, S.wall2);
     k.bx(0.74, 0.3, 0.74, 0, 1.6, 0, DARKWOOD); k.bx(0.5, 0.15, 0.02, 0, 1.68, -0.38, WARM); k.gl(0.46, 0.13, 0.02, 0, 1.69, -0.39, WARM); for (const s of [-1, 1]) k.gl(0.02, 0.13, 0.42, s * 0.375, 1.69, 0, WARM);
-    k.gable(1.1, 0.34, 1.0, 0, 1.92, 0, S.roof); k.bx(1.12, 0.03, 0.04, 0, 1.92, -0.5, 0x2a4a88);
+    k.gable(1.1, 0.34, 1.0, 0, 1.92, 0, S.roof, 0, true, 'ribs'); k.bx(1.12, 0.03, 0.04, 0, 1.92, -0.5, 0x2a4a88);
     k.cy(0.035, 0.035, 0.45, 5, -0.3, 2.0, 0.25, DARK); k.smoke.push([-0.3, 2.5, 0.25]);
     k.door(0, -0.37, 0.24, 0.38); k.win(-0.2, 0.7, -0.375, 0.1, 0.2); k.win(0.2, 1.0, -0.375, 0.1, 0.2); k.steps(0, -0.4, 0.4, 2);
     // projecteur à gaz : cône luisant sur potence
@@ -112,7 +112,7 @@ export function buildTower(k: Kit) {
     k.cy(0.01, 0.01, 0.3, 4, 0, 1.68, 0.2, 0xdfe6ee); k.flags.push([0, 2.55, 0]); k.cy(0.01, 0.012, 0.5, 4, 0, 2.15, 0, 0xdfe6ee);
     k.cy(0.01, 0.01, 0.4, 4, 0.3, 1.68, 0.3, 0xdfe6ee); k.flags.push([0.3, 2.0, 0.3]);
     k.tools(0.45, -0.4); k.crates(-0.55, 0.2, 2, 0.15); k.lamp(-0.45, -0.45, 0.45); k.lamp(0.5, -0.4, 0.45); k.fence(-0.65, -0.65, 0.65, -0.65, 0.2);
-    k.bubble(0.95, 0, 0, CYAN); k.st.fire = 1.7; k.sparks.push([0, 2.3, 0]);
+    k.bubble(0.8, 0, 0, CYAN); k.st.fire = 1.7; k.sparks.push([0, 2.3, 0]);
   }
   void STONE; void WOOD; void DARK;
 }

@@ -51,8 +51,7 @@ export function buildCamp(k: Kit) {
   } else if (a === 3) {
     // baraque de brique sous tôle à deux cheminées, chaudière à vapeur, poteau télégraphique, tentes de chantier, chariot, baril en feu
     k.bx(2.2, 0.62, 0.9, 0, 0, 0.78, S.wall); k.bx(2.3, 0.07, 1.0, 0, 0.62, 0.78, S.wall2); k.bx(2.3, 0.05, 1.0, 0, 0, 0.78, S.wall2);
-    k.gable(2.4, 0.5, 1.2, 0, 0.67, 0.78, S.roof);
-    for (let i = 0; i < 9; i++) { const x = -1.02 + i * 0.255; k.rb(0.03, 0.02, 0.62, x, 0.95 - 0.02, 0.45, 0x2a4a88, 0.78); k.rb(0.03, 0.02, 0.62, x, 0.95 - 0.02, 1.11, 0x2a4a88, -0.78); }
+    k.gable(2.4, 0.5, 1.2, 0, 0.67, 0.78, S.roof, 0, true, 'ribs');
     k.chimney(0.55, 0.8, 0.9, 0.7, 0.18, S.wall); k.chimney(-0.5, 0.8, 0.9, 0.55, 0.16, S.wall); k.sparks.push([0.55, 1.58, 0.9]);
     k.door(0, 0.31, 0.32, 0.45); k.steps(0, 0.28, 0.5, 2);
     for (const x of [-0.7, -0.38, 0.38, 0.7]) k.win(x, 0.3, 0.31, 0.16, 0.22);
@@ -109,7 +108,7 @@ export function buildCamp(k: Kit) {
     k.strings(-0.75, -0.55, 0.75, -0.55, 1.0, 8);
     k.spin(0, 0.7, paint(new THREE.OctahedronGeometry(0.05).translate(0.9, 1.25, 0), WHITE)); k.spin(0, 0.7, paint(new THREE.OctahedronGeometry(0.05).translate(-0.9, 1.3, 0), CYAN));
     k.pole(1.3, -0.95, 1.7);
-    k.bubble(1.7, 0, 0.35); k.st.fire = 0.55; k.sparks.push([0, 1.3, 0.7]); k.smoke.push([0.7, 1.0, 0.7]);
+    k.bubble(1.5, 0, 0.35); k.st.fire = 0.55; k.sparks.push([0, 1.3, 0.7]); k.smoke.push([0.7, 1.0, 0.7]);
   }
   void IRON; void MAGENTA; void WOOD; void CYAN; void WARM;
 }

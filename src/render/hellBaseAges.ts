@@ -21,7 +21,7 @@ export const BASE_AGE_MAX = 5;
 /** L'âge du village (0 à 99 selon la sim) ramené aux cinq variantes */
 export const baseAgeOf = (age: number) => Math.max(1, Math.min(BASE_AGE_MAX, Math.round(age) || 1));
 /** Les bâtiments sont dessinés à cette échelle de l'emprise de la sim : la caméra de jeu les voit de loin (14 à 34 cases) */
-export const BASE_SCALE = 1.4;
+export const BASE_SCALE = 1.3;
 
 export interface BaseParts {
   solid: THREE.BufferGeometry;

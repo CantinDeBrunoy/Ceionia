@@ -34,6 +34,7 @@ export function buildBrazier(k: Kit) {
     k.rod(0.14, 0.62, 0.08, 0.14, 1.05, 0.08, DARK, 0.05); k.cy(0.05, 0.04, 0.05, 6, 0.14, 1.05, 0.08, DARK); k.smoke.push([0.14, 1.2, 0.08]); k.sparks.push([0, 1.0, 0]);
     sh(new THREE.SphereGeometry(0.07, 6, 5).scale(1, 0.8, 1).translate(-0.12, 0.72, 0.05), 0x7a7e84);
     for (let i = 0; i < 5; i++) sh(new THREE.DodecahedronGeometry(0.05, 0).translate(0.28 + (i % 3) * 0.07, 0.04 + (i > 2 ? 0.05 : 0), 0.05 + (i % 2) * 0.07), 0x2a2a30);
+    k.rod(0.3, 0, -0.2, 0.3, 0.5, -0.2, 0x2a2a30, 0.02); k.flags.push([0.3, 0.42, -0.2]);
     k.st.fire = 0.58;
   } else if (a === 4) {
     // projecteur halogène sur trépied et son câble, baril de feu de secours, générateur orange, cône de signalisation

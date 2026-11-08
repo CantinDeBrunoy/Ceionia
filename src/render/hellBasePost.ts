@@ -36,8 +36,7 @@ export function buildPost(k: Kit) {
     // long baraquement de rondins, toit de chaume, râteliers de lances et boucliers, cour de pieux, mannequins, cible
     k.bx(1.9, 0.6, 0.95, 0, 0, 0.4, S.wall);
     for (let i = 0; i < 6; i++) { k.bx(1.94, 0.025, 0.99, 0, 0.06 + i * 0.1, 0.4, DARKWOOD); for (const sx of [-1, 1]) k.cy(0.05, 0.05, 0.1, 6, sx * 0.97, i * 0.1, -0.06, WOOD, 0); }
-    k.gable(2.2, 0.62, 1.25, 0, 0.58, 0.4, 0xd0b060);
-    for (let i = 0; i < 7; i++) k.rb(2.2, 0.016, 0.03, 0, 0.58 + 0.28 * (1 - i / 7) + 0.02, 0.4 - 0.55 * (1 - i / 7), 0xa8884a, -0.0, 0, 0);
+    k.gable(2.2, 0.62, 1.25, 0, 0.58, 0.4, 0xd0b060, 0, true, 'rows');
     k.rod(-1.0, 0.58, 0.4, -1.0, 1.35, 0.4, DARKWOOD, 0.03); k.rod(1.0, 0.58, 0.4, 1.0, 1.35, 0.4, DARKWOOD, 0.03);
     k.door(0, -0.08, 0.34, 0.46); k.steps(0, -0.12, 0.5, 2);
     k.win(-0.55, 0.28, -0.08, 0.16, 0.18); k.win(0.55, 0.28, -0.08, 0.16, 0.18);
@@ -55,8 +54,7 @@ export function buildPost(k: Kit) {
     // caserne de pierre : parapet crénelé, toit de tuiles bleues, tour d'angle, rangée de boucliers, râteliers, quintaine, porte à herse
     k.bx(1.9, 0.78, 0.95, 0, 0, 0.4, STONE); k.crenels(1.9, 0.95, 0, 0.78, 0.4, S.wall2, 8, 0.13);
     k.bx(1.96, 0.06, 1.01, 0, 0.74, 0.4, S.wall2);
-    k.gable(1.3, 0.5, 0.75, 0, 0.8, 0.45, S.roof);
-    for (let i = 0; i < 4; i++) k.bx(1.3, 0.012, 0.014, 0, 0.82 + i * 0.1, 0.17 + i * 0.12, 0x2a4a88, 0);
+    k.gable(1.3, 0.5, 0.75, 0, 0.8, 0.45, S.roof, 0, true, 'rows');
     k.cy(0.3, 0.33, 1.0, 8, 1.0, 0, 0.55, STONE); k.cy(0.36, 0.3, 0.08, 8, 1.0, 0.95, 0.55, S.wall2); k.cn(0.34, 0.42, 8, 1.0, 1.03, 0.55, S.roof); k.gl(0.05, 0.2, 0.02, 1.0, 0.55, 0.23, WARM); k.flags.push([1.0, 1.55, 0.55]);
     k.door(-0.15, -0.08, 0.36, 0.5); k.bx(0.4, 0.04, 0.04, -0.15, 0.52, -0.1, DARK); for (let i = 0; i < 4; i++) k.bx(0.012, 0.44, 0.012, -0.27 + i * 0.08, 0.05, -0.1, DARK);
     k.steps(-0.15, -0.12, 0.6, 3);
@@ -75,8 +73,7 @@ export function buildPost(k: Kit) {
   } else if (a === 3) {
     // caserne de brique : tôle ondulée, deux cheminées, deux rangs de fenêtres, perron, canon de campagne, rangée de fusils, pas de manœuvre
     k.bx(1.95, 0.72, 0.95, 0, 0, 0.4, S.wall); k.bx(2.02, 0.06, 1.02, 0, 0.72, 0.4, S.wall2); k.bx(2.0, 0.05, 1.0, 0, 0, 0.4, S.wall2);
-    k.gable(2.1, 0.5, 1.2, 0, 0.78, 0.4, S.roof);
-    for (let i = 0; i < 9; i++) { const x = -0.9 + i * 0.225; k.rb(0.03, 0.02, 0.62, x, 1.0, 0.1, 0x2a4a88, 0.78); k.rb(0.03, 0.02, 0.62, x, 1.0, 0.7, 0x2a4a88, -0.78); }
+    k.gable(2.1, 0.5, 1.2, 0, 0.78, 0.4, S.roof, 0, true, 'ribs');
     k.chimney(-0.55, 0.9, 0.5, 0.55, 0.18, S.wall); k.chimney(0.6, 0.9, 0.5, 0.5, 0.18, S.wall);
     k.door(0, -0.08, 0.34, 0.46); k.steps(0, -0.12, 0.6, 3);
     for (const x of [-0.75, -0.45, 0.45, 0.75]) { k.win(x, 0.12, -0.08, 0.15, 0.2); k.win(x, 0.44, -0.08, 0.15, 0.18); }
@@ -115,7 +112,7 @@ export function buildPost(k: Kit) {
     k.bx(1.95, 0.62, 0.95, 0, 0, 0.4, S.wall);
     sh(new THREE.CylinderGeometry(0.62, 0.7, 0.3, 4, 1).rotateY(Math.PI / 4).scale(1.4, 1, 0.95).translate(0, 0.76, 0.4), 0xeef2f8);
     k.gl(1.99, 0.025, 1.0, 0, 0.58, 0.4, CYAN); k.gl(1.99, 0.02, 1.0, 0, 0.14, 0.4, MAGENTA);
-    k.shine.push(paint(new THREE.SphereGeometry(0.55, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.55, 0.6, 0.95).translate(0, 0.92, 0.4), 0x5ab4e8));
+    k.shine.push(paint(new THREE.SphereGeometry(0.5, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.4, 0.45, 0.85).translate(0, 0.92, 0.4), 0x3a8ad0));
     k.gtor(0.8, 0.012, 0, 0.93, 0.4, CYAN, Math.PI / 2, 18);
     k.door(-0.3, -0.08, 0.38, 0.46);
     for (const x of [-0.85, -0.6, 0.0, 0.3, 0.6, 0.85]) k.win(x, 0.28, -0.08, 0.18, 0.14, -1, 0x7af0ff);
@@ -128,7 +125,7 @@ export function buildPost(k: Kit) {
     k.dish(0.7, 0.9, 0.5, 1); k.mast(-0.8, 0.9, 0.6, 0.8);
     k.crates(1.15, -0.35, 3, 0.18); k.barrels(-1.15, -0.5, 2); k.tools(0.9, 0.95); k.lamp(-0.7, -0.35, 0.5); k.lamp(0.3, -0.35, 0.5);
     k.fence(-1.2, -1.2, 1.2, -1.2, 0.22); k.pole(1.1, -0.7, 1.6); k.pole(-1.1, -0.7, 1.4);
-    k.bubble(1.35, 0, 0.1); k.smoke.push([0.2, 1.1, 0.4]);
+    k.bubble(1.2, 0, 0.1); k.smoke.push([0.2, 1.1, 0.4]);
   }
   void CLOTH; void GOLD; void DARK; void WOOD; void MAGENTA; void EMBER;
 }
