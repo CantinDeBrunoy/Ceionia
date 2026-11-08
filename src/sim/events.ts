@@ -143,7 +143,7 @@ export const EVENTS: ExpEvent[] = [
   },
   {
     id: 'croc', where: ['river'], water: 'fresh', warm: true, scenes: ['boat', 'fish', 'gather', 'pebbles', 'hops', 'salt', 'spring'], title: 'Un crocodile !',
-    text: 'Ce que l’on prenait pour un tronc flottant ouvre un œil, puis une gueule pleine de dents : un crocodile glisse vers l’équipe.',
+    text: 'Ce que l’on prenait pour un tronc ouvre un œil, puis une gueule pleine de dents : un crocodile !',
     options: [
       { label: 'Fuir loin de l’eau', risk: 0.9, work: 5, text: 'On a couru loin de la berge : le crocodile a claqué des mâchoires dans le vide.' },
       { label: 'Se battre, armes en main', needs: WEAPONS, risk: 0.65, text: 'Les armes pointées l’ont fait reculer : le crocodile a replongé dans l’eau brune.' },
@@ -153,7 +153,7 @@ export const EVENTS: ExpEvent[] = [
   // ---------------- La chasse au monstre des mers ----------------
   {
     id: 'swell', where: ['river'], scenes: ['megalodon', 'kraken'], title: 'La tempête se lève',
-    text: 'Le ciel noircit au large, la pluie fouette la mer et de grosses vagues secouent la galère : les hommes d’armes se cramponnent aux bords, harpons à la main.',
+    text: 'Le ciel noircit au large, la pluie fouette la mer et de grosses vagues secouent la galère.',
     options: [
       { label: 'Ramer face aux vagues', risk: 0.85, work: 4, text: 'Tous aux rames, face aux vagues : la galère a tenu bon dans la tempête.' },
       { wait: true, label: 'Attendre que la mer se calme', risk: 0.9, work: 6, text: 'On a attendu que la tempête passe, à l’abri derrière les boucliers.' },
@@ -193,7 +193,7 @@ export const EVENTS: ExpEvent[] = [
   // ---------------- Le volet maritime : épave à la dérive, grain en plein voyage ----------------
   {
     id: 'derelict', where: ['river'], scenes: ['voyage', 'wreck', 'trawl', 'isles'], arrive: true, water: 'sea', ages: [2, 5], title: 'Une coque à la dérive',
-    text: 'Une coque abandonnée dérive sur l’eau, mâts brisés et voiles en lambeaux : un navire perdu dans une tempête, il y a longtemps.',
+    text: 'Une coque abandonnée dérive sur l’eau, mâts brisés et voiles en lambeaux : un navire perdu.',
     options: [
       { label: 'L’accoster et fouiller la cale', risk: 1.1, work: 5, bonus: [{ t: 'ore', n: 3 }], text: 'Dans la cale, des barres de métal et un coffre scellé : un petit trésor.' },
       { label: 'Relever son nom pour les cartes', risk: 0.85, work: 3, bonus: [joy(1, 4)], text: 'On a noté son nom et sa position sur la carte : les marins s’en souviendront.' },
@@ -249,7 +249,7 @@ export const EVENTS: ExpEvent[] = [
   },
   {
     id: 'rumble', where: ['river'], scenes: ['portal'], from: 0.4, title: 'L’arche gronde',
-    text: 'Un grondement sourd monte de l’arche ; des étincelles rouges jaillissent entre ses pierres et les braseros crachent des flammes.',
+    text: 'Un grondement sourd monte de l’arche : des étincelles rouges jaillissent, les braseros crachent des flammes.',
     options: [
       { label: 'Reculer et laisser l’arche s’apaiser', wait: true, risk: 0.85, work: 6, text: 'On a reculé le temps que l’arche s’apaise, puis on s’est remis à l’ouvrage.' },
       { label: 'Lever les boucliers et continuer', needs: ARMORS, risk: 0.75, work: 2, text: 'Derrière les boucliers, l’équipe a continué malgré la pluie d’étincelles.' },
@@ -357,7 +357,7 @@ export const EVENTS: ExpEvent[] = [
   // ---------------- La chasse au mammouth : le vieux mâle qui charge, la tempête de neige où la harde disparaît ----------------
   {
     id: 'tusks', where: ['plain', 'mountain', 'far'], missions: ['mammoth'], title: 'Le vieux mâle charge',
-    text: 'Le plus vieux mammouth de la harde a flairé les chasseurs : il lève la trompe, barrit à faire trembler le sol… et fonce droit sur eux !',
+    text: 'Le plus vieux mammouth a flairé les chasseurs : il barrit à faire trembler le sol… et fonce droit sur eux !',
     options: [
       { label: 'Se jeter derrière les rochers', risk: 0.8, work: 5, text: 'Tout le monde s’est jeté derrière les rochers : le vieux mâle est passé en trombe, sans toucher personne.' },
       { label: 'Serrer les rangs, armes pointées', risk: 0.85, text: 'Serrés en hérisson, armes pointées : le vieux mâle a pilé net, puis fait demi-tour en grondant.' },

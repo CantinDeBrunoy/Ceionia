@@ -159,21 +159,21 @@ export const MISSIONS: Mission[] = [
     intro: 'Des bêtes sauvages paissent loin du camp. Si l’on en ramenait quelques-unes, on pourrait les garder près des fermes : du lait, de la laine et de la viande toute l’année.',
     choices: [
       {
-        label: 'Suivre le troupeau dans la plaine', text: 'Long mais sûr : on marche avec les moutons jusqu’à ce qu’ils se laissent approcher.',
+        label: 'Suivre le troupeau dans la plaine', text: 'Long mais sûr : on marche avec les moutons.',
         dest: 'plain', scene: 'herd', fail: 'storm', doing: 'marche avec les moutons jusqu’à ce qu’ils se laissent approcher', party: 3, work: 24, risk: 0.15, carry: 'animals',
         win: [{ t: 'herd', kinds: ['sheep', 'sheep', 'sheep', 'sheep'] }, food(3)], lose: [],
         winText: 'Le troupeau a suivi les chasseurs jusqu’au camp, sans se presser. Les moutons broutent maintenant près des fermes.',
         loseText: 'Un orage a éclaté et dispersé le troupeau. Les chasseurs rentrent bredouilles, mais ils retenteront leur chance.',
       },
       {
-        label: 'Bâtir un enclos de branchages en lisière', text: 'On rabat les bêtes de la forêt dans un enclos : il faut des bras, et les sangliers sont farouches.',
+        label: 'Bâtir un enclos de branchages en lisière', text: 'On rabat les bêtes de la forêt dans un enclos.',
         dest: 'forest', scene: 'corral', fail: 'charge', doing: 'rabat les bêtes dans un enclos de branchages', party: 4, work: 30, risk: 0.25, carry: 'animals',
         win: [{ t: 'herd', kinds: ['pig', 'pig', 'pig', 'sheep', 'sheep'] }, food(4)], lose: [hurt(1, 2)],
         winText: 'L’enclos a tenu : sangliers et moutons ont été menés au village, et ils s’y plaisent.',
         loseText: 'Un sanglier a forcé l’enclos et blessé un chasseur. Il se repose à la hutte.',
       },
       {
-        label: 'Attirer les aurochs avec du sel', text: 'Rapide mais risqué : près de la rivière, les aurochs viennent lécher le sel… quand ils sont d’humeur.',
+        label: 'Attirer les aurochs avec du sel', text: 'Rapide mais risqué : les aurochs viennent lécher le sel.',
         dest: 'river', scene: 'salt', fail: 'charge', doing: 'attend, cachée, que les aurochs viennent lécher le sel', danger: ['beast', 'water'], party: 2, work: 14, risk: 0.4, carry: 'animals',
         win: [{ t: 'herd', kinds: ['cow', 'cow', 'sheep'] }, food(4)], lose: [hurt(1, 3), joy(-2, 2)],
         winText: 'Le sel a fait merveille : deux aurochs, doux comme des agneaux, ont suivi les chasseurs jusqu’au camp.',
@@ -183,7 +183,7 @@ export const MISSIONS: Mission[] = [
   },
   {
     id: 'berries', age: 0, mandatory: false, icon: '🍇', title: 'La grande cueillette',
-    intro: 'Les baies mûrissent au fond des bois et le long de l’eau : de quoi faire des réserves pour quelques jours.',
+    intro: 'Les baies mûrissent dans les bois et le long de l’eau. De quoi faire des réserves pour quelques jours.',
     choices: [
       {
         label: 'Partir en forêt', text: 'Des buissons à perte de vue, à condition d’arriver avant les oiseaux.',
@@ -233,7 +233,7 @@ export const MISSIONS: Mission[] = [
         loseText: 'Les abeilles se sont réveillées : des piqûres en pagaille, un cueilleur gonflé comme une outre.',
       },
       {
-        label: 'Suivre les abeilles jusqu’à leur essaim', text: 'Patient : on suit leur vol de fleur en fleur, jusqu’à un essaim posé dans la plaine.',
+        label: 'Suivre les abeilles jusqu’à leur essaim', text: 'Patient : on suit leur vol jusqu’à un essaim.',
         dest: 'plain', scene: 'swarm', doing: 'recueille l’essaim posé sur une branche', party: 3, work: 22, risk: 0.12, carry: 'sacks',
         win: [food(3, 4)], lose: [],
         winText: 'Au bout de la piste, un essaim tout neuf accroché à une branche basse : on l’a cueilli sans une piqûre.',
@@ -245,24 +245,24 @@ export const MISSIONS: Mission[] = [
     // la seconde mission obligatoire de la Préhistoire : un traîneau de viande et de peaux, et la fête au retour
     // (l'éléphant plutôt que le mammouth 🦣, que Windows 10 n'affiche pas)
     id: 'mammoth', age: 0, mandatory: true, icon: '🐘', title: 'Chasser le mammouth',
-    intro: 'Une harde de mammouths descend des glaciers et passe non loin du camp. Un seul de ces géants laineux nourrirait tout le monde pendant des lunes, et ses peaux tiendraient chaud tout l’hiver… mais un mammouth, ça se chasse à plusieurs, et avec ruse.',
+    intro: 'Une harde de mammouths passe non loin du camp. Un seul de ces géants nourrirait tout le monde, et ses peaux tiendraient chaud tout l’hiver… mais ça se chasse à plusieurs, et avec ruse.',
     choices: [
       {
-        label: 'Pièges et fosses', text: 'Long mais sûr : on creuse des fosses sur le passage de la harde, on les couvre de branchages, et l’on attend qu’un mammouth s’y prenne les pattes.',
+        label: 'Pièges et fosses', text: 'Long mais sûr : on creuse des fosses sur son passage.',
         dest: 'plain', scene: 'mammoth', fail: 'scatter', doing: 'creuse des fosses sur le passage de la harde et guette les mammouths', danger: ['beast', 'weather'], party: 4, work: 30, risk: 0.2, carry: 'sledge',
         win: [food(6, 6), food(2), joy(2, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [],
         winText: 'Le vieux mâle s’est pris les pattes dans une fosse : les chasseurs rentrent, le traîneau chargé de viande et de peaux. Ce soir, grande fête autour du feu !',
         loseText: 'La harde a flairé les fosses et fait un grand détour. Les chasseurs rentrent les mains vides, mais les fosses attendront la prochaine fois.',
       },
       {
-        label: 'Rabattre la harde vers le ravin', text: 'Rapide mais risqué : torches et grands cris, on pousse les mammouths vers un ravin où le plus vieux restera coincé. Un mammouth affolé, ça charge !',
+        label: 'Rabattre la harde vers le ravin', text: 'Rapide mais risqué : torches et cris, vers un ravin.',
         dest: 'mountain', scene: 'mammoth', fail: 'charge', doing: 'rabat la harde vers le ravin, torches et lances en main', danger: ['beast', 'fall'], party: 5, work: 18, risk: 0.4, carry: 'sledge',
         win: [food(8, 6), food(2), joy(3, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [hurt(2, 2), joy(-1, 3)],
         winText: 'La harde a dévalé la pente et le vieux mâle est resté coincé au fond du ravin : jamais le camp n’a vu autant de viande et de fourrures !',
         loseText: 'Le vieux mâle a fait volte-face et chargé les rabatteurs : deux chasseurs sont blessés, et la harde s’est enfuie dans la montagne.',
       },
       {
-        label: 'Suivre la harde à distance', text: 'Patient : on suit les mammouths au-delà des collines sans se montrer, jusqu’à ce qu’un vieux mâle fatigué traîne loin derrière les autres.',
+        label: 'Suivre la harde à distance', text: 'Patient : on suit la harde sans se montrer.',
         dest: 'far', scene: 'mammoth', fail: 'blizzard', doing: 'suit la harde à distance et encercle le vieux mâle', party: 3, work: 26, risk: 0.25, carry: 'sledge',
         win: [food(5, 6), food(2), joy(2, 5), joy(1), { t: 'perk', id: 'furs' }], lose: [hurt(1, 1)],
         winText: 'Le vieux mâle, à bout de souffle, s’est couché loin derrière la harde : les chasseurs rentrent, le traîneau plein de viande et de peaux.',
@@ -273,7 +273,7 @@ export const MISSIONS: Mission[] = [
   // ---------------- Antiquité ----------------
   {
     id: 'seeds', age: 1, mandatory: true, icon: '🌾', title: 'Le blé des collines',
-    intro: 'Un marchand raconte qu’au-delà des collines, un village cultive un blé qui pousse deux fois plus haut. Il faudrait en rapporter des semences.',
+    intro: 'Au-delà des collines, un village cultive un blé géant. Il faudrait en rapporter des semences.',
     choices: [
       {
         label: 'Partir avec des poteries à échanger', text: 'Le plus long chemin, mais on arrive en amis.',
@@ -365,14 +365,14 @@ export const MISSIONS: Mission[] = [
     intro: 'Un géant à tentacules rôde au large et attrape les navires. Une troupe d’hommes d’armes embarque sur deux galères, harpons en main : il est temps de le chasser !',
     choices: [
       {
-        label: 'Trancher ses tentacules', text: 'Les deux galères foncent sur lui, harpons et haches en main. Plus risqué, mais quelle gloire !',
+        label: 'Trancher ses tentacules', text: 'Les deux galères foncent, harpons en main. Risqué !',
         dest: 'river', sea: true, scene: 'kraken', fail: 'capsize', doing: 'tranche les tentacules du kraken, harpons en main', danger: ['monster', 'water'], party: 5, work: 38, risk: 0.55, carry: 'sacks',
         win: [food(3, 5), joy(5, 6), joy(2), { t: 'ore', n: 10 }, { t: 'perk', id: 'kraken' }], lose: [hurt(3, 4), joy(-3, 4)],
         winText: 'Le kraken a lâché les galères et fui dans les profondeurs, un tentacule en moins : la légende est née ! Des perles et du minerai remontent avec lui.',
         loseText: 'Les tentacules ont brisé les rames et secoué les galères : trois blessés, et le kraken est toujours là.',
       },
       {
-        label: 'Le prendre en tenaille', text: 'Une galère de chaque côté : il ne sait plus où frapper. Plus long, un peu plus sûr.',
+        label: 'Le prendre en tenaille', text: 'Une galère de chaque côté. Plus long, plus sûr.',
         dest: 'river', sea: true, scene: 'kraken', fail: 'capsize', doing: 'prend le kraken en tenaille entre ses deux galères', danger: ['monster', 'water'], party: 6, work: 44, risk: 0.45, carry: 'sacks',
         win: [food(3, 5), joy(4, 6), joy(2), { t: 'ore', n: 8 }, { t: 'perk', id: 'kraken' }], lose: [hurt(2, 4), joy(-2, 4)],
         winText: 'Pris entre les deux galères, le kraken a plongé pour ne plus revenir : la légende est née ! Des perles et du minerai remontent avec lui.',
@@ -385,17 +385,17 @@ export const MISSIONS: Mission[] = [
     // réveille le portail ; obligatoire (elle ouvre l'île), puis il faut sécuriser l'île (`isleSecured`, condition d'âge),
     // jamais la conquête des Enfers. Sans île (partie d'avant elle), elle n'est pas disponible (`Expeditions.why`) ni demandée
     id: 'portal', age: 1, mandatory: true, icon: '🌀', title: 'Le portail de l’autre rive', unlocks: 'watchtower',
-    intro: 'Au large, de l’autre côté du bras de mer, une petite île rougeoie certaines nuits. Les pêcheurs jurent qu’une arche de pierre noire s’y dresse, et qu’on entend gronder au-delà… Une galère pourrait y mener quelques braves.',
+    intro: 'Au large, une petite île rougeoie certaines nuits. Les pêcheurs jurent qu’une arche de pierre noire s’y dresse… Une galère pourrait y mener quelques braves.',
     choices: [
       {
-        label: 'Traverser à la rame et réveiller l’arche', text: 'La galère file droit vers l’île ; l’équipe débarque, cherche l’arche et allume ses braseros.',
+        label: 'Traverser à la rame et réveiller l’arche', text: 'La galère file droit vers l’île et son arche.',
         dest: 'river', sea: true, scene: 'portal', fail: 'storm', doing: 'explore l’île et réveille le portail', danger: ['water', 'weather'], party: 4, work: 30, risk: 0.25, carry: 'sacks',
         win: [{ t: 'perk', id: 'portal' }, joy(2, 4)], lose: [hurt(1, 2)],
         winText: 'Les braseros flambent, les runes s’allument, et entre les pierres de l’arche un tourbillon rouge et violet s’est mis à tourner : le portail est ouvert ! Sur l’île, on peut maintenant bâtir des tours de garde, puis une caserne.',
         loseText: 'Une tempête s’est levée sur le bras de mer : la galère a dû rebrousser chemin, et un rameur s’est blessé. Il faudra retenter la traversée.',
       },
       {
-        label: 'Attendre une mer d’huile', text: 'Plus long, plus sûr : on guette le calme plat avant de traverser, et l’on prend le temps d’étudier les runes.',
+        label: 'Attendre une mer d’huile', text: 'Plus long, plus sûr : on guette le calme plat.',
         dest: 'river', sea: true, scene: 'portal', fail: 'fog', doing: 'déchiffre les runes de l’arche et réveille le portail', danger: ['water'], party: 3, work: 44, risk: 0.12, carry: 'sacks',
         win: [{ t: 'perk', id: 'portal' }, joy(1, 4)], lose: [],
         winText: 'Par une mer d’huile, l’équipe a gagné l’île et déchiffré les runes une à une : l’arche s’est éveillée dans un grondement, un tourbillon rouge et violet entre ses pierres. Le portail est ouvert ! On peut y bâtir des tours de garde, puis une caserne.',
@@ -406,17 +406,17 @@ export const MISSIONS: Mission[] = [
   {
     // expédition légendaire facultative : le mégalodon, en haute mer, contre deux galères
     id: 'megalodon', age: 1, mandatory: false, icon: '🦈', title: 'Chasser le mégalodon',
-    intro: 'Un requin gros comme une maison fend la haute mer de son aileron et coule les barques des pêcheurs. Deux galères d’hommes d’armes partent le chasser, harpons en main.',
+    intro: 'Un requin gros comme une maison coule les barques des pêcheurs. Deux galères d’hommes d’armes partent le chasser, harpons en main.',
     choices: [
       {
-        label: 'Le harponner au large', text: 'Les deux galères l’encadrent et le criblent de harpons. Ses dents valent de l’or… s’il ne vous croque pas.',
+        label: 'Le harponner au large', text: 'Les deux galères l’encadrent et le criblent de harpons.',
         dest: 'river', sea: true, scene: 'megalodon', fail: 'capsize', doing: 'harponne le mégalodon depuis ses deux galères', danger: ['monster', 'water'], party: 5, work: 34, risk: 0.45, carry: 'sacks',
         win: [food(5, 5), joy(3, 5), joy(1), { t: 'ore', n: 6 }, { t: 'perk', id: 'megalodon' }], lose: [hurt(2, 3), joy(-2, 3)],
         winText: 'Les harpons ont frappé juste : le mégalodon est vaincu ! Sa viande nourrit le village, et ses dents géantes ornent la place.',
         loseText: 'Un coup de queue, et une galère a chaviré : les hommes d’armes rentrent à la nage, deux sont blessés.',
       },
       {
-        label: 'L’appâter avec une carcasse', text: 'Une baleine morte traînée entre les galères : il viendra à elle. Plus long, plus sûr.',
+        label: 'L’appâter avec une carcasse', text: 'Une carcasse en appât entre les galères. Plus long, plus sûr.',
         dest: 'river', sea: true, scene: 'megalodon', fail: 'capsize', doing: 'attire le mégalodon vers l’appât, harpons levés', danger: ['monster', 'water'], party: 5, work: 40, risk: 0.35, carry: 'sacks',
         win: [food(4, 5), joy(3, 5), joy(1), { t: 'ore', n: 5 }, { t: 'perk', id: 'megalodon' }], lose: [hurt(1, 3), joy(-1, 3)],
         winText: 'Le mégalodon a mordu à l’appât, et les harpons ont fait le reste : ses dents géantes ornent la place.',
@@ -509,17 +509,17 @@ export const MISSIONS: Mission[] = [
   {
     // facultative (le passage d'âge ne tient qu'au filon) : un gros risque, un gros butin ; les armures et les épées aident
     id: 'dragon', age: 2, mandatory: true, icon: '🐉', title: 'Chasser le dragon',
-    intro: 'Un dragon s’est terré dans une grotte au pied de la montagne : il enlève les moutons et roussit les toits. On dit qu’il dort sur un tas d’or… Des chevaliers sont prêts à l’en déloger.',
+    intro: 'Un dragon s’est terré dans une grotte : il enlève les moutons et roussit les toits. On dit qu’il dort sur un tas d’or… Des chevaliers sont prêts à l’en déloger.',
     choices: [
       {
-        label: 'L’affronter dans sa grotte', text: 'Épées, arbalètes et boucliers : on le défie à l’entrée de son antre. Le plus court, et le plus dangereux.',
+        label: 'L’affronter dans sa grotte', text: 'On le défie à l’entrée de son antre. Court et dangereux.',
         dest: 'cave', scene: 'dragon', doing: 'affronte le dragon à l’entrée de sa grotte', danger: ['monster', 'dark'], party: 5, work: 32, risk: 0.45, carry: 'cart',
         win: [{ t: 'ore', n: 16 }, joy(4, 6), joy(2), { t: 'perk', id: 'dragon' }], lose: [hurt(2, 3), joy(-2, 3)],
         winText: 'Le dragon s’est effondré devant sa grotte ! Les chevaliers rentrent avec son trésor : de l’or et du fer plein le chariot.',
         loseText: 'Le dragon a craché le feu et pris son envol : deux chevaliers brûlés, et la bête rôde toujours.',
       },
       {
-        label: 'L’enfumer hors de sa grotte', text: 'Un grand feu d’herbes humides devant l’entrée : à moitié étouffé, il sortira affaibli. Plus long, plus sûr.',
+        label: 'L’enfumer hors de sa grotte', text: 'Un grand feu devant l’entrée l’affaiblit. Plus long, plus sûr.',
         dest: 'cave', scene: 'dragon', doing: 'enfume la grotte du dragon et l’attend, arbalètes braquées', danger: ['monster', 'dark'], party: 4, work: 40, risk: 0.3, carry: 'cart',
         win: [{ t: 'ore', n: 12 }, joy(3, 6), joy(2), { t: 'perk', id: 'dragon' }], lose: [hurt(1, 2), joy(-1, 3)],
         winText: 'Le dragon est sorti en toussant, et les carreaux d’arbalète ont fait le reste ! Son trésor rentre au village sur le chariot.',
@@ -530,7 +530,7 @@ export const MISSIONS: Mission[] = [
   {
     // obligatoire (le volet maritime du Moyen Âge) : la caravelle ouvre le chantier naval, d'où sortiront les navires du village
     id: 'caravel', age: 2, mandatory: true, icon: '⛵', title: 'La caravelle', unlocks: 'shipyard',
-    intro: 'Les charpentiers ont dessiné une caravelle : trois mâts, des voiles latines, de quoi tenir la haute mer. Avant de lui bâtir un chantier, il faut l’essayer et tracer une première route au large.',
+    intro: 'Les charpentiers ont dessiné une caravelle, faite pour la haute mer. Avant son chantier, il faut l’essayer et tracer une première route.',
     choices: [
       {
         label: 'Longer la côte à la voile', text: 'Prudent : on garde la terre en vue, longue-vue et cartes en main.',
@@ -540,7 +540,7 @@ export const MISSIONS: Mission[] = [
         loseText: 'Un grain a couché les voiles et brisé une vergue ; un marin s’est blessé. La caravelle est rentrée à la rame.',
       },
       {
-        label: 'Prendre le large, cap à l’ouest', text: 'Audacieux : trois jours hors de vue de la terre, pour trouver de nouvelles routes.',
+        label: 'Prendre le large, cap à l’ouest', text: 'Audacieux : trois jours hors de vue de la terre.',
         dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'file droit vers l’ouest, loin de toute terre', danger: ['water', 'weather'], party: 4, work: 34, risk: 0.4, carry: 'sacks',
         win: [{ t: 'perk', id: 'caravel' }, joy(3, 6), jobs(2), { t: 'ore', n: 6 }], lose: [hurt(2, 3), joy(-1, 3)],
         winText: 'Cap à l’ouest, la caravelle a trouvé des eaux riches et des routes nouvelles. Le village veut son chantier naval pour en bâtir d’autres !',
@@ -552,17 +552,17 @@ export const MISSIONS: Mission[] = [
     // facultative : il faut le chantier naval (ouvert par la caravelle) pour armer le navire marchand
     id: 'spice', age: 2, mandatory: false, icon: '🌶️', title: 'La route des épices',
     requires: { kinds: ['shipyard'] },
-    intro: 'Le but : rapporter des épices au village. Un navire marchand part du chantier naval vers des comptoirs lointains, y troque laine et fer contre poivre, safran et soieries, puis revient. Au retour : de quoi mieux manger, du bonheur, et des échanges qui rapportent du minerai. Route courte et sûre, ou longue et risquée mais plus riche.',
+    intro: 'Le but : rapporter des épices au village. Un navire marchand troque laine et fer contre poivre, safran et soieries, puis revient. Route courte et sûre, ou longue et risquée mais plus riche.',
     choices: [
       {
-        label: 'Charger le poivre aux comptoirs proches', text: 'Une traversée courte, sans histoires : on troque de la laine et du fer contre des sacs d’épices.',
+        label: 'Charger le poivre aux comptoirs proches', text: 'Traversée courte : laine et fer contre des sacs d’épices.',
         dest: 'river', sea: true, scene: 'voyage', fail: 'fog', doing: 'troque laine et fer contre des sacs d’épices', danger: ['water'], party: 3, work: 22, risk: 0.2, carry: 'sacks',
         win: [food(3, 8), joy(2, 6), jobs(1)], lose: [hurt(1, 1)],
         winText: 'Des sacs de poivre et de cannelle plein la cale : les tables du village sentent bon, et les marchands sont ravis.',
         loseText: 'Pris dans la brume, le navire a perdu sa route et il est rentré à vide.',
       },
       {
-        label: 'Pousser jusqu’aux îles aux épices', text: 'Une longue route, des pirates peut-être, mais un chargement de soies, de safran et de gingembre.',
+        label: 'Pousser jusqu’aux îles aux épices', text: 'Longue route, pirates peut-être, mais soies et safran.',
         dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'pousse jusqu’aux îles aux épices et charge la cale', danger: ['water', 'weather'], party: 4, work: 36, risk: 0.4, carry: 'sacks',
         win: [food(5, 8), joy(4, 8), jobs(2), { t: 'ore', n: 10 }, { t: 'perk', id: 'spices' }], lose: [hurt(2, 3), joy(-1, 3)],
         winText: 'Les îles aux épices ! La cale déborde de soies et de safran : le marché du village n’a jamais été aussi animé.',
@@ -686,14 +686,14 @@ export const MISSIONS: Mission[] = [
     intro: 'Les vieux pêcheurs parlent d’un galion englouti au large avec sa cargaison d’or. Un bateau à vapeur et des scaphandriers pourraient le retrouver.',
     choices: [
       {
-        label: 'Draguer le fond au large', text: 'Les chaînes de la drague raclent le fond : lent, mais sans plongeur à risquer.',
+        label: 'Draguer le fond au large', text: 'La drague racle le fond : lent, sans plongeur à risquer.',
         dest: 'river', sea: true, scene: 'wreck', fail: 'storm', doing: 'drague le fond à la recherche du galion', danger: ['water', 'weather'], party: 3, work: 26, risk: 0.2, carry: 'sacks',
         win: [{ t: 'ore', n: 10 }, joy(2, 6), { t: 'perk', id: 'galleon' }], lose: [hurt(1, 1)],
         winText: 'La drague a ramené des bordages noircis, des canons et quelques lingots : le galion repose bien là.',
         loseText: 'La chaîne de la drague s’est rompue dans une houle : rien remonté, un matelot blessé.',
       },
       {
-        label: 'Envoyer le scaphandrier', text: 'Casque de cuivre et pompe à bras : il descend jusqu’au pont du galion, au risque de sa vie.',
+        label: 'Envoyer le scaphandrier', text: 'Casque de cuivre, pompe à bras : il descend jusqu’au pont.',
         dest: 'river', sea: true, scene: 'wreck', fail: 'capsize', doing: 'descend le scaphandrier jusqu’au pont du galion', danger: ['water'], party: 4, work: 34, risk: 0.4, carry: 'sacks',
         win: [{ t: 'ore', n: 22 }, joy(4, 6), joy(1), { t: 'perk', id: 'galleon' }], lose: [hurt(2, 3), joy(-1, 3)],
         winText: 'Le scaphandrier a ouvert les coffres du galion : de l’or et de l’argent, remontés à la pompe. Le village en parlera longtemps.',
@@ -759,17 +759,17 @@ export const MISSIONS: Mission[] = [
     // les grands Jeux, au stade du village : il faut toutes les installations sportives ; la flamme, la foule, le podium
     id: 'games', age: 4, mandatory: false, icon: '🏅', title: 'Organiser les JO',
     requires: { kinds: ['stadium', 'football', 'basket', 'tennis', 'waterpark', 'alpine'] },
-    intro: 'Stade, terrains, courts, bassins et station de montagne : le village a tout ce qu’il faut pour accueillir les Jeux. Athlètes du monde entier, relais de la flamme, cérémonie d’ouverture… le monde entier regardera !',
+    intro: 'Le village a tout ce qu’il faut pour accueillir les Jeux. Athlètes du monde entier, relais de la flamme, cérémonie d’ouverture… le monde entier regardera !',
     choices: [
       {
-        label: 'Une cérémonie grandiose', text: 'Relais de la flamme, défilé des nations, drapeaux et foule en délire : une fête que l’on n’oubliera pas.',
+        label: 'Une cérémonie grandiose', text: 'Flamme, défilé des nations, foule en délire : une grande fête.',
         dest: 'plain', scene: 'games', fail: 'storm', doing: 'allume la flamme au stade et ouvre les Jeux devant la foule', danger: ['weather'], party: 6, work: 34, risk: 0.2,
         win: [joy(10, 10), joy(4), jobs(4), { t: 'ore', n: 8 }, { t: 'perk', id: 'games' }], lose: [joy(-2, 4)],
         winText: 'La flamme brille au-dessus du stade, les médailles pleuvent : le monde entier parle du village ! Les visiteurs ont laissé de quoi garnir les réserves.',
         loseText: 'Un orage a noyé la cérémonie : la flamme s’est éteinte, et les Jeux se sont terminés sous les parapluies.',
       },
       {
-        label: 'Des Jeux simples et joyeux', text: 'Moins de faste, plus de sport : on court, on saute, on nage, et tout le monde y gagne.',
+        label: 'Des Jeux simples et joyeux', text: 'Moins de faste, plus de sport : on court, on saute, on nage.',
         dest: 'plain', scene: 'games', fail: 'storm', doing: 'allume la flamme au stade et lance les épreuves', danger: ['weather'], party: 4, work: 26, risk: 0.08,
         win: [joy(6, 8), joy(2), jobs(2), { t: 'ore', n: 4 }, { t: 'perk', id: 'games' }], lose: [],
         winText: 'Des records, des sourires et des médailles : les Jeux du village resteront dans les mémoires.',
@@ -781,17 +781,17 @@ export const MISSIONS: Mission[] = [
     // facultative : le chalutier a besoin d'un marché où décharger la pêche
     id: 'trawl', age: 4, mandatory: false, icon: '🎣', title: 'La pêche en haute mer',
     requires: { kinds: ['fishmarket'] },
-    intro: 'Le marché de la mer réclame plus de poisson : un chalutier pourrait ratisser les grands fonds, loin au large, et en rapporter des tonnes.',
+    intro: 'Le marché réclame plus de poisson. Un chalutier pourrait ratisser les grands fonds, loin au large.',
     choices: [
       {
-        label: 'Chaluter sur le plateau', text: 'Une pêche régulière, au large mais pas trop loin : de bonnes prises sans risque inutile.',
+        label: 'Chaluter sur le plateau', text: 'Pêche régulière, au large mais pas trop loin.',
         dest: 'river', sea: true, scene: 'trawl', fail: 'storm', doing: 'chalute sur le plateau, les filets pleins', danger: ['water', 'weather'], party: 3, work: 22, risk: 0.2, carry: 'sacks',
         win: [food(6, 8), jobs(1)], lose: [hurt(1, 1)],
         winText: 'Les filets sont remontés pleins à craquer : le marché de la mer n’a jamais autant vendu.',
         loseText: 'Le filet s’est pris dans une épave : un marin blessé, la pêche perdue.',
       },
       {
-        label: 'Suivre les thons au grand large', text: 'Plus loin, plus long : des bancs de thons géants, à condition de tenir la mer.',
+        label: 'Suivre les thons au grand large', text: 'Plus loin, plus long : des bancs de thons géants.',
         dest: 'river', sea: true, scene: 'trawl', fail: 'storm', doing: 'suit les bancs de thons au grand large', danger: ['water', 'weather'], party: 4, work: 32, risk: 0.35, carry: 'sacks',
         win: [food(10, 8), food(1), joy(2, 6), jobs(2)], lose: [hurt(2, 2), joy(-1, 3)],
         winText: 'Des thons par centaines ! La criée a vendu jusqu’au dernier, et le village mange du poisson toute la semaine.',
@@ -804,7 +804,7 @@ export const MISSIONS: Mission[] = [
     // facultative : explorer les îles flottantes, depuis la ferme marine
     id: 'seafarm', age: 5, mandatory: false, icon: '🏝️', title: 'Les îles flottantes',
     requires: { kinds: ['offshore'] },
-    intro: 'Au large, des îles de culture dérivent au gré des courants : algues géantes, coraux et bancs rares. L’hydroglisseur du village peut les rejoindre et les ancrer près de la ferme marine.',
+    intro: 'Au large, des îles de culture dérivent : algues géantes, coraux, bancs rares. L’hydroglisseur du village peut les rejoindre et les ancrer près de la ferme marine.',
     choices: [
       {
         label: 'Ancrer les îles de culture', text: 'On les remorque jusqu’à la ferme marine : lent et sûr.',
@@ -867,7 +867,7 @@ export const MISSIONS: Mission[] = [
   {
     id: 'colony', age: 5, mandatory: false, icon: '🪐', title: 'Coloniser une autre planète', farewell: true,
     requires: { missions: ['moon'], kinds: ['spaceport', 'fusion'] },
-    intro: 'Le dernier voyage : un vaisseau colonial, propulsé par l’énergie de la centrale à fusion, emportera des colons vers la planète bleue d’une étoile voisine. Tout le village viendra leur dire adieu, puis les accompagnera jusqu’au pas de tir. Là-bas, ils fonderont un nouveau village… comme au premier jour, autour d’un feu de camp.',
+    intro: 'Le dernier voyage : un vaisseau colonial emporte des colons vers une planète bleue. Tout le village leur dit adieu, puis les accompagne jusqu’au pas de tir. Là-bas, ils fonderont un nouveau village… autour d’un feu de camp.',
     choices: [
       {
         label: 'L’arche des colons', text: 'Un grand vaisseau, lent et sûr, avec ses serres et ses graines.',
@@ -877,7 +877,7 @@ export const MISSIONS: Mission[] = [
         loseText: 'Une tempête solaire a forcé le vaisseau à faire demi-tour : les colons reviennent, déçus mais sains et saufs. On réparera l’arche.',
       },
       {
-        label: 'Le saut à travers l’espace', text: 'Le moteur expérimental plie l’espace : le voyage en quelques mois… si tout se passe bien.',
+        label: 'Le saut à travers l’espace', text: 'Un moteur qui plie l’espace : quelques mois de voyage.',
         dest: 'spaceport', scene: 'colony', doing: 'embarque les colons et allume le moteur expérimental', danger: ['weather'], party: 5, work: 56, risk: 0,
         win: [joy(22), { t: 'perk', id: 'colony' }], lose: [],
         winText: 'Un éclair, et le vaisseau a disparu… pour reparaître au bord de l’autre étoile. Les colons se sont posés sur la planète bleue : un nouveau village est né !',
