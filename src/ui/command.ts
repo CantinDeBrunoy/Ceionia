@@ -90,6 +90,8 @@ export function escapeAction(s: { kind: 'hell' | 'isle'; placing: boolean; trace
   return s.kind === 'isle' ? 'leaveIsle' : 'hint';
 }
 
+/** L'aide des contrôles se replie d'elle-même après ce temps (ms) */
+const HELP_MS = 20000;
 const LONG_PRESS = 450, DRAG = 6, DOUBLE = 320;
 /** Une raison de refus sans sa fin « (à fabriquer… ) » (le français comme l'anglais) */
 const noCraft = (s: string) => s.replace(/ \((?:à fabriquer|to craft).*\)$/, '');
@@ -150,8 +152,6 @@ export class CommandUI implements ToolInput {
     this.goalEl = document.createElement('div');
     this.goalEl.id = 'hellGoal';
     this.goalEl.innerHTML = '<i class="hgArrow"></i><span class="hgPin">🎯<b></b></span>';
-    this.goalEl.title = tr('Cliquez pour centrer la vue sur l’objectif');
-    this.goalEl.addEventListener('click', () => this.centerGoal());
     root.append(this.bar, this.box, this.alertEl, this.goalEl);
     this.bar.addEventListener('click', (e) => this.onBar(e));
   }
@@ -197,6 +197,8 @@ export class CommandUI implements ToolInput {
 
   down(e: PointerInfo) {
     this.touch();
+    // l'aide des contrôles se replie dès qu'on joue (un clic sur la carte)
+    if (this.helpOpen) this.closeHelp();
     this.start = { x: e.x, y: e.y, touch: e.touch, box: true, lx: e.x, ly: e.y };
     this.dragging = false;
     this.pressed = false;
@@ -451,6 +453,10 @@ export class CommandUI implements ToolInput {
 
   // ---------- Clavier ----------
 
+  /** Replie l'aide des contrôles (aussi toute seule après un moment) */
+  closeHelp() { this.helpOpen = false; this.barKey = ''; this.render(); }
+  private helpAt = 0;
+
   /** Une touche, en commandement : true si elle est prise (les autres raccourcis ne la voient pas) */
   key(e: KeyboardEvent): boolean {
     const t = this.theater;
@@ -475,6 +481,7 @@ export class CommandUI implements ToolInput {
     if (k === 'r') { this.retreat(); return take(); }
     if (k === 'a') { if (this.cmd.selected.size) { this.cmd.armed = 'attack'; this.host.canvas.style.cursor = 'crosshair'; this.render(); } return take(); }
     if (k === ' ') { e.preventDefault(); this.host.togglePause(); this.render(); return true; }
+    if (k === 'escape' && this.helpOpen) { this.closeHelp(); return true; }
     if (k === 'escape') {
       const a = escapeAction({ kind: t.kind, placing: !!this.placing, trace: !!this.wall.a, armed: !!this.cmd.armed, selected: this.cmd.selected.size });
       if (a === 'cancelTrace') this.cancelTrace();
@@ -523,7 +530,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'attack') { if (this.cmd.selected.size) this.cmd.armed = this.cmd.armed ? null : 'attack'; }
     else if (a === 'tab:build' || a === 'tab:rec') { this.menuTab = a === 'tab:rec' ? 'rec' : 'build'; this.barKey = ''; this.render(); return; }
     else if (a === 'pause') this.host.togglePause();
-    else if (a === 'help') this.helpOpen = !this.helpOpen;
+    else if (a === 'help') { this.helpOpen = !this.helpOpen; this.helpAt = performance.now(); }
     else if (a === 'goal') { this.centerGoal(); return; }
     else if (a === 'follow') { const on = !this.host.following?.(); this.host.follow?.(on); this.host.toast(on ? tr('La vue suit vos troupes. Déplacez la vue pour reprendre la main.') : tr('La vue ne suit plus les troupes.')); }
     else if (a.startsWith('grp:')) { const n = +a.slice(4); if (e.shiftKey || e.ctrlKey) this.cmd.setGroup(n); else if (this.cmd.recall(n)) this.focusSelection(); }
@@ -626,6 +633,7 @@ export class CommandUI implements ToolInput {
   /** Remet l'interface à jour (appelée souvent : ne refait le contenu que s'il a changé) */
   render() {
     const t = this.theater;
+    if (this.helpOpen && performance.now() - this.helpAt > HELP_MS) this.helpOpen = false;
     this.stepWaiting();
     this.bar.style.display = t ? '' : 'none';
     if (!t) return;
@@ -823,7 +831,8 @@ export class CommandUI implements ToolInput {
     const label = nplural(Math.max(1, Math.round(dist)), 'case', 'cases');
     const [sx, sy] = t.screenRaw(g.x, g.z);
     // la zone libre de l'écran : sous le haut (ressources, frise) et au-dessus du bas (barre des troupes)
-    const x0 = 28, x1 = W - 28, y0 = 130, y1 = H - 190;
+    const cr = c.getBoundingClientRect(), under = this.bar.querySelector('.tgoal')?.getBoundingClientRect(), over = this.bar.querySelector('.tfoot')?.getBoundingClientRect();
+    const x0 = 28, x1 = W - 28, y0 = under ? under.bottom - cr.top + 34 : 130, y1 = Math.max(y0 + 40, over ? over.top - cr.top - 24 : H - 190);
     const inside = sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1;
     let px = sx, py = sy, ang = 0;
     if (!inside) {

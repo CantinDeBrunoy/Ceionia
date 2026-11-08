@@ -226,7 +226,6 @@ registerDict('war', {
   'ouverte : abattez sa forteresse': 'open: destroy its fortress',
   'Centrer': 'Center',
   'Centrer la vue sur l’objectif': 'Center the view on the goal',
-  'Cliquez pour centrer la vue sur l’objectif': 'Click to center the view on the goal',
   'Suivre': 'Follow',
   'La vue suit les troupes envoyées ; déplacer la vue reprend la main': 'The view follows the troops you send; moving the view takes control back',
   'La vue suit vos troupes. Déplacez la vue pour reprendre la main.': 'The view follows your troops. Move the view to take control back.',

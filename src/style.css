@@ -1157,7 +1157,7 @@ body.cinematic #bannerWrap { display: none !important; }
 #troopBar .tgoal .tfa { position: static; transform: none; box-shadow: none; }
 #hellGoal { position: absolute; left: 0; top: 0; z-index: 8; display: none; pointer-events: none; }
 #hellGoal.show { display: block; }
-#hellGoal .hgPin { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); animation: hgbob 1.2s ease-in-out infinite; pointer-events: auto; cursor: pointer; }
+#hellGoal .hgPin { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; font-size: 22px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); animation: hgbob 1.2s ease-in-out infinite; }
 #hellGoal .hgPin b { margin-top: 2px; padding: 2px 8px; border-radius: 999px; background: #fff3d6; color: #8a2a12; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
 #hellGoal .hgArrow { position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; display: none; }
 #hellGoal .hgArrow::before { content: ''; position: absolute; left: 4px; top: 4px; border-left: 24px solid #ffcf4a; border-top: 12px solid transparent; border-bottom: 12px solid transparent; filter: drop-shadow(0 0 4px rgba(255, 120, 40, 0.9)); }
@@ -1168,3 +1168,4 @@ body.cinematic #bannerWrap { display: none !important; }
   #troopBar .tgoal { font-size: 11px; padding: 3px 7px; }
   #troopBar .tgb { min-height: 24px; padding: 0 7px; font-size: 11px; }
 }
+#troopBar .thelp { width: min(400px, calc(100vw - 24px)); font-size: 12px; padding: 8px 12px; gap: 3px 10px; opacity: 0.96; }

@@ -569,7 +569,7 @@ class Game implements UIHost {
       // vue en perspective de trois quarts (pas presque de dessus) ; le clic droit glissé l'incline de 0,28 à 1,5
       // et l'objectif (l'avant-poste, la forteresse) doit entrer dans l'image : la vue se place entre les troupes et lui
       const goal = nextGoal(f, [x, z]), gd = goal.x === undefined ? 0 : Math.hypot(goal.x - x, goal.z! - z);
-      const vx = goal.x !== undefined && gd < 45 ? x + (goal.x - x) * 0.45 : x, vz = goal.x !== undefined && gd < 45 ? z + (goal.z! - z) * 0.45 : z + 1.5;
+      const vx = goal.x !== undefined && gd < 45 ? x + (goal.x - x) * 0.3 : x, vz = goal.x !== undefined && gd < 45 ? z + (goal.z! - z) * 0.3 : z + 1.5;
       this.cam.jump({ x: vx, z: vz, dist: Math.min(30, Math.max(15, 11 + gd * 0.55)), pitch: 0.72, yaw: Math.PI }, hm.view.groundY(vx, vz));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
