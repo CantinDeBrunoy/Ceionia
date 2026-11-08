@@ -662,7 +662,7 @@ export class HellView {
       }
     }
     if (!this.rangeRing) {
-      this.rangeRing = new THREE.Mesh(new THREE.RingGeometry(BASE_R - 0.08, BASE_R + 0.08, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.45, depthWrite: false, fog: false }));
+      this.rangeRing = new THREE.Mesh(new THREE.RingGeometry(BASE_R - 0.1, BASE_R + 0.1, 112).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.45, depthWrite: false, fog: false }));
       this.rangeRing.renderOrder = 8;
       this.content.add(this.rangeRing);
     }

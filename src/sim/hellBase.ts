@@ -32,7 +32,7 @@ export const BASE_KINDS = Object.keys(BASE_DEFS) as BaseKind[];
 export const isBaseKind = (k: unknown): k is BaseKind => typeof k === 'string' && k in BASE_DEFS;
 
 /** Les bâtiments d'une base tiennent à BASE_R cases au plus de son camp ; soins et forge agissent à CARE_R cases d'eux */
-export const BASE_R = 8, CARE_R = 6;
+export const BASE_R = 14, CARE_R = 9;
 /** Un camp de base se pose à CAMP_MARGIN rangées au moins de la zone suivante, si elle est encore aux démons */
 export const CAMP_MARGIN = 6;
 /** Soins par seconde (points de vie) près du camp et de l'infirmerie */
