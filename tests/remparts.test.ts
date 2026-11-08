@@ -54,7 +54,7 @@ describe('bâtiments militaires au village', () => {
     expect(w.canPlace('wall', sea % N, Math.floor(sea / N))).toMatch(/eau|Hors/);
     w.place('house', sx, sz, 0, true, 1, false);
     expect(w.canPlace('wall', sx, sz)).toBe('Emplacement occupé');
-    w.setRoad(sx + 3, sz, true);
+    for (let z = sz - 2; z <= sz + 2; z++) w.setRoad(sx + 3, z, true);
     expect(w.canPlace('wall', sx + 3, sz)).toBe('Une route est déjà ici');
     expect(w.canPlace('watchtower', sx + 3, sz)).toBe('Une route est déjà ici');
     expect(w.canPlace('gate', sx + 3, sz)).toBeNull();
@@ -64,6 +64,26 @@ describe('bâtiments militaires au village', () => {
     w.removeBuilding(gate.id);
     expect(w.road[w.ci(sx + 3, sz)]).toBe(1);
     expect(w.occ[w.ci(sx + 3, sz)]).toBe(0);
+  });
+
+  it('la porte sur une rue : seulement une rue droite (pas de virage, de carrefour ni d’escalier en diagonale), tournée dans son axe', () => {
+    const { w, sx, sz } = setup();
+    // une rue droite nord-sud, un coude, un carrefour, un escalier en diagonale
+    for (let z = sz - 3; z <= sz + 5; z++) w.setRoad(sx, z, true);
+    expect(w.canPlace('gate', sx, sz)).toBeNull();
+    const g = w.place('gate', sx, sz, 0, false, 2, false);
+    expect(gateAlongX(rampartMask(w, g))).toBe(true);
+    w.setRoad(sx + 1, sz + 2, true); w.setRoad(sx + 2, sz + 2, true);
+    expect(w.canPlace('gate', sx, sz + 2)).toMatch(/rue droite/);
+    for (let x = sx - 3; x <= sx + 3; x++) w.setRoad(x, sz + 4, true);
+    expect(w.canPlace('gate', sx, sz + 4)).toMatch(/rue droite/);
+    for (let i = 0; i < 4; i++) { w.setRoad(sx + 3 + i, sz - 3 + i, true); w.setRoad(sx + 4 + i, sz - 3 + i, true); }
+    expect(w.canPlace('gate', sx + 4, sz - 3)).toMatch(/rue droite/);
+    // une rue droite est-ouest : la porte se tourne
+    for (let x = sx - 3; x <= sx + 3; x++) w.setRoad(x, sz - 2, true);
+    w.setRoad(sx, sz - 3, false); w.setRoad(sx, sz - 1, false);
+    const h = w.place('gate', sx, sz - 2, 0, false, 2, false);
+    expect(gateAlongX(rampartMask(w, h))).toBe(false);
   });
 
   it('ni porte ni chemin d’accès pour les remparts ; un pan est bon marché, gratuit en Facile', () => {
@@ -183,6 +203,15 @@ describe('remparts : un modèle détaillé et distinct à chaque âge', () => {
       expect(end.box.min.x).toBeGreaterThan(-0.4);
       expect(corner.box.min.z).toBeLessThan(-0.48);
       expect(corner.n).not.toBe(straight.n);
+    }
+  });
+
+  it('les battants ouverts sont rabattus contre les piédroits : rien dans la chaussée (|x| < 0,27) sous l’arche', () => {
+    for (const age of [1, 2, 3, 4, 5]) {
+      const m = getModel('gate', age, { v: 0, L: false, R: false, F: false, mask: WALL_E | WALL_W }), pos = m.body.attributes.position;
+      let inRoad = 0;
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getX(i)) < 0.27 && pos.getY(i) < 0.45 && Math.abs(pos.getZ(i)) < 0.5) inRoad++;
+      expect(inRoad, `âge ${age}`).toBe(0);
     }
   });
 

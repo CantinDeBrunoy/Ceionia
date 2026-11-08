@@ -342,6 +342,7 @@ registerDict('catalog', {
   '{n} pans posés': '{n} pieces built', 'Un pan posé': 'One piece built',
   ' ({n} cases sautées : routes, bâtiments ou eau)': ' ({n} cells skipped: roads, buildings or water)',
   '. Cliquez plus loin pour prolonger le mur ; Échap : arrêter.': '. Click further away to extend the wall; Esc: stop.',
+  'La porte se pose sur une rue droite : pas dans un virage ni à un carrefour': 'The gate goes on a straight street: not in a bend nor at a crossroads',
   'À cheval sur le rivage de l’île : posez-le tout entier sur l’île': 'Straddling the island’s shore: place it entirely on the island',
   // ---- pluriels (KIND_LABEL)
   'maisons': 'houses',

@@ -259,11 +259,12 @@ export function rampartWall(p: Parts, age: number, mask: number, kit: DefKit) {
 /* et les battants ouverts vers l'intérieur (-z) ; le mur court d'est en ouest, la vue la tourne pour un mur nord-sud         */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
-/** Un battant ouvert, accroché à la tour `s` (−1 : ouest, 1 : est), large de `w`, haut de `h` */
+/**
+ * Un battant grand ouvert, accroché à la tour `s` (−1 : ouest, 1 : est), large de `w`, haut de `h` : rabattu contre le
+ * piédroit, le long du passage (vers -z, l'intérieur), hors de la chaussée (|x| < 0,3) qu'il ne barre jamais
+ */
 function leaf(p: Parts, s: number, w: number, h: number, d: number, color: number, draw?: (q: Parts) => void) {
-  const th = -s * 1.2, c = Math.cos(1.2), sn = Math.sin(1.2);
-  // depuis la charnière (s × 0,3, 0), le battant part vers le centre et pivote vers -z
-  const cx = s * 0.3 - s * c * (w / 2), cz = -sn * (w / 2);
+  const th = -s * (PI / 2), cx = s * (0.3 + d / 2 + 0.006), cz = -0.1 - w / 2;
   p.box(w, h, d, cx, 0.02, cz, color, th);
   if (draw) { const q = new Parts(); draw(q); for (const g of q.body) p.body.push(g.rotateY(th).translate(cx, 0, cz)); for (const g of q.glow) p.glow.push(g.rotateY(th).translate(cx, 0, cz)); }
 }
@@ -303,7 +304,7 @@ function gateStone(p: Parts, kit: DefKit) {
     torch(p, s * 0.28, 0.5, 0.1);
   }
   // l'arc en plein cintre, les mâchicoulis, le chemin de ronde crénelé au-dessus, la herse relevée
-  p.add(new THREE.TorusGeometry(0.3, 0.05, 6, 14, PI), 0, 0.44, 0, edge);
+  p.add(new THREE.TorusGeometry(0.3, 0.045, 6, 14, PI), 0, 0.5, 0, edge);
   p.box(0.6, 0.12, 0.2, 0, 0.74, 0, stone); p.box(0.64, 0.03, 0.24, 0, 0.86, 0, edge);
   for (let i = 0; i < 5; i++) p.box(0.04, 0.04, 0.04, -0.24 + i * 0.12, 0.7, 0.1, dark);
   for (const x of [-0.18, 0, 0.18]) p.box(0.09, 0.08, 0.06, x, 0.89, 0.08, stone);
@@ -371,7 +372,7 @@ function gateConcrete(p: Parts, kit: DefKit) {
 function gateEnergy(p: Parts, kit: DefKit) {
   const white = 0xdfe6ee, cyan = 0x40f0ff, dkc = 0x4a5664;
   for (const s of [-1, 1]) {
-    p.cyl(0.12, 0.14, 0.05, 8, s * 0.4, 0, 0, dkc); p.add(new THREE.TorusGeometry(0.125, 0.006, 4, 12).rotateX(PI / 2), s * 0.4, 0.055, 0, cyan, 0, 'neon');
+    p.cyl(0.1, 0.11, 0.05, 8, s * 0.4, 0, 0, dkc); p.add(new THREE.TorusGeometry(0.105, 0.006, 4, 12).rotateX(PI / 2), s * 0.4, 0.055, 0, cyan, 0, 'neon');
     p.cyl(0.07, 0.1, 1.0, 8, s * 0.4, 0.05, 0, white);
     for (const y of [0.15, 0.55, 0.9]) p.add(new THREE.TorusGeometry(0.1, 0.01, 4, 12).rotateX(PI / 2), s * 0.4, y, 0, cyan, 0, 'neon');
     for (let i = 0; i < 4; i++) { const a = (i * PI) / 2 + PI / 4; p.box(0.03, 0.7, 0.03, s * 0.4 + Math.sin(a) * 0.09, 0.2, Math.cos(a) * 0.09, dkc, a); }
