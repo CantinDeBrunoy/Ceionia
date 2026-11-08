@@ -34,7 +34,7 @@ export const EASE_LOSS = 0.82;
 /** Plafond d'ennemis dans une vague (le rendu en tient bien davantage) */
 export const WAVE_MAX = 160;
 /** Une zone d'Enfers qui se réveille se renforce de cette part de la puissance du joueur présent */
-export const GARRISON_RATIO = 0.7;
+export const GARRISON_RATIO = 1;
 /** Une unité du joueur ne pèse pas plus que ça dans le calcul (un soldat aux points de vie truqués ne doit pas déclencher une armée) */
 export const MAX_UNIT_POWER = 300;
 /** Une vague qui suit la sécurisation de l'île : de simples escarmouches */

@@ -420,7 +420,7 @@ export class Hell {
     this.reinforced[zone] = pp;
     let have = 0;
     for (const u of this.units.values()) if (u.hp > 0 && u.side === 'hell' && u.zone === zone) have += powerOf(u.stats);
-    const want = pp * GARRISON_RATIO * this.balance.k - have;
+    const want = pp * GARRISON_RATIO * Math.min(1, 0.35 + 0.13 * zone) * this.balance.k - have;
     if (want <= 0) return;
     const age = Math.min(5, Math.max(ZONE_AGE[zone] ?? 1, tierAge(this.age) - 1));
     const kinds = compose(want, 4 + zone, age, DEMON_POWER).slice(0, 80);
