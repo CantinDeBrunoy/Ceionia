@@ -468,15 +468,15 @@ export const KINDS: Record<KindId, KindDef> = {
     id: 'wall', size: 1, minAge: 1, icon: '🧱', cat: 'war',
     names: ['', 'Palissade', 'Muraille', 'Enceinte de brique', 'Mur de béton', 'Mur d’énergie'],
     desc: 'Un rempart qui ferme la ville, tracé d’un trait : un clic au point A, un clic au point B. Il s’interrompt de lui-même là où passe une route.',
-    perk: 'Débloqué par l’expédition « Le portail de l’autre rive ». Les pans se raccordent entre eux, avec un poteau ou une tourelle aux bouts et aux angles ; une porte ferme les passages. Décor : il ne gêne ni les habitants ni les véhicules.',
-    reqMission: 'portal',
+    perk: 'Il faut d’abord une tour de garde. Les pans se raccordent entre eux, avec un poteau ou une tourelle aux bouts et aux angles ; une porte ferme les passages. Décor : il ne gêne ni les habitants ni les véhicules.',
+    reqKind: 'watchtower',
   },
   gate: {
     id: 'gate', size: 1, minAge: 1, icon: '🚪', cat: 'war',
     names: ['', 'Porte de palissade', 'Porte fortifiée', 'Porte de fer', 'Portail blindé', 'Porte à champ de force'],
     desc: 'La porte de la ville : deux tours et un passage, à poser dans un rempart ou en travers d’une route.',
-    perk: 'Débloquée par l’expédition « Le portail de l’autre rive ». Se pose sur une case libre ou sur une route (elle l’enjambe, battants ouverts) ; elle se tourne d’elle-même dans l’axe du mur.',
-    reqMission: 'portal',
+    perk: 'Il faut d’abord une tour de garde. Se pose sur une case libre ou sur une route (elle l’enjambe, battants ouverts) ; elle se tourne d’elle-même dans l’axe du mur.',
+    reqKind: 'watchtower',
   },
 };
 

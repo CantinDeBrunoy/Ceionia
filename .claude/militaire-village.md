@@ -2,8 +2,9 @@
 
 Décisions prises (le plus simple, cohérent avec l'existant) :
 
-- **Déblocage** : tout l'onglet Militaire s'ouvre avec l'expédition « Le portail de l'autre rive » (Antiquité), comme
-  aujourd'hui ; la caserne demande toujours une première tour de garde. Remparts et portes : même expédition.
+- **Déblocage** : l'onglet Militaire s'ouvre avec l'expédition « Le portail de l'autre rive » (Antiquité), qui débloque la
+  tour de garde, comme aujourd'hui ; caserne, remparts et porte demandent ensuite une première tour de garde (règle
+  `reqKind`, la même que pour la caserne : une seule expédition, un seul « d'abord la tour »).
 - **Où bâtir** : tour de garde, caserne, rempart et porte se posent partout sur la terre ferme (village et île du portail).
   Sur l'île, on ne bâtit toujours que ces défenses, portail ouvert (`World.portalRule` inchangé pour le reste).
 - **Les murs et les habitants** : un rempart ne se pose jamais sur une route (`canPlace`) : le tracé libre saute les cases de
