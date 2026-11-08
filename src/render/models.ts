@@ -12215,14 +12215,21 @@ export function shark(p: Parts, big = false) {
   body.computeVertexNormals();
   p.body.push(body);
   // le grand aileron dorsal, un second plus petit, l'aileron anal
-  p.add(new THREE.ConeGeometry(0.058, big ? 0.24 : 0.2, 3).scale(0.2, 1, 1), 0, 0.09 + (big ? 0.12 : 0.1) * 0.82, 0.03, fin, 0, false, 0, -0.38);
-  p.add(new THREE.ConeGeometry(0.026, 0.07, 3).scale(0.2, 1, 1), 0, 0.075, -0.12, fin, 0, false, 0, -0.5);
-  p.add(new THREE.ConeGeometry(0.02, 0.06, 3).scale(0.2, 1, 1), 0, -0.095, -0.13, fin, 0, false, 0, 0.5);
+  // les nageoires : des plaques minces découpées dans un profil (u, v), jamais des cônes tournés dans tous les sens
+  const plate = (pts: number[][], thick: number) => new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v))), { depth: thick, bevelEnabled: false }).translate(0, 0, -thick / 2);
+  // verticales (dorsale, caudale) : profil (z, y), mince en x ; rotateY(π/2) donne x' = z, z' = -x
+  const vertical = (pts: number[][], thick: number) => plate(pts.map(([z, y]) => [-z, y]), thick).rotateY(Math.PI / 2);
+  // horizontales (pectorales) : profil (x, z), mince en y ; rotateX(π/2) donne y' = -z, z' = y
+  const flat = (pts: number[][], thick: number) => plate(pts, thick).rotateX(Math.PI / 2);
+  // la dorsale triangulaire, haute d'un sixième de la longueur environ et courbée vers l'arrière ; une seconde plus petite, l'anale
+  const dh = big ? 0.11 : 0.1;
+  p.add(vertical([[0.085, 0.082], [-0.012, 0.09 + dh], [-0.03, 0.09 + dh * 0.42], [-0.058, 0.082]], 0.012), 0, 0, 0, fin);
+  p.add(vertical([[-0.115, 0.05], [-0.14, 0.084], [-0.16, 0.044]], 0.008), 0, 0, 0, fin);
+  p.add(vertical([[-0.115, -0.05], [-0.14, -0.08], [-0.158, -0.044]], 0.008), 0, 0, 0, fin);
   // les pectorales : grandes, en faux, vers l'arrière et le bas
-  for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.04, 0.18, 3).scale(1, 1, 0.22), s * 0.12, -0.07, 0.07, fin, 0, false, -s * 2.0, -0.35);
-  // la queue en croissant : un grand lobe en haut, un plus court en bas
-  p.add(new THREE.ConeGeometry(0.04, 0.17, 3).scale(0.22, 1, 1), 0, 0.075, -0.318, fin, 0, false, 0, -0.65);
-  p.add(new THREE.ConeGeometry(0.03, 0.12, 3).scale(0.22, 1, 1), 0, -0.05, -0.305, fin, 0, false, 0, -2.5);
+  for (const s of [-1, 1]) p.add(flat([[0, 0.04], [s * 0.125, -0.05], [s * 0.078, 0], [0, -0.025]], 0.008), s * 0.075, -0.052, 0.07, fin, 0, false, -s * 0.28);
+  // la queue en croissant, dans l'axe : le lobe du haut plus long que celui du bas
+  p.add(vertical([[-0.25, 0.014], [-0.325, 0.125], [-0.31, 0.02], [-0.33, -0.088], [-0.25, -0.014]], 0.012), 0, 0, 0, fin);
   // les yeux (un point noir cerclé de clair), les narines, cinq fentes de branchies de chaque côté
   for (const s of [-1, 1]) {
     p.sphere(0.013, s * 0.058, 0.026, 0.205, 0xe9eef0);
@@ -12232,13 +12239,12 @@ export function shark(p: Parts, big = false) {
   }
   // la gueule : un bandeau sombre sous le museau, une rangée de dents en haut (pointes vers le bas) et en bas (vers le haut)
   p.box(0.07, 0.012, 0.1, 0, -0.066, 0.17, 0x5a2a36);
-  p.box(0.06, 0.012, 0.09, 0, -0.078, 0.17, belly);
-  const teeth = big ? 8 : 5, size = big ? 1.25 : 1;
-  for (let i = 0; i < teeth; i++) for (const s of [-1, 1]) {
-    const z = 0.245 - i * (big ? 0.02 : 0.028), x = s * (0.012 + i * (big ? 0.0065 : 0.009));
-    p.add(new THREE.ConeGeometry(0.0085 * size, 0.032 * size, 3).rotateX(Math.PI), x, -0.07, z, 0xffffff);
-    if (i % 2 === 0) p.add(new THREE.ConeGeometry(0.007 * size, 0.024 * size, 3), x * 0.9, -0.064, z - 0.01, 0xfdfdf2);
-  }
+  // les dents en U autour de la gueule : le long des deux côtés puis en travers du museau, pointes vers le bas
+  const side = big ? 6 : 4, size = big ? 1.25 : 1, tooth = (x: number, z: number) => p.add(new THREE.ConeGeometry(0.0085 * size, 0.034 * size, 3).translate(0, -0.017 * size, 0), x, -0.064, z, 0xffffff);
+  for (let i = 0; i < side; i++) for (const s of [-1, 1]) tooth(s * 0.036, 0.205 - i * (0.075 / side));
+  for (const x of [-0.024, -0.008, 0.008, 0.024]) tooth(x, 0.222 - Math.abs(x) * 0.5);
+  // les dents du bas, plus petites, entre les autres
+  for (let i = 0; i < side; i++) for (const s of [-1, 1]) p.add(new THREE.ConeGeometry(0.007 * size, 0.022 * size, 3).translate(0, 0.011 * size, 0), s * 0.03, -0.078,0.205 - (i + 0.5) * (0.075 / side), 0xfdfdf2);
   // le mégalodon : des balafres claires sur le flanc, de vieilles cicatrices
   if (big) for (let i = 0; i < 3; i++) for (const s of [-1, 1]) p.box(0.004, 0.026, 0.05, s * 0.088, 0 - i * 0.012, 0.06 - i * 0.045, 0xb9c4cc, 0.35 * s);
 }
