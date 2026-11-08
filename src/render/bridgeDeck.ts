@@ -1,3 +1,5 @@
+import { World, N } from '../world/world';
+
 /**
  * Profil en long du tablier d'un petit pont : plat au-dessus de l'eau (et un peu sur les rives), rampes douces jusqu'au pied
  * du chemin aux deux bouts, jamais sous le sol.
@@ -20,4 +22,54 @@ export function deckProfile(S: number[], wet: boolean[], ground: number[], deckY
     return Math.max(v, ground[i] + 0.03);
   });
   return { y, a, b, deck: dk };
+}
+
+const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+/** Combien de cases sèches au plus un pont enjambe d'un seul tenant entre deux bras d'eau le long de la même route */
+export const MAX_DRY_GAP = 4;
+
+/**
+ * Cases de route portées par un pont : celles qui passent sur l'eau (vraie eau, pas une flaque), et les cases sèches prises
+ * entre deux d'entre elles le long de la même route (quatre au plus, tant que le sol n'y dépasse pas le tablier de plus d'une
+ * demi-case) : un ruisseau qui serpente sous la route la mouille par endroits, on n'y jette qu'un seul ouvrage d'une rive à
+ * l'autre, dans l'axe de la route, au lieu de plusieurs petits ponts rapprochés
+ */
+export function bridgeCells(w: World): Set<number> {
+  const out = new Set<number>();
+  const road = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1;
+  for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) if (road(cx, cz) && w.bridgeY(cx, cz) !== null) out.add(w.ci(cx, cz));
+  const nbrs = (k: number) => D4.map(([dx, dz]) => [(k % N) + dx, Math.floor(k / N) + dz]).filter(([x, z]) => road(x, z)).map(([x, z]) => w.ci(x, z));
+  for (const k of [...out]) for (const first of nbrs(k)) {
+    // on suit la route depuis le pont, case sèche après case sèche, tant qu'elle ne bifurque pas
+    const gap: number[] = [];
+    let prev = k, cur = first;
+    for (let step = 0; step <= MAX_DRY_GAP; step++) {
+      if (out.has(cur)) { for (const c of gap) out.add(c); break; }
+      const n = nbrs(cur);
+      if (n.length !== 2 || step === MAX_DRY_GAP) break;
+      // une colline entre deux bras : pas de tablier perché dessus
+      if (w.cellAvg(cur % N, Math.floor(cur / N)) > (w.bridgeY(k % N, Math.floor(k / N)) ?? 0) + 0.5) break;
+      gap.push(cur);
+      const next = n[0] === prev ? n[1] : n[0];
+      prev = cur; cur = next;
+    }
+  }
+  return out;
+}
+
+/** Ouvrages d'art : groupes de cases de route portées par un pont, voisines entre elles (4-voisinage) */
+export function bridgeGroups(w: World, cells: Set<number> = bridgeCells(w)): number[][] {
+  const seen = new Set<number>(), out: number[][] = [];
+  for (const k of cells) {
+    if (seen.has(k)) continue;
+    const g = [k];
+    seen.add(k);
+    for (let i = 0; i < g.length; i++) {
+      const x = g[i] % N, z = Math.floor(g[i] / N);
+      for (const [dx, dz] of D4) { if (!w.inCells(x + dx, z + dz)) continue; const n = w.ci(x + dx, z + dz); if (cells.has(n) && !seen.has(n)) { seen.add(n); g.push(n); } }
+    }
+    out.push(g);
+  }
+  return out;
 }

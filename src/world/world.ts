@@ -805,11 +805,17 @@ export class World {
     return (this.lake[k] ? this.lakeLevel[k] : SEA) + 0.32;
   }
 
+  /** Eau qu'il faut vraiment franchir : ni une flaque, ni une rive qui trempe à peine (là, la route reste sur le sol) */
+  realWater(cx: number, cz: number) {
+    return this.lake[this.ci(cx, cz)] === 1 || this.cellAvg(cx, cz) < 0.02 || this.cellMin(cx, cz) <= -0.2;
+  }
+
   bridgeY(cx: number, cz: number): number | null {
     if (!this.inCells(cx, cz)) return null;
     const k = this.ci(cx, cz);
-    if (!this.road[k] || !this.isWet(cx, cz)) return null;
-    return (this.lake[k] ? this.lakeLevel[k] : SEA) + 0.32;
+    if (!this.road[k] || !this.realWater(cx, cz)) return null;
+    // tablier mince, presque au ras de l'eau : il ne monte que si la rive est plus haute (le dessin le relève alors)
+    return (this.lake[k] ? this.lakeLevel[k] : SEA) + 0.24;
   }
 
   /**

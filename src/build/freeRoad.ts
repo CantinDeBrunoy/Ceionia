@@ -39,9 +39,11 @@ export function planRoad(w: World, ax: number, az: number, bx: number, bz: numbe
     i = j;
   }
   // la ligne la plus douce qui passe : trois passes de Chaikin, sinon moins, sinon la ligne brisée
+  // (jamais plus d'eau neuve que le chemin cherché : une courbe qui rogne un coin ne doit pas mouiller une case de plus)
+  const wetN = (ks: number[]) => ks.filter((k) => w.isWet(k % N, Math.floor(k / N)) && !w.road[k]).length, base = wetN(cells);
   for (const it of [3, 2, 1, 0]) {
     const pts = chaikin(keep, it).flat();
-    if (it === 0 || fits(w, pts, false)) return { pts, cells: unique(rasterize(pts, N)), why: null };
+    if (it === 0 || (fits(w, pts, false) && wetN(unique(rasterize(pts, N))) <= base)) return { pts, cells: unique(rasterize(pts, N)), why: null };
   }
   return straight('Pas de passage.');
 }
@@ -57,7 +59,8 @@ function cost(w: World, k: number) {
   if (v === VEG_FOREST) c += 1.5;
   else if (v === VEG_ROCKS) c += 1;
   else if (v === VEG_FIELD || v === VEG_GARDEN) c += 4;
-  if (w.isWet(x, z)) c += 4;
+  // l'eau se franchit en pont, cher ; un pont déjà posé se réutilise sans surcoût
+  if (w.isWet(x, z) && !w.road[k]) c += 8;
   // une route existante se croise, on ne la longe pas
   if (w.road[k]) c += 1.5;
   // on garde ses distances avec les bâtiments
@@ -90,7 +93,11 @@ function search(w: World, a: number, b: number): number[] | null {
       const dh = Math.abs(w.cellAvg(nx, nz) - hc);
       if (dh > STEP_H && !w.isWet(nx, nz) && !w.isWet(x, z)) continue;
       if (dx && dz && (!isFinite(costAt(z * N + nx)) || !isFinite(costAt(nz * N + x)))) continue;
-      const nd = dc + cn * (dx && dz ? Math.SQRT2 : 1) + dh * 3;
+      // en diagonale entre deux cases sèches, on ne rogne pas le coin d'une case d'eau (la ligne la mouillerait : un pont de plus)
+      if (dx && dz && !w.isWet(x, z) && !w.isWet(nx, nz) && (w.isWet(nx, z) || w.isWet(x, nz))) continue;
+      // un nouveau franchissement (de la terre à l'eau, hors pont existant) coûte très cher : peu de ponts, et courts
+      const cross = w.isWet(nx, nz) && !w.road[n] && !(w.isWet(x, z) || w.road[c]) ? 12 : 0;
+      const nd = dc + cn * (dx && dz ? Math.SQRT2 : 1) + dh * 3 + cross;
       if (nd < dist[loc(n)]) { dist[loc(n)] = nd; prev[loc(n)] = c; heap.push(nd + h(n), n); }
     }
   }

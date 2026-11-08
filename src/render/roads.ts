@@ -1,4 +1,4 @@
-import { deckProfile } from './bridgeDeck';
+import { deckProfile, bridgeCells } from './bridgeDeck';
 import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { hash2 } from '../core/rng';
@@ -26,9 +26,9 @@ const HW = [0.21, 0.25, 0.27, 0.3, 0.32];
 const WIGGLE = [0.32, 0.25, 0.14, 0, 0], WIDTH_VAR = [0.22, 0.18, 0.12, 0, 0], FRAY = [0.035, 0.03, 0.02, 0, 0];
 /** Rayon des bordures arrondies aux coins des carrefours */
 const FILLET = 0.12;
-/** Ponts : tablier de bois, puis de pierre, puis d'acier ; piles et garde-corps */
-const DECK_COL = [0x9a7452, 0xa27c58, 0x8f7c66, 0xa39d95, 0xb4b9c0].map((c) => new THREE.Color(c));
-const PILE_COL = [0x6f5640, 0x6f5640, 0x8a8178, 0x8a8178, 0x7d838c].map((c) => new THREE.Color(c));
+/** Ponts : tablier de bois clair (âges 0 à 2), de pierre (3), de bitume sur béton (4) ; piles et culées */
+const DECK_COL = [0xb48c5c, 0xb48c5c, 0xa88454, 0x8c8479, 0x5d6169].map((c) => new THREE.Color(c));
+const PILE_COL = [0x7a5a3e, 0x7a5a3e, 0x7a5a3e, 0x8a8178, 0xb9b6ae].map((c) => new THREE.Color(c));
 /** neige des chemins : la teinte de la neige des champs (une neige plus blanche y dessinerait des plaques crues) */
 const SNOW = new THREE.Color(0xe9f0f8);
 const PEBBLE = [0xb3aba1, 0x9d9890, 0xc8c2b8].map((c) => new THREE.Color(c));
@@ -382,32 +382,9 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     return { cells: [...(head !== undefined ? [head] : []), ...order, ...(tail !== undefined ? [tail] : [])], head: head !== undefined, tail: tail !== undefined };
   }
 
-  /**
-   * Cases de route portées par un pont : celles qui passent sur l'eau, et les cases sèches prises entre deux d'entre elles le long
-   * de la même route (deux au plus) : un ruisseau qui serpente sous la route la mouille par endroits, on n'y jette qu'un seul
-   * ouvrage d'une rive à l'autre, dans l'axe de la route, au lieu de petits ponts chacun de travers
-   */
+  /** Cases de route portées par un pont (voir `bridgeCells` : les ponts voisins d'un même ruisseau n'en font qu'un) */
   private bridged = new Set<number>();
-  private findBridged() {
-    const w = this.world, out = new Set<number>();
-    const road = (x: number, z: number) => w.inCells(x, z) && w.road[w.ci(x, z)] === 1;
-    for (let cz = 0; cz < N; cz++) for (let cx = 0; cx < N; cx++) if (road(cx, cz) && w.bridgeY(cx, cz) !== null) out.add(w.ci(cx, cz));
-    const nbrs = (k: number) => D4.map(([dx, dz]) => [(k % N) + dx, Math.floor(k / N) + dz]).filter(([x, z]) => road(x, z)).map(([x, z]) => w.ci(x, z));
-    for (const k of [...out]) for (const first of nbrs(k)) {
-      // on suit la route depuis le pont, case sèche après case sèche, tant qu'elle ne bifurque pas
-      const gap: number[] = [];
-      let prev = k, cur = first;
-      for (let step = 0; step < 3; step++) {
-        if (out.has(cur)) { for (const c of gap) out.add(c); break; }
-        const n = nbrs(cur);
-        if (n.length !== 2 || step === 2) break;
-        gap.push(cur);
-        const next = n[0] === prev ? n[1] : n[0];
-        prev = cur; cur = next;
-      }
-    }
-    this.bridged = out;
-  }
+  private findBridged() { this.bridged = bridgeCells(this.world); }
 
   /**
    * Routes en courbe : pour chaque case de route qu'une courbe traverse (hors ponts), les morceaux de sa ligne qui y passent,
@@ -1017,7 +994,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       for (const i of BOX_TRIS) { const p = v[i]; sp.push(p[0], p[1], p[2]); sc.push(cl.r, cl.g, cl.b); }
     };
     // tablier des ponts : teinte sans neige ; ses sommets sont notés pour que la neige s'y pose ensuite sans tout refaire
-    const deck = DECK_COL[a].clone(), pile = PILE_COL[a];
+    const deck = DECK_COL[a].clone(), pile = age >= 5 ? new THREE.Color(0xe9eef2) : PILE_COL[a];
+    if (age >= 5) deck.set(0xeef2f5);
     const deckV: number[] = [], plank = new THREE.Color();
     let plankM = 1;
     const noteDeck = (cl: THREE.Color, n: number) => {
@@ -1051,6 +1029,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       if (ew && !ns) for (const z of [z0 + 0.015, z1 - 0.015]) { box(x0, y + 0.1, z - 0.012, x1, y + 0.13, z + 0.012, rail); for (let x = x0 + 0.05; x < x1; x += 0.3) box(x - 0.012, y, z - 0.012, x + 0.012, y + 0.1, z + 0.012, rail); }
       if (ns && !ew) for (const x of [x0 + 0.015, x1 - 0.015]) { box(x - 0.012, y + 0.1, z0, x + 0.012, y + 0.13, z1, rail); for (let z = z0 + 0.05; z < z1; z += 0.3) box(x - 0.012, y, z - 0.012, x + 0.012, y + 0.1, z + 0.012, rail); }
     };
+    /** lumières (liserés des ponts, lampes) : sommets et couleurs du maillage lumineux */
+    const gp: number[] = [], gc: number[] = [];
     /** lanternes au bout des petits ponts : x, hauteur du tablier, z, direction vers l'extérieur */
     const bridgePosts: number[][] = [];
     /** Pavé orienté : centre (x, z), axe (ux, uz) sur ±hu, en travers sur ±hv, de y0 à y1 */
@@ -1062,19 +1042,66 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         for (const i of [f[0], f[1], f[2], f[0], f[2], f[3]]) { sp.push(...v[i]); sc.push(cl.r, cl.g, cl.b); }
     };
     const quad = (q: number[][], cl: THREE.Color) => { noteDeck(cl, 6); for (const i of [0, 1, 2, 0, 2, 3]) { sp.push(...q[i]); sc.push(cl.r, cl.g, cl.b); } };
+    /** Poutre de section rectangulaire d'un point à un autre : demi-largeur `hu` (à l'horizontale), demi-hauteur `hv` */
+    const beam = (a: number[], b: number[], hu: number, hv: number, cl: THREE.Color, glow = false) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], l = Math.hypot(dx, dy, dz);
+      if (l < 1e-5) return;
+      const ux = dx / l, uy = dy / l, uz = dz / l;
+      let sx = uz, sz = -ux;
+      const sl = Math.hypot(sx, sz);
+      if (sl < 1e-4) { sx = 1; sz = 0; } else { sx /= sl; sz /= sl; }
+      const vx = uy * sz, vy = uz * sx - ux * sz, vz = -uy * sx;
+      const o = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+      const corner = (p: number[], s: number, t: number) => [p[0] + sx * hu * s + vx * hv * t, p[1] + vy * hv * t, p[2] + sz * hu * s + vz * hv * t];
+      const v = [...o.map(([s, t]) => corner(a, s, t)), ...o.map(([s, t]) => corner(b, s, t))];
+      const P = glow ? gp : sp, Cc = glow ? gc : sc;
+      if (!glow) noteDeck(cl, 36);
+      for (const f of [[0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [1, 5, 6, 2], [2, 6, 7, 3], [3, 7, 4, 0]])
+        for (const i of [f[0], f[1], f[2], f[0], f[2], f[3]]) { P.push(...v[i]); Cc.push(cl.r, cl.g, cl.b); }
+    };
     /**
-     * Pont simple : un axe qui part du pied de la rampe, sur le chemin de la rive, coupe les virages comme les habitants
-     * (diagonale d'un tracé en escalier), rejoint l'autre rive ; adouci, puis tablier en ruban, garde-corps et piles
+     * Pont : UN tablier continu d'une rive à l'autre, dans l'axe de la route (il suit sa courbe par petits tronçons), de la largeur
+     * de la chaussée, mince, au niveau des rives (rampes très douces seulement si la rive est plus haute que l'eau). Selon l'âge :
+     * passerelle de bois (âges 0 à 2), pierre et fonte (3), béton, bitume marqué et glissières d'acier (4), tablier blanc à
+     * liserés lumineux et haubans (5). Piles seulement pour une vraie portée (plus de 3 cases) ; culées aux deux rives
      */
     const smoothBridge = (ch: { cells: number[]; head: boolean; tail: boolean }) => {
-      const cells = ch.cells, hw = hw0 + 0.03, th = 0.055;
+      const cells = ch.cells, modern = a >= 4, fut = age >= 5, stone = a === 3;
+      const hw = hw0 + (modern ? 0.06 : 0.03), th = 0.12;
+      const K = (c: number) => new THREE.Color(c);
+      const steel = K(fut ? 0xf2f6f9 : 0x9aa0a8), concrete = K(fut ? 0xf4f6f8 : 0xdedbd4), white = K(0xf3f3ee), glowC = K(0x8fe6ff);
+      const edge = modern || stone ? pile : deck.clone().multiplyScalar(0.78);
+      const rail = a <= 2 ? pile : stone ? K(0xa39d95) : steel;
       let spanA = 0, spanB = 0;
       const xz = (c: number) => [c % N, Math.floor(c / N)];
       const i0 = ch.head ? 1 : 0, i1 = cells.length - (ch.tail ? 2 : 1);
       // le tablier à la hauteur de l'eau la plus haute qu'il franchit (les cases sèches entre deux bras n'en ont pas)
       const deckY = Math.max(...cells.slice(i0, i1 + 1).map((c) => w.bridgeY(c % N, Math.floor(c / N)) ?? -Infinity));
-      const pts: number[][] = [];
-      for (let i = i0; i <= i1; i++) { const [px, pz] = w.passPoint(cells, i); pts.push([px, deckY, pz]); }
+      let pts: number[][] = [];
+      // route en courbe : l'axe est la ligne même de la courbe, d'une rive à l'autre (jamais le chapelet des centres de cases)
+      const ids = cells.slice(i0, i1 + 1).map((c) => w.curveAt(c)?.ids ?? []);
+      const cid = ids.length ? ids[0].find((id) => ids.every((l) => l.includes(id))) : undefined, curve = cid === undefined ? undefined : w.curves.find((c) => c.id === cid);
+      let along = false;
+      if (curve) {
+        const sm = sampleCurve(curve.pts), inner = new Set(cells.slice(i0, i1 + 1)), at = (i: number) => w.ci(Math.floor(sm[i * 2]), Math.floor(sm[i * 2 + 1]));
+        const m = sm.length / 2;
+        let f = -1, l = -1;
+        for (let i = 0; i < m; i++) if (inner.has(at(i))) { if (f < 0) f = i; l = i; }
+        if (f >= 0 && l > f) {
+          // jusqu'au pied de la rampe : les échantillons qui restent dans la case de la rive
+          const hd = ch.head ? cells[0] : -1, tl = ch.tail ? cells[cells.length - 1] : -1;
+          while (f > 0 && at(f - 1) === hd) f--;
+          while (l < m - 1 && at(l + 1) === tl) l++;
+          for (let i = f; i <= l; i++) pts.push([sm[i * 2], deckY, sm[i * 2 + 1]]);
+          // la ligne court dans un sens ou dans l'autre : le pied « tête » est celui qui est dans la case de tête
+          const ref = xz(ch.head ? cells[0] : cells[cells.length - 1]), dd = (q: number[]) => Math.hypot(q[0] - ref[0] - 0.5, q[2] - ref[1] - 0.5);
+          if (ch.head ? dd(pts[pts.length - 1]) < dd(pts[0]) : dd(pts[pts.length - 1]) > dd(pts[0])) pts.reverse();
+          if (ch.head) pts[0][1] = w.hAt(pts[0][0], pts[0][2]) + 0.04;
+          if (ch.tail) pts[pts.length - 1][1] = w.hAt(pts[pts.length - 1][0], pts[pts.length - 1][2]) + 0.04;
+          along = true;
+        }
+      }
+      if (!along) for (let i = i0; i <= i1; i++) { const [px, pz] = w.passPoint(cells, i); pts.push([px, deckY, pz]); }
       // aux deux bouts : rampe jusqu'au chemin de la rive, ou tablier qui s'arrête au-dessus de l'eau
       const cap = (bank: number | undefined, first: number, toward: number[], atStart: boolean) => {
         const [fx, fz] = xz(first);
@@ -1090,9 +1117,11 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         }
       };
       const [ex, ez] = xz(cells[cells.length - 1]);
-      cap(ch.head ? cells[0] : undefined, cells[i0], pts.length > 1 ? pts[1] : [ex + 0.5, 0, ez + 0.5], true);
-      cap(ch.tail ? cells[cells.length - 1] : undefined, cells[i1], pts[pts.length - 2], false);
-      // adoucir l'axe (deux passes de Chaikin, bouts fixes)
+      if (!along) {
+        cap(ch.head ? cells[0] : undefined, cells[i0], pts.length > 1 ? pts[1] : [ex + 0.5, 0, ez + 0.5], true);
+        cap(ch.tail ? cells[cells.length - 1] : undefined, cells[i1], pts[pts.length - 2], false);
+      }
+      // adoucir l'axe (deux passes de Chaikin, bouts fixes), puis le recouper en tronçons courts : le tablier suit la courbe
       let line = pts;
       for (let it = 0; it < 2; it++) {
         const out = [line[0]];
@@ -1103,6 +1132,14 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         out.push(line[line.length - 1]);
         line = out;
       }
+      {
+        const out = [line[0]];
+        for (let i = 0; i + 1 < line.length; i++) {
+          const p = line[i], q = line[i + 1], m = Math.ceil(Math.hypot(q[0] - p[0], q[2] - p[2]) / 0.2);
+          for (let k = 1; k <= m; k++) out.push(p.map((v, c) => v + (q[c] - v) * (k / m)));
+        }
+        line = out;
+      }
       // profil en long : tablier plat au-dessus de l'eau (et un peu sur les rives), rampes douces jusqu'au sol aux deux bouts
       const n = line.length, L: number[][] = [], R: number[][] = [], wet: boolean[] = [];
       const S = [0];
@@ -1111,47 +1148,98 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       line.forEach((c, i) => { c[1] = prof.y[i]; });
       spanA = prof.a; spanB = prof.b;
       for (let i = 0; i < n; i++) {
-        const p = line[Math.max(0, i - 1)], q = line[Math.min(n - 1, i + 1)], tx = q[0] - p[0], tz = q[2] - p[2], tl = Math.hypot(tx, tz) || 1;
+        // tangente moyennée sur quelques points : pas de coude ni de pli du ruban
+        const p = line[Math.max(0, i - 2)], q = line[Math.min(n - 1, i + 2)], tx = q[0] - p[0], tz = q[2] - p[2], tl = Math.hypot(tx, tz) || 1;
         const nx = -tz / tl, nz = tx / tl, c = line[i];
         L.push([c[0] + nx * hw, c[1], c[2] + nz * hw]); R.push([c[0] - nx * hw, c[1], c[2] - nz * hw]);
         wet.push(S[i] >= spanA && S[i] <= spanB);
       }
-      const rail = age >= 4 ? deck : pile;
-      let run = 0, nextPost = 0.05, nextPile = spanA + 0.6;
-      // appuis sous le tablier seulement pour une vraie portée : un petit pont se pose sur ses rives
-      const longSpan = spanB - spanA > 1.5;
+      const seek = (s: number): [number, number] => {
+        let i = 0;
+        while (i < n - 2 && S[i + 1] < s) i++;
+        return [i, Math.max(0, Math.min(1, (s - S[i]) / (S[i + 1] - S[i] || 1)))];
+      };
+      const lerp = (A: number[], B: number[], t: number) => A.map((v, k) => v + (B[k] - v) * t);
+      const onS = (s: number, at: number[][]) => { const [i, t] = seek(s); return lerp(at[i], at[i + 1], t); };
+      const up = (p: number[], dy: number) => [p[0], p[1] + dy, p[2]];
+      const down = (v: number[]) => [v[0], v[1] - th, v[2]];
+      /** point du tablier à la fraction `f` de la largeur (-1 : bord droit, 1 : bord gauche) au tronçon i */
+      const lat = (i: number, f: number, dy = 0) => [line[i][0] + (L[i][0] - line[i][0]) * f, line[i][1] + dy, line[i][2] + (L[i][2] - line[i][2]) * f];
+      const span = spanB - spanA;
+      const longSpan = span > 3, bigSpan = span > 4;
+      let run = 0, nextPost = 0.05, nextPile = spanA + 0.7, nextDash = 0.1;
       for (let i = 0; i + 1 < n; i++) {
-        // tablier : planches de bois à la teinte qui varie, dalles de pierre, chaussée d'acier
-        plankM = a <= 2 ? 0.88 + 0.16 * hash2(i, cells[0], 81) : 0.96 + 0.06 * hash2(i, cells[0], 81);
+        // tablier : planches de bois à la teinte qui varie, dalles de pierre, chaussée de bitume, panneau blanc
+        plankM = a <= 2 ? 0.9 + 0.14 * hash2(i, cells[0], 81) : modern ? 1 : 0.96 + 0.06 * hash2(i, cells[0], 81);
         plank.copy(deck).multiplyScalar(plankM);
-        const l0 = L[i], l1 = L[i + 1], r0 = R[i], r1 = R[i + 1], down = (v: number[]) => [v[0], v[1] - th, v[2]];
+        const l0 = L[i], l1 = L[i + 1], r0 = R[i], r1 = R[i + 1];
         quad([l0, l1, r1, r0], plank);
-        quad([down(l0), down(r0), down(r1), down(l1)], pile);
-        quad([l0, down(l0), down(l1), l1], deck);
-        quad([r0, r1, down(r1), down(r0)], deck);
+        quad([down(l0), down(r0), down(r1), down(l1)], edge);
+        quad([l0, down(l0), down(l1), l1], edge);
+        quad([r0, r1, down(r1), down(r0)], edge);
+        if (i === 0) quad([l0, r0, down(r0), down(l0)], edge);
+        if (i + 2 === n) quad([l1, down(l1), down(r1), r1], edge);
         const p = line[i], q = line[i + 1], seg = Math.hypot(q[0] - p[0], q[2] - p[2]);
         if (!seg) continue;
         const ux = (q[0] - p[0]) / seg, uz = (q[2] - p[2]) / seg;
-        if (wet[i] && wet[i + 1]) {
-          // main courante continue et poteaux réguliers, des deux côtés, un peu en retrait du bord
-          for (const s of [L, R]) {
-            const s0 = s[i], s1 = s[i + 1], ml = Math.hypot(s1[0] - s0[0], s1[2] - s0[2]);
-            const ix = ((p[0] - s0[0]) / hw) * 0.015, iz = ((p[2] - s0[2]) / hw) * 0.015;
-            obox((s0[0] + s1[0]) / 2 + ix, (s0[2] + s1[2]) / 2 + iz, ux, uz, ml / 2 + 0.006, 0.012, p[1] + 0.1, p[1] + 0.13, rail);
+        // marquage de la chaussée moderne, dans le prolongement de celui de la route : lignes de rive et axe en tirets
+        if (modern && !fut && S[i] > 0.05) {
+          for (const f of [-1, 1]) {
+            const e = 0.82 * (hw0 / hw), w0 = 0.016 / hw;
+            quad([lat(i, f * e - w0, 0.006), lat(i + 1, f * e - w0, 0.006), lat(i + 1, f * e + w0, 0.006), lat(i, f * e + w0, 0.006)], white);
           }
-          for (; nextPost < run + seg; nextPost += 0.3) {
-            const t = (nextPost - run) / seg, cx = p[0] + (q[0] - p[0]) * t, cz = p[2] + (q[2] - p[2]) * t;
-            for (const s of [L, R]) {
-              const x = s[i][0] + (s[i + 1][0] - s[i][0]) * t, z = s[i][2] + (s[i + 1][2] - s[i][2]) * t;
-              obox(x + ((cx - x) / hw) * 0.015, z + ((cz - z) / hw) * 0.015, ux, uz, 0.012, 0.012, p[1], p[1] + 0.1, rail);
+          for (; nextDash < S[i + 1]; nextDash += 0.26) {
+            if (nextDash < S[i] || nextDash + 0.13 > S[n - 1] - 0.05) continue;
+            const s0 = onS(nextDash, line), s1 = onS(nextDash + 0.13, line), [j0, t0] = seek(nextDash), [j1, t1] = seek(nextDash + 0.13);
+            const o0 = lerp(L[j0], L[j0 + 1], t0), o1 = lerp(L[j1], L[j1 + 1], t1), k = 0.012 / hw;
+            const d0 = [(o0[0] - s0[0]) * k, (o0[2] - s0[2]) * k], d1 = [(o1[0] - s1[0]) * k, (o1[2] - s1[2]) * k];
+            quad([[s0[0] - d0[0], s0[1] + 0.006, s0[2] - d0[1]], [s1[0] - d1[0], s1[1] + 0.006, s1[2] - d1[1]], [s1[0] + d1[0], s1[1] + 0.006, s1[2] + d1[1]], [s0[0] + d0[0], s0[1] + 0.006, s0[2] + d0[1]]], white);
+          }
+        }
+        if (wet[i] && wet[i + 1]) {
+          // garde-corps continus des deux côtés, un peu en retrait du bord
+          for (const [s, sd] of [[L, 1], [R, -1]] as const) {
+            const s0 = s[i], s1 = s[i + 1], ml = Math.hypot(s1[0] - s0[0], s1[2] - s0[2]);
+            const ix = ((p[0] - s0[0]) / hw) * 0.02, iz = ((p[2] - s0[2]) / hw) * 0.02, mx = (s0[0] + s1[0]) / 2 + ix, mz = (s0[2] + s1[2]) / 2 + iz;
+            const my = (s0[1] + s1[1]) / 2;
+            if (a <= 2) obox(mx, mz, ux, uz, ml / 2 + 0.006, 0.012, my + 0.1, my + 0.13, rail);
+            else if (stone) {
+              // parapet de pierre continu, coiffé d'une tablette, et garde-corps de fonte
+              obox(mx, mz, ux, uz, ml / 2 + 0.004, 0.026, my, my + 0.08, rail);
+              obox(mx, mz, ux, uz, ml / 2 + 0.004, 0.034, my + 0.08, my + 0.095, K(0xb9b3a9));
+              obox(mx, mz, ux, uz, ml / 2 + 0.004, 0.006, my + 0.14, my + 0.155, K(0x3c4a44));
+            } else {
+              // bordure de béton (trottoir surélevé), double glissière d'acier ; au 5e âge, liseré lumineux le long de la bordure
+              obox(mx, mz, ux, uz, ml / 2 + 0.003, 0.03, my, my + 0.045, concrete);
+              obox(mx, mz, ux, uz, ml / 2 + 0.004, 0.008, my + 0.075, my + 0.088, rail);
+              if (!fut) obox(mx, mz, ux, uz, ml / 2 + 0.004, 0.008, my + 0.112, my + 0.125, rail);
+              if (fut) beam([mx - ux * ml / 2, my + 0.047, mz - uz * ml / 2], [mx + ux * ml / 2, my + 0.047, mz + uz * ml / 2], 0.012, 0.004, glowC, true);
             }
           }
-          // piles plantées dans l'eau : poteaux de bois par paires, piles de pierre en travers, fûts d'acier
-          for (; nextPile < run + seg; nextPile += 0.8) {
-            if (!longSpan || nextPile > spanB - 0.4) continue;
-            const t = (nextPile - run) / seg, x = p[0] + (q[0] - p[0]) * t, z = p[2] + (q[2] - p[2]) * t, y = p[1], foot = Math.max(y - 1.1, Math.min(y - 0.6, w.hAt(x, z)));
-            if (a === 2 || a === 3) obox(x, z, -uz, ux, hw * 0.82, 0.07, foot, y - th, pile);
-            else for (const o of [-1, 1]) obox(x - uz * o * (hw - 0.07), z + ux * o * (hw - 0.07), ux, uz, a >= 4 ? 0.035 : 0.05, a >= 4 ? 0.035 : 0.05, foot, y - th, pile);
+          for (; nextPost < run + seg; nextPost += modern ? 0.25 : 0.3) {
+            const t = (nextPost - run) / seg, cx = p[0] + (q[0] - p[0]) * t, cz = p[2] + (q[2] - p[2]) * t, cy = p[1] + (q[1] - p[1]) * t;
+            for (const s of [L, R]) {
+              const x = s[i][0] + (s[i + 1][0] - s[i][0]) * t, z = s[i][2] + (s[i + 1][2] - s[i][2]) * t;
+              const bx = x + ((cx - x) / hw) * 0.02, bz = z + ((cz - z) / hw) * 0.02;
+              if (a <= 2) obox(bx, bz, ux, uz, 0.012, 0.012, cy, cy + 0.1, rail);
+              else if (stone) obox(bx, bz, ux, uz, 0.03, 0.034, cy, cy + 0.12, rail);
+              else obox(bx, bz, ux, uz, 0.01, 0.01, cy + 0.04, cy + (fut ? 0.095 : 0.13), rail);
+            }
+          }
+          // piles plantées dans l'eau (seulement pour une vraie portée) : poteaux de bois fins par paires, piles de pierre ou de béton
+          // en travers, fûts blancs au 5e âge
+          for (; nextPile < run + seg; nextPile += modern || stone ? 1.5 : 0.8) {
+            if (!longSpan || nextPile > spanB - 0.5) continue;
+            const t = (nextPile - run) / seg, x = p[0] + (q[0] - p[0]) * t, z = p[2] + (q[2] - p[2]) * t, y = p[1] + (q[1] - p[1]) * t;
+            const foot = Math.max(y - 1.6, w.hAt(x, z) - 0.05);
+            if (modern) {
+              const hu = fut ? 0.07 : hw * 0.5;
+              obox(x, z, -uz, ux, hu, fut ? 0.04 : 0.05, foot, y - th - 0.04, pile);
+              obox(x, z, -uz, ux, hw * 0.96, 0.07, y - th - 0.04, y - th, pile);
+            } else if (stone) {
+              obox(x, z, -uz, ux, hw * 0.7, 0.07, foot, y - th - 0.04, pile);
+              obox(x, z, -uz, ux, hw * 0.92, 0.08, y - th - 0.04, y - th, pile);
+            } else for (const o of [-1, 1]) obox(x - uz * o * (hw - 0.07), z + ux * o * (hw - 0.07), ux, uz, 0.03, 0.03, foot, y - th, pile);
           }
         } else {
           nextPost = run + seg + 0.05;
@@ -1159,13 +1247,44 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         }
         run += seg;
       }
-      // poteaux d'extrémité, des deux bouts et des deux côtés ; une lanterne au bout de chacun (côtés alternés)
+      // culées aux deux rives (bien ancrées dans le sol) pour les ouvrages de pierre et de béton
+      if (spanB > spanA && (modern || stone)) for (const s of [spanA + 0.08, spanB - 0.08]) {
+        const c = onS(s, line), [j0] = seek(s), tx = line[j0 + 1][0] - line[j0][0], tz = line[j0 + 1][2] - line[j0][2], tl = Math.hypot(tx, tz) || 1;
+        obox(c[0], c[2], tx / tl, tz / tl, 0.09, hw + 0.01, Math.min(w.hAt(c[0], c[2]), c[1] - th - 0.05) - 0.12, c[1] - th + 0.002, pile);
+      }
+      // longue portée : poutres treillis d'acier au-dessus du tablier (4e âge), ou pylône et haubans minces (5e âge)
+      if (bigSpan && modern) {
+        const sa = spanA + 0.1, sb = spanB - 0.1, m = Math.max(2, Math.round((sb - sa) / 0.5)), hgt = 0.26;
+        for (const sd of [L, R]) {
+          const top = (s: number) => up(onS(s, sd), hgt), bot = (s: number) => up(onS(s, sd), 0.04);
+          beam(top(sa), top(sb), 0.012, 0.012, steel);
+          for (let k = 0; k <= m; k++) {
+            const s = sa + ((sb - sa) * k) / m;
+            if (!fut) beam(bot(s), top(s), 0.01, 0.01, steel);
+            if (k < m && !fut) beam(k % 2 ? top(s) : bot(s), k % 2 ? bot(sa + ((sb - sa) * (k + 1)) / m) : top(sa + ((sb - sa) * (k + 1)) / m), 0.007, 0.007, steel);
+          }
+        }
+        if (fut) {
+          // pylône central en A et haubans qui retombent sur les deux bords
+          const mid = (sa + sb) / 2, apex = up(onS(mid, line), 0.95);
+          for (const sd of [L, R]) beam(down(onS(mid, sd)), apex, 0.02, 0.02, steel);
+          const kk = Math.floor((sb - sa) / 2 / 0.45);
+          for (let k = 1; k <= kk; k++) for (const sg of [-1, 1]) for (const sd of [L, R]) beam(apex, up(onS(mid + sg * k * 0.45, sd), 0.05), 0.004, 0.004, concrete);
+        }
+      }
+      // poteaux d'extrémité des bouts, et une lanterne par bout ; ponts modernes : lampadaires à bras le long de la portée
       const first = wet.indexOf(true), last = wet.lastIndexOf(true);
-      if (first >= 0) for (const [i, o] of [[first, 1], [last, -1]]) {
-        const c = line[i];
-        for (const [side, sd] of [[L[i], 1], [R[i], -1]] as const) {
-          obox(side[0], side[2], 1, 0, 0.022, 0.022, c[1] - th, c[1] + 0.2, rail);
-          if (sd === o) { const dx = side[0] - c[0], dz = side[2] - c[2], dl = Math.hypot(dx, dz) || 1; bridgePosts.push([side[0], c[1], side[2], dx / dl, dz / dl]); }
+      if (first >= 0) {
+        for (const [i, o] of [[first, 1], [last, -1]]) {
+          const c = line[i];
+          for (const [side, sd] of [[L[i], 1], [R[i], -1]] as const) {
+            if (!modern) obox(side[0], side[2], 1, 0, 0.022, 0.022, c[1] - th, c[1] + 0.2, rail);
+            if (sd === o) { const dx = side[0] - c[0], dz = side[2] - c[2], dl = Math.hypot(dx, dz) || 1; bridgePosts.push([side[0], c[1], side[2], dx / dl, dz / dl]); }
+          }
+        }
+        if (modern && span > 1.8) for (let s = spanA + 1.4, k = 0; s < spanB - 0.9; s += 1.4, k++) {
+          const sd = k % 2 ? R : L, c = onS(s, line), e = onS(s, sd), dx = e[0] - c[0], dz = e[2] - c[2], dl = Math.hypot(dx, dz) || 1;
+          bridgePosts.push([e[0], e[1], e[2], dx / dl, dz / dl]);
         }
       }
     };
@@ -1206,7 +1325,6 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     }
     yield;
     // petits objets : une géométrie de base étirée, tournée, posée
-    const gp: number[] = [], gc: number[] = [];
     const put = (geo: THREE.BufferGeometry, x: number, y: number, z: number, sx: number, sy: number, sz: number, ry: number, cl: THREE.Color | number, glow = false) => {
       const p = geo.attributes.position, co = Math.cos(ry), si = Math.sin(ry), col = typeof cl === 'number' ? hexCol(cl) : cl;
       const P = glow ? gp : sp, Cc = glow ? gc : sc, arr = p.array;
