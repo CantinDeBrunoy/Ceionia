@@ -3,7 +3,7 @@ import { GEAR_BY, GearId, Stock } from './gear';
 
 /**
  * L'armée du joueur : la garnison de l'île du portail. Des habitants du village s'enrôlent à la caserne (sur l'île) : chacun
- * prend en réserve les pièces d'équipement de sa troupe (lance du soldat, arc de l'archer, épée et armure du chevalier, que le
+ * prend en réserve les pièces d'équipement de sa troupe (lance du soldat, puis fusil dès l'âge industriel ; arc de l'archer, épée et armure du chevalier, que le
  * village fabrique ; lance et cheval de l'écurie pour le cavalier), traverse le bras de mer en galère et rejoint la garnison au bout de sa durée de recrutement. Un soldat
  * abattu n'est pas perdu : il est ramené blessé à la caserne et s'y soigne. Renvoyé au village, il rapporte son équipement (et son cheval).
  * Simulation pure (le combat est dans `hell.ts`, l'île dans `isleBattle.ts`)
@@ -51,11 +51,12 @@ export const TROOPS: Record<TroopKind, TroopDef> = {
   soldier: {
     kind: 'soldier', name: 'Soldat', plural: 'Soldats', icon: '🛡️', age: 1, gear: ['spear'], time: 20,
     base: { hp: 110, dmg: 11, range: 0.6, speed: 2, cooldown: 1.1, sight: 6, radius: 0.28 },
-    desc: 'Lance et bouclier : il tient la ligne au corps à corps.',
+    desc: 'Lance et bouclier : il tient la ligne au corps à corps (à l’âge industriel, il troque la lance contre le fusil).',
     forms: [
-      { from: 3, name: 'Fusilier', plural: 'Fusiliers', icon: '💂', gear: ['spear'], adj: { hp: 1.05, dmg: 1.2 }, desc: 'Fusil à baïonnette (la lance de la réserve s’y fixe) : il tient la ligne et pique à bout portant.' },
-      { from: 4, name: 'Fantassin', plural: 'Fantassins', icon: '🪖', gear: ['spear'], adj: { hp: 1.15, dmg: 1.3 }, desc: 'Treillis, gilet pare-balles et fusil d’assaut à baïonnette : il tient la ligne.' },
-      { from: 5, name: 'Soldat à impulsions', plural: 'Soldats à impulsions', icon: '🦾', gear: ['spear'], adj: { hp: 1.3, dmg: 1.4, speed: 1.1 }, desc: 'Exo-armure et fusil à impulsions : il tient la ligne, vite et dur.' },
+      // (à l'âge industriel, le soldat n'est plus un lancier : il tire au fusil, à moyenne portée, un peu moins fort mais plus vite que le tirailleur)
+      { from: 3, name: 'Fusilier', plural: 'Fusiliers', icon: '💂', gear: ['rifle'], adj: { hp: 1.05, dmg: 0.82, range: 6.5, cooldown: 0.8 }, desc: 'Habit et shako, fusil à l’épaule (à fabriquer à l’atelier) : il tire par salves à moyenne portée, moins loin que le tirailleur, et tient bon à bout portant. La poudre fait du bruit et de la fumée.' },
+      { from: 4, name: 'Fantassin', plural: 'Fantassins', icon: '🪖', gear: ['rifle'], adj: { hp: 1.15, dmg: 0.9, range: 7, cooldown: 0.75 }, desc: 'Treillis, casque et fusil d’assaut (le fusil de l’atelier) : il tire en rafales à moyenne portée.' },
+      { from: 5, name: 'Soldat à impulsions', plural: 'Soldats à impulsions', icon: '🦾', gear: ['rifle'], adj: { hp: 1.3, dmg: 0.88, range: 7.5, cooldown: 0.65, speed: 1.1 }, desc: 'Combinaison et fusil à impulsions (le fusil de l’atelier) : il tire vite, à moyenne portée.' },
     ],
   },
   archer: {
@@ -114,7 +115,7 @@ export function troopKit(kind: TroopKind, age: number): { gear: GearId[]; mount:
   return { gear: f.gear, mount: !!f.mount };
 }
 
-/** Les pièces dont une troupe recrutable à cet âge a besoin (même « dépassées » pour les expéditions : la lance du soldat) */
+/** Les pièces dont une troupe recrutable à cet âge a besoin (même « dépassées » pour les expéditions : la lance du cavalier) */
 export function troopGearNeeded(age: number): Set<GearId> {
   const out = new Set<GearId>();
   for (const k of Object.keys(TROOPS) as TroopKind[]) if (age >= TROOPS[k].age) for (const g of troopKit(k, age).gear) out.add(g);
