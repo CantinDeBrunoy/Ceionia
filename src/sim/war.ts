@@ -42,7 +42,7 @@ export function clockText(s: number) {
 /** Petite, moyenne ou grosse : par rapport à la première vague (deux diablotins) */
 export function waveForce(kinds: DemonKind[]): WaveForce {
   const r = kinds.reduce((a, k) => a + DEMON_POWER[k], 0) / (2 * DEMON_POWER.imp);
-  return r < 1.9 ? 'small' : r < 3.4 ? 'medium' : 'big';
+  return r < 1.9 ? 'small' : r < 3 ? 'medium' : 'big';
 }
 
 /** L'incursion est annoncée (avec sa composition) cette durée (s) avant d'arriver */

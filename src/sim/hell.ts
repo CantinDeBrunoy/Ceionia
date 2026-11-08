@@ -108,7 +108,7 @@ export const FORGE_EVERY = 45;
 /** Répit (s) laissé à l'île après la chute du dernier poste avancé, avant l'incursion suivante */
 export const FRONT_RESPITE = 120;
 /** L'invasion : sa taille (démons, avant Facile), son niveau de composition, et le compte à rebours qui l'annonce (s de jeu) */
-export const INVASION_SIZE = 6, INVASION_LEVEL = 4, INVASION_DELAY = 40;
+export const INVASION_SIZE = 5, INVASION_LEVEL = 4, INVASION_DELAY = 40;
 export const RAID_FIRST = 300, RAID_EVERY = 240, RAID_MIN = 150, RAID_MAX = 10, RAID_SECURED_MAX = 6, SECURE_WAVES = 5;
 
 export type Side = 'hell' | 'player';
@@ -952,7 +952,7 @@ export class Hell {
   planInvasion(): DemonKind[] {
     const lv = INVASION_LEVEL, n = this.balance.legacy ? INVASION_SIZE - 2 : INVASION_SIZE;
     return planWave({
-      level: lv, age: tierAge(this.age), power: this.armyPower, legacy: raidKinds(lv, n), powers: DEMON_POWER, balance: this.balance,
+      level: lv, age: tierAge(this.age), power: 0, legacy: raidKinds(lv, n), powers: DEMON_POWER, balance: this.balance,
       conquered: this.conquered.filter(Boolean).length,
     });
   }
