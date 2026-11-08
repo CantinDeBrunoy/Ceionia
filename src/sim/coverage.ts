@@ -1,4 +1,5 @@
 import { KINDS, Building, sizeOf } from '../build/catalog';
+import { tr } from '../i18n';
 
 /**
  * Couverture de sécurité : la part des habitations à portée d'une caserne de pompiers et d'un poste de police.
@@ -60,23 +61,24 @@ export function computeCoverage(buildings: Iterable<Building>): Coverage {
 }
 
 const DIRS = ['à l’est', 'au sud-est', 'au sud', 'au sud-ouest', 'à l’ouest', 'au nord-ouest', 'au nord', 'au nord-est'];
+/** (les textes sont traduits à l'affichage : `tr` cherche le français exact) */
 /** Où se trouve le centre d'un groupe d'habitations, en clair (« au nord-est du village ») */
 export function whereIs(group: Building[], all: Building[]): string {
   if (!group.length || !all.length) return '';
   const mx = all.reduce((s, b) => s + b.x, 0) / all.length, mz = all.reduce((s, b) => s + b.z, 0) / all.length;
   const gx = group.reduce((s, b) => s + b.x, 0) / group.length, gz = group.reduce((s, b) => s + b.z, 0) / group.length;
-  if (Math.hypot(gx - mx, gz - mz) < 4) return 'au centre du village';
+  if (Math.hypot(gx - mx, gz - mz) < 4) return tr('au centre du village');
   const a = Math.atan2(gz - mz, gx - mx); // z croît vers le sud
-  return `${DIRS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]} du village`;
+  return tr('{dir} du village', { dir: tr(DIRS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]) });
 }
 
 /** Les conseils de la fiche, ton casual */
 export function coverageTips(c: Coverage, all: Building[]): string[] {
   const t: string[] = [];
-  if (!c.homes) return ['Pas encore d’habitations à protéger.'];
-  if (!c.stations.fire.length) t.push('Bâtissez une caserne de pompiers : elle protège les maisons des flammes.');
-  else if (c.uncoveredFire.length) t.push(`Une caserne de pompiers de plus ${whereIs(c.uncoveredFire, all)} : ${c.uncoveredFire.length} maison${c.uncoveredFire.length > 1 ? 's sont' : ' est'} trop loin des secours.`);
-  if (!c.stations.police.length) t.push('Bâtissez un poste de police : les rondes rassurent tout le monde.');
-  else if (c.uncoveredPolice.length) t.push(`Un poste de police de plus ${whereIs(c.uncoveredPolice, all)} : ${c.uncoveredPolice.length} maison${c.uncoveredPolice.length > 1 ? 's sont' : ' est'} trop loin des gardes.`);
+  if (!c.homes) return [tr('Pas encore d’habitations à protéger.')];
+  if (!c.stations.fire.length) t.push(tr('Bâtissez une caserne de pompiers : elle protège les maisons des flammes.'));
+  else if (c.uncoveredFire.length) t.push(tr(c.uncoveredFire.length > 1 ? 'Une caserne de pompiers de plus {where} : {n} maisons sont trop loin des secours.' : 'Une caserne de pompiers de plus {where} : {n} maison est trop loin des secours.', { where: whereIs(c.uncoveredFire, all), n: c.uncoveredFire.length }));
+  if (!c.stations.police.length) t.push(tr('Bâtissez un poste de police : les rondes rassurent tout le monde.'));
+  else if (c.uncoveredPolice.length) t.push(tr(c.uncoveredPolice.length > 1 ? 'Un poste de police de plus {where} : {n} maisons sont trop loin des gardes.' : 'Un poste de police de plus {where} : {n} maison est trop loin des gardes.', { where: whereIs(c.uncoveredPolice, all), n: c.uncoveredPolice.length }));
   return t;
 }

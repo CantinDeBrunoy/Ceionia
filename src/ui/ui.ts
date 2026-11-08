@@ -1329,20 +1329,20 @@ export class UI {
     const all = [...world.buildings.values()], on = this.host.tools.coverage.active;
     const state = c.share >= 0.8 ? 'ok' : c.share >= 0.4 ? 'full' : 'warn';
     const tips = coverageTips(c, all);
-    const row = (icon: string, label: string, v: string, note = '') => `<div class="crow"><b>${ic(icon, 16, 2)}</b><span>${label}${note ? `<small>${note}</small>` : ''}</span><em>${v}</em></div>`;
+    const row = (icon: string, label: string, v: string, note = '') => `<div class="crow"><b>${ic(icon, 16, 2)}</b><span>${tr(label)}${note ? `<small>${note}</small>` : ''}</span><em>${v}</em></div>`;
     const html = `
-      <h4>${ic(SECURITY_NEED.icon, 18, 2)} ${SECURITY_NEED.label}<em class="${state}">${pc(c.share)}</em></h4>
-      <div class="sub">couverture moyenne des habitations</div>
+      <h4>${ic(SECURITY_NEED.icon, 18, 2)} ${tr(SECURITY_NEED.label)}<em class="${state}">${pc(c.share)}</em></h4>
+      <div class="sub">${tr('couverture moyenne des habitations')}</div>
       <div class="bar ${state}"><i style="width:${Math.round(c.share * 100)}%"></i></div>
-      <p class="hint">Pompiers : ${FIRE_RANGE} cases autour de la caserne. Police : ${policeRange(1)} à ${policeRange(5)} cases selon l’âge du poste. Un bonus, pas une obligation : +${COVER_JOY} de bien-être par maison protégée par les deux (jusqu’à +${COVER_JOY_MAX}).</p>
+      <p class="hint">${tr('Pompiers : {fire} cases autour de la caserne. Police : {p1} à {p5} cases selon l’âge du poste. Un bonus, pas une obligation : +{joy} de bien-être par maison protégée par les deux (jusqu’à +{max}).', { fire: FIRE_RANGE, p1: policeRange(1), p5: policeRange(5), joy: COVER_JOY, max: COVER_JOY_MAX })}</p>
       <div class="src">
-        ${row('flame', 'Couverture des pompiers', pc(c.fireShare), `${c.stations.fire.length} caserne${c.stations.fire.length > 1 ? 's' : ''}`)}
-        ${row('shield', 'Couverture de la police', pc(c.policeShare), `${c.stations.police.length} poste${c.stations.police.length > 1 ? 's' : ''}`)}
+        ${row('flame', 'Couverture des pompiers', pc(c.fireShare), nplural(c.stations.fire.length, 'caserne', 'casernes'))}
+        ${row('shield', 'Couverture de la police', pc(c.policeShare), nplural(c.stations.police.length, 'poste', 'postes'))}
       </div>
-      <div class="crow total"><span>Maisons protégées par les deux</span><em>${c.both} / ${c.homes}</em></div>
-      <div class="crow total"><span>Postes de sécurité</span><em>${c.stations.fire.length + c.stations.police.length}</em></div>
-      ${tips.length ? `<p class="hint ${state}">${tips.join(' ')}</p>` : '<p class="hint ok">Tout le village est bien protégé !</p>'}
-      <button class="primary" data-cover title="Cercles verts : portée des postes. Rond orange : maison mal protégée. Rond rouge : aucune protection.">${ic('eye', 15, 2.2)} ${on ? 'Masquer la carte de couverture' : 'Montrer sur la carte'}</button>
+      <div class="crow total"><span>${tr('Maisons protégées par les deux')}</span><em>${c.both} / ${c.homes}</em></div>
+      <div class="crow total"><span>${tr('Postes de sécurité')}</span><em>${c.stations.fire.length + c.stations.police.length}</em></div>
+      ${tips.length ? `<p class="hint ${state}">${tips.join(' ')}</p>` : `<p class="hint ok">${tr('Tout le village est bien protégé !')}</p>`}
+      <button class="primary" data-cover title="${tr('Cercles verts : portée des postes. Rond orange : maison mal protégée. Rond rouge : aucune protection.')}">${ic('eye', 15, 2.2)} ${tr(on ? 'Masquer la carte de couverture' : 'Montrer sur la carte')}</button>
       <div class="row2"><button data-kind="fire">${ic('hammer', 14, 2.2)} ${sim.nameOf('fire')}</button><button data-kind="police">${ic('hammer', 14, 2.2)} ${sim.nameOf('police')}</button></div>`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
