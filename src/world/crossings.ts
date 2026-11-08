@@ -271,7 +271,8 @@ export function findCrossings(w: World): Crossing[] {
         if (sp.to.kind === 'open') open(seq[seq.length - 1], line.length > 1 ? line[line.length - 1] : undefined, false);
         if (line.length < 2) continue;
         // axe : simplifié (une route en escalier devient une diagonale), coudes arrondis, puis recoupé en pas réguliers
-        const axis = resample(chaikin(simplify(line, keep, 0.3)), STEP);
+        // (tolérance : un escalier, même à deux cases pour une, devient une droite ; un vrai coude à angle droit reste un coude)
+      const axis = resample(chaikin(simplify(line, keep, 0.55)), STEP);
         const n = axis.length, S = [0];
         for (let i = 1; i < n; i++) S.push(S[i - 1] + Math.hypot(axis[i][0] - axis[i - 1][0], axis[i][1] - axis[i - 1][1]));
         const cellAt = (p: number[]) => { const x = Math.floor(p[0]), z = Math.floor(p[1]); return w.inCells(x, z) ? w.ci(x, z) : -1; };

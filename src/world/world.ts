@@ -813,11 +813,11 @@ export class World {
   }
 
   /** Franchissements d'eau par les routes (voir `crossings.ts`), recalculés quand les routes ou le relief changent */
-  private crossCache: { key: string; map: Map<number, Crossing> } | null = null;
+  private crossCache: { v: number; vis: number; map: Map<number, Crossing> } | null = null;
   crossings(): Map<number, Crossing> {
-    const key = `${this.version}|${this.visVersion}`;
-    if (!this.crossCache || this.crossCache.key !== key) this.crossCache = { key, map: crossingMap(this) };
-    return this.crossCache.map;
+    const c = this.crossCache;
+    if (!c || c.v !== this.version || c.vis !== this.visVersion) this.crossCache = { v: this.version, vis: this.visVersion, map: crossingMap(this) };
+    return this.crossCache!.map;
   }
   /** Le pont qui porte la case, s'il y en a un */
   crossingAt(cx: number, cz: number): Crossing | undefined {
