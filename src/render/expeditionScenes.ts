@@ -15,6 +15,7 @@ import { rocketGeo, ROCKET_H, ROCKET_R, RocketKind } from './rocket';
 import { SPACEPAD, shark, crocodile, tentacle, krakenHead, harpoon } from './models';
 import { makeBeast } from './beasts';
 import { Building, sizeOf } from '../build/catalog';
+import { FloatIsles, FLOAT_LAND, FLOAT_BACK } from './floatIsles';
 
 /** Modèle et taille (longueur du corps) des bêtes des expéditions */
 export const ANIMAL: Record<HerdKind | 'wolf', [ModelName, number]> = { sheep: ['sheep', 0.2], cow: ['cow', 0.3], pig: ['pig', 0.17], horse: ['horse', 0.34], wolf: ['wolf', 0.3] };
@@ -749,6 +750,8 @@ const BEHAVIOR: Record<Scene, string> = {
   portal: 'boat',
   // le volet maritime : au large, en bateau (voyage, chasse à l'épave, pêche en haute mer)
   voyage: 'boat', wreck: 'boat', trawl: 'boat',
+  // les îles flottantes : l'hydroglisseur accoste l'archipel, l'équipe y débarque (voir `FloatIsles`)
+  isles: 'boat',
 };
 /**
  * L'expédition du portail, en part du travail : la galère touche l'île, l'équipe arrive à l'arche, le tourbillon s'éveille,
@@ -898,6 +901,8 @@ export class ExpeditionScene {
   private boat: { obj: THREE.Object3D; home: [number, number]; out: [number, number]; y: number; riders: number[] } | null = null;
   /** l'île du portail : où l'équipe débarque, et le portail qu'elle va réveiller */
   private isle: { land: [number, number]; gate: [number, number] } | null = null;
+  /** les îles flottantes (scène `isles`) : l'archipel, que l'équipe visite à pied */
+  private float: FloatIsles | null = null;
   /**
    * la chasse au monstre des mers : la seconde galère (ses hommes d'armes, pris parmi ceux de `boat`) et le point de combat,
    * entre les deux, où se tient le monstre
@@ -1035,7 +1040,10 @@ export class ExpeditionScene {
         this.dogs.push({ obj: actor.root, actor, x: cx + (i ? 0.2 : -0.2), z: cz, tx: cx, tz: cz, heading: 0, wait: 0, speed: 1.7 });
       }
     }
-    else if (kind === 'boat') { this.launch(a); this.populateSea(a); }
+    else if (kind === 'boat') {
+      this.launch(a); this.populateSea(a);
+      if (this.story === 'isles' && this.boat) this.float = new FloatIsles(this.group, this.props, this.boat.home, this.boat.out, this.boat.y, (x, z) => this.world.surfaceAt(x, z), a.party.length);
+    }
     else if (kind === 'fish') this.spots = this.bankSpots(a.party.length);
     else if (kind === 'mine') {
       const [ux, uz] = this.uphill(cx, cz), [rx, rz] = this.near(cx + ux * 0.56, cz + uz * 0.56, cx, cz);
@@ -3029,7 +3037,7 @@ export class ExpeditionScene {
     const obj = hullOf();
     // la chasse armée : toute la troupe embarque, sur deux galères (`riders` : tout l'équipage ; la seconde a sa moitié) ;
     // l'équipe du portail aussi, sur une seule
-    const riders = a.party.slice(0, war || this.isle ? a.party.length : Math.min(2, a.party.length));
+    const riders = a.party.slice(0, war || this.isle || this.story === 'isles' ? a.party.length : Math.min(2, a.party.length));
     this.boat = { obj, home: [wx, wz], out, y: wat.level, riders };
     if (war && this.offshore) {
       // les deux galères encadrent le monstre, de part et d'autre du point de combat, chacune bord à bord face à lui
@@ -3356,6 +3364,7 @@ export class ExpeditionScene {
     else for (const b of this.beasts) this.stepBeast(b, dt, a);
     this.workK = k;
     if (this.boat && onSite) this.stepBoat(dt);
+    if (this.float) this.float.update(dt, k, onSite, (x, y, z) => this.puffAt(x, y, z));
     if (this.swimmers.length) this.stepSwimmers(dt);
     if (this.monster) this.stepMonster(dt, a, k);
     if (this.balloon) this.stepBalloon(k, onSite);
@@ -3682,7 +3691,7 @@ export class ExpeditionScene {
     if (this.offshore) {
       // au large : elle file jusqu'à l'eau profonde, y reste tout le travail, et rentre à la rive quand il s'achève
       // (la galère de la chasse reste sur place jusqu'à ce que le monstre soit mort ou enfui, voir `FATE_AT`)
-      const k = this.workK, home = this.monster ? 0.87 : 0.8, go = this.isle ? ISLE_LAND : 0.2;
+      const k = this.workK, home = this.monster ? 0.87 : 0.8, go = this.isle ? ISLE_LAND : this.story === 'isles' ? FLOAT_LAND - 0.01 : 0.2;
       u = k < go ? smooth(k / go) : k < home ? 1 : 1 - smooth(Math.min(1, (k - home) / (0.97 - home)));
       back = k >= home;
     } else {
@@ -3695,12 +3704,25 @@ export class ExpeditionScene {
     // la seconde galère de la chasse part avec la première, avec sa part de l'équipage, et prend le monstre de l'autre côté
     // (l'équipe du portail débarque sur l'île le temps du travail : la galère l'attend, vide, au bord de la plage)
     const ashore = !!this.isle && this.offshore && this.workK >= ISLE_LAND && this.workK < ISLE_BACK;
-    const crew = ashore ? [] : es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders;
+    const afloat = !!this.float && this.offshore && this.workK >= FLOAT_LAND && this.workK < FLOAT_BACK;
+    const crew = ashore || afloat ? [] : es ? bt.riders.filter((id) => !es.riders.includes(id)) : bt.riders;
     const [px, pz] = this.sail(bt.obj, bt.home, bt.out, bt.y, u, back, dt, crew, war || !!this.isle, 0);
     if (es) this.sail(es.obj, es.home, es.out, bt.y, u, back, dt, es.riders, war, 1.3);
     // la chasse : la vue garde le combat entier (les deux galères, le monstre entre elles)
     this.focus = this.arena && es ? [(px + es.obj.position.x) / 2, (pz + es.obj.position.z) / 2] : [px, pz];
     if (ashore) this.stepIsle(this.workK);
+    if (this.float) this.stepFloat(afloat);
+  }
+
+  /** L'équipe sur les îles flottantes : chacun suit son parcours (scan, balises, cultures, récolte, caisses au drone) */
+  private stepFloat(afloat: boolean) {
+    const f = this.float!, riders = this.boat!.riders, n = riders.length;
+    riders.forEach((id, i) => {
+      const pose = afloat ? f.crew(i, n, this.workK) : null;
+      if (pose) this.agents.ride(id, { x: pose.x, z: pose.z, y: pose.y, heading: pose.heading, act: pose.act });
+      f.tool(id, pose);
+    });
+    if (afloat) this.focus = f.focus;
   }
 
   /**
@@ -4410,7 +4432,7 @@ export class ExpeditionScene {
     // (pas de pêcheur à la ligne pendant la chasse au monstre : tout l'équipage est aux harpons)
     if ((this.kind !== 'boat' && this.kind !== 'fish') || this.monster) return;
     // l'outil selon l'ouvrage : longue-vue au grand voyage (rien à pêcher), gaffe et grappin sur l'épave, canne ailleurs
-    const gear = this.story === 'voyage' ? (a.age <= 3 ? 'glass' : 'none') : this.story === 'wreck' ? 'gaffe' : 'rod';
+    const gear = this.story === 'isles' ? 'none' : this.story === 'voyage' ? (a.age <= 3 ? 'glass' : 'none') : this.story === 'wreck' ? 'gaffe' : 'rod';
     const fishers = this.kind === 'boat' ? [this.boat!.riders[this.boat!.riders.length - 1], ...a.party.filter((id) => !this.boat!.riders.includes(id))] : a.party;
     const w = this.world, wat = this.water!;
     for (const id of a.party) {
