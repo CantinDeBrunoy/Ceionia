@@ -1,6 +1,6 @@
 import type { World } from '../world/world';
 import { HellMap } from '../world/hell';
-import { isleDefenses, repelWave, ISLE_SECURE } from '../world/portal';
+import { isleDefenses, villageBarracks, repelWave, ISLE_SECURE } from '../world/portal';
 import { Hell, HellEvent, HellSave, HellUnit, RaidWave, DEMONS, DemonKind, demonStats, SECURE_WAVES, SITES, DEMON_POWER, INVASION_DELAY } from './hell';
 import { IsleBattle, defenseK } from './isleBattle';
 import { balanceOf, powerOf } from './hellBalance';
@@ -153,8 +153,14 @@ export class War {
   /** Nom d'une troupe à l'âge du village (« tirailleur »), pour les nouvelles */
   private nm(k: TroopKind) { return troopName(k, this.faction?.age ?? 1).toLowerCase(); }
 
-  /** Casernes : celles de l'île et les casernes avancées des Enfers */
-  private barracks() { return isleDefenses(this.world).barracks + (this.portalOut ? 0 : this.base?.posts() ?? 0); }
+  /**
+   * Casernes : celles de l'île, les casernes avancées des Enfers, et celles du village (chacune ajoute ses places à la
+   * garnison, une fois qu'une caserne de l'île accueille les recrues)
+   */
+  private barracks() {
+    const isle = isleDefenses(this.world).barracks;
+    return isle + (isle ? villageBarracks(this.world) : 0) + (this.portalOut ? 0 : this.base?.posts() ?? 0);
+  }
 
   /** Contexte de recrutement */
   recruitCtx(age: number, pop: number): RecruitCtx {

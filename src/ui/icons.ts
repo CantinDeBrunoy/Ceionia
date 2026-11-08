@@ -137,6 +137,9 @@ const P: Record<string, string> = {
   maglev: '<path d="M4 14V9a5 5 0 0 1 5-5h9l3 5v5z"/><path d="M4 9h17M9 4v5M14 4v5"/><path d="M3 18h18M6 21h12"/><path d="M7 14v4M17 14v4"/>',
   // tour de garde crénelée, sa meurtrière et son drapeau
   watchtower: '<path d="M8 21V8h8v13"/><path d="M7 8V5h2v1.5h2V5h2v1.5h2V5h2v3"/><path d="M12 11v3"/><path d="M12 5V2l3 1-3 1"/><path d="M5 21h14"/>',
+  // rempart crénelé entre deux poteaux ; porte de la ville : deux tours et son arche
+  wall: '<path d="M3 21V6h3v15"/><path d="M18 21V6h3v15"/><path d="M6 10h12M6 21h12"/><path d="M6 10V7h2.5v2M10 7h4v3M15.5 7H18v3"/><path d="M9 15h2v3H9zM13 15h2v3h-2z"/>',
+  gate: '<path d="M3 21V7h4v14"/><path d="M17 21V7h4v14"/><path d="M2.5 7h5M16.5 7h5"/><path d="M7 11h10"/><path d="M8 21v-6a4 4 0 0 1 8 0v6"/><path d="M12 2v3"/><path d="M12 2l2.5 1L12 4"/>',
   // navire à voile, phare (tour, lanterne, rayons), éolienne en mer
   ship: '<path d="M3 16h18l-2.5 4h-13z"/><path d="M12 3v13"/><path d="M12 4l6 9h-6"/><path d="M12 6l-5 7h5"/>',
   lighthouse: '<path d="M9 21l1-13h4l1 13"/><path d="M10 8l2-4 2 4"/><path d="M10.4 12.5h3.2M9.8 16.5h4.4"/><path d="M3 21h18"/><path d="M4 5l4 1.5M20 5l-4 1.5"/>',
@@ -165,13 +168,13 @@ export const KIND_ICON: Record<KindId, string> = {
   theater: 'masks', acropolis: 'acropolis', forum: 'arch', senate: 'dome',
   carworks: 'car', lab: 'flask', aerodrome: 'balloon', manor: 'manor', oilwell: 'pumpjack', refinery: 'refinery', brickworks: 'kiln',
   arcology: 'arcology', vfarm: 'tower', fusion: 'atom', spaceport: 'rocket', research: 'qubit', maglev: 'maglev',
-  watchtower: 'watchtower', barracks: 'shield',
+  watchtower: 'watchtower', barracks: 'shield', wall: 'wall', gate: 'gate',
   shipyard: 'ship', lighthouse: 'lighthouse', fishmarket: 'fish', offshore: 'turbine',
 };
 export const CAT_ICON: Record<BuildCat, string> = { home: 'house', prod: 'wheat', service: 'cross', life: 'columns', war: 'sword' };
 /** Icône de chaque groupe de lecture de la barre de construction */
 export const SUB_ICON: Record<string, string> = {
   logis: 'house', eau: 'drop', lumiere: 'lamp', nourriture: 'bread', materiaux: 'rock', industrie: 'anvil', sante: 'heart', savoir: 'book',
-  securite: 'shield', defense: 'sword', transport: 'train', parcs: 'leaf', detente: 'smile', culte: 'columns', monuments: 'castle',
+  securite: 'shield', defense: 'sword', remparts: 'wall', transport: 'train', parcs: 'leaf', detente: 'smile', culte: 'columns', monuments: 'castle',
 };
 export const SEASON_ICONS = ['spring', 'sun', 'leaf', 'snowflake'];

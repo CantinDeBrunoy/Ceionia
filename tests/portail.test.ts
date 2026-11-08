@@ -4,7 +4,7 @@ import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { landDistance, ISLE_R, ISLE_MIN, STRAIT_MIN, PORTAL_CELLS, ISLE_SECURE, holdIsle, repelWave, isleDefenses, isleManned, isleProgress, isleSecured, isleSteps } from '../src/world/portal';
 import { SECURE_WAVES } from '../src/sim/hell';
-import { zoneOrigins, isZoned as isleZoned } from '../src/build/zones';
+import { isleOrigins, zoneOrigins, isZoned as isleZoned } from '../src/build/zones';
 
 /** Les cases de terre reliées (à pied, de proche en proche) à la case donnée */
 function landFrom(w: World, cx: number, cz: number) {
@@ -101,22 +101,23 @@ describe('l’île du portail', () => {
     expect(old.portal).toBeNull();
   });
 
-  it('on n’y bâtit que les défenses, une fois le portail ouvert, et les défenses nulle part ailleurs', () => {
+  it('on n’y bâtit que les défenses, une fois le portail ouvert ; les défenses se bâtissent aussi au village', () => {
     const w = new World();
     newWorld(w, 3, 2026, GEN);
     const p = w.portal!, [sx, sz] = w.startSpot();
-    // portail fermé : aucune défense nulle part
-    expect(zoneOrigins(w, 'watchtower')).toEqual([]);
+    // portail fermé : aucune défense sur l'île (au village, l'expédition verrouille l'onglet, pas la carte)
+    expect(isleOrigins(w, 'watchtower')).toEqual([]);
     expect(w.canPlace('watchtower', p.x + 2, p.z)).toMatch(/ouvrir le portail/);
     w.exp.done.push('portal');
     expect(w.portalOpen).toBe(true);
-    const towers = zoneOrigins(w, 'watchtower'), camps = zoneOrigins(w, 'barracks');
+    const towers = isleOrigins(w, 'watchtower'), camps = isleOrigins(w, 'barracks');
     expect(towers.length).toBeGreaterThan(20);
     expect(camps.length).toBeGreaterThan(8);
     for (const k of [...towers, ...camps]) expect(w.onPortalIsland(k % N, Math.floor(k / N))).toBe(true);
-    // pas sur le portail, pas sur le continent
+    // pas sur le portail ; au village, oui (une tour de garde dans les rues)
     expect(w.canPlace('watchtower', p.x - 1, p.z - 1)).toMatch(/portail se dresse/);
-    expect(w.canPlace('watchtower', sx + 4, sz + 4)).toMatch(/île du portail/);
+    expect(w.canPlace('watchtower', sx + 4, sz + 4)).toBeNull();
+    expect(w.canPlace('barracks', sx + 4, sz + 4)).toBeNull();
     // ni maison ni ferme sur l'île
     expect(w.canPlace('house', p.x + 2, p.z)).toMatch(/que des défenses/);
     expect(zoneOrigins(w, 'house').some((k) => w.onPortalIsland(k % N, Math.floor(k / N)))).toBe(false);
@@ -124,31 +125,32 @@ describe('l’île du portail', () => {
     const k = towers[0];
     w.place('watchtower', k % N, Math.floor(k / N), 0, true, 1, false);
     expect([...w.buildings.values()].some((b) => b.kind === 'watchtower')).toBe(true);
-    // sans île (ancienne partie) : aucune défense
+    // sans île (ancienne partie) : les défenses se bâtissent quand même au village
     const old = new World();
     const json = w.toJSON() as Record<string, unknown>;
     delete json.portal;
     old.fromJSON(json);
-    expect(old.canPlace('watchtower', p.x + 2, p.z)).toMatch(/pas d’île/);
+    expect(old.canPlace('watchtower', sx + 4, sz + 4)).toBeNull();
   });
 
   it('l’île se sécurise : défenses debout, puis vagues repoussées (les jours tenus ne sont qu’un relevé) ; le compte se sauvegarde', () => {
     const w = new World();
     newWorld(w, 3, 2026, GEN);
-    expect(isleZoned('watchtower') && isleZoned('barracks')).toBe(true);
+    // (les défenses ne sont plus des bâtiments de zone : elles se posent au village aussi)
+    expect(isleZoned('watchtower') || isleZoned('barracks')).toBe(false);
     expect(ISLE_SECURE.waves).toBe(SECURE_WAVES);
     // sans portail ouvert ni défenses, le temps ne compte pas
     holdIsle(w, 1000, 100);
     expect(w.isleGuard.days).toBe(0);
     expect(isleSecured(w)).toBe(false);
     w.exp.done.push('portal');
-    const t = zoneOrigins(w, 'watchtower')[0];
+    const t = isleOrigins(w, 'watchtower')[0];
     w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false);
     holdIsle(w, 1000, 100);
     expect(isleManned(w)).toBe(false);
     expect(w.isleGuard.days).toBe(0);
     expect(isleSteps(w).map((x) => x.have)).toEqual([1, 0, 0]);
-    const c = zoneOrigins(w, 'barracks')[0];
+    const c = isleOrigins(w, 'barracks')[0];
     w.place('barracks', c % N, Math.floor(c / N), 0, true, 1, false);
     expect(isleDefenses(w)).toEqual({ towers: 1, barracks: 1 });
     holdIsle(w, 300, 100);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Parts, type Glow } from './parts';
-import { KindId, KINDS, smallSize } from '../build/catalog';
+import { KindId, KINDS, smallSize, isRampart } from '../build/catalog';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { bakeFit, hasModel, ModelName } from './assets';
 import { hash2 } from '../core/rng';
@@ -8,6 +8,7 @@ import { drawRocket } from './rocket';
 import { decal, fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 import { defTower, defBarracks, type DefKit } from './defenses';
 import { circus, type CircusKit } from './circus';
+import { rampartWall, rampartGate } from './ramparts';
 
 /**
  * Bâtiments importés (CC0), par sorte puis par âge : leurs variantes ; null ou absent, le modèle procédural. Il ne reste que
@@ -132,6 +133,8 @@ export interface ModelOpts {
   row?: number;
   /** tours de l'âge futuriste : rang dans la ligne d'horizon, de 0 (immeuble bas) à 3 (gratte-ciel) */
   tier?: number;
+  /** remparts : les côtés reliés à un autre pan (WALL_N, E, S, W de hellBase.ts), pour se raccorder aux voisins */
+  mask?: number;
 }
 
 /** Bâtiments passés en 2 × 2 dont le modèle procédural est dessiné pour une case : on l'agrandit d'autant */
@@ -12441,6 +12444,8 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'circus': sink(0.012); circus(p, 5, CIRCUS_KIT); return true;
     case 'watchtower': defTower(p, 5, DEF_KIT); return true;
     case 'barracks': defBarracks(p, 5, DEF_KIT); return true;
+    case 'wall': rampartWall(p, 5, o.mask ?? 0, DEF_KIT); return true;
+    case 'gate': rampartGate(p, 5, o.mask ?? 0, DEF_KIT); return true;
   }
   return false;
 }
@@ -13286,7 +13291,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   if (imported) return imported;
   // (le bloc ne compte qu'au Moyen Âge, pour la couleur des toits ; le rang dans la ligne d'horizon, à l'âge futuriste)
   const key = kind === 'house' ? `${kind}|${age}|${o.v}|${+o.L}${+o.R}${+o.F}|${age === 2 ? o.row ?? '' : ''}|${age >= 5 ? o.tier ?? '' : ''}`
-    : `${kind}|${age}|${o.v % 3}|${size}${age >= 5 && kind === 'workshop' ? `|${o.tier ?? ''}` : ''}`;
+    : `${kind}|${age}|${o.v % 3}|${size}${age >= 5 && kind === 'workshop' ? `|${o.tier ?? ''}` : ''}${isRampart(kind) ? `|m${o.mask ?? 0}` : ''}`;
   let m = cache.get(key);
   if (m) return m;
   const p = new Parts();
@@ -13367,6 +13372,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'maglev': maglev(p); break;
     case 'watchtower': defTower(p, age, DEF_KIT); break;
     case 'barracks': defBarracks(p, age, DEF_KIT); break;
+    case 'wall': rampartWall(p, age, o.mask ?? 0, DEF_KIT); break;
+    case 'gate': rampartGate(p, age, o.mask ?? 0, DEF_KIT); break;
   }
   if (extras) futureExtras(p, kind, kind === 'forum' && size === 3 ? 2 : size);
   lifeK = 1;

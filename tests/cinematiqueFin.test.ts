@@ -5,7 +5,7 @@ import {
 import { World, N, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
-import { zoneOrigins } from '../src/build/zones';
+import { isleOrigins, zoneOrigins } from '../src/build/zones';
 import { War } from '../src/sim/war';
 import { hellFallen } from '../src/sim/kingdom';
 
@@ -91,7 +91,7 @@ describe('La cinématique de fin : une seule fois', () => {
     const w = new World();
     newWorld(w, 3, 2026, GEN);
     w.exp.done.push('portal');
-    const t = zoneOrigins(w, 'watchtower')[0];
+    const t = isleOrigins(w, 'watchtower')[0];
     w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false);
     const war = new War(w);
     const tick = (n: number) => { for (let i = 0; i < n * 10; i++) war.update(0.1, 1); };

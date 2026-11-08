@@ -10,7 +10,8 @@ import { tr } from '../i18n';
  */
 export const FIRE_RANGE = 14;
 export const policeRange = (age: number) => 12 + Math.max(0, Math.min(5, age));
-export const rangeOf = (b: { kind: string; age: number }) => (b.kind === 'fire' ? FIRE_RANGE : b.kind === 'police' ? policeRange(b.age) : 0);
+/** (la tour de garde du village veille comme un poste de police, à la même portée) */
+export const rangeOf = (b: { kind: string; age: number }) => (b.kind === 'fire' ? FIRE_RANGE : b.kind === 'police' || b.kind === 'watchtower' ? policeRange(b.age) : 0);
 
 /** Bien-être par habitation couverte par les deux services, et plafond (léger : le village ne dépend pas de la sécurité) */
 export const COVER_JOY = 0.04;
@@ -39,7 +40,7 @@ export function computeCoverage(buildings: Iterable<Building>): Coverage {
   const fireSt: Building[] = [], policeSt: Building[] = [], homes: Building[] = [];
   for (const b of buildings) {
     if (b.kind === 'fire') fireSt.push(b);
-    else if (b.kind === 'police') policeSt.push(b);
+    else if (b.kind === 'police' || b.kind === 'watchtower') policeSt.push(b);
     else if ((KINDS[b.kind]?.housing?.[b.age] ?? 0) > 0) homes.push(b);
   }
   const mid = (b: Building) => sizeOf(b) / 2;

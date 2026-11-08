@@ -36,6 +36,8 @@ import { SurfaceGate } from './core/surface';
 import { Sim } from './sim/sim';
 import { GEAR_BY } from './sim/gear';
 import { Agents } from './sim/agents';
+import { Patrols } from './sim/patrols';
+import { PatrolView } from './render/patrols';
 import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
 import { Streams } from './render/streams';
@@ -120,6 +122,9 @@ class Game implements UIHost {
   veg: VegView;
   env: Environment;
   agents: Agents;
+  /** les patrouilles de soldats des tours de garde et casernes du village, et leur vue */
+  patrols: Patrols;
+  patrolView: PatrolView;
   fauna: Fauna;
   eruptions: Eruptions;
   streams: Streams;
@@ -321,6 +326,9 @@ class Game implements UIHost {
     this.env = new Environment(this.scene, renderer, coarse);
     this.agents = new Agents(w);
     this.agents.camera = this.cam.camera;
+    this.patrols = new Patrols(w);
+    this.patrolView = new PatrolView(w, this.patrols);
+    this.patrolView.camera = this.cam.camera;
     this.fauna = new Fauna(w, this.veg);
     this.fauna.people = () => this.agents.agents;
     this.eruptions = new Eruptions(w);
@@ -393,7 +401,7 @@ class Game implements UIHost {
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.gardens.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.gardens.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group);
     this.applyQuality();
 
     const host = this;
@@ -1100,6 +1108,7 @@ class Game implements UIHost {
     this.env.setShadowSize(p.shadowSize);
     this.fauna.detail = p.faunaDetail;
     this.agents.detail = p.faunaDetail;
+    this.patrolView.detail = p.faunaDetail;
     this.veg.lodDist = p.vegLod;
     this.blightView.density = p.density;
     this.blightView.mist = p.mist;
@@ -1473,6 +1482,9 @@ class Game implements UIHost {
     // pas de tracteur aux champs tant que l'usine automobile n'est pas bâtie
     this.agents.motor = (this.sim.counts.carworks ?? 0) > 0;
     this.agents.update(gdt, this.time.hour, this.sim.age, this.env.rainK > 0.6, this.sim.pop, this.env.night, this.time.season);
+    // les rondes des soldats du village (torche à la main la nuit)
+    this.patrols.update(gdt, this.sim.age);
+    this.patrolView.update(this.sim.age, this.env.night > 0.5);
     this.cam.pace = this.time.paused ? 1 : this.time.speed;
     this.expeditions.speed = this.time.speed;
     this.expeditions.update(gdt);

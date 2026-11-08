@@ -168,6 +168,13 @@ export function isleDefenses(w: World) {
   return { towers, barracks };
 }
 
+/** Les casernes du village (hors île) : elles logent des soldats de plus pour la garnison */
+export function villageBarracks(w: World) {
+  let n = 0;
+  for (const b of w.buildings.values()) if (b.kind === 'barracks' && !w.onPortalIsland(b.x, b.z)) n++;
+  return n;
+}
+
 /** L'île a ses défenses : portail ouvert, une tour de garde et une caserne au moins */
 export function isleManned(w: World) {
   if (!w.portalOpen) return false;
