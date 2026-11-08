@@ -1012,3 +1012,12 @@ body.under #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 122px); }
 /* la cinématique de la victoire : l'interface s'efface */
 body.cinematic #hud, body.cinematic #dock, body.cinematic #expList, body.cinematic #troopBar, body.cinematic #underBar, body.cinematic #bossBar, body.cinematic #selCard,
 body.cinematic #warAlert, body.cinematic #tuto, body.cinematic #tutoRing, body.cinematic #warTip, body.cinematic #homeBtn { display: none !important; }
+/* la cinématique de fin du volet militaire : voile (lumière ou noir), bandeaux de texte, bouton « Passer », bandes de cinéma */
+#kingCine { position: absolute; inset: 0; z-index: 35; pointer-events: none !important; }
+#kingCine .kc-veil { position: absolute; inset: 0; opacity: 0; }
+#kingCine .kc-bar { position: absolute; left: 0; right: 0; height: 7vh; background: #000; }
+#kingCine .kc-bar.t { top: 0; }
+#kingCine .kc-bar.b { bottom: 0; }
+#kingCine .kc-cap { position: absolute; left: 0; right: 0; bottom: 14vh; text-align: center; font-size: clamp(22px, 4vw, 40px); font-weight: 800; letter-spacing: 0.04em; color: #fff4d0; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8), 0 0 28px rgba(255, 190, 70, 0.55); opacity: 0; }
+#kingCine .kc-skip { position: absolute; right: 16px; bottom: calc(7vh + 12px); pointer-events: auto !important; padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 10, 20, 0.55); color: #f4ecd8; font: inherit; font-weight: 700; cursor: pointer; opacity: 0.8; }
+#kingCine .kc-skip:hover { opacity: 1; background: rgba(40, 30, 20, 0.8); }

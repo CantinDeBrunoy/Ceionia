@@ -26,6 +26,7 @@ export const KINGDOM_TEXT = {
   joy: (n: number) => `+${n} bien-être, pour toujours`,
   isle: 'L’île du portail est purifiée : fini les incursions',
   cont: 'Continuer',
+  skip: 'Passer',
   home: 'Retour au village',
 };
 
