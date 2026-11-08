@@ -495,7 +495,7 @@ registerDict('catalog', {
   'Posé à {r} cases au plus d’une gare desservie par un train de marchandises, il produit {n} % de plus.': 'Placed within {r} tiles of a station served by a freight train, it produces {n}% more.',
   'Une gare de voyageurs à {r} cases au plus y amène les équipes : expéditions spatiales plus sûres et lancements préparés plus vite.': 'A passenger station within {r} tiles brings teams here: space expeditions are safer and launches are prepared faster.',
   'Raccourci : {key}': 'Shortcut: {key}',
-  'Grand bâtiment ({n} × {n}) · ': 'Large building ({n} × {n}) ·',
+  'Grand bâtiment ({n} × {n}) · ': 'Large building ({n} × {n}) · ',
   'pas encore construit': 'not built yet',
   'Coût : {cost}': 'Cost: {cost}',
   ' — vous avez {have}': ' — you have {have}',

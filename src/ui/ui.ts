@@ -767,7 +767,7 @@ export class UI {
     if (guide) return guide;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
-      return tr('Débloqué par l’expédition « {title} »', { title: m?.title ?? d.reqMission });
+      return tr('Débloqué par l’expédition « {title} »', { title: tr(m?.title ?? d.reqMission) });
     }
     if (d.reqKind && !h.sim.built(d.reqKind)) return tr('Il faut d’abord « {name} » au village', { name: h.sim.nameOf(d.reqKind) });
     return null;
@@ -849,7 +849,7 @@ export class UI {
       const locked = to.reqMission && !h.expeditions.state.done.includes(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
       const first = !locked && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
       if (first) return `<button disabled title="${attr(tr('Il faut d’abord « {name} » au village', { name: first }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${tr('{name} d’abord', { name: first })}</small></button>`;
-      return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: locked }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${locked}</small></button>`
+      return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: tr(locked) }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${tr(locked)}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} ${tr('Améliorer : {name}', { name })}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
     }).join('');
     const upgrades = ups ? `<div class="acts ups">${ups}</div>` : '';
@@ -1153,7 +1153,7 @@ export class UI {
     go.hidden = !ready;
     if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = tr('Toutes les conditions sont réunies : passer à l’âge suivant ({age})', { age: AGES[ap!.next].name }); }
     $('#ageReq').innerHTML = ap
-      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: i.mission }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
+      ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
       : tr('Dernier âge atteint : profitez de votre village !');
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';

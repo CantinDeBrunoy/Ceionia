@@ -264,7 +264,7 @@ export class Sim {
     const quote = (k: KindId) => tr('« {name} »', { name: this.nameOf(k) });
     const about = (k: KindId, text: string) => { this.messageKind = k; return text; };
     // le titre d'une expédition, dans la langue du jeu
-    const title = (id: string) => MISSIONS.find((x) => x.id === id)?.title ?? id;
+    const title = (id: string) => tr(MISSIONS.find((x) => x.id === id)?.title ?? id);
     // le bâtiment conseillé coûte du bois ou de la pierre que le village n'a pas, et rien n'en produit : on dit d'abord
     // comment en avoir (sinon le joueur attend une ressource qui ne vient jamais)
     const build = (k: KindId, text: string) => {
@@ -308,7 +308,7 @@ export class Sim {
       if (!miss) return tr('Tout est prêt pour l’âge suivant ({age}) : passez-y quand vous voulez.', { age: AGES[ap.next].name });
       if (miss?.mission) {
         // toutes celles qui restent à réussir (la Préhistoire en demande deux)
-        const left = ap.items.filter((i) => i.mission && i.have < i.need).map((i) => tr('« {name} »', { name: i.mission! }));
+        const left = ap.items.filter((i) => i.mission && i.have < i.need).map((i) => tr('« {name} »', { name: tr(i.mission!) }));
         this.messageExp = true;
         return left.length > 1 ? tr('Pour l’âge suivant : réussissez les expéditions {list} et {last} (menu Expéditions).', { list: left.slice(0, -1).join(', '), last: left[left.length - 1] }) : tr('Pour l’âge suivant : réussissez l’expédition {name} (menu Expéditions).', { name: left[0] });
       }
@@ -339,8 +339,8 @@ export class Sim {
       if (w.exp.done.includes(VICTORY)) return tr('Le village a essaimé dans les étoiles : ses colons vivent sur une autre planète.');
       const next = MISSIONS.find((m) => m.age === this.age && m.requires && !w.exp.done.includes(m.id));
       const need = next?.requires?.kinds?.find((k) => !reqLine(k, next.requires!.kinds!).some((x) => this.counts[x]));
-      if (need) return build(need, tr('Pour « {title} » : il faut {k}.', { title: next!.title, k: say(need) }));
-      if (next) return tr('Prochaine étape vers les étoiles : l’expédition « {title} » (menu Expéditions).', { title: next.title }) + (this.counts.spaceport && !spaceRail(w) ? ' ' + tr('Astuce : une gare desservie par un train de voyageurs, à {n} cases au plus du cosmodrome, y amènerait les équipes (plus sûr, plus rapide).', { n: RAIL_REACH }) : '');
+      if (need) return build(need, tr('Pour « {title} » : il faut {k}.', { title: tr(next!.title), k: say(need) }));
+      if (next) return tr('Prochaine étape vers les étoiles : l’expédition « {title} » (menu Expéditions).', { title: tr(next.title) }) + (this.counts.spaceport && !spaceRail(w) ? ' ' + tr('Astuce : une gare desservie par un train de voyageurs, à {n} cases au plus du cosmodrome, y amènerait les équipes (plus sûr, plus rapide).', { n: RAIL_REACH }) : '');
     }
     const tip = this.railTip();
     if (tip) return tip;
