@@ -997,6 +997,7 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar .tcorner { flex: none; display: flex; flex-direction: column; gap: 4px; }
 #troopBar .tcorner button { min-height: 32px; padding: 0 14px; font-size: 13px; font-weight: 800; border-radius: 10px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); color: var(--ink); justify-content: center; }
 #troopBar .tcorner button.on { background: var(--accent); color: #fff; }
+#troopBar .tcorner button.go { min-height: 48px; background: #12a37e; color: #fff; border-color: #0d7a5f; font-size: 14px; box-shadow: 0 0 0 3px rgba(18, 163, 126, 0.35), var(--lift); }
 #troopBar .thelp { position: absolute; right: 10px; bottom: 150px; list-style: none; margin: 0; padding: 10px 14px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; width: min(460px, calc(100vw - 24px)); }
 #troopBar .thelp li { display: contents; }
 #troopBar .thelp b { color: var(--ink); white-space: nowrap; }

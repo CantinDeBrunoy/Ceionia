@@ -510,7 +510,7 @@ export class CommandUI implements ToolInput {
         ${this.passDock(isle)}
         <div class="tbot panel"><div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}</div><div class="thint">${this.hint()}</div></div>
         ${rec}
-        <div class="tcorner"><button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="Rappel des contrôles">Aide</button><button data-a="leave" class="tx" title="${isle ? 'Quitter le commandement (Échap)' : 'Quitter les Enfers'}">Quitter</button></div>
+        <div class="tcorner"><button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="Rappel des contrôles">Aide</button><button data-a="leave" class="tx${isle ? '' : ' go'}" title="${isle ? 'Quitter le commandement (Échap)' : 'Quitter les Enfers et revenir sur l’île (Échap)'}">${isle ? 'Quitter' : '↩ Retourner sur l’île'}</button></div>
       </div>${this.helpOpen ? `<ul class="thelp panel">${CONTROLS_HELP.map(([k, t]) => `<li><b>${k}</b><span>${t}</span></li>`).join('')}</ul>` : ''}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
   }
@@ -521,7 +521,7 @@ export class CommandUI implements ToolInput {
    */
   private passDock(isle: boolean) {
     const w = this.host.war, n = this.cmd.selected.size;
-    const main = isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}" title="${isle ? 'Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)' : 'Les troupes choisies repassent le portail et rentrent sur l’île'}"><span class="oi">🌀</span><span>${isle ? 'Envoyer aux Enfers' : 'Rentrer sur l’île'}<small>${n ? `${n} troupe${n > 1 ? 's' : ''} choisie${n > 1 ? 's' : ''}` : 'choisir des troupes'}</small></span></button>`;
+    const main = isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}" title="${isle ? 'Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)' : 'Les troupes choisies repassent le portail et rentrent sur l’île'}"><span class="oi">🌀</span><span>${isle ? 'Envoyer aux Enfers' : 'Renvoyer les troupes sur l’île'}<small>${n ? `${n} troupe${n > 1 ? 's' : ''} choisie${n > 1 ? 's' : ''}` : 'choisir des troupes'}</small></span></button>`;
     const links = this.hellLinks(isle);
     return main || links ? `<div class="tfl">${main}${links}</div>` : '';
   }
