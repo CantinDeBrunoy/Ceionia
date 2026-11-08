@@ -6,6 +6,8 @@
  * poussière, la rampe, les colons qui sortent et le premier feu de camp qui s'allume
  */
 
+import { tr as trx } from '../i18n';
+
 type RGB = [number, number, number];
 const W = 480, H = 270;
 
@@ -270,7 +272,7 @@ function spaceScene(c: CanvasRenderingContext2D, u: number, t: number, jump: boo
       halo(c, 130 + ee * 140 - 36 * sc, 170 - ee * 90 + 8 * sc, 8 + age * 14, [255, 170, 90], 0.4 * (1 - age));
     }
     ship(c, sx, sy, sc, at, 1.3, t);
-    return 'Le vaisseau colonial quitte la planète du village…';
+    return trx('Le vaisseau colonial quitte la planète du village…');
   }
   // ---- la traversée : l'arche file entre les étoiles ; pendant le saut, un tunnel de lumière et une longue traînée
   if (u < 0.42) {
@@ -305,8 +307,8 @@ function spaceScene(c: CanvasRenderingContext2D, u: number, t: number, jump: boo
       const fl = Math.max(0, f1, f2);
       if (fl > 0) { c.fillStyle = `rgba(255,255,255,${fl})`; c.fillRect(0, 0, W, H); }
     }
-    return jump ? (k < 0.45 ? 'Allumage du moteur expérimental…' : 'L’espace se plie : l’étoile voisine est déjà là !')
-      : (k < 0.5 ? 'Des années de voyage entre les étoiles…' : 'Dans les serres de l’arche, les graines du nouveau village attendent.');
+    return trx(jump ? (k < 0.45 ? 'Allumage du moteur expérimental…' : 'L’espace se plie : l’étoile voisine est déjà là !')
+      : (k < 0.5 ? 'Des années de voyage entre les étoiles…' : 'Dans les serres de l’arche, les graines du nouveau village attendent.'));
   }
   // ---- l'approche : l'étoile voisine, la planète bleue (anneau, lunes) qui grossit, l'arche qui la survole puis plonge
   const k = smooth((u - 0.42) / 0.2), pr = 22 + k * 230, px = W * 0.7 - k * 40, py = H * 0.5 + k * 150;
@@ -326,7 +328,7 @@ function spaceScene(c: CanvasRenderingContext2D, u: number, t: number, jump: boo
   }
   ship(c, sx, sy, sc, 0.15 + en * 0.4, 1, t, !en);
   if (en > 0.4) { c.fillStyle = `rgba(255,230,190,${(en - 0.4) * 1.2 * smooth(clamp((u - 0.6) / 0.02))})`; c.fillRect(0, 0, W, H); }
-  return 'La planète bleue de l’étoile voisine !';
+  return trx('La planète bleue de l’étoile voisine !');
 }
 
 /** Sur la planète, à l'aube : la descente, la poussière, la rampe, les colons qui sortent, le premier feu de camp */
@@ -389,7 +391,7 @@ function surfaceScene(c: CanvasRenderingContext2D, u: number, t: number): string
     c.fillStyle = `rgba(232,224,200,${0.7 * (1 - dust) * (0.5 + rnd(i, 24) * 0.5)})`;
     c.beginPath(); c.arc(lx + side * e * (30 + rnd(i, 23) * 120), ly - 2 - rnd(i, 25) * 12 * (1 - dust * 0.5), r, 0, Math.PI * 2); c.fill();
   }
-  if (u < 0.78) return land < 1 ? 'Descente vers la plaine, à l’aube…' : 'Contact ! L’arche s’est posée.';
+  if (u < 0.78) return trx(land < 1 ? 'Descente vers la plaine, à l’aube…' : 'Contact ! L’arche s’est posée.');
   // la rampe s'ouvre, les colons descendent, vont au feu et le font prendre
   const fx = W * 0.7, ramp = smooth(clamp((u - 0.78) / 0.04)), walk = clamp((u - 0.81) / 0.1);
   const hx = lx + 11, hy = ly - 44, ex = lerp(hx + 1, hx + 46, ramp), ey = lerp(hy + 10, ly, ramp);
@@ -407,7 +409,7 @@ function surfaceScene(c: CanvasRenderingContext2D, u: number, t: number): string
   // un voile chaud sur l'image quand le feu prend, puis le noir final
   if (u > 0.9) { c.fillStyle = `rgba(255,170,90,${0.06 * Math.sin(t * 3) + 0.05})`; c.fillRect(0, 0, W, H); }
   if (u > 0.95) { c.fillStyle = `rgba(3,5,13,${(u - 0.95) / 0.05})`; c.fillRect(0, 0, W, H); }
-  return u < 0.88 ? 'La rampe s’ouvre : les colons foulent leur nouvelle planète.' : 'Ils allument leur premier feu de camp : un nouveau village est né.';
+  return trx(u < 0.88 ? 'La rampe s’ouvre : les colons foulent leur nouvelle planète.' : 'Ils allument leur premier feu de camp : un nouveau village est né.');
 }
 
 /** L'arche posée (ou qui se pose) debout, le nez en l'air, ses pieds en (x, y + 14) ; `land` : ses pieds se déploient (0 … 1) */

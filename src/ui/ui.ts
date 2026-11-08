@@ -1,4 +1,4 @@
-import { tr, plural, nplural, getLang, setLang, colon, LANGS, type Lang } from '../i18n';
+import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, type Lang } from '../i18n';
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building } from '../build/catalog';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
@@ -146,7 +146,7 @@ function railTip(k: KindId) {
     : want === 'passenger' ? `<p class="perk">🚂 ${tr('Une gare de voyageurs à {r} cases au plus y amène les équipes : expéditions spatiales plus sûres et lancements préparés plus vite.', { r: RAIL_REACH })}</p>` : '';
 }
 const riskLabel = (r: number) => tr(r <= 0.12 ? 'faible' : r <= 0.22 ? 'mesuré' : r <= 0.32 ? 'élevé' : 'très élevé');
-const pct = (r: number) => `${Math.round(r * 100)} %`;
+const pct = (r: number) => pctText(Math.round(r * 100));
 const workLabel = (s: number) => (s <= 15 ? 'courte' : s <= 23 ? 'moyenne' : 'longue');
 /** Les gains en pastilles d'icônes (la phrase complète en infobulle) */
 const chipsHtml = (effects: Parameters<typeof effectChips>[0]) => effectChips(effects).map((c) => `<span class="chip" title="${c.title}">${c.icon}${c.n ? ` ${c.n}` : ''}</span>`).join('') || `<span class="chip" title="${tr('rien')}">∅</span>`;
@@ -540,7 +540,7 @@ export class UI {
     $('#helpBtn').onclick = () => { this.help = !this.help; try { localStorage.setItem('ceionia.aides', this.help ? '1' : '0'); } catch { /* sans stockage */ } this.host.audio.sfxClick(); this.renderMessage(); };
     $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
-    $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info('Le brouillard se lève.'); };
+    $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info(tr('Le brouillard se lève.')); };
     $('#bSpeed').onclick = () => {
       const seq = [1, 2, 4];
       host.time.speed = seq[(seq.indexOf(host.time.speed) + 1) % seq.length] ?? 1;
@@ -1149,7 +1149,7 @@ export class UI {
     // où en est l'âge : le pourcentage, l'âge visé et les conditions remplies (le détail s'ouvre d'un clic)
     const met = ap ? ap.items.filter((i) => i.have >= i.need).length : 0;
     const next = ap ? `<span>${tr('Vers {age}', { age: AGES[ap.next].name })}</span><span>${tr('{met}/{n} conditions ▾', { met, n: ap.items.length })}</span>` : `<span>${tr('Dernier âge atteint')}</span>`;
-    $('#agePct').textContent = ap ? `${pct} %` : '';
+    $('#agePct').textContent = ap ? pctText(pct) : '';
     if ($('#ageNext').dataset.v !== next) { $('#ageNext').innerHTML = next; $('#ageNext').dataset.v = next; }
     // tout est réuni : un bouton pour passer à l'âge suivant (ce n'est plus automatique)
     const go = $('#ageGo'), ready = !!ap && sim.ready, label = ap ? `${ic('up', 15, 2.4)} ${tr('Passer à : {age}', { age: AGES[ap.next].name })}` : '';
@@ -1328,7 +1328,7 @@ export class UI {
 
   /** Fiche du besoin Sécurité : couverture des pompiers et de la police, rayons, conseils, et le bouton de surbrillance sur la carte */
   private renderSecurity() {
-    const { sim, world } = this.host, c = sim.coverage, pc = (v: number) => `${Math.round(v * 100)} %`;
+    const { sim, world } = this.host, c = sim.coverage, pc = (v: number) => pctText(Math.round(v * 100));
     const all = [...world.buildings.values()], on = this.host.tools.coverage.active;
     const state = c.share >= 0.8 ? 'ok' : c.share >= 0.4 ? 'full' : 'warn';
     const tips = coverageTips(c, all);

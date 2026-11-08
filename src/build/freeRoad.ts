@@ -1,6 +1,7 @@
 import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS } from '../world/world';
 import { chaikin, rasterize, sampleCurve } from '../world/curves';
 import { Heap } from '../sim/agents';
+import { tr } from '../i18n';
 
 /** Longueur maximale d'une route libre (en cases, à vol d'oiseau) ; marge du terrain fouillé autour de A et B */
 export const FREE_MAX = 80;
@@ -23,12 +24,12 @@ export function planRoad(w: World, ax: number, az: number, bx: number, bz: numbe
   const x0 = Math.floor(ax), z0 = Math.floor(az), x1 = Math.floor(bx), z1 = Math.floor(bz);
   const A: [number, number] = [x0 + 0.5, z0 + 0.5], B: [number, number] = [x1 + 0.5, z1 + 0.5];
   const straight = (why: string): RoadPlan => ({ pts: [A[0], A[1], B[0], B[1]], cells: [], why });
-  if (!w.inCells(x0, z0) || !w.inCells(x1, z1)) return straight('Hors de la carte.');
-  if (Math.hypot(x1 - x0, z1 - z0) > FREE_MAX) return straight(`Trop loin : une route libre fait au plus ${FREE_MAX} cases.`);
+  if (!w.inCells(x0, z0) || !w.inCells(x1, z1)) return straight(tr('Hors de la carte.'));
+  if (Math.hypot(x1 - x0, z1 - z0) > FREE_MAX) return straight(tr('Trop loin : une route libre fait au plus {n} cases.', { n: FREE_MAX }));
   const ok = (k: number) => !!w.road[k] || w.canRoad(k % N, Math.floor(k / N));
-  if (!ok(w.ci(x0, z0)) || !ok(w.ci(x1, z1))) return straight('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.');
+  if (!ok(w.ci(x0, z0)) || !ok(w.ci(x1, z1))) return straight(tr('On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.'));
   const cells = search(w, w.ci(x0, z0), w.ci(x1, z1));
-  if (!cells) return straight('Pas de passage : des bâtiments, l’eau profonde ou des pentes trop raides barrent le chemin.');
+  if (!cells) return straight(tr('Pas de passage : des bâtiments, l’eau profonde ou des pentes trop raides barrent le chemin.'));
   const centre = (k: number): [number, number] => [(k % N) + 0.5, Math.floor(k / N) + 0.5];
   // on garde les cases d'angle, on file tout droit ailleurs tant que la ligne reste praticable
   const keep: [number, number][] = [centre(cells[0])];
@@ -45,7 +46,7 @@ export function planRoad(w: World, ax: number, az: number, bx: number, bz: numbe
     const pts = chaikin(keep, it).flat();
     if (it === 0 || (fits(w, pts, false) && wetN(unique(rasterize(pts, N))) <= base)) return { pts, cells: unique(rasterize(pts, N)), why: null };
   }
-  return straight('Pas de passage.');
+  return straight(tr('Pas de passage.'));
 }
 
 /** Cases sans doublon, dans l'ordre */

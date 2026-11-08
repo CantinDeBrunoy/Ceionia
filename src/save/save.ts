@@ -60,11 +60,11 @@ export function deleteSlot(map: number) {
 }
 
 export function validate(d: any): SaveData {
-  if (!d || d.v !== 1 || typeof d.map !== 'number' || !d.world || !Array.isArray(d.world.heights)) throw new Error('Fichier de sauvegarde invalide');
+  if (!d || d.v !== 1 || typeof d.map !== 'number' || !d.world || !Array.isArray(d.world.heights)) throw new Error(tr('Fichier de sauvegarde invalide'));
   // seule reste la carte du continent ; les cartes sont passées de 48 à 96 puis 192 cases de côté
   const def = mapDef(d.map);
-  if (!def) throw new Error('Sauvegarde d’une carte qui n’existe plus (seul le continent reste)');
-  if (d.world.n !== def.size) throw new Error('Sauvegarde d’une ancienne version (carte plus petite)');
+  if (!def) throw new Error(tr('Sauvegarde d’une carte qui n’existe plus (seul le continent reste)'));
+  if (d.world.n !== def.size) throw new Error(tr('Sauvegarde d’une ancienne version (carte plus petite)'));
   return d as SaveData;
 }
 

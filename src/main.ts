@@ -492,7 +492,7 @@ class Game implements UIHost {
       busy: () => this.tutorial.on || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
       act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
     });
-    this.ui.info(save ? 'Bon retour dans votre village !' : w.buildings.size ? 'Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.' : `Commencez par « ${this.sim.nameOf('gather')} », la place au centre du village (Bâtir › Vie & culture).`);
+    this.ui.info(save ? trx('Bon retour dans votre village !') : w.buildings.size ? trx('Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.') : trx('Commencez par « {name} », la place au centre du village (Bâtir › Vie & culture).', { name: this.sim.nameOf('gather') }));
     requestAnimationFrame(() => this.frame());
   }
 
@@ -517,7 +517,7 @@ class Game implements UIHost {
       sessionStorage.setItem(AUTOSTART, `${d.map}|continue`);
       this.running = false;
       location.reload();
-    } catch (e) { this.ui.toast('Import impossible : ' + (e as Error).message); }
+    } catch (e) { this.ui.toast(trx('Import impossible : {why}', { why: (e as Error).message })); }
   }
   newGame(difficulty: Difficulty) {
     deleteSlot(this.world.mapId);
@@ -744,7 +744,7 @@ class Game implements UIHost {
     if (this.fading) return;
     this.fading = true;
     const f = document.getElementById('fade')!;
-    f.textContent = label;
+    f.textContent = trx(label);
     f.classList.add('on');
     setTimeout(async () => {
       try { await fn(); } finally {
@@ -776,7 +776,7 @@ class Game implements UIHost {
     this.quake = { cell, t: 18 };
     audio.sfxRumble(18);
     // le message mène au volcan qui se réveille (on ne savait pas lequel)
-    this.ui.toast('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.', () => this.ensureSurface(() => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); }), 'danger');
+    this.ui.toast(trx('La terre tremble : un volcan se réveille… Cliquez ici pour le voir.'), () => this.ensureSurface(() => { this.follow(null); this.cam.goTo((cell % N) + 0.5, Math.floor(cell / N) + 0.5, 40); }), 'danger');
   }
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
@@ -825,7 +825,7 @@ class Game implements UIHost {
       const spots = this.parade.start(route, [a.base[0], a.base[1]], [a.dest[0], a.dest[1]], this.sim.age, crowd.length);
       f = this.farewell = { id: a.id, crowd, spots, sent: 0, rel: null, relAt: 0, voyage: false };
       this.festAt(a.base[0], a.base[1]);
-      this.ui.info(`${a.m.icon} Tout le village sort dire adieu aux colons !`);
+      this.ui.info(`${a.m.icon} ${trx('Tout le village sort dire adieu aux colons !')}`);
     }
     // la foule gagne sa place le long de la route, quelques-uns par image (chaque trajet se calcule) ; à défaut de place, elle
     // se range en cercle près du cœur du village
@@ -1001,7 +1001,7 @@ class Game implements UIHost {
     if (e.line !== null) r.setStops(e.line, e.stops, e.via); else r.addLine(e.stops, e.via);
     const l = e.line !== null ? this.world.lines.find((x) => x.id === e.line) : this.world.lines[this.world.lines.length - 1], tr = l ? r.trains.get(l.id) : undefined;
     audio.sfxPlace();
-    this.ui.toast(tr?.why ? `🚂 ${tr.why}` : `🚂 Ligne ${e.line !== null ? 'modifiée' : 'ouverte'} : ${l ? r.lineLabel(l) : ''}.`);
+    this.ui.toast(tr?.why ? `🚂 ${tr.why}` : trx(e.line !== null ? '🚂 Ligne modifiée : {line}.' : '🚂 Ligne ouverte : {line}.', { line: l ? r.lineLabel(l) : '' }));
     this.ui.update();
   }
 
@@ -1113,7 +1113,7 @@ class Game implements UIHost {
   erupt(cell: number) {
     if (!this.eruptions.start(cell)) return;
     audio.sfxEruption(ERUPTION_DUR);
-    this.ui.info('Le volcan entre en éruption !');
+    this.ui.info(trx('Le volcan entre en éruption !'));
     // la première éruption de la partie : la vue file sur le volcan pour ne pas la manquer
     // (pas depuis les Enfers ni le commandement de l'île : la vue n'y est pas arrachée, le message mène au volcan)
     if (!this.volcanoSeen && this.mode === 'surface' && !this.isleCmd) {
@@ -1244,7 +1244,7 @@ class Game implements UIHost {
       // R, l'outil Route déjà en main : on passe du tracé en ligne au tracé libre, et retour
       if (tool === 'road' && this.tools.tool === 'road') {
         this.tools.setRoadMode(this.tools.roadMode === 'line' ? 'free' : 'line');
-        this.ui.toast(this.tools.roadMode === 'free' ? 'Route libre : un clic au point A, un clic au point B.' : 'Route en ligne : glissez, case par case.');
+        this.ui.toast(trx(this.tools.roadMode === 'free' ? 'Route libre : un clic au point A, un clic au point B.' : 'Route en ligne : glissez, case par case.'));
         audio.sfxClick();
       } else if (tool) { this.tools.setTool(tool); audio.sfxClick(); }
       else if (k === 'b') { this.tools.setTool('build', this.tools.kind); }
