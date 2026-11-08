@@ -13,7 +13,7 @@ import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle
- * avec Maj ou Ctrl + glissé ; le glissé seul déplace la vue, double-clic = toutes celles de la même sorte en vue, Maj pour ajouter), ordres (clic droit ou appui long : se rendre, ou
+ * par glissé ; double-clic = toutes celles de la même sorte en vue, Maj pour ajouter), ordres (clic droit ou appui long : se rendre, ou
  * attaquer l'ennemi visé ; A puis clic : attaquer en marchant ; H : tenir ; R : se replier), groupes (Ctrl ou Maj + 1…5 pour
  * le former, 1…5 pour le rappeler, deux fois pour y aller), pause active (Espace : les ordres se donnent en pause). L'interface :
  * tout en bas, d'un seul bandeau : le bouton de passage du portail à gauche (les ordres : A, H, R, Espace), les cartes de troupes
@@ -77,7 +77,7 @@ export const IDLE_MS = 5000;
 export const CONTROLS_HELP: [string, string][] = [
   ['Clic', 'choisir une troupe (double-clic : toutes celles de la même sorte ; Maj : ajouter)'],
   ['Glisser', 'déplacer la vue (sur le sol)'],
-  ['Maj + glisser', 'tracer un cadre autour des troupes à choisir (Ctrl aussi)'],
+  ['Glisser', 'tracer un cadre autour des troupes à choisir'],
   ['Clic droit', 'aller là, ou attaquer l’ennemi visé (au doigt : appui long)'],
   ['A puis clic', 'attaquer en marchant : on combat ce qu’on croise'],
   ['H · R', 'tenir la position · se replier'],
@@ -161,7 +161,7 @@ export class CommandUI implements ToolInput {
 
   down(e: PointerInfo) {
     this.touch();
-    this.start = { x: e.x, y: e.y, touch: e.touch, box: !!(e.shift || e.ctrl), lx: e.x, ly: e.y };
+    this.start = { x: e.x, y: e.y, touch: e.touch, box: true, lx: e.x, ly: e.y };
     this.dragging = false;
     this.pressed = false;
     clearTimeout(this.press);
@@ -400,7 +400,7 @@ export class CommandUI implements ToolInput {
     else if (a.startsWith('grp:')) { const n = +a.slice(4); if (e.shiftKey || e.ctrlKey) this.cmd.setGroup(n); else if (this.cmd.recall(n)) this.focusSelection(); }
     else if (a === 'portal') {
       const us = this.units().filter((u) => this.cmd.selected.has(u.id));
-      if (!us.length) this.host.toast('Choisissez d’abord des troupes (clic, ou Maj + glisser pour un cadre).');
+      if (!us.length) this.host.toast('Choisissez d’abord des troupes (clic, ou glisser pour un cadre).');
       else { w.sendThroughPortal(us); this.host.toast(this.theater.kind === 'isle' ? `${us.length} soldat${us.length > 1 ? 's' : ''} en route vers le portail des Enfers.` : `${us.length} soldat${us.length > 1 ? 's' : ''} en route pour rentrer sur l’île.`); }
     }
     else if (a.startsWith('rec:')) this.recruitOrCraft(a.slice(4) as TroopKind);
@@ -460,8 +460,8 @@ export class CommandUI implements ToolInput {
     const n = this.cmd.selected.size;
     if (this.placing) return `Cliquez au sol pour poser : ${BASE_DEFS[this.placing].name}. Échap ou clic droit pour arrêter.`;
     if (this.cmd.armed) return 'Cliquez à l’endroit à attaquer : les soldats combattront ce qu’ils croisent.';
-    if (n) return `${n} soldat${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} : clic droit : envoyer · A attaquer · H tenir · R replier · glisser : déplacer la vue · Maj + glisser : cadre.`;
-    return 'Choisissez des soldats (clic), puis clic droit où les envoyer · glisser : déplacer la vue · Maj + glisser : sélectionner · clic droit glissé : tourner.';
+    if (n) return `${n} soldat${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} : clic droit : envoyer · A attaquer · H tenir · R replier · glisser : tracer un cadre.`;
+    return 'Choisissez des soldats (clic), puis clic droit où les envoyer · glisser : tracer un cadre · clic droit glissé : tourner.';
   }
 
   /** Remet l'interface à jour (appelée souvent : ne refait le contenu que s'il a changé) */
