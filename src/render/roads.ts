@@ -1,3 +1,4 @@
+import { deckProfile } from './bridgeDeck';
 import * as THREE from 'three';
 import { World, N } from '../world/world';
 import { hash2 } from '../core/rng';
@@ -1043,13 +1044,15 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
       };
       ramp(-1, 0); ramp(1, 0); ramp(0, -1); ramp(0, 1);
       // piles plantées dans l'eau
-      const foot = Math.min(y - 0.6, w.hAt(cx + 0.5, cz + 0.5));
+      const foot = Math.max(y - 1.1, Math.min(y - 0.6, w.hAt(cx + 0.5, cz + 0.5)));
       for (const [px, pz] of ew && !ns ? [[cx + 0.5, z0 + 0.06], [cx + 0.5, z1 - 0.06]] : [[x0 + 0.06, cz + 0.5], [x1 - 0.06, cz + 0.5]]) box(px - 0.05, foot, pz - 0.05, px + 0.05, y - 0.05, pz + 0.05, pile);
       // garde-corps le long des bords libres
       const rail = age >= 4 ? deck : pile;
       if (ew && !ns) for (const z of [z0 + 0.015, z1 - 0.015]) { box(x0, y + 0.1, z - 0.012, x1, y + 0.13, z + 0.012, rail); for (let x = x0 + 0.05; x < x1; x += 0.3) box(x - 0.012, y, z - 0.012, x + 0.012, y + 0.1, z + 0.012, rail); }
       if (ns && !ew) for (const x of [x0 + 0.015, x1 - 0.015]) { box(x - 0.012, y + 0.1, z0, x + 0.012, y + 0.13, z1, rail); for (let z = z0 + 0.05; z < z1; z += 0.3) box(x - 0.012, y, z - 0.012, x + 0.012, y + 0.1, z + 0.012, rail); }
     };
+    /** lanternes au bout des petits ponts : x, hauteur du tablier, z, direction vers l'extérieur */
+    const bridgePosts: number[][] = [];
     /** Pavé orienté : centre (x, z), axe (ux, uz) sur ±hu, en travers sur ±hv, de y0 à y1 */
     const obox = (x: number, z: number, ux: number, uz: number, hu: number, hv: number, y0: number, y1: number, cl: THREE.Color) => {
       const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([p, q]) => [x + ux * hu * p - uz * hv * q, z + uz * hu * p + ux * hv * q]);
@@ -1064,7 +1067,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
      * (diagonale d'un tracé en escalier), rejoint l'autre rive ; adouci, puis tablier en ruban, garde-corps et piles
      */
     const smoothBridge = (ch: { cells: number[]; head: boolean; tail: boolean }) => {
-      const cells = ch.cells, hw = age >= 4 ? 0.34 : 0.32, th = 0.055;
+      const cells = ch.cells, hw = hw0 + 0.03, th = 0.055;
+      let spanA = 0, spanB = 0;
       const xz = (c: number) => [c % N, Math.floor(c / N)];
       const i0 = ch.head ? 1 : 0, i1 = cells.length - (ch.tail ? 2 : 1);
       // le tablier à la hauteur de l'eau la plus haute qu'il franchit (les cases sèches entre deux bras n'en ont pas)
@@ -1099,16 +1103,23 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         out.push(line[line.length - 1]);
         line = out;
       }
-      // côtés du ruban ; au-dessus de l'eau (pas sur les rampes) : garde-corps et piles
+      // profil en long : tablier plat au-dessus de l'eau (et un peu sur les rives), rampes douces jusqu'au sol aux deux bouts
       const n = line.length, L: number[][] = [], R: number[][] = [], wet: boolean[] = [];
+      const S = [0];
+      for (let i = 1; i < n; i++) S.push(S[i - 1] + Math.hypot(line[i][0] - line[i - 1][0], line[i][2] - line[i - 1][2]));
+      const prof = deckProfile(S, line.map((c) => w.isWet(Math.floor(c[0]), Math.floor(c[2]))), line.map((c) => w.hAt(c[0], c[2])), deckY, line[0][1], line[n - 1][1]);
+      line.forEach((c, i) => { c[1] = prof.y[i]; });
+      spanA = prof.a; spanB = prof.b;
       for (let i = 0; i < n; i++) {
         const p = line[Math.max(0, i - 1)], q = line[Math.min(n - 1, i + 1)], tx = q[0] - p[0], tz = q[2] - p[2], tl = Math.hypot(tx, tz) || 1;
         const nx = -tz / tl, nz = tx / tl, c = line[i];
         L.push([c[0] + nx * hw, c[1], c[2] + nz * hw]); R.push([c[0] - nx * hw, c[1], c[2] - nz * hw]);
-        wet.push(w.isWet(Math.floor(c[0]), Math.floor(c[2])) && c[1] > deckY - 0.05);
+        wet.push(S[i] >= spanA && S[i] <= spanB);
       }
       const rail = age >= 4 ? deck : pile;
-      let run = 0, nextPost = 0.05, nextPile = 0.35;
+      let run = 0, nextPost = 0.05, nextPile = spanA + 0.6;
+      // appuis sous le tablier seulement pour une vraie portée : un petit pont se pose sur ses rives
+      const longSpan = spanB - spanA > 1.5;
       for (let i = 0; i + 1 < n; i++) {
         // tablier : planches de bois à la teinte qui varie, dalles de pierre, chaussée d'acier
         plankM = a <= 2 ? 0.88 + 0.16 * hash2(i, cells[0], 81) : 0.96 + 0.06 * hash2(i, cells[0], 81);
@@ -1137,7 +1148,8 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
           }
           // piles plantées dans l'eau : poteaux de bois par paires, piles de pierre en travers, fûts d'acier
           for (; nextPile < run + seg; nextPile += 0.8) {
-            const t = (nextPile - run) / seg, x = p[0] + (q[0] - p[0]) * t, z = p[2] + (q[2] - p[2]) * t, y = p[1], foot = Math.min(y - 0.6, w.hAt(x, z));
+            if (!longSpan || nextPile > spanB - 0.4) continue;
+            const t = (nextPile - run) / seg, x = p[0] + (q[0] - p[0]) * t, z = p[2] + (q[2] - p[2]) * t, y = p[1], foot = Math.max(y - 1.1, Math.min(y - 0.6, w.hAt(x, z)));
             if (a === 2 || a === 3) obox(x, z, -uz, ux, hw * 0.82, 0.07, foot, y - th, pile);
             else for (const o of [-1, 1]) obox(x - uz * o * (hw - 0.07), z + ux * o * (hw - 0.07), ux, uz, a >= 4 ? 0.035 : 0.05, a >= 4 ? 0.035 : 0.05, foot, y - th, pile);
           }
@@ -1146,6 +1158,15 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
           nextPile = Math.max(nextPile, run + seg + 0.2);
         }
         run += seg;
+      }
+      // poteaux d'extrémité, des deux bouts et des deux côtés ; une lanterne au bout de chacun (côtés alternés)
+      const first = wet.indexOf(true), last = wet.lastIndexOf(true);
+      if (first >= 0) for (const [i, o] of [[first, 1], [last, -1]]) {
+        const c = line[i];
+        for (const [side, sd] of [[L[i], 1], [R[i], -1]] as const) {
+          obox(side[0], side[2], 1, 0, 0.022, 0.022, c[1] - th, c[1] + 0.2, rail);
+          if (sd === o) { const dx = side[0] - c[0], dz = side[2] - c[2], dl = Math.hypot(dx, dz) || 1; bridgePosts.push([side[0], c[1], side[2], dx / dl, dz / dl]); }
+        }
       }
     };
     // ponts : un pont simple suit sa courbe ; un carrefour ou une boucle sur l'eau reste un ouvrage case par case
@@ -1163,7 +1184,7 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
         }
         const ch = this.bridgeChain(comp);
         if (ch) { smoothBridge(ch); continue; }
-        const compY = Math.max(...comp.map((c) => w.bridgeY(c % N, Math.floor(c / N)) ?? -Infinity));
+        const compY = Math.max(...comp.map((c) => Math.max(w.bridgeY(c % N, Math.floor(c / N)) ?? -Infinity, w.hAt((c % N) + 0.5, Math.floor(c / N) + 0.5) + 0.03)));
         for (const c of comp) {
           const x = c % N, z = Math.floor(c / N);
           bridge(x, z, compY, (dx, dz) => w.inCells(x + dx, z + dz) && w.road[w.ci(x + dx, z + dz)] === 1);
@@ -1215,7 +1236,12 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     };
 
     // places des lanternes : sur le trottoir en ville (côté maisons, ou coin d'un carrefour), au bord du chemin ailleurs
-    const lamps = new Map<number, [number, number, number, number]>();
+    const lamps = new Map<number, [number, number, number, number] | [number, number, number, number, number]>();
+    // lanternes sur les poteaux d'extrémité des petits ponts (à la hauteur du tablier)
+    bridgePosts.forEach(([x, y, z, sx, sz], i) => {
+      const d = Math.abs(sx) > Math.abs(sz) ? [Math.sign(sx), 0] : [0, Math.sign(sz)];
+      lamps.set(-1e6 - i, [x, z, d[0], d[1], y]);
+    });
     for (const k of this.lightCells(lines)) {
       if (++batch % 32 === 0) yield;
       const cx = k % N, cz = Math.floor(k / N), st = plan?.cells.get(k);
@@ -1472,9 +1498,9 @@ float rGrain(vec2 rp, float sc, float amp) { return 1.0 - amp * 0.5 + rHash(floo
     // éclairage des chemins : torches à la Préhistoire, puis lanternes pendues, réverbères à gaz, lampadaires
     yield;
     const lights: number[] = [];
-    for (const [, [x, z, sx, sz]] of lamps) {
+    for (const [, [x, z, sx, sz, deckAt]] of lamps) {
       if (++batch % 32 === 0) yield;
-      const y = w.hAt(x, z) + (town ? 0.02 : 0);
+      const y = deckAt ?? w.hAt(x, z) + (town ? 0.02 : 0);
       // le bras de la lanterne se tend vers le chemin
       const ry = Math.atan2(-sx, -sz) - Math.PI / 2;
       lights.push(x - sx * 0.08, z - sz * 0.08);
