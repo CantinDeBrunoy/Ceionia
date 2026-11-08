@@ -640,7 +640,7 @@ export class HellView {
     if (!near || (!p.smoke.length && !p.sparks.length)) return;
     d.puffT -= dt;
     if (d.puffT > 0) return;
-    d.puffT = 0.4 + Math.random() * 0.35;
+    d.puffT = 0.16 + Math.random() * 0.2;
     const co = Math.cos(yaw), si = Math.sin(yaw), fx = this.units.fx;
     const at = (v: [number, number, number]): [number, number, number] => [d.x + v[0] * co + v[2] * si, d.y + v[1], d.z - v[0] * si + v[2] * co];
     const col = d.age === 1 ? 0x5a4a48 : d.age === 2 ? 0x4a4048 : d.age === 3 ? 0x2c2a2e : d.age === 4 ? 0x6a6a70 : 0x9ad0e8;

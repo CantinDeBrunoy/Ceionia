@@ -40,7 +40,7 @@ const ST: { wall: number; wall2: number; roof: number; trim: number; acc: number
   { wall: WOOD, wall2: DARKWOOD, roof: CLOTH, trim: 0xc89a6a, acc: BLUE },
   { wall: 0x8a8590, wall2: 0x5e5a66, roof: 0x3a5a9a, trim: 0xb8b2bc, acc: BLUE },
   { wall: 0xa4553a, wall2: 0x6a3424, roof: 0x7a8088, trim: 0x4a4650, acc: 0x2e6ad8 },
-  { wall: 0xaeb0b2, wall2: 0x7c7e82, roof: 0x5a5e66, trim: 0xe0b030, acc: 0x2e6ad8 },
+  { wall: 0xc8cacc, wall2: 0x9a9ca0, roof: 0x5a5e66, trim: 0xe0b030, acc: 0x2e6ad8 },
   { wall: 0xdfe6ee, wall2: 0x8a98ac, roof: 0xc4d0e0, trim: CYAN, acc: CYAN },
 ];
 
@@ -63,7 +63,7 @@ export function baseAgeGeo(kind: BaseKind, ageIn: number): BaseParts | null {
 
   // ----- éléments communs -----
   /** ombre portée : un disque sombre à plat sous le bâtiment */
-  const shadow = (rx: number, rz: number, x = 0, z = 0.1) => solid.push(paint(new THREE.CylinderGeometry(1, 1, 0.012, 14).scale(rx, 1, rz).translate(x, 0.006, z), 0x1c1216));
+  const shadow = (rx: number, rz: number, x = 0, z = 0.1) => solid.push(paint(new THREE.CylinderGeometry(1, 1, 0.012, 14).scale(rx * 0.88, 1, rz * 0.88).translate(x, 0.006, z), 0x3a2228));
   /** dalle ou sol préparé : terre battue (rien), pierre, brique, béton, plaque de métal à liseré néon */
   const pad = (hw: number, hd: number, x = 0, z = 0.1) => {
     if (a === 1) return;
@@ -173,7 +173,7 @@ export function baseAgeGeo(kind: BaseKind, ageIn: number): BaseParts | null {
   const stakes = (x0: number, z0: number, x1: number, z1: number, n: number) => {
     for (let i = 0; i < n; i++) {
       const t = n === 1 ? 0.5 : i / (n - 1);
-      solid.push(paint(new THREE.ConeGeometry(0.03, 0.34, 4).rotateZ(i % 2 ? 0.45 : -0.45).translate(x0 + (x1 - x0) * t, 0.14, z0 + (z1 - z0) * t), 0xc89a6a, shade));
+      solid.push(paint(new THREE.ConeGeometry(0.03, 0.34, 4).rotateZ(i % 2 ? 0.2 : -0.2).translate(x0 + (x1 - x0) * t, 0.14, z0 + (z1 - z0) * t), 0xc89a6a, shade));
     }
   };
 
