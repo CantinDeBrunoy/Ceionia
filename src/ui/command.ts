@@ -14,7 +14,7 @@ import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneTo, zoneThe, zoneAgeText } from '../
  * double-clic = toutes celles de la même sorte en vue, Maj pour ajouter), ordres (clic droit ou appui long : se rendre, ou
  * attaquer l'ennemi visé ; A puis clic : attaquer en marchant ; H : tenir ; R : se replier), groupes (Ctrl ou Maj + 1…5 pour
  * le former, 1…5 pour le rappeler, deux fois pour y aller), pause active (Espace : les ordres se donnent en pause). L'interface :
- * à gauche les ordres en grands boutons, à droite la caserne (île) ou la base avancée (Enfers), en bas les cartes de troupes et
+ * à gauche le bouton de passage du portail (les ordres : A, H, R, Espace), à droite la caserne (île) ou la base avancée (Enfers), en bas les cartes de troupes et
  * les groupes, en haut le ruban d'état, en bas à droite Aide et Quitter
  */
 
@@ -69,6 +69,7 @@ export const CONTROLS_HELP: [string, string][] = [
   ['Clic droit', 'aller là, ou attaquer l’ennemi visé (au doigt : appui long)'],
   ['A puis clic', 'attaquer en marchant : on combat ce qu’on croise'],
   ['H · R', 'tenir la position · se replier'],
+  ['Clic droit glissé', 'tourner la vue ; en le montant ou le descendant, incliner la caméra (clavier : Page haut / Page bas)'],
   ['Ctrl + 1…5', 'former un groupe ; 1…5 le rappelle, deux fois pour y aller'],
   ['Espace', 'pause active : les ordres se donnent en pause'],
   ['🌀 · 🔥', 'passer le portail ; « Voir les Enfers » y mène, « Renforts » fait venir la garnison de l’île'],
@@ -396,8 +397,8 @@ export class CommandUI implements ToolInput {
     const n = this.cmd.selected.size;
     if (this.placing) return `Cliquez au sol pour poser : ${BASE_DEFS[this.placing].name}. Échap ou clic droit pour arrêter.`;
     if (this.cmd.armed) return 'Cliquez à l’endroit à attaquer : les soldats combattront ce qu’ils croisent.';
-    if (n) return `${n} soldat${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} : clic droit où les envoyer, ou un ordre à gauche.`;
-    return 'Choisissez des soldats (clic, ou cadre à la souris), puis clic droit où les envoyer.';
+    if (n) return `${n} soldat${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} : clic droit où les envoyer · A attaquer · H tenir · R replier · Espace pause · clic droit glissé : incliner la vue.`;
+    return 'Choisissez des soldats (clic, ou cadre à la souris), puis clic droit où les envoyer. Clic droit glissé : tourner et incliner la vue.';
   }
 
   /** Remet l'interface à jour (appelée souvent : ne refait le contenu que s'il a changé) */
@@ -440,13 +441,7 @@ export class CommandUI implements ToolInput {
     const ribbon = [status, blight, garrison, wounded ? `<span class="twd" title="Blessés qui se soignent à la caserne">🩹 ${wounded} blessé${wounded > 1 ? 's' : ''}</span>` : ''].filter(Boolean).map((x) => `<div class="tchip">${x}</div>`).join('');
     const none = isle ? 'Aucune troupe sur l’île : recrutez à la caserne (à droite).' : w.army.troops.some((x) => x.where === 'hell') ? 'Aucune troupe debout ici : les blessés se soignent.' : 'Aucune troupe ici : faites venir la garnison de l’île (Renforts, à gauche).';
     const html = `<div class="tstate">${ribbon}</div>
-      <div class="tdock tleft"><h5>Ordres</h5>
-        <button data-a="attack" class="tord atk${sel.armed ? ' on' : ''}" title="Attaquer en marchant : choisir des soldats, puis cliquer au sol ; ils combattent ce qu’ils croisent (touche A)"><span class="oi">⚔️</span>Attaquer<kbd>A</kbd></button>
-        <button data-a="hold" class="tord hld" title="Tenir la position : les soldats choisis s’arrêtent et défendent l’endroit (touche H)"><span class="oi">🛡️</span>Tenir<kbd>H</kbd></button>
-        <button data-a="retreat" class="tord rtr" title="${isle ? 'Se replier vers la caserne (touche R)' : 'Se replier vers le portail (touche R)'}"><span class="oi">↩️</span>Replier<kbd>R</kbd></button>
-        ${isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt" title="${isle ? 'Passer le portail : les troupes choisies partent en expédition dans les Enfers (facultatif)' : 'Rentrer sur l’île par le portail'}"><span class="oi">🌀</span>${isle ? 'Enfers' : 'Île'}</button>`}${this.hellLinks(isle)}
-        <button data-a="pause" class="tord tps${this.host.paused() ? ' on' : ''}" title="Pause active (Espace) : les ordres se donnent en pause"><span class="oi">${this.host.paused() ? '▶' : '⏸'}</span>${this.host.paused() ? 'Reprendre' : 'Pause'}<kbd>␣</kbd></button>
-      </div>
+      ${this.passDock(isle)}
       ${rec}
       <div class="tbot panel"><div class="thint">${this.hint()}</div>
         <div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall" data-a="all" title="Toutes les troupes">Tous</button>` : ''}<span class="tgl">Groupes</span><span class="grps">${groups}</span></div></div>
@@ -455,14 +450,25 @@ export class CommandUI implements ToolInput {
   }
 
   /**
+   * Le seul dock de gauche : UN bouton pour faire passer les troupes choisies d'un monde à l'autre (les ordres se donnent au
+   * clavier : A, H, R, Espace, et au clic droit) ; à côté, en plus discret, le lien « Voir les Enfers » (île) ou « Renforts » (Enfers)
+   */
+  private passDock(isle: boolean) {
+    const w = this.host.war, n = this.cmd.selected.size;
+    const main = isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}" title="${isle ? 'Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)' : 'Les troupes choisies repassent le portail et rentrent sur l’île'}"><span class="oi">🌀</span><span>${isle ? 'Envoyer au portail : Enfers' : 'Rentrer sur l’île'}<small>${n ? `${n} troupe${n > 1 ? 's' : ''} choisie${n > 1 ? 's' : ''}` : 'choisissez d’abord des troupes'}</small></span></button>`;
+    const links = this.hellLinks(isle);
+    return main || links ? `<div class="tdock tleft">${main}${links}</div>` : '';
+  }
+
+  /**
    * Les passages entre l'île et les Enfers : de l'île, aller voir les troupes et la base des Enfers (sans quoi on n'y entrait
    * qu'en cliquant la nouvelle d'un passage) ; des Enfers, faire venir en renfort les troupes valides de l'île
    */
   private hellLinks(isle: boolean) {
     const w = this.host.war;
-    if (isle) return w.hellPresence() ? '<button data-a="goHell" class="tord gth" title="Aller dans les Enfers, auprès des troupes et de la base avancée"><span class="oi">🔥</span>Voir les Enfers</button>' : '';
+    if (isle) return w.hellPresence() ? '<button data-a="goHell" class="tord gth sm" title="Aller dans les Enfers, auprès des troupes et de la base avancée"><span class="oi">🔥</span>Voir les Enfers</button>' : '';
     const n = w.portalOut || !w.isle ? 0 : w.troopsIn(w.isle.sim).filter((u) => !w.crossing.has(u.id)).length;
-    return n ? `<button data-a="garrison" class="tord gar" title="Renforts : les ${n} troupe${n > 1 ? 's' : ''} valide${n > 1 ? 's' : ''} de l’île passent le portail et vous rejoignent"><span class="oi">🌀</span>Renforts +${n}</button>` : '';
+    return n ? `<button data-a="garrison" class="tord gar sm" title="Renforts : les ${n} troupe${n > 1 ? 's' : ''} valide${n > 1 ? 's' : ''} de l’île passent le portail et vous rejoignent"><span class="oi">🌀</span>Renforts +${n}</button>` : '';
   }
 
   /**
@@ -473,10 +479,11 @@ export class CommandUI implements ToolInput {
     const w = this.host.war, b = w.base;
     if (!b) return '';
     const world = w.purse;
-    const sup = Math.round((b.supply / SUPPLY_MAX) * 100), low = sup < 25;
+    const sup = Math.round((b.supply / SUPPLY_MAX) * 100), low = sup < 25, lvl = sup < 25 ? 'low' : sup < 50 ? 'mid' : 'ok';
     const enRoute = b.convoys.length ? `<small class="q">Convoi en route : ${b.convoys.map((c) => `${Math.ceil(c.left)} s`).join(' · ')}</small>` : '';
-    const gauge = `<span class="tsup${low ? ' low' : ''}" title="Vivres et équipement de l’expédition : chaque troupe en consomme ; à vide, elles s’affaiblissent peu à peu${b.weak > 0 ? ` (en ce moment : −${Math.round(b.weak * 100)} % de force)` : ''}">🍞 Vivres <i><b style="width:${sup}%"></b></i>${sup} %</span>
-      <button data-a="convoy" class="trb" title="Envoyer un convoi de ravitaillement depuis le village : il arrive par le portail"><b>📦 Ravitailler</b><small>${costText(CONVOY_COST)}</small></button>${enRoute}`;
+    const gauge = `<span class="tsup ${lvl}" title="Vivres et équipement de l’expédition : chaque troupe en consomme ; à vide, elles s’affaiblissent peu à peu${b.weak > 0 ? ` (en ce moment : −${Math.round(b.weak * 100)} % de force)` : ''}">🍞 Vivres <i><b style="width:${sup}%"></b></i>${sup} %</span>
+      <small class="tsupx${low ? ' low' : ''}">${low ? 'Presque plus de vivres ! ' : ''}Les soldats mangent : à zéro, ils s’affaiblissent.</small>
+      <button data-a="convoy" class="trb tconv${low ? ' urgent' : sup < 50 ? ' soon' : ''}" title="Un convoi part du village avec des vivres : il passe le portail et réapprovisionne la base avancée"><b>📦 Envoyer des vivres à la base</b><small>${costText(CONVOY_COST)}</small></button>${enRoute}`;
     const zi = Math.min(HELL_ZONES.length - 1, Math.max(0, w.faction?.frontier ?? 0));
     const builds = BASE_KINDS.map((k) => {
       const d = BASE_DEFS[k], afford = canAfford(world, d.cost);

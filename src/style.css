@@ -866,7 +866,7 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar .twd { color: var(--ink2); }
 #troopBar .tdock { position: absolute; top: calc(var(--hudB, 82px) + 64px); display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 18px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); max-height: calc(100dvh - var(--hudB, 82px) - 64px - 100px); overflow-y: auto; overscroll-behavior: contain; }
 body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
-#troopBar .tleft { left: 12px; width: 140px; }
+#troopBar .tleft { left: 12px; width: 190px; }
 #troopBar .tright { right: 12px; width: 210px; }
 #troopBar .tdock h5 { margin: 0; padding: 0 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink2); }
 #troopBar .tdock h5 small { font-size: 12px; letter-spacing: 0; color: var(--ink); }
@@ -877,6 +877,10 @@ body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
 #troopBar .tord.hld { background: #2b6cf0; }
 #troopBar .tord.rtr { background: #5b6b8c; }
 #troopBar .tord.prt, #troopBar .tord.gth, #troopBar .tord.gar { background: #7a3fb0; white-space: normal; line-height: 1.15; }
+#troopBar .tord.prt { display: flex; align-items: center; gap: 8px; text-align: left; min-height: 64px; box-shadow: 0 0 0 3px rgba(255, 213, 74, 0.8); }
+#troopBar .tord.prt small { display: block; font-size: 11px; font-weight: 600; opacity: 0.85; }
+#troopBar .tord.prt.idle { box-shadow: none; opacity: 0.85; }
+#troopBar .tord.sm { min-height: 40px; font-size: 13px; }
 #troopBar .tord.tps { background: #8a94a8; min-height: 44px; font-size: 14px; }
 #troopBar .tord.on { background: var(--ink); outline: 3px solid #ffd54a; }
 #troopBar .trb { flex-direction: column; align-items: flex-start; gap: 1px; min-height: 52px; justify-content: center; padding: 4px 12px; border-radius: 12px; border: 2px solid #12a37e; background: #e6f7f1; color: var(--ink); text-align: left; white-space: normal; }
@@ -899,7 +903,14 @@ body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
 #troopBar .tsup i { display: inline-block; width: 64px; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.18); overflow: hidden; }
 #troopBar .tsup i b { display: block; height: 100%; background: #3fbf5a; }
 #troopBar .tsup.low { color: #c0392b; }
-#troopBar .tsup.low i b { background: #e0a020; }
+#troopBar .tsup.mid { color: #a86a00; }
+#troopBar .tsup.mid i b { background: #e0a020; }
+#troopBar .tsup.low i b { background: #d63a2a; }
+#troopBar .tsupx { font-size: 11.5px; font-weight: 600; line-height: 1.25; color: var(--ink2); }
+#troopBar .tsupx.low { color: #c0392b; font-weight: 800; }
+#troopBar .tconv.soon { border-color: #e0a020; background: #fff3d6; }
+#troopBar .tconv.urgent { border-color: #d63a2a; background: #ffe3de; animation: convPulse 1.1s ease-in-out infinite; }
+@keyframes convPulse { 50% { box-shadow: 0 0 0 4px rgba(214, 58, 42, 0.35); } }
 /* jauge de contamination de l'île du portail : rouge-violet qui recule */
 #troopBar .tblight i b, #troopBar .tblight.low i b { background: linear-gradient(90deg, #8a3fd0, #e0442a); }
 #troopBar .tblight { color: #7a3fb0; }
@@ -931,7 +942,7 @@ body.under #troopBar .tdock { top: calc(var(--hudB, 82px) + 70px); }
   #troopBar .tstate { gap: 5px; }
   #troopBar .tchip { padding: 5px 9px; font-size: 12px; }
   #troopBar .tdock { top: calc(var(--hudB, 82px) + 78px); padding: 7px; gap: 6px; border-radius: 14px; max-height: calc(100dvh - var(--hudB, 82px) - 78px - 150px); }
-  #troopBar .tleft { left: 6px; width: 104px; }
+  #troopBar .tleft { left: 6px; width: 124px; }
   #troopBar .tright { right: 6px; width: 138px; }
   #troopBar .tbase { width: 158px; }
   #troopBar .tbuilds { grid-template-columns: 1fr; }

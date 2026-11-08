@@ -528,11 +528,12 @@ class Game implements UIHost {
       this.war.hellInView = true;
       this.war.hellFx.length = 0;
       document.body.classList.add('under', 'hell');
-      this.cam.minDist = 2.4; this.cam.maxDist = 30; this.cam.minPitch = 0.95;
+      this.cam.minDist = 2.4; this.cam.maxDist = 34; this.cam.minPitch = 0.28;
       // (à la base avancée la plus loin, s'il y en a une) ; sur les troupes les plus avancées s'il y en a : la vue se pose sur
       // elles (elle visait quatre cases devant, et sur un petit écran la barre des troupes les cachait)
       const [x, z] = this.hellFocus(hm);
-      this.cam.jump({ x, z: z + 1, dist: 14, pitch: 1.05, yaw: Math.PI }, hm.view.groundY(x, z));
+      // vue en perspective de trois quarts (pas presque de dessus) ; le clic droit glissé l'incline de 0,28 à 1,5
+      this.cam.jump({ x, z: z + 1.5, dist: 15, pitch: 0.72, yaw: Math.PI }, hm.view.groundY(x, z));
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
       this.ui.banner('Monde des Enfers', `${hm.zoneName(z)} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.`);
@@ -615,6 +616,8 @@ class Game implements UIHost {
     this.cam.handler = this.command;
     this.command.setTheater(t);
     this.cam.goTo(p.x, p.z + 1, Math.min(Math.max(this.cam.dist, 18), 26));
+    // trois quarts plutôt que presque de dessus (l'inclinaison reste réglable : clic droit glissé)
+    this.cam.tiltTo(0.8);
     this.ui.update();
   }
 

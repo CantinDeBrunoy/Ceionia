@@ -212,6 +212,8 @@ export class CameraRig {
     this.apply(1);
   }
   rotate(d: number) { this.goal.yaw += d; }
+  /** Incline la vue vers cet angle (on ne la relève jamais plus haut que ce qu'on a déjà : seulement si elle plonge davantage) */
+  tiltTo(pitch: number) { if (this.goal.pitch > pitch) this.goal.pitch = clamp(pitch, this.minPitch, 1.5); }
 
   /** Point visé par la vue d'ensemble (une partie neuve : là où poser la place du village), sinon le milieu de la carte */
   homeAt: [number, number] | null = null;
@@ -237,6 +239,9 @@ export class CameraRig {
     }
     if (k.has('KeyQ')) this.goal.yaw += dt * 1.4;
     if (k.has('KeyE')) this.goal.yaw -= dt * 1.4;
+    // inclinaison au clavier : Page haut / Page bas
+    if (k.has('PageUp')) this.goal.pitch = clamp(this.goal.pitch + dt * 1.0, this.minPitch, 1.5);
+    if (k.has('PageDown')) this.goal.pitch = clamp(this.goal.pitch - dt * 1.0, this.minPitch, 1.5);
     if (k.has('Equal') || k.has('NumpadAdd')) this.goal.dist = clamp(this.goal.dist * (1 - dt * 1.2), this.minDist, this.maxDist);
     if (k.has('Minus') || k.has('NumpadSubtract')) this.goal.dist = clamp(this.goal.dist * (1 + dt * 1.2), this.minDist, this.maxDist);
     // un point de visée non fini (une unité suivie sans position, un calcul raté) figeait la vue sur un écran vide : on revient
