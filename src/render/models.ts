@@ -7132,7 +7132,7 @@ function heliport(p: Parts) {
  * chaume, ponton de bois ; industriel : brique et bandes rouges et blanches, garde-corps de fonte, lampe à huile, logis de
  * tuiles ; moderne : béton à bandes, antennes, parabole, panneaux solaires, vedette ; futur : fût blanc effilé, anneaux
  * holographiques, module blanc, halo néon. Perron, fenêtres, paratonnerre et girouette, drapeaux, enclos, caisses, bouées,
- * barque et ponton, mouettes, écume autour du rocher
+ * barque à sec et ponton sur la grève, mouettes (pas d'eau dessinée : celle du jeu s'y raccorde)
  */
 function lighthouse(p: Parts, age: number) {
   const X = -0.2, Z = -0.15, fut = age >= 5, old = age <= 2, ind = age === 3, mod = age === 4;
@@ -7140,17 +7140,13 @@ function lighthouse(p: Parts, age: number) {
   const r0 = fut ? 0.17 : 0.2, r1 = fut ? 0.075 : 0.11;
   const rad = (y: number) => r0 + (r1 - r0) * Math.min(1, Math.max(0, (y - base) / (h - base)));
   const metal = ind ? 0x2e3238 : 0x4a4f58, lamp = fut ? 0xbff4ff : 0xfff1b0;
-  // le sol, la mer sur le bord gauche (vaguelettes, écume), les galets du rivage
+  // le sol, la grève de galets sur le bord gauche (sèche : l'eau est celle du jeu), les galets du rivage
   p.box(1.9, 0.012, 1.9, 0, 0, 0, old ? C.green : 0x7cb560);
-  p.box(0.5, 0.02, 1.9, -0.7, 0, 0, fut ? 0x7fe0f0 : C.water);
-  for (const [z, w] of [[-0.8, 0.3], [-0.4, 0.22], [0.0, 0.34], [0.3, 0.2], [0.8, 0.28]]) p.box(w, 0.006, 0.014, -0.76 + ((z * 9) % 0.12), 0.02, z, 0xeaf6fa);
+  p.box(0.5, 0.02, 1.9, -0.7, 0, 0, fut ? 0xdfe6ec : old ? 0xb8ab8a : 0xc9bd9c);
   for (let i = 0; i < 9; i++) p.sphere(0.04 + (i % 3) * 0.012, -0.44 + ((i * 37) % 7) * 0.012, 0.0, -0.9 + i * 0.22, i % 2 ? 0xd6c9a4 : 0xc2b48e, 0, 0.5);
-  p.box(0.04, 0.018, 1.9, -0.45, 0.012, 0, 0xf4f8fa);
-  // le rocher : amas de blocs sous la tour, des rochers épars et l'écume qui les lèche
+  // le rocher : amas de blocs sous la tour, des rochers épars
   for (const [x, z, r] of [[X, Z, 0.5], [X + 0.3, Z + 0.22, 0.28], [X - 0.32, Z + 0.1, 0.24], [X + 0.05, Z - 0.42, 0.26], [X + 0.4, Z - 0.2, 0.2], [X - 0.25, Z - 0.3, 0.22], [-0.52, 0.0, 0.14], [-0.62, -0.62, 0.12]])
     p.sphere(r, x, 0.0, z, dark(C.darkstone, 0.88 + Math.abs((x * 7) % 1) * 0.1), 1, 0.5);
-  p.add(new THREE.TorusGeometry(0.2, 0.01, 3, 12).rotateX(Math.PI / 2).scale(1, 1, 1.6), -0.54, 0.024, -0.62, 0xeaf6fa);
-  p.add(new THREE.TorusGeometry(0.16, 0.01, 3, 12).rotateX(Math.PI / 2).scale(1, 1, 1.4), -0.55, 0.024, 0.0, 0xeaf6fa);
   // le soubassement de la tour : pierre taillée, assises (anneaux) et quelques moellons saillants
   const foot = old ? C.darkstone : ind ? 0x8a3a2e : 0xb8b4ac;
   p.cyl(0.26, 0.29, base, 14, X, 0, Z, foot);
@@ -7302,7 +7298,7 @@ function lighthouse(p: Parts, age: number) {
   }
   p.box(0.04, 0.03, 0.034, ex + 0.2, 0.012, ez + 0.1, 0xf4f0e8); p.box(0.03, 0.012, 0.016, ex + 0.2, 0.042, ez + 0.1, 0xd84a3e);
   p.box(0.024, 0.02, 0.028, ex - 0.25, 0.012, ez - 0.05, 0xa8663a);
-  // le ponton, l'échelle d'accès à l'eau, les bittes, les bouées, les caisses et le filet
+  // le ponton de planches sur la grève, l'échelle, les bittes, les bouées, les caisses et le filet
   const pc = fut ? 0xdfe6ec : old ? C.wood : 0x8a6a48;
   p.box(0.55, 0.022, 0.12, -0.6, 0.025, 0.55, pc);
   for (let i = 0; i < 6; i++) p.box(0.004, 0.003, 0.11, -0.84 + i * 0.09, 0.047, 0.55, dark(pc, 0.8));
@@ -7319,8 +7315,9 @@ function lighthouse(p: Parts, age: number) {
   p.cyl(0.03, 0.032, 0.06, 8, -0.28, 0.012, 0.42, C.wood);
   for (let i = 0; i < 5; i++) p.box(0.006, 0.05, 0.006, -0.1 + i * 0.03, 0.0, 0.62, C.darkwood);
   p.box(0.13, 0.002, 0.07, -0.04, 0.05, 0.62, 0xb8ab92); p.box(0.13, 0.002, 0.01, -0.04, 0.05, 0.62, 0xb8ab92, 0.0);
-  // la barque amarrée au ponton, par âge : bois et voile carrée, coque de tôle, vedette, canot lisse
+  // la barque tirée à sec près du ponton, calée sur deux chantiers : bois et voile carrée, coque de tôle, vedette, canot lisse
   const bx = -0.72, bz = 0.8, hullc = fut ? 0xf2f6fa : mod ? 0xf4f4f0 : ind ? 0x3a3f48 : 0x9a6a44;
+  for (const dz of [-0.1, 0.1]) p.box(0.14, 0.02, 0.025, bx, 0.012, bz + dz, C.darkwood);
   p.add(new THREE.IcosahedronGeometry(1, 1).scale(0.07, 0.035, 0.22), bx, 0.038, bz, hullc, 0.0);
   p.add(new THREE.IcosahedronGeometry(1, 0).scale(0.052, 0.012, 0.19), bx, 0.058, bz, dark(hullc, 0.6), 0.0);
   p.box(0.12, 0.012, 0.014, bx, 0.058, bz - 0.04, C.wood); p.box(0.12, 0.012, 0.014, bx, 0.058, bz + 0.05, C.wood);
@@ -7360,9 +7357,11 @@ function shipyard(p: Parts, age: number) {
   const fut = age >= 5, old = age <= 2, ind = age === 3, dry = age >= 4;
   const X = -0.5, Z0 = -1.15, Z1 = 1.2, ZC = 0.02;
   const wood = old ? C.wood : 0xa8aeb6, dwood = old ? C.darkwood : C.metal;
-  // le sol : terre battue, puis dalle ; l'eau au bout de la cale (bord +z)
+  // le sol : terre battue, puis dalle ; au bout de la cale (bord +z), un quai sec (planches, pierre ou béton) : la cale s'y
+  // arrête, l'eau, s'il y en a, est celle du jeu
   p.box(2.9, 0.012, 2.9, 0, 0, 0, old ? C.dirt : ind ? 0xa8a49c : fut ? 0xdfe6ec : 0xb8b4ac);
-  p.box(2.9, 0.012, 0.4, 0, 0.012, 1.25, fut ? 0x7fe0f0 : C.water);
+  p.box(2.9, 0.012, 0.4, 0, 0.012, 1.25, old ? 0x8a6a48 : ind ? 0x7a746c : fut ? 0xc4ccd6 : 0x8a8f96);
+  for (let i = 0; i < 9; i++) p.box(2.9, 0.004, 0.012, 0, 0.026, 1.07 + i * 0.045, old ? 0x6a4a30 : ind ? 0x5d5852 : fut ? 0x6ae4ff : 0x6a707a, 0, fut ? 'neon' : false);
   if (old) for (const [x, z, w] of [[0.1, 0.1, 0.5], [-1.1, 0.6, 0.35], [0.5, 0.95, 0.4], [-0.9, -0.9, 0.3]]) p.box(w, 0.006, 0.28, x, 0.012, z, 0xb89868);
   // la cale : en pente (haut côté terre, bas côté eau) ; en époque moderne, une cale sèche horizontale
   const drop = dry ? 0 : 0.17, ang = dry ? 0 : Math.atan2(drop, Z1 - Z0);
@@ -7371,10 +7370,10 @@ function shipyard(p: Parts, age: number) {
   const pb = (w: number, h: number, d: number, x: number, z: number, hy: number, c: number, rz = 0, glow = false) =>
     p.add(new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0), x, slip(z) + hy, z, c, 0, glow, rz, ang);
   if (dry) {
-    // bassin de béton : fond, murs, bajoyers, marches, eau basse à la porte
+    // bassin de béton : fond, murs, bajoyers, marches, porte de cale fermée au bout
     p.box(1.1, 0.04, 2.5, X, 0.012, 0.0, fut ? 0xdde8f0 : 0x8a8f96);
     for (const s of [-1, 1]) { p.box(0.1, 0.12, 2.5, X + s * 0.6, 0.012, 0, fut ? 0xf2f6fa : 0xa8aeb6); p.box(0.1, 0.012, 2.5, X + s * 0.6, 0.132, 0, fut ? 0x6ae4ff : 0xf2c23a, 0, fut ? 'neon' : false); }
-    p.box(1.1, 0.024, 0.34, X, 0.052, 1.0, fut ? 0x7fe0f0 : 0x4f6a86);
+    p.box(1.1, 0.024, 0.34, X, 0.052, 1.0, fut ? 0xc4ccd6 : 0x6a707a);
     p.box(1.1, 0.1, 0.05, X, 0.012, 1.16, fut ? 0xdde8f0 : 0x6a707a);
     for (let i = 0; i < 7; i++) p.box(0.5, 0.012, 0.1, X, 0.052, -1.15 + i * 0.32, 0x9a9fa6);
   } else {
@@ -7718,7 +7717,7 @@ function fishmarket(p: Parts, age: number) {
     p.add(new THREE.TorusGeometry(0.022, 0.007, 3, 8, Math.PI * 1.4), P(-0.03, 0.02)[0], g + 0.02, P(-0.03, 0.02)[1], 0xd8884a, ry + Math.PI / 2, false, 0, Math.PI / 2);
   };
 
-  // ---- le sol : herbe, dallage de pavés (mouillés), flaques, taches de glace
+  // ---- le sol : herbe, dallage de pavés, taches de glace (pas de flaques : aucune eau dessinée)
   p.box(1.9, 0.012, 1.9, 0, 0, 0, 0x9ccf92);
   p.box(1.84, 0.02, 1.76, 0, 0.012, 0.02, dark(baseC, 0.82));
   if (fut) {
@@ -7728,8 +7727,6 @@ function fishmarket(p: Parts, age: number) {
   } else {
     for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) p.box(0.19, 0.008, 0.19, -0.8 + i * 0.2, g, -0.8 + j * 0.2, dark(baseC, 0.88 + hash2(i, j, 31) * 0.22));
   }
-  for (const [x, z, sx, sz, ry] of [[-0.35, 0.58, 0.16, 0.06, 0.3], [0.4, 0.72, 0.12, 0.06, -0.2], [0.0, 0.02, 0.2, 0.05, 0.1], [-0.82, 0.3, 0.08, 0.1, 0]])
-    p.add(new THREE.CylinderGeometry(1, 1, 0.004, 10).scale(sx, 1, sz), x, g + 0.01, z, fut ? 0x9ad8f0 : 0xa8cce0, ry);
   for (const [x, z] of [[-0.64, 0.5], [-0.2, 0.5], [0.24, 0.5]]) p.box(0.14, 0.004, 0.08, x + 0.05, g + 0.008, z + 0.04, 0xeaf6fc, 0.2);
 
   // ---- la halle : murs du fond et de gauche, soubassement, charpente, toit
@@ -7865,14 +7862,13 @@ function fishmarket(p: Parts, age: number) {
     p.box(0.1, 0.04, 0.008, ax + 0.1, g + 0.26, -0.478, 0x1f7ac0); p.box(0.07, 0.016, 0.01, ax + 0.1, g + 0.27, -0.474, 0xf4f4f0);
     for (const dx of [-0.08, 0.08]) { p.box(0.12, 0.06, 0.12, ax - 0.02 + dx, g + 0.4, -0.7, 0xc4c8ce); p.cyl(0.04, 0.04, 0.006, 8, ax - 0.02 + dx, g + 0.46, -0.7, 0x3a3f48); }
   } else {
-    // viviers cylindriques lumineux, poissons-silhouettes, tuyauterie vers la halle
+    // viviers cylindriques lumineux (verre et néon), tuyauterie vers la halle
     for (const [x, z] of [[ax - 0.08, -0.68], [ax + 0.12, -0.5]]) {
       p.cyl(0.15, 0.15, 0.3, 14, x, g, z, 0xbfe0ee);
       p.cyl(0.13, 0.13, 0.26, 14, x, g + 0.02, z, 0x4ff0ff, 'neon');
       p.cyl(0.16, 0.16, 0.014, 14, x, g + 0.3, z, 0xdde8f0);
       p.cyl(0.16, 0.16, 0.014, 14, x, g, z, 0xdde8f0);
       p.add(new THREE.TorusGeometry(0.15, 0.007, 3, 16).rotateX(Math.PI / 2), x, g + 0.16, z, 0x2e3440);
-      for (let i = 0; i < 3; i++) { const a = i * 2.1 + x * 5; fish(x + Math.cos(a) * 0.07, g + 0.1 + i * 0.07, z + Math.sin(a) * 0.07, 0x1a3a5a, a, 0.9); }
     }
     p.box(0.18, 0.02, 0.02, ax - 0.18, g + 0.12, -0.55, 0x8a96a2);
     p.box(0.02, 0.02, 0.3, ax - 0.27, g + 0.12, -0.65, 0x8a96a2);
@@ -7951,12 +7947,12 @@ function fishmarket(p: Parts, age: number) {
 }
 
 /**
- * Ferme marine (3 × 3) : un bassin de mer où s'élèvent poissons, algues et coquillages. À gauche, la plateforme principale
+ * Ferme marine (3 × 3) : une aire de béton où s'alignent enclos d'élevage, algues et coquillages. À gauche, la plateforme principale
  * sur pilotis (béton et acier, garde-corps, liseré de sécurité) porte le bâtiment de contrôle vitré et son radar, les
  * conteneurs frigorifiques, les réservoirs, le silo d'aliments et son tapis roulant qui file sur pilotis jusqu'aux cages ;
- * la grue de service (palan, filet) décharge le bateau-nourrisseur amarré (cordages, défenses) ; à droite, l'hélisurface en
- * encorbellement, la passerelle vers l'éolienne et son transformateur. Dans l'eau : cages circulaires aux flotteurs jaunes
- * (filet, bancs de poissons qui tournent), tables à coquillages et lignes de bouées d'algues, écume autour des pilotis,
+ * la grue de service (palan, filet) décharge le bateau-nourrisseur tiré au sec (cordages, défenses) ; à droite, l'hélisurface en
+ * encorbellement, la passerelle vers l'éolienne et son transformateur. Sur le terre-plein de béton (aucune eau dessinée) : enclos
+ * circulaires aux flotteurs jaunes (filet), tables à coquillages et séchoirs à algues, semelles au pied des pilotis,
  * ouvriers en gilet, drone qui rôde, mouettes. Âge 5 : modules blancs hexagonaux aux liserés cyan, serre sous dôme de culture,
  * bras robotisé, hologramme, cages hexagonales, drones-nourrisseurs et seconde éolienne
  */
@@ -7989,21 +7985,19 @@ function offshore(p: Parts, age: number) {
     p.add(new THREE.IcosahedronGeometry(0.017, 0), ...P(0.043, 0.055), 0xf4f4f0, ry);
     p.add(new THREE.ConeGeometry(0.006, 0.02, 4).rotateZ(-Math.PI / 2), ...P(0.064, 0.052), 0xf2c23a, ry);
   };
-  // l'écume au pied d'un pilotis ou d'un flotteur
-  const foam = (x: number, z: number, r: number) => p.add(new THREE.TorusGeometry(r, 0.008, 3, 10).rotateX(Math.PI / 2), x, wy + 0.004, z, 0xf2fafa);
+  // la semelle de béton au pied d'un pilotis ou d'un piquet
+  const foam = (x: number, z: number, r: number) => p.add(new THREE.TorusGeometry(r, 0.008, 3, 10).rotateX(Math.PI / 2), x, wy + 0.004, z, 0xb4b8bc);
   // un ouvrier en gilet orange et casque jaune, sur le pont
   const worker = (x: number, z: number, ry: number) => figure(p, x, z, fut ? 0xffa31a : 0xff7a1a, ry, false, 0xffd23a, 'idle', D - 0.012);
 
-  // ── la mer : bassin, bandes de profondeur, ombre de la plateforme, éclats de lumière
+  // ── le terre-plein : dalle de béton sur le pré (pas d'eau dessinée), joints de dilatation, ombre de la plateforme
   p.box(2.9, 0.012, 2.9, 0, 0, 0, C.green);
-  p.cyl(1.4, 1.4, 0.03, 18, 0, 0, 0, 0x6a90a8);
-  p.cyl(1.34, 1.34, 0.01, 18, 0, 0.03, 0, C.water);
-  p.cyl(1.12, 1.12, 0.0015, 18, 0, wy, 0, 0x7cc6d8);
-  p.cyl(0.8, 0.8, 0.0015, 18, 0, wy + 0.0015, 0, 0x5fb0cc);
-  p.box(PW + 0.14, 0.0015, PD + 0.14, cx + 0.1, wy + 0.003, cz + 0.08, 0x3f86a4);
-  for (let i = 0; i < 12; i++) {
-    const a = i * 2.4, r = 0.35 + ((i * 0.37) % 0.85);
-    p.box(0.1 + (i % 3) * 0.04, 0.002, 0.008, Math.cos(a) * r, wy + 0.0045, Math.sin(a) * r * 0.9 + 0.1, 0xe4f6fa, a * 0.4);
+  p.cyl(1.4, 1.4, 0.03, 18, 0, 0, 0, 0x8a8f96);
+  p.cyl(1.34, 1.34, 0.01, 18, 0, 0.03, 0, 0xb4b8bc);
+  p.box(PW + 0.14, 0.0015, PD + 0.14, cx + 0.1, wy + 0.003, cz + 0.08, 0x9a9fa6);
+  for (let i = -3; i <= 3; i++) {
+    const w = 2 * Math.sqrt(Math.max(0.01, 1.34 * 1.34 - (i * 0.4) * (i * 0.4)));
+    p.box(0.006, 0.002, w, i * 0.4, wy + 0.0015, 0, 0x9a9fa6); p.box(w, 0.002, 0.006, 0, wy + 0.0015, i * 0.4, 0x9a9fa6);
   }
 
   // ── la plateforme principale : pilotis, entretoises, caillebotis, liseré de sécurité
@@ -8199,9 +8193,11 @@ function offshore(p: Parts, age: number) {
   cr.add(new THREE.TorusGeometry(0.045, 0.003, 3, 10).rotateX(Math.PI / 2), -0.3, -0.41, 0, dark(0xe8832a, 0.7));
   fish(cr, -0.3, -0.37, 0.0, 0xc8d4dc, 0.4, 0.6);
 
-  // ── le bateau-nourrisseur amarré contre la plateforme : coque, pont, timonerie vitrée, cuve à granulés, défenses, cordages
+  // ── le bateau-nourrisseur tiré au sec contre la plateforme : coque, pont, timonerie vitrée, cuve à granulés, défenses, cordages
   const ax = -1.15, az = -0.35;
-  const bt = sway([ax, wy + 0.005, az], [0, 0, 1], 0.05, 0.35);
+  // posé à sec sur un berceau de bois
+  for (const dz of [-0.12, 0.0, 0.12]) p.box(0.2, 0.02, 0.025, ax, wy, az + dz, C.darkwood);
+  const bt = sway([ax, wy + 0.02, az], [0, 0, 1], 0.006, 0.35);
   bt.add(new THREE.IcosahedronGeometry(1, 1).scale(0.075, 0.05, 0.2), 0, 0.012, 0, fut ? 0xf2f6fa : 0x1f7ac0);
   bt.add(new THREE.IcosahedronGeometry(1, 1).scale(0.077, 0.012, 0.202), 0, 0.03, 0, fut ? 0x6ae4ff : 0xf4f2ee, 0, nz);
   bt.box(0.11, 0.008, 0.28, 0, 0.044, 0, 0xb8bcc2);
@@ -8274,19 +8270,13 @@ function offshore(p: Parts, age: number) {
     for (let k = 0; k < nst; k++) { const a = (k / nst) * Math.PI * 2; p.box(0.008, 0.07, 0.008, x + Math.cos(a) * 0.2, 0.07, z + Math.sin(a) * 0.2, steel); }
     p.add(new THREE.TorusGeometry(0.2, 0.004, 3, seg).rotateX(Math.PI / 2), x, 0.135, z, dk);
     foam(x, z, 0.225);
-    p.cyl(0.165, 0.165, 0.002, 14, x, wy + 0.004, z, 0x9ae6e8);
-    for (let k = 0; k < 4; k++) p.box(0.33, 0.002, 0.005, x, wy + 0.0065, z, 0x4f9ab4, (k * Math.PI) / 4);
-    for (const r of [0.06, 0.115]) p.add(new THREE.TorusGeometry(r, 0.0035, 3, 14).rotateX(Math.PI / 2), x, wy + 0.0075, z, 0x4f9ab4);
-    const s = turning([x, 0.056, z], [0, 1, 0], (i % 2 ? 0.7 : -0.55) * (1 + i * 0.08));
-    for (let k = 0; k < 6; k++) {
-      const a = k * 1.05 + i, r = 0.07 + (k % 2) * 0.05;
-      fish(s, Math.cos(a) * r, (k % 3) * 0.006, -Math.sin(a) * r, silver[(k + i) % silver.length], a + Math.PI / 2, 0.62, fut && k % 2 === 0);
-    }
+    // le fond de l'enclos : dalle claire sans eau, filet (rayons et mailles) en transparence
+    p.cyl(0.165, 0.165, 0.002, 14, x, wy + 0.004, z, 0xc8ccd0);
+    for (let k = 0; k < 4; k++) p.box(0.33, 0.002, 0.005, x, wy + 0.0065, z, 0x8a8478, (k * Math.PI) / 4);
+    for (const r of [0.06, 0.115]) p.add(new THREE.TorusGeometry(r, 0.0035, 3, 14).rotateX(Math.PI / 2), x, wy + 0.0075, z, 0x8a8478);
   };
   cage(-0.75, 0.85, 0); cage(-0.1, 0.95, 1); cage(0.5, 0.9, 2);
   gull(-0.55, 0.13, 0.85, 0.5);
-  // des poissons libres dans le bassin, qui font la ronde autour des tables et des lignes
-  { const s = turning([0.05, 0.05, 0.2], [0, 1, 0], 0.3); for (let k = 0; k < 5; k++) { const a = k * 1.25, r = 0.5 + (k % 2) * 0.06; fish(s, Math.cos(a) * r, 0, -Math.sin(a) * r, silver[k], a + Math.PI / 2, 0.6); } }
 
   // ── les tables à coquillages : cadre flottant, piquets, poches d'huîtres en rangs, coquilles ; descente depuis le pont
   const table = (x: number, z: number) => {
@@ -8307,15 +8297,13 @@ function offshore(p: Parts, age: number) {
     p.box(0.22, 0.016, 0.1, sx, wy + 0.01, 0.38, steel);
   }
 
-  // ── les lignes de bouées d'algues d'élevage : amarres, flotteurs, rideaux d'algues flottantes
+  // ── les séchoirs à algues : deux piquets, une corde tendue, rideaux d'algues qui pendent, fanion
   for (const lx of [0.82, 1.0]) {
-    p.box(0.005, 0.005, 0.66, lx, wy + 0.012, 0.5, 0x6a5a44);
-    for (const z of [0.17, 0.83]) { p.sphere(0.03, lx, wy + 0.012, z, 0xf28a3c, 1, 0.9); p.cyl(0.004, 0.004, 0.08, 4, lx, wy + 0.04, z, dk); p.box(0.02, 0.014, 0.004, lx + 0.01, wy + 0.1, z, 0xd84a3e); foam(lx, z, 0.045); }
+    for (const z of [0.17, 0.83]) { p.cyl(0.008, 0.01, 0.17, 5, lx, wy, z, C.darkwood); foam(lx, z, 0.03); p.box(0.02, 0.014, 0.004, lx + 0.01, wy + 0.15, z, 0xd84a3e); }
+    p.box(0.005, 0.005, 0.66, lx, wy + 0.14, 0.5, 0x6a5a44);
     for (let k = 0; k < 6; k++) {
-      const z = 0.25 + k * 0.1;
-      p.sphere(0.017, lx, wy + 0.012, z, fut && k % 2 ? 0xdde8f0 : 0xf4f2ee, 0, 0.9);
-      p.add(new THREE.IcosahedronGeometry(1, 1).scale(0.035, 0.008, 0.05), lx + (k % 2 ? 0.035 : -0.035), wy + 0.01, z + 0.02, k % 3 ? 0x6a8a3a : 0x8a6a34);
-      p.add(new THREE.IcosahedronGeometry(1, 0).scale(0.02, 0.006, 0.04), lx + (k % 2 ? -0.03 : 0.03), wy + 0.01, z - 0.02, k % 2 ? 0x4a7a3a : 0x7a5a2e);
+      const z = 0.25 + k * 0.1, hh = 0.07 + (k % 3) * 0.012;
+      p.box(0.012, hh, 0.03, lx, wy + 0.135 - hh, z, k % 3 ? 0x6a8a3a : 0x8a6a34);
     }
   }
 
