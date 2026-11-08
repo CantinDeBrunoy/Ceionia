@@ -163,9 +163,19 @@ export class CameraRig {
     this.clampGoal();
   }
 
+  /** limites de la vue (x0, x1, z0, z1) quand la carte n'est pas celle du village (les Enfers : 184 cases de long) ; null : le village */
+  bounds: [number, number, number, number] | null = null;
   private clampGoal() {
-    this.goal.x = clamp(this.goal.x, 2, N - 2);
-    this.goal.z = clamp(this.goal.z, 2, N - 2);
+    const b = this.bounds ?? [2, N - 2, 2, N - 2];
+    this.goal.x = clamp(this.goal.x, b[0], b[1]);
+    this.goal.z = clamp(this.goal.z, b[2], b[3]);
+  }
+
+  /** Dérive doucement vers un point sans changer le zoom ni l'angle (le suivi des troupes ; ne compte pas comme un geste du joueur) */
+  glide(x: number, z: number) {
+    this.goal.x = x; this.goal.z = z;
+    this.tracking = 0;
+    this.clampGoal();
   }
 
   /** Suit un point (une expédition) : la caméra glisse jusqu'à lui ; dist : la rapprocher au besoin */

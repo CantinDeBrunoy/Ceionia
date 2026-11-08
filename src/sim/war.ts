@@ -268,10 +268,15 @@ export class War {
   private cross(t: Troop, age: number) {
     const u = this.unitOf.get(t.id);
     const hp = u ? u.hp : t.hp;
+    // la lueur du passage, devant l'arche d'où l'on part puis là où l'on arrive
+    const from = u ? this.simOf(u) : null;
+    if (u && from) from.events.push({ type: 'portal', x: u.x, z: u.z });
     this.undeploy(t);
     t.where = t.where === 'isle' ? 'hell' : 'isle';
     t.hp = hp; t.x = undefined; t.z = undefined;
     this.deploy(t, age);
+    const nu = this.unitOf.get(t.id), to = nu ? this.simOf(nu) : null;
+    if (nu && to) to.events.push({ type: 'portal', x: nu.x, z: nu.z });
     this.news.push(t.where === 'hell' ? { kind: 'portal', text: tr('🌀 Un {troop} a passé le portail : il attend vos ordres dans les Enfers.', { troop: this.nm(t.kind) }) } : { kind: 'info', text: tr('🌀 Un {troop} est rentré des Enfers sur l’île.', { troop: this.nm(t.kind) }) });
   }
 

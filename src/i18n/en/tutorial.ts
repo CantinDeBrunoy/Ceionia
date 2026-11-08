@@ -70,7 +70,7 @@ registerDict('tutorial', {
   'Le tutoriel vous le fera bâtir un peu plus tard.': 'The tutorial will let you build that a bit later.',
 
   // ---------------- Aides militaires (src/ui/warTips.ts) ----------------
-  '🌀 Expédition obligatoire : « Le portail de l’autre rive ». Cliquez pour la voir.': '🌀 Required expedition: “The portal on the other shore”. Click to see it.',
+  '🌀 La faille violette mène aux Enfers ! Réussissez l’expédition « Le portail de l’autre rive ».': '🌀 The purple rift leads to Hell! Complete the expedition “The portal on the other shore”.',
   '🗼 Portail ouvert ! Posez une tour de garde et une caserne sur son île. Cliquez pour y aller.': '🗼 Portal open! Build a watchtower and barracks on its island. Click to go.',
   '⚔️ Vos soldats gardent l’île. Cliquez pour les commander.': '⚔️ Your soldiers guard the island. Click to command them.',
   '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. 🎺 : vague suivante. « ? » : aide.': '🖱️ Click or drag a box: select. Right-click: move, attack. 🎺: next wave. “?”: help.',
