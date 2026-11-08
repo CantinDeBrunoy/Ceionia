@@ -13378,6 +13378,77 @@ function futureBarracks(p: Parts) {
   p.cyl(0.01, 0.01, 0.6, 4, 0.72, 0.39, bz, dk); p.sphere(0.025, 0.72, 1.0, bz, 0xff4a4a);
 }
 
+/** Tours de garde par âge : antiquité (tour carrée de pierre à terrasse), industriel (brique, cheminée-vigie, projecteur), moderne (béton, radar, projecteur) */
+function ageWatchtower(p: Parts, age: number) {
+  if (age <= 1) {
+    const wall = 0xd8cdb4, dk = 0xa89c82;
+    p.box(0.62, 0.05, 0.62, 0, 0, 0, dk);
+    p.box(0.46, 1.0, 0.46, 0, 0.05, 0, wall);
+    p.box(0.5, 0.04, 0.5, 0, 0.35, 0, dk); p.box(0.5, 0.04, 0.5, 0, 0.7, 0, dk);
+    p.box(0.14, 0.24, 0.03, 0, 0.05, 0.24, C.darkwood);
+    for (const y of [0.5, 0.85]) p.box(0.05, 0.12, 0.03, 0, y, 0.24, 0x2a2622);
+    p.box(0.62, 0.07, 0.62, 0, 1.05, 0, dk);
+    for (const [x, z] of [[-0.26, -0.26], [0.26, -0.26], [-0.26, 0.26], [0.26, 0.26], [0, 0.28], [0, -0.28], [0.28, 0], [-0.28, 0]]) p.box(0.1, 0.09, 0.1, x, 1.12, z, wall);
+    p.cyl(0.05, 0.035, 0.05, 6, 0, 1.12, 0, C.metal); p.box(0.06, 0.06, 0.06, 0, 1.17, 0, C.flame, 0, true);
+    p.cyl(0.008, 0.008, 0.28, 4, 0.22, 1.12, 0.22, C.darkwood); p.box(0.14, 0.08, 0.012, 0.29, 1.3, 0.22, 0xc8402e);
+    return;
+  }
+  const brick = age === 3, wall = brick ? 0xa8502e : 0xb9bcc0, dk = brick ? 0x6e3420 : 0x7c8086;
+  p.box(0.66, 0.06, 0.66, 0, 0, 0, dk);
+  p.box(0.4, 1.05, 0.4, 0, 0.06, 0, wall);
+  for (const y of [0.3, 0.6, 0.9]) p.box(0.44, 0.03, 0.44, 0, 0.06 + y, 0, dk);
+  p.box(0.13, 0.24, 0.03, 0, 0.06, 0.21, C.darkwood);
+  for (const y of [0.42, 0.78]) for (const s of [-1, 1]) p.box(0.06, 0.12, 0.03, s * 0.1, 0.06 + y, 0.21, 0x2a3440, 0, true);
+  p.box(0.56, 0.05, 0.56, 0, 1.11, 0, dk);
+  p.box(0.34, 0.2, 0.34, 0, 1.16, 0, brick ? 0x8c4a2a : 0x9aa0a6);
+  for (const s of [-1, 1]) p.box(0.1, 0.1, 0.02, s * 0.08, 1.21, 0.18, 0xffe6a0, 0, true);
+  p.box(0.4, 0.04, 0.4, 0, 1.36, 0, dk);
+  if (brick) {
+    p.cyl(0.04, 0.05, 0.28, 6, 0.15, 1.4, -0.15, 0x6e3420);
+    p.cyl(0.05, 0.05, 0.12, 6, 0, 1.4, 0, C.metal); p.cone(0.07, 0.07, 6, 0, 1.52, 0, 0x4a5058);
+    p.box(0.06, 0.06, 0.1, 0, 1.43, 0.08, 0xfff1c9, 0, true);
+  } else {
+    p.cyl(0.14, 0.14, 0.03, 10, 0, 1.4, 0, 0x4a5058); p.box(0.3, 0.02, 0.03, 0, 1.45, 0, 0x4a5058);
+    p.cyl(0.01, 0.01, 0.2, 4, 0, 1.4, 0, 0x4a5058);
+    p.cyl(0.05, 0.06, 0.09, 8, 0.15, 1.4, 0.1, 0x3c3c40); p.box(0.07, 0.07, 0.03, 0.15, 1.44, 0.17, 0xfff1c9, 0, true);
+    p.cyl(0.008, 0.008, 0.4, 4, -0.18, 1.4, -0.18, 0x4a5058);
+  }
+}
+
+/** Casernes par âge : antiquité (cour de terre à palissade, bâtiment crépi), industriel (brique et tôle, drapeau), moderne (bloc de béton, antennes, véhicule) */
+function ageBarracks(p: Parts, age: number) {
+  const brick = age === 3, modern = age >= 4;
+  const wall = age <= 1 ? 0xe0d4b8 : brick ? 0xa8502e : 0xb9bcc0, dk = age <= 1 ? 0xa89c82 : brick ? 0x6e3420 : 0x7c8086;
+  p.box(1.84, 0.012, 1.84, 0, 0, 0, modern ? 0x9aa0a6 : 0x8cbf6c);
+  p.box(1.7, 0.008, 1.0, 0, 0.012, 0.36, modern ? 0x6a7078 : dark(C.dirt, 0.95));
+  const bz = -0.5, W = 1.56, D = 0.62, H = modern ? 0.36 : 0.42, zf = bz + D / 2;
+  p.box(W + 0.05, 0.05, D + 0.05, 0, 0, bz, dk);
+  p.box(W, H - 0.05, D, 0, 0.05, bz, wall);
+  if (modern) {
+    p.box(W + 0.06, 0.05, D + 0.06, 0, H, bz, 0x5a6068);
+    for (const x of [-0.5, -0.17, 0.17, 0.5]) p.box(0.18, 0.07, 0.02, x, 0.22, zf + 0.005, 0x2a3440, 0, true);
+    p.box(0.24, 0.24, 0.02, 0, 0.05, zf + 0.005, 0x4a5058);
+    p.cyl(0.01, 0.01, 0.55, 4, -0.6, H, bz, 0x4a5058); p.cyl(0.01, 0.01, 0.4, 4, -0.45, H, bz, 0x4a5058);
+    p.cyl(0.12, 0.12, 0.02, 8, 0.5, H + 0.05, bz, 0x4a5058); p.box(0.28, 0.015, 0.02, 0.5, H + 0.1, bz, 0x4a5058);
+    for (const x of [-0.6, 0, 0.6]) p.box(0.5, 0.03, 0.03, x, 0.012, 0.9, 0xe8e8e0);
+    p.box(0.2, 0.1, 0.1, 0.5, 0.06, 0.55, 0x4a5a3a); p.box(0.14, 0.06, 0.08, 0.5, 0.12, 0.55, 0x3c4a2c);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.cyl(0.022, 0.022, 0.02, 6, 0.5 + sx * 0.07, 0.025, 0.55 + sz * 0.04, 0x2a2a2e);
+  } else {
+    roof(p, 0, H, bz, { w: W, d: D, h: brick ? 0.18 : 0.28, color: brick ? 0x5a6068 : C.terracotta, wall, len: W + 0.12, ov: 0.08, tiles: !brick, courses: brick });
+    p.box(0.22, 0.28, 0.02, 0, 0.05, zf + 0.005, C.darkwood);
+    for (const x of [-0.5, -0.25, 0.25, 0.5]) p.box(0.1, 0.1, 0.02, x, 0.2, zf + 0.005, 0x3a3430, 0, true);
+    if (brick) p.cyl(0.05, 0.06, 0.3, 6, 0.6, H, bz, 0x6e3420);
+    const R = 0.88;
+    for (const [x0, z0, x1, z1] of [[-R, -0.12, -R, R], [R, -0.12, R, R], [-R, R, -0.26, R], [0.26, R, R, R]]) {
+      const len = Math.hypot(x1 - x0, z1 - z0), k = Math.max(1, Math.round(len / 0.09));
+      for (let i = 0; i <= k; i++) p.cyl(0.028, 0.03, 0.2 + (i % 2) * 0.03, 5, x0 + ((x1 - x0) * i) / k, 0, z0 + ((z1 - z0) * i) / k, brick ? C.metal : C.darkwood);
+    }
+    for (const [x, z] of [[-0.45, 0.35], [-0.15, 0.55], [0.5, 0.3]]) { p.cyl(0.015, 0.015, 0.2, 4, x, 0, z, C.wood); p.box(0.14, 0.02, 0.02, x, 0.15, z, C.wood); p.cyl(0.04, 0.045, 0.09, 6, x, 0.08, z, C.thatch); p.sphere(0.035, x, 0.24, z, C.thatch); }
+  }
+  p.cyl(0.012, 0.012, 0.62, 5, 0.62, 0, 0.62, C.darkwood);
+  p.box(0.012, 0.22, 0.14, 0.62, 0.36, 0.69, 0xc8402e);
+}
+
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? smallSize(kind) : KINDS[kind].size;
   const imported = importedModel(kind, age, o.v, size);
@@ -13462,8 +13533,8 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'spaceport': spaceport(p); break;
     case 'research': research(p); break;
     case 'maglev': maglev(p); break;
-    case 'watchtower': watchtower(p, age); break;
-    case 'barracks': barracks(p, age); break;
+    case 'watchtower': if (age === 2) watchtower(p, age); else ageWatchtower(p, age); break;
+    case 'barracks': if (age === 2) barracks(p, age); else ageBarracks(p, age); break;
   }
   if (extras) futureExtras(p, kind, kind === 'forum' && size === 3 ? 2 : size);
   lifeK = 1;
