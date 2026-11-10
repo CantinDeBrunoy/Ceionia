@@ -1654,7 +1654,7 @@ class Game implements UIHost {
     });
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.on; this.command.render(); this.warTips.update(0.25); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.on; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;
