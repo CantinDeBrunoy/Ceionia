@@ -147,7 +147,8 @@ describe('nourriture et croissance selon la difficulté', () => {
     for (const d of ['easy', 'sandbox'] as Difficulty[]) {
       const sim = hungry(d, 20);
       for (let i = 0; i < 50; i++) sim.update(1, 1);
-      expect(sim.pop).toBe(20);
+      // personne ne part ; au bac à sable, le village grandit même sans nourriture (aucun besoin ne le freine)
+      if (d === 'sandbox') expect(sim.pop).toBeGreaterThanOrEqual(20); else expect(sim.pop).toBe(20);
     }
     const sim = hungry('normal', 20);
     for (let i = 0; i < 50; i++) sim.update(1, 1);

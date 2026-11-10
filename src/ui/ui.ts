@@ -43,7 +43,7 @@ export interface UIHost {
   saveNow(): void;
   exportSave(): void;
   importFile(f: File): void;
-  newGame(difficulty: Difficulty): void;
+  newGame(difficulty: Difficulty, age?: number): void;
   toMenu(): void;
   setPhoto(on: boolean): void;
   capture(): void;
@@ -314,27 +314,38 @@ export function confirmBox(root: HTMLElement, message: string, ok = 'Confirmer')
   });
 }
 
+/** Les boutons de choix de l'âge de départ (bac à sable) : `data-a` porte l'âge, `aria-pressed` celui qui est choisi */
+const ageButtons = (cls: string, pick: number) => AGES.map((a, i) => `<button type="button" class="${cls}" data-a="${i}" aria-pressed="${i === pick}">${a.name}</button>`).join('');
+
 /**
  * Choix de la difficulté d'une nouvelle partie : trois cartes (celle de `current` choisie d'avance), puis « Commencer » ;
- * `note` prévient de ce qui sera écrasé. Rend la difficulté choisie, ou null si le joueur renonce
+ * `note` prévient de ce qui sera écrasé. Au bac à sable, on choisit aussi l'âge de départ (`age` d'avance).
+ * Rend la difficulté et l'âge choisis, ou null si le joueur renonce
  */
-export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty; note?: string; ok?: string } = {}): Promise<Difficulty | null> {
+export function chooseDifficulty(root: HTMLElement, opts: { current?: Difficulty; age?: number; note?: string; ok?: string } = {}): Promise<{ d: Difficulty; age: number } | null> {
   const T = DIFF_TEXT;
-  let pick: Difficulty = opts.current ?? DEFAULT_DIFFICULTY;
+  let pick: Difficulty = opts.current ?? DEFAULT_DIFFICULTY, age = opts.age ?? 0;
   return new Promise((resolve) => {
     const ov = document.createElement('div');
     ov.className = 'overlay';
     ov.style.zIndex = '40';
     ov.innerHTML = `<div class="modal panel diffpick"><div class="mtitle"><h3>${ic('target', 22)} ${T.choose}</h3></div><p class="hint">${T.chooseSub}</p>
       <div class="diffs">${DIFFICULTIES.map((d) => `<button class="diff ${d}" data-d="${d}" aria-pressed="${d === pick}"><b>${ic(T.icon[d], 30, 1.6)}</b><strong>${T.name[d]}</strong><em>${T.tagline[d]}</em><ul>${T.points[d].map((x) => `<li>${x}</li>`).join('')}</ul></button>`).join('')}</div>
+      <div class="pickAges" ${pick === 'sandbox' ? '' : 'hidden'}><span>${T.startAge}</span><div class="ageBtns">${ageButtons('ageBtn', age)}</div></div>
       ${opts.note ? `<p class="hint warn">${ic('alert', 14, 2)}${opts.note}</p>` : ''}
       <div class="row foot"><span class="grow"></span><button data-r="0">${T.cancel}</button><button data-r="1" class="active">${opts.ok ?? T.start}</button></div></div>`;
-    const done = (r: Difficulty | null) => { ov.remove(); resolve(r); };
+    const done = (r: { d: Difficulty; age: number } | null) => { ov.remove(); resolve(r); };
+    // l'âge de départ ne compte qu'au bac à sable
+    const res = (d: Difficulty) => ({ d, age: d === 'sandbox' ? age : 0 });
+    const sel = () => { ov.querySelectorAll<HTMLElement>('[data-d]').forEach((x) => x.setAttribute('aria-pressed', `${x.dataset.d === pick}`)); $('.pickAges', ov).hidden = pick !== 'sandbox'; };
     ov.querySelectorAll<HTMLButtonElement>('[data-d]').forEach((b) => {
-      b.onclick = () => { pick = b.dataset.d as Difficulty; ov.querySelectorAll('[data-d]').forEach((x) => x.setAttribute('aria-pressed', `${x === b}`)); };
-      b.ondblclick = () => done(b.dataset.d as Difficulty);
+      b.onclick = () => { pick = b.dataset.d as Difficulty; sel(); };
+      b.ondblclick = () => done(res(b.dataset.d as Difficulty));
     });
-    ov.querySelectorAll<HTMLButtonElement>('[data-r]').forEach((b) => (b.onclick = () => done(b.dataset.r === '1' ? pick : null)));
+    ov.querySelectorAll<HTMLButtonElement>('.ageBtn').forEach((b) => {
+      b.onclick = () => { age = +b.dataset.a!; ov.querySelectorAll('.ageBtn').forEach((x) => x.setAttribute('aria-pressed', `${x === b}`)); };
+    });
+    ov.querySelectorAll<HTMLButtonElement>('[data-r]').forEach((b) => (b.onclick = () => done(b.dataset.r === '1' ? res(pick) : null)));
     ov.addEventListener('pointerdown', (e) => { if (e.target === ov) done(null); });
     root.appendChild(ov);
   });
@@ -516,6 +527,9 @@ export class UI {
     $('#agePanel').onclick = (e) => {
       // le passage à l'âge suivant, quand tout est prêt
       if ((e.target as HTMLElement).closest('#ageGo')) { this.host.sim.advance(); return; }
+      // bac à sable : un âge au choix (le panneau reste ouvert)
+      const setAge = (e.target as HTMLElement).closest<HTMLElement>('[data-setage]')?.dataset.setage;
+      if (setAge !== undefined) { if (this.host.sim.setAge(+setAge)) this.host.audio.sfxClick(); this.update(); return; }
       // une condition qui demande un bâtiment : on le prend en main (le bon onglet et le bon rayon s'ouvrent)
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
       // (les défenses de l'île : la vue y va, l'outil en main)
@@ -734,7 +748,7 @@ export class UI {
   /** Un bâtiment verrouillé par une expédition : un clic sur son message mène à cette expédition */
   private lockGo(k: KindId) {
     const d = KINDS[k];
-    return d.minAge <= this.host.sim.age && d.reqMission ? () => this.gotoMission(d.reqMission!) : undefined;
+    return d.minAge <= this.host.sim.age && d.reqMission && !this.host.world.sandbox ? () => this.gotoMission(d.reqMission!) : undefined;
   }
 
   /** Ce qui manque à une mission, en boutons : un bâtiment à bâtir (sous son nom de l'âge), une expédition à réussir */
@@ -786,6 +800,8 @@ export class UI {
     if (k !== START_KIND && isStart(h.world)) return startMessage(h.sim.nameOf(START_KIND));
     const guide = this.tutorial?.lock(k);
     if (guide) return guide;
+    // au bac à sable, tout ce qui est de l'âge s'ouvre : ni expédition ni bâtiment préalable
+    if (h.world.sandbox) return null;
     if (d.reqMission && !h.expeditions.state.done.includes(d.reqMission)) {
       const m = MISSIONS.find((x) => x.id === d.reqMission);
       // le portail : on dit où il mène (le public ne sait pas qu'il y a des Enfers derrière la faille violette)
@@ -872,8 +888,8 @@ export class UI {
     // améliorations : ce qu'il peut devenir à cet âge, et leur prix (ou ce qui manque pour les débloquer)
     const ups = UPGRADES.filter((u) => u.from === b.kind && h.sim.age >= KINDS[u.to].minAge).map((u) => {
       const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
-      const locked = to.reqMission && !h.expeditions.state.done.includes(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
-      const first = !locked && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
+      const locked = to.reqMission && !h.world.missionDone(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
+      const first = !locked && !h.world.sandbox && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
       if (first) return `<button disabled title="${attr(tr('Il faut d’abord « {name} » au village', { name: first }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${tr('{name} d’abord', { name: first })}</small></button>`;
       return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: tr(locked) }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${tr(locked)}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} ${tr('Améliorer : {name}', { name })}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
@@ -977,7 +993,8 @@ export class UI {
     // pendant le tutoriel guidé, sa propre bulle suffit : pas de conseil en plus
     // (et en plein commandement, le conseil du village se tait : le combat a ses propres aides)
     const fighting = !!document.getElementById('troopBar') && document.getElementById('troopBar')!.style.display !== 'none';
-    el.hidden = quiet || !!this.tutorial?.on || fighting;
+    // (au bac à sable : aucun conseil)
+    el.hidden = quiet || !!this.tutorial?.on || fighting || this.host.world.sandbox;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
     const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;
@@ -1133,7 +1150,7 @@ export class UI {
   showNewAge(age: number) {
     const fresh = KIND_ORDER.filter((k) => KINDS[k].minAge === age && !this.lockOf(k));
     // ceux qu'une expédition débloquerait : visibles mais grisés, avec le nom de l'expédition
-    const shut = KIND_ORDER.filter((k) => KINDS[k].minAge <= age && KINDS[k].reqMission && !this.host.expeditions.state.done.includes(KINDS[k].reqMission!)
+    const shut = KIND_ORDER.filter((k) => KINDS[k].minAge <= age && KINDS[k].reqMission && !this.host.world.missionDone(KINDS[k].reqMission!)
       && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge!));
     if (!fresh.length && !shut.length) return;
     const lockedTile = (k: KindId) => {
@@ -1169,21 +1186,25 @@ export class UI {
     if (this.host.tools.placeWhy !== this.infoWhy) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
     $('#ageSub').textContent = AGES[sim.age].tagline;
-    const ap = sim.ageProgress(), pct = ap ? Math.floor(ap.ratio * 100) : 100;
+    const ap = sim.ageProgress(), pct = ap ? Math.floor(ap.ratio * 100) : 100, sb = this.host.world.sandbox;
+    $('#agePanel').classList.toggle('sandbox', sb);
+    $('#agePanel').title = tr(sb ? 'Choisir l’âge du village' : "Voir ce qu'il faut pour l'âge suivant");
     $('#ageBar').style.width = `${pct}%`;
     $('#agePanel').classList.toggle('ready', pct >= 100);
     // où en est l'âge : le pourcentage, l'âge visé et les conditions remplies (le détail s'ouvre d'un clic)
     const met = ap ? ap.items.filter((i) => i.have >= i.need).length : 0;
-    const next = ap ? `<span>${tr('Vers {age}', { age: AGES[ap.next].name })}</span><span>${tr('{met}/{n} conditions ▾', { met, n: ap.items.length })}</span>` : `<span>${tr('Dernier âge atteint')}</span>`;
+    const next = sb ? `<span>${ic('palette', 13, 2)} ${tr('Bac à sable')}</span><span>${tr('Changer d’âge ▾')}</span>` : ap ? `<span>${tr('Vers {age}', { age: AGES[ap.next].name })}</span><span>${tr('{met}/{n} conditions ▾', { met, n: ap.items.length })}</span>` : `<span>${tr('Dernier âge atteint')}</span>`;
     $('#agePct').textContent = ap ? pctText(pct) : '';
     if ($('#ageNext').dataset.v !== next) { $('#ageNext').innerHTML = next; $('#ageNext').dataset.v = next; }
     // tout est réuni : un bouton pour passer à l'âge suivant (ce n'est plus automatique)
     const go = $('#ageGo'), ready = !!ap && sim.ready, label = ap ? `${ic('up', 15, 2.4)} ${tr('Passer à : {age}', { age: AGES[ap.next].name })}` : '';
     go.hidden = !ready;
     if (ready && go.dataset.v !== label) { go.innerHTML = label; go.dataset.v = label; go.title = tr('Toutes les conditions sont réunies : passer à l’âge suivant ({age})', { age: AGES[ap!.next].name }); }
-    $('#ageReq').innerHTML = ap
+    // au bac à sable, le panneau liste les âges : un clic y mène, vers l'avant comme vers l'arrière
+    const sbReq = sb ? `<b>${tr('Changer d’âge : sans condition')}</b>${AGES.map((a, i) => `<button type="button" class="ageSet${i === sim.age ? ' now' : ''}" data-setage="${i}">${a.name}<small>${a.tagline}</small></button>`).join('')}` : null;
+    if (sbReq !== null) { if ($('#ageReq').dataset.v !== sbReq) { $('#ageReq').innerHTML = sbReq; $('#ageReq').dataset.v = sbReq; } } else { delete $('#ageReq').dataset.v; $('#ageReq').innerHTML = ap
       ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
-      : tr('Dernier âge atteint : profitez de votre village !');
+      : tr('Dernier âge atteint : profitez de votre village !'); }
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
       const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);
@@ -2063,7 +2084,7 @@ export class UI {
     const fi = q<HTMLInputElement>('#fImport');
     q('#gImport').onclick = () => fi.click();
     fi.onchange = () => { if (fi.files?.[0]) h.importFile(fi.files[0]); };
-    q('#gNew').onclick = async () => { const d = await chooseDifficulty(this.root, { current: h.world.difficulty, note: DIFF_TEXT.restartNote, ok: DIFF_TEXT.restart }); if (d) h.newGame(d); };
+    q('#gNew').onclick = async () => { const r = await chooseDifficulty(this.root, { current: h.world.difficulty, age: h.world.sandbox ? h.sim.age : 0, note: DIFF_TEXT.restartNote, ok: DIFF_TEXT.restart }); if (r) h.newGame(r.d, r.age); };
     q('#gMenu').onclick = () => h.toMenu();
     this.tutorial?.bindSettings(ov, close);
   }
@@ -2072,7 +2093,7 @@ export class UI {
 // ---------------- Menu principal ----------------
 export interface MenuHost {
   /** `seed` : graine d'une nouvelle partie (celle du continent montré en aperçu) ; `difficulty` : celle qu'a choisie le joueur */
-  start(map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty): void;
+  start(map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty, age?: number): void;
   importFile(f: File): void;
 }
 
@@ -2151,6 +2172,7 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
       <div class="mModes">${DIFFICULTIES.map((d) => `<div class="mMode ${d}">${d === DEFAULT_DIFFICULTY ? `<span class="mBadge">${DIFF_TEXT.recommended}</span>` : ''}
         <div class="mHead"><b>${ic(DIFF_TEXT.icon[d], 30, 1.9)}</b><div><h2>${DIFF_TEXT.name[d]}</h2><em>${DIFF_TEXT.tagline[d]}</em></div></div>
         <ul>${DIFF_TEXT.points[d].map((x) => `<li>${ic('check', 18, 2.6)}<span>${x}</span></li>`).join('')}</ul><p class="mSum">${DIFF_TEXT.summary[d]}</p>
+        ${d === 'sandbox' ? `<div class="pickAges"><span>${DIFF_TEXT.startAge}</span><div class="ageBtns">${ageButtons('ageBtn', 0)}</div></div>` : ''}
         <button class="mPlay" data-d="${d}">${DIFF_TEXT.play(d)}</button></div>`).join('')}</div>
       <div class="mFoot"></div>
       <div class="mLinks">${langPicker(getLang(), 'mLang')}<button id="mImport">${ic('upload', 16)} ${tr('Importer une sauvegarde')}</button><button id="mCredits">${tr('Crédits')}</button></div>
@@ -2181,7 +2203,13 @@ export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
     const d = b.dataset.d as Difficulty;
     // une nouvelle partie dans ce mode, tout de suite ; seule une sauvegarde de la carte qu'elle écraserait demande confirmation
     if (save && !(await confirmBox(root, DIFF_TEXT.overwrite, DIFF_TEXT.play(d)))) return;
-    host.start(mapId(), 'new', seed, d);
+    host.start(mapId(), 'new', seed, d, d === 'sandbox' ? startAge : 0);
+  }));
+  // bac à sable : l'âge où la partie commence
+  let startAge = 0;
+  ov.querySelectorAll<HTMLButtonElement>('.ageBtn').forEach((b) => (b.onclick = () => {
+    startAge = +b.dataset.a!;
+    ov.querySelectorAll('.ageBtn').forEach((x) => x.setAttribute('aria-pressed', `${x === b}`));
   }));
   const f = $<HTMLInputElement>('#mFile', ov);
   $('#mImport', ov).onclick = () => f.click();

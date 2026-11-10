@@ -17,6 +17,7 @@ export const TUTO_TEXT = {
   next: 'Suivant',
   finish: 'Terminer',
   skip: 'Passer le tutoriel',
+  sandbox: 'Pas de tutoriel au bac à sable : bâtissez dans l’ordre que vous voulez.',
   wellDone: 'Bien joué !',
   skipped: 'Tutoriel mis de côté : reprenez-le quand vous voulez dans Réglages › Partie.',
   finished: 'Tutoriel terminé ! Il reste dans Réglages › Partie, si vous voulez le refaire.',
@@ -221,7 +222,7 @@ export class Tutorial {
   private shown = new WeakSet<Element>();
 
   /** `fresh` : nouvelle partie (le tutoriel, s'il est activé, reprend au début) */
-  constructor(private ui: UI, private host: UIHost, fresh: boolean) {
+  constructor(private ui: UI, private host: UIHost, fresh: boolean, private off = false) {
     const h = host, T = TUTO_TEXT.steps, q = (s: string) => ui.root.querySelector(s);
     const count = () => { const n: Record<string, number> = {}; for (const b of h.world.buildings.values()) n[b.kind] = (n[b.kind] ?? 0) + 1; return n; };
     const roads = () => { let n = 0; const r = h.world.road; for (let k = 0; k < r.length; k++) if (r[k]) n++; return n; };
@@ -361,7 +362,9 @@ export class Tutorial {
     window.addEventListener('resize', () => { if (this.on) this.place(); });
     ui.tutorial = this;
 
-    const st = readState() ?? { on: tutorialOn(), step: 0 };
+    // bac à sable : jamais de tutoriel, et le choix du joueur pour les autres parties n'est pas touché
+    if (off) return;
+    const st =readState() ?? { on: tutorialOn(), step: 0 };
     // nouvelle partie avec le tutoriel : le temps attend que le joueur ait pris ses repères (il le relance à l'étape du temps)
     if (fresh) { st.step = 0; if (st.on) h.time.paused = true; }
     this.i = Math.min(st.step, this.steps.length - 1);
@@ -371,6 +374,7 @@ export class Tutorial {
 
   /** Affiche l'étape donnée (elle repart de zéro) */
   show(i: number) {
+    if (this.off) return;
     this.i = clamp(i, 0, this.steps.length - 1);
     this.on = true;
     const s = this.steps[this.i];
@@ -514,6 +518,7 @@ export class Tutorial {
   /** Sa ligne dans l'onglet Partie des réglages */
   settingsHtml() {
     const T = TUTO_TEXT.settings;
+    if (this.off) return `<h4>${T.title}</h4><p class="hint">${TUTO_TEXT.sandbox}</p>`;
     return `<h4>${T.title}</h4>
       <div class="row"><label>${T.label}</label><button id="gTuto" class="${this.on ? 'active' : ''}">${this.on ? T.on : T.off}</button><button id="gTutoRestart">${ic('restart', 16)} ${T.restart}</button></div>
       <p class="hint" id="gTutoHint">${this.settingsHint()}</p>`;
@@ -526,6 +531,7 @@ export class Tutorial {
 
   /** Activé : la bulle reprend là où on l'avait laissée (la fenêtre se ferme pour la laisser voir) ; « Recommencer » : au début */
   bindSettings(ov: HTMLElement, close: () => void) {
+    if (this.off) return;
     const T = TUTO_TEXT.settings, b = ov.querySelector<HTMLButtonElement>('#gTuto')!;
     b.onclick = () => {
       if (!this.on) { close(); this.show(this.i); return; }

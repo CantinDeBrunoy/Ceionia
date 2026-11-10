@@ -97,7 +97,7 @@ const RAW = {
     normal: 'Chaque pierre compte',
   } as Record<Difficulty, string>,
   points: {
-    sandbox: ['Tout est gratuit : bois, pierre et minerai ne manquent jamais', 'Personne ne meurt de faim ni ne quitte le village', 'Pour créer et sculpter sans compter'],
+    sandbox: ['Choisissez votre âge : tout y est débloqué, expéditions comprises', 'Tout est gratuit et infini, aucun besoin à tenir', 'Pas de tutoriel : on bâtit dans l’ordre qu’on veut'],
     easy: ['Les grands bâtiments se paient en bois et en pierre', 'Les petits restent gratuits', 'Le village grandit quand ses besoins sont comblés'],
     normal: [
       'Chaque bâtiment se paie, plus cher selon sa taille et l’âge', 'Pour passer d’âge, il faut bâtir du neuf : les bâtiments d’avant ne comptent pas',
@@ -106,7 +106,7 @@ const RAW = {
   } as Record<Difficulty, string[]>,
   /** les points clés en une phrase, pour l'écran d'accueil sur téléphone */
   summary: {
-    sandbox: 'Tout est gratuit et personne ne souffre : pour créer et sculpter sans compter.',
+    sandbox: 'Choisissez votre âge : tout est débloqué, gratuit et sans besoin à tenir, pour bâtir et explorer librement.',
     easy: 'Les grands bâtiments se paient en bois et en pierre, les petits sont gratuits. Le village grandit quand ses besoins sont comblés.',
     normal: 'Tout se paie et on mange plus : chaque pierre compte. Le mode conseillé.',
   } as Record<Difficulty, string>,
@@ -114,6 +114,8 @@ const RAW = {
   recommended: 'Conseillé',
   /** bouton de l'écran d'accueil qui lance une nouvelle partie dans ce mode */
   play: (d: Difficulty) => `Jouer en ${RAW.name[d]}`,
+  /** bac à sable : l'âge où la partie commence, et le changement d'âge en jeu */
+  startAge: 'Âge de départ',
   choose: 'Choisissez la difficulté',
   chooseSub: 'Elle vaut pour toute la partie : on peut en changer en la recommençant.',
   start: 'Commencer',
@@ -148,6 +150,7 @@ export const DIFF_TEXT = {
   get summary() { return trRec(RAW.summary); },
   get recommended() { return tr(RAW.recommended); },
   play: (d: Difficulty) => tr('Jouer en {name}', { name: tr(RAW.name[d]) }),
+  get startAge() { return tr(RAW.startAge); },
   get choose() { return tr(RAW.choose); },
   get chooseSub() { return tr(RAW.chooseSub); },
   get start() { return tr(RAW.start); },

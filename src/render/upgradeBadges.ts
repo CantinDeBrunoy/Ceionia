@@ -48,7 +48,7 @@ export class UpgradeBadges {
       for (const u of UPGRADES) {
         if (u.from !== b.kind) continue;
         const to = KINDS[u.to];
-        if (age < to.minAge || (to.reqMission && !w.exp.done.includes(to.reqMission))) continue;
+        if (age < to.minAge || (to.reqMission && !w.missionDone(to.reqMission))) continue;
         if (to.reqKind && ![...w.buildings.values()].some((o) => lineOf(to.reqKind!).includes(o.kind))) continue;
         if (!canPay(w, priceIn(w, u.to, age))) continue;
         const s = sizeOf(b);

@@ -290,8 +290,11 @@ class Game implements UIHost {
     },
   };
 
-  /** `seed` : graine d'une nouvelle partie (tirée au hasard sans elle) ; `difficulty` : la sienne (normale sans elle) */
-  constructor(mapId: number, mode: 'continue' | 'new', seed?: number, difficulty: Difficulty = DEFAULT_DIFFICULTY) {
+  /**
+   * `seed` : graine d'une nouvelle partie (tirée au hasard sans elle) ; `difficulty` : la sienne (normale sans elle) ;
+   * `startAge` : l'âge où commence une partie de bac à sable (la Préhistoire sans lui ; ignoré dans les autres modes)
+   */
+  constructor(mapId: number, mode: 'continue' | 'new', seed?: number, difficulty: Difficulty = DEFAULT_DIFFICULTY, startAge = 0) {
     const w = this.world;
     const save = mode === 'continue' ? loadSlot(mapId) : null;
     const settings = { ...loadSettings(), ...(save?.settings ?? {}) } as Partial<Settings>;
@@ -313,6 +316,8 @@ class Game implements UIHost {
       newWorld(w, mapId, seed ?? newSeed(), GEN);
       w.difficulty = difficulty;
       w.wood = rulesOf(difficulty).startWood; w.stone = rulesOf(difficulty).startStone;
+      // le bac à sable commence à l'âge choisi, tout ouvert
+      if (w.sandbox) this.sim.age = Math.max(0, Math.min(AGES.length - 1, Math.round(startAge) || 0));
     }
     this.war.load(w.war);
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
@@ -481,13 +486,14 @@ class Game implements UIHost {
       this.war.ageUp(age);
       this.ui.banner(trx('Nouvel âge : {name}', { name: AGES[age].name }), AGES[age].tagline);
       // l'Antiquité : la faille violette du rivage mène aux Enfers (dit une fois, en une phrase ; un clic mène à l'expédition)
-      if (age === 1 && !this.world.portalOpen && this.world.portal) {
+      if (age === 1 && !this.world.portalOpen && this.world.portal && !this.world.sandbox) {
         this.warTips.markSeen('portal');
         setTimeout(() => this.ui.toast(WAR_TIP_TEXT.portal, () => this.ui.gotoMission('portal')), 6500);
       }
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
-      setTimeout(() => this.ui.showNewAge(age), 3600);
+      // (au bac à sable, tout est déjà ouvert : pas de liste)
+      if (!this.world.sandbox) setTimeout(() => this.ui.showNewAge(age), 3600);
       audio.sfxAgeUp();
       // le sol des jardins change avec eux
       this.terrain.gardenAge = age;
@@ -519,7 +525,8 @@ class Game implements UIHost {
     this.gardens.sync(this.sim.age);
     this.refreshHalos();
     this.ui.update();
-    this.tutorial = new Tutorial(this.ui, this, !save);
+    // (pas de tutoriel au bac à sable : il n'y a rien à apprendre dans l'ordre)
+    this.tutorial = new Tutorial(this.ui, this, !save, w.sandbox);
     // les aides du volet militaire (bulles facultatives, au moment utile)
     this.warTips = new WarTips({
       root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
@@ -553,9 +560,9 @@ class Game implements UIHost {
       location.reload();
     } catch (e) { this.ui.toast(trx('Import impossible : {why}', { why: (e as Error).message })); }
   }
-  newGame(difficulty: Difficulty) {
+  newGame(difficulty: Difficulty, age = 0) {
     deleteSlot(this.world.mapId);
-    sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|fresh|${difficulty}`);
+    sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|fresh|${difficulty}|${age}`);
     this.running = false;
     location.reload();
   }
@@ -1667,7 +1674,7 @@ async function boot() {
   loading.remove();
 
   let started = false;
-  const start = (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty) => {
+  const start = (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty, age?: number) => {
     if (started) return;
     started = true;
     // les anciennes cartes (île, vallée, plateaux) n'existent plus : on joue sur le continent
@@ -1678,18 +1685,18 @@ async function boot() {
     // tailles des tableaux du monde, des vues et de la caméra
     setMapSize(mapDef(map)!.size);
     syncChunks();
-    (window as any).__game = new Game(map, mode, seed, difficulty);
+    (window as any).__game = new Game(map, mode, seed, difficulty, age);
   };
   const auto = sessionStorage.getItem(AUTOSTART);
   let menu: HTMLElement | null = null;
   if (auto) {
     sessionStorage.removeItem(AUTOSTART);
-    const [m, mode, diff] = auto.split('|');
-    start(+m, mode === 'continue' ? 'continue' : 'new', undefined, isDifficulty(diff) ? diff : undefined);
+    const [m, mode, diff, ageS] = auto.split('|');
+    start(+m, mode === 'continue' ? 'continue' : 'new', undefined, isDifficulty(diff) ? diff : undefined, +ageS || 0);
     return;
   }
   menu = showMenu(uiRoot, {
-    start: (map, mode, seed, difficulty) => start(map, mode, seed, difficulty),
+    start: (map, mode, seed, difficulty, age) => start(map, mode, seed, difficulty, age),
     importFile: async (f) => {
       try { const d = await readSaveFile(f); saveSlot(d); start(d.map, 'continue'); }
       catch (e) { alert(trx('Import impossible : {why}', { why: (e as Error).message })); }
