@@ -43,6 +43,7 @@ import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
 import { Streams } from './render/streams';
 import { Atmosphere } from './render/atmosphere';
+import { NightSky, SkyShowKind, skyNewsText } from './render/nightSky';
 import { SNOW, setSnowMap } from './render/snow';
 import { AmbientLife } from './render/life';
 import { Glow } from './render/glow';
@@ -134,6 +135,8 @@ class Game implements UIHost {
   eruptions: Eruptions;
   streams: Streams;
   atmosphere: Atmosphere;
+  /** aurores boréales et étoiles filantes */
+  nightSky: NightSky;
   life: AmbientLife;
   /** halo lumineux de nuit et sous terre (absent en qualité réduite) */
   private glow = coarse ? null : new Glow(renderer);
@@ -344,6 +347,8 @@ class Game implements UIHost {
     this.eruptions = new Eruptions(w);
     this.streams = new Streams(w, this.terrain.waterMat.normalMap);
     this.atmosphere = new Atmosphere(w, audio);
+    this.nightSky = new NightSky(w);
+    this.scene.add(this.nightSky.group);
     this.life = new AmbientLife(w, this.buildings);
     this.fires = new Fires(w);
     this.traffic = new Traffic(w);
@@ -963,6 +968,19 @@ class Game implements UIHost {
     });
   }
 
+  /**
+   * Mode développeur : le ciel de nuit à la demande. `__game.skyShow('aurora')` (aurore boréale), `'shower'` (nuit des étoiles
+   * filantes), `'star'` (une étoile filante tout de suite), `'off'` (rien cette nuit) ; de jour, la nuit tombe d'un coup et le
+   * ciel se dégage. Le jeu doit tourner (en pause, tout reste figé)
+   */
+  skyShow(kind: SkyShowKind = 'aurora') {
+    if (kind !== 'off') {
+      if (this.env.daylight > 0.15) this.time.hour = 22;
+      if (this.env.weatherKind !== 'clear' || this.env.wantKind !== 'clear') { this.env.manualWeather = null; this.env.wantKind = 'clear'; }
+    }
+    this.nightSky.force(kind, this.time);
+  }
+
   /** Mode développeur : rejoue la cinématique de fin du volet militaire (`__game.playKingdomEnd()`), depuis les Enfers (tous les plans) ou la surface */
   playKingdomEnd() { this.kingStage.playEnd(true); }
 
@@ -1500,8 +1518,16 @@ class Game implements UIHost {
     this.terrain.stepRecolor();
 
     this.env.update(dt, this.time, this.season, this.cam.target, gdt, this.cam.dist);
-    if (!uv && !hv) this.atmosphere.update(dt, this.time, this.season, this.env, this.cam.camera, this.cam.target);
-    else this.atmosphere.hideMist();
+    if (!uv && !hv) {
+      this.atmosphere.update(dt, this.time, this.season, this.env, this.cam.camera, this.cam.target);
+      this.nightSky.update(dt, gdt, this.time, this.env, this.cam.camera);
+      // une aurore, une nuit des étoiles filantes : un mot, et un clic relève la vue vers le ciel (en mode photo, la cloche seule)
+      for (const k of this.nightSky.news.splice(0)) {
+        const text = skyNewsText(k, (this.sim.counts.observatory ?? 0) > 0);
+        if (document.body.classList.contains('photo')) this.ui.info(text);
+        else this.ui.toast(text, () => this.cam.lookUp(k === 'aurora' ? 0 : undefined));
+      }
+    } else this.atmosphere.hideMist();
     SNOW.value = uv || hv ? 0 : this.season.snow;
     this.sim.rain = this.env.rainK;
     this.sim.season = this.time.season;
