@@ -64,6 +64,12 @@ export class Eruptions {
     this.bombMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     // la lumière existe dès le départ (éteinte) : l'allumer ne recompile pas les matériaux de la scène
     this.group.add(this.bombMesh, this.puffs.mesh, this.light, this.frontLight);
+    // une coulée de lave vide et cachée : son shader se compile au chargement avec le reste (sinon à la première éruption,
+    // une image figée) ; les vraies coulées le partagent (même clé de programme)
+    const mould = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+    const tpl = new THREE.Mesh(mould, flowMaterial({ uFront: { value: 0 }, uCool: { value: 0 }, uFade: { value: 0 } }, this.uTime));
+    tpl.visible = false;
+    this.group.add(tpl);
   }
 
   /** Lance l'éruption du volcan posé sur la case ; false s'il est déjà en éruption */
