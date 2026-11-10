@@ -199,6 +199,8 @@ export class Sim {
   get drought() { return this.moisture < 0.25 && this.fieldFood > 0; }
 
   get canGrow() {
+    // au bac à sable, seules les places comptent : aucun besoin ne freine le village
+    if (this.world.sandbox) return this.housing.ok;
     return this.housing.ok && this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok && this.health.ok;
   }
 
@@ -218,7 +220,8 @@ export class Sim {
 
   ageProgress(): AgeProgress | null {
     const n = this.age + 1;
-    if (n >= AGES.length) return null;
+    // au bac à sable, rien ne conditionne l'âge : on le choisit (voir `setAge`)
+    if (n >= AGES.length || this.world.sandbox) return null;
     const req = AGES[n], w = this.world;
     const items: AgeProgress['items'] = [{ label: 'Habitants', have: Math.floor(this.pop), need: req.reqPop }];
     // en Normal, passé la préhistoire, les bâtiments d'avant qui ont servi aux âges passés (changés d'office en leur version du
@@ -275,6 +278,8 @@ export class Sim {
       return about(k, text);
     };
     this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false;
+    // au bac à sable, aucun conseil : on bâtit comme on veut
+    if (w.sandbox) return tr('Bac à sable : tout est ouvert et gratuit, bâtissez comme vous voulez.');
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
     if (w.buildings.size === 0) return about('gather', tr('Pour commencer, posez {name} au centre : c’est la place du village.', { name: quote('gather') }));
     if (!this.counts.house) return about('house', tr('Autour de la place, le centre du village : {house}, {farm} et {well}.', { house: quote('house'), farm: quote('farm'), well: quote('well') }));
@@ -402,7 +407,7 @@ export class Sim {
       this.recalc();
     }
     // les fondateurs : la place du village posée dans un village sans maison ni habitant accueille tout de suite quatre habitants
-    if (this.pop === 0 && this.age === 0 && (this.counts.gather ?? 0) > 0 && !(this.counts.house ?? 0)) { this.pop = 4; this.evaluate(); }
+    if (this.pop === 0 && (this.age === 0 || this.world.sandbox) && (this.counts.gather ?? 0) > 0 && !(this.counts.house ?? 0)) { this.pop = 4; this.evaluate(); }
     if (this.pop > this.housing.cap) this.pop = Math.max(this.housing.cap, 0);
     // horloge des expéditions : les effets passagers s'éteignent
     const e = this.world.exp;
@@ -443,6 +448,22 @@ export class Sim {
     } else if (this.food.ok) this.fled = 0;
     const unmet = !(this.food.ok && this.water.ok && this.jobs.ok && this.joy.ok && this.health.ok);
     this.recovering = r.recoverT > 0 && unmet ? r.recoverT : Math.max(0, this.recovering - dt);
+  }
+
+  /**
+   * Bac à sable : change d'âge à volonté (vers l'avant ou l'arrière), sans condition ; true si l'âge a changé. Les bâtiments
+   * déjà posés gardent leur âge (ils ne rajeunissent pas) ; les nouveaux se posent à l'âge choisi
+   */
+  setAge(n: number) {
+    if (!this.world.sandbox) return false;
+    n = Math.max(0, Math.min(AGES.length - 1, Math.round(n)));
+    if (n === this.age) return false;
+    this.age = n;
+    this.recalc(); this.evaluate();
+    this.world.ageBase = { ...this.counts };
+    this.onAgeUp?.(this.age);
+    this.message = this.computeMessage();
+    return true;
   }
 
   /** Tout est réuni pour l'âge suivant : le bouton « Passer à l'ère suivante » s'allume */
