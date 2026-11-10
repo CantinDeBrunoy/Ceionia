@@ -60,7 +60,9 @@ export class NightSky {
   /** annonces à faire (une par nuit et par spectacle) */
   news: SkyNews[] = [];
   private aurora: THREE.Mesh;
-  private auroraU = { uTime: { value: 0 }, uAlpha: { value: 0 }, uMap: { value: new THREE.Vector3() }, uR: { value: SKY_R }, uH: { value: AURORA_H } };
+  private auroraU = { uTime: { value: 0 }, uAlpha: { value: 0 }, uFine: { value: 1 }, uMap: { value: new THREE.Vector3() }, uR: { value: SKY_R }, uH: { value: AURORA_H } };
+  /** densité des effets (qualité graphique) : en dessous de la moitié, l'aurore n'a qu'un voile */
+  set density(d: number) { this.auroraU.uFine.value = d > 0.5 ? 1 : 0; }
   /** force affichée de l'aurore (suit le programme en douceur) */
   private auroraK = 0;
   private meteorMesh: THREE.Mesh;
@@ -110,7 +112,7 @@ void main() {
   vB = position.xy;
   gl_Position = projectionMatrix * viewMatrix * vec4(cameraPosition + vec3(d.x * cos(e), sin(e), d.y * cos(e)) * uR, 1.0);
 }`,
-      fragmentShader: `uniform float uTime; uniform float uAlpha; varying vec2 vB;
+      fragmentShader: `uniform float uTime; uniform float uAlpha; uniform float uFine; varying vec2 vB;
 float hh(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 float nz(vec2 p) {
   vec2 i = floor(p), f = fract(p);
@@ -138,13 +140,16 @@ vec3 veil(float az, float v, float t, float s, float lift) {
   float violet = smoothstep(0.04, 0.22, h) * exp(-up * 2.4) * (0.4 + 0.6 * ray);
   float q = (h + 0.016) / 0.014;
   float pink = exp(-q * q) * arc * arc;
-  return (vec3(0.2, 1.0, 0.32) * green * (0.5 + 0.8 * ray) + vec3(0.5, 0.12, 0.8) * violet * 0.55 + vec3(1.0, 0.25, 0.55) * pink * 0.5) * arc * dens * beam;
+  return (vec3(0.2, 1.0, 0.32) * green * (0.5 + 0.8 * ray) + vec3(0.55, 0.12, 0.8) * violet * 0.7 + vec3(1.0, 0.22, 0.5) * pink * 0.7) * arc * dens * beam;
 }
 void main() {
   float az = vB.x, v = vB.y, t = uTime;
   // vive vers le nord (-z), à peine un voile au sud
   float north = 0.15 + 0.85 * smoothstep(-0.3, 0.9, -sin(az));
-  vec3 c = veil(az, v, t, 0.0, 0.24) + veil(az + 0.5, v, t * 1.2, 5.7, 0.36) * 0.5;
+  vec3 c = veil(az, v, t, 0.0, 0.24);
+  // le second voile, plus haut et plus pâle (sauté quand la carte graphique peine)
+  if (uFine > 0.5) c += veil(az + 0.5, v, t * 1.2, 5.7, 0.36) * 0.5;
+  else c *= 1.25;
   c *= 0.75 * north * uAlpha * smoothstep(0.0, 0.04, v) * (1.0 - smoothstep(0.7, 1.0, v));
   gl_FragColor = vec4(c, 1.0);
   #include <tonemapping_fragment>
@@ -204,11 +209,11 @@ void main() {
   /** Spectacle de la nuit en cours (pour les tests et le débogage) */
   get tonight(): Readonly<NightShow> { return this.show; }
 
-  /** Part des terres froides : taïga et neiges éternelles */
+  /** Part des terres froides : taïga et neiges éternelles (une case sur quatre suffit ; une fois par nuit) */
   private coldShare() {
     const w = this.world;
     let land = 0, cold = 0;
-    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+    for (let z = 0; z < N; z += 2) for (let x = 0; x < N; x += 2) {
       const h = w.cellAvg(x, z);
       if (h < 0.08) continue;
       land++;
@@ -246,7 +251,7 @@ void main() {
     this.aurora.geometry.setDrawRange(0, this.auroraK > 0 ? Infinity : 0);
     if (this.auroraK > 0) {
       // une lueur verte sur le paysage et le fond du ciel, qui suit les sursauts
-      env.hemi.color.lerp(AURORA_TINT, u.uAlpha.value * 0.12);
+      env.hemi.color.lerp(AURORA_TINT, u.uAlpha.value * 0.2);
       env.skyMat.uniforms.top.value.lerp(AURORA_SKY, u.uAlpha.value * 0.1);
       env.skyMat.uniforms.hz.value.lerp(AURORA_SKY, u.uAlpha.value * 0.06);
     }

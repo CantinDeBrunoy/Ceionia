@@ -1165,6 +1165,7 @@ class Game implements UIHost {
     this.veg.lodDist = p.vegLod;
     this.blightView.density = p.density;
     this.blightView.mist = p.mist;
+    this.nightSky.density = p.density;
     setFxDensity(p.density);
   }
 
