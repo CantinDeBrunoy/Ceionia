@@ -120,7 +120,7 @@ registerDict('war', {
   'Fermer le portail': 'Close the portal',
   '🗼 Pour les affronter : « {tower} » et « {barracks} » sur l’île du portail, pas au village, puis une garnison.': '🗼 To fight them: “{tower}” and “{barracks}” on the portal island, not in the village, then a garrison.',
   '⚔️ Bâtissez ici, sur l’île du portail (pas au village) : « {tower} » et « {barracks} », puis recrutez une garnison.': '⚔️ Build here, on the portal island (not in the village): “{tower}” and “{barracks}”, then recruit a garrison.',
-  '{name} est au village : contre les démons, il en faut sur l’île du portail. Cliquez ici pour y aller.': '{name} is in the village: against the demons, you need one on the portal island. Click here to go there.',
+  '« {name} » est au village : contre les démons, il en faut sur l’île du portail. Cliquez ici pour y aller.': '“{name}” is in the village: against the demons, you need one on the portal island. Click here to go there.',
   '🌀 Les Enfers': '🌀 Hell',
   'Affronter…': 'Fight…',
   'Le portail est refermé : rouvrez-le quand vous voulez.': 'The portal is closed: reopen it whenever you like.',

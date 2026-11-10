@@ -736,7 +736,7 @@ class Game implements UIHost {
     if ((b.kind !== 'watchtower' && b.kind !== 'barracks') || this.war.pve !== 'on' || this.world.onPortalIsland(b.x, b.z) || this.tutorial.chapterOn === 'pve') return;
     const d = isleDefenses(this.world);
     if (b.kind === 'watchtower' ? d.towers : d.barracks) return;
-    this.ui.toast(trx('{name} est au village : contre les démons, il en faut sur l’île du portail. Cliquez ici pour y aller.', { name: this.sim.nameOf(b.kind) }), () => this.commandIsle(), 'action');
+    this.ui.toast(trx('« {name} » est au village : contre les démons, il en faut sur l’île du portail. Cliquez ici pour y aller.', { name: this.sim.nameOf(b.kind) }), () => this.commandIsle(), 'action');
   }
 
   /** Tours de garde et casernes du village (hors de l'île du portail) */

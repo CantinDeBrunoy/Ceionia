@@ -654,8 +654,8 @@ body.photo #photoBar { display: flex; }
 #tuto[data-side="right"] .tArrow { left: -1px; border-bottom-width: 2px; border-left-width: 2px; }
 #tuto[data-side="left"] .tArrow { left: calc(100% + 1px); border-top-width: 2px; border-right-width: 2px; }
 #tuto:not([data-side]) .tArrow, #tuto[data-side=""] .tArrow { display: none; }
-/* l'élément montré : un bouton prend une teinte dorée, sans bouger ni clignoter (une fiche, un panneau gardent leurs couleurs) */
-button.tHi:not(.active):not(.on) { background: #fff1bf !important; border-color: #ffb31a !important; }
+/* l'élément montré : un bouton prend un liseré doré, sans bouger ni clignoter ni changer de couleur (texte blanc ou foncé, il reste lisible) */
+button.tHi { box-shadow: inset 0 0 0 2px #ffb31a, 0 0 14px rgba(255, 179, 26, 0.45) !important; }
 /* autour de lui, un anneau doré dont la lueur respire lentement (l'anneau est à part : un élément redessiné ne la relance pas) */
 #tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; border: 3px solid #ffb31a; box-shadow: 0 0 12px 3px rgba(255, 179, 26, 0.5); transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease; animation: tutoRing 3.2s ease-in-out infinite; }
 @keyframes tutoRing { 50% { box-shadow: 0 0 20px 6px rgba(255, 179, 26, 0.28); } }
