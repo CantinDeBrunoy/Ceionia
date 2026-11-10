@@ -977,7 +977,7 @@ export class UI {
     // pendant le tutoriel guidé, sa propre bulle suffit : pas de conseil en plus
     // (et en plein commandement, le conseil du village se tait : le combat a ses propres aides)
     const fighting = !!document.getElementById('troopBar') && document.getElementById('troopBar')!.style.display !== 'none';
-    el.hidden = quiet || !!this.tutorial?.on || fighting;
+    el.hidden = quiet || !!this.tutorial?.active || fighting;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
     const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;
