@@ -1,0 +1,92 @@
+# Faune
+
+> Fichiers : `src/render/fauna.ts` (classe `Fauna` : zones de vie, comportements, rendu), `src/render/beasts.ts` (bêtes articulées dessinées par le jeu), `src/render/assets.ts` (modèles Quaternius, `makeActor`, `play`), `src/render/impostors.ts` (silhouettes lointaines), `src/render/pens.ts` (enclos), `src/render/zoo.ts` (le zoo), `src/render/trophies.ts` (trophées de la place), `src/render/life.ts` (petites touches : poissons qui sautent, nuée du soir), `src/render/farmRigs.ts` (engins des champs, voir plus bas), `src/sim/missions.ts` (`penHerds`, `PEN_CAP`, `STABLE_CAP`).
+> Tests : `tests/faune.test.ts`, `tests/betes.test.ts`, `tests/trophees.test.ts`.
+> Voir aussi : [vegetation-biomes.md](vegetation-biomes.md), [expeditions.md](expeditions.md), [monde-souterrain.md](monde-souterrain.md), [ciel-meteo.md](ciel-meteo.md), [outils-terrain.md](outils-terrain.md) (volcans), [rendu-modeles.md](rendu-modeles.md), [chargement-performances.md](chargement-performances.md), [trafic.md](trafic.md).
+
+## En bref
+La faune est un décor vivant : aucune bête n'est sauvegardée ni ne compte dans la simulation. `Fauna` recense le monde (biomes, lisières, berges, grottes, fermes), en déduit des **groupes** (`Source`) puis crée les bêtes de chaque groupe. Elles errent autour de leur domaine, broutent, boivent, fuient, chassent. Les bêtes d'expédition ramenées au village (moutons, vaches, cochons, chevaux) sont le seul lien avec la simulation (`w.exp.herd`). Le zoo, les enclos et les trophées sont des vues à part.
+
+## Règles du jeu
+### Qui vit où
+- **Tout biome** : lapins, cerfs (lisières tempérées et taïga), renards (lisières tempérées, taïga, marais ; modèle `fox` requis), oiseaux chanteurs (un groupe par bosquet, jusqu'à 40), abeilles, papillons, canards (rivages), grenouilles (berges et mares, modèle `frog` requis), vols d'oiseaux (4 sur la carte + 3 au-dessus du village), mouettes (rivages), poissons (hauts-fonds), dauphins (large, 3 au plus), baleine (au large, modèle `whale`), raies manta (modèle `manta`).
+- Table `ZONES` (`fauna.ts`) : une ligne = espèce, biomes, ancrages dans le décor, un groupe par `per` cases, `max` groupes par biome. Lézards (désert, tropiques ; rochers), chameaux (désert ; lisières), crocodiles (marais, tropiques, désert ; berges), tortues (marais, tropiques, tempéré, désert ; mares), éléphants et girafes (tropiques), élans (taïga), loups (tempéré, lisières), crabes (tous biomes, plages). `speciesIn(biome)` lit cette table.
+- Hors table, mais dans `refreshGen` : moutons (prairies tempérées et marais), chevaux (tempéré et tropiques, modèle `horse` requis, 3 groupes au plus), lamas (désert et hauteurs de la taïga, modèle `llama`), loups de taïga (2 meutes au plus), ours, bouquetins (hauts pâturages, > 4,2 de hauteur, hors flancs de volcan), aigles (2 aires, 5 sur grande carte, aux plus hauts sommets, à plus de 14 cases l'une de l'autre), chauves-souris (3 par grotte, 8 grottes au plus).
+- **Ours** : `bearDens` pose une tanière devant chaque grotte ou au bout de chaque faille, une sur cinq n'a pas d'ours (`hash2 > 0.8`), 5 tanières au plus ; un ourson (`cub`) suit sa mère. Ils regagnent la tanière (cachés) la nuit et en hiver (`season === 3`).
+- **Basse-cour** (selon les bâtiments) : poules (ferme avant l'âge 4 : 4 ; maison âge ≤ 2 : 3 pour 55 % d'entre elles), oies (fermes et 15 % des maisons, âge ≤ 2 ; ferme âge < 4), chien (maison ou ferme âge ≤ 3, 30 %, modèle `dog` requis), vaches (ferme âges 1 à 3 : 2), cochons (idem, modèle `pig` requis). Les poules se cachent la nuit.
+- **Alentours du village** : anneau de `VILLAGE_RING` = 5 à 19 cases du centre (`villageCenter` : la place `gather`, sinon le milieu des bâtiments), sans bâtiment à moins de 2 cases, 2 à 8 groupes de la liste `NEARBY[biome]`.
+- **Selon l'âge** (`nearbyAllowed`) : âges 0-1 toutes les bêtes ; âge 2 sans le gros gibier (`BIG_GAME` : éléphant, girafe, chameau, élan) ; âge ≥ 3 seulement `SMALL_GAME` (oiseaux, lapins, lézards, grenouilles, tortues, moutons). Dès l'âge 2, `KEEP_AWAY` (gros gibier, cerfs, renards, loups) ne s'installe qu'à ≥ 18 cases du village, ≥ 34 dès l'âge 3 (fonction locale `group`).
+- **Visiteurs** (`scout`) : toutes les 3 s, si la caméra est à moins de 55 du sol (`wantsVisitors`) et qu'on voit moins de `SEEN_MIN` = 6 bêtes à terre dans un rayon `SEEN_R` = 10 du centre de la vue, un petit groupe du biome (ou un banc de poissons sur l'eau) arrive à pied par le bord du champ. `VISITORS` = 5 groupes au plus, le plus ancien repart.
+
+### Comportements
+- **Fuite** : chaque espèce a un rayon `flee` (cases) dans `SPECS` ; sans `flee`, la bête ne fuit jamais (vache, éléphant, crocodile, chien, cane…). La menace est un prédateur (`PREY`) ou, pour `WARY`, un villageois à moins de 1,3 case. Fuite : `fear` = 2,5 s, course, le groupe voisin (moins de 3 cases) détale avec elle ; les lapins zigzaguent.
+- **Prédateurs** (`PREY`) : renard (lapins, poules, grenouilles ; vue 6), loup (cerfs, moutons, lamas, élans ; vue 8), crocodile (grenouilles ; vue 2,5). Quand `hunger` ≤ 0 il choisit la proie la plus proche, la poursuit 7 à 10 s ; prise : la proie disparaît 90 à 150 s (`dead`) puis revient à son domaine, le chasseur mange 6 s. La meute chasse la proie du chef (`leader`).
+- **Meutes** : les loups suivent le chef (rang 0) ; au repos tous font les mêmes gestes ; le chef hurle (`onHowl` → `audio.sfxHowl` dans `main.ts`, volume selon la distance à la caméra).
+- **Boire** (`DRINKERS`) : halte à la berge la plus proche (moins de 7 cases) toutes les 60 à 150 s. **Brouter** (`GRAZERS`) : choisit l'herbe la moins broutée (`w.grazed`), qui repousse dans `life`.
+- **Éruption** : `main.ts` donne `fauna.alarm = eruptions.alarm()` (centre du volcan, rayon `f.r + 6`, tant que `e.t < ERUPTION_DUR`). Les bêtes à terre qui ont un `flee` fuient en courant ; les oiseaux chanteurs s'envolent. Poissons, vols et bêtes sans `flee` l'ignorent.
+- **Nuit et saisons** : sommeil la nuit (heure < 6 ou > 21) sauf canards, renards, loups, grenouilles ; en hiver canards, grenouilles, lézards, tortues, crocodiles sont cachés ; lézards cachés la nuit ; dauphins, baleines, mantas cachés l'hiver ; oiseaux, abeilles, papillons selon heure, pluie et saison (voir `update`).
+- **Mer** : bancs (`fish`, 5 à 7 poissons) tournent en formation et sautent ; les dauphins traquent le banc le plus proche (rayon 14), le banc accélère (`rush`) ; la baleine remonte respirer ; les mantas glissent à `SEA - 0,32`. Un poisson hors de l'eau (rive, île) n'est pas affiché. Le **récif** (coraux, algues, épave) n'est pas de la faune : c'est du décor (`vegetation.ts`, voir [vegetation-biomes.md](vegetation-biomes.md)). Les poissons qui sautent près de la vue sont dans `life.ts` (`jumpingFish`, 4 à la fois au plus).
+
+### Bêtes aux prés, enclos, zoo
+- `penHerds(w)` (`missions.ts`) répartit `w.exp.herd` : les chevaux (hors `exp.riding`) dans les écuries (`STABLE_CAP` = 4 par écurie), le reste dans les enclos (`PEN_CAP` = 6 par enclos), le surplus (`rest`) paît en petits groupes (4 au plus) près des fermes (des maisons, 3 au plus, faute de ferme).
+- En plus de l'enclos, jusqu'à la moitié du troupeau (6 bêtes par espèce au plus, groupes de 3, 8 groupes au plus) paît près des fermes et enclos (`field-<espèce>-<j>`).
+- `PenView` anime les bêtes d'enclos dans le repère du bâtiment ; un chien de berger par enclos, 3 poules dès l'âge 1. Une bête qu'une expédition vient de ramener entre à pied par le portail (`ARRIVALS`, `claimArrival`, `penWay`).
+- **Zoo** (bâtiment 3 × 3, dès l'époque moderne) : `ZooView` met 12 bêtes articulées aux places de `ZOO_RESIDENTS` (`models.ts`) : 2 éléphants, 2 crocodiles, 2 girafes, 2 ours, 2 tortues, 2 lézards. Elles ne s'animent que si la caméra est à moins de `NEAR` = 55 ; vitesse par espèce dans `PACE` ; geste de repos tous les ~7 s.
+- **Trophées** : voir plus bas.
+
+## Fonctionnement dans le code
+### Pipeline
+1. `Game.update` (`main.ts`) appelle `fauna.update(dt, elapsed, heure, saison, pluie, âge, caméra)` ; `fauna.people` donne les habitants (méfiance), `fauna.detail` suit le réglage de qualité (`p.faunaDetail`).
+2. **Recensement** (`refreshGen`, générateur) : refait quand `w.version` change (au plus tous les 0,5 s) ou que l'âge change. La première fois d'un coup, ensuite 4 ms par image. Il remplit des listes de cases (prairies, lisières, rochers, berges, plages, hauts-fonds, large…), puis la liste `src` de `Source` (`key`, `kind`, domaine, `n`, `radius`).
+3. **Réconciliation** : les bêtes dont la clé existe encore sont gardées (le domaine est mis à jour), l'écart est ajouté ou retiré. Les domaines restent stables via `homes` (`home`) tant que leur case reste valable. Une bête est supprimée si l'espèce de sa clé change.
+4. **Plafond** : `budget[kind] = ceil(SPECS[kind].max × 0,7)` ; chaque groupe retranche son effectif ; un groupe qui dépasserait est réduit ou ignoré. Le rendu instancié ne peut montrer que `max` bêtes (`if (n >= sp.max) continue`).
+5. **Comportement** (`walk`, `swim`, `fly`, `soar`, `glide`, `songbird`, `bee`, `flutter`, `follow`) à pas variable : `pace` donne une cadence de réflexion (chaque image près de la vue, 1 sur 3 au-delà de `FAR_WALK` = 70, 1 sur 10 hors champ) ; le temps en retard (`lag`, 0,25 s au plus) est rattrapé.
+6. **Rendu** (`render`) : trois voies. (a) Forme instanciée procédurale (`SPECS[k].geo`, une `InstancedMesh` par espèce, couleur par instance, battement d'ailes par `flapMaterial`) ; (b) modèle animé Quaternius (`MODELS` : mouton, vache, cochon, poule, chien, cerf/cerf mâle de tête, cheval, lama, renard, grenouille, poissons, dauphin, baleine, manta) via `makeActor` ; (c) bête articulée du jeu (`BEAST_KINDS`, `makeBeast`). `PROCEDURAL` liste les espèces toujours instanciées ou de secours (lapin, canards, oiseaux, abeille, chauve-souris, aigle, mouette, bouquetin, oie). Un modèle absent retombe sur la forme instanciée (`hasModel`).
+7. **Qualité** (bêtes à acteur, distances × `detail`) : ombre portée en deçà de `SHADOW_D` = 24, animation 1 image sur 2 au-delà de `SLOW_D` = 22, **silhouette figée** (`Impostors`) au-delà de `IMPOSTOR_D` = 36, masquées au-delà de `HIDE_D` = 130 (`HIDE_TINY_D` = 45 pour lézard, crabe, tortue : `TINY`).
+
+### Les bêtes articulées (`beasts.ts`)
+Ours, éléphant, girafe, chameau, élan, loup, crocodile, lézard, tortue, crabe (et le dragon de l'expédition, qui n'est pas de la faune). Chacune : un `Rig` (os nommés, pivots, pièces rattachées à un os, dégradé ventre-dos), des robes (`*_COATS`), et des **clips calculés une fois** (`ClipDef` = nom, durée, fonction de pose), joués avec le même mélangeur que les modèles Quaternius. `makeBeast(kind, robe, taille, nuance)` clone le squelette (`SkeletonUtils.clone`) et renvoie un `Actor`.
+- Noms de clips attendus par `fauna.ts` : `Walk`, `Gallop`, `Idle`, `Eating`, `Sleep`, et les gestes `Idle_2`, `Idle_3` (joués une fois, `GESTURES`). `Idle_2` du loup = hurlement. Les expéditions utilisent aussi `Attack`, `Hit`, `Death` (loup, dragon). `animateActor` enchaîne : course, marche, manger, boire, dormir, tête basse (broutage), geste de repos.
+- `beastYaw(kind)` corrige le cap (le crabe marche de côté : `yaw` = −π/2).
+
+### Trophées (`trophies.ts`)
+- `TROPHIES` = mammouth, kraken, mégalodon, dragon, roi des Enfers (`hellking`). `trophiesWon(exp)` : une mission réussie de ce nom (`exp.done`) ou le trophée rapporté (`exp.perks`) ; pour `kraken` et `megalodon` seulement le `perk` (une ancienne sauvegarde comptait le kraken réussi quand le « monstre des mers » était le mégalodon).
+- `Trophies.sync(place, ids)`, appelé toutes les 0,5 s par `main.ts`, ne refait les maillages que si la clé change (id, position, rotation, âge de la place, liste, hauteurs du terrain dessous). Emplacement : `trophySlot(id, âge)` dans le tableau `SLOTS` (un jeu de 5 places par âge de la place, choisies pour éviter bancs, étals, statues). Le socle suit l'âge (`plinth` : pierre brute, marbre, pierre taillée, bronze, liseré lumineux). Tous tournés de `VIEW_YAW` = 0,75 vers la vue d'ensemble.
+
+### Engins des champs (`farmRigs.ts`)
+Pas de la faune : géométries partagées des attelages et machines agricoles (charrue à bœufs, chariot à foin, tracteurs des âges 3 à 5, moissonneuse, drone). Le bœuf d'attelage y est une pièce de géométrie, pas une bête de `Fauna`. Voir [rendu-modeles.md](rendu-modeles.md) et [jardins.md](jardins.md) pour les champs.
+
+## Liens avec les autres systèmes
+- [expeditions.md](expeditions.md) : `ANIMAL` (`expeditionScenes.ts`) donne modèle et longueur des bêtes ramenées ; `ExpeditionView` laisse les bêtes dans `ARRIVALS`.
+- [ciel-meteo.md](ciel-meteo.md) : heure, saison, pluie pilotent sommeil, vols et abris.
+- [outils-terrain.md](outils-terrain.md) : volcans et éruptions (`alarm`), grottes et failles (tanières).
+- [monde-souterrain.md](monde-souterrain.md) : les créatures du sous-sol ne sont pas dans `Fauna`.
+- [chargement-performances.md](chargement-performances.md) : coût des bêtes articulées, silhouettes, plafonds.
+- [habitants.md](habitants.md) : `fauna.people` lit les habitants pour la méfiance.
+
+## Pièges et invariants
+- Chaque `Source.key` doit être **stable** d'un recensement à l'autre (préfixe + indice) : sinon toutes les bêtes du groupe sont recréées et sautent. Les clés des zones sont `z<indice de zone>b<biome>-<i>` : **insérer une ligne au milieu de `ZONES` change toutes les clés suivantes** ; ajouter en fin de tableau.
+- `salt` fixe la case de domaine (`hash2`) : un salt unique par ligne de zone, ou deux espèces se superposent.
+- Le plafond `max × 0,7` et `SPECS[...].max` : relever l'un sans l'autre ne montre pas plus de bêtes.
+- Une bête dont la case n'est plus `ok` (bâtiment posé, eau montée) retourne à son domaine d'un coup ; avec la sculpture, le recensement est limité à 2 par seconde (bug d'à-coup corrigé : recensement en générateur).
+- Une bête sans `flee` ne fuit pas, y compris devant un volcan (éléphant, vache, crocodile) : voulu ou oubli, à vérifier si on s'en plaint.
+- Les bêtes articulées retirées de la scène hors champ (`animateActor`) : ne pas compter sur leur `mixer` hors vue. Les silhouettes sont prises sur le premier acteur vu de chaque clé (`actorKey`) : une clé par robe (`beast:<espèce>:<robe>`) ou par modèle.
+- Les grenouilles, crocodiles et tortues sont posées à fleur d'eau (`SEA` − 0,01, −0,035, −0,018) : ne pas changer `SEA` sans les revoir.
+- `Math.random` est utilisé dans `PenView` et `scout`/`Fauna.rnd` (graine fixe 4242 pour `Fauna`) : pas de reproductibilité demandée, mais les tests de `faune.test.ts` passent par `refresh` direct.
+- Doublon dans `refreshGen` : le groupe de loups de taïga est déclaré deux fois (même préfixe `wolf`, effectifs 4 − (i % 2) puis 3) ; seule la dernière déclaration compte pour la réconciliation, la première fixe le nombre créé. À nettoyer avec prudence.
+
+## Pour modifier
+### Ajouter un animal
+1. Ajouter son nom au type `Kind` et une entrée dans `SPECS` (`fauna.ts`) : couleurs (robes), vitesses, pauses, `ok` (terrain praticable), `flee`, `scale`, `max`. Ajouter à `GRAZERS`, `DRINKERS`, `WARY`, `PREY` selon ses mœurs.
+2. Choisir le rendu, **au niveau du cheval** (squelette et animations : marche, course, repos, broutage, sommeil, gestes) :
+   - modèle animé CC0 : déclarer le fichier dans `NAMES` (`assets.ts`), le glb dans `public/models/`, une entrée dans `MODELS` (longueur du corps, correction de cap) et créditer dans les crédits ; ou
+   - bête articulée du jeu : écrire son `Rig` et ses clips dans `beasts.ts`, l'ajouter à `BeastKind` et à `DEFS` (robes, `yaw`), avec au moins `Walk`, `Gallop`, `Idle` (testé par `betes.test.ts`), plus `Sleep`, `Eating`, `Idle_2`/`Idle_3`. Une bête « en pièces » sans squelette n'est plus acceptée.
+3. Lui donner un lieu : une ligne dans `ZONES` (en fin de tableau, nouveau `salt`), ou un groupe dans `refreshGen`. Pour qu'on la croise près du village, l'ajouter à `NEARBY[biome]` et, si elle est grosse, à `BIG_GAME` / `KEEP_AWAY`.
+4. Si elle va au zoo : une entrée dans `ZOO_RESIDENTS` et `PACE` (`zoo.ts`).
+5. Tests : `faune.test.ts` (biome), `betes.test.ts` (clips et os), puis `npx tsc --noEmit` et `npx vitest run`.
+
+### Changer le nombre ou le lieu
+`per`, `max`, `n` dans `ZONES` ; le `0,7` du plafond ; `VILLAGE_RING`, `SEEN_MIN`, `VISITORS` ; `far` (18 / 34) dans `group`.
+
+### Ajouter un trophée
+Ajouter l'id au bout de `TROPHIES`, une fonction de dessin dans `DRAW`, une place dans chaque jeu de `SLOTS` (5 places par âge : au-delà, `trophySlot` réutilise par modulo, donc deux trophées se superposeraient), et la condition dans `trophiesWon`. Test : `trophees.test.ts`.
