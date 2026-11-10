@@ -15,6 +15,11 @@ registerDict('menu', {
     'Left click: build · Right click: rotate the view · Wheel: zoom · Middle click: pan · WASD / ZQSD: move · R: rotate the building · Esc: let go',
   'Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.': 'Touch: one finger to build, two to pan, zoom and rotate.',
   'Chargement des modèles…': 'Loading models…',
+  // ---- écran de chargement (src/ui/loading.ts)
+  'Construction du monde…': 'Building the world…',
+  'Préparation des matériaux…': 'Preparing materials…',
+  'Préparation de la nuit…': 'Preparing the night…',
+  'Dernières retouches…': 'Final touches…',
   'Import impossible : {why}': 'Import failed: {why}',
   'Langue': 'Language',
 

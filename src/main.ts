@@ -91,6 +91,9 @@ import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
+import { LoadingScreen, painted } from './ui/loading';
+import { WarmUp } from './render/warmup';
+import { CompileJob, compilePaced, representatives } from './render/precompile';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
@@ -228,6 +231,13 @@ class Game implements UIHost {
   audio = audio;
   season = makeSeasonState();
   private lastTime = performance.now();
+  /** les premières images, derrière l'écran de chargement (null ensuite) : la qualité « Auto » ne les juge pas */
+  private warming: WarmUp | null = null;
+  private warmed: (() => void) | null = null;
+  /** durées (ms) et nombres de programmes du chargement, pour le mesurer (`__game.loadStats`, voir docs/chargement-performances.md) */
+  loadStats: Record<string, number> = {};
+  /** le jour (numéro) dont le soir est préparé : shaders de nuit de ce qui est apparu depuis le chargement */
+  private eveningReady = -1;
   /** carte des ombres : position et orientation de la caméra à la dernière image, images depuis sa dernière mise à jour */
   private shadowPos = new THREE.Vector3();
   private shadowQ = new THREE.Quaternion();
@@ -527,7 +537,57 @@ class Game implements UIHost {
       act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
     });
     this.ui.info(save ? trx('Bon retour dans votre village !') : w.buildings.size ? trx('Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.') : trx('Commencez par « {name} », la place au centre du village (Bâtir › Vie & culture).', { name: this.sim.nameOf('gather') }));
-    requestAnimationFrame(() => this.frame());
+    // (la boucle d'images démarre à la fin de `prepare`, derrière l'écran de chargement)
+  }
+
+  /**
+   * Prépare la scène derrière l'écran de chargement, puis lance la boucle d'images. Les shaders du jour, et ceux de la nuit
+   * (la scène rendue dans l'image du halo, les passes du halo), se compilent d'avance, en parallèle quand le navigateur le
+   * permet ; puis les premières images tournent pour de bon jusqu'à ce qu'elles passent vite. Sans cela, la première image
+   * figeait l'écran plusieurs secondes, et le premier soir encore autant (voir docs/chargement-performances.md)
+   */
+  async prepare(screen: LoadingScreen) {
+    const cam = this.cam.camera, s = this.loadStats, now = () => performance.now();
+    let t = now();
+    try {
+      // une image sans rendu : ce qui se bâtit à la première image (bêtes, chemins…) existe avant la compilation
+      screen.step('Construction du monde…', 0.26);
+      await painted();
+      t = now();
+      this.advance();
+      s.firstStep = now() - t;
+      screen.step('Préparation des matériaux…', 0.3);
+      await painted();
+      t = now();
+      const night = !!this.glow && this.gfx.glow, objects = representatives(this.scene), n0 = renderer.info.programs?.length ?? 0;
+      // (les images du halo d'abord : leur allocation attendrait la fin des compilations lancées)
+      if (night) this.glow!.allocate();
+      const jobs: CompileJob[] = [{ objects, scene: this.scene, target: null, label: 'Préparation des matériaux…' }];
+      if (night) for (const j of this.glow!.nightJobs(this.scene, objects)) jobs.push({ ...j, label: 'Préparation de la nuit…' });
+      await compilePaced(renderer, cam, jobs, (k, label) => screen.step(label, 0.3 + 0.55 * k));
+      s.compile = now() - t;
+      s.programs0 = (renderer.info.programs?.length ?? 0) - n0;
+      // une image avec le halo, cachée par l'écran : ses images s'allouent, sa dernière passe se compile
+      screen.step('Dernières retouches…', 0.88);
+      await painted();
+      t = now();
+      if (night) this.glow!.warm(this.scene, cam);
+      s.nightFrame = now() - t;
+    } catch (e) { console.warn(e); }
+    t = now();
+    await this.warmUp();
+    s.warmUp = now() - t;
+    s.programs = renderer.info.programs?.length ?? 0;
+  }
+
+  /** Lance la boucle d'images ; la promesse se tient quand les premières images passent vite (voir `WarmUp`) */
+  private warmUp() {
+    return new Promise<void>((done) => {
+      this.warming = new WarmUp();
+      this.warmed = done;
+      this.lastTime = performance.now();
+      requestAnimationFrame(() => this.frame());
+    });
   }
 
   // ---------- UIHost ----------
@@ -1429,9 +1489,17 @@ class Game implements UIHost {
   private frame() {
     if (!this.running) return;
     requestAnimationFrame(() => this.frame());
-    const now = performance.now();
-    const dt = Math.min(0.1, (now - this.lastTime) / 1000);
-    this.adapt(now - this.lastTime);
+    const ms = this.advance();
+    this.renderer_render();
+    // les premières images, derrière l'écran de chargement : il se lève quand elles passent vite
+    if (this.warming?.feed(ms)) { this.warming = null; this.warmed?.(); this.warmed = null; }
+  }
+
+  /** Avance d'une image (temps, simulation, vues), sans la rendre ; rend le temps écoulé depuis la précédente (ms) */
+  private advance() {
+    const now = performance.now(), ms = now - this.lastTime;
+    const dt = Math.min(0.1, ms / 1000);
+    if (!this.warming) this.adapt(ms);
     this.lastTime = now;
     this.elapsed += dt;
     stepWind(this.elapsed, this.env.rainK);
@@ -1634,6 +1702,10 @@ class Game implements UIHost {
       if (this.incidentCam) { const i = this.incidents().find((x) => x.key === this.incidentCam); if (i) this.cam.follow(i.x, i.z); else this.incidentCam = null; }
       this.gardens.update(dt, this.time.hour);
       this.halos.update(dt, this.env.night);
+      // l'après-midi, une fois par jour : les shaders de nuit de ce qui est apparu depuis le chargement (bêtes de passage et
+      // leurs silhouettes lointaines…) se compilent d'avance, sans bloquer ; sinon, tous au premier halo du soir
+      const h = this.time.hour;
+      if (this.glow && this.gfx.glow && h >= 15 && h < 17 && this.eveningReady !== this.time.days) { this.eveningReady = this.time.days; this.glow.precompile(this.scene, this.cam.camera); }
       this.upBadges.update(dt, this.sim.age);
       this.windT += dt * (1 + this.env.weatherK * 0.6);
       this.veg.animate(this.windT, this.elapsed, 1 - this.env.weatherK * 0.3);
@@ -1652,46 +1724,58 @@ class Game implements UIHost {
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
-
-    this.renderer_render();
+    return ms;
   }
 }
 
 // ---------- Boot ----------
 async function boot() {
   // modèles 3D chargés avant tout : la végétation et la faune les lisent à la construction
-  const loading = document.createElement('div');
-  loading.className = 'loading';
-  uiRoot.appendChild(loading);
-  await loadModels((done, total) => { loading.textContent = `${trx('Chargement des modèles…')} ${done}/${total}`; });
-  loading.remove();
+  // (l'écran de chargement à côté de #ui, non dedans : l'interface du jeu réécrit #ui en se construisant)
+  const app = uiRoot.parentElement!;
+  let screen: LoadingScreen | null = new LoadingScreen(app);
+  const models = screen;
+  await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * 0.2, `${done}/${total}`));
 
   let started = false;
-  const start = (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty) => {
+  const start = async (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty) => {
     if (started) return;
     started = true;
     // les anciennes cartes (île, vallée, plateaux) n'existent plus : on joue sur le continent
     if (!mapDef(map)) map = CONTINENT;
+    // l'écran de chargement couvre la vue (celui des modèles, s'il est encore là) ; on le laisse s'afficher avant de bâtir
+    const ld = screen ?? new LoadingScreen(app);
+    screen = null;
+    ld.step('Construction du monde…', 0.22);
+    await painted();
     // l'accueil peut avoir été redessiné (changement de langue) : on retire celui qui est à l'écran
     document.getElementById('menu')?.remove();
     menu?.remove();
     // tailles des tableaux du monde, des vues et de la caméra
     setMapSize(mapDef(map)!.size);
     syncChunks();
-    (window as any).__game = new Game(map, mode, seed, difficulty);
+    const t0 = performance.now();
+    const game = new Game(map, mode, seed, difficulty);
+    game.loadStats.build = performance.now() - t0;
+    (window as any).__game = game;
+    await game.prepare(ld);
+    ld.done();
   };
   const auto = sessionStorage.getItem(AUTOSTART);
   let menu: HTMLElement | null = null;
   if (auto) {
     sessionStorage.removeItem(AUTOSTART);
     const [m, mode, diff] = auto.split('|');
-    start(+m, mode === 'continue' ? 'continue' : 'new', undefined, isDifficulty(diff) ? diff : undefined);
+    void start(+m, mode === 'continue' ? 'continue' : 'new', undefined, isDifficulty(diff) ? diff : undefined);
     return;
   }
+  // l'accueil : l'écran des modèles s'efface ; un autre couvrira la vue au lancement de la partie
+  models.done(true);
+  screen = null;
   menu = showMenu(uiRoot, {
     start: (map, mode, seed, difficulty) => start(map, mode, seed, difficulty),
     importFile: async (f) => {
-      try { const d = await readSaveFile(f); saveSlot(d); start(d.map, 'continue'); }
+      try { const d = await readSaveFile(f); saveSlot(d); void start(d.map, 'continue'); }
       catch (e) { alert(trx('Import impossible : {why}', { why: (e as Error).message })); }
     },
   });
