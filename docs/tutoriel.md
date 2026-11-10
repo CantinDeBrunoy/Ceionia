@@ -101,6 +101,7 @@ Clé `village-lowpoly:v1:tutorial` du `localStorage`, lue par `parseState`, écr
 - Aides militaires (`warTips.ts`) : muettes tant que la bulle est active ; celles qu'un chapitre a dites ne reviennent pas.
 
 ## Pièges et invariants
+- Bac à sable : `new Tutorial(…, off = world.sandbox)` ne lit ni n'écrit l'état enregistré (le choix du joueur pour ses autres parties reste intact), et `chapter()` ne lance aucun chapitre (voir [bac-a-sable.md](bac-a-sable.md)).
 - **`tutorial.ts` ne lit pas le PvE** : ni `war.`, ni `isleDefenses`, ni `hellWhy`, ni `invasion` (tests). Tout ce qui
   touche à la guerre passe par `tutorialChapters.ts` et le `ChapterHost`.
 - **Compatibilité** : les anciens états n'ont que `on` et `step`. Finir et passer y écrivaient tous deux `on: false` ;

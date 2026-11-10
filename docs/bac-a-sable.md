@@ -1,6 +1,6 @@
 # Bac à sable
 
-> Fichiers : `src/sim/difficulty.ts` (la difficulté `sandbox` et ses textes), `src/world/world.ts` (`World.sandbox`, `World.missionDone`, `World.unlimited`), `src/sim/sim.ts` (`Sim.setAge`, croissance, conseil), `src/ui/ui.ts` (accueil, choix de la partie, panneau de l'âge, verrous), `src/ui/tutorial.ts` (tutoriel coupé), `src/main.ts` (`Game`, lancement), `src/build/startLock.ts` (verrou de départ)
+> Fichiers : `src/sim/difficulty.ts` (la difficulté `sandbox` et ses textes), `src/world/world.ts` (`World.sandbox`, `World.missionDone`, `World.unlimited`), `src/sim/sim.ts` (`Sim.setAge`, croissance, conseil), `src/ui/ui.ts` (accueil, choix de la partie, panneau de l'âge, verrous), `src/ui/tutorial.ts` (tutoriel et chapitres coupés), `src/main.ts` (`Game`, lancement), `src/build/startLock.ts` (verrou de départ)
 > Tests : `tests/bacASable.test.ts`, `tests/difficulty.test.ts`
 > Voir aussi : [difficulte.md](difficulte.md), [ages.md](ages.md), [economie-ressources.md](economie-ressources.md), [besoins-population.md](besoins-population.md), [tutoriel.md](tutoriel.md), [sauvegarde.md](sauvegarde.md), [batiments-catalogue.md](batiments-catalogue.md)
 
