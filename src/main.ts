@@ -548,11 +548,11 @@ class Game implements UIHost {
    */
   async prepare(screen: LoadingScreen) {
     const cam = this.cam.camera, s = this.loadStats, now = () => performance.now();
-    let t = now();
+    let t = 0;
     try {
-      // une image sans rendu : ce qui se bâtit à la première image (bêtes, chemins…) existe avant la compilation
       screen.step('Construction du monde…', 0.26);
       await painted();
+      // une image sans rendu : ce qui se bâtit à la première image (bêtes, chemins…) existe avant la compilation
       t = now();
       this.advance();
       s.firstStep = now() - t;
