@@ -134,7 +134,7 @@ registerDict('ui', {
   'Monter le terrain sous le pinceau.': 'Raise the terrain under the brush.',
   'Baisser le terrain sous le pinceau.': 'Lower the terrain under the brush.',
   'Aplanir à la hauteur du premier clic.': 'Flatten to the height of the first click.',
-  'Tailler des falaises nettes, en gradins.': 'Carve sharp, stepped cliffs.',
+  'Tailler des falaises : en glissant, le sol se dresse d’un gradin à paroi de roche franche ; sur une pente, en gradins. Maj : creuser d’un gradin.': 'Carve cliffs: drag and the ground rises one step with a sheer rock face; on a slope, in steps. Shift: dig one step down.',
   'Creuser sous le niveau de l’eau : mares, rivières, lacs.': 'Dig below water level: ponds, rivers, lakes.',
   'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.': 'Raise a mountain, with eternal snow if it is tall.',
   'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut. Pour le retirer : la Gomme ou Démolir sur son cône ; Ctrl+Z annule.': 'Place a volcano (one click): the wider the brush, the taller it gets. To remove it: the Eraser or Demolish on its cone; Ctrl+Z undoes.',

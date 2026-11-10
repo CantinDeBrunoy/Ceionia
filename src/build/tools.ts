@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, VEG_FISSURE, Snapshot } from '../world/world';
-import { sculpt, raiseVolcano, removeVolcano, SculptTool, brushOnBuilding, volcanoRadius } from '../world/terraform';
+import { sculpt, raiseVolcano, removeVolcano, SculptTool, SculptCtx, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
 import { KINDS, KindId, Building, hasDoor, sizeOf, smallSize } from './catalog';
@@ -81,7 +81,7 @@ export class ToolController implements ToolInput {
   private touchMode = false;
   private pre: Snapshot | null = null;
   private strokeChanged = false;
-  private ctx = { target: 0 };
+  private ctx: SculptCtx = { target: 0 };
   private lastRoad: { x: number; z: number } | null = null;
   private vegTimer = 0;
   private moveOrigin: { kind: KindId; x: number; z: number; rot: number; auto: boolean; small: boolean } | null = null;
@@ -426,6 +426,8 @@ export class ToolController implements ToolInput {
       }
     } else if (SCULPT_TOOLS.includes(t)) {
       this.ctx.target = this.hit.y;
+      // falaise : Maj enfoncée, le gradin se creuse au lieu de se dresser
+      this.ctx.dig = !!e.shift;
       if (this.reliefBlocked()) this.h.toast(tr('Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).'));
     }
     else if (t === 'biome') this.applyBiome();

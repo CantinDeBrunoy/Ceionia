@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, setMapSize, VEG_FOREST, VEG_CAVE, TREE_LINE } from '../src/world/world';
 import { newWorld, addDefaultDecor } from '../src/world/mapgen';
 import { loneTreeAt } from '../src/render/vegetation';
+import { sculpt, CLIFF_STEP } from '../src/world/terraform';
 
 function monde() {
   const w = new World();
@@ -57,6 +58,43 @@ describe('gomme : les arbres de la carte', () => {
     expect(w.setVeg(x, z, VEG_FOREST)).toBe(false);
     const [lx, lz] = trouve(w, (cx, cz) => w.cellAvg(cx, cz) > 1 && w.cellAvg(cx, cz) < TREE_LINE - 1 && w.cellSlope(cx, cz) < 0.5 && !w.veg[w.ci(cx, cz)] && !w.occ[w.ci(cx, cz)] && !w.decor[w.ci(cx, cz)] && !w.lake[w.ci(cx, cz)]);
     expect(w.setVeg(lx, lz, VEG_FOREST)).toBe(true);
+  });
+});
+
+/** Un replat dégagé de 13 × 13 cases (ni bâtiment, ni route, ni eau, ni décor), son centre */
+function replat(w: World): [number, number] {
+  return trouve(w, (x, z) => {
+    if (x < 10 || z < 10 || x > N - 11 || z > N - 11) return false;
+    const h = w.cellAvg(x, z);
+    if (h < 1 || h > 3.5) return false;
+    for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) {
+      const k = w.ci(x + dx, z + dz);
+      if (w.occ[k] || w.road[k] || w.lake[k] || w.decor[k] || w.veg[k] >= VEG_CAVE || Math.abs(w.cellAvg(x + dx, z + dz) - h) > 0.4) return false;
+    }
+    return true;
+  });
+}
+
+describe('falaise', () => {
+  beforeAll(() => setMapSize(192));
+
+  it('sur le plat, un seul passage dresse un gradin à paroi franche (Maj : il se creuse)', () => {
+    const w = monde();
+    const [x, z] = replat(w), h0 = w.hAt(x + 0.5, z + 0.5), ctx = { target: h0 };
+    expect(sculpt(w, 'cliff', x + 0.5, z + 0.5, 3, 0.016, ctx)).toBe(true);
+    // tout le disque d'un coup, à un gradin au-dessus du clic
+    expect(w.h(x, z)).toBeCloseTo(h0 + CLIFF_STEP, 4);
+    expect(w.h(x + 2, z)).toBeCloseTo(h0 + CLIFF_STEP, 4);
+    // juste hors du pinceau, le sol n'a pas bougé : la paroi fait tout le gradin d'une case à l'autre
+    expect(w.h(x + 4, z) - w.h(x + 3, z)).toBeLessThan(-CLIFF_STEP * 0.7);
+    // repasser ne change plus rien
+    expect(sculpt(w, 'cliff', x + 0.5, z + 0.5, 3, 0.016, ctx)).toBe(false);
+    // le relief affiché garde la marche
+    w.updateVis();
+    expect(w.hAt(x + 0.5, z + 0.5) - h0).toBeGreaterThan(CLIFF_STEP * 0.9);
+    const w2 = monde(), c2 = { target: w2.hAt(x + 0.5, z + 0.5), dig: true };
+    sculpt(w2, 'cliff', x + 0.5, z + 0.5, 3, 0.016, c2);
+    expect(w2.h(x, z)).toBeCloseTo(c2.target - CLIFF_STEP, 4);
   });
 });
 

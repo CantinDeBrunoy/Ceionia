@@ -187,7 +187,7 @@ const DECO_NOTE = 'Décoratif : rend le village plus heureux, ne produit rien.';
 const TOOL_DESC: Record<string, string> = {
   none: 'Regarder le village. Un clic sur un volcan le réveille.',
   raise: 'Monter le terrain sous le pinceau.', lower: 'Baisser le terrain sous le pinceau.', flatten: 'Aplanir à la hauteur du premier clic.',
-  cliff: 'Tailler des falaises nettes, en gradins.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
+  cliff: 'Tailler des falaises : en glissant, le sol se dresse d’un gradin à paroi de roche franche ; sur une pente, en gradins. Maj : creuser d’un gradin.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
   mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut. Pour le retirer : la Gomme ou Démolir sur son cône ; Ctrl+Z annule.',
   forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: `Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille. ${DECO_NOTE}`,
   biome: 'Peindre un biome (tempéré, taïga, désert, tropical, marais) ou rendre la terre à son climat : le sol, les arbres, l’herbe, les bêtes et la neige suivent.',
