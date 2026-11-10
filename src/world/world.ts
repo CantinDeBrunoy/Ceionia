@@ -227,11 +227,11 @@ export class World {
   unlimitedSetting = false;
   /** ressources illimitées : toujours au bac à sable, jamais en Normal, selon le réglage en Facile */
   get unlimited() { return rulesOf(this.difficulty).unlimited ?? this.unlimitedSetting; }
+  set unlimited(on: boolean) { this.unlimitedSetting = on; }
   /** Bac à sable : tout est débloqué (âge choisi à volonté, expéditions comprises), rien ne se paie, aucun besoin ne freine */
   get sandbox() { return this.difficulty === 'sandbox'; }
   /** L'expédition `id` a-t-elle débloqué ce qu'elle offre ? Toujours, au bac à sable */
   missionDone(id: string) { return this.sandbox || this.exp.done.includes(id); }
-  set unlimited(on: boolean) { this.unlimitedSetting = on; }
   /** lignes de chemin de fer (`linesAuto` : drapeau des anciennes sauvegardes, gardé tel quel) */
   lines: RailLine[] = [];
   linesAuto = true;
