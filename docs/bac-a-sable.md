@@ -14,7 +14,7 @@ Ce n'est pas un réglage à part : c'est `World.difficulty === 'sandbox'`. Le mo
 - **Bâtiments** : tous ceux de l'âge courant et des âges précédents sont disponibles, y compris ceux que débloque une expédition. Plus de bâtiment préalable exigé (`reqKind`), plus de verrou « posez d'abord la place du village ».
 - **Ressources** : infinies. Aucun coût n'est prélevé, la barre affiche « ∞ » (bois, pierre, minerai, briques, carburant). L'équipement des expéditions et le recrutement sont gratuits aussi.
 - **Besoins** : aucun ne freine le village. Il grandit dès qu'il reste des places (logement). Pas de famine, pas de départs, pas de ralentissement après un manque.
-- **Coupé** : le tutoriel, le conseil du moment (la pastille est cachée), la liste « nouveaux bâtiments » au changement d'âge, l'astuce du portail à l'Antiquité.
+- **Coupé** : le tutoriel, le conseil du moment (la pastille est cachée), les bulles d'aide militaire (`warTips.update` n'est pas appelé), la liste « nouveaux bâtiments » au changement d'âge, l'astuce du portail à l'Antiquité.
 - **Marque** : le panneau de l'âge porte « Bac à sable » et sa jauge reste pleine ; le menu « Reprendre mon village » et les réglages affichent le mode.
 - **Fin de partie** : la fusée reste possible (ses expéditions sont débloquées comme les autres) ; elle ne dépend de rien d'autre.
 
