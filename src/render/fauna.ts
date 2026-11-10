@@ -558,6 +558,9 @@ export class Fauna {
         mat = flapMaterial(this.uTime, sp.flap);
       } else mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 0.9 });
       const m = new THREE.InstancedMesh(g, mat, sp.max);
+      // couleur par instance dès la création : le shader en tient compte. Créée au premier `setColorAt`, elle changeait le
+      // shader à la première apparition de l'espèce (les chauves-souris : à la première nuit, une image figée)
+      m.setColorAt(0, this.col.setRGB(1, 1, 1));
       m.count = 0;
       m.frustumCulled = false;
       m.castShadow = k !== 'butterfly' && k !== 'bee';
