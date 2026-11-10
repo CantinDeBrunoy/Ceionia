@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
-import { World, N, setMapSize, VEG_CAVE, VEG_FISSURE, VEG_FOREST, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
+import { World, N, setMapSize, VEG_CAVE, VEG_FOREST, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
 import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors } from '../src/render/fauna';
 import { hash2 } from '../src/core/rng';
 
@@ -26,9 +26,10 @@ describe('faune : rattachement au décor', () => {
   it('les ours vivent à l’entrée des grottes et au bout des failles', () => {
     const w = new World();
     w.heights.fill(1);
-    const cave = w.ci(40, 40), fiss = w.ci(70, 60);
+    const cave = w.ci(40, 40);
     w.veg[cave] = VEG_CAVE;
-    w.veg[fiss] = VEG_FISSURE;
+    // une faille : un ravin (ses cases dans rift)
+    expect(w.stampFissure(70, 60)).toBe(true);
     w.computeDecor();
     // toutes les grottes ne sont pas habitées : on en pose assez pour en trouver
     for (let i = 0; i < 12; i++) { w.veg[w.ci(10 + i * 6, 20)] = VEG_CAVE; }
@@ -37,7 +38,7 @@ describe('faune : rattachement au décor', () => {
     expect(dens.length).toBeGreaterThan(0);
     expect(dens.length).toBeLessThanOrEqual(5);
     const holes: [number, number][] = [];
-    for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_CAVE || w.veg[k] === VEG_FISSURE) holes.push([k % N + 0.5, Math.floor(k / N) + 0.5]);
+    for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_CAVE || w.rift[k]) holes.push([k % N + 0.5, Math.floor(k / N) + 0.5]);
     for (const d of dens) {
       // sur une case libre, jamais dans le décor, et près d'une entrée
       expect(w.decor[w.ci(Math.floor(d.x), Math.floor(d.z))]).toBe(0);

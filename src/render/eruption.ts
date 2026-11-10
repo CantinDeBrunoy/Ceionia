@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, VolcanoFrame } from '../world/world';
+import { World, N, VolcanoFrame, VEG_VOLCANO } from '../world/world';
 import { smoothstep } from '../core/rng';
 import { Puffs } from './particles';
 
@@ -25,11 +25,14 @@ interface Flow {
   cells: number[]; cellD: number[]; covered: number;
   /** axe de la coulée (x, z) et distance le long de l'axe, pour situer le front */
   pts: [number, number][]; dist: number[];
+  /** hauteur de chaque sommet du ruban au-dessus du sol (bourrelet) : le ruban se redrape quand le relief change */
+  lift: Float32Array;
   /** elle finit dans l'eau : panache de vapeur */
   wet: boolean;
   smokeAcc: number;
 }
-interface Eruption { cell: number; f: VolcanoFrame; t: number; flows: Flow[]; bombAcc: number; sprayAcc: number; ashAcc: number; blast: boolean }
+/** `gone` : le volcan a disparu en pleine éruption (rasé, annulé) : elle s'arrête net et ses coulées s'effacent */
+interface Eruption { cell: number; f: VolcanoFrame; t: number; flows: Flow[]; bombAcc: number; sprayAcc: number; ashAcc: number; blast: boolean; gone: boolean }
 
 /** Force de l'éruption : rien pendant le grondement, explosion, paroxysme puis déclin */
 const power = (t: number) => (t < 1.2 ? 0 : t < 2 ? (t - 1.2) / 0.8 : t < ERUPTION_DUR * 0.55 ? 1 : Math.max(0, 1 - (t - ERUPTION_DUR * 0.55) / (ERUPTION_DUR * 0.45)));
@@ -38,7 +41,8 @@ const rumble = (t: number) => (t < 1.2 ? t / 1.2 : power(t));
 
 /**
  * Éruptions volcaniques, déclenchées d'un clic sur un volcan : bombes de lave et fontaine au-dessus du cratère, panache de cendres,
- * coulées qui descendent les flancs, lueur orangée ; purement visuel (le relief ne change pas)
+ * coulées qui descendent les flancs, lueur orangée ; purement visuel (le relief ne change pas). Si le joueur sculpte le volcan
+ * pendant l'éruption, la lave suit le sol (`followRelief`)
  */
 export class Eruptions {
   group = new THREE.Group();
@@ -64,13 +68,22 @@ export class Eruptions {
     this.bombMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     // la lumière existe dès le départ (éteinte) : l'allumer ne recompile pas les matériaux de la scène
     this.group.add(this.bombMesh, this.puffs.mesh, this.light, this.frontLight);
+    // une coulée de lave vide et cachée : son shader se compile au chargement avec le reste (sinon à la première éruption,
+    // une image figée) ; les vraies coulées le partagent (même clé de programme)
+    const mould = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+    const tpl = new THREE.Mesh(mould, flowMaterial({ uFront: { value: 0 }, uCool: { value: 0 }, uFade: { value: 0 } }, this.uTime));
+    tpl.visible = false;
+    this.group.add(tpl);
   }
 
-  /** Lance l'éruption du volcan posé sur la case ; false s'il est déjà en éruption */
+  /**
+   * Lance l'éruption du volcan posé sur la case ; false s'il est déjà en éruption, ou s'il n'y a plus de volcan (rasé pendant
+   * les secousses qui l'annonçaient : la lave jaillissait alors d'un sol plat)
+   */
   start(cell: number) {
-    if (this.list.some((e) => e.cell === cell && e.t < ERUPTION_DUR)) return false;
+    if (this.world.veg[cell] !== VEG_VOLCANO || this.list.some((e) => e.cell === cell && e.t < ERUPTION_DUR)) return false;
     const f = this.world.volcanoFrame(cell % N, Math.floor(cell / N));
-    const e: Eruption = { cell, f, t: 0, flows: [], bombAcc: 0, sprayAcc: 0, ashAcc: 0, blast: false };
+    const e: Eruption = { cell, f, t: 0, flows: [], bombAcc: 0, sprayAcc: 0, ashAcc: 0, blast: false, gone: false };
     // des coulées sur tous les flancs, l'une après l'autre ; certaines se séparent en deux bras en descendant
     const n = f.r > 12 ? 7 : 5, a0 = Math.random() * Math.PI * 2;
     const add = (fl: Flow | null) => { if (fl) { e.flows.push(fl); this.group.add(fl.mesh); } return fl; };
@@ -103,6 +116,8 @@ export class Eruptions {
 
   update(dt: number) {
     this.uTime.value += dt;
+    // le relief a changé (sculpture, annulation) : la lave suit le sol, et un volcan disparu s'éteint
+    if (this.world.visVersion !== this.visSeen) { this.visSeen = this.world.visVersion; this.followRelief(); }
     let glow = 0, gx = 0, gy = 0, gz = 0, front = 0, fx = 0, fz = 0;
     for (let i = this.list.length - 1; i >= 0; i--) {
       const e = this.list[i], f = e.f;
@@ -126,12 +141,14 @@ export class Eruptions {
       // coulées : le front avance pendant l'éruption et un peu après (plus lentement), puis la lave refroidit et s'efface
       for (let k = e.flows.length - 1; k >= 0; k--) {
         const fl = e.flows[k], u = fl.u;
-        const moving = e.t > fl.delay && e.t < ERUPTION_DUR + FLOW_MOVE && u.uFront.value < fl.len;
+        const moving = !e.gone && e.t > fl.delay && e.t < ERUPTION_DUR + FLOW_MOVE && u.uFront.value < fl.len;
         if (moving) u.uFront.value = Math.min(fl.len, u.uFront.value + fl.speed * dt * (e.t > ERUPTION_DUR ? 0.55 : 1));
         // le sol que la lave a recouvert reste un champ de basalte
-        for (; fl.covered < fl.cells.length && fl.cellD[fl.covered] <= u.uFront.value; fl.covered++) this.world.coverLava(fl.cells[fl.covered]);
+        for (; !e.gone && fl.covered < fl.cells.length && fl.cellD[fl.covered] <= u.uFront.value; fl.covered++) this.world.coverLava(fl.cells[fl.covered]);
         if (e.t > ERUPTION_DUR + FLOW_COOL) u.uCool.value = Math.min(1, u.uCool.value + dt / 12);
         if (e.t > ERUPTION_DUR + FLOW_FADE) u.uFade.value = Math.max(0, u.uFade.value - dt / 4);
+        // volcan rasé : ses coulées s'effacent en une seconde
+        if (e.gone) u.uFade.value = Math.max(0, u.uFade.value - dt);
         // fumées au front et le long de la lave chaude ; dans l'eau, un panache de vapeur
         if (u.uFront.value > 0.5 && u.uCool.value < 0.85) {
           const heat = 1 - u.uCool.value, atEnd = u.uFront.value >= fl.len - 0.2;
@@ -167,6 +184,29 @@ export class Eruptions {
     this.frontLight.intensity = front * (16 + 5 * Math.sin(this.uTime.value * 9.1));
     this.stepBombs(dt);
     this.puffs.update(dt);
+  }
+
+  /** dernier relief affiché suivi par la lave (`World.visVersion`) */
+  private visSeen = -1;
+
+  /**
+   * Le relief a changé sous les éruptions (le joueur sculpte le volcan, annule…) : chaque coulée se redrape sur le sol (elle
+   * restait sinon en l'air au-dessus d'un creux, ou enfouie sous une butte), les bombes posées aussi ; le repère du volcan
+   * (fond du cratère, rebord) se refait. Un volcan qui n'est plus là (rasé, annulé) cesse son éruption
+   */
+  private followRelief() {
+    const w = this.world;
+    for (const e of this.list) {
+      if (w.veg[e.cell] !== VEG_VOLCANO) { if (!e.gone) { e.gone = true; e.t = Math.max(e.t, ERUPTION_DUR); } }
+      else e.f = w.volcanoFrame(e.cell % N, Math.floor(e.cell / N));
+      for (const fl of e.flows) {
+        const p = fl.mesh.geometry.attributes.position as THREE.BufferAttribute;
+        for (let i = 0; i < p.count; i++) p.setY(i, Math.max(w.hAt(p.getX(i), p.getZ(i)), 0.02) + fl.lift[i]);
+        p.needsUpdate = true;
+        fl.mesh.geometry.computeBoundingSphere();
+      }
+    }
+    for (const b of this.bombs) if (b.landed >= 0) b.y = w.hAt(b.x, b.z);
   }
 
   /** Projette une bombe de lave (ou une goutte de la fontaine) depuis le fond du cratère */
@@ -286,7 +326,7 @@ export class Eruptions {
     }
     if (pts.length < 4) return null;
     // ruban bombé, drapé sur le relief : étroit à la source, il s'élargit en descendant et finit en lobe
-    const n = pts.length, A = ACROSS, pos = new Float32Array(n * A * 3), along = new Float32Array(n * A), side = new Float32Array(n * A);
+    const n = pts.length, A = ACROSS, pos = new Float32Array(n * A * 3), along = new Float32Array(n * A), side = new Float32Array(n * A), lift = new Float32Array(n * A);
     const under = new Map<number, number>(), dists: number[] = [], seed = Math.random() * 10;
     let dist = d0;
     for (let i = 0; i < n; i++) {
@@ -299,7 +339,8 @@ export class Eruptions {
       const tx = bx - ax, tz = bz - az, tl = Math.hypot(tx, tz) || 1;
       for (let j = 0; j < A; j++) {
         const sd = (j / (A - 1)) * 2 - 1, o = sd * hw, vx = px - (tz / tl) * o, vz = pz + (tx / tl) * o, k = i * A + j;
-        pos[k * 3] = vx; pos[k * 3 + 1] = Math.max(w.hAt(vx, vz), 0.02) + 0.04 + bulge * (1 - sd * sd); pos[k * 3 + 2] = vz;
+        lift[k] = 0.04 + bulge * (1 - sd * sd);
+        pos[k * 3] = vx; pos[k * 3 + 1] = Math.max(w.hAt(vx, vz), 0.02) + lift[k]; pos[k * 3 + 2] = vz;
         along[k] = dist; side[k] = sd;
         const cx = Math.floor(vx), cz = Math.floor(vz);
         if (cx >= 0 && cz >= 0 && cx < N && cz < N && !under.has(cz * N + cx)) under.set(cz * N + cx, dist);
@@ -323,7 +364,7 @@ export class Eruptions {
     // un bras ne s'allume qu'une fois que la lave de la coulée mère l'a atteint
     u.uFront.value = d0;
     const cells = [...under.keys()].sort((a, b) => under.get(a)! - under.get(b)!);
-    return { mesh, len: dist, delay, speed: 0.9 + Math.random() * 0.5, u, cells, cellD: cells.map((c) => under.get(c)!), covered: 0, pts, dist: dists, wet, smokeAcc: 0 };
+    return { mesh, len: dist, delay, speed: 0.9 + Math.random() * 0.5, u, cells, cellD: cells.map((c) => under.get(c)!), covered: 0, pts, dist: dists, lift, wet, smokeAcc: 0 };
   }
 }
 

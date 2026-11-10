@@ -34,6 +34,10 @@ registerDict('misc', {
   'Route libre : un clic au point A, un clic au point B.': 'Free road: click point A, then click point B.',
   'Route en ligne : glissez, case par case.': 'Straight road: drag it, tile by tile.',
   'Le brouillard se lève.': 'The fog is lifting.',
+  // le ciel de nuit (render/nightSky)
+  '🌌 Une aurore boréale illumine le ciel ! Cliquez ici pour lever les yeux.': '🌌 The northern lights are glowing in the sky! Click here to look up.',
+  '🌠 Nuit des étoiles filantes ! Cliquez ici pour lever les yeux.': '🌠 A night of shooting stars! Click here to look up.',
+  '🔭 Les astronomes annoncent une nuit d’étoiles filantes ! Cliquez ici pour lever les yeux.': '🔭 The astronomers announce a night of shooting stars! Click here to look up.',
   'Passer ›': 'Skip ›',
   'les grands cratères': 'the great craters',
   'la mer de la Tranquillité': 'the Sea of Tranquility',

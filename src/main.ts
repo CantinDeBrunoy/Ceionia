@@ -43,6 +43,7 @@ import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
 import { Streams } from './render/streams';
 import { Atmosphere } from './render/atmosphere';
+import { NightSky, SkyShowKind, skyNewsText } from './render/nightSky';
 import { SNOW, setSnowMap } from './render/snow';
 import { AmbientLife } from './render/life';
 import { Glow } from './render/glow';
@@ -51,6 +52,7 @@ import { ToolController, ToolId } from './build/tools';
 import { AudioEngine } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { Tutorial } from './ui/tutorial';
+import { chapters } from './ui/tutorialChapters';
 import { AGES, KINDS, Building, sizeOf, type KindId } from './build/catalog';
 import { MISSIONS, VICTORY } from './sim/missions';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
@@ -76,13 +78,13 @@ import { PortalView } from './render/portal';
 import { BlightView } from './render/blight';
 import { isleBlight } from './world/blight';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
-import { holdIsle, isleDefenses } from './world/portal';
+import { holdIsle, isleDefenses, villageBarracks } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
 import { IsleRuins } from './render/isleRuins';
 import { setFxDensity } from './render/combatFx';
 import { War, clockText } from './sim/war';
 import { KingdomStage } from './kingdomStage';
-import { WarTips, WarTipState, WAR_TIP_TEXT } from './ui/warTips';
+import { WarTips, WarTipState, WAR_TIP_TEXT, type WarTipId } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
 import { PortalChoice } from './ui/portalChoice';
@@ -91,6 +93,9 @@ import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
+import { LoadingScreen, painted } from './ui/loading';
+import { WarmUp } from './render/warmup';
+import { CompileJob, compilePaced, representatives } from './render/precompile';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
@@ -134,6 +139,8 @@ class Game implements UIHost {
   eruptions: Eruptions;
   streams: Streams;
   atmosphere: Atmosphere;
+  /** aurores boréales et étoiles filantes */
+  nightSky: NightSky;
   life: AmbientLife;
   /** halo lumineux de nuit et sous terre (absent en qualité réduite) */
   private glow = coarse ? null : new Glow(renderer);
@@ -228,6 +235,13 @@ class Game implements UIHost {
   audio = audio;
   season = makeSeasonState();
   private lastTime = performance.now();
+  /** les premières images, derrière l'écran de chargement (null ensuite) : la qualité « Auto » ne les juge pas */
+  private warming: WarmUp | null = null;
+  private warmed: (() => void) | null = null;
+  /** durées (ms) et nombres de programmes du chargement, pour le mesurer (`__game.loadStats`, voir docs/chargement-performances.md) */
+  loadStats: Record<string, number> = {};
+  /** le jour (numéro) dont le soir est préparé : shaders de nuit de ce qui est apparu depuis le chargement */
+  private eveningReady = -1;
   /** carte des ombres : position et orientation de la caméra à la dernière image, images depuis sa dernière mise à jour */
   private shadowPos = new THREE.Vector3();
   private shadowQ = new THREE.Quaternion();
@@ -349,6 +363,8 @@ class Game implements UIHost {
     this.eruptions = new Eruptions(w);
     this.streams = new Streams(w, this.terrain.waterMat.normalMap);
     this.atmosphere = new Atmosphere(w, audio);
+    this.nightSky = new NightSky(w);
+    this.scene.add(this.nightSky.group);
     this.life = new AmbientLife(w, this.buildings);
     this.fires = new Fires(w);
     this.traffic = new Traffic(w);
@@ -454,7 +470,7 @@ class Game implements UIHost {
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
-    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, click: () => audio.sfxClick(), toast: (m) => this.ui.toast(m) });
+    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart() });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
       war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
@@ -500,7 +516,7 @@ class Game implements UIHost {
       this.terrain.recolor(this.season);
       this.propsDirty = true;
     };
-    this.buildings.onPlaced = () => { this.propsDirty = true; };
+    this.buildings.onPlaced = (b) => { this.propsDirty = true; this.defenseWhere(b); };
     this.sim.recalc();
     this.sim.update(0, 1);
 
@@ -527,14 +543,75 @@ class Game implements UIHost {
     this.ui.update();
     // (pas de tutoriel au bac à sable : il n'y a rien à apprendre dans l'ordre)
     this.tutorial = new Tutorial(this.ui, this, !save, w.sandbox);
+    // ses chapitres : l'île du portail (le PvE choisi), la première entrée dans les Enfers
+    this.tutorial.setChapters(chapters(this.tutorial, this.ui, {
+      root: uiRoot, age: () => this.sim.age,
+      isle: () => isleDefenses(this.world), village: () => this.villageDefenses(),
+      army: () => this.war.army.troops.length + this.war.army.queue.length, need: () => this.war.invasionNeed(), pve: () => this.war.pve === 'on',
+      theater: () => this.command.theater?.kind ?? null, mode: () => this.mode, atIsle: () => this.lookingAtIsle(),
+      selected: () => this.command.cmd.selected.size, lastOrder: () => this.command.cmd.lastOrder,
+      commandIsle: () => this.commandIsle(),
+    }));
+    // un chapitre fini dit déjà ce que disaient les aides militaires du même moment : elles ne se répètent pas
+    this.tutorial.onChapterEnd = (id, done) => { if (done) for (const t of (id === 'pve' ? ['isle', 'orders'] : ['hell']) as WarTipId[]) this.warTips.markSeen(t); };
     // les aides du volet militaire (bulles facultatives, au moment utile)
     this.warTips = new WarTips({
       root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
-      busy: () => this.tutorial.on || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
+      busy: () => this.tutorial.active || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
       act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
     });
     this.ui.info(save ? trx('Bon retour dans votre village !') : w.buildings.size ? trx('Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.') : trx('Commencez par « {name} », la place au centre du village (Bâtir › Vie & culture).', { name: this.sim.nameOf('gather') }));
-    requestAnimationFrame(() => this.frame());
+    // (la boucle d'images démarre à la fin de `prepare`, derrière l'écran de chargement)
+  }
+
+  /**
+   * Prépare la scène derrière l'écran de chargement, puis lance la boucle d'images. Les shaders du jour, et ceux de la nuit
+   * (la scène rendue dans l'image du halo, les passes du halo), se compilent d'avance, en parallèle quand le navigateur le
+   * permet ; puis les premières images tournent pour de bon jusqu'à ce qu'elles passent vite. Sans cela, la première image
+   * figeait l'écran plusieurs secondes, et le premier soir encore autant (voir docs/chargement-performances.md)
+   */
+  async prepare(screen: LoadingScreen) {
+    const cam = this.cam.camera, s = this.loadStats, now = () => performance.now();
+    let t = 0;
+    try {
+      screen.step('Construction du monde…', 0.26);
+      await painted();
+      // une image sans rendu : ce qui se bâtit à la première image (bêtes, chemins…) existe avant la compilation
+      t = now();
+      this.advance();
+      s.firstStep = now() - t;
+      screen.step('Préparation des matériaux…', 0.3);
+      await painted();
+      t = now();
+      const night = !!this.glow && this.gfx.glow, objects = representatives(this.scene), n0 = renderer.info.programs?.length ?? 0;
+      // (les images du halo d'abord : leur allocation attendrait la fin des compilations lancées)
+      if (night) this.glow!.allocate();
+      const jobs: CompileJob[] = [{ objects, scene: this.scene, target: null, label: 'Préparation des matériaux…' }];
+      if (night) for (const j of this.glow!.nightJobs(this.scene, objects)) jobs.push({ ...j, label: 'Préparation de la nuit…' });
+      await compilePaced(renderer, cam, jobs, (k, label) => screen.step(label, 0.3 + 0.55 * k));
+      s.compile = now() - t;
+      s.programs0 = (renderer.info.programs?.length ?? 0) - n0;
+      // une image avec le halo, cachée par l'écran : ses images s'allouent, sa dernière passe se compile
+      screen.step('Dernières retouches…', 0.88);
+      await painted();
+      t = now();
+      if (night) this.glow!.warm(this.scene, cam);
+      s.nightFrame = now() - t;
+    } catch (e) { console.warn(e); }
+    t = now();
+    await this.warmUp();
+    s.warmUp = now() - t;
+    s.programs = renderer.info.programs?.length ?? 0;
+  }
+
+  /** Lance la boucle d'images ; la promesse se tient quand les premières images passent vite (voir `WarmUp`) */
+  private warmUp() {
+    return new Promise<void>((done) => {
+      this.warming = new WarmUp();
+      this.warmed = done;
+      this.lastTime = performance.now();
+      requestAnimationFrame(() => this.frame());
+    });
   }
 
   // ---------- UIHost ----------
@@ -609,6 +686,8 @@ class Game implements UIHost {
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
       this.ui.banner(trx('Monde des Enfers'), trx('{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.', { zone: hm.zoneName(z) }), 'hell');
+      // la première entrée : le chapitre du tutoriel sur les Enfers (la cible, les troupes, l'attaque, le retour)
+      this.tutorial.chapter('hell');
       this.ui.update();
     }, 'Passage du portail…');
   }
@@ -701,7 +780,42 @@ class Game implements UIHost {
     this.cam.goTo(p.x, p.z + 1, Math.min(Math.max(this.cam.dist, 18), 26));
     // trois quarts plutôt que presque de dessus (l'inclinaison reste réglable : clic droit glissé)
     this.cam.tiltTo(0.8);
+    // l'île sans ses défenses : le menu s'ouvre sur « Bâtir », et un message dit quoi y poser
+    const d = isleDefenses(this.world);
+    if (this.war.pve === 'on' && (!d.towers || !d.barracks)) { this.command.isleMenu('build'); this.isleBrief(); }
     this.ui.update();
+  }
+
+  /** « Affronter les démons » : le chapitre du tutoriel (une fois), puis la vue va sur l'île, au commandement, où l'on bâtit */
+  private pveStart() {
+    this.tutorial.chapter('pve');
+    this.commandIsle();
+  }
+
+  /**
+   * Ce qu'il faut bâtir sur l'île, dit à l'arrivée (une fois par session) : les joueurs posaient tour de garde et caserne au
+   * village. Le chapitre du tutoriel, quand il guide, le dit lui-même
+   */
+  private isleSaid = false;
+  private isleBrief() {
+    if (this.isleSaid || this.tutorial.active) return;
+    this.isleSaid = true;
+    this.ui.toast(trx('⚔️ Bâtissez ici, sur l’île du portail (pas au village) : « {tower} » et « {barracks} », puis recrutez une garnison.', { tower: this.sim.nameOf('watchtower'), barracks: this.sim.nameOf('barracks') }), undefined, 'action');
+  }
+
+  /** Une tour de garde ou une caserne posée au village quand l'île n'en a pas : elle ne garde pas le portail, on le dit */
+  private defenseWhere(b: Building) {
+    if ((b.kind !== 'watchtower' && b.kind !== 'barracks') || this.war.pve !== 'on' || this.world.onPortalIsland(b.x, b.z) || this.tutorial.chapterOn === 'pve') return;
+    const d = isleDefenses(this.world);
+    if (b.kind === 'watchtower' ? d.towers : d.barracks) return;
+    this.ui.toast(trx('« {name} » est au village : contre les démons, il en faut sur l’île du portail. Cliquez ici pour y aller.', { name: this.sim.nameOf(b.kind) }), () => this.commandIsle(), 'action');
+  }
+
+  /** Tours de garde et casernes du village (hors de l'île du portail) */
+  private villageDefenses() {
+    let towers = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'watchtower' && !this.world.onPortalIsland(b.x, b.z)) towers++;
+    return { towers, barracks: villageBarracks(this.world) };
   }
 
   /** Quitte le commandement de l'île (`quiet` : sans rien dire) */
@@ -970,6 +1084,19 @@ class Game implements UIHost {
     });
   }
 
+  /**
+   * Mode développeur : le ciel de nuit à la demande. `__game.skyShow('aurora')` (aurore boréale), `'shower'` (nuit des étoiles
+   * filantes), `'star'` (une étoile filante tout de suite), `'off'` (rien cette nuit) ; de jour, la nuit tombe d'un coup et le
+   * ciel se dégage. Le jeu doit tourner (en pause, tout reste figé)
+   */
+  skyShow(kind: SkyShowKind = 'aurora') {
+    if (kind !== 'off') {
+      if (this.env.daylight > 0.15) this.time.hour = 22;
+      if (this.env.weatherKind !== 'clear' || this.env.wantKind !== 'clear') { this.env.manualWeather = null; this.env.wantKind = 'clear'; }
+    }
+    this.nightSky.force(kind, this.time);
+  }
+
   /** Mode développeur : rejoue la cinématique de fin du volet militaire (`__game.playKingdomEnd()`), depuis les Enfers (tous les plans) ou la surface */
   playKingdomEnd() { this.kingStage.playEnd(true); }
 
@@ -1154,6 +1281,7 @@ class Game implements UIHost {
     this.veg.lodDist = p.vegLod;
     this.blightView.density = p.density;
     this.blightView.mist = p.mist;
+    this.nightSky.density = p.density;
     setFxDensity(p.density);
   }
 
@@ -1436,9 +1564,17 @@ class Game implements UIHost {
   private frame() {
     if (!this.running) return;
     requestAnimationFrame(() => this.frame());
-    const now = performance.now();
-    const dt = Math.min(0.1, (now - this.lastTime) / 1000);
-    this.adapt(now - this.lastTime);
+    const ms = this.advance();
+    this.renderer_render();
+    // les premières images, derrière l'écran de chargement : il se lève quand elles passent vite
+    if (this.warming?.feed(ms)) { this.warming = null; this.warmed?.(); this.warmed = null; }
+  }
+
+  /** Avance d'une image (temps, simulation, vues), sans la rendre ; rend le temps écoulé depuis la précédente (ms) */
+  private advance() {
+    const now = performance.now(), ms = now - this.lastTime;
+    const dt = Math.min(0.1, ms / 1000);
+    if (!this.warming) this.adapt(ms);
     this.lastTime = now;
     this.elapsed += dt;
     stepWind(this.elapsed, this.env.rainK);
@@ -1507,8 +1643,16 @@ class Game implements UIHost {
     this.terrain.stepRecolor();
 
     this.env.update(dt, this.time, this.season, this.cam.target, gdt, this.cam.dist);
-    if (!uv && !hv) this.atmosphere.update(dt, this.time, this.season, this.env, this.cam.camera, this.cam.target);
-    else this.atmosphere.hideMist();
+    if (!uv && !hv) {
+      this.atmosphere.update(dt, this.time, this.season, this.env, this.cam.camera, this.cam.target);
+      this.nightSky.update(dt, gdt, this.time, this.env, this.cam.camera);
+      // une aurore, une nuit des étoiles filantes : un mot, et un clic relève la vue vers le ciel (en mode photo, la cloche seule)
+      for (const k of this.nightSky.news.splice(0)) {
+        const text = skyNewsText(k, (this.sim.counts.observatory ?? 0) > 0);
+        if (document.body.classList.contains('photo')) this.ui.info(text);
+        else this.ui.toast(text, () => this.cam.lookUp(k === 'aurora' ? 0 : undefined));
+      }
+    } else this.atmosphere.hideMist();
     SNOW.value = uv || hv ? 0 : this.season.snow;
     this.sim.rain = this.env.rainK;
     this.sim.season = this.time.season;
@@ -1641,6 +1785,10 @@ class Game implements UIHost {
       if (this.incidentCam) { const i = this.incidents().find((x) => x.key === this.incidentCam); if (i) this.cam.follow(i.x, i.z); else this.incidentCam = null; }
       this.gardens.update(dt, this.time.hour);
       this.halos.update(dt, this.env.night);
+      // l'après-midi, une fois par jour : les shaders de nuit de ce qui est apparu depuis le chargement (bêtes de passage et
+      // leurs silhouettes lointaines…) se compilent d'avance, sans bloquer ; sinon, tous au premier halo du soir
+      const h = this.time.hour;
+      if (this.glow && this.gfx.glow && h >= 15 && h < 17 && this.eveningReady !== this.time.days) { this.eveningReady = this.time.days; this.glow.precompile(this.scene, this.cam.camera); }
       this.upBadges.update(dt, this.sim.age);
       this.windT += dt * (1 + this.env.weatherK * 0.6);
       this.veg.animate(this.windT, this.elapsed, 1 - this.env.weatherK * 0.3);
@@ -1654,51 +1802,63 @@ class Game implements UIHost {
     });
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.on; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
-
-    this.renderer_render();
+    return ms;
   }
 }
 
 // ---------- Boot ----------
 async function boot() {
   // modèles 3D chargés avant tout : la végétation et la faune les lisent à la construction
-  const loading = document.createElement('div');
-  loading.className = 'loading';
-  uiRoot.appendChild(loading);
-  await loadModels((done, total) => { loading.textContent = `${trx('Chargement des modèles…')} ${done}/${total}`; });
-  loading.remove();
+  // (l'écran de chargement à côté de #ui, non dedans : l'interface du jeu réécrit #ui en se construisant)
+  const app = uiRoot.parentElement!;
+  let screen: LoadingScreen | null = new LoadingScreen(app);
+  const models = screen;
+  await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * 0.2, `${done}/${total}`));
 
   let started = false;
-  const start = (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty, age?: number) => {
+  const start = async (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty, age?: number) => {
     if (started) return;
     started = true;
     // les anciennes cartes (île, vallée, plateaux) n'existent plus : on joue sur le continent
     if (!mapDef(map)) map = CONTINENT;
+    // l'écran de chargement couvre la vue (celui des modèles, s'il est encore là) ; on le laisse s'afficher avant de bâtir
+    const ld = screen ?? new LoadingScreen(app);
+    screen = null;
+    ld.step('Construction du monde…', 0.22);
+    await painted();
     // l'accueil peut avoir été redessiné (changement de langue) : on retire celui qui est à l'écran
     document.getElementById('menu')?.remove();
     menu?.remove();
     // tailles des tableaux du monde, des vues et de la caméra
     setMapSize(mapDef(map)!.size);
     syncChunks();
-    (window as any).__game = new Game(map, mode, seed, difficulty, age);
+    const t0 = performance.now();
+    const game = new Game(map, mode, seed, difficulty, age);
+    game.loadStats.build = performance.now() - t0;
+    (window as any).__game = game;
+    await game.prepare(ld);
+    ld.done();
   };
   const auto = sessionStorage.getItem(AUTOSTART);
   let menu: HTMLElement | null = null;
   if (auto) {
     sessionStorage.removeItem(AUTOSTART);
     const [m, mode, diff, ageS] = auto.split('|');
-    start(+m, mode === 'continue' ? 'continue' : 'new', undefined, isDifficulty(diff) ? diff : undefined, +ageS || 0);
+    void start(+m, mode === 'continue' ? 'continue' : 'new', undefined, isDifficulty(diff) ? diff : undefined, +ageS || 0);
     return;
   }
+  // l'accueil : l'écran des modèles s'efface ; un autre couvrira la vue au lancement de la partie
+  models.done(true);
+  screen = null;
   menu = showMenu(uiRoot, {
     start: (map, mode, seed, difficulty, age) => start(map, mode, seed, difficulty, age),
     importFile: async (f) => {
-      try { const d = await readSaveFile(f); saveSlot(d); start(d.map, 'continue'); }
+      try { const d = await readSaveFile(f); saveSlot(d); void start(d.map, 'continue'); }
       catch (e) { alert(trx('Import impossible : {why}', { why: (e as Error).message })); }
     },
   });

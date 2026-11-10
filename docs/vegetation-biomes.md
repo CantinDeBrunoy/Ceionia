@@ -1,6 +1,6 @@
 # Végétation, climat et biomes
 
-> Fichiers : `src/world/world.ts` (`computeBiomes`, `paintBiome`, `vegFits`, `setVeg`, `sanitize`, constantes `BIOME_*`, `TREE_LINE`, `SNOW_LINE`), `src/world/continent.ts` (`fillClimate`), `src/world/mapgen.ts` (forêts, rochers, bosquets, `shapeBiomes`), `src/render/vegetation.ts` (`VegView` : arbres, herbe, fleurs, rochers, fonds marins), `src/render/treeShapes.ts` (formes procédurales de secours), `src/render/season.ts` (palette des saisons), `src/render/terrainView.ts` (teinte du sol par biome et par saison), `src/render/alpine.ts` (station de ski).
+> Fichiers : `src/world/world.ts` (`computeBiomes`, `paintBiome`, `vegFits`, `setVeg`, `sanitize`, constantes `BIOME_*`, `TREE_LINE`, `SNOW_LINE`), `src/world/continent.ts` (`fillClimate`), `src/world/mapgen.ts` (forêts, rochers, bosquets, `shapeBiomes`), `src/render/vegetation.ts` (`VegView` : arbres, herbe, fleurs, rochers, fonds marins), `src/render/treeShapes.ts` (formes procédurales de secours), `src/render/season.ts` et `seasonConfig.ts` (saisons, voir [saisons.md](saisons.md)), `src/render/terrainView.ts` (teinte du sol par biome et par saison), `src/render/alpine.ts` (station de ski).
 > Tests : `tests/rivage.test.ts` (algues, roseaux, nénuphars), `tests/saisons.test.ts`, `tests/champs.test.ts`, `tests/neigeRoutes.test.ts`.
 > Voir aussi : [monde-carte.md](monde-carte.md), [eau-rivieres.md](eau-rivieres.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [jardins.md](jardins.md), [outils-terrain.md](outils-terrain.md), [rendu-modeles.md](rendu-modeles.md)
 
@@ -12,7 +12,7 @@ Chaque case a un **biome** (tempéré, taïga, désert, tropical, marais) dédui
 - Le joueur peut **peindre** un biome (pinceau de biome, `World.paintBiome` / `biomesChanged`) : la peinture l'emporte sur le climat, même quand le relief change ; null rend la case à son climat.
 - Forêts, champs, jardins, rochers se posent au pinceau (`tools.ts`) sous les conditions de `World.vegFits` (voir plus bas) ; ni dans l'eau, ni sur un bâtiment ou une route.
 - Hauteur des arbres : plus d'arbres posés par le générateur au-dessus de `TREE_LINE = 5.8`. Neiges éternelles entre `SNOW_LINE = [7, 8.2]`. Les sapins remplacent les feuillus au-dessus de ~4,2 d'altitude (voir ci-dessous).
-- Saison : le printemps fleurit (rose), l'été est vert, l'automne roux, l'hiver neigeux et nu ; la neige ne tient que la première moitié de l'hiver (voir `season.ts`). Les cultures sont rases l'hiver (`growth` 0,05) : champs vides sous 0,12.
+- Saison : le printemps fleurit (cerisiers roses et blancs en bosquets), l'été est vert soutenu, l'automne orange, jaune et rouge, l'hiver neigeux et nu ; la neige ne tient que la première moitié de l'hiver (détail dans [saisons.md](saisons.md)). Les cultures sont rases l'hiver (`growth` 0,05) : champs vides sous 0,12.
 - Désert et tropiques ne voient presque pas la neige (facteurs de neige par biome).
 
 ## Fonctionnement dans le code
@@ -59,8 +59,9 @@ Par case de terre (`cellAvg ≥ 0.12`), bruit `Simplex(seed+99)` :
 - Sans modèles importés (échec de chargement), `treeShapes.ts` fournit des feuillus à boules, des sapins à étages (`pineShape`, trois variantes), des buissons et des rochers procéduraux.
 
 ### Saisons sur le décor
-- `GameTime` (`core/time.ts`) : `seasonT` 0..4 (0 printemps, 1 été, 2 automne, 3 hiver) ; `mix()` fait la transition sur `BLEND = 0,3` de saison, centrée sur le changement. `computeSeason` (`season.ts`) mélange les palettes `P` : herbe, feuillage (rose au printemps, jaune-vert l'été, orange l'automne, gris l'hiver), eau, cultures, neige `[0, 0, 0.05, 1]`, feuilles `[0.95, 1, 0.9, 0.3]`, croissance `[0.6, 1, 0.45, 0.05]`, opacité de l'eau. La neige fond après `seasonT = 3.5` (jusqu'à 85 % de moins) et reste à 15 % avant 0,2.
-- `Game.refreshSeason` (`main.ts`) : clé `floor(seasonT × 120)` ; à chaque nouveau pas, `veg.applySeason` (couleurs des matériaux ; si `leaf`, `snow` ou `growth` ont bougé de plus de 0,03, **toutes** les tuiles sont remises en file), jardins, neige des toits (`setSnowMap` avec les facteurs `SNOWY`), neige des routes. Le sol : `terrain.recolor` par bandes de `RECOLOR_ROWS = 6` lignes (`stepRecolor`), au plus tous les `2 × max(1, vitesse)` pas.
+- Fiches, palettes et transitions : [saisons.md](saisons.md). Feuillus, buissons, touffes et sapins prennent leur teinte d'une palette de saison par instance (`addPalette`) ; les arbres à fleurs sont tirés par bosquets (`blossomAt`, `SPECIES`) ; chaque feuillu a son propre feuillage (`s.leaf` ± `trees.leafSpread`) : bouleau nu sous 0,5.
+- `Game.refreshSeason` (`main.ts`) : clé `floor(seasonT × 120)` ; à chaque nouveau pas, `veg.applySeason` (palettes branchées sur l'état ; si l'un des 10 réglages de forme a bougé de plus de 0,03, **toutes** les tuiles sont remises en file), jardins, neige des toits (`setSnowMap` avec les facteurs `SNOWY`), neige des routes. Le sol : `terrain.recolor` par bandes de `RECOLOR_ROWS = 6` lignes (`stepRecolor`), au plus tous les `2 × max(1, vitesse)` pas.
+- Berges (`VegView.bank`) : roseaux à fleur d'eau (pas au milieu d'une rivière, pas sur une case défrichée), touffes en haut de la grève, quelques fleurs ; ni au désert, ni au marais (il a les siens), ni sur l'île contaminée.
 - Facteur de neige par biome : `SNOWY = [1, 1, 0.15, 0.2, 1]` (sol et toits, `terrainView.ts`) et `snowy(b)` (`vegetation.ts` : taïga 1,2, désert 0,15, tropical 0,2, autres 1). Les deux tables ne sont pas identiques (taïga) : à garder en tête.
 - Lacs gelés et torrents figés : voir [eau-rivieres.md](eau-rivieres.md).
 - Station de ski (`alpine.ts`) : les skieurs chaussent des skis si la neige dépasse 0,35 ou si le sommet du site est au-dessus de `SNOW_LINE[0]` ; la pose exige un sommet d'au moins `ALPINE_PEAK` à `ALPINE_REACH` cases (`World.bigPeakNear`).
@@ -86,5 +87,5 @@ Par case de terre (`cellAvg ≥ 0.12`), bruit `Simplex(seed+99)` :
 - **Une essence d'arbre** : modèle dans `render/assets.ts` (`bakeStatic`, `species`), couche dans le constructeur de `VegView`, choix dans `forest` / `meadowDetails` (biome, probabilité, altitude).
 - **Densité ou taille des forêts** : tableau `dense` et `fq` dans `newWorld` (génération), `cnt` dans `VegView.forest` (rendu).
 - **Un nouveau biome** : `BIOME_*` et `BIOME_NAMES` (`world.ts`), règle dans `computeBiomes`, climat (`fillClimate`) si besoin, couleur de sol dans `terrainView.ts`, puis chaque tableau cité ci-dessus.
-- **Une saison différente** : palettes `P` (`season.ts`) ; vérifier `tests/saisons.test.ts`.
+- **Une saison différente** : sa fiche dans `seasonConfig.ts` ([saisons.md](saisons.md)) ; vérifier `tests/saisons.test.ts`.
 - **Changer les distances de détail** : `LOD_DIST`, `DETAIL_DIST`, `SMALL_DIST`, `SHADOW_DIST` (`vegetation.ts`) et `vegLod` (`adaptive.ts`).

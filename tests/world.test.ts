@@ -264,7 +264,10 @@ describe('continent tiré de la graine', () => {
     const w = continentOf(2026, GEN_FIXED), counts = [0, 0, 0, 0, 0];
     for (const b of w.biome) counts[b]++;
     expect(counts).toEqual([12140, 9652, 5221, 7694, 2157]);
-    expect(signature(w.veg)).toBe(357195);
+    // (les failles de la carte sont des ravins : leur case du milieu a perdu la marque 8 de la faille d'un clic, la forêt et le
+    // reste sont les mêmes ; leurs cases sont dans `rift`, à l'emprise qu'avait la faille)
+    expect(signature(w.veg)).toBe(357195 - 1656);
+    expect(signature(w.rift)).toBe(5915);
   });
 
   it('une nouvelle partie sauvegarde la version de son générateur et la retrouve', () => {

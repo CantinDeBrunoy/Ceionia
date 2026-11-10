@@ -12,7 +12,8 @@ Il n'y a **pas de réseau de rivières** dans les données : la mer est un plan 
 - Creuser sous 0 donne de l'eau **à ce niveau-là, même loin de la mer** (une mare) ; remonter le sol au-dessus de 0 l'assèche. Une cuvette creusée entre 0 et 2,5 sans passer sous 0 reste sèche.
 - Un creux assez haut, grand et profond devient un lac : niveau (`level`) au moins 2,5, profondeur (`deep`) au moins 0,35, au moins 16 sous-sommets (environ 4 cases), moins de 4 % d'arbres, ni bâtiment, ni champ, ni jardin au fond. Au plus `round(N/8)` lacs (24 sur 192), les plus grands et profonds d'abord.
 - Torrents : au plus `round(N/16)` sources de montagne (12) plus un torrent par déversoir de lac ; sources espacées de plus de 9 cases, au-dessus de `max(2.4, 0.5 × sommet)`.
-- Hiver : lacs gelés (glace presque opaque), torrents figés, quand la neige dépasse environ 0,45 (`uIce = smoothstep(0.45, 0.85, snow)`, lissé).
+- Hiver : la glace suit `iceNow` (gel de la saison, nul sous 0,35 de neige, lissé). Mer et rivières gèlent depuis les rives et les eaux dormantes, en plaques irrégulières ; le courant fort reste libre, et rien ne gèle là où la neige ne tient pas (tropiques, désert, via `SNOW_U`). Les lacs gèlent depuis les rives et gardent des trous d'eau libre au plus profond ; les torrents se figent sur le plat, les chutes raides coulent encore (embruns réduits).
+- Le reste de l'année, teinte, limpidité, reflets et vitesse du courant suivent la saison ; pétales ou feuilles dérivent au fil des rivières ([saisons.md](saisons.md)).
 - Pont : toute route sur de l'eau « réelle » ou sur un torrent est portée par un pont, un seul tablier continu de rive à rive. Pas de route au large (voir ci-dessous).
 - Interdit dans l'eau, selon l'objet : voir le tableau « Seuils » et la section « Ce qui est interdit ».
 

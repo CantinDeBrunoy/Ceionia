@@ -711,6 +711,13 @@ export class CommandUI implements ToolInput {
 
   /** L'onglet ouvert du menu de la garnison (île) : recruter d'abord, c'est ce qu'on fait le plus souvent */
   private isleTab: 'build' | 'rec' = 'rec';
+  /** Ouvre le menu de l'île sur cet onglet (l'île sans ses défenses : « Bâtir ») */
+  isleMenu(tab: 'build' | 'rec') {
+    if (this.isleTab === tab) return;
+    this.isleTab = tab;
+    this.barKey = '';
+    this.render();
+  }
 
   /**
    * Le menu de l'île, le même composant que « Ma base » des Enfers : « Ma garnison » avec les onglets Bâtir (les défenses de

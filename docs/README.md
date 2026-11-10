@@ -22,6 +22,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [vegetation-biomes.md](vegetation-biomes.md) : biomes, climat, arbres, herbe, rochers, saisons sur le décor.
 - [outils-terrain.md](outils-terrain.md) : sculpter le relief, falaises, eau, montagnes, volcans et lave, failles, grottes, gomme.
 - [ciel-meteo.md](ciel-meteo.md) : jour et nuit, saisons, pluie, neige, orages, arc-en-ciel, aurore, étoiles filantes.
+- [saisons.md](saisons.md) : la fiche de chaque saison (sol, arbres, végétation basse, eau, lumière, effets), palettes par arbre, transitions.
 
 ### Construire
 - [batiments-catalogue.md](batiments-catalogue.md) : le catalogue (`KINDS`), tailles, coûts, âges, rayons, évolutions, déblocages.

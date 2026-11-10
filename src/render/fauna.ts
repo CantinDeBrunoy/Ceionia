@@ -1,7 +1,7 @@
 import { penHerds, HerdKind } from '../sim/missions';
 import { claimArrival } from './pens';
 import * as THREE from 'three';
-import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO, VEG_CAVE, VEG_FISSURE } from '../world/world';
+import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO, VEG_CAVE } from '../world/world';
 import { KINDS, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { Parts } from './parts';
@@ -451,18 +451,22 @@ export const wantsVisitors = (seen: number, camDist: number) => camDist < 55 && 
  */
 export function bearDens(w: World): { key: string; x: number; z: number; cub: boolean }[] {
   const out: { key: string; x: number; z: number; cub: boolean }[] = [];
-  for (let k = 0; k < N * N; k++) {
-    const t = w.veg[k];
-    if (t !== VEG_CAVE && t !== VEG_FISSURE) continue;
+  // les entrées : chaque grotte, et chaque ravin (une faille) par son milieu
+  const holes: [number, number[] | null][] = [];
+  for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_CAVE) holes.push([k, null]);
+  for (const g of w.riftGroups()) holes.push([w.riftMid(g), g]);
+  for (const [k, group] of holes) {
     const cx = k % N, cz = Math.floor(k / N);
     if (hash2(cx, cz, 105) > 0.8) continue;
     let mx: number, mz: number;
-    if (t === VEG_CAVE) {
+    if (!group) {
       const f = w.caveFrame(cx, cz, () => 0);
       mx = f.x + Math.sin(f.yaw) * 1.5; mz = f.z + Math.cos(f.yaw) * 1.5;
     } else {
-      const f = w.fissureFrame(cx, cz), side = hash2(cx, cz, 107) < 0.5 ? -1 : 1, r = f.len / 2 + 1.5;
-      mx = f.x + Math.cos(f.yaw) * side * r; mz = f.z + Math.sin(f.yaw) * side * r;
+      // au bout du ravin : sa case la plus éloignée de son milieu, un peu au-delà
+      const end = group.reduce((b, q) => (Math.hypot((q % N) - cx, Math.floor(q / N) - cz) > Math.hypot((b % N) - cx, Math.floor(b / N) - cz) ? q : b));
+      const ex = (end % N) + 0.5, ez = Math.floor(end / N) + 0.5, l = Math.hypot(ex - cx - 0.5, ez - cz - 0.5) || 1;
+      mx = ex + ((ex - cx - 0.5) / l) * 1.5; mz = ez + ((ez - cz - 0.5) / l) * 1.5;
     }
     let best: [number, number] | null = null, bd = 3.2;
     for (let dz = -3; dz <= 3; dz++)
@@ -554,6 +558,9 @@ export class Fauna {
         mat = flapMaterial(this.uTime, sp.flap);
       } else mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 0.9 });
       const m = new THREE.InstancedMesh(g, mat, sp.max);
+      // couleur par instance dès la création : le shader en tient compte. Créée au premier `setColorAt`, elle changeait le
+      // shader à la première apparition de l'espèce (les chauves-souris : à la première nuit, une image figée)
+      m.setColorAt(0, this.col.setRGB(1, 1, 1));
       m.count = 0;
       m.frustumCulled = false;
       m.castShadow = k !== 'butterfly' && k !== 'bee';

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { World, N, VR, VS, BIOME_TAIGA, VEG_VOLCANO } from '../world/world';
+import { World, N, VR, VS, VEG_VOLCANO } from '../world/world';
 import { GameTime } from '../core/time';
 import { clamp, lerp, mulberry32, smoothstep } from '../core/rng';
 import { Environment } from './env';
@@ -71,12 +71,10 @@ function patchMist() {
 patchMist();
 /** Nuages accrochés aux sommets : bouffées par pic */
 const CAP_PUFFS = 7;
-/** Distance des rideaux d'aurore à la caméra */
-const AURORA_R = 260;
 
 /**
  * Atmosphère : brume du matin qui stagne dans les creux, nuages accrochés aux plus hauts sommets, arc-en-ciel après la pluie,
- * orages (éclairs, illumination, tonnerre) et aurores boréales les nuits d'hiver
+ * orages (éclairs, illumination, tonnerre). Les aurores et les étoiles filantes sont dans `nightSky`
  */
 export class Atmosphere {
   group = new THREE.Group();
@@ -96,11 +94,6 @@ export class Atmosphere {
   private bowU = { uAlpha: { value: 0 } };
   private bowT = 0;
   private wasRaining = false;
-  private aurora: THREE.Mesh;
-  private auroraU = { uTime: { value: 0 }, uAlpha: { value: 0 } };
-  private auroraTonight = false;
-  private wasNight = false;
-  private taiga = 0;
   private bolt: THREE.Mesh;
   private boltT = 0;
   private flashT = 0;
@@ -138,40 +131,11 @@ void main(){
     this.bow = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.15, 128, 2, 0, Math.PI), bm);
     this.bow.visible = false;
     this.bow.renderOrder = -5;
-    // ---- aurores : deux rideaux courbes au-dessus de l'horizon, face à la caméra (hauteur unité, étirée à chaque image)
-    const ag: THREE.BufferGeometry[] = [];
-    for (const [k, r] of [[0, AURORA_R], [1, AURORA_R * 0.9]] as const) {
-      const g = new THREE.PlaneGeometry(1, 1, 90, 1), p = g.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const u = p.getX(i), v = p.getY(i) + 0.5, a = -Math.PI / 2 + u * (1.7 - k * 0.4) + (k - 0.5) * 0.3;
-        p.setXYZ(i, Math.cos(a) * r, k * 0.08 + v * (1 - k * 0.2), Math.sin(a) * r);
-      }
-      g.setAttribute('aCurtain', new THREE.Float32BufferAttribute(new Array(p.count).fill(k), 1));
-      ag.push(g);
-    }
-    this.aurora = new THREE.Mesh(mergeGeometries(ag)!, new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: this.auroraU,
-      vertexShader: 'attribute float aCurtain; varying vec2 vA; varying float vK; void main(){ vA = uv; vK = aCurtain; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform float uTime; uniform float uAlpha; varying vec2 vA; varying float vK;
-void main(){
-  float x = vA.x * 9.0 + vK * 3.0;
-  float band = pow(max(0.0, 0.5 + 0.5 * sin(x * 6.0 + sin(x * 1.3 + uTime * 0.25) * 3.0 + uTime * 0.35)), 3.0);
-  float fold = 0.6 + 0.4 * sin(x * 2.1 - uTime * 0.2);
-  float y = vA.y;
-  // (jamais la puissance d'un nombre négatif : un NaN, de nuit, gagnait tout l'écran par le halo)
-  float a = uAlpha * (0.25 + band) * fold * smoothstep(0.0, 0.1, y) * pow(max(0.0, 1.0 - y), 1.2) * smoothstep(0.0, 0.08, vA.x) * smoothstep(1.0, 0.92, vA.x);
-  vec3 c = mix(vec3(0.2, 1.0, 0.6), vec3(0.7, 0.35, 1.0), smoothstep(0.35, 1.0, y)) * 1.3;
-  gl_FragColor = vec4(c, min(1.0, a));
-}`,
-    }));
-    this.aurora.frustumCulled = false;
-    this.aurora.renderOrder = -8;
-    this.aurora.visible = false;
     // ---- éclair : ruban de lumière remplacé à chaque coup
     this.bolt = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.5, 3), fog: false }));
     this.bolt.visible = false;
     this.bolt.frustumCulled = false;
-    this.group.add(this.caps, this.bow, this.aurora, this.bolt);
+    this.group.add(this.caps, this.bow, this.bolt);
   }
 
   /** Sous terre : pas de brume */
@@ -264,26 +228,6 @@ void main(){
       this.bow.position.set(cp.x + fwd.x * D, apex - R, cp.z + fwd.z * D);
       this.bow.scale.setScalar(R);
       this.bow.lookAt(cp.x, apex - R, cp.z);
-    }
-
-    // ---- aurores : nuits d'hiver, ou de temps en temps sur une carte froide
-    if (this.taiga === 0) { let t = 0; for (let k = 0; k < N * N; k++) if (w.biome[k] === BIOME_TAIGA) t++; this.taiga = t / (N * N) + 1e-6; }
-    const isNight = env.night > 0.6;
-    if (isNight && !this.wasNight) this.auroraTonight = season === 3 ? this.rnd() < 0.8 : this.taiga > 0.12 && season !== 1 && this.rnd() < 0.3;
-    this.wasNight = isNight;
-    const aurA = (this.auroraTonight ? smoothstep(0.6, 0.9, env.night) : 0) * (1 - overcast);
-    this.auroraU.uAlpha.value += (aurA - this.auroraU.uAlpha.value) * Math.min(1, dt * 0.4);
-    this.auroraU.uTime.value += dt;
-    this.aurora.visible = false;
-    if (this.auroraU.uAlpha.value > 0.01) {
-      // la vue plongeante ne montre qu'une bande de ciel : les rideaux montent de l'horizon jusqu'au haut de l'image
-      const cp = camera.position, fwd = new THREE.Vector3(focus.x - cp.x, 0, focus.z - cp.z).normalize();
-      const down = Math.asin(clamp((cp.y - focus.y) / Math.max(1e-3, cp.distanceTo(focus)), -1, 1));
-      const half = THREE.MathUtils.degToRad((camera as THREE.PerspectiveCamera).fov / 2), sky = half - down;
-      this.aurora.visible = sky > 0.01;
-      this.aurora.position.set(cp.x, cp.y - AURORA_R * 0.01, cp.z);
-      this.aurora.rotation.y = Math.atan2(-fwd.x, -fwd.z);
-      this.aurora.scale.set(1, Math.max(45, Math.tan(sky) * AURORA_R * 1.3), 1);
     }
 
     // ---- orages : certaines averses tournent à l'orage (plus souvent l'été)
