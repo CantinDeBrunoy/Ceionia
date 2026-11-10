@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
-  BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, FissureFrame, fissureAt, SNOW_LINE,
+  BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, FissureFrame, fissureAt, SNOW_LINE, LavaPool,
 } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
@@ -280,7 +280,7 @@ export class VegView {
   private fernMat: THREE.MeshStandardMaterial;
   private wreck: THREE.InstancedMesh;
   private wreckModel = false;
-  private lava: THREE.InstancedMesh;
+  private lava: THREE.Mesh;
   private smoke: THREE.InstancedMesh;
   private smokePhase: THREE.InstancedBufferAttribute;
   private volcanoes: [number, number][] = [];
@@ -433,7 +433,11 @@ export class VegView {
     this.wreck = single(wreck?.rest ?? wreckGeo(), std(0xffffff, true), MAX_SPECIAL);
     // lave : matériau non éclairé, elle brille aussi la nuit
     // lave très vive : elle rayonne la nuit (halo)
-    this.lava = single(lavaGeo(), new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2) }), MAX_SPECIAL, false);
+    // (un maillage par carte : chaque lac épouse la cuvette de son cratère)
+    this.lava = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2) }));
+    this.lava.frustumCulled = false;
+    this.lava.visible = false;
+    this.group.add(this.lava);
     const smokeG = new THREE.IcosahedronGeometry(0.22, 1);
     this.smokePhase = new THREE.InstancedBufferAttribute(new Float32Array(MAX_SPECIAL * SMOKE_PER_VOLCANO), 1);
     smokeG.setAttribute('aPhase', this.smokePhase);
@@ -1137,7 +1141,7 @@ export class VegView {
   private rebuildSpecial() {
     const w = this.world, d = this.dummy, col = this.col, s = this.season;
     let nWr = 0, nL = 0, nSm = 0, nSp = 0;
-    const caveGeos: THREE.BufferGeometry[] = [], crackGeos: THREE.BufferGeometry[] = [], glowGeos: THREE.BufferGeometry[] = [];
+    const caveGeos: THREE.BufferGeometry[] = [], crackGeos: THREE.BufferGeometry[] = [], glowGeos: THREE.BufferGeometry[] = [], lavaGeos: THREE.BufferGeometry[] = [];
     const at = (x: number, z: number) => w.hAt(x, z);
     this.volcanoes = [];
     for (let k = 0; k < N * N; k++) {
@@ -1171,19 +1175,10 @@ export class VegView {
         this.wreck.setColorAt(nWr++, col.setScalar(0.9 + hash2(cx, cz, 503) * 0.15));
       } else if (t === VEG_VOLCANO && nL < MAX_SPECIAL) {
         this.volcanoes.push([cx + 0.5, cz + 0.5]);
-        // bassin de lave au point le plus bas du cratère, rayon arrêté là où les parois dépassent la surface
-        let px = cx + 0.5, pz = cz + 0.5, y = w.hAt(px, pz);
-        for (let dz = -1.2; dz <= 1.2; dz += 0.2)
-          for (let dx = -1.2; dx <= 1.2; dx += 0.2) { const h = w.hAt(cx + 0.5 + dx, cz + 0.5 + dz); if (h < y) { y = h; px = cx + 0.5 + dx; pz = cz + 0.5 + dz; } }
-        // la lave remplit un peu la cuvette : un lac plutôt qu'une flaque
-        const level = y + 0.3;
-        let r = 0.15;
-        for (; r < 2.4; r += 0.05) {
-          let wall = Infinity;
-          for (let a = 0; a < 16; a++) wall = Math.min(wall, w.hAt(px + Math.cos((a / 16) * 6.283) * r, pz + Math.sin((a / 16) * 6.283) * r));
-          if (wall > level + 0.02) break;
-        }
-        this.lava.setMatrixAt(nL++, this.at(px, level, pz, 0, r / 0.55));
+        // lac de lave : il remplit la cuvette du cratère sans en déborder, même sculpté ; sans cuvette, la bouche rougeoie
+        const pool = w.lavaPool(cx, cz), px = pool.x, pz = pool.z, y = pool.floor;
+        lavaGeos.push(lavaPoolGeo(pool));
+        nL++;
         for (let i = 0; i < SMOKE_PER_VOLCANO; i++) {
           this.smokePhase.setX(nSm, i / SMOKE_PER_VOLCANO + hash2(cx, cz, 540 + i) * 0.1);
           this.smoke.setMatrixAt(nSm, this.at(px + (hash2(cx, cz, 510 + i) - 0.5) * 0.3, y + 0.2, pz + (hash2(cx, cz, 520 + i) - 0.5) * 0.3, 0, 0.8 + hash2(cx, cz, 530 + i) * 0.5));
@@ -1196,7 +1191,7 @@ export class VegView {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     };
-    set(this.wreck, nWr); set(this.lava, nL); set(this.smoke, nSm); set(this.spores, nSp);
+    set(this.wreck, nWr); set(this.smoke, nSm); set(this.spores, nSp);
     this.smokePhase.needsUpdate = true;
     this.sporePhase.needsUpdate = true;
     const swap = (m: THREE.Mesh, list: THREE.BufferGeometry[]) => {
@@ -1204,7 +1199,7 @@ export class VegView {
       m.geometry = list.length ? mergeGeometries(list, false)! : new THREE.BufferGeometry();
       m.visible = list.length > 0;
     };
-    swap(this.caves, caveGeos); swap(this.fissures, crackGeos); swap(this.fissureGlow, glowGeos);
+    swap(this.caves, caveGeos); swap(this.fissures, crackGeos); swap(this.fissureGlow, glowGeos); swap(this.lava, lavaGeos);
   }
 }
 
@@ -1542,12 +1537,30 @@ function coralGeo(): THREE.BufferGeometry {
   return p.build(false).body;
 }
 
-/** Bassin de lave : cœur jaune, bord orange */
-function lavaGeo(): THREE.BufferGeometry {
-  const p = new Parts();
-  p.add(new THREE.CircleGeometry(0.55, 14).rotateX(-Math.PI / 2), 0, 0, 0, 0xff5a14);
-  p.add(new THREE.CircleGeometry(0.3, 12).rotateX(-Math.PI / 2), 0, 0.01, 0, 0xffc04a);
-  return p.build(false).body;
+/**
+ * Lac de lave d'un cratère (voir `World.lavaPool`) : une étoile plate à sa surface, de la portée de la lave dans chaque
+ * direction ; cœur jaune, bord orange
+ */
+const LAVA_CORE = new THREE.Color(0xffd06a), LAVA_MID = new THREE.Color(0xffb040), LAVA_RIM = new THREE.Color(0xff5a14);
+function lavaPoolGeo(p: LavaPool): THREE.BufferGeometry {
+  const pos: number[] = [], col: number[] = [], n = p.reach.length, y = p.level;
+  const at = (a: number, f: number): [number, number, number] => {
+    const t = ((a % n) / n) * Math.PI * 2, r = p.reach[a % n] * f;
+    return [p.x + Math.cos(t) * r, y, p.z + Math.sin(t) * r];
+  };
+  const put = (v: [number, number, number], c: THREE.Color) => { pos.push(...v); col.push(c.r, c.g, c.b); };
+  const O: [number, number, number] = [p.x, y, p.z];
+  for (let a = 0; a < n; a++) {
+    // (sens des sommets : la face regarde le ciel)
+    const m0 = at(a, 0.5), m1 = at(a + 1, 0.5), e0 = at(a, 1), e1 = at(a + 1, 1);
+    put(O, LAVA_CORE); put(m1, LAVA_MID); put(m0, LAVA_MID);
+    put(m0, LAVA_MID); put(m1, LAVA_MID); put(e1, LAVA_RIM);
+    put(m0, LAVA_MID); put(e1, LAVA_RIM); put(e0, LAVA_RIM);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return g;
 }
 
 /** Fumée de volcan : chaque bouffée monte, grossit et s'efface en boucle (phase par instance) */

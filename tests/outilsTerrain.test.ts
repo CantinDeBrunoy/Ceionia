@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { World, N, setMapSize, VEG_FOREST, VEG_CAVE, TREE_LINE } from '../src/world/world';
+import * as THREE from 'three';
+import { World, N, setMapSize, VEG_FOREST, VEG_CAVE, VEG_VOLCANO, TREE_LINE } from '../src/world/world';
 import { newWorld, addDefaultDecor } from '../src/world/mapgen';
 import { loneTreeAt } from '../src/render/vegetation';
-import { sculpt, CLIFF_STEP } from '../src/world/terraform';
+import { sculpt, CLIFF_STEP, raiseVolcano, removeVolcano } from '../src/world/terraform';
+import { Eruptions } from '../src/render/eruption';
 
 function monde() {
   const w = new World();
@@ -95,6 +97,94 @@ describe('falaise', () => {
     const w2 = monde(), c2 = { target: w2.hAt(x + 0.5, z + 0.5), dig: true };
     sculpt(w2, 'cliff', x + 0.5, z + 0.5, 3, 0.016, c2);
     expect(w2.h(x, z)).toBeCloseTo(c2.target - CLIFF_STEP, 4);
+  });
+});
+
+/** Le lac de lave ne déborde nulle part : à sa portée, dans chaque direction, la paroi dépasse sa surface */
+function lacContenu(w: World, cell: number) {
+  const p = w.lavaPool(cell % N, Math.floor(cell / N));
+  if (p.vent) return p;
+  p.reach.forEach((r, a) => {
+    const t = (a / p.reach.length) * Math.PI * 2;
+    expect(w.hAt(p.x + Math.cos(t) * r, p.z + Math.sin(t) * r)).toBeGreaterThan(p.level - 0.15);
+    // et en deçà, la lave couvre le sol (elle ne flotte pas au-dessus du vide)
+    for (let q = 0.2; q < r - 0.1; q += 0.2) expect(w.hAt(p.x + Math.cos(t) * q, p.z + Math.sin(t) * q)).toBeLessThan(p.level + 0.02);
+  });
+  return p;
+}
+
+describe('volcan sculpté', () => {
+  beforeAll(() => setMapSize(192));
+
+  /** Un volcan neuf (pinceau 3) sur un replat, et la case de son cratère */
+  function volcan(): [World, number, number, number] {
+    const w = monde(), [x, z] = replat(w);
+    expect(raiseVolcano(w, x + 0.5, z + 0.5, 3)).toBe(true);
+    w.updateVis();
+    return [w, w.ci(x, z), x, z];
+  }
+
+  it('le lac de lave reste dans la cuvette du cratère, même éventré, comblé ou taillé en falaise', () => {
+    const [w, cell, x, z] = volcan();
+    const intact = lacContenu(w, cell);
+    expect(intact.vent).toBe(false);
+    expect(intact.level).toBeGreaterThan(intact.floor + 0.1);
+    // une brèche dans le rebord : la lave baisse sous le col, elle ne sort plus en l'air par la brèche
+    for (let i = 0; i < 60; i++) sculpt(w, 'lower', x + 3.5, z + 0.5, 2, 0.05, { target: 0 });
+    w.updateVis();
+    lacContenu(w, cell);
+    // la falaise taillée en travers du cône
+    sculpt(w, 'cliff', x + 0.5, z + 2.5, 2, 0.05, { target: w.hAt(x + 0.5, z + 2.5) });
+    w.updateVis();
+    lacContenu(w, cell);
+    // le cratère aplani : plus de cuvette, seule la bouche rougeoie (au ras du sol)
+    const top = w.hAt(x + 3.5, z + 0.5) + 3;
+    for (let i = 0; i < 40; i++) sculpt(w, 'flatten', x + 0.5, z + 0.5, 3, 0.05, { target: top });
+    w.updateVis();
+    const flat = lacContenu(w, cell);
+    expect(flat.vent).toBe(true);
+    expect(Math.abs(flat.level - w.hAt(flat.x, flat.z))).toBeLessThan(0.1);
+  });
+
+  it('pendant une éruption, la lave suit le relief sculpté ; un volcan rasé s’éteint', () => {
+    const [w, cell] = volcan();
+    const e = new Eruptions(w);
+    expect(e.start(cell)).toBe(true);
+    for (let i = 0; i < 80; i++) e.update(0.1);
+    const flows = (e as any).list[0].flows as { mesh: THREE.Mesh; pts: [number, number][] }[];
+    expect(flows.length).toBeGreaterThan(0);
+    // l'écart le plus grand entre la lave et le sol
+    const ecart = () => {
+      let worst = 0;
+      for (const fl of (e as any).list.flatMap((q: any) => q.flows)) {
+        const p = fl.mesh.geometry.attributes.position;
+        for (let i = 0; i < p.count; i++) worst = Math.max(worst, Math.abs(p.getY(i) - Math.max(0.02, w.hAt(p.getX(i), p.getZ(i)))));
+      }
+      return worst;
+    };
+    expect(ecart()).toBeLessThan(0.3);
+    // une fosse sous une coulée, une butte sous une autre
+    const [ax, az] = flows[0].pts[Math.floor(flows[0].pts.length / 2)];
+    for (let i = 0; i < 40; i++) sculpt(w, 'lower', ax, az, 2, 0.05, { target: 0 });
+    const [bx, bz] = flows[flows.length - 1].pts[Math.floor(flows[flows.length - 1].pts.length / 2)];
+    for (let i = 0; i < 20; i++) sculpt(w, 'raise', bx, bz, 2, 0.05, { target: 0 });
+    w.updateVis();
+    e.update(0.1);
+    expect(ecart()).toBeLessThan(0.3);
+    // rasé en pleine éruption : plus de bombes, les coulées s'effacent, et il ne se réveille plus
+    expect(removeVolcano(w, cell)).toBe(true);
+    w.updateVis();
+    for (let i = 0; i < 30; i++) e.update(0.1);
+    expect(e.active).toBe(false);
+    expect((e as any).list.length).toBe(0);
+    expect(e.start(cell)).toBe(false);
+  });
+
+  it('ni plantation ni bâtiment n’effacent la marque du cratère', () => {
+    const [w, cell, x, z] = volcan();
+    expect(w.setVeg(x, z, VEG_FOREST)).toBe(false);
+    expect(w.veg[cell]).toBe(VEG_VOLCANO);
+    expect(w.canPlace('house', x, z)).toBe('Le cratère d’un volcan est ici');
   });
 });
 

@@ -111,6 +111,14 @@ export const VOLCANO_MAX_R = 17;
 /** Volcan : centre du cratère, hauteurs du fond, du rebord et du pied, rayon du cône */
 export interface VolcanoFrame { x: number; z: number; floor: number; rim: number; foot: number; r: number }
 
+/**
+ * Lac de lave d'un cratère : son centre (le creux du cratère), le fond, le niveau de la lave et sa portée dans chacune des
+ * `POOL_DIRS` directions ; `vent` : le cratère n'a plus de cuvette (comblé, aplani ou éventré par la sculpture), seule la
+ * bouche rougeoie au fond
+ */
+export interface LavaPool { x: number; z: number; floor: number; level: number; reach: number[]; vent: boolean }
+export const POOL_DIRS = 24;
+
 /** Faille (ravin façon Minecraft) : sillon sinueux de longueur `len`, tourné de `yaw`, large de 2 × `width`, profond de `depth` */
 export interface FissureFrame { x: number; z: number; yaw: number; len: number; width: number; depth: number; phase: number }
 
@@ -462,6 +470,33 @@ export class World {
       foot += y; reach += r;
     }
     return { x, z, floor, rim, foot: foot / 16, r: reach / 16 + 1.5 };
+  }
+
+  /**
+   * Lac de lave du volcan posé en (cx, cz), d'après le relief affiché. Il remplit la cuvette du cratère sans jamais en
+   * déborder : son niveau reste sous le col le plus bas du rebord (le plus haut du sol dans chaque direction, le plus bas
+   * d'entre eux) ; dans chaque direction, il s'arrête où la paroi dépasse sa surface. Un disque de rayon fixe, posé au creux,
+   * sortait du cratère en l'air dès que la sculpture l'avait éventré ou comblé
+   */
+  lavaPool(cx: number, cz: number): LavaPool {
+    const x0 = cx + 0.5, z0 = cz + 0.5, R = 6, step = 0.1;
+    let x = x0, z = z0, floor = this.hAt(x, z);
+    for (let dz = -1.2; dz <= 1.2; dz += 0.2) for (let dx = -1.2; dx <= 1.2; dx += 0.2) { const h = this.hAt(x0 + dx, z0 + dz); if (h < floor - 1e-4) { floor = h; x = x0 + dx; z = z0 + dz; } }
+    const dirs: [number, number][] = [];
+    let spill = Infinity;
+    for (let a = 0; a < POOL_DIRS; a++) {
+      const ca = Math.cos((a / POOL_DIRS) * Math.PI * 2), sa = Math.sin((a / POOL_DIRS) * Math.PI * 2);
+      dirs.push([ca, sa]);
+      let top = -Infinity;
+      for (let r = step; r <= R; r += step) top = Math.max(top, this.hAt(x + ca * r, z + sa * r));
+      spill = Math.min(spill, top);
+    }
+    // la lave remplit un peu la cuvette (un lac plutôt qu'une flaque), jamais jusqu'au col
+    const level = Math.min(floor + 0.3, spill - 0.08);
+    if (level < floor + 0.05) return { x, z, floor, level: floor + 0.03, reach: dirs.map(() => 0.35), vent: true };
+    // (un peu sous la paroi, pour ne pas laisser de jour entre la lave et la roche)
+    const reach = dirs.map(([ca, sa]) => { let r = step; while (r < R && this.hAt(x + ca * r, z + sa * r) < level) r += step; return r + 0.05; });
+    return { x, z, floor, level, reach, vent: false };
   }
 
   /** Volcan dont le cône couvre le point : sa case, ou -1 */
@@ -910,6 +945,8 @@ export class World {
         // vient se souder à la tour de tous côtés, on y monte par le chemin de ronde)
         if (!this.road[k]) { const d = this.doorOf(cx, cz); if (d && !(isRampart(kind) && d.kind === 'watchtower')) return tr('Devant la porte d’un bâtiment : son chemin passe ici'); }
         if (this.decor[k]) return tr('Une grotte ou une faille est ici');
+        // (le fond du cratère est plat : un bâtiment y effaçait la marque du volcan)
+        if (this.veg[k] === VEG_VOLCANO) return tr('Le cratère d’un volcan est ici');
         if (this.lake[k]) return tr('Un lac est ici');
         // le port bâtit son quai sur la rive, et même un peu dans l'eau peu profonde (il le remblaie) ; pas en eau profonde
         if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return tr('L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'); continue; }
@@ -1258,6 +1295,8 @@ export class World {
     const k = this.ci(cx, cz);
     if (type !== 0) {
       if (this.occ[k] || this.road[k]) return false;
+      // une plantation ne recouvre pas un décor unique : le cratère d'un volcan y perdait sa marque (plus de lave, cône orphelin)
+      if (this.veg[k] >= VEG_CAVE && this.veg[k] !== type) return false;
       if (!this.vegFits(type, this.cellAvg(cx, cz), this.cellSlope(cx, cz), true)) return false;
       if ((type === VEG_CAVE || type === VEG_FISSURE) && !this.decorFits(cx, cz, type)) return false;
     }

@@ -640,6 +640,7 @@ registerDict('catalog', {
   'Une route est déjà ici': 'There is already a road here',
   'Devant la porte d’un bâtiment : son chemin passe ici': 'In front of a building’s door: its path goes here',
   'Une grotte ou une faille est ici': 'A cave or a fissure is here',
+  'Le cratère d’un volcan est ici': 'A volcano’s crater is here',
   'Un lac est ici': 'A lake is here',
   'Trop proche de l’eau : reculez sur la terre ferme': 'Too close to the water: move back onto dry land',
   'Terrain trop pentu': 'Ground too steep',
