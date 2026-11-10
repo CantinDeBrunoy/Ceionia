@@ -419,7 +419,11 @@ export class ToolController implements ToolInput {
     if (t === 'volcano') {
       // le volcan se pose d'un seul clic, à l'écart des bâtiments
       if (this.reliefBlocked()) this.h.toast(tr(this.radius > 3 ? 'Trop près des bâtiments : un volcan se pose à l’écart du village, ou réduisez la taille du pinceau (il fait la largeur du volcan).' : 'Trop près des bâtiments : un volcan se pose à l’écart du village.'));
-      else if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) { this.mark(); this.h.audio.sfxPlace(); }
+      else if (raiseVolcano(this.h.world, this.hit.x, this.hit.z, this.radius)) {
+        this.mark(); this.h.audio.sfxPlace();
+        // on ne savait pas comment s'en défaire : on le dit dès la pose
+        this.h.toast(tr('Volcan posé. Pour le retirer : la Gomme ou Démolir sur son cône le rase ; Ctrl+Z annule.'));
+      }
     } else if (SCULPT_TOOLS.includes(t)) {
       this.ctx.target = this.hit.y;
       if (this.reliefBlocked()) this.h.toast(tr('Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).'));
