@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
-  BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, FissureFrame, fissureAt, SNOW_LINE,
+  BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, SNOW_LINE, LavaPool,
 } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
@@ -49,6 +49,18 @@ const BOLETE = new THREE.Color(0.82, 0.62, 0.44);
  * peu de leurs cases (perron, abside, douves du château)
  */
 export const WALL_GAP = 0.16;
+
+/** Part des cases de prairie qui portent un arbre isolé, par biome (aucun au désert : des cactus) */
+const LONE_TREE = [0.022, 0.03, 0, 0.034, 0.024];
+
+/**
+ * Un arbre isolé de la carte se dresse-t-il sur cette case ? Il n'est rangé nulle part (ni dans `veg`) : il se tire de la case,
+ * sur une prairie peu pentue ; la gomme défriche la case (`World.cleared`) et il disparaît
+ */
+export function loneTreeAt(w: World, cx: number, cz: number) {
+  const k = w.ci(cx, cz);
+  return !w.veg[k] && !w.cleared[k] && !w.occ[k] && !w.road[k] && w.cellSlope(cx, cz) < 1 && hash2(cx, cz, 820) < LONE_TREE[w.biome[k]];
+}
 
 /** Fleurs sauvages par biome (teintes ; 0.58 = blanc) */
 const WILD_HUES = [[0.13, 0.58, 0.75, 0.13, 0.58], [0.58, 0.62, 0.58, 0.75], [0.92], [0.92, 0.05, 0.85, 0.11, 0.0], [0.15, 0.58, 0.7]];
@@ -268,7 +280,7 @@ export class VegView {
   private fernMat: THREE.MeshStandardMaterial;
   private wreck: THREE.InstancedMesh;
   private wreckModel = false;
-  private lava: THREE.InstancedMesh;
+  private lava: THREE.Mesh;
   private smoke: THREE.InstancedMesh;
   private smokePhase: THREE.InstancedBufferAttribute;
   private volcanoes: [number, number][] = [];
@@ -421,7 +433,11 @@ export class VegView {
     this.wreck = single(wreck?.rest ?? wreckGeo(), std(0xffffff, true), MAX_SPECIAL);
     // lave : matériau non éclairé, elle brille aussi la nuit
     // lave très vive : elle rayonne la nuit (halo)
-    this.lava = single(lavaGeo(), new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2) }), MAX_SPECIAL, false);
+    // (un maillage par carte : chaque lac épouse la cuvette de son cratère)
+    this.lava = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2) }));
+    this.lava.frustumCulled = false;
+    this.lava.visible = false;
+    this.group.add(this.lava);
     const smokeG = new THREE.IcosahedronGeometry(0.22, 1);
     this.smokePhase = new THREE.InstancedBufferAttribute(new Float32Array(MAX_SPECIAL * SMOKE_PER_VOLCANO), 1);
     smokeG.setAttribute('aPhase', this.smokePhase);
@@ -945,7 +961,9 @@ export class VegView {
     if (bk > 0.15 && slope <= 1.4) { this.ashland(cx, cz, bk); return; }
     const rough = avg < 0.32 || slope > 0.9;
     const stones = b === BIOME_DESERT || b === BIOME_TAIGA ? 0.04 : 0.012;
-    if (slope <= 1.4 && hash2(cx, cz, 301) < (rough ? 0.1 : stones)) {
+    // case défrichée à la gomme : ni arbre isolé, ni buisson, ni caillou (l'herbe et les fleurs restent)
+    const wild = !w.cleared[k];
+    if (wild && slope <= 1.4 && hash2(cx, cz, 301) < (rough ? 0.1 : stones)) {
       const px = cx + 0.15 + hash2(cx, cz, 302) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 303) * 0.7;
       // blocs plus gros sur les pentes raides et en montagne
       const sc = slope > 1.2 || avg > 4 ? 1.4 + hash2(cx, cz, 307) * 1.8 : 0.6 + hash2(cx, cz, 307) * 0.9;
@@ -960,13 +978,14 @@ export class VegView {
       // désert : cactus nains, broussailles sèches et rares touffes jaunies
       const h = hash2(cx, cz, 801);
       const px = cx + 0.2 + hash2(cx, cz, 802) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 803) * 0.6, y = w.hAt(px, pz);
-      if (h < 0.07 && this.cacti.length) {
+      if (wild && h < 0.07 && this.cacti.length) {
         const cactus = this.cacti[Math.floor(hash2(cx, cz, 804) * this.cacti.length)].layer, sc = this.fit(px, pz, cactus.reach, 0.4 + hash2(cx, cz, 806) * 0.3);
         if (sc) cactus.put(this.at(px, y, pz, hash2(cx, cz, 805) * 6.28, sc), col.setScalar(1.1));
-      } else if (h < 0.17 && this.shrub) this.bush(px, y, pz, hash2(cx, cz, 805) * 6.28, 0.6 + hash2(cx, cz, 806) * 0.5, col.copy(SHRUB_COLORS[BIOME_DESERT]));
+      } else if (wild && h < 0.17 && this.shrub) this.bush(px, y, pz, hash2(cx, cz, 805) * 6.28, 0.6 + hash2(cx, cz, 806) * 0.5, col.copy(SHRUB_COLORS[BIOME_DESERT]));
       else if (h < 0.4 && s.snow < 0.6) this.tuft.put(this.at(px, y - 0.01, pz, hash2(cx, cz, 805) * 6.28, 0.9, 0.5, 0.9), col.copy(TUFT_TINT[BIOME_DESERT]));
       // ossements blanchis par le soleil, cailloux de grès
       const h2 = hash2(cx, cz, 811), qx = cx + 0.15 + hash2(cx, cz, 812) * 0.7, qz = cz + 0.15 + hash2(cx, cz, 813) * 0.7;
+      if (!wild) return;
       if (h2 < 0.014 && this.bones.length) this.bones[Math.floor(hash2(cx, cz, 814) * this.bones.length)].put(this.at(qx, w.hAt(qx, qz) - 0.006, qz, hash2(cx, cz, 815) * 6.28, 0.8 + hash2(cx, cz, 816) * 0.5), col.setScalar(1));
       else if (h2 < 0.14) {
         const n = 1 + Math.floor(hash2(cx, cz, 817) * 3);
@@ -989,9 +1008,9 @@ export class VegView {
       this.tuft.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(cx, cz, 360 + i) * 6.28, sc, sc * 0.62 * (1 - s.snow * snowy(b) * 0.6) * (1 - g * 0.5), sc),
         col.copy(TUFT_TINT[b]).multiplyScalar(0.85 + hash2(cx, cz, 380 + i) * 0.25));
     }
-    this.meadowDetails(cx, cz, b, slope, s);
+    this.meadowDetails(cx, cz, b, slope, s, wild);
     // fougères sous les tropiques
-    if (b === BIOME_TROPICAL && this.shrub && hash2(cx, cz, 390) < 0.12) {
+    if (wild && b === BIOME_TROPICAL && this.shrub && hash2(cx, cz, 390) < 0.12) {
       const px = cx + 0.2 + hash2(cx, cz, 391) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 392) * 0.6;
       this.bush(px, w.hAt(px, pz), pz, hash2(cx, cz, 393) * 6.28, 1 + hash2(cx, cz, 394) * 0.5, col.copy(SHRUB_COLORS[BIOME_TROPICAL]));
     }
@@ -1060,12 +1079,15 @@ export class VegView {
     }
   }
 
-  /** Détails des prairies : arbres isolés, buissons, fougères, champignons, cailloux et touffes de fleurs */
-  private meadowDetails(cx: number, cz: number, b: number, slope: number, s: SeasonState) {
+  /**
+   * Détails des prairies : arbres isolés, buissons, fougères, champignons, cailloux et touffes de fleurs ; `wild` faux (case
+   * défrichée à la gomme) : seulement les fleurs
+   */
+  private meadowDetails(cx: number, cz: number, b: number, slope: number, s: SeasonState, wild: boolean) {
     const w = this.world, col = this.col;
-    const h = hash2(cx, cz, 820), rot = hash2(cx, cz, 823) * 6.28;
+    const h = wild ? hash2(cx, cz, 820) : 1, rot = hash2(cx, cz, 823) * 6.28;
     const qx = cx + 0.2 + hash2(cx, cz, 821) * 0.6, qz = cz + 0.2 + hash2(cx, cz, 822) * 0.6, qy = w.hAt(qx, qz);
-    const lone = [0.022, 0.03, 0, 0.034, 0.024][b];
+    const lone = LONE_TREE[b];
     const sc = 0.75 + hash2(cx, cz, 824) * 0.35;
     col.setScalar(0.85 + hash2(cx, cz, 825) * 0.25);
     if (h < lone && slope < 1) {
@@ -1119,7 +1141,7 @@ export class VegView {
   private rebuildSpecial() {
     const w = this.world, d = this.dummy, col = this.col, s = this.season;
     let nWr = 0, nL = 0, nSm = 0, nSp = 0;
-    const caveGeos: THREE.BufferGeometry[] = [], crackGeos: THREE.BufferGeometry[] = [], glowGeos: THREE.BufferGeometry[] = [];
+    const caveGeos: THREE.BufferGeometry[] = [], crackGeos: THREE.BufferGeometry[] = [], glowGeos: THREE.BufferGeometry[] = [], lavaGeos: THREE.BufferGeometry[] = [];
     const at = (x: number, z: number) => w.hAt(x, z);
     this.volcanoes = [];
     for (let k = 0; k < N * N; k++) {
@@ -1131,17 +1153,6 @@ export class VegView {
         const b = w.biome[k], snow = s ? Math.min(1, s.snow * snowy(b) * 1.1) : 0;
         const top = col.copy(CAVE_TOP[b]).lerp(SNOWC, snow);
         caveGeos.push(caveMoundGeo(w.caveFrame(cx, cz), at, CAVE_ROCK[b], top, Math.max(b === BIOME_DESERT ? 0.5 : 0.75, snow), hash2(cx, cz, 560)));
-      } else if (t === VEG_FISSURE) {
-        const f = w.fissureFrame(cx, cz), g = fissureGeo(f, at, CAVE_ROCK[w.biome[k]]);
-        crackGeos.push(g.body);
-        glowGeos.push(g.glow);
-        // spores lumineuses qui montent du fond
-        for (let i = 0; i < SPORES_PER_FISSURE && nSp < MAX_SPECIAL * SPORES_PER_FISSURE; i++) {
-          const u = (hash2(cx, cz, 570 + i) - 0.5) * f.len * 0.8, [off] = fissureAt(f, u);
-          const x = f.x + u * Math.cos(f.yaw) - off * Math.sin(f.yaw), z = f.z + u * Math.sin(f.yaw) + off * Math.cos(f.yaw);
-          this.sporePhase.setX(nSp, i / SPORES_PER_FISSURE + hash2(cx, cz, 590 + i) * 0.1);
-          this.spores.setMatrixAt(nSp++, this.at(x, at(x, z), z, 0, 0.7 + hash2(cx, cz, 580 + i) * 0.6));
-        }
       } else if (t === VEG_WRECK && nWr < MAX_SPECIAL) {
         // coque échouée, à moitié enfoncée ; le modèle est déjà brisé : il gîte à peine
         const px = cx + 0.5, pz = cz + 0.5;
@@ -1153,19 +1164,10 @@ export class VegView {
         this.wreck.setColorAt(nWr++, col.setScalar(0.9 + hash2(cx, cz, 503) * 0.15));
       } else if (t === VEG_VOLCANO && nL < MAX_SPECIAL) {
         this.volcanoes.push([cx + 0.5, cz + 0.5]);
-        // bassin de lave au point le plus bas du cratère, rayon arrêté là où les parois dépassent la surface
-        let px = cx + 0.5, pz = cz + 0.5, y = w.hAt(px, pz);
-        for (let dz = -1.2; dz <= 1.2; dz += 0.2)
-          for (let dx = -1.2; dx <= 1.2; dx += 0.2) { const h = w.hAt(cx + 0.5 + dx, cz + 0.5 + dz); if (h < y) { y = h; px = cx + 0.5 + dx; pz = cz + 0.5 + dz; } }
-        // la lave remplit un peu la cuvette : un lac plutôt qu'une flaque
-        const level = y + 0.3;
-        let r = 0.15;
-        for (; r < 2.4; r += 0.05) {
-          let wall = Infinity;
-          for (let a = 0; a < 16; a++) wall = Math.min(wall, w.hAt(px + Math.cos((a / 16) * 6.283) * r, pz + Math.sin((a / 16) * 6.283) * r));
-          if (wall > level + 0.02) break;
-        }
-        this.lava.setMatrixAt(nL++, this.at(px, level, pz, 0, r / 0.55));
+        // lac de lave : il remplit la cuvette du cratère sans en déborder, même sculpté ; sans cuvette, la bouche rougeoie
+        const pool = w.lavaPool(cx, cz), px = pool.x, pz = pool.z, y = pool.floor;
+        lavaGeos.push(lavaPoolGeo(pool));
+        nL++;
         for (let i = 0; i < SMOKE_PER_VOLCANO; i++) {
           this.smokePhase.setX(nSm, i / SMOKE_PER_VOLCANO + hash2(cx, cz, 540 + i) * 0.1);
           this.smoke.setMatrixAt(nSm, this.at(px + (hash2(cx, cz, 510 + i) - 0.5) * 0.3, y + 0.2, pz + (hash2(cx, cz, 520 + i) - 0.5) * 0.3, 0, 0.8 + hash2(cx, cz, 530 + i) * 0.5));
@@ -1173,12 +1175,22 @@ export class VegView {
         }
       }
     }
+    // les ravins creusés au pinceau : lueur au fond, le long de leur axe, éboulis, blocs sur les rebords, filons dans les parois
+    if (w.rift.includes(1)) {
+      const g = riftGeo(w, at, (k) => CAVE_ROCK[w.biome[k]], (x, z, phase, sc) => {
+        if (nSp >= MAX_SPECIAL * SPORES_PER_FISSURE) return;
+        this.sporePhase.setX(nSp, phase);
+        this.spores.setMatrixAt(nSp++, this.at(x, at(x, z), z, 0, sc));
+      });
+      crackGeos.push(g.body);
+      glowGeos.push(g.glow);
+    }
     const set = (m: THREE.InstancedMesh, n: number) => {
       m.count = n;
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     };
-    set(this.wreck, nWr); set(this.lava, nL); set(this.smoke, nSm); set(this.spores, nSp);
+    set(this.wreck, nWr); set(this.smoke, nSm); set(this.spores, nSp);
     this.smokePhase.needsUpdate = true;
     this.sporePhase.needsUpdate = true;
     const swap = (m: THREE.Mesh, list: THREE.BufferGeometry[]) => {
@@ -1186,7 +1198,7 @@ export class VegView {
       m.geometry = list.length ? mergeGeometries(list, false)! : new THREE.BufferGeometry();
       m.visible = list.length > 0;
     };
-    swap(this.caves, caveGeos); swap(this.fissures, crackGeos); swap(this.fissureGlow, glowGeos);
+    swap(this.caves, caveGeos); swap(this.fissures, crackGeos); swap(this.fissureGlow, glowGeos); swap(this.lava, lavaGeos);
   }
 }
 
@@ -1402,33 +1414,34 @@ function caveMoundGeo(f: { x: number; y: number; z: number; yaw: number }, at: (
 }
 
 /**
- * Décor d'un ravin (World creuse le relief) : éboulis au fond, blocs sur les rebords, filons de minerai dans les parois ;
- * une lueur violette (le monde souterrain) court au fond
+ * Décor des ravins creusés au pinceau (World creuse le relief, voir `World.rift`) : une lueur violette court au fond, le long
+ * de l'axe de chaque ravin (les cases les plus éloignées de ses bords) ; éboulis au fond, blocs sur les rebords, filons de
+ * minerai dans les parois ; `spore` pose les spores lumineuses qui montent du fond
  */
-function fissureGeo(f: FissureFrame, at: (x: number, z: number) => number, rock: THREE.Color) {
-  const c = Math.cos(f.yaw), s = Math.sin(f.yaw), NS = 40, seed = Math.round(f.phase * 100);
-  const toW = (u: number, v: number): [number, number] => [f.x + u * c - v * s, f.z + u * s + v * c];
-  const tmp = new THREE.Color();
-  // lueur : bande étroite au fond, plus vive au milieu du ravin
+function riftGeo(w: World, at: (x: number, z: number) => number, rockOf: (k: number) => THREE.Color, spore: (x: number, z: number, phase: number, sc: number) => void) {
+  const tmp = new THREE.Color(), GLOW = new THREE.Color(0.5, 0.26, 1).multiplyScalar(0.7), DARK = new THREE.Color(0, 0, 0);
+  const inner = new Map<number, number>(), rift = w.rift;
+  const innerAt = (k: number) => { let v = inner.get(k); if (v === undefined) { v = w.riftInner((k % N) + 0.5, Math.floor(k / N) + 0.5); inner.set(k, v); } return v; };
+  const isRift = (x: number, z: number) => w.inCells(x, z) && rift[z * N + x] === 1;
+  // l'axe : une case de ravin aussi loin de ses bords que ses voisines
+  const axis = (x: number, z: number) => {
+    if (!isRift(x, z)) return false;
+    const v = innerAt(z * N + x);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if ((dx || dz) && isRift(x + dx, z + dz) && innerAt((z + dz) * N + x + dx) > v + 1e-3) return false;
+    return true;
+  };
   const gpos: number[] = [], gcol: number[] = [];
-  const rows: [number, number, number, THREE.Color][][] = [];
-  for (let r = 0; r <= NS; r++) {
-    const u = -f.len / 2 + (r / NS) * f.len, [off, hw] = fissureAt(f, u), t = Math.abs(u) / (f.len / 2);
-    rows.push([-1, 0, 1].map((j) => {
-      const [x, z] = toW(u, off + j * hw * 0.3);
-      return [x, at(x, z) + 0.03, z, j === 0 ? new THREE.Color(0.5, 0.26, 1).multiplyScalar(0.7 * (1 - t * t)) : new THREE.Color(0, 0, 0)] as [number, number, number, THREE.Color];
-    }));
-  }
-  const push = (v: [number, number, number, THREE.Color]) => { gpos.push(v[0], v[1], v[2]); gcol.push(v[3].r, v[3].g, v[3].b); };
-  for (let r = 0; r < NS; r++)
+  const pushV = (x: number, z: number, c: THREE.Color) => { gpos.push(x, at(x, z) + 0.03, z); gcol.push(c.r, c.g, c.b); };
+  /** un trait de lueur d'un centre de case à l'autre : cœur violet, bords noirs (fondus, en mode additif) */
+  const stroke = (ax: number, az: number, bx: number, bz: number) => {
+    const l = Math.hypot(bx - ax, bz - az) || 1, nx = (-(bz - az) / l) * 0.2, nz = ((bx - ax) / l) * 0.2;
+    const row = (x: number, z: number) => [[x + nx, z + nz, DARK], [x, z, GLOW], [x - nx, z - nz, DARK]] as [number, number, THREE.Color][];
+    const A = row(ax, az), B = row(bx, bz);
     for (let j = 0; j < 2; j++) {
-      // u (rangées) × v (colonnes) pointe vers le bas : on tourne dans l'autre sens pour faire face au ciel
-      const A = rows[r][j], B = rows[r][j + 1], D = rows[r + 1][j], E = rows[r + 1][j + 1];
-      push(A); push(B); push(D); push(B); push(E); push(D);
+      const a0 = A[j], a1 = A[j + 1], b0 = B[j], b1 = B[j + 1];
+      for (const v of [a0, b0, a1, a1, b0, b1]) pushV(v[0], v[1], v[2]);
     }
-  const glow = new THREE.BufferGeometry();
-  glow.setAttribute('position', new THREE.Float32BufferAttribute(gpos, 3));
-  glow.setAttribute('color', new THREE.Float32BufferAttribute(gcol, 3));
+  };
   const parts: THREE.BufferGeometry[] = [];
   const add = (g: THREE.BufferGeometry, x: number, y: number, z: number, col: THREE.Color) => {
     g.deleteAttribute('uv');
@@ -1438,30 +1451,43 @@ function fissureGeo(f: FissureFrame, at: (x: number, z: number) => number, rock:
     g.setAttribute('color', new THREE.BufferAttribute(cc, 3));
     parts.push(g.index ? g.toNonIndexed() : g);
   };
-  const steps = Math.round(f.len / 0.5);
-  for (let i = 0; i < steps; i++) {
-    const u = -f.len / 2 + ((i + 0.5) / steps) * f.len, [off, hw] = fissureAt(f, u), h = (k: number) => hash2(i, k, seed);
-    if (hw < 0.15) continue;
+  for (let k = 0; k < N * N; k++) {
+    if (!rift[k]) continue;
+    const cx = k % N, cz = Math.floor(k / N), px = cx + 0.5, pz = cz + 0.5, h = (s: number) => hash2(cx, cz, 570 + s), rock = rockOf(k);
+    if (axis(cx, cz)) {
+      // traits vers les voisines de l'axe (en biais seulement si aucune voisine droite ne fait le lien)
+      let linked = false;
+      for (const [dx, dz] of [[1, 0], [0, 1]]) if (axis(cx + dx, cz + dz)) { stroke(px, pz, px + dx, pz + dz); linked = true; }
+      for (const [dx, dz] of [[1, 1], [-1, 1]]) if (axis(cx + dx, cz + dz) && !axis(cx + dx, cz) && !axis(cx, cz + dz)) { stroke(px, pz, px + dx, pz + dz); linked = true; }
+      if (!linked && !axis(cx - 1, cz) && !axis(cx, cz - 1) && !axis(cx - 1, cz - 1) && !axis(cx + 1, cz - 1)) stroke(px - 0.3, pz, px + 0.3, pz);
+      if (h(1) < 0.35) spore(px + (h(2) - 0.5) * 0.6, pz + (h(3) - 0.5) * 0.6, h(4), 0.7 + h(5) * 0.6);
+    }
     // éboulis au fond
-    if (h(1) < 0.6) {
-      const r = 0.05 + h(2) * 0.08, [x, z] = toW(u, off + (h(3) - 0.5) * hw * 0.5);
-      add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1).rotateY(h(4) * 6.28), x, at(x, z) + r * 0.2, z, tmp.copy(rock).multiplyScalar(0.55 + h(5) * 0.2));
+    if (h(6) < 0.5) {
+      const r = 0.05 + h(7) * 0.08, x = px + (h(8) - 0.5) * 0.5, z = pz + (h(9) - 0.5) * 0.5;
+      add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1).rotateY(h(10) * 6.28), x, at(x, z) + r * 0.2, z, tmp.copy(rock).multiplyScalar(0.55 + h(11) * 0.2));
     }
-    // blocs sur les rebords
-    if (h(6) < 0.45) {
-      const side = h(7) < 0.5 ? -1 : 1, r = 0.05 + h(8) * 0.07, [x, z] = toW(u, off + side * (hw + 0.2 + h(9) * 0.15));
-      add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1).rotateY(h(10) * 6.28), x, at(x, z) + r * 0.2, z, tmp.copy(rock).multiplyScalar(0.8 + h(11) * 0.2));
-    }
-    // filons dans les parois, façon Minecraft : charbon, fer, or, diamant
-    if (h(12) < 0.3) {
-      const side = h(13) < 0.5 ? -1 : 1, ore = RAVINE_ORES[Math.floor(h(14) * RAVINE_ORES.length)];
-      for (let q = 0; q < 3; q++) {
-        const [x, z] = toW(u + (hash2(i, q, seed + 1) - 0.5) * 0.3, off + side * hw * (0.68 + hash2(i, q, seed + 2) * 0.12));
-        const e = 0.05 + hash2(i, q, seed + 3) * 0.03;
-        add(new THREE.BoxGeometry(e, e, e).rotateX(hash2(i, q, seed + 4) * 3).rotateY(hash2(i, q, seed + 5) * 3), x, at(x, z), z, ore);
+    // au bord du ravin : des blocs sur le rebord, des filons dans la paroi (façon Minecraft : charbon, fer, or, diamant)
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (isRift(cx + dx, cz + dz)) continue;
+      const s = 20 + (dx + 1) * 3 + (dz + 1);
+      if (h(s) < 0.3) {
+        const r = 0.05 + h(s + 1) * 0.07, x = px + dx * (0.62 + h(s + 2) * 0.15) + dz * (h(s + 3) - 0.5) * 0.6, z = pz + dz * (0.62 + h(s + 2) * 0.15) + dx * (h(s + 3) - 0.5) * 0.6;
+        add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1).rotateY(h(s + 4) * 6.28), x, at(x, z) + r * 0.2, z, tmp.copy(rock).multiplyScalar(0.8 + h(s + 5) * 0.2));
+      }
+      if (h(s + 6) < 0.22) {
+        const ore = RAVINE_ORES[Math.floor(h(s + 7) * RAVINE_ORES.length)];
+        for (let q = 0; q < 3; q++) {
+          const e = 0.05 + hash2(cx, cz, 640 + s * 3 + q) * 0.03, sp = (hash2(cx, cz, 660 + s * 3 + q) - 0.5) * 0.5;
+          const x = px + dx * 0.4 + dz * sp, z = pz + dz * 0.4 + dx * sp;
+          add(new THREE.BoxGeometry(e, e, e).rotateX(h(s + 8 + q) * 3).rotateY(h(s + 11 + q) * 3), x, at(x, z), z, ore);
+        }
       }
     }
   }
+  const glow = new THREE.BufferGeometry();
+  glow.setAttribute('position', new THREE.Float32BufferAttribute(gpos, 3));
+  glow.setAttribute('color', new THREE.Float32BufferAttribute(gcol, 3));
   return { body: parts.length ? mergeGeometries(parts, false)! : new THREE.BufferGeometry(), glow };
 }
 
@@ -1524,12 +1550,30 @@ function coralGeo(): THREE.BufferGeometry {
   return p.build(false).body;
 }
 
-/** Bassin de lave : cœur jaune, bord orange */
-function lavaGeo(): THREE.BufferGeometry {
-  const p = new Parts();
-  p.add(new THREE.CircleGeometry(0.55, 14).rotateX(-Math.PI / 2), 0, 0, 0, 0xff5a14);
-  p.add(new THREE.CircleGeometry(0.3, 12).rotateX(-Math.PI / 2), 0, 0.01, 0, 0xffc04a);
-  return p.build(false).body;
+/**
+ * Lac de lave d'un cratère (voir `World.lavaPool`) : une étoile plate à sa surface, de la portée de la lave dans chaque
+ * direction ; cœur jaune, bord orange
+ */
+const LAVA_CORE = new THREE.Color(0xffd06a), LAVA_MID = new THREE.Color(0xffb040), LAVA_RIM = new THREE.Color(0xff5a14);
+function lavaPoolGeo(p: LavaPool): THREE.BufferGeometry {
+  const pos: number[] = [], col: number[] = [], n = p.reach.length, y = p.level;
+  const at = (a: number, f: number): [number, number, number] => {
+    const t = ((a % n) / n) * Math.PI * 2, r = p.reach[a % n] * f;
+    return [p.x + Math.cos(t) * r, y, p.z + Math.sin(t) * r];
+  };
+  const put = (v: [number, number, number], c: THREE.Color) => { pos.push(...v); col.push(c.r, c.g, c.b); };
+  const O: [number, number, number] = [p.x, y, p.z];
+  for (let a = 0; a < n; a++) {
+    // (sens des sommets : la face regarde le ciel)
+    const m0 = at(a, 0.5), m1 = at(a + 1, 0.5), e0 = at(a, 1), e1 = at(a + 1, 1);
+    put(O, LAVA_CORE); put(m1, LAVA_MID); put(m0, LAVA_MID);
+    put(m0, LAVA_MID); put(m1, LAVA_MID); put(e1, LAVA_RIM);
+    put(m0, LAVA_MID); put(e1, LAVA_RIM); put(e0, LAVA_RIM);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return g;
 }
 
 /** Fumée de volcan : chaque bouffée monte, grossit et s'efface en boucle (phase par instance) */

@@ -187,12 +187,12 @@ const DECO_NOTE = 'Décoratif : rend le village plus heureux, ne produit rien.';
 const TOOL_DESC: Record<string, string> = {
   none: 'Regarder le village. Un clic sur un volcan le réveille.',
   raise: 'Monter le terrain sous le pinceau.', lower: 'Baisser le terrain sous le pinceau.', flatten: 'Aplanir à la hauteur du premier clic.',
-  cliff: 'Tailler des falaises nettes, en gradins.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
-  mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut.',
+  cliff: 'Tailler des falaises : en glissant, le sol se dresse d’un gradin à paroi de roche franche ; sur une pente, en gradins. Maj : creuser d’un gradin.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
+  mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut. Pour le retirer : la Gomme ou Démolir sur son cône ; Ctrl+Z annule.',
   forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: `Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille. ${DECO_NOTE}`,
   biome: 'Peindre un biome (tempéré, taïga, désert, tropical, marais) ou rendre la terre à son climat : le sol, les arbres, l’herbe, les bêtes et la neige suivent.',
-  rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte dans la roche (un clic) : les expéditions vers une grotte s’y rendent.', fissure: 'Ouvrir une faille dans le sol (un clic).',
-  erase: 'Effacer forêts, champs, jardins et rochers.',
+  rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte dans la roche (un clic) : les expéditions vers une grotte s’y rendent.', fissure: 'Creuser une faille : en glissant, un ravin se creuse le long du tracé (le pinceau en règle la largeur). La Gomme le comble.',
+  erase: 'Effacer forêts, champs, jardins, rochers et les arbres isolés de la carte ; combler une faille.',
   road: 'Tracer une route : en ligne, en glissant case par case ; en libre, d’un clic au point A puis au point B, une belle courbe qui contourne les obstacles (R pour changer de mode). Sur l’eau peu profonde, elle devient un pont.',
   bulldoze: 'Démolir un bâtiment, une route ou un décor. Élargissez le pinceau pour effacer d’un coup tout un parc, une forêt ou des routes (les petits bâtiments partent aussi ; les grands se démolissent un à un).', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
 };

@@ -1,4 +1,4 @@
-import { World, N, VR, VS, VEG_CAVE, VEG_FISSURE, VEG_VOLCANO, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
+import { World, N, VR, VS, VEG_CAVE, VEG_VOLCANO, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
 import { Simplex } from './noise';
 import { hash2 } from '../core/rng';
 import { localize } from '../i18n';
@@ -201,10 +201,9 @@ export class Underground {
   /** Régénère si la carte ou ses entrées ont changé ; renvoie true dans ce cas */
   sync(): boolean {
     const w = this.world, ent: Entrance[] = [];
-    for (let k = 0; k < N * N; k++) {
-      const t = w.veg[k];
-      if (t === VEG_CAVE || t === VEG_FISSURE) ent.push({ x: (k % N) + 0.5, z: Math.floor(k / N) + 0.5, cell: k, kind: t === VEG_CAVE ? 'cave' : 'fissure' });
-    }
+    for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_CAVE) ent.push({ x: (k % N) + 0.5, z: Math.floor(k / N) + 0.5, cell: k, kind: 'cave' });
+    // une entrée par faille (ravin creusé au pinceau), en son milieu
+    for (const k of w.riftEntrances()) ent.push({ x: (k % N) + 0.5, z: Math.floor(k / N) + 0.5, cell: k, kind: 'fissure' });
     const key = `${w.mapId}|${w.seed}|${ent.map((e) => e.cell).join(',')}`;
     if (key === this.key) return false;
     this.key = key;

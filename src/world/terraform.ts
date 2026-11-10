@@ -6,7 +6,14 @@ const ridges = new Simplex(31);
 
 export type SculptTool = 'raise' | 'lower' | 'flatten' | 'cliff' | 'dig' | 'mountain' | 'volcano';
 
-export interface SculptCtx { target: number }
+/** `target` : hauteur du premier clic ; `dig` (falaise, Maj enfoncée) : le gradin se creuse au lieu de se dresser */
+export interface SculptCtx { target: number; dig?: boolean }
+
+/**
+ * Hauteur d'un gradin de falaise : assez pour que le relief affiché (lissé) garde une paroi de roche franche ; à 1, la
+ * marche fondait dans le lissage et ne se voyait presque pas
+ */
+export const CLIFF_STEP = 2;
 
 /** Un sommet du relief qui borde une case bâtie (ou une route, avec roads) : le pinceau n'y touche pas */
 function locked(world: World, vx: number, vz: number, roads = false) {
@@ -151,9 +158,12 @@ export function sculpt(world: World, tool: SculptTool, wx: number, wz: number, r
         case 'lower': nh = h - 2.4 * dt * w; break;
         case 'dig': nh = h + (-1.3 - h) * Math.min(1, 5 * dt) * w; break;
         case 'flatten': nh = h + (ctx.target - h) * Math.min(1, 8 * dt) * w; break;
+        // falaise : tout le disque passe d'un coup sur le gradin le plus proche, et au moins un gradin au-dessus du premier
+        // clic (au-dessous avec Maj) : sans fondu au bord, la paroi se dresse franche dès le premier passage, et le sol plat
+        // se taille aussi (arrondir seulement ne changeait rien sur le plat, à peine une marche en pente)
         case 'cliff': {
-          const snapped = ctx.target + Math.round((h - ctx.target) / 1.0) * 1.0;
-          nh = h + (snapped - h) * Math.min(1, 10 * dt) * (d < radius * 0.85 ? 1 : 0.4);
+          const k = Math.round((h - ctx.target) / CLIFF_STEP);
+          nh = ctx.target + (ctx.dig ? Math.min(-1, k) : Math.max(1, k)) * CLIFF_STEP;
           break;
         }
       }
