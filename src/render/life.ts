@@ -7,12 +7,13 @@ import { Environment } from './env';
 import { SeasonState } from './season';
 import { BuildingView } from './buildings';
 import { Puffs } from './particles';
+import { pickPalette } from './seasonShaders';
+import { PETAL_COLORS } from './seasonConfig';
 
 const FIREFLIES = 160, MAX_LEAVES = 260, FLOCK = 90, MAX_RINGS = 10;
 /** Fumée de bois : un voile blanc bleuté ; celle des forges et des usines, grise (jamais noire comme du charbon) */
 const SMOKE_LIGHT = new THREE.Color(0.93, 0.93, 0.95), SMOKE_DARK = new THREE.Color(0.5, 0.49, 0.5), STEAM = new THREE.Color(0.96, 0.97, 0.98);
-const AUTUMN = [0xe0782c, 0xd4a03a, 0xc4532a, 0x9a6a3a, 0xe8b84a].map((c) => new THREE.Color(c));
-const PETALS = [0xf6c6d8, 0xfbe3ec, 0xffffff, 0xf2a9c4].map((c) => new THREE.Color(c));
+const PETALS = PETAL_COLORS.map((c) => new THREE.Color(c));
 
 interface Leaf { x: number; y: number; z: number; vy: number; ph: number; rx: number; rz: number; landed: number; col: THREE.Color }
 interface Fish { x0: number; z0: number; dx: number; dz: number; t: number; y: number }
@@ -47,6 +48,8 @@ export class AmbientLife {
   private leafList: Leaf[] = [];
   private trees: number[] = [];
   private treeTimer = 0;
+  /** dérive des feuilles au vent (saison) */
+  private wind = 1;
   // poissons
   private fishMesh: THREE.InstancedMesh;
   private fishes: Fish[] = [];
@@ -128,7 +131,7 @@ void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.
     this.t += dt;
     this.chimneySmoke(dt, h, season, focus);
     this.fireflies(dt, season, time.frac, env.night, rain, focus);
-    this.fallingLeaves(dt, season, time.frac, s, focus);
+    this.fallingLeaves(dt, s, focus);
     this.jumpingFish(dt, s, focus);
     this.duskFlock(dt, h, env, focus);
     if (w.visVersion !== this.builtVis || (w.version !== this.builtVersion && this.ventTimer <= 0)) {
@@ -202,7 +205,7 @@ void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.
   }
 
   /** Feuilles mortes en automne, pétales au printemps : elles tombent des feuillus proches en voletant, puis restent un peu au sol */
-  private fallingLeaves(dt: number, season: number, frac: number, s: SeasonState, focus: THREE.Vector3) {
+  private fallingLeaves(dt: number, s: SeasonState, focus: THREE.Vector3) {
     const w = this.world;
     this.treeTimer -= dt;
     if (this.treeTimer <= 0) {
@@ -215,13 +218,14 @@ void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.
           if (w.veg[k] === VEG_FOREST && (b === BIOME_TEMPERATE || b === BIOME_MARSH)) this.trees.push(k);
         }
     }
-    const autumn = season === 2 && s.leaf > 0.35, spring = season === 0 && frac < 0.75;
-    const rate = (autumn ? 34 : spring ? 18 : 0) * this.density;
+    // taux et couleurs de la saison (seasonConfig.ts, fx) : pétales au printemps, feuilles mortes à l'automne, emportées par le vent
+    const fx = s.fx, rate = (fx.petals + fx.leaves) * this.density;
+    this.wind = fx.wind;
     if (rate && this.trees.length) {
       for (let n = Math.floor(rate * dt + Math.random()); n > 0 && this.leafList.length < MAX_LEAVES; n--) {
         const k = this.trees[Math.floor(Math.random() * this.trees.length)], x = (k % N) + 0.15 + Math.random() * 0.7, z = Math.floor(k / N) + 0.15 + Math.random() * 0.7;
-        const pal = autumn ? AUTUMN : PETALS;
-        this.leafList.push({ x, y: w.hAt(x, z) + 0.55 + Math.random() * 0.7, z, vy: -(0.28 + Math.random() * 0.18), ph: Math.random() * 6.28, rx: Math.random() * 6, rz: Math.random() * 6, landed: -1, col: pal[Math.floor(Math.random() * pal.length)] });
+        const petal = Math.random() * (fx.petals + fx.leaves) < fx.petals;
+        this.leafList.push({ x, y: w.hAt(x, z) + 0.55 + Math.random() * 0.7, z, vy: -(0.28 + Math.random() * 0.18), ph: Math.random() * 6.28, rx: Math.random() * 6, rz: Math.random() * 6, landed: -1, col: petal ? PETALS[Math.floor(Math.random() * PETALS.length)] : pickPalette(fx.leafColors, Math.random()) });
       }
     }
     const d = this.dummy, m = this.leaves;
@@ -229,8 +233,8 @@ void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.
     for (let i = this.leafList.length - 1; i >= 0; i--) {
       const l = this.leafList[i];
       if (l.landed < 0) {
-        l.x += (Math.sin(this.t * 2.2 + l.ph) * 0.35 + 0.12) * dt;
-        l.z += (Math.cos(this.t * 1.7 + l.ph) * 0.25 + 0.05) * dt;
+        l.x += (Math.sin(this.t * 2.2 + l.ph) * 0.35 + 0.12 * this.wind) * dt;
+        l.z += (Math.cos(this.t * 1.7 + l.ph) * 0.25 + 0.05 * this.wind) * dt;
         l.y += l.vy * dt;
         l.rx += dt * 3.1; l.rz += dt * 2.3;
         const g = w.hAt(l.x, l.z);

@@ -1599,8 +1599,8 @@ class Game implements UIHost {
     else {
       this.buildings.update(dt, this.sim.age);
       this.fauna.update(gdt, this.elapsed, this.time.hour, this.time.season, this.env.rainK, this.sim.age, this.cam.camera);
-      this.terrain.animateWater(this.elapsed, 1 - this.env.weatherK * 0.3);
-      this.streams.update(dt, this.season.snow, this.cam.target);
+      this.terrain.animateWater(this.elapsed, 1 - this.env.weatherK * 0.3, this.season);
+      this.streams.update(dt, this.season, this.cam.target);
       this.life.update(dt, this.time, this.season, this.env, this.cam.target);
       // pas de voiture sur les routes tant que l'usine automobile n'est pas bâtie : des charrettes jusque-là ; sans carburant,
       // les automobiles restent au garage

@@ -1,18 +1,15 @@
 import * as THREE from 'three';
-import { World, N, SEA, VR, VS, VEG_CAVE, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
+import { World, N, SEA, VR, VS, VEG_CAVE, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
 import { groundDetailTexture, waterNormalTexture } from './textures';
 import { Blight, blightAt, purityAt } from '../world/blight';
+import { SeasonState, seasonOf } from './season';
+import { SNOW_COLORS, ICE_COLOR } from './seasonConfig';
+import { SNOW_U } from './snow';
 
-export interface GroundPalette {
-  grass: THREE.Color;
-  crop: THREE.Color;
-  foliage: THREE.Color;
-  snow: number;
-  water: THREE.Color;
-  waterOpacity: number;
-}
+/** Teintes de saison du sol et de l'eau : l'état de saison complet (seasonConfig.ts) */
+export type GroundPalette = SeasonState;
 
 const SAND = new THREE.Color(0xeedcaa);
 const WET_SAND = new THREE.Color(0xd8c79c);
@@ -26,7 +23,7 @@ const VOLCANO_BROWN = new THREE.Color(0x7d5c40);
 const GRAVEL = new THREE.Color(0xb9b1a6);
 const WHITE = new THREE.Color(0xf4f7fb);
 /** Neige : teinte de base, bleutée dans les creux, éclatante sur les bosses */
-const SNOW_BASE = new THREE.Color(0xe6eef8), SNOW_SHADE = new THREE.Color(0xb4c8e6), SNOW_LIT = new THREE.Color(0xf3f7fc);
+const SNOW_BASE = new THREE.Color(SNOW_COLORS.base), SNOW_SHADE = new THREE.Color(SNOW_COLORS.shade), SNOW_LIT = new THREE.Color(SNOW_COLORS.lit);
 const HIGH = new THREE.Color(0xc9d79a);
 const TILLED = new THREE.Color(0xa47b52);
 const BEDS = new THREE.Color(0x8a6548);
@@ -36,10 +33,7 @@ const LAWN = new THREE.Color(0x74c060);
 /** pelouse du jardin bioluminescent (âge futuriste) : vert menthe, bleuté */
 const FUTURE_LAWN = new THREE.Color(0x52d6a4);
 const UNDERGROWTH = new THREE.Color(0x6f9c5c);
-const MEADOW = new THREE.Color(0xc9da8e);
 const YARD = new THREE.Color(0xcdb791);
-const DEEP_WATER = new THREE.Color(0x2c7899);
-const SHALLOW_WATER = new THREE.Color(0x9fe3d8);
 /** Sols des biomes (tempéré = herbe de saison) : taïga, désert, tropiques, marais */
 const TAIGA = new THREE.Color(0x6a9576);
 const DESERT = new THREE.Color(0xe8cf98);
@@ -121,7 +115,17 @@ export class TerrainView {
     uDeep: { value: new THREE.Color() },
     /** courant des rivières : sens vers la mer (r, g) et force (b), par case */
     uFlow: { value: null as THREE.Texture | null },
+    /** avancée du courant (vitesse de saison cumulée : elle change sans faire sauter les stries) */
+    uFlowT: { value: 0 },
+    /** limpidité des hauts-fonds, reflet du ciel, gel, débris qui dérivent (pétales, feuilles) : saison */
+    uClarity: { value: 1 },
+    uSparkle: { value: 0.35 },
+    uIce: { value: 0 },
+    uIceCol: { value: new THREE.Color(ICE_COLOR) },
+    uFloat: { value: new THREE.Color() },
+    uFloatK: { value: 0 },
   };
+  private lastWaterT = -1;
   private flowTex = new THREE.DataTexture(new Uint8Array(N * N * 4), N, N);
   /** Relief affiché en texture (demi-flottants) : l'eau en déduit sa profondeur et son écume, la brume son épaisseur */
   private heightTex: THREE.DataTexture;
@@ -288,7 +292,7 @@ ${BLIGHT_GLSL}
     normalMap.repeat.set(9 * N / 48, 9 * N / 48);
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, roughness: 0.1, metalness: 0, depthWrite: false, normalMap, normalScale: new THREE.Vector2(0.4, 0.4) });
     this.waterMat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, this.waterU, this.blightU);
+      Object.assign(sh.uniforms, this.waterU, this.blightU, SNOW_U);
       // houle calculée par la carte graphique (même vague que les canards de la faune) : plus de sommets à recopier à chaque image
       sh.vertexShader = 'uniform float uTime;\nuniform float uCalm;\nvarying vec2 vWater;\n' + sh.vertexShader
         .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
@@ -298,7 +302,8 @@ ${BLIGHT_GLSL}
         .replace('#include <begin_vertex>', `#include <begin_vertex>
   transformed.y = ${SEA.toFixed(4)} + (sin(wA) + sin(wB) + sin(wC)) * wK;
   vWater = (modelMatrix * vec4(transformed, 1.0)).xz;`);
-      sh.fragmentShader = `uniform float uTime;\nuniform sampler2D uHeight;\nuniform sampler2D uDetail;\nuniform sampler2D uFlow;\nuniform vec3 uShallow;\nuniform vec3 uDeep;\nvarying vec2 vWater;\n${BLIGHT_GLSL}\n`
+      sh.fragmentShader = `uniform float uTime;\nuniform sampler2D uHeight;\nuniform sampler2D uDetail;\nuniform sampler2D uFlow;\nuniform vec3 uShallow;\nuniform vec3 uDeep;\nvarying vec2 vWater;\n`
+        + `uniform float uFlowT;\nuniform float uClarity;\nuniform float uSparkle;\nuniform float uIce;\nuniform vec3 uIceCol;\nuniform vec3 uFloat;\nuniform float uFloatK;\nuniform sampler2D uSnowMap;\nuniform float uSnowSize;\n${BLIGHT_GLSL}\n`
         + sh.fragmentShader
           .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
   // autour de l'île du portail, près de lui : une eau un peu rougeâtre, écumeuse, qui luit la nuit
@@ -322,7 +327,8 @@ ${BLIGHT_GLSL}
   float depth = max(0.0, ${SEA.toFixed(1)} - ground);
   diffuseColor.rgb = mix(uShallow, uDeep, 1.0 - exp(-depth * 1.2));
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.32, 0.42, 0.33), calm * 0.65);
-  diffuseColor.a = mix(mix(0.32, 0.93, smoothstep(0.0, 1.8, depth)), 0.88, calm * 0.7);
+  // eau limpide au printemps et l'été (on voit le fond des hauts-fonds), plus sombre et plus opaque l'automne
+  diffuseColor.a = mix(mix(0.32 / uClarity, 0.93, smoothstep(0.0, 1.8 * uClarity, depth)), 0.88, calm * 0.7);
   // écume : bande claire qui respire le long du rivage, découpée par un bruit qui dérive
   float n = texture2D(uDetail, vWater * 0.45 + vec2(uTime * 0.02, uTime * 0.013)).b;
   float band = 1.0 - smoothstep(0.0, 0.16 + 0.06 * sin(uTime * 1.4 + vWater.x * 1.3 + vWater.y * 0.9), depth);
@@ -336,18 +342,44 @@ ${BLIGHT_GLSL}
     vec2 q = vec2(dot(vWater, dir), dot(vWater, vec2(-dir.y, dir.x)));
     // tirets allongés dans le sens du courant, en rangs décalés qui avancent vers l'aval
     float lane = q.y * 2.4, row = floor(lane);
-    float f = fract(q.x * 0.55 - uTime * 0.35 + fract(sin(row * 12.9898) * 43758.5453));
+    float f = fract(q.x * 0.55 - uFlowT * 0.35 + fract(sin(row * 12.9898) * 43758.5453));
     float dash = smoothstep(0.0, 0.12, f) * smoothstep(0.45, 0.2, f) * smoothstep(0.5, 0.15, abs(fract(lane) - 0.5));
     float lines = dash * fl.b;
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.97, 1.0), lines * 0.35);
     diffuseColor.a = max(diffuseColor.a, lines * 0.6);
+    // pétales au printemps, feuilles mortes à l'automne : de petits losanges qui dérivent au fil du courant
+    if (uFloatK > 0.01) {
+      vec2 fq = vec2(q.x * 1.4 - uFlowT * 0.5, q.y * 1.4);
+      vec2 fc = floor(fq), ff = fract(fq) - 0.5;
+      float fh = fract(sin(dot(fc, vec2(41.3, 289.1))) * 43758.5453);
+      vec2 fo = vec2(fract(fh * 13.7), fract(fh * 71.3)) - 0.5;
+      float fd = abs(ff.x - fo.x * 0.5) * 1.5 + abs(ff.y - fo.y * 0.5);
+      float bit = step(fh, uFloatK * 0.32 * clamp(fl.b * 3.0, 0.0, 1.0)) * (1.0 - smoothstep(0.14, 0.17, fd));
+      diffuseColor.rgb = mix(diffuseColor.rgb, uFloat * (0.82 + 0.36 * fract(fh * 7.1)), bit);
+      diffuseColor.a = max(diffuseColor.a, bit);
+    }
+  }
+  // glace l'hiver : elle part des rives et des eaux dormantes, en plaques aux bords irréguliers ; l'eau reste libre là où le
+  // courant est fort, au large, et là où la neige ne tient pas (tropiques, désert)
+  if (uIce > 0.01) {
+    float iz = texture2D(uDetail, vWater * 0.3).b, iz2 = texture2D(uDetail, vWater * 0.11 + 0.37).b;
+    float ice = uIce * smoothstep(0.3, 0.8, texture2D(uSnowMap, vWater / uSnowSize).r) * (1.0 - smoothstep(0.1, 0.45, fl.b) * 0.85);
+    float reach = ice * (0.45 + calm * 1.6) * (0.6 + iz2 * 0.9);
+    float iceK = ice > 0.02 ? 1.0 - smoothstep(reach * 0.8, reach * 1.05 + 0.02, depth + (iz - 0.5) * 0.35) : 0.0;
+    if (iceK > 0.0) {
+      // voile de neige par endroits, fissures plus sombres
+      float crack = 1.0 - smoothstep(0.0, 0.035, abs(fract(iz * 7.0) - 0.5));
+      vec3 ic = mix(uIceCol, vec3(0.92, 0.95, 0.97), smoothstep(0.55, 0.78, iz) * 0.7) * (1.0 - crack * 0.16);
+      diffuseColor.rgb = mix(diffuseColor.rgb, ic, iceK);
+      diffuseColor.a = mix(diffuseColor.a, 0.96, iceK);
+    }
   }`)
           .replace('#include <opaque_fragment>', `vec3 skyCol = vec3(0.8, 0.9, 0.97);
 #ifdef USE_FOG
   skyCol = fogColor;
 #endif
   float fres = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 5.0);
-  outgoingLight = mix(outgoingLight, skyCol * vec3(0.85, 0.93, 1.0), fres * 0.35);
+  outgoingLight = mix(outgoingLight, skyCol * vec3(0.85, 0.93, 1.0), fres * uSparkle);
 #include <opaque_fragment>`);
     };
     this.water = new THREE.Mesh(pg, this.waterMat);
@@ -360,7 +392,7 @@ ${BLIGHT_GLSL}
     const sx = new Simplex(77);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.patch[z * VS + x] = clamp(sx.fbm((x / VR) * 0.085, (z / VR) * 0.085, 3) * 1.6, -1, 1);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.wobble[z * VS + x] = sx.noise2((x / VR) * 0.8 + 50, (z / VR) * 0.8);
-    this.update({ grass: new THREE.Color(0x8fcf7e), crop: new THREE.Color(0xe3cf6e), foliage: new THREE.Color(0x86cf84), snow: 0, water: new THREE.Color(0x9fd8e0), waterOpacity: 0.72 });
+    this.update(seasonOf(0));
   }
 
   /**
@@ -578,7 +610,8 @@ ${BLIGHT_GLSL}
     bc[3].copy(pal.grass).lerp(TROPIC, 0.75);
     bc[4].copy(pal.grass).lerp(MARSH, 0.6);
     const [cForest, cField, cGarden, cRocks] = this.vegCol;
-    cForest.copy(pal.grass).lerp(UNDERGROWTH, 0.55).lerp(pal.foliage, 0.12);
+    // sous-bois : mousse et ombre, tapis de feuilles mortes à l'automne, un voile de pétales au printemps
+    cForest.copy(pal.grass).lerp(UNDERGROWTH, 0.55).lerp(pal.terrain.litter, pal.terrain.litterK).lerp(pal.foliage, 0.1);
     cField.copy(TILLED).lerp(pal.crop, 0.55);
     const gAge = Math.min(this.gardenAge, 5);
     const bare = gAge === 0 || gAge === 2;
@@ -608,12 +641,21 @@ ${BLIGHT_GLSL}
         const dry = bw[bo + BIOME_DESERT], wet = bw[bo + BIOME_MARSH];
         tmp.lerp(HIGH, clamp((h - 2.5) / 4, 0, 0.6) * (1 - snow) * (1 - dry));
         const pv = patch[i];
-        if (pv > 0) tmp.lerp(dry > 0.5 ? DESERT_RED : MEADOW, pv * 0.32 * (1 - snow)); else tmp.multiplyScalar(1 + pv * 0.13);
+        // grandes plaques : prairie claire au printemps, herbe un peu sèche l'été, jaunie l'automne (moins sous les tropiques)
+        if (pv > 0) {
+          if (dry > 0.5) tmp.lerp(DESERT_RED, pv * 0.32 * (1 - snow));
+          else tmp.lerp(pal.terrain.patch, pv * pal.terrain.patchK * (1 - snow) * (1 - bw[bo + BIOME_TROPICAL] * 0.7));
+        } else tmp.multiplyScalar(1 + pv * 0.13);
+        // quelques taches de terre apparente, sur le plat
+        const earth = pal.terrain.soilK * flat * smoothstep(0.42, 0.75, this.wobble[i] * 0.7 + pv * 0.5) * (1 - snow) * (1 - dry);
+        if (earth > 0) tmp.lerp(pal.terrain.soil, earth);
         // marais : flaques de vase sombre
         if (wet > 0 && pv < 0) tmp.lerp(MUD, -pv * 0.7 * wet);
         // rivages : sable, sauf au marais (berges de vase)
         const beach = (1 - smoothstep(0.12, 0.42, h)) * (1 - quay);
-        tmp.lerp(SAND, beach * (1 - wet)).lerp(MUD, beach * wet * 0.6);
+        // haut des berges : herbe fraîche et mousse, feuilles mortes ou givre selon la saison, entre le sable et l'herbe
+        const bank = (0.45 + 0.55 * smoothstep(0.15, 0.3, h)) * pal.terrain.bankK * (1 - wet);
+        tmp.lerp(SAND, beach * (1 - wet) * (1 - bank)).lerp(pal.terrain.bank, beach * bank).lerp(MUD, beach * wet * 0.6);
         // parois : craie blanche près de la mer, roche plus haut, grise en montagne
         if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(MOUNTAIN, alt), steep);
         if (alt > 0) tmp.lerp(MOUNTAIN, alt * 0.85);
@@ -749,10 +791,8 @@ ${BLIGHT_GLSL}
     }
     // falaise du bord : si la zone le touche (la bande de saison la refait une fois finie)
     if (!colorsOnly && (full || x0 === 0 || z0 === 0 || x1 === VS - 1 || z1 === VS - 1)) this.updateSkirt(pal);
-    // eau : turquoise clair sur les hauts-fonds, bleu profond au large, teintée par la saison
-    this.waterU.uShallow.value.copy(SHALLOW_WATER).lerp(pal.water, 0.45);
-    this.waterU.uDeep.value.copy(DEEP_WATER).lerp(pal.water, 0.25);
-    this.sideMat.color.copy(this.waterU.uDeep.value);
+    // eau : hauts-fonds clairs, grand fond, selon la saison
+    this.seasonWater(pal);
   }
 
   /**
@@ -864,7 +904,21 @@ ${BLIGHT_GLSL}
   /** La nuit (0 … 1) : le sol contaminé et l'eau autour du portail rougeoient */
   setNight(night: number) { this.blightU.uBlightNight.value = night; }
 
-  animateWater(t: number, calm = 1) {
+  /** Eau de la saison : teintes (lues sur place à chaque image), limpidité, reflets, gel, débris qui dérivent */
+  private seasonWater(s: SeasonState) {
+    const u = this.waterU, w = s.water;
+    u.uShallow.value = w.shallow; u.uDeep.value = w.deep; u.uFloat.value = w.float;
+    u.uClarity.value = w.clarity; u.uSparkle.value = w.sparkle; u.uFloatK.value = w.floatK; u.uIce.value = s.iceNow;
+    this.waterMat.roughness = w.roughness;
+    this.sideMat.color.copy(w.deep);
+  }
+
+  animateWater(t: number, calm = 1, s?: SeasonState) {
+    // le courant avance à la vitesse de la saison (fonte des neiges, ralenti l'hiver)
+    const dt = this.lastWaterT < 0 ? 0 : Math.max(0, Math.min(0.25, t - this.lastWaterT));
+    this.lastWaterT = t;
+    this.waterU.uFlowT.value += dt * (s ? s.water.flow : 1);
+    if (s) this.seasonWater(s);
     this.waterU.uTime.value = t;
     this.waterU.uCalm.value = calm;
     this.waterMat.normalMap!.offset.set(t * 0.011, t * 0.007);

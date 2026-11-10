@@ -5,6 +5,8 @@ export const SNOW = { value: 0 };
 /** Part de la neige que retient chaque case de la carte (déserts et tropiques presque rien), et taille de la carte */
 const SNOW_MAP = { value: null as THREE.Texture | null };
 const SNOW_SIZE = { value: 1 };
+/** Carte de la neige que retient chaque case, pour les shaders qui en ont besoin (glace de l'eau) */
+export const SNOW_U = { uSnowMap: SNOW_MAP, uSnowSize: SNOW_SIZE };
 let map: THREE.DataTexture | null = null;
 
 /** Neige que retient chaque case (0 … 1), d'après son biome : à refaire quand la carte change */

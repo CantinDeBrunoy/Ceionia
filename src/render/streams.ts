@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { World, N, VR, VS, SEA, VEG_VOLCANO, VEG_FOREST, VEG_FIELD, VEG_GARDEN } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Puffs } from './particles';
+import { SeasonState } from './season';
+import { NOISE_GLSL } from './seasonShaders';
 
 /** Lac retenu dans un creux du relief : niveau de l'eau, sous-sommets noyés, sommet par où il déborde */
 interface Lake { level: number; cells: number[]; outlet: number }
@@ -31,6 +33,10 @@ export class Streams {
   density = 1;
   private uFrozen = { value: 0 };
   private uIce = { value: 0 };
+  /** courant au rythme de la saison ; celui des eaux calmes ralentit encore quand elles gèlent */
+  private uSlow = { value: 0 };
+  /** teinte de l'eau de la saison (les lacs s'y mêlent) */
+  private uLakeTint = { value: new THREE.Color(0x7fc8cf) };
   private built = -1;
   private job: Generator<void, void, unknown> | null = null;
   private wait = 0;
@@ -47,23 +53,30 @@ export class Streams {
     const lakeMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.12, metalness: 0, depthWrite: false, normalMap: waterNormal, normalScale: new THREE.Vector2(0.3, 0.3) });
     lakeMat.onBeforeCompile = (sh) => {
       sh.uniforms.uIce = this.uIce;
-      sh.fragmentShader = 'uniform float uIce;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-  // gelés l'hiver : glace bleutée presque opaque
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.93, 0.97), uIce * 0.85);
-  diffuseColor.a = mix(diffuseColor.a, 0.96, uIce);`);
+      sh.uniforms.uLakeTint = this.uLakeTint;
+      sh.vertexShader = 'varying vec2 vLakeW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLakeW = position.xz;');
+      sh.fragmentShader = 'uniform float uIce;\nuniform vec3 uLakeTint;\nvarying vec2 vLakeW;\n' + NOISE_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  // profondeur relative (portée par l'opacité des sommets) ; teinte de l'eau de la saison
+  float lkD = clamp((diffuseColor.a - 0.55) / 0.35, 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uLakeTint, 0.3);
+  // l'hiver, la glace gagne depuis les rives, en plaques irrégulières : il reste des trous d'eau libre au plus profond
+  float lkN = sznNoise(vLakeW * 0.55) * 0.65 + sznNoise(vLakeW * 1.6 + 7.0) * 0.35 - 0.5;
+  float lkIce = uIce > 0.01 ? 1.0 - smoothstep(uIce * 0.95 - 0.05, uIce * 0.95 + 0.03, lkD * 0.85 + lkN * 0.6) : 0.0;
+  diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.72, 0.86, 0.91), vec3(0.9, 0.94, 0.97), clamp(lkN * 4.0 + 0.5, 0.0, 1.0)), lkIce * 0.9);
+  diffuseColor.a = mix(diffuseColor.a, 0.96, lkIce);`);
     };
     lakeMat.customProgramCacheKey = () => 'lake';
     this.lakeMesh = new THREE.Mesh(new THREE.BufferGeometry(), lakeMat);
     this.lakeMesh.renderOrder = 2;
     this.lakeMesh.receiveShadow = true;
-    this.flowMesh = new THREE.Mesh(new THREE.BufferGeometry(), torrentMaterial(this.uTime, this.uFrozen));
+    this.flowMesh = new THREE.Mesh(new THREE.BufferGeometry(), torrentMaterial(this.uTime, this.uSlow, this.uFrozen));
     this.flowMesh.renderOrder = 2;
     this.group.add(this.lakeMesh, this.flowMesh, this.puffs.mesh);
   }
 
-  /** Proximité du torrent et de la cascade les plus proches (0 loin … 1 tout près) ; rien quand tout est gelé */
+  /** Proximité du torrent et de la cascade les plus proches (0 loin … 1 tout près) ; les torrents gelés se taisent, les chutes moins */
   nearness(focus: THREE.Vector3): [number, number] {
-    if (this.uFrozen.value > 0.6) return [0, 0];
+    const fr = this.uFrozen.value;
     let ds = Infinity, dc = Infinity;
     const s = this.samples;
     for (let i = 0; i < s.length; i += 3) {
@@ -72,15 +85,17 @@ export class Streams {
       if (s[i + 2] > 1.1) dc = Math.min(dc, d);
     }
     for (const sp of this.sprays) dc = Math.min(dc, Math.hypot(sp.x - focus.x, sp.z - focus.z));
-    return [1 - smoothstep(1.5, 12, ds), 1 - smoothstep(2, 16, dc)];
+    return [(1 - smoothstep(1.5, 12, ds)) * (1 - fr), (1 - smoothstep(2, 16, dc)) * (1 - fr * 0.5)];
   }
 
-  /** @param snow neige de saison (0 … 1) : lacs gelés et torrents figés l'hiver */
-  update(dt: number, snow: number, focus: THREE.Vector3) {
+  /** @param s saison : courant plus vif à la fonte des neiges ; l'hiver, lacs gelés depuis les rives et torrents figés sur le plat */
+  update(dt: number, s: SeasonState, focus: THREE.Vector3) {
     const w = this.world;
-    this.uTime.value += dt;
-    this.uIce.value += (smoothstep(0.45, 0.85, snow) - this.uIce.value) * Math.min(1, dt * 0.5);
+    this.uIce.value += (s.iceNow - this.uIce.value) * Math.min(1, dt * 0.5);
     this.uFrozen.value = this.uIce.value;
+    this.uTime.value += dt * s.water.flow;
+    this.uSlow.value += dt * s.water.flow * (1 - this.uFrozen.value);
+    this.uLakeTint.value = s.water.shallow;
     // le relief vient de changer : on attend qu'il se stabilise (sculpture en cours), puis on recalcule par petits bouts,
     // quelques millisecondes par image (au chargement, d'un coup)
     if (w.visVersion !== this.built) {
@@ -93,13 +108,12 @@ export class Streams {
       const end = performance.now() + 4;
       while (performance.now() < end) if (this.job.next().done) { this.job = null; break; }
     }
-    // embruns au pied des cascades proches (rien quand elles sont gelées)
-    if (this.uFrozen.value < 0.5) {
-      for (const s of this.sprays) {
-        if (Math.abs(s.x - focus.x) > 45 || Math.abs(s.z - focus.z) > 45 || Math.random() > dt * 3 * s.k * this.density) continue;
-        this.puffs.spawn(s.x + (Math.random() - 0.5) * 0.3, s.y + 0.1, s.z + (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, 0.35 + Math.random() * 0.3, (Math.random() - 0.5) * 0.3,
-          0.22 + Math.random() * 0.15, 1.4 + Math.random() * 0.8, MIST, 0, { grow: 2.2, drag: 0.6, wind: 0.08, alpha: 0.42 });
-      }
+    // embruns au pied des cascades proches : elles coulent encore l'hiver, plus maigres (et plus fortes à la fonte des neiges)
+    const spray = 3 * Math.min(1.4, s.water.flow) * (1 - this.uFrozen.value * 0.65) * this.density;
+    for (const sp of this.sprays) {
+      if (Math.abs(sp.x - focus.x) > 45 || Math.abs(sp.z - focus.z) > 45 || Math.random() > dt * spray * sp.k) continue;
+      this.puffs.spawn(sp.x + (Math.random() - 0.5) * 0.3, sp.y + 0.1, sp.z + (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, 0.35 + Math.random() * 0.3, (Math.random() - 0.5) * 0.3,
+        0.22 + Math.random() * 0.15, 1.4 + Math.random() * 0.8, MIST, 0, { grow: 2.2, drag: 0.6, wind: 0.08, alpha: 0.42 });
     }
     this.puffs.update(dt);
   }
@@ -389,19 +403,25 @@ function mergeRibbons(list: THREE.BufferGeometry[]) {
   return out;
 }
 
-/** Eau vive : stries qui filent vers l'aval, écume blanche dans les chutes, bords transparents ; figée et blanchie l'hiver */
-function torrentMaterial(uTime: { value: number }, uFrozen: { value: number }) {
+/**
+ * Eau vive : stries qui filent vers l'aval, écume blanche dans les chutes, bords transparents. L'hiver, les tronçons calmes
+ * gèlent (blanchis, figés), les chutes raides continuent de couler. Deux horloges cumulées (courant de saison, et courant
+ * ralenti par le gel) : on passe de l'une à l'autre selon la pente du tronçon, jamais dans le temps (pas de saut des stries)
+ */
+function torrentMaterial(uTime: { value: number }, uSlow: { value: number }, uFrozen: { value: number }) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.15, metalness: 0, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uTime, uFrozen });
+    Object.assign(sh.uniforms, { uTime, uSlow, uFrozen });
     sh.vertexShader = 'attribute float aAlong;\nattribute float aSide;\nattribute float aSteep;\nvarying float vAlong;\nvarying float vSide;\nvarying float vSteep;\n'
       + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vAlong = aAlong; vSide = aSide; vSteep = aSteep;');
-    sh.fragmentShader = 'uniform float uTime;\nuniform float uFrozen;\nvarying float vAlong;\nvarying float vSide;\nvarying float vSteep;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-  float t = uTime * (1.0 - uFrozen);
+    sh.fragmentShader = 'uniform float uTime;\nuniform float uSlow;\nuniform float uFrozen;\nvarying float vAlong;\nvarying float vSide;\nvarying float vSteep;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  float live = smoothstep(0.55, 1.05, vSteep);
+  float t = mix(uSlow, uTime, live);
+  float fr = uFrozen * (1.0 - live * 0.8) * (0.8 + 0.2 * sin(vAlong * 0.9));
   float streak = smoothstep(0.55, 0.95, sin(vAlong * 5.0 - t * (5.0 + vSteep * 9.0) + sin(vSide * 4.0 + vAlong * 1.7) * 1.3) * 0.5 + 0.5);
   float foam = clamp(vSteep * 0.85 + streak * (0.25 + vSteep * 0.5), 0.0, 1.0);
   vec3 water = mix(vec3(0.33, 0.62, 0.74), vec3(0.95, 0.98, 1.0), foam);
-  diffuseColor.rgb = mix(water, vec3(0.88, 0.94, 0.98), uFrozen * 0.8);
+  diffuseColor.rgb = mix(water, vec3(0.86, 0.93, 0.97), fr * 0.85);
   diffuseColor.a = (0.72 + foam * 0.25) * (1.0 - smoothstep(0.65, 1.0, abs(vSide)));`);
   };
   m.customProgramCacheKey = () => 'torrent';

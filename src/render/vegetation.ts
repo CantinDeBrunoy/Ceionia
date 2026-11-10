@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
-  BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, FissureFrame, fissureAt, SNOW_LINE,
+  BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, FissureFrame, fissureAt, SNOW_LINE,
 } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
@@ -13,6 +13,8 @@ import { bakeStatic, splitTrees, meshVariants, MeshPart, ModelName } from './ass
 import { broadleafShape, pineShape, bushShape, rockShapes } from './treeShapes';
 import { addSnow } from './snow';
 import { SHADOW_LAYER } from './materials';
+import { addPalette, addCover, pickPalette, PaletteHandle, COVER } from './seasonShaders';
+import { SPECIES, PETAL_COLORS } from './seasonConfig';
 import { Blight, blightAt, purityAt } from '../world/blight';
 
 /**
@@ -54,8 +56,11 @@ export const WALL_GAP = 0.16;
 const WILD_HUES = [[0.13, 0.58, 0.75, 0.13, 0.58], [0.58, 0.62, 0.58, 0.75], [0.92], [0.92, 0.05, 0.85, 0.11, 0.0], [0.15, 0.58, 0.7]];
 /** Teinte des touffes d'herbe par biome (multiplie la couleur de saison) */
 const TUFT_TINT = [[1, 1, 1], [0.78, 0.9, 0.88], [1.05, 0.92, 0.62], [0.82, 1.08, 0.74], [0.86, 0.94, 0.68]].map(([r, g, b]) => new THREE.Color(r, g, b));
-/** Sous-bois par biome */
+/** Buissons du désert et des tropiques (sans saisons) ; ailleurs, teinte du biome qui multiplie la palette de saison */
 const SHRUB_COLORS = [0x6fa860, 0x5f8f62, 0xa09060, 0x4fa04a, 0x6f8f4e].map((c) => new THREE.Color(c));
+const SHRUB_TINT = [[1, 1, 1], [0.86, 0.94, 0.98], [1, 1, 1], [1, 1, 1], [0.95, 1, 0.9]].map(([r, g, b]) => new THREE.Color(r, g, b));
+/** Fleurs des buissons fleuris (printemps) */
+const BUSH_BLOOM = PETAL_COLORS.map((c) => new THREE.Color(c));
 /** Île du portail contaminée : bois mort noir violacé, troncs calcinés, herbe brûlée, obsidienne ; fleurs vives des halos */
 const DEAD_WOOD = new THREE.Color(0.42, 0.32, 0.42), CHARRED = new THREE.Color(0.2, 0.16, 0.17);
 const BURNT_GRASS = new THREE.Color(0.42, 0.3, 0.22), OBSIDIAN = new THREE.Color(0.2, 0.16, 0.26);
@@ -239,6 +244,8 @@ export class VegView {
   private willows: Species[] = [];
   private deadTrees: Species[] = [];
   private shrub: Layer | null = null;
+  /** buissons du désert et des tropiques, qui ne suivent pas les saisons */
+  private shrubDry: Layer | null = null;
   private wheat: Layer;
   private plant: Layer;
   private blossom: Layer;
@@ -280,9 +287,13 @@ export class VegView {
   private imported = false;
   private wheatMat: THREE.MeshStandardMaterial;
   private season: SeasonState | null = null;
-  private lastLeaf = -1;
-  private lastSnow = -1;
-  private lastGrowth = -1;
+  /** réglages de saison qui changent la forme ou le nombre des décors (et non leur teinte) : à leur dernière reconstruction */
+  private builtSig = new Float32Array(10).fill(-1);
+  private sig = new Float32Array(10);
+  /** palettes de saison des feuillages, des sapins, des touffes et des buissons (teintes lues sur place par les shaders) */
+  private pals: { blossom: PaletteHandle; leafy: PaletteHandle; willow: PaletteHandle; conifer: PaletteHandle; tuft: PaletteHandle; shrub: PaletteHandle };
+  /** bosquets d'arbres à fleurs, prairies fleuries */
+  private groveNoise = new Simplex(9137);
   private built = false;
   /** tuiles à reconstruire (les retouches du joueur passent devant) */
   private queue: number[] = [];
@@ -314,6 +325,22 @@ export class VegView {
     // l'hiver, la neige se pose sur les branches des sapins, des bouleaux nus et des buissons, et sur les rochers
     addSnow(this.pineMat);
     addSnow(wood, 0.9);
+    // et sur les feuilles sèches que gardent quelques feuillus
+    addSnow(this.blobMat, 0.7);
+    addSnow(this.blob2Mat, 0.7);
+    // teintes de saison par arbre, tirées des palettes (seasonConfig.ts) : bosquets de cerisiers, groupes d'érables rouges…
+    const shrubMat = soft(true);
+    addSnow(shrubMat, 0.8);
+    this.pals = {
+      blossom: addPalette(this.blobMat, 0.7),
+      leafy: addPalette(this.blob2Mat, 0.6),
+      willow: addPalette(this.willowMat, 0.5),
+      conifer: addPalette(this.pineMat, 0.4),
+      tuft: addPalette(this.tuftMat, 0.75),
+      shrub: addPalette(shrubMat, 0.6),
+    };
+    // les saules gardent leur vert un peu grisé
+    this.willowMat.color.setRGB(0.9, 0.98, 0.88);
 
     // arbres modélisés (Quaternius, Ultimate Nature) : bouleaux, arbres communs et ronds, sapins ; leur feuillage garde ses
     // nuances mais prend la couleur de la saison. Sans modèles : feuillus ronds et sapins à étages procéduraux (treeShapes)
@@ -364,7 +391,9 @@ export class VegView {
     this.cacti = keep([species('cactus2', 0.95, /^$/, wood, wood), species('cactus_flowers', 0.72, /^$/, wood, wood), species('cactus', 0.42, /^$/, wood, wood, /black|brown/i)]);
     this.willows = keep([species('willow', 1.2, /green/i, this.willowMat, wood)]);
     this.deadTrees = keep([species('dead_tree', 0.95, /^$/, wood, wood)]);
-    this.shrub = layer([{ geo: bushShape(), mat: soft(true) }], { detail: true, lod: true });
+    const bush = bushShape();
+    this.shrub = layer([{ geo: bush, mat: shrubMat }], { detail: true, lod: true });
+    this.shrubDry = layer([{ geo: bush, mat: soft(true) }], { detail: true, lod: true });
     this.wheat = layer([{ geo: wheatClumpGeo(), mat: this.wheatMat }], { shadow: false, detail: true });
     this.plant = layer([{ geo: smoothBlobs([[0.07, 0, 0.045, 0, 0.72, 1]], false), mat: soft(false) }], { detail: true });
     this.blossom = layer([{ geo: new THREE.IcosahedronGeometry(0.035, 0).translate(0, 0.085, 0), mat: std(0xffffff) }], { shadow: false, detail: true });
@@ -379,6 +408,8 @@ export class VegView {
     this.lily = layer([{ geo: lilyModel?.rest ?? new THREE.CircleGeometry(0.12, 7).rotateX(-Math.PI / 2), mat: lilyMat }], { shadow: false, detail: true });
     const rockMat = std(0xbabcbd, true);
     addSnow(rockMat);
+    // mousse (plus épaisse près de l'eau) ou feuilles sur le dessus, sous la neige
+    addCover(rockMat, SEA);
     this.rocks = rockShapes().map((r) => ({ layer: layer([{ geo: r.geometry, mat: rockMat }], { small: true }), radius: r.radius }));
     // fonds marins importés : algues (qui ondulent dans le courant) et lot de coraux, textures conservées
     const weed = meshVariants('seaweed', 1, false), corals = meshVariants('coral_set', 0.22, true);
@@ -480,18 +511,23 @@ export class VegView {
 
   applySeason(s: SeasonState) {
     this.season = s;
-    this.blobMat.color.copy(s.foliage);
-    this.blob2Mat.color.copy(s.foliage2);
-    this.willowMat.color.copy(s.foliage2).lerp(new THREE.Color(0x7fae6a), 0.35);
-    // un peu de givre sur tout le sapin ; la neige, elle, tient sur le dessus des branches
-    this.pineMat.color.setHex(0x4f9a68).lerp(new THREE.Color(0xe8f0f4), s.snow * 0.18);
+    // teintes : lues sur place par les shaders, rien à reconstruire
+    const p = this.pals;
+    p.blossom.set(s.trees.blossom); p.leafy.set(s.trees.leafy); p.willow.set(s.trees.leafy);
+    p.conifer.set(s.trees.conifer); p.tuft.set(s.ground.tuft); p.shrub.set(s.ground.shrub);
+    COVER.color.value = s.ground.moss;
+    COVER.k.value = s.ground.mossK;
     this.wheatMat.color.copy(s.crop);
-    this.tuftMat.color.copy(s.grass);
-    this.fernMat.color.copy(s.foliage2).lerp(s.grass, 0.4).lerp(new THREE.Color(0x5f9a4e), 0.45);
-    if (Math.abs(s.leaf - this.lastLeaf) > 0.03 || Math.abs(s.snow - this.lastSnow) > 0.03 || Math.abs(s.growth - this.lastGrowth) > 0.03) {
-      this.lastLeaf = s.leaf;
-      this.lastSnow = s.snow;
-      this.lastGrowth = s.growth;
+    this.fernMat.color.copy(s.ground.fern);
+    // forme et nombre (feuillage, neige, cultures, fleurs, herbe, champignons, feuilles mortes, roseaux) : les tuiles se
+    // refont au fil des images quand l'un d'eux a assez bougé
+    const g = s.ground, sig = this.sig;
+    sig[0] = s.leaf; sig[1] = s.snow; sig[2] = s.growth; sig[3] = g.flowerK * 0.5; sig[4] = g.tuftHeight; sig[5] = g.mushrooms;
+    sig[6] = g.leafPiles; sig[7] = g.shrubBloom; sig[8] = s.trees.leafSpread; sig[9] = g.bankReeds;
+    let moved = false;
+    for (let i = 0; i < sig.length; i++) if (Math.abs(sig[i] - this.builtSig[i]) > 0.03) moved = true;
+    if (moved) {
+      this.builtSig.set(sig);
       for (let ch = 0; ch < NC * NC; ch++) this.enqueue(ch, false);
       // neige et mousse au sommet des grottes
       if (this.built) this.rebuildSpecial();
@@ -656,10 +692,36 @@ export class VegView {
     return room >= reach * sc * 0.5 ? room / reach : 0;
   }
 
-  /** Buisson, à l'écart des murs */
-  private bush(x: number, y: number, z: number, rot: number, sc: number, c: THREE.Color) {
-    if (!this.shrub || !(sc = this.fit(x, z, this.shrub.reach, sc))) return;
-    this.shrub.put(this.at(x, y, z, rot, sc), c);
+  /**
+   * Buisson, à l'écart des murs : teinte de saison (palette, neige par le shader) sauf au désert et sous les tropiques ; au
+   * printemps, certains fleurissent
+   */
+  private bush(x: number, y: number, z: number, rot: number, sc: number, b: number, bright: number, s: SeasonState) {
+    const seasonal = b !== BIOME_DESERT && b !== BIOME_TROPICAL, layer = seasonal ? this.shrub : this.shrubDry;
+    if (!layer || !(sc = this.fit(x, z, layer.reach, sc))) return;
+    if (seasonal) layer.put(this.at(x, y, z, rot, sc), this.col.copy(SHRUB_TINT[b]).multiplyScalar(bright));
+    else layer.put(this.at(x, y, z, rot, sc), this.col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)).multiplyScalar(bright));
+    const h = hash2(Math.floor(x * 11), Math.floor(z * 11), 1701);
+    if (!seasonal || s.snow > 0.1 || h >= s.ground.shrubBloom) return;
+    // fleurs posées sur le dessus et le pourtour du buisson, roses ou blanches selon le buisson
+    const c = BUSH_BLOOM[Math.floor(hash2(Math.floor(x * 11), Math.floor(z * 11), 1702) * BUSH_BLOOM.length)];
+    const n = 4 + Math.floor(h * 10) % 3;
+    for (let i = 0; i < n; i++) {
+      const a = rot + (i / n) * 6.28 + hash2(Math.floor(x * 11), i, 1703), r = (0.035 + 0.035 * (i % 2)) * sc;
+      this.flowerC(x + Math.cos(a) * r, y + (0.135 - (i % 2) * 0.03) * sc - 0.04, z + Math.sin(a) * r, 0.5, c);
+    }
+  }
+
+  /** Arbre à fleurs ? Par bosquets (bruit doux) plutôt qu'au hasard, dans la proportion voulue (seasonConfig.ts) */
+  private blossomAt(x: number, z: number, h: number) {
+    const g = SPECIES.blossomGroves, n = this.groveNoise.noise2(x * 0.11, z * 0.11) * 0.5 + 0.5;
+    // le mélange resserre les valeurs vers le milieu : on les étire pour garder à peu près la part demandée
+    return 0.5 + (n * g + h * (1 - g) - 0.5) * 1.9 < SPECIES.blossom;
+  }
+
+  /** Prairie fleurie autour de la case (0 … 1) : les fleurs sauvages poussent par taches plutôt qu'au hasard */
+  private meadowZone(cx: number, cz: number) {
+    return Math.min(1, Math.max(0, 0.5 + this.groveNoise.noise2(cx * 0.07 + 40, cz * 0.07 - 13) * 0.9));
   }
 
   /** Rocher posé au point le plus bas du sol sous lui : aucun bord ne flotte, même en pente */
@@ -679,8 +741,48 @@ export class VegView {
   private perch(x: number, y: number, z: number) { this.perches[Layer.chunk].push(x, y, z); }
 
   private flower(x: number, y: number, z: number, scale: number, hue: number, sat: number, light: number) {
-    this.blossom.put(this.at(x, y, z, 0, scale), this.col.setHSL(hue, sat, light));
+    this.flowerC(x, y, z, scale, this.col.setHSL(hue, sat, light));
+  }
+
+  /** Fleur d'une couleur donnée (butinée par les abeilles) */
+  private flowerC(x: number, y: number, z: number, scale: number, c: THREE.Color) {
+    this.blossom.put(this.at(x, y, z, 0, scale), c);
     this.flowers[Layer.chunk].push(x, y + 0.08 * scale, z);
+  }
+
+  /**
+   * Berge : roseaux à fleur d'eau (vert frais, paille l'automne, sous la neige l'hiver), quelques touffes d'herbe en haut de la
+   * grève ; les fleurs du printemps y poussent aussi
+   */
+  private bank(cx: number, cz: number, avg: number, b: number, s: SeasonState) {
+    const w = this.world, col = this.col;
+    // (pas au milieu d'une rivière peu profonde : seulement sur les cases surtout émergées)
+    if (avg > 0.02 && hash2(cx, cz, 1601) < s.ground.bankReeds * (b === BIOME_TROPICAL ? 0.4 : 1)) {
+      const n = 1 + Math.floor(hash2(cx, cz, 1602) * 3);
+      for (let i = 0; i < n; i++) {
+        const px = cx + 0.1 + hash2(cx, cz, 1603 + i) * 0.8, pz = cz + 0.1 + hash2(cx, cz, 1607 + i) * 0.8, y = w.hAt(px, pz);
+        if (y < SEA - 0.04 || y > SEA + 0.24 || this.room(px, pz) < 0.1) continue;
+        const sc = 0.7 + hash2(cx, cz, 1611 + i) * 0.5;
+        this.reed.put(this.at(px, y - 0.02, pz, hash2(cx, cz, 1615 + i) * 6.28, sc, sc * (0.45 + 0.45 * s.growth)),
+          col.copy(s.ground.reed).multiplyScalar(0.85 + hash2(cx, cz, 1619 + i) * 0.25).lerp(SNOWC, s.snow * 0.5));
+      }
+    }
+    if (avg < 0.16) return;
+    const n = Math.floor(hash2(cx, cz, 1623) * 3);
+    for (let i = 0; i < n; i++) {
+      const px = cx + 0.1 + hash2(cx, cz, 1624 + i) * 0.8, pz = cz + 0.1 + hash2(cx, cz, 1628 + i) * 0.8, y = w.hAt(px, pz);
+      if (y < SEA + 0.12) continue;
+      const sc = 0.75 + hash2(cx, cz, 1632 + i) * 0.4;
+      this.tuft.put(this.at(px, y - 0.01, pz, hash2(cx, cz, 1636 + i) * 6.28, sc, sc * 0.55 * s.ground.tuftHeight * (1 - s.snow * snowy(b) * 0.6), sc),
+        col.copy(TUFT_TINT[b]).multiplyScalar(0.85 + hash2(cx, cz, 1640 + i) * 0.25));
+    }
+    if (b === BIOME_TEMPERATE && s.snow < 0.1 && hash2(cx, cz, 1644) < s.ground.flowerK * 0.18) {
+      const c = pickPalette(s.ground.flowers, hash2(cx, cz, 1645));
+      for (let i = 0; i < 2; i++) {
+        const px = cx + 0.15 + hash2(cx, cz, 1646 + i) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 1650 + i) * 0.7, y = w.hAt(px, pz);
+        if (y > SEA + 0.15) this.flowerC(px, y - 0.03, pz, 0.5, c);
+      }
+    }
   }
 
   /** Arbre importé posé au sol, cime notée comme perchoir ; près d'un bâtiment, sa cime reste hors des murs */
@@ -718,7 +820,7 @@ export class VegView {
         continue;
       }
       // taïga et hauteurs : sapins, souvent enneigés ; ailleurs un tiers de sapins parmi les bouleaux
-      const isPine = h < (b === BIOME_TAIGA ? 0.92 : this.pineVars.length ? 0.32 : 0.38) || y > (this.imported ? 4.2 : 3.2);
+      const isPine = h < (b === BIOME_TAIGA ? SPECIES.pineTaiga : this.pineVars.length ? SPECIES.pine : SPECIES.pineProcedural) || y > (this.imported ? 4.2 : 3.2);
       // sapins enneigés : sur les sommets, et partout en taïga quand l'hiver arrive
       if (isPine && this.snowPines.length && (y > 4.2 || (b === BIOME_TAIGA && s.snow > 0.3)) && hv < (y > 4.2 ? 0.75 : 0.6)) {
         this.tree(this.snowPines[0], px, y, pz, rot, sc, col);
@@ -730,16 +832,15 @@ export class VegView {
         this.pine.put(this.at(px, y, pz, rot, f), col);
         this.trunk.put(this.dummy.matrix, col);
         this.perch(px, y + 0.85 * f, pz);
-      } else this.broadleaf(px, y, pz, rot, sc, col, s, hash2(cx, cz, 70 + k) < 0.4);
+      } else this.broadleaf(px, y, pz, rot, sc, col, s, this.blossomAt(px, pz, hash2(cx, cz, 70 + k)));
     }
     this.forestFloor(cx, cz, b, s);
     // sous-bois (fougères sous les palmiers, broussailles sèches au désert)
     if (hash2(cx, cz, 5) < (b === BIOME_DESERT ? 0.3 : 0.7) && s.snow < 0.8) {
       const px = cx + 0.15 + hash2(cx, cz, 6) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 7) * 0.7;
-      col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)).multiplyScalar(0.85 + hash2(cx, cz, 8) * 0.2);
       const sc = (0.8 + hash2(cx, cz, 9) * 0.6) * (b === BIOME_TROPICAL ? 1.4 : b === BIOME_DESERT ? 0.7 : 1);
-      if (this.shrub) this.bush(px, w.hAt(px, pz), pz, hash2(cx, cz, 4) * 6.28, sc, col);
-      else this.plantAt(px, pz, 1.1 + hash2(cx, cz, 9) * 0.6, 0.8, hash2(cx, cz, 4) * 6.28, col);
+      if (this.shrub) this.bush(px, w.hAt(px, pz), pz, hash2(cx, cz, 4) * 6.28, sc, b, 0.85 + hash2(cx, cz, 8) * 0.2, s);
+      else this.plantAt(px, pz, 1.1 + hash2(cx, cz, 9) * 0.6, 0.8, hash2(cx, cz, 4) * 6.28, col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)));
     }
   }
 
@@ -748,12 +849,17 @@ export class VegView {
    * en plein hiver ; 40 % fleurissent (rose au printemps, orange en automne)
    */
   private broadleaf(px: number, y: number, pz: number, rot: number, sc: number, col: THREE.Color, s: SeasonState, blossom: boolean) {
-    if (s.leaf < 0.5 && this.bare) { this.tree(this.bare, px, y, pz, rot, sc, col); return; }
+    // chaque arbre a son rythme : à l'automne, certains se dégarnissent plus tôt ; l'hiver, quelques-uns gardent des feuilles sèches
+    const leaf = Math.min(1, Math.max(0, s.leaf + (hash2(Math.floor(px * 13), Math.floor(pz * 13), 79) - 0.5) * s.trees.leafSpread));
+    if (leaf < 0.5 && this.bare) { this.tree(this.bare, px, y, pz, rot, sc, col); return; }
     const t = this.leafy[Math.floor(hash2(Math.floor(px * 7), Math.floor(pz * 7), 77) * this.leafy.length)];
     // la cime d'été, la plus large, reste hors des murs voisins
     if (!(sc = this.fit(px, pz, Math.max(t.blob.reach, t.trunk.reach), sc))) return;
     t.trunk.put(this.at(px, y, pz, rot, sc), col);
-    const ls = Math.max(0.25, s.leaf) * sc, lsy = ls * (0.8 + 0.2 * s.leaf);
+    // la ramure rétrécit à mesure qu'elle se dégarnit ; les rares arbres qui gardent leurs feuilles sèches l'hiver gardent une
+    // cime fournie (une boule minuscule au bout du tronc ferait une sucette)
+    const size = Math.max(0.25, leaf, 0.72 * (1 - smoothstep(0.35, 0.6, s.leaf)));
+    const ls = size * sc, lsy = ls * (0.8 + 0.2 * size);
     const m = this.at(px, y + t.leafY * (sc - lsy), pz, rot, ls, lsy, ls);
     (blossom ? t.blob : t.blob2).put(m, col);
     this.perch(px, y + t.leafTop * lsy + t.leafY * (sc - lsy) + 0.01, pz);
@@ -777,14 +883,22 @@ export class VegView {
       this.ferns!.put(this.at(fx, w.hAt(fx, fz) - 0.01, fz, hash2(cx, cz, 922 + i) * 6.28, fs, fs * (0.6 + 0.4 * s.leaf)), col.copy(FERN_TINT[b]).multiplyScalar(0.85 + hash2(cx, cz, 926 + i) * 0.25));
     }
     // champignons en petits groupes, plus nombreux à l'automne
-    const autumn = s.foliage2.r > s.foliage2.g;
-    if (this.mushrooms && hash2(cx, cz, 930) < (autumn ? 0.35 : 0.12)) {
+    if (this.mushrooms && hash2(cx, cz, 930) < s.ground.mushrooms) {
       const m = 1 + Math.floor(hash2(cx, cz, 931) * 3), brown = hash2(cx, cz, 932) < 0.4;
       const mx = cx + 0.2 + hash2(cx, cz, 933) * 0.6, mz = cz + 0.2 + hash2(cx, cz, 934) * 0.6;
       for (let i = 0; i < m; i++) {
         const qx = mx + (hash2(cx, cz, 935 + i) - 0.5) * 0.14, qz = mz + (hash2(cx, cz, 939 + i) - 0.5) * 0.14;
         const ms = 0.6 + hash2(cx, cz, 943 + i) * 0.7;
         this.mushrooms.put(this.at(qx, w.hAt(qx, qz) - 0.005, qz, hash2(cx, cz, 947 + i) * 6.28, ms), brown ? BOLETE : WHITE);
+      }
+    }
+    // tas de feuilles mortes à l'automne, aux couleurs des arbres (pas sous les palmiers)
+    if (s.ground.leafPiles > 0.03 && b !== BIOME_TROPICAL && hash2(cx, cz, 960) < s.ground.leafPiles) {
+      const n = 1 + Math.floor(hash2(cx, cz, 961) * 3);
+      for (let i = 0; i < n; i++) {
+        const lx = cx + 0.12 + hash2(cx, cz, 962 + i) * 0.76, lz = cz + 0.12 + hash2(cx, cz, 966 + i) * 0.76, ls = 0.9 + hash2(cx, cz, 970 + i) * 0.9;
+        col.copy(pickPalette(s.fx.leafColors, hash2(cx, cz, 978 + i))).multiplyScalar(0.85 + hash2(cx, cz, 982 + i) * 0.25);
+        this.plant.put(this.at(lx, w.hAt(lx, lz) - 0.02, lz, hash2(cx, cz, 974 + i) * 6.28, ls * 1.3, ls * 0.32, ls), col);
       }
     }
   }
@@ -939,6 +1053,8 @@ export class VegView {
       }
     }
     if (avg < -0.12) { this.seabed(cx, cz, -avg, s); return; }
+    // berges (rivières, lacs, côtes) : roseaux au bord de l'eau, quelques touffes en haut de la grève
+    if (avg < 0.32 && slope <= 1.1 && b !== BIOME_DESERT && b !== BIOME_MARSH && s.snow * snowy(b) < 0.7) this.bank(cx, cz, avg, b, s);
     if (avg < 0.12) return;
     // l'île du portail contaminée : herbe brûlée, rochers d'obsidienne
     const bk = this.blighted(cx, cz);
@@ -963,7 +1079,7 @@ export class VegView {
       if (h < 0.07 && this.cacti.length) {
         const cactus = this.cacti[Math.floor(hash2(cx, cz, 804) * this.cacti.length)].layer, sc = this.fit(px, pz, cactus.reach, 0.4 + hash2(cx, cz, 806) * 0.3);
         if (sc) cactus.put(this.at(px, y, pz, hash2(cx, cz, 805) * 6.28, sc), col.setScalar(1.1));
-      } else if (h < 0.17 && this.shrub) this.bush(px, y, pz, hash2(cx, cz, 805) * 6.28, 0.6 + hash2(cx, cz, 806) * 0.5, col.copy(SHRUB_COLORS[BIOME_DESERT]));
+      } else if (h < 0.17 && this.shrub) this.bush(px, y, pz, hash2(cx, cz, 805) * 6.28, 0.6 + hash2(cx, cz, 806) * 0.5, BIOME_DESERT, 1, s);
       else if (h < 0.4 && s.snow < 0.6) this.tuft.put(this.at(px, y - 0.01, pz, hash2(cx, cz, 805) * 6.28, 0.9, 0.5, 0.9), col.copy(TUFT_TINT[BIOME_DESERT]));
       // ossements blanchis par le soleil, cailloux de grès
       const h2 = hash2(cx, cz, 811), qx = cx + 0.15 + hash2(cx, cz, 812) * 0.7, qz = cz + 0.15 + hash2(cx, cz, 813) * 0.7;
@@ -986,25 +1102,30 @@ export class VegView {
     for (let i = 0; i < n; i++) {
       const px = cx + 0.1 + hash2(cx, cz, 340 + i) * 0.8, pz = cz + 0.1 + hash2(cx, cz, 350 + i) * 0.8;
       const sc = (0.9 + hash2(cx, cz, 370 + i) * 0.5) * lush;
-      this.tuft.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(cx, cz, 360 + i) * 6.28, sc, sc * 0.62 * (1 - s.snow * snowy(b) * 0.6) * (1 - g * 0.5), sc),
+      this.tuft.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(cx, cz, 360 + i) * 6.28, sc, sc * 0.62 * s.ground.tuftHeight * (1 - s.snow * snowy(b) * 0.6) * (1 - g * 0.5), sc),
         col.copy(TUFT_TINT[b]).multiplyScalar(0.85 + hash2(cx, cz, 380 + i) * 0.25));
     }
     this.meadowDetails(cx, cz, b, slope, s);
     // fougères sous les tropiques
     if (b === BIOME_TROPICAL && this.shrub && hash2(cx, cz, 390) < 0.12) {
       const px = cx + 0.2 + hash2(cx, cz, 391) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 392) * 0.6;
-      this.bush(px, w.hAt(px, pz), pz, hash2(cx, cz, 393) * 6.28, 1 + hash2(cx, cz, 394) * 0.5, col.copy(SHRUB_COLORS[BIOME_TROPICAL]));
+      this.bush(px, w.hAt(px, pz), pz, hash2(cx, cz, 393) * 6.28, 1 + hash2(cx, cz, 394) * 0.5, BIOME_TROPICAL, 1, s);
     }
-    // fleurs : plus nombreuses là où les abeilles ont butiné, broutées par les troupeaux
-    const flowers = s.snow < 0.1 && s.growth > 0.5;
-    const chance = ([0.2, 0.08, 0, 0.32, 0.15][b] + w.bloom[k] * 0.6) * (1 - g * 0.8);
+    // fleurs : plus nombreuses là où les abeilles ont butiné, broutées par les troupeaux. Dans les biomes à saisons, par
+    // prairies (taches), surtout au printemps et aux couleurs de la saison ; ailleurs, aux couleurs du biome
+    const seasonal = b !== BIOME_DESERT && b !== BIOME_TROPICAL;
+    const flowers = s.snow < 0.1 && (seasonal ? s.ground.flowerK > 0.02 : s.growth > 0.5);
+    const zone = seasonal ? s.ground.flowerK * (0.25 + 1.5 * this.meadowZone(cx, cz)) : 1;
+    const chance = ([0.2, 0.08, 0, 0.32, 0.15][b] + w.bloom[k] * 0.6) * (1 - g * 0.8) * zone;
     if (flowers && hash2(cx, cz, 330) < chance) {
-      const m = 1 + Math.floor(hash2(cx, cz, 331) * 3) + Math.round(w.bloom[k] * 2);
+      const m = 1 + Math.floor(hash2(cx, cz, 331) * 3) + Math.round(w.bloom[k] * 2) + (zone > 1.2 ? 1 : 0);
       const hues = WILD_HUES[b];
       const hue = hues[Math.floor(hash2(cx, cz, 332) * hues.length)];
+      const own = b === BIOME_TEMPERATE ? pickPalette(s.ground.flowers, hash2(cx, cz, 332)) : null;
       for (let i = 0; i < m; i++) {
         const px = cx + 0.15 + hash2(cx, cz, 333 + i) * 0.7, pz = cz + 0.15 + hash2(cx, cz, 337 + i) * 0.7;
-        this.flower(px, w.hAt(px, pz) - 0.03, pz, 0.55, hue, hue === 0.58 ? 0.1 : 0.8, hue === 0.58 ? 0.96 : 0.68);
+        if (own) this.flowerC(px, w.hAt(px, pz) - 0.03, pz, 0.55, own);
+        else this.flower(px, w.hAt(px, pz) - 0.03, pz, 0.55, hue, hue === 0.58 ? 0.1 : 0.8, hue === 0.58 ? 0.96 : 0.68);
       }
     }
     // l'île purifiée : des fleurs vives repoussent dans les halos des défenses
@@ -1073,10 +1194,10 @@ export class VegView {
       const pick = <T,>(list: T[]) => list[Math.floor(hash2(cx, cz, 826) * list.length)];
       if (b === BIOME_TROPICAL && this.palms.length) this.tree(pick(this.palms), qx, qy, qz, rot, sc, col);
       else if (b === BIOME_MARSH && this.willows.length) this.tree(this.willows[0], qx, qy, qz, rot, sc * 0.9, col);
-      else if ((b === BIOME_TAIGA || hash2(cx, cz, 827) < 0.35) && this.pineVars.length) this.tree(pick(this.pineVars), qx, qy, qz, rot, sc, col);
-      else this.broadleaf(qx, qy, qz, rot, sc, col, s, hash2(cx, cz, 828) < 0.4);
+      else if ((b === BIOME_TAIGA || hash2(cx, cz, 827) < SPECIES.lonePine) && this.pineVars.length) this.tree(pick(this.pineVars), qx, qy, qz, rot, sc, col);
+      else this.broadleaf(qx, qy, qz, rot, sc, col, s, this.blossomAt(qx, qz, hash2(cx, cz, 828)));
     } else if (h < lone + 0.055 && this.shrub && b !== BIOME_MARSH && s.snow < 0.8) {
-      this.bush(qx, qy, qz, rot, 0.7 + hash2(cx, cz, 829) * 0.6, col.copy(SHRUB_COLORS[b]).lerp(SNOWC, s.snow * 0.35 * snowy(b)).multiplyScalar(0.9 + hash2(cx, cz, 830) * 0.2));
+      this.bush(qx, qy, qz, rot, 0.7 + hash2(cx, cz, 829) * 0.6, b, 0.9 + hash2(cx, cz, 830) * 0.2, s);
     } else if (h < lone + 0.085 && this.ferns && b !== BIOME_MARSH && s.snow * snowy(b) < 0.5) {
       this.ferns.put(this.at(qx, qy - 0.01, qz, rot, sc, sc * (0.6 + 0.4 * s.leaf)), col.copy(FERN_TINT[b]));
     } else if (h < lone + 0.1 && this.mushrooms && s.snow < 0.5) {
@@ -1090,7 +1211,8 @@ export class VegView {
       }
     }
     // touffes de fleurs des champs (modèles), butinées comme les autres
-    if (this.wildFlowers.length && b !== BIOME_TAIGA && s.snow < 0.1 && s.growth > 0.4 && hash2(cx, cz, 860) < 0.1 + w.bloom[w.ci(cx, cz)] * 0.2) {
+    const wild = b === BIOME_TEMPERATE ? Math.min(1.5, s.ground.flowerK) * (0.3 + 1.2 * this.meadowZone(cx, cz)) : s.growth > 0.4 ? 1 : 0;
+    if (this.wildFlowers.length && b !== BIOME_TAIGA && s.snow < 0.1 && hash2(cx, cz, 860) < (0.1 + w.bloom[w.ci(cx, cz)] * 0.2) * wild) {
       const layer = this.wildFlowers[Math.floor(hash2(cx, cz, 861) * this.wildFlowers.length)];
       const n = 2 + Math.floor(hash2(cx, cz, 862) * 3);
       for (let i = 0; i < n; i++) {

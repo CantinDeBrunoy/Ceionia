@@ -11,6 +11,7 @@ const NIGHT_TOP = new THREE.Color(0x202c5c), NIGHT_HZ = new THREE.Color(0x44537f
 const DAY_TOP = new THREE.Color(0x62b4f0), DAY_HZ = new THREE.Color(0xd2eaf8);
 const DUSK_TOP = new THREE.Color(0x8d86c4), DUSK_HZ = new THREE.Color(0xf7b49a);
 const GREY = new THREE.Color(0xb9c0ca);
+const MOON = new THREE.Color(0x9fb2ff), LOW_SUN = new THREE.Color(0xffb27a), WHITE = new THREE.Color(0xffffff), NIGHT_GROUND = new THREE.Color(0x7581a8);
 
 const rainCount = 1500, snowCount = 1300;
 /** Échelle de la carte par rapport à la version 48 cases (nuages, brouillard) */
@@ -210,8 +211,10 @@ export class Environment {
 
     const top = this.tmpA.copy(NIGHT_TOP).lerp(DAY_TOP, day).lerp(DUSK_TOP, twi * 0.55);
     const hz = this.tmpB.copy(NIGHT_HZ).lerp(DAY_HZ, day).lerp(DUSK_HZ, twi * 0.75);
-    top.lerp(s.tint, 0.1 * day);
-    hz.lerp(s.tint, 0.12 * day);
+    // teinte du ciel de la saison : bleu clair au printemps, lumineux l'été, voilé de roux l'automne, pâle l'hiver
+    const L = s.light;
+    top.lerp(L.sky, L.skyK * day);
+    hz.lerp(L.sky, L.skyK * 1.2 * day);
     const g = GREY.clone().multiplyScalar(0.25 + 0.75 * day);
     top.lerp(g, overcast * 0.55); hz.lerp(g, overcast * 0.75);
     this.skyMat.uniforms.top.value.copy(top);
@@ -220,10 +223,11 @@ export class Environment {
     this.fog.color.copy(hz);
     // le brouillard recule quand on dézoome, pour voir toute la carte
     const away = Math.max(0, camDist - 62);
-    this.fog.near = lerp(lerp(85, 40, Math.max(rainK, snowK)), 8, fogK) + away * 0.9;
-    this.fog.far = lerp(lerp(220, 120, Math.max(rainK, snowK)), 70, fogK) + away * 1.6;
+    this.fog.near = lerp(lerp(85 * L.haze, 40, Math.max(rainK, snowK)), 8, fogK) + away * 0.9;
+    this.fog.far = lerp(lerp(220 * L.haze, 120, Math.max(rainK, snowK)), 70, fogK) + away * 1.6;
 
-    const sunI = smoothstep(0.0, 0.18, elev) * 2.75 * (1 - overcast * 0.6);
+    // soleil de la saison : plus fort l'été (ombres marquées), doux et orangé l'automne, froid l'hiver
+    const sunI = smoothstep(0.0, 0.18, elev) * 2.75 * L.sunK * (1 - overcast * 0.6);
     const moonI = smoothstep(0.0, 0.18, -elev) * 1.9 * (1 - overcast * 0.4);
     const useSun = elev > 0;
     const ld = useSun ? dir : dir.clone().negate();
@@ -240,11 +244,12 @@ export class Environment {
     this.sun.target.position.set(fx, 0, fz);
     this.sun.position.set(fx, 0, fz).addScaledVector(ld, 200);
     this.sun.intensity = useSun ? sunI : moonI;
-    this.sun.color.setHex(useSun ? 0xffe9c8 : 0x9fb2ff).lerp(new THREE.Color(0xffb27a), useSun ? twi * 0.7 : 0);
-    // la nuit reste lisible : on voit ce qu'on bâtit au clair de lune
-    this.hemi.intensity = lerp(0.88, 0.72, day) * (1 + overcast * 0.25);
-    this.hemi.color.copy(top).lerp(new THREE.Color(0xffffff), 0.45);
-    this.hemi.groundColor.setHex(0xd9c6a8).lerp(new THREE.Color(0x7581a8), 1 - day);
+    this.sun.color.copy(useSun ? L.sun : MOON).lerp(LOW_SUN, useSun ? twi * 0.7 : 0);
+    // la nuit reste lisible : on voit ce qu'on bâtit au clair de lune. Le jour, la lumière du ciel teinte les ombres (bleutées
+    // l'hiver, chaudes l'automne) ; un peu moins forte l'été, pour des ombres plus marquées
+    this.hemi.intensity = lerp(0.88, 0.72 * L.ambientK, day) * (1 + overcast * 0.25);
+    this.hemi.color.copy(top).lerp(WHITE, 0.45).lerp(L.ambient, L.ambientMix * day);
+    this.hemi.groundColor.copy(L.ground).lerp(NIGHT_GROUND, 1 - day);
     this.sunMesh.position.copy(this.center).addScaledVector(dir, 400);
     this.moonMesh.position.copy(this.center).addScaledVector(dir, -400);
     this.sunMesh.visible = elev > -0.08 && overcast < 0.9;
@@ -263,8 +268,12 @@ export class Environment {
     // précipitations
     // de loin, la pluie et la neige (un volume carré autour du point visé) ne se dessinent plus : on y verrait le carré
     const near = camDist < 95, far = clamp((camDist - 60) / 35, 0, 1);
+    // l'hiver, par temps clair, quelques flocons flottent quand même dans l'air
+    const flurry = this.weatherKind === 'snow' ? 0 : s.fx.flurries * Math.min(1, s.snow * 2) * 0.6 * (1 - wk);
+    const flakes = Math.max(snowK, flurry);
     this.rain.visible = rainK > 0.01 && near;
-    this.snowPts.visible = snowK > 0.01 && near;
+    this.snowPts.visible = flakes > 0.01 && near;
+    this.snowPts.geometry.setDrawRange(0, snowK >= flurry ? snowCount : Math.floor(snowCount * 0.18));
     if (this.rain.visible) {
       (this.rain.material as THREE.LineBasicMaterial).opacity = 0.55 * rainK * (1 - far);
       const b = this.rainBase, p = this.rainPos;
@@ -278,7 +287,7 @@ export class Environment {
       (this.rain.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     }
     if (this.snowPts.visible) {
-      (this.snowPts.material as THREE.PointsMaterial).opacity = 0.9 * snowK * (1 - far);
+      (this.snowPts.material as THREE.PointsMaterial).opacity = 0.9 * flakes * (1 - far);
       const b = this.snowBase, p = this.snowPos, t = this.time;
       for (let i = 0; i < snowCount; i++) {
         b[i * 3 + 1] -= dt * 2.2;

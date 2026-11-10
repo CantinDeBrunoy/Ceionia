@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { World, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GameTime } from '../src/core/time';
-import { computeSeason, makeSeasonState } from '../src/render/season';
+import { computeSeason, makeSeasonState, seasonOf } from '../src/render/season';
+import { SEASONS } from '../src/render/seasonConfig';
 import { TerrainView } from '../src/render/terrainView';
 
 // les textures du sol se dessinent sur un canevas, absent hors du navigateur : une texture vide suffit ici
@@ -78,4 +79,65 @@ describe('saisons', () => {
     for (let i = 0; i < want.length; i++) worst = Math.max(worst, Math.abs(got[i] - want[i]));
     expect(worst).toBeLessThan(1e-5);
   }, 20000);
+});
+
+describe('fiches de saison (seasonConfig)', () => {
+  /** Toutes les palettes d'une fiche, avec leur chemin */
+  const palettes = (o: unknown, path = ''): [string, { colors: readonly string[]; share: readonly number[] }][] => {
+    if (!o || typeof o !== 'object') return [];
+    if ('colors' in o && 'share' in o) return [[path, o as { colors: readonly string[]; share: readonly number[] }]];
+    return Object.entries(o).flatMap(([k, v]) => palettes(v, path ? `${path}.${k}` : k));
+  };
+
+  it('chaque palette a quatre teintes valides et des parts qui font 1', () => {
+    for (const [i, def] of SEASONS.entries()) {
+      const list = palettes(def);
+      expect(list.length).toBeGreaterThanOrEqual(7);
+      for (const [path, p] of list) {
+        expect(p.colors.length, `${i} ${path}`).toBe(4);
+        for (const c of p.colors) expect(c, `${i} ${path}`).toMatch(/^#[0-9A-Fa-f]{6}$/);
+        expect(p.share.reduce((a, b) => a + b, 0), `${i} ${path}`).toBeCloseTo(1, 5);
+      }
+    }
+  });
+
+  it('une saison franche montre sa fiche telle quelle ; les teintes changent sans à-coup, même au tour de l’an', () => {
+    for (let i = 0; i < 4; i++) {
+      const s = seasonOf(i);
+      expect(s.index).toBe(i);
+      expect(s.terrain.grass.getHexString()).toBe(SEASONS[i].terrain.grass.slice(1).toLowerCase());
+      expect(s.trees.leafy.colors[2].getHexString()).toBe(SEASONS[i].trees.leafy.colors[2].slice(1).toLowerCase());
+    }
+    const time = new GameTime(), s = makeSeasonState();
+    const probe = () => [s.terrain.grass, s.trees.blossom.colors[0], s.trees.leafy.colors[3], s.water.shallow, s.light.sun, s.ground.shrub.colors[1]]
+      .flatMap((c) => [c.r, c.g, c.b]).concat(s.trees.leafy.share[0], s.water.flow, s.light.sunK, s.ground.flowerK / 2);
+    let last: number[] | null = null;
+    for (let i = 0; i <= 4000; i++) {
+      time.seasonT = (i % 4000) / 1000;
+      computeSeason(time, s);
+      const now = probe();
+      if (last) for (let k = 0; k < now.length; k++) expect(Math.abs(now[k] - last[k]), `réglage ${k} à ${time.seasonT}`).toBeLessThan(0.03);
+      last = now;
+    }
+  });
+
+  it('la glace ne prend que l’hiver, quand la neige tient, et fond avec elle', () => {
+    const time = new GameTime(), s = makeSeasonState();
+    for (let i = 0; i < 4000; i++) {
+      time.seasonT = i / 1000;
+      computeSeason(time, s);
+      if (time.season < 2) expect(s.iceNow).toBe(0);
+      if (time.season === 3 && time.frac > 0.2 && time.frac <= 0.5) expect(s.iceNow).toBeGreaterThan(0.9);
+      if (s.snow < 0.35) expect(s.iceNow).toBe(0);
+    }
+  });
+
+  it('les raccourcis d’origine pointent sur la fiche (herbe, feuillages, cultures, ciel)', () => {
+    const s = seasonOf(2);
+    expect(s.grass).toBe(s.terrain.grass);
+    expect(s.foliage).toBe(s.trees.blossom.colors[0]);
+    expect(s.foliage2).toBe(s.trees.leafy.colors[0]);
+    expect(s.crop).toBe(s.terrain.crop);
+    expect(s.tint).toBe(s.light.sky);
+  });
 });

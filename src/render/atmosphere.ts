@@ -194,7 +194,7 @@ void main(){
     const dawn = smoothstep(3.5, 6, h) * (1 - smoothstep(8.5, 11, h));
     const dusk = smoothstep(18.5, 22, h) * 0.45 + (h < 4 || h > 22 ? 0.3 : 0);
     // plus légère qu'avant : un voile au lever du jour, qui ne noie plus le village chaque matin
-    const seasonK = [0.6, 0.3, 0.8, 0.45][season];
+    const seasonK = s.light.mist;
     // et pas tous les jours : un matin, un soir sur trois environ (le tirage ne dépend que du jour, il ne clignote pas)
     const night = h < 4 ? time.days - 1 : time.days;
     const morningOn = mistDay(time.days * 2) < MIST_CHANCE ? 1 : 0, eveningOn = mistDay(night * 2 + 1) < MIST_CHANCE ? 1 : 0;
