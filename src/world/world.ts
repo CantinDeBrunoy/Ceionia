@@ -53,6 +53,8 @@ export interface Snapshot {
   veg: Uint8Array;
   /** biomes peints au pinceau (absent : ceux d'avant restent) */
   biomePaint?: Uint8Array;
+  /** cases défrichées à la gomme (absent : celles d'avant restent) */
+  cleared?: Uint8Array;
   buildings: Building[];
   nextId: number;
   /** stocks de bois et de pierre (un bâtiment annulé rend ce qu'il avait coûté) */
@@ -169,6 +171,16 @@ export class World {
   biomePaint = new Uint8Array(N * N);
   /** change à chaque coup de pinceau de biome (la neige des toits se refait) */
   biomeVersion = 0;
+  /**
+   * Cases défrichées à la gomme : le décor sauvage des prairies (arbres isolés, buissons, fougères, champignons, cailloux)
+   * n'est rangé nulle part, il se tire de la case (voir `VegView.meadow`) ; ici, il ne pousse plus. Sauvegardé
+   */
+  cleared = new Uint8Array(N * N);
+  /**
+   * Décors de la carte (grottes, failles, épaves) déjà posés, à la création ou au premier chargement d'une ancienne sauvegarde
+   * (voir `addDefaultDecor`) : ceux que le joueur efface ensuite ne reviennent plus. Sauvegardé
+   */
+  decorDone = false;
   private temp = new Float32Array(N * N);
   private wet = new Float32Array(N * N);
   private climateKey = '';
@@ -1260,6 +1272,21 @@ export class World {
     return true;
   }
 
+  /**
+   * La gomme sur une case : forêt, champ, jardin ou rochers s'effacent, et la case est défrichée (ni arbre isolé, ni
+   * buisson, ni caillou de la carte n'y repoussent). Vrai si quelque chose a changé
+   */
+  erase(cx: number, cz: number): boolean {
+    if (!this.inCells(cx, cz)) return false;
+    const k = this.ci(cx, cz);
+    const had = !!this.veg[k] && this.setVeg(cx, cz, 0);
+    if (this.occ[k] || this.road[k] || this.cleared[k]) return had;
+    this.cleared[k] = 1;
+    this.markVeg(cx, cz, cx, cz);
+    this.vegDirty = true;
+    return true;
+  }
+
   /** Après sculpture : supprime routes/végétation devenues invalides */
   /** Terrain compatible avec un type de végétation (pose stricte, ou maintien plus tolérant après sculpture) */
   vegFits(type: number, avg: number, slope: number, placing: boolean) {
@@ -1272,6 +1299,8 @@ export class World {
     // rien ne tient sur une paroi trop raide
     if (type === VEG_ROCKS) return avg >= (placing ? 0.12 : 0.08) && slope <= (placing ? 1 : 1.4);
     if (avg < (placing ? 0.2 : 0.1)) return false;
+    // pas d'arbre planté au-dessus de la limite des arbres (comme ceux de la carte)
+    if (type === VEG_FOREST && placing && avg > TREE_LINE) return false;
     return slope <= (type === VEG_FOREST ? (placing ? 1.4 : 1.8) : placing ? 0.6 : 0.9);
   }
 
@@ -1294,6 +1323,7 @@ export class World {
       road: this.road.slice(),
       veg: this.veg.slice(),
       biomePaint: this.biomePaint.slice(),
+      cleared: this.cleared.slice(),
       buildings: [...this.buildings.values()].map((b) => ({ ...b })),
       nextId: this.nextId,
       wood: this.wood,
@@ -1307,6 +1337,7 @@ export class World {
     this.road.set(s.road);
     this.veg.set(s.veg);
     if (s.biomePaint) { this.biomePaint.set(s.biomePaint); this.biomeVersion++; }
+    if (s.cleared) this.cleared.set(s.cleared);
     this.occ.fill(0);
     this.buildings.clear();
     for (const b0 of s.buildings) {
@@ -1336,6 +1367,8 @@ export class World {
     for (let i = 0; i < this.road.length; i++) if (this.road[i]) roads.push(i);
     const biomes: number[] = [];
     for (let i = 0; i < this.biomePaint.length; i++) if (this.biomePaint[i]) biomes.push(i, this.biomePaint[i]);
+    const cleared: number[] = [];
+    for (let i = 0; i < this.cleared.length; i++) if (this.cleared[i]) cleared.push(i);
     const order = new Map([...this.buildings.keys()].map((id, i) => [id, i]));
     return {
       n: N,
@@ -1344,6 +1377,9 @@ export class World {
       roads,
       veg,
       biomes,
+      cleared,
+      // décors de la carte (grottes, failles, épaves) déjà posés : ceux que le joueur efface ne reviennent pas au chargement
+      ...(this.decorDone ? { decor: 1 } : {}),
       buildings: [...this.buildings.values()].map((b) => (b.small ? [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age, 1] : [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age])),
       nextId: this.nextId,
       plaza3: PLAZA3,
@@ -1452,7 +1488,10 @@ export class World {
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     const biomePaint = new Uint8Array(N * N);
     for (let i = 0; i + 1 < (d.biomes ?? []).length; i += 2) if (d.biomes[i] >= 0 && d.biomes[i] < N * N && d.biomes[i + 1] >= 1 && d.biomes[i + 1] <= BIOME_NAMES.length) biomePaint[d.biomes[i]] = d.biomes[i + 1];
-    this.restore({ heights, road, veg, biomePaint, buildings, nextId: id });
+    const cleared = new Uint8Array(N * N);
+    for (const k of Array.isArray(d.cleared) ? d.cleared : []) if (k >= 0 && k < N * N) cleared[k] = 1;
+    this.decorDone = !!d.decor;
+    this.restore({ heights, road, veg, biomePaint, cleared, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.basalt.fill(0);
     const lava = d.basalt ?? [];

@@ -568,15 +568,13 @@ export class ToolController implements ToolInput {
         if (!w.inCells(cx, cz)) continue;
         if (Math.hypot(cx + 0.5 - hit.x, cz + 0.5 - hit.z) > r) continue;
         if (type === VEG_FOREST && hash2(cx, cz, (performance.now() / 150) | 0) > 0.7) continue;
+        // la gomme : plantations, et le décor sauvage de la carte (arbres isolés, buissons, cailloux), qui n'est pas dans veg
+        if (type === 0) { if (w.erase(cx, cz)) this.mark(); continue; }
         const k = w.ci(cx, cz);
-        if (type === 0 ? w.veg[k] !== 0 : w.veg[k] !== type) {
-          const prev = w.veg[k];
+        if (w.veg[k] !== type) {
           // ni champ, ni forêt, ni jardin, ni rochers dans l'eau : lac, torrent ou ruisseau qui passe par la case, rive mouillée
-          if (type !== 0 && (w.lake[k] || this.h.wetCell?.(k) || w.cellMin(cx, cz) < 0.05)) continue;
-          if (type === 0 || (!w.occ[k] && !w.road[k])) {
-            // simule pour savoir s'il y a changement
-            if (w.setVeg(cx, cz, type) || prev !== w.veg[k]) this.mark();
-          }
+          if (w.lake[k] || this.h.wetCell?.(k) || w.cellMin(cx, cz) < 0.05) continue;
+          if (!w.occ[k] && !w.road[k] && w.setVeg(cx, cz, type)) this.mark();
         }
       }
   }
@@ -796,7 +794,7 @@ export class ToolController implements ToolInput {
       // n'importe quelle case de l'emprise d'une grotte ou d'une faille la fait disparaître
       const e = w.entranceAt(c.x + 0.5, c.z + 0.5);
       if (e >= 0) { this.mark(); w.setVeg(e % N, Math.floor(e / N), 0); this.h.audio.sfxDestroy(); }
-    } else if (w.veg[k]) { this.mark(); w.setVeg(c.x, c.z, 0); }
+    } else if (w.erase(c.x, c.z)) this.mark();
   }
 
   /**
@@ -816,7 +814,11 @@ export class ToolController implements ToolInput {
           continue;
         }
         if (w.road[k]) { this.mark(); w.setRoad(cx, cz, false); any = true; }
-        else if (w.veg[k] && !w.decor[k]) { this.mark(); w.setVeg(cx, cz, 0); any = true; }
+        else if (!w.decor[k]) {
+          // plantations, et le décor sauvage de la carte (arbres isolés, buissons) : comme la gomme
+          const had = !!w.veg[k];
+          if (w.erase(cx, cz)) { this.mark(); if (had) any = true; }
+        }
       }
     if (any) this.h.audio.sfxDestroy();
     else if (big && performance.now() - this.lastToast > 1500) { this.h.toast(tr('Les grands bâtiments se démolissent un à un : un clic dessus (Ctrl+Z annule).')); this.lastToast = performance.now(); }
