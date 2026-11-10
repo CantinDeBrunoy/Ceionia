@@ -228,6 +228,13 @@ export class CameraRig {
   /** Incline la vue vers cet angle (on ne la relève jamais plus haut que ce qu'on a déjà : seulement si elle plonge davantage) */
   tiltTo(pitch: number) { if (this.goal.pitch > pitch) this.goal.pitch = clamp(pitch, this.minPitch, 1.5); }
 
+  /** Relève la vue vers l'horizon, pour voir le ciel (une aurore, des étoiles filantes) ; yaw : se tourner aussi vers ce cap */
+  lookUp(yaw?: number) {
+    if (yaw !== undefined) this.goal.yaw += Math.atan2(Math.sin(yaw - this.goal.yaw), Math.cos(yaw - this.goal.yaw));
+    this.goal.pitch = this.minPitch;
+    this.tracking = 0;
+  }
+
   /** Point visé par la vue d'ensemble (une partie neuve : là où poser la place du village), sinon le milieu de la carte */
   homeAt: [number, number] | null = null;
   /** Vue d'ensemble */
