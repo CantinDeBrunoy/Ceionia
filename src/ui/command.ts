@@ -172,6 +172,8 @@ export class CommandUI implements ToolInput {
     this.wall.reset();
     this.theater?.ghost?.(null);
     this.theater = t;
+    // hors des Enfers, `frame` n'est plus appelé : la cible du prochain bastion restait affichée à la surface
+    if (t?.kind !== 'hell') this.goalEl.classList.remove('show');
     this.touch();
     this.cmd.clear();
     this.cmd.groups = {};
