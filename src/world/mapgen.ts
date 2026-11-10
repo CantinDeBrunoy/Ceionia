@@ -56,7 +56,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   world.gen = gen;
   const plan = gen === GEN_FIXED ? null : continentPlan(seed, gen), v3 = gen >= GEN_VAR;
   const heights = genHeights(mapId, seed, gen);
-  world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), cleared: new Uint8Array(N * N), buildings: [], nextId: 1 });
+  world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), cleared: new Uint8Array(N * N), rift: new Uint8Array(N * N), buildings: [], nextId: 1 });
   world.oil.fill(0);
   world.decorDone = false;
   world.computeBiomes();
@@ -222,9 +222,13 @@ export function addDefaultDecor(world: World, seed: number) {
   world.computeBiomes();
   world.computeDecor();
   if (done) { addOilFields(world, seed); return; }
-  /** `prefer` : les cases qui le vérifient passent en premier (tirage au sort à l'intérieur de chaque groupe) */
+  /**
+   * `prefer` : les cases qui le vérifient passent en premier (tirage au sort à l'intérieur de chaque groupe) ; une faille est
+   * un ravin (ses cases dans `rift`), posé à la forme d'avant le pinceau
+   */
+  const fissure = (type: number) => type === VEG_FISSURE;
   const pick = (type: number, max: number, spacing: number, ok: (x: number, z: number) => boolean, prefer?: (x: number, z: number) => boolean) => {
-    if (world.veg.includes(type)) return;
+    if (fissure(type) ? world.rift.includes(1) : world.veg.includes(type)) return;
     const cand: number[] = [];
     for (let z = 1; z < N - 1; z++) for (let x = 1; x < N - 1; x++) if (ok(x, z)) cand.push(z * N + x);
     for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]]; }
@@ -237,7 +241,7 @@ export function addDefaultDecor(world: World, seed: number) {
       if (placed.length >= max) break;
       const x = k % N, z = Math.floor(k / N);
       if (placed.some((p) => Math.hypot((p % N) - x, Math.floor(p / N) - z) < spacing)) continue;
-      if (world.setVeg(x, z, type)) placed.push(k);
+      if (fissure(type) ? world.stampFissure(x, z) : world.setVeg(x, z, type)) placed.push(k);
     }
   };
   const free = (x: number, z: number) => !world.occ[world.ci(x, z)] && !world.road[world.ci(x, z)];

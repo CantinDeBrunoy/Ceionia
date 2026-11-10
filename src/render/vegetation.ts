@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
-  BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, FissureFrame, fissureAt, SNOW_LINE, LavaPool,
+  BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, SNOW_LINE, LavaPool,
 } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
@@ -1153,17 +1153,6 @@ export class VegView {
         const b = w.biome[k], snow = s ? Math.min(1, s.snow * snowy(b) * 1.1) : 0;
         const top = col.copy(CAVE_TOP[b]).lerp(SNOWC, snow);
         caveGeos.push(caveMoundGeo(w.caveFrame(cx, cz), at, CAVE_ROCK[b], top, Math.max(b === BIOME_DESERT ? 0.5 : 0.75, snow), hash2(cx, cz, 560)));
-      } else if (t === VEG_FISSURE) {
-        const f = w.fissureFrame(cx, cz), g = fissureGeo(f, at, CAVE_ROCK[w.biome[k]]);
-        crackGeos.push(g.body);
-        glowGeos.push(g.glow);
-        // spores lumineuses qui montent du fond
-        for (let i = 0; i < SPORES_PER_FISSURE && nSp < MAX_SPECIAL * SPORES_PER_FISSURE; i++) {
-          const u = (hash2(cx, cz, 570 + i) - 0.5) * f.len * 0.8, [off] = fissureAt(f, u);
-          const x = f.x + u * Math.cos(f.yaw) - off * Math.sin(f.yaw), z = f.z + u * Math.sin(f.yaw) + off * Math.cos(f.yaw);
-          this.sporePhase.setX(nSp, i / SPORES_PER_FISSURE + hash2(cx, cz, 590 + i) * 0.1);
-          this.spores.setMatrixAt(nSp++, this.at(x, at(x, z), z, 0, 0.7 + hash2(cx, cz, 580 + i) * 0.6));
-        }
       } else if (t === VEG_WRECK && nWr < MAX_SPECIAL) {
         // coque échouée, à moitié enfoncée ; le modèle est déjà brisé : il gîte à peine
         const px = cx + 0.5, pz = cz + 0.5;
@@ -1185,6 +1174,16 @@ export class VegView {
           this.smoke.setColorAt(nSm++, col.setScalar(0.85 + hash2(cx, cz, 550 + i) * 0.2));
         }
       }
+    }
+    // les ravins creusés au pinceau : lueur au fond, le long de leur axe, éboulis, blocs sur les rebords, filons dans les parois
+    if (w.rift.includes(1)) {
+      const g = riftGeo(w, at, (k) => CAVE_ROCK[w.biome[k]], (x, z, phase, sc) => {
+        if (nSp >= MAX_SPECIAL * SPORES_PER_FISSURE) return;
+        this.sporePhase.setX(nSp, phase);
+        this.spores.setMatrixAt(nSp++, this.at(x, at(x, z), z, 0, sc));
+      });
+      crackGeos.push(g.body);
+      glowGeos.push(g.glow);
     }
     const set = (m: THREE.InstancedMesh, n: number) => {
       m.count = n;
@@ -1415,33 +1414,34 @@ function caveMoundGeo(f: { x: number; y: number; z: number; yaw: number }, at: (
 }
 
 /**
- * Décor d'un ravin (World creuse le relief) : éboulis au fond, blocs sur les rebords, filons de minerai dans les parois ;
- * une lueur violette (le monde souterrain) court au fond
+ * Décor des ravins creusés au pinceau (World creuse le relief, voir `World.rift`) : une lueur violette court au fond, le long
+ * de l'axe de chaque ravin (les cases les plus éloignées de ses bords) ; éboulis au fond, blocs sur les rebords, filons de
+ * minerai dans les parois ; `spore` pose les spores lumineuses qui montent du fond
  */
-function fissureGeo(f: FissureFrame, at: (x: number, z: number) => number, rock: THREE.Color) {
-  const c = Math.cos(f.yaw), s = Math.sin(f.yaw), NS = 40, seed = Math.round(f.phase * 100);
-  const toW = (u: number, v: number): [number, number] => [f.x + u * c - v * s, f.z + u * s + v * c];
-  const tmp = new THREE.Color();
-  // lueur : bande étroite au fond, plus vive au milieu du ravin
+function riftGeo(w: World, at: (x: number, z: number) => number, rockOf: (k: number) => THREE.Color, spore: (x: number, z: number, phase: number, sc: number) => void) {
+  const tmp = new THREE.Color(), GLOW = new THREE.Color(0.5, 0.26, 1).multiplyScalar(0.7), DARK = new THREE.Color(0, 0, 0);
+  const inner = new Map<number, number>(), rift = w.rift;
+  const innerAt = (k: number) => { let v = inner.get(k); if (v === undefined) { v = w.riftInner((k % N) + 0.5, Math.floor(k / N) + 0.5); inner.set(k, v); } return v; };
+  const isRift = (x: number, z: number) => w.inCells(x, z) && rift[z * N + x] === 1;
+  // l'axe : une case de ravin aussi loin de ses bords que ses voisines
+  const axis = (x: number, z: number) => {
+    if (!isRift(x, z)) return false;
+    const v = innerAt(z * N + x);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if ((dx || dz) && isRift(x + dx, z + dz) && innerAt((z + dz) * N + x + dx) > v + 1e-3) return false;
+    return true;
+  };
   const gpos: number[] = [], gcol: number[] = [];
-  const rows: [number, number, number, THREE.Color][][] = [];
-  for (let r = 0; r <= NS; r++) {
-    const u = -f.len / 2 + (r / NS) * f.len, [off, hw] = fissureAt(f, u), t = Math.abs(u) / (f.len / 2);
-    rows.push([-1, 0, 1].map((j) => {
-      const [x, z] = toW(u, off + j * hw * 0.3);
-      return [x, at(x, z) + 0.03, z, j === 0 ? new THREE.Color(0.5, 0.26, 1).multiplyScalar(0.7 * (1 - t * t)) : new THREE.Color(0, 0, 0)] as [number, number, number, THREE.Color];
-    }));
-  }
-  const push = (v: [number, number, number, THREE.Color]) => { gpos.push(v[0], v[1], v[2]); gcol.push(v[3].r, v[3].g, v[3].b); };
-  for (let r = 0; r < NS; r++)
+  const pushV = (x: number, z: number, c: THREE.Color) => { gpos.push(x, at(x, z) + 0.03, z); gcol.push(c.r, c.g, c.b); };
+  /** un trait de lueur d'un centre de case à l'autre : cœur violet, bords noirs (fondus, en mode additif) */
+  const stroke = (ax: number, az: number, bx: number, bz: number) => {
+    const l = Math.hypot(bx - ax, bz - az) || 1, nx = (-(bz - az) / l) * 0.2, nz = ((bx - ax) / l) * 0.2;
+    const row = (x: number, z: number) => [[x + nx, z + nz, DARK], [x, z, GLOW], [x - nx, z - nz, DARK]] as [number, number, THREE.Color][];
+    const A = row(ax, az), B = row(bx, bz);
     for (let j = 0; j < 2; j++) {
-      // u (rangées) × v (colonnes) pointe vers le bas : on tourne dans l'autre sens pour faire face au ciel
-      const A = rows[r][j], B = rows[r][j + 1], D = rows[r + 1][j], E = rows[r + 1][j + 1];
-      push(A); push(B); push(D); push(B); push(E); push(D);
+      const a0 = A[j], a1 = A[j + 1], b0 = B[j], b1 = B[j + 1];
+      for (const v of [a0, b0, a1, a1, b0, b1]) pushV(v[0], v[1], v[2]);
     }
-  const glow = new THREE.BufferGeometry();
-  glow.setAttribute('position', new THREE.Float32BufferAttribute(gpos, 3));
-  glow.setAttribute('color', new THREE.Float32BufferAttribute(gcol, 3));
+  };
   const parts: THREE.BufferGeometry[] = [];
   const add = (g: THREE.BufferGeometry, x: number, y: number, z: number, col: THREE.Color) => {
     g.deleteAttribute('uv');
@@ -1451,30 +1451,43 @@ function fissureGeo(f: FissureFrame, at: (x: number, z: number) => number, rock:
     g.setAttribute('color', new THREE.BufferAttribute(cc, 3));
     parts.push(g.index ? g.toNonIndexed() : g);
   };
-  const steps = Math.round(f.len / 0.5);
-  for (let i = 0; i < steps; i++) {
-    const u = -f.len / 2 + ((i + 0.5) / steps) * f.len, [off, hw] = fissureAt(f, u), h = (k: number) => hash2(i, k, seed);
-    if (hw < 0.15) continue;
+  for (let k = 0; k < N * N; k++) {
+    if (!rift[k]) continue;
+    const cx = k % N, cz = Math.floor(k / N), px = cx + 0.5, pz = cz + 0.5, h = (s: number) => hash2(cx, cz, 570 + s), rock = rockOf(k);
+    if (axis(cx, cz)) {
+      // traits vers les voisines de l'axe (en biais seulement si aucune voisine droite ne fait le lien)
+      let linked = false;
+      for (const [dx, dz] of [[1, 0], [0, 1]]) if (axis(cx + dx, cz + dz)) { stroke(px, pz, px + dx, pz + dz); linked = true; }
+      for (const [dx, dz] of [[1, 1], [-1, 1]]) if (axis(cx + dx, cz + dz) && !axis(cx + dx, cz) && !axis(cx, cz + dz)) { stroke(px, pz, px + dx, pz + dz); linked = true; }
+      if (!linked && !axis(cx - 1, cz) && !axis(cx, cz - 1) && !axis(cx - 1, cz - 1) && !axis(cx + 1, cz - 1)) stroke(px - 0.3, pz, px + 0.3, pz);
+      if (h(1) < 0.35) spore(px + (h(2) - 0.5) * 0.6, pz + (h(3) - 0.5) * 0.6, h(4), 0.7 + h(5) * 0.6);
+    }
     // éboulis au fond
-    if (h(1) < 0.6) {
-      const r = 0.05 + h(2) * 0.08, [x, z] = toW(u, off + (h(3) - 0.5) * hw * 0.5);
-      add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1).rotateY(h(4) * 6.28), x, at(x, z) + r * 0.2, z, tmp.copy(rock).multiplyScalar(0.55 + h(5) * 0.2));
+    if (h(6) < 0.5) {
+      const r = 0.05 + h(7) * 0.08, x = px + (h(8) - 0.5) * 0.5, z = pz + (h(9) - 0.5) * 0.5;
+      add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1).rotateY(h(10) * 6.28), x, at(x, z) + r * 0.2, z, tmp.copy(rock).multiplyScalar(0.55 + h(11) * 0.2));
     }
-    // blocs sur les rebords
-    if (h(6) < 0.45) {
-      const side = h(7) < 0.5 ? -1 : 1, r = 0.05 + h(8) * 0.07, [x, z] = toW(u, off + side * (hw + 0.2 + h(9) * 0.15));
-      add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1).rotateY(h(10) * 6.28), x, at(x, z) + r * 0.2, z, tmp.copy(rock).multiplyScalar(0.8 + h(11) * 0.2));
-    }
-    // filons dans les parois, façon Minecraft : charbon, fer, or, diamant
-    if (h(12) < 0.3) {
-      const side = h(13) < 0.5 ? -1 : 1, ore = RAVINE_ORES[Math.floor(h(14) * RAVINE_ORES.length)];
-      for (let q = 0; q < 3; q++) {
-        const [x, z] = toW(u + (hash2(i, q, seed + 1) - 0.5) * 0.3, off + side * hw * (0.68 + hash2(i, q, seed + 2) * 0.12));
-        const e = 0.05 + hash2(i, q, seed + 3) * 0.03;
-        add(new THREE.BoxGeometry(e, e, e).rotateX(hash2(i, q, seed + 4) * 3).rotateY(hash2(i, q, seed + 5) * 3), x, at(x, z), z, ore);
+    // au bord du ravin : des blocs sur le rebord, des filons dans la paroi (façon Minecraft : charbon, fer, or, diamant)
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (isRift(cx + dx, cz + dz)) continue;
+      const s = 20 + (dx + 1) * 3 + (dz + 1);
+      if (h(s) < 0.3) {
+        const r = 0.05 + h(s + 1) * 0.07, x = px + dx * (0.62 + h(s + 2) * 0.15) + dz * (h(s + 3) - 0.5) * 0.6, z = pz + dz * (0.62 + h(s + 2) * 0.15) + dx * (h(s + 3) - 0.5) * 0.6;
+        add(new THREE.IcosahedronGeometry(r, 0).scale(1, 0.7, 1).rotateY(h(s + 4) * 6.28), x, at(x, z) + r * 0.2, z, tmp.copy(rock).multiplyScalar(0.8 + h(s + 5) * 0.2));
+      }
+      if (h(s + 6) < 0.22) {
+        const ore = RAVINE_ORES[Math.floor(h(s + 7) * RAVINE_ORES.length)];
+        for (let q = 0; q < 3; q++) {
+          const e = 0.05 + hash2(cx, cz, 640 + s * 3 + q) * 0.03, sp = (hash2(cx, cz, 660 + s * 3 + q) - 0.5) * 0.5;
+          const x = px + dx * 0.4 + dz * sp, z = pz + dz * 0.4 + dx * sp;
+          add(new THREE.BoxGeometry(e, e, e).rotateX(h(s + 8 + q) * 3).rotateY(h(s + 11 + q) * 3), x, at(x, z), z, ore);
+        }
       }
     }
   }
+  const glow = new THREE.BufferGeometry();
+  glow.setAttribute('position', new THREE.Float32BufferAttribute(gpos, 3));
+  glow.setAttribute('color', new THREE.Float32BufferAttribute(gcol, 3));
   return { body: parts.length ? mergeGeometries(parts, false)! : new THREE.BufferGeometry(), glow };
 }
 

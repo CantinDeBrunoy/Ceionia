@@ -55,6 +55,8 @@ export interface Snapshot {
   biomePaint?: Uint8Array;
   /** cases défrichées à la gomme (absent : celles d'avant restent) */
   cleared?: Uint8Array;
+  /** cases des ravins creusés au pinceau Faille (absent : celles d'avant restent) */
+  rift?: Uint8Array;
   buildings: Building[];
   nextId: number;
   /** stocks de bois et de pierre (un bâtiment annulé rend ce qu'il avait coûté) */
@@ -95,7 +97,8 @@ export interface WorldListener {
 
 /**
  * Vegetation: 0 rien, 1 forêt, 2 champ, 3 jardin ; décors sans effet sur la simulation : 4 rocaille, 5 entrée de grotte,
- * 6 épave, 7 cratère de volcan, 8 faille (grottes et failles : le moteur du monde souterrain y voit ses entrées)
+ * 6 épave, 7 cratère de volcan, 8 faille d'un clic (anciennes parties seulement : convertie en ravin au chargement, voir
+ * `World.rift` ; les failles se creusent désormais au pinceau). Grottes et failles : les entrées du monde souterrain
  */
 export const VEG_FOREST = 1, VEG_FIELD = 2, VEG_GARDEN = 3, VEG_ROCKS = 4, VEG_CAVE = 5, VEG_WRECK = 6, VEG_VOLCANO = 7, VEG_FISSURE = 8;
 /** Rayon de l'emprise d'une grotte (butte rocheuse autour de l'ouverture) */
@@ -130,6 +133,13 @@ export function fissureAt(f: FissureFrame, u: number): [number, number] {
 }
 
 const smooth01 = (a: number, b: number, v: number) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+/** Bruit doux (0 … 1) tiré des cases : valeurs interpolées entre les nœuds entiers */
+function valueNoise(x: number, z: number) {
+  const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz, sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+  const a = hashCell(ix, iz), b = hashCell(ix + 1, iz), c = hashCell(ix, iz + 1), d = hashCell(ix + 1, iz + 1);
+  return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz;
+}
 
 /** Biomes, déduits du climat (température, humidité) et du relief : ils choisissent les essences, le sol et la faune */
 export const BIOME_TEMPERATE = 0, BIOME_TAIGA = 1, BIOME_DESERT = 2, BIOME_TROPICAL = 3, BIOME_MARSH = 4;
@@ -204,6 +214,12 @@ export class World {
   lifeCells = new Set<number>();
   /** Cases couvertes par une grotte ou une faille (on n'y bâtit pas, la végétation s'en écarte) */
   decor = new Uint8Array(N * N);
+  /**
+   * Failles : les cases des ravins, creusés au pinceau en glissant (1 sur chaque case). Le relief de jeu ne change pas : le
+   * ravin se creuse dans le relief affiché (`carveRavines`), et ses cases sont un décor (ni bâtiment, ni route, ni arbre).
+   * Sauvegardé ; les failles d'un clic des anciennes parties (`VEG_FISSURE` sur une case) y sont converties au chargement
+   */
+  rift = new Uint8Array(N * N);
   /** Torches posées dans le monde souterrain (cases) */
   torches = new Set<number>();
   /** Par sous-sommet du relief affiché : creusement des ravins (0 hors d'une faille … 1 au fond) */
@@ -547,10 +563,11 @@ export class World {
     return true;
   }
 
-  /** Entrée du souterrain (grotte ou faille) dont l'emprise couvre le point : sa case, ou -1 */
+  /** Entrée du souterrain (grotte ou faille) dont l'emprise couvre le point : sa case (pour un ravin, celle du point), ou -1 */
   entranceAt(x: number, z: number) {
     const cx = Math.floor(x), cz = Math.floor(z);
     if (!this.inCells(cx, cz) || !this.decor[cz * N + cx]) return -1;
+    if (this.rift[cz * N + cx]) return cz * N + cx;
     let best = -1, bd = Infinity;
     for (let dz = -7; dz <= 7; dz++)
       for (let dx = -7; dx <= 7; dx++) {
@@ -584,14 +601,146 @@ export class World {
     return best;
   }
 
-  /** Recalcule l'emprise des grottes et des failles */
+  /** Recalcule l'emprise des grottes et des failles (les cases des ravins, et celle d'une faille d'un clic pas encore convertie) */
   computeDecor() {
     this.decor.fill(0);
     for (let k = 0; k < N * N; k++) {
+      if (this.rift[k]) this.decor[k] = VEG_FISSURE;
       const t = this.veg[k];
       if (t !== VEG_CAVE && t !== VEG_FISSURE) continue;
       for (const c of this.decorCells(k % N, Math.floor(k / N), t)) if (c >= 0 && c < N * N) this.decor[c] = t;
     }
+  }
+
+  // ---------- Failles (ravins creusés au pinceau) ----------
+
+  /** Une case peut-elle devenir un ravin ? Terre ferme, loin du bord, sans bâtiment, route, lac, grotte ni autre décor unique */
+  riftFits(cx: number, cz: number) {
+    if (cx < 1 || cz < 1 || cx > N - 2 || cz > N - 2) return false;
+    const k = this.ci(cx, cz);
+    if (this.occ[k] || this.road[k] || this.lake[k] || this.veg[k] >= VEG_CAVE || (this.decor[k] && !this.rift[k])) return false;
+    return this.cellAvg(cx, cz) >= 0.15;
+  }
+
+  /** Creuse la case en ravin (sa végétation disparaît) ; vrai si elle ne l'était pas encore */
+  digRift(cx: number, cz: number): boolean {
+    if (!this.riftFits(cx, cz) || this.rift[this.ci(cx, cz)]) return false;
+    const k = this.ci(cx, cz);
+    this.rift[k] = 1;
+    this.decor[k] = VEG_FISSURE;
+    this.veg[k] = 0;
+    this.riftChanged(cx, cz, cx, cz);
+    return true;
+  }
+
+  /** Comble une case de ravin ; vrai si elle en était une */
+  fillRift(cx: number, cz: number): boolean {
+    if (!this.inCells(cx, cz) || !this.rift[this.ci(cx, cz)]) return false;
+    const k = this.ci(cx, cz);
+    this.rift[k] = 0;
+    // (une case de ravin n'est jamais dans l'emprise d'une grotte : `riftFits`)
+    this.decor[k] = 0;
+    this.riftChanged(cx, cz, cx, cz);
+    return true;
+  }
+
+  /** Le ravin a changé dans la zone : son creux (calculé jusqu'à trois cases de ses bords) et la végétation se refont */
+  private riftChanged(x0: number, z0: number, x1: number, z1: number) {
+    this.markTerrain(x0 - 3, z0 - 3, x1 + 3, z1 + 3);
+    this.markVeg(x0 - 2, z0 - 2, x1 + 2, z1 + 2);
+    this.vegDirty = true;
+    this.version++;
+  }
+
+  /**
+   * Pinceau Faille : creuse en ravin les cases dont le centre est à moins de `hw` du segment A → B (le trajet du pointeur
+   * entre deux images : pas de trou dans le ravin quand on glisse vite) ; `ok` écarte d'autres cases (les torrents). Nombre de
+   * cases creusées
+   */
+  digRiftAlong(ax: number, az: number, bx: number, bz: number, hw: number, ok?: (k: number) => boolean): number {
+    const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
+    let n = 0;
+    for (let cz = Math.floor(Math.min(az, bz) - hw); cz <= Math.ceil(Math.max(az, bz) + hw); cz++)
+      for (let cx = Math.floor(Math.min(ax, bx) - hw); cx <= Math.ceil(Math.max(ax, bx) + hw); cx++) {
+        const px = cx + 0.5, pz = cz + 0.5, t = l2 > 1e-9 ? Math.min(1, Math.max(0, ((px - ax) * dx + (pz - az) * dz) / l2)) : 0;
+        if (Math.hypot(px - ax - dx * t, pz - az - dz * t) > hw || !this.inCells(cx, cz)) continue;
+        if (ok && !ok(this.ci(cx, cz))) continue;
+        if (this.digRift(cx, cz)) n++;
+      }
+    return n;
+  }
+
+  /** Ravins : les groupes de cases de ravin qui se touchent (même par un coin) */
+  riftGroups(): number[][] {
+    const seen = new Uint8Array(N * N), out: number[][] = [];
+    for (let k0 = 0; k0 < N * N; k0++) {
+      if (!this.rift[k0] || seen[k0]) continue;
+      const group = [k0];
+      seen[k0] = 1;
+      for (let i = 0; i < group.length; i++) {
+        const k = group[i], x = k % N, z = Math.floor(k / N);
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+          const j = (z + dz) * N + x + dx;
+          if (this.inCells(x + dx, z + dz) && this.rift[j] && !seen[j]) { seen[j] = 1; group.push(j); }
+        }
+      }
+      out.push(group);
+    }
+    return out;
+  }
+
+  /** Le milieu d'un ravin (voir `riftGroups`) : sa case la plus proche du centre de ses cases */
+  riftMid(g: number[]): number {
+    let sx = 0, sz = 0;
+    for (const k of g) { sx += k % N; sz += Math.floor(k / N); }
+    sx /= g.length; sz /= g.length;
+    return g.reduce((b, k) => (Math.hypot((k % N) - sx, Math.floor(k / N) - sz) < Math.hypot((b % N) - sx, Math.floor(b / N) - sz) ? k : b));
+  }
+
+  /** L'entrée de chaque ravin (le monde souterrain, les tanières d'ours) : son milieu */
+  riftEntrances(): number[] { return this.riftGroups().map((g) => this.riftMid(g)); }
+
+  /** Comble tout le ravin dont la case fait partie (Démolir d'un clic) ; nombre de cases comblées */
+  fillRiftGroup(k: number): number {
+    const g = this.riftGroups().find((q) => q.includes(k));
+    if (!g) return 0;
+    for (const c of g) this.fillRift(c % N, Math.floor(c / N));
+    return g.length;
+  }
+
+  /**
+   * Une faille de la forme d'avant le pinceau (sillon sinueux tiré de la case, voir `fissureFrame`) posée en (cx, cz) :
+   * l'emprise qu'elle avait devient un ravin. Sert aux failles de la carte et à convertir celles des anciennes parties ; false
+   * si elle ne tient pas (mêmes règles que la faille d'un clic : sol assez plat, emprise libre)
+   */
+  stampFissure(cx: number, cz: number): boolean {
+    if (!this.inCells(cx, cz)) return false;
+    const k = this.ci(cx, cz);
+    if (this.occ[k] || this.road[k] || this.rift[k] || !this.vegFits(VEG_FISSURE, this.cellAvg(cx, cz), this.cellSlope(cx, cz), true) || !this.decorFits(cx, cz, VEG_FISSURE)) return false;
+    for (const c of this.decorCells(cx, cz, VEG_FISSURE)) { this.rift[c] = 1; this.decor[c] = VEG_FISSURE; }
+    // (la case du milieu portait la faille : comme avant, sa végétation disparaît ; celle de l'emprise reste, cachée)
+    this.veg[k] = 0;
+    this.riftChanged(cx - 7, cz - 7, cx + 7, cz + 7);
+    return true;
+  }
+
+  /**
+   * Profondeur dans le ravin du point (x, z) : sa distance (en cases, jusqu'à 3) à la plus proche case qui n'est pas un ravin ;
+   * 0 hors d'un ravin et sur ses bords
+   */
+  riftInner(x: number, z: number): number {
+    const cx = Math.floor(x), cz = Math.floor(z);
+    // le point doit être à l'intérieur : toutes les cases qui le touchent (un sommet touche quatre cases) sont du ravin
+    const xs = x === cx ? [cx - 1, cx] : [cx], zs = z === cz ? [cz - 1, cz] : [cz];
+    for (const qz of zs) for (const qx of xs) if (!this.inCells(qx, qz) || !this.rift[qz * N + qx]) return 0;
+    let d = 3;
+    for (let qz = cz - 3; qz <= cz + 3; qz++)
+      for (let qx = cx - 3; qx <= cx + 3; qx++) {
+        if (this.inCells(qx, qz) && this.rift[qz * N + qx]) continue;
+        const ex = Math.max(qx - x, 0, x - qx - 1), ez = Math.max(qz - z, 0, z - qz - 1);
+        d = Math.min(d, Math.hypot(ex, ez));
+      }
+    return d;
   }
 
   /** Hauteur brute de la grille de jeu (mêmes triangles que hAt) : utilisable avant le calcul du relief affiché */
@@ -696,30 +845,24 @@ export class World {
   }
 
   /**
-   * Failles : ravins façon Minecraft creusés dans le relief affiché, après le lissage pour garder des parois presque verticales ;
-   * le sol de jeu (cases) ne change pas, le fond peut descendre sous le niveau de la mer sans se remplir d'eau
+   * Failles : ravins façon Minecraft creusés dans le relief affiché, après le lissage pour garder des parois presque verticales.
+   * Chaque sous-sommet au cœur d'un ravin descend selon sa distance au bord (`riftInner`) : la paroi tombe sur un peu plus
+   * d'une demi-case, le fond est à pleine profondeur (2,4 à 3,8, qui ondule le long du ravin). Le sol de jeu (cases) ne change
+   * pas ; le fond peut descendre sous le niveau de la mer sans se remplir d'eau
    */
   private carveRavines(wx0: number, wz0: number, wx1: number, wz1: number) {
     const vis = this.vis, rv = this.ravine;
     for (let z = wz0; z <= wz1; z++) rv.fill(0, z * VS + wx0, z * VS + wx1 + 1);
-    for (let k = 0; k < N * N; k++) {
-      if (this.veg[k] !== VEG_FISSURE) continue;
-      const f = this.fissureFrame(k % N, Math.floor(k / N)), c = Math.cos(f.yaw), s = Math.sin(f.yaw), R = f.len / 2 + 1.5;
-      for (let z = Math.max(wz0, Math.floor((f.z - R) * VR)); z <= Math.min(wz1, Math.ceil((f.z + R) * VR)); z++)
-        for (let x = Math.max(wx0, Math.floor((f.x - R) * VR)); x <= Math.min(wx1, Math.ceil((f.x + R) * VR)); x++) {
-          const dx = x / VR - f.x, dz = z / VR - f.z, u = dx * c + dz * s, v = -dx * s + dz * c;
-          if (Math.abs(u) > f.len / 2) continue;
-          const [off, hw] = fissureAt(f, u);
-          // pleine profondeur au cœur, bord franc ; le ravin remonte vers ses extrémités
-          const wgt = 1 - smooth01(hw * 0.35, hw + 0.4, Math.abs(v - off));
-          if (wgt <= 0) continue;
-          const t = Math.abs(u) / (f.len / 2), d = wgt * Math.min(1, (1 - t * t) * 1.8);
-          const i = z * VS + x;
-          if (d <= rv[i] || this.visPin[i]) continue;
-          vis[i] -= f.depth * (d - rv[i]);
-          rv[i] = d;
-        }
-    }
+    if (!this.rift.includes(1)) return;
+    for (let z = wz0; z <= wz1; z++)
+      for (let x = wx0; x <= wx1; x++) {
+        const px = x / VR, pz = z / VR, i = z * VS + x;
+        if (!this.rift[Math.min(N - 1, Math.floor(pz)) * N + Math.min(N - 1, Math.floor(px))] || this.visPin[i]) continue;
+        const d = smooth01(0, 0.6, this.riftInner(px, pz));
+        if (d <= 0) continue;
+        vis[i] -= (2.4 + 1.4 * valueNoise(px * 0.3, pz * 0.3)) * d;
+        rv[i] = d;
+      }
   }
 
   isWaterCell(cx: number, cz: number) { return this.cellAvg(cx, cz) < 0.08; }
@@ -1313,11 +1456,13 @@ export class World {
 
   /**
    * La gomme sur une case : forêt, champ, jardin ou rochers s'effacent, et la case est défrichée (ni arbre isolé, ni
-   * buisson, ni caillou de la carte n'y repoussent). Vrai si quelque chose a changé
+   * buisson, ni caillou de la carte n'y repoussent) ; un ravin se comble. Vrai si quelque chose a changé
    */
   erase(cx: number, cz: number): boolean {
     if (!this.inCells(cx, cz)) return false;
     const k = this.ci(cx, cz);
+    // un ravin se comble
+    if (this.rift[k]) return this.fillRift(cx, cz);
     const had = !!this.veg[k] && this.setVeg(cx, cz, 0);
     if (this.occ[k] || this.road[k] || this.cleared[k]) return had;
     this.cleared[k] = 1;
@@ -1350,6 +1495,8 @@ export class World {
       for (let cx = Math.max(0, x0); cx <= Math.min(N - 1, x1); cx++) {
         const k = this.ci(cx, cz);
         if (this.veg[k] && !this.vegFits(this.veg[k], this.cellAvg(cx, cz), this.cellSlope(cx, cz), false)) { this.veg[k] = 0; this.vegDirty = true; }
+        // un ravin noyé (creusé sous l'eau avec l'outil Eau) disparaît
+        if (this.rift[k] && this.cellAvg(cx, cz) < 0.1) { this.rift[k] = 0; this.decor[k] = 0; this.vegDirty = true; }
         if (this.road[k] && !this.canRoad(cx, cz)) { this.road[k] = 0; this.roadsDirty = true; }
       }
     this.version++;
@@ -1363,6 +1510,7 @@ export class World {
       veg: this.veg.slice(),
       biomePaint: this.biomePaint.slice(),
       cleared: this.cleared.slice(),
+      rift: this.rift.slice(),
       buildings: [...this.buildings.values()].map((b) => ({ ...b })),
       nextId: this.nextId,
       wood: this.wood,
@@ -1377,6 +1525,7 @@ export class World {
     this.veg.set(s.veg);
     if (s.biomePaint) { this.biomePaint.set(s.biomePaint); this.biomeVersion++; }
     if (s.cleared) this.cleared.set(s.cleared);
+    if (s.rift) this.rift.set(s.rift);
     this.occ.fill(0);
     this.buildings.clear();
     for (const b0 of s.buildings) {
@@ -1406,8 +1555,9 @@ export class World {
     for (let i = 0; i < this.road.length; i++) if (this.road[i]) roads.push(i);
     const biomes: number[] = [];
     for (let i = 0; i < this.biomePaint.length; i++) if (this.biomePaint[i]) biomes.push(i, this.biomePaint[i]);
-    const cleared: number[] = [];
+    const cleared: number[] = [], rift: number[] = [];
     for (let i = 0; i < this.cleared.length; i++) if (this.cleared[i]) cleared.push(i);
+    for (let i = 0; i < this.rift.length; i++) if (this.rift[i]) rift.push(i);
     const order = new Map([...this.buildings.keys()].map((id, i) => [id, i]));
     return {
       n: N,
@@ -1417,6 +1567,7 @@ export class World {
       veg,
       biomes,
       cleared,
+      rift,
       // décors de la carte (grottes, failles, épaves) déjà posés : ceux que le joueur efface ne reviennent pas au chargement
       ...(this.decorDone ? { decor: 1 } : {}),
       buildings: [...this.buildings.values()].map((b) => (b.small ? [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age, 1] : [b.kind, b.x, b.z, b.rot, b.auto ? 1 : 0, b.age])),
@@ -1527,10 +1678,18 @@ export class World {
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     const biomePaint = new Uint8Array(N * N);
     for (let i = 0; i + 1 < (d.biomes ?? []).length; i += 2) if (d.biomes[i] >= 0 && d.biomes[i] < N * N && d.biomes[i + 1] >= 1 && d.biomes[i + 1] <= BIOME_NAMES.length) biomePaint[d.biomes[i]] = d.biomes[i + 1];
-    const cleared = new Uint8Array(N * N);
+    const cleared = new Uint8Array(N * N), rift = new Uint8Array(N * N);
     for (const k of Array.isArray(d.cleared) ? d.cleared : []) if (k >= 0 && k < N * N) cleared[k] = 1;
+    for (const k of Array.isArray(d.rift) ? d.rift : []) if (k >= 0 && k < N * N) rift[k] = 1;
+    // les failles d'un clic des anciennes parties (une case, forme tirée de la case) : leur emprise devient un ravin, à la
+    // même place et de la même taille (rien n'y était bâti) ; la case perd sa marque
+    for (let k = 0; k < N * N; k++) {
+      if (veg[k] !== VEG_FISSURE) continue;
+      for (const c of this.decorCells(k % N, Math.floor(k / N), VEG_FISSURE)) if (c >= 0 && c < N * N) rift[c] = 1;
+      veg[k] = 0;
+    }
     this.decorDone = !!d.decor;
-    this.restore({ heights, road, veg, biomePaint, cleared, buildings, nextId: id });
+    this.restore({ heights, road, veg, biomePaint, cleared, rift, buildings, nextId: id });
     this.torches = new Set((d.torches ?? []).filter((k: number) => k >= 0 && k < N * N));
     this.basalt.fill(0);
     const lava = d.basalt ?? [];

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
-import { World, N, setMapSize, VEG_FOREST, VEG_CAVE, VEG_VOLCANO, TREE_LINE } from '../src/world/world';
+import { World, N, setMapSize, VEG_FOREST, VEG_CAVE, VEG_VOLCANO, VEG_FISSURE, TREE_LINE, MAX_H } from '../src/world/world';
 import { newWorld, addDefaultDecor } from '../src/world/mapgen';
 import { loneTreeAt } from '../src/render/vegetation';
 import { sculpt, CLIFF_STEP, raiseVolcano, removeVolcano } from '../src/world/terraform';
@@ -185,6 +185,71 @@ describe('volcan sculpté', () => {
     expect(w.setVeg(x, z, VEG_FOREST)).toBe(false);
     expect(w.veg[cell]).toBe(VEG_VOLCANO);
     expect(w.canPlace('house', x, z)).toBe('Le cratère d’un volcan est ici');
+  });
+});
+
+describe('faille au pinceau', () => {
+  beforeAll(() => setMapSize(192));
+
+  it('en glissant, un ravin se creuse le long du tracé ; c’est une entrée, on n’y bâtit pas, la gomme le comble', () => {
+    const w = monde(), [x, z] = replat(w), y0 = w.hAt(x + 0.5, z + 0.5);
+    const n = w.digRiftAlong(x - 4.5, z + 0.5, x + 5.5, z + 0.5, 1.5);
+    // une bande de trois cases de large sur dix de long
+    expect(n).toBeGreaterThanOrEqual(30);
+    for (let dx = -4; dx <= 5; dx++) for (const dz of [-1, 0, 1]) expect(w.rift[w.ci(x + dx, z + dz)]).toBe(1);
+    expect(w.rift[w.ci(x, z + 3)]).toBe(0);
+    // le sol de jeu ne bouge pas ; le relief affiché se creuse, sans eau au fond
+    w.updateVis();
+    expect(w.cellAvg(x, z)).toBeGreaterThan(0.9);
+    expect(y0 - w.hAt(x + 0.5, z + 0.5)).toBeGreaterThan(2);
+    expect(w.seaAt(x + 0.5, z + 0.5, MAX_H)).toBe(false);
+    // hors du ravin, rien ne change
+    expect(Math.abs(w.hAt(x + 0.5, z + 4.5) - y0)).toBeLessThan(0.6);
+    // un décor : ni bâtiment ni route ; une entrée pour les expéditions (et le monde souterrain)
+    expect(w.canPlace('house', x, z)).toBe('Une grotte ou une faille est ici');
+    expect(w.canRoad(x, z)).toBe(false);
+    expect(w.entranceAt(x + 0.5, z + 0.5)).toBeGreaterThanOrEqual(0);
+    expect(w.outpostEntrance(x - 1, z + 2, 1)).toBeGreaterThanOrEqual(0);
+    expect(w.riftEntrances().length).toBeGreaterThanOrEqual(1);
+    // gardé à la sauvegarde
+    const r = recharge(w);
+    expect(r.rift[r.ci(x, z)]).toBe(1);
+    // la gomme comble case par case
+    expect(w.erase(x, z)).toBe(true);
+    expect(w.rift[w.ci(x, z)]).toBe(0);
+    expect(w.canPlace('house', x, z)).not.toBe('Une grotte ou une faille est ici');
+  });
+
+  it('les failles de la carte sont des ravins ; pas de faille sur un bâtiment, une route ou l’eau', () => {
+    const w = monde();
+    expect(w.rift.includes(1)).toBe(true);
+    expect(w.veg.includes(VEG_FISSURE)).toBe(false);
+    const [x, z] = replat(w);
+    w.place('house', x, z, 0, true, 1, false);
+    w.setRoad(x + 3, z, true);
+    expect(w.digRift(x, z)).toBe(false);
+    expect(w.digRift(x + 3, z)).toBe(false);
+    const [sx, sz] = trouve(w, (cx, cz) => w.cellAvg(cx, cz) < -0.5);
+    expect(w.digRift(sx, sz)).toBe(false);
+  });
+
+  it('une ancienne sauvegarde avec une faille d’un clic se charge : la faille devient un ravin à la même place, qui sert d’entrée', () => {
+    const w = monde(), [x, z] = replat(w);
+    const legacy = w.decorCells(x, z, VEG_FISSURE);
+    // la sauvegarde d'avant : pas de champ rift ni de marque decor, la faille est une case de veg (8)
+    const r = recharge(w, (d) => { delete d.rift; delete d.decor; d.veg.push(w.ci(x, z), VEG_FISSURE); });
+    expect(r.veg[r.ci(x, z)]).toBe(0);
+    for (const k of legacy) expect(r.rift[k]).toBe(1);
+    addDefaultDecor(r, 2026);
+    r.updateVis();
+    // à la même place, de la même emprise : on n'y bâtit toujours pas, et c'est une entrée
+    for (const k of legacy) expect(r.decor[k]).toBe(VEG_FISSURE);
+    expect(r.entranceAt(x + 0.5, z + 0.5)).toBeGreaterThanOrEqual(0);
+    expect(r.ravine.some((v) => v > 0.5)).toBe(true);
+    // sa faille compte : le premier chargement (sans la marque des décors) n'en ajoute pas d'autres
+    let n = 0;
+    for (let k = 0; k < N * N; k++) if (r.rift[k]) n++;
+    expect(n).toBe(new Set(legacy).size);
   });
 });
 

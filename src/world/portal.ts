@@ -91,7 +91,7 @@ export function addPortalIsland(w: World, seed: number): PortalSite | null {
     for (let cx = p.x - reach; cx < p.x + reach; cx++) {
       if (!w.inCells(cx, cz)) continue;
       const k = w.ci(cx, cz), dx = cx + 0.5 - p.x, dz = cz + 0.5 - p.z, d = Math.hypot(dx, dz) / isleRadius(p, seed, Math.atan2(dz, dx));
-      w.veg[k] = 0; w.oil[k] = 0;
+      w.veg[k] = 0; w.oil[k] = 0; w.rift[k] = 0;
       if (w.cellAvg(cx, cz) < 0.2) continue;
       const r = hash2(cx, cz, seed + 9013);
       if (d > 0.6 && d < 0.86 && r < 0.3) w.veg[k] = VEG_FOREST;
@@ -125,7 +125,7 @@ function carveStrait(w: World, dl: Float32Array, M: number, C: number, seed: num
           const h = w.cellAvg(cx, cz), v = w.veg[w.ci(cx, cz)];
           if (h <= -0.35) continue;
           // des terres basses, pas les montagnes, ni le volcan, ni les grottes et failles
-          cost += h > 2.4 || v === VEG_VOLCANO || v === VEG_CAVE || v === VEG_FISSURE || w.lake[w.ci(cx, cz)] ? 1000 : 1 + Math.max(0, h);
+          cost += h > 2.4 || v === VEG_VOLCANO || v === VEG_CAVE || v === VEG_FISSURE || w.rift[w.ci(cx, cz)] || w.lake[w.ci(cx, cz)] ? 1000 : 1 + Math.max(0, h);
         }
       if (cost < bc) { bc = cost; best = z * n + x; }
     }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, VEG_FISSURE, Snapshot } from '../world/world';
+import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, Snapshot } from '../world/world';
 import { sculpt, raiseVolcano, removeVolcano, SculptTool, SculptCtx, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
@@ -27,8 +27,8 @@ const MAX_SPOTS = 900, SPOTS_R = 10;
 
 export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'];
 export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'];
-/** Décors posés d'un clic, sans pinceau */
-export const SINGLE_TOOLS: ToolId[] = ['cave', 'fissure'];
+/** Décors posés d'un clic, sans pinceau (la faille se creuse au pinceau, en glissant) */
+export const SINGLE_TOOLS: ToolId[] = ['cave'];
 /** Tracé des routes : en glissant, case par case (« Ligne »), ou d'un point A à un point B, en courbe (« Libre ») */
 export type RoadMode = 'line' | 'free';
 
@@ -344,7 +344,7 @@ export class ToolController implements ToolInput {
       this.h.changed();
     }
   }
-  private endStroke() { this.pre = null; this.lastRoad = null; }
+  private endStroke() { this.pre = null; this.lastRoad = null; this.lastRift = null; }
 
   // ---------- Entrées ----------
   private pickAt(e: PointerInfo) {
@@ -555,12 +555,12 @@ export class ToolController implements ToolInput {
     const w = this.h.world;
     // la gomme rase aussi un volcan (la moindre case de son cône suffit)
     if (this.tool === 'erase' && this.eraseVolcanoUnderCursor()) return;
+    if (this.tool === 'fissure') { this.applyRift(); return; }
     if (SINGLE_TOOLS.includes(this.tool)) {
-      // une seule grotte (ou faille) sous le curseur
-      const cx = Math.floor(hit.x), cz = Math.floor(hit.z), cave = this.tool === 'cave';
-      if (w.setVeg(cx, cz, cave ? VEG_CAVE : VEG_FISSURE)) { this.mark(); this.h.audio.sfxPlace(); }
-      else this.h.toast(cave ? tr('Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.')
-        : tr('Une faille fend un sol assez plat, à l’écart des bâtiments, des routes et des autres entrées.'));
+      // une seule grotte sous le curseur
+      const cx = Math.floor(hit.x), cz = Math.floor(hit.z);
+      if (w.setVeg(cx, cz, VEG_CAVE)) { this.mark(); this.h.audio.sfxPlace(); }
+      else this.h.toast(tr('Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.'));
       return;
     }
     const r = Math.max(0.6, this.radius * 0.8);
@@ -579,6 +579,28 @@ export class ToolController implements ToolInput {
           if (!w.occ[k] && !w.road[k] && w.setVeg(cx, cz, type)) this.mark();
         }
       }
+  }
+
+  /** dernier point du tracé de la faille en cours (le ravin se creuse d'un point au suivant, sans trou quand on glisse vite) */
+  private lastRift: [number, number] | null = null;
+
+  /** Demi-largeur du ravin que creuse la faille : la moitié du pinceau, une case de large au plus petit */
+  private riftHalf() { return Math.max(0.75, this.radius * 0.5); }
+
+  /** Pinceau Faille : on glisse, et un ravin se creuse le long du tracé (ni sur un bâtiment, une route, l'eau ou une grotte) */
+  private applyRift() {
+    const hit = this.hit;
+    if (!hit) return;
+    const w = this.h.world, from = this.lastRift ?? [hit.x, hit.z], first = !this.strokeChanged;
+    const n = w.digRiftAlong(from[0], from[1], hit.x, hit.z, this.riftHalf(), (k) => !this.h.wetCell?.(k));
+    this.lastRift = [hit.x, hit.z];
+    if (n) { this.mark(); if (first) this.h.audio.sfxPlace(); return; }
+    // rien de creusé là où l'on a cliqué (et ce n'est pas déjà un ravin) : on dit pourquoi
+    const k = w.inCells(Math.floor(hit.x), Math.floor(hit.z)) ? w.ci(Math.floor(hit.x), Math.floor(hit.z)) : -1;
+    if (first && k >= 0 && !w.rift[k] && performance.now() - this.lastToast > 1500) {
+      this.h.toast(tr('Une faille se creuse dans la terre ferme, à l’écart des bâtiments, des routes, de l’eau et des grottes.'));
+      this.lastToast = performance.now();
+    }
   }
 
   /** Pinceau de biome : chaque case sous le pinceau prend le biome choisi (ou retrouve celui de son climat) */
@@ -792,8 +814,11 @@ export class ToolController implements ToolInput {
     const k = w.inCells(c.x, c.z) ? w.ci(c.x, c.z) : -1;
     if (k < 0) return;
     if (w.road[k]) { this.mark(); w.setRoad(c.x, c.z, false); this.h.audio.sfxDestroy(); }
-    else if (w.decor[k]) {
-      // n'importe quelle case de l'emprise d'une grotte ou d'une faille la fait disparaître
+    else if (w.rift[k]) {
+      // une case d'un ravin : tout le ravin se comble (la gomme, elle, comble case par case)
+      this.mark(); w.fillRiftGroup(k); this.h.audio.sfxDestroy();
+    } else if (w.decor[k]) {
+      // n'importe quelle case de l'emprise d'une grotte la fait disparaître
       const e = w.entranceAt(c.x + 0.5, c.z + 0.5);
       if (e >= 0) { this.mark(); w.setVeg(e % N, Math.floor(e / N), 0); this.h.audio.sfxDestroy(); }
     } else if (w.erase(c.x, c.z)) this.mark();
@@ -905,7 +930,8 @@ export class ToolController implements ToolInput {
     // démolir : le pinceau large montre son disque (rouge), et le bâtiment visé reste éclairé dessous
     const wide = t === 'bulldoze' && this.radius > 1;
     if (SCULPT_TOOLS.includes(t) || VEG_TOOLS.includes(t) || t === 'biome' || wide) {
-      const r = VEG_TOOLS.includes(t) || t === 'biome' ? Math.max(0.6, this.radius * 0.8) : t === 'volcano' ? volcanoRadius(this.radius) : this.radius;
+      // (la faille : la largeur du ravin qu'elle creuse)
+      const r = t === 'fissure' ? this.riftHalf() + 0.4 : VEG_TOOLS.includes(t) || t === 'biome' ? Math.max(0.6, this.radius * 0.8) : t === 'volcano' ? volcanoRadius(this.radius) : this.radius;
       const pos = this.ring.geometry.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < 48; i++) {
         const a = (i / 48) * Math.PI * 2;

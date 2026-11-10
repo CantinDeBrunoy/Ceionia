@@ -485,7 +485,6 @@ registerDict('catalog', {
   'Pas assez de place libre autour pour {name} ({size} × {size}, sans route ni bâtiment derrière).': 'Not enough free space around it for {name} ({size} × {size}, with no road or building behind).',
   'Le pinceau touche un bâtiment : le relief n’y change pas. Éloignez-le, ou réduisez sa taille ([ et ]).': 'The brush touches a building: the terrain won’t change there. Move it away, or reduce its size ([ and ]).',
   'Une grotte se pose sur la terre ferme, à l’écart des bâtiments, des routes et des autres entrées.': 'A cave goes on solid ground, away from buildings, roads and other entrances.',
-  'Une faille fend un sol assez plat, à l’écart des bâtiments, des routes et des autres entrées.': 'A fissure splits fairly flat ground, away from buildings, roads and other entrances.',
   'On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde.': 'You can’t lay a road here: a building, a slope that is too steep or water that is too deep is in the way.',
   'Les grands bâtiments se démolissent un à un : un clic dessus (Ctrl+Z annule).': 'Large buildings are demolished one at a time: click on one (Ctrl+Z undoes).',
   'Cliquez pour reposer le bâtiment (Échap pour annuler).': 'Click to put the building back down (Esc to cancel).',
