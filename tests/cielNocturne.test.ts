@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nightShow, nightOf, auroraChance, METEOR_RATE, MeteorKind } from '../src/core/skyNights';
+import { nightShow, nightOf, auroraChance, meteorRate, METEOR_RATE, MeteorKind } from '../src/core/skyNights';
 import { GameTime } from '../src/core/time';
 import { tr, setLang } from '../src/i18n';
 import '../src/i18n/en';
@@ -76,6 +76,16 @@ describe('ciel de nuit : aurores et étoiles filantes', () => {
     expect(METEOR_RATE.lone * 25).toBeGreaterThan(0.6);
     expect(METEOR_RATE.lone * 25).toBeLessThan(1.6);
     expect(METEOR_RATE.shower * 25).toBeGreaterThan(40);
+  });
+
+  it('la durée du jour : l’étoile isolée reste seule par nuit, l’averse s’étale sans disparaître', () => {
+    // une nuit dure à peu près le quart de la journée en pleine obscurité
+    const perNight = (k: MeteorKind, dayLen: number) => meteorRate(k, dayLen) * dayLen * 0.25;
+    for (const d of [30, 100, 400]) expect(perNight('lone', d)).toBeCloseTo(perNight('lone', 100));
+    expect(meteorRate('shower', 100)).toBe(METEOR_RATE.shower);
+    expect(perNight('shower', 400)).toBeGreaterThan(perNight('shower', 100));
+    expect(meteorRate('shower', 400)).toBeGreaterThan(meteorRate('some', 30));
+    expect(meteorRate('none', 30)).toBe(0);
   });
 
   it('la nuit commence le soir et finit au matin : un seul numéro du coucher au lever', () => {

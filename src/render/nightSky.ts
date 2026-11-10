@@ -4,7 +4,7 @@ import { GameTime } from '../core/time';
 import { mulberry32, smoothstep } from '../core/rng';
 import { tr } from '../i18n';
 import { Environment } from './env';
-import { METEOR_RATE, MeteorKind, NightShow, nightOf, nightShow } from '../core/skyNights';
+import { MeteorKind, NightShow, meteorRate, nightOf, nightShow } from '../core/skyNights';
 
 /** Rayon de la coupole du ciel de nuit, centrée sur la caméra : bien au-delà de l'île, qui la cache là où elle passe devant */
 const SKY_R = 900;
@@ -260,7 +260,7 @@ void main() {
     const fly = Math.min(gdt, dt * 2);
     // la grande nuit vient par bouffées : des moments calmes, puis plusieurs à la fois
     const c = t * 0.8, surge = this.show.meteors === 'shower' ? 0.5 + 0.9 * Math.max(0, Math.sin(c) * Math.sin(c * 0.41 + 2)) : 1;
-    const rate = METEOR_RATE[this.show.meteors] * surge * deep * clear;
+    const rate = meteorRate(this.show.meteors, time.dayLen) * surge * deep * clear;
     if (gdt > 0) for (let k = Math.floor(rate * gdt + this.rnd()); k > 0; k--) this.spawn(camera, this.show.meteors === 'shower');
     if (this.starNow) { this.starNow = false; this.spawn(camera, false, 24); }
     this.drawMeteors(fly, camera.position);

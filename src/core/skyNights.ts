@@ -28,6 +28,16 @@ export const SOME = 0.18, LONE = 0.3;
 /** Étoiles filantes par seconde de jeu au cœur de la nuit : une par nuit environ, quelques-unes, une averse */
 export const METEOR_RATE: Record<MeteorKind, number> = { none: 0, lone: 0.045, some: 0.22, shower: 3 };
 
+/**
+ * Cadence des étoiles filantes (par seconde de jeu) pour une durée du jour donnée (`GameTime.dayLen`, 100 s par défaut) :
+ * l'étoile isolée reste seule quelle que soit la longueur de la nuit ; les autres viennent un peu plus serrées quand la nuit
+ * est courte, un peu plus espacées quand elle est longue
+ */
+export function meteorRate(kind: MeteorKind, dayLen = 100) {
+  const k = 100 / Math.max(10, dayLen);
+  return METEOR_RATE[kind] * (kind === 'lone' ? k : Math.sqrt(k));
+}
+
 /** La nuit qui commence le soir du jour `day` : avant midi, on est encore dans celle de la veille */
 export const nightOf = (day: number, hour: number) => (hour < 12 ? day - 1 : day);
 
