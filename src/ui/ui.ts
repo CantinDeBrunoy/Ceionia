@@ -994,7 +994,7 @@ export class UI {
     // (et en plein commandement, le conseil du village se tait : le combat a ses propres aides)
     const fighting = !!document.getElementById('troopBar') && document.getElementById('troopBar')!.style.display !== 'none';
     // (au bac à sable : aucun conseil)
-    el.hidden = quiet || !!this.tutorial?.on || fighting || this.host.world.sandbox;
+    el.hidden = quiet || !!this.tutorial?.active || fighting || this.host.world.sandbox;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
     const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;

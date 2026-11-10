@@ -51,6 +51,7 @@ import { ToolController, ToolId } from './build/tools';
 import { AudioEngine } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { Tutorial } from './ui/tutorial';
+import { chapters } from './ui/tutorialChapters';
 import { AGES, KINDS, Building, sizeOf, type KindId } from './build/catalog';
 import { MISSIONS, VICTORY } from './sim/missions';
 import { SpaceCast, showVictory, showVoyage } from './ui/spaceViews';
@@ -76,13 +77,13 @@ import { PortalView } from './render/portal';
 import { BlightView } from './render/blight';
 import { isleBlight } from './world/blight';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
-import { holdIsle, isleDefenses } from './world/portal';
+import { holdIsle, isleDefenses, villageBarracks } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
 import { IsleRuins } from './render/isleRuins';
 import { setFxDensity } from './render/combatFx';
 import { War, clockText } from './sim/war';
 import { KingdomStage } from './kingdomStage';
-import { WarTips, WarTipState, WAR_TIP_TEXT } from './ui/warTips';
+import { WarTips, WarTipState, WAR_TIP_TEXT, type WarTipId } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
 import { PortalChoice } from './ui/portalChoice';
@@ -454,7 +455,7 @@ class Game implements UIHost {
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
-    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, click: () => audio.sfxClick(), toast: (m) => this.ui.toast(m) });
+    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart() });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
       war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
@@ -500,7 +501,7 @@ class Game implements UIHost {
       this.terrain.recolor(this.season);
       this.propsDirty = true;
     };
-    this.buildings.onPlaced = () => { this.propsDirty = true; };
+    this.buildings.onPlaced = (b) => { this.propsDirty = true; this.defenseWhere(b); };
     this.sim.recalc();
     this.sim.update(0, 1);
 
@@ -527,10 +528,21 @@ class Game implements UIHost {
     this.ui.update();
     // (pas de tutoriel au bac à sable : il n'y a rien à apprendre dans l'ordre)
     this.tutorial = new Tutorial(this.ui, this, !save, w.sandbox);
+    // ses chapitres : l'île du portail (le PvE choisi), la première entrée dans les Enfers
+    this.tutorial.setChapters(chapters(this.tutorial, this.ui, {
+      root: uiRoot, age: () => this.sim.age,
+      isle: () => isleDefenses(this.world), village: () => this.villageDefenses(),
+      army: () => this.war.army.troops.length + this.war.army.queue.length, need: () => this.war.invasionNeed(), pve: () => this.war.pve === 'on',
+      theater: () => this.command.theater?.kind ?? null, mode: () => this.mode, atIsle: () => this.lookingAtIsle(),
+      selected: () => this.command.cmd.selected.size, lastOrder: () => this.command.cmd.lastOrder,
+      commandIsle: () => this.commandIsle(),
+    }));
+    // un chapitre fini dit déjà ce que disaient les aides militaires du même moment : elles ne se répètent pas
+    this.tutorial.onChapterEnd = (id, done) => { if (done) for (const t of (id === 'pve' ? ['isle', 'orders'] : ['hell']) as WarTipId[]) this.warTips.markSeen(t); };
     // les aides du volet militaire (bulles facultatives, au moment utile)
     this.warTips = new WarTips({
       root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
-      busy: () => this.tutorial.on || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
+      busy: () => this.tutorial.active || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
       act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
     });
     this.ui.info(save ? trx('Bon retour dans votre village !') : w.buildings.size ? trx('Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.') : trx('Commencez par « {name} », la place au centre du village (Bâtir › Vie & culture).', { name: this.sim.nameOf('gather') }));
@@ -609,6 +621,8 @@ class Game implements UIHost {
       this.cam.handler = this.command;
       this.command.setTheater(this.hellTheater(hm));
       this.ui.banner(trx('Monde des Enfers'), trx('{zone} : le royaume démoniaque est tout au fond. Expédition facultative ; le portail ramène sur l’île.', { zone: hm.zoneName(z) }), 'hell');
+      // la première entrée : le chapitre du tutoriel sur les Enfers (la cible, les troupes, l'attaque, le retour)
+      this.tutorial.chapter('hell');
       this.ui.update();
     }, 'Passage du portail…');
   }
@@ -701,7 +715,42 @@ class Game implements UIHost {
     this.cam.goTo(p.x, p.z + 1, Math.min(Math.max(this.cam.dist, 18), 26));
     // trois quarts plutôt que presque de dessus (l'inclinaison reste réglable : clic droit glissé)
     this.cam.tiltTo(0.8);
+    // l'île sans ses défenses : le menu s'ouvre sur « Bâtir », et un message dit quoi y poser
+    const d = isleDefenses(this.world);
+    if (this.war.pve === 'on' && (!d.towers || !d.barracks)) { this.command.isleMenu('build'); this.isleBrief(); }
     this.ui.update();
+  }
+
+  /** « Affronter les démons » : le chapitre du tutoriel (une fois), puis la vue va sur l'île, au commandement, où l'on bâtit */
+  private pveStart() {
+    this.tutorial.chapter('pve');
+    this.commandIsle();
+  }
+
+  /**
+   * Ce qu'il faut bâtir sur l'île, dit à l'arrivée (une fois par session) : les joueurs posaient tour de garde et caserne au
+   * village. Le chapitre du tutoriel, quand il guide, le dit lui-même
+   */
+  private isleSaid = false;
+  private isleBrief() {
+    if (this.isleSaid || this.tutorial.active) return;
+    this.isleSaid = true;
+    this.ui.toast(trx('⚔️ Bâtissez ici, sur l’île du portail (pas au village) : « {tower} » et « {barracks} », puis recrutez une garnison.', { tower: this.sim.nameOf('watchtower'), barracks: this.sim.nameOf('barracks') }), undefined, 'action');
+  }
+
+  /** Une tour de garde ou une caserne posée au village quand l'île n'en a pas : elle ne garde pas le portail, on le dit */
+  private defenseWhere(b: Building) {
+    if ((b.kind !== 'watchtower' && b.kind !== 'barracks') || this.war.pve !== 'on' || this.world.onPortalIsland(b.x, b.z) || this.tutorial.chapterOn === 'pve') return;
+    const d = isleDefenses(this.world);
+    if (b.kind === 'watchtower' ? d.towers : d.barracks) return;
+    this.ui.toast(trx('« {name} » est au village : contre les démons, il en faut sur l’île du portail. Cliquez ici pour y aller.', { name: this.sim.nameOf(b.kind) }), () => this.commandIsle(), 'action');
+  }
+
+  /** Tours de garde et casernes du village (hors de l'île du portail) */
+  private villageDefenses() {
+    let towers = 0;
+    for (const b of this.world.buildings.values()) if (b.kind === 'watchtower' && !this.world.onPortalIsland(b.x, b.z)) towers++;
+    return { towers, barracks: villageBarracks(this.world) };
   }
 
   /** Quitte le commandement de l'île (`quiet` : sans rien dire) */
@@ -1654,7 +1703,7 @@ class Game implements UIHost {
     });
 
     this.uiTimer -= dt;
-    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.on; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
+    if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;

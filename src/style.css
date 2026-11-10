@@ -619,40 +619,47 @@ body.under #fx-vignette { background: radial-gradient(ellipse at 50% 45%, transp
 #photoBar { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; padding: 8px; }
 body.photo #photoBar { display: flex; }
 
-/* ---------- Tutoriel guidé : la bulle, l'anneau autour de l'élément montré, l'interrupteur de l'accueil ---------- */
-#tuto { position: absolute; z-index: 32; width: min(330px, calc(100vw - 16px)); padding: 11px 14px 10px; background: rgba(255, 255, 255, 0.96); border: 1px solid var(--edge); border-radius: 14px; box-shadow: 0 16px 40px rgba(15, 27, 45, 0.28), 0 0 0 1px rgba(47, 111, 237, 0.2); font-size: 13px; line-height: 1.45; transition: left 0.25s ease, top 0.25s ease, box-shadow 0.2s; animation: rise 0.2s ease-out; }
+/* ---------- Tutoriel guidé : la bulle, le halo autour de l'élément montré, l'interrupteur de l'accueil ---------- */
+/* la bulle : grande, sombre, cernée de bleu vif : elle se détache des panneaux clairs comme du terrain */
+#tuto { position: absolute; z-index: 32; width: min(390px, calc(100vw - 16px)); padding: 14px 18px 13px; background: #13233d; color: #fff; border: 2px solid #6b9bff; border-radius: 16px; box-shadow: 0 18px 46px rgba(10, 18, 32, 0.5), 0 0 0 4px rgba(47, 111, 237, 0.28); font-size: 15.5px; line-height: 1.45; transition: left 0.25s ease, top 0.25s ease, border-color 0.2s, box-shadow 0.2s; animation: rise 0.2s ease-out; }
 #tuto.fresh { transition: none; }
-#tuto.done { box-shadow: 0 16px 40px rgba(15, 27, 45, 0.28), 0 0 0 2px var(--good); }
-#tuto .tHead { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-ink); }
-#tuto .tHead b { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--good); font-size: 12.5px; letter-spacing: 0; text-transform: none; }
-#tuto h4 { margin: 4px 0; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
-#tuto p { margin: 0 0 6px; color: var(--ink2); }
-#tuto p.tNote { color: #b06d0e; font-weight: 600; }
+#tuto.done { border-color: #3fd5a6; box-shadow: 0 18px 46px rgba(10, 18, 32, 0.5), 0 0 0 4px rgba(18, 163, 126, 0.35); }
+#tuto .tHead { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #a9c6ff; }
+#tuto .tHead b { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: #5fe3b9; font-size: 14px; letter-spacing: 0; text-transform: none; }
+#tuto h4 { margin: 5px 0 6px; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: #fff; }
+#tuto p { margin: 0 0 8px; color: #e6edf9; }
+#tuto p.tNote { color: #ffd27a; font-weight: 700; }
+#tuto p.tMore { font-size: 14.5px; color: #cfdcf2; }
+#tuto kbd { display: inline-block; min-width: 1.5em; margin: 0 1px; padding: 0 5px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.45); border-bottom-width: 3px; background: rgba(255, 255, 255, 0.1); color: #fff; font: inherit; font-size: 13.5px; font-weight: 800; line-height: 1.5; text-align: center; }
 #tuto svg.ic { display: inline-block; vertical-align: -3px; }
-#tuto ul { list-style: none; margin: 6px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-#tuto li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; }
-#tuto li > i { flex: 0 0 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; border: 2px solid rgba(15, 27, 45, 0.25); color: #fff; }
-#tuto li.ok { color: var(--good); }
+#tuto ul { list-style: none; margin: 8px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+#tuto ul:empty { display: none; }
+#tuto li { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 600; color: #e6edf9; }
+#tuto li > i { flex: 0 0 19px; height: 19px; display: grid; place-items: center; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.5); color: #fff; }
+#tuto li.ok { color: #5fe3b9; }
 #tuto li.ok > i { background: var(--good); border-color: var(--good); }
+#tuto .tAct { width: 100%; margin: 0 0 10px; min-height: 42px; background: #ffd54a; border-color: #ffd54a; color: #2a1d00; font-size: 15px; font-weight: 800; }
+#tuto .tAct:hover { background: #ffe07a; }
 #tuto .tActs { display: flex; align-items: center; gap: 8px; }
-#tuto .tActs button { min-height: 34px; padding: 4px 12px; font-size: 12.5px; }
-#tuto .tSkip { padding: 4px 4px; background: transparent; border-color: transparent; box-shadow: none; color: var(--ink2); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
-#tuto .tNext.active { animation: tutoGo 1.4s ease-in-out infinite; }
-@keyframes tutoGo { 50% { box-shadow: 0 0 0 5px rgba(47, 111, 237, 0.2), 0 6px 16px rgba(47, 111, 237, 0.4); } }
-/* la pointe, sur le bord tourné vers l'élément montré */
-#tuto .tArrow { position: absolute; width: 14px; height: 14px; background: inherit; transform: translate(-50%, -50%) rotate(45deg); pointer-events: none; }
-#tuto[data-side="below"] .tArrow { top: 0; }
-#tuto[data-side="above"] .tArrow { top: 100%; }
-#tuto[data-side="right"] .tArrow { left: 0; }
-#tuto[data-side="left"] .tArrow { left: 100%; }
+#tuto .tActs button { min-height: 40px; padding: 5px 15px; font-size: 14.5px; }
+#tuto .tNext { background: #fff; color: var(--ink); border-color: #fff; }
+#tuto .tNext.active { background: var(--accent); border-color: #8fb4ff; color: #fff; }
+#tuto .tSkip { padding: 4px 4px; background: transparent; border-color: transparent; box-shadow: none; color: #b8c7e0; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+#tuto .tSkip:hover { color: #fff; background: transparent; }
+/* la pointe, sur le bord tourné vers l'élément montré (elle prolonge la bordure) */
+#tuto .tArrow { position: absolute; width: 16px; height: 16px; background: inherit; border: 0 solid #6b9bff; transform: translate(-50%, -50%) rotate(45deg); pointer-events: none; transition: border-color 0.2s; }
+#tuto.done .tArrow { border-color: #3fd5a6; }
+#tuto[data-side="below"] .tArrow { top: -1px; border-top-width: 2px; border-left-width: 2px; }
+#tuto[data-side="above"] .tArrow { top: calc(100% + 1px); border-bottom-width: 2px; border-right-width: 2px; }
+#tuto[data-side="right"] .tArrow { left: -1px; border-bottom-width: 2px; border-left-width: 2px; }
+#tuto[data-side="left"] .tArrow { left: calc(100% + 1px); border-top-width: 2px; border-right-width: 2px; }
 #tuto:not([data-side]) .tArrow, #tuto[data-side=""] .tArrow { display: none; }
-/* l'élément que la bulle montre : un halo doré qui bat, bien plus voyant que l'anneau seul */
-.tHi { animation: tutoHi 0.9s ease-in-out infinite !important; position: relative; z-index: 2; background-color: #ffd54a !important; color: #3a2600 !important; border-color: #ff9d00 !important; }
-.tHi * { color: inherit; }
-@keyframes tutoHi { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 4px #ff9d00, 0 0 14px 4px rgba(255, 170, 0, 0.7); } 50% { transform: scale(1.12); box-shadow: 0 0 0 6px #ff7a00, 0 0 34px 14px rgba(255, 150, 0, 0.9); } }
-@media (prefers-reduced-motion: reduce) { .tHi { animation: none !important; box-shadow: 0 0 0 5px #ff9d00; } }
-#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; box-shadow: 0 0 0 3px var(--accent), 0 0 0 7px rgba(47, 111, 237, 0.22); transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease; animation: tutoRing 1.5s ease-in-out infinite; }
-@keyframes tutoRing { 50% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 13px rgba(47, 111, 237, 0.06); } }
+/* l'élément montré : un bouton prend un liseré doré, sans bouger ni clignoter ni changer de couleur (texte blanc ou foncé, il reste lisible) */
+button.tHi { box-shadow: inset 0 0 0 2px #ffb31a, 0 0 14px rgba(255, 179, 26, 0.45) !important; }
+/* autour de lui, un anneau doré dont la lueur respire lentement (l'anneau est à part : un élément redessiné ne la relance pas) */
+#tutoRing { position: absolute; z-index: 31; border-radius: 14px; pointer-events: none; border: 3px solid #ffb31a; box-shadow: 0 0 12px 3px rgba(255, 179, 26, 0.5); transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease; animation: tutoRing 3.2s ease-in-out infinite; }
+@keyframes tutoRing { 50% { box-shadow: 0 0 20px 6px rgba(255, 179, 26, 0.28); } }
+@media (prefers-reduced-motion: reduce) { #tutoRing { animation: none; } }
 .tutoToggle { justify-content: center; }
 .tutoToggle button { gap: 8px; padding: 8px 14px; }
 .tutoToggle .sw { position: relative; width: 34px; height: 20px; border-radius: 999px; background: rgba(15, 27, 45, 0.2); transition: background 0.15s; }
@@ -932,6 +939,8 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #portalChoice h4 { margin: 0 0 6px; font-size: 19px; }
 #portalChoice p { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
 #portalChoice small { display: block; color: var(--ink2); margin-bottom: 12px; }
+/* ce que demande le combat : les défenses se bâtissent sur l'île, pas au village */
+#portalChoice p.how { margin: 10px 0 8px; padding: 8px 10px; border-radius: 10px; background: #fff3d1; color: #5a3b00; font-size: 14px; font-weight: 700; }
 #portalChoice .tcbtn { display: flex; gap: 10px; }
 #portalChoice .tcbtn button { flex: 1; min-height: 52px; white-space: normal; font-size: 15px; font-weight: 800; border-radius: 12px; border: 2px solid var(--line); cursor: pointer; }
 #portalChoice .tcbtn .go { background: #c8482b; color: #fff; border-color: #c8482b; }

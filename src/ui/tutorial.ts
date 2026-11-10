@@ -2,13 +2,14 @@ import { KINDS, KindId } from '../build/catalog';
 import { MAPS } from '../world/mapgen';
 import { loadSlot } from '../save/save';
 import { ic } from './icons';
-import { tr, localize, colon } from '../i18n';
+import { tr, localize, colon, getLang } from '../i18n';
 import type { UI, UIHost } from './ui';
 
 /**
- * Tutoriel guidé : une bulle montre l'élément de l'interface dont il est question (un anneau l'entoure) et passe d'elle-même à
+ * Tutoriel guidé : une bulle montre l'élément de l'interface dont il est question (un halo l'entoure) et passe d'elle-même à
  * l'étape suivante quand le joueur l'a fait, ou d'un clic sur « Suivant ». Rien n'est bloqué : le jeu continue autour. On le
  * passe, on le reprend depuis les réglages ; il est activé d'office pour qui n'a encore aucune partie, et le choix est retenu.
+ * Des chapitres s'y ajoutent plus tard dans la partie, lancés par un événement (voir `Tutorial.chapter` et `tutorialChapters.ts`)
  */
 
 /** Tous les textes du tutoriel, au même endroit (pour la traduction du jeu). `{eye}`, `{compass}`… : icônes dans le texte */
@@ -17,6 +18,7 @@ export const TUTO_TEXT = {
   next: 'Suivant',
   finish: 'Terminer',
   skip: 'Passer le tutoriel',
+  skipChapter: 'Passer ce chapitre',
   sandbox: 'Pas de tutoriel au bac à sable : bâtissez dans l’ordre que vous voulez.',
   wellDone: 'Bien joué !',
   skipped: 'Tutoriel mis de côté : reprenez-le quand vous voulez dans Réglages › Partie.',
@@ -36,6 +38,7 @@ export const TUTO_TEXT = {
     hintOn: (i: number, n: number, title: string) => tr('Une bulle vous guide pas à pas. Étape {i} sur {n} : « {title} ».', { i, n, title }),
     hintOff: (i: number, n: number, title: string) => tr('Mis de côté à l’étape {i} sur {n} (« {title} ») : le réactiver le reprend là, « Recommencer » repart du début.', { i, n, title }),
     hintNew: 'Une bulle vous guide pas à pas : caméra, construction, besoins, âges, expéditions et incidents.',
+    hintChap: (title: string, i: number, n: number) => tr('Chapitre « {title} » : étape {i} sur {n}.', { title, i, n }),
   },
   steps: {
     welcome: {
@@ -47,6 +50,8 @@ export const TUTO_TEXT = {
       title: 'Regardez autour de vous',
       text: 'Faites glisser la vue avec le clic droit, et zoomez à la molette.',
       touch: 'Glissez à deux doigts pour bouger, zoomer et tourner la vue.',
+      /** les touches de la vue, dans la disposition du clavier du joueur (voir `viewKeys`) */
+      keys: (move: string, turn: string) => tr('Au clavier : {move} déplacent la vue, {turn} la tournent.', { move, turn }),
       tasks: ['Bouger la vue'],
       paused: 'Le jeu est en pause pour l’instant.',
     },
@@ -73,6 +78,11 @@ export const TUTO_TEXT = {
     stone: {
       title: 'La pierre',
       text: 'Posez un pierrier près des rochers, dans la zone verte.',
+      tasks: [] as string[],
+    },
+    resources: {
+      title: 'Les ressources',
+      text: 'Vos réserves s’affichent ici : bois et pierre paient les grands bâtiments, le minerai le passage des âges.',
       tasks: [] as string[],
     },
     road: {
@@ -131,10 +141,16 @@ export const TUTO_TEXT = {
 type StepId = keyof typeof TUTO_TEXT.steps;
 type Side = 'below' | 'above' | 'right' | 'left';
 
+/** Les textes d'une étape : titre, phrase, tâches */
+export interface StepText { title: string; text: string; tasks: string[] }
+
 /** Une étape : l'élément montré, les tâches à faire et comment savoir qu'elles sont faites */
-interface Step {
-  id: StepId;
-  /** l'élément montré (null : la bulle se tient à l'écart, sans anneau) */
+export interface Step {
+  /** une étape de la suite principale (`TUTO_TEXT.steps`), ou celle d'un chapitre */
+  id: string;
+  /** les textes d'une étape de chapitre (ceux de la suite principale viennent de `TUTO_TEXT.steps`) */
+  t?: StepText;
+  /** l'élément montré (null : la bulle se tient à l'écart, sans halo) */
   anchor(): Element | null;
   /** les tâches de l'étape, faites ou non (une tâche faite le reste) */
   check(): boolean[];
@@ -142,24 +158,97 @@ interface Step {
   begin?(): void;
   /** le texte, s'il dépend de la situation */
   text?(): string;
+  /** une ligne en HTML sous le texte (les touches du clavier) */
+  more?(): string;
   /** une ligne de plus selon la situation */
   note?(): string;
   /** les intitulés des tâches, s'ils dépendent de la situation */
   tasks?(): string[];
+  /** un bouton dans la bulle qui mène où il faut (« Aller sur l'île ») ; null : pas de bouton */
+  act?(): { label: string; run(): void } | null;
+  /** l'élément ne sert qu'à placer la bulle (une fiche que le joueur vient d'ouvrir) : ni halo ni anneau */
+  bare?(a: Element): boolean;
   /** une étape à lire : une fois faite, elle attend « Suivant » au lieu de passer d'elle-même */
   read?: boolean;
   /** tâches à faire pour passer (toutes par défaut) */
   need?: number;
 }
 
+/** Les chapitres : l'île du portail quand le joueur choisit d'affronter les démons, la première entrée dans les Enfers */
+export type ChapterId = 'pve' | 'hell';
+export const CHAPTERS: readonly ChapterId[] = ['pve', 'hell'];
+
+/** Un chapitre : une courte suite d'étapes qu'un événement lance, une seule fois */
+export interface Chapter {
+  title(): string;
+  steps: Step[];
+  /** le chapitre a encore un sens (faux : il s'achève, compté comme vu ; les Enfers quittés, le portail refermé) */
+  live?(): boolean;
+  /** le joueur n'est pas là où se passe le chapitre : la bulle attend, cachée */
+  away?(): boolean;
+}
+
 const KEY = 'village-lowpoly:v1:tutorial';
-interface TutoState { on: boolean; step: number }
+
+/**
+ * L'état enregistré. Les anciens états n'ont que `on` et `step` (le numéro d'étape dans `LEGACY`) : finir et passer y
+ * écrivaient tous deux `on: false` ; `end` les distingue désormais
+ */
+export interface TutoState {
+  /** la suite principale est en cours */
+  on: boolean;
+  /** son étape (celle où on l'a laissée) */
+  step: number;
+  /** l'identifiant de cette étape, qui survit aux étapes ajoutées */
+  id?: string;
+  /** comment elle s'est arrêtée : finie, ou mise de côté (« Passer », désactivée) ; absent : en cours, ou ancien état */
+  end?: 'done' | 'skip';
+  /** les chapitres déjà montrés (finis ou passés) */
+  seen?: string[];
+  /** le chapitre en cours et son étape */
+  ch?: { id: ChapterId; step: number };
+}
+
+/** L'ordre des étapes avant « Les ressources » : un ancien état ne donne que le numéro */
+const LEGACY = ['welcome', 'camera', 'fire', 'habitat', 'food', 'wood', 'stone', 'road', 'needs', 'time', 'ages', 'expeditions', 'gear', 'incidents'];
+
+/** Lit un état enregistré (null : rien, ou illisible) */
+export function parseState(raw: unknown): TutoState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.on !== 'boolean') return null;
+  const s: TutoState = { on: o.on, step: Math.max(0, Math.floor(+(o.step as number) || 0)) };
+  if (typeof o.id === 'string') s.id = o.id;
+  if (o.end === 'done' || o.end === 'skip') s.end = o.end;
+  if (Array.isArray(o.seen)) s.seen = o.seen.filter((x): x is string => typeof x === 'string');
+  const ch = o.ch as Record<string, unknown> | undefined;
+  if (ch && CHAPTERS.includes(ch.id as ChapterId)) s.ch = { id: ch.id as ChapterId, step: Math.max(0, Math.floor(+(ch.step as number) || 0)) };
+  return s;
+}
+
+/**
+ * Le joueur a-t-il mis le tutoriel de côté (« Passer », ou désactivé) ? Un ancien état ne le dit pas : arrêté en route (étape
+ * au-delà de la première), il a été passé ; revenu à la première, il a été fini, ou jamais commencé
+ */
+export function setAside(s: TutoState | null): boolean {
+  if (!s || s.on) return false;
+  return s.end ? s.end === 'skip' : s.step > 0;
+}
+
+/** Un chapitre se lance-t-il ? Une seule fois, même si le tutoriel est fini ; pas s'il a été mis de côté */
+export function chapterDue(s: TutoState | null, id: ChapterId): boolean {
+  return !setAside(s) && !(s?.seen ?? []).includes(id);
+}
+
+/** L'étape où reprendre la suite principale (`ids` : ses étapes dans l'ordre) */
+export function stepIndex(s: TutoState, ids: readonly string[]): number {
+  const id = s.id ?? LEGACY[s.step];
+  const i = id ? ids.indexOf(id) : -1;
+  return i >= 0 ? i : Math.min(s.step, ids.length - 1);
+}
 
 function readState(): TutoState | null {
-  try {
-    const s = JSON.parse(localStorage.getItem(KEY) || 'null');
-    return s && typeof s.on === 'boolean' ? { on: s.on, step: Math.max(0, Math.floor(+s.step || 0)) } : null;
-  } catch { return null; }
+  try { return parseState(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch { return null; }
 }
 function writeState(s: TutoState) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ignore */ }
@@ -168,8 +257,20 @@ function writeState(s: TutoState) {
 /** Le tutoriel est-il activé ? Tant que le joueur n'a rien choisi : oui s'il n'a encore aucune partie */
 export function tutorialOn() { return readState()?.on ?? !MAPS.some((m) => loadSlot(m.id)); }
 
+/**
+ * Les lettres des touches de la vue. Le jeu lit les touches physiques (`e.code` : W A S D pour bouger, Q E pour tourner, voir
+ * `camera.ts`) : leurs lettres viennent de la disposition du clavier quand le navigateur la donne, sinon de la langue
+ * (AZERTY en français : Z Q S D et A E)
+ */
+export function viewKeys(layout: { get(code: string): string | undefined } | null | undefined, lang: string) {
+  const fr = lang === 'fr';
+  const k = (code: string, guess: string) => { const v = layout?.get(code); return (v && v.length === 1 && /\p{L}/u.test(v) ? v : guess).toUpperCase(); };
+  return { move: [k('KeyW', fr ? 'z' : 'w'), k('KeyA', fr ? 'q' : 'a'), k('KeyS', 's'), k('KeyD', 'd')], turn: [k('KeyQ', fr ? 'a' : 'q'), k('KeyE', 'e')] };
+}
+
 /** Icônes glissées dans les textes */
 const fmt = (s: string) => s.replace(/\{(\w+)\}/g, (_, n: string) => ic(n, 15, 2.2));
+const kbd = (keys: string[], sep = '') => keys.map((x) => `<kbd>${x}</kbd>`).join(sep);
 
 /** Interrupteur du tutoriel sur l'écran d'accueil : il vaut pour la partie lancée, et le choix est retenu */
 export function menuToggle(): HTMLElement {
@@ -178,7 +279,8 @@ export function menuToggle(): HTMLElement {
   const draw = () => {
     const on = tutorialOn();
     row.innerHTML = `<button class="${on ? 'on' : ''}" aria-pressed="${on}" title="${T.title}">${ic('book', 17, 2)}${T.label}${colon()}${on ? T.on : T.off}<i class="sw"></i></button>`;
-    (row.firstElementChild as HTMLButtonElement).onclick = () => { writeState({ on: !on, step: readState()?.step ?? 0 }); draw(); };
+    // (désactivé ici : mis de côté, les chapitres se taisent aussi)
+    (row.firstElementChild as HTMLButtonElement).onclick = () => { const s = readState(); writeState({ ...s, on: !on, step: s?.step ?? 0, end: on ? 'skip' : undefined }); draw(); };
   };
   draw();
   return row;
@@ -198,11 +300,24 @@ const GATE: Partial<Record<StepId, KindId[]>> = {
 const GUIDED = new Set<string>(['gather', 'house', 'well', 'farm', 'lumber', 'quarry']);
 
 export class Tutorial {
-  /** la bulle est affichée */
+  /** la bulle est active : la suite principale ou un chapitre */
   on = false;
+  /** la suite principale est en cours (un chapitre peut l'interrompre : elle reprend après lui) */
+  guiding = false;
+  /** un chapitre s'achève (`done` : fini, ou devenu sans objet ; sinon passé) */
+  onChapterEnd: ((id: ChapterId, done: boolean) => void) | null = null;
   private steps: Step[];
-  /** étape en cours (ou celle où on l'a laissé) */
+  /** étape en cours de la suite principale (ou celle où on l'a laissée) */
   private i = 0;
+  /** le chapitre en cours et son étape ; tous les chapitres (voir `setChapters`) */
+  private ch: ChapterId | null = null;
+  private ci = 0;
+  private chapters: Partial<Record<ChapterId, Chapter>> = {};
+  /** un chapitre en cours à la dernière session : il reprend dès que les chapitres sont connus */
+  private pending: TutoState['ch'] | null = null;
+  /** comment la suite principale s'est arrêtée, et les chapitres déjà montrés */
+  private end: TutoState['end'];
+  private seen = new Set<string>();
   /** tâches de l'étape déjà faites */
   private ticks: boolean[] = [];
   /** toutes faites depuis… (la bulle dit « Bien joué ! » un instant avant de passer) */
@@ -212,14 +327,16 @@ export class Tutorial {
   private body: HTMLElement;
   private arrow: HTMLElement;
   private ring: HTMLElement;
-  /** clics repérés pendant l'étape : l'œil d'une équipe, celui d'un incident */
-  private clicks = new Set<'exp' | 'inc'>();
-  /** état au début de l'étape */
+  /** clics repérés pendant l'étape : l'œil d'une équipe ('exp'), d'un incident ('inc'), un bouton à `data-a` (son action) */
+  private clicks = new Set<string>();
   /** l'outil Route a été pris pendant cette étape */
   private roadTool = false;
+  /** état au début de l'étape */
   private base: { view?: { x: number; z: number; yaw: number; dist: number }; kinds?: Record<string, number>; roads?: number; paused?: boolean; speed?: number } = {};
   /** choix d'expédition déjà amenés sous les yeux */
   private shown = new WeakSet<Element>();
+  /** les touches de la vue (la disposition du clavier, lue dès que le navigateur la donne) */
+  private keys = viewKeys(null, getLang());
 
   /** `fresh` : nouvelle partie (le tutoriel, s'il est activé, reprend au début) */
   constructor(private ui: UI, private host: UIHost, fresh: boolean, private off = false) {
@@ -248,6 +365,8 @@ export class Tutorial {
         id: 'camera', anchor: () => null, read: true,
         begin: () => (this.base.view = h.cam.view()),
         text: () => (coarse() ? T.camera.touch : T.camera.text),
+        // le clavier : les lettres de la disposition du joueur (ZQSD en AZERTY, WASD en QWERTY)
+        more: () => (coarse() ? '' : T.camera.keys(kbd(this.keys.move), kbd(this.keys.turn, ' / '))),
         note: () => (h.time.paused ? T.camera.paused : ''),
         // un seul geste suffit : un enfant zoome tout de suite, mais tourner la vue au clic droit ne se devine pas
         check: () => {
@@ -260,6 +379,8 @@ export class Tutorial {
       make('food', ['farm']),
       make('wood', ['lumber']),
       make('stone', ['quarry']),
+      // le bûcheron et le pierrier posés, leur production paraît dans la barre des ressources
+      { id: 'resources', anchor: () => q('#res'), check: () => [], read: true },
       {
         id: 'road', anchor: () => q('#quickL [data-tool="road"]'),
         begin: () => { this.base.roads = roads(); this.roadTool = false; },
@@ -273,8 +394,9 @@ export class Tutorial {
         },
       },
       {
-        // la fiche ouverte (d'un besoin ou des habitants) : la bulle se met dessous, sans la cacher
+        // la fiche ouverte (d'un besoin ou des habitants) : la bulle se met à côté, sans la cacher ni l'entourer
         id: 'needs', anchor: () => [q('#needInfo'), q('#census')].find((x) => !(x as HTMLElement).hidden) ?? q('#needs'),
+        bare: (a) => a.id === 'needInfo' || a.id === 'census',
         check: () => [!(q('#needInfo') as HTMLElement).hidden || !(q('#census') as HTMLElement).hidden],
       },
       {
@@ -283,9 +405,10 @@ export class Tutorial {
         check: () => [h.time.paused !== this.base.paused, h.time.speed !== this.base.speed],
       },
       {
-        // une fois ouvert, la bulle montre la liste des conditions
+        // une fois ouvert, la bulle se met à côté de la liste des conditions
         id: 'ages', read: true,
         anchor: () => (q('#agePanel')!.classList.contains('open') ? q('#ageReq') : q('#agePanel')),
+        bare: (a) => a.id === 'ageReq',
         check: () => [q('#agePanel')!.classList.contains('open')],
       },
       {
@@ -351,40 +474,99 @@ export class Tutorial {
       h.audio.sfxClick();
       if (b.classList.contains('tNext')) this.next();
       else if (b.classList.contains('tSkip')) this.skip();
+      else if (b.classList.contains('tAct')) { this.cur.act?.()?.run(); this.key = ''; }
     });
-    // l'œil d'une carte d'équipe ou d'incident (capturé avant que la carte ne soit redessinée)
+    // l'œil d'une carte d'équipe ou d'incident, un bouton de la barre des troupes (capturés avant que la carte ne soit redessinée)
     ui.root.addEventListener('click', (e) => {
-      const cam = (e.target as HTMLElement).closest('.expCard .cam');
+      const t = e.target as HTMLElement, cam = t.closest('.expCard .cam');
       if (cam) this.clicks.add(cam.closest('.incident') ? 'inc' : 'exp');
+      const a = t.closest<HTMLElement>('[data-a]')?.dataset.a;
+      if (a) this.clicks.add(a);
     }, true);
     // une liste qui défile (la fenêtre des expéditions) : la bulle suit l'élément montré
     ui.root.addEventListener('scroll', () => { if (this.on) this.place(); }, true);
     window.addEventListener('resize', () => { if (this.on) this.place(); });
+    // les lettres des touches selon la disposition du clavier (Chrome, Edge) ; sinon, celles de la langue
+    const kb = (navigator as Navigator & { keyboard?: { getLayoutMap?(): Promise<Map<string, string>> } }).keyboard;
+    kb?.getLayoutMap?.().then((m) => { this.keys = viewKeys(m, getLang()); this.key = ''; }).catch(() => { /* disposition inconnue */ });
     ui.tutorial = this;
 
     // bac à sable : jamais de tutoriel, et le choix du joueur pour les autres parties n'est pas touché
     if (off) return;
-    const st =readState() ?? { on: tutorialOn(), step: 0 };
+    const st = readState() ?? { on: tutorialOn(), step: 0 };
+    this.end = st.end;
+    this.seen = new Set(st.seen ?? []);
+    // un chapitre laissé en cours reprend (pas dans une partie neuve : il se relancera à son heure)
+    this.pending = fresh ? null : st.ch ?? null;
     // nouvelle partie avec le tutoriel : le temps attend que le joueur ait pris ses repères (il le relance à l'étape du temps)
-    if (fresh) { st.step = 0; if (st.on) h.time.paused = true; }
-    this.i = Math.min(st.step, this.steps.length - 1);
-    writeState({ on: st.on, step: this.i });
+    if (fresh && st.on) h.time.paused = true;
+    this.i = fresh ? 0 : stepIndex(st, this.steps.map((s) => s.id));
+    this.guiding = st.on;
+    this.save();
     if (st.on) this.show(this.i);
   }
 
-  /** Affiche l'étape donnée (elle repart de zéro) */
+  /** l'étape affichée : celle du chapitre en cours, sinon celle de la suite principale */
+  private get cur(): Step { return this.ch ? this.chapters[this.ch]!.steps[this.ci] : this.steps[this.i]; }
+
+  /** La bulle guide en ce moment (un chapitre qui attend ailleurs ne compte pas : conseils et aides reprennent) */
+  get active() { return this.on && !(this.ch && this.chapters[this.ch]!.away?.()); }
+
+  /** Le chapitre en cours (null : aucun) */
+  get chapterOn() { return this.ch; }
+
+  /** Un bouton à `data-a` cliqué pendant l'étape (« goal » : le bouton Centrer de la barre des troupes) */
+  clicked(a: string) { return this.clicks.has(a); }
+
+  /** Les chapitres (une fois le jeu prêt) ; celui laissé en cours à la dernière session reprend */
+  setChapters(defs: Partial<Record<ChapterId, Chapter>>) {
+    this.chapters = defs;
+    const p = this.pending;
+    this.pending = null;
+    if (p && defs[p.id] && chapterDue(this.state(), p.id)) this.openChapter(p.id, p.step);
+    else this.save();
+  }
+
+  /**
+   * Lance un chapitre, au moment de son événement : une seule fois, même le tutoriel fini, mais pas s'il a été mis de côté.
+   * La suite principale en cours attend la fin du chapitre. Vrai s'il démarre
+   */
+  chapter(id: ChapterId): boolean {
+    // (ni chapitre au bac à sable)
+    if (this.off || !this.chapters[id] || this.ch === id || !chapterDue(this.state(), id)) return false;
+    // un autre chapitre en cours compte pour vu : le nouveau le remplace
+    if (this.ch) this.seen.add(this.ch);
+    this.openChapter(id, 0);
+    return true;
+  }
+
+  private openChapter(id: ChapterId, i: number) {
+    this.ch = id;
+    this.ci = clamp(i, 0, this.chapters[id]!.steps.length - 1);
+    this.on = true;
+    this.begin();
+  }
+
+  /** Affiche l'étape donnée de la suite principale (elle repart de zéro) */
   show(i: number) {
     if (this.off) return;
     this.i = clamp(i, 0, this.steps.length - 1);
-    this.on = true;
-    const s = this.steps[this.i];
+    this.ch = null;
+    this.on = this.guiding = true;
+    this.end = undefined;
+    this.begin();
+  }
+
+  /** L'étape affichée commence */
+  private begin() {
+    const s = this.cur;
     this.base = {};
     this.clicks.clear();
     s.begin?.();
     this.ticks = s.check().map(() => false);
     this.doneAt = 0;
     this.key = '';
-    writeState({ on: true, step: this.i });
+    this.save();
     // la bulle apparaît directement à sa place (sans glisser depuis la précédente)
     this.box.classList.add('fresh');
     this.update();
@@ -392,6 +574,11 @@ export class Tutorial {
   }
 
   next() {
+    if (this.ch) {
+      if (this.ci >= this.chapters[this.ch]!.steps.length - 1) this.endChapter(true);
+      else { this.ci++; this.begin(); }
+      return;
+    }
     // une étape de pose terminée : l'outil rentre (sinon le prochain clic, sur « Suivant » ou à côté, poserait un bâtiment de trop)
     if (['fire', 'habitat', 'food', 'wood', 'stone'].includes(this.steps[this.i]?.id) && this.host.tools.tool === 'build') this.host.tools.setTool('none');
     // le feu de camp posé, le temps repart (il était arrêté le temps de regarder autour de soi)
@@ -400,43 +587,86 @@ export class Tutorial {
     this.show(this.i + 1);
   }
 
-  /** Cache la bulle ; le tutoriel reprendra à cette étape */
+  /** Un chapitre s'achève (`done` : fini ; sinon passé) : il ne revient plus ; la suite principale en cours reprend */
+  private endChapter(done: boolean) {
+    const id = this.ch!;
+    this.seen.add(id);
+    this.ch = null;
+    this.onChapterEnd?.(id, done);
+    if (this.guiding) { this.show(this.i); return; }
+    this.hide();
+  }
+
+  /** Cache la bulle et met le tutoriel de côté (il reprendra à cette étape) ; les chapitres se taisent aussi */
   stop() {
+    this.end = 'skip';
+    this.ch = null;
+    this.guiding = false;
+    this.hide();
+  }
+
+  private hide() {
     this.on = false;
     this.box.hidden = this.ring.hidden = true;
     this.light(null);
-    writeState({ on: false, step: this.i });
+    this.save();
   }
 
-  skip() { this.stop(); if (this.host.time.paused) this.host.time.paused = false; this.ui.info(TUTO_TEXT.skipped); }
+  /** « Passer » : le chapitre seul, ou tout le tutoriel */
+  skip() {
+    if (this.ch) { this.endChapter(false); return; }
+    this.stop();
+    if (this.host.time.paused) this.host.time.paused = false;
+    this.ui.info(TUTO_TEXT.skipped);
+  }
 
   finish() {
-    this.stop();
     this.i = 0;
-    writeState({ on: false, step: 0 });
+    this.end = 'done';
+    this.guiding = false;
+    this.hide();
     this.ui.info(TUTO_TEXT.finished);
   }
+
+  /** « Recommencer » : la suite principale repart du début, et les chapitres se remontreront à leur heure */
+  restart() {
+    this.seen.clear();
+    this.show(0);
+  }
+
+  /** L'état à enregistrer */
+  private state(): TutoState {
+    return {
+      on: this.guiding, step: this.i, id: this.steps[this.i]?.id, end: this.end, seen: [...this.seen],
+      ch: this.ch ? { id: this.ch, step: this.ci } : this.pending ?? undefined,
+    };
+  }
+  private save() { writeState(this.state()); }
 
   /** Coche ce que le joueur a fait, passe à l'étape suivante, place la bulle (appelé quatre fois par seconde) */
   update() {
     if (!this.on) return;
-    const s = this.steps[this.i];
+    const chap = this.ch ? this.chapters[this.ch]! : null;
+    // un chapitre devenu sans objet (les Enfers quittés, le portail refermé) s'achève
+    if (chap?.live && !chap.live()) { this.endChapter(true); return; }
+    const s = this.cur;
     s.check().forEach((v, j) => { if (v) this.ticks[j] = true; });
     const all = this.ticks.filter(Boolean).length >= (s.need ?? this.ticks.length);
     if (all && !s.read) {
       if (!this.doneAt) this.doneAt = performance.now();
       else if (performance.now() - this.doneAt > 1000) { this.next(); return; }
     }
-    // une fenêtre ouverte (réglages, récit, décision) cache la bulle, sauf celle des expéditions à leur étape
+    // une fenêtre ouverte (réglages, récit, décision) cache la bulle, sauf celle des expéditions à leur étape ; un chapitre
+    // attend que le joueur soit là où il se passe ; la suite principale se cache sous terre et dans les Enfers
     const ov = this.ui.root.querySelector('.overlay'), body = document.body.classList;
-    const away = (!!ov && !((s.id === 'expeditions' || s.id === 'gear') && ov.querySelector('.expModal'))) || body.contains('photo') || body.contains('under');
+    const away = (!!ov && !((s.id === 'expeditions' || s.id === 'gear') && ov.querySelector('.expModal'))) || body.contains('photo') || (chap ? !!chap.away?.() : body.contains('under'));
     this.box.hidden = away;
     if (away) { this.ring.hidden = true; this.light(null); return; }
     this.render(s, all);
     this.place();
   }
 
-  /** l'élément montré : il luit et bat (en plus de l'anneau), pour qu'on le trouve du premier coup */
+  /** l'élément montré : un bouton prend une teinte dorée (l'anneau doré, lui, l'entoure d'un halo qui respire lentement) */
   private lit: Element | null = null;
   private light(a: Element | null) {
     if (a === this.lit) return;
@@ -451,27 +681,31 @@ export class Tutorial {
    */
   lock(k: KindId): string | null {
     if (!this.on) return null;
-    const ok = GATE[this.steps[this.i].id];
+    const ok = GATE[this.cur.id as StepId];
     if (!ok || ok.includes(k)) return null;
     for (const b of this.host.world.buildings.values()) if (!GUIDED.has(b.kind)) return null;
     return TUTO_TEXT.locked;
   }
 
   private render(s: Step, all: boolean) {
-    const T = TUTO_TEXT, st = T.steps[s.id], n = this.steps.length, last = this.i === n - 1;
-    const tasks = s.tasks?.() ?? st.tasks, note = s.note?.() ?? '';
-    const key = `${this.i}|${this.ticks.join()}|${all}|${note}|${tasks.join()}`;
+    const T = TUTO_TEXT, st = s.t ?? T.steps[s.id as StepId], chap = this.ch ? this.chapters[this.ch]! : null;
+    const n = chap ? chap.steps.length : this.steps.length, at = chap ? this.ci : this.i, last = at === n - 1;
+    const tasks = s.tasks?.() ?? st.tasks, note = s.note?.() ?? '', more = s.more?.() ?? '', act = s.act?.() ?? null;
+    const key = `${this.ch}|${at}|${this.ticks.join()}|${all}|${note}|${more}|${act?.label}|${tasks.join()}`;
     if (key === this.key) return;
     this.key = key;
     const fin = all && tasks.length > 0;
     this.box.classList.toggle('done', fin);
+    this.box.classList.toggle('chap', !!chap);
     this.body.innerHTML = `
-      <div class="tHead"><span>${T.stepOf(this.i + 1, n)}</span>${fin ? `<b>${ic('check', 14, 2.6)} ${T.wellDone}</b>` : ''}</div>
+      <div class="tHead"><span>${chap ? `${chap.title()} · ${at + 1} / ${n}` : T.stepOf(at + 1, n)}</span>${fin ? `<b>${ic('check', 15, 2.6)} ${T.wellDone}</b>` : ''}</div>
       <h4>${st.title}</h4>
       <p>${fmt(s.text?.() ?? st.text)}</p>
+      ${more ? `<p class="tMore">${more}</p>` : ''}
       ${note ? `<p class="tNote">${fmt(note)}</p>` : ''}
-      <ul>${tasks.map((t, j) => `<li class="${this.ticks[j] ? 'ok' : ''}"><i>${this.ticks[j] ? ic('check', 12, 3) : ''}</i>${fmt(t)}</li>`).join('')}</ul>
-      <div class="tActs"><button class="tSkip">${T.skip}</button><span class="grow"></span><button class="tNext ${all ? 'active' : ''}">${last ? T.finish : s.read ? T.ok : T.next}</button></div>`;
+      <ul>${tasks.map((t, j) => `<li class="${this.ticks[j] ? 'ok' : ''}"><i>${this.ticks[j] ? ic('check', 13, 3) : ''}</i>${fmt(t)}</li>`).join('')}</ul>
+      ${act ? `<button class="tAct">${act.label}</button>` : ''}
+      <div class="tActs"><button class="tSkip">${chap ? T.skipChapter : T.skip}</button><span class="grow"></span><button class="tNext ${all ? 'active' : ''}">${last ? T.finish : s.read ? T.ok : T.next}</button></div>`;
   }
 
   /**
@@ -479,11 +713,13 @@ export class Tutorial {
    * sur un côté), sans sortir de l'écran ; la pointe vise le milieu de l'élément. Sans élément : à droite, sous la barre du haut
    */
   private place() {
-    const box = this.box, ring = this.ring, W = innerWidth, H = innerHeight, m = 8, gap = 14;
-    const a = this.steps[this.i].anchor(), r = a?.getBoundingClientRect();
+    const box = this.box, ring = this.ring, W = innerWidth, H = innerHeight, m = 8, gap = 16;
+    const s = this.cur, a = s.anchor(), r = a?.getBoundingClientRect();
     const seen = !!r && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < H && r.right > 0 && r.left < W;
-    ring.hidden = !seen;
-    this.light(seen ? a : null);
+    // (une fiche que le joueur vient d'ouvrir place la bulle sans être entourée)
+    const bare = seen && !!s.bare?.(a!);
+    ring.hidden = !seen || bare;
+    this.light(seen && !bare ? a : null);
     const w = box.offsetWidth, h = box.offsetHeight;
     if (!seen) {
       const top = (document.getElementById('hud')?.getBoundingClientRect().bottom ?? 80) + 12;
@@ -492,8 +728,8 @@ export class Tutorial {
       box.dataset.side = '';
       return;
     }
-    ring.style.left = `${r.left - 5}px`; ring.style.top = `${r.top - 5}px`;
-    ring.style.width = `${r.width + 10}px`; ring.style.height = `${r.height + 10}px`;
+    ring.style.left = `${r.left - 6}px`; ring.style.top = `${r.top - 6}px`;
+    ring.style.width = `${r.width + 12}px`; ring.style.height = `${r.height + 12}px`;
     // dans la barre du bas, la bulle passe au-dessus de la fiche du bâtiment survolé ; en haut, sous tout le panneau (le conseil reste lisible)
     const lid = Math.min(r.top, a!.closest('#dock')?.getBoundingClientRect().top ?? r.top);
     const floor = Math.max(r.bottom, a!.closest('#hud > .panel')?.getBoundingClientRect().bottom ?? r.bottom);
@@ -510,8 +746,8 @@ export class Tutorial {
     const { x, y } = pos(side);
     box.style.left = `${x}px`; box.style.top = `${y}px`;
     box.dataset.side = side;
-    this.arrow.style.left = vert ? `${clamp(cx - x, 18, w - 18)}px` : '';
-    this.arrow.style.top = vert ? '' : `${clamp(cy - y, 18, h - 18)}px`;
+    this.arrow.style.left = vert ? `${clamp(cx - x, 20, w - 20)}px` : '';
+    this.arrow.style.top = vert ? '' : `${clamp(cy - y, 20, h - 20)}px`;
   }
 
   // ---------------- Réglages ----------------
@@ -525,7 +761,8 @@ export class Tutorial {
   }
 
   private settingsHint() {
-    const T = TUTO_TEXT.settings, n = this.steps.length, title = TUTO_TEXT.steps[this.steps[this.i].id].title;
+    const T = TUTO_TEXT.settings, n = this.steps.length, title = TUTO_TEXT.steps[this.steps[this.i].id as StepId].title;
+    if (this.ch) { const c = this.chapters[this.ch]!; return T.hintChap(c.title(), this.ci + 1, c.steps.length); }
     return this.on ? T.hintOn(this.i + 1, n, title) : this.i ? T.hintOff(this.i + 1, n, title) : T.hintNew;
   }
 
@@ -540,6 +777,6 @@ export class Tutorial {
       b.classList.remove('active');
       ov.querySelector('#gTutoHint')!.textContent = this.settingsHint();
     };
-    ov.querySelector<HTMLButtonElement>('#gTutoRestart')!.onclick = () => { close(); this.show(0); };
+    ov.querySelector<HTMLButtonElement>('#gTutoRestart')!.onclick = () => { close(); this.restart(); };
   }
 }
