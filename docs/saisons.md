@@ -41,7 +41,6 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
 - [ciel-meteo.md](ciel-meteo.md) : temps de jeu, transition `mix()`, météo par saison.
 - [vegetation-biomes.md](vegetation-biomes.md) : couches de végétation, biomes, facteurs de neige.
 - [eau-rivieres.md](eau-rivieres.md) : courant (`flowTex`), lacs, torrents.
-- [jardins.md](jardins.md) : les jardins lisent `leaf`, `snow`, `foliage2`.
 
 ## Pièges et invariants
 - `lerpInto` interpole sur place les objets de l'état : ne jamais remplacer une couleur de l'état par une autre (`s.grass = …`) : les uniforms et les raccourcis pointent dessus.

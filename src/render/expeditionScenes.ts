@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import { World, N, SEA, VEG_FOREST, VEG_CAVE } from '../world/world';
-import { Agents } from '../sim/agents';
+import { Agents, type Act } from '../sim/agents';
 import { ActiveExpedition, seaClearance, SEA_CLEAR, openWater, seaRoomMap, huntSpot } from '../sim/expeditions';
 import { HerdKind, Scene, BoatKind, boatKindFor } from '../sim/missions';
-import { Act } from '../world/gardens';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { makeFolk, folkStep, Folk, FolkPose, FolkRole } from './folk';
 import { balloonBasketGeo, balloonEnvelopeGeo } from './balloon';
@@ -506,6 +505,39 @@ const craterGeo = () => geo('crater', (p) => {
 });
 const meteorGeo = () => geo('meteor', (p) => { p.add(new THREE.IcosahedronGeometry(0.09, 0).scale(1, 0.8, 1), 0, 0.06, 0, 0x3a3634); for (let i = 0; i < 4; i++) p.add(new THREE.IcosahedronGeometry(0.025, 0), Math.cos(i * 1.6) * 0.07, 0.1, Math.sin(i * 1.6) * 0.07, 0x5a5650); });
 const drumGeo = () => geo('drum', (p) => { p.cyl(0.04, 0.04, 0.05, 10, 0, 0, 0, 0xc84a3e); p.cyl(0.041, 0.041, 0.006, 10, 0, 0.05, 0, 0xf2e8d0); });
+/** Rayon du cercle de combat du pugilat */
+const PIT_R = 0.34;
+/**
+ * Le cercle du pugilat : sable ratissé, piquets et double corde jusqu'au Moyen Âge ; ensuite un vrai ring, plancher, toile,
+ * poteaux de coin rouge et bleu, trois rangs de cordes
+ */
+const fightPitGeo = (ring: boolean) => geo(`fpit${+ring}`, (p) => {
+  if (!ring) {
+    p.cyl(PIT_R + 0.04, PIT_R + 0.05, 0.012, 22, 0, 0, 0, 0xdcc69a);
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; p.cyl(0.008, 0.01, 0.1, 5, Math.cos(a) * PIT_R, 0, Math.sin(a) * PIT_R, 0x7a5a3a); }
+    for (const y of [0.05, 0.085]) p.add(new THREE.TorusGeometry(PIT_R, 0.004, 3, 30).rotateX(Math.PI / 2), 0, y, 0, 0xc9b48a);
+    return;
+  }
+  const h = PIT_R * 0.95;
+  p.box(h * 2 + 0.06, 0.05, h * 2 + 0.06, 0, 0, 0, 0x3a3a44);
+  p.box(h * 2 + 0.03, 0.008, h * 2 + 0.03, 0, 0.05, 0, 0xece6d8);
+  [0xd8443a, 0xf2f2f2, 0x3a6ab8, 0xf2f2f2].forEach((c, i) => { const a = (i / 4) * Math.PI * 2 + Math.PI / 4, r = h * Math.SQRT2; p.cyl(0.012, 0.012, 0.17, 6, Math.cos(a) * r, 0.05, Math.sin(a) * r, c); });
+  for (const [k, y] of [[0, 0.1], [1, 0.14], [2, 0.18]]) for (let s = 0; s < 4; s++) {
+    const c = [0xd8443a, 0xf2f2f2, 0x3a6ab8][k];
+    if (s % 2) p.box(0.006, 0.006, h * 2, (s === 1 ? 1 : -1) * h, y, 0, c); else p.box(h * 2, 0.006, 0.006, 0, y, (s === 0 ? 1 : -1) * h, c);
+  }
+});
+/** La stèle du vieux champion : un pilier, son buste, les cestes de cuir pendus */
+const hermGeo = () => geo('herm', (p) => {
+  p.box(0.07, 0.03, 0.07, 0, 0, 0, 0xcfc6b4); p.box(0.05, 0.2, 0.05, 0, 0.03, 0, 0xe2dccd);
+  p.box(0.045, 0.05, 0.04, 0, 0.23, 0, 0xe2dccd); p.box(0.07, 0.03, 0.035, 0, 0.21, 0, 0xe2dccd);
+  for (const s of [-1, 1]) p.box(0.016, 0.04, 0.016, s * 0.034, 0.12, 0.02, 0x8a5a34);
+});
+/** Le banc des combattants, et l'amphore d'eau fraîche à côté */
+const fightBenchGeo = () => geo('fbench', (p) => {
+  p.box(0.26, 0.016, 0.06, 0, 0.045, 0, 0x9a7452); for (const s of [-1, 1]) p.box(0.02, 0.045, 0.05, s * 0.11, 0, 0, 0x6f5640);
+  p.cyl(0.018, 0.024, 0.07, 7, 0.17, 0, 0.01, 0xb8673e); p.cyl(0.008, 0.018, 0.02, 7, 0.17, 0.07, 0.01, 0xb8673e);
+});
 const steamGeo = () => geo('steam', (p) => p.sphere(0.035, 0, 0, 0, 0xf4f4f2, 1));
 const smokeGeo = () => geo('smoke', (p) => p.sphere(0.04, 0, 0, 0, 0x8a8680, 1));
 const cloudGeo = () => geo('cloud', (p) => p.sphere(0.05, 0, 0, 0, 0xf2f0ec, 1));
@@ -750,6 +782,8 @@ const BEHAVIOR: Record<Scene, string> = {
   smoke: 'tend', swarm: 'tend', trade: 'trade', spring: 'spring', gallery: 'delve', cave: 'delve', troupe: 'watch', abbey: 'watch', stars: 'watch',
   race: 'tend', balloon: 'tend', launch: 'watch', moon: 'watch', colony: 'watch', mammoth: 'mammoth', megalodon: 'boat', kraken: 'boat',
   dragon: 'dragon', games: 'games',
+  // l'école du pugilat : le cercle de sable, et l'équipe qui boxe à tour de rôle (voir `stepPugilist`)
+  pugilat: 'watch',
   // la galère traverse jusqu'à l'île du portail, l'équipe y débarque (voir `stepIsle`)
   portal: 'boat',
   // le volet maritime : au large, en bateau (voyage, chasse à l'épave, pêche en haute mer)
@@ -949,6 +983,8 @@ export class ExpeditionScene {
   /** sa hauteur au-dessus du sol (la montgolfière en vol), pour que la vue la garde dans le cadre */
   lift = 0;
   private bath: { at: [number, number][]; y: number; in: Set<number> } | null = null;
+  /** le cercle du pugilat : son centre, la hauteur où l'on boxe, ceux qui y combattent */
+  private pit: { x: number; z: number; y: number; in: Set<number> } | null = null;
   private mouth: { at: [number, number]; heap: [number, number] } | null = null;
   private delve = new Map<number, { phase: 'go' | 'in' | 'out' | 'heap'; t: number }>();
   private cartRun: { obj: THREE.Object3D; a: [number, number]; b: [number, number] } | null = null;
@@ -1205,6 +1241,23 @@ export class ExpeditionScene {
       people.forEach((m, i) => this.npc(m, age, cx + 0.28, cz + (i ? 0.14 : -0.12), -Math.PI / 2, 'talk'));
       this.spots.push([cx - 0.24, cz - 0.08], [cx - 0.24, cz + 0.1], [kx + 0.15, kz + 0.12]);
       this.focus = [cx + 0.28, cz];
+    } else if (st === 'pugilat') {
+      // le cercle de sable (un ring dès l'âge industriel), sur le replat le plus plat ; deux par deux, ils y boxent à tour de rôle
+      // sous l'œil du vieux champion, les autres crient autour ; la stèle, le banc et l'amphore au bord
+      const ring = a.age >= 3, [px, pz] = this.flatSpot(cx, cz, PIT_R + 0.08), [, hi] = this.relief(px, pz, PIT_R + 0.05), py = hi + 0.002;
+      this.put(fightPitGeo(ring), px, pz, 0).position.y = py;
+      this.pit = { x: px, z: pz, y: py + (ring ? 0.058 : 0.012), in: new Set() };
+      const [hx, hz] = this.near(px - PIT_R - 0.2, pz - 0.18, cx, cz);
+      this.put(hermGeo(), hx, hz, Math.PI / 2);
+      const [bx, bz] = this.near(px + 0.05, pz - PIT_R - 0.22, cx, cz);
+      this.put(fightBenchGeo(), bx, bz, 0);
+      this.npc('sage', age, px - PIT_R - 0.12, pz + 0.05, Math.PI / 2, 'talk');
+      // quelques curieux venus voir
+      for (const [ang, r] of [[0.5, 0.62], [2.4, 0.66], [3.9, 0.6]]) {
+        const [x, z] = this.near(px + Math.cos(ang) * r, pz + Math.sin(ang) * r, cx, cz);
+        this.npc('villager', age, x, z, Math.atan2(px - x, pz - z), 'cheer');
+      }
+      this.focus = [px, pz];
     } else if (st === 'spring') {
       // la source chaude : bassin fumant cerclé de pierres (de roseaux au bord de la rivière) ; on s'y baigne à tour de rôle. Sur
       // le replat le plus plat à portée, posé au plus haut du sol sous lui (jamais à moitié enterré dans la pente) ; un socle de
@@ -1968,7 +2021,7 @@ export class ExpeditionScene {
 
   /** Un membre va en (x, z) et y travaille, tourné vers (fx, fz) ; il ne repart pas avant `stay` secondes */
   private sendTo(a: ActiveExpedition, id: number | undefined, x: number, z: number, fx: number, fz: number, stay: number) {
-    if (id === undefined || this.kind === 'delve' || this.boat?.riders.includes(id) || this.bath?.in.has(id)) return;
+    if (id === undefined || this.kind === 'delve' || this.boat?.riders.includes(id) || this.bath?.in.has(id) || this.pit?.in.has(id)) return;
     this.agents.memberGo(id, x, z, Math.atan2(fx - x, fz - z));
     this.next.set(id, stay);
     this.goal.set(id, 1);
@@ -3837,6 +3890,7 @@ export class ExpeditionScene {
       if (this.games && this.stepAthlete(id, i, k, dt)) return;
       if (this.dragon && this.stepKnight(id, i, a, k, dt)) return;
       if (this.kind === 'spring' && this.stepBather(id, i, a, dt)) return;
+      if (this.pit && this.stepPugilist(id, i, a)) return;
       if (this.kind === 'delve' && this.mouth) { this.stepDelver(id, i, dt); return; }
       let left = (this.next.get(id) ?? i * 0.8) - dt;
       if (this.kind === 'camp' && left <= 0) {
@@ -3864,6 +3918,7 @@ export class ExpeditionScene {
     if (this.mam) return this.mam.k < 0.3 && this.mam.way !== 'pits' ? 'sit' : 'work';
     if (st === 'salt') return k < 0.75 ? 'sit' : 'work';
     if (st === 'troupe') return (i + Math.floor(this.t / 5)) % 2 ? 'cheer' : 'sit';
+    if (st === 'pugilat') return (i + Math.floor(this.t / 3)) % 3 ? 'cheer' : 'stroll';
     if (st === 'abbey') return (i + Math.floor(this.t / 7)) % 3 ? 'sit' : 'cheer';
     if (st === 'stars') return i < 3 ? 'work' : 'sit';
     // au compte à rebours, on attend ; au décollage, on crie de joie
@@ -4394,6 +4449,25 @@ export class ExpeditionScene {
     return false;
   }
 
+  /**
+   * Le pugilat : deux par deux, à tour de rôle (une reprise de 9 s), ils entrent dans le cercle et boxent face à face en
+   * tournant l'un autour de l'autre ; la reprise finie, ils ressortent crier avec les autres
+   */
+  private stepPugilist(id: number, i: number, a: ActiveExpedition) {
+    const p = this.pit!, n = a.party.length, round = Math.floor(this.t / 9), pairs = Math.max(1, Math.floor(n / 2));
+    const slot = ((i - (round % pairs) * 2) % n + n) % n, fighting = a.phase === 'work' && slot < 2 && n >= 2;
+    if (fighting) {
+      // ils se tournent autour, se rapprochent pour frapper, reculent pour esquiver
+      const ang = this.t * 0.45 + slot * Math.PI, r = 0.1 + Math.sin(this.t * 1.3 + slot) * 0.025;
+      const x = p.x + Math.cos(ang) * r, z = p.z + Math.sin(ang) * r;
+      this.agents.ride(id, { x, z, y: p.y, heading: Math.atan2(p.x - x, p.z - z), act: 'box' });
+      p.in.add(id);
+      return true;
+    }
+    if (p.in.has(id)) { p.in.delete(id); this.agents.ride(id, null); this.next.set(id, 0.3); this.goal.delete(id); }
+    return false;
+  }
+
   /** Galerie ou grotte : chacun y entre, disparaît le temps d'abattre la roche, ressort et vide sa charge au tas */
   private stepDelver(id: number, i: number, dt: number) {
     const m = this.mouth!, st = this.delve.get(id) ?? { phase: 'go' as const, t: i * 1.6 };
@@ -4452,6 +4526,12 @@ export class ExpeditionScene {
       const r = this.rocket, d0 = Math.hypot(cx - r.x, cz - r.z), ang = Math.atan2(cx - r.x, cz - r.z) + (i - (a.party.length - 1) / 2) * 0.16, rr = Math.max(1.3, Math.min(2.2, d0));
       const [x, z] = this.near(r.x + Math.sin(ang) * rr, r.z + Math.cos(ang) * rr, cx, cz);
       return [x, z, Math.atan2(r.x - x, r.z - z)];
+    }
+    if (this.pit) {
+      // tout autour du cercle, face aux combattants (pas du côté du vieux champion)
+      const p = this.pit, n = a.party.length, ang = 0.9 + (i / Math.max(1, n - 1)) * 4.2, r = PIT_R + 0.2 + (i % 2) * 0.08;
+      const [x, z] = this.near(p.x + Math.cos(ang) * r, p.z + Math.sin(ang) * r, cx, cz);
+      return [x, z, Math.atan2(p.x - x, p.z - z)];
     }
     if (this.kind === 'watch' && !(this.story === 'stars' && i < 3)) {
       // en demi-cercle face aux jongleurs ou au frère brasseur (tournés vers -x), ou le nez au ciel
@@ -4593,6 +4673,7 @@ export class ExpeditionScene {
     if (a.phase === 'work' || a.phase === 'out' || a.phase === 'gather') {
       for (const id of this.boat?.riders ?? []) this.agents.ride(id, null);
       for (const id of this.bath?.in ?? []) this.agents.ride(id, null);
+      for (const id of this.pit?.in ?? []) this.agents.ride(id, null);
       for (const id of this.balloon?.riders ?? []) this.agents.ride(id, null);
       if (this.race?.driver != null) this.agents.ride(this.race.driver, null);
       if (this.games || this.dragon) for (const id of a.party) this.agents.ride(id, null);

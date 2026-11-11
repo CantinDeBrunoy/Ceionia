@@ -169,7 +169,6 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
   volcano: { icon: 'volcano', label: 'Volcan' },
   forest: { icon: 'forest', label: 'Forêt', key: '6' },
   field: { icon: 'wheat', label: 'Champ', key: '7' },
-  garden: { icon: 'spring', label: 'Jardin', key: '8' },
   biome: { icon: 'palette', label: 'Biome' },
   rocks: { icon: 'rock', label: 'Rochers' },
   cave: { icon: 'cave', label: 'Grotte' },
@@ -181,7 +180,6 @@ const TOOL_INFO: Record<string, { icon: string; label: string; key?: string }> =
 };
 
 /** Ce que le jardin n'est pas : il ne produit rien */
-const DECO_NOTE = 'Décoratif : rend le village plus heureux, ne produit rien.';
 
 /** À quoi sert chaque outil (fiche au survol) */
 const TOOL_DESC: Record<string, string> = {
@@ -189,23 +187,14 @@ const TOOL_DESC: Record<string, string> = {
   raise: 'Monter le terrain sous le pinceau.', lower: 'Baisser le terrain sous le pinceau.', flatten: 'Aplanir à la hauteur du premier clic.',
   cliff: 'Tailler des falaises : en glissant, le sol se dresse d’un gradin à paroi de roche franche ; sur une pente, en gradins. Maj : creuser d’un gradin.', dig: 'Creuser sous le niveau de l’eau : mares, rivières, lacs.',
   mountain: 'Faire pousser une montagne, avec ses neiges éternelles si elle est haute.', volcano: 'Poser un volcan (un clic) : plus le pinceau est large, plus il est haut. Pour le retirer : la Gomme ou Démolir sur son cône ; Ctrl+Z annule.',
-  forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.', garden: `Un jardin : un lieu de rencontre qui change avec les âges et selon sa taille. ${DECO_NOTE}`,
+  forest: 'Planter une forêt : bois et bien-être.', field: 'Semer des champs : ils nourrissent le village.',
   biome: 'Peindre un biome (tempéré, taïga, désert, tropical, marais) ou rendre la terre à son climat : le sol, les arbres, l’herbe, les bêtes et la neige suivent.',
   rocks: 'Poser des rochers (un clic).', cave: 'Ouvrir une grotte dans la roche (un clic) : les expéditions vers une grotte s’y rendent.', fissure: 'Creuser une faille : en glissant, un ravin se creuse le long du tracé (le pinceau en règle la largeur). La Gomme le comble.',
-  erase: 'Effacer forêts, champs, jardins, rochers et les arbres isolés de la carte ; combler une faille.',
+  erase: 'Effacer forêts, champs, rochers et les arbres isolés de la carte ; combler une faille.',
   road: 'Tracer une route : en ligne, en glissant case par case ; en libre, d’un clic au point A puis au point B, une belle courbe qui contourne les obstacles (R pour changer de mode). Sur l’eau peu profonde, elle devient un pont.',
   bulldoze: 'Démolir un bâtiment, une route ou un décor. Élargissez le pinceau pour effacer d’un coup tout un parc, une forêt ou des routes (les petits bâtiments partent aussi ; les grands se démolissent un à un).', move: 'Ramasser un bâtiment pour le reposer ailleurs (Échap pour annuler).',
 };
 
-/** Le jardin change de nature avec les âges : son nom, son icône et sa fiche aussi */
-const GARDEN_BY_AGE: { icon: string; label: string; desc: string }[] = [
-  { icon: 'campfire', label: 'Campement', desc: 'Un campement : lieu de rassemblement autour des feux, tipis, séchoirs et taille du silex.' },
-  { icon: 'spring', label: 'Jardin', desc: 'Un jardin à l’antique : pelouse, bassin, cyprès, oliviers et bancs de marbre.' },
-  { icon: 'shield', label: 'Lices', desc: 'Des lices : sur une zone longue, un tournoi où deux chevaliers joutent devant les gradins ; sur une petite zone, quintaine et tir à l’arc.' },
-  { icon: 'leaf', label: 'Jardin public', desc: 'Un jardin public : à la française sur un terrain rectangulaire, à l’anglaise (étang, kiosque) sur une zone aux contours libres.' },
-  { icon: 'slide', label: 'Parc', desc: 'Un parc et son aire de jeux : toboggan, balançoires, bascule, tourniquet, bac à sable.' },
-  { icon: 'leaf', label: 'Jardin lumineux', desc: 'Un jardin bioluminescent : serre-dôme de verre, arbres-lumière, allées qui brillent, bassin anti-gravité, jardinières qui flottent et drones-jardiniers.' },
-];
 /** Biomes que peint le pinceau, et leur teinte de pastille (null : rendre la terre à son climat) */
 const BIOME_CHOICES: { b: number | null; label: string; color: string }[] = [
   { b: 0, label: 'Tempéré', color: '#8fc47e' }, { b: 1, label: 'Taïga', color: '#5f8a72' }, { b: 2, label: 'Désert', color: '#e2c27a' },
@@ -224,7 +213,7 @@ const QUICK = ['none', 'road', 'bulldoze', 'move'];
 /** Grands onglets de la barre du bas */
 const TABS = [
   { id: 'relief', icon: 'relief', label: 'Relief', hint: 'Sculptez le terrain', tools: ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
-  { id: 'nature', icon: 'tree', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'garden', 'biome', 'rocks', 'cave', 'fissure', 'erase'] },
+  { id: 'nature', icon: 'tree', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'biome', 'rocks', 'cave', 'fissure', 'erase'] },
   { id: 'build', icon: 'houses', label: 'Bâtir', hint: '', tools: [] as string[] },
 ];
 
@@ -369,7 +358,7 @@ function modal(root: HTMLElement, cls: string, title: string, body: string, onCl
 
 /** Onglet auquel appartient un outil ('none' reste dans l'onglet courant) */
 const tabOfTool = (tool: ToolId, current: string) =>
-  SCULPT_TOOLS.includes(tool) ? 'relief' : tool === 'field' || (tool === 'garden' && current === 'build') ? 'build' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
+  SCULPT_TOOLS.includes(tool) ? 'relief' : tool === 'field' ? 'build' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
 
 /** Ce que change un bâtiment débloqué par une expédition, dit au retour de l'équipe */
 const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
@@ -707,16 +696,14 @@ export class UI {
         const tip = `${d.names[a]}${gv.length ? ` : ${gv.join(', ').toLowerCase()}` : ''}`;
         return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" title="${tip}" aria-label="${tip}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span><small class="gv">${gv[0] ?? ''}</small>${badge}</button>`;
       };
-      const toolTile = (id: string, sub: string, deco = false) => {
+      const toolTile = (id: string, sub: string) => {
         const i = this.toolInfo(id);
-        return `<button class="tile${deco ? ' deco' : ''}" data-tool="${id}" title="${i.label}${colon()}${sub}" aria-label="${i.label}${colon()}${sub}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span><small class="gv">${sub}</small>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`;
+        return `<button class="tile" data-tool="${id}" title="${i.label}${colon()}${sub}" aria-label="${i.label}${colon()}${sub}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span><small class="gv">${sub}</small>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`;
       };
       html = BUILD_SUBS[this.cat].map((sub) => {
         const tiles = kinds.filter((k) => KIND_SUB[k] === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
-        // les champs nourrissent (groupe Nourriture) ; le jardin est un décor : bien en vue dans Parcs et décor
-        // (masqués tant que le village est vide : on ne pose d'abord que le feu de camp)
+        // les champs nourrissent (groupe Nourriture), masqués tant que le village est vide : on ne pose d'abord que le feu de camp
         if (this.cat === 'prod' && sub.id === 'nourriture' && !isStart(this.host.world)) tiles.push(toolTile('field', tr('Nourriture')));
-        if (this.cat === 'life' && sub.id === 'parcs' && !isStart(this.host.world)) tiles.unshift(toolTile('garden', tr('Décor'), true));
         return tiles.length ? `<div class="grp" data-sub="${sub.id}"><div class="gh">${ic(SUB_ICON[sub.id] ?? 'leaf', 13, 2)}<span>${sub.label}</span></div><div class="gt">${tiles.join('')}</div></div>` : '';
       }).join('') || `<span class="mhint">${tr('Rien à bâtir dans ce rayon avant l’âge {age}.', { age: AGES[Math.min(age + 2, AGES.length - 1)].name })}</span>`;
     } else {
@@ -963,12 +950,10 @@ export class UI {
     }));
   }
 
-  /** Nom, icône, raccourci et fiche d'un outil ; le jardin prend ceux de l'âge du village (campement, jardin, lices, parc…) */
+  /** Nom, icône, raccourci et fiche d'un outil */
   private toolInfo(id: string) {
     const base = TOOL_INFO[id];
-    if (id !== 'garden') return { ...base, label: tr(base.label), key: base.key === 'Échap' ? tr('Échap') : base.key, desc: tr(TOOL_DESC[id] ?? '') };
-    const g = GARDEN_BY_AGE[Math.min(this.host.sim.age, GARDEN_BY_AGE.length - 1)];
-    return { ...base, key: base.key === 'Échap' ? tr('Échap') : base.key, icon: g.icon, label: tr(g.label), desc: `${tr(g.desc)} ${tr(DECO_NOTE)}` };
+    return { ...base, label: tr(base.label), key: base.key === 'Échap' ? tr('Échap') : base.key, desc: tr(TOOL_DESC[id] ?? '') };
   }
 
   /**
@@ -1408,7 +1393,7 @@ export class UI {
     if (c.untreated) tips.push(tr('Un lieu de soins soignerait les malades.'));
     if (c.hungry) tips.push(tr('Une ferme, un champ ou un ponton de pêche nourrirait tout le monde.'));
     if (c.thirsty) tips.push(tr('Un point d’eau ou un puits de plus abreuverait tout le monde.'));
-    if (c.unhappy) tips.push(tr('Un lieu de rencontre, un jardin ou un lieu de culte rendrait le village plus heureux.'));
+    if (c.unhappy) tips.push(tr('Un lieu de rencontre, une arène ou un lieu de culte rendrait le village plus heureux.'));
     const html = `
       <h4>${ic('houses', 18, 2)} ${nplural(c.p, 'habitant', 'habitants')} <small>${tr('pour {n} places', { n: c.places })}${c.away ? tr(', dont {n} en expédition', { n: c.away }) : ''}</small></h4>
       <div class="cbar">${seg(c.employed, 'work', 'Au travail')}${seg(c.jobless, 'idle', 'Sans emploi')}${seg(c.others, 'kids', 'Enfants et anciens')}</div>

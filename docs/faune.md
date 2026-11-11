@@ -54,7 +54,7 @@ Ours, éléphant, girafe, chameau, élan, loup, crocodile, lézard, tortue, crab
 - `Trophies.sync(place, ids)`, appelé toutes les 0,5 s par `main.ts`, ne refait les maillages que si la clé change (id, position, rotation, âge de la place, liste, hauteurs du terrain dessous). Emplacement : `trophySlot(id, âge)` dans le tableau `SLOTS` (un jeu de 5 places par âge de la place, choisies pour éviter bancs, étals, statues). Le socle suit l'âge (`plinth` : pierre brute, marbre, pierre taillée, bronze, liseré lumineux). Tous tournés de `VIEW_YAW` = 0,75 vers la vue d'ensemble.
 
 ### Engins des champs (`farmRigs.ts`)
-Pas de la faune : géométries partagées des attelages et machines agricoles (charrue à bœufs, chariot à foin, tracteurs des âges 3 à 5, moissonneuse, drone). Le bœuf d'attelage y est une pièce de géométrie, pas une bête de `Fauna`. Voir [rendu-modeles.md](rendu-modeles.md) et [jardins.md](jardins.md) pour les champs.
+Pas de la faune : géométries partagées des attelages et machines agricoles (charrue à bœufs, chariot à foin, tracteurs des âges 3 à 5, moissonneuse, drone). Le bœuf d'attelage y est une pièce de géométrie, pas une bête de `Fauna`. Voir [rendu-modeles.md](rendu-modeles.md).
 
 ## Liens avec les autres systèmes
 - [expeditions.md](expeditions.md) : `ANIMAL` (`expeditionScenes.ts`) donne modèle et longueur des bêtes ramenées ; `ExpeditionView` laisse les bêtes dans `ARRIVALS`.

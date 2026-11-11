@@ -1,8 +1,8 @@
 # Rendu et modèles 3D
 
 > Fichiers : `src/render/models.ts` (13 700 lignes : les modèles procéduraux de tous les bâtiments, par âge), `src/render/parts.ts` (`Parts`, constructeur de géométries), `src/render/buildings.ts` (`BuildingView` : un bâtiment du monde → ses maillages), `src/render/batch.ts` (`GeoBatch`, lots `BatchedMesh`), `src/render/impostors.ts` (silhouettes lointaines des bêtes), `src/render/assets.ts` (modèles `.glb` externes), `src/render/materials.ts` (matériaux, lumières de fenêtres, eau, neige), `src/render/textures.ts` (sol, vagues), `src/render/adaptive.ts` + `src/render/gpu.ts` (qualité), `src/render/glow.ts` (halo), `src/render/halos.ts` (flaques de lumière), `src/render/snow.ts`
-> Tests : `tests/rendu.test.ts` (parcelle, plafond de triangles, tailles), `tests/lots.test.ts` (`mergeLit`, `GeoBatch`), `tests/silhouettes.test.ts`, `tests/fusionModeles.test.ts`, `tests/qualite.test.ts`, `tests/futur.test.ts`, `tests/jardins.test.ts`
-> Voir aussi : [architecture.md](architecture.md), [batiments-catalogue.md](batiments-catalogue.md), [ages.md](ages.md), [chargement-performances.md](chargement-performances.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [jardins.md](jardins.md), [remparts.md](remparts.md)
+> Tests : `tests/rendu.test.ts` (parcelle, plafond de triangles, tailles), `tests/lots.test.ts` (`mergeLit`, `GeoBatch`), `tests/silhouettes.test.ts`, `tests/fusionModeles.test.ts`, `tests/qualite.test.ts`, `tests/futur.test.ts`
+> Voir aussi : [architecture.md](architecture.md), [batiments-catalogue.md](batiments-catalogue.md), [ages.md](ages.md), [chargement-performances.md](chargement-performances.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [remparts.md](remparts.md)
 
 ## En bref
 Presque tous les bâtiments sont **dessinés par le jeu** : chaque sorte a une fonction qui empile des boîtes, cylindres, cônes et sphères (`Parts`) et rend deux géométries fusionnées (corps, lumières). Le résultat est mis en cache par sorte, âge et variante, puis `BuildingView` en fait des instances d'un lot dessiné en un seul appel. Seules quelques pièces sont des modèles externes `.glb` (CC0 ou CC-BY). La qualité graphique se règle à la main ou toute seule (`adaptive.ts`).
@@ -28,7 +28,7 @@ Presque tous les bâtiments sont **dessinés par le jeu** : chaque sorte a une f
 - **Outils de construction** (modules à état, remis à zéro par `getModel`) : `sink`, `sway` / `swing` / `turning` (pièces qui bougent, dessinées autour de leur pivot), `animPart` (personnages animés : pivot, axe, amplitude, fréquence, phase, rebond lus par le shader `crowdMat`), `lifeSize`, `placed` (reprend un dessin d'une case au milieu d'une grande place, tourné et agrandi), `smoke`, `attach` (pose un `.glb` sur la parcelle), `unshaded`, `recolorTop`, `tileRoof`, `lift`, puis petits éléments réutilisés : `steps`, `statue`, `pediment`, `column`, `roof` (toit à pans, `RoofOpts`), `slab`, `windows`, `ivy`, `timbers`, `figure`, `seated`, `crowd`…
 - **Fonctions par sorte** : maisons et huttes, enclos et fermes, puits, atelier, lieu de rencontre (`gather`, `gatherPlaza`), temple, moulin, gare, santé, école, pompiers, écurie, rucher, thermes, taverne, mine, avant-poste, scierie, carrière, phare, port, chantier naval, halle aux poissons, ferme marine, stades, parcs d'attraction, zoo, théâtre, acropole, forum, sénat, raffinerie, briqueterie…
 - **Âge futuriste** : palette `F` et `NC`, `futureHouse`, `futureOffice` (hauteurs `FUTURE_HOUSE_H`), `futureModel`, `cyberTower`, `spaceport`, `arcology`…
-- Fin : `cache`, `getModel`, puis les créatures de l'eau des expéditions (`shark`, `crocodile`, `tentacle`, `krakenHead`, `harpoon`). `defenses.ts` (tours de garde et casernes par âge), `ramparts.ts`, `circus.ts` sont des fichiers à part appelés avec un petit « kit » (`DEF_KIT`, `CIRCUS_KIT`) pour partager `sway`, `smoke`, `turning`.
+- Fin : `cache`, `getModel`, puis les créatures de l'eau des expéditions (`shark`, `crocodile`, `tentacle`, `krakenHead`, `harpoon`). `defenses.ts` (tours de garde et casernes par âge), `ramparts.ts`, `circus.ts`, `arena.ts` (l'arène : Colisée, joute, lutte, boxe, robots ; kit `ARENA_KIT` avec `swing` et `animPart` pour la foule) sont des fichiers à part appelés avec un petit « kit » (`DEF_KIT`, `CIRCUS_KIT`) pour partager `sway`, `smoke`, `turning`.
 - `Parts` (`parts.ts`) : `box`, `cyl`, `cone`, `sphere`, `pyramid`, `gable`, `add(géométrie, x, y, z, couleur, rotation, lumière)`. Le 7e argument `glow` met la pièce dans le groupe des lumières : `true` = fenêtre ou flamme (`aLight` : graine > 0 fenêtre, < 0 flamme chaude), `'neon'` = néon de sa couleur. **Toutes les coordonnées sont locales à la parcelle**, origine au centre, façade vers +z, `y` vers le haut ; 1 unité = 1 case.
 
 ### Matériaux et lumières (`materials.ts`)
@@ -62,7 +62,7 @@ Presque tous les bâtiments sont **dessinés par le jeu** : chaque sorte a une f
 ## Liens avec les autres systèmes
 - Les bâtiments évoluent selon `sim.age` ([ages.md](ages.md)) ; leur taille et leur sorte viennent de `KINDS` ([batiments-catalogue.md](batiments-catalogue.md)).
 - La fumée des cheminées (`Model.smoke`, `BuildingView.chimneys`) alimente `life.ts` ; les lumières de nuit suivent `env.night` ([ciel-meteo.md](ciel-meteo.md)).
-- Les jardins, remparts et défenses de l'île ont leurs propres fichiers de rendu ([jardins.md](jardins.md), [remparts.md](remparts.md), [portail-ile.md](portail-ile.md)).
+- Les remparts, l'arène (`arena.ts`) et les défenses de l'île ont leurs propres fichiers de rendu ([remparts.md](remparts.md), [portail-ile.md](portail-ile.md)).
 - L'aperçu de pose (`tools.ts`) appelle `getModel` avec `v: 0` et `mats.ghost`.
 
 ## Pièges et invariants

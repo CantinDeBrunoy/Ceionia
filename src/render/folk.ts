@@ -16,9 +16,9 @@ import { HUMAN_K } from './assets';
 export type FolkRole = 'villager' | 'monk' | 'juggler' | 'sage' | 'nomad' | 'scholar' | 'fisher' | 'drummer' | 'thief' | 'astronaut';
 /**
  * Ce qu'il fait : debout, au pas, à la course, à l'ouvrage, assis, bras levés, à parler, à jongler ; aux champs : semer à la
- * volée, faucher (ou couper à la faucille), ramasser penché, porter à deux bras (gerbe, panier, cagette)
+ * volée, faucher (ou couper à la faucille), ramasser penché, porter à deux bras (gerbe, panier, cagette) ; en garde, à boxer
  */
-export type FolkPose = 'idle' | 'walk' | 'run' | 'work' | 'sit' | 'cheer' | 'talk' | 'juggle' | 'sow' | 'reap' | 'gather' | 'carry';
+export type FolkPose = 'idle' | 'walk' | 'run' | 'work' | 'sit' | 'cheer' | 'talk' | 'juggle' | 'sow' | 'reap' | 'gather' | 'carry' | 'box';
 /** Comment il tient ce qu'il a en main : droit (torche, seau, panier), en outil (qui frappe à l'ouvrage), pointé devant (arme) */
 export type FolkHold = 'upright' | 'tool' | 'point';
 
@@ -447,6 +447,14 @@ export function folkStep(f: Folk, phase: number, pose: FolkPose) {
     right.rotation.x = -0.75 + Math.sin(phase * 1.3) * 0.3; right.rotation.z = -0.15;
     left.rotation.x = -0.12 + Math.sin(phase * 0.7) * 0.06;
     l0.rotation.x = l1.rotation.x = 0;
+  } else if (pose === 'box') {
+    // en garde, poings devant le menton, sautillant ; un direct du gauche, puis du droit, et l'esquive du buste
+    const jab = Math.max(0, Math.sin(phase * 1.7)), cross = Math.max(0, Math.sin(phase * 1.7 + Math.PI));
+    b.position.y = Math.abs(Math.sin(phase * 3.4)) * 0.006;
+    b.rotation.x = 0.1; b.rotation.y = 0.25 * (cross - jab);
+    left.rotation.x = -1.2 - jab * 0.4; left.rotation.z = -0.35 + jab * 0.3;
+    right.rotation.x = -1.2 - cross * 0.4; right.rotation.z = 0.35 - cross * 0.3;
+    l0.rotation.x = -0.3; l1.rotation.x = 0.25;
   } else if (pose === 'juggle') {
     right.rotation.x = -1.15 + Math.sin(phase * 2.6) * 0.3; left.rotation.x = -1.15 - Math.sin(phase * 2.6) * 0.3;
     l0.rotation.x = l1.rotation.x = 0;

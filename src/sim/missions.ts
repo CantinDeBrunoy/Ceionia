@@ -38,6 +38,8 @@ export type Scene = 'herd' | 'boat' | 'fish' | 'mine' | 'gather' | 'hunt' | 'bui
   | 'dragon' | 'games'
   // la traversée en galère jusqu'à l'île du portail, qu'on explore et dont on réveille l'arche
   | 'portal'
+  // l'entraînement au pugilat : le cercle de sable, deux boxeurs qui s'affrontent à tour de rôle, le vieux champion
+  | 'pugilat'
   // le volet maritime : voyage de découverte ou de commerce au large, chasse à l'épave, pêche en haute mer
   | 'voyage' | 'wreck' | 'trawl'
   // les îles flottantes de l'âge futuriste (archipel de plateformes, balises, cultures, drone-barge)
@@ -356,6 +358,27 @@ export const MISSIONS: Mission[] = [
         win: [joy(1), food(1)], lose: [],
         winText: 'La rivière tiède menait à une source chaude au milieu des roseaux : on y a pris un bain, et des idées.',
         loseText: 'La source n’était qu’une flaque tiède : pas de quoi y bâtir des bains.',
+      },
+    ],
+  },
+  {
+    // l'entraînement au pugilat : deux par deux dans le cercle de sable, sous l'œil d'un vieux champion ; débloque l'arène
+    id: 'pugilat', age: 1, mandatory: false, icon: '🥊', title: 'L’école du pugilat', unlocks: 'arena',
+    intro: 'Un vieux champion, le nez cassé et les poings bandés de cuir, enseigne le pugilat aux jeunes gens. Apprenons de lui : le village rêve déjà de gradins.',
+    choices: [
+      {
+        label: 'Suivre ses leçons', text: 'Garde haute, jeu de jambes : on apprend sans casse.',
+        dest: 'plain', scene: 'pugilat', doing: 's’entraîne au pugilat dans le cercle de sable', party: 4, work: 24, risk: 0.18,
+        win: [joy(2), joy(3, 4)], lose: [hurt(1, 2)],
+        winText: 'Les poings bandés de cuir, nos jeunes tiennent la garde : le village veut des gradins pour les voir combattre.',
+        loseText: 'Un direct mal paré, un nez en sang : on rentre penauds.',
+      },
+      {
+        label: 'Défier ses élèves', text: 'De vrais combats, au loin. Plus de gloire, plus de bosses.',
+        dest: 'far', scene: 'pugilat', doing: 'combat les élèves du champion devant la foule', party: 5, work: 30, risk: 0.32,
+        win: [joy(3), joy(5, 6), jobs(1)], lose: [hurt(2, 3), joy(-1, 3)],
+        winText: 'Victoire aux points devant toute la vallée ! On parle déjà de bâtir une arène pour accueillir les combats.',
+        loseText: 'Nos champions sont rentrés couverts de bosses : deux blessés.',
       },
     ],
   },

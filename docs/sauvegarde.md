@@ -54,6 +54,7 @@ Le préfixe `village-lowpoly` est l'ancien nom du jeu : **ne pas le renommer** (
 - bâtiments : les sortes inconnues sont **sautées** et les numéros sont **réattribués** à la suite (`id` ≠ ancien `id`) ; c'est pourquoi les lignes de train sauvent des **rangs** de bâtiment (`s`), pas des numéros. Le château devient « gare centrale » s'il servait d'arrêt à l'âge industriel.
 - `growLarge` : les bâtiments devenus plus grands depuis (2 × 2, place 3 × 3) s'étendent sur une place libre, sinon restent « petits » (`small`) et réessaient au chargement suivant ; `plaza3` marque les parties à place 3 × 3.
 - monde souterrain retiré : `claimed`, `mined`, `dug`, `digs` sont ignorés.
+- jardins retirés (l'arène les remplace) : les cases `VEG_GARDEN` (3) de `veg` redeviennent de l'herbe (0) dans `World.fromJSON`.
 - `exp` : `readExpState` (filtre les missions et l'équipement inconnus, migre « le monstre des mers » vers kraken et mégalodon, marque `sea` pour les parties d'avant le volet maritime).
 - `difficulty` : `readDifficulty(valeur, diffV)` (sans `diffV`, « normal » devient « easy » et « challenge » devient « normal »).
 - `ageBase` absent → `{}` ; `portal` : `readPortal` (abîmé → pas d'île) ; `isleGuard` défaut 0 ; `curves` filtrées ; `war` : objet ou `null`, relu par `War.load` (champs tolérants ; une invasion `coming` en cours devient `ready` ; sans état d'invasion ou de PvE, la partie est dite « legacy » et jamais bloquée).

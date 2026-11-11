@@ -8,6 +8,7 @@ import { drawRocket } from './rocket';
 import { decal, fireEngine, fireLadder, LADDER_AT } from './fireEngine';
 import { defTower, defBarracks, type DefKit } from './defenses';
 import { circus, type CircusKit } from './circus';
+import { arena, type ArenaKit } from './arena';
 import { rampartWall, rampartGate } from './ramparts';
 
 /**
@@ -12442,6 +12443,7 @@ function futureModel(p: Parts, kind: KindId, o: ModelOpts, size: number): boolea
     case 'baths': futureBaths(p, o.v); return true;
     case 'zoo': zooBig(p, 5); return true;
     case 'circus': sink(0.012); circus(p, 5, CIRCUS_KIT); return true;
+    case 'arena': sink(0.012); arena(p, 5, ARENA_KIT); return true;
     case 'watchtower': defTower(p, 5, DEF_KIT); return true;
     case 'barracks': defBarracks(p, 5, DEF_KIT); return true;
     case 'wall': rampartWall(p, 5, o.mask ?? 0, DEF_KIT); return true;
@@ -13284,6 +13286,8 @@ function zooBig(p: Parts, age: number) {
 const DEF_KIT: DefKit = { sway, smoke, turn: turning, pipe, roof };
 /** Les aides dont le cirque (circus.ts) a besoin */
 const CIRCUS_KIT: CircusKit = { sway, turn: turning, smoke };
+/** Les aides dont l'arène (arena.ts) a besoin : en plus, le balancement régulier des coups et la foule animée */
+const ARENA_KIT: ArenaKit = { sway, turn: turning, smoke, swing, fan: animPart };
 
 export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
   const size = o.small ? smallSize(kind) : KINDS[kind].size;
@@ -13357,6 +13361,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'funfair': if (size === 3) funfairBig(p, Math.max(3, age)); else funfair(p, Math.max(3, age)); break;
     case 'zoo': zooBig(p, Math.max(4, age)); break;
     case 'circus': sink(0.012); circus(p, Math.max(2, age), CIRCUS_KIT); break;
+    case 'arena': sink(0.012); arena(p, Math.max(1, age), ARENA_KIT); break;
     case 'theater': theater(p, Math.max(1, age)); break;
     case 'acropolis': acropolis(p, age); break;
     case 'forum': forum(p, Math.max(1, age)); break;

@@ -2,7 +2,7 @@
 
 > Fichiers : `src/sim/agents.ts` (classe `Agents` : habitants instanciés, métiers, trajets, recherche de chemin, équipes d'expédition), `src/sim/fields.ts` (parcelles, bras des champs, engins agricoles, saisons), `src/sim/patrols.ts` (rondes dans les rues), `src/sim/sentinels.ts` (sentinelles des remparts), `src/render/folk.ts` (modèle articulé d'un habitant et ses poses), `src/render/patrols.ts` (`PatrolView` : habille patrouilles et sentinelles en soldats), `src/render/riders.ts` (cavaliers, chevaux de trait, blindés), `src/render/life.ts` (petite vie : fumées, lucioles, oiseaux ; pas des habitants), `src/main.ts` (les appels de `update`)
 > Tests : `tests/patrouilles.test.ts`, `tests/sentinelles.test.ts`, `tests/trottoirs.test.ts`, `tests/champs.test.ts`, `tests/fondateurs.test.ts`, `tests/silhouettes.test.ts`
-> Voir aussi : [besoins-population.md](besoins-population.md), [routes.md](routes.md), [jardins.md](jardins.md), [remparts.md](remparts.md), [expeditions.md](expeditions.md), [incidents.md](incidents.md), [armee-combat.md](armee-combat.md), [ciel-meteo.md](ciel-meteo.md), [chemin-de-fer.md](chemin-de-fer.md), [trafic.md](trafic.md), [rendu-modeles.md](rendu-modeles.md)
+> Voir aussi : [besoins-population.md](besoins-population.md), [routes.md](routes.md), [remparts.md](remparts.md), [expeditions.md](expeditions.md), [incidents.md](incidents.md), [armee-combat.md](armee-combat.md), [ciel-meteo.md](ciel-meteo.md), [chemin-de-fer.md](chemin-de-fer.md), [trafic.md](trafic.md), [rendu-modeles.md](rendu-modeles.md)
 
 ## En bref
 La population (`Sim.pop`, un nombre) n'est pas simulée une à une. `Agents` montre une fraction d'elle en passants instanciés qui sortent des maisons, vont à leur travail ou flânent, rentrent la nuit ou sous la pluie. Les mêmes objets servent d'équipes d'expédition et de voyageurs du train. Les patrouilles et sentinelles sont une simulation à part, purement décorative.
@@ -17,7 +17,7 @@ La population (`Sim.pop`, un nombre) n'est pas simulée une à une. `Agents` mon
 - Nuit : de 20 h 30 à 5 h 30 (`night`), **ou** quand il pleut fort (`sheltering = env.rainK > 0.6`, donné par `main.ts`) : tous rentrent (`sendHome`) et personne ne sort ; les blessés (`rest`) restent chez eux le temps de guérir.
 - Heures de travail (`working`) : 7 h 30 à 12 h et 13 h 30 à 18 h. Un habitant avec un métier va à son poste avec la probabilité 0,8 (`jobDest`) ; un bras des champs à sa parcelle avec 0,9.
 - Enfants, 8 h à 12 h : à l'école avec la probabilité 0,7.
-- Le reste du temps (`chooseDest`) : lieux de rencontre, jardins (places libres, `gardenDest`), puits, feu, temple (on y entre), champs, ateliers, bord de forêt. Poids social 0,3 le matin, 0,7 de 12 h à 14 h 30, 0,65 après 17 h.
+- Le reste du temps (`chooseDest`) : lieux de rencontre, puits, feu, temple (on y entre), champs, ateliers, bord de forêt. Poids social 0,3 le matin, 0,7 de 12 h à 14 h 30, 0,65 après 17 h.
 - Sur place : 14 à 26 s à l'ouvrage, 10 s assis ou à acclamer, 4 à 12 s sinon (`arrive`).
 
 **Métiers** (`JOB_OF`, `assignJobs`) : un lieu de travail offre `clamp(round(jobs / 3), 1, 3)` places (`KINDS[kind].jobs[âge]`). Priorité quand il y a plus de places que d'habitants : `JOB_RANK` (pompiers, paysans, prêtres, gardes, soignants…), les paysans comptent double (`JOB_SHARE`). L'outil tenu vient de `TOOL_OF`, le geste de `JOB_ACT`. Quand un bâtiment brûle, les pompiers (rayon 30) puis les voisins (rayon 16) accourent au seau (`alert`).

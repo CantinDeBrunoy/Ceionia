@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, VEG_FOREST, VEG_FIELD, VEG_GARDEN, VEG_ROCKS, VEG_CAVE, Snapshot } from '../world/world';
+import { World, N, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, Snapshot } from '../world/world';
 import { sculpt, raiseVolcano, removeVolcano, SculptTool, SculptCtx, brushOnBuilding, volcanoRadius } from '../world/terraform';
 import { TerrainView } from '../render/terrainView';
 import { CameraRig, PointerInfo, ToolInput } from '../core/camera';
@@ -20,13 +20,13 @@ import { traceRampart, layRampart, rampartCost, RampartTrace } from './rampart';
 import { costLabel } from '../sim/economy';
 import { tr } from '../i18n';
 
-export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'garden' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
+export type ToolId = 'none' | SculptTool | 'forest' | 'field' | 'biome' | 'rocks' | 'cave' | 'fissure' | 'erase' | 'road' | 'build' | 'bulldoze' | 'move';
 
 /** points verts des emplacements libres : jusqu'à tant, dans ce rayon autour du curseur (en cases) */
 const MAX_SPOTS = 900, SPOTS_R = 10;
 
 export const SCULPT_TOOLS: ToolId[] = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'];
-export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'garden', 'rocks', 'cave', 'fissure', 'erase'];
+export const VEG_TOOLS: ToolId[] = ['forest', 'field', 'rocks', 'cave', 'fissure', 'erase'];
 /** Décors posés d'un clic, sans pinceau (la faille se creuse au pinceau, en glissant) */
 export const SINGLE_TOOLS: ToolId[] = ['cave'];
 /** Tracé des routes : en glissant, case par case (« Ligne »), ou d'un point A à un point B, en courbe (« Libre ») */
@@ -564,7 +564,7 @@ export class ToolController implements ToolInput {
       return;
     }
     const r = Math.max(0.6, this.radius * 0.8);
-    const type = this.tool === 'forest' ? VEG_FOREST : this.tool === 'field' ? VEG_FIELD : this.tool === 'garden' ? VEG_GARDEN : this.tool === 'rocks' ? VEG_ROCKS : 0;
+    const type = this.tool === 'forest' ? VEG_FOREST : this.tool === 'field' ? VEG_FIELD : this.tool === 'rocks' ? VEG_ROCKS : 0;
     for (let cz = Math.floor(hit.z - r); cz <= Math.ceil(hit.z + r); cz++)
       for (let cx = Math.floor(hit.x - r); cx <= Math.ceil(hit.x + r); cx++) {
         if (!w.inCells(cx, cz)) continue;
@@ -574,7 +574,7 @@ export class ToolController implements ToolInput {
         if (type === 0) { if (w.erase(cx, cz)) this.mark(); continue; }
         const k = w.ci(cx, cz);
         if (w.veg[k] !== type) {
-          // ni champ, ni forêt, ni jardin, ni rochers dans l'eau : lac, torrent ou ruisseau qui passe par la case, rive mouillée
+          // ni champ, ni forêt, ni rochers dans l'eau : lac, torrent ou ruisseau qui passe par la case, rive mouillée
           if (w.lake[k] || this.h.wetCell?.(k) || w.cellMin(cx, cz) < 0.05) continue;
           if (!w.occ[k] && !w.road[k] && w.setVeg(cx, cz, type)) this.mark();
         }
@@ -825,7 +825,7 @@ export class ToolController implements ToolInput {
   }
 
   /**
-   * Le pinceau de démolition sur un disque : routes, plantations (forêts, champs, jardins, rochers) et petits bâtiments partent
+   * Le pinceau de démolition sur un disque : routes, plantations (forêts, champs, rochers) et petits bâtiments partent
    * sans confirmation ; les grands bâtiments (2 × 2 et plus), les grottes et les failles restent : on les vise un à un
    */
   private bulldozeDisc(hx: number, hz: number, r: number) {

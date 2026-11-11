@@ -27,11 +27,8 @@ const SNOW_BASE = new THREE.Color(SNOW_COLORS.base), SNOW_SHADE = new THREE.Colo
 const HIGH = new THREE.Color(0xc9d79a);
 const TILLED = new THREE.Color(0xa47b52);
 const BEDS = new THREE.Color(0x8a6548);
-/** Sol des jardins : terre battue du camp préhistorique, sable des lices du Moyen Âge ; pelouse aux autres âges */
-const CAMP_GROUND = new THREE.Color(0xb49a76), LISTS_GROUND = new THREE.Color(0xcdb48c);
+/** Sol des anciens jardins (il n'en reste plus : voir `World.fromJSON`) */
 const LAWN = new THREE.Color(0x74c060);
-/** pelouse du jardin bioluminescent (âge futuriste) : vert menthe, bleuté */
-const FUTURE_LAWN = new THREE.Color(0x52d6a4);
 const UNDERGROWTH = new THREE.Color(0x6f9c5c);
 const YARD = new THREE.Color(0xcdb791);
 /** Sols des biomes (tempéré = herbe de saison) : taïga, désert, tropiques, marais */
@@ -147,8 +144,6 @@ export class TerrainView {
   /** Par sous-sommet : part des cases voisines en forêt / champ / jardin / rocaille (zones à bords doux) */
   private vegW = new Float32Array(VS * VS * 4);
   private vegCol = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
-  /** âge du village : le sol des jardins en dépend (terre battue, gravier, sable, pelouse) */
-  gardenAge = 0;
   /** Par sous-sommet : terre battue autour des bâtiments, champs de lave refroidie */
   private yardW = new Float32Array(VS * VS);
   private lavaW = new Float32Array(VS * VS);
@@ -613,11 +608,8 @@ ${BLIGHT_GLSL}
     // sous-bois : mousse et ombre, tapis de feuilles mortes à l'automne, un voile de pétales au printemps
     cForest.copy(pal.grass).lerp(UNDERGROWTH, 0.55).lerp(pal.terrain.litter, pal.terrain.litterK).lerp(pal.foliage, 0.1);
     cField.copy(TILLED).lerp(pal.crop, 0.55);
-    const gAge = Math.min(this.gardenAge, 5);
-    const bare = gAge === 0 || gAge === 2;
-    if (bare) cGarden.copy(gAge ? LISTS_GROUND : CAMP_GROUND).lerp(pal.grass, gAge ? 0.12 : 0.22);
-    else if (gAge === 5) cGarden.copy(pal.grass).lerp(FUTURE_LAWN, 0.6);
-    else cGarden.copy(pal.grass).lerp(LAWN, 0.55);
+    // (les anciens jardins : il n'en reste plus, voir `World.fromJSON` ; une pelouse si jamais)
+    cGarden.copy(pal.grass).lerp(LAWN, 0.55);
     cRocks.copy(GRAVEL).lerp(pal.grass, 0.15);
 
     // couleur et motif par sous-sommet : dégradés continus fond marin → sable → herbe → roche → neiges éternelles
@@ -672,8 +664,7 @@ ${BLIGHT_GLSL}
           }
           if (lava > 0) tmp.lerp(VOLCANO_BROWN, lava * 0.95).lerp(BASALT, top * lava * 0.65);
         }
-        // terre battue et sable des jardins nus ; la pelouse garde le motif de l'herbe
-        const yard = yw[i] * (1 - quay), soil = Math.min(1, yard * 0.55 + vw[i * 4 + 1] + (bare ? vw[i * 4 + 2] : 0));
+        const yard = yw[i] * (1 - quay), soil = Math.min(1, yard * 0.55 + vw[i * 4 + 1]);
         if (yard > 0) tmp.lerp(YARD, yard * 0.55 * flat);
         // pas de sous-bois vert sous les cactus
         for (let q = 0; q < 4; q++) if (vw[i * 4 + q] > 0) tmp.lerp(this.vegCol[q], vw[i * 4 + q] * (q === 3 ? 1 : flat) * (q === 0 ? 1 - dry : 1));

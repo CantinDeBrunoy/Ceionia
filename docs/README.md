@@ -28,7 +28,6 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [batiments-catalogue.md](batiments-catalogue.md) : le catalogue (`KINDS`), tailles, coûts, âges, rayons, évolutions, déblocages.
 - [placement-construction.md](placement-construction.md) : poser, tourner, déplacer, démolir, annuler ; règles de placement et refus.
 - [routes.md](routes.md) : routes en ligne et libres, routes automatiques, rendu des routes, piétons et voies.
-- [jardins.md](jardins.md) : jardins, parcs et places, leur plan selon l'âge et la taille.
 - [remparts.md](remparts.md) : murailles, portes, tours, chemin de ronde.
 
 ### Le village

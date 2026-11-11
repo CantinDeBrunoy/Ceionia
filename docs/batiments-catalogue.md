@@ -5,14 +5,14 @@
 > Voir aussi : [placement-construction.md](placement-construction.md), [rendu-modeles.md](rendu-modeles.md), [interface.md](interface.md), [traduction.md](traduction.md), [ages.md](ages.md), [economie-ressources.md](economie-ressources.md), [besoins-population.md](besoins-population.md), [difficulte.md](difficulte.md)
 
 ## En bref
-`KINDS` (`catalog.ts`) est la table de tous les genres de bâtiments, indexée par `KindId` (64 genres). Un genre donne sa taille, son âge minimum, son rayon dans le menu, ses noms par âge et ses apports (logement, vivres, eau, travail, bien-être, soins) par âge. Un `Building` posé ne stocke que son genre, sa case, sa rotation et un âge d'affichage : tout le reste se lit dans le catalogue. Les règles de terrain sont ailleurs (`World.canPlace`, voir [placement-construction.md](placement-construction.md)).
+`KINDS` (`catalog.ts`) est la table de tous les genres de bâtiments, indexée par `KindId` (65 genres). Un genre donne sa taille, son âge minimum, son rayon dans le menu, ses noms par âge et ses apports (logement, vivres, eau, travail, bien-être, soins) par âge. Un `Building` posé ne stocke que son genre, sa case, sa rotation et un âge d'affichage : tout le reste se lit dans le catalogue. Les règles de terrain sont ailleurs (`World.canPlace`, voir [placement-construction.md](placement-construction.md)).
 
 ## Règles du jeu
 - **Âges** : index 0 à 5 (Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste, `AGES`). Un bâtiment se pose à partir de `minAge`. Les bâtiments du village changent de modèle tout seuls quand l'âge monte (voir plus bas).
-- **Tailles** (`size`, en cases) : 1 (maison, puits, lampadaire, ferme), 2 (atelier, école, soins, temple, moulin…), 3 (place, raffinerie, port, stade, cirque, zoo, arcologie…), 4 (aéroport, cosmodrome). Le champ `size` est la taille actuelle ; `Building.small` marque un ancien bâtiment resté à l'ancienne taille (`smallSize`, `sizeOf`).
+- **Tailles** (`size`, en cases) : 1 (maison, puits, lampadaire, ferme), 2 (atelier, école, soins, temple, moulin…), 3 (place, raffinerie, port, stade, cirque, arène, zoo, arcologie…), 4 (aéroport, cosmodrome). Le champ `size` est la taille actuelle ; `Building.small` marque un ancien bâtiment resté à l'ancienne taille (`smallSize`, `sizeOf`).
 - **Âge maximum** (`maxAge`) : seuls `acropolis`, `forum` et `senate` l'ont (1) : on ne les bâtit plus après l'Antiquité (le menu les masque, `lockOf` refuse avec « c'est trop tard »). Ceux déjà posés restent et évoluent.
 - **Déblocages** :
-  - `reqMission` : expédition à réussir (`pen`, `stable`, `apiary`, `mine`, `refinery`, `baths`, `tavern`, `circus`, `carworks`, `aerodrome`, `shipyard`, `observatory`, `watchtower`). `lockOf` renvoie « Débloqué par l'expédition … » ; pour `portal`, le texte parle de la faille violette.
+  - `reqMission` : expédition à réussir (`pen`, `stable`, `apiary`, `mine`, `refinery`, `baths`, `tavern`, `circus`, `arena`, `carworks`, `aerodrome`, `shipyard`, `observatory`, `watchtower`). `lockOf` renvoie « Débloqué par l'expédition … » ; pour `portal`, le texte parle de la faille violette.
   - `reqKind` : un bâtiment à avoir déjà (`station` veut `terminal`, `terminal` veut `brickworks`, `carworks` veut `refinery`, `barracks`/`wall`/`gate` veulent `watchtower`). Le test se fait avec `Sim.built`, qui compte aussi les améliorations (`lineOf`).
   - Tutoriel : `tutorial.lock(k)` verrouille tout sauf l'étape en cours pendant les premières étapes (voir [tutoriel.md](tutoriel.md)).
   - Village vide : seule la place du village (`START_KIND = 'gather'`) est permise (voir [placement-construction.md](placement-construction.md)).
@@ -24,7 +24,7 @@
   - briques en plus (`BRICK_PRICE` : gare 10, gare centrale 30, usine auto 20, raffinerie 30 ; ×1,5 en Normal).
   Une amélioration coûte le prix du nouveau bâtiment, entier.
 - **Rayons du menu** (`BuildCat` : `home`, `prod`, `service`, `life`, `war` ; `BUILD_CATS`) et **groupes** (`BUILD_SUBS`, `KIND_SUB`). Les groupes ne servent qu'à ranger les vignettes (aucun effet sur le jeu ni la sauvegarde). Rayon `war` : défense, remparts.
-- **Ordre du menu** : `KIND_ORDER` (63 genres). Seul `manor` en est absent : on ne l'obtient qu'en améliorant une maison.
+- **Ordre du menu** : `KIND_ORDER` (64 genres). Seul `manor` en est absent : on ne l'obtient qu'en améliorant une maison.
 - **Évolutions** (`UPGRADES`, bouton « Améliorer » de la fiche) : maison → manoir, puits → château d'eau, gare centrale → gare maglev, ponton → port, atelier → usine auto, ferme → ferme verticale. `lineOf(k)` donne un genre et toutes ses améliorations (une maison devenue manoir compte comme une maison).
 
 ## Fonctionnement dans le code
@@ -39,7 +39,7 @@
 ## Liens avec les autres systèmes
 - Besoins et population : [besoins-population.md](besoins-population.md) (`Sim.recalc` additionne les tableaux par âge).
 - Prix et production : [economie-ressources.md](economie-ressources.md) (`YIELD`, `BRICK_PRICE`).
-- Jardins : [jardins.md](jardins.md) (un jardin n'est pas un bâtiment : `VEG_GARDEN`, 0,8 de bien-être par case).
+- Arène (`arena`, 3 × 3, dès l'Antiquité, débloquée par l'expédition `pugilat`) : Colisée, champ de joute, arène de lutte, palais de la boxe, arène des robots ; modèle dans `render/arena.ts`. Elle remplace les anciens jardins (outil retiré, `VEG_GARDEN` effacé au chargement, voir [sauvegarde.md](sauvegarde.md)).
 - Remparts : [remparts.md](remparts.md) (`wall`, `gate`, `isRampart`).
 - Modèles 3D : [rendu-modeles.md](rendu-modeles.md) (`getModel(kind, age, opts)`).
 - Âges et missions : [ages.md](ages.md), [expeditions.md](expeditions.md).

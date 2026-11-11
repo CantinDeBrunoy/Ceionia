@@ -65,7 +65,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 
 ## Liens avec les autres systèmes
 - Coûts et apports par âge : [economie-ressources.md](economie-ressources.md), [batiments-catalogue.md](batiments-catalogue.md).
-- Rendu : modèles par âge ([rendu-modeles.md](rendu-modeles.md)), jardins ([jardins.md](jardins.md)).
+- Rendu : modèles par âge ([rendu-modeles.md](rendu-modeles.md)).
 - Guerre : `war.ageUp`, unités par âge ([armee-combat.md](armee-combat.md)).
 - Expéditions : obligatoires par âge, déblocage de bâtiments ([expeditions.md](expeditions.md)).
 - Tutoriel : verrous de bâtiments ([tutoriel.md](tutoriel.md)).

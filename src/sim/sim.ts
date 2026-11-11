@@ -90,7 +90,7 @@ export class Sim {
   private src: Record<NeedId, Map<string, { n: number; v: number }>> = { housing: new Map(), food: new Map(), water: new Map(), jobs: new Map(), joy: new Map(), health: new Map() };
   /** couverture des pompiers et de la police (indicateur et petit bonus de bien-être), refaite à chaque recalcul */
   coverage: Coverage = computeCoverage([]);
-  private land = { fields: 0, fertile: 0, gardens: 0, forests: 0 };
+  private land = { fields: 0, fertile: 0, forests: 0 };
   private lastVersion = -1;
   private recalcTimer = 0;
   onAgeUp: ((age: number) => void) | null = null;
@@ -122,18 +122,18 @@ export class Sim {
       He += k.health?.[a] ?? 0;
       if (b.kind === 'house' && w.nearWater(b.x, b.z, 3)) W += k.housing?.[a] ?? 0;
     }
-    let fields = 0, fertile = 0, gardens = 0, forests = 0;
+    let fields = 0, fertile = 0, forests = 0;
     for (let i = 0; i < w.veg.length; i++) {
       const v = w.veg[i];
-      if (v === 2) { fields++; if (w.ash[i]) fertile++; } else if (v === 3) gardens++; else if (v === 1) forests++;
+      if (v === 2) { fields++; if (w.ash[i]) fertile++; } else if (v === 1) forests++;
     }
-    this.land = { fields, fertile, gardens, forests };
+    this.land = { fields, fertile, forests };
     // les champs semés sur les cendres d'une coulée donnent double récolte
     this.baseFood = F;
     this.fieldFood = (fields + fertile) * 3;
     // un emploi pour deux champs (des emplois entiers, comme les autres)
     J += Math.floor(fields / 2);
-    Jy += gardens * 0.8 + forests * 0.08;
+    Jy += forests * 0.08;
     this.coverage = computeCoverage(w.buildings.values());
     Jy += this.coverage.joy;
     this.counts = counts;
@@ -180,7 +180,6 @@ export class Sim {
     const rows = [...this.src[k]].map(([key, s]) => ({ label: key === 'riverside' ? tr('Maisons au bord de l’eau') : this.nameOf(key as KindId), n: s.n, v: s.v }));
     if (k === 'food' && L.fields) rows.push({ label: tr(L.fertile ? 'Champs (récolte double sur les cendres)' : 'Champs (selon la pluie)'), n: L.fields, v: this.fieldsFood });
     if (k === 'jobs' && L.fields >= 2) rows.push({ label: tr('Champs'), n: L.fields, v: Math.floor(L.fields / 2) });
-    if (k === 'joy' && L.gardens) rows.push({ label: tr('Jardins'), n: L.gardens, v: L.gardens * 0.8 });
     if (k === 'joy' && this.coverage.joy > 0) rows.push({ label: tr('Sécurité (pompiers et police)'), n: this.coverage.both, v: this.coverage.joy });
     if (k === 'joy' && L.forests) rows.push({ label: tr('Forêts où l’on se promène'), n: L.forests, v: L.forests * 0.08 });
     if (k === 'food' || k === 'water' || k === 'jobs' || k === 'joy') { const b = needBonus(e, k); if (b) rows.push({ label: tr(b > 0 ? 'Expéditions (effets en cours)' : 'Expéditions (malus en cours)'), n: 0, v: b }); }
@@ -292,7 +291,7 @@ export class Sim {
     if (young && !this.producing('wood')) return about('lumber', this.counts.farm ? tr('Un bûcheron : le premier bâtiment qui travaille pour vous. {lumber}.', { lumber: say('lumber') }) : tr('Un bûcheron et un séchoir : les premiers bâtiments qui travaillent pour vous. {lumber}, puis {farm}.', { lumber: say('lumber'), farm: say('farm') }));
     if (young && !this.producing('stone')) return about('quarry', tr('Il vous faut aussi de la pierre pour les grands bâtiments : {k}.', { k: say('quarry') }));
     if (!this.jobs.ok) return about('workshop', tr('Les habitants cherchent du travail : {k}.', { k: say('workshop') }));
-    if (!this.joy.ok) return about('gather', tr('Les habitants aimeraient un lieu de rencontre : {k}, un jardin ou un lieu de culte.', { k: say('gather') }));
+    if (!this.joy.ok) return about('gather', tr('Les habitants aimeraient un lieu de rencontre : {k}, une arène ou un lieu de culte.', { k: say('gather') }));
     if (!this.health.ok) return about('health', tr('Les habitants tombent malades : il faut {k}.', { k: say('health') }));
     if (this.recovering > 0 && this.housing.ok) return DIFF_TEXT.recovering;
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque

@@ -15,7 +15,7 @@ Une route est une case de `World.road` (0 ou 1). Le joueur en trace de deux faç
 **Route libre** (mode « Libre », mode par défaut, `roadMode = 'free'`) : un clic au point A, un clic au point B, ou un glissé de A à B (relâcher à plus de 12 px de l'appui). Un ruban vert (rouge si refusé) montre la courbe prévue, avec une flèche au bout. Un clic sur A, ou Échap, oublie A. Une fois la route posée, l'outil est quitté (`setTool('none')`). R, l'outil étant déjà en main, bascule entre les deux modes (`main.ts`).
 - Longueur : `FREE_MAX = 80` cases à vol d'oiseau (« Trop loin »).
 - Refus avec message (`RoadPlan.why`) : « Hors de la carte. », « On ne pose pas de route ici : bâtiment, pente trop raide ou eau trop profonde. » (A ou B non posable), « Pas de passage : des bâtiments, l'eau profonde ou des pentes trop raides barrent le chemin. ».
-- Le chemin contourne bâtiments, pentes, champs et jardins ; il ne franchit l'eau que si l'on ne peut pas faire autrement.
+- Le chemin contourne bâtiments, pentes et champs ; il ne franchit l'eau que si l'on ne peut pas faire autrement.
 - Un clic de départ sur une route existante est permis ; la nouvelle route la croise ou la rejoint.
 
 **Routes automatiques** (réglage `autoRoads`, vrai par défaut, dans les réglages ; `Game.setAutoRoads`) : à la pose d'un bâtiment, `autoRoad` trace un seul chemin de sa porte jusqu'au réseau (ou, sans réseau encore, jusqu'à la porte du bâtiment le plus proche : le tout premier bâtiment n'a rien à relier).
@@ -23,7 +23,7 @@ Une route est une case de `World.road` (0 ou 1). Le joueur en trace de deux faç
 - Longueur maxi : `MAX_LINK = 14` cases ; `MAX_SHORE = 30` pour le ponton et le port (accès par l'arrière, jamais sur l'eau) ; `MAX_JOIN = 18` pour relier un hameau.
 - **Hameau** : un réseau qui dessert exactement `HAMLET = 3` bâtiments est relié une fois au réseau voisin le plus proche (`joinHamlet`).
 - Un bâtiment orienté de lui-même ouvre sa porte du côté commode et tourne sa façade vers le chemin ; orienté à la main, il garde sa façade.
-- Le chemin va droit (`TURN = 0,6` par virage), longe les façades, évite champs et jardins (+6), pente (×1,5), forêt et rochers (+0,8), eau (`WET = 8`, nouveau franchissement `CROSS = 14`), et les terrains libres où tiendrait un grand bâtiment (`OPEN3 = 1,6`, `OPEN2 = 0,6`, `spoiled`). Il ne longe jamais une route existante, ne la rejoint qu'en un point, ne fait pas de carré de route (`square`, `TWICE = 4`), ne longe pas le flanc ni l'arrière d'un bâtiment (`FLANK = 3`, détour accepté jusqu'à `DETOUR = 7`) sauf s'il n'y a pas d'autre tracé (niveaux 0 à 3 de `wisest`).
+- Le chemin va droit (`TURN = 0,6` par virage), longe les façades, évite les champs (+6), pente (×1,5), forêt et rochers (+0,8), eau (`WET = 8`, nouveau franchissement `CROSS = 14`), et les terrains libres où tiendrait un grand bâtiment (`OPEN3 = 1,6`, `OPEN2 = 0,6`, `spoiled`). Il ne longe jamais une route existante, ne la rejoint qu'en un point, ne fait pas de carré de route (`square`, `TWICE = 4`), ne longe pas le flanc ni l'arrière d'un bâtiment (`FLANK = 3`, détour accepté jusqu'à `DETOUR = 7`) sauf s'il n'y a pas d'autre tracé (niveaux 0 à 3 de `wisest`).
 
 **Démolir une route** : outil Démolir, une case ou un disque ; voir [placement-construction.md](placement-construction.md). Le relief qui rend une case impraticable après sculpture la retire (`World.sanitize`).
 
@@ -34,7 +34,7 @@ Une route est une case de `World.road` (0 ou 1). Le joueur en trace de deux faç
 ## Fonctionnement dans le code
 **Route libre** (`planRoad(w, ax, az, bx, bz)`) :
 1. cases de A et B en centres ; A* en 8-voisinage dans la boîte de A et B élargie de `MARGIN = 14` ;
-2. coût d'une case (`cost`) : `1 + pente × 2,5`, forêt +1,5, rochers +1, champ ou jardin +4, eau +8 (hors pont existant), route existante +1,5 (on croise, on ne longe pas), voisin d'un bâtiment +0,6 ; infini si `!canRoad` ;
+2. coût d'une case (`cost`) : `1 + pente × 2,5`, forêt +1,5, rochers +1, champ +4, eau +8 (hors pont existant), route existante +1,5 (on croise, on ne longe pas), voisin d'un bâtiment +0,6 ; infini si `!canRoad` ;
 3. coûts de passage : saut de hauteur supérieur à `STEP_H = 0,75` refusé hors de l'eau, diagonale refusée entre deux obstacles, ou en rognant le coin d'une case d'eau, nouveau franchissement +12 ;
 4. tirage en lignes droites (jusqu'à 12 cases, `fits(…, cheap = true)`) puis adoucissement de Chaikin à 3, 2, 1 puis 0 passes : la courbe la plus douce qui reste praticable, qui ne frôle aucun bâtiment (`BAND = 0,22`) et qui ne mouille pas plus de cases que le chemin cherché.
 5. Résultat : `{ pts, cells, why }`. `World.addCurve(pts)` arrondit les points au centième, pose les cases (`rasterize` + `setRoad`) et enregistre la courbe dans `World.curves` (`{ id, pts }`).
@@ -59,7 +59,6 @@ Une route est une case de `World.road` (0 ou 1). Le joueur en trace de deux faç
 - Remparts : un pan saute les routes ; la porte les enjambe ([remparts.md](remparts.md)).
 - Chemin de fer : voies séparées de `World.road` ([chemin-de-fer.md](chemin-de-fer.md)).
 - Eau : ponts, torrents sous la route ([eau-rivieres.md](eau-rivieres.md)).
-- Jardins : l'allée d'un jardin n'est pas une route ([jardins.md](jardins.md)).
 
 ## Pièges et invariants
 - Les courbes survivent à la démolition de leurs cases (`curveCells` garde tout). Si le joueur démolit une route libre puis repose une case de route à la main au même endroit, la vue la dessine comme un morceau de l'ancienne courbe (`curveAt` répond de nouveau). À vérifier à l'écran ; la sauvegarde élimine les courbes mortes.

@@ -134,7 +134,6 @@ registerDict('tutorial', {
   'Un bûcheron et un séchoir : les premiers bâtiments qui travaillent pour vous. {tip}, puis {then}.': 'A woodcutter and a grain dryer: your first working buildings. {tip}, then {then}.',
   'Il vous faut aussi de la pierre pour les grands bâtiments : {tip}.': 'You also need stone for big buildings: {tip}.',
   'Les habitants cherchent du travail : {tip}.': 'People are looking for work: {tip}.',
-  'Les habitants aimeraient un lieu de rencontre : {tip}, un jardin ou un lieu de culte.': 'People would like a place to meet: {tip}, a garden or a temple.',
   'Les habitants tombent malades : il faut {tip}.': 'People are getting sick: you need {tip}.',
   'Village plein ({pop}/{cap} places) : {tip} de plus, +{per} places, pour qu’il grandisse.': 'Village full ({pop}/{cap} spots): add more {tip}, +{per} spots, so it can grow.',
   'Les voitures restent au garage, faute de carburant : {tip} le tire du pétrole brut des puits.': 'Cars stay in the garage, with no fuel: {tip} makes it from the crude oil of the wells.',

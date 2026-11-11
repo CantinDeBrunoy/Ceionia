@@ -96,7 +96,7 @@ export interface WorldListener {
 }
 
 /**
- * Vegetation: 0 rien, 1 forêt, 2 champ, 3 jardin ; décors sans effet sur la simulation : 4 rocaille, 5 entrée de grotte,
+ * Vegetation: 0 rien, 1 forêt, 2 champ, 3 jardin (retiré du jeu : effacé au chargement, voir `fromJSON`) ; décors sans effet sur la simulation : 4 rocaille, 5 entrée de grotte,
  * 6 épave, 7 cratère de volcan, 8 faille d'un clic (anciennes parties seulement : convertie en ravin au chargement, voir
  * `World.rift` ; les failles se creusent désormais au pinceau). Grottes et failles : les entrées du monde souterrain
  */
@@ -1671,6 +1671,8 @@ export class World {
     const road = new Uint8Array(N * N), veg = new Uint8Array(N * N);
     for (const i of d.roads ?? []) if (i >= 0 && i < road.length) road[i] = 1;
     for (let i = 0; i + 1 < (d.veg ?? []).length; i += 2) if (d.veg[i] >= 0 && d.veg[i] < veg.length) veg[d.veg[i]] = d.veg[i + 1];
+    // les jardins ont été retirés du jeu (l'arène les remplace) : leurs cases redeviennent de l'herbe
+    for (let k = 0; k < veg.length; k++) if (veg[k] === VEG_GARDEN) veg[k] = 0;
     const buildings: Building[] = [];
     let id = 1;
     const ids: number[] = [];

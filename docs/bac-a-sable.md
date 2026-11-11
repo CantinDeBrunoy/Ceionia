@@ -32,7 +32,7 @@ Ce n'est pas un réglage à part : c'est `World.difficulty === 'sandbox'`. Le mo
 - `Sim.update` : les fondateurs (quatre habitants à la pose de la place) arrivent à tout âge au bac à sable, pas seulement à la Préhistoire.
 
 **Changer d'âge**
-- `Sim.setAge(n)` : sans effet hors bac à sable ; borne `n`, recalcule, remet `world.ageBase`, puis appelle `onAgeUp` (même chemin que le vrai passage d'âge : bannière, garnison, sol des jardins, rendu).
+- `Sim.setAge(n)` : sans effet hors bac à sable ; borne `n`, recalcule, remet `world.ageBase`, puis appelle `onAgeUp` (même chemin que le vrai passage d'âge : bannière, garnison, rendu).
 - `ui.ts` › `UI.update` : en bac à sable, `#ageReq` liste des `button[data-setage]` ; `#agePanel` gère le clic (`closest('[data-setage]')`) et appelle `sim.setAge`.
 - `Sim.ageProgress` rend `null` au bac à sable : plus de conditions, `Sim.ready` est faux, `Sim.advance` ne fait rien.
 - `BuildingView.update` (`render/buildings.ts`) ne fait évoluer que vers le haut (`b.age < worldAge`).

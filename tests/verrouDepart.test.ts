@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isStart, startRefusal, START_KIND } from '../src/build/startLock';
 
 const vide = { buildings: { size: 0 } }, bati = { buildings: { size: 1 } };
-const tools = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano', 'forest', 'field', 'garden', 'biome', 'rocks', 'cave', 'fissure', 'erase', 'road', 'bulldoze', 'move'];
+const tools = ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano', 'forest', 'field', 'biome', 'rocks', 'cave', 'fissure', 'erase', 'road', 'bulldoze', 'move'];
 
 describe('verrou de départ', () => {
   it('village vide : seul le feu de camp se pose', () => {

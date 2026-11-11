@@ -19,7 +19,7 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 | Nourriture `food` | bâtiments + champs + bonus d'expédition | `up((n+1) × foodK)` | `cap >= demand` |
 | Eau `water` | bâtiments + maisons au bord de l'eau + bonus | `n + 1` | `cap >= demand` |
 | Travail `jobs` | bâtiments + `floor(champs/2)` + bonus | `up(n × 0,5)` si `n >= 6`, sinon 0 | `cap >= demand` |
-| Bien-être `joy` | bâtiments + jardins + forêts + sécurité + bonus | `pop × 0,3` si `pop >= 6`, sinon 0 | `cap >= demand` (pas d'arrondi) |
+| Bien-être `joy` | bâtiments + forêts + sécurité + bonus | `pop × 0,3` si `pop >= 6`, sinon 0 | `cap >= demand` (pas d'arrondi) |
 | Santé `health` | somme des `health` | `up(n × 0,2)` si `n >= 15`, sinon 0 | `cap >= demand` |
 
 - `foodK` vient de `difficulty.ts` : 1 en Facile et Bac à sable, 1,25 en Normal. Le « +1 » de nourriture et d'eau est une part de réserve pour le village.
@@ -28,7 +28,7 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 - **Maisons au bord de l'eau** : une `house` avec de l'eau ou un lac dans le carré de ±3 cases autour de son coin d'origine (`World.nearWater(x, z, 3)`, test carré, pas rond) ajoute à l'eau autant que son logement (ligne « Maisons au bord de l'eau » de la fiche).
 - **Champs** (`veg === VEG_FIELD`) : nourriture `(champs + champs sur cendres) × 3`, multipliée par `yieldK = 0,55 + 0,55 × moisture` (de 55 % en sécheresse à 110 %), puis par 1,3 avec le savoir-faire `seeds` (expédition « Le blé des collines »). Les champs sur cendres de lave (`w.ash`) comptent double. Un emploi pour deux champs (`floor(champs/2)`).
 - **Humidité** `Sim.moisture` (0 … 1, départ 0,7) : si `rain > 0.3`, `+dt × 0,05 × rain` ; sinon baisse de `dt × [0,0015 ; 0,004 ; 0,0015 ; 0][saison]` (printemps, été, automne, hiver). `drought` : `moisture < 0.25` et au moins un champ.
-- **Bien-être** : `+0,8` par case de jardin (`veg === 3`), `+0,08` par case de forêt, plus `coverage.joy` (voir plus bas). La lanterne (`lamp`) donne 0,2.
+- **Bien-être** : `+0,08` par case de forêt (les jardins, retirés du jeu, donnaient 0,8 par case), plus `coverage.joy` (voir plus bas). La lanterne (`lamp`) donne 0,2.
 - **Bonus d'expédition** : `needBonus(world.exp, need)` (`missions.ts`) pour `food`, `water`, `jobs`, `joy` seulement : bonus durable + effets passagers (`exp.temp`, qui s'éteignent à `exp.clock`). Pas de bonus de santé ni de logement.
 
 ### Croissance (`Sim.update`)
@@ -69,7 +69,7 @@ Le helper `build(k, texte)` remplace le conseil par « Il manque du bois / de la
 Affichage (`ui.ts` › `renderMessage`) : ton `warn` (un besoin hors logement manque, ou sécheresse), `goal` (âge suivant en vue, ou village plein), `calm`. À partir de l'âge 1, le conseil est masqué (`quiet`) sauf manque ou passage d'âge prêt, ou si l'aide est activée (bouton cible, clé `ceionia.aides` du `localStorage`). Masqué aussi pendant le tutoriel guidé et en plein commandement.
 
 ## Fonctionnement dans le code
-- `Sim.recalc()` : parcourt `world.buildings`, remplit `src` (détail par sorte pour les fiches), les totaux, compte les champs / jardins / forêts, appelle `computeCoverage`. Déclenché par `Sim.update` quand `world.version` a changé **et** au plus tous les 0,25 s réelles (`recalcTimer`). `advance()` et le constructeur de `Game` l'appellent aussi.
+- `Sim.recalc()` : parcourt `world.buildings`, remplit `src` (détail par sorte pour les fiches), les totaux, compte les champs et les forêts, appelle `computeCoverage`. Déclenché par `Sim.update` quand `world.version` a changé **et** au plus tous les 0,25 s réelles (`recalcTimer`). `advance()` et le constructeur de `Game` l'appellent aussi.
 - `Sim.evaluate()` : à chaque `update` (et après chaque habitant gagné ou perdu) ; applique bonus d'expédition, rendement des champs, demandes et `ok`.
 - `Sim.update(dt, realDt)` : `dt` est le temps de jeu (nul en pause, ×vitesse), `realDt` sert au minuteur de recalcul. Ordre : recalcul, fondateurs, plafond de logement, horloge des expéditions, humidité, `evaluate`, `hardship`, croissance, `computeMessage`. Appelé par `Game.frame` (`main.ts`) avec `sim.rain` et `sim.season` mis à jour juste avant.
 - `Sim.needDetail(k)` : alimente la fiche d'un besoin (`ui.ts` › `renderNeed`) : lignes triées par apport, bâtiment qui comble le mieux (`house, farm, well, workshop, gather, health`) et son apport `per` à l'âge du village.

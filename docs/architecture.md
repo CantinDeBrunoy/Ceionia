@@ -32,7 +32,7 @@ Constructeur (`main.ts`), dans l'ordre :
 | Rôle | Champs (fichier) |
 |---|---|
 | Données | `world` (`world/world.ts`), `sim` (`sim/sim.ts`), `time` (`core/time.ts`), `war` (`sim/war.ts`), `expeditions`, `railway`, `under` (`world/underground.ts`) |
-| Terrain et décor | `terrain` (`render/terrainView.ts`), `veg`, `roads`, `streams`, `gardens`, `pens`, `seeps`, `env` (ciel, soleil, ombres), `atmosphere`, `eruptions` |
+| Terrain et décor | `terrain` (`render/terrainView.ts`), `veg`, `roads`, `streams`, `pens`, `seeps`, `env` (ciel, soleil, ombres), `atmosphere`, `eruptions` |
 | Bâtiments | `buildings` (`render/buildings.ts`), `halos`, `upBadges`, `fires`, `emergencies`, `portalView`, `blightView` |
 | Vie | `agents` (habitants), `patrols`/`sentinels` + leurs vues, `fauna`, `life`, `traffic`, `helis`, `airships`, `transports`, `fairground`, `zoo`, `alpine`, `railView`, `railBoost`, `fest`, `parade`, `trophies` |
 | Expéditions et guerre | `expView`, `spaceCast`, `kingStage`, `command` (contrôle des troupes), `hellMode` (créé à la première visite), `isleLayer`, `ferry`, `isleRuins` (créés dans `stepWar`) |
@@ -65,10 +65,10 @@ Transitions :
 
 Ordre (surface, simplifié) :
 1. `adapt(temps brut)` (qualité « Auto »), `stepWind`, `time.update`, `cam.update(dt, hauteur du sol du mode)`, tremblement de caméra (éruption, secousse, cris du roi : `kingStage.shake`), `tools.update`.
-2. Reconstructions limitées en fréquence : relief (`terrainTimer` 0,06 s), routes, bâtiments, végétation, jardins, halos (`propsTimer` 0,12 s), repousse de la lave (toutes les 2 s de jeu), teinte de la lave (0,25 s), saison (`refreshSeason`, clé = `seasonT × 120`), `roads.step`, `terrain.stepRecolor`.
+2. Reconstructions limitées en fréquence : relief (`terrainTimer` 0,06 s), routes, bâtiments, végétation, halos (`propsTimer` 0,12 s), repousse de la lave (toutes les 2 s de jeu), teinte de la lave (0,25 s), saison (`refreshSeason`, clé = `seasonT × 120`), `roads.step`, `terrain.stepRecolor`.
 3. `env.update`, `atmosphere.update` (pas aux Enfers ni sous terre), `sim.update(gdt, dt)`, éruptions, incendies, `wakeVolcano`, messages des incendies, urgences et pertes (`world.losses`).
 4. Habitants (`agents.update`), patrouilles, sentinelles, `expeditions.update`, `holdIsle`, `stepWar` (guerre, alertes, île, `kingStage.update`), `stepFarewell`, `stepKingCrowd`, `railway.update`, `expView.update`, fêtes, enclos.
-5. Suivi par la caméra d'une équipe d'expédition (`following`), puis **selon le mode** : Enfers (`command.frame`, `hellMode.update`), souterrain (`uv.update`), sinon animation de la surface (bâtiments, faune, eau, vie, trafic, portail, contamination, rails, jardins, halos, végétation). La surface n'est donc **pas animée** pendant qu'on est aux Enfers, mais la simulation (étapes 3 et 4) continue.
+5. Suivi par la caméra d'une équipe d'expédition (`following`), puis **selon le mode** : Enfers (`command.frame`, `hellMode.update`), souterrain (`uv.update`), sinon animation de la surface (bâtiments, faune, eau, vie, trafic, portail, contamination, rails, halos, végétation). La surface n'est donc **pas animée** pendant qu'on est aux Enfers, mais la simulation (étapes 3 et 4) continue.
 6. `audio.update`, minuterie de l'interface (toutes les 0,25 s : `ui.update`, `tutorial.update`, `command.render`, `warTips.update`, bouton « Retourner au village »), trophées (0,5 s), **sauvegarde automatique toutes les 15 s**, `renderer_render` (ombres une image sur `gfx.shadowEvery` si la vue est immobile ; halo `Glow` la nuit ou aux Enfers).
 
 ### Temps de jeu (`GameTime`)
@@ -92,7 +92,7 @@ Orbitale : `target` (point visé), `yaw`, `pitch`, `dist`. Chaque valeur a un **
 ### Raccourcis clavier (surface, `bindKeys`)
 | Touche | Effet |
 |---|---|
-| `0`–`9` (rangée du haut ou pavé) | outils : 0 montagne, 1 relever, 2 abaisser, 3 aplanir, 4 falaise, 5 creuser, 6 forêt, 7 champ, 8 jardin, 9 gomme |
+| `0`–`9` (rangée du haut ou pavé) | outils : 0 montagne, 1 relever, 2 abaisser, 3 aplanir, 4 falaise, 5 creuser, 6 forêt, 7 champ, 9 gomme |
 | `R` | route (si l'outil est déjà pris : bascule tracé en ligne / libre) ; avec un bâtiment en main ou sélectionné : le tourne |
 | `X` démolir, `M` déplacer, `B` bâtir (dernier bâtiment) | |
 | `T` | tourner le bâtiment en main |
@@ -126,7 +126,7 @@ L'objet `Game` entier, pour préparer une situation à la main : `__game.world`,
 
 ## Liens avec les autres systèmes
 - Chaque système a son `update(gdt|dt)` appelé dans `frame` : voir son fichier pour ses règles.
-- Le passage d'âge (`sim.onAgeUp`) est branché dans le constructeur : bannière, fenêtre des nouveaux bâtiments, couleur du sol des jardins.
+- Le passage d'âge (`sim.onAgeUp`) est branché dans le constructeur : bannière, fenêtre des nouveaux bâtiments.
 - Les nouvelles de guerre (`war.news`) sont triées dans `stepWar` ; celles des incendies, urgences et pertes dans `frame`.
 
 ## Pièges et invariants

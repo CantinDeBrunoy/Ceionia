@@ -60,7 +60,6 @@ import { L_GONE, L_LIFT } from './render/expeditionScenes';
 import { Parade, Spot } from './render/parade';
 import { Fires } from './render/fires';
 import { Traffic } from './render/traffic';
-import { GardenView } from './render/gardens';
 import { Halos } from './render/halos';
 import { RailBoost } from './render/railBoost';
 import { UpgradeBadges } from './render/upgradeBadges';
@@ -161,7 +160,6 @@ class Game implements UIHost {
   alpine: AlpineView;
   emergencies: Emergencies;
   transports: Transports;
-  gardens: GardenView;
   halos: Halos;
   /** pastilles « ⬆ » sur les bâtiments qui peuvent évoluer */
   upBadges: UpgradeBadges;
@@ -345,7 +343,6 @@ class Game implements UIHost {
     this.quakeTimer = this.time.dayLen * (5 + Math.random() * 4);
 
     this.terrain = new TerrainView(w);
-    this.terrain.gardenAge = this.sim.age;
     this.roads = new RoadView(w);
     this.veg = new VegView(w);
     this.buildings = new BuildingView(w);
@@ -380,8 +377,6 @@ class Game implements UIHost {
     this.fires.pails = (b) => this.agents.pails(b);
     this.agents.burning = (id) => this.fires.burning.some((b) => b.id === id);
     this.transports = new Transports(w, this.buildings);
-    // jardins : lieux qui changent avec les âges ; leurs feux fument et crépitent comme les foyers
-    this.gardens = new GardenView(w);
     // halos de lumière des feux et des lanternes, la nuit
     this.halos = new Halos(w);
     this.upBadges = new UpgradeBadges(w);
@@ -422,7 +417,6 @@ class Game implements UIHost {
     this.scene.add(this.portalView.group);
     this.blightView = new BlightView(w);
     this.scene.add(this.blightView.group);
-    this.life.extraChimneys = (out) => this.gardens.chimneys(out);
     // la foudre et les bombes de lave mettent le feu aux bâtiments ; les habitants accourent
     const ignite = (b: Building | undefined) => { if (b && this.fires.ignite(b)) { this.agents.alert(b.z * N + b.x); audio.sfxDestroy(); } };
     this.emergencies.ignite = (b) => ignite(b);
@@ -432,7 +426,7 @@ class Game implements UIHost {
     this.life.onSplash = (x, z) => audio.sfxSplash((1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 25)) * Math.min(1, 40 / this.cam.dist));
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.gardens.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group);
     this.applyQuality();
 
     const host = this;
@@ -511,9 +505,6 @@ class Game implements UIHost {
       // (au bac à sable, tout est déjà ouvert : pas de liste)
       if (!this.world.sandbox) setTimeout(() => this.ui.showNewAge(age), 3600);
       audio.sfxAgeUp();
-      // le sol des jardins change avec eux
-      this.terrain.gardenAge = age;
-      this.terrain.recolor(this.season);
       this.propsDirty = true;
     };
     this.buildings.onPlaced = (b) => { this.propsDirty = true; this.defenseWhere(b); };
@@ -538,7 +529,6 @@ class Game implements UIHost {
     onLangChange(() => { this.saveNow(); sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`); this.running = false; location.reload(); });
 
     this.refreshSeason(true);
-    this.gardens.sync(this.sim.age);
     this.refreshHalos();
     this.ui.update();
     // (pas de tutoriel au bac à sable : il n'y a rien à apprendre dans l'ordre)
@@ -1432,7 +1422,7 @@ class Game implements UIHost {
 
   // ---------- Entrées clavier ----------
   private bindKeys() {
-    const map: Record<string, ToolId> = { '0': 'mountain', '1': 'raise', '2': 'lower', '3': 'flatten', '4': 'cliff', '5': 'dig', '6': 'forest', '7': 'field', '8': 'garden', '9': 'erase', r: 'road', x: 'bulldoze', m: 'move' };
+    const map: Record<string, ToolId> = { '0': 'mountain', '1': 'raise', '2': 'lower', '3': 'flatten', '4': 'cliff', '5': 'dig', '6': 'forest', '7': 'field', '9': 'erase', r: 'road', x: 'bulldoze', m: 'move' };
     window.addEventListener('keydown', (e) => {
       const t = e.target as HTMLElement;
       if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement) return;
@@ -1498,7 +1488,7 @@ class Game implements UIHost {
     this.cam.resize(w, h);
   }
 
-  /** Sources de lumière la nuit : feux de camp et braseros, lampadaires, feux des jardins, lanternes des chemins */
+  /** Sources de lumière la nuit : feux de camp et braseros, lampadaires, lanternes des chemins */
   private refreshHalos() {
     const pts: number[] = [];
     for (const b of this.world.buildings.values()) {
@@ -1511,7 +1501,6 @@ class Game implements UIHost {
       }
       else if (b.kind === 'workshop' && b.age === 2) pts.push(b.x + 0.5, b.z + 0.5, 0.75, 0.45);
     }
-    this.gardens.lights(pts);
     this.portalView.lights(pts);
     for (let i = 0; i < this.roads.lights.length; i += 2) pts.push(this.roads.lights[i], this.roads.lights[i + 1], 0.75, 0.5);
     for (let i = 0; i < this.railView.lights.length; i += 2) pts.push(this.railView.lights[i], this.railView.lights[i + 1], 0.95, 0.6);
@@ -1535,7 +1524,6 @@ class Game implements UIHost {
       const w = this.world;
       setSnowMap(N, (k) => SNOWY[w.biome[k]] ?? 1);
       this.veg.applySeason(this.season);
-      this.gardens.applySeason(this.season);
       // la neige des routes suit la saison sans les refaire (shader) ; elles ne se refont que lorsqu'elle franchit un seuil où
       // leurs décors changent : sur un grand village, les refaire coûte un à-coup, et à ×4 la neige bouge quatre fois plus vite
       const s = this.season.snow;
@@ -1619,11 +1607,10 @@ class Game implements UIHost {
       if (w.roadsDirty || this.propsDirty) { w.roadsDirty = false; this.roads.rebuildSoon(this.sim.age, this.season.snow); this.buildings.refreshAll(); }
       // l'herbe des prairies dépend aussi des routes
       if (w.vegDirty || roadsChanged || this.propsDirty) {
-        // le sol se teinte sous les champs, jardins et forêts
+        // le sol se teinte sous les champs et forêts
         if (w.vegDirty && w.vegRect) this.terrain.update(this.season, w.vegRect);
         w.vegDirty = false;
         this.veg.rebuild(this.season);
-        this.gardens.sync(this.sim.age);
         this.refreshHalos();
       }
       this.propsDirty = false;
@@ -1783,7 +1770,6 @@ class Game implements UIHost {
       else this.trainCam = null;
       // l'incident suivi : la caméra reste dessus (sur le véhicule en route), jusqu'à ce qu'il soit fini
       if (this.incidentCam) { const i = this.incidents().find((x) => x.key === this.incidentCam); if (i) this.cam.follow(i.x, i.z); else this.incidentCam = null; }
-      this.gardens.update(dt, this.time.hour);
       this.halos.update(dt, this.env.night);
       // l'après-midi, une fois par jour : les shaders de nuit de ce qui est apparu depuis le chargement (bêtes de passage et
       // leurs silhouettes lointaines…) se compilent d'avance, sans bloquer ; sinon, tous au premier halo du soir

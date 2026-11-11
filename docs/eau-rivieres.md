@@ -10,7 +10,7 @@ Il n'y a **pas de réseau de rivières** dans les données : la mer est un plan 
 ## Règles du jeu
 - Niveau de la mer : `SEA = 0` (`world.ts`). Le sol est du sable franc jusqu'à 0,12 de hauteur, qui s'estompe jusqu'à 0,42 (`terrainView.ts`, `beach`) ; au marais, vase au lieu de sable.
 - Creuser sous 0 donne de l'eau **à ce niveau-là, même loin de la mer** (une mare) ; remonter le sol au-dessus de 0 l'assèche. Une cuvette creusée entre 0 et 2,5 sans passer sous 0 reste sèche.
-- Un creux assez haut, grand et profond devient un lac : niveau (`level`) au moins 2,5, profondeur (`deep`) au moins 0,35, au moins 16 sous-sommets (environ 4 cases), moins de 4 % d'arbres, ni bâtiment, ni champ, ni jardin au fond. Au plus `round(N/8)` lacs (24 sur 192), les plus grands et profonds d'abord.
+- Un creux assez haut, grand et profond devient un lac : niveau (`level`) au moins 2,5, profondeur (`deep`) au moins 0,35, au moins 16 sous-sommets (environ 4 cases), moins de 4 % d'arbres, ni bâtiment, ni champ au fond. Au plus `round(N/8)` lacs (24 sur 192), les plus grands et profonds d'abord.
 - Torrents : au plus `round(N/16)` sources de montagne (12) plus un torrent par déversoir de lac ; sources espacées de plus de 9 cases, au-dessus de `max(2.4, 0.5 × sommet)`.
 - Hiver : la glace suit `iceNow` (gel de la saison, nul sous 0,35 de neige, lissé). Mer et rivières gèlent depuis les rives et les eaux dormantes, en plaques irrégulières ; le courant fort reste libre, et rien ne gèle là où la neige ne tient pas (tropiques, désert, via `SNOW_U`). Les lacs gèlent depuis les rives et gardent des trous d'eau libre au plus profond ; les torrents se figent sur le plat, les chutes raides coulent encore (embruns réduits).
 - Le reste de l'année, teinte, limpidité, reflets et vitesse du courant suivent la saison ; pétales ou feuilles dérivent au fil des rivières ([saisons.md](saisons.md)).
@@ -80,7 +80,7 @@ Une seule détection et un seul profil de tablier servent à la fois au dessin (
 - Ponton (`pier`) : il lui faut une case voisine d'eau (`cellAvg < -0.05` ou lac) et peut s'avancer dans l'eau peu profonde (moyenne ≥ 0,05 requise sur ses propres cases).
 - Port (`harbor`) : pas en eau profonde (`cellAvg < -0.9`), un côté du quai doit toucher l'eau, un pied sur la rive, quai à moins de 0,6 au-dessus de l'eau (lac ou mer) ; il creuse son bassin sur trois rangs (`dredge`) et son quai est remblayé à `QUAY_MAX = 0,32` au plus.
 - Bâtiments de la mer (`SEASIDE` : chantier naval, phare, halle aux poissons, ferme marine) : de l'eau à 5 cases au plus de l'emprise.
-- Champs, forêts, jardins, rochers peints : refusés sur un lac, sur un torrent (`wetCell`), ou si un coin de la case est sous 0,05 (`tools.ts`). La végétation déjà posée est retirée si l'eau monte (`sanitize`, `vegFits`).
+- Champs, forêts, rochers peints : refusés sur un lac, sur un torrent (`wetCell`), ou si un coin de la case est sous 0,05 (`tools.ts`). La végétation déjà posée est retirée si l'eau monte (`sanitize`, `vegFits`).
 - Grottes et failles : terre ferme seulement (`avg >= 0.3`) ; épave : seulement en eau peu profonde (`-1 <= avg <= 0.3`) ; volcan : `avg >= 0`.
 - Routes : voir `canRoad` ; au large (moyenne ≤ -1,7), aucune route.
 

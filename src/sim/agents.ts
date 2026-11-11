@@ -6,11 +6,13 @@ import { makeActor, play, hasModel, Actor, HUMAN, HUMAN_K } from '../render/asse
 import { makeFolk, folkStep, holdFolk, Folk, FolkHold, FolkPose } from '../render/folk';
 import { makeRider, rideStep, Rider } from '../render/riders';
 import { makeSoldier, soldierStep, Soldier } from '../render/soldiers';
-import { findGardens, layoutGarden, Spot, Act } from '../world/gardens';
 import { Parts } from '../render/parts';
 import { mats } from '../render/materials';
 import { findPlots, fieldHands, shareHands, fieldSeason, fieldTask, longestRun, rigAt, runCells, Plot, Run, FieldTask, TRACTOR_AGE, TRACTOR_CELLS, MACHINE_AGE, DRONE_AGE, MAX_DRONES, RigKind, machineOf, isAutoRig, isMotorRig, rigShown, RIG_SPEED } from './fields';
 import { rigGeo, droneGeo, propellerGeo, PROP_SPOTS, seatOf } from '../render/farmRigs';
+
+/** Ce que fait un habitant à sa place : assis, à l'ouvrage, bras levés, à jouer, à courir, à flâner, à boxer */
+export type Act = 'sit' | 'work' | 'cheer' | 'play' | 'run' | 'stroll' | 'box';
 
 /** Ce que porte un membre d'expédition : son arme, une torche, une corde, une armure (il devient chevalier), son cheval */
 /** Équipement d'un membre d'expédition ; `rider` : en selle, il devient le cavalier de l'époque (charge de cavalerie),
@@ -367,8 +369,6 @@ export class Agents {
   private season = 0;
   private age = 0;
   private roads: number[] = [];
-  /** places des jardins (pour l'âge courant) et qui les occupe */
-  private gspots: Spot[] = [];
   /** places occupées : clé → habitant */
   private held = new Map<string, number>();
   /** ce bâtiment brûle-t-il encore ? (branché sur les incendies) */
@@ -847,8 +847,6 @@ export class Agents {
     const r = this.rnd();
     // les enfants vont jouer près des lieux de rencontre, des champs ou au bord des chemins
     if (child) {
-      // aire de jeux, pelouse du jardin
-      if (this.rnd() < 0.5) { const d = this.gardenDest(true); if (d) return d; }
       const play = this.socials.filter((b) => b.kind !== 'temple');
       // à côté du puits ou du feu, sans s'en approcher : ils courent en rond autour de leur place
       if (play.length && r < 0.5) { const d = this.beside(this.pick(play)!, 0); if (d) return d; }
@@ -859,9 +857,7 @@ export class Agents {
     // bûcherons à la lisière
     if (r > 0.86) { const d = this.cellDest(this.woods); if (d) return d; }
     const socialBias = hour >= 12 && hour < 14.5 ? 0.7 : hour >= 17 ? 0.65 : 0.3;
-    if (r < socialBias && (this.socials.length || this.gspots.length)) {
-      // le jardin : une place libre (autour du feu, à l'ouvrage, dans les gradins, sur un banc…)
-      if (!this.socials.length || this.rnd() < 0.55) { const d = this.gardenDest(false); if (d) return d; }
+    if (r < socialBias && this.socials.length) {
       const b = this.pick(this.socials);
       // on entre au temple ; au puits, au feu de camp ou sur la place, on reste à côté
       if (b?.kind === 'temple') return { cell: this.cellOf(b), hidden: true };
@@ -1087,16 +1083,6 @@ export class Agents {
     });
   }
 
-  /** Une place libre dans un jardin, pour un enfant ou un adulte */
-  private gardenDest(kid: boolean): Dest | null {
-    const free: number[] = [];
-    for (let i = 0; i < this.gspots.length; i++) if (!!this.gspots[i].kid === kid && !this.held.has(`g${i}`)) free.push(i);
-    const i = this.pick(free);
-    if (i === undefined) return null;
-    const s = this.gspots[i];
-    return { cell: Math.floor(s.z) * N + Math.floor(s.x), hidden: false, spot: [s.x, s.z], face: s.face, deck: s.seat ? this.world.hAt(s.x, s.z) + s.seat + (s.act === 'sit' ? SIT_LIFT : 0) : undefined, act: s.act, hold: `g${i}` };
-  }
-
   private release(a: Agent) {
     if (a.hold && this.held.get(a.hold) === a.id) this.held.delete(a.hold);
     a.hold = null;
@@ -1107,15 +1093,6 @@ export class Agents {
       if (a.task === 'drive' && a.state === 'doing') { a.x += Math.cos(a.heading) * 0.15; a.z -= Math.sin(a.heading) * 0.15; }
     }
     a.rig = null;
-  }
-
-  /** Places des jardins : refaites quand le monde ou l'âge change */
-  private refreshGardens(age: number) {
-    this.gspots = [];
-    for (const g of findGardens(this.world)) this.gspots.push(...layoutGarden(this.world, g, age).spots);
-    // les places des jardins sont refaites : on les libère toutes
-    for (const k of this.held.keys()) if (k[0] === 'g') this.held.delete(k);
-    for (const a of this.agents) if (a.hold?.[0] === 'g') a.hold = null;
   }
 
   private startPath(a: Agent, goal: number, hiddenAtEnd: boolean) {
@@ -1140,7 +1117,7 @@ export class Agents {
     this.season = season; this.age = age;
     if (w.version !== this.lastVersion) { this.lastVersion = w.version; this.refreshTargets(); }
     const key = `${w.version}|${age}|${+this.motor}`;
-    if (key !== this.spotKey) { this.spotKey = key; this.refreshGardens(age); this.refreshRigs(this.rigAge(age)); }
+    if (key !== this.spotKey) { this.spotKey = key; this.refreshRigs(this.rigAge(age)); }
     // les passants qu'on voit, plus les bras des champs (autant que les champs en emploient, à l'échelle des passants), plus
     // les membres des expéditions en cours
     const away = this.agents.reduce((n, a) => n + (a.mission ? 1 : 0), 0);
@@ -1306,7 +1283,7 @@ export class Agents {
     const pose: FolkPose = riding ? 'sit'
       : field ? field[0]
       : a.state === 'walking' || (running && a.state === 'doing') ? ((running && a.state === 'doing') || a.urgent ? 'run' : 'walk')
-      : a.state === 'doing' ? (a.act === 'sit' ? 'sit' : a.act === 'cheer' || a.act === 'play' ? 'cheer' : a.act === 'stroll' || (a.mission && !a.act) ? (a.tool === 'book' || a.job?.kind === 'merchant' ? 'talk' : 'idle') : 'work')
+      : a.state === 'doing' ? (a.act === 'sit' ? 'sit' : a.act === 'box' ? 'box' : a.act === 'cheer' || a.act === 'play' ? 'cheer' : a.act === 'stroll' || (a.mission && !a.act) ? (a.tool === 'book' || a.job?.kind === 'merchant' ? 'talk' : 'idle') : 'work')
       : 'idle';
     folkStep(act, a.phase * (field && !riding ? field[1] : pose === 'run' ? 1.1 : pose === 'walk' ? 1.6 : 1), pose);
     void dt;
@@ -1373,7 +1350,7 @@ export class Agents {
     }
     a.soldier.root.position.set(a.x, this.groundY(a), a.z);
     a.soldier.root.rotation.y = a.heading;
-    soldierStep(a.soldier, a.phase * 1.6, a.state === 'walking' ? 'walk' : a.act === 'cheer' ? 'cheer' : a.act === 'work' ? 'fight' : 'guard');
+    soldierStep(a.soldier, a.phase * 1.6, a.state === 'walking' ? 'walk' : a.act === 'cheer' ? 'cheer' : a.act === 'work' || a.act === 'box' ? 'fight' : 'guard');
     return true;
   }
 

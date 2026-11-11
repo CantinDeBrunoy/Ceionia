@@ -16,7 +16,7 @@
 
 ## En bref
 Deux onglets de la barre du bas. **Relief** : monter, baisser, aplanir, falaise, eau, montagne, volcan. **Nature** : forêt,
-jardin, biome, rochers, grotte, faille, gomme (le champ se prend dans Bâtir › Production › Nourriture, ou touche 7). Chaque
+biome, rochers, grotte, faille, gomme (le champ se prend dans Bâtir › Production › Nourriture, ou touche 7). Chaque
 outil est un pinceau rond (taille `[` et `]`, gardée par outil), sauf la grotte et le volcan, posés d'un clic. Le relief de
 jeu est une grille de sommets (`heights`, une case = 1) ; le relief affiché (`vis`) en est un suréchantillonnage lissé. Tout
 est annulable (Ctrl+Z, 60 coups).
@@ -41,16 +41,16 @@ est annulable (Ctrl+Z, 60 coups).
   l'outil arrondissait au mètre près : rien sur le plat, une marche de 1 que le lissage du relief affiché effaçait presque.
 
 ### Nature
-- Forêt, champ, jardin, rochers : pinceau (une application toutes les 0,15 s ; la forêt ne prend que 70 % des cases à chaque
+- Forêt, champ, rochers : pinceau (une application toutes les 0,15 s ; la forêt ne prend que 70 % des cases à chaque
   passage). Jamais dans l'eau, sur un torrent (`wetCell`), une rive mouillée, un bâtiment ou une route. Pentes et hauteurs :
-  `vegFits` (forêt : pente ≤ 1,4 et pas au-dessus de `TREE_LINE = 5.8` ; champ, jardin : pente ≤ 0,6 ; rochers : pente ≤ 1).
+  `vegFits` (forêt : pente ≤ 1,4 et pas au-dessus de `TREE_LINE = 5.8` ; champ : pente ≤ 0,6 ; rochers : pente ≤ 1).
 - Une plantation ne recouvre jamais un décor unique (grotte, épave, cratère de volcan) : `setVeg` refuse.
 - Biome : peint `biomePaint` (tempéré, taïga, désert, tropical, marais, ou « Climat » pour rendre la case à son climat).
 - Grotte : un clic, sur la terre ferme (hauteur ≥ 0,3, pente ≤ 2,2), emprise libre (`decorFits`, rayon `CAVE_R`).
 - Faille : un **pinceau qui creuse**. On glisse : les cases dont le centre est à moins de `max(0,75, rayon / 2)` du tracé
   deviennent un ravin (`digRiftAlong`). Refusée sur un bâtiment, une route, un lac, un torrent, la mer ou la plage (hauteur <
   0,15), une grotte ou un autre décor unique, et au bord de la carte.
-- Gomme (`World.erase`) : efface forêt, champ, jardin, rochers, épave ; **défriche** la case (arbres isolés, buissons,
+- Gomme (`World.erase`) : efface forêt, champ, rochers, épave ; **défriche** la case (arbres isolés, buissons,
   fougères, champignons, cailloux et cactus de la carte disparaissent, l'herbe et les fleurs restent) ; comble une case de
   ravin ; sur la moindre case d'un cône, rase le volcan.
 - Démolir : un clic sur une case de ravin comble tout le ravin ; sur une grotte, la retire. Pinceau large : routes,
@@ -67,7 +67,7 @@ est annulable (Ctrl+Z, 60 coups).
 - Éruption : `ERUPTION_DUR = 16` s (grondement 1,2 s, paroxysme, déclin). Cinq coulées (sept si `r > 12`), parfois un bras ;
   elles avancent encore 10 s, refroidissent, s'effacent 24 s après. Les bombes de plus de 0,26 qui retombent sur un bâtiment
   l'enflamment (30 %, catastrophes actives).
-- Lave au sol (`coverLava`) : forêts, champs et jardins brûlent, le sol devient basalte (`basalt = 1`) puis la végétation
+- Lave au sol (`coverLava`) : forêts et champs brûlent, le sol devient basalte (`basalt = 1`) puis la végétation
   revient en trois saisons (`regrow`) ; la case garde des cendres (`ash`) : un champ semé dessus compte double (`sim.ts`,
   `fertile`). Les routes sont épargnées ; les bâtiments ne sont détruits que si les catastrophes sont actives.
 - Lac de lave du cratère (`lavaPool`) : il remplit la cuvette (0,3 au-dessus du fond), toujours sous le col le plus bas du

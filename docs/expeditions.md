@@ -11,12 +11,12 @@ Une mission = plusieurs **choix** (en général deux, parfois trois, un seul pou
 ## Règles du jeu
 
 ### Les missions
-`MISSIONS` (`missions.ts`) : 34 missions, de l’âge 0 à l'âge 5. Une mission affichée est celle de l'âge du village ou d'un âge passé (`Expeditions.list`). Réussie, elle peut se refaire (`redoEffects`, voir plus bas).
+`MISSIONS` (`missions.ts`) : 35 missions, de l’âge 0 à l'âge 5. Une mission affichée est celle de l'âge du village ou d'un âge passé (`Expeditions.list`). Réussie, elle peut se refaire (`redoEffects`, voir plus bas).
 
 | Âge | Missions (★ obligatoire, → bâtiment débloqué) |
 |---|---|
 | 0 | `herd` ★ → enclos (`pen`), `berries`, `flint`, `honey` → rucher (`apiary`), `mammoth` ★ |
-| 1 | `seeds` ★, `horses` → écurie (`stable`), `fishing`, `springs` → bains (`baths`), `kraken` ★, `portal` ★ → tour de garde (`watchtower`), `megalodon` |
+| 1 | `seeds` ★, `horses` → écurie (`stable`), `fishing`, `springs` → bains (`baths`), `pugilat` → arène (`arena`), `kraken` ★, `portal` ★ → tour de garde (`watchtower`), `megalodon` |
 | 2 | `mine` ★ → mine, `wolf`, `fair` → cirque, `brewer` → taverne, `dragon` ★, `caravel` ★ → chantier naval, `spice` (exige le chantier naval) |
 | 3 | `railway` ★, `coal`, `motorcar` ★ → usine automobile, `flight` → aérodrome, `oil` ★ → raffinerie, `galleon` (chantier naval) |
 | 4 | `summit` ★, `reef`, `stars` → observatoire, `games` (stade, football, basket, tennis, parc aquatique, ski), `trawl` (halle aux poissons) |
@@ -56,7 +56,7 @@ Calculé sur les choix d'une mission, rien n'est stocké : le risque le plus bas
 5. **Retour** (`back`, 240 s au plus) puis `home` : fête (`main.ts` › `festAt`, `Festivities`) si réussite. `finish` : applique `win` ou `lose`, marque la mission faite, rend l'équipement (un échec en perd une pièce une fois sur deux), met les blessés au repos (durée ÷2 avec lieu de soins, ÷2 avec trousse), retire l'équipe, appelle `onReport` → `showReport` (récit, bouton pour bâtir le bâtiment débloqué). La colonie remplace le récit par l'écran de victoire.
 
 ### Déblocages
-Une mission réussie qui a `unlocks` permet de bâtir ce bâtiment. Le verrou réel est `KINDS[k].reqMission` dans `catalog.ts` (13 bâtiments) ; `Mission.unlocks` ne sert qu'à l'affichage : les deux doivent rester d'accord. Les savoir-faire (`exp.perks`) donnent champs +30 %, trophées sur la place, forge infernale…
+Une mission réussie qui a `unlocks` permet de bâtir ce bâtiment. Le verrou réel est `KINDS[k].reqMission` dans `catalog.ts` (14 bâtiments) ; `Mission.unlocks` ne sert qu'à l'affichage : les deux doivent rester d'accord. Les savoir-faire (`exp.perks`) donnent champs +30 %, trophées sur la place, forge infernale…
 
 ### Interface
 - Bouton 🧭 → `openExpeditions(tab)` : onglets Missions / Équipement / Chemin de fer (dès l'âge 3), sous-onglets Toutes / Militaires / Légendaires, cartes triées (obligatoires et légendaires à faire, puis le reste, puis les réussies). Une carte = un bouton « Envoyer une équipe » → `openSend` : intro, puis une carte par choix (style, durée, risque en points, gains, équipement qui manque avec bouton « Fabriquer », bouton « Partir », « Détails »). La fenêtre se redessine toutes les 300 ms si le stock change (pas sous un bouton enfoncé).
@@ -79,7 +79,7 @@ Une mission réussie qui a `unlocks` permet de bâtir ce bâtiment. Le verrou r�
 
 ### Rendu
 - `ExpeditionView.update` : un fanion par équipe (porté par le chef), `ExpeditionScene` créée dès le départ (le décor est posé avant l'arrivée), suiveurs au retour (`rebuild` : bêtes, chariot, traîneau, sacs, jongleurs ; `settle` les mène à l'enclos). Le décor s'efface (`scene.leave`) quand l'équipe est à `LEAVE_DIST = 5` cases ou après `LEAVE_T = 30` s.
-- `ExpeditionScene` : le cœur de la mission est choisi par `BEHAVIOR[scene]` (`herd`, `boat`, `mine`, `gather`, `hunt`, `build`, `delve`, `watch`, `tend`…), posé dans le constructeur (une branche par comportement), animé dans `update` (`stepMembers`, `stepBoat`, `stepMonster`, `stepBalloon`, `stepRocket`, `stepRace`, `stepGames`, `stepDragon`, `stepIsle`, `stepWorks`…), effets dans `stepFx`. Sous-modules : `floatIsles.ts` (îles flottantes), `galleon.ts` (épave et relevage).
+- `ExpeditionScene` : le cœur de la mission est choisi par `BEHAVIOR[scene]` (`herd`, `boat`, `mine`, `gather`, `hunt`, `build`, `delve`, `watch`, `tend`…), posé dans le constructeur (une branche par comportement), animé dans `update` (`stepMembers`, `stepBoat`, `stepMonster`, `stepBalloon`, `stepRocket`, `stepRace`, `stepGames`, `stepDragon`, `stepPugilist` (le pugilat : deux par deux dans le cercle, en `ride` avec le geste `box`), `stepIsle`, `stepWorks`…), effets dans `stepFx`. Sous-modules : `floatIsles.ts` (îles flottantes), `galleon.ts` (épave et relevage).
 - Imprévus joués sur la scène : `stageEvent(id)` fait correspondre l'id d'un imprévu à une fonction `stageXxx` (table `steps`) qui crée une `Staging` (objets, `step(dt)`, `leave`). La suite de l'option choisie est lue dans `a.picks`. Les échecs (`Choice.fail`) se jouent au départ de l'équipe par la même table (`rocks`, `capsize`, `scatter`, `charge`, `stings`, `blast`, `gone`, plus `storm`, `fog`, `birds`, `blizzard`).
 
 ### Suivi par la caméra

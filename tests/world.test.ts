@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, MAX_H, MIN_H, MOUNTAIN_H, SNOW_LINE, BIOME_DESERT, setMapSize, VEG_FIELD, VEG_GARDEN, VEG_VOLCANO, VEG_FOREST, VR, VS } from '../src/world/world';
-import { findGardens, layoutGarden } from '../src/world/gardens';
 import { genHeights, newWorld, addDefaultDecor, MAPS } from '../src/world/mapgen';
 import { GEN, GEN_FIXED, GEN_PLAN, Zone, continentPlan, riverU, toPlan, fromPlan } from '../src/world/continent';
 import { Sim } from '../src/sim/sim';
@@ -326,6 +325,15 @@ describe('sauvegarde', () => {
     expect(r.basalt[r.ci(5, 5)]).toBeCloseTo(0.42, 2);
     expect(r.ash[r.ci(6, 6)]).toBe(1);
     expect(r.ore).toBe(17);
+  });
+
+  it('les jardins d’une ancienne partie redeviennent de l’herbe (l’outil a été retiré)', () => {
+    const [x, z] = flatLand(w);
+    w.veg[w.ci(x, z)] = VEG_GARDEN; w.veg[w.ci(x + 1, z)] = VEG_FIELD;
+    const r = new World();
+    r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(r.veg[r.ci(x, z)]).toBe(0);
+    expect(r.veg[r.ci(x + 1, z)]).toBe(VEG_FIELD);
   });
 
   it('un biome peint au pinceau tient malgré le climat et le relief, se sauvegarde et s’annule', () => {
@@ -684,82 +692,6 @@ describe('façades et ponts', () => {
     expect(pz).toBeGreaterThan(z + 0.5); expect(pz).toBeLessThan(z + 1);
     // aux bouts du pont, on reste près du centre de la case
     for (const i of [0, 2]) { const [qx, qz] = w.passPoint(path, i), c = path[i]; expect(Math.hypot(qx - (c % N) - 0.5, qz - Math.floor(c / N) - 0.5)).toBeLessThan(0.3); }
-  });
-});
-
-describe('jardins', () => {
-  /** Un jardin rectangulaire de w × d cases peint sur de la terre plate et dégagée */
-  function garden(w: World, gw: number, gd: number) {
-    for (let z = 8; z < N - 8 - gd; z++)
-      for (let x = 8; x < N - 8 - gw; x++) {
-        let ok = true;
-        for (let i = 0; i < gw && ok; i++) for (let j = 0; j < gd && ok; j++) ok = w.cellAvg(x + i, z + j) > 0.5 && w.cellSlope(x + i, z + j) < 0.6 && !w.occ[w.ci(x + i, z + j)] && !w.road[w.ci(x + i, z + j)] && !w.isWet(x + i, z + j);
-        if (!ok) continue;
-        for (let i = 0; i < gw; i++) for (let j = 0; j < gd; j++) { w.veg[w.ci(x + i, z + j)] = VEG_GARDEN; w.decor[w.ci(x + i, z + j)] = 0; }
-        return findGardens(w).find((g) => g.set.has(w.ci(x, z)))!;
-      }
-    throw new Error('pas de place pour un jardin');
-  }
-
-  it('change de visage à chaque âge, toujours le même pour une zone donnée', () => {
-    const w = continent(), g = garden(w, 4, 3);
-    const styles = [0, 1, 2, 3, 4, 5].map((a) => layoutGarden(w, g, a).style);
-    expect(styles[0]).toBe('camp');
-    expect(styles[1]).toBe('antique');
-    expect(styles[4]).toBe('parc');
-    expect(styles[5]).toBe('futur');
-    expect(new Set(styles).size).toBe(6);
-    expect(layoutGarden(w, g, 2)).toEqual(layoutGarden(w, g, 2));
-  });
-
-  it('se remplit selon la taille et reste dans la zone', () => {
-    const w = continent(), small = garden(w, 2, 1), big = garden(w, 6, 5);
-    for (let a = 0; a <= 5; a++) {
-      const s = layoutGarden(w, small, a), b = layoutGarden(w, big, a);
-      expect(b.items.length).toBeGreaterThan(s.items.length);
-      for (const l of [s, b]) for (const it of l.items) expect(l.g.set.has(w.ci(Math.floor(it.x), Math.floor(it.z)))).toBe(true);
-      expect(b.spots.length).toBeGreaterThan(0);
-    }
-    // préhistoire : des feux et des places assises autour ; époque moderne : des jeux pour les enfants
-    expect(layoutGarden(w, big, 0).items.filter((i) => i.k === 'fire').length).toBeGreaterThan(0);
-    expect(layoutGarden(w, big, 0).spots.some((s) => s.act === 'sit')).toBe(true);
-    expect(layoutGarden(w, big, 4).spots.some((s) => s.kid && s.act === 'play')).toBe(true);
-  });
-
-  it('à l’âge futuriste, un jardin lumineux qui ne ressemble pas au parc moderne', () => {
-    const w = continent(), big = garden(w, 6, 5), small = garden(w, 2, 1);
-    const f = layoutGarden(w, big, 5), m = layoutGarden(w, big, 4);
-    expect(f.style).toBe('futur');
-    const kinds = new Set(f.items.map((i) => i.k)), modern = new Set(m.items.map((i) => i.k));
-    for (const k of ['dome', 'lighttree', 'hexbed', 'drone', 'pathlight', 'podbench', 'gravpool', 'hoverpad']) expect(kinds.has(k), k).toBe(true);
-    // rien du parc moderne : ni toboggan, ni arbres ordinaires, ni lampadaires
-    for (const k of ['slide', 'swings', 'tree', 'lamp', 'bench']) expect(kinds.has(k), k).toBe(false);
-    expect([...kinds].filter((k) => modern.has(k) && k !== 'pond').length).toBeLessThan(3);
-    // on s'y assoit, les enfants y jouent, et ça reste dans la zone même petite
-    expect(f.spots.some((s) => s.act === 'sit')).toBe(true);
-    expect(f.spots.some((s) => s.kid && s.act === 'play')).toBe(true);
-    expect(f.paths.length).toBeGreaterThan(20);
-    const s = layoutGarden(w, small, 5);
-    expect(s.items.length).toBeGreaterThan(0);
-    for (const l of [f, s]) for (const it of l.items) expect(l.g.set.has(w.ci(Math.floor(it.x), Math.floor(it.z)))).toBe(true);
-    expect(layoutGarden(w, big, 5)).toEqual(f);
-  });
-
-  it('tous les âges ont de l’herbe plus riche et des détails propres', () => {
-    const w = continent(), big = garden(w, 6, 5);
-    const has = (a: number, k: string) => layoutGarden(w, big, a).items.some((i) => i.k === k);
-    expect(has(0, 'fern') && has(0, 'berrybush') && has(0, 'totem')).toBe(true);
-    expect(has(1, 'tuft') && has(1, 'urn') && has(1, 'rosebush')).toBe(true);
-    expect(has(5, 'glowgrass')).toBe(true);
-  });
-
-  it('un jardin long accueille un tournoi au Moyen Âge, un petit des lices d’entraînement', () => {
-    const w = continent(), long = garden(w, 8, 3), small = garden(w, 2, 2);
-    const t = layoutGarden(w, long, 2);
-    expect(t.style).toBe('tournoi');
-    expect(t.lanes.length).toBe(4);
-    expect(t.spots.some((s) => s.act === 'cheer')).toBe(true);
-    expect(layoutGarden(w, small, 2).style).toBe('lices');
   });
 });
 

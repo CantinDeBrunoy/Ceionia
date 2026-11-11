@@ -24,7 +24,7 @@ Index d'une case : `ci(x, z) = z * N + x` ; d'un sommet : `vi(x, z) = z * (N + 1
 | `heights` | `Float32Array (N+1)²` | relief de jeu (sauvegardé × 100, arrondi) |
 | `occ` | `Int32Array N²` | id du bâtiment qui couvre la case (0 : libre) |
 | `road` | `Uint8Array` | 1 : route (courbes : `curves`, voir [routes.md](routes.md)) |
-| `veg` | `Uint8Array` | 0 rien, `VEG_FOREST` 1, `VEG_FIELD` 2, `VEG_GARDEN` 3, `VEG_ROCKS` 4, `VEG_CAVE` 5, `VEG_WRECK` 6, `VEG_VOLCANO` 7, `VEG_FISSURE` 8 ; `>= VEG_CAVE` = décor unique |
+| `veg` | `Uint8Array` | 0 rien, `VEG_FOREST` 1, `VEG_FIELD` 2, `VEG_GARDEN` 3 (anciens jardins, effacés au chargement), `VEG_ROCKS` 4, `VEG_CAVE` 5, `VEG_WRECK` 6, `VEG_VOLCANO` 7, `VEG_FISSURE` 8 ; `>= VEG_CAVE` = décor unique |
 | `decor` | `Uint8Array` | emprise (déborde de la case) d'une grotte ou d'une faille ; recalculé par `computeDecor` |
 | `biome` / `biomePaint` | `Uint8Array` | biome de la case ; peinture du joueur (0 : climat, sinon biome + 1) |
 | `lake`, `lakeLevel` | `Uint8Array`, `Float32Array` | lacs, calculés par `Streams` (voir [eau-rivieres.md](eau-rivieres.md)) |
