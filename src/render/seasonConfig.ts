@@ -122,7 +122,7 @@ const SPRING: SeasonDef = {
     litter: '#7DA552', litterK: 0.25, bank: '#86B25A', bankK: 0.55, crop: '#B4DC86',
   },
   trees: {
-    blossom: pal(['#E9A0B4', '#F1F0DB', '#F2BCCB', '#A8D66D'], [0.45, 0.3, 0.1, 0.15]),
+    blossom: pal(['#E9A0B4', '#DC8CA8', '#F2BCCB', '#A8D66D'], [0.45, 0.3, 0.1, 0.15]),
     leafy: pal(['#A6D45A', '#8CC43E', '#74B03A', '#C0DD72'], [0.4, 0.25, 0.2, 0.15]),
     conifer: pal(['#5AA448', '#4C963F', '#68B050', '#529C44'], [0.4, 0.3, 0.15, 0.15]),
     leafSpread: 0.15,
