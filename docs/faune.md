@@ -65,6 +65,7 @@ Pas de la faune : géométries partagées des attelages et machines agricoles (c
 - [habitants.md](habitants.md) : `fauna.people` lit les habitants pour la méfiance.
 
 ## Pièges et invariants
+- Les silhouettes lointaines et un exemplaire caché (`samples`) de chaque bête articulée sont pris au constructeur (`bakeSilhouettes`), pour préparer leurs shaders au chargement ; une nouvelle clé de silhouette doit y figurer (voir [chargement-performances.md](chargement-performances.md)).
 - Chaque `Source.key` doit être **stable** d'un recensement à l'autre (préfixe + indice) : sinon toutes les bêtes du groupe sont recréées et sautent. Les clés des zones sont `z<indice de zone>b<biome>-<i>` : **insérer une ligne au milieu de `ZONES` change toutes les clés suivantes** ; ajouter en fin de tableau.
 - `salt` fixe la case de domaine (`hash2`) : un salt unique par ligne de zone, ou deux espèces se superposent.
 - Le plafond `max × 0,7` et `SPECS[...].max` : relever l'un sans l'autre ne montre pas plus de bêtes.

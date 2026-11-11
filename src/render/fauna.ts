@@ -540,9 +540,13 @@ export class Fauna {
   detail = 1;
   /** silhouettes figées des bêtes articulées lointaines, dessinées par lots */
   readonly impostors = new Impostors();
+  /** un exemplaire caché de chaque bête articulée, pour préparer ses shaders au chargement (voir `bakeSilhouettes`) */
+  readonly samples = new THREE.Group();
 
   constructor(private world: World, private veg: { perches: number[][]; flowers: number[][] }) {
     this.group.add(this.impostors.group);
+    this.samples.visible = false;
+    this.group.add(this.samples);
     for (const k of KIND_LIST) {
       const sp = SPECS[k];
       if (!sp.geo) continue;
@@ -567,6 +571,35 @@ export class Fauna {
       m.receiveShadow = true;
       this.meshes[k] = m;
       this.group.add(m);
+    }
+    this.bakeSilhouettes();
+  }
+
+  /**
+   * Toutes les bêtes articulées possibles (chaque robe des bêtes du jeu, chaque modèle), prises dès le départ : leur silhouette
+   * lointaine (`Impostors.ensure`) et un exemplaire caché dans `samples`. Ainsi leurs shaders (articulé, instancié, et leurs
+   * ombres) se préparent sous l'écran de chargement (voir `firstUseAll`, precompile.ts). Sans cela, une bête d'une sorte
+   * encore jamais vue, ou sa silhouette, compilait au moment où elle paraissait : 100 à 150 ms figées, souvent à la
+   * première rotation de la vue, quand des visiteurs arrivent. Les clés et tailles sont celles de `populate`
+   */
+  private bakeSilhouettes() {
+    const keep = (a: Actor) => { a.root.visible = true; this.samples.add(a.root); };
+    for (const kind of KIND_LIST) {
+      const sp = SPECS[kind], md = MODELS[kind];
+      if (BEAST_KINDS.has(kind as BeastKind)) {
+        for (let coat = 0; coat < sp.colors.length; coat++) {
+          const size = sp.scale ?? 1, a = makeBeast(kind as BeastKind, coat, size);
+          this.impostors.ensure(`beast:${kind}:${coat}`, a, size);
+          if (coat === 0) keep(a);
+        }
+      } else if (md && !PROCEDURAL.has(kind)) {
+        for (const name of new Set([md.name, ...(md.lead ? [md.lead] : []), ...(md.pick ?? [])])) {
+          const a = makeActor(name, md.length);
+          if (!a) continue;
+          this.impostors.ensure(`model:${name}`, a, md.length);
+          keep(a);
+        }
+      }
     }
   }
 

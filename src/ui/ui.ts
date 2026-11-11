@@ -356,6 +356,29 @@ function modal(root: HTMLElement, cls: string, title: string, body: string, onCl
   return { ov, close };
 }
 
+/** La rose des vents de l'en-tête des expéditions */
+const EXP_EMBLEM = `<svg class="exEmblem" viewBox="0 0 64 64" aria-hidden="true">
+  <circle cx="32" cy="32" r="17" fill="none" stroke="#1d2f5c" stroke-width="3.5"/>
+  <path d="M32 2 L37 27 L32 24 L27 27 Z M32 62 L27 37 L32 40 L37 37 Z M2 32 L27 27 L24 32 L27 37 Z M62 32 L37 37 L40 32 L37 27 Z" fill="#1d2f5c"/>
+  <path d="M32 2 L37 27 L32 24 Z M62 32 L37 37 L40 32 Z M32 62 L27 37 L32 40 Z M2 32 L27 27 L24 32 Z" fill="#4a6aa8"/>
+  <path d="M14 14 L29 28 L28 29 Z M50 14 L36 29 L35 28 Z M50 50 L35 36 L36 35 Z M14 50 L28 35 L29 36 Z" fill="#1d2f5c"/>
+  <circle cx="32" cy="32" r="4" fill="#5d9be8" stroke="#1d2f5c" stroke-width="2"/>
+</svg>`;
+/** L'avion de papier du bouton « Envoyer une équipe » */
+const SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M21.5 2.5L10 14M21.5 2.5l-7 19-4.5-7.5L2.5 9.5z"/></svg>';
+/**
+ * L'illustration d'une carte d'expédition (`public/expeditions/`) : celle de la mission si elle en a une, sinon celle de son
+ * lieu (le premier choix ; la mer pour un choix en mer). Sans image, la carte montre la pastille de la mission sur un fond
+ * aux couleurs du lieu (`.mart.{lieu}`)
+ */
+const MISSION_ART = new Set(['mammoth']);
+const DEST_ART = new Set(['plain', 'forest', 'sea', 'far', 'mountain', 'river']);
+function missionArt(m: Mission): { src: string | null; dest: string } {
+  const c = m.choices[0], dest = c?.sea ? 'sea' : c?.dest ?? 'plain';
+  const src = MISSION_ART.has(m.id) ? `./expeditions/mission-${m.id}.webp` : DEST_ART.has(dest) ? `./expeditions/dest-${dest}.webp` : null;
+  return { src, dest };
+}
+
 /** Onglet auquel appartient un outil ('none' reste dans l'onglet courant) */
 const tabOfTool = (tool: ToolId, current: string) =>
   SCULPT_TOOLS.includes(tool) ? 'relief' : tool === 'field' ? 'build' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
@@ -760,7 +783,8 @@ export class UI {
     const risks = cs.map((c) => this.host.expeditions.preview(c).risk);
     const lvl = Math.max(...risks) <= 0.12 ? 'low' : Math.max(...risks) <= 0.22 ? 'mid' : 'high';
     const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(c.win)).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
-    return `<div class="mpills"><span title="${tr('Habitants dans l’équipe')}">👥 ${range(cs.map((c) => c.party), String)}</span><span title="${tr('Durée')}">⏳ ${['courte', 'moyenne', 'longue'].filter((l) => cs.some((c) => workLabel(c.work) === l)).map((l) => tr(l)).join('–')}</span><span class="crisk ${lvl}" title="${tr('Risque d’échec')}">⚠️ ${range(risks, (r) => `${Math.round(r * 100)}`)} %</span>${gains.map((c) => `<span class="chip" title="${c.title}">${c.icon}</span>`).join('')}</div>`;
+    return `<div class="mpills"><span title="${tr('Habitants dans l’équipe')}">${ic('team', 15, 2)} ${range(cs.map((c) => c.party), String)}</span><span title="${tr('Durée')}">${ic('clock', 15, 2)} ${['courte', 'moyenne', 'longue'].filter((l) => cs.some((c) => workLabel(c.work) === l)).map((l) => tr(l)).join('–')}</span><span class="crisk ${lvl}" title="${tr('Risque d’échec')}">${ic('alert', 14, 2.2)} ${range(risks, (r) => `${Math.round(r * 100)}`)} %</span></div>
+      ${gains.length ? `<div class="mgains">${gains.map((c) => `<span class="chip" title="${attr(c.title)}">${c.icon}</span>`).join('')}</div>` : ''}`;
   }
 
   /** Ouvre les expéditions sur une mission : l'onglet des missions, sa carte amenée sous les yeux et mise en avant */
@@ -771,7 +795,6 @@ export class UI {
     const card = ov.querySelector<HTMLElement>(`.mission[data-id="${id}"]`);
     if (!card) return;
     // le filtre en cours pourrait la cacher : retour à « Toutes »
-    if (card.hidden) ov.querySelector<HTMLButtonElement>('[data-f="all"]')?.click();
     card.scrollIntoView({ block: 'center', behavior: 'smooth' });
     card.classList.remove('flash');
     void card.offsetWidth;
@@ -1493,44 +1516,56 @@ export class UI {
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
     const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);
-    // une carte compacte par mission : pastille, titre, âge, étiquettes, une phrase, ce qu'elle débloque ; un seul bouton ouvre
-    // la petite fenêtre de départ (les choix, l'équipement, le risque)
+    // une carte par mission : son illustration à gauche ; à droite la pastille et le titre, les étiquettes, une phrase, les
+    // pastilles (équipe, durée, risque), les gains, ce qu'elle débloque ou ce qui manque, et un bouton qui ouvre la petite
+    // fenêtre de départ (les choix, l'équipement, le risque)
     const card = (m: Mission) => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, leg = isLegendary(m), mil = isMilitary(m);
       const tags = `${m.mandatory ? `<span class="mtag must">★ ${tr('Obligatoire')}</span>` : ''}${leg ? `<span class="mtag leg">✨ ${tr('Légendaire')}</span>` : ''}${mil ? `<span class="mtag mil">⚔️ ${tr('Militaire')}</span>` : ''}`;
       const label = tr(run ? 'Équipe en route…' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe');
+      const art = missionArt(m);
       return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
-        <div class="mhead"><b class="mbadge">${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div>${done ? `<span class="okb">✓ ${tr('réussie')}</span>` : run ? `<span class="runb">${tr('en route…')}</span>` : ''}</div>
-        ${tags ? `<div class="mtags">${tags}</div>` : ''}
-        <p class="mtext">${splitIntro(m.intro).head}</p>
-        ${splitIntro(m.intro).rest ? `<details class="mstory"><summary>${tr('Lire l’histoire')}</summary><p>${splitIntro(m.intro).rest}</p></details>` : ''}
-        ${this.missionPills(m)}
-        ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
-        ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m)}</p>` : ''}
-        <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${ic('compass', 16, 2)} ${label}</button></div>`;
+        <div class="mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${m.icon}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
+        <div class="mbody">
+          <div class="mhead"><b class="mbadge">${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div></div>
+          ${tags ? `<div class="mtags">${tags}</div>` : ''}
+          <p class="mtext">${splitIntro(m.intro).head}</p>
+          ${this.missionPills(m)}
+          ${m.unlocks ? `<p class="unlock${this.canBuildNow(m.unlocks, done) ? ' ready' : ''}">${ic(KIND_ICON[m.unlocks], 15, 2)} ${tr(done ? 'A débloqué :' : 'Débloque :')} <b>${KINDS[m.unlocks].names[Math.max(age, KINDS[m.unlocks].minAge)]}</b>${this.canBuildNow(m.unlocks, done) ? `<button class="go bgo" data-kind="${m.unlocks}">${ic('hammer', 14, 2)} ${tr('Bâtir')}</button>` : ''}</p>` : ''}
+          ${ex.missing(m).length ? `<p class="req">${this.needsHtml(m)}</p>` : ''}
+          <button class="sendBtn" data-send="${m.id}" ${run ? 'disabled' : ''}>${SEND_ICON} ${label}</button>
+        </div></div>`;
     };
     const sorted = ex.list(age).sort((a, b) => rank(a) - rank(b));
     const cards = sorted.map(card).join('');
     const nMil = sorted.filter(isMilitary).length, nLeg = sorted.filter(isLegendary).length;
-    const { ov, close } = modal(this.root, 'expModal', `${ic('compass', 22)} ${tr('Expéditions')}`, `
-      <div class="tabs"><button data-tab="missions" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 16, 2)}${tr('Missions')}</button><button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('sword', 16, 2)}${tr('Équipement')}</button>${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('train', 16, 2)}${tr('Chemin de fer')}</button>` : ''}</div>
+    // l'en-tête : la rose des vents, le titre et une phrase ; puis une seule barre : les filtres des missions (toutes,
+    // militaires, légendaires), et à droite l'équipement et le chemin de fer
+    const head = `${EXP_EMBLEM}<span class="exTitle"><span>${tr('Expéditions')}</span><small>${tr('Envoyez des équipes explorer de nouveaux territoires et rapporter des ressources ou des savoir-faire.')}</small></span>`;
+    const { ov, close } = modal(this.root, 'expModal', head, `
+      <nav class="expNav">
+        <button data-tab="missions" data-f="all" class="${tab === 'missions' ? 'on' : ''}">${ic('compass', 17, 2)}${tr('Toutes')} <small>(${sorted.length})</small></button>
+        <button data-f="mil">${ic('sword', 17, 2)}${tr('Militaires')} <small>(${nMil})</small></button>
+        <button data-f="leg">${ic('peaks', 17, 2)}${tr('Légendaires')} <small>(${nLeg})</small></button>
+        <span class="grow"></span>
+        <button data-tab="gear" class="${tab === 'gear' ? 'on' : ''}">${ic('shield', 17, 2)}${tr('Équipement')}</button>
+        ${railOn ? `<button data-tab="rail" class="${tab === 'rail' ? 'on' : ''}">${ic('train', 17, 2)}${tr('Chemin de fer')}</button>` : ''}
+      </nav>
       <section data-sec="missions" ${tab === 'missions' ? '' : 'hidden'}>
-        <div class="teams"><div class="row"><b>${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}</div>
-        <p class="hint">${tr('Envoyez de petites équipes chercher ce qui manque au village.')}</p><details class="cdet"><summary>${tr('En savoir plus')}</summary><p class="hint">${tr('Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.')}</p></details>
-        <div class="subtabs"><button data-f="all" class="on">${tr('Toutes')} <small>${sorted.length}</small></button><button data-f="mil">⚔️ ${tr('Militaires')} <small>${nMil}</small></button><button data-f="leg">✨ ${tr('Légendaires')} <small>${nLeg}</small></button></div>
+        <div class="teams"><div class="row"><b>${ic('team', 16, 2)} ${tr('Équipes en route : {n} / {max}', { n: ex.active.length, max })}</b><span class="grow"></span><small>${next}</small></div>${teams}
+          <details class="cdet"><summary>${tr('En savoir plus')}</summary><p class="hint">${tr('Vous les verrez partir, faire leur travail sur place et revenir. Sur place, un imprévu vous demandera de choisir. Chaque âge a au moins une expédition obligatoire (★) pour passer au suivant ; en cas d’échec, on peut retenter. L’équipement, une école et un lieu de soins rendent les expéditions plus sûres.')}</p></details></div>
         <div class="missions">${cards}</div>
         <p class="emptyMsg" hidden></p>
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
       ${railOn ? `<section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>` : ''}`);
-    ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
-      ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
-      ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((sec) => (sec.hidden = sec.dataset.sec !== b.dataset.tab));
-    }));
-    // sous-menu des types d'expéditions : toutes, militaires, légendaires
-    ov.querySelectorAll<HTMLButtonElement>('[data-f]').forEach((b) => (b.onclick = () => {
-      ov.querySelectorAll<HTMLButtonElement>('[data-f]').forEach((x) => x.classList.toggle('on', x === b));
+    // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section
+    ov.querySelectorAll<HTMLButtonElement>('.expNav button').forEach((b) => (b.onclick = () => {
+      ov.querySelectorAll<HTMLButtonElement>('.expNav button').forEach((x) => x.classList.toggle('on', x === b));
+      const sec = b.dataset.tab ?? 'missions';
+      ov.querySelectorAll<HTMLElement>('[data-sec]').forEach((x) => (x.hidden = x.dataset.sec !== sec));
       const f = b.dataset.f;
+      if (!f) return;
       let shown = 0;
       ov.querySelectorAll<HTMLElement>('.mission').forEach((el) => {
         el.hidden = f === 'mil' ? el.dataset.mil !== '1' : f === 'leg' ? el.dataset.leg !== '1' : false;
@@ -2129,80 +2164,130 @@ export function showCredits(root: HTMLElement) {
     <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>`);
 }
 
-/** Paysage de collines en facettes, derrière l'écran d'accueil (calé en bas, rogné sur les côtés selon l'écran) */
-const MENU_LAND = `<svg class="mLand" viewBox="0 0 1280 800" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-  <polygon points="0,520 180,400 330,470 520,360 700,450 880,380 1060,460 1280,390 1280,800 0,800" fill="#b9d6a6"/>
-  <polygon points="0,600 220,500 420,570 640,490 860,560 1080,500 1280,560 1280,800 0,800" fill="#a3c98f"/>
-  <polygon points="520,360 600,410 700,450 560,450" fill="#c8dfb6"/><polygon points="880,380 960,430 1060,460 900,455" fill="#c8dfb6"/>
-  <polygon points="0,690 260,620 520,670 800,610 1040,660 1280,620 1280,800 0,800" fill="#8fbc7a"/>
-  <g fill="#6aa563"><polygon points="120,640 140,590 160,640"/><polygon points="170,650 188,606 206,650"/><polygon points="1090,640 1110,586 1130,640"/><polygon points="1140,652 1158,610 1176,652"/><polygon points="1210,640 1228,596 1246,640"/></g>
-  <polygon points="1000,560 1030,540 1060,560 1060,600 1000,600" fill="#f2d3a8"/><polygon points="995,562 1030,534 1065,562" fill="#d98d6c"/>
-  <polygon points="80,590 108,570 136,590 136,628 80,628" fill="#f2d3a8"/><polygon points="75,592 108,564 141,592" fill="#c9785a"/>
-</svg>`;
+/** le triangle plein des boutons « Nouvelle partie » et « Continuer », et le chevron des cartes */
+const playIcon = (s = 30) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path d="M6 3.5l15 8.5-15 8.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`;
+const CHEVRON = '<svg class="mChev" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/** les sommets au-dessus du titre (vectoriels, nets à toute taille) : une ombre décalée, puis le crème */
+const LOGO_PEAKS = (() => {
+  const shapes = [
+    'M695,355 L835,185 L888,246 L828,302 Z',
+    'M905,236 L1010,105 L1146,272 L1088,262 L1052,256 L1014,280 L962,250 Z',
+    'M1160,266 L1190,243 L1258,340 L1218,300 L1176,292 Z',
+    'M628,410 Q1000,296 1348,415 Q1000,332 628,410 Z',
+  ];
+  const draw = (fill: string, dx: number, dy: number) => shapes.map((d) => `<path d="${d}" fill="${fill}" transform="translate(${dx} ${dy})"/>`).join('');
+  return `<svg class="mPeaks" viewBox="610 95 760 330" aria-hidden="true">${draw('#bfa992', 3, 5)}${draw('#fbf4e8', 0, 0)}</svg>`;
+})();
+
+/** la vidéo du fond animé (dans public/menu/) ; vide tant qu'il n'y en a pas : l'image fixe sert alors */
+const MENU_VIDEO = '';
 
 /**
- * L'écran d'accueil : le titre, « Reprendre mon village » s'il existe une sauvegarde de la carte, puis les deux modes côte à
- * côte (empilés sur téléphone), chacun avec son bouton qui lance aussitôt une nouvelle partie (une confirmation seulement si
- * elle écrase la sauvegarde) ; le tutoriel, l'import d'une sauvegarde et les crédits ; s'il y a plusieurs cartes, un sélecteur
+ * L'écran d'accueil, sur un paysage au soleil couchant (images de `public/menu/`, ou la vidéo `MENU_VIDEO`) : le titre, les
+ * trois modes en cartes illustrées (un clic choisit le mode, la carte choisie grandit ; un double-clic lance), « Nouvelle
+ * partie » dans le mode choisi (le bac à sable demande d'abord l'âge de départ ; une confirmation si la sauvegarde de la
+ * carte serait écrasée) et, s'il existe une sauvegarde, son résumé en bas à gauche avec « Continuer ».
+ * L'engrenage ouvre les options : langue, tutoriel guidé, carte (s'il y en a plusieurs), import, crédits, commandes.
  */
-export function showMenu(root: HTMLElement, host: MenuHost): HTMLElement {
+export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): HTMLElement {
   const ov = document.createElement('div');
   ov.className = 'overlay';
   ov.id = 'menu';
-  ov.innerHTML = `${MENU_LAND}
+  // pas d'animation pour qui l'a demandé au système : la vidéo reste sur son image
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const bg = MENU_VIDEO
+    ? `<video class="mBg" src="./menu/${MENU_VIDEO}" poster="./menu/fond.webp" muted loop playsinline ${still ? '' : 'autoplay'} preload="auto" aria-hidden="true"></video>`
+    : '<img class="mBg" src="./menu/fond.webp" alt="" decoding="async">';
+  ov.innerHTML = `${bg}
+    <button class="mGear" title="${tr('Options')}" aria-label="${tr('Options')}">${ic('gear', 30, 1.9)}</button>
     <div class="mInner">
-      <header><h1>Ceionia</h1><p class="sub">${tr('Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.')}</p></header>
-      ${MAPS.length > 1 ? `<label class="mMap">${tr('Carte')} <select id="mMapSel">${MAPS.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select></label>` : ''}
-      <div class="mResume panel" hidden></div>
-      <div class="mModes">${DIFFICULTIES.map((d) => `<div class="mMode ${d}">${d === DEFAULT_DIFFICULTY ? `<span class="mBadge">${DIFF_TEXT.recommended}</span>` : ''}
-        <div class="mHead"><b>${ic(DIFF_TEXT.icon[d], 30, 1.9)}</b><div><h2>${DIFF_TEXT.name[d]}</h2><em>${DIFF_TEXT.tagline[d]}</em></div></div>
-        <ul>${DIFF_TEXT.points[d].map((x) => `<li>${ic('check', 18, 2.6)}<span>${x}</span></li>`).join('')}</ul><p class="mSum">${DIFF_TEXT.summary[d]}</p>
-        ${d === 'sandbox' ? `<div class="pickAges"><span>${DIFF_TEXT.startAge}</span><div class="ageBtns">${ageButtons('ageBtn', 0)}</div></div>` : ''}
-        <button class="mPlay" data-d="${d}">${DIFF_TEXT.play(d)}</button></div>`).join('')}</div>
-      <div class="mFoot"></div>
-      <div class="mLinks">${langPicker(getLang(), 'mLang')}<button id="mImport">${ic('upload', 16)} ${tr('Importer une sauvegarde')}</button><button id="mCredits">${tr('Crédits')}</button></div>
-      <p class="mKeys">${tr('Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher')}<br><span>${tr('Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.')}</span></p>
+      <header class="mTitle">${LOGO_PEAKS}<h1>Ceionia</h1>
+        <p class="sub"><span>${tr('Bâtissez')}</span><i>◆</i><span>${tr('Équilibrez')}</span><i>◆</i><span>${tr('Façonnez votre monde')}</span></p></header>
+      <div class="mModes" role="radiogroup" aria-label="${tr('Mode')}">${DIFFICULTIES.map((d) => `<button type="button" role="radio" class="mMode ${d}${d === DEFAULT_DIFFICULTY ? ' rec' : ''}" data-d="${d}" title="${attr(DIFF_TEXT.points[d].join(' · '))}">
+        <span class="mGem" aria-hidden="true"></span>
+        <span class="mArt"><img src="./menu/mode-${d}.webp" alt="" decoding="async"></span>
+        ${d === DEFAULT_DIFFICULTY ? `<span class="mRec">${DIFF_TEXT.recommended}</span>` : ''}
+        <h2>${DIFF_TEXT.mode(d)}</h2><em>${DIFF_TEXT.blurb[d]}</em>${CHEVRON}</button>`).join('')}</div>
+      <button class="mGo">${playIcon()}<span>${tr('Nouvelle partie')}</span></button>
+      <div class="mStatus"><b>${ic('leaf', 22, 2)}</b><div class="grow"><span></span><small></small></div><button class="mResume" hidden>${playIcon(16)}${tr('Continuer')}</button></div>
     </div>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">`;
   // la carte choisie (le continent par défaut) : sa sauvegarde, et la graine de sa prochaine partie (chacune a son continent)
-  const sel = ov.querySelector<HTMLSelectElement>('#mMapSel');
-  const mapId = () => (sel ? +sel.value : MAPS[0].id);
-  let save: SaveData | null = null, seed = newSeed();
-  const resume = $('.mResume', ov);
+  let save: SaveData | null = null, seed = newSeed(), pick: Difficulty = DEFAULT_DIFFICULTY;
+  const status = $('.mStatus', ov), resume = $<HTMLButtonElement>('.mResume', ov);
+  const select = (d: Difficulty) => {
+    pick = d;
+    ov.querySelectorAll<HTMLElement>('.mMode').forEach((b) => { b.classList.toggle('sel', b.dataset.d === d); b.setAttribute('aria-checked', `${b.dataset.d === d}`); });
+  };
   const draw = () => {
-    save = loadSlot(mapId());
+    save = loadSlot(map);
     seed = newSeed();
     resume.hidden = !save;
     ov.classList.toggle('hasSave', !!save);
-    if (!save) { resume.innerHTML = ''; return; }
-    // sur téléphone, le résumé se raccourcit : « Normal · Médiéval · 142 habitants » (les <i> et la date s'effacent)
-    const d = readDifficulty(save.world.difficulty, save.world.diffV), when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
-    resume.innerHTML = `<b>${ic('house', 40, 1.8)}</b><div class="grow"><h3>${tr('Reprendre mon village')}</h3><p><span><i>${tr('Mode')} </i>${DIFF_TEXT.name[d]}</span><span><i>${tr('âge')} </i>${AGES[save.age]?.name ?? ''}</span><span>${pop} ${plural(pop, 'habitant', 'habitants')}</span>${when ? `<span class="when">${when}</span>` : ''}</p></div><button class="active mGo">${tr('Continuer')}</button>`;
-    $('.mGo', resume).onclick = () => host.start(mapId(), 'continue');
+    $('span', status).textContent = save ? tr('Votre monde vous attend…') : tr('Un monde neuf vous attend…');
+    // le mode choisi d'avance : celui de la sauvegarde, sinon le mode conseillé
+    const d = save ? readDifficulty(save.world.difficulty, save.world.diffV) : DEFAULT_DIFFICULTY;
+    select(d);
+    if (!save) { $('small', status).textContent = ''; return; }
+    // le résumé de la partie : mode, âge, habitants, « il y a… »
+    const when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
+    $('small', status).textContent = [DIFF_TEXT.name[d], AGES[save.age]?.name ?? '', `${pop} ${plural(pop, 'habitant', 'habitants')}`, when].filter(Boolean).join(' · ');
   };
   draw();
-  if (sel) sel.onchange = draw;
-  // la langue change à chaud : l'accueil est redessiné dans la nouvelle langue
-  bindLangPicker(ov, () => { ov.remove(); showMenu(root, host); });
-  ov.querySelectorAll<HTMLButtonElement>('.mPlay').forEach((b) => (b.onclick = async () => {
-    const d = b.dataset.d as Difficulty;
-    // une nouvelle partie dans ce mode, tout de suite ; seule une sauvegarde de la carte qu'elle écraserait demande confirmation
+  resume.onclick = () => host.start(map, 'continue');
+  const play = async () => {
+    const d = pick;
+    // bac à sable : l'âge où la partie commence, d'abord
+    const age = d === 'sandbox' ? await pickAge(root) : 0;
+    if (age === null) return;
+    // seule une sauvegarde de la carte que la nouvelle partie écraserait demande confirmation
     if (save && !(await confirmBox(root, DIFF_TEXT.overwrite, DIFF_TEXT.play(d)))) return;
-    host.start(mapId(), 'new', seed, d, d === 'sandbox' ? startAge : 0);
-  }));
-  // bac à sable : l'âge où la partie commence
-  let startAge = 0;
-  ov.querySelectorAll<HTMLButtonElement>('.ageBtn').forEach((b) => (b.onclick = () => {
-    startAge = +b.dataset.a!;
-    ov.querySelectorAll('.ageBtn').forEach((x) => x.setAttribute('aria-pressed', `${x === b}`));
-  }));
+    host.start(map, 'new', seed, d, age);
+  };
+  $('.mGo', ov).onclick = play;
+  ov.querySelectorAll<HTMLButtonElement>('.mMode').forEach((b) => {
+    b.onclick = () => select(b.dataset.d as Difficulty);
+    b.ondblclick = () => { select(b.dataset.d as Difficulty); void play(); };
+  });
   const f = $<HTMLInputElement>('#mFile', ov);
-  $('#mImport', ov).onclick = () => f.click();
-  $('#mCredits', ov).onclick = () => showCredits(root);
   f.onchange = () => { if (f.files?.[0]) host.importFile(f.files[0]); };
-  // le tutoriel guidé, pour la partie qu'on lance
-  $('.mFoot', ov).appendChild(menuToggle());
+  // les options : langue, tutoriel, carte, import, crédits, commandes
+  $('.mGear', ov).onclick = () => {
+    const { ov: m, close } = modal(root, 'menuOpts', `${ic('gear', 20, 2)} ${tr('Options')}`, `
+      <div class="row"><label>${tr('Langue')}</label>${langPicker(getLang(), 'mLang')}</div>
+      <div class="row mTuto"><label>${tr('Tutoriel')}</label></div>
+      ${MAPS.length > 1 ? `<div class="row"><label for="mMapSel">${tr('Carte')}</label><select id="mMapSel">${MAPS.map((x) => `<option value="${x.id}"${x.id === map ? ' selected' : ''}>${x.name}</option>`).join('')}</select></div>` : ''}
+      <div class="row mBtns"><button class="mImport">${ic('upload', 16)} ${tr('Importer une sauvegarde')}</button><button class="mCredits">${tr('Crédits')}</button></div>
+      <p class="mKeys">${tr('Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher')}<br><span>${tr('Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.')}</span></p>`);
+    // le tutoriel guidé, pour la partie qu'on lance
+    $('.mTuto', m).appendChild(menuToggle());
+    const sel = m.querySelector<HTMLSelectElement>('#mMapSel');
+    if (sel) sel.onchange = () => { map = +sel.value; draw(); };
+    $('.mImport', m).onclick = () => { close(); f.click(); };
+    $('.mCredits', m).onclick = () => { close(); showCredits(root); };
+    // la langue change à chaud : l'accueil est redessiné dans la nouvelle langue
+    bindLangPicker(m, () => { close(); ov.remove(); showMenu(root, host, map); });
+  };
+  // Échap ferme la fenêtre ouverte par-dessus l'accueil (le clavier du jeu n'est pas encore branché)
+  const onKey = (e: KeyboardEvent) => {
+    if (!ov.isConnected) { window.removeEventListener('keydown', onKey); return; }
+    if (e.key !== 'Escape') return;
+    const top = [...root.querySelectorAll<HTMLElement & { close?: () => void }>('.overlay:not(#menu)')].pop();
+    top?.close?.();
+  };
+  window.addEventListener('keydown', onKey);
   root.appendChild(ov);
   return ov;
+}
+
+/** Bac à sable : l'âge où commence la partie ; null si le joueur renonce */
+function pickAge(root: HTMLElement): Promise<number | null> {
+  return new Promise((resolve) => {
+    let age: number | null = null;
+    const { ov, close } = modal(root, 'agePick', `${ic('palette', 20, 2)} ${DIFF_TEXT.startAge}`,
+      `<p class="hint">${DIFF_TEXT.points.sandbox[0]}</p><div class="ageBtns">${ageButtons('ageBtn', -1)}</div>`, () => resolve(age));
+    ov.querySelectorAll<HTMLButtonElement>('.ageBtn').forEach((b) => (b.onclick = () => { age = +b.dataset.a!; close(); }));
+  });
 }
 export type { SaveData };

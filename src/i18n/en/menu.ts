@@ -3,10 +3,19 @@ import { registerDict } from '../index';
 /** Textes français -> anglais : menu principal, réglages, crédits, difficultés */
 registerDict('menu', {
   // ---- menu principal
-  'Bâtissez, sculptez et regardez votre village traverser six âges et quatre saisons.': 'Build, sculpt and watch your village grow through six ages and four seasons.',
   'Carte': 'Map',
-  'Reprendre mon village': 'Resume my village',
+  'Bâtissez': 'Build',
+  'Équilibrez': 'Balance',
+  'Façonnez votre monde': 'Shape your world',
+  'Options': 'Options',
+  'Votre monde vous attend…': 'Your world awaits…',
+  'Un monde neuf vous attend…': 'A new world awaits…',
+  'Mode {name}': '{name} mode',
+  'Construisez librement, sans contraintes.': 'Build freely, without constraints.',
+  'Apprenez les bases en douceur.': 'Learn the basics gently.',
+  'Relevez le vrai défi : chaque pierre compte.': 'Take on the real challenge: every stone counts.',
   'Continuer': 'Continue',
+  'Nouvelle partie': 'New game',
   'Mode': 'Mode',
   'âge': 'age',
   'Importer une sauvegarde': 'Import a save',
@@ -20,6 +29,16 @@ registerDict('menu', {
   'Préparation des matériaux…': 'Preparing materials…',
   'Préparation de la nuit…': 'Preparing the night…',
   'Dernières retouches…': 'Final touches…',
+  'Premières images…': 'First frames…',
+  // ---- conseils de l'écran de chargement (LOAD_TIPS, src/ui/loading.ts)
+  'Planifiez bien vos constructions pour une ville prospère.': 'Plan your buildings well for a thriving town.',
+  'Le village grandit quand ses besoins sont comblés : nourriture, eau, logement, travail.': 'Your village grows when its needs are met: food, water, housing, work.',
+  'Clic droit pour tourner la vue, molette pour zoomer.': 'Right click to rotate the view, mouse wheel to zoom.',
+  'R tourne le bâtiment que vous tenez en main.': 'R rotates the building you are holding.',
+  'Les expéditions débloquent de nouveaux bâtiments.': 'Expeditions unlock new buildings.',
+  'P : le mode photo, pour admirer votre village.': 'P: photo mode, to admire your village.',
+  'Cliquez sur une condition de l’âge suivant pour trouver ce qui manque.': 'Click a condition of the next age to find what is missing.',
+  'Sculptez le relief, creusez des lacs, faites naître des montagnes.': 'Sculpt the land, dig lakes, raise mountains.',
   'Import impossible : {why}': 'Import failed: {why}',
   'Langue': 'Language',
 

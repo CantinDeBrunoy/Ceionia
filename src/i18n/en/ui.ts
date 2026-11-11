@@ -155,4 +155,6 @@ registerDict('ui', {
   'Tracé': 'Path', 'Ligne': 'Line', 'Libre': 'Free',
   'En glissant, case par case (tout droit, à angle droit)': 'Dragging tile by tile (straight, at right angles)',
   'Un clic au point A, un clic au point B : une belle courbe qui contourne les obstacles, comme la voie ferrée': 'Click point A, then point B: a smooth curve around obstacles, like the railway',
+  // ---- fenêtre des expéditions (en-tête)
+  'Envoyez des équipes explorer de nouveaux territoires et rapporter des ressources ou des savoir-faire.': 'Send teams to explore new lands and bring back resources or know-how.',
 });

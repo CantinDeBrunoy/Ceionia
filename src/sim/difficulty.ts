@@ -110,6 +110,12 @@ const RAW = {
     easy: 'Les grands bâtiments se paient en bois et en pierre, les petits sont gratuits. Le village grandit quand ses besoins sont comblés.',
     normal: 'Tout se paie et on mange plus : chaque pierre compte. Le mode conseillé.',
   } as Record<Difficulty, string>,
+  /** la phrase d'une carte de mode, à l'écran d'accueil */
+  blurb: {
+    sandbox: 'Construisez librement, sans contraintes.',
+    easy: 'Apprenez les bases en douceur.',
+    normal: 'Relevez le vrai défi : chaque pierre compte.',
+  } as Record<Difficulty, string>,
   /** mode mis en avant à l'accueil */
   recommended: 'Conseillé',
   /** bouton de l'écran d'accueil qui lance une nouvelle partie dans ce mode */
@@ -149,6 +155,9 @@ export const DIFF_TEXT = {
   get points() { return trRecs(RAW.points); },
   get summary() { return trRec(RAW.summary); },
   get recommended() { return tr(RAW.recommended); },
+  get blurb() { return trRec(RAW.blurb); },
+  /** le titre d'une carte de l'accueil : « Mode Facile » */
+  mode: (d: Difficulty) => tr('Mode {name}', { name: tr(RAW.name[d]) }),
   play: (d: Difficulty) => tr('Jouer en {name}', { name: tr(RAW.name[d]) }),
   get startAge() { return tr(RAW.startAge); },
   get choose() { return tr(RAW.choose); },

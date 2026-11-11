@@ -110,3 +110,26 @@ export async function compilePaced(renderer: THREE.WebGLRenderer, camera: THREE.
   await settle();
   progress(1, jobs.length ? jobs[jobs.length - 1].label : '');
 }
+
+/**
+ * Une image de toute la scène, rendue sous l'écran de chargement : chaque programme sert une première fois, et maillages et
+ * textures partent au GPU, même pour ce qui est hors champ ou caché au chargement.
+ * - `renderer.compile` lance la compilation, mais sous Direct3D (ANGLE) le shader n'est fini qu'à son premier usage
+ *   (`onFirstUse` attend `getProgramInfoLog`) : 100 à 300 ms figées au moment où l'objet paraît. Mesuré : les bêtes
+ *   (`AtlasMaterial`, moutons articulés), hors champ au chargement, figeaient la première rotation de la vue.
+ * - three n'envoie la géométrie et les textures d'un objet qu'à son premier affichage.
+ * On montre donc tout (`frustumCulled` levé) et l'on rend visibles, le temps de l'image, les représentants cachés
+ * (`objects`, voir `representatives`) et leurs parents, puis chaque rendu de `draws` passe (l'écran, l'image du halo de
+ * nuit) ; tout est remis en l'état ensuite. Rend le nombre d'objets touchés
+ */
+export function firstUseAll(scene: THREE.Scene, objects: THREE.Object3D[], draws: (() => void)[]): number {
+  const culled: THREE.Object3D[] = [], shown: THREE.Object3D[] = [];
+  for (const o of objects) for (let x: THREE.Object3D | null = o; x && x !== scene; x = x.parent) if (!x.visible) { x.visible = true; shown.push(x); }
+  scene.traverseVisible((o) => { if (o.frustumCulled && (o as THREE.Mesh).geometry) { o.frustumCulled = false; culled.push(o); } });
+  try { for (const d of draws) d(); }
+  finally {
+    for (const o of culled) o.frustumCulled = true;
+    for (const o of shown) o.visible = false;
+  }
+  return culled.length + shown.length;
+}

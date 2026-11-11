@@ -94,7 +94,7 @@ import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adapti
 import { weakGpu, probeRenderer } from './render/gpu';
 import { LoadingScreen, painted } from './ui/loading';
 import { WarmUp } from './render/warmup';
-import { CompileJob, compilePaced, representatives } from './render/precompile';
+import { CompileJob, compilePaced, representatives, firstUseAll } from './render/precompile';
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui') as HTMLElement;
@@ -235,6 +235,8 @@ class Game implements UIHost {
   private lastTime = performance.now();
   /** les premières images, derrière l'écran de chargement (null ensuite) : la qualité « Auto » ne les juge pas */
   private warming: WarmUp | null = null;
+  /** pendant les images d'essai : l'avancée vers le lever de l'écran (barre de chargement) */
+  private warmStep: ((k: number) => void) | null = null;
   private warmed: (() => void) | null = null;
   /** durées (ms) et nombres de programmes du chargement, pour le mesurer (`__game.loadStats`, voir docs/chargement-performances.md) */
   loadStats: Record<string, number> = {};
@@ -584,12 +586,20 @@ class Game implements UIHost {
       // une image avec le halo, cachée par l'écran : ses images s'allouent, sa dernière passe se compile
       screen.step('Dernières retouches…', 0.88);
       await painted();
+      // tout est montré, hors champ et caché compris, le temps de ces images : chaque shader du jour et de la nuit sert une
+      // fois, maillages et textures partent au GPU ; la première rotation de la vue et le premier soir ne figent plus
       t = now();
-      if (night) this.glow!.warm(this.scene, cam);
-      s.nightFrame = now() - t;
+      // (les ombres ne se refont pas à chaque image : on force leur passe, pour préparer aussi les shaders d'ombre)
+      const draws = [() => { renderer.shadowMap.needsUpdate = true; renderer.render(this.scene, cam); }];
+      if (night) draws.push(() => this.glow!.warm(this.scene, cam));
+      s.firstUsed = firstUseAll(this.scene, objects, draws);
+      s.firstUse = now() - t;
     } catch (e) { console.warn(e); }
     t = now();
+    // les premières images pour de bon : la barre va de 90 à 100 % à mesure qu'elles passent fluides
+    this.warmStep = (k) => screen.step('Premières images…', 0.9 + 0.1 * k);
     await this.warmUp();
+    this.warmStep = null;
     s.warmUp = now() - t;
     s.programs = renderer.info.programs?.length ?? 0;
   }
@@ -1556,6 +1566,7 @@ class Game implements UIHost {
     this.renderer_render();
     // les premières images, derrière l'écran de chargement : il se lève quand elles passent vite
     if (this.warming?.feed(ms)) { this.warming = null; this.warmed?.(); this.warmed = null; }
+    else if (this.warming) this.warmStep?.(this.warming.progress);
   }
 
   /** Avance d'une image (temps, simulation, vues), sans la rendre ; rend le temps écoulé depuis la précédente (ms) */

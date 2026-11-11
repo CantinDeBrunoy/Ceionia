@@ -65,6 +65,13 @@ export class Impostors {
     return im;
   }
 
+  /**
+   * Prend d'avance la silhouette d'une sorte (sans en poser) : ses maillages instanciés sont dans la scène dès le chargement,
+   * donc leurs shaders se préparent sous l'écran de chargement. Pris au premier besoin, ils se compilaient au moment où une
+   * bête s'éloignait de la vue (souvent à la première rotation) : 100 à 150 ms figées par sorte
+   */
+  ensure(key: string, actor: Actor, size = 1) { if (!this.sets.has(key)) this.bake(key, actor, size); }
+
   begin() { for (const s of this.sets.values()) s.n = 0; }
 
   /** Pose la silhouette de l'acteur (de la sorte `key`, son modèle à la taille `size`) à la matrice `m` */

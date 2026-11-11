@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import * as THREE from 'three';
-import { WarmUp, SMOOTH_MS, SMOOTH_RUN, WARM_MAX_MS, stillCompiling } from '../src/render/warmup';
+import { WarmUp, SMOOTH_MS, SMOOTH_SPAN_MS, WARM_MAX_MS, stillCompiling } from '../src/render/warmup';
 import { representatives } from '../src/render/precompile';
 import { World, setMapSize } from '../src/world/world';
 import { Fauna } from '../src/render/fauna';
@@ -9,16 +9,16 @@ import '../src/i18n/en';
 
 describe('premières images derrière l’écran de chargement', () => {
   it('l’écran se lève après quelques images fluides de suite, pas avant', () => {
-    const w = new WarmUp();
-    for (let i = 0; i < SMOOTH_RUN - 1; i++) expect(w.feed(16)).toBe(false);
+    const w = new WarmUp(), n = Math.ceil(SMOOTH_SPAN_MS / 16);
+    for (let i = 0; i < n - 1; i++) expect(w.feed(16)).toBe(false);
     expect(w.feed(16)).toBe(true);
   });
 
   it('une image lente remet le compte à zéro', () => {
-    const w = new WarmUp();
-    for (let i = 0; i < SMOOTH_RUN - 1; i++) w.feed(16);
+    const w = new WarmUp(), n = Math.ceil(SMOOTH_SPAN_MS / 16);
+    for (let i = 0; i < n - 1; i++) w.feed(16);
     expect(w.feed(SMOOTH_MS + 200)).toBe(false);
-    for (let i = 0; i < SMOOTH_RUN - 1; i++) expect(w.feed(16)).toBe(false);
+    for (let i = 0; i < n - 1; i++) expect(w.feed(16)).toBe(false);
     expect(w.feed(16)).toBe(true);
   });
 
@@ -91,7 +91,7 @@ describe('textes de l’écran de chargement', () => {
   afterAll(() => setLang('fr', false));
   it('chaque étape a sa traduction anglaise', () => {
     setLang('en', false);
-    for (const s of ['Chargement des modèles…', 'Construction du monde…', 'Préparation des matériaux…', 'Préparation de la nuit…', 'Dernières retouches…']) {
+    for (const s of ['Chargement des modèles…', 'Construction du monde…', 'Préparation des matériaux…', 'Préparation de la nuit…', 'Dernières retouches…', 'Premières images…']) {
       expect(tr(s)).not.toBe(s);
       expect(tr(s)).not.toMatch(/[àâçéèêëîïôûùü]/i);
     }

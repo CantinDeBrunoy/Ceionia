@@ -1,6 +1,6 @@
 # Chargement et performances
 
-> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/style.css` (`#loadScreen`)
+> Fichiers : `src/main.ts` (`boot`, `Game.prepare`, `Game.warmUp`, `Game.frame` et `Game.advance`, préparation du soir), `src/ui/loading.ts` (`LoadingScreen`, `painted`), `src/render/precompile.ts` (`representatives`, `compilePaced`, `compileNow`, `firstUseAll`), `src/render/fauna.ts` (`bakeSilhouettes`), `src/render/impostors.ts` (`ensure`), `src/render/warmup.ts` (`WarmUp`, `stillCompiling`), `src/render/glow.ts` (`Glow.allocate`, `nightJobs`, `precompile`, `warm`), `src/render/adaptive.ts` (qualité « Auto »), `src/style.css` (`#loadScreen`)
 > Tests : `tests/chargement.test.ts`, `tests/qualite.test.ts`
 > Voir aussi : [architecture.md](architecture.md), [rendu-modeles.md](rendu-modeles.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [traduction.md](traduction.md)
 
@@ -13,8 +13,10 @@ Le premier affichage d'un objet compile ses shaders (ses « programmes »). Chaq
   2. « Construction du monde… » : la partie choisie se bâtit (22 puis 26 %).
   3. « Préparation des matériaux… » : shaders de l'écran (de 30 à 85 %, avec la suivante).
   4. « Préparation de la nuit… » : shaders du halo. Seulement si le halo est actif.
-  5. « Dernières retouches… » : une image avec halo, puis les premières images (88 %).
-- Aucune durée minimale. L'écran se lève après `SMOOTH_RUN` = 4 images de suite sous `SMOOTH_MS` = 40 ms. Au plus `WARM_MAX_MS` = 3 000 ms d'images d'essai : une machine lente ne reste pas bloquée (`warmup.ts`).
+  5. « Dernières retouches… » : une image avec halo (88 %).
+  6. « Premières images… » : la boucle tourne pour de bon sous l'écran ; la barre va de 90 à 100 % à mesure que les images passent fluides (`WarmUp.progress`).
+- L'écran se lève après `SMOOTH_SPAN_MS` = 1 200 ms d'images de suite sous `SMOOTH_MS` = 40 ms ; une image lente remet le compte à zéro. Au plus `WARM_MAX_MS` = 8 000 ms d'images d'essai : une machine lente ne reste pas bloquée (`warmup.ts`). Avant, 4 images fluides suffisaient (environ 70 ms) : ce qui se bâtissait ou se compilait juste après (un shader tardif, 167 ms mesurés 1,2 s après le lever) tombait sous les yeux du joueur. Mesure après le changement (partie reprise, 1 600 × 900, mode développement) : aucune image au-dessus de 40 ms dans les 16 s qui suivent le lever ; le lever arrive environ 1 s plus tard.
+- Habillage (`loading.ts`, `style.css`) : le paysage de l'accueil (`public/menu/fond.webp`) voilé de clair au centre, l'emblème (rose des vents et montagnes, SVG `EMBLEM`), « Ceionia », l'étape, la barre bleue, et un conseil (`LOAD_TIPS`) qui change toutes les `TIP_MS` = 4,5 s, tiré au hasard au départ. Les conseils passent par `tr` (anglais dans `src/i18n/en/menu.ts`).
 - Fondu de 0,5 s (`#loadScreen.out`, `style.css`). La partie tourne déjà dessous ; l'écran bloque les clics tant qu'il est là.
 - Pendant les images d'essai, le temps de jeu avance (moins d'une seconde en général) ; la qualité « Auto » ne les juge pas.
 - Le message d'accueil (`ui.info`) va dans la cloche : il ne se perd pas sous l'écran.
@@ -46,11 +48,11 @@ D'autres premières fois, mesurées après ce chantier (mode développement) : p
 2. `representatives(scene)` (`precompile.ts`) : un objet par matériau et par variante, objets cachés compris (halos, lune, lucioles…). La variante (`variant`) reprend ce qui change le shader d'un même matériau dans three : maillage instancié, couleur par instance, articulé, lot, attributs `normal` / `uv` / `tangent`, couleurs RGB ou RGBA, morphs.
 3. Halo actif (`glow` et `gfx.glow`) : `Glow.allocate()` d'abord. Allouer une cible de rendu interroge le pilote, et cette question attend la fin de toutes les compilations lancées.
 4. `compilePaced` : objet par objet (`renderer.compile` sur un faux groupe qui ne parcourt que lui, lumières et brouillard de la vraie scène). Tous les `BATCH` = 32 programmes lancés, on attend qu'ils soient prêts, puis on rend la main : la barre avance. Travaux : l'écran (cible `null`), puis la nuit (`Glow.nightJobs` : la scène dans `composer.renderTarget1`, les passes du flou sur des carrés).
-5. « Dernières retouches… », puis `Glow.warm` : une image avec halo, cachée par l'écran. Les images du flou s'allouent, et `OutputPass` se compile (ses réglages ne se fixent qu'à son premier rendu).
-6. `warmUp` : la boucle démarre ; chaque image passe par `WarmUp.feed`. La promesse se tient quand l'écran peut se lever.
+5. « Dernières retouches… », puis `firstUseAll` : tout est montré le temps de deux images (élimination hors champ levée, représentants cachés et leurs parents rendus visibles), une à l'écran avec la passe d'ombres forcée, puis `Glow.warm` (une image avec halo). Chaque programme sert ainsi une première fois, maillages et textures partent au GPU, les images du flou s'allouent, et `OutputPass` se compile (ses réglages ne se fixent qu'à son premier rendu). Tout est remis en l'état ensuite.
+6. `warmUp` : la boucle démarre ; chaque image passe par `WarmUp.feed`, et `warmStep` avance la barre. La promesse se tient quand l'écran peut se lever.
 7. Une erreur dans les étapes 1 à 5 est écrite en console, et la boucle démarre quand même.
 
-`Game.loadStats` (`__game.loadStats`) garde les durées (ms) : `build`, `firstStep`, `compile`, `nightFrame`, `warmUp`, et les nombres de programmes (`programs0` lancés, `programs` en tout).
+`Game.loadStats` (`__game.loadStats`) garde les durées (ms) : `build`, `firstStep`, `compile`, `firstUse` (les deux images de `firstUseAll`), `warmUp`, les nombres de programmes (`programs0` lancés, `programs` en tout) et `firstUsed` (objets montrés en plus pour ces images).
 
 ### La boucle : `frame` et `advance`
 `advance()` fait tout sauf le rendu (temps, simulation, vues) et rend le temps écoulé depuis l'image précédente. `frame()` = `requestAnimationFrame`, `advance`, `renderer_render`, puis `WarmUp.feed` pendant les images d'essai. `adapt` (qualité « Auto ») n'est pas appelé tant que `warming` existe.
@@ -69,6 +71,13 @@ Dans `Game.advance` (vue de la surface) : une fois par jour de jeu, entre 15 h e
 - Enfers et monde souterrain : leurs scènes ne passent pas par ce mécanisme. `fadeThrough` garde deux images derrière le voile noir ; la première descente compile encore.
 - Traduction ([traduction.md](traduction.md)) : les étapes sont dans `src/i18n/en/menu.ts`.
 
+### La première rotation de la vue
+Mesuré (Chrome sans fenêtre, 1 600 × 900, halo actif, nouvelle partie) : en tournant la vue juste après le lever de l'écran, une image de 100 à 220 ms dans presque chaque essai. Le profil la plaçait dans `onFirstUse` → `getProgramInfoLog` : un shader neuf, ou compilé mais jamais encore servi. Deux causes :
+- **Le premier usage.** Sous Direct3D (ANGLE), un programme lancé par `renderer.compile` n'est fini qu'à son premier usage réel. Un objet hors champ ou caché au chargement ne servait jamais sous l'écran. Remède : `firstUseAll`.
+- **Les bêtes et leurs silhouettes.** Les visiteurs (`Fauna.scout`) arrivent près de ce que regarde la caméra. Leurs bêtes articulées (`SkinnedMesh`), leurs ombres et leurs silhouettes lointaines (`Impostors`, maillages instanciés pris au premier besoin) avaient des variantes de shader qu'aucun objet n'avait au chargement. Remède : `Fauna.bakeSilhouettes`, au constructeur, prend la silhouette de chaque robe et de chaque modèle (`Impostors.ensure`) et garde un exemplaire caché de chaque bête dans `fauna.samples`.
+
+Après : 8 essais sur 8 sans image au-dessus de 34 ms pendant 5 s de rotation. Coût : environ 0,4 s de plus à la construction (bêtes et silhouettes) et 0,5 s à l'image de premier usage, sous l'écran.
+
 ## Pièges et invariants
 - Créer maillages et matériaux au démarrage, cachés au besoin (`visible = false`, `count = 0`), plutôt qu'à leur première apparition : tout ce qui est dans la scène se compile au chargement, même caché.
 - `setColorAt` crée `instanceColor` au premier appel, et le shader change. Appeler `setColorAt(0, blanc)` à la création (faune, éruption, particules, feuilles).
@@ -79,6 +88,8 @@ Dans `Game.advance` (vue de la surface) : une fois par jour de jeu, entre 15 h e
 - Sur ce Chrome (Direct3D 11), la compilation « en parallèle » (KHR_parallel_shader_compile) n'empêche pas l'attente : `isReady` bloque jusqu'à la fin du paquet. D'où des paquets de 32 : assez gros pour garder le parallélisme (un seul gros paquet : 2,6 s ; paquets de 8 : 5 s ; paquets de 32 : 3,2 s), assez petits pour que la barre avance (au plus 0,3 à 0,6 s figées).
 - Sans l'extension, `isReady` est toujours vrai : `compilePaced` attend alors l'édition des liens (`LINK_STATUS`), paquet par paquet.
 - Le navigateur garde les programmes compilés en cache : une partie reprise dans la même session se charge bien plus vite. Mesurer avec un profil neuf pour le pire cas.
+- `renderer.compile` ne suffit pas : un programme qui n'a jamais servi fige encore à son premier usage (Direct3D). Tout objet qui doit paraître plus tard doit être dans la scène au chargement, même caché, pour que `firstUseAll` le montre une fois.
+- Un maillage créé « au premier besoin » (silhouettes, effets, bêtes d'une sorte encore jamais vue) échappe à toute la préparation. Le créer d'avance, vide ou caché, comme `bakeSilhouettes`.
 - L'écran de chargement vit dans `#app`. Le placer dans `#ui` le ferait disparaître à la construction de l'interface.
 
 ## Comment mesurer les à-coups
@@ -92,7 +103,9 @@ Dans `Game.advance` (vue de la surface) : une fois par jour de jeu, entre 15 h e
 - Répéter chaque mesure : sur une machine partagée, une image figée de plusieurs secondes peut venir d'ailleurs.
 
 ## Pour modifier
+- **Ajouter un conseil** : une phrase dans `LOAD_TIPS` (`loading.ts`) et sa traduction dans `src/i18n/en/menu.ts`. Ne citer que ce qui existe vraiment dans le jeu.
 - **Ajouter une étape à l'écran** : `screen.step('Texte…', part)` dans `Game.prepare` ou `start` (`main.ts`), suivi de `await painted()` avant un long calcul. Traduction dans `src/i18n/en/menu.ts` ; ajouter le texte à `tests/chargement.test.ts`.
+- **Ajouter une bête articulée ou un modèle de faune** : rien à faire si elle passe par `SPECS` / `MODELS` et les clés de `populate` (`beast:{sorte}:{robe}`, `model:{nom}`) : `bakeSilhouettes` les prend d'avance. Une autre clé de silhouette doit y être ajoutée.
 - **Ajouter un effet qui ne paraît qu'à certains moments** (nuit, hiver, éruption, fête) : son maillage et son matériau au constructeur de la vue, cachés. Vérifier avec la mesure ci-dessus qu'aucun programme ne se compile au moment voulu.
 - **Ajouter une passe de post-traitement** : ses matériaux dans `Glow.nightJobs` (un carré chacun), ou dans l'image réelle de `Glow.warm` si ses réglages ne se fixent qu'au rendu.
-- **Régler le lever de l'écran** : `SMOOTH_MS`, `SMOOTH_RUN`, `WARM_MAX_MS` (`warmup.ts`) ; la taille des paquets : `BATCH` (`precompile.ts`).
+- **Régler le lever de l'écran** : `SMOOTH_MS`, `SMOOTH_SPAN_MS`, `WARM_MAX_MS` (`warmup.ts`) ; la taille des paquets : `BATCH` (`precompile.ts`).
