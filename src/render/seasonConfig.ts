@@ -118,28 +118,28 @@ const pal = (colors: PaletteDef['colors'], share: PaletteDef['share']): PaletteD
 const SPRING: SeasonDef = {
   snow: 0, leaf: 0.95, growth: 0.6,
   terrain: {
-    grass: '#91B95B', patch: '#B4D477', patchK: 0.5, soil: '#8E7A58', soilK: 0.28,
+    grass: '#98C454', patch: '#BCDB72', patchK: 0.5, soil: '#8E7A58', soilK: 0.28,
     litter: '#7DA552', litterK: 0.25, bank: '#86B25A', bankK: 0.55, crop: '#B4DC86',
   },
   trees: {
     blossom: pal(['#E9A0B4', '#F1F0DB', '#F2BCCB', '#A8D66D'], [0.45, 0.3, 0.1, 0.15]),
-    leafy: pal(['#A8D66D', '#7DB653', '#5D9B48', '#C2DD86'], [0.4, 0.25, 0.2, 0.15]),
-    conifer: pal(['#4F9A68', '#3F8A5E', '#5BA672', '#46905F'], [0.4, 0.3, 0.15, 0.15]),
+    leafy: pal(['#A6D45A', '#8CC43E', '#74B03A', '#C0DD72'], [0.4, 0.25, 0.2, 0.15]),
+    conifer: pal(['#5AA448', '#4C963F', '#68B050', '#529C44'], [0.4, 0.3, 0.15, 0.15]),
     leafSpread: 0.15,
   },
   ground: {
-    tuft: pal(['#91B95B', '#A8CC6A', '#B4D477', '#7FAF55'], [0.4, 0.25, 0.2, 0.15]), tuftHeight: 0.9,
+    tuft: pal(['#A2CF52', '#B4D865', '#C4DF78', '#8EC04C'], [0.4, 0.25, 0.2, 0.15]), tuftHeight: 1,
     shrub: pal(['#7DB458', '#8CC063', '#6FA850', '#9ACB6A'], [0.4, 0.25, 0.2, 0.15]), shrubBloom: 0.5,
     flowers: pal(['#E9A0B4', '#F1F0DB', '#F2D477', '#B79AD8'], [0.3, 0.3, 0.25, 0.15]), flowerK: 1.7,
-    fern: '#7FB55A', mushrooms: 0.06, leafPiles: 0, moss: '#7EA650', mossK: 0.5, bankReeds: 0.3, reed: '#E4F5D2',
+    fern: '#9CCB55', mushrooms: 0.06, leafPiles: 0, moss: '#7EA650', mossK: 0.5, bankReeds: 0.3, reed: '#E4F5D2',
   },
   water: {
     shallow: '#8ED4C6', deep: '#2F7E94', clarity: 1, sparkle: 0.35, roughness: 0.1, flow: 1.4, ice: 0,
     float: '#F2BCCB', floatK: 0.5,
   },
   light: {
-    sun: '#FFEBCB', sunK: 1, sky: '#EAF4FF', skyK: 0.12, ambient: '#F4FAFF', ambientMix: 0.2, ambientK: 1,
-    ground: '#CFCBA4', haze: 1, mist: 0.6,
+    sun: '#FFF0D6', sunK: 1.1, sky: '#E2F0FF', skyK: 0.1, ambient: '#DDEBFF', ambientMix: 0.35, ambientK: 1,
+    ground: '#C9D79C', haze: 1, mist: 0.6,
   },
   fx: {
     petals: 18, leaves: 0, wind: 1, flurries: 0,
@@ -151,28 +151,28 @@ const SPRING: SeasonDef = {
 const SUMMER: SeasonDef = {
   snow: 0, leaf: 1, growth: 1,
   terrain: {
-    grass: '#78A94C', patch: '#ABB062', patchK: 0.32, soil: '#B09670', soilK: 0.22,
-    litter: '#5E8C46', litterK: 0.3, bank: '#73A64A', bankK: 0.55, crop: '#E3CF6E',
+    grass: '#8CBC45', patch: '#BCCB5C', patchK: 0.36, soil: '#B09670', soilK: 0.18,
+    litter: '#6E9A40', litterK: 0.3, bank: '#73A64A', bankK: 0.55, crop: '#E3CF6E',
   },
   trees: {
-    blossom: pal(['#6FA850', '#5D9B48', '#7FB55A', '#88BC5E'], [0.3, 0.3, 0.2, 0.2]),
-    leafy: pal(['#5D9B48', '#4E8A3E', '#6FA850', '#5A9644'], [0.35, 0.3, 0.2, 0.15]),
-    conifer: pal(['#3F8A5A', '#367D52', '#4A9663', '#3C8456'], [0.4, 0.3, 0.15, 0.15]),
+    blossom: pal(['#8CC43C', '#7AB534', '#9CCF46', '#A8D24E'], [0.3, 0.3, 0.2, 0.2]),
+    leafy: pal(['#86C03A', '#72AE32', '#9ACC44', '#6AA42E'], [0.35, 0.3, 0.2, 0.15]),
+    conifer: pal(['#4E9A3C', '#438C36', '#5CA844', '#3F8438'], [0.4, 0.3, 0.15, 0.15]),
     leafSpread: 0.1,
   },
   ground: {
-    tuft: pal(['#78A94C', '#6A9C44', '#8DB457', '#B8B064'], [0.4, 0.25, 0.2, 0.15]), tuftHeight: 1.15,
-    shrub: pal(['#5E9A48', '#4F8A40', '#6AA650', '#5A9444'], [0.4, 0.25, 0.2, 0.15]), shrubBloom: 0.08,
+    tuft: pal(['#9CC848', '#8CBC40', '#B2D45A', '#CCCF6A'], [0.4, 0.25, 0.2, 0.15]), tuftHeight: 1.2,
+    shrub: pal(['#78B23E', '#68A238', '#86BE48', '#70AA3C'], [0.4, 0.25, 0.2, 0.15]), shrubBloom: 0.08,
     flowers: pal(['#F2D477', '#F1F0DB', '#E06A5A', '#8FA8E0'], [0.35, 0.3, 0.2, 0.15]), flowerK: 0.75,
-    fern: '#5F9A4E', mushrooms: 0.1, leafPiles: 0, moss: '#6B9445', mossK: 0.42, bankReeds: 0.4, reed: '#FFFFFF',
+    fern: '#88BE46', mushrooms: 0.1, leafPiles: 0, moss: '#6B9445', mossK: 0.42, bankReeds: 0.4, reed: '#FFFFFF',
   },
   water: {
     shallow: '#5FC2C2', deep: '#2A7899', clarity: 1.05, sparkle: 0.45, roughness: 0.06, flow: 1, ice: 0,
     float: '#7DB653', floatK: 0.04,
   },
   light: {
-    sun: '#FFF0D8', sunK: 1.08, sky: '#D8ECFF', skyK: 0.08, ambient: '#FFFAF0', ambientMix: 0.15, ambientK: 0.92,
-    ground: '#D9C6A8', haze: 1.1, mist: 0.3,
+    sun: '#FFF2DA', sunK: 1.15, sky: '#D2E8FF', skyK: 0.08, ambient: '#D8E8FF', ambientMix: 0.35, ambientK: 0.95,
+    ground: '#C8D396', haze: 1.1, mist: 0.3,
   },
   fx: {
     petals: 0, leaves: 1.5, wind: 0.8, flurries: 0,
@@ -223,7 +223,7 @@ const WINTER: SeasonDef = {
   trees: {
     blossom: pal(['#A87850', '#B08A5A', '#946A48', '#B9956A'], [0.25, 0.25, 0.25, 0.25]),
     leafy: pal(['#A87850', '#B9956A', '#946A48', '#B08A5A'], [0.25, 0.25, 0.25, 0.25]),
-    conifer: pal(['#3E7A5E', '#4A8268', '#5B8E78', '#3A7058'], [0.4, 0.3, 0.15, 0.15]),
+    conifer: pal(['#4C8A4E', '#579455', '#62A05E', '#45804A'], [0.4, 0.3, 0.15, 0.15]),
     leafSpread: 0.5,
   },
   ground: {

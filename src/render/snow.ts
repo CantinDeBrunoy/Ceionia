@@ -28,7 +28,7 @@ export function setSnowMap(n: number, snowy: (k: number) => number) {
  * monde, tirée de la position) blanchit d'autant plus qu'elle regarde le ciel, avec un bord irrégulier, et selon ce que
  * retient le biome ; `k` règle la quantité. Les faces verticales (murs, fenêtres, troncs) restent nettes
  */
-export function addSnow(mat: THREE.Material, k = 1) {
+export function addSnow(mat: THREE.Material, k = 1, lo = 0.16, hi = 0.5) {
   const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
   mat.onBeforeCompile = (sh, r) => {
     prev.call(mat, sh, r);
@@ -43,10 +43,10 @@ export function addSnow(mat: THREE.Material, k = 1) {
     float snHere = texture2D(uSnowMap, vSnowW.xz / uSnowSize).r;
     // une fine couche douce : elle couvre aussi les toits pentus (pas de pan à moitié gris), un peu bleutée sur les pentes,
     // plus claire sur le plat ; à peine moins couvrante qu'un drap, pour garder un soupçon du toit dessous
-    float snCap = clamp(uSnowCover * snHere * ${k.toFixed(2)}, 0.0, 1.0) * smoothstep(0.16, 0.5, snN.y + snEdge) * 0.94;
+    float snCap = clamp(uSnowCover * snHere * ${k.toFixed(2)}, 0.0, 1.0) * smoothstep(${lo.toFixed(2)}, ${hi.toFixed(2)}, snN.y + snEdge) * 0.94;
     vec3 snCol = mix(vec3(0.84, 0.89, 0.96), vec3(0.95, 0.97, 1.0), smoothstep(0.35, 0.95, snN.y));
     diffuseColor.rgb = mix(diffuseColor.rgb, snCol, snCap);
   }`);
   };
-  mat.customProgramCacheKey = () => `${key}|snow${k}`;
+  mat.customProgramCacheKey = () => `${key}|snow${k}|${lo}|${hi}`;
 }

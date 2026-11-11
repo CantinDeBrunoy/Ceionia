@@ -10,7 +10,7 @@ import { Parts } from './parts';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
 import { bakeStatic, splitTrees, meshVariants, MeshPart, ModelName } from './assets';
-import { broadleafShape, pineShape, bushShape, rockShapes } from './treeShapes';
+import { birchShape, roundTreeShape, bareBirchShape, fernShape, pineShape, bushShape, rockShapes } from './treeShapes';
 import { addSnow } from './snow';
 import { SHADOW_LAYER } from './materials';
 import { addPalette, addCover, pickPalette, PaletteHandle, COVER } from './seasonShaders';
@@ -331,11 +331,13 @@ export class VegView {
     addWind(this.blobMat, this.uTime, 0.035);
     addWind(this.blob2Mat, this.uTime, 0.035);
     addWind(this.willowMat, this.uTime, 0.05);
-    this.tuftMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 1, side: THREE.DoubleSide });
+    this.tuftMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 1, side: THREE.DoubleSide });
     addWind(this.tuftMat, this.uTime, 1.3);
+    keepNormals(this.tuftMat);
     const wood = std(0xffffff, true);
     // l'hiver, la neige se pose sur les branches des sapins, des bouleaux nus et des buissons, et sur les rochers
-    addSnow(this.pineMat);
+    // sapins facettés : la neige ne tient que sur les facettes les plus plates, ils restent verts dessous
+    addSnow(this.pineMat, 1, 0.62, 0.9);
     addSnow(wood, 0.9);
     // et sur les feuilles sèches que gardent quelques feuillus
     addSnow(this.blobMat, 0.7);
@@ -366,21 +368,13 @@ export class VegView {
         leafY, leafTop: canopy.boundingBox!.max.y,
       };
     };
-    const round = bakeStatic('tree_round', 1.1, /green/i);
-    for (const m of [bakeStatic('birch', 1.1, /green/i), bakeStatic('tree_common', 1.2, /orange/i), ...(round ? splitTrees(round) : [])])
-      if (m?.tint && m.rest) this.leafy.push(leafyOf(m.rest, m.tint, m.tintY));
-    if (!this.leafy.length) { const t = broadleafShape(); this.leafy.push(leafyOf(t.trunk, t.canopy, t.bottom)); }
+    // feuillus et sapins du style « diorama ensoleillé » (treeShapes.ts) : bouleaux blancs à cimes facettées, feuillus bruns,
+    // sapins à étages ; les autres biomes gardent leurs essences importées
+    for (const t of [birchShape(0), birchShape(1), birchShape(2), roundTreeShape(0), roundTreeShape(1)]) this.leafy.push(leafyOf(t.trunk, t.canopy, t.bottom));
     this.trunk = this.leafy[0].trunk;
-    const bare = bakeStatic('birch_bare', 1.05, /^$/);
-    if (bare?.rest) this.bare = { layer: layer([{ geo: bare.rest, mat: wood }], { lod: true }), height: 1.05 };
+    this.bare = { layer: layer([{ geo: bareBirchShape(), mat: wood }], { lod: true }), height: 1.05 };
     this.pine = layer([{ geo: pineGeo(), mat: this.pineMat }]);
-    const pines = bakeStatic('pines', 1.2, /green/i);
-    for (const t of pines ? splitTrees(pines) : []) {
-      if (!t.tint || !t.rest) continue;
-      t.tint.computeBoundingBox();
-      this.pineVars.push({ layer: layer([{ geo: t.tint, mat: this.pineMat }, { geo: t.rest, mat: wood }], { lod: true }), height: t.tint.boundingBox!.max.y });
-    }
-    if (!this.pineVars.length) for (const v of [0, 1, 2]) { const t = pineShape(v); this.pineVars.push({ layer: layer([{ geo: t.green, mat: this.pineMat }, { geo: t.trunk, mat: wood }], { lod: true }), height: t.top }); }
+    for (const v of [0, 1, 2]) { const t = pineShape(v); this.pineVars.push({ layer: layer([{ geo: t.green, mat: this.pineMat }, { geo: t.trunk, mat: wood }], { lod: true }), height: t.top }); }
     // essences des autres biomes
     const species = (name: ModelName, height: number, tintRe: RegExp, tintMat: THREE.Material, restMat: THREE.Material, skip?: RegExp): Species | null => {
       const m = bakeStatic(name, height, tintRe, skip);
@@ -394,11 +388,10 @@ export class VegView {
     const palmMat = soft(true);
     addWind(palmMat, this.uTime, 0.03);
     // sapins enneigés : le modèle (neige sur les branches), sinon des calottes de neige sur chaque étage
-    this.snowPines = keep([species('pine_snow', 1.15, /green/i, this.pineMat, wood)]);
-    if (!this.snowPines.length) {
-      const sp = pineShape(0, true);
-      this.snowPines = [{ layer: layer([{ geo: sp.green, mat: this.pineMat }, { geo: sp.snow!, mat: std(0xf4f8fb, true) }, { geo: sp.trunk, mat: wood }], { lod: true }), height: sp.top }];
-    }
+    this.snowPines = [0, 1].map((v) => {
+      const sp = pineShape(v, true);
+      return { layer: layer([{ geo: sp.green, mat: this.pineMat }, { geo: sp.snow!, mat: std(0xf4f8fb, true) }, { geo: sp.trunk, mat: wood }], { lod: true }), height: sp.top };
+    });
     this.palms = keep([species('palm', 1.3, /^$/, palmMat, palmMat), species('palm2', 1.6, /^$/, palmMat, palmMat), species('palm3', 1.25, /^$/, palmMat, palmMat)]);
     this.cacti = keep([species('cactus2', 0.95, /^$/, wood, wood), species('cactus_flowers', 0.72, /^$/, wood, wood), species('cactus', 0.42, /^$/, wood, wood, /black|brown/i)]);
     this.willows = keep([species('willow', 1.2, /green/i, this.willowMat, wood)]);
@@ -444,7 +437,9 @@ export class VegView {
     };
     this.logs = prop('log', 0.12);
     this.stumps = prop('stump', 0.1);
-    this.ferns = prop('fern', 0.13, this.fernMat);
+    // fougère dessinée par le jeu, facettée comme les arbres (le modèle importé jurait avec le reste)
+    this.fernMat.side = THREE.DoubleSide;
+    this.ferns = layer([{ geo: fernShape(), mat: this.fernMat }], { detail: true, lod: true });
     this.mushrooms = prop('mushroom', 0.08);
     this.bones = keep([prop('skull', 0.06), prop('ribcage', 0.1), prop('bone', 0.022)]);
     this.wildFlowers = meshVariants('flowers', 0.11, true).map((v) => variant(v));
@@ -839,7 +834,7 @@ export class VegView {
       const isPine = h < (b === BIOME_TAIGA ? SPECIES.pineTaiga : this.pineVars.length ? SPECIES.pine : SPECIES.pineProcedural) || y > (this.imported ? 4.2 : 3.2);
       // sapins enneigés : sur les sommets, et partout en taïga quand l'hiver arrive
       if (isPine && this.snowPines.length && (y > 4.2 || (b === BIOME_TAIGA && s.snow > 0.3)) && hv < (y > 4.2 ? 0.75 : 0.6)) {
-        this.tree(this.snowPines[0], px, y, pz, rot, sc, col);
+        this.tree(pick(this.snowPines, hv), px, y, pz, rot, sc, col);
       } else if (isPine && this.pineVars.length) {
         this.tree(pick(this.pineVars, hv), px, y, pz, rot, sc, col);
       } else if (isPine) {
@@ -1117,13 +1112,14 @@ export class VegView {
     if (s.snow * snowy(b) > 0.6) return;
     const g = w.grazed[k];
     const base = b === BIOME_TAIGA ? 1 : b === BIOME_TROPICAL ? 3 : 2;
-    const n = Math.round((base + Math.floor(hash2(cx, cz, 310) * 4)) * (1 - g * 0.85));
+    // prairie dense : un tapis d'herbe haute (les touffes s'effacent au loin, voir DETAIL_DIST)
+    const n = Math.round((base + Math.floor(hash2(cx, cz, 310) * 4)) * 2.6 * (1 - g * 0.85));
     const lush = b === BIOME_TROPICAL ? 1.15 : 1;
     for (let i = 0; i < n; i++) {
-      const px = cx + 0.1 + hash2(cx, cz, 340 + i) * 0.8, pz = cz + 0.1 + hash2(cx, cz, 350 + i) * 0.8;
-      const sc = (0.9 + hash2(cx, cz, 370 + i) * 0.5) * lush;
-      this.tuft.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(cx, cz, 360 + i) * 6.28, sc, sc * 0.62 * s.ground.tuftHeight * (1 - s.snow * snowy(b) * 0.6) * (1 - g * 0.5), sc),
-        col.copy(TUFT_TINT[b]).multiplyScalar(0.85 + hash2(cx, cz, 380 + i) * 0.25));
+      const px = cx + 0.02 + hash2(cx, cz, 2000 + i * 5) * 0.96, pz = cz + 0.02 + hash2(cx, cz, 2001 + i * 5) * 0.96;
+      const sc = (0.9 + hash2(cx, cz, 2002 + i * 5) * 0.5) * lush;
+      this.tuft.put(this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(cx, cz, 2003 + i * 5) * 6.28, sc, sc * 0.62 * s.ground.tuftHeight * (1 - s.snow * snowy(b) * 0.6) * (1 - g * 0.5), sc),
+        col.copy(TUFT_TINT[b]).multiplyScalar(0.85 + hash2(cx, cz, 2004 + i * 5) * 0.25));
     }
     this.meadowDetails(cx, cz, b, slope, s, wild);
     // fougères sous les tropiques
@@ -1364,20 +1360,44 @@ function addSwell(m: THREE.Material, uWater: { value: number }, uCalm: { value: 
 
 /** Touffe d'herbe : 6 brins en éventail, sombres au pied et clairs à la pointe */
 function tuftGeo(): THREE.BufferGeometry {
+  // herbe haute et serrée : brins en deux tronçons qui se courbent, sombres au pied, presque blancs à la pointe (la teinte vient
+  // de la palette de saison) ; vue de haut, un tapis lumineux
   const pos: number[] = [], col: number[] = [];
-  const base = new THREE.Color(0xb9cb9c), tip = new THREE.Color(0xf6ffe6);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + (i % 2) * 0.4;
-    const h = 0.09 + (i % 3) * 0.025, lean = 0.035 + (i % 2) * 0.025, wd = 0.014;
-    const ca = Math.cos(a), sa = Math.sin(a);
-    pos.push(-sa * wd, 0, ca * wd, sa * wd, 0, -ca * wd, ca * lean, h, sa * lean);
-    col.push(base.r, base.g, base.b, base.r, base.g, base.b, tip.r, tip.g, tip.b);
+  const base = new THREE.Color(0xb4c494), mid = new THREE.Color(0xe6efc8), tip = new THREE.Color(0xfffff0);
+  const BLADES = 14;
+  for (let i = 0; i < BLADES; i++) {
+    const a = (i / BLADES) * Math.PI * 2 + (i % 3) * 0.5, r0 = (i % 4) * 0.022;
+    const h = 0.13 + ((i * 7) % 5) * 0.026, lean = 0.035 + (i % 3) * 0.022, wd = 0.016;
+    const ca = Math.cos(a), sa = Math.sin(a), ox = ca * r0, oz = sa * r0;
+    const mx = ox + ca * lean * 0.35, my = h * 0.55, mz = oz + sa * lean * 0.35, w2 = wd * 0.6;
+    const tx = ox + ca * lean, tz = oz + sa * lean;
+    // tronçon bas (deux triangles), puis la pointe
+    pos.push(ox - sa * wd, 0, oz + ca * wd, ox + sa * wd, 0, oz - ca * wd, mx + sa * w2, my, mz - ca * w2);
+    pos.push(ox - sa * wd, 0, oz + ca * wd, mx + sa * w2, my, mz - ca * w2, mx - sa * w2, my, mz + ca * w2);
+    pos.push(mx - sa * w2, my, mz + ca * w2, mx + sa * w2, my, mz - ca * w2, tx, h, tz);
+    for (const c of [base, base, mid, base, mid, mid, mid, mid, tip]) col.push(c.r, c.g, c.b);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.computeVertexNormals();
+  // normales tournées vers le ciel (un peu vers l'extérieur) : l'herbe s'éclaire comme le sol, sans brins noirs à contre-jour
+  const nrm = new Float32Array(pos.length);
+  for (let i = 0; i < pos.length; i += 3) {
+    const l = Math.hypot(pos[i], pos[i + 2]) || 1;
+    nrm[i] = (pos[i] / l) * 0.3; nrm[i + 1] = 0.95; nrm[i + 2] = (pos[i + 2] / l) * 0.3;
+  }
+  g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
   return g;
+}
+
+/** Normales lues telles quelles des deux côtés (l'envers d'un brin d'herbe n'est pas tourné vers le sol) */
+function keepNormals(mat: THREE.Material) {
+  const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
+  mat.onBeforeCompile = (sh, r) => {
+    prev.call(mat, sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace(/normal \*= faceDirection;/g, ''));
+  };
+  mat.customProgramCacheKey = () => `${key}|keepN`;
 }
 
 /** Touffe de roseaux : longues feuilles vert-jaune et deux massettes brunes */
