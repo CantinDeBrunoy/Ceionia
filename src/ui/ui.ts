@@ -761,8 +761,8 @@ export class UI {
     const age = this.host.sim.age, build = this.tab === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${pic(CAT_PIC[c.id], 24)}</b><span class="cl">${c.label}</span></button>`).join('')
-      : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 24)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${pic(CAT_PIC[c.id], 20)}</b><span class="cl">${c.label}</span></button>`).join('')
+      : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 20)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
     // un sous-menu du Paysage : l'outil en main d'un autre sous-menu est lâché (sinon refreshTools ramènerait le sien)
     sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = () => {
       this.land = b.dataset.l as LandSub;
@@ -1090,7 +1090,8 @@ export class UI {
     hb.setAttribute('aria-pressed', String(this.help));
     hb.classList.toggle('on', this.help);
     hb.title = tr(this.help ? 'Masquer les conseils' : 'Afficher les conseils');
-    hb.innerHTML = ic('target', 16, 2);
+    // un œil (conseils affichés : bouton crème à bord doré)
+    if (!hb.firstElementChild) hb.innerHTML = ic('eye', 20, 2);
     // à partir de l’Antiquité, seuls restent visibles un besoin à combler (orange) ou le passage d’âge
     const quiet = late && !this.help && !(sim.ready && !k) && !NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) && !sim.drought;
     // pendant le tutoriel guidé, sa propre bulle suffit : pas de conseil en plus
@@ -1558,10 +1559,10 @@ export class UI {
     // juste sous la barre du haut, quelle que soit sa hauteur (elle passe sur plusieurs lignes sur un téléphone)
     // (le bas des panneaux du haut, sans la colonne de gauche qui descend avec le conseil et les messages)
     const hudB = Math.round(Math.max(...['#agePanel', '#resPanel', '#needsBox', '#hudR'].map((q) => $(q).getBoundingClientRect().bottom)));
-    // les cartes des équipes : sous la colonne de gauche (carte du village, conseil, messages) ; la liste des conditions d'âge
+    // les cartes des équipes : à gauche, sous la barre du haut ; la liste des conditions d'âge
     // dépliée : elles passent dessous au lieu d'être cachées
     const req = $('#agePanel').classList.contains('open') ? $('#ageReq').getBoundingClientRect().bottom : 0;
-    list.style.top = `${Math.round(Math.max(hudB, $('#hudNotes').getBoundingClientRect().bottom, req)) + 8}px`;
+    list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
     // la hauteur de la barre du bas, quand elle s'étend sous la fiche d'un bâtiment (à droite) : la fiche s'arrête au-dessus

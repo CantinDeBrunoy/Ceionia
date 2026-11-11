@@ -1,6 +1,4 @@
 import { KINDS, KindId } from '../build/catalog';
-import { MAPS } from '../world/mapgen';
-import { loadSlot } from '../save/save';
 import { ic } from './icons';
 import { tr, localize, colon, getLang } from '../i18n';
 import type { UI, UIHost } from './ui';
@@ -203,6 +201,8 @@ export interface TutoState {
   id?: string;
   /** comment elle s'est arrêtée : finie, ou mise de côté (« Passer », désactivée) ; absent : en cours, ou ancien état */
   end?: 'done' | 'skip';
+  /** désactivé par le joueur à l'accueil : une nouvelle partie ne le relance pas (« Passer » ne vaut que pour la partie en cours) */
+  off?: boolean;
   /** les chapitres déjà montrés (finis ou passés) */
   seen?: string[];
   /** le chapitre en cours et son étape */
@@ -220,6 +220,7 @@ export function parseState(raw: unknown): TutoState | null {
   const s: TutoState = { on: o.on, step: Math.max(0, Math.floor(+(o.step as number) || 0)) };
   if (typeof o.id === 'string') s.id = o.id;
   if (o.end === 'done' || o.end === 'skip') s.end = o.end;
+  if (o.off === true) s.off = true;
   if (Array.isArray(o.seen)) s.seen = o.seen.filter((x): x is string => typeof x === 'string');
   const ch = o.ch as Record<string, unknown> | undefined;
   if (ch && CHAPTERS.includes(ch.id as ChapterId)) s.ch = { id: ch.id as ChapterId, step: Math.max(0, Math.floor(+(ch.step as number) || 0)) };
@@ -240,6 +241,15 @@ export function chapterDue(s: TutoState | null, id: ChapterId): boolean {
   return !setAside(s) && !(s?.seen ?? []).includes(id);
 }
 
+/**
+ * La suite principale est-elle en cours au chargement d'une partie ? Une partie neuve la relance, sauf si le joueur l'a
+ * désactivée à l'accueil (l'avoir finie ou passée dans une autre partie ne compte pas) ; une partie reprise garde son état
+ */
+export function startsOn(saved: TutoState | null, fresh: boolean): boolean {
+  // (une partie reprise sans état enregistré : une ancienne partie, jouée sans le tutoriel)
+  return fresh ? !saved?.off : saved?.on ?? false;
+}
+
 /** L'étape où reprendre la suite principale (`ids` : ses étapes dans l'ordre) */
 export function stepIndex(s: TutoState, ids: readonly string[]): number {
   const id = s.id ?? LEGACY[s.step];
@@ -254,8 +264,11 @@ function writeState(s: TutoState) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ignore */ }
 }
 
-/** Le tutoriel est-il activé ? Tant que le joueur n'a rien choisi : oui s'il n'a encore aucune partie */
-export function tutorialOn() { return readState()?.on ?? !MAPS.some((m) => loadSlot(m.id)); }
+/**
+ * L'interrupteur de l'accueil : le tutoriel est activé tant que le joueur ne l'y a pas désactivé. Une nouvelle partie le
+ * relance alors depuis le début, même s'il a été fini ou passé dans une autre partie
+ */
+export function tutorialOn() { return !readState()?.off; }
 
 /**
  * Les lettres des touches de la vue. Le jeu lit les touches physiques (`e.code` : W A S D pour bouger, Q E pour tourner, voir
@@ -280,7 +293,7 @@ export function menuToggle(): HTMLElement {
     const on = tutorialOn();
     row.innerHTML = `<button class="${on ? 'on' : ''}" aria-pressed="${on}" title="${T.title}">${ic('book', 17, 2)}${T.label}${colon()}${on ? T.on : T.off}<i class="sw"></i></button>`;
     // (désactivé ici : mis de côté, les chapitres se taisent aussi)
-    (row.firstElementChild as HTMLButtonElement).onclick = () => { const s = readState(); writeState({ ...s, on: !on, step: s?.step ?? 0, end: on ? 'skip' : undefined }); draw(); };
+    (row.firstElementChild as HTMLButtonElement).onclick = () => { const s = readState(); writeState({ ...s, on: !on, step: s?.step ?? 0, end: on ? 'skip' : undefined, off: on ? true : undefined }); draw(); };
   };
   draw();
   return row;
@@ -317,6 +330,8 @@ export class Tutorial {
   private pending: TutoState['ch'] | null = null;
   /** comment la suite principale s'est arrêtée, et les chapitres déjà montrés */
   private end: TutoState['end'];
+  /** désactivé à l'accueil (gardé d'une partie à l'autre) */
+  private menuOff = false;
   private seen = new Set<string>();
   /** tâches de l'étape déjà faites */
   private ticks: boolean[] = [];
@@ -493,7 +508,13 @@ export class Tutorial {
 
     // bac à sable : jamais de tutoriel, et le choix du joueur pour les autres parties n'est pas touché
     if (off) return;
-    const st = readState() ?? { on: tutorialOn(), step: 0 };
+    const saved = readState(), st = saved ?? { on: true, step: 0 };
+    this.menuOff = !!saved?.off;
+    // une nouvelle partie relance le tutoriel depuis le début, sauf s'il a été désactivé à l'accueil : l'avoir fini ou passé
+    // dans une autre partie ne compte pas (sinon un joueur qui revient ne le revoyait jamais, l'interrupteur étant rangé
+    // dans les options de l'accueil)
+    st.on = startsOn(saved, fresh);
+    if (fresh && st.on) st.end = undefined;
     this.end = st.end;
     this.seen = new Set(st.seen ?? []);
     // un chapitre laissé en cours reprend (pas dans une partie neuve : il se relancera à son heure)
@@ -638,7 +659,7 @@ export class Tutorial {
   private state(): TutoState {
     return {
       on: this.guiding, step: this.i, id: this.steps[this.i]?.id, end: this.end, seen: [...this.seen],
-      ch: this.ch ? { id: this.ch, step: this.ci } : this.pending ?? undefined,
+      ch: this.ch ? { id: this.ch, step: this.ci } : this.pending ?? undefined, off: this.menuOff || undefined,
     };
   }
   private save() { writeState(this.state()); }
@@ -710,7 +731,7 @@ export class Tutorial {
 
   /**
    * Place l'anneau autour de l'élément montré et la bulle à côté (dessous pour le haut de l'écran, dessus pour le bas, sinon
-   * sur un côté), sans sortir de l'écran ; la pointe vise le milieu de l'élément. Sans élément : à droite, sous la barre du haut
+   * sur un côté), sans sortir de l'écran ; la pointe vise le milieu de l'élément. Sans élément : au centre, sous la barre du haut
    */
   private place() {
     const box = this.box, ring = this.ring, W = innerWidth, H = innerHeight, m = 8, gap = 16;
@@ -722,8 +743,10 @@ export class Tutorial {
     this.light(seen && !bare ? a : null);
     const w = box.offsetWidth, h = box.offsetHeight;
     if (!seen) {
-      const top = (document.getElementById('hud')?.getBoundingClientRect().bottom ?? 80) + 12;
-      box.style.left = `${Math.max(m, W - w - 12)}px`;
+      // au centre, juste sous la barre du haut (et sous les messages qui s'y affichent)
+      const notes = document.getElementById('hudNotes')?.getBoundingClientRect();
+      const top = Math.max(document.getElementById('hud')?.getBoundingClientRect().bottom ?? 80, notes && notes.height ? notes.bottom : 0) + 12;
+      box.style.left = `${Math.max(m, (W - w) / 2)}px`;
       box.style.top = `${clamp(top, m, H - h - m)}px`;
       box.dataset.side = '';
       return;

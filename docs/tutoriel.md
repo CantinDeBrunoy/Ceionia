@@ -12,8 +12,12 @@ Plus tard dans la partie, des chapitres courts se lancent sur un événement : l
 dans les Enfers. Ils ne se montrent qu'une fois.
 
 ## Règles du jeu
-- **Activation** : d'office pour qui n'a encore aucune partie (`tutorialOn`). L'interrupteur de l'écran d'accueil
-  (`menuToggle`) et la ligne « Tutoriel » de Réglages › Partie (`settingsHtml`) le changent ; le choix est retenu.
+- **Activation** (`startsOn`) : chaque **nouvelle partie** (hors bac à sable) relance la suite principale depuis la première
+  étape, même si le joueur l'a finie ou passée dans une autre partie (« Passer » ne vaut que pour la partie en cours). Seule
+  exception : il l'a désactivée par l'interrupteur de l'accueil (`menuToggle`, champ `off` de l'état, gardé d'une partie à
+  l'autre). Une partie reprise garde son état (sans état enregistré : pas de tutoriel). Avant, une partie neuve ne le relançait
+  que si l'état disait « en cours » : un joueur qui l'avait fini ou passé une fois ne le revoyait plus, l'interrupteur étant
+  rangé dans les options de l'accueil. La ligne « Tutoriel » de Réglages › Partie (`settingsHtml`) le reprend en cours de partie.
 - **Nouvelle partie** : la suite principale repart de la première étape et le temps est en pause jusqu'au feu de camp.
 - **La suite principale** (15 étapes, dans `Tutorial` › constructeur) :
   1. `welcome` « Bienvenue ! » (à lire)

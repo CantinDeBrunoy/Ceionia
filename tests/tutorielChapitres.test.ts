@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { TUTO_TEXT, parseState, setAside, chapterDue, stepIndex, viewKeys, type TutoState } from '../src/ui/tutorial';
+import { TUTO_TEXT, parseState, setAside, chapterDue, stepIndex, viewKeys, startsOn, type TutoState } from '../src/ui/tutorial';
 import { CHAPTER_TEXT, chapterTexts } from '../src/ui/tutorialChapters';
 import { i18nEntries, setLang } from '../src/i18n';
 import '../src/i18n/en';
@@ -14,6 +14,9 @@ describe('tutoriel : l’état enregistré', () => {
     expect(parseState({ on: true, step: 2.7, id: 'road', end: 'skip', seen: ['pve', 7], ch: { id: 'hell', step: 1 } }))
       .toEqual({ on: true, step: 2, id: 'road', end: 'skip', seen: ['pve'], ch: { id: 'hell', step: 1 } });
     expect(parseState({ on: false, step: 0, end: 'peut-être', ch: { id: 'lune', step: 0 } })).toEqual({ on: false, step: 0 });
+    // désactivé à l'accueil : gardé ; une autre valeur que true est ignorée
+    expect(parseState({ on: false, step: 0, end: 'skip', off: true })).toEqual({ on: false, step: 0, end: 'skip', off: true });
+    expect(parseState({ on: true, step: 0, off: 'oui' })).toEqual({ on: true, step: 0 });
     expect(parseState(null)).toBeNull();
     expect(parseState({ step: 3 })).toBeNull();
     expect(parseState('on')).toBeNull();
@@ -122,5 +125,19 @@ describe('tutoriel : les nouveaux textes ont leur anglais', () => {
     setLang('en', false);
     expect(TUTO_TEXT.steps.camera.keys('WASD', 'Q / E')).toBe('Keyboard: WASD move the view, Q / E turn it.');
     expect(CHAPTER_TEXT.hell.title).toBe('Hell');
+  });
+});
+
+describe('démarrage du tutoriel', () => {
+  it('une nouvelle partie le relance, même fini ou passé ailleurs, sauf s’il est désactivé à l’accueil', () => {
+    expect(startsOn(null, true)).toBe(true);
+    expect(startsOn({ on: false, step: 0, end: 'done' }, true)).toBe(true);
+    expect(startsOn({ on: false, step: 4, end: 'skip' }, true)).toBe(true);
+    expect(startsOn({ on: false, step: 0, end: 'skip', off: true }, true)).toBe(false);
+  });
+  it('une partie reprise garde son état', () => {
+    expect(startsOn({ on: false, step: 4, end: 'skip' }, false)).toBe(false);
+    expect(startsOn({ on: true, step: 4 }, false)).toBe(true);
+    expect(startsOn(null, false)).toBe(false);
   });
 });
