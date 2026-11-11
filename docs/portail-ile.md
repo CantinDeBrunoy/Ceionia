@@ -10,7 +10,7 @@ Au large du continent, une île porte une arche : le portail des Enfers. L'expé
 ## Règles du jeu
 ### Ouvrir le portail
 - L'île existe sur toute carte où la mer a de la place (`addPortalIsland` ; sinon `world.portal` est `null` et la mission n'est pas proposée). Rayon `ISLE_R` = 11 à 15 cases (tiré de la graine), `ISLE_MIN` = 8 si la mer manque de place, bras de mer d'au moins `STRAIT_MIN` = 8 cases, replat central à `ISLE_TOP` = 1,15. Si le large est trop étroit, `carveStrait` fait reculer la côte la plus basse.
-- `World.portalOpen` = l'île existe et `exp.done` contient `portal` (mission `portal`, `missions.ts`, Antiquité, `mandatory: true`, débloque la tour de garde). Elle reste obligatoire pour sortir de l'Antiquité quand la carte a une île (`sim.ts` : `mandatoriesFor`, `m.id !== 'portal' || w.portal`).
+- `World.portalOpen` = l'île existe et `exp.done` contient `portal` (mission `portal`, `missions.ts`, Antiquité, `mandatory: true`, débloque la tour de garde), ou `World.portalWoken` : au bac à sable, le portail s'ouvre de lui-même dès l'Antiquité, sans l'expédition (`Sim.update`, voir [bac-a-sable.md](bac-a-sable.md)). Elle reste obligatoire pour sortir de l'Antiquité quand la carte a une île (`sim.ts` : `mandatoriesFor`, `m.id !== 'portal' || w.portal`).
 - À l'arrivée en Antiquité, un toast mène à la mission (`sim.onAgeUp`, `main.ts`) ; la bulle d'aide `portal` fait de même (`warTips.ts`).
 
 ### Le choix : affronter ou refermer

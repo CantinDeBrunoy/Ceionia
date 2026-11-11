@@ -123,4 +123,36 @@ describe('bac à sable', () => {
       expect(back.sandbox).toBe(d === 'sandbox');
     }
   });
+
+  it('dès l’Antiquité, le portail s’ouvre sans l’expédition (la carte du choix peut venir) ; il reste ouvert et se sauvegarde', () => {
+    const w = village('sandbox'), sim = new Sim(w);
+    expect(w.portal).not.toBeNull();
+    // à la Préhistoire, rien ne s'ouvre
+    sim.update(0.1, 0.1);
+    expect(w.portalOpen).toBe(false);
+    // on passe à l'Antiquité : le portail s'ouvre, l'expédition n'est pas comptée comme faite
+    sim.setAge(1);
+    sim.update(0.1, 0.1);
+    expect(w.portalOpen).toBe(true);
+    expect(w.exp.done).not.toContain('portal');
+    // revenir en arrière ne le referme pas
+    sim.setAge(0);
+    sim.update(0.1, 0.1);
+    expect(w.portalOpen).toBe(true);
+    const back = new World();
+    back.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+    expect(back.portalOpen).toBe(true);
+  });
+
+  it('hors bac à sable, il faut toujours l’expédition pour ouvrir le portail', () => {
+    for (const d of ['easy', 'normal'] as Difficulty[]) {
+      const w = village(d), sim = new Sim(w);
+      sim.age = 3;
+      sim.update(0.1, 0.1);
+      expect(w.portalOpen).toBe(false);
+      const back = new World();
+      back.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+      expect(back.portalWoken).toBe(false);
+    }
+  });
 });

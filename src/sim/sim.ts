@@ -408,6 +408,9 @@ export class Sim {
     }
     // les fondateurs : la place du village posée dans un village sans maison ni habitant accueille tout de suite quatre habitants
     if (this.pop === 0 && (this.age === 0 || this.world.sandbox) && (this.counts.gather ?? 0) > 0 && !(this.counts.house ?? 0)) { this.pop = 4; this.evaluate(); }
+    // bac à sable : dès l'Antiquité, le portail s'ouvre sans l'expédition ; la carte du choix (affronter les démons ou refermer
+    // le portail) arrive alors d'elle-même (`Game.stepWar`)
+    if (this.world.sandbox && this.age >= 1 && this.world.portal && !this.world.portalWoken) this.world.portalWoken = true;
     if (this.pop > this.housing.cap) this.pop = Math.max(this.housing.cap, 0);
     // horloge des expéditions : les effets passagers s'éteignent
     const e = this.world.exp;
