@@ -20,6 +20,8 @@ registerDict('menu', {
   'âge': 'age',
   'Importer une sauvegarde': 'Import a save',
   'Crédits': 'Credits',
+  'Pictos sous licence MIT': 'Icons under the MIT license',
+  '{src} (Microsoft) : les pictos en couleur des expéditions. Copyright (c) Microsoft Corporation.': '{src} (Microsoft): the colour icons of the expeditions. Copyright (c) Microsoft Corporation.',
   'Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher':
     'Left click: build · Right click: rotate the view · Wheel: zoom · Middle click: pan · WASD / ZQSD: move · R: rotate the building · Esc: let go',
   'Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.': 'Touch: one finger to build, two to pan, zoom and rotate.',

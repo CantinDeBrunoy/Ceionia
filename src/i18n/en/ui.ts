@@ -157,4 +157,19 @@ registerDict('ui', {
   'Un clic au point A, un clic au point B : une belle courbe qui contourne les obstacles, comme la voie ferrée': 'Click point A, then point B: a smooth curve around obstacles, like the railway',
   // ---- fenêtre des expéditions (en-tête)
   'Envoyez des équipes explorer de nouveaux territoires et rapporter des ressources ou des savoir-faire.': 'Send teams to explore new lands and bring back resources or know-how.',
+  // ---- fenêtre de départ d'une expédition (sendHtml)
+  'Envoyez votre équipe explorer de nouveaux territoires.': 'Send your team to explore new lands.',
+  'Façon de partir': 'Way to go',
+  'Équipement nécessaire': 'Required equipment',
+  '{n} habitants': '{n} villagers',
+  'prêt, en réserve': 'ready, in stock',
+  '{name} : en fabrication': '{name}: being made',
+  'Cliquez sur « + » pour fabriquer ce qui manque.': 'Click “+” to make what is missing.',
+  'Aucun équipement nécessaire : l’équipe part les mains libres.': 'No equipment needed: the team travels light.',
+  'Durée estimée': 'Estimated duration',
+  'Récompenses possibles': 'Possible rewards',
+  'En cas d’échec : {what}': 'If it fails: {what}',
+  'Une expédition peut échouer : l’équipement la rend plus sûre.': 'An expedition can fail: equipment makes it safer.',
+  'Lancer l’expédition': 'Launch the expedition',
+  'Retour': 'Back',
 });

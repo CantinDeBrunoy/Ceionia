@@ -15,13 +15,12 @@ import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expedi
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
-import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, DestKind, Mission, Choice, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
+import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
-import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, dangersOf, gearCost, gearCostLabel, gearGaps, gearObsolete } from '../sim/gear';
+import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearObsolete } from '../sim/gear';
 import { choiceStyles, riskDots, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
 import { troopGearNeeded } from '../sim/army';
-import { securityCuts, SECURITY_MAX } from '../sim/security';
 import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -29,6 +28,7 @@ import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
+import { pic } from './pics';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
 
 export interface UIHost {
@@ -95,7 +95,6 @@ export interface UIHost {
   goHome(): void;
 }
 
-const DEST_ICON: Record<DestKind, string> = { plain: '🌾 plaine', forest: '🌲 forêt', river: '🏞️ rivière', mountain: '⛰️ montagne', cave: '🕳️ grotte', far: '🧭 au loin', spaceport: '🚀 cosmodrome' };
 /** Où en est le train d'une ligne, en clair */
 function trainWhere(r: Railway, t: Train) {
   if (t.why) return t.why;
@@ -784,7 +783,7 @@ export class UI {
     const lvl = Math.max(...risks) <= 0.12 ? 'low' : Math.max(...risks) <= 0.22 ? 'mid' : 'high';
     const seen = new Set<string>(), gains = cs.flatMap((c) => effectChips(c.win)).filter((c) => (seen.has(c.icon) ? false : (seen.add(c.icon), true)));
     return `<div class="mpills"><span title="${tr('Habitants dans l’équipe')}">${ic('team', 15, 2)} ${range(cs.map((c) => c.party), String)}</span><span title="${tr('Durée')}">${ic('clock', 15, 2)} ${['courte', 'moyenne', 'longue'].filter((l) => cs.some((c) => workLabel(c.work) === l)).map((l) => tr(l)).join('–')}</span><span class="crisk ${lvl}" title="${tr('Risque d’échec')}">${ic('alert', 14, 2.2)} ${range(risks, (r) => `${Math.round(r * 100)}`)} %</span></div>
-      ${gains.length ? `<div class="mgains">${gains.map((c) => `<span class="chip" title="${attr(c.title)}">${c.icon}</span>`).join('')}</div>` : ''}`;
+      ${gains.length ? `<div class="mgains">${gains.map((c) => `<span class="chip" title="${attr(c.title)}">${pic(c.icon, 26)}</span>`).join('')}</div>` : ''}`;
   }
 
   /** Ouvre les expéditions sur une mission : l'onglet des missions, sa carte amenée sous les yeux et mise en avant */
@@ -1513,7 +1512,7 @@ export class UI {
     const railOn = age >= 3;
     if (tab === 'rail' && !railOn) tab = 'missions';
     const next = max < partyLimit(1e9) ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: max * 30, pop }) : tr('Équipes au maximum');
-    const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${a.m.icon} ${a.m.title} — ${ex.status(a)}</span>`).join('');
+    const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${pic(a.m.icon, 18)} ${a.m.title} — ${ex.status(a)}</span>`).join('');
     // d'abord les expéditions obligatoires et légendaires qui restent à faire, puis les autres à faire, puis ce qu'on peut refaire
     const rank = (m: Mission) => (ex.done(m) && !m.repeat ? 2 : (m.mandatory || isLegendary(m)) && !ex.done(m) ? 0 : 1);
     // une carte par mission : son illustration à gauche ; à droite la pastille et le titre, les étiquettes, une phrase, les
@@ -1521,13 +1520,13 @@ export class UI {
     // fenêtre de départ (les choix, l'équipement, le risque)
     const card = (m: Mission) => {
       const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, leg = isLegendary(m), mil = isMilitary(m);
-      const tags = `${m.mandatory ? `<span class="mtag must">★ ${tr('Obligatoire')}</span>` : ''}${leg ? `<span class="mtag leg">✨ ${tr('Légendaire')}</span>` : ''}${mil ? `<span class="mtag mil">⚔️ ${tr('Militaire')}</span>` : ''}`;
+      const tags = `${m.mandatory ? `<span class="mtag must">${pic('★', 14)} ${tr('Obligatoire')}</span>` : ''}${leg ? `<span class="mtag leg">${pic('✨', 14)} ${tr('Légendaire')}</span>` : ''}${mil ? `<span class="mtag mil">${pic('⚔️', 14)} ${tr('Militaire')}</span>` : ''}`;
       const label = tr(run ? 'Équipe en route…' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe');
       const art = missionArt(m);
       return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
-        <div class="mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${m.icon}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
+        <div class="mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${pic(m.icon, 96)}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
         <div class="mbody">
-          <div class="mhead"><b class="mbadge">${m.icon}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div></div>
+          <div class="mhead"><b class="mbadge">${pic(m.icon, 30)}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div></div>
           ${tags ? `<div class="mtags">${tags}</div>` : ''}
           <p class="mtext">${splitIntro(m.intro).head}</p>
           ${this.missionPills(m)}
@@ -1622,22 +1621,12 @@ export class UI {
    * « Partir ». Elle se redessine quand l'équipement ou la réserve changent ; l'équipe partie, tout se ferme
    */
   private openSend(m: Mission, main: HTMLElement, closeMain: () => void) {
-    const h = this.host, ex = h.expeditions, age = h.sim.age;
-    // les « Détails » ouverts (numéro du choix) : la fenêtre se redessine, ils restent ouverts
-    const openDet = new Set<number>();
-    const body = () => {
-      const done = ex.done(m), run = ex.running(m), redo = done && !m.repeat, max = ex.slots();
-      const req = m.requires ? `<p class="req">${[...(m.requires.missions ?? []).filter((id) => ex.state.done.includes(id)).map((id) => `« ${MISSIONS.find((x) => x.id === id)?.title} »`), ...(m.requires.kinds ?? []).filter((k) => ex.hasFor(k, m.requires!.kinds!)).map((k) => KINDS[k].names[Math.max(age, KINDS[k].minAge)])].map((t) => `<span class="ok">✓ ${t}</span>`).join('')}${this.needsHtml(m)}</p>` : '';
-      const choices = run ? `<p class="hint">${ic('clock', 15, 2)} ${tr('Une équipe est déjà en route.')}</p>` : `<div class="choices">${this.choiceButtons(m, openDet)}</div>`;
-      const si = splitIntro(m.intro);
-      return `<p class="sintro">${si.head}</p>
-        ${si.rest ? `<details class="mstory"><summary>${tr('Lire l’histoire')}</summary><p>${si.rest}</p></details>` : ''}
-        ${redo ? `<p class="hint" title="${tr('Ses bonus durables ne durent plus que {n} jours', { n: REDO_DAYS })}">${ic('restart', 14, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</p>` : ''}
-        ${req}
-        <p class="slots">${ic('compass', 14, 2)} ${tr('Équipes :')} <b>${ex.active.length} / ${max}</b>${ex.active.length >= max ? ` — ${tr('attendez un retour')}` : ''}</p>
-        ${choices}`;
-    };
-    const { ov, close } = modal(this.root, 'sendModal', `${m.icon} ${m.title}`, `<div class="sendBody">${body()}</div>`, () => clearInterval(iv));
+    const h = this.host, ex = h.expeditions;
+    // la façon de partir choisie (prudent, équilibré, audacieux) : d'avance l'équilibrée, sinon le premier choix possible
+    let sel = this.defaultChoice(m);
+    const body = () => this.sendHtml(m, sel);
+    const head = `${EXP_EMBLEM}<span class="exTitle"><span>${tr('Lancer une expédition')}</span><small>${tr('Envoyez votre équipe explorer de nouveaux territoires.')}</small></span>`;
+    const { ov, close } = modal(this.root, 'sendModal', head, `<div class="sendBody">${body()}</div>`, () => clearInterval(iv));
     const root = $('.sendBody', ov);
     // une pièce fabriquée, une équipe partie ou de retour, la réserve qui bouge : les choix se redessinent ; la barre de
     // fabrication avance en continu
@@ -1651,9 +1640,12 @@ export class UI {
       ov.querySelectorAll<HTMLElement>('.gnbar i').forEach((i) => (i.style.width = `${Math.round(ex.craftProgress() * 100)}%`));
     };
     const iv = setInterval(tick, 300);
-    ov.addEventListener('toggle', (e) => { const d = e.target as HTMLDetailsElement; if (d.classList?.contains('cdtl')) { if (d.open) openDet.add(+d.dataset.c!); else openDet.delete(+d.dataset.c!); } }, true);
     ov.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
+      // une autre façon de partir : le panneau de droite se redessine
+      const pick = t.closest<HTMLButtonElement>('button[data-pick]');
+      if (pick) { sel = +pick.dataset.pick!; h.audio.sfxClick(); root.innerHTML = body(); return; }
+      if (t.closest('button.sBack')) { h.audio.sfxClick(); close(); return; }
       // l'équipement qui manque : le fabriquer d'ici, ou aller à sa fiche dans l'onglet Équipement
       const mkAll = t.closest<HTMLButtonElement>('button[data-mkall]');
       if (mkAll) {
@@ -1714,96 +1706,82 @@ export class UI {
     });
   }
 
+  /** Le choix montré d'avance à l'ouverture de la fenêtre de départ : l'équilibré, sinon le premier qu'on peut faire */
+  private defaultChoice(m: Mission) {
+    const ex = this.host.expeditions, cs = m.choices.map((c) => choiceAt(c, this.host.sim.age)), st = choiceStyles(cs);
+    const ok = (i: number) => !ex.why(m, cs[i]);
+    const bal = st.findIndex((x, i) => x.style === 'balanced' && ok(i));
+    if (bal >= 0) return bal;
+    const first = cs.findIndex((_, i) => ok(i));
+    return first >= 0 ? first : 0;
+  }
+
   /**
-   * Les choix d'une mission (fenêtre de départ) : une carte par choix, trois infos et un bouton. En haut le style (prudent,
-   * audacieux) et ce qui distingue le choix ; le nom et une courte phrase ; habitants, durée et risque en trois pastilles ; les
-   * deux ou trois principaux gains et pertes ; l'équipement qui manque (un bouton) ; « Partir ». Tout le reste (phrase complète,
-   * risque exact, équipement emporté, dangers, tous les gains et pertes) est replié sous « Détails »
+   * La fenêtre de départ : à gauche l'illustration de la mission, son nom et sa phrase ; à droite la façon de partir
+   * (prudent / équilibré / audacieux, un sélecteur segmenté), l'équipement nécessaire (une case par pièce : prête, ou « + »
+   * qui la fabrique), la durée, le risque, les récompenses ; en bas « Retour », ce qui peut mal tourner (ou pourquoi on
+   * ne peut pas partir) et « Lancer l'expédition »
    */
-  private choiceButtons(m: Mission, open: Set<number> = new Set()) {
-    const ex = this.host.expeditions, done = ex.done(m);
-    const cs = m.choices.map((c0) => choiceAt(c0, this.host.sim.age)), styles = choiceStyles(cs);
-    const STYLE: Record<ChoiceStyleKind, [string, string]> = { cautious: ['cautious', 'Prudent'], bold: ['bold', 'Audacieux'], balanced: ['balanced', 'Équilibré'] };
+  private sendHtml(m: Mission, sel: number) {
+    const h = this.host, ex = h.expeditions, age = h.sim.age, st = ex.state;
+    const cs = m.choices.map((c0) => choiceAt(c0, age)), styles = choiceStyles(cs);
+    const i = Math.min(sel, cs.length - 1), c = cs[i], done = ex.done(m), run = ex.running(m), redo = done && !m.repeat;
+    const why = run ? tr('Une équipe est déjà en route.') : ex.why(m, c);
+    const pv = ex.preview(c), lvl = pv.risk <= 0.12 ? 'low' : pv.risk <= 0.22 ? 'mid' : 'high', dots = riskDots(pv.risk);
+    const STYLE: Record<ChoiceStyleKind, string> = { cautious: 'Prudent', balanced: 'Équilibré', bold: 'Audacieux' };
     const EFFECT: Record<ChoiceEffect, string> = { fewerInjuries: 'Moins de blessés', safer: 'Plus sûr', moreRewards: 'Plus de récompenses', riskier: 'Plus risqué' };
-    return cs.map((c, i) => {
-      const why = ex.why(m, c), pv = ex.preview(c), base = ex.riskOf(c), st = styles[i], lvl = pv.risk <= 0.12 ? 'low' : pv.risk <= 0.22 ? 'mid' : 'high';
-      const win = done ? redoEffects(c.win) : c.win;
-      const dots = riskDots(pv.risk), riskTip = tr('Risque d’échec : {r}', { r: `${riskLabel(pv.risk)} (${pct(pv.risk)})` });
-      const phrase = cardPhrase(c.text);
-      // les principaux gains (deux, ou trois sans perte) et la première perte ; les autres sous « Détails »
-      const pills = (effects: Parameters<typeof effectChips>[0], cls: string, max: number) => effectChips(effects).slice(0, max).map((e) => `<span class="pill ${cls}" title="${e.title}">${e.icon} ${e.n || (cls === 'loss' ? '' : e.title)}</span>`).join('');
-      // la principale perte : les blessés d'abord
-      const worst = [...c.lose].sort((a, b) => +(b.t === 'injured') - +(a.t === 'injured'))[0];
-      const lossPills = worst ? effectChips([worst]).map((e) => `<span class="pill loss" title="${e.title}">${e.icon} ${worst.t === 'injured' ? tr('Blessés possibles') : e.n || e.title}</span>`).join('') : '';
-      const gains = pills(win, 'gain', c.lose.length ? 2 : 3);
-      const dangers = dangersOf(c).map((d) => tr(DANGER_NAME[d])).join(', ');
-      const kit = this.kitHtml(c, pv);
-      const detail = [
-        c.text && c.text !== phrase ? `<p class="cfull">${c.text}</p>` : '',
-        `<p class="drow">${ic('alert', 14, 2)} ${pv.risk < base - 0.005 ? tr('Risque : {p} avec l’équipement ({b} sans)', { p: pct(pv.risk), b: pct(base) }) : tr('Risque : {p}', { p: pct(pv.risk) })}</p>`,
-        `<p class="drow">${tr(DEST_ICON[c.dest])}${c.mounts ? ` · 🐎 ${c.mounts}` : ''}${c.fuel ? ` · ⛽ ${tr('{n} carburant', { n: c.fuel })}` : ''}${dangers ? ` · ${dangers}` : ''}</p>`,
-        kit,
-        `<div class="cgain"><span class="gwin" title="${tr('Si tout va bien')}">✅ ${chipsHtml(win)}</span>${c.lose.length ? `<span class="glose" title="${tr('Sinon')}">❌ ${chipsHtml(c.lose)}</span>` : ''}</div>`,
-        this.gearNeedDetail(c),
-      ].join('');
-      return `<div class="cbox ${st.style ?? ''} ${why ? 'off' : ''}">
-        ${st.style ? `<div class="ctop"><span class="cstyle ${STYLE[st.style][0]}">${tr(STYLE[st.style][1])}</span>${st.effect ? `<span class="ceffect ${st.effect === 'fewerInjuries' || st.effect === 'moreRewards' ? 'good' : ''}">${tr(EFFECT[st.effect])}</span>` : ''}</div>` : ''}
-        <b class="clabel">${c.label}</b>
-        ${phrase ? `<p class="ctext">${phrase}</p>` : ''}
-        <div class="cinfo"><span class="info" title="${tr('Habitants dans l’équipe')}">${ic('team', 16, 2)} ${c.party}</span><span class="info" title="${tr('Durée')}">${ic('clock', 16, 2)} <span class="dur">${tr(workLabel(c.work))}</span></span><span class="info" title="${riskTip}" aria-label="${riskTip}">${tr('Risque')} <span class="rdots ${lvl}">${[1, 2, 3].map((n) => `<i class="${n <= dots ? 'on' : ''}"></i>`).join('')}</span></span></div>
-        <div class="cpills">${gains}${lossPills}</div>
-        ${this.gearNeedHtml(c)}
-        <button class="choice depart" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''} title="${why ?? ''}">${ic('compass', 18, 2)} ${tr('Partir')}</button>
-        ${why ? `<small class="why">${why}</small>` : ''}
-        <details class="cdtl" data-c="${i}" ${open.has(i) ? 'open' : ''}><summary>${tr('Détails')}</summary><div class="cdbody">${detail}</div></details></div>`;
-    }).join('');
-  }
-
-  /** Sous un choix : ce que l'équipe emporte, et ce que les pompiers et la police du village retirent à son risque (rien sans eux) */
-  private kitHtml(c: Choice, pv: { take: Partial<Record<GearId, number>> }) {
-    const ex = this.host.expeditions, age = this.host.sim.age;
-    // ce que l'équipe emporte : icônes et quantités
-    const items = GEAR.filter((g) => (pv.take[g.id] ?? 0) > 0).map((g) => `<span class="kitem" title="${tr(g.name)}">${ic(g.icon, 14, 2)}×${pv.take[g.id]}</span>`).join('');
-    // pompiers et police : −x % de risque en tout, le détail en infobulle
-    const cuts = securityCuts(dangersOf(c), (k) => ex.has(k));
-    const total = Math.round((1 - Math.max(1 - SECURITY_MAX, cuts.reduce((p, s) => p * (1 - s.cut), 1))) * 100);
-    const guard = cuts.length ? `<span class="kitem" title="${tr('Veillent sur l’équipe : {list}', { list: cuts.map((s) => tr('{name} −{n} %', { name: KINDS[s.kind].names[Math.max(age, KINDS[s.kind].minAge)].toLowerCase(), n: Math.round(s.cut * 100) })).join(', ') })}">${ic('shield', 14, 2)}−${total} %</span>` : '';
-    return items || guard ? `<div class="ckit" title="${tr('Emporté, depuis la réserve')}">${ic('kit', 14, 2)}${items}${guard}</div>` : '';
-  }
-
-  /** L'équipement qui manque à un choix, en détail : ce que chaque pièce protège (sous « Détails ») */
-  private gearNeedDetail(c: Choice) {
-    const h = this.host, st = h.expeditions.state;
-    return gearGaps(c, st.gear, st.craft, h.sim.age, (g) => !g.needs || h.expeditions.has(g.needs)).map((g) => {
-      const state = `${tr('{n} en réserve', { n: g.have })}${g.queued ? `, ${tr('{n} en fabrication', { n: g.queued })}` : ''}`;
-      return `<p class="drow gnfor">${ic(g.gear.icon, 14, 2)} ${g.need > 1 ? g.gear.plural : g.gear.name}${colon()}${state} · ${tr('protège de : {d}', { d: g.dangers.map((d) => tr(DANGER_NAME[d])).join(', ') })}</p>`;
-    }).join('');
-  }
-
-  /**
-   * Sous un choix : l'équipement qui lui manque, en une ligne (« 2 barques manquent ») et un seul bouton « Fabriquer · prix » ;
-   * plusieurs pièces : une ligne chacune, et « Tout ». Ce qu'elles protègent est en infobulle et sous « Détails »
-   */
-  private gearNeedHtml(c: Choice) {
-    const h = this.host, ex = h.expeditions, st = ex.state, age = h.sim.age;
+    const art = missionArt(m), si = splitIntro(m.intro);
+    // la façon de partir : un segment par choix (son style s'il en a un, sinon son nom), ce qui le distingue dessous
+    // (rangés du plus sûr au plus risqué : prudent, équilibré, audacieux)
+    const ORDER: Record<string, number> = { cautious: 0, balanced: 1, bold: 2 };
+    const order = cs.map((_, k) => k).sort((a, b) => (ORDER[styles[a].style ?? ''] ?? 3) - (ORDER[styles[b].style ?? ''] ?? 3) || a - b);
+    const seg = cs.length > 1 ? `<div class="sStyles" role="radiogroup" aria-label="${tr('Façon de partir')}">${order.map((k) => { const x = cs[k];
+      const sk = styles[k].style, name = sk ? tr(STYLE[sk]) : x.label, off = !!ex.why(m, x);
+      return `<button type="button" role="radio" data-pick="${k}" class="${k === i ? 'on' : ''} ${sk ?? ''} ${off ? 'off' : ''}" aria-checked="${k === i}" title="${attr(x.label)}"><b>${name}</b>${styles[k].effect ? `<small>${tr(EFFECT[styles[k].effect!])}</small>` : ''}</button>`;
+    }).join('')}</div>` : '';
+    // l'équipement : ce que l'équipe emporte de la réserve (prêt), et ce qui manque (à fabriquer d'un clic)
     const gaps = gearGaps(c, st.gear, st.craft, age, (g) => !g.needs || ex.has(g.needs));
-    if (!gaps.length) return '';
     const scaled = (g: Gear, n: number) => { const k = gearCost(g, h.world.difficulty); return { wood: k.wood * n, stone: k.stone * n, ore: k.ore * n, fuel: (k.fuel ?? 0) * n }; };
-    const cost = (g: Gear, n: number) => gearCostLabel(scaled(g, n));
-    const row = (g: (typeof gaps)[number], single: boolean) => {
-      const left = g.need - g.have - g.queued, n = left > 0 ? left : g.need, why = ex.whyCraft(g.gear, age), price = left > 0 ? cost(g.gear, left) : '';
-      const name = `${n} ${(n > 1 ? g.gear.plural : g.gear.name).toLowerCase()}`;
-      const link = `<button type="button" class="gnlink" data-geargo="${g.gear.id}" title="${tr('{name} : voir dans l’onglet Équipement', { name: n > 1 ? g.gear.plural : g.gear.name })}">${name}</button>`;
-      const text = left > 0 ? (single ? tr(n > 1 ? '{list} manquent' : '{list} manque', { list: link }) : link) : tr('{list} en fabrication', { list: link });
-      const act = left > 0 ? `<button type="button" class="mk" data-mk="${g.gear.id}" data-left="${left}" ${why ? 'disabled' : ''} title="${why ?? tr('Fabriquer : {t} s', { t: g.gear.time })}">${ic('hammer', 14, 2)} ${price ? tr('Fabriquer · {price}', { price }) : tr('Fabriquer')}</button>` : `<span class="mkq" title="${tr('En fabrication')}">${ic('clock', 13, 2)}</span>`;
-      const making = st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : '';
-      const tip = tr('À fabriquer pour partir bien équipé : {state} · {dangers}', { state: `${tr('{n} en réserve', { n: g.have })}${g.queued ? `, ${tr('{n} en fabrication', { n: g.queued })}` : ''}`, dangers: g.dangers.map((d) => DANGER_NAME[d]).join(', ') });
-      return `<div class="gnrow" title="${tip}"><span>${ic(g.gear.icon, 16, 2)} ${text}${why && left > 0 ? ` <small class="why">${why}</small>` : ''}</span>${act}${making}</div>`;
-    };
+    const ready = GEAR.filter((g) => (pv.take[g.id] ?? 0) > 0).map((g) => `<div class="gslot ok" title="${attr(`${tr(g.name)} ×${pv.take[g.id]} · ${tr('prêt, en réserve')}`)}">${ic(g.icon, 30, 1.8)}<b>×${pv.take[g.id]}</b><i class="gmark">${ic('check', 12, 3)}</i></div>`).join('');
+    const missing = gaps.map((g) => {
+      const left = g.need - g.have - g.queued, wc = ex.whyCraft(g.gear, age), name = tr(g.need > 1 ? g.gear.plural : g.gear.name);
+      if (left <= 0) return `<div class="gslot wait" title="${attr(tr('{name} : en fabrication', { name }))}">${ic(g.gear.icon, 30, 1.8)}<b>×${g.need - g.have}</b><i class="gmark">${ic('clock', 12, 2.6)}</i>${st.craft[0] === g.gear.id ? `<div class="bar gnbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}</div>`;
+      const price = gearCostLabel(scaled(g.gear, left));
+      const tip = wc ?? `${name} : ${tr('protège de : {d}', { d: g.dangers.map((d) => tr(DANGER_NAME[d])).join(', ') })} · ${price ? tr('Fabriquer · {price}', { price }) : tr('Fabriquer')}`;
+      return `<button type="button" class="gslot miss" data-mk="${g.gear.id}" data-left="${left}" ${wc ? 'disabled' : ''} title="${attr(tip)}">${ic(g.gear.icon, 30, 1.8)}<b>×${left}</b><i class="gmark">+</i></button>`;
+    }).join('');
     const todo = gaps.filter((g) => g.need - g.have - g.queued > 0);
-    const total = todo.reduce((s, g) => { const k = scaled(g.gear, g.need - g.have - g.queued); return { wood: s.wood + k.wood, stone: s.stone + k.stone, ore: s.ore + k.ore, fuel: s.fuel + k.fuel }; }, { wood: 0, stone: 0, ore: 0, fuel: 0 });
-    const all = todo.length > 1 ? `<button type="button" class="mkAll" data-mkall="1" title="${tr('Met en fabrication tout l’équipement qui manque')}">${ic('hammer', 14, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : '';
-    return `<div class="gearNeed" title="${tr('Équipement à fabriquer')}">${gaps.length > 1 ? `<p class="gnh">${tr('Équipement qui manque')}${all}</p>` : ''}${gaps.map((g) => row(g, gaps.length === 1)).join('')}</div>`;
+    const total = todo.reduce((t, g) => { const k = scaled(g.gear, g.need - g.have - g.queued); return { wood: t.wood + k.wood, stone: t.stone + k.stone, ore: t.ore + k.ore, fuel: t.fuel + k.fuel }; }, { wood: 0, stone: 0, ore: 0, fuel: 0 });
+    const gearNote = todo.length ? `<p class="gnote">${tr('Cliquez sur « + » pour fabriquer ce qui manque.')}${todo.length > 1 ? ` <button type="button" class="mkAll" data-mkall="1">${ic('hammer', 13, 2)} ${gearCostLabel(total) ? tr('Tout fabriquer · {price}', { price: gearCostLabel(total) }) : tr('Tout fabriquer')}</button>` : ''}</p>` : '';
+    // la boîte de « Tout fabriquer » doit contenir les boutons des pièces (voir le gestionnaire)
+    const gearBox = `<div class="sPanel sGear gearNeed"><div class="sHead">${ic('shield', 20, 2)}<b>${tr('Équipement nécessaire')}</b><span class="grow"></span><small>${ic('team', 15, 2)} ${tr('{n} habitants', { n: c.party })}</small></div>
+      ${ready || missing ? `<div class="gslots">${ready}${missing}</div>${gearNote}` : `<p class="gnote">${tr('Aucun équipement nécessaire : l’équipe part les mains libres.')}</p>`}</div>`;
+    const win = done ? redoEffects(c.win) : c.win;
+    const seen = new Set<string>(), gains = effectChips(win).filter((e) => (seen.has(e.icon) ? false : (seen.add(e.icon), true)));
+    const riskTip = tr('Risque d’échec : {r}', { r: `${riskLabel(pv.risk)} (${pct(pv.risk)})` });
+    // en bas : pourquoi on ne peut pas partir, sinon ce qui arrive en cas d'échec
+    const lose = effectSummary(c.lose);
+    const warn = why ?? (this.needsHtml(m) ? '' : lose ? tr('En cas d’échec : {what}', { what: lose }) : tr('Une expédition peut échouer : l’équipement la rend plus sûre.'));
+    const needs = ex.missing(m).length ? `<div class="sNeeds req">${this.needsHtml(m)}</div>` : '';
+    return `<div class="sGrid">
+      <div class="sArt mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}
+        <div class="sCap"><h3>${pic(m.icon, 28)} ${m.title}</h3><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div></div>
+      <div class="sSide">
+        ${seg}
+        ${c.label && cs.length > 1 ? `<p class="sChoice"><b>${c.label}</b>${cardPhrase(c.text) ? ` — ${cardPhrase(c.text)}` : ''}</p>` : ''}
+        ${gearBox}
+        <div class="sPanel sRow">${ic('clock', 22, 2)}<b>${tr('Durée estimée')}</b><span class="grow"></span><span class="sVal">${tr(workLabel(c.work))}</span></div>
+        <div class="sPanel sRow sRisk ${lvl}" title="${riskTip}">${ic('alert', 22, 2.2)}<b>${tr('Risque')}</b><span class="grow"></span><span class="sPct">${pct(pv.risk)}</span><span class="rdots ${lvl}">${[1, 2, 3].map((n) => `<i class="${n <= dots ? 'on' : ''}"></i>`).join('')}</span></div>
+        <div class="sPanel sRewards"><div class="sHead">${ic('gift', 20, 2)}<b>${tr('Récompenses possibles')}</b></div>
+          <div class="sGifts">${gains.map((e, k) => `<span class="gift g${k % 4}" title="${attr(e.title)}">${pic(e.icon, 38)}${e.n ? `<small>${e.n}</small>` : ''}</span>`).join('') || `<small class="hint">${tr('rien')}</small>`}</div></div>
+      </div>
+    </div>
+    ${needs}
+    <div class="sFoot">
+      <button type="button" class="sBack">${ic('back', 18, 2.2)} ${tr('Retour')}</button>
+      <p class="sWarn ${why ? 'block' : ''}">${pic(why ? '⛔' : '🔥', 22)}<span>${warn}</span></p>
+      <button class="choice depart sGo" data-m="${m.id}" data-c="${i}" ${why ? 'disabled' : ''}>${SEND_ICON} ${tr('Lancer l’expédition')}</button>
+    </div>`;
   }
 
   /** Chemin de fer : chaque ligne, où en est son train et ses voyageurs */
@@ -2160,6 +2138,10 @@ export function showCredits(root: HTMLElement) {
     <ul class="credits">
       <li>${tr('« Greek Temple » par {author} : temple et asclépiéion de l’Antiquité.', { author: a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)') })}</li>
       <li>${tr('« Amphora » par {a1} et « Eight Vases » par {a2} : atelier du potier.', { a1: a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira'), a2: a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner') })}</li>
+    </ul>
+    <h4>${tr('Pictos sous licence MIT')}</h4>
+    <ul class="credits">
+      <li>${tr('{src} (Microsoft) : les pictos en couleur des expéditions. Copyright (c) Microsoft Corporation.', { src: a('https://github.com/microsoft/fluentui-emoji', 'Fluent Emoji') })}</li>
     </ul>
     <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>`);
 }

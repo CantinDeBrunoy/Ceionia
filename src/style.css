@@ -429,39 +429,45 @@ body.under:has(#warAlert.show) #toasts { top: calc(var(--hudB, 82px) + 122px); }
 .mGear svg { transition: transform 0.4s; }
 .mGear:hover svg { transform: rotate(60deg); }
 
-/* les fenêtres ouvertes par-dessus l'accueil (options, âge du bac à sable, confirmation, crédits) : même DA que les cartes */
-#menu ~ .overlay { background: rgba(28, 32, 60, 0.32); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
-#menu ~ .overlay > .modal { padding: 0 28px 24px; border-radius: 28px; border: 3px solid rgba(255, 255, 255, 0.85); background: linear-gradient(180deg, rgba(255, 249, 238, 0.97), rgba(252, 233, 204, 0.96)); color: var(--mInk); box-shadow: 0 0 0 3px rgba(255, 210, 110, 0.7), 0 0 40px 6px rgba(255, 200, 100, 0.35), 0 26px 60px rgba(20, 25, 60, 0.42); }
-#menu ~ .overlay > .modal .mtitle { margin: 0 -28px 8px; padding: 20px 20px 12px 28px; border-bottom: 0; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
-#menu ~ .overlay > .modal .mtitle h3 { font-family: 'Fraunces', Georgia, serif; font-size: 25px; font-weight: 600; color: var(--mInk); }
-#menu ~ .overlay > .modal .mtitle h3 svg { color: #c78a1c; }
-#menu ~ .overlay > .modal > p:first-child { margin: 30px 4px 18px; font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 600; line-height: 1.3; text-align: center; }
-#menu ~ .overlay > .modal h4 { color: #a07a3c; }
-#menu ~ .overlay > .modal .hint, #menu ~ .overlay > .modal .mKeys { color: #6e5d4a; }
-#menu ~ .overlay > .modal a { color: #a3651a; }
-#menu ~ .overlay > .modal button { min-height: 44px; padding: 0 18px; border-radius: 999px; border: 2px solid rgba(190, 150, 90, 0.3); background: rgba(255, 255, 255, 0.72); color: var(--mInk); box-shadow: none; }
-#menu ~ .overlay > .modal button:hover { background: #fff; border-color: rgba(200, 150, 70, 0.6); }
-#menu ~ .overlay > .modal button.active { border-color: transparent; background: rgba(34, 40, 54, 0.88); color: #fff; box-shadow: 0 6px 16px rgba(10, 15, 35, 0.25); }
-#menu ~ .overlay > .modal button.active:hover { background: rgba(34, 40, 54, 1); }
-#menu ~ .overlay > .modal .x { min-height: 38px; min-width: 38px; padding: 0; border-radius: 50%; }
-#menu ~ .overlay > .modal .row:last-child { gap: 10px; }
-#menu ~ .overlay > .modal > p:first-child + .row { justify-content: center; padding-bottom: 6px; }
+/* les fenêtres ouvertes par-dessus l'accueil (options, âge du bac à sable, confirmation, crédits) : la DA de la fenêtre des
+   expéditions (verre clair bleuté, titre bleu nuit, pilules blanches, bouton principal en dégradé bleu) */
+#menu ~ .overlay { background: rgba(20, 30, 60, 0.3); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#menu ~ .overlay > .modal { padding: 0 26px 24px; border-radius: 30px; border: 1.5px solid rgba(255, 255, 255, 0.85); background: rgba(238, 243, 250, 0.9); backdrop-filter: blur(18px) saturate(1.1); -webkit-backdrop-filter: blur(18px) saturate(1.1); color: #1b2540; box-shadow: 0 30px 70px rgba(20, 35, 70, 0.35); }
+#menu ~ .overlay > .modal .mtitle { margin: 0 -26px 8px; padding: 20px 20px 12px 26px; border-bottom: 0; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+#menu ~ .overlay > .modal .mtitle h3 { gap: 12px; font-size: 25px; font-weight: 800; letter-spacing: -0.01em; color: #1b2540; }
+#menu ~ .overlay > .modal .mtitle h3 svg { width: 28px; height: 28px; color: #2a63dc; }
+#menu ~ .overlay > .modal .x { align-self: flex-start; min-height: 44px; min-width: 44px; padding: 0; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.85); color: #1b2540; box-shadow: 0 2px 8px rgba(20, 35, 70, 0.08); }
+#menu ~ .overlay > .modal h4 { color: #5a6b8c; }
+#menu ~ .overlay > .modal .hint, #menu ~ .overlay > .modal .mKeys { color: #4a5876; }
+#menu ~ .overlay > .modal a { color: #2a63dc; }
+#menu ~ .overlay > .modal button { min-height: 44px; padding: 0 18px; gap: 8px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.75); color: #3a4560; font-weight: 700; box-shadow: 0 1px 3px rgba(20, 35, 70, 0.06); }
+#menu ~ .overlay > .modal button:hover { background: #fff; color: #1b2540; }
+#menu ~ .overlay > .modal button.active, #menu ~ .overlay > .modal button[data-r="1"] { border-color: transparent; background: linear-gradient(180deg, #4a87f3, #2a63dc); color: #fff; box-shadow: 0 6px 16px rgba(42, 99, 220, 0.35); }
+#menu ~ .overlay > .modal button.active:hover, #menu ~ .overlay > .modal button[data-r="1"]:hover { background: linear-gradient(180deg, #3f7ef0, #1f58cf); }
+/* la confirmation (« La sauvegarde de cette carte sera écrasée ») : un avertissement, le texte au centre, deux pilules */
+#menu ~ .overlay > .modal > p:first-child { margin: 30px 4px 20px; font-size: 18px; font-weight: 800; line-height: 1.35; text-align: center; color: #1b2540; }
+#menu ~ .overlay > .modal > p:first-child::before { content: ''; display: block; width: 52px; height: 52px; margin: 0 auto 14px; border-radius: 16px; background: rgba(255, 170, 60, 0.2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b45a00' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3 2 20h20L12 3z'/%3E%3Cpath d='M12 10v4M12 17.5v.01'/%3E%3C/svg%3E") center / 28px no-repeat; }
+#menu ~ .overlay > .modal > p:first-child + .row { justify-content: center; gap: 10px; padding-bottom: 4px; }
 #menu ~ .overlay > .modal > p:first-child + .row > .grow { display: none; }
+#menu ~ .overlay > .modal > p:first-child + .row > button { min-width: 130px; min-height: 48px; }
+/* les options : chaque réglage sur un fond blanc, comme les cartes d'expédition */
 .menuOpts { width: min(560px, 100%); text-align: left; }
-.menuOpts .row { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
-.menuOpts .row > label { min-width: 84px; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #a07a3c; }
-.menuOpts .langPick { margin: 0; gap: 6px; }
-#menu ~ .overlay .menuOpts .langPick button { border-radius: 999px; }
-#menu ~ .overlay .menuOpts .langPick button.active { background: rgba(34, 40, 54, 0.88); border-color: transparent; color: #fff; }
-.menuOpts .tutoToggle { justify-content: flex-start; margin: 0; }
-.menuOpts .tutoToggle button.on .sw { background: var(--mGold); }
-.menuOpts select { font: inherit; font-weight: 700; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 2px solid rgba(190, 150, 90, 0.3); background: rgba(255, 255, 255, 0.8); color: var(--mInk); }
-.menuOpts .mBtns { flex-wrap: wrap; padding-top: 14px; border-top: 1px solid rgba(160, 122, 60, 0.2); }
-.mKeys { margin: 14px 0 0; font-size: 12px; line-height: 1.6; color: var(--ink2); }
+.menuOpts .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; padding: 10px 12px 10px 16px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.62); }
+.menuOpts .row > label { min-width: 84px; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #5a6b8c; }
+.menuOpts .langPick { margin: 0; padding: 0; gap: 6px; border: 0; background: none; }
+#menu ~ .overlay .menuOpts .langPick button.active { border-color: transparent; background: linear-gradient(180deg, #4a87f3, #2a63dc); color: #fff; }
+.menuOpts .tutoToggle { justify-content: flex-start; margin: 0; padding: 0; border: 0; background: none; }
+.menuOpts .tutoToggle button.on .sw { background: #2a63dc; }
+.menuOpts select { font: inherit; font-weight: 700; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.85); color: #1b2540; }
+.menuOpts .mBtns { flex-wrap: wrap; padding: 0; border: 0; background: none; }
+.mKeys { margin: 12px 0 0; padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.45); font-size: 12px; line-height: 1.6; color: var(--ink2); }
 @media (hover: none) and (pointer: coarse) { .mKeys { display: none; } }
+/* l'âge de départ du bac à sable : une pilule par âge, bleue au survol */
 .agePick { width: min(520px, 100%); text-align: left; }
+.agePick .hint { margin: 4px 0 0; }
 .agePick .ageBtns { margin-top: 14px; gap: 8px; }
 .agePick .ageBtn { min-height: 48px; padding: 0 20px; font-size: 15px; }
+#menu ~ .overlay .agePick .ageBtn:hover { border-color: transparent; background: linear-gradient(180deg, #4a87f3, #2a63dc); color: #fff; }
 @media (max-height: 760px) and (min-width: 721px) {
   .mPeaks { width: 140px; }
   #menu h1 { font-size: 78px; }
@@ -488,8 +494,8 @@ body.under:has(#warAlert.show) #toasts { top: calc(var(--hudB, 82px) + 122px); }
   .mStatus small { white-space: normal; }
   .mGear { top: 12px; right: 12px; width: 48px; height: 48px; }
   .mGear svg { width: 24px; height: 24px; }
-  #menu ~ .overlay > .modal { padding: 0 18px 18px; border-radius: 22px; }
-  #menu ~ .overlay > .modal .mtitle { margin: 0 -18px 6px; padding: 16px 14px 10px 18px; }
+  #menu ~ .overlay > .modal { padding: 0 16px 18px; border-radius: 22px; }
+  #menu ~ .overlay > .modal .mtitle { margin: 0 -16px 6px; padding: 16px 12px 10px 16px; }
 }
 /* choix de la difficulté (nouvelle partie) et son rappel dans les réglages */
 .diffpick { max-width: 760px; text-align: left; }
@@ -1350,7 +1356,7 @@ body.cinematic #bannerWrap { display: none !important; }
 .expModal .mission.leg:not(.must) { border-color: #efd27a; }
 /* l'illustration : l'image du lieu ou de la mission, sinon la pastille sur un fond aux couleurs du lieu */
 .mart { position: relative; flex: 0 0 36%; min-height: 210px; border-radius: 16px; overflow: hidden; display: grid; place-items: center; background: linear-gradient(170deg, #a9cbea, #7fb07a); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5); }
-.mart img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mart > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .mart > b { font-size: 64px; filter: drop-shadow(0 6px 10px rgba(20, 35, 70, 0.25)); }
 .mart.forest { background: linear-gradient(170deg, #b6d4a4, #4f8a4e); }
 .mart.river, .mart.sea { background: linear-gradient(170deg, #b9dcf4, #3f86c9); }
@@ -1412,3 +1418,101 @@ body.cinematic #bannerWrap { display: none !important; }
 .expModal > section::-webkit-scrollbar-thumb, .expModal .missions::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(42, 60, 110, 0.28); }
 .expModal > section::-webkit-scrollbar-thumb:hover, .expModal .missions::-webkit-scrollbar-thumb:hover { background: rgba(42, 60, 110, 0.45); }
 @media (max-width: 720px) { .expModal .missions { margin-right: -10px; } }
+/* pictos 3D à la place des émojis (src/ui/pics.ts) */
+img.pic { display: inline-block; flex: none; vertical-align: -0.22em; object-fit: contain; user-select: none; }
+.mtag img.pic { vertical-align: -0.2em; }
+.expModal .mhead > .mbadge img.pic { width: 32px; height: 32px; }
+.mart > b img.pic { width: 96px; height: 96px; filter: drop-shadow(0 8px 12px rgba(20, 35, 70, 0.28)); }
+.mgains .chip img.pic { width: 26px; height: 26px; }
+.teamChip img.pic { vertical-align: -0.25em; }
+
+/* ---------- Lancer une expédition (refonte) : l'illustration à gauche ; à droite la façon de partir, l'équipement, la durée, le risque, les récompenses ---------- */
+.overlay:has(> .sendModal) { background: rgba(20, 30, 60, 0.3); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 25; }
+.overlay > .modal.sendModal { max-width: 1060px; width: 100%; padding: 0 26px 22px; border-radius: 30px; border: 1.5px solid rgba(255, 255, 255, 0.85); background: rgba(238, 243, 250, 0.9); backdrop-filter: blur(18px) saturate(1.1); -webkit-backdrop-filter: blur(18px) saturate(1.1); box-shadow: 0 30px 70px rgba(20, 35, 70, 0.4); color: #1b2540; }
+.sendModal .mtitle { margin: 0 -26px 8px; padding: 22px 22px 12px 26px; border-bottom: 0; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.sendModal .mtitle h3 { gap: 16px; align-items: center; }
+.sendModal .mtitle .x { align-self: flex-start; min-height: 46px; min-width: 46px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.85); color: #1b2540; box-shadow: 0 2px 8px rgba(20, 35, 70, 0.08); }
+.sGrid { display: grid; grid-template-columns: 1.12fr 1fr; gap: 18px; align-items: stretch; }
+.sArt.mart { min-height: 380px; border-radius: 22px; border: 3px solid rgba(255, 255, 255, 0.85); box-shadow: 0 10px 26px rgba(20, 35, 70, 0.18); }
+.sArt.mart > b img.pic { width: 120px; height: 120px; }
+.sCap { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 20px 18px; background: linear-gradient(180deg, rgba(10, 20, 40, 0), rgba(10, 20, 40, 0.62)); color: #fff; text-align: left; }
+.sCap img.pic { width: 28px; height: 28px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
+.sCap h3 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 22px; font-weight: 800; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
+.sCap p { margin: 4px 0 0; font-size: 14px; line-height: 1.4; opacity: 0.95; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4); }
+.sCap small { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; opacity: 0.9; }
+.sSide { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+/* la façon de partir : un sélecteur segmenté, la couleur suit le style */
+.sStyles { display: flex; gap: 6px; padding: 5px; border-radius: 18px; background: rgba(255, 255, 255, 0.5); border: 1px solid rgba(255, 255, 255, 0.9); }
+.sStyles button { flex: 1; flex-direction: column; gap: 1px; min-height: 54px; padding: 6px 8px; border-radius: 14px; border: 2px solid transparent; background: transparent; color: #3a4560; box-shadow: none; }
+.sStyles button b { font-size: 15px; font-weight: 800; }
+.sStyles button small { font-size: 11.5px; font-weight: 600; color: #5a6b8c; }
+.sStyles button:hover { background: rgba(255, 255, 255, 0.7); }
+.sStyles button.on { background: #fff; box-shadow: 0 4px 12px rgba(20, 35, 70, 0.12); border-color: #4a87f3; }
+.sStyles button.on.cautious { border-color: #3fae6e; }
+.sStyles button.on.cautious b { color: #1f7a3a; }
+.sStyles button.on.balanced b { color: #2a63dc; }
+.sStyles button.on.bold { border-color: #f08a3c; }
+.sStyles button.on.bold b { color: #b45a00; }
+.sStyles button.off { opacity: 0.55; }
+.sChoice { margin: 0 4px; font-size: 13px; line-height: 1.4; color: #4a5876; }
+.sChoice b { color: #1b2540; }
+.sPanel { padding: 12px 16px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.62); }
+.sHead { display: flex; align-items: center; gap: 10px; color: #3a4560; }
+.sHead b { font-size: 16px; font-weight: 800; color: #1b2540; }
+.sHead small { display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 700; color: #4a5876; }
+/* l'équipement : une case par pièce, prête (coche verte), en fabrication (horloge) ou à fabriquer (« + ») */
+.sendModal .gearNeed.sGear { display: block; margin: 0; padding: 12px 16px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.62); }
+.gslots { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.gslot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 76px; height: 76px; padding: 0; border-radius: 18px; border: 1.5px solid rgba(255, 255, 255, 0.95); background: #fff; color: #2b3a5c; box-shadow: 0 3px 10px rgba(20, 35, 70, 0.1); }
+.gslot b { font-size: 12.5px; font-weight: 800; color: #4a5876; }
+.gslot .gmark { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; background: #3fae6e; color: #fff; font-style: normal; font-size: 16px; font-weight: 800; line-height: 1; }
+.gslot.wait .gmark { background: #f0a43c; }
+.gslot.wait .gnbar { position: absolute; left: 10px; right: 10px; bottom: 8px; height: 4px; }
+.sendModal button.gslot.miss { min-height: 0; min-width: 0; border: 2px dashed rgba(90, 107, 140, 0.45); background: rgba(255, 255, 255, 0.45); color: #5a6b8c; box-shadow: none; }
+.sendModal button.gslot.miss .gmark { background: linear-gradient(180deg, #4a87f3, #2a63dc); }
+.sendModal button.gslot.miss:hover:not(:disabled) { border-color: #2a63dc; background: #fff; color: #2a63dc; }
+.sendModal button.gslot.miss:disabled { opacity: 0.5; }
+.gnote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 12.5px; color: #5a6b8c; }
+.gnote .mkAll { min-height: 32px; padding: 0 12px; border-radius: 999px; font-size: 12px; }
+.sRow { display: flex; align-items: center; gap: 10px; color: #3a4560; }
+.sRow b { font-size: 16px; font-weight: 800; color: #1b2540; }
+.sVal { font-size: 16px; font-weight: 800; color: #1b2540; }
+.sVal::first-letter { text-transform: uppercase; }
+.sRisk.mid { box-shadow: 0 0 0 2px rgba(255, 190, 90, 0.55), 0 0 18px rgba(255, 190, 90, 0.3); }
+.sRisk.mid > svg { color: #e08a1e; }
+.sRisk.high { box-shadow: 0 0 0 2px rgba(240, 100, 90, 0.5), 0 0 18px rgba(240, 100, 90, 0.25); }
+.sRisk.high > svg { color: #d0453a; }
+.sRisk.low > svg { color: #3fae6e; }
+.sPct { font-size: 13px; font-weight: 700; color: #5a6b8c; margin-right: 6px; }
+.sRisk .rdots { gap: 6px; }
+.sRisk .rdots i { width: 14px; height: 14px; }
+.sRisk .rdots.mid i.on { background: #f08a1e; }
+.sRisk .rdots.high i.on { background: #d0453a; }
+.sRisk .rdots.low i.on { background: #3fae6e; }
+.sGifts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px; padding: 12px; border-radius: 16px; background: rgba(230, 236, 246, 0.7); }
+.gift { position: relative; display: grid; place-items: center; width: 66px; height: 66px; border-radius: 18px; border: 1.5px solid rgba(255, 255, 255, 0.95); box-shadow: 0 3px 10px rgba(20, 35, 70, 0.08); }
+.gift.g0 { background: #e3f1d6; }
+.gift.g1 { background: #e7eaf0; }
+.gift.g2 { background: #dcefd6; }
+.gift.g3 { background: #fbe0e0; }
+.gift small { position: absolute; right: 4px; bottom: 2px; font-size: 11px; font-weight: 800; color: #3a4560; }
+.sNeeds { margin: 12px 0 0; padding: 10px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.55); }
+.sFoot { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; margin-top: 16px; }
+.sWarn { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; padding: 12px 16px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.5); font-size: 13.5px; line-height: 1.35; color: #4a5876; text-align: left; }
+.sWarn.block { background: rgba(240, 100, 90, 0.12); border-color: rgba(240, 100, 90, 0.3); color: #a8323a; font-weight: 700; }
+.sendModal button.sGo { flex-direction: row; align-items: center; justify-content: center; align-self: center; min-height: 58px; padding: 0 34px; gap: 10px; border-radius: 18px; border: 0; background: linear-gradient(180deg, #4a87f3, #2a63dc); color: #fff; font-size: 17px; font-weight: 800; box-shadow: 0 8px 20px rgba(42, 99, 220, 0.35); }
+.sendModal button.sGo:hover:not(:disabled) { background: linear-gradient(180deg, #3f7ef0, #1f58cf); }
+.sendModal button.sGo:disabled { background: rgba(15, 27, 45, 0.15); color: #5a6b8c; box-shadow: none; }
+.sendModal .sBack { min-height: 52px; padding: 0 20px 0 14px; gap: 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.75); color: #1b2540; font-size: 16px; font-weight: 700; box-shadow: 0 2px 8px rgba(20, 35, 70, 0.08); }
+.sendModal .sBack svg { padding: 4px; border-radius: 50%; border: 1.5px solid #3a4560; box-sizing: content-box; }
+.sendModal .failMsg { margin: 0 0 10px; padding: 10px 14px; border-radius: 14px; background: rgba(240, 100, 90, 0.12); color: #a8323a; font-weight: 700; }
+@media (max-width: 760px) {
+  .overlay > .modal.sendModal { padding: 0 14px 16px; border-radius: 22px; }
+  .sendModal .mtitle { margin: 0 -14px 6px; padding: 14px 12px 10px 14px; }
+  .sGrid { grid-template-columns: 1fr; }
+  .sArt.mart { min-height: 220px; }
+  .sFoot { grid-template-columns: 1fr; }
+  .sendModal .sBack { order: 3; justify-self: start; }
+  .gslot { width: 64px; height: 64px; }
+  .gift { width: 56px; height: 56px; }
+}
