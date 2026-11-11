@@ -401,8 +401,12 @@ const SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="
  * lieu (le premier choix ; la mer pour un choix en mer). Sans image, la carte montre la pastille de la mission sur un fond
  * aux couleurs du lieu (`.mart.{lieu}`)
  */
-const MISSION_ART = new Set(['mammoth']);
-const DEST_ART = new Set(['plain', 'forest', 'sea', 'far', 'mountain', 'river']);
+const MISSION_ART = new Set([
+  'mammoth', 'honey', 'seeds', 'horses', 'fishing', 'springs', 'pugilat', 'kraken', 'portal', 'megalodon', 'mine', 'wolf',
+  'brewer', 'dragon', 'caravel', 'spice', 'railway', 'coal', 'motorcar', 'flight', 'oil', 'galleon', 'summit', 'reef',
+  'stars', 'games', 'trawl', 'seafarm', 'rocket', 'moon', 'colony',
+]);
+const DEST_ART = new Set(['plain', 'forest', 'sea', 'far', 'mountain', 'river', 'cave', 'spaceport']);
 function missionArt(m: Mission): { src: string | null; dest: string } {
   const c = m.choices[0], dest = c?.sea ? 'sea' : c?.dest ?? 'plain';
   const src = MISSION_ART.has(m.id) ? `./expeditions/mission-${m.id}.webp` : DEST_ART.has(dest) ? `./expeditions/dest-${dest}.webp` : null;
