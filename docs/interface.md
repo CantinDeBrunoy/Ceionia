@@ -46,7 +46,7 @@ Trois onglets : **Temps et météo** (vitesse Pause/×1/×2/×4/×8 ; durée du 
 
 ### Menu d'accueil (`showMenu`)
 Sur un paysage au couchant (`public/menu/fond.webp`, ou la vidéo nommée par `MENU_VIDEO` dans `ui.ts`, l'image servant alors d'affiche ; la vidéo ne démarre pas si le système demande moins d'animations) : le titre (sommets en SVG `LOGO_PEAKS` et « Ceionia » en Fraunces arrondie, axe `SOFT`, avec un relief en ombre pleine : vectoriel pour rester net), la devise, trois cartes de mode illustrées (`mode-{difficulté}.webp`, titre `DIFF_TEXT.mode`, phrase `DIFF_TEXT.blurb`, les points du mode en `title`).
-- Un clic sur une carte **choisit** le mode : la carte choisie (`.sel`) grandit, luit et porte le losange. Au départ, le mode de la sauvegarde, sinon le mode conseillé (`DEFAULT_DIFFICULTY`, Normal, qui garde sa mention « Conseillé »). Un double-clic lance directement.
+- Un clic sur une carte **choisit** le mode : la carte choisie (`.sel`) grandit (un zoom `transform: scale(1.1)`, qui ne change pas la mise en page : « Nouvelle partie » ne bouge pas), luit et porte le losange. Au départ, le mode de la sauvegarde, sinon le mode conseillé (`DEFAULT_DIFFICULTY`, Normal, qui garde sa mention « Conseillé »). Un double-clic lance directement.
 - **Nouvelle partie** lance le mode choisi : le bac à sable demande d'abord l'âge de départ (`pickAge`), une sauvegarde de la carte qui serait écrasée demande confirmation.
 - La pastille en bas à gauche résume la sauvegarde (mode, âge, habitants, `savedAgo`) et porte **Continuer** ; sans sauvegarde, elle dit qu'un monde neuf attend.
 - L'engrenage ouvre les options : langue, tutoriel (`menuToggle`), carte (s'il y en a plusieurs), import, crédits, rappel des commandes.
