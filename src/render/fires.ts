@@ -31,6 +31,8 @@ export class Fires {
   responder: { spraying(b: Building): number | null } | null = null;
   /** où se tiennent les habitants qui jettent l'eau de leur seau sur ce bâtiment */
   pails: ((b: Building) => [number, number][]) | null = null;
+  /** haut du modèle du bâtiment (y monde), pour voir les flammes sur le toit ; sans lui, une hauteur forfaitaire */
+  top: ((b: Building) => number | null) | null = null;
   private list: Fire[] = [];
   private flames: THREE.InstancedMesh;
   private smoke = new Puffs(260, 0);
@@ -117,9 +119,13 @@ export class Fires {
       // les flammes faiblissent sous la lance, sous les seaux, ou à mesure qu'on fait la chaîne depuis le puits
       const tamed = Math.max(spray !== null ? spray / SPRAY_OUT : 0, f.doused / DOUSE, water && spray === null ? f.t / out : 0);
       const s = s0, base = ground, k = Math.min(1, f.t / 3) * Math.max(0.25, 1 - tamed);
+      // une flamme sur deux lèche le toit, les autres montent le long des murs, du dehors (au centre et à mi-hauteur, elles
+      // restaient cachées dans le modèle)
+      const top = Math.max(base + 0.3, this.top?.(b) ?? base + 0.5);
       for (let j = 0; j < FLAMES_PER_FIRE && n < MAX_FLAMES; j++) {
-        const ph = f.seed + j * 2.3, flick = 0.65 + 0.35 * Math.sin(this.t * (9 + j) + ph);
-        d.position.set(b.x + s / 2 + Math.sin(ph * 3.1) * 0.28 * s, base + 0.25 + (j % 3) * 0.12, b.z + s / 2 + Math.cos(ph * 2.3) * 0.28 * s);
+        const ph = f.seed + j * 2.3, flick = 0.65 + 0.35 * Math.sin(this.t * (9 + j) + ph), roof = j % 2 === 0;
+        const r = roof ? 0.22 * s : 0.46 * s, y = roof ? top - 0.14 + (j % 3) * 0.04 : base + 0.08 + (j % 3) * 0.14;
+        d.position.set(b.x + s / 2 + Math.sin(ph * 3.1) * r, y, b.z + s / 2 + Math.cos(ph * 3.1) * r);
         d.rotation.set(Math.sin(this.t * 3 + ph) * 0.15, ph, Math.cos(this.t * 2.6 + ph) * 0.15);
         d.scale.set(k * (0.8 + 0.3 * flick), k * (0.7 + 0.8 * flick), k * (0.8 + 0.3 * flick));
         d.updateMatrix();
@@ -127,9 +133,9 @@ export class Fires {
       }
       // l'eau jetée sur le feu (seaux ou lance) : de la vapeur blanche monte des flammes qui faiblissent
       if ((water || spray !== null) && f.t > 2 && Math.random() < dt * 5)
-        this.smoke.spawn(b.x + s / 2 + (Math.random() - 0.5) * 0.6 * s, base + 0.35, b.z + s / 2 + (Math.random() - 0.5) * 0.6 * s, 0, 0.9 + Math.random() * 0.4, 0, 0.14, 1.6, STEAM, 0.2, { grow: 2.4, drag: 0.15, wind: 0.25, alpha: 0.7 });
+        this.smoke.spawn(b.x + s / 2 + (Math.random() - 0.5) * 0.6 * s, top - 0.1, b.z + s / 2 + (Math.random() - 0.5) * 0.6 * s, 0, 0.9 + Math.random() * 0.4, 0, 0.14, 1.6, STEAM, 0.2, { grow: 2.4, drag: 0.15, wind: 0.25, alpha: 0.7 });
       if (Math.random() < dt * 6 * k)
-        this.smoke.spawn(b.x + s / 2 + (Math.random() - 0.5) * 0.4 * s, base + 0.7, b.z + s / 2 + (Math.random() - 0.5) * 0.4 * s, 0, 0.6 + Math.random() * 0.4, 0, 0.22, 4, SMOKE, 0.3, { grow: 3.4, drag: 0.12, wind: 0.2, alpha: 0.75 });
+        this.smoke.spawn(b.x + s / 2 + (Math.random() - 0.5) * 0.4 * s, top + 0.05, b.z + s / 2 + (Math.random() - 0.5) * 0.4 * s, 0, 0.6 + Math.random() * 0.4, 0, 0.22, 4, SMOKE, 0.3, { grow: 3.4, drag: 0.12, wind: 0.2, alpha: 0.75 });
     }
     this.flames.count = n;
     this.flames.instanceMatrix.needsUpdate = true;

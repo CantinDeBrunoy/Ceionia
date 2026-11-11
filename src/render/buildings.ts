@@ -432,6 +432,15 @@ export class BuildingView implements WorldListener {
 
   refreshAll() { for (const e of this.entries.values()) this.refresh(e.b); }
 
+  /** Haut du modèle affiché (y monde) : les flammes d'un incendie se posent sur le toit, pas dans les murs ; null si inconnu */
+  topOf(id: number) {
+    const e = this.entries.get(id);
+    if (!e) return null;
+    e.body.updateWorldMatrix(true, false);
+    return this.topBox.setFromObject(e.body).max.y;
+  }
+  private topBox = new THREE.Box3();
+
   /** Bâtiments abattus (les défenses de l'île pendant une incursion) : ils ne s'affichent plus, leurs ruines les remplacent */
   private ruined = new Set<number>();
   /** Abat un bâtiment (il s'affaisse et disparaît) ou le relève (il resurgit) */

@@ -755,8 +755,12 @@ export class Agents {
   alert(cell: number) {
     const cx = cell % N + 0.5, cz = Math.floor(cell / N) + 0.5, b = this.world.buildings.get(this.world.occ[cell]);
     // les pompiers accourent de leur caserne (même de chez eux), puis les voisins qui passent, tous seau en main
-    const crew = this.agents.filter((a) => a.job?.kind === 'firefighter' && !a.mission && Math.hypot(a.x - cx, a.z - cz) < 30).slice(0, 4);
-    const near = this.agents.filter((a) => !a.hidden && !a.mission && !crew.includes(a) && Math.hypot(a.x - cx, a.z - cz) < 16).slice(0, Math.max(2, 6 - crew.length));
+    // (pas ceux qui courent déjà vers ce feu : l'appel se relance tant que personne n'accourt, voir `responders`)
+    const free = (a: Agent) => !a.mission && a.blaze !== b?.id;
+    const crew = this.agents.filter((a) => a.job?.kind === 'firefighter' && free(a) && Math.hypot(a.x - cx, a.z - cz) < 30).slice(0, 4);
+    // ceux qui sont dehors d'abord, puis ceux qui sortent de chez eux ou de leur atelier
+    const near = this.agents.filter((a) => free(a) && !crew.includes(a) && Math.hypot(a.x - cx, a.z - cz) < 16)
+      .sort((p, q) => +p.hidden - +q.hidden).slice(0, Math.max(2, 6 - crew.length));
     for (const a of [...crew, ...near]) {
       a.goingHome = false;
       if (!b) { this.startPath(a, cell, false); continue; }
@@ -764,6 +768,12 @@ export class Agents {
       if (d) this.go(a, { ...d, act: 'work', tool: 'bucket', urgent: true, blaze: b.id });
     }
   }
+
+  /** Il court vers un bâtiment qui brûle encore, ou y jette l'eau de son seau */
+  private fighting(a: Agent) { return a.blaze != null && this.burning(a.blaze); }
+
+  /** Combien d'habitants courent vers ce bâtiment en feu ou y jettent déjà l'eau de leur seau */
+  responders(b: Building) { return this.agents.filter((a) => a.blaze === b.id && (a.state === 'walking' || a.state === 'doing')).length; }
 
   /** Où se tiennent ceux qui jettent l'eau de leur seau sur ce bâtiment en feu (arrivés sur place) */
   pails(b: Building): [number, number][] {
@@ -1206,7 +1216,8 @@ export class Agents {
         // un obstacle posé sur le chemin : on recalcule
         const nc = a.path[a.pi];
         if (nc !== undefined && w.occ[nc] && nc !== a.path[a.path.length - 1] && w.buildings.get(w.occ[nc])?.kind !== 'lamp') { a.path = []; a.pi = 0; }
-        if (night && !a.goingHome && !a.mission && this.pathBudget > 0) this.sendHome(a);
+        // la nuit, on rentre, sauf pour éteindre un feu
+        if (night && !a.goingHome && !a.mission && !this.fighting(a) && this.pathBudget > 0) this.sendHome(a);
       } else if (a.state === 'doing') {
         // en expédition : il fait ce qu'on lui a dit, jusqu'au prochain ordre
         if (a.mission) continue;
@@ -1221,7 +1232,7 @@ export class Agents {
         }
         // aux champs : le semeur et le faucheur suivent les sillons, le tracteur les siens
         if (a.task && !a.hidden) this.fieldStep(a, dt);
-        if (night && !a.goingHome) { if (this.pathBudget > 0) this.sendHome(a); }
+        if (night && !a.goingHome && !this.fighting(a)) { if (this.pathBudget > 0) this.sendHome(a); }
         else if (a.timer <= 0 && this.pathBudget > 0) {
           a.hidden = false;
           // la moisson faite, il porte sa gerbe à la grange ; sinon il choisit où aller

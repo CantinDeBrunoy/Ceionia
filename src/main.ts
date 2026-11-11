@@ -181,6 +181,8 @@ class Game implements UIHost {
   /** les trophées des gros monstres vaincus, sur la grande place ; quand on les remet à jour */
   trophies: Trophies;
   private trophyT = 0;
+  /** prochain rappel à l'aide pour les feux que personne ne combat (s) */
+  private fireCallT = 0;
   /** le bouton « Retourner au village », quand la vue s'éloigne de la grande place */
   private homeBtn: HomeButton;
   /** la mise en scène du royaume des Enfers (combat du roi, victoire) */
@@ -379,6 +381,7 @@ class Game implements UIHost {
     this.alpine = new AlpineView(w, this.buildings);
     this.emergencies = new Emergencies(w, this.fires, this.roads.islands);
     this.fires.responder = this.emergencies;
+    this.fires.top = (b) => this.buildings.topOf(b.id);
     // les pompiers et les voisins au seau : ils restent tant que ça brûle, et leur eau éteint le feu
     this.fires.pails = (b) => this.agents.pails(b);
     this.agents.burning = (id) => this.fires.burning.some((b) => b.id === id);
@@ -1662,6 +1665,8 @@ class Game implements UIHost {
     this.eruptions.update(gdt);
     this.fauna.alarm = this.eruptions.alarm();
     this.fires.update(dt);
+    // personne n'accourt vers un feu (tout le monde était à l'intérieur ou loin au moment où il a pris) : on rappelle à l'aide
+    if ((this.fireCallT -= dt) <= 0) { this.fireCallT = 4; for (const b of this.fires.burning) if (!this.agents.responders(b)) this.agents.alert(b.z * N + b.x); }
     this.wakeVolcano(gdt, dt);
     // nouvelles du village : incendies, feux éteints, bâtiments perdus
     for (const m of this.fires.news.splice(0)) this.ui.toast(m, undefined, m.startsWith('🔥') ? 'danger' : 'info');
