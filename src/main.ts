@@ -643,15 +643,6 @@ class Game implements UIHost {
     this.running = false;
     location.reload();
   }
-  /**
-   * Âge du dessin des routes et des places : celui du village ; au bac à sable, jamais plus jeune que le bâtiment le plus récent
-   * (redescendre d'âge ne rajeunit pas ce qui est bâti, les rues autour non plus)
-   */
-  roadAge() {
-    let a = this.sim.age;
-    if (this.world.sandbox) for (const b of this.world.buildings.values()) a = Math.max(a, b.age);
-    return a;
-  }
   toMenu() { this.saveNow(); this.running = false; location.reload(); }
   setPhoto(on: boolean) { document.body.classList.toggle('photo', on); }
   underZone() { return this.mode === 'under' ? UZ_NAMES[this.under.zoneAt(this.cam.target.x, this.cam.target.z)] : this.mode === 'hell' && this.hellMode ? `🔥 ${this.hellMode.zoneName(this.cam.target.z)}` : null; }
@@ -1546,8 +1537,8 @@ class Game implements UIHost {
       // la neige des routes suit la saison sans les refaire (shader) ; elles ne se refont que lorsqu'elle franchit un seuil où
       // leurs décors changent : sur un grand village, les refaire coûte un à-coup, et à ×4 la neige bouge quatre fois plus vite
       const s = this.season.snow;
-      if (force) { this.roads.rebuild(this.roadAge(), s); this.propsDirty = false; }
-      else if (this.propsDirty || roadSnowStep(this.roads.builtSnow, s)) { this.roads.rebuildSoon(this.roadAge(), s); this.propsDirty = false; }
+      if (force) { this.roads.rebuild(this.sim.age, s); this.propsDirty = false; }
+      else if (this.propsDirty || roadSnowStep(this.roads.builtSnow, s)) { this.roads.rebuildSoon(this.sim.age, s); this.propsDirty = false; }
       else this.roads.setSnow(s);
     }
   }
@@ -1624,7 +1615,7 @@ class Game implements UIHost {
       this.propsTimer = 0.12;
       const roadsChanged = w.roadsDirty;
       // les chemins se refont au fil des images (pas d'à-coup à la pose) ; les bâtiments se tournent vers la rue tout de suite
-      if (w.roadsDirty || this.propsDirty) { w.roadsDirty = false; this.roads.rebuildSoon(this.roadAge(), this.season.snow); this.buildings.refreshAll(); }
+      if (w.roadsDirty || this.propsDirty) { w.roadsDirty = false; this.roads.rebuildSoon(this.sim.age, this.season.snow); this.buildings.refreshAll(); }
       // l'herbe des prairies dépend aussi des routes
       if (w.vegDirty || roadsChanged || this.propsDirty) {
         // le sol se teinte sous les champs et forêts

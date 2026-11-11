@@ -6,6 +6,7 @@ import { AGES, KINDS, KindId } from '../src/build/catalog';
 import { priceIn, canPay } from '../src/sim/economy';
 import { isStart, startRefusal } from '../src/build/startLock';
 import { Difficulty } from '../src/sim/difficulty';
+import { targetAge } from '../src/render/buildings';
 
 function village(difficulty: Difficulty) {
   setMapSize(192);
@@ -154,5 +155,13 @@ describe('bac à sable', () => {
       back.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
       expect(back.portalWoken).toBe(false);
     }
+  });
+
+  it('en redescendant d’âge, les bâtiments redescendent, sans passer sous l’âge où leur sorte apparaît', () => {
+    // l'arène au Médiéval : le champ de joute, pas le palais de la boxe
+    expect(targetAge({ kind: 'arena' }, 2)).toBe(2);
+    // à la Préhistoire, elle n'existe pas encore : elle garde son premier modèle (le Colisée)
+    expect(targetAge({ kind: 'arena' }, 0)).toBe(KINDS.arena.minAge);
+    expect(targetAge({ kind: 'house' }, 0)).toBe(0);
   });
 });

@@ -454,7 +454,7 @@ export class Sim {
 
   /**
    * Bac à sable : change d'âge à volonté (vers l'avant ou l'arrière), sans condition ; true si l'âge a changé. Les bâtiments
-   * déjà posés gardent leur âge (ils ne rajeunissent pas) ; les nouveaux se posent à l'âge choisi
+   * suivent, dans un sens comme dans l'autre, sans descendre sous l'âge où leur sorte apparaît (`targetAge`, buildings.ts)
    */
   setAge(n: number) {
     if (!this.world.sandbox) return false;

@@ -138,7 +138,14 @@ function litOf(body: THREE.BufferGeometry, glow: THREE.BufferGeometry | null | u
   return geo;
 }
 
-const easeOutBack = (t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+/**
+ * Âge que doit prendre un bâtiment : celui du village, jamais sous l'âge où sa sorte apparaît. Au bac à sable, redescendre
+ * d'âge le fait donc redescendre aussi (joutes au Médiéval, pas un palais de la boxe) ; une sorte trop récente (le Colisée
+ * à la Préhistoire) garde son premier modèle
+ */
+export function targetAge(b: Pick<Building, 'kind'>, worldAge: number) { return Math.max(worldAge, KINDS[b.kind].minAge); }
+
+const easeOutBack =(t: number) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
 export class BuildingView implements WorldListener {
   group = new THREE.Group();
@@ -483,7 +490,8 @@ export class BuildingView implements WorldListener {
     if (this.evoTimer <= 0) {
       this.evoTimer = 0.06;
       for (const e of this.entries.values()) {
-        if (!e.anim && e.b.age < worldAge && !this.ruined.has(e.b.id)) { e.anim = { type: 'evolve', t: 0, swapped: false, to: worldAge }; break; }
+        const to = targetAge(e.b, worldAge);
+        if (!e.anim && e.b.age !== to && !this.ruined.has(e.b.id)) { e.anim = { type: 'evolve', t: 0, swapped: false, to }; break; }
       }
     }
     for (const e of this.entries.values()) {

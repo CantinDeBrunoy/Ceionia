@@ -35,8 +35,7 @@ Ce n'est pas un réglage à part : c'est `World.difficulty === 'sandbox'`. Le mo
 - `Sim.setAge(n)` : sans effet hors bac à sable ; borne `n`, recalcule, remet `world.ageBase`, puis appelle `onAgeUp` (même chemin que le vrai passage d'âge : bannière, garnison, rendu).
 - `ui.ts` › `UI.update` : en bac à sable, `#ageReq` liste des `button[data-setage]` ; `#agePanel` gère le clic (`closest('[data-setage]')`) et appelle `sim.setAge`.
 - `Sim.ageProgress` rend `null` au bac à sable : plus de conditions, `Sim.ready` est faux, `Sim.advance` ne fait rien.
-- `BuildingView.update` (`render/buildings.ts`) ne fait évoluer que vers le haut (`b.age < worldAge`) : en redescendant, les bâtiments gardent leur âge.
-- Routes et places : `Game.roadAge()` (`main.ts`) les dessine à l'âge du village, mais au bac à sable jamais plus jeune que le bâtiment le plus récent : redescendre d'âge ne remet pas des chemins de terre devant une usine. Habitants, véhicules et trains suivent, eux, l'âge choisi.
+- `BuildingView.update` (`render/buildings.ts`) fait évoluer chaque bâtiment, un à la fois, vers `targetAge` : l'âge du village, jamais sous le `minAge` de sa sorte. En redescendant, les bâtiments redescendent donc aussi (l'arène redevient champ de joute au Médiéval) ; une sorte trop récente pour l'âge choisi (le Colisée à la Préhistoire) garde son premier modèle. Les routes et les places suivent l'âge choisi. Hors bac à sable, l'âge ne baisse jamais : rien ne change.
 
 **Déblocages**
 - `ui.ts` › `UI.lockOf` : après l'âge minimum et maximum, le verrou de départ et le tutoriel, un `if (h.world.sandbox) return null` saute `reqMission` et `reqKind`.
