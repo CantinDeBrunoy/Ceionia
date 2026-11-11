@@ -60,6 +60,7 @@ Presque tous les bâtiments sont **dessinés par le jeu** : chaque sorte a une f
 - `Halos` (`halos.ts`) : flaques de lumière chaude drapées sur le sol autour des feux, braseros, lampadaires, lanternes de routes et de voies (`Game.refreshHalos` rassemble les sources : x, z, rayon, intensité) ; opacité ∝ nuit, vacille.
 
 ## Liens avec les autres systèmes
+- Interface : `render/thumbs.ts` (`Thumbs`) rend avec `getModel` les vignettes 3D de la barre de construction, une par image, dans une cible hors écran du même moteur (voir [interface.md](interface.md)).
 - Les bâtiments évoluent selon `sim.age` ([ages.md](ages.md)) ; leur taille et leur sorte viennent de `KINDS` ([batiments-catalogue.md](batiments-catalogue.md)).
 - La fumée des cheminées (`Model.smoke`, `BuildingView.chimneys`) alimente `life.ts` ; les lumières de nuit suivent `env.night` ([ciel-meteo.md](ciel-meteo.md)).
 - Les remparts, l'arène (`arena.ts`) et les défenses de l'île ont leurs propres fichiers de rendu ([remparts.md](remparts.md), [portail-ile.md](portail-ile.md)).

@@ -97,7 +97,7 @@ export const TUTO_TEXT = {
     },
     time: {
       title: 'Le temps',
-      text: 'Le bouton {pause} arrête le temps, le bouton ×1 l’accélère.',
+      text: 'Le bouton {pause} arrête le temps, le bouton {fastForward} l’accélère.',
       tasks: ['Arrêter ou relancer le temps', 'Changer la vitesse'],
     },
     ages: {
@@ -732,7 +732,9 @@ export class Tutorial {
     ring.style.width = `${r.width + 12}px`; ring.style.height = `${r.height + 12}px`;
     // dans la barre du bas, la bulle passe au-dessus de la fiche du bâtiment survolé ; en haut, sous tout le panneau (le conseil reste lisible)
     const lid = Math.min(r.top, a!.closest('#dock')?.getBoundingClientRect().top ?? r.top);
-    const floor = Math.max(r.bottom, a!.closest('#hud > .panel')?.getBoundingClientRect().bottom ?? r.bottom);
+    // (en haut : sous toutes les rangées du HUD, qui peut en avoir deux ou plus sur un écran moyen ou étroit ; le conseil et
+    // les messages, hors du flux, ne comptent pas)
+    const floor = Math.max(r.bottom, a!.closest('#hud')?.getBoundingClientRect().bottom ?? r.bottom);
     const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     const order: Side[] = cy < H / 2 ? ['below', 'above', 'right', 'left'] : ['above', 'below', 'right', 'left'];
     const fits = (s: Side) => (s === 'below' ? floor + gap + h <= H - m : s === 'above' ? lid - gap - h >= m : s === 'right' ? r.right + gap + w <= W - m : r.left - gap - w >= m);

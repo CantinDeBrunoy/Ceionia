@@ -15,6 +15,13 @@ registerDict('ui', {
   'Voir ce qu\'il faut pour l\'âge suivant': 'See what the next age requires',
   'Pause (Espace)': 'Pause (Space)',
   'Dissiper le brouillard': 'Clear the fog',
+  // ---- HUD : horloge, habitants, carrousel des vignettes
+  '{season}, jour {n}': '{season}, day {n}',
+  'Depuis hier': 'Since yesterday', 'stable': 'steady',
+  'Précédents': 'Previous', 'Suivants': 'Next',
+  // ---- mode Paysage : ses sous-menus et leurs groupes
+  'Paysage': 'Landscape', 'Sculpter': 'Sculpt', 'Sommets': 'Peaks', 'Végétation': 'Vegetation', 'Sol': 'Ground', 'Décor': 'Scenery', 'Effacer': 'Erase',
+  'Mini-carte : cliquer pour y envoyer la vue': 'Minimap: click to move the view there',
   'Expéditions': 'Expeditions',
   'Mode photo (P)': 'Photo mode (P)',
   'Mode photo': 'Photo mode',

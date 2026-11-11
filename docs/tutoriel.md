@@ -64,7 +64,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   sert qu'à placer la bulle : fiche du besoin, conditions d'âge), `read` (attend « OK »), `need`. Les textes d'une étape
   principale viennent de `TUTO_TEXT.steps[id]` ; ceux d'un chapitre, de `Step.t` (`CHAPTER_TEXT`).
 - **Placement** (`Tutorial.place`) : dessous si l'élément est en haut de l'écran, dessus s'il est en bas, sinon sur un côté ;
-  sous tout le panneau du HUD, au-dessus du dock ; le côté qui cache le moins les fiches ouvertes ; la pointe vise le milieu.
+  sous toutes les rangées du HUD (`#hud` ; il en a deux ou plus sur un écran moyen ou étroit), au-dessus du dock ; le côté qui cache le moins les fiches ouvertes ; la pointe vise le milieu.
 - **Surbrillance** : `#tutoRing`, un élément à part, entoure l'élément montré : bordure dorée, lueur qui respire en 3,2 s.
   L'élément lui-même prend la classe `.tHi` : sur un bouton, un liseré doré intérieur ; rien d'autre (ni `transform`, ni
   couleur de fond, ni animation).

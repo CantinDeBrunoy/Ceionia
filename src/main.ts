@@ -48,6 +48,7 @@ import { SNOW, setSnowMap } from './render/snow';
 import { AmbientLife } from './render/life';
 import { Glow } from './render/glow';
 import { loadModels } from './render/assets';
+import { Thumbs } from './render/thumbs';
 import { ToolController, ToolId } from './build/tools';
 import { AudioEngine } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
@@ -262,6 +263,9 @@ class Game implements UIHost {
   private lavaPaint = 0;
   private propsDirty = true;
   private uiTimer = 0;
+  /** vignettes 3D des bâtiments (barre de construction) */
+  private thumbs = new Thumbs(renderer);
+  thumb(k: KindId, age: number) { return this.thumbs.get(k, age); }
   private saveTimer = 0;
   private running = true;
   /** monde souterrain (créé à la première descente) */
@@ -1801,6 +1805,8 @@ class Game implements UIHost {
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
+    // une vignette 3D par image, et la barre de construction la montre dès qu'elle est prête
+    if (this.thumbs.pump()) this.ui.thumbsReady();
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }

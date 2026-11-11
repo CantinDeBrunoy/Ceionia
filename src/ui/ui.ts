@@ -25,10 +25,11 @@ import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFI
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
-import { ic, KIND_ICON, CAT_ICON, SUB_ICON, SEASON_ICONS } from './icons';
+import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
 import { pic } from './pics';
+import { MiniMap } from './minimap';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
 
 export interface UIHost {
@@ -85,6 +86,8 @@ export interface UIHost {
   railUndo(): void;
   railFinish(): void;
   railCancel(): void;
+  /** vignette 3D d'un bâtiment à un âge (data URL), null tant qu'elle n'est pas rendue */
+  thumb?(k: KindId, age: number): string | null;
   /** plus de points de passage : la voie se pose d'elle-même ; ce qui empêche de valider le tracé (null : rien) */
   railAuto(): void;
   railTrouble(): string | null;
@@ -211,10 +214,30 @@ const QUICK = ['none', 'road', 'bulldoze', 'move'];
 
 /** Grands onglets de la barre du bas */
 const TABS = [
-  { id: 'relief', icon: 'relief', label: 'Relief', hint: 'Sculptez le terrain', tools: ['raise', 'lower', 'flatten', 'cliff', 'dig', 'mountain', 'volcano'] },
-  { id: 'nature', icon: 'tree', label: 'Nature', hint: 'Plantez et décorez', tools: ['forest', 'biome', 'rocks', 'cave', 'fissure', 'erase'] },
-  { id: 'build', icon: 'houses', label: 'Bâtir', hint: '', tools: [] as string[] },
+  { id: 'build', label: 'Bâtir' },
+  { id: 'land', label: 'Paysage' },
 ];
+type LandSub = 'relief' | 'nature';
+/**
+ * Les sous-menus du mode Paysage (comme les rayons de Bâtir), et dans chacun les outils rangés en groupes de lecture
+ * (comme `BUILD_SUBS`)
+ */
+const LAND_SUBS: { id: LandSub; pic: string; label: string; groups: { label: string; icon: string; tools: string[] }[] }[] = [
+  { id: 'relief', pic: '⛰', label: 'Relief', groups: [
+    { label: 'Sculpter', icon: 'raise', tools: ['raise', 'lower', 'flatten', 'cliff'] },
+    { label: 'Eau', icon: 'waves', tools: ['dig'] },
+    { label: 'Sommets', icon: 'peaks', tools: ['mountain', 'volcano'] },
+  ] },
+  { id: 'nature', pic: '🌳', label: 'Nature', groups: [
+    { label: 'Végétation', icon: 'forest', tools: ['forest'] },
+    { label: 'Sol', icon: 'palette', tools: ['biome'] },
+    { label: 'Décor', icon: 'rock', tools: ['rocks', 'cave', 'fissure'] },
+    { label: 'Effacer', icon: 'eraser', tools: ['erase'] },
+  ] },
+];
+/** Le sous-menu du Paysage auquel appartient un outil (null : un outil d'ailleurs) */
+const landOfTool = (tool: ToolId): LandSub | null =>
+  SCULPT_TOOLS.includes(tool) ? 'relief' : tool === 'biome' || (VEG_TOOLS.includes(tool) && tool !== 'field') ? 'nature' : null;
 
 /** Besoins du village, dans l'ordre de la barre du haut */
 const NEEDS: { k: 'food' | 'water' | 'housing' | 'jobs' | 'joy' | 'health'; icon: string; label: string }[] = [
@@ -224,6 +247,14 @@ const NEEDS: { k: 'food' | 'water' | 'housing' | 'jobs' | 'joy' | 'health'; icon
 /** Ce qu'un bâtiment apporte, pour sa fiche et sa vignette */
 /** Le 7e besoin de la barre : la sécurité (couverture des pompiers et de la police), un indicateur qui ne bloque pas la croissance */
 const SECURITY_NEED = { k: 'security' as const, icon: 'shield', label: 'Sécurité' };
+/** Pictos 3D du HUD (voir `pics.ts`) : besoins, stocks, saisons, rayons et onglets de la barre de construction */
+const NEED_PIC: Record<NeedId | 'security', string> = { food: '🍞', water: '💧', housing: '🏠', jobs: '💼', joy: '😊', health: '❤', security: '🛡' };
+const RES_PIC: Record<Resource, string> = { wood: '🪵', stone: '🪨', ore: '⛏', brick: '🧱', crude: '🛢', fuel: '⛽' };
+const SEASON_PIC = ['🌸', '☀', '🍂', '❄'];
+const CAT_PIC: Record<BuildCat, string> = { home: '🏠', prod: '🌾', service: '🏥', life: '🎭', war: '⚔' };
+/** Le picto de la carte du village, qui suit l'âge : Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste */
+const AGE_PIC = ['🦣', '🏛', '🏰', '🏭', '🏙', '🚀'];
+const TAB_PIC: Record<string, string> = { build: '🔨', land: '🏔' };
 const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string; one?: string }[] = [
   { k: 'housing', icon: 'house', label: 'logements', one: 'logement' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
   { k: 'jobs', icon: 'hammer', label: 'emplois', one: 'emploi' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
@@ -380,7 +411,7 @@ function missionArt(m: Mission): { src: string | null; dest: string } {
 
 /** Onglet auquel appartient un outil ('none' reste dans l'onglet courant) */
 const tabOfTool = (tool: ToolId, current: string) =>
-  SCULPT_TOOLS.includes(tool) ? 'relief' : tool === 'field' ? 'build' : VEG_TOOLS.includes(tool) || tool === 'biome' ? 'nature' : tool === 'none' ? current : 'build';
+  landOfTool(tool) ? 'land' : tool === 'none' ? current : 'build';
 
 /** Ce que change un bâtiment débloqué par une expédition, dit au retour de l'équipe */
 const UNLOCK_NOTE: Partial<Record<KindId, string>> = {
@@ -394,6 +425,8 @@ export class UI {
   tab = 'build';
   /** rayon ouvert de la barre de construction */
   cat: BuildCat = 'home';
+  /** sous-menu ouvert du mode Paysage */
+  land: LandSub = 'relief';
   private lastAge = -1;
   /** le besoin dont la fiche est ouverte */
   private needOpen: NeedId | 'security' | null = null;
@@ -410,34 +443,49 @@ export class UI {
   private incCards = new Map<string, HTMLElement>();
   /** tutoriel guidé (sa ligne dans les réglages) */
   tutorial: Tutorial | null = null;
+  /** la mini-carte du coin bas droit */
+  private mini: MiniMap;
 
   constructor(root: HTMLElement, private host: UIHost) {
     this.root = root;
     root.innerHTML = `
       <header id="hud">
-        <div id="agePanel" class="panel" title="${tr('Voir ce qu\'il faut pour l\'âge suivant')}">
-          <div class="ageTop"><b id="ageName"></b><em id="agePct"></em><small id="ageSub"></small></div>
-          <div class="bar ageGauge"><i id="ageBar"></i></div>
-          <div id="ageNext"></div>
-          <button id="ageGo" hidden></button>
-          <div id="ageReq"></div>
+        <div id="hudL">
+          <div id="agePanel" class="panel" title="${tr("Voir ce qu'il faut pour l'âge suivant")}">
+            <div class="vCard">
+              <span class="vLogo" id="vLogo"></span>
+              <div class="vText">
+                <div class="ageTop"><b class="vName">Ceionia</b><span class="chev">▾</span><em id="agePct"></em></div>
+                <div class="ageLine"><i class="dot"></i><b id="ageName"></b></div>
+              </div>
+            </div>
+            <small id="ageSub"></small>
+            <div class="bar ageGauge"><i id="ageBar"></i></div>
+            <div id="ageNext"></div>
+            <button id="ageGo" hidden></button>
+            <div id="ageReq"></div>
+          </div>
+          <div id="hudNotes">
+            <div class="msgRow"><div id="msg"></div><button id="helpBtn" type="button" aria-pressed="false"></button></div>
+            <div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div>
+          </div>
         </div>
-        <div id="needsPanel" class="panel">
-          <div class="needsRow"><div id="needs"></div><div id="res"></div></div>
-          <div class="msgRow"><div id="msg"></div><button id="helpBtn" type="button" aria-pressed="false"></button></div>
+        <div id="needsPanel">
+          <div id="resPanel" class="panel hudPill"><div id="res"></div><span class="hsep"></span><button class="pop" id="pop" title="${tr('État des habitants')}" aria-label="${tr('État des habitants')}" aria-expanded="false"></button></div>
+          <div id="needsBox" class="panel hudPill"><div id="needs"></div></div>
         </div>
-        <div id="timePanel" class="panel">
-          <div id="clock"></div>
-          <button id="bPause" title="${tr('Pause (Espace)')}" aria-label="${tr('Pause')}">${ic('pause', 18, 2.2)}</button>
-          <button id="bSpeed" title="${tr('Vitesse')}">×1</button>
-          <button id="bFog" title="${tr('Dissiper le brouillard')}" aria-label="${tr('Dissiper le brouillard')}" hidden>${ic('fog', 18, 2)}</button>
+        <div id="hudR">
+          <div id="timePanel">
+            <div id="clock" class="panel"></div>
+            <button id="bPause" class="round" title="${tr('Pause (Espace)')}" aria-label="${tr('Pause')}">${ic('pause', 20, 2.2)}</button>
+            <button id="bSpeed" class="round" title="${tr('Vitesse')}" aria-label="${tr('Vitesse')}"></button>
+          </div>
+          <nav id="menuBtns">
+            <button id="bExp" class="round" title="${tr('Expéditions')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span id="expBadge"></span></button>
+            <button id="bBell" class="round" title="${tr('Notifications')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
+            <button id="bSettings" class="round" title="${tr('Réglages')}" aria-label="${tr('Réglages')}">${ic('gear', 21)}</button>
+          </nav>
         </div>
-        <nav id="menuBtns" class="panel">
-          <button id="bExp" title="${tr('Expéditions')}" aria-label="${tr('Expéditions')}">${ic('compass')}<span id="expBadge"></span></button>
-          <button id="bBell" title="${tr('Notifications')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
-          <button id="bPhoto" title="${tr('Mode photo (P)')}" aria-label="${tr('Mode photo')}">${ic('camera')}</button>
-          <button id="bSettings" title="${tr('Réglages')}" aria-label="${tr('Réglages')}">${ic('gear')}</button>
-        </nav>
       </header>
       <div id="expList"></div>
       <div id="underBar" class="panel">
@@ -449,27 +497,38 @@ export class UI {
       <div id="fade"></div>
       <footer id="dock">
         <div id="info" class="panel"></div>
-        <div id="dockMain" class="panel">
-          <div id="dockTop">
-            <div class="quick" id="quickL"></div>
+        <div id="dockRow">
+          <div id="dockSide" class="panel">
             <div id="modes"></div>
+            <div class="quick" id="quickL"></div>
             <div class="quick" id="quickR">
               <button id="bUndo" title="${tr('Annuler (Ctrl+Z)')}" aria-label="${tr('Annuler')}">${ic('undo', 17, 2)}</button>
               <button id="bRedo" title="${tr('Rétablir (Ctrl+Y)')}" aria-label="${tr('Rétablir')}">${ic('redo', 17, 2)}</button>
               <button id="bRot" title="${tr('Tourner le bâtiment (R)')}" aria-label="${tr('Tourner le bâtiment')}">${ic('rotate', 17, 2)}</button>
-              <button id="bHome" title="${tr('Revenir au village (V) — une seconde fois : vue d\'ensemble')}" aria-label="${tr('Revenir au village')}">${ic('target', 17, 2)}</button>
             </div>
           </div>
-          <div id="items"></div>
-          <div id="dockBottom">
-            <div id="subcats"></div>
-            <div id="biomes"></div>
-            <div id="roadModes"></div>
-            <div id="brush"><span>${tr('Taille du pinceau')}</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
+          <div id="dockMain" class="panel">
+            <div id="dockTop"><div id="subcats"></div></div>
+            <div id="itemsWrap">
+              <button class="scr" id="itPrev" type="button" title="${tr('Précédents')}" aria-label="${tr('Précédents')}">‹</button>
+              <div id="items"></div>
+              <button class="scr" id="itNext" type="button" title="${tr('Suivants')}" aria-label="${tr('Suivants')}">›</button>
+            </div>
+            <div id="dockBottom">
+              <div id="biomes"></div>
+              <div id="roadModes"></div>
+              <div id="brush"><span>${tr('Taille du pinceau')}</span><input id="rad" type="range" min="1" max="8" step="0.5" value="3"><b id="radv">3</b></div>
+            </div>
+          </div>
+          <div id="dockRight">
+          <nav id="viewBtns">
+            <button id="bHome" class="round" title="${tr('Revenir au village (V) — une seconde fois : vue d\'ensemble')}" aria-label="${tr('Revenir au village')}">${ic('target', 20, 2)}</button>
+            <button id="bFog" class="round" title="${tr('Dissiper le brouillard')}" aria-label="${tr('Dissiper le brouillard')}" hidden>${ic('fog', 20, 2)}</button>
+            <button id="bPhoto" class="round" title="${tr('Mode photo (P)')}" aria-label="${tr('Mode photo')}">${ic('eyeOff', 20, 2)}</button>
+          </nav>
           </div>
         </div>
       </footer>
-      <div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div>
       <div id="notifPanel" class="panel" hidden></div>
       <div id="cursorHint"></div>
       <div id="bannerWrap"><div id="banner" class="panel"><h2></h2><p></p></div></div>
@@ -495,9 +554,8 @@ export class UI {
         return;
       }
     }, { passive: false });
-    $('#needs').innerHTML = NEEDS.map((n) => `<div class="need" id="n-${n.k}"><b>${ic(n.icon, 20)}</b><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('')
-      + `<div class="need" id="n-security"><b>${ic(SECURITY_NEED.icon, 20)}</b><div class="bar"><i></i></div><span>${tr(SECURITY_NEED.label)}</span></div>`
-      + `<button class="pop" id="pop" title="${tr('État des habitants')}" aria-label="${tr('État des habitants')}" aria-expanded="false">0<small>${tr('habitants')}</small></button>`;
+    // chaque besoin : son picto 3D, le pourcentage comblé et sa jauge (le nom reste en infobulle, et sous la jauge si la place le permet)
+    $('#needs').innerHTML = [...NEEDS, SECURITY_NEED].map((n) => `<div class="need" id="n-${n.k}"><b>${pic(NEED_PIC[n.k], 26)}</b><em class="pv"></em><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('');
     // fiche des habitants : un clic sur le compteur l'ouvre, un clic ailleurs la ferme
     const census = document.createElement('div');
     census.id = 'census';
@@ -601,6 +659,14 @@ export class UI {
       this.host.tools.setRoadMode(b.dataset.m as RoadMode);
       this.host.audio.sfxClick();
     };
+    // le carrousel des vignettes : les flèches font défiler d'une largeur visible, et se grisent au bout
+    const items = $('#items'), slide = (d: number) => { items.scrollBy({ left: d * items.clientWidth * 0.8, behavior: 'smooth' }); this.host.audio.sfxClick(); };
+    $('#itPrev').onclick = () => slide(-1);
+    $('#itNext').onclick = () => slide(1);
+    items.addEventListener('scroll', () => this.refreshArrows(), { passive: true });
+    window.addEventListener('resize', () => this.refreshArrows());
+    // la mini-carte, à droite des boutons de vue
+    this.mini = new MiniMap($('#dockRight'), host, () => host.audio.sfxClick());
     const rad = $<HTMLInputElement>('#rad');
     rad.oninput = () => { host.tools.radius = +rad.value; $('#radv').textContent = rad.value; };
 
@@ -642,7 +708,7 @@ export class UI {
    */
   private renderDock() {
     const modes = $('#modes');
-    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${tr(t.label)}${t.id === this.tab ? tr(' — recliquer pour replier ou déplier la barre') : ''}"><b>${ic(t.icon, 20)}</b><span>${tr(t.label)}</span></button>`).join('');
+    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${tr(t.label)}${t.id === this.tab ? tr(' — recliquer pour replier ou déplier la barre') : ''}"><b>${pic(TAB_PIC[t.id], 26)}</b><span>${tr(t.label)}</span></button>`).join('');
     modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
       const why = b.dataset.t !== 'build' ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
@@ -686,17 +752,24 @@ export class UI {
   /** Ce que montrent les vignettes du rayon ouvert (nombre de chaque bâtiment, cadenas) : elles se redessinent quand ça change */
   private tilesKey = '';
   private tilesNow() {
-    return this.tab === 'build' ? (this.cat === 'war' ? this.host.pveLine?.()?.button ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab;
+    return this.tab === 'build' ? (this.cat === 'war' ? this.host.pveLine?.()?.button ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
   }
 
   /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
   renderItems(keep = false) {
     this.tilesKey = this.tilesNow();
-    const t = TABS.find((x) => x.id === this.tab)!, age = this.host.sim.age, build = t.id === 'build';
+    const age = this.host.sim.age, build = this.tab === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}">${ic(CAT_ICON[c.id], 16, 2)}<span class="cl">${c.label}</span></button>`).join('')
-      : `<span class="mhint">${ic(t.icon, 16, 2)}${tr(t.hint)}</span>`;
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${pic(CAT_PIC[c.id], 24)}</b><span class="cl">${c.label}</span></button>`).join('')
+      : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 24)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
+    // un sous-menu du Paysage : l'outil en main d'un autre sous-menu est lâché (sinon refreshTools ramènerait le sien)
+    sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = () => {
+      this.land = b.dataset.l as LandSub;
+      const lt = landOfTool(this.host.tools.tool);
+      if (lt && lt !== this.land) this.host.tools.setTool('none');
+      this.renderItems(); this.host.audio.sfxClick();
+    }));
     sub.querySelectorAll<HTMLButtonElement>('button[data-c]').forEach((b) => (b.onclick = () => {
       const why = b.dataset.c !== KINDS.gather.cat ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
@@ -716,7 +789,9 @@ export class UI {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0, gv = givesOf(k, a);
         const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
         const tip = `${d.names[a]}${gv.length ? ` : ${gv.join(', ').toLowerCase()}` : ''}`;
-        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" title="${tip}" aria-label="${tip}"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><span class="lbl">${d.names[a]}</span><small class="gv">${gv[0] ?? ''}</small>${badge}</button>`;
+        // la vignette 3D du bâtiment (son vrai modèle, à cet âge) ; en attendant qu'elle soit rendue, son icône au trait
+        const th = this.host.thumb?.(k, a), img = th ? `<b class="th"><img src="${th}" alt="" draggable="false"></b>` : `<b class="th" data-th="${k}|${a}">${ic(KIND_ICON[k], 28, 1.6)}</b>`;
+        return `<button class="tile kind ${locked ? 'locked' : ''} ${d.size === 2 ? 'big' : d.size === 3 ? 'big huge' : d.size >= 4 ? 'big giant' : ''}" data-kind="${k}" title="${tip}" aria-label="${tip}">${img}<span class="lbl">${d.names[a]}</span><small class="gv">${gv[0] ?? ''}</small>${badge}</button>`;
       };
       const toolTile = (id: string, sub: string) => {
         const i = this.toolInfo(id);
@@ -729,7 +804,9 @@ export class UI {
         return tiles.length ? `<div class="grp" data-sub="${sub.id}"><div class="gh">${ic(SUB_ICON[sub.id] ?? 'leaf', 13, 2)}<span>${sub.label}</span></div><div class="gt">${tiles.join('')}</div></div>` : '';
       }).join('') || `<span class="mhint">${tr('Rien à bâtir dans ce rayon avant l’âge {age}.', { age: AGES[Math.min(age + 2, AGES.length - 1)].name })}</span>`;
     } else {
-      html = t.tools.map((id) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; }).join('');
+      // les outils du sous-menu, par groupe de lecture (Sculpter, Eau, Sommets ; Végétation, Sol, Décor, Effacer)
+      const tool = (id: string) => { const i = this.toolInfo(id); return `<button class="tile" data-tool="${id}" aria-label="${i.label}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`; };
+      html = LAND_SUBS.find((l) => l.id === this.land)!.groups.map((g) => `<div class="grp"><div class="gh">${ic(g.icon, 13, 2)}<span>${tr(g.label)}</span></div><div class="gt">${g.tools.map(tool).join('')}</div></div>`).join('');
     }
     // le portail à rouvrir (ou le PvE à choisir) : une ligne en tête du rayon Militaire
     const pve = build && this.cat === 'war' ? this.host.pveLine?.() : null;
@@ -752,6 +829,25 @@ export class UI {
       b.onpointerleave = () => { this.hover = null; this.renderInfo(); };
     });
     this.refreshTools();
+    requestAnimationFrame(() => this.refreshArrows());
+  }
+
+  /** Les flèches du carrousel : grisées au bout de la rangée, cachées quand tout tient */
+  private refreshArrows() {
+    const it = $('#items'), max = it.scrollWidth - it.clientWidth;
+    $('#itemsWrap').classList.toggle('fits', max <= 1);
+    ($('#itPrev') as HTMLButtonElement).disabled = it.scrollLeft <= 1;
+    ($('#itNext') as HTMLButtonElement).disabled = it.scrollLeft >= max - 1;
+  }
+
+  /** Une vignette 3D vient d'être rendue : elle remplace l'icône au trait des vignettes qui l'attendaient */
+  thumbsReady() {
+    this.root.querySelectorAll<HTMLElement>('#items [data-th]').forEach((el) => {
+      const [k, a] = el.dataset.th!.split('|'), th = this.host.thumb?.(k as KindId, +a);
+      if (!th) return;
+      el.innerHTML = `<img src="${th}" alt="" draggable="false">`;
+      delete el.dataset.th;
+    });
   }
 
   /** Un bâtiment verrouillé par une expédition : un clic sur son message mène à cette expédition */
@@ -1010,7 +1106,9 @@ export class UI {
     el.className = `tone-${tone}${k || ready || exp || rail ? ' link' : ''}`;
     el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
     const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    el.innerHTML = `${ic(tone === 'warn' ? 'alert' : tone === 'goal' ? 'target' : 'check', 15, 2.2)}<span>${text}</span>${k ? `<b class="go">${ic('hammer', 12, 2.4)}${tr('Bâtir')}</b>` : exp ? `<b class="go">${ic('compass', 12, 2.4)}${tr('Ouvrir')}</b>` : rail ? `<b class="go">${ic('train', 12, 2.4)}${tr('Tracer')}</b>` : ready ? `<b class="go">${ic('up', 12, 2.4)}${tr('Passer')}</b>` : ''}`;
+    // un picto selon le ton (manque, objectif, tout va bien) ; un conseil qui mène quelque part finit par son geste et un chevron
+    const go = (w: string) => `<b class="go">${w}<i>›</i></b>`;
+    el.innerHTML = `<span class="mi">${pic(tone === 'warn' ? '⚠' : tone === 'goal' ? '⬆' : '✅', 24)}</span><span>${text}</span>${k ? go(tr('Bâtir')) : exp ? go(tr('Ouvrir')) : rail ? go(tr('Tracer')) : ready ? go(tr('Passer')) : ''}`;
     void el.offsetWidth;
     el.classList.add('flash');
   }
@@ -1020,6 +1118,10 @@ export class UI {
    * en produit chaque jour
    */
   private resKey = '';
+  /** habitants au début du jour en cours, et ce que la veille a apporté (null le premier jour) */
+  private popDay = -1;
+  private popPrev = 0;
+  private popDelta: number | null = null;
   private renderResources() {
     const w = this.host.world, day = this.host.expeditions.daily();
     const items: [Resource, string, string][] = [['wood', 'tree', tr('Bois')], ['stone', 'rock', tr('Pierre')], ['ore', 'pickaxe', tr('Minerai')]];
@@ -1039,8 +1141,8 @@ export class UI {
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
-      ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${ic(icon, 18, 2)}<b>∞</b><small>${label}</small></div>`
-      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${ic(icon, 18, 2)}<b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em><small>${label}</small></div>`).join('');
+      ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${pic(RES_PIC[r], 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
+      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${pic(RES_PIC[r], 28)}<span class="rv"><b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em></span></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -1063,7 +1165,9 @@ export class UI {
     $('#roadModes').querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('active', b.dataset.m === tl.roadMode));
     // l'onglet suit l'outil ; le rayon suit le bâtiment choisi
     const tabOf = tabOfTool(tl.tool, this.tab);
-    if (tabOf !== this.tab) { this.tab = tabOf; this.renderDock(); return; }
+    if (tabOf !== this.tab) { this.tab = tabOf; const lt = landOfTool(tl.tool); if (lt) this.land = lt; this.renderDock(); return; }
+    // le sous-menu du Paysage suit l'outil en main (un raccourci clavier, par exemple)
+    { const lt = landOfTool(tl.tool); if (this.tab === 'land' && lt && lt !== this.land) { this.land = lt; this.renderItems(); return; } }
     if (tl.tool === 'build' && KINDS[tl.kind].cat !== this.cat) { this.cat = KINDS[tl.kind].cat; this.renderItems(); return; }
     $<HTMLInputElement>('#rad').value = String(tl.radius);
     $('#radv').textContent = String(tl.radius);
@@ -1131,7 +1235,9 @@ export class UI {
         box.appendChild(el);
       }
       el.className = `toast ${v.level}${v.act ? ' act' : ''}`;
-      el.textContent = v.count > 1 ? `${v.text} ×${v.count}` : v.text;
+      // un picto selon le niveau (danger, geste à faire, annonce), puis le texte (sûr : posé en texte, pas en HTML)
+      const txt = v.count > 1 ? `${v.text} ×${v.count}` : v.text;
+      if (el.dataset.v !== txt) { el.innerHTML = `${pic(v.level === 'danger' ? '⚠' : v.level === 'action' ? '🧭' : '🔔', 24)}<span></span>`; el.querySelector('span')!.textContent = txt; el.dataset.v = txt; }
     }
     $('#bellBadge').textContent = q.unread ? String(Math.min(q.unread, 99)) : '';
     $('#bBell').classList.toggle('new', q.unread > 0);
@@ -1192,6 +1298,9 @@ export class UI {
     this.markFirst();
     if (this.host.tools.placeWhy !== this.infoWhy) this.renderInfo();
     $('#ageName').textContent = AGES[sim.age].name;
+    // le logo de la carte du village change avec l'âge (picto et teinte du fond)
+    const logo = $('#vLogo');
+    if (logo.dataset.a !== String(sim.age)) { logo.innerHTML = pic(AGE_PIC[sim.age] ?? AGE_PIC[0], 30); logo.dataset.a = String(sim.age); logo.className = `vLogo age${sim.age}`; }
     $('#ageSub').textContent = AGES[sim.age].tagline;
     const ap = sim.ageProgress(), pct = ap ? Math.floor(ap.ratio * 100) : 100, sb = this.host.world.sandbox;
     $('#agePanel').classList.toggle('sandbox', sb);
@@ -1216,15 +1325,20 @@ export class UI {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
       const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);
       $('i', el).style.width = `${Math.round(fill * 100)}%`;
+      $('.pv', el).textContent = pctText(Math.round(fill * 100));
       el.classList.toggle('warn', !need.ok && !housing);
       el.classList.toggle('full', !need.ok && housing);
       el.title = housing ? tr('{need} : {pop} habitants pour {cap} places', { need: tr(n.label), pop: Math.floor(sim.pop), cap: need.cap }) : tr('{need} : {cap} pour un besoin de {demand}', { need: tr(n.label), cap: num(need.cap), demand: num(need.demand) });
     }
-    { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('#n-security').title = tr('Sécurité : {pct} % des habitations couvertes (pompiers {fire} %, police {police} %)', { pct: Math.round(s * 100), fire: Math.round(sim.coverage.fireShare * 100), police: Math.round(sim.coverage.policeShare * 100) }); }
+    { const s = sim.coverage.share; $('i', $('#n-security')).style.width = `${Math.round(s * 100)}%`; $('.pv', $('#n-security')).textContent = pctText(Math.round(s * 100)); $('#n-security').title = tr('Sécurité : {pct} % des habitations couvertes (pompiers {fire} %, police {police} %)', { pct: Math.round(s * 100), fire: Math.round(sim.coverage.fireShare * 100), police: Math.round(sim.coverage.policeShare * 100) }); }
     // le compteur signale le souci le plus pressant ; le détail est dans la fiche des habitants
     const cs = this.census(), alert = cs.untreated ? tr('{n} sans soins', { n: cs.untreated }) : cs.hungry ? tr(cs.hungry > 1 ? '{n} ont faim' : '{n} a faim', { n: cs.hungry }) : cs.thirsty ? tr(cs.thirsty > 1 ? '{n} ont soif' : '{n} a soif', { n: cs.thirsty })
       : cs.jobless ? tr('{n} sans emploi', { n: cs.jobless }) : cs.injured ? `${cs.injured} ${plural(cs.injured, 'blessé', 'blessés')}` : '';
-    const popHtml = `${cs.p}<small>${tr('habitants')}</small>${alert ? `<small class="alert">${alert}</small>` : ''}`;
+    // sous le nombre : le souci le plus pressant, sinon ce que le village a gagné (ou perdu) d'habitants la veille
+    const day = this.host.time.days;
+    if (day !== this.popDay) { if (this.popDay >= 0) this.popDelta = cs.p - this.popPrev; this.popDay = day; this.popPrev = cs.p; }
+    const dl = this.popDelta, trend = dl === null ? `<small>${tr('habitants')}</small>` : `<small class="trend ${dl > 0 ? 'up' : dl < 0 ? 'down' : ''}" title="${tr('Depuis hier')}">${dl > 0 ? `▲ +${dl}` : dl < 0 ? `▼ −${-dl}` : `= ${tr('stable')}`}</small>`;
+    const popHtml = `${pic('👥', 26)}<span class="pn"><b>${cs.p}</b>${alert ? `<small class="alert">${alert}</small>` : trend}</span>`;
     if ($('#pop').dataset.v !== popHtml) { $('#pop').innerHTML = popHtml; $('#pop').dataset.v = popHtml; }
     if (!$('#census').hidden) this.renderCensus();
     if (this.needOpen) this.renderNeed();
@@ -1232,11 +1346,13 @@ export class UI {
     this.renderMessage();
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
-    const clock = `${ic(SEASON_ICONS[time.season], 18)}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${SEASONS[time.season]} ${wk}</small></span>`;
+    // le picto de la saison (la lune la nuit), l'heure, la saison et le jour de la partie
+    const night = hh >= 21 || hh < 6, sp = pic(night ? '🌙' : SEASON_PIC[time.season], 34);
+    const clock = `${sp}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${tr('{season}, jour {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small></span>`;
     // le contenu ne change que si l'heure, la saison ou la météo changent (on évite de recréer les icônes à chaque mise à jour)
     if ($('#clock').dataset.v !== clock) { $('#clock').innerHTML = clock; $('#clock').dataset.v = clock; }
-    if ($('#bPause').dataset.p !== String(time.paused)) { $('#bPause').innerHTML = ic(time.paused ? 'play' : 'pause', 18, 2.2); $('#bPause').dataset.p = String(time.paused); }
-    $('#bSpeed').textContent = `×${time.speed}`;
+    if ($('#bPause').dataset.p !== String(time.paused)) { $('#bPause').innerHTML = ic(time.paused ? 'play' : 'pause', 20, 2.2); $('#bPause').dataset.p = String(time.paused); $('#bPause').classList.toggle('on', time.paused); }
+    if ($('#bSpeed').dataset.v !== String(time.speed)) { $('#bSpeed').innerHTML = `${ic('fastForward', 20, 2)}<small>×${time.speed}</small>`; $('#bSpeed').dataset.v = String(time.speed); $('#bSpeed').classList.toggle('on', time.speed > 1); }
     // le bouton du brouillard ne paraît que lorsqu'il y en a
     ($('#bFog') as HTMLButtonElement).hidden = this.host.fogLevel() < 0.15;
     const zone = this.host.underZone();
@@ -1245,6 +1361,7 @@ export class UI {
       if ($('#underZone').dataset.v !== zh) { $('#underZone').innerHTML = zh; $('#underZone').dataset.v = zh; }
     }
     this.updateExpeditions();
+    this.mini.update();
     this.renderSelection();
     this.renderResources();
     ($('#bUndo') as HTMLButtonElement).disabled = !this.host.tools.undoStack.length;
@@ -1439,15 +1556,17 @@ export class UI {
   private updateExpeditions() {
     const h = this.host, ex = h.expeditions, list = $('#expList');
     // juste sous la barre du haut, quelle que soit sa hauteur (elle passe sur plusieurs lignes sur un téléphone)
-    const hudB = Math.round($('#hud').getBoundingClientRect().bottom);
-    // la liste des conditions d'âge dépliée : les cartes des équipes passent dessous au lieu d'être cachées
+    // (le bas des panneaux du haut, sans la colonne de gauche qui descend avec le conseil et les messages)
+    const hudB = Math.round(Math.max(...['#agePanel', '#resPanel', '#needsBox', '#hudR'].map((q) => $(q).getBoundingClientRect().bottom)));
+    // les cartes des équipes : sous la colonne de gauche (carte du village, conseil, messages) ; la liste des conditions d'âge
+    // dépliée : elles passent dessous au lieu d'être cachées
     const req = $('#agePanel').classList.contains('open') ? $('#ageReq').getBoundingClientRect().bottom : 0;
-    list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
+    list.style.top = `${Math.round(Math.max(hudB, $('#hudNotes').getBoundingClientRect().bottom, req)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
     // la hauteur de la barre du bas, quand elle s'étend sous la fiche d'un bâtiment (à droite) : la fiche s'arrête au-dessus
     // et défile plutôt que de passer dessous
-    const dm = $('#dockMain').getBoundingClientRect(), sc = $('#selCard').getBoundingClientRect();
+    const dm = $('#dockRow').getBoundingClientRect(), sc = $('#selCard').getBoundingClientRect();
     const dockH = dm.height && (!sc.width || dm.right > sc.left) ? Math.max(0, Math.round(innerHeight - dm.top)) : 0;
     if (this.root.style.getPropertyValue('--dockH') !== `${dockH}px`) this.root.style.setProperty('--dockH', `${dockH}px`);
     const live = new Set<number>();

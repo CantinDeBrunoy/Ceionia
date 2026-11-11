@@ -46,7 +46,7 @@ registerDict('tutorial', {
   'Chaque jauge en haut est un besoin : cliquez sur une icône pour savoir quoi bâtir.': 'Each bar at the top is a need: click an icon to find out what to build.',
   'Ouvrir la fiche d’un besoin': 'Open a need card',
   'Le temps': 'Time',
-  'Le bouton {pause} arrête le temps, le bouton ×1 l’accélère.': 'The {pause} button stops time, the ×1 button speeds it up.',
+  'Le bouton {pause} arrête le temps, le bouton {fastForward} l’accélère.': 'The {pause} button stops time, the {fastForward} button speeds it up.',
   'Arrêter ou relancer le temps': 'Stop or restart time',
   'Changer la vitesse': 'Change the speed',
   'Les âges': 'Ages',

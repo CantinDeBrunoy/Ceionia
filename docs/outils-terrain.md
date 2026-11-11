@@ -15,7 +15,7 @@
 > [monde-souterrain.md](monde-souterrain.md).
 
 ## En bref
-Deux onglets de la barre du bas. **Relief** : monter, baisser, aplanir, falaise, eau, montagne, volcan. **Nature** : forêt,
+Le mode **Paysage** de la barre du bas, en deux sous-menus. **Relief** : monter, baisser, aplanir, falaise, eau, montagne, volcan. **Nature** : forêt,
 biome, rochers, grotte, faille, gomme (le champ se prend dans Bâtir › Production › Nourriture, ou touche 7). Chaque
 outil est un pinceau rond (taille `[` et `]`, gardée par outil), sauf la grotte et le volcan, posés d'un clic. Le relief de
 jeu est une grille de sommets (`heights`, une case = 1) ; le relief affiché (`vis`) en est un suréchantillonnage lissé. Tout
