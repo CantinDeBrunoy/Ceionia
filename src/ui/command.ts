@@ -5,8 +5,9 @@ import type { PointerInfo, ToolInput } from '../core/camera';
 import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGearMissing, gearToCraft, troopForm, troopName, troopLabel, gearName, andJoin } from '../sim/army';
 import type { GearId } from '../sim/gear';
 import { tr, plural, nplural, pct } from '../i18n';
-import { clockText, type War } from '../sim/war';
+import { clockText, waveForce, WARN_TIME, type War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
+import { INVASION_DELAY, raidInterval } from '../sim/hell';
 import { BASE_DEFS, costText, canAfford, COUNTER_WARN } from '../sim/hellBase';
 import type { BaseCost } from '../sim/hellBase';
 import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
@@ -86,6 +87,12 @@ export interface CommandHost {
   follow?(on: boolean): void;
   /** le portrait d'une troupe à cet âge (URL d'image), null tant qu'il n'est pas prêt : la carte garde alors son picto */
   portrait?(kind: TroopKind, age: number): string | null;
+  /**
+   * l'aperçu 3D d'une défense de l'île ou d'un bâtiment de la base des Enfers à cet âge (vignette de `Thumbs`, data URL), null
+   * tant qu'il attend son tour : la carte garde son picto, puis `thumbsReady` le remplace sur place
+   */
+  defenseThumb?(kind: string, age: number): string | null;
+  baseThumb?(kind: BaseKind, age: number): string | null;
 }
 
 /** Les outils de la base des Enfers : choisir les troupes (l'outil ordinaire), déplacer ou démolir un bâtiment */
@@ -799,9 +806,12 @@ export class CommandUI implements ToolInput {
     const status = isle ? this.waveStatus(next, !!raid) : '';
     // après la victoire sur l'invasion : le guidage pas à pas vers les Enfers (choisir les troupes, puis les envoyer)
     const step = isle ? w.guideStep(sel.selected.size) : null;
-    const guide = step ? `<span class="wst guide">${step === 'select' ? tr('➡️ Vers les Enfers : choisissez vos troupes (bouton « Tous »).') : tr('➡️ Vers les Enfers : envoyez-les avec « Envoyer aux Enfers ».')}</span>` : '';
-    const garrison = `<span class="wst" title="${isle ? tr('Soldats de la garnison de l’île, sur le maximum que la caserne peut loger') : tr('Soldats de l’armée, sur le maximum')}">🛡️ ${isle ? tr('Garnison') : tr('Armée')} <b>${armySize(w.army)} / ${armyCap(ctx)}</b></span>`;
-    const ribbon = [guide, status, garrison, wounded ? `<span class="twd" title="${tr('Blessés qui se soignent à la caserne')}">${pic('🩹', 16)} ${nplural(wounded, 'blessé', 'blessés')}</span>` : ''].filter(Boolean).map((x) => `<div class="tchip">${x}</div>`).join('');
+    // (la flèche émoji, bleue, cède la place à un picto du portail)
+    const guide = step ? `<div class="tpill tguide">${pic('🌀', 16)} ${(step === 'select' ? tr('➡️ Vers les Enfers : choisissez vos troupes (bouton « Tous »).') : tr('➡️ Vers les Enfers : envoyez-les avec « Envoyer aux Enfers ».')).replace(/^➡️\s*/, '')}</div>` : '';
+    // (accolées au panneau des vagues : la garnison et les blessés, en pastilles crème)
+    const garrison = `<span class="tpill" title="${tr('Soldats de la garnison de l’île, sur le maximum que la caserne peut loger')}">${pic('🛡', 16)} ${tr('Garnison')} <b>${armySize(w.army)} / ${armyCap(ctx)}</b></span>`;
+    const side = `<div class="twside">${garrison}${wounded ? `<span class="tpill twd" title="${tr('Blessés qui se soignent à la caserne')}">${pic('🩹', 16)} ${nplural(wounded, 'blessé', 'blessés')}</span>` : ''}</div>`;
+    const ribbon = `${guide}${status}${side}`;
     const none = isle ? tr('Aucune troupe sur l’île : recrutez à la caserne (à droite).') : w.army.troops.some((x) => x.where === 'hell') ? tr('Aucune troupe debout ici : les blessés se soignent.') : tr('Aucune troupe ici : faites venir la garnison de l’île (Renforts, à gauche).');
     // dans les Enfers : une seule frise compacte (le front, l'alerte, l'armée) ; sur l'île, le ruban de pastilles
     this.bar.classList.toggle('inhell', !isle);
@@ -809,7 +819,7 @@ export class CommandUI implements ToolInput {
     const tip = !us.length && !this.placing && this.tool === 'select' ? none : this.hint();
     // au-dessus de la rangée : les troupes sur le terrain (une carte par sorte, « Tous »), seulement s'il y en a
     const field = us.length ? `<div class="tbot panel"><div class="tcards">${cards}<button class="tall${step === 'select' ? ' guide' : ''}" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button></div></div>` : '';
-    const html = `${isle ? `<div class="tstate">${ribbon}</div>` : this.frontBar(wounded)}
+    const html = `${isle ? `<div class="tstate twtop">${ribbon}</div>` : this.frontBar(wounded)}
       <div class="tfoot ${isle ? 'tisle' : 'thell'}">
         ${field}
         ${this.passDock(isle, step)}
@@ -822,20 +832,51 @@ export class CommandUI implements ToolInput {
   }
 
   /**
-   * La pastille des vagues : « Vague en cours », ou le compte à rebours (m:ss), la force prévue (petite, moyenne, grosse) et le
-   * bouton qui la fait venir tout de suite ; avant l'invasion, ce qu'il lui faut pour être annoncée
+   * Le panneau des vagues, centré en haut de l'île (crème et or, comme la barre du bas) : un médaillon, un en-tête en petites
+   * capitales, le compte à rebours en grand, la force prévue en pilule, une jauge du temps qui reste et le cor (« Appeler la
+   * prochaine vague », terni avec sa raison en infobulle quand il ne sert pas). Vague en cours ou invasion annoncée : rouge
+   * brique, les démons encore debout. Avant l'invasion : ce qu'il lui faut, coché au fur et à mesure. Portail fermé ou pas encore
+   * choisi : le bouton qui rouvre le choix. Les états pressants gardent `wst hot` (le tutoriel s'y accroche)
    */
   private waveStatus(next: number | null, raid: boolean) {
-    const w = this.host.war;
-    if (w.pve === 'off') return `<span class="wst hot">${withPic(tr('🔒 Portail fermé'), 16)} · <button data-a="pveChoice">${tr('Rouvrir')}</button></span>`;
-    if (w.pve === 'ask') return `<span class="wst hot">${tr('🌀 Les Enfers')} · <button data-a="pveChoice">${tr('Affronter…')}</button></span>`;
-    if (w.inv === 'ready' && !raid) return `<span class="wst hot">${tr('⚔️ Invasion prête')} · <button data-a="fight">${tr('Affronter')}</button></span>`;
-    if (raid) return `<span class="wst hot">${w.inv === 'raid' ? tr('🔥 Invasion : {n} démons', { n: w.isle!.raiders().length }) : tr('🔥 Vague en cours : {n} démons', { n: w.isle!.raiders().length })}</span>`;
-    if (next === null) return w.active && w.pve === 'on' && w.inv === 'wait' ? `<span class="wst hot">${tr('⚠️ Invasion à venir : une tour de garde, une caserne et {n} soldats sur l’île.', { n: w.invasionNeed() })}</span>` : '';
-    const f = w.nextForce(), force = f === 'big' ? tr('Grosse vague') : f === 'medium' ? tr('Vague moyenne') : f === 'small' ? tr('Petite vague') : '';
-    const why = w.callWhy(), t = `<b>${clockText(next)}</b>`;
-    const label = w.inv === 'coming' ? tr('⚠️ Invasion dans {t}', { t }) : tr('Prochaine vague dans {t}', { t });
-    return `<span class="wst${w.inv === 'coming' ? ' hot' : ''}">${label}${force ? ` · ${force}` : ''} <button data-a="wave" class="${why ? 'off' : ''}" title="${why ?? tr('Sonner le cor : faire venir la prochaine vague tout de suite, sans attendre')}">${withPic(tr('🎺 Appeler la prochaine vague'), 16)}</button></span>`;
+    const w = this.host.war, f = w.faction;
+    const esc = (s: string) => s.replace(/"/g, '&quot;');
+    const box = (mod: string, hot: boolean, icon: string, head: string, main: string, foot = '', act = '') =>
+      `<div class="twave ${mod} wst${hot ? ' hot' : ''}" role="status"><span class="twm" aria-hidden="true">${pic(icon, 30)}</span><div class="twc"><small class="twh">${head}</small><div class="twr">${main}</div>${foot}</div>${act ? `<div class="twa">${act}</div>` : ''}</div>`;
+    const gauge = (k: number, tip: string) => `<span class="twg" title="${esc(tip)}"><i style="width:${Math.round(Math.max(0, Math.min(1, k)) * 100)}%"></i></span>`;
+    const note = (s: string) => `<p class="twn">${s}</p>`;
+    const btn = (a: string, icon: string, label: string, tip: string, off = false) => `<button data-a="${a}" class="twb${icon ? ' ico' : ''}${off ? ' off' : ''}" title="${esc(tip)}"${off ? ' aria-disabled="true"' : ''}>${icon ? pic(icon, 18) : ''}<span class="twl">${label}</span></button>`;
+    const forceText = (v: ReturnType<typeof waveForce> | null) => v === 'big' ? tr('Grosse vague') : v === 'medium' ? tr('Vague moyenne') : v === 'small' ? tr('Petite vague') : '';
+    const pill = (s: string, cls = '') => s ? `<span class="twp${cls ? ` ${cls}` : ''}">${s}</span>` : '';
+    if (w.pve === 'off') return box('lock', true, '🔒', tr('Les vagues'), `<b class="twt sm">${tr('Portail fermé')}</b>`, note(tr('Aucune vague tant qu’il reste fermé.')), btn('pveChoice', '', tr('Rouvrir'), tr('Choisir à nouveau : affronter les démons ou garder le portail fermé')));
+    if (w.pve === 'ask') return box('lock', true, '🌀', tr('Le portail'), `<b class="twt sm">${tr('Les Enfers')}</b>`, note(tr('Affronter les démons, ou refermer le portail.')), btn('pveChoice', '', tr('Affronter…'), tr('Choisir : affronter les démons ou fermer le portail')));
+    if (w.inv === 'ready' && !raid) return box('ready', true, '⚔', tr('Invasion'), `<b class="twt sm">${tr('Prête')}</b>`, note(tr('Elle part sur votre signal, {s} s plus tard.', { s: INVASION_DELAY })), btn('fight', '⚔', tr('Affronter'), tr('Lancer l’invasion : les démons sortent du portail {s} s plus tard', { s: INVASION_DELAY })));
+    if (raid) {
+      // (les démons encore debout, sur ceux de la vague)
+      const r = w.isle!.raid!, n = w.isle!.raiders().length, tot = Math.max(1, r.units.length);
+      return box('alert', true, '🔥', w.inv === 'raid' ? tr('Invasion en cours') : tr('Vague en cours'), `<b class="twt">${n}<small>/${tot}</small></b><span class="twu">${plural(n, 'démon debout', 'démons debout')}</span>${pill(forceText(waveForce(r.units.map((u) => u.kind))))}`, gauge(n / tot, tr('Démons encore debout')));
+    }
+    if (next === null) {
+      // avant l'invasion : ce qu'il lui faut (une tour, une caserne, des soldats valides sur l'île), coché au fur et à mesure
+      if (w.active && w.pve === 'on' && w.inv === 'wait') {
+        const need = w.invasionNeed(), g = w.garrison();
+        const item = (ok: boolean, s: string) => `<span class="twk${ok ? ' ok' : ''}">${ok ? '✓' : '·'} ${s}</span>`;
+        const list = item(this.host.defenseCount('watchtower') > 0, this.host.defenseInfo('watchtower').name) + item(this.host.defenseCount('barracks') > 0, this.host.defenseInfo('barracks').name) + item(g >= need, tr('{n} / {m} soldats', { n: Math.min(g, need), m: need }));
+        return box('prep', true, '⚠', tr('Invasion à venir'), `<span class="twks">${list}</span>`);
+      }
+      // une zone des Enfers tenue suspend les vagues
+      if (f && !f.victory && f.frontPosts > 0 && w.pve === 'on' && w.inv === 'done') return box('calm', false, '🌀', tr('Les vagues'), `<b class="twt sm">${tr('Suspendues')}</b>`, note(tr('Aucune vague tant que vous tenez une zone des Enfers.')));
+      return '';
+    }
+    // le compte à rebours : la jauge se vide jusqu'à la vague (sur l'intervalle entre deux vagues, ou le délai de l'invasion)
+    const coming = w.inv === 'coming', why = w.callWhy(), left = Math.ceil(next);
+    const span = Math.max(left, 1, coming ? INVASION_DELAY : f ? raidInterval(f.raidLevel, f.islandSecured) : 0);
+    // (dans les dernières secondes, la vague est composée et annoncée : son nombre de démons s'ajoute)
+    const planned = !coming && f?.planned ? f.planned.length : 0;
+    const near = coming ? 'alert' : next <= WARN_TIME ? 'next near' : 'next';
+    const main = `<b class="twt">${clockText(next)}</b>${pill(forceText(w.nextForce()))}${planned ? pill(nplural(planned, 'démon', 'démons'), 'n') : ''}`;
+    return box(near, coming, coming ? '🔥' : '🌀', coming ? tr('Invasion dans') : tr('Prochaine vague dans'), main, gauge(left / span, tr('Temps qui reste avant la vague')),
+      btn('wave', '🎺', tr('Appeler la prochaine vague'), why ?? tr('Sonner le cor : faire venir la prochaine vague tout de suite, sans attendre'), !!why));
   }
 
   /** L'onglet ouvert du menu de la garnison (île) : recruter d'abord, c'est ce qu'on fait le plus souvent */
@@ -872,7 +913,7 @@ export class CommandUI implements ToolInput {
       // (poser une défense : on quitte le commandement, l'outil de construction du village prend la main)
       const tile = (k: string) => {
         const d = this.host.defenseInfo(k), why = this.host.defenseLock(k), n = this.host.defenseCount(k);
-        return `<button data-a="ibuild:${k}" class="trb tb tbv${why ? ' off' : ''}" title="${esc(`${d.name}. ${why ?? d.desc}`)}"><span class="tic">${pic(d.icon, 34)}</span><b>${d.name}</b><small class="co">${why ? `${pic('🔒', 12)} ${tr('verrouillé')}` : n ? tr('{n} en place', { n }) : tr('à poser')}</small></button>`;
+        return `<button data-a="ibuild:${k}" class="trb tb tbv${why ? ' off' : ''}" title="${esc(`${d.name}. ${why ?? d.desc}`)}">${this.preview(`d:${k}:${age}`, () => this.host.defenseThumb?.(k, age), d.icon)}<b>${d.name}</b><small class="co">${why ? `${pic('🔒', 12)} ${tr('verrouillé')}` : n ? tr('{n} en place', { n }) : tr('à poser')}</small></button>`;
       };
       // (les familles se lisent au filet qui les sépare ; leur nom est dans l'infobulle)
       const fam = (cls: string, title: string, inner2: string) => `<div class="tfam ${cls}" title="${tr(title)}"><div class="tbuilds">${inner2}</div></div>`;
@@ -885,6 +926,39 @@ export class CommandUI implements ToolInput {
   /** Les onglets Bâtir et Recruter (pilules empilées, l'ouvert doré) : à droite de « Ma garnison », à gauche de « Ma base » */
   private tabs(tab: 'build' | 'rec') {
     return `<span class="ttabs"><button data-a="tab:build" class="${tab === 'build' ? 'on' : ''}">${pic('🔨', 18)}<span>${tr('Bâtir')}</span></button><button data-a="tab:rec" class="${tab === 'rec' ? 'on' : ''}">${PERSON_PLUS}<span>${tr('Recruter')}</span></button></span>`;
+  }
+
+  /** Les aperçus en attente de leur vignette : clé → le HTML du picto de repli (tel qu'il est dans `barKey`) et de quoi relire la vignette */
+  private thumbWait = new Map<string, { html: string; get: () => string | null | undefined }>();
+  /** L'aperçu prêt : la vignette 3D en tête de carte */
+  private static previewImg(url: string) { return `<span class="tic tpv"><img src="${url}" alt="" draggable="false"></span>`; }
+
+  /**
+   * L'aperçu 3D d'un bâtiment en tête de sa carte (onglet Bâtir) : la vignette de la barre de construction si elle est prête,
+   * sinon le picto, gardé en attente (`thumbsReady` le remplace sur place quand elle arrive)
+   */
+  private preview(key: string, get: () => string | null | undefined, icon: string) {
+    const url = get();
+    if (url) return CommandUI.previewImg(url);
+    const html = `<span class="tic" data-th="${key}">${pic(icon, 34)}</span>`;
+    this.thumbWait.set(key, { html, get });
+    return html;
+  }
+
+  /**
+   * Une vignette 3D vient d'être rendue : les cartes qui l'attendaient prennent leur aperçu sur place (rien d'autre n'est
+   * redessiné), et `barKey` suit, pour que le prochain `render` n'y voie aucun changement
+   */
+  thumbsReady() {
+    for (const [key, w] of this.thumbWait) {
+      const url = w.get();
+      if (!url) continue;
+      this.thumbWait.delete(key);
+      if (!this.barKey.includes(w.html)) continue;
+      const done = CommandUI.previewImg(url);
+      this.barKey = this.barKey.split(w.html).join(done);
+      this.bar.querySelectorAll(`[data-th="${key}"]`).forEach((el) => { el.outerHTML = done; });
+    }
   }
 
   /** Le visage d'une troupe : son portrait (rendu du modèle 3D, ou dessin fourni) s'il est prêt, sinon son picto */
@@ -959,7 +1033,7 @@ export class CommandUI implements ToolInput {
     const btn = (k: BaseKind, legend: string, extra = '') => {
       const d = BASE_DEFS[k], afford = canAfford(world, d.cost), locked = k !== 'camp' && !hasCamp;
       const why = locked ? tr('d’abord le Camp') : afford ? '' : tr('manque {x}', { x: miss(d.cost) });
-      return `<button data-a="build:${k}" class="trb tb tbv${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${tr('{name} ({cost}) : {legend}', { name: d.name, cost: costText(d.cost), legend: tr(legend) })}. ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}"><span class="tic">${pic(d.icon, 34)}</span><b>${tr(CommandUI.BSHORT[k])}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></button>`;
+      return `<button data-a="build:${k}" class="trb tb tbv${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${tr('{name} ({cost}) : {legend}', { name: d.name, cost: costText(d.cost), legend: tr(legend) })}. ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}">${this.preview(`b:${k}:${age}`, () => this.host.baseThumb?.(k, age), d.icon)}<b>${tr(CommandUI.BSHORT[k])}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></button>`;
     };
     // (les familles — tenir, défendre, éclairer — se lisent au filet qui les sépare ; leur nom est dans l'infobulle)
     const fam = (cls: string, title: string, tip: string, inner: string) => `<div class="tfam ${cls}" title="${tr(title)} : ${tr(tip)}"><div class="tbuilds">${inner}</div></div>`;

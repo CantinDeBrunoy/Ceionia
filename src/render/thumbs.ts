@@ -7,13 +7,20 @@ import type { KindId } from '../build/catalog';
  * Vignettes 3D des bâtiments, pour la barre de construction : le vrai modèle du jeu (celui de l'âge), vu de trois quarts sur
  * fond transparent, rendu une fois par le moteur dans une cible hors écran puis gardé en image (data URL). Rendu à 2× puis
  * réduit (adoucit les bords sans anticrénelage). La file se vide d'une vignette par image (`pump`) : ouvrir un rayon ne fige
- * pas le jeu ; une vignette pas encore prête montre l'icône au trait en attendant
+ * pas le jeu ; une vignette pas encore prête montre l'icône au trait en attendant. Les mêmes vignettes servent aux cartes des
+ * défenses de l'île ; d'autres modèles (la base des Enfers) passent par une source chargée à part (`addSource`, `getFrom`)
  */
 const RT = 224, OUT = 112;
+
+/** Ce qu'une source fabrique pour une vignette : l'objet à rendre, et de quoi libérer ce qu'elle a créé pour lui */
+export type ThumbModel = { obj: THREE.Object3D; done?: () => void } | null;
+export type ThumbMaker = (id: string, age: number) => ThumbModel;
 
 export class Thumbs {
   private cache = new Map<string, string>();
   private queue: string[] = [];
+  /** les sources de modèles d'ailleurs, par espace (« hell ») : chargées à la première demande */
+  private sources = new Map<string, { load: () => Promise<ThumbMaker>; make: ThumbMaker | null; loading: boolean }>();
   private scene = new THREE.Scene();
   private cam = new THREE.PerspectiveCamera(26, 1, 0.05, 200);
   private rt: THREE.WebGLRenderTarget | null = null;
@@ -30,21 +37,56 @@ export class Thumbs {
     this.small.width = this.small.height = OUT;
   }
 
-  /** La vignette d'un bâtiment à cet âge (data URL), ou null si elle attend son tour (elle est alors mise dans la file) */
-  get(kind: KindId, age: number): string | null {
-    const key = `${kind}|${age}`, got = this.cache.get(key);
+  /**
+   * La vignette d'un bâtiment à cet âge (data URL), ou null si elle attend son tour (elle est alors mise dans la file ; `first` :
+   * dans la file prioritaire, pour les cartes à l'écran pendant que la barre de construction, cachée, attend encore les siennes)
+   */
+  get(kind: KindId, age: number, first = false): string | null {
+    return this.want(`${kind}|${age}`, first);
+  }
+
+  /** Déclare une source de modèles d'ailleurs (`load` : le module chargé à part, appelé à la première demande) */
+  addSource(space: string, load: () => Promise<ThumbMaker>) {
+    this.sources.set(space, { load, make: null, loading: false });
+  }
+
+  /** La vignette d'un modèle d'une source (`id` à cet âge), ou null tant qu'elle attend (la source, ou son tour dans la file) */
+  getFrom(space: string, id: string, age: number): string | null {
+    const s = this.sources.get(space);
+    if (!s) return null;
+    if (!s.make) {
+      // (un échec de chargement n'est pas retenté : les cartes gardent leur picto)
+      if (!s.loading) { s.loading = true; s.load().then((m) => { s.make = m; }, () => {}); }
+      return null;
+    }
+    return this.want(`${space}:${id}|${age}`, true);
+  }
+
+  private want(key: string, first = false): string | null {
+    const got = this.cache.get(key);
     if (got !== undefined) return got || null;
-    if (!this.queue.includes(key)) this.queue.push(key);
+    if (this.soon.includes(key)) return null;
+    const i = this.queue.indexOf(key);
+    if (first) { if (i >= 0) this.queue.splice(i, 1); this.soon.push(key); }
+    else if (i < 0) this.queue.push(key);
     return null;
   }
+  /** la file prioritaire (`first`), vidée avant l'autre, dans l'ordre des demandes (les cartes de gauche à droite) */
+  private soon: string[] = [];
 
   /** Rend la prochaine vignette de la file ; vrai si une vignette vient d'être prête */
   pump(): boolean {
-    const key = this.queue.shift();
+    const key = this.soon.shift() ?? this.queue.shift();
     if (!key) return false;
-    const [kind, age] = key.split('|');
+    const [id, age] = key.split('|'), i = id.indexOf(':');
     let url = '';
-    try { url = this.draw(kind as KindId, +age); } catch { /* modèle introuvable : l'icône au trait reste */ }
+    try {
+      if (i < 0) url = this.draw(id as KindId, +age);
+      else {
+        const m = this.sources.get(id.slice(0, i))?.make?.(id.slice(i + 1), +age);
+        if (m) { try { url = this.shoot(m.obj); } finally { m.done?.(); } }
+      }
+    } catch { /* modèle introuvable : l'icône au trait reste */ }
     this.cache.set(key, url);
     return !!url;
   }
@@ -57,6 +99,11 @@ export class Thumbs {
     if (m.rotor) { const r = new THREE.Mesh(m.rotor.geo, mats.body); r.position.set(...m.rotor.pivot); group.add(r); }
     if (m.vane?.geo) { const v = new THREE.Mesh(m.vane.geo, mats.body); v.position.set(m.vane.pivot[0], 0, m.vane.pivot[1]); group.add(v); }
     for (const s of m.sways ?? []) { const w = new THREE.Mesh(s.geo, mats.body); w.position.set(...s.pivot); group.add(w); }
+    return this.shoot(group);
+  }
+
+  /** Photographie un objet (façade vers +z) dans la cible hors écran et rend l'image réduite (data URL ; vide s'il n'a pas de taille) */
+  private shoot(group: THREE.Object3D): string {
     // cadrage : la sphère qui englobe le modèle, vue de trois quarts (façade vers +z), un peu d'en haut
     const box = new THREE.Box3().setFromObject(group), sphere = box.getBoundingSphere(new THREE.Sphere());
     if (!isFinite(sphere.radius) || sphere.radius <= 0) return '';

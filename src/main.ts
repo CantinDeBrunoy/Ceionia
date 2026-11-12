@@ -458,6 +458,8 @@ class Game implements UIHost {
     this.tools.setTool = (t, kind) => { if (t === 'none' || this.mode === 'under') setTool(t, kind); else this.ensureSurface(() => setTool(t, kind)); };
     this.ui = new UI(uiRoot, host);
     this.spaceCast = new SpaceCast(uiRoot);
+    // les vignettes des bâtiments de la base des Enfers : leurs modèles viennent avec le module des Enfers, chargé à part
+    this.thumbs.addSource('hell', () => import('./render/hellThumbs').then((m) => m.hellThumb));
     // le contrôle des troupes : ses ordres au clic droit (sans glisser), la barre des troupes, l'alerte d'incursion
     this.command = new CommandUI(uiRoot, {
       war: this.war, canvas, camKeys: this.cam.keys,
@@ -476,6 +478,9 @@ class Game implements UIHost {
       crafting: () => this.world.exp.craft, craftCheck: (ids) => this.expeditions.whyCraftAll(ids, this.sim.age),
       // les portraits des cartes de troupes : le modèle 3D rendu hors écran, à la demande, une fois par sorte et par âge
       portrait: troopPortrait,
+      // l'aperçu 3D des cartes de l'onglet Bâtir : les vignettes de la barre de construction (défenses de l'île, base des Enfers)
+      defenseThumb: (k, age) => this.thumbs.get(k as KindId, Math.max(age, KINDS[k as KindId].minAge), true),
+      baseThumb: (k, age) => this.thumbs.getFrom('hell', k, age),
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
@@ -1887,8 +1892,8 @@ class Game implements UIHost {
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
     if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
-    // une vignette 3D par image, et la barre de construction la montre dès qu'elle est prête
-    if (this.thumbs.pump()) this.ui.thumbsReady();
+    // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
+    if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
