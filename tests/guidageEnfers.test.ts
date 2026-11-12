@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { HellMap, HELL_ZONES } from '../src/world/hell';
+import { HellMap } from '../src/world/hell';
 import { Hell } from '../src/sim/hell';
 import { troopStats } from '../src/sim/army';
-import { nextGoal, goalLine, zoneLine } from '../src/sim/objective';
+import { nextGoal, goalLine } from '../src/sim/objective';
 import { escapeAction, CommandUI, CONTROLS_HELP, PORTAL_REACH, Theater } from '../src/ui/command';
 import { WAR_TIP_TEXT, WAR_TIP_MAX } from '../src/ui/warTips';
 import { tr, setLang } from '../src/i18n';
@@ -69,12 +69,10 @@ describe('l’objectif suivant dans les Enfers', () => {
   it('les phrases : courtes, avec la distance, et la zone ouverte', () => {
     const { m, h } = setup(0);
     const g = nextGoal(h, m.arrival);
-    expect(zoneLine(h)).toBe(`Zone ouverte : ${HELL_ZONES[1].name}`);
     expect(goalLine(g, 17.2)).toBe('Objectif : abattre l’avant-poste (à 17 cases)');
     expect(goalLine(g, 1)).toBe('Objectif : abattre l’avant-poste (à 1 case)');
     setLang('en', false);
     expect(goalLine(g, 17.2)).toBe('Goal: destroy the outpost (17 tiles away)');
-    expect(zoneLine(h)).toBe('Open zone: Ember Caves');
   });
 });
 
@@ -85,6 +83,10 @@ describe('Échap dans le commandement', () => {
     expect(s({ placing: true, trace: true })).toBe('cancelTrace');
     expect(s({ armed: true, selected: 3 })).toBe('disarm');
     expect(s({ selected: 3 })).toBe('deselect');
+    // le tiroir « Ma base » se referme une fois tout le reste lâché
+    expect(s({ selected: 3, base: true })).toBe('deselect');
+    expect(s({ base: true })).toBe('closeBase');
+    expect(s({ kind: 'isle', base: true })).toBe('leaveIsle');
   });
   it('ne quitte jamais les Enfers (un rappel à la place) ; sur l’île, il range le commandement', () => {
     expect(s()).toBe('hint');
