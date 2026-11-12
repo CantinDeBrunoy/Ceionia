@@ -2347,6 +2347,13 @@ export function showCredits(root: HTMLElement) {
       </ul>
     </section>
     <section class="credCard">
+      <h4>${ic('heart', 18, 2)}${tr('Cris d’animaux enregistrés')}</h4>
+      <ul class="credits">
+        <li>${tr('Via {src}, en CC0 ou domaine public : bêlement de mouton (aussi pour le bouquetin), hennissement, caquètement de poule (alys, PDSounds), brame du wapiti de l’US Fish and Wildlife Service (pour le cerf et l’élan).', { src: a('https://commons.wikimedia.org', 'Wikimedia Commons') })}</li>
+        <li>${tr('« Single Cow Moo » par {author}, licence {lic} : meuglement de la vache.', { author: a('https://commons.wikimedia.org/wiki/File:Single_Cow_Moo.ogg', 'MichaeltheFox8621'), lic: a('https://creativecommons.org/licenses/by-sa/4.0/deed.fr', 'CC BY-SA 4.0') })}</li>
+      </ul>
+    </section>
+    <section class="credCard">
       <h4>${ic('heart', 18, 2)}${tr('Modèles sous licence CC-BY 3.0')}</h4>
       <ul class="credits">
         <li>${tr('« Greek Temple » par {author} : temple et asclépiéion de l’Antiquité.', { author: a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)') })}</li>

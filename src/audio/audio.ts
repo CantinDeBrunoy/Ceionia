@@ -34,6 +34,20 @@ const ROOTS = [60, 62, 57, 55]; // printemps, été, automne, hiver
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 /** Audio 100 % procédural (Web Audio) : musique générative + ambiances + effets */
+/**
+ * Vrais enregistrements de cris (espèce de la faune → fichier de `public/sons/animaux`, sans extension). Sources et
+ * licences : `docs/audio.md` et la page Crédits. Le cerf et l'élan partagent le brame du wapiti
+ */
+const SAMPLES: Record<string, { file: string; rate?: number; max?: number }> = {
+  sheep: { file: 'mouton' }, cow: { file: 'vache' }, horse: { file: 'cheval' }, deer: { file: 'cerf' }, moose: { file: 'cerf', rate: 0.85 },
+  // le caquètement dure 9 s : on en joue un passage
+  hen: { file: 'poule', max: 3.5 },
+  // pas de chèvre libre et légère : le bouquetin reprend le bêlement du mouton, plus aigu
+  ibex: { file: 'mouton', rate: 1.3 },
+};
+/** niveau de crête des enregistrements, proche des cris de synthèse */
+const SAMPLE_PEAK = 0.16;
+
 export class AudioEngine {
   ctx: AudioContext | null = null;
   musicVol = 0.5;
@@ -71,6 +85,8 @@ export class AudioEngine {
   private lastDegree = 2;
   private birdTimer = 0;
   private frogTimer = 2;
+  /** vrais cris d'animaux chargés : tampon, début et durée utiles (s), gain qui ramène le pic à `SAMPLE_PEAK` */
+  private samples = new Map<string, { buf: AudioBuffer; from: number; len: number; gain: number }>();
 
   /** À appeler depuis un geste utilisateur */
   start() {
@@ -85,6 +101,7 @@ export class AudioEngine {
     this.musicG = ctx.createGain(); this.musicG.connect(this.master);
     this.sfxG = ctx.createGain(); this.sfxG.connect(this.master);
     this.ambG = ctx.createGain(); this.ambG.connect(this.master);
+    this.loadSamples(ctx);
     // bruit
     const len = ctx.sampleRate * 3;
     this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -465,17 +482,62 @@ export class AudioEngine {
     this.tone(38, t, 2.4, 'sine', 0.3 * k, this.sfxG, 0, 0.05);
   }
   /**
+   * Cri d'un animal sauvage, au volume des ambiances, atténué selon la distance (k 0 … 1) : le vrai enregistrement
+   * (`SAMPLES`) s'il est chargé, joué un peu plus haut ou plus bas à chaque fois ; sinon le cri de synthèse (`CALLS`)
+   */
+  sfxCall(kind: string, k: number) {
+    if (!this.ctx || k <= 0) return;
+    const ctx = this.ctx, t = ctx.currentTime + 0.02, def = SAMPLES[kind], smp = def && this.samples.get(def.file);
+    const g = ctx.createGain(); g.connect(this.ambG);
+    if (def && smp) {
+      const src = ctx.createBufferSource(); src.buffer = smp.buf;
+      const rate = (def.rate ?? 1) * (0.93 + Math.random() * 0.14);
+      src.playbackRate.value = rate;
+      // un enregistrement long : un passage tiré au hasard, avec un fondu d'entrée et de sortie
+      const len = Math.min(smp.len, def.max ?? smp.len), from = smp.from + Math.random() * (smp.len - len), dur = len / rate, v = k * smp.gain;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(v, t + (len < smp.len ? 0.08 : 0.005));
+      g.gain.setValueAtTime(v, t + dur * 0.8);
+      g.gain.linearRampToValueAtTime(len < smp.len ? 0.0001 : v * 0.8, t + dur);
+      src.connect(g); src.start(t, from, len);
+      src.onended = () => g.disconnect();
+      return;
+    }
+    const call = CALLS[kind];
+    if (!call) { g.disconnect(); return; }
+    g.gain.value = k;
+    call({ ctx, noise: this.noise }, g, t);
+    setTimeout(() => g.disconnect(), 4000);
+  }
+
+  /**
+   * Charge les vrais cris d'animaux (`public/sons/animaux`) une fois le son démarré. Chacun est rogné de ses silences
+   * et ramené au même niveau ; un fichier absent ou illisible laisse le cri de synthèse
+   */
+  private loadSamples(ctx: AudioContext) {
+    for (const name of new Set(Object.values(SAMPLES).map((d) => d.file))) {
+      fetch(`${import.meta.env.BASE_URL}sons/animaux/${name}.mp3`)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+        .then((a) => ctx.decodeAudioData(a))
+        .then((buf) => {
+          const d = buf.getChannelData(0);
+          let peak = 0;
+          for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+          if (peak < 1e-4) return;
+          let a = 0, b = d.length - 1;
+          while (a < b && Math.abs(d[a]) < peak * 0.03) a++;
+          while (b > a && Math.abs(d[b]) < peak * 0.03) b--;
+          const from = Math.max(0, a / buf.sampleRate - 0.02), to = Math.min(buf.duration, b / buf.sampleRate + 0.08);
+          this.samples.set(name, { buf, from, len: to - from, gain: SAMPLE_PEAK / peak });
+        })
+        .catch(() => { /* pas de fichier : le cri de synthèse reste */ });
+    }
+  }
+
+  /**
    * Hurlement d'une meute (force 0 … 1) : chaque voix monte, tient en vibrant, puis retombe en glissant ; les voix
    * entrent l'une après l'autre, à des hauteurs différentes
    */
-  /** Cri d'un animal sauvage (`CALLS`), au volume des ambiances, atténué selon la distance (k 0 … 1) */
-  sfxCall(kind: string, k: number) {
-    const call = CALLS[kind];
-    if (!this.ctx || !call || k <= 0) return;
-    const g = this.ctx.createGain(); g.gain.value = k; g.connect(this.ambG);
-    call({ ctx: this.ctx, noise: this.noise }, g, this.ctx.currentTime + 0.02);
-    setTimeout(() => g.disconnect(), 4000);
-  }
   sfxHowl(k: number) {
     if (!this.ctx) return;
     const ctx = this.ctx, t0 = ctx.currentTime + 0.02;
