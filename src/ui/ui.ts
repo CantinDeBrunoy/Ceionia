@@ -2299,16 +2299,16 @@ const playIcon = (s = 30) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}
 const CHEVRON = '<svg class="mChev" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 /** les sommets au-dessus du titre (vectoriels, nets à toute taille) : une ombre décalée, puis le crème */
-const LOGO_PEAKS = (() => {
-  const shapes = [
+const PEAK_SHAPES = [
     'M695,355 L835,185 L888,246 L828,302 Z',
     'M905,236 L1010,105 L1146,272 L1088,262 L1052,256 L1014,280 L962,250 Z',
     'M1160,266 L1190,243 L1258,340 L1218,300 L1176,292 Z',
     'M628,410 Q1000,296 1348,415 Q1000,332 628,410 Z',
-  ];
-  const draw = (fill: string, dx: number, dy: number) => shapes.map((d) => `<path d="${d}" fill="${fill}" transform="translate(${dx} ${dy})"/>`).join('');
-  return `<svg class="mPeaks" viewBox="610 95 760 330" aria-hidden="true">${draw('#bfa992', 3, 5)}${draw('#fbf4e8', 0, 0)}</svg>`;
-})();
+];
+const drawPeaks = (fill: string, dx: number, dy: number) => PEAK_SHAPES.map((d) => `<path d="${d}" fill="${fill}" transform="translate(${dx} ${dy})"/>`).join('');
+const LOGO_PEAKS = `<svg class="mPeaks" viewBox="610 95 760 330" aria-hidden="true">${drawPeaks('#bfa992', 3, 5)}${drawPeaks('#fbf4e8', 0, 0)}</svg>`;
+/** les mêmes sommets, en petit et en blanc, dans la pastille du bas */
+const MINI_PEAKS = `<svg viewBox="610 95 760 330" width="48" height="21" aria-hidden="true">${drawPeaks('currentColor', 0, 0)}</svg>`;
 
 /** la vidéo du fond animé (dans public/menu/) ; vide tant qu'il n'y en a pas : l'image fixe sert alors */
 const MENU_VIDEO = '';
@@ -2340,7 +2340,7 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
         ${d === DEFAULT_DIFFICULTY ? `<span class="mRec">${DIFF_TEXT.recommended}</span>` : ''}
         <h2>${DIFF_TEXT.mode(d)}</h2><em>${DIFF_TEXT.blurb[d]}</em>${CHEVRON}</button>`).join('')}</div>
       <button class="mGo">${playIcon()}<span>${tr('Nouvelle partie')}</span></button>
-      <div class="mStatus"><b>${ic('leaf', 22, 2)}</b><div class="grow"><span></span><small></small></div><button class="mResume" hidden>${playIcon(16)}${tr('Continuer')}</button></div>
+      <div class="mStatus"><b>${MINI_PEAKS}</b><i class="mSep" aria-hidden="true"></i><span></span><button class="mResume" hidden>${playIcon(16)}${tr('Continuer')}</button></div>
     </div>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">`;
   // la carte choisie (le continent par défaut) : sa sauvegarde, et la graine de sa prochaine partie (chacune a son continent)
@@ -2359,10 +2359,10 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
     // le mode choisi d'avance : celui de la sauvegarde, sinon le mode conseillé
     const d = save ? readDifficulty(save.world.difficulty, save.world.diffV) : DEFAULT_DIFFICULTY;
     select(d);
-    if (!save) { $('small', status).textContent = ''; return; }
-    // le résumé de la partie : mode, âge, habitants, « il y a… »
+    if (!save) { status.title = ''; return; }
+    // le résumé de la partie (mode, âge, habitants, « il y a… ») : en bulle au survol, la pastille tient sur une ligne
     const when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
-    $('small', status).textContent = [DIFF_TEXT.name[d], AGES[save.age]?.name ?? '', `${pop} ${plural(pop, 'habitant', 'habitants')}`, when].filter(Boolean).join(' · ');
+    status.title = [DIFF_TEXT.name[d], AGES[save.age]?.name ?? '', `${pop} ${plural(pop, 'habitant', 'habitants')}`, when].filter(Boolean).join(' · ');
   };
   draw();
   resume.onclick = () => host.start(map, 'continue');

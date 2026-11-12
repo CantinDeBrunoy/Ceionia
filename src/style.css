@@ -501,14 +501,14 @@ body.under #selCard, body.photo #selCard { display: none; }
 .mGo { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 22px; width: min(420px, 100%); min-height: 78px; padding: 0 40px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.3); background: rgba(34, 40, 54, 0.62); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; font-size: 26px; font-weight: 600; box-shadow: 0 12px 32px rgba(10, 15, 35, 0.35); }
 .mGo:hover { background: rgba(34, 40, 54, 0.78); }
 /* la pastille du bas : le monde qui attend, et « Continuer » s'il existe une sauvegarde */
-.mStatus { position: fixed; left: 24px; bottom: 24px; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 48px); padding: 8px 8px 8px 12px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.35); background: rgba(28, 40, 36, 0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; }
-#menu:not(.hasSave) .mStatus { padding-right: 24px; }
-.mStatus > b { display: flex; color: #a6e07c; }
-.mStatus span { display: block; font-size: 15px; font-weight: 600; }
-.mStatus small { display: block; font-size: 12.5px; font-weight: 600; opacity: 0.82; white-space: nowrap; }
-.mStatus small:empty { display: none; }
-.mResume { flex: none; gap: 8px; min-height: 40px; padding: 0 16px 0 12px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 14.5px; font-weight: 700; box-shadow: none; }
-.mResume:hover { background: rgba(255, 255, 255, 0.26); border-color: rgba(255, 255, 255, 0.6); }
+/* (verre sombre bordé d'un vert doré lumineux, les sommets du logo en blanc, un filet, le texte, puis « Continuer » en pilule) */
+.mStatus { position: fixed; left: 22px; bottom: 22px; display: flex; align-items: center; gap: 16px; max-width: calc(100% - 44px); min-height: 60px; padding: 7px 8px 7px 24px; border-radius: 999px; border: 2px solid #e4e27a; background: rgba(30, 40, 38, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; box-shadow: 0 0 14px 2px rgba(228, 226, 122, 0.45), inset 0 0 10px rgba(228, 226, 122, 0.18); }
+#menu:not(.hasSave) .mStatus { padding-right: 26px; }
+.mStatus > b { display: flex; color: #fff; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)); }
+.mSep { flex: none; align-self: stretch; width: 1.5px; margin: 6px 0; background: rgba(255, 255, 255, 0.55); }
+.mStatus > span { min-width: 0; font-size: 19px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+.mResume { flex: none; gap: 9px; min-height: 44px; padding: 0 20px 0 16px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, 0.4); background: rgba(40, 46, 52, 0.55); color: #fff; font-size: 16px; font-weight: 700; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.mResume:hover { background: rgba(40, 46, 52, 0.75); border-color: rgba(255, 255, 255, 0.65); }
 .mResume[hidden] { display: none; }
 .mGear { position: fixed; top: 22px; right: 24px; z-index: 2; width: 62px; height: 62px; padding: 0; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.45); background: rgba(44, 60, 110, 0.38); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; box-shadow: 0 6px 18px rgba(20, 30, 70, 0.3); }
 .mGear:hover { background: rgba(44, 60, 110, 0.55); }
@@ -576,8 +576,8 @@ body.under #selCard, body.photo #selCard { display: none; }
   .mGem { top: -12px; left: auto; right: 22px; width: 24px; height: 24px; margin: 0; }
   .mGem::after { inset: 5px; }
   .mGo { margin-top: 4px; min-height: 60px; font-size: 21px; }
-  .mStatus { position: static; max-width: 100%; }
-  .mStatus small { white-space: normal; }
+  .mStatus { position: static; max-width: 100%; gap: 12px; padding-left: 16px; }
+  .mStatus > span { font-size: 16px; white-space: normal; }
   .mGear { top: 12px; right: 12px; width: 48px; height: 48px; }
   .mGear svg { width: 24px; height: 24px; }
   #menu ~ .overlay > .modal { padding: 0 16px 18px; border-radius: 22px; }
