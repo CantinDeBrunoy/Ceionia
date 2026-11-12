@@ -2434,18 +2434,20 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
   });
   const f = $<HTMLInputElement>('#mFile', ov);
   f.onchange = () => { if (f.files?.[0]) host.importFile(f.files[0]); };
-  // les options : langue, tutoriel, carte, import (les crédits sont dans les paramètres du jeu)
+  // les options : langue, tutoriel, carte, import, crédits, commandes
   $('.mGear', ov).onclick = () => {
     const { ov: m, close } = menuPop(root, 'menuOpts', 'options', tr('Options'), `
       <div class="row"><span class="popKey">${popIc('langue')}<label>${tr('Langue')}</label></span>${langPicker(getLang(), 'mLang')}</div>
       <div class="row mTuto"><span class="popKey">${popIc('tutoriel')}<label>${tr('Tutoriel')}</label></span></div>
       ${MAPS.length > 1 ? `<div class="row"><span class="popKey"><label for="mMapSel">${tr('Carte')}</label></span><select id="mMapSel">${MAPS.map((x) => `<option value="${x.id}"${x.id === map ? ' selected' : ''}>${x.name}</option>`).join('')}</select></div>` : ''}
-      <div class="mBtns"><button class="mImport">${popIc('importer')}${tr('Importer une sauvegarde')}</button></div>`);
+      <div class="mBtns"><button class="mImport">${popIc('importer')}${tr('Importer une sauvegarde')}</button><button class="mCredits">${popIc('credits')}${tr('Crédits')}</button></div>
+      <p class="mKeys">${ic('info', 20, 1.8)}<span>${tr('Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher')}<br><span>${tr('Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.')}</span></span></p>`);
     // le tutoriel guidé, pour la partie qu'on lance
     $('.mTuto', m).appendChild(menuToggle());
     const sel = m.querySelector<HTMLSelectElement>('#mMapSel');
     if (sel) sel.onchange = () => { map = +sel.value; draw(); };
     $('.mImport', m).onclick = () => { close(); f.click(); };
+    $('.mCredits', m).onclick = () => { close(); showCredits(root); };
     // la langue change à chaud : l'accueil est redessiné dans la nouvelle langue
     // les options se rouvrent aussitôt dans la nouvelle langue, sans animation : elles restent ouvertes pour le joueur
     bindLangPicker(m, () => {
