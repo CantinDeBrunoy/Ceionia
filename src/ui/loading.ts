@@ -15,15 +15,15 @@ const EMBLEM = `<svg class="ldEmblem" viewBox="0 0 120 120" aria-hidden="true">
 /** l'ampoule devant le conseil */
 const BULB = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 5a5.5 5.5 0 0 0-3.3 9.9c.6.5.8 1.1.8 1.8v.3h5v-.3c0-.7.3-1.3.8-1.8A5.5 5.5 0 0 0 12 5z"/><path d="M12 1.5v1.2M4.6 4.6l.9.9M19.4 4.6l-.9.9M2.5 11h1.3M21.5 11h-1.3"/></svg>';
 
-/** La vidéo du fond animé de l'accueil et du chargement (dans public/menu/) ; vide : l'image fixe `fond.webp` sert seule */
+/** La vidéo du fond animé de l'accueil (dans public/menu/) ; vide : l'image fixe `fond.webp` sert seule */
 export const MENU_VIDEO = 'fond.mp4';
 
 /**
  * Le fond de l'accueil et du chargement, classe `cls` : la vidéo en boucle, sans le son, sur l'image fixe en attendant
- * qu'elle démarre ; l'image seule si le système demande moins d'animations
+ * qu'elle démarre ; l'image seule si `video` est faux (le chargement) ou si le système demande moins d'animations
  */
-export function menuBg(cls: string): string {
-  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+export function menuBg(cls: string, video = true): string {
+  const still = !video || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   return MENU_VIDEO && !still
     ? `<video class="${cls}" src="./menu/${MENU_VIDEO}" poster="./menu/fond.webp" muted loop autoplay playsinline preload="auto" disablepictureinpicture aria-hidden="true"></video>`
     : `<img class="${cls}" src="./menu/fond.webp" alt="" decoding="async">`;
@@ -60,7 +60,7 @@ export class LoadingScreen {
     const el = (this.el = document.createElement('div'));
     el.id = 'loadScreen';
     el.setAttribute('role', 'status');
-    el.innerHTML = `${menuBg('ldBg')}<div class="ldBox">${EMBLEM}<h1>Ceionia</h1><p class="ldStep"></p><div class="ldBar"><i></i></div><p class="ldTip">${BULB}<span></span></p></div>`;
+    el.innerHTML = `${menuBg('ldBg', false)}<div class="ldBox">${EMBLEM}<h1>Ceionia</h1><p class="ldStep"></p><div class="ldBar"><i></i></div><p class="ldTip">${BULB}<span></span></p></div>`;
     this.label = el.querySelector('.ldStep')!;
     this.bar = el.querySelector('.ldBar i')!;
     // un conseil au hasard, puis le suivant toutes les quelques secondes

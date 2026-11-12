@@ -6,6 +6,9 @@ import { N } from '../world/world';
 const maxDistFor = () => 150 * (N / 48) * 0.8;
 const homeFor = () => 62 * (N / 48) * 0.8;
 
+/** Au village, la vue peut descendre jusqu'à l'horizontale (regarder le paysage à hauteur d'homme) */
+export const SURFACE_MIN_PITCH = 0;
+
 export interface PointerInfo { x: number; y: number; touch: boolean; button: number; shift?: boolean; ctrl?: boolean }
 
 export interface ToolInput {
@@ -41,8 +44,8 @@ export class CameraRig {
   /** suivi d'une équipe en cours (secondes restantes) : la vue lui colle de plus près */
   private tracking = 0;
   maxDist = maxDistFor();
-  /** inclinaison minimale (vue plus plongeante sous terre, pour voir par-dessus les parois) */
-  minPitch = 0.25;
+  /** inclinaison minimale : 0 au village, la vue descend jusqu'à l'horizontale (plus plongeante sous terre, pour voir par-dessus les parois) */
+  minPitch = SURFACE_MIN_PITCH;
 
   constructor(private el: HTMLElement) {
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.5, 1800);
@@ -231,7 +234,7 @@ export class CameraRig {
   /** Relève la vue vers l'horizon, pour voir le ciel (une aurore, des étoiles filantes) ; yaw : se tourner aussi vers ce cap */
   lookUp(yaw?: number) {
     if (yaw !== undefined) this.goal.yaw += Math.atan2(Math.sin(yaw - this.goal.yaw), Math.cos(yaw - this.goal.yaw));
-    this.goal.pitch = this.minPitch;
+    this.goal.pitch = Math.max(this.minPitch, 0.25);
     this.tracking = 0;
   }
 
@@ -283,9 +286,14 @@ export class CameraRig {
     const gy = groundY(this.target.x, this.target.z);
     this.target.y += ((Number.isFinite(gy) ? Math.max(0, gy) : this.target.y) + (this.tracking > 0 ? this.lift : 0) - this.target.y) * f;
     this.apply(1);
-    // la caméra passe par-dessus les sommets au lieu de les traverser
+    // la caméra passe par-dessus les sommets au lieu de les traverser ; elle garde son angle (une vue rasante reste
+    // parallèle au sol au lieu de replonger vers le point visé)
     const p = this.camera.position, floor = groundY(p.x, p.z) + 1.5;
-    if (p.y < floor) { p.y = floor; this.camera.lookAt(this.target); }
+    if (p.y < floor) {
+      p.y = floor;
+      const cp = Math.cos(this.pitch);
+      this.camera.lookAt(p.x - Math.sin(this.yaw) * cp, p.y - Math.sin(this.pitch), p.z - Math.cos(this.yaw) * cp);
+    }
   }
 
   apply(_: number) {

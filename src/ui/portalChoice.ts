@@ -1,6 +1,7 @@
 import { tr } from '../i18n';
 import { KINDS } from '../build/catalog';
 import type { War } from '../sim/war';
+import { withPic } from './pics';
 
 /**
  * La carte du choix du portail : dès que l'expédition « Le portail de l'autre rive » a réussi (puis quand le joueur la rouvre
@@ -36,7 +37,7 @@ export class PortalChoice {
     const name = (k: 'watchtower' | 'barracks') => KINDS[k].names[Math.max(age, KINDS[k].minAge)];
     w.choiceSeen = true;
     const how = tr('🗼 Pour les affronter : « {tower} » et « {barracks} » sur l’île du portail, pas au village, puis une garnison.', { tower: name('watchtower'), barracks: name('barracks') });
-    this.el.innerHTML = `<h4>${closed ? tr('🔒 Portail fermé') : tr('🌀 Le portail est ouvert !')}</h4><p>${closed ? tr('Rouvrir le portail pour affronter les démons ?') : tr('Des démons rôdent de l’autre côté.')}</p><p class="how">${how}</p><small>${tr('Vous pourrez changer d’avis dans l’onglet Militaire.')}</small><div class="tcbtn"><button data-a="fight" class="go">${tr('Affronter les démons')}</button>${closed ? `<button data-a="keep">${tr('Garder le portail fermé')}</button>` : `<button data-a="close">${tr('Fermer le portail')}</button>`}</div>`;
+    this.el.innerHTML = `<h4>${withPic(closed ? tr('🔒 Portail fermé') : tr('🌀 Le portail est ouvert !'), 22)}</h4><p>${closed ? tr('Rouvrir le portail pour affronter les démons ?') : tr('Des démons rôdent de l’autre côté.')}</p><p class="how">${how}</p><small>${tr('Vous pourrez changer d’avis dans l’onglet Militaire.')}</small><div class="tcbtn"><button data-a="fight" class="go">${tr('Affronter les démons')}</button>${closed ? `<button data-a="keep">${tr('Garder le portail fermé')}</button>` : `<button data-a="close">${tr('Fermer le portail')}</button>`}</div>`;
     this.el.style.display = '';
   }
 

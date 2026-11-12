@@ -30,7 +30,7 @@ import { Transports } from './render/transports';
 import { VegView, syncChunks } from './render/vegetation';
 import { Environment } from './render/env';
 import { computeSeason, makeSeasonState } from './render/season';
-import { CameraRig, PointerInfo, ToolInput } from './core/camera';
+import { CameraRig, SURFACE_MIN_PITCH, PointerInfo, ToolInput } from './core/camera';
 import { GameTime } from './core/time';
 import { SurfaceGate } from './core/surface';
 import { Sim } from './sim/sim';
@@ -78,7 +78,7 @@ import { PortalView } from './render/portal';
 import { BlightView } from './render/blight';
 import { isleBlight } from './world/blight';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
-import { holdIsle, isleDefenses, villageBarracks } from './world/portal';
+import { holdIsle, isleDefenses, nearIsle, villageBarracks } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
 import { IsleRuins } from './render/isleRuins';
 import { setFxDensity } from './render/combatFx';
@@ -288,8 +288,10 @@ class Game implements UIHost {
   private ferry: IsleFerry | null = null;
   /** les ruines des défenses de l'île abattues pendant une incursion */
   private isleRuins: IsleRuins | null = null;
-  /** on commande la garnison de l'île (la vue reste en surface) */
+  /** on commande la garnison de l'île (la vue reste en surface) : vrai tant que la vue est près de l'île (`syncIsleView`) */
   isleCmd = false;
+  /** la vue est près de l'île du portail (`nearIsle`, avec hystérésis) */
+  private isleNear = false;
   /** les actions du village demandées depuis les Enfers ou le commandement de l'île : on remonte d'abord (`ensureSurface`) */
   private surfaceGate = new SurfaceGate({
     mode: () => this.mode, isle: () => this.isleCmd, fading: () => this.fading,
@@ -462,7 +464,8 @@ class Game implements UIHost {
       age: () => this.sim.age, pop: () => this.sim.pop,
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
-      leaveIsle: () => this.leaveIsle(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(), openPortalChoice: () => this.portalChoice.show(),
+      // (« Retourner au village », ou Échap : la vue retourne au village, l'interface de l'île se range d'elle-même)
+      leaveIsle: () => this.goHome(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(), openPortalChoice: () => this.portalChoice.show(),
       defenseInfo: (k) => { const d = KINDS[k as KindId], a = Math.max(this.sim.age, d.minAge); return { name: d.names[a], icon: d.icon, desc: d.desc }; },
       defenseLock: (k) => this.ui.lockWhy(k as KindId),
       defenseCount: (k) => { const d = isleDefenses(this.world); return k === 'watchtower' ? d.towers : k === 'barracks' ? d.barracks : this.sim.counts[k as KindId] ?? 0; },
@@ -717,7 +720,7 @@ class Game implements UIHost {
       this.hellMode?.view.leave();
       this.command.setTheater(null);
       this.cam.bounds = null; this.hellFollow = false;
-      this.cam.minDist = this.surfaceZoom.min; this.cam.minPitch = 0.25;
+      this.cam.minDist = this.surfaceZoom.min; this.cam.minPitch = SURFACE_MIN_PITCH;
       this.cam.maxDist = this.surfaceZoom.max || this.cam.maxDist;
       const v = this.surfaceView ?? this.cam.view();
       this.cam.jump(v, this.world.hAt(v.x, v.z));
@@ -774,19 +777,16 @@ class Game implements UIHost {
   /** Prend le commandement de la garnison de l'île (la vue y va) */
   commandIsle() {
     if (this.mode === 'hell') { this.ensureSurface(() => this.commandIsle(), true); return; }
-    if (this.mode !== 'surface' || !this.war.ensure()) return;
-    this.syncIsleLayer();
-    const t = this.isleTheater(), p = this.world.portal;
-    if (!t || !p) return;
+    const p = this.world.portal;
+    if (this.mode !== 'surface' || !p || !this.war.ensure()) return;
     this.follow(null); this.trainCam = null; this.incidentCam = null;
     this.tools.setTool('none');
-    this.tools.select(null);
-    this.isleCmd = true;
-    this.cam.handler = this.command;
-    this.command.setTheater(t);
     this.cam.goTo(p.x, p.z + 1, Math.min(Math.max(this.cam.dist, 18), 26));
     // trois quarts plutôt que presque de dessus (l'inclinaison reste réglable : clic droit glissé)
     this.cam.tiltTo(0.8);
+    // (la vue va sur l'île : l'interface s'affiche tout de suite, sans attendre la fin du glissement)
+    if (!this.enterIsle()) return;
+    this.isleNear = true;
     // l'île sans ses défenses : le menu s'ouvre sur « Bâtir », et un message dit quoi y poser
     const d = isleDefenses(this.world);
     if (this.war.pve === 'on' && (!d.towers || !d.barracks)) { this.command.isleMenu('build'); this.isleBrief(); }
@@ -833,6 +833,35 @@ class Game implements UIHost {
     if (this.mode === 'surface') this.cam.handler = this.tools;
     canvas.style.cursor = '';
     if (!quiet) this.ui.update();
+  }
+
+  /** L'interface de l'île s'affiche : son théâtre passe au contrôle des troupes (la vue ne bouge pas) */
+  private enterIsle(): boolean {
+    if (this.isleCmd) return true;
+    if (this.mode !== 'surface' || !this.war.ensure()) return false;
+    this.syncIsleLayer();
+    const t = this.isleTheater();
+    if (!t) return false;
+    this.tools.select(null);
+    this.isleCmd = true;
+    this.cam.handler = this.command;
+    this.command.setTheater(t);
+    return true;
+  }
+
+  /**
+   * L'interface de l'île (ruban d'attaque, « Ma garnison », passage aux Enfers) suit la vue : elle s'affiche quand on s'approche
+   * de l'île du portail et se range quand on s'en éloigne (`nearIsle`, avec hystérésis). On mesure là où va la vue (`cam.view`),
+   * pas là où elle passe : « Retourner au village » la range aussitôt, « Voir l'île » l'affiche aussitôt. Elle ne s'ouvre pas
+   * d'elle-même avec un outil en main (on pose une tour sur l'île : elle revient quand on le lâche), une vue qui suit quelque
+   * chose, le tracé d'une ligne, un fondu ou la cinématique du royaume
+   */
+  private syncIsleView() {
+    const p = this.world.portal, v = this.cam.view();
+    this.isleNear = this.mode === 'surface' && !!p && this.world.portalOpen && nearIsle(this.isleNear, Math.hypot(v.x - p.x, v.z - p.z), p.r);
+    if (!this.isleNear) { if (this.isleCmd) this.leaveIsle(); return; }
+    if (this.isleCmd || this.fading || this.tools.tool !== 'none' || this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.railEdit || this.kingStage.playing) return;
+    this.enterIsle();
   }
 
   /** « Voir l'île » : la vue va sur l'île du portail, au commandement */
@@ -953,6 +982,8 @@ class Game implements UIHost {
     this.kingStage.update(dt);
     // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
     if (this.isleCmd && this.command.theater?.sim !== isle?.sim) { const t = this.isleTheater(); if (t) this.command.setTheater(t); else this.leaveIsle(); }
+    // l'interface de l'île suit la vue : affichée près de l'île, rangée au loin
+    this.syncIsleView();
   }
 
   // ---------- Monde souterrain ----------
@@ -1398,7 +1429,7 @@ class Game implements UIHost {
       document.body.classList.remove('under');
       this.underView?.leave();
       this.cam.minDist = this.surfaceZoom.min;
-      this.cam.minPitch = 0.25;
+      this.cam.minPitch = SURFACE_MIN_PITCH;
       this.cam.maxDist = this.surfaceZoom.max || this.cam.maxDist;
       const v = this.surfaceView ?? this.cam.view();
       if (cell !== undefined) { v.x = (cell % N) + 0.5; v.z = Math.floor(cell / N) + 0.5; v.dist = Math.min(v.dist, 16); }

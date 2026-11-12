@@ -157,6 +157,20 @@ export const ISLE_SECURE = { waves: 5, days: 6 };
 /** L'âge que la sécurisation de l'île ouvre : le Moyen Âge (on la demande pour quitter l'Antiquité) */
 export const ISLE_AGE = 2;
 
+/**
+ * L'interface de l'île (ruban d'attaque, « Ma garnison ») s'affiche quand la vue s'approche de l'île : seuils en cases au-delà
+ * du rayon `r`, comptés depuis le centre. On entre à `r + ISLE_NEAR_IN` (juste passé le rivage, encore au-dessus du bras de
+ * mer, qui fait au moins `STRAIT_MIN` = 8 cases : la côte du continent n'y entre jamais) ; on ne sort qu'au-delà de
+ * `r + ISLE_NEAR_OUT`, pour ne pas clignoter en bordure
+ */
+export const ISLE_NEAR_IN = 4;
+export const ISLE_NEAR_OUT = 10;
+
+/** La vue est-elle près de l'île ? `was` : elle l'était déjà (hystérésis) ; `d` : distance au centre de l'île, en cases */
+export function nearIsle(was: boolean, d: number, r: number): boolean {
+  return d < r + (was ? ISLE_NEAR_OUT : ISLE_NEAR_IN);
+}
+
 /** Les défenses debout sur l'île du portail : tours de garde et casernes */
 export function isleDefenses(w: World) {
   let towers = 0, barracks = 0;

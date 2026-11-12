@@ -19,8 +19,8 @@ export const TUTO_TEXT = {
   skipChapter: 'Passer ce chapitre',
   sandbox: 'Pas de tutoriel au bac à sable : bâtissez dans l’ordre que vous voulez.',
   wellDone: 'Bien joué !',
-  skipped: 'Tutoriel mis de côté : reprenez-le quand vous voulez dans Réglages › Partie.',
-  finished: 'Tutoriel terminé ! Il reste dans Réglages › Partie, si vous voulez le refaire.',
+  skipped: 'Tutoriel mis de côté : reprenez-le quand vous voulez dans Paramètres › Divers.',
+  finished: 'Tutoriel terminé ! Il reste dans Paramètres › Divers, si vous voulez le refaire.',
   menu: {
     label: 'Tutoriel guidé',
     on: 'activé',

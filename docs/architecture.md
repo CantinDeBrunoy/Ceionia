@@ -46,7 +46,7 @@ Constructeur (`main.ts`), dans l'ordre :
 | Mode | Scène rendue | `cam.handler` | Bornes caméra |
 |---|---|---|---|
 | surface | `scene` | `tools` | zoom `minDist` 3,2 à `maxDist` ; limites `[2, N-2]` |
-| surface + `isleCmd` | `scene` | `command` (théâtre de l'île) | idem ; la vue va sur l'île, `tiltTo(0.8)` |
+| surface + `isleCmd` | `scene` | `command` (théâtre de l'île) | idem ; `isleCmd` suit la vue : vrai près de l'île du portail (`syncIsleView`, voir [portail-ile.md](portail-ile.md)) |
 | hell | `hellMode.scene` | `command` (théâtre des Enfers) | zoom 2,4 à 34, `minPitch` 0,28, limites `bounds` = carte des Enfers (`W` × `L`) |
 | under | `underView.scene` | `underInput` | zoom 2,4 à 24, `minPitch` 0,95 |
 
@@ -55,7 +55,7 @@ Le mode **souterrain** n'est plus accessible au joueur (retiré du jeu) ; le mot
 Transitions :
 - `enterHell()` : refuse si `war.hellWhy()` ; `fadeThrough` (fond noir 380 ms, charge `hellMode.ts` à la volée, mémorise `surfaceView` et `surfaceZoom`, passe `mode='hell'`, classes `under hell` sur `body`, `cam.jump`, `command.setTheater`).
 - `exitHell()` : l'inverse, rend la vue de surface mémorisée.
-- `commandIsle()` / `leaveIsle()` : pas de fondu, la vue reste en surface ; `command.setTheater(isleTheater())`. Depuis les Enfers, `commandIsle` remonte d'abord.
+- Île du portail : pas de fondu, la vue reste en surface. `syncIsleView` (fin de `stepWar`, chaque image) entre (`enterIsle` : `command.setTheater(isleTheater())`) quand le but de la caméra s'approche de l'île, et sort (`leaveIsle`) quand il s'en éloigne (`nearIsle`, hystérésis). `commandIsle()` y envoie la vue et entre aussitôt ; depuis les Enfers, il remonte d'abord. « Retourner au village » appelle `goHome`.
 - `exitUnder()` sert aussi à quitter les Enfers (le bouton « Remonter »).
 - `fadeThrough(fn, label)` : une seule bascule à la fois (garde `fading`) ; le voile se lève après deux images ou au plus 600 ms (onglet caché).
 - `ensureSurface(then, keepIsle?)` : file `SurfaceGate` (`core/surface.ts`). Toute action du village demandée depuis les Enfers ou le commandement (suivre une équipe, aller au volcan, prendre un outil, tracer une ligne, `goHome`…) passe par elle : elle quitte la vue, attend `SURFACE_DELAY` (900 ms) puis exécute chaque action une fois, dans l'ordre ; abandon après 8 essais. `tools.setTool` est surchargé dans le constructeur pour cela.
@@ -81,11 +81,11 @@ Ordre (surface, simplifié) :
 
 ### Caméra (`CameraRig`)
 Orbitale : `target` (point visé), `yaw`, `pitch`, `dist`. Chaque valeur a un **but** (`goal`) et la valeur courante le rattrape (`1 − exp(−10·dt)` ; suivi : `1 − exp(−24·pace·dt)` pendant 0,3 s après chaque `follow`).
-- Souris : clic gauche = outil courant ; clic droit glissé = tourner (`yaw −= dx·0,006`, `pitch += dy·0,005`, borné `[minPitch, 1,5]`), + Maj = déplacer ; clic milieu = déplacer ; molette = zoom vers le curseur (`exp(delta·0,0012)`) ; clic droit sans glisser (< 6 px) = ordre aux troupes (`rightClick`).
+- Souris : clic gauche = outil courant ; clic droit glissé = tourner (`yaw −= dx·0,006`, `pitch += dy·0,005`, borné `[minPitch, 1,5]` ; au village `minPitch` = `SURFACE_MIN_PITCH` = 0 : la vue descend jusqu'à l'horizontale), + Maj = déplacer ; clic milieu = déplacer ; molette = zoom vers le curseur (`exp(delta·0,0012)`) ; clic droit sans glisser (< 6 px) = ordre aux troupes (`rightClick`).
 - Clavier (touches **physiques** `e.code`, donc ZQSD en AZERTY et WASD en QWERTY) : flèches ou WASD = déplacer ; Q/E = tourner (1,4 rad/s) ; Page haut/bas = incliner ; `+` / `−` = zoomer. Ignoré avec Ctrl, Méta ou Alt, et dans un champ de saisie.
 - Tactile : un doigt = outil ; deux doigts = pincer (zoom), tourner, déplacer (`startGesture`, mode `gesture` annule l'outil en cours).
 - Méthodes utiles : `goTo(x, z, dist)` (glisse, lâche le suivi), `follow(x, z, dist?, lift?)` (suit un point), `glide`, `jump(vue, y)` (saute sans glissement), `reset()` (vue d'ensemble : `homeDist()`, tient compte du ratio d'écran), `view()`, `tiltTo`, `panBy`, `bounds`.
-- Distances : `maxDistFor() = 150·(N/48)·0,8` (480 pour N = 192), `homeFor() = 62·(N/48)·0,8`. Champ de vision 38°, plans 0,5 (rapproché de près) à 1 800. La caméra ne passe pas sous le sol (`groundY + 1,5`).
+- Distances : `maxDistFor() = 150·(N/48)·0,8` (480 pour N = 192), `homeFor() = 62·(N/48)·0,8`. Champ de vision 38°, plans 0,5 (rapproché de près) à 1 800. La caméra ne passe pas sous le sol (`groundY + 1,5`) ; relevée ainsi, elle garde son angle (une vue rasante reste parallèle au sol). `lookUp` (voir le ciel) s'arrête à 0,25.
 - Filet de sécurité : si `goal` ou la position devient non finie (NaN), la vue revient à la dernière vue valable (`sane`).
 - **Une seule chose suivie à la fois** : équipe d'expédition (`following`), train (`trainCam`), incident (`incidentCam`). Chaque `follow…` lâche les autres ; faire glisser la vue (`onPan`) lâche tout. `goHome()` ramène sur le cœur du village (médiane des bâtiments, `villageCenter`), une seconde fois sur la vue d'ensemble.
 

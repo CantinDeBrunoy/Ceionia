@@ -499,18 +499,17 @@ body.under #selCard, body.photo #selCard { display: none; }
 .mMode h2 { margin: 2px 0 6px; font-family: 'Fraunces', Georgia, serif; font-size: clamp(20px, 1.7vw, 26px); font-weight: 600; line-height: 1.1; transition: font-size 0.25s; }
 .mMode em { font-size: 15px; font-weight: 500; line-height: 1.35; color: #3b3e48; }
 .mChev { flex: none; box-sizing: content-box; margin-top: auto; padding-top: 14px; color: #262832; }
-.mGo { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 22px; width: min(420px, 100%); min-height: 78px; padding: 0 40px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.3); background: rgba(34, 40, 54, 0.62); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; font-size: 26px; font-weight: 600; box-shadow: 0 12px 32px rgba(10, 15, 35, 0.35); }
+/* les boutons de lancement, côte à côte et de même forme : « Continuer » (s'il y a une sauvegarde) rempli de l'or de
+   l'accueil, « Nouvelle partie » en verre sombre ; sous la rangée, le résumé de la partie sauvegardée */
+.mPlay { margin-top: auto; display: flex; justify-content: center; align-items: stretch; gap: 18px; width: min(760px, 100%); }
+.mGo, .mResume { flex: 0 1 360px; display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 76px; padding: 0 34px; border-radius: 999px; font-size: 25px; font-weight: 700; box-shadow: 0 12px 32px rgba(10, 15, 35, 0.35); }
+.mGo { border: 2px solid rgba(255, 255, 255, 0.3); background: rgba(34, 40, 54, 0.62); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; font-weight: 600; }
 .mGo:hover { background: rgba(34, 40, 54, 0.78); }
-/* la pastille du bas : le monde qui attend, et « Continuer » s'il existe une sauvegarde */
-/* (verre sombre bordé d'un vert doré lumineux, les sommets du logo en blanc, un filet, le texte, puis « Continuer » en pilule) */
-.mStatus { position: fixed; left: 22px; bottom: 22px; display: flex; align-items: center; gap: 16px; max-width: calc(100% - 44px); min-height: 60px; padding: 7px 8px 7px 24px; border-radius: 999px; border: 2px solid #e4e27a; background: rgba(30, 40, 38, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; box-shadow: 0 0 14px 2px rgba(228, 226, 122, 0.45), inset 0 0 10px rgba(228, 226, 122, 0.18); }
-#menu:not(.hasSave) .mStatus { padding-right: 26px; }
-.mStatus > b { display: flex; color: #fff; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)); }
-.mSep { flex: none; align-self: stretch; width: 1.5px; margin: 6px 0; background: rgba(255, 255, 255, 0.55); }
-.mStatus > span { min-width: 0; font-size: 19px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
-.mResume { flex: none; gap: 9px; min-height: 44px; padding: 0 20px 0 16px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, 0.55); background: linear-gradient(180deg, #f1ef98, #d9d65e); color: #2c3420; font-size: 16px; font-weight: 700; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12); }
-.mResume:hover { background: linear-gradient(180deg, #f6f4ad, #e2df6c); border-color: rgba(255, 255, 255, 0.8); }
+.mResume { border: 2px solid rgba(255, 240, 200, 0.9); background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; box-shadow: 0 12px 32px rgba(10, 15, 35, 0.3), 0 0 22px rgba(246, 195, 90, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.45); }
+.mResume:hover { background: linear-gradient(180deg, #f8cc6c, #e8a43a); }
 .mResume[hidden] { display: none; }
+.mSave { margin: -8px 0 0; max-width: 100%; font-size: 15px; font-weight: 600; text-align: center; color: #fdf6e8; text-shadow: 0 1px 6px rgba(20, 25, 50, 0.6); }
+.mSave[hidden] { display: none; }
 .mGear { position: fixed; top: 22px; right: 24px; z-index: 2; width: 62px; height: 62px; padding: 0; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.45); background: rgba(44, 60, 110, 0.38); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; box-shadow: 0 6px 18px rgba(20, 30, 70, 0.3); }
 .mGear:hover { background: rgba(44, 60, 110, 0.55); }
 .mGear svg { transition: transform 0.4s; }
@@ -533,68 +532,97 @@ body.under #selCard, body.photo #selCard { display: none; }
 #menu ~ .overlay > .modal button.active:hover, #menu ~ .overlay > .modal button[data-r="1"]:hover { background: linear-gradient(180deg, #3f7ef0, #1f58cf); }
 /* les fenêtres peintes de l'accueil (options, âge de départ, confirmation ; menuPop dans ui.ts) : fond crème bordé d'or,
    petites montagnes posées sur le bord du haut, paysage en bas (montagnes lointaines derrière la prairie), pilules crème
-   et bleues ; les images sont dans public/menu/popup/ */
-#menu ~ .overlay > .cePop { --pInk: #262a48; --pInk2: #4f5470; position: relative; overflow: visible; max-height: none; margin: 56px auto 12px; padding: 22px 26px 0; border-radius: 30px; border: 2px solid #fff7e8; background: linear-gradient(180deg, #fcf6ee 0%, #f8ecdf 55%, #f4e3d2 100%); backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--pInk); box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.75), 0 0 34px rgba(255, 196, 110, 0.5), 0 30px 70px rgba(40, 30, 70, 0.32); }
+   et dorées ; les images sont dans public/menu/popup/ */
+#ui > .overlay > .cePop { --pInk: #262a48; --pInk2: #4f5470; position: relative; overflow: visible; max-height: none; margin: 56px auto 12px; padding: 22px 26px 0; border-radius: 30px; border: 2px solid #fff7e8; background: linear-gradient(180deg, #fcf6ee 0%, #f8ecdf 55%, #f4e3d2 100%); backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--pInk); box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.75), 0 0 34px rgba(255, 196, 110, 0.5), 0 30px 70px rgba(40, 30, 70, 0.32); }
 .cePop > * { position: relative; z-index: 1; }
 .cePop > .popCrest { position: absolute; z-index: 2; left: 50%; bottom: calc(100% - 6px); width: 210px; transform: translateX(-50%); pointer-events: none; }
 .cePop > .popLand { position: absolute; z-index: 0; inset: auto 0 0; overflow: hidden; border-radius: 0 0 28px 28px; pointer-events: none; }
 .popLand img { display: block; }
 .popFar { position: absolute; left: 6%; bottom: 34%; width: 88%; opacity: 0.85; }
 .popMeadow { position: relative; width: 100%; }
-#menu ~ .overlay > .cePop .mtitle { position: static; margin: 0 0 16px; padding: 0 56px 0 0; background: none; }
-#menu ~ .overlay > .cePop .mtitle h3 { gap: 14px; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 32px; font-weight: 700; letter-spacing: 0; color: var(--pInk); }
+#ui > .overlay > .cePop .mtitle { position: static; margin: 0 0 16px; padding: 0 56px 0 0; border-bottom: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+#ui > .overlay > .cePop .mtitle h3 { gap: 14px; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 32px; font-weight: 700; letter-spacing: 0; color: var(--pInk); }
 .popBadge { flex: none; width: 58px; height: auto; }
-#menu ~ .overlay > .cePop .x { position: absolute; z-index: 3; top: 14px; right: 14px; width: 46px; min-width: 46px; height: 46px; min-height: 46px; border: 0; border-radius: 50%; background: url('/menu/popup/icone_fermer.webp') center / contain no-repeat; box-shadow: none; }
-#menu ~ .overlay > .cePop .x:hover { background-color: transparent; filter: brightness(1.04); transform: scale(1.06); }
-#menu ~ .overlay > .cePop .x svg { display: none; }
-#menu ~ .overlay > .cePop .hint { margin: -6px 0 0; font-size: 15px; font-weight: 600; color: var(--pInk2); }
-/* les pilules : crème en relief, bleue pour le choix en cours et le bouton principal */
-#menu ~ .overlay > .cePop button { min-height: 48px; padding: 0 20px; gap: 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: var(--pInk); font-size: 16px; font-weight: 700; box-shadow: 0 3px 10px rgba(120, 85, 50, 0.16), inset 0 -2px 0 rgba(160, 120, 80, 0.08); }
-#menu ~ .overlay > .cePop button:hover { background: #fffdf9; color: var(--pInk); box-shadow: 0 5px 14px rgba(120, 85, 50, 0.22); }
-#menu ~ .overlay > .cePop button.active, #menu ~ .overlay > .cePop button[aria-pressed="true"], #menu ~ .overlay > .cePop button[data-r="1"] { border-color: rgba(255, 255, 255, 0.5); background: linear-gradient(180deg, #4d82f2, #2a59d6); color: #fff; box-shadow: 0 6px 16px rgba(42, 89, 214, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
-#menu ~ .overlay > .cePop button.active:hover, #menu ~ .overlay > .cePop button[aria-pressed="true"]:hover, #menu ~ .overlay > .cePop button[data-r="1"]:hover { background: linear-gradient(180deg, #4378ee, #224fcb); }
+#ui > .overlay > .cePop .x { position: absolute; z-index: 3; top: 14px; right: 14px; width: 46px; min-width: 46px; height: 46px; min-height: 46px; border: 0; border-radius: 50%; background: url('/menu/popup/icone_fermer.webp') center / contain no-repeat; box-shadow: none; }
+#ui > .overlay > .cePop .x:hover { background-color: transparent; filter: brightness(1.04); transform: scale(1.06); }
+#ui > .overlay > .cePop .x svg { display: none; }
+#ui > .overlay > .cePop .hint { margin: -6px 0 0; font-size: 15px; font-weight: 600; color: var(--pInk2); }
+/* les pilules : crème en relief, dorée pour le choix en cours et le bouton principal */
+#ui > .overlay > .cePop button { min-height: 48px; padding: 0 20px; gap: 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: var(--pInk); font-size: 16px; font-weight: 700; box-shadow: 0 3px 10px rgba(120, 85, 50, 0.16), inset 0 -2px 0 rgba(160, 120, 80, 0.08); }
+#ui > .overlay > .cePop button:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; color: var(--pInk); box-shadow: 0 5px 14px rgba(120, 85, 50, 0.22); }
+/* le choix en cours et le bouton principal : l'or chaud de l'accueil (--mGold, le losange de la carte choisie), texte brun */
+#ui > .overlay > .cePop button.active, #ui > .overlay > .cePop button[aria-pressed="true"], #ui > .overlay > .cePop button[data-r="1"] { border-color: rgba(255, 236, 190, 0.9); background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; box-shadow: 0 6px 16px rgba(227, 154, 47, 0.42), 0 0 0 3px rgba(246, 195, 90, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.45); }
+#ui > .overlay > .cePop button.active:hover, #ui > .overlay > .cePop button[aria-pressed="true"]:hover, #ui > .overlay > .cePop button[data-r="1"]:hover { background: linear-gradient(180deg, #f8cc6c, #e8a43a); color: #3a2a14; }
 .popIc { flex: none; width: 34px; height: auto; }
 /* les options : un réglage par bandeau clair */
-#menu ~ .overlay > .cePop.menuOpts { width: min(640px, 100%); max-width: none; padding-bottom: 40px; text-align: left; }
+#ui > .overlay > .cePop.menuOpts { width: min(640px, 100%); max-width: none; padding-bottom: 40px; text-align: left; }
 .menuOpts .row { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 8px 10px 8px 14px; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.5); box-shadow: 0 2px 10px rgba(120, 85, 50, 0.07); }
 .popKey { flex: none; display: flex; align-items: center; gap: 10px; min-width: 150px; }
 .popKey label { font-size: 17px; font-weight: 700; color: var(--pInk); }
-.menuOpts .langPick { margin: 0; padding: 0; gap: 10px; border: 0; background: none; }
-#menu ~ .overlay > .cePop .langPick button { min-width: 136px; justify-content: flex-start; padding-left: 10px; }
+#ui > .overlay > .cePop .langPick button { min-width: 136px; justify-content: flex-start; padding-left: 10px; }
 .cePop .langPick b { display: inline-grid; place-items: center; min-width: 32px; height: 26px; border-radius: 9px; background: rgba(38, 42, 72, 0.07); font-size: 13px; font-weight: 800; }
-.cePop .langPick button.active b { background: rgba(255, 255, 255, 0.22); }
+.cePop .langPick button.active b { background: rgba(255, 255, 255, 0.35); }
 .menuOpts .tutoToggle { flex: 1; justify-content: stretch; margin: 0; padding: 0; border: 0; background: none; }
-#menu ~ .overlay > .cePop .tutoToggle button, #menu ~ .overlay > .cePop .tutoToggle button.on { flex: 1; justify-content: flex-start; padding: 0 8px 0 18px; border-color: rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: var(--pInk); box-shadow: 0 3px 10px rgba(120, 85, 50, 0.16); }
+#ui > .overlay > .cePop .tutoToggle button, #ui > .overlay > .cePop .tutoToggle button.on { flex: 1; justify-content: flex-start; padding: 0 8px 0 18px; border-color: rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: var(--pInk); box-shadow: 0 3px 10px rgba(120, 85, 50, 0.16); }
 .cePop .tutoToggle .sw { margin-left: auto; width: 54px; height: 32px; }
 .cePop .tutoToggle .sw::after { top: 3px; left: 3px; width: 26px; height: 26px; }
-.cePop .tutoToggle button.on .sw { background: linear-gradient(180deg, #4d82f2, #2a59d6); }
+.cePop .tutoToggle button.on .sw { background: linear-gradient(180deg, #f6c35a, #e39a2f); box-shadow: 0 0 8px rgba(227, 154, 47, 0.45); }
 .cePop .tutoToggle button.on .sw::after { transform: translateX(22px); }
 .menuOpts select { font: inherit; font-weight: 700; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: #fffbf5; color: var(--pInk); }
 .menuOpts .mBtns { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 0; }
-#menu ~ .overlay > .cePop .mBtns button { min-height: 54px; padding: 0 24px 0 12px; }
+#ui > .overlay > .cePop .mBtns button { min-height: 54px; padding: 0 24px 0 12px; }
 .mKeys { margin: 12px 0 0; padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.45); font-size: 12px; line-height: 1.6; color: var(--ink2); }
 .cePop .mKeys { display: flex; align-items: center; gap: 10px; margin: 18px 11% 0; padding: 10px 16px; border: 1px solid rgba(255, 255, 255, 0.7); background: rgba(236, 228, 242, 0.82); font-size: 12.5px; line-height: 1.5; font-weight: 600; color: var(--pInk2); }
 .cePop .mKeys svg { flex: none; color: #7a7f99; }
 @media (hover: none) and (pointer: coarse) { .mKeys { display: none; } }
-/* l'âge de départ du bac à sable : une pilule par âge, avec son icône (blanche sur la pilule bleue) */
-#menu ~ .overlay > .cePop.agePick { width: min(640px, 100%); max-width: none; padding-bottom: 96px; text-align: left; }
+/* l'âge de départ du bac à sable : une pilule par âge, avec son icône (brune sur la pilule dorée) */
+#ui > .overlay > .cePop.agePick { width: min(640px, 100%); max-width: none; padding-bottom: 96px; text-align: left; }
 .agePick .hint { text-align: center; }
 .agePick .ageBtns { justify-content: center; margin-top: 18px; gap: 12px; }
-#menu ~ .overlay > .cePop .ageBtn { min-height: 52px; padding: 0 22px 0 16px; }
+#ui > .overlay > .cePop .ageBtn { min-height: 52px; padding: 0 22px 0 16px; }
 .agePick .ageBtn .popIc { width: auto; height: 24px; }
-.agePick .ageBtn[aria-pressed="true"] .popIc { filter: brightness(0) invert(1); }
+/* l'icône de l'âge choisi passe en brun foncé sur l'or */
+.agePick .ageBtn[aria-pressed="true"] .popIc { filter: brightness(0) opacity(0.78); }
 /* la confirmation : l'avertissement, le message, deux pilules */
-#menu ~ .overlay > .cePop.menuConfirm { width: min(450px, 100%); max-width: none; padding-bottom: 78px; text-align: center; }
-#menu ~ .overlay > .menuConfirm .mtitle { margin: 0; padding: 0; }
+#ui > .overlay > .cePop.menuConfirm { width: min(450px, 100%); max-width: none; padding-bottom: 78px; text-align: center; }
+#ui > .overlay > .menuConfirm .mtitle { margin: 0; padding: 0; }
 .popWarn { display: block; width: 68px; height: auto; margin: 6px auto 10px; }
 .popMsg { max-width: 340px; margin: 0 auto 22px; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 23px; font-weight: 700; line-height: 1.3; color: var(--pInk); }
 .popFoot { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; }
-#menu ~ .overlay > .cePop .popFoot button { min-width: 150px; min-height: 52px; }
+#ui > .overlay > .cePop .popFoot button { min-width: 150px; min-height: 52px; }
+/* les paramètres en jeu (openSettings), dans la même coque : sous-titre sous le titre, onglets en colonne à gauche,
+   panneau clair à droite (titre de section, réglages l'intitulé à gauche et les contrôles à droite, sous-titres à filet) */
+#ui > .overlay > .cePop.settings { width: min(940px, 100%); max-width: none; padding-bottom: 92px; text-align: left; }
+.popTi { display: flex; flex-direction: column; gap: 2px; }
+.popTi small { font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif; font-variation-settings: normal; font-size: 15px; font-weight: 500; letter-spacing: 0; color: var(--pInk2); }
+.setWrap { display: grid; grid-template-columns: 230px 1fr; gap: 18px; align-items: start; }
+.setTabs { display: flex; flex-direction: column; gap: 10px; }
+#ui > .overlay > .cePop .setTabs button { justify-content: flex-start; min-height: 54px; padding: 0 18px; gap: 12px; text-align: left; }
+#ui > .overlay > .cePop .setTabs button svg { flex: none; color: #8a6a3e; }
+#ui > .overlay > .cePop .setTabs button.on { border-color: rgba(255, 236, 190, 0.9); background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; box-shadow: 0 6px 16px rgba(227, 154, 47, 0.42), 0 0 0 3px rgba(246, 195, 90, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.45); }
+#ui > .overlay > .cePop .setTabs button.on svg { color: #3a2a14; }
+.setPane { max-height: calc(100vh - 300px); min-height: 380px; overflow-y: auto; padding: 18px 22px 10px; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.55); box-shadow: 0 2px 10px rgba(120, 85, 50, 0.07); }
+.setPane::-webkit-scrollbar { width: 6px; }
+.setPane::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(120, 85, 50, 0.28); }
+.setPane > section[hidden] { display: none; }
+.setH { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 22px; font-weight: 800; color: var(--pInk); }
+.setH svg { color: #c9822a; }
+#ui > .overlay > .cePop .setPane h4 { display: flex; align-items: center; gap: 12px; margin: 18px 0 10px; font-size: 16px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--pInk); }
+#ui > .overlay > .cePop .setPane h4::after { content: ''; flex: 1; height: 1px; background: rgba(120, 85, 50, 0.2); }
+.setPane .row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
+.setPane .row > label { flex: 0 0 170px; font-size: 15px; font-weight: 700; color: var(--pInk); }
+.setPane .row > span:not(.diffTag) { min-width: 48px; text-align: right; font-weight: 800; color: var(--pInk); }
+#ui > .overlay > .cePop .setPane button { min-height: 42px; padding: 0 16px; gap: 8px; font-size: 15px; }
+#ui > .overlay > .cePop .setPane .hint { margin: -4px 0 12px; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--pInk2); }
+.setPane .dpoints { margin: 0 0 8px; padding-left: 20px; }
+/* les curseurs dorés : la piste remplie d'or jusqu'au bouton (la couleur d'accent du navigateur) */
+.cePop input[type="range"] { flex: 1; min-width: 140px; accent-color: #e39a2f; }
+.cePop .langPick { margin: 0; padding: 0; gap: 10px; border: 0; background: none; }
 @media (max-height: 760px) and (min-width: 721px) {
   .mPeaks { width: 140px; }
   #menu h1 { font-size: 78px; }
   .mMode { flex-basis: 240px; }
-  .mGo { min-height: 64px; font-size: 22px; }
+  .mGo, .mResume { min-height: 64px; font-size: 22px; }
 }
 @media (max-width: 720px) {
   .mInner { gap: 16px; padding: 22px 16px 24px; }
@@ -611,33 +639,39 @@ body.under #selCard, body.photo #selCard { display: none; }
   .mChev { grid-area: chev; margin: 0; padding: 0; }
   .mGem { top: -12px; left: auto; right: 22px; width: 24px; height: 24px; margin: 0; }
   .mGem::after { inset: 5px; }
-  .mGo { margin-top: 4px; min-height: 60px; font-size: 21px; }
-  .mStatus { position: static; max-width: 100%; gap: 12px; padding-left: 16px; }
-  .mStatus > span { font-size: 16px; white-space: normal; }
+  .mPlay { flex-direction: column; gap: 12px; margin-top: 4px; width: min(460px, 100%); }
+  .mGo, .mResume { flex: none; min-height: 60px; font-size: 21px; }
+  .mSave { margin-top: -4px; font-size: 13.5px; }
   .mGear { top: 12px; right: 12px; width: 48px; height: 48px; }
   .mGear svg { width: 24px; height: 24px; }
   #menu ~ .overlay > .modal { padding: 0 16px 18px; border-radius: 22px; }
   #menu ~ .overlay > .modal .mtitle { margin: 0 -16px 6px; padding: 16px 12px 10px 16px; }
   /* les fenêtres peintes : les réglages passent à la ligne, les pilules se partagent la largeur */
-  #menu ~ .overlay > .cePop { margin-top: 48px; padding-top: 18px; border-radius: 24px; }
-  #menu ~ .overlay > .cePop .mtitle { margin: 0 0 12px; padding: 0 50px 0 0; }
-  #menu ~ .overlay > .cePop .mtitle h3 { font-size: 26px; }
-  #menu ~ .overlay > .cePop .x { top: 10px; right: 10px; }
+  #ui > .overlay > .cePop { margin-top: 48px; padding-top: 18px; border-radius: 24px; }
+  #ui > .overlay > .cePop .mtitle { margin: 0 0 12px; padding: 0 50px 0 0; }
+  #ui > .overlay > .cePop .mtitle h3 { font-size: 26px; }
+  #ui > .overlay > .cePop .x { top: 10px; right: 10px; }
   .cePop > .popCrest { width: 160px; }
   .cePop > .popLand { border-radius: 0 0 22px 22px; }
   .popBadge { width: 48px; }
   .menuOpts .row { flex-wrap: wrap; padding: 10px; }
   .popKey { min-width: 0; }
   .menuOpts .langPick { flex: 1 1 100%; }
-  #menu ~ .overlay > .cePop .langPick button { flex: 1; min-width: 0; }
+  #ui > .overlay > .cePop .langPick button { flex: 1; min-width: 0; }
   .menuOpts .tutoToggle { flex: 1 1 100%; }
-  #menu ~ .overlay > .cePop .mBtns button { flex: 1 1 100%; }
-  #menu ~ .overlay > .cePop.menuOpts { padding-bottom: 72px; }
+  #ui > .overlay > .cePop .mBtns button { flex: 1 1 100%; }
+  #ui > .overlay > .cePop.menuOpts { padding-bottom: 72px; }
   .cePop .mKeys { margin: 16px 0 0; }
-  #menu ~ .overlay > .cePop.agePick { padding-bottom: 64px; }
-  #menu ~ .overlay > .cePop .ageBtn { flex: 1 1 40%; }
-  #menu ~ .overlay > .cePop.menuConfirm { padding-bottom: 56px; }
+  #ui > .overlay > .cePop.agePick { padding-bottom: 64px; }
+  #ui > .overlay > .cePop .ageBtn { flex: 1 1 40%; }
+  #ui > .overlay > .cePop.menuConfirm { padding-bottom: 56px; }
   .popMsg { font-size: 20px; }
+  #ui > .overlay > .cePop.settings { padding-bottom: 64px; }
+  .setWrap { grid-template-columns: 1fr; gap: 12px; }
+  .setTabs { flex-direction: row; overflow-x: auto; gap: 8px; padding: 2px 2px 6px; }
+  #ui > .overlay > .cePop .setTabs button { flex: none; min-height: 44px; padding: 0 14px; font-size: 14px; }
+  .setPane { max-height: none; min-height: 0; padding: 14px; }
+  .setPane .row > label { flex-basis: 100%; }
 }
 /* choix de la difficulté (nouvelle partie) et son rappel dans les réglages */
 .diffpick { max-width: 760px; text-align: left; }
@@ -1227,7 +1261,7 @@ body.commanding #dock { display: none; }
 body.commanding #troopBar { display: block; }
 #troopBar > * { pointer-events: auto; }
 #troopBar button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; white-space: nowrap; }
-#troopBar button.on { background: var(--accent); color: #fff; }
+#troopBar button.on { background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; }
 #troopBar kbd { margin-left: auto; font-size: 10.5px; opacity: 0.55; font-weight: 600; }
 #troopBar .tstate { position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
 #troopBar .tstate > * { pointer-events: auto; }
@@ -1257,51 +1291,6 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar button.guide, #troopBar .tord.prt.guide { animation: guidePulse 1.1s ease-in-out infinite; outline: 3px solid #ffd54a; outline-offset: 2px; }
 @keyframes guidePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 213, 74, 0.95); } 50% { box-shadow: 0 0 0 10px rgba(255, 213, 74, 0); } }
 #troopBar .twd { color: var(--ink2); }
-#troopBar .tord { min-height: 56px; border: 0; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 800; padding: 0 12px; background: #5b6b8c; }
-#troopBar .tord .oi { font-size: 20px; line-height: 1; }
-#troopBar .tord kbd { color: #fff; }
-#troopBar .tord.atk { background: #c8482b; }
-#troopBar .tord.hld { background: #2b6cf0; }
-#troopBar .tord.rtr { background: #5b6b8c; }
-#troopBar .tord.prt, #troopBar .tord.gth, #troopBar .tord.gar { background: #7a3fb0; white-space: normal; line-height: 1.15; }
-#troopBar .tord.prt { display: flex; align-items: center; gap: 8px; text-align: left; min-height: 64px; box-shadow: 0 0 0 3px rgba(255, 213, 74, 0.8); }
-#troopBar .tord.prt small { display: block; font-size: 11px; font-weight: 600; opacity: 0.85; }
-#troopBar .tord.prt.idle { box-shadow: none; opacity: 0.85; }
-#troopBar .tord.sm { min-height: 40px; font-size: 13px; }
-#troopBar .tord.tps { background: #8a94a8; min-height: 44px; font-size: 14px; }
-#troopBar .tord.on { background: var(--ink); outline: 3px solid #ffd54a; }
-#troopBar .trb { flex-direction: column; align-items: flex-start; gap: 1px; min-height: 52px; justify-content: center; padding: 4px 12px; border-radius: 12px; border: 2px solid #12a37e; background: #e6f7f1; color: var(--ink); text-align: left; white-space: normal; }
-#troopBar .trb b { font-size: 14px; font-weight: 800; }
-#troopBar .trb small { font-size: 11.5px; font-weight: 700; color: var(--ink2); line-height: 1.2; }
-#troopBar .trb.craft { border: 2px dashed #d6a24a; background: #fff8e6; }
-#troopBar .trb.craft small { color: #8a5a00; }
-#troopBar .trb.off { opacity: 0.55; border-color: var(--line); background: var(--glass); }
-#troopBar .trb.on { background: var(--accent); color: #fff; border-color: var(--accent); }
-#troopBar .trb.on small { color: #fff; }
-#troopBar .tsup { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ink2); }
-#troopBar .tchip .tsup { display: inline-flex; color: var(--ink); }
-#troopBar .tsup i { display: inline-block; width: 64px; height: 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.18); overflow: hidden; }
-#troopBar .tsup i b { display: block; height: 100%; background: #3fbf5a; }
-#troopBar .tsup.low { color: #c0392b; }
-#troopBar .tsup.mid { color: #a86a00; }
-#troopBar .tsup.mid i b { background: #e0a020; }
-#troopBar .tsup.low i b { background: #d63a2a; }
-/* jauge de contamination de l'île du portail : rouge-violet qui recule */
-#troopBar .tblight i b, #troopBar .tblight.low i b { background: linear-gradient(90deg, #8a3fd0, #e0442a); }
-#troopBar .tblight { color: #7a3fb0; }
-#troopBar .thint { font-size: 13px; font-weight: 700; color: var(--ink2); text-align: center; }
-#troopBar .tcards { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
-#troopBar .tcard { position: relative; flex-direction: column; gap: 0; min-width: 96px; min-height: 60px; padding: 4px 16px 9px; line-height: 1.15; border: 2px solid var(--line); border-radius: 14px; }
-#troopBar .tcard b { font-size: 22px; font-weight: 800; }
-#troopBar .tcard .tn { font-size: 13px; font-weight: 800; }
-#troopBar .tcard i { position: absolute; left: 10px; bottom: 4px; height: 4px; max-width: calc(100% - 20px); border-radius: 2px; background: #3fbf5a; }
-#troopBar .tcard i.low { background: #e0a020; }
-#troopBar .tcard.on { border-color: #2b6cf0; background: #2b6cf0; }
-#troopBar .tall { min-height: 60px; padding: 0 20px; border: 2px solid var(--line); border-radius: 14px; font-size: 15px; font-weight: 800; }
-#troopBar .tnone { color: var(--ink2); font-weight: 600; }
-#troopBar .thelp li { display: contents; }
-#troopBar .thelp b { color: var(--ink); white-space: nowrap; }
-#troopBar .thelp span { color: var(--ink2); }
 /* Enfers : la frise du front (une ligne), « Ma base » en trois familles */
 #troopBar .tfrise { align-items: center; gap: 10px; padding: 5px 12px; border-radius: 14px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); flex-wrap: nowrap; max-width: calc(100vw - 24px); }
 #troopBar .tfz { display: flex; align-items: center; }
@@ -1318,67 +1307,150 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 @keyframes zpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(214, 58, 42, 0.6); } 50% { box-shadow: 0 0 0 5px rgba(214, 58, 42, 0); } }
 #troopBar .tfs { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--line); font-size: 13px; font-weight: 700; white-space: nowrap; }
 #troopBar .tfa { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; background: #ffe3d8; color: #a53a1c; box-shadow: var(--lift); font-size: 12.5px; font-weight: 800; max-width: min(560px, calc(100vw - 24px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* la barre du bas : « Rentrer sur l'île » à gauche, les troupes au centre, le menu de la base (ou la caserne) à droite, Aide et Quitter au bout */
-#troopBar .tfoot { position: absolute; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 8px; pointer-events: none; }
+/* la barre du bas, la même sur l'île et dans les Enfers, peinte crème et or comme les fenêtres de l'accueil (.cePop) :
+   le passage (violet, l'identité des Enfers) à gauche, les troupes au centre, « Ma garnison » ou « Ma base » à droite, Aide et
+   le retour au bout ; le choix en cours est doré, jamais bleu */
+#troopBar { --cInk: #262a48; --cInk2: #4f5470; --cBrown: #8a6a3e; --cGold: linear-gradient(180deg, #f6c35a, #e39a2f);
+  --cGoldGlow: 0 6px 16px rgba(227, 154, 47, 0.42), 0 0 0 3px rgba(246, 195, 90, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  --cShell: linear-gradient(180deg, #fcf6ee 0%, #f8ecdf 55%, #f4e3d2 100%);
+  --cShellShadow: 0 0 0 1.5px rgba(238, 190, 112, 0.75), 0 0 26px rgba(255, 196, 110, 0.42), 0 14px 34px rgba(40, 30, 70, 0.26);
+  --cPill: linear-gradient(180deg, #fffbf5, #f6ede2); --cPillShadow: 0 3px 10px rgba(120, 85, 50, 0.16), inset 0 -2px 0 rgba(160, 120, 80, 0.08); }
+#troopBar .tfoot { position: absolute; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
 #troopBar .tfoot > * { pointer-events: auto; }
-#troopBar .tfl { flex: none; display: flex; flex-direction: column; gap: 6px; width: 176px; }
-#troopBar .tfl .tord { min-height: 56px; }
-#troopBar .tbot { flex: 0 1 auto; min-width: 0; padding: 5px 8px 5px; border-radius: 16px; display: flex; flex-direction: column; gap: 3px; }
-#troopBar .thint { width: 0; min-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 600; line-height: 1.25; color: var(--ink2); text-align: center; opacity: 0.85; }
-#troopBar .tcards { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; }
-#troopBar .tcard { position: relative; flex-direction: column; gap: 0; min-width: 58px; min-height: 44px; padding: 2px 6px 7px; line-height: 1.1; border: 2px solid var(--line); border-radius: 12px; }
-#troopBar .tcard b { font-size: 16px; font-weight: 800; }
-#troopBar .tcard .tn { font-size: 10.5px; font-weight: 800; white-space: nowrap; }
-#troopBar .tcard i { position: absolute; left: 10px; bottom: 3px; height: 4px; max-width: calc(100% - 20px); border-radius: 2px; background: #3fbf5a; }
-#troopBar .tcard i.low { background: #e0a020; }
-#troopBar .tcard.on { border-color: #2b6cf0; background: #2b6cf0; }
-#troopBar .tall { min-height: 44px; padding: 0 10px; border: 2px solid var(--line); border-radius: 12px; font-size: 14px; font-weight: 800; }
-#troopBar .tnone { color: var(--ink2); font-weight: 600; font-size: 12.5px; }
-#troopBar .tmenu { flex: 1 1 0; min-width: 0; max-width: none; padding: 6px 8px 7px; border-radius: 16px; display: flex; flex-direction: column; gap: 4px; }
+/* la coque : les deux panneaux (troupes, menu) */
+#troopBar .tbot, #troopBar .tmenu, #troopBar .thelp { border: 2px solid #fff7e8; border-radius: 22px; background: var(--cShell); box-shadow: var(--cShellShadow); backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--cInk); }
+#troopBar .tbot { flex: 0 1 auto; align-self: stretch; min-width: 0; max-width: 38%; padding: 8px 10px 6px; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
+#troopBar .thint { width: 0; min-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 600; line-height: 1.25; color: var(--cInk2); text-align: center; }
+#troopBar .tnone { padding: 6px 8px; color: var(--cInk2); font-weight: 600; font-size: 12.5px; }
+/* les cartes (troupes, recrues, bâtiments) : blanc crème translucide, picto à gauche, la choisie bordée d'or */
+#troopBar .tcard, #troopBar .tmrow .trb { position: relative; flex: none; display: flex; flex-direction: row; align-items: center; gap: 8px; border: 1px solid #fff; border-radius: 18px; background: rgba(255, 255, 255, 0.55); color: var(--cInk); text-align: left; white-space: nowrap; box-shadow: 0 2px 8px rgba(120, 85, 50, 0.1); cursor: pointer; transition: border-color 0.12s, background 0.12s, box-shadow 0.12s, transform 0.12s; }
+#troopBar .tcard:hover, #troopBar .tmrow .trb:hover { border-color: rgba(240, 180, 69, 0.75); background: rgba(255, 255, 255, 0.85); box-shadow: 0 5px 14px rgba(120, 85, 50, 0.18); transform: translateY(-1px); }
+#troopBar .tcard.on, #troopBar .tmrow .trb.on { border-color: rgba(240, 180, 69, 0.95); background: linear-gradient(180deg, #fff9ec, #fdebc8); box-shadow: 0 0 0 2px rgba(246, 195, 90, 0.75), 0 6px 16px rgba(227, 154, 47, 0.38), 0 0 18px rgba(255, 196, 110, 0.45); }
+#troopBar .ti, #troopBar .tic { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; background: radial-gradient(circle at 50% 38%, #fffdf8 0%, #f5e8d6 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9), 0 1px 3px rgba(120, 85, 50, 0.14); }
+#troopBar .ti img, #troopBar .tic img { width: 34px; height: 34px; }
+#troopBar .ttx { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; line-height: 1.15; }
+#troopBar .tcards { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 6px; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(160, 120, 80, 0.35) transparent; padding: 4px; margin: -4px; }
+#troopBar .tcard { min-height: 54px; padding: 5px 14px 9px 5px; }
+#troopBar .tcard .ti { width: 40px; height: 40px; }
+#troopBar .tcard .ti img { width: 30px; height: 30px; }
+#troopBar .tcard b { font-size: 17px; font-weight: 800; color: var(--cInk); }
+#troopBar .tcard .tn { font-size: 11px; font-weight: 700; color: var(--cInk2); }
+#troopBar .tcard i { position: absolute; left: 12px; bottom: 4px; height: 4px; max-width: calc(100% - 24px); border-radius: 2px; background: #79bf55; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7); }
+#troopBar .tcard i.low { background: #e9a23b; }
+#troopBar .tall { position: sticky; right: 0; z-index: 1; flex: none; min-height: 54px; padding: 0 16px; border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 18px; background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font-size: 14px; font-weight: 800; }
+#troopBar .tall:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }
+/* le menu : titre en Fraunces, onglets en pilules crème (l'ouvert doré), familles séparées d'un filet chaud */
+#troopBar .tmenu { flex: 1 1 0; min-width: 0; max-width: none; padding: 8px 10px 9px; display: flex; flex-direction: column; gap: 6px; }
 #troopBar .tbase { flex: 1 1 0; }
-#troopBar .tmh { display: flex; align-items: center; gap: 10px; min-height: 22px; }
-#troopBar .tmh h5 { margin: 0; padding: 0 2px; font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink2); white-space: nowrap; }
-#troopBar .tmh h5 small { font-size: 12px; letter-spacing: 0; color: var(--ink); }
-#troopBar .tmh .q { color: var(--ink2); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* les deux onglets Bâtir / Recruter : grands, contrastés, on voit tout de suite lequel est ouvert */
-#troopBar .ttabs { display: inline-flex; gap: 6px; margin-left: auto; padding: 3px; border-radius: 999px; background: rgba(15, 27, 45, 0.1); }
-#troopBar .ttabs button { min-height: 34px; padding: 0 18px; border-radius: 999px; font-size: 14px; font-weight: 800; background: #fff; border: 2px solid transparent; color: var(--ink); box-shadow: 0 1px 3px rgba(15, 27, 45, 0.25); cursor: pointer; }
-#troopBar .ttabs button:hover { border-color: var(--accent); }
-#troopBar .ttabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(47, 111, 237, 0.55); }
-#troopBar .tmrow { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: 1px; }
-#troopBar .tfam { flex: none; display: flex; flex-direction: column; gap: 2px; }
-#troopBar .tfam + .tfam { padding-left: 8px; border-left: 1px solid var(--line); }
-#troopBar .tfam h6 { margin: 0; font-size: 10.5px; font-weight: 800; line-height: 1; color: var(--ink2); }
-#troopBar .tfam.hold h6 { color: #0d7a5f; }
-#troopBar .tfam.def h6 { color: #c8482b; }
-#troopBar .tfam.lit h6 { color: #b46a00; }
-#troopBar .tbuilds { display: flex; gap: 5px; }
-#troopBar .tmrow .trb { flex: none; min-height: 44px; padding: 3px 6px; gap: 0; border-radius: 10px; align-items: center; text-align: center; }
-#troopBar .tmrow .trb b { font-size: 12.5px; }
-#troopBar .tmrow .trb small { font-size: 10.5px; line-height: 1.2; max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#troopBar .tbuilds .trb { border-color: #c9a45a; background: #fff8e6; }
-#troopBar .tbuilds .trb small.co { color: #7a5300; }
-#troopBar .tfam.def .trb, #troopBar .tfam.lit .trb { border-color: #d6dff0; background: #fff; }
-#troopBar .tfam .trb.first { border-color: #f2c14e; background: #fff1c9; box-shadow: 0 0 0 3px rgba(242, 193, 78, 0.55); }
-#troopBar .tbuilds .trb.on, #troopBar .tmrow .trb.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-#troopBar .tbuilds .trb.on small, #troopBar .tbuilds .trb.on small.co { color: #fff; }
-#troopBar .tbuilds .trb.off { opacity: 0.6; background: var(--glass); border-color: var(--line); box-shadow: none; }
-/* recruter dans les Enfers : prêt (vert), à fabriquer (pointillé orange), impossible (gris, la raison écrite sur le bouton) */
-#troopBar .tbuilds .trb.rh small { max-width: 132px; white-space: normal; text-align: center; font-weight: 700; }
-#troopBar .tbuilds .trb.rh.go { border: 2px solid #12a37e; background: #e6f7f1; }
-#troopBar .tbuilds .trb.rh.go small { color: #0a6b52; }
-#troopBar .tbuilds .trb.rh.craft { border: 2px dashed #d6a24a; background: #fff8e6; }
+#troopBar .tmh { display: flex; align-items: center; gap: 10px; min-height: 28px; padding-left: 4px; }
+#troopBar .tmh h5 { display: flex; align-items: center; gap: 8px; margin: 0; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 18px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--cInk); white-space: nowrap; }
+#troopBar .tmh h5 small { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px 2px 6px; border-radius: 999px; border: 1px solid #fff; background: rgba(255, 255, 255, 0.6); font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: #7a5300; }
+#troopBar .tmh .q { display: inline-flex; align-items: center; gap: 3px; min-width: 0; color: var(--cInk2); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#troopBar .ttabs { display: inline-flex; gap: 4px; margin-left: auto; padding: 3px; border-radius: 999px; background: rgba(160, 120, 80, 0.12); }
+#troopBar .ttabs button { min-height: 34px; padding: 0 18px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font-size: 14px; font-weight: 800; cursor: pointer; }
+#troopBar .ttabs button:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }
+#troopBar .ttabs button.on, #troopBar .ttabs button.on:hover { border-color: rgba(255, 236, 190, 0.9); background: var(--cGold); color: #3a2a14; box-shadow: var(--cGoldGlow); }
+#troopBar .tmrow { display: flex; align-items: stretch; gap: 10px; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(160, 120, 80, 0.35) transparent; padding: 4px 4px 3px; margin: -4px -4px 0; }
+#troopBar .tfam { flex: none; display: flex; flex-direction: column; gap: 4px; }
+#troopBar .tfam + .tfam { padding-left: 10px; border-left: 1px solid rgba(160, 120, 80, 0.22); }
+#troopBar .tfam h6 { margin: 0 0 0 4px; font-size: 10.5px; font-weight: 800; line-height: 1; letter-spacing: 0.04em; color: var(--cBrown); }
+#troopBar .tfam.hold h6 { color: #5f7f2c; }
+#troopBar .tfam.def h6 { color: #b0533a; }
+#troopBar .tfam.lit h6 { color: #b07a1a; }
+#troopBar .tbuilds { display: flex; gap: 6px; }
+#troopBar .tmrow .trb { min-height: 54px; padding: 5px 12px 5px 5px; }
+#troopBar .tmrow .trb b { font-size: 13.5px; font-weight: 800; }
+#troopBar .tmrow .trb small { max-width: 124px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; line-height: 1.2; color: var(--cInk2); }
+#troopBar .tmrow .trb small.co { display: flex; align-items: center; gap: 6px; color: #7a5300; }
+#troopBar .tmrow .trb small.co span { display: inline-flex; align-items: center; gap: 1px; }
+/* « à poser d'abord » (le camp) : un liseré d'or qui respire */
+#troopBar .tfam .trb.first { border-color: rgba(240, 180, 69, 0.95); box-shadow: 0 0 0 2px rgba(246, 195, 90, 0.6), 0 0 16px rgba(255, 196, 110, 0.5); animation: goldBreath 1.6s ease-in-out infinite; }
+@keyframes goldBreath { 50% { box-shadow: 0 0 0 4px rgba(246, 195, 90, 0.35), 0 0 22px rgba(255, 196, 110, 0.65); } }
+#troopBar .tmrow .trb.off { background: rgba(255, 255, 255, 0.32); box-shadow: none; }
+#troopBar .tmrow .trb.off .tic { opacity: 0.6; filter: grayscale(0.7); }
+#troopBar .tmrow .trb.off b { color: var(--cInk2); }
+#troopBar .tmrow .trb.off:hover { transform: none; }
+/* recruter : prêt (le mot en vert), à fabriquer (pointillé ambré), impossible (la raison en rouge brique, sur le bouton) */
+#troopBar .tbuilds .trb.rh small { white-space: normal; max-width: 128px; }
+#troopBar .tbuilds .trb.rh.go small { color: #4c7a26; }
+#troopBar .tbuilds .trb.rh.craft { border: 1.5px dashed #dba84e; background: rgba(255, 248, 230, 0.75); }
 #troopBar .tbuilds .trb.rh.craft small { color: #8a5a00; }
-#troopBar .tbuilds .trb.rh.off { opacity: 1; border: 2px solid var(--line); background: var(--glass); color: var(--ink2); }
 #troopBar .tbuilds .trb.rh.off small { color: #a23b2a; }
-#troopBar .tcorner { flex: none; display: flex; flex-direction: column; gap: 4px; }
-#troopBar .tcorner button { min-height: 32px; padding: 0 14px; font-size: 13px; font-weight: 800; border-radius: 10px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); color: var(--ink); justify-content: center; }
-#troopBar .tcorner button.on { background: var(--accent); color: #fff; }
-#troopBar .tcorner button.go { min-height: 48px; background: #12a37e; color: #fff; border-color: #0d7a5f; font-size: 14px; box-shadow: 0 0 0 3px rgba(18, 163, 126, 0.35), var(--lift); }
-#troopBar .thelp { position: absolute; right: 10px; bottom: 150px; list-style: none; margin: 0; padding: 10px 14px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; width: min(460px, calc(100vw - 24px)); }
+/* à gauche : le passage du portail, une carte crème à pastille violette (l'identité des Enfers), plus vive quand des troupes sont choisies */
+#troopBar .tfl { flex: none; display: flex; flex-direction: column; gap: 6px; width: 184px; }
+#troopBar .tord { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 12px 0 6px; border: 2px solid #fff7e8; border-radius: 999px; background: var(--cShell); color: #4b2a7a; font-size: 13.5px; font-weight: 800; line-height: 1.15; text-align: left; white-space: normal; box-shadow: 0 0 0 1.5px rgba(170, 125, 225, 0.55), 0 8px 20px rgba(40, 30, 70, 0.24); cursor: pointer; }
+#troopBar .tord:hover { box-shadow: 0 0 0 1.5px rgba(170, 125, 225, 0.85), 0 0 18px rgba(170, 125, 225, 0.35), 0 8px 20px rgba(40, 30, 70, 0.24); }
+#troopBar .tord .oi { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; background: linear-gradient(180deg, #b48ae6, #7444bd); box-shadow: 0 0 0 1px rgba(150, 100, 220, 0.4), 0 3px 8px rgba(110, 64, 180, 0.35); font-size: 17px; line-height: 1; }
+#troopBar .tord .oi img { width: 22px; height: 22px; }
+#troopBar .tord.prt { min-height: 66px; padding: 6px 12px 6px 7px; border-radius: 22px; font-size: 14.5px; box-shadow: 0 0 0 1.5px rgba(170, 125, 225, 0.85), 0 0 24px rgba(170, 125, 225, 0.45), 0 10px 26px rgba(40, 30, 70, 0.28); }
+#troopBar .tord.prt .oi { width: 44px; height: 44px; }
+#troopBar .tord.prt .oi img { width: 30px; height: 30px; }
+#troopBar .tord.prt small { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--cInk2); }
+#troopBar .tord.prt.idle { box-shadow: 0 0 0 1.5px rgba(170, 125, 225, 0.5), 0 10px 26px rgba(40, 30, 70, 0.24); }
+#troopBar .tord.prt.idle .oi { filter: saturate(0.75); }
+/* au bout : Aide (pilule crème) et le retour (pilule crème à pastille verte, liseré vert doux) */
+#troopBar .tcorner { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 158px; }
+#troopBar .tcorner .tl { white-space: normal; line-height: 1.15; text-align: left; }
+#troopBar .tcorner button { justify-content: flex-start; gap: 8px; min-height: 38px; padding: 0 14px 0 6px; border: 2px solid #fff7e8; border-radius: 999px; background: var(--cShell); color: var(--cInk); font-size: 13px; font-weight: 800; box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.6), 0 8px 20px rgba(40, 30, 70, 0.24); cursor: pointer; }
+#troopBar .tcorner button:hover { box-shadow: 0 0 0 1.5px rgba(240, 180, 69, 0.9), 0 0 16px rgba(255, 196, 110, 0.45), 0 8px 20px rgba(40, 30, 70, 0.24); }
+#troopBar .tcorner .tq { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(160, 120, 80, 0.14); color: var(--cBrown); font-family: 'Fraunces', Georgia, serif; font-size: 15px; font-weight: 800; }
+#troopBar .tcorner button.on { border-color: rgba(255, 236, 190, 0.9); background: var(--cGold); color: #3a2a14; box-shadow: var(--cGoldGlow), 0 8px 20px rgba(40, 30, 70, 0.24); }
+#troopBar .tcorner button.on .tq { background: rgba(255, 255, 255, 0.4); color: #3a2a14; }
+#troopBar .tcorner button.go { min-height: 54px; padding-right: 16px; font-size: 14px; box-shadow: 0 0 0 1.5px rgba(126, 184, 92, 0.8), 0 0 18px rgba(150, 210, 110, 0.32), 0 8px 20px rgba(40, 30, 70, 0.24); }
+#troopBar .tcorner button.go:hover { box-shadow: 0 0 0 1.5px rgba(110, 175, 75, 1), 0 0 22px rgba(150, 210, 110, 0.5), 0 8px 20px rgba(40, 30, 70, 0.24); }
+#troopBar .tcorner .oi { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 2px solid #fff; background: linear-gradient(180deg, #a9d986, #5f9f41); box-shadow: 0 0 0 1px rgba(100, 160, 70, 0.4), 0 3px 8px rgba(80, 140, 50, 0.35); }
+#troopBar .tcorner .oi img { width: 26px; height: 26px; }
+#troopBar button:focus-visible { outline: 3px solid rgba(240, 180, 69, 0.9); outline-offset: 2px; }
+#troopBar .thelp { position: absolute; right: 10px; bottom: 150px; list-style: none; margin: 0; padding: 12px 16px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; width: min(460px, calc(100vw - 24px)); }
 #troopBar .thelp li { display: contents; }
-#troopBar .thelp b { color: var(--ink); white-space: nowrap; }
-#troopBar .thelp span { color: var(--ink2); }
+#troopBar .thelp b { color: var(--cInk); white-space: nowrap; }
+#troopBar .thelp span { color: var(--cInk2); }
+/* écran moyen : le menu passe sur sa propre ligne, sous (passage, troupes, Aide et retour) */
+@media (max-width: 1100px) {
+  #troopBar .tfoot { flex-wrap: wrap; align-items: stretch; }
+  #troopBar .tfl { order: 1; justify-content: flex-end; }
+  #troopBar .tbot { order: 2; flex: 1 1 0; max-width: none; }
+  #troopBar .tcorner { order: 3; justify-content: flex-end; }
+  #troopBar .tmenu { order: 4; flex: 1 1 100%; }
+}
+/* téléphone et petite tablette : deux lignes (passage, troupes, Aide et retour en pictos), puis le menu sur toute la largeur ;
+   les rangées de cartes défilent de côté, jamais la page */
+@media (max-width: 720px) {
+  #troopBar .tfoot { left: 6px; right: 6px; bottom: max(6px, env(safe-area-inset-bottom)); flex-wrap: wrap; gap: 6px; align-items: stretch; }
+  #troopBar .tfl { order: 1; width: 108px; gap: 5px; }
+  #troopBar .tord { min-height: 40px; padding: 0 8px 0 4px; gap: 6px; font-size: 11.5px; }
+  #troopBar .tord .oi { width: 28px; height: 28px; }
+  #troopBar .tord .oi img { width: 19px; height: 19px; }
+  #troopBar .tord.prt { min-height: 52px; padding: 4px 8px 4px 4px; border-radius: 18px; font-size: 12px; }
+  #troopBar .tord.prt .oi { width: 34px; height: 34px; }
+  #troopBar .tord.prt .oi img { width: 24px; height: 24px; }
+  #troopBar .tord.prt small { font-size: 10px; }
+  #troopBar .tbot { order: 2; flex: 1 1 0; min-width: 0; max-width: none; padding: 5px 6px 4px; border-radius: 18px; }
+  #troopBar .tcorner { order: 3; gap: 5px; width: auto; }
+  #troopBar .tcorner button, #troopBar .tcorner button.go { justify-content: center; width: 44px; min-height: 44px; padding: 0; }
+  #troopBar .tcorner .tl { display: none; }
+  #troopBar .tcorner .oi { width: 34px; height: 34px; }
+  #troopBar .tcorner .oi img { width: 22px; height: 22px; }
+  #troopBar .tmenu { order: 4; flex: 1 1 100%; max-width: none; padding: 6px 8px 7px; border-radius: 18px; }
+  #troopBar .tmh { min-height: 24px; gap: 6px; }
+  #troopBar .tmh h5 { font-size: 15px; }
+  #troopBar .ttabs button { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
+  #troopBar .tmh .q { display: none; }
+  #troopBar .tcards { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+  #troopBar .tcard { min-height: 46px; padding: 3px 10px 8px 3px; gap: 5px; border-radius: 15px; }
+  #troopBar .tcard .ti { width: 32px; height: 32px; border-radius: 11px; }
+  #troopBar .tcard .ti img { width: 24px; height: 24px; }
+  #troopBar .tcard b { font-size: 15px; }
+  #troopBar .tcard .tn { font-size: 10.5px; }
+  #troopBar .tall { min-height: 46px; padding: 0 10px; border-radius: 15px; font-size: 12.5px; }
+  #troopBar .thint { font-size: 10.5px; }
+  #troopBar .tmrow .trb { min-height: 46px; padding: 3px 9px 3px 3px; gap: 6px; border-radius: 15px; }
+  #troopBar .tmrow .tic { width: 34px; height: 34px; border-radius: 11px; }
+  #troopBar .tmrow .tic img { width: 27px; height: 27px; }
+  #troopBar .tmrow .trb b { font-size: 12px; }
+  #troopBar .tmrow .trb small { font-size: 10.5px; }
+  #troopBar .thelp { bottom: 200px; right: 6px; }
+}
 /* le nom de la zone courante, à gauche de la frise */
 #troopBar .tfn { flex: none; font-size: 13px; font-weight: 800; color: #8a2a12; white-space: nowrap; padding-right: 10px; border-right: 1px solid var(--line); }
 #troopBar .tfa { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; background: #ffe3d8; color: #a53a1c; box-shadow: var(--lift); font-size: 12.5px; font-weight: 800; max-width: min(560px, calc(100vw - 24px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1401,27 +1473,6 @@ body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
   #troopBar .tfs { padding-left: 8px; gap: 6px; font-size: 11.5px; }
   #troopBar .tfa { font-size: 11px; }
   #troopBar .tchip { padding: 5px 9px; font-size: 12px; }
-  #troopBar .tord { min-height: 44px; font-size: 13px; padding: 0 8px; gap: 5px; }
-  #troopBar .tord kbd { display: none; }
-  /* barre du bas sur deux lignes : (rentrer, troupes, Aide/Quitter), puis le menu de la base sur toute la largeur, qui défile de côté */
-  #troopBar .tfoot { left: 6px; right: 6px; bottom: max(6px, env(safe-area-inset-bottom)); flex-wrap: wrap; gap: 5px; align-items: stretch; }
-  #troopBar .tfl { order: 1; width: 112px; flex-direction: column; }
-  #troopBar .tfl .tord { min-height: 44px; }
-  #troopBar .tfl .tord.prt { min-height: 50px; }
-  #troopBar .tbot { order: 2; flex: 1 1 0; min-width: 0; padding: 5px 6px 5px; }
-  #troopBar .tcorner { order: 3; flex-direction: column; gap: 3px; }
-  #troopBar .tcorner button { min-height: 30px; padding: 0 9px; font-size: 12px; }
-  #troopBar .tmenu { order: 4; flex: 1 1 100%; max-width: none; padding: 4px 6px 5px; }
-  #troopBar .tcard { min-width: 62px; min-height: 44px; padding: 2px 6px 7px; }
-  #troopBar .tcard b { font-size: 16px; }
-  #troopBar .tcard .tn { font-size: 11px; }
-  #troopBar .tall { min-height: 44px; padding: 0 9px; font-size: 12.5px; }
-  #troopBar .tcards { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
-  #troopBar .tcard, #troopBar .tall { flex: none; }
-  #troopBar .thint { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #troopBar .tmrow .trb { min-height: 40px; padding: 2px 7px; }
-  #troopBar .tmrow .trb b { font-size: 11.5px; }
-  #troopBar .thelp { bottom: 200px; right: 6px; }
 }
 #selBox { display: none; position: absolute; z-index: 8; border: 1.5px solid #7dff8a; background: rgba(125, 255, 138, 0.12); pointer-events: none; }
 #warAlert { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); z-index: 9; padding: 8px 10px 8px 14px; align-items: center; gap: 10px; font-weight: 800; color: #9a1e12; border-color: rgba(200, 60, 40, 0.5); }
@@ -1450,11 +1501,11 @@ body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
 .kwRewards b { font-size: 16px; line-height: 1.1; }
 @media (max-width: 560px) { .kwRewards { grid-template-columns: 1fr; } }
 /* les aides du volet militaire : une petite bulle, deux lignes au plus, cliquable */
-#warTip { position: absolute; top: calc(var(--hudB, 82px) + 12px); right: 12px; z-index: 9; width: min(400px, calc(100vw - 24px)); padding: 9px 30px 7px 12px; cursor: pointer; border-color: rgba(70, 110, 220, 0.45); animation: rise 0.2s ease-out; }
+#warTip { position: absolute; top: calc(var(--hudB, 82px) + 12px); right: 12px; z-index: 9; width: min(400px, calc(100vw - 24px)); padding: 10px 32px 8px 14px; cursor: pointer; border: 2px solid #fff7e8; border-radius: 20px; background: linear-gradient(180deg, #fcf6ee 0%, #f8ecdf 55%, #f4e3d2 100%); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.75), 0 0 22px rgba(255, 196, 110, 0.4), 0 12px 28px rgba(40, 30, 70, 0.24); animation: rise 0.2s ease-out; }
 #warTip[hidden] { display: none; }
-#warTip .wtText { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-#warTip .wtX { position: absolute; top: 5px; right: 5px; padding: 1px 6px; font-size: 11px; background: none; border: none; color: var(--ink2); }
-#warTip .wtOff { margin-top: 4px; padding: 0; font-size: 11px; background: none; border: none; color: var(--ink2); text-decoration: underline; }
+#warTip .wtText { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.35; color: #262a48; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#warTip .wtX { position: absolute; top: 6px; right: 7px; padding: 1px 6px; font-size: 11px; background: none; border: none; box-shadow: none; color: #8a6a3e; }
+#warTip .wtOff { margin-top: 4px; padding: 0; font-size: 11px; background: none; border: none; box-shadow: none; color: #8a6a3e; text-decoration: underline; }
 /* écran étroit : la bulle descend sous ce qui est centré en haut (messages, alerte d'incursion, barre des Enfers et son bouton
    Remonter, barre de vie du roi), qu'elle recouvrait */
 @media (max-width: 1279px) {
@@ -1640,6 +1691,19 @@ body.cinematic #bannerWrap { display: none !important; }
 .expModal .mbody > :nth-last-child(2) { margin-bottom: auto; }
 .expModal button.sendBtn:hover:not(:disabled) { background: linear-gradient(180deg, #3f7ef0, #1f58cf); }
 .expModal .mission.done button.sendBtn { background: #fff; color: #1f4fb8; border: 1.5px solid #2b6cf0; box-shadow: none; }
+/* petit format des missions réussies : une vignette carrée, le titre, les pastilles et « Refaire » (ni texte, ni gains, ni
+   étiquettes ; « A débloqué » seulement s'il reste à bâtir) */
+.expModal .mission.small { align-self: start; align-items: center; gap: 12px; padding: 8px; border-radius: 18px; }
+.mission.small .mart { flex: 0 0 92px; height: 92px; min-height: 0; border-radius: 12px; }
+.mission.small .mart > b img.pic { width: 52px; height: 52px; }
+.mission.small .mstate { top: 4px; left: 4px; padding: 1px 6px; font-size: 10.5px; }
+.mission.small .mtags, .mission.small .mtext, .mission.small .mgains, .mission.small .unlock:not(.ready) { display: none; }
+.expModal .mission.small .mhead h4 { font-size: 15px; }
+.expModal .mission.small .mhead > .mbadge { flex-basis: 26px; width: 26px; height: 26px; }
+.expModal .mission.small .mhead > .mbadge img.pic { width: 22px; height: 22px; }
+.expModal .mission.small .mpills { margin-top: 4px; }
+.expModal .mission.small .unlock, .expModal .mission.small .req { margin-top: 6px; }
+.expModal .mission.small .mbody > .sendBtn { margin-top: 8px; min-height: 34px; border-radius: 10px; font-size: 13px; }
 .expModal button.sendBtn:disabled { background: rgba(15, 27, 45, 0.12); color: var(--ink2); box-shadow: none; }
 @media (max-width: 720px) {
   .overlay > .modal.expModal { padding: 0 14px 16px; border-radius: 22px; }
@@ -1696,19 +1760,6 @@ img.pic { display: inline-block; flex: none; vertical-align: -0.22em; object-fit
 /* la façon de partir : un sélecteur segmenté, la couleur suit le style */
 .sStyles { display: flex; gap: 6px; padding: 5px; border-radius: 18px; background: rgba(255, 255, 255, 0.5); border: 1px solid rgba(255, 255, 255, 0.9); }
 .sStyles button { flex: 1; flex-direction: column; gap: 1px; min-height: 54px; padding: 6px 8px; border-radius: 14px; border: 2px solid transparent; background: transparent; color: #3a4560; box-shadow: none; }
-/* petit format des missions réussies : une vignette carrée, le titre, les pastilles et « Refaire » (ni texte, ni gains, ni
-   étiquettes ; « A débloqué » seulement s'il reste à bâtir) */
-.expModal .mission.small { align-self: start; align-items: center; gap: 12px; padding: 8px; border-radius: 18px; }
-.mission.small .mart { flex: 0 0 92px; height: 92px; min-height: 0; border-radius: 12px; }
-.mission.small .mart > b img.pic { width: 52px; height: 52px; }
-.mission.small .mstate { top: 4px; left: 4px; padding: 1px 6px; font-size: 10.5px; }
-.mission.small .mtags, .mission.small .mtext, .mission.small .mgains, .mission.small .unlock:not(.ready) { display: none; }
-.expModal .mission.small .mhead h4 { font-size: 15px; }
-.expModal .mission.small .mhead > .mbadge { flex-basis: 26px; width: 26px; height: 26px; }
-.expModal .mission.small .mhead > .mbadge img.pic { width: 22px; height: 22px; }
-.expModal .mission.small .mpills { margin-top: 4px; }
-.expModal .mission.small .unlock, .expModal .mission.small .req { margin-top: 6px; }
-.expModal .mission.small .mbody > .sendBtn { margin-top: 8px; min-height: 34px; border-radius: 10px; font-size: 13px; }
 .sStyles button b { font-size: 15px; font-weight: 800; }
 .sStyles button small { font-size: 11.5px; font-weight: 600; color: #5a6b8c; }
 .sStyles button:hover { background: rgba(255, 255, 255, 0.7); }

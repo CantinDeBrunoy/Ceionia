@@ -2,6 +2,7 @@ import type { KingdomReward } from '../sim/kingdom';
 import { FORGE_CRAFT, FORGE_RISK } from '../sim/kingdom';
 import { GEAR_BY } from '../sim/gear';
 import { ic } from './icons';
+import { pic } from './pics';
 import { tr, t, localize, registerKeys } from '../i18n';
 
 /**
@@ -60,7 +61,7 @@ export class BossBar {
     const fresh = !this.key.startsWith(s.name);
     this.key = key;
     if (fresh || !this.el.querySelector('.bfill')) {
-      this.el.innerHTML = `<button class="bfocus" title="${KINGDOM_TEXT.focus}">👑</button><div class="bmain"><div class="bhead"><b class="bname"></b><small class="bnote"></small></div><div class="btrack"><i class="bfill"></i></div></div>`;
+      this.el.innerHTML = `<button class="bfocus" title="${KINGDOM_TEXT.focus}">${pic('👑', 22)}</button><div class="bmain"><div class="bhead"><b class="bname"></b><small class="bnote"></small></div><div class="btrack"><i class="bfill"></i></div></div>`;
     }
     this.el.classList.toggle('rage', s.rage);
     this.el.querySelector('.bname')!.textContent = s.name;
@@ -85,7 +86,7 @@ export function showKingdomVictory(root: HTMLElement, r: KingdomReward | null, o
     <h2>${T.title}</h2>
     <p class="story">${T.story}</p>
     <h4 class="kwHead">${T.rewards}</h4>
-    <ul class="kwRewards">${items.map(([i, t]) => `<li><b>${i}</b><span>${t}</span></li>`).join('')}</ul>
+    <ul class="kwRewards">${items.map(([i, t]) => `<li><b>${pic(i, 28)}</b><span>${t}</span></li>`).join('')}</ul>
     <div class="row"><button class="home">${ic('house', 16)} ${T.home}</button><span class="grow"></span><button class="active ok">${T.cont}</button></div>
   </div>`;
   root.appendChild(ov);

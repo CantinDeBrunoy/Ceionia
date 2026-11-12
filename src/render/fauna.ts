@@ -134,9 +134,10 @@ const MODELS: Partial<Record<Kind, { name: ModelName; length: number; lead?: Mod
   cow: { name: 'cow', length: 0.3 },
   pig: { name: 'pig', length: 0.17 },
   hen: { name: 'chicken', length: 0.085, yaw: Math.PI },
-  dog: { name: 'dog', length: 0.2 },
+  // shiba ou husky, cheval bai ou blanc : un modèle par groupe
+  dog: { name: 'dog', length: 0.2, pick: ['dog', 'husky'] },
   deer: { name: 'deer', length: 0.3, lead: 'stag' },
-  horse: { name: 'horse', length: 0.34 },
+  horse: { name: 'horse', length: 0.34, pick: ['horse', 'horse_white'] },
   llama: { name: 'llama', length: 0.24 },
   fox: { name: 'fox', length: 0.2 },
   frog: { name: 'frog', length: 0.085 },

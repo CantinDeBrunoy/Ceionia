@@ -1,12 +1,12 @@
 /**
- * Pictos 3D en couleur à la place des émojis (dont le rendu varie selon le système) : le jeu Fluent Emoji de Microsoft
- * (licence MIT, https://github.com/microsoft/fluentui-emoji), en WebP 128 px dans `public/icons/fluent/`.
- * `pic(émoji)` rend l'image ; un émoji absent de la table reste en texte. Pour en ajouter : le PNG « 3D » du dossier
- * Fluent qui porte le nom de l'émoji, converti en WebP 128 px, et une ligne ici
+ * Pictos 3D en couleur à la place des émojis (dont le rendu varie selon le système) : le jeu d'icônes de Ceionia,
+ * low-poly 3D comme l'équipement, en WebP 128 px dans `public/icons/pics/`.
+ * `pic(émoji)` rend l'image ; un émoji absent de la table reste en texte. Pour en ajouter : une image carrée sur fond
+ * transparent, réduite en WebP 128 px, et une ligne ici
  */
 
 /** émoji (sans sélecteur de variante U+FE0F) → nom du fichier */
-const FLUENT: Record<string, string> = {
+const PICS: Record<string, string> = {
   '🔥': 'fire',
   '⛔': 'no_entry',
   '🐑': 'ewe',
@@ -84,14 +84,60 @@ const FLUENT: Record<string, string> = {
   '🦣': 'mammoth',
   '🏰': 'castle',
   '🏙': 'cityscape',
+  // dangers des expéditions
+  '🧗': 'danger_fall',
+  '🌊': 'danger_water',
+  '🌑': 'danger_dark',
+  '⛈': 'danger_storm',
+  '👹': 'danger_monster',
+  // panneaux : rail, atelier, verrous, royaume, guerre
+  '📦': 'freight',
+  '🧳': 'passengers',
+  '⚡': 'boost',
+  '⏳': 'hourglass',
+  '🔒': 'lock',
+  '👑': 'crown',
+  '🏆': 'trophy',
+  '🌿': 'herb',
+  '🎯': 'target',
+  '🩹': 'bandage',
+  '🛠': 'tools',
+  '🎺': 'horn',
+  '🌲': 'pine',
+  '📷': 'camera',
+  // troupes
+  '🏹': 'bow',
+  '🪓': 'axe',
+  '💂': 'guard',
+  '🪖': 'helmet',
+  '🔫': 'gun',
+  '🦾': 'mech_arm',
+  '🤖': 'robot',
+  '🚜': 'tank',
+  '🛸': 'ufo',
+  '☄': 'comet',
 };
+
+const key = (emoji: string) => emoji.replace(/️/g, '');
 
 /** Le picto d'un émoji, à la taille `size` (px) ; l'émoji en texte s'il n'a pas de picto */
 export function pic(emoji: string, size = 20, cls = ''): string {
-  const f = FLUENT[emoji.replace(/\uFE0F/g, '')];
+  const f = PICS[key(emoji)];
   if (!f) return emoji;
-  return `<img class="pic${cls ? ' ' + cls : ''}" src="./icons/fluent/${f}.webp" width="${size}" height="${size}" alt="${emoji}" draggable="false" decoding="async">`;
+  return `<img class="pic${cls ? ' ' + cls : ''}" src="./icons/pics/${f}.webp" width="${size}" height="${size}" alt="${emoji}" draggable="false" decoding="async">`;
 }
 
 /** Vrai si l'émoji a un picto */
-export const hasPic = (emoji: string) => !!FLUENT[emoji.replace(/\uFE0F/g, '')];
+export const hasPic = (emoji: string) => !!PICS[key(emoji)];
+
+/** L'émoji en tête d'un texte, s'il a un picto, et la suite (sans l'espace qui suit) ; sinon null */
+export function leadPic(text: string): [string, string] | null {
+  const m = /^(\p{Extended_Pictographic}️?)\s*/u.exec(text);
+  return m && hasPic(m[1]) ? [m[1], text.slice(m[0].length)] : null;
+}
+
+/** Un bout de HTML dont l'émoji de tête devient un picto (« 🔒 Portail fermé ») ; inchangé sinon */
+export function withPic(html: string, size = 18): string {
+  const l = leadPic(html);
+  return l ? `${pic(l[0], size)} ${l[1]}` : html;
+}

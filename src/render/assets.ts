@@ -11,6 +11,9 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   // arbres des forêts tempérées (Ultimate Nature) : bouleau, arbre commun, arbre rond, bouleau nu, sapins, sapin enneigé
   'birch', 'tree_common', 'tree_round', 'birch_bare', 'pines', 'pine_snow',
   'fox', 'wolf', 'horse', 'llama', 'frog',
+  // Animated Animal Pack de Quaternius (celui de la biche, du cerf et du renard) : cheval bai et cheval blanc, alpaga
+  // (`llama`), vache, shiba (`dog`) et husky
+  'horse_white', 'husky',
   // sous-bois et détails des prairies
   'log', 'stump', 'fern', 'flowers', 'mushroom', 'skull', 'ribcage', 'bone',
   // monde souterrain : cristaux, toiles et créatures
@@ -375,10 +378,27 @@ export interface Actor {
 }
 
 /** Bêtes de la ferme et des bois, rendues en facettes */
-const FACETED = new Set<string>(['cow', 'pig', 'sheep', 'chicken', 'horse', 'deer', 'stag', 'fox', 'wolf', 'llama', 'dog']);
+const FACETED = new Set<string>(['cow', 'pig', 'sheep', 'chicken', 'horse', 'horse_white', 'deer', 'stag', 'fox', 'wolf', 'llama', 'dog', 'husky']);
 
-/** Bêtes dont le modèle, trop arrondi, est simplifié en grosses facettes (sommets regroupés sur une grille de `n` cases) */
-const CHUNKY: Partial<Record<string, number>> = { cow: 9 };
+/**
+ * Bêtes dont le modèle, trop arrondi, est simplifié en grosses facettes (sommets regroupés sur une grille de `n` cases).
+ * Aucune aujourd'hui : l'ancienne vache tachetée l'était ; celle de l'Animated Animal Pack est déjà en facettes
+ */
+const CHUNKY: Partial<Record<string, number>> = {};
+
+/**
+ * Noms d'animation des anciens modèles (pack de ferme en cubes) que les enclos, cavaliers et expéditions demandent encore,
+ * et leur équivalent dans l'Animated Animal Pack (galop, broutage, coup de tête, saut…)
+ */
+const CLIP_ALIAS: [string, string[]][] = [
+  ['Run', ['Gallop']],
+  ['Idle_Eating', ['Eating']],
+  ['Headbutt', ['Attack_Headbutt', 'Attack']],
+  ['Jump_Start', ['Jump_toIdle', 'Jump_ToIdle']],
+  ['Jump_Loop', ['Gallop_Jump']],
+  ['WalkSlow', ['Walk']],
+  ['Idle_Headlow', ['Idle_2_HeadLow']],
+];
 const chunked = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
 
 /**
@@ -521,6 +541,10 @@ export function makeActor(name: ModelName, size: number, fit: 'length' | 'height
   for (const clip of gltf.animations) {
     const short = clip.name.split('|').pop()!;
     if (!actions.has(short)) actions.set(short, mixer.clipAction(clip));
+  }
+  for (const [alias, clips] of CLIP_ALIAS) {
+    const c = clips.map((n) => actions.get(n)).find(Boolean);
+    if (c && !actions.has(alias)) actions.set(alias, c);
   }
   return { root, mixer, actions, current: null };
 }

@@ -7,6 +7,7 @@
  */
 
 import { tr, localize } from '../i18n';
+import { pic, leadPic } from './pics';
 
 export type WarTipId = 'portal' | 'isle' | 'garrison' | 'orders' | 'hell' | 'ageLock' | 'base' | 'kingdom';
 
@@ -137,7 +138,9 @@ export class WarTips {
     this.shown = id;
     this.el.dataset.tip = id;
     this.el.innerHTML = `<p class="wtText"></p><button class="wtX" title="${tr('Fermer')}" aria-label="${tr('Fermer')}">✕</button><button class="wtOff">${tr('Masquer les aides')}</button>`;
-    this.el.querySelector('.wtText')!.textContent = WAR_TIP_TEXT[id];
+    const tx = WAR_TIP_TEXT[id], lead = leadPic(tx), p = this.el.querySelector<HTMLElement>('.wtText')!;
+    // l'émoji de tête devient un picto, le reste est posé en texte
+    if (lead) { p.innerHTML = `${pic(lead[0], 20)} `; p.append(lead[1]); } else p.textContent = tx;
     this.el.hidden = false;
   }
 

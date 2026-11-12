@@ -27,7 +27,7 @@ import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
-import { pic } from './pics';
+import { pic, leadPic, withPic } from './pics';
 import { menuBg } from './loading';
 import { MiniMap } from './minimap';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
@@ -127,12 +127,12 @@ function railStat(h: UIHost, b: Building): [string, string] | null {
   // [pastille courte, explication complète en info-bulle]
   if (want === 'freight') {
     const st = railStation(w, b);
-    return st ? [`${t} ⚡ ${tr('+{n} % par le rail', { n: bonus })}`, tr('Boosté : servi par la gare de marchandises voisine ({name}), dont le chariot fait la navette ; produit {n} % de plus', { name: r.stopName(st), n: bonus })]
+    return st ? [`${t} ${pic('⚡', 14)} ${tr('+{n} % par le rail', { n: bonus })}`, tr('Boosté : servi par la gare de marchandises voisine ({name}), dont le chariot fait la navette ; produit {n} % de plus', { name: r.stopName(st), n: bonus })]
       : [`${t} ${tr('+{n} % avec une gare', { n: bonus })}`, tr('Une gare à {r} cases au plus, desservie par un train de marchandises, le ferait produire {n} % de plus', { r: RAIL_REACH, n: bonus })];
   }
   if (want === 'passenger') {
     const st = railStation(w, b);
-    return st ? [`${t} ⚡ ${tr('Servi par le train')}`, tr('Boosté : servi par la gare de voyageurs voisine ({name}) ; les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite', { name: r.stopName(st) })]
+    return st ? [`${t} ${pic('⚡', 14)} ${tr('Servi par le train')}`, tr('Boosté : servi par la gare de voyageurs voisine ({name}) ; les équipes arrivent en train, expéditions spatiales plus sûres et lancements préparés plus vite', { name: r.stopName(st) })]
       : [`${t} ${tr('À relier au train')}`, tr('Une gare à {r} cases au plus, desservie par un train de voyageurs, y amènerait les équipes : expéditions spatiales plus sûres et lancements préparés plus vite', { r: RAIL_REACH })];
   }
   if (!isStation(b)) return null;
@@ -501,7 +501,7 @@ export class UI {
           <nav id="menuBtns">
             <button id="bExp" class="round" title="${tr('Expéditions')}" aria-label="${tr('Expéditions')}">${ic('compass', 21)}<span id="expBadge"></span></button>
             <button id="bBell" class="round" title="${tr('Notifications')}" aria-label="${tr('Notifications')}" aria-expanded="false">${ic('bell', 20)}<span id="bellBadge"></span></button>
-            <button id="bSettings" class="round" title="${tr('Réglages')}" aria-label="${tr('Réglages')}">${ic('gear', 21)}</button>
+            <button id="bSettings" class="round" title="${tr('Paramètres')}" aria-label="${tr('Paramètres')}">${ic('gear', 21)}</button>
           </nav>
         </div>
       </header>
@@ -805,7 +805,7 @@ export class UI {
       const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1 && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge)), shut = (k: KindId) => +!!this.lockOf(k);
       const tile = (k: KindId) => {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0, gv = givesOf(k, a);
-        const badge = locked ? '<i class="badge lock">🔒</i>' : n ? `<i class="badge">${n}</i>` : '';
+        const badge = locked ? `<i class="badge lock">${pic('🔒', 14)}</i>` : n ? `<i class="badge">${n}</i>` : '';
         const tip = `${d.names[a]}${gv.length ? ` : ${gv.join(', ').toLowerCase()}` : ''}`;
         // la vignette 3D du bâtiment (son vrai modèle, à cet âge) ; en attendant qu'elle soit rendue, son icône au trait
         const th = this.host.thumb?.(k, a), img = th ? `<b class="th"><img src="${th}" alt="" draggable="false"></b>` : `<b class="th" data-th="${k}|${a}">${ic(KIND_ICON[k], 28, 1.6)}</b>`;
@@ -965,7 +965,7 @@ export class UI {
     box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? tr('Grand bâtiment ({n} × {n}) · ', { n: d.size }) : ''}${count}</small></div></div>
       ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${k === 'wall' && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) })}${rich ? '' : tr(' — vous avez {have}', { have: haveLabel(w, cost) })}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
-      ${lock ? `<p class="lock">🔒 ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : `${tr(hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap : lâcher')}</p>` : ''}`;
+      ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : `${tr(hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap : lâcher')}</p>` : ''}`;
   }
 
   /**
@@ -1013,11 +1013,11 @@ export class UI {
       const to = KINDS[u.to], name = to.names[Math.max(b.age, to.minAge)], c = priceIn(h.world, u.to, h.sim.age);
       const locked = to.reqMission && !h.world.missionDone(to.reqMission) ? MISSIONS.find((m) => m.id === to.reqMission)?.title ?? to.reqMission : null;
       const first = !locked && !h.world.sandbox && to.reqKind && !h.sim.built(to.reqKind) ? h.sim.nameOf(to.reqKind) : null;
-      if (first) return `<button disabled title="${attr(tr('Il faut d’abord « {name} » au village', { name: first }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${tr('{name} d’abord', { name: first })}</small></button>`;
-      return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: tr(locked) }))}">${ic('upgrade', 16, 2)} ${name} <small>🔒 ${tr(locked)}</small></button>`
+      if (first) return `<button disabled title="${attr(tr('Il faut d’abord « {name} » au village', { name: first }))}">${ic('upgrade', 16, 2)} ${name} <small>${pic('🔒', 12)} ${tr('{name} d’abord', { name: first })}</small></button>`;
+      return locked ? `<button disabled title="${attr(tr('Débloqué par l’expédition « {title} »', { title: tr(locked) }))}">${ic('upgrade', 16, 2)} ${name} <small>${pic('🔒', 12)} ${tr(locked)}</small></button>`
         : `<button data-act="up:${u.to}" class="primary">${ic('upgrade', 16, 2)} ${tr('Améliorer : {name}', { name })}${to.size > sizeOf(b) ? ` <small>${to.size} × ${to.size}</small>` : ''}${c ? ` <small>${costLabel(c)}</small>` : ''}</button>`;
     }).join('');
-    // la case à cocher des flèches d'amélioration : elle vaut pour tous les bâtiments (même réglage que Réglages › Partie)
+    // la case à cocher des flèches d'amélioration : elle vaut pour tous les bâtiments (même réglage que Paramètres › Partie)
     const upChk = `<label class="upchk" title="${attr(tr('Montre ou cache la flèche au-dessus de chaque bâtiment qui peut être amélioré, pour tous les bâtiments.'))}"><input type="checkbox" data-act="badges" ${h.hideUpBadges ? '' : 'checked'}> ${tr('Afficher les flèches d’amélioration')}</label>`;
     const upgrades = ups ? `<div class="acts ups">${ups}</div>${upChk}` : '';
     const key = `${b.id}|${b.rot}|${b.age}|${b.auto}|${stats.join()}|${railChip}|${rails}|${upgrades}`;
@@ -1255,9 +1255,14 @@ export class UI {
         box.appendChild(el);
       }
       el.className = `toast ${v.level}${v.act ? ' act' : ''}`;
-      // un picto selon le niveau (danger, geste à faire, annonce), puis le texte (sûr : posé en texte, pas en HTML)
+      // le picto de l'émoji de tête s'il en a un, sinon un picto selon le niveau (danger, geste à faire, annonce),
+      // puis le texte (sûr : posé en texte, pas en HTML)
       const txt = v.count > 1 ? `${v.text} ×${v.count}` : v.text;
-      if (el.dataset.v !== txt) { el.innerHTML = `${pic(v.level === 'danger' ? '⚠' : v.level === 'action' ? '🧭' : '🔔', 24)}<span></span>`; el.querySelector('span')!.textContent = txt; el.dataset.v = txt; }
+      if (el.dataset.v !== txt) {
+        const lead = leadPic(txt);
+        el.innerHTML = `${pic(lead ? lead[0] : v.level === 'danger' ? '⚠' : v.level === 'action' ? '🧭' : '🔔', 24)}<span></span>`;
+        el.querySelector('span')!.textContent = lead ? lead[1] : txt; el.dataset.v = txt;
+      }
     }
     $('#bellBadge').textContent = q.unread ? String(Math.min(q.unread, 99)) : '';
     $('#bBell').classList.toggle('new', q.unread > 0);
@@ -1275,7 +1280,7 @@ export class UI {
     const p = $('#notifPanel'), h = this.notifs.history;
     const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     p.innerHTML = `<div class="npHead"><b>${tr('Notifications')}</b>${h.length ? `<button class="npClear" type="button">${tr('Tout effacer')}</button>` : ''}</div>`
-      + (h.length ? `<ul>${h.map((x) => `<li class="${x.level}">${esc(x.text)}${x.count > 1 ? ` <em>×${x.count}</em>` : ''}</li>`).join('')}</ul>` : `<p class="npNone">${tr('Rien de nouveau.')}</p>`);
+      + (h.length ? `<ul>${h.map((x) => `<li class="${x.level}">${withPic(esc(x.text), 18)}${x.count > 1 ? ` <em>×${x.count}</em>` : ''}</li>`).join('')}</ul>` : `<p class="npNone">${tr('Rien de nouveau.')}</p>`);
     p.querySelector<HTMLElement>('.npClear')?.addEventListener('click', () => { this.notifs.clearHistory(); this.renderNotifPanel(); this.renderNotifs(); });
   }
 
@@ -1478,7 +1483,7 @@ export class UI {
       <p class="hint">${tr(meta.use)}</p>
       <div class="src">${rows.join('') || `<div class="crow"><span class="none">${tr('Aucun bâtiment n’en produit encore.')}</span></div>`}</div>
       <p class="hint ${day > 0 ? 'ok' : 'warn'}">${tr(meta.more)}</p>
-      ${lock ? `<p class="hint warn">🔒 ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}`;
+      ${lock ? `<p class="hint warn">${pic('🔒', 16)} ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
   }
@@ -1964,7 +1969,7 @@ export class UI {
         return `<div class="gear" data-gear="${g.id}" title="${g.desc}">
           <div class="gart${GEAR_ART.has(g.id) ? '' : ' none'}">${art}</div>
           <div class="gbody">
-          <div class="ghead"><span class="gli">${ic(GEAR_LINE[g.id] ?? g.icon, 24, 1.8)}</span><b class="gname">${g.name}</b><span class="cnt" title="${tr('En réserve')}${crafting ? tr(', en fabrication') : ''}${out ? tr(', en route') : ''}">${n}${crafting ? ` · ⏳${crafting}` : ''}${out ? ` · 🧭${out}` : ''}</span></div>
+          <div class="ghead"><span class="gli">${ic(GEAR_LINE[g.id] ?? g.icon, 24, 1.8)}</span><b class="gname">${g.name}</b><span class="cnt" title="${tr('En réserve')}${crafting ? tr(', en fabrication') : ''}${out ? tr(', en route') : ''}">${n}${crafting ? ` · ${pic('⏳', 14)}${crafting}` : ''}${out ? ` · 🧭${out}` : ''}</span></div>
           <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : tr('Utile partout')}${g.also ? tr(' et les {d}', { d: DANGER_NAME[g.also] }) : ''} · ${per(g)}">${vs} ${tr('−{n} % de risque', { n: Math.round(g.cut * 100) })}</small>
           ${why ? `<small class="why">${why}</small>` : ''}
           <button data-craft="${g.id}" class="${why ? '' : 'go'}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.time, price }) : tr('Fabriquer : {t} s', { t: g.time }))}">${ic('eq-craft', 18, 1.9)} ${why ? price || tr('Fabriquer') : tr('Fabriquer')}</button>
@@ -2099,15 +2104,18 @@ export class UI {
   // ---------------- Réglages ----------------
   openSettings() {
     const h = this.host, t = h.time, a = h.audio;
-    const tabs = [['time', 'clock', tr('Temps et météo')], ['look', 'palette', tr('Image et son')], ['game', 'houses', tr('Partie')]];
+    // quatre onglets en colonne (en rangée sur téléphone) ; chaque section commence par son titre et son icône
+    const tabs = [['time', 'sun', tr('Temps et météo')], ['look', 'screen', tr('Graphismes & son')], ['game', 'pad', tr('Partie')], ['misc', 'sliders', tr('Divers')]];
+    const head = (k: string) => { const [, i, l] = tabs.find((x) => x[0] === k)!; return `<h3 class="setH">${ic(i, 22, 2)}${l}</h3>`; };
     const lang = getLang();
     // au bac à sable et en Normal, la difficulté impose le réglage des ressources
     const forced = DIFF_TEXT.resForced[h.world.difficulty];
-    const { ov, close } = modal(this.root, 'settings', `${ic('gear', 22)} ${tr('Réglages')}`, `
-      <div class="tabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 16, 2)}${l}</button>`).join('')}</div>
-      <section data-sec="time">
-        <h4>${tr('Vitesse')}</h4>
-        <div class="row"><button data-sp="0">${ic('pause', 16, 2.2)} ${tr('Pause')}</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button><button data-sp="8">×8</button></div>
+    // la DA des fenêtres peintes de l'accueil (menuPop) : coque crème et dorée, le choix en cours en or
+    const { ov, close } = menuPop(this.root, 'settings', 'options', tr('Paramètres'), `<div class="setWrap">
+      <nav class="setTabs">${tabs.map(([k, i, l], n) => `<button data-tab="${k}" class="${n ? '' : 'on'}">${ic(i, 18, 2)}${l}</button>`).join('')}</nav>
+      <div class="setPane">
+      <section data-sec="time">${head('time')}
+        <div class="row"><label>${tr('Vitesse')}</label><button data-sp="0">${ic('pause', 16, 2.2)} ${tr('Pause')}</button><button data-sp="1">×1</button><button data-sp="2">×2</button><button data-sp="4">×4</button><button data-sp="8">×8</button></div>
         <div class="row"><label>${tr('Durée du jour')}</label><input id="sDay" type="range" min="30" max="400" step="10" value="${t.dayLen}"><span id="vDay">${t.dayLen}s</span></div>
         <div class="row"><label>${tr('Durée saison')}</label><input id="sSeason" type="range" min="30" max="600" step="10" value="${t.seasonLen}"><span id="vSeason">${t.seasonLen}s</span></div>
         <h4>${tr('Saison et heure')}</h4>
@@ -2116,14 +2124,14 @@ export class UI {
         <h4>${tr('Météo')}</h4>
         <div class="row">${[['auto', '', tr('Auto')], ['clear', 'sun', tr('Clair')], ['rain', 'rain', tr('Pluie')], ['snow', 'snow', tr('Neige')], ['fog', 'fog', tr('Brume')]].map(([k, i, l]) => `<button data-w="${k}" class="${(h.env.manualWeather ?? 'auto') === k ? 'active' : ''}">${i ? ic(i, 16) + ' ' : ''}${l}</button>`).join('')}</div>
       </section>
-      <section data-sec="look" hidden>
+      <section data-sec="look" hidden>${head('look')}
         <h4>${tr('Graphismes')}</h4>
         <div class="row">${[['auto', tr('Auto')], ['high', tr('Haute (halo de nuit)')], ['medium', tr('Normale')], ['low', tr('Réduite')]].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}" title="${k === 'auto' ? tr('La qualité baisse d’elle-même si le jeu saccade, et remonte quand tout est fluide') : ''}">${l}</button>`).join('')}</div>
         <h4>${tr('Audio')}</h4>
         <div class="row"><label>${tr('Musique')}</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" aria-label="${tr('Couper la musique')}" class="${a.muteMusic ? 'active' : ''}">${ic(a.muteMusic ? 'mute' : 'volume', 18)}</button></div>
         <div class="row"><label>${tr('Sons')}</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" aria-label="${tr('Couper les sons')}" class="${a.muteSfx ? 'active' : ''}">${ic(a.muteSfx ? 'mute' : 'volume', 18)}</button></div>
       </section>
-      <section data-sec="game" hidden>
+      <section data-sec="game" hidden>${head('game')}
         <h4>${tr('Règles')}</h4>
         <div class="row"><label>${DIFF_TEXT.setting}</label><span class="diffTag ${h.world.difficulty}">${ic(DIFF_TEXT.icon[h.world.difficulty], 16, 2)}${DIFF_TEXT.name[h.world.difficulty]}</span></div>
         <ul class="hint dpoints">${DIFF_TEXT.points[h.world.difficulty].map((x) => `<li>${x}</li>`).join('')}</ul>
@@ -2138,17 +2146,20 @@ export class UI {
         <p class="hint">${tr('Normales : bois, pierre et minerai se gagnent et se dépensent. Illimitées : ils ne manquent jamais — les grands bâtiments ne coûtent rien, l’équipement non plus, et le minerai demandé pour passer d’âge est acquis.')}</p>
         <h4>${tr('Sauvegarde')}</h4>
         <div class="row"><button id="gSave">${ic('save', 16)} ${tr('Sauvegarder')}</button><button id="gExport">${ic('download', 16)} ${tr('Exporter')}</button><button id="gImport">${ic('upload', 16)} ${tr('Importer')}</button></div>
+        <h4>${tr('Quitter')}</h4>
+        <div class="row"><button id="gNew">${ic('restart', 16)} ${tr('Recommencer cette carte')}</button><button id="gMenu">${ic('house', 16)} ${tr('Menu principal')}</button></div>
+        <input type="file" id="fImport" accept="application/json,.json" style="display:none">
+      </section>
+      <section data-sec="misc" hidden>${head('misc')}
         ${this.tutorial?.settingsHtml() ?? ''}
         <h4>${tr('Langue')}</h4>
         ${langPicker(lang)}
-        <h4>${tr('Quitter')}</h4>
-        <div class="row"><button id="gCredits">${tr('Crédits')}</button><button id="gNew">${ic('restart', 16)} ${tr('Recommencer cette carte')}</button><button id="gMenu">${ic('house', 16)} ${tr('Menu principal')}</button></div>
-        <input type="file" id="fImport" accept="application/json,.json" style="display:none">
+        <h4>${tr('Crédits')}</h4>
+        <div class="row"><button id="gCredits">${tr('Crédits')}</button></div>
       </section>
-      <div class="row foot"><span class="grow"></span><button id="gClose" class="active">${tr('Fermer')}</button></div>`);
+      </div></div>`, undefined, tr('Personnalisez votre expérience de jeu.'));
     bindLangPicker(ov);
     const q = <T extends HTMLElement>(s: string) => $(s, ov) as T;
-    q('#gClose').onclick = close;
     q('#gCredits').onclick = () => showCredits(this.root);
     ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => (b.onclick = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((x) => x.classList.toggle('on', x === b));
@@ -2288,10 +2299,6 @@ export function showCredits(root: HTMLElement) {
       <li>${tr('« Greek Temple » par {author} : temple et asclépiéion de l’Antiquité.', { author: a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)') })}</li>
       <li>${tr('« Amphora » par {a1} et « Eight Vases » par {a2} : atelier du potier.', { a1: a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira'), a2: a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner') })}</li>
     </ul>
-    <h4>${tr('Pictos sous licence MIT')}</h4>
-    <ul class="credits">
-      <li>${tr('{src} (Microsoft) : les pictos en couleur des expéditions. Copyright (c) Microsoft Corporation.', { src: a('https://github.com/microsoft/fluentui-emoji', 'Fluent Emoji') })}</li>
-    </ul>
     <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>`);
 }
 
@@ -2308,8 +2315,6 @@ const PEAK_SHAPES = [
 ];
 const drawPeaks = (fill: string, dx: number, dy: number) => PEAK_SHAPES.map((d) => `<path d="${d}" fill="${fill}" transform="translate(${dx} ${dy})"/>`).join('');
 const LOGO_PEAKS = `<svg class="mPeaks" viewBox="610 95 760 330" aria-hidden="true">${drawPeaks('#bfa992', 3, 5)}${drawPeaks('#fbf4e8', 0, 0)}</svg>`;
-/** les mêmes sommets, en petit et en blanc, dans la pastille du bas */
-const MINI_PEAKS = `<svg viewBox="610 95 760 330" width="48" height="21" aria-hidden="true">${drawPeaks('currentColor', 0, 0)}</svg>`;
 
 /**
  * L'écran d'accueil, sur un paysage animé (la vidéo `MENU_VIDEO` de `loading.ts`, ou l'image fixe) : le titre, les
@@ -2332,13 +2337,13 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
         <span class="mArt"><img src="./menu/mode-${d}.webp" alt="" decoding="async"></span>
         <span class="mRec">${d === DEFAULT_DIFFICULTY ? DIFF_TEXT.recommended : ''}</span>
         <h2>${DIFF_TEXT.mode(d)}</h2><em>${DIFF_TEXT.blurb[d]}</em>${CHEVRON}</button>`).join('')}</div>
-      <button class="mGo">${playIcon()}<span>${tr('Nouvelle partie')}</span></button>
-      <div class="mStatus"><b>${MINI_PEAKS}</b><i class="mSep" aria-hidden="true"></i><span></span><button class="mResume" hidden>${playIcon(16)}${tr('Continuer')}</button></div>
+      <div class="mPlay"><button class="mResume" hidden>${playIcon()}<span>${tr('Continuer')}</span></button><button class="mGo">${playIcon()}<span>${tr('Nouvelle partie')}</span></button></div>
+      <p class="mSave" hidden></p>
     </div>
     <input type="file" id="mFile" accept="application/json,.json" style="display:none">`;
   // la carte choisie (le continent par défaut) : sa sauvegarde, et la graine de sa prochaine partie (chacune a son continent)
   let save: SaveData | null = null, seed = newSeed(), pick: Difficulty = DEFAULT_DIFFICULTY;
-  const status = $('.mStatus', ov), resume = $<HTMLButtonElement>('.mResume', ov);
+  const status = $('.mSave', ov), resume = $<HTMLButtonElement>('.mResume', ov);
   const select = (d: Difficulty) => {
     pick = d;
     ov.querySelectorAll<HTMLElement>('.mMode').forEach((b) => { b.classList.toggle('sel', b.dataset.d === d); b.setAttribute('aria-checked', `${b.dataset.d === d}`); });
@@ -2348,14 +2353,14 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
     seed = newSeed();
     resume.hidden = !save;
     ov.classList.toggle('hasSave', !!save);
-    $('span', status).textContent = save ? tr('Votre monde vous attend…') : tr('Un monde neuf vous attend…');
     // le mode choisi d'avance : celui de la sauvegarde, sinon le mode conseillé
     const d = save ? readDifficulty(save.world.difficulty, save.world.diffV) : DEFAULT_DIFFICULTY;
     select(d);
-    if (!save) { status.title = ''; return; }
-    // le résumé de la partie (mode, âge, habitants, « il y a… ») : en bulle au survol, la pastille tient sur une ligne
+    status.hidden = !save;
+    if (!save) return;
+    // sous les boutons, le résumé de la partie : mode, âge, habitants, « il y a… »
     const when = savedAgo(save.savedAt), pop = Math.floor(save.pop);
-    status.title = [DIFF_TEXT.name[d], AGES[save.age]?.name ?? '', `${pop} ${plural(pop, 'habitant', 'habitants')}`, when].filter(Boolean).join(' · ');
+    status.textContent = `${tr('Votre monde vous attend…')} ${[DIFF_TEXT.name[d], AGES[save.age]?.name ?? '', `${pop} ${plural(pop, 'habitant', 'habitants')}`, when].filter(Boolean).join(' · ')}`;
   };
   draw();
   resume.onclick = () => host.start(map, 'continue');
@@ -2418,10 +2423,12 @@ const AGE_ICON = ['prehistoire', 'antiquite', 'medieval', 'industriel', 'moderne
 
 /**
  * Fenêtre de l'accueil (options, âge de départ, confirmation) : fond crème bordé d'or, petites montagnes au-dessus,
- * paysage peint en bas (montagnes lointaines, prairie). `icon` : le losange du titre (un fichier icone_*.webp)
+ * paysage peint en bas (montagnes lointaines, prairie). `icon` : le losange du titre (un fichier icone_*.webp) ; `sub` : sous-titre.
+ * Sert aussi en jeu (les paramètres) : le style vaut pour toute fenêtre `.cePop` de #ui
  */
-function menuPop(root: HTMLElement, cls: string, icon: string, title: string, body: string, onClose?: () => void) {
-  const r = modal(root, `cePop ${cls}`, icon ? `${popIc(icon, 'popBadge')}<span>${title}</span>` : title, body, onClose);
+function menuPop(root: HTMLElement, cls: string, icon: string, title: string, body: string, onClose?: () => void, sub = '') {
+  const head = `<span class="popTi">${title}${sub ? `<small>${sub}</small>` : ''}</span>`;
+  const r = modal(root, `cePop ${cls}`, icon ? `${popIc(icon, 'popBadge')}${head}` : title, body, onClose);
   $('.modal', r.ov).insertAdjacentHTML('afterbegin', `<img class="popCrest" src="${POP}montagnes_entete.webp" alt="" aria-hidden="true">`
     + `<div class="popLand" aria-hidden="true"><img class="popFar" src="${POP}montagnes_lointaines.webp" alt=""><img class="popMeadow" src="${POP}prairie_collines.webp" alt=""></div>`);
   return r;
