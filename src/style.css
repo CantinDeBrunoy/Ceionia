@@ -477,7 +477,7 @@ body.under #selCard, body.photo #selCard { display: none; }
 #menu p.sub { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0 16px; margin: 16px 0 0; font-size: clamp(13px, 1.2vw, 18px); font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: #fdf6e8; text-shadow: 0 2px 8px rgba(40, 50, 110, 0.5); }
 #menu p.sub i { font-style: normal; font-size: 0.7em; letter-spacing: 0; }
 /* les cartes : un clic choisit le mode ; la carte choisie grandit, luit et porte le losange */
-.mModes { display: flex; justify-content: center; align-items: center; gap: clamp(28px, 2.6vw, 44px); width: min(1100px, 100%); }
+.mModes { display: flex; justify-content: center; align-items: stretch; gap: clamp(28px, 2.6vw, 44px); width: min(1100px, 100%); }
 .mMode { position: relative; flex: 0 1 280px; display: flex; flex-direction: column; align-items: center; gap: 0; min-height: 0; padding: 14px 20px 18px; border-radius: 26px; border: 3px solid rgba(255, 255, 255, 0.75); text-align: center; color: #23262f; box-shadow: 0 18px 40px rgba(30, 40, 90, 0.25); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: transform 0.22s, box-shadow 0.18s; }
 .mMode.sandbox { background: linear-gradient(180deg, rgba(238, 249, 236, 0.93), rgba(212, 236, 214, 0.9)); }
 .mMode.easy { background: linear-gradient(180deg, rgba(255, 245, 226, 0.95), rgba(253, 222, 172, 0.93)); }
@@ -493,8 +493,9 @@ body.under #selCard, body.photo #selCard { display: none; }
 .mGem::after { content: ''; position: absolute; inset: 6px; border-radius: 2px; background: #fffaf0; }
 .mMode.sel .mGem { transform: rotate(45deg) scale(1); }
 .mArt { display: block; width: 100%; padding: 12px 0 10px; }
-.mArt img { display: block; width: 100%; height: auto; }
-.mRec { font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: #b47a10; }
+/* même cadre pour les trois illustrations (de hauteurs différentes) : titres et textes alignés d'une carte à l'autre */
+.mArt img { display: block; width: 100%; height: auto; aspect-ratio: 560 / 355; object-fit: contain; }
+.mRec { min-height: 16px; line-height: 16px; font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: #b47a10; }
 .mMode h2 { margin: 2px 0 6px; font-family: 'Fraunces', Georgia, serif; font-size: clamp(20px, 1.7vw, 26px); font-weight: 600; line-height: 1.1; transition: font-size 0.25s; }
 .mMode em { font-size: 15px; font-weight: 500; line-height: 1.35; color: #3b3e48; }
 .mChev { flex: none; box-sizing: content-box; margin-top: auto; padding-top: 14px; color: #262832; }

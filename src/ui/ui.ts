@@ -2330,7 +2330,7 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
       <div class="mModes" role="radiogroup" aria-label="${tr('Mode')}">${DIFFICULTIES.map((d) => `<button type="button" role="radio" class="mMode ${d}${d === DEFAULT_DIFFICULTY ? ' rec' : ''}" data-d="${d}" title="${attr(DIFF_TEXT.points[d].join(' · '))}">
         <span class="mGem" aria-hidden="true"></span>
         <span class="mArt"><img src="./menu/mode-${d}.webp" alt="" decoding="async"></span>
-        ${d === DEFAULT_DIFFICULTY ? `<span class="mRec">${DIFF_TEXT.recommended}</span>` : ''}
+        <span class="mRec">${d === DEFAULT_DIFFICULTY ? DIFF_TEXT.recommended : ''}</span>
         <h2>${DIFF_TEXT.mode(d)}</h2><em>${DIFF_TEXT.blurb[d]}</em>${CHEVRON}</button>`).join('')}</div>
       <button class="mGo">${playIcon()}<span>${tr('Nouvelle partie')}</span></button>
       <div class="mStatus"><b>${MINI_PEAKS}</b><i class="mSep" aria-hidden="true"></i><span></span><button class="mResume" hidden>${playIcon(16)}${tr('Continuer')}</button></div>
