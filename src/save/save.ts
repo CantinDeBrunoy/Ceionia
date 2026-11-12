@@ -7,6 +7,8 @@ export interface Settings {
   speed: number;
   musicVol: number;
   sfxVol: number;
+  /** volume des ambiances (nature et bruitages de proximité) ; absent des anciennes sauvegardes : 0,7 */
+  ambVol?: number;
   /** son activé : coupé par défaut tant que le joueur ne l'a pas allumé dans les réglages */
   music?: boolean;
   sfx?: boolean;

@@ -3,6 +3,7 @@ import './i18n/en';
 import { onLangChange, tr as trx, nplural } from './i18n';
 import * as THREE from 'three';
 import { World, N, VEG_VOLCANO, setMapSize } from './world/world';
+import { buildingSpots, pickVoices } from './audio/spots';
 import { Underground, UZ_NAMES } from './world/underground';
 import type { UnderView } from './render/underView';
 /**
@@ -182,6 +183,10 @@ class Game implements UIHost {
   /** les trophées des gros monstres vaincus, sur la grande place ; quand on les remet à jour */
   trophies: Trophies;
   private trophyT = 0;
+  /** bruitages de proximité : prochain choix des sources (s), volcans de la carte (cases) et version du monde où on les a comptés */
+  private spotT = 0;
+  private volcanoCells: number[] = [];
+  private volcanoV = -1;
   /** prochain rappel à l'aide pour les feux que personne ne combat (s) */
   private fireCallT = 0;
   /** le bouton « Retourner au village », quand la vue s'éloigne de la grande place */
@@ -344,7 +349,7 @@ class Game implements UIHost {
     }
     this.war.load(w.war);
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
-    Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
+    Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, ambVol: settings.ambVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
     if (settings.quality) this.quality = settings.quality;
     this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? (weak ? 2 : 0))));
     this.autoRoads = settings.autoRoads ?? true;
@@ -543,7 +548,7 @@ class Game implements UIHost {
     const unlock = () => { audio.start(); audio.applyVolumes(); };
     window.addEventListener('pointerdown', unlock, { once: true });
     window.addEventListener('keydown', unlock, { once: true });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveNow(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveNow(); audio.pause(document.hidden); });
     window.addEventListener('pagehide', () => this.saveNow());
     // changer de langue en jeu : on sauvegarde, la page recharge et reprend la partie dans la nouvelle langue
     onLangChange(() => { this.saveNow(); sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`); this.running = false; location.reload(); });
@@ -638,7 +643,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -1419,6 +1424,26 @@ class Game implements UIHost {
     return { stream: stream * zoom, cascade: cascade * zoom, coast: coast * zoom, fire: Math.max(this.life.fireNear(f), this.fires.nearness(f.x, f.z)) * zoom, alt: Math.max(0, w.hAt(f.x, f.z)), frogs: this.fauna.frogsNear(f.x, f.z, 9) * zoom };
   }
 
+  /** Bruitages de proximité : les sources autour du point visé (au village seulement), leur place à l'écran */
+  private syncSpots(surface: boolean) {
+    const w = this.world, f = this.cam.target;
+    if (!surface || this.isleCmd) { audio.spots([], []); return; }
+    if (this.volcanoV !== w.version) {
+      this.volcanoV = w.version;
+      this.volcanoCells = [];
+      for (let k = 0; k < N * N; k++) if (w.veg[k] === VEG_VOLCANO) this.volcanoCells.push(k);
+    }
+    const spots = buildingSpots(w.buildings.values(), f.x, f.z);
+    for (const k of this.volcanoCells) {
+      const x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5;
+      if (Math.abs(x - f.x) < 45 && Math.abs(z - f.z) < 45) spots.push({ kind: 'volcano', x, z });
+    }
+    const env = this.env, list = pickVoices(spots, f.x, f.z, this.cam.dist, { daylight: env.daylight, rain: env.rainK, winter: this.time.season === 3 }, coarse ? 3 : 6);
+    const v = this.spotV;
+    audio.spots(list, list.map((s) => { v.set(s.x, w.hAt(s.x, s.z), s.z).project(this.cam.camera); return Math.max(-1, Math.min(1, v.x)) * 0.7; }));
+  }
+  private spotV = new THREE.Vector3();
+
   /**
    * Fait l'action au village : depuis les Enfers ou le commandement de l'île, on remonte d'abord (fondu), puis elle s'exécute une
    * fois. `keepIsle` : on reste au commandement de l'île (aller sur l'île, y commander)
@@ -1888,6 +1913,7 @@ class Game implements UIHost {
       pop: this.sim.pop, camDist: this.cam.dist, under: uv || hv ? 1 : 0,
       ...this.ambience(),
     });
+    if ((this.spotT -= dt) <= 0) { this.spotT = 0.25; this.syncSpots(!uv && !hv); }
 
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }

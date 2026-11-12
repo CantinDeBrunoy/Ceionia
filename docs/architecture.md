@@ -108,7 +108,7 @@ Orbitale : `target` (point visé), `yaw`, `pitch`, `dist`. Chaque valeur a un **
 En commandement (Enfers, île) `CommandUI.key` passe d'abord : `H` tenir, `R` retraite, `A` attaquer, `1`–`5` groupes (Ctrl ou Maj = enregistrer), `Espace` pause, `Échap` désélectionne (il ne quitte pas les Enfers). Aux Enfers, une touche d'outil du village (B, R, X, chiffres) remonte à la surface puis prend l'outil. Sous terre : `U` ou `Échap` remonte.
 
 ### Audio
-`audio/audio.ts` : `AudioEngine`, tout en Web Audio, **procédural** (musique générative selon l'âge et la saison, ambiances, effets `sfx…`). Coupé par défaut (`muteMusic`, `muteSfx` vrais jusqu'à ce que le joueur les allume) ; le contexte démarre au premier clic ou à la première touche (`unlock`). `audio.update(dt, état)` reçoit chaque image l'âge, la saison, la lumière, la météo, la population, la distance de caméra et la proximité (torrents, côte, feu).
+`audio/audio.ts` : `AudioEngine`, tout en Web Audio, **procédural** (musique générative selon l'âge et la saison, ambiances, effets `sfx…`). Coupé par défaut (`muteMusic`, `muteSfx` vrais jusqu'à ce que le joueur les allume) ; le contexte démarre au premier clic ou à la première touche (`unlock`). `audio.update(dt, état)` reçoit chaque image l'âge, la saison, la lumière, la météo, la population, la distance de caméra et la proximité (torrents, côte, feu). Bruitages de proximité des bâtiments et des volcans (`Game.syncSpots`, toutes les 0,25 s) et pause quand l'onglet est caché : voir [audio.md](audio.md).
 
 ### Carte des dossiers
 - `src/main.ts`, `src/hellMode.ts`, `src/kingdomStage.ts`, `src/kingdomEnd.ts` : démarrage, mode des Enfers, mise en scène du royaume.

@@ -2162,6 +2162,7 @@ export class UI {
         <h4>${tr('Audio')}</h4>
         <div class="row"><label>${tr('Musique')}</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" aria-label="${tr('Couper la musique')}" class="${a.muteMusic ? 'active' : ''}">${ic(a.muteMusic ? 'mute' : 'volume', 18)}</button></div>
         <div class="row"><label>${tr('Sons')}</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" aria-label="${tr('Couper les sons')}" class="${a.muteSfx ? 'active' : ''}">${ic(a.muteSfx ? 'mute' : 'volume', 18)}</button></div>
+        <div class="row"><label title="${tr('Nature, ateliers, bêtes et foule près de la caméra')}">${tr('Ambiances')}</label><input id="sAmb" type="range" min="0" max="1" step="0.05" value="${a.ambVol}"><button tabindex="-1" aria-hidden="true" style="visibility:hidden">${ic('volume', 18)}</button></div>
       </section>
       <section data-sec="game" hidden>${head('game')}
         <h4>${tr('Règles')}</h4>
@@ -2280,6 +2281,7 @@ export class UI {
     };
     rng('#sMusic', (v) => (a.musicVol = v));
     rng('#sSfx', (v) => (a.sfxVol = v));
+    rng('#sAmb', (v) => (a.ambVol = v));
     q('#mMusic').onclick = () => { a.muteMusic = !a.muteMusic; q('#mMusic').innerHTML = ic(a.muteMusic ? 'mute' : 'volume', 18); q('#mMusic').classList.toggle('active', a.muteMusic); h.applySettings(); };
     q('#mSfx').onclick = () => { a.muteSfx = !a.muteSfx; q('#mSfx').innerHTML = ic(a.muteSfx ? 'mute' : 'volume', 18); q('#mSfx').classList.toggle('active', a.muteSfx); h.applySettings(); };
     q('#gSave').onclick = () => { h.saveNow(); this.info('Partie sauvegardée'); };

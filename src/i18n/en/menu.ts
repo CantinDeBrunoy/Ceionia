@@ -130,6 +130,8 @@ registerDict('menu', {
   'Couper la musique': 'Mute music',
   'Sons': 'Sounds',
   'Couper les sons': 'Mute sounds',
+  'Ambiances': 'Ambience',
+  'Nature, ateliers, bêtes et foule près de la caméra': 'Nature, workshops, animals and crowds near the camera',
   'Règles': 'Rules',
   'Catastrophes': 'Disasters',
   'Activées': 'On',
