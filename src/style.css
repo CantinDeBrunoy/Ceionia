@@ -1008,9 +1008,9 @@ button.sendBtn:disabled { background: rgba(15, 27, 45, 0.12); color: var(--ink2)
 /* les stocks au-dessus des cartes, avec leurs pictos */
 .gstock { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 6px 0 14px; font-size: 15px; font-weight: 700; color: #17315a; }
 .gstock span { display: inline-flex; align-items: center; gap: 8px; }
-/* l'en-tête : un paysage de montagnes à droite, fondu vers le titre */
+/* l'en-tête : le paysage de l'âge à droite (--exp-banner, posé par openExpeditions), fondu vers le titre */
 .expModal > .mtitle { position: relative; overflow: hidden; }
-.expModal > .mtitle::before { content: ''; position: absolute; inset: 0 0 0 38%; background: url('/expeditions/banniere.webp') right center / cover no-repeat; -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%); pointer-events: none; }
+.expModal > .mtitle::before { content: ''; position: absolute; inset: 0 0 0 42%; background: var(--exp-banner, url('/expeditions/banniere-0.webp')) center 62% / cover no-repeat; -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%); pointer-events: none; }
 .expModal > .mtitle > * { position: relative; }
 .gear .gdesc { margin-top: 0; }
 .queue { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
