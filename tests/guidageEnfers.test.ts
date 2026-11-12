@@ -127,6 +127,7 @@ describe('le portail, cible d’un ordre de déplacement', () => {
     const host: any = {
       war: { portalOut: false, hellWhy: () => null, sendThroughPortal: (l: { id: number }[]) => sent.push(l.map((u) => u.id)) },
       canvas: { style: {} }, camKeys: new Set(), toast() {}, click() {}, age: () => 1, pop: () => 10, paused: () => false,
+      went: [] as string[], goHell() { this.went.push('hell'); }, leaveHell() { this.went.push('village'); },
     };
     const ui = new CommandUI(fakeEl() as unknown as HTMLElement, host);
     ui.render = () => {};
@@ -154,6 +155,24 @@ describe('le portail, cible d’un ordre de déplacement', () => {
     ui.cmd.clear();
     ui.rightClick({ x: m.portal[0], y: m.portal[1], touch: false, button: 2 });
     expect(sent).toEqual([]);
+  });
+
+  it('un clic sur le portail passe de l’autre côté : de l’île aux Enfers, des Enfers au village', () => {
+    for (const [kind, to] of [['isle', 'hell'], ['hell', 'village']] as const) {
+      const { ui, us, portal } = build(kind);
+      // (même avec des troupes choisies : le clic gauche n'est pas un ordre)
+      ui.cmd.select([us[0].id]);
+      const e = { x: portal[0] + 0.5, y: portal[1], touch: false, button: 0 };
+      ui.down(e); ui.up(e);
+      expect((ui as any).host.went, kind).toEqual([to]);
+    }
+  });
+
+  it('un clic hors du portail ne quitte pas les Enfers', () => {
+    const { ui, m } = build('hell');
+    const e = { x: m.arrival[0] + 6, y: m.arrival[1] + 4, touch: false, button: 0 };
+    ui.down(e); ui.up(e);
+    expect((ui as any).host.went).toEqual([]);
   });
 
   it('le royaume tombé, le portail de l’île est éteint : plus de passage vers les Enfers', () => {

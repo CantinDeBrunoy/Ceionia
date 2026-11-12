@@ -332,10 +332,10 @@ export class CommandUI implements ToolInput {
     if (this.cmd.armed) cur = 'crosshair';
     else if (p) {
       if (this.cmd.selected.size && foeAt(t.sim, p[0], p[1], 0.6)) cur = 'crosshair';
-      // le portail avec des troupes choisies : curseur « passage » (flèche vers l'arche) ; sans troupes, sur l'île, un clic mène aux Enfers
+      // le portail avec des troupes choisies : curseur « passage » (flèche vers l'arche) ; sans troupes, un clic passe de l'autre côté
       else if (pass) cur = 'alias';
       else if (unitAt(this.units(), p[0], p[1], 0.5)) cur = 'pointer';
-      else if (t.kind === 'isle' && portal) cur = 'pointer';
+      else if (portal) cur = 'pointer';
     }
     this.host.canvas.style.cursor = cur;
   }
@@ -534,8 +534,8 @@ export class CommandUI implements ToolInput {
     // attaquer en marchant, armé : le clic donne l'ordre
     if (this.cmd.armed && this.cmd.selected.size) { this.orderAt(x, y); return; }
     const u = unitAt(this.units(), p[0], p[1], 0.5);
-    // un clic sur le portail (sans unité dessus) : on passe dans les Enfers
-    if (!u && t.kind === 'isle' && t.atPortal?.(p[0], p[1])) { this.host.click(); this.host.goHell(); return; }
+    // un clic sur le portail (sans unité dessus) : de l'île, on passe dans les Enfers ; des Enfers, on revient au village
+    if (!u && t.atPortal?.(p[0], p[1])) { this.host.click(); if (t.kind === 'isle') this.host.goHell(); else this.host.leaveHell(); return; }
     const now = performance.now();
     if (u) {
       // double-clic : toutes celles de la même sorte, en vue
@@ -678,10 +678,11 @@ export class CommandUI implements ToolInput {
     else if (a === 'follow') { const on = !this.host.following?.(); this.host.follow?.(on); this.host.toast(on ? tr('La vue suit vos troupes. Déplacez la vue pour reprendre la main.') : tr('La vue ne suit plus les troupes.')); }
     else if (a.startsWith('grp:')) { const n = +a.slice(4); if (e.shiftKey || e.ctrlKey) this.cmd.setGroup(n); else if (this.cmd.recall(n)) this.focusSelection(); }
     else if (a === 'portal') {
+      // (le bouton n'est que sur l'île)
       const us = this.units().filter((u) => this.cmd.selected.has(u.id));
-      if (this.theater.kind === 'isle' && w.hellWhy()) this.host.toast(w.hellWhy()!);
+      if (w.hellWhy()) this.host.toast(w.hellWhy()!);
       else if (!us.length) this.host.toast(tr('Choisissez d’abord des troupes (clic, ou glisser pour un cadre).'));
-      else { w.sendThroughPortal(us); this.host.toast(this.theater.kind === 'isle' ? tr('{n} en route vers le portail des Enfers.', { n: nplural(us.length, 'soldat', 'soldats') }) : tr('{n} en route pour rentrer sur l’île.', { n: nplural(us.length, 'soldat', 'soldats') })); }
+      else { w.sendThroughPortal(us); this.host.toast(tr('{n} en route vers le portail des Enfers.', { n: nplural(us.length, 'soldat', 'soldats') })); }
     }
     else if (a.startsWith('rec:')) this.recruitOrCraft(a.slice(4) as TroopKind);
     else if (a === 'goHell') { this.host.goHell(); return; }
@@ -993,12 +994,13 @@ export class CommandUI implements ToolInput {
   }
 
   /**
-   * Le seul dock de gauche : UN bouton pour faire passer les troupes choisies d'un monde à l'autre (les ordres se donnent au
-   * clavier : A, H, R, Espace, et au clic droit) ; à côté, en plus discret, le lien « Voir les Enfers » (île) ou « Renforts » (Enfers)
+   * Le seul dock de gauche : sur l'île, UN bouton pour envoyer les troupes choisies aux Enfers (les ordres se donnent au
+   * clavier : A, H, R, Espace, et au clic droit) ; à côté, en plus discret, le lien « Voir les Enfers » (île) ou « Renforts »
+   * (Enfers). Dans les Enfers, pas de bouton de renvoi : un ordre (clic droit) sur le portail ramène les troupes choisies
    */
   private passDock(isle: boolean, step: 'select' | 'send' | null = null) {
     const w = this.host.war, n = this.cmd.selected.size, closed = isle ? w.hellWhy() : null;
-    const main = isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}${closed ? ' closed' : ''}${step === 'send' ? ' guide' : ''}" title="${isle ? (closed ?? tr('Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)')) : tr('Les troupes choisies repassent le portail et rentrent sur l’île')}"><span class="oi">${pic('🌀', 24)}</span><span class="tpt"><b>${isle ? tr('Envoyer aux Enfers') : tr('Renvoyer les troupes sur l’île')}</b><small>${n > 1 ? tr('{n} troupes choisies', { n }) : n ? tr('{n} troupe choisie', { n }) : tr('choisir des troupes')}</small></span>${PORTAL_ART}</button>`;
+    const main = !isle || w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}${closed ? ' closed' : ''}${step === 'send' ? ' guide' : ''}" title="${closed ?? tr('Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)')}"><span class="oi">${pic('🌀', 24)}</span><span class="tpt"><b>${tr('Envoyer aux Enfers')}</b><small>${n > 1 ? tr('{n} troupes choisies', { n }) : n ? tr('{n} troupe choisie', { n }) : tr('choisir des troupes')}</small></span>${PORTAL_ART}</button>`;
     const links = this.hellLinks(isle);
     return main || links ? `<div class="tfl">${main}${links}</div>` : '';
   }
