@@ -1599,11 +1599,21 @@ body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
   #troopBar .tchip { padding: 5px 9px; font-size: 12px; }
 }
 #selBox { display: none; position: absolute; z-index: 8; border: 1.5px solid #7dff8a; background: rgba(125, 255, 138, 0.12); pointer-events: none; }
-#warAlert { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); z-index: 9; padding: 8px 10px 8px 14px; align-items: center; gap: 10px; font-weight: 800; color: #9a1e12; border-color: rgba(200, 60, 40, 0.5); }
+/* L'alerte de l'île (incursion, invasion annoncée, guidage vers les Enfers) : la coque crème et or du panneau des vagues, un
+   médaillon rouge brique (violet pour le guidage), le texte en encre foncée, « Voir l'île » en pilule dorée */
+#warAlert { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); z-index: 9; width: max-content; max-width: calc(100vw - 24px); padding: 7px 8px 7px 7px; align-items: center; gap: 12px; border: 2px solid #fff7e8; border-radius: 999px; background: linear-gradient(180deg, #fcf6ee 0%, #f8ecdf 55%, #f4e3d2 100%); box-shadow: 0 0 0 1.5px rgba(200, 72, 43, 0.75), 0 0 26px rgba(226, 96, 58, 0.35), 0 12px 30px rgba(40, 30, 70, 0.24); color: #262a48; font-size: 15px; font-weight: 700; }
 #warAlert.show { display: flex; animation: riseCentered 0.16s ease-out; }
 /* (centrée : l'apparition garde son décalage de moitié, elle ne glisse plus de la droite) */
 @keyframes riseCentered { from { opacity: 0; transform: translate(-50%, 6px); } }
-#warAlert button { padding: 5px 10px; font-weight: 700; }
+#warAlert .wam { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 50% 36%, #ffd9c4 0%, #e0603a 70%, #b8381f 100%); box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px rgba(200, 72, 43, 0.85), 0 3px 10px rgba(184, 56, 31, 0.35); font-size: 22px; line-height: 1; }
+#warAlert .wam img { width: 24px; height: 24px; }
+#warAlert .wat { min-width: 0; line-height: 1.25; }
+#warAlert .wab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px 0 18px; border-radius: 999px; border: 1px solid rgba(255, 236, 190, 0.9); background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; font-size: 14px; font-weight: 800; box-shadow: 0 4px 12px rgba(227, 154, 47, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.45); }
+#warAlert .wab:hover { background: linear-gradient(180deg, #f8cc6c, #e8a43a); color: #3a2a14; }
+#warAlert .wab span { font-size: 20px; line-height: 1; margin-top: -2px; }
+#warAlert.guide { box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.75), 0 0 26px rgba(255, 196, 110, 0.42), 0 12px 30px rgba(40, 30, 70, 0.24); }
+#warAlert.guide .wam { background: radial-gradient(circle at 50% 36%, #efe2ff 0%, #9b6ad8 70%, #6a3fb0 100%); box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px rgba(238, 190, 112, 0.9), 0 3px 10px rgba(106, 63, 176, 0.3); }
+@media (max-width: 720px) { #warAlert { gap: 8px; border-radius: 22px; font-size: 13px; } #warAlert .wam { width: 32px; height: 32px; } #warAlert .wam img { width: 19px; height: 19px; } #warAlert .wab { min-height: 34px; padding: 0 12px; font-size: 13px; } }
 /* ---------- Le royaume des Enfers : barre de vie du roi, écran de victoire ---------- */
 #bossBar { position: absolute; top: calc(var(--hudB, 82px) + 66px); left: 50%; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 10px; width: min(460px, calc(100vw - 24px)); padding: 7px 12px 8px 8px; border-color: rgba(200, 60, 40, 0.5); }
 #bossBar[hidden] { display: none; }

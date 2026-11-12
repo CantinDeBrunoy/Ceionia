@@ -192,7 +192,7 @@ export class CommandUI implements ToolInput {
     this.box.id = 'selBox';
     this.alertEl = document.createElement('div');
     this.alertEl.id = 'warAlert';
-    this.alertEl.className = 'panel';
+    this.alertEl.setAttribute('role', 'alert');
     this.goalEl = document.createElement('div');
     this.goalEl.id = 'hellGoal';
     this.goalEl.innerHTML = `<i class="hgArrow"></i><span class="hgPin">${pic('🎯', 22)}<b></b></span>`;
@@ -1173,9 +1173,14 @@ export class CommandUI implements ToolInput {
     const el = this.alertEl;
     if (!text) { el.classList.remove('show'); return; }
     // le bouton reste en place (le compte à rebours change le texte chaque seconde : un bouton refait à chaque fois perdrait des clics)
-    if (!el.querySelector('button')) el.innerHTML = `<span></span><button>${tr('Voir l’île')}</button>`;
-    const span = el.querySelector('span')!;
-    if (span.textContent !== text) span.textContent = text;
+    if (!el.querySelector('button')) el.innerHTML = `<span class="wam" aria-hidden="true"></span><span class="wat"></span><button class="wab">${tr('Voir l’île')}<span aria-hidden="true">›</span></button>`;
+    // l'emoji de tête passe dans le médaillon ; 🌀 (le guidage) en violet, le reste (incursion, invasion) rouge brique
+    const m = /^(\p{Extended_Pictographic}️?)\s*/u.exec(text), icon = m?.[1] ?? '🔥';
+    const med = el.querySelector<HTMLElement>('.wam')!;
+    if (med.dataset.i !== icon) { med.dataset.i = icon; med.innerHTML = pic(icon, 24); }
+    el.classList.toggle('guide', icon === '🌀');
+    const span = el.querySelector('.wat')!, body = m ? text.slice(m[0].length) : text;
+    if (span.textContent !== body) span.textContent = body;
     el.querySelector('button')!.onclick = () => { this.host.click(); onView?.(); };
     el.classList.add('show');
   }
