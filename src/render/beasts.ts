@@ -1950,9 +1950,421 @@ function dragon(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Basse-cour : mouton, cochon, poule ----------
+// dans le style de l'Animated Animal Pack (biche, cheval, vache) : proportions naturelles, grandes facettes, teintes sobres
+
+/** Coups de tête, sautillement et sursaut communs au mouton et au cochon (béliers et verrats des expéditions, agneaux) */
+function farmMoves(): ClipDef[] {
+  return [
+    // il recule, baisse la tête et charge
+    ['Attack', 0.9, (u, P) => {
+      const back = win(u, 0, 0.4, 0.12), hit = win(u, 0.4, 0.7, 0.06);
+      M(P, 'hips', 0, -0.004 * back, -0.01 * back + 0.014 * hit);
+      R(P, 'neck', 0.5 * back + 0.2 * hit); R(P, 'head', 0.35 * back + 0.25 * hit);
+      for (const L of ['L', 'R']) { R(P, `h${L}1`, -0.3 * back + 0.2 * hit); R(P, `h${L}2`, 0.4 * back); R(P, `f${L}1`, 0.15 * back - 0.35 * hit); }
+      ears(P, 0.3 * back, 0);
+      breathe(P, u, 2, 1.4);
+    }],
+    // petit bond sur place, les quatre pattes ensemble (l'agneau joue)
+    ['Jump', 0.7, (u, P) => {
+      const up = Math.sin(Math.PI * smooth(u * 1.4)) * (u < 0.72 ? 1 : 0), crouch = blip(u, 0.02, 0.1) + blip(u, 0.76, 0.12);
+      M(P, 'hips', 0, 0.028 * up - 0.006 * crouch, 0);
+      R(P, 'hips', -0.15 * up);
+      for (const L of ['L', 'R']) { R(P, `f${L}1`, -0.3 * up); R(P, `f${L}2`, 0.7 * up); R(P, `h${L}1`, 0.25 * up); R(P, `h${L}2`, 0.5 * up + 0.4 * crouch); }
+      R(P, 'neck', -0.15 * up); R(P, 'tail1', -0.4 * up);
+      ears(P, -0.3 * up, 0.2 * up);
+    }],
+    // touché : il fait un écart, tête rejetée
+    ['Hit', 0.5, (u, P) => {
+      const k = Math.sin(Math.PI * u);
+      R(P, 'hips', -0.1 * k, 0, 0.08 * k); R(P, 'chest', -0.12 * k, 0.12 * k);
+      R(P, 'neck', -0.25 * k, 0.2 * k); R(P, 'head', -0.12 * k);
+      R(P, 'jaw', 0.2 * k);
+      ears(P, 0.5 * k, 0);
+      R(P, 'fL1', -0.35 * k); R(P, 'fR1', -0.2 * k);
+    }],
+  ];
+}
+
+const SHEEP_COATS: Coat[] = [
+  // blanc à tête claire, crème à tête noire, blanc à tête noire, gris-crème à tête brune, mouton noir
+  { wool: 0xe2ddd2, top: 0xf8f5ee, face: 0xd8c8b0, leg: 0xc8b8a0, hoof: 0x4a3e36, nose: 0x6a5048, inner: 0xe0a8a0, shade: 0xb8b0a2 },
+  { wool: 0xdcd2bc, top: 0xf2ead8, face: 0x2c2626, leg: 0x2c2626, hoof: 0x1c1818, nose: 0x161212, inner: 0x5a4442, shade: 0xb0a690 },
+  { wool: 0xe6e2da, top: 0xfcfaf6, face: 0x343030, leg: 0x302c2c, hoof: 0x1c1818, nose: 0x161212, inner: 0x5a4442, shade: 0xbab4aa },
+  { wool: 0xc8c0b2, top: 0xe0dace, face: 0x6a5040, leg: 0x5a4436, hoof: 0x2e2622, nose: 0x2a201c, inner: 0xb08070, shade: 0xa09888 },
+  { wool: 0x3a3436, top: 0x524a4a, face: 0x221e1e, leg: 0x221e1e, hoof: 0x141010, nose: 0x0e0c0c, inner: 0x4a3a3a, shade: 0x2a2626 },
+];
+
+/**
+ * Mouton : toison épaisse et bosselée (des mèches en facettes sur le dos et les flancs), cuisses laineuses, pattes fines et
+ * nues, tête étroite à la face rase, oreilles tombant à l'horizontale, bonnet de laine sur le front, queue courte ; broute,
+ * bêle (mâchoire qui s'ouvre, oreilles en arrière), secoue sa toison, dort couché les pattes sous lui
+ */
+function sheep(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  r.bone('hips', null, 0, 0.085, -0.035);
+  r.bone('chest', 'hips', 0, 0.088, 0.025);
+  r.bone('ribs', 'chest', 0, 0.088, 0.0);
+  r.bone('neck', 'chest', 0, 0.096, 0.052);
+  r.bone('head', 'neck', 0, 0.11, 0.076);
+  r.bone('jaw', 'head', 0, 0.099, 0.095);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.012, 0.116, 0.081));
+  r.bone('tail1', 'hips', 0, 0.096, -0.082);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.019, 0.066, 0.04);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.019, 0.036, 0.042);
+    r.bone(`h${L}1`, 'hips', s * 0.021, 0.068, -0.05);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.021, 0.036, -0.058);
+  });
+
+  // toison : trois volumes (croupe, ventre qui respire, poitrail), dessous plus sombre
+  const bodyC: V3 = [0, 0.09, 0.0], bodyR: V3 = [0.045, 0.042, 0.06];
+  r.add('hips', ell(0.042, 0.04, 0.04), [0, 0.091, -0.046], c.wool, [0, 0, 0], c.top);
+  r.add('ribs', ell(...bodyR), bodyC, c.wool, [0, 0, 0], c.top);
+  r.add('chest', ell(0.035, 0.038, 0.03), [0, 0.088, 0.042], c.wool, [0.2, 0, 0], c.top);
+  r.add('ribs', ell(0.032, 0.012, 0.05), [0, 0.054, -0.004], c.shade);
+  // mèches : des bosses en facettes sur le dos et les flancs
+  const rnd = mulberry32(17);
+  for (let i = 0; i < 22; i++) {
+    const lat = 0.15 + rnd() * 1.15, lon = (rnd() * 2 - 1) * Math.PI * (0.35 + 0.6 * rnd());
+    const { at } = onEll(bodyC, bodyR, lat, lon, -0.004);
+    const k = 0.75 + rnd() * 0.5;
+    r.add(at[2] < -0.025 ? 'hips' : at[2] > 0.035 ? 'chest' : 'ribs', ell(0.014 * k, 0.011 * k, 0.014 * k, 0), at, c.wool, [rnd(), rnd(), rnd()], c.top);
+  }
+  // cou laineux, tête rase (face, chanfrein, mufle, naseaux), bonnet de laine
+  r.put('neck', seg([0, 0.09, 0.044], [0, 0.108, 0.07], 0.024, 0.017, 7), c.wool, c.top);
+  r.add('head', ell(0.0125, 0.0145, 0.023), [0, 0.108, 0.09], c.face, [0.5, 0, 0]);
+  r.add('head', ell(0.0095, 0.0105, 0.012), [0, 0.1, 0.104], c.face);
+  r.add('head', ell(0.0052, 0.0032, 0.003, 0), [0, 0.1, 0.1155], c.nose);
+  r.add('head', ell(0.017, 0.012, 0.016), [0, 0.121, 0.079], c.wool, [0.3, 0, 0], c.top);
+  r.both((s) => r.add('head', ell(0.0026, 0.003, 0.002, 0), [s * 0.0102, 0.113, 0.095], 0x141010, [0, s * 0.5, 0]));
+  r.put('jaw', seg([0, 0.097, 0.096], [0, 0.095, 0.11], 0.0065, 0.0042, 5), c.face);
+  // oreilles à l'horizontale, intérieur rosé
+  r.both((s, L) => {
+    r.add(`e${L}`, ell(0.012, 0.0035, 0.0062), [s * 0.022, 0.114, 0.081], c.face, [0, -s * 0.2, -s * 0.3]);
+    r.add(`e${L}`, ell(0.008, 0.0018, 0.0038, 0), [s * 0.023, 0.1155, 0.082], c.inner, [0, -s * 0.2, -s * 0.3]);
+  });
+  r.add('tail1', ell(0.011, 0.02, 0.011), [0, 0.086, -0.09], c.wool, [0.35, 0, 0], c.top);
+  // pattes : haut laineux, canons fins et nus, sabots sombres
+  r.both((s, L) => {
+    const x = s * 0.019, hx = s * 0.021;
+    r.add(`f${L}1`, ell(0.014, 0.018, 0.015), [x, 0.07, 0.04], c.wool, [0, 0, 0], c.top);
+    r.put(`f${L}1`, seg([x, 0.062, 0.041], [x, 0.036, 0.042], 0.006, 0.005), c.leg);
+    r.put(`f${L}2`, seg([x, 0.036, 0.042], [x, 0.006, 0.044], 0.0052, 0.0045), c.leg);
+    r.add(`f${L}2`, ell(0.0056, 0.0042, 0.0066, 0), [x, 0.004, 0.046], c.hoof);
+    r.add(`h${L}1`, ell(0.016, 0.021, 0.018), [hx, 0.073, -0.05], c.wool, [0.15, 0, 0], c.top);
+    r.put(`h${L}1`, seg([hx, 0.062, -0.053], [hx, 0.036, -0.058], 0.0065, 0.005), c.leg);
+    r.put(`h${L}2`, seg([hx, 0.036, -0.058], [hx, 0.006, -0.054], 0.0052, 0.0045), c.leg);
+    r.add(`h${L}2`, ell(0.0056, 0.0042, 0.0066, 0), [hx, 0.004, -0.051], c.hoof);
+  });
+
+  // pas : une patte après l'autre ; galop : les arrière puis les avant
+  const clips = quadClips({
+    walk: { dur: 0.85, A: 0.34, L: 0.8, ph: { hL: 0, fL: 0.25, hR: 0.5, fR: 0.75 }, bob: 0.0025 },
+    run: { dur: 0.42, A: 0.7, L: 1.1, ph: { hL: 0, hR: 0.08, fL: 0.45, fR: 0.53 }, bob: 0.009, rock: 0.14 },
+    neck: ['neck'], graze: [0.95], grazeHead: 0.45,
+    lie: { drop: 0.045, f: [-1.35, 2.5], h: [-1.0, 2.2] },
+    hook: (n, u, P) => {
+      if (n === 'Idle' || n === 'Walk') ears(P, 0, 0.12 * sn(u, 3, 0.2));
+      if (n === 'Eating') R(P, 'tail1', 0, 0.25 * sn(u, 4) * win(u, 0.1, 0.3, 0.04));
+    },
+  });
+  clips.push(
+    // bêle : tête levée, mâchoire qui s'ouvre et tremble, oreilles en arrière
+    ['Idle_2', 3, (u, P) => {
+      const k = win(u, 0.1, 0.85, 0.12), b = win(u, 0.3, 0.7, 0.06);
+      breathe(P, u, 2, 1 + b);
+      R(P, 'neck', -0.25 * k); R(P, 'head', -0.15 * k);
+      R(P, 'jaw', 0.32 * b + 0.06 * b * sn(u, 14));
+      ears(P, 0.25 * b, -0.2 * b);
+    }],
+    // secoue sa toison, de la tête à la croupe
+    ['Idle_3', 2, (u, P) => {
+      const k = win(u, 0.1, 0.9, 0.1);
+      R(P, 'head', 0, 0, 0.4 * k * sn(u, 6));
+      R(P, 'neck', 0, 0, 0.25 * k * sn(u, 6, 0.08));
+      R(P, 'chest', 0, 0, 0.12 * k * sn(u, 6, 0.16));
+      R(P, 'hips', 0, 0, 0.08 * k * sn(u, 6, 0.24));
+      R(P, 'tail1', 0, 0.5 * k * sn(u, 8));
+      ears(P, 0, 0.4 * k * sn(u, 6));
+    }],
+    ...farmMoves(),
+  );
+  return { rig: r, clips };
+}
+
+const PIG_COATS: Coat[] = [
+  // rose, roux (Duroc), noir (gascon)
+  { skin: 0xdc9c96, top: 0xf0bcb4, belly: 0xf2c8c0, snout: 0xd28684, hoof: 0x6a4c48, inner: 0xc87a7a },
+  { skin: 0x9a5236, top: 0xb86e4a, belly: 0xbc7c5c, snout: 0x8a4a38, hoof: 0x3a2a24, inner: 0x7a3e30 },
+  { skin: 0x2e2a2c, top: 0x463e42, belly: 0x4a4244, snout: 0x5a4a4a, hoof: 0x1e1a1a, inner: 0x3a3032 },
+];
+
+/**
+ * Cochon : tonneau court sur pattes brèves, nuque épaisse, groin en disque aux narines sombres, oreilles tombant sur les
+ * yeux, jambons ronds, queue en tire-bouchon ; trottine, fouille du groin, s'ébroue, dort couché
+ */
+function pig(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  r.bone('hips', null, 0, 0.06, -0.03);
+  r.bone('chest', 'hips', 0, 0.062, 0.03);
+  r.bone('ribs', 'chest', 0, 0.062, 0.0);
+  r.bone('neck', 'chest', 0, 0.066, 0.058);
+  r.bone('head', 'neck', 0, 0.068, 0.072);
+  r.bone('jaw', 'head', 0, 0.053, 0.09);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.015, 0.088, 0.078));
+  r.bone('tail1', 'hips', 0, 0.074, -0.07);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.02, 0.042, 0.042);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.02, 0.022, 0.043);
+    r.bone(`h${L}1`, 'hips', s * 0.021, 0.044, -0.045);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.021, 0.022, -0.05);
+  });
+
+  // corps en tonneau, ventre clair, échine plus claire
+  r.add('hips', ell(0.036, 0.034, 0.038), [0, 0.064, -0.04], c.skin, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.038, 0.036, 0.05), [0, 0.064, 0.0], c.skin, [0, 0, 0], c.top);
+  r.add('chest', ell(0.032, 0.034, 0.03), [0, 0.062, 0.04], c.skin, [0.15, 0, 0], c.top);
+  r.add('ribs', ell(0.026, 0.009, 0.044), [0, 0.0365, -0.002], c.belly);
+  // nuque épaisse, tête, groin en disque
+  r.put('neck', seg([0, 0.062, 0.05], [0, 0.068, 0.074], 0.03, 0.025, 7), c.skin, c.top);
+  r.add('head', ell(0.023, 0.023, 0.024), [0, 0.07, 0.082], c.skin, [0, 0, 0], c.top);
+  r.put('head', seg([0, 0.065, 0.094], [0, 0.062, 0.111], 0.0125, 0.011, 7), c.skin);
+  r.add('head', ell(0.0118, 0.0102, 0.0028), [0, 0.062, 0.1115], c.snout);
+  r.both((s) => {
+    r.add('head', ell(0.0022, 0.003, 0.0012, 0), [s * 0.0042, 0.062, 0.114], 0x2a1e1e);
+    r.add('head', ell(0.0024, 0.0026, 0.0018, 0), [s * 0.0135, 0.078, 0.095], 0x161010, [0, s * 0.5, 0]);
+  });
+  r.put('jaw', seg([0, 0.053, 0.09], [0, 0.054, 0.103], 0.0075, 0.0052, 5), c.belly);
+  // oreilles qui tombent vers l'avant, sur les yeux
+  r.both((s, L) => {
+    r.add(`e${L}`, ell(0.011, 0.0028, 0.014), [s * 0.017, 0.09, 0.088], c.skin, [0.55, 0, -s * 0.45], c.top);
+    r.add(`e${L}`, ell(0.007, 0.0014, 0.009, 0), [s * 0.0165, 0.0885, 0.089], c.inner, [0.55, 0, -s * 0.45]);
+  });
+  // queue en tire-bouchon
+  r.add('tail1', new THREE.TorusGeometry(0.0045, 0.0015, 4, 9, Math.PI * 1.7), [0, 0.07, -0.076], c.skin, [0, Math.PI / 2, 0]);
+  // pattes brèves, jambons ronds, onglons sombres
+  r.both((s, L) => {
+    const x = s * 0.02, hx = s * 0.021;
+    r.add(`f${L}1`, ell(0.013, 0.017, 0.015), [x, 0.05, 0.041], c.skin, [0, 0, 0], c.top);
+    r.put(`f${L}1`, seg([x, 0.045, 0.042], [x, 0.022, 0.043], 0.0082, 0.0062), c.skin);
+    r.put(`f${L}2`, seg([x, 0.022, 0.043], [x, 0.005, 0.045], 0.0058, 0.005), c.skin);
+    r.add(`f${L}2`, ell(0.0056, 0.0042, 0.0064, 0), [x, 0.004, 0.047], c.hoof);
+    r.add(`h${L}1`, ell(0.016, 0.022, 0.021), [hx, 0.055, -0.046], c.skin, [0.1, 0, 0], c.top);
+    r.put(`h${L}1`, seg([hx, 0.044, -0.047], [hx, 0.022, -0.05], 0.0085, 0.0064), c.skin);
+    r.put(`h${L}2`, seg([hx, 0.022, -0.05], [hx, 0.005, -0.048], 0.0058, 0.005), c.skin);
+    r.add(`h${L}2`, ell(0.0056, 0.0042, 0.0064, 0), [hx, 0.004, -0.046], c.hoof);
+  });
+
+  // trottine en diagonales, galop serré
+  const clips = quadClips({
+    walk: { dur: 0.55, A: 0.4, L: 0.9, ph: { hL: 0, fR: 0.02, hR: 0.5, fL: 0.52 }, bob: 0.002 },
+    run: { dur: 0.34, A: 0.75, L: 1.15, ph: { hL: 0, hR: 0.08, fL: 0.45, fR: 0.53 }, bob: 0.006, rock: 0.12 },
+    neck: ['neck'], graze: [0.55], grazeHead: 0.55,
+    lie: { drop: 0.03, f: [-1.4, 2.4], h: [-1.0, 2.1] },
+    hook: (n, u, P) => {
+      // la queue frétille ; à table, le groin fouille de droite et de gauche
+      R(P, 'tail1', 0, 0, 0.35 * sn(u, n === 'Gallop' ? 4 : 3));
+      if (n === 'Eating') { R(P, 'head', 0.06 * sn(u, 6), 0.18 * sn(u, 3)); M(P, 'head', 0, 0, 0.003 * sn(u, 6)); }
+      if (n === 'Walk' || n === 'Gallop') ears(P, 0.15 * sn(u, 2), 0);
+    },
+  });
+  clips.push(
+    // s'ébroue : la tête secoue, les oreilles battent
+    ['Idle_2', 2, (u, P) => {
+      const k = win(u, 0.1, 0.9, 0.1);
+      R(P, 'head', 0.05 * k, 0.35 * k * sn(u, 5));
+      R(P, 'neck', 0, 0.15 * k * sn(u, 5, 0.06));
+      ears(P, 0.3 * k * pos(sn(u, 10)), 0.35 * k * sn(u, 5));
+      R(P, 'jaw', 0.12 * k * pos(sn(u, 10)));
+      breathe(P, u, 3, 1.4);
+    }],
+    // renifle le sol en avançant le groin, à petits coups
+    ['Idle_3', 3, (u, P) => {
+      const k = win(u, 0.05, 0.95, 0.15);
+      R(P, 'neck', 0.45 * k); R(P, 'head', 0.4 * k + 0.05 * k * pos(sn(u, 12)), 0.25 * k * sn(u, 1.5));
+      R(P, 'fL1', -0.15 * win(u, 0.5, 0.7, 0.06)); R(P, 'fL2', 0.4 * win(u, 0.52, 0.66, 0.05));
+      breathe(P, u, 6);
+    }],
+    ...farmMoves(),
+  );
+  return { rig: r, clips };
+}
+
+const HEN_COATS: Coat[] = [
+  // blanche, rousse, fauve clair, noire aux reflets verts
+  { f: 0xe8e2d6, top: 0xfcfaf4, breast: 0xf2eee6, neck: 0xfaf6ee, wing: 0xe0dace, tip: 0xc8c0b2, tail: 0xe6e0d4, tailTop: 0xfaf6ee },
+  { f: 0x9a4e22, top: 0xc06a32, breast: 0xa85a2c, neck: 0xd08a42, wing: 0x8a4420, tip: 0x5a2c18, tail: 0x2a2220, tailTop: 0x3e3a2a },
+  { f: 0xd0b07a, top: 0xe8cc96, breast: 0xdcbc86, neck: 0xecd4a2, wing: 0xc4a46e, tip: 0xa88a5a, tail: 0x8a7048, tailTop: 0xb09468 },
+  { f: 0x2a2628, top: 0x3a3638, breast: 0x2e2a2c, neck: 0x34383a, wing: 0x26282a, tip: 0x1a1c1e, tail: 0x1e2826, tailTop: 0x2c3c38 },
+];
+
+/**
+ * Poule : corps en goutte (bréchet bombé, croupe relevée), camail plus clair sur le cou, crête et barbillons rouges, bec
+ * jaune en deux pièces, ailes repliées sur les flancs (os de l'épaule et du bout de l'aile), queue en éventail, cuisses
+ * emplumées, pattes jaunes à trois doigts ; marche en avançant la tête par à-coups, court ailes entrouvertes, picore,
+ * gratte le sol, s'étire et bat des ailes, dort accroupie la tête dans les plumes
+ */
+function hen(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  const RED = 0xd83a2e, BEAK = 0xe8b040, LEG = 0xe0b048;
+  r.bone('hips', null, 0, 0.036, -0.004);
+  r.bone('ribs', 'hips', 0, 0.038, 0.006);
+  r.bone('neck', 'ribs', 0, 0.048, 0.016);
+  r.bone('head', 'neck', 0, 0.064, 0.025);
+  r.bone('jaw', 'head', 0, 0.0635, 0.035);
+  r.bone('tail1', 'hips', 0, 0.048, -0.022);
+  r.both((s, L) => {
+    r.bone(`w${L}1`, 'ribs', s * 0.017, 0.05, 0.01);
+    r.bone(`w${L}2`, `w${L}1`, s * 0.019, 0.045, -0.012);
+    r.bone(`l${L}1`, 'hips', s * 0.009, 0.03, 0.0);
+    r.bone(`l${L}2`, `l${L}1`, s * 0.009, 0.016, 0.003);
+  });
+
+  // corps : croupe, bréchet bombé et clair, duvet du dessous
+  r.add('hips', ell(0.019, 0.02, 0.025), [0, 0.04, -0.008], c.f, [-0.15, 0, 0], c.top);
+  r.add('ribs', ell(0.0185, 0.021, 0.019), [0, 0.04, 0.012], c.breast, [-0.35, 0, 0], c.f);
+  r.add('hips', ell(0.015, 0.009, 0.018), [0, 0.027, -0.01], c.breast);
+  // cou au camail clair, tête, crête dentelée, barbillons, bec en deux pièces, yeux
+  r.put('neck', seg([0, 0.046, 0.014], [0, 0.062, 0.024], 0.0108, 0.0076, 7), c.f, c.neck);
+  r.add('head', ell(0.0082, 0.0092, 0.0098), [0, 0.067, 0.027], c.neck);
+  for (let i = 0; i < 4; i++) r.add('head', ell(0.0016, 0.0042 - Math.abs(i - 1.5) * 0.0006, 0.0032, 0), [0, 0.0765, 0.0205 + i * 0.0042], RED, [0.25 - i * 0.12, 0, 0]);
+  r.add('head', new THREE.ConeGeometry(0.0036, 0.0085, 4), [0, 0.0665, 0.0395], BEAK, [Math.PI / 2 + 0.25, 0, 0]);
+  r.both((s) => {
+    r.add('head', ell(0.0016, 0.0019, 0.0012, 0), [s * 0.0066, 0.0695, 0.0305], 0x1a1210, [0, s * 0.6, 0]);
+    r.add('head', ell(0.0018, 0.0016, 0.001, 0), [s * 0.0068, 0.0663, 0.031], RED, [0, s * 0.6, 0]);
+  });
+  r.add('jaw', new THREE.ConeGeometry(0.0026, 0.0062, 4), [0, 0.0628, 0.0375], BEAK, [Math.PI / 2 + 0.45, 0, 0]);
+  r.both((s) => r.add('jaw', ell(0.0022, 0.0042, 0.0026, 0), [s * 0.0018, 0.0575, 0.0335], RED));
+  // queue en éventail, plumes relevées
+  for (let i = -1; i <= 1; i++) r.add('tail1', ell(0.0035, 0.016, 0.009), [i * 0.004, 0.06, -0.031], c.tail, [-0.55, 0, i * 0.25], c.tailTop);
+  // ailes repliées : l'épaule et le bout de l'aile, plus sombre
+  r.both((s, L) => {
+    r.add(`w${L}1`, ell(0.0052, 0.0135, 0.016), [s * 0.0185, 0.044, 0.003], c.wing, [0.12, 0, s * 0.06], c.f);
+    r.add(`w${L}2`, ell(0.0042, 0.009, 0.013), [s * 0.0185, 0.042, -0.016], c.tip, [0.35, 0, s * 0.06], c.wing);
+  });
+  // cuisses emplumées, pattes jaunes, trois doigts devant et un derrière
+  r.both((s, L) => {
+    const x = s * 0.009;
+    r.add(`l${L}1`, ell(0.007, 0.009, 0.0085), [x, 0.028, 0.0], c.breast);
+    r.put(`l${L}1`, seg([x, 0.024, 0.001], [x, 0.016, 0.003], 0.0026, 0.0021, 5), LEG);
+    r.put(`l${L}2`, seg([x, 0.016, 0.003], [x, 0.002, 0.002], 0.0021, 0.0017, 5), LEG);
+    for (const a of [-0.45, 0, 0.45]) r.put(`l${L}2`, seg([x, 0.0016, 0.002], [x + Math.sin(a) * 0.008, 0.0012, 0.002 + Math.cos(a) * 0.008], 0.0012, 0.0008, 4), LEG);
+    r.put(`l${L}2`, seg([x, 0.0016, 0.002], [x, 0.0012, -0.004], 0.0011, 0.0008, 4), LEG);
+  });
+
+  /** pas : chaque patte (phase) se porte en avant en se pliant ; la tête avance par à-coups, deux fois par cycle */
+  const legs = (P: Pose, u: number, A: number, L: number) => {
+    for (const [l, ph] of [['lL', 0], ['lR', 0.5]] as [string, number][]) {
+      const w = TAU * (u - ph);
+      R(P, l + '1', -A * Math.sin(w) + L * 0.3 * pos(Math.cos(w)));
+      R(P, l + '2', -L * pos(Math.cos(w)));
+    }
+  };
+  const wings = (P: Pose, open: number, flap = 0) => {
+    R(P, 'wL1', -0.2 * open, 0, open + flap); R(P, 'wR1', -0.2 * open, 0, -open - flap);
+    R(P, 'wL2', 0, 0, 0.3 * open); R(P, 'wR2', 0, 0, -0.3 * open);
+  };
+  const clips: ClipDef[] = [
+    ['Walk', 0.6, (u, P) => {
+      legs(P, u, 0.5, 0.9);
+      R(P, 'hips', 0, 0.05 * sn(u), 0.07 * sn(u));
+      M(P, 'hips', 0, -0.0012 * cs(u, 2), 0);
+      // la tête reste en place puis se jette en avant
+      const jerk = (u * 2) % 1, thrust = jerk < 0.7 ? jerk / 0.7 : 1 - (jerk - 0.7) / 0.3;
+      M(P, 'neck', 0, 0, -0.004 + 0.008 * thrust);
+      R(P, 'neck', 0.12 * thrust);
+      R(P, 'head', -0.1 * thrust);
+      R(P, 'tail1', 0.06 * sn(u, 2), 0.08 * sn(u));
+    }],
+    ['Gallop', 0.34, (u, P) => {
+      legs(P, u, 0.8, 1.2);
+      R(P, 'hips', 0.3, 0, 0.06 * sn(u));
+      M(P, 'hips', 0, 0.003 * pos(sn(u, 2)), 0);
+      R(P, 'neck', 0.35); R(P, 'head', -0.25);
+      wings(P, 0.45, 0.25 * sn(u, 2));
+      R(P, 'tail1', -0.2);
+    }],
+    ['Idle', 6, (u, P) => {
+      breathe(P, u, 4, 1.5);
+      // regards par à-coups, d'un œil puis de l'autre
+      const look = Math.round(sn(u, 1) * 2) / 2, tilt = Math.round(sn(u, 2, 0.15) * 2) / 2;
+      R(P, 'head', 0.1 * tilt, 0.55 * look, 0.25 * tilt);
+      R(P, 'neck', -0.05 + 0.05 * tilt, 0.15 * look);
+      R(P, 'jaw', 0.25 * blip(u, 0.42, 0.02) + 0.25 * blip(u, 0.46, 0.02));
+      R(P, 'tail1', 0, 0.12 * sn(u, 6) * win(u, 0.7, 0.85, 0.03));
+      wings(P, 0.08 * win(u, 0.6, 0.66, 0.02));
+    }],
+    // picore : deux coups de bec au sol, le corps basculé
+    ['Eating', 1.2, (u, P) => {
+      const peck = Math.pow(pos(sn(u, 2, -0.15)), 0.6);
+      R(P, 'hips', 0.3 + 0.12 * peck);
+      R(P, 'neck', 0.55 + 0.75 * peck);
+      R(P, 'head', 0.25 + 0.35 * peck);
+      R(P, 'tail1', -0.2);
+      for (const l of ['lL', 'lR']) { R(P, l + '1', -0.25); R(P, l + '2', 0.15); }
+    }],
+    // accroupie, la tête rentrée dans les plumes du dos
+    ['Sleep', 8, (u, P) => {
+      breathe(P, u, 2, 1.6);
+      M(P, 'hips', 0, -0.012, 0);
+      for (const l of ['lL', 'lR']) { R(P, l + '1', 0.9); R(P, l + '2', -1.7); }
+      M(P, 'neck', 0, -0.006, -0.008);
+      R(P, 'neck', -0.6); R(P, 'head', 0.9, 2.4);
+      R(P, 'tail1', 0.2);
+    }],
+    // se dresse, s'étire et bat des ailes en caquetant
+    ['Idle_2', 2.4, (u, P) => {
+      const k = win(u, 0.08, 0.9, 0.1), f = win(u, 0.25, 0.75, 0.05);
+      R(P, 'hips', -0.3 * k);
+      M(P, 'hips', 0, 0.004 * k, 0);
+      R(P, 'neck', -0.3 * k); R(P, 'head', 0.2 * k);
+      wings(P, 1.1 * f, 0.5 * f * sn(u, 7));
+      R(P, 'jaw', 0.35 * f * pos(sn(u, 9)));
+      R(P, 'tail1', -0.3 * k);
+      breathe(P, u, 4, 2);
+    }],
+    // gratte le sol de la patte droite, recule d'un pas et regarde
+    ['Idle_3', 2.6, (u, P) => {
+      const s1 = win(u, 0.05, 0.25, 0.04), s2 = win(u, 0.28, 0.48, 0.04), look = win(u, 0.55, 0.95, 0.06);
+      const rake = s1 * sn(u * 5) + s2 * sn(u * 5, 1, 0.3);
+      R(P, 'lR1', -0.5 * (s1 + s2) + 0.6 * rake); R(P, 'lR2', -0.6 * (s1 + s2));
+      R(P, 'hips', 0.2 * (s1 + s2) + 0.35 * look, 0, 0.06 * (s1 + s2));
+      R(P, 'neck', 0.4 * look); R(P, 'head', 0.4 * look, 0.4 * look * sn(u, 2));
+      wings(P, 0.12 * (s1 + s2));
+    }],
+    // coup de bec en avant, ailes entrouvertes
+    ['Attack', 0.6, (u, P) => {
+      const k = win(u, 0.1, 0.7, 0.1), hit = blip(u, 0.42, 0.12);
+      R(P, 'hips', 0.25 * k);
+      R(P, 'neck', 0.4 * k + 0.4 * hit); M(P, 'neck', 0, 0, 0.008 * hit);
+      R(P, 'head', -0.1 * k);
+      wings(P, 0.5 * k);
+      R(P, 'jaw', 0.3 * k);
+    }],
+    // sursaut, ailes ouvertes
+    ['Hit', 0.5, (u, P) => {
+      const k = Math.sin(Math.PI * u);
+      M(P, 'hips', 0, 0.01 * k, 0);
+      R(P, 'neck', -0.4 * k); R(P, 'head', 0.2 * k);
+      wings(P, 1.0 * k);
+      R(P, 'jaw', 0.3 * k);
+    }],
+    // petit envol : bond en battant des ailes
+    ['Jump', 0.8, (u, P) => {
+      const up = Math.sin(Math.PI * u);
+      M(P, 'hips', 0, 0.022 * up, 0);
+      for (const l of ['lL', 'lR']) { R(P, l + '1', 0.6 * up); R(P, l + '2', -1.0 * up); }
+      wings(P, 1.0 * up, 0.6 * up * sn(u, 6));
+      R(P, 'neck', -0.2 * up);
+    }],
+  ];
+  return { rig: r, clips };
+}
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon' | 'sheep' | 'pig' | 'hen';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
@@ -1968,6 +2380,10 @@ const DEFS: Record<BeastKind, BeastDef> = {
   crab: { coats: CRAB_COATS, build: crab, yaw: -Math.PI / 2 },
   // le dragon de la grotte (expédition du Moyen Âge), pas une bête de la faune
   dragon: { coats: DRAGON_COATS, build: dragon },
+  // basse-cour (aussi dans les enclos et les expéditions, par `makeActor`, voir assets.ts)
+  sheep: { coats: SHEEP_COATS, build: sheep },
+  pig: { coats: PIG_COATS, build: pig },
+  hen: { coats: HEN_COATS, build: hen },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */

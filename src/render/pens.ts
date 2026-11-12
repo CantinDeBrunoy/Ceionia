@@ -87,7 +87,7 @@ export class PenView {
       // le chien de berger garde l'enclos ; les poules picorent dans le pré (dès l'Antiquité, avec le poulailler)
       const dog = keep(id, 'dog') ?? this.extra('dog', 0.17, 0, 0.12, ['Idle', 'Idle_Eating'], 0.15, 0.62);
       if (dog) pen.beasts.push(dog);
-      if (b.age >= 1) for (let i = 0; i < 3; i++) { const hen = keep(id, 'chicken') ?? this.extra('chicken', 0.085, Math.PI, 0.09, ['Idle_Eating', 'Eating', 'Idle'], 0.42 + i * 0.08, -0.35 + i * 0.1); if (hen) pen.beasts.push(hen); }
+      if (b.age >= 1) for (let i = 0; i < 3; i++) { const hen = keep(id, 'chicken') ?? this.extra('chicken', 0.085, 0, 0.09, ['Idle_Eating', 'Eating', 'Idle'], 0.42 + i * 0.08, -0.35 + i * 0.1); if (hen) pen.beasts.push(hen); }
       this.pens.set(id, pen);
     }
     // celles qui n'ont plus leur place (enclos démoli, cheval parti en expédition) quittent le pré

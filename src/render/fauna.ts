@@ -130,10 +130,8 @@ const MODELS: Partial<Record<Kind, { name: ModelName; length: number; lead?: Mod
   dolphin: { name: 'dolphin', length: 0.5 },
   whale: { name: 'whale', length: 1.7 },
   manta: { name: 'manta', length: 0.55 },
-  sheep: { name: 'sheep', length: 0.2 },
+  // (mouton, cochon et poule : bêtes articulées du jeu, voir `BEAST_KINDS`)
   cow: { name: 'cow', length: 0.3 },
-  pig: { name: 'pig', length: 0.17 },
-  hen: { name: 'chicken', length: 0.085, yaw: Math.PI },
   // shiba ou husky, cheval bai ou blanc : un modèle par groupe
   dog: { name: 'dog', length: 0.2, pick: ['dog', 'husky'] },
   deer: { name: 'deer', length: 0.3, lead: 'stag' },
@@ -334,9 +332,9 @@ function butterflyGeo() {
 }
 
 const SPECS: Record<Kind, Spec> = {
-  sheep: { geo: sheepGeo, max: 80, colors: [0xffffff, 0xf3ece0, 0xffffff, 0xe9e2d6, 0x5a5052], speed: 0.35, run: 1.2, idle: [3, 9], ok: farmland, graze: 0.14, flee: 2.5 },
+  sheep: { geo: sheepGeo, max: 80, colors: [0xffffff, 0xf3ece0, 0xfdfdfd, 0xe9e2d6, 0x5a5052], speed: 0.35, run: 1.2, idle: [3, 9], ok: farmland, graze: 0.14, flee: 2.5, scale: 0.91 },
   cow: { geo: cowGeo, max: 64, colors: [0xffffff, 0xb07850, 0xe8d8b8, 0x8a5a3a], speed: 0.3, idle: [4, 12], ok: farmland, graze: 0.1 },
-  pig: { geo: sheepGeo, max: 48, colors: [0xf2b3b3], speed: 0.3, idle: [3, 8], ok: farmland, graze: 0.1 },
+  pig: { geo: sheepGeo, max: 48, colors: [0xf2b3b3, 0xb8664a, 0x3e3638], speed: 0.3, idle: [3, 8], ok: farmland, graze: 0.1, scale: 0.86 },
   hen: { geo: henGeo, max: 176, colors: [0xffffff, 0xc8763c, 0xe8d0a0, 0x4a4446], speed: 0.45, run: 0.9, idle: [1, 4], ok: offRoad, peck: true, flee: 1.4 },
   rabbit: { geo: rabbitGeo, max: 110, colors: [0xb08a68, 0x9a9690, 0xf2efe8, 0x8a6a4e], speed: 0.9, run: 1.75, idle: [2, 6], ok: offRoad, hop: 0.05, flee: 2.2 },
   deer: { geo: deerGeo, max: 72, colors: [0xb87a48, 0xa86c40, 0xc48a58], speed: 0.5, run: 1.9, idle: [4, 10], ok: wild, graze: 0.2, flee: 3.5 },

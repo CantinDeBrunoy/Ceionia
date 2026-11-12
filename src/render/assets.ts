@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { makeBeast, BeastKind } from './beasts';
 
 /** Modèles Quaternius (CC0, via poly.pizza) servis depuis public/models ; chaque modèle absent retombe sur sa version procédurale */
-const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
+const NAMES = ['cow', 'deer', 'stag',
   'ship_wreck', 'dolphin', 'whale', 'manta', 'clownfish', 'yellow_tang', 'fish', 'coral_set', 'seaweed',
   // biomes : essences, plantes d'eau et faune sauvage
   'palm', 'palm2', 'palm3', 'cactus', 'cactus2', 'cactus_flowers', 'willow', 'dead_tree', 'lilypad',
@@ -32,7 +33,15 @@ const NAMES = ['sheep', 'cow', 'chicken', 'pig', 'deer', 'stag',
   // abri ouvert sur poteaux de l'enclos antique (Quaternius, CC0)
   'f_hut',
 ] as const;
-export type ModelName = (typeof NAMES)[number];
+/**
+ * Bêtes de la basse-cour dessinées par le jeu (`beasts.ts`), dans le style de l'Animated Animal Pack : elles répondent aux
+ * mêmes noms que les modèles qu'elles remplacent (mouton, cochon et poule en cubes ou en style « mignon »), si bien que
+ * faune, enclos et expéditions les obtiennent par `makeActor`
+ */
+const DRAWN = { sheep: 'sheep', pig: 'pig', chicken: 'hen' } as const satisfies Record<string, BeastKind>;
+type DrawnName = keyof typeof DRAWN;
+export type ModelName = (typeof NAMES)[number] | DrawnName;
+const isDrawn = (n: string): n is DrawnName => n in DRAWN;
 
 
 const loaded = new Map<ModelName, GLTF>();
@@ -41,47 +50,13 @@ export async function loadModels(onProgress?: (done: number, total: number) => v
   const loader = new GLTFLoader();
   let done = 0;
   await Promise.all(NAMES.map(async (n) => {
-    try { const g = await loader.loadAsync(`./models/${n}.glb`); retouch(n, g); loaded.set(n, g); }
+    try { loaded.set(n, await loader.loadAsync(`./models/${n}.glb`)); }
     catch (e) { console.warn(`Modèle « ${n} » indisponible : version procédurale`, e); }
     onProgress?.(++done, NAMES.length);
   }));
 }
 
-export const hasModel = (n: ModelName) => loaded.has(n);
-
-/** Retouches de modèles : la laine du mouton de l'atlas est gris foncé, on la blanchit et on assombrit tête et pattes */
-function retouch(name: ModelName, gltf: GLTF) {
-  if (name !== 'sheep') return;
-  gltf.scene.traverse((o) => {
-    const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-    if (!m?.map?.image) return;
-    m.map = recolor(m.map, (r, g, b) => {
-      if (Math.max(r, g, b) - Math.min(r, g, b) > 25) return [r, g, b];
-      const l = (r + g + b) / 3;
-      // gris foncé : tête et pattes ; gris clair : laine
-      return l < 110 ? [58, 52, 50] : l < 205 ? [242, 238, 230] : [r, g, b];
-    });
-  });
-}
-
-/** Copie d'une texture dont chaque pixel passe par `fn` (mêmes réglages : retournement, filtrage, espace colorimétrique) */
-function recolor(tex: THREE.Texture, fn: (r: number, g: number, b: number) => [number, number, number]) {
-  const img = tex.image as CanvasImageSource & { width: number; height: number };
-  const cv = document.createElement('canvas');
-  cv.width = img.width; cv.height = img.height;
-  const ctx = cv.getContext('2d')!;
-  ctx.drawImage(img, 0, 0);
-  const data = ctx.getImageData(0, 0, cv.width, cv.height);
-  const d = data.data;
-  for (let i = 0; i < d.length; i += 4) [d[i], d[i + 1], d[i + 2]] = fn(d[i], d[i + 1], d[i + 2]);
-  ctx.putImageData(data, 0, 0);
-  const out = new THREE.CanvasTexture(cv);
-  out.flipY = tex.flipY;
-  out.colorSpace = tex.colorSpace;
-  out.wrapS = tex.wrapS; out.wrapT = tex.wrapT;
-  out.magFilter = tex.magFilter; out.minFilter = tex.minFilter;
-  return out;
-}
+export const hasModel = (n: ModelName) => isDrawn(n) || loaded.has(n);
 
 export interface StaticModel {
   /** partie teintable (couleurs relatives ≈ 1, teinte donnée par le matériau : feuillage de saison, roche…) */
@@ -378,7 +353,7 @@ export interface Actor {
 }
 
 /** Bêtes de la ferme et des bois, rendues en facettes */
-const FACETED = new Set<string>(['cow', 'pig', 'sheep', 'chicken', 'horse', 'horse_white', 'deer', 'stag', 'fox', 'wolf', 'llama', 'dog', 'husky']);
+const FACETED = new Set<string>(['cow', 'horse', 'horse_white', 'deer', 'stag', 'fox', 'wolf', 'llama', 'dog', 'husky']);
 
 /**
  * Bêtes dont le modèle, trop arrondi, est simplifié en grosses facettes (sommets regroupés sur une grille de `n` cases).
@@ -394,7 +369,7 @@ const CLIP_ALIAS: [string, string[]][] = [
   ['Run', ['Gallop']],
   ['Idle_Eating', ['Eating']],
   ['Headbutt', ['Attack_Headbutt', 'Attack']],
-  ['Jump_Start', ['Jump_toIdle', 'Jump_ToIdle']],
+  ['Jump_Start', ['Jump_toIdle', 'Jump_ToIdle', 'Jump']],
   ['Jump_Loop', ['Gallop_Jump']],
   ['WalkSlow', ['Walk']],
   ['Idle_Headlow', ['Idle_2_HeadLow']],
@@ -502,6 +477,7 @@ export function mergeSkinned(root: THREE.Object3D): boolean {
 
 /** Personnage animé : clone indépendant (squelette compris) ramené à la taille voulue (longueur du corps ou hauteur), pieds à y = 0 */
 export function makeActor(name: ModelName, size: number, fit: 'length' | 'height' = 'length'): Actor | null {
+  if (isDrawn(name)) return drawnActor(DRAWN[name], size, fit);
   const gltf = loaded.get(name);
   if (!gltf) return null;
   // une fois par modèle : simplification en grosses facettes (pièce par pièce, pour que les taches de la vache restent
@@ -542,11 +518,34 @@ export function makeActor(name: ModelName, size: number, fit: 'length' | 'height
     const short = clip.name.split('|').pop()!;
     if (!actions.has(short)) actions.set(short, mixer.clipAction(clip));
   }
-  for (const [alias, clips] of CLIP_ALIAS) {
-    const c = clips.map((n) => actions.get(n)).find(Boolean);
-    if (c && !actions.has(alias)) actions.set(alias, c);
+  const a = { root, mixer, actions, current: null };
+  alias(a);
+  return a;
+}
+
+/** Les anciens noms d'animation pointent vers ceux du modèle (voir `CLIP_ALIAS`) */
+function alias(a: Actor) {
+  for (const [name, clips] of CLIP_ALIAS) {
+    const c = clips.map((n) => a.actions.get(n)).find(Boolean);
+    if (c && !a.actions.has(name)) a.actions.set(name, c);
   }
-  return { root, mixer, actions, current: null };
+}
+
+/** Taille (longueur ou hauteur) de chaque bête dessinée à l'échelle 1, mesurée une fois */
+const drawnSize = new Map<string, THREE.Vector3>();
+let drawnCount = 0;
+/** Bête de la basse-cour dessinée par le jeu, ramenée à `size` comme un modèle ; robes en alternance */
+function drawnActor(kind: BeastKind, size: number, fit: 'length' | 'height'): Actor {
+  let s = drawnSize.get(kind);
+  if (!s) {
+    const probe = makeBeast(kind, 0, 1);
+    probe.root.updateMatrixWorld(true);
+    s = new THREE.Box3().setFromObject(probe.root).getSize(new THREE.Vector3());
+    drawnSize.set(kind, s);
+  }
+  const a = makeBeast(kind, drawnCount++ * 7, size / Math.max(1e-6, fit === 'height' ? s.y : Math.max(s.x, s.z)), 0.94 + (drawnCount % 5) * 0.03);
+  alias(a);
+  return a;
 }
 
 /** Enchaîne en fondu vers la première animation disponible de la liste */
