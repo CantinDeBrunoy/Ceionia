@@ -1071,6 +1071,10 @@ class Game implements UIHost {
   }
 
   setQuality(q: Quality) { this.quality = q; this.applyQuality(); this.applySettings(); }
+  /** Ce que la qualité en cours donne vraiment (pour les réglages) : ses paramètres, le halo (absent sur écran tactile), la part de la finesse de l'écran, le palier de « Auto » */
+  get gfxShown() {
+    return { p: this.gfx, glow: !!this.glow && this.gfx.glow, fine: renderer.getPixelRatio() / (window.devicePixelRatio || 1), level: this.adaptive.level, max: MAX_LEVEL };
+  }
   setDisasters(on: boolean) { this.world.disasters = on; this.applySettings(); }
   setAutoRoads(on: boolean) { this.autoRoads = on; this.applySettings(); }
   setHideUpBadges(on: boolean) { this.hideUpBadges = on; this.upBadges.hidden = on; this.applySettings(); }
@@ -1107,10 +1111,6 @@ class Game implements UIHost {
     let f = this.farewell;
     if (!a) { if (f) { ag.dismiss(f.crowd); this.farewell = null; } this.parade.stop(); return; }
     if (!f || f.id !== a.id) {
-  /** Ce que la qualité en cours donne vraiment (pour les réglages) : ses paramètres, le halo (absent sur écran tactile), la part de la finesse de l'écran, le palier de « Auto » */
-  get gfxShown() {
-    return { p: this.gfx, glow: !!this.glow && this.gfx.glow, fine: renderer.getPixelRatio() / (window.devicePixelRatio || 1), level: this.adaptive.level, max: MAX_LEVEL };
-  }
       if (f) ag.dismiss(f.crowd);
       const crowd = ag.recruit(Math.min(60, ag.available())) ?? [];
       // la route des colons : les cases que suivrait leur marche, du cœur du village au pas de tir (le tracé direct sans chemin)
