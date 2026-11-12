@@ -13,6 +13,9 @@ import { BASE_DEFS, BASE_R } from '../sim/hellBase';
 import type { KingFight } from '../sim/kingdom';
 import { KingFx } from './kingFx';
 import { RuinSmoke } from './isleRuins';
+import { siteParts } from './hellSites';
+import { HellDecor } from './hellDecor';
+import { HellCritters } from './hellCritters';
 
 /**
  * Le monde des Enfers, vu comme le monde souterrain (galeries en coupe, le dessus des parois est la tranche sombre de la
@@ -55,7 +58,7 @@ export class HellView {
   private fog = new THREE.Fog(BG, 14, 44);
   private d = new THREE.Object3D();
   /** bâtiments : maillage debout, ruines, barre de vie */
-  private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[]; rise?: number; smokeT?: number; base?: BaseDress; wall?: WallPart }>();
+  private houses = new Map<number, { up: THREE.Group; ruin: THREE.Mesh; down: boolean; flags: THREE.Object3D[]; rise?: number; smokeT?: number; base?: BaseDress; wall?: WallPart; puffs?: { smoke: [number, number, number][]; sparks: [number, number, number][]; t: number } }>();
   /** l'âge du village (la sim, via main.ts) : les bâtiments de la base prennent la variante de leur âge sans être rebâtis */
   age = 1;
   /** les murs (palissades, portes) raccordés : leur recalcul quand la carte change, les formes déjà faites */
@@ -95,6 +98,9 @@ export class HellView {
   private waveK = 0;
   private debrisGeo: THREE.BufferGeometry | null = null;
   private debrisMat: THREE.Material | null = null;
+  /** le décor vivant (végétation infernale, torches, cages, cascades de lave, fumerolles, cendre) et les petites bêtes */
+  private decor: HellDecor | null = null;
+  private critters: HellCritters | null = null;
 
   constructor(readonly map: HellMap, public hell: Hell) {
     this.scene.background = BG.clone();
@@ -121,6 +127,11 @@ export class HellView {
     this.buildPools();
     this.buildBridges();
     this.buildDecor();
+    this.decor = new HellDecor(this.map, this.uTime, WALL);
+    this.content.add(this.decor.group);
+    this.sources.push(...this.decor.sources);
+    this.critters = new HellCritters(this.map, this.uTime);
+    this.content.add(this.critters.group);
     this.buildEmbers();
     this.buildMist();
     this.buildPortal();
@@ -413,9 +424,9 @@ export class HellView {
     const ruinMat = caveLit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), 'hell-ruin');
     for (const b of this.hell.buildings.values()) {
       if (b.side !== 'hell') continue;
-      const [solid, shine, flagY] = houseGeo(b.kind as HellSiteKind);
+      const parts = siteParts(b.kind as HellSiteKind, b.zone), flagY = parts.flags;
       const up = new THREE.Group();
-      up.add(new THREE.Mesh(solid, lit), new THREE.Mesh(shine, glow));
+      up.add(new THREE.Mesh(parts.solid, lit), new THREE.Mesh(parts.shine, glow));
       // étendards violets qui flottent
       const flags: THREE.Object3D[] = [];
       for (const [fx, fy, fz] of flagY) {
@@ -432,7 +443,7 @@ export class HellView {
       ruin.position.copy(up.position);
       ruin.visible = false;
       this.content.add(up, ruin);
-      this.houses.set(b.id, { up, ruin, down: false, flags });
+      this.houses.set(b.id, { up, ruin, down: false, flags, puffs: parts.smoke.length || parts.sparks.length ? { smoke: parts.smoke, sparks: parts.sparks, t: Math.random() } : undefined });
       const h = b.kind === 'kingdom' ? 5.4 : b.kind === 'fortress' || b.kind === 'spire' ? 2.6 : 1.4;
       this.sources.push({ x: b.site.x, y: y + h, z: b.site.z - b.site.r - 0.3, r: b.kind === 'kingdom' ? 9 : 4.5, c: new THREE.Color(1, 0.45, 0.2).multiplyScalar(b.kind === 'kingdom' ? 2 : 1.4), flicker: 0.25 });
     }
@@ -772,11 +783,14 @@ export class HellView {
       // les ruines qui ont fini de fumer (une fois la zone tenue, la fumée s'éteint au bout d'un moment)
       if (h.down && this.smoke.has(id) && (h.smokeT = (h.smokeT ?? 0) + dt) > 90) this.smoke.stop(id);
       if (h.up.visible) h.flags.forEach((f, i) => { f.rotation.y = Math.sin(t * 2.3 + i + id) * 0.35; });
+      if (h.puffs && h.up.visible && !h.down) this.puffSite(h.up, h.puffs, dt, Math.hypot(h.up.position.x - target.x, h.up.position.z - target.z) < dist * 1.6 + 6);
       if (h.base && h.up.visible && !h.down) this.animBase(h.base, h.up.rotation.y, id, dt, t, Math.hypot(h.base.x - target.x, h.base.z - target.z) < dist * 1.6 + 6);
       // (déjà vu debout : sa chute fumera ; une ruine trouvée en arrivant, non)
       if (!h.down) this.housesSeen.add(id);
     }
     this.stepGates(dt);
+    this.decor?.update(dt, target.x, target.z, dist * 1.6 + 6, this.units.fx);
+    this.critters?.update(dt, target.x, target.z, dist * 2 + 10, this.units.fx);
     this.smoke.update(dt);
     if (this.portalDisc) this.portalDisc.rotation.z = 0;
     this.kingFx.update(dt, this.fight, events);
@@ -803,6 +817,16 @@ export class HellView {
     const col = d.age === 1 ? 0x5a4a48 : d.age === 2 ? 0x4a4048 : d.age === 3 ? 0x2c2a2e : d.age === 4 ? 0x6a6a70 : 0x9ad0e8;
     for (const v of p.smoke) { const w = at(v); fx.plume(w[0], w[1], w[2], col); }
     for (const v of p.sparks) if (Math.random() < 0.55) { const w = at(v); fx.ember(w[0], w[1], w[2], d.age === 5 ? 0x70e8ff : 0xffb040); }
+  }
+
+  /** Fumée des cheminées et des braseros, étincelles des forges démoniaques (seulement près de la vue) */
+  private puffSite(up: THREE.Object3D, p: { smoke: [number, number, number][]; sparks: [number, number, number][]; t: number }, dt: number, near: boolean) {
+    if (!near || (p.t -= dt) > 0) return;
+    p.t = 0.22 + Math.random() * 0.25;
+    const co = Math.cos(up.rotation.y), si = Math.sin(up.rotation.y), o = up.position, fx = this.units.fx;
+    const at = (v: [number, number, number]) => [o.x + v[0] * co + v[2] * si, o.y + v[1], o.z - v[0] * si + v[2] * co] as const;
+    for (const v of p.smoke) if (Math.random() < 0.6) { const w = at(v); fx.plume(w[0], w[1], w[2], 0x2e2228); }
+    for (const v of p.sparks) for (let i = 0; i < 2; i++) { const w = at(v); fx.ember(w[0] + (Math.random() - 0.5) * 0.2, w[1], w[2] + (Math.random() - 0.5) * 0.2, 0xffa040); }
   }
 
   /** Le royaume s'effondre (la cinématique de la victoire) : ses ruines s'enfoncent, la lave monte, poussière et jets de feu */
@@ -957,88 +981,6 @@ function ruinGeo(r: number, seed: number) {
     parts.push(paint(new THREE.BoxGeometry(s, s * 0.7, s).rotateY(a).rotateX(hash2(seed, i, 4) - 0.5).translate(Math.sin(a) * d, s * 0.3, Math.cos(a) * d), i % 4 === 0 ? 0x6a2a1a : 0x2e2228));
   }
   return merge(parts);
-}
-
-/**
- * Les bâtiments démoniaques (face au nord, +z vers le sud) : pièces opaques, pièces qui luisent (fenêtres, braises, yeux),
- * et où flottent les étendards
- */
-function houseGeo(kind: HellSiteKind): [THREE.BufferGeometry, THREE.BufferGeometry, [number, number, number][]] {
-  const STONE = 0x4a3440, DARK = 0x2c1e26, RED = 0xc23a2a, BONE = 0xeadcc0, GOLD = 0xe0a83a, LAVA = 0xffa040, EYE = 0xffe14a, PURPLE = 0x6a2a8a;
-  const horn = (x: number, y: number, z: number, s: number, lean: number) => paint(new THREE.ConeGeometry(0.1 * s, 0.5 * s, 5).rotateZ(lean).translate(x, y, z), BONE, (t) => 0.8 + t * 0.3);
-  const solid: THREE.BufferGeometry[] = [], shine: THREE.BufferGeometry[] = [], flags: [number, number, number][] = [];
-  if (kind === 'outpost') {
-    solid.push(paint(new THREE.CylinderGeometry(0.42, 0.62, 1.5, 4).rotateY(Math.PI / 4).translate(0, 0.75, 0), STONE, (y) => 0.8 + y * 0.3));
-    solid.push(paint(new THREE.BoxGeometry(1, 0.18, 1).translate(0, 1.55, 0), DARK));
-    for (const [x, z] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) solid.push(paint(new THREE.ConeGeometry(0.1, 0.42, 4).translate(x, 1.85, z), RED));
-    solid.push(horn(-0.3, 1.1, -0.45, 1.2, 0.6), horn(0.3, 1.1, -0.45, 1.2, -0.6));
-    shine.push(paint(new THREE.BoxGeometry(0.14, 0.32, 0.05).translate(0, 1.05, -0.5), LAVA), paint(new THREE.BoxGeometry(0.3, 0.12, 0.3).translate(0, 1.7, 0), LAVA));
-    flags.push([0, 2.1, 0]);
-    solid.push(paint(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 4).translate(0, 1.95, 0), DARK));
-  } else if (kind === 'forge') {
-    solid.push(paint(new THREE.BoxGeometry(1.6, 0.75, 1.3).translate(0, 0.375, 0.1), STONE, (y) => 0.8 + y * 0.3));
-    solid.push(paint(new THREE.CylinderGeometry(0.05, 1.1, 0.6, 4).rotateY(Math.PI / 4).scale(1.05, 1, 0.85).translate(0, 1.05, 0.1), PURPLE));
-    solid.push(paint(new THREE.CylinderGeometry(0.16, 0.2, 1.1, 6).translate(0.5, 1.2, 0.35), DARK));
-    // l'enclume devant la porte
-    solid.push(paint(new THREE.BoxGeometry(0.3, 0.12, 0.14).translate(-0.45, 0.28, -0.75), 0x3a3a44), paint(new THREE.BoxGeometry(0.14, 0.22, 0.12).translate(-0.45, 0.11, -0.75), 0x2a2a30));
-    shine.push(paint(new THREE.BoxGeometry(0.55, 0.42, 0.06).translate(0, 0.28, -0.56), LAVA), paint(new THREE.CylinderGeometry(0.13, 0.13, 0.08, 6).translate(0.5, 1.78, 0.35), 0xff6a20));
-  } else if (kind === 'fortress') {
-    // enceinte carrée crénelée, quatre tours à toit rouge, donjon cornu, porte qui rougeoie
-    for (const [w, d, x, z] of [[3.2, 0.32, 0, -1.45], [3.2, 0.32, 0, 1.45], [0.32, 3.2, -1.45, 0], [0.32, 3.2, 1.45, 0]] as const) {
-      solid.push(paint(new THREE.BoxGeometry(w, 1, d).translate(x, 0.5, z), STONE, (y) => 0.8 + y * 0.3));
-      const n = 6;
-      for (let i = 0; i < n; i++) {
-        const u = (i + 0.5) / n - 0.5;
-        solid.push(paint(new THREE.BoxGeometry(w > d ? 0.24 : 0.34, 0.2, w > d ? 0.34 : 0.24).translate(x + (w > d ? u * w : 0), 1.1, z + (w > d ? 0 : u * d)), STONE));
-      }
-    }
-    for (const [x, z] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) {
-      solid.push(paint(new THREE.CylinderGeometry(0.42, 0.5, 1.7, 6).translate(x, 0.85, z), STONE, (y) => 0.8 + y * 0.3));
-      solid.push(paint(new THREE.ConeGeometry(0.58, 0.8, 6).translate(x, 2.1, z), RED));
-      shine.push(paint(new THREE.BoxGeometry(0.1, 0.24, 0.1).translate(x, 1.25, z - Math.sign(z) * 0.0 - 0.47), LAVA));
-    }
-    solid.push(paint(new THREE.BoxGeometry(1.3, 2.3, 1.3).translate(0, 1.15, 0.2), DARK, (y) => 0.8 + y * 0.4));
-    solid.push(horn(-0.55, 2.55, 0.2, 2.2, 0.55), horn(0.55, 2.55, 0.2, 2.2, -0.55));
-    shine.push(paint(new THREE.BoxGeometry(0.7, 0.75, 0.08).translate(0, 0.4, -1.62), 0xff5a1a));
-    shine.push(paint(new THREE.BoxGeometry(0.18, 0.12, 0.05).translate(-0.25, 1.8, -0.47), EYE), paint(new THREE.BoxGeometry(0.18, 0.12, 0.05).translate(0.25, 1.8, -0.47), EYE));
-    flags.push([-1.5, 2.7, -1.5], [1.5, 2.7, -1.5]);
-    for (const x of [-1.5, 1.5]) solid.push(paint(new THREE.CylinderGeometry(0.025, 0.025, 0.8, 4).translate(x, 2.6, -1.5), DARK));
-  } else if (kind === 'spire') {
-    // une tour de la citadelle : fût sombre sur un socle, meurtrières de lave, chemin de ronde, toit rouge cornu
-    solid.push(paint(new THREE.CylinderGeometry(0.75, 0.9, 0.4, 6).translate(0, 0.2, 0), STONE));
-    solid.push(paint(new THREE.CylinderGeometry(0.5, 0.66, 2.4, 6).translate(0, 1.6, 0), DARK, (y) => 0.8 + y * 0.4));
-    solid.push(paint(new THREE.CylinderGeometry(0.72, 0.6, 0.3, 6).translate(0, 2.95, 0), STONE));
-    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; solid.push(paint(new THREE.BoxGeometry(0.22, 0.24, 0.2).translate(0, 3.2, 0.62).rotateY(a), STONE)); }
-    solid.push(paint(new THREE.ConeGeometry(0.62, 1.3, 6).translate(0, 3.85, 0), RED));
-    solid.push(horn(-0.4, 3.3, 0, 1.5, 0.7), horn(0.4, 3.3, 0, 1.5, -0.7));
-    for (const y of [1.2, 2.1]) shine.push(paint(new THREE.BoxGeometry(0.12, 0.3, 0.06).translate(0, y, -0.6), LAVA));
-    shine.push(paint(new THREE.BoxGeometry(0.16, 0.1, 0.05).translate(0, 3.45, -0.5), EYE));
-    flags.push([0, 4.7, 0]);
-    solid.push(paint(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 4).translate(0, 4.6, 0), DARK));
-  } else {
-    // la citadelle : enceinte octogonale, six tours, une flèche immense couronnée de cornes et d'un œil de lave
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      solid.push(paint(new THREE.BoxGeometry(2.6, 1.6, 0.4).translate(0, 0.8, 3.6).rotateY(a), STONE, (y) => 0.8 + y * 0.3));
-      for (let j = 0; j < 4; j++) solid.push(paint(new THREE.BoxGeometry(0.3, 0.26, 0.42).translate(-0.9 + j * 0.6, 1.73, 3.6).rotateY(a), STONE));
-    }
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + 0.3, x = Math.sin(a) * 3.7, z = Math.cos(a) * 3.7;
-      solid.push(paint(new THREE.CylinderGeometry(0.55, 0.7, 2.8, 6).translate(x, 1.4, z), DARK, (y) => 0.8 + y * 0.4));
-      solid.push(paint(new THREE.ConeGeometry(0.75, 1.2, 6).translate(x, 3.4, z), RED));
-      shine.push(paint(new THREE.BoxGeometry(0.16, 0.34, 0.16).translate(x * 0.86, 2.1, z * 0.86), LAVA));
-      flags.push([x, 4.2, z]);
-    }
-    solid.push(paint(new THREE.CylinderGeometry(1.3, 2.2, 3.6, 8).translate(0, 1.8, 0), STONE, (y) => 0.75 + y * 0.4));
-    solid.push(paint(new THREE.CylinderGeometry(0.6, 1.2, 2.8, 8).translate(0, 5, 0), DARK, (y) => 0.8 + y * 0.4));
-    solid.push(paint(new THREE.ConeGeometry(0.7, 1.6, 8).translate(0, 7.2, 0), RED));
-    solid.push(horn(-1, 6, 0, 4, 0.7), horn(1, 6, 0, 4, -0.7), horn(-1.6, 3.6, 0, 3, 0.9), horn(1.6, 3.6, 0, 3, -0.9));
-    solid.push(paint(new THREE.TorusGeometry(0.75, 0.1, 4, 10).rotateX(Math.PI / 2).translate(0, 6.45, 0), GOLD));
-    shine.push(paint(new THREE.IcosahedronGeometry(0.42, 1).translate(0, 5.6, -0.72), 0xffd040));
-    shine.push(paint(new THREE.BoxGeometry(1.2, 1.3, 0.1).translate(0, 0.65, -3.72), 0xff5a1a));
-    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; shine.push(paint(new THREE.BoxGeometry(0.2, 0.4, 0.1).translate(0, 2.4, 1.95).rotateY(a), LAVA)); }
-  }
-  return [merge(solid), merge(shine), flags];
 }
 
 // ---------- Matériaux ----------

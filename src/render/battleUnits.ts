@@ -167,7 +167,7 @@ export class BattleLayer {
       // le coup se voit : un bond vers la cible quand il frappe, un recul net quand il est touché (affichage seulement)
       const push = dead ? 0 : (u.stats.range <= 2 ? atk * 0.22 * (sc + 0.5) : 0) - (u.hurt < 0.16 ? (1 - u.hurt / 0.16) * 0.14 : 0);
       v.set(u.x + Math.sin(u.heading) * push, this.groundY(u.x, u.z) + (bob + hover) * sc - sink, u.z + Math.cos(u.heading) * push);
-      e.set(-fall * 1.4 + atk * 0.18, u.heading, 0, 'YXZ');
+      e.set(-fall * 1.4 + atk * 0.18 + (u.moving || dead ? 0 : Math.sin(t * 1.7 + u.id * 1.3) * 0.025), u.heading, 0, 'YXZ');
       q.setFromEuler(e);
       s.setScalar(sc * shrink);
       root.compose(v, q, s);
@@ -188,8 +188,10 @@ export class BattleLayer {
       pose('legR', -sw * stride);
       const archer = kind === 'archer';
       // l'archer tend son arc (bras gauche en avant) ; les autres frappent du bras droit, de haut en bas
-      pose('armL', archer && u.state === 'attack' ? -1.45 : -sw * stride * 0.6);
-      pose('armR', archer ? (u.state === 'attack' ? -1.3 + atk * 0.4 : sw * stride * 0.6) : u.swing < 0.5 ? -2.3 * atk + 0.4 * atk * atk : sw * stride * 0.6);
+      // au repos : les bras se balancent un peu, écartés, au rythme du souffle
+      const idle = u.moving || dead ? 0 : Math.sin(t * 1.7 + u.id * 1.3);
+      pose('armL', archer && u.state === 'attack' ? -1.45 : -sw * stride * 0.6 + idle * 0.07, 0, -idle * 0.05 - 0.04);
+      pose('armR', archer ? (u.state === 'attack' ? -1.3 + atk * 0.4 : sw * stride * 0.6 + idle * 0.07) : u.swing < 0.5 ? -2.3 * atk + 0.4 * atk * atk : sw * stride * 0.6 - idle * 0.07, 0, idle * 0.05 + 0.04);
       const flap = kind === 'imp' ? Math.sin(t * 16 + u.id) * 0.55 : Math.sin(t * 2.2 + u.id) * 0.18 + (u.moving ? Math.sin(t * 7 + u.id) * 0.2 : 0);
       pose('wingL', 0, 0.5 + flap, 0);
       pose('wingR', 0, -0.5 - flap, 0);
@@ -525,6 +527,20 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
     for (let i = 0; i < 5; i++) body.push(paint(new THREE.ConeGeometry(0.06, 0.2, 4).translate(0, 0.1, 0).rotateX(-0.4).translate((i - 2) * 0.15, S.hip + 0.2 + (i % 2) * 0.12, -S.torso * 0.75), S.horn, (t) => 0.8 + t * 0.3));
     body.push(paint(new THREE.BoxGeometry(S.w * 2.2, 0.06, S.torso * 1.2).translate(0, S.hip + 0.05, 0), 0x6a5048));
   }
+  // détails communs : arcade sourcilière, crocs, oreilles pointues des petits, ceinture et pagne, pointes le long du dos
+  body.push(paint(new THREE.BoxGeometry(S.head * 1.15, S.head * 0.18, S.head * 0.3).rotateX(0.3).translate(0, headY + S.head * 0.33, S.head * 0.72 + headZ), S.dark));
+  for (const sd of [-1, 1]) body.push(paint(new THREE.ConeGeometry(S.head * 0.08, S.head * 0.3, 3).rotateX(Math.PI).translate(sd * S.head * 0.22, headY - S.head * 0.42, S.head * 0.82 + headZ), 0xf4ecd8));
+  if (kind === 'imp' || kind === 'archer' || kind === 'chief') for (const sd of [-1, 1]) body.push(paint(new THREE.ConeGeometry(S.head * 0.22, S.head * 0.7, 3).rotateZ(-sd * 1.25).translate(sd * S.head * 1.05, headY + S.head * 0.05, 0), S.skin));
+  if (kind === 'imp' || kind === 'archer' || kind === 'brute' || kind === 'chief') {
+    body.push(paint(new THREE.CylinderGeometry(S.torso * 0.98, S.torso * 1.02, 0.035, 7).scale(1, 1, 0.82).translate(0, S.hip + 0.06, 0), 0x3a2418));
+    body.push(paint(new THREE.BoxGeometry(S.w * 0.9, S.hip * 0.42, 0.015).translate(0, S.hip - S.hip * 0.15, S.torso * 0.8), kind === 'chief' ? 0x5a1a2a : 0x5a3a28));
+    body.push(paint(new THREE.BoxGeometry(0.045, 0.035, 0.02).translate(0, S.hip + 0.06, S.torso * 0.84), 0xc0a060));
+  }
+  if (kind === 'brute' || kind === 'guardian' || kind === 'horned' || kind === 'golem')
+    for (let i = 0; i < 4; i++) body.push(paint(new THREE.ConeGeometry(S.limb * (0.55 - i * 0.07), 0.12 - i * 0.015, 4).rotateX(-0.7).translate(0, S.sh - 0.02 - i * (S.sh - S.hip) * 0.24, -S.torso * 0.78 - 0.02), kind === 'golem' ? 0x4a3c42 : S.horn, (t) => 0.8 + t * 0.3));
+  // la brute et le gardien : une grosse queue courte ; la brute, un anneau dans le nez
+  if (kind === 'brute' || kind === 'guardian') body.push(paint(new THREE.ConeGeometry(0.05, 0.3, 5).rotateX(-1.9).translate(0, S.hip + 0.02, -S.torso - 0.1), S.skin));
+  if (kind === 'brute') body.push(paint(new THREE.TorusGeometry(0.03, 0.008, 3, 8).translate(0, headY - S.head * 0.18, S.head * 0.98 + headZ), 0xe0b040));
   out.body = { geo: merge(body), pivot: new THREE.Vector3() };
   // les lueurs : yeux, et pour les gros monstres des fissures de lave, le cœur ardent, la couronne de flammes
   const glow: THREE.BufferGeometry[] = [-1, 1].map((sd) => paint(new THREE.IcosahedronGeometry(S.head * 0.2, 0).scale(1.2, 0.8, 0.6).translate(sd * S.head * 0.38, headY + S.head * 0.12, S.head * 0.88 + headZ), S.eye));
@@ -547,11 +563,17 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
     for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; glow.push(paint(new THREE.ConeGeometry(0.035, 0.16 + (i % 2) * 0.06, 4).translate(Math.sin(a) * S.head * 0.7, headY + S.head * 1.0, Math.cos(a) * S.head * 0.7), i % 2 ? 0xffd040 : 0xff8a1a)); }
     glow.push(paint(new THREE.BoxGeometry(S.head * 1.0, 0.03, 0.02).translate(0, headY - S.head * 0.35, S.head * 0.92 + headZ), 0xffa030));
   }
+  // marques de feu sur le torse de la brute et du chef ; pointes de flèches enflammées dans le carquois de l'archer
+  if (kind === 'brute' || kind === 'chief') for (const sd of [-1, 1]) glow.push(paint(new THREE.BoxGeometry(0.018, 0.1, 0.012).rotateZ(sd * 0.5).translate(sd * S.torso * 0.32, (S.sh + S.hip) / 2 + 0.03, S.torso * 0.72), 0xff6a1a), paint(new THREE.BoxGeometry(0.06, 0.016, 0.012).translate(sd * S.torso * 0.3, (S.sh + S.hip) / 2 - 0.04, S.torso * 0.7), 0xff6a1a));
+  if (kind === 'archer') for (let i = 0; i < 3; i++) glow.push(paint(new THREE.ConeGeometry(0.014, 0.05, 3).rotateX(0.4).translate(0.05 + i * 0.03, S.sh + 0.13 + (i % 2) * 0.02, -S.torso - 0.06), 0xff8a2a));
   out.glow = { geo: merge(glow), pivot: new THREE.Vector3() };
   // jambes : pivot à la hanche, vers le bas ; pieds griffus
   const leg = () => merge([
     paint(new THREE.CylinderGeometry(S.limb, S.limb * 0.8, S.hip, 5).translate(0, -S.hip / 2, 0), S.skin),
     paint(new THREE.BoxGeometry(S.limb * 2.2, S.limb * 0.9, S.limb * 3).translate(0, -S.hip + S.limb * 0.4, S.limb * 0.6), S.dark),
+    // griffes des orteils, pointe au genou des gros
+    ...[-1, 0, 1].map((i) => paint(new THREE.ConeGeometry(S.limb * 0.28, S.limb * 0.9, 3).rotateX(Math.PI / 2).translate(i * S.limb * 0.7, -S.hip + S.limb * 0.25, S.limb * 2.3), 0xf0e4cc)),
+    ...(heavy || kind === 'horned' ? [paint(new THREE.ConeGeometry(S.limb * 0.4, S.limb * 1.4, 4).rotateX(1.2).translate(0, -S.hip * 0.45, S.limb * 1.1), S.horn)] : []),
   ]);
   out.legL = { geo: leg(), pivot: new THREE.Vector3(-S.w * 0.55, S.hip, 0) };
   out.legR = { geo: leg(), pivot: new THREE.Vector3(S.w * 0.55, S.hip, 0) };
@@ -561,6 +583,8 @@ export function demonParts(kind: DemonKind): Partial<Record<PartName, { geo: THR
   const arm = (weapon: THREE.BufferGeometry[], lavaFist = false) => merge([
     paint(new THREE.CylinderGeometry(S.limb * 0.9, S.limb * 0.75, armLen, 5).translate(0, -armLen / 2, 0), S.skin),
     paint(new THREE.IcosahedronGeometry(S.limb * fist, 0).translate(0, -armLen, 0), lavaFist ? 0xff7a2a : S.dark, lavaFist ? (t) => 0.75 + t * 0.5 : undefined),
+    // trois griffes au bout du poing
+    ...[-1, 0, 1].map((i) => paint(new THREE.ConeGeometry(S.limb * 0.25, S.limb * fist * 0.9, 3).rotateX(Math.PI * 0.85).translate(i * S.limb * fist * 0.45, -armLen - S.limb * fist * 0.75, S.limb * fist * 0.35), 0xf0e4cc)),
     // (brassard)
     ...(kind === 'titan' || kind === 'lord' || kind === 'horned' ? [paint(new THREE.CylinderGeometry(S.limb * 1.15, S.limb * 1.05, armLen * 0.22, 6).translate(0, -armLen * 0.75, 0), kind === 'lord' ? 0xe0b040 : S.dark)] : []),
     ...weapon,
