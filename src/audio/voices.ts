@@ -301,3 +301,75 @@ export const VOICES: Record<SpotKind, VoiceDef> = {
     },
   },
 };
+
+// ---------- cris de la faune sauvage (un animal près de la vue, de temps en temps) ----------
+
+/** Brame du cerf (en automne) : râle grave et rauque qui enfle ; sinon un aboiement bref d'alerte */
+function deerCall(s: Synth, d: AudioNode, t: number) {
+  if (Math.random() < 0.5) {
+    const f = rnd(70, 95), dur = rnd(1.4, 2.2);
+    note(s, d, t, { f, f2: f * 0.8, dur, vol: 0.16, type: 'sawtooth', attack: 0.25, filter: 'lowpass', ff: 700, q: 1.5, vib: rnd(18, 26), vibDepth: f * 0.06 });
+    hiss(s, d, t + 0.1, dur * 0.8, 500, 0.05, 'bandpass', 1.2, 0.2);
+  } else {
+    const f = rnd(420, 520);
+    note(s, d, t, { f, f2: f * 0.6, dur: 0.22, vol: 0.1, type: 'sawtooth', attack: 0.01, filter: 'bandpass', ff: 1200, q: 2 });
+    hiss(s, d, t, 0.15, 1400, 0.06, 'bandpass', 1.5);
+  }
+}
+
+/** Élan : long appel plaintif qui glisse vers le grave */
+function mooseCall(s: Synth, d: AudioNode, t: number) {
+  const f = rnd(160, 210);
+  note(s, d, t, { f, f2: f * 0.55, dur: rnd(1.2, 1.7), vol: 0.13, type: 'sawtooth', attack: 0.15, filter: 'bandpass', ff: 600, q: 2, vib: 3, vibDepth: f * 0.02 });
+}
+
+/** Barrissement : cuivré, aigu, tremblé, qui monte puis casse */
+function trumpet(s: Synth, d: AudioNode, t: number) {
+  const f = rnd(420, 560), dur = rnd(0.9, 1.3);
+  note(s, d, t, { f: f * 0.8, f2: f * 1.25, dur: dur * 0.6, vol: 0.13, type: 'sawtooth', attack: 0.05, filter: 'bandpass', ff: 1800, q: 1.2, vib: rnd(20, 28), vibDepth: f * 0.05 });
+  note(s, d, t + dur * 0.5, { f: f * 1.2, f2: f * 0.7, dur: dur * 0.6, vol: 0.1, type: 'sawtooth', filter: 'bandpass', ff: 1600, q: 1.2, vib: rnd(20, 28), vibDepth: f * 0.06 });
+  hiss(s, d, t, dur, 2200, 0.04, 'bandpass', 1, 0.05);
+}
+
+/** Chameau : grognement gargouillé, grave */
+function camelCall(s: Synth, d: AudioNode, t: number) {
+  const f = rnd(85, 120);
+  note(s, d, t, { f, f2: f * 0.75, dur: rnd(0.7, 1.1), vol: 0.14, type: 'sawtooth', attack: 0.05, filter: 'lowpass', ff: 600, q: 2, vib: rnd(28, 40), vibDepth: f * 0.15 });
+}
+
+/** Lama : petit fredonnement nasal, doux */
+function llamaCall(s: Synth, d: AudioNode, t: number) {
+  const f = rnd(230, 290);
+  note(s, d, t, { f, f2: f * 1.1, dur: rnd(0.5, 0.8), vol: 0.16, type: 'triangle', attack: 0.08, filter: 'bandpass', ff: 700, q: 3 });
+}
+
+/** Girafe et ours : souffle par les naseaux ; l'ours y ajoute un grognement sourd */
+function snort(s: Synth, d: AudioNode, t: number) { hiss(s, d, t, rnd(0.25, 0.4), rnd(500, 800), 0.1, 'bandpass', 1.3, 0.02); }
+function bearCall(s: Synth, d: AudioNode, t: number) {
+  const f = rnd(65, 85);
+  note(s, d, t, { f, f2: f * 0.85, dur: rnd(0.8, 1.2), vol: 0.14, type: 'sawtooth', attack: 0.1, filter: 'lowpass', ff: 380, q: 2, vib: rnd(30, 45), vibDepth: f * 0.2 });
+}
+
+/** Bouquetin : bêlement court et plus aigu que le mouton */
+function ibexCall(s: Synth, d: AudioNode, t: number) {
+  const f = rnd(420, 520);
+  note(s, d, t, { f, f2: f * 0.85, dur: rnd(0.3, 0.45), vol: 0.1, type: 'sawtooth', attack: 0.03, filter: 'bandpass', ff: 1400, q: 2, vib: rnd(10, 13), vibDepth: f * 0.05 });
+}
+
+/** Cochon : deux ou trois grognements courts */
+function grunt(s: Synth, d: AudioNode, t: number) {
+  const n = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < n; i++) { const f = rnd(110, 150); note(s, d, t + i * rnd(0.18, 0.28), { f, f2: f * 0.8, dur: 0.14, vol: 0.12, type: 'sawtooth', attack: 0.01, filter: 'lowpass', ff: 650, q: 3, vib: 35, vibDepth: f * 0.2 }); }
+}
+
+/** Renard : glapissement aigu et bref, parfois répété */
+function yip(s: Synth, d: AudioNode, t: number) {
+  const n = 1 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) { const f = rnd(900, 1150); note(s, d, t + i * 0.32, { f: f * 0.8, f2: f * 1.2, dur: 0.18, vol: 0.06, type: 'sawtooth', attack: 0.01, filter: 'bandpass', ff: 1800, q: 2 }); }
+}
+
+/** Cri d'un animal sauvage selon son espèce (même nom que la faune) */
+export const CALLS: Record<string, (s: Synth, d: AudioNode, t: number) => void> = {
+  sheep: bleat, cow: moo, horse: neigh, hen: cluck, pig: grunt, deer: deerCall, moose: mooseCall, elephant: trumpet,
+  camel: camelCall, llama: llamaCall, giraffe: snort, bear: bearCall, ibex: ibexCall, fox: yip,
+};

@@ -1,6 +1,6 @@
 import { clamp } from '../core/rng';
 import type { SpotKind, SpotVoice } from './spots';
-import { VOICES } from './voices';
+import { VOICES, CALLS } from './voices';
 
 export interface AudioState {
   age: number;
@@ -468,30 +468,74 @@ export class AudioEngine {
    * Hurlement d'une meute (force 0 … 1) : chaque voix monte, tient en vibrant, puis retombe en glissant ; les voix
    * entrent l'une après l'autre, à des hauteurs différentes
    */
+  /** Cri d'un animal sauvage (`CALLS`), au volume des ambiances, atténué selon la distance (k 0 … 1) */
+  sfxCall(kind: string, k: number) {
+    const call = CALLS[kind];
+    if (!this.ctx || !call || k <= 0) return;
+    const g = this.ctx.createGain(); g.gain.value = k; g.connect(this.ambG);
+    call({ ctx: this.ctx, noise: this.noise }, g, this.ctx.currentTime + 0.02);
+    setTimeout(() => g.disconnect(), 4000);
+  }
   sfxHowl(k: number) {
     if (!this.ctx) return;
-    const ctx = this.ctx, t0 = ctx.currentTime;
-    for (let v = 0; v < 3; v++) {
-      const t = t0 + v * (0.6 + Math.random() * 0.5), f0 = 330 + v * 55 + Math.random() * 40, dur = 2.6 + Math.random() * 0.8;
-      const o = ctx.createOscillator(); o.type = 'sine';
-      o.frequency.setValueAtTime(f0 * 0.7, t);
-      o.frequency.linearRampToValueAtTime(f0 * 1.45, t + 0.5);
-      o.frequency.setValueAtTime(f0 * 1.45, t + dur * 0.6);
-      o.frequency.exponentialRampToValueAtTime(f0 * 0.8, t + dur);
-      // vibrato
+    const ctx = this.ctx, t0 = ctx.currentTime + 0.02;
+    // écho de la vallée : le hurlement porte loin
+    const echo = ctx.createDelay(1); echo.delayTime.value = 0.31;
+    const fb = ctx.createGain(); fb.gain.value = 0.28;
+    const dark = ctx.createBiquadFilter(); dark.type = 'lowpass'; dark.frequency.value = 900;
+    const wet = ctx.createGain(); wet.gain.value = 0.35;
+    echo.connect(dark); dark.connect(fb); fb.connect(echo); dark.connect(wet); wet.connect(this.sfxG);
+    // le chef d'abord, long ; puis un ou deux autres qui entrent décalés, sur une autre note (pas d'accord : chacun sa hauteur)
+    const n = 2 + (Math.random() < 0.5 ? 1 : 0);
+    let end = t0;
+    for (let v = 0; v < n; v++) {
+      const t = t0 + (v === 0 ? 0 : 0.9 + v * (0.5 + Math.random() * 0.7));
+      const f0 = (v === 0 ? 300 : 340 + Math.random() * 130) * (0.95 + Math.random() * 0.1);
+      const dur = (v === 0 ? 3.4 : 2.4) + Math.random() * 0.9;
+      const peak = f0 * (1.35 + Math.random() * 0.15);
+      end = Math.max(end, t + dur);
+      // contour : départ grave et sourd, montée glissée, longue tenue qui ondule à peine, puis chute en fin de souffle
+      const freq = (p: AudioParam) => {
+        p.setValueAtTime(f0 * 0.72, t);
+        p.linearRampToValueAtTime(peak, t + 0.55 + Math.random() * 0.3);
+        p.linearRampToValueAtTime(peak * (0.97 + Math.random() * 0.06), t + dur * 0.55);
+        p.linearRampToValueAtTime(peak * 0.94, t + dur * 0.8);
+        p.exponentialRampToValueAtTime(f0 * 0.62, t + dur);
+      };
+      // voix : dents de scie (harmoniques de la gorge) passées dans un « ou » (deux formants), plus un sinus pour le corps
+      const saw = ctx.createOscillator(); saw.type = 'sawtooth'; freq(saw.frequency);
+      const sine = ctx.createOscillator(); sine.type = 'sine'; freq(sine.frequency);
+      const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 520; f1.Q.value = 2.2;
+      const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 900; f2.Q.value = 3;
+      const sawG = ctx.createGain(); sawG.gain.value = 0.55;
+      const sineG = ctx.createGain(); sineG.gain.value = 0.5;
+      saw.connect(f1); saw.connect(f2); f1.connect(sawG); f2.connect(sawG); sine.connect(sineG);
+      // ondulation lente et légère (pas le vibrato rapide d'une sirène)
       const lfo = ctx.createOscillator(), lg = ctx.createGain();
-      lfo.frequency.value = 5 + Math.random() * 1.5; lg.gain.value = f0 * 0.025;
-      lfo.connect(lg); lg.connect(o.frequency);
-      const g = ctx.createGain();
+      lfo.frequency.value = 0.7 + Math.random() * 0.8; lg.gain.value = f0 * 0.012;
+      lfo.connect(lg); lg.connect(saw.frequency); lg.connect(sine.frequency);
+      // souffle : un peu de bruit autour de la note
+      const br = ctx.createBufferSource(); br.buffer = this.noise; br.loop = true;
+      const bf = ctx.createBiquadFilter(); bf.type = 'bandpass'; bf.frequency.value = 700; bf.Q.value = 1.2;
+      const bg = ctx.createGain(); bg.gain.value = 0.05;
+      br.connect(bf); bf.connect(bg);
+      // enveloppe : entrée douce, gonfle un peu, s'éteint en traînant
+      const g = ctx.createGain(), vol = (v === 0 ? 0.075 : 0.05) * k;
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(0.07 * k, t + 0.4);
-      g.gain.setValueAtTime(0.07 * k, t + dur * 0.7);
+      g.gain.linearRampToValueAtTime(vol * 0.7, t + 0.35);
+      g.gain.linearRampToValueAtTime(vol, t + dur * 0.5);
+      g.gain.linearRampToValueAtTime(vol * 0.75, t + dur * 0.82);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400;
-      o.connect(f); f.connect(g); g.connect(this.sfxG);
-      o.start(t); lfo.start(t); o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+      const soft = ctx.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 1500;
+      sawG.connect(soft); sineG.connect(soft); bg.connect(soft); soft.connect(g);
+      g.connect(this.sfxG); g.connect(echo);
+      for (const o of [saw, sine, lfo]) { o.start(t); o.stop(t + dur + 0.05); }
+      br.start(t, Math.random() * 1.5); br.stop(t + dur + 0.05);
     }
-  }  /** Feu d'artifice : détonation, souffle grave et crépitement des étincelles (force 0 … 1) */
+    // l'écho se tait après le dernier hurlement
+    setTimeout(() => { try { fb.disconnect(); wet.disconnect(); } catch { /* déjà coupé */ } }, (end - ctx.currentTime + 3) * 1000);
+  }
+  /** Feu d'artifice : détonation, souffle grave et crépitement des étincelles (force 0 … 1) */
   sfxBang(k: number) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

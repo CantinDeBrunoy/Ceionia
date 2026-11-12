@@ -47,7 +47,7 @@ Tout le son est **synthétisé** par Web Audio : aucun fichier son, rien à tél
 ## Liens avec les autres systèmes
 - Réglages : `Settings.musicVol`, `sfxVol`, `ambVol`, `music`, `sfx` ([sauvegarde.md](sauvegarde.md)) ; curseurs dans `openSettings` ([interface.md](interface.md)).
 - Proximité de nature : `Streams.nearness`, `World.waterDist`, `Life.fireNear`, `Fires.nearness`, `Fauna.frogsNear`.
-- Effets branchés dans `main.ts` : éruption (`erupt`), tonnerre, fêtes, combats (`onClash`), plouf des poissons et hurlement des loups (volume selon la distance au point visé et le zoom).
+- Effets branchés dans `main.ts` : éruption (`erupt`), tonnerre, fêtes, combats (`onClash`), plouf des poissons et hurlement des loups (volume selon la distance au point visé et le zoom). Cris de la faune sauvage : toutes les 2,5 à 6,5 s, si la vue est à moins de 70 de distance, `Fauna.pickCaller` tire un animal éveillé, visible et vivant à moins de 22 cases du point visé, parmi les espèces de `CALLS` (`voices.ts` : mouton, vache, cheval, poule, cochon, cerf (brame ou aboiement), élan, éléphant (barrissement), chameau, lama, girafe, ours, bouquetin, renard) ; `audio.sfxCall` le joue sur le bus des ambiances, atténué selon la distance et le zoom. Hurlement (`sfxHowl`) : le chef puis un ou deux loups décalés, chacun sur sa note ; dents de scie dans deux formants « ou » (520 et 900 Hz) plus un sinus, un peu de souffle, montée glissée, longue tenue à peine ondulante (0,7 à 1,5 Hz), chute en fin de souffle, écho de vallée (0,31 s).
 
 ## Pièges et invariants
 - Rien ne joue avant `audio.start()` (geste du joueur) : `ctx` est `null`, toutes les méthodes ressortent.

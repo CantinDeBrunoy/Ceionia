@@ -490,6 +490,19 @@ export class Fauna {
   group = new THREE.Group();
   /** une meute de loups se met à hurler (pour le son) */
   onHowl: ((x: number, z: number) => void) | null = null;
+
+  /**
+   * Un animal éveillé, visible et vivant, tiré au hasard à moins de `r` cases de (x, z), parmi les espèces qui crient
+   * (`callers`) ; les bruitages de la faune sauvage (`main.ts` → `audio.sfxCall`)
+   */
+  pickCaller(x: number, z: number, r: number, callers: ReadonlySet<string>): { kind: string; x: number; z: number } | null {
+    let pick: Critter | null = null, n = 0;
+    for (const c of this.critters) {
+      if (c.hidden || c.sleeping || c.dead > 0 || !callers.has(c.kind) || Math.abs(c.x - x) > r || Math.abs(c.z - z) > r) continue;
+      if (Math.random() * ++n < 1) pick = c;
+    }
+    return pick && { kind: pick.kind, x: pick.x, z: pick.z };
+  }
   /** villageois, que les bêtes sauvages évitent */
   people: () => Person[] = () => [];
   /** volcan en éruption : tous les animaux qui craignent quelque chose s'en éloignent en courant */

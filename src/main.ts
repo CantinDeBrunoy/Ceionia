@@ -4,6 +4,7 @@ import { onLangChange, tr as trx, nplural } from './i18n';
 import * as THREE from 'three';
 import { World, N, VEG_VOLCANO, setMapSize } from './world/world';
 import { buildingSpots, pickVoices } from './audio/spots';
+import { CALLS } from './audio/voices';
 import { Underground, UZ_NAMES } from './world/underground';
 import type { UnderView } from './render/underView';
 /**
@@ -119,6 +120,9 @@ const VILLAGE_DIST = 30;
 const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
 
+/** espèces sauvages qui crient près de la vue (`CALLS` de voices.ts) */
+const CALLERS: ReadonlySet<string> = new Set(Object.keys(CALLS));
+
 class Game implements UIHost {
   scene = new THREE.Scene();
   cam = new CameraRig(canvas);
@@ -185,6 +189,8 @@ class Game implements UIHost {
   private trophyT = 0;
   /** bruitages de proximité : prochain choix des sources (s), volcans de la carte (cases) et version du monde où on les a comptés */
   private spotT = 0;
+  /** prochain cri d'un animal sauvage près de la vue */
+  private callT = 3;
   private volcanoCells: number[] = [];
   private volcanoV = -1;
   /** prochain rappel à l'aide pour les feux que personne ne combat (s) */
@@ -1864,6 +1870,16 @@ class Game implements UIHost {
     else {
       this.buildings.update(dt, this.sim.age);
       this.fauna.update(gdt, this.elapsed, this.time.hour, this.time.season, this.env.rainK, this.sim.age, this.cam.camera);
+      // de temps en temps, une bête sauvage près de la vue crie (bêlement, brame, barrissement…) ; on l'entend de près
+      this.callT -= dt;
+      if (this.callT <= 0) {
+        this.callT = 2.5 + Math.random() * 4;
+        const t = this.cam.target, c = this.cam.dist < 70 ? this.fauna.pickCaller(t.x, t.z, 22, CALLERS) : null;
+        if (c) {
+          const k = (1 - Math.min(1, Math.hypot(c.x - t.x, c.z - t.z) / 26)) * Math.min(1, 40 / this.cam.dist);
+          if (k > 0.08) audio.sfxCall(c.kind, k);
+        }
+      }
       this.terrain.animateWater(this.elapsed, 1 - this.env.weatherK * 0.3, this.season);
       this.streams.update(dt, this.season, this.cam.target);
       this.life.update(dt, this.time, this.season, this.env, this.cam.target);
