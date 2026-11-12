@@ -1451,7 +1451,7 @@ class Game implements UIHost {
       const x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5;
       if (Math.abs(x - f.x) < 45 && Math.abs(z - f.z) < 45) spots.push({ kind: 'volcano', x, z });
     }
-    const env = this.env, list = pickVoices(spots, f.x, f.z, this.cam.dist, { daylight: env.daylight, rain: env.rainK, winter: this.time.season === 3 }, coarse ? 3 : 6);
+    const env = this.env, list = pickVoices(spots, f.x, f.z, this.cam.dist, { daylight: env.daylight, rain: env.rainK, winter: this.time.season === 3 }, coarse ? 1 : 2);
     const v = this.spotV;
     audio.spots(list, list.map((s) => { v.set(s.x, w.hAt(s.x, s.z), s.z).project(this.cam.camera); return Math.max(-1, Math.min(1, v.x)) * 0.7; }));
   }
@@ -1873,7 +1873,7 @@ class Game implements UIHost {
       // de temps en temps, une bête sauvage près de la vue crie (bêlement, brame, barrissement…) ; on l'entend de près
       this.callT -= dt;
       if (this.callT <= 0) {
-        this.callT = 2.5 + Math.random() * 4;
+        this.callT = 7 + Math.random() * 9;
         const t = this.cam.target, c = this.cam.dist < 70 ? this.fauna.pickCaller(t.x, t.z, 22, CALLERS) : null;
         if (c) {
           const k = (1 - Math.min(1, Math.hypot(c.x - t.x, c.z - t.z) / 26)) * Math.min(1, 40 / this.cam.dist);

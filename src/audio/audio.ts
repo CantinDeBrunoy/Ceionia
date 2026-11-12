@@ -201,7 +201,7 @@ export class AudioEngine {
     // mouettes près du rivage, aigles en montagne, crépitement des feux
     this.gullTimer -= dt;
     if (this.gullTimer <= 0) {
-      this.gullTimer = 3 + Math.random() * 7;
+      this.gullTimer = 8 + Math.random() * 12;
       if ((s.coast ?? 0) > 0.3 && s.daylight > 0.4 && s.rain < 0.5 && out > 0.5) this.gull(T + 0.05, s.coast!);
     }
     this.eagleTimer -= dt;
@@ -224,7 +224,7 @@ export class AudioEngine {
     // oiseaux
     this.birdTimer -= dt;
     if (this.birdTimer <= 0 && s.daylight > 0.5 && s.rain < 0.3 && s.season !== 3 && s.under < 0.5) {
-      this.birdTimer = 1.5 + Math.random() * 4;
+      this.birdTimer = 4 + Math.random() * 7;
       this.chirp(T + 0.05);
     } else if (this.birdTimer <= 0) this.birdTimer = 2;
 

@@ -99,13 +99,16 @@ export function timeFactor(when: When, env: SpotEnv) {
   return 1;
 }
 
-/** Atténuation du zoom : les sons des bâtiments s'éteignent quand la caméra s'éloigne ; le volcan porte plus loin */
+/**
+ * Atténuation du zoom : les sons des bâtiments ne s'entendent que de près (pleins sous 21 de distance, muets au-delà de 56) ;
+ * le volcan porte plus loin
+ */
 export function zoomFactor(kind: SpotKind, camDist: number) {
-  return kind === 'volcano' ? clamp(1.5 - camDist / 110, 0.2, 1) : clamp(1.45 - camDist / 60, 0, 1);
+  return kind === 'volcano' ? clamp(1.5 - camDist / 110, 0.2, 1) : clamp(1.6 - camDist / 35, 0, 1);
 }
 
 /**
- * Les `max` voix les plus fortes. Une sorte n'occupe qu'une voix : plusieurs sources proches de la même sorte s'additionnent
+ * Les `max` voix les plus fortes, la première seule à pleine force. Une sorte n'occupe qu'une voix : plusieurs sources proches de la même sorte s'additionnent
  * (sans dépasser 1), la position retenue est celle de la plus proche
  */
 export function pickVoices(spots: Spot[], fx: number, fz: number, camDist: number, env: SpotEnv, max: number): SpotVoice[] {
@@ -129,5 +132,6 @@ export function pickVoices(spots: Spot[], fx: number, fz: number, camDist: numbe
     if (k >= 0.03) out.push({ kind, k: Math.min(1, k), x: a.x, z: a.z });
   }
   out.sort((a, b) => b.k - a.k);
-  return out.slice(0, max);
+  // une voix domine, les suivantes restent en retrait (sinon tout se mêle en tintamarre)
+  return out.slice(0, max).map((v, i) => (i === 0 ? v : { ...v, k: v.k * 0.45 }));
 }
