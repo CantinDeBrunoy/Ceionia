@@ -138,7 +138,6 @@ const MODELS: Partial<Record<Kind, { name: ModelName; length: number; lead?: Mod
   horse: { name: 'horse', length: 0.34, pick: ['horse', 'horse_white'] },
   llama: { name: 'llama', length: 0.24 },
   fox: { name: 'fox', length: 0.2 },
-  frog: { name: 'frog', length: 0.085 },
 };
 
 interface Source { key: string; kind: Kind; hx: number; hz: number; n: number; radius: number }
@@ -342,7 +341,7 @@ const SPECS: Record<Kind, Spec> = {
   llama: { geo: deerGeo, max: 16, colors: [0xf2ece0, 0xb89878, 0x8a6a4e], speed: 0.38, run: 1.3, idle: [4, 10], ok: offRoad, graze: 0.12, flee: 3 },
   fox: { geo: deerGeo, max: 28, colors: [0xd8743a], speed: 0.5, run: 1.55, idle: [3, 8], ok: offRoad, scale: 0.6, flee: 1.5 },
   wolf: { geo: deerGeo, max: 24, colors: [0x8a8a90, 0x6a6a72, 0x9a8670], speed: 0.55, run: 1.75, idle: [3, 8], ok: offRoad, scale: 0.8, flee: 2 },
-  frog: { geo: duckGeo, max: 110, colors: [0x6aa84a], speed: 0.35, run: 0.7, idle: [2, 7], ok: bank, hop: 0.03, flee: 1.2, scale: 0.6 },
+  frog: { geo: duckGeo, max: 110, colors: [0x6aa84a, 0xa87a4e, 0x8a9a4e], speed: 0.35, run: 0.7, idle: [2, 7], ok: bank, hop: 0.03, flee: 1.2 },
   duck: { geo: duckGeo, max: 40, colors: [0x8a6a4a, 0xa8a49c, 0xffffff], speed: 0.25, idle: [2, 6], ok: water },
   duckling: { geo: duckGeo, max: 100, colors: [0xf8dc6a], speed: 0.25, idle: [1, 1], ok: water, scale: 0.55 },
   bird: { geo: birdGeo, max: 70, colors: [0xffffff, 0xdfe4ea], speed: 0, idle: [1, 1], ok: any, flap: [9, 0.9, 0.012], scale: 2.3 },
@@ -371,7 +370,7 @@ const SPECS: Record<Kind, Spec> = {
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex']);
+const PROCEDURAL = new Set<Kind>(['bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull']);
 
 /** Élément du décor ou zone auquel un groupe d'animaux est rattaché */
 export type Anchor = 'edge' | 'meadow' | 'rocks' | 'banks' | 'ponds' | 'coast';
@@ -826,7 +825,7 @@ export class Fauna {
     group('wolf', 'wolf', edge[BIOME_TAIGA], hasModel('wolf') ? Math.min(2, Math.floor(edge[BIOME_TAIGA].length / 50)) : 0, () => 3, 3.5, 100);
     // grenouilles : surtout au bord des mares et des étangs, et dans les marais
     const ponds = banks.filter(pond), frogBanks = ponds.concat(ponds, banks.filter((k) => w.biome[k] === BIOME_MARSH), banks.filter((_, i) => i % 4 === 0));
-    group('frog', 'frog', frogBanks, hasModel('frog') ? Math.min(28, Math.floor(frogBanks.length / 5)) : 0, (i) => 2 + (i % 2), 1.3, 110);
+    group('frog', 'frog', frogBanks, Math.min(28, Math.floor(frogBanks.length / 5)), (i) => 2 + (i % 2), 1.3, 110);
     group('duck', 'duck', shore, Math.min(14, Math.floor(shore.length / 25)), () => 4, 2.5, 120);
     // oiseaux chanteurs : un par bosquet, ils se posent dans les arbres alentour
     group('song', 'songbird', forest.concat(gardens), Math.min(40, Math.floor(forest.length / 18)), (i) => 2 + (i % 2), 6, 140);

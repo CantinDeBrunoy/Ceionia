@@ -11,7 +11,7 @@ const NAMES = ['cow', 'deer', 'stag',
   'palm', 'palm2', 'palm3', 'cactus', 'cactus2', 'cactus_flowers', 'willow', 'dead_tree', 'lilypad',
   // arbres des forêts tempérées (Ultimate Nature) : bouleau, arbre commun, arbre rond, bouleau nu, sapins, sapin enneigé
   'birch', 'tree_common', 'tree_round', 'birch_bare', 'pines', 'pine_snow',
-  'fox', 'wolf', 'horse', 'llama', 'frog',
+  'fox', 'wolf', 'horse', 'llama',
   // Animated Animal Pack de Quaternius (celui de la biche, du cerf et du renard) : cheval bai et cheval blanc, alpaga
   // (`llama`), vache, shiba (`dog`) et husky
   'horse_white', 'husky',
