@@ -7,6 +7,7 @@ import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from 
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
 import { Environment, WeatherKind } from '../render/env';
+import type { GfxParams } from '../render/adaptive';
 import { AudioEngine } from '../audio/audio';
 import { CameraRig } from '../core/camera';
 import { loadSlot, SaveData, savedAgo, Quality } from '../save/save';
@@ -64,6 +65,8 @@ export interface UIHost {
   /** qualité graphique et catastrophes naturelles */
   quality: Quality;
   setQuality(q: Quality): void;
+  /** ce que la qualité en cours donne vraiment : paramètres, halo, part de la finesse de l'écran, palier de « Auto » */
+  readonly gfxShown: { p: GfxParams; glow: boolean; fine: number; level: number; max: number };
   disasters: boolean;
   setDisasters(on: boolean): void;
   autoRoads: boolean;
@@ -300,11 +303,40 @@ const WEATHER_ICON: Record<WeatherKind, string> = { clear: '', rain: 'rain', sno
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
+/** Le niveau de qualité choisi, en clair : une phrase, puis ce qu'il donne aspect par aspect (relu des réglages appliqués) */
+function qualityInfo(qual: Quality, g: UIHost['gfxShown']) {
+  const p = g.p, pc = (x: number) => pctText(Math.round(Math.min(1, x) * 100));
+  const say = qual === 'auto'
+    ? `${tr('S’ajuste tout seul : part du plus beau, baisse par paliers si le jeu saccade, et remonte quand tout redevient fluide.')} ${g.level ? tr('En ce moment : palier {n} sur {max}, l’image est allégée.', { n: g.level, max: g.max }) : tr('En ce moment : rien n’est allégé.')}`
+    : qual === 'high' ? tr('Tout au plus beau, avec le halo lumineux des lampes et des feux la nuit. Pour un ordinateur solide.')
+    : qual === 'medium' ? tr('Sans halo de nuit ; ombres, détails au loin et particules un peu allégés.')
+    : tr('Sans halo ni brume ; ombres, détails au loin et particules réduits. Pour un ordinateur modeste ou un portable sur batterie.');
+  const yes = (on: boolean) => `<b class="${on ? 'on' : 'off'}">${tr(on ? 'Oui' : 'Non')}</b>`;
+  const items: [string, string][] = [
+    [tr('Halo de nuit'), yes(g.glow)],
+    [tr('Brume'), yes(p.mist)],
+    [tr('Ombres'), `<b>${tr(p.shadowSize >= 2048 ? 'Fines' : p.shadowSize >= 1536 ? 'Moyennes' : 'Grossières')}</b>`],
+    [tr('Bêtes et habitants animés'), `<b>${tr('{p} de la distance', { p: pc(p.faunaDetail) })}</b>`],
+    [tr('Arbres détaillés'), `<b>${tr('{p} de la distance', { p: pc(p.vegLod / 48) })}</b>`],
+    [tr('Finesse de l’image'), `<b>${tr('{p} de l’écran', { p: pc(g.fine) })}</b>`],
+    [tr('Fumées, embruns, étincelles'), `<b>${pc(p.density)}</b>`],
+  ];
+  return `<p class="hint">${say}</p><ul class="qGrid">${items.map(([l, v]) => `<li><span>${l}</span>${v}</li>`).join('')}</ul>`;
+}
+
 /** Noms des langues, chacun dans sa propre langue */
 const LANG_NAME: Record<string, string> = { fr: 'Français', en: 'English' };
+/** Le drapeau de chaque langue, en SVG (3 sur 2) : France, Royaume-Uni */
+const LANG_FLAG: Record<string, string> = {
+  fr: '<svg viewBox="0 0 3 2" preserveAspectRatio="none"><rect width="1" height="2" fill="#0055a4"/><rect x="1" width="1" height="2" fill="#fff"/><rect x="2" width="1" height="2" fill="#ef4135"/></svg>',
+  en: '<svg viewBox="0 0 60 30" preserveAspectRatio="xMidYMid slice"><clipPath id="flagUkT"><path d="M30,15h30v15zv15h-30zh-30v-15zv-15h30z"/></clipPath>'
+    + '<rect width="60" height="30" fill="#012169"/><path d="M0,0L60,30M60,0L0,30" stroke="#fff" stroke-width="6"/>'
+    + '<path d="M0,0L60,30M60,0L0,30" clip-path="url(#flagUkT)" stroke="#c8102e" stroke-width="4"/>'
+    + '<path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#c8102e" stroke-width="6"/></svg>',
+};
 /** Sélecteur de langue (menu principal et réglages) : un bouton par langue, celle en cours est enfoncée */
 function langPicker(cur: string, cls = '') {
-  return `<div class="row langPick ${cls}" role="group" aria-label="${tr('Langue')}">${LANGS.map((l) => `<button type="button" data-lang="${l}" class="${l === cur ? 'active' : ''}" aria-pressed="${l === cur}" lang="${l}"><b>${l.toUpperCase()}</b> ${LANG_NAME[l]}</button>`).join('')}</div>`;
+  return `<div class="row langPick ${cls}" role="group" aria-label="${tr('Langue')}">${LANGS.map((l) => `<button type="button" data-lang="${l}" class="${l === cur ? 'active' : ''}" aria-pressed="${l === cur}" lang="${l}"><span class="flag" aria-hidden="true">${LANG_FLAG[l] ?? ''}</span>${LANG_NAME[l]}</button>`).join('')}</div>`;
 }
 /** Branche le sélecteur : un clic change la langue (mémorisée) ; `after` redessine l'écran (en jeu, la page recharge d'elle-même) */
 function bindLangPicker(root: HTMLElement, after?: (l: Lang) => void) {
@@ -2126,7 +2158,8 @@ export class UI {
       </section>
       <section data-sec="look" hidden>${head('look')}
         <h4>${tr('Graphismes')}</h4>
-        <div class="row">${[['auto', tr('Auto')], ['high', tr('Haute (halo de nuit)')], ['medium', tr('Normale')], ['low', tr('Réduite')]].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}" title="${k === 'auto' ? tr('La qualité baisse d’elle-même si le jeu saccade, et remonte quand tout est fluide') : ''}">${l}</button>`).join('')}</div>
+        <div class="row">${[['auto', tr('Auto')], ['high', tr('Haute')], ['medium', tr('Normale')], ['low', tr('Réduite')]].map(([k, l]) => `<button data-q="${k}" class="${h.quality === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+        <div class="qInfo"></div>
         <h4>${tr('Audio')}</h4>
         <div class="row"><label>${tr('Musique')}</label><input id="sMusic" type="range" min="0" max="1" step="0.05" value="${a.musicVol}"><button id="mMusic" aria-label="${tr('Couper la musique')}" class="${a.muteMusic ? 'active' : ''}">${ic(a.muteMusic ? 'mute' : 'volume', 18)}</button></div>
         <div class="row"><label>${tr('Sons')}</label><input id="sSfx" type="range" min="0" max="1" step="0.05" value="${a.sfxVol}"><button id="mSfx" aria-label="${tr('Couper les sons')}" class="${a.muteSfx ? 'active' : ''}">${ic(a.muteSfx ? 'mute' : 'volume', 18)}</button></div>
@@ -2171,12 +2204,24 @@ export class UI {
       h.applySettings();
       live();
     }));
+    // sous les boutons de qualité, ce que le niveau choisi change vraiment (relu du jeu : rien d'affiché qui ne soit appliqué)
+    let qKey = '';
+    const showQ = () => {
+      const g = h.gfxShown, html = qualityInfo(h.quality, g);
+      if (html === qKey) return;
+      qKey = html;
+      q('.qInfo').innerHTML = html;
+    };
+    showQ();
     // la fenêtre suit le jeu tant qu'elle est ouverte : vitesse en cours, saison et heure qui avancent
     const live = () => {
       ov.querySelectorAll<HTMLButtonElement>('[data-sp]').forEach((b) => { const v = +b.dataset.sp!; b.classList.toggle('active', v === 0 ? t.paused : !t.paused && t.speed === v); });
       ov.querySelectorAll<HTMLButtonElement>('[data-season]').forEach((b) => b.classList.toggle('active', +b.dataset.season! === t.season));
       const hour = q<HTMLInputElement>('#sHour');
       if (document.activeElement !== hour) { hour.value = t.hour.toFixed(1); q('#vHour').textContent = `${Math.floor(t.hour)}h`; }
+
+      // le palier de « Auto » peut changer pendant qu'on regarde
+      if (h.quality === 'auto') showQ();
     };
     live();
     const iv = setInterval(() => { if (ov.isConnected) live(); else clearInterval(iv); }, 500);
@@ -2201,6 +2246,7 @@ export class UI {
     ov.querySelectorAll<HTMLButtonElement>('[data-q]').forEach((b) => (b.onclick = () => {
       h.setQuality(b.dataset.q as Quality);
       ov.querySelectorAll('[data-q]').forEach((x) => x.classList.toggle('active', x === b));
+      showQ();
     }));
     q('#gDisasters').onclick = () => {
       h.setDisasters(!h.disasters);
@@ -2283,23 +2329,31 @@ export function drawPreview(canvas: HTMLCanvasElement, heights: ArrayLike<number
   g.putImageData(img, 0, 0);
 }
 
-/** Les crédits : les modèles 3D et les licences (les auteurs sous licence CC-BY doivent être cités) */
+/**
+ * Les crédits : les modèles 3D et les licences (les auteurs sous licence CC-BY doivent être cités). Même fenêtre peinte que
+ * les paramètres (`menuPop`) : losange des crédits, titre et sous-titre, une carte par licence, paysage en bas
+ */
 export function showCredits(root: HTMLElement) {
   const a = (href: string, t: string) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${t}</a>`;
-  modal(root, 'credits', 'Crédits', `
-    <p>${tr('Ceionia est un jeu libre de droits d’image et de son : la géométrie des bâtiments, des habitants, des véhicules et de la musique est dessinée et générée par le jeu lui-même. Certains modèles 3D, gratuits, viennent d’artistes à qui nous disons merci.')}</p>
-    <h4>${tr('Modèles sous licence CC0 (domaine public)')}</h4>
-    <ul class="credits">
-      <li>${a('https://quaternius.com', 'Quaternius')} : ${tr('animaux de ferme et sauvages, faune marine, arbres (Ultimate Nature), palmiers, cactus, créatures des grottes, décors, puits, fermes, tour de pierre, enclos.')}</li>
-      <li>${a('https://kenney.nl', 'Kenney')} : ${tr('Survival Kit, épave de navire.')}</li>
-      <li>${tr('Kay Lousberg (crâne, os), MiniPoly (coraux), Mohabins (algues), iPoly3D (cristaux), MilkAndBanana (jarre), reyshapes (cruche), via {src}.', { src: a('https://poly.pizza', 'Poly Pizza') })}</li>
-    </ul>
-    <h4>${tr('Modèles sous licence CC-BY 3.0')}</h4>
-    <ul class="credits">
-      <li>${tr('« Greek Temple » par {author} : temple et asclépiéion de l’Antiquité.', { author: a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)') })}</li>
-      <li>${tr('« Amphora » par {a1} et « Eight Vases » par {a2} : atelier du potier.', { a1: a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira'), a2: a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner') })}</li>
-    </ul>
-    <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>`);
+  menuPop(root, 'credits', 'credits', tr('Crédits'), `<div class="credPane">
+    <p class="credIntro">${tr('Ceionia est un jeu libre de droits d’image et de son : la géométrie des bâtiments, des habitants, de nombreuses bêtes (mouton, cochon, poule, lapin, canards, oie, grenouille, bouquetin…), des véhicules et la musique sont dessinés et générés par le jeu lui-même. Certains modèles 3D, gratuits, viennent d’artistes à qui nous disons merci.')}</p>
+    <section class="credCard">
+      <h4>${ic('heart', 18, 2)}${tr('Modèles sous licence CC0 (domaine public)')}</h4>
+      <ul class="credits">
+        <li>${a('https://quaternius.com', 'Quaternius')} : ${tr('Animated Animal Pack (cheval, alpaga, vache, shiba, husky, biche, cerf, renard), loup, faune marine, arbres (Ultimate Nature), palmiers, cactus, créatures des grottes, décors, puits, fermes, tour de pierre, enclos.')}</li>
+        <li>${a('https://kenney.nl', 'Kenney')} : ${tr('Survival Kit, épave de navire.')}</li>
+        <li>${tr('Kay Lousberg (crâne, os), MiniPoly (coraux), Mohabins (algues), iPoly3D (cristaux), MilkAndBanana (jarre), reyshapes (cruche), via {src}.', { src: a('https://poly.pizza', 'Poly Pizza') })}</li>
+      </ul>
+    </section>
+    <section class="credCard">
+      <h4>${ic('heart', 18, 2)}${tr('Modèles sous licence CC-BY 3.0')}</h4>
+      <ul class="credits">
+        <li>${tr('« Greek Temple » par {author} : temple et asclépiéion de l’Antiquité.', { author: a('https://poly.pizza/m/cdMQnl19MB9', 'Alexandre Thomas (Ashtom)') })}</li>
+        <li>${tr('« Amphora » par {a1} et « Eight Vases » par {a2} : atelier du potier.', { a1: a('https://poly.pizza/m/7Q8MkXjALbL', 'Bruno Oliveira'), a2: a('https://poly.pizza/m/083bnosQpkP', 'Paul Spooner') })}</li>
+      </ul>
+    </section>
+    <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>
+  </div>`, undefined, tr('Les artistes des modèles 3D, et leurs licences.'));
 }
 
 /** le triangle plein des boutons « Nouvelle partie » et « Continuer », et le chevron des cartes */

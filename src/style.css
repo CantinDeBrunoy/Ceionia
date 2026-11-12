@@ -560,8 +560,10 @@ body.under #selCard, body.photo #selCard { display: none; }
 .popKey { flex: none; display: flex; align-items: center; gap: 10px; min-width: 150px; }
 .popKey label { font-size: 17px; font-weight: 700; color: var(--pInk); }
 #ui > .overlay > .cePop .langPick button { min-width: 136px; justify-content: flex-start; padding-left: 10px; }
-.cePop .langPick b { display: inline-grid; place-items: center; min-width: 32px; height: 26px; border-radius: 9px; background: rgba(38, 42, 72, 0.07); font-size: 13px; font-weight: 800; }
-.cePop .langPick button.active b { background: rgba(255, 255, 255, 0.35); }
+/* le drapeau de la langue (SVG en 3 sur 2), bordé d'un filet comme une petite carte */
+.cePop .langPick .flag { flex: none; display: block; width: 33px; height: 22px; overflow: hidden; border-radius: 6px; box-shadow: 0 0 0 1px rgba(38, 42, 72, 0.16), 0 2px 5px rgba(120, 85, 50, 0.22); }
+.cePop .langPick .flag svg { display: block; width: 100%; height: 100%; }
+.cePop .langPick button.active .flag { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 2px 6px rgba(120, 70, 20, 0.3); }
 .menuOpts .tutoToggle { flex: 1; justify-content: stretch; margin: 0; padding: 0; border: 0; background: none; }
 #ui > .overlay > .cePop .tutoToggle button, #ui > .overlay > .cePop .tutoToggle button.on { flex: 1; justify-content: flex-start; padding: 0 8px 0 18px; border-color: rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: var(--pInk); box-shadow: 0 3px 10px rgba(120, 85, 50, 0.16); }
 .cePop .tutoToggle .sw { margin-left: auto; width: 54px; height: 32px; }
@@ -618,6 +620,27 @@ body.under #selCard, body.photo #selCard { display: none; }
 /* les curseurs dorés : la piste remplie d'or jusqu'au bouton (la couleur d'accent du navigateur) */
 .cePop input[type="range"] { flex: 1; min-width: 140px; accent-color: #e39a2f; }
 .cePop .langPick { margin: 0; padding: 0; gap: 10px; border: 0; background: none; }
+/* Graphismes : ce que change le niveau choisi (une phrase, puis aspect par aspect en petites cartes) */
+.setPane .qInfo .hint { margin: 0 0 10px !important; }
+.qGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin: 0 0 6px; padding: 0; list-style: none; }
+.qGrid li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; padding: 6px 12px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 251, 245, 0.85); box-shadow: 0 1px 4px rgba(120, 85, 50, 0.1); font-size: 13px; font-weight: 600; color: var(--pInk2); }
+.qGrid li b { flex: none; font-weight: 800; color: var(--pInk); }
+.qGrid li b.on { color: #b06e12; }
+.qGrid li b.off { color: #9a98aa; }
+/* Crédits : même fenêtre peinte que les paramètres, une carte par licence */
+#ui > .overlay > .cePop.credits { width: min(760px, 100%); max-width: none; padding-bottom: 124px; text-align: left; }
+.credPane { display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 320px); overflow-y: auto; padding: 2px 2px 8px; }
+.credPane::-webkit-scrollbar { width: 6px; }
+.credPane::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(120, 85, 50, 0.28); }
+.credIntro { margin: 0; font-size: 15px; line-height: 1.5; font-weight: 500; color: var(--pInk2); }
+.credCard { padding: 14px 18px 10px; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.55); box-shadow: 0 2px 10px rgba(120, 85, 50, 0.07); }
+#ui > .overlay > .cePop .credCard h4 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--pInk); }
+.credCard h4 svg { flex: none; color: #c9822a; }
+.cePop .credits { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.55; color: var(--pInk); }
+.cePop .credits li { margin: 0 0 4px; }
+.cePop .credits li::marker { color: #d39a45; }
+.cePop .credits a, .cePop.credits .hint a { color: #a8620e; font-weight: 700; text-decoration-color: rgba(168, 98, 14, 0.4); text-underline-offset: 2px; }
+#ui > .overlay > .cePop.credits .hint { margin: 0; font-size: 13px; font-weight: 500; line-height: 1.45; }
 @media (max-height: 760px) and (min-width: 721px) {
   .mPeaks { width: 140px; }
   #menu h1 { font-size: 78px; }
@@ -667,6 +690,9 @@ body.under #selCard, body.photo #selCard { display: none; }
   #ui > .overlay > .cePop.menuConfirm { padding-bottom: 56px; }
   .popMsg { font-size: 20px; }
   #ui > .overlay > .cePop.settings { padding-bottom: 64px; }
+  #ui > .overlay > .cePop.credits { padding-bottom: 64px; }
+  .credPane { max-height: none; }
+  .credCard { padding: 12px 14px 8px; }
   .setWrap { grid-template-columns: 1fr; gap: 12px; }
   .setTabs { flex-direction: row; overflow-x: auto; gap: 8px; padding: 2px 2px 6px; }
   #ui > .overlay > .cePop .setTabs button { flex: none; min-height: 44px; padding: 0 14px; font-size: 14px; }
