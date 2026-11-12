@@ -375,6 +375,7 @@ class Game implements UIHost {
     this.fauna.people = () => this.agents.agents;
     this.eruptions = new Eruptions(w);
     this.streams = new Streams(w, this.terrain.waterMat.normalMap);
+    this.terrain.wetCell = (k) => this.streams.covers(k);
     this.atmosphere = new Atmosphere(w, audio);
     this.nightSky = new NightSky(w);
     this.scene.add(this.nightSky.group);
