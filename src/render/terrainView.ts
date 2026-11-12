@@ -76,6 +76,8 @@ const SNOW_FACE_MIX = 0.8;
  * est posé à fleur de sol (clôtures de 0,12, bancs, pavés) resterait dessous
  */
 const SNOW_DEPTH = 0.025, SNOW_DRIFT = 0.05, SNOW_BANK = 0.06;
+/** Lacs de lave dont la lueur éclaire les parois du cratère (au-delà, pas de lueur) */
+const MAX_LAVA_GLOW = 4;
 /** Sous-cases par côté (selon la taille de la carte) */
 const subCells = () => N * VR;
 
@@ -167,6 +169,15 @@ export class TerrainView {
   private drift = new Float32Array(VS * VS);
   private openW = new Float32Array(VS * VS);
   private lift = new Float32Array(VS * VS);
+  /**
+   * Par sous-sommet, sur un cône de volcan : part du cône (0 … 1), neige de saison qu'il retiendrait (déjà ôtée près de la
+   * lave : cratère, rebord). Sur le cône, la neige se pose facette par facette (voir `update`, à l'émission des triangles)
+   */
+  private volcW = new Float32Array(VS * VS);
+  private volcSn = new Float32Array(VS * VS);
+  private snowFacet = new THREE.Color();
+  /** lacs de lave (x, niveau, z, portée) : leur lueur vacille sur les parois du cratère */
+  private lavaU = { uLava: { value: Array.from({ length: MAX_LAVA_GLOW }, () => new THREE.Vector4()) }, uLavaN: { value: 0 } };
   /** Cases d'un torrent ou d'une rivière dessinés à part (`Streams`) : la neige ne s'y épaissit pas */
   wetCell: ((k: number) => boolean) | null = null;
   /** Par case : part de chaque biome alentour (transitions douces), et couleur de sol de chaque biome */
@@ -204,7 +215,7 @@ export class TerrainView {
     const topMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
     topMat.onBeforeCompile = (sh) => {
       sh.uniforms.uDetail = { value: detail };
-      Object.assign(sh.uniforms, this.caveU, this.blightU, { uSnowSun: SNOW_SUN });
+      Object.assign(sh.uniforms, this.caveU, this.blightU, this.lavaU, { uSnowSun: SNOW_SUN, uTime: this.waterU.uTime });
       sh.vertexShader = 'attribute vec4 surf;\nvarying vec4 vSurf;\nvarying vec3 vPos;\nvarying vec3 vNrm;\n'
         + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSurf = surf;\n  vPos = position;\n  vNrm = normal;');
       const T = CAVE_TUNNEL, f = (v: number) => v.toFixed(3), sb = SNOW_BASE;
@@ -212,6 +223,9 @@ export class TerrainView {
 uniform vec3 uSnowSun;
 uniform vec4 uCaves[${MAX_CAVES}];
 uniform int uCaveN;
+uniform vec4 uLava[${MAX_LAVA_GLOW}];
+uniform int uLavaN;
+uniform float uTime;
 varying vec4 vSurf;
 varying vec3 vPos;
 varying vec3 vNrm;
@@ -234,6 +248,17 @@ ${BLIGHT_GLSL}
   if (bk > 0.0) {
     float sp = texture2D(uDetail, vPos.xz * 0.37 + 0.13).b;
     totalEmissiveRadiance += vec3(0.95, 0.13, 0.05) * bk * (0.015 + uBlightNight * (0.035 + 0.3 * smoothstep(0.6, 0.78, sp)));
+  }
+  // lac de lave : sa lueur monte sur les parois du cratère et vacille (plus forte la nuit)
+  for (int i = 0; i < ${MAX_LAVA_GLOW}; i++) {
+    if (i >= uLavaN) break;
+    vec4 L = uLava[i];
+    vec3 d = vPos - L.xyz;
+    float lk = (1.0 - smoothstep(0.5, 1.0, length(d.xz) / (L.w + 1.4))) * (1.0 - smoothstep(-0.1, 2.6, d.y)) * step(-0.15, d.y);
+    if (lk > 0.0) {
+      float fl = 0.78 + 0.14 * sin(uTime * 1.9 + atan(d.z, d.x) * 3.0 - uTime * 0.4) + 0.08 * sin(uTime * 5.1 + d.x * 2.3 + d.z * 1.7);
+      totalEmissiveRadiance += vec3(1.0, 0.3, 0.06) * lk * lk * fl * (0.18 + 0.5 * uBlightNight);
+    }
   }`)
         .replace('void main() {', `void main() {
   // grottes : le versant qui traverse le tunnel est ouvert (la butte rocheuse recouvre l'ouverture)
@@ -287,9 +312,11 @@ ${BLIGHT_GLSL}
     vec3 snTint = mix(vec3(0.8, 0.87, 1.04), vec3(1.04, 1.0, 0.93), smoothstep(-0.1, 0.75, toSun));
     snTint *= 1.0 + vec3(0.03, 0.005, -0.03) * (snN(vPos.xz * 0.05 + 9.0) * 2.0 - 1.0);
     diffuseColor.rgb *= mix(vec3(1.0), snTint, sn);
-    float drift = snN(vPos.xz * 0.45 + 3.1) * 0.6 + snN(vPos.xz * 1.3 + 7.7) * 0.4 - 0.5;
+    // (bruits projetés d'en haut : sur une pente raide ils s'étireraient en longues stries ; ils s'y effacent)
+    float snFlat = smoothstep(0.55, 0.85, abs(snF.y));
+    float drift = (snN(vPos.xz * 0.45 + 3.1) * 0.6 + snN(vPos.xz * 1.3 + 7.7) * 0.4 - 0.5) * snFlat;
     // traînées allongées dans le sens du vent
-    float streak = snN(vec2(vPos.x * 0.3 + vPos.z * 0.12, vPos.z * 2.2 - vPos.x * 0.5)) - 0.5;
+    float streak = (snN(vec2(vPos.x * 0.3 + vPos.z * 0.12, vPos.z * 2.2 - vPos.x * 0.5)) - 0.5) * snFlat;
     float rip = tri(vPos + 0.7, bw, 0.9).g - 0.5;
     float grain = tri(vPos + 1.9, bw, 2.6).g - 0.5;
     float glint = smoothstep(0.78, 0.86, tri(vPos * 1.7 + 4.1, bw, 3.1).b);
@@ -626,6 +653,24 @@ ${BLIGHT_GLSL}
       if (t === VEG_CAVE && nCaves < MAX_CAVES) { const f = w.caveFrame(cx, cz); this.caveU.uCaves.value[nCaves++].set(f.x, f.y, f.z, f.yaw); }
       else if (t === VEG_VOLCANO) volcanoes.push(w.volcanoFrame(cx, cz));
     }
+    // rayon de la crête de chaque cratère (moyenne de 16 directions) : pas de neige en deçà, ni juste au-delà ; lueur des lacs
+    const crest = volcanoes.map((v) => {
+      let sum = 0;
+      for (let a = 0; a < 16; a++) {
+        const ca = Math.cos((a / 16) * Math.PI * 2), sa = Math.sin((a / 16) * Math.PI * 2);
+        let best = -Infinity, br = 0;
+        for (let r = 0.2; r <= v.r * 0.7; r += 0.2) { const y = w.hAt(v.x + ca * r, v.z + sa * r); if (y > best) { best = y; br = r; } }
+        sum += br;
+      }
+      return sum / 16;
+    });
+    let nLava = 0;
+    for (const v of volcanoes) {
+      if (nLava >= MAX_LAVA_GLOW) break;
+      const p = w.lavaPool(Math.floor(v.x), Math.floor(v.z));
+      this.lavaU.uLava.value[nLava++].set(p.x, p.level, p.z, Math.max(...p.reach));
+    }
+    this.lavaU.uLavaN.value = nLava;
 
     // relief et marais pour l'eau
     this.caveU.uCaveN.value = nCaves;
@@ -710,6 +755,7 @@ ${BLIGHT_GLSL}
         // fond vaseux des mares du marais
         tmp.copy(WET_SAND).lerp(SEABED, clamp(-h / 1.6, 0, 1)).lerp(MUD, this.vbw[i * NB + BIOME_MARSH] * 0.8);
         sand = 0.6;
+        this.volcW[i] = 0; this.volcSn[i] = -1;
       } else {
         // (le talus du terre-plein d'un port reste en herbe : pas de paroi de roche ni de grève autour du quai)
         const quay = this.quayW[i], steep = (1 - smoothstep(0.6, 0.8, vnor[i * 3 + 1])) * (1 - quay * 0.9), flat = 1 - steep;
@@ -742,15 +788,22 @@ ${BLIGHT_GLSL}
         if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(MOUNTAIN, alt), steep);
         if (alt > 0) tmp.lerp(MOUNTAIN, alt * 0.85);
         // volcan : vert au pied, il vire au brun en montant, plus sombre près du cratère
-        let lava = 0, top = 0;
+        // (la chaleur : dans le cratère, sur sa crête et le haut des flancs, la neige fond)
+        // limite de la neige sur le cône : elle descend plus ou moins selon la direction (langues dans les ravines)
+        let lava = 0, top = 0, hot = 0, line = 0, vRel = 0;
         if (volcanoes.length) {
           const x = (i % VS) / VR, z = Math.floor(i / VS) / VR;
-          for (const v of volcanoes) {
-            const d = Math.hypot(x - v.x, z - v.z);
+          for (let q = 0; q < volcanoes.length; q++) {
+            const v = volcanoes[q], d = Math.hypot(x - v.x, z - v.z);
             if (d >= v.r) continue;
             const rel = clamp((h - v.foot) / Math.max(0.5, v.rim - v.foot), 0, 1.2);
             const k = smoothstep(0.06, 0.45, rel) * (1 - smoothstep(v.r * 0.8, v.r, d));
-            if (k > lava) { lava = k; top = smoothstep(0.82, 1, rel); }
+            if (k > lava) {
+              lava = k; top = smoothstep(0.82, 1, rel); vRel = rel;
+              hot = Math.max(1 - smoothstep(crest[q] + 0.2, crest[q] + 0.8, d), smoothstep(0.92, 0.99, rel));
+              const a = Math.atan2(z - v.z, x - v.x), sd = v.x * 0.37 + v.z * 0.61;
+              line = 0.42 + 0.13 * Math.sin(a * 5 + sd) + 0.08 * Math.sin(a * 11 + sd * 2.3) + 0.05 * Math.sin(a * 23 + sd * 3.1);
+            }
           }
           if (lava > 0) tmp.lerp(VOLCANO_BROWN, lava * 0.95).lerp(BASALT, top * lava * 0.65);
         }
@@ -772,6 +825,8 @@ ${BLIGHT_GLSL}
         if (snow > 0) {
           // bord doux entre la neige et le sol : la neige s'amincit vers l'herbe (sans plaques blanches découpées)
           cover = smoothstep(0.24, 0.68, snow * 1.2 - 0.12 + (pv * 0.65 + this.wobble[i] * 0.4 - steep * 0.8 - vw[i * 4] * 0.55) * snow);
+          // sur le cône, la neige se pose par facettes entières (à l'émission des triangles) : pas de bord tracé au pixel
+          cover *= 1 - smoothstep(0.25, 0.5, lava);
           const xi = i % VS, zi = (i / VS) | 0;
           const curv = xi > 1 && zi > 1 && xi < VS - 2 && zi < VS - 2 ? (vis[i - 2] + vis[i + 2] + vis[i - 2 * VS] + vis[i + 2 * VS]) * 0.25 - h : 0;
           this.cliff.copy(SNOW_BASE).lerp(SNOW_SHADE, clamp(curv * 4, 0, 0.35)).lerp(SNOW_LIT, clamp(-curv * 5 + 0.2, 0, 0.9));
@@ -786,7 +841,11 @@ ${BLIGHT_GLSL}
         sand = Math.max(beach, soil, dry * 0.9) * (1 - rock);
         grass = Math.max(0, 1 - sand - rock);
         // la neige recouvre les motifs du sol (ils restent là où elle est mince) ; elle a les siens
-        cover = Math.max(cover, cap * 0.9);
+        // (pas de neiges éternelles sur le volcan, comme dans la teinte ci-dessus)
+        cover = Math.max(cover, cap * 0.9 * (1 - lava));
+        this.volcW[i] = lava;
+        // (moins il neige, plus la limite remonte ; > 0 : enneigé)
+        this.volcSn[i] = lava > 0 && snow > 0.05 ? vRel - line - (1 - snow) * 0.45 - this.wobble[i] * 0.06 - hot * 2 : -1;
         const smooth = 1 - cover * 0.85;
         grass *= smooth; sand *= smooth; rock *= smooth;
       }
@@ -837,17 +896,21 @@ ${BLIGHT_GLSL}
 
     // triangles (même découpage que World.hAt)
     const pos = this.pos, col = this.col, nor = this.nor, surf = this.surf, lift = this.lift;
+    const volcW = this.volcW, volcSn = this.volcSn, sf = this.snowFacet;
     let o = 0;
+    /** neige du triangle en cours sur un cône de volcan : -1 hors du cône (neige des sommets), 0 facette nue, 1 enneigée */
+    let facet = -1;
     // (la neige change l'épaisseur et les normales : positions et normales se refont aussi aux changements de saison)
     const emit = (vi: number, x: number, y: number, z: number, nx: number, ny: number, nz: number) => {
-      const k = vi * 3, fm = FACE_MIX + (SNOW_FACE_MIX - FACE_MIX) * vsurf[vi * 4 + 3];
+      const k = vi * 3, cv = facet < 0 ? vsurf[vi * 4 + 3] : facet, fm = FACE_MIX + (SNOW_FACE_MIX - FACE_MIX) * cv;
       pos[o] = x; pos[o + 1] = y; pos[o + 2] = z;
       const mx = nx * fm + vnor[k] * (1 - fm), my = ny * fm + vnor[k + 1] * (1 - fm), mz = nz * fm + vnor[k + 2] * (1 - fm);
       const ml = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
       nor[o] = mx / ml; nor[o + 1] = my / ml; nor[o + 2] = mz / ml;
-      col[o] = vcol[k]; col[o + 1] = vcol[k + 1]; col[o + 2] = vcol[k + 2];
+      if (facet === 1) { col[o] = sf.r; col[o + 1] = sf.g; col[o + 2] = sf.b; }
+      else { col[o] = vcol[k]; col[o + 1] = vcol[k + 1]; col[o + 2] = vcol[k + 2]; }
       const so = (o / 3) * 4, sk = vi * 4;
-      surf[so] = vsurf[sk]; surf[so + 1] = vsurf[sk + 1]; surf[so + 2] = vsurf[sk + 2]; surf[so + 3] = vsurf[sk + 3];
+      surf[so] = vsurf[sk]; surf[so + 1] = vsurf[sk + 1]; surf[so + 2] = vsurf[sk + 2]; surf[so + 3] = cv;
       o += 3;
     };
     // sous-cases dont un sommet a changé ; chacune occupe 18 valeurs (2 triangles × 3 sommets × 3)
@@ -865,6 +928,17 @@ ${BLIGHT_GLSL}
           let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
           const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
           nx /= l; ny /= l; nz /= l;
+          // cône de volcan : la neige prend ou non la facette entière (bord net, en dents de facettes) au-dessus d'une limite
+          // qui ondule autour du cône ; jamais dans le cratère ni près de la crête chaude (`volcSn`)
+          facet = -1;
+          if (volcW[ia] + volcW[ib] + volcW[ic] >= 1.5) {
+            facet = volcSn[ia] + volcSn[ib] + volcSn[ic] > 0 ? 1 : 0;
+            if (facet === 1) {
+              const hs = Math.imul(cx * 2 + t, 0x9e3779b1) ^ Math.imul(cz, 0x85ebca6b);
+              // blanc de neige, un peu plus ou moins éclatant d'une facette à l'autre (le shader le nuance selon le soleil)
+              sf.copy(SNOW_BASE).lerp(SNOW_LIT, 0.2 + (((hs ^ (hs >>> 15)) >>> 0) / 4294967296) * 0.3);
+            }
+          }
           emit(ia, ax, ay, az, nx, ny, nz);
           emit(ib, bx, by, bz, nx, ny, nz);
           emit(ic, qx, qy, qz, nx, ny, nz);
