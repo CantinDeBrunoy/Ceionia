@@ -36,12 +36,9 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
   - **Facettes** : sous la neige, la normale tend vers celle de la facette (`FACE_MIX` 0,3 → `SNOW_FACE_MIX` 0,8).
   - **Nuances** : facette au soleil crème, à contre-jour bleutée (`SNOW_SUN`, direction de la lumière principale, tenue par `env.ts`) ; par grandes zones, un blanc un peu plus chaud ou plus froid. `addSnow` (toits, rochers, sapins) a la même nuance.
   - **Épaisseur**, affichage seul (le relief du jeu, `vis` et `hAt`, ne bouge pas) : `lift` = couverture × (`SNOW_DEPTH` 0,025 + `SNOW_DRIFT` 0,05 × bruit `drift` des bourrelets + `SNOW_BANK` 0,06 sur le rang de sous-sommets qui entoure un bâtiment). Nulle sur et au bord des bâtiments, des routes, des champs, des lacs, des torrents (`wetCell`, branché sur `Streams.covers` dans `main.ts`), à moins de 2 cases de l'eau, dans les ravins et sous 0,15 d'altitude.
-  - **Volcan** : sur le cône (`volcW` ≥ 0,5 en moyenne sur le triangle), pas de bord au pixel ni de couverture des sommets : la
-    neige prend la **facette entière** ou rien (`facet` à l'émission des triangles : couverture 1 ou 0, couleur de neige
-    propre à la facette). Elle tient au-dessus d'une limite d'altitude relative (pied 0 → rebord 1) d'environ 0,42, qui
-    ondule autour du cône (trois sinus de l'angle : des langues) et remonte quand il neige peu. Rien dans le cratère, sur sa
-    crête (`crest`, rayon moyen du rebord, + 0,8) ni sur le haut des flancs (≥ 0,92) : `hot`. Pas de neiges éternelles sur le
-    cône, même s'il dépasse `SNOW_LINE` (ni teinte, ni couverture). Épaisseur nulle.
+  - **Volcan** : jamais de neige sur le cône, même l'hiver : il garde son brun (choix de l'auteur, une neige par facettes a
+    été essayée puis retirée). La couverture de saison s'efface au pied (`cover × (1 - smoothstep(0.1, 0.4, part du cône))`),
+    et pas de neiges éternelles, même au-dessus de `SNOW_LINE` (ni teinte, ni couverture).
   - Bruits de la neige projetés d'en haut (congères, traînées) : effacés sur les facettes raides (`snFlat`), où ils
     s'étiraient en longues stries.
   - Positions et normales du sol se refont donc aussi à chaque bande de reteinte (`update(…, colorsOnly)`), pas seulement les couleurs.

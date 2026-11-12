@@ -128,7 +128,7 @@ cases `VEG_FOREST` comme celles qu'on plante.
 - Lueur sur les parois (`terrainView.ts`, `lavaU`) : jusqu'à `MAX_LAVA_GLOW` (4) lacs `(x, niveau, z, portée)`, refaits à
   chaque `update` ; lumière émise orange qui monte à 2,6 au-dessus de la lave et vacille, plus forte la nuit (`setNight`). La
   fumée prend aussi la lueur à sa base (`smokeMaterial`).
-- Teinte et neige du cône : voir [saisons.md](saisons.md) (neige par facettes, rien dans le cratère).
+- Le cône reste brun en toute saison, sans neige : voir [saisons.md](saisons.md).
 - `Eruptions.start` refuse une case qui n'est plus un volcan. `update` suit `world.visVersion` : à chaque changement du
   relief, `followRelief` redrape les coulées (hauteur `lift` au-dessus du sol par sommet) et les bombes posées, refait le
   repère du volcan ; un volcan disparu (`gone`) cesse son éruption et ses coulées s'effacent en une seconde.
