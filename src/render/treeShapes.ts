@@ -195,6 +195,45 @@ export function bareBirchShape() {
 }
 
 /**
+ * Étage de sapin : n branches en étoile qui pointent et retombent, encoches entre elles, profil un peu creusé, dessous en
+ * cône plat. Pied à y, pointe à y + h ; faces plates (sans index)
+ */
+function pineTier(r: number, h: number, y: number, n: number, seed: number, hk: number) {
+  const pos: number[] = [];
+  const tri = (a: number[], b: number[], c: number[], hx: number, hy: number, hz: number) => {
+    // sens des faces : la normale du côté de l'indice (hx, hy, hz)
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    const d = (uy * vz - uz * vy) * hx + (uz * vx - ux * vz) * hy + (ux * vy - uy * vx) * hz;
+    pos.push(...a, ...(d >= 0 ? b : c), ...(d >= 0 ? c : b));
+  };
+  // anneaux de 2n points : pointe de branche (pair), encoche (impair)
+  const ring = (rt: number, rn: number, yt: number, yn: number) => {
+    const out: number[][] = [];
+    for (let k = 0; k < n * 2; k++) {
+      const tip = k % 2 === 0, j = noise.noise2(k * 0.9 + seed, seed * 1.3);
+      const a = (k / (n * 2)) * Math.PI * 2 + (tip ? 0.12 * j : 0), rr = (tip ? rt * (1 + 0.1 * j) : rn);
+      out.push([Math.cos(a) * rr, y + (tip ? yt - 0.012 * hk * (1 + j) : yn), Math.sin(a) * rr]);
+    }
+    return out;
+  };
+  const rim = ring(r * 1.04, r * 0.7, -0.07 * h, 0.08 * h), mid = ring(r * 0.5, r * 0.4, 0.45 * h, 0.5 * h);
+  const apex = [0, y + h, 0], under = [0, y + 0.2 * h, 0];
+  const m = n * 2;
+  for (let k = 0; k < m; k++) {
+    const k1 = (k + 1) % m, a = mid[k], b = mid[k1], c = rim[k], d = rim[k1];
+    const hx = (a[0] + b[0]) / 2, hz = (a[2] + b[2]) / 2;
+    tri(apex, a, b, hx, r * 0.4, hz);
+    tri(a, c, d, hx, r * 0.3, hz);
+    tri(a, d, b, hx, r * 0.3, hz);
+    tri(under, c, d, 0, -1, 0);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
  * Sapin à étages de cônes facettés (0 : ordinaire, 1 : élancé, 2 : trapu), bord des étages qui retombe, sombre dessous ;
  * avec snow, des calottes de neige sur chaque étage (maillage à part, matériau blanc)
  */
@@ -205,23 +244,18 @@ export function pineShape(v: number, snow = false) {
   const y0 = 0.2 * hk, span = 0.66 * hk;
   for (let i = 0; i < tiers; i++) {
     const f = i / (tiers - 1), r = (0.29 - 0.19 * f) * wk, h = (0.32 - 0.12 * f) * hk, y = y0 + f * span * (1 - 0.18 * f);
-    let g: THREE.BufferGeometry = new THREE.ConeGeometry(r, h, 8, 1);
-    g.deleteAttribute('uv'); g.deleteAttribute('normal');
-    g = mergeVertices(g);
-    const p = g.attributes.position;
-    for (let k = 0; k < p.count; k++) {
-      const py = p.getY(k);
-      if (py >= 0) continue;
-      // bord irrégulier, qui retombe
-      const a = Math.atan2(p.getZ(k), p.getX(k)), j = 1 + 0.12 * Math.sin(a * 3 + i * 1.7 + v);
-      const rim = Math.hypot(p.getX(k), p.getZ(k)) > r * 0.5;
-      p.setXYZ(k, p.getX(k) * j, py - (rim ? 0.025 * hk : 0), p.getZ(k) * j);
-    }
-    g = flat(g.translate(0, y + h / 2, 0).rotateY(i * 0.7 + v));
-    paintFaces(g, (_x, cy, _z, ny) => (ny < -0.5 ? 0.42 : (0.62 + 0.42 * smoothstep(y, y + h, cy)) * (0.88 + 0.12 * f) * (0.94 + 0.1 * ny)));
+    const g = pineTier(r, h, y, i < tiers - 1 ? 7 : 6, i * 1.7 + v * 5.3, hk);
+    g.rotateY(i * 0.7 + v);
+    const seed = 40 + v * 9 + i;
+    paintFaces(g, (cx, cy, cz, ny, k) => {
+      // dessous sombre, plus clair vers le cœur ; dessus : clair en haut de l'étage, un peu plus clair à la pointe des branches
+      if (ny < -0.3) return 0.36 + 0.1 * (1 - Math.min(1, Math.hypot(cx, cz) / r));
+      const tip = smoothstep(r * 0.55, r * 0.95, Math.hypot(cx, cz));
+      return (0.58 + 0.42 * smoothstep(y, y + h, cy) + 0.08 * tip) * (0.88 + 0.12 * f) * (0.9 + 0.12 * ny) * (0.9 + 0.17 * hash2(k, seed, 23));
+    });
     greens.push(g);
     if (snow) {
-      const cap = flat(new THREE.ConeGeometry(r * 0.62, h * 0.5, 8).translate(0, y + h * 0.75, 0).rotateY(i * 0.7 + v));
+      const cap = flat(new THREE.ConeGeometry(r * 0.62, h * 0.5, i < tiers - 1 ? 7 : 6).translate(0, y + h * 0.75, 0).rotateY(i * 0.7 + v));
       paintFaces(cap, (_x, _y, _z, ny) => 0.9 + 0.1 * ny);
       caps.push(cap);
     }
