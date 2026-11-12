@@ -1,4 +1,6 @@
 import { clamp } from '../core/rng';
+import type { SpotKind, SpotVoice } from './spots';
+import { VOICES } from './voices';
 
 export interface AudioState {
   age: number;
@@ -36,11 +38,17 @@ export class AudioEngine {
   ctx: AudioContext | null = null;
   musicVol = 0.5;
   sfxVol = 0.7;
+  /** volume des ambiances : nature (vent, eau, oiseaux…) et bruitages de proximité (forge, bêtes, foule…) */
+  ambVol = 0.7;
   muteMusic = true;
   muteSfx = true;
   private master!: GainNode;
   private musicG!: GainNode;
   private sfxG!: GainNode;
+  private ambG!: GainNode;
+  private surfG!: GainNode;
+  /** voix des bruitages de proximité, une par sorte de source */
+  private voices = new Map<SpotKind, { out: GainNode; pan: StereoPannerNode; inp: GainNode; srcs: AudioScheduledSourceNode[]; next: number; k: number; end: number }>();
   private windG!: GainNode;
   private rainG!: GainNode;
   private waterG!: GainNode;
@@ -49,6 +57,7 @@ export class AudioEngine {
   private caveG!: GainNode;
   private streamG!: GainNode;
   private cascadeG!: GainNode;
+  private surfLfo!: GainNode;
   private gullTimer = 4;
   private eagleTimer = 10;
   private crackleTimer = 0;
@@ -72,6 +81,7 @@ export class AudioEngine {
     this.master.connect(comp); comp.connect(ctx.destination);
     this.musicG = ctx.createGain(); this.musicG.connect(this.master);
     this.sfxG = ctx.createGain(); this.sfxG.connect(this.master);
+    this.ambG = ctx.createGain(); this.ambG.connect(this.master);
     // bruit
     const len = ctx.sampleRate * 3;
     this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -87,7 +97,7 @@ export class AudioEngine {
       src.loopStart = Math.random() * 1.5;
       const f = ctx.createBiquadFilter(); f.type = filterType; f.frequency.value = freq; f.Q.value = q;
       const g = ctx.createGain(); g.gain.value = 0;
-      src.connect(f); f.connect(g); g.connect(this.sfxG); src.start();
+      src.connect(f); f.connect(g); g.connect(this.ambG); src.start();
       return { g, f };
     };
     const wind = noiseLoop('bandpass', 420, 0.5); this.windG = wind.g;
@@ -102,6 +112,11 @@ export class AudioEngine {
     // eau vive : murmure clair des torrents, grondement grave des cascades
     const stream = noiseLoop('bandpass', 1300, 0.5); this.streamG = stream.g;
     const casc = noiseLoop('lowpass', 320, 0.7); this.cascadeG = casc.g;
+    // ressac : houle lente de la mer près du rivage
+    const surf = noiseLoop('lowpass', 480, 0.6); this.surfG = surf.g;
+    const sl = ctx.createOscillator(); sl.frequency.value = 0.11;
+    const slg = ctx.createGain(); slg.gain.value = 0; sl.connect(slg); slg.connect(surf.g.gain); sl.start();
+    this.surfLfo = slg;
     // grillons
     const cr = ctx.createOscillator(); cr.type = 'sine'; cr.frequency.value = 4300;
     const cg = ctx.createGain(); cg.gain.value = 0;
@@ -110,7 +125,7 @@ export class AudioEngine {
     const amOff = ctx.createConstantSource(); amOff.offset.value = 0.5;
     const mod = ctx.createGain(); mod.gain.value = 0;
     am.connect(amg); amg.connect(mod.gain); amOff.connect(mod.gain);
-    cr.connect(mod); mod.connect(cg); cg.connect(this.sfxG);
+    cr.connect(mod); mod.connect(cg); cg.connect(this.ambG);
     cr.start(); am.start(); amOff.start();
     this.cricketG = cg;
     this.applyVolumes();
@@ -122,6 +137,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     this.musicG.gain.setTargetAtTime(this.muteMusic ? 0 : this.musicVol * 0.55, this.ctx.currentTime, 0.1);
     this.sfxG.gain.setTargetAtTime(this.muteSfx ? 0 : this.sfxVol, this.ctx.currentTime, 0.1);
+    this.ambG.gain.setTargetAtTime(this.muteSfx ? 0 : this.ambVol, this.ctx.currentTime, 0.1);
   }
 
   private tone(freq: number, t: number, dur: number, type: OscillatorType, vol: number, dest: AudioNode, cutoff = 0, attack = 0.01) {
@@ -150,11 +166,15 @@ export class AudioEngine {
     set(this.windG, (0.02 + 0.025 * (s.season === 3 ? 1 : 0.4) + 0.03 * s.fog + 0.02 * s.rain + 0.02 * s.snow + 0.05 * high) * out);
     set(this.streamG, 0.07 * (s.stream ?? 0) * out);
     set(this.cascadeG, 0.12 * (s.cascade ?? 0) * out);
+    // ressac : le niveau moyen et la houle (l'oscillateur ajoute ± autant au gain)
+    const surf = 0.06 * (s.coast ?? 0) * out;
+    set(this.surfG, surf); this.surfLfo.gain.setTargetAtTime(surf * 0.8, T, 0.4);
     set(this.rainG, 0.1 * s.rain * out);
     this.waterG.gain.setTargetAtTime(0.02 * clamp(1.4 - s.camDist / 130, 0.2, 1) * out, T, 0.5);
     set(this.cricketG, night * (s.season === 3 ? 0 : 0.012) * (1 - s.rain) * out);
     set(this.villageG, Math.min(0.03, s.pop * 0.0004) * s.daylight * (1 - s.rain * 0.6) * out);
     set(this.caveG, 0.06 * s.under);
+    this.tickVoices(T);
     // gouttes qui tombent de la voûte, en écho
     this.dripTimer -= dt;
     if (s.under > 0.5 && this.dripTimer <= 0) {
@@ -225,6 +245,63 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Bruitages de proximité (voir `spots.ts`) : les voix retenues, avec leur panoramique (−1 gauche … 1 droite). Une voix
+   * nouvelle naît en fondu ; une voix absente de la liste s'éteint en fondu, puis ses nœuds sont libérés. Les coups de
+   * chaque voix ne se programment que si elle s'entend
+   */
+  spots(list: SpotVoice[], pans: number[]) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const T = ctx.currentTime, seen = new Set<SpotKind>();
+    list.forEach((sv, i) => {
+      seen.add(sv.kind);
+      let v = this.voices.get(sv.kind);
+      if (!v) {
+        const out = ctx.createGain(); out.gain.value = 0;
+        const pan = ctx.createStereoPanner(); pan.pan.value = pans[i] ?? 0;
+        const inp = ctx.createGain(); inp.gain.value = VOICES[sv.kind].gain;
+        inp.connect(out); out.connect(pan); pan.connect(this.ambG);
+        const srcs = VOICES[sv.kind].loop?.({ ctx, noise: this.noise }, inp) ?? [];
+        v = { out, pan, inp, srcs, next: T + Math.random() * 0.8, k: 0, end: 0 };
+        this.voices.set(sv.kind, v);
+      }
+      v.k = sv.k; v.end = 0;
+      v.out.gain.setTargetAtTime(sv.k, T, 0.25);
+      v.pan.pan.setTargetAtTime(pans[i] ?? 0, T, 0.25);
+    });
+    for (const [kind, v] of this.voices) {
+      if (seen.has(kind)) continue;
+      if (!v.end) { v.end = T + 1.6; v.k = 0; v.out.gain.setTargetAtTime(0, T, 0.25); }
+      else if (T >= v.end) {
+        for (const s of v.srcs) { try { s.stop(); } catch { /* déjà arrêtée */ } }
+        v.pan.disconnect();
+        this.voices.delete(kind);
+      }
+    }
+  }
+
+  /** Programme les coups des voix audibles (appelé chaque image) */
+  private tickVoices(T: number) {
+    for (const [kind, v] of this.voices) {
+      const tick = VOICES[kind].tick;
+      if (!tick || v.k < 0.02 || T < v.next) continue;
+      v.next = Math.max(T, v.next) + tick({ ctx: this.ctx!, noise: this.noise }, v.inp, Math.max(T, v.next) + 0.02);
+    }
+  }
+
+  /** Voix des bruitages en cours (pour vérifier sans écouter : `__game.audio.debugSpots()`) */
+  debugSpots() {
+    return [...this.voices].map(([kind, v]) => ({ kind, k: +v.k.toFixed(3), gain: +v.out.gain.value.toFixed(3), pan: +v.pan.pan.value.toFixed(2), fading: !!v.end }));
+  }
+
+  /** Onglet caché : tout se tait ; il reprend au retour */
+  pause(hidden: boolean) {
+    if (!this.ctx) return;
+    if (hidden) this.ctx.suspend();
+    else this.ctx.resume();
+  }
+
   /** Cri de mouette : deux ou trois « kia » qui glissent vers le grave */
   private gull(t: number, k: number) {
     const ctx = this.ctx!, n = 2 + Math.floor(Math.random() * 2);
@@ -235,7 +312,7 @@ export class AudioEngine {
       const g = ctx.createGain();
       o.frequency.setValueAtTime(f, st); o.frequency.exponentialRampToValueAtTime(f * 0.62, st + 0.22);
       g.gain.setValueAtTime(0.0001, st); g.gain.linearRampToValueAtTime(0.045 * k, st + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.24);
-      o.connect(flt); flt.connect(g); g.connect(this.sfxG);
+      o.connect(flt); flt.connect(g); g.connect(this.ambG);
       o.start(st); o.stop(st + 0.26);
     }
   }
@@ -249,7 +326,7 @@ export class AudioEngine {
     const g = ctx.createGain();
     o.frequency.setValueAtTime(2600, t); o.frequency.exponentialRampToValueAtTime(1500, t + 0.75);
     g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.035 * k, t + 0.06); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
-    o.connect(g); g.connect(this.sfxG);
+    o.connect(g); g.connect(this.ambG);
     o.start(t); vib.start(t); o.stop(t + 0.85); vib.stop(t + 0.85);
   }
 
@@ -300,7 +377,7 @@ export class AudioEngine {
       const vca = ctx.createGain(); vca.gain.value = 0.5;
       am.connect(amg); amg.connect(vca.gain);
       const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = f0 * 2.2; f.Q.value = 2.5;
-      o.connect(f); f.connect(vca); vca.connect(g); g.connect(this.sfxG);
+      o.connect(f); f.connect(vca); vca.connect(g); g.connect(this.ambG);
       o.start(t0); am.start(t0); o.stop(t0 + dur + 0.05); am.stop(t0 + dur + 0.05);
     }
   }
@@ -318,7 +395,7 @@ export class AudioEngine {
       g.gain.setValueAtTime(0.0001, st);
       g.gain.linearRampToValueAtTime(0.022, st + 0.015);
       g.gain.exponentialRampToValueAtTime(0.0001, st + 0.09);
-      o.connect(g); g.connect(this.sfxG);
+      o.connect(g); g.connect(this.ambG);
       o.start(st); o.stop(st + 0.12);
     }
   }

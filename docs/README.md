@@ -15,6 +15,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 - [interface.md](interface.md) : HUD, menus, onglets et rayons de construction, fiches, notifications, réglages.
 - [traduction.md](traduction.md) : `tr`, `localize`, fichiers anglais (voir aussi `src/i18n/README.md`).
 - [chargement-performances.md](chargement-performances.md) : écran de chargement, préparation des shaders, coûts connus.
+- [audio.md](audio.md) : musique générative, ambiances, bruitages de proximité (forge, bêtes, foule, volcan…), effets, réglages de volume.
 
 ### Le monde
 - [monde-carte.md](monde-carte.md) : grille, hauteurs, génération du continent par graine, contrées, cases et leurs couches.
