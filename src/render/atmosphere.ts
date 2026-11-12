@@ -91,7 +91,7 @@ export class Atmosphere {
   private peaks: { x: number; y: number; z: number }[] = [];
   private builtVis = -1;
   private bow: THREE.Mesh;
-  private bowU = { uAlpha: { value: 0 } };
+  private bowU = { uAlpha: { value: 0 }, uFoot: { value: 1 } };
   private bowT = 0;
   private wasRaining = false;
   private bolt: THREE.Mesh;
@@ -114,19 +114,20 @@ export class Atmosphere {
     this.caps.frustumCulled = false;
     this.caps.renderOrder = 4;
     // ---- arc-en-ciel : demi-anneau aux couleurs du spectre, rouge à l'extérieur et violet à l'intérieur ; au-dehors, l'arc
-    // secondaire, plus pâle, aux couleurs inversées. L'arc entier jusqu'à l'horizon (seul son pied s'estompe), translucide
+    // secondaire, plus pâle, aux couleurs inversées. Translucide, aux teintes adoucies (un vrai arc-en-ciel n'est pas criard) ;
+    // ses pieds s'estompent au niveau de la mer, là-bas derrière l'île (sinon il pendrait sous le plateau dans le vide)
     const bm = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, fog: false, uniforms: this.bowU,
-      vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform float uAlpha; varying vec2 vP;
+      vertexShader: 'varying vec2 vP; varying float vY; void main(){ vP = position.xy; vY = (modelMatrix * vec4(position, 1.0)).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform float uAlpha; uniform float uFoot; varying vec2 vP; varying float vY;
 vec3 hue(float h){ return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
 void main(){
   float r = length(vP), t = clamp((r - 0.9) / 0.1, 0.0, 1.0), s = clamp((1.13 - r) / 0.08, 0.0, 1.0);
   float a1 = sin(t * 3.14159), a2 = sin(s * 3.14159) * 0.35;
   vec3 c = a1 >= a2 ? hue(0.78 * (1.0 - t)) : hue(0.78 * (1.0 - s));
-  float a = uAlpha * max(a1, a2) * smoothstep(0.0, 0.06, vP.y / r);
+  float a = uAlpha * max(a1, a2) * smoothstep(0.0, 0.06, vP.y / r) * smoothstep(0.0, uFoot, vY);
   if (a < 0.002) discard;
-  gl_FragColor = vec4(c, a * 0.34); }`,
+  gl_FragColor = vec4(mix(c, vec3(1.0), 0.22), a * 0.28); }`,
     });
     this.bow = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.15, 128, 2, 0, Math.PI), bm);
     this.bow.visible = false;
@@ -217,14 +218,20 @@ void main(){
       this.bowU.uAlpha.value = bowA;
       // au loin, dans la direction opposée au soleil (ramenée vers l'axe de la vue), dans le ciel : il paraît dès que la vue
       // montre un peu de ciel au-dessus de l'horizon, son sommet sous le haut de l'image, ses pieds sous l'horizon (un arc
-      // entier, non un bout d'arc coupé en l'air) ; la vue plongeante, qui ne montre pas le ciel, ne le montre pas
-      const D = 130, R = D * 0.75;
+      // entier, non un bout d'arc coupé en l'air) ; la vue plongeante, qui ne montre pas le ciel, ne le montre pas.
+      // Il se tient toujours derrière l'île (au-delà de son bord vu d'ici) : le relief le cache, il ne passe jamais devant.
+      // Sa taille apparente ne change pas avec la distance (R / D fixe, comme un vrai arc-en-ciel). Quand on dézoome jusqu'à
+      // voir l'île comme un plateau flottant, il s'efface : il n'y a plus d'horizon où le poser, il encadrerait la carte
+      const back = Math.hypot(cp.x - N / 2, cp.z - N / 2) + N * 0.75;
+      const D = Math.max(130, back), R = D * 0.75;
+      const far = 1 - smoothstep(1.2, 1.7, cp.distanceTo(focus) / N);
       fwd.lerp(anti, 0.6).normalize();
       const down = Math.asin(clamp((cp.y - focus.y) / Math.max(1e-3, cp.distanceTo(focus)), -1, 1));
       const half = THREE.MathUtils.degToRad((camera as THREE.PerspectiveCamera).fov / 2), sky = half - down;
       const apex = cp.y + Math.tan(Math.min(0.45, Math.max(0.02, sky * 0.75))) * D;
-      this.bow.visible = sky > 0.004;
-      this.bowU.uAlpha.value = bowA * smoothstep(0.004, 0.04, sky);
+      this.bowU.uAlpha.value = bowA * smoothstep(0.004, 0.04, sky) * far;
+      this.bowU.uFoot.value = D * 0.04;
+      this.bow.visible = sky > 0.004 && far > 0.01;
       this.bow.position.set(cp.x + fwd.x * D, apex - R, cp.z + fwd.z * D);
       this.bow.scale.setScalar(R);
       this.bow.lookAt(cp.x, apex - R, cp.z);

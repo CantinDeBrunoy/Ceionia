@@ -354,6 +354,30 @@ describe('ciel', () => {
     run(10, 'snow', 'snow', 1);
     expect(bowT()).toBe(0);
   });
+
+  it('l’arc-en-ciel se tient derrière l’île, jamais devant, et s’efface quand on la voit de très loin', () => {
+    const w = continent();
+    const atm = new Atmosphere(w, null as unknown as AudioEngine);
+    const env = { weatherKind: 'clear', wantKind: 'clear', weatherK: 0, rainK: 0, daylight: 1, night: 0 } as unknown as Environment;
+    const time = { hour: 11, season: 1, days: 3, frac: 0.3 } as unknown as GameTime, s = makeSeasonState();
+    const bow = (atm as unknown as { bow: THREE.Mesh }).bow;
+    const focus = new THREE.Vector3(N / 2, 0, N / 2), cam = new THREE.PerspectiveCamera(38, 1.5, 0.1, 2000);
+    // vue basse qui montre le ciel, à une distance donnée du milieu de l'île
+    const look = (d: number) => {
+      cam.position.set(N / 2, d * Math.sin(0.15), N / 2 + d * Math.cos(0.15)); cam.lookAt(focus); cam.updateMatrixWorld();
+      (atm as unknown as { bowT: number }).bowT = 30;
+      atm.update(0.1, time, s, env, cam, focus);
+    };
+    for (const d of [0.3 * N, N, 1.3 * N]) {
+      look(d);
+      expect(bow.visible).toBe(true);
+      // plus loin que le bord de l'île vu d'ici (le relief le cache au lieu qu'il passe devant)
+      expect(Math.hypot(bow.position.x - cam.position.x, bow.position.z - cam.position.z)).toBeGreaterThan(d + N / 2);
+    }
+    // l'île vue comme un plateau flottant : plus d'arc-en-ciel autour d'elle
+    look(2.4 * N);
+    expect(bow.visible).toBe(false);
+  });
 });
 
 /** L'ancienne forme du volcan (cône lisse), telle qu'elle était avant les ravines des grands volcans */
