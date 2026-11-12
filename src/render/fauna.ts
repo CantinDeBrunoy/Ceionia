@@ -7,7 +7,7 @@ import { hash2, mulberry32 } from '../core/rng';
 import { Parts } from './parts';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { CH, NC } from './vegetation';
-import { makeBeast, BEAST_KINDS, GESTURES, beastYaw, BeastKind } from './beasts';
+import { makeBeast, BEAST_KINDS, GESTURES, beastYaw, BeastKind, FOWL_FLOAT } from './beasts';
 import { Impostors } from './impostors';
 
 type Kind = 'sheep' | 'cow' | 'pig' | 'hen' | 'rabbit' | 'deer' | 'horse' | 'llama' | 'fox' | 'wolf' | 'frog'
@@ -343,7 +343,7 @@ const SPECS: Record<Kind, Spec> = {
   fox: { geo: deerGeo, max: 28, colors: [0xd8743a], speed: 0.5, run: 1.55, idle: [3, 8], ok: offRoad, scale: 0.6, flee: 1.5 },
   wolf: { geo: deerGeo, max: 24, colors: [0x8a8a90, 0x6a6a72, 0x9a8670], speed: 0.55, run: 1.75, idle: [3, 8], ok: offRoad, scale: 0.8, flee: 2 },
   frog: { geo: duckGeo, max: 110, colors: [0x6aa84a], speed: 0.35, run: 0.7, idle: [2, 7], ok: bank, hop: 0.03, flee: 1.2, scale: 0.6 },
-  duck: { geo: duckGeo, max: 40, colors: [0xffffff], speed: 0.25, idle: [2, 6], ok: water },
+  duck: { geo: duckGeo, max: 40, colors: [0x8a6a4a, 0xa8a49c, 0xffffff], speed: 0.25, idle: [2, 6], ok: water },
   duckling: { geo: duckGeo, max: 100, colors: [0xf8dc6a], speed: 0.25, idle: [1, 1], ok: water, scale: 0.55 },
   bird: { geo: birdGeo, max: 70, colors: [0xffffff, 0xdfe4ea], speed: 0, idle: [1, 1], ok: any, flap: [9, 0.9, 0.012], scale: 2.3 },
   songbird: { geo: songbirdGeo, max: 90, colors: [0xe8553c, 0x4a8ce0, 0xf2c94c, 0x9a7458, 0x5abf8a], speed: 0, idle: [4, 14], ok: any, flap: [22, 1.2, 0.012], scale: 1.3 },
@@ -371,7 +371,7 @@ const SPECS: Record<Kind, Spec> = {
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['rabbit', 'duck', 'duckling', 'bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex', 'goose']);
+const PROCEDURAL = new Set<Kind>(['bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'ibex']);
 
 /** Élément du décor ou zone auquel un groupe d'animaux est rattaché */
 export type Anchor = 'edge' | 'meadow' | 'rocks' | 'banks' | 'ponds' | 'coast';
@@ -495,6 +495,8 @@ export class Fauna {
   people: () => Person[] = () => [];
   /** volcan en éruption : tous les animaux qui craignent quelque chose s'en éloignent en courant */
   alarm: { x: number; z: number; r: number } | null = null;
+  /** temps de la houle (celui du rendu de l'eau) */
+  private elapsed = 0;
   private meshes = {} as Record<Kind, THREE.InstancedMesh>;
   private phases = {} as Record<Kind, THREE.InstancedBufferAttribute | undefined>;
   private flaps = {} as Record<Kind, THREE.InstancedBufferAttribute | undefined>;
@@ -1548,9 +1550,11 @@ export class Fauna {
     const gait = c.moving && !swimmer && !a.actions.has('Walk') && !a.actions.has('WalkSlow');
     const bob = gait ? Math.abs(Math.sin(c.phase * 0.9)) * (c.run ? 0.03 : 0.012) : 0;
     const ground = this.world.hAt(c.x, c.z), beast = BEAST_KINDS.has(c.kind);
-    // grenouilles à fleur d'eau, crocodiles et tortues à demi immergés sur les hauts-fonds
+    // grenouilles à fleur d'eau, crocodiles et tortues à demi immergés sur les hauts-fonds ; canards sur la houle, enfoncés
+    // jusqu'au tiers du corps
     const wet = c.kind === 'frog' ? SEA - 0.01 : c.kind === 'croc' ? SEA - 0.035 : c.kind === 'turtle' ? SEA - 0.018 : -Infinity;
-    a.root.position.set(c.x, (swimmer ? c.y : Math.max(ground, wet)) + bob, c.z);
+    const y = c.kind === 'duck' || c.kind === 'duckling' ? this.swell(c.x, c.z) - FOWL_FLOAT * c.size : swimmer ? c.y : Math.max(ground, wet);
+    a.root.position.set(c.x, y + bob, c.z);
     a.root.rotation.set(swimmer ? c.pitch : 0, c.heading + (MODELS[c.kind]?.yaw ?? beastYaw(c.kind)), gait ? Math.sin(c.phase * 0.9) * 0.07 : 0, 'YXZ');
     if (silhouette) {
       a.root.updateMatrix();
@@ -1594,9 +1598,16 @@ export class Fauna {
     play(a, go ? [want] : ['Idle']);
   }
 
+  /** Hauteur de l'eau en (x, z) : même houle que la surface (canards) */
+  private swell(x: number, z: number) {
+    const t = this.elapsed;
+    return SEA + (Math.sin(x * 0.9 + t * 1.3) + Math.sin(z * 1.1 + t * 1.1) + Math.sin((x + z) * 0.5 + t * 0.7)) * 0.018;
+  }
+
   private render(elapsed: number, dt: number, camera?: THREE.Camera) {
     const w = this.world, d = this.d;
     this.frame++;
+    this.elapsed = elapsed;
     if (camera) this.frustum.setFromProjectionMatrix(this.pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     const counts = {} as Record<Kind, number>;
     for (const k of KIND_LIST) counts[k] = 0;
@@ -1627,10 +1638,8 @@ export class Fauna {
       const n = counts[c.kind];
       if (n >= sp.max) continue;
       let y: number;
-      if (c.kind === 'duck' || c.kind === 'duckling') {
-        // même houle que la surface de l'eau
-        y = SEA + (Math.sin(c.x * 0.9 + elapsed * 1.3) + Math.sin(c.z * 1.1 + elapsed * 1.1) + Math.sin((c.x + c.z) * 0.5 + elapsed * 0.7)) * 0.018;
-      } else if (sp.flap || SWIMMERS.has(c.kind)) y = c.y;
+      if (c.kind === 'duck' || c.kind === 'duckling') y = this.swell(c.x, c.z);
+      else if (sp.flap || SWIMMERS.has(c.kind)) y = c.y;
       else {
         y = w.hAt(c.x, c.z);
         if (c.moving) y += sp.hop ? Math.abs(Math.sin(c.phase * 0.7)) * sp.hop * (c.run ? 1.6 : 1) : Math.abs(Math.sin(c.phase)) * 0.006;

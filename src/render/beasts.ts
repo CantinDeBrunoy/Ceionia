@@ -2362,9 +2362,312 @@ function hen(c: Coat): { rig: Rig; clips: ClipDef[] } {
   return { rig: r, clips };
 }
 
+// ---------- Lapin ----------
+
+const RABBIT_COATS: Coat[] = [
+  // lièvre brun, gris, blanc, brun sombre
+  { fur: 0x9a7656, top: 0xb8926c, belly: 0xe8dcc8, tail: 0xf4f0e8, earTip: 0x4e3a2c, inner: 0xd8a8a0 },
+  { fur: 0x86827c, top: 0xa8a29a, belly: 0xe2ded6, tail: 0xf4f2ee, earTip: 0x4a4644, inner: 0xd0a4a0 },
+  { fur: 0xe4e0d8, top: 0xfaf8f4, belly: 0xf4f0e8, tail: 0xffffff, earTip: 0xd0c8bc, inner: 0xe8b0b0 },
+  { fur: 0x64503e, top: 0x80664e, belly: 0xcab8a0, tail: 0xe8e0d4, earTip: 0x3a2c22, inner: 0xb88880 },
+];
+
+/**
+ * Lapin : croupe ronde, longues pattes arrière repliées dont le pied repose à plat, pattes avant courtes, grands yeux sur
+ * les côtés, longues oreilles à bout sombre (chacune sur son os), museau clair au nez rose, queue en pompon ; avance par
+ * bonds, détale en grands sauts oreilles couchées, mâchonne, se dresse pour guetter, se lave le museau
+ */
+function rabbit(c: Coat): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  r.bone('hips', null, 0, 0.03, -0.015);
+  r.bone('chest', 'hips', 0, 0.032, 0.015);
+  r.bone('ribs', 'chest', 0, 0.032, 0.0);
+  r.bone('neck', 'chest', 0, 0.042, 0.03);
+  r.bone('head', 'neck', 0, 0.05, 0.038);
+  r.bone('jaw', 'head', 0, 0.043, 0.05);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.006, 0.062, 0.036));
+  r.bone('tail1', 'hips', 0, 0.036, -0.042);
+  r.both((s, L) => {
+    r.bone(`f${L}1`, 'chest', s * 0.011, 0.024, 0.024);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.011, 0.01, 0.026);
+    r.bone(`h${L}1`, 'hips', s * 0.016, 0.03, -0.022);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.017, 0.008, -0.036);
+  });
+
+  // croupe ronde, dos, poitrail et ventre clairs
+  r.add('hips', ell(0.025, 0.026, 0.029), [0, 0.033, -0.02], c.fur, [0, 0, 0], c.top);
+  r.add('ribs', ell(0.021, 0.022, 0.026), [0, 0.033, 0.006], c.fur, [0, 0, 0], c.top);
+  r.add('chest', ell(0.016, 0.019, 0.015), [0, 0.03, 0.023], c.belly, [0.3, 0, 0], c.fur);
+  r.add('ribs', ell(0.017, 0.007, 0.028), [0, 0.014, -0.006], c.belly);
+  r.put('neck', seg([0, 0.039, 0.024], [0, 0.048, 0.035], 0.013, 0.011, 7), c.fur, c.top);
+  // tête : crâne, joues, museau clair, nez rose, grands yeux
+  r.add('head', ell(0.0132, 0.0138, 0.017), [0, 0.052, 0.042], c.fur, [0.15, 0, 0], c.top);
+  r.both((s) => r.add('head', ell(0.007, 0.008, 0.009), [s * 0.0072, 0.047, 0.049], c.fur));
+  r.add('head', ell(0.0078, 0.0068, 0.0068), [0, 0.0465, 0.0555], c.belly);
+  r.add('head', ell(0.0022, 0.0016, 0.0012, 0), [0, 0.049, 0.0618], 0xd88a8a);
+  r.both((s) => {
+    r.add('head', ell(0.0027, 0.0032, 0.0024, 0), [s * 0.0098, 0.0555, 0.0475], 0x120e0c, [0, s * 0.7, 0]);
+    r.add('head', ell(0.0009, 0.0009, 0.0006, 0), [s * 0.0112, 0.0565, 0.0495], 0xf4f0e8);
+  });
+  r.put('jaw', seg([0, 0.043, 0.05], [0, 0.0425, 0.058], 0.004, 0.0028, 5), c.belly);
+  // longues oreilles, bout sombre, intérieur rosé
+  r.both((s, L) => {
+    r.add(`e${L}`, ell(0.0048, 0.022, 0.0028), [s * 0.0072, 0.08, 0.033], c.fur, [-0.22, 0, -s * 0.12], c.earTip);
+    r.add(`e${L}`, ell(0.0028, 0.016, 0.0012, 0), [s * 0.0072, 0.079, 0.0352], c.inner, [-0.22, 0, -s * 0.12]);
+  });
+  r.add('tail1', ell(0.0082, 0.0082, 0.0072, 0), [0, 0.039, -0.047], c.tail);
+  // pattes avant courtes ; arrière : cuisse ronde, long pied à plat
+  r.both((s, L) => {
+    const x = s * 0.011, hx = s * 0.017;
+    r.put(`f${L}1`, seg([x, 0.024, 0.025], [x, 0.01, 0.026], 0.0045, 0.0036, 5), c.fur, c.top);
+    r.put(`f${L}2`, seg([x, 0.01, 0.026], [x, 0.002, 0.028], 0.0036, 0.003, 5), c.fur);
+    r.add(`f${L}2`, ell(0.0038, 0.0024, 0.005, 0), [x, 0.002, 0.03], c.belly);
+    r.add(`h${L}1`, ell(0.0105, 0.016, 0.017), [hx, 0.027, -0.025], c.fur, [0.3, 0, 0], c.top);
+    r.put(`h${L}1`, seg([hx, 0.02, -0.03], [hx, 0.008, -0.036], 0.005, 0.0042, 5), c.fur);
+    r.put(`h${L}2`, seg([hx, 0.007, -0.037], [hx, 0.0022, -0.01], 0.0042, 0.0034, 5), c.fur);
+    r.add(`h${L}2`, ell(0.004, 0.0022, 0.008, 0), [hx, 0.002, -0.014], c.belly);
+  });
+
+  /** un bond : les pieds arrière poussent, le corps décrit un arc, les pattes avant se tendent pour l'arrivée */
+  const hop = (P: Pose, u: number, H: number, S: number) => {
+    const t = Math.min(1, u / 0.62), arc = u < 0.62 ? Math.sin(Math.PI * t) : 0, push = win(u, 0, 0.3, 0.1), land = win(u, 0.5, 0.8, 0.08);
+    M(P, 'hips', 0, H * arc, 0);
+    R(P, 'hips', -0.25 * S * push + 0.18 * S * land);
+    for (const L of ['L', 'R']) {
+      R(P, `h${L}1`, 0.7 * S * push - 0.2 * land); R(P, `h${L}2`, -0.6 * S * push);
+      R(P, `f${L}1`, -0.6 * S * arc + 0.25 * land); R(P, `f${L}2`, 0.3 * arc);
+    }
+    R(P, 'neck', 0.12 * S * arc); R(P, 'head', -0.1 * arc);
+  };
+  const clips: ClipDef[] = [
+    ['Walk', 0.55, (u, P) => { hop(P, u, 0.012, 1); ears(P, 0.12 * Math.sin(Math.PI * Math.min(1, u / 0.62)), 0); R(P, 'tail1', -0.3 * win(u, 0, 0.6, 0.1)); }],
+    ['Gallop', 0.36, (u, P) => { hop(P, u, 0.024, 1.5); ears(P, 0.9, -0.15); R(P, 'tail1', -0.5); }],
+    ['Idle', 6, (u, P) => {
+      breathe(P, u, 18, 0.8);
+      // le nez frémit, les oreilles tournent chacune de son côté
+      R(P, 'head', 0.025 * pos(sn(u, 24)) * win(u, 0.1, 0.45, 0.05), 0.2 * sn(u, 1, 0.3) * win(u, 0.5, 0.95, 0.1));
+      R(P, 'jaw', 0.08 * pos(sn(u, 24)) * win(u, 0.1, 0.45, 0.05));
+      R(P, 'eL', 0.1 * blip(u, 0.3, 0.06), 0.35 * win(u, 0.55, 0.8, 0.05));
+      R(P, 'eR', 0.1 * blip(u, 0.7, 0.06), -0.3 * win(u, 0.2, 0.4, 0.05));
+    }],
+    // mâchonne, la tête dans l'herbe
+    ['Eating', 2.4, (u, P) => {
+      breathe(P, u, 12, 0.6);
+      R(P, 'neck', 0.5); R(P, 'head', 0.35 + 0.03 * sn(u, 6));
+      R(P, 'jaw', 0.14 * pos(sn(u, 12)));
+      ears(P, 0.35, -0.12);
+      for (const L of ['L', 'R']) R(P, `f${L}1`, 0.15);
+    }],
+    // en miche, oreilles couchées sur le dos
+    ['Sleep', 8, (u, P) => {
+      breathe(P, u, 6, 1.2);
+      M(P, 'hips', 0, -0.007, 0);
+      for (const L of ['L', 'R']) { R(P, `f${L}1`, -1.0); R(P, `f${L}2`, 1.4); R(P, `h${L}1`, 0.3); }
+      R(P, 'neck', 0.25); R(P, 'head', 0.1);
+      ears(P, 1.25, -0.1);
+    }],
+    // se dresse sur ses pattes arrière pour guetter
+    ['Idle_2', 3.2, (u, P) => {
+      const k = win(u, 0.1, 0.85, 0.15);
+      R(P, 'hips', -0.95 * k);
+      M(P, 'hips', 0, 0.006 * k, 0);
+      for (const L of ['L', 'R']) { R(P, `h${L}1`, 0.95 * k); R(P, `h${L}2`, -0.1 * k); R(P, `f${L}1`, 0.55 * k); R(P, `f${L}2`, 0.6 * k); }
+      R(P, 'neck', 0.35 * k); R(P, 'head', 0.55 * k, 0.4 * k * sn(u, 1.5));
+      ears(P, -0.15 * k, -0.08 * k);
+      breathe(P, u, 18);
+    }],
+    // se lave le museau des pattes avant
+    ['Idle_3', 2.6, (u, P) => {
+      const k = win(u, 0.08, 0.9, 0.12), rub = sn(u, 6);
+      R(P, 'hips', -0.35 * k);
+      for (const L of ['L', 'R']) { R(P, `f${L}1`, -(1.1 + 0.2 * rub) * k); R(P, `f${L}2`, (0.9 - 0.2 * rub) * k); R(P, `h${L}1`, 0.35 * k); }
+      R(P, 'neck', 0.55 * k); R(P, 'head', (0.5 + 0.12 * rub) * k);
+      ears(P, 0.4 * k, 0);
+    }],
+  ];
+  return { rig: r, clips };
+}
+
+// ---------- Canards et oies ----------
+
+const DUCK_COATS: Coat[] = [
+  // cane colvert brun chiné, colvert mâle (tête verte, collier blanc, poitrail brun), canard blanc de ferme
+  { f: 0x8a6a4a, top: 0xa8865e, breast: 0x9a7854, belly: 0xb89a74, head: 0x7a5c40, neck: 0x8a6a4a, bill: 0xc8903a, wing: 0x7a5a3e, tip: 0x4a3a2a, spec: 0x3a5ab0, tail: 0x8a6a4a, leg: 0xe08a30 },
+  { f: 0xa8a49c, top: 0xc8c4bc, breast: 0x6a3a2a, belly: 0xd8d4cc, head: 0x1e5a3a, neck: 0x1e5a3a, ring: 0xf0f0ea, bill: 0xd8c84a, wing: 0x8a8680, tip: 0x3a3a3a, spec: 0x3a5ab0, tail: 0x2a2a2a, leg: 0xe08a30 },
+  { f: 0xeae6de, top: 0xfcfaf6, breast: 0xf4f0e8, belly: 0xe8e4dc, head: 0xf8f6f0, neck: 0xf4f2ec, bill: 0xf0a030, wing: 0xe4e0d6, tip: 0xd0cabe, spec: 0xd8d2c6, tail: 0xf0ece4, leg: 0xf0a030 },
+];
+const DUCKLING_COATS: Coat[] = [
+  { f: 0xecc850, top: 0xf8e080, breast: 0xfae49a, belly: 0xf4dc8a, head: 0xf2d460, neck: 0xf2d460, bill: 0xd88a3a, wing: 0xe8c04a, tip: 0xd8b040, spec: 0xe8c04a, tail: 0xecc850, leg: 0xe89a40 },
+];
+const GOOSE_COATS: Coat[] = [
+  // oie blanche de ferme (bec orange à bouton), crème, oie cendrée
+  { f: 0xeae6de, top: 0xfcfaf6, breast: 0xf4f0e8, belly: 0xe8e4dc, head: 0xf8f6f0, neck: 0xf6f4ee, bill: 0xf09030, knob: 0xe07020, wing: 0xe2ded4, tip: 0xd0cabe, spec: 0xdcd6ca, tail: 0xf0ece4, leg: 0xf09a40 },
+  { f: 0xe0d8c8, top: 0xf2ecde, breast: 0xece4d4, belly: 0xe2dacc, head: 0xeee8da, neck: 0xece6d8, bill: 0xf09a40, knob: 0xe07a28, wing: 0xd4ccba, tip: 0xbab09e, spec: 0xd0c8b6, tail: 0xe0d8c8, leg: 0xf0a048 },
+  { f: 0x847e72, top: 0xa49e92, breast: 0xb4aea2, belly: 0xd8d4cc, head: 0x7a7468, neck: 0x847e72, bill: 0xe8926a, wing: 0x6e685e, tip: 0x4a4640, spec: 0x8a8478, tail: 0x5e5a52, leg: 0xe8a07a },
+];
+
+/**
+ * Canard, caneton, oie : corps en carène, poitrail bombé, queue relevée, cou (deux os : l'oie l'a long), tête ronde, bec
+ * plat en deux pièces (bouton à la base pour l'oie domestique), ailes repliées en deux os (miroir bleu du colvert), pattes
+ * orange aux pieds palmés. Le caneton : boule de duvet, grosse tête, moignons d'ailes. Dessinés debout : sur l'eau, la
+ * faune les enfonce de `FOWL_FLOAT`. Se dandinent, battent des ailes, barbotent tête en bas, se lissent les plumes,
+ * dorment la tête sous l'aile ; l'oie siffle, cou tendu
+ */
+function fowl(c: Coat, kind: 'duck' | 'duckling' | 'goose'): { rig: Rig; clips: ClipDef[] } {
+  const r = new Rig();
+  const goose = kind === 'goose', chick = kind === 'duckling';
+  // cou : base, milieu, tête (l'oie le porte haut)
+  const n0: V3 = [0, 0.05, 0.024], n1: V3 = goose ? [0, 0.07, 0.037] : [0, 0.058, 0.028], hd: V3 = goose ? [0, 0.09, 0.035] : [0, 0.066, 0.033];
+  r.bone('hips', null, 0, 0.04, -0.01);
+  r.bone('ribs', 'hips', 0, 0.042, 0.008);
+  r.bone('neck', 'ribs', ...n0);
+  r.bone('neck2', 'neck', ...n1);
+  r.bone('head', 'neck2', ...hd);
+  r.bone('jaw', 'head', 0, hd[1] - 0.003, hd[2] + 0.008);
+  r.bone('tail1', 'hips', 0, 0.046, -0.038);
+  r.both((s, L) => {
+    r.bone(`w${L}1`, 'ribs', s * 0.017, 0.05, 0.01);
+    r.bone(`w${L}2`, `w${L}1`, s * 0.018, 0.048, -0.016);
+    r.bone(`l${L}1`, 'hips', s * 0.009, 0.03, 0.0);
+    r.bone(`l${L}2`, `l${L}1`, s * 0.009, 0.016, 0.002);
+  });
+
+  if (chick) {
+    // boule de duvet, grosse tête, moignons d'ailes
+    r.add('hips', ell(0.02, 0.018, 0.024), [0, 0.042, -0.006], c.f, [0, 0, 0], c.top);
+    r.add('ribs', ell(0.017, 0.017, 0.016), [0, 0.041, 0.012], c.breast, [0, 0, 0], c.f);
+    r.put('neck', seg([0, 0.048, 0.018], [0, 0.056, 0.024], 0.01, 0.009, 6), c.f, c.top);
+    r.add('head', ell(0.0125, 0.0125, 0.0125), [hd[0], hd[1] + 0.002, hd[2] - 0.004], c.head, [0, 0, 0], c.top);
+    r.add('head', ell(0.0045, 0.0018, 0.007), [0, hd[1] - 0.001, hd[2] + 0.011], c.bill, [0.1, 0, 0]);
+    r.add('jaw', ell(0.004, 0.0014, 0.006, 0), [0, hd[1] - 0.003, hd[2] + 0.010], c.bill, [0.15, 0, 0]);
+    r.both((s) => r.add('head', ell(0.0022, 0.0024, 0.0018, 0), [s * 0.0092, hd[1] + 0.004, hd[2] + 0.003], 0x161210, [0, s * 0.6, 0]));
+    r.add('tail1', ell(0.006, 0.005, 0.006, 0), [0, 0.046, -0.03], c.tail);
+    r.both((s, L) => {
+      r.add(`w${L}1`, ell(0.0045, 0.008, 0.009), [s * 0.019, 0.045, 0.002], c.wing, [0, 0, 0], c.f);
+      r.add(`w${L}2`, ell(0.003, 0.004, 0.005, 0), [s * 0.019, 0.046, -0.008], c.tip);
+    });
+  } else {
+    // carène, poitrail bombé, dessous clair
+    r.add('hips', ell(0.022, 0.019, 0.036), [0, 0.042, -0.006], c.f, [0, 0, 0], c.top);
+    r.add('ribs', ell(0.02, 0.02, 0.02), [0, 0.041, 0.018], c.breast, [-0.2, 0, 0], c.f);
+    r.add('hips', ell(0.018, 0.007, 0.03), [0, 0.027, -0.004], c.belly);
+    r.add('tail1', ell(0.0095, 0.0055, 0.015), [0, 0.049, -0.046], c.tail, [-0.45, 0, 0]);
+    // cou et tête ; collier blanc du colvert
+    r.put('neck', seg([0, 0.046, 0.021], n1, goose ? 0.0105 : 0.0098, goose ? 0.0082 : 0.0086, 7), c.neck, c.neck);
+    r.put('neck2', seg(n1, hd, goose ? 0.0082 : 0.0086, goose ? 0.0072 : 0.008, 7), c.neck, c.head);
+    if (c.ring) r.put('neck', seg([0, 0.051, 0.024], [0, 0.0535, 0.0255], 0.0102, 0.0098, 7), c.ring);
+    r.add('head', ell(goose ? 0.0092 : 0.0102, goose ? 0.0098 : 0.0102, goose ? 0.0135 : 0.0128), [0, hd[1] + 0.001, hd[2] + 0.001], c.head);
+    // bec plat (supérieur sur la tête, inférieur sur la mâchoire), bouton de l'oie domestique
+    const bz = hd[2] + (goose ? 0.018 : 0.017);
+    r.add('head', ell(goose ? 0.0055 : 0.0062, 0.0026, goose ? 0.0105 : 0.011), [0, hd[1] - 0.0015, bz], c.bill, [0.18, 0, 0]);
+    r.add('jaw', ell(goose ? 0.005 : 0.0056, 0.0018, goose ? 0.0095 : 0.01, 0), [0, hd[1] - 0.0042, bz - 0.001], c.bill, [0.22, 0, 0]);
+    if (c.knob) r.add('head', ell(0.0036, 0.0038, 0.0034, 0), [0, hd[1] + 0.002, hd[2] + 0.0105], c.knob);
+    r.both((s) => r.add('head', ell(0.0018, 0.002, 0.0015, 0), [s * (goose ? 0.0078 : 0.0088), hd[1] + 0.0035, hd[2] + 0.004], 0x161210, [0, s * 0.6, 0]));
+    // ailes repliées : épaule (miroir) et rémiges sombres croisées sur la queue
+    r.both((s, L) => {
+      r.add(`w${L}1`, ell(0.0058, 0.0125, 0.024), [s * 0.0195, 0.046, -0.004], c.wing, [0.08, 0, s * 0.05], c.top);
+      r.add(`w${L}1`, ell(0.0014, 0.0035, 0.0062, 0), [s * 0.025, 0.045, -0.013], c.spec);
+      r.add(`w${L}2`, ell(0.0042, 0.0075, 0.015), [s * 0.0155, 0.05, -0.032], c.tip, [0.25, 0, s * 0.12], c.wing);
+    });
+  }
+  // pattes orange, pieds palmés (sous l'eau pour les canards qui nagent)
+  r.both((s, L) => {
+    const x = s * 0.009;
+    r.put(`l${L}1`, seg([x, 0.03, 0.0], [x, 0.016, 0.002], 0.0028, 0.0022, 5), c.leg);
+    r.put(`l${L}2`, seg([x, 0.016, 0.002], [x, 0.002, 0.002], 0.0022, 0.0018, 5), c.leg);
+    r.add(`l${L}2`, ell(0.0058, 0.0012, 0.0082, 0), [x, 0.0015, 0.0075], c.leg);
+  });
+
+  const legs = (P: Pose, u: number, A: number, L: number) => {
+    for (const [l, ph] of [['lL', 0], ['lR', 0.5]] as [string, number][]) {
+      const w = TAU * (u - ph);
+      R(P, l + '1', -A * Math.sin(w) + L * 0.3 * pos(Math.cos(w)));
+      R(P, l + '2', -L * pos(Math.cos(w)));
+    }
+  };
+  const wings = (P: Pose, open: number, flap = 0) => {
+    R(P, 'wL1', -0.2 * open, 0, open + flap); R(P, 'wR1', -0.2 * open, 0, -open - flap);
+    R(P, 'wL2', 0, 0, 0.35 * open); R(P, 'wR2', 0, 0, -0.35 * open);
+  };
+  const neck = (P: Pose, a: number, b: number, h: number, y = 0) => { R(P, 'neck', a, y * 0.4); R(P, 'neck2', b, y * 0.4); R(P, 'head', h, y * 0.3); };
+  const clips: ClipDef[] = [
+    // se dandine (sur l'eau : les pieds pagaient, le corps roule à peine)
+    ['Walk', chick ? 0.36 : 0.56, (u, P) => {
+      legs(P, u, 0.55, 0.8);
+      R(P, 'hips', 0, 0.04 * sn(u), 0.1 * sn(u));
+      M(P, 'hips', 0, -0.0015 * cs(u, 2), 0);
+      neck(P, 0.04 * sn(u, 2), -0.03 * sn(u, 2), 0, 0.1 * sn(u));
+      R(P, 'tail1', 0, 0.15 * sn(u));
+    }],
+    ['Gallop', chick ? 0.26 : 0.34, (u, P) => {
+      legs(P, u, 0.85, 1.1);
+      R(P, 'hips', 0.2, 0, 0.12 * sn(u));
+      neck(P, 0.3, 0.2, -0.3);
+      wings(P, 0.55, 0.35 * sn(u, 2));
+      R(P, 'tail1', -0.2);
+    }],
+    ['Idle', 6, (u, P) => {
+      breathe(P, u, 4, 1.2);
+      const look = Math.round(sn(u, 1) * 2) / 2;
+      neck(P, 0.03 * sn(u, 2), 0, 0.08 * sn(u, 2, 0.2), 0.6 * look);
+      // la queue frétille
+      R(P, 'tail1', 0, 0.45 * sn(u, 10) * win(u, 0.62, 0.74, 0.03));
+      R(P, 'jaw', 0.25 * (blip(u, 0.3, 0.02) + blip(u, 0.34, 0.02)));
+    }],
+    // barbote ou broute : le bec au sol, il fouille
+    ['Eating', 2, (u, P) => {
+      breathe(P, u, 4);
+      R(P, 'hips', 0.25);
+      neck(P, 0.75 + 0.06 * sn(u, 4), goose ? 0.7 : 0.45, 0.35 + 0.08 * pos(sn(u, 8)), 0.25 * sn(u));
+      R(P, 'jaw', 0.18 * pos(sn(u, 8)));
+      R(P, 'tail1', -0.35, 0.2 * sn(u, 3));
+    }],
+    // assis, la tête tournée sur le dos, le bec sous l'aile
+    ['Sleep', 8, (u, P) => {
+      breathe(P, u, 2, 1.6);
+      M(P, 'hips', 0, -0.012, 0);
+      for (const l of ['lL', 'lR']) { R(P, l + '1', 0.9); R(P, l + '2', -1.7); }
+      R(P, 'neck', -0.9, 1.2); R(P, 'neck2', -0.6, 1.2); R(P, 'head', 0.6, 0.9);
+    }],
+    // se dresse et bat des ailes
+    ['Idle_2', 2.2, (u, P) => {
+      const k = win(u, 0.08, 0.9, 0.1), f = win(u, 0.22, 0.78, 0.05);
+      R(P, 'hips', -0.45 * k);
+      M(P, 'hips', 0, 0.005 * k, 0);
+      neck(P, -0.3 * k, -0.15 * k, 0.3 * k);
+      wings(P, 1.25 * f, 0.55 * f * sn(u, 6));
+      R(P, 'tail1', -0.4 * k);
+      R(P, 'jaw', 0.3 * f * pos(sn(u, 6)));
+    }],
+    // se lisse les plumes : le bec fouille sous l'aile, d'un côté puis de l'autre ; le canard sur l'eau s'y retourne aussi
+    ['Idle_3', 3.4, (u, P) => {
+      const a = win(u, 0.05, 0.45, 0.08), b = win(u, 0.55, 0.95, 0.08), nib = 0.08 * pos(sn(u, 14));
+      neck(P, -0.15 * (a + b), 0.35 * (a + b), 0.6 * (a + b) + nib, 1.9 * a - 1.9 * b);
+      R(P, 'wL1', 0, 0, 0.25 * a); R(P, 'wR1', 0, 0, -0.25 * b);
+      R(P, 'jaw', 0.15 * (a + b) * pos(sn(u, 14)));
+      R(P, 'tail1', 0, 0.3 * sn(u, 6) * win(u, 0.46, 0.54, 0.02));
+    }],
+  ];
+  if (goose) clips.push(
+    // siffle : cou tendu au ras du sol, bec ouvert, ailes entrouvertes
+    ['Attack', 1.4, (u, P) => {
+      const k = win(u, 0.05, 0.9, 0.12);
+      R(P, 'hips', 0.2 * k);
+      neck(P, 1.0 * k, -0.55 * k, -0.35 * k, 0.12 * k * sn(u, 3));
+      R(P, 'jaw', 0.35 * k + 0.05 * k * sn(u, 20));
+      wings(P, 0.55 * k, 0.08 * k * sn(u, 5));
+    }],
+  );
+  return { rig: r, clips };
+}
+
+/** Hauteur dont un canard (ou un caneton) à l'échelle 1 s'enfonce dans l'eau : le dessous du corps sous la surface */
+export const FOWL_FLOAT = 0.03;
+
 // ---------- Catalogue ----------
 
-export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon' | 'sheep' | 'pig' | 'hen';
+export type BeastKind = 'bear' | 'elephant' | 'giraffe' | 'camel' | 'moose' | 'wolf' | 'croc' | 'lizard' | 'turtle' | 'crab' | 'dragon' | 'sheep' | 'pig' | 'hen'
+  | 'rabbit' | 'duck' | 'duckling' | 'goose';
 interface BeastDef { coats: Coat[]; build: (c: Coat) => { rig: Rig; clips: ClipDef[] }; yaw?: number }
 const DEFS: Record<BeastKind, BeastDef> = {
   bear: { coats: BEAR_COATS, build: bear },
@@ -2384,6 +2687,10 @@ const DEFS: Record<BeastKind, BeastDef> = {
   sheep: { coats: SHEEP_COATS, build: sheep },
   pig: { coats: PIG_COATS, build: pig },
   hen: { coats: HEN_COATS, build: hen },
+  rabbit: { coats: RABBIT_COATS, build: rabbit },
+  duck: { coats: DUCK_COATS, build: (c) => fowl(c, 'duck') },
+  duckling: { coats: DUCKLING_COATS, build: (c) => fowl(c, 'duckling') },
+  goose: { coats: GOOSE_COATS, build: (c) => fowl(c, 'goose') },
 };
 export const BEAST_KINDS = new Set<string>(Object.keys(DEFS));
 /** gestes joués une fois de temps en temps au repos (se dresser, humer l'air…) */
