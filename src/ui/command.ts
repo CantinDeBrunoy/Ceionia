@@ -196,7 +196,10 @@ export class CommandUI implements ToolInput {
     this.goalEl = document.createElement('div');
     this.goalEl.id = 'hellGoal';
     this.goalEl.innerHTML = `<i class="hgArrow"></i><span class="hgPin">${pic('🎯', 22)}<b></b></span>`;
-    root.append(this.bar, this.box, this.alertEl, this.goalEl);
+    root.append(this.bar, this.box, this.goalEl);
+    // l'alerte se range en tête de la colonne de gauche, au-dessus des cartes des équipes et des messages
+    const side = root.querySelector('#expList');
+    if (side) side.prepend(this.alertEl); else root.append(this.alertEl);
     this.bar.addEventListener('click', (e) => this.onBar(e));
   }
 

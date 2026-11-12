@@ -517,7 +517,6 @@ export class UI {
           </div>
           <div id="hudNotes">
             <div class="msgRow"><div id="msg"></div><button id="helpBtn" type="button" aria-pressed="false"></button></div>
-            <div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div>
           </div>
         </div>
         <div id="needsPanel">
@@ -537,7 +536,7 @@ export class UI {
           </nav>
         </div>
       </header>
-      <div id="expList"></div>
+      <div id="expList"><div id="toasts" role="status" aria-live="polite" aria-relevant="additions"></div></div>
       <div id="underBar" class="panel">
         <div id="underZone"></div>
         <button id="bUp" title="${tr('Remonter à la surface (U)')}">${ic('up', 18)} ${tr('Remonter')}</button>
@@ -1645,7 +1644,7 @@ export class UI {
           const e = ex.active.find((x) => x.id === id);
           if (e?.wait) this.showDecision(e);
         };
-        list.appendChild(card);
+        list.insertBefore(card, $('#toasts'));
         this.expCards.set(a.id, card);
       }
       $('small', card).textContent = ex.status(a);
@@ -1666,7 +1665,7 @@ export class UI {
         card.innerHTML = `<i class="team"></i><b class="mi"></b><div class="grow"><div class="t"></div><small></small><div class="bar"><i></i></div></div><button class="cam" title="${tr('La caméra suit l\'intervention')}" aria-label="${tr('Suivre l\'intervention à la caméra')}">${ic('eye', 18)}</button>`;
         const key = i.key;
         $('.cam', card).onclick = () => { h.followIncident(h.incidentCam === key ? null : key); this.update(); };
-        list.appendChild(card);
+        list.insertBefore(card, $('#toasts'));
         this.incCards.set(i.key, card);
       }
       $('.mi', card).textContent = i.icon;

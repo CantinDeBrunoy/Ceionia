@@ -113,7 +113,7 @@ describe('textes d’aide', () => {
 const fakeEl = (): Record<string, unknown> => {
   const el: Record<string, unknown> = { style: {}, dataset: {}, innerHTML: '', textContent: '', title: '', children: [] };
   el.classList = { add() {}, remove() {}, toggle() {}, contains: () => false };
-  el.append = () => {}; el.addEventListener = () => {}; el.querySelector = () => null; el.getBoundingClientRect = () => ({ top: 0, bottom: 0 });
+  el.append = () => {}; el.prepend = () => {}; el.setAttribute = () => {}; el.addEventListener = () => {}; el.querySelector = () => null; el.getBoundingClientRect = () => ({ top: 0, bottom: 0 });
   return el;
 };
 

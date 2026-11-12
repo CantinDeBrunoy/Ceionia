@@ -409,18 +409,18 @@ body.under #selCard, body.photo #selCard { display: none; }
 #info .keys { color: var(--ink2); font-size: 11.5px; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 
-/* la file des messages : au plus deux (un seul sur un téléphone), en pilules sous le conseil du moment (colonne de gauche) */
-#toasts { position: relative; z-index: 34; display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 100%; pointer-events: none !important; }
+/* la file des messages : au plus deux (un seul sur un téléphone), en petites pilules dans la colonne de gauche, sous les
+   cartes des équipes et des incidents */
+#toasts { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: max-content; max-width: min(300px, calc(100vw - 2 * var(--gap))); pointer-events: none !important; }
 #toasts:empty { display: none; }
-#toasts .toast { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 5px 16px 5px 6px; border-radius: 22px; font-size: 13px; font-weight: 700; line-height: 1.3; color: var(--hInk); background: rgba(255, 255, 255, 0.78); border: 1px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: var(--hBlur); -webkit-backdrop-filter: var(--hBlur); animation: toastIn 0.3s ease-out; }
-#toasts .toast > .pic { padding: 4px; width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.8); }
-#toasts .toast.danger { color: #8f1d24; background: rgba(255, 238, 236, 0.9); }
+#toasts .toast { display: flex; align-items: center; gap: 7px; max-width: 100%; min-height: 32px; padding: 3px 12px 3px 4px; border-radius: 17px; font-size: 12px; font-weight: 600; line-height: 1.3; color: var(--hInk); background: rgba(255, 255, 255, 0.72); border: 1px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: var(--hBlur); -webkit-backdrop-filter: var(--hBlur); animation: slideIn 0.25s ease-out; }
+#toasts .toast > .pic { flex: none; padding: 3px; width: 24px; height: 24px; border-radius: 50%; background: rgba(255, 255, 255, 0.8); }
+#toasts .toast.danger { color: #8f1d24; background: rgba(255, 238, 236, 0.88); }
 #toasts .toast.danger > .pic { background: #fff; box-shadow: inset 0 0 0 1.5px rgba(201, 54, 60, 0.45); }
 /* message qui mène quelque part (une décision d'expédition) : cliquable, avec un chevron */
 #toasts .toast.act { pointer-events: auto !important; cursor: pointer; }
-#toasts .toast.act::after { content: '›'; margin-left: 4px; font-size: 20px; line-height: 0.8; color: var(--hInk2); }
+#toasts .toast.act::after { content: '›'; margin-left: 2px; font-size: 17px; line-height: 0.8; color: var(--hInk2); }
 #toasts .toast.act:hover { background: #fff; }
-@keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { #toasts .toast { animation: none; } }
 /* la cloche */
 #bBell { position: relative; }
@@ -784,7 +784,6 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
   #msg { min-height: 38px; font-size: 12px; }
   #msg .mi { width: 28px; height: 28px; }
   #msg .mi img { width: 20px; height: 20px; }
-  #toasts .toast { min-height: 36px; font-size: 12px; }
   /* en bas : les modes en une rangée d'icônes au-dessus de la barre ; les boutons de vue flottent à droite, au-dessus */
   #dock { padding: 0 4px; gap: 6px; }
   #dock > #dockRow { position: relative; grid-template-columns: minmax(0, 1fr); gap: 6px; }
@@ -1293,8 +1292,6 @@ body.commanding #troopBar { display: block; }
 #troopBar .tchip { padding: 7px 14px; border-radius: 12px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); font-size: 14px; font-weight: 700; color: var(--ink); }
 #troopBar .tchip:empty { display: none; }
 body.under #troopBar .tstate { top: calc(var(--hudB, 82px) + 66px); }
-body:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) + 58px); }
-body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) + 114px); }
 #troopBar .wst { display: inline-flex; align-items: center; gap: 6px; }
 #troopBar .wst b { color: #c8482b; }
 #troopBar .wst.hot { color: #c0392b; }
@@ -1581,10 +1578,7 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 /* dans les Enfers, plus de barre « Rivière de lave / Remonter » : la zone est dans la frise, le retour est « Rentrer sur l'île » */
 body.hell #underBar { display: none; }
 body.hell #troopBar .tstate { top: calc(var(--hudB, 82px) + 10px); }
-body.hell:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) + 58px); }
-body.hell #warAlert { top: calc(var(--hudB, 82px) + 10px); }
 body.hell #bossBar { top: calc(var(--hudB, 82px) + 70px); }
-body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
 @media (max-width: 640px) {
   #troopBar { font-size: 11.5px; }
   #troopBar .tstate { gap: 5px; }
@@ -1599,21 +1593,18 @@ body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
   #troopBar .tchip { padding: 5px 9px; font-size: 12px; }
 }
 #selBox { display: none; position: absolute; z-index: 8; border: 1.5px solid #7dff8a; background: rgba(125, 255, 138, 0.12); pointer-events: none; }
-/* L'alerte de l'île (incursion, invasion annoncée, guidage vers les Enfers) : la coque crème et or du panneau des vagues, un
-   médaillon rouge brique (violet pour le guidage), le texte en encre foncée, « Voir l'île » en pilule dorée */
-#warAlert { display: none; position: absolute; top: calc(var(--hudB, 82px) + 10px); left: 50%; transform: translateX(-50%); z-index: 9; width: max-content; max-width: calc(100vw - 24px); padding: 7px 8px 7px 7px; align-items: center; gap: 12px; border: 2px solid #fff7e8; border-radius: 999px; background: linear-gradient(180deg, #fcf6ee 0%, #f8ecdf 55%, #f4e3d2 100%); box-shadow: 0 0 0 1.5px rgba(200, 72, 43, 0.75), 0 0 26px rgba(226, 96, 58, 0.35), 0 12px 30px rgba(40, 30, 70, 0.24); color: #262a48; font-size: 15px; font-weight: 700; }
-#warAlert.show { display: flex; animation: riseCentered 0.16s ease-out; }
-/* (centrée : l'apparition garde son décalage de moitié, elle ne glisse plus de la droite) */
-@keyframes riseCentered { from { opacity: 0; transform: translate(-50%, 6px); } }
-#warAlert .wam { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 50% 36%, #ffd9c4 0%, #e0603a 70%, #b8381f 100%); box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px rgba(200, 72, 43, 0.85), 0 3px 10px rgba(184, 56, 31, 0.35); font-size: 22px; line-height: 1; }
-#warAlert .wam img { width: 24px; height: 24px; }
-#warAlert .wat { min-width: 0; line-height: 1.25; }
-#warAlert .wab { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px 0 18px; border-radius: 999px; border: 1px solid rgba(255, 236, 190, 0.9); background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; font-size: 14px; font-weight: 800; box-shadow: 0 4px 12px rgba(227, 154, 47, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.45); }
+/* L'alerte de l'île (incursion, invasion annoncée, guidage vers les Enfers) : une petite pilule en tête de la colonne de
+   gauche, comme les messages, teintée de rouge (violet pour le guidage), « Voir l'île » en petite pilule dorée */
+#warAlert { display: none; align-self: flex-start; width: max-content; max-width: min(300px, calc(100vw - 2 * var(--gap))); min-height: 32px; padding: 3px 4px 3px 4px; align-items: center; gap: 7px; border-radius: 17px; border: 1px solid rgba(201, 54, 60, 0.35); background: rgba(255, 238, 236, 0.9); box-shadow: var(--hShadow); backdrop-filter: var(--hBlur); -webkit-backdrop-filter: var(--hBlur); color: #8f1d24; font-size: 12px; font-weight: 600; line-height: 1.3; pointer-events: auto; }
+#warAlert.show { display: flex; animation: slideIn 0.25s ease-out; }
+#warAlert .wam { flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 3px; border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 1.5px rgba(201, 54, 60, 0.45); font-size: 15px; line-height: 1; }
+#warAlert .wam img { width: 18px; height: 18px; }
+#warAlert .wat { min-width: 0; }
+#warAlert .wab { flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 10px 0 11px; border-radius: 999px; border: 1px solid rgba(255, 236, 190, 0.9); background: linear-gradient(180deg, #f6c35a, #e39a2f); color: #3a2a14; font-size: 11.5px; font-weight: 800; box-shadow: 0 2px 6px rgba(227, 154, 47, 0.35); }
 #warAlert .wab:hover { background: linear-gradient(180deg, #f8cc6c, #e8a43a); color: #3a2a14; }
-#warAlert .wab span { font-size: 20px; line-height: 1; margin-top: -2px; }
-#warAlert.guide { box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.75), 0 0 26px rgba(255, 196, 110, 0.42), 0 12px 30px rgba(40, 30, 70, 0.24); }
-#warAlert.guide .wam { background: radial-gradient(circle at 50% 36%, #efe2ff 0%, #9b6ad8 70%, #6a3fb0 100%); box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px rgba(238, 190, 112, 0.9), 0 3px 10px rgba(106, 63, 176, 0.3); }
-@media (max-width: 720px) { #warAlert { gap: 8px; border-radius: 22px; font-size: 13px; } #warAlert .wam { width: 32px; height: 32px; } #warAlert .wam img { width: 19px; height: 19px; } #warAlert .wab { min-height: 34px; padding: 0 12px; font-size: 13px; } }
+#warAlert .wab span { font-size: 15px; line-height: 1; margin-top: -2px; }
+#warAlert.guide { color: #4a2d7a; background: rgba(244, 238, 255, 0.9); border-color: rgba(106, 63, 176, 0.3); }
+#warAlert.guide .wam { box-shadow: inset 0 0 0 1.5px rgba(106, 63, 176, 0.45); }
 /* ---------- Le royaume des Enfers : barre de vie du roi, écran de victoire ---------- */
 #bossBar { position: absolute; top: calc(var(--hudB, 82px) + 66px); left: 50%; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 10px; width: min(460px, calc(100vw - 24px)); padding: 7px 12px 8px 8px; border-color: rgba(200, 60, 40, 0.5); }
 #bossBar[hidden] { display: none; }
@@ -1627,7 +1618,6 @@ body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
 #bossBar.rage { animation: bossRage 0.9s ease-in-out infinite; }
 #bossBar.rage .bnote { color: #c0281a; }
 @keyframes bossRage { 50% { box-shadow: 0 0 0 3px rgba(255, 80, 40, 0.45), 0 8px 24px rgba(15, 27, 45, 0.18); } }
-#warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 112px); }
 .kingdomWin .victoryCard canvas { aspect-ratio: 520 / 200; }
 .kwHead { margin: 0 0 6px; text-align: left; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink2); }
 .kwRewards { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; text-align: left; }
@@ -1640,19 +1630,12 @@ body.hell #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 118px); }
 #warTip .wtText { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.35; color: #262a48; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #warTip .wtX { position: absolute; top: 6px; right: 7px; padding: 1px 6px; font-size: 11px; background: none; border: none; box-shadow: none; color: #8a6a3e; }
 #warTip .wtOff { margin-top: 4px; padding: 0; font-size: 11px; background: none; border: none; box-shadow: none; color: #8a6a3e; text-decoration: underline; }
-/* écran étroit : la bulle descend sous ce qui est centré en haut (messages, alerte d'incursion, barre des Enfers et son bouton
-   Remonter, barre de vie du roi), qu'elle recouvrait */
+/* écran étroit : la bulle descend sous ce qui est centré en haut (conseil, barre des Enfers et son bouton Remonter,
+   barre de vie du roi), qu'elle recouvrait */
 @media (max-width: 1279px) {
   #warTip { top: calc(var(--hudB, 82px) + 72px); }
   body:has(#bossBar:not([hidden])) #warTip { top: calc(var(--hudB, 82px) + 112px); }
-  body:has(#warAlert.show):has(#bossBar:not([hidden])) #warTip { top: calc(var(--hudB, 82px) + 158px); }
-  body.under:has(#warAlert.show) #warTip { top: calc(var(--hudB, 82px) + 124px); }
-  body.under:has(#warAlert.show):has(#bossBar:not([hidden])) #warTip { top: calc(var(--hudB, 82px) + 170px); }
 }
-/* dans les Enfers, la barre du lieu (son bouton Remonter) tient le haut : l'alerte d'incursion sur l'île se pose dessous (elle la
-   recouvrait), la barre de vie du roi plus bas encore */
-body.under #warAlert { top: calc(var(--hudB, 82px) + 66px); }
-body.under #warAlert.show ~ #bossBar { top: calc(var(--hudB, 82px) + 122px); }
 /* la cinématique de la victoire : l'interface s'efface */
 body.cinematic #hud, body.cinematic #dock, body.cinematic #expList, body.cinematic #troopBar, body.cinematic #underBar, body.cinematic #bossBar, body.cinematic #selCard,
 body.cinematic #warAlert, body.cinematic #tuto, body.cinematic #tutoRing, body.cinematic #warTip, body.cinematic #homeBtn { display: none !important; }
