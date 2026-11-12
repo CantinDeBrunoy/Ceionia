@@ -1925,22 +1925,26 @@ export class UI {
     </div>`;
   }
 
-  /** Chemin de fer : chaque ligne, où en est son train et ses voyageurs */
+  /**
+   * Chemin de fer : l'en-tête (le train, une phrase), puis une carte par ligne : son paysage (public/expeditions/rail/,
+   * cinq illustrations qui tournent selon le numéro de la ligne), sa couleur, son trajet, où en est son train, « Suivre le train »
+   */
   private railHtml() {
-    const h = this.host, r = h.railway, age = h.sim.age, head = `<h4>${ic('train', 16, 2)} ${tr('Chemin de fer')}</h4>`;
-    const how = `<p class="hint">${tr('Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares ; un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.')}</p>`;
-    if (age < 3) return `${head}<p class="hint">${tr('Le chemin de fer viendra avec les gares, à l’âge industriel.')}</p>`;
-    if (!h.world.lines.length) return `${head}${how}<p class="hint">${tr('Aucune ligne pour l’instant : bâtissez deux gares (petite gare, ou la gare centrale).')}</p>`;
+    const h = this.host, r = h.railway, age = h.sim.age, R = './expeditions/rail/';
+    const head = (sub: string) => `<div class="rlTop"><img src="${R}train.webp" alt="" decoding="async"><div><h4>${tr('Chemin de fer')}</h4><p>${sub}</p></div></div>`;
+    const how = tr('Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares ; un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.');
+    if (age < 3) return head(tr('Le chemin de fer viendra avec les gares, à l’âge industriel.'));
+    if (!h.world.lines.length) return `${head(how)}<p class="hint rlNone">${tr('Aucune ligne pour l’instant : bâtissez deux gares (petite gare, ou la gare centrale).')}</p>`;
     const lines = h.world.lines.map((l) => {
       const tn = r.trains.get(l.id);
       if (!tn) return '';
       const seated = r.seated(tn);
-      return `<div class="rcard"><div class="rhead">${dot(l.color)}<b>${r.lineLabel(l)}</b></div>
-        <div class="campStats"><span>${tr('Train :')} <b>${trainWhere(r, tn)}</b>${seated ? ` (${tr('{n} à bord', { n: seated })})` : ''}</span><span>${tr('Voyageurs arrivés :')} <b>${tn.carried}</b></span>
-        </div>
-        ${tn.why ? '' : `<button class="trainBtn" data-train="${l.id}">${ic('eye', 16, 2)} ${tr('Suivre le train')}</button>`}</div>`;
+      // les voyageurs arrivés en info-bulle : la carte ne garde que le trajet et la position du train
+      return `<div class="rlCard" title="${tr('Voyageurs arrivés :')} ${tn.carried}"><img class="rlArt" src="${R}ligne-${(Math.abs(l.id) % 5) + 1}.webp" alt="" loading="lazy" decoding="async">
+        <div class="rlBody"><b>${dot(l.color)}${r.lineLabel(l)}</b><span>${tr('Train :')} ${trainWhere(r, tn)}${seated ? ` (${tr('{n} à bord', { n: seated })})` : ''}</span></div>
+        ${tn.why ? '' : `<button class="trainBtn" data-train="${l.id}"><img src="${R}oeil.webp" alt="" decoding="async">${tr('Suivre le train')}</button>`}</div>`;
     }).join('');
-    return `${head}${how}${lines}`;
+    return `${head(tr('Choisissez une ligne et suivez le train jusqu’à sa destination.'))}<div class="rlList">${lines}</div>`;
   }
 
   /** Équipement : réserve, fabrication et file d'attente */
@@ -2368,7 +2372,7 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
     const age = d === 'sandbox' ? await pickAge(root) : 0;
     if (age === null) return;
     // seule une sauvegarde de la carte que la nouvelle partie écraserait demande confirmation
-    if (save && !(await confirmBox(root, DIFF_TEXT.overwrite, DIFF_TEXT.play(d)))) return;
+    if (save && !(await menuConfirm(root, DIFF_TEXT.overwrite, DIFF_TEXT.play(d)))) return;
     host.start(map, 'new', seed, d, age);
   };
   $('.mGo', ov).onclick = play;
@@ -2380,12 +2384,12 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
   f.onchange = () => { if (f.files?.[0]) host.importFile(f.files[0]); };
   // les options : langue, tutoriel, carte, import, crédits, commandes
   $('.mGear', ov).onclick = () => {
-    const { ov: m, close } = modal(root, 'menuOpts', `${ic('gear', 20, 2)} ${tr('Options')}`, `
-      <div class="row"><label>${tr('Langue')}</label>${langPicker(getLang(), 'mLang')}</div>
-      <div class="row mTuto"><label>${tr('Tutoriel')}</label></div>
-      ${MAPS.length > 1 ? `<div class="row"><label for="mMapSel">${tr('Carte')}</label><select id="mMapSel">${MAPS.map((x) => `<option value="${x.id}"${x.id === map ? ' selected' : ''}>${x.name}</option>`).join('')}</select></div>` : ''}
-      <div class="row mBtns"><button class="mImport">${ic('upload', 16)} ${tr('Importer une sauvegarde')}</button><button class="mCredits">${tr('Crédits')}</button></div>
-      <p class="mKeys">${tr('Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher')}<br><span>${tr('Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.')}</span></p>`);
+    const { ov: m, close } = menuPop(root, 'menuOpts', 'options', tr('Options'), `
+      <div class="row"><span class="popKey">${popIc('langue')}<label>${tr('Langue')}</label></span>${langPicker(getLang(), 'mLang')}</div>
+      <div class="row mTuto"><span class="popKey">${popIc('tutoriel')}<label>${tr('Tutoriel')}</label></span></div>
+      ${MAPS.length > 1 ? `<div class="row"><span class="popKey"><label for="mMapSel">${tr('Carte')}</label></span><select id="mMapSel">${MAPS.map((x) => `<option value="${x.id}"${x.id === map ? ' selected' : ''}>${x.name}</option>`).join('')}</select></div>` : ''}
+      <div class="mBtns"><button class="mImport">${popIc('importer')}${tr('Importer une sauvegarde')}</button><button class="mCredits">${popIc('credits')}${tr('Crédits')}</button></div>
+      <p class="mKeys">${ic('info', 20, 1.8)}<span>${tr('Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher')}<br><span>${tr('Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.')}</span></span></p>`);
     // le tutoriel guidé, pour la partie qu'on lance
     $('.mTuto', m).appendChild(menuToggle());
     const sel = m.querySelector<HTMLSelectElement>('#mMapSel');
@@ -2393,7 +2397,13 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
     $('.mImport', m).onclick = () => { close(); f.click(); };
     $('.mCredits', m).onclick = () => { close(); showCredits(root); };
     // la langue change à chaud : l'accueil est redessiné dans la nouvelle langue
-    bindLangPicker(m, () => { close(); ov.remove(); showMenu(root, host, map); });
+    // les options se rouvrent aussitôt dans la nouvelle langue, sans animation : elles restent ouvertes pour le joueur
+    bindLangPicker(m, () => {
+      close(); ov.remove();
+      $<HTMLButtonElement>('.mGear', showMenu(root, host, map)).click();
+      const pop = [...root.querySelectorAll<HTMLElement>('.menuOpts')].pop();
+      if (pop) pop.style.animation = 'none';
+    });
   };
   // Échap ferme la fenêtre ouverte par-dessus l'accueil (le clavier du jeu n'est pas encore branché)
   const onKey = (e: KeyboardEvent) => {
@@ -2407,12 +2417,42 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
   return ov;
 }
 
+/** Les images des fenêtres de l'accueil (public/menu/popup/) */
+const POP = './menu/popup/';
+const popIc = (f: string, cls = 'popIc') => `<img class="${cls}" src="${POP}icone_${f}.webp" alt="" decoding="async">`;
+/** l'icône de chaque âge, dans l'ordre de AGES */
+const AGE_ICON = ['prehistoire', 'antiquite', 'medieval', 'industriel', 'moderne', 'futuriste'];
+
+/**
+ * Fenêtre de l'accueil (options, âge de départ, confirmation) : fond crème bordé d'or, petites montagnes au-dessus,
+ * paysage peint en bas (montagnes lointaines, prairie). `icon` : le losange du titre (un fichier icone_*.webp)
+ */
+function menuPop(root: HTMLElement, cls: string, icon: string, title: string, body: string, onClose?: () => void) {
+  const r = modal(root, `cePop ${cls}`, icon ? `${popIc(icon, 'popBadge')}<span>${title}</span>` : title, body, onClose);
+  $('.modal', r.ov).insertAdjacentHTML('afterbegin', `<img class="popCrest" src="${POP}montagnes_entete.webp" alt="" aria-hidden="true">`
+    + `<div class="popLand" aria-hidden="true"><img class="popFar" src="${POP}montagnes_lointaines.webp" alt=""><img class="popMeadow" src="${POP}prairie_collines.webp" alt=""></div>`);
+  return r;
+}
+
+/** Confirmation sur l'accueil (une sauvegarde va être écrasée) : l'avertissement, le message, « Annuler » et `ok` */
+function menuConfirm(root: HTMLElement, message: string, ok: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let r = false;
+    const { ov, close } = menuPop(root, 'menuConfirm', '', '',
+      `${popIc('avertissement', 'popWarn')}<p class="popMsg"></p><div class="popFoot"><button data-r="0">${tr('Annuler')}</button><button data-r="1">${ic('play', 15, 2)}${ok}</button></div>`, () => resolve(r));
+    ov.style.zIndex = '40';
+    $('.popMsg', ov).textContent = tr(message);
+    ov.querySelectorAll<HTMLButtonElement>('[data-r]').forEach((b) => (b.onclick = () => { r = b.dataset.r === '1'; close(); }));
+  });
+}
+
 /** Bac à sable : l'âge où commence la partie ; null si le joueur renonce */
 function pickAge(root: HTMLElement): Promise<number | null> {
   return new Promise((resolve) => {
     let age: number | null = null;
-    const { ov, close } = modal(root, 'agePick', `${ic('palette', 20, 2)} ${DIFF_TEXT.startAge}`,
-      `<p class="hint">${DIFF_TEXT.points.sandbox[0]}</p><div class="ageBtns">${ageButtons('ageBtn', -1)}</div>`, () => resolve(age));
+    const btns = AGES.map((a, i) => `<button type="button" class="ageBtn" data-a="${i}" aria-pressed="${i === 0}">${AGE_ICON[i] ? popIc(`epoque_${AGE_ICON[i]}`) : ''}${a.name}</button>`).join('');
+    const { ov, close } = menuPop(root, 'agePick', 'age_calendrier', DIFF_TEXT.startAge,
+      `<p class="hint">${DIFF_TEXT.points.sandbox[0]}</p><div class="ageBtns">${btns}</div>`, () => resolve(age));
     ov.querySelectorAll<HTMLButtonElement>('.ageBtn').forEach((b) => (b.onclick = () => { age = +b.dataset.a!; close(); }));
   });
 }

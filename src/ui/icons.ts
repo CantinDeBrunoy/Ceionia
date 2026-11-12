@@ -53,6 +53,7 @@ const P: Record<string, string> = {
   kit: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M12 10v7M8.5 13.5h7"/>',
   shield: '<path d="M12 3l8 3v6c0 4.8-3.4 7.9-8 9-4.6-1.1-8-4.2-8-9V6z"/><path d="M12 7.5v10M8 11.5h8"/>',
   alert: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
   bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
   pen: '<path d="M3 20V9M9 20V9M15 20V9M21 20V9"/><path d="M2 12h20M2 17h20"/><path d="M3 9l0-2M9 9V7M15 9V7M21 9V7"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',

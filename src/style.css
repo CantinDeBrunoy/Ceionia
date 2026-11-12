@@ -507,8 +507,8 @@ body.under #selCard, body.photo #selCard { display: none; }
 .mStatus > b { display: flex; color: #fff; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)); }
 .mSep { flex: none; align-self: stretch; width: 1.5px; margin: 6px 0; background: rgba(255, 255, 255, 0.55); }
 .mStatus > span { min-width: 0; font-size: 19px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
-.mResume { flex: none; gap: 9px; min-height: 44px; padding: 0 20px 0 16px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, 0.4); background: rgba(40, 46, 52, 0.55); color: #fff; font-size: 16px; font-weight: 700; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12); }
-.mResume:hover { background: rgba(40, 46, 52, 0.75); border-color: rgba(255, 255, 255, 0.65); }
+.mResume { flex: none; gap: 9px; min-height: 44px; padding: 0 20px 0 16px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, 0.55); background: linear-gradient(180deg, #f1ef98, #d9d65e); color: #2c3420; font-size: 16px; font-weight: 700; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.mResume:hover { background: linear-gradient(180deg, #f6f4ad, #e2df6c); border-color: rgba(255, 255, 255, 0.8); }
 .mResume[hidden] { display: none; }
 .mGear { position: fixed; top: 22px; right: 24px; z-index: 2; width: 62px; height: 62px; padding: 0; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.45); background: rgba(44, 60, 110, 0.38); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; box-shadow: 0 6px 18px rgba(20, 30, 70, 0.3); }
 .mGear:hover { background: rgba(44, 60, 110, 0.55); }
@@ -530,30 +530,65 @@ body.under #selCard, body.photo #selCard { display: none; }
 #menu ~ .overlay > .modal button:hover { background: #fff; color: #1b2540; }
 #menu ~ .overlay > .modal button.active, #menu ~ .overlay > .modal button[data-r="1"] { border-color: transparent; background: linear-gradient(180deg, #4a87f3, #2a63dc); color: #fff; box-shadow: 0 6px 16px rgba(42, 99, 220, 0.35); }
 #menu ~ .overlay > .modal button.active:hover, #menu ~ .overlay > .modal button[data-r="1"]:hover { background: linear-gradient(180deg, #3f7ef0, #1f58cf); }
-/* la confirmation (« La sauvegarde de cette carte sera écrasée ») : un avertissement, le texte au centre, deux pilules */
-#menu ~ .overlay > .modal > p:first-child { margin: 30px 4px 20px; font-size: 18px; font-weight: 800; line-height: 1.35; text-align: center; color: #1b2540; }
-#menu ~ .overlay > .modal > p:first-child::before { content: ''; display: block; width: 52px; height: 52px; margin: 0 auto 14px; border-radius: 16px; background: rgba(255, 170, 60, 0.2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b45a00' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3 2 20h20L12 3z'/%3E%3Cpath d='M12 10v4M12 17.5v.01'/%3E%3C/svg%3E") center / 28px no-repeat; }
-#menu ~ .overlay > .modal > p:first-child + .row { justify-content: center; gap: 10px; padding-bottom: 4px; }
-#menu ~ .overlay > .modal > p:first-child + .row > .grow { display: none; }
-#menu ~ .overlay > .modal > p:first-child + .row > button { min-width: 130px; min-height: 48px; }
-/* les options : chaque réglage sur un fond blanc, comme les cartes d'expédition */
-.menuOpts { width: min(560px, 100%); text-align: left; }
-.menuOpts .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; padding: 10px 12px 10px 16px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.62); }
-.menuOpts .row > label { min-width: 84px; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #5a6b8c; }
-.menuOpts .langPick { margin: 0; padding: 0; gap: 6px; border: 0; background: none; }
-#menu ~ .overlay .menuOpts .langPick button.active { border-color: transparent; background: linear-gradient(180deg, #4a87f3, #2a63dc); color: #fff; }
-.menuOpts .tutoToggle { justify-content: flex-start; margin: 0; padding: 0; border: 0; background: none; }
-.menuOpts .tutoToggle button.on .sw { background: #2a63dc; }
-.menuOpts select { font: inherit; font-weight: 700; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.85); color: #1b2540; }
-.menuOpts .mBtns { flex-wrap: wrap; padding: 0; border: 0; background: none; }
+/* les fenêtres peintes de l'accueil (options, âge de départ, confirmation ; menuPop dans ui.ts) : fond crème bordé d'or,
+   petites montagnes posées sur le bord du haut, paysage en bas (montagnes lointaines derrière la prairie), pilules crème
+   et bleues ; les images sont dans public/menu/popup/ */
+#menu ~ .overlay > .cePop { --pInk: #262a48; --pInk2: #4f5470; position: relative; overflow: visible; max-height: none; margin: 56px auto 12px; padding: 22px 26px 0; border-radius: 30px; border: 2px solid #fff7e8; background: linear-gradient(180deg, #fcf6ee 0%, #f8ecdf 55%, #f4e3d2 100%); backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--pInk); box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.75), 0 0 34px rgba(255, 196, 110, 0.5), 0 30px 70px rgba(40, 30, 70, 0.32); }
+.cePop > * { position: relative; z-index: 1; }
+.cePop > .popCrest { position: absolute; z-index: 2; left: 50%; bottom: calc(100% - 6px); width: 210px; transform: translateX(-50%); pointer-events: none; }
+.cePop > .popLand { position: absolute; z-index: 0; inset: auto 0 0; overflow: hidden; border-radius: 0 0 28px 28px; pointer-events: none; }
+.popLand img { display: block; }
+.popFar { position: absolute; left: 6%; bottom: 34%; width: 88%; opacity: 0.85; }
+.popMeadow { position: relative; width: 100%; }
+#menu ~ .overlay > .cePop .mtitle { position: static; margin: 0 0 16px; padding: 0 56px 0 0; background: none; }
+#menu ~ .overlay > .cePop .mtitle h3 { gap: 14px; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 32px; font-weight: 700; letter-spacing: 0; color: var(--pInk); }
+.popBadge { flex: none; width: 58px; height: auto; }
+#menu ~ .overlay > .cePop .x { position: absolute; z-index: 3; top: 14px; right: 14px; width: 46px; min-width: 46px; height: 46px; min-height: 46px; border: 0; border-radius: 50%; background: url('/menu/popup/icone_fermer.webp') center / contain no-repeat; box-shadow: none; }
+#menu ~ .overlay > .cePop .x:hover { background-color: transparent; filter: brightness(1.04); transform: scale(1.06); }
+#menu ~ .overlay > .cePop .x svg { display: none; }
+#menu ~ .overlay > .cePop .hint { margin: -6px 0 0; font-size: 15px; font-weight: 600; color: var(--pInk2); }
+/* les pilules : crème en relief, bleue pour le choix en cours et le bouton principal */
+#menu ~ .overlay > .cePop button { min-height: 48px; padding: 0 20px; gap: 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: var(--pInk); font-size: 16px; font-weight: 700; box-shadow: 0 3px 10px rgba(120, 85, 50, 0.16), inset 0 -2px 0 rgba(160, 120, 80, 0.08); }
+#menu ~ .overlay > .cePop button:hover { background: #fffdf9; color: var(--pInk); box-shadow: 0 5px 14px rgba(120, 85, 50, 0.22); }
+#menu ~ .overlay > .cePop button.active, #menu ~ .overlay > .cePop button[aria-pressed="true"], #menu ~ .overlay > .cePop button[data-r="1"] { border-color: rgba(255, 255, 255, 0.5); background: linear-gradient(180deg, #4d82f2, #2a59d6); color: #fff; box-shadow: 0 6px 16px rgba(42, 89, 214, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+#menu ~ .overlay > .cePop button.active:hover, #menu ~ .overlay > .cePop button[aria-pressed="true"]:hover, #menu ~ .overlay > .cePop button[data-r="1"]:hover { background: linear-gradient(180deg, #4378ee, #224fcb); }
+.popIc { flex: none; width: 34px; height: auto; }
+/* les options : un réglage par bandeau clair */
+#menu ~ .overlay > .cePop.menuOpts { width: min(640px, 100%); max-width: none; padding-bottom: 40px; text-align: left; }
+.menuOpts .row { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 8px 10px 8px 14px; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.5); box-shadow: 0 2px 10px rgba(120, 85, 50, 0.07); }
+.popKey { flex: none; display: flex; align-items: center; gap: 10px; min-width: 150px; }
+.popKey label { font-size: 17px; font-weight: 700; color: var(--pInk); }
+.menuOpts .langPick { margin: 0; padding: 0; gap: 10px; border: 0; background: none; }
+#menu ~ .overlay > .cePop .langPick button { min-width: 136px; justify-content: flex-start; padding-left: 10px; }
+.cePop .langPick b { display: inline-grid; place-items: center; min-width: 32px; height: 26px; border-radius: 9px; background: rgba(38, 42, 72, 0.07); font-size: 13px; font-weight: 800; }
+.cePop .langPick button.active b { background: rgba(255, 255, 255, 0.22); }
+.menuOpts .tutoToggle { flex: 1; justify-content: stretch; margin: 0; padding: 0; border: 0; background: none; }
+#menu ~ .overlay > .cePop .tutoToggle button, #menu ~ .overlay > .cePop .tutoToggle button.on { flex: 1; justify-content: flex-start; padding: 0 8px 0 18px; border-color: rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: var(--pInk); box-shadow: 0 3px 10px rgba(120, 85, 50, 0.16); }
+.cePop .tutoToggle .sw { margin-left: auto; width: 54px; height: 32px; }
+.cePop .tutoToggle .sw::after { top: 3px; left: 3px; width: 26px; height: 26px; }
+.cePop .tutoToggle button.on .sw { background: linear-gradient(180deg, #4d82f2, #2a59d6); }
+.cePop .tutoToggle button.on .sw::after { transform: translateX(22px); }
+.menuOpts select { font: inherit; font-weight: 700; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: #fffbf5; color: var(--pInk); }
+.menuOpts .mBtns { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 0; }
+#menu ~ .overlay > .cePop .mBtns button { min-height: 54px; padding: 0 24px 0 12px; }
 .mKeys { margin: 12px 0 0; padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.45); font-size: 12px; line-height: 1.6; color: var(--ink2); }
+.cePop .mKeys { display: flex; align-items: center; gap: 10px; margin: 18px 11% 0; padding: 10px 16px; border: 1px solid rgba(255, 255, 255, 0.7); background: rgba(236, 228, 242, 0.82); font-size: 12.5px; line-height: 1.5; font-weight: 600; color: var(--pInk2); }
+.cePop .mKeys svg { flex: none; color: #7a7f99; }
 @media (hover: none) and (pointer: coarse) { .mKeys { display: none; } }
-/* l'âge de départ du bac à sable : une pilule par âge, bleue au survol */
-.agePick { width: min(520px, 100%); text-align: left; }
-.agePick .hint { margin: 4px 0 0; }
-.agePick .ageBtns { margin-top: 14px; gap: 8px; }
-.agePick .ageBtn { min-height: 48px; padding: 0 20px; font-size: 15px; }
-#menu ~ .overlay .agePick .ageBtn:hover { border-color: transparent; background: linear-gradient(180deg, #4a87f3, #2a63dc); color: #fff; }
+/* l'âge de départ du bac à sable : une pilule par âge, avec son icône (blanche sur la pilule bleue) */
+#menu ~ .overlay > .cePop.agePick { width: min(640px, 100%); max-width: none; padding-bottom: 96px; text-align: left; }
+.agePick .hint { text-align: center; }
+.agePick .ageBtns { justify-content: center; margin-top: 18px; gap: 12px; }
+#menu ~ .overlay > .cePop .ageBtn { min-height: 52px; padding: 0 22px 0 16px; }
+.agePick .ageBtn .popIc { width: auto; height: 24px; }
+.agePick .ageBtn[aria-pressed="true"] .popIc { filter: brightness(0) invert(1); }
+/* la confirmation : l'avertissement, le message, deux pilules */
+#menu ~ .overlay > .cePop.menuConfirm { width: min(450px, 100%); max-width: none; padding-bottom: 78px; text-align: center; }
+#menu ~ .overlay > .menuConfirm .mtitle { margin: 0; padding: 0; }
+.popWarn { display: block; width: 68px; height: auto; margin: 6px auto 10px; }
+.popMsg { max-width: 340px; margin: 0 auto 22px; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 23px; font-weight: 700; line-height: 1.3; color: var(--pInk); }
+.popFoot { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; }
+#menu ~ .overlay > .cePop .popFoot button { min-width: 150px; min-height: 52px; }
 @media (max-height: 760px) and (min-width: 721px) {
   .mPeaks { width: 140px; }
   #menu h1 { font-size: 78px; }
@@ -582,6 +617,26 @@ body.under #selCard, body.photo #selCard { display: none; }
   .mGear svg { width: 24px; height: 24px; }
   #menu ~ .overlay > .modal { padding: 0 16px 18px; border-radius: 22px; }
   #menu ~ .overlay > .modal .mtitle { margin: 0 -16px 6px; padding: 16px 12px 10px 16px; }
+  /* les fenêtres peintes : les réglages passent à la ligne, les pilules se partagent la largeur */
+  #menu ~ .overlay > .cePop { margin-top: 48px; padding-top: 18px; border-radius: 24px; }
+  #menu ~ .overlay > .cePop .mtitle { margin: 0 0 12px; padding: 0 50px 0 0; }
+  #menu ~ .overlay > .cePop .mtitle h3 { font-size: 26px; }
+  #menu ~ .overlay > .cePop .x { top: 10px; right: 10px; }
+  .cePop > .popCrest { width: 160px; }
+  .cePop > .popLand { border-radius: 0 0 22px 22px; }
+  .popBadge { width: 48px; }
+  .menuOpts .row { flex-wrap: wrap; padding: 10px; }
+  .popKey { min-width: 0; }
+  .menuOpts .langPick { flex: 1 1 100%; }
+  #menu ~ .overlay > .cePop .langPick button { flex: 1; min-width: 0; }
+  .menuOpts .tutoToggle { flex: 1 1 100%; }
+  #menu ~ .overlay > .cePop .mBtns button { flex: 1 1 100%; }
+  #menu ~ .overlay > .cePop.menuOpts { padding-bottom: 72px; }
+  .cePop .mKeys { margin: 16px 0 0; }
+  #menu ~ .overlay > .cePop.agePick { padding-bottom: 64px; }
+  #menu ~ .overlay > .cePop .ageBtn { flex: 1 1 40%; }
+  #menu ~ .overlay > .cePop.menuConfirm { padding-bottom: 56px; }
+  .popMsg { font-size: 20px; }
 }
 /* choix de la difficulté (nouvelle partie) et son rappel dans les réglages */
 .diffpick { max-width: 760px; text-align: left; }
@@ -832,10 +887,34 @@ body.photo #hud, body.photo #dock, body.photo #expList { display: none; }
 #railEdit .rbad { color: #c0392b; font-weight: 600; }
 #railEdit .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 #railEdit .acts button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; }
-.railBox { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; }
-.railBox h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 14px; }
-.railBox .campStats { margin: 6px 0 8px; }
+/* l'onglet Chemin de fer des expéditions (d'après la maquette) : l'en-tête au train, une carte claire par ligne */
+.railBox { margin: 0; padding: 6px 0 4px; }
+.rlTop { display: flex; align-items: center; gap: 18px; margin: 4px 0 14px; padding: 0 4px; }
+.rlTop > img { flex: none; width: 54px; height: 54px; }
+.rlTop h4 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.01em; text-transform: none; color: #1b2540; }
+.rlTop p { margin: 2px 0 0; font-size: 15px; font-weight: 500; line-height: 1.4; color: #4a5876; }
+.rlNone { margin: 0 4px; }
+.rlList { display: flex; flex-direction: column; gap: 10px; }
+.rlCard { display: flex; align-items: center; gap: 22px; padding: 8px 18px 8px 8px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.55); box-shadow: 0 2px 10px rgba(20, 35, 70, 0.06); }
+.rlArt { flex: none; width: 266px; height: 100px; border-radius: 14px; object-fit: cover; box-shadow: 0 2px 6px rgba(20, 35, 70, 0.15); }
+.rlBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.rlBody > b { display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 800; line-height: 1.2; color: #1b2540; }
+.rlBody .lineDot { width: 20px; height: 20px; box-shadow: none; }
+.rlBody > span { font-size: 15px; font-weight: 500; line-height: 1.35; color: #4a5876; }
 .trainBtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; }
+.expModal .rlCard .trainBtn { flex: none; gap: 12px; min-height: 52px; padding: 0 24px 0 20px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: #fff; color: #1b2540; font-size: 18px; font-weight: 700; box-shadow: 0 3px 10px rgba(20, 35, 70, 0.1); }
+.expModal .rlCard .trainBtn:hover { background: #f4f7fd; }
+.trainBtn > img { width: 26px; height: auto; }
+@media (max-width: 720px) {
+  .rlTop h4 { font-size: 21px; }
+  .rlTop > img { width: 42px; height: 42px; }
+  .rlCard { flex-wrap: wrap; gap: 10px 14px; padding: 8px; }
+  .rlArt { width: 112px; height: 72px; border-radius: 12px; }
+  .rlBody > b { font-size: 16px; gap: 8px; }
+  .rlBody .lineDot { width: 14px; height: 14px; }
+  .rlBody > span { font-size: 13px; }
+  .expModal .rlCard .trainBtn { flex: 1 1 100%; justify-content: center; min-height: 44px; font-size: 15px; }
+}
 body.under #underBar { display: flex; }
 body.under #dock, body.under #fx-tilt-top, body.under #fx-tilt-bottom { display: none; }
 body.under #fx-vignette { background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(8, 6, 12, 0.55) 100%); }
