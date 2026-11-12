@@ -120,6 +120,15 @@ cases `VEG_FOREST` comme celles qu'on plante.
 - `lavaPool` : creux du cratère (± 1,2 autour de la case), col = le plus bas des points hauts de 24 rayons (6 cases), niveau
   `min(fond + 0,3, col - 0,08)`, portée dans chaque direction jusqu'à la paroi ; `vent` si moins de 0,05 de lave. Rendu : une
   étoile plate par volcan (`lavaPoolGeo`), refaite avec les décors uniques.
+- Lave vivante (`lavaMaterial`, `vegetation.ts`) : l'attribut `lava` (centre du lac, part du rayon 0 / 0,5 / 1) sert au
+  shader ; plaques de croûte en cellules de Voronoï (9 par pixel) qui tournent lentement autour du centre et se déforment,
+  chacune rougeoyant à son rythme, fissures orange vif, cœur clair où la lave remonte, croûte dense contre la paroi, pulsation
+  lente de tout le lac. Temps : `uTime` de la végétation (`animate`). Couleurs linéaires : une croûte « sombre » doit valoir
+  moins de 0,15, l'écran éclaircit beaucoup les sombres.
+- Lueur sur les parois (`terrainView.ts`, `lavaU`) : jusqu'à `MAX_LAVA_GLOW` (4) lacs `(x, niveau, z, portée)`, refaits à
+  chaque `update` ; lumière émise orange qui monte à 2,6 au-dessus de la lave et vacille, plus forte la nuit (`setNight`). La
+  fumée prend aussi la lueur à sa base (`smokeMaterial`).
+- Le cône reste brun en toute saison, sans neige : voir [saisons.md](saisons.md).
 - `Eruptions.start` refuse une case qui n'est plus un volcan. `update` suit `world.visVersion` : à chaque changement du
   relief, `followRelief` redrape les coulées (hauteur `lift` au-dessus du sol par sommet) et les bombes posées, refait le
   repère du volcan ; un volcan disparu (`gone`) cesse son éruption et ses coulées s'effacent en une seconde.

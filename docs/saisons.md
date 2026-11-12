@@ -36,6 +36,11 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
   - **Facettes** : sous la neige, la normale tend vers celle de la facette (`FACE_MIX` 0,3 → `SNOW_FACE_MIX` 0,8).
   - **Nuances** : facette au soleil crème, à contre-jour bleutée (`SNOW_SUN`, direction de la lumière principale, tenue par `env.ts`) ; par grandes zones, un blanc un peu plus chaud ou plus froid. `addSnow` (toits, rochers, sapins) a la même nuance.
   - **Épaisseur**, affichage seul (le relief du jeu, `vis` et `hAt`, ne bouge pas) : `lift` = couverture × (`SNOW_DEPTH` 0,025 + `SNOW_DRIFT` 0,05 × bruit `drift` des bourrelets + `SNOW_BANK` 0,06 sur le rang de sous-sommets qui entoure un bâtiment). Nulle sur et au bord des bâtiments, des routes, des champs, des lacs, des torrents (`wetCell`, branché sur `Streams.covers` dans `main.ts`), à moins de 2 cases de l'eau, dans les ravins et sous 0,15 d'altitude.
+  - **Volcan** : jamais de neige sur le cône, même l'hiver : il garde son brun (choix de l'auteur, une neige par facettes a
+    été essayée puis retirée). La couverture de saison s'efface au pied (`cover × (1 - smoothstep(0.1, 0.4, part du cône))`),
+    et pas de neiges éternelles, même au-dessus de `SNOW_LINE` (ni teinte, ni couverture).
+  - Bruits de la neige projetés d'en haut (congères, traînées) : effacés sur les facettes raides (`snFlat`), où ils
+    s'étiraient en longues stries.
   - Positions et normales du sol se refont donc aussi à chaque bande de reteinte (`update(…, colorsOnly)`), pas seulement les couleurs.
 - Eau de mer et rivières (`TerrainView.seasonWater`, appelée par `animateWater`) : `uShallow`/`uDeep` pointent sur la fiche ; `uFlowT` cumule `dt × water.flow` (la vitesse change sans faire sauter les stries) ; débris qui dérivent (`uFloat`, `uFloatK`) ; glace (`uIce`) selon la profondeur, le courant et la carte de neige (`SNOW_U`).
 - Lacs et torrents (`Streams.update(dt, saison, …)`) : voir [eau-rivieres.md](eau-rivieres.md).
@@ -55,6 +60,9 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
 - Un nombre qui pilote une animation (courant) se cumule côté processeur ; ne pas multiplier un temps absolu par un réglage de saison dans un shader (les stries sauteraient pendant la transition).
 - Un réglage qui change la forme ou le nombre des décors doit entrer dans la signature de `applySeason`, sinon il ne s'applique qu'à la prochaine reconstruction.
 - L'épaisseur de la neige enfonce ce qui est posé à `hAt` (0,075 au plus, 0,135 sur le rang autour des bâtiments) (arbres, cailloux, personnages) : voulu. Ce qui est posé à fleur de sol et doit rester visible (clôtures, pavés, voies) a besoin d'une exclusion dans `openW` ou d'un `yardW` non nul ; les clôtures de 0,12 au bord des bâtiments disparaissaient avec une congère contre les murs.
+- La neige des sommets (`cover`) et leur teinte doivent rester à 0 sur le cône : sinon le shader retire la neige du mélange
+  (`under`) sur un sol brun et laisse des bavures rouge-noir au bord, et la couverture interpolée sur des pentes raides
+  dessine des stries. Les neiges éternelles y peignaient tout le cône en blanc, cratère compris, même l'été.
 - Les shaders ajoutés se posent à la construction des matériaux, jamais à la volée (voir [chargement-performances.md](chargement-performances.md)) ; `addPalette` et `addCover` enchaînent l'`onBeforeCompile` précédent, `addWind` l'écrase : `addWind` d'abord.
 
 ## Pour modifier

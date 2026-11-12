@@ -460,7 +460,7 @@ export class VegView {
     // lave : matériau non éclairé, elle brille aussi la nuit
     // lave très vive : elle rayonne la nuit (halo)
     // (un maillage par carte : chaque lac épouse la cuvette de son cratère)
-    this.lava = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2) }));
+    this.lava = new THREE.Mesh(new THREE.BufferGeometry(), lavaMaterial(this.uTime));
     this.lava.frustumCulled = false;
     this.lava.visible = false;
     this.group.add(this.lava);
@@ -1739,7 +1739,12 @@ function lavaPoolGeo(p: LavaPool): THREE.BufferGeometry {
     const t = ((a % n) / n) * Math.PI * 2, r = p.reach[a % n] * f;
     return [p.x + Math.cos(t) * r, y, p.z + Math.sin(t) * r];
   };
-  const put = (v: [number, number, number], c: THREE.Color) => { pos.push(...v); col.push(c.r, c.g, c.b); };
+  // (centre du lac et part du rayon, pour l'animation de la croûte)
+  const lav: number[] = [];
+  const put = (v: [number, number, number], c: THREE.Color) => {
+    pos.push(...v); col.push(c.r, c.g, c.b);
+    lav.push(p.x, p.z, c === LAVA_CORE ? 0 : c === LAVA_MID ? 0.5 : 1);
+  };
   const O: [number, number, number] = [p.x, y, p.z];
   for (let a = 0; a < n; a++) {
     // (sens des sommets : la face regarde le ciel)
@@ -1751,7 +1756,58 @@ function lavaPoolGeo(p: LavaPool): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('lava', new THREE.Float32BufferAttribute(lav, 3));
   return g;
+}
+
+/**
+ * Lave du lac de cratère, vivante : plaques de croûte polygonales (cellules de Voronoï) qui tournent lentement autour du
+ * centre et se déforment, chacune rougeoyant à son rythme ; fissures vives entre elles ; cœur clair où la lave remonte,
+ * croûte plus dense contre la paroi ; tout le lac respire. Non éclairée : elle brille la nuit et nourrit le halo
+ * (`glow.ts`). Peu de calcul : 9 cellules par pixel, sur les quelques pixels du lac
+ */
+function lavaMaterial(uTime: { value: number }) {
+  const m = new THREE.MeshBasicMaterial({ vertexColors: true });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = 'attribute vec3 lava;\nvarying vec3 vLava;\nvarying vec2 vLavaP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  vLava = lava; vLavaP = position.xz;`);
+    sh.fragmentShader = `uniform float uTime;
+varying vec3 vLava;
+varying vec2 vLavaP;
+vec2 lvH(vec2 p) { p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
+` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  vec2 q = vLavaP - vLava.xy;
+  float rel = vLava.z, t = uTime;
+  // le lac tourne lentement, ses plaques glissent un peu les unes contre les autres
+  float a = t * 0.045, ca = cos(a), sa = sin(a);
+  vec2 x = vec2(ca * q.x - sa * q.y, sa * q.x + ca * q.y) * 1.8 + 7.0;
+  vec2 n = floor(x), f = fract(x), id = n;
+  float d1 = 8.0, d2 = 8.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec2 g = vec2(float(i), float(j)), o = lvH(n + g);
+    o = 0.5 + 0.38 * sin(t * 0.35 + 6.2831 * o);
+    vec2 d = g + o - f;
+    float dd = dot(d, d);
+    if (dd < d1) { d2 = d1; d1 = dd; id = n + g; } else if (dd < d2) d2 = dd;
+  }
+  float edge = sqrt(d2) - sqrt(d1), ph = lvH(id + 3.1).x;
+  // chaque plaque rougeoie à son rythme ; tout le lac respire
+  float heat = 0.5 + 0.5 * sin(t * (0.6 + ph * 0.9) + ph * 6.2831);
+  float breathe = 0.9 + 0.1 * sin(t * 0.7) + 0.05 * sin(t * 2.3 + q.x * 1.7);
+  // la croûte se forme en s'éloignant du centre, où la lave remonte
+  float crustK = smoothstep(0.0, 0.4, rel + (ph - 0.5) * 0.6) * (0.9 + 0.1 * heat);
+  vec3 molten = mix(vec3(2.0, 0.62, 0.1), vec3(2.4, 1.45, 0.4), smoothstep(0.7, 0.0, rel) * (0.6 + 0.4 * heat));
+  // (couleurs linéaires : l'écran éclaircit beaucoup les sombres)
+  vec3 crust = mix(vec3(0.008, 0.004, 0.004), vec3(0.14, 0.02, 0.006), heat * heat * (1.0 - rel * 0.4));
+  vec3 c = mix(molten, crust, crustK);
+  // fissures entre les plaques : un liseré orange vif, plus clair au milieu
+  float seam = 1.0 - smoothstep(0.02, 0.09, edge);
+  c = mix(c, mix(vec3(2.0, 0.6, 0.1), vec3(2.4, 1.5, 0.5), 1.0 - smoothstep(0.0, 0.04, edge)), seam * crustK);
+  diffuseColor.rgb = c * breathe;`);
+  };
+  m.customProgramCacheKey = () => 'lavapool';
+  return m;
 }
 
 /** Fumée de volcan : chaque bouffée monte, grossit et s'efface en boucle (phase par instance) */
@@ -1764,8 +1820,10 @@ function smokeMaterial(uTime: { value: number }) {
   transformed *= 0.5 + vLife * 2.4;
   transformed.y += vLife * 2.6;
   transformed.x += vLife * vLife * 0.9;`);
-    sh.fragmentShader = 'varying float vLife;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-  diffuseColor.a *= 0.65 * (1.0 - vLife) * smoothstep(0.0, 0.08, vLife);`);
+    sh.fragmentShader = 'uniform float uTime;\nvarying float vLife;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  diffuseColor.a *= 0.65 * (1.0 - vLife) * smoothstep(0.0, 0.08, vLife);`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  // le bas de la colonne prend la lueur du lac de lave, qui vacille
+  totalEmissiveRadiance += vec3(0.9, 0.3, 0.06) * pow(1.0 - vLife, 3.0) * (0.45 + 0.15 * sin(uTime * 2.7 + vLife * 9.0));`);
   };
   m.customProgramCacheKey = () => 'smoke';
   return m;
