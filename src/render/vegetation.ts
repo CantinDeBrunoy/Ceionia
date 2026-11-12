@@ -1048,7 +1048,7 @@ export class VegView {
     }
     // coraux : mers chaudes et tempérées, pas dans les mares ni les eaux froides
     const b = w.biome[w.ci(cx, cz)];
-    if (b !== BIOME_MARSH && b !== BIOME_TAIGA && depth > 0.15 && depth < 1.1 && hash2(cx, cz, 640) < (b === BIOME_TROPICAL ? 0.4 : 0.22)) {
+    if (b !== BIOME_MARSH && b !== BIOME_TAIGA && depth > 0.15 && depth < 1.1 && hash2(cx, cz, 640) < (b === BIOME_TROPICAL ? 0.55 : 0.28)) {
       const n = 1 + Math.floor(hash2(cx, cz, 641) * 2);
       for (let i = 0; i < n; i++) {
         const px = cx + 0.2 + hash2(cx, cz, 642 + i) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 646 + i) * 0.6;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
 import { World, N, setMapSize, VEG_CAVE, VEG_FOREST, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
-import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA } from '../src/render/fauna';
+import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA, COAST_REACH, nearbyAllowed } from '../src/render/fauna';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { hash2 } from '../src/core/rng';
@@ -134,6 +134,21 @@ describe('faune : la mer', () => {
     const kinds = new Set((f as any).critters.map((c: any) => c.kind));
     expect(kinds.has('dolphin')).toBe(true);
     expect(kinds.has('fish')).toBe(true);
+    expect(kinds.has('shark')).toBe(true);
+    // la mer devant le village (ici le milieu de la carte, sans feu de camp) : dauphins, requin et bancs à moins de COAST_REACH
+    const coast = (f as any).critters.filter((c: any) => c.key.startsWith('coast'));
+    for (const k of ['coastD0', 'coastS0', 'coastF0']) expect(coast.some((c: any) => c.key === k), k).toBe(true);
+    for (const c of coast) expect(Math.hypot(c.hx - N / 2, c.hz - N / 2)).toBeLessThan(COAST_REACH + 16);
+    // l'hiver : un groupe de dauphins sur deux reste (clés en 0), les autres partent
+    for (let i = 0; i < 20; i++) f.update(0.05, i * 0.05, 12, 3, 0, 0);
+    const dol = (f as any).critters.filter((c: any) => c.kind === 'dolphin');
+    expect(dol.filter((c: any) => !c.key.endsWith('0')).every((c: any) => c.hidden)).toBe(true);
+    expect(dol.some((c: any) => c.key.endsWith('0') && !c.hidden)).toBe(true);
     setMapSize(96);
+  });
+
+  it('les bêtes de la mer viennent près du village à tout âge', () => {
+    for (const age of [0, 2, 3, 5]) for (const k of ['fish', 'dolphin', 'shark'] as const) expect(nearbyAllowed(k, age)).toBe(true);
+    expect(nearbyAllowed('deer', 3)).toBe(false);
   });
 });
