@@ -29,7 +29,7 @@ Le temps du jeu (`GameTime`) fait tourner les heures et les saisons. `Environmen
 ### Saisons
 - Fiche de chaque saison (`seasonConfig.ts`, détail dans [saisons.md](saisons.md)) : sol, arbres, végétation basse, eau, lumière, effets.
 - Neige au sol : `snow` vaut 0, 0, 0,05 et 1 selon la saison ; elle ne tient que la première moitié de l'hiver, fond de `seasonT` 3,5 à 3,9 (il en reste 15 %), et n'est qu'à 15 % au tout début du printemps (`computeSeason`).
-- Neige posée sur les toits, branches, rochers : `SNOW.value` × part retenue par le biome (`SNOWY = [1, 1, 0.15, 0.2, 1]`, `setSnowMap`) ; 0 sous terre.
+- Neige posée sur les toits, branches, rochers : `SNOW.value` × part retenue par le biome (`SNOWY = [1, 1, 0.15, 0.2, 1]`, `setSnowMap`) ; 0 sous terre ; facettes au soleil crème, à contre-jour bleutées (`SNOW_SUN`). Neige du sol : voir [saisons.md](saisons.md).
 - Les routes ne se refont qu'aux seuils de neige (`roadSnowStep`), sinon le shader suit seul ([routes.md](routes.md)).
 
 ### Météo

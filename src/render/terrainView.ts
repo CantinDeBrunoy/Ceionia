@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { World, N, SEA, VR, VS, VEG_CAVE, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
+import { World, N, SEA, VR, VS, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
 import { groundDetailTexture, waterNormalTexture } from './textures';
 import { Blight, blightAt, purityAt } from '../world/blight';
 import { SeasonState, seasonOf } from './season';
 import { SNOW_COLORS, ICE_COLOR } from './seasonConfig';
-import { SNOW_U } from './snow';
+import { SNOW_U, SNOW_SUN } from './snow';
 
 /** Teintes de saison du sol et de l'eau : l'état de saison complet (seasonConfig.ts) */
 export type GroundPalette = SeasonState;
@@ -68,6 +68,14 @@ const STRATA_T = [0, 0.05, 0.27, 0.5, 0.75, 1];
 const SKIRT_BOTTOM = -3.5;
 /** Part de la normale de face dans l'ombrage : garde un léger facettage low-poly sur un relief lissé */
 const FACE_MIX = 0.3;
+/** Sous la neige, les facettes se marquent davantage : part de la normale de la facette quand la neige couvre tout */
+const SNOW_FACE_MIX = 0.8;
+/**
+ * Épaisseur de la neige au sol (affichage seul, le relief du jeu ne bouge pas) : couche de fond, bourrelets en plus, congère
+ * à une demi-case des bâtiments. Nulle sur les routes, les champs, près de l'eau et dans l'emprise des bâtiments : ce qui y
+ * est posé à fleur de sol (clôtures de 0,12, bancs, pavés) resterait dessous
+ */
+const SNOW_DEPTH = 0.025, SNOW_DRIFT = 0.05, SNOW_BANK = 0.06;
 /** Sous-cases par côté (selon la taille de la carte) */
 const subCells = () => N * VR;
 
@@ -155,6 +163,12 @@ export class TerrainView {
   private patch = new Float32Array(VS * VS);
   /** Par sous-sommet : bruit fin qui fait onduler les bords des champs et des jardins */
   private wobble = new Float32Array(VS * VS);
+  /** Par sous-sommet : bruit des bourrelets de neige ; part des cases voisines où la neige peut s'épaissir ; épaisseur affichée */
+  private drift = new Float32Array(VS * VS);
+  private openW = new Float32Array(VS * VS);
+  private lift = new Float32Array(VS * VS);
+  /** Cases d'un torrent ou d'une rivière dessinés à part (`Streams`) : la neige ne s'y épaissit pas */
+  wetCell: ((k: number) => boolean) | null = null;
   /** Par case : part de chaque biome alentour (transitions douces), et couleur de sol de chaque biome */
   private biomeW = new Float32Array(N * N * NB);
   private biomeTmp = new Float32Array(N * N * NB);
@@ -190,11 +204,12 @@ export class TerrainView {
     const topMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
     topMat.onBeforeCompile = (sh) => {
       sh.uniforms.uDetail = { value: detail };
-      Object.assign(sh.uniforms, this.caveU, this.blightU);
+      Object.assign(sh.uniforms, this.caveU, this.blightU, { uSnowSun: SNOW_SUN });
       sh.vertexShader = 'attribute vec4 surf;\nvarying vec4 vSurf;\nvarying vec3 vPos;\nvarying vec3 vNrm;\n'
         + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSurf = surf;\n  vPos = position;\n  vNrm = normal;');
-      const T = CAVE_TUNNEL, f = (v: number) => v.toFixed(3);
+      const T = CAVE_TUNNEL, f = (v: number) => v.toFixed(3), sb = SNOW_BASE;
       sh.fragmentShader = `uniform sampler2D uDetail;
+uniform vec3 uSnowSun;
 uniform vec4 uCaves[${MAX_CAVES}];
 uniform int uCaveN;
 varying vec4 vSurf;
@@ -236,17 +251,42 @@ ${BLIGHT_GLSL}
         .replace('#include <color_fragment>', `#include <color_fragment>
   vec3 bw = pow(abs(normalize(vNrm)), vec3(4.0));
   bw /= bw.x + bw.y + bw.z;
+  // bord de la neige net et dentelé, tracé au pixel : la couverture des sommets (fondue sur une demi-case) sert de seuil, un
+  // bruit le découpe en plaques où le sol perce, avec un liseré de terre mouillée. Le sol sous la neige se retrouve en ôtant
+  // la neige du mélange des sommets (assez juste tant que la neige y est mince ; au-delà, le bord est déjà tout blanc)
+  float sn = 0.0;
+  if (vSurf.w > 0.01) {
+    float snRaw = vSurf.w;
+    float jag = snN(vPos.xz * 2.3 + 1.7) * 0.6 + snN(vPos.xz * 5.3 + 4.2) * 0.4 - 0.5;
+    float snT = snRaw + jag * 1.7 * snRaw * (1.0 - snRaw);
+    sn = smoothstep(0.47, 0.52, snT);
+    vec3 snBase = vec3(${f(sb.r)}, ${f(sb.g)}, ${f(sb.b)});
+    float c0 = min(snRaw, 0.85);
+    vec3 under = clamp((diffuseColor.rgb - snBase * c0) / (1.0 - c0), 0.0, 1.0);
+    // marche de la neige : son ombre sur le sol au pied du bord, une lèvre claire en haut
+    under *= 1.0 - 0.3 * smoothstep(0.38, 0.47, snT) * (1.0 - sn);
+    // au cœur de la neige, la teinte des sommets (creux bleutés, bosses claires) reprend la main
+    vec3 snCol = mix(snBase, diffuseColor.rgb, smoothstep(0.8, 1.0, snRaw));
+    snCol *= 1.0 + 0.07 * (1.0 - smoothstep(0.52, 0.6, snT));
+    diffuseColor.rgb = mix(under, snCol, sn);
+  }
   vec3 d1 = tri(vPos, bw, 0.6) - 0.5;
   vec3 d2 = tri(vPos + 0.31, bw, 0.11) - 0.5;
   // sous la neige, les motifs du sol et les strates s'effacent : une neige propre, sans traînées grises
-  float clean = 1.0 - vSurf.w * 0.9;
+  float clean = 1.0 - sn * 0.9;
   diffuseColor.rgb *= 1.0 + dot(vSurf.xyz, d1 * vec3(0.55, 0.4, 0.6) + d2 * vec3(0.3, 0.2, 0.35)) * clean;
   // strates horizontales sur la craie et la roche
   float strata = smoothstep(0.86, 1.0, sin(vPos.y * 9.0 + sin(vPos.x * 1.1 + vPos.z * 0.7) * 0.8));
   diffuseColor.rgb *= 1.0 - strata * 0.16 * vSurf.z * clean;
-  // neige : congères (grandes ondulations), rides du vent aux creux bleutés, grain et paillettes qui s'éteignent au loin
-  float sn = vSurf.w;
+  // neige : congères (grandes ondulations), rides du vent aux creux bleutés, grain et paillettes qui s'éteignent au loin ;
+  // chaque facette prend sa nuance selon le soleil (crème au soleil, bleutée à contre-jour) ; par grandes zones, un blanc un
+  // peu plus chaud ou plus froid
   if (sn > 0.01) {
+    vec3 snF = normalize(cross(dFdx(vPos), dFdy(vPos)));
+    float toSun = dot(snF, uSnowSun);
+    vec3 snTint = mix(vec3(0.8, 0.87, 1.04), vec3(1.04, 1.0, 0.93), smoothstep(-0.1, 0.75, toSun));
+    snTint *= 1.0 + vec3(0.03, 0.005, -0.03) * (snN(vPos.xz * 0.05 + 9.0) * 2.0 - 1.0);
+    diffuseColor.rgb *= mix(vec3(1.0), snTint, sn);
     float drift = snN(vPos.xz * 0.45 + 3.1) * 0.6 + snN(vPos.xz * 1.3 + 7.7) * 0.4 - 0.5;
     // traînées allongées dans le sens du vent
     float streak = snN(vec2(vPos.x * 0.3 + vPos.z * 0.12, vPos.z * 2.2 - vPos.x * 0.5)) - 0.5;
@@ -387,6 +427,7 @@ ${BLIGHT_GLSL}
     const sx = new Simplex(77);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.patch[z * VS + x] = clamp(sx.fbm((x / VR) * 0.085, (z / VR) * 0.085, 3) * 1.6, -1, 1);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.wobble[z * VS + x] = sx.noise2((x / VR) * 0.8 + 50, (z / VR) * 0.8);
+    for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.drift[z * VS + x] = sx.noise2((x / VR) * 0.55 + 20, (z / VR) * 0.55 + 80) * 0.65 + sx.noise2((x / VR) * 1.4 - 30, (z / VR) * 1.4) * 0.35;
     this.update(seasonOf(0));
   }
 
@@ -572,7 +613,7 @@ ${BLIGHT_GLSL}
       const cz1 = Math.min(N - 1, Math.floor(z / VR)), cz0 = z % VR === 0 ? cz1 - (z === VS - 1 ? 0 : 1) : cz1;
       for (let x = x0; x <= x1; x++) {
         const cx1 = Math.min(N - 1, Math.floor(x / VR)), cx0 = x % VR === 0 ? cx1 - (x === VS - 1 ? 0 : 1) : cx1;
-        let n = 0, y = 0, lava = 0, oil = 0, quay = 0;
+        let n = 0, y = 0, lava = 0, oil = 0, quay = 0, open = 0;
         const f = this.zone;
         f.fill(0);
         for (let cz = cz0; cz <= cz1; cz++)
@@ -585,6 +626,7 @@ ${BLIGHT_GLSL}
             if (t >= 1 && t <= 4) f[t - 1]++;
             if (w.occ[k]) y++;
             if (quayNear.has(k)) quay++;
+            else if (!w.road[k] && w.veg[k] !== VEG_FIELD && !w.lake[k] && w.waterDist[k] >= 2 && !this.wetCell?.(k)) open++;
             lava += w.basalt[k];
             oil += w.oil[k];
           }
@@ -596,6 +638,7 @@ ${BLIGHT_GLSL}
         this.lavaW[i] = n ? lava / n : 0;
         this.oilW[i] = n ? oil / n : 0;
         this.quayW[i] = n ? quay / n : 0;
+        this.openW[i] = n && w.ravine[i] <= 0.02 ? open / n : 0;
       }
     }
     const bc = this.biomeCol;
@@ -733,19 +776,28 @@ ${BLIGHT_GLSL}
       }
       vcol[i * 3] = tmp.r; vcol[i * 3 + 1] = tmp.g; vcol[i * 3 + 2] = tmp.b;
       vsurf[i * 4] = grass; vsurf[i * 4 + 1] = sand; vsurf[i * 4 + 2] = rock; vsurf[i * 4 + 3] = cover;
+      // épaisseur de la neige : une couche, des bourrelets ; rien sur le bord ni dans l'emprise d'un bâtiment, une congère sur
+      // le rang de sous-sommets qui l'entoure
+      const open = yw[i] > 0 ? 0 : smoothstep(0.7, 1, this.openW[i]) * smoothstep(0.15, 0.5, h);
+      let bank = 0;
+      if (open > 0) {
+        const xi = i % VS, zi = (i / VS) | 0;
+        if (xi > 0 && xi < VS - 1 && zi > 0 && zi < VS - 1) bank = Math.max(yw[i - 1], yw[i + 1], yw[i - VS], yw[i + VS]) > 0 ? 1 : 0;
+      }
+      this.lift[i] = cover > 0.05 && open > 0
+        ? cover * open * (SNOW_DEPTH + SNOW_DRIFT * smoothstep(-0.25, 0.75, this.drift[i]) + SNOW_BANK * bank) : 0;
     }
 
     // triangles (même découpage que World.hAt)
-    const pos = this.pos, col = this.col, nor = this.nor, surf = this.surf;
+    const pos = this.pos, col = this.col, nor = this.nor, surf = this.surf, lift = this.lift;
     let o = 0;
+    // (la neige change l'épaisseur et les normales : positions et normales se refont aussi aux changements de saison)
     const emit = (vi: number, x: number, y: number, z: number, nx: number, ny: number, nz: number) => {
-      const k = vi * 3;
-      if (!colorsOnly) {
-        pos[o] = x; pos[o + 1] = y; pos[o + 2] = z;
-        const mx = nx * FACE_MIX + vnor[k] * (1 - FACE_MIX), my = ny * FACE_MIX + vnor[k + 1] * (1 - FACE_MIX), mz = nz * FACE_MIX + vnor[k + 2] * (1 - FACE_MIX);
-        const ml = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
-        nor[o] = mx / ml; nor[o + 1] = my / ml; nor[o + 2] = mz / ml;
-      }
+      const k = vi * 3, fm = FACE_MIX + (SNOW_FACE_MIX - FACE_MIX) * vsurf[vi * 4 + 3];
+      pos[o] = x; pos[o + 1] = y; pos[o + 2] = z;
+      const mx = nx * fm + vnor[k] * (1 - fm), my = ny * fm + vnor[k + 1] * (1 - fm), mz = nz * fm + vnor[k + 2] * (1 - fm);
+      const ml = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
+      nor[o] = mx / ml; nor[o + 1] = my / ml; nor[o + 2] = mz / ml;
       col[o] = vcol[k]; col[o + 1] = vcol[k + 1]; col[o + 2] = vcol[k + 2];
       const so = (o / 3) * 4, sk = vi * 4;
       surf[so] = vsurf[sk]; surf[so + 1] = vsurf[sk + 1]; surf[so + 2] = vsurf[sk + 2]; surf[so + 3] = vsurf[sk + 3];
@@ -759,9 +811,9 @@ ${BLIGHT_GLSL}
         const i00 = cz * VS + cx, i10 = i00 + 1, i01 = i00 + VS, i11 = i01 + 1;
         for (let t = 0; t < 2; t++) {
           const ia = i00, ib = t === 0 ? i11 : i01, ic = t === 0 ? i10 : i11;
-          const ax = (ia % VS) / VR, az = Math.floor(ia / VS) / VR, ay = vis[ia];
-          const bx = (ib % VS) / VR, bz = Math.floor(ib / VS) / VR, by = vis[ib];
-          const qx = (ic % VS) / VR, qz = Math.floor(ic / VS) / VR, qy = vis[ic];
+          const ax = (ia % VS) / VR, az = Math.floor(ia / VS) / VR, ay = vis[ia] + lift[ia];
+          const bx = (ib % VS) / VR, bz = Math.floor(ib / VS) / VR, by = vis[ib] + lift[ib];
+          const qx = (ic % VS) / VR, qz = Math.floor(ic / VS) / VR, qy = vis[ic] + lift[ic];
           const ux = bx - ax, uy = by - ay, uz = bz - az, wx = qx - ax, wy = qy - ay, wz = qz - az;
           let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
           const l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
@@ -773,7 +825,7 @@ ${BLIGHT_GLSL}
       }
     // envoi au processeur graphique : seulement les rangées touchées
     const ga = this.top.geometry.attributes;
-    const sent = colorsOnly ? [ga.color, ga.surf] : [ga.position, ga.color, ga.normal, ga.surf];
+    const sent = [ga.position, ga.color, ga.normal, ga.surf];
     for (const a of sent) {
       const attr = a as THREE.BufferAttribute;
       const per = 6 * attr.itemSize;

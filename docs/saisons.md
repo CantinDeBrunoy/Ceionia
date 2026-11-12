@@ -30,6 +30,13 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
 
 ### Le reste
 - Sol (`TerrainView.update`) : plaques `terrain.patch` (bruit `patch`), taches `terrain.soil` (bruit `wobble`, sur le plat), litière `terrain.litter` sous les forêts, haut des berges `terrain.bank` entre le sable et l'herbe ; neige aux couleurs `SNOW_COLORS`.
+- Neige au sol, en low-poly à facettes nettes (`terrainView.ts`) :
+  - **Couverture** par sous-sommet (`cover`, 4e valeur de `surf`) : plaques, moins sous les arbres et sur les pentes.
+  - **Bord** tracé au pixel dans le shader : la couverture des sommets sert de seuil, un bruit (`snN`) le découpe en plaques dentelées où le sol perce (`smoothstep(0.47, 0.52)`), avec l'ombre de la « marche » sur le sol et une lèvre claire en haut. Le sol sous la neige se retrouve en ôtant `SNOW_COLORS.base` du mélange des sommets (juste tant que la neige y est mince ; au-delà le bord est tout blanc).
+  - **Facettes** : sous la neige, la normale tend vers celle de la facette (`FACE_MIX` 0,3 → `SNOW_FACE_MIX` 0,8).
+  - **Nuances** : facette au soleil crème, à contre-jour bleutée (`SNOW_SUN`, direction de la lumière principale, tenue par `env.ts`) ; par grandes zones, un blanc un peu plus chaud ou plus froid. `addSnow` (toits, rochers, sapins) a la même nuance.
+  - **Épaisseur**, affichage seul (le relief du jeu, `vis` et `hAt`, ne bouge pas) : `lift` = couverture × (`SNOW_DEPTH` 0,025 + `SNOW_DRIFT` 0,05 × bruit `drift` des bourrelets + `SNOW_BANK` 0,06 sur le rang de sous-sommets qui entoure un bâtiment). Nulle sur et au bord des bâtiments, des routes, des champs, des lacs, des torrents (`wetCell`, branché sur `Streams.covers` dans `main.ts`), à moins de 2 cases de l'eau, dans les ravins et sous 0,15 d'altitude.
+  - Positions et normales du sol se refont donc aussi à chaque bande de reteinte (`update(…, colorsOnly)`), pas seulement les couleurs.
 - Eau de mer et rivières (`TerrainView.seasonWater`, appelée par `animateWater`) : `uShallow`/`uDeep` pointent sur la fiche ; `uFlowT` cumule `dt × water.flow` (la vitesse change sans faire sauter les stries) ; débris qui dérivent (`uFloat`, `uFloatK`) ; glace (`uIce`) selon la profondeur, le courant et la carte de neige (`SNOW_U`).
 - Lacs et torrents (`Streams.update(dt, saison, …)`) : voir [eau-rivieres.md](eau-rivieres.md).
 - Rochers : `addCover` (mousse ou feuilles sur le dessus, plus épaisse près de l'eau, uniforms `COVER`), posé après `addSnow` pour passer dessous.
@@ -47,6 +54,7 @@ Chaque saison a une **fiche** dans `seasonConfig.ts` : sol, arbres, végétation
 - Une palette a toujours 4 teintes et des parts qui font 1 (test).
 - Un nombre qui pilote une animation (courant) se cumule côté processeur ; ne pas multiplier un temps absolu par un réglage de saison dans un shader (les stries sauteraient pendant la transition).
 - Un réglage qui change la forme ou le nombre des décors doit entrer dans la signature de `applySeason`, sinon il ne s'applique qu'à la prochaine reconstruction.
+- L'épaisseur de la neige enfonce ce qui est posé à `hAt` (0,075 au plus, 0,135 sur le rang autour des bâtiments) (arbres, cailloux, personnages) : voulu. Ce qui est posé à fleur de sol et doit rester visible (clôtures, pavés, voies) a besoin d'une exclusion dans `openW` ou d'un `yardW` non nul ; les clôtures de 0,12 au bord des bâtiments disparaissaient avec une congère contre les murs.
 - Les shaders ajoutés se posent à la construction des matériaux, jamais à la volée (voir [chargement-performances.md](chargement-performances.md)) ; `addPalette` et `addCover` enchaînent l'`onBeforeCompile` précédent, `addWind` l'écrase : `addWind` d'abord.
 
 ## Pour modifier

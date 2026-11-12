@@ -4,6 +4,7 @@ import { SeasonState } from './season';
 import { mats, LIGHTS, SHADOW_LAYER } from './materials';
 import { clamp, lerp, smoothstep, mulberry32 } from '../core/rng';
 import { N } from '../world/world';
+import { SNOW_SUN } from './snow';
 
 export type WeatherKind = 'clear' | 'rain' | 'snow' | 'fog';
 
@@ -243,6 +244,7 @@ export class Environment {
     const fx = Math.round(focus.x / texel) * texel, fz = Math.round(focus.z / texel) * texel;
     this.sun.target.position.set(fx, 0, fz);
     this.sun.position.set(fx, 0, fz).addScaledVector(ld, 200);
+    SNOW_SUN.value.copy(ld).normalize();
     this.sun.intensity = useSun ? sunI : moonI;
     this.sun.color.copy(useSun ? L.sun : MOON).lerp(LOW_SUN, useSun ? twi * 0.7 : 0);
     // la nuit reste lisible : on voit ce qu'on bâtit au clair de lune. Le jour, la lumière du ciel teinte les ombres (bleutées

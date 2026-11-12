@@ -2,6 +2,8 @@ import * as THREE from 'three';
 
 /** Neige du moment sur le village (0 … 1), partagée par tous les matériaux qui la reçoivent ; 0 sous terre */
 export const SNOW = { value: 0 };
+/** Direction de la lumière principale (soleil, ou lune la nuit), vers elle : nuance des facettes enneigées (`env.ts`) */
+export const SNOW_SUN = { value: new THREE.Vector3(0.4, 0.8, 0.3).normalize() };
 /** Part de la neige que retient chaque case de la carte (déserts et tropiques presque rien), et taille de la carte */
 const SNOW_MAP = { value: null as THREE.Texture | null };
 const SNOW_SIZE = { value: 1 };
@@ -32,10 +34,10 @@ export function addSnow(mat: THREE.Material, k = 1, lo = 0.16, hi = 0.5) {
   const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey();
   mat.onBeforeCompile = (sh, r) => {
     prev.call(mat, sh, r);
-    Object.assign(sh.uniforms, { uSnowCover: SNOW, uSnowMap: SNOW_MAP, uSnowSize: SNOW_SIZE });
+    Object.assign(sh.uniforms, { uSnowCover: SNOW, uSnowMap: SNOW_MAP, uSnowSize: SNOW_SIZE, uSnowSun: SNOW_SUN });
     sh.vertexShader = 'varying vec3 vSnowW;\n' + sh.vertexShader.replace('#include <project_vertex>',
       '#include <project_vertex>\n  vSnowW = cameraPosition + transpose(mat3(viewMatrix)) * mvPosition.xyz;');
-    sh.fragmentShader = 'uniform float uSnowCover;\nuniform sampler2D uSnowMap;\nuniform float uSnowSize;\nvarying vec3 vSnowW;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    sh.fragmentShader = 'uniform float uSnowCover;\nuniform vec3 uSnowSun;\nuniform sampler2D uSnowMap;\nuniform float uSnowSize;\nvarying vec3 vSnowW;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
   if (uSnowCover > 0.01) {
     vec3 snN = normalize(cross(dFdx(vSnowW), dFdy(vSnowW)));
     // bord de la neige un peu irrégulier, sans rayer les longs pans de toit ; un toit à 45° est tout blanc
@@ -45,6 +47,8 @@ export function addSnow(mat: THREE.Material, k = 1, lo = 0.16, hi = 0.5) {
     // plus claire sur le plat ; à peine moins couvrante qu'un drap, pour garder un soupçon du toit dessous
     float snCap = clamp(uSnowCover * snHere * ${k.toFixed(2)}, 0.0, 1.0) * smoothstep(${lo.toFixed(2)}, ${hi.toFixed(2)}, snN.y + snEdge) * 0.94;
     vec3 snCol = mix(vec3(0.84, 0.89, 0.96), vec3(0.95, 0.97, 1.0), smoothstep(0.35, 0.95, snN.y));
+    // facette au soleil un peu crème, à contre-jour bleutée
+    snCol *= mix(vec3(0.86, 0.91, 1.03), vec3(1.03, 1.0, 0.95), smoothstep(-0.2, 0.65, dot(snN, uSnowSun)));
     diffuseColor.rgb = mix(diffuseColor.rgb, snCol, snCap);
   }`);
   };
