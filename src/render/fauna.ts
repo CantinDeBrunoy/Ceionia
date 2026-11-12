@@ -145,6 +145,32 @@ interface Source { key: string; kind: Kind; hx: number; hz: number; n: number; r
 const blocked = (w: World, cx: number, cz: number) => !w.inCells(cx, cz) || !!w.occ[w.ci(cx, cz)] || !!w.decor[w.ci(cx, cz)] || !!w.lake[w.ci(cx, cz)];
 const land = (w: World, cx: number, cz: number) => !blocked(w, cx, cz) && w.cellAvg(cx, cz) >= 0.2 && w.cellSlope(cx, cz) < 1.1;
 const water = (w: World, cx: number, cz: number) => w.inCells(cx, cz) && w.cellAvg(cx, cz) < -0.12;
+/** le large : cases de mer à au moins `OPEN_SEA` cases de toute terre (dauphins, baleines) */
+export const OPEN_SEA = 5;
+/**
+ * Cases de mer (hors lacs) à au moins `r` cases de la terre, par parcours en largeur depuis les cases sèches. La mer des
+ * continents ne descend guère sous −1,25 : un seuil de profondeur (−1,6 autrefois) n'y trouvait aucune case, et ni dauphin ni
+ * baleine n'apparaissait
+ */
+export function openSea(w: World, r: number): number[] {
+  const dist = new Uint8Array(N * N).fill(255), queue = new Int32Array(N * N);
+  let head = 0, tail = 0;
+  for (let k = 0; k < N * N; k++) if (!water(w, k % N, Math.floor(k / N)) || w.lake[k]) { dist[k] = 0; queue[tail++] = k; }
+  while (head < tail) {
+    const k = queue[head++], d = dist[k];
+    if (d >= r) continue;
+    const cx = k % N, cz = (k - cx) / N;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const x = cx + dx, z = cz + dz;
+      if (!w.inCells(x, z) || dist[z * N + x] <= d + 1) continue;
+      dist[z * N + x] = d + 1;
+      queue[tail++] = z * N + x;
+    }
+  }
+  const out: number[] = [];
+  for (let k = 0; k < N * N; k++) if (dist[k] >= r) out.push(k);
+  return out;
+}
 const pasture = (w: World, cx: number, cz: number) => land(w, cx, cz) && w.veg[w.ci(cx, cz)] !== 2 && w.veg[w.ci(cx, cz)] !== 3;
 const wild = (w: World, cx: number, cz: number) => land(w, cx, cz) && !w.road[w.ci(cx, cz)] && w.veg[w.ci(cx, cz)] <= 1;
 /** bêtes de la ferme : sur l'herbe, jamais sur les routes ni les places du village */
@@ -673,12 +699,13 @@ export class Fauna {
         }
         if (water(w, cx, cz)) {
           const a = w.cellAvg(cx, cz);
-          if (a < -0.35 && a > -1.6) shallows.push(k);
-          else if (a <= -1.6) deep.push(k);
+          if (a < -0.35) shallows.push(k);
           if (w.waterDist[k] === 0 && [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.cellAvg(cx + dx, cz + dz) > 0.1)) shore.push(k);
         }
       }
     }
+    yield;
+    deep.push(...openSea(w, OPEN_SEA));
     yield;
     for (const b of w.buildings.values()) {
       const s = sizeOf(b);

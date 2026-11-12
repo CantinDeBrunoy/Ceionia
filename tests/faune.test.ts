@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
 import { World, N, setMapSize, VEG_CAVE, VEG_FOREST, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
-import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors } from '../src/render/fauna';
+import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA } from '../src/render/fauna';
+import { newWorld } from '../src/world/mapgen';
+import { GEN } from '../src/world/continent';
 import { hash2 } from '../src/core/rng';
 
 describe('faune : rattachement au décor', () => {
@@ -115,5 +117,23 @@ describe('faune : densité', () => {
     for (const b of [BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH]) expect(new Set(NEARBY[b]).size).toBeGreaterThanOrEqual(4);
     expect(SEEN_MIN).toBeGreaterThanOrEqual(5);
     expect(VISITORS).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('faune : la mer', () => {
+  it('le continent a un large, et des dauphins y vivent (le seuil de profondeur n’en trouvait aucun)', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026, GEN);
+    w.updateVis();
+    const open = openSea(w, OPEN_SEA);
+    expect(open.length).toBeGreaterThan(100);
+    for (const k of open) expect(w.cellAvg(k % N, Math.floor(k / N))).toBeLessThan(-0.12);
+    const f = new Fauna(w, { perches: Array.from({ length: N * N }, () => []), flowers: Array.from({ length: N * N }, () => []) });
+    f.update(0.016, 0, 12, 0, 0, 0);
+    const kinds = new Set((f as any).critters.map((c: any) => c.kind));
+    expect(kinds.has('dolphin')).toBe(true);
+    expect(kinds.has('fish')).toBe(true);
+    setMapSize(96);
   });
 });
