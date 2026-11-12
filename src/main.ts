@@ -349,7 +349,7 @@ class Game implements UIHost {
     }
     this.war.load(w.war);
     Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
-    Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, ambVol: settings.ambVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfx !== true });
+    Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, ambVol: settings.ambVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfxChosen === true && settings.sfx !== true, sfxChosen: settings.sfxChosen === true });
     if (settings.quality) this.quality = settings.quality;
     this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? (weak ? 2 : 0))));
     this.autoRoads = settings.autoRoads ?? true;
@@ -644,7 +644,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, music: !audio.muteMusic, sfx: !audio.muteSfx, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, music: !audio.muteMusic, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();

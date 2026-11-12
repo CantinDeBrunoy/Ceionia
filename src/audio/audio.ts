@@ -41,7 +41,10 @@ export class AudioEngine {
   /** volume des ambiances : nature (vent, eau, oiseaux…) et bruitages de proximité (forge, bêtes, foule…) */
   ambVol = 0.7;
   muteMusic = true;
-  muteSfx = true;
+  /** sons et ambiances allumés par défaut ; la musique reste coupée tant que le joueur ne l'allume pas */
+  muteSfx = false;
+  /** le joueur a lui-même allumé ou coupé les sons (sinon on suit le défaut) */
+  sfxChosen = false;
   private master!: GainNode;
   private musicG!: GainNode;
   private sfxG!: GainNode;

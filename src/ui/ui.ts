@@ -2283,7 +2283,7 @@ export class UI {
     rng('#sSfx', (v) => (a.sfxVol = v));
     rng('#sAmb', (v) => (a.ambVol = v));
     q('#mMusic').onclick = () => { a.muteMusic = !a.muteMusic; q('#mMusic').innerHTML = ic(a.muteMusic ? 'mute' : 'volume', 18); q('#mMusic').classList.toggle('active', a.muteMusic); h.applySettings(); };
-    q('#mSfx').onclick = () => { a.muteSfx = !a.muteSfx; q('#mSfx').innerHTML = ic(a.muteSfx ? 'mute' : 'volume', 18); q('#mSfx').classList.toggle('active', a.muteSfx); h.applySettings(); };
+    q('#mSfx').onclick = () => { a.muteSfx = !a.muteSfx; a.sfxChosen = true; q('#mSfx').innerHTML = ic(a.muteSfx ? 'mute' : 'volume', 18); q('#mSfx').classList.toggle('active', a.muteSfx); h.applySettings(); };
     q('#gSave').onclick = () => { h.saveNow(); this.info('Partie sauvegardée'); };
     q('#gExport').onclick = () => h.exportSave();
     const fi = q<HTMLInputElement>('#fImport');

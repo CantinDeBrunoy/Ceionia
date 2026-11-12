@@ -5,7 +5,7 @@
 > Voir aussi : [architecture.md](architecture.md), [interface.md](interface.md) (réglages), [sauvegarde.md](sauvegarde.md)
 
 ## En bref
-Tout le son est **synthétisé** par Web Audio : aucun fichier son, rien à télécharger, aucune licence à citer. Trois familles : la musique générative (selon l'âge, la saison, la nuit), les ambiances (nature autour du point visé, et bruitages de proximité des bâtiments et des volcans) et les effets ponctuels (`sfx…` : poser, démolir, éruption, tonnerre, combat…). Le son est coupé par défaut ; le contexte démarre au premier clic ou à la première touche (`unlock`).
+Tout le son est **synthétisé** par Web Audio : aucun fichier son, rien à télécharger, aucune licence à citer. Trois familles : la musique générative (selon l'âge, la saison, la nuit), les ambiances (nature autour du point visé, et bruitages de proximité des bâtiments et des volcans) et les effets ponctuels (`sfx…` : poser, démolir, éruption, tonnerre, combat…). Les sons et les ambiances sont allumés par défaut, la musique est coupée tant que le joueur ne l'allume pas ; le contexte démarre au premier clic ou à la première touche (`unlock`).
 
 ## Règles du jeu
 - **Réglages** (Graphismes & son) : Musique, Sons, Ambiances (volume 0 … 1 ; défaut 0,5, 0,7, 0,7). Le bouton qui coupe les sons coupe aussi les ambiances.
