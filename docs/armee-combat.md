@@ -92,6 +92,7 @@ Huit bulles facultatives, une à la fois, une fois chacune (`ceionia.aidesMilita
 - [interface.md](interface.md) : bouton du temps, notifications (`ui.toast`), rayon Militaire.
 
 ## Pièges et invariants
+- **Portraits et gel** : le petit moteur des portraits est un contexte WebGL à part ; ses shaders se compilent d'abord sans bloquer (`compileAsync`, puis le rendu). Rendus directement, ils se compilaient au premier portrait et figeaient le jeu 0,3 à 0,9 s à l'arrivée sur l'île (la barre de l'île demande les portraits). Garder cette attente avant `renderer.render`.
 - `Troop.hp` est un relevé : la vérité est l'unité au combat tant qu'elle existe. Ne jamais soigner une troupe en modifiant seulement `Troop.hp` pendant qu'elle est déployée.
 - La puissance utilisée pour les vagues plafonne chaque unité présente à `MAX_UNIT_POWER` = 300 (`Hell.playerPower`), pas `War.power`.
 - `troopStats` arrondit : le chevalier de l'âge 2 a exactement 230 pv. Les tests d'équilibre (`equilibreBatailles.test.ts`) en dépendent : toute retouche des bases ou de `AGE_K` change les vagues.

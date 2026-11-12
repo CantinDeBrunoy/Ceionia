@@ -157,6 +157,9 @@ async function render(job: { key: string; kind: TroopKind; age: number }) {
   camera.near = dist / 20; camera.far = dist * 4;
   camera.updateProjectionMatrix();
   try {
+    // les shaders du petit moteur se compilent d'abord sans bloquer (KHR_parallel_shader_compile) : compilés au premier
+    // rendu, ils figeaient le jeu 0,3 à 0,9 s à l'arrivée sur l'île (la barre de l'île demande les portraits)
+    await renderer.compileAsync(scene, camera);
     renderer.render(scene, camera);
     // (l'image est copiée à l'appel de toBlob : la scène peut être vidée tout de suite)
     const wait = new Promise<Blob | null>((ok) => renderer.domElement.toBlob(ok, 'image/webp', 0.92));
