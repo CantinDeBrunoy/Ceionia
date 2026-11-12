@@ -1307,62 +1307,113 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 @keyframes zpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(214, 58, 42, 0.6); } 50% { box-shadow: 0 0 0 5px rgba(214, 58, 42, 0); } }
 #troopBar .tfs { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--line); font-size: 13px; font-weight: 700; white-space: nowrap; }
 #troopBar .tfa { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; background: #ffe3d8; color: #a53a1c; box-shadow: var(--lift); font-size: 12.5px; font-weight: 800; max-width: min(560px, calc(100vw - 24px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* la barre du bas, la même sur l'île et dans les Enfers, peinte crème et or comme les fenêtres de l'accueil (.cePop) :
-   le passage (violet, l'identité des Enfers) à gauche, les troupes au centre, « Ma garnison » ou « Ma base » à droite, Aide et
-   le retour au bout ; le choix en cours est doré, jamais bleu */
+/* la barre du bas, la même sur l'île et dans les Enfers, peinte crème et or comme les fenêtres de l'accueil (.cePop) : une
+   rangée d'environ 170 px. Île : la carte de passage (violette, l'identité des Enfers), la bulle d'aide, « Ma garnison »
+   (cartes de recrues à portrait, onglets à droite), Aide et le retour. Enfers : la carte de passage, les onglets et les outils,
+   « Ma base », Aide et le retour. Au-dessus, les troupes sur le terrain. Le choix en cours est doré, jamais bleu */
 #troopBar { --cInk: #262a48; --cInk2: #4f5470; --cBrown: #8a6a3e; --cGold: linear-gradient(180deg, #f6c35a, #e39a2f);
   --cGoldGlow: 0 6px 16px rgba(227, 154, 47, 0.42), 0 0 0 3px rgba(246, 195, 90, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.45);
   --cShell: linear-gradient(180deg, #fcf6ee 0%, #f8ecdf 55%, #f4e3d2 100%);
   --cShellShadow: 0 0 0 1.5px rgba(238, 190, 112, 0.75), 0 0 26px rgba(255, 196, 110, 0.42), 0 14px 34px rgba(40, 30, 70, 0.26);
   --cPill: linear-gradient(180deg, #fffbf5, #f6ede2); --cPillShadow: 0 3px 10px rgba(120, 85, 50, 0.16), inset 0 -2px 0 rgba(160, 120, 80, 0.08); }
-#troopBar .tfoot { position: absolute; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
+#troopBar .tfoot { position: absolute; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); height: 170px; display: flex; align-items: stretch; gap: 10px; pointer-events: none; }
 #troopBar .tfoot > * { pointer-events: auto; }
-/* la coque : les deux panneaux (troupes, menu) */
-#troopBar .tbot, #troopBar .tmenu, #troopBar .thelp { border: 2px solid #fff7e8; border-radius: 22px; background: var(--cShell); box-shadow: var(--cShellShadow); backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--cInk); }
-#troopBar .tbot { flex: 0 1 auto; align-self: stretch; min-width: 0; max-width: 38%; padding: 8px 10px 6px; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
-#troopBar .thint { width: 0; min-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 600; line-height: 1.25; color: var(--cInk2); text-align: center; }
-#troopBar .tnone { padding: 6px 8px; color: var(--cInk2); font-weight: 600; font-size: 12.5px; }
+/* la coque : les panneaux (garnison ou base, outils, Aide et retour, troupes sur le terrain, rappel des contrôles) */
+#troopBar .tbot, #troopBar .tmenu, #troopBar .ttool, #troopBar .tcorner, #troopBar .thelp { border: 2px solid #fff7e8; border-radius: 22px; background: var(--cShell); box-shadow: var(--cShellShadow); backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--cInk); }
+/* au-dessus de la rangée : les troupes sur le terrain (centrées sur l'île, à droite dans les Enfers, où la bulle tient la gauche) */
+#troopBar .tbot { position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%); max-width: min(780px, 100%); padding: 6px 8px; display: flex; }
+#troopBar .thell .tbot { left: auto; right: 0; transform: none; max-width: calc(100% - 370px); }
+/* la bulle d'aide du moment : crème, pastille « i » verte, pointe vers la carte de passage */
+#troopBar .tbub { flex: 0 0 178px; align-self: center; position: relative; display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px 10px 10px; border: 2px solid #fff7e8; border-radius: 18px; background: var(--cShell); box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.65), 0 10px 24px rgba(40, 30, 70, 0.22); color: var(--cInk); pointer-events: none; }
+#troopBar .tbub::before { content: ''; position: absolute; left: -7px; top: 50%; width: 11px; height: 11px; margin-top: -6px; background: #faf0e4; box-shadow: -1.5px 1.5px 0 rgba(238, 190, 112, 0.65); transform: rotate(45deg); }
+#troopBar .tbi { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #fff; background: linear-gradient(180deg, #9ad672, #4f9a36); color: #fff; font-family: 'Fraunces', Georgia, serif; font-size: 13px; font-weight: 800; font-style: italic; line-height: 1; box-shadow: 0 2px 5px rgba(80, 140, 50, 0.35); }
+#troopBar .thint { margin: 0; min-width: 0; font-size: 12px; font-weight: 600; line-height: 1.35; color: var(--cInk2); display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+#troopBar .thint b { color: var(--cInk); font-weight: 800; }
+#troopBar .thell .tbub { position: absolute; left: 0; bottom: calc(100% + 10px); width: min(350px, calc(100% - 20px)); }
+#troopBar .thell .tbub::before { left: 46px; top: auto; bottom: -7px; margin-top: 0; box-shadow: 1.5px 1.5px 0 rgba(238, 190, 112, 0.65); }
+#troopBar .thell .thint { -webkit-line-clamp: 3; }
 /* les cartes (troupes, recrues, bâtiments) : blanc crème translucide, picto à gauche, la choisie bordée d'or */
 #troopBar .tcard, #troopBar .tmrow .trb { position: relative; flex: none; display: flex; flex-direction: row; align-items: center; gap: 8px; border: 1px solid #fff; border-radius: 18px; background: rgba(255, 255, 255, 0.55); color: var(--cInk); text-align: left; white-space: nowrap; box-shadow: 0 2px 8px rgba(120, 85, 50, 0.1); cursor: pointer; transition: border-color 0.12s, background 0.12s, box-shadow 0.12s, transform 0.12s; }
 #troopBar .tcard:hover, #troopBar .tmrow .trb:hover { border-color: rgba(240, 180, 69, 0.75); background: rgba(255, 255, 255, 0.85); box-shadow: 0 5px 14px rgba(120, 85, 50, 0.18); transform: translateY(-1px); }
 #troopBar .tcard.on, #troopBar .tmrow .trb.on { border-color: rgba(240, 180, 69, 0.95); background: linear-gradient(180deg, #fff9ec, #fdebc8); box-shadow: 0 0 0 2px rgba(246, 195, 90, 0.75), 0 6px 16px rgba(227, 154, 47, 0.38), 0 0 18px rgba(255, 196, 110, 0.45); }
-#troopBar .ti, #troopBar .tic { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; background: radial-gradient(circle at 50% 38%, #fffdf8 0%, #f5e8d6 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9), 0 1px 3px rgba(120, 85, 50, 0.14); }
+#troopBar .ti, #troopBar .tic { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; background: radial-gradient(circle at 50% 38%, #fffdf8 0%, #f5e8d6 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9), 0 1px 3px rgba(120, 85, 50, 0.14); font-size: 24px; line-height: 1; }
 #troopBar .ti img, #troopBar .tic img { width: 34px; height: 34px; }
 #troopBar .ttx { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; line-height: 1.15; }
 #troopBar .tcards { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 6px; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(160, 120, 80, 0.35) transparent; padding: 4px; margin: -4px; }
 #troopBar .tcard { min-height: 54px; padding: 5px 14px 9px 5px; }
 #troopBar .tcard .ti { width: 40px; height: 40px; }
 #troopBar .tcard .ti img { width: 30px; height: 30px; }
+/* (le portrait en pied, cadré sur le buste dans le petit médaillon) */
+#troopBar .tcard .ti { overflow: hidden; }
+#troopBar .tcard .ti img.tpimg { width: 40px; height: 54px; object-fit: cover; object-position: 50% 6%; align-self: start; }
 #troopBar .tcard b { font-size: 17px; font-weight: 800; color: var(--cInk); }
 #troopBar .tcard .tn { font-size: 11px; font-weight: 700; color: var(--cInk2); }
 #troopBar .tcard i { position: absolute; left: 12px; bottom: 4px; height: 4px; max-width: calc(100% - 24px); border-radius: 2px; background: #79bf55; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7); }
 #troopBar .tcard i.low { background: #e9a23b; }
 #troopBar .tall { position: sticky; right: 0; z-index: 1; flex: none; min-height: 54px; padding: 0 16px; border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 18px; background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font-size: 14px; font-weight: 800; }
 #troopBar .tall:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }
-/* le menu : titre en Fraunces, onglets en pilules crème (l'ouvert doré), familles séparées d'un filet chaud */
-#troopBar .tmenu { flex: 1 1 0; min-width: 0; max-width: none; padding: 8px 10px 9px; display: flex; flex-direction: column; gap: 6px; }
+/* le menu : en-tête en petites capitales (picto, « Ma garnison 2 / 6 », filet de progression), une rangée de cartes qui défile
+   en interne, les onglets en pilules empilées à droite d'un filet (l'ouvert doré) */
+#troopBar .tmenu { flex: 1 1 0; min-width: 0; max-width: none; padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
 #troopBar .tbase { flex: 1 1 0; }
-#troopBar .tmh { display: flex; align-items: center; gap: 10px; min-height: 28px; padding-left: 4px; }
-#troopBar .tmh h5 { display: flex; align-items: center; gap: 8px; margin: 0; font-family: 'Fraunces', Georgia, serif; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: 18px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--cInk); white-space: nowrap; }
-#troopBar .tmh h5 small { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px 2px 6px; border-radius: 999px; border: 1px solid #fff; background: rgba(255, 255, 255, 0.6); font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: #7a5300; }
-#troopBar .tmh .q { display: inline-flex; align-items: center; gap: 3px; min-width: 0; color: var(--cInk2); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#troopBar .ttabs { display: inline-flex; gap: 4px; margin-left: auto; padding: 3px; border-radius: 999px; background: rgba(160, 120, 80, 0.12); }
-#troopBar .ttabs button { min-height: 34px; padding: 0 18px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font-size: 14px; font-weight: 800; cursor: pointer; }
+#troopBar .tmh { flex: none; display: flex; align-items: center; gap: 12px; min-height: 26px; padding-left: 2px; }
+#troopBar .tmh h5 { display: flex; align-items: center; gap: 7px; margin: 0; font-family: 'Manrope', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cInk); white-space: nowrap; }
+#troopBar .tmh h5 small { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; border: 1px solid #fff; background: rgba(255, 255, 255, 0.65); font-size: 12.5px; font-weight: 800; letter-spacing: 0; color: #7a5300; }
+#troopBar .tprog { flex: 0 1 170px; min-width: 40px; height: 6px; border-radius: 3px; background: rgba(160, 120, 80, 0.18); box-shadow: inset 0 1px 1px rgba(120, 85, 50, 0.12); overflow: hidden; }
+#troopBar .tprog > i { display: block; height: 100%; border-radius: 3px; background: var(--cGold); }
+#troopBar .tmh .q { display: inline-flex; align-items: center; gap: 3px; min-width: 0; margin-left: auto; color: var(--cInk2); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#troopBar .tmbody { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; gap: 12px; }
+#troopBar .ttabs { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+#troopBar .tmbody > .ttabs { padding-left: 12px; border-left: 1px solid rgba(160, 120, 80, 0.25); }
+#troopBar .ttabs button { justify-content: flex-start; gap: 8px; min-width: 124px; min-height: 40px; padding: 0 16px 0 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); font-size: 14px; font-weight: 800; cursor: pointer; }
+#troopBar .ttabs button .pic, #troopBar .ttabs button .ic { flex: none; }
 #troopBar .ttabs button:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }
 #troopBar .ttabs button.on, #troopBar .ttabs button.on:hover { border-color: rgba(255, 236, 190, 0.9); background: var(--cGold); color: #3a2a14; box-shadow: var(--cGoldGlow); }
-#troopBar .tmrow { display: flex; align-items: stretch; gap: 10px; overflow-x: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(160, 120, 80, 0.35) transparent; padding: 4px 4px 3px; margin: -4px -4px 0; }
-#troopBar .tfam { flex: none; display: flex; flex-direction: column; gap: 4px; }
+#troopBar .tmrow { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 10px; overflow-x: auto; overflow-y: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(160, 120, 80, 0.35) transparent; padding: 4px; margin: -4px; }
+#troopBar .tfam { flex: none; display: flex; }
 #troopBar .tfam + .tfam { padding-left: 10px; border-left: 1px solid rgba(160, 120, 80, 0.22); }
-#troopBar .tfam h6 { margin: 0 0 0 4px; font-size: 10.5px; font-weight: 800; line-height: 1; letter-spacing: 0.04em; color: var(--cBrown); }
-#troopBar .tfam.hold h6 { color: #5f7f2c; }
-#troopBar .tfam.def h6 { color: #b0533a; }
-#troopBar .tfam.lit h6 { color: #b07a1a; }
-#troopBar .tbuilds { display: flex; gap: 6px; }
+#troopBar .tbuilds { display: flex; align-items: stretch; gap: 8px; }
 #troopBar .tmrow .trb { min-height: 54px; padding: 5px 12px 5px 5px; }
 #troopBar .tmrow .trb b { font-size: 13.5px; font-weight: 800; }
 #troopBar .tmrow .trb small { max-width: 124px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; line-height: 1.2; color: var(--cInk2); }
 #troopBar .tmrow .trb small.co { display: flex; align-items: center; gap: 6px; color: #7a5300; }
 #troopBar .tmrow .trb small.co span { display: inline-flex; align-items: center; gap: 1px; }
+/* carte de bâtiment : le picto en haut, le nom, le coût en pied */
+#troopBar .tmrow .trb.tbv { flex-direction: column; justify-content: flex-start; align-items: center; gap: 3px; width: 100px; height: 108px; min-height: 0; padding: 6px 5px 5px; text-align: center; white-space: normal; }
+#troopBar .tmrow .trb.tbv .tic { width: 44px; height: 44px; border-radius: 14px; }
+#troopBar .tmrow .trb.tbv .tic img { width: 36px; height: 36px; }
+#troopBar .tmrow .trb.tbv b { font-size: 12px; line-height: 1.08; }
+#troopBar .tmrow .trb.tbv small { max-width: 100%; margin-top: auto; justify-content: center; flex-wrap: wrap; gap: 1px 4px; white-space: normal; }
+#troopBar .tmrow .trb.tbv small.co { font-size: 10.5px; }
+#troopBar .tmrow .trb.tbv small.co .pic { width: 12px; height: 12px; }
+#troopBar .tmrow .trb.tbv small:not(.co) { display: inline-flex; align-items: center; gap: 3px; }
+/* carte de recrue : le portrait en pied à gauche, le nom et la pilule du rôle, ce qu'elle prend en pied */
+#troopBar .tmrow .trb.trc { display: grid; grid-template-columns: 52px 1fr; grid-template-rows: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 5px; align-items: stretch; width: 152px; height: 108px; min-height: 0; padding: 6px 8px 7px 6px; white-space: normal; }
+#troopBar .trc .tpo { grid-row: 1; grid-column: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: center; border-radius: 12px; background: radial-gradient(circle at 50% 30%, #fffdf8 0%, #efdfc8 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9), 0 1px 3px rgba(120, 85, 50, 0.14); overflow: hidden; }
+#troopBar .trc .tpo .tpimg { display: block; width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; }
+#troopBar .trc .tpo.none { align-items: center; }
+#troopBar .trc .tpo.none img { width: 38px; height: 38px; }
+#troopBar .trc .ttx { grid-row: 1; grid-column: 2; align-self: center; gap: 5px; }
+#troopBar .tmrow .trc b { font-size: 13.5px; line-height: 1.12; overflow-wrap: anywhere; }
+#troopBar .trc .trole { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; padding: 2px 7px 2px 4px; border-radius: 999px; background: rgba(160, 120, 80, 0.13); color: #6b4f2a; font-size: 10.5px; font-weight: 800; line-height: 1.15; }
+#troopBar .trc .trole .pic { flex: none; width: 14px; height: 14px; }
+#troopBar .trc .tco { grid-row: 2; grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; min-width: 0; padding-top: 5px; border-top: 1px solid rgba(160, 120, 80, 0.16); font-size: 11.5px; font-weight: 800; color: #7a5300; white-space: nowrap; overflow: hidden; }
+#troopBar .trc .tco > span { display: inline-flex; align-items: center; gap: 2px; }
+#troopBar .trc .tco .pic { width: 14px; height: 14px; }
+#troopBar .trc .tpill { min-width: 0; max-width: 100%; padding: 2px 8px 2px 5px; border-radius: 999px; font-size: 10.5px; line-height: 1.2; }
+#troopBar .trc .tpill > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#troopBar .trc .tpill.off { background: #fde1d8; color: #a23b2a; box-shadow: inset 0 0 0 1px rgba(200, 80, 60, 0.28); }
+#troopBar .trc .tpill.craft { background: #fff0cc; color: #8a5a00; box-shadow: inset 0 0 0 1px rgba(220, 170, 80, 0.45); }
+#troopBar .tmrow .trc.off { background: rgba(236, 222, 206, 0.6); }
+#troopBar .tmrow .trc.off .tpo { opacity: 0.75; filter: grayscale(0.55); }
+/* les outils de la base (Enfers) : les onglets empilés, dessous les boutons carrés (l'outil en main doré) */
+#troopBar .ttool { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 10px 12px; }
+#troopBar .ttool .ttabs { gap: 6px; }
+#troopBar .ttool .ttabs button { width: 100%; }
+#troopBar .ttools { display: flex; gap: 6px; }
+#troopBar .ttl { justify-content: center; width: 46px; height: 46px; padding: 0; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.95); background: var(--cPill); box-shadow: var(--cPillShadow); color: var(--cInk); cursor: pointer; }
+#troopBar .ttl:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }
+#troopBar .ttl.on, #troopBar .ttl.on:hover { border-color: rgba(255, 236, 190, 0.9); background: var(--cGold); color: #3a2a14; box-shadow: var(--cGoldGlow); }
 /* « à poser d'abord » (le camp) : un liseré d'or qui respire */
 #troopBar .tfam .trb.first { border-color: rgba(240, 180, 69, 0.95); box-shadow: 0 0 0 2px rgba(246, 195, 90, 0.6), 0 0 16px rgba(255, 196, 110, 0.5); animation: goldBreath 1.6s ease-in-out infinite; }
 @keyframes goldBreath { 50% { box-shadow: 0 0 0 4px rgba(246, 195, 90, 0.35), 0 0 22px rgba(255, 196, 110, 0.65); } }
@@ -1376,66 +1427,107 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
 #troopBar .tbuilds .trb.rh.craft { border: 1.5px dashed #dba84e; background: rgba(255, 248, 230, 0.75); }
 #troopBar .tbuilds .trb.rh.craft small { color: #8a5a00; }
 #troopBar .tbuilds .trb.rh.off small { color: #a23b2a; }
-/* à gauche : le passage du portail, une carte crème à pastille violette (l'identité des Enfers), plus vive quand des troupes sont choisies */
-#troopBar .tfl { flex: none; display: flex; flex-direction: column; gap: 6px; width: 184px; }
+/* à gauche : le passage du portail. La carte « Envoyer aux Enfers » est violette (l'identité des Enfers), bordée d'or, pastille
+   tourbillon en haut, portail lumineux en bas ; plus vive quand des troupes sont choisies. Dessous, « Voir les Enfers » ou
+   « Renforts » en pilule crème */
+#troopBar .tfl { flex: none; display: flex; flex-direction: column; gap: 6px; width: 152px; }
 #troopBar .tord { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 12px 0 6px; border: 2px solid #fff7e8; border-radius: 999px; background: var(--cShell); color: #4b2a7a; font-size: 13.5px; font-weight: 800; line-height: 1.15; text-align: left; white-space: normal; box-shadow: 0 0 0 1.5px rgba(170, 125, 225, 0.55), 0 8px 20px rgba(40, 30, 70, 0.24); cursor: pointer; }
 #troopBar .tord:hover { box-shadow: 0 0 0 1.5px rgba(170, 125, 225, 0.85), 0 0 18px rgba(170, 125, 225, 0.35), 0 8px 20px rgba(40, 30, 70, 0.24); }
 #troopBar .tord .oi { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; background: linear-gradient(180deg, #b48ae6, #7444bd); box-shadow: 0 0 0 1px rgba(150, 100, 220, 0.4), 0 3px 8px rgba(110, 64, 180, 0.35); font-size: 17px; line-height: 1; }
 #troopBar .tord .oi img { width: 22px; height: 22px; }
-#troopBar .tord.prt { min-height: 66px; padding: 6px 12px 6px 7px; border-radius: 22px; font-size: 14.5px; box-shadow: 0 0 0 1.5px rgba(170, 125, 225, 0.85), 0 0 24px rgba(170, 125, 225, 0.45), 0 10px 26px rgba(40, 30, 70, 0.28); }
-#troopBar .tord.prt .oi { width: 44px; height: 44px; }
-#troopBar .tord.prt .oi img { width: 30px; height: 30px; }
-#troopBar .tord.prt small { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--cInk2); }
-#troopBar .tord.prt.idle { box-shadow: 0 0 0 1.5px rgba(170, 125, 225, 0.5), 0 10px 26px rgba(40, 30, 70, 0.24); }
-#troopBar .tord.prt.idle .oi { filter: saturate(0.75); }
-/* au bout : Aide (pilule crème) et le retour (pilule crème à pastille verte, liseré vert doux) */
-#troopBar .tcorner { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 158px; }
+#troopBar .tord.sm { min-height: 36px; font-size: 12.5px; }
+#troopBar .tord.sm .oi { width: 26px; height: 26px; }
+#troopBar .tord.sm .oi img { width: 18px; height: 18px; }
+#troopBar .tord.prt { position: relative; flex: 1 1 0; min-height: 0; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 5px; padding: 9px 10px 0; border: 2px solid #f6c35a; border-radius: 22px; background: radial-gradient(130% 85% at 50% 100%, #b47af5 0%, #7440cc 42%, #45207f 100%); color: #fff; overflow: hidden; box-shadow: inset 0 0 0 1.5px rgba(255, 236, 190, 0.55), 0 0 0 1.5px rgba(227, 154, 47, 0.5), 0 0 26px rgba(170, 125, 225, 0.5), 0 12px 28px rgba(40, 30, 70, 0.32); }
+#troopBar .tord.prt:hover { box-shadow: inset 0 0 0 1.5px rgba(255, 236, 190, 0.8), 0 0 0 1.5px rgba(240, 180, 69, 0.9), 0 0 32px rgba(190, 140, 245, 0.7), 0 12px 28px rgba(40, 30, 70, 0.32); }
+#troopBar .tord.prt .oi { width: 34px; height: 34px; border-color: #ffe7a8; box-shadow: 0 0 0 1px rgba(246, 195, 90, 0.6), 0 3px 8px rgba(30, 10, 60, 0.4); }
+#troopBar .tord.prt .oi img { width: 24px; height: 24px; }
+#troopBar .tord.prt .tpt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#troopBar .tord.prt b { font-size: 14.5px; font-weight: 800; line-height: 1.12; color: #fff; text-shadow: 0 1px 2px rgba(30, 10, 60, 0.55); }
+#troopBar .tord.prt small { display: block; font-size: 11px; font-weight: 700; color: #ecdcff; }
+#troopBar .tord.prt .tpi { display: block; flex: 1 1 30px; width: calc(100% + 20px); min-height: 26px; max-height: 66px; margin: auto -10px 0; }
+#troopBar .tord.prt.idle { filter: saturate(0.82); box-shadow: inset 0 0 0 1.5px rgba(255, 236, 190, 0.45), 0 0 0 1.5px rgba(227, 154, 47, 0.4), 0 0 16px rgba(170, 125, 225, 0.3), 0 12px 28px rgba(40, 30, 70, 0.28); }
+#troopBar .tord.prt.idle .tpi { opacity: 0.88; }
+/* au bout : Aide et le retour, empilés dans un petit panneau (pilules crème ; le retour à pastille verte, liseré vert doux) */
+#troopBar .tcorner { flex: none; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 8px; width: 172px; padding: 10px; }
 #troopBar .tcorner .tl { white-space: normal; line-height: 1.15; text-align: left; }
-#troopBar .tcorner button { justify-content: flex-start; gap: 8px; min-height: 38px; padding: 0 14px 0 6px; border: 2px solid #fff7e8; border-radius: 999px; background: var(--cShell); color: var(--cInk); font-size: 13px; font-weight: 800; box-shadow: 0 0 0 1.5px rgba(238, 190, 112, 0.6), 0 8px 20px rgba(40, 30, 70, 0.24); cursor: pointer; }
-#troopBar .tcorner button:hover { box-shadow: 0 0 0 1.5px rgba(240, 180, 69, 0.9), 0 0 16px rgba(255, 196, 110, 0.45), 0 8px 20px rgba(40, 30, 70, 0.24); }
+#troopBar .tcorner button { justify-content: flex-start; gap: 8px; min-height: 42px; padding: 0 14px 0 6px; border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 999px; background: var(--cPill); color: var(--cInk); font-size: 13px; font-weight: 800; box-shadow: var(--cPillShadow); cursor: pointer; }
+#troopBar .tcorner button:hover { border-color: rgba(240, 180, 69, 0.75); background: #fffdf9; }
 #troopBar .tcorner .tq { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(160, 120, 80, 0.14); color: var(--cBrown); font-family: 'Fraunces', Georgia, serif; font-size: 15px; font-weight: 800; }
 #troopBar .tcorner button.on { border-color: rgba(255, 236, 190, 0.9); background: var(--cGold); color: #3a2a14; box-shadow: var(--cGoldGlow), 0 8px 20px rgba(40, 30, 70, 0.24); }
 #troopBar .tcorner button.on .tq { background: rgba(255, 255, 255, 0.4); color: #3a2a14; }
-#troopBar .tcorner button.go { min-height: 54px; padding-right: 16px; font-size: 14px; box-shadow: 0 0 0 1.5px rgba(126, 184, 92, 0.8), 0 0 18px rgba(150, 210, 110, 0.32), 0 8px 20px rgba(40, 30, 70, 0.24); }
-#troopBar .tcorner button.go:hover { box-shadow: 0 0 0 1.5px rgba(110, 175, 75, 1), 0 0 22px rgba(150, 210, 110, 0.5), 0 8px 20px rgba(40, 30, 70, 0.24); }
+#troopBar .tcorner button.go { min-height: 56px; padding-right: 14px; font-size: 13.5px; box-shadow: 0 0 0 1.5px rgba(126, 184, 92, 0.8), 0 0 14px rgba(150, 210, 110, 0.3), var(--cPillShadow); }
+#troopBar .tcorner button.go:hover { box-shadow: 0 0 0 1.5px rgba(110, 175, 75, 1), 0 0 20px rgba(150, 210, 110, 0.5), var(--cPillShadow); }
 #troopBar .tcorner .oi { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 2px solid #fff; background: linear-gradient(180deg, #a9d986, #5f9f41); box-shadow: 0 0 0 1px rgba(100, 160, 70, 0.4), 0 3px 8px rgba(80, 140, 50, 0.35); }
 #troopBar .tcorner .oi img { width: 26px; height: 26px; }
 #troopBar button:focus-visible { outline: 3px solid rgba(240, 180, 69, 0.9); outline-offset: 2px; }
-#troopBar .thelp { position: absolute; right: 10px; bottom: 150px; list-style: none; margin: 0; padding: 12px 16px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; width: min(460px, calc(100vw - 24px)); }
+#troopBar .thelp { position: absolute; right: 10px; bottom: 270px; z-index: 2; list-style: none; margin: 0; padding: 12px 16px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; width: min(460px, calc(100vw - 24px)); }
 #troopBar .thelp li { display: contents; }
 #troopBar .thelp b { color: var(--cInk); white-space: nowrap; }
 #troopBar .thelp span { color: var(--cInk2); }
-/* écran moyen : le menu passe sur sa propre ligne, sous (passage, troupes, Aide et retour) */
+/* écran moyen : la rangée se tasse ; la bulle passe au-dessus, à gauche, les troupes sur le terrain au-dessus, à droite */
 @media (max-width: 1100px) {
-  #troopBar .tfoot { flex-wrap: wrap; align-items: stretch; }
-  #troopBar .tfl { order: 1; justify-content: flex-end; }
-  #troopBar .tbot { order: 2; flex: 1 1 0; max-width: none; }
-  #troopBar .tcorner { order: 3; justify-content: flex-end; }
-  #troopBar .tmenu { order: 4; flex: 1 1 100%; }
+  #troopBar .tfoot { height: 160px; gap: 8px; }
+  #troopBar .tfl { width: 132px; }
+  #troopBar .tord.prt b { font-size: 13.5px; }
+  #troopBar .tbub, #troopBar .thell .tbub { position: absolute; left: 0; bottom: calc(100% + 10px); width: min(330px, calc(100% - 20px)); align-self: auto; }
+  #troopBar .tbub::before { left: 46px; top: auto; bottom: -7px; margin-top: 0; box-shadow: 1.5px 1.5px 0 rgba(238, 190, 112, 0.65); }
+  #troopBar .thint { -webkit-line-clamp: 3; }
+  #troopBar .tbot, #troopBar .thell .tbot { left: auto; right: 0; transform: none; max-width: calc(100% - 350px); }
+  #troopBar .tmrow .trb.trc, #troopBar .tmrow .trb.tbv { height: 98px; }
+  #troopBar .tmbody > .ttabs { padding-left: 8px; }
+  #troopBar .ttabs button { min-width: 0; padding: 0 12px 0 8px; }
+  #troopBar .tcorner { width: 140px; padding: 8px; }
 }
-/* téléphone et petite tablette : deux lignes (passage, troupes, Aide et retour en pictos), puis le menu sur toute la largeur ;
-   les rangées de cartes défilent de côté, jamais la page */
+/* tablette : Aide et le retour n'ont plus que leur picto (le texte reste en infobulle) */
+@media (max-width: 900px) {
+  #troopBar .tcorner { width: auto; }
+  #troopBar .tcorner button, #troopBar .tcorner button.go { justify-content: center; width: 46px; min-height: 46px; padding: 0; }
+  #troopBar .tcorner .tl { display: none; }
+  #troopBar .ttl { width: 40px; height: 40px; }
+}
+/* téléphone et petite tablette : une ligne (passage en pilule ; Aide et le retour en pictos), puis le menu (dans les Enfers, les
+   onglets et les outils en petite grille à sa gauche) ; la bulle et les troupes au-dessus, sur toute la largeur ; les rangées
+   de cartes défilent de côté, jamais la page */
 @media (max-width: 720px) {
-  #troopBar .tfoot { left: 6px; right: 6px; bottom: max(6px, env(safe-area-inset-bottom)); flex-wrap: wrap; gap: 6px; align-items: stretch; }
-  #troopBar .tfl { order: 1; width: 108px; gap: 5px; }
+  #troopBar .tfoot { left: 6px; right: 6px; bottom: max(6px, env(safe-area-inset-bottom)); height: auto; flex-wrap: wrap; gap: 6px; }
+  #troopBar .tfl { order: 1; flex: 1 1 0; width: auto; min-width: 0; flex-direction: row; gap: 5px; }
   #troopBar .tord { min-height: 40px; padding: 0 8px 0 4px; gap: 6px; font-size: 11.5px; }
   #troopBar .tord .oi { width: 28px; height: 28px; }
   #troopBar .tord .oi img { width: 19px; height: 19px; }
-  #troopBar .tord.prt { min-height: 52px; padding: 4px 8px 4px 4px; border-radius: 18px; font-size: 12px; }
-  #troopBar .tord.prt .oi { width: 34px; height: 34px; }
-  #troopBar .tord.prt .oi img { width: 24px; height: 24px; }
+  #troopBar .tord.prt { flex: 1 1 0; flex-direction: row; align-items: center; min-height: 48px; padding: 4px 8px 4px 5px; border-radius: 16px; }
+  #troopBar .tord.prt .oi { width: 32px; height: 32px; }
+  #troopBar .tord.prt .oi img { width: 22px; height: 22px; }
+  #troopBar .tord.prt b { font-size: 12.5px; }
   #troopBar .tord.prt small { font-size: 10px; }
-  #troopBar .tbot { order: 2; flex: 1 1 0; min-width: 0; max-width: none; padding: 5px 6px 4px; border-radius: 18px; }
-  #troopBar .tcorner { order: 3; gap: 5px; width: auto; }
-  #troopBar .tcorner button, #troopBar .tcorner button.go { justify-content: center; width: 44px; min-height: 44px; padding: 0; }
-  #troopBar .tcorner .tl { display: none; }
-  #troopBar .tcorner .oi { width: 34px; height: 34px; }
-  #troopBar .tcorner .oi img { width: 22px; height: 22px; }
-  #troopBar .tmenu { order: 4; flex: 1 1 100%; max-width: none; padding: 6px 8px 7px; border-radius: 18px; }
-  #troopBar .tmh { min-height: 24px; gap: 6px; }
-  #troopBar .tmh h5 { font-size: 15px; }
-  #troopBar .ttabs button { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
+  #troopBar .tord.prt .tpi { display: none; }
+  #troopBar .tord.sm { flex: 0 1 auto; min-height: 48px; border-radius: 16px; }
+  #troopBar .tcorner { order: 2; flex-direction: row; gap: 5px; width: auto; padding: 4px; border-radius: 16px; }
+  #troopBar .tcorner button, #troopBar .tcorner button.go { justify-content: center; width: 40px; min-height: 40px; padding: 0; }
+  #troopBar .tcorner .oi { width: 32px; height: 32px; }
+  #troopBar .tcorner .oi img { width: 21px; height: 21px; }
+  #troopBar .tbub, #troopBar .thell .tbub { left: 0; right: 0; width: auto; bottom: calc(100% + 6px); padding: 6px 10px 6px 7px; border-radius: 14px; }
+  #troopBar .tfoot:has(.tbot) .tbub { bottom: calc(100% + 66px); }
+  #troopBar .tbub::before { display: none; }
+  #troopBar .tbi { width: 18px; height: 18px; font-size: 11px; }
+  #troopBar .thint { font-size: 11px; -webkit-line-clamp: 2; }
+  #troopBar .tbot, #troopBar .thell .tbot { left: 0; right: 0; max-width: none; bottom: calc(100% + 6px); padding: 4px 5px; border-radius: 16px; }
+  #troopBar .ttool { order: 3; display: grid; grid-template-columns: repeat(2, 38px); grid-auto-rows: 38px; align-content: center; gap: 5px; padding: 6px; border-radius: 16px; }
+  #troopBar .ttool .ttabs, #troopBar .ttool .ttools { display: contents; }
+  #troopBar .ttool .ttabs button, #troopBar .ttl { width: 38px; height: 38px; min-width: 0; min-height: 0; padding: 0; justify-content: center; border-radius: 12px; }
+  #troopBar .ttool .ttabs button > span, #troopBar .tmbody > .ttabs button > span { display: none; }
+  #troopBar .tmenu { order: 4; flex: 1 1 100%; padding: 6px 8px 7px; border-radius: 18px; }
+  #troopBar .thell .tmenu { flex: 1 1 0; }
+  #troopBar .tmh { min-height: 22px; gap: 8px; }
+  #troopBar .tmh h5 { font-size: 12px; }
   #troopBar .tmh .q { display: none; }
+  #troopBar .tmbody { gap: 8px; }
+  #troopBar .tmbody > .ttabs { padding-left: 8px; gap: 6px; }
+  #troopBar .tmbody > .ttabs button { width: 40px; min-width: 0; min-height: 40px; padding: 0; justify-content: center; }
+  #troopBar .tmrow .trb.trc { width: 140px; height: 104px; }
+  #troopBar .tmrow .trb.tbv { width: 84px; height: 104px; }
+  #troopBar .tmrow .trb.tbv .tic { width: 42px; height: 42px; }
+  #troopBar .tmrow .trb.tbv .tic img { width: 34px; height: 34px; }
   #troopBar .tcards { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
   #troopBar .tcard { min-height: 46px; padding: 3px 10px 8px 3px; gap: 5px; border-radius: 15px; }
   #troopBar .tcard .ti { width: 32px; height: 32px; border-radius: 11px; }
@@ -1443,13 +1535,10 @@ body.under:has(#warAlert.show) #troopBar .tstate { top: calc(var(--hudB, 82px) +
   #troopBar .tcard b { font-size: 15px; }
   #troopBar .tcard .tn { font-size: 10.5px; }
   #troopBar .tall { min-height: 46px; padding: 0 10px; border-radius: 15px; font-size: 12.5px; }
-  #troopBar .thint { font-size: 10.5px; }
-  #troopBar .tmrow .trb { min-height: 46px; padding: 3px 9px 3px 3px; gap: 6px; border-radius: 15px; }
-  #troopBar .tmrow .tic { width: 34px; height: 34px; border-radius: 11px; }
-  #troopBar .tmrow .tic img { width: 27px; height: 27px; }
+  #troopBar .tmrow .trb { border-radius: 15px; }
   #troopBar .tmrow .trb b { font-size: 12px; }
   #troopBar .tmrow .trb small { font-size: 10.5px; }
-  #troopBar .thelp { bottom: 200px; right: 6px; }
+  #troopBar .thelp { bottom: 340px; right: 6px; }
 }
 /* le nom de la zone courante, à gauche de la frise */
 #troopBar .tfn { flex: none; font-size: 13px; font-weight: 800; color: #8a2a12; white-space: nowrap; padding-right: 10px; border-right: 1px solid var(--line); }

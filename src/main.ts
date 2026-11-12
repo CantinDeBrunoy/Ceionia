@@ -87,6 +87,7 @@ import { KingdomStage } from './kingdomStage';
 import { WarTips, WarTipState, WAR_TIP_TEXT, type WarTipId } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
+import { troopPortrait } from './render/troopPortraits';
 import { PortalChoice } from './ui/portalChoice';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
@@ -473,6 +474,8 @@ class Game implements UIHost {
       following: () => this.hellFollow, follow: (on) => { this.hellFollow = on; },
       craft: (id) => { const why = this.expeditions.whyCraft(GEAR_BY[id], this.sim.age); if (!why) this.expeditions.craft(id, this.sim.age); return why; },
       crafting: () => this.world.exp.craft, craftCheck: (ids) => this.expeditions.whyCraftAll(ids, this.sim.age),
+      // les portraits des cartes de troupes : le modèle 3D rendu hors écran, à la demande, une fois par sorte et par âge
+      portrait: troopPortrait,
     });
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });

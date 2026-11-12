@@ -290,6 +290,41 @@ export class HellBase {
     return this.place(kind, Math.floor(x) + 0.5, Math.floor(z) + 0.5);
   }
 
+  /** Le bâtiment de la base, debout, sous un point (à son emprise près, plus `pad` cases) : le plus proche */
+  at(x: number, z: number, pad = 0.3): HellBuilding | null {
+    let best: HellBuilding | null = null, bd = Infinity;
+    for (const b of this.buildings()) { const d = Math.hypot(b.site.x - x, b.site.z - z); if (d <= b.site.r + pad && d < bd) { bd = d; best = b; } }
+    return best;
+  }
+
+  /** Démolit un bâtiment de la base ; rien n'est rendu (comme au village). Le camp, cœur de la base, reste : null, ou la raison du refus */
+  demolish(b: HellBuilding): string | null {
+    if (b.kind === 'camp') return tr('Le camp de base ne se démolit pas : c’est le cœur de la base.');
+    if (b.down || !this.hell.buildings.has(b.id)) return tr('Ce bâtiment n’est plus là.');
+    this.map.unblock(b.site as never);
+    this.hell.buildings.delete(b.id);
+    return null;
+  }
+
+  /** Ce qui empêche de déplacer ce bâtiment à ce point (null : on peut) ; les règles de la pose, le bâtiment ôté de sa place */
+  relocateWhy(b: HellBuilding, x: number, z: number): string | null {
+    if (b.kind === 'camp') return tr('Le camp de base ne se déplace pas : c’est le cœur de la base.');
+    if (b.down || !this.hell.buildings.has(b.id)) return tr('Ce bâtiment n’est plus là.');
+    this.hell.buildings.delete(b.id);
+    this.map.unblock(b.site as never);
+    try { return this.canBuild(b.kind as BaseKind, x, z); } finally { this.hell.buildings.set(b.id, b); this.map.reblock(b.site); }
+  }
+
+  /** Déplace un bâtiment de la base (gratuit, il garde sa vie) : null, ou la raison du refus */
+  relocate(b: HellBuilding, x: number, z: number): string | null {
+    const why = this.relocateWhy(b, x, z);
+    if (why) return why;
+    this.map.unblock(b.site as never);
+    this.hell.buildings.delete(b.id);
+    this.place(b.kind as BaseKind, Math.floor(x) + 0.5, Math.floor(z) + 0.5, b.hp);
+    return null;
+  }
+
   /** Pose un bâtiment (sans contrôle : sauvegarde reprise) */
   private place(kind: BaseKind, x: number, z: number, hp?: number) {
     const d = BASE_DEFS[kind], zone = zoneOfZ(Math.floor(z));

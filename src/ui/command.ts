@@ -14,15 +14,16 @@ import { planHellRecruit, orderHellRecruit, stepHellWaiting, shortWhy } from '..
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 import { nextGoal, goalLine, zoneLine, HellGoal } from '../sim/objective';
 import { pic, withPic } from './pics';
+import { ic } from './icons';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle
  * par glissé ; double-clic = toutes celles de la même sorte en vue, Maj pour ajouter), ordres (clic droit ou appui long : se rendre, ou
  * attaquer l'ennemi visé ; A puis clic : attaquer en marchant ; H : tenir ; R : se replier), groupes (Ctrl ou Maj + 1…5 pour
  * le former, 1…5 pour le rappeler, deux fois pour y aller), pause active (Espace : les ordres se donnent en pause). L'interface :
- * tout en bas, d'un seul bandeau : le bouton de passage du portail à gauche (les ordres : A, H, R, Espace), les cartes de troupes
- * au centre, la caserne (île) ou le menu de la base avancée (Enfers, onglets Bâtir / Recruter) à droite, puis Aide et Quitter ;
- * (groupes au clavier seulement) ; en haut le ruban d'état (île) ou la frise du front avec le nom de la zone (Enfers)
+ * tout en bas, une rangée : la carte de passage du portail à gauche, la bulle d'aide du moment, « Ma garnison » (île : cartes
+ * de recrues à portrait, onglets Bâtir / Recruter à droite) ou les outils et « Ma base » (Enfers), puis Aide et le retour ;
+ * au-dessus, les troupes sur le terrain (une carte par sorte, « Tous ») ; en haut le ruban d'état (île) ou la frise du front
  */
 
 /** Le théâtre des opérations : la bataille commandée, et comment passer de l'écran au sol */
@@ -83,15 +84,22 @@ export interface CommandHost {
   /** la vue suit les troupes (Enfers) : lire, ou la mettre en marche / l'arrêter */
   following?(): boolean;
   follow?(on: boolean): void;
+  /** le portrait d'une troupe à cet âge (URL d'image), null tant qu'il n'est pas prêt : la carte garde alors son picto */
+  portrait?(kind: TroopKind, age: number): string | null;
 }
+
+/** Les outils de la base des Enfers : choisir les troupes (l'outil ordinaire), déplacer ou démolir un bâtiment */
+export type BaseTool = 'select' | 'move' | 'demolish';
 
 /** Un ordre de déplacement donné à moins de cette distance du portail (cases) le fait passer aux troupes choisies (et à elles seules) */
 export const PORTAL_REACH = 2.6;
 
 /** Ce que fait Échap en commandement, dans l'ordre : lâcher le bâtiment, abandonner un mur, désarmer, désélectionner ; rien d'autre dans les Enfers */
-export type EscapeAction = 'stopPlacing' | 'cancelTrace' | 'disarm' | 'deselect' | 'leaveIsle' | 'hint';
-export function escapeAction(s: { kind: 'hell' | 'isle'; placing: boolean; trace: boolean; armed: boolean; selected: number }): EscapeAction {
+export type EscapeAction = 'stopPlacing' | 'cancelTrace' | 'stopTool' | 'disarm' | 'deselect' | 'leaveIsle' | 'hint';
+export function escapeAction(s: { kind: 'hell' | 'isle'; placing: boolean; trace: boolean; armed: boolean; selected: number; tool?: boolean }): EscapeAction {
   if (s.placing) return s.trace ? 'cancelTrace' : 'stopPlacing';
+  // un outil de la base (déplacer, démolir) : on le lâche, on revient au choix des troupes
+  if (s.tool) return 'stopTool';
   if (s.armed) return 'disarm';
   if (s.selected) return 'deselect';
   // Échap sert partout à fermer ou lâcher : il ne quitte pas les Enfers (le bouton « Retourner sur l'île » s'en charge)
@@ -104,6 +112,20 @@ const LONG_PRESS = 450, DRAG = 6, DOUBLE = 320;
 /** Une raison de refus sans sa fin « (à fabriquer… ) » (le français comme l'anglais) */
 const noCraft = (s: string) => s.replace(/ \((?:à fabriquer|to craft).*\)$/, '');
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** Le rôle d'une troupe à cet âge, en deux ou trois mots et un picto (la pilule des cartes de recrues) */
+export function troopRole(kind: TroopKind, age: number): { icon: string; text: string } {
+  if (kind === 'soldier') return age >= 3 ? { icon: '🔫', text: 'Tir en rafales' } : { icon: '🛡', text: 'Corps à corps' };
+  if (kind === 'archer') return age >= 5 ? { icon: '🤖', text: 'Tir rapide' } : age >= 3 ? { icon: '🎯', text: 'Tir lointain' } : { icon: '🏹', text: 'Tir à distance' };
+  if (kind === 'knight') return age >= 4 ? { icon: '🚀', text: 'Tir lourd + armure' } : { icon: '⚔', text: 'Corps à corps + armure' };
+  return age >= 4 ? { icon: '🚜', text: 'Blindé' } : { icon: '🐎', text: 'Charge rapide' };
+}
+
+/** Picto « personne + » de l'onglet Recruter */
+const PERSON_PLUS = '<svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.6"/><path d="M2.5 20.5c0-3.8 2.9-6.2 6.5-6.2s6.5 2.4 6.5 6.2"/><path d="M19 8v6M16 11h6"/></svg>';
+
+/** L'illustration de la carte de passage : un portail violet lumineux dans une arche dorée */
+const PORTAL_ART = `<svg class="tpi" viewBox="0 0 120 60" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><defs><radialGradient id="tpiGlow" cx="50%" cy="58%" r="52%"><stop offset="0" stop-color="#fff6ff"/><stop offset=".3" stop-color="#e2b8ff"/><stop offset=".65" stop-color="#a55ff0" stop-opacity=".75"/><stop offset="1" stop-color="#6a2fc0" stop-opacity="0"/></radialGradient><linearGradient id="tpiVoid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c58cff"/><stop offset=".55" stop-color="#7b3fd6"/><stop offset="1" stop-color="#3d1a7a"/></linearGradient></defs><ellipse cx="60" cy="56" rx="50" ry="5" fill="#1e0b3c" opacity=".45"/><ellipse cx="60" cy="34" rx="50" ry="30" fill="url(#tpiGlow)"/><path d="M40 57V31a20 20 0 0 1 40 0v26z" fill="url(#tpiVoid)"/><path d="M60 37m-9 0a9 9 0 1 1 9 9a5.5 5.5 0 1 1-5.5-5.5" fill="none" stroke="#f6e2ff" stroke-width="2.4" stroke-linecap="round" opacity=".95"/><path d="M36 58V31a24 24 0 0 1 48 0v27" fill="none" stroke="#f6c35a" stroke-width="5" stroke-linejoin="round"/><path d="M36 58V31a24 24 0 0 1 48 0v27" fill="none" stroke="#fff2c8" stroke-width="1.2" opacity=".7"/><rect x="31" y="54" width="14" height="5" rx="1.5" fill="#e39a2f"/><rect x="75" y="54" width="14" height="5" rx="1.5" fill="#e39a2f"/><circle cx="60" cy="6.5" r="3" fill="#fff2c8"/><circle cx="22" cy="22" r="1.4" fill="#f3dcff"/><circle cx="99" cy="17" r="1.8" fill="#f3dcff"/><circle cx="104" cy="38" r="1.1" fill="#f3dcff"/><circle cx="16" cy="42" r="1.2" fill="#f3dcff"/></svg>`;
 /** Sans ordre ni clic pendant ce temps (ms), le mode ordres de l'île se range de lui-même */
 export const IDLE_MS = 5000;
 
@@ -147,6 +169,13 @@ export class CommandUI implements ToolInput {
   private goalEl: HTMLElement;
   /** le curseur est sur le portail, des troupes choisies : un ordre y fait passer le portail */
   private overPortal = false;
+  /** l'outil de la base des Enfers (les boutons carrés à gauche de « Ma base ») */
+  tool: BaseTool = 'select';
+  /** le bâtiment qu'on déplace (son identifiant) ; la case où l'on a vérifié la place, et si elle convient */
+  private moving: number | null = null;
+  private moveAt = { cell: '', ok: false };
+  /** le bâtiment désigné par un premier clic de démolition (un second clic, sous 4 s, le démolit) */
+  private razeAsk: { id: number; t: number } | null = null;
 
   constructor(root: HTMLElement, private host: CommandHost) {
     this.bar = document.createElement('div');
@@ -171,6 +200,7 @@ export class CommandUI implements ToolInput {
     if (this.theater?.layer && this.theater !== t) this.theater.layer.selected = new Set();
     this.placing = null;
     this.wall.reset();
+    this.tool = 'select'; this.moving = null; this.razeAsk = null;
     this.theater?.ghost?.(null);
     this.theater = t;
     // hors des Enfers, `frame` n'est plus appelé : la cible du prochain bastion restait affichée à la surface
@@ -280,6 +310,12 @@ export class CommandUI implements ToolInput {
       this.host.canvas.style.cursor = 'copy';
       return;
     }
+    // un outil de la base : le bâtiment visé s'éclaire (vert : à déplacer, rouge : à démolir), le bâtiment déplacé suit le curseur
+    if (this.tool !== 'select' && t.kind === 'hell') {
+      if (p) this.toolHover(p);
+      this.host.canvas.style.cursor = this.tool === 'move' ? (this.moving !== null ? 'copy' : 'grab') : 'crosshair';
+      return;
+    }
     const portal = !!p && !!t.atPortal?.(p[0], p[1]) && this.canCross();
     const pass = portal && this.cmd.selected.size > 0;
     if (pass !== this.overPortal) { this.overPortal = pass; this.host.canvas.title = pass ? tr('Clic droit : passer le portail') : ''; this.barKey = ''; this.render(); }
@@ -358,7 +394,88 @@ export class CommandUI implements ToolInput {
   /** Clic droit (sans glisser : un glisser fait tourner la vue) : un tracé de mur en cours s'abandonne d'abord, puis la pose s'arrête */
   rightClick(e: PointerInfo) {
     if (this.placing) { if (this.cancelTrace()) return; this.stopPlacing(); return; }
+    // un outil de la base : un bâtiment en main reste où il était ; sinon on lâche l'outil
+    if (this.tool !== 'select') { this.dropTool(); return; }
     this.orderAt(e.x, e.y);
+  }
+
+  /** Prend un outil de la base (reprendre le même : on revient au choix des troupes) */
+  setTool(tool: BaseTool) {
+    const next = this.tool === tool ? 'select' : tool;
+    if (this.placing) { this.placing = null; this.wall.reset(); }
+    this.tool = next; this.moving = null; this.razeAsk = null; this.moveAt.cell = '';
+    this.cmd.armed = null;
+    this.theater?.ghost?.(null);
+    this.host.canvas.style.cursor = '';
+    if (next === 'move') this.host.toast(tr('Déplacer : cliquez un bâtiment de la base, puis sa nouvelle place. Échap ou clic droit : arrêter.'));
+    else if (next === 'demolish') this.host.toast(tr('Démolir : cliquez un bâtiment de la base, puis encore une fois pour confirmer (rien n’est rendu). Échap ou clic droit : arrêter.'));
+    this.barKey = '';
+    this.render();
+  }
+  /** Échap ou clic droit avec un outil : le bâtiment en main reste à sa place ; sinon, retour au choix des troupes */
+  private dropTool() {
+    if (this.moving !== null) { this.moving = null; this.moveAt.cell = ''; this.theater?.ghost?.(null); this.render(); return; }
+    this.setTool('select');
+  }
+
+  /** Le survol avec un outil de la base : le fantôme du bâtiment visé, ou du bâtiment déplacé à sa nouvelle place */
+  private toolHover(p: [number, number]) {
+    const t = this.theater, b = this.host.war.base;
+    if (!t?.ghost || !b) return;
+    if (this.moving !== null) {
+      const it = b.hell.buildings.get(this.moving);
+      if (!it || it.down) { this.moving = null; t.ghost(null); return; }
+      // (la place n'est revérifiée que quand le curseur change de case)
+      const cell = `${Math.floor(p[0])},${Math.floor(p[1])}`;
+      if (cell !== this.moveAt.cell) this.moveAt = { cell, ok: b.relocateWhy(it, p[0], p[1]) === null };
+      const camp = b.camp(zoneOfZ(Math.floor(p[1])));
+      t.ghost(it.kind as BaseKind, p[0], p[1], this.moveAt.ok, camp ? [camp.site.x, camp.site.z] : null);
+      return;
+    }
+    const it = b.at(p[0], p[1]);
+    if (it) t.ghost(it.kind as BaseKind, it.site.x, it.site.z, this.tool === 'move' && it.kind !== 'camp');
+    else t.ghost(null);
+  }
+
+  /** Un clic avec un outil de la base : prendre ou poser le bâtiment à déplacer ; désigner puis démolir */
+  private toolAt(p: [number, number]) {
+    const b = this.host.war.base;
+    if (!b) return;
+    const name = (k: string) => ({ icon: BASE_DEFS[k as BaseKind].icon, name: BASE_DEFS[k as BaseKind].name });
+    if (this.tool === 'move' && this.moving !== null) {
+      const it = b.hell.buildings.get(this.moving);
+      if (!it || it.down) { this.moving = null; this.theater?.ghost?.(null); this.render(); return; }
+      const why = b.relocate(it, p[0], p[1]);
+      if (why) { this.host.toast(why); return; }
+      this.host.click();
+      this.host.toast(tr('{icon} {name} : déplacé.', name(it.kind)));
+      this.moving = null; this.moveAt.cell = '';
+      this.theater?.ghost?.(null);
+      this.render();
+      return;
+    }
+    const it = b.at(p[0], p[1]);
+    if (!it) { this.host.toast(tr('Cliquez un bâtiment de votre base.')); return; }
+    if (this.tool === 'move') {
+      const why = it.kind === 'camp' ? tr('Le camp de base ne se déplace pas : c’est le cœur de la base.') : null;
+      if (why) { this.host.toast(why); return; }
+      this.moving = it.id; this.moveAt.cell = '';
+      this.host.click();
+      this.host.toast(tr('{icon} {name} : cliquez sa nouvelle place (Échap : le laisser où il est).', name(it.kind)));
+      this.toolHover(p);
+    } else {
+      const now = performance.now();
+      if (this.razeAsk?.id === it.id && now - this.razeAsk.t < 4000) {
+        const why = b.demolish(it);
+        this.razeAsk = null;
+        if (why) this.host.toast(why);
+        else { this.host.click(); this.host.toast(tr('{icon} {name} : démoli.', name(it.kind))); this.theater?.ghost?.(null); }
+      } else {
+        this.razeAsk = { id: it.id, t: now };
+        this.host.toast(it.kind === 'camp' ? tr('Le camp de base ne se démolit pas : c’est le cœur de la base.') : tr('{icon} {name} : cliquez encore pour le démolir (rien n’est rendu).', name(it.kind)));
+      }
+    }
+    this.render();
   }
   /** Abandonne le tracé de mur en cours (le point A) : vrai s'il y en avait un */
   private cancelTrace() {
@@ -375,6 +492,7 @@ export class CommandUI implements ToolInput {
     if (!this.placing) this.stopPlacing();
     else {
       this.cmd.armed = null; this.wall.reset();
+      this.tool = 'select'; this.moving = null; this.razeAsk = null;
       this.host.toast(kind === 'palisade' ? tr('{icon} Palissade : un clic au point A, un clic au point B (ou glissez) : le mur se pose en ligne libre, droite ou en diagonale ({cost} le pan). B devient le début du suivant ; G : porte ici ; Échap ou clic droit : arrêter.', { icon: BASE_DEFS.palisade.icon, cost: costText(BASE_DEFS.palisade.cost) }) : kind === 'gate' ? tr('{icon} Porte : survolez un pan de mur (elle s’y insère, en le remplaçant) et cliquez ({cost}). Échap ou clic droit : arrêter.', { icon: BASE_DEFS.gate.icon, cost: costText(BASE_DEFS.gate.cost) }) : tr('{icon} {name} : cliquez au sol pour le poser ({cost}). Échap ou clic droit : arrêter.', { icon: BASE_DEFS[kind!].icon, name: BASE_DEFS[kind!].name, cost: costText(BASE_DEFS[kind!].cost) }));
     }
     this.render();
@@ -402,6 +520,7 @@ export class CommandUI implements ToolInput {
     const t = this.theater!, p = t.pick(x, y);
     if (!p) return;
     if (this.placing) { this.placeAt(x, y); return; }
+    if (this.tool !== 'select' && t.kind === 'hell') { this.toolAt(p); return; }
     // attaquer en marchant, armé : le clic donne l'ordre
     if (this.cmd.armed && this.cmd.selected.size) { this.orderAt(x, y); return; }
     const u = unitAt(this.units(), p[0], p[1], 0.5);
@@ -495,9 +614,10 @@ export class CommandUI implements ToolInput {
     if (k === ' ') { e.preventDefault(); this.host.togglePause(); this.render(); return true; }
     if (k === 'escape' && this.helpOpen) { this.closeHelp(); return true; }
     if (k === 'escape') {
-      const a = escapeAction({ kind: t.kind, placing: !!this.placing, trace: !!this.wall.a, armed: !!this.cmd.armed, selected: this.cmd.selected.size });
+      const a = escapeAction({ kind: t.kind, placing: !!this.placing, trace: !!this.wall.a, armed: !!this.cmd.armed, selected: this.cmd.selected.size, tool: this.tool !== 'select' });
       if (a === 'cancelTrace') this.cancelTrace();
       else if (a === 'stopPlacing') this.stopPlacing();
+      else if (a === 'stopTool') { this.dropTool(); return true; }
       else if (a === 'disarm') this.cmd.armed = null;
       else if (a === 'deselect') this.cmd.clear();
       else if (a === 'leaveIsle') this.host.leaveIsle();
@@ -560,6 +680,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'fight') w.startInvasion();
     else if (a === 'wave') { const why = w.callWhy(); if (why) this.host.toast(why); else { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la prochaine vague arrive !')); } }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
+    else if (a.startsWith('tool:')) { this.host.click(); this.setTool(a.slice(5) as BaseTool); return; }
     else if (a.startsWith('rech:')) { this.recruitHell(a.slice(5) as TroopKind); if (this.placing) { this.render(); return; } }
     else if (a === 'leave') { if (this.theater.kind === 'isle') this.host.leaveIsle(); else this.host.leaveHell(); return; }
     this.host.click();
@@ -639,10 +760,14 @@ export class CommandUI implements ToolInput {
     if (this.placing === 'palisade') return this.wallInfo || tr('Mur : cliquez pour choisir le début (A), puis la fin (B).');
     if (this.placing === 'gate') return tr('Porte : survolez un pan de mur et cliquez : elle s’y insère. Échap ou clic droit pour arrêter.');
     if (this.placing) return tr('Cliquez au sol pour poser : {name}. Échap ou clic droit pour arrêter.', { name: BASE_DEFS[this.placing].name });
+    if (this.tool === 'move') return this.moving !== null ? tr('Cliquez la nouvelle place du bâtiment. Échap ou clic droit : le laisser où il est.') : tr('Déplacer : cliquez un bâtiment de la base (pas le camp). Échap pour arrêter.');
+    if (this.tool === 'demolish') return tr('Démolir : cliquez un bâtiment, puis encore une fois pour confirmer. Rien n’est rendu.');
     if (this.overPortal) return tr('Clic droit : passer le portail');
     if (this.cmd.armed) return tr('Cliquez à l’endroit à attaquer : les soldats combattront ce qu’ils croisent.');
     if (n > 1) return tr('{n} soldats choisis : clic droit : envoyer · A attaquer · H tenir · R replier · glisser : tracer un cadre.', { n });
     if (n) return tr('{n} soldat choisi : clic droit : envoyer · A attaquer · H tenir · R replier · glisser : tracer un cadre.', { n });
+    // sur l'île : le chemin des Enfers (la carte de passage est juste à gauche de la bulle)
+    if (this.theater?.kind === 'isle' && !this.host.war.portalOut) return tr('Choisissez des soldats ci-dessus (clic), puis cliquez sur {btn} pour les envoyer.', { btn: `<b>${tr('Envoyer aux Enfers')}</b>` });
     return tr('Choisissez des soldats (clic), puis clic droit où les envoyer · glisser : tracer un cadre · clic droit glissé : tourner.');
   }
 
@@ -663,7 +788,7 @@ export class CommandUI implements ToolInput {
       const of = us.filter((u) => u.kind === k);
       if (!of.length) return '';
       const hp = of.reduce((s, u) => s + u.hp, 0) / of.reduce((s, u) => s + u.maxHp, 0), on = of.filter((u) => sel.selected.has(u.id)).length;
-      return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${tr('{who} : choisir (Maj : ajouter)', { who: `${troopForm(k, age).plural}${troopForm(k, age).name !== TROOPS[k].name ? tr(' (ex-{old})', { old: TROOPS[k].plural.toLowerCase() }) : ''}` })}"><span class="ti">${pic(troopForm(k, age).icon, 30)}</span><span class="ttx"><b>${isle ? `${on ? `${on} / ` : ''}` : `${on} / `}${of.length}</b><span class="tn">${troopForm(k, age).plural}</span></span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
+      return `<button class="tcard${on ? ' on' : ''}" data-a="kind:${k}" title="${tr('{who} : choisir (Maj : ajouter)', { who: `${troopForm(k, age).plural}${troopForm(k, age).name !== TROOPS[k].name ? tr(' (ex-{old})', { old: TROOPS[k].plural.toLowerCase() }) : ''}` })}"><span class="ti">${this.face(k, age, 30)}</span><span class="ttx"><b>${isle ? `${on ? `${on} / ` : ''}` : `${on} / `}${of.length}</b><span class="tn">${troopForm(k, age).plural}</span></span><i style="width:${Math.round(hp * 100)}%" class="${hp < 0.35 ? 'low' : ''}"></i></button>`;
     }).join('');
     const ctx = w.recruitCtx(this.host.age(), this.host.pop());
     // à droite : le même menu que dans les Enfers (« Ma garnison » sur l'île : Bâtir les défenses, Recruter), avec ses deux onglets
@@ -680,12 +805,18 @@ export class CommandUI implements ToolInput {
     const none = isle ? tr('Aucune troupe sur l’île : recrutez à la caserne (à droite).') : w.army.troops.some((x) => x.where === 'hell') ? tr('Aucune troupe debout ici : les blessés se soignent.') : tr('Aucune troupe ici : faites venir la garnison de l’île (Renforts, à gauche).');
     // dans les Enfers : une seule frise compacte (le front, l'alerte, l'armée) ; sur l'île, le ruban de pastilles
     this.bar.classList.toggle('inhell', !isle);
+    // la bulle d'aide du moment (à droite de la carte de passage) ; sans troupe ici, ce qu'il faut faire pour en avoir
+    const tip = !us.length && !this.placing && this.tool === 'select' ? none : this.hint();
+    // au-dessus de la rangée : les troupes sur le terrain (une carte par sorte, « Tous »), seulement s'il y en a
+    const field = us.length ? `<div class="tbot panel"><div class="tcards">${cards}<button class="tall${step === 'select' ? ' guide' : ''}" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button></div></div>` : '';
     const html = `${isle ? `<div class="tstate">${ribbon}</div>` : this.frontBar(wounded)}
-      <div class="tfoot">
+      <div class="tfoot ${isle ? 'tisle' : 'thell'}">
+        ${field}
         ${this.passDock(isle, step)}
-        <div class="tbot panel"><div class="tcards">${cards || `<span class="tnone">${none}</span>`}${us.length ? `<button class="tall${step === 'select' ? ' guide' : ''}" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button>` : ''}</div><div class="thint">${this.hint()}</div></div>
+        <div class="tbub" role="status"><span class="tbi" aria-hidden="true">i</span><p class="thint">${tip}</p></div>
+        ${isle ? '' : this.toolDock()}
         ${rec}
-        <div class="tcorner"><button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="${tr('Rappel des contrôles')}"><span class="tq">?</span><span class="tl">${tr('Aide')}</span></button><button data-a="leave" class="tx go" title="${isle ? tr('Retourner au village (Échap)') : tr('Quitter les Enfers et revenir sur l’île')}"><span class="oi">${pic(isle ? '🏠' : '🏝', 24)}</span><span class="tl">${isle ? tr('Retourner au village') : tr('Retourner sur l’île')}</span></button></div>
+        <div class="tcorner panel"><button data-a="help" class="thb${this.helpOpen ? ' on' : ''}" title="${tr('Rappel des contrôles')}"><span class="tq">?</span><span class="tl">${tr('Aide')}</span></button><button data-a="leave" class="tx go" title="${isle ? tr('Retourner au village (Échap)') : tr('Quitter les Enfers et revenir sur l’île')}"><span class="oi">${pic(isle ? '🏠' : '🏝', 24)}</span><span class="tl">${isle ? tr('Retourner au village') : tr('Retourner sur l’île')}</span></button></div>
       </div>${this.helpOpen ? `<ul class="thelp panel">${CONTROLS_HELP.map(([k, t]) => `<li><b>${tr(k)}</b><span>${tr(t)}</span></li>`).join('')}</ul>` : ''}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
   }
@@ -732,21 +863,56 @@ export class CommandUI implements ToolInput {
         const why = recruitWhy(w.army, k, ctx);
         // il ne manque que l'équipement : un clic le fait fabriquer, la recrue part dès qu'il est prêt
         const craft = !!why && onlyGearMissing(w.army, k, ctx);
-        const fm = troopForm(k, age), gear = [...fm.gear.map((g) => gearName(g)), ...(fm.mount ? [tr('cheval')] : [])].join(' + ');
+        const fm = troopForm(k, age);
         const tip = craft ? tr('{why} : cliquez, l’atelier du village fabrique l’équipement et la recrue part dès qu’il est prêt', { why: noCraft(why!) }) : why ?? tr('Recruter : {troop}. {desc} ({items}, {time} s)', { troop: troopLabel(k, age), desc: fm.desc, items: andJoin([...fm.gear.map((g) => `1 ${gearName(g)}`), ...(fm.mount ? [tr('1 cheval de l’écurie')] : [])]), time: TROOPS[k].time });
-        const sub = craft ? tr('à fabriquer') : why ? shortWhy(noCraft(why)) : gear;
-        return `<button data-a="rec:${k}" class="trb tb rh ${why ? (craft ? 'craft' : 'off') : 'go'}" title="${esc(`${tr('{name} : {tip}', { name: fm.name, tip })}${fm.name !== TROOPS[k].name ? tr(' (ex-{old})', { old: TROOPS[k].name.toLowerCase() }) : ''}`)}"><span class="tic">${pic(fm.icon, 34)}</span><span class="ttx"><b>${fm.name}</b><small class="co">${sub}</small></span></button>`;
+        const note = craft ? tr('à fabriquer') : why ? shortWhy(noCraft(why)) : '';
+        return this.troopCard(`rec:${k}`, k, age, why ? (craft ? 'craft' : 'off') : 'go', `${tr('{name} : {tip}', { name: fm.name, tip })}${fm.name !== TROOPS[k].name ? tr(' (ex-{old})', { old: TROOPS[k].name.toLowerCase() }) : ''}`, note, TROOPS[k].time);
       }).join('')}</div></div>`;
     } else {
       // (poser une défense : on quitte le commandement, l'outil de construction du village prend la main)
       const tile = (k: string) => {
         const d = this.host.defenseInfo(k), why = this.host.defenseLock(k), n = this.host.defenseCount(k);
-        return `<button data-a="ibuild:${k}" class="trb tb${why ? ' off' : ''}" title="${esc(`${d.name}. ${why ?? d.desc}`)}"><span class="tic">${pic(d.icon, 34)}</span><span class="ttx"><b>${d.name}</b><small class="co">${why ? tr('verrouillé') : n ? tr('{n} en place', { n }) : tr('à poser')}</small></span></button>`;
+        return `<button data-a="ibuild:${k}" class="trb tb tbv${why ? ' off' : ''}" title="${esc(`${d.name}. ${why ?? d.desc}`)}"><span class="tic">${pic(d.icon, 34)}</span><b>${d.name}</b><small class="co">${why ? `${pic('🔒', 12)} ${tr('verrouillé')}` : n ? tr('{n} en place', { n }) : tr('à poser')}</small></button>`;
       };
-      const fam = (cls: string, title: string, inner2: string) => `<div class="tfam ${cls}"><h6>${tr(title)}</h6><div class="tbuilds">${inner2}</div></div>`;
+      // (les familles se lisent au filet qui les sépare ; leur nom est dans l'infobulle)
+      const fam = (cls: string, title: string, inner2: string) => `<div class="tfam ${cls}" title="${tr(title)}"><div class="tbuilds">${inner2}</div></div>`;
       inner = `${fam('hold', 'Garder l’île', tile('watchtower') + tile('barracks'))}${fam('def', 'Remparts', tile('wall') + tile('gate'))}`;
     }
-    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5>${tr('Ma garnison')} <small>${pic('🛡', 16)} ${armySize(w.army)} / ${armyCap(ctx)}</small></h5><span class="ttabs"><button data-a="tab:build" class="${tab === 'build' ? 'on' : ''}">${tr('Bâtir')}</button><button data-a="tab:rec" class="${tab === 'rec' ? 'on' : ''}">${tr('Recruter')}</button></span>${queue}</div><div class="tmrow">${inner}</div></div>`;
+    const size = armySize(w.army), cap = armyCap(ctx);
+    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5>${pic('👥', 20)}<span class="tmt">${tr('Ma garnison')}</span><small>${size} / ${cap}</small></h5><i class="tprog" title="${tr('Soldats de la garnison de l’île, sur le maximum que la caserne peut loger')}"><i style="width:${cap ? Math.min(100, Math.round((size / cap) * 100)) : 0}%"></i></i>${queue}</div><div class="tmbody"><div class="tmrow">${inner}</div>${this.tabs(tab)}</div></div>`;
+  }
+
+  /** Les onglets Bâtir et Recruter (pilules empilées, l'ouvert doré) : à droite de « Ma garnison », à gauche de « Ma base » */
+  private tabs(tab: 'build' | 'rec') {
+    return `<span class="ttabs"><button data-a="tab:build" class="${tab === 'build' ? 'on' : ''}">${pic('🔨', 18)}<span>${tr('Bâtir')}</span></button><button data-a="tab:rec" class="${tab === 'rec' ? 'on' : ''}">${PERSON_PLUS}<span>${tr('Recruter')}</span></button></span>`;
+  }
+
+  /** Le visage d'une troupe : son portrait (rendu du modèle 3D, ou dessin fourni) s'il est prêt, sinon son picto */
+  private face(k: TroopKind, age: number, size: number) {
+    const u = this.host.portrait?.(k, age);
+    return u ? `<img class="tpimg" src="${u}" alt="" draggable="false" decoding="async">` : pic(troopForm(k, age).icon, size);
+  }
+
+  /**
+   * Une carte de recrue, la même sur l'île et dans les Enfers : le portrait en pied à gauche ; le nom et le rôle en pilule à
+   * droite ; en pied, ce qu'elle prend (une place, ses pièces, le cheval, le temps), ou la raison du refus (pilule rouge,
+   * cadenas), ou « à fabriquer » (pilule ambrée)
+   */
+  private troopCard(a: string, k: TroopKind, age: number, state: 'go' | 'craft' | 'off', tip: string, note: string, time: number) {
+    const fm = troopForm(k, age), r = troopRole(k, age), port = this.host.portrait?.(k, age);
+    const foot = state === 'go' ? CommandUI.troopCost(k, age, time) : `<span class="tpill ${state}">${pic(state === 'off' ? '🔒' : '🛠', 13)}<span>${note}</span></span>`;
+    return `<button data-a="${a}" class="trb tb rh trc ${state}" title="${tip.replace(/"/g, '&quot;')}"><span class="tpo${port ? '' : ' none'}">${port ? `<img class="tpimg" src="${port}" alt="" draggable="false" decoding="async">` : pic(fm.icon, 38)}</span><span class="ttx"><b>${fm.name}</b><span class="trole">${pic(r.icon, 14)}<span>${tr(r.text)}</span></span></span><span class="tco">${foot}</span></button>`;
+  }
+
+  /** Ce que prend une recrue, en pastilles : une place de la garnison, une de chaque pièce, le cheval, la durée */
+  private static troopCost(k: TroopKind, age: number, time: number) {
+    const fm = troopForm(k, age), it = (title: string, img: string, n: string) => `<span title="${title}">${img}${n}</span>`;
+    return [
+      it(tr('Une place de la garnison'), pic('👥', 14), '1'),
+      ...fm.gear.map((g) => it(gearName(g), `<img class="pic" src="./icons/gear/${g}.webp" width="14" height="14" alt="" draggable="false" decoding="async">`, '1')),
+      ...(fm.mount ? [it(tr('cheval'), pic('🐎', 14), '1')] : []),
+      it(tr('Durée du recrutement'), pic('⏳', 13), `${time} s`),
+    ].join('');
   }
 
   /**
@@ -755,7 +921,7 @@ export class CommandUI implements ToolInput {
    */
   private passDock(isle: boolean, step: 'select' | 'send' | null = null) {
     const w = this.host.war, n = this.cmd.selected.size, closed = isle ? w.hellWhy() : null;
-    const main = isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}${closed ? ' closed' : ''}${step === 'send' ? ' guide' : ''}" title="${isle ? (closed ?? tr('Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)')) : tr('Les troupes choisies repassent le portail et rentrent sur l’île')}"><span class="oi">${pic('🌀', 26)}</span><span>${isle ? tr('Envoyer aux Enfers') : tr('Renvoyer les troupes sur l’île')}<small>${n > 1 ? tr('{n} troupes choisies', { n }) : n ? tr('{n} troupe choisie', { n }) : tr('choisir des troupes')}</small></span></button>`;
+    const main = isle && w.portalOut ? '' : `<button data-a="portal" class="tord prt${n ? '' : ' idle'}${closed ? ' closed' : ''}${step === 'send' ? ' guide' : ''}" title="${isle ? (closed ?? tr('Les troupes choisies passent le portail et partent en expédition dans les Enfers (facultatif)')) : tr('Les troupes choisies repassent le portail et rentrent sur l’île')}"><span class="oi">${pic('🌀', 24)}</span><span class="tpt"><b>${isle ? tr('Envoyer aux Enfers') : tr('Renvoyer les troupes sur l’île')}</b><small>${n > 1 ? tr('{n} troupes choisies', { n }) : n ? tr('{n} troupe choisie', { n }) : tr('choisir des troupes')}</small></span>${PORTAL_ART}</button>`;
     const links = this.hellLinks(isle);
     return main || links ? `<div class="tfl">${main}${links}</div>` : '';
   }
@@ -793,9 +959,10 @@ export class CommandUI implements ToolInput {
     const btn = (k: BaseKind, legend: string, extra = '') => {
       const d = BASE_DEFS[k], afford = canAfford(world, d.cost), locked = k !== 'camp' && !hasCamp;
       const why = locked ? tr('d’abord le Camp') : afford ? '' : tr('manque {x}', { x: miss(d.cost) });
-      return `<button data-a="build:${k}" class="trb tb${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${tr('{name} ({cost}) : {legend}', { name: d.name, cost: costText(d.cost), legend: tr(legend) })}. ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}"><span class="tic">${pic(d.icon, 34)}</span><span class="ttx"><b>${tr(CommandUI.BSHORT[k])}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></span></button>`;
+      return `<button data-a="build:${k}" class="trb tb tbv${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${tr('{name} ({cost}) : {legend}', { name: d.name, cost: costText(d.cost), legend: tr(legend) })}. ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}"><span class="tic">${pic(d.icon, 34)}</span><b>${tr(CommandUI.BSHORT[k])}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></button>`;
     };
-    const fam = (cls: string, title: string, tip: string, inner: string) => `<div class="tfam ${cls}" title="${tr(tip)}"><h6>${tr(title)}</h6><div class="tbuilds">${inner}</div></div>`;
+    // (les familles — tenir, défendre, éclairer — se lisent au filet qui les sépare ; leur nom est dans l'infobulle)
+    const fam = (cls: string, title: string, tip: string, inner: string) => `<div class="tfam ${cls}" title="${tr(title)} : ${tr(tip)}"><div class="tbuilds">${inner}</div></div>`;
     const tab = this.menuTab;
     const inner = tab === 'build'
       ? `${fam('hold', 'Tenir', 'Tenir la zone', btn('camp', hasCamp ? 'point de repli' : 'à poser d’abord', hasCamp ? '' : ' first') + btn('post', 'recrues sur place') + btn('smithy', '+20 % de force') + btn('infirmary', 'soins rapides'))}${
@@ -803,9 +970,19 @@ export class CommandUI implements ToolInput {
         fam('lit', 'Éclairer', 'Éclairer : repousse la brume', btn('brazier', 'repousse la brume'))}`
       : `<div class="tfam"><div class="tbuilds">${TROOP_KINDS.filter((k) => age >= TROOPS[k].age).map((k) => {
         const p = this.hellPlan(k), fm = troopForm(k, age);
-        return `<button data-a="rech:${k}" class="trb tb rh ${p.state === 'ready' ? 'go' : p.state === 'craft' ? 'craft' : 'off'}" title="${`${troopLabel(k, age)}. ${fm.desc} — ${p.tip}`.replace(/"/g, '&quot;')}"><span class="tic">${pic(fm.icon, 34)}</span><span class="ttx"><b>${fm.name}</b><small class="co">${p.sub}</small></span></button>`;
+        return this.troopCard(`rech:${k}`, k, age, p.state === 'ready' ? 'go' : p.state === 'craft' ? 'craft' : 'off', `${troopLabel(k, age)}. ${fm.desc} — ${p.tip}`, p.sub, Math.round(TROOPS[k].time * 0.75));
       }).join('')}</div></div>`;
-    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5 title="${tr('La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’{zone}', { zone: zoneTo(zi) })}">${tr('Ma base')}</h5><span class="ttabs"><button data-a="tab:build" class="${tab === 'build' ? 'on' : ''}">${tr('Bâtir')}</button><button data-a="tab:rec" class="${tab === 'rec' ? 'on' : ''}">${tr('Recruter')}</button></span>${this.hellQueue()}</div><div class="tmrow">${inner}</div></div>`;
+    return `<div class="tmenu panel tbase tbarr"><div class="tmh"><h5 title="${tr('La base avancée : bâtissez dans le seuil du portail ou dans une zone conquise ; la brume s’ouvre jusqu’{zone}', { zone: zoneTo(zi) })}">${pic('⛺', 20)}<span class="tmt">${tr('Ma base')}</span></h5>${this.hellQueue()}</div><div class="tmbody"><div class="tmrow">${inner}</div></div></div>`;
+  }
+
+  /**
+   * À gauche de « Ma base » (Enfers) : les onglets Bâtir / Recruter, et dessous les outils de la base en boutons carrés :
+   * choisir les troupes (l'outil ordinaire), déplacer un bâtiment, le démolir. (Pas de « tourner » : les bâtiments de la base
+   * n'ont pas d'orientation, ils font face au portail d'eux-mêmes.)
+   */
+  private toolDock() {
+    const btn = (k: BaseTool, icon: string, label: string) => `<button data-a="tool:${k}" class="ttl${this.tool === k ? ' on' : ''}" title="${label}" aria-label="${label}">${icon}</button>`;
+    return `<div class="ttool panel">${this.tabs(this.menuTab)}<span class="ttools">${btn('select', ic('pointer', 22, 2), tr('Choisir les troupes (l’outil ordinaire)'))}${btn('move', ic('hand', 22, 2), tr('Déplacer un bâtiment de la base'))}${btn('demolish', ic('demolish', 22, 2), tr('Démolir un bâtiment de la base (rien n’est rendu)'))}</span></div>`;
   }
 
   /** La file des recrues des Enfers : « En route : 🛡️ 12 s » (et 🛠️ pour celles qui attendent l'atelier) */

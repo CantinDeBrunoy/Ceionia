@@ -71,7 +71,7 @@ Les images de `public/menu/` sont des illustrations fournies par l'auteur (pas g
 
 ## Liens avec les autres systèmes
 - `Sim` fournit le conseil (`message`, `messageKind`, `messageExp`, `messageIsle`, `messageRail`), la progression d'âge (`ageProgress`) et les compteurs (`counts`) : voir [besoins-population.md](besoins-population.md), [ages.md](ages.md).
-- Les expéditions (cartes `#expList`, fenêtre, décisions, récit) : [expeditions.md](expeditions.md). Les ordres aux troupes et la barre des troupes ne sont **pas** dans `ui.ts` : `ui/command.ts` ([armee-combat.md](armee-combat.md)).
+- Les expéditions (cartes `#expList`, fenêtre, décisions, récit) : [expeditions.md](expeditions.md). Les ordres aux troupes et la barre des troupes ne sont **pas** dans `ui.ts` : `ui/command.ts` ([armee-combat.md](armee-combat.md), « La barre du bas » : même coque crème et or que les fenêtres peintes `.cePop`).
 - Le tutoriel (`tutorial.lock(k)` peut verrouiller une vignette) : [tutoriel.md](tutoriel.md). Les bulles du volet militaire (`WarTips`) : `ui/warTips.ts`.
 - L'ensemble des textes français : voir le dictionnaire `src/i18n/en/ui.ts`.
 
