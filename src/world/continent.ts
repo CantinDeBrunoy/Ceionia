@@ -120,6 +120,8 @@ export interface ContinentPlan {
   orient: number;
   /** relief de fond (version 3 ; absent : celui des versions 1 et 2) */
   relief?: { freq: number; amp: number; lift: number };
+  /** lit de cailloux de l'amont de la rivière (version 3) : part du cours où il finit, phase de son bord irrégulier */
+  bed?: { end: number; ph: number };
 }
 
 /** Distance au centre du continent, rapportée à son rayon (côte vers 1) : ellipse tournée, qui s'avance en caps ou se creuse en baies selon l'angle */
@@ -137,6 +139,34 @@ function coastDist(c: ContinentPlan['coast'], u: number, v: number) {
 export function riverU(r: ContinentPlan['river'], v: number) {
   const t = clamp((v - r.v) / (1 - r.v), 0, 1);
   return lerp(r.u, r.mouth, t) + smoothstep(0, 0.15, t) * (r.a1 * Math.sin(t * r.k1 + r.p1) + r.a2 * Math.sin(t * r.k2 + r.p2));
+}
+
+/**
+ * Lit de cailloux : 1 sur l'amont de la rivière, de la source jusque vers `bed.end` du cours (0,3 à 0,4), puis il s'efface sur
+ * 0,08 avec un bord irrégulier ; 0 au-delà, et toujours 0 sans `bed` (versions 1 et 2). `t` : part du cours (0 source, 1 embouchure)
+ */
+export function rockyBed(p: ContinentPlan, t: number) {
+  if (!p.bed || t < 0) return 0;
+  const e = p.bed.end + 0.025 * Math.sin(t * 37 + p.bed.ph) + 0.015 * Math.sin(t * 91 + p.bed.ph * 2);
+  return 1 - smoothstep(e - 0.08, e, t);
+}
+
+/**
+ * Cases du lit de cailloux (0 … 255) : la force du lit (`rockyBed`) à moins de 4 cases de l'axe de la rivière, nulle au-delà
+ * et avant la version 3. Ne dit rien de l'eau : le décor vérifie aussi que la case est bien un haut-fond (voir `VegView`)
+ */
+export function fillRiverBed(gen: number, seed: number, n: number, out: Uint8Array) {
+  out.fill(0);
+  if (gen < GEN_VAR) return;
+  const p = continentPlan(seed, gen), r = p.river;
+  if (!p.bed) return;
+  for (let wz = 0; wz < n; wz++)
+    for (let wx = 0; wx < n; wx++) {
+      const [x, z] = toPlan(p.orient, wx + 0.5, wz + 0.5, n), v = z / n;
+      if (v <= r.v) continue;
+      const k = rockyBed(p, (v - r.v) / (1 - r.v)) * (1 - smoothstep(2.5, 4, Math.abs(x - n * riverU(r, v))));
+      out[wz * n + wx] = Math.round(k * 255);
+    }
 }
 
 /** Point du pourtour d'une contrée à l'angle t (dans son repère), à la distance f rapportée au rayon */
@@ -212,7 +242,11 @@ export function continentPlan(seed: number, gen = GEN): ContinentPlan {
       p.relief = { freq: R(0.022, 0.04), amp: R(1.2, 2.1), lift: R(1.1, 1.8) };
       p.orient = Math.floor(rnd() * 8);
     }
-    if (fits(p)) return p;
+    if (fits(p)) {
+      // (tiré à part, pour ne rien changer aux autres tirages)
+      if (v3) { const b = mulberry32(seed * 31 + 977); p.bed = { end: lerp(0.3, 0.4, b()), ph: b() * 2 * Math.PI }; }
+      return p;
+    }
   }
   return SAFE_PLAN;
 }
@@ -297,7 +331,10 @@ export function plannedHeight(x: number, z: number, n: number, s: Simplex, s2: S
     const dr = Math.abs(x - n * riverU(r, v)), w = smoothstep(r.v, r.v + 0.08, v), t = Math.min(1, ((v - r.v) / (1 - r.v)) * 1.15);
     const valley = Math.exp(-(dr * dr) / (2 * 7 * 7)) * w;
     h = lerp(h, Math.min(h, 0.2 + 2.4 * Math.pow(1 - t, 1.6)), valley * 0.85) - valley * t * 0.35;
-    h = lerp(h, -0.9, Math.exp(-(dr * dr) / (2 * 2.1 * 2.1)) * w);
+    // chenal : profond, sauf sur le lit de cailloux de l'amont (version 3), plus large et peu profond, où les rochers affleurent
+    const k = rockyBed(p, (v - r.v) / (1 - r.v)), sg = 2.1 + k * 0.7;
+    const floor = lerp(-0.9, -0.22 + 0.07 * s2.fbm(x * 0.25 + 61, z * 0.25, 2), k);
+    h = lerp(h, floor, Math.exp(-(dr * dr) / (2 * sg * sg)) * w);
   }
   // la mer borde toute la carte
   return lerp(h, Math.min(h, -1), smoothstep(4, 1, Math.min(x, z, n - x, n - z)));
