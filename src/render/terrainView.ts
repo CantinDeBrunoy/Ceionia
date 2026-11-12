@@ -330,28 +330,52 @@ ${BLIGHT_GLSL}
   float foam = smoothstep(0.42, 0.62, n + band * 0.45) * band * (1.0 - calm * 0.9);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), foam * 0.8);
   diffuseColor.a = max(diffuseColor.a, foam * 0.9);
-  // rivières : stries claires qui filent vers l'aval, étirées dans le sens du courant
-  vec3 fl = texture2D(uFlow, vWater / ${N.toFixed(1)}).rgb;
+  // rivières : stries claires qui filent vers l'aval, étirées dans le sens du courant. Le motif est tracé dans le repère
+  // de chaque maille d'une grille (3 cases), tourné autour du centre de la maille, et les quatre mailles voisines se
+  // fondent l'une dans l'autre. Un repère tourné autour de l'origine du monde décalait les rangs de plusieurs tirets pour
+  // un centième de radian d'écart de direction : des franges serrées en courbes de niveau, en chevrons et en spirales.
+  // La texture du courant est filtrée : hors de l'eau elle vaut 0 (alpha compris), d'où la direction 2 rg - a.
+  vec4 fl = texture2D(uFlow, vWater / ${N.toFixed(1)});
   if (fl.b > 0.02) {
-    vec2 dir = normalize(fl.rg * 2.0 - 1.0 + 1e-4);
-    vec2 q = vec2(dot(vWater, dir), dot(vWater, vec2(-dir.y, dir.x)));
-    // tirets allongés dans le sens du courant, en rangs décalés qui avancent vers l'aval
-    float lane = q.y * 2.4, row = floor(lane);
-    float f = fract(q.x * 0.55 - uFlowT * 0.35 + fract(sin(row * 12.9898) * 43758.5453));
-    float dash = smoothstep(0.0, 0.12, f) * smoothstep(0.45, 0.2, f) * smoothstep(0.5, 0.15, abs(fract(lane) - 0.5));
-    float lines = dash * fl.b;
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.97, 1.0), lines * 0.35);
+    vec2 pdir = normalize(fl.rg * 2.0 - fl.a + 1e-4);
+    vec2 gp = vWater / 3.0 - 0.5, g0 = floor(gp), gt = fract(gp);
+    gt = gt * gt * (3.0 - 2.0 * gt);
+    float lines = 0.0, wSum = 0.0, bitK = 0.0;
+    vec3 bitC = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+      vec2 o = vec2(mod(float(i), 2.0), floor(float(i) * 0.5));
+      vec2 cell = g0 + o, c = (cell + 0.5) * 3.0;
+      vec4 cf = texture2D(uFlow, c / ${N.toFixed(1)});
+      vec2 dir = cf.a > 0.3 ? normalize(cf.rg * 2.0 - cf.a + 1e-4) : pdir;
+      float w = mix(1.0 - gt.x, gt.x, o.x) * mix(1.0 - gt.y, gt.y, o.y);
+      vec2 rel = vWater - c;
+      vec2 q = vec2(dot(rel, dir), dot(rel, vec2(-dir.y, dir.x)));
+      float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+      // tirets fins et espacés, un rang sur deux environ, qui avancent vers l'aval
+      float lane = q.y * 1.5 + h * 7.0, row = floor(lane), rh = fract(sin(row * 12.9898 + h * 31.7) * 43758.5453);
+      float f = fract(q.x * 0.34 - uFlowT * 0.22 + rh * 3.0);
+      float dash = smoothstep(0.0, 0.08, f) * smoothstep(0.34, 0.12, f) * smoothstep(0.17, 0.05, abs(fract(lane) - 0.5)) * step(0.45, rh);
+      lines += dash * w;
+      wSum += w;
+      // pétales au printemps, feuilles mortes à l'automne : de petits losanges qui dérivent au fil du courant (chance
+      // réduite : les mailles voisines superposent chacune les leurs)
+      if (uFloatK > 0.01) {
+        vec2 fq = vec2(q.x * 1.4 - uFlowT * 0.5, q.y * 1.4) + h * 17.0;
+        vec2 fc = floor(fq), ff = fract(fq) - 0.5;
+        float fh = fract(sin(dot(fc, vec2(41.3, 289.1))) * 43758.5453);
+        vec2 fo = vec2(fract(fh * 13.7), fract(fh * 71.3)) - 0.5;
+        float fd = abs(ff.x - fo.x * 0.5) * 1.5 + abs(ff.y - fo.y * 0.5);
+        float bit = step(fh, uFloatK * 0.2 * clamp(fl.b * 3.0, 0.0, 1.0)) * (1.0 - smoothstep(0.14, 0.17, fd)) * w;
+        bitC += uFloat * (0.82 + 0.36 * fract(fh * 7.1)) * bit;
+        bitK += bit;
+      }
+    }
+    lines = clamp(lines * fl.b * 2.0 / max(wSum, 1e-3), 0.0, 1.0);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.97, 1.0), lines * 0.4);
     diffuseColor.a = max(diffuseColor.a, lines * 0.6);
-    // pétales au printemps, feuilles mortes à l'automne : de petits losanges qui dérivent au fil du courant
-    if (uFloatK > 0.01) {
-      vec2 fq = vec2(q.x * 1.4 - uFlowT * 0.5, q.y * 1.4);
-      vec2 fc = floor(fq), ff = fract(fq) - 0.5;
-      float fh = fract(sin(dot(fc, vec2(41.3, 289.1))) * 43758.5453);
-      vec2 fo = vec2(fract(fh * 13.7), fract(fh * 71.3)) - 0.5;
-      float fd = abs(ff.x - fo.x * 0.5) * 1.5 + abs(ff.y - fo.y * 0.5);
-      float bit = step(fh, uFloatK * 0.32 * clamp(fl.b * 3.0, 0.0, 1.0)) * (1.0 - smoothstep(0.14, 0.17, fd));
-      diffuseColor.rgb = mix(diffuseColor.rgb, uFloat * (0.82 + 0.36 * fract(fh * 7.1)), bit);
-      diffuseColor.a = max(diffuseColor.a, bit);
+    if (bitK > 0.001) {
+      diffuseColor.rgb = mix(diffuseColor.rgb, bitC / bitK, min(1.0, bitK));
+      diffuseColor.a = max(diffuseColor.a, min(1.0, bitK));
     }
   }
   // glace l'hiver : elle part des rives et des eaux dormantes, en plaques aux bords irréguliers ; l'eau reste libre là où le
@@ -390,10 +414,6 @@ ${BLIGHT_GLSL}
     this.update(seasonOf(0));
   }
 
-  /**
-   * Courant des rivières : l'eau descend la vallée. Pour chaque case d'eau, hauteur moyenne des berges alentour ; le courant
-   * suit la pente de ces berges (des hautes vallées vers les basses), seulement dans les chenaux étroits
-   */
   /** De l'eau à moins de `r` cases de la zone (cases, bornes incluses) ? */
   private waterNear(rect: [number, number, number, number], r: number) {
     const w = this.world;
@@ -402,6 +422,10 @@ ${BLIGHT_GLSL}
     return false;
   }
 
+  /**
+   * Courant des rivières : l'eau descend la vallée, seulement dans les chenaux étroits. L'axe suit le bord de l'eau ; le
+   * sens va vers les berges plus basses le long de cet axe (des hautes vallées vers les basses)
+   */
   private computeFlow() {
     const w = this.world, R = 4, S = N + 1;
     const wet = (k: number) => w.cellAvg(k % N, Math.floor(k / N)) < -0.05 && !w.lake[k];
@@ -422,16 +446,39 @@ ${BLIGHT_GLSL}
       const c = cnt[z1 * S + x1] - cnt[z0 * S + x1] - cnt[z1 * S + x0] + cnt[z0 * S + x0];
       return c ? (sumH[z1 * S + x1] - sumH[z0 * S + x1] - sumH[z1 * S + x0] + sumH[z0 * S + x0]) / c : 0;
     };
+    // axe du chenal : la pente moyenne des berges va surtout d'une rive à l'autre (une rive plus haute que l'autre) ; l'axe
+    // vient donc du bord de l'eau. Part de terre en carré de rayon 2, son gradient (vers les rives), puis tenseur de
+    // structure de ce gradient en carré de rayon 3 : son vecteur propre mineur suit le chenal, même en son milieu où le
+    // gradient s'annule
+    const box = (t: Float64Array, x: number, z: number, r: number) => {
+      const x0 = Math.max(0, x - r), z0 = Math.max(0, z - r), x1 = Math.min(N, x + r + 1), z1 = Math.min(N, z + r + 1);
+      return [t[z1 * S + x1] - t[z0 * S + x1] - t[z1 * S + x0] + t[z0 * S + x0], (x1 - x0) * (z1 - z0)];
+    };
+    const dryF = new Float32Array(N * N);
+    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) { const [c, a] = box(cnt, x, z, 2); dryF[z * N + x] = c / a; }
+    const jxx = new Float64Array(S * S), jxz = new Float64Array(S * S), jzz = new Float64Array(S * S);
+    for (let z = 0; z < N; z++)
+      for (let x = 0; x < N; x++) {
+        const gx = dryF[z * N + Math.min(N - 1, x + 1)] - dryF[z * N + Math.max(0, x - 1)];
+        const gz = dryF[Math.min(N - 1, z + 1) * N + x] - dryF[Math.max(0, z - 1) * N + x], i = (z + 1) * S + x + 1;
+        jxx[i] = gx * gx + jxx[i - 1] + jxx[i - S] - jxx[i - S - 1];
+        jxz[i] = gx * gz + jxz[i - 1] + jxz[i - S] - jxz[i - S - 1];
+        jzz[i] = gz * gz + jzz[i - 1] + jzz[i - S] - jzz[i - S - 1];
+      }
     const data = this.flowTex.image.data as Uint8Array;
     data.fill(0);
     for (let k = 0; k < N * N; k++) {
       if (!wet(k) || land[k] < 0) continue;
       const x = k % N, z = Math.floor(k / N);
-      let vx = bank(Math.max(0, x - 2), z) - bank(Math.min(N - 1, x + 2), z), vz = bank(x, Math.max(0, z - 2)) - bank(x, Math.min(N - 1, z + 2));
-      const g = Math.hypot(vx, vz);
-      if (g < 1e-3) continue;
-      vx /= g; vz /= g;
-      const narrow = Math.min(1, Math.max(0, (4.5 - land[k]) / 2.5)), strong = Math.min(1, g * 2.5);
+      const a = box(jxx, x, z, 3)[0], b = box(jxz, x, z, 3)[0], c = box(jzz, x, z, 3)[0];
+      if (a + c < 1e-6) continue;
+      const th = 0.5 * Math.atan2(2 * b, a - c);
+      let vx = -Math.sin(th), vz = Math.cos(th);
+      // sens : vers l'aval, là où les berges sont plus basses, 4 cases plus loin le long de l'axe
+      const at = (s: number) => bank(Math.min(N - 1, Math.max(0, Math.round(x + vx * s))), Math.min(N - 1, Math.max(0, Math.round(z + vz * s))));
+      const drop = at(-4) - at(4);
+      if (drop < 0) { vx = -vx; vz = -vz; }
+      const narrow = Math.min(1, Math.max(0, (4.5 - land[k]) / 2.5)), strong = Math.min(1, 0.45 + Math.abs(drop) * 1.5);
       data[k * 4] = Math.round((vx * 0.5 + 0.5) * 255);
       data[k * 4 + 1] = Math.round((vz * 0.5 + 0.5) * 255);
       data[k * 4 + 2] = Math.round(narrow * strong * 255);
