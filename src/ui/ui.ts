@@ -1104,7 +1104,8 @@ export class UI {
   private renderMessage() {
     const { sim } = this.host, el = $('#msg'), k = sim.messageKind;
     const hb = $('#helpBtn') as HTMLButtonElement, late = sim.age >= 1;
-    hb.hidden = !late;
+    // (au bac à sable, pas de conseils : pas d'œil non plus)
+    hb.hidden = !late || this.host.world.sandbox;
     hb.setAttribute('aria-pressed', String(this.help));
     hb.classList.toggle('on', this.help);
     hb.title = tr(this.help ? 'Masquer les conseils' : 'Afficher les conseils');
