@@ -28,6 +28,7 @@ import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
 import { pic } from './pics';
+import { menuBg } from './loading';
 import { MiniMap } from './minimap';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
 
@@ -2310,11 +2311,8 @@ const LOGO_PEAKS = `<svg class="mPeaks" viewBox="610 95 760 330" aria-hidden="tr
 /** les mêmes sommets, en petit et en blanc, dans la pastille du bas */
 const MINI_PEAKS = `<svg viewBox="610 95 760 330" width="48" height="21" aria-hidden="true">${drawPeaks('currentColor', 0, 0)}</svg>`;
 
-/** la vidéo du fond animé (dans public/menu/) ; vide tant qu'il n'y en a pas : l'image fixe sert alors */
-const MENU_VIDEO = '';
-
 /**
- * L'écran d'accueil, sur un paysage au soleil couchant (images de `public/menu/`, ou la vidéo `MENU_VIDEO`) : le titre, les
+ * L'écran d'accueil, sur un paysage animé (la vidéo `MENU_VIDEO` de `loading.ts`, ou l'image fixe) : le titre, les
  * trois modes en cartes illustrées (un clic choisit le mode, la carte choisie grandit ; un double-clic lance), « Nouvelle
  * partie » dans le mode choisi (le bac à sable demande d'abord l'âge de départ ; une confirmation si la sauvegarde de la
  * carte serait écrasée) et, s'il existe une sauvegarde, son résumé en bas à gauche avec « Continuer ».
@@ -2324,12 +2322,7 @@ export function showMenu(root: HTMLElement, host: MenuHost, map = MAPS[0].id): H
   const ov = document.createElement('div');
   ov.className = 'overlay';
   ov.id = 'menu';
-  // pas d'animation pour qui l'a demandé au système : la vidéo reste sur son image
-  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const bg = MENU_VIDEO
-    ? `<video class="mBg" src="./menu/${MENU_VIDEO}" poster="./menu/fond.webp" muted loop playsinline ${still ? '' : 'autoplay'} preload="auto" aria-hidden="true"></video>`
-    : '<img class="mBg" src="./menu/fond.webp" alt="" decoding="async">';
-  ov.innerHTML = `${bg}
+  ov.innerHTML = `${menuBg('mBg')}
     <button class="mGear" title="${tr('Options')}" aria-label="${tr('Options')}">${ic('gear', 30, 1.9)}</button>
     <div class="mInner">
       <header class="mTitle">${LOGO_PEAKS}<h1>Ceionia</h1>
