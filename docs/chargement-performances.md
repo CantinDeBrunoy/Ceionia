@@ -68,7 +68,7 @@ Dans `Game.advance` (vue de la surface) : une fois par jour de jeu, entre 15 h e
 - Petits écrans tactiles (`coarse`) : pas de `Glow`, donc pas de nuit à préparer.
 - Faune ([faune.md](faune.md)) : les maillages instanciés des espèces ont leur couleur par instance dès la création (`Fauna` constructeur). Les chauves-souris ne sortent que la nuit : sans cela, leur shader changeait au premier soir.
 - Éruptions (`eruption.ts`) : une coulée vide et cachée porte le matériau de la lave dès le départ (clé de programme `lavaflow`).
-- Enfers et monde souterrain : leurs scènes ne passent pas par ce mécanisme. `fadeThrough` garde deux images derrière le voile noir ; la première descente compile encore.
+- Enfers et monde souterrain : leurs scènes ne passent pas par ce mécanisme. `fadeThrough` (monde souterrain, retour des Enfers par la cinématique de fin) garde deux images derrière le voile noir, `loadThrough` (entrée aux Enfers et retour) trois derrière l'écran de chargement ; la première descente compile encore.
 - Traduction ([traduction.md](traduction.md)) : les étapes sont dans `src/i18n/en/menu.ts`.
 
 ### La première rotation de la vue

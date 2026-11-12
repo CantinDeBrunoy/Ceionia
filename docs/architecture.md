@@ -53,11 +53,12 @@ Constructeur (`main.ts`), dans l'ordre :
 Le mode **souterrain** n'est plus accessible au joueur (retiré du jeu) ; le moteur reste pour les Enfers et `__game.enterUnder(case)`. La descente automatique quand une troupe suivie est sous terre (`isBelow`, dans `frame`) ne devrait plus se produire (à vérifier).
 
 Transitions :
-- `enterHell()` : refuse si `war.hellWhy()` ; `fadeThrough` (fond noir 380 ms, charge `hellMode.ts` à la volée, mémorise `surfaceView` et `surfaceZoom`, passe `mode='hell'`, classes `under hell` sur `body`, `cam.jump`, `command.setTheater`).
-- `exitHell()` : l'inverse, rend la vue de surface mémorisée.
+- `enterHell()` : refuse si `war.hellWhy()` ; `loadThrough` (l'écran de chargement du jeu, `LoadingScreen`, avec « Passage du portail… » et la barre qui avance ; charge `hellMode.ts` à la volée, mémorise `surfaceView` et `surfaceZoom`, passe `mode='hell'`, classes `under hell` sur `body`, `cam.jump`, `command.setTheater`).
+- `exitHell(fade)` : l'inverse, rend la vue de surface mémorisée ; derrière l'écran de chargement (« Retour à la surface… »), sauf `fade` (fondu au noir : la cinématique de la fin du royaume, sous son voile de lumière).
 - Île du portail : pas de fondu, la vue reste en surface. `syncIsleView` (fin de `stepWar`, chaque image) entre (`enterIsle` : `command.setTheater(isleTheater())`) quand le but de la caméra s'approche de l'île, et sort (`leaveIsle`) quand il s'en éloigne (`nearIsle`, hystérésis). `commandIsle()` y envoie la vue et entre aussitôt ; depuis les Enfers, il remonte d'abord. « Retourner au village » appelle `goHome`.
 - `exitUnder()` sert aussi à quitter les Enfers (le bouton « Remonter »).
 - `fadeThrough(fn, label)` : une seule bascule à la fois (garde `fading`) ; le voile se lève après deux images ou au plus 600 ms (onglet caché).
+- `loadThrough(fn, label)` : même garde `fading`, mais derrière l'écran de chargement (arrivée en fondu, 520 ms) ; `fn` reçoit l'écran pour avancer la barre ; il s'efface après trois images ou au plus 1,2 s.
 - `ensureSurface(then, keepIsle?)` : file `SurfaceGate` (`core/surface.ts`). Toute action du village demandée depuis les Enfers ou le commandement (suivre une équipe, aller au volcan, prendre un outil, tracer une ligne, `goHome`…) passe par elle : elle quitte la vue, attend `SURFACE_DELAY` (900 ms) puis exécute chaque action une fois, dans l'ordre ; abandon après 8 essais. `tools.setTool` est surchargé dans le constructeur pour cela.
 
 ### Boucle de jeu (`Game.frame`)

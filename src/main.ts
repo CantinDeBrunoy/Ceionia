@@ -484,7 +484,7 @@ class Game implements UIHost {
     this.kingStage = new KingdomStage({
       war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
       mode: () => this.mode, hellView: () => (this.mode === 'hell' ? this.hellMode?.view ?? null : null),
-      exitHell: () => this.exitHell(), goHome: () => this.goHome(),
+      exitHell: () => this.exitHell(true), goHome: () => this.goHome(),
       raiders: () => { const i = this.war.isle; return i ? i.raiders().map((u) => ({ x: u.x + i.map.ox, z: u.z + i.map.oz })) : []; },
       age: () => this.sim.age,
       village: () => this.villageCenter(), fest: (x, z) => this.festAt(x, z), crowd: (on, x, z) => this.kingCrowd(on, x, z),
@@ -670,14 +670,20 @@ class Game implements UIHost {
     this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
-    this.fadeThrough(async () => {
+    const label = 'Passage du portail…';
+    this.loadThrough(async (screen) => {
       const { HellMode } = await loadHell();
+      screen.step(label, 0.35);
+      await painted();
       const f = this.war.ensureFaction();
       if (!this.hellMode || this.hellMode.hell !== f) this.hellMode = new HellMode(this.war.hellMap!, f, this.war.king);
+      screen.step(label, 0.6);
+      await painted();
       const hm = this.hellMode;
       hm.view.fight = this.war.king;
       hm.view.fx.onClash = (k) => this.audio.sfxClash(k);
       hm.view.build();
+      screen.step(label, 0.85);
       this.surfaceView = this.cam.view();
       this.surfaceZoom = { min: this.cam.minDist, max: this.cam.maxDist };
       this.mode = 'hell';
@@ -702,7 +708,7 @@ class Game implements UIHost {
       // la première entrée : le chapitre du tutoriel sur les Enfers (la cible, les troupes, l'attaque, le retour)
       this.tutorial.chapter('hell');
       this.ui.update();
-    }, 'Passage du portail…');
+    }, label);
   }
 
   /** Où regarder en entrant dans les Enfers : le groupe des troupes les plus avancées, sinon le camp le plus avancé, sinon le portail */
@@ -713,10 +719,18 @@ class Game implements UIHost {
     return [near.reduce((s, u) => s + u.x, 0) / near.length, near.reduce((s, u) => s + u.z, 0) / near.length];
   }
 
-  /** Quitte les Enfers pour la surface */
-  exitHell() {
+  /**
+   * Quitte les Enfers pour la surface, derrière l'écran de chargement ; `fade` : par un simple fondu au noir (la
+   * cinématique de la fin du royaume, déjà sous son voile de lumière)
+   */
+  exitHell(fade = false) {
     if (this.mode !== 'hell') return;
-    this.fadeThrough(() => {
+    const label = 'Retour à la surface…';
+    const through = fade
+      ? (fn: (screen: LoadingScreen | null) => void) => this.fadeThrough(() => fn(null), label)
+      : (fn: (screen: LoadingScreen | null) => void) => this.loadThrough(fn, label);
+    through((screen) => {
+      screen?.step(label, 0.5);
       this.mode = 'surface';
       this.war.hellInView = false;
       document.body.classList.remove('under', 'hell');
@@ -729,7 +743,7 @@ class Game implements UIHost {
       this.cam.jump(v, this.world.hAt(v.x, v.z));
       this.cam.handler = this.tools;
       canvas.style.cursor = '';
-    }, 'Retour à la surface…');
+    });
   }
 
   /** Le théâtre des Enfers pour le contrôle des troupes */
@@ -1007,6 +1021,31 @@ class Game implements UIHost {
         setTimeout(lift, 600);
       }
     }, 380);
+  }
+
+  /**
+   * Comme `fadeThrough`, mais derrière l'écran de chargement du jeu (paysage, emblème, barre, conseil) : pour un passage
+   * long, qui bâtit tout un monde (les Enfers). `fn` reçoit l'écran pour faire avancer la barre
+   */
+  private loadThrough(fn: (screen: LoadingScreen) => void | Promise<void>, label: string) {
+    if (this.fading) return;
+    this.fading = true;
+    const screen = new LoadingScreen(uiRoot.parentElement!);
+    screen.step(label, 0.08);
+    // l'écran arrive en fondu, puis le passage commence
+    screen.el.classList.add('out');
+    requestAnimationFrame(() => screen.el.classList.remove('out'));
+    setTimeout(async () => {
+      try { await painted(); await fn(screen); } finally {
+        screen.step(label, 0.95);
+        // quelques images derrière l'écran : la nouvelle vue y compile ses matériaux ; onglet caché : il se lève quand même
+        let n = 0, over = false;
+        const lift = () => { if (over) return; over = true; screen.done(); this.fading = false; };
+        const tick = () => { if (++n >= 3) lift(); else requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+        setTimeout(lift, 1200);
+      }
+    }, 520);
   }
 
   /** Catastrophes activées : de temps en temps, un volcan se réveille de lui-même, annoncé par des secousses */
