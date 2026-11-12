@@ -1,7 +1,7 @@
 # Ciel et météo
 
 > Fichiers : `src/core/time.ts` (`GameTime` : heure, jours, saisons, vitesse, pause), `src/render/env.ts` (`Environment` : soleil, lune, couleurs du ciel, étoiles, nuages, brouillard, météo, pluie, neige qui tombe), `src/render/season.ts` (palette des saisons, tenue de la neige), `src/render/snow.ts` (neige posée sur les matériaux), `src/render/atmosphere.ts` (`Atmosphere` : brume, nuages des sommets, arc-en-ciel, orages), `src/render/nightSky.ts` (`NightSky` : aurores boréales, étoiles filantes), `src/core/skyNights.ts` (programme des nuits, logique pure), `src/render/glow.ts` (halo de nuit), `src/render/life.ts` (lucioles, nuée du crépuscule), `src/main.ts` (`Game.frame`, `refreshSeason`, `renderer_render`, `dispelFog`, `skyShow`), `src/ui/ui.ts` (réglages : météo, durée du jour, saison).
-> Tests : `tests/cielNocturne.test.ts`, `tests/saisons.test.ts`, `tests/neigeRoutes.test.ts`.
+> Tests : `tests/cielNocturne.test.ts`, `tests/saisons.test.ts`, `tests/neigeRoutes.test.ts`, `tests/rendu.test.ts` (« ciel » : arc-en-ciel).
 > Voir aussi : [architecture.md](architecture.md), [vegetation-biomes.md](vegetation-biomes.md), [rendu-modeles.md](rendu-modeles.md), [interface.md](interface.md), [incidents.md](incidents.md), [routes.md](routes.md)
 
 ## En bref
@@ -44,6 +44,10 @@ Le temps du jeu (`GameTime`) fait tourner les heures et les saisons. `Environmen
 - Brume au ras du sol : un matin et un soir sur trois (`MIST_CHANCE = 0.3`, tirage par jour `mistDay`), plus en automne (`light.mist` de la fiche : 0,6, 0,3, 0,8, 0,45) ; le brouillard l'épaissit et la monte, la pluie la disperse. Le bouton « dissiper » (`#bFog` → `Game.dispelFog`) chasse brouillard et brume 300 s. Coupée en qualité réduite (`gfx.mist`).
 - Nuages : `11 × N/48` groupes autour du milieu de la carte, qui tournent lentement (0,006 rad/s), assombris la nuit, gris par temps couvert. Nuages des sommets : `N/12` pics au plus (plus de 7 de haut, espacés de 12 cases, pas les volcans), 7 bouffées chacun (`CAP_PUFFS`).
 - Arc-en-ciel : quand une vraie pluie (`weatherK > 0.5`) cesse, ciel dégagé, sans neige, en plein jour (7 h – 17,5 h) : 45 s réelles. À l'opposé du soleil ; on ne le voit qu'en lui tournant le dos et si la vue montre le ciel.
+  - Toujours derrière l'île : posé à `D = max(130, distance au milieu de l'île + 0,75 × N)` de la caméra, au-delà de son bord, testé en profondeur (le relief le cache). Rayon `0,75 × D` : même taille apparente à toutes les distances, comme un vrai.
+  - Ses pieds s'estompent au niveau de la mer (`uFoot = 0,04 × D`) : il ne pend pas sous le plateau.
+  - Il pâlit quand on dézoome : plein jusqu'à `1,2 × N` du point visé, effacé à `1,7 × N` (vue d'ensemble « plateau flottant », où il encadrait la carte).
+  - Teintes adoucies (mêlées de blanc à 22 %), opacité 0,28.
 - Orages : quand une pluie commence, chance d'orage 60 % l'été, 35 % au printemps et en automne, jamais l'hiver. Éclair toutes les 4 à 13 s tant que `rainK > 0.75`, à 12 – 52 cases du point visé, attiré par un bâtiment proche (une chance sur deux) ; tonnerre retardé de 0,035 s par case ; une fois sur deux la foudre met le feu (`onStrike`, [incidents.md](incidents.md)).
 
 ### Aurores boréales et étoiles filantes (`NightSky`, `skyNights.ts`)
