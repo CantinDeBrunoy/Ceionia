@@ -281,14 +281,13 @@ export const VOICES: Record<SpotKind, VoiceDef> = {
       return rnd(2.5, 5);
     },
   },
-  // machines de l'âge futuriste : bourdonnement électrique, ventilation, bips et pulsations
+  // machines de l'âge futuriste : bourdonnement électrique, ventilation et pulsations sourdes (plus de bips aigus : agaçants)
   machine: {
     gain: 0.5,
     loop: (s, d) => [...drone(s, d, [[55, 0.06, 'sine'], [110, 0.035, 'sine'], [165, 0.02, 'triangle']], 600), ...noiseBed(s, d, 3500, 0.012, 'highpass', 0.7)],
     tick(s, d, t) {
-      if (Math.random() < 0.5) { const f = rnd(1000, 1500); note(s, d, t, { f, dur: 0.08, vol: 0.03 }); note(s, d, t + 0.12, { f: f * 1.33, dur: 0.08, vol: 0.03 }); }
-      else note(s, d, t, { f: 90, f2: 55, dur: 0.9, vol: 0.1, attack: 0.15 });
-      return rnd(1.5, 3.5);
+      note(s, d, t, { f: 90, f2: 55, dur: 0.9, vol: 0.1, attack: 0.15 });
+      return rnd(2.5, 5);
     },
   },
   // volcan : grondement sourd qui enfle et retombe, bulles de lave

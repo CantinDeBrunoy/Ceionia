@@ -11,7 +11,7 @@ export interface AudioState {
   fog: number;
   pop: number;
   camDist: number;
-  /** 1 sous terre : ni vent ni oiseaux, gouttes d'eau et grondement sourd */
+  /** 1 sous terre : ni oiseaux ni grillons, gouttes d'eau et grondement sourd */
   under: number;
   /** proximité (0 … 1) d'un torrent, d'une cascade, du rivage et d'un feu ; altitude du point visé */
   stream?: number;
@@ -38,7 +38,7 @@ export class AudioEngine {
   ctx: AudioContext | null = null;
   musicVol = 0.5;
   sfxVol = 0.7;
-  /** volume des ambiances : nature (vent, eau, oiseaux…) et bruitages de proximité (forge, bêtes, foule…) */
+  /** volume des ambiances : nature (eau, pluie, oiseaux…) et bruitages de proximité (forge, bêtes, foule…) */
   ambVol = 0.7;
   muteMusic = true;
   /** sons et ambiances allumés par défaut ; la musique reste coupée tant que le joueur ne l'allume pas */
@@ -52,10 +52,8 @@ export class AudioEngine {
   private surfG!: GainNode;
   /** voix des bruitages de proximité, une par sorte de source */
   private voices = new Map<SpotKind, { out: GainNode; pan: StereoPannerNode; inp: GainNode; srcs: AudioScheduledSourceNode[]; next: number; k: number; end: number }>();
-  private windG!: GainNode;
   private rainG!: GainNode;
   private waterG!: GainNode;
-  private cricketG!: GainNode;
   private villageG!: GainNode;
   private caveG!: GainNode;
   private streamG!: GainNode;
@@ -65,6 +63,8 @@ export class AudioEngine {
   private eagleTimer = 10;
   private crackleTimer = 0;
   private dripTimer = 0;
+  /** prochaine stridulation de grillon (les grillons chantent par courtes trilles espacées, plus en continu) */
+  private cricketTimer = 0;
   private noise!: AudioBuffer;
   private nextNote = 0;
   private nextPad = 0;
@@ -103,9 +103,7 @@ export class AudioEngine {
       src.connect(f); f.connect(g); g.connect(this.ambG); src.start();
       return { g, f };
     };
-    const wind = noiseLoop('bandpass', 420, 0.5); this.windG = wind.g;
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.12;
-    const lg = ctx.createGain(); lg.gain.value = 220; lfo.connect(lg); lg.connect(wind.f.frequency); lfo.start();
+    // pas de vent : son souffle continu couvrait les autres ambiances
     const rain = noiseLoop('highpass', 1800, 0.4); this.rainG = rain.g;
     const water = noiseLoop('lowpass', 520, 0.8); this.waterG = water.g;
     const wl = ctx.createOscillator(); wl.frequency.value = 0.3;
@@ -120,17 +118,6 @@ export class AudioEngine {
     const sl = ctx.createOscillator(); sl.frequency.value = 0.11;
     const slg = ctx.createGain(); slg.gain.value = 0; sl.connect(slg); slg.connect(surf.g.gain); sl.start();
     this.surfLfo = slg;
-    // grillons
-    const cr = ctx.createOscillator(); cr.type = 'sine'; cr.frequency.value = 4300;
-    const cg = ctx.createGain(); cg.gain.value = 0;
-    const am = ctx.createOscillator(); am.type = 'square'; am.frequency.value = 14;
-    const amg = ctx.createGain(); amg.gain.value = 0.5;
-    const amOff = ctx.createConstantSource(); amOff.offset.value = 0.5;
-    const mod = ctx.createGain(); mod.gain.value = 0;
-    am.connect(amg); amg.connect(mod.gain); amOff.connect(mod.gain);
-    cr.connect(mod); mod.connect(cg); cg.connect(this.ambG);
-    cr.start(); am.start(); amOff.start();
-    this.cricketG = cg;
     this.applyVolumes();
     this.nextNote = ctx.currentTime + 1;
     this.nextPad = ctx.currentTime + 0.5;
@@ -164,9 +151,8 @@ export class AudioEngine {
     // ambiances
     const set = (g: GainNode, v: number) => g.gain.setTargetAtTime(v, T, 0.4);
     const out = 1 - s.under;
-    // le vent forcit en altitude
+    // altitude (aigles en montagne)
     const high = clamp(((s.alt ?? 0) - 4) / 7, 0, 1);
-    set(this.windG, (0.02 + 0.025 * (s.season === 3 ? 1 : 0.4) + 0.03 * s.fog + 0.02 * s.rain + 0.02 * s.snow + 0.05 * high) * out);
     set(this.streamG, 0.07 * (s.stream ?? 0) * out);
     set(this.cascadeG, 0.12 * (s.cascade ?? 0) * out);
     // ressac : le niveau moyen et la houle (l'oscillateur ajoute ± autant au gain)
@@ -174,10 +160,19 @@ export class AudioEngine {
     set(this.surfG, surf); this.surfLfo.gain.setTargetAtTime(surf * 0.8, T, 0.4);
     set(this.rainG, 0.1 * s.rain * out);
     this.waterG.gain.setTargetAtTime(0.02 * clamp(1.4 - s.camDist / 130, 0.2, 1) * out, T, 0.5);
-    set(this.cricketG, night * (s.season === 3 ? 0 : 0.012) * (1 - s.rain) * out);
     set(this.villageG, Math.min(0.03, s.pop * 0.0004) * s.daylight * (1 - s.rain * 0.6) * out);
     set(this.caveG, 0.06 * s.under);
     this.tickVoices(T);
+    // grillons la nuit : une courte trille douce de temps en temps, d'un grillon puis d'un autre (hauteur et place variées)
+    this.cricketTimer -= dt;
+    const crick = night * (s.season === 3 ? 0 : 1) * (1 - s.rain) * out;
+    if (this.cricketTimer <= 0) {
+      this.cricketTimer = 1.2 + Math.random() * 3.5;
+      if (crick > 0.3) {
+        const f = 3600 + Math.random() * 700, n = 2 + Math.floor(Math.random() * 3), vol = 0.004 * crick;
+        for (let i = 0; i < n; i++) this.tone(f, T + 0.02 + i * 0.09, 0.05, 'sine', vol, this.ambG, 0, 0.012);
+      }
+    }
     // gouttes qui tombent de la voûte, en écho
     this.dripTimer -= dt;
     if (s.under > 0.5 && this.dripTimer <= 0) {

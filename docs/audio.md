@@ -9,7 +9,7 @@ Tout le son est **synthétisé** par Web Audio : aucun fichier son, rien à tél
 
 ## Règles du jeu
 - **Réglages** (Graphismes & son) : Musique, Sons, Ambiances (volume 0 … 1 ; défaut 0,5, 0,7, 0,7). Le bouton qui coupe les sons coupe aussi les ambiances.
-- **Ambiances de nature** : vent (plus fort en altitude, l'hiver, par brume, pluie ou neige), pluie, eau lointaine, torrents et cascades proches, **ressac** près du rivage (houle lente), grillons la nuit, murmure du village le jour, oiseaux, mouettes, aigles en montagne, crépitement des feux, grenouilles ; sous terre : grondement et gouttes.
+- **Ambiances de nature** : pluie (plus de vent : son souffle continu prenait trop de place), eau lointaine, torrents et cascades proches, **ressac** près du rivage (houle lente), grillons la nuit (courtes trilles douces toutes les 1 à 5 s, plus de note continue hachée), murmure du village le jour, oiseaux, mouettes, aigles en montagne, crépitement des feux, grenouilles ; sous terre : grondement et gouttes.
 - **Bruitages de proximité** : quand la caméra s'approche, on entend les bâtiments et les volcans (table plus bas). Chaque source porte jusqu'à `r1` cases (pleine force jusqu'à `r0`). Les ateliers, la foule et les poules se taisent la nuit ; les bêtes des enclos s'entendent moins ; la taverne s'anime le soir. Sous la pluie, foule et abeilles baissent ; l'hiver, plus d'abeilles. Caméra haute : les bâtiments s'éteignent vers `dist` = 87, le volcan porte plus loin.
 - **Onglet caché** : tout se tait (le contexte est suspendu), et reprend au retour.
 
@@ -29,7 +29,7 @@ Tout le son est **synthétisé** par Web Audio : aucun fichier son, rien à tél
 | `crowd` | place (sauf feu de camp et parc), forum | rumeur, conversations, appel d'un marchand | jour |
 | `tavern` | taverne | conversations, rires, chopes | surtout le soir |
 | `harbor` | port | clapot, cordages, cloche | toujours |
-| `machine` | laboratoire (Moderne, Futuriste), fusion, arcologie, institut, ferme verticale, maglev, cosmodrome | bourdonnement électrique, ventilation, bips, pulsations | toujours |
+| `machine` | laboratoire (Moderne, Futuriste), fusion, arcologie, institut, ferme verticale, maglev, cosmodrome | bourdonnement électrique, ventilation, pulsations sourdes (pas de bips aigus) | toujours |
 | `volcano` | cratère (`VEG_VOLCANO`) | grondement qui enfle, bulles de lave | toujours |
 
 ## Fonctionnement dans le code
