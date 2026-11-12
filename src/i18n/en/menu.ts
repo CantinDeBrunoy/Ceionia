@@ -19,9 +19,6 @@ registerDict('menu', {
   'âge': 'age',
   'Importer une sauvegarde': 'Import a save',
   'Crédits': 'Credits',
-  'Clic gauche : bâtir · Clic droit : tourner la vue · Molette : zoomer · Clic milieu : déplacer · ZQSD : se déplacer · R : tourner le bâtiment · Échap : lâcher':
-    'Left click: build · Right click: rotate the view · Wheel: zoom · Middle click: pan · WASD / ZQSD: move · R: rotate the building · Esc: let go',
-  'Tactile : un doigt pour bâtir, deux pour déplacer, zoomer et tourner.': 'Touch: one finger to build, two to pan, zoom and rotate.',
   'Chargement des modèles…': 'Loading models…',
   // ---- écran de chargement (src/ui/loading.ts)
   'Construction du monde…': 'Building the world…',

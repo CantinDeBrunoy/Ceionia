@@ -22,9 +22,6 @@ export const TUTO_TEXT = {
   skipped: 'Tutoriel mis de côté : reprenez-le quand vous voulez dans Paramètres › Divers.',
   finished: 'Tutoriel terminé ! Il reste dans Paramètres › Divers, si vous voulez le refaire.',
   menu: {
-    label: 'Tutoriel guidé',
-    on: 'activé',
-    off: 'désactivé',
     title: 'Une bulle vous guide pas à pas dans la partie : caméra, construction, besoins, âges, expéditions et incidents.',
   },
   settings: {
@@ -287,11 +284,12 @@ const kbd = (keys: string[], sep = '') => keys.map((x) => `<kbd>${x}</kbd>`).joi
 
 /** Interrupteur du tutoriel sur l'écran d'accueil : il vaut pour la partie lancée, et le choix est retenu */
 export function menuToggle(): HTMLElement {
-  const T = TUTO_TEXT.menu, row = document.createElement('div');
+  const T = TUTO_TEXT.menu, S = TUTO_TEXT.settings, row = document.createElement('div');
   row.className = 'row tutoToggle';
   const draw = () => {
     const on = tutorialOn();
-    row.innerHTML = `<button class="${on ? 'on' : ''}" aria-pressed="${on}" title="${T.title}">${ic('book', 17, 2)}${T.label}${colon()}${on ? T.on : T.off}<i class="sw"></i></button>`;
+    // un simple interrupteur : l'état en clair, puis la glissière (le libellé est déjà à gauche du bandeau)
+    row.innerHTML = `<button class="${on ? 'on' : ''}" role="switch" aria-checked="${on}" title="${T.title}">${on ? S.on : S.off}<i class="sw"></i></button>`;
     // (désactivé ici : mis de côté, les chapitres se taisent aussi)
     (row.firstElementChild as HTMLButtonElement).onclick = () => { const s = readState(); writeState({ ...s, on: !on, step: s?.step ?? 0, end: on ? 'skip' : undefined, off: on ? true : undefined }); draw(); };
   };

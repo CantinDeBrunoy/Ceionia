@@ -524,7 +524,7 @@ body.under #selCard, body.photo #selCard { display: none; }
 #menu ~ .overlay > .modal .mtitle h3 svg { width: 28px; height: 28px; color: #2a63dc; }
 #menu ~ .overlay > .modal .x { align-self: flex-start; min-height: 44px; min-width: 44px; padding: 0; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.85); color: #1b2540; box-shadow: 0 2px 8px rgba(20, 35, 70, 0.08); }
 #menu ~ .overlay > .modal h4 { color: #5a6b8c; }
-#menu ~ .overlay > .modal .hint, #menu ~ .overlay > .modal .mKeys { color: #4a5876; }
+#menu ~ .overlay > .modal .hint { color: #4a5876; }
 #menu ~ .overlay > .modal a { color: #2a63dc; }
 #menu ~ .overlay > .modal button { min-height: 44px; padding: 0 18px; gap: 8px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.75); color: #3a4560; font-weight: 700; box-shadow: 0 1px 3px rgba(20, 35, 70, 0.06); }
 #menu ~ .overlay > .modal button:hover { background: #fff; color: #1b2540; }
@@ -555,7 +555,7 @@ body.under #selCard, body.photo #selCard { display: none; }
 #ui > .overlay > .cePop button.active:hover, #ui > .overlay > .cePop button[aria-pressed="true"]:hover, #ui > .overlay > .cePop button[data-r="1"]:hover { background: linear-gradient(180deg, #f8cc6c, #e8a43a); color: #3a2a14; }
 .popIc { flex: none; width: 34px; height: auto; }
 /* les options : un réglage par bandeau clair */
-#ui > .overlay > .cePop.menuOpts { width: min(640px, 100%); max-width: none; padding-bottom: 40px; text-align: left; }
+#ui > .overlay > .cePop.menuOpts { width: min(640px, 100%); max-width: none; padding-bottom: 104px; text-align: left; }
 .menuOpts .row { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 8px 10px 8px 14px; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.5); box-shadow: 0 2px 10px rgba(120, 85, 50, 0.07); }
 .popKey { flex: none; display: flex; align-items: center; gap: 10px; min-width: 150px; }
 .popKey label { font-size: 17px; font-weight: 700; color: var(--pInk); }
@@ -564,8 +564,10 @@ body.under #selCard, body.photo #selCard { display: none; }
 .cePop .langPick .flag { flex: none; display: block; width: 33px; height: 22px; overflow: hidden; border-radius: 6px; box-shadow: 0 0 0 1px rgba(38, 42, 72, 0.16), 0 2px 5px rgba(120, 85, 50, 0.22); }
 .cePop .langPick .flag svg { display: block; width: 100%; height: 100%; }
 .cePop .langPick button.active .flag { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 2px 6px rgba(120, 70, 20, 0.3); }
-.menuOpts .tutoToggle { flex: 1; justify-content: stretch; margin: 0; padding: 0; border: 0; background: none; }
-#ui > .overlay > .cePop .tutoToggle button, #ui > .overlay > .cePop .tutoToggle button.on { flex: 1; justify-content: flex-start; padding: 0 8px 0 18px; border-color: rgba(255, 255, 255, 0.95); background: linear-gradient(180deg, #fffbf5, #f6ede2); color: var(--pInk); box-shadow: 0 3px 10px rgba(120, 85, 50, 0.16); }
+/* le tutoriel : l'état et la glissière à droite du bandeau, sans pilule autour */
+.menuOpts .tutoToggle { flex: 1; justify-content: flex-end; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+#ui > .overlay > .cePop .tutoToggle button, #ui > .overlay > .cePop .tutoToggle button:hover { gap: 12px; min-height: 44px; padding: 0 4px 0 12px; border: 0; background: none; box-shadow: none; color: var(--pInk2); font-size: 15px; }
+#ui > .overlay > .cePop .tutoToggle button.on { color: var(--pInk); }
 .cePop .tutoToggle .sw { margin-left: auto; width: 54px; height: 32px; }
 .cePop .tutoToggle .sw::after { top: 3px; left: 3px; width: 26px; height: 26px; }
 .cePop .tutoToggle button.on .sw { background: linear-gradient(180deg, #f6c35a, #e39a2f); box-shadow: 0 0 8px rgba(227, 154, 47, 0.45); }
@@ -573,10 +575,6 @@ body.under #selCard, body.photo #selCard { display: none; }
 .menuOpts select { font: inherit; font-weight: 700; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.95); background: #fffbf5; color: var(--pInk); }
 .menuOpts .mBtns { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 0; }
 #ui > .overlay > .cePop .mBtns button { min-height: 54px; padding: 0 24px 0 12px; }
-.mKeys { margin: 12px 0 0; padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.45); font-size: 12px; line-height: 1.6; color: var(--ink2); }
-.cePop .mKeys { display: flex; align-items: center; gap: 10px; margin: 18px 11% 0; padding: 10px 16px; border: 1px solid rgba(255, 255, 255, 0.7); background: rgba(236, 228, 242, 0.82); font-size: 12.5px; line-height: 1.5; font-weight: 600; color: var(--pInk2); }
-.cePop .mKeys svg { flex: none; color: #7a7f99; }
-@media (hover: none) and (pointer: coarse) { .mKeys { display: none; } }
 /* l'âge de départ du bac à sable : une pilule par âge, avec son icône (brune sur la pilule dorée) */
 #ui > .overlay > .cePop.agePick { width: min(640px, 100%); max-width: none; padding-bottom: 96px; text-align: left; }
 .agePick .hint { text-align: center; }
@@ -622,9 +620,11 @@ body.under #selCard, body.photo #selCard { display: none; }
 .cePop .langPick { margin: 0; padding: 0; gap: 10px; border: 0; background: none; }
 /* Graphismes : ce que change le niveau choisi (une phrase, puis aspect par aspect en petites cartes) */
 .setPane .qInfo .hint { margin: 0 0 10px !important; }
-.qGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin: 0 0 6px; padding: 0; list-style: none; }
-.qGrid li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; padding: 6px 12px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 251, 245, 0.85); box-shadow: 0 1px 4px rgba(120, 85, 50, 0.1); font-size: 13px; font-weight: 600; color: var(--pInk2); }
-.qGrid li b { flex: none; font-weight: 800; color: var(--pInk); }
+/* Une carte par aspect : le nom en petit au-dessus, la valeur en gras dessous (rien ne déborde, même en anglais ou au téléphone) */
+.qGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 0 0 6px; padding: 0; list-style: none; }
+.qGrid li { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; padding: 8px 12px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.95); background: rgba(255, 251, 245, 0.85); box-shadow: 0 1px 4px rgba(120, 85, 50, 0.1); }
+.qGrid li span { font-size: 12px; line-height: 1.25; font-weight: 600; color: var(--pInk2); }
+.qGrid li b { font-size: 14px; line-height: 1.25; font-weight: 800; color: var(--pInk); }
 .qGrid li b.on { color: #b06e12; }
 .qGrid li b.off { color: #9a98aa; }
 /* Crédits : même fenêtre peinte que les paramètres, une carte par licence */
@@ -683,8 +683,7 @@ body.under #selCard, body.photo #selCard { display: none; }
   #ui > .overlay > .cePop .langPick button { flex: 1; min-width: 0; }
   .menuOpts .tutoToggle { flex: 1 1 100%; }
   #ui > .overlay > .cePop .mBtns button { flex: 1 1 100%; }
-  #ui > .overlay > .cePop.menuOpts { padding-bottom: 72px; }
-  .cePop .mKeys { margin: 16px 0 0; }
+  #ui > .overlay > .cePop.menuOpts { padding-bottom: 80px; }
   #ui > .overlay > .cePop.agePick { padding-bottom: 64px; }
   #ui > .overlay > .cePop .ageBtn { flex: 1 1 40%; }
   #ui > .overlay > .cePop.menuConfirm { padding-bottom: 56px; }
