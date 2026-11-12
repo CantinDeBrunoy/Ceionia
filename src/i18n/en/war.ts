@@ -95,24 +95,24 @@ registerDict('war', {
   '🎺 Le cor sonne : la prochaine vague arrive !': '🎺 The horn sounds: the next wave is coming!',
 
   // ---- barre de commandement : ruban d'état, boutons ----
-  'Petite vague': 'Small wave', 'Vague moyenne': 'Medium wave', 'Grosse vague': 'Big wave',
-  'Sonner le cor : faire venir la prochaine vague tout de suite, sans attendre': 'Sound the horn: bring the next wave right now, without waiting',
+  'Petite attaque': 'Small attack', 'Attaque moyenne': 'Medium attack', 'Grosse attaque': 'Big attack',
+  'Sonner le cor : faire venir la prochaine attaque tout de suite, sans attendre': 'Sound the horn: bring the next attack right now, without waiting',
   'Une vague est déjà en cours.': 'A wave is already under way.',
   'Aucune vague n’est prévue pour le moment.': 'No wave is planned yet.',
   'Il faut des soldats sur l’île pour appeler une vague.': 'You need soldiers on the island to call a wave.',
-  // (le panneau des vagues, en haut de l'île)
-  'Les vagues': 'Waves', 'Portail fermé': 'Portal closed', 'Aucune vague tant qu’il reste fermé.': 'No waves while it stays closed.',
+  // (le bandeau des attaques, en haut de l'île)
+  'Portail fermé': 'Portal closed', 'aucune attaque tant qu’il reste fermé': 'no attacks while it stays closed',
   'Choisir à nouveau : affronter les démons ou garder le portail fermé': 'Choose again: fight the demons or keep the portal closed',
-  'Le portail': 'The portal', 'Affronter les démons, ou refermer le portail.': 'Fight the demons, or close the portal.',
+  'Le portail des Enfers': 'The portal to Hell', 'affronter les démons, ou le refermer': 'fight the demons, or close it',
   'Choisir : affronter les démons ou fermer le portail': 'Choose: fight the demons or close the portal',
-  'Invasion': 'Invasion', 'Prête': 'Ready', 'Elle part sur votre signal, {s} s plus tard.': 'It starts on your signal, {s} s later.',
+  'Invasion prête': 'Invasion ready', 'elle part {s} s après votre signal': 'it starts {s} s after your signal',
   'Lancer l’invasion : les démons sortent du portail {s} s plus tard': 'Start the invasion: the demons come out of the portal {s} s later',
-  'Invasion en cours': 'Invasion under way', 'Vague en cours': 'Wave under way',
-  'démon debout': 'demon standing', 'démons debout': 'demons standing', 'Démons encore debout': 'Demons still standing',
+  'Invasion en cours': 'Invasion under way', 'Attaque en cours': 'Attack under way',
+  'démon debout': 'demon standing', 'démons debout': 'demons standing',
   '{n} / {m} soldats': '{n} / {m} soldiers', 'Invasion à venir': 'Invasion coming',
-  'Suspendues': 'On hold', 'Aucune vague tant que vous tenez une zone des Enfers.': 'No waves while you hold a zone of Hell.',
-  'Invasion dans': 'Invasion in', 'Prochaine vague dans': 'Next wave in', 'Temps qui reste avant la vague': 'Time left before the wave',
-  'Appeler la prochaine vague': 'Call the next wave',
+  'Attaques suspendues': 'Attacks on hold', 'vous tenez une zone des Enfers': 'you hold a zone of Hell',
+  'Invasion dans': 'Invasion in', 'Prochaine attaque dans': 'Next attack in',
+  'Appeler la prochaine attaque': 'Call the next attack',
 
   // ---- l'invasion du portail : annonce, victoire, guidage vers les Enfers ----
   '⚠️ Les démons vont attaquer : préparez la garnison ! La grosse vague arrive dans {t}.': '⚠️ The demons are about to attack: get the garrison ready! The big wave arrives in {t}.',
