@@ -101,7 +101,7 @@ registerDict('tutorial', {
   'Faites un clic droit sur la cible 🎯 : vos troupes y marchent et l’attaquent.': 'Right-click the 🎯 target: your troops march there and attack it.',
   'Donner un ordre d’un clic droit': 'Give an order with a right-click',
   'Le retour': 'Heading back',
-  '« Retourner sur l’île » vous ramène au village ; vos troupes restent ici.': '“Back to the island” takes you back to the village; your troops stay here.',
+  '« Village », ou un clic sur le portail, vous ramène au village ; vos troupes restent ici.': '“Village”, or a click on the portal, takes you back to the village; your troops stay here.',
 
   // ---------------- Aides militaires (src/ui/warTips.ts) ----------------
   '🌀 La faille violette mène aux Enfers ! Réussissez l’expédition « Le portail de l’autre rive ».': '🌀 The purple rift leads to Hell! Complete the expedition “The portal on the other shore”.',

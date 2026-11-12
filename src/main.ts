@@ -762,7 +762,13 @@ class Game implements UIHost {
     const v = new THREE.Vector3();
     return {
       kind: 'hell', sim: hm.hell, layer: hm.view.units,
-      pick: (x, y) => { const p = hm.view.pick(this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight)); return p ? [p.x, p.z] : null; },
+      // (un rayon sur l'arche du portail vaut le portail lui-même : un clic dessus ramène au village)
+      pick: (x, y) => {
+        const ray = this.cam.ray(x, y, canvas.clientWidth, canvas.clientHeight);
+        if (hm.view.portalHit(ray)) return [hm.map.portal[0], hm.map.portal[1]];
+        const p = hm.view.pick(ray);
+        return p ? [p.x, p.z] : null;
+      },
       screen: (x, z) => this.toScreen(v.set(x, hm.view.groundY(x, z) + 0.3, z)),
       screenRaw: (x, z) => this.toScreenRaw(v.set(x, hm.view.groundY(x, z) + 0.3, z)),
       focus: (x, z, d) => this.cam.goTo(x, z, d === undefined ? this.cam.dist : Math.max(this.cam.dist, d)),

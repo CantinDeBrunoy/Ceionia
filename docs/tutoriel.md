@@ -45,10 +45,10 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   3. `pveOrders` : choisir des soldats (« Tous ») et donner un ordre d'un clic droit.
   4. `pveInvasion` (à lire) : avec assez de soldats, « Affronter » lance l'invasion, qui ouvre les Enfers.
 - **Chapitre « Les Enfers »** (`hell`, 4 étapes), à la première entrée dans les Enfers :
-  1. `hellGoal` : le 🎯 marque le prochain bastion ; cliquer « Centrer ».
+  1. `hellGoal` : le 🎯 marque le prochain bastion ; cliquer l'objectif au bout de la frise (il centre la vue).
   2. `hellPick` : choisir des troupes (sans troupe : « Renforts » fait venir la garnison).
   3. `hellAttack` : un ordre d'un clic droit sur la cible (la bulle se tient à l'écart).
-  4. `hellBack` (à lire) : « Retourner sur l'île » ramène au village.
+  4. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.
 - **Quand les chapitres se lancent** : une seule fois chacun, même le tutoriel fini, même s'il est en cours (la suite
   principale reprend après le chapitre). Jamais si le joueur a mis le tutoriel de côté (« Passer le tutoriel », ou
   désactivé à l'accueil ou dans les réglages). « Passer ce chapitre » ne passe que le chapitre. « Recommencer » les réarme.
@@ -73,7 +73,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   L'élément lui-même prend la classe `.tHi` : sur un bouton, un liseré doré intérieur ; rien d'autre (ni `transform`, ni
   couleur de fond, ni animation).
 - **Clics repérés** : un écouteur en capture sur `ui.root` note l'œil des cartes (`exp`, `inc`) et l'action de tout bouton
-  à `data-a` (`goal` pour « Centrer ») ; `Tutorial.clicked(a)`. La liste se vide à chaque étape.
+  à `data-a` (`goal` pour l'objectif de la frise) ; `Tutorial.clicked(a)`. La liste se vide à chaque étape.
 - **Les drapeaux** : `on` (la bulle est active), `guiding` (la suite principale est en cours, même interrompue),
   `active` (la bulle guide vraiment : un chapitre qui attend ailleurs ne compte pas), `chapterOn`.
   `active` fait taire le conseil du moment (`UI.renderMessage`) et les aides militaires (`WarTips`, `busy`) ;
@@ -117,7 +117,7 @@ Clé `village-lowpoly:v1:tutorial` du `localStorage`, lue par `parseState`, écr
   `tutorialChapters.ts`), sinon le texte affiche une icône vide.
 - **Pas d'animation sur l'élément montré** : la barre des troupes refait son HTML chaque seconde (compte à rebours) ; une
   animation posée sur l'élément repartirait de zéro à chaque fois et clignoterait. La lueur vit sur `#tutoRing`.
-- **Couleurs** : ne pas teinter le fond d'un bouton montré ; certains ont un texte blanc (« Retourner sur l'île »).
+- **Couleurs** : ne pas teinter le fond d'un bouton montré ; certains ont un texte blanc.
 - « Passer » seul est déjà traduit « Advance » (passage d'âge) : le bouton des chapitres dit « Passer ce chapitre ».
 - Le chapitre des Enfers s'achève dès qu'on les quitte (`live`), même au milieu : il ne se joue qu'à la première entrée.
 - Onglet caché du navigateur : la boucle ralentit, la bulle met plusieurs secondes à passer. Rien de faux dans le jeu.

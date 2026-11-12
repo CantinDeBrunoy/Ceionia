@@ -59,7 +59,7 @@ export const CHAPTER_TEXT = {
     },
     back: {
       title: 'Le retour',
-      text: '« Retourner sur l’île » vous ramène au village ; vos troupes restent ici.',
+      text: '« Village », ou un clic sur le portail, vous ramène au village ; vos troupes restent ici.',
       tasks: [] as string[],
     },
   },

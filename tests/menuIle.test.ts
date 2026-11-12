@@ -50,10 +50,31 @@ describe('le menu de l’île', () => {
     expect(isle).toContain('class="tmenu panel tbase tbarr"');
     // les recrues se montrent dans les mêmes tuiles que les recrues des Enfers
     expect(isle).toMatch(/data-a="rec:soldier" class="trb tb rh /);
-    const hell = build('hell').html();
-    expect(hell).toContain('Ma base');
-    expect(hell).toContain('data-a="tab:build"');
-    expect(hell).toContain('class="tmenu panel tbase tbarr"');
+    // dans les Enfers, « Ma base » est un tiroir fermé à l'arrivée : un bouton, qui ouvre les mêmes onglets
+    const { ui, html } = build('hell');
+    expect(html()).toContain('data-a="base"');
+    expect(html()).not.toContain('class="tmenu panel tbase tbarr"');
+    expect(html()).not.toContain('data-a="tab:build"');
+    (ui as any).onBar({ target: { closest: () => ({ dataset: { a: 'base' } }) }, shiftKey: false, ctrlKey: false });
+    expect(html()).toContain('Ma base');
+    expect(html()).toContain('data-a="tab:build"');
+    expect(html()).toContain('class="tmenu panel tbase tbarr"');
+  });
+
+  it('les Enfers sans le superflu : ni carte de passage, ni « Suivre », ni bulle d’aide tant qu’on ne bâtit pas', () => {
+    const { ui, html } = build('hell');
+    (ui as any).units = () => [{ id: 1, kind: 'soldier', x: 30, z: 12, hp: 10, maxHp: 10 }];
+    (ui as any).barKey = '';
+    ui.render();
+    const h = html();
+    expect(h).not.toContain('data-a="portal"');
+    expect(h).not.toContain('data-a="follow"');
+    expect(h).not.toContain('class="tbub"');
+    expect(h).toContain('class="tcard');
+    // un bâtiment à poser : le tiroir s'ouvre et la bulle dit comment faire
+    ui.startPlacing('camp');
+    expect(html()).toContain('class="tmenu panel tbase tbarr"');
+    expect(html()).toContain('class="tbub"');
   });
 
   it('l’onglet Bâtir propose les défenses de l’île ; plus d’ancien bloc « Caserne » sans onglets', () => {
@@ -69,6 +90,6 @@ describe('le menu de l’île', () => {
 
   it('le retour est « Retourner au village », compact, comme le retour des Enfers', () => {
     expect(build('isle').html()).toContain('Retourner au village');
-    expect(build('hell').html()).toContain('Retourner sur l’île');
+    expect(build('hell').html()).toMatch(/data-a="leave"[^>]*>.*Village/);
   });
 });

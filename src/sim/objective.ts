@@ -1,5 +1,5 @@
 import type { Hell } from './hell';
-import { HELL_ZONES, Z_KINGDOM, zoneAgeText, zoneThe } from '../world/hell';
+import { Z_KINGDOM, zoneAgeText, zoneThe } from '../world/hell';
 import { tr, nplural } from '../i18n';
 
 /**
@@ -32,13 +32,6 @@ export function nextGoal(h: Hell, from: [number, number]): HellGoal {
   if (posts.length && (!main || at(posts[0]) + 5 < at(main))) return { kind: 'outpost', zone, x: posts[0].site.x, z: posts[0].site.z };
   if (main) return { kind: main.kind === 'kingdom' ? 'kingdom' : 'fortress', zone, x: main.site.x, z: main.site.z };
   return { kind: 'done', zone };
-}
-
-/** « Zone ouverte : Grottes de braise » (la zone où l'on se bat, celle qui s'ouvre au joueur) */
-export function zoneLine(h: Hell): string {
-  if (h.victory) return tr('Royaume démoniaque abattu');
-  const open = Math.min(h.frontier, HELL_ZONES.length - 1);
-  return tr('Zone ouverte : {zone}', { zone: HELL_ZONES[open].name });
 }
 
 /** « Objectif : abattre la forteresse (à 24 cases) » : une phrase courte */

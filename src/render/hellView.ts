@@ -413,8 +413,11 @@ export class HellView {
     this.sources.push({ x: px, y: y + 1.8, z: pz + 0.8, r: 6, c: new THREE.Color(0.9, 0.3, 1).multiplyScalar(1.8), flicker: 0.1 });
   }
 
-  /** Point du portail sous le curseur ? */
-  portalAt(x: number, z: number) { return Math.hypot(x - this.map.portal[0], z - this.map.portal[1]) < 2; }
+  /** Le rayon touche-t-il l'arche du portail (et pas seulement le sol à son pied) ? Un clic sur le haut de l'arche tombe au sol bien derrière elle */
+  portalHit(ray: THREE.Ray) {
+    const [px, pz] = this.map.portal, y = this.map.groundY(px, pz);
+    return ray.intersectsBox(new THREE.Box3(new THREE.Vector3(px - 1.6, y, pz - 0.6), new THREE.Vector3(px + 1.6, y + 3.7, pz + 0.6)));
+  }
 
   // ---------- Bâtiments ----------
 

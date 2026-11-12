@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { HellMap, HELL_ZONES } from '../src/world/hell';
+import { HellMap } from '../src/world/hell';
 import { Hell } from '../src/sim/hell';
 import { troopStats } from '../src/sim/army';
-import { nextGoal, goalLine, zoneLine } from '../src/sim/objective';
+import { nextGoal, goalLine } from '../src/sim/objective';
 import { escapeAction, CommandUI, CONTROLS_HELP, PORTAL_REACH, Theater } from '../src/ui/command';
 import { WAR_TIP_TEXT, WAR_TIP_MAX } from '../src/ui/warTips';
 import { tr, setLang } from '../src/i18n';
@@ -69,12 +69,10 @@ describe('l’objectif suivant dans les Enfers', () => {
   it('les phrases : courtes, avec la distance, et la zone ouverte', () => {
     const { m, h } = setup(0);
     const g = nextGoal(h, m.arrival);
-    expect(zoneLine(h)).toBe(`Zone ouverte : ${HELL_ZONES[1].name}`);
     expect(goalLine(g, 17.2)).toBe('Objectif : abattre l’avant-poste (à 17 cases)');
     expect(goalLine(g, 1)).toBe('Objectif : abattre l’avant-poste (à 1 case)');
     setLang('en', false);
     expect(goalLine(g, 17.2)).toBe('Goal: destroy the outpost (17 tiles away)');
-    expect(zoneLine(h)).toBe('Open zone: Ember Caves');
   });
 });
 
@@ -85,6 +83,10 @@ describe('Échap dans le commandement', () => {
     expect(s({ placing: true, trace: true })).toBe('cancelTrace');
     expect(s({ armed: true, selected: 3 })).toBe('disarm');
     expect(s({ selected: 3 })).toBe('deselect');
+    // le tiroir « Ma base » se referme une fois tout le reste lâché
+    expect(s({ selected: 3, base: true })).toBe('deselect');
+    expect(s({ base: true })).toBe('closeBase');
+    expect(s({ kind: 'isle', base: true })).toBe('leaveIsle');
   });
   it('ne quitte jamais les Enfers (un rappel à la place) ; sur l’île, il range le commandement', () => {
     expect(s()).toBe('hint');
@@ -127,6 +129,7 @@ describe('le portail, cible d’un ordre de déplacement', () => {
     const host: any = {
       war: { portalOut: false, hellWhy: () => null, sendThroughPortal: (l: { id: number }[]) => sent.push(l.map((u) => u.id)) },
       canvas: { style: {} }, camKeys: new Set(), toast() {}, click() {}, age: () => 1, pop: () => 10, paused: () => false,
+      went: [] as string[], goHell() { this.went.push('hell'); }, leaveHell() { this.went.push('village'); },
     };
     const ui = new CommandUI(fakeEl() as unknown as HTMLElement, host);
     ui.render = () => {};
@@ -154,6 +157,24 @@ describe('le portail, cible d’un ordre de déplacement', () => {
     ui.cmd.clear();
     ui.rightClick({ x: m.portal[0], y: m.portal[1], touch: false, button: 2 });
     expect(sent).toEqual([]);
+  });
+
+  it('un clic sur le portail passe de l’autre côté : de l’île aux Enfers, des Enfers au village', () => {
+    for (const [kind, to] of [['isle', 'hell'], ['hell', 'village']] as const) {
+      const { ui, us, portal } = build(kind);
+      // (même avec des troupes choisies : le clic gauche n'est pas un ordre)
+      ui.cmd.select([us[0].id]);
+      const e = { x: portal[0] + 0.5, y: portal[1], touch: false, button: 0 };
+      ui.down(e); ui.up(e);
+      expect((ui as any).host.went, kind).toEqual([to]);
+    }
+  });
+
+  it('un clic hors du portail ne quitte pas les Enfers', () => {
+    const { ui, m } = build('hell');
+    const e = { x: m.arrival[0] + 6, y: m.arrival[1] + 4, touch: false, button: 0 };
+    ui.down(e); ui.up(e);
+    expect((ui as any).host.went).toEqual([]);
   });
 
   it('le royaume tombé, le portail de l’île est éteint : plus de passage vers les Enfers', () => {
