@@ -4,7 +4,7 @@ import { tr } from '../i18n';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/difficulty';
-import { GEN, GEN_FIXED, fillClimate } from './continent';
+import { GEN, GEN_FIXED, fillClimate, fillRiverBed } from './continent';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Crossing, crossingMap, nearestOnDeck } from './crossings';
@@ -202,6 +202,8 @@ export class World {
   private temp = new Float32Array(N * N);
   private wet = new Float32Array(N * N);
   private climateKey = '';
+  /** Lit de cailloux de l'amont de la rivière (0 … 255 par case), tiré du plan comme le climat ; non sauvegardé (`fillRiverBed`) */
+  bed = new Uint8Array(N * N);
   /** distances à l'eau déjà calculées (un recalcul partiel des biomes peut s'y fier) */
   private biomesDone = false;
   /** Distance (en cases, plafonnée) à l'eau la plus proche */
@@ -903,6 +905,7 @@ export class World {
     if (key !== this.climateKey) {
       this.climateKey = key;
       fillClimate(this.gen, this.seed, N, this.temp, this.wet);
+      fillRiverBed(this.gen, this.seed, N, this.bed);
       rect = null;
     }
     const dist = this.waterDist;

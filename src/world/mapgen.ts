@@ -83,7 +83,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
       if (n > dense[b] && rnd() < (b === BIOME_DESERT ? 0.35 : 0.8)) world.veg[world.ci(x, z)] = VEG_FOREST;
       else if (n > dense[b] - 0.17 && rnd() < 0.04) world.veg[world.ci(x, z)] = VEG_FOREST;
     }
-  if (v3) addGroves(world, vary);
+  if (v3) { addGroves(world, vary); rockyBanks(world, mulberry32(seed + 93)); }
   world.vegDirty = true;
   // sanitize (pentes)
   world.sanitize(0, 0, N, N);
@@ -135,6 +135,21 @@ function addGroves(world: World, rnd: () => number) {
       }
     made++;
   }
+}
+
+/**
+ * Rives du lit de cailloux (version 3) : une case de rive sur trois environ, au bord de l'eau, devient de la rocaille (on peut
+ * l'enlever, elle sert aux carrières) ; les rochers du lit lui-même ne sont qu'un décor (`VegView.riverbed`)
+ */
+function rockyBanks(world: World, rnd: () => number) {
+  for (let z = 1; z < N - 1; z++)
+    for (let x = 1; x < N - 1; x++) {
+      const k = world.ci(x, z), a = world.cellAvg(x, z);
+      if (world.bed[k] < 40 || a < 0.12 || a > 3.5 || world.cellSlope(x, z) > 1 || (world.veg[k] && world.veg[k] !== VEG_FOREST)) continue;
+      let wet = false;
+      for (let dz = -1; dz <= 1 && !wet; dz++) for (let dx = -1; dx <= 1; dx++) if (world.cellAvg(x + dx, z + dz) < -0.05) { wet = true; break; }
+      if (wet && rnd() < 0.35 * (world.bed[k] / 255)) world.veg[k] = VEG_ROCKS;
+    }
 }
 
 /**
@@ -198,7 +213,8 @@ function shapeBiomes(world: World, seed: number, wind: number | null) {
       if (biomeNear(x, z, BIOME_MARSH) && h < 1.2) {
         const p = pond.fbm(x * 0.22, z * 0.22, 2);
         if (p > 0.18) world.heights[i] = Math.min(h, lerp(0.1, -0.8, smoothstep(0.18, 0.38, p)));
-        else world.heights[i] = lerp(h, 0.3, 0.5);
+        // (le lit de cailloux reste dans l'eau : le marais ne l'aplanit pas)
+        else if (!(h < 0 && world.bed[world.ci(Math.min(x, N - 1), Math.min(z, N - 1))])) world.heights[i] = lerp(h, 0.3, 0.5);
       } else if (biomeNear(x, z, BIOME_DESERT) && h > 0.4) {
         // longues ondulations de dunes, orientées par le vent
         const ph = (x * wx + z * wz) + dune.fbm(x * 0.05, z * 0.05, 2) * 4;

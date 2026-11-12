@@ -992,6 +992,32 @@ export class VegView {
   }
 
   /**
+   * Lit de cailloux (force `k`) : de gros blocs facettés gris et bruns qui sortent de l'eau peu profonde, des dalles plates
+   * claires (de glace l'hiver), des cailloux ; enneigés selon la saison et le biome. Rien sous 0,5 de fond
+   */
+  private riverbed(cx: number, cz: number, k: number, b: number, s: SeasonState) {
+    const w = this.world, col = this.col, h = (i: number) => hash2(cx, cz, 950 + i);
+    const n = Math.round((3 + h(0) * 3) * (0.35 + 0.65 * k)), snow = s.snow * 0.7 * snowy(b);
+    for (let i = 0; i < n; i++) {
+      const px = cx + 0.1 + h(1 + i) * 0.8, pz = cz + 0.1 + h(9 + i) * 0.8, y = w.hAt(px, pz);
+      if (y < -0.5) continue;
+      // (assez hauts pour sortir de l'eau : le fond est vers -0,2)
+      const r = h(17 + i), big = i < 2 && h(25 + i) < (i ? 0.35 : 0.2 + 0.6 * k), slab = !big && h(27 + i) < 0.3;
+      const sc = big ? 3.8 + r * 2.4 : slab ? 2.8 + r * 2 : 1.4 + r * 1.6;
+      const sy = big ? sc * (2.6 + h(35 + i)) : slab ? sc * 1.7 : sc * (2.4 + h(35 + i));
+      if (slab) {
+        // dalle claire, bleutée de glace quand l'eau gèle
+        col.setScalar(1.05 + h(42 + i) * 0.12).lerp(ICE_SLAB, s.iceNow * 0.7).lerp(SNOWC, snow * 0.5);
+      } else {
+        col.setScalar(0.74 + h(42 + i) * 0.34);
+        if (h(50 + i) < 0.5) col.multiply(BED_BROWN);
+        col.lerp(SNOWC, snow);
+      }
+      this.placeRock(px, pz, sc, sy, h(58 + i), h(66 + i), col);
+    }
+  }
+
+  /**
    * Eau près du rivage : une case de terre ferme (ou de lac) à `r` cases au plus. Nénuphars, roseaux et algues n'y poussent
    * que là, jamais en pleine mer (sur les hauts-fonds du récif, au large)
    */
@@ -1042,6 +1068,12 @@ export class VegView {
     const w = this.world, col = this.col, k = w.ci(cx, cz);
     if (w.occ[k] || w.road[k] || w.lake[k]) return;
     const avg = w.cellAvg(cx, cz), slope = w.cellSlope(cx, cz), b = w.biome[k];
+    // lit de cailloux de l'amont de la rivière : seulement là où il est peu profond (pas sur un chenal creusé, ni sur une
+    // ancienne partie au chenal profond) ; la rive garde ensuite son herbe
+    if (w.bed[k] && avg > -0.6 && avg < 0.4) {
+      this.riverbed(cx, cz, w.bed[k] / 255, b, s);
+      if (avg < 0.12) return;
+    }
     // marais : roseaux sur les berges et dans l'eau peu profonde, nénuphars sur les mares (au bord, jamais au large)
     if (b === BIOME_MARSH && avg > -0.7 && avg < 0.7 && s.snow < 0.85 && (avg > SEA + 0.02 || this.nearShore(cx, cz, 2))) {
       if (avg < 0.02 && hash2(cx, cz, 701) < 0.45) {
@@ -1322,6 +1354,9 @@ export class VegView {
 }
 
 const DESERT_ROCK = new THREE.Color(1.08, 0.9, 0.76);
+/** rochers bruns du lit de cailloux, et ses dalles prises dans la glace l'hiver */
+const BED_BROWN = new THREE.Color(1.06, 0.84, 0.62);
+const ICE_SLAB = new THREE.Color(0.82, 0.92, 1.02);
 /** Part de la neige de saison qui tient dans chaque biome */
 const snowy = (b: number) => (b === BIOME_DESERT ? 0.15 : b === BIOME_TROPICAL ? 0.2 : b === BIOME_TAIGA ? 1.2 : 1);
 

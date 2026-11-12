@@ -1,7 +1,7 @@
 # Eau, rivières, lacs, torrents et ponts
 
 > Fichiers : `src/world/world.ts` (`isWet`, `realWater`, `nearWater`, `canRoad`, `canPlace`, `setLakes`, `setTorrents`, `surfaceAt`), `src/render/streams.ts` (lacs et torrents, classe `Streams`), `src/render/terrainView.ts` (plan d'eau de la mer, courant, écume), `src/world/crossings.ts` (franchissements et tablier des ponts), `src/world/mapgen.ts` (`carveTarns`, `shapeBiomes`), `src/world/continent.ts` (vallée de la rivière), `src/world/ferry.ts`, `src/world/terraform.ts` (effet des pinceaux).
-> Tests : `tests/franchissements.test.ts`, `tests/rivage.test.ts`, `tests/pontons.test.ts`, `tests/ferry.test.ts`, `tests/sources.test.ts`.
+> Tests : `tests/franchissements.test.ts`, `tests/litDeCailloux.test.ts`, `tests/rivage.test.ts`, `tests/pontons.test.ts`, `tests/ferry.test.ts`, `tests/sources.test.ts`.
 > Voir aussi : [monde-carte.md](monde-carte.md), [outils-terrain.md](outils-terrain.md), [routes.md](routes.md), [chemin-de-fer.md](chemin-de-fer.md), [placement-construction.md](placement-construction.md), [trafic.md](trafic.md), [vegetation-biomes.md](vegetation-biomes.md)
 
 ## En bref
@@ -21,7 +21,8 @@ Il n'y a **pas de réseau de rivières** dans les données : la mer est un plan 
 
 ### La mer et les rivières (rendu : `TerrainView`)
 - Plan d'eau : `PlaneGeometry(N, N)` à `SEA` ; la couleur et l'écume viennent de la profondeur lue dans `heightTex` (le relief affiché en texture) ; houle dans le vertex shader.
-- Rivière générée : dans `plannedHeight` (`continent.ts`), `riverU(r, v)` donne l'abscisse de la rivière de sa source à son embouchure ; autour, une vallée gaussienne (sigma 7) fait descendre le sol vers une pente, et un chenal étroit (sigma 2,1) est creusé à -0,9. Source dans le flanc du massif (`river.u`, `river.v`). Rien n'est retenu après la génération.
+- Rivière générée : dans `plannedHeight` (`continent.ts`), `riverU(r, v)` donne l'abscisse de la rivière de sa source à son embouchure ; autour, une vallée gaussienne (sigma 7) fait descendre le sol vers une pente, et un chenal étroit (sigma 2,1) est creusé à -0,9. Source dans le flanc du massif (`river.u`, `river.v`). Rien n'est retenu du relief après la génération.
+- **Lit de cailloux** (version 3 du générateur) : sur l'amont, de la source jusqu'à `plan.bed.end` du cours (tiré entre 0,3 et 0,4, bord irrégulier, effacé sur 0,08 : `rockyBed`), le chenal est plus large (sigma 2,1 → 2,8) et peu profond (fond vers -0,22 ± 0,07 au lieu de -0,9). L'eau reste de l'eau pour toutes les règles (bâtir, routes, ponts) ; le shader l'éclaircit en haut-fond et y forme la glace en hiver. `fillRiverBed` en tire un masque par case (`World.bed`, 0 … 255, à moins de 4 cases de l'axe, non sauvegardé, refait avec le climat dans `computeBiomes`). Le décor (`VegView.riverbed`, voir [vegetation-biomes.md](vegetation-biomes.md)) y pose de gros rochers, des dalles et des cailloux là où le fond est entre -0,6 et 0,4 : une ancienne partie, au chenal profond, n'en montre pas ; une case comblée ou bâtie les perd ; aucun sous un pont. À la génération, `rockyBanks` (`mapgen.ts`) change environ une case de rive sur trois en rocaille, et `shapeBiomes` n'aplanit pas le lit quand il traverse un marais.
 - Courant : `TerrainView.computeFlow` fabrique une texture `flowTex` (une case par texel) : pour chaque case d'eau (`cellAvg < -0.05`, hors lac) à 4 cases au plus d'une rive, la direction suit la pente moyenne des berges (carré de rayon `R = 4`), la force `narrow × strong` (b) est maximale dans les chenaux étroits. Purement visuel. Recalculé dans `update` si le relief change et que de l'eau est à moins de 6 cases de la zone (`waterNear`), jamais pour une simple retouche de teinte.
 - Fonds : le sol sous l'eau se teinte de sable mouillé vers `SEABED` ; vase au marais. Algues, coraux, roseaux, nénuphars : voir [vegetation-biomes.md](vegetation-biomes.md).
 
@@ -105,6 +106,7 @@ Une seule détection et un seul profil de tablier servent à la fois au dessin (
 
 ## Pour modifier
 - **Changer la taille ou le nombre de lacs / torrents** : `keep` et `MAX_TORRENTS` dans `streams.ts` (proportionnels à `N`), seuils dans `steps()` (`level < 2.5`, `deep < 0.35`, `cells.length < 16`).
+- **Le lit de cailloux** : étendue dans `continentPlan` (`bed.end`) et `rockyBed`, profondeur et largeur dans `plannedHeight`, décor dans `VegView.riverbed`, rives dans `rockyBanks`. Le masque dépend seulement de la graine et de `gen` : le changer change le décor des parties en cours, pas leur relief (sauvegardé).
 - **Lacs et étangs de génération** : `carveTarns` dans `mapgen.ts` (arguments `want`, `lo`, `hi`, `k`), puis le remplissage les révèle ; ne pas supposer qu'une cuvette creusée devient forcément un lac.
 - **Une nouvelle règle « pas dans l'eau »** : ajouter le test dans `canPlace` (`world.ts`) avec le seuil adapté (voir le tableau), et dans le pinceau concerné s'il y en a un.
 - **Un nouveau type de franchissement** : `isWater` et `carriedCells` (`crossings.ts`) ; le dessin est dans `render/roads.ts` ; vérifier `tests/franchissements.test.ts`.
