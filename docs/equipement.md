@@ -39,7 +39,7 @@ Dangers (`Danger`) : `beast`, `fall`, `water`, `dark`, `weather`, `monster`. Un 
 - Condition (`Expeditions.whyCraft`) : âge de la pièce atteint, bâtiment `needs` présent (atelier, lieu de soins pour la trousse), de quoi payer, file non pleine (`MAX_CRAFT = 6`). Le prix est prélevé tout de suite ; annuler une pièce de la file le rend (`cancelCraft`).
 - La file se fabrique une pièce à la fois (`craftStep`) : durée `g.time` secondes de jeu, ×1,5 avec un atelier (`has('workshop')`), ×`FORGE_CRAFT` (1,5) avec la forge infernale. Fin de file : message « L'équipement commandé est prêt ».
 - `whyCraftAll(ids, age)` : pour la commande d'un lot (bouton « Tout fabriquer », garnison) : tout ou rien, total du prix et place dans la file.
-- L'onglet Équipement (`renderArsenal`) : une carte par pièce (réserve, en route, prix, raison du refus), la file avec annulation, et le repli « Anciennes armes et outils ».
+- L'onglet Équipement (`renderArsenal`) : une carte par pièce **de l'âge** (`gearCurrent` : ni à venir, ni dépassée) avec son illustration en fond (le bas de la carte, en verre clair, la laisse voir), réserve, en route, prix, raison du refus ; puis la file avec annulation.
 
 ### Ce qu'une équipe emporte (`loadout`)
 Pour chaque danger du choix, dans l'ordre : la pièce en stock la plus protectrice (`cut` le plus haut parmi celles qui parent ce danger, même dépassée) qui n'est pas déjà prise ; autant de pièces que `per(party)` si possible, sinon ce qui reste. Le risque est multiplié par `k = 1 − (somme des cut × part fournie) / max(1, nombre de dangers)`, puis par `1 − 0,1` si une trousse est en stock (une seule part). Une pièce qui pare deux dangers (une arme : bêtes et créatures) n'est comptée que pour le premier danger traité. `Expeditions.preview(c)` donne le résultat avant départ (équipement, chevaux, carburant, risque).
@@ -50,7 +50,7 @@ Pour chaque danger du choix, dans l'ordre : la pièce en stock la plus protectri
 
 ### Ce que le joueur voit au départ (`gearGaps`)
 Pour chaque danger du choix qu'aucune pièce en réserve ne couvre en entier (stock < `per(party)`), la pièce **actuelle** (`gearCurrent` : connue et pas dépassée) la plus protectrice que le village sait fabriquer (`usable` : atelier ou lieu de soins là) est proposée : « 2 barques manquent », bouton « Fabriquer · prix », « Tout fabriquer » s'il y en a plusieurs, lien vers la fiche dans l'onglet Équipement. Les dangers se regroupent par pièce.
-Les pièces dépassées pour les expéditions (`gearObsolete`) restent visibles dans l'arsenal si une troupe de l'âge en a besoin (`troopGearNeeded`, `army.ts`).
+Les pièces dépassées pour les expéditions (`gearObsolete`) ne sont plus montrées dans l'onglet Équipement, même si une troupe de l'âge en a besoin (`troopGearNeeded`, `army.ts`) : la caserne les commande elle-même quand une recrue en manque (barre des troupes `command.ts`, Enfers `recruitPlan.ts`).
 
 ## Fonctionnement dans le code
 - État : `world.exp.gear` (`Stock` = `Record<GearId, number>`, `emptyStock`), `world.exp.craft` (file de `GearId`), `craftT` (avancement de la première pièce, secondes de jeu). Sauvegardés ; `readExpState` ignore les ids inconnus, met les nouvelles pièces à 0 et borne les stocks à des entiers ≥ 0 (une ancienne sauvegarde se charge, test `armesEpoque`).

@@ -18,9 +18,8 @@ import type { RailEditState } from '../build/trackEdit';
 import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
-import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearObsolete } from '../sim/gear';
+import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
 import { choiceStyles, riskDots, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
-import { troopGearNeeded } from '../sim/army';
 import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -1662,7 +1661,8 @@ export class UI {
       const tags = `${m.mandatory ? `<span class="mtag must">${pic('★', 14)} ${tr('Obligatoire')}</span>` : ''}${leg ? `<span class="mtag leg">${pic('✨', 14)} ${tr('Légendaire')}</span>` : ''}${mil ? `<span class="mtag mil">${pic('⚔️', 14)} ${tr('Militaire')}</span>` : ''}`;
       const label = tr(run ? 'Équipe en route…' : redo ? 'Refaire l’expédition' : 'Envoyer une équipe');
       const art = missionArt(m);
-      return `<div class="mission ${done ? 'done' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
+      // une mission réussie (rangée à la fin) passe en petit format : vignette, titre, pastilles et « Refaire »
+      return `<div class="mission ${done ? 'done' : ''}${redo && !run ? ' small' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
         <div class="mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${pic(m.icon, 96)}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
         <div class="mbody">
           <div class="mhead"><b class="mbadge">${pic(m.icon, 30)}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div></div>
@@ -1948,22 +1948,19 @@ export class UI {
     const h = this.host, ex = h.expeditions, age = h.sim.age, st = ex.state;
     const away = (id: GearId) => ex.active.reduce((n, a) => n + (a.gear[id] ?? 0), 0);
     const per = (g: Gear) => tr(g.per(1) === 1 && g.per(2) === 2 ? 'un par membre' : g.id === 'kit' ? 'une par équipe' : g.per(3) === 1 ? 'une pour trois' : 'une pour deux');
-    const oldOpen = !!el.querySelector<HTMLDetailsElement>('details.oldGear')?.open;
-    // une pièce dépassée pour les expéditions mais que les troupes de l'âge exigent (la lance du soldat) reste en vue
-    const troops = troopGearNeeded(age), shown = (g: Gear) => !gearObsolete(g, age) || troops.has(g.id);
+    // seules les pièces de l'âge (ni à venir, ni dépassées) : la caserne fabrique elle-même ce qui manque à ses recrues
     const card = (g: Gear) => {
-        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), locked = age < g.age, price = gearCostLabel(gearCost(g, h.world.difficulty));
+        const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), price = gearCostLabel(gearCost(g, h.world.difficulty));
         const vs = g.guards ? `${pic(DANGER_ICON[g.guards], 18)}${g.also ? pic(DANGER_ICON[g.also], 18) : ''}` : pic('🛡️', 18);
         // l'illustration avec décor en tête de carte ; une pièce pas encore illustrée garde son icône sur un fond uni
         const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}-bg.webp" alt="" loading="lazy" decoding="async">` : ic(g.icon, 40, 1.6);
         const crafting = st.craft.filter((x) => x === g.id).length;
         // fabricable : « Fabriquer » en bleu, le prix en info-bulle ; sinon une pilule grise avec le prix
-        return `<div class="gear ${locked ? 'locked' : !shown(g) ? 'old' : ''}" data-gear="${g.id}" title="${g.desc}">
+        return `<div class="gear" data-gear="${g.id}" title="${g.desc}">
           <div class="gart${GEAR_ART.has(g.id) ? '' : ' none'}">${art}</div>
           <div class="gbody">
           <div class="ghead"><span class="gli">${ic(GEAR_LINE[g.id] ?? g.icon, 24, 1.8)}</span><b class="gname">${g.name}</b><span class="cnt" title="${tr('En réserve')}${crafting ? tr(', en fabrication') : ''}${out ? tr(', en route') : ''}">${n}${crafting ? ` · ⏳${crafting}` : ''}${out ? ` · 🧭${out}` : ''}</span></div>
           <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : tr('Utile partout')}${g.also ? tr(' et les {d}', { d: DANGER_NAME[g.also] }) : ''} · ${per(g)}">${vs} ${tr('−{n} % de risque', { n: Math.round(g.cut * 100) })}</small>
-          ${gearObsolete(g, age) && troops.has(g.id) ? `<small class="gnote">${tr('Pour recruter à la caserne.')}</small>` : ''}
           ${why ? `<small class="why">${why}</small>` : ''}
           <button data-craft="${g.id}" class="${why ? '' : 'go'}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.time, price }) : tr('Fabriquer : {t} s', { t: g.time }))}">${ic('eq-craft', 18, 1.9)} ${why ? price || tr('Fabriquer') : tr('Fabriquer')}</button>
           ${st.craft[0] === g.id ? `<div class="bar gnbar cbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}
@@ -1973,8 +1970,7 @@ export class UI {
     el.innerHTML = `
       <p class="hint" title="${tr('Elle le rapporte au retour (un échec peut en coûter une pièce). Sur place, certaines décisions demandent une corde, une barque ou des armes. Le village fabrique une pièce après l’autre, plus vite avec un atelier.')}">${tr('Chaque équipe emporte le meilleur équipement en réserve.')}</p>
       <div class="gstock"><span>${pic('🪵', 26)}${tr('{n} bois', { n: Math.floor(h.world.wood) })}</span><span>${pic('🪨', 26)}${tr('{n} pierre', { n: Math.floor(h.world.stone) })}</span><span>${pic('⛏', 26)}${tr('{n} minerai', { n: Math.floor(ex.ore) })}</span>${age >= 4 ? `<span title="${tr('Carburant')}">${pic('⛽', 26)}${Math.floor(h.world.fuel)}</span>` : ''}</div>
-      <div class="gearGrid">${GEAR.filter(shown).map(card).join('')}</div>
-      ${GEAR.some((g) => !shown(g)) ? `<details class="oldGear"${oldOpen ? ' open' : ''}><summary title="${tr('Dépassées à cette époque : les expéditions ne les demandent plus, mais les troupes s’en servent encore')}">${tr('Anciennes armes et outils')}</summary><div class="gearGrid">${GEAR.filter((g) => !shown(g)).map(card).join('')}</div></details>` : ''}
+      <div class="gearGrid">${GEAR.filter((g) => gearCurrent(g, age)).map(card).join('')}</div>
       <h4>${tr('Fabrication')}</h4>
       <div class="queue">${st.craft.length ? st.craft.map((id, i) => `<span class="qi">${gearPic(GEAR_BY[id], 22, 16, 2)}${GEAR_BY[id].name}${i === 0 ? `<i class="bar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></i>` : ''}<button data-cancel="${i}" title="${tr('Annuler')}" aria-label="${tr('Annuler')}">${ic('close', 14, 2)}</button></span>`).join('') : `<small>${tr('Rien en cours.')}</small>`}</div>`;
     el.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => (b.onclick = () => {

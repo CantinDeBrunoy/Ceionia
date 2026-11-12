@@ -161,7 +161,6 @@ registerDict('expeditions', {
   '{n} pierre': '{n} stone',
   '{n} minerai': '{n} ore',
   'Tout fabriquer': 'Craft all',
-  'Anciennes armes et outils': 'Old weapons and tools',
   'Fabrication': 'Crafting',
   'Rien en cours.': 'Nothing in progress.',
   'un par membre': 'one per member', 'une par équipe': 'one per team', 'une pour trois': 'one for three', 'une pour deux': 'one for two',
