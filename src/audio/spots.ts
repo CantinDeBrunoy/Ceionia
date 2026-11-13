@@ -100,11 +100,11 @@ export function timeFactor(when: When, env: SpotEnv) {
 }
 
 /**
- * Atténuation du zoom : les sons des bâtiments ne s'entendent que de près (pleins sous 21 de distance, muets au-delà de 56) ;
- * le volcan porte plus loin
+ * Atténuation du zoom : les sons des bâtiments ne s'entendent que la vue proche (pleins sous 15 de distance, muets au-delà de
+ * 40) ; le volcan porte plus loin
  */
 export function zoomFactor(kind: SpotKind, camDist: number) {
-  return kind === 'volcano' ? clamp(1.5 - camDist / 110, 0.2, 1) : clamp(1.6 - camDist / 35, 0, 1);
+  return kind === 'volcano' ? clamp(1.5 - camDist / 110, 0.2, 1) : clamp(1.6 - camDist / 25, 0, 1);
 }
 
 /**

@@ -1875,9 +1875,10 @@ class Game implements UIHost {
       this.callT -= dt;
       if (this.callT <= 0) {
         this.callT = 7 + Math.random() * 9;
-        const t = this.cam.target, c = this.cam.dist < 70 ? this.fauna.pickCaller(t.x, t.z, 22, CALLERS) : null;
+        // seulement une bête proche du point visé, la vue près du sol (muette au-delà de 40 de distance)
+        const t = this.cam.target, c = this.cam.dist < 40 ? this.fauna.pickCaller(t.x, t.z, 12, CALLERS) : null;
         if (c) {
-          const k = (1 - Math.min(1, Math.hypot(c.x - t.x, c.z - t.z) / 26)) * Math.min(1, 40 / this.cam.dist);
+          const k = (1 - Math.min(1, Math.hypot(c.x - t.x, c.z - t.z) / 14)) * Math.min(1, Math.max(0, 1.6 - this.cam.dist / 25));
           if (k > 0.08) audio.sfxCall(c.kind, k);
         }
       }

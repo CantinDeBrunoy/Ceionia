@@ -182,7 +182,9 @@ export class AudioEngine {
     this.tickVoices(T);
     // grillons la nuit : une courte trille douce de temps en temps, d'un grillon puis d'un autre (hauteur et place variées)
     this.cricketTimer -= dt;
-    const crick = night * (s.season === 3 ? 0 : 1) * (1 - s.rain) * out;
+    // les bêtes ne s'entendent que la vue proche du sol : pleines sous 15 de distance, muettes au-delà de 40
+    const near = clamp(1.6 - s.camDist / 25, 0, 1);
+    const crick = night * (s.season === 3 ? 0 : 1) * (1 - s.rain) * out * near;
     if (this.cricketTimer <= 0) {
       this.cricketTimer = 1.2 + Math.random() * 3.5;
       if (crick > 0.3) {
@@ -202,12 +204,12 @@ export class AudioEngine {
     this.gullTimer -= dt;
     if (this.gullTimer <= 0) {
       this.gullTimer = 8 + Math.random() * 12;
-      if ((s.coast ?? 0) > 0.3 && s.daylight > 0.4 && s.rain < 0.5 && out > 0.5) this.gull(T + 0.05, s.coast!);
+      if ((s.coast ?? 0) > 0.3 && near > 0.2 && s.daylight > 0.4 && s.rain < 0.5 && out > 0.5) this.gull(T + 0.05, s.coast! * near);
     }
     this.eagleTimer -= dt;
     if (this.eagleTimer <= 0) {
       this.eagleTimer = 8 + Math.random() * 12;
-      if (high > 0.2 && s.daylight > 0.5 && s.rain < 0.4 && out > 0.5) this.eagle(T + 0.05, high);
+      if (high > 0.2 && near > 0.2 && s.daylight > 0.5 && s.rain < 0.4 && out > 0.5) this.eagle(T + 0.05, high * near);
     }
     this.crackleTimer -= dt;
     if ((s.fire ?? 0) > 0.05 && this.crackleTimer <= 0 && out > 0.5) {
@@ -217,15 +219,15 @@ export class AudioEngine {
     // grenouilles : un concert au crépuscule et la nuit, plus fourni après la pluie
     this.frogTimer -= dt;
     if (this.frogTimer <= 0) {
-      const k = (s.frogs ?? 0) * (0.25 + 0.75 * night) * (1 + s.rain) * out;
+      const k = (s.frogs ?? 0) * (0.25 + 0.75 * night) * (1 + s.rain) * out * near;
       this.frogTimer = k > 0.05 ? (0.4 + Math.random() * 1.8) / Math.min(1.5, k + 0.3) : 2;
       if (k > 0.05 && s.season !== 3) this.croak(T + 0.02, Math.min(1, k));
     }
     // oiseaux
     this.birdTimer -= dt;
-    if (this.birdTimer <= 0 && s.daylight > 0.5 && s.rain < 0.3 && s.season !== 3 && s.under < 0.5) {
+    if (this.birdTimer <= 0 && near > 0.3 && s.daylight > 0.5 && s.rain < 0.3 && s.season !== 3 && s.under < 0.5) {
       this.birdTimer = 4 + Math.random() * 7;
-      this.chirp(T + 0.05);
+      this.chirp(T + 0.05, near);
     } else if (this.birdTimer <= 0) this.birdTimer = 2;
 
     // musique
@@ -397,7 +399,7 @@ export class AudioEngine {
     }
   }
 
-  private chirp(t: number) {
+  private chirp(t: number, k = 1) {
     const ctx = this.ctx!;
     const n = 2 + Math.floor(Math.random() * 3);
     const base = 2200 + Math.random() * 1800;
@@ -408,7 +410,7 @@ export class AudioEngine {
       o.frequency.setValueAtTime(base, st);
       o.frequency.exponentialRampToValueAtTime(base * (1.3 + Math.random() * 0.4), st + 0.07);
       g.gain.setValueAtTime(0.0001, st);
-      g.gain.linearRampToValueAtTime(0.022, st + 0.015);
+      g.gain.linearRampToValueAtTime(0.022 * k, st + 0.015);
       g.gain.exponentialRampToValueAtTime(0.0001, st + 0.09);
       o.connect(g); g.connect(this.ambG);
       o.start(st); o.stop(st + 0.12);
