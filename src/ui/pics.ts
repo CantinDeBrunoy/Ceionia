@@ -120,8 +120,21 @@ const PICS: Record<string, string> = {
 
 const key = (emoji: string) => emoji.replace(/️/g, '');
 
+/**
+ * Émojis rendus par une icône peinte du HUD (`public/icons/hud/`) plutôt que par leur picto 3D : ressources, besoins,
+ * saisons, cadenas, alerte, combat, équipe, étoile des obligatoires, éclat des légendaires, sablier, éclair, boussole. Les mêmes icônes que la barre du haut, partout où `pic` est appelé
+ */
+const HUD_PICS: Record<string, string> = {
+  '🪵': 'bois', '🪨': 'pierre', '⛏': 'minerai', '🧱': 'briques', '🛢': 'carburant', '👥': 'equipe',
+  '🍞': 'nourriture', '💧': 'eau', '🏠': 'logement', '💼': 'travail', '😊': 'bienetre', '❤': 'sante', '🛡': 'securite',
+  '🔒': 'cadenas', '⚠': 'alerte', '⚔': 'militaire', '★': 'etoile', '⭐': 'etoile', '✨': 'eclat', '⏳': 'sablier', '⌛': 'sablier',
+  '⚡': 'eclair', '✅': 'coche', '🧭': 'boussole', '📜': 'parchemin', '🌸': 'printemps', '☀': 'ete', '🍂': 'automne', '❄': 'hiver', '🌙': 'nuit',
+};
+
 /** Le picto d'un émoji, à la taille `size` (px) ; l'émoji en texte s'il n'a pas de picto */
 export function pic(emoji: string, size = 20, cls = ''): string {
+  const h = HUD_PICS[key(emoji)];
+  if (h) return hudPic(h, size, cls);
   const f = PICS[key(emoji)];
   if (!f) return emoji;
   return `<img class="pic${cls ? ' ' + cls : ''}" src="./icons/pics/${f}.webp" width="${size}" height="${size}" alt="${emoji}" draggable="false" decoding="async">`;
@@ -136,7 +149,7 @@ export function hudPic(name: string, size = 20, cls = ''): string {
 }
 
 /** Vrai si l'émoji a un picto */
-export const hasPic = (emoji: string) => !!PICS[key(emoji)];
+export const hasPic = (emoji: string) => !!(PICS[key(emoji)] || HUD_PICS[key(emoji)]);
 
 /** L'émoji en tête d'un texte, s'il a un picto, et la suite (sans l'espace qui suit) ; sinon null */
 export function leadPic(text: string): [string, string] | null {

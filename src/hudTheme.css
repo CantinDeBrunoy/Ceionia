@@ -114,3 +114,81 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 #info { border-radius: var(--hR); }
 #selCard button, #info button { border-radius: 12px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFBF2, #F6E6C8); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(120, 80, 25, 0.18); color: var(--hInk); }
 #selCard button:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+
+/* ---------- Expéditions, en parchemin et or : la grande fenêtre (missions, équipement, chemin de fer), la fenêtre de départ,
+   la décision d'un imprévu et le récit. Le bleu des boutons devient l'or du HUD, le verre bleuté une coque crème ---------- */
+.overlay:has(> .expModal), .overlay:has(> .sendModal) { background: rgba(40, 28, 12, 0.35); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.overlay > .modal.expModal, .overlay > .modal.sendModal, .overlay > .modal.decide, .overlay > .modal.report {
+  background: linear-gradient(180deg, #FFFAEE 0%, #FBF0DA 55%, #F6E6C6 100%); border: 2.5px solid var(--hEdge); color: var(--hInk);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), inset 0 0 22px rgba(255, 240, 205, 0.9), 0 0 0 2px rgba(255, 238, 195, 0.45), 0 24px 60px rgba(40, 25, 5, 0.45);
+  backdrop-filter: none; -webkit-backdrop-filter: none; border-radius: 26px; }
+.expModal .mtitle, .sendModal .mtitle, .decide .mtitle, .report .mtitle { background: transparent; }
+.exTitle > span, .decide .mtitle h3, .report .mtitle h3 { font-family: var(--hSerif); font-weight: 800; color: var(--hInk); font-variation-settings: 'SOFT' 30, 'opsz' 72; }
+.exTitle small { color: var(--hInk2); }
+.exEmblem { object-fit: contain; filter: drop-shadow(0 3px 5px rgba(90, 60, 20, 0.25)); }
+/* l'en-tête : le paysage de l'âge se fond dans le parchemin */
+.expModal > .mtitle::before { -webkit-mask-image: linear-gradient(90deg, transparent, #000 35%); mask-image: linear-gradient(90deg, transparent, #000 35%); opacity: 0.9; }
+.expModal .mtitle .x, .sendModal .mtitle .x, .sendModal .sBack { border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F7E9CC); color: var(--hInk); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(120, 80, 25, 0.2); }
+.sendModal .sBack svg { border-color: var(--hInk); }
+/* la barre : onglets crème, l'actif en or */
+.expNav { background: rgba(240, 220, 180, 0.35); border: 1px solid rgba(225, 190, 130, 0.5); }
+.expNav button { border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F7E9CC); color: var(--hInk); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6); }
+.expNav button:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+.expNav button.on { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+.expModal .teams { border: 1px solid rgba(225, 190, 130, 0.55); background: rgba(255, 250, 238, 0.7); color: var(--hInk); }
+/* les cartes : crème bombée, l'obligatoire et la légendaire bordées d'or ; l'image dans un cadre doré */
+.expModal .mission { border: 1.5px solid rgba(225, 195, 140, 0.7); background: linear-gradient(180deg, #FFFCF5, #F8ECD3); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 3px 10px rgba(90, 60, 20, 0.12); }
+.expModal .mission.must, .expModal .mission.leg:not(.must) { border: 2px solid var(--hGold); background: linear-gradient(180deg, #FFF6DE, #FBE6B8); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 0 0 3px rgba(255, 220, 140, 0.35), 0 4px 12px rgba(120, 80, 20, 0.16); }
+.expModal .mission.must.done { border: 1.5px solid rgba(225, 195, 140, 0.7); background: linear-gradient(180deg, #FFFCF5, #F8ECD3); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 3px 10px rgba(90, 60, 20, 0.12); }
+.mart, .sArt.mart { border: 2px solid var(--hEdge); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4), 0 2px 6px rgba(90, 60, 20, 0.18); background: linear-gradient(170deg, #F2E3C2, #D9C08E); }
+.mstate { background: #FFF8E9; border: 1px solid var(--hEdge); }
+/* plus de pastille d'émoji devant le titre : l'illustration dit déjà de quoi il s'agit */
+.expModal .mhead > .mbadge { display: none; }
+.expModal .mhead h4, .sCap h3 { font-family: var(--hSerif); font-weight: 800; color: var(--hInk); letter-spacing: -0.01em; font-variation-settings: 'SOFT' 30, 'opsz' 48; }
+.sCap h3 { color: #fff; }
+.expModal .mhead small, .expModal .mission .mtext, .expModal .mpills span { color: var(--hInk2); }
+.mtag { border: 1px solid transparent; }
+.mtag.must { color: #7A4A0E; background: #FCE7B6; border-color: rgba(226, 180, 94, 0.6); }
+.mtag.leg { color: #6B4210; background: var(--hGoldFill); border-color: var(--hGold); }
+.mtag.mil { color: #7E2A22; background: #F8DCD2; border-color: rgba(214, 120, 100, 0.45); }
+.mgains, .sGifts { background: rgba(214, 196, 150, 0.25); border: 1px solid rgba(225, 195, 140, 0.45); }
+.mgains .chip { background: #FFFAF0; box-shadow: 0 0 0 1px rgba(225, 195, 140, 0.6); }
+.gift.g0, .gift.g1, .gift.g2, .gift.g3 { background: #FFFAF0; border: 1.5px solid rgba(225, 195, 140, 0.7); }
+/* les boutons d'action : or chaud, texte brun (comme le bouton Continuer de l'accueil) */
+.expModal button.sendBtn, .sendModal button.sGo, .gear button.go, .gnote .mkAll {
+  background: linear-gradient(180deg, #FFE7A6, #F2BE55); border: 1.5px solid #D9A646; color: #4A3010; font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -6px 10px rgba(200, 130, 30, 0.2), 0 3px 8px rgba(120, 80, 20, 0.28); }
+.expModal button.sendBtn:hover:not(:disabled), .sendModal button.sGo:hover:not(:disabled), .gear button.go:hover { background: linear-gradient(180deg, #FFEDB8, #F5C661); filter: none; }
+.expModal .mission.done button.sendBtn { background: linear-gradient(180deg, #FFFCF4, #F7E9CC); color: var(--hInk); border: 1.5px solid var(--hEdge); box-shadow: none; }
+.expModal button.sendBtn:disabled, .sendModal button.sGo:disabled { background: rgba(120, 90, 50, 0.14); color: var(--hInk2); border-color: transparent; box-shadow: none; }
+.expModal .mission .unlock { background: rgba(110, 160, 70, 0.14); border-color: rgba(110, 160, 70, 0.4); color: #3E6A22; }
+/* l'équipement : cartes crème, la réserve en pastille dorée */
+.gear { background: linear-gradient(180deg, #FFFCF5, #F8ECD3); border: 1.5px solid rgba(225, 195, 140, 0.7); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 3px 10px rgba(90, 60, 20, 0.12); }
+.gear .gart { background: radial-gradient(circle at 50% 45%, #FFF8E6, #EBD8AE); }
+.gear .gart:not(.none) + .gbody { background: linear-gradient(180deg, rgba(255, 250, 238, 0.85), rgba(250, 238, 212, 0.95)); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.gear .gli, .gear .gname, .gstock { color: var(--hInk); }
+.gear .gname { font-family: var(--hSerif); font-weight: 800; }
+.gear .cnt { background: #FCE7B6; color: #6B4210; border: 1px solid rgba(226, 180, 94, 0.7); }
+.gear button { border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F7E9CC); color: var(--hInk2); }
+/* la fenêtre de départ */
+.sStyles, .sPanel, .sendModal .gearNeed.sGear, .sNeeds, .sWarn { background: rgba(255, 250, 238, 0.75); border: 1px solid rgba(225, 195, 140, 0.55); }
+.sStyles button { color: var(--hInk); }
+.sStyles button small, .sChoice, .sHead small, .gnote, .sPct { color: var(--hInk2); }
+.sStyles button.on { background: #FFFDF7; border-color: var(--hGold); box-shadow: 0 2px 8px rgba(120, 80, 20, 0.15); }
+.sStyles button.on.balanced b { color: #8A5A12; }
+.sChoice b, .sHead b, .sRow b, .sVal { color: var(--hInk); }
+.sHead, .sRow { color: var(--hInk2); }
+.gslot { background: #FFFAF0; border: 1.5px solid rgba(225, 195, 140, 0.7); color: var(--hInk); box-shadow: 0 1px 4px rgba(90, 60, 20, 0.12); }
+.gslot b { color: var(--hInk2); }
+.sendModal button.gslot.miss { border: 2px dashed rgba(180, 140, 80, 0.55); background: rgba(255, 250, 238, 0.6); color: var(--hInk2); }
+.sendModal button.gslot.miss .gmark { background: linear-gradient(180deg, #F5C661, #D9A646); }
+.sendModal button.gslot.miss:hover:not(:disabled) { border-color: var(--hGold); background: #FFFDF7; color: var(--hInk); }
+/* l'imprévu et le récit */
+.decide { border-color: var(--hGold); }
+.report h2 { font-family: var(--hSerif); font-weight: 800; }
+.rlCard { background: linear-gradient(180deg, #FFFCF5, #F8ECD3); border: 1.5px solid rgba(225, 195, 140, 0.7); }
+.expModal .rlCard .trainBtn { border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F7E9CC); color: var(--hInk); }
+.expModal > section::-webkit-scrollbar-thumb, .expModal .missions::-webkit-scrollbar-thumb { background: rgba(160, 120, 60, 0.35); }
+/* l'objet entier, posé sur son parchemin (l'image est carrée, la case en 16:10) */
+.gear .gart img { object-fit: contain; object-position: 50% 50%; }
+.expModal .cdet summary, .expModal a { color: #8A5A12; }

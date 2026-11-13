@@ -420,14 +420,8 @@ function modal(root: HTMLElement, cls: string, title: string, body: string, onCl
   return { ov, close };
 }
 
-/** La rose des vents de l'en-tête des expéditions */
-const EXP_EMBLEM = `<svg class="exEmblem" viewBox="0 0 64 64" aria-hidden="true">
-  <circle cx="32" cy="32" r="17" fill="none" stroke="#1d2f5c" stroke-width="3.5"/>
-  <path d="M32 2 L37 27 L32 24 L27 27 Z M32 62 L27 37 L32 40 L37 37 Z M2 32 L27 27 L24 32 L27 37 Z M62 32 L37 37 L40 32 L37 27 Z" fill="#1d2f5c"/>
-  <path d="M32 2 L37 27 L32 24 Z M62 32 L37 37 L40 32 Z M32 62 L27 37 L32 40 Z M2 32 L27 27 L24 32 Z" fill="#4a6aa8"/>
-  <path d="M14 14 L29 28 L28 29 Z M50 14 L36 29 L35 28 Z M50 50 L35 36 L36 35 Z M14 50 L28 35 L29 36 Z" fill="#1d2f5c"/>
-  <circle cx="32" cy="32" r="4" fill="#5d9be8" stroke="#1d2f5c" stroke-width="2"/>
-</svg>`;
+/** La boussole peinte de l'en-tête des expéditions (`public/icons/hud/boussole.webp`) */
+const EXP_EMBLEM = hudPic('boussole', 62, 'exEmblem');
 /** L'avion de papier du bouton « Envoyer une équipe » */
 const SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M21.5 2.5L10 14M21.5 2.5l-7 19-4.5-7.5L2.5 9.5z"/></svg>';
 /**
