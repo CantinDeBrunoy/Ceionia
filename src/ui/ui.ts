@@ -2000,18 +2000,16 @@ export class UI {
     // seules les pièces de l'âge (ni à venir, ni dépassées) : la caserne fabrique elle-même ce qui manque à ses recrues
     const card = (g: Gear) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), price = gearCostLabel(gearCost(g, h.world.difficulty));
-        const vs = g.guards ? `${pic(DANGER_ICON[g.guards], 18)}${g.also ? pic(DANGER_ICON[g.also], 18) : ''}` : pic('🛡️', 18);
-        // l'illustration avec décor en tête de carte ; une pièce pas encore illustrée garde son icône sur un fond uni
-        const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}-bg.webp" alt="" loading="lazy" decoding="async">` : ic(g.icon, 40, 1.6);
+        // l'objet peint, détouré, posé sur un halo doré en tête de carte ; une pièce pas encore illustrée garde son icône au trait
+        const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}.webp" alt="" loading="lazy" decoding="async">` : ic(g.icon, 40, 1.6);
         const crafting = st.craft.filter((x) => x === g.id).length;
         // fabricable : « Fabriquer » en bleu, le prix en info-bulle ; sinon une pilule grise avec le prix
         return `<div class="gear" data-gear="${g.id}" title="${g.desc}">
           <div class="gart${GEAR_ART.has(g.id) ? '' : ' none'}">${art}</div>
           <div class="gbody">
-          <div class="ghead"><span class="gli">${ic(GEAR_LINE[g.id] ?? g.icon, 24, 1.8)}</span><b class="gname">${g.name}</b><span class="cnt" title="${tr('En réserve')}${crafting ? tr(', en fabrication') : ''}${out ? tr(', en route') : ''}">${n}${crafting ? ` · ${pic('⏳', 14)}${crafting}` : ''}${out ? ` · 🧭${out}` : ''}</span></div>
-          <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : tr('Utile partout')}${g.also ? tr(' et les {d}', { d: DANGER_NAME[g.also] }) : ''} · ${per(g)}">${vs} ${tr('−{n} % de risque', { n: Math.round(g.cut * 100) })}</small>
-          ${why ? `<small class="why">${why}</small>` : ''}
-          <button data-craft="${g.id}" class="${why ? '' : 'go'}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.time, price }) : tr('Fabriquer : {t} s', { t: g.time }))}">${ic('eq-craft', 18, 1.9)} ${why ? price || tr('Fabriquer') : tr('Fabriquer')}</button>
+          <div class="ghead"><b class="gname">${g.name}</b><span class="cnt" title="${tr('En réserve')}${crafting ? tr(', en fabrication') : ''}${out ? tr(', en route') : ''}">${n}${crafting ? ` · ${pic('⏳', 14)}${crafting}` : ''}${out ? ` · ${hudPic('boussole', 14)}${out}` : ''}</span></div>
+          <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : tr('Utile partout')}${g.also ? tr(' et les {d}', { d: DANGER_NAME[g.also] }) : ''} · ${per(g)}">${hudPic('securite', 16)} ${tr('−{n} % de risque', { n: Math.round(g.cut * 100) })}</small>
+          <button data-craft="${g.id}" class="${why ? '' : 'go'}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.time, price }) : tr('Fabriquer : {t} s', { t: g.time }))}">${why ? hudPic('cadenas', 15) : ic('eq-craft', 16, 1.9)} ${why ? price || tr('Fabriquer') : tr('Fabriquer')}</button>
           ${st.craft[0] === g.id ? `<div class="bar gnbar cbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}
           </div>
         </div>`;
