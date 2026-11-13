@@ -436,7 +436,7 @@ const MISSION_ART = new Set([
 ]);
 const DEST_ART = new Set(['plain', 'forest', 'sea', 'far', 'mountain', 'river', 'cave', 'spaceport']);
 /** Missions dessinées en diorama (`public/expeditions/dio-{id}.webp`, fond transparent) : l'îlot sort de la carte, à gauche */
-const MISSION_DIO = new Set(['mammoth']);
+const MISSION_DIO = new Set(['mammoth', 'herd', 'seeds', 'kraken']);
 /** Équipements illustrés (`public/icons/gear/`) : `{id}.webp` sans décor (cases, file), `{id}-bg.webp` avec décor (cartes) */
 const GEAR_ART = new Set<GearId>([
   'spear', 'rope', 'torch', 'bow', 'boat', 'sword', 'crossbow', 'armor', 'kit', 'rifle', 'lamp', 'assault', 'grenade',
