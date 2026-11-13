@@ -435,6 +435,8 @@ const MISSION_ART = new Set([
   'stars', 'games', 'trawl', 'seafarm', 'rocket', 'moon', 'colony',
 ]);
 const DEST_ART = new Set(['plain', 'forest', 'sea', 'far', 'mountain', 'river', 'cave', 'spaceport']);
+/** Missions dessinées en diorama (`public/expeditions/dio-{id}.webp`, fond transparent) : l'îlot sort de la carte, à gauche */
+const MISSION_DIO = new Set(['mammoth']);
 /** Équipements illustrés (`public/icons/gear/`) : `{id}.webp` sans décor (cases, file), `{id}-bg.webp` avec décor (cartes) */
 const GEAR_ART = new Set<GearId>([
   'spear', 'rope', 'torch', 'bow', 'boat', 'sword', 'crossbow', 'armor', 'kit', 'rifle', 'lamp', 'assault', 'grenade',
@@ -1696,7 +1698,7 @@ export class UI {
       const art = missionArt(m);
       // une mission réussie (rangée à la fin) passe en petit format : vignette, titre, pastilles et « Refaire »
       return `<div class="mission ${done ? 'done' : ''}${redo && !run ? ' small' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
-        <div class="mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${pic(m.icon, 96)}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
+        <div class="mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" loading="lazy" decoding="async">` : art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${pic(m.icon, 96)}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
         <div class="mbody">
           <div class="mhead"><b class="mbadge">${pic(m.icon, 30)}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div></div>
           ${tags ? `<div class="mtags">${tags}</div>` : ''}

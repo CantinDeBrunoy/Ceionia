@@ -192,3 +192,26 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 /* l'objet entier, posé sur son parchemin (l'image est carrée, la case en 16:10) */
 .gear .gart img { object-fit: contain; object-position: 50% 50%; }
 .expModal .cdet summary, .expModal a { color: #8A5A12; }
+/* les missions en liste de cartes larges (proposition B) : l'image à gauche, le texte au milieu, les gains et le bouton à
+   droite ; une mission en diorama pose son îlot à gauche, qui sort de la carte par la gauche (dans la marge) et par le haut */
+.expModal .missions { grid-template-columns: minmax(0, 1fr); padding: 56px 10px 22px 70px; row-gap: 76px; }
+.expModal .mission { min-height: 200px; gap: 22px; padding: 14px 18px 14px 14px; }
+.expModal .mission .mart { flex: 0 0 230px; min-height: 0; }
+.expModal .mbody { display: grid; grid-template-columns: minmax(0, 1fr) 250px; grid-template-rows: auto auto 1fr auto; column-gap: 22px; align-content: start; }
+.expModal .mbody > * { grid-column: 1; }
+.expModal .mbody > .mgains, .expModal .mbody > .unlock, .expModal .mbody > .req, .expModal .mbody > .sendBtn { grid-column: 2; }
+.expModal .mbody > .mgains { grid-row: 1 / span 2; align-self: start; margin-top: 4px; justify-content: center; }
+.expModal .mbody > .unlock, .expModal .mbody > .req { grid-row: 3; align-self: start; }
+.expModal .mbody > .sendBtn { grid-row: 4; align-self: end; margin-top: 10px; }
+.expModal .mbody > :nth-last-child(2) { margin-bottom: 0; }
+.expModal .mission.small { min-height: 0; }
+.expModal .mission.small .mart { flex-basis: 92px; }
+.expModal .mission.small .mbody { grid-template-rows: auto auto; }
+.expModal .mart.dio { overflow: visible; border: 0; box-shadow: none; background: radial-gradient(closest-side, rgba(255, 214, 120, 0.6), rgba(255, 214, 120, 0) 100%); }
+.mart.dio > img.dioImg { position: absolute; inset: auto; left: -24%; bottom: -3%; width: 122%; height: auto; object-fit: contain; filter: drop-shadow(0 10px 12px rgba(80, 50, 15, 0.32)); pointer-events: none; }
+.mission.small .mart.dio > img.dioImg { left: -14%; bottom: -12%; width: 128%; }
+@media (max-width: 860px) {
+  .expModal .missions { padding: 40px 6px 12px 40px; row-gap: 48px; }
+  .expModal .mission .mart { flex-basis: 150px; }
+  .expModal .mbody { display: flex; }
+}
