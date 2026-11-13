@@ -44,7 +44,7 @@ import { PatrolView } from './render/patrols';
 import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
 import { Streams } from './render/streams';
-import { Atmosphere } from './render/atmosphere';
+import { Atmosphere, MTN_STEPS } from './render/atmosphere';
 import { NightSky, SkyShowKind, skyNewsText } from './render/nightSky';
 import { SNOW, setSnowMap } from './render/snow';
 import { AmbientLife } from './render/life';
@@ -1377,6 +1377,8 @@ class Game implements UIHost {
     // en « Auto », on part de la qualité haute (réduite sur un petit écran tactile) et le contrôleur descend par paliers
     const p = this.gfx = q === 'auto' ? paramsAt(coarse ? 'low' : 'high', this.adaptive.level) : paramsAt(q, 0);
     this.atmosphere.mistEnabled = p.mist;
+    // brume des montagnes : moins de pas de marche en qualité normale, coupée avec la brume en qualité réduite
+    this.atmosphere.mountainSteps = p.density >= 1 ? MTN_STEPS.high : MTN_STEPS.medium;
     this.life.density = p.density;
     this.streams.density = p.density;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? Math.max(p.pixelRatio, 1) : p.pixelRatio));
