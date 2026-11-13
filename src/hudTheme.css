@@ -215,3 +215,25 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
   .expModal .mission .mart { flex-basis: 150px; }
   .expModal .mbody { display: flex; }
 }
+
+/* ---------- formes de carte à l'essai : A (en hauteur, l'îlot posé sur le haut de la carte et qui la dépasse) et C (fenêtre
+   en arche d'où sort l'îlot, titre sur un ruban doré). B, les cartes larges, reste la forme par défaut ---------- */
+.expModal.carte-a .missions, .expModal.carte-c .missions { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); padding: 96px 14px 18px 10px; gap: 84px 22px; }
+.expModal.carte-a .mission, .expModal.carte-c .mission { flex-direction: column; min-height: auto; gap: 10px; padding: 12px 14px 14px; }
+.expModal.carte-a .mission .mart, .expModal.carte-c .mission .mart { flex: none; height: 170px; }
+.expModal.carte-a .mbody, .expModal.carte-c .mbody { display: flex; flex: 0 0 auto; min-height: auto; flex-direction: column; text-align: center; align-items: stretch; }
+.expModal.carte-a .mhead, .expModal.carte-c .mhead { justify-content: center; }
+.expModal.carte-a .mtags, .expModal.carte-c .mtags, .expModal.carte-a .mpills, .expModal.carte-c .mpills, .expModal.carte-a .mgains, .expModal.carte-c .mgains { justify-content: center; }
+.expModal.carte-a .mbody > .sendBtn, .expModal.carte-c .mbody > .sendBtn { margin-top: auto; }
+.expModal.carte-a .mbody > .mgains, .expModal.carte-c .mbody > .mgains, .expModal.carte-a .mbody > .unlock, .expModal.carte-c .mbody > .unlock { align-self: center; }
+.expModal.carte-a .mbody > .sendBtn ~ *, .expModal.carte-a .mbody > :nth-last-child(2) { margin-bottom: 10px; }
+/* A : l'îlot posé sur le haut de la carte, plus large qu'elle, qui la dépasse par le haut */
+.expModal.carte-a .mart.dio { background: radial-gradient(closest-side, rgba(255, 214, 120, 0.55), rgba(255, 214, 120, 0)); }
+.expModal.carte-a .mart.dio > img.dioImg { left: -6%; bottom: -8%; width: 112%; }
+/* C : la fenêtre en arche, ciel doux et filet doré ; l'îlot posé sur le bas de l'arche sort par le haut ; le titre sur un ruban */
+.expModal.carte-c .mission .mart { height: 190px; border-radius: 50% 50% 14px 14px / 34% 34% 14px 14px; border: 2px solid var(--hEdge); background: linear-gradient(180deg, #CFE3F2, #F3E9D2 85%); overflow: hidden; }
+.expModal.carte-c .mission .mart.dio { overflow: visible; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5); }
+.expModal.carte-c .mart.dio > img.dioImg { left: -4%; bottom: 2%; width: 108%; }
+.expModal.carte-c .mhead { position: relative; z-index: 1; margin: -26px -22px 0; padding: 7px 18px 8px; border-radius: 6px; background: var(--hGoldFill); border: 1.5px solid #D9A646; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 3px 6px rgba(120, 80, 20, 0.25); }
+.expModal.carte-c .mhead h4 { font-size: 18px; }
+.expModal.carte-c .mhead small { display: none; }

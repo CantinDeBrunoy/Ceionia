@@ -1732,6 +1732,9 @@ export class UI {
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
       ${railOn ? `<section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>` : ''}`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
+    // forme des cartes à l'essai (maquettes A, B, C de l'auteur) : `?carte=a` ou `?carte=c` dans l'adresse, B sinon
+    const shape = new URLSearchParams(location.search).get('carte');
+    if (shape === 'a' || shape === 'c') $('.expModal', ov).classList.add(`carte-${shape}`);
     $('.expModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, age))}.webp)`);
 
     // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section
