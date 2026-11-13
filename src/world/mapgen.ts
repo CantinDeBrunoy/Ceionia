@@ -63,9 +63,11 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   shapeBiomes(world, seed, plan ? plan.wind : null);
   world.computeBiomes();
   // forêts plus ou moins denses selon le biome (cactus clairsemés au désert, forêt dense en taïga et sous les tropiques) ;
-  // version 3 : chaque partie a ses forêts, plus ou moins étendues, en massifs plus ou moins grands
-  const vary = mulberry32(seed + 6), dOff = v3 ? (vary() - 0.5) * 0.26 : 0, fq = v3 ? lerp(0.1, 0.2, vary()) : 0.14;
-  const dense = [0.12, 0, 0.42, 0.04, 0.1].map((d) => d + dOff);
+  // version 3 : chaque partie a ses forêts, plus ou moins étendues ; de vrais massifs pleins, séparés par des plaines
+  // dégagées (bruit lent, presque toutes les cases boisées au-dessus du seuil, une lisière étroite)
+  const vary = mulberry32(seed + 6), dOff = v3 ? (vary() - 0.5) * 0.26 : 0, fq = v3 ? lerp(0.022, 0.038, vary()) : 0.14;
+  // (version 3 : seuil abaissé de 0,12, la forêt couvre environ la moitié des terres boisables)
+  const dense = [0.12, 0, 0.42, 0.04, 0.1].map((d, b) => d + dOff - (v3 && b !== BIOME_DESERT ? 0.12 : 0));
   const s = new Simplex(seed + 99);
   const rnd = mulberry32(seed + 5);
   for (let z = 0; z < N; z++)
@@ -80,16 +82,17 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
       if (a > TREE_LINE) continue;
       if (a < 0.45 && b !== BIOME_TROPICAL && b !== BIOME_MARSH) continue;
       const n = s.fbm(x * fq, z * fq, 3);
-      if (n > dense[b] && rnd() < (b === BIOME_DESERT ? 0.35 : 0.8)) world.veg[world.ci(x, z)] = VEG_FOREST;
-      else if (n > dense[b] - 0.17 && rnd() < 0.04) world.veg[world.ci(x, z)] = VEG_FOREST;
+      if (n > dense[b] && rnd() < (b === BIOME_DESERT ? 0.35 : v3 ? 0.97 : 0.8)) world.veg[world.ci(x, z)] = VEG_FOREST;
+      else if (v3 ? n > dense[b] - 0.04 && rnd() < 0.35 : n > dense[b] - 0.17 && rnd() < 0.04) world.veg[world.ci(x, z)] = VEG_FOREST;
     }
-  if (v3) { addGroves(world, vary); rockyBanks(world, mulberry32(seed + 93)); }
+  if (v3) { gatherForests(world); addGroves(world, vary); rockyBanks(world, mulberry32(seed + 93)); }
   world.vegDirty = true;
   // sanitize (pentes)
   world.sanitize(0, 0, N, N);
   // le volcan, au cœur de l'île volcanique
   if (plan) { const [vx, vz] = fromPlan(plan.orient, N * plan.volcano.u, N * plan.volcano.v, N); raiseVolcano(world, vx, vz, 5.5); }
   else raiseVolcano(world, N * 0.22, N * 0.8, 5.5);
+  if (v3) forestHearts(world, mulberry32(seed + 57));
   if (!v3) carveTarns(world, seed, !!plan);
   else {
     // lacs de montagne et étangs de plaine, plus ou moins nombreux
@@ -118,11 +121,109 @@ function clearStart(world: World) {
 }
 
 /**
+ * Forêts d'un seul tenant (version 3) : deux passes de lissage (une case entourée d'arbres se boise, une case boisée presque
+ * seule redevient prairie), puis les îlots de moins de 20 cases disparaissent. Il reste des massifs nets et des plaines
+ * dégagées, au lieu d'un semis d'arbres partout
+ */
+function gatherForests(world: World) {
+  const wooded = (x: number, z: number) => world.inCells(x, z) && world.veg[world.ci(x, z)] === VEG_FOREST;
+  const next = new Uint8Array(N * N);
+  for (let pass = 0; pass < 2; pass++) {
+    for (let z = 0; z < N; z++)
+      for (let x = 0; x < N; x++) {
+        const k = world.ci(x, z);
+        let n = 0;
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if ((dx || dz) && wooded(x + dx, z + dz)) n++;
+        const v = world.veg[k], a = world.cellAvg(x, z), b = world.biome[k];
+        // (les cactus du désert restent clairsemés)
+        if (v === VEG_FOREST) next[k] = n <= 2 && b !== BIOME_DESERT ? 0 : 1;
+        else next[k] = !v && n >= 5 && a >= 0.45 && a <= TREE_LINE && b !== BIOME_DESERT && world.cellSlope(x, z) <= 1.2 ? 1 : 2;
+      }
+    for (let k = 0; k < N * N; k++) {
+      if (next[k] === 1) world.veg[k] = VEG_FOREST;
+      else if (next[k] === 0) world.veg[k] = 0;
+    }
+  }
+  // îlots trop petits
+  const seen = new Uint8Array(N * N);
+  for (let k0 = 0; k0 < N * N; k0++) {
+    if (seen[k0] || world.veg[k0] !== VEG_FOREST) continue;
+    const cells = [k0];
+    seen[k0] = 1;
+    for (let i = 0; i < cells.length; i++) {
+      const x = cells[i] % N, z = Math.floor(cells[i] / N);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!wooded(x + dx, z + dz)) continue;
+        const j = world.ci(x + dx, z + dz);
+        if (!seen[j]) { seen[j] = 1; cells.push(j); }
+      }
+    }
+    if (cells.length < 20 && world.biome[k0] !== BIOME_DESERT) for (const k of cells) world.veg[k] = 0;
+  }
+}
+
+/**
+ * Cœur des forêts (version 3) : au milieu des grands massifs, de petites mares dans une clairière (en plaine, l'eau affleure
+ * sous le niveau de la mer ; en altitude, un creux qui devient un petit lac) et des affleurements de rochers. Une case est
+ * « au cœur » si toutes les cases à deux pas sont boisées
+ */
+function forestHearts(world: World, rnd: () => number) {
+  const S = N + 1, heart: number[] = [];
+  const wooded = (x: number, z: number) => world.inCells(x, z) && world.veg[world.ci(x, z)] === VEG_FOREST;
+  for (let z = 3; z < N - 3; z++)
+    for (let x = 3; x < N - 3; x++) {
+      const b = world.biome[world.ci(x, z)];
+      if (b === BIOME_DESERT || b === BIOME_MARSH || !wooded(x, z) || world.cellSlope(x, z) > 0.6) continue;
+      let all = true;
+      for (let dz = -2; dz <= 2 && all; dz++) for (let dx = -2; dx <= 2 && all; dx++) all = wooded(x + dx, z + dz);
+      if (all) heart.push(z * N + x);
+    }
+  for (let i = heart.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [heart[i], heart[j]] = [heart[j], heart[i]]; }
+  const ponds = Math.min(14, Math.round(heart.length / 160)), outcrops = Math.min(18, Math.round(heart.length / 110));
+  const used: number[] = [];
+  const far = (k: number, d: number) => used.every((u) => Math.hypot((u % N) - (k % N), Math.floor(u / N) - Math.floor(k / N)) > d);
+  let madePonds = 0, madeRocks = 0;
+  for (const k of heart) {
+    if (madePonds >= ponds && madeRocks >= outcrops) break;
+    const x0 = k % N, z0 = Math.floor(k / N), h0 = world.cellAvg(x0, z0);
+    const low = h0 < 0.9, high = h0 > 2.8 && h0 < TREE_LINE - 0.3;
+    if (madePonds < ponds && (low || high) && far(k, 10)) {
+      // mare : fond plat sous l'eau, berges en pente douce ; une petite clairière autour
+      // (contour irrégulier : le rayon ondule avec l'angle)
+      const cx = x0 + 0.5, cz = z0 + 0.5, R0 = (low ? 1.6 : 2) + rnd() * 0.9, bottom = low ? -0.8 : h0 - 0.9;
+      const p1 = rnd() * 6.28, p2 = rnd() * 6.28, a1 = 0.12 + rnd() * 0.12, a2 = 0.06 + rnd() * 0.1, R = R0 * (1 + a1 + a2);
+      for (let z = Math.max(0, Math.floor(cz - R)); z <= Math.min(N, Math.ceil(cz + R)); z++)
+        for (let x = Math.max(0, Math.floor(cx - R)); x <= Math.min(N, Math.ceil(cx + R)); x++) {
+          const t = Math.atan2(z - cz, x - cx), r = R0 * (1 + a1 * Math.sin(2 * t + p1) + a2 * Math.sin(3 * t + p2));
+          const d = Math.hypot(x - cx, z - cz), i = z * S + x;
+          if (d < r) world.heights[i] = Math.min(world.heights[i], lerp(bottom, world.heights[i], smoothstep(r * 0.35, r, d)));
+        }
+      for (let z = Math.floor(cz - R - 1); z <= Math.ceil(cz + R); z++)
+        for (let x = Math.floor(cx - R - 1); x <= Math.ceil(cx + R); x++)
+          if (world.inCells(x, z) && Math.hypot(x + 0.5 - cx, z + 0.5 - cz) < R + 0.4 && world.veg[world.ci(x, z)] === VEG_FOREST) world.veg[world.ci(x, z)] = 0;
+      world.markTerrain(cx - R - 1, cz - R - 1, cx + R + 1, cz + R + 1);
+      used.push(k); madePonds++;
+    } else if (madeRocks < outcrops && far(k, 6)) {
+      // affleurement : deux à quatre cases de rochers serrées, au milieu des arbres
+      const n = 2 + Math.floor(rnd() * 3);
+      let x = x0, z = z0;
+      for (let i = 0; i < n; i++) {
+        if (wooded(x, z)) world.veg[world.ci(x, z)] = VEG_ROCKS;
+        const dir = Math.floor(rnd() * 4);
+        x += dir === 0 ? 1 : dir === 1 ? -1 : 0; z += dir === 2 ? 1 : dir === 3 ? -1 : 0;
+      }
+      used.push(k); madeRocks++;
+    }
+  }
+  if (madePonds || madeRocks) world.vegDirty = true;
+}
+
+/**
  * Bosquets (version 3) : quelques touffes d'arbres semées dans les prés, hors des forêts, du désert et des hauteurs, pour que
  * les clairières ne se ressemblent pas d'une partie à l'autre
  */
 function addGroves(world: World, rnd: () => number) {
-  const want = 8 + Math.floor(rnd() * 16);
+  const want = 2 + Math.floor(rnd() * 5);
   for (let i = 0, made = 0; i < want * 30 && made < want; i++) {
     const cx = 4 + Math.floor(rnd() * (N - 8)), cz = 4 + Math.floor(rnd() * (N - 8)), k = world.ci(cx, cz), a = world.cellAvg(cx, cz);
     if (world.veg[k] || a < 0.5 || a > TREE_LINE - 0.5 || world.cellSlope(cx, cz) > 0.7 || world.biome[k] === BIOME_DESERT) continue;

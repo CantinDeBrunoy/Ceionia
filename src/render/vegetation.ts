@@ -46,6 +46,8 @@ const CAVE_TOP = [0x76a05e, 0x5f8f6a, 0xe6cf9a, 0x5aa850, 0x7d9a58].map((c) => n
 /** Fougères : teinte par biome (multiplie la couleur de saison) */
 const FERN_TINT = [[1, 1, 1], [0.8, 0.95, 0.9], [1, 1, 0.8], [0.85, 1.1, 0.8], [0.9, 1, 0.8]].map(([r, g, b]) => new THREE.Color(r, g, b));
 const BOLETE = new THREE.Color(0.82, 0.62, 0.44);
+/** Mousse des rochers de forêt (multiplie le gris de la pierre) : tempérée, humide des tropiques */
+const MOSS = [new THREE.Color(0.78, 0.95, 0.66), new THREE.Color(0.66, 0.92, 0.58)];
 /**
  * Marge autour de l'emprise d'un bâtiment, que ni les cimes ni les rochers ne franchissent : quelques modèles débordent un
  * peu de leurs cases (perron, abside, douves du château)
@@ -56,12 +58,23 @@ export const WALL_GAP = 0.16;
 const LONE_TREE = [0.022, 0.03, 0, 0.034, 0.024];
 
 /**
+ * Chance d'un arbre isolé sur une case de prairie : surtout en lisière (forêt à deux cases au plus), où les arbres
+ * s'égaillent ; presque jamais en pleine plaine, qui reste dégagée
+ */
+function loneChance(w: World, cx: number, cz: number, b: number) {
+  for (let dz = -2; dz <= 2; dz++)
+    for (let dx = -2; dx <= 2; dx++)
+      if (w.inCells(cx + dx, cz + dz) && w.veg[w.ci(cx + dx, cz + dz)] === VEG_FOREST) return LONE_TREE[b] * 2.5;
+  return LONE_TREE[b] * 0.12;
+}
+
+/**
  * Un arbre isolé de la carte se dresse-t-il sur cette case ? Il n'est rangé nulle part (ni dans `veg`) : il se tire de la case,
  * sur une prairie peu pentue ; la gomme défriche la case (`World.cleared`) et il disparaît
  */
 export function loneTreeAt(w: World, cx: number, cz: number) {
   const k = w.ci(cx, cz);
-  return !w.veg[k] && !w.cleared[k] && !w.occ[k] && !w.road[k] && w.cellSlope(cx, cz) < 1 && hash2(cx, cz, 820) < LONE_TREE[w.biome[k]];
+  return !w.veg[k] && !w.cleared[k] && !w.occ[k] && !w.road[k] && w.cellSlope(cx, cz) < 1 && hash2(cx, cz, 820) < loneChance(w, cx, cz, w.biome[k]);
 }
 
 /** Fleurs sauvages par biome (teintes ; 0.58 = blanc) */
@@ -812,11 +825,14 @@ export class VegView {
     const pick = <T,>(list: T[], h: number) => list[Math.floor(h * list.length)];
     // grands arbres importés : moins d'instances par case (une seule pour les palmiers et les cactus)
     const big = b === BIOME_TROPICAL || b === BIOME_DESERT;
-    const cnt = big ? (hash2(cx, cz, 1) > 0.7 ? 2 : 1) : this.imported ? (hash2(cx, cz, 1) > 0.55 ? 2 : 1) : hash2(cx, cz, 1) > 0.45 ? 3 : 2;
+    // au cœur d'un massif (les quatre voisines boisées), la futaie se serre : un arbre de plus, des cimes plus larges
+    const inner = [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dz]) => w.inCells(cx + dx, cz + dz) && w.veg[w.ci(cx + dx, cz + dz)] === VEG_FOREST);
+    const cnt = (big ? (hash2(cx, cz, 1) > 0.7 ? 2 : 1) : this.imported ? (hash2(cx, cz, 1) > 0.55 ? 2 : 1) : hash2(cx, cz, 1) > 0.45 ? 3 : 2) + (inner && b !== BIOME_DESERT ? 1 : 0);
+    const grow = inner && b !== BIOME_DESERT ? 1.12 : 1;
     for (let k = 0; k < cnt; k++) {
       const px = cx + 0.12 + hash2(cx, cz, 10 + k) * 0.76, pz = cz + 0.12 + hash2(cx, cz, 20 + k) * 0.76;
       const y = w.hAt(px, pz);
-      const sc = (0.75 + hash2(cx, cz, 30 + k) * 0.7) * (0.75 + 0.25 * smoothstep(0, 0.45, edgeDist(px, pz)));
+      const sc = (0.75 + hash2(cx, cz, 30 + k) * 0.7) * (0.75 + 0.25 * smoothstep(0, 0.45, edgeDist(px, pz))) * grow;
       const rot = hash2(cx, cz, 50 + k) * 6.28, h = hash2(cx, cz, 40 + k), hv = hash2(cx, cz, 90 + k);
       col.setScalar(0.85 + hash2(cx, cz, 60 + k) * 0.25);
       if (b === BIOME_TROPICAL && this.palms.length) { this.tree(pick(this.palms, hv), px, y, pz, rot, sc * 0.95, col); continue; }
@@ -886,6 +902,22 @@ export class VegView {
     col.setScalar(0.88 + hash2(cx, cz, 906) * 0.18);
     if (h < 0.06 && this.logs && this.fit(px, pz, this.logs.reach, sc) === sc) this.logs.put(this.at(px, w.hAt(px, pz) - 0.015, pz, rot, sc), col);
     else if (h < 0.11 && this.stumps) this.stumps.put(this.at(px, w.hAt(px, pz) - 0.01, pz, rot, sc), col);
+    else if (h < 0.17 && b !== BIOME_MARSH) {
+      // gros bloc moussu, à demi enterré, et parfois un ou deux cailloux à ses pieds
+      const bs = 1.3 + hash2(cx, cz, 986) * 1.4;
+      col.setScalar(0.8 + hash2(cx, cz, 987) * 0.2).multiply(MOSS[b === BIOME_TROPICAL ? 1 : 0]).lerp(SNOWC, s.snow * 0.6 * snowy(b));
+      this.placeRock(px, pz, bs, bs * (0.7 + hash2(cx, cz, 988) * 0.5), rot / 6.28, hash2(cx, cz, 989), col);
+    }
+    // cailloux épars sur l'humus (gris, un peu verdis)
+    if (hash2(cx, cz, 990) < 0.22) {
+      const n = 1 + Math.floor(hash2(cx, cz, 991) * 3);
+      for (let i = 0; i < n; i++) {
+        const qx = cx + 0.12 + hash2(cx, cz, 992 + i) * 0.76, qz = cz + 0.12 + hash2(cx, cz, 996 + i) * 0.76, qs = 0.4 + hash2(cx, cz, 1000 + i) * 0.5;
+        col.setScalar(0.78 + hash2(cx, cz, 1004 + i) * 0.25);
+        if (hash2(cx, cz, 1008 + i) < 0.5) col.multiply(MOSS[0]);
+        this.placeRock(qx, qz, qs, qs * 0.7, hash2(cx, cz, 1012 + i), hash2(cx, cz, 1016 + i), col.lerp(SNOWC, s.snow * 0.6 * snowy(b)));
+      }
+    }
     // fougères : denses sous les palmiers, absentes des marais
     const nf = b === BIOME_MARSH || !this.ferns ? 0 : hash2(cx, cz, 907) < (b === BIOME_TROPICAL ? 0.75 : 0.45) ? 1 + Math.floor(hash2(cx, cz, 908) * 2) : 0;
     for (let i = 0; i < nf; i++) {
@@ -1031,6 +1063,40 @@ export class VegView {
     return false;
   }
 
+  /** Petite eau isolée : peu de cases d'eau à 5 cases alentour (une mare, pas une rivière, un lac ni la mer) */
+  private smallWater(cx: number, cz: number) {
+    const w = this.world;
+    let wet = 0;
+    for (let dz = -5; dz <= 5; dz++)
+      for (let dx = -5; dx <= 5; dx++) {
+        const x = cx + dx, z = cz + dz;
+        if (!w.inCells(x, z) || w.cellAvg(x, z) < 0.08) wet++;
+        if (wet > 22) return false;
+      }
+    return true;
+  }
+
+  /**
+   * Récif de corail : part des cases couvertes (0 hors récif). Mer tropicale peu profonde, en eau libre (presque toute l'eau
+   * à 4 cases alentour : une rivière, un chenal ou une crique étroite n'en ont pas), par plaques suivant un bruit ; le cœur
+   * d'une plaque est dense, son bord s'éclaircit
+   */
+  private reefNoise = new Simplex(6113);
+  reefAt(cx: number, cz: number, depth: number) {
+    const w = this.world, k = w.ci(cx, cz);
+    if (depth < 0.15 || depth > 1.1 || w.lake[k] || w.biome[k] !== BIOME_TROPICAL) return 0;
+    const p = this.reefNoise.fbm(cx * 0.07, cz * 0.07, 2);
+    if (p < -0.05) return 0;
+    let wet = 0;
+    for (let dz = -4; dz <= 4; dz++)
+      for (let dx = -4; dx <= 4; dx++) {
+        const x = cx + dx, z = cz + dz;
+        if (!w.inCells(x, z) || w.cellAvg(x, z) < 0.08) wet++;
+      }
+    if (wet < 72) return 0;
+    return 0.35 + 0.5 * smoothstep(-0.05, 0.25, p);
+  }
+
   /** Fond marin : laminaires qui ondulent sous la surface (près du rivage), coraux colorés sur les hauts-fonds */
   private seabed(cx: number, cz: number, depth: number, s: SeasonState) {
     const w = this.world, col = this.col;
@@ -1046,10 +1112,10 @@ export class VegView {
         (this.seaweed ?? this.kelp).put(this.at(px, y, pz, hash2(cx, cz, 617 + i) * 6.28, wd, tall, wd), col);
       }
     }
-    // coraux : mers chaudes et tempérées, pas dans les mares ni les eaux froides
-    const b = w.biome[w.ci(cx, cz)];
-    if (b !== BIOME_MARSH && b !== BIOME_TAIGA && depth > 0.15 && depth < 1.1 && hash2(cx, cz, 640) < (b === BIOME_TROPICAL ? 0.55 : 0.28)) {
-      const n = 1 + Math.floor(hash2(cx, cz, 641) * 2);
+    // coraux : seulement sur les récifs, en mer chaude et au large (jamais dans une rivière, une mare ni un lac)
+    const reef = this.reefAt(cx, cz, depth);
+    if (reef > 0 && hash2(cx, cz, 640) < reef) {
+      const n = 1 + Math.floor(hash2(cx, cz, 641) * (reef > 0.6 ? 3 : 2));
       for (let i = 0; i < n; i++) {
         const px = cx + 0.2 + hash2(cx, cz, 642 + i) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 646 + i) * 0.6;
         const m = this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(cx, cz, 650 + i) * 6.28, 0.8 + hash2(cx, cz, 654 + i) * 0.7);
@@ -1092,6 +1158,27 @@ export class VegView {
           if (y < SEA - 0.3) continue;
           const sc = 1 + hash2(cx, cz, 731 + i) * 0.6;
           this.reed.put(this.at(px, y - 0.02, pz, hash2(cx, cz, 735 + i) * 6.28, sc, sc * (0.5 + 0.5 * s.growth + 0.3)), col.setScalar(0.85 + hash2(cx, cz, 739 + i) * 0.25).lerp(SNOWC, s.snow * 0.5));
+        }
+      }
+    }
+    // mare isolée (dans une clairière de forêt, un creux de plaine) : nénuphars sur l'eau, ceinture de roseaux au bord
+    if (b !== BIOME_MARSH && b !== BIOME_DESERT && avg < 0.3 && avg > -1 && s.snow < 0.85 && this.smallWater(cx, cz)) {
+      if (avg < 0.02 && hash2(cx, cz, 1701) < 0.8) {
+        const n = 2 + Math.floor(hash2(cx, cz, 1702) * 3);
+        for (let i = 0; i < n; i++) {
+          const px = cx + 0.1 + hash2(cx, cz, 1703 + i) * 0.8, pz = cz + 0.1 + hash2(cx, cz, 1707 + i) * 0.8;
+          if (w.hAt(px, pz) > SEA - 0.08) continue;
+          this.lily.put(this.at(px, SEA + 0.01, pz, hash2(cx, cz, 1711 + i) * 6.28, 0.7 + hash2(cx, cz, 1715 + i) * 0.6), col.setScalar(0.9 + hash2(cx, cz, 1719 + i) * 0.2));
+        }
+      }
+      if (!w.cleared[k] && hash2(cx, cz, 1730) < 0.75) {
+        const n = 3 + Math.floor(hash2(cx, cz, 1731) * 4);
+        for (let i = 0; i < n; i++) {
+          const px = cx + 0.08 + hash2(cx, cz, 1732 + i) * 0.84, pz = cz + 0.08 + hash2(cx, cz, 1740 + i) * 0.84, y = w.hAt(px, pz);
+          if (y < SEA - 0.22 || y > SEA + 0.08 || this.room(px, pz) < 0.1) continue;
+          const sc = 0.8 + hash2(cx, cz, 1748 + i) * 0.5;
+          this.reed.put(this.at(px, y - 0.02, pz, hash2(cx, cz, 1756 + i) * 6.28, sc, sc * (0.5 + 0.5 * s.growth + 0.2)),
+            col.setScalar(0.85 + hash2(cx, cz, 1764 + i) * 0.25).lerp(SNOWC, s.snow * 0.5));
         }
       }
     }
@@ -1237,7 +1324,7 @@ export class VegView {
     const w = this.world, col = this.col;
     const h = wild ? hash2(cx, cz, 820) : 1, rot = hash2(cx, cz, 823) * 6.28;
     const qx = cx + 0.2 + hash2(cx, cz, 821) * 0.6, qz = cz + 0.2 + hash2(cx, cz, 822) * 0.6, qy = w.hAt(qx, qz);
-    const lone = LONE_TREE[b];
+    const lone = loneChance(w, cx, cz, b);
     const sc = 0.75 + hash2(cx, cz, 824) * 0.35;
     col.setScalar(0.85 + hash2(cx, cz, 825) * 0.25);
     if (h < lone && slope < 1) {

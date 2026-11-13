@@ -23,9 +23,9 @@ const setup = () => {
   newWorld(w, 3, 2026, GEN);
   w.exp.done.push('portal');
   const [sx, sz] = w.startSpot();
-  // (un replat de 9 × 9 autour du départ : tout s'y pose)
-  for (let z = sz - 3; z <= sz + 6; z++) for (let x = sx - 3; x <= sx + 6; x++) w.heights[z * (N + 1) + x] = 1.5;
-  for (let z = sz - 3; z < sz + 6; z++) for (let x = sx - 3; x < sx + 6; x++) w.veg[w.ci(x, z)] = 0;
+  // (un replat de 9 × 10 autour du départ : tout s'y pose, jusqu'au pan devant la tour de la rangée sz + 6)
+  for (let z = sz - 3; z <= sz + 7; z++) for (let x = sx - 3; x <= sx + 6; x++) w.heights[z * (N + 1) + x] = 1.5;
+  for (let z = sz - 3; z < sz + 7; z++) for (let x = sx - 3; x < sx + 6; x++) w.veg[w.ci(x, z)] = 0;
   return { w, sx, sz };
 };
 
