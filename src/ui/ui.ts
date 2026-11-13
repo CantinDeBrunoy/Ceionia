@@ -28,7 +28,7 @@ import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
-import { pic, leadPic, withPic } from './pics';
+import { pic, hudPic, leadPic, withPic } from './pics';
 import { menuBg } from './loading';
 import { MiniMap } from './minimap';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
@@ -251,13 +251,15 @@ const NEEDS: { k: 'food' | 'water' | 'housing' | 'jobs' | 'joy' | 'health'; icon
 /** Le 7e besoin de la barre : la sécurité (couverture des pompiers et de la police), un indicateur qui ne bloque pas la croissance */
 const SECURITY_NEED = { k: 'security' as const, icon: 'shield', label: 'Sécurité' };
 /** Pictos 3D du HUD (voir `pics.ts`) : besoins, stocks, saisons, rayons et onglets de la barre de construction */
-const NEED_PIC: Record<NeedId | 'security', string> = { food: '🍞', water: '💧', housing: '🏠', jobs: '💼', joy: '😊', health: '❤', security: '🛡' };
-const RES_PIC: Record<Resource, string> = { wood: '🪵', stone: '🪨', ore: '⛏', brick: '🧱', crude: '🛢', fuel: '⛽' };
-const SEASON_PIC = ['🌸', '☀', '🍂', '❄'];
-const CAT_PIC: Record<BuildCat, string> = { home: '🏠', prod: '🌾', service: '🏥', life: '🎭', war: '⚔' };
+// icônes peintes du HUD (`hudPic`) ; le carburant garde son picto
+const NEED_PIC: Record<NeedId | 'security', string> = { food: 'nourriture', water: 'eau', housing: 'logement', jobs: 'travail', joy: 'bienetre', health: 'sante', security: 'securite' };
+const RES_PIC: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', brick: 'briques', crude: 'carburant', fuel: '⛽' };
+const resPic = (r: Resource, size: number) => RES_PIC[r].length > 2 ? hudPic(RES_PIC[r], size) : pic(RES_PIC[r], size);
+const SEASON_PIC = ['printemps', 'ete', 'automne', 'hiver'];
+const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', war: 'militaire' };
 /** Le picto de la carte du village, qui suit l'âge : Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste */
-const AGE_PIC = ['🦣', '🏛', '🏰', '🏭', '🏙', '🚀'];
-const TAB_PIC: Record<string, string> = { build: '🔨', land: '🏔' };
+const AGE_PIC = ['age-0', 'age-1', 'age-2', 'age-3', 'age-4', 'age-5'];
+const TAB_PIC: Record<string, string> = { build: 'production', land: 'paysage' };
 const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string; one?: string }[] = [
   { k: 'housing', icon: 'house', label: 'logements', one: 'logement' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
   { k: 'jobs', icon: 'hammer', label: 'emplois', one: 'emploi' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
@@ -418,14 +420,8 @@ function modal(root: HTMLElement, cls: string, title: string, body: string, onCl
   return { ov, close };
 }
 
-/** La rose des vents de l'en-tête des expéditions */
-const EXP_EMBLEM = `<svg class="exEmblem" viewBox="0 0 64 64" aria-hidden="true">
-  <circle cx="32" cy="32" r="17" fill="none" stroke="#1d2f5c" stroke-width="3.5"/>
-  <path d="M32 2 L37 27 L32 24 L27 27 Z M32 62 L27 37 L32 40 L37 37 Z M2 32 L27 27 L24 32 L27 37 Z M62 32 L37 37 L40 32 L37 27 Z" fill="#1d2f5c"/>
-  <path d="M32 2 L37 27 L32 24 Z M62 32 L37 37 L40 32 Z M32 62 L27 37 L32 40 Z M2 32 L27 27 L24 32 Z" fill="#4a6aa8"/>
-  <path d="M14 14 L29 28 L28 29 Z M50 14 L36 29 L35 28 Z M50 50 L35 36 L36 35 Z M14 50 L28 35 L29 36 Z" fill="#1d2f5c"/>
-  <circle cx="32" cy="32" r="4" fill="#5d9be8" stroke="#1d2f5c" stroke-width="2"/>
-</svg>`;
+/** La boussole peinte de l'en-tête des expéditions (`public/icons/hud/boussole.webp`) */
+const EXP_EMBLEM = hudPic('boussole', 62, 'exEmblem');
 /** L'avion de papier du bouton « Envoyer une équipe » */
 const SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M21.5 2.5L10 14M21.5 2.5l-7 19-4.5-7.5L2.5 9.5z"/></svg>';
 /**
@@ -439,6 +435,16 @@ const MISSION_ART = new Set([
   'stars', 'games', 'trawl', 'seafarm', 'rocket', 'moon', 'colony',
 ]);
 const DEST_ART = new Set(['plain', 'forest', 'sea', 'far', 'mountain', 'river', 'cave', 'spaceport']);
+/**
+ * Missions dessinées en diorama (`public/expeditions/dio-{id}.webp`, îlot isométrique sur fond transparent) : l'îlot est posé
+ * à cheval sur le bord gauche de la carte. Toutes les missions en ont un ; une mission ajoutée sans diorama garde l'image
+ * dans son cadre
+ */
+const MISSION_DIO = new Set([
+  'herd', 'berries', 'flint', 'honey', 'mammoth', 'seeds', 'horses', 'fishing', 'springs', 'pugilat', 'kraken', 'portal',
+  'megalodon', 'mine', 'wolf', 'fair', 'brewer', 'dragon', 'caravel', 'spice', 'railway', 'coal', 'motorcar', 'flight', 'oil',
+  'galleon', 'summit', 'reef', 'stars', 'games', 'trawl', 'seafarm', 'rocket', 'moon', 'colony',
+]);
 /** Équipements illustrés (`public/icons/gear/`) : `{id}.webp` sans décor (cases, file), `{id}-bg.webp` avec décor (cartes) */
 const GEAR_ART = new Set<GearId>([
   'spear', 'rope', 'torch', 'bow', 'boat', 'sword', 'crossbow', 'armor', 'kit', 'rifle', 'lamp', 'assault', 'grenade',
@@ -604,7 +610,7 @@ export class UI {
       }
     }, { passive: false });
     // chaque besoin : son picto 3D, le pourcentage comblé et sa jauge (le nom reste en infobulle, et sous la jauge si la place le permet)
-    $('#needs').innerHTML = [...NEEDS, SECURITY_NEED].map((n) => `<div class="need" id="n-${n.k}"><b>${pic(NEED_PIC[n.k], 26)}</b><em class="pv"></em><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('');
+    $('#needs').innerHTML = [...NEEDS, SECURITY_NEED].map((n) => `<div class="need" id="n-${n.k}"><b>${hudPic(NEED_PIC[n.k], 26)}</b><em class="pv"></em><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('');
     // fiche des habitants : un clic sur le compteur l'ouvre, un clic ailleurs la ferme
     const census = document.createElement('div');
     census.id = 'census';
@@ -757,7 +763,7 @@ export class UI {
    */
   private renderDock() {
     const modes = $('#modes');
-    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${tr(t.label)}${t.id === this.tab ? tr(' — recliquer pour replier ou déplier la barre') : ''}"><b>${pic(TAB_PIC[t.id], 26)}</b><span>${tr(t.label)}</span></button>`).join('');
+    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${tr(t.label)}${t.id === this.tab ? tr(' — recliquer pour replier ou déplier la barre') : ''}"><b>${hudPic(TAB_PIC[t.id], 26)}</b><span>${tr(t.label)}</span></button>`).join('');
     modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
       const why = b.dataset.t !== 'build' ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
@@ -810,7 +816,7 @@ export class UI {
     const age = this.host.sim.age, build = this.tab === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${pic(CAT_PIC[c.id], 20)}</b><span class="cl">${c.label}</span></button>`).join('')
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${hudPic(CAT_PIC[c.id], 22)}</b><span class="cl">${c.label}</span></button>`).join('')
       : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 20)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
     // un sous-menu du Paysage : l'outil en main d'un autre sous-menu est lâché (sinon refreshTools ramènerait le sien)
     sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = () => {
@@ -1192,8 +1198,8 @@ export class UI {
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
-      ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${pic(RES_PIC[r], 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
-      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${pic(RES_PIC[r], 28)}<span class="rv"><b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em></span></div>`).join('');
+      ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${resPic(r, 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
+      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em></span></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -1356,7 +1362,7 @@ export class UI {
     $('#ageName').textContent = AGES[sim.age].name;
     // le logo de la carte du village change avec l'âge (picto et teinte du fond)
     const logo = $('#vLogo');
-    if (logo.dataset.a !== String(sim.age)) { logo.innerHTML = pic(AGE_PIC[sim.age] ?? AGE_PIC[0], 30); logo.dataset.a = String(sim.age); logo.className = `vLogo age${sim.age}`; }
+    if (logo.dataset.a !== String(sim.age)) { logo.innerHTML = hudPic(AGE_PIC[sim.age] ?? AGE_PIC[0], 34); logo.dataset.a = String(sim.age); logo.className = `vLogo age${sim.age}`; }
     $('#ageSub').textContent = AGES[sim.age].tagline;
     const ap = sim.ageProgress(), pct = ap ? Math.floor(ap.ratio * 100) : 100, sb = this.host.world.sandbox;
     $('#agePanel').classList.toggle('sandbox', sb);
@@ -1403,7 +1409,7 @@ export class UI {
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
     // le picto de la saison (la lune la nuit), l'heure, la saison et le jour de la partie
-    const night = hh >= 21 || hh < 6, sp = pic(night ? '🌙' : SEASON_PIC[time.season], 34);
+    const night = hh >= 21 || hh < 6, sp = hudPic(night ? 'nuit' : SEASON_PIC[time.season], 38);
     const clock = `${sp}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${tr('{season}, jour {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small></span>`;
     // le contenu ne change que si l'heure, la saison ou la météo changent (on évite de recréer les icônes à chaque mise à jour)
     if ($('#clock').dataset.v !== clock) { $('#clock').innerHTML = clock; $('#clock').dataset.v = clock; }
@@ -1700,7 +1706,7 @@ export class UI {
       const art = missionArt(m);
       // une mission réussie (rangée à la fin) passe en petit format : vignette, titre, pastilles et « Refaire »
       return `<div class="mission ${done ? 'done' : ''}${redo && !run ? ' small' : ''} ${leg ? 'leg' : ''} ${m.mandatory ? 'must' : ''}" data-id="${m.id}" data-leg="${+leg}" data-mil="${+mil}">
-        <div class="mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${pic(m.icon, 96)}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
+        <div class="mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" loading="lazy" decoding="async">` : art.src ? `<img src="${art.src}" alt="" loading="lazy" decoding="async">` : `<b>${pic(m.icon, 96)}</b>`}${done ? `<span class="mstate ok">✓ ${tr('réussie')}</span>` : run ? `<span class="mstate run">${tr('en route…')}</span>` : ''}</div>
         <div class="mbody">
           <div class="mhead"><b class="mbadge">${pic(m.icon, 30)}</b><div class="grow"><h4>${m.title}</h4><small>${AGES[m.age].name}</small></div></div>
           ${tags ? `<div class="mtags">${tags}</div>` : ''}
@@ -1805,6 +1811,8 @@ export class UI {
     const body = () => this.sendHtml(m, sel);
     const head = `${EXP_EMBLEM}<span class="exTitle"><span>${tr('Lancer une expédition')}</span><small>${tr('Envoyez votre équipe explorer de nouveaux territoires.')}</small></span>`;
     const { ov, close } = modal(this.root, 'sendModal', head, `<div class="sendBody">${body()}</div>`, () => clearInterval(iv));
+    // le paysage de l'âge du village dans l'en-tête, comme la fenêtre des expéditions
+    $('.sendModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, h.sim.age))}.webp)`);
     const root = $('.sendBody', ov);
     // une pièce fabriquée, une équipe partie ou de retour, la réserve qui bouge : les choix se redessinent ; la barre de
     // fabrication avance en continu
@@ -1942,8 +1950,8 @@ export class UI {
     const warn = why ?? (this.needsHtml(m) ? '' : lose ? tr('En cas d’échec : {what}', { what: lose }) : tr('Une expédition peut échouer : l’équipement la rend plus sûre.'));
     const needs = ex.missing(m).length ? `<div class="sNeeds req">${this.needsHtml(m)}</div>` : '';
     return `<div class="sGrid">
-      <div class="sArt mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}
-        <div class="sCap"><h3>${pic(m.icon, 28)} ${m.title}</h3><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div></div>
+      <div class="sArt mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" decoding="async">` : art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}
+        <div class="sCap"><h3>${MISSION_DIO.has(m.id) ? '' : pic(m.icon, 28) + ' '}${m.title}</h3><span class="sEra">${hudPic(AGE_PIC[m.age] ?? AGE_PIC[0], 16)} ${AGES[m.age].name}</span><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div></div>
       <div class="sSide">
         ${seg}
         ${c.label && cs.length > 1 ? `<p class="sChoice"><b>${c.label}</b>${cardPhrase(c.text) ? ` — ${cardPhrase(c.text)}` : ''}</p>` : ''}
@@ -1992,18 +2000,16 @@ export class UI {
     // seules les pièces de l'âge (ni à venir, ni dépassées) : la caserne fabrique elle-même ce qui manque à ses recrues
     const card = (g: Gear) => {
         const why = ex.whyCraft(g, age), n = st.gear[g.id], out = away(g.id), price = gearCostLabel(gearCost(g, h.world.difficulty));
-        const vs = g.guards ? `${pic(DANGER_ICON[g.guards], 18)}${g.also ? pic(DANGER_ICON[g.also], 18) : ''}` : pic('🛡️', 18);
-        // l'illustration avec décor en tête de carte ; une pièce pas encore illustrée garde son icône sur un fond uni
-        const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}-bg.webp" alt="" loading="lazy" decoding="async">` : ic(g.icon, 40, 1.6);
+        // l'objet peint, détouré, posé sur un halo doré en tête de carte ; une pièce pas encore illustrée garde son icône au trait
+        const art = GEAR_ART.has(g.id) ? `<img src="./icons/gear/${g.id}.webp" alt="" loading="lazy" decoding="async">` : ic(g.icon, 40, 1.6);
         const crafting = st.craft.filter((x) => x === g.id).length;
         // fabricable : « Fabriquer » en bleu, le prix en info-bulle ; sinon une pilule grise avec le prix
         return `<div class="gear" data-gear="${g.id}" title="${g.desc}">
           <div class="gart${GEAR_ART.has(g.id) ? '' : ' none'}">${art}</div>
           <div class="gbody">
-          <div class="ghead"><span class="gli">${ic(GEAR_LINE[g.id] ?? g.icon, 24, 1.8)}</span><b class="gname">${g.name}</b><span class="cnt" title="${tr('En réserve')}${crafting ? tr(', en fabrication') : ''}${out ? tr(', en route') : ''}">${n}${crafting ? ` · ${pic('⏳', 14)}${crafting}` : ''}${out ? ` · 🧭${out}` : ''}</span></div>
-          <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : tr('Utile partout')}${g.also ? tr(' et les {d}', { d: DANGER_NAME[g.also] }) : ''} · ${per(g)}">${vs} ${tr('−{n} % de risque', { n: Math.round(g.cut * 100) })}</small>
-          ${why ? `<small class="why">${why}</small>` : ''}
-          <button data-craft="${g.id}" class="${why ? '' : 'go'}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.time, price }) : tr('Fabriquer : {t} s', { t: g.time }))}">${ic('eq-craft', 18, 1.9)} ${why ? price || tr('Fabriquer') : tr('Fabriquer')}</button>
+          <div class="ghead"><b class="gname">${g.name}</b><span class="cnt" title="${tr('En réserve')}${crafting ? tr(', en fabrication') : ''}${out ? tr(', en route') : ''}">${n}${crafting ? ` · ${pic('⏳', 14)}${crafting}` : ''}${out ? ` · ${hudPic('boussole', 14)}${out}` : ''}</span></div>
+          <small class="gd" title="${g.guards ? DANGER_VS[g.guards] : tr('Utile partout')}${g.also ? tr(' et les {d}', { d: DANGER_NAME[g.also] }) : ''} · ${per(g)}">${hudPic('securite', 16)} ${tr('−{n} % de risque', { n: Math.round(g.cut * 100) })}</small>
+          <button data-craft="${g.id}" class="${why ? '' : 'go'}" ${why ? 'disabled' : ''} title="${why ?? (price ? tr('Fabriquer : {t} s, {price}', { t: g.time, price }) : tr('Fabriquer : {t} s', { t: g.time }))}">${why ? hudPic('cadenas', 15) : ic('eq-craft', 16, 1.9)} ${why ? price || tr('Fabriquer') : tr('Fabriquer')}</button>
           ${st.craft[0] === g.id ? `<div class="bar gnbar cbar"><i style="width:${Math.round(ex.craftProgress() * 100)}%"></i></div>` : ''}
           </div>
         </div>`;
