@@ -376,3 +376,36 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
   .rlCard > .rlDio { left: 50%; top: -56px; width: 170px; transform: translateX(-50%); }
   .rlSeat { align-self: center; }
 }
+/* Chemin de fer resserré : tout un cran plus petit (l'auteur trouvait la maquette trop grosse) */
+.rlTop { gap: 10px; margin: 2px 0 12px; }
+.rlTop > img.pic { width: 42px; height: 42px; }
+.rlTop h4 { font-size: 21px; }
+.rlTop p { font-size: 13px; }
+.rlList { gap: 14px; padding: 12px 4px 4px 70px; }
+.expModal .rlCard { min-height: 84px; gap: 12px; padding: 8px 12px 8px 108px; border-radius: 14px; }
+.rlCard > .rlDio { left: -66px; width: 162px; }
+.rlBody { gap: 3px; }
+.rlBody > b { font-size: 16.5px; gap: 8px; }
+.rlBody .lineDot { width: 15px; height: 15px; border-width: 2px; }
+.rlBody > span { font-size: 12.5px; }
+.rlSeat { padding: 1px 9px; font-size: 12px; gap: 4px; }
+.rlSeat img.pic { width: 14px; height: 14px; }
+.expModal .rlCard .trainBtn { min-height: 36px; padding: 0 14px; gap: 7px; font-size: 13px; }
+.expModal .rlCard .trainBtn svg { width: 15px; height: 15px; }
+.rlMore { min-height: 54px; gap: 12px; padding: 8px 14px; border-radius: 14px; }
+.rlMore p { font-size: 13px; }
+.rlMore b { font-size: 15px; }
+.rlPlus { width: 30px; height: 30px; font-size: 19px; border-radius: 8px; }
+@media (max-width: 760px) {
+  .rlList { padding: 56px 2px 4px; gap: 56px; }
+  .expModal .rlCard { padding: 74px 10px 10px; }
+  .rlCard > .rlDio { left: 50%; top: -48px; width: 140px; transform: translateX(-50%); }
+}
+.rlList { gap: 30px; padding: 20px 4px 6px 76px; }
+.expModal .rlCard { min-height: 104px; padding: 10px 14px 10px 112px; }
+.rlCard > .rlDio { left: -70px; width: 168px; }
+.rlBody > b { font-size: 18px; }
+.rlBody > span { font-size: 13px; }
+.rlTop > img.pic { width: 48px; height: 48px; }
+.rlTop h4 { font-size: 23px; }
+.expModal .rlCard .trainBtn { min-height: 40px; padding: 0 16px; font-size: 14px; }
