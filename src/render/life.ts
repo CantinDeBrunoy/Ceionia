@@ -7,17 +7,19 @@ import { Environment } from './env';
 import { SeasonState } from './season';
 import { BuildingView } from './buildings';
 import { Puffs } from './particles';
+import type { SeaFx } from './fauna';
 import { pickPalette } from './seasonShaders';
 import { PETAL_COLORS } from './seasonConfig';
 
-const FIREFLIES = 160, MAX_LEAVES = 260, FLOCK = 90, MAX_RINGS = 10;
+const FIREFLIES = 160, MAX_LEAVES = 260, FLOCK = 90, MAX_RINGS = 24;
 /** Fumée de bois : un voile blanc bleuté ; celle des forges et des usines, grise (jamais noire comme du charbon) */
 const SMOKE_LIGHT = new THREE.Color(0.93, 0.93, 0.95), SMOKE_DARK = new THREE.Color(0.5, 0.49, 0.5), STEAM = new THREE.Color(0.96, 0.97, 0.98);
 const PETALS = PETAL_COLORS.map((c) => new THREE.Color(c));
 
 interface Leaf { x: number; y: number; z: number; vy: number; ph: number; rx: number; rz: number; landed: number; col: THREE.Color }
 interface Fish { x0: number; z0: number; dx: number; dz: number; t: number; y: number }
-interface Ring { x: number; y: number; z: number; t: number }
+/** rond dans l'eau ; `s` : taille (1 : un poisson qui retombe) */
+interface Ring { x: number; y: number; z: number; t: number; s?: number }
 
 /**
  * Petites touches de vie : fumée des cheminées (plus épaisse l'hiver et aux heures des repas), lucioles des nuits d'été,
@@ -285,7 +287,7 @@ void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.
     for (const r of this.ringList) {
       d.position.set(r.x, 0.03, r.z);
       d.rotation.set(0, 0, 0);
-      d.scale.setScalar(0.08 + r.t * 0.42);
+      d.scale.setScalar((0.08 + r.t * 0.42) * (r.s ?? 1));
       d.updateMatrix();
       this.rings.setMatrixAt(n, d.matrix);
       this.ringAlpha.setX(n++, 0.75 * (1 - r.t / 1.4));
@@ -293,6 +295,28 @@ void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.
     this.rings.count = n;
     this.rings.instanceMatrix.needsUpdate = true;
     this.ringAlpha.needsUpdate = true;
+  }
+
+  /**
+   * Effets d'eau des bêtes marines (`Fauna.onSea`) : gerbe d'un saut (`size` 0,5 poisson … 3 baleine, avec le bruit
+   * d'éclaboussure dès 1), souffle d'une baleine (colonne de vapeur), sillage d'un aileron, remous au-dessus d'un banc
+   */
+  seaFx(kind: SeaFx, x: number, z: number, size: number) {
+    const spawn = (n: number, f: () => void) => { for (let k = 0; k < Math.max(1, Math.round(n * this.density)); k++) f(); };
+    if (kind === 'splash') {
+      if (this.ringList.length < MAX_RINGS) this.ringList.push({ x, y: 0, z, t: 0, s: 0.6 + size * 0.5 });
+      const r = 0.3 + size * 0.25;
+      spawn(3 + size * 4, () => this.puffs.spawn(x + (Math.random() - 0.5) * r * 0.5, 0.05, z + (Math.random() - 0.5) * r * 0.5, (Math.random() - 0.5) * r, 0.7 + Math.random() * (0.4 + size * 0.35), (Math.random() - 0.5) * r,
+        0.05 + size * 0.02, 0.55 + size * 0.1, STEAM, 0, { grow: 0.6, drag: 2.5, wind: 0, alpha: 0.85 }));
+      if (size >= 1) this.onSplash?.(x, z);
+    } else if (kind === 'spout') {
+      // un jet haut et blanc, qui s'évase en panache (lisible même vu d'en haut)
+      spawn(18, () => this.puffs.spawn(x + (Math.random() - 0.5) * 0.08, 0.15, z + (Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.25, 2 + Math.random() * 1.4, (Math.random() - 0.5) * 0.25,
+        0.13, 1.4 + Math.random() * 0.6, STEAM, 0, { grow: 3, drag: 1.2, wind: 0.35, alpha: 0.85 }));
+    } else if (kind === 'wake') {
+      spawn(2, () => this.puffs.spawn(x + (Math.random() - 0.5) * 0.08, 0.03, z + (Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.15, 0.06, (Math.random() - 0.5) * 0.15,
+        0.05, 0.9, STEAM, 0, { grow: 1.6, drag: 3, wind: 0, alpha: 0.7 }));
+    } else if (this.ringList.length < MAX_RINGS) this.ringList.push({ x, y: 0, z, t: 0, s: 1.4 });
   }
 
   private ripple(x: number, z: number) {
