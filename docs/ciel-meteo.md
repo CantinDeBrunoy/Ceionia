@@ -10,7 +10,7 @@ Le temps du jeu (`GameTime`) fait tourner les heures et les saisons. `Environmen
 ## Règles du jeu
 
 ### Le temps
-- Une journée dure `dayLen = 100` s réelles (réglage « Durée du jour », 30 à 400 s), une saison `seasonLen = 160` s : une saison fait 1,6 jour, une année 6,4 jours (`time.ts`).
+- Une journée dure `dayLen = 100` s réelles (réglage « Durée du jour », 30 à 400 s), une saison `seasonLen = 240` s : une saison fait 2,4 jours, une année 9,6 jours (`time.ts`).
 - Les heures de nuit filent plus vite : `NIGHT_SKIP = 0.6`, la nuit prend environ 30 % du cycle (≈ 31 s à ×1, durée du jour par défaut).
 - Vitesse ×1, ×2, ×4 et pause : `GameTime.update(dt)` rend le temps de jeu (`gdt`, 0 en pause).
 - Saison affichée : `GameTime.season` ; le décor passe d'une saison à l'autre sur `BLEND = 0.3` de saison, centré sur le changement (`GameTime.mix`).

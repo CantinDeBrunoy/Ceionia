@@ -10,7 +10,7 @@ export class GameTime {
   /** 0..4 : 0 printemps, 1 été, 2 automne, 3 hiver */
   seasonT = 0.15;
   dayLen = 100; // secondes réelles par jour
-  seasonLen = 160; // secondes réelles par saison
+  seasonLen = 240; // secondes réelles par saison
   speed = 1;
   paused = false;
   days = 0;

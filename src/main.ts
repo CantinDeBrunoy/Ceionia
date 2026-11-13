@@ -121,6 +121,8 @@ const VILLAGE_DIST = 30;
 const PARADE_G = 10, PARADE_MS = 6000;
 const AUTOSTART = 'village-lowpoly:autostart';
 
+/** ancienne durée de saison par défaut (s) : les sauvegardes qui l'ont gardée passent à la nouvelle (240 s, 50 % de plus) */
+const OLD_SEASON_LEN = 160;
 /** espèces sauvages qui crient près de la vue (`CALLS` de voices.ts) */
 const CALLERS: ReadonlySet<string> = new Set(Object.keys(CALLS));
 
@@ -355,7 +357,7 @@ class Game implements UIHost {
       if (w.sandbox) this.sim.age = Math.max(0, Math.min(AGES.length - 1, Math.round(startAge) || 0));
     }
     this.war.load(w.war);
-    Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen ?? 160, speed: settings.speed ?? 1 });
+    Object.assign(this.time, { dayLen: settings.dayLen ?? 100, seasonLen: settings.seasonLen === undefined || settings.seasonLen === OLD_SEASON_LEN ? 240 : settings.seasonLen, speed: settings.speed ?? 1 });
     Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, ambVol: settings.ambVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfxChosen === true && settings.sfx !== true, sfxChosen: settings.sfxChosen === true });
     if (settings.quality) this.quality = settings.quality;
     this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? (weak ? 2 : 0))));
