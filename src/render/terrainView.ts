@@ -315,6 +315,25 @@ ${BLIGHT_GLSL}
   // strates horizontales sur la craie et la roche
   float strata = smoothstep(0.86, 1.0, sin(vPos.y * 9.0 + sin(vPos.x * 1.1 + vPos.z * 0.7) * 0.8));
   diffuseColor.rgb *= 1.0 - strata * 0.16 * vSurf.z * clean;
+  // parois du désert (poids rangé en négatif dans vSurf.w, là où il n'y a pas de neige) : les couches du Grand Canyon, en
+  // bandes horizontales selon la hauteur, du schiste sombre du fond au calcaire clair du rebord. Elles teintent le grès rouge
+  // des sommets (qui garde son ombre cuite)
+  float gorge = clamp(-vSurf.w, 0.0, 1.0);
+  if (gorge > 0.01) {
+    float gy = vPos.y + sin(vPos.x * 0.7 + vPos.z * 0.4) * 0.03;
+    vec3 band = vec3(0.33, 0.26, 0.25);
+    band = mix(band, vec3(0.58, 0.38, 0.27), smoothstep(0.73, 0.77, gy));
+    band = mix(band, vec3(0.66, 0.58, 0.45), smoothstep(1.03, 1.07, gy));
+    band = mix(band, vec3(0.70, 0.62, 0.52), smoothstep(1.78, 1.82, gy));
+    band = mix(band, vec3(0.74, 0.33, 0.21), smoothstep(2.13, 2.17, gy));
+    band = mix(band, mix(vec3(0.80, 0.42, 0.27), vec3(0.86, 0.56, 0.36), step(0.0, sin(gy * 40.0))), smoothstep(2.63, 2.67, gy));
+    band = mix(band, vec3(0.66, 0.28, 0.19), smoothstep(2.93, 2.97, gy));
+    band = mix(band, vec3(0.93, 0.86, 0.70), smoothstep(3.08, 3.12, gy));
+    band = mix(band, vec3(0.84, 0.76, 0.62), smoothstep(3.23, 3.27, gy));
+    // (teintes écrites en sRGB, les couleurs des sommets sont linéaires)
+    band = pow(band, vec3(2.2));
+    diffuseColor.rgb *= mix(vec3(1.0), band / vec3(${f(RED_ROCK.r)}, ${f(RED_ROCK.g)}, ${f(RED_ROCK.b)}), gorge);
+  }
   // neige : congères (grandes ondulations), rides du vent aux creux bleutés, grain et paillettes qui s'éteignent au loin ;
   // chaque facette prend sa nuance selon le soleil (crème au soleil, bleutée à contre-jour) ; par grandes zones, un blanc un
   // peu plus chaud ou plus froid
@@ -708,7 +727,7 @@ ${BLIGHT_GLSL}
     // couleur et motif par sous-sommet : dégradés continus fond marin → sable → herbe → roche → neiges éternelles
     for (let zz = z0; zz <= z1; zz++) for (let i = zz * VS + x0; i <= zz * VS + x1; i++) {
       const h = vis[i];
-      let grass = 0, sand = 0, rock = 0, cover = 0;
+      let grass = 0, sand = 0, rock = 0, cover = 0, gorge = 0;
       if (h < 0.02) {
         // fond vaseux des mares du marais
         tmp.copy(WET_SAND).lerp(SEABED, clamp(-h / 1.6, 0, 1)).lerp(MUD, this.vbw[i * NB + BIOME_MARSH] * 0.8);
@@ -742,7 +761,11 @@ ${BLIGHT_GLSL}
         const bank = (0.45 + 0.55 * smoothstep(0.15, 0.3, h)) * pal.terrain.bankK * (1 - wet);
         tmp.lerp(SAND, beach * (1 - wet) * (1 - bank)).lerp(pal.terrain.bank, beach * bank).lerp(MUD, beach * wet * 0.6);
         // parois : craie blanche près de la mer, roche plus haut, grise en montagne
-        if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(RED_ROCK, dry * 0.85).lerp(MOUNTAIN, alt), steep);
+        // (au bord du désert, la paroi est déjà de grès : pas de craie au pied d'un canyon qui touche une prairie)
+        const redK = smoothstep(0.05, 0.45, dry);
+        if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(RED_ROCK, redK).lerp(MOUNTAIN, alt), steep);
+        // (les strates du désert : voir le shader)
+        gorge = steep * redK * (1 - alt);
         if (alt > 0) tmp.lerp(MOUNTAIN, alt * 0.85);
         // volcan : vert au pied, il vire au brun en montant, plus sombre près du cratère
         let lava = 0, top = 0;
@@ -787,6 +810,7 @@ ${BLIGHT_GLSL}
         // glaciers : la neige des replats d'altitude tourne à la glace bleutée
         if (cap > 0.5) tmp.lerp(ICE, (cap - 0.5) * 2 * flat * 0.5 * (1 - lava));
         // peu de strates sur le volcan : elles y dessineraient des courbes de niveau
+        gorge *= 1 - lava;
         rock = Math.max((steep + alt - steep * alt) * (1 - lava * 0.7), vw[i * 4 + 3], lava * 0.35, smoothstep(0.3, 0.8, lf) * 0.9);
         sand = Math.max(beach, soil, dry * 0.9) * (1 - rock);
         grass = Math.max(0, 1 - sand - rock);
@@ -800,7 +824,7 @@ ${BLIGHT_GLSL}
       const rv = w.ravine[i];
       if (rv > 0) {
         tmp.lerp(RAVINE_WALL, smoothstep(0, 0.3, rv) * 0.85).lerp(RAVINE_DEEP, smoothstep(0.3, 1, rv) * 0.85);
-        rock = Math.max(rock, rv); grass *= 1 - rv; sand *= 1 - rv;
+        rock = Math.max(rock, rv); grass *= 1 - rv; sand *= 1 - rv; gorge *= 1 - rv;
       }
       // l'île du portail contaminée : sol noirci veiné de braise près du portail, cendre violacée vers la lisière (la neige
       // n'y tient pas) ; dans les halos des défenses, l'herbe repousse drue
@@ -828,7 +852,8 @@ ${BLIGHT_GLSL}
         tmp.multiplyScalar(1 - clamp(l1 * 0.9 + l3 * 0.3, -0.06, 0.3) * (1 - cover * 0.85));
       }
       vcol[i * 3] = tmp.r; vcol[i * 3 + 1] = tmp.g; vcol[i * 3 + 2] = tmp.b;
-      vsurf[i * 4] = grass; vsurf[i * 4 + 1] = sand; vsurf[i * 4 + 2] = rock; vsurf[i * 4 + 3] = cover;
+      // la neige et les strates du désert se partagent le 4e motif : neige en positif, strates en négatif
+      vsurf[i * 4] = grass; vsurf[i * 4 + 1] = sand; vsurf[i * 4 + 2] = rock; vsurf[i * 4 + 3] = cover > 0.001 ? cover : -gorge;
       // épaisseur de la neige : une couche, des bourrelets ; rien sur le bord ni dans l'emprise d'un bâtiment, une congère sur
       // le rang de sous-sommets qui l'entoure
       const open = yw[i] > 0 ? 0 : smoothstep(0.7, 1, this.openW[i]) * smoothstep(0.15, 0.5, h);
@@ -846,7 +871,7 @@ ${BLIGHT_GLSL}
     let o = 0;
     // (la neige change l'épaisseur et les normales : positions et normales se refont aussi aux changements de saison)
     const emit = (vi: number, x: number, y: number, z: number, nx: number, ny: number, nz: number) => {
-      const k = vi * 3, fm = FACE_MIX + (SNOW_FACE_MIX - FACE_MIX) * vsurf[vi * 4 + 3];
+      const k = vi * 3, fm = FACE_MIX + (SNOW_FACE_MIX - FACE_MIX) * Math.max(0, vsurf[vi * 4 + 3]);
       pos[o] = x; pos[o + 1] = y; pos[o + 2] = z;
       const mx = nx * fm + vnor[k] * (1 - fm), my = ny * fm + vnor[k + 1] * (1 - fm), mz = nz * fm + vnor[k + 2] * (1 - fm);
       const ml = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
