@@ -1628,6 +1628,19 @@ export class UI {
     list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
+    // en bataille, la frise du haut monte au niveau des ressources quand elle tient entre elles et les boutons de droite
+    const ts = document.querySelector<HTMLElement>('#troopBar .tstate');
+    if (ts && document.body.classList.contains('commanding')) {
+      const w = ts.offsetWidth, res = $('#resPanel').getBoundingClientRect(), hr = $('#hudR').getBoundingClientRect();
+      // centrée sur l'écran si possible, sinon au milieu de la place libre entre les deux
+      const a = res.right + 12, b = hr.left - 12, fits = b - a >= w;
+      const mid = (innerWidth - w) / 2 >= a && (innerWidth + w) / 2 <= b ? innerWidth / 2 : (a + b) / 2;
+      document.body.classList.toggle('tsTop', fits);
+      if (fits) {
+        this.root.style.setProperty('--tsTop', `${Math.round(res.top)}px`);
+        this.root.style.setProperty('--tsX', `${Math.round(mid)}px`);
+      }
+    } else document.body.classList.remove('tsTop');
     // la hauteur de la barre du bas, quand elle s'étend sous la fiche d'un bâtiment (à droite) : la fiche s'arrête au-dessus
     // et défile plutôt que de passer dessous
     const dm = $('#dockRow').getBoundingClientRect(), sc = $('#selCard').getBoundingClientRect();

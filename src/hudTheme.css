@@ -467,3 +467,7 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
   #troopBar .tcorner { width: 190px; padding: 8px; gap: 6px; }
 }
 @media (min-width: 901px) { #troopBar .tfoot .tbub { left: max(0px, calc(50% - 410px - 12px - 196px)); max-width: 560px; } }
+
+/* en bataille, la frise du haut (zones des Enfers, vagues de l'île) au niveau des ressources quand la place le permet */
+body.tsTop #troopBar .tstate, body.tsTop.hell #troopBar .tstate, body.tsTop.under #troopBar .tstate { top: var(--tsTop, 10px); left: var(--tsX, 50%); }
+body.tsTop.hell #bossBar { top: calc(var(--tsTop, 10px) + 70px); }
