@@ -409,3 +409,10 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 .rlTop > img.pic { width: 48px; height: 48px; }
 .rlTop h4 { font-size: 23px; }
 .expModal .rlCard .trainBtn { min-height: 40px; padding: 0 16px; font-size: 14px; }
+/* deux lignes par rangée (l'îlot de la seconde colonne déborde dans la gouttière) ; la carte « Nouvelle ligne » prend toute la largeur */
+.rlList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 92px; }
+.rlList > .rlMore { grid-column: 1 / -1; }
+.expModal .rlCard .rlBody > b { flex-wrap: wrap; }
+@media (max-width: 1100px) { .rlList { grid-template-columns: minmax(0, 1fr); } }
+.expModal .rlCard .rlBody > b { display: block; line-height: 1.2; }
+.expModal .rlCard .rlBody > b .lineDot { display: inline-block; margin-right: 7px; vertical-align: -1px; }
