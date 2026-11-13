@@ -1633,11 +1633,11 @@ export class UI {
     if (ts && document.body.classList.contains('commanding')) {
       const w = ts.offsetWidth, res = $('#resPanel').getBoundingClientRect(), hr = $('#hudR').getBoundingClientRect();
       // centrée sur l'écran si possible, sinon au milieu de la place libre entre les deux
-      const a = res.right + 12, b = hr.left - 12, fits = b - a >= w;
+      const a = (res.width ? res.right : 0) + 12, b = hr.left - 12, fits = b - a >= w;
       const mid = (innerWidth - w) / 2 >= a && (innerWidth + w) / 2 <= b ? innerWidth / 2 : (a + b) / 2;
       document.body.classList.toggle('tsTop', fits);
       if (fits) {
-        this.root.style.setProperty('--tsTop', `${Math.round(res.top)}px`);
+        this.root.style.setProperty('--tsTop', `${Math.round(res.width ? res.top : hr.top)}px`);
         this.root.style.setProperty('--tsX', `${Math.round(mid)}px`);
       }
     } else document.body.classList.remove('tsTop');

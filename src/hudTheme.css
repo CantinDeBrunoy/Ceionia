@@ -472,43 +472,56 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 body.tsTop #troopBar .tstate, body.tsTop.hell #troopBar .tstate, body.tsTop.under #troopBar .tstate { top: var(--tsTop, 10px); left: var(--tsX, 50%); }
 body.tsTop.hell #bossBar { top: calc(var(--tsTop, 10px) + 70px); }
 
-/* ---------- frise des Enfers : le chemin des zones en médaillons sur un parchemin ----------
-   zone tenue : médaillon d'or coché ; zone ouverte : médaillon blanc cerclé d'or qui respire ; fermée : parchemin en pointillé ;
-   verrouillée par l'âge : cadenas ; attaquée : cercle rouge qui bat. Les liens tenus deviennent un ruban d'or */
-#troopBar .tfrise { gap: 14px; padding: 7px 10px 7px 16px; border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); color: var(--hInk); }
-#troopBar .tfn { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; padding-right: 14px; border-right: 1px solid rgba(200, 160, 95, 0.4); color: var(--hInk); }
-#troopBar .tfn small { font-family: inherit; font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #A8452A; }
-#troopBar .tfn b { font-family: var(--hSerif); font-variation-settings: 'SOFT' 50, 'opsz' 36; font-size: 17px; font-weight: 800; color: var(--hInk); }
-#troopBar .tfz { gap: 0; }
-#troopBar .zn { width: 64px; gap: 3px; }
-#troopBar .zc { width: 26px; height: 26px; font-family: var(--hSerif); font-size: 13px; font-weight: 800; color: var(--hInk2); background: radial-gradient(circle at 50% 35%, #FFFCF3, #F3E3C4 85%); border: 1.5px dashed #C9A874; box-shadow: inset 0 1px 2px rgba(120, 80, 30, 0.12); }
-#troopBar .zc .pic { display: block; }
-#troopBar .zt { font-size: 10.5px; font-weight: 700; color: var(--hInk2); letter-spacing: 0.01em; white-space: nowrap; }
-#troopBar .zn.ok .zc { background: var(--hGoldFill); border: 1.5px solid var(--hGold); box-shadow: var(--hGoldShadow); }
-#troopBar .zn.ok .zt { color: var(--hInk); font-weight: 800; }
-#troopBar .zn.cur .zc { width: 30px; height: 30px; margin: -2px 0; font-size: 15px; color: #8A4B12; background: radial-gradient(circle at 50% 35%, #FFFFFF, #FFF4DA 80%); border: 2.5px solid #E2A845; box-shadow: 0 0 0 3px rgba(255, 226, 150, 0.55), 0 2px 6px rgba(150, 95, 20, 0.35); animation: zgold 1.6s ease-in-out infinite; }
-#troopBar .zn.cur .zt { color: #8A4B12; font-weight: 800; }
-#troopBar .zn.lock .zc { border-style: solid; border-color: #D9C29C; background: #F1E5CF; }
-#troopBar .zn.lock .zc .pic { opacity: 0.8; }
-#troopBar .zn.lock .zt, #troopBar .zn.shut .zt { color: #9C8466; font-weight: 600; }
-#troopBar .zn.hot .zc { color: #fff; background: radial-gradient(circle at 50% 35%, #F27560, #C8352A 85%); border: 2px solid #fff; box-shadow: 0 0 0 1.5px rgba(200, 53, 42, 0.6); animation: zpulse 1s ease-in-out infinite; }
-#troopBar .zn.hot .zt { color: #B3321F; font-weight: 800; }
-#troopBar .zl { flex: 0 0 30px; min-width: 0; height: 4px; margin: 0 -21px 15px; border-radius: 3px; background: repeating-linear-gradient(90deg, #D5BC92 0 5px, transparent 5px 9px); }
-#troopBar .zl.ok { background: linear-gradient(180deg, #FBE1A0, #E2B45E); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6); }
-@keyframes zgold { 0%, 100% { box-shadow: 0 0 0 3px rgba(255, 226, 150, 0.55), 0 2px 6px rgba(150, 95, 20, 0.35); } 50% { box-shadow: 0 0 0 6px rgba(255, 220, 130, 0.25), 0 0 14px rgba(255, 196, 90, 0.55); } }
+/* ---------- frise des Enfers (maquette `.claude/maquettes-hud/gpt-exp/frise-gpt.png`) ----------
+   parchemin dans un cadre de fer sombre aux braises ; à gauche la bannière au trident, « Les Enfers » en Fraunces et la zone
+   en cartouche ; un médaillon peint par zone (`public/icons/hell/zone-N.webp`) : tenue cochée, attaquée en rouge qui bat,
+   à prendre cerclée d'or qui luit, verrouillée ou fermée éteinte avec un cadenas ; l'objectif en capsule aux épées.
+   Dans les Enfers, plus de ressources en haut : la frise prend leur place */
+body.hell #resPanel { display: none !important; }
+#troopBar .tfrise.hellf { gap: 14px; padding: 8px 14px 8px 10px; border-radius: 16px; color: var(--hInk);
+  background: linear-gradient(180deg, #FFF8E6 0%, #F9EACB 60%, #F1DDB6 100%);
+  border: 3px solid #3B2A22;
+  box-shadow: inset 0 0 0 1.5px #D9A955, inset 0 0 0 3px rgba(255, 240, 205, 0.7), inset 0 0 18px rgba(222, 170, 90, 0.35), 0 0 0 1px rgba(255, 120, 40, 0.45), 0 0 14px rgba(255, 90, 20, 0.35), 0 6px 16px rgba(20, 5, 0, 0.55); }
+#troopBar .hellf .tfn { display: flex; flex-direction: row; align-items: center; gap: 8px; padding-right: 14px; border-right: 1px solid rgba(160, 110, 50, 0.35); }
+#troopBar .hellf .tfb { width: 38px; height: 50px; object-fit: contain; margin: -12px 0 -14px; filter: drop-shadow(0 2px 3px rgba(60, 10, 0, 0.4)); }
+#troopBar .hellf .tft { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+#troopBar .hellf .tft b { font-family: var(--hSerif); font-variation-settings: 'SOFT' 50, 'opsz' 48; font-size: 21px; font-weight: 800; line-height: 1; color: #2E1E14; }
+#troopBar .hellf .tft small { font-family: var(--hSerif); font-size: 12.5px; font-weight: 700; line-height: 1; padding: 3px 10px; border-radius: 999px; color: #3A2616; background: var(--hGoldFill); border: 1px solid #C99A45; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5); white-space: nowrap; letter-spacing: 0; text-transform: none; }
+#troopBar .hellf .tfz { gap: 0; }
+#troopBar .hellf .zn { width: 66px; gap: 2px; }
+#troopBar .hellf .zn .zc, #troopBar .hellf .zn.cur .zc, #troopBar .hellf .zn.hot .zc, #troopBar .hellf .zn.lock .zc, #troopBar .hellf .zn.shut .zc { position: relative; margin: 0; width: 42px; height: 42px; padding: 0; border: none; background: none; box-shadow: none; border-radius: 50%; }
+#troopBar .hellf .ze { width: 42px; height: 42px; display: block; filter: drop-shadow(0 2px 2px rgba(60, 20, 0, 0.35)); }
+#troopBar .hellf .zs { position: absolute; right: -4px; bottom: -3px; width: 17px; height: 17px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
+#troopBar .hellf .zt { display: flex; flex-direction: column; align-items: center; font-family: var(--hSerif); font-size: 12.5px; font-weight: 800; line-height: 1.02; color: #3A2616; white-space: nowrap; padding: 1px 8px; border-radius: 999px; }
+#troopBar .hellf .zt small { font-size: 11px; font-weight: 800; color: inherit; opacity: 0.85; }
+#troopBar .hellf .zn.ok .zc, #troopBar .hellf .zn.shut .zc, #troopBar .hellf .zn.lock .zc { animation: none; }
+#troopBar .hellf .zn.cur .zc { box-shadow: 0 0 0 2.5px #F2C24E, 0 0 12px 3px rgba(255, 190, 60, 0.75); animation: hfGlow 1.6s ease-in-out infinite; }
+#troopBar .hellf .zn.cur .zt { background: var(--hGoldFill); box-shadow: inset 0 0 0 1px #D2A04A; color: #2E1E14; }
+#troopBar .hellf .zn.hot .zc { background: none; border: none; box-shadow: 0 0 0 2.5px #E0402C, 0 0 12px 3px rgba(230, 50, 30, 0.7); animation: hfHot 1s ease-in-out infinite; }
+#troopBar .hellf .zn.hot .zt { color: #B3261A; }
+#troopBar .hellf .zn.lock .ze, #troopBar .hellf .zn.shut .ze { filter: grayscale(0.55) brightness(1.05) drop-shadow(0 2px 2px rgba(60, 20, 0, 0.2)); opacity: 0.72; }
+#troopBar .hellf .zn.lock .zt, #troopBar .hellf .zn.shut .zt { color: #6E5843; font-weight: 700; }
+#troopBar .hellf .zl { flex: 0 0 26px; min-width: 0; height: 3px; margin: 0 -14px 30px; border-radius: 2px; background: #6B4A36; box-shadow: 0 0 0 1px rgba(255, 230, 190, 0.5); }
+#troopBar .hellf .zl.ok { background: linear-gradient(180deg, #FBE1A0, #D9A24A); }
+@keyframes hfGlow { 0%, 100% { box-shadow: 0 0 0 2.5px #F2C24E, 0 0 10px 2px rgba(255, 190, 60, 0.6); } 50% { box-shadow: 0 0 0 2.5px #FFD86E, 0 0 18px 6px rgba(255, 190, 60, 0.85); } }
+@keyframes hfHot { 0%, 100% { box-shadow: 0 0 0 2.5px #E0402C, 0 0 8px 2px rgba(230, 50, 30, 0.55); } 50% { box-shadow: 0 0 0 2.5px #FF6A4A, 0 0 18px 6px rgba(230, 50, 30, 0.85); } }
 /* l'objectif au bout, en capsule d'or claire */
-#troopBar .tfg { gap: 6px; padding: 5px 13px 5px 8px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFDF6, #FBEFD5); box-shadow: var(--hTile); color: var(--hInk); font-size: 12.5px; font-weight: 700; }
-#troopBar button.tfg:hover { background: var(--hGoldFill); border-color: var(--hGold); }
-#troopBar .tfg .tgo { color: var(--hInk); }
-#troopBar .tfg .tgo b { color: #A8452A; font-weight: 800; }
+#troopBar .hellf .tfg { gap: 8px; padding: 6px 16px 6px 10px; border: 2px solid #D9A955; border-radius: 999px; background: linear-gradient(180deg, #FFFBEF, #F8E8C6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 1px 3px rgba(100, 60, 20, 0.25); color: #2E1E14; font-family: var(--hSerif); font-size: 14px; font-weight: 800; }
+#troopBar .hellf button.tfg:hover { background: var(--hGoldFill); border-color: #C99A45; }
+#troopBar .hellf .tfg .pic { width: 26px; height: 26px; }
+#troopBar .hellf .tfg .tgo { color: #2E1E14; }
+#troopBar .hellf .tfg .tgo b { color: #A8452A; font-weight: 800; }
 #troopBar .tgoal { background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); }
 #troopBar .tfa { display: inline-flex; align-items: center; gap: 5px; }
-@media (max-width: 640px) {
-  #troopBar .tfrise { gap: 6px 8px; padding: 5px 8px; }
-  #troopBar .tfn { padding-right: 8px; }
-  #troopBar .tfn b { font-size: 14px; }
-  #troopBar .zn, #troopBar .zn.cur { width: 28px; }
-  #troopBar .zc { width: 20px; height: 20px; font-size: 11px; }
-  #troopBar .zn.cur .zc { width: 24px; height: 24px; }
-  #troopBar .zl { flex: 0 0 8px; margin: 0 -4px; }
+@media (max-width: 900px) {
+  #troopBar .tfrise.hellf { gap: 6px 8px; padding: 5px 8px; }
+  #troopBar .hellf .tfb { display: none; }
+  #troopBar .hellf .tft b { font-size: 15px; }
+  #troopBar .hellf .zn { width: 34px; }
+  #troopBar .hellf .zc, #troopBar .hellf .ze { width: 28px; height: 28px; }
+  #troopBar .hellf .zs { width: 13px; height: 13px; }
+  #troopBar .hellf .zt { display: none; }
+  #troopBar .hellf .zl { flex: 0 0 8px; margin: 0 -4px; }
+  #troopBar .hellf .tfg { font-size: 12px; padding: 4px 10px 4px 6px; }
+  #troopBar .hellf .tfg .pic { width: 20px; height: 20px; }
 }

@@ -1129,7 +1129,9 @@ export class CommandUI implements ToolInput {
         const st = hot.has(i) ? 'hot' : held ? 'ok' : i === f.frontier && !ageLock ? 'cur' : ageLock ? 'lock' : 'shut';
         const tip = tr('{name} : {state} ({age})', { name: zd.name, state: st === 'hot' ? tr('attaquée') : st === 'ok' ? tr('tenue') : st === 'cur' ? tr('ouverte : abattez sa forteresse') : ageLock ? tr('verrouillée : demande {age}', { age: zoneAgeText(i) }) : tr('fermée : abattez d’abord la forteresse de la zone d’avant'), age: zoneAgeText(i) });
         const link = i ? `<i class="zl${held ? ' ok' : ''}"></i>` : '';
-        return `${link}<span class="zn ${st}" title="${tip.replace(/"/g, '&quot;')}"><span class="zc">${st === 'ok' ? hudPic('coche', 14) : st === 'lock' ? hudPic('cadenas', 13) : i ? i : 'P'}</span><span class="zt">${tr(CommandUI.ZSHORT[i])}</span></span>`;
+        // l'emblème peint de la zone dans un médaillon de fer ; l'état en pastille (coche, cadenas) et en couleur
+        const badge = st === 'ok' ? hudPic('coche', 16, 'zs') : st === 'lock' || st === 'shut' ? hudPic('cadenas', 15, 'zs') : '';
+        return `${link}<span class="zn ${st}" title="${tip.replace(/"/g, '&quot;')}"><span class="zc"><img class="ze" src="./icons/hell/zone-${i}.webp" alt="" draggable="false" decoding="async">${badge}</span><span class="zt"><small>${i ? i : 'P'}</small>${tr(CommandUI.ZSHORT[i])}</span></span>`;
       }).join('');
     }
     const al = alerts[0];
@@ -1138,7 +1140,7 @@ export class CommandUI implements ToolInput {
     const g = this.goal, goal = g ? (g.x !== undefined ? `<button data-a="goal" class="tfg" title="${tr('Centrer la vue sur l’objectif')}">${hudPic('militaire', 18)}<span class="tgo">${goalLine(g, null)}<b class="tgd"></b></span></button>` : `<span class="tfg">${pic('🔒', 18)}<span class="tgo">${goalLine(g, null)}</span></span>`) : '';
     // dessous, seulement quand les démons menacent la base
     const row = al ? `<div class="tgoal"><span class="tfa" title="${al.text.replace(/"/g, '&quot;')}">${pic('⚠️', 16)} ${al.text}</span></div>` : '';
-    return `<div class="tstate tfcol"><div class="tfrise">${zn ? `<span class="tfn" title="${tr('La zone où se trouve la vue ; un clic sur le portail ramène au village')}"><small>${tr('Les Enfers')}</small><b>${zn}</b></span>` : ''}<div class="tfz">${nodes}</div>${goal}</div>${row}</div>`;
+    return `<div class="tstate tfcol"><div class="tfrise hellf">${zn ? `<span class="tfn" title="${tr('La zone où se trouve la vue ; un clic sur le portail ramène au village')}"><img class="tfb" src="./icons/hell/banniere.webp" alt="" draggable="false" decoding="async"><span class="tft"><b>${tr('Les Enfers')}</b><small>${zn}</small></span></span>` : ''}<div class="tfz">${nodes}</div>${goal}</div>${row}</div>`;
   }
 
   /** Les recrues en route vers le camp (équipement en fabrication comprises) */
