@@ -127,6 +127,14 @@ export function pic(emoji: string, size = 20, cls = ''): string {
   return `<img class="pic${cls ? ' ' + cls : ''}" src="./icons/pics/${f}.webp" width="${size}" height="${size}" alt="${emoji}" draggable="false" decoding="async">`;
 }
 
+/**
+ * Icône peinte du HUD (`public/icons/hud/`, WebP 128 px, fond transparent) : ressources, besoins, saisons, âges, rayons,
+ * boutons. Même balise qu'un picto (`img.pic`), pour que les règles de taille du CSS s'appliquent
+ */
+export function hudPic(name: string, size = 20, cls = ''): string {
+  return `<img class="pic hp${cls ? ' ' + cls : ''}" src="./icons/hud/${name}.webp" width="${size}" height="${size}" alt="" draggable="false" decoding="async">`;
+}
+
 /** Vrai si l'émoji a un picto */
 export const hasPic = (emoji: string) => !!PICS[key(emoji)];
 

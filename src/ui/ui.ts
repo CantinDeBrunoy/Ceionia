@@ -28,7 +28,7 @@ import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
-import { pic, leadPic, withPic } from './pics';
+import { pic, hudPic, leadPic, withPic } from './pics';
 import { menuBg } from './loading';
 import { MiniMap } from './minimap';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
@@ -251,13 +251,15 @@ const NEEDS: { k: 'food' | 'water' | 'housing' | 'jobs' | 'joy' | 'health'; icon
 /** Le 7e besoin de la barre : la sécurité (couverture des pompiers et de la police), un indicateur qui ne bloque pas la croissance */
 const SECURITY_NEED = { k: 'security' as const, icon: 'shield', label: 'Sécurité' };
 /** Pictos 3D du HUD (voir `pics.ts`) : besoins, stocks, saisons, rayons et onglets de la barre de construction */
-const NEED_PIC: Record<NeedId | 'security', string> = { food: '🍞', water: '💧', housing: '🏠', jobs: '💼', joy: '😊', health: '❤', security: '🛡' };
-const RES_PIC: Record<Resource, string> = { wood: '🪵', stone: '🪨', ore: '⛏', brick: '🧱', crude: '🛢', fuel: '⛽' };
-const SEASON_PIC = ['🌸', '☀', '🍂', '❄'];
-const CAT_PIC: Record<BuildCat, string> = { home: '🏠', prod: '🌾', service: '🏥', life: '🎭', war: '⚔' };
+// icônes peintes du HUD (`hudPic`) ; le carburant garde son picto
+const NEED_PIC: Record<NeedId | 'security', string> = { food: 'nourriture', water: 'eau', housing: 'logement', jobs: 'travail', joy: 'bienetre', health: 'sante', security: 'securite' };
+const RES_PIC: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', brick: 'briques', crude: 'carburant', fuel: '⛽' };
+const resPic = (r: Resource, size: number) => RES_PIC[r].length > 2 ? hudPic(RES_PIC[r], size) : pic(RES_PIC[r], size);
+const SEASON_PIC = ['printemps', 'ete', 'automne', 'hiver'];
+const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', war: 'militaire' };
 /** Le picto de la carte du village, qui suit l'âge : Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste */
-const AGE_PIC = ['🦣', '🏛', '🏰', '🏭', '🏙', '🚀'];
-const TAB_PIC: Record<string, string> = { build: '🔨', land: '🏔' };
+const AGE_PIC = ['age-0', 'age-1', 'age-2', 'age-3', 'age-4', 'age-5'];
+const TAB_PIC: Record<string, string> = { build: 'production', land: 'paysage' };
 const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon: string; label: string; one?: string }[] = [
   { k: 'housing', icon: 'house', label: 'logements', one: 'logement' }, { k: 'food', icon: 'bread', label: 'nourriture' }, { k: 'water', icon: 'drop', label: 'eau' },
   { k: 'jobs', icon: 'hammer', label: 'emplois', one: 'emploi' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
@@ -604,7 +606,7 @@ export class UI {
       }
     }, { passive: false });
     // chaque besoin : son picto 3D, le pourcentage comblé et sa jauge (le nom reste en infobulle, et sous la jauge si la place le permet)
-    $('#needs').innerHTML = [...NEEDS, SECURITY_NEED].map((n) => `<div class="need" id="n-${n.k}"><b>${pic(NEED_PIC[n.k], 26)}</b><em class="pv"></em><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('');
+    $('#needs').innerHTML = [...NEEDS, SECURITY_NEED].map((n) => `<div class="need" id="n-${n.k}"><b>${hudPic(NEED_PIC[n.k], 26)}</b><em class="pv"></em><div class="bar"><i></i></div><span>${tr(n.label)}</span></div>`).join('');
     // fiche des habitants : un clic sur le compteur l'ouvre, un clic ailleurs la ferme
     const census = document.createElement('div');
     census.id = 'census';
@@ -757,7 +759,7 @@ export class UI {
    */
   private renderDock() {
     const modes = $('#modes');
-    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${tr(t.label)}${t.id === this.tab ? tr(' — recliquer pour replier ou déplier la barre') : ''}"><b>${pic(TAB_PIC[t.id], 26)}</b><span>${tr(t.label)}</span></button>`).join('');
+    modes.innerHTML = TABS.map((t) => `<button data-t="${t.id}" class="${t.id === this.tab ? 'active' : ''}" title="${tr(t.label)}${t.id === this.tab ? tr(' — recliquer pour replier ou déplier la barre') : ''}"><b>${hudPic(TAB_PIC[t.id], 26)}</b><span>${tr(t.label)}</span></button>`).join('');
     modes.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.onclick = () => {
       const why = b.dataset.t !== 'build' ? this.startWhy() : null;
       if (why) { this.toast(why); return; }
@@ -810,7 +812,7 @@ export class UI {
     const age = this.host.sim.age, build = this.tab === 'build';
     const sub = $('#subcats');
     sub.innerHTML = build
-      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${pic(CAT_PIC[c.id], 20)}</b><span class="cl">${c.label}</span></button>`).join('')
+      ? BUILD_CATS.map((c) => `<button data-c="${c.id}" aria-label="${c.label}" class="${c.id === this.cat ? 'on' : ''}" title="${c.label}${colon()}${BUILD_SUBS[c.id].map((x) => x.label.toLowerCase()).join(', ')}"><b>${hudPic(CAT_PIC[c.id], 22)}</b><span class="cl">${c.label}</span></button>`).join('')
       : LAND_SUBS.map((l) => `<button data-l="${l.id}" aria-label="${tr(l.label)}" class="${l.id === this.land ? 'on' : ''}" title="${tr(l.label)}${colon()}${l.groups.map((g) => tr(g.label).toLowerCase()).join(', ')}"><b>${pic(l.pic, 20)}</b><span class="cl">${tr(l.label)}</span></button>`).join('');
     // un sous-menu du Paysage : l'outil en main d'un autre sous-menu est lâché (sinon refreshTools ramènerait le sien)
     sub.querySelectorAll<HTMLButtonElement>('button[data-l]').forEach((b) => (b.onclick = () => {
@@ -1192,8 +1194,8 @@ export class UI {
     const drawn = this.host.expeditions.yields().crude;
     const flow = (r: Resource) => (r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
-      ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${pic(RES_PIC[r], 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
-      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${pic(RES_PIC[r], 28)}<span class="rv"><b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em></span></div>`).join('');
+      ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${resPic(r, 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
+      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em></span></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -1356,7 +1358,7 @@ export class UI {
     $('#ageName').textContent = AGES[sim.age].name;
     // le logo de la carte du village change avec l'âge (picto et teinte du fond)
     const logo = $('#vLogo');
-    if (logo.dataset.a !== String(sim.age)) { logo.innerHTML = pic(AGE_PIC[sim.age] ?? AGE_PIC[0], 30); logo.dataset.a = String(sim.age); logo.className = `vLogo age${sim.age}`; }
+    if (logo.dataset.a !== String(sim.age)) { logo.innerHTML = hudPic(AGE_PIC[sim.age] ?? AGE_PIC[0], 34); logo.dataset.a = String(sim.age); logo.className = `vLogo age${sim.age}`; }
     $('#ageSub').textContent = AGES[sim.age].tagline;
     const ap = sim.ageProgress(), pct = ap ? Math.floor(ap.ratio * 100) : 100, sb = this.host.world.sandbox;
     $('#agePanel').classList.toggle('sandbox', sb);
@@ -1403,7 +1405,7 @@ export class UI {
     const hh = Math.floor(time.hour), mm = Math.floor((time.hour % 1) * 60);
     const wk = WEATHER_ICON[env.weatherKind] && env.weatherK > 0.3 ? ic(WEATHER_ICON[env.weatherKind], 13, 2) : '';
     // le picto de la saison (la lune la nuit), l'heure, la saison et le jour de la partie
-    const night = hh >= 21 || hh < 6, sp = pic(night ? '🌙' : SEASON_PIC[time.season], 34);
+    const night = hh >= 21 || hh < 6, sp = hudPic(night ? 'nuit' : SEASON_PIC[time.season], 38);
     const clock = `${sp}<span class="time">${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}<small>${tr('{season}, jour {n}', { season: SEASONS[time.season], n: time.days + 1 })} ${wk}</small></span>`;
     // le contenu ne change que si l'heure, la saison ou la météo changent (on évite de recréer les icônes à chaque mise à jour)
     if ($('#clock').dataset.v !== clock) { $('#clock').innerHTML = clock; $('#clock').dataset.v = clock; }
