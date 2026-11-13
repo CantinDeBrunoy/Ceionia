@@ -448,3 +448,22 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 #troopBar .thell .tcorner .thb { justify-content: flex-start; width: auto; min-height: 42px; padding: 0 14px 0 6px; }
 #troopBar .thell .tcorner .tl { display: inline; }
 #troopBar .thell .tcorner .tord.gar { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 12px 0 5px; border-radius: 999px; }
+
+/* ---------- Barre de bataille : la même mise en page que la barre du village (#dockRow), pas une bande collée d'un bord à
+   l'autre : trois panneaux séparés, le menu au centre (800 px au plus), les modes à sa gauche et le coin à sa droite, avec
+   le même espace entre eux et les mêmes tailles de boutons et de cartes ---------- */
+@media (min-width: 901px) {
+  #troopBar .tfoot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 820px) minmax(0, 1fr); align-items: end; gap: 12px; height: auto; left: var(--gap, 10px); right: var(--gap, 10px); }
+  #troopBar .tfoot > .ttool { grid-column: 1; justify-self: end; align-self: end; padding: 8px; border-radius: var(--hR); gap: 6px; }
+  #troopBar .tfoot > .tmenu { grid-column: 2; align-self: end; min-height: 0; padding: 8px 10px 10px; border-radius: var(--hR); }
+  #troopBar .tfoot > .tcorner { grid-column: 3; justify-self: start; align-self: end; border-radius: var(--hR); }
+  #troopBar .ttool .ttabs { gap: 3px; }
+  #troopBar .ttool .ttabs button { width: 172px; min-width: 0; height: 46px; min-height: 0; padding: 0 12px 0 9px; gap: 10px; border-radius: 12px; font-size: 15px; font-weight: 700; }
+  #troopBar .ttool .ttools { padding-top: 6px; border-top: 1px solid rgba(200, 160, 95, 0.4); justify-content: center; gap: 4px; }
+  #troopBar .ttool .ttl { width: 38px; height: 36px; min-height: 0; border-radius: 10px; }
+  #troopBar .tmenu .tmrow { overflow-x: auto; scrollbar-width: none; }
+  #troopBar .tmenu .tbuilds { gap: 10px; }
+  #troopBar .tmenu .trb.tbv { width: 100px; min-height: 108px; border-radius: 13px; }
+  #troopBar .tcorner { width: 190px; padding: 8px; gap: 6px; }
+}
+@media (min-width: 901px) { #troopBar .tfoot .tbub { left: max(0px, calc(50% - 410px - 12px - 196px)); max-width: 560px; } }
