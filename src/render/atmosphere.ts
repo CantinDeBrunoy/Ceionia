@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { World, N, VR, VS, VEG_VOLCANO } from '../world/world';
+import { World, N, VR, VS, VEG_VOLCANO, seaMargin } from '../world/world';
 import { GameTime } from '../core/time';
 import { clamp, lerp, mulberry32, smoothstep } from '../core/rng';
 import { Environment } from './env';
@@ -12,6 +12,8 @@ const MIST_DAY = new THREE.Color(0xf4f7fa), MIST_NIGHT = new THREE.Color(0x4e5a7
 const MIST = { x: 0, y: 2.1, z: 0.9, w: 0 };
 /** couleur de la brume (espace de travail, convertie dans le shader) et taille de la carte (la brume s'efface au bord) */
 const MIST_COL = { x: 1, y: 1, z: 1, w: 192 };
+/** Étendue de la brume (x0, x1, en cases) : la carte et la mer de décor autour */
+const MIST_BOX = { x: 0, y: 192 };
 /** Part des matins (et des soirs) où la brume se lève */
 const MIST_CHANCE = 0.3;
 const mistDay = (n: number) => { const x = Math.sin(n * 91.345 + 7.13) * 43758.5453; return x - Math.floor(x); };
@@ -39,6 +41,7 @@ function patchMist() {
   varying vec3 vMistW;
   uniform vec4 uMist;
   uniform vec4 uMistColor;
+  uniform vec2 uMistBox;
   float mistHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float mistNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
@@ -56,7 +59,7 @@ function patchMist() {
     if (mh > 0.0) {
       vec3 toCam = cameraPosition - vMistW;
       float path = min(8.0, length(toCam) * (toCam.y > mh ? mh / toCam.y : 1.0));
-      float edge = smoothstep(0.0, 6.0, min(min(mq.x, mq.y), min(uMistColor.w - mq.x, uMistColor.w - mq.y)));
+      float edge = smoothstep(0.0, 6.0, min(min(mq.x, mq.y) - uMistBox.x, uMistBox.y - max(mq.x, mq.y)));
       // nappe laiteuse : vite opaque là où elle est épaisse (on n'y voit plus les ombres du sol), transparente sur ses bords
       float m = 1.0 - exp(-path * uMist.x * smoothstep(0.0, uMist.z, mh) * (0.55 + 0.45 * mn) * 1.6);
       gl_FragColor.rgb = mix(gl_FragColor.rgb, linearToOutputTexel(vec4(uMistColor.rgb, 1.0)).rgb, m * edge * 0.9);
@@ -64,7 +67,7 @@ function patchMist() {
   }
 #endif
 ` + C.fog_fragment;
-  const u = { uMist: { value: MIST }, uMistColor: { value: MIST_COL } };
+  const u = { uMist: { value: MIST }, uMistColor: { value: MIST_COL }, uMistBox: { value: MIST_BOX } };
   Object.assign(THREE.UniformsLib.fog, u);
   for (const lib of Object.values(THREE.ShaderLib)) if (lib.uniforms.fogColor) Object.assign(lib.uniforms, u);
 }
@@ -107,6 +110,7 @@ export class Atmosphere {
 
   constructor(private world: World, private audio: AudioEngine) {
     MIST_COL.w = N;
+    MIST_BOX.x = -seaMargin(); MIST_BOX.y = N + seaMargin();
     // ---- nuages accrochés aux sommets
     this.capMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1, transparent: true, opacity: 0.8, depthWrite: false, emissive: 0xffffff, emissiveIntensity: 0 });
     this.caps = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), this.capMat, 24 * CAP_PUFFS);
