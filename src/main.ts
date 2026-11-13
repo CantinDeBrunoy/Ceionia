@@ -16,7 +16,7 @@ const loadUnder = () => (underModule ??= import('./render/underView'));
 import type { HellMode } from './hellMode';
 let hellModule: Promise<typeof import('./hellMode')> | null = null;
 const loadHell = () => (hellModule ??= import('./hellMode'));
-import { newWorld, addDefaultDecor, mapDef, newSeed, CONTINENT } from './world/mapgen';
+import { newWorld, addDefaultDecor, mapDef, newSeed, playSize, CONTINENT } from './world/mapgen';
 import { GEN } from './world/continent';
 import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
@@ -1977,8 +1977,8 @@ async function boot() {
     // l'accueil peut avoir été redessiné (changement de langue) : on retire celui qui est à l'écran
     document.getElementById('menu')?.remove();
     menu?.remove();
-    // tailles des tableaux du monde, des vues et de la caméra
-    setMapSize(mapDef(map)!.size);
+    // tailles des tableaux du monde, des vues et de la caméra : une partie reprise garde la taille de sa sauvegarde
+    setMapSize(playSize(map, mode === 'continue' ? loadSlot(map)?.world.n : undefined));
     syncChunks();
     const t0 = performance.now();
     const game = new Game(map, mode, seed, difficulty, age);

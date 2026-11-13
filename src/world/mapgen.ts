@@ -6,26 +6,35 @@ import { mulberry32, smoothstep, clamp, lerp, hash2 } from '../core/rng';
 import { localize } from '../i18n';
 import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, continentPlan, fixedHeight, plannedHeight, toPlan, fromPlan } from './continent';
 
-/** Carte jouable : `size` cases de côté */
-export interface MapDef { id: number; name: string; desc: string; defaultSeed: number; size: number }
+/**
+ * Carte jouable : `size` cases de côté pour une nouvelle partie ; `sizes`, les tailles qu'une sauvegarde peut avoir (une
+ * partie garde la taille qui l'a créée, lue dans sa sauvegarde)
+ */
+export interface MapDef { id: number; name: string; desc: string; defaultSeed: number; size: number; sizes: number[] }
 
 /** La carte jouable : le continent (il garde le numéro 3, celui des sauvegardes déjà faites) */
 export const CONTINENT = 3;
 export const MAPS: MapDef[] = [
-  { id: CONTINENT, name: 'Continent', desc: 'Un grand continent, différent à chaque partie : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192 },
+  { id: CONTINENT, name: 'Continent', desc: 'Un grand continent, différent à chaque partie : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192, sizes: [192, 320] },
 ];
 for (const m of MAPS) localize(m, ['name', 'desc']);
 /** La carte de ce numéro (null : une carte qui n'existe plus) */
 export const mapDef = (id: number) => MAPS.find((m) => m.id === id) ?? null;
+/** Côté de la carte d'une partie : celui de sa sauvegarde pour une partie reprise, sinon celui d'une nouvelle partie */
+export const playSize = (id: number, saved?: number) => {
+  const def = mapDef(id) ?? MAPS[0];
+  return saved !== undefined && def.sizes.includes(saved) ? saved : def.size;
+};
 /** Graine d'une nouvelle partie : chacune a son continent (`defaultSeed` ne sert plus qu'aux tests et en secours) */
 export const newSeed = () => Math.floor(Math.random() * 100000) + 1;
 
 /**
  * Relief du continent pour une graine, selon la version du générateur (`GEN` pour une nouvelle partie) : la version 1 garde
- * ses contrées à la même place, la version 2 les place selon le plan tiré de la graine
+ * ses contrées à la même place, la version 2 les place selon le plan tiré de la graine. `n` : côté de la carte (par défaut,
+ * celui d'une nouvelle partie)
  */
-export function genHeights(mapId: number, seed: number, gen = GEN): Float32Array {
-  const N = (mapDef(mapId) ?? MAPS[0]).size;
+export function genHeights(mapId: number, seed: number, gen = GEN, n = (mapDef(mapId) ?? MAPS[0]).size): Float32Array {
+  const N = n;
   const hts = new Float32Array((N + 1) * (N + 1));
   const s = new Simplex(seed);
   const s2 = new Simplex(seed * 7 + 13);
@@ -55,7 +64,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   world.seed = seed;
   world.gen = gen;
   const plan = gen === GEN_FIXED ? null : continentPlan(seed, gen), v3 = gen >= GEN_VAR;
-  const heights = genHeights(mapId, seed, gen);
+  const heights = genHeights(mapId, seed, gen, N);
   world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), cleared: new Uint8Array(N * N), rift: new Uint8Array(N * N), buildings: [], nextId: 1 });
   world.oil.fill(0);
   world.decorDone = false;

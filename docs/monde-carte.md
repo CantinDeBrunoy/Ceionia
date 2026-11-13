@@ -8,7 +8,7 @@
 La carte est une grille de `N × N` cases ; le relief est défini sur les `(N+1)²` sommets de cette grille. Chaque case porte des couches parallèles (route, végétation, bâtiment, décor…). Une seule carte est jouable, le « Continent » (`MAPS` dans `mapgen.ts`, 192 cases de côté), tiré d'une graine : relief, climat, forêts, lacs, grottes, pétrole et île du portail en découlent. Le joueur modifie ensuite le relief (sculpture, bâtiments qui aplanissent) ; seul le relief brut est sauvegardé, tout le reste de ce qui est « visuel » se recalcule.
 
 ## Règles du jeu
-- Taille : `MapDef.size` = 192 pour le Continent (`MAPS`). Id de carte `CONTINENT = 3` (numéro des sauvegardes d'origine ; une carte inconnue retombe sur lui dans `main.ts`).
+- Taille : `MapDef.size` = 192 pour une nouvelle partie du Continent (`MAPS`) ; `MapDef.sizes` = `[192, 320]`, les tailles qu'une sauvegarde peut avoir. Une partie garde la taille qui l'a créée : `playSize(carte, n de la sauvegarde)` (`mapgen.ts`) la donne à `setMapSize` dans `main.ts` › `start`. Id de carte `CONTINENT = 3` (numéro des sauvegardes d'origine ; une carte inconnue retombe sur lui dans `main.ts`).
 - Hauteurs : `MIN_H = -2.4`, `MAX_H = 16`, mer à `SEA = 0` (`world.ts`). Les pinceaux et le générateur écrêtent à ces bornes.
 - Repères d'altitude (`world.ts`) : `MOUNTAIN_H = 2.4` (on est « dans la montagne » : mine, carrière, club alpin), `TREE_LINE = 5.8` (plus d'arbres posés par le générateur au-dessus), `SNOW_LINE = [7, 8.2]` (neiges éternelles, fondu), `ALPINE_PEAK = 5.2` et `ALPINE_REACH = 7` (station de ski : un sommet d'au moins 5,2 à moins de 7 cases).
 - Aucun brouillard de guerre : toute la carte est visible dès le départ. La brume affichée est météo (`fogLevel` dans `main.ts`), voir [ciel-meteo.md](ciel-meteo.md).
@@ -33,7 +33,7 @@ Index d'une case : `ci(x, z) = z * N + x` ; d'un sommet : `vi(x, z) = z * (N + 1
 | `oil` | `Uint8Array` | gisements de pétrole |
 | `grazed`, `bloom` | `Float32Array` | vie sauvage, non sauvegardée |
 
-Le champ `World.n` vaut `N` à la construction. `N` et `VS` sont des `let` exportés : `setMapSize(n)` les change et doit être appelé **avant** de construire `World`, les vues, la caméra (`main.ts` le fait au démarrage, puis `syncChunks()` de `vegetation.ts`). Valeur par défaut `N = 96` : sans `setMapSize(192)`, un test échoue de façon obscure.
+Le champ `World.n` vaut `N` à la construction. `N` et `VS` sont des `let` exportés : `setMapSize(n)` les change et doit être appelé **avant** de construire `World`, les vues, la caméra (`main.ts` le fait au démarrage, avec la taille de la sauvegarde pour une partie reprise, puis `syncChunks()` de `vegetation.ts`). `genHeights(carte, graine, gen, n)` prend le côté en paramètre (`newWorld` passe `N`). Valeur par défaut `N = 96` : sans `setMapSize(192)`, un test échoue de façon obscure.
 
 Marqueurs de travail pour la vue : `terrainDirty` / `terrainRect` (`markTerrain`, `markTerrainAll`, `takeTerrainRect`), `vegDirty` / `vegRect` (`markVeg`), `roadsDirty`, `version` (toute modification structurelle ; la simulation et les ponts en dépendent), `visVersion` (relief affiché refait).
 
@@ -90,7 +90,7 @@ Le plan est un jeu de « contrées » `Zone { u, v, r, a, e }` (centre en part d
 - Les cartes d'avant (île, vallée, plateaux) n'existent plus ; `mapDef` renvoie `null`.
 
 ## Pour modifier
-- **Changer la taille** : `MAPS[0].size` ; vérifier `CH` dans `vegetation.ts` (tuiles de 32 au-delà de 128), `MAX_TORRENTS` et `keep` des lacs dans `streams.ts` (proportionnels à `N`), les tests (`setMapSize`). Les anciennes sauvegardes sont refusées (`d.n !== N`).
+- **Changer la taille** : `MAPS[0].size` (nouvelles parties), et l'ajouter à `MAPS[0].sizes` en gardant les anciennes tailles (sinon leurs sauvegardes sont refusées) ; vérifier `CH` dans `vegetation.ts` (tuiles de 32 au-delà de 128), `MAX_TORRENTS` et `keep` des lacs dans `streams.ts` (proportionnels à `N`), les tests (`setMapSize`, `tests/tailleCarte.test.ts`). Une sauvegarde d'une taille absente de `sizes` est refusée (`validate`, puis `d.n !== N` dans `fromJSON`).
 - **Nouvelle contrée ou nouvelle forme** : nouvelle version `GEN_xxx` dans `continent.ts`, branche dans `continentPlan` / `plannedHeight` / `fillClimate`, la valeur de `GEN`, `genHeights` et `newWorld` (étapes dépendantes de `v3`). Ne pas modifier `GEN_PLAN` (tests).
 - **Nouvelle couche par case** : champ dans `World`, `toJSON` / `fromJSON` avec valeur par défaut, `restore` si elle est dans les annulations (`Snapshot`), marqueur de rafraîchissement.
 - **Nouveau décor unique** : constante `VEG_xxx` (>= `VEG_CAVE` s'il est « spécial »), `vegFits`, `pick` dans `addDefaultDecor`, rendu dans `VegView.rebuildSpecial`.
