@@ -44,7 +44,7 @@ Une partie se sauve dans le `localStorage` du navigateur, en un seul JSON, **un 
 Le préfixe `village-lowpoly` est l'ancien nom du jeu : **ne pas le renommer** (les parties existantes disparaîtraient). `sessionStorage` : `village-lowpoly:autostart` (`AUTOSTART`) transmet « carte|continue » ou « carte|fresh|difficulté » d'un chargement de page au suivant.
 
 ### Lecture d'une sauvegarde
-1. `loadSlot(carte)` : `JSON.parse` puis `validate` ; toute exception rend `null`. `validate` exige `v === 1`, `map` numérique, `world.heights` tableau, une carte qui existe (`mapDef`) et `world.n === taille de la carte` ; sinon erreur lisible (« Sauvegarde d'une ancienne version (carte plus petite) », « …carte qui n'existe plus… »).
+1. `loadSlot(carte)` : `JSON.parse` puis `validate` ; toute exception rend `null`. `validate` exige `v === 1`, `map` numérique, `world.heights` tableau, une carte qui existe (`mapDef`) et `world.n` parmi les tailles connues (`MapDef.sizes`) ; sinon erreur lisible (« Sauvegarde d'une ancienne version (carte plus petite) », « …carte qui n'existe plus… »).
 2. Dans le constructeur de `Game` : `world.mapId/seed`, `world.fromJSON(save.world)`, `sim.age`, `sim.pop`, `time.seasonT`, `time.hour`, `addDefaultDecor(w, seed)` (rajoute grottes, failles, épaves et **gisements de pétrole** à une carte qui n'en a pas : c'est ainsi que les anciennes parties en reçoivent), `war.load(w.war)`. Si cela jette, `newWorld(…, graine par défaut)` : une partie neuve silencieuse.
 3. Réglages : `loadSettings()` puis ceux de la sauvegarde par-dessus.
 
@@ -69,7 +69,7 @@ Le préfixe `village-lowpoly` est l'ancien nom du jeu : **ne pas le renommer** (
 ## Pièges et invariants
 - **Ne jamais jeter une sauvegarde pour un champ inconnu ou manquant** : valeur par défaut, `filter` des identifiants connus, `Number.isFinite`. Un `throw` dans `fromJSON` après son premier test laisse un monde à moitié rempli (le repli `newWorld` repart d'un monde déjà touché).
 - Une sauvegarde illisible ou refusée par `validate` fait démarrer une **partie neuve** (le menu ne propose alors pas « Reprendre »), et la première sauvegarde automatique, 15 s plus tard, écrase l'ancienne. Aucun avertissement.
-- Un changement de **taille de carte** invalide toutes les sauvegardes (`world.n`) : les cartes sont déjà passées de 48 à 96 puis 192.
+- **Taille de carte** : une partie garde la sienne (`world.n`, relue avant de bâtir le monde : `playSize` dans `main.ts` › `start`). Agrandir la carte des nouvelles parties, c'est changer `MapDef.size` et ajouter la taille à `MapDef.sizes` sans retirer les anciennes. Les cartes de 48 et 96 d'autrefois restent refusées.
 - Les `id` de bâtiment ne sont pas stables d'une sauvegarde à l'autre : ne jamais en garder un dans un champ sauvegardé sans le convertir en rang (voir `lines`).
 - Les paires et tuples sont positionnels : ajouter une valeur **à la fin** d'un tuple (comme le 7e élément `small` des bâtiments), jamais au milieu.
 - Quota : le `localStorage` fait environ 5 Mo ; la sauvegarde d'un grand village approche-t-elle de cette limite ? À vérifier.
