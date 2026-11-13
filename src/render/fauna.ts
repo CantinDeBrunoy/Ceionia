@@ -1,7 +1,7 @@
 import { penHerds, HerdKind } from '../sim/missions';
 import { claimArrival } from './pens';
 import * as THREE from 'three';
-import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO, VEG_CAVE } from '../world/world';
+import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO, VEG_CAVE, VEG_FOREST } from '../world/world';
 import { KINDS, sizeOf } from '../build/catalog';
 import { hash2, mulberry32 } from '../core/rng';
 import { Parts } from './parts';
@@ -426,6 +426,29 @@ const SPECS: Record<Kind, Spec> = {
   butterfly: { geo: butterflyGeo, max: 64, colors: [0xf7d24c, 0xf29ab4, 0xffffff, 0x9fc8f0, 0xf09a50], speed: 0, idle: [1, 1], ok: any, flap: [26, 1.3, 0.003] },
 };
 const KIND_LIST = Object.keys(SPECS) as Kind[];
+
+/**
+ * Milieu de vie des bêtes sauvages : les biomes où elles vont (et, pour `open`, jamais sous les arbres d'une forêt). Il est
+ * vérifié à chaque pas (`ok`), pas seulement au choix du domaine : sinon un cerf d'une lisière tempérée partait brouter ou
+ * boire dans le désert voisin, et un éléphant des lisières s'enfonçait dans la forêt
+ */
+const HABITAT: Partial<Record<Kind, { biomes: number[]; open?: boolean }>> = {
+  deer: { biomes: [BIOME_TEMPERATE, BIOME_TAIGA, BIOME_MARSH] },
+  moose: { biomes: [BIOME_TAIGA, BIOME_MARSH] },
+  fox: { biomes: [BIOME_TEMPERATE, BIOME_TAIGA, BIOME_MARSH] },
+  wolf: { biomes: [BIOME_TEMPERATE, BIOME_TAIGA] },
+  elephant: { biomes: [BIOME_TROPICAL], open: true },
+  giraffe: { biomes: [BIOME_TROPICAL], open: true },
+  camel: { biomes: [BIOME_DESERT], open: true },
+  lizard: { biomes: [BIOME_DESERT, BIOME_TROPICAL] },
+  croc: { biomes: [BIOME_MARSH, BIOME_TROPICAL, BIOME_DESERT] },
+};
+for (const [k, h] of Object.entries(HABITAT) as [Kind, { biomes: number[]; open?: boolean }][]) {
+  const base = SPECS[k].ok;
+  SPECS[k].ok = (w, cx, cz) => base(w, cx, cz) && h.biomes.includes(w.biome[w.ci(cx, cz)]) && !(h.open && w.veg[w.ci(cx, cz)] === VEG_FOREST);
+}
+/** La case convient-elle à l'espèce (sol, et milieu de vie pour les bêtes sauvages) ? */
+export const habitatOk = (w: World, k: Kind, cx: number, cz: number) => SPECS[k].ok(w, cx, cz);
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
 const PROCEDURAL = new Set<Kind>(['bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'shark']);
 
@@ -437,13 +460,13 @@ const ALL_BIOMES = [BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, 
 export const ZONES: Zone[] = [
   // désert : lézards sur les rochers, chameaux aux lisières des oasis (cactus, palmiers)
   { kind: 'lizard', biomes: [BIOME_DESERT, BIOME_TROPICAL], anchors: ['rocks', 'edge'], per: 10, max: 6, n: (i) => 2 + (i % 2), radius: 1.3, salt: 300 },
-  { kind: 'camel', biomes: [BIOME_DESERT], anchors: ['edge', 'meadow'], per: 60, max: 4, n: (i) => 2 + (i % 2), radius: 2.6, salt: 310 },
+  { kind: 'camel', biomes: [BIOME_DESERT], anchors: ['meadow', 'edge'], per: 60, max: 4, n: (i) => 2 + (i % 2), radius: 2.6, salt: 310 },
   // marais, fleuves et lacs : crocodiles sur les berges, tortues au bord des mares
   { kind: 'croc', biomes: [BIOME_MARSH, BIOME_TROPICAL, BIOME_DESERT], anchors: ['banks'], per: 40, max: 3, n: () => 1, radius: 1.4, salt: 320 },
   { kind: 'turtle', biomes: [BIOME_MARSH, BIOME_TROPICAL, BIOME_TEMPERATE, BIOME_DESERT], anchors: ['ponds', 'banks'], per: 14, max: 5, n: (i) => 1 + (i % 2), radius: 1.1, salt: 330 },
   // savane et plaines chaudes : éléphants et girafes à l'ombre des arbres
-  { kind: 'elephant', biomes: [BIOME_TROPICAL], anchors: ['edge', 'meadow'], per: 60, max: 3, n: (i) => 2 + (i % 2), radius: 3, salt: 340 },
-  { kind: 'giraffe', biomes: [BIOME_TROPICAL], anchors: ['edge', 'meadow'], per: 55, max: 3, n: (i) => 2 + (i % 2), radius: 3, salt: 350 },
+  { kind: 'elephant', biomes: [BIOME_TROPICAL], anchors: ['meadow', 'edge'], per: 60, max: 3, n: (i) => 2 + (i % 2), radius: 3, salt: 340 },
+  { kind: 'giraffe', biomes: [BIOME_TROPICAL], anchors: ['meadow', 'edge'], per: 55, max: 3, n: (i) => 2 + (i % 2), radius: 3, salt: 350 },
   // taïga : élans aux lisières ; forêts tempérées : une petite meute de loups
   { kind: 'moose', biomes: [BIOME_TAIGA], anchors: ['edge'], per: 45, max: 5, n: (i) => 1 + (i % 2), radius: 2.8, salt: 360 },
   { kind: 'wolf', biomes: [BIOME_TEMPERATE], anchors: ['edge'], per: 140, max: 1, n: (i) => 3 + (i % 2), radius: 3, salt: 370 },
@@ -827,6 +850,8 @@ export class Fauna {
         const out = list.filter((k) => Math.hypot((k % N) + 0.5 - vc0[0], Math.floor(k / N) + 0.5 - vc0[1]) >= far);
         list = out;
       }
+      // seulement les cases de son milieu (un éléphant ne s'installe pas sous les arbres de la lisière)
+      if (HABITAT[kind]) list = list.filter((k) => SPECS[kind].ok(w, k % N, Math.floor(k / N)));
       if (!list.length) return;
       const set = new Set(list);
       for (let i = 0; i < count; i++) {
@@ -1067,7 +1092,8 @@ export class Fauna {
     // sur l'eau libre, un visiteur sur deux est un groupe de dauphins (un banc de poissons, sous la surface, se voit mal)
     if (wet && this.visitSerial % 2 === 0 && [[3, 0], [-3, 0], [0, 3], [0, -3]].every(([dx, dz]) => water(w, Math.floor(best![0] + dx), Math.floor(best![1] + dz)))) kind = 'dolphin';
     if (!wet) {
-      const list = NEARBY[w.biome[w.ci(Math.floor(best[0]), Math.floor(best[1]))]].filter((k) => this.shows(k) && nearbyAllowed(k, this.lastAge));
+      const bx = Math.floor(best[0]), bz = Math.floor(best[1]);
+      const list = NEARBY[w.biome[w.ci(bx, bz)]].filter((k) => this.shows(k) && nearbyAllowed(k, this.lastAge) && SPECS[k].ok(w, bx, bz));
       if (!list.length) return;
       kind = list[this.visitSerial % list.length];
     }

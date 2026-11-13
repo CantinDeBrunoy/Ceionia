@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
 import { World, N, setMapSize, VEG_CAVE, VEG_FOREST, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
-import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA, COAST_REACH, nearbyAllowed } from '../src/render/fauna';
+import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA, COAST_REACH, nearbyAllowed, habitatOk } from '../src/render/fauna';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { hash2 } from '../src/core/rng';
@@ -19,6 +19,24 @@ describe('faune : rattachement au décor', () => {
     expect(speciesIn(BIOME_TAIGA)).not.toContain('camel');
     expect(speciesIn(BIOME_DESERT)).not.toContain('elephant');
     for (const b of [0, 1, 2, 3, 4]) expect(speciesIn(b)).toContain('crab');
+  });
+
+  it('chaque bête sauvage reste dans son milieu : ni cerf au désert, ni éléphant sous les arbres', () => {
+    const w = new World();
+    w.heights.fill(1);
+    w.computeBiomes();
+    // moitié ouest tempérée, moitié est désertique ; une forêt tropicale au sud
+    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) w.biome[w.ci(x, z)] = z > 70 ? BIOME_TROPICAL : x < N / 2 ? BIOME_TEMPERATE : BIOME_DESERT;
+    for (let z = 80; z < 90; z++) for (let x = 10; x < 20; x++) w.veg[w.ci(x, z)] = VEG_FOREST;
+    expect(habitatOk(w, 'deer', 10, 10)).toBe(true);
+    expect(habitatOk(w, 'deer', 70, 10)).toBe(false);
+    expect(habitatOk(w, 'camel', 70, 10)).toBe(true);
+    expect(habitatOk(w, 'camel', 10, 10)).toBe(false);
+    expect(habitatOk(w, 'elephant', 40, 80)).toBe(true);
+    expect(habitatOk(w, 'elephant', 15, 85)).toBe(false);
+    expect(habitatOk(w, 'elephant', 10, 10)).toBe(false);
+    // le lapin, lui, va partout
+    expect(habitatOk(w, 'rabbit', 70, 10)).toBe(true);
   });
 
   it('chaque zone est rattachée à un élément du décor', () => {
