@@ -132,6 +132,64 @@ class Rig {
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
     this.geos.push(g);
   }
+  /**
+   * Coque tendue sur des anneaux (corps, trompe, pattes) : l'axe passe par les centres, chaque anneau (demi-largeur `rx`,
+   * demi-hauteur `ry`, perpendiculaire à l'axe) suit son os ou deux os à parts égales (jointure qui plie sans se casser) ;
+   * longues facettes comme celles des modèles du pack ; dégradé du dessous (`color`) au dessus (`top`) sur la hauteur
+   * `range`, chaque face un peu nuancée (`mottle`), bandes plus sombres entre deux anneaux (`band`, rides) ; bouts fermés
+   */
+  loft(rings: { c: V3; rx: number; ry: number; bone: string | [string, string] }[], sides: number, color: number, top: number,
+    o: { range?: [number, number]; mottle?: number; band?: (i: number) => number; seed?: number; phase?: number } = {}) {
+    const rnd = mulberry32(o.seed ?? 7), ph = o.phase ?? Math.PI / sides;
+    const pts: THREE.Vector3[][] = [], C = rings.map((r) => new THREE.Vector3(...r.c));
+    rings.forEach((r, i) => {
+      const d = C[Math.min(i + 1, C.length - 1)].clone().sub(C[Math.max(i - 1, 0)]).normalize();
+      const ex = new THREE.Vector3(1, 0, 0).addScaledVector(d, -d.x).normalize(), ey = new THREE.Vector3().crossVectors(d, ex);
+      const ring: THREE.Vector3[] = [];
+      for (let k = 0; k < sides; k++) {
+        const a = ph + (k / sides) * TAU;
+        ring.push(C[i].clone().addScaledVector(ex, r.rx * Math.cos(a)).addScaledVector(ey, r.ry * Math.sin(a)));
+      }
+      pts.push(ring);
+    });
+    let [lo, hi] = o.range ?? [Infinity, -Infinity];
+    if (!o.range) for (const ring of pts) for (const p of ring) { lo = Math.min(lo, p.y); hi = Math.max(hi, p.y); }
+    const pos: number[] = [], col: number[] = [], si: number[] = [], sw: number[] = [];
+    const ids = rings.map((r) => (Array.isArray(r.bone) ? r.bone : [r.bone]).map((b) => this.idx(b)));
+    _ca.setHex(color); _cb.setHex(top);
+    const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, ia: number, ib: number, ic: number, mid: THREE.Vector3, k: number) => {
+      // face tournée vers l'extérieur
+      const n = _w.subVectors(b, a).cross(_v.subVectors(c, a));
+      if (n.dot(_v.subVectors(a, mid)) < 0) { [b, c] = [c, b]; [ib, ic] = [ic, ib]; }
+      const t = smooth(((a.y + b.y + c.y) / 3 - lo) / Math.max(1e-6, hi - lo) * 1.3 - 0.15), m = k * (1 + (o.mottle ?? 0) * (rnd() * 2 - 1));
+      for (const [p, ri] of [[a, ia], [b, ib], [c, ic]] as [THREE.Vector3, number][]) {
+        pos.push(p.x, p.y, p.z);
+        col.push((_ca.r + (_cb.r - _ca.r) * t) * m, (_ca.g + (_cb.g - _ca.g) * t) * m, (_ca.b + (_cb.b - _ca.b) * t) * m);
+        const b2 = ids[ri];
+        for (let q = 0; q < 4; q++) { si.push(b2[q] ?? 0); sw.push(q < b2.length ? 1 / b2.length : 0); }
+      }
+    };
+    for (let i = 0; i + 1 < rings.length; i++) {
+      const mid = C[i].clone().add(C[i + 1]).multiplyScalar(0.5), k = o.band?.(i) ?? 1;
+      for (let j = 0; j < sides; j++) {
+        const j2 = (j + 1) % sides, a = pts[i][j], b = pts[i][j2], c = pts[i + 1][j2], d = pts[i + 1][j];
+        tri(a, b, c, i, i, i + 1, mid, k);
+        tri(a, c, d, i, i + 1, i + 1, mid, k);
+      }
+    }
+    // bouts fermés : un éventail vers le centre de l'anneau, un peu en retrait de l'axe
+    for (const [i, nb] of [[0, 1], [rings.length - 1, rings.length - 2]]) {
+      const tip = C[i].clone().addScaledVector(C[i].clone().sub(C[nb]).normalize(), Math.min(rings[i].rx, rings[i].ry) * 0.5);
+      const mid = C[i].clone().lerp(C[nb], 0.5);
+      for (let j = 0; j < sides; j++) tri(pts[i][j], pts[i][(j + 1) % sides], tip, i, i, i, mid, o.band?.(Math.min(i, rings.length - 2)) ?? 1);
+    }
+    const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    this.geos.push(g);
+  }
   /** la même pièce des deux côtés (s = 1 côté gauche +x, s = -1 côté droit), os nommés `${nom}L` / `${nom}R` si `side` */
   both(fn: (s: number, L: string) => void) { fn(1, 'L'); fn(-1, 'R'); }
 
@@ -446,79 +504,140 @@ function bear(c: Coat): { rig: Rig; clips: ClipDef[] } {
 // ---------- Éléphant ----------
 
 const ELEPHANT_COATS: Coat[] = [
-  { skin: 0x908e94, top: 0xaaa8ae, dark: 0x747278, ear: 0xa48c90, tusk: 0xf2ead2, nail: 0xd8d0c0, tuft: 0x2e2a2a },
-  { skin: 0x84807e, top: 0x9e9894, dark: 0x6a6664, ear: 0x9a8282, tusk: 0xeee2c4, nail: 0xd0c6b4, tuft: 0x262222 },
-  { skin: 0x9c968e, top: 0xb4aea6, dark: 0x7e7872, ear: 0xb09a96, tusk: 0xf4ecd8, nail: 0xdcd4c4, tuft: 0x302c2a },
+  // gris de savane, gris rougi de poussière de latérite, gris ardoise
+  { skin: 0x8a8682, top: 0xa49e98, dark: 0x5e5a58, ear: 0xa88a86, vein: 0x8a6e6c, tusk: 0xeee4c8, nail: 0xd4cab4, tuft: 0x2a2624, eye: 0x1c1410 },
+  { skin: 0x8e7e72, top: 0xaa9684, dark: 0x625650, ear: 0xae8e84, vein: 0x8c6c64, tusk: 0xeadcbc, nail: 0xd0c2a8, tuft: 0x2a2220, eye: 0x1c1410 },
+  { skin: 0x726f72, top: 0x8e8a8c, dark: 0x4c4a4e, ear: 0x9a8084, vein: 0x7a6266, tusk: 0xf2eada, nail: 0xd8d0c0, tuft: 0x221e1e, eye: 0x161010 },
 ];
 
+/** Contour de l'oreille d'éléphant (vue de côté : `x` vers l'arrière depuis la charnière, `y` vers le haut), en forme de carte d'Afrique */
+const EAR_OUTLINE: [number, number][] = [
+  [0, 0.026], [0.03, 0.036], [0.062, 0.03], [0.086, 0.01], [0.094, -0.02], [0.09, -0.052], [0.078, -0.08],
+  [0.06, -0.1], [0.044, -0.122], [0.03, -0.128], [0.018, -0.11], [0.012, -0.08], [0.004, -0.05], [-0.004, -0.014],
+];
+/** plaque plate du contour, réduite de `k` vers son centre, épaisse de `d` (le long de +x une fois posée) */
+function earPlate(k: number, d: number) {
+  const sh = new THREE.Shape(), cx = 0.045, cy = -0.045;
+  EAR_OUTLINE.forEach(([x, y], i) => { const px = cx + (x - cx) * k, py = cy + (y - cy) * k; if (i) sh.lineTo(px, py); else sh.moveTo(px, py); });
+  // la forme est tracée dans le plan (x, y) et épaissie selon z : on la couche dans le plan (z, y), l'arrière vers -z
+  return new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false, curveSegments: 1 }).rotateY(Math.PI / 2);
+}
+
 /**
- * Éléphant : masse grise au dos voûté, grandes oreilles qui battent, trompe en trois segments annelés, défenses ivoire
- * recourbées, pattes en piliers aux ongles clairs, queue à toupet ; marche lente et ample, charge oreilles déployées
- * trompe levée, cueille l'herbe de la trompe et la porte à la bouche, barrit
+ * Éléphant : une seule coque du croupion au poitrail (garrot haut, léger creux des reins, croupe ronde, ventre plus
+ * sombre), tête au front bombé qui se prolonge en une trompe continue, ridée de bandes et recourbée au bout ; grandes
+ * oreilles plates en forme de carte d'Afrique (dos gris, intérieur rosé veiné) qui battent ; défenses ivoire qui sortent de
+ * gaines de peau ; pattes en colonnes qui s'évasent au pied, ridées aux chevilles, ongles clairs ; peau nuancée face par
+ * face ; queue à toupet. Marche lente et ample, charge oreilles déployées trompe levée, cueille l'herbe de la trompe et
+ * la porte à la bouche, barrit
  */
 function elephant(c: Coat): { rig: Rig; clips: ClipDef[] } {
   const r = new Rig();
-  r.bone('hips', null, 0, 0.18, -0.05);
-  r.bone('chest', 'hips', 0, 0.19, 0.04);
-  r.bone('ribs', 'chest', 0, 0.19, 0.04);
-  r.bone('neck', 'chest', 0, 0.21, 0.1);
-  r.bone('head', 'neck', 0, 0.215, 0.12);
-  r.bone('jaw', 'head', 0, 0.168, 0.15);
-  const t0: V3 = [0, 0.18, 0.188], t1: V3 = [0, 0.118, 0.198], t2: V3 = [0, 0.062, 0.2], t3: V3 = [0, 0.024, 0.192];
-  r.bone('trunk1', 'head', ...t0);
-  r.bone('trunk2', 'trunk1', ...t1);
-  r.bone('trunk3', 'trunk2', ...t2);
-  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.042, 0.232, 0.132));
-  r.bone('tail1', 'hips', 0, 0.21, -0.125);
+  r.bone('hips', null, 0, 0.19, -0.05);
+  r.bone('chest', 'hips', 0, 0.2, 0.04);
+  r.bone('ribs', 'chest', 0, 0.2, 0.0);
+  r.bone('neck', 'chest', 0, 0.225, 0.1);
+  r.bone('head', 'neck', 0, 0.232, 0.122);
+  r.bone('jaw', 'head', 0, 0.18, 0.158);
+  r.bone('trunk1', 'head', 0, 0.192, 0.19);
+  r.bone('trunk2', 'trunk1', 0, 0.128, 0.203);
+  r.bone('trunk3', 'trunk2', 0, 0.07, 0.206);
+  r.both((s, L) => r.bone(`e${L}`, 'head', s * 0.04, 0.236, 0.134));
+  r.bone('tail1', 'hips', 0, 0.238, -0.148);
   r.both((s, L) => {
-    r.bone(`f${L}1`, 'chest', s * 0.044, 0.16, 0.072);
-    r.bone(`f${L}2`, `f${L}1`, s * 0.044, 0.088, 0.072);
-    r.bone(`h${L}1`, 'hips', s * 0.044, 0.165, -0.078);
-    r.bone(`h${L}2`, `h${L}1`, s * 0.044, 0.088, -0.08);
+    r.bone(`f${L}1`, 'chest', s * 0.046, 0.17, 0.066);
+    r.bone(`f${L}2`, `f${L}1`, s * 0.046, 0.09, 0.068);
+    r.bone(`h${L}1`, 'hips', s * 0.046, 0.175, -0.088);
+    r.bone(`h${L}2`, `h${L}1`, s * 0.046, 0.09, -0.092);
   });
+  const mot = { mottle: 0.045 };
 
-  // corps : croupe tombante, torse (qui respire), échine saillante, ventre plus sombre
-  r.add('hips', ell(0.068, 0.076, 0.08), [0, 0.186, -0.055], c.dark, [0, 0, 0], c.top);
-  r.add('ribs', ell(0.074, 0.082, 0.088), [0, 0.192, 0.035], c.dark, [0, 0, 0], c.top);
-  r.add('chest', ell(0.046, 0.03, 0.08), [0, 0.252, 0.02], c.skin, [0.1, 0, 0], c.top);
-  // tête : front bombé, bosses du crâne, yeux, bouche
-  r.add('neck', ell(0.052, 0.058, 0.036), [0, 0.205, 0.11], c.dark, [0, 0, 0], c.skin);
-  r.add('head', ell(0.048, 0.054, 0.046), [0, 0.218, 0.15], c.dark, [0, 0, 0], c.top);
-  r.both((s) => r.add('head', ell(0.022, 0.02, 0.02), [s * 0.018, 0.255, 0.16], c.top));
-  r.both((s) => r.add('head', ell(0.005, 0.005, 0.004, 0), [s * 0.038, 0.218, 0.172], 0x161212));
-  r.add('jaw', ell(0.022, 0.012, 0.024, 0), [0, 0.16, 0.162], c.dark);
-  r.add('jaw', ell(0.014, 0.006, 0.012, 0), [0, 0.162, 0.182], 0xa87a78);
-  // défenses : deux segments, vers l'avant puis vers le haut
+  // corps d'une pièce : croupe ronde, creux des reins, garrot haut, poitrail ; échine en arête (un sommet en haut)
+  const body: { c: V3; rx: number; ry: number; bone: string | [string, string] }[] = [
+    { c: [0, 0.218, -0.156], rx: 0.03, ry: 0.034, bone: 'hips' },
+    { c: [0, 0.214, -0.142], rx: 0.058, ry: 0.06, bone: 'hips' },
+    { c: [0, 0.204, -0.112], rx: 0.074, ry: 0.079, bone: 'hips' },
+    { c: [0, 0.198, -0.062], rx: 0.08, ry: 0.08, bone: 'hips' },
+    { c: [0, 0.197, -0.015], rx: 0.082, ry: 0.085, bone: ['hips', 'ribs'] },
+    { c: [0, 0.202, 0.03], rx: 0.08, ry: 0.09, bone: 'ribs' },
+    { c: [0, 0.208, 0.07], rx: 0.071, ry: 0.084, bone: 'chest' },
+    { c: [0, 0.218, 0.098], rx: 0.055, ry: 0.066, bone: 'chest' },
+    { c: [0, 0.226, 0.118], rx: 0.044, ry: 0.052, bone: 'neck' },
+  ];
+  r.loft(body, 10, c.dark, c.top, { ...mot, range: [0.13, 0.29], seed: 11, phase: Math.PI / 2 });
+
+  // tête et trompe d'une pièce : crâne, front bombé, face qui plonge vers la trompe, trompe effilée recourbée au bout
+  const head: { c: V3; rx: number; ry: number; bone: string | [string, string] }[] = [
+    { c: [0, 0.238, 0.112], rx: 0.036, ry: 0.04, bone: 'head' },
+    { c: [0, 0.242, 0.13], rx: 0.048, ry: 0.052, bone: 'head' },
+    { c: [0, 0.236, 0.152], rx: 0.049, ry: 0.054, bone: 'head' },
+    { c: [0, 0.22, 0.174], rx: 0.041, ry: 0.046, bone: 'head' },
+    { c: [0, 0.196, 0.188], rx: 0.03, ry: 0.032, bone: ['head', 'trunk1'] },
+    { c: [0, 0.168, 0.197], rx: 0.024, ry: 0.025, bone: 'trunk1' },
+    { c: [0, 0.146, 0.201], rx: 0.021, ry: 0.022, bone: 'trunk1' },
+    { c: [0, 0.126, 0.203], rx: 0.019, ry: 0.02, bone: ['trunk1', 'trunk2'] },
+    { c: [0, 0.104, 0.205], rx: 0.017, ry: 0.018, bone: 'trunk2' },
+    { c: [0, 0.084, 0.206], rx: 0.0155, ry: 0.016, bone: 'trunk2' },
+    { c: [0, 0.068, 0.206], rx: 0.014, ry: 0.0145, bone: ['trunk2', 'trunk3'] },
+    { c: [0, 0.048, 0.207], rx: 0.0128, ry: 0.013, bone: 'trunk3' },
+    { c: [0, 0.03, 0.211], rx: 0.0118, ry: 0.012, bone: 'trunk3' },
+    { c: [0, 0.019, 0.221], rx: 0.011, ry: 0.0105, bone: 'trunk3' },
+    { c: [0, 0.016, 0.232], rx: 0.0105, ry: 0.0095, bone: 'trunk3' },
+  ];
+  // rides de la trompe : une bande sur deux un peu plus sombre
+  r.loft(head, 10, c.dark, c.top, { ...mot, range: [0.02, 0.29], seed: 12, phase: Math.PI / 2, band: (i) => (i >= 5 && i % 2 ? 0.86 : 1) });
+  // bouche : lèvre inférieure rose sombre sous la trompe
+  r.add('jaw', ell(0.017, 0.01, 0.017, 0), [0, 0.176, 0.176], c.dark);
+  r.add('jaw', ell(0.009, 0.004, 0.008, 0), [0, 0.18, 0.184], 0x6e4a4a);
+  // yeux petits, enfoncés dans un repli de peau plus sombre
   r.both((s) => {
-    const a: V3 = [s * 0.02, 0.168, 0.176], b: V3 = [s * 0.025, 0.148, 0.222], tip: V3 = [s * 0.03, 0.158, 0.25];
-    r.put('head', seg(a, b, 0.0075, 0.0055), c.tusk);
-    r.put('head', seg(b, tip, 0.0055, 0.0012), c.tusk);
+    r.add('head', ell(0.004, 0.009, 0.012, 0), [s * 0.044, 0.226, 0.166], c.dark, [0, 0, -s * 0.25]);
+    r.add('head', ell(0.004, 0.0055, 0.0065, 0), [s * 0.046, 0.227, 0.168], c.eye, [0, 0, -s * 0.25]);
   });
-  // trompe annelée, narines au bout
-  r.put('trunk1', seg(t0, t1, 0.023, 0.018, 7), c.skin);
-  r.put('trunk2', seg(t1, t2, 0.018, 0.013, 7), c.skin);
-  r.put('trunk3', seg(t2, t3, 0.013, 0.011, 6), c.skin);
-  for (const [b, p, q, rr] of [['trunk1', t0, t1, 0.023], ['trunk2', t1, t2, 0.018], ['trunk3', t2, t3, 0.013]] as [string, V3, V3, number][])
-    for (const f of [0.3, 0.55, 0.8]) r.put(b, seg(along(p, q, f), along(p, q, f + 0.04), rr * 1.03, rr * 1.02, 7), c.dark);
-  r.add('trunk3', ell(0.013, 0.006, 0.013, 0), [0, 0.022, 0.191], c.dark);
-  // grandes oreilles : face externe grise, face interne rosée
-  r.both((s, L) => {
-    r.add(`e${L}`, ell(0.006, 0.068, 0.056), [s * 0.06, 0.205, 0.105], c.skin, [0, -s * 0.5, 0], c.top);
-    r.add(`e${L}`, ell(0.004, 0.056, 0.046), [s * 0.056, 0.205, 0.11], c.ear, [0, -s * 0.5, 0]);
+  // défenses : gaine de peau, puis ivoire vers l'avant, vers le bas puis relevé, pointes un peu rentrées
+  r.both((s) => {
+    const a: V3 = [s * 0.024, 0.19, 0.18], b: V3 = [s * 0.026, 0.168, 0.2], m: V3 = [s * 0.025, 0.152, 0.224], tip: V3 = [s * 0.018, 0.158, 0.252];
+    r.put('head', seg([s * 0.022, 0.198, 0.172], a, 0.011, 0.0095, 7), c.skin);
+    r.put('head', seg(a, b, 0.0078, 0.007, 6), c.tusk);
+    r.put('head', seg(b, m, 0.007, 0.0055, 6), c.tusk);
+    r.put('head', seg(m, tip, 0.0055, 0.001, 6), c.tusk);
   });
-  // queue à toupet
-  r.put('tail1', seg([0, 0.21, -0.125], [0, 0.135, -0.15], 0.006, 0.004, 5), c.skin);
-  r.add('tail1', ell(0.007, 0.016, 0.007, 0), [0, 0.128, -0.152], c.tuft);
-  // pattes en piliers, pieds ronds aux ongles clairs
+  // grandes oreilles plates : dos gris, intérieur rosé veiné, tenues un peu écartées du cou
   r.both((s, L) => {
-    const x = s * 0.044;
-    r.add(`f${L}1`, ell(0.034, 0.05, 0.04), [x, 0.15, 0.07], c.dark, [0, 0, 0], c.skin);
-    r.put(`f${L}2`, seg([x, 0.092, 0.072], [x, 0.012, 0.072], 0.028, 0.031, 8), c.dark);
-    r.add(`h${L}1`, ell(0.036, 0.056, 0.046), [x, 0.15, -0.075], c.dark, [0, 0, 0], c.skin);
-    r.put(`h${L}2`, seg([x, 0.092, -0.08], [x, 0.012, -0.08], 0.027, 0.03, 8), c.dark);
-    for (const [b, z] of [[`f${L}2`, 0.072], [`h${L}2`, -0.08]] as [string, number][]) {
-      r.put(b, seg([x, 0, z], [x, 0.014, z], 0.034, 0.032, 8), c.dark);
-      for (const i of [-1, 0, 1]) r.add(b, ell(0.007, 0.006, 0.004, 0), [x + i * 0.014, 0.006, z + 0.031], c.nail);
+    // les plaques couvrent x de 0 à leur épaisseur : le dos gris vers l'extérieur, l'intérieur rosé tourné vers la tête
+    const hinge: V3 = [s * 0.04, 0.236, 0.134], rot: V3 = [0, -s * 0.62, s * 0.12];
+    const back = earPlate(1, 0.005), inner = earPlate(0.86, 0.002);
+    if (s > 0) inner.translate(-0.002, 0, 0); else back.translate(-0.005, 0, 0);
+    r.add(`e${L}`, back, hinge, c.skin, rot, c.top);
+    r.add(`e${L}`, inner, hinge, c.ear, rot);
+    // veines sombres sur l'intérieur
+    for (const [a, b] of [[[0.012, -0.004], [0.05, -0.03]], [[0.01, -0.02], [0.036, -0.075]], [[0.05, -0.03], [0.072, -0.06]]] as [number, number][][]) {
+      const v = new THREE.BoxGeometry(0.0012, 0.0022, Math.hypot(b[0] - a[0], b[1] - a[1]));
+      v.rotateX(Math.atan2(b[1] - a[1], b[0] - a[0])).translate(s > 0 ? -0.0026 : 0.0026, (a[1] + b[1]) / 2, -(a[0] + b[0]) / 2);
+      r.add(`e${L}`, v, hinge, c.vein, rot);
+    }
+  });
+  // queue fine qui pend, toupet sombre
+  r.put('tail1', seg([0, 0.24, -0.15], [0, 0.19, -0.166], 0.0065, 0.004, 5), c.skin);
+  r.put('tail1', seg([0, 0.19, -0.166], [0, 0.152, -0.168], 0.004, 0.003, 5), c.skin);
+  r.add('tail1', ell(0.006, 0.016, 0.006, 0), [0, 0.146, -0.168], c.tuft);
+  // pattes en colonnes : cuisse cachée dans le corps, genou, canon qui s'évase au pied, rides aux chevilles, ongles
+  r.both((s, L) => {
+    const x = s * 0.046;
+    for (const [u, z, w] of [['f', 0.067, 1], ['h', -0.09, 1.1]] as [string, number, number][]) {
+      const b1 = `${u}${L}1`, b2 = `${u}${L}2`, top = u === 'f' ? 0.2 : 0.21;
+      r.loft([
+        // le haut de la cuisse s'affine dans le corps : l'épaule et la hanche se fondent dans la coque
+        { c: [x * 0.8, top, z], rx: 0.016 * w, ry: 0.028 * w, bone: b1 },
+        { c: [x, 0.15, z], rx: 0.031 * w, ry: 0.037 * w, bone: b1 },
+        { c: [x, 0.118, z + 0.001], rx: 0.028, ry: 0.031, bone: b1 },
+        { c: [x, 0.09, z + 0.002], rx: 0.0255, ry: 0.0275, bone: [b1, b2] },
+        { c: [x, 0.058, z + 0.002], rx: 0.0245, ry: 0.026, bone: b2 },
+        { c: [x, 0.03, z + 0.002], rx: 0.026, ry: 0.0275, bone: b2 },
+        { c: [x, 0.012, z + 0.002], rx: 0.029, ry: 0.03, bone: b2 },
+        { c: [x, 0.001, z + 0.002], rx: 0.03, ry: 0.031, bone: b2 },
+      ], 9, c.dark, c.skin, { ...mot, range: [0.0, 0.2], seed: u === 'f' ? 13 + s : 17 + s, band: (i) => (i === 4 || i === 5 ? 0.88 : 1) });
+      for (const i of [-1.2, 0, 1.2]) r.add(b2, ell(0.0085, 0.007, 0.005, 0), [x + i * 0.0125, 0.0065, z + 0.002 + 0.028 * Math.cos(i * 0.4)], c.nail, [0, i * 0.4, 0]);
     }
   });
 
