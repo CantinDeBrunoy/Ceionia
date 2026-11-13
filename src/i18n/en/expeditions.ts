@@ -197,6 +197,8 @@ registerDict('expeditions', {
   '{n} à bord': '{n} on board',
   'Voyageurs arrivés :': 'Passengers arrived:',
   'Suivre le train': 'Follow the train',
+  'Nouvelle ligne :': 'New line:',
+  'choisissez une gare, puis « Nouvelle ligne ».': 'pick a station, then “New line”.',
   'Choisissez une ligne et suivez le train jusqu’à sa destination.': 'Pick a line and follow the train to its destination.',
   'à quai à {name}, attend que le quai de {next} se libère': 'at the platform at {name}, waiting for the platform at {next} to clear',
   'à quai à {name}': 'at the platform at {name}',

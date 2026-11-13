@@ -346,3 +346,33 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 #railEdit .acts button.primary:disabled { background: rgba(240, 200, 110, 0.35); color: rgba(74, 48, 16, 0.5); }
 #railEdit kbd { padding: 1px 6px; border-radius: 6px; border: 1px solid rgba(200, 160, 95, 0.7); background: #FFFDF6; font: 600 11px/1.5 var(--fL, inherit); color: var(--hInk2); }
 @media (max-width: 600px) { #railEdit .acts { flex-wrap: wrap; } #railEdit::before { width: 70%; } #railEdit kbd { display: none; } }
+
+/* ---------- Expéditions › Chemin de fer, d'après la maquette de l'auteur : train peint et titre en Fraunces ; une carte par
+   ligne, de la famille des cartes de mission (l'îlot de la ligne à cheval sur le bord gauche), la couleur de la ligne en
+   pastille, les voyageurs en capsule, « Suivre le train » en or ; dessous, une carte en pointillé pour tracer une ligne ---------- */
+.rlTop { gap: 14px; margin: 6px 0 18px; }
+.rlTop > img.pic { width: 58px; height: 58px; filter: drop-shadow(0 3px 4px rgba(80, 50, 15, 0.25)); }
+.rlTop h4 { font-family: var(--hSerif); font-weight: 800; font-size: 28px; color: var(--hInk); font-variation-settings: 'SOFT' 30, 'opsz' 72; }
+.rlTop p { color: var(--hInk); }
+.rlList { gap: 22px; padding: 18px 4px 6px 96px; }
+.expModal .rlCard { position: relative; gap: 18px; min-height: 120px; padding: 14px 18px 14px 150px; border-radius: 18px;
+  background: linear-gradient(180deg, #FFFEF9, #FFF6E4); border: 1.5px solid rgba(225, 190, 130, 0.8); box-shadow: inset 0 0 0 1px #fff, 0 2px 0 rgba(200, 160, 90, 0.25), 0 8px 18px rgba(90, 60, 20, 0.12); }
+.rlCard > .rlDio { position: absolute; left: -92px; top: 50%; width: 230px; height: auto; transform: translateY(-52%); filter: drop-shadow(0 10px 12px rgba(80, 50, 15, 0.3)); pointer-events: none; }
+.rlBody > b { font-family: var(--hSerif); font-weight: 800; font-size: 22px; color: var(--hInk); letter-spacing: -0.01em; }
+.rlBody .lineDot { width: 22px; height: 22px; border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(160, 120, 60, 0.4), 0 1px 3px rgba(0, 0, 0, 0.2); }
+.rlBody > span { color: var(--hInk); font-size: 14.5px; }
+.rlSeat { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px; border-radius: 999px; background: #FFFDF6; border: 1px solid rgba(225, 195, 140, 0.8); font-style: normal; font-weight: 700; font-size: 13.5px; }
+.expModal .rlCard .trainBtn { gap: 10px; min-height: 48px; padding: 0 22px; border-radius: 999px; background: linear-gradient(180deg, #FFE7A6, #F2BE55); border: 1.5px solid #D9A646; color: #4A3010; font-weight: 800; font-size: 15px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -6px 10px rgba(200, 130, 30, 0.2), 0 3px 8px rgba(120, 80, 20, 0.28); }
+.expModal .rlCard .trainBtn:hover { background: linear-gradient(180deg, #FFEDB8, #F5C661); }
+.rlMore { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 76px; padding: 12px 18px; border-radius: 16px; border: 2px dashed rgba(200, 160, 95, 0.55); background: rgba(255, 250, 238, 0.55); color: var(--hInk); }
+.rlMore p { margin: 0; font-size: 15px; }
+.rlMore b { font-family: var(--hSerif); font-weight: 800; font-size: 18px; }
+.rlPlus { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; border: 2px dashed rgba(200, 160, 95, 0.7); font: 600 24px/1 var(--fL, inherit); color: #8A5A12; }
+.rlNone { margin: 0 4px 12px; }
+@media (max-width: 760px) {
+  .rlList { padding: 70px 2px 6px; gap: 70px; }
+  .expModal .rlCard { padding: 96px 12px 12px; flex-wrap: wrap; justify-content: center; text-align: center; }
+  .rlCard > .rlDio { left: 50%; top: -56px; width: 170px; transform: translateX(-50%); }
+  .rlSeat { align-self: center; }
+}

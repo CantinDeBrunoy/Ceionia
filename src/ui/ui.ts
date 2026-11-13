@@ -1978,20 +1978,23 @@ export class UI {
    */
   private railHtml() {
     const h = this.host, r = h.railway, age = h.sim.age, R = './expeditions/rail/';
-    const head = (sub: string) => `<div class="rlTop"><img src="${R}train.webp" alt="" decoding="async"><div><h4>${tr('Chemin de fer')}</h4><p>${sub}</p></div></div>`;
+    const head = (sub: string) => `<div class="rlTop">${hudPic('train', 58)}<div><h4>${tr('Chemin de fer')}</h4><p>${sub}</p></div></div>`;
+    // sous les lignes, une carte en pointillé rappelle comment en tracer une autre (au lieu d'un grand vide)
+    const more = `<div class="rlMore"><span class="rlPlus">+</span><p><b>${tr('Nouvelle ligne :')}</b> ${tr('choisissez une gare, puis « Nouvelle ligne ».')}</p></div>`;
     const how = tr('Choisissez une gare d’un clic, puis « Nouvelle ligne », et cliquez dans l’ordre les gares à relier (Entrée pour valider). La voie se pose d’elle-même d’un arrêt à l’autre et un train fait la navette : il prend et dépose des voyageurs aux gares ; un train de marchandises fait produire davantage les ateliers et carrières à côté de ses gares.');
     if (age < 3) return head(tr('Le chemin de fer viendra avec les gares, à l’âge industriel.'));
-    if (!h.world.lines.length) return `${head(how)}<p class="hint rlNone">${tr('Aucune ligne pour l’instant : bâtissez deux gares (petite gare, ou la gare centrale).')}</p>`;
+    if (!h.world.lines.length) return `${head(how)}<p class="hint rlNone">${tr('Aucune ligne pour l’instant : bâtissez deux gares (petite gare, ou la gare centrale).')}</p>${more}`;
     const lines = h.world.lines.map((l) => {
       const tn = r.trains.get(l.id);
       if (!tn) return '';
       const seated = r.seated(tn);
       // les voyageurs arrivés en info-bulle : la carte ne garde que le trajet et la position du train
-      return `<div class="rlCard" title="${tr('Voyageurs arrivés :')} ${tn.carried}"><img class="rlArt" src="${R}ligne-${(Math.abs(l.id) % 5) + 1}.webp" alt="" loading="lazy" decoding="async">
-        <div class="rlBody"><b>${dot(l.color)}${r.lineLabel(l)}</b><span>${tr('Train :')} ${trainWhere(r, tn)}${seated ? ` (${tr('{n} à bord', { n: seated })})` : ''}</span></div>
-        ${tn.why ? '' : `<button class="trainBtn" data-train="${l.id}"><img src="${R}oeil.webp" alt="" decoding="async">${tr('Suivre le train')}</button>`}</div>`;
+      // l'îlot de la ligne (cinq dioramas qui tournent selon son numéro), posé à cheval sur le bord gauche comme les missions
+      return `<div class="rlCard" title="${tr('Voyageurs arrivés :')} ${tn.carried}"><img class="rlDio" src="${R}dio-${(Math.abs(l.id) % 5) + 1}.webp" alt="" loading="lazy" decoding="async">
+        <div class="rlBody"><b>${dot(l.color)}${r.lineLabel(l)}</b><span>${tr('Train :')} ${trainWhere(r, tn)}</span>${seated ? `<em class="rlSeat">${hudPic('equipe', 18)} ${tr('{n} à bord', { n: seated })}</em>` : ''}</div>
+        ${tn.why ? '' : `<button class="trainBtn" data-train="${l.id}">${ic('eye', 18, 2)}${tr('Suivre le train')}</button>`}</div>`;
     }).join('');
-    return `${head(tr('Choisissez une ligne et suivez le train jusqu’à sa destination.'))}<div class="rlList">${lines}</div>`;
+    return `${head(tr('Choisissez une ligne et suivez le train jusqu’à sa destination.'))}<div class="rlList">${lines}${more}</div>`;
   }
 
   /** Équipement : réserve, fabrication et file d'attente */
