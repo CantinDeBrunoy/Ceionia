@@ -142,6 +142,26 @@ export function riverU(r: ContinentPlan['river'], v: number) {
 }
 
 /**
+ * Tracé de la rivière générée, dans les coordonnées du monde (cases, de 0 à n), de la source dans la montagne jusqu'au bord
+ * sud du plan (embouchure), un point par demi-case environ. Version 1 : le cours de `fixedHeight` ; versions 2 et 3 :
+ * `riverU`, tourné selon le plan. Le relief sculpté ensuite par le joueur n'y est pas
+ */
+export function riverCourse(gen: number, seed: number, n: number): [number, number][] {
+  const out: [number, number][] = [];
+  if (gen === GEN_FIXED) {
+    const phase = mulberry32(seed)() * 6.28;
+    for (let z = 0.14 * n; z <= n; z += 0.5) {
+      const v = z / n;
+      out.push([n * (0.62 - (v - 0.16) * 0.12 + 0.05 * Math.sin(z * 0.045 + phase) + 0.02 * Math.sin(z * 0.11 + phase * 2)), z]);
+    }
+    return out;
+  }
+  const p = continentPlan(seed, gen), r = p.river;
+  for (let b = r.v * n; b <= n; b += 0.5) out.push(fromPlan(p.orient, n * riverU(r, b / n), b, n));
+  return out;
+}
+
+/**
  * Lit de cailloux : 1 sur l'amont de la rivière, de la source jusque vers `bed.end` du cours (0,3 à 0,4), puis il s'efface sur
  * 0,08 avec un bord irrégulier ; 0 au-delà, et toujours 0 sans `bed` (versions 1 et 2). `t` : part du cours (0 source, 1 embouchure)
  */

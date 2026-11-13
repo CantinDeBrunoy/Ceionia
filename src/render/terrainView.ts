@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { World, N, SEA, VR, VS, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
+import { World, N, SEA, VR, VS, seaMargin, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
+import { computeFlow } from '../world/flow';
 import { Simplex } from '../world/noise';
 import { groundDetailTexture, waterNormalTexture } from './textures';
 import { Blight, blightAt, purityAt } from '../world/blight';
@@ -68,6 +69,16 @@ const STRATA = [0xb58c66, 0xd2bda2, 0xb5a08c, 0x9c8a7c, 0x857869].map((c) => new
 /** Profondeur relative des rangées de la falaise (0 = bord du relief, 1 = base) */
 const STRATA_T = [0, 0.05, 0.27, 0.5, 0.75, 1];
 const SKIRT_BOTTOM = -3.5;
+/**
+ * Fond de la mer de décor autour de la carte (voir `seaMargin`) : il part du relief du bord, rejoint en `SEA_SLOPE` cases le
+ * fond de la pleine mer de la carte (`SEA_FLOOR`, celui du générateur), puis s'enfonce doucement jusqu'à `SEA_DEEP` au bout
+ * de la marge (une eau un peu plus sombre au large, sans cadre)
+ */
+const SEA_FLOOR = -1, SEA_DEEP = -1.3, SEA_SLOPE = 6;
+const marginFloor = (top: number, d: number, M: number) =>
+  top + (SEA_FLOOR - top) * smoothstep(0, SEA_SLOPE, d) + (SEA_DEEP - SEA_FLOOR) * smoothstep(SEA_SLOPE, M, d);
+/** Distances au bord des rangées du fond de la marge (s'y ajoutent la mi-marge et la marge) */
+const MARGIN_D = [0, 0.6, 1.5, 3, SEA_SLOPE];
 /** Part de la normale de face dans l'ombrage : garde un léger facettage low-poly sur un relief lissé */
 const FACE_MIX = 0.3;
 /** Sous la neige, les facettes se marquent davantage : part de la normale de la facette quand la neige couvre tout */
@@ -109,6 +120,8 @@ export class TerrainView {
   group = new THREE.Group();
   top: THREE.Mesh;
   skirt: THREE.Mesh;
+  /** fond de la mer de décor autour de la carte */
+  margin: THREE.Mesh;
   water: THREE.Mesh;
   waterMat: THREE.MeshStandardMaterial;
   private sideMat: THREE.MeshStandardMaterial;
@@ -147,6 +160,10 @@ export class TerrainView {
   private skPos = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
   private skCol = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
   private skNor = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
+  private M = seaMargin();
+  private mgPos = new Float32Array(4 * this.C * (MARGIN_D.length + 1) * 6 * 3);
+  private mgCol = new Float32Array(4 * this.C * (MARGIN_D.length + 1) * 6 * 3);
+  private mgSurf = new Float32Array(4 * this.C * (MARGIN_D.length + 1) * 6 * 4);
   private tmp = new THREE.Color();
   /** Par sous-sommet : normale lissée, couleur, poids des motifs de détail (herbe, sable/terre, roche) */
   private vnor = new Float32Array(VS * VS * 3);
@@ -298,6 +315,25 @@ ${BLIGHT_GLSL}
   // strates horizontales sur la craie et la roche
   float strata = smoothstep(0.86, 1.0, sin(vPos.y * 9.0 + sin(vPos.x * 1.1 + vPos.z * 0.7) * 0.8));
   diffuseColor.rgb *= 1.0 - strata * 0.16 * vSurf.z * clean;
+  // parois du désert (poids rangé en négatif dans vSurf.w, là où il n'y a pas de neige) : les couches du Grand Canyon, en
+  // bandes horizontales selon la hauteur, du schiste sombre du fond au calcaire clair du rebord. Elles teintent le grès rouge
+  // des sommets (qui garde son ombre cuite)
+  float gorge = clamp(-vSurf.w, 0.0, 1.0);
+  if (gorge > 0.01) {
+    float gy = vPos.y + sin(vPos.x * 0.7 + vPos.z * 0.4) * 0.03;
+    vec3 band = vec3(0.33, 0.26, 0.25);
+    band = mix(band, vec3(0.58, 0.38, 0.27), smoothstep(0.73, 0.77, gy));
+    band = mix(band, vec3(0.66, 0.58, 0.45), smoothstep(1.03, 1.07, gy));
+    band = mix(band, vec3(0.70, 0.62, 0.52), smoothstep(1.78, 1.82, gy));
+    band = mix(band, vec3(0.74, 0.33, 0.21), smoothstep(2.13, 2.17, gy));
+    band = mix(band, mix(vec3(0.80, 0.42, 0.27), vec3(0.86, 0.56, 0.36), step(0.0, sin(gy * 40.0))), smoothstep(2.63, 2.67, gy));
+    band = mix(band, vec3(0.66, 0.28, 0.19), smoothstep(2.93, 2.97, gy));
+    band = mix(band, vec3(0.93, 0.86, 0.70), smoothstep(3.08, 3.12, gy));
+    band = mix(band, vec3(0.84, 0.76, 0.62), smoothstep(3.23, 3.27, gy));
+    // (teintes écrites en sRGB, les couleurs des sommets sont linéaires)
+    band = pow(band, vec3(2.2));
+    diffuseColor.rgb *= mix(vec3(1.0), band / vec3(${f(RED_ROCK.r)}, ${f(RED_ROCK.g)}, ${f(RED_ROCK.b)}), gorge);
+  }
   // neige : congères (grandes ondulations), rides du vent aux creux bleutés, grain et paillettes qui s'éteignent au loin ;
   // chaque facette prend sa nuance selon le soleil (crème au soleil, bleutée à contre-jour) ; par grandes zones, un blanc un
   // peu plus chaud ou plus froid
@@ -335,6 +371,14 @@ ${BLIGHT_GLSL}
     this.skirt.receiveShadow = true;
     this.skirt.castShadow = true;
 
+    const mg = new THREE.BufferGeometry();
+    mg.setAttribute('position', new THREE.BufferAttribute(this.mgPos, 3));
+    mg.setAttribute('color', new THREE.BufferAttribute(this.mgCol, 3));
+    mg.setAttribute('surf', new THREE.BufferAttribute(this.mgSurf, 4));
+    // même matériau que le relief : le fond de la marge prolonge celui de la carte sans couture de teinte ni de grain
+    this.margin = new THREE.Mesh(mg, topMat);
+    this.margin.frustumCulled = false;
+
     // Eau : couleur selon la profondeur, écume au rivage, vaguelettes, reflet du ciel en incidence rasante
     this.heightTex = new THREE.DataTexture(new Uint16Array(VS * VS * 2), VS, VS, THREE.RGFormat, THREE.HalfFloatType);
     this.heightTex.magFilter = this.heightTex.minFilter = THREE.LinearFilter;
@@ -342,11 +386,12 @@ ${BLIGHT_GLSL}
     this.waterU.uDetail.value = detail;
     this.flowTex.magFilter = this.flowTex.minFilter = THREE.LinearFilter;
     this.waterU.uFlow.value = this.flowTex;
-    const pg = new THREE.PlaneGeometry(N, N, N, N).rotateX(-Math.PI / 2).translate(N / 2, 0, N / 2);
+    const W = N + 2 * this.M;
+    const pg = new THREE.PlaneGeometry(W, W, W, W).rotateX(-Math.PI / 2).translate(N / 2, 0, N / 2);
     this.waterGeo = pg;
     this.waterBase = (pg.attributes.position.array as Float32Array).slice();
     const normalMap = waterNormalTexture();
-    normalMap.repeat.set(9 * N / 48, 9 * N / 48);
+    normalMap.repeat.set(9 * W / 48, 9 * W / 48);
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, roughness: 0.1, metalness: 0, depthWrite: false, normalMap, normalScale: new THREE.Vector2(0.4, 0.4) });
     this.waterMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.waterU, this.blightU, SNOW_U);
@@ -379,6 +424,11 @@ ${BLIGHT_GLSL}
           .replace('#include <color_fragment>', `#include <color_fragment>
   // relief sous l'eau (r) et part de marais (g, négatif au fond des ravins : pas d'eau) : eau dormante, sombre et sans écume
   vec2 hg = texture2D(uHeight, (vWater * ${VR.toFixed(1)} + 0.5) / ${VS.toFixed(1)}).rg;
+  // mer de décor, hors de la carte : le relief du bord (texture prolongée) descend vers le fond du large, comme le maillage du fond
+  float off = max(max(-vWater.x, vWater.x - ${N.toFixed(1)}), max(-vWater.y, vWater.y - ${N.toFixed(1)}));
+  // (l'eau dormante d'un marais du bord s'éteint en quelques cases, comme le courant)
+  if (off > 0.0) hg = vec2(mix(hg.r, ${SEA_FLOOR.toFixed(2)}, smoothstep(0.0, ${SEA_SLOPE.toFixed(1)}, off))
+    + ${(SEA_DEEP - SEA_FLOOR).toFixed(2)} * smoothstep(${SEA_SLOPE.toFixed(1)}, ${this.M.toFixed(1)}, off), max(hg.g, 0.0) * (1.0 - smoothstep(0.0, 4.0, off)));
   if (hg.g < -0.3) discard;
   float ground = hg.r, calm = clamp(hg.g, 0.0, 1.0);
   float depth = max(0.0, ${SEA.toFixed(1)} - ground);
@@ -397,7 +447,8 @@ ${BLIGHT_GLSL}
   // fondent l'une dans l'autre. Un repère tourné autour de l'origine du monde décalait les rangs de plusieurs tirets pour
   // un centième de radian d'écart de direction : des franges serrées en courbes de niveau, en chevrons et en spirales.
   // La texture du courant est filtrée : hors de l'eau elle vaut 0 (alpha compris), d'où la direction 2 rg - a.
-  vec4 fl = texture2D(uFlow, vWater / ${N.toFixed(1)});
+  // (courant du bord prolongé, qui s'éteint en quelques cases au large)
+  vec4 fl = texture2D(uFlow, vWater / ${N.toFixed(1)}) * (1.0 - smoothstep(0.0, 4.0, off));
   if (fl.b > 0.02) {
     vec2 pdir = normalize(fl.rg * 2.0 - fl.a + 1e-4);
     vec2 gp = vWater / 3.0 - 0.5, g0 = floor(gp), gt = fract(gp);
@@ -469,7 +520,7 @@ ${BLIGHT_GLSL}
     this.water.renderOrder = 2;
     this.sideMat = new THREE.MeshStandardMaterial({ color: 0x5fa6bf, transparent: true, opacity: 0.8, roughness: 0.3, depthWrite: false });
 
-    this.group.add(this.top, this.skirt, this.water, this.makeWaterSides(), this.makeRock());
+    this.group.add(this.top, this.skirt, this.margin, this.water, this.makeWaterSides(), this.makeRock());
     const sx = new Simplex(77);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.patch[z * VS + x] = clamp(sx.fbm((x / VR) * 0.085, (z / VR) * 0.085, 3) * 1.6, -1, 1);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.wobble[z * VS + x] = sx.noise2((x / VR) * 0.8 + 50, (z / VR) * 0.8);
@@ -485,77 +536,18 @@ ${BLIGHT_GLSL}
     return false;
   }
 
-  /**
-   * Courant des rivières : l'eau descend la vallée, seulement dans les chenaux étroits. L'axe suit le bord de l'eau ; le
-   * sens va vers les berges plus basses le long de cet axe (des hautes vallées vers les basses)
-   */
+  /** Courant des rivières, de la montagne à la mer (voir `computeFlow` dans `world/flow.ts`) */
   private computeFlow() {
-    const w = this.world, R = 4, S = N + 1;
-    const wet = (k: number) => w.cellAvg(k % N, Math.floor(k / N)) < -0.05 && !w.lake[k];
-    // tables cumulées : somme des hauteurs et nombre de cases de terre, pour une moyenne en carré en temps constant
-    const sumH = new Float64Array(S * S), cnt = new Float64Array(S * S), land = new Int16Array(N * N).fill(-1), q: number[] = [];
-    for (let z = 0; z < N; z++)
-      for (let x = 0; x < N; x++) {
-        const k = z * N + x, dry = !wet(k), i = (z + 1) * S + x + 1;
-        sumH[i] = (dry ? w.cellAvg(x, z) : 0) + sumH[i - 1] + sumH[i - S] - sumH[i - S - 1];
-        cnt[i] = (dry ? 1 : 0) + cnt[i - 1] + cnt[i - S] - cnt[i - S - 1];
-        if (dry) { land[k] = 0; q.push(k); }
-      }
-    const nb = (k: number) => { const x = k % N, z = Math.floor(k / N); return [x > 0 ? k - 1 : -1, x < N - 1 ? k + 1 : -1, z > 0 ? k - N : -1, z < N - 1 ? k + N : -1]; };
-    // largeur : distance à la rive, au plus quelques cases
-    for (let h = 0; h < q.length; h++) { const d = land[q[h]]; if (d >= 4) continue; for (const j of nb(q[h])) if (j >= 0 && land[j] < 0) { land[j] = d + 1; q.push(j); } }
-    const bank = (x: number, z: number) => {
-      const x0 = Math.max(0, x - R), z0 = Math.max(0, z - R), x1 = Math.min(N, x + R + 1), z1 = Math.min(N, z + R + 1);
-      const c = cnt[z1 * S + x1] - cnt[z0 * S + x1] - cnt[z1 * S + x0] + cnt[z0 * S + x0];
-      return c ? (sumH[z1 * S + x1] - sumH[z0 * S + x1] - sumH[z1 * S + x0] + sumH[z0 * S + x0]) / c : 0;
-    };
-    // axe du chenal : la pente moyenne des berges va surtout d'une rive à l'autre (une rive plus haute que l'autre) ; l'axe
-    // vient donc du bord de l'eau. Part de terre en carré de rayon 2, son gradient (vers les rives), puis tenseur de
-    // structure de ce gradient en carré de rayon 3 : son vecteur propre mineur suit le chenal, même en son milieu où le
-    // gradient s'annule
-    const box = (t: Float64Array, x: number, z: number, r: number) => {
-      const x0 = Math.max(0, x - r), z0 = Math.max(0, z - r), x1 = Math.min(N, x + r + 1), z1 = Math.min(N, z + r + 1);
-      return [t[z1 * S + x1] - t[z0 * S + x1] - t[z1 * S + x0] + t[z0 * S + x0], (x1 - x0) * (z1 - z0)];
-    };
-    const dryF = new Float32Array(N * N);
-    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) { const [c, a] = box(cnt, x, z, 2); dryF[z * N + x] = c / a; }
-    const jxx = new Float64Array(S * S), jxz = new Float64Array(S * S), jzz = new Float64Array(S * S);
-    for (let z = 0; z < N; z++)
-      for (let x = 0; x < N; x++) {
-        const gx = dryF[z * N + Math.min(N - 1, x + 1)] - dryF[z * N + Math.max(0, x - 1)];
-        const gz = dryF[Math.min(N - 1, z + 1) * N + x] - dryF[Math.max(0, z - 1) * N + x], i = (z + 1) * S + x + 1;
-        jxx[i] = gx * gx + jxx[i - 1] + jxx[i - S] - jxx[i - S - 1];
-        jxz[i] = gx * gz + jxz[i - 1] + jxz[i - S] - jxz[i - S - 1];
-        jzz[i] = gz * gz + jzz[i - 1] + jzz[i - S] - jzz[i - S - 1];
-      }
-    const data = this.flowTex.image.data as Uint8Array;
-    data.fill(0);
-    for (let k = 0; k < N * N; k++) {
-      if (!wet(k) || land[k] < 0) continue;
-      const x = k % N, z = Math.floor(k / N);
-      const a = box(jxx, x, z, 3)[0], b = box(jxz, x, z, 3)[0], c = box(jzz, x, z, 3)[0];
-      if (a + c < 1e-6) continue;
-      const th = 0.5 * Math.atan2(2 * b, a - c);
-      let vx = -Math.sin(th), vz = Math.cos(th);
-      // sens : vers l'aval, là où les berges sont plus basses, 4 cases plus loin le long de l'axe
-      const at = (s: number) => bank(Math.min(N - 1, Math.max(0, Math.round(x + vx * s))), Math.min(N - 1, Math.max(0, Math.round(z + vz * s))));
-      const drop = at(-4) - at(4);
-      if (drop < 0) { vx = -vx; vz = -vz; }
-      const narrow = Math.min(1, Math.max(0, (4.5 - land[k]) / 2.5)), strong = Math.min(1, 0.45 + Math.abs(drop) * 1.5);
-      data[k * 4] = Math.round((vx * 0.5 + 0.5) * 255);
-      data[k * 4 + 1] = Math.round((vz * 0.5 + 0.5) * 255);
-      data[k * 4 + 2] = Math.round(narrow * strong * 255);
-      data[k * 4 + 3] = 255;
-    }
+    computeFlow(this.world, this.flowTex.image.data as Uint8Array);
     this.flowTex.needsUpdate = true;
   }
 
   private makeWaterSides() {
     const g = new THREE.Group();
-    const depth = 3.6, e = 0.012;
+    const depth = 3.6, e = 0.012 + this.M, W = N + 2 * this.M;
     const sides: [number, number, number, number][] = [[N / 2, -e, 0, 0], [N / 2, N + e, 0, Math.PI], [-e, N / 2, 0, -Math.PI / 2], [N + e, N / 2, 0, Math.PI / 2]];
     for (const [x, z, , ry] of sides) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(N, depth), this.sideMat);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(W, depth), this.sideMat);
       m.position.set(x, -depth / 2, z);
       m.rotation.y = ry;
       m.renderOrder = 2;
@@ -566,7 +558,7 @@ ${BLIGHT_GLSL}
 
   /** Socle rocheux sous la falaise, plus sombre vers la pointe */
   private makeRock() {
-    const R = (N / 2) * Math.SQRT2;
+    const R = (N / 2 + this.M) * Math.SQRT2;
     const geo = new THREE.CylinderGeometry(R, 3, 13, 4, 4, true).rotateY(Math.PI / 4);
     const p = geo.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -735,7 +727,7 @@ ${BLIGHT_GLSL}
     // couleur et motif par sous-sommet : dégradés continus fond marin → sable → herbe → roche → neiges éternelles
     for (let zz = z0; zz <= z1; zz++) for (let i = zz * VS + x0; i <= zz * VS + x1; i++) {
       const h = vis[i];
-      let grass = 0, sand = 0, rock = 0, cover = 0;
+      let grass = 0, sand = 0, rock = 0, cover = 0, gorge = 0;
       if (h < 0.02) {
         // fond vaseux des mares du marais
         tmp.copy(WET_SAND).lerp(SEABED, clamp(-h / 1.6, 0, 1)).lerp(MUD, this.vbw[i * NB + BIOME_MARSH] * 0.8);
@@ -769,7 +761,11 @@ ${BLIGHT_GLSL}
         const bank = (0.45 + 0.55 * smoothstep(0.15, 0.3, h)) * pal.terrain.bankK * (1 - wet);
         tmp.lerp(SAND, beach * (1 - wet) * (1 - bank)).lerp(pal.terrain.bank, beach * bank).lerp(MUD, beach * wet * 0.6);
         // parois : craie blanche près de la mer, roche plus haut, grise en montagne
-        if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(RED_ROCK, dry * 0.85).lerp(MOUNTAIN, alt), steep);
+        // (au bord du désert, la paroi est déjà de grès : pas de craie au pied d'un canyon qui touche une prairie)
+        const redK = smoothstep(0.05, 0.45, dry);
+        if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(RED_ROCK, redK).lerp(MOUNTAIN, alt), steep);
+        // (les strates du désert : voir le shader)
+        gorge = steep * redK * (1 - alt);
         if (alt > 0) tmp.lerp(MOUNTAIN, alt * 0.85);
         // volcan : vert au pied, il vire au brun en montant, plus sombre près du cratère
         let lava = 0, top = 0;
@@ -814,6 +810,7 @@ ${BLIGHT_GLSL}
         // glaciers : la neige des replats d'altitude tourne à la glace bleutée
         if (cap > 0.5) tmp.lerp(ICE, (cap - 0.5) * 2 * flat * 0.5 * (1 - lava));
         // peu de strates sur le volcan : elles y dessineraient des courbes de niveau
+        gorge *= 1 - lava;
         rock = Math.max((steep + alt - steep * alt) * (1 - lava * 0.7), vw[i * 4 + 3], lava * 0.35, smoothstep(0.3, 0.8, lf) * 0.9);
         sand = Math.max(beach, soil, dry * 0.9) * (1 - rock);
         grass = Math.max(0, 1 - sand - rock);
@@ -827,7 +824,7 @@ ${BLIGHT_GLSL}
       const rv = w.ravine[i];
       if (rv > 0) {
         tmp.lerp(RAVINE_WALL, smoothstep(0, 0.3, rv) * 0.85).lerp(RAVINE_DEEP, smoothstep(0.3, 1, rv) * 0.85);
-        rock = Math.max(rock, rv); grass *= 1 - rv; sand *= 1 - rv;
+        rock = Math.max(rock, rv); grass *= 1 - rv; sand *= 1 - rv; gorge *= 1 - rv;
       }
       // l'île du portail contaminée : sol noirci veiné de braise près du portail, cendre violacée vers la lisière (la neige
       // n'y tient pas) ; dans les halos des défenses, l'herbe repousse drue
@@ -855,7 +852,8 @@ ${BLIGHT_GLSL}
         tmp.multiplyScalar(1 - clamp(l1 * 0.9 + l3 * 0.3, -0.06, 0.3) * (1 - cover * 0.85));
       }
       vcol[i * 3] = tmp.r; vcol[i * 3 + 1] = tmp.g; vcol[i * 3 + 2] = tmp.b;
-      vsurf[i * 4] = grass; vsurf[i * 4 + 1] = sand; vsurf[i * 4 + 2] = rock; vsurf[i * 4 + 3] = cover;
+      // la neige et les strates du désert se partagent le 4e motif : neige en positif, strates en négatif
+      vsurf[i * 4] = grass; vsurf[i * 4 + 1] = sand; vsurf[i * 4 + 2] = rock; vsurf[i * 4 + 3] = cover > 0.001 ? cover : -gorge;
       // épaisseur de la neige : une couche, des bourrelets ; rien sur le bord ni dans l'emprise d'un bâtiment, une congère sur
       // le rang de sous-sommets qui l'entoure
       const open = yw[i] > 0 ? 0 : smoothstep(0.7, 1, this.openW[i]) * smoothstep(0.15, 0.5, h);
@@ -873,7 +871,7 @@ ${BLIGHT_GLSL}
     let o = 0;
     // (la neige change l'épaisseur et les normales : positions et normales se refont aussi aux changements de saison)
     const emit = (vi: number, x: number, y: number, z: number, nx: number, ny: number, nz: number) => {
-      const k = vi * 3, fm = FACE_MIX + (SNOW_FACE_MIX - FACE_MIX) * vsurf[vi * 4 + 3];
+      const k = vi * 3, fm = FACE_MIX + (SNOW_FACE_MIX - FACE_MIX) * Math.max(0, vsurf[vi * 4 + 3]);
       pos[o] = x; pos[o + 1] = y; pos[o + 2] = z;
       const mx = nx * fm + vnor[k] * (1 - fm), my = ny * fm + vnor[k + 1] * (1 - fm), mz = nz * fm + vnor[k + 2] * (1 - fm);
       const ml = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
@@ -961,9 +959,13 @@ ${BLIGHT_GLSL}
     }
   }
 
-  /** Falaise sur les bords de la carte : strates de terre puis de roche, faces irrégulières */
+  /**
+   * Falaise sur les bords du plateau, au bout de la mer de décor : strates de terre puis de roche, faces irrégulières. Elle
+   * part du fond du large ; le fond de la marge (`updateMargin`) suit le relief du bord de la carte
+   */
   private updateSkirt(pal: GroundPalette) {
-    const vis = this.world.vis, vcol = this.vcol;
+    this.updateMargin();
+    const k = (N + 2 * this.M) / N;
     const p = this.skPos, c = this.skCol, nn = this.skNor;
     const rows = STRATA_T.length;
     const edge = new THREE.Color();
@@ -981,8 +983,9 @@ ${BLIGHT_GLSL}
     sides.forEach(([start, step, nx, nz], side) => {
       for (let j = 0; j <= C; j++) {
         const vi = start + j * step;
-        const ex = (vi % VS) / VR, ez = Math.floor(vi / VS) / VR, top = vis[vi];
-        edge.setRGB(vcol[vi * 3], vcol[vi * 3 + 1], vcol[vi * 3 + 2]);
+        // le bord de la carte, agrandi depuis son centre jusqu'au bout de la marge
+        const ex = N / 2 + ((vi % VS) / VR - N / 2) * k, ez = N / 2 + (Math.floor(vi / VS) / VR - N / 2) * k, top = SEA_DEEP;
+        edge.copy(SEABED);
         for (let r = 0; r < rows; r++) {
           const t = STRATA_T[r];
           // les rangées intermédiaires bombent vers l'extérieur (sauf aux angles, partagés par deux bords)
@@ -993,7 +996,7 @@ ${BLIGHT_GLSL}
           if (r === 0) cols[r].copy(edge);
           else if (r === 1) cols[r].copy(edge).lerp(STRATA[0], top > 0.1 ? 0.55 : 0.85);
           else cols[r].copy(STRATA[r - 1]).multiplyScalar(0.92 + hash2(j, r, side + 13) * 0.14);
-          if (r <= 1 && pal.snow > 0) cols[r].lerp(WHITE, pal.snow * 0.6);
+          if (r <= 1 && pal.snow > 0 && top > SEA) cols[r].lerp(WHITE, pal.snow * 0.6);
         }
         if (j > 0)
           for (let r = 0; r < rows - 1; r++) {
@@ -1008,6 +1011,76 @@ ${BLIGHT_GLSL}
     this.skirt.geometry.attributes.position.needsUpdate = true;
     this.skirt.geometry.attributes.color.needsUpdate = true;
     this.skirt.geometry.attributes.normal.needsUpdate = true;
+  }
+
+  /**
+   * Fond de la mer de décor : de chaque bord de la carte (sous-sommets du relief, sans couture), des rangées de plus en plus
+   * loin qui descendent vers le large (`marginFloor`, même pente que dans le shader de l'eau). Aux angles, la première et la dernière
+   * colonne partent en diagonale : les deux bords voisins s'y rejoignent
+   */
+  private updateMargin() {
+    const vis = this.world.vis, vcol = this.vcol, vsurf = this.vsurf, C = this.C, M = this.M;
+    const D = [...MARGIN_D, (SEA_SLOPE + M) / 2, M], rows = D.length;
+    const p = this.mgPos, c = this.mgCol, sf = this.mgSurf;
+    const px = new Float32Array(rows), py = new Float32Array(rows), pz = new Float32Array(rows);
+    const qx = new Float32Array(rows), qy = new Float32Array(rows), qz = new Float32Array(rows);
+    // teinte et sol (herbe, sable, roche, neige) : ceux du sommet du bord, qui se fondent au large dans la moyenne du fond de
+    // mer le long des bords (sinon chaque tache du bord s'étirerait en bande jusqu'au bout de la marge)
+    const avg = [0, 0, 0, 0, 0, 0, 0];
+    let na = 0;
+    for (let j = 0; j < VS; j++)
+      for (const vi of [j, (VS - 1) * VS + j, j * VS, j * VS + VS - 1]) {
+        if (vis[vi] > SEA_FLOOR * 0.5) continue;
+        for (let b = 0; b < 3; b++) avg[b] += vcol[vi * 3 + b];
+        for (let b = 0; b < 4; b++) avg[3 + b] += vsurf[vi * 4 + b];
+        na++;
+      }
+    if (na) for (let b = 0; b < 7; b++) avg[b] /= na;
+    else { avg[0] = SEABED.r; avg[1] = SEABED.g; avg[2] = SEABED.b; avg[4] = 1; }
+    avg[6] = 0;
+    let pi = 0, qi = 0;
+    let o = 0;
+    const put = (x: Float32Array, y: Float32Array, z: Float32Array, vi: number, r: number) => {
+      p[o] = x[r]; p[o + 1] = y[r]; p[o + 2] = z[r];
+      const t = smoothstep(0, SEA_SLOPE, D[r]), so = (o / 3) * 4;
+      for (let b = 0; b < 3; b++) c[o + b] = vcol[vi * 3 + b] + (avg[b] - vcol[vi * 3 + b]) * t;
+      for (let b = 0; b < 4; b++) sf[so + b] = vsurf[vi * 4 + b] + (avg[3 + b] - vsurf[vi * 4 + b]) * t;
+      o += 3;
+    };
+    // bord : (sous-sommet de départ, pas le long du bord, normale sortante)
+    const sides: [number, number, number, number][] = [[0, 1, 0, -1], [(VS - 1) * VS, 1, 0, 1], [0, VS, -1, 0], [VS - 1, VS, 1, 0]];
+    for (const [start, step, nx, nz] of sides) {
+      const tx = step === 1 ? 1 : 0, tz = 1 - tx;
+      // ordre des sommets pour que la face regarde vers le haut
+      const flip = nx < 0 || nz > 0;
+      for (let j = 0; j <= C; j++) {
+        const vi = start + j * step, s = j === 0 ? -1 : j === C ? 1 : 0;
+        const ex = (vi % VS) / VR, ez = Math.floor(vi / VS) / VR, top = vis[vi];
+        qi = vi;
+        for (let r = 0; r < rows; r++) {
+          const d = D[r];
+          qx[r] = ex + (nx + tx * s) * d; qz[r] = ez + (nz + tz * s) * d;
+          qy[r] = marginFloor(top, d, M);
+        }
+        if (j > 0)
+          for (let r = 0; r < rows - 1; r++) {
+            if (flip) {
+              put(px, py, pz, pi, r); put(px, py, pz, pi, r + 1); put(qx, qy, qz, qi, r + 1);
+              put(px, py, pz, pi, r); put(qx, qy, qz, qi, r + 1); put(qx, qy, qz, qi, r);
+            } else {
+              put(px, py, pz, pi, r); put(qx, qy, qz, qi, r); put(qx, qy, qz, qi, r + 1);
+              put(px, py, pz, pi, r); put(qx, qy, qz, qi, r + 1); put(px, py, pz, pi, r + 1);
+            }
+          }
+        px.set(qx); py.set(qy); pz.set(qz); pi = qi;
+      }
+    }
+    const g = this.margin.geometry;
+    g.setDrawRange(0, o / 3);
+    g.attributes.position.needsUpdate = true;
+    g.attributes.color.needsUpdate = true;
+    g.attributes.surf.needsUpdate = true;
+    g.computeVertexNormals();
   }
 
   /**

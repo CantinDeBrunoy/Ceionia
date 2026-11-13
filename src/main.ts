@@ -17,7 +17,7 @@ const loadUnder = () => (underModule ??= import('./render/underView'));
 import type { HellMode } from './hellMode';
 let hellModule: Promise<typeof import('./hellMode')> | null = null;
 const loadHell = () => (hellModule ??= import('./hellMode'));
-import { newWorld, addDefaultDecor, mapDef, newSeed, CONTINENT } from './world/mapgen';
+import { newWorld, addDefaultDecor, mapDef, newSeed, playSize, CONTINENT } from './world/mapgen';
 import { GEN } from './world/continent';
 import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
@@ -45,7 +45,7 @@ import { PatrolView } from './render/patrols';
 import { Fauna } from './render/fauna';
 import { Eruptions, ERUPTION_DUR } from './render/eruption';
 import { Streams } from './render/streams';
-import { Atmosphere } from './render/atmosphere';
+import { Atmosphere, MTN_STEPS } from './render/atmosphere';
 import { NightSky, SkyShowKind, skyNewsText } from './render/nightSky';
 import { SNOW, setSnowMap } from './render/snow';
 import { AmbientLife } from './render/life';
@@ -1378,6 +1378,8 @@ class Game implements UIHost {
     // en « Auto », on part de la qualité haute (réduite sur un petit écran tactile) et le contrôleur descend par paliers
     const p = this.gfx = q === 'auto' ? paramsAt(coarse ? 'low' : 'high', this.adaptive.level) : paramsAt(q, 0);
     this.atmosphere.mistEnabled = p.mist;
+    // brume des montagnes : moins de pas de marche en qualité normale, coupée avec la brume en qualité réduite
+    this.atmosphere.mountainSteps = p.density >= 1 ? MTN_STEPS.high : MTN_STEPS.medium;
     this.life.density = p.density;
     this.streams.density = p.density;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? Math.max(p.pixelRatio, 1) : p.pixelRatio));
@@ -1976,8 +1978,8 @@ async function boot() {
     // l'accueil peut avoir été redessiné (changement de langue) : on retire celui qui est à l'écran
     document.getElementById('menu')?.remove();
     menu?.remove();
-    // tailles des tableaux du monde, des vues et de la caméra
-    setMapSize(mapDef(map)!.size);
+    // tailles des tableaux du monde, des vues et de la caméra : une partie reprise garde la taille de sa sauvegarde
+    setMapSize(playSize(map, mode === 'continue' ? loadSlot(map)?.world.n : undefined));
     syncChunks();
     const t0 = performance.now();
     const game = new Game(map, mode, seed, difficulty, age);

@@ -39,7 +39,7 @@ D'autres premières fois, mesurées après ce chantier (mode développement) : p
 ## Fonctionnement dans le code
 
 ### Démarrage (`main.ts` › `boot`)
-1. `LoadingScreen` posé dans `#app`, à côté de `#ui` et non dedans : `new UI` réécrit le contenu de `#ui` en se construisant. Puis `loadModels`, avec l'étape des modèles.
+1. `LoadingScreen` posé dans `#app`, à côté de `#ui` et non dedans : `new UI` réécrit le contenu de `#ui` en se construisant. Il montre le même logo que l'accueil (`LOGO_PEAKS`, exporté par `loading.ts` et repris par `ui.ts`, et « Ceionia » en Fraunces crème), sur le paysage assombri au centre, avec l'étape et le conseil en crème et une barre dorée. Puis `loadModels`, avec l'étape des modèles.
 2. Accueil : l'écran des modèles disparaît d'un coup (`done(true)`). Lancement automatique (`AUTOSTART` : changement de langue, nouvelle partie, import) : le même écran continue.
 3. `start` (async) : étape « Construction du monde… », `painted()` (l'écran s'affiche avant le long calcul), retrait de l'accueil, `setMapSize`, `new Game` (synchrone, 1 à 2 s : génération ou lecture de la sauvegarde, toutes les vues). Le constructeur ne lance plus la boucle d'images. Puis `await game.prepare(ld)` et `ld.done()`.
 

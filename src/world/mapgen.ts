@@ -1,4 +1,4 @@
-import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
+import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, ISLET_MIN } from './world';
 import { raiseVolcano } from './terraform';
 import { addPortalIsland } from './portal';
 import { Simplex } from './noise';
@@ -6,26 +6,35 @@ import { mulberry32, smoothstep, clamp, lerp, hash2 } from '../core/rng';
 import { localize } from '../i18n';
 import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, continentPlan, fixedHeight, plannedHeight, toPlan, fromPlan } from './continent';
 
-/** Carte jouable : `size` cases de côté */
-export interface MapDef { id: number; name: string; desc: string; defaultSeed: number; size: number }
+/**
+ * Carte jouable : `size` cases de côté pour une nouvelle partie ; `sizes`, les tailles qu'une sauvegarde peut avoir (une
+ * partie garde la taille qui l'a créée, lue dans sa sauvegarde)
+ */
+export interface MapDef { id: number; name: string; desc: string; defaultSeed: number; size: number; sizes: number[] }
 
 /** La carte jouable : le continent (il garde le numéro 3, celui des sauvegardes déjà faites) */
 export const CONTINENT = 3;
 export const MAPS: MapDef[] = [
-  { id: CONTINENT, name: 'Continent', desc: 'Un grand continent, différent à chaque partie : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192 },
+  { id: CONTINENT, name: 'Continent', desc: 'Un grand continent, différent à chaque partie : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192, sizes: [192, 320] },
 ];
 for (const m of MAPS) localize(m, ['name', 'desc']);
 /** La carte de ce numéro (null : une carte qui n'existe plus) */
 export const mapDef = (id: number) => MAPS.find((m) => m.id === id) ?? null;
+/** Côté de la carte d'une partie : celui de sa sauvegarde pour une partie reprise, sinon celui d'une nouvelle partie */
+export const playSize = (id: number, saved?: number) => {
+  const def = mapDef(id) ?? MAPS[0];
+  return saved !== undefined && def.sizes.includes(saved) ? saved : def.size;
+};
 /** Graine d'une nouvelle partie : chacune a son continent (`defaultSeed` ne sert plus qu'aux tests et en secours) */
 export const newSeed = () => Math.floor(Math.random() * 100000) + 1;
 
 /**
  * Relief du continent pour une graine, selon la version du générateur (`GEN` pour une nouvelle partie) : la version 1 garde
- * ses contrées à la même place, la version 2 les place selon le plan tiré de la graine
+ * ses contrées à la même place, la version 2 les place selon le plan tiré de la graine. `n` : côté de la carte (par défaut,
+ * celui d'une nouvelle partie)
  */
-export function genHeights(mapId: number, seed: number, gen = GEN): Float32Array {
-  const N = (mapDef(mapId) ?? MAPS[0]).size;
+export function genHeights(mapId: number, seed: number, gen = GEN, n = (mapDef(mapId) ?? MAPS[0]).size): Float32Array {
+  const N = n;
   const hts = new Float32Array((N + 1) * (N + 1));
   const s = new Simplex(seed);
   const s2 = new Simplex(seed * 7 + 13);
@@ -55,13 +64,14 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   world.seed = seed;
   world.gen = gen;
   const plan = gen === GEN_FIXED ? null : continentPlan(seed, gen), v3 = gen >= GEN_VAR;
-  const heights = genHeights(mapId, seed, gen);
+  const heights = genHeights(mapId, seed, gen, N);
   world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), cleared: new Uint8Array(N * N), rift: new Uint8Array(N * N), buildings: [], nextId: 1 });
   world.oil.fill(0);
+  world.biomePaint.fill(0);
   world.decorDone = false;
   world.computeBiomes();
   shapeBiomes(world, seed, plan ? plan.wind : null);
-  if (v3) carveCanyon(world, mulberry32(seed + 61));
+  const canyonFloor = v3 ? carveCanyon(world, seed, mulberry32(seed + 61)) : [];
   world.computeBiomes();
   // forêts plus ou moins denses selon le biome (cactus clairsemés au désert, forêt dense en taïga et sous les tropiques) ;
   // version 3 : chaque partie a ses forêts, plus ou moins étendues ; de vrais massifs pleins, séparés par des plaines
@@ -87,6 +97,9 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
       else if (v3 ? n > dense[b] - 0.04 && rnd() < 0.35 : n > dense[b] - 0.17 && rnd() < 0.04) world.veg[world.ci(x, z)] = VEG_FOREST;
     }
   if (v3) { gatherForests(world); addGroves(world, vary); rockyBanks(world, mulberry32(seed + 93)); }
+  // quelques arbres au fond du canyon, au bord de la rivière
+  const cr = mulberry32(seed + 67);
+  for (const k of canyonFloor) if (cr() < 0.3) world.veg[k] = VEG_FOREST;
   world.vegDirty = true;
   // sanitize (pentes)
   world.sanitize(0, 0, N, N);
@@ -301,66 +314,165 @@ function carveTarns(world: World, seed: number, dry: boolean, want = 5, lo = 4, 
 }
 
 /**
- * Canyon du désert (version 3) : une longue gorge sinueuse entre deux plateaux. Le tracé part d'une case de désert sèche et
- * serpente tant qu'il reste au désert, loin de l'eau ; on garde le plus long de quelques essais (au moins 24 cases). De part
- * et d'autre, la roche se dresse en plateau (2,4 au-dessus du fond), parois abruptes que le rendu teint de grès rouge strié ;
- * au milieu, un fond plat d'environ deux cases et demie, à la hauteur du désert alentour (lissée le long du tracé). Aux deux
- * bouts, le plateau s'abaisse et la gorge s'ouvre sur le désert
+ * Hauteurs du canyon (version 3) : la rivière au fond, au niveau de la mer ; une étroite plaine verte de part et d'autre ; la
+ * gorge intérieure jusqu'à la terrasse ; puis la grande paroi jusqu'au rebord du plateau. Les marches dépassent 1,3 : le
+ * relief affiché les garde franches (pas de lissage au bord des à-pics). Plateau sous 3,8, où la roche virerait au gris
  */
-function carveCanyon(world: World, rnd: () => number) {
-  const S = N + 1;
+const CANYON = { river: -0.45, bank: 0.25, floor: 0.5, bench: 1.8, foot: 2.05, rim: 3.35 };
+
+/**
+ * Canyon du désert (version 3), inspiré du Grand Canyon : une gorge à méandres taillée dans un large plateau, avec une rivière
+ * au fond. Le tracé part d'une case de désert sèche, serpente (méandres réguliers et virages au hasard) et file vers l'eau la
+ * plus proche, où la rivière se jette ; on garde le meilleur de quelques essais (d'abord ceux qui arrivent à l'eau, puis le
+ * plus long). Autour, le désert devient un plateau plat ; la gorge y descend en gradins : paroi, terrasse (éboulis au pied de
+ * la paroi suivante), gorge intérieure, plaine verte et rivière. Le bruit fait avancer ou reculer chaque gradin : éperons et
+ * criques. Deux ou trois canyons affluents entaillent la paroi haute jusqu'à la terrasse. Le plateau s'efface près de l'eau
+ * (la gorge s'ouvre sur la rive). Les cases du plateau et des parois sont peintes en désert (l'altitude et la rivière les
+ * feraient changer de biome), celles du fond en prairie. Rend les cases du fond, où quelques arbres pousseront
+ */
+function carveCanyon(world: World, seed: number, rnd: () => number): number[] {
+  const S = N + 1, C = CANYON;
+  const inside = (cx: number, cz: number) => world.inCells(cx, cz) && cx > 12 && cz > 12 && cx < N - 13 && cz < N - 13;
+  const dist = (x: number, z: number) => world.waterDist[world.ci(Math.floor(x), Math.floor(z))];
   const desertAt = (x: number, z: number) => {
     const cx = Math.floor(x), cz = Math.floor(z);
-    return world.inCells(cx, cz) && cx > 9 && cz > 9 && cx < N - 10 && cz < N - 10 && world.biome[world.ci(cx, cz)] === BIOME_DESERT && world.waterDist[world.ci(cx, cz)] >= 5;
+    return inside(cx, cz) && world.biome[world.ci(cx, cz)] === BIOME_DESERT;
   };
   const starts: number[] = [];
   for (let k = 0; k < N * N; k++) if (world.waterDist[k] >= 9 && desertAt(k % N, Math.floor(k / N))) starts.push(k);
-  if (!starts.length) return;
-  let best: [number, number][] = [];
-  for (let t = 0; t < 16; t++) {
+  if (!starts.length) return [];
+  // un essai : méandres réguliers (sinus d'amplitude et de période tirées) sur un cap qui dérive, attiré par l'eau ; il
+  // s'arrête à l'eau (réussi), hors du désert loin de la rive, ou au bout de 220 pas
+  let best: [number, number][] = [], bestWet = false;
+  for (let t = 0; t < 24; t++) {
     const k = starts[Math.floor(rnd() * starts.length)];
-    let x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5, a = rnd() * 6.28, turn = 0;
+    let x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5, head = rnd() * 6.28, drift = 0, wet = false;
+    const amp = 0.55 + rnd() * 0.35, per = 0.09 + rnd() * 0.06, ph = rnd() * 6.28;
     const path: [number, number][] = [[x, z]];
-    for (let i = 0; i < 140; i++) {
-      // virages doux qui changent de sens : des méandres
-      turn = turn * 0.85 + (rnd() - 0.5) * 0.1;
-      a += turn;
-      const nx = x + Math.cos(a) * 0.5, nz = z + Math.sin(a) * 0.5;
-      if (!desertAt(nx, nz)) break;
+    for (let i = 0; i < 220; i++) {
+      drift = drift * 0.9 + (rnd() - 0.5) * 0.05;
+      head += drift;
+      // pente de la distance à l'eau : le cap tourne doucement vers la rive
+      const gx = dist(Math.min(N - 1, x + 2), z) - dist(Math.max(0, x - 2), z), gz = dist(x, Math.min(N - 1, z + 2)) - dist(x, Math.max(0, z - 2));
+      if (i > 20 && (gx || gz)) {
+        const want = Math.atan2(-gz, -gx);
+        let da = want - head;
+        da = Math.atan2(Math.sin(da), Math.cos(da));
+        head += da * 0.035;
+      }
+      const a = head + Math.sin(i * per + ph) * amp;
+      const nx = x + Math.cos(a) * 0.5, nz = z + Math.sin(a) * 0.5, cx = Math.floor(nx), cz = Math.floor(nz);
+      if (!inside(cx, cz)) break;
+      if (world.isWaterCell(cx, cz)) { wet = true; break; }
+      if (!desertAt(nx, nz) && dist(nx, nz) > 3) break;
       x = nx; z = nz;
       path.push([x, z]);
     }
-    if (path.length > best.length) best = path;
+    if (path.length < 60) continue;
+    if ((wet && !bestWet) || (wet === bestWet && path.length > best.length)) { best = path; bestWet = wet; }
   }
-  if (best.length < 48) return;
-  // fond : hauteur du désert le long du tracé, lissée
-  const raw = best.map(([x, z]) => world.cellAvg(Math.floor(x), Math.floor(z)));
-  const floor = raw.map((_, i) => {
-    let sum = 0, n = 0;
-    for (let j = Math.max(0, i - 10); j <= Math.min(raw.length - 1, i + 10); j++) { sum += raw[j]; n++; }
-    return Math.max(0.35, sum / n);
-  });
-  const G = 1.25, WALL = 1.15, TOP = 4, OUT = 2.8, R = G + WALL + TOP + OUT, rise = 2.4;
+  if (best.length < 60) return [];
+  // affluents : deux ou trois courts canyons qui partent de la gorge, de biais, d'un côté ou de l'autre
+  const tribs: [number, number][][] = [];
+  const nt = 2 + Math.floor(rnd() * 2);
+  for (let t = 0; t < nt; t++) {
+    const j = Math.floor(best.length * (0.2 + 0.6 * rnd())), [px, pz] = best[j], [qx, qz] = best[Math.min(best.length - 1, j + 2)];
+    let a = Math.atan2(qz - pz, qx - px) + (rnd() < 0.5 ? 1 : -1) * (1.1 + rnd() * 0.5), x = px, z = pz;
+    const path: [number, number][] = [];
+    const len = 18 + Math.floor(rnd() * 10);
+    for (let i = 0; i < len; i++) {
+      a += (rnd() - 0.5) * 0.35;
+      x += Math.cos(a) * 0.5; z += Math.sin(a) * 0.5;
+      if (!inside(Math.floor(x), Math.floor(z))) break;
+      if (i > 4) path.push([x, z]);
+    }
+    if (path.length > 6) tribs.push(path);
+  }
+  const near = (p: [number, number][], x: number, z: number) => {
+    let d = Infinity, at = 0;
+    for (let j = 0; j < p.length; j++) {
+      const e = (x - p[j][0]) ** 2 + (z - p[j][1]) ** 2;
+      if (e < d) { d = e; at = j; }
+    }
+    return [Math.sqrt(d), at];
+  };
+  // le bruit avance ou recule chaque gradin (éperons, criques), le plateau a un bord découpé
+  const n1 = new Simplex(seed + 611), n2 = new Simplex(seed + 613), n3 = new Simplex(seed + 617);
+  const ramp = (a: number, b: number, d: number, e0: number, e1: number) => lerp(a, b, smoothstep(e0, e1, d));
+  const R = 22;
   const xs = best.map((p) => p[0]), zs = best.map((p) => p[1]);
-  const x0 = Math.max(0, Math.floor(Math.min(...xs) - R - 1)), x1 = Math.min(N, Math.ceil(Math.max(...xs) + R + 1));
-  const z0 = Math.max(0, Math.floor(Math.min(...zs) - R - 1)), z1 = Math.min(N, Math.ceil(Math.max(...zs) + R + 1));
+  const x0 = Math.max(0, Math.floor(Math.min(...xs) - R)), x1 = Math.min(N, Math.ceil(Math.max(...xs) + R));
+  const z0 = Math.max(0, Math.floor(Math.min(...zs) - R)), z1 = Math.min(N, Math.ceil(Math.max(...zs) + R));
+  const W = x1 - x0 + 1, out = new Float32Array(W * (z1 - z0 + 1)).fill(NaN);
   for (let z = z0; z <= z1; z++)
     for (let x = x0; x <= x1; x++) {
-      let d = Infinity, at = 0;
-      for (let j = 0; j < best.length; j++) {
-        const e = Math.hypot(x - best[j][0], z - best[j][1]);
-        if (e < d) { d = e; at = j; }
-      }
+      const [d] = near(best, x, z);
       if (d >= R) continue;
-      const i = z * S + x, h = world.heights[i], base = floor[at];
-      // aux bouts, le plateau s'abaisse (les 12 derniers pas)
-      const open = Math.min(1, Math.min(at, best.length - 1 - at) / 12), top = base + rise * open * (0.9 + 0.1 * Math.sin(at * 0.3));
-      if (d < G) { world.heights[i] = Math.min(h, base); continue; }
-      const p = d < G + WALL ? lerp(base, top, smoothstep(G, G + WALL, d)) : d < G + WALL + TOP ? top : lerp(top, h, smoothstep(G + WALL + TOP, R, d));
-      world.heights[i] = Math.min(MAX_H, Math.max(h, p));
+      const i = z * S + x, h = world.heights[i];
+      const e1 = 2.3 + n1.noise2(x * 0.3, z * 0.3) * 0.45;
+      const e2 = e1 + 0.6 + Math.max(0.8, 3.2 + n2.noise2(x * 0.16, z * 0.16) * 2.2);
+      const e3 = e2 + 0.6 + 7 + n3.fbm(x * 0.09, z * 0.09, 2) * 4;
+      let p: number;
+      if (d < 1.1) p = C.river;
+      else if (d < 1.5) p = C.bank;
+      else if (d < e1) p = C.floor;
+      else if (d < e1 + 0.6) p = ramp(C.floor, C.bench, d, e1, e1 + 0.6);
+      else if (d < e2) p = ramp(C.bench, C.foot, d, e2 - 0.9, e2);
+      else if (d < e2 + 0.6) p = ramp(C.foot, C.rim, d, e2, e2 + 0.6);
+      else p = C.rim;
+      // affluents : la paroi haute entaillée jusqu'à la terrasse
+      for (const tp of tribs) {
+        const [dt, at] = near(tp, x, z), w = 0.7 + 0.5 * (1 - at / tp.length);
+        if (dt < w) p = Math.min(p, C.foot);
+        else if (dt < w + 0.6) p = Math.min(p, ramp(C.foot, C.rim, dt, w, w + 0.6));
+      }
+      // plateau : il s'efface près de l'eau et vers son bord découpé (talus de 2,5 cases)
+      const k = smoothstep(2, 7, dist(Math.min(N - 1, x), Math.min(N - 1, z))) * (1 - smoothstep(e3, e3 + 2.5, d));
+      out[(z - z0) * W + x - x0] = p < h ? p : lerp(h, p, k);
     }
-  for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) if (world.veg[world.ci(x, z)] === VEG_FOREST) world.veg[world.ci(x, z)] = 0;
+  // (en deux temps : la distance à l'eau ne doit pas changer pendant le calcul) ; `lift` : de combien chaque sommet a bougé
+  const lift = new Float32Array(out.length);
+  for (let z = z0; z <= z1; z++)
+    for (let x = x0; x <= x1; x++) {
+      const o = (z - z0) * W + x - x0, v = out[o], i = z * S + x;
+      if (Number.isNaN(v)) continue;
+      lift[o] = v - world.heights[i];
+      world.heights[i] = Math.min(MAX_H, v);
+    }
+  // biomes peints et rien de l'ancien décor, là où le relief a changé
+  const floor: number[] = [];
+  for (let z = z0; z < z1; z++)
+    for (let x = x0; x < x1; x++) {
+      const o = (z - z0) * W + x - x0, up = (lift[o] + lift[o + 1] + lift[o + W] + lift[o + W + 1]) / 4;
+      const moved = Math.max(Math.abs(lift[o]), Math.abs(lift[o + 1]), Math.abs(lift[o + W]), Math.abs(lift[o + W + 1]));
+      if (moved < 0.05) continue;
+      const k = world.ci(x, z), a = world.cellAvg(x, z), [d] = near(best, x + 0.5, z + 0.5);
+      world.veg[k] = 0;
+      if (a < 0.08) continue;
+      // (la paroi de la gorge intérieure reste au désert : son grès rouge et ses strates)
+      if (d < 3.5 && a < 0.6) { world.paintBiome(x, z, BIOME_TEMPERATE); if (a > 0.4) floor.push(k); }
+      else if (up > 0.3 || a > 0.6) world.paintBiome(x, z, BIOME_DESERT);
+    }
+  // pas de petite tache de désert peinte hors du désert (au débouché, au bord du plateau) : une tache désertique de moins de
+  // `ISLET_MIN` cases rend ses cases peintes à leur climat, qui la fond alors dans le biome voisin (`fixIslets`)
+  world.computeBiomes();
+  const seen = new Uint8Array(N * N), dry = (k: number) => world.biome[k] === BIOME_DESERT && !world.isWaterCell(k % N, Math.floor(k / N));
+  for (let k0 = 0; k0 < N * N; k0++) {
+    if (seen[k0] || !dry(k0) || world.biomePaint[k0] !== BIOME_DESERT + 1) continue;
+    const cells = [k0];
+    seen[k0] = 1;
+    for (let i = 0; i < cells.length; i++) {
+      const cx = cells[i] % N, cz = Math.floor(cells[i] / N);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!world.inCells(cx + dx, cz + dz)) continue;
+        const j = world.ci(cx + dx, cz + dz);
+        if (!seen[j] && dry(j)) { seen[j] = 1; cells.push(j); }
+      }
+    }
+    if (cells.length < ISLET_MIN) for (const k of cells) if (world.biomePaint[k] === BIOME_DESERT + 1) world.paintBiome(k % N, Math.floor(k / N), null);
+  }
   world.markTerrain(x0, z0, x1, z1);
+  return floor;
 }
 
 /** Relief propre aux biomes : mares dans les marais, dunes au désert, en travers du vent `wind` (null : celui de la version 1) */
