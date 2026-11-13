@@ -170,15 +170,16 @@ export class AudioEngine {
     const out = 1 - s.under;
     // altitude (aigles en montagne)
     const high = clamp(((s.alt ?? 0) - 4) / 7, 0, 1);
-    set(this.streamG, 0.07 * (s.stream ?? 0) * out);
-    set(this.cascadeG, 0.12 * (s.cascade ?? 0) * out);
+    // ambiances continues gardées discrètes : elles ne doivent pas couvrir le jeu
+    set(this.streamG, 0.04 * (s.stream ?? 0) * out);
+    set(this.cascadeG, 0.065 * (s.cascade ?? 0) * out);
     // ressac : le niveau moyen et la houle (l'oscillateur ajoute ± autant au gain)
-    const surf = 0.06 * (s.coast ?? 0) * out;
+    const surf = 0.035 * (s.coast ?? 0) * out;
     set(this.surfG, surf); this.surfLfo.gain.setTargetAtTime(surf * 0.8, T, 0.4);
-    set(this.rainG, 0.1 * s.rain * out);
-    this.waterG.gain.setTargetAtTime(0.02 * clamp(1.4 - s.camDist / 130, 0.2, 1) * out, T, 0.5);
-    set(this.villageG, Math.min(0.03, s.pop * 0.0004) * s.daylight * (1 - s.rain * 0.6) * out);
-    set(this.caveG, 0.06 * s.under);
+    set(this.rainG, 0.045 * s.rain * out);
+    this.waterG.gain.setTargetAtTime(0.012 * clamp(1.4 - s.camDist / 130, 0.2, 1) * out, T, 0.5);
+    set(this.villageG, Math.min(0.018, s.pop * 0.00025) * s.daylight * (1 - s.rain * 0.6) * out);
+    set(this.caveG, 0.04 * s.under);
     this.tickVoices(T);
     // grillons la nuit : une courte trille douce de temps en temps, d'un grillon puis d'un autre (hauteur et place variées)
     this.cricketTimer -= dt;
@@ -478,7 +479,8 @@ export class AudioEngine {
   sfxThunder(delay: number, k: number) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime + delay;
-    if (k > 0.7) this.burst(t, 0.35, 2200, 0.35 * k);
+    k *= 0.55; // tonnerre plus lointain, moins agressif
+    if (k > 0.4) this.burst(t, 0.35, 2200, 0.35 * k);
     this.burst(t + 0.05, 2.8, 180, 0.9 * k);
     this.burst(t + 0.6 + Math.random() * 0.5, 2.2, 120, 0.6 * k);
     this.tone(38, t, 2.4, 'sine', 0.3 * k, this.sfxG, 0, 0.05);
