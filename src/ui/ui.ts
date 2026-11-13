@@ -435,8 +435,16 @@ const MISSION_ART = new Set([
   'stars', 'games', 'trawl', 'seafarm', 'rocket', 'moon', 'colony',
 ]);
 const DEST_ART = new Set(['plain', 'forest', 'sea', 'far', 'mountain', 'river', 'cave', 'spaceport']);
-/** Missions dessinées en diorama (`public/expeditions/dio-{id}.webp`, fond transparent) : l'îlot sort de la carte, à gauche */
-const MISSION_DIO = new Set(['mammoth', 'herd', 'seeds', 'kraken']);
+/**
+ * Missions dessinées en diorama (`public/expeditions/dio-{id}.webp`, îlot isométrique sur fond transparent) : l'îlot est posé
+ * à cheval sur le bord gauche de la carte. Toutes les missions en ont un ; une mission ajoutée sans diorama garde l'image
+ * dans son cadre
+ */
+const MISSION_DIO = new Set([
+  'herd', 'berries', 'flint', 'honey', 'mammoth', 'seeds', 'horses', 'fishing', 'springs', 'pugilat', 'kraken', 'portal',
+  'megalodon', 'mine', 'wolf', 'fair', 'brewer', 'dragon', 'caravel', 'spice', 'railway', 'coal', 'motorcar', 'flight', 'oil',
+  'galleon', 'summit', 'reef', 'stars', 'games', 'trawl', 'seafarm', 'rocket', 'moon', 'colony',
+]);
 /** Équipements illustrés (`public/icons/gear/`) : `{id}.webp` sans décor (cases, file), `{id}-bg.webp` avec décor (cartes) */
 const GEAR_ART = new Set<GearId>([
   'spear', 'rope', 'torch', 'bow', 'boat', 'sword', 'crossbow', 'armor', 'kit', 'rifle', 'lamp', 'assault', 'grenade',
