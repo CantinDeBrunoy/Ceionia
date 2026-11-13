@@ -50,15 +50,23 @@ describe('le menu de l’île', () => {
     expect(isle).toContain('class="tmenu panel tbase tbarr"');
     // les recrues se montrent dans les mêmes tuiles que les recrues des Enfers
     expect(isle).toMatch(/data-a="rec:soldier" class="trb tb rh /);
-    // dans les Enfers, « Ma base » est un tiroir fermé à l'arrivée : un bouton, qui ouvre les mêmes onglets
-    const { ui, html } = build('hell');
-    expect(html()).toContain('data-a="base"');
-    expect(html()).not.toContain('class="tmenu panel tbase tbarr"');
-    expect(html()).not.toContain('data-a="tab:build"');
-    (ui as any).onBar({ target: { closest: () => ({ dataset: { a: 'base' } }) }, shiftKey: false, ctrlKey: false });
+    // les onglets sont les deux modes du petit panneau de gauche, comme Bâtir / Paysage au village
+    expect(isle).toMatch(/class="ttool panel"><span class="ttabs"><button data-a="tab:build"/);
+    // dans les Enfers, la même barre : « Ma base » est ouverte d'emblée, avec les mêmes onglets à gauche (plus de tiroir)
+    const { html } = build('hell');
+    expect(html()).not.toContain('data-a="base"');
     expect(html()).toContain('Ma base');
     expect(html()).toContain('data-a="tab:build"');
     expect(html()).toContain('class="tmenu panel tbase tbarr"');
+  });
+
+  it('chaque onglet Bâtir montre aussi, grisés, les bâtiments de l’autre théâtre', () => {
+    const isle = build('isle');
+    (isle.ui as any).isleTab = 'build';
+    (isle.ui as any).barKey = '';
+    isle.ui.render();
+    expect(isle.html()).toMatch(/class="trb tb tbv off far" disabled/);
+    expect(build('hell').html()).toMatch(/class="trb tb tbv off far" disabled/);
   });
 
   it('les Enfers sans le superflu : ni carte de passage, ni « Suivre », ni bulle d’aide tant qu’on ne bâtit pas', () => {
@@ -71,7 +79,7 @@ describe('le menu de l’île', () => {
     expect(h).not.toContain('data-a="follow"');
     expect(h).not.toContain('class="tbub"');
     expect(h).toContain('class="tcard');
-    // un bâtiment à poser : le tiroir s'ouvre et la bulle dit comment faire
+    // un bâtiment à poser : la bulle dit comment faire
     ui.startPlacing('camp');
     expect(html()).toContain('class="tmenu panel tbase tbarr"');
     expect(html()).toContain('class="tbub"');
@@ -88,8 +96,8 @@ describe('le menu de l’île', () => {
     for (const k of ['watchtower', 'barracks', 'wall', 'gate']) expect(h).toContain(`data-a="ibuild:${k}"`);
   });
 
-  it('le retour est « Retourner au village », compact, comme le retour des Enfers', () => {
+  it('le retour est « Retourner au village », sur l’île comme dans les Enfers', () => {
     expect(build('isle').html()).toContain('Retourner au village');
-    expect(build('hell').html()).toMatch(/data-a="leave"[^>]*>.*Village/);
+    expect(build('hell').html()).toMatch(/data-a="leave"[^>]*>.*Retourner au village/);
   });
 });
