@@ -171,14 +171,35 @@ export function openSea(w: World, r: number): number[] {
   return out;
 }
 /**
- * Place libre en mer : pour chaque case, la distance (en cases, au plus `max`) à la terre ou à un lac la plus proche (0 hors
- * de la mer). Un nageur tourne autour de son domaine : il lui faut assez de place pour ne jamais frôler une rive (sinon il
- * disparaît et reparaît d'un coup en passant dessus)
+ * La mer : les cases d'eau (hors mares) reliées au bord de la carte, c'est-à-dire au large. Un lac intérieur (le grand lac en
+ * anneau autour de son île, un étang sous le niveau de la mer), si grand soit-il, n'en est pas : pas de baleine ni de requin
+ * dedans
  */
-export function seaRoom(w: World, max: number): Uint8Array {
-  const dist = new Uint8Array(N * N).fill(255), queue = new Int32Array(N * N);
+export function seaMask(w: World): Uint8Array {
+  const m = new Uint8Array(N * N), st: number[] = [];
+  const add = (x: number, z: number) => {
+    if (!w.inCells(x, z)) return;
+    const k = w.ci(x, z);
+    if (m[k] || w.lake[k] || !water(w, x, z)) return;
+    m[k] = 1; st.push(k);
+  };
+  for (let i = 0; i < N; i++) { add(i, 0); add(i, N - 1); add(0, i); add(N - 1, i); }
+  while (st.length) {
+    const k = st.pop()!, x = k % N, z = (k - x) / N;
+    add(x + 1, z); add(x - 1, z); add(x, z + 1); add(x, z - 1);
+  }
+  return m;
+}
+/**
+ * Place libre en mer : pour chaque case, la distance (en cases, au plus `max`) à la terre, à une mare ou à un lac la plus
+ * proche (0 hors de la mer). Un nageur tourne autour de son domaine : il lui faut assez de place pour ne jamais frôler une
+ * rive (sinon il disparaît et reparaît d'un coup en passant dessus). Avec `sea` = false, toute eau compte (les lacs aussi :
+ * les poissons y vivent)
+ */
+export function seaRoom(w: World, max: number, sea = true): Uint8Array {
+  const dist = new Uint8Array(N * N).fill(255), queue = new Int32Array(N * N), m = sea ? seaMask(w) : null;
   let head = 0, tail = 0;
-  for (let k = 0; k < N * N; k++) if (!water(w, k % N, Math.floor(k / N)) || w.lake[k]) { dist[k] = 0; queue[tail++] = k; }
+  for (let k = 0; k < N * N; k++) if (!water(w, k % N, Math.floor(k / N)) || w.lake[k] || (m && !m[k])) { dist[k] = 0; queue[tail++] = k; }
   while (head < tail) {
     const k = queue[head++], d = dist[k];
     if (d >= max) continue;
@@ -703,8 +724,9 @@ export class Fauna {
   /** prédateurs, et chef (rang 0) de chaque groupe : recensés à chaque image plutôt que cherchés parmi toutes les bêtes */
   private hunters: Critter[] = [];
   private leads = new Map<string, Critter>();
-  /** place libre en mer (voir `seaRoom`), du dernier recensement */
+  /** place libre en mer, et dans toute eau, lacs compris (voir `seaRoom`), du dernier recensement */
   private room: Uint8Array | null = null;
+  private wetRoom: Uint8Array | null = null;
   /** qualité graphique : part de la distance à laquelle les bêtes articulées restent affichées et animées à chaque image */
   detail = 1;
   /** silhouettes figées des bêtes articulées lointaines, dessinées par lots */
@@ -853,7 +875,8 @@ export class Fauna {
       }
     }
     yield;
-    const room = this.room = seaRoom(w, 9);
+    // la place en mer (bêtes marines, jamais dans un lac) et dans toute eau (poissons, aussi dans les lacs)
+    const room = this.room = seaRoom(w, 9), wet = this.wetRoom = seaRoom(w, 9, false);
     for (let k = 0; k < N * N; k++) if (room[k] >= OPEN_SEA) deep.push(k);
     const roomy = (list: number[], r: number) => list.filter((k) => room[k] >= r);
     yield;
@@ -1010,7 +1033,7 @@ export class Fauna {
     const flowery = gardens.concat(mT.filter((_, i) => i % 3 === 0), mTr);
     group('bees', 'bee', flowery, Math.min(9, Math.floor(flowery.length / 45) + Math.min(3, gardens.length)), () => 3, 5, 150);
     group('fly', 'butterfly', gardens.concat(green), Math.min(40, gardens.length + Math.floor(green.length / 70)), () => 1, 0.4, 160);
-    const fishSea = roomy(shallows, 2), mantaSea = roomy(shallows, 3);
+    const fishSea = shallows.filter((k) => wet[k] >= 2), mantaSea = roomy(shallows, 3);
     group('fish', 'fish', fishSea, Math.min(22, Math.floor(shallows.length / 22)), (i) => 5 + (i % 3), 1.3, 200);
     // les grands animaux décrivent de larges boucles : domaine loin des bords de la carte
     const open = (r: number) => deep.filter((k) => { const x = k % N, z = Math.floor(k / N); return x > r && z > r && x < N - 1 - r && z < N - 1 - r; });
@@ -1165,7 +1188,8 @@ export class Fauna {
     if (!best) return;
     let kind: Kind = 'fish';
     // sur l'eau libre, un visiteur sur deux est un groupe de dauphins (un banc de poissons, sous la surface, se voit mal)
-    if (wet && this.visitSerial % 2 === 0 && [[3, 0], [-3, 0], [0, 3], [0, -3]].every(([dx, dz]) => water(w, Math.floor(best![0] + dx), Math.floor(best![1] + dz)))) kind = 'dolphin';
+    // (en mer seulement, assez loin des rives : jamais dans un lac ni une rivière)
+    if (wet && this.visitSerial % 2 === 0 && this.roomAt(best[0], best[1], 4)) kind = 'dolphin';
     if (!wet) {
       const list = NEARBY[w.biome[w.ci(Math.floor(best[0]), Math.floor(best[1]))]].filter((k) => this.shows(k) && nearbyAllowed(k, this.lastAge));
       if (!list.length) return;
@@ -1756,15 +1780,16 @@ export class Fauna {
     const k = (sgn * sp * dt) / Math.max(0.01, bd);
     const nx = c.hx + (best.hx - c.hx) * k, nz = c.hz + (best.hz - c.hz) * k;
     // le domaine reste en eau libre, assez loin des rives pour toute la ronde
-    if (!this.roomAt(nx, nz, c.radius)) return;
+    if (!this.roomAt(nx, nz, c.radius, c.kind !== 'fish')) return;
     if (c.kind === 'fish' || bd > 1) { c.hx = nx; c.hz = nz; }
   }
 
-  /** Assez de place en mer autour de (x, z) pour une ronde de rayon `r` */
-  private roomAt(x: number, z: number, r: number) {
+  /** Assez de place autour de (x, z) pour une ronde de rayon `r` : en mer (`sea`, bêtes marines) ou dans toute eau (poissons) */
+  private roomAt(x: number, z: number, r: number, sea = true) {
     const cx = Math.floor(x), cz = Math.floor(z);
     if (!this.world.inCells(cx, cz)) return false;
-    if (this.room) return this.room[this.world.ci(cx, cz)] >= Math.max(2, Math.ceil(r));
+    const room = sea ? this.room : this.wetRoom;
+    if (room) return room[this.world.ci(cx, cz)] >= Math.max(2, Math.ceil(r));
     return [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].every(([ox, oz]) => water(this.world, Math.floor(x + ox), Math.floor(z + oz)));
   }
 

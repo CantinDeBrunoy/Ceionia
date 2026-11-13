@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
 import { World, N, setMapSize, VEG_CAVE, VEG_FOREST, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
-import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA, COAST_REACH, nearbyAllowed } from '../src/render/fauna';
+import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA, COAST_REACH, nearbyAllowed, seaMask } from '../src/render/fauna';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { hash2 } from '../src/core/rng';
@@ -174,6 +174,47 @@ describe('faune : la mer', () => {
     expect(worst.d).toBeLessThan(0.1);
     expect(worst.h).toBeLessThan(0.2);
     expect(worst.y).toBeLessThan(0.06);
+    setMapSize(96);
+  });
+
+  it('les bêtes marines restent en mer : jamais dans un lac, même grand et profond ; les poissons, si', () => {
+    setMapSize(96);
+    const MARINE = ['dolphin', 'whale', 'manta', 'shark'];
+    // la terre partout, sauf un grand lac en anneau autour d'une île au milieu (sans lien avec le bord de la carte)
+    const w = new World(), V = N + 1;
+    for (let z = 0; z < V; z++) for (let x = 0; x < V; x++) {
+      const d = Math.hypot(x - 48, z - 48);
+      w.heights[z * V + x] = d > 8 && d < 34 ? -1.3 : 1;
+    }
+    w.computeBiomes();
+    w.biome.fill(BIOME_TEMPERATE);
+    expect(seaMask(w).some((v) => v)).toBe(false);
+    expect(openSea(w, OPEN_SEA)).toEqual([]);
+    const f = new Fauna(w, { perches: Array.from({ length: N * N }, () => []), flowers: Array.from({ length: N * N }, () => []) });
+    // la vue sur le lac : les visiteurs (bancs, et dauphins sur l'eau libre de la mer) peuvent venir
+    const cam = new THREE.PerspectiveCamera(50, 1.5, 0.1, 500);
+    cam.position.set(52, 10, 28);
+    cam.lookAt(48, 0, 24);
+    cam.updateMatrixWorld();
+    for (let i = 0; i < 200; i++) f.update(0.05, i * 0.05, 12, 1, 0, 0, cam);
+    const all = (f as any).critters;
+    expect(all.filter((c: any) => MARINE.includes(c.kind))).toEqual([]);
+    expect(all.some((c: any) => c.kind === 'fish')).toBe(true);
+
+    // et sur le continent : chaque bête marine nage sur une case de mer, jamais sur une case de lac
+    setMapSize(192);
+    const c = new World();
+    newWorld(c, 3, 2026, GEN);
+    c.updateVis();
+    const sea = seaMask(c);
+    const g = new Fauna(c, { perches: Array.from({ length: N * N }, () => []), flowers: Array.from({ length: N * N }, () => []) });
+    for (let i = 0; i < 60; i++) g.update(0.05, i * 0.05, 12, 1, 0, 0);
+    const marine = (g as any).critters.filter((x: any) => MARINE.includes(x.kind));
+    expect(marine.length).toBeGreaterThan(0);
+    for (const x of marine) {
+      expect(sea[c.ci(Math.floor(x.hx), Math.floor(x.hz))], `${x.key} domaine`).toBe(1);
+      if (!x.hidden) expect(sea[c.ci(Math.floor(x.x), Math.floor(x.z))], `${x.key}`).toBe(1);
+    }
     setMapSize(96);
   });
 
