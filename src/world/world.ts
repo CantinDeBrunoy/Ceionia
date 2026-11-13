@@ -41,6 +41,9 @@ export const VR = 2;
 export let VS = N * VR + 1;
 
 /** Taille de la carte choisie ; à appeler avant de construire le monde, ses vues et la caméra (tailles des tableaux) */
+/** Taille (cases de terre) sous laquelle une tache de climat tropical ou désertique se fond dans ses voisines */
+export const ISLET_MIN = 60;
+
 export function setMapSize(n: number) {
   N = n;
   VS = n * VR + 1;
@@ -206,6 +209,11 @@ export class World {
   bed = new Uint8Array(N * N);
   /** distances à l'eau déjà calculées (un recalcul partiel des biomes peut s'y fier) */
   private biomesDone = false;
+  /**
+   * Îlots de climat effacés (`fixIslets`) : 0 ou le biome qui remplace + 1, refait à chaque calcul complet ; un calcul partiel
+   * (retouche du relief) le réapplique pour qu'un îlot ne revienne pas
+   */
+  private islet = new Uint8Array(N * N);
   /** Distance (en cases, plafonnée) à l'eau la plus proche */
   waterDist = new Uint8Array(N * N);
   /** Vie sauvage, non sauvegardée : herbe broutée (0 intacte … 1 rase) et fleurs semées par les abeilles */
@@ -942,8 +950,50 @@ export class World {
       if (t < -0.36) b = BIOME_TAIGA;
       else if (t > 0.3) b = m < 0.08 ? BIOME_DESERT : BIOME_TROPICAL;
       else if (m > 0.32 && h < 1.4 && d <= 4) b = BIOME_MARSH;
+      if (rect && this.islet[k] && (b === BIOME_DESERT || b === BIOME_TROPICAL)) b = this.islet[k] - 1;
       const f = this.biomePaint[k];
       this.biome[k] = f ? f - 1 : b;
+    }
+    // (la carte figée de la version 1 garde ses biomes d'origine)
+    if (!rect && this.gen !== GEN_FIXED) this.fixIslets();
+  }
+
+  /**
+   * Petites taches de climat chaud : le bruit de température franchit le seuil des tropiques ou du désert par endroits, en
+   * plein pays tempéré, et y faisait pousser des palmiers sans neige au milieu d'une forêt enneigée. Une tache tropicale ou
+   * désertique de moins de `ISLET_MIN` cases de terre prend le biome le plus fréquent autour d'elle, sauf l'oasis (tache
+   * tropicale entourée surtout de désert) et les îles (aucune terre voisine). Les cases peintes au pinceau ne bougent pas.
+   * Pas sur la carte figée de la version 1
+   */
+  private fixIslets() {
+    const land = (k: number) => !this.isWaterCell(k % N, Math.floor(k / N));
+    this.islet.fill(0);
+    // (plusieurs passes : un petit désert fondu dans le tempéré peut laisser seule une oasis voisine)
+    for (let pass = 0, changed = true; changed && pass < 4; pass++) {
+      changed = false;
+      const seen = new Uint8Array(N * N);
+      for (let k0 = 0; k0 < N * N; k0++) {
+        const b = this.biome[k0];
+        if (seen[k0] || (b !== BIOME_DESERT && b !== BIOME_TROPICAL) || this.biomePaint[k0] || !land(k0)) continue;
+        const cells = [k0], nb = [0, 0, 0, 0, 0];
+        seen[k0] = 1;
+        for (let i = 0; i < cells.length; i++) {
+          const cx = cells[i] % N, cz = Math.floor(cells[i] / N);
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const x = cx + dx, z = cz + dz;
+            if (!this.inCells(x, z)) continue;
+            const j = z * N + x;
+            if (!land(j)) continue;
+            if (this.biome[j] === b && !this.biomePaint[j]) { if (!seen[j]) { seen[j] = 1; cells.push(j); } } else nb[this.biome[j]]++;
+          }
+        }
+        if (cells.length >= ISLET_MIN) continue;
+        let best = -1;
+        for (let o = 0; o < 5; o++) if (o !== b && nb[o] > 0 && (best < 0 || nb[o] > nb[best])) best = o;
+        if (best < 0 || (b === BIOME_TROPICAL && best === BIOME_DESERT)) continue;
+        for (const k of cells) { this.biome[k] = best; this.islet[k] = best + 1; }
+        changed = true;
+      }
     }
   }
 

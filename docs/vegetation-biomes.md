@@ -1,7 +1,7 @@
 # Végétation, climat et biomes
 
 > Fichiers : `src/world/world.ts` (`computeBiomes`, `paintBiome`, `vegFits`, `setVeg`, `sanitize`, constantes `BIOME_*`, `TREE_LINE`, `SNOW_LINE`), `src/world/continent.ts` (`fillClimate`), `src/world/mapgen.ts` (forêts, rochers, bosquets, `shapeBiomes`), `src/render/vegetation.ts` (`VegView` : arbres, herbe, fleurs, rochers, fonds marins), `src/render/treeShapes.ts` (feuillus, sapins, buissons et rochers dessinés par le jeu), `src/render/season.ts` et `seasonConfig.ts` (saisons, voir [saisons.md](saisons.md)), `src/render/terrainView.ts` (teinte du sol par biome et par saison), `src/render/alpine.ts` (station de ski).
-> Tests : `tests/rivage.test.ts` (algues, roseaux, nénuphars), `tests/saisons.test.ts`, `tests/champs.test.ts`, `tests/neigeRoutes.test.ts`.
+> Tests : `tests/rivage.test.ts` (algues, roseaux, nénuphars), `tests/biomesIlots.test.ts` (pas d'îlot tropical ni désertique en pays tempéré), `tests/saisons.test.ts`, `tests/champs.test.ts`, `tests/neigeRoutes.test.ts`.
 > Voir aussi : [monde-carte.md](monde-carte.md), [eau-rivieres.md](eau-rivieres.md), [ciel-meteo.md](ciel-meteo.md), [faune.md](faune.md), [outils-terrain.md](outils-terrain.md), [rendu-modeles.md](rendu-modeles.md)
 
 ## En bref
@@ -22,7 +22,8 @@ Chaque case a un **biome** (tempéré, taïga, désert, tropical, marais) dédui
 - `World.computeBiomes(rect)` : recalcule `temp`/`wet` si la clé `mapId|seed|gen` a changé (donc au chargement), puis les distances à l'eau (`waterDist`, parcours en largeur depuis les cases `isWaterCell`, plafonné à 12), puis le biome de chaque case :
   - `t = temp − max(0, h − 2.6) × 0.22` (l'altitude refroidit), `m = wet + (0.25 si d ≤ 2, 0.1 si d ≤ 5)` ;
   - `t < -0.36` : taïga ; sinon `t > 0.3` : désert si `m < 0.08`, sinon tropical ; sinon `m > 0.32` et `h < 1.4` et `d ≤ 4` : marais ; sinon tempéré ;
-  - `biomePaint` l'emporte.
+  - **îlots de climat** (`fixIslets`, après chaque calcul complet, sauf sur la carte figée de la version 1) : le bruit de température franchit par endroits le seuil des tropiques ou du désert en plein pays tempéré (une case à une soixantaine), ce qui faisait pousser des palmiers sans neige au milieu d'une forêt enneigée. Une tache tropicale ou désertique de moins de `ISLET_MIN = 60` cases de terre prend le biome le plus fréquent autour d'elle ; restent l'oasis (tache tropicale entourée surtout de désert) et les îles (sans terre voisine). Plusieurs passes (au plus 4) : un petit désert fondu dans le tempéré peut laisser seule une oasis voisine. Le remplacement est retenu (`islet`) et réappliqué par les calculs partiels ;
+  - `biomePaint` l'emporte (les cases peintes ne sont jamais fondues).
   Avec `rect`, seule la zone retouchée est refaite, sauf si une case y a changé d'état eau/terre (alors tout est recalculé). Appelé par `updateVis`.
 - `carveCanyon` (`mapgen.ts`, version 3, juste après `shapeBiomes`) : un canyon dans le désert. Tracé sinueux (pas de 0,5 case, virage lissé), qui reste au désert à 5 cases au moins de l'eau et à 10 du bord ; le plus long de 16 essais, gardé s'il fait 24 cases ou plus. Fond plat (demi-largeur 1,25) à la hauteur du désert lissée sur ±10 pas, au moins 0,35 ; parois sur 1,15 case ; plateau de 4 cases à 2,4 au-dessus du fond ; pente extérieure sur 2,8 cases. Aux 12 derniers pas de chaque bout, le plateau s'abaisse : la gorge s'ouvre. Les parois abruptes du désert sont teintes de grès rouge (`RED_ROCK`, `terrainView.ts`), striées par le shader comme les autres roches.
 - `shapeBiomes` (`mapgen.ts`, à la génération seulement) sculpte le relief selon le biome : marais (sommets sous 1,2 : mares de bruit `Simplex(seed+313)`, fond jusqu'à -0,8, sinon aplati vers 0,3), désert (au-dessus de 0,4 : dunes `sin` d'amplitude ~0,45, orientées par le vent du plan).
@@ -82,6 +83,7 @@ Par case de terre (`cellAvg ≥ 0.12`), bruit `Simplex(seed+99)` :
 
 ## Pièges et invariants
 - Un nouveau biome change la taille des tableaux par biome (`NB = 5` dans `terrainView.ts`, `SNOWY`, `FERN_TINT`, `TUFT_TINT`, `SHRUB_COLORS`, `WILD_HUES`, `CAVE_ROCK`, `CAVE_TOP`, `dense` de `newWorld`, `lone` de `meadowDetails`, fleurs…) : tous dans le même ordre.
+- Essences par biome : palmiers seulement au biome tropical (`forest`, `meadowDetails`), cactus au désert ; un palmier hors des tropiques vient donc toujours d'un biome mal placé, pas du rendu.
 - La peinture de biome (`biomePaint`) est sauvegardée (`toJSON` : `biomes`) ; le climat, lui, n'est pas sauvegardé et se recalcule depuis `gen` : changer `fillClimate` d'une version existante change les biomes des parties en cours.
 - Toute modification de `veg`, `road` ou du relief doit marquer la zone (`markVeg`) ; sans cela, l'ancien décor reste.
 - Un recalcul de saison remet toute la carte en file : sur 192 cases, c'est volontairement étalé (`BUDGET_MS`). Ne pas appeler `rebuild` de toute la carte à chaque image.
