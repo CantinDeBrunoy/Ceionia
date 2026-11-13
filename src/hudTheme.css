@@ -322,3 +322,27 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
   .sArt.mart.dio .sCap h3 { font-size: 34px; }
   .sendModal .sGrid { grid-template-columns: 0.95fr 1.1fr; gap: 30px; }
 }
+
+/* ---------- Tracé d'une ligne de chemin de fer (#railEdit), d'après la maquette de l'auteur : panneau de parchemin à filet
+   doré en haut au centre, le paysage de l'âge derrière le titre, le trajet dans une capsule avec un train, l'astuce en
+   italique entre deux filets, les actions sur une ligne, « Valider » en or à droite ---------- */
+#railEdit { width: min(640px, 94vw); padding: 14px 16px 14px; overflow: hidden; border-radius: 20px; color: var(--hInk);
+  background: linear-gradient(180deg, #FFFAEE 0%, #FCF0D8 60%, #F7E7C8 100%); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); backdrop-filter: none; -webkit-backdrop-filter: none; }
+#railEdit::before { content: ''; position: absolute; top: 0; right: 0; width: 52%; height: 64px; background: var(--exp-banner) center 60% / cover no-repeat; -webkit-mask-image: linear-gradient(90deg, transparent, #000 40%); mask-image: linear-gradient(90deg, transparent, #000 40%); opacity: 0.9; pointer-events: none; }
+#railEdit > * { position: relative; }
+#railEdit .rhead { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+#railEdit .rhead b { font-family: var(--hSerif); font-weight: 800; font-size: 25px; letter-spacing: -0.01em; font-variation-settings: 'SOFT' 30, 'opsz' 72; }
+#railEdit .rhead .lineDot, #railEdit .rhead i { width: 18px; height: 18px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(160, 120, 60, 0.4); }
+#railEdit .rroute { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; padding: 7px 14px; border-radius: 999px; background: linear-gradient(180deg, #FFFDF6, #F8EBCF); border: 1.5px solid rgba(225, 190, 130, 0.8); font-family: var(--hSerif); font-weight: 800; font-size: 17px; }
+#railEdit .rroute svg { color: #8A5A12; }
+#railEdit small { display: block; color: var(--hInk); font-size: 13px; line-height: 1.4; padding: 0 4px; }
+#railEdit .rtip { margin-top: 8px; padding: 7px 4px; border-top: 1px solid rgba(200, 160, 95, 0.4); border-bottom: 1px solid rgba(200, 160, 95, 0.4); font-style: italic; color: var(--hInk2); }
+#railEdit .rbad { color: #A8323A; }
+#railEdit .acts { flex-wrap: nowrap; gap: 8px; margin-top: 10px; }
+#railEdit .acts button { flex: 1 1 auto; justify-content: center; min-height: 40px; padding: 0 12px; border-radius: 999px; font-weight: 700; color: var(--hInk);
+  border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F7E9CC); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(120, 80, 25, 0.18); }
+#railEdit .acts button:disabled { opacity: 1; color: rgba(110, 88, 67, 0.5); background: rgba(120, 90, 50, 0.08); border-color: rgba(200, 165, 110, 0.45); box-shadow: none; }
+#railEdit .acts button.primary { background: linear-gradient(180deg, #FFE7A6, #F2BE55); border-color: #D9A646; color: #4A3010; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 3px 8px rgba(120, 80, 20, 0.25); }
+#railEdit .acts button.primary:disabled { background: rgba(240, 200, 110, 0.35); color: rgba(74, 48, 16, 0.5); }
+#railEdit kbd { padding: 1px 6px; border-radius: 6px; border: 1px solid rgba(200, 160, 95, 0.7); background: #FFFDF6; font: 600 11px/1.5 var(--fL, inherit); color: var(--hInk2); }
+@media (max-width: 600px) { #railEdit .acts { flex-wrap: wrap; } #railEdit::before { width: 70%; } #railEdit kbd { display: none; } }
