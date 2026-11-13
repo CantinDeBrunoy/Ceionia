@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World, N, SEA, VR, VS, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
+import { computeFlow } from '../world/flow';
 import { Simplex } from '../world/noise';
 import { groundDetailTexture, waterNormalTexture } from './textures';
 import { Blight, blightAt, purityAt } from '../world/blight';
@@ -485,68 +486,9 @@ ${BLIGHT_GLSL}
     return false;
   }
 
-  /**
-   * Courant des rivières : l'eau descend la vallée, seulement dans les chenaux étroits. L'axe suit le bord de l'eau ; le
-   * sens va vers les berges plus basses le long de cet axe (des hautes vallées vers les basses)
-   */
+  /** Courant des rivières, de la montagne à la mer (voir `computeFlow` dans `world/flow.ts`) */
   private computeFlow() {
-    const w = this.world, R = 4, S = N + 1;
-    const wet = (k: number) => w.cellAvg(k % N, Math.floor(k / N)) < -0.05 && !w.lake[k];
-    // tables cumulées : somme des hauteurs et nombre de cases de terre, pour une moyenne en carré en temps constant
-    const sumH = new Float64Array(S * S), cnt = new Float64Array(S * S), land = new Int16Array(N * N).fill(-1), q: number[] = [];
-    for (let z = 0; z < N; z++)
-      for (let x = 0; x < N; x++) {
-        const k = z * N + x, dry = !wet(k), i = (z + 1) * S + x + 1;
-        sumH[i] = (dry ? w.cellAvg(x, z) : 0) + sumH[i - 1] + sumH[i - S] - sumH[i - S - 1];
-        cnt[i] = (dry ? 1 : 0) + cnt[i - 1] + cnt[i - S] - cnt[i - S - 1];
-        if (dry) { land[k] = 0; q.push(k); }
-      }
-    const nb = (k: number) => { const x = k % N, z = Math.floor(k / N); return [x > 0 ? k - 1 : -1, x < N - 1 ? k + 1 : -1, z > 0 ? k - N : -1, z < N - 1 ? k + N : -1]; };
-    // largeur : distance à la rive, au plus quelques cases
-    for (let h = 0; h < q.length; h++) { const d = land[q[h]]; if (d >= 4) continue; for (const j of nb(q[h])) if (j >= 0 && land[j] < 0) { land[j] = d + 1; q.push(j); } }
-    const bank = (x: number, z: number) => {
-      const x0 = Math.max(0, x - R), z0 = Math.max(0, z - R), x1 = Math.min(N, x + R + 1), z1 = Math.min(N, z + R + 1);
-      const c = cnt[z1 * S + x1] - cnt[z0 * S + x1] - cnt[z1 * S + x0] + cnt[z0 * S + x0];
-      return c ? (sumH[z1 * S + x1] - sumH[z0 * S + x1] - sumH[z1 * S + x0] + sumH[z0 * S + x0]) / c : 0;
-    };
-    // axe du chenal : la pente moyenne des berges va surtout d'une rive à l'autre (une rive plus haute que l'autre) ; l'axe
-    // vient donc du bord de l'eau. Part de terre en carré de rayon 2, son gradient (vers les rives), puis tenseur de
-    // structure de ce gradient en carré de rayon 3 : son vecteur propre mineur suit le chenal, même en son milieu où le
-    // gradient s'annule
-    const box = (t: Float64Array, x: number, z: number, r: number) => {
-      const x0 = Math.max(0, x - r), z0 = Math.max(0, z - r), x1 = Math.min(N, x + r + 1), z1 = Math.min(N, z + r + 1);
-      return [t[z1 * S + x1] - t[z0 * S + x1] - t[z1 * S + x0] + t[z0 * S + x0], (x1 - x0) * (z1 - z0)];
-    };
-    const dryF = new Float32Array(N * N);
-    for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) { const [c, a] = box(cnt, x, z, 2); dryF[z * N + x] = c / a; }
-    const jxx = new Float64Array(S * S), jxz = new Float64Array(S * S), jzz = new Float64Array(S * S);
-    for (let z = 0; z < N; z++)
-      for (let x = 0; x < N; x++) {
-        const gx = dryF[z * N + Math.min(N - 1, x + 1)] - dryF[z * N + Math.max(0, x - 1)];
-        const gz = dryF[Math.min(N - 1, z + 1) * N + x] - dryF[Math.max(0, z - 1) * N + x], i = (z + 1) * S + x + 1;
-        jxx[i] = gx * gx + jxx[i - 1] + jxx[i - S] - jxx[i - S - 1];
-        jxz[i] = gx * gz + jxz[i - 1] + jxz[i - S] - jxz[i - S - 1];
-        jzz[i] = gz * gz + jzz[i - 1] + jzz[i - S] - jzz[i - S - 1];
-      }
-    const data = this.flowTex.image.data as Uint8Array;
-    data.fill(0);
-    for (let k = 0; k < N * N; k++) {
-      if (!wet(k) || land[k] < 0) continue;
-      const x = k % N, z = Math.floor(k / N);
-      const a = box(jxx, x, z, 3)[0], b = box(jxz, x, z, 3)[0], c = box(jzz, x, z, 3)[0];
-      if (a + c < 1e-6) continue;
-      const th = 0.5 * Math.atan2(2 * b, a - c);
-      let vx = -Math.sin(th), vz = Math.cos(th);
-      // sens : vers l'aval, là où les berges sont plus basses, 4 cases plus loin le long de l'axe
-      const at = (s: number) => bank(Math.min(N - 1, Math.max(0, Math.round(x + vx * s))), Math.min(N - 1, Math.max(0, Math.round(z + vz * s))));
-      const drop = at(-4) - at(4);
-      if (drop < 0) { vx = -vx; vz = -vz; }
-      const narrow = Math.min(1, Math.max(0, (4.5 - land[k]) / 2.5)), strong = Math.min(1, 0.45 + Math.abs(drop) * 1.5);
-      data[k * 4] = Math.round((vx * 0.5 + 0.5) * 255);
-      data[k * 4 + 1] = Math.round((vz * 0.5 + 0.5) * 255);
-      data[k * 4 + 2] = Math.round(narrow * strong * 255);
-      data[k * 4 + 3] = 255;
-    }
+    computeFlow(this.world, this.flowTex.image.data as Uint8Array);
     this.flowTex.needsUpdate = true;
   }
 
