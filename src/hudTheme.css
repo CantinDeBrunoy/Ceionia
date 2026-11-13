@@ -192,48 +192,37 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 /* l'objet entier, posé sur son parchemin (l'image est carrée, la case en 16:10) */
 .gear .gart img { object-fit: contain; object-position: 50% 50%; }
 .expModal .cdet summary, .expModal a { color: #8A5A12; }
-/* les missions en liste de cartes larges (proposition B) : l'image à gauche, le texte au milieu, les gains et le bouton à
-   droite ; une mission en diorama pose son îlot à gauche, qui sort de la carte par la gauche (dans la marge) et par le haut */
-.expModal .missions { grid-template-columns: minmax(0, 1fr); padding: 56px 10px 22px 70px; row-gap: 76px; }
-.expModal .mission { min-height: 200px; gap: 22px; padding: 14px 18px 14px 14px; }
-.expModal .mission .mart { flex: 0 0 230px; min-height: 0; }
-.expModal .mbody { display: grid; grid-template-columns: minmax(0, 1fr) 250px; grid-template-rows: auto auto 1fr auto; column-gap: 22px; align-content: start; }
+/* les missions en liste de cartes larges et basses (proposition B de l'auteur, resserrée) : l'image à gauche, le texte au
+   milieu, les gains et le bouton à droite ; la carte est plus claire que le parchemin de la fenêtre, pour se détacher. Une
+   mission en diorama pose son îlot à gauche : il sort de la carte par la gauche (dans la marge) et par le haut */
+.expModal .missions { grid-template-columns: minmax(0, 1fr); padding: 40px 10px 18px 56px; row-gap: 44px; }
+.expModal .mission { min-height: auto; gap: 16px; padding: 10px 14px 10px 10px; border-radius: 16px;
+  background: linear-gradient(180deg, #FFFEFA, #FFF7E8); border: 1.5px solid rgba(225, 195, 140, 0.75);
+  box-shadow: inset 0 0 0 1px #fff, 0 2px 0 rgba(200, 160, 90, 0.25), 0 6px 14px rgba(90, 60, 20, 0.12); }
+.expModal .mission.must, .expModal .mission.leg:not(.must) { background: linear-gradient(180deg, #FFFCF2, #FFF1D2); border: 1.5px solid var(--hGold); box-shadow: inset 0 0 0 1px #fff, 0 2px 0 rgba(200, 150, 60, 0.3), 0 6px 14px rgba(120, 80, 20, 0.14); }
+.expModal .mission .mart { flex: 0 0 160px; min-height: 112px; border-radius: 12px; }
+.expModal .mhead h4 { font-size: 16px; }
+.expModal .mhead small { font-size: 11.5px; }
+.expModal .mtags { margin-top: 4px; }
+.expModal .mission .mtext { margin-top: 4px; font-size: 13px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.expModal .mpills { margin-top: 6px; }
+.expModal .mbody { display: grid; grid-template-columns: minmax(0, 1fr) 210px; grid-template-rows: auto auto auto 1fr; column-gap: 18px; align-content: start; padding: 2px 0; }
 .expModal .mbody > * { grid-column: 1; }
 .expModal .mbody > .mgains, .expModal .mbody > .unlock, .expModal .mbody > .req, .expModal .mbody > .sendBtn { grid-column: 2; }
-.expModal .mbody > .mgains { grid-row: 1 / span 2; align-self: start; margin-top: 4px; justify-content: center; }
-.expModal .mbody > .unlock, .expModal .mbody > .req { grid-row: 3; align-self: start; }
-.expModal .mbody > .sendBtn { grid-row: 4; align-self: end; margin-top: 10px; }
+.expModal .mbody > .mgains { grid-row: 1 / span 2; align-self: start; margin: 2px 0 0; padding: 4px 6px; gap: 5px; justify-content: center; }
+.expModal .mgains .chip { width: 32px; height: 32px; }
+.expModal .mgains .chip img.pic { width: 22px; height: 22px; }
+.expModal .mbody > .unlock, .expModal .mbody > .req { grid-row: 3; align-self: start; margin-top: 6px; font-size: 12px; padding: 4px 8px; }
+.expModal .mbody > .sendBtn { grid-row: 4; align-self: end; margin-top: 8px; min-height: 38px; font-size: 14px; border-radius: 12px; }
 .expModal .mbody > :nth-last-child(2) { margin-bottom: 0; }
 .expModal .mission.small { min-height: 0; }
-.expModal .mission.small .mart { flex-basis: 92px; }
+.expModal .mission.small .mart { flex-basis: 76px; height: 76px; }
 .expModal .mission.small .mbody { grid-template-rows: auto auto; }
 .expModal .mart.dio { overflow: visible; border: 0; box-shadow: none; background: radial-gradient(closest-side, rgba(255, 214, 120, 0.6), rgba(255, 214, 120, 0) 100%); }
-.mart.dio > img.dioImg { position: absolute; inset: auto; left: -24%; bottom: -3%; width: 122%; height: auto; object-fit: contain; filter: drop-shadow(0 10px 12px rgba(80, 50, 15, 0.32)); pointer-events: none; }
+.mart.dio > img.dioImg { position: absolute; inset: auto; left: -26%; bottom: -6%; width: 124%; height: auto; object-fit: contain; filter: drop-shadow(0 8px 10px rgba(80, 50, 15, 0.3)); pointer-events: none; }
 .mission.small .mart.dio > img.dioImg { left: -14%; bottom: -12%; width: 128%; }
 @media (max-width: 860px) {
-  .expModal .missions { padding: 40px 6px 12px 40px; row-gap: 48px; }
-  .expModal .mission .mart { flex-basis: 150px; }
+  .expModal .missions { padding: 34px 6px 12px 36px; row-gap: 36px; }
+  .expModal .mission .mart { flex-basis: 120px; }
   .expModal .mbody { display: flex; }
 }
-
-/* ---------- formes de carte à l'essai : A (en hauteur, l'îlot posé sur le haut de la carte et qui la dépasse) et C (fenêtre
-   en arche d'où sort l'îlot, titre sur un ruban doré). B, les cartes larges, reste la forme par défaut ---------- */
-.expModal.carte-a .missions, .expModal.carte-c .missions { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); padding: 96px 14px 18px 10px; gap: 84px 22px; }
-.expModal.carte-a .mission, .expModal.carte-c .mission { flex-direction: column; min-height: auto; gap: 10px; padding: 12px 14px 14px; }
-.expModal.carte-a .mission .mart, .expModal.carte-c .mission .mart { flex: none; height: 170px; }
-.expModal.carte-a .mbody, .expModal.carte-c .mbody { display: flex; flex: 0 0 auto; min-height: auto; flex-direction: column; text-align: center; align-items: stretch; }
-.expModal.carte-a .mhead, .expModal.carte-c .mhead { justify-content: center; }
-.expModal.carte-a .mtags, .expModal.carte-c .mtags, .expModal.carte-a .mpills, .expModal.carte-c .mpills, .expModal.carte-a .mgains, .expModal.carte-c .mgains { justify-content: center; }
-.expModal.carte-a .mbody > .sendBtn, .expModal.carte-c .mbody > .sendBtn { margin-top: auto; }
-.expModal.carte-a .mbody > .mgains, .expModal.carte-c .mbody > .mgains, .expModal.carte-a .mbody > .unlock, .expModal.carte-c .mbody > .unlock { align-self: center; }
-.expModal.carte-a .mbody > .sendBtn ~ *, .expModal.carte-a .mbody > :nth-last-child(2) { margin-bottom: 10px; }
-/* A : l'îlot posé sur le haut de la carte, plus large qu'elle, qui la dépasse par le haut */
-.expModal.carte-a .mart.dio { background: radial-gradient(closest-side, rgba(255, 214, 120, 0.55), rgba(255, 214, 120, 0)); }
-.expModal.carte-a .mart.dio > img.dioImg { left: -6%; bottom: -8%; width: 112%; }
-/* C : la fenêtre en arche, ciel doux et filet doré ; l'îlot posé sur le bas de l'arche sort par le haut ; le titre sur un ruban */
-.expModal.carte-c .mission .mart { height: 190px; border-radius: 50% 50% 14px 14px / 34% 34% 14px 14px; border: 2px solid var(--hEdge); background: linear-gradient(180deg, #CFE3F2, #F3E9D2 85%); overflow: hidden; }
-.expModal.carte-c .mission .mart.dio { overflow: visible; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5); }
-.expModal.carte-c .mart.dio > img.dioImg { left: -4%; bottom: 2%; width: 108%; }
-.expModal.carte-c .mhead { position: relative; z-index: 1; margin: -26px -22px 0; padding: 7px 18px 8px; border-radius: 6px; background: var(--hGoldFill); border: 1.5px solid #D9A646; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 3px 6px rgba(120, 80, 20, 0.25); }
-.expModal.carte-c .mhead h4 { font-size: 18px; }
-.expModal.carte-c .mhead small { display: none; }
