@@ -31,6 +31,8 @@ interface Spec {
   peck?: boolean;
   /** battement d'ailes : fréquence, amplitude, demi-largeur du corps */
   flap?: [number, number, number];
+  /** ondulation du corps à la nage (instancié) : fréquence, amplitude au bout de la queue */
+  sway?: [number, number];
   scale?: number;
   /** distance à laquelle l'animal détale devant un prédateur (ou un villageois) */
   flee?: number;
@@ -48,6 +50,8 @@ const DRINKERS = new Set<Kind>(['sheep', 'cow', 'horse', 'deer', 'llama', 'fox',
 /** Bêtes sauvages qui se méfient des villageois (celles de la ferme, non) */
 const WARY = new Set<Kind>(['rabbit', 'deer', 'frog', 'fox', 'wolf', 'bear', 'lizard', 'crab', 'turtle', 'moose', 'giraffe', 'ibex']);
 const SWIMMERS = new Set<Kind>(['fish', 'dolphin', 'whale', 'manta', 'shark']);
+/** Grands nageurs : animés plus loin que les autres bêtes (voir `render`) */
+const BIG_SWIM = new Set<Kind>(['dolphin', 'whale', 'manta']);
 /** Petites bêtes articulées, qu'on cesse d'animer et d'afficher plus tôt quand on s'éloigne */
 const TINY = new Set<Kind>(['lizard', 'crab', 'turtle']);
 /** Bêtes que ramènent les expéditions */
@@ -115,6 +119,8 @@ interface Critter {
   /** nage : hors de l'eau à la dernière image (gerbe au passage), minuteur des effets d'eau (souffle, sillage, remous) */
   air?: boolean;
   seaT?: number;
+  /** nage : course lissée (l'allure suit `rush` peu à peu) */
+  glide?: number;
 }
 
 /** Au-delà de cette distance à la caméra, les bêtes à terre et dans l'eau ne réfléchissent qu'une image sur trois */
@@ -160,12 +166,43 @@ export const COAST_REACH = 70;
  * baleine n'apparaissait
  */
 export function openSea(w: World, r: number): number[] {
-  const dist = new Uint8Array(N * N).fill(255), queue = new Int32Array(N * N);
+  const dist = seaRoom(w, r), out: number[] = [];
+  for (let k = 0; k < N * N; k++) if (dist[k] >= r) out.push(k);
+  return out;
+}
+/**
+ * La mer : les cases d'eau (hors mares) reliées au bord de la carte, c'est-à-dire au large. Un lac intérieur (le grand lac en
+ * anneau autour de son île, un étang sous le niveau de la mer), si grand soit-il, n'en est pas : pas de baleine ni de requin
+ * dedans
+ */
+export function seaMask(w: World): Uint8Array {
+  const m = new Uint8Array(N * N), st: number[] = [];
+  const add = (x: number, z: number) => {
+    if (!w.inCells(x, z)) return;
+    const k = w.ci(x, z);
+    if (m[k] || w.lake[k] || !water(w, x, z)) return;
+    m[k] = 1; st.push(k);
+  };
+  for (let i = 0; i < N; i++) { add(i, 0); add(i, N - 1); add(0, i); add(N - 1, i); }
+  while (st.length) {
+    const k = st.pop()!, x = k % N, z = (k - x) / N;
+    add(x + 1, z); add(x - 1, z); add(x, z + 1); add(x, z - 1);
+  }
+  return m;
+}
+/**
+ * Place libre en mer : pour chaque case, la distance (en cases, au plus `max`) à la terre, à une mare ou à un lac la plus
+ * proche (0 hors de la mer). Un nageur tourne autour de son domaine : il lui faut assez de place pour ne jamais frôler une
+ * rive (sinon il disparaît et reparaît d'un coup en passant dessus). Avec `sea` = false, toute eau compte (les lacs aussi :
+ * les poissons y vivent)
+ */
+export function seaRoom(w: World, max: number, sea = true): Uint8Array {
+  const dist = new Uint8Array(N * N).fill(255), queue = new Int32Array(N * N), m = sea ? seaMask(w) : null;
   let head = 0, tail = 0;
-  for (let k = 0; k < N * N; k++) if (!water(w, k % N, Math.floor(k / N)) || w.lake[k]) { dist[k] = 0; queue[tail++] = k; }
+  for (let k = 0; k < N * N; k++) if (!water(w, k % N, Math.floor(k / N)) || w.lake[k] || (m && !m[k])) { dist[k] = 0; queue[tail++] = k; }
   while (head < tail) {
     const k = queue[head++], d = dist[k];
-    if (d >= r) continue;
+    if (d >= max) continue;
     const cx = k % N, cz = (k - cx) / N;
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const x = cx + dx, z = cz + dz;
@@ -174,9 +211,8 @@ export function openSea(w: World, r: number): number[] {
       queue[tail++] = z * N + x;
     }
   }
-  const out: number[] = [];
-  for (let k = 0; k < N * N; k++) if (dist[k] >= r) out.push(k);
-  return out;
+  for (let k = 0; k < N * N; k++) dist[k] = Math.min(dist[k], max);
+  return dist;
 }
 const pasture = (w: World, cx: number, cz: number) => land(w, cx, cz) && w.veg[w.ci(cx, cz)] !== 2 && w.veg[w.ci(cx, cz)] !== 3;
 const wild = (w: World, cx: number, cz: number) => land(w, cx, cz) && !w.road[w.ci(cx, cz)] && w.veg[w.ci(cx, cz)] <= 1;
@@ -353,27 +389,102 @@ function dolphinGeo() {
   return p.build(false).body;
 }
 
+/** Triangles (9 nombres chacun) en géométrie, chaque face tournée vers l'extérieur de `inside(centre de la face)` */
+function facets(tris: number[][], inside: (x: number, y: number, z: number) => [number, number, number]) {
+  const out: number[] = [];
+  for (const t of tris) {
+    const [ax, ay, az, bx, by, bz, cx, cy, cz] = t;
+    const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay), ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az), nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    const mx = (ax + bx + cx) / 3, my = (ay + by + cy) / 3, mz = (az + bz + cz) / 3, [ix, iy, iz] = inside(mx, my, mz);
+    if (nx * (mx - ix) + ny * (my - iy) + nz * (mz - iz) < 0) out.push(ax, ay, az, cx, cy, cz, bx, by, bz);
+    else out.push(...t);
+  }
+  return tri(out);
+}
+
 /**
- * Requin : corps gris fuselé (ventre clair) et grand aileron dorsal, environ 0,9 case de long. Nageant juste sous la
- * surface, seul l'aileron la fend (voir `swim`)
+ * Nageoire en coin, à facettes nettes : base de `a` à `b` (épaisse de 2 × `t` selon l'axe `n`), pointe `tip` effilée
+ */
+function finTris(a: number[], b: number[], tip: number[], t: number, n: number[]) {
+  const o = (p: number[], s: number) => [p[0] + n[0] * t * s, p[1] + n[1] * t * s, p[2] + n[2] * t * s];
+  const A = o(a, 1), B = o(a, -1), C = o(b, 1), D = o(b, -1);
+  const tris = [[...A, ...C, ...tip], [...B, ...tip, ...D], [...A, ...tip, ...B], [...C, ...D, ...tip]];
+  const mid = [(a[0] + b[0] + tip[0]) / 3, (a[1] + b[1] + tip[1]) / 3, (a[2] + b[2] + tip[2]) / 3] as [number, number, number];
+  return facets(tris, () => mid);
+}
+
+/**
+ * Requin, en facettes nettes au niveau des autres bêtes : corps fuselé tourné par sections octogonales (dos gris bleuté,
+ * ventre blanc franchement séparé sur le flanc), museau pointu, grand aileron dorsal en faucille, second petit aileron,
+ * queue en croissant au lobe haut plus grand, pectorales en ailes balayées vers l'arrière, yeux noirs, fentes des ouïes.
+ * Environ 1,1 de long avant `scale` ; nageant juste sous la surface, seul l'aileron la fend (voir `swim`). La queue
+ * ondule dans le shader (`swayMaterial`)
  */
 function sharkGeo() {
   const p = new Parts();
-  p.add(ico(0.1, 0.5, 0.42, 4.4, 1), 0, 0, 0, 0xffffff);
-  p.add(ico(0.09, 0.42, 0.22, 3.8, 1), 0, -0.03, 0.02, 0xe6eaee);
-  // aileron dorsal haut et recourbé, deux fois plus visible qu'une simple crête
-  p.add(tri([0, 0.03, 0.08, 0, 0.22, -0.06, 0, 0.03, -0.08]), 0, 0, 0, 0xd8dde2);
-  p.add(tri([0, 0.03, -0.08, 0, 0.22, -0.06, 0, 0.03, 0.08]), 0, 0, 0, 0xd8dde2);
-  // queue en croissant, nageoires pectorales
-  p.add(tri([0, 0, -0.4, 0, 0.16, -0.54, 0, 0.02, -0.46]), 0, 0, 0, 0xd8dde2);
-  p.add(tri([0, 0, -0.4, 0, 0.02, -0.46, 0, 0.16, -0.54]), 0, 0, 0, 0xd8dde2);
-  p.add(tri([0, 0, -0.4, 0, -0.1, -0.5, 0, -0.01, -0.45]), 0, 0, 0, 0xd8dde2);
-  p.add(tri([0, 0, -0.4, 0, -0.01, -0.45, 0, -0.1, -0.5]), 0, 0, 0, 0xd8dde2);
+  const BACK = 0x71879a, BELLY = 0xeef1f3, FIN = 0x62788b, DARKC = 0x16191d;
+  // sections du museau à la queue : z, demi-largeur, demi-hauteur, hauteur du centre
+  const S: [number, number, number, number][] = [
+    [0.47, 0, 0, -0.012], [0.42, 0.028, 0.024, -0.006], [0.34, 0.058, 0.05, 0], [0.22, 0.082, 0.074, 0.004], [0.07, 0.09, 0.082, 0.006],
+    [-0.08, 0.078, 0.072, 0.008], [-0.22, 0.054, 0.052, 0.01], [-0.34, 0.03, 0.033, 0.012], [-0.44, 0.014, 0.02, 0.014], [-0.48, 0, 0, 0.016],
+  ];
+  const SIDES = 8;
+  const ring = (s: [number, number, number, number]) => Array.from({ length: SIDES }, (_, i) => {
+    const a = (i / SIDES) * Math.PI * 2, sn = Math.sin(a);
+    // ventre un peu aplati, dos en arête douce
+    return [Math.cos(a) * s[1] * 1.1, s[3] + sn * s[2] * 1.1 * (sn < 0 ? 0.82 : 1), s[0]];
+  });
+  const back: number[][] = [], belly: number[][] = [];
+  const put = (t: number[]) => {
+    // dos ou ventre : selon que la face regarde vers le haut ou le bas (la ligne de partage court sur le flanc)
+    const [ax, ay, az, bx, by, bz, cx, cy, cz] = t;
+    const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+    const len = Math.hypot((by - ay) * (cz - az) - (bz - az) * (cy - ay), ny, (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) || 1;
+    const my = (ay + by + cy) / 3;
+    (my < -0.004 && Math.abs(ny / len) > 0.25 ? belly : back).push(t);
+  };
+  for (let i = 0; i + 1 < S.length; i++) {
+    const r0 = ring(S[i]), r1 = ring(S[i + 1]);
+    for (let j = 0; j < SIDES; j++) {
+      const a = r0[j], b = r0[(j + 1) % SIDES], c = r1[j], d = r1[(j + 1) % SIDES];
+      if (S[i][1] > 0) put([...a, ...b, ...c]);
+      if (S[i + 1][1] > 0) put([...b, ...d, ...c]);
+    }
+  }
+  const axis = (_x: number, y: number, z: number): [number, number, number] => [0, Math.max(-0.01, Math.min(0.016, y * 0.2)), z];
+  p.add(facets(back, axis), 0, 0, 0, BACK);
+  p.add(facets(belly, axis), 0, 0, 0, BELLY);
+  // grand aileron dorsal en faucille, second petit aileron
+  p.add(finTris([0, 0.07, 0.11], [0, 0.072, -0.04], [0, 0.235, -0.07], 0.012, [1, 0, 0]), 0, 0, 0, FIN);
+  p.add(finTris([0, 0.035, -0.27], [0, 0.03, -0.33], [0, 0.075, -0.35], 0.006, [1, 0, 0]), 0, 0, 0, FIN);
+  // queue en croissant : lobe haut long et effilé, lobe bas plus court
+  p.add(finTris([0, 0.03, -0.42], [0, 0.012, -0.48], [0, 0.2, -0.62], 0.008, [1, 0, 0]), 0, 0, 0, FIN);
+  p.add(finTris([0, 0.006, -0.43], [0, 0.014, -0.48], [0, -0.1, -0.56], 0.007, [1, 0, 0]), 0, 0, 0, FIN);
   for (const k of [-1, 1]) {
-    p.add(tri([k * 0.05, -0.03, 0.1, k * 0.2, -0.08, -0.04, k * 0.05, -0.03, -0.02]), 0, 0, 0, 0xd8dde2);
-    p.add(tri([k * 0.05, -0.03, 0.1, k * 0.05, -0.03, -0.02, k * 0.2, -0.08, -0.04]), 0, 0, 0, 0xd8dde2);
+    // pectorales en ailes, balayées vers l'arrière et un peu tombantes ; petites pelviennes
+    p.add(finTris([k * 0.068, -0.04, 0.16], [k * 0.074, -0.045, 0.05], [k * 0.25, -0.1, -0.03], 0.008, [0, 1, 0]), 0, 0, 0, FIN);
+    p.add(finTris([k * 0.03, -0.045, -0.2], [k * 0.025, -0.04, -0.26], [k * 0.08, -0.07, -0.29], 0.005, [0, 1, 0]), 0, 0, 0, FIN);
+    // yeux noirs et fentes des ouïes
+    p.add(new THREE.OctahedronGeometry(0.011, 0), k * 0.05, 0.018, 0.33, DARKC);
+    for (let g = 0; g < 3; g++) p.add(new THREE.BoxGeometry(0.004, 0.034, 0.005), k * (0.083 - g * 0.002), 0.004, 0.25 - g * 0.022, 0x4c5c6a);
   }
   return p.build(false).body;
+}
+
+/**
+ * Matériau de nage : le corps ondule de la tête (immobile) à la queue (la plus ample), comme un battement de nageoire
+ * caudale ; `aPhase` décale chaque bête
+ */
+export function swayMaterial(uTime: { value: number }, [freq, amp]: [number, number]) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 0.8 });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = 'uniform float uTime;\nattribute float aPhase;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  float tailW = smoothstep(0.2, -0.62, transformed.z);
+  transformed.x += sin(uTime * ${freq.toFixed(2)} + aPhase - transformed.z * 5.0) * ${amp.toFixed(3)} * tailW * tailW;`);
+  };
+  m.customProgramCacheKey = () => `sway${freq}|${amp}`;
+  return m;
 }
 
 function butterflyGeo() {
@@ -408,7 +519,7 @@ const SPECS: Record<Kind, Spec> = {
   whale: { geo: dolphinGeo, max: 4, colors: [0x55607a], speed: 0, idle: [1, 1], ok: water, scale: 4 },
   manta: { geo: dolphinGeo, max: 8, colors: [0x2c3d5c], speed: 0, idle: [1, 1], ok: water, scale: 1.2 },
   dolphin: { geo: dolphinGeo, max: 18, colors: [0x7f97ab, 0x8ea3b4], speed: 0, idle: [1, 1], ok: water, scale: 1.5 },
-  shark: { geo: sharkGeo, max: 6, colors: [0x5d6b78, 0x6a7784], speed: 0, idle: [1, 1], ok: water },
+  shark: { geo: sharkGeo, max: 6, colors: [0xffffff, 0xe6ebf0], speed: 0, idle: [1, 1], ok: water, scale: 0.85, sway: [3.2, 0.05] },
   eagle: { geo: birdGeo, max: 12, colors: [0x5a4232, 0x6b4e38, 0x4e3a2c], speed: 0, idle: [1, 1], ok: any, flap: [3, 0.45, 0.012], scale: 3.6 },
   gull: { geo: birdGeo, max: 30, colors: [0xffffff, 0xf2f4f6], speed: 0, idle: [1, 1], ok: any, flap: [7, 0.9, 0.012], scale: 2 },
   bear: { max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
@@ -636,6 +747,9 @@ export class Fauna {
   /** prédateurs, et chef (rang 0) de chaque groupe : recensés à chaque image plutôt que cherchés parmi toutes les bêtes */
   private hunters: Critter[] = [];
   private leads = new Map<string, Critter>();
+  /** place libre en mer, et dans toute eau, lacs compris (voir `seaRoom`), du dernier recensement */
+  private room: Uint8Array | null = null;
+  private wetRoom: Uint8Array | null = null;
   /** qualité graphique : part de la distance à laquelle les bêtes articulées restent affichées et animées à chaque image */
   detail = 1;
   /** silhouettes figées des bêtes articulées lointaines, dessinées par lots */
@@ -660,6 +774,11 @@ export class Fauna {
         this.phases[k] = ph;
         this.flaps[k] = fl;
         mat = flapMaterial(this.uTime, sp.flap);
+      } else if (sp.sway) {
+        const ph = new THREE.InstancedBufferAttribute(new Float32Array(sp.max), 1);
+        g.setAttribute('aPhase', ph);
+        this.phases[k] = ph;
+        mat = swayMaterial(this.uTime, sp.sway);
       } else mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 0.9 });
       const m = new THREE.InstancedMesh(g, mat, sp.max);
       // couleur par instance dès la création : le shader en tient compte. Créée au premier `setColorAt`, elle changeait le
@@ -779,7 +898,10 @@ export class Fauna {
       }
     }
     yield;
-    deep.push(...openSea(w, OPEN_SEA));
+    // la place en mer (bêtes marines, jamais dans un lac) et dans toute eau (poissons, aussi dans les lacs)
+    const room = this.room = seaRoom(w, 9), wet = this.wetRoom = seaRoom(w, 9, false);
+    for (let k = 0; k < N * N; k++) if (room[k] >= OPEN_SEA) deep.push(k);
+    const roomy = (list: number[], r: number) => list.filter((k) => room[k] >= r);
     yield;
     for (const b of w.buildings.values()) {
       const s = sizeOf(b);
@@ -936,14 +1058,15 @@ export class Fauna {
     const flowery = gardens.concat(mT.filter((_, i) => i % 3 === 0), mTr);
     group('bees', 'bee', flowery, Math.min(9, Math.floor(flowery.length / 45) + Math.min(3, gardens.length)), () => 3, 5, 150);
     group('fly', 'butterfly', gardens.concat(green), Math.min(40, gardens.length + Math.floor(green.length / 70)), () => 1, 0.4, 160);
-    group('fish', 'fish', shallows, Math.min(22, Math.floor(shallows.length / 22)), (i) => 5 + (i % 3), 1.3, 200);
+    const fishSea = shallows.filter((k) => wet[k] >= 2), mantaSea = roomy(shallows, 3);
+    group('fish', 'fish', fishSea, Math.min(22, Math.floor(shallows.length / 22)), (i) => 5 + (i % 3), 1.3, 200);
     // les grands animaux décrivent de larges boucles : domaine loin des bords de la carte
     const open = (r: number) => deep.filter((k) => { const x = k % N, z = Math.floor(k / N); return x > r && z > r && x < N - 1 - r && z < N - 1 - r; });
-    const deepD = open(4), deepW = open(6);
+    const deepD = open(4), deepW = roomy(open(6), 7);
     group('dolphins', 'dolphin', deepD, deepD.length > 40 ? Math.min(3, Math.floor(deepD.length / 300) + 1) : 0, () => 3, 3.2, 230);
     // baleine au large, raies sur les hauts-fonds : seulement avec leurs modèles
     group('whale', 'whale', deepW, deepW.length > 60 && hasModel('whale') ? Math.min(2, Math.floor(deepW.length / 600) + 1) : 0, () => 1, 5, 240);
-    group('mantas', 'manta', shallows.length ? shallows : deep, shallows.length + deep.length > 150 && hasModel('manta') ? 2 : 0, () => 2, 2.2, 250);
+    group('mantas', 'manta', mantaSea.length ? mantaSea : deep, mantaSea.length + deep.length > 150 && hasModel('manta') ? 2 : 0, () => 2, 2.2, 250);
     // requins : un aileron qui fend la surface, au large
     group('sharks', 'shark', deepD, deepD.length > 80 ? Math.min(3, Math.floor(deepD.length / 900) + 1) : 0, () => 1, 4, 270);
     // la mer devant le village : un groupe de dauphins, une baleine, une raie et des bancs sur le large et les hauts-fonds les
@@ -955,11 +1078,11 @@ export class Fauna {
       for (const k of list) m = Math.min(m, d(k));
       return m > reach ? [] : list.filter((k) => d(k) <= m + spread);
     };
-    const coastD = nearest(deepD, 10, COAST_REACH), coastW = nearest(deepW, 14, COAST_REACH), coastF = nearest(shallows, 12, COAST_REACH);
+    const coastD = nearest(deepD, 10, COAST_REACH), coastW = nearest(deepW, 14, COAST_REACH), coastF = nearest(fishSea, 12, COAST_REACH), coastM = nearest(mantaSea, 12, COAST_REACH);
     group('coastD', 'dolphin', coastD, coastD.length > 8 ? 1 : 0, () => 3, 3.2, 280);
     group('coastW', 'whale', coastW, coastW.length > 12 && hasModel('whale') ? 1 : 0, () => 1, 5, 281);
     group('coastS', 'shark', coastD, coastD.length > 8 ? 1 : 0, () => 1, 3.5, 282);
-    group('coastM', 'manta', coastF, coastF.length > 8 && hasModel('manta') ? 1 : 0, () => 2, 2.2, 283);
+    group('coastM', 'manta', coastM, coastM.length > 8 && hasModel('manta') ? 1 : 0, () => 2, 2.2, 283);
     group('coastF', 'fish', coastF, Math.min(4, Math.floor(coastF.length / 10)), (i) => 6 + (i % 3), 1.3, 284);
     // chauves-souris : trois par grotte, de sortie la nuit
     for (const k of caves.slice(0, 8)) { const [x, z] = at(k); src.push({ key: `bat${k}`, kind: 'bat', hx: x, hz: z, n: 3, radius: 0.8 }); }
@@ -1090,7 +1213,8 @@ export class Fauna {
     if (!best) return;
     let kind: Kind = 'fish';
     // sur l'eau libre, un visiteur sur deux est un groupe de dauphins (un banc de poissons, sous la surface, se voit mal)
-    if (wet && this.visitSerial % 2 === 0 && [[3, 0], [-3, 0], [0, 3], [0, -3]].every(([dx, dz]) => water(w, Math.floor(best![0] + dx), Math.floor(best![1] + dz)))) kind = 'dolphin';
+    // (en mer seulement, assez loin des rives : jamais dans un lac ni une rivière)
+    if (wet && this.visitSerial % 2 === 0 && this.roomAt(best[0], best[1], 4)) kind = 'dolphin';
     if (!wet) {
       const bx = Math.floor(best[0]), bz = Math.floor(best[1]);
       const list = NEARBY[w.biome[w.ci(bx, bz)]].filter((k) => this.shows(k) && nearbyAllowed(k, this.lastAge) && SPECS[k].ok(w, bx, bz));
@@ -1193,7 +1317,8 @@ export class Fauna {
     this.sphere.center.set(c.x, fly || SWIMMERS.has(c.kind) ? c.y : this.world.hAt(c.x, c.z), c.z);
     this.sphere.radius = 3;
     if (!this.frustum.intersectsSphere(this.sphere)) return 10;
-    return !fly && (c.x - cam.x) ** 2 + (c.z - cam.z) ** 2 > FAR_WALK * FAR_WALK ? 3 : 1;
+    // (les nageurs, calculés d'après leur ronde, coûtent peu : à chaque image, sinon ils avancent par à-coups)
+    return !fly && !SWIMMERS.has(c.kind) && (c.x - cam.x) ** 2 + (c.z - cam.z) ** 2 > FAR_WALK * FAR_WALK ? 3 : 1;
   }
 
   /** Prédateurs (et villageois) proches dont l'animal a peur */
@@ -1564,27 +1689,48 @@ export class Fauna {
   }
 
   /**
-   * Nage : le banc (ou le groupe de dauphins) tourne autour de son domaine en formation ;
-   * de temps en temps un poisson saute hors de l'eau, les dauphins font des bonds réguliers ;
-   * les dauphins traquent le banc le plus proche, qui s'enfuit en accélérant
+   * Nage : le banc (ou le groupe de dauphins) tourne autour de son domaine en formation ; de temps en temps un poisson saute
+   * hors de l'eau, les dauphins font des bonds réguliers ; les dauphins traquent le banc le plus proche, qui s'enfuit en
+   * accélérant. Tout est lissé : la bête suit en douceur le point de sa ronde (domaine déplacé par la chasse ou le
+   * recensement, course qui s'emballe), son cap et son inclinaison suivent sa trajectoire réelle, et son allure ne change que
+   * peu à peu (`glide`)
    */
   private swim(c: Critter, dt: number, season: number) {
     const w = this.world, dolphin = c.kind === 'dolphin', shark = c.kind === 'shark', big = c.kind === 'whale' || c.kind === 'manta';
     if (c.slot === 0 && (dolphin || shark || c.kind === 'fish')) this.hunt(c, dt);
     const L = c.slot === 0 ? c : this.leads.get(c.key) ?? c;
     if (L !== c) { c.hx = L.hx; c.hz = L.hz; c.rush = L.rush; }
+    const first = c.seaT === undefined;
+    // la course ne change l'allure que peu à peu
+    const g = c.glide = first ? c.rush : (c.glide ?? 0) + (c.rush - (c.glide ?? 0)) * (1 - Math.exp(-dt * 1.5));
     const dir = hash2(Math.floor(c.key.length * 7 + c.key.charCodeAt(c.key.length - 1)), 3, 3) < 0.5 ? 1 : -1;
-    const om = (c.kind === 'whale' ? 0.05 : shark ? 0.09 : dolphin ? 0.16 : big ? 0.12 : 0.32) * dir * (1 + c.rush * 1.5);
+    // allure propre à l'espèce (cases/s), quelle que soit la taille de la ronde : un banc visiteur à large ronde filait
+    // autrefois à plus de 3 cases/s (vitesse angulaire fixe)
+    const R = c.radius * (1 + g * 0.4);
+    const v = (c.kind === 'whale' ? 0.25 : shark ? 0.36 : dolphin ? 0.5 : big ? 0.26 : 0.42) * (1 + g * 1.2);
+    const om = (dir * v) / Math.max(0.8, R);
     c.ang += om * dt;
     const th = c.ang;
-    const dx = -Math.sin(th) * om, dz = Math.cos(th) * om * 0.8;
-    const h = Math.atan2(dx, dz);
-    const R = c.radius * (1 + c.rush * 0.4);
-    const lat = (c.slot % 2 ? 1 : -1) * Math.ceil(c.slot / 2) * (dolphin || big ? 0.4 : 0.12) * (1 + c.rush), back = -Math.ceil(c.slot / 2) * (dolphin || big ? 0.35 : 0.1);
+    const h = Math.atan2(-Math.sin(th) * om, Math.cos(th) * om * 0.8);
+    const lat = (c.slot % 2 ? 1 : -1) * Math.ceil(c.slot / 2) * (dolphin || big ? 0.4 : 0.12) * (1 + g), back = -Math.ceil(c.slot / 2) * (dolphin || big ? 0.35 : 0.1);
     const wob = Math.sin(this.t * 2.3 + c.slot * 1.7) * (dolphin ? 0.05 : 0.04);
-    c.x = c.hx + Math.cos(th) * R + (lat + wob) * Math.cos(h) + back * Math.sin(h);
-    c.z = c.hz + Math.sin(th) * R * 0.8 - (lat + wob) * Math.sin(h) + back * Math.cos(h);
-    c.heading = h + Math.sin(this.t * 6 + c.slot) * (dolphin ? 0.04 : shark ? 0.03 : 0.15);
+    const tx = c.hx + Math.cos(th) * R + (lat + wob) * Math.cos(h) + back * Math.sin(h);
+    const tz = c.hz + Math.sin(th) * R * 0.8 - (lat + wob) * Math.sin(h) + back * Math.cos(h);
+    // suit en douceur le point de sa ronde ; posée d'un coup seulement à son apparition ou de très loin
+    const px = c.x, pz = c.z, py = c.y;
+    if (first || Math.hypot(tx - c.x, tz - c.z) > 6) { c.x = tx; c.z = tz; c.heading = h; }
+    else { const k = 1 - Math.exp(-dt * (c.kind === 'whale' ? 2 : 4)); c.x += (tx - c.x) * k; c.z += (tz - c.z) * k; }
+    // le cap suit la trajectoire, en virages arrondis
+    const speed = Math.hypot(c.x - px, c.z - pz) / Math.max(1e-3, dt);
+    if (!first && speed > 0.05) {
+      // (et jamais plus vite qu'un vrai nageur ne tourne : 2,5 rad/s, la baleine 0,8)
+      const h0 = c.heading, most = dt * (c.kind === 'whale' ? 0.8 : 2.5);
+      turn(c, Math.atan2(c.x - px, c.z - pz), 1 - Math.exp(-dt * (c.kind === 'whale' ? 2.5 : 6)));
+      let dh = c.heading - h0;
+      while (dh > Math.PI) dh -= Math.PI * 2;
+      while (dh < -Math.PI) dh += Math.PI * 2;
+      c.heading = h0 + Math.max(-most, Math.min(most, dh));
+    }
     // l'hiver, les mantas partent ; il ne reste qu'un groupe de dauphins et une baleine sur deux (les clés en 0)
     const away = season === 3 && (c.kind === 'manta' || ((dolphin || c.kind === 'whale') && !c.key.endsWith('0')));
     // hors de l'eau (rive, île) : on ne l'affiche pas
@@ -1593,6 +1739,8 @@ export class Fauna {
     const fx = (k: SeaFx, x: number, z: number, s: number) => { if (c.every === 1 && !c.hidden) this.onSea?.(k, x, z, s); };
     const wasAir = !!c.air;
     c.seaT = (c.seaT ?? this.rnd() * 3) - dt;
+    /** inclinaison (cabrée en montant, piquée en descendant) selon la pente de la trajectoire, × `tilt` */
+    let tilt = 1;
     if (c.kind === 'whale') {
       // longue nage profonde ; elle remonte respirer (le dos affleure, elle souffle), puis plonge, la queue levée ;
       // une remontée sur trois environ finit en saut, avec une grosse gerbe
@@ -1600,51 +1748,56 @@ export class Fauna {
       const breathe = Math.pow(Math.max(0, s), 2);
       const leap = hash2(Math.floor(p / (Math.PI * 2)), c.key.length, 5) < 0.33 ? Math.pow(Math.max(0, s), 18) * 1.1 : 0;
       c.y = SEA - 0.6 + breathe * 0.55 + leap;
-      c.pitch = -Math.cos(p) * (breathe * 0.5 + leap * 1.3);
-      if (s > 0.93 && c.seaT <= 0) { c.seaT = 8; fx('spout', c.x + Math.sin(h) * 0.5, c.z + Math.cos(h) * 0.5, 1); }
+      tilt = 1.6;
+      if (s > 0.93 && c.seaT <= 0) { c.seaT = 8; fx('spout', c.x + Math.sin(c.heading) * 0.5, c.z + Math.cos(c.heading) * 0.5, 1); }
       c.air = c.y > SEA + 0.2;
       if (c.air !== wasAir) fx('splash', c.x, c.z, 3);
     } else if (c.kind === 'manta') {
       // glisse juste sous la surface, le bout des ailes affleure ; de temps en temps un saut hors de l'eau
       c.timer -= dt;
       if (c.timer < -1.1) c.timer = 14 + this.rnd() * 26;
-      const u = c.timer < 0 ? -c.timer / 1.1 : 0, jump = c.timer < 0 ? Math.sin(u * Math.PI) : 0;
+      const jump = c.timer < 0 ? Math.sin((-c.timer / 1.1) * Math.PI) : 0;
       c.y = SEA - 0.1 + Math.sin(this.t * 0.7 + c.slot) * 0.03 + jump * 0.7;
-      c.pitch = c.timer < 0 ? -Math.cos(u * Math.PI) * 0.7 : 0;
+      tilt = 0.6;
       c.air = jump > 0.15;
       if (c.air !== wasAir) fx('splash', c.x, c.z, 1.4);
     } else if (shark) {
       // juste sous la surface : seul l'aileron la fend, avec un sillage d'écume
       c.y = SEA - 0.1 + Math.sin(this.t * 0.5 + c.slot) * 0.015;
-      c.pitch = 0;
       if (c.seaT <= 0) { c.seaT = 0.3; fx('wake', c.x, c.z, 1); }
     } else if (dolphin) {
-      // à fleur d'eau, puis de grands bonds en arc : gerbe en sortant et en retombant
-      const a = this.t * (1.1 + c.rush * 0.6) + c.slot * 0.9, lift = Math.max(0, (Math.sin(a) - 0.3) / 0.7);
-      c.y = SEA - 0.12 + lift * 0.8;
-      c.pitch = -Math.cos(a) * Math.min(1, lift * 3) * 0.95;
+      // à fleur d'eau, puis de grands bonds en arc : gerbe en sortant et en retombant. Le rythme des bonds est un angle
+      // cumulé (celui du chef, décalé pour chacun) : une course qui s'emballe l'accélère sans le faire sauter
+      if (c.slot === 0) c.phase += dt * (1.1 + g * 0.6);
+      const a = (((L.phase - c.slot * 0.9) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2), a0 = 0.3047;
+      const u = a > a0 && a < Math.PI - a0 ? (a - a0) / (Math.PI - 2 * a0) : -1;
+      c.y = SEA - 0.12 + (u >= 0 ? Math.sin(u * Math.PI) * 0.8 : -Math.sin(a) * 0.03);
       c.air = c.y > SEA + 0.06;
       if (c.air !== wasAir) fx('splash', c.x, c.z, c.air ? 0.7 : 1);
     } else {
       c.timer -= dt;
-      if (c.timer < -0.7) c.timer = (4 + this.rnd() * 14) / (1 + c.rush * 3);
+      if (c.timer < -0.7) c.timer = (4 + this.rnd() * 14) / (1 + g * 3);
       const jump = c.timer < 0 ? Math.sin((-c.timer / 0.7) * Math.PI) : 0;
       c.y = SEA - 0.08 - Math.sin(this.t + c.slot) * 0.02 + jump * 0.4;
-      c.pitch = c.timer < 0 ? -Math.cos((-c.timer / 0.7) * Math.PI) * 1.1 : 0;
       c.air = jump > 0.2;
       if (c.air && !wasAir) fx('splash', c.x, c.z, 0.5);
       // le banc trouble la surface au-dessus de lui : un remous de temps en temps
       if (c.slot === 0 && c.seaT <= 0) { c.seaT = 1.6 + this.rnd() * 2; fx('ripple', c.x, c.z, 1); }
     }
+    const vy = first ? 0 : (c.y - py) / Math.max(1e-3, dt);
+    const want = Math.max(-1.25, Math.min(1.25, -Math.atan2(vy, Math.max(0.2, speed)) * tilt));
+    c.pitch = first ? want : c.pitch + (want - c.pitch) * (1 - Math.exp(-dt * 9));
   }
 
   /** Chef de banc ou de groupe : dauphins et requins se rapprochent du banc le plus proche, le banc s'écarte d'eux */
   private hunt(c: Critter, dt: number) {
-    const w = this.world;
     const hunter = c.kind === 'dolphin' || c.kind === 'shark';
-    const others = this.critters.filter((o) => o.slot === 0 && (hunter ? o.kind === 'fish' : o.kind === 'dolphin' || o.kind === 'shark'));
     let best: Critter | null = null, bd = hunter ? 14 : 4;
-    for (const o of others) { const d = Math.hypot(o.hx - c.hx, o.hz - c.hz); if (d < bd) { bd = d; best = o; } }
+    for (const o of this.leads.values()) {
+      if (hunter ? o.kind !== 'fish' : o.kind !== 'dolphin' && o.kind !== 'shark') continue;
+      const d = Math.hypot(o.hx - c.hx, o.hz - c.hz);
+      if (d < bd) { bd = d; best = o; }
+    }
     c.rush = Math.max(0, c.rush - dt * 0.3);
     if (!best) return;
     const sgn = hunter ? 1 : -1, sp = c.kind === 'dolphin' ? 0.35 : c.kind === 'shark' ? 0.2 : 0.8;
@@ -1652,10 +1805,18 @@ export class Fauna {
     if (c.kind === 'dolphin' && bd < 4) c.rush = Math.min(1, c.rush + dt);
     const k = (sgn * sp * dt) / Math.max(0.01, bd);
     const nx = c.hx + (best.hx - c.hx) * k, nz = c.hz + (best.hz - c.hz) * k;
-    // le domaine reste en eau libre
-    let ok = true;
-    for (const [ox, oz] of [[0, 0], [c.radius, 0], [-c.radius, 0], [0, c.radius], [0, -c.radius]]) if (!water(w, Math.floor(nx + ox), Math.floor(nz + oz))) { ok = false; break; }
-    if (ok && (c.kind === 'fish' || bd > 1)) { c.hx = nx; c.hz = nz; }
+    // le domaine reste en eau libre, assez loin des rives pour toute la ronde
+    if (!this.roomAt(nx, nz, c.radius, c.kind !== 'fish')) return;
+    if (c.kind === 'fish' || bd > 1) { c.hx = nx; c.hz = nz; }
+  }
+
+  /** Assez de place autour de (x, z) pour une ronde de rayon `r` : en mer (`sea`, bêtes marines) ou dans toute eau (poissons) */
+  private roomAt(x: number, z: number, r: number, sea = true) {
+    const cx = Math.floor(x), cz = Math.floor(z);
+    if (!this.world.inCells(cx, cz)) return false;
+    const room = sea ? this.room : this.wetRoom;
+    if (room) return room[this.world.ci(cx, cz)] >= Math.max(2, Math.ceil(r));
+    return [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].every(([ox, oz]) => water(this.world, Math.floor(x + ox), Math.floor(z + oz)));
   }
 
   /** Papillon (ou chauve-souris) : boucles irrégulières autour de son point d'attache */
@@ -1776,8 +1937,11 @@ export class Fauna {
             this.sphere.radius = (MODELS[c.kind]?.length ?? 0.3) * 1.5 + 0.2;
             visible = this.frustum.intersectsSphere(this.sphere);
             d = this.sphere.center.distanceTo(camera.position);
-            far = d > SLOW_D * this.detail;
-            silhouette = d > IMPOSTOR_D * this.detail;
+            // les grands nageurs, peu nombreux, gardent plus loin une animation à chaque image (une silhouette figée qui
+            // glisse sur l'eau, ou une nage à une image sur deux, se voyaient)
+            const reach = BIG_SWIM.has(c.kind) ? 2.5 : 1;
+            far = d > SLOW_D * this.detail * reach;
+            silhouette = d > IMPOSTOR_D * this.detail * reach;
             // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points (les petites, plus tôt)
             if (d > (TINY.has(c.kind) ? HIDE_TINY_D : HIDE_D) * this.detail) visible = false;
           }
