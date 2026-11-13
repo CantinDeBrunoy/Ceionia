@@ -18,6 +18,8 @@ const ROCK = new THREE.Color(0xc2b2a2);
 const MOUNTAIN = new THREE.Color(0xa49d99);
 /** falaises de craie (façon Étretat) et basalte autour des volcans */
 const CHALK = new THREE.Color(0xf0ebdf);
+/** Grès rouge des parois du désert (canyon, flancs des mesas) */
+const RED_ROCK = new THREE.Color(0xc4724a);
 const BASALT = new THREE.Color(0x4e4645);
 const VOLCANO_BROWN = new THREE.Color(0x7d5c40);
 const GRAVEL = new THREE.Color(0xb9b1a6);
@@ -767,7 +769,7 @@ ${BLIGHT_GLSL}
         const bank = (0.45 + 0.55 * smoothstep(0.15, 0.3, h)) * pal.terrain.bankK * (1 - wet);
         tmp.lerp(SAND, beach * (1 - wet) * (1 - bank)).lerp(pal.terrain.bank, beach * bank).lerp(MUD, beach * wet * 0.6);
         // parois : craie blanche près de la mer, roche plus haut, grise en montagne
-        if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(MOUNTAIN, alt), steep);
+        if (steep > 0) tmp.lerp(this.cliff.copy(CHALK).lerp(ROCK, smoothstep(1.5, 3.5, h)).lerp(RED_ROCK, dry * 0.85).lerp(MOUNTAIN, alt), steep);
         if (alt > 0) tmp.lerp(MOUNTAIN, alt * 0.85);
         // volcan : vert au pied, il vire au brun en montant, plus sombre près du cratère
         let lava = 0, top = 0;

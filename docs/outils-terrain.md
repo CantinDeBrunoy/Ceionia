@@ -104,7 +104,7 @@ Suréchantillonnage `VR = 2`, trois passes de flou binomial ; le flou s'estompe 
 - Entrées : `entranceAt` rend la case de ravin visée ; `outpostEntrance` (lieu des expéditions vers une grotte : une vraie
   grotte d'abord, une faille avec 10 de pénalité) ; `riftEntrances` (un par ravin, son milieu) pour le moteur souterrain
   (`underground.ts`) ; `bearDens` met une tanière au bout de chaque ravin.
-- Carte : `addDefaultDecor` pose cinq failles à la forme d'avant le pinceau (`stampFissure` : l'emprise de `decorCells(…,
+- Carte : `addDefaultDecor` pose une seule faille sur une nouvelle carte (version 3 du générateur), cinq sur les cartes des générateurs d'avant, à la forme d'avant le pinceau (`stampFissure` : l'emprise de `decorCells(…,
   VEG_FISSURE)` devient un ravin).
 
 ### Le décor sauvage et la gomme

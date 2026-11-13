@@ -61,6 +61,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   world.decorDone = false;
   world.computeBiomes();
   shapeBiomes(world, seed, plan ? plan.wind : null);
+  if (v3) carveCanyon(world, mulberry32(seed + 61));
   world.computeBiomes();
   // forêts plus ou moins denses selon le biome (cactus clairsemés au désert, forêt dense en taïga et sous les tropiques) ;
   // version 3 : chaque partie a ses forêts, plus ou moins étendues ; de vrais massifs pleins, séparés par des plaines
@@ -299,6 +300,69 @@ function carveTarns(world: World, seed: number, dry: boolean, want = 5, lo = 4, 
   if (picked.length) world.vegDirty = true;
 }
 
+/**
+ * Canyon du désert (version 3) : une longue gorge sinueuse entre deux plateaux. Le tracé part d'une case de désert sèche et
+ * serpente tant qu'il reste au désert, loin de l'eau ; on garde le plus long de quelques essais (au moins 24 cases). De part
+ * et d'autre, la roche se dresse en plateau (2,4 au-dessus du fond), parois abruptes que le rendu teint de grès rouge strié ;
+ * au milieu, un fond plat d'environ deux cases et demie, à la hauteur du désert alentour (lissée le long du tracé). Aux deux
+ * bouts, le plateau s'abaisse et la gorge s'ouvre sur le désert
+ */
+function carveCanyon(world: World, rnd: () => number) {
+  const S = N + 1;
+  const desertAt = (x: number, z: number) => {
+    const cx = Math.floor(x), cz = Math.floor(z);
+    return world.inCells(cx, cz) && cx > 9 && cz > 9 && cx < N - 10 && cz < N - 10 && world.biome[world.ci(cx, cz)] === BIOME_DESERT && world.waterDist[world.ci(cx, cz)] >= 5;
+  };
+  const starts: number[] = [];
+  for (let k = 0; k < N * N; k++) if (world.waterDist[k] >= 9 && desertAt(k % N, Math.floor(k / N))) starts.push(k);
+  if (!starts.length) return;
+  let best: [number, number][] = [];
+  for (let t = 0; t < 16; t++) {
+    const k = starts[Math.floor(rnd() * starts.length)];
+    let x = (k % N) + 0.5, z = Math.floor(k / N) + 0.5, a = rnd() * 6.28, turn = 0;
+    const path: [number, number][] = [[x, z]];
+    for (let i = 0; i < 140; i++) {
+      // virages doux qui changent de sens : des méandres
+      turn = turn * 0.85 + (rnd() - 0.5) * 0.1;
+      a += turn;
+      const nx = x + Math.cos(a) * 0.5, nz = z + Math.sin(a) * 0.5;
+      if (!desertAt(nx, nz)) break;
+      x = nx; z = nz;
+      path.push([x, z]);
+    }
+    if (path.length > best.length) best = path;
+  }
+  if (best.length < 48) return;
+  // fond : hauteur du désert le long du tracé, lissée
+  const raw = best.map(([x, z]) => world.cellAvg(Math.floor(x), Math.floor(z)));
+  const floor = raw.map((_, i) => {
+    let sum = 0, n = 0;
+    for (let j = Math.max(0, i - 10); j <= Math.min(raw.length - 1, i + 10); j++) { sum += raw[j]; n++; }
+    return Math.max(0.35, sum / n);
+  });
+  const G = 1.25, WALL = 1.15, TOP = 4, OUT = 2.8, R = G + WALL + TOP + OUT, rise = 2.4;
+  const xs = best.map((p) => p[0]), zs = best.map((p) => p[1]);
+  const x0 = Math.max(0, Math.floor(Math.min(...xs) - R - 1)), x1 = Math.min(N, Math.ceil(Math.max(...xs) + R + 1));
+  const z0 = Math.max(0, Math.floor(Math.min(...zs) - R - 1)), z1 = Math.min(N, Math.ceil(Math.max(...zs) + R + 1));
+  for (let z = z0; z <= z1; z++)
+    for (let x = x0; x <= x1; x++) {
+      let d = Infinity, at = 0;
+      for (let j = 0; j < best.length; j++) {
+        const e = Math.hypot(x - best[j][0], z - best[j][1]);
+        if (e < d) { d = e; at = j; }
+      }
+      if (d >= R) continue;
+      const i = z * S + x, h = world.heights[i], base = floor[at];
+      // aux bouts, le plateau s'abaisse (les 12 derniers pas)
+      const open = Math.min(1, Math.min(at, best.length - 1 - at) / 12), top = base + rise * open * (0.9 + 0.1 * Math.sin(at * 0.3));
+      if (d < G) { world.heights[i] = Math.min(h, base); continue; }
+      const p = d < G + WALL ? lerp(base, top, smoothstep(G, G + WALL, d)) : d < G + WALL + TOP ? top : lerp(top, h, smoothstep(G + WALL + TOP, R, d));
+      world.heights[i] = Math.min(MAX_H, Math.max(h, p));
+    }
+  for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) if (world.veg[world.ci(x, z)] === VEG_FOREST) world.veg[world.ci(x, z)] = 0;
+  world.markTerrain(x0, z0, x1, z1);
+}
+
 /** Relief propre aux biomes : mares dans les marais, dunes au désert, en travers du vent `wind` (null : celui de la version 1) */
 function shapeBiomes(world: World, seed: number, wind: number | null) {
   const pond = new Simplex(seed + 313), dune = new Simplex(seed + 317);
@@ -365,8 +429,9 @@ export function addDefaultDecor(world: World, seed: number) {
   // grottes : deux au plus, éloignées l'une de l'autre, creusées de préférence dans un versant raide de colline ou de montagne
   pick(VEG_CAVE, 2, 30, (x, z) => free(x, z) && world.cellSlope(x, z) >= 0.25 && world.cellAvg(x, z) > 0.6 && world.cellAvg(x, z) < 5.5 && world.waterDist[z * N + x] >= 3,
     (x, z) => world.cellSlope(x, z) >= 0.7 && world.cellAvg(x, z) > 1.2);
-  // failles : terrain assez plat, à l'écart de l'eau
-  pick(VEG_FISSURE, 5, 20, (x, z) => free(x, z) && world.cellSlope(x, z) < 0.5 && world.cellAvg(x, z) > 0.5 && world.cellAvg(x, z) < 4 && world.waterDist[z * N + x] >= 6);
+  // failles : terrain assez plat, à l'écart de l'eau ; une seule sur une nouvelle carte (version 3), cinq sur les cartes
+  // des générateurs d'avant (inchangées)
+  pick(VEG_FISSURE, world.gen >= GEN_VAR ? 1 : 5, 20, (x, z) => free(x, z) && world.cellSlope(x, z) < 0.5 && world.cellAvg(x, z) > 0.5 && world.cellAvg(x, z) < 4 && world.waterDist[z * N + x] >= 6);
   // épave : eau peu profonde avec de la terre à côté
   pick(VEG_WRECK, 3, 14, (x, z) => {
     const a = world.cellAvg(x, z);

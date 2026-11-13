@@ -24,6 +24,7 @@ Chaque case a un **biome** (tempéré, taïga, désert, tropical, marais) dédui
   - `t < -0.36` : taïga ; sinon `t > 0.3` : désert si `m < 0.08`, sinon tropical ; sinon `m > 0.32` et `h < 1.4` et `d ≤ 4` : marais ; sinon tempéré ;
   - `biomePaint` l'emporte.
   Avec `rect`, seule la zone retouchée est refaite, sauf si une case y a changé d'état eau/terre (alors tout est recalculé). Appelé par `updateVis`.
+- `carveCanyon` (`mapgen.ts`, version 3, juste après `shapeBiomes`) : un canyon dans le désert. Tracé sinueux (pas de 0,5 case, virage lissé), qui reste au désert à 5 cases au moins de l'eau et à 10 du bord ; le plus long de 16 essais, gardé s'il fait 24 cases ou plus. Fond plat (demi-largeur 1,25) à la hauteur du désert lissée sur ±10 pas, au moins 0,35 ; parois sur 1,15 case ; plateau de 4 cases à 2,4 au-dessus du fond ; pente extérieure sur 2,8 cases. Aux 12 derniers pas de chaque bout, le plateau s'abaisse : la gorge s'ouvre. Les parois abruptes du désert sont teintes de grès rouge (`RED_ROCK`, `terrainView.ts`), striées par le shader comme les autres roches.
 - `shapeBiomes` (`mapgen.ts`, à la génération seulement) sculpte le relief selon le biome : marais (sommets sous 1,2 : mares de bruit `Simplex(seed+313)`, fond jusqu'à -0,8, sinon aplati vers 0,3), désert (au-dessus de 0,4 : dunes `sin` d'amplitude ~0,45, orientées par le vent du plan).
 
 ### Génération des arbres et rochers (`newWorld`, `mapgen.ts`)
