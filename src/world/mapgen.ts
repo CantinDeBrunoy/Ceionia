@@ -1,4 +1,4 @@
-import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH } from './world';
+import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, ISLET_MIN } from './world';
 import { raiseVolcano } from './terraform';
 import { addPortalIsland } from './portal';
 import { Simplex } from './noise';
@@ -453,6 +453,24 @@ function carveCanyon(world: World, seed: number, rnd: () => number): number[] {
       if (d < 3.5 && a < 0.6) { world.paintBiome(x, z, BIOME_TEMPERATE); if (a > 0.4) floor.push(k); }
       else if (up > 0.3 || a > 0.6) world.paintBiome(x, z, BIOME_DESERT);
     }
+  // pas de petite tache de désert peinte hors du désert (au débouché, au bord du plateau) : une tache désertique de moins de
+  // `ISLET_MIN` cases rend ses cases peintes à leur climat, qui la fond alors dans le biome voisin (`fixIslets`)
+  world.computeBiomes();
+  const seen = new Uint8Array(N * N), dry = (k: number) => world.biome[k] === BIOME_DESERT && !world.isWaterCell(k % N, Math.floor(k / N));
+  for (let k0 = 0; k0 < N * N; k0++) {
+    if (seen[k0] || !dry(k0) || world.biomePaint[k0] !== BIOME_DESERT + 1) continue;
+    const cells = [k0];
+    seen[k0] = 1;
+    for (let i = 0; i < cells.length; i++) {
+      const cx = cells[i] % N, cz = Math.floor(cells[i] / N);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!world.inCells(cx + dx, cz + dz)) continue;
+        const j = world.ci(cx + dx, cz + dz);
+        if (!seen[j] && dry(j)) { seen[j] = 1; cells.push(j); }
+      }
+    }
+    if (cells.length < ISLET_MIN) for (const k of cells) if (world.biomePaint[k] === BIOME_DESERT + 1) world.paintBiome(k % N, Math.floor(k / N), null);
+  }
   world.markTerrain(x0, z0, x1, z1);
   return floor;
 }
