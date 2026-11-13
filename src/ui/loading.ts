@@ -1,16 +1,15 @@
 import { tr } from '../i18n';
 
-/** L'emblème : une rose des vents dont le cercle enferme des montagnes et un lac */
-const EMBLEM = `<svg class="ldEmblem" viewBox="0 0 120 120" aria-hidden="true">
-  <path d="M60 2 L67 44 L60 40 L53 44 Z M60 118 L53 76 L60 80 L67 76 Z M2 60 L44 53 L40 60 L44 67 Z M118 60 L76 67 L80 60 L76 53 Z" fill="#1d2f5c"/>
-  <path d="M60 2 L67 44 L60 40 Z M118 60 L76 67 L80 60 Z M60 118 L53 76 L60 80 Z M2 60 L44 53 L40 60 Z" fill="#3a5694"/>
-  <path d="M28 28 L52 47 L47 52 Z M92 28 L73 52 L68 47 Z M92 92 L68 73 L73 68 Z M28 92 L47 68 L52 73 Z" fill="#1d2f5c"/>
-  <circle cx="60" cy="60" r="30" fill="#eef4ff" stroke="#1d2f5c" stroke-width="5"/>
-  <path d="M33 66 L48 47 L55 55 L64 41 L87 66 Z" fill="#1d2f5c"/>
-  <path d="M64 41 L70 49 L66 48 L62 52 L59 48 Z M48 47 L52 52 L49 51 L46 53 Z" fill="#ffffff"/>
-  <path d="M33 66 L87 66 Q84 78 76 84 L60 76 L44 84 Q36 78 33 66 Z" fill="#5d9be8"/>
-  <path d="M60 76 L76 84 Q69 89 60 90 Q51 89 44 84 Z" fill="#3a7bd5"/>
-</svg>`;
+/** les sommets au-dessus du titre (vectoriels, nets à toute taille) : une ombre décalée, puis le crème */
+const PEAK_SHAPES = [
+    'M695,355 L835,185 L888,246 L828,302 Z',
+    'M905,236 L1010,105 L1146,272 L1088,262 L1052,256 L1014,280 L962,250 Z',
+    'M1160,266 L1190,243 L1258,340 L1218,300 L1176,292 Z',
+    'M628,410 Q1000,296 1348,415 Q1000,332 628,410 Z',
+];
+const drawPeaks = (fill: string, dx: number, dy: number) => PEAK_SHAPES.map((d) => `<path d="${d}" fill="${fill}" transform="translate(${dx} ${dy})"/>`).join('');
+/** le logo de l'accueil et du chargement : les sommets au-dessus du titre « Ceionia » */
+export const LOGO_PEAKS = `<svg class="mPeaks" viewBox="610 95 760 330" aria-hidden="true">${drawPeaks('#bfa992', 3, 5)}${drawPeaks('#fbf4e8', 0, 0)}</svg>`;
 
 /** l'ampoule devant le conseil */
 const BULB = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 5a5.5 5.5 0 0 0-3.3 9.9c.6.5.8 1.1.8 1.8v.3h5v-.3c0-.7.3-1.3.8-1.8A5.5 5.5 0 0 0 12 5z"/><path d="M12 1.5v1.2M4.6 4.6l.9.9M19.4 4.6l-.9.9M2.5 11h1.3M21.5 11h-1.3"/></svg>';
@@ -60,7 +59,7 @@ export class LoadingScreen {
     const el = (this.el = document.createElement('div'));
     el.id = 'loadScreen';
     el.setAttribute('role', 'status');
-    el.innerHTML = `${menuBg('ldBg', false)}<div class="ldBox">${EMBLEM}<h1>Ceionia</h1><p class="ldStep"></p><div class="ldBar"><i></i></div><p class="ldTip">${BULB}<span></span></p></div>`;
+    el.innerHTML = `${menuBg('ldBg', false)}<div class="ldBox">${LOGO_PEAKS}<h1>Ceionia</h1><p class="ldStep"></p><div class="ldBar"><i></i></div><p class="ldTip">${BULB}<span></span></p></div>`;
     this.label = el.querySelector('.ldStep')!;
     this.bar = el.querySelector('.ldBar i')!;
     // un conseil au hasard, puis le suivant toutes les quelques secondes

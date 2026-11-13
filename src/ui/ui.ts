@@ -29,7 +29,7 @@ import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
 import { pic, hudPic, leadPic, withPic } from './pics';
-import { menuBg } from './loading';
+import { menuBg, LOGO_PEAKS } from './loading';
 import { MiniMap } from './minimap';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
 
@@ -2374,15 +2374,6 @@ export function showCredits(root: HTMLElement) {
 const playIcon = (s = 30) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path d="M6 3.5l15 8.5-15 8.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`;
 const CHEVRON = '<svg class="mChev" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-/** les sommets au-dessus du titre (vectoriels, nets à toute taille) : une ombre décalée, puis le crème */
-const PEAK_SHAPES = [
-    'M695,355 L835,185 L888,246 L828,302 Z',
-    'M905,236 L1010,105 L1146,272 L1088,262 L1052,256 L1014,280 L962,250 Z',
-    'M1160,266 L1190,243 L1258,340 L1218,300 L1176,292 Z',
-    'M628,410 Q1000,296 1348,415 Q1000,332 628,410 Z',
-];
-const drawPeaks = (fill: string, dx: number, dy: number) => PEAK_SHAPES.map((d) => `<path d="${d}" fill="${fill}" transform="translate(${dx} ${dy})"/>`).join('');
-const LOGO_PEAKS = `<svg class="mPeaks" viewBox="610 95 760 330" aria-hidden="true">${drawPeaks('#bfa992', 3, 5)}${drawPeaks('#fbf4e8', 0, 0)}</svg>`;
 
 /**
  * L'écran d'accueil, sur un paysage animé (la vidéo `MENU_VIDEO` de `loading.ts`, ou l'image fixe) : le titre, les

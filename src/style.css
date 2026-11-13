@@ -717,18 +717,19 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
 /* ---------- Écran de chargement : aux couleurs de l'accueil ; il couvre la vue le temps que la scène se prépare, puis s'efface ---------- */
 #loadScreen { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 24px 16px; overflow: hidden; background: #dfe9f6; transition: opacity 0.5s ease; }
 #loadScreen.out { opacity: 0; pointer-events: none !important; }
-/* le paysage, voilé de clair au centre (une brume) pour lire le titre et la barre */
+/* le paysage, un peu assombri au centre pour lire le titre crème et la barre */
 .ldBg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 60%; filter: saturate(1.05) brightness(1.08); }
-#loadScreen::before { content: ''; position: absolute; inset: 0; z-index: 1; background: radial-gradient(ellipse 46% 52% at 50% 52%, rgba(244, 248, 255, 0.92) 0%, rgba(240, 246, 255, 0.78) 40%, rgba(235, 243, 255, 0.25) 75%, rgba(235, 243, 255, 0) 100%); }
+#loadScreen::before { content: ''; position: absolute; inset: 0; z-index: 1; background: radial-gradient(ellipse 46% 52% at 50% 56%, rgba(40, 52, 96, 0.28) 0%, rgba(40, 52, 96, 0.16) 45%, rgba(40, 52, 96, 0) 80%); }
 .ldBox { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; width: min(580px, 100%); text-align: center; }
-.ldEmblem { width: clamp(96px, 9vw, 140px); height: auto; margin-bottom: 4px; filter: drop-shadow(0 4px 10px rgba(29, 47, 92, 0.18)); }
-.ldBox h1 { margin: 0 0 14px; font-size: clamp(56px, 6.4vw, 96px); line-height: 1; font-weight: 800; letter-spacing: -0.01em; color: #17264d; }
-.ldStep { margin: 0 0 22px; min-height: 1.4em; font-size: clamp(16px, 1.45vw, 22px); font-weight: 700; color: #4a5876; }
-.ldBar { width: 100%; height: 14px; border-radius: 999px; background: rgba(150, 165, 190, 0.35); box-shadow: inset 0 1px 2px rgba(27, 42, 74, 0.12); overflow: hidden; }
-.ldBar i { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(180deg, #4f86f0, #2a63dc); transition: width 0.25s ease; }
-.ldTip { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 40px 0 0; min-height: 2.6em; font-size: clamp(13px, 1.05vw, 16px); font-weight: 600; color: #3d4a66; }
+/* le même logo que l'accueil : les sommets crème et le titre en Fraunces crème, liseré brun */
+.ldBox .mPeaks { width: clamp(130px, 12vw, 210px); }
+.ldBox h1 { margin: 0 0 14px; font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-variation-settings: 'SOFT' 100, 'WONK' 0; font-size: clamp(60px, 7vw, 110px); line-height: 0.95; letter-spacing: -0.005em; color: #fdf7ec; text-shadow: 2px 3px 0 #bfa992, 0 8px 26px rgba(40, 50, 110, 0.35); }
+.ldStep { margin: 0 0 22px; min-height: 1.4em; font-size: clamp(16px, 1.45vw, 22px); font-weight: 700; color: #fdf6e8; text-shadow: 0 2px 8px rgba(40, 50, 110, 0.55); }
+.ldBar { width: 100%; height: 14px; border-radius: 999px; background: rgba(253, 247, 236, 0.35); box-shadow: inset 0 1px 2px rgba(27, 42, 74, 0.2), 0 0 0 1px rgba(253, 247, 236, 0.5); overflow: hidden; }
+.ldBar i { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(180deg, #f8d77a, #e0a637); transition: width 0.25s ease; }
+.ldTip { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 40px 0 0; min-height: 2.6em; font-size: clamp(13px, 1.05vw, 16px); font-weight: 600; color: #fdf6e8; text-shadow: 0 2px 8px rgba(40, 50, 110, 0.6); }
 .ldTip svg { flex: none; }
-@media (max-width: 600px) { .ldTip { margin-top: 28px; } #loadScreen::before { background: radial-gradient(ellipse 80% 45% at 50% 50%, rgba(244, 248, 255, 0.92) 0%, rgba(240, 246, 255, 0.75) 55%, rgba(235, 243, 255, 0.2) 100%); } }
+@media (max-width: 600px) { .ldTip { margin-top: 28px; } #loadScreen::before { background: radial-gradient(ellipse 80% 45% at 50% 50%, rgba(40, 52, 96, 0.3) 0%, rgba(40, 52, 96, 0.18) 55%, rgba(40, 52, 96, 0) 100%); } }
 .hint { font-size: 12px; color: var(--ink2); max-width: 640px; line-height: 1.55; margin: 6px 0; }
 .hint svg.ic { display: inline-block; vertical-align: -3px; margin-right: 4px; }
 
