@@ -45,7 +45,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   3. `pveOrders` : choisir des soldats (« Tous ») et donner un ordre d'un clic droit.
   4. `pveInvasion` (à lire) : avec assez de soldats, « Affronter » lance l'invasion, qui ouvre les Enfers.
 - **Chapitre « Les Enfers »** (`hell`, 4 étapes), à la première entrée dans les Enfers :
-  1. `hellGoal` : le 🎯 marque le prochain bastion ; cliquer l'objectif au bout de la frise (il centre la vue).
+  1. `hellGoal` : le marqueur à l'écran montre le prochain bastion ; cliquer l'objectif au bout de la frise (il centre la vue).
   2. `hellPick` : choisir des troupes (sans troupe : « Renforts » fait venir la garnison).
   3. `hellAttack` : un ordre d'un clic droit sur la cible (la bulle se tient à l'écart).
   4. `hellBack` (à lire) : « Village », ou un clic sur le portail, ramène au village.

@@ -14,7 +14,7 @@ import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } f
 import { planHellRecruit, orderHellRecruit, stepHellWaiting, shortWhy } from '../sim/recruitPlan';
 import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 import { nextGoal, goalLine, HellGoal } from '../sim/objective';
-import { pic, withPic } from './pics';
+import { pic, withPic, hudPic } from './pics';
 import { ic } from './icons';
 
 /**
@@ -1129,16 +1129,16 @@ export class CommandUI implements ToolInput {
         const st = hot.has(i) ? 'hot' : held ? 'ok' : i === f.frontier && !ageLock ? 'cur' : ageLock ? 'lock' : 'shut';
         const tip = tr('{name} : {state} ({age})', { name: zd.name, state: st === 'hot' ? tr('attaquée') : st === 'ok' ? tr('tenue') : st === 'cur' ? tr('ouverte : abattez sa forteresse') : ageLock ? tr('verrouillée : demande {age}', { age: zoneAgeText(i) }) : tr('fermée : abattez d’abord la forteresse de la zone d’avant'), age: zoneAgeText(i) });
         const link = i ? `<i class="zl${held ? ' ok' : ''}"></i>` : '';
-        return `${link}<span class="zn ${st}" title="${tip.replace(/"/g, '&quot;')}"><span class="zc">${i ? i : 'P'}</span><span class="zt">${tr(CommandUI.ZSHORT[i])}</span></span>`;
+        return `${link}<span class="zn ${st}" title="${tip.replace(/"/g, '&quot;')}"><span class="zc">${st === 'ok' ? hudPic('coche', 14) : st === 'lock' ? hudPic('cadenas', 13) : i ? i : 'P'}</span><span class="zt">${tr(CommandUI.ZSHORT[i])}</span></span>`;
       }).join('');
     }
     const al = alerts[0];
     const zn = this.host.zoneName?.();
     // au bout de la frise, l'objectif (la distance se met à jour à part, sans refaire la barre) : un clic y centre la vue
-    const g = this.goal, goal = g ? (g.x !== undefined ? `<button data-a="goal" class="tfg" title="${tr('Centrer la vue sur l’objectif')}">${pic('🎯', 18)}<span class="tgo">${goalLine(g, null)}<b class="tgd"></b></span></button>` : `<span class="tfg">${pic('🔒', 18)}<span class="tgo">${goalLine(g, null)}</span></span>`) : '';
+    const g = this.goal, goal = g ? (g.x !== undefined ? `<button data-a="goal" class="tfg" title="${tr('Centrer la vue sur l’objectif')}">${hudPic('militaire', 18)}<span class="tgo">${goalLine(g, null)}<b class="tgd"></b></span></button>` : `<span class="tfg">${pic('🔒', 18)}<span class="tgo">${goalLine(g, null)}</span></span>`) : '';
     // dessous, seulement quand les démons menacent la base
-    const row = al ? `<div class="tgoal"><span class="tfa" title="${al.text.replace(/"/g, '&quot;')}">⚠️ ${al.text}</span></div>` : '';
-    return `<div class="tstate tfcol"><div class="tfrise">${zn ? `<span class="tfn" title="${tr('La zone où se trouve la vue ; un clic sur le portail ramène au village')}">🔥 ${zn}</span>` : ''}<div class="tfz">${nodes}</div>${goal}</div>${row}</div>`;
+    const row = al ? `<div class="tgoal"><span class="tfa" title="${al.text.replace(/"/g, '&quot;')}">${pic('⚠️', 16)} ${al.text}</span></div>` : '';
+    return `<div class="tstate tfcol"><div class="tfrise">${zn ? `<span class="tfn" title="${tr('La zone où se trouve la vue ; un clic sur le portail ramène au village')}"><small>${tr('Les Enfers')}</small><b>${zn}</b></span>` : ''}<div class="tfz">${nodes}</div>${goal}</div>${row}</div>`;
   }
 
   /** Les recrues en route vers le camp (équipement en fabrication comprises) */

@@ -471,3 +471,44 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
 /* en bataille, la frise du haut (zones des Enfers, vagues de l'île) au niveau des ressources quand la place le permet */
 body.tsTop #troopBar .tstate, body.tsTop.hell #troopBar .tstate, body.tsTop.under #troopBar .tstate { top: var(--tsTop, 10px); left: var(--tsX, 50%); }
 body.tsTop.hell #bossBar { top: calc(var(--tsTop, 10px) + 70px); }
+
+/* ---------- frise des Enfers : le chemin des zones en médaillons sur un parchemin ----------
+   zone tenue : médaillon d'or coché ; zone ouverte : médaillon blanc cerclé d'or qui respire ; fermée : parchemin en pointillé ;
+   verrouillée par l'âge : cadenas ; attaquée : cercle rouge qui bat. Les liens tenus deviennent un ruban d'or */
+#troopBar .tfrise { gap: 14px; padding: 7px 10px 7px 16px; border-radius: var(--hR); background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); color: var(--hInk); }
+#troopBar .tfn { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; padding-right: 14px; border-right: 1px solid rgba(200, 160, 95, 0.4); color: var(--hInk); }
+#troopBar .tfn small { font-family: inherit; font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #A8452A; }
+#troopBar .tfn b { font-family: var(--hSerif); font-variation-settings: 'SOFT' 50, 'opsz' 36; font-size: 17px; font-weight: 800; color: var(--hInk); }
+#troopBar .tfz { gap: 0; }
+#troopBar .zn { width: 64px; gap: 3px; }
+#troopBar .zc { width: 26px; height: 26px; font-family: var(--hSerif); font-size: 13px; font-weight: 800; color: var(--hInk2); background: radial-gradient(circle at 50% 35%, #FFFCF3, #F3E3C4 85%); border: 1.5px dashed #C9A874; box-shadow: inset 0 1px 2px rgba(120, 80, 30, 0.12); }
+#troopBar .zc .pic { display: block; }
+#troopBar .zt { font-size: 10.5px; font-weight: 700; color: var(--hInk2); letter-spacing: 0.01em; white-space: nowrap; }
+#troopBar .zn.ok .zc { background: var(--hGoldFill); border: 1.5px solid var(--hGold); box-shadow: var(--hGoldShadow); }
+#troopBar .zn.ok .zt { color: var(--hInk); font-weight: 800; }
+#troopBar .zn.cur .zc { width: 30px; height: 30px; margin: -2px 0; font-size: 15px; color: #8A4B12; background: radial-gradient(circle at 50% 35%, #FFFFFF, #FFF4DA 80%); border: 2.5px solid #E2A845; box-shadow: 0 0 0 3px rgba(255, 226, 150, 0.55), 0 2px 6px rgba(150, 95, 20, 0.35); animation: zgold 1.6s ease-in-out infinite; }
+#troopBar .zn.cur .zt { color: #8A4B12; font-weight: 800; }
+#troopBar .zn.lock .zc { border-style: solid; border-color: #D9C29C; background: #F1E5CF; }
+#troopBar .zn.lock .zc .pic { opacity: 0.8; }
+#troopBar .zn.lock .zt, #troopBar .zn.shut .zt { color: #9C8466; font-weight: 600; }
+#troopBar .zn.hot .zc { color: #fff; background: radial-gradient(circle at 50% 35%, #F27560, #C8352A 85%); border: 2px solid #fff; box-shadow: 0 0 0 1.5px rgba(200, 53, 42, 0.6); animation: zpulse 1s ease-in-out infinite; }
+#troopBar .zn.hot .zt { color: #B3321F; font-weight: 800; }
+#troopBar .zl { flex: 0 0 30px; min-width: 0; height: 4px; margin: 0 -21px 15px; border-radius: 3px; background: repeating-linear-gradient(90deg, #D5BC92 0 5px, transparent 5px 9px); }
+#troopBar .zl.ok { background: linear-gradient(180deg, #FBE1A0, #E2B45E); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6); }
+@keyframes zgold { 0%, 100% { box-shadow: 0 0 0 3px rgba(255, 226, 150, 0.55), 0 2px 6px rgba(150, 95, 20, 0.35); } 50% { box-shadow: 0 0 0 6px rgba(255, 220, 130, 0.25), 0 0 14px rgba(255, 196, 90, 0.55); } }
+/* l'objectif au bout, en capsule d'or claire */
+#troopBar .tfg { gap: 6px; padding: 5px 13px 5px 8px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFDF6, #FBEFD5); box-shadow: var(--hTile); color: var(--hInk); font-size: 12.5px; font-weight: 700; }
+#troopBar button.tfg:hover { background: var(--hGoldFill); border-color: var(--hGold); }
+#troopBar .tfg .tgo { color: var(--hInk); }
+#troopBar .tfg .tgo b { color: #A8452A; font-weight: 800; }
+#troopBar .tgoal { background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); }
+#troopBar .tfa { display: inline-flex; align-items: center; gap: 5px; }
+@media (max-width: 640px) {
+  #troopBar .tfrise { gap: 6px 8px; padding: 5px 8px; }
+  #troopBar .tfn { padding-right: 8px; }
+  #troopBar .tfn b { font-size: 14px; }
+  #troopBar .zn, #troopBar .zn.cur { width: 28px; }
+  #troopBar .zc { width: 20px; height: 20px; font-size: 11px; }
+  #troopBar .zn.cur .zc { width: 24px; height: 24px; }
+  #troopBar .zl { flex: 0 0 8px; margin: 0 -4px; }
+}
