@@ -235,3 +235,42 @@ button.round small { background: linear-gradient(180deg, #4fae4a, #2c8436); bord
   .expModal .mart.dio { left: -56px; width: 150px; height: 150px; }
   .expModal .mbody { display: flex; }
 }
+
+/* ---------- Lancer une expédition, d'après la maquette de l'auteur : à gauche le diorama de la mission sur un halo doré, dans
+   un panneau de parchemin qu'il dépasse par le haut, le titre, l'âge et la phrase dessous ; à droite la façon de partir en
+   segments dorés, puis l'équipement, la durée, le risque et les récompenses dans des encadrés ; le paysage de l'âge en tête */
+.overlay > .modal.sendModal { max-width: 1180px; }
+.sendModal > .mtitle { position: relative; overflow: hidden; }
+.sendModal > .mtitle::before { content: ''; position: absolute; inset: 0 0 0 45%; background: var(--exp-banner) center 62% / cover no-repeat; -webkit-mask-image: linear-gradient(90deg, transparent, #000 35%); mask-image: linear-gradient(90deg, transparent, #000 35%); opacity: 0.9; pointer-events: none; }
+.sendModal > .mtitle > * { position: relative; }
+.sendModal .sGrid { grid-template-columns: 1fr 1.08fr; gap: 22px; }
+.sArt.mart.dio { display: flex; flex-direction: column; justify-content: flex-end; overflow: visible; border: 1.5px solid rgba(225, 190, 130, 0.8); border-radius: 18px;
+  background: radial-gradient(60% 50% at 50% 42%, rgba(255, 214, 120, 0.55), rgba(255, 214, 120, 0) 100%), linear-gradient(180deg, #FFFEF9, #FFF4DE);
+  box-shadow: inset 0 0 0 1px #fff, 0 6px 16px rgba(90, 60, 20, 0.14); }
+.sArt.mart.dio > img.dioImg { position: absolute; inset: auto; left: 50%; top: -34px; width: 92%; height: auto; transform: translateX(-50%); filter: drop-shadow(0 12px 14px rgba(80, 50, 15, 0.3)); }
+.sArt.mart.dio .sCap { position: relative; padding: 0 22px 20px; background: none; color: var(--hInk); text-align: center; }
+.sArt.mart.dio .sCap h3 { justify-content: center; color: var(--hInk); text-shadow: none; font-size: 30px; }
+.sArt.mart.dio .sCap p { color: var(--hInk); text-shadow: none; opacity: 1; font-size: 15px; }
+.sArt.mart.dio .sCap small { color: var(--hInk2); opacity: 1; }
+.sEra { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 2px 12px; border-radius: 999px; background: #FCE7B6; border: 1px solid rgba(226, 180, 94, 0.7); color: #6B4210; font-size: 13.5px; font-weight: 700; }
+.sCap:not(.sArt.dio .sCap) .sEra { background: rgba(255, 255, 255, 0.85); }
+/* la façon de partir : trois segments, le choisi en or */
+.sStyles { gap: 8px; padding: 0; border: 0; background: none; }
+.sStyles button { min-height: 50px; border-radius: 999px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F7E9CC); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(120, 80, 25, 0.15); }
+.sStyles button b { font-size: 16px; }
+.sStyles button.on, .sStyles button.on.cautious, .sStyles button.on.bold, .sStyles button.on.balanced { background: var(--hGoldFill); border-color: var(--hGold); box-shadow: var(--hGoldShadow); }
+.sStyles button.on b, .sStyles button.on.cautious b, .sStyles button.on.bold b, .sStyles button.on.balanced b { color: var(--hInk); }
+.sChoice { font-size: 14.5px; color: var(--hInk); }
+/* les encadrés : parchemin clair et filet doré */
+.sPanel, .sendModal .gearNeed.sGear { background: linear-gradient(180deg, #FFFEF9, #FFF7E6); border: 1.5px solid rgba(225, 190, 130, 0.8); border-radius: 16px; box-shadow: inset 0 0 0 1px #fff; }
+.sHead b, .sRow b, .sVal { font-family: var(--hSerif); font-weight: 800; font-size: 17px; letter-spacing: -0.01em; }
+.sRisk.mid { box-shadow: inset 0 0 0 1px #fff, 0 0 0 2px rgba(240, 190, 90, 0.45); }
+.sGifts { background: rgba(240, 225, 190, 0.35); }
+.gift { border-radius: 16px; }
+.sendModal button.sGo { border-radius: 999px; min-height: 60px; font-family: var(--hSerif); font-size: 19px; }
+.sendModal .sBack { border-radius: 999px; }
+.sWarn.block { border-radius: 999px; background: #FBE1DA; border: 1.5px solid rgba(220, 120, 110, 0.45); color: #A8323A; }
+@media (max-width: 760px) {
+  .sArt.mart.dio { min-height: 300px; }
+  .sArt.mart.dio > img.dioImg { top: -20px; width: 78%; }
+}

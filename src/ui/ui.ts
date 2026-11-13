@@ -1811,6 +1811,8 @@ export class UI {
     const body = () => this.sendHtml(m, sel);
     const head = `${EXP_EMBLEM}<span class="exTitle"><span>${tr('Lancer une expédition')}</span><small>${tr('Envoyez votre équipe explorer de nouveaux territoires.')}</small></span>`;
     const { ov, close } = modal(this.root, 'sendModal', head, `<div class="sendBody">${body()}</div>`, () => clearInterval(iv));
+    // le paysage de l'âge du village dans l'en-tête, comme la fenêtre des expéditions
+    $('.sendModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, h.sim.age))}.webp)`);
     const root = $('.sendBody', ov);
     // une pièce fabriquée, une équipe partie ou de retour, la réserve qui bouge : les choix se redessinent ; la barre de
     // fabrication avance en continu
@@ -1948,8 +1950,8 @@ export class UI {
     const warn = why ?? (this.needsHtml(m) ? '' : lose ? tr('En cas d’échec : {what}', { what: lose }) : tr('Une expédition peut échouer : l’équipement la rend plus sûre.'));
     const needs = ex.missing(m).length ? `<div class="sNeeds req">${this.needsHtml(m)}</div>` : '';
     return `<div class="sGrid">
-      <div class="sArt mart ${art.dest}">${art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}
-        <div class="sCap"><h3>${pic(m.icon, 28)} ${m.title}</h3><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div></div>
+      <div class="sArt mart ${art.dest}${MISSION_DIO.has(m.id) ? ' dio' : ''}">${MISSION_DIO.has(m.id) ? `<img class="dioImg" src="./expeditions/dio-${m.id}.webp" alt="" decoding="async">` : art.src ? `<img src="${art.src}" alt="" decoding="async">` : `<b>${pic(m.icon, 120)}</b>`}
+        <div class="sCap"><h3>${MISSION_DIO.has(m.id) ? '' : pic(m.icon, 28) + ' '}${m.title}</h3><span class="sEra">${hudPic(AGE_PIC[m.age] ?? AGE_PIC[0], 16)} ${AGES[m.age].name}</span><p>${si.head}</p>${redo ? `<small>${ic('restart', 13, 2)} ${tr('Déjà réussie : bonus de {n} jours seulement.', { n: REDO_DAYS })}</small>` : ''}</div></div>
       <div class="sSide">
         ${seg}
         ${c.label && cs.length > 1 ? `<p class="sChoice"><b>${c.label}</b>${cardPhrase(c.text) ? ` — ${cardPhrase(c.text)}` : ''}</p>` : ''}
