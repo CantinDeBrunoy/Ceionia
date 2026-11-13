@@ -147,6 +147,36 @@ describe('faune : la mer', () => {
     setMapSize(96);
   });
 
+  it('la nage est fluide : ni saut de position, ni virage sec, ni à-coup de hauteur, même quand le monde change', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026, GEN);
+    w.updateVis();
+    const f = new Fauna(w, { perches: Array.from({ length: N * N }, () => []), flowers: Array.from({ length: N * N }, () => []) });
+    const sea = () => (f as any).critters.filter((c: any) => ['fish', 'dolphin', 'shark'].includes(c.kind));
+    f.update(0.016, 0, 12, 1, 0, 0);
+    let prev = new Map(sea().map((c: any) => [c, { x: c.x, z: c.z, y: c.y, h: c.heading }]));
+    let worst = { d: 0, h: 0, y: 0 };
+    for (let i = 1; i < 600; i++) {
+      // un bâtiment posé ailleurs : nouveau recensement (qui remettait les bancs chassés à leur domaine d'un coup)
+      if (i % 150 === 0) w.version++;
+      f.update(1 / 60, i / 60, 12, 1, 0, 0);
+      for (const c of sea()) {
+        const p = prev.get(c);
+        if (!p) continue;
+        let dh = Math.abs(c.heading - p.h) % (Math.PI * 2);
+        if (dh > Math.PI) dh = Math.PI * 2 - dh;
+        worst = { d: Math.max(worst.d, Math.hypot(c.x - p.x, c.z - p.z)), h: Math.max(worst.h, dh), y: Math.max(worst.y, Math.abs(c.y - p.y)) };
+      }
+      prev = new Map(sea().map((c: any) => [c, { x: c.x, z: c.z, y: c.y, h: c.heading }]));
+    }
+    // à 60 images/s : moins de 0,1 case, 0,2 radian, 0,06 de hauteur par image
+    expect(worst.d).toBeLessThan(0.1);
+    expect(worst.h).toBeLessThan(0.2);
+    expect(worst.y).toBeLessThan(0.06);
+    setMapSize(96);
+  });
+
   it('les bêtes de la mer viennent près du village à tout âge', () => {
     for (const age of [0, 2, 3, 5]) for (const k of ['fish', 'dolphin', 'shark'] as const) expect(nearbyAllowed(k, age)).toBe(true);
     expect(nearbyAllowed('deer', 3)).toBe(false);
