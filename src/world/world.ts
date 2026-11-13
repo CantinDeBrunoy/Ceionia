@@ -39,6 +39,11 @@ export const SNOW_LINE: [number, number] = [7, 8.2];
 /** Relief affiché : VR sous-sommets par case, lissé (la grille de jeu reste N×N) */
 export const VR = 2;
 export let VS = N * VR + 1;
+/**
+ * Mer de décor autour de la carte, en cases de chaque côté (32 sur la grande carte) : affichage seul, hors de la grille,
+ * rien n'y est jouable ni sauvegardé. Le plateau (eau, fond, falaise, socle) déborde d'autant
+ */
+export const seaMargin = () => Math.round(N / 12) * 2;
 
 /** Taille de la carte choisie ; à appeler avant de construire le monde, ses vues et la caméra (tailles des tableaux) */
 /** Taille (cases de terre) sous laquelle une tache de climat tropical ou désertique se fond dans ses voisines */

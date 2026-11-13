@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, SEA, VR, VS, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
+import { World, N, SEA, VR, VS, seaMargin, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { computeFlow } from '../world/flow';
 import { Simplex } from '../world/noise';
@@ -69,6 +69,16 @@ const STRATA = [0xb58c66, 0xd2bda2, 0xb5a08c, 0x9c8a7c, 0x857869].map((c) => new
 /** Profondeur relative des rangées de la falaise (0 = bord du relief, 1 = base) */
 const STRATA_T = [0, 0.05, 0.27, 0.5, 0.75, 1];
 const SKIRT_BOTTOM = -3.5;
+/**
+ * Fond de la mer de décor autour de la carte (voir `seaMargin`) : il part du relief du bord, rejoint en `SEA_SLOPE` cases le
+ * fond de la pleine mer de la carte (`SEA_FLOOR`, celui du générateur), puis s'enfonce doucement jusqu'à `SEA_DEEP` au bout
+ * de la marge (une eau un peu plus sombre au large, sans cadre)
+ */
+const SEA_FLOOR = -1, SEA_DEEP = -1.3, SEA_SLOPE = 6;
+const marginFloor = (top: number, d: number, M: number) =>
+  top + (SEA_FLOOR - top) * smoothstep(0, SEA_SLOPE, d) + (SEA_DEEP - SEA_FLOOR) * smoothstep(SEA_SLOPE, M, d);
+/** Distances au bord des rangées du fond de la marge (s'y ajoutent la mi-marge et la marge) */
+const MARGIN_D = [0, 0.6, 1.5, 3, SEA_SLOPE];
 /** Part de la normale de face dans l'ombrage : garde un léger facettage low-poly sur un relief lissé */
 const FACE_MIX = 0.3;
 /** Sous la neige, les facettes se marquent davantage : part de la normale de la facette quand la neige couvre tout */
@@ -110,6 +120,8 @@ export class TerrainView {
   group = new THREE.Group();
   top: THREE.Mesh;
   skirt: THREE.Mesh;
+  /** fond de la mer de décor autour de la carte */
+  margin: THREE.Mesh;
   water: THREE.Mesh;
   waterMat: THREE.MeshStandardMaterial;
   private sideMat: THREE.MeshStandardMaterial;
@@ -148,6 +160,10 @@ export class TerrainView {
   private skPos = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
   private skCol = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
   private skNor = new Float32Array(4 * this.C * (STRATA_T.length - 1) * 6 * 3);
+  private M = seaMargin();
+  private mgPos = new Float32Array(4 * this.C * (MARGIN_D.length + 1) * 6 * 3);
+  private mgCol = new Float32Array(4 * this.C * (MARGIN_D.length + 1) * 6 * 3);
+  private mgSurf = new Float32Array(4 * this.C * (MARGIN_D.length + 1) * 6 * 4);
   private tmp = new THREE.Color();
   /** Par sous-sommet : normale lissée, couleur, poids des motifs de détail (herbe, sable/terre, roche) */
   private vnor = new Float32Array(VS * VS * 3);
@@ -336,6 +352,14 @@ ${BLIGHT_GLSL}
     this.skirt.receiveShadow = true;
     this.skirt.castShadow = true;
 
+    const mg = new THREE.BufferGeometry();
+    mg.setAttribute('position', new THREE.BufferAttribute(this.mgPos, 3));
+    mg.setAttribute('color', new THREE.BufferAttribute(this.mgCol, 3));
+    mg.setAttribute('surf', new THREE.BufferAttribute(this.mgSurf, 4));
+    // même matériau que le relief : le fond de la marge prolonge celui de la carte sans couture de teinte ni de grain
+    this.margin = new THREE.Mesh(mg, topMat);
+    this.margin.frustumCulled = false;
+
     // Eau : couleur selon la profondeur, écume au rivage, vaguelettes, reflet du ciel en incidence rasante
     this.heightTex = new THREE.DataTexture(new Uint16Array(VS * VS * 2), VS, VS, THREE.RGFormat, THREE.HalfFloatType);
     this.heightTex.magFilter = this.heightTex.minFilter = THREE.LinearFilter;
@@ -343,11 +367,12 @@ ${BLIGHT_GLSL}
     this.waterU.uDetail.value = detail;
     this.flowTex.magFilter = this.flowTex.minFilter = THREE.LinearFilter;
     this.waterU.uFlow.value = this.flowTex;
-    const pg = new THREE.PlaneGeometry(N, N, N, N).rotateX(-Math.PI / 2).translate(N / 2, 0, N / 2);
+    const W = N + 2 * this.M;
+    const pg = new THREE.PlaneGeometry(W, W, W, W).rotateX(-Math.PI / 2).translate(N / 2, 0, N / 2);
     this.waterGeo = pg;
     this.waterBase = (pg.attributes.position.array as Float32Array).slice();
     const normalMap = waterNormalTexture();
-    normalMap.repeat.set(9 * N / 48, 9 * N / 48);
+    normalMap.repeat.set(9 * W / 48, 9 * W / 48);
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, roughness: 0.1, metalness: 0, depthWrite: false, normalMap, normalScale: new THREE.Vector2(0.4, 0.4) });
     this.waterMat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.waterU, this.blightU, SNOW_U);
@@ -380,6 +405,11 @@ ${BLIGHT_GLSL}
           .replace('#include <color_fragment>', `#include <color_fragment>
   // relief sous l'eau (r) et part de marais (g, négatif au fond des ravins : pas d'eau) : eau dormante, sombre et sans écume
   vec2 hg = texture2D(uHeight, (vWater * ${VR.toFixed(1)} + 0.5) / ${VS.toFixed(1)}).rg;
+  // mer de décor, hors de la carte : le relief du bord (texture prolongée) descend vers le fond du large, comme le maillage du fond
+  float off = max(max(-vWater.x, vWater.x - ${N.toFixed(1)}), max(-vWater.y, vWater.y - ${N.toFixed(1)}));
+  // (l'eau dormante d'un marais du bord s'éteint en quelques cases, comme le courant)
+  if (off > 0.0) hg = vec2(mix(hg.r, ${SEA_FLOOR.toFixed(2)}, smoothstep(0.0, ${SEA_SLOPE.toFixed(1)}, off))
+    + ${(SEA_DEEP - SEA_FLOOR).toFixed(2)} * smoothstep(${SEA_SLOPE.toFixed(1)}, ${this.M.toFixed(1)}, off), max(hg.g, 0.0) * (1.0 - smoothstep(0.0, 4.0, off)));
   if (hg.g < -0.3) discard;
   float ground = hg.r, calm = clamp(hg.g, 0.0, 1.0);
   float depth = max(0.0, ${SEA.toFixed(1)} - ground);
@@ -398,7 +428,8 @@ ${BLIGHT_GLSL}
   // fondent l'une dans l'autre. Un repère tourné autour de l'origine du monde décalait les rangs de plusieurs tirets pour
   // un centième de radian d'écart de direction : des franges serrées en courbes de niveau, en chevrons et en spirales.
   // La texture du courant est filtrée : hors de l'eau elle vaut 0 (alpha compris), d'où la direction 2 rg - a.
-  vec4 fl = texture2D(uFlow, vWater / ${N.toFixed(1)});
+  // (courant du bord prolongé, qui s'éteint en quelques cases au large)
+  vec4 fl = texture2D(uFlow, vWater / ${N.toFixed(1)}) * (1.0 - smoothstep(0.0, 4.0, off));
   if (fl.b > 0.02) {
     vec2 pdir = normalize(fl.rg * 2.0 - fl.a + 1e-4);
     vec2 gp = vWater / 3.0 - 0.5, g0 = floor(gp), gt = fract(gp);
@@ -470,7 +501,7 @@ ${BLIGHT_GLSL}
     this.water.renderOrder = 2;
     this.sideMat = new THREE.MeshStandardMaterial({ color: 0x5fa6bf, transparent: true, opacity: 0.8, roughness: 0.3, depthWrite: false });
 
-    this.group.add(this.top, this.skirt, this.water, this.makeWaterSides(), this.makeRock());
+    this.group.add(this.top, this.skirt, this.margin, this.water, this.makeWaterSides(), this.makeRock());
     const sx = new Simplex(77);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.patch[z * VS + x] = clamp(sx.fbm((x / VR) * 0.085, (z / VR) * 0.085, 3) * 1.6, -1, 1);
     for (let z = 0; z < VS; z++) for (let x = 0; x < VS; x++) this.wobble[z * VS + x] = sx.noise2((x / VR) * 0.8 + 50, (z / VR) * 0.8);
@@ -494,10 +525,10 @@ ${BLIGHT_GLSL}
 
   private makeWaterSides() {
     const g = new THREE.Group();
-    const depth = 3.6, e = 0.012;
+    const depth = 3.6, e = 0.012 + this.M, W = N + 2 * this.M;
     const sides: [number, number, number, number][] = [[N / 2, -e, 0, 0], [N / 2, N + e, 0, Math.PI], [-e, N / 2, 0, -Math.PI / 2], [N + e, N / 2, 0, Math.PI / 2]];
     for (const [x, z, , ry] of sides) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(N, depth), this.sideMat);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(W, depth), this.sideMat);
       m.position.set(x, -depth / 2, z);
       m.rotation.y = ry;
       m.renderOrder = 2;
@@ -508,7 +539,7 @@ ${BLIGHT_GLSL}
 
   /** Socle rocheux sous la falaise, plus sombre vers la pointe */
   private makeRock() {
-    const R = (N / 2) * Math.SQRT2;
+    const R = (N / 2 + this.M) * Math.SQRT2;
     const geo = new THREE.CylinderGeometry(R, 3, 13, 4, 4, true).rotateY(Math.PI / 4);
     const p = geo.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -903,9 +934,13 @@ ${BLIGHT_GLSL}
     }
   }
 
-  /** Falaise sur les bords de la carte : strates de terre puis de roche, faces irrégulières */
+  /**
+   * Falaise sur les bords du plateau, au bout de la mer de décor : strates de terre puis de roche, faces irrégulières. Elle
+   * part du fond du large ; le fond de la marge (`updateMargin`) suit le relief du bord de la carte
+   */
   private updateSkirt(pal: GroundPalette) {
-    const vis = this.world.vis, vcol = this.vcol;
+    this.updateMargin();
+    const k = (N + 2 * this.M) / N;
     const p = this.skPos, c = this.skCol, nn = this.skNor;
     const rows = STRATA_T.length;
     const edge = new THREE.Color();
@@ -923,8 +958,9 @@ ${BLIGHT_GLSL}
     sides.forEach(([start, step, nx, nz], side) => {
       for (let j = 0; j <= C; j++) {
         const vi = start + j * step;
-        const ex = (vi % VS) / VR, ez = Math.floor(vi / VS) / VR, top = vis[vi];
-        edge.setRGB(vcol[vi * 3], vcol[vi * 3 + 1], vcol[vi * 3 + 2]);
+        // le bord de la carte, agrandi depuis son centre jusqu'au bout de la marge
+        const ex = N / 2 + ((vi % VS) / VR - N / 2) * k, ez = N / 2 + (Math.floor(vi / VS) / VR - N / 2) * k, top = SEA_DEEP;
+        edge.copy(SEABED);
         for (let r = 0; r < rows; r++) {
           const t = STRATA_T[r];
           // les rangées intermédiaires bombent vers l'extérieur (sauf aux angles, partagés par deux bords)
@@ -935,7 +971,7 @@ ${BLIGHT_GLSL}
           if (r === 0) cols[r].copy(edge);
           else if (r === 1) cols[r].copy(edge).lerp(STRATA[0], top > 0.1 ? 0.55 : 0.85);
           else cols[r].copy(STRATA[r - 1]).multiplyScalar(0.92 + hash2(j, r, side + 13) * 0.14);
-          if (r <= 1 && pal.snow > 0) cols[r].lerp(WHITE, pal.snow * 0.6);
+          if (r <= 1 && pal.snow > 0 && top > SEA) cols[r].lerp(WHITE, pal.snow * 0.6);
         }
         if (j > 0)
           for (let r = 0; r < rows - 1; r++) {
@@ -950,6 +986,76 @@ ${BLIGHT_GLSL}
     this.skirt.geometry.attributes.position.needsUpdate = true;
     this.skirt.geometry.attributes.color.needsUpdate = true;
     this.skirt.geometry.attributes.normal.needsUpdate = true;
+  }
+
+  /**
+   * Fond de la mer de décor : de chaque bord de la carte (sous-sommets du relief, sans couture), des rangées de plus en plus
+   * loin qui descendent vers le large (`marginFloor`, même pente que dans le shader de l'eau). Aux angles, la première et la dernière
+   * colonne partent en diagonale : les deux bords voisins s'y rejoignent
+   */
+  private updateMargin() {
+    const vis = this.world.vis, vcol = this.vcol, vsurf = this.vsurf, C = this.C, M = this.M;
+    const D = [...MARGIN_D, (SEA_SLOPE + M) / 2, M], rows = D.length;
+    const p = this.mgPos, c = this.mgCol, sf = this.mgSurf;
+    const px = new Float32Array(rows), py = new Float32Array(rows), pz = new Float32Array(rows);
+    const qx = new Float32Array(rows), qy = new Float32Array(rows), qz = new Float32Array(rows);
+    // teinte et sol (herbe, sable, roche, neige) : ceux du sommet du bord, qui se fondent au large dans la moyenne du fond de
+    // mer le long des bords (sinon chaque tache du bord s'étirerait en bande jusqu'au bout de la marge)
+    const avg = [0, 0, 0, 0, 0, 0, 0];
+    let na = 0;
+    for (let j = 0; j < VS; j++)
+      for (const vi of [j, (VS - 1) * VS + j, j * VS, j * VS + VS - 1]) {
+        if (vis[vi] > SEA_FLOOR * 0.5) continue;
+        for (let b = 0; b < 3; b++) avg[b] += vcol[vi * 3 + b];
+        for (let b = 0; b < 4; b++) avg[3 + b] += vsurf[vi * 4 + b];
+        na++;
+      }
+    if (na) for (let b = 0; b < 7; b++) avg[b] /= na;
+    else { avg[0] = SEABED.r; avg[1] = SEABED.g; avg[2] = SEABED.b; avg[4] = 1; }
+    avg[6] = 0;
+    let pi = 0, qi = 0;
+    let o = 0;
+    const put = (x: Float32Array, y: Float32Array, z: Float32Array, vi: number, r: number) => {
+      p[o] = x[r]; p[o + 1] = y[r]; p[o + 2] = z[r];
+      const t = smoothstep(0, SEA_SLOPE, D[r]), so = (o / 3) * 4;
+      for (let b = 0; b < 3; b++) c[o + b] = vcol[vi * 3 + b] + (avg[b] - vcol[vi * 3 + b]) * t;
+      for (let b = 0; b < 4; b++) sf[so + b] = vsurf[vi * 4 + b] + (avg[3 + b] - vsurf[vi * 4 + b]) * t;
+      o += 3;
+    };
+    // bord : (sous-sommet de départ, pas le long du bord, normale sortante)
+    const sides: [number, number, number, number][] = [[0, 1, 0, -1], [(VS - 1) * VS, 1, 0, 1], [0, VS, -1, 0], [VS - 1, VS, 1, 0]];
+    for (const [start, step, nx, nz] of sides) {
+      const tx = step === 1 ? 1 : 0, tz = 1 - tx;
+      // ordre des sommets pour que la face regarde vers le haut
+      const flip = nx < 0 || nz > 0;
+      for (let j = 0; j <= C; j++) {
+        const vi = start + j * step, s = j === 0 ? -1 : j === C ? 1 : 0;
+        const ex = (vi % VS) / VR, ez = Math.floor(vi / VS) / VR, top = vis[vi];
+        qi = vi;
+        for (let r = 0; r < rows; r++) {
+          const d = D[r];
+          qx[r] = ex + (nx + tx * s) * d; qz[r] = ez + (nz + tz * s) * d;
+          qy[r] = marginFloor(top, d, M);
+        }
+        if (j > 0)
+          for (let r = 0; r < rows - 1; r++) {
+            if (flip) {
+              put(px, py, pz, pi, r); put(px, py, pz, pi, r + 1); put(qx, qy, qz, qi, r + 1);
+              put(px, py, pz, pi, r); put(qx, qy, qz, qi, r + 1); put(qx, qy, qz, qi, r);
+            } else {
+              put(px, py, pz, pi, r); put(qx, qy, qz, qi, r); put(qx, qy, qz, qi, r + 1);
+              put(px, py, pz, pi, r); put(qx, qy, qz, qi, r + 1); put(px, py, pz, pi, r + 1);
+            }
+          }
+        px.set(qx); py.set(qy); pz.set(qz); pi = qi;
+      }
+    }
+    const g = this.margin.geometry;
+    g.setDrawRange(0, o / 3);
+    g.attributes.position.needsUpdate = true;
+    g.attributes.color.needsUpdate = true;
+    g.attributes.surf.needsUpdate = true;
+    g.computeVertexNormals();
   }
 
   /**
