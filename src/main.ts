@@ -1976,6 +1976,7 @@ class Game implements UIHost {
       this.upBadges.update(dt, this.sim.age);
       this.windT += dt * (1 + this.env.weatherK * 0.6);
       this.veg.animate(this.windT, this.elapsed, 1 - this.env.weatherK * 0.3);
+      this.veg.fogFar = this.env.fog.far;
       this.veg.update(dt, this.cam.camera.position);
     }
     audio.update(dt, {

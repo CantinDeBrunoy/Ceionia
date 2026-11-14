@@ -212,9 +212,9 @@ class Layer {
     }
   }
 
-  /** Visibilité d'une tuile selon sa distance à la caméra */
-  view(ch: number, dist: number, lodDist = LOD_DIST) {
-    const has = this.n[ch] > 0;
+  /** Visibilité d'une tuile selon sa distance à la caméra ; `gone` : toute la tuile est noyée dans la brume (rien n'est dessiné) */
+  view(ch: number, dist: number, lodDist = LOD_DIST, gone = false) {
+    const has = this.n[ch] > 0 && !gone;
     // en qualité réduite (lodDist plus court), menus détails et ombres s'arrêtent plus près, dans la même proportion
     const k = lodDist / LOD_DIST;
     const hide = (this.o.detail && dist > DETAIL_DIST * k) || (this.o.small && dist > SMALL_DIST);
@@ -250,6 +250,11 @@ export class VegView {
   group = new THREE.Group();
   /** distance à partir de laquelle les arbres passent en version simplifiée (qualité graphique) */
   lodDist = LOD_DIST;
+  /**
+   * Fin de la brume (`Fog.far`), donnée par le jeu à chaque image : une tuile tout entière au-delà n'est plus dessinée (elle
+   * aurait la couleur de la brume). Sur une grande carte, de près, c'est la plupart des tuiles
+   */
+  fogFar = Infinity;
   /** contamination de l'île du portail (arbres morts, herbe brûlée, obsidienne ; fleurs des halos) : à suivre par le jeu */
   blight: Blight | null = null;
   /** perchoirs (cimes) et fleurs de chaque tuile, [x, y, z, …] : la faune s'y pose et les butine */
@@ -605,8 +610,11 @@ export class VegView {
     this.flush(BUDGET_MS);
     for (let ch = 0; ch < NC * NC; ch++) {
       const x = ((ch % NC) + 0.5) * CH, z = (Math.floor(ch / NC) + 0.5) * CH;
-      const dist = Math.max(0, Math.hypot(cam.x - x, cam.y - 1, cam.z - z) - CH * 0.6);
-      for (const l of this.layers) l.view(ch, dist, this.lodDist);
+      const d = Math.hypot(cam.x - x, cam.y - 1, cam.z - z), dist = Math.max(0, d - CH * 0.6);
+      // (point de la tuile le plus proche : centre moins sa demi-diagonale, et une marge pour les grands arbres ; la brume suit
+      // la profondeur dans l'axe de la vue, qui ne vaut qu'environ 0,8 fois la distance dans les coins de l'écran)
+      const gone = (d - CH * 0.71 - 4) * 0.78 > this.fogFar;
+      for (const l of this.layers) l.view(ch, dist, this.lodDist, gone);
     }
   }
 
