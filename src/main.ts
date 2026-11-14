@@ -1979,7 +1979,7 @@ class Game implements UIHost {
     audio.update(dt, {
       age: this.sim.age, season: this.time.season, daylight: this.env.daylight,
       rain: this.env.rainK, snow: this.env.weatherKind === 'snow' ? this.env.weatherK : 0, fog: this.env.weatherKind === 'fog' ? this.env.weatherK : 0,
-      pop: this.sim.pop, camDist: this.cam.dist, under: uv || hv ? 1 : 0,
+      pop: this.sim.pop, camDist: this.cam.dist, under: uv || hv ? 1 : 0, hell: !!hv,
       ...this.ambience(),
     });
     if ((this.spotT -= dt) <= 0) { this.spotT = 0.25; this.syncSpots(!uv && !hv); }

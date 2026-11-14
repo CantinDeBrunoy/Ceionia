@@ -11,8 +11,10 @@ export interface AudioState {
   fog: number;
   pop: number;
   camDist: number;
-  /** 1 sous terre : ni oiseaux ni grillons, gouttes d'eau et grondement sourd */
+  /** 1 sous terre ou aux Enfers : ni oiseaux ni grillons, grondement sourd */
   under: number;
+  /** aux Enfers : pas de gouttes d'eau (ces petits « bip-bup » n'ont leur place que dans les grottes) */
+  hell?: boolean;
   /** proximité (0 … 1) d'un torrent, d'une cascade, du rivage et d'un feu ; altitude du point visé */
   stream?: number;
   cascade?: number;
@@ -306,7 +308,7 @@ export class AudioEngine {
     }
     // gouttes qui tombent de la voûte, en écho
     this.dripTimer -= dt;
-    if (s.under > 0.5 && this.dripTimer <= 0) {
+    if (s.under > 0.5 && !s.hell && this.dripTimer <= 0) {
       this.dripTimer = 0.4 + Math.random() * 2.2;
       const f = 1400 + Math.random() * 1600;
       this.tone(f, T + 0.02, 0.18, 'sine', 0.05, this.sfxG, 0, 0.002);
