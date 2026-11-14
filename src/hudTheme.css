@@ -825,6 +825,40 @@ body.hell #resPanel { display: none !important; }
   #worldChoice .wcWay small { font-size: 12px; }
 }
 
+/* l'onglet « Voies » des expéditions (`ui/ways.ts`) : les deux voies du grand choix, une carte chacune, comme la carte du
+   choix : parchemin bordé d'or (violet pour les Enfers), diorama en tête, nom en Fraunces, une phrase d'envie, ce qu'elle
+   ouvre, le pavé d'état en haut à droite, le bouton d'or en pied ; « pas sur cette carte » s'efface */
+.expModal .waysBox { padding: 4px 2px 10px; }
+.expModal .wyLead { margin: 2px 0 34px; text-align: center; font-family: var(--hSerif); font-style: italic; font-size: 15px; color: var(--hInk2); }
+.expModal .wayCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.expModal .wayCard { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 132px 20px 18px; border-radius: 22px; text-align: center; color: #3A2213;
+  border: 2px solid #D29A35; background: linear-gradient(180deg, #FFF8E4 0%, #FBE9BF 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65), 0 0 0 3px rgba(255, 225, 160, 0.35), 0 6px 16px rgba(110, 70, 20, 0.18); }
+.expModal .wayCard.hell { border-color: #9A5BC4; background: linear-gradient(180deg, #FBF4FF 0%, #EBD6F7 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65), 0 0 0 3px rgba(220, 190, 245, 0.35), 0 6px 16px rgba(70, 30, 100, 0.18); }
+.expModal .wyArt { position: absolute; left: 0; right: 0; top: -26px; height: 156px; display: flex; align-items: flex-end; justify-content: center; pointer-events: none; }
+.expModal .wyArt img { max-width: 78%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 8px 8px rgba(60, 30, 70, 0.28)); }
+.expModal .wayCard.world .wyArt img { max-width: 52%; }
+.expModal .wyState { position: absolute; top: 12px; right: 12px; padding: 4px 10px; border-radius: 999px; font-family: var(--hSerif); font-size: 12.5px; font-weight: 800; letter-spacing: 0.02em;
+  background: #FFFCF4; border: 1.5px solid var(--hEdge); color: #5A4030; box-shadow: 0 1px 3px rgba(110, 70, 20, 0.18); }
+.expModal .st-free .wyState { background: linear-gradient(180deg, #FFE7A6, #F3BE58); border-color: #D29A35; color: #4A2C0E; }
+.expModal .st-taken .wyState { background: #E7F2DA; border-color: rgba(110, 160, 70, 0.6); color: #3E6A22; }
+.expModal .wayCard h4 { margin: 0; font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 72; font-size: 26px; font-weight: 800; line-height: 1.05; color: #3A2213; }
+.expModal .wayCard h4::after { content: ''; display: block; width: 56%; height: 9px; margin: 6px auto 0; background: linear-gradient(90deg, transparent, #D9A955 30%, #D9A955 70%, transparent) center / 100% 1px no-repeat, linear-gradient(45deg, transparent 40%, #E2B45E 40% 60%, transparent 60%) center / 9px 9px no-repeat, linear-gradient(-45deg, transparent 40%, #E2B45E 40% 60%, transparent 60%) center / 9px 9px no-repeat; }
+.expModal .wyPitch { margin: 2px 0 0; font-family: var(--hSerif); font-size: 15px; font-weight: 600; line-height: 1.35; color: #4A3020; }
+.expModal .wyGives { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 4px 0 6px; padding: 0; list-style: none; }
+.expModal .wyGives li { padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #5A4030; background: rgba(255, 252, 244, 0.85); border: 1px solid rgba(217, 169, 85, 0.55); }
+.expModal .wyGo { display: inline-flex; align-items: center; gap: 10px; margin-top: auto; min-height: 50px; padding: 6px 22px 6px 14px; border-radius: 16px; cursor: pointer; color: #3A2213; font-family: var(--hSerif); font-size: 17px; font-weight: 800;
+  border: 2px solid #D29A35; background: linear-gradient(180deg, #FFE7A6, #F3BE58); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 -8px 14px rgba(215, 140, 30, 0.25), 0 0 0 2px rgba(255, 230, 170, 0.6), 0 4px 10px rgba(120, 75, 15, 0.3); }
+.expModal .wyGo:hover { background: linear-gradient(180deg, #FFEDB8, #F7CA6A); }
+.expModal .wyGo .pic { width: 26px; height: 26px; }
+.expModal .wyNote { margin: auto 0 0; padding-top: 6px; font-family: var(--hSerif); font-style: italic; font-size: 14px; color: var(--hInk2); }
+.expModal .wayCard.st-none { filter: saturate(0.45); opacity: 0.7; }
+.expModal .wayCard.st-none .wyArt img { opacity: 0.7; }
+@media (max-width: 640px) {
+  .expModal .wayCards { grid-template-columns: 1fr; gap: 40px; }
+  .expModal .wayCard { padding-top: 112px; }
+  .expModal .wyArt { height: 132px; }
+}
+
 /* (la carte de la diplomatie reprend celle du portail) */
 #diploChoice.panel { top: calc(50% + 34px); width: min(540px, calc(100vw - 24px)); padding: 120px 26px 22px; border-radius: 22px; text-align: center; color: var(--hInk);
   background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow), 0 18px 50px rgba(40, 25, 10, 0.35); backdrop-filter: none; -webkit-backdrop-filter: none; overflow: visible; }

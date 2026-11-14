@@ -3,7 +3,7 @@ import { World, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { canExpand, expandWorld } from '../src/world/expand';
-import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, waysTabShown, CROSSROADS_AGE } from '../src/sim/crossroads';
+import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, waysTabShown, wayBadge, CROSSROADS_AGE } from '../src/sim/crossroads';
 import { War } from '../src/sim/war';
 import { Sim } from '../src/sim/sim';
 import { Agents } from '../src/sim/agents';
@@ -36,7 +36,8 @@ describe('le grand choix : les règles', () => {
     expect(hellWay({ portal: null, portalOpen: false }, 'ask')).toBe('none');
     expect(hellWay({ portal: {}, portalOpen: false }, 'ask')).toBe('open');
     expect(hellWay({ portal: {}, portalOpen: true }, 'off')).toBe('ask');
-    expect(hellWay({ portal: {}, portalOpen: true }, 'ask')).toBe('ask');
+    // (ouvert sans choix : l'expédition d'une ancienne partie, le bac à sable ; il tombe dans le grand choix)
+    expect(hellWay({ portal: {}, portalOpen: true }, 'ask')).toBe('open');
     expect(hellWay({ portal: {}, portalOpen: true }, 'on')).toBe('taken');
     expect(worldWay({ isles: null }, true)).toBe('open');
     expect(worldWay({ isles: null }, false)).toBe('none');
@@ -68,13 +69,17 @@ describe('le grand choix : les règles', () => {
     expect(crossroadsSettled(w, 'open', 'open')).toBe(false);
   });
 
-  it('l’onglet « Voies » : passé l’Antiquité (au bac à sable, tout de suite), s’il reste une voie sur la carte', () => {
-    expect(waysTabShown({ sandbox: false }, 1, 'open', 'open')).toBe(false);
-    expect(waysTabShown({ sandbox: false }, 2, 'open', 'open')).toBe(true);
-    expect(waysTabShown({ sandbox: true }, 0, 'ask', 'open')).toBe(true);
-    expect(waysTabShown({ sandbox: false }, 3, 'none', 'none')).toBe(false);
+  it('l’onglet « Voies » : une fois le grand choix fait (au bac à sable, tout de suite), s’il reste une voie sur la carte', () => {
+    expect(waysTabShown({ sandbox: false, crossroads: false }, 'open', 'open')).toBe(false);
+    expect(waysTabShown({ sandbox: false, crossroads: true }, 'open', 'open')).toBe(true);
+    expect(waysTabShown({ sandbox: true, crossroads: false }, 'open', 'open')).toBe(true);
+    expect(waysTabShown({ sandbox: false, crossroads: true }, 'none', 'none')).toBe(false);
     // (les deux prises : l'onglet reste, il dit ce qui est fait)
-    expect(waysTabShown({ sandbox: false }, 3, 'taken', 'taken')).toBe(true);
+    expect(waysTabShown({ sandbox: false, crossroads: true }, 'taken', 'taken')).toBe(true);
+    expect(wayBadge('open')).toBe('free');
+    expect(wayBadge('ask')).toBe('free');
+    expect(wayBadge('taken')).toBe('taken');
+    expect(wayBadge('none')).toBe('none');
   });
 });
 
@@ -124,7 +129,7 @@ describe('le grand choix : une partie', () => {
     const back = reload(w);
     expect(back.crossroads).toBe(true);
     expect(crossroadsDue(back, 3, 'open', 'open', true)).toBe(false);
-    expect(waysTabShown(back, 3, 'open', 'open')).toBe(true);
+    expect(waysTabShown(back, 'open', 'open')).toBe(true);
     expect(ways(back, war)).toEqual({ hell: 'open', world: 'open' });
   });
 
@@ -151,7 +156,7 @@ describe('le grand choix : les anciennes sauvegardes', () => {
     expect(w.toJSON()).not.toHaveProperty('crossroads');
   });
 
-  it('un portail déjà ouvert par l’expédition (même refermé) reste tel quel : pas de carte', () => {
+  it('un portail déjà ouvert par l’expédition et refermé reste tel quel : pas de carte', () => {
     const w = village();
     w.exp.done.push('portal');
     const back = reload(w), war = new War(back);
@@ -163,6 +168,25 @@ describe('le grand choix : les anciennes sauvegardes', () => {
     expect(crossroadsDue(back, 3, s.hell, s.world, true)).toBe(false);
     // l'onglet propose de rouvrir (sa carte : « Affronter les démons »)
     expect(waysHtml(s)).toContain('data-way="hell"');
+  });
+
+  it('un portail ouvert en attente du choix (« ask ») tombe dans le grand choix ; affronté, il reste tel quel', () => {
+    const w = village();
+    w.exp.done.push('portal');
+    const back = reload(w), war = new War(back);
+    war.load({ army: { troops: [], queue: [] }, invasion: 'wait', pve: 'ask', choiceSeen: true });
+    let s = ways(back, war);
+    expect(s.hell).toBe('open');
+    expect(crossroadsDue(back, 3, s.hell, s.world, true)).toBe(true);
+    // pas d'invasion tant que le choix n'est pas fait
+    war.update(0.1, 3);
+    expect(war.pve).toBe('ask');
+    expect(war.nextWaveIn()).toBeNull();
+    // affronté dans une ancienne partie : rien ne change
+    war.load({ army: { troops: [], queue: [] }, invasion: 'wait', pve: 'on', choiceSeen: true });
+    s = ways(back, war);
+    expect(s.hell).toBe('taken');
+    expect(crossroadsDue(back, 3, s.hell, s.world, true)).toBe(false);
   });
 
   it('un archipel déjà accepté reste tel quel : pas de carte', () => {
@@ -246,8 +270,10 @@ describe('le grand choix : une condition du passage au Médiéval', () => {
     const a = ready();
     a.w.crossroads = true;
     expect(choice(a.sim)!.have).toBe(1);
+    // « Les Enfers » (`Game.openHell`) : le portail s'ouvre et le choix est marqué
     const b = ready();
     b.w.portalWoken = true;
+    b.w.crossroads = true;
     expect(choice(b.sim)!.have).toBe(1);
   });
 
@@ -276,7 +302,7 @@ describe('le grand choix : une condition du passage au Médiéval', () => {
     expect(sb.ageProgress()).toBeNull();
   });
 
-  it('une ancienne partie encore à l’Antiquité : la condition s’ajoute ; remplie d’office si le portail ou l’archipel y sont déjà', () => {
+  it('une ancienne partie encore à l’Antiquité : la condition s’ajoute ; un portail ouvert sans choix y tombe aussi', () => {
     const w = village();
     const old = reload(w, { crossroads: undefined });
     const sim = new Sim(old);
@@ -286,25 +312,35 @@ describe('le grand choix : une condition du passage au Médiéval', () => {
     const s2 = new Sim(opened);
     s2.age = 1;
     expect(opened.portalOpen).toBe(true);
+    // (sans choix PvE, l'expédition d'avant ne fait pas le choix : il reste à faire ; affronté ou refermé, `stepCrossroads`
+    // marque `crossroads`, et la condition est remplie)
+    expect(choice(s2)!.have).toBe(0);
+    expect(crossroadsDue(opened, 1, hellWay(opened, 'ask'), 'open', true)).toBe(true);
+    expect(crossroadsSettled(opened, hellWay(opened, 'on'), 'open')).toBe(true);
+    expect(crossroadsSettled(opened, hellWay(opened, 'off'), 'open')).toBe(true);
+    opened.crossroads = true;
     expect(choice(s2)!.have).toBe(1);
   });
 
 });
 
 describe('l’onglet « Voies » des expéditions', () => {
-  it('chaque voie non prise a son bouton ; la voie prise le dit, sans bouton', () => {
+  it('une carte par voie : image, phrase d’envie, état ; un bouton seulement si elle est disponible', () => {
     const open = waysHtml({ hell: 'open', world: 'open' });
     expect(open).toContain('data-way="hell"');
     expect(open).toContain('data-way="world"');
     expect(open).toContain('Ouvrir le portail');
+    expect(open).toContain('./ui/portail.webp');
+    expect(open).toContain('dio-caravel.webp');
+    expect(open.match(/st-free/g)).toHaveLength(2);
     const taken = waysHtml({ hell: 'taken', world: 'open' });
     expect(taken).not.toContain('data-way="hell"');
-    expect(taken).toContain('voie prise');
+    expect(taken).toContain('Voie ouverte');
     expect(taken).toContain('data-way="world"');
-    const both = waysHtml({ hell: 'taken', world: 'taken' });
-    expect(both).not.toContain('data-way=');
-    // le portail ouvert sans qu'on affronte ses démons
-    expect(waysHtml({ hell: 'ask', world: 'none' })).toContain('Affronter les démons');
+    expect(waysHtml({ hell: 'taken', world: 'taken' })).not.toContain('data-way=');
+    // le portail refermé se rouvre ; une voie impossible sur la carte est grisée, sans bouton
+    expect(waysHtml({ hell: 'ask', world: 'none' })).toContain('Rouvrir le portail');
+    expect(waysHtml({ hell: 'ask', world: 'none' })).toContain('st-none');
   });
 
   it('textes traduits en anglais', () => {

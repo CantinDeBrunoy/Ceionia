@@ -1826,9 +1826,9 @@ export class UI {
     // le chemin de fer ne vient qu'à l'âge industriel : avant, pas d'onglet
     const railOn = age >= 3;
     if (tab === 'rail' && !railOn) tab = 'missions';
-    // les voies du grand choix (les Enfers, explorer le monde) : passé l'Antiquité (au bac à sable, tout de suite)
+    // les voies du grand choix (les Enfers, explorer le monde) : une fois le grand choix fait (au bac à sable, tout de suite)
     const ways = h.ways?.() ?? { hell: 'none' as WayState, world: 'none' as WayState };
-    const waysOn = waysTabShown(h.world, age, ways.hell, ways.world);
+    const waysOn = waysTabShown(h.world, ways.hell, ways.world);
     if (tab === 'ways' && !waysOn) tab = 'missions';
     const next = max < partyLimit(1e9) ? tr('Équipe en plus à {n} habitants (vous : {pop})', { n: max * 30, pop }) : tr('Équipes au maximum');
     const teams = ex.active.map((a) => `<span class="teamChip"><i style="background:${hex(TEAM_COLORS[(a.id - 1) % TEAM_COLORS.length])}"></i>${pic(a.m.icon, 18)} ${a.m.title} — ${ex.status(a)}</span>`).join('');

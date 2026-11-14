@@ -261,6 +261,8 @@ export class Sim {
     // le grand choix (les Enfers, le monde, ou ni l'un ni l'autre) : obligatoire pour passer au Médiéval ; sa carte s'ouvre
     // quand le reste est rempli (« Ni l'un ni l'autre » compte), voir `sim/crossroads.ts`
     if (n === CROSSROADS_AGE) {
+      // (la simulation ne connaît pas le choix PvE : un portail ouvert compte une fois que `Game.stepCrossroads` a marqué
+      // `crossroads` pour un portail affronté ou refermé ; ouvert sans choix, il tombe dans le grand choix)
       const met = crossroadsMet(w, hellWay(w, 'ask'), worldWay(w, canExpand({ n: N, gen: w.gen })));
       items.push({ label: CHOICE_LABEL, have: met ? 1 : 0, need: 1 });
     }
