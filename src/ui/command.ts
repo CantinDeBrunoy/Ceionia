@@ -212,13 +212,17 @@ export class CommandUI implements ToolInput {
     const side = root.querySelector('#expList');
     if (side) side.prepend(this.alertEl); else root.append(this.alertEl);
     this.bar.addEventListener('click', (e) => this.onBar(e));
-    this.bar.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') this.showCard((e.target as HTMLElement).closest<HTMLElement>('[data-xn]')); });
-    this.bar.addEventListener('pointerleave', () => this.showCard(null));
+    this.bar.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') { this.hovering = (e.target as HTMLElement).closest<HTMLElement>('[data-xn]'); this.showCard(this.hovering); } });
+    // (en quittant la barre : la carte du bâtiment qu'on pose revient, sinon elle s'efface)
+    this.bar.addEventListener('pointerleave', () => { this.hovering = null; this.showHeld(); });
   }
 
   /** la carte d'explication de la barre de bataille, et la tuile qu'elle montre */
   private card: HTMLElement;
   private cardOf: HTMLElement | null = null;
+  /** ce que montre la carte en plus (l'aide de pose du bâtiment en main), et la tuile survolée */
+  private cardKeys = '';
+  private hovering: HTMLElement | null = null;
   /** de quoi la placer (posé par l'interface du village, qui connaît le haut de l'écran) */
   onCard: (() => void) | null = null;
 
@@ -226,15 +230,27 @@ export class CommandUI implements ToolInput {
    * Montre la carte de la tuile survolée (null : la cache) : la vignette de la tuile, le nom, le sous-titre en italique,
    * à quoi elle sert, le coût, et ce qui la bloque
    */
-  private showCard(el: HTMLElement | null) {
-    if (el === this.cardOf) return;
+  private showCard(el: HTMLElement | null, keys = '') {
+    if (el === this.cardOf && keys === this.cardKeys) return;
     this.cardOf = el;
+    this.cardKeys = keys;
     if (!el || !this.theater) { this.card.classList.remove('show'); return; }
     const d = el.dataset, img = el.querySelector('.tic img, .tpo img') as HTMLImageElement | null;
     const th = img ? `<img src="${img.src}" alt="" draggable="false">` : (el.querySelector('.tic, .tpo')?.innerHTML ?? '');
-    this.card.innerHTML = `<div class="ihead"><b class="xth">${th}</b><div class="grow"><h4>${d.xn}</h4>${d.xs ? `<small class="xsub">${d.xs}</small>` : ''}</div></div>${d.xd ? `<p class="xdesc">${d.xd}</p>` : ''}${d.xc ? `<p class="cost">${d.xc}</p>` : ''}${d.xw ? `<p class="lock">${pic('🔒', 16)} ${d.xw}</p>` : ''}`;
+    this.card.innerHTML = `<div class="ihead"><b class="xth">${th}</b><div class="grow"><h4>${d.xn}</h4>${d.xs ? `<small class="xsub">${d.xs}</small>` : ''}</div></div>${d.xd ? `<p class="xdesc">${d.xd}</p>` : ''}${d.xc ? `<p class="cost">${d.xc}</p>` : ''}${d.xw ? `<p class="lock">${pic('🔒', 16)} ${d.xw}</p>` : ''}${keys ? `<p class="keys">${keys}</p>` : ''}`;
     this.card.classList.add('show');
     this.onCard?.();
+  }
+
+  /**
+   * Le bâtiment qu'on pose (base des Enfers, défense de l'île) : sa carte reste affichée avec l'aide de pose (plus de bulle
+   * au-dessus des modes) ; rien en main, la carte s'efface. Une tuile survolée passe devant
+   */
+  private showHeld() {
+    if (this.hovering) return;
+    const held = this.placing ? `build:${this.placing}` : this.theater?.kind === 'isle' && this.host.isleHeld?.() ? `ibuild:${this.host.isleHeld()}` : null;
+    const tile = held ? this.bar.querySelector<HTMLElement>(`[data-a="${held}"]`) : null;
+    this.showCard(tile, tile ? this.hint() : '');
   }
 
   get active() { return !!this.theater; }
@@ -861,7 +877,9 @@ export class CommandUI implements ToolInput {
     // la bulle d'aide du moment (à droite de la carte de passage) ; sans troupe ici, ce qu'il faut faire pour en avoir
     const tip = !us.length && !this.placing && !this.host.isleHeld?.() && this.tool === 'select' ? none : this.hint();
     // dans les Enfers, la bulle ne dit que l'utile : poser, déplacer, démolir, ou quoi faire sans troupe (le reste est dans l'Aide)
-    const bubble = isle || !us.length || !!this.placing || this.tool !== 'select';
+    // (un bâtiment en main : pas de bulle, sa carte d'explication dit comment le poser, à droite du menu)
+    const held = !!this.placing || (isle && !!this.host.isleHeld?.());
+    const bubble = !held && (isle || !us.length || this.tool !== 'select');
     // au-dessus de la rangée : les troupes sur le terrain (une carte par sorte, « Tous ») ; aux Enfers sans troupe, les renforts
     const field = us.length ? `<div class="tbot panel"><div class="tcards">${cards}<button class="tall${step === 'select' ? ' guide' : ''}" data-a="all" title="${tr('Toutes les troupes')}">${tr('Tous')}</button></div></div>` : '';
     // la même disposition que la barre du village, sur l'île comme dans les Enfers : à gauche les deux modes (Bâtir, Recruter)
@@ -877,6 +895,7 @@ export class CommandUI implements ToolInput {
         <div class="tcorner panel">${corner}</div>
       </div>${this.helpOpen ? `<ul class="thelp panel">${CONTROLS_HELP.map(([k, t]) => `<li><b>${tr(k)}</b><span>${tr(t)}</span></li>`).join('')}</ul>` : ''}`;
     if (html !== this.barKey) { this.barKey = html; this.bar.innerHTML = html; }
+    this.showHeld();
   }
 
   /**
