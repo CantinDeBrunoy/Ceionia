@@ -18,7 +18,7 @@ export type FolkRole = 'villager' | 'monk' | 'juggler' | 'sage' | 'nomad' | 'sch
  * Ce qu'il fait : debout, au pas, à la course, à l'ouvrage, assis, bras levés, à parler, à jongler ; aux champs : semer à la
  * volée, faucher (ou couper à la faucille), ramasser penché, porter à deux bras (gerbe, panier, cagette) ; en garde, à boxer
  */
-export type FolkPose = 'idle' | 'walk' | 'run' | 'work' | 'sit' | 'cheer' | 'talk' | 'juggle' | 'sow' | 'reap' | 'gather' | 'carry' | 'box';
+export type FolkPose = 'idle' | 'walk' | 'run' | 'work' | 'sit' | 'ride' | 'cheer' | 'talk' | 'juggle' | 'sow' | 'reap' | 'gather' | 'carry' | 'box';
 /** Comment il tient ce qu'il a en main : droit (torche, seau, panier), en outil (qui frappe à l'ouvrage), pointé devant (arme) */
 export type FolkHold = 'upright' | 'tool' | 'point';
 
@@ -388,12 +388,18 @@ export function holdFolk(f: Folk, side: 0 | 1, m: THREE.Object3D, how: FolkHold)
   f.hands[side].add(m);
 }
 
-/** L'habitant au rythme de `phase` : son pas, sa course, l'ouvrage (l'outil qui monte et frappe), assis, bras levés, mains qui parlent */
-export function folkStep(f: Folk, phase: number, pose: FolkPose) {
+/** Hauteur de la hanche au-dessus des pieds (repère du modèle, avant l'échelle) de l'habitant assis ou en selle */
+export const FOLK_SEAT = 0.025;
+
+/**
+ * L'habitant au rythme de `phase` : son pas, sa course, l'ouvrage (l'outil qui monte et frappe), assis, en selle, bras
+ * levés, mains qui parlent. En selle, `gallop` (0 au pas, 1 au galop) le penche vers l'avant
+ */
+export function folkStep(f: Folk, phase: number, pose: FolkPose, gallop = 0) {
   const [right, left] = f.arms, [l0, l1] = f.legs, b = f.body, sw = Math.sin(phase);
-  const sit = pose === 'sit';
+  const sit = pose === 'sit' || pose === 'ride';
   b.position.y = sit ? -0.075 : pose === 'walk' || pose === 'carry' ? Math.abs(sw) * 0.006 : pose === 'run' ? Math.abs(sw) * 0.012 : pose === 'cheer' ? Math.abs(Math.sin(phase * 2)) * 0.008 : Math.sin(phase * 0.3) * 0.0015;
-  for (const l of f.legs) l.position.y = sit ? 0.025 : 0.1;
+  for (const l of f.legs) { l.position.y = sit ? FOLK_SEAT : 0.1; l.rotation.z = 0; }
   b.rotation.set(pose === 'run' ? 0.18 : 0, pose === 'talk' ? Math.sin(phase * 0.5) * 0.12 : 0, 0);
   b.position.z = 0;
   right.rotation.z = left.rotation.z = 0;
@@ -430,6 +436,14 @@ export function folkStep(f: Folk, phase: number, pose: FolkPose) {
     const a = pose === 'run' ? 0.95 : 0.55;
     l0.rotation.x = sw * a; l1.rotation.x = -sw * a;
     right.rotation.x = -sw * a * 0.8 - (pose === 'run' ? 0.35 : 0); left.rotation.x = sw * a * 0.8 - (pose === 'run' ? 0.35 : 0);
+  } else if (pose === 'ride') {
+    // à califourchon : les jambes de part et d'autre du flanc, un peu en avant ; le buste penché au galop, les mains aux rênes
+    const lean = 0.08 + gallop * 0.24;
+    b.rotation.x = lean; b.position.y = -0.075 + HIP * (1 - Math.cos(lean)); b.position.z = -HIP * Math.sin(lean);
+    l0.rotation.x = l1.rotation.x = -0.45;
+    l0.rotation.z = -0.62; l1.rotation.z = 0.62;
+    right.rotation.x = left.rotation.x = -0.95 + gallop * Math.sin(phase) * 0.06;
+    right.rotation.z = 0.16; left.rotation.z = -0.16;
   } else if (sit) {
     l0.rotation.x = l1.rotation.x = -1.45;
     right.rotation.x = left.rotation.x = -0.45 + Math.sin(phase * 0.3) * 0.03;
