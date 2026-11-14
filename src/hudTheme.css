@@ -924,3 +924,17 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 #tuto .tSkip:hover { color: var(--hInk); }
 #tuto .tArrow { border-color: var(--hEdge); }
 #tuto.done .tArrow { border-color: #7DBF5E; }
+
+/* ---------- l'accueil (lot 4) : ses fenêtres sans habillage peint (confirmation, choix de la difficulté) n'ont plus le verre
+   bleuté ni le bouton bleu de l'accueil, mais le parchemin et l'or ---------- */
+#menu ~ .overlay { background: rgba(45, 30, 12, 0.3); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+#menu ~ .overlay > .modal.panel:not(.cePop) { background: var(--hGlass); border: 2px solid var(--hEdge); color: var(--hInk); box-shadow: var(--hShadow), 0 24px 60px rgba(40, 25, 10, 0.38); backdrop-filter: none; -webkit-backdrop-filter: none; }
+#menu ~ .overlay > .modal.panel:not(.cePop) .mtitle h3 { font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 48; color: #3A2213; }
+#menu ~ .overlay > .modal.panel:not(.cePop) .mtitle h3 svg { color: #B07A22; }
+#menu ~ .overlay > .modal.panel:not(.cePop) h4, #menu ~ .overlay > .modal.panel:not(.cePop) .hint { color: var(--hInk2); }
+#menu ~ .overlay > .modal.panel:not(.cePop) a { color: #8A5A12; }
+#menu ~ .overlay > .modal.panel:not(.cePop) button { border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F6E7C9); color: var(--hInk); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(120, 80, 25, 0.2); }
+#menu ~ .overlay > .modal.panel:not(.cePop) button:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); color: var(--hInk); }
+#menu ~ .overlay > .modal.panel:not(.cePop) button.active, #menu ~ .overlay > .modal.panel:not(.cePop) button[data-r="1"] { border-color: var(--hGold); background: var(--hGoldFill); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+#menu ~ .overlay > .modal.panel:not(.cePop) button.active:hover, #menu ~ .overlay > .modal.panel:not(.cePop) button[data-r="1"]:hover { background: linear-gradient(180deg, #FFF3CC, #F9D886); }
+#menu ~ .overlay > .modal.panel:not(.cePop) .x { border-radius: 50%; }
