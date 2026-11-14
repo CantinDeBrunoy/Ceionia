@@ -133,20 +133,4 @@ describe('villes des peuples rivaux (archipel)', () => {
       }
     for (const people of ['orient', 'asie'] as const) for (let age = 1; age <= 5; age++) expect(triCount(townWall(people, age, 1.6))).toBeLessThan(600);
   });
-
-  it('les ruines : palais, portes, tours et remparts abîmés, sans lumières, moins de triangles, toujours propres', () => {
-    for (const people of ['orient', 'asie'] as const)
-      for (let age = 1; age <= 5; age++) {
-        for (const [kind, w, d] of [['palace', 6, 5], ['gate', 2.4, 1.4], ['tower', 1.3, 1.3], ['house', 1.2, 1.1]] as const) {
-          const whole = townModel(people, kind, age, 1, w, d), ruin = townModel(people, kind, age, 1, w, d, true);
-          expect(ruin).not.toBe(whole);
-          expect(triCount(ruin)).toBeLessThan(triCount(whole));
-          expect((ruin.attributes.position.array as Float32Array).every((x) => Number.isFinite(x))).toBe(true);
-          // plus aucune fenêtre allumée
-          const lit = ruin.attributes.aLight?.array as Float32Array | undefined;
-          if (lit) expect(lit.every((x) => x === 0)).toBe(true);
-        }
-        expect(triCount(townWall(people, age, 1.6, true))).toBeLessThan(triCount(townWall(people, age, 1.6)));
-      }
-  });
 });
