@@ -16,7 +16,9 @@ const angleDiff = (a: number, b: number) => wrapAngle(a - b);
 
 /** Sorte d'un lot de la ville */
 export type TownKind =
-  | 'temple' | 'palace' | 'market' | 'port' | 'caravan' | 'baths' | 'garden' | 'house' | 'workshop' | 'field' | 'gate' | 'tower';
+  | 'temple' | 'palace' | 'market' | 'port' | 'caravan' | 'baths' | 'garden' | 'house' | 'workshop' | 'field' | 'gate' | 'tower'
+  // propres au peuple asiatique
+  | 'teahouse' | 'paifang';
 
 /**
  * Un lot : centre (cases du monde), emprise `w` × `d` (cases, avant rotation), rotation `rot` (la façade, +z du modèle, regarde

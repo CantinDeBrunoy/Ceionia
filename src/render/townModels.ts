@@ -950,11 +950,12 @@ export function townModel(people: People, kind: TownKind, age: number, v: number
   if (g) return g;
   const p = new Parts(), o = people === 'orient';
   switch (kind) {
-    case 'house': (o ? oHouse : aHouse)(p, a, vv, qw, qd); break;
-    case 'workshop': (o ? oWorkshop : aWorkshop)(p, a, vv, qw, qd); break;
+    case 'house': (o ? oHouse : asian.aHouse)(p, a, vv, qw, qd); break;
+    case 'workshop': (o ? oWorkshop : asian.aWorkshop)(p, a, vv, qw, qd); break;
     case 'temple': o ? oTemple(p, a) : asian.aTemple(p, a, vv); break;
     case 'palace': o ? oPalace(p, a) : asian.aPalace(p, a, vv); break;
-    case 'market': (o ? oMarket : aMarket)(p, a, vv); break;
+    case 'market': (o ? oMarket : asian.aMarket)(p, a, vv); break;
+    case 'teahouse': asian.aTeahouse(p, a, vv, qw, qd); break;
     case 'port': (o ? oPort : aPort)(p, a, vv); break;
     case 'caravan': oCaravan(p, a, vv); break;
     case 'baths': oBaths(p, a, vv); break;

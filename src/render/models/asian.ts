@@ -591,3 +591,477 @@ export function aPalace(p: Parts, age: number, v: number) {
     if (glow) for (const sx of [-1, 1]) p.box(0.02, 0.02, 2.2, sx * 2.0, 0.135, tz, A.amber, 0, 'neon');
   }
 }
+
+// ---------- Les maisons ----------
+
+/** Fenêtre à claire-voie : cadre de bois, papier allumé la nuit, croisillon (face +z en (x, y, z), ou tournée de `ry`) */
+function win(p: Parts, x: number, y: number, z: number, w: number, h: number, ry = 0, frame = A.darkwood, paper = A.paper) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  p.box(w + 0.024, h + 0.024, 0.01, x - s * 0.003, y - 0.012, z - c * 0.003, frame, ry);
+  p.box(w, h, 0.014, x, y, z, paper, ry, true);
+  p.box(0.008, h, 0.02, x, y, z, frame, ry);
+  p.box(w, 0.008, 0.02, x, y + h * 0.5, z, frame, ry);
+}
+/** Porte à deux battants sous son linteau, et sa marche (façade +z) */
+function door(p: Parts, x: number, z: number, w: number, h: number, col = A.red, frame = A.darkwood) {
+  p.box(w + 0.04, h + 0.03, 0.012, x, 0, z - 0.002, frame);
+  p.box(w, h, 0.016, x, 0, z + 0.002, col);
+  p.box(0.006, h, 0.02, x, 0, z + 0.003, dark(col, 0.7));
+  p.box(w + 0.08, 0.025, 0.07, x, 0, z + 0.03, A.stone);
+}
+/** Corps d'une maison (façade +z) : soubassement de pierre, murs, poteaux d'angle, sablière */
+function body(p: Parts, W: number, D: number, H: number, wall: number, post = A.darkwood, x = 0, z = 0) {
+  p.box(W + 0.04, 0.05, D + 0.04, x, 0, z, A.stone);
+  p.box(W, H, D, x, 0.05, z, wall);
+  for (const sx of [-1, 1]) p.box(0.035, H, 0.035, x + sx * (W / 2 - 0.012), 0.05, z + D / 2 - 0.012, post);
+  p.box(W + 0.01, 0.03, 0.03, x, 0.05 + H - 0.03, z + D / 2 - 0.008, post);
+}
+/** Plante en pot (ou bonsaï) */
+function potPlant(p: Parts, x: number, z: number, s = 1, col = A.leaf) {
+  p.cyl(0.045 * s, 0.035 * s, 0.06 * s, 6, x, 0, z, 0x8a5a3a);
+  p.sphere(0.055 * s, x, 0.1 * s, z, col, 0, 0.9);
+}
+/** Parapet autour d'un toit en terrasse (rectangle w × d, posé en y) */
+function parapet(p: Parts, w: number, d: number, y: number, col: number, h = 0.05, t = 0.03) {
+  p.box(w, h, t, 0, y, d / 2 - t / 2, col); p.box(w, h, t, 0, y, -d / 2 + t / 2, col);
+  p.box(t, h, d - 2 * t, w / 2 - t / 2, y, 0, col); p.box(t, h, d - 2 * t, -w / 2 + t / 2, y, 0, col);
+}
+
+/** Maison de l'Antiquité : charpente, torchis, toit de chaume ; grenier sur pilotis, claie de séchage ou auvent selon la variante */
+function hutHouse(p: Parts, v: number, w: number, d: number) {
+  const W = w * 0.72, D = d * 0.62, H = 0.26, kind = v % 3, z = -d * 0.06;
+  body(p, W, D, H, A.wattle, A.timber, 0, z);
+  door(p, -W * 0.18, z + D / 2 + 0.006, 0.12, 0.19, A.timber, A.darkwood);
+  p.box(0.1, 0.08, 0.014, W * 0.22, 0.16, z + D / 2 + 0.006, 0x3a2a22);
+  p.box(0.014, 0.08, D * 0.3, W / 2 + 0.006, 0.16, z, 0x3a2a22);
+  hipRoof(p, W + 0.2, D + 0.22, 0.3, 0, 0.05 + H, z, A.thatch);
+  if (kind === 0) {
+    // grenier sur pilotis
+    const gx = -w * 0.32, gz = d * 0.32;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.025, 0.14, 0.025, gx + sx * 0.07, 0, gz + sz * 0.07, A.timber);
+    p.box(0.2, 0.14, 0.2, gx, 0.14, gz, A.wood);
+    hipRoof(p, 0.3, 0.3, 0.14, gx, 0.28, gz, A.thatch);
+  } else if (kind === 1) {
+    // claie de séchage et jarre
+    for (const sz of [-1, 1]) p.box(0.02, 0.2, 0.02, w * 0.34, 0, d * 0.32 + sz * 0.12, A.timber);
+    p.box(0.012, 0.012, 0.28, w * 0.34, 0.19, d * 0.32, A.timber);
+    for (let i = 0; i < 3; i++) p.box(0.006, 0.1, 0.05, w * 0.34, 0.09, d * 0.22 + i * 0.09, [0xb8a040, 0xa85a3a, 0x8a9a4a][(i + v) % 3]);
+    p.cyl(0.04, 0.03, 0.08, 6, -w * 0.3, 0, d * 0.34, 0x8a5a3a);
+  } else {
+    // auvent sur deux poteaux et bois empilé
+    for (const sx of [-1, 1]) p.box(0.025, 0.24, 0.025, sx * W * 0.4, 0, z + D / 2 + 0.16, A.timber);
+    p.box(W * 0.9, 0.02, 0.2, 0, 0.24, z + D / 2 + 0.08, A.thatch);
+    for (let i = 0; i < 3; i++) p.add(new THREE.CylinderGeometry(0.02, 0.02, 0.22, 5).rotateX(Math.PI / 2), W / 2 + 0.06, 0.03 + i * 0.035, z, 0x8a6a48);
+  }
+}
+
+/** Maison à cour (Médiéval, Industriel) : corps principal au fond, deux ailes, mur de façade et sa porte couverte, cour plantée */
+function courtHouse(p: Parts, age: number, v: number, w: number, d: number) {
+  const W = w * 0.9, D = d * 0.86, tile = houseTile(age, v), wall = pick([A.plaster, A.plaster, 0xe8dcc6], v), H = 0.26;
+  p.box(W, 0.03, D, 0, 0, 0, A.paving);
+  // corps principal
+  const md = D * 0.36, mz = -D / 2 + md / 2;
+  body(p, W, md, H, wall, A.red, 0, mz);
+  door(p, 0, mz + md / 2 + 0.006, 0.12, 0.19);
+  for (const sx of [-1, 1]) win(p, sx * W * 0.28, 0.12, mz + md / 2 + 0.008, 0.14, 0.1);
+  hipRoof(p, W + 0.16, md + 0.2, 0.24, 0, 0.05 + H, mz, tile, 0, { lod: true, rows: 1, step: 0.1 });
+  // ailes
+  const ww = W * 0.24, wd = D * 0.36, wz = mz + md / 2 + wd / 2 + 0.02;
+  for (const sx of [-1, 1]) {
+    const x = sx * (W / 2 - ww / 2);
+    p.box(ww, H * 0.86, wd, x, 0.05, wz, wall);
+    win(p, x - sx * (ww / 2 + 0.006), 0.11, wz, 0.12, 0.09, -sx * Math.PI / 2);
+    hipRoof(p, ww + 0.12, wd + 0.12, 0.17, x, 0.05 + H * 0.86, wz, tile, 0, { lod: true, rows: 1, step: 0.13, tips: false, ends: false });
+  }
+  // mur de façade et porte couverte
+  const fz = D / 2 - 0.03;
+  for (const sx of [-1, 1]) {
+    p.box(W * 0.4, 0.22, 0.05, sx * W * 0.3, 0, fz, wall);
+    p.box(W * 0.42, 0.025, 0.09, sx * W * 0.3, 0.22, fz, dark(tile, 0.85));
+  }
+  p.box(0.22, 0.27, 0.07, 0, 0, fz, A.red);
+  p.box(0.14, 0.2, 0.08, 0, 0, fz, A.darkwood);
+  hipRoof(p, 0.32, 0.18, 0.1, 0, 0.27, fz, tile, 0, { lod: true, rows: 0, hips: false });
+  if (age >= 3) for (const sx of [-1, 1]) lantern(p, sx * 0.1, 0.23, fz + 0.06, 0.026);
+  // la cour : arbre, jarre à poissons, pot
+  const s = v % 2 ? 1 : -1;
+  roundTree(p, W * 0.12 * s, 0.02, 0.36, pick([A.maple, A.leaf, A.blossom, 0xd9b23a], v >> 2), v);
+  p.cyl(0.05, 0.04, 0.07, 6, -W * 0.12 * s, 0, 0.06, A.bronze);
+  potPlant(p, 0.15, D * 0.3, 0.7);
+}
+
+/** Maison à véranda (Médiéval) : colonnes rouges, claire-voies, toit courbe, appentis et réserve d'eau */
+function porchHouse(p: Parts, age: number, v: number, w: number, d: number) {
+  const W = w * 0.78, D = d * 0.56, H = 0.28, tile = houseTile(age, v), wall = pick([A.plaster, 0xeee4d0, A.wattle], v), z = -d * 0.08;
+  p.box(W + 0.1, 0.06, D + 0.22, 0, 0, z + 0.06, A.stone);
+  p.box(W, H, D, 0, 0.06, z, wall);
+  for (let i = 0; i < 4; i++) p.add(new THREE.CylinderGeometry(0.02, 0.022, H, 5, 1, true).translate(0, H / 2, 0), -W / 2 + 0.03 + (i * (W - 0.06)) / 3, 0.06, z + D / 2 + 0.12, A.red);
+  door(p, 0, z + D / 2 + 0.006, 0.14, 0.2);
+  for (const sx of [-1, 1]) win(p, sx * W * 0.3, 0.15, z + D / 2 + 0.008, 0.16, 0.12);
+  p.box(W + 0.02, 0.035, 0.03, 0, 0.06 + H - 0.035, z + D / 2 + 0.12, A.darkwood);
+  hipRoof(p, W + 0.22, D + 0.42, 0.28, 0, 0.06 + H, z + 0.06, tile, 0, { lod: true, rows: 1, step: 0.1 });
+  // appentis sur le côté, réserve d'eau, pot fleuri
+  const sx = v % 2 ? 1 : -1;
+  p.box(0.16, 0.2, D * 0.7, sx * (W / 2 + 0.08), 0.05, z - D * 0.1, A.timber);
+  frustum(p, 0.2, D * 0.74, 0.04, D * 0.74, 0.08, sx * (W / 2 + 0.08) - sx * 0.08, 0.25, z - D * 0.1, tile);
+  p.cyl(0.06, 0.05, 0.1, 7, -sx * (W / 2 - 0.02), 0, d * 0.36, A.darkstone);
+  p.cyl(0.05, 0.05, 0.102, 7, -sx * (W / 2 - 0.02), 0, d * 0.36, A.water);
+  potPlant(p, sx * W * 0.25, d * 0.38, 0.8, A.blossom);
+}
+
+/** Maison à étage (Médiéval, Industriel) : rez-de-chaussée, avant-toit, étage en retrait à balcon, toit haut */
+function tallHouse(p: Parts, age: number, v: number, w: number, d: number) {
+  const W = w * 0.76, D = d * 0.66, h1 = 0.26, h2 = 0.22, tile = houseTile(age, v), wall = pick([A.plaster, 0xe9dfca], v), z = -d * 0.04;
+  body(p, W, D, h1, wall, A.red, 0, z);
+  door(p, -W * 0.22, z + D / 2 + 0.006, 0.12, 0.19);
+  win(p, W * 0.18, 0.13, z + D / 2 + 0.008, 0.22, 0.11);
+  hipRoof(p, W + 0.2, D + 0.2, 0.1, 0, 0.05 + h1, z, tile, 0, { lod: true, rows: 1, step: 0.1, hips: false, ends: false });
+  const y2 = 0.05 + h1 + 0.06, uw = W * 0.84, ud = D * 0.78;
+  p.box(uw, h2, ud, 0, y2, z, wall);
+  for (const sx of [-1, 1]) win(p, sx * uw * 0.22, y2 + 0.06, z + ud / 2 + 0.008, 0.14, 0.1);
+  rail(p, uw + 0.06, 0, y2 - 0.01, z + ud / 2 + 0.05, 0, A.red, 0.06, 0.15);
+  p.box(uw + 0.06, 0.015, 0.08, 0, y2 - 0.015, z + ud / 2 + 0.03, A.darkwood);
+  hipRoof(p, uw + 0.18, ud + 0.2, 0.24, 0, y2 + h2, z, tile, 0, { lod: true, rows: 1, step: 0.1 });
+  if (age >= 3) for (const sx of [-1, 1]) lantern(p, sx * W * 0.4, 0.05 + h1 - 0.03, z + D / 2 + 0.08, 0.026);
+  bamboo(p, (v % 2 ? 1 : -1) * w * 0.38, d * 0.36, 0.4, v);
+}
+
+/** Maison-boutique (Industriel) : rez ouvert sur la rue (comptoir, marchandises), étage à balcon, enseigne et lanternes */
+function shopHouse(p: Parts, age: number, v: number, w: number, d: number) {
+  const W = w * 0.86, D = d * 0.74, h1 = 0.3, h2 = 0.26, tile = houseTile(age, v), wall = pick([A.plaster, 0xe6dccb, 0xd9cdb8, 0xe8d4b8], v), z = -d * 0.04;
+  p.box(W + 0.04, 0.05, D + 0.04, 0, 0, z, A.stone);
+  p.box(W, h1, D - 0.12, 0, 0.05, z - 0.06, wall);
+  // la boutique : intérieur éclairé, comptoir, marchandises, piliers
+  p.box(W * 0.8, h1 * 0.6, 0.014, 0, 0.1, z + D / 2 - 0.11, A.win, 0, true);
+  p.box(W * 0.8, 0.1, 0.06, 0, 0.05, z + D / 2 - 0.06, A.timber);
+  for (let i = 0; i < 4; i++) p.box(0.06, 0.04, 0.04, -W * 0.3 + i * W * 0.2, 0.15, z + D / 2 - 0.06, [0xd9a43c, 0x9a3a2a, 0x6a8a3a, 0xc8783a][(i + v) % 4]);
+  for (const sx of [-1, 1]) p.box(0.03, h1, 0.03, sx * (W / 2 - 0.015), 0.05, z + D / 2 - 0.015, A.red);
+  p.box(W + 0.18, 0.02, 0.18, 0, 0.05 + h1, z + D / 2 + 0.03, dark(tile, 0.9));
+  // l'étage
+  const y2 = 0.07 + h1;
+  p.box(W, h2, D, 0, y2, z, wall);
+  for (let i = 0; i < 3; i++) win(p, -W * 0.3 + i * W * 0.3, y2 + 0.07, z + D / 2 + 0.008, 0.12, 0.12);
+  rail(p, W, 0, y2, z + D / 2 + 0.06, 0, A.red, 0.06, 0.15);
+  p.box(W, 0.015, 0.08, 0, y2 - 0.005, z + D / 2 + 0.03, A.darkwood);
+  hipRoof(p, W + 0.18, D + 0.2, 0.26, 0, y2 + h2, z, tile, 0, { lod: true, rows: 1, step: 0.1 });
+  // l'enseigne verticale (des traits dorés figurent l'écriture) et les lanternes
+  const sx = v % 2 ? 1 : -1;
+  p.box(0.05, 0.36, 0.1, sx * (W / 2 + 0.03), 0.12, z + D / 2 - 0.04, pick([A.red, 0x2f4f6f, 0x1f3a2a], v >> 1));
+  for (let i = 0; i < 3; i++) p.box(0.054, 0.05, 0.05, sx * (W / 2 + 0.03), 0.18 + i * 0.09, z + D / 2 - 0.04, A.gold);
+  for (const lx of [-1, 1]) lantern(p, lx * W * 0.36, 0.05 + h1 - 0.05, z + D / 2 + 0.08, 0.03);
+}
+
+/** Maison de brique grise à arcades (Industriel) : galerie couverte sur la rue, deux étages, balcon de fer */
+function arcadeHouse(p: Parts, age: number, v: number, w: number, d: number) {
+  const W = w * 0.86, D = d * 0.72, H = 0.62, brick = pick([0x8e8a84, 0x9a948a, 0xa08a7a], v), tile = houseTile(age, v), z = -d * 0.05, fz = z + D / 2;
+  p.box(W, H, D - 0.16, 0, 0, z - 0.08, brick);
+  p.box(W, H - 0.26, 0.16, 0, 0.26, fz - 0.08, brick);
+  for (let i = 0; i <= 3; i++) p.box(0.04, 0.26, 0.04, -W / 2 + 0.02 + (i * (W - 0.04)) / 3, 0, fz - 0.02, brick);
+  for (let i = 0; i < 3; i++) p.box(W / 3 - 0.08, 0.18, 0.012, -W / 3 + (i * W) / 3, 0.04, fz - 0.154, A.win, 0, true);
+  for (let f = 0; f < 2; f++) for (let i = 0; i < 3; i++) win(p, -W * 0.3 + i * W * 0.3, 0.32 + f * 0.15, fz + 0.006, 0.09, 0.1, 0, 0x5a4a3a, A.win);
+  rail(p, W * 0.9, 0, 0.3, fz + 0.05, 0, 0x3a3a3e, 0.06, 0.12);
+  p.box(W * 0.92, 0.012, 0.06, 0, 0.3, fz + 0.025, 0x3a3a3e);
+  p.box(W * 0.5, 0.06, 0.012, 0, 0.27, fz + 0.006, pick([A.red, 0x2f4f6f], v));
+  p.box(W + 0.02, 0.03, D + 0.02, 0, H, z, 0xb8b2a8);
+  hipRoof(p, W + 0.12, D + 0.12, 0.2, 0, H + 0.03, z, tile, 0, { lod: true, rows: 1, step: 0.1 });
+}
+
+/** Immeuble (Moderne) : béton, balcons, climatiseurs, enseignes au néon ; un jardin et un pavillon courbe sur le toit pour certains */
+function modernBlock(p: Parts, v: number, w: number, d: number, r: () => number) {
+  const W = w * 0.86, D = d * 0.8, kind = v % 3, floors = kind === 1 ? 3 : 4 + Math.floor(r() * 3), fh = 0.24, H = floors * fh;
+  const wall = pick([A.concrete, 0xe8e2d6, 0xcfd3d6, 0xe0d0c0], v);
+  p.box(W, H, D, 0, 0, 0, wall);
+  // bandeaux vitrés par étage, trumeaux
+  for (let f = 1; f < floors; f++) p.box(W + 0.012, 0.1, D + 0.012, 0, f * fh + 0.08, 0, 0xf0e2b0, 0, true);
+  for (const sx of [-1, -0.33, 0.33, 1]) p.box(0.05, H - fh, D + 0.024, sx * (W / 2 - 0.025), fh, 0, wall);
+  // balcons de façade et climatiseurs
+  for (let f = 1; f < floors; f++) {
+    p.box(W * 0.8, 0.02, 0.09, 0, f * fh, D / 2 + 0.045, 0xbababa);
+    p.box(W * 0.8, 0.05, 0.01, 0, f * fh + 0.02, D / 2 + 0.09, 0x9a9a9a);
+    if ((f + v) % 2) p.box(0.07, 0.05, 0.05, W * 0.3, f * fh + 0.13, D / 2 + 0.03, 0xdadada);
+  }
+  // rez : vitrine, enseigne lumineuse, enseigne verticale
+  p.box(W * 0.8, 0.14, 0.012, 0, 0.03, D / 2 + 0.006, 0xf0e2b0, 0, true);
+  p.box(W * 0.84, 0.06, 0.03, 0, 0.18, D / 2 + 0.015, pick([0xff4040, 0x40c0ff, 0xffa030, 0x60ff90], v >> 1), 0, 'neon');
+  p.box(0.05, Math.min(H * 0.6, 0.8), 0.12, (v % 2 ? 1 : -1) * (W / 2 + 0.03), fh, D * 0.3, pick([A.pink, A.cyan, A.amber], v), 0, 'neon');
+  if (kind === 2) {
+    p.box(W * 0.9, 0.04, D * 0.9, 0, H, 0, A.moss);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.add(new THREE.CylinderGeometry(0.015, 0.015, 0.16, 4, 1, true).translate(0, 0.08, 0), sx * 0.12, H + 0.04, sz * 0.12, A.red);
+    hipRoof(p, 0.4, 0.4, 0.14, 0, H + 0.2, 0, A.tileG, 0, { lod: true, rows: 0 });
+    potPlant(p, W * 0.3, D * 0.3, 1.2); potPlant(p, -W * 0.3, -D * 0.25, 1.2, A.maple);
+  } else {
+    parapet(p, W, D, H, wall);
+    p.cyl(0.06, 0.06, 0.12, 7, -W * 0.22, H, -D * 0.2, 0xd8d8d8);
+    p.box(0.12, 0.08, 0.1, W * 0.2, H, D * 0.1, 0xbcbcbc);
+    if (kind === 1) {
+      // l'enseigne sur le toit
+      for (const sx of [-1, 1]) p.box(0.02, 0.14, 0.02, sx * W * 0.3, H, D * 0.3, 0x6a6a6a);
+      p.box(W * 0.7, 0.13, 0.02, 0, H + 0.1, D * 0.3, pick([A.pink, A.cyan, A.amber, 0x9aff6a], v + 1), 0, 'neon');
+    }
+  }
+}
+
+/** Tour (Futuriste) : étages de verre allumés, jupes de toits courbes à liseré de néon, terrasses plantées, toit courbe au sommet */
+function futureTower(p: Parts, v: number, w: number, d: number, r: () => number) {
+  const W = w * 0.8, D = d * 0.76, roofC = pick([A.tileG, A.tileB, 0x8a5a4a, A.tileG], v), neon = pick([A.cyan, A.amber, A.pink], v >> 2);
+  if (v % 4 === 3) {
+    // pavillon de verre bas, toit flottant, bambous
+    p.box(w * 0.92, 0.05, d * 0.92, 0, 0, 0, 0xd8d8d0);
+    p.box(W, 0.32, D, 0, 0.05, 0, A.glass, 0, true);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.03, 0.4, 0.03, sx * W / 2, 0.05, sz * D / 2, 0xf2f0ea);
+    hipRoof(p, W + 0.16, D + 0.16, 0.14, 0, 0.45, 0, roofC, 0, { lod: true, rows: 1, step: 0.12, glow: 'neon', edge: neon, lift: 0.06 });
+    for (const sx of [-1, 1]) bamboo(p, sx * w * 0.4, d * 0.38, 0.35, v + sx);
+    return;
+  }
+  const floors = 6 + Math.floor(r() * 6), fh = 0.22, tw = W * 0.8, td = D * 0.8;
+  p.box(W, 0.1, D, 0, 0, 0, 0xd8d8d0);
+  let y = 0.1;
+  for (let f = 0; f < floors; f++, y += fh) {
+    p.box(tw, fh * 0.7, td, 0, y, 0, A.glass, 0, true);
+    p.box(tw + 0.02, fh * 0.3, td + 0.02, 0, y + fh * 0.7, 0, 0xf2f0ea);
+    if (f % 3 === 2 && f < floors - 1) {
+      hipRoof(p, tw + 0.24, td + 0.24, 0.08, 0, y + fh * 0.98, 0, roofC, 0, { lod: true, rows: 0, hips: false, glow: 'neon', edge: neon, t: 0.02 });
+      p.box(tw * 0.9, 0.04, 0.05, 0, y + fh + 0.02, td / 2 + 0.06, A.moss);
+    }
+  }
+  for (const sx of [-1, 1]) p.box(0.02, y - 0.1, 0.02, sx * (tw / 2 + 0.012), 0.1, td / 2 + 0.012, neon, 0, 'neon');
+  hipRoof(p, tw + 0.2, td + 0.2, 0.3, 0, y, 0, roofC, 0, { lod: true, rows: 1, step: 0.11, glow: 'neon', edge: neon });
+  p.cyl(0.008, 0.008, 0.3, 4, 0, y + 0.3, 0, 0xdddddd);
+  p.sphere(0.02, 0, y + 0.6, 0, neon);
+}
+
+/** Une maison de la ville, selon l'âge et la variante (lot w × d, façade +z sur la rue) */
+export function aHouse(p: Parts, age: number, v: number, w: number, d: number) {
+  const r = mulberry32(v + 23), big = w > 1.05 && d > 0.95;
+  if (age <= 1) return hutHouse(p, v, w, d);
+  if (age === 2) {
+    const k = v % 4;
+    if (k === 0 && big) return courtHouse(p, age, v, w, d);
+    if (k === 2) return tallHouse(p, age, v, w, d);
+    return porchHouse(p, age, v, w, d);
+  }
+  if (age === 3) {
+    const k = v % 4;
+    if (k === 0 && big) return courtHouse(p, age, v, w, d);
+    if (k === 3) return arcadeHouse(p, age, v, w, d);
+    if (k === 2) return tallHouse(p, age, v, w, d);
+    return shopHouse(p, age, v, w, d);
+  }
+  if (age === 4) return modernBlock(p, v, w, d, r);
+  return futureTower(p, v, w, d, r);
+}
+
+// ---------- Le salon de thé ----------
+
+/**
+ * Le salon de thé (lot 1,8 × 1,6) : pavillon de chaume ouvert à l'Antiquité ; puis pavillon à étage, galerie à balustrade,
+ * double toit, lanternes, tables sous parasols sur la terrasse ; enseigne au néon et guirlande au Moderne ; verre et toits
+ * à liseré au Futuriste
+ */
+export function aTeahouse(p: Parts, age: number, v: number, w: number, d: number) {
+  const W = w * 0.62, D = d * 0.56, tile = age >= 4 ? A.tileG : houseTile(Math.max(2, age), v + 1), z = -d * 0.1;
+  p.box(w * 0.94, 0.04, d * 0.92, 0, 0, 0, age <= 1 ? 0xa8946c : A.paving);
+  const table = (x: number, tz: number, para: boolean) => {
+    p.cyl(0.07, 0.07, 0.015, 7, x, 0.1, tz, A.timber);
+    p.cyl(0.015, 0.02, 0.1, 4, x, 0, tz, A.darkwood);
+    for (const sx of [-1, 1]) p.box(0.05, 0.05, 0.05, x + sx * 0.12, 0, tz, A.timber);
+    p.cyl(0.015, 0.015, 0.02, 5, x, 0.115, tz, 0xe8e0d0);
+    if (para) { p.cyl(0.006, 0.006, 0.34, 4, x, 0.1, tz, A.darkwood); p.cone(0.16, 0.06, 8, x, 0.42, tz, pick([A.red, 0xe8c070, 0x3f7262], v + Math.round(x * 10))); }
+  };
+  if (age <= 1) {
+    // pavillon ouvert : poteaux, plancher, bancs, foyer et bouilloire, toit de chaume
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.04, 0.32, 0.04, sx * W / 2, 0.04, z + sz * D / 2, A.timber);
+    p.box(W, 0.05, D, 0, 0.04, z, A.wood);
+    for (const sz of [-1, 1]) p.box(W * 0.8, 0.06, 0.1, 0, 0.09, z + sz * D * 0.3, A.timber);
+    p.cyl(0.06, 0.07, 0.06, 6, 0, 0.09, z, A.darkstone);
+    p.cyl(0.035, 0.04, 0.05, 6, 0, 0.15, z, A.bronze);
+    hipRoof(p, W + 0.3, D + 0.3, 0.32, 0, 0.36, z, A.thatch);
+    table(-w * 0.28, d * 0.32, false); table(w * 0.22, d * 0.34, false);
+    return;
+  }
+  const glass = age >= 5, wall = glass ? A.glass : A.plaster, col = glass ? 0xf2f0ea : A.red, neon = age >= 5 ? A.cyan : undefined;
+  // rez : piliers, claire-voies
+  p.box(W + 0.2, 0.06, D + 0.2, 0, 0.04, z, A.stone);
+  p.box(W - 0.1, 0.3, D - 0.1, 0, 0.1, z, wall, 0, glass);
+  for (const sx of [-1, -0.33, 0.33, 1]) for (const sz of [-1, 1]) p.add(new THREE.CylinderGeometry(0.022, 0.022, 0.3, 5, 1, true).translate(0, 0.15, 0), sx * W / 2, 0.1, z + sz * D / 2, col);
+  if (!glass) for (let i = 0; i < 3; i++) win(p, -W * 0.33 + i * W * 0.33, 0.14, z + D / 2 - 0.044, W * 0.24, 0.18);
+  // galerie de l'étage, avant-toit bas
+  p.box(W + 0.24, 0.03, D + 0.24, 0, 0.4, z, A.darkwood);
+  for (const sz of [-1, 1]) rail(p, W + 0.22, 0, 0.43, z + sz * (D / 2 + 0.11), 0, col, 0.07, 0.12);
+  for (const sx of [-1, 1]) rail(p, D + 0.22, sx * (W / 2 + 0.11), 0.43, z, Math.PI / 2, col, 0.07, 0.12);
+  hipRoof(p, W + 0.44, D + 0.44, 0.1, 0, 0.36, z, tile, 0, { lod: true, rows: 1, step: 0.11, hips: false, ends: false, glow: neon ? 'neon' : false, edge: neon });
+  // l'étage et son toit
+  p.box(W * 0.8, 0.26, D * 0.8, 0, 0.43, z, wall, 0, glass);
+  if (!glass) for (const sz of [-1, 1]) for (let i = 0; i < 2; i++) win(p, -W * 0.2 + i * W * 0.4, 0.49, z + sz * (D * 0.4 + 0.008), W * 0.26, 0.13, sz < 0 ? Math.PI : 0);
+  hipRoof(p, W * 0.8 + 0.4, D * 0.8 + 0.4, 0.34, 0, 0.69, z, tile, 0, { lod: true, rows: 2, step: 0.1, glow: neon ? 'neon' : false, edge: neon });
+  // lanternes aux coins, enseigne, tables sur la terrasse
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) lantern(p, sx * (W / 2 + 0.16), 0.36, z + sz * (D / 2 + 0.16), 0.032);
+  p.box(0.3, 0.09, 0.02, 0, 0.3, z + D / 2 + 0.12, age === 4 ? A.pink : A.redDark, 0, age === 4 ? 'neon' : false);
+  if (age < 4) p.box(0.22, 0.05, 0.022, 0, 0.32, z + D / 2 + 0.122, A.gold);
+  for (const [tx, tz] of [[-w * 0.3, d * 0.33], [0.02, d * 0.36], [w * 0.32, d * 0.31]]) table(tx, tz, age >= 3);
+  if (age === 4) for (let i = 0; i < 7; i++) p.box(0.02, 0.02, 0.02, -w * 0.4 + i * w * 0.13, 0.38 - Math.sin((i / 6) * Math.PI) * 0.06, d * 0.44, 0xffe0a0, 0, true);
+  bamboo(p, -w * 0.42, -d * 0.36, 0.45, v);
+  if (age >= 3) potPlant(p, w * 0.4, -d * 0.38, 1, A.blossom);
+}
+
+// ---------- Le marché, puis la bourse ----------
+
+/** Étal dans la halle : planche, marchandises */
+function stallIn(p: Parts, x: number, z: number, goods: number[], i: number) {
+  p.box(0.6, 0.13, 0.3, x, 0.06, z, A.timber);
+  for (let j = 0; j < 3; j++) p.box(0.14, 0.05, 0.14, x - 0.18 + j * 0.18, 0.19, z, pick(goods, i + j));
+}
+/** Bandeau de claire-voies allumées sur les quatre faces d'un bloc w × d, posé en y */
+function windowStrip(p: Parts, w: number, d: number, y: number, h: number) {
+  p.box(w + 0.012, h, d + 0.012, 0, y, 0, A.paper, 0, true);
+  const n = Math.max(2, Math.round(w / 0.2));
+  for (let i = 0; i <= n; i++) p.box(0.02, h, d + 0.02, -w / 2 + (i * w) / n, y, 0, A.redDark);
+}
+
+/** Le marché (lot 4 × 4) : étals sous petits toits, puis halle couverte ; la bourse au Moderne et au Futuriste */
+export function aMarket(p: Parts, age: number, v: number) {
+  p.box(3.9, 0.035, 3.9, 0, 0, 0, age <= 1 ? 0xb4a482 : A.paving);
+  const goods = [0x8a9a3a, 0xc8783a, 0xd8c070, 0x9a3a2a, 0xe0b440, 0x6a8a3a];
+  const stall = (x: number, z: number, ry: number, i: number) => inFrame(p, x, 0, z, ry, (q) => {
+    q.box(0.62, 0.14, 0.36, 0, 0, 0, A.timber);
+    for (let j = 0; j < 3; j++) q.cyl(0.06, 0.05, 0.06, 6, -0.18 + j * 0.18, 0.14, 0.04, pick(goods, i + j));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) q.box(0.025, 0.4, 0.025, sx * 0.3, 0, sz * 0.17, A.darkwood);
+    if (age <= 1) hipRoof(q, 0.82, 0.58, 0.18, 0, 0.4, 0, A.thatch);
+    else {
+      hipRoof(q, 0.8, 0.56, 0.16, 0, 0.4, 0, houseTile(age, i + v), 0, { lod: true, rows: 1, step: 0.14 });
+      lantern(q, 0.3, 0.36, 0.26, 0.026);
+    }
+  });
+  if (age <= 2) {
+    // deux rangées d'étals face à l'allée, un puits au centre, ballots ; le pavillon du gardien du marché (Médiéval)
+    for (const sz of [-1, 1]) for (let i = 0; i < 4; i++) if (!(age === 2 && sz < 0 && (i === 1 || i === 2))) stall(-1.35 + i * 0.9, sz * 1.15, sz > 0 ? Math.PI : 0, i + (sz > 0 ? 4 : 0));
+    p.cyl(0.16, 0.18, 0.12, 8, 0, 0, 0.1, A.stone); p.cyl(0.13, 0.13, 0.122, 8, 0, 0, 0.1, A.water);
+    for (const sx of [-1, 1]) p.box(0.025, 0.3, 0.025, sx * 0.15, 0.12, 0.1, A.timber);
+    p.box(0.34, 0.025, 0.025, 0, 0.42, 0.1, A.timber);
+    for (let i = 0; i < 5; i++) p.box(0.12, 0.08, 0.1, -1.6 + i * 0.12, 0, 0.55 + (i % 2) * 0.12, [0x9a7a5a, 0x7a6a4a, 0xb8a070][i % 3]);
+    if (age === 2) inFrame(p, 0, 0, -1.25, 0, (q) => {
+      hall(q, { w: 1.1, d: 0.6, h: 0.3, roof: A.tile, podium: 0.08, rows: 2, step: 0.1, roofH: 0.18, bays: 3, double: true });
+      banner(q, 0.7, 0.2, 0.7, A.red);
+    });
+    return;
+  }
+  if (age === 3) {
+    // la halle : charpente ouverte sur colonnes, lanterneau, étals dedans, lanternes sous l'avant-toit, enseigne
+    const W = 3.3, D = 2.3, H = 0.5;
+    p.box(W + 0.2, 0.06, D + 0.2, 0, 0, 0, A.stone);
+    for (let i = 0; i <= 6; i++) for (const sz of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, H, 6, 1, true).translate(0, H / 2, 0), -W / 2 + (i * W) / 6, 0.06, sz * D / 2, A.red);
+    for (const sx of [-1, 1]) p.add(new THREE.CylinderGeometry(0.035, 0.035, H, 6, 1, true).translate(0, H / 2, 0), sx * W / 2, 0.06, 0, A.red);
+    p.box(W + 0.06, 0.06, D + 0.06, 0, 0.06 + H - 0.06, 0, A.beam);
+    for (let i = 0; i < 4; i++) for (const sz of [-1, 1]) stallIn(p, -1.2 + i * 0.8, sz * 0.55, goods, i + v + (sz > 0 ? 3 : 0));
+    hipRoof(p, W + 0.36, D + 0.36, 0.34, 0, 0.06 + H, 0, A.tile, 0, { rows: 1, step: 0.11, ends: false });
+    p.box(W * 0.6, 0.36, D * 0.42, 0, 0.06 + H + 0.1, 0, A.plaster);
+    windowStrip(p, W * 0.6, D * 0.42, 0.06 + H + 0.3, 0.1);
+    hipRoof(p, W * 0.6 + 0.36, D * 0.42 + 0.36, 0.38, 0, 0.06 + H + 0.46, 0, A.tileG, 0, { rows: 2, step: 0.11 });
+    for (let i = 0; i < 9; i++) lantern(p, -1.6 + i * 0.4, 0.06 + H - 0.04, D / 2 + 0.16, 0.03);
+    p.box(0.5, 0.14, 0.02, 0, 0.06 + H + 0.06, D / 2 + 0.24, A.redDark);
+    p.box(0.4, 0.07, 0.022, 0, 0.06 + H + 0.095, D / 2 + 0.242, A.gold);
+    for (let i = 0; i < 3; i++) p.box(0.2, 0.12, 0.16, -1.6 + i * 0.24, 0, 1.6, [0x9a7a5a, 0x7a6a4a, 0xb8a070][i]);
+    return;
+  }
+  // la bourse : socle, portique de colonnes, salle vitrée, bandeau des cours au néon, couronne de toit courbe
+  const glass = age >= 5, W = 3.0, D = 2.0, fl = age === 4 ? 3 : 2, fh = 0.36, y0 = 0.16;
+  p.box(3.6, 0.08, 3.4, 0, 0, -0.2, 0xd6d2c8);
+  stairs(p, 2.0, 0.16, 0.36, 0, 0, 1.5, 0xe2ded4, 3);
+  p.box(W + 0.1, 0.16, D + 0.1, 0, 0, -0.35, 0xe2ded4);
+  if (!glass) {
+    p.box(W, fl * fh, D, 0, y0, -0.35, 0xe8e4dc);
+    for (let f = 0; f < fl; f++) p.box(W + 0.012, 0.16, D + 0.012, 0, y0 + f * fh + 0.12, -0.35, A.win, 0, true);
+    for (let i = 0; i <= 8; i++) p.box(0.05, fl * fh, 0.05, -W / 2 + (i * W) / 8, y0, -0.35 + D / 2 + 0.01, 0xe8e4dc);
+    // portique, bandeau des cours, toits
+    for (let i = 0; i < 6; i++) p.cyl(0.05, 0.055, fl * fh * 0.66, 8, -1.25 + i * 0.5, y0, 0.85, 0xf2efe8);
+    p.box(2.8, 0.1, 0.3, 0, y0 + fl * fh * 0.66, 0.8, 0xf2efe8);
+    p.box(2.4, 0.06, 0.02, 0, y0 + fl * fh * 0.66 + 0.02, 0.96, A.amber, 0, 'neon');
+    hipRoof(p, 3.0, 0.5, 0.18, 0, y0 + fl * fh * 0.66 + 0.1, 0.8, A.tileG, 0, { rows: 1, step: 0.11, ridge: A.gold });
+    hipRoof(p, W + 0.4, D + 0.4, 0.5, 0, y0 + fl * fh, -0.35, A.tileG, 0, { rows: 2, step: 0.11, ridge: A.gold });
+    for (const sx of [-1, 1]) { p.cyl(0.012, 0.012, 1.0, 4, sx * 1.6, 0.08, 1.35, 0xcfcfcf); p.box(0.012, 0.16, 0.24, sx * 1.6, 0.88, 1.47, A.red); }
+    lion(p, -0.75, 1.6, 1.1, A.bronze); lion(p, 0.75, 1.6, 1.1, A.bronze);
+  } else {
+    // verre, toits flottants à liseré, anneau des cours au-dessus
+    p.box(W, fl * fh, D, 0, y0, -0.35, A.glass, 0, true);
+    for (let i = 0; i <= 6; i++) p.box(0.03, fl * fh, D + 0.02, -W / 2 + (i * W) / 6, y0, -0.35, 0xf2f0ea);
+    hipRoof(p, W + 0.5, D + 0.5, 0.16, 0, y0 + fh + 0.02, -0.35, A.tileB, 0, { rows: 1, step: 0.12, hips: false, glow: 'neon', edge: A.cyan });
+    hipRoof(p, W * 0.8, D * 0.8, 0.5, 0, y0 + fl * fh + 0.1, -0.35, A.tileB, 0, { rows: 2, step: 0.12, glow: 'neon', edge: A.cyan, ridge: A.gold });
+    p.add(new THREE.TorusGeometry(0.9, 0.025, 4, 24).rotateX(Math.PI / 2), 0, y0 + fl * fh + 0.9, -0.35, A.amber, 0, 'neon');
+    for (let i = 0; i < 4; i++) p.box(0.4, 0.02, 0.02, -0.6 + i * 0.4, 0.17, 1.1, A.cyan, 0, 'neon');
+  }
+  for (const sx of [-1, 1]) for (const sz of [0.5, 1.4]) potPlant(p, sx * 1.75, sz, 1.4);
+}
+
+// ---------- Les ateliers ----------
+
+/** Atelier (lot d'une maison) : potier au four couché, ou teinturier de la soie ; brique et cheminée ; usine ; laboratoire */
+export function aWorkshop(p: Parts, age: number, v: number, w: number, d: number) {
+  const W = w * 0.86, D = d * 0.8, tile = houseTile(age, v);
+  if (age <= 2) {
+    if (v % 2 === 0) {
+      // le potier : long four voûté couché sur la pente, sa cheminée, l'abri, le tour, les jarres qui sèchent
+      p.add(new THREE.CylinderGeometry(0.11, 0.11, W * 0.8, 7, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), 0, 0.02, -D * 0.28, 0xa8644a, 0, false, 0.08);
+      p.cyl(0.05, 0.06, 0.38, 6, W * 0.4, 0, -D * 0.28, 0x8a5440);
+      for (let i = 0; i < 4; i++) p.box(0.04, 0.04, 0.01, -W * 0.3 + i * W * 0.2, 0.05, -D * 0.28 + 0.11, 0x3a2420);
+      for (const sx of [-1, 1]) for (const zz of [D * 0.2, -D * 0.02]) p.box(0.025, 0.24, 0.025, sx * W * 0.38, 0, zz, A.timber);
+      hipRoof(p, W * 0.9, D * 0.42, 0.16, 0, 0.24, D * 0.09, age <= 1 ? A.thatch : tile, 0, { lod: true, rows: 1, step: 0.1 });
+      p.box(0.18, 0.1, 0.12, -W * 0.15, 0, D * 0.09, A.timber);
+      p.cyl(0.05, 0.05, 0.02, 8, -W * 0.15, 0.1, D * 0.09, 0x9a7a5a);
+      for (let i = 0; i < 6; i++) p.cyl(0.03, 0.04, 0.07, 6, W * 0.05 + (i % 3) * 0.08, 0, D * 0.36 + ((i >> 1) & 1) * 0.08, pick([0x6a8aa0, 0xb88a5a, 0x5a7a6a], i + v));
+    } else {
+      // le teinturier : petite maison, perches où sèchent les soies de couleur, cuves
+      p.box(W * 0.5, 0.24, D * 0.4, -W * 0.22, 0, -D * 0.25, age <= 1 ? A.wattle : A.plaster);
+      hipRoof(p, W * 0.5 + 0.14, D * 0.4 + 0.14, 0.18, -W * 0.22, 0.24, -D * 0.25, age <= 1 ? A.thatch : tile, 0, { lod: true, rows: 1, step: 0.1 });
+      for (const sx of [-1, 1]) p.box(0.02, 0.36, 0.02, sx * W * 0.42, 0, D * 0.12, A.timber);
+      for (const k of [0, 1]) p.box(W * 0.86, 0.015, 0.015, 0, 0.34, D * 0.12 + (k - 0.5) * 0.12, A.timber);
+      for (let i = 0; i < 5; i++) for (const k of [0, 1]) p.box(0.1, 0.22, 0.006, -W * 0.34 + i * W * 0.17, 0.12, D * 0.12 + (k - 0.5) * 0.12, pick([0x2f5fa0, 0xc0442a, 0xd9a43c, 0x3f8a6a, 0x8a4f7a], i + k * 2 + v));
+      for (let i = 0; i < 3; i++) { p.cyl(0.07, 0.07, 0.08, 7, W * 0.2, 0, -D * 0.3 + i * 0.14, A.timber); p.cyl(0.06, 0.06, 0.082, 7, W * 0.2, 0, -D * 0.3 + i * 0.14, [0x2f5fa0, 0xc0442a, 0xd9a43c][(i + v) % 3]); }
+    }
+    return;
+  }
+  if (age === 3) {
+    // atelier de brique : toit courbe, haute cheminée, caisses
+    p.box(W, 0.36, D * 0.8, 0, 0, 0, 0x9a8a80);
+    for (let i = 0; i < 3; i++) win(p, -W * 0.3 + i * W * 0.3, 0.12, D * 0.4 + 0.006, 0.14, 0.14, 0, 0x5a4a3a, A.win);
+    p.box(0.16, 0.24, 0.012, -W * 0.38, 0, D * 0.4 + 0.006, 0x4a3a30);
+    hipRoof(p, W + 0.12, D * 0.8 + 0.12, 0.22, 0, 0.36, 0, tile, 0, { lod: true, rows: 1, step: 0.1 });
+    p.cyl(0.05, 0.07, 0.9, 7, W * 0.32, 0, -D * 0.3, 0x8a5a44);
+    p.cyl(0.07, 0.07, 0.04, 7, W * 0.32, 0.9, -D * 0.3, 0x6a4434);
+    for (let i = 0; i < 3; i++) p.box(0.12, 0.1, 0.1, -W * 0.25 + i * 0.14, 0, D * 0.46, [0x9a7a5a, 0x7a6a4a, 0xb8a070][i]);
+    return;
+  }
+  if (age === 4) {
+    // petite usine à toit en dents de scie, enseigne au néon
+    p.box(W, 0.4, D * 0.84, 0, 0, 0, A.concrete);
+    p.box(W + 0.012, 0.12, D * 0.84 + 0.012, 0, 0.18, 0, A.win, 0, true);
+    for (let i = 0; i < 3; i++) {
+      const x = -W / 3 + (i * W) / 3;
+      frustum(p, D * 0.84, W / 3 - 0.01, D * 0.84, 0.02, 0.14, x, 0.4, 0, A.concreteD, Math.PI / 2);
+    }
+    p.box(W * 0.5, 0.08, 0.02, 0, 0.3, D * 0.42 + 0.01, pick([A.pink, A.cyan, A.amber], v), 0, 'neon');
+    p.cyl(0.04, 0.05, 0.7, 6, -W * 0.38, 0, -D * 0.3, 0xb0b0b0);
+    p.cyl(0.05, 0.05, 0.03, 6, -W * 0.38, 0.7, -D * 0.3, 0xc0442a);
+    // porte de chargement, quai, caisses et conteneur
+    p.box(0.22, 0.2, 0.014, W * 0.28, 0, D * 0.42 + 0.006, 0x8a9096);
+    for (let i = 0; i < 5; i++) p.box(0.2, 0.008, 0.016, W * 0.28, 0.02 + i * 0.04, D * 0.42 + 0.008, 0x6a7076);
+    p.box(0.34, 0.05, 0.12, W * 0.28, 0, D * 0.42 + 0.06, A.concreteD);
+    p.box(0.3, 0.13, 0.12, -W * 0.18, 0, D * 0.46, pick([0x3f7a6a, 0xc0442a, 0x2f5f9e], v));
+    for (let i = 0; i < 2; i++) p.box(0.08, 0.08, 0.08, W * 0.05 + i * 0.1, 0, D * 0.5, 0xb8a070);
+    for (const sx of [-1, 1]) p.cyl(0.03, 0.03, 0.06, 6, sx * W * 0.25, 0.54, -D * 0.15, 0x9a9a9a);
+    return;
+  }
+  // laboratoire : verre, panneaux solaires, liseré
+  p.box(W, 0.36, D * 0.82, 0, 0, 0, 0xf2f0ea);
+  p.box(W + 0.012, 0.18, D * 0.82 + 0.012, 0, 0.1, 0, A.glass, 0, true);
+  for (let i = 0; i < 2; i++) p.box(W * 0.42, 0.02, D * 0.5, -W * 0.22 + i * W * 0.44, 0.38, 0, 0x2a4a6a, 0, false, 0.25);
+  p.box(W * 0.9, 0.012, 0.012, 0, 0.36, D * 0.41 + 0.01, A.cyan, 0, 'neon');
+  for (let i = 0; i <= 4; i++) p.box(0.025, 0.36, 0.025, -W / 2 + (i * W) / 4, 0, D * 0.41, 0xf2f0ea);
+  // l'entrée sous auvent courbe, l'aire des drones, une antenne
+  hipRoof(p, 0.4, 0.22, 0.08, 0, 0.3, D * 0.45, A.tileB, 0, { lod: true, rows: 0, hips: false, glow: 'neon', edge: A.cyan, t: 0.02 });
+  p.cyl(0.14, 0.14, 0.02, 10, W * 0.25, 0, D * 0.38 + 0.12, 0xdcdcdc);
+  p.add(new THREE.TorusGeometry(0.11, 0.008, 3, 12).rotateX(Math.PI / 2), W * 0.25, 0.025, D * 0.38 + 0.12, A.cyan, 0, 'neon');
+  p.box(0.08, 0.02, 0.08, W * 0.25, 0.08, D * 0.38 + 0.12, 0x3a3a40);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.box(0.03, 0.01, 0.03, W * 0.25 + sx * 0.06, 0.09, D * 0.38 + 0.12 + sz * 0.06, 0x3a3a40);
+  p.cyl(0.006, 0.006, 0.4, 4, -W * 0.35, 0.36, -D * 0.25, 0xdddddd);
+  p.sphere(0.02, -W * 0.35, 0.76, -D * 0.25, A.pink);
+}
