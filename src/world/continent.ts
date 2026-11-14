@@ -398,7 +398,7 @@ export function fillClimate(gen: number, seed: number, n: number, temp: Float32A
   for (let gz = 0; gz < n; gz++)
     for (let gx = 0; gx < n; gx++) {
       const wx = gx - f.x, wz = gz - f.z;
-      if (lay && (wx < 0 || wz < 0 || wx >= f.n || wz >= f.n)) { [temp[gz * n + gx], wet[gz * n + gx]] = isleClimate(lay, gx, gz, st, sm); continue; }
+      if (lay && (wx < 0 || wz < 0 || wx >= f.n || wz >= f.n)) { [temp[gz * n + gx], wet[gz * n + gx]] = isleClimate(lay, gx, gz, st, sm, seed); continue; }
       const N0 = f.n;
       // le climat suit le plan, tourné ou retourné avec lui (version 3)
       let cx = wx, cz = wz;
