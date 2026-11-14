@@ -277,7 +277,7 @@ export class World {
   brick = 0;
   /** or, tiré du seul comptoir des voisins, dans une partie qui a accepté l'archipel (les anciennes sauvegardes : zéro) */
   gold = 0;
-  /** comptoir des voisins : saturation des cours, âge où l'or est apparu (sauvegardé) */
+  /** comptoir des voisins : saturation des cours (sauvegardée) */
   trade: TradeState = newTradeState();
   /** Gisements de pétrole : cases où le brut suinte (1), tirées de la graine de la carte ; seul un puits de pétrole s'y pose */
   oil = new Uint8Array(N * N);
@@ -1700,7 +1700,7 @@ export class World {
       fuel: this.fuel,
       brick: this.brick,
       ...(this.gold ? { gold: this.gold } : {}),
-      ...(this.trade.since >= 0 || Object.keys(this.trade.sat).length ? { trade: this.trade } : {}),
+      ...(Object.keys(this.trade.sat).length ? { trade: this.trade } : {}),
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       exp: this.exp,
       difficulty: this.difficulty,

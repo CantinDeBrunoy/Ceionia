@@ -7,16 +7,17 @@ import type { ArchLayout } from '../src/world/archipelago';
 import { Expeditions } from '../src/sim/expeditions';
 import { Agents } from '../src/sim/agents';
 import {
-  BUY, SELL, SAT_MAX, SAT_RECOVER, SAT_STEP, TRADE_RES, archipelagoOn, buy, buyQuote, firstGoldAge, goldNeed, newTradeState,
+  BUY, SELL, SAT_MAX, SAT_RECOVER, SAT_STEP, TRADE_RES, buy, buyQuote, firstGoldAge, goldNeed, goldSince, newTradeState,
   readTradeState, recover, sell, sellQuote, sellRate,
 } from '../src/sim/trade';
+import { archipelagoOn } from '../src/world/expand';
 
-/** Un monde plat de 192 cases ; avec `arch`, l'archipel accepté (des îles, faute de mieux) */
-function flat(arch = false) {
+/** Un monde plat de 192 cases ; avec `at`, l'archipel accepté à cet âge (des îles, faute de mieux) */
+function flat(at: number | null = null) {
   setMapSize(192);
   const w = new World();
   w.heights.fill(1);
-  if (arch) w.isles = { main: { x: 0, z: 0, n: 192 }, rivals: [], small: [] } as unknown as ArchLayout;
+  if (at !== null) { w.isles = { main: { x: 0, z: 0, n: 192 }, rivals: [], small: [] } as unknown as ArchLayout; w.exploredAt = at; }
   return w;
 }
 
@@ -33,12 +34,10 @@ describe('or : la ressource', () => {
     const w = flat();
     w.gold = 37.5;
     w.trade.sat.wood = 0.12;
-    w.trade.since = 2;
     const r = new World();
     r.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
     expect(r.gold).toBe(37.5);
     expect(r.trade.sat.wood).toBeCloseTo(0.12, 9);
-    expect(r.trade.since).toBe(2);
     const { gold, trade, ...old } = w.toJSON() as Record<string, unknown>;
     expect(gold).toBe(37.5);
     expect(trade).toBeTruthy();
@@ -50,13 +49,20 @@ describe('or : la ressource', () => {
   });
 
   it('une sauvegarde abîmée ne casse rien', () => {
-    expect(readTradeState({ sat: { wood: 9, stone: -1, ore: 'x' }, since: 1.5 })).toEqual({ sat: { wood: SAT_MAX }, since: -1 });
+    expect(readTradeState({ sat: { wood: 9, stone: -1, ore: 'x' } })).toEqual({ sat: { wood: SAT_MAX } });
     expect(readTradeState(null)).toEqual(newTradeState());
   });
 
   it('ne s’affiche (archipelagoOn) que si l’archipel est accepté', () => {
     expect(archipelagoOn(flat())).toBe(false);
-    expect(archipelagoOn(flat(true))).toBe(true);
+    expect(archipelagoOn(flat(2))).toBe(true);
+  });
+
+  it('l’âge d’acceptation vient de world.exploredAt (absent : comme accepté dès le début)', () => {
+    expect(goldSince(flat(3))).toBe(3);
+    const w = flat(2);
+    w.exploredAt = null;
+    expect(goldSince(w)).toBe(0);
   });
 });
 
@@ -88,7 +94,7 @@ describe('comptoir : les cours', () => {
   });
 
   it('le temps qui passe au village fait remonter les cours', () => {
-    const w = flat(true);
+    const w = flat(2);
     w.trade.sat.stone = 0.1;
     const ex = new Expeditions(w, new Agents(w), () => 100, () => 0.5);
     for (let i = 0; i < 100; i++) ex.update(1);
@@ -96,7 +102,7 @@ describe('comptoir : les cours', () => {
   });
 
   it('vendre et acheter : les stocks bougent, rien sans de quoi payer', () => {
-    const w = flat(true);
+    const w = flat(2);
     w.wood = 25;
     expect(sell(w, 'wood', 1)).toBe(true);
     expect(w.gold).toBe(1);
@@ -136,14 +142,10 @@ describe('passage d’âge : l’or', () => {
     const item = (sim: Sim) => sim.ageProgress()!.items.find((i) => i.label === GOLD_LABEL);
     const no = new Sim(flat());
     no.age = 2;
-    no.update(0, 0);
     expect(item(no)).toBeUndefined();
 
-    const w = flat(true), sim = new Sim(w);
+    const w = flat(2), sim = new Sim(w);
     sim.age = 2;
-    sim.update(0, 0);
-    // l'or apparaît et l'on retient l'âge de l'acceptation
-    expect(w.trade.since).toBe(2);
     expect(item(sim)).toMatchObject({ have: 0, need: 20 });
     w.gold = 12.7;
     expect(item(sim)!.have).toBe(12);
@@ -153,10 +155,8 @@ describe('passage d’âge : l’or', () => {
     expect(item(sim)!.have).toBe(20);
 
     // une partie qui accepte tard, à l'âge industriel : pas d'or pour le Moderne
-    const late = flat(true), s2 = new Sim(late);
+    const late = flat(3), s2 = new Sim(late);
     s2.age = 3;
-    s2.update(0, 0);
-    expect(late.trade.since).toBe(3);
     expect(item(s2)).toBeUndefined();
     s2.age = 4;
     expect(item(s2)).toMatchObject({ need: 100 });

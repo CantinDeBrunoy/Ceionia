@@ -43,7 +43,7 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 - **Équipement** (`gear.ts` › `gearCost`) : toujours du minerai (et du carburant pour certaines pièces) ; bois et pierre seulement en Normal (`gearPrice`). Détail dans [equipement.md](equipement.md).
 
 ### L'or et le comptoir des voisins (`trade.ts`)
-- L'or n'existe que si l'**archipel est accepté** : `archipelagoOn(world)`, seule lecture de l'indicateur (pour l'instant : `world.isles` non nul, le monde agrandi à l'archipel ; à rebrancher sur l'indicateur « archipel accepté » quand il existera). Sans archipel, ni stock affiché, ni condition d'âge.
+- L'or n'existe que si l'**archipel est accepté** : `archipelagoOn(world)` (`world/expand.ts` : `world.isles` non nul, le monde agrandi à l'archipel). Sans archipel, ni stock affiché, ni condition d'âge.
 - **Pas de mine d'or** : on n'en obtient qu'en vendant au peuple allié. Aucun `YIELD` n'en donne (`daily().gold` vaut toujours 0).
 - **Comptoir** (fiche « Les voisins ») : un clic sur l'or de la barre des stocks (`#res`) l'ouvre ; le conseil et la ligne « or » du panneau d'âge y mènent aussi. Le bâtiment-comptoir chez les voisins viendra avec leur ville.
 - Cours de départ (l'auteur équilibrera) :
@@ -71,7 +71,7 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 - `Expeditions.mineStep(dt)` (appelée par `Expeditions.update` avec le temps de jeu) : `day = dt / dayLen`. Bois, pierre, minerai, briques : `stock += day × taux` en continu (petites parts, l'affichage arrondit). Brut : on cumule dans `prodT.crude` et on ne verse que des barils entiers. Carburant : `fuel = max(0, fuel − day × burn)`. Raffinerie : `refineT += day × capacité` ; à chaque unité et tant que `crude >= 1`, un baril part et `prodT.fuel += 0,75` ; seuls les entiers atteignent `world.fuel`.
 - `canPay(w, cost)` / `pay(w, cost)` : comparent et retranchent bois, pierre, briques. `tools.ts` paie **après** la pose réussie (`place`, `upgradeSelected`) ; `rampart.ts` pan par pan.
 - UI : `renderResources` (`#res`) affiche stock et taux du jour ; briques dès l'âge 3 (ou dès qu'on en a) ; brut et carburant dès l'âge 4 ou dès qu'il y en a (ou après l'expédition `oil`). `renderRes` donne la fiche d'une ressource (`RES_META`, sources par bâtiment). Le conseil `Sim.computeMessage` / `build()` s'appuie sur `Sim.producing`.
-- Sauvegarde : `World.toJSON` / `fromJSON` (`wood`, `stone`, `ore`, `crude`, `fuel`, `brick`, `gold`, `trade`) ; un champ absent vaut 0, sauf bois et pierre qui valent `START_*` (anciennes parties). `trade` (`TradeState`) : saturation de chaque ressource et `since`, l'âge du village quand l'or est apparu (−1 : pas encore), relu par `readTradeState`.
+- Sauvegarde : `World.toJSON` / `fromJSON` (`wood`, `stone`, `ore`, `crude`, `fuel`, `brick`, `gold`, `trade`) ; un champ absent vaut 0, sauf bois et pierre qui valent `START_*` (anciennes parties). `trade` (`TradeState`) : saturation de chaque ressource, relue par `readTradeState`.
 - Comptoir : `renderTrade` (fiche, classe `#needInfo.trade`) et `tradeClick` (`ui.ts`) appellent `sell` / `buy` de `trade.ts`, qui vérifient la réserve avant de rien prélever. En ressources illimitées, l'or s'affiche ∞ et les boutons restent ouverts.
 
 ## Liens avec les autres systèmes
@@ -94,6 +94,6 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 - **Changer un rendement** : `YIELD` dans `economy.ts` ; adapter `tests/briques.test.ts` si c'est la briqueterie ; vérifier `RES_META` (`ui.ts`) et les conseils.
 - **Ajouter une ressource** : `Resource`, `World` (champ + sauvegarde), `RES_NAME`, `Expeditions.yields` / `mineStep` / `prodT`, `RES_PIC`, `RES_META` et `renderResources` dans `ui.ts`, traduction. (L'or n'a pas de `RES_META` : sa fiche est le comptoir.)
 - **Changer un cours** : `SELL`, `BUY`, `SAT_*` dans `trade.ts` ; mettre à jour `tests/or.test.ts` et le tableau ci-dessus.
-- **Rebrancher « archipel accepté »** : seulement `archipelagoOn` (indicateur) et `goldSince` (âge d'acceptation) dans `trade.ts`. La branche « carte plus grande » apporte `archipelagoOn` dans `world/expand.ts` (même règle) et `world.exploredAt` : à sa fusion, faire lire `exploredAt` par `goldSince` et retirer `trade.since` (garder sa relecture pour les sauvegardes).
+- **« Archipel accepté »** : `archipelagoOn` (`world/expand.ts`, vrai si la carte a ses îles) et `goldSince` (`trade.ts`, lit `world.exploredAt`). `trade.ts` n'importe pas `expand.ts` (qui importe `world.ts` : cycle).
 - **Changer un prix** : barème `price` dans `difficulty.ts` (Normal) ou formule de Facile dans `costOf` ; `BRICK_PRICE` pour les briques ; mettre à jour `tests/difficulty.test.ts`.
 - **Faire payer un bâtiment en briques** : l'ajouter à `BRICK_PRICE` ; `canPay`, `shortLabel` et la fiche suivent.

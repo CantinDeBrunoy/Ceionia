@@ -29,29 +29,22 @@ export const GOLD_OFFER_AGE = 2;
 /** Premier âge (à atteindre) dont l'or est demandé, selon l'âge du village quand l'archipel a été accepté */
 export const firstGoldAge = (since: number) => (since <= GOLD_OFFER_AGE ? GOLD_OFFER_AGE + 1 : since + 2);
 
-/** État du comptoir, sauvegardé : saturation de chaque ressource (0 … `SAT_MAX`), âge où l'or est apparu (−1 : pas encore) */
-export interface TradeState { sat: Partial<Record<TradeRes, number>>; since: number }
-export const newTradeState = (): TradeState => ({ sat: {}, since: -1 });
+/** État du comptoir, sauvegardé : saturation de chaque ressource (0 … `SAT_MAX`) */
+export interface TradeState { sat: Partial<Record<TradeRes, number>> }
+export const newTradeState = (): TradeState => ({ sat: {} });
 
-/** Relit l'état d'une sauvegarde (absent dans une ancienne partie : rien de saturé, pas d'or encore) */
+/** Relit l'état d'une sauvegarde (absent dans une ancienne partie : rien de saturé) */
 export function readTradeState(d: unknown): TradeState {
-  const t = newTradeState(), o = (d ?? {}) as { sat?: Record<string, unknown>; since?: unknown };
+  const t = newTradeState(), o = (d ?? {}) as { sat?: Record<string, unknown> };
   for (const r of TRADE_RES) { const v = Number(o.sat?.[r]); if (v > 0) t.sat[r] = Math.min(SAT_MAX, v); }
-  if (Number.isInteger(o.since) && (o.since as number) >= 0) t.since = o.since as number;
   return t;
 }
 
 /**
- * L'archipel est-il accepté dans cette partie ? Une seule lecture, à rebrancher quand l'indicateur « archipel accepté »
- * existera : pour l'instant, le monde a ses îles (agrandi à l'archipel, `world.isles`)
+ * Âge du village quand l'archipel a été accepté (`World.exploredAt`, posé à l'agrandissement). Une partie qui a ses îles
+ * sans cette date (une partie d'essai créée d'emblée sur l'archipel) compte comme acceptée dès le début
  */
-export const archipelagoOn = (w: Pick<World, 'isles'>) => !!w.isles;
-
-/**
- * Âge du village quand l'archipel a été accepté (−1 : pas encore). Une seule lecture, elle aussi : à rebrancher sur
- * `world.exploredAt` (branche « carte plus grande ») quand elle sera fusionnée
- */
-export const goldSince = (w: Pick<World, 'trade'>) => w.trade.since;
+export const goldSince = (w: Pick<World, 'exploredAt'>) => w.exploredAt ?? 0;
 
 /** Combien de `r` il faut vendre pour 1 or, saturation comprise */
 export const sellRate = (r: TradeRes, sat = 0) => SELL[r] / (1 - Math.min(SAT_MAX, sat));
@@ -99,10 +92,10 @@ export function buy(w: Stocks, r: TradeRes, n = 1) {
 
 /**
  * L'or demandé pour atteindre l'âge `next` : rien sans archipel, rien pour un âge qui suit de trop près une acceptation
- * tardive (`since` : l'âge du village quand l'or est apparu), sinon `reqGold` de l'âge
+ * tardive (`since` : l'âge du village à l'acceptation, `goldSince`), sinon `reqGold` de l'âge
  */
 export function goldNeed(next: number, on: boolean, since: number) {
   const need = AGES[next]?.reqGold ?? 0;
-  if (!on || !need || since < 0) return 0;
+  if (!on || !need) return 0;
   return next >= firstGoldAge(since) ? need : 0;
 }

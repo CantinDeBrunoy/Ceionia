@@ -5,7 +5,8 @@ import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catal
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
-import { archipelagoOn, goldNeed, goldSince } from './trade';
+import { goldNeed, goldSince } from './trade';
+import { archipelagoOn } from '../world/expand';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -409,8 +410,6 @@ export class Sim {
 
   update(dt: number, realDt: number) {
     this.recalcTimer -= realDt;
-    // l'archipel accepté : l'or apparaît, et l'on retient à quel âge (la condition d'or en dépend)
-    if (this.world.trade.since < 0 && archipelagoOn(this.world)) this.world.trade.since = this.age;
     if (this.world.version !== this.lastVersion && this.recalcTimer <= 0) {
       this.lastVersion = this.world.version;
       this.recalcTimer = 0.25;
