@@ -24,7 +24,7 @@ import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCost
 import { choiceStyles, riskDots, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
 import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
 import { archipelagoOn } from '../world/expand';
-import { CHOICE_LABEL, waysTabShown, type Way, type WayState } from '../sim/crossroads';
+import { CHOICE_LABEL, waysSoon, waysTabShown, type Way, type WayState } from '../sim/crossroads';
 import { waysHtml } from './ways';
 import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
@@ -1826,7 +1826,7 @@ export class UI {
     // le chemin de fer ne vient qu'à l'âge industriel : avant, pas d'onglet
     const railOn = age >= 3;
     if (tab === 'rail' && !railOn) tab = 'missions';
-    // les voies du grand choix (les Enfers, explorer le monde) : passé l'Antiquité (au bac à sable, tout de suite)
+    // les voies du grand choix (les Enfers, explorer le monde) : dès l'Antiquité (au bac à sable, tout de suite)
     const ways = h.ways?.() ?? { hell: 'none' as WayState, world: 'none' as WayState };
     const waysOn = waysTabShown(h.world, age, ways.hell, ways.world);
     if (tab === 'ways' && !waysOn) tab = 'missions';
@@ -1879,7 +1879,7 @@ export class UI {
       </section>
       <section data-sec="gear" ${tab === 'gear' ? '' : 'hidden'}><div class="arsenal"></div></section>
       ${railOn ? `<section data-sec="rail" ${tab === 'rail' ? '' : 'hidden'}><div class="railBox">${this.railHtml()}</div></section>` : ''}
-      ${waysOn ? `<section data-sec="ways" ${tab === 'ways' ? '' : 'hidden'}>${waysHtml(ways)}</section>` : ''}`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
+      ${waysOn ? `<section data-sec="ways" ${tab === 'ways' ? '' : 'hidden'}>${waysHtml(ways, waysSoon(h.world, age))}</section>` : ''}`);    // le paysage de l'en-tête suit l'âge du village (public/expeditions/banniere-{âge}.webp)
     $('.expModal', ov).style.setProperty('--exp-banner', `url(./expeditions/banniere-${Math.max(0, Math.min(5, age))}.webp)`);
 
     // la barre : un filtre montre les missions (toutes, militaires, légendaires), l'équipement et le chemin de fer leur section

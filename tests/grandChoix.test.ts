@@ -3,7 +3,7 @@ import { World, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { canExpand, expandWorld } from '../src/world/expand';
-import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, waysTabShown, CROSSROADS_AGE } from '../src/sim/crossroads';
+import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, waysTabShown, waysSoon, wayBadge, CROSSROADS_AGE } from '../src/sim/crossroads';
 import { War } from '../src/sim/war';
 import { Sim } from '../src/sim/sim';
 import { Agents } from '../src/sim/agents';
@@ -69,13 +69,23 @@ describe('le grand choix : les règles', () => {
     expect(crossroadsSettled(w, 'open', 'open')).toBe(false);
   });
 
-  it('l’onglet « Voies » : passé l’Antiquité (au bac à sable, tout de suite), s’il reste une voie sur la carte', () => {
-    expect(waysTabShown({ sandbox: false }, 1, 'open', 'open')).toBe(false);
-    expect(waysTabShown({ sandbox: false }, 2, 'open', 'open')).toBe(true);
+  it('l’onglet « Voies » : dès l’Antiquité (au bac à sable, tout de suite), s’il reste une voie sur la carte ; « pas encore » avant le grand choix', () => {
+    expect(waysTabShown({ sandbox: false }, 0, 'open', 'open')).toBe(false);
+    expect(waysTabShown({ sandbox: false }, 1, 'open', 'open')).toBe(true);
     expect(waysTabShown({ sandbox: true }, 0, 'ask', 'open')).toBe(true);
     expect(waysTabShown({ sandbox: false }, 3, 'none', 'none')).toBe(false);
     // (les deux prises : l'onglet reste, il dit ce qui est fait)
     expect(waysTabShown({ sandbox: false }, 3, 'taken', 'taken')).toBe(true);
+    // à l'Antiquité, avant le choix : pas encore ; après lui (ou au Médiéval, ou au bac à sable) : à prendre
+    expect(waysSoon({ sandbox: false, crossroads: false }, 1)).toBe(true);
+    expect(waysSoon({ sandbox: false, crossroads: true }, 1)).toBe(false);
+    expect(waysSoon({ sandbox: false, crossroads: false }, 2)).toBe(false);
+    expect(waysSoon({ sandbox: true, crossroads: false }, 0)).toBe(false);
+    expect(wayBadge('open', false)).toBe('free');
+    expect(wayBadge('ask', false)).toBe('free');
+    expect(wayBadge('open', true)).toBe('soon');
+    expect(wayBadge('taken', true)).toBe('taken');
+    expect(wayBadge('none', false)).toBe('none');
   });
 });
 
@@ -321,19 +331,26 @@ describe('le grand choix : une condition du passage au Médiéval', () => {
 });
 
 describe('l’onglet « Voies » des expéditions', () => {
-  it('chaque voie non prise a son bouton ; la voie prise le dit, sans bouton', () => {
+  it('une carte par voie : image, phrase d’envie, état ; un bouton seulement si elle est disponible', () => {
     const open = waysHtml({ hell: 'open', world: 'open' });
     expect(open).toContain('data-way="hell"');
     expect(open).toContain('data-way="world"');
     expect(open).toContain('Ouvrir le portail');
+    expect(open).toContain('./ui/portail.webp');
+    expect(open).toContain('dio-caravel.webp');
+    expect(open.match(/st-free/g)).toHaveLength(2);
     const taken = waysHtml({ hell: 'taken', world: 'open' });
     expect(taken).not.toContain('data-way="hell"');
-    expect(taken).toContain('voie prise');
+    expect(taken).toContain('Voie ouverte');
     expect(taken).toContain('data-way="world"');
-    const both = waysHtml({ hell: 'taken', world: 'taken' });
-    expect(both).not.toContain('data-way=');
-    // le portail ouvert sans qu'on affronte ses démons
-    expect(waysHtml({ hell: 'ask', world: 'none' })).toContain('Affronter les démons');
+    expect(waysHtml({ hell: 'taken', world: 'taken' })).not.toContain('data-way=');
+    // avant le grand choix : pas encore, pas de bouton
+    const soon = waysHtml({ hell: 'open', world: 'open' }, true);
+    expect(soon).not.toContain('data-way=');
+    expect(soon.match(/st-soon/g)).toHaveLength(2);
+    // le portail refermé se rouvre ; une voie impossible sur la carte est grisée, sans bouton
+    expect(waysHtml({ hell: 'ask', world: 'none' })).toContain('Rouvrir le portail');
+    expect(waysHtml({ hell: 'ask', world: 'none' })).toContain('st-none');
   });
 
   it('textes traduits en anglais', () => {

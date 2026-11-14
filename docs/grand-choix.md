@@ -19,9 +19,15 @@ Deux contenus de fin de partie arrivaient en même temps au début du Médiéval
 - Chaque réponse marque `World.crossroads` (sauvegardé) : la carte ne revient plus.
 
 ### L'onglet « Voies » des expéditions
-- Bouton « Voies » (boussole) à droite de la barre des expéditions, au Médiéval et après (au bac à sable, tout de suite), dès qu'une voie existe sur la carte (`waysTabShown`).
-- Deux cartes comme celles des missions (diorama du portail, de la caravelle) : la voie à prendre a son bouton (« Ouvrir le portail », « Explorer le monde ») ; la voie prise le dit (« Facultatif · ✓ voie prise ») sans bouton ; une voie impossible n'a pas de carte.
+- Bouton « Voies » (boussole) à droite de la barre des expéditions, dès l'Antiquité (au bac à sable, tout de suite), dès qu'une voie existe sur la carte (`waysTabShown`). Rien ne le signale.
+- Une carte par voie (`ui/ways.ts`, styles « l'onglet Voies » de `hudTheme.css`), dans l'habillage de la carte du grand choix : parchemin bordé d'or (violet pour les Enfers), diorama en tête (l'arche du portail, la caravelle), nom en Fraunces souligné d'un filet doré, une phrase d'envie, deux pastilles « ce qu'elle ouvre », le pavé d'état en haut à droite, le bouton d'or en pied.
+- Quatre états (`wayBadge`) :
+  - **Disponible** : pavé doré et bouton « Ouvrir le portail » (« Rouvrir le portail » s'il a été refermé) ou « Explorer le monde ». C'est la voie non prise, ou les deux après « Ni l'un ni l'autre ».
+  - **Voie ouverte** : pavé vert, une phrase dit ce qui est là, pas de bouton.
+  - **Pas encore** : à l'Antiquité, tant que le grand choix n'a pas eu lieu (`waysSoon`). Carte un peu éteinte, « Elle s'ouvrira à la fin de l'Antiquité. », pas de bouton.
+  - **Pas sur cette carte** : pas d'île du portail, ou monde qui ne peut plus s'agrandir. Carte grisée, pas de bouton.
 - Le bouton ferme la fenêtre et ouvre la carte de cette seule voie pour confirmer (`WorldChoice.show(way)` : la voie et « Pas maintenant »). Le portail refermé (état `ask` de la voie) ouvre plutôt la carte du portail (« Affronter les démons » / « Garder le portail fermé ») ; ouvert sans choix (ancienne partie, bac à sable), c'est la carte de la voie des Enfers, qui passe `pve` à `on`.
+- Au téléphone (≤ 640 px), les deux cartes s'empilent.
 
 ### La cinématique « Explorer le monde » : elle fait office de chargement
 Demande de l'auteur : « il faut une vraie cinématique comme celle de fin. Elle fera office de chargement ». L'habillage est celui de la cinématique de fin du volet militaire (`#kingCine`) : bandes noires, bandeaux dorés, fondus, « Passer ». La partition est dans `voyageCine.ts` (testée), la mise en scène dans `voyageStage.ts`. Deux actes, de part et d'autre du rechargement de la partie agrandie.

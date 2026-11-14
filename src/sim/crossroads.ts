@@ -72,7 +72,23 @@ export function crossroadsDue(w: CrossWorld, age: number, hell: WayState, world:
 /** La condition de passage est-elle remplie ? (le choix fait, une voie déjà prise, ou aucune possible sur cette carte) */
 export const crossroadsMet = crossroadsSettled;
 
-/** L'onglet « Voies » des expéditions : au Médiéval et après (au bac à sable, tout de suite), dès qu'une voie existe */
+/**
+ * L'onglet « Voies » des expéditions : dès l'Antiquité (au bac à sable, tout de suite), dès qu'une voie existe sur la carte.
+ * Avant le grand choix, ses voies y sont annoncées « pas encore » (`waysSoon`) ; le jeu ne mène jamais à l'onglet
+ */
 export function waysTabShown(w: Pick<CrossWorld, 'sandbox'>, age: number, hell: WayState, world: WayState): boolean {
-  return (w.sandbox || age >= CROSSROADS_AGE) && (hell !== 'none' || world !== 'none');
+  return (w.sandbox || age >= CROSSROADS_AGE - 1) && (hell !== 'none' || world !== 'none');
+}
+
+/** Les voies ne se prennent pas encore : le grand choix de la fin de l'Antiquité n'a pas eu lieu (jamais au bac à sable) */
+export function waysSoon(w: Pick<CrossWorld, 'sandbox' | 'crossroads'>, age: number): boolean {
+  return !w.sandbox && !w.crossroads && age < CROSSROADS_AGE;
+}
+
+/** L'état affiché d'une voie dans l'onglet : déjà ouverte, à prendre, pas encore, ou impossible sur cette carte */
+export type WayBadge = 'taken' | 'free' | 'soon' | 'none';
+export function wayBadge(st: WayState, soon: boolean): WayBadge {
+  if (st === 'none') return 'none';
+  if (st === 'taken') return 'taken';
+  return soon ? 'soon' : 'free';
 }
