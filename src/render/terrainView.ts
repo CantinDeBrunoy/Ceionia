@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, SEA, VR, VS, seaMargin, SEA_FLOOR, SEA_DEEP, SEA_SLOPE, marginFloor, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
+import { World, N, SEA, MIN_H, MAX_H, VR, VS, seaMargin, SEA_FLOOR, SEA_DEEP, SEA_SLOPE, marginFloor, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { computeFlow } from '../world/flow';
 import { Simplex } from '../world/noise';
@@ -85,6 +85,11 @@ const SNOW_DEPTH = 0.025, SNOW_DRIFT = 0.05, SNOW_BANK = 0.06;
 const MAX_LAVA_GLOW = 4;
 /** Sous-cases par côté (selon la taille de la carte) */
 const subCells = () => N * VR;
+/**
+ * Côté d'une tuile du sol, en cases : chaque tuile dessine sa part du même tampon de sommets (son propre index) et s'élague
+ * hors du champ de la caméra et de la carte des ombres. 9 tuiles sur la carte de 192, 36 sur celle de 384
+ */
+const TILE = 64;
 
 /**
  * Contamination de l'île du portail dans les shaders (sol et eau) : son intensité au point, comme `blightAt` (sans le bord
@@ -110,7 +115,10 @@ float blightK(vec2 p) {
 
 export class TerrainView {
   group = new THREE.Group();
-  top: THREE.Mesh;
+  /** le sol : ses tuiles (`TILE`), qui partagent les attributs de `topGeo` */
+  top = new THREE.Group();
+  /** sommets du sol (non indexés, 6 par sous-case, rangés par lignes de sous-cases) : jamais dessinée elle-même */
+  private topGeo: THREE.BufferGeometry;
   skirt: THREE.Mesh;
   /** fond de la mer de décor autour de la carte */
   margin: THREE.Mesh;
@@ -349,10 +357,24 @@ ${BLIGHT_GLSL}
     diffuseColor.rgb = c + glint * 0.12 * sn;
   }`);
     };
-    this.top = new THREE.Mesh(g, topMat);
-    this.top.receiveShadow = true;
-    this.top.castShadow = true;
-    this.top.frustumCulled = false;
+    this.topGeo = g;
+    const C = this.C, TS = TILE * VR;
+    for (let tz = 0; tz < C; tz += TS)
+      for (let tx = 0; tx < C; tx += TS) {
+        const w = Math.min(TS, C - tx), h = Math.min(TS, C - tz), idx = new Uint32Array(w * h * 6);
+        let k = 0;
+        for (let z = tz; z < tz + h; z++) for (let x = tx; x < tx + w; x++) for (let i = 0, b = (z * C + x) * 6; i < 6; i++) idx[k++] = b + i;
+        const tg = new THREE.BufferGeometry();
+        for (const [name, a] of Object.entries(g.attributes)) tg.setAttribute(name, a);
+        tg.setIndex(new THREE.BufferAttribute(idx, 1));
+        // (boîte de toute la hauteur possible, avec une marge : le relief change sans qu'on la recalcule)
+        tg.boundingBox = new THREE.Box3(new THREE.Vector3(tx / VR, MIN_H - 4, tz / VR), new THREE.Vector3((tx + w) / VR, MAX_H + 4, (tz + h) / VR));
+        tg.boundingSphere = tg.boundingBox.getBoundingSphere(new THREE.Sphere());
+        const m = new THREE.Mesh(tg, topMat);
+        m.receiveShadow = true;
+        m.castShadow = true;
+        this.top.add(m);
+      }
 
     const sg = new THREE.BufferGeometry();
     sg.setAttribute('position', new THREE.BufferAttribute(this.skPos, 3));
@@ -894,7 +916,7 @@ ${BLIGHT_GLSL}
         }
       }
     // envoi au processeur graphique : seulement les rangées touchées
-    const ga = this.top.geometry.attributes;
+    const ga = this.topGeo.attributes;
     const sent = [ga.position, ga.color, ga.normal, ga.surf];
     for (const a of sent) {
       const attr = a as THREE.BufferAttribute;

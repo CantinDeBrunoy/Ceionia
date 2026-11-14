@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import * as THREE from 'three';
 import { World, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GameTime } from '../src/core/time';
@@ -61,7 +62,8 @@ describe('saisons', () => {
 
   it('le sol suit la saison sur toute la carte, même quand les saisons filent (×4, saisons courtes)', () => {
     const w = continent(), terrain = new TerrainView(w), time = new GameTime(), pal = makeSeasonState();
-    const colors = () => Float32Array.from(terrain.top.geometry.attributes.color.array as Float32Array);
+    // (les tuiles du sol partagent les mêmes sommets : la première suffit)
+    const colors = () => Float32Array.from((terrain.top.children[0] as THREE.Mesh).geometry.attributes.color.array as Float32Array);
     // tout l'hiver sur la carte, puis l'été qui arrive
     time.setSeason(3);
     terrain.update(computeSeason(time, pal));
