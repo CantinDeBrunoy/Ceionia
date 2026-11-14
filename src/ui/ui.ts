@@ -26,6 +26,7 @@ import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
 import { ic, KIND_ICON, SUB_ICON, SEASON_ICONS } from './icons';
+import { eyeClick } from './homeButton';
 import { type Tutorial, menuToggle } from './tutorial';
 import { brief, shortStop } from './brief';
 import { pic, hudPic, leadPic, withPic } from './pics';
@@ -1697,7 +1698,8 @@ export class UI {
         $('.mi', card).textContent = a.m.icon;
         $('.t', card).textContent = a.m.title;
         const id = a.id;
-        $('.cam', card).onclick = () => { h.follow(h.following === id ? null : id); this.update(); };
+        // l'œil suit l'équipe ; sur l'équipe suivie, il la lâche et ramène la vue au village
+        $('.cam', card).onclick = () => { if (eyeClick(h.following, id) === 'home') h.goHome(); else h.follow(id); this.update(); };
         // une équipe qui attend : un clic n'importe où sur sa carte ouvre la décision (sauf l'œil, qui la suit à la caméra)
         card.onclick = (ev) => {
           if ((ev.target as HTMLElement).closest('.cam')) return;

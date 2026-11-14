@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { awayFromHome } from '../src/ui/homeButton';
+import { awayFromHome, eyeClick } from '../src/ui/homeButton';
+
+describe('l’œil de la carte d’une équipe', () => {
+  it('suit l’équipe ; sur l’équipe déjà suivie, ramène au village', () => {
+    expect(eyeClick(null, 2)).toBe('follow');
+    expect(eyeClick(1, 2)).toBe('follow');
+    expect(eyeClick(2, 2)).toBe('home');
+  });
+});
 
 describe('le bouton « Retourner au village »', () => {
   it('reste caché tant que la place est à l’écran, près du point visé', () => {

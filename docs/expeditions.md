@@ -60,7 +60,7 @@ Une mission réussie qui a `unlocks` permet de bâtir ce bâtiment. Le verrou r�
 
 ### Interface
 - Bouton 🧭 → `openExpeditions(tab)` : onglets Missions / Équipement / Chemin de fer (dès l'âge 3), sous-onglets Toutes / Militaires / Légendaires, cartes triées (obligatoires et légendaires à faire, puis le reste, puis les réussies). Une carte = un bouton « Envoyer une équipe » → `openSend` : intro, puis une carte par choix (style, durée, risque en points, gains, équipement qui manque avec bouton « Fabriquer », bouton « Partir », « Détails »). La fenêtre se redessine toutes les 300 ms si le stock change (pas sous un bouton enfoncé).
-- Cartes des équipes à gauche (`updateExpeditions`) : fanion de couleur (`TEAM_COLORS`), état (`Expeditions.status`), barre (`progress`), œil pour suivre à la caméra, bouton de décision si `a.wait`.
+- Cartes des équipes à gauche (`updateExpeditions`) : fanion de couleur (`TEAM_COLORS`), état (`Expeditions.status`), barre (`progress`), œil pour suivre à la caméra (un second clic lâche l'équipe et ramène au village), bouton de décision si `a.wait`.
 
 
 ### La fenêtre (`openExpeditions`, `ui.ts`)
@@ -102,7 +102,7 @@ En bas : « Retour » (referme la fenêtre de départ), une ligne qui dit pourqu
 - Imprévus joués sur la scène : `stageEvent(id)` fait correspondre l'id d'un imprévu à une fonction `stageXxx` (table `steps`) qui crée une `Staging` (objets, `step(dt)`, `leave`). La suite de l'option choisie est lue dans `a.picks`. Les échecs (`Choice.fail`) se jouent au départ de l'équipe par la même table (`rocks`, `capsize`, `scatter`, `charge`, `stings`, `blast`, `gone`, plus `storm`, `fog`, `birds`, `blizzard`).
 
 ### Suivi par la caméra
-`Game.follow(id)` (`main.ts`) pose `following`. Un seul suivi à la fois : suivre une équipe efface `trainCam` et `incidentCam`, et inversement. Dans la boucle, `followPoint` (`expeditionView.ts`) donne la cible : le fanion, sinon le premier de l'équipe, et sur place un point entre le fanion et `scene.focus` (distance < 8) avec `lift` (montgolfière). La vue est lissée (`followSm`), vise un peu devant l'équipe en route et se rapproche à l'arrivée (6,5). Panoramique manuel (`cam.onPan`) ou `follow(null)` : on lâche. Depuis les Enfers ou le commandement de l'île, la vue remonte d'abord (`ensureSurface`). Le suivi sous terre (`isBelow`, `autoUnder`) ne s'active plus : voir [monde-souterrain.md](monde-souterrain.md).
+`Game.follow(id)` (`main.ts`) pose `following`. Un seul suivi à la fois : suivre une équipe efface `trainCam` et `incidentCam`, et inversement. Dans la boucle, `followPoint` (`expeditionView.ts`) donne la cible : le fanion, sinon le premier de l'équipe, et sur place un point entre le fanion et `scene.focus` (distance < 8) avec `lift` (montgolfière). La vue est lissée (`followSm`), vise un peu devant l'équipe en route et se rapproche à l'arrivée (6,5). Panoramique manuel (`cam.onPan`) ou `follow(null)` : on lâche, la vue reste où elle est. L'œil de la carte de l'équipe suivie la lâche et ramène la vue au village (`eyeClick` dans `homeButton.ts`, puis `Game.goHome`). Depuis les Enfers ou le commandement de l'île, la vue remonte d'abord (`ensureSurface`). Le suivi sous terre (`isBelow`, `autoUnder`) ne s'active plus : voir [monde-souterrain.md](monde-souterrain.md).
 
 ## Liens avec les autres systèmes
 - [equipement.md](equipement.md) : `loadout`, `dangersOf`, pièces, fabrication.
