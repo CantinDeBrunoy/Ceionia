@@ -288,6 +288,12 @@ const SAFE_PLAN: ContinentPlan = (() => {
   };
 })();
 
+/**
+ * Marge de mer de la version 3, en part du côté (16 cases à 192) : la terre s'efface entre 1,2 et 0,5 fois la marge du bord.
+ * Un bruit la fait varier de 0,05 à environ 0,17 le long des bords (baies, avancées, anses)
+ */
+export const EDGE_SEA = 0.083;
+
 /** Continent de la version 2 : mêmes contrées que la version 1, placées, taillées et orientées selon le plan */
 export function plannedHeight(x: number, z: number, n: number, s: Simplex, s2: Simplex, p: ContinentPlan) {
   const u = x / n, v = z / n, c = p.coast;
@@ -355,6 +361,16 @@ export function plannedHeight(x: number, z: number, n: number, s: Simplex, s2: S
     const k = rockyBed(p, (v - r.v) / (1 - r.v)), sg = 2.1 + k * 0.7;
     const floor = lerp(-0.9, -0.22 + 0.07 * s2.fbm(x * 0.25 + 61, z * 0.25, 2), k);
     h = lerp(h, floor, Math.exp(-(dr * dr) / (2 * sg * sg)) * w);
+  }
+  // version 3 : une large marge de mer, de largeur irrégulière le long des bords. La terre (montagnes comprises) s'enfonce
+  // avant d'atteindre le bord : la côte dessine des caps et des anses, au lieu d'être tranchée droit par la bande qui suit
+  if (p.relief) {
+    // (bruits en part de carte : même dessin quelle que soit la taille) grandes baies et avancées, puis petites anses
+    const bay = s2.fbm(u * 4.5 + 141, v * 4.5 - 57, 2), cove = s.fbm(u * 14 + 87, v * 14 + 19, 2);
+    const m = n * Math.max(0.05, EDGE_SEA + 0.13 * bay + 0.03 * cove);
+    // distance au bord déformée : la côte se dentelle, même là où la marge varie peu
+    const e = Math.min(x, z, n - x, n - z) + n * 0.04 * s2.fbm(u * 9 - 33, v * 9 + 71, 3);
+    h = lerp(h, Math.min(h, -1.2), smoothstep(m * 1.2, m * 0.5, e));
   }
   // la mer borde toute la carte
   return lerp(h, Math.min(h, -1), smoothstep(4, 1, Math.min(x, z, n - x, n - z)));
