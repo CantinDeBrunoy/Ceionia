@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { World, N, MAX_H, MIN_H, MOUNTAIN_H, SNOW_LINE, BIOME_DESERT, setMapSize, VEG_FIELD, VEG_GARDEN, VEG_VOLCANO, VEG_FOREST, VR, VS } from '../src/world/world';
 import { genHeights, newWorld, addDefaultDecor, MAPS } from '../src/world/mapgen';
-import { GEN, GEN_FIXED, GEN_PLAN, Zone, continentPlan, riverU, toPlan, fromPlan } from '../src/world/continent';
+import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, Zone, continentPlan, riverU, toPlan, fromPlan } from '../src/world/continent';
 import { Sim } from '../src/sim/sim';
 import { autoRoad } from '../src/build/autoroads';
 import { facingRoadRot } from '../src/build/placement';
@@ -74,12 +74,12 @@ const PLAN2_SIG = 2006609.137;
 
 /** Case du plan d'une case du monde, selon l'orientation du continent de cette graine */
 function planCell(seed: number) {
-  const o = continentPlan(seed).orient;
+  const o = continentPlan(seed, GEN_VAR).orient;
   return (x: number, z: number) => toPlan(o, x + 0.5, z + 0.5, N).map(Math.floor) as [number, number];
 }
 /** Case du monde d'une case du plan */
 function worldCell(seed: number) {
-  const o = continentPlan(seed).orient;
+  const o = continentPlan(seed, GEN_VAR).orient;
   return (x: number, z: number) => fromPlan(o, x + 0.5, z + 0.5, N).map(Math.floor) as [number, number];
 }
 
@@ -112,7 +112,8 @@ const signature = (h: ArrayLike<number>) => { let s = 0; for (let i = 0; i < h.l
 describe('continent tiré de la graine', () => {
   const SEEDS = [2026, 7, 4242, 31337];
   const cache = new Map<number, World>();
-  const shown = (seed: number) => cache.get(seed) ?? cache.set(seed, continentOf(seed)).get(seed)!;
+  // (les contrées à leur place : celles de la version 3 ; la version 5 les déplace, voir plus bas)
+  const shown = (seed: number) => cache.get(seed) ?? cache.set(seed, continentOf(seed, GEN_VAR)).get(seed)!;
 
   it('une même graine donne toujours le même continent : plan, relief, végétation et biomes', () => {
     expect(continentPlan(4242)).toEqual(continentPlan(4242));
@@ -192,7 +193,7 @@ describe('continent tiré de la graine', () => {
 
   it('la rivière descend des montagnes jusqu’à la mer, et l’on trouve où bâtir au bord de l’eau', () => {
     for (const seed of SEEDS) {
-      const w = shown(seed), g = regions(w), r = continentPlan(seed).river, wc = worldCell(seed);
+      const w = shown(seed), g = regions(w), r = continentPlan(seed, GEN_VAR).river, wc = worldCell(seed);
       /** case du monde de la case (x, z) du plan */
       const at = (x: number, z: number) => { const [a, b] = wc(x, z); return b * N + a; };
       // du massif à la côte, son lit est de l'eau qui rejoint la mer
@@ -271,7 +272,7 @@ describe('continent tiré de la graine', () => {
   });
 
   it('une nouvelle partie sauvegarde la version de son générateur et la retrouve', () => {
-    const w = shown(4242), d = JSON.parse(JSON.stringify(w.toJSON()));
+    const w = continentOf(4242), d = JSON.parse(JSON.stringify(w.toJSON()));
     expect(d.gen).toBe(GEN);
     const w2 = new World();
     w2.mapId = 3; w2.seed = 4242;

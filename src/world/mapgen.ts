@@ -47,7 +47,7 @@ export function genHeights(mapId: number, seed: number, gen = GEN, n = (mapDef(m
     return hts;
   }
   const plan = continentPlan(seed, gen);
-  if (gen >= GEN_ARCH) return archHeights(hts, N, seed, gen, s, s2, plan);
+  if (gen === GEN_ARCH) return archHeights(hts, N, seed, gen, s, s2, plan);
   for (let z = 0; z <= N; z++)
     for (let x = 0; x <= N; x++) {
       // chaque sommet prend la hauteur de son point du plan, tourné ou retourné (version 3)
@@ -96,7 +96,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   world.mapId = mapId;
   world.seed = seed;
   world.gen = gen;
-  world.isles = gen >= GEN_ARCH ? archLayout(seed, N) : null;
+  world.isles = gen === GEN_ARCH ? archLayout(seed, N) : null;
   const plan = gen === GEN_FIXED ? null : continentPlan(seed, gen), v3 = gen >= GEN_VAR;
   const heights = genHeights(mapId, seed, gen, N);
   world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), cleared: new Uint8Array(N * N), rift: new Uint8Array(N * N), buildings: [], nextId: 1 });
