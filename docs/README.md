@@ -19,6 +19,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 
 ### Le monde
 - [monde-carte.md](monde-carte.md) : grille, hauteurs, génération du continent par graine, contrées, cases et leurs couches.
+- [iles.md](iles.md) : l'archipel des cartes de 384 cases, les villes de décor des deux peuples rivaux (plan, modèles par âge, points nommés pour la bataille).
 - [eau-rivieres.md](eau-rivieres.md) : niveau de la mer, lacs, rivières et torrents, comment les cours d'eau se tracent et se redirigent, ponts et franchissements.
 - [vegetation-biomes.md](vegetation-biomes.md) : biomes, climat, arbres, herbe, rochers, saisons sur le décor.
 - [outils-terrain.md](outils-terrain.md) : sculpter le relief, falaises, eau, montagnes, volcans et lave, failles, grottes, gomme.

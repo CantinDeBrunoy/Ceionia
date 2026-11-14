@@ -215,6 +215,11 @@ export class World {
    */
   cleared = new Uint8Array(N * N);
   /**
+   * Cases des villes des peuples rivaux de l'archipel (décor, `rivalTown.ts`) : ni herbe, ni buisson, ni caillou n'y pousse.
+   * Non sauvegardé : refait par `RivalTowns` à partir du plan des villes ; null sans archipel
+   */
+  town: Uint8Array | null = null;
+  /**
    * Décors de la carte (grottes, failles, épaves) déjà posés, à la création ou au premier chargement d'une ancienne sauvegarde
    * (voir `addDefaultDecor`) : ceux que le joueur efface ensuite ne reviennent plus. Sauvegardé
    */
