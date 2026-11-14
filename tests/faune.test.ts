@@ -228,14 +228,66 @@ describe('faune : la mer', () => {
       }
       p = { x: whale.x, z: whale.z, y: whale.y, h: whale.heading, pi: whale.pitch };
     }
-    // un virage large et régulier (une ronde de rayon 7 : 0,04 rad/s), une allure presque constante (0,25 case/s)
+    // des virages très larges (0,08 rad/s au plus), une allure lente qui varie un peu (0,25 case/s ± le rythme)
     expect(worst.turn).toBeLessThan(0.1);
-    expect(worst.vMin).toBeGreaterThan(0.18);
-    expect(worst.vMax).toBeLessThan(0.32);
+    expect(worst.vMin).toBeGreaterThan(0.12);
+    expect(worst.vMax).toBeLessThan(0.34);
     // elle remonte respirer puis replonge, en douceur
     expect(yMax - yMin).toBeGreaterThan(0.4);
     expect(worst.vy).toBeLessThan(0.6);
     expect(worst.pitch).toBeLessThan(0.6);
+    setMapSize(96);
+  });
+
+  it('une nage naturelle : les dauphins sautent et plongent vraiment, les trajectoires ne sont plus des cercles, les bancs se déforment', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026, GEN);
+    w.updateVis();
+    const f = new Fauna(w, { perches: Array.from({ length: N * N }, () => []), flowers: Array.from({ length: N * N }, () => []) });
+    f.update(0.016, 0, 12, 1, 0, 0);
+    const all = () => (f as any).critters as any[];
+    const dol = all().find((c) => c.key === 'coastD0' && c.slot === 0) ?? all().find((c) => c.kind === 'dolphin' && c.slot === 0);
+    const shark = all().find((c) => c.kind === 'shark');
+    const school = all().filter((c) => c.key === all().find((x) => x.kind === 'fish' && x.slot === 0).key);
+    const dy = { min: 9, max: -9, deep: 0, entries: 0, headFirst: 0 };
+    const turns = { pos: 0, neg: 0, pinned: 0 }, sp: number[] = [], spread: number[] = [];
+    let far = 0, wasAir = false, p = { x: shark.x, z: shark.z };
+    const dt = 1 / 30;
+    for (let i = 1; i < 1200; i++) {
+      f.update(dt, i * dt, 12, 1, 0, 0);
+      if (i < 30) { p = { x: shark.x, z: shark.z }; continue; }
+      dy.min = Math.min(dy.min, dol.y); dy.max = Math.max(dy.max, dol.y);
+      if (dol.y < -0.45) dy.deep += dt;
+      const air = dol.y > 0.06;
+      if (wasAir && !air) dy.entries++;
+      if (air && dol.y < 0.3 && dol.pitch > 0.8) dy.headFirst++;
+      wasAir = air;
+      if (shark.turnV > 0.02) turns.pos++;
+      if (shark.turnV < -0.02) turns.neg++;
+      if (Math.abs(shark.turnV) > 0.2) turns.pinned++;
+      sp.push(Math.hypot(shark.x - p.x, shark.z - p.z) / dt);
+      p = { x: shark.x, z: shark.z };
+      far = Math.max(far, Math.hypot(shark.x - shark.hx, shark.z - shark.hz) / shark.radius);
+      const cx = school.reduce((a, c) => a + c.x, 0) / school.length, cz = school.reduce((a, c) => a + c.z, 0) / school.length;
+      spread.push(school.reduce((a, c) => a + Math.hypot(c.x - cx, c.z - cz), 0) / school.length);
+    }
+    // 40 s : les dauphins sortent de l'eau d'au moins 0,4, plongent sous 0,5 (le fond peut les arrêter), restent au fond plusieurs secondes,
+    // sautent souvent, et retombent tête la première
+    expect(dy.max).toBeGreaterThan(0.4);
+    expect(dy.min).toBeLessThan(-0.5);
+    expect(dy.deep).toBeGreaterThan(4);
+    expect(dy.entries).toBeGreaterThanOrEqual(6);
+    expect(dy.headFirst).toBeGreaterThan(0);
+    // le requin vire dans les deux sens, change d'allure, et reste près de son domaine
+    expect(turns.pos).toBeGreaterThan(20);
+    expect(turns.neg).toBeGreaterThan(20);
+    // et ne tourne pas en rond au plus serré de son virage
+    expect(turns.pinned / 1170).toBeLessThan(0.3);
+    expect(Math.max(...sp) - Math.min(...sp)).toBeGreaterThan(0.08);
+    expect(far).toBeLessThan(2.5);
+    // le banc respire : son étalement varie
+    expect(Math.max(...spread) - Math.min(...spread)).toBeGreaterThan(0.05);
     setMapSize(96);
   });
 

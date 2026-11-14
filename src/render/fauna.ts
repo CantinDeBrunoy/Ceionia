@@ -50,6 +50,26 @@ const DRINKERS = new Set<Kind>(['sheep', 'cow', 'horse', 'deer', 'llama', 'fox',
 /** Bêtes sauvages qui se méfient des villageois (celles de la ferme, non) */
 const WARY = new Set<Kind>(['rabbit', 'deer', 'frog', 'fox', 'wolf', 'bear', 'lizard', 'crab', 'turtle', 'moose', 'giraffe', 'ibex']);
 const SWIMMERS = new Set<Kind>(['fish', 'dolphin', 'whale', 'manta', 'shark']);
+type SwimKind = 'fish' | 'dolphin' | 'whale' | 'manta' | 'shark';
+/**
+ * Nage de chaque espèce (voir `swim`) : allure (cases/s), virage le plus vif (rad/s), part de variation de l'allure, place
+ * voulue devant soi (cases de mer ; sinon il vire), écart dans la formation, roulis par rad/s de virage
+ */
+const SWIM: Record<SwimKind, { v: number; turn: number; vary: number; clear: number; gap: number; bank: number }> = {
+  whale: { v: 0.25, turn: 0.08, vary: 0.15, clear: 4, gap: 1, bank: 2 },
+  dolphin: { v: 0.55, turn: 0.5, vary: 0.25, clear: 3, gap: 0.45, bank: 0.5 },
+  shark: { v: 0.36, turn: 0.22, vary: 0.3, clear: 3, gap: 0.5, bank: 0.8 },
+  manta: { v: 0.3, turn: 0.22, vary: 0.25, clear: 2, gap: 0.5, bank: 1.2 },
+  fish: { v: 0.42, turn: 0.9, vary: 0.35, clear: 1, gap: 0.12, bank: 0.2 },
+};
+/** Cycle des dauphins (s) : nage à fleur d'eau, deux sauts (arc, puis court passage sous l'eau), plongée */
+const DOLPHIN_CYCLE = (() => {
+  const c = { surface: 2.5, leap: 1, dip: 0.45, height: 0.6, dive: 3.5, depth: 0.75, leaps: 0, total: 0 };
+  c.leaps = 2 * (c.leap + c.dip);
+  c.total = c.surface + c.leaps + c.dive;
+  return c;
+})();
+const smooth01 = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
 /** Grands nageurs : animés plus loin que les autres bêtes (voir `render`) */
 const BIG_SWIM = new Set<Kind>(['dolphin', 'whale', 'manta']);
 /** Petites bêtes articulées, qu'on cesse d'animer et d'afficher plus tôt quand on s'éloigne */
@@ -121,6 +141,11 @@ interface Critter {
   seaT?: number;
   /** nage : course lissée (l'allure suit `rush` peu à peu) */
   glide?: number;
+  /** nage pilotée : allure (cases/s), vitesse de virage (rad/s), roulis dans les virages, graine des rythmes propres */
+  spd?: number;
+  turnV?: number;
+  bank?: number;
+  seed?: number;
 }
 
 /** Au-delà de cette distance à la caméra, les bêtes à terre et dans l'eau ne réfléchissent qu'une image sur trois */
@@ -1076,11 +1101,13 @@ export class Fauna {
     // la mer devant le village : un groupe de dauphins, une baleine, une raie et des bancs sur le large et les hauts-fonds les
     // plus proches du village (du milieu de la carte avant le feu de camp), pour qu'on les croise sans traverser la carte
     const port = vc ?? [N / 2, N / 2];
+    // (au moins les 30 cases les plus proches : le large le plus proche n'est parfois qu'une étroite langue de mer)
     const nearest = (list: number[], spread: number, reach: number) => {
       const d = (k: number) => Math.hypot((k % N) + 0.5 - port[0], Math.floor(k / N) + 0.5 - port[1]);
-      let m = Infinity;
-      for (const k of list) m = Math.min(m, d(k));
-      return m > reach ? [] : list.filter((k) => d(k) <= m + spread);
+      const by = list.map((k) => [d(k), k]).sort((a, b) => a[0] - b[0]);
+      if (!by.length || by[0][0] > reach) return [];
+      const m = by[0][0];
+      return by.filter(([dk], i) => dk <= m + spread || i < 30).map(([, k]) => k);
     };
     const coastD = nearest(deepD, 10, COAST_REACH), coastW = whaleSea(nearest(deepW, 14, COAST_REACH)), coastF = nearest(fishSea, 12, COAST_REACH), coastM = nearest(mantaSea, 12, COAST_REACH);
     group('coastD', 'dolphin', coastD, coastD.length > 8 ? 1 : 0, () => 3, 3.2, 280);
@@ -1693,49 +1720,91 @@ export class Fauna {
   }
 
   /**
-   * Nage : le banc (ou le groupe de dauphins) tourne autour de son domaine en formation ; de temps en temps un poisson saute
-   * hors de l'eau, les dauphins font des bonds réguliers ; les dauphins traquent le banc le plus proche, qui s'enfuit en
-   * accélérant. Tout est lissé : la bête suit en douceur le point de sa ronde (domaine déplacé par la chasse ou le
-   * recensement, course qui s'emballe), son cap et son inclinaison suivent sa trajectoire réelle, et son allure ne change que
-   * peu à peu (`glide`)
+   * Nage pilotée, pour qu'elle paraisse naturelle (plus de ronde en ellipse parfaite à vitesse constante). Le chef du groupe
+   * dérive au gré d'un cap qui vagabonde, vire progressivement (vitesse de virage lissée, bornée par espèce : `SWIM`), revient
+   * vers son domaine quand il s'en écarte, évite les rives en regardant devant lui, et varie son allure (ralentit dans les
+   * virages). Les autres le suivent par pilotage vers leur place dans la formation, place qui respire (le banc se déforme,
+   * s'écarte en fuyant). Le corps s'incline dans les virages et suit la pente de la trajectoire. Chaque espèce a son rythme
+   * vertical (voir plus bas). Les dauphins traquent le banc le plus proche, qui s'enfuit en accélérant
    */
   private swim(c: Critter, dt: number, season: number) {
-    const w = this.world, dolphin = c.kind === 'dolphin', shark = c.kind === 'shark', big = c.kind === 'whale' || c.kind === 'manta';
+    const w = this.world, dolphin = c.kind === 'dolphin', shark = c.kind === 'shark';
+    const S = SWIM[c.kind as SwimKind];
     if (c.slot === 0 && (dolphin || shark || c.kind === 'fish')) this.hunt(c, dt);
     const L = c.slot === 0 ? c : this.leads.get(c.key) ?? c;
     if (L !== c) { c.hx = L.hx; c.hz = L.hz; c.rush = L.rush; }
     const first = c.seaT === undefined;
+    const seed = c.seed ??= hash2(c.key.length * 13 + c.slot, c.key.charCodeAt(c.key.length - 1), 23) * 100;
+    const t = this.t;
     // la course ne change l'allure que peu à peu
     const g = c.glide = first ? c.rush : (c.glide ?? 0) + (c.rush - (c.glide ?? 0)) * (1 - Math.exp(-dt * 1.5));
-    const dir = hash2(Math.floor(c.key.length * 7 + c.key.charCodeAt(c.key.length - 1)), 3, 3) < 0.5 ? 1 : -1;
-    // allure propre à l'espèce (cases/s), quelle que soit la taille de la ronde : un banc visiteur à large ronde filait
-    // autrefois à plus de 3 cases/s (vitesse angulaire fixe)
-    const R = c.radius * (1 + g * 0.4);
-    const v = (c.kind === 'whale' ? 0.25 : shark ? 0.36 : dolphin ? 0.5 : big ? 0.26 : 0.42) * (1 + g * 1.2);
-    const om = (dir * v) / Math.max(0.8, R);
-    c.ang += om * dt;
-    const th = c.ang;
-    const h = Math.atan2(-Math.sin(th) * om, Math.cos(th) * om * 0.8);
-    const lat = (c.slot % 2 ? 1 : -1) * Math.ceil(c.slot / 2) * (dolphin || big ? 0.4 : 0.12) * (1 + g), back = -Math.ceil(c.slot / 2) * (dolphin || big ? 0.35 : 0.1);
-    // petit balancement des poissons du banc seulement : le cap suit la trajectoire réelle, et chez les grands nageurs ce
-    // balancement faisait zigzaguer le corps (la baleine virait de ±0,4 rad/s en ne tournant que de 0,05)
-    const wob = c.kind === 'fish' ? Math.sin(this.t * 2.3 + c.slot * 1.7) * 0.04 : 0;
-    const tx = c.hx + Math.cos(th) * R + (lat + wob) * Math.cos(h) + back * Math.sin(h);
-    const tz = c.hz + Math.sin(th) * R * 0.8 - (lat + wob) * Math.sin(h) + back * Math.cos(h);
-    // suit en douceur le point de sa ronde ; posée d'un coup seulement à son apparition ou de très loin
     const px = c.x, pz = c.z, py = c.y;
-    if (first || Math.hypot(tx - c.x, tz - c.z) > 6) { c.x = tx; c.z = tz; c.heading = h; }
-    else { const k = 1 - Math.exp(-dt * (c.kind === 'whale' ? 2 : 4)); c.x += (tx - c.x) * k; c.z += (tz - c.z) * k; }
-    // le cap suit la trajectoire, en virages arrondis
-    const speed = Math.hypot(c.x - px, c.z - pz) / Math.max(1e-3, dt);
-    if (!first && speed > 0.05) {
-      // (et jamais plus vite qu'un vrai nageur ne tourne : 2,5 rad/s, la baleine 0,8)
-      const h0 = c.heading, most = dt * (c.kind === 'whale' ? 0.8 : 2.5);
-      turn(c, Math.atan2(c.x - px, c.z - pz), 1 - Math.exp(-dt * (c.kind === 'whale' ? 2.5 : 6)));
-      let dh = c.heading - h0;
-      dh = wrapAngle(dh);
-      c.heading = h0 + Math.max(-most, Math.min(most, dh));
+    const sea = c.kind !== 'fish';
+    if (first) {
+      // apparition : près de sa place (le chef sur son domaine, les autres derrière lui), cap au hasard
+      const a = seed * 6.28;
+      c.heading = L === c ? a : L.heading;
+      c.x = (L === c ? c.hx : L.x) - Math.sin(c.heading) * 0.3 * c.slot + Math.cos(a) * 0.2;
+      c.z = (L === c ? c.hz : L.z) - Math.cos(c.heading) * 0.3 * c.slot + Math.sin(a) * 0.2;
+      c.spd = S.v; c.turnV = 0;
+    } else if (L === c) {
+      // ---- chef : cap qui vagabonde (deux houles lentes), rappel vers le domaine, rives évitées
+      const R = c.radius * (1 + g * 0.4);
+      const dx = c.hx - c.x, dz = c.hz - c.z, dist = Math.hypot(dx, dz);
+      // (deux houles de 15 et 37 s : il ondoie d'un côté puis de l'autre, en longues courbes)
+      let want = (Math.sin(t * 0.17 + seed * 7) * 0.5 + Math.sin(t * 0.42 + seed * 3) * 0.5) * S.turn * 0.75;
+      // rappel doux (au plus 60 % du virage le plus vif) : un rappel plein faisait tourner en rond au bord du domaine
+      const home = smooth01((dist - R * 0.8) / (R * 1.2));
+      if (home > 0) {
+        // (seulement s'il s'en éloigne : tiré sans cesse vers le centre, il en faisait le tour en orbite)
+        const diff = wrapAngle(Math.atan2(dx, dz) - c.heading), back = home * smooth01((Math.abs(diff) - 0.5) / 1);
+        want = want * (1 - back) + Math.sign(diff) * S.turn * 0.6 * back;
+      }
+      // rives : il vire vers le côté le plus dégagé seulement si devant lui la mer se resserre plus qu'ici (dans une
+      // langue de mer étroite, un seuil fixe le faisait virer sans fin)
+      const look = 1.5 + S.v * 4;
+      const roomAhead = (a: number) => this.roomOf(c.x + Math.sin(a) * look, c.z + Math.cos(a) * look, sea);
+      const need = Math.min(S.clear, this.roomOf(c.x, c.z, sea));
+      if (roomAhead(c.heading) < need) want = (roomAhead(c.heading - 0.7) > roomAhead(c.heading + 0.7) ? -1 : 1) * S.turn;
+      c.turnV = (c.turnV ?? 0) + (want - (c.turnV ?? 0)) * (1 - Math.exp(-dt * 1.2));
+      c.heading = wrapAngle(c.heading + c.turnV * dt);
+      // allure : rythme qui varie (deux houles), plus vive en course, plus lente dans les virages
+      const rhythm = 1 + S.vary * (Math.sin(t * 0.21 + seed * 5) * 0.65 + Math.sin(t * 0.57 + seed * 11) * 0.35);
+      const target = S.v * rhythm * (1 + g * 1.2) * (1 - 0.3 * Math.min(1, Math.abs(c.turnV) / S.turn));
+      c.spd = (c.spd ?? S.v) + (target - (c.spd ?? S.v)) * (1 - Math.exp(-dt * 0.8));
+      c.x += Math.sin(c.heading) * c.spd * dt;
+      c.z += Math.cos(c.heading) * c.spd * dt;
+    } else {
+      // ---- suiveur : rejoint sa place dans la formation du chef ; cette place respire (le banc se déforme) et s'écarte
+      // quand le banc fuit
+      const side = c.slot % 2 ? 1 : -1, rank = Math.ceil(c.slot / 2);
+      const spread = (1 + g * 0.9) * (1 + 0.25 * Math.sin(t * 0.37 + seed * 9));
+      const lat = side * rank * S.gap * spread + Math.sin(t * 0.45 + seed * 4) * S.gap * 0.5;
+      const back = -rank * S.gap * 0.9 * spread + Math.cos(t * 0.33 + seed * 6) * S.gap * 0.5;
+      const sh = Math.sin(L.heading), ch = Math.cos(L.heading);
+      const tx = L.x + lat * ch + back * sh, tz = L.z - lat * sh + back * ch;
+      const ox = tx - c.x, oz = tz - c.z, d = Math.hypot(ox, oz);
+      if (d > 6) { c.x = tx; c.z = tz; c.heading = L.heading; }
+      else {
+        // cap : vers sa place quand il en est loin, celui du chef quand il y est
+        const near = smooth01((0.6 - d) / 0.5);
+        const want = near >= 1 ? L.heading : wrapAngle(Math.atan2(ox, oz) + wrapAngle(L.heading - Math.atan2(ox, oz)) * near);
+        const turnWant = Math.max(-S.turn * 1.4, Math.min(S.turn * 1.4, wrapAngle(want - c.heading) * 2));
+        c.turnV = (c.turnV ?? 0) + (turnWant - (c.turnV ?? 0)) * (1 - Math.exp(-dt * 2.5));
+        c.heading = wrapAngle(c.heading + c.turnV * dt);
+        // allure : celle du chef, un peu plus vive s'il est en retard, plus lente s'il est en avance
+        const ahead = ox * Math.sin(c.heading) + oz * Math.cos(c.heading), ls0 = L.spd ?? S.v;
+        const target = Math.max(ls0 * 0.4, Math.min(ls0 * 1.8 + 0.1, ls0 + ahead * 1.2));
+        c.spd = (c.spd ?? S.v) + (target - (c.spd ?? S.v)) * (1 - Math.exp(-dt * 2));
+        c.x += Math.sin(c.heading) * c.spd * dt;
+        c.z += Math.cos(c.heading) * c.spd * dt;
+        // un banc de poissons glisse aussi un peu de côté vers sa place (les petits poissons se rangent sans virer)
+        if (c.kind === 'fish') { const k = 1 - Math.exp(-dt * 0.8); c.x += ox * k * 0.5; c.z += oz * k * 0.5; }
+      }
     }
+    const speed = Math.hypot(c.x - px, c.z - pz) / Math.max(1e-3, dt);
+    // le corps se couche un peu dans les virages
+    c.bank = Math.max(-0.45, Math.min(0.45, -(c.turnV ?? 0) * S.bank));
     // l'hiver, les mantas partent ; il ne reste qu'un groupe de dauphins et une baleine sur deux (les clés en 0)
     const away = season === 3 && (c.kind === 'manta' || ((dolphin || c.kind === 'whale') && !c.key.endsWith('0')));
     // hors de l'eau (rive, île) : on ne l'affiche pas
@@ -1745,45 +1814,65 @@ export class Fauna {
     const wasAir = !!c.air;
     c.seaT = (c.seaT ?? this.rnd() * 3) - dt;
     /** inclinaison (cabrée en montant, piquée en descendant) selon la pente de la trajectoire, × `tilt` */
-    let tilt = 1;
+    let tilt = 1, pitchRate = 9;
+    /** pas plus bas que le fond */
+    const floor = w.hAt(c.x, c.z) + 0.12;
     if (c.kind === 'whale') {
       // longue nage profonde ; elle remonte respirer (le dos affleure, elle souffle), puis plonge, la queue levée ;
       // une remontée sur trois environ finit en saut, avec une grosse gerbe
-      const p = this.t * 0.2 + c.key.charCodeAt(c.key.length - 1) * 1.7, s = Math.sin(p);
+      const p = t * 0.2 + c.key.charCodeAt(c.key.length - 1) * 1.7, s = Math.sin(p);
       const breathe = Math.pow(Math.max(0, s), 2);
       const leap = hash2(Math.floor(p / (Math.PI * 2)), c.key.length, 5) < 0.33 ? Math.pow(Math.max(0, s), 18) * 1.1 : 0;
-      c.y = SEA - 0.6 + breathe * 0.55 + leap;
+      c.y = Math.max(floor, SEA - 0.6) + breathe * 0.55 + leap;
       tilt = 1.6;
       if (s > 0.93 && c.seaT <= 0) { c.seaT = 8; fx('spout', c.x + Math.sin(c.heading) * 0.5, c.z + Math.cos(c.heading) * 0.5, 1); }
       c.air = c.y > SEA + 0.2;
       if (c.air !== wasAir) fx('splash', c.x, c.z, 3);
     } else if (c.kind === 'manta') {
-      // glisse juste sous la surface, le bout des ailes affleure ; de temps en temps un saut hors de l'eau
+      // plane entre deux eaux, remonte jusqu'à faire affleurer le bout des ailes, redescend ; de temps en temps un saut
       c.timer -= dt;
       if (c.timer < -1.1) c.timer = 14 + this.rnd() * 26;
       const jump = c.timer < 0 ? Math.sin((-c.timer / 1.1) * Math.PI) : 0;
-      c.y = SEA - 0.1 + Math.sin(this.t * 0.7 + c.slot) * 0.03 + jump * 0.7;
+      c.y = Math.max(floor, SEA - 0.1 - 0.16 * (0.5 + 0.5 * Math.sin(t * 0.15 + seed * 4))) + jump * 0.7;
       tilt = 0.6;
       c.air = jump > 0.15;
       if (c.air !== wasAir) fx('splash', c.x, c.z, 1.4);
     } else if (shark) {
-      // juste sous la surface : seul l'aileron la fend, avec un sillage d'écume
-      c.y = SEA - 0.1 + Math.sin(this.t * 0.5 + c.slot) * 0.015;
-      if (c.seaT <= 0) { c.seaT = 0.3; fx('wake', c.x, c.z, 1); }
+      // juste sous la surface, l'aileron la fend avec un sillage ; de temps en temps il s'enfonce un moment (l'aileron
+      // disparaît) puis remonte
+      const sink = smooth01((Math.sin(t * 0.09 + seed * 13) - 0.55) / 0.35);
+      c.y = Math.max(floor, SEA - 0.1 - 0.3 * sink) + Math.sin(t * 0.5 + seed) * 0.012;
+      tilt = 0.7;
+      if (c.seaT <= 0 && sink < 0.3) { c.seaT = 0.3; fx('wake', c.x, c.z, 1); }
     } else if (dolphin) {
-      // à fleur d'eau, puis de grands bonds en arc : gerbe en sortant et en retombant. Le rythme des bonds est un angle
-      // cumulé (celui du chef, décalé pour chacun) : une course qui s'emballe l'accélère sans le faire sauter
-      if (c.slot === 0) c.phase += dt * (1.1 + g * 0.6);
-      const a = (((L.phase - c.slot * 0.9) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2), a0 = 0.3047;
-      const u = a > a0 && a < Math.PI - a0 ? (a - a0) / (Math.PI - 2 * a0) : -1;
-      c.y = SEA - 0.12 + (u >= 0 ? Math.sin(u * Math.PI) * 0.8 : -Math.sin(a) * 0.03);
+      // cycle du groupe (le temps du chef, décalé pour chacun) : nage à fleur d'eau, deux sauts en arc hors de l'eau
+      // (sortie et entrée tête la première, avec gerbe), puis une plongée où ils disparaissent quelques secondes avant de
+      // ressortir plus loin. La course accélère le cycle sans le faire sauter (temps cumulé)
+      if (c.slot === 0) c.phase += dt * (1 + g * 0.5);
+      const cyc = DOLPHIN_CYCLE, u = ((((L.phase - c.slot * 0.35) % cyc.total) + cyc.total) % cyc.total);
+      const top = SEA - 0.06;
+      let y = top + Math.sin(t * 1.3 + seed) * 0.015;
+      if (u >= cyc.surface && u < cyc.surface + cyc.leaps) {
+        // sauts : arc d'une seconde, séparés d'un court passage sous l'eau
+        const k = u - cyc.surface, each = cyc.leap + cyc.dip, j = k % each;
+        y = j < cyc.leap ? top + Math.sin((j / cyc.leap) * Math.PI) * cyc.height : top - Math.sin(((j - cyc.leap) / cyc.dip) * Math.PI) * 0.22;
+      } else if (u >= cyc.surface + cyc.leaps) {
+        // plongée : descente tête la première, longue nage au fond de l'eau, remontée
+        const k = (u - cyc.surface - cyc.leaps) / cyc.dive;
+        y = top - smooth01(k / 0.25) * smooth01((1 - k) / 0.25) * cyc.depth;
+        if (k > 0.97 && c.seaT <= 0) { c.seaT = 2; fx('ripple', c.x, c.z, 1); }
+      }
+      c.y = Math.max(floor, y);
+      pitchRate = 12;
       c.air = c.y > SEA + 0.06;
       if (c.air !== wasAir) fx('splash', c.x, c.z, c.air ? 0.7 : 1);
     } else {
+      // banc : à une profondeur qui varie lentement (tout le banc ensemble) ; de temps en temps un poisson saute
       c.timer -= dt;
       if (c.timer < -0.7) c.timer = (4 + this.rnd() * 14) / (1 + g * 3);
       const jump = c.timer < 0 ? Math.sin((-c.timer / 0.7) * Math.PI) : 0;
-      c.y = SEA - 0.08 - Math.sin(this.t + c.slot) * 0.02 + jump * 0.4;
+      const ls = L.seed ?? seed;
+      c.y = Math.max(floor, SEA - 0.08 - 0.07 * (0.5 + 0.5 * Math.sin(t * 0.2 + ls)) - Math.sin(t + c.slot) * 0.015) + jump * 0.4;
       c.air = jump > 0.2;
       if (c.air && !wasAir) fx('splash', c.x, c.z, 0.5);
       // le banc trouble la surface au-dessus de lui : un remous de temps en temps
@@ -1791,7 +1880,15 @@ export class Fauna {
     }
     const vy = first ? 0 : (c.y - py) / Math.max(1e-3, dt);
     const want = Math.max(-1.25, Math.min(1.25, -Math.atan2(vy, Math.max(0.2, speed)) * tilt));
-    c.pitch = first ? want : c.pitch + (want - c.pitch) * (1 - Math.exp(-dt * 9));
+    c.pitch = first ? want : c.pitch + (want - c.pitch) * (1 - Math.exp(-dt * pitchRate));
+  }
+
+  /** Place libre en mer (ou dans toute eau, `sea` = false) à la case de (x, z) ; 0 hors de la carte */
+  private roomOf(x: number, z: number, sea: boolean) {
+    const cx = Math.floor(x), cz = Math.floor(z);
+    if (!this.world.inCells(cx, cz)) return 0;
+    const room = sea ? this.room : this.wetRoom;
+    return room ? room[this.world.ci(cx, cz)] : water(this.world, cx, cz) ? 9 : 0;
   }
 
   /** Chef de banc ou de groupe : dauphins et requins se rapprochent du banc le plus proche, le banc s'écarte d'eux */
@@ -1874,7 +1971,7 @@ export class Fauna {
     const wet = c.kind === 'frog' ? SEA - 0.01 : c.kind === 'croc' ? SEA - 0.035 : c.kind === 'turtle' ? SEA - 0.018 : -Infinity;
     const y = c.kind === 'duck' || c.kind === 'duckling' ? this.swell(c.x, c.z) - FOWL_FLOAT * c.size : swimmer ? c.y : Math.max(ground, wet);
     a.root.position.set(c.x, y + bob, c.z);
-    a.root.rotation.set(swimmer ? c.pitch : 0, c.heading + (MODELS[c.kind]?.yaw ?? beastYaw(c.kind)), gait ? Math.sin(c.phase * 0.9) * 0.07 : 0, 'YXZ');
+    a.root.rotation.set(swimmer ? c.pitch : 0, c.heading + (MODELS[c.kind]?.yaw ?? beastYaw(c.kind)), swimmer ? c.bank ?? 0 : gait ? Math.sin(c.phase * 0.9) * 0.07 : 0, 'YXZ');
     if (silhouette) {
       a.root.updateMatrix();
       this.impostors.put(c.actorKey ?? c.kind, a, a.root.matrix, c.actorSize ?? 1);
@@ -1892,7 +1989,8 @@ export class Fauna {
     else if (c.pitch > 0.05) play(a, ['Eating', 'Idle_Eating', 'Bite_Front', 'Idle_Headlow', 'Idle']);
     else if (beast) this.idleBeast(c, a);
     else play(a, ['Idle', 'Idle_2']);
-    const speedUp = c.run ? 1.3 : 1;
+    // un nageur bat de la queue au rythme de son allure (plus vite quand il accélère, plus lentement quand il plane)
+    const speedUp = swimmer ? Math.max(0.6, Math.min(1.8, (c.spd ?? SWIM[c.kind as SwimKind].v) / SWIM[c.kind as SwimKind].v)) : c.run ? 1.3 : 1;
     // un peu loin, l'animation n'avance qu'une image sur deux
     // la baleine bat lentement de la queue : nage ample, au trois quarts de la cadence du modèle
     const pace = c.kind === 'whale' ? 0.75 : 1;
@@ -1970,7 +2068,7 @@ export class Fauna {
         if (c.moving) y += sp.hop ? Math.abs(Math.sin(c.phase * 0.7)) * sp.hop * (c.run ? 1.6 : 1) : Math.abs(Math.sin(c.phase)) * 0.006;
       }
       d.position.set(c.x, y, c.z);
-      d.rotation.set(c.pitch, c.heading, c.moving && !sp.hop ? Math.sin(c.phase) * 0.05 : 0, 'YXZ');
+      d.rotation.set(c.pitch, c.heading, SWIMMERS.has(c.kind) ? c.bank ?? 0 : c.moving && !sp.hop ? Math.sin(c.phase) * 0.05 : 0, 'YXZ');
       // couché la nuit
       d.scale.set(c.size, c.size * (c.sleeping ? 0.78 : 1), c.size);
       d.updateMatrix();
