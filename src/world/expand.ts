@@ -1,6 +1,6 @@
 import { World, setMapSize } from './world';
 import { newWorld } from './mapgen';
-import { GEN_VAR, GEN_ARCH } from './continent';
+import { GEN_FIXED, GEN_VAR, GEN_ARCH } from './continent';
 import { ARCH_N, MAIN_N, archLayout } from './archipelago';
 import { smoothstep, lerp } from '../core/rng';
 
@@ -17,15 +17,19 @@ import { smoothstep, lerp } from '../core/rng';
  */
 export const archipelagoOn = (w: { isles: unknown }) => !!w.isles;
 
-/** La partie peut-elle s'agrandir ? Seulement le continent de la version 3, sur la carte de 192 */
-export const canExpand = (world: { n?: number; gen?: number }) => world?.n === MAIN_N && world?.gen === GEN_VAR;
+/**
+ * La partie peut-elle s'agrandir ? Le continent sur la carte de 192, quelle que soit sa version (1, 2, 3 ou 5 ; une sauvegarde sans
+ * version est de la 1) : son île garde la sienne (`World.mainGen`)
+ */
+export const canExpand = (world: { n?: number; gen?: number }) => world?.n === MAIN_N && (world.gen ?? GEN_FIXED) !== GEN_ARCH;
 
 /**
  * Sauvegarde du monde (`World.toJSON`) agrandie à l'archipel, pour la carte `map` et la graine `seed`. Change la taille de la
  * carte du jeu (`setMapSize(ARCH_N)`) : à appeler juste avant de recharger la partie
  */
 export function expandWorld(old: any, map: number, seed: number): any {
-  if (!canExpand(old)) throw new Error('Seul le continent de la version 3, sur la carte de 192, peut s’agrandir');
+  if (!canExpand(old)) throw new Error('Seul le continent, sur la carte de 192, peut s’agrandir');
+  const base = old.gen ?? GEN_FIXED;
   const n0 = MAIN_N, n = ARCH_N, f = archLayout(seed, n).main;
   setMapSize(n);
   const fresh = new World();
@@ -61,6 +65,8 @@ export function expandWorld(old: any, map: number, seed: number): any {
     gen: GEN_ARCH,
     isles: neu.isles,
     reveal: 1,
+    // (l'île garde la version de son générateur : son climat, sa rivière et ses biomes ne changent pas)
+    ...(base !== GEN_VAR ? { mainGen: base } : {}),
     heights,
     roads: list(old.roads, neu.roads),
     veg: pairs(old.veg, neu.veg),

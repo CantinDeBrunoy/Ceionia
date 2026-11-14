@@ -8,11 +8,14 @@ import { archLayout, isleClimate, type Frame } from './archipelago';
  * garde la version qui l'a créée. 1 : agencement fixe, seuls les détails changent avec la graine (parties d'avant le plan) ;
  * 2 : agencement tiré de la graine (plan du continent) ; 3 : plan plus libre (contrées, côte, rivière, relief), tourné ou
  * retourné (huit orientations), lacs, forêts et bosquets en nombre variable ; 4 : l'archipel (`archipelago.ts`), le
- * continent de la version 3 à sa taille d'origine dans un cadre de la carte de 384, et les îles rivales
+ * continent de la version 3 à sa taille d'origine dans un cadre de la carte de 384, et les îles rivales (seulement par
+ * l'agrandissement d'une partie : `expand.ts`) ; 5 : comme la 3, mais les contrées changent de place d'une partie à l'autre
+ * (`slots` dans `continentPlan`). Attention : la 4 n'est pas « plus récente » que la 3 pour le continent ; tester
+ * `gen === GEN_ARCH` pour l'archipel, et `mainGenOf` pour la version du continent
  */
-export const GEN_FIXED = 1, GEN_PLAN = 2, GEN_VAR = 3, GEN_ARCH = 4;
+export const GEN_FIXED = 1, GEN_PLAN = 2, GEN_VAR = 3, GEN_ARCH = 4, GEN_SLOTS = 5;
 /** Version des nouvelles parties */
-export const GEN = GEN_VAR;
+export const GEN = GEN_SLOTS;
 
 /**
  * Orientation du plan (version 3) : `o` de 0 à 7, bit 1 : miroir est-ouest, bit 2 : miroir nord-sud, bit 4 : échange des
@@ -34,8 +37,15 @@ export function fromPlan(o: number, a: number, b: number, n: number): [number, n
  * carré de `MAIN_N` cases que lui laisse l'archipel. Le plan, le climat, la rivière et le volcan se calculent dans ce cadre
  */
 export function mainFrame(gen: number, seed: number, n: number): Frame {
-  return gen >= GEN_ARCH ? archLayout(seed, n).main : { x: 0, z: 0, n };
+  return gen === GEN_ARCH ? archLayout(seed, n).main : { x: 0, z: 0, n };
 }
+
+/**
+ * Version du générateur de l'île principale : la partie elle-même jusqu'à la version 3 ; en version 4, celle de la partie
+ * d'origine si elle a été agrandie (`base`, `World.mainGen` : 1, 2, 3 ou 5), sinon la version 3. Le plan, le climat, la rivière et
+ * le lit de cailloux de l'île principale suivent cette version : une ancienne partie agrandie garde son île telle quelle
+ */
+export const mainGenOf = (gen: number, base = GEN_VAR) => (gen === GEN_ARCH ? base : gen);
 
 /** Relief de fond des versions 1 et 2 : finesse et amplitude du bruit, bombement vers le cœur du continent */
 const RELIEF0 = { freq: 0.03, amp: 1.6, lift: 1.4 };
@@ -156,17 +166,17 @@ export function riverU(r: ContinentPlan['river'], v: number) {
  * sud du plan (embouchure), un point par demi-case environ. Version 1 : le cours de `fixedHeight` ; versions 2 et 3 :
  * `riverU`, tourné selon le plan. Le relief sculpté ensuite par le joueur n'y est pas
  */
-export function riverCourse(gen: number, seed: number, n: number): [number, number][] {
-  const out: [number, number][] = [];
-  if (gen === GEN_FIXED) {
+export function riverCourse(gen: number, seed: number, n: number, base = GEN_VAR): [number, number][] {
+  const out: [number, number][] = [], f = mainFrame(gen, seed, n), m = f.n, g = mainGenOf(gen, base);
+  if (g === GEN_FIXED) {
     const phase = mulberry32(seed)() * 6.28;
-    for (let z = 0.14 * n; z <= n; z += 0.5) {
-      const v = z / n;
-      out.push([n * (0.62 - (v - 0.16) * 0.12 + 0.05 * Math.sin(z * 0.045 + phase) + 0.02 * Math.sin(z * 0.11 + phase * 2)), z]);
+    for (let z = 0.14 * m; z <= m; z += 0.5) {
+      const v = z / m;
+      out.push([m * (0.62 - (v - 0.16) * 0.12 + 0.05 * Math.sin(z * 0.045 + phase) + 0.02 * Math.sin(z * 0.11 + phase * 2)) + f.x, z + f.z]);
     }
     return out;
   }
-  const p = continentPlan(seed, gen), r = p.river, f = mainFrame(gen, seed, n), m = f.n;
+  const p = continentPlan(seed, g), r = p.river;
   for (let b = r.v * m; b <= m; b += 0.5) { const [x, z] = fromPlan(p.orient, m * riverU(r, b / m), b, m); out.push([x + f.x, z + f.z]); }
   return out;
 }
@@ -185,10 +195,11 @@ export function rockyBed(p: ContinentPlan, t: number) {
  * Cases du lit de cailloux (0 … 255) : la force du lit (`rockyBed`) à moins de 4 cases de l'axe de la rivière, nulle au-delà
  * et avant la version 3. Ne dit rien de l'eau : le décor vérifie aussi que la case est bien un haut-fond (voir `VegView`)
  */
-export function fillRiverBed(gen: number, seed: number, n: number, out: Uint8Array) {
+export function fillRiverBed(gen: number, seed: number, n: number, out: Uint8Array, base = GEN_VAR) {
   out.fill(0);
-  if (gen < GEN_VAR) return;
-  const p = continentPlan(seed, gen), r = p.river, f = mainFrame(gen, seed, n), m = f.n;
+  const g = mainGenOf(gen, base);
+  if (g < GEN_VAR) return;
+  const p = continentPlan(seed, g), r = p.river, f = mainFrame(gen, seed, n), m = f.n;
   if (!p.bed) return;
   for (let wz = 0; wz < m; wz++)
     for (let wx = 0; wx < m; wx++) {
@@ -243,7 +254,7 @@ export function continentPlan(seed: number, gen = GEN): ContinentPlan {
   const zone = (u0: number, u1: number, v0: number, v1: number, r0: number, r1: number, e1: number, sp = 0.03): Zone =>
     v3 ? { u: R(u0 - sp, u1 + sp), v: R(v0 - sp, v1 + sp), r: R(r0 * 0.9, r1 * 1.1), a: R(0, Math.PI), e: R(1, 1 + (e1 - 1) * 1.5) }
       : { u: R(u0, u1), v: R(v0, v1), r: R(r0, r1), a: R(0, Math.PI), e: R(1, e1) };
-  for (let tries = 0; tries < 100; tries++) {
+  for (let tries = 0; tries < (gen >= GEN_SLOTS ? 400 : 100); tries++) {
     const coast = {
       u: R(0.48, 0.52), v: R(0.45, 0.49), ru: W(0.43, 0.47, 0.42, 0.47), rv: W(0.41, 0.45, 0.4, 0.45), a: W(-0.2, 0.2, -0.35, 0.35), warp: W(0.1, 0.15, 0.09, 0.18), freq: W(0.01, 0.015, 0.009, 0.018),
       capes: Array.from({ length: 2 + Math.floor(rnd() * (v3 ? 6 : 4)) }, () => ({ t: R(-Math.PI, Math.PI), w: R(0.2, 0.5), d: (rnd() < 0.5 ? -1 : 1) * W(0.06, 0.16, 0.05, 0.2) })),
@@ -262,6 +273,8 @@ export function continentPlan(seed: number, gen = GEN): ContinentPlan {
     const volcano = { ...zone(0.15, 0.24, 0.79, 0.85, 0.11, 0.15, 1.3, 0.02), strait: R(0.07, 0.15) };
     const mesas = { ...zone(0.79, 0.86, 0.47, 0.6, 0.14, 0.18, 1.4, 0.02), freq: W(0.05, 0.075, 0.045, 0.085), cut: R(0.02, 0.08), top: W(2.2, 3, 2, 3.3) };
     const archipelago = { ...zone(0.8, 0.87, 0.83, 0.88, 0.13, 0.17, 1.4, 0.015), freq: W(0.085, 0.115, 0.075, 0.13), cut: R(0.1, 0.15) };
+    // version 5 : les contrées changent de place (voir `slots`) ; un tirage où elles se chevauchent est refait
+    if (gen >= GEN_SLOTS && !slots(rnd, m, plateaus, lake, volcano, mesas, archipelago)) continue;
     // la rivière naît dans le flanc ouest du massif
     const river = {
       u: m.u + W(-0.1, 0, -0.14, 0.02), v: Math.max(0.1, m.v + R(-0.07, -0.02)), mouth: W(0.45, 0.62, 0.4, 0.66), a1: W(0.02, 0.055, 0.02, 0.075), k1: W(3.5, 8, 3, 9),
@@ -272,6 +285,11 @@ export function continentPlan(seed: number, gen = GEN): ContinentPlan {
       p.relief = { freq: R(0.022, 0.04), amp: R(1.2, 2.1), lift: R(1.1, 1.8) };
       p.orient = Math.floor(rnd() * 8);
     }
+    // version 5 : les contrées ayant bougé, la rivière les frôle plus souvent ; elle se retire (embouchure plus libre) avant de
+    // refaire tout le tirage
+    if (gen >= GEN_SLOTS)
+      for (let k = 0; k < 30 && !fits(p); k++)
+        p.river = { ...p.river, u: m.u + R(-0.1, 0), v: Math.max(0.1, m.v + R(-0.07, -0.02)), mouth: clamp(m.u - 0.05 + R(-0.07, 0.07), 0.22, 0.82), a1: R(0.012, 0.045), k1: R(3, 9), p1: R(0, 2 * Math.PI) };
     if (fits(p)) {
       // (tiré à part, pour ne rien changer aux autres tirages)
       if (v3) { const b = mulberry32(seed * 31 + 977); p.bed = { end: lerp(0.3, 0.4, b()), ph: b() * 2 * Math.PI }; }
@@ -279,6 +297,50 @@ export function continentPlan(seed: number, gen = GEN): ContinentPlan {
     }
   }
   return SAFE_PLAN;
+}
+
+/**
+ * Places des contrées de la version 5 (dans le repère du plan, avant qu'il soit tourné) : le massif dans le nord (la rivière en
+ * descend vers le sud), les deux îles du large dans les deux coins du sud (dans un ordre ou l'autre), les mesas au chaud (est
+ * ou sud : le désert y prend, loin de l'archipel), le lac au cœur des terres (il reste fermé), les plateaux plus au large. Chaque contrée garde la taille, la
+ * forme et l'axe tirés comme en version 3 ; les sommets suivent le massif, l'îlot suit le lac. Faux si deux contrées des terres
+ * se chevauchent (le tirage est alors refait)
+ */
+function slots(rnd: () => number, m: ContinentPlan['mountains'], plateaus: Zone, lake: ContinentPlan['lake'], volcano: Zone, mesas: Zone, archipelago: Zone) {
+  const R = (a: number, b: number) => lerp(a, b, rnd());
+  const pick = (a: [number, number][]) => a.splice(Math.floor(rnd() * a.length), 1)[0];
+  /** places hors du couloir de la rivière (qui descend du massif vers le sud, autour de l'abscisse `u0`) */
+  let u0 = 0;
+  const clear = (a: [number, number][], w: number) => a.filter(([u]) => Math.abs(u - u0) > w);
+  const at = (q: Zone, [u, v]: [number, number], j: number): [number, number] => {
+    const du = u + R(-j, j) - q.u, dv = v + R(-j, j) - q.v;
+    q.u += du; q.v += dv;
+    return [du, dv];
+  };
+  // (sur un côté du nord : le centre reste libre pour le lac)
+  const [mu, mv] = at(m, pick([[0.69, 0.18], [0.31, 0.18]]), 0.02);
+  for (const pk of m.peaks) { pk.u += mu; pk.v += mv; }
+  u0 = m.u - 0.05;
+  const south: [number, number][] = [[0.19, 0.82], [0.84, 0.86]];
+  if (rnd() < 0.5) south.reverse();
+  at(volcano, south[0], 0.02);
+  at(archipelago, south[1], 0.015);
+  // (les mesas loin de l'archipel : la mer chaude n'y mord pas le désert)
+  const hot = clear([[0.82, 0.53], [0.72, 0.64], [0.36, 0.68], [0.6, 0.7], [0.5, 0.62], [0.25, 0.6], [0.84, 0.4], [0.45, 0.72]], 0.18).filter(([u, v]) => Math.hypot(u - archipelago.u, v - archipelago.v) > 0.26);
+  // le lac au cœur des terres (il doit rester fermé, loin des côtes) ; les plateaux plus au large
+  const high = clear([[0.22, 0.27], [0.25, 0.6], [0.78, 0.36], [0.72, 0.3], [0.8, 0.5], [0.5, 0.36]], 0.24);
+  const lakes = clear([[0.3, 0.5], [0.62, 0.42], [0.68, 0.52], [0.36, 0.4], [0.3, 0.62], [0.7, 0.62], [0.5, 0.5]], 0.3);
+  if (!hot.length || !high.length || !lakes.length) return false;
+  at(mesas, pick(hot), 0.02);
+  at(plateaus, pick(high), 0.03);
+  const [lu, lv] = at(lake, pick(lakes), 0.02);
+  lake.islet.u += lu; lake.islet.v += lv;
+  const land: Zone[] = [m, plateaus, lake, mesas];
+  for (let i = 0; i < land.length; i++)
+    for (let j = i + 1; j < land.length; j++)
+      // (0,6 : le continent de la version 3 tolère lui-même que plateaux et lac se touchent)
+      if (Math.hypot(land[i].u - land[j].u, land[i].v - land[j].v) < (land[i].r + land[j].r) * 0.6) return false;
+  return true;
 }
 
 /** Plan de secours, si aucun tirage ne convient (cela n'arrive pour ainsi dire jamais) : les contrées à peu près à la place de celles du continent d'origine */
@@ -391,10 +453,10 @@ export function plannedHeight(x: number, z: number, n: number, s: Simplex, s2: S
  * bruit. Avec le plan (version 2), le désert se resserre autour des mesas, les tropiques autour de l'archipel, et les rives
  * du grand lac s'humidifient (marais), pas son îlot
  */
-export function fillClimate(gen: number, seed: number, n: number, temp: Float32Array, wet: Float32Array) {
-  const st = new Simplex(seed * 13 + 5), sm = new Simplex(seed * 17 + 9), p = gen >= GEN_PLAN ? continentPlan(seed, gen) : null;
+export function fillClimate(gen: number, seed: number, n: number, temp: Float32Array, wet: Float32Array, base = GEN_VAR) {
+  const g = mainGenOf(gen, base), st = new Simplex(seed * 13 + 5), sm = new Simplex(seed * 17 + 9), p = g >= GEN_PLAN ? continentPlan(seed, g) : null;
   // version 4 : hors du cadre de l'île principale, le climat des îles de l'archipel
-  const f = mainFrame(gen, seed, n), lay = gen >= GEN_ARCH ? archLayout(seed, n) : null;
+  const f = mainFrame(gen, seed, n), lay = gen === GEN_ARCH ? archLayout(seed, n) : null;
   for (let gz = 0; gz < n; gz++)
     for (let gx = 0; gx < n; gx++) {
       const wx = gx - f.x, wz = gz - f.z;
