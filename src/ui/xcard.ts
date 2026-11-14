@@ -2,7 +2,7 @@
 // et sur la barre de bataille (bâtiment ou recrue survolés). Ce module ne fait que la placer, sans rien chevaucher.
 
 /** Largeur voulue de la carte, et la plus petite place libre où elle se pose à côté du menu */
-const WANT = 360, MIN_SIDE = 290;
+const WANT = 320, MIN_SIDE = 280;
 
 /**
  * Place la carte (en `position: fixed`) :

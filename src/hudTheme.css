@@ -592,3 +592,160 @@ body.hell #resPanel { display: none !important; }
   #troopBar .tfoot > .tcorner { grid-column: 4; justify-self: end; }
   #troopBar .tfoot .tbub { left: var(--tbL, 0px); }
 }
+
+/* ---------- la barre du bas réduite de moitié (demande de l'auteur, 14 nov. 2026 : « réduire la taille du HUD du bas de 50 % »)
+   ordinateur : environ 105 px de haut au lieu de 214 ; les modes côte à côte et les outils sur une ligne, des onglets fins, des
+   cartes de bâtiment de 72 × 64 sans titres de groupe (le filet sépare les groupes), une mini-carte de 104 px ---------- */
+@media (min-width: 861px) {
+  #dock > #dockRow { gap: 8px; }
+  #dock #dockSide { display: grid; grid-template-columns: repeat(7, 30px); gap: 4px; padding: 6px; align-content: end; }
+  #dock #dockSide #modes { grid-column: 1 / -1; flex-direction: row; gap: 4px; }
+  #dock #modes button { flex: 1; width: auto; height: 32px; padding: 0 8px 0 6px; gap: 6px; border-radius: 10px; font-size: 13px; }
+  #dock #modes button b, #dock #modes button b .pic, #dock #modes button b svg { width: 20px; height: 20px; }
+  #dock #dockSide .quick { display: contents; }
+  #dock .quick button { width: 30px; height: 30px; border-radius: 9px; }
+  #dock .quick button svg { width: 15px; height: 15px; }
+  #dock #dockMain { padding: 5px 6px 6px; }
+  #dock #dockTop { padding: 0 2px 3px; }
+  #dock #subcats button { height: 26px; padding: 0 10px 2px 8px; gap: 5px; border-radius: 10px 10px 0 0; font-size: 12.5px; }
+  #dock #subcats button.on { border-radius: 10px; }
+  #dock #subcats button b .pic, #dock #subcats button b img { width: 16px; height: 16px; }
+  #dock #itemsWrap { padding: 3px 2px; border-radius: 14px; }
+  #dock #itemsWrap .scr { width: 20px; height: 44px; font-size: 22px; }
+  #dock #items { gap: 6px; min-height: 0; padding: 1px; }
+  #dock #items .grp { gap: 0; padding-left: 6px; }
+  #dock #items .gh { display: none; }
+  #dock #items .gt { gap: 5px; }
+  #dock #items button.tile { width: 72px; height: 64px; padding: 2px 3px 4px; gap: 0; border-radius: 11px; }
+  #dock #items button.tile b.th { width: 54px; height: 42px; }
+  #dock #items button.tile b.th img { width: 56px; height: 48px; }
+  #dock #items button.tile:not(.kind) b svg { width: 26px; height: 26px; margin: 6px 0 4px; }
+  #dock #items button.tile .lbl { max-width: 68px; font-size: 11px; line-height: 1.05; -webkit-line-clamp: 1; }
+  #dock #items button.tile .gv { display: none; }
+  #dock #items button.tile.big::before, #dock #items .key { left: 5px; top: 3px; font-size: 8px; }
+  #dock #items .badge { right: 4px; top: 3px; font-size: 9px; padding: 0 4px; }
+  #dock #biomes button { min-height: 24px; padding: 1px 8px 1px 6px; font-size: 11px; }
+  #dock #brush { min-height: 28px; }
+  #dock #viewBtns { gap: 5px; padding: 4px; }
+  #dock #viewBtns button.round { width: 38px; height: 38px; }
+  #dock #viewBtns button.round svg { width: 17px; height: 17px; }
+  #dock #miniMap, #dock #dockRight #miniMap { width: 104px; height: 104px; padding: 4px; border-radius: 18px; }
+  #miniMap canvas { border-radius: 14px; }
+  #miniMap .mmN { top: 7px; right: 7px; width: 18px; height: 18px; font-size: 9px; }
+  /* la carte d'explication, plus ramassée */
+  #info, #info.held, #selCard, #tinfo { padding: 8px 11px 9px; font-size: 11.5px; line-height: 1.35; border-radius: 14px; }
+  #info .xth, #selCard .xth, #tinfo .xth { width: 54px; height: 44px; }
+  #info h4, #info.held h4, #selCard h4, #tinfo h4 { font-size: 16px; }
+  #info .xsub, #selCard .xsub, #tinfo .xsub { font-size: 11px; margin-top: 1px; }
+  #info .ihead, #selCard .ihead, #tinfo .ihead { gap: 9px; }
+  #info .xdesc, #tinfo .xdesc { margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #info p, #tinfo p { margin-top: 4px; }
+  #info .effs { margin-top: 4px; gap: 4px; }
+  #info .perk { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  #info .xcount { display: none; }
+  #dock #items button.tile { width: 78px; }
+  #dock #items button.tile .lbl { max-width: 74px; }
+  #info::before, #tinfo::before { width: 10px; height: 10px; top: 8px; right: 10px; }
+  #selCard .xacts { margin-top: 7px; gap: 6px; }
+  #selCard .xacts button { min-height: 30px; font-size: 12px; }
+  #selCard .xacts .xdel { flex-basis: 36px; }
+  #selCard .ihead .x, #selCard .ihead .xfold { width: 26px; height: 26px; }
+}
+/* la place de la carte suit sa largeur réduite */
+@media (min-width: 1400px) {
+  #dock > #dockRow { grid-template-columns: auto minmax(0, 1180px) 300px auto; }
+}
+/* la barre de bataille réduite de moitié comme celle du village : modes côte à côte et outils dessous, cartes de 78 × 64,
+   recrues de 132 × 64, coin sur deux rangées (Aide en pastille et « Retourner au village », puis le passage) */
+@media (min-width: 901px) {
+  #troopBar .tfoot { gap: 8px; }
+  #troopBar .tfoot > .ttool { padding: 6px; gap: 4px; }
+  #troopBar .ttool .ttabs { flex-direction: row; gap: 4px; }
+  #troopBar .ttool .ttabs button { width: 104px; height: 32px; padding: 0 8px 0 6px; gap: 6px; border-radius: 10px; font-size: 13px; }
+  #troopBar .ttool .ttabs button .pic, #troopBar .ttool .ttabs button svg { width: 18px; height: 18px; }
+  #troopBar .ttool .ttools { padding-top: 4px; gap: 4px; }
+  #troopBar .ttool .ttl { width: 32px; height: 30px; border-radius: 9px; }
+  #troopBar .ttool .ttl svg { width: 17px; height: 17px; }
+  #troopBar .tfoot > .tmenu { padding: 5px 8px 6px; }
+  #troopBar .tmh { min-height: 18px; gap: 8px; }
+  #troopBar .tmh h5 { font-size: 11px; gap: 5px; }
+  #troopBar .tmh h5 .pic { width: 16px; height: 16px; }
+  #troopBar .tmh h5 small { font-size: 10.5px; padding: 0 7px; }
+  #troopBar .tmh .q { font-size: 10.5px; }
+  #troopBar .tmenu .tmrow { gap: 6px; }
+  #troopBar .tmenu .tbuilds { gap: 5px; }
+  #troopBar .tmenu .tfam + .tfam { padding-left: 6px; }
+  #troopBar .tmenu .trb.tbv, #troopBar .tmrow .trb.tbv { width: 78px; height: 66px; min-height: 0; padding: 2px 3px 3px; gap: 0; border-radius: 11px; }
+  #troopBar .tmrow .trb.tbv .tic { flex: none; height: 38px; border-radius: 9px; background: none; box-shadow: none; overflow: hidden; }
+  #troopBar .tmrow .trb.tbv .tic img { width: 26px; height: 26px; }
+  #troopBar .tmrow .trb.tbv .tic.tpv img { width: 48px; height: 40px; transform: none; object-fit: contain; }
+  #troopBar .tmrow .trb.tbv b { font-size: 11px; line-height: 1.05; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .tmrow .trb.tbv small.co { font-size: 9.5px; gap: 3px; line-height: 1.1; }
+  #troopBar .tmrow .trb.tbv small.co .pic { width: 11px; height: 11px; }
+  #troopBar .tmrow .trb.trc { width: 132px; height: 66px; min-height: 0; padding: 3px 5px; grid-template-columns: 38px minmax(0, 1fr); column-gap: 5px; border-radius: 11px; }
+  #troopBar .trc .tpo { border-radius: 8px; }
+  #troopBar .trc .ttx { gap: 2px; }
+  #troopBar .trc .ttx b { font-size: 11.5px; line-height: 1.05; }
+  #troopBar .trc .trole { font-size: 9.5px; padding: 1px 5px 1px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .trc .trole > span { overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .trc .trole .pic { width: 11px; height: 11px; }
+  #troopBar .trc .tco { padding-top: 2px; gap: 5px; font-size: 10px; }
+  #troopBar .trc .tco .pic { width: 11px; height: 11px; }
+  #troopBar .tfoot > .tcorner, #troopBar .thell .tcorner, #troopBar .thell.tshut .tcorner { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 5px; width: 180px; padding: 6px; align-items: stretch; }
+  #troopBar .tcorner .thb, #troopBar .thell .tcorner .thb { grid-column: 1; grid-row: 1; width: 32px; min-height: 0; height: 32px; padding: 0; justify-content: center; }
+  #troopBar .tcorner .thb .tl { display: none; }
+  #troopBar .tcorner .thb .tq { width: 22px; height: 22px; font-size: 13px; }
+  #troopBar .tcorner button.go, #troopBar .tcorner .tx { grid-column: 2; grid-row: 1; min-height: 32px; padding: 0 10px 0 3px; gap: 6px; font-size: 12px; }
+  #troopBar .tcorner .oi { width: 26px; height: 26px; }
+  #troopBar .tcorner .oi img { width: 18px; height: 18px; }
+  #troopBar .tcorner .tfl, #troopBar .tcorner > .tord { grid-column: 1 / -1; grid-row: 2; gap: 5px; }
+  #troopBar .tcorner .tord, #troopBar .thell .tcorner .tord.gar { min-height: 32px; padding: 0 10px 0 3px; gap: 6px; font-size: 12px; }
+  #troopBar .tcorner .tord .oi { width: 26px; height: 26px; }
+  #troopBar .tcorner .tord .tpt b { font-size: 12px; }
+  #troopBar .tcorner .tord .tpt small { display: none; }
+  #troopBar .tbot { padding: 4px 6px; }
+  #troopBar .tfoot .tbub { bottom: calc(100% + 4px); }
+}
+@media (min-width: 1400px) {
+  #troopBar .tfoot { grid-template-columns: auto minmax(0, 1180px) 300px auto; }
+}
+/* tablette et téléphone : la même cure, avec des cibles d'au moins 40 px au doigt ; plus de titres de groupe, des cartes de
+   66 × 58, la mini-carte de 72 px et les boutons de vue à sa gauche (une rangée au lieu d'une pile) */
+@media (max-width: 860px) {
+  #dock #dockSide { gap: 3px; padding: 3px; }
+  #dock #modes button { width: 40px; height: 40px; }
+  #dock .quick button { width: 40px; height: 40px; }
+  #dock #dockRight { gap: 5px; align-items: flex-end; }
+  #dock #viewBtns { flex-direction: row; padding: 3px; gap: 4px; }
+  #dock #viewBtns button.round { width: 40px; height: 40px; }
+  #dock #miniMap, #dock #dockRight #miniMap { width: 72px; height: 72px; padding: 3px; border-radius: 14px; }
+  #miniMap canvas { border-radius: 11px; }
+  #miniMap .mmN { display: none; }
+  #dock #dockMain { padding: 4px 4px 5px; }
+  /* (les rayons ne passent plus sur la rangée des modes : ils entrent dans la barre, en haut) */
+  #dock #dockTop { position: static; padding: 0 0 3px; }
+  #dock #subcats button { height: 40px; min-width: 44px; border-bottom: 2px solid var(--hEdge); border-radius: 12px; }
+  #dock #itemsWrap { padding: 2px; }
+  #dock #items { min-height: 0; gap: 5px; }
+  #dock #items .gh { display: none; }
+  #dock #items .grp { gap: 0; padding-left: 5px; }
+  #dock #items .gt { gap: 5px; }
+  #dock #items button.tile { width: 66px; height: 58px; padding: 2px 2px 3px; gap: 0; border-radius: 11px; }
+  #dock #items button.tile b.th { width: 48px; height: 38px; }
+  #dock #items button.tile b.th img { width: 50px; height: 44px; }
+  #dock #items button.tile .lbl { max-width: 62px; font-size: 10px; line-height: 1.05; -webkit-line-clamp: 1; }
+  #dock #items button.tile.big::before, #dock #items .key { left: 4px; top: 2px; font-size: 8px; }
+  #dock #items .badge { right: 3px; top: 2px; font-size: 9px; padding: 0 4px; }
+}
+/* écran moyen (861 à 1 399 px) : modes, menu et coin côte à côte, le menu prend la place qui reste (plus de panneau qui
+   déborde à gauche) ; la carte d'explication monte au-dessus du coin */
+@media (min-width: 861px) and (max-width: 1399px) {
+  #dock > #dockRow { grid-template-columns: auto minmax(0, 800px) auto; justify-content: center; }
+  #dock #dockSide { justify-self: start; }
+}
+@media (min-width: 901px) and (max-width: 1399px) {
+  #troopBar .tfoot { grid-template-columns: auto minmax(0, 820px) auto; justify-content: center; }
+  #troopBar .tfoot > .ttool { justify-self: start; }
+  #troopBar .tfoot > .tcorner { justify-self: end; }
+  #troopBar .tfoot .tbub { left: var(--tbL, 0px); }
+}
