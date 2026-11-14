@@ -927,8 +927,10 @@ export class CommandUI implements ToolInput {
       // avant l'invasion : ce qu'il lui faut (une tour, une caserne, des soldats valides sur l'île), coché au fur et à mesure
       if (w.active && w.pve === 'on' && w.inv === 'wait') {
         const need = w.invasionNeed(), g = w.garrison();
-        const item = (ok: boolean, s: string) => `<span class="twk${ok ? ' ok' : ''}">${ok ? '✓' : '·'} ${s}</span>`;
-        const list = item(this.host.defenseCount('watchtower') > 0, this.host.defenseInfo('watchtower').name) + item(this.host.defenseCount('barracks') > 0, this.host.defenseInfo('barracks').name) + item(g >= need, tr('{n} / {m} soldats', { n: Math.min(g, need), m: need }));
+        // ce qui manque est une pastille cliquable qui mène à l'action : poser la tour ou la caserne, ouvrir « Recruter »
+        const item = (ok: boolean, s: string, act: string, tip: string) => ok ? `<span class="twk ok">✓ ${s}</span>` : `<button class="twk go" data-a="${act}" title="${esc(tip)}">${s}</button>`;
+        const tower = this.host.defenseInfo('watchtower').name, barracks = this.host.defenseInfo('barracks').name;
+        const list = item(this.host.defenseCount('watchtower') > 0, tower, 'ibuild:watchtower', tr('Poser : {name}', { name: tower })) + item(this.host.defenseCount('barracks') > 0, barracks, 'ibuild:barracks', tr('Poser : {name}', { name: barracks })) + item(g >= need, tr('{n} / {m} soldats', { n: Math.min(g, need), m: need }), 'tab:rec', tr('Recruter des soldats'));
         return box('prep', true, '⚠', head(tr('Invasion à venir')) + `<span class="twks">${list}</span>`);
       }
       // une zone des Enfers tenue suspend les attaques

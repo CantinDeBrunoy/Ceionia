@@ -1683,9 +1683,10 @@ export class UI {
     list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
-    // en bataille, la frise du haut monte au niveau des ressources quand elle tient entre elles et les boutons de droite
+    // dans les Enfers, la frise du haut monte au niveau des boutons de droite quand elle tient (les ressources et les besoins y
+    // sont cachés) ; sur l'île, le bandeau des attaques reste sous la barre du haut, qui garde ses besoins
     const ts = document.querySelector<HTMLElement>('#troopBar .tstate');
-    if (ts && document.body.classList.contains('commanding')) {
+    if (ts && document.body.classList.contains('commanding') && document.body.classList.contains('hell')) {
       const w = ts.offsetWidth, res = $('#resPanel').getBoundingClientRect(), hr = $('#hudR').getBoundingClientRect();
       // centrée sur l'écran si possible, sinon au milieu de la place libre entre les deux
       const a = (res.width ? res.right : 0) + 12, b = hr.left - 12, fits = b - a >= w;
