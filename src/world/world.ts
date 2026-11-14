@@ -5,7 +5,8 @@ import { smoothstep } from '../core/rng';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/difficulty';
-import { GEN, GEN_FIXED, fillClimate, fillRiverBed } from './continent';
+import { GEN, GEN_FIXED, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
+import { archLayout, type ArchLayout } from './archipelago';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Crossing, crossingMap, nearestOnDeck } from './crossings';
@@ -311,6 +312,17 @@ export class World {
   digs: number[] = [];
   /** l'île du portail (sauvegardée) ; null sur une carte d'avant l'île : la mission du portail n'y est pas disponible */
   portal: PortalSite | null = null;
+  /**
+   * Les îles de l'archipel (version 4, `archipelago.ts`) : cadre de l'île principale, îles rivales et leurs villages, petites
+   * îles. Tirées de la graine et écrites dans la sauvegarde ; null avant la version 4 (une seule île)
+   */
+  isles: ArchLayout | null = null;
+
+  /** Case dans le cadre de l'île principale (toujours vrai avant la version 4) */
+  inMain(x: number, z: number) {
+    const f = this.isles?.main;
+    return !f || (x >= f.x && z >= f.z && x < f.x + f.n && z < f.z + f.n);
+  }
   /**
    * La garde de l'île du portail (sauvegardée) : vagues de démons repoussées, jours tenus avec ses défenses debout ; l'île est
    * sécurisée (`isleSecured`, voir `portal.ts`) quand l'un ou l'autre suffit : la condition d'âge s'y branchera
@@ -1234,18 +1246,19 @@ export class World {
    * partie neuve se pose
    */
   startSpot(): [number, number] {
-    const c = Math.floor(N / 2) - 1, S = KINDS.gather.size;
-    let best: [number, number] = [c, c], score = Infinity;
+    // (le milieu de l'île principale : toute la carte jusqu'à la version 3)
+    const f = mainFrame(this.gen, this.seed, N), cx = f.x + Math.floor(f.n / 2) - 1, cz = f.z + Math.floor(f.n / 2) - 1, S = KINDS.gather.size;
+    let best: [number, number] = [cx, cz], score = Infinity;
     // (un anneau plus loin ne peut faire mieux que la distance déjà trouvée)
-    for (let r = 0; r < N / 2 && r <= score; r++)
+    for (let r = 0; r < f.n / 2 && r <= score; r++)
       for (let dz = -r; dz <= r; dz++)
         for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || this.canPlace('gather', c + dx, c + dz) !== null) continue;
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || this.canPlace('gather', cx + dx, cz + dz) !== null) continue;
           let veg = 0, steep = 0;
-          for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const x = c + dx + i, z = c + dz + j; if (this.veg[this.ci(x, z)]) veg++; steep = Math.max(steep, this.cellSlope(x, z)); }
+          for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const x = cx + dx + i, z = cz + dz + j; if (this.veg[this.ci(x, z)]) veg++; steep = Math.max(steep, this.cellSlope(x, z)); }
           // un sol couvert ou pentu ne compte qu'à défaut d'autre chose à quelques cases de là
           const s = Math.hypot(dx, dz) + veg * 4 + (steep > 0.5 ? 8 : 0);
-          if (s < score) { score = s; best = [c + dx, c + dz]; }
+          if (s < score) { score = s; best = [cx + dx, cz + dz]; }
         }
     return best;
   }
@@ -1641,6 +1654,7 @@ export class World {
     return {
       n: N,
       gen: this.gen,
+      ...(this.isles ? { isles: this.isles } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
       roads,
       veg,
@@ -1758,6 +1772,8 @@ export class World {
     this.growLarge(buildings, heights, road, veg, d.plaza3 === PLAZA3);
     // les sauvegardes d'avant le plan du continent n'ont pas de version : leur climat reste celui de la version 1
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
+    // (la place des îles se tire de la graine : celle de la sauvegarde n'est là que pour qui la lit au dehors)
+    this.isles = this.gen >= GEN_ARCH ? archLayout(this.seed, N) : null;
     const biomePaint = new Uint8Array(N * N);
     for (let i = 0; i + 1 < (d.biomes ?? []).length; i += 2) if (d.biomes[i] >= 0 && d.biomes[i] < N * N && d.biomes[i + 1] >= 1 && d.biomes[i + 1] <= BIOME_NAMES.length) biomePaint[d.biomes[i]] = d.biomes[i + 1];
     const cleared = new Uint8Array(N * N), rift = new Uint8Array(N * N);

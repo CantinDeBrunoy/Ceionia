@@ -63,6 +63,13 @@ Versions du générateur (`continent.ts`) : `GEN_FIXED = 1` (agencement fixe, d'
 8. `addPortalIsland` (si plan) : île du portail au large (voir [portail-ile.md](portail-ile.md)).
 9. Version 3 : `clearStart`.
 
+### L'archipel (version 4, `archipelago.ts`)
+Sur une carte de `ARCH_N` = 384 cases, une partie neuve prend la version `GEN_ARCH` = 4 (`main.ts` : `N >= ARCH_N`) ; les nouvelles parties restent à 192 (`MapDef.size`) tant que l'archipel n'est pas ouvert aux joueurs. `archLayout(seed)` tire la place des îles, dans un repère où l'île principale est à l'ouest, puis le tourne ou le retourne (huit orientations) :
+- **île principale** : le continent de la version 3, à sa taille d'origine, dans un cadre de `MAIN_N` = 192 cases (`mainFrame(gen, seed, n)` ; toute la carte avant la version 4). Plan, climat (`fillClimate`), rivière (`riverCourse`), lit de cailloux (`fillRiverBed`), volcan, départ (`startSpot`, au milieu du cadre) et île du portail (cherchée dans le cadre) se calculent dans ce cadre. Canyon, grottes, failles et pétrole restent dans le cadre (`World.inMain`) ;
+- **deux îles rivales** (`rivals`), rayon 64 à 72, environ 11 900 cases de terre chacune, séparées par un bras de mer : peuple `orient` (climat chaud et sec : sable, palmiers) et peuple `asie` (tempéré humide). Chacune a la place plate de son village (`village`, rayon 9, à 1,3), aplanie par `flattenVillages` après les dunes, les forêts et les étangs ;
+- **une à trois petites îles** (`small`), rayon 16 à 22, tropicales.
+Le relief (`archHeights` dans `mapgen.ts`) : le fond du large partout, le continent dans son cadre (sa mer descend au fond du large : pas de carré visible), les îles (`isleHeight` : plateau vallonné, côte déformée), puis la mer sur les 4 cases du bord. `World.isles` est tiré de la graine au chargement et écrit dans la sauvegarde (`isles`) pour qui la lit au dehors. Tests : `tests/archipel.test.ts`.
+
 ### Le plan du continent (`continentPlan(seed, gen)`)
 Le plan est un jeu de « contrées » `Zone { u, v, r, a, e }` (centre en part de carte, rayon, axe, étirement) : côte (ellipse déformée avec caps et baies), montagnes (chaîne et sommets `peaks`), plateaux en gradins, grand lac et îlot, île volcanique et détroit, mesas, archipel, rivière (`riverU`), vent (oriente les dunes), `orient` (0 à 7 : bit 1 miroir est-ouest, bit 2 miroir nord-sud, bit 4 échange des axes ; `toPlan` / `fromPlan`). Le tirage est refait jusqu'à 100 fois tant que `fits(plan)` est faux (lac fermé, massif dans les terres, archipel au large, rivière qui ne frôle ni lac, ni mesas, ni île) ; sinon `SAFE_PLAN`. Générateurs aléatoires : `mulberry32(seed*991 + 7121)` (version 3) ou `seed*977 + 4049` (version 2).
 

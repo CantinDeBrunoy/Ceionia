@@ -59,10 +59,12 @@ export function addPortalIsland(w: World, seed: number): PortalSite | null {
   const n = w.n, rnd = mulberry32(seed * 31 + 9001);
   let R = lerp(ISLE_R[0], ISLE_R[1], rnd());
   const dl = landDistance(w), M = Math.ceil(ISLE_R[1]) + 3;
-  // le point de mer le plus éloigné de toute terre (à égalité, tiré de la graine)
+  // le point de mer le plus éloigné de toute terre (à égalité, tiré de la graine), au large de l'île principale (version 4 :
+  // dans son cadre, pas près des îles rivales)
+  const f = w.isles?.main ?? { x: 0, z: 0, n };
   let best = -1, bs = -1;
-  for (let z = M; z < n - M; z++)
-    for (let x = M; x < n - M; x++) {
+  for (let z = f.z + M; z < f.z + f.n - M; z++)
+    for (let x = f.x + M; x < f.x + f.n - M; x++) {
       const k = z * n + x, s = dl[k] + hash2(x, z, seed + 9011) * 0.5;
       if (s > bs) { bs = s; best = k; }
     }
@@ -114,8 +116,9 @@ export function addPortalIsland(w: World, seed: number): PortalSite | null {
 function carveStrait(w: World, dl: Float32Array, M: number, C: number, seed: number): number {
   const n = w.n, R = Math.ceil(C);
   let best = -1, bc = Infinity;
-  for (let z = M; z < n - M; z += 2)
-    for (let x = M; x < n - M; x += 2) {
+  const f = w.isles?.main ?? { x: 0, z: 0, n };
+  for (let z = f.z + M; z < f.z + f.n - M; z += 2)
+    for (let x = f.x + M; x < f.x + f.n - M; x += 2) {
       if (dl[z * n + x] < C * 0.45) continue;
       let cost = hash2(x, z, seed + 9017);
       for (let dz = -R; dz <= R && cost < bc; dz++)

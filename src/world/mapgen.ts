@@ -4,7 +4,8 @@ import { addPortalIsland } from './portal';
 import { Simplex } from './noise';
 import { mulberry32, smoothstep, clamp, lerp, hash2 } from '../core/rng';
 import { localize } from '../i18n';
-import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, continentPlan, fixedHeight, plannedHeight, toPlan, fromPlan } from './continent';
+import { GEN, GEN_FIXED, GEN_PLAN, GEN_VAR, GEN_ARCH, continentPlan, fixedHeight, plannedHeight, toPlan, fromPlan, mainFrame } from './continent';
+import { archLayout, addIsles, flattenVillages } from './archipelago';
 
 /**
  * Carte jouable : `size` cases de côté pour une nouvelle partie ; `sizes`, les tailles qu'une sauvegarde peut avoir (une
@@ -15,7 +16,7 @@ export interface MapDef { id: number; name: string; desc: string; defaultSeed: n
 /** La carte jouable : le continent (il garde le numéro 3, celui des sauvegardes déjà faites) */
 export const CONTINENT = 3;
 export const MAPS: MapDef[] = [
-  { id: CONTINENT, name: 'Continent', desc: 'Un grand continent, différent à chaque partie : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192, sizes: [192, 320] },
+  { id: CONTINENT, name: 'Continent', desc: 'Un grand continent, différent à chaque partie : plateaux, montagnes et rivière, île volcanique, grand lac, mesas et archipel.', defaultSeed: 2026, size: 192, sizes: [192, 320, 384] },
 ];
 for (const m of MAPS) localize(m, ['name', 'desc']);
 /** La carte de ce numéro (null : une carte qui n'existe plus) */
@@ -46,11 +47,39 @@ export function genHeights(mapId: number, seed: number, gen = GEN, n = (mapDef(m
     return hts;
   }
   const plan = continentPlan(seed, gen);
+  if (gen >= GEN_ARCH) return archHeights(hts, N, seed, gen, s, s2, plan);
   for (let z = 0; z <= N; z++)
     for (let x = 0; x <= N; x++) {
       // chaque sommet prend la hauteur de son point du plan, tourné ou retourné (version 3)
       const [px, pz] = toPlan(plan.orient, x, z, N);
       hts[z * (N + 1) + x] = clamp(plannedHeight(px, pz, N, s, s2, plan), MIN_H, MAX_H);
+    }
+  return hts;
+}
+
+/**
+ * Relief de l'archipel (version 4) : la haute mer partout, le continent de la version 3 dans son cadre (sa mer descend au
+ * fond du large, et le cadre s'y raccorde sur ses 12 dernières cases), puis les îles rivales et les petites îles, et la mer sur le bord
+ */
+function archHeights(hts: Float32Array, N: number, seed: number, gen: number, s: Simplex, s2: Simplex, plan: ReturnType<typeof continentPlan>) {
+  const f = mainFrame(gen, seed, N), deep = new Simplex(seed * 3 + 41), S = N + 1;
+  for (let z = 0; z <= N; z++)
+    for (let x = 0; x <= N; x++) {
+      let h = -1.45 + 0.25 * deep.fbm(x * 0.02, z * 0.02, 2);
+      const lx = x - f.x, lz = z - f.z;
+      if (lx >= 0 && lz >= 0 && lx <= f.n && lz <= f.n) {
+        const [px, pz] = toPlan(plan.orient, lx, lz, f.n), hm = plannedHeight(px, pz, f.n, s, s2, plan);
+        // la mer du continent (vers -1) rejoint le fond du large : pas de carré plus clair autour de l'île principale
+        const hs = hm > -0.7 ? hm : Math.min(hm, lerp(-0.7, h, smoothstep(-0.7, -1, hm)));
+        h = lerp(h, hs, smoothstep(0, 12, Math.min(lx, lz, f.n - lx, f.n - lz)));
+      }
+      hts[z * S + x] = h;
+    }
+  addIsles(hts, N, seed, archLayout(seed, N));
+  for (let z = 0; z <= N; z++)
+    for (let x = 0; x <= N; x++) {
+      const i = z * S + x;
+      hts[i] = clamp(lerp(hts[i], Math.min(hts[i], -1), smoothstep(4, 1, Math.min(x, z, N - x, N - z))), MIN_H, MAX_H);
     }
   return hts;
 }
@@ -63,6 +92,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   world.mapId = mapId;
   world.seed = seed;
   world.gen = gen;
+  world.isles = gen >= GEN_ARCH ? archLayout(seed, N) : null;
   const plan = gen === GEN_FIXED ? null : continentPlan(seed, gen), v3 = gen >= GEN_VAR;
   const heights = genHeights(mapId, seed, gen, N);
   world.restore({ heights, road: new Uint8Array(N * N), veg: new Uint8Array(N * N), cleared: new Uint8Array(N * N), rift: new Uint8Array(N * N), buildings: [], nextId: 1 });
@@ -104,7 +134,11 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   // sanitize (pentes)
   world.sanitize(0, 0, N, N);
   // le volcan, au cœur de l'île volcanique
-  if (plan) { const [vx, vz] = fromPlan(plan.orient, N * plan.volcano.u, N * plan.volcano.v, N); raiseVolcano(world, vx, vz, 5.5); }
+  if (plan) {
+    // (dans le cadre de l'île principale : toute la carte jusqu'à la version 3)
+    const f = mainFrame(gen, seed, N), [vx, vz] = fromPlan(plan.orient, f.n * plan.volcano.u, f.n * plan.volcano.v, f.n);
+    raiseVolcano(world, vx + f.x, vz + f.z, 5.5);
+  }
   else raiseVolcano(world, N * 0.22, N * 0.8, 5.5);
   if (v3) forestHearts(world, mulberry32(seed + 57));
   if (!v3) carveTarns(world, seed, !!plan);
@@ -115,6 +149,8 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
     world.computeBiomes();
     carveTarns(world, seed + 1, true, Math.floor(lr() * 5), 1, 3.2, 0.6);
   }
+  // version 4 : le replat des villages des îles rivales, une fois les dunes, les forêts et les étangs posés
+  if (world.isles) { flattenVillages(world.heights, world.veg, N, world.isles); world.markTerrainAll(); world.sanitize(0, 0, N, N); }
   addDefaultDecor(world, seed);
   // l'île du portail, au large, une fois le continent achevé (pas sur le continent figé de la version 1, qui ne change plus)
   if (plan) addPortalIsland(world, seed);
@@ -332,7 +368,8 @@ const CANYON = { river: -0.45, bank: 0.25, floor: 0.5, bench: 1.8, foot: 2.05, r
  */
 function carveCanyon(world: World, seed: number, rnd: () => number): number[] {
   const S = N + 1, C = CANYON;
-  const inside = (cx: number, cz: number) => world.inCells(cx, cz) && cx > 12 && cz > 12 && cx < N - 13 && cz < N - 13;
+  // (version 4 : sur l'île principale)
+  const inside = (cx: number, cz: number) => world.inCells(cx, cz) && cx > 12 && cz > 12 && cx < N - 13 && cz < N - 13 && world.inMain(cx, cz);
   const dist = (x: number, z: number) => world.waterDist[world.ci(Math.floor(x), Math.floor(z))];
   const desertAt = (x: number, z: number) => {
     const cx = Math.floor(x), cz = Math.floor(z);
@@ -538,12 +575,14 @@ export function addDefaultDecor(world: World, seed: number) {
     }
   };
   const free = (x: number, z: number) => !world.occ[world.ci(x, z)] && !world.road[world.ci(x, z)];
+  // (grottes et failles sur l'île principale : version 4, pas sur les îles rivales)
+  const own = (x: number, z: number) => free(x, z) && world.inMain(x, z);
   // grottes : deux au plus, éloignées l'une de l'autre, creusées de préférence dans un versant raide de colline ou de montagne
-  pick(VEG_CAVE, 2, 30, (x, z) => free(x, z) && world.cellSlope(x, z) >= 0.25 && world.cellAvg(x, z) > 0.6 && world.cellAvg(x, z) < 5.5 && world.waterDist[z * N + x] >= 3,
+  pick(VEG_CAVE, 2, 30, (x, z) => own(x, z) && world.cellSlope(x, z) >= 0.25 && world.cellAvg(x, z) > 0.6 && world.cellAvg(x, z) < 5.5 && world.waterDist[z * N + x] >= 3,
     (x, z) => world.cellSlope(x, z) >= 0.7 && world.cellAvg(x, z) > 1.2);
   // failles : terrain assez plat, à l'écart de l'eau ; une seule sur une nouvelle carte (version 3), cinq sur les cartes
   // des générateurs d'avant (inchangées)
-  pick(VEG_FISSURE, world.gen >= GEN_VAR ? 1 : 5, 20, (x, z) => free(x, z) && world.cellSlope(x, z) < 0.5 && world.cellAvg(x, z) > 0.5 && world.cellAvg(x, z) < 4 && world.waterDist[z * N + x] >= 6);
+  pick(VEG_FISSURE, world.gen >= GEN_VAR ? 1 : 5, 20, (x, z) => own(x, z) && world.cellSlope(x, z) < 0.5 && world.cellAvg(x, z) > 0.5 && world.cellAvg(x, z) < 4 && world.waterDist[z * N + x] >= 6);
   // épave : eau peu profonde avec de la terre à côté
   pick(VEG_WRECK, 3, 14, (x, z) => {
     const a = world.cellAvg(x, z);
@@ -568,7 +607,8 @@ export function addOilFields(world: World, seed: number) {
   // sauvegarde) donne les mêmes nappes, ou presque
   const rank = (k: number) => hash2(k % N, Math.floor(k / N), seed + 4243), blob = new Simplex(seed + 4247);
   const ok = (x: number, z: number) => {
-    if (x < 2 || z < 2 || x >= N - 2 || z >= N - 2) return false;
+    // (version 4 : sur l'île principale seulement, l'âge moderne y demande ses puits)
+    if (x < 2 || z < 2 || x >= N - 2 || z >= N - 2 || !world.inMain(x, z)) return false;
     const k = world.ci(x, z), h = world.cellAvg(x, z);
     return h > 0.35 && h < MOUNTAIN_H && world.cellSlope(x, z) < 0.6 && !world.decor[k] && !world.lake[k] && !world.occ[k] && !world.road[k]
       && world.veg[k] !== VEG_VOLCANO && world.waterDist[k] >= 2;
