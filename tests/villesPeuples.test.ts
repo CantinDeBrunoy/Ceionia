@@ -8,6 +8,8 @@ import { townPlans, lotsAt, inPoly, segDist, HOUSE_SHARE, type TownKind, type To
 import { townModel, townWall, triCount } from '../src/render/townModels';
 
 const SEEDS = [11, 4242, 7];
+/** Budgets de triangles des modèles du peuple asiatique (`models/asian.ts`), quand ils diffèrent des autres */
+const ASIE_CAP: Partial<Record<TownKind, number>> = { temple: 11500, palace: 11500 };
 const worlds = new Map<number, World>();
 function archipel(seed: number) {
   if (!worlds.has(seed)) {
@@ -121,7 +123,8 @@ describe('villes des peuples rivaux (archipel)', () => {
         for (let age = 1; age <= 5; age++)
           for (let v = 0; v < 12; v++) {
             const g = townModel(people, kind, age, v, w, d), pos = g.attributes.position.array as Float32Array;
-            if (triCount(g) > cap) expect(`${people} ${kind} ${age} ${v} : ${triCount(g)}`).toBe('dans le budget');
+            // (les monuments du peuple asiatique ont le détail des nôtres : charpente, tuiles en couvre-joints, balustrades)
+            if (triCount(g) > (people === 'asie' ? ASIE_CAP[kind] ?? cap : cap)) expect(`${people} ${kind} ${age} ${v} : ${triCount(g)}`).toBe('dans le budget');
             expect(pos.every((x) => Number.isFinite(x))).toBe(true);
             // dans son lot (les arbres et les toits débordent un peu ; le port avance sur l'eau avec son navire)
             if (kind === 'port') continue;

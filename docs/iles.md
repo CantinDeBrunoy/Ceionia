@@ -1,6 +1,6 @@
 # Les îles de l'archipel
 
-> Fichiers : `src/world/archipelago.ts` (place et relief des îles, replat des villages), `src/world/rivalTown.ts` (plan des villes des peuples rivaux), `src/render/townModels.ts` (leurs modèles, par peuple et par âge), `src/render/rivalTowns.ts` (`RivalTowns` : les villes posées sur la carte), `src/main.ts` (création et mise à jour dans `Game`), `src/render/vegetation.ts` (pas d'herbe dans les villes)
+> Fichiers : `src/world/archipelago.ts` (place et relief des îles, replat des villages), `src/world/rivalTown.ts` (plan des villes des peuples rivaux), `src/render/townModels.ts` (leurs modèles, par peuple et par âge), `src/render/models/asian.ts` (les modèles du peuple asiatique), `src/render/rivalTowns.ts` (`RivalTowns` : les villes posées sur la carte), `src/main.ts` (création et mise à jour dans `Game`), `src/render/vegetation.ts` (pas d'herbe dans les villes)
 > Tests : `tests/archipel.test.ts`, `tests/villesPeuples.test.ts`
 > Voir aussi : [monde-carte.md](monde-carte.md), [rendu-modeles.md](rendu-modeles.md), [ages.md](ages.md)
 
@@ -40,6 +40,7 @@ Un lot (`Lot`) : sorte (`TownKind`), centre (cases du monde), emprise `w` × `d`
 - Outils locaux : `frustum` (tronc de pyramide, faîtage si `d1` ≈ 0), `dome` (coupole ou bulbe, par `LatheGeometry`), `arch` (arc en plein cintre), `curvedRoof` / `curvedSpire` (toits courbes : trois pans de plus en plus raides et coins relevés), `palm`, `pine`, `roundTree`, `windowsAround` (immeubles : un bandeau vitré par étage, recoupé par des trumeaux), `parapet`, `merlons`, `lantern`.
 - `townWall(peuple, âge, longueur)` : un pan de rempart qui plonge de 1,5 case sous le sol ; `plinthGeo` : le socle d'un lot en pente, une boîte unité étirée par l'instance.
 - Budgets (test) : maisons 1 300 triangles au plus (≈ 200 à 550 en pratique), monuments 6 500, pan de rempart 600.
+- **Le peuple asiatique** (`models/asian.ts`, appelé par `townModel`) a le détail de nos bâtiments. Ses outils : `hipRoof` (toit en croupe courbe : pans creusés, coins relevés et évasés, rangs de tuiles en couvre-joints, arêtiers, faîtage à queues recourbées, épis ; `lod` pour les petits toits ; le chaume `A.thatch` est épais et sans tuiles), `hall` (salle à colonnes laquées sur socle, claire-voies allumées, poutre peinte, consoles, un ou deux avant-toits, balustrade), `pagoda`, `inFrame` (dessine dans un repère tourné, pour poser une salle de biais), `rail`, `stairs`, `lantern`, `stoneLantern`, `censer`, `lion`, arbres (`pine`, `roundTree`, `willow`, `bamboo`), `rock`. Budgets propres (`ASIE_CAP` du test) : temple et palais 11 500 triangles.
 
 ### La vue (`rivalTowns.ts`)
 - `RivalTowns` est créé par `Game` dès que `archipelagoOn(world)` (partie neuve de 384 cases, ou partie rechargée après l'agrandissement de `expandWorld`), mis à jour chaque image (`update(dt, sim.age)`), caché hors de la surface (Enfers, souterrain).

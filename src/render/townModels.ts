@@ -4,6 +4,7 @@ import { mergeLit } from './materials';
 import { mulberry32 } from '../core/rng';
 import type { People } from '../world/archipelago';
 import type { TownKind } from '../world/rivalTown';
+import * as asian from './models/asian';
 
 /**
  * Les modèles des villes des deux peuples rivaux (décor de l'archipel, voir `rivalTowns.ts` et `docs/iles.md`) : un jeu
@@ -951,8 +952,8 @@ export function townModel(people: People, kind: TownKind, age: number, v: number
   switch (kind) {
     case 'house': (o ? oHouse : aHouse)(p, a, vv, qw, qd); break;
     case 'workshop': (o ? oWorkshop : aWorkshop)(p, a, vv, qw, qd); break;
-    case 'temple': o ? oTemple(p, a) : aTemple(p, a, vv); break;
-    case 'palace': o ? oPalace(p, a) : aPalace(p, a, vv); break;
+    case 'temple': o ? oTemple(p, a) : asian.aTemple(p, a, vv); break;
+    case 'palace': o ? oPalace(p, a) : asian.aPalace(p, a, vv); break;
     case 'market': (o ? oMarket : aMarket)(p, a, vv); break;
     case 'port': (o ? oPort : aPort)(p, a, vv); break;
     case 'caravan': oCaravan(p, a, vv); break;
