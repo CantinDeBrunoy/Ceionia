@@ -20,11 +20,11 @@ Sur une carte de 384 cases (version 4 du générateur), deux îles rivales font 
 
 ### Le plan (`rivalTown.ts`)
 `townPlan(world, rivalIsle)` (mis en cache par graine et peuple ; `townPlans(world)` pour les deux) calcule, à partir des **hauteurs brutes** (`cellAvg`, `cellSlope`, `isWaterCell`) et d'un tirage `mulberry32` propre à la graine et au peuple :
-1. **la mer la plus proche** : 72 directions depuis le centre du replat (`isles.rivals[i].village`), la plus courte jusqu'à l'eau (`seaAng`, `seaDist`) ;
+1. **la mer la plus proche** : 72 directions depuis le centre du replat (`isles.rivals[i].village`), la plus courte jusqu'à l'eau profonde (hauteur sous -0,35 : une mare ou une lagune derrière un cordon de sable ne compte pas) (`seaAng`, `seaDist`) ;
 2. **le palais** : le point le plus haut d'une couronne de 8 à 12 cases, à plus de 80° de la mer, sur un sol pas trop raide ;
 3. **les remparts** : 12 sommets autour du centre (rayon de base `WALL_R` = 13,5 cases, ±10 %), élargis pour enfermer le palais, retenus à 4 cases de la mer, lissés ; la mer tombe au milieu d'un côté ;
 4. **les portes** : au milieu du côté qui regarde la mer (la porte du port, toujours la première), et de deux autres côtés à un tiers de tour (sauf celle qui buterait sur le palais) ;
-5. **le temple** au centre (façade vers la porte du port), sa place ronde ; **le marché** à mi-chemin du palais, poussé de côté s'il touche ; **le port** sur la côte dans la direction de la mer, son quai sur l'eau ; **la plage** : un bout de côte en pente douce à 25-60° du port ;
+5. **le temple** au centre (façade vers la porte du port), sa place ronde ; **le marché** à mi-chemin du palais, poussé de côté s'il touche ; **le port** dans la direction de la mer, 1,5 case avant l'eau profonde (le quai avance dessus, le navire y mouille) ; **la plage** : le rivage (dernière terre avant l'eau profonde) le plus doux à 25-60° du port ;
 6. les **monuments du peuple** : caravansérail près d'une porte de terre et bains près de la mosquée (oriental), grand jardin au pied du palais (asiatique) ;
 7. les **rues** : de chaque porte à la place, de la place au palais par le marché, de la porte du port au quai ; puis des ruelles qui s'enfoncent dans les quartiers (Médiéval) ;
 8. les **jardins** dans les vides, puis les **maisons** sur une grille tremblée (pas de 1,12 case, maisons de 0,9 à 1,35 case), chacune tournée vers la rue la plus proche (ou vers le centre, au quart de tour, loin des rues) ; quelques ateliers au bord ; les âges d'apparition (`from`) selon `HOUSE_SHARE` ;
@@ -50,7 +50,7 @@ Un lot (`Lot`) : sorte (`TownKind`), centre (cases du monde), emprise `w` × `d`
 - Le sol : `markGround` met `world.town` (cases des villes, non sauvegardé) pour que `VegView.meadow` et `loneTreeAt` n'y fassent pousser ni herbe, ni buisson, ni caillou ; les forêts et rocailles de ces cases sont retirées de `veg`.
 
 ## Liens avec les autres systèmes
-- Le replat des villages (`flattenVillages`, rayon `village.r` = 9) vient du générateur de l'archipel ([monde-carte.md](monde-carte.md)) ; la ville déborde du replat, ses lots en pente prennent un socle.
+- Le replat des villages (`flattenVillages`, rayon `village.r` = 9) vient du générateur de l'archipel ([monde-carte.md](monde-carte.md)), qui n'a pas été touché : la ville (rayon d'environ 13,5) déborde du replat, ses lots en pente prennent un socle. Les ruisseaux qui traversent parfois la ville passent sous les rues et les maisons (pas encore de ponts).
 - Les âges ([ages.md](ages.md)) : `sim.age` mène la ville.
 - La future bataille lira `townPlans(world)[i].points` (plage, remparts, portes, port, palais).
 
