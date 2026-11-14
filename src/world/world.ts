@@ -317,6 +317,10 @@ export class World {
    * îles. Tirées de la graine et écrites dans la sauvegarde ; null avant la version 4 (une seule île)
    */
   isles: ArchLayout | null = null;
+  /** « Explorer le monde » : 'ask' tant que le joueur n'a pas répondu, 'no' s'il reste sur son île (sauvegardé) */
+  explore: 'ask' | 'no' = 'ask';
+  /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
+  reveal = false;
 
   /** Case dans le cadre de l'île principale (toujours vrai avant la version 4) */
   inMain(x: number, z: number) {
@@ -1659,6 +1663,8 @@ export class World {
       n: N,
       gen: this.gen,
       ...(this.isles ? { isles: this.isles } : {}),
+      ...(this.explore === 'no' ? { explore: 'no' } : {}),
+      ...(this.reveal ? { reveal: 1 } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
       roads,
       veg,
@@ -1778,6 +1784,8 @@ export class World {
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     // (la place des îles se tire de la graine : celle de la sauvegarde n'est là que pour qui la lit au dehors)
     this.isles = this.gen >= GEN_ARCH ? archLayout(this.seed, N) : null;
+    this.explore = d.explore === 'no' ? 'no' : 'ask';
+    this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);
     for (let i = 0; i + 1 < (d.biomes ?? []).length; i += 2) if (d.biomes[i] >= 0 && d.biomes[i] < N * N && d.biomes[i + 1] >= 1 && d.biomes[i + 1] <= BIOME_NAMES.length) biomePaint[d.biomes[i]] = d.biomes[i + 1];
     const cleared = new Uint8Array(N * N), rift = new Uint8Array(N * N);
