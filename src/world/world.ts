@@ -1027,6 +1027,7 @@ export class World {
 
   /** Peint le biome d'une case (null : la case retrouve celui de son climat) ; true si quelque chose change */
   paintBiome(cx: number, cz: number, b: number | null) {
+    if (!this.inMain(cx, cz)) return false;
     if (!this.inCells(cx, cz)) return false;
     const k = this.ci(cx, cz), v = b === null ? 0 : b + 1;
     if (this.biomePaint[k] === v) return false;
@@ -1186,6 +1187,8 @@ export class World {
         if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return tr('L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'); continue; }
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return tr('Trop proche de l’eau : reculez sur la terre ferme');
       }
+    // version 4 : rien hors de l'île principale (les îles rivales et les petites îles sont aux autres peuples)
+    if (!this.inMain(x, z) || !this.inMain(x + s - 1, z + s - 1)) return tr('Hors de votre île : on ne bâtit pas sur les autres îles');
     // l'île du portail : des défenses seulement (et les défenses au village aussi)
     const isle = this.portalRule(kind, x, z, s);
     if (isle) return isle;
@@ -1451,7 +1454,8 @@ export class World {
   }
 
   canRoad(cx: number, cz: number) {
-    if (!this.inCells(cx, cz)) return false;
+    // (version 4 : pas de route hors de l'île principale)
+    if (!this.inCells(cx, cz) || !this.inMain(cx, cz)) return false;
     const k = this.ci(cx, cz);
     if (this.occ[k] || this.decor[k]) return false;
     // sur l'eau : un pont, sauf au large
