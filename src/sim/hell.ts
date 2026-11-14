@@ -107,8 +107,13 @@ export const FORGE_EVERY = 45;
  */
 /** Répit (s) laissé à l'île après la chute du dernier poste avancé, avant l'incursion suivante */
 export const FRONT_RESPITE = 120;
-/** L'invasion : sa taille (démons, avant Facile), son niveau de composition, et le compte à rebours qui l'annonce (s de jeu) */
-export const INVASION_SIZE = 5, INVASION_LEVEL = 4, INVASION_DELAY = 10;
+/**
+ * L'invasion : INVASION_WAVES vagues de plus en plus fortes (la dernière : INVASION_SIZE démons, avant Facile, au niveau de
+ * composition INVASION_LEVEL), le compte à rebours qui l'annonce et l'écart entre deux vagues (s de jeu). Repoussée, c'est
+ * fini : plus aucune vague ne vient sur l'île
+ */
+export const INVASION_SIZE = 5, INVASION_LEVEL = 4, INVASION_DELAY = 10, INVASION_WAVES = 3, INVASION_GAP = 40;
+/** (les incursions d’avant l’invasion en trois vagues : `planRaid` et ses tests d’équilibre ; le jeu n’en envoie plus) */
 export const RAID_FIRST = 300, RAID_EVERY = 240, RAID_MIN = 150, RAID_MAX = 10, RAID_SECURED_MAX = 6, SECURE_WAVES = 5;
 
 export type Side = 'hell' | 'player';
@@ -945,12 +950,14 @@ export class Hell {
   }
 
   /**
-   * L'invasion : la première grosse vague, à repousser avant d'aller dans les Enfers. Un peu plus du double de la première
-   * vague normale (INVASION_SIZE démons au niveau INVASION_LEVEL : diablotins, un archer, une brute), mais gagnable avec une
-   * tour, une caserne et une petite garnison ; plus petite en Facile (×0,6) et au bac à sable
+   * Une vague de l'invasion (`step` : 1 à INVASION_WAVES), à repousser avant d'aller dans les Enfers. Chaque vague a un démon
+   * et un niveau de plus que la précédente ; la dernière, un peu plus du double de la première vague normale (INVASION_SIZE
+   * démons au niveau INVASION_LEVEL : diablotins, un archer, une brute), reste gagnable avec une tour, une caserne et une
+   * petite garnison ; plus petites en Facile (×0,6) et au bac à sable
    */
-  planInvasion(): DemonKind[] {
-    const lv = INVASION_LEVEL, n = this.balance.legacy ? INVASION_SIZE - 2 : INVASION_SIZE;
+  planInvasion(step = INVASION_WAVES): DemonKind[] {
+    const back = INVASION_WAVES - Math.max(1, Math.min(INVASION_WAVES, step));
+    const lv = INVASION_LEVEL - back, n = Math.max(2, (this.balance.legacy ? INVASION_SIZE - 2 : INVASION_SIZE) - back);
     return planWave({
       level: lv, age: tierAge(this.age), power: 0, legacy: raidKinds(lv, n), powers: DEMON_POWER, balance: this.balance,
       conquered: this.conquered.filter(Boolean).length,

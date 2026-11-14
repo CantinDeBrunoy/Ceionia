@@ -32,6 +32,8 @@ const setup = () => {
 };
 /** La guerre au pas de 1/10 s pendant `t` secondes (jusqu'à `until`) */
 const tick = (war: War, t: number, until?: () => boolean) => { for (let i = 0; i < t * 10; i++) { war.update(0.1, 1); if (until?.()) return true; } return false; };
+/** L'invasion lancée tout de suite, sans attendre la garnison : sa première vague sort du portail */
+const invade = (war: War) => { war.acceptPve(); tick(war, 1); war.inv = 'coming'; war.faction!.nextRaid = war.faction!.time; };
 
 describe('volet militaire : les textes', () => {
   it('les noms des zones prennent leur article (« des Grottes de braise », « de la Rivière de lave »)', () => {
@@ -114,10 +116,9 @@ describe('volet militaire : rien ne reste coincé', () => {
     expect(u.target).not.toBe(stuck.id);
   });
 
-  it('une vague qui traîne (un démon coincé) finit par compter pour repoussée : les vagues suivantes viennent', () => {
-    const w = setup(), war = new War(w); war.skipInvasion();
-    tick(war, 1);
-    war.callWave();
+  it('une vague qui traîne (un démon coincé) finit par compter pour repoussée : la vague suivante de l’invasion vient', () => {
+    const w = setup(), war = new War(w);
+    invade(war);
     tick(war, 1, () => !!war.isle!.raid);
     const isle = war.isle!;
     // les démons ne bougent plus (comme coincés hors d'atteinte des défenses)
@@ -142,9 +143,8 @@ describe('volet militaire : rien ne reste coincé', () => {
   }, 30000);
 
   it('la durée d’une vague en cours se sauvegarde', () => {
-    const w = setup(), war = new War(w); war.skipInvasion();
-    tick(war, 1);
-    war.callWave();
+    const w = setup(), war = new War(w);
+    invade(war);
     tick(war, 3, () => !!war.isle!.raid);
     tick(war, 2);
     const t = war.isle!.raidT;

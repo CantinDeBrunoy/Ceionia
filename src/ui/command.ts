@@ -5,9 +5,9 @@ import type { PointerInfo, ToolInput } from '../core/camera';
 import { TROOPS, TROOP_KINDS, TroopKind, armySize, armyCap, recruitWhy, onlyGearMissing, gearToCraft, troopForm, troopName, troopLabel, gearName, andJoin } from '../sim/army';
 import type { GearId } from '../sim/gear';
 import { tr, plural, nplural, pct } from '../i18n';
-import { clockText, waveForce, WARN_TIME, type War } from '../sim/war';
+import { clockText, waveForce, type War } from '../sim/war';
 import type { BaseKind } from '../sim/hell';
-import { INVASION_DELAY } from '../sim/hell';
+import { INVASION_DELAY, INVASION_WAVES } from '../sim/hell';
 import { BASE_DEFS, costText, canAfford, COUNTER_WARN } from '../sim/hellBase';
 import type { BaseCost } from '../sim/hellBase';
 import { HELL_ZONES, ZONE_AGE, zoneOfZ, zoneOf, zoneTo, zoneThe, zoneAgeText } from '../world/hell';
@@ -743,7 +743,7 @@ export class CommandUI implements ToolInput {
     else if (a === 'garrison') { const n = w.callGarrison(); this.host.toast(n > 1 ? tr('🌀 {n} troupes de l’île passent le portail : elles arrivent au seuil des Enfers.', { n }) : n ? tr('🌀 1 troupe de l’île passe le portail : elle arrive au seuil des Enfers.') : tr('Aucune troupe valide sur l’île.')); }
     else if (a === 'pveChoice') { this.host.openPortalChoice(); return; }
     else if (a === 'fight') w.startInvasion();
-    else if (a === 'wave') { const why = w.callWhy(); if (why) this.host.toast(why); else { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la prochaine vague arrive !')); } }
+    else if (a === 'wave') { const why = w.callWhy(); if (why) this.host.toast(why); else { w.callWave(); this.host.toast(tr('🎺 Le cor sonne : la vague arrive !')); } }
     else if (a.startsWith('build:')) { this.startPlacing(a.slice(6) as BaseKind); return; }
     else if (a.startsWith('tool:')) { this.host.click(); this.setTool(a.slice(5) as BaseTool); return; }
     else if (a.startsWith('rech:')) { this.recruitHell(a.slice(5) as TroopKind); if (this.placing) { this.render(); return; } }
@@ -899,14 +899,14 @@ export class CommandUI implements ToolInput {
   }
 
   /**
-   * Le bandeau des attaques, centré en haut de l'île : une barre sombre aux bouts en chevrons, bordée de rouge vif, comme
-   * une alerte. À gauche le picto, puis une seule ligne (« Prochaine attaque dans 3:16 · Petite attaque »), le temps en rouge ;
-   * à droite d'un filet, le bouton crème (« Appeler la prochaine attaque », terni avec sa raison en infobulle quand il ne sert
-   * pas). Dans les dernières secondes, le temps bat ; pendant une attaque, la bordure pulse et compte les démons debout.
-   * Portail fermé, attaques suspendues : bordure éteinte. Les états pressants gardent `wst hot` (le tutoriel s'y accroche)
+   * Le bandeau de l'invasion, centré en haut de l'île : une barre sombre aux bouts en chevrons, bordée de rouge vif, comme
+   * une alerte. À gauche le picto, puis une seule ligne (« Invasion : vague 2/3 dans 0:32 · Grosse attaque »), le temps en
+   * rouge ; à droite d'un filet, le bouton crème (« Affronter », « Appeler la vague 2/3 »). Pendant une vague, la bordure pulse
+   * et compte les démons debout. L'invasion repoussée : « L'île est sûre », bordure dorée, plus rien ne vient. Portail fermé :
+   * bordure dorée. Les états pressants gardent `wst hot` (le tutoriel s'y accroche)
    */
   private waveStatus(next: number | null, raid: boolean) {
-    const w = this.host.war, f = w.faction;
+    const w = this.host.war, f = w.faction, k = w.invStep(), m = INVASION_WAVES;
     const esc = (s: string) => s.replace(/"/g, '&quot;');
     const box = (mod: string, hot: boolean, icon: string, line: string, act = '') =>
       `<div class="twave ${mod} wst${hot ? ' hot' : ''}" role="status"><span class="twm" aria-hidden="true">${pic(icon, 30)}</span><div class="twc">${line}</div>${act ? `<span class="twsep" aria-hidden="true"></span><div class="twa">${act}</div>` : ''}</div>`;
@@ -917,31 +917,30 @@ export class CommandUI implements ToolInput {
     const forceText = (v: ReturnType<typeof waveForce> | null) => v === 'big' ? tr('Grosse attaque') : v === 'medium' ? tr('Attaque moyenne') : v === 'small' ? tr('Petite attaque') : '';
     if (w.pve === 'off') return box('lock', true, '🔒', head(tr('Portail fermé')) + tail(tr('aucune attaque tant qu’il reste fermé')), btn('pveChoice', '', tr('Rouvrir'), tr('Choisir à nouveau : affronter les démons ou garder le portail fermé')));
     if (w.pve === 'ask') return box('lock', true, '🌀', head(tr('Le portail des Enfers')) + tail(tr('affronter les démons, ou le refermer')), btn('pveChoice', '', tr('Affronter…'), tr('Choisir : affronter les démons ou fermer le portail')));
-    if (w.inv === 'ready' && !raid) return box('ready', true, '⚔', head(tr('Invasion prête')) + tail(tr('elle part {s} s après votre signal', { s: INVASION_DELAY })), btn('fight', '⚔', tr('Affronter'), tr('Lancer l’invasion : les démons sortent du portail {s} s plus tard', { s: INVASION_DELAY })));
+    if (w.inv === 'ready' && !raid) return box('ready', true, '⚔', head(tr('Invasion prête')) + tail(k === 1 ? tr('{m} vagues à repousser', { m }) : tr('elle reprend à la vague {k}/{m}', { k, m })),
+      btn('fight', '⚔', tr('Affronter'), tr('Lancer l’invasion : les démons sortent du portail {s} s plus tard', { s: INVASION_DELAY })));
     if (raid) {
-      // (les démons encore debout, sur ceux de l'attaque)
+      // (les démons encore debout, sur ceux de la vague ; une attaque d'une ancienne partie, sans invasion, se finit aussi)
       const r = w.isle!.raid!, n = w.isle!.raiders().length, tot = Math.max(1, r.units.length);
-      return box('alert', true, '🔥', head(w.inv === 'raid' ? tr('Invasion en cours') : tr('Attaque en cours')) + big(`${n}<small>/${tot}</small>`) + tail(plural(n, 'démon debout', 'démons debout')) + tail(forceText(waveForce(r.units.map((u) => u.kind)))));
+      return box('alert', true, '🔥', head(w.inv === 'raid' ? tr('Invasion : vague {k}/{m}', { k, m }) : tr('Attaque en cours')) + big(`${n}<small>/${tot}</small>`) + tail(plural(n, 'démon debout', 'démons debout')));
     }
     if (next === null) {
-      // avant l'invasion : ce qu'il lui faut (une tour, une caserne, des soldats valides sur l'île), coché au fur et à mesure
+      // avant l'invasion (ou après une vague perdue) : ce qu'il lui faut (une tour, une caserne, des soldats valides sur l'île)
       if (w.active && w.pve === 'on' && w.inv === 'wait') {
         const need = w.invasionNeed(), g = w.garrison();
         const item = (ok: boolean, s: string) => `<span class="twk${ok ? ' ok' : ''}">${ok ? '✓' : '·'} ${s}</span>`;
         const list = item(this.host.defenseCount('watchtower') > 0, this.host.defenseInfo('watchtower').name) + item(this.host.defenseCount('barracks') > 0, this.host.defenseInfo('barracks').name) + item(g >= need, tr('{n} / {m} soldats', { n: Math.min(g, need), m: need }));
-        return box('prep', true, '⚠', head(tr('Invasion à venir')) + `<span class="twks">${list}</span>`);
+        return box('prep', true, '⚠', head(tr('Invasion à venir')) + (k > 1 ? tail(tr('elle reprend à la vague {k}/{m}', { k, m })) : '') + `<span class="twks">${list}</span>`);
       }
-      // une zone des Enfers tenue suspend les attaques
-      if (f && !f.victory && f.frontPosts > 0 && w.pve === 'on' && w.inv === 'done') return box('calm', false, '🌀', head(tr('Attaques suspendues')) + tail(tr('vous tenez une zone des Enfers')));
+      // l'invasion repoussée : c'est fini, plus rien ne vient
+      if (w.active && w.pve === 'on' && w.inv === 'done' && f) return box('calm', false, '🛡', head(tr('L’île est sûre')) + tail(tr('invasion repoussée, plus aucune attaque')));
       return '';
     }
-    // le compte à rebours ; dans les dernières secondes, l'attaque est composée et annoncée : son nombre de démons s'ajoute
-    const coming = w.inv === 'coming', why = w.callWhy();
-    const planned = !coming && f?.planned ? f.planned.length : 0;
-    const mod = coming ? 'alert' : next <= WARN_TIME ? 'next near' : 'next';
-    const line = head(coming ? tr('Invasion dans') : tr('Prochaine attaque dans')) + big(clockText(next)) + tail(forceText(w.nextForce())) + (planned ? tail(nplural(planned, 'démon', 'démons')) : '');
-    return box(mod, coming, '⚔', line,
-      btn('wave', '🎺', tr('Appeler la prochaine attaque'), why ?? tr('Sonner le cor : faire venir la prochaine attaque tout de suite, sans attendre'), !!why));
+    // une vague arrive : la première 10 s après « Affronter », les suivantes INVASION_GAP s après la précédente (le cor les avance)
+    const why = w.callWhy();
+    const line = head(tr('Invasion : vague {k}/{m} dans', { k, m })) + big(clockText(next)) + tail(forceText(w.nextForce()));
+    return box(k === 1 || next <= 10 ? 'alert' : 'next', true, '⚔', line,
+      k === 1 ? '' : btn('wave', '🎺', tr('Appeler la vague {k}/{m}', { k, m }), why ?? tr('Sonner le cor : faire venir cette vague tout de suite, sans attendre'), !!why));
   }
 
   /** L'onglet ouvert du menu de la garnison (île) : recruter d'abord, c'est ce qu'on fait le plus souvent */

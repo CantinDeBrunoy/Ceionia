@@ -3,7 +3,7 @@ import { World, N, setMapSize, VEG_VOLCANO } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { landDistance, ISLE_R, ISLE_MIN, STRAIT_MIN, PORTAL_CELLS, ISLE_SECURE, holdIsle, repelWave, isleDefenses, isleManned, isleProgress, isleSecured, isleSteps } from '../src/world/portal';
-import { SECURE_WAVES } from '../src/sim/hell';
+import { INVASION_WAVES } from '../src/sim/hell';
 import { isleOrigins, zoneOrigins, isZoned as isleZoned } from '../src/build/zones';
 
 /** Les cases de terre reliées (à pied, de proche en proche) à la case donnée */
@@ -138,7 +138,8 @@ describe('l’île du portail', () => {
     newWorld(w, 3, 2026, GEN);
     // (les défenses ne sont plus des bâtiments de zone : elles se posent au village aussi)
     expect(isleZoned('watchtower') || isleZoned('barracks')).toBe(false);
-    expect(ISLE_SECURE.waves).toBe(SECURE_WAVES);
+    // (l'île est sûre quand les trois vagues de l'invasion sont repoussées)
+    expect(ISLE_SECURE.waves).toBe(INVASION_WAVES);
     // sans portail ouvert ni défenses, le temps ne compte pas
     holdIsle(w, 1000, 100);
     expect(w.isleGuard.days).toBe(0);

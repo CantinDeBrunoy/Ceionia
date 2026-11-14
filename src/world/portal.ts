@@ -154,9 +154,10 @@ function carveStrait(w: World, dl: Float32Array, M: number, C: number, seed: num
 /**
  * Sécuriser l'île : l'étape obligatoire du volet militaire pour quitter l'Antiquité (les expéditions dans les Enfers, elles,
  * restent facultatives). Il faut le portail ouvert, au moins une tour de garde et une caserne debout sur l'île, puis repousser
- * `waves` vagues de démons (les jours tenus, `days`, ne sont plus qu'un relevé). `waves` vaut `SECURE_WAVES` (sim/hell)
+ * `waves` vagues de démons (les jours tenus, `days`, ne sont plus qu'un relevé). `waves` vaut `SECURE_WAVES` (sim/hell) : les
+ * vagues de l'invasion. Plus exigée pour changer d'âge
  */
-export const ISLE_SECURE = { waves: 5, days: 6 };
+export const ISLE_SECURE = { waves: 3, days: 6 };
 /** L'âge que la sécurisation de l'île ouvre : le Moyen Âge (on la demande pour quitter l'Antiquité) */
 export const ISLE_AGE = 2;
 

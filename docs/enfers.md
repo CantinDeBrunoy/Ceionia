@@ -57,7 +57,7 @@ Payée par le village (bois, pierre, minerai ; bac à sable gratuit). Rayon d'em
 Règles de pose (`HellBase.canBuild`) : zone tenue (`Hell.held` : le seuil, ou une zone conquise et ouverte) ; d'abord un camp dans la zone ; au plus `BASE_R` = 14 cases du camp ; le camp à `CAMP_MARGIN` = 6 rangées au moins d'une zone encore aux démons ; à plus de 3,2 cases du portail ; sol libre (ni lave, ni pont, ni paroi, ni bâtiment ; une porte se pose sur une palissade) ; pas sur des troupes ; l'accessibilité depuis le portail doit rester d'un seul tenant (`keepsPath`, sauf pour une porte). Soins et forge agissent à `CARE_R` = 9 cases. Les murs se tracent en glissé de A à B (`planLine`, `buildLine`).
 
 ### Le front : contre-attaques, reprise
-- **Front** : `frontPosts` = nombre de zones conquises. Tant qu'il est > 0, aucune vague ne vise l'île (`raidDue`, avec `FRONT_RESPITE` = 120 s de répit après la chute du dernier poste, événement `frontCleared`). Les démons reprennent les postes un à un, le plus profond d'abord (`deepestPost`).
+- **Front** : `frontPosts` = nombre de zones conquises. Il ne suspend plus rien sur l'île : l'invasion faite, aucune vague n'y revient (le code d'avant reste dans `raidDue` et `FRONT_RESPITE` ; l'événement `frontCleared` sort encore à la chute du dernier poste). Les démons reprennent les postes un à un, le plus profond d'abord (`deepestPost`).
 - **Contre-attaque** (`HellBase.counter`) : sur la base du poste le plus profond tenu (camp, ou troupes sur place) ; la première `COUNTER_FIRST` = 180 s après la pose du camp, annoncée `COUNTER_WARN` = 45 s avant, les suivantes `COUNTER_EVERY` = 300 s après la précédente repoussée. Taille : `planWave` avec `power` = puissance des troupes présentes, plancher `counterSize` (2 + zone + n + 2 × retard d'âge, plafonné à 10 + 2 × retard) ; les démons ont les stats de la zone d'après. Repoussée quand ils sont tous abattus (`counterEnd`).
 - **Chute d'un camp** (`HellBase.fall`) : tous les bâtiments de la zone s'effondrent, la zone est reperdue (`retake`, `zoneLost`) ; au seuil : `campLost`. Un poste assiégé que personne ne garde (ni camp, ni troupe) tombe après `FRONT_GRACE` = 30 s.
 - **Reprise d'une zone laissée seule** (`stepReclaim`) : `RECLAIM_FIRST` = 420 s après l'abandon, préavis `RECLAIM_WARN` = 150 s, pause de `RECLAIM_COOLDOWN` = 600 s entre deux reprises ; un camp ou des troupes sur place annulent la menace.
@@ -82,7 +82,7 @@ Règles de pose (`HellBase.canBuild`) : zone tenue (`Hell.held` : le seuil, ou u
 - `HellMode.addTroop` : aide du mode développeur, des unités du joueur hors armée.
 
 ## Liens avec les autres systèmes
-- [portail-ile.md](portail-ile.md) : verrou d'entrée (`hellWhy`), vagues suspendues par `frontPosts`, contamination qui recule avec les zones conquises (`conqueredZones`).
+- [portail-ile.md](portail-ile.md) : verrou d'entrée (`hellWhy`), plus aucune vague sur l'île une fois l'invasion repoussée, contamination qui recule avec les zones conquises (`conqueredZones`).
 - [armee-combat.md](armee-combat.md) : troupes, ordres, simulation de combat, recrutement à la caserne avancée (`recruitHell`, `recruitPlan.ts`).
 - [fin-du-royaume.md](fin-du-royaume.md) : la zone 6, le roi, la citadelle.
 - [ages.md](ages.md) : `ZONE_AGE` suit les âges ; un passage d'âge rouvre la brume (`War.ageUp`).
@@ -94,7 +94,7 @@ Règles de pose (`HellBase.canBuild`) : zone tenue (`Hell.held` : le seuil, ou u
 - Les démons d'une contre-attaque ou d'une vague sont des « raiders » (`zone = −1`) : sans poste ni laisse. À la chute d'un camp, ceux de la contre-attaque deviennent la garnison de la zone (`fall`).
 - `HellBase.load` rend aux démons sans zone repris de la sauvegarde la force de la zone d'où ils viennent (`active`) ; sans cela ils reviendraient aux stats de la zone 1.
 - Le front dépend de la zone la plus profonde **gardée** : un poste sans camp ni troupe n'est pas « gardé » (`troopsIn`), il sera repris.
-- Le camp au seuil (zone 0) subit aussi des contre-attaques tant que rien n'est conquis, mais ne suspend pas les vagues de l'île (`frontPosts` ne compte que les zones conquises).
+- Le camp au seuil (zone 0) subit aussi des contre-attaques tant que rien n'est conquis, (`frontPosts` ne compte que les zones conquises ; il ne suspend plus rien sur l'île, où plus aucune vague ne vient après l'invasion).
 - Les bâtiments du joueur au combat sont des `HellBuilding` de côté `player` ; `HellBase.buildings` les reconnaît à `kind in BASE_DEFS` (la tour de garde et la caserne de l'île, aussi `player`, n'y sont pas).
 - Royaume tombé (`portalOut`) : `hellWhy()` rend `null`, donc `enterHell` reste possible par le clic sur le portail (`world.portalOpen` reste vrai), alors que `sendThroughPortal`, `recruitHell` et `hellPresence` refusent. À vérifier : est-ce voulu ?
 - Distance des tirs et portées : toujours du **bord** de la cible (rayon déduit), pas du centre.

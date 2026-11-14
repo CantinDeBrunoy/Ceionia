@@ -4,7 +4,7 @@ import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { isleOrigins, zoneOrigins } from '../src/build/zones';
 import { HellMap } from '../src/world/hell';
-import { Hell, HellUnit, RAID_FIRST, SECURE_WAVES, demonStats } from '../src/sim/hell';
+import { Hell, HellUnit, RAID_FIRST, INVASION_WAVES, INVASION_GAP, demonStats } from '../src/sim/hell';
 import { Command, formation, unitAt, foeAt, inRect, SPACING } from '../src/sim/command';
 import { TROOPS, newArmy, recruit, recruitWhy, cancelRecruit, dismiss, stepArmy, wound, troopStats, readArmy, troopCap, armyCap, RecruitCtx, HEAL_TIME, isTroopKind, onlyGearMissing } from '../src/sim/army';
 import { emptyStock } from '../src/sim/gear';
@@ -177,24 +177,25 @@ describe('la défense de l’île du portail', () => {
   };
   /** La guerre au pas de 1/10 s pendant `t` secondes */
   const tick = (war: War, t: number, until?: () => boolean) => { for (let i = 0; i < t * 10; i++) { war.update(0.1, 1); if (until?.()) return true; } return false; };
+  /** L'invasion lancée tout de suite, sans attendre la garnison : sa première vague sort du portail */
+  const invade = (war: War) => { war.acceptPve(); tick(war, 1); war.inv = 'coming'; war.faction!.nextRaid = war.faction!.time; };
 
-  it('les vagues arrivent à l’heure, sortent du portail, ne touchent que l’île ; la garnison et la tour les repoussent', () => {
-    const w = setup(), war = new War(w); war.skipInvasion();
+  it('les trois vagues de l’invasion sortent du portail, ne touchent que l’île ; la garnison et la tour les repoussent, puis plus rien', () => {
+    const w = setup(), war = new War(w); war.acceptPve();
     for (let i = 0; i < 4; i++) expect(war.recruit('soldier', 1, 80)).toBeNull();
     for (let i = 0; i < 2; i++) expect(war.recruit('archer', 1, 80)).toBeNull();
     expect(w.exp.gear.spear).toBe(6);
     tick(war, 2);
     expect(war.isle!.defs.size).toBe(2);
-    // la première vague : RAID_FIRST secondes après la première tour
-    expect(war.nextWaveIn()).toBeGreaterThan(RAID_FIRST - 5);
     // (une recrue à la fois par caserne)
     tick(war, 4 * TROOPS.soldier.time + 2 * TROOPS.archer.time - 2 + 5);
     expect(war.isle!.sim.alive('player')).toHaveLength(6);
     expect(war.isle!.raid).toBeNull();
-    let waves = 0;
-    for (let n = 0; n < SECURE_WAVES; n++) {
-      war.callWave();
-      expect(tick(war, 2, () => !!war.isle!.raid)).toBe(true);
+    expect(war.inv).toBe('ready');
+    expect(war.startInvasion()).toBe(true);
+    for (let n = 1; n <= INVASION_WAVES; n++) {
+      expect(war.invStep()).toBe(n);
+      expect(tick(war, INVASION_GAP + 2, () => !!war.isle!.raid)).toBe(true);
       const isle = war.isle!;
       // les démons sortent devant le portail, sur l'île
       for (const u of isle.raiders()) {
@@ -205,21 +206,25 @@ describe('la défense de l’île du portail', () => {
       // ils ne quittent jamais l'île (la carte de combat n'est faite que de ses cases)
       tick(war, 120, () => !war.isle!.raid);
       expect(war.isle!.raid).toBeNull();
-      waves = w.isleGuard.waves;
-      // les blessés guérissent entre deux vagues
-      tick(war, HEAL_TIME + 5);
+      expect(w.isleGuard.waves).toBe(n);
+      // entre deux vagues : le compte à rebours de la suivante
+      if (n < INVASION_WAVES) { expect(war.inv).toBe('coming'); expect(war.nextWaveIn()).toBeGreaterThan(INVASION_GAP - 15); }
     }
-    expect(waves).toBe(SECURE_WAVES);
-    expect(war.faction!.raidsRepelled).toBe(SECURE_WAVES);
+    expect(war.inv).toBe('done');
+    expect(war.faction!.raidsLost).toBe(0);
     expect(isleSecured(w)).toBe(true);
-    expect(war.news.some((x) => x.kind === 'secured')).toBe(true);
-  }, 60000);
+    // c'est fini : ni compte à rebours, ni cor, ni vague, même longtemps après
+    tick(war, RAID_FIRST * 2);
+    expect(war.isle!.raid).toBeNull();
+    expect(war.faction!.wave).toBe(INVASION_WAVES);
+    expect(war.nextWaveIn()).toBeNull();
+    expect(war.callWhy()).not.toBeNull();
+  }, 90000);
 
   it('la tour de garde tire seule sur les démons à portée ; les défenses tombées font perdre la vague, puis se relèvent', () => {
-    const w = setup(), war = new War(w); war.skipInvasion();
-    tick(war, 1);
+    const w = setup(), war = new War(w);
+    invade(war);
     const isle = war.isle!, tower = [...isle.defs.values()].find((b) => b.kind === 'watchtower')!;
-    war.callWave();
     tick(war, 1, () => !!isle.raid);
     expect(isle.raid).not.toBeNull();
     // la tour tire (des flèches, pas de feu)
@@ -267,11 +272,11 @@ describe('la défense de l’île du portail', () => {
   }, 30000);
 
   it('se sauvegarde et se reprend : armée, recrues en route, faction, vague en cours', () => {
-    const w = setup(), war = new War(w); war.skipInvasion();
+    const w = setup(), war = new War(w); war.acceptPve();
     war.recruit('soldier', 1, 80); war.recruit('archer', 1, 80);
     tick(war, TROOPS.soldier.time + 1);
     war.recruit('soldier', 1, 80);
-    war.callWave();
+    invade(war);
     tick(war, 1, () => !!war.isle!.raid);
     const raiders = war.isle!.raiders().length;
     expect(raiders).toBeGreaterThan(0);
@@ -314,7 +319,7 @@ describe('la condition d’âge : l’île du portail ne conditionne plus rien (
     const t = isleOrigins(w, 'watchtower')[0];
     w.place('watchtower', t % N, Math.floor(t / N), 0, true, 1, false);
     sim.recalc();
-    w.isleGuard.waves = SECURE_WAVES;
+    w.isleGuard.waves = INVASION_WAVES;
     expect(isle()).toHaveLength(0);
     // à un autre âge, rien de tout ça
     sim.age = 2;

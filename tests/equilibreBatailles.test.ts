@@ -109,6 +109,11 @@ describe('équilibre : batailles sur l’île du portail', () => {
     w.place('barracks', c % N, Math.floor(c / N), 0, true, age, false);
     return w;
   };
+  /**
+   * Une incursion lancée à la main au niveau `level` : le jeu n'en envoie plus hors des trois vagues de l'invasion, mais le
+   * combat de l'île et la composition des vagues (`planRaid`) restent éprouvés ici
+   */
+  const raid = (war: War, level: number) => { const f = war.faction!; f.raidsRepelled = level - 1; war.isle!.startRaid(f.spawnRaid(f.time)); };
   const fight = (age: number, n: number, level: number, difficulty: Difficulty = 'normal') => {
     const w = island(age);
     w.difficulty = difficulty;
@@ -121,12 +126,10 @@ describe('équilibre : batailles sur l’île du portail', () => {
     }
     tick(1);
     const f = war.faction!;
-    f.raidsRepelled = level - 1;
-    war.callWave();
-    tick(3, () => !!war.isle!.raid);
+    raid(war, level);
     const foes = war.isle!.raiders().length, start = war.isle!.sim.alive('player').length;
     tick(400, () => !war.isle!.raid);
-    return { won: f.raidsLost === 0 && f.raidsRepelled === level, left: war.isle!.sim.alive('player').length, start, foes };
+    return { won: f.raidsLost === 0 && !war.isle!.raid, left: war.isle!.sim.alive('player').length, start, foes };
   };
 
   it('trente soldats industriels ou modernes face à la vague pleine : victoire serrée, ni promenade ni raz-de-marée', () => {
@@ -155,28 +158,11 @@ describe('équilibre : batailles sur l’île du portail', () => {
     expect(s.foes).toBeLessThan(n.foes);
   }, 180000);
 
-  it('l’annonce : la vague est composée avant d’arriver, et c’est elle qui arrive', () => {
-    const w = island(3), war = new War(w); war.skipInvasion();
-    for (let i = 0; i < 20; i++) war.army.troops.push({ id: war.army.nextId++, kind: 'soldier', hp: 130, maxHp: 130, where: 'isle', heal: 0 });
-    for (let i = 0; i < 20; i++) war.update(0.1, 3);
-    const f = war.faction!;
-    f.nextRaid = f.time + 30;
-    for (let i = 0; i < 20; i++) war.update(0.1, 3);
-    expect(f.planned).not.toBeNull();
-    const plan = [...f.planned!];
-    expect(war.news.some((x) => x.text.includes('se rassemblent'))).toBe(true);
-    war.callWave();
-    for (let i = 0; i < 20; i++) war.update(0.1, 3);
-    expect(f.activeRaid!.units.map((u) => u.kind)).toEqual(plan);
-    expect(f.planned).toBeNull();
-  }, 30000);
-
   it('beaucoup de monde (100+ unités) : la simulation reste rapide', () => {
     const w = island(4), war = new War(w); war.skipInvasion();
     for (let i = 0; i < 80; i++) war.army.troops.push({ id: war.army.nextId++, kind: 'soldier', hp: 150, maxHp: 150, where: 'isle', heal: 0 });
     for (let i = 0; i < 20; i++) war.update(0.1, 4);
-    war.faction!.raidsRepelled = 4;
-    war.callWave();
+    raid(war, 5);
     for (let i = 0; i < 30; i++) war.update(0.1, 4);
     expect(war.isle!.raiders().length + war.isle!.sim.alive('player').length).toBeGreaterThan(100);
     const t0 = performance.now();

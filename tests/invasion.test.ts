@@ -5,12 +5,15 @@ import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { isleOrigins, zoneOrigins } from '../src/build/zones';
 import { War, waveForce, clockText, invasionTroops } from '../src/sim/war';
-import { DEMON_POWER, INVASION_DELAY } from '../src/sim/hell';
+import { DEMON_POWER, INVASION_DELAY, INVASION_WAVES, INVASION_GAP } from '../src/sim/hell';
 import { TroopKind, troopStats } from '../src/sim/army';
 import { sumPower } from '../src/sim/hellBalance';
 import type { Difficulty } from '../src/sim/difficulty';
 
-/** L'invasion du portail : annoncée une fois (tour + caserne + garnison), grosse, à repousser avant d'ouvrir les Enfers */
+/**
+ * L'invasion du portail : annoncée une fois (tour + caserne + garnison), trois vagues de plus en plus grosses à repousser
+ * avant d'ouvrir les Enfers ; ensuite, plus aucune vague
+ */
 
 beforeAll(() => setMapSize(192));
 
@@ -53,7 +56,7 @@ describe('l’invasion : quand elle est annoncée', () => {
     }
   });
 
-  it('pas de vague sans choix : tout prêt, le joueur décide ; « Affronter » lance la vague après 10 s', () => {
+  it('pas de vague sans choix : tout prêt, le joueur décide ; « Affronter » lance la première vague après 10 s', () => {
     const war = pveWar(island());
     enlist(war, 3);
     tick(war, 2);
@@ -86,14 +89,28 @@ describe('l’invasion : quand elle est annoncée', () => {
     expect(war.inv).toBe('raid');
     expect(said(war, 'invasionStart')).toBe(1);
     expect(war.faction!.activeRaid!.units.map((u) => u.kind)).toEqual(plan);
-    // repoussée : faite, et elle ne se redéclenche pas
-    tick(war, 400, () => war.inv === 'done');
+    // la première repoussée : la deuxième dans INVASION_GAP s, celle qui est annoncée, puis la troisième
+    tick(war, 200, () => war.inv !== 'raid');
+    expect(war.inv).toBe('coming');
+    expect(war.invStep()).toBe(2);
+    expect(said(war, 'repelled')).toBe(1);
+    expect(war.nextWaveIn()!).toBeGreaterThan(INVASION_GAP - 2);
+    const plan2 = [...war.faction!.planned!];
+    tick(war, INVASION_GAP + 2, () => !!war.isle!.raid);
+    expect(war.faction!.activeRaid!.units.map((u) => u.kind)).toEqual(plan2);
+    // les trois repoussées : faite, l'île sûre, et plus rien ne vient
+    tick(war, 600, () => war.inv === 'done');
     expect(war.inv).toBe('done');
+    expect(said(war, 'invasionStart')).toBe(INVASION_WAVES);
     expect(said(war, 'invasionDone')).toBe(1);
-    tick(war, 60);
+    expect(said(war, 'secured')).toBe(0);
+    expect(war.faction!.raidsRepelled).toBe(INVASION_WAVES);
+    tick(war, 600);
+    expect(war.isle!.raid).toBeNull();
+    expect(war.nextWaveIn()).toBeNull();
+    expect(war.faction!.wave).toBe(INVASION_WAVES);
     expect(said(war, 'invasion')).toBe(1);
-    expect(war.faction!.raidsRepelled).toBe(1);
-  }, 60000);
+  }, 90000);
 
   it('la garnison la déclenche : à Facile, deux soldats suffisent', () => {
     expect(invasionTroops('normal')).toBe(3);
@@ -117,6 +134,23 @@ describe('l’invasion : quand elle est annoncée', () => {
     tick(war, 30, () => war.inv !== 'raid');
     expect(war.inv).toBe('wait');
     expect(war.hellWhy()).not.toBeNull();
+  }, 60000);
+
+  it('une vague perdue au milieu de l’invasion : elle reprend à cette vague, pas à la première', () => {
+    const war = pveWar(island());
+    enlist(war, 3);
+    tick(war, 2);
+    war.faction!.raidsRepelled = 1;
+    expect(war.invStep()).toBe(2);
+    war.startInvasion();
+    war.faction!.nextRaid = war.faction!.time;
+    tick(war, 2);
+    expect(war.inv).toBe('raid');
+    for (const u of war.isle!.sim.alive('player')) u.hp = 0;
+    for (const b of war.isle!.defs.values()) war.isle!.sim.damage(b, 1e6, -1);
+    tick(war, 30, () => war.inv !== 'raid');
+    expect(war.inv).toBe('wait');
+    expect(war.invStep()).toBe(2);
   }, 60000);
 });
 
@@ -323,27 +357,68 @@ describe('les sauvegardes', () => {
     war.skipInvasion();
     expect(reload(war).inv).toBe('done');
   });
+
+  it('entre deux vagues : rechargée, l’invasion attend « Affronter » et reprend à la vague suivante', () => {
+    const war = pveWar(island());
+    enlist(war, 3);
+    tick(war, 2);
+    war.startInvasion();
+    war.faction!.nextRaid = war.faction!.time;
+    tick(war, 200, () => war.faction!.raidsRepelled === 1 && war.inv === 'coming');
+    expect(war.inv).toBe('coming');
+    const back = reload(war);
+    enlist(back, 3);
+    tick(back, 1);
+    expect(back.inv).toBe('ready');
+    expect(back.invStep()).toBe(2);
+    expect(back.startInvasion()).toBe(true);
+    expect(back.faction!.planned!.length).toBe(back.faction!.planInvasion(2).length);
+  });
+
+  it('une partie d’avant les trois vagues, l’invasion déjà faite après une seule : l’île est sûre, plus aucune vague', () => {
+    const war = pveWar(island());
+    enlist(war, 3);
+    tick(war, 1);
+    war.inv = 'done';
+    war.faction!.raidsRepelled = 1;
+    war.faction!.nextRaid = war.faction!.time + 30;
+    const back = reload(war, (s) => { (s.faction as { raidsRepelled: number }).raidsRepelled = 1; });
+    tick(back, 300);
+    expect(back.inv).toBe('done');
+    expect(back.isle!.raid).toBeNull();
+    expect(back.nextWaveIn()).toBeNull();
+    expect(back.faction!.raidsRepelled).toBe(INVASION_WAVES);
+  });
 });
 
-describe('les vagues suivantes', () => {
-  it('« Appeler la prochaine vague » : désactivé sans garnison ou pendant une vague, sans effet avant l’invasion', () => {
+describe('le cor', () => {
+  it('« Appeler la vague » : seulement entre deux vagues de l’invasion, avec des soldats ; jamais avant, ni après', () => {
     const war = pveWar(island());
     tick(war, 1);
     war.callWave();
     expect(war.faction!.nextRaid).toBeLessThan(0);
     expect(war.callWhy()).not.toBeNull();
-    war.inv = 'done';
-    war.faction!.nextRaid = war.faction!.time + 200;
-    expect(war.callWhy()).toBe('Il faut des soldats sur l’île pour appeler une vague.');
     enlist(war, 3);
-    tick(war, 1);
+    tick(war, 2);
+    war.startInvasion();
+    war.faction!.nextRaid = war.faction!.time;
+    tick(war, 200, () => war.faction!.raidsRepelled === 1 && war.inv === 'coming');
     expect(war.callWhy()).toBeNull();
     war.callWave();
     tick(war, 3, () => !!war.isle!.raid);
     expect(war.isle!.raid).not.toBeNull();
     expect(war.callWhy()).toBe('Une vague est déjà en cours.');
-  });
+    war.skipInvasion();
+    tick(war, 300, () => !war.isle!.raid);
+    expect(war.callWhy()).toBe('Aucune vague n’est prévue pour le moment.');
+    war.callWave();
+    tick(war, 10);
+    expect(war.isle!.raid).toBeNull();
+  }, 60000);
 
+});
+
+describe('le bandeau', () => {
   it('le compte à rebours s’écrit en m:ss et la force se range en petite, moyenne, grosse', () => {
     expect(clockText(0)).toBe('0:00');
     expect(clockText(59.2)).toBe('1:00');
@@ -359,11 +434,12 @@ describe('l’invasion est gagnable, et grosse', () => {
     enlist(war, soldiers);
     tick(war, 2);
     war.startInvasion();
-    const plan = [...war.faction!.planned!];
+    // (la dernière vague, la plus grosse)
+    const plan = war.faction!.planInvasion();
     war.faction!.nextRaid = war.faction!.time;
     tick(war, 3, () => !!war.isle!.raid);
     const start = war.isle!.sim.alive('player').length;
-    tick(war, 500, () => !war.isle!.raid);
+    tick(war, 900, () => war.inv === 'done' || war.faction!.raidsLost > 0);
     return { won: war.inv === 'done' && war.faction!.raidsLost === 0, plan, left: war.isle!.sim.alive('player').length, start };
   };
 
@@ -378,7 +454,7 @@ describe('l’invasion est gagnable, et grosse', () => {
     expect(s.plan.length).toBeLessThan(n.plan.length);
   }, 120000);
 
-  it('elle pèse deux à trois fois la première vague normale', () => {
+  it('ses vagues grossissent ; la dernière pèse deux à trois fois la première vague normale', () => {
     const war = pveWar(island());
     tick(war, 1);
     const f = war.faction!;
@@ -386,5 +462,9 @@ describe('l’invasion est gagnable, et grosse', () => {
     expect(big / first).toBeGreaterThanOrEqual(2);
     expect(big / first).toBeLessThanOrEqual(3.6);
     expect(waveForce(f.planInvasion())).toBe('big');
+    const p = [1, 2, 3].map((k) => sumPower(f.planInvasion(k), DEMON_POWER));
+    expect(p[0]).toBeLessThan(p[1]);
+    expect(p[1]).toBeLessThan(p[2]);
+    expect(INVASION_WAVES).toBe(3);
   });
 });
