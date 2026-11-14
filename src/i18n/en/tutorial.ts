@@ -55,7 +55,6 @@ registerDict('tutorial', {
   'Personne n’est libre pour partir : passez à la suite.': 'Nobody is free to go: move on.',
   'Ouvrir les expéditions': 'Open expeditions',
   'Lancer une expédition': 'Start an expedition',
-  'Suivre l’équipe avec {eye}': 'Follow the team with {eye}',
   'L’équipement': 'Gear',
   'Certaines expéditions demandent du matériel : fabriquez-le dans l’onglet « Équipement ».': 'Some expeditions need equipment: craft it in the “Gear” tab.',
   'Ouvrir l’onglet Équipement': 'Open the Gear tab',

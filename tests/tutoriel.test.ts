@@ -18,6 +18,12 @@ describe('tutoriel : une phrase simple par étape', () => {
     expect(TUTO_TEXT.steps.welcome.text).toMatch(/village/);
   });
 
+  it('les expéditions : ouvrir et lancer, sans suivre l’équipe à l’œil', () => {
+    const t = TUTO_TEXT.steps.expeditions.tasks;
+    expect(t).toEqual(['Ouvrir les expéditions', 'Lancer une expédition']);
+    expect(t.join().includes('{eye}')).toBe(false);
+  });
+
   it('le bûcheron et le pierrier ont une zone d’emplacements à montrer', () => {
     expect(isZoned('lumber')).toBe(true);
     expect(isZoned('quarry')).toBe(true);

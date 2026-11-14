@@ -28,7 +28,8 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   10. `needs` : ouvrir la fiche d'un besoin
   11. `time` : pause et vitesse
   12. `ages` : ouvrir les conditions de l'âge suivant (à lire)
-  13. `expeditions`, 14. `gear`, 15. `incidents`
+  13. `expeditions` : ouvrir les expéditions et lancer une mission (pas de suivi à l'œil : l'étape passe dès le départ)
+  14. `gear`, 15. `incidents`
 - **Verrous de construction** (`GATE`) : pendant les étapes 1 à 7, on ne bâtit que ce que le tutoriel a déjà fait poser
   (`welcome`, `camera`, `fire` : la place ; puis maison et puits ; puis séchoir ; bûcheron ; pierrier). Le reste dit « Le
   tutoriel vous le fera bâtir un peu plus tard. ». Le verrou saute dès que le village compte un bâtiment hors de `GUIDED`,
@@ -72,7 +73,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
 - **Surbrillance** : `#tutoRing`, un élément à part, entoure l'élément montré : bordure dorée, lueur qui respire en 3,2 s.
   L'élément lui-même prend la classe `.tHi` : sur un bouton, un liseré doré intérieur ; rien d'autre (ni `transform`, ni
   couleur de fond, ni animation).
-- **Clics repérés** : un écouteur en capture sur `ui.root` note l'œil des cartes (`exp`, `inc`) et l'action de tout bouton
+- **Clics repérés** : un écouteur en capture sur `ui.root` note l'œil des cartes d'incident (`inc`) et l'action de tout bouton
   à `data-a` (`goal` pour l'objectif de la frise) ; `Tutorial.clicked(a)`. La liste se vide à chaque étape.
 - **Les drapeaux** : `on` (la bulle est active), `guiding` (la suite principale est en cours, même interrompue),
   `active` (la bulle guide vraiment : un chapitre qui attend ailleurs ne compte pas), `chapterOn`.
