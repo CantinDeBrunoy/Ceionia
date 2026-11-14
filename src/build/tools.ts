@@ -415,6 +415,8 @@ export class ToolController implements ToolInput {
       this.downAt = [e.x, e.y];
       return;
     }
+    // version 4 : les autres îles ne se bâtissent ni ne se transforment
+    if (!this.h.world.inMain(Math.floor(this.hit.x), Math.floor(this.hit.z))) { this.pressed = false; this.h.toast(tr('Hors de votre île : on ne bâtit pas sur les autres îles')); return; }
     this.beginStroke();
     if (t === 'volcano') {
       // le volcan se pose d'un seul clic, à l'écart des bâtiments
@@ -567,7 +569,7 @@ export class ToolController implements ToolInput {
     const type = this.tool === 'forest' ? VEG_FOREST : this.tool === 'field' ? VEG_FIELD : this.tool === 'rocks' ? VEG_ROCKS : 0;
     for (let cz = Math.floor(hit.z - r); cz <= Math.ceil(hit.z + r); cz++)
       for (let cx = Math.floor(hit.x - r); cx <= Math.ceil(hit.x + r); cx++) {
-        if (!w.inCells(cx, cz)) continue;
+        if (!w.inCells(cx, cz) || !w.inMain(cx, cz)) continue;
         if (Math.hypot(cx + 0.5 - hit.x, cz + 0.5 - hit.z) > r) continue;
         if (type === VEG_FOREST && hash2(cx, cz, (performance.now() / 150) | 0) > 0.7) continue;
         // la gomme : plantations, et le décor sauvage de la carte (arbres isolés, buissons, cailloux), qui n'est pas dans veg

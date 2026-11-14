@@ -3,6 +3,7 @@ import { World, N, setMapSize, BIOME_DESERT, BIOME_TROPICAL } from '../src/world
 import { newWorld, CONTINENT } from '../src/world/mapgen';
 import { GEN_ARCH, GEN, mainFrame } from '../src/world/continent';
 import { ARCH_N, MAIN_N, archLayout } from '../src/world/archipelago';
+import { sculpt } from '../src/world/terraform';
 
 const SEEDS = [11, 4242];
 const cache = new Map<number, World>();
@@ -80,9 +81,12 @@ describe('archipel (version 4, carte de 384)', () => {
       const w = archipel(seed);
       for (const q of w.isles!.rivals) {
         const v = q.village;
-        for (let z = Math.ceil(v.z - v.r + 2); z < v.z + v.r - 2; z++)
-          for (let x = Math.ceil(v.x - v.r + 2); x < v.x + v.r - 2; x++) {
-            if (Math.hypot(x + 0.5 - v.x, z + 0.5 - v.z) > v.r - 2) continue;
+        // (tout plat au cœur, 0,6 fois le rayon ; plus loin, il garde un peu de relief)
+        const c = v.r * 0.6;
+        expect(v.r).toBeGreaterThanOrEqual(15);
+        for (let z = Math.ceil(v.z - c); z < v.z + c; z++)
+          for (let x = Math.ceil(v.x - c); x < v.x + c; x++) {
+            if (Math.hypot(x + 0.5 - v.x, z + 0.5 - v.z) > c - 1) continue;
             expect(w.isWaterCell(x, z)).toBe(false);
             expect(w.cellSlope(x, z)).toBeLessThan(0.3);
           }
@@ -128,6 +132,20 @@ describe('archipel (version 4, carte de 384)', () => {
     let same = 0;
     for (let k = 0; k < N * N; k++) if (back.biome[k] === w.biome[k]) same++;
     expect(same / (N * N)).toBeGreaterThan(0.995);
+  });
+
+  it('on ne bâtit, ne trace et ne sculpte que sur l’île principale', () => {
+    const w = archipel(4242), v = w.isles!.rivals[0].village, x = Math.round(v.x), z = Math.round(v.z);
+    expect(w.canPlace('house', x, z)).toMatch(/Hors de votre île/);
+    expect(w.canRoad(x, z)).toBe(false);
+    expect(w.paintBiome(x, z, 0)).toBe(false);
+    const before = Float32Array.from(w.heights);
+    sculpt(w, 'raise', x, z, 3, 0.05, { target: 0 });
+    expect(Array.from(w.heights)).toEqual(Array.from(before));
+    // sur l'île principale, rien ne change : on bâtit près du départ
+    const [sx, sz] = w.startSpot();
+    expect(w.canPlace('gather', sx, sz)).toBeNull();
+    expect(w.canRoad(sx - 2, sz)).toBe(true);
   });
 
   it('avant la version 4, le cadre est toute la carte (rien ne change aux anciennes parties)', () => {
