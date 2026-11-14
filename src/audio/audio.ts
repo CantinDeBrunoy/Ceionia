@@ -48,6 +48,34 @@ const SAMPLES: Record<string, { file: string; rate?: number; max?: number }> = {
 /** niveau de crête des enregistrements, proche des cris de synthèse */
 const SAMPLE_PEAK = 0.16;
 
+/** Ambiances musicales hors des âges : le menu principal, les Enfers, la fin (chute du roi, voyage des colons, victoire) */
+export type MusicScene = 'menu' | 'hell' | 'end';
+/**
+ * Musique enregistrée, en attendant celle composée pour le jeu : fichiers de `public/sons/musique/` (sans extension),
+ * une liste par âge (`age0` … `age5`) et par scène. Sources et licences : `docs/audio.md` et la page Crédits. Une liste
+ * vide ou des fichiers absents rendent la musique générée ; `RECORDED_MUSIC = false` la rend partout
+ */
+export const MUSIC: Record<string, string[]> = {
+  age0: ['prehistoire-tribal', 'prehistoire-ancetres', 'prehistoire-oiseau-tonnerre'],
+  age1: ['antiquite-temple', 'antiquite-harpe', 'antiquite-luth', 'antiquite-cuivres'],
+  age2: ['medieval-exploration', 'medieval-auberge', 'medieval-conteur'],
+  age3: ['industriel-gymnopedie', 'industriel-morialta'],
+  age4: ['moderne-the', 'moderne-fleuriste'],
+  age5: ['futuriste-synthwave', 'futuriste-aout'],
+  menu: ['menu'], hell: ['enfers'], end: ['fin'],
+};
+const RECORDED_MUSIC = true;
+/** durée du fondu enchaîné entre deux morceaux (s) */
+const MUSIC_FADE = 4;
+/**
+ * niveau des morceaux sur le bus de la musique (les fichiers sont tous à −20 LUFS, voir `docs/audio.md`) : un peu au-dessus
+ * de la musique générée en valeur efficace (0,014 contre 0,011 au volume par défaut), un son continu contre des notes éparses
+ */
+const TRACK_GAIN = 0.55;
+
+/** Un morceau en cours : l'élément audio (lu en flux, sans tout décoder), son nœud et son gain de fondu */
+interface Track { key: string; name: string; el: HTMLAudioElement; src: MediaElementAudioSourceNode; g: GainNode; next: boolean; dropped: boolean }
+
 export class AudioEngine {
   ctx: AudioContext | null = null;
   musicVol = 0.5;
@@ -87,6 +115,13 @@ export class AudioEngine {
   private frogTimer = 2;
   /** vrais cris d'animaux chargés : tampon, début et durée utiles (s), gain qui ramène le pic à `SAMPLE_PEAK` */
   private samples = new Map<string, { buf: AudioBuffer; from: number; len: number; gain: number }>();
+  /** musique enregistrée : la scène imposée (sinon celle de l'âge), le morceau en cours, les fichiers introuvables */
+  private scene: MusicScene | null = null;
+  private ageKey = 'age0';
+  private track: Track | null = null;
+  private missing = new Set<string>();
+  /** dernier morceau joué par liste : le suivant en diffère */
+  private lastTrack = new Map<string, string>();
 
   /** À appeler depuis un geste utilisateur */
   start() {
@@ -145,6 +180,82 @@ export class AudioEngine {
     this.musicG.gain.setTargetAtTime(this.muteMusic ? 0 : this.musicVol * 0.55, this.ctx.currentTime, 0.1);
     this.sfxG.gain.setTargetAtTime(this.muteSfx ? 0 : this.sfxVol, this.ctx.currentTime, 0.1);
     this.ambG.gain.setTargetAtTime(this.muteSfx ? 0 : this.ambVol, this.ctx.currentTime, 0.1);
+    this.syncMusic();
+  }
+
+  /** La scène musicale (menu, Enfers, fin) ; null : la musique de l'âge */
+  music(scene: MusicScene | null) {
+    if (scene === this.scene) return;
+    this.scene = scene;
+    this.syncMusic();
+  }
+
+  /** La liste voulue (rien si la musique est coupée : aucun fichier n'est chargé) ; on change de morceau si elle change */
+  private syncMusic() {
+    if (!this.ctx) return;
+    const want = this.muteMusic || !RECORDED_MUSIC ? null : this.scene ?? this.ageKey;
+    if (this.track?.key === want) return;
+    this.fadeOut(this.track);
+    this.track = null;
+    if (want) this.playTrack(want);
+  }
+
+  /**
+   * Lance un morceau de la liste `key`, autre que le précédent si possible : il entre en fondu dès qu'il joue, et
+   * quelques secondes avant sa fin le suivant prend le relais. Un fichier illisible est écarté ; une liste sans fichier
+   * laisse la musique générée
+   */
+  private playTrack(key: string) {
+    const ctx = this.ctx!, list = (MUSIC[key] ?? []).filter((n) => !this.missing.has(n));
+    if (!list.length) { this.track = null; return; }
+    const prev = this.lastTrack.get(key), pool = list.length > 1 ? list.filter((n) => n !== prev) : list;
+    const name = pool[Math.floor(Math.random() * pool.length)];
+    this.lastTrack.set(key, name);
+    const el = new Audio();
+    el.preload = 'auto';
+    el.src = `${import.meta.env.BASE_URL}sons/musique/${name}.mp3`;
+    const src = ctx.createMediaElementSource(el), g = ctx.createGain();
+    g.gain.value = 0.0001;
+    src.connect(g); g.connect(this.musicG);
+    const t: Track = { key, name, el, src, g, next: false, dropped: false };
+    this.track = t;
+    el.addEventListener('playing', () => { if (this.track === t) g.gain.setTargetAtTime(TRACK_GAIN, ctx.currentTime, MUSIC_FADE / 4); });
+    const relay = () => {
+      if (this.track !== t || t.next) return;
+      t.next = true;
+      this.fadeOut(t);
+      this.playTrack(key);
+    };
+    el.addEventListener('timeupdate', () => { if (el.duration - el.currentTime < MUSIC_FADE) relay(); });
+    el.addEventListener('ended', relay);
+    el.addEventListener('error', () => {
+      if (t.dropped) return;
+      this.missing.add(name);
+      if (this.track === t) { this.drop(t); this.track = null; this.playTrack(key); }
+    });
+    el.play().catch(() => { /* lecture refusée sans geste : on réessaie au prochain réglage */ });
+  }
+
+  private fadeOut(t: Track | null) {
+    if (!t || !this.ctx) return;
+    t.g.gain.cancelScheduledValues(this.ctx.currentTime);
+    t.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, MUSIC_FADE / 4);
+    setTimeout(() => this.drop(t), MUSIC_FADE * 1000 + 300);
+  }
+
+  private drop(t: Track) {
+    if (t.dropped) return;
+    t.dropped = true;
+    t.el.pause();
+    t.el.removeAttribute('src');
+    t.el.load();
+    t.src.disconnect(); t.g.disconnect();
+  }
+
+  /** Le morceau en cours (pour vérifier sans écouter : `__game.audio.debugMusic()`) */
+  debugMusic() {
+    const t = this.track;
+    return { scene: this.scene, age: this.ageKey, track: t?.name ?? null, time: t ? +t.el.currentTime.toFixed(1) : 0, gain: t ? +t.g.gain.value.toFixed(3) : 0, missing: [...this.missing] };
   }
 
   private tone(freq: number, t: number, dur: number, type: OscillatorType, vol: number, dest: AudioNode, cutoff = 0, attack = 0.01) {
@@ -231,7 +342,10 @@ export class AudioEngine {
       this.chirp(T + 0.05, near);
     } else if (this.birdTimer <= 0) this.birdTimer = 2;
 
-    // musique
+    // musique : l'enregistrement de l'âge (ou de la scène) s'il y en a un, sinon la musique générée
+    const ageKey = `age${Math.min(s.age, 5)}`;
+    if (ageKey !== this.ageKey) { this.ageKey = ageKey; this.syncMusic(); }
+    if (this.track) { this.nextNote = this.nextPad = T + 0.5; return; }
     const scale = SCALES[Math.min(s.age, 4)];
     const root = ROOTS[s.season] - (night > 0.6 ? 12 : 0);
     const beat = (0.8 + (s.age === 0 ? 0.35 : 0) - s.age * 0.05) * (1 + night * 0.35);
@@ -316,8 +430,8 @@ export class AudioEngine {
   /** Onglet caché : tout se tait ; il reprend au retour */
   pause(hidden: boolean) {
     if (!this.ctx) return;
-    if (hidden) this.ctx.suspend();
-    else this.ctx.resume();
+    if (hidden) { this.ctx.suspend(); this.track?.el.pause(); }
+    else { this.ctx.resume(); this.track?.el.play().catch(() => { /* reprise refusée */ }); }
   }
 
   /** Cri de mouette : deux ou trois « kia » qui glissent vers le grave */

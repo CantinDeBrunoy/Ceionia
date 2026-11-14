@@ -115,6 +115,8 @@ renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const audio = new AudioEngine();
+/** Les réglages du son enregistrés, appliqués au moteur (au menu principal comme en partie) */
+const audioSettings = (s: Partial<Settings>) => Object.assign(audio, { musicVol: s.musicVol ?? 0.5, sfxVol: s.sfxVol ?? 0.7, ambVol: s.ambVol ?? 0.7, muteMusic: s.music !== true, muteSfx: s.sfxChosen === true && s.sfx !== true, sfxChosen: s.sfxChosen === true });
 /** distance de la caméra quand elle revient sur le village (assez près pour reconnaître ses maisons) */
 const VILLAGE_DIST = 30;
 /** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
@@ -365,7 +367,7 @@ class Game implements UIHost {
     }
     this.war.load(w.war);
     Object.assign(this.time, { dayLen: settings.dayLen === undefined || settings.dayLen === OLD_DAY_LEN ? 130 : settings.dayLen, seasonLen: settings.seasonLen === undefined || settings.seasonLen === OLD_SEASON_LEN ? 240 : settings.seasonLen, speed: settings.speed ?? 1 });
-    Object.assign(audio, { musicVol: settings.musicVol ?? 0.5, sfxVol: settings.sfxVol ?? 0.7, ambVol: settings.ambVol ?? 0.7, muteMusic: settings.music !== true, muteSfx: settings.sfxChosen === true && settings.sfx !== true, sfxChosen: settings.sfxChosen === true });
+    audioSettings(settings);
     if (settings.quality) this.quality = settings.quality;
     this.adaptive.level = Math.max(0, Math.min(MAX_LEVEL, Math.round(settings.autoLevel ?? (weak ? 2 : 0))));
     this.autoRoads = settings.autoRoads ?? true;
@@ -1984,7 +1986,11 @@ class Game implements UIHost {
 
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.uiTimer = 0.25; this.ui.update(); this.tutorial.update(); this.expeditions.lenient = this.tutorial.guiding; this.command.render(); if (!this.world.sandbox) this.warTips.update(0.25); }
-    if (this.uiTimer === 0.25) this.homeBtn.set(this.awayFromHome());
+    if (this.uiTimer === 0.25) {
+      this.homeBtn.set(this.awayFromHome());
+      // la musique de la fin (chute du roi des Enfers, voyage des colons, écrans de victoire), des Enfers, sinon de l'âge
+      audio.music(this.kingStage.playing || uiRoot.querySelector('.overlay.voyage, .overlay.victory') ? 'end' : this.mode === 'hell' ? 'hell' : null);
+    }
     // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }
     if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
@@ -2038,6 +2044,12 @@ async function boot() {
   // l'accueil : l'écran des modèles s'efface ; un autre couvrira la vue au lancement de la partie
   models.done(true);
   screen = null;
+  // la musique du menu, si le joueur l'a allumée : le son démarre au premier clic ou à la première touche
+  audioSettings(loadSettings());
+  audio.music('menu');
+  const wake = () => { audio.start(); audio.applyVolumes(); };
+  window.addEventListener('pointerdown', wake, { once: true });
+  window.addEventListener('keydown', wake, { once: true });
   menu = showMenu(uiRoot, {
     start: (map, mode, seed, difficulty, age) => start(map, mode, seed, difficulty, age),
     importFile: async (f) => {
