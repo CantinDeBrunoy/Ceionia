@@ -26,7 +26,7 @@ export function fisherKind(age: number): VesselKind {
 }
 
 /** Coque effilée : pont de largeur w, profondeur d sous la flottaison, longueur L ; proue en pointe, poupe arrondie */
-function hull(p: Parts, w: number, d: number, L: number, top: number, color: number, band: number | null, deck: number) {
+export function hull(p: Parts, w: number, d: number, L: number, top: number, color: number, band: number | null, deck: number) {
   p.add(new THREE.BoxGeometry(w, top + d * 0.45, L), 0, (top - d * 0.45) / 2, 0, color);
   p.add(new THREE.BoxGeometry(w * 0.66, d * 0.6, L * 0.96), 0, -d * 0.7, 0, color);
   p.add(new THREE.ConeGeometry(w * 0.71, w, 4).rotateY(Math.PI / 4).rotateX(Math.PI / 2).scale(1, (d + top) / w, 1), 0, (top - d) / 2, L / 2 + w / 2 - 0.01, color);
@@ -99,6 +99,13 @@ const BUILD: Record<VesselKind, (p: Parts) => [number, number, number] | null> =
   cargo: (p) => freighter(p, 4),
   hydro: (p) => { hydrofoil(p); return null; },
 };
+const vessels = new Map<VesselKind, { geo: THREE.BufferGeometry; funnel: [number, number, number] | null }>();
+/** Le modèle d'un navire de commerce (géométrie partagée, et la bouche de sa cheminée s'il en a une) : sert aussi au commerce entre les îles rivales */
+export function vesselModel(kind: VesselKind) {
+  let g = vessels.get(kind);
+  if (!g) { const p = new Parts(); const f = BUILD[kind](p); g = { geo: p.build(false).body, funnel: f }; vessels.set(kind, g); }
+  return g;
+}
 /** Vitesse (cases par seconde) : la voile est lente, le vapeur plus vif, le cargo et le navire à foils filent */
 const SPEED: Record<VesselKind, number> = { caravel: 1.1, galleon: 1, steamer: 1.6, cargo: 2, hydro: 3 };
 
@@ -128,7 +135,6 @@ const SEARCH = 9;
 export class SeaTraffic {
   group = new THREE.Group();
   private lanes = new Map<number, Lane>();
-  private geos = new Map<VesselKind, { geo: THREE.BufferGeometry; funnel: [number, number, number] | null }>();
   private smoke = new Puffs(80, 0);
   private v = new THREE.Vector3();
   private clock = 0;
@@ -160,11 +166,7 @@ export class SeaTraffic {
     return w.lake[k] ? w.lakeLevel[k] : SEA;
   }
 
-  private geoOf(kind: VesselKind) {
-    let g = this.geos.get(kind);
-    if (!g) { const p = new Parts(); const f = BUILD[kind](p); g = { geo: p.build(false).body, funnel: f }; this.geos.set(kind, g); }
-    return g;
-  }
+  private geoOf(kind: VesselKind) { return vesselModel(kind); }
 
   private makeVessel(kind: VesselKind, size: number, t: number): Vessel {
     const g = this.geoOf(kind), root = new THREE.Group(), mesh = new THREE.Mesh(g.geo, mats.body);

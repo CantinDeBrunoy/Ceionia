@@ -84,6 +84,8 @@ import { isleBlight } from './world/blight';
 import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { holdIsle, isleDefenses, nearIsle, villageBarracks } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
+import { NavalConflict } from './render/navalConflict';
+import type { ConflictState } from './sim/navalConflict';
 import { IsleRuins } from './render/isleRuins';
 import { RivalTowns } from './render/rivalTowns';
 import { setFxDensity } from './render/combatFx';
@@ -178,6 +180,8 @@ class Game implements UIHost {
   alpine: AlpineView;
   emergencies: Emergencies;
   transports: Transports;
+  /** le conflit vivant entre les deux îles rivales (décor : escarmouches, puis commerce ou patrouilles) */
+  naval: NavalConflict;
   halos: Halos;
   /** pastilles « ⬆ » sur les bâtiments qui peuvent évoluer */
   upBadges: UpgradeBadges;
@@ -423,6 +427,9 @@ class Game implements UIHost {
     this.fires.pails = (b) => this.agents.pails(b);
     this.agents.burning = (id) => this.fires.burning.some((b) => b.id === id);
     this.transports = new Transports(w, this.buildings);
+    this.naval = new NavalConflict(w);
+    this.naval.onClash = (k) => this.audio.sfxClash(k);
+    this.naval.onFirst = (x, z, seen) => this.firstSkirmish(x, z, seen);
     // halos de lumière des feux et des lanternes, la nuit
     this.halos = new Halos(w);
     this.upBadges = new UpgradeBadges(w);
@@ -473,7 +480,7 @@ class Game implements UIHost {
     // le hurlement d'une meute, plus faible au loin
     this.fauna.onSea = (k, x, z, size) => this.life.seaFx(k, x, z, size);
     this.fauna.onHowl = (x, z) => { const k = (1 - Math.min(1, Math.hypot(x - this.cam.target.x, z - this.cam.target.z) / 40)) * Math.min(1, 50 / this.cam.dist); if (k > 0.05) audio.sfxHowl(k); };
-    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group);
+    this.scene.add(this.terrain.group, this.roads.group, this.veg.group, this.buildings.group, this.agents.group, this.patrolView.group, this.sentinelView.group, this.fauna.group, this.eruptions.group, this.streams.group, this.atmosphere.group, this.life.group, this.fires.group, this.traffic.group, this.helis.group, this.airships.group, this.alpine.group, this.emergencies.group, this.transports.group, this.halos.mesh, this.upBadges.points, this.expView.group, this.fest.group, this.parade.group, this.pens.group, this.railView.group, this.seeps.group, this.railBoost.group, this.naval.group);
     this.applyQuality();
 
     const host = this;
@@ -1317,6 +1324,30 @@ class Game implements UIHost {
     this.nightSky.force(kind, this.time);
   }
 
+  /**
+   * La première bataille navale entre les îles rivales : une notification, une seule fois par partie (retenue dans le
+   * navigateur, rien dans la sauvegarde) ; aucune si on la regarde déjà
+   */
+  private firstSkirmish(x: number, z: number, seen: boolean) {
+    const key = `ceionia.escarmouche.${this.world.mapId}.${this.world.seed}`;
+    try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch { return; }
+    if (seen) return;
+    this.ui.toast(trx('Une escarmouche au large des îles rivales… Cliquez ici pour la voir.'), () => this.ensureSurface(() => { this.follow(null); this.cam.goTo(x, z, 40); }), 'action');
+  }
+
+  /**
+   * Mode développeur : une escarmouche entre les îles rivales tout de suite (`__game.skirmish('naval')` ou `'raid'`), la caméra
+   * sur son point de départ ; `__game.seeSkirmish()` suit l'action. Faux sans archipel ou hors guerre
+   */
+  skirmish(kind?: 'naval' | 'raid') {
+    const ok = this.naval.trigger(kind, this.sim.age);
+    if (ok) this.seeSkirmish();
+    return ok;
+  }
+  seeSkirmish() { const f = this.naval.focus(); if (f) { this.follow(null); this.cam.goTo(f[0], f[1], Math.max(30, Math.min(this.cam.dist, 45))); } }
+  /** L'état du conflit entre les îles rivales (à brancher sur la diplomatie) : en cours, paix, guerre gagnée, traité */
+  setConflict(state: ConflictState) { this.naval.state = state; }
+
   /** Mode développeur : rejoue la cinématique de fin du volet militaire (`__game.playKingdomEnd()`), depuis les Enfers (tous les plans) ou la surface */
   playKingdomEnd() { this.kingStage.playEnd(true); }
 
@@ -2026,6 +2057,7 @@ class Game implements UIHost {
       this.blightView.update(dt, this.env.night, this.cam.target, this.cam.dist);
       this.terrain.setNight(this.env.night);
       this.transports.update(gdt, this.sim.age);
+      this.naval.update(gdt, this.sim.age, this.cam.camera, this.mode === 'surface');
       this.railView.update(dt, this.sim.age);
       this.railBoost.update(dt, this.cam.target.x, this.cam.target.z, this.cam.dist, this.env.night);
       if (this.railView.lightsVersion !== this.railLightsV) { this.railLightsV = this.railView.lightsVersion; this.refreshHalos(); }
