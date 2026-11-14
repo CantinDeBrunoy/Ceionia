@@ -925,8 +925,8 @@ const sx0 = (v: number) => (v % 3) - 1;
 
 /** Le patio d'une maison (cw × cd au centre, murs de hauteur h) : dallage, galerie d'arcs, bassin, oranger ou palmier, pots */
 function courtyard(p: Parts, s: Style, v: number, cw: number, cd: number, h: number) {
-  p.box(cw, 0.012, cd, 0, 0, 0, pick([0xd9c9a2, 0xc9d6cc, 0xe6d3a8], v));
-  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) if ((i + j) % 2) p.box(cw / 2 - 0.01, 0.014, cd / 2 - 0.01, (i - 0.5) * cw / 2, 0, (j - 0.5) * cd / 2, s.tiles[0]);
+  p.box(cw, 0.035, cd, 0, 0, 0, pick([0xd9c9a2, 0xc9d6cc, 0xe6d3a8], v));
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) if ((i + j) % 2) p.box(cw / 2 - 0.01, 0.037, cd / 2 - 0.01, (i - 0.5) * cw / 2, 0, (j - 0.5) * cd / 2, s.tiles[0]);
   // sur les murs du patio, une arcade peinte au rez-de-chaussée
   for (const [f, len] of faces(p, cw, cd)) {
     const g = new Face(p, f.ry + Math.PI, f.ox, f.oz);
@@ -1382,7 +1382,7 @@ function oGarden(p: Parts, age: number, v: number, w: number, d: number) {
   fg.box(0.58, 0.06, 0.1, 0, wh + 0.14, -0.035, wall);
   if (age <= 3) fg.plane(0.46, 0.05, 0, wh + 0.17, 0.016, s.tiles[0]);
   // les allées de sable, les quatre parterres, les canaux en croix, la fontaine au milieu
-  p.box(W - 0.14, 0.02, D - 0.14, 0, 0, 0, age >= 4 ? 0xe2d8c0 : 0xd9c9a2);
+  p.box(W - 0.14, 0.035, D - 0.14, 0, 0, 0, age >= 4 ? 0xe2d8c0 : 0xd9c9a2);
   const bw = W * 0.36, bd = D * 0.36;
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) bed(p, bw, bd, sx * W * 0.24, sz * D * 0.24, v * 4 + sx + sz * 2, s.trim, 0.02);
   p.box(0.14, 0.035, D - 0.24, 0, 0.02, 0, s.trim); p.box(0.08, 0.037, D - 0.26, 0, 0.02, 0, O.water);
