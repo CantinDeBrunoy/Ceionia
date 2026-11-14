@@ -749,3 +749,42 @@ body.hell #resPanel { display: none !important; }
   #troopBar .tfoot > .tcorner { justify-self: end; }
   #troopBar .tfoot .tbub { left: var(--tbL, 0px); }
 }
+
+/* ---------- la carte du choix du portail (maquette `.claude/maquettes-hud/gpt-exp/portail-gpt.png`) ----------
+   parchemin bordé d'or ; le diorama du portail déborde en haut ; titre en Fraunces souligné d'un filet doré à losange ;
+   la consigne en encart avec les vignettes de la tour de garde et de la caserne ; deux choix côte à côte, l'or et la crème */
+#portalChoice.panel { top: 50%; width: min(540px, calc(100vw - 24px)); padding: 120px 26px 22px; border-radius: 22px; text-align: center; color: var(--hInk);
+  background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow), 0 18px 50px rgba(40, 25, 10, 0.35); backdrop-filter: none; -webkit-backdrop-filter: none; overflow: visible; }
+#portalChoice .pcDio { position: absolute; left: 50%; top: -96px; width: 360px; max-width: 76%; transform: translateX(-50%); pointer-events: none; filter: drop-shadow(0 8px 10px rgba(60, 20, 70, 0.35)); }
+#portalChoice h4 { margin: 0; font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 72; font-size: 32px; font-weight: 800; line-height: 1.05; color: #3A2213; }
+#portalChoice h4::after { content: ''; display: block; width: 62%; height: 9px; margin: 8px auto 0; background: linear-gradient(90deg, transparent, #D9A955 30%, #D9A955 70%, transparent) center / 100% 1px no-repeat, linear-gradient(45deg, transparent 40%, #E2B45E 40% 60%, transparent 60%) center / 9px 9px no-repeat, linear-gradient(-45deg, transparent 40%, #E2B45E 40% 60%, transparent 60%) center / 9px 9px no-repeat; }
+#portalChoice .pcSub { margin: 8px 0 12px; font-family: var(--hSerif); font-size: 17px; font-weight: 600; color: #4A3020; }
+#portalChoice .pcHow { margin: 0 0 12px; padding: 12px 14px 12px; border-radius: 16px; border: 1.5px solid rgba(217, 169, 85, 0.6); background: linear-gradient(180deg, rgba(255, 250, 236, 0.9), rgba(247, 233, 205, 0.75)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6); }
+#portalChoice .pcHow p { margin: 0; padding: 0; background: none; font-family: var(--hSerif); font-size: 15.5px; font-weight: 700; line-height: 1.3; color: #3A2213; }
+#portalChoice .pcB { display: flex; justify-content: center; gap: 40px; margin: 8px 0 8px; }
+#portalChoice .pcB figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#portalChoice .pcB img, #portalChoice .pcPh { display: block; width: 120px; height: 100px; object-fit: contain; transform: scale(1.3); transform-origin: 50% 60%; filter: drop-shadow(0 4px 4px rgba(80, 50, 15, 0.25)); }
+#portalChoice .pcPh { transform: none; }
+#portalChoice .pcPh { border-radius: 14px; background: rgba(217, 169, 85, 0.12); }
+#portalChoice .pcB figcaption { margin-top: 6px; position: relative; font-family: var(--hSerif); font-size: 15px; font-weight: 800; color: #3A2213; }
+#portalChoice .pcNote { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-family: var(--hSerif); font-style: italic; font-size: 13px; color: var(--hInk2); }
+#portalChoice .pcNote::before, #portalChoice .pcNote::after { content: ''; flex: 1; height: 1px; background: rgba(200, 160, 95, 0.5); }
+#portalChoice .pcBtns { display: flex; gap: 12px; }
+#portalChoice .pcBtns button { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px 14px 8px 12px; border-radius: 16px; text-align: left; white-space: normal; cursor: pointer; color: #3A2213; }
+#portalChoice .pcBtns button span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#portalChoice .pcBtns b { font-family: var(--hSerif); font-size: 17px; font-weight: 800; line-height: 1.1; }
+#portalChoice .pcBtns small { font-family: var(--hSerif); font-style: italic; font-size: 12.5px; font-weight: 500; color: #5A4030; }
+#portalChoice .pcBtns .pic { flex: none; width: 34px; height: 34px; }
+#portalChoice .pcGo { border: 2px solid #D29A35; background: linear-gradient(180deg, #FFE7A6, #F3BE58); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 -8px 14px rgba(215, 140, 30, 0.25), 0 0 0 2px rgba(255, 230, 170, 0.6), 0 4px 10px rgba(120, 75, 15, 0.3); }
+#portalChoice .pcGo:hover { background: linear-gradient(180deg, #FFEDB8, #F7CA6A); }
+#portalChoice .pcNo { border: 2px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F5E6C8); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 2px 6px rgba(120, 80, 25, 0.2); }
+#portalChoice .pcNo:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+@media (max-width: 520px) {
+  #portalChoice.panel { padding: 92px 14px 14px; }
+  #portalChoice .pcDio { top: -64px; width: 250px; }
+  #portalChoice h4 { font-size: 25px; }
+  #portalChoice .pcB img, #portalChoice .pcPh { width: 80px; height: 70px; }
+  #portalChoice .pcBtns { flex-direction: column; gap: 8px; }
+  #portalChoice .pcBtns button { min-height: 52px; }
+}
+#portalChoice .pcBtns small { display: block; margin: 0; }

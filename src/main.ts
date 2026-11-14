@@ -514,7 +514,7 @@ class Game implements UIHost {
     // (une défense de l'île en main : le clic droit la lâche, il ne donne pas d'ordre aux troupes)
     this.cam.rightClick = (e) => { if (this.islePlace) { this.tools.escape(); this.endIslePlace(); return; } if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
-    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart() });
+    this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
       war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
