@@ -46,6 +46,8 @@ const SAMPLES: Record<string, { file: string; rate?: number; max?: number }> = {
   hen: { file: 'poule', max: 3.5 },
   // pas de chèvre libre et légère : le bouquetin reprend le bêlement du mouton, plus aigu
   ibex: { file: 'mouton', rate: 1.3 },
+  // hurlement d'une vraie meute (28 s) : un passage de 7 s, joué quand le chef hurle (`sfxHowl`)
+  wolf: { file: 'loup', max: 7 },
 };
 /** niveau de crête des enregistrements, proche des cris de synthèse */
 const SAMPLE_PEAK = 0.16;
@@ -698,6 +700,8 @@ export class AudioEngine {
    */
   sfxHowl(k: number) {
     if (!this.ctx) return;
+    // le vrai hurlement enregistré s'il est chargé ; sinon la meute de synthèse
+    if (this.samples.has(SAMPLES.wolf.file)) { this.sfxCall('wolf', k); return; }
     k *= ANIMAL_VOL;
     const ctx = this.ctx, t0 = ctx.currentTime + 0.02;
     // écho de la vallée : le hurlement porte loin

@@ -97,6 +97,7 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 | `cerf.mp3` | cerf, élan (× 0,85) | Wikimedia Commons, « Elkbellow.ogg » (US Fish and Wildlife Service) | domaine public |
 | `vache.mp3` | vache | Wikimedia Commons, « Single Cow Moo.ogg », par MichaeltheFox8621 | CC BY-SA 4.0 (crédit obligatoire) |
 | `cheval.mp3` | cheval | Wikimedia Commons, « Wiehern.ogg » | domaine public |
+| `loup.mp3` | loup (passage de 7 s, `max`, joué par `sfxHowl` à la place de la meute de synthèse) | Wikimedia Commons, « Wolf howls.ogg » (US Fish and Wildlife Service) | domaine public |
 | `poule.mp3` | poule (passage de 3,5 s tiré au hasard, `max`) | Wikimedia Commons, « Hen announcing shes lain an egg.ogg », par alys (PDSounds) | domaine public |
 
 Les fichiers sont les transcodages MP3 de Commons (lus partout, Safari compris). Pour en ajouter un : le déposer dans `public/sons/animaux/`, l'inscrire dans `SAMPLES` (`rate` pour le décaler, `max` pour un long enregistrement), le citer dans `showCredits` (avec sa traduction) et dans ce tableau.
