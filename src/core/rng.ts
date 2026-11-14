@@ -23,3 +23,13 @@ export const smoothstep = (a: number, b: number, v: number) => {
   const t = clamp((v - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
 };
+
+/**
+ * Angle ramené dans ]−π, π], d'un coup (pas de boucle `while (d > π) d -= 2π` : avec un angle infini, ou si grand que
+ * retirer 2π ne le change plus, elle ne finissait jamais et figeait le jeu) ; un angle qui n'est pas un nombre fini donne 0
+ */
+export function wrapAngle(a: number): number {
+  if (!Number.isFinite(a)) return 0;
+  const T = Math.PI * 2, r = a - T * Math.ceil((a - Math.PI) / T);
+  return Number.isFinite(r) && Math.abs(r) <= Math.PI ? r : 0;
+}

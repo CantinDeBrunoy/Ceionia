@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { wrapAngle } from '../core/rng';
 import { tr } from '../i18n';
 import { World, N } from '../world/world';
 import { Building, KindId, sizeOf } from '../build/catalog';
@@ -447,7 +448,7 @@ function patientGeo() {
 }
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
-const turn = (from: number, to: number, k: number) => { let d = to - from; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return from + d * k; };
+const turn = (from: number, to: number, k: number) => { let d = to - from; d = wrapAngle(d); return from + d * k; };
 
 /**
  * Les secours en intervention : quand un bâtiment prend feu à portée d'une caserne, le camion (ou la pompe attelée) part

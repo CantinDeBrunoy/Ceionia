@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { wrapAngle } from '../core/rng';
 import { World } from '../world/world';
 import { Parts } from './parts';
 import { mats } from './materials';
@@ -231,8 +232,7 @@ export class Helis {
       if (len > 0.05) {
         const want = Math.atan2(d.x, d.z);
         let da = want - h.heading;
-        while (da > Math.PI) da -= Math.PI * 2;
-        while (da < -Math.PI) da += Math.PI * 2;
+        da = wrapAngle(da);
         const turnRate = Math.max(-1.6, Math.min(1.6, da * 2));
         h.heading += turnRate * dt;
         h.bank += (-turnRate * 0.22 - h.bank) * Math.min(1, dt * 3);

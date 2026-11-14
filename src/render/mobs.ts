@@ -4,7 +4,7 @@ import { Underground, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGMA } from '..
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { batGeo, flapMaterial } from './fauna';
 import { caveLit } from './caveLight';
-import { mulberry32 } from '../core/rng';
+import { mulberry32, wrapAngle } from '../core/rng';
 
 export type MobKind = 'zombie' | 'skeleton' | 'spider' | 'slime' | 'mushnub' | 'ghost' | 'golem' | 'worm';
 
@@ -158,8 +158,7 @@ const RING_GEO = new THREE.TorusGeometry(1, 0.18, 4, 9), FANG_GEO = new THREE.Co
 
 const turnTo = (m: Mob, target: number, k: number) => {
   let d = target - m.heading;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
+  d = wrapAngle(d);
   m.heading += d * Math.min(1, k);
 };
 
