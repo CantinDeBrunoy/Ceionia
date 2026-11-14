@@ -1040,3 +1040,6 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   #dock > #dockRow { grid-template-columns: auto fit-content(1180px) 330px auto; }
   #dock #dockMain { min-width: clamp(480px, calc(100vw - 880px), 640px); }
 }
+
+/* le champ de blé : sa vignette peinte, comme une carte de bâtiment */
+#items button.tile.thumb .gv { display: none; }
