@@ -48,7 +48,7 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
   - Repli : un fichier illisible ou absent est noté (`missing`) et sauté ; une liste sans fichier rend la musique générative (en partie seulement : au menu, elle ne tourne pas). Pendant un morceau, la musique générative se tait (`update` ressort avant les notes et recale `nextNote`, `nextPad`).
   - Revenir à la musique générée, ou passer à celle composée pour le jeu : remplacer les fichiers et les noms de `MUSIC` (une liste vide = musique générée pour cette scène), ou `RECORDED_MUSIC = false` partout. Mettre à jour les crédits.
   - Vérifier sans écouter : `__game.audio.debugMusic()` (scène, âge, morceau, position, gain, fichiers manquants).
-  - Les morceaux (tous MP3 96 kbit/s stéréo, 44,1 kHz, ramenés à −20 LUFS intégrés et −2 dBTP au plus, 48 Mo en tout, 68 min) :
+  - Les morceaux (tous MP3 96 kbit/s stéréo, 44,1 kHz, ramenés à −20 LUFS intégrés et −2 dBTP au plus, 64 Mo en tout, 93 min) :
 
 | Liste | Fichier | Morceau | Auteur | Licence |
 |---|---|---|---|---|
@@ -64,13 +64,21 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 | `age2` | `medieval-conteur` | « Teller of the Tales » (3:32) | Kevin MacLeod | CC BY 4.0 |
 | `age3` | `industriel-gymnopedie` | « Gymnopedie No 1 » d'Erik Satie (3:07) | Kevin MacLeod | CC BY 4.0 |
 | `age3` | `industriel-morialta` | « Danse Morialta » (3:56) | Kevin MacLeod | CC BY 4.0 |
+| `age3` | `industriel-gymnopedie-3` | « Gymnopedie No 3 » d'Erik Satie (2:25) | Kevin MacLeod | CC BY 4.0 |
+| `age3` | `industriel-valse-givre` | « Frost Waltz » (2:15) | Kevin MacLeod | CC BY 4.0 |
+| `age3` | `industriel-adieux` | « The Parting » (3:04) | Kevin MacLeod | CC BY 4.0 |
 | `age4` | `moderne-the` | « A cup of tea » (2:49) | TAD, OpenGameArt (« lofi Compilation ») | CC0 |
 | `age4` | `moderne-fleuriste` | « Florist » (1:53) | TAD, OpenGameArt | CC0 |
+| `age4` | `moderne-barman` | « Bartender » (4:07) | TAD, OpenGameArt | CC0 |
+| `age4` | `moderne-cafe-chats` | « Cat caffe » (2:13) | TAD, OpenGameArt | CC0 |
 | `age5` | `futuriste-synthwave` | « Calm Ambient 1 (Synthwave 4k) » (2:38) | The Cynic Project, OpenGameArt | CC0 |
 | `age5` | `futuriste-aout` | « Another August » (3:27) | The Cynic Project, OpenGameArt | CC0 |
+| `age5` | `futuriste-lifewave` | « Calm Ambient 3 (Lifewave 2k) » (3:07) | The Cynic Project, OpenGameArt | CC0 |
 | `menu` | `menu` | « Thaxted » de Gustav Holst (2:33) | Kevin MacLeod | CC BY 4.0 |
 | `hell` | `enfers-oppression` | « Oppressive Gloom » (3:19) | Kevin MacLeod | CC BY 4.0 |
 | `hell` | `enfers-com-mecha` | « Theme of Com-Mecha » (4:59), écrit pour une planète volcanique et industrielle | Matthew Pablo, OpenGameArt | CC BY 3.0 |
+| `hell` | `enfers-croisade` | « Crusade » (3:19) | Kevin MacLeod | CC BY 4.0 |
+| `hell` | `enfers-rituel` | « Ritual » (4:24) | Kevin MacLeod | CC BY 4.0 |
 | `end` | `fin` | « Beyond The Clouds » (2:22) | Matthew Pablo, OpenGameArt | CC BY 3.0 |
 
   - Préparer un fichier (ffmpeg, deux passes : mesure, puis correction linéaire) : `ffmpeg -i in.mp3 -af loudnorm=I=-20:TP=-2:LRA=11:print_format=json -f null -`, puis `ffmpeg -i in.mp3 -af "loudnorm=I=-20:TP=-2:LRA=11:measured_I=…:measured_TP=…:measured_LRA=…:measured_thresh=…:offset=…:linear=true,aresample=44100" -map_metadata -1 -ac 2 -c:a libmp3lame -b:a 96k sortie.mp3`. Vérifier : `ffmpeg -i sortie.mp3 -af ebur128=peak=true -f null -` (I ≈ −20 LUFS).
