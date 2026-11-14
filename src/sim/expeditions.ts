@@ -238,6 +238,11 @@ const destName = (c: Choice) => tr(c.sea ? 'la mer' : DEST_NAME[c.dest]);
  * Repli quand le village n'a pas de tel endroit à portée ; une grotte introuvable se cherche dans la montagne, puis au pied
  * de la moindre paroi (l'équipe y trouve une entrée), jamais dans la plaine ou le désert lointain
  */
+/**
+ * La galère du portail ne dépasse pas `PORTAL_SAIL` cases par seconde en moyenne ; son retour, le plus court des deux trajets,
+ * tient en `PORTAL_RETURN` du travail (de 0,8 à 0,97, voir `stepBoat` dans expeditionScenes.ts)
+ */
+export const PORTAL_SAIL = 2.2, PORTAL_RETURN = 0.17;
 const FALLBACK: Record<DestKind, DestKind | null> = { cave: 'mountain', mountain: 'far', river: 'plain', forest: 'plain', far: 'plain', plain: null, spaceport: null };
 /** Une équipe de plus tous les 30 habitants, quatre au plus */
 const PER_TEAM = 30, MAX_TEAMS = 4;
@@ -464,6 +469,9 @@ export class Expeditions {
       site: c.dest === 'cave' ? 'cave' : kind, age, sea: sea && kind === 'river',
       targets: [], entry: -1, front: -1, redo: this.done(m), mounts, ambush: [], routeLen: 0, might: 0, air,
     };
+    // la galère du portail traverse à l'allure d'une galère : loin de l'île, le travail s'allonge d'autant (sinon elle
+    // filait d'une rive à l'autre en quelques secondes, et l'on croyait l'équipe téléportée)
+    if (c.scene === 'portal') a.extra = Math.max(a.extra, this.portalCrossing(dest) / (PORTAL_SAIL * PORTAL_RETURN) - c.work);
     // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval (tous en selle, ou tous à pied) ; on part en selle
     const kits = party.map((): Kit => ({}));
     for (const g of ['plasma', 'assault', 'rifle', 'crossbow', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
@@ -648,6 +656,18 @@ export class Expeditions {
       const k = seats[i];
       this.agents.ride(id, { x: p.x + k.x * c + k.z * s, z: p.z - k.x * s + k.z * c, y: p.y + k.y, heading: p.heading + k.face, act: k.sit ? 'sit' : null });
     });
+  }
+
+  /** La longueur de la traversée vers l'île du portail : de la rive de départ, tout droit, jusqu'à la terre de l'île */
+  portalCrossing(from: [number, number]): number {
+    const w = this.world, p = w.portal;
+    if (!p) return 0;
+    const dx = p.x + 0.5 - from[0], dz = p.z + 0.5 - from[1], L = Math.hypot(dx, dz);
+    for (let k = 0.5; k < L; k += 0.5) {
+      const cx = Math.floor(from[0] + (dx / L) * k), cz = Math.floor(from[1] + (dz / L) * k);
+      if (w.inCells(cx, cz) && w.onPortalIsland(cx, cz) && !w.isWet(cx, cz)) return k;
+    }
+    return L;
   }
 
   /** L'appareil qui emmènerait l'équipe : l'hélicoptère de l'héliport (âge moderne) ou la montgolfière de l'aérodrome, avec ses deux aires ; null si le village n'en a pas */
