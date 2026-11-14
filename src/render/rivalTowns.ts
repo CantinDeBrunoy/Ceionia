@@ -106,7 +106,7 @@ export class RivalTowns {
       return [Math.max(0.16, Math.min(back, 0.6)), lo];
     }
     if (l.kind === 'field') return [mid - 0.01, mid];
-    if (l.kind === 'tower' || l.kind === 'gate') return [mid, mid];
+    if (l.kind === 'tower' || l.kind === 'gate' || l.kind === 'paifang') return [mid, mid];
     // au-dessus de la plupart de l'emprise, sans flotter de toute la pente : un socle comble le reste
     return [Math.max(mid, hi - 0.25), lo - 0.08];
   }
@@ -133,7 +133,7 @@ export class RivalTowns {
   private place(it: Item) {
     const [y, low] = this.footing(it.lot);
     if (it.body) it.body.y = y;
-    const need = it.lot.kind !== 'field' && it.lot.kind !== 'port' && it.lot.kind !== 'tower' && it.lot.kind !== 'gate' && y - low > 0.03;
+    const need = it.lot.kind !== 'field' && it.lot.kind !== 'port' && it.lot.kind !== 'tower' && it.lot.kind !== 'gate' && it.lot.kind !== 'paifang' && y - low > 0.03;
     if (need && !it.plinth) it.plinth = this.addPiece(plinthGeo(it.plan.people), it.lot.x, low, it.lot.z, it.lot.rot, it.lot.w * 0.94, y - low + 0.02, it.lot.d * 0.94);
     else if (need && it.plinth) { Object.assign(it.plinth, { y: low, sy: y - low + 0.02 }); this.setPiece(it.plinth); }
     else if (!need && it.plinth) { this.batch.remove(it.plinth.inst, it.plinth.geo); it.plinth = null; }

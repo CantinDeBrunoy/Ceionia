@@ -9,7 +9,7 @@ import { townModel, townWall, triCount } from '../src/render/townModels';
 
 const SEEDS = [11, 4242, 7];
 /** Budgets de triangles des modèles du peuple asiatique (`models/asian.ts`), quand ils diffèrent des autres */
-const ASIE_CAP: Partial<Record<TownKind, number>> = { temple: 11500, palace: 11500, house: 1700, teahouse: 3000 };
+const ASIE_CAP: Partial<Record<TownKind, number>> = { temple: 11500, palace: 11500, house: 1700, teahouse: 3000, gate: 3000, tower: 1300, paifang: 1400 };
 const worlds = new Map<number, World>();
 function archipel(seed: number) {
   if (!worlds.has(seed)) {
@@ -114,7 +114,7 @@ describe('villes des peuples rivaux (archipel)', () => {
   it('les modèles des deux peuples, à chaque âge : propres, dans leur budget de triangles et dans leur lot', () => {
     const kinds: [TownKind, number, number, number][] = [
       ['house', 1.2, 1.1, 1300], ['workshop', 1.2, 1.1, 1300], ['garden', 2.2, 2.2, 2000], ['field', 3, 2.5, 1000], ['tower', 1.3, 1.3, 1000], ['gate', 2.4, 1.4, 1500],
-      ['temple', 5, 5, 6500], ['palace', 6, 5, 6500], ['teahouse', 1.8, 1.6, 3000], ['market', 4, 4, 4500], ['port', 4, 3.5, 4500], ['caravan', 4, 4, 4500], ['baths', 3, 2.6, 4500],
+      ['temple', 5, 5, 6500], ['palace', 6, 5, 6500], ['teahouse', 1.8, 1.6, 3000], ['paifang', 1.8, 0.5, 1400], ['market', 4, 4, 4500], ['port', 4, 3.5, 4500], ['caravan', 4, 4, 4500], ['baths', 3, 2.6, 4500],
     ];
     const box = new THREE.Box3();
     for (const people of ['orient', 'asie'] as const)
