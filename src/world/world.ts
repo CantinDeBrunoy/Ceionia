@@ -322,6 +322,12 @@ export class World {
    * îles. Tirées de la graine et écrites dans la sauvegarde ; null avant la version 4 (une seule île)
    */
   isles: ArchLayout | null = null;
+  /** « Explorer le monde » : 'ask' tant que le joueur n'a pas répondu, 'no' s'il reste sur son île (sauvegardé) */
+  explore: 'ask' | 'no' = 'ask';
+  /** âge du village quand le joueur a accepté d'explorer le monde (sauvegardé) ; null sans archipel, ou sur une carte créée en archipel */
+  exploredAt: number | null = null;
+  /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
+  reveal = false;
 
   /** Case dans le cadre de l'île principale (toujours vrai avant la version 4) */
   inMain(x: number, z: number) {
@@ -1032,6 +1038,7 @@ export class World {
 
   /** Peint le biome d'une case (null : la case retrouve celui de son climat) ; true si quelque chose change */
   paintBiome(cx: number, cz: number, b: number | null) {
+    if (!this.inMain(cx, cz)) return false;
     if (!this.inCells(cx, cz)) return false;
     const k = this.ci(cx, cz), v = b === null ? 0 : b + 1;
     if (this.biomePaint[k] === v) return false;
@@ -1191,6 +1198,8 @@ export class World {
         if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return tr('L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'); continue; }
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return tr('Trop proche de l’eau : reculez sur la terre ferme');
       }
+    // version 4 : rien hors de l'île principale (les îles rivales et les petites îles sont aux autres peuples)
+    if (!this.inMain(x, z) || !this.inMain(x + s - 1, z + s - 1)) return tr('Hors de votre île : on ne bâtit pas sur les autres îles');
     // l'île du portail : des défenses seulement (et les défenses au village aussi)
     const isle = this.portalRule(kind, x, z, s);
     if (isle) return isle;
@@ -1456,7 +1465,8 @@ export class World {
   }
 
   canRoad(cx: number, cz: number) {
-    if (!this.inCells(cx, cz)) return false;
+    // (version 4 : pas de route hors de l'île principale)
+    if (!this.inCells(cx, cz) || !this.inMain(cx, cz)) return false;
     const k = this.ci(cx, cz);
     if (this.occ[k] || this.decor[k]) return false;
     // sur l'eau : un pont, sauf au large
@@ -1660,6 +1670,9 @@ export class World {
       n: N,
       gen: this.gen,
       ...(this.isles ? { isles: this.isles } : {}),
+      ...(this.explore === 'no' ? { explore: 'no' } : {}),
+      ...(this.exploredAt !== null ? { exploredAt: this.exploredAt } : {}),
+      ...(this.reveal ? { reveal: 1 } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
       roads,
       veg,
@@ -1779,6 +1792,9 @@ export class World {
     this.gen = Number.isInteger(d.gen) && d.gen > GEN_FIXED ? d.gen : GEN_FIXED;
     // (la place des îles se tire de la graine : celle de la sauvegarde n'est là que pour qui la lit au dehors)
     this.isles = this.gen >= GEN_ARCH ? archLayout(this.seed, N) : null;
+    this.explore = d.explore === 'no' ? 'no' : 'ask';
+    this.exploredAt = Number.isInteger(d.exploredAt) && this.isles ? d.exploredAt : null;
+    this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);
     for (let i = 0; i + 1 < (d.biomes ?? []).length; i += 2) if (d.biomes[i] >= 0 && d.biomes[i] < N * N && d.biomes[i + 1] >= 1 && d.biomes[i + 1] <= BIOME_NAMES.length) biomePaint[d.biomes[i]] = d.biomes[i + 1];
     const cleared = new Uint8Array(N * N), rift = new Uint8Array(N * N);
