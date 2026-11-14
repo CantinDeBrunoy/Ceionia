@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Parts, type Glow } from '../parts';
 import { mulberry32 } from '../../core/rng';
+import { asianJunk } from './asianShips';
 
 /**
  * Les modèles de la ville du peuple asiatique (décor de l'archipel, voir `townModels.ts`, `rivalTowns.ts` et
@@ -27,7 +28,7 @@ export const A = {
 /** L'élément `i` d'une liste, en boucle (aussi pour un `i` négatif) */
 const pick = <T,>(a: T[], i: number) => a[((Math.round(i) % a.length) + a.length) % a.length];
 /** Une couleur assombrie (k < 1) ou éclaircie */
-const dark = (c: number, k: number) => {
+export const dark = (c: number, k: number) => {
   const r = Math.min(255, Math.round(((c >> 16) & 255) * k)), g = Math.min(255, Math.round(((c >> 8) & 255) * k)), b = Math.min(255, Math.round((c & 255) * k));
   return (r << 16) | (g << 8) | b;
 };
@@ -38,10 +39,10 @@ const templeTile = (age: number) => (age <= 1 ? A.shingle : age === 2 ? A.tile :
 
 // ---------- Géométrie brute ----------
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 
 /** Pousse un triangle dont la normale s'écarte du point `ref` (les faces sont vues de face) ; un triangle plat est ignoré */
-function tri(out: number[], a: V3, b: V3, c: V3, ref: V3) {
+export function tri(out: number[], a: V3, b: V3, c: V3, ref: V3) {
   const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
   const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
   if (nx * nx + ny * ny + nz * nz < 1e-12) return;
@@ -49,10 +50,10 @@ function tri(out: number[], a: V3, b: V3, c: V3, ref: V3) {
   if (nx * cx + ny * cy + nz * cz >= 0) out.push(...a, ...b, ...c);
   else out.push(...a, ...c, ...b);
 }
-const quad = (out: number[], a: V3, b: V3, c: V3, d: V3, ref: V3) => { tri(out, a, b, c, ref); tri(out, a, c, d, ref); };
+export const quad = (out: number[], a: V3, b: V3, c: V3, d: V3, ref: V3) => { tri(out, a, b, c, ref); tri(out, a, c, d, ref); };
 
 /** Ajoute une liste plate de triangles comme une pièce */
-function mesh(p: Parts, pts: number[], x: number, y: number, z: number, col: number, ry = 0, glow: Glow = false) {
+export function mesh(p: Parts, pts: number[], x: number, y: number, z: number, col: number, ry = 0, glow: Glow = false) {
   if (!pts.length) return;
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
@@ -60,7 +61,7 @@ function mesh(p: Parts, pts: number[], x: number, y: number, z: number, col: num
 }
 
 /** Côte en toit (arête saillante) le long d'une polyligne : deux pans de `rw` de demi-largeur (direction `q`, horizontale) et `rh` de haut */
-function rib(out: number[], pts: V3[], qx: number, qz: number, rw: number, rh: number) {
+export function rib(out: number[], pts: V3[], qx: number, qz: number, rw: number, rh: number) {
   const UP: V3 = [0, -60, 0];
   for (let i = 0; i + 1 < pts.length; i++) {
     const [a, b] = [pts[i], pts[i + 1]];
@@ -76,7 +77,7 @@ function rib(out: number[], pts: V3[], qx: number, qz: number, rw: number, rh: n
  * Dessine dans un repère à part (origine en (x, y, z), tourné de `ry`, mis à l'échelle `k`) : la fonction dessine face à
  * +z autour de l'origine, comme pour un lot
  */
-function inFrame(p: Parts, x: number, y: number, z: number, ry: number, draw: (q: Parts) => void, k = 1) {
+export function inFrame(p: Parts, x: number, y: number, z: number, ry: number, draw: (q: Parts) => void, k = 1) {
   const q = new Parts();
   draw(q);
   const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(k, k, k));
@@ -85,7 +86,7 @@ function inFrame(p: Parts, x: number, y: number, z: number, ry: number, draw: (q
 }
 
 /** Une pièce pointue (cône à `seg` pans) de la base `at` vers la direction `dir` */
-function spike(p: Parts, r: number, len: number, at: V3, dir: V3, col: number, x: number, y: number, z: number, ry: number, seg = 4) {
+export function spike(p: Parts, r: number, len: number, at: V3, dir: V3, col: number, x: number, y: number, z: number, ry: number, seg = 4) {
   const d = new THREE.Vector3(...dir).normalize();
   const g = new THREE.ConeGeometry(r, len, seg, 1, true).translate(0, len / 2, 0).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d)).translate(...at);
   p.add(g, x, y, z, col, ry);
@@ -218,7 +219,7 @@ function coping(p: Parts, w: number, d: number, y: number, x: number, z: number,
 }
 
 /** Lanterne ronde de papier rouge, chapeaux dorés et gland ; allumée la nuit */
-function lantern(p: Parts, x: number, y: number, z: number, r = 0.04, col = A.lantern) {
+export function lantern(p: Parts, x: number, y: number, z: number, r = 0.04, col = A.lantern) {
   p.add(new THREE.CylinderGeometry(r * 0.85, r * 0.85, r * 1.7, 6, 1, true), x, y, z, col, 0, true);
   p.add(new THREE.ConeGeometry(r * 0.88, r * 0.5, 6, 1, true), x, y + r * 1.05, z, A.gold);
   p.add(new THREE.ConeGeometry(r * 0.88, r * 0.5, 6, 1, true).rotateX(Math.PI), x, y - r * 1.05, z, A.gold);
@@ -297,7 +298,7 @@ function rock(p: Parts, x: number, z: number, s: number, seed = 0) {
 }
 
 /** Balustrade de marbre (ou de bois) le long de x, centrée en (x, y, z), tournée de `ry` */
-function rail(p: Parts, len: number, x: number, y: number, z: number, ry = 0, col = A.marble, h = 0.07, step = 0.24) {
+export function rail(p: Parts, len: number, x: number, y: number, z: number, ry = 0, col = A.marble, h = 0.07, step = 0.24) {
   const c = Math.cos(ry), s = Math.sin(ry);
   p.box(len, 0.018, 0.026, x, y + h - 0.018, z, col, ry);
   p.box(len, 0.014, 0.02, x, y + 0.012, z, col, ry);
@@ -1119,7 +1120,8 @@ function pond(p: Parts, x: number, z: number, rx: number, rz: number, r: () => n
  */
 export function aGarden(p: Parts, age: number, v: number, w: number, d: number) {
   const big = w > 3, W = w * 0.95, D = d * 0.95, r = mulberry32(v + 5), tile = age <= 1 ? A.thatch : houseTile(Math.max(2, age), v);
-  p.box(W, 0.02, D, 0, 0, 0, A.grass);
+  // (au-dessus du sol de la ville, que `RivalTowns` étend dans les murs)
+  p.box(W, 0.045, D, 0, 0, 0, A.grass);
   if (big) {
     // le mur et sa porte-lune (un disque sombre, l'ouverture ronde)
     for (const [x, z, ww, dd] of [[0, -D / 2, W, 0.08], [W / 2, 0, 0.08, D], [-W / 2, 0, 0.08, D], [-W * 0.3, D / 2, W * 0.4, 0.08], [W * 0.3, D / 2, W * 0.4, 0.08]] as const) {
@@ -1159,33 +1161,8 @@ export function aGarden(p: Parts, age: number, v: number, w: number, d: number) 
 /** Jonque (puis navire de son âge), de flanc le long de x, proue vers +x, en (x, z) */
 export function aJunk(p: Parts, age: number, x: number, z: number) {
   if (age <= 3) {
-    const hull = age <= 1 ? 0x6a4a34 : 0x5a3a28, deck = 0xa8845a;
-    // coque : fond, flancs évasés, château arrière haut et carré, proue relevée
-    frustum(p, 1.5, 0.36, 1.9, 0.52, 0.22, x, -0.1, z, hull);
-    p.box(1.86, 0.03, 0.5, x, 0.12, z, deck);
-    p.box(0.4, 0.2, 0.54, x - 0.82, 0.12, z, hull);
-    p.box(0.44, 0.03, 0.58, x - 0.82, 0.32, z, deck);
-    p.box(0.42, 0.06, 0.014, x - 0.82, 0.34, z + 0.29, A.red); p.box(0.42, 0.06, 0.014, x - 0.82, 0.34, z - 0.29, A.red);
-    p.box(0.2, 0.08, 0.46, x + 0.88, 0.1, z, hull, 0, false, 0.4);
-    // l'œil peint de la proue
-    for (const sz of [-1, 1]) { p.cyl(0.03, 0.03, 0.01, 8, x + 0.78, 0.13, z + sz * 0.26, 0xf0e8d8, false, 0); p.box(0.025, 0.025, 0.012, x + 0.78, 0.13, z + sz * 0.262, 0x1a1a1a); }
-    // le gouvernail, la cabine, les lanternes
-    p.box(0.06, 0.3, 0.03, x - 1.06, -0.1, z, A.darkwood);
-    p.box(0.3, 0.12, 0.3, x - 0.3, 0.15, z, A.timber);
-    hipRoof(p, 0.38, 0.38, 0.08, x - 0.3, 0.27, z, A.tile, 0, { lod: true, rows: 0, hips: false });
-    if (age >= 2) lantern(p, x - 1.0, 0.48, z, 0.03);
-    // trois mâts, voiles à lattes (panneaux étagés, lattes sombres)
-    const sail = age <= 1 ? 0xc89a6a : age === 2 ? 0xb8603a : 0xc0583a;
-    for (const [mx, mh, sw] of [[0.25, 1.15, 0.62], [-0.32, 0.9, 0.5], [0.72, 0.6, 0.3]] as const) {
-      p.cyl(0.018, 0.024, mh, 5, x + mx, 0.14, z, A.darkwood);
-      const n = 5, sh = mh * 0.76;
-      for (let i = 0; i < n; i++) {
-        const y = 0.3 + (i * sh) / n, k = 1 - i * 0.06;
-        p.box(sw * k, sh / n - 0.012, 0.012, x + mx - sw * 0.12, y, z + 0.035, i % 2 ? sail : dark(sail, 0.9));
-        p.box(sw * k + 0.03, 0.012, 0.022, x + mx - sw * 0.12, y + sh / n - 0.012, z + 0.035, A.darkwood);
-      }
-      p.box(0.06, 0.04, 0.012, x + mx, 0.14 + mh, z, A.red);
-    }
+    // la jonque marchande de `asianShips.ts`, de flanc, proue vers +x, à l'échelle du port
+    inFrame(p, x, -0.02, z, Math.PI / 2, (q) => { asianJunk(q, true); }, 2.2);
     return;
   }
   if (age === 4) {

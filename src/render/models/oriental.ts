@@ -815,7 +815,7 @@ function oPalace(p: Parts, age: number) {
 
 const DOORS = [O.turq, O.blue, 0x2f8f5a, O.red, O.wood, O.cobalt, O.turqD, 0x8a4f3a];
 const houseWall = (age: number, v: number) =>
-  age <= 1 ? pick([O.mud, 0xd2ae7e, 0xbf9868, 0xc8a070], v) : age <= 3 ? pick([O.white, O.sand, O.cream, 0xf0e6d6, 0xe9d9bd, O.white], v) : age === 4 ? pick([O.concrete, O.white, 0xf1e7d4, 0xe6d2a8, 0xdcc097], v) : pick([O.white, O.marble, 0xeef2f2], v);
+  age <= 1 ? pick([O.mud, 0xd2ae7e, 0xbf9868, 0xc8a070], v) : age <= 3 ? pick([O.white, 0xebd3a4, O.white, 0xe3bf8c, 0xf6efe4, 0xd9ad84, O.cream], v) : age === 4 ? pick([O.concrete, O.white, 0xf1e7d4, 0xe6d2a8, 0xdcc097], v) : pick([O.white, O.marble, 0xeef2f2], v);
 
 /** Garde-corps plein d'un toit en terrasse (rectangle w × d posé en y), sans ses faces cachées */
 function parapet(p: Parts, w: number, d: number, y: number, col: number, h = 0.06, t = 0.035, x = 0, z = 0) {
@@ -843,8 +843,19 @@ function oHouse(p: Parts, age: number, v: number, w: number, d: number) {
   if (age <= 1) { mudHouse(p, s, r, v, W, D, wall); return; }
   if (age <= 3) {
     const floors = age === 2 ? 1 + (r() < 0.5 ? 1 : 0) : 2 + (r() < 0.4 ? 1 : 0), fh = 0.3, h = floors * fh;
-    p.box(W, h, D, 0, 0, 0, wall);
+    // une maison sur trois, quand le lot est assez grand, s'ouvre sur un patio planté (bien lisible vu d'en haut)
+    const patio = v % 3 === 0 && W >= 0.95 && D >= 0.85, cw = W * 0.46, cd = D * 0.42;
+    if (patio) {
+      const dz = (D - cd) / 2, dx = (W - cw) / 2;
+      p.box(W, h, dz, 0, 0, D / 2 - dz / 2, wall); p.box(W, h, dz, 0, 0, -D / 2 + dz / 2, wall);
+      for (const sx of [-1, 1]) p.box(dx, h, cd, sx * (W / 2 - dx / 2), 0, 0, wall);
+      courtyard(p, s, v, cw, cd, h);
+    } else p.box(W, h, D, 0, 0, 0, wall);
     const fs = faces(p, W, D), f = fs[0][0];
+    // l'acrotère : un bandeau de couleur en haut des murs, et le tapis ou la natte qui sèche sur la terrasse
+    const cap = pick([s.tiles[0], O.turq, O.blue, O.ochre, s.tiles[0], O.red], v >> 1);
+    for (const [ff, len] of fs) ff.plane(len + 0.004, 0.05, 0, h - 0.055, 0.003, cap);
+    if (!patio && v % 5 !== 2) p.box(W * 0.3, 0.008, D * 0.24, sd * W * 0.2, h, D * 0.18, pick([O.red, 0xc98a3a, 0x8a4f7a, O.rose, 0xd9a43c], v + 2));
     // soubassement de pierre, porte en arc (encadrement de faïence une fois sur deux), lanterne, banquette et pot de fleurs
     for (const [ff, len] of fs) ff.plane(len, 0.06, 0, 0.03, 0.002, s.base);
     const du = sd * W * 0.22;
@@ -873,14 +884,17 @@ function oHouse(p: Parts, age: number, v: number, w: number, d: number) {
     merlons(f, W, h, wall, 'step', 0.28, 0.09, 0.04);
     for (const [ff, len] of fs.slice(1)) ff.add(openBox(len - (Math.abs(ff.ry) === Math.PI / 2 ? 0.08 : 0), 0.05, 0.04), 0, h, -0.02, wall);
     for (const u of [-W * 0.35, W * 0.35]) f.add(new THREE.CylinderGeometry(0.012, 0.012, 0.07, 3, 1, true).rotateX(Math.PI / 2), u, h - 0.04, 0.035, O.beam);
-    const kind = v % 5;
-    if (kind === 0) {
-      // petite coupole sur un tambour
-      const R = Math.min(W, D) * 0.2;
-      p.cyl(R * 1.05, R * 1.1, 0.07, 8, -sd * W * 0.15, h, -D * 0.12, wall);
-      dome(p, R, R * 1.05, -sd * W * 0.15, h + 0.07, -D * 0.12, age === 2 ? wall : s.dome, 'half', 8);
-      p.add(new THREE.OctahedronGeometry(0.022), -sd * W * 0.15, h + 0.08 + R * 1.05, -D * 0.12, O.gold);
-    } else if (kind === 1) windTower(p, sd * W * 0.28, -D * 0.25, h, 0.32, wall, s.trim);
+    const kind = patio ? -1 : v % 5;
+    if (kind === 0 || kind === 3 || patio) {
+      // coupole sur un tambour, turquoise (ou blanche une fois sur trois), au-dessus de la pièce principale
+      const R = Math.min(W, D) * (patio ? 0.17 : 0.26), dx = patio ? sd * (W / 2 - (W - cw) / 4) : -sd * W * 0.15, dz = patio ? -D / 2 + (D - cd) / 4 : -D * 0.12;
+      const dc = v % 3 === 1 ? O.white : age === 2 ? O.turq : s.dome;
+      p.cyl(R * 1.05, R * 1.12, 0.08, 8, dx, h, dz, wall);
+      p.cyl(R * 1.07, R * 1.07, 0.02, 8, dx, h + 0.07, dz, cap);
+      dome(p, R, R * 1.05, dx, h + 0.08, dz, dc, 'half', 10, false, dark(dc, 0.9));
+      p.add(new THREE.OctahedronGeometry(0.022), dx, h + 0.09 + R * 1.05, dz, O.gold);
+    }
+    if (kind === 1) windTower(p, sd * W * 0.28, -D * 0.25, h, 0.32, wall, s.trim);
     else if (kind === 2) {
       // tonnelle de bois, vigne (Industriel) ou toile tendue (Médiéval)
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.cyl(0.012, 0.012, 0.18, 4, sx * W * 0.3, h, sz * D * 0.25, O.wood);
@@ -889,13 +903,13 @@ function oHouse(p: Parts, age: number, v: number, w: number, d: number) {
       p.box(0.12, 0.012, 0.18, 0, h, 0.05, O.red);
     } else if (kind === 3) {
       // chambre haute sur le toit, sa porte et ses jarres
-      const uw = W * 0.45, ud = D * 0.45, ux = sd * W * 0.2, uz = -D * 0.2;
+      const uw = W * 0.4, ud = D * 0.4, ux = sd * W * 0.25, uz = D * 0.08;
       p.box(uw, 0.25, ud, ux, h, uz, wall);
       parapet(p, uw, ud, h + 0.25, wall, 0.04, 0.03, ux, uz);
       const fu = new Face(p, 0, ux, uz + ud / 2, h);
       door(fu, 0, 0.09, 0.16, s.arch, s.trim, leaf);
       for (let i = 0; i < 3; i++) jar(p, -sd * W * 0.2 + i * 0.07, D * 0.25, 0.9, O.terra, h);
-    } else {
+    } else if (kind === 4) {
       // jarres d'eau et linge qui sèche
       for (const sx of [-1, 1]) p.cyl(0.01, 0.01, 0.18, 3, sx * W * 0.32, h, 0.05, O.wood);
       p.box(W * 0.64, 0.005, 0.005, 0, h + 0.17, 0.05, O.darkwood);
@@ -908,6 +922,24 @@ function oHouse(p: Parts, age: number, v: number, w: number, d: number) {
   futureHouse(p, r, v, W, D);
 }
 const sx0 = (v: number) => (v % 3) - 1;
+
+/** Le patio d'une maison (cw × cd au centre, murs de hauteur h) : dallage, galerie d'arcs, bassin, oranger ou palmier, pots */
+function courtyard(p: Parts, s: Style, v: number, cw: number, cd: number, h: number) {
+  p.box(cw, 0.035, cd, 0, 0, 0, pick([0xd9c9a2, 0xc9d6cc, 0xe6d3a8], v));
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) if ((i + j) % 2) p.box(cw / 2 - 0.01, 0.037, cd / 2 - 0.01, (i - 0.5) * cw / 2, 0, (j - 0.5) * cd / 2, s.tiles[0]);
+  // sur les murs du patio, une arcade peinte au rez-de-chaussée
+  for (const [f, len] of faces(p, cw, cd)) {
+    const g = new Face(p, f.ry + Math.PI, f.ox, f.oz);
+    bay(g, 0, 0, Math.min(0.2, len * 0.5), 0.2, s.arch, O.shade, { frame: s.trim, seg: 4 });
+    g.plane(len, 0.035, 0, h - 0.07, 0.003, s.tiles[0]);
+  }
+  p.cyl(0.08, 0.085, 0.05, 8, cw * 0.18, 0.01, -cd * 0.15, s.trim);
+  p.cyl(0.065, 0.065, 0.052, 8, cw * 0.18, 0.01, -cd * 0.15, O.water);
+  if (v % 2) palm(p, -cw * 0.15, cd * 0.12, Math.min(0.75, h + 0.3), v, 0x8a6a48, 0x5f9442, false);
+  else orangeTree(p, -cw * 0.15, cd * 0.12, Math.min(0.55, h + 0.15), 0.01);
+  p.cyl(0.03, 0.022, 0.05, 6, cw * 0.3, 0.01, cd * 0.3, O.terra);
+  p.add(new THREE.IcosahedronGeometry(0.04, 0), cw * 0.3, 0.08, cd * 0.3, O.green);
+}
 
 /** Maison de brique crue (Antiquité) : cube à rondins, porte à linteau de bois, toit en terrasse, coupoles en ruche ou chambre haute */
 function mudHouse(p: Parts, s: Style, r: () => number, v: number, W: number, D: number, wall: number) {
@@ -1350,7 +1382,7 @@ function oGarden(p: Parts, age: number, v: number, w: number, d: number) {
   fg.box(0.58, 0.06, 0.1, 0, wh + 0.14, -0.035, wall);
   if (age <= 3) fg.plane(0.46, 0.05, 0, wh + 0.17, 0.016, s.tiles[0]);
   // les allées de sable, les quatre parterres, les canaux en croix, la fontaine au milieu
-  p.box(W - 0.14, 0.02, D - 0.14, 0, 0, 0, age >= 4 ? 0xe2d8c0 : 0xd9c9a2);
+  p.box(W - 0.14, 0.035, D - 0.14, 0, 0, 0, age >= 4 ? 0xe2d8c0 : 0xd9c9a2);
   const bw = W * 0.36, bd = D * 0.36;
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) bed(p, bw, bd, sx * W * 0.24, sz * D * 0.24, v * 4 + sx + sz * 2, s.trim, 0.02);
   p.box(0.14, 0.035, D - 0.24, 0, 0.02, 0, s.trim); p.box(0.08, 0.037, D - 0.26, 0, 0.02, 0, O.water);
