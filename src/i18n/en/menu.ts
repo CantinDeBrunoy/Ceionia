@@ -174,7 +174,7 @@ registerDict('menu', {
     'Animated Animal Pack (horse, alpaca, cow, shiba, husky, doe, stag, fox), wolf, marine life, trees (Ultimate Nature), palm trees, cacti, cave creatures, props, wells, farms, stone tower, pens.',
   'Survival Kit, épave de navire.': 'Survival Kit, ship wreck.',
   'Cris d’animaux enregistrés': 'Recorded animal calls',
-  'Via {src}, en CC0 ou domaine public : bêlement de mouton (aussi pour le bouquetin), hennissement, caquètement de poule (alys, PDSounds), brame du wapiti et hurlement d’une meute de loups, de l’US Fish and Wildlife Service (pour le cerf, l’élan et le loup).': 'Via {src}, CC0 or public domain: sheep bleat (also used for the ibex), horse neigh, hen cackle (alys, PDSounds), elk bugle and a wolf pack howling from the US Fish and Wildlife Service (for the deer, the moose and the wolf).',
+  'Via {src}, en CC0 ou domaine public : bêlement de mouton (aussi pour le bouquetin), hennissement, caquètement de poule (alys, PDSounds), hurlement d’une meute de loups, de l’US Fish and Wildlife Service.': 'Via {src}, CC0 or public domain: sheep bleat (also used for the ibex), horse neigh, hen cackle (alys, PDSounds), a wolf pack howling from the US Fish and Wildlife Service.',
   '« Single Cow Moo » par {author}, licence {lic} : meuglement de la vache.': '“Single Cow Moo” by {author}, licence {lic}: the cow’s moo.',
   'Kay Lousberg (crâne, os), MiniPoly (coraux), Mohabins (algues), iPoly3D (cristaux), MilkAndBanana (jarre), reyshapes (cruche), via {src}.':
     'Kay Lousberg (skull, bones), MiniPoly (corals), Mohabins (seaweed), iPoly3D (crystals), MilkAndBanana (jar), reyshapes (pitcher), via {src}.',

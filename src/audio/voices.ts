@@ -318,12 +318,6 @@ function deerCall(s: Synth, d: AudioNode, t: number) {
   }
 }
 
-/** Élan : long appel plaintif qui glisse vers le grave */
-function mooseCall(s: Synth, d: AudioNode, t: number) {
-  const f = rnd(160, 210);
-  note(s, d, t, { f, f2: f * 0.55, dur: rnd(1.2, 1.7), vol: 0.13, type: 'sawtooth', attack: 0.15, filter: 'bandpass', ff: 600, q: 2, vib: 3, vibDepth: f * 0.02 });
-}
-
 /** Barrissement : cuivré, aigu, tremblé, qui monte puis casse */
 function trumpet(s: Synth, d: AudioNode, t: number) {
   const f = rnd(420, 560), dur = rnd(0.9, 1.3);
@@ -371,6 +365,6 @@ function yip(s: Synth, d: AudioNode, t: number) {
 
 /** Cri d'un animal sauvage selon son espèce (même nom que la faune) */
 export const CALLS: Record<string, (s: Synth, d: AudioNode, t: number) => void> = {
-  sheep: bleat, cow: moo, horse: neigh, hen: cluck, pig: grunt, deer: deerCall, moose: mooseCall, elephant: trumpet,
+  sheep: bleat, cow: moo, horse: neigh, hen: cluck, pig: grunt, deer: deerCall, elephant: trumpet,
   camel: camelCall, llama: llamaCall, giraffe: snort, bear: bearCall, ibex: ibexCall, fox: yip,
 };

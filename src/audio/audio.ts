@@ -38,10 +38,10 @@ const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 /** Audio 100 % procédural (Web Audio) : musique générative + ambiances + effets */
 /**
  * Vrais enregistrements de cris (espèce de la faune → fichier de `public/sons/animaux`, sans extension). Sources et
- * licences : `docs/audio.md` et la page Crédits. Le cerf et l'élan partagent le brame du wapiti
+ * licences : `docs/audio.md` et la page Crédits. Le cerf garde son brame de synthèse (le brame enregistré du wapiti, trop proche d'un hurlement, est retiré) ; l'élan ne crie plus
  */
 const SAMPLES: Record<string, { file: string; rate?: number; max?: number }> = {
-  sheep: { file: 'mouton' }, cow: { file: 'vache' }, horse: { file: 'cheval' }, deer: { file: 'cerf' }, moose: { file: 'cerf', rate: 0.85 },
+  sheep: { file: 'mouton' }, cow: { file: 'vache' }, horse: { file: 'cheval' },
   // le caquètement dure 9 s : on en joue un passage
   hen: { file: 'poule', max: 3.5 },
   // pas de chèvre libre et légère : le bouquetin reprend le bêlement du mouton, plus aigu

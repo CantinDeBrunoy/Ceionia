@@ -94,7 +94,6 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 | Fichier | Espèces | Source | Licence |
 |---|---|---|---|
 | `mouton.mp3` | mouton, bouquetin (× 1,3 plus aigu) | Wikimedia Commons, « Sheep bleat.ogg » | CC0 |
-| `cerf.mp3` | cerf, élan (× 0,85) | Wikimedia Commons, « Elkbellow.ogg » (US Fish and Wildlife Service) | domaine public |
 | `vache.mp3` | vache | Wikimedia Commons, « Single Cow Moo.ogg », par MichaeltheFox8621 | CC BY-SA 4.0 (crédit obligatoire) |
 | `cheval.mp3` | cheval | Wikimedia Commons, « Wiehern.ogg » | domaine public |
 | `loup.mp3` | loup (passage de 7 s, `max`, joué par `sfxHowl` à la place de la meute de synthèse) | Wikimedia Commons, « Wolf howls.ogg » (US Fish and Wildlife Service) | domaine public |
@@ -102,7 +101,7 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 
 Les fichiers sont les transcodages MP3 de Commons (lus partout, Safari compris). Pour en ajouter un : le déposer dans `public/sons/animaux/`, l'inscrire dans `SAMPLES` (`rate` pour le décaler, `max` pour un long enregistrement), le citer dans `showCredits` (avec sa traduction) et dans ce tableau.
 
-Cités dans la page Crédits (`showCredits`). Cris de la faune sauvage : toutes les 7 à 16 s, si la vue est à moins de 40 de distance, `Fauna.pickCaller` tire un animal éveillé, visible et vivant à moins de 12 cases du point visé (force nulle à 14 cases), parmi les espèces de `CALLS` (`voices.ts` : mouton, vache, cheval, poule, cochon, cerf (brame ou aboiement), élan, éléphant (barrissement), chameau, lama, girafe, ours, bouquetin, renard) ; `audio.sfxCall` le joue sur le bus des ambiances, atténué selon la distance et le zoom. Hurlement (`sfxHowl`) : le chef puis un ou deux loups décalés, chacun sur sa note ; dents de scie dans deux formants « ou » (520 et 900 Hz) plus un sinus, un peu de souffle, montée glissée, longue tenue à peine ondulante (0,7 à 1,5 Hz), chute en fin de souffle, écho de vallée (0,31 s).
+Cités dans la page Crédits (`showCredits`). Cris de la faune sauvage : toutes les 7 à 16 s, si la vue est à moins de 40 de distance, `Fauna.pickCaller` tire un animal éveillé, visible et vivant à moins de 12 cases du point visé (force nulle à 14 cases), parmi les espèces de `CALLS` (`voices.ts` : mouton, vache, cheval, poule, cochon, cerf (brame ou aboiement, de synthèse), éléphant (barrissement), chameau, lama, girafe, ours, bouquetin, renard) ; `audio.sfxCall` le joue sur le bus des ambiances, atténué selon la distance et le zoom. Hurlement (`sfxHowl`) : le chef puis un ou deux loups décalés, chacun sur sa note ; dents de scie dans deux formants « ou » (520 et 900 Hz) plus un sinus, un peu de souffle, montée glissée, longue tenue à peine ondulante (0,7 à 1,5 Hz), chute en fin de souffle, écho de vallée (0,31 s).
 
 ## Pièges et invariants
 - Rien ne joue avant `audio.start()` (geste du joueur) : `ctx` est `null`, toutes les méthodes ressortent. `unlockOn` écoute `pointerdown`, `pointerup`, `touchend`, `keydown` et `click` **en capture** sur `window` : la bulle du tutoriel arrête la propagation de `pointerdown`, et au toucher le navigateur ne compte le geste qu'au lever du doigt. Chaque geste rappelle `start()` (reprise du contexte, nouvel essai de lecture d'un morceau refusé) ; les écouteurs se retirent une fois le contexte lancé et la musique en lecture.
