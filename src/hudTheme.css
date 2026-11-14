@@ -766,7 +766,7 @@ body.hell #resPanel { display: none !important; }
 #portalChoice .pcHow p, #worldChoice .pcHow p { margin: 0; padding: 0; background: none; font-family: var(--hSerif); font-size: 15.5px; font-weight: 700; line-height: 1.3; color: #3A2213; }
 #portalChoice .pcB, #worldChoice .pcB { display: flex; justify-content: center; gap: 40px; margin: 8px 0 8px; }
 #portalChoice .pcB figure, #worldChoice .pcB figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-#portalChoice .pcB img, #portalChoice .pcPh, #worldChoice .pcB img, #worldChoice .pcPh { display: block; width: 120px; height: 100px; object-fit: contain; transform: scale(1.3); transform-origin: 50% 60%; filter: drop-shadow(0 4px 4px rgba(80, 50, 15, 0.25)); }
+#portalChoice .pcB img, #portalChoice .pcPh, #worldChoice .pcB img, #worldChoice .pcPh { display: block; width: 120px; height: 100px; object-fit: contain; object-position: 50% 100%; filter: drop-shadow(0 4px 4px rgba(80, 50, 15, 0.25)); }
 #portalChoice .pcPh, #worldChoice .pcPh { transform: none; }
 #portalChoice .pcPh, #worldChoice .pcPh { border-radius: 14px; background: rgba(217, 169, 85, 0.12); }
 #portalChoice .pcB figcaption, #worldChoice .pcB figcaption { margin-top: 6px; position: relative; font-family: var(--hSerif); font-size: 15px; font-weight: 800; color: #3A2213; }
@@ -1043,3 +1043,9 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 
 /* le champ de blé : sa vignette peinte, comme une carte de bâtiment */
 #items button.tile.thumb .gv { display: none; }
+
+/* les vignettes recadrées sur leur contenu (thumbs.ts) remplissent leur case : l'image tient juste dans `b.th`, posée en bas,
+   sans déborder sur le nom */
+#dock #items button.tile b.th { position: relative; flex: none; }
+#dock #items button.tile b.th img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; }
+#troopBar .tmrow .trb.tbv .tic.tpv img { object-fit: contain; object-position: 50% 100%; }
