@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   World, N, SEA, VEG_FOREST, VEG_FIELD, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_VOLCANO, VEG_FISSURE, CAVE_TUNNEL,
-  BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, SNOW_LINE, LavaPool,
+  BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, SNOW_LINE, LavaPool, seaMargin, marginFloor, marginOff,
 } from '../world/world';
 import { hash2, smoothstep } from '../core/rng';
 import { Simplex } from '../world/noise';
@@ -658,6 +658,13 @@ export class VegView {
         else if (t === VEG_ROCKS) this.rockery(cx, cz, s);
       }
     }
+    // tuile du bord : la bande de mer de décor qui la prolonge au large (angles compris)
+    const M = seaMargin(), x1 = Math.min(N, x0 + CH), z1 = Math.min(N, z0 + CH);
+    if (x0 === 0 || z0 === 0 || x1 === N || z1 === N) {
+      const xa = x0 === 0 ? -M : x0, xb = x1 === N ? N + M : x1, za = z0 === 0 ? -M : z0, zb = z1 === N ? N + M : z1;
+      for (let cz = za; cz < zb; cz++)
+        for (let cx = xa; cx < xb; cx++) if (!w.inCells(cx, cz)) this.offshore(cx, cz, s);
+    }
     for (const l of this.layers) l.end(ch);
   }
 
@@ -1113,17 +1120,36 @@ export class VegView {
       }
     }
     // coraux : seulement sur les récifs, en mer chaude et au large (jamais dans une rivière, une mare ni un lac)
-    const reef = this.reefAt(cx, cz, depth);
-    if (reef > 0 && hash2(cx, cz, 640) < reef) {
-      const n = 1 + Math.floor(hash2(cx, cz, 641) * (reef > 0.6 ? 3 : 2));
-      for (let i = 0; i < n; i++) {
-        const px = cx + 0.2 + hash2(cx, cz, 642 + i) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 646 + i) * 0.6;
-        const m = this.at(px, w.hAt(px, pz) - 0.01, pz, hash2(cx, cz, 650 + i) * 6.28, 0.8 + hash2(cx, cz, 654 + i) * 0.7);
-        const v = hash2(cx, cz, 658 + i);
-        if (this.corals.length) this.corals[Math.floor(v * this.corals.length)].put(m);
-        else this.coral.put(m, CORAL_COLORS[Math.floor(v * CORAL_COLORS.length)]);
-      }
+    this.reefCorals(cx, cz, this.reefAt(cx, cz, depth), (x, z) => w.hAt(x, z));
+  }
+
+  /** Bouquets de coraux d'une case de récif (`reef` : part couverte), posés sur le fond `floor` */
+  private reefCorals(cx: number, cz: number, reef: number, floor: (x: number, z: number) => number) {
+    if (!(reef > 0) || hash2(cx, cz, 640) >= reef) return;
+    const n = 1 + Math.floor(hash2(cx, cz, 641) * (reef > 0.6 ? 3 : 2));
+    for (let i = 0; i < n; i++) {
+      const px = cx + 0.2 + hash2(cx, cz, 642 + i) * 0.6, pz = cz + 0.2 + hash2(cx, cz, 646 + i) * 0.6;
+      const m = this.at(px, floor(px, pz) - 0.01, pz, hash2(cx, cz, 650 + i) * 6.28, 0.8 + hash2(cx, cz, 654 + i) * 0.7);
+      const v = hash2(cx, cz, 658 + i);
+      if (this.corals.length) this.corals[Math.floor(v * this.corals.length)].put(m);
+      else this.coral.put(m, CORAL_COLORS[Math.floor(v * CORAL_COLORS.length)]);
     }
+  }
+
+  /**
+   * Case de la mer de décor (hors de la grille, voir `seaMargin`) : les récifs du bord s'y prolongent (même bruit, biome de la
+   * case du bord la plus proche), de plus en plus clairsemés vers le large : plus rien à 14 cases. Rien d'autre n'y pousse
+   */
+  private offshore(cx: number, cz: number, s: SeasonState) {
+    if (s.snow > 0.9) return;
+    const w = this.world, off = marginOff(cx + 0.5, cz + 0.5), fade = 1 - smoothstep(1, 14, off);
+    if (fade <= 0) return;
+    const ex = Math.min(N - 1, Math.max(0, cx)), ez = Math.min(N - 1, Math.max(0, cz));
+    if (w.biome[w.ci(ex, ez)] !== BIOME_TROPICAL) return;
+    const p = this.reefNoise.fbm(cx * 0.07, cz * 0.07, 2);
+    if (p < -0.05) return;
+    const M = seaMargin();
+    this.reefCorals(cx, cz, (0.35 + 0.5 * smoothstep(-0.05, 0.25, p)) * fade, (x, z) => marginFloor(w.hAt(x, z), marginOff(x, z), M));
   }
 
   /**
