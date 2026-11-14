@@ -5,7 +5,7 @@
 > Voir aussi : [architecture.md](architecture.md), [interface.md](interface.md) (réglages), [sauvegarde.md](sauvegarde.md)
 
 ## En bref
-Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux enregistrés (ci-dessous). Trois familles : la musique générative (selon l'âge, la saison, la nuit), les ambiances (nature autour du point visé, et bruitages de proximité des bâtiments et des volcans) et les effets ponctuels (`sfx…` : poser, démolir, éruption, tonnerre, combat…). Les sons et les ambiances sont allumés par défaut, la musique est coupée tant que le joueur ne l'allume pas ; le contexte démarre au premier clic ou à la première touche (`unlock`).
+Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et la musique, enregistrés (ci-dessous). Trois familles : la musique (des morceaux libres de droits selon l'âge, le menu, les Enfers et la fin ; à défaut la musique générative, selon l'âge, la saison, la nuit), les ambiances (nature autour du point visé, et bruitages de proximité des bâtiments et des volcans) et les effets ponctuels (`sfx…` : poser, démolir, éruption, tonnerre, combat…). Les sons et les ambiances sont allumés par défaut, la musique est coupée tant que le joueur ne l'allume pas ; le contexte démarre au premier clic ou à la première touche (`unlock`).
 
 ## Règles du jeu
 - **Réglages** (Graphismes & son) : Musique, Sons, Ambiances (volume 0 … 1 ; défaut 0,5, 0,7, 0,7). Le bouton qui coupe les sons coupe aussi les ambiances.
@@ -43,8 +43,38 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux en
   3. Panoramique : la source projetée à l'écran, `x × 0,7`.
   4. `AudioEngine.spots(liste, pans)` : une voix nouvelle = `inp` → `out` (gain = force, fondu `setTargetAtTime` 0,25 s) → `StereoPannerNode` → `ambG`, avec ses boucles (`VOICES[sorte].loop`) ; une voix absente de la liste s'éteint en fondu, ses nœuds sont arrêtés et débranchés 1,6 s après.
   5. `tickVoices` (dans `update`) : quand l'heure de la voix arrive et qu'elle s'entend (force ≥ 0,02), `VOICES[sorte].tick` programme ses coups dans `inp` et rend le délai avant le suivant.
+- **Musique enregistrée** (`MUSIC` dans `audio.ts`, fichiers dans `public/sons/musique/`) : une liste de morceaux par âge (`age0` … `age5`) et par scène (`menu`, `hell`, `end`). `audio.music(scène)` impose une scène, `null` rend celle de l'âge (lue dans `update`). `main.ts` la choisit toutes les 0,25 s : `end` pendant la cinématique de la chute du roi (`kingStage.playing`), le voyage des colons (`.overlay.voyage`) et les écrans de victoire (`.overlay.victory`, les deux fins) ; `hell` aux Enfers ; sinon l'âge. Le menu principal pose `menu` (`boot`, avec les réglages enregistrés et un démarrage du son au premier clic).
+  - Rien n'est chargé tant que la musique est coupée. Un morceau est un `HTMLAudioElement` lu en flux (`createMediaElementSource` → gain de fondu → `musicG`), au niveau `TRACK_GAIN` (0,55 : en valeur efficace 0,014, un peu au-dessus de la musique générée, 0,011, au volume par défaut). Il entre en fondu (`MUSIC_FADE` = 4 s) ; 4 s avant sa fin, le suivant de la liste (autre que le précédent s'il y en a plusieurs) prend le relais en fondu enchaîné, de même quand la liste change (passage d'âge, Enfers, fin).
+  - Repli : un fichier illisible ou absent est noté (`missing`) et sauté ; une liste sans fichier rend la musique générative (en partie seulement : au menu, elle ne tourne pas). Pendant un morceau, la musique générative se tait (`update` ressort avant les notes et recale `nextNote`, `nextPad`).
+  - Revenir à la musique générée, ou passer à celle composée pour le jeu : remplacer les fichiers et les noms de `MUSIC` (une liste vide = musique générée pour cette scène), ou `RECORDED_MUSIC = false` partout. Mettre à jour les crédits.
+  - Vérifier sans écouter : `__game.audio.debugMusic()` (scène, âge, morceau, position, gain, fichiers manquants).
+  - Les morceaux (tous MP3 96 kbit/s stéréo, 44,1 kHz, ramenés à −20 LUFS intégrés et −2 dBTP au plus, 44 Mo en tout, 63 min) :
+
+| Liste | Fichier | Morceau | Auteur | Licence |
+|---|---|---|---|---|
+| `age0` | `prehistoire-tribal` | « Tribal » (3:12) | Of Far Different Nature, OpenGameArt | CC0 |
+| `age0` | `prehistoire-ancetres` | « The Sky of our Ancestors » (7:11) | Kevin MacLeod (incompetech.com) | CC BY 4.0 |
+| `age0` | `prehistoire-oiseau-tonnerre` | « Thunderbird » (6:02) | Kevin MacLeod | CC BY 4.0 |
+| `age1` | `antiquite-temple` | « Temple of the Manes » (2:36) | Kevin MacLeod | CC BY 4.0 |
+| `age1` | `antiquite-harpe` | « Enchanted Journey » (4:30) | Kevin MacLeod | CC BY 4.0 |
+| `age1` | `antiquite-luth` | « Suonatore di Liuto » (2:24) | Kevin MacLeod | CC BY 4.0 |
+| `age1` | `antiquite-cuivres` | « Peaceful Desolation » (1:31) | Kevin MacLeod | CC BY 4.0 |
+| `age2` | `medieval-exploration` | « Medieval: Exploration » (3:56) | RandomMind, OpenGameArt | CC0 |
+| `age2` | `medieval-auberge` | « Medieval: The Old Tower Inn » (1:46) | RandomMind, OpenGameArt | CC0 |
+| `age2` | `medieval-conteur` | « Teller of the Tales » (3:32) | Kevin MacLeod | CC BY 4.0 |
+| `age3` | `industriel-gymnopedie` | « Gymnopedie No 1 » d'Erik Satie (3:07) | Kevin MacLeod | CC BY 4.0 |
+| `age3` | `industriel-morialta` | « Danse Morialta » (3:56) | Kevin MacLeod | CC BY 4.0 |
+| `age4` | `moderne-the` | « A cup of tea » (2:49) | TAD, OpenGameArt (« lofi Compilation ») | CC0 |
+| `age4` | `moderne-fleuriste` | « Florist » (1:53) | TAD, OpenGameArt | CC0 |
+| `age5` | `futuriste-synthwave` | « Calm Ambient 1 (Synthwave 4k) » (2:38) | The Cynic Project, OpenGameArt | CC0 |
+| `age5` | `futuriste-aout` | « Another August » (3:27) | The Cynic Project, OpenGameArt | CC0 |
+| `menu` | `menu` | « Thaxted » de Gustav Holst (2:33) | Kevin MacLeod | CC BY 4.0 |
+| `hell` | `enfers` | « Oppressive Gloom » (3:19) | Kevin MacLeod | CC BY 4.0 |
+| `end` | `fin` | « Beyond The Clouds » (2:22) | Matthew Pablo, OpenGameArt | CC BY 3.0 |
+
+  - Préparer un fichier (ffmpeg, deux passes : mesure, puis correction linéaire) : `ffmpeg -i in.mp3 -af loudnorm=I=-20:TP=-2:LRA=11:print_format=json -f null -`, puis `ffmpeg -i in.mp3 -af "loudnorm=I=-20:TP=-2:LRA=11:measured_I=…:measured_TP=…:measured_LRA=…:measured_thresh=…:offset=…:linear=true,aresample=44100" -map_metadata -1 -ac 2 -c:a libmp3lame -b:a 96k sortie.mp3`. Vérifier : `ffmpeg -i sortie.mp3 -af ebur128=peak=true -f null -` (I ≈ −20 LUFS).
 - **Synthèse** (`voices.ts`) : `note` (oscillateur, glissement, filtre, vibrato), `hiss` (souffle de bruit filtré), `noiseBed` (boucle de bruit, volume ondulant), `drone` (oscillateurs continus). Bêlement = dent de scie chevrotante (vibrato 9–12 Hz) dans un passe-bande ; enclume = partiels inharmoniques (× 2,76, × 5,4) ; foule = syllabes brèves à des hauteurs de voix variées sur une rumeur de bruit.
-- **Pause** : `visibilitychange` → `audio.pause(document.hidden)` (`ctx.suspend()` / `resume()`).
+- **Pause** : `visibilitychange` → `audio.pause(document.hidden)` (`ctx.suspend()` / `resume()`, et le morceau en cours mis en pause).
 
 ## Liens avec les autres systèmes
 - Réglages : `Settings.musicVol`, `sfxVol`, `ambVol`, `music`, `sfx` ([sauvegarde.md](sauvegarde.md)) ; curseurs dans `openSettings` ([interface.md](interface.md)).

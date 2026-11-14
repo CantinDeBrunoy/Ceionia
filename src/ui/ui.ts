@@ -2347,8 +2347,18 @@ export function drawPreview(canvas: HTMLCanvasElement, heights: ArrayLike<number
  */
 export function showCredits(root: HTMLElement) {
   const a = (href: string, t: string) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${t}</a>`;
+  // titres des morceaux, entre les guillemets de la langue
+  const q = (...ts: string[]) => ts.map((t) => tr('« {t} »', { t })).join(', ');
   menuPop(root, 'credits', 'credits', tr('Crédits'), `<div class="credPane">
-    <p class="credIntro">${tr('Ceionia est un jeu libre de droits d’image et de son : la géométrie des bâtiments, des habitants, de nombreuses bêtes (mouton, cochon, poule, lapin, canards, oie, grenouille, bouquetin…), des véhicules et la musique sont dessinés et générés par le jeu lui-même. Certains modèles 3D, gratuits, viennent d’artistes à qui nous disons merci.')}</p>
+    <p class="credIntro">${tr('Ceionia est un jeu libre de droits d’image et de son : la géométrie des bâtiments, des habitants, de nombreuses bêtes (mouton, cochon, poule, lapin, canards, oie, grenouille, bouquetin…), des véhicules et la plupart des sons sont dessinés et générés par le jeu lui-même. Certains modèles 3D, des cris d’animaux et les musiques, gratuits, viennent d’artistes à qui nous disons merci.')}</p>
+    <section class="credCard">
+      <h4>${ic('heart', 18, 2)}${tr('Musiques, en attendant celles composées pour le jeu')}</h4>
+      <ul class="credits">
+        <li>${tr('{author}, licence {lic} : {titles}.', { author: a('https://incompetech.com', 'Kevin MacLeod (incompetech.com)'), lic: a(tr('https://creativecommons.org/licenses/by/4.0/deed.fr'), 'CC BY 4.0'), titles: q('The Sky of our Ancestors', 'Thunderbird', 'Temple of the Manes', 'Enchanted Journey', 'Suonatore di Liuto', 'Peaceful Desolation', 'Teller of the Tales') + `, ${q('Gymnopedie No 1')} (Erik Satie), ${q('Danse Morialta')}, ${q('Thaxted')} (Gustav Holst), ${q('Oppressive Gloom')}` })}</li>
+        <li>${tr('{author}, licence {lic} : {titles}.', { author: a('https://opengameart.org/content/beyond-the-clouds-orchestral-theme', 'Matthew Pablo'), lic: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC BY 3.0'), titles: q('Beyond The Clouds') })}</li>
+        <li>${tr('Via {src}, en CC0 : {list}.', { src: a('https://opengameart.org', 'OpenGameArt'), list: [[q('Tribal'), 'Of Far Different Nature'], [q('Medieval: Exploration', 'Medieval: The Old Tower Inn'), 'RandomMind'], [q('A cup of tea', 'Florist'), 'TAD'], [q('Calm Ambient 1 (Synthwave 4k)', 'Another August'), 'The Cynic Project']].map(([t, by]) => tr('{titles} par {author}', { titles: t, author: by })).join(' ; ') })}</li>
+      </ul>
+    </section>
     <section class="credCard">
       <h4>${ic('heart', 18, 2)}${tr('Modèles sous licence CC0 (domaine public)')}</h4>
       <ul class="credits">
@@ -2372,7 +2382,7 @@ export function showCredits(root: HTMLElement) {
       </ul>
     </section>
     <p class="hint">${tr('Les modèles ont été retouchés (couleurs, échelle) pour s’accorder au style du jeu. Les licences : {cc0} et {ccby}.', { cc0: a(tr('https://creativecommons.org/publicdomain/zero/1.0/deed.fr'), 'CC0'), ccby: a(tr('https://creativecommons.org/licenses/by/3.0/deed.fr'), 'CC-BY 3.0') })}</p>
-  </div>`, undefined, tr('Les artistes des modèles 3D, et leurs licences.'));
+  </div>`, undefined, tr('Les artistes des modèles 3D, des sons et des musiques, et leurs licences.'));
 }
 
 /** le triangle plein des boutons « Nouvelle partie » et « Continuer », et le chevron des cartes */
