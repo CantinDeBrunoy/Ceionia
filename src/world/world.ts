@@ -1,6 +1,7 @@
 import { Building, KINDS, KindId, DEFENSES, hasDoor, sizeOf, smallSize, isRampart } from '../build/catalog';
 import { readPortal } from './portal';
 import { tr } from '../i18n';
+import { smoothstep } from '../core/rng';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/difficulty';
@@ -44,6 +45,16 @@ export let VS = N * VR + 1;
  * rien n'y est jouable ni sauvegardé. Le plateau (eau, fond, falaise, socle) déborde d'autant
  */
 export const seaMargin = () => Math.round(N / 12) * 2;
+/**
+ * Fond de la mer de décor : il part du relief du bord, rejoint en `SEA_SLOPE` cases le fond de la pleine mer de la carte
+ * (`SEA_FLOOR`, celui du générateur), puis s'enfonce doucement jusqu'à `SEA_DEEP` au bout de la marge (une eau un peu plus
+ * sombre au large, sans cadre). Le même calcul sert au fond (TerrainView), à l'eau (shader) et aux coraux du large
+ */
+export const SEA_FLOOR = -1, SEA_DEEP = -1.3, SEA_SLOPE = 6;
+export const marginFloor = (top: number, d: number, M: number) =>
+  top + (SEA_FLOOR - top) * smoothstep(0, SEA_SLOPE, d) + (SEA_DEEP - SEA_FLOOR) * smoothstep(SEA_SLOPE, M, d);
+/** Distance d'un point au bord de la carte, en cases (0 dedans) : celle du fond et de l'eau de la marge */
+export const marginOff = (x: number, z: number) => Math.max(0, -x, x - N, -z, z - N);
 
 /** Taille de la carte choisie ; à appeler avant de construire le monde, ses vues et la caméra (tailles des tableaux) */
 /** Taille (cases de terre) sous laquelle une tache de climat tropical ou désertique se fond dans ses voisines */

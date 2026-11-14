@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, SEA, VR, VS, seaMargin, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
+import { World, N, SEA, VR, VS, seaMargin, SEA_FLOOR, SEA_DEEP, SEA_SLOPE, marginFloor, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { computeFlow } from '../world/flow';
 import { Simplex } from '../world/noise';
@@ -69,14 +69,6 @@ const STRATA = [0xb58c66, 0xd2bda2, 0xb5a08c, 0x9c8a7c, 0x857869].map((c) => new
 /** Profondeur relative des rangées de la falaise (0 = bord du relief, 1 = base) */
 const STRATA_T = [0, 0.05, 0.27, 0.5, 0.75, 1];
 const SKIRT_BOTTOM = -3.5;
-/**
- * Fond de la mer de décor autour de la carte (voir `seaMargin`) : il part du relief du bord, rejoint en `SEA_SLOPE` cases le
- * fond de la pleine mer de la carte (`SEA_FLOOR`, celui du générateur), puis s'enfonce doucement jusqu'à `SEA_DEEP` au bout
- * de la marge (une eau un peu plus sombre au large, sans cadre)
- */
-const SEA_FLOOR = -1, SEA_DEEP = -1.3, SEA_SLOPE = 6;
-const marginFloor = (top: number, d: number, M: number) =>
-  top + (SEA_FLOOR - top) * smoothstep(0, SEA_SLOPE, d) + (SEA_DEEP - SEA_FLOOR) * smoothstep(SEA_SLOPE, M, d);
 /** Distances au bord des rangées du fond de la marge (s'y ajoutent la mi-marge et la marge) */
 const MARGIN_D = [0, 0.6, 1.5, 3, SEA_SLOPE];
 /** Part de la normale de face dans l'ombrage : garde un léger facettage low-poly sur un relief lissé */
