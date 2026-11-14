@@ -985,6 +985,10 @@ export class UI {
   placeCards() {
     const top = parseFloat(this.root.style.getPropertyValue('--hudB')) || 82;
     if (document.body.classList.contains('commanding')) {
+      // (la bande d'aide au-dessus des modes, où qu'ils soient dans la barre)
+      const foot = document.querySelector<HTMLElement>('#troopBar .tfoot'), tool = document.querySelector('#troopBar .ttool');
+      const bar = document.getElementById('troopBar');
+      if (foot && tool && bar) { const l = `${Math.round(tool.getBoundingClientRect().left - foot.getBoundingClientRect().left)}px`; if (bar.style.getPropertyValue('--tbL') !== l) bar.style.setProperty('--tbL', l); }
       const t = document.getElementById('tinfo');
       if (t) placeCard(t, document.querySelector('#troopBar .tmenu'), document.querySelector('#troopBar .tcorner'), top);
       return;

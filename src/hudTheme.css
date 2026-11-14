@@ -567,11 +567,13 @@ body.hell #resPanel { display: none !important; }
   #selCard.fold > :not(.ihead):not(.xacts) { display: none; }
   #selCard:not(.fold) .ihead .xfold { transform: rotate(180deg); }
 }
-/* sur un écran large, le menu se range contre le panneau de gauche (comme la maquette) : la carte d'explication tient à sa
-   droite, avant les boutons de vue et la mini-carte ; plus étroit, le menu reste centré et la carte monte au-dessus du coin */
-@media (min-width: 1580px) {
-  #dock > #dockRow { grid-template-columns: auto minmax(0, 800px) minmax(0, 1fr); }
+/* sur un écran large (≥ 1 400 px), comme la maquette : un seul bloc centré dans la bande du bas, les modes à gauche, la barre
+   des bâtiments qui s'élargit (1 180 px au plus), la place de la carte d'explication (340 px), puis les boutons de vue et la
+   mini-carte ; plus étroit, le menu reste centré et la carte monte au-dessus du coin de droite */
+@media (min-width: 1400px) {
+  #dock > #dockRow { grid-template-columns: auto minmax(0, 1180px) 340px auto; justify-content: center; }
   #dockSide { justify-self: start; }
+  #dockRow > #dockRight { grid-column: 4; justify-self: end; }
 }
 /* la carte en main n'est plus au milieu de l'écran : elle arrive en sautillant deux fois, puis se tient tranquille */
 #info.held.show { animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), hintBounce 1.6s ease-in-out 0.45s 2; }
@@ -582,10 +584,11 @@ body.hell #resPanel { display: none !important; }
   #info.held.show { display: block !important; }
   #info.held .xdesc, #info.held .xcount { display: none; }
 }
-/* la barre de bataille suit : sur un écran large, les modes et le menu à gauche, le coin à droite, la carte entre les deux */
-@media (min-width: 1580px) {
-  #troopBar .tfoot { grid-template-columns: auto minmax(0, 820px) minmax(0, 1fr); }
+/* la barre de bataille suit : le même bloc centré (modes, menu élargi, place de la carte, coin) ; la bande d'aide se cale
+   au-dessus des modes (`--tbL`, posé par `UI.placeCards`) */
+@media (min-width: 1400px) {
+  #troopBar .tfoot { grid-template-columns: auto minmax(0, 1180px) 340px auto; justify-content: center; }
   #troopBar .tfoot > .ttool { justify-self: start; }
-  #troopBar .tfoot > .tcorner { justify-self: end; }
+  #troopBar .tfoot > .tcorner { grid-column: 4; justify-self: end; }
+  #troopBar .tfoot .tbub { left: var(--tbL, 0px); }
 }
-@media (min-width: 1580px) { #troopBar .tfoot .tbub { left: 0; } }
