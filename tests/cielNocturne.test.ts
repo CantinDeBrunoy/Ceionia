@@ -94,6 +94,7 @@ describe('ciel de nuit : aurores et étoiles filantes', () => {
     expect(nightOf(5, 13)).toBe(5);
     // en suivant l'horloge du jeu, le numéro ne change qu'à midi
     const t = new GameTime();
+    t.dayLen = 100; // 200 s simulées = deux jours, quelle que soit la durée par défaut
     t.hour = 13;
     let last = nightOf(t.days, t.hour), changes = 0;
     for (let i = 0; i < 2000; i++) {
