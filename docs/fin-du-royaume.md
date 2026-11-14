@@ -43,7 +43,7 @@ Au fond des Enfers, la zone 6 abrite le roi démon et sa citadelle. Le roi dort 
 
 ## Liens avec les autres systèmes
 - [enfers.md](enfers.md) : zone 6, forteresses d'avant, base avancée ; `Hell.victory`.
-- [portail-ile.md](portail-ile.md) : l'île sécurisée et purifiée, vagues suspendues.
+- [portail-ile.md](portail-ile.md) : l'île sécurisée et purifiée (déjà sûre depuis l'invasion : plus aucune vague).
 - [armee-combat.md](armee-combat.md) : les mêmes règles de combat (armure, portée, `big`) ; les troupes de la base se battent ici.
 - [expeditions.md](expeditions.md) : `FORGE_PERK` agit sur l'atelier (`craftT`) et le risque des missions (`expeditions.ts`) ; `exp.perks`.
 - [faune.md](faune.md) : les trophées (`trophiesWon`).

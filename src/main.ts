@@ -90,6 +90,7 @@ import { IsleRuins } from './render/isleRuins';
 import { RivalTowns } from './render/rivalTowns';
 import { setFxDensity } from './render/combatFx';
 import { War, clockText } from './sim/war';
+import { INVASION_WAVES } from './sim/hell';
 import { KingdomStage } from './kingdomStage';
 import { TrophyStage } from './trophyStage';
 import { WarTips, WarTipState, WAR_TIP_TEXT, type WarTipId } from './ui/warTips';
@@ -1204,7 +1205,7 @@ class Game implements UIHost {
         this.ui.info(n.text);
         if (this.mode === 'surface' && !(this.isleCmd && this.lookingAtIsle())) this.viewIsle();
       } else if (n.kind === 'invasionDone') {
-        this.ui.banner(trx('Invasion repoussée !'), trx('Le portail est affaibli. Menez vos troupes aux Enfers : suivez le guide.'));
+        this.ui.banner(trx('Invasion repoussée !'), trx('Plus aucune attaque sur l’île. Les Enfers sont ouverts : suivez le guide pour y mener vos troupes.'));
         this.ui.toast(n.text);
       } else if (n.kind === 'raid' && n.text.startsWith('🔥')) this.ui.info(n.text);
       else if (n.kind === 'raid' || n.kind === 'lost') this.ui.toast(trx('{text} Cliquez ici pour voir l’île.', { text: n.text }), () => this.viewIsle(), 'danger');
@@ -1217,8 +1218,8 @@ class Game implements UIHost {
     const isle = w.isle, watching = this.isleCmd && this.lookingAtIsle();
     const left = w.inv === 'coming' ? w.nextWaveIn() : null;
     this.command.alert(
-      isle?.raid && !watching ? (w.inv === 'raid' ? trx('🔥 Invasion du portail : {n} !', { n: nplural(isle.raiders().length, 'démon', 'démons') }) : trx('🔥 Incursion sur l’île du portail : {n} !', { n: nplural(isle.raiders().length, 'démon', 'démons') }))
-        : left !== null ? trx('⚠️ Les démons vont attaquer : préparez la garnison ! {t}', { t: clockText(left) })
+      isle?.raid && !watching ? (w.inv === 'raid' ? trx('🔥 Invasion, vague {k}/{m} : {n} !', { k: w.invStep(), m: INVASION_WAVES, n: nplural(isle.raiders().length, 'démon', 'démons') }) : trx('🔥 Incursion sur l’île du portail : {n} !', { n: nplural(isle.raiders().length, 'démon', 'démons') }))
+        : left !== null ? (w.invStep() > 1 ? trx('⚠️ Invasion : vague {k}/{m} dans {t}', { k: w.invStep(), m: INVASION_WAVES, t: clockText(left) }) : trx('⚠️ Les démons vont attaquer : préparez la garnison ! {t}', { t: clockText(left) }))
         : w.guideStep(0) && !watching && this.mode === 'surface' ? trx('🌀 Menez vos troupes aux Enfers : allez sur l’île.') : null,
       () => this.viewIsle());
     this.syncIsleLayer();
