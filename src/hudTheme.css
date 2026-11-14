@@ -1122,3 +1122,71 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 @media (max-width: 720px) {
   #troopBar button.twk { min-height: 40px; padding: 0 10px; font-size: 11.5px; }
 }
+
+/* ---------- Lancer une expédition, troisième passe : le « parchemin déroulé » choisi par l'auteur (maquette
+   `.claude/maquettes-hud/gpt-exp/depart-p1.png`). L'îlot en grand en haut, au centre, qui sort de la fenêtre vers l'en-tête ;
+   le titre, l'âge entre deux lauriers et la phrase dessous ; une grande carte par façon de partir (emblème peint, nom, ce qui
+   la distingue, sa durée, son risque, ses récompenses ; la choisie en or) ; l'équipement sur une ligne fine ; deux rouleaux
+   dorés de part et d'autre de la fenêtre. Images : `public/expeditions/depart/` ---------- */
+.overlay > .modal.sendModal { position: relative; max-width: 1040px; overflow: visible; }
+@media (min-width: 761px) {
+  .overlay > .modal.sendModal::before, .overlay > .modal.sendModal::after { content: ''; position: absolute; top: -16px; bottom: -16px; width: 44px; box-sizing: border-box; border-style: solid; border-width: 34px 0; border-image: url(./expeditions/depart/rouleau.webp) 72 0 72 0 fill / 34px 0 34px 0 stretch; pointer-events: none; z-index: 6; filter: drop-shadow(0 4px 6px rgba(60, 35, 10, 0.35)); }
+  .overlay > .modal.sendModal::before { left: -24px; }
+  .overlay > .modal.sendModal::after { right: -24px; }
+}
+.sendModal .sScroll { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.sendModal .sTop, .sendModal .sTop.mart, .sendModal .sTop.mart.dio { position: relative; width: 100%; height: 118px; margin: 0; border: 0; border-radius: 0; background: radial-gradient(30% 60% at 50% 70%, rgba(255, 214, 120, 0.45), rgba(255, 214, 120, 0)); box-shadow: none; overflow: visible; z-index: 5; }
+.sendModal .sTop > img.dioImg, .sendModal .sTop > img { position: absolute; left: 50%; bottom: -14px; top: auto; width: 300px; height: auto; transform: translateX(-50%); filter: drop-shadow(0 12px 12px rgba(80, 50, 15, 0.28)); }
+.sendModal .sTop:not(.dio) > img { width: 300px; border-radius: 18px; }
+.sendModal > .mtitle { z-index: 1; }
+.sendModal .sCap { position: relative; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; background: none; color: var(--hInk); text-align: center; }
+.sendModal .sCap h3 { margin: 0; justify-content: center; color: #3A2213; text-shadow: none; font-size: 36px; line-height: 1.05; }
+.sendModal .sCap p { margin: 2px 0 0; color: var(--hInk); font-family: var(--hSerif); font-size: 16px; opacity: 1; text-shadow: none; }
+.sendModal .sCap small { color: var(--hInk2); opacity: 1; }
+.sendModal .sEraRow { display: inline-flex; align-items: center; gap: 6px; }
+.sendModal .sEraRow .sLaur { width: 30px; height: 30px; object-fit: contain; }
+.sendModal .sEraRow .sEra { margin: 0; }
+.sendModal .sCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 16px; width: 100%; margin-top: 4px; }
+.sendModal .sCards.n1 { width: min(520px, 100%); }
+.sendModal .sCard { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; min-height: 0; padding: 12px 14px 14px; border-radius: 18px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F8ECD2); color: var(--hInk); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 2px 6px rgba(120, 80, 25, 0.15); white-space: normal; text-align: center; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s, transform 0.1s; }
+.sendModal .sCard:hover { border-color: var(--hGold); }
+.sendModal .sCard.on { border: 2px solid #E2B04A; background: linear-gradient(180deg, #FFFBEB, #FBEBC4); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 0 0 3px rgba(255, 220, 140, 0.55), 0 0 18px rgba(255, 196, 90, 0.45), 0 4px 10px rgba(120, 80, 20, 0.2); }
+.sendModal .sCard.off { opacity: 0.6; filter: grayscale(0.4); }
+.sendModal .scHead { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.sendModal .scEmb { width: 74px; height: 62px; object-fit: contain; filter: drop-shadow(0 3px 4px rgba(80, 50, 15, 0.25)); }
+.sendModal .scName { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.sendModal .scName b { padding: 2px 18px 3px 14px; font-family: var(--hSerif); font-size: 22px; font-weight: 800; color: #3A2213; background: linear-gradient(180deg, #FBEFD2, #F1DDAF); clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 0 100%); }
+.sendModal .sCard.on .scName b { background: linear-gradient(180deg, #FFE7A6, #F3C86A); }
+.sendModal .scName small { padding-left: 14px; font-family: var(--hSerif); font-size: 13px; color: var(--hInk2); }
+.sendModal .scText { font-size: 13.5px; line-height: 1.35; color: var(--hInk); }
+.sendModal .scText b { font-weight: 800; }
+.sendModal .scStats { display: grid; grid-template-columns: 1fr 1fr 1.35fr; gap: 8px; width: 100%; }
+.sendModal .scBox { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; padding: 7px 8px; border-radius: 12px; border: 1px solid rgba(225, 190, 130, 0.75); background: rgba(255, 253, 246, 0.9); text-align: left; }
+.sendModal .scBox svg { flex: none; color: #8A5A12; }
+.sendModal .scBox > span { display: flex; flex-direction: column; min-width: 0; }
+.sendModal .scBox small { font-size: 11.5px; color: var(--hInk2); white-space: nowrap; }
+.sendModal .scBox b { font-family: var(--hSerif); font-size: 16px; font-weight: 800; color: #3A2213; white-space: nowrap; }
+.sendModal .scRisk.mid svg { color: #D98A1C; } .sendModal .scRisk.high svg, .sendModal .scRisk.high b { color: #C8352A; }
+.sendModal .scGifts > span { align-items: center; }
+.sendModal .scG { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.sendModal .scG i { display: inline-flex; align-items: center; gap: 2px; font-style: normal; }
+.sendModal .scG em { font-style: normal; font-family: var(--hSerif); font-size: 14px; font-weight: 800; color: #3A2213; }
+.sendModal .sSlim.sGear, .sendModal .gearNeed.sGear.sSlim { display: flex; flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; width: 100%; min-height: 0; padding: 8px 16px; flex-wrap: wrap; overflow: visible; text-align: left; }
+.sendModal .sSlim .gslots { flex: none; display: flex; gap: 6px; }
+.sendModal .sSlim .gslot { width: 56px; height: 56px; }
+.sendModal .sSlim .sgT { display: inline-flex; align-items: center; gap: 8px; padding-right: 14px; border-right: 1px solid rgba(200, 160, 95, 0.45); }
+.sendModal .sSlim .sgT b { font-family: var(--hSerif); font-size: 17px; font-weight: 800; }
+.sendModal .sSlim .gslots { margin: 0; }
+.sendModal .sSlim .gnote { flex: 1; margin: 0; padding-left: 14px; border-left: 1px solid rgba(200, 160, 95, 0.45); }
+.sendModal .sSlim .sgP { display: inline-flex; align-items: center; gap: 6px; padding-left: 14px; border-left: 1px solid rgba(200, 160, 95, 0.45); font-weight: 700; color: var(--hInk); white-space: nowrap; }
+.sendModal .sFoot { margin-top: 12px; }
+.sendModal button.sGo:disabled { background: linear-gradient(180deg, #F6E3B0, #E9CB86); color: rgba(58, 34, 19, 0.6); border: 1.5px solid #D9B46A; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5); }
+@media (max-width: 760px) {
+  .sendModal .sTop, .sendModal .sTop.mart, .sendModal .sTop.mart.dio { height: 110px; }
+  .sendModal .sTop > img.dioImg, .sendModal .sTop > img { width: 230px; bottom: -8px; }
+  .sendModal .sCap h3 { font-size: 26px; }
+  .sendModal .sCards { grid-template-columns: 1fr; gap: 10px; }
+  .sendModal .scStats { grid-template-columns: 1fr 1fr; }
+  .sendModal .scGifts { grid-column: 1 / -1; }
+  .sendModal .sSlim .sgT, .sendModal .sSlim .gnote, .sendModal .sSlim .sgP { border: 0; padding: 0; }
+}
