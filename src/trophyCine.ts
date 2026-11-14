@@ -12,11 +12,44 @@ const CINE = new Set<string>(CINE_TROPHIES);
 export const TROPHY_CINE_DUR = 5;
 /** Le joueur doit être tranquille depuis ce temps (s) : pas de cinématique dès qu'une fenêtre se ferme */
 export const CALM_DELAY = 0.8;
+/**
+ * Le récit d'une expédition retenu pour la cinématique n'attend pas plus que ce temps (s) : si elle n'a pas pu partir (une
+ * bannière qui traîne, une fenêtre qui s'ouvre), il s'affiche, et la cinématique passera plus tard
+ */
+export const HOLD_MAX = 6;
 
 /** Les plans (s) : la vue glisse vers la place, tourne autour, puis revient ; le trophée monte de terre entre-temps */
 export const SHOT = { approach: 1.5, riseFrom: 1.2, riseTo: 3, burst: 2.9, orbitTo: 4.1, capIn: 1.7, capOut: 4.3 } as const;
 
-export interface TrophyEntry { id: string; t: number; after?: () => void }
+/** Ce que le jeu montre ou fait en ce moment, pour savoir si la cinématique peut passer */
+export interface CineScene {
+  /** l'écran de chargement */
+  loading: boolean;
+  /** une autre vue que la surface (Enfers, sous terre, commandement de l'île), un fondu, une traversée, la découverte des îles */
+  away: boolean;
+  /** un outil en main : pose de bâtiment, route, tracé de voie, ordres aux troupes */
+  placing: boolean;
+  /** une fenêtre ouverte, une carte de choix, une alerte de guerre */
+  window: boolean;
+  /** une autre cinématique, le mode photo, l'onglet caché */
+  other: boolean;
+  /** une bannière qui passe (elle s'en va d'elle-même) */
+  banner: boolean;
+  /** une notification à l'écran : ne retient pas la cinématique (l'interface s'efface), seulement dite pour mémoire */
+  notice: boolean;
+}
+
+/**
+ * Le joueur est tranquille, la cinématique d'un trophée peut passer. Une notification ne la retient pas : encore à l'écran au
+ * retour de l'équipe, elle faisait passer le récit d'abord, et la cinématique ne venait qu'après lui, ou jamais si le joueur
+ * enchaînait (fenêtre, outil). banner : compter une bannière qui passe (pour partir, oui ; pour garder le récit, non : elle s'en
+ * va d'elle-même)
+ */
+export function cineCalm(s: CineScene, banner = true) {
+  return !s.loading && !s.away && !s.placing && !s.window && !s.other && !(banner && s.banner);
+}
+
+export interface TrophyEntry { id: string; t: number; after?: () => void; held?: number }
 
 /** La file des trophées à montrer, un à la fois */
 export class TrophyCineQueue {
@@ -30,10 +63,11 @@ export class TrophyCineQueue {
 
   /**
    * Relève les trophées nouveaux et met en file ceux qui ont leur cinématique. after : à faire une fois la cinématique finie
-   * (le récit de l'expédition) ; on ne le garde que si elle part tout de suite (calm et rien en cours) : rend vrai dans ce cas,
-   * sinon c'est à l'appelant de le faire
+   * (le récit de l'expédition) ; on ne le garde que si elle peut partir sous peu (ready : rien qui retienne le joueur, et
+   * aucune cinématique en cours) : rend vrai dans ce cas, sinon c'est à l'appelant de le faire. Gardé, il est rendu au plus
+   * tard au bout de `HOLD_MAX` s (voir `update`)
    */
-  detect(won: readonly string[], after?: () => void, calm = false): boolean {
+  detect(won: readonly string[], after?: () => void, ready = false): boolean {
     const fresh: TrophyEntry[] = [];
     for (const id of won) {
       if (this.known.has(id)) continue;
@@ -43,8 +77,10 @@ export class TrophyCineQueue {
     // (un trophée perdu, une partie remplacée : il pourra revenir)
     for (const id of [...this.known]) if (!won.includes(id)) this.known.delete(id);
     this.queue.push(...fresh);
-    if (!after || !fresh.length || !calm || this.cur) return false;
-    fresh[fresh.length - 1].after = after;
+    if (!after || !fresh.length || !ready || this.cur) return false;
+    const e = fresh[fresh.length - 1];
+    e.after = after;
+    e.held = 0;
     this.calmT = CALM_DELAY;
     return true;
   }
@@ -52,13 +88,20 @@ export class TrophyCineQueue {
   /** Ce trophée attend sa cinématique : on ne le pose pas encore sur la place */
   hidden(id: string) { return this.queue.some((e) => e.id === id); }
 
-  /** Un tour : rend la cinématique qui commence ou celle qui finit */
-  update(dt: number, calm: boolean): { start?: TrophyEntry; end?: TrophyEntry } {
+  /**
+   * Un tour : rend la cinématique qui commence ou celle qui finit, et le récit retenu trop longtemps (`release` : à montrer
+   * tout de suite, la cinématique reste en file)
+   */
+  update(dt: number, calm: boolean): { start?: TrophyEntry; end?: TrophyEntry; release?: () => void } {
     if (this.cur) {
       this.cur.t += dt;
       return this.cur.t >= TROPHY_CINE_DUR ? { end: this.stop() } : {};
     }
     this.calmT = calm ? this.calmT + dt : 0;
+    if (this.queue.length && this.calmT < CALM_DELAY) {
+      const e = this.queue.find((x) => x.after);
+      if (e && (e.held = (e.held ?? 0) + dt) >= HOLD_MAX) { const f = e.after!; e.after = undefined; return { release: f }; }
+    }
     if (!this.queue.length || this.calmT < CALM_DELAY) return {};
     this.cur = this.queue.shift()!;
     this.cur.t = 0;

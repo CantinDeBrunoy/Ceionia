@@ -93,6 +93,7 @@ import { War, clockText } from './sim/war';
 import { INVASION_WAVES } from './sim/hell';
 import { KingdomStage } from './kingdomStage';
 import { TrophyStage } from './trophyStage';
+import { cineCalm } from './trophyCine';
 import { WarTips, WarTipState, type WarTipId } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
@@ -580,7 +581,7 @@ class Game implements UIHost {
     });
     this.trophyStage = new TrophyStage({
       cam: this.cam, scene: this.scene, root: uiRoot, trophies: this.trophies, audio,
-      won: () => trophiesWon(this.world.exp), calm: () => this.trophyCalm(), surface: () => this.mode === 'surface' && !this.isleCmd,
+      won: () => trophiesWon(this.world.exp), calm: (banner) => this.trophyCalm(banner), surface: () => this.mode === 'surface' && !this.isleCmd,
       ground: (x, z) => w.hAt(x, z),
       top: (x, z) => {
         const cx = Math.floor(x), cz = Math.floor(z);
@@ -1524,11 +1525,17 @@ class Game implements UIHost {
     this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp).filter((id) => !this.trophyStage.hidden(id)));
   }
 
-  /** Le joueur est tranquille, une cinématique peut passer : partie chargée, en surface, ni pose, ni fenêtre, ni bandeau, ni autre cinématique */
-  private trophyCalm() {
-    return !this.warming && this.mode === 'surface' && !this.isleCmd && !this.fading && this.tools.tool === 'none' && !this.railEdit && !this.islePlace && !this.command.active
-      && !this.ui.popupShowing() && !document.querySelector('#warAlert.show') && !this.ui.root.querySelector('.overlay:not(#menu)')
-      && !this.kingStage.playing && !document.body.classList.contains('photo') && !document.hidden;
+  /** Ce que le jeu montre ou fait, pour la cinématique d'un trophée (voir `cineCalm`, trophyCine.ts) */
+  private trophyCalm(banner = true) {
+    return cineCalm({
+      loading: !!this.warming || !!document.getElementById('loadScreen'),
+      away: this.mode !== 'surface' || this.isleCmd || this.fading || this.revealing || this.voyageStage.playing,
+      placing: this.tools.tool !== 'none' || !!this.railEdit || !!this.islePlace || this.command.active,
+      window: !!this.ui.root.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible || !!document.querySelector('#warAlert.show'),
+      other: this.kingStage.playing || document.body.classList.contains('photo') || document.hidden,
+      banner: !!document.querySelector('#banner.show'),
+      notice: this.ui.popupShowing(),
+    }, banner);
   }
 
   /** La grande place du village (le lieu de rencontre de 3 × 3, sans entrée) la plus proche de (x, z), s'il y en a une */
