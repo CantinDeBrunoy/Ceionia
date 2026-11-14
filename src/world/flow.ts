@@ -16,7 +16,7 @@ export function riverDirs(w: World): Float32Array {
   const key = `${w.mapId}|${w.seed}|${w.gen}|${N}`;
   if (key === courseKey && courseDir) return courseDir;
   const dir = new Float32Array(N * N * 2), best = new Float32Array(N * N).fill(Infinity);
-  const pts = riverCourse(w.gen, w.seed, N);
+  const pts = riverCourse(w.gen, w.seed, N, w.mainGen);
   for (let i = 0; i < pts.length; i++) {
     const [ax, az] = pts[Math.max(0, i - 2)], [bx, bz] = pts[Math.min(pts.length - 1, i + 2)];
     const tl = Math.hypot(bx - ax, bz - az);

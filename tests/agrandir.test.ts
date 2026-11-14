@@ -1,18 +1,18 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { World, N, setMapSize, VEG_FOREST } from '../src/world/world';
 import { newWorld, CONTINENT } from '../src/world/mapgen';
-import { GEN, GEN_ARCH } from '../src/world/continent';
+import { GEN, GEN_ARCH, GEN_FIXED, GEN_PLAN } from '../src/world/continent';
 import { ARCH_N, MAIN_N, archLayout } from '../src/world/archipelago';
 import { expandWorld, canExpand } from '../src/world/expand';
 
 const SEED = 4242;
 
 /** Une partie de 192 avec un petit village : place, maisons, une route droite, une route en courbe, un bosquet planté */
-function village() {
+function village(gen = GEN) {
   setMapSize(MAIN_N);
   const w = new World();
   w.seed = SEED;
-  newWorld(w, CONTINENT, SEED, GEN);
+  newWorld(w, CONTINENT, SEED, gen);
   w.updateVis();
   const [sx, sz] = w.startSpot();
   w.place('gather', sx, sz, 0, true, 0, false);
@@ -26,8 +26,8 @@ function village() {
 describe('le monde s’agrandit : une partie de 192 passe sur l’archipel', () => {
   afterAll(() => setMapSize(192));
 
-  it('le village est intact, décalé dans le cadre de l’île principale, et les îles rivales l’entourent', () => {
-    const w = village(), old = JSON.parse(JSON.stringify(w.toJSON()));
+  it.each([['3', GEN], ['2', GEN_PLAN], ['1', GEN_FIXED]])('version %s : le village est intact, décalé dans le cadre de l’île principale, et les îles rivales l’entourent', (_, gen) => {
+    const w = village(gen), old = JSON.parse(JSON.stringify(w.toJSON()));
     expect(canExpand(old)).toBe(true);
     const oldBiome = Array.from(w.biome), oldBuildings = [...w.buildings.values()].map((b) => [b.kind, b.x, b.z, b.rot] as const);
     const oldRoads = old.roads as number[], f = archLayout(SEED, ARCH_N).main;
@@ -56,8 +56,10 @@ describe('le monde s’agrandit : une partie de 192 passe sur l’archipel', () 
     for (let z = 0; z < MAIN_N; z++) for (let x = 0; x < MAIN_N; x++) if (e.biome[(z + f.z) * ARCH_N + x + f.x] === oldBiome[z * MAIN_N + x]) same++;
     expect(same / (MAIN_N * MAIN_N)).toBeGreaterThan(0.99);
     // l'île du portail suit, les îles rivales sont là
-    expect(e.portal).not.toBeNull();
-    expect([e.portal!.x - f.x, e.portal!.z - f.z]).toEqual([w.portal!.x, w.portal!.z]);
+    if (w.portal) expect([e.portal!.x - f.x, e.portal!.z - f.z]).toEqual([w.portal.x, w.portal.z]);
+    else expect(e.portal).toBeNull();
+    // l'île garde la version de son générateur
+    expect(e.mainGen).toBe(gen);
     expect(e.isles!.rivals.length).toBe(2);
     for (const q of e.isles!.rivals) expect(e.isWaterCell(Math.round(q.village.x), Math.round(q.village.z))).toBe(false);
     // on continue de bâtir chez soi, pas chez les voisins
@@ -67,8 +69,9 @@ describe('le monde s’agrandit : une partie de 192 passe sur l’archipel', () 
     expect(e.inMain(g.x, g.z)).toBe(true);
   }, 60000);
 
-  it('une partie déjà agrandie, ou d’un ancien générateur, ne s’agrandit pas', () => {
+  it('une partie déjà agrandie ne s’agrandit pas ; les anciennes (versions 1 et 2, ou sans version) le peuvent', () => {
     expect(canExpand({ n: ARCH_N, gen: GEN_ARCH })).toBe(false);
-    expect(canExpand({ n: MAIN_N, gen: 2 })).toBe(false);
+    expect(canExpand({ n: MAIN_N, gen: 2 })).toBe(true);
+    expect(canExpand({ n: MAIN_N })).toBe(true);
   });
 });

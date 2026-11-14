@@ -37,6 +37,13 @@ export function mainFrame(gen: number, seed: number, n: number): Frame {
   return gen >= GEN_ARCH ? archLayout(seed, n).main : { x: 0, z: 0, n };
 }
 
+/**
+ * Version du générateur de l'île principale : la partie elle-même jusqu'à la version 3 ; en version 4, celle de la partie
+ * d'origine si elle a été agrandie (`base`, `World.mainGen` : 1, 2 ou 3), sinon la version 3. Le plan, le climat, la rivière et
+ * le lit de cailloux de l'île principale suivent cette version : une ancienne partie agrandie garde son île telle quelle
+ */
+export const mainGenOf = (gen: number, base = GEN_VAR) => (gen >= GEN_ARCH ? base : gen);
+
 /** Relief de fond des versions 1 et 2 : finesse et amplitude du bruit, bombement vers le cœur du continent */
 const RELIEF0 = { freq: 0.03, amp: 1.6, lift: 1.4 };
 
@@ -156,17 +163,17 @@ export function riverU(r: ContinentPlan['river'], v: number) {
  * sud du plan (embouchure), un point par demi-case environ. Version 1 : le cours de `fixedHeight` ; versions 2 et 3 :
  * `riverU`, tourné selon le plan. Le relief sculpté ensuite par le joueur n'y est pas
  */
-export function riverCourse(gen: number, seed: number, n: number): [number, number][] {
-  const out: [number, number][] = [];
-  if (gen === GEN_FIXED) {
+export function riverCourse(gen: number, seed: number, n: number, base = GEN_VAR): [number, number][] {
+  const out: [number, number][] = [], f = mainFrame(gen, seed, n), m = f.n, g = mainGenOf(gen, base);
+  if (g === GEN_FIXED) {
     const phase = mulberry32(seed)() * 6.28;
-    for (let z = 0.14 * n; z <= n; z += 0.5) {
-      const v = z / n;
-      out.push([n * (0.62 - (v - 0.16) * 0.12 + 0.05 * Math.sin(z * 0.045 + phase) + 0.02 * Math.sin(z * 0.11 + phase * 2)), z]);
+    for (let z = 0.14 * m; z <= m; z += 0.5) {
+      const v = z / m;
+      out.push([m * (0.62 - (v - 0.16) * 0.12 + 0.05 * Math.sin(z * 0.045 + phase) + 0.02 * Math.sin(z * 0.11 + phase * 2)) + f.x, z + f.z]);
     }
     return out;
   }
-  const p = continentPlan(seed, gen), r = p.river, f = mainFrame(gen, seed, n), m = f.n;
+  const p = continentPlan(seed, g), r = p.river;
   for (let b = r.v * m; b <= m; b += 0.5) { const [x, z] = fromPlan(p.orient, m * riverU(r, b / m), b, m); out.push([x + f.x, z + f.z]); }
   return out;
 }
@@ -185,10 +192,11 @@ export function rockyBed(p: ContinentPlan, t: number) {
  * Cases du lit de cailloux (0 … 255) : la force du lit (`rockyBed`) à moins de 4 cases de l'axe de la rivière, nulle au-delà
  * et avant la version 3. Ne dit rien de l'eau : le décor vérifie aussi que la case est bien un haut-fond (voir `VegView`)
  */
-export function fillRiverBed(gen: number, seed: number, n: number, out: Uint8Array) {
+export function fillRiverBed(gen: number, seed: number, n: number, out: Uint8Array, base = GEN_VAR) {
   out.fill(0);
-  if (gen < GEN_VAR) return;
-  const p = continentPlan(seed, gen), r = p.river, f = mainFrame(gen, seed, n), m = f.n;
+  const g = mainGenOf(gen, base);
+  if (g < GEN_VAR) return;
+  const p = continentPlan(seed, g), r = p.river, f = mainFrame(gen, seed, n), m = f.n;
   if (!p.bed) return;
   for (let wz = 0; wz < m; wz++)
     for (let wx = 0; wx < m; wx++) {
@@ -391,8 +399,8 @@ export function plannedHeight(x: number, z: number, n: number, s: Simplex, s2: S
  * bruit. Avec le plan (version 2), le désert se resserre autour des mesas, les tropiques autour de l'archipel, et les rives
  * du grand lac s'humidifient (marais), pas son îlot
  */
-export function fillClimate(gen: number, seed: number, n: number, temp: Float32Array, wet: Float32Array) {
-  const st = new Simplex(seed * 13 + 5), sm = new Simplex(seed * 17 + 9), p = gen >= GEN_PLAN ? continentPlan(seed, gen) : null;
+export function fillClimate(gen: number, seed: number, n: number, temp: Float32Array, wet: Float32Array, base = GEN_VAR) {
+  const g = mainGenOf(gen, base), st = new Simplex(seed * 13 + 5), sm = new Simplex(seed * 17 + 9), p = g >= GEN_PLAN ? continentPlan(seed, g) : null;
   // version 4 : hors du cadre de l'île principale, le climat des îles de l'archipel
   const f = mainFrame(gen, seed, n), lay = gen >= GEN_ARCH ? archLayout(seed, n) : null;
   for (let gz = 0; gz < n; gz++)
