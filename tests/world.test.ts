@@ -1032,7 +1032,7 @@ describe('expéditions', () => {
     expect(redoEffects(MISSIONS.find((m) => m.id === 'seeds')!.choices[0].win).some((e) => e.t === 'perk')).toBe(false);
   });
 
-  it('les chevaux de l’écurie partent avec chaque expédition, et chacun porte ce qu’on lui confie', () => {
+  it('les chevaux de l’écurie partent avec chaque expédition, toute l’équipe en selle, et chacun porte ce qu’on lui confie', () => {
     const w = continent();
     const [x, z] = flatLand(w);
     for (const [dx, dz] of [[0, 0], [2, 0], [0, 2], [2, 2], [4, 0], [4, 2]]) if (w.canPlace('house', x + dx, z + dz) === null) w.place('house', x + dx, z + dz, 0, true, 2, false);
@@ -1045,13 +1045,27 @@ describe('expéditions', () => {
     w.exp.gear.sword = 3;
     const ex = new Expeditions(w, agents, () => 100, () => 0.99);
     const wolf = MISSIONS.find((m) => m.id === 'wolf')!;
-    expect(ex.preview(wolf.choices[0]).label).toMatch(/3 épées · 2 chevaux/);
+    expect(ex.preview(wolf.choices[0]).label).toMatch(/3 épées · 3 chevaux/);
     const a = ex.start(wolf, 0)!;
     expect(a.mounts).toBe(2);
     expect(w.exp.riding).toBe(2);
     const kits = a.party.map((id) => agents.agents.find((g) => g.id === id)!.kit!);
-    expect(kits.filter((k) => k.horse).length).toBe(2);
+    // deux chevaux pris à l'écurie, le troisième prêté : personne à pied à côté des cavaliers
+    expect(kits.filter((k) => k.horse).length).toBe(3);
     expect(kits.every((k) => k.weapon === 'sword')).toBe(true);
+    // l'équipe va et revient groupée : pas de cavaliers arrivés depuis longtemps qui attendent des marcheurs
+    let spread = 0;
+    for (let i = 0; i < 40000 && ex.active.includes(a) && a.phase !== 'home'; i++) {
+      agents.update(0.05, 10, 2, false, 30, 0);
+      ex.update(0.05);
+      if (a.wait) ex.decide(a, a.wait.options.findIndex((_, j) => ex.canTake(a, j)));
+      if (a.phase === 'back' && a.t > 3) {
+        const ps = agents.partyPositions(a.party);
+        for (const p of ps) for (const q of ps) spread = Math.max(spread, Math.hypot(p[0] - q[0], p[1] - q[1]));
+      }
+    }
+    expect(a.phase).toBe('home');
+    expect(spread).toBeLessThan(5);
   });
 
   it('une décision prise en route ne fait pas reculer l’équipe, et les libellés suivent l’âge', () => {

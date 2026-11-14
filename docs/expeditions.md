@@ -92,7 +92,7 @@ En bas : « Retour » (referme la fenêtre de départ), une ligne qui dit pourqu
 
 ### Véhicules
 - Bateau selon l'âge (`boatKindFor` dans `missions.ts`) : pirogue, barque, voilier, vapeur, vedette, hydroglisseur ; galère à rames pour le portail, le kraken et le mégalodon jusqu'à l'âge 2. Modèles dans `BOAT_MAKE` (`expeditionScenes.ts`).
-- Chevaux : sans troupe, un par membre tant que l'écurie en a (`mountsFor`).
+- Chevaux : sans troupe, un par membre tant que l'écurie en a (`mountsFor`, retirés de l'écurie et comptés dans `exp.riding`). Dès qu'il y en a un, **toute l'équipe part en selle** : les chevaux qui manquent sont prêtés, sans en retirer de l'écurie. Avant, les autres suivaient à pied, et les cavaliers arrivés depuis longtemps semblaient bloqués au village à les attendre (le retour se termine quand tout le monde est là). La fenêtre de départ annonce un cheval par membre. Même règle pour les véhicules : tout le monde en voiture, en blindé ou à bord de l'appareil. Test : `world.test.ts` (« toute l'équipe en selle »), qui vérifie aussi que l'équipe rentre groupée.
 - Voiture : âge ≥ 3, `motorcar` réussie, usine automobile bâtie, ni cheval ni troupe (`motor` dans `start`) ; coussin d'air (`kt.hover`) dès l'âge 5.
 - En l'air (`airFor`, `airlift.ts`) : seulement vers `mountain` ou `far`, sans mer ni troupe ni `farewell`. Héliport et âge ≥ 4 : hélicoptère (`AIR.heli`, 3,2 cases/s) ; sinon aérodrome et âge ≥ 3 : montgolfière (`AIR.balloon`, 0,9 case/s). Étapes `AirLeg` : `walk` → `out` → `ground` → `fetch` → `back` → `home`. `Expeditions.airPose` donne la pose de l'appareil, `airRide` place chacun à bord, `AirFleet` (render) dessine. `helis.ts` n'est **pas** celui des expéditions : c'est l'hélicoptère et le drone de l'hôpital.
 
