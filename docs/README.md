@@ -54,7 +54,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 
 ### Transports, vie, fin de partie
 - [chemin-de-fer.md](chemin-de-fer.md) : gares, voies, trains, fret, bonus de proximité.
-- [trafic.md](trafic.md) : véhicules, bateaux, aéronefs, services.
+- [trafic.md](trafic.md) : véhicules, bateaux, aéronefs, services ; le conflit vivant entre les îles rivales (escarmouches, incursions, commerce, patrouilles).
 - [faune.md](faune.md) : animaux par biome, comportements, enclos, zoo.
 - [fin-de-partie.md](fin-de-partie.md) : fusée, voyage, parade, écran de fin.
 

@@ -27,6 +27,7 @@ registerDict('misc', {
   'Retour à la surface…': 'Back to the surface…',
   'Descente sous terre…': 'Heading underground…',
   'La terre tremble : un volcan se réveille… Cliquez ici pour le voir.': 'The ground is shaking: a volcano is waking up… Click here to see it.',
+  'Une escarmouche au large des îles rivales… Cliquez ici pour la voir.': 'A skirmish off the rival islands… Click here to watch it.',
   'Tout le village sort dire adieu aux colons !': 'The whole village comes out to say goodbye to the settlers!',
   '🚂 Ligne modifiée : {line}.': '🚂 Line updated: {line}.',
   '🚂 Ligne ouverte : {line}.': '🚂 Line opened: {line}.',

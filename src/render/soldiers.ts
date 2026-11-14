@@ -26,13 +26,13 @@ export interface Soldier {
  * à porter (un brancard) */
 export type SoldierMode = 'idle' | 'walk' | 'fight' | 'guard' | 'cheer' | 'run' | 'kneel' | 'carry';
 
-const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
+export const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 const STEEL = 0xc4cad2, BLUE = 0x3a6ab8, GOLD = 0xe8c66a, SKIN = 0xe8b894, LEATHER = 0x5a3e2c, BLACK = 0x1e1e22, WHITE = 0xf0ece0;
 const SKINS = [0xe8b894, 0xd8a07a, 0xb07a52, 0xf0c8a8];
 const FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 
 /** Tenue d'une époque : couleurs des pièces du corps, coiffe, ce que tient chaque main */
-interface Kit {
+export interface Kit {
   leg: number; boot: number; hip: number; torso: number; arm: number; hand: number;
   /** ce que tient la main droite : une arme d'épaule (on met en joue) ou une lame, une hache, un pic (on frappe), une lance
    * (portée droite, couchée pour frapper) */
@@ -201,7 +201,7 @@ const KITS = [roman, roman, knight, napoleonic, modern, future];
 // ---------- Les troupes de la garnison (île du portail, Enfers) : lancier, archer, chevalier, chacun reconnaissable ----------
 
 /** Lance : hampe de frêne, fer en feuille, talon (le long de +y depuis la main) */
-function spear(p: Parts, wood = 0x8a6a44, iron = STEEL) {
+export function spear(p: Parts, wood = 0x8a6a44, iron = STEEL) {
   p.box(0.009, 0.3, 0.009, 0, -0.07, 0, wood);
   p.add(new THREE.ConeGeometry(0.011, 0.05, 4).scale(1, 1, 0.5), 0, 0.255, 0, iron);
   p.box(0.012, 0.012, 0.012, 0, 0.226, 0, dark(iron, 0.8));
@@ -238,10 +238,10 @@ const manAtArms: Kit = {
 const SPEARMEN = [romanSpear, romanSpear, manAtArms, napoleonic, modern, future];
 
 /** Couleurs d'un archer selon l'époque : tunique, capuchon et pèlerine, chausses, épaules, arc, corde (`neon` : corde lumineuse) */
-interface ArcherLook { tunic: number; hood: number; leg: number; boot: number; arm: number; shoulder: number; bow: number; string: number; neon?: boolean; mail?: boolean }
+export interface ArcherLook { tunic: number; hood: number; leg: number; boot: number; arm: number; shoulder: number; bow: number; string: number; neon?: boolean; mail?: boolean }
 
 /** Archer : capuchon pointu et pèlerine, tunique ceinturée, carquois garni dans le dos, arc tenu dans la main gauche */
-function archerKit(o: ArcherLook): Kit {
+export function archerKit(o: ArcherLook): Kit {
   return {
     leg: o.leg, boot: o.boot, hip: o.tunic, torso: o.tunic, arm: o.arm, hand: LEATHER, hold: 'arrow', leftHold: 'bow',
     dress(p) {
@@ -363,7 +363,7 @@ const heavyFuture: Kit = {
 };
 
 /** Long fusil porté droit (le long de +y depuis la main) : crosse, platine, canon de `len` ; lunette ou rail lumineux au besoin */
-function longRifle(p: Parts, o: { wood: number; metal: number; len: number; scope?: boolean; neon?: boolean }) {
+export function longRifle(p: Parts, o: { wood: number; metal: number; len: number; scope?: boolean; neon?: boolean }) {
   p.box(0.014, 0.05, 0.02, 0, -0.04, 0, o.wood);
   p.box(0.01, 0.12, 0.012, 0, 0.0, 0.004, o.wood);
   p.box(0.005, o.len, 0.005, 0, -0.04 + o.len / 2 + 0.05, 0.012, o.metal);
@@ -784,9 +784,13 @@ const MINERS = [miner2, miner2, miner2, miner3, miner4, miner4];
 const FIREMEN = [fireman, fireman, fireman, fireman, firemanNow, firemanNow];
 
 /** Qui est-ce : un soldat de l'époque, un gendarme, un mineur */
-export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight' | 'gunner' | 'rifleman';
+export type SoldierRole = 'soldier' | 'gendarme' | 'miner' | 'fireman' | 'medic' | 'police' | 'spearman' | 'archer' | 'knight' | 'gunner' | 'rifleman' | PeopleRole;
+/** Les soldats des deux peuples des îles rivales, fantassin et archer (tenues dans `peopleSoldiers.ts`, inscrites par `registerKits`) */
+export type PeopleRole = 'orient' | 'orientArcher' | 'asie' | 'asieArcher';
 /** Les troupes de la garnison (leurs géométries sont partagées d'un soldat à l'autre : `makeSoldier` les garde en cache) */
 const TROOP_ROLES: Partial<Record<SoldierRole, Kit[]>> = { spearman: SPEARMEN, archer: ARCHERS, knight: KNIGHTS, gunner: GUNNERS, rifleman: RIFLEMEN };
+/** Inscrit les tenues (une par époque, de la Préhistoire au Futuriste) d'un rôle de troupe défini ailleurs */
+export function registerKits(role: SoldierRole, kits: Kit[]) { TROOP_ROLES[role] = kits; }
 const troopGeo = new Map<string, THREE.BufferGeometry>();
 /** Géométrie partagée d'une pièce de troupe (`key` : rôle, époque, teint, pièce), faite à la première demande */
 function shared(key: string | null, make: () => THREE.BufferGeometry) {
