@@ -5,7 +5,7 @@ import { smoothstep } from '../core/rng';
 import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/difficulty';
-import { GEN, GEN_FIXED, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
+import { GEN, GEN_FIXED, GEN_VAR, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
 import { archLayout, type ArchLayout } from './archipelago';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
@@ -319,6 +319,11 @@ export class World {
   isles: ArchLayout | null = null;
   /** « Explorer le monde » : 'ask' tant que le joueur n'a pas répondu, 'no' s'il reste sur son île (sauvegardé) */
   explore: 'ask' | 'no' = 'ask';
+  /**
+   * Version du générateur de l'île principale (sauvegardée si ce n'est pas la 3) : une ancienne partie (version 1 ou 2)
+   * agrandie à l'archipel garde le climat, la rivière et les biomes de son île (`mainGenOf`)
+   */
+  mainGen = GEN_VAR;
   /** âge du village quand le joueur a accepté d'explorer le monde (sauvegardé) ; null sans archipel, ou sur une carte créée en archipel */
   exploredAt: number | null = null;
   /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
@@ -943,11 +948,11 @@ export class World {
    * (sur un grand village, tout refaire à chaque bâtiment posé coûtait un à-coup)
    */
   computeBiomes(rect: [number, number, number, number] | null = null) {
-    const key = `${this.mapId}|${this.seed}|${this.gen}`;
+    const key = `${this.mapId}|${this.seed}|${this.gen}|${this.mainGen}`;
     if (key !== this.climateKey) {
       this.climateKey = key;
-      fillClimate(this.gen, this.seed, N, this.temp, this.wet);
-      fillRiverBed(this.gen, this.seed, N, this.bed);
+      fillClimate(this.gen, this.seed, N, this.temp, this.wet, this.mainGen);
+      fillRiverBed(this.gen, this.seed, N, this.bed, this.mainGen);
       rect = null;
     }
     const dist = this.waterDist;
@@ -989,7 +994,7 @@ export class World {
       this.biome[k] = f ? f - 1 : b;
     }
     // (la carte figée de la version 1 garde ses biomes d'origine)
-    if (!rect && this.gen !== GEN_FIXED) this.fixIslets();
+    if (!rect && this.gen !== GEN_FIXED && !(this.isles && this.mainGen === GEN_FIXED)) this.fixIslets();
   }
 
   /**
@@ -1667,6 +1672,7 @@ export class World {
       ...(this.isles ? { isles: this.isles } : {}),
       ...(this.explore === 'no' ? { explore: 'no' } : {}),
       ...(this.exploredAt !== null ? { exploredAt: this.exploredAt } : {}),
+      ...(this.isles && this.mainGen !== GEN_VAR ? { mainGen: this.mainGen } : {}),
       ...(this.reveal ? { reveal: 1 } : {}),
       heights: Array.from(this.heights, (v) => Math.round(v * 100)),
       roads,
@@ -1789,6 +1795,7 @@ export class World {
     this.isles = this.gen >= GEN_ARCH ? archLayout(this.seed, N) : null;
     this.explore = d.explore === 'no' ? 'no' : 'ask';
     this.exploredAt = Number.isInteger(d.exploredAt) && this.isles ? d.exploredAt : null;
+    this.mainGen = this.isles && [GEN_FIXED, 2].includes(d.mainGen) ? d.mainGen : GEN_VAR;
     this.reveal = d.reveal === 1 && !!this.isles;
     const biomePaint = new Uint8Array(N * N);
     for (let i = 0; i + 1 < (d.biomes ?? []).length; i += 2) if (d.biomes[i] >= 0 && d.biomes[i] < N * N && d.biomes[i + 1] >= 1 && d.biomes[i + 1] <= BIOME_NAMES.length) biomePaint[d.biomes[i]] = d.biomes[i + 1];
