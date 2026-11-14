@@ -8,6 +8,8 @@ import { townPlans, lotsAt, inPoly, segDist, HOUSE_SHARE, type TownKind, type To
 import { townModel, townWall, triCount } from '../src/render/townModels';
 
 const SEEDS = [11, 4242, 7];
+/** Budgets de triangles des modèles du peuple asiatique (`models/asian.ts`), quand ils diffèrent des autres */
+const ASIE_CAP: Partial<Record<TownKind, number>> = { temple: 11500, palace: 11500, house: 1700, teahouse: 3000, gate: 3000, tower: 1300, paifang: 1400 };
 const worlds = new Map<number, World>();
 function archipel(seed: number) {
   if (!worlds.has(seed)) {
@@ -113,16 +115,18 @@ describe('villes des peuples rivaux (archipel)', () => {
     const kinds: [TownKind, number, number, number][] = [
       ['house', 1.2, 1.1, 1300], ['workshop', 1.2, 1.1, 1300], ['garden', 2.2, 2.2, 2000], ['field', 3, 2.5, 1000], ['tower', 1.3, 1.3, 1000], ['gate', 2.4, 1.4, 1500],
       // les monuments couvrent 25 à 30 cases : 11 000 triangles au plus pour le temple et le palais (une pièce de chaque par ville)
-      ['temple', 5, 5, 11000], ['palace', 6, 5, 11000], ['market', 4, 4, 6500], ['port', 4, 3.5, 6500], ['caravan', 4, 4, 6500], ['baths', 3, 2.6, 6500],
+      ['temple', 5, 5, 11000], ['palace', 6, 5, 11000], ['teahouse', 1.8, 1.6, 3000], ['paifang', 1.8, 0.5, 1400], ['market', 4, 4, 6500], ['port', 4, 3.5, 6500], ['caravan', 4, 4, 6500], ['baths', 3, 2.6, 6500],
     ];
     const box = new THREE.Box3();
     for (const people of ['orient', 'asie'] as const)
       for (const [kind, w, d, cap] of kinds) {
         if ((kind === 'caravan' || kind === 'baths') && people === 'asie') continue;
+        if ((kind === 'teahouse' || kind === 'paifang') && people === 'orient') continue;
         for (let age = 1; age <= 5; age++)
           for (let v = 0; v < 12; v++) {
             const g = townModel(people, kind, age, v, w, d), pos = g.attributes.position.array as Float32Array;
-            if (triCount(g) > cap) expect(`${people} ${kind} ${age} ${v} : ${triCount(g)}`).toBe('dans le budget');
+            // (les monuments du peuple asiatique ont le détail des nôtres : charpente, tuiles en couvre-joints, balustrades)
+            if (triCount(g) > (people === 'asie' ? ASIE_CAP[kind] ?? cap : cap)) expect(`${people} ${kind} ${age} ${v} : ${triCount(g)}`).toBe('dans le budget');
             expect(pos.every((x) => Number.isFinite(x))).toBe(true);
             // dans son lot (les arbres et les toits débordent un peu ; le port avance sur l'eau avec son navire)
             if (kind === 'port') continue;
@@ -132,5 +136,27 @@ describe('villes des peuples rivaux (archipel)', () => {
           }
       }
     for (const people of ['orient', 'asie'] as const) for (let age = 1; age <= 5; age++) expect(triCount(townWall(people, age, 1.6))).toBeLessThan(600);
+  });
+
+  it('les états de bataille : en ruine (plus bas, sans lumières, gravats) et en reconstruction (échafaudage)', () => {
+    const box = new THREE.Box3(), top = (g: THREE.BufferGeometry) => { box.setFromBufferAttribute(g.attributes.position as THREE.BufferAttribute); return box.max.y; };
+    const lit = (g: THREE.BufferGeometry) => Array.from(g.attributes.aLight.array as Float32Array).some((x) => x !== 0);
+    for (const people of ['orient', 'asie'] as const)
+      for (const [kind, w, d] of [['palace', 6, 5], ['gate', 2.4, 1.4], ['tower', 1.3, 1.3], ['house', 1.2, 1.1], ['temple', 5, 5]] as [TownKind, number, number][])
+        for (const age of [2, 3, 5]) {
+          const ok = townModel(people, kind, age, 1, w, d), ruin = townModel(people, kind, age, 1, w, d, 'ruin'), rep = townModel(people, kind, age, 1, w, d, 'repair');
+          for (const g of [ruin, rep]) expect((g.attributes.position.array as Float32Array).every((x) => Number.isFinite(x))).toBe(true);
+          expect(top(ruin)).toBeLessThan(top(ok));
+          expect(lit(ruin)).toBe(false);
+          expect(triCount(rep)).toBeGreaterThan(30);
+          // le cache rend la même géométrie, et l'état intact ne change pas
+          expect(townModel(people, kind, age, 1, w, d, 'ruin')).toBe(ruin);
+          expect(townModel(people, kind, age, 1, w, d, 'intact')).toBe(ok);
+        }
+    for (const people of ['orient', 'asie'] as const) {
+      const ok = townWall(people, 3, 1.6), br = [0, 1, 2, 3].map((s) => townWall(people, 3, 1.6, 'ruin', s));
+      // des brèches : le haut du pan ne tient plus partout
+      for (const g of br) expect(top(g)).toBeLessThan(top(ok) - 0.05);
+    }
   });
 });

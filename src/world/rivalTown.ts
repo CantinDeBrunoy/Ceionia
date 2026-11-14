@@ -16,7 +16,9 @@ const angleDiff = (a: number, b: number) => wrapAngle(a - b);
 
 /** Sorte d'un lot de la ville */
 export type TownKind =
-  | 'temple' | 'palace' | 'market' | 'port' | 'caravan' | 'baths' | 'garden' | 'house' | 'workshop' | 'field' | 'gate' | 'tower';
+  | 'temple' | 'palace' | 'market' | 'port' | 'caravan' | 'baths' | 'garden' | 'house' | 'workshop' | 'field' | 'gate' | 'tower'
+  // propres au peuple asiatique
+  | 'teahouse' | 'paifang';
 
 /**
  * Un lot : centre (cases du monde), emprise `w` × `d` (cases, avant rotation), rotation `rot` (la façade, +z du modèle, regarde
@@ -66,6 +68,7 @@ export const HOUSE_SHARE = [0, 0.24, 0.45, 0.66, 0.85, 1];
 /** Emprise des monuments (cases) */
 const SIZE: Partial<Record<TownKind, [number, number]>> = {
   temple: [5, 5], palace: [6, 5], market: [4, 4], port: [4, 3.5], caravan: [4, 4], baths: [3, 2.6], garden: [4, 4],
+  teahouse: [1.8, 1.6], paifang: [1.8, 0.5],
 };
 
 const plans = new Map<string, TownPlan>();
@@ -275,6 +278,27 @@ function drawTown(w: World, q: RivalIsle): TownPlan {
     return { d, s, sx, sz };
   };
   const onPlazaAny = (x: number, z: number, r: number) => plazas.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + r);
+
+  if (people === 'asie') {
+    // les paifang : à l'entrée de la place du temple, sur chaque rue qui vient d'une porte, et en tête de l'avenue du palais
+    const arch = (a: [number, number], b: [number, number], back: number) => {
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, x = b[0] - ((b[0] - a[0]) / l) * back, z = b[1] - ((b[1] - a[1]) / l) * back;
+      const [sw, sd] = SIZE.paifang!;
+      lots.push({ kind: 'paifang', x, z, w: sw, d: sd, rot: facing(x, z, a[0], a[1]), from: 1, v: Math.floor(rnd() * 1000) });
+    };
+    for (const st of mains.slice(0, portes.length)) arch(st.pts[st.pts.length - 2], st.pts[st.pts.length - 1], 0.7);
+    arch([mk[0], mk[1]], palFront, 0.6);
+    // les salons de thé : au bord d'une rue, près du marché et sur la route du port
+    const [tw, td] = SIZE.teahouse!, tr = rad({ w: tw, d: td }) * 0.86;
+    for (const [ax, az] of [[mk[0], mk[1]], [cx + (sea[0] - cx) * 0.5, cz + (sea[1] - cz) * 0.5]])
+      for (let tries = 0; tries < 160; tries++) {
+        const a = rnd() * Math.PI * 2, dd = 1.5 + tries * 0.05 + rnd() * 1.5, x = ax + Math.cos(a) * dd, z = az + Math.sin(a) * dd;
+        const ns = nearStreet(x, z);
+        if (!inWall(x, z, tr + 1) || !land(x, z) || slope(x, z) > 1 || clash(x, z, tr, 0.4) || onPlazaAny(x, z, tr) || ns.d < tr * 0.8 || ns.d > tr + 1.2) continue;
+        lots.push({ kind: 'teahouse', x, z, w: tw, d: td, rot: facing(x, z, ns.sx, ns.sz), from: 2, v: Math.floor(rnd() * 1000) });
+        break;
+      }
+  }
 
   // jardins dans les vides (plus nombreux chez le peuple asiatique)
   const gardens = people === 'asie' ? 5 : 3;
