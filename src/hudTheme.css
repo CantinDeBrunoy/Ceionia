@@ -938,3 +938,87 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 #menu ~ .overlay > .modal.panel:not(.cePop) button.active, #menu ~ .overlay > .modal.panel:not(.cePop) button[data-r="1"] { border-color: var(--hGold); background: var(--hGoldFill); color: var(--hInk); box-shadow: var(--hGoldShadow); }
 #menu ~ .overlay > .modal.panel:not(.cePop) button.active:hover, #menu ~ .overlay > .modal.panel:not(.cePop) button[data-r="1"]:hover { background: linear-gradient(180deg, #FFF3CC, #F9D886); }
 #menu ~ .overlay > .modal.panel:not(.cePop) .x { border-radius: 50%; }
+
+/* ---------- juste milieu (retour de l'auteur : « trop petit, un juste milieu entre avant et maintenant ») : sur ordinateur, la
+   barre du bas remonte à environ 75 % de sa hauteur d'origine (≈ 160 px au village, ≈ 125 px en bataille) ; vignettes, textes
+   et carte d'explication plus confortables. Le téléphone garde sa barre réduite ---------- */
+@media (min-width: 861px) {
+  #dock > #dockRow { gap: 10px; }
+  #dock #dockSide { grid-template-columns: repeat(7, 34px); gap: 5px; padding: 7px; }
+  #dock #dockSide #modes { flex-direction: column; gap: 4px; }
+  #dock #modes button { flex: none; height: 38px; padding: 0 10px 0 8px; gap: 8px; border-radius: 12px; font-size: 14px; }
+  #dock #modes button b, #dock #modes button b .pic, #dock #modes button b svg { width: 22px; height: 22px; }
+  #dock .quick button { width: 34px; height: 32px; border-radius: 10px; }
+  #dock .quick button svg { width: 16px; height: 16px; }
+  #dock #dockMain { padding: 6px 7px 7px; }
+  #dock #subcats button { height: 32px; padding: 0 13px 2px 10px; gap: 6px; border-radius: 12px 12px 0 0; font-size: 13.5px; }
+  #dock #subcats button.on { border-radius: 12px; }
+  #dock #subcats button b .pic, #dock #subcats button b img { width: 19px; height: 19px; }
+  #dock #itemsWrap { padding: 4px 3px; }
+  #dock #itemsWrap .scr { width: 24px; height: 56px; font-size: 28px; }
+  #dock #items { gap: 8px; }
+  #dock #items .gh { display: flex; font-size: 9.5px; padding-left: 3px; }
+  #dock #items .grp { gap: 3px; padding-left: 8px; }
+  #dock #items .gt { gap: 6px; }
+  #dock #items button.tile { width: 90px; height: 92px; padding: 3px 4px 5px; gap: 1px; border-radius: 13px; }
+  #dock #items button.tile b.th { width: 68px; height: 56px; }
+  #dock #items button.tile b.th img { width: 70px; height: 62px; }
+  #dock #items button.tile .lbl { max-width: 84px; font-size: 12px; line-height: 1.08; -webkit-line-clamp: 2; }
+  #dock #items button.tile.big::before, #dock #items .key { left: 7px; top: 5px; font-size: 8.5px; }
+  #dock #items .badge { right: 5px; top: 4px; font-size: 9.5px; }
+  #dock #viewBtns { gap: 6px; padding: 5px; }
+  #dock #viewBtns button.round { width: 44px; height: 44px; }
+  #dock #viewBtns button.round svg { width: 19px; height: 19px; }
+  #dock #miniMap, #dock #dockRight #miniMap { width: 146px; height: 146px; padding: 5px; border-radius: 22px; }
+  #miniMap canvas { border-radius: 17px; }
+  #miniMap .mmN { top: 9px; right: 9px; width: 21px; height: 21px; font-size: 10px; }
+  #info, #info.held, #selCard, #tinfo { padding: 10px 13px 11px; font-size: 12px; line-height: 1.4; border-radius: 16px; }
+  #info .xth, #selCard .xth, #tinfo .xth { width: 66px; height: 56px; }
+  #info h4, #info.held h4, #selCard h4, #tinfo h4 { font-size: 18.5px; }
+  #info .xsub, #selCard .xsub, #tinfo .xsub { font-size: 12px; margin-top: 2px; }
+  #info .xdesc, #tinfo .xdesc { margin-top: 6px; -webkit-line-clamp: 3; }
+  #info .perk { -webkit-line-clamp: 2; }
+  #info::before, #tinfo::before { width: 12px; height: 12px; top: 9px; right: 11px; }
+  #selCard .xacts { margin-top: 9px; gap: 7px; }
+  #selCard .xacts button { min-height: 34px; font-size: 12.5px; }
+  #selCard .xacts .xdel { flex-basis: 40px; }
+  #selCard .ihead .x, #selCard .ihead .xfold { width: 28px; height: 28px; }
+}
+@media (min-width: 1400px) {
+  #dock > #dockRow, #troopBar .tfoot { grid-template-columns: auto minmax(0, 1180px) 330px auto; }
+}
+@media (min-width: 901px) {
+  #troopBar .tfoot { gap: 10px; }
+  #troopBar .tfoot > .ttool { padding: 7px; gap: 5px; }
+  #troopBar .ttool .ttabs { flex-direction: column; gap: 4px; }
+  #troopBar .ttool .ttabs button { width: 150px; height: 38px; padding: 0 10px 0 8px; gap: 8px; border-radius: 12px; font-size: 14px; }
+  #troopBar .ttool .ttabs button .pic, #troopBar .ttool .ttabs button svg { width: 20px; height: 20px; }
+  #troopBar .ttool .ttools { padding-top: 5px; gap: 5px; }
+  #troopBar .ttool .ttl { width: 36px; height: 32px; border-radius: 10px; }
+  #troopBar .tfoot > .tmenu { padding: 6px 9px 8px; }
+  #troopBar .tmh { min-height: 22px; }
+  #troopBar .tmh h5 { font-size: 12.5px; }
+  #troopBar .tmh h5 .pic { width: 18px; height: 18px; }
+  #troopBar .tmh h5 small { font-size: 11.5px; padding: 0 8px; }
+  #troopBar .tmenu .tbuilds { gap: 7px; }
+  #troopBar .tmenu .trb.tbv, #troopBar .tmrow .trb.tbv { width: 92px; height: 84px; padding: 3px 4px 4px; border-radius: 13px; }
+  #troopBar .tmrow .trb.tbv .tic { height: 50px; }
+  #troopBar .tmrow .trb.tbv .tic img { width: 32px; height: 32px; }
+  #troopBar .tmrow .trb.tbv .tic.tpv img { width: 58px; height: 48px; }
+  #troopBar .tmrow .trb.tbv b { font-size: 12px; max-width: 86px; }
+  #troopBar .tmrow .trb.tbv small.co { font-size: 10.5px; }
+  #troopBar .tmrow .trb.tbv small.co .pic { width: 12px; height: 12px; }
+  #troopBar .tmrow .trb.trc { width: 144px; height: 84px; padding: 4px 6px; grid-template-columns: 46px minmax(0, 1fr); column-gap: 6px; border-radius: 13px; }
+  #troopBar .trc .ttx b { font-size: 12.5px; }
+  #troopBar .trc .trole { font-size: 10.5px; }
+  #troopBar .trc .tco { font-size: 11px; padding-top: 3px; }
+  #troopBar .trc .tco .pic, #troopBar .trc .trole .pic { width: 13px; height: 13px; }
+  #troopBar .tfoot > .tcorner, #troopBar .thell .tcorner, #troopBar .thell.tshut .tcorner { grid-template-columns: 38px minmax(0, 1fr); gap: 6px; width: 200px; padding: 7px; }
+  #troopBar .tcorner .thb, #troopBar .thell .tcorner .thb { width: 38px; height: 38px; }
+  #troopBar .tcorner .thb .tq { width: 26px; height: 26px; font-size: 14px; }
+  #troopBar .tcorner button.go, #troopBar .tcorner .tx { min-height: 38px; font-size: 13px; }
+  #troopBar .tcorner .oi, #troopBar .tcorner .tord .oi { width: 30px; height: 30px; }
+  #troopBar .tcorner .oi img { width: 21px; height: 21px; }
+  #troopBar .tcorner .tord, #troopBar .thell .tcorner .tord.gar { min-height: 38px; font-size: 13px; }
+  #troopBar .tcorner .tord .tpt b { font-size: 13px; }
+}
