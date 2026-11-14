@@ -64,6 +64,7 @@ Un lot (`Lot`) : sorte (`TownKind`), centre (cases du monde), emprise `w` × `d`
 - Toutes les géométries du lot doivent passer par `mergeLit` (mêmes attributs) ; le sol des rues aussi.
 - Une pièce animée qui s'écrase disparaît sous 3 % de sa taille (`setPiece`) : sinon son toit aplati ferait une tache au sol.
 - Coût mesuré (graine 11, vue de haut à la distance maximale, ordinateur, panneau caché) : environ 790 pièces et 170 000 à 195 000 triangles pour les deux villes, de 1 à 4 ms de rendu sur 35 ms.
+- Depuis les modèles détaillés du peuple asiatique (`models/asian.ts`), sa ville seule compte, remparts compris (graines 11 et 4242) : 55 000 triangles à l'Antiquité, 135 000 au Médiéval, 175 000 à 180 000 à l'Industriel, 130 000 au Moderne, 180 000 à 190 000 au Futuriste ; la ville orientale de 30 000 à 130 000. Le temps de rendu n'a pas encore été remesuré en jeu.
 
 ## Pour modifier
 - **Changer un modèle** : la fonction du peuple dans `townModels.ts` (`oHouse`, `oTemple`, `aTemple`, `pagoda`…), branche de l'âge ; lancer `npx vitest run tests/villesPeuples.test.ts` (budgets, emprise).
