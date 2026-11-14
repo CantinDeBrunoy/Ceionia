@@ -12,6 +12,7 @@ import { peopleRole } from './peopleSoldiers';
 import { CombatFx } from './combatFx';
 import { Puffs } from './particles';
 import { mats } from './materials';
+import { archipelagoOn } from '../world/expand';
 
 /**
  * Le conflit vivant entre les deux îles rivales, en décor : de temps en temps une escarmouche (une bataille navale entre deux
@@ -162,7 +163,7 @@ export class NavalConflict {
   /** Mode développeur : une escarmouche tout de suite (la précédente s'efface) ; faux sans archipel ou hors guerre */
   trigger(kind: 'naval' | 'raid' = pickSkirmish(rnd), age = this.age): boolean {
     this.age = age;
-    const shown = conflictShown(this.state, !!this.world.isles, this.age);
+    const shown = conflictShown(this.state, archipelagoOn(this.world), this.age);
     if (seaLife(shown) !== 'skirmish' || !this.places()) return false;
     if (this.skirmish) this.drop(this.skirmish);
     this.skirmish = kind === 'raid' ? this.raid() ?? this.naval() : this.naval();
@@ -175,7 +176,7 @@ export class NavalConflict {
     this.age = age;
     this.clock += dt;
     // (les places du conflit se calculent à la première scène, pas au chargement : quelques dizaines de millisecondes)
-    const shown = conflictShown(this.state, !!this.world.isles, age), mode = seaLife(shown);
+    const shown = conflictShown(this.state, archipelagoOn(this.world), age), mode = seaLife(shown);
     if (!mode) {
       if (this.skirmish) { this.drop(this.skirmish); this.skirmish = null; }
       if (this.life) { this.drop(this.life); this.life = null; }
