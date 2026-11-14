@@ -2346,8 +2346,11 @@ export class ExpeditionScene {
     // (au galion englouti, elle dérive du côté opposé à l'épave et à la gabare)
     const ang = this.salv ? this.salv.away + (Math.random() - 0.5) * 0.8 : 0.7 + Math.random() * 1.2;
     let d = 1.25;
+    // là où on l'a trouvée : le bateau tant que la décision se fait attendre (l'équipe s'est arrêtée), puis ce point reste
+    // fixe (posée chaque image à côté du bateau, elle le suivait quand il reprenait sa route)
+    const o = bt.obj.position.clone();
     return (dt: number) => {
-      const o = bt.obj.position;
+      if (s.pick < 0) o.copy(bt.obj.position);
       // elle dérive vers la galère quand on veut la fouiller, s'éloigne quand on passe son chemin
       d += ((s.pick === 0 ? 0.55 : s.pick === 2 && s.after > 1 ? 2.2 : 1.1) - d) * Math.min(1, dt * 0.8);
       wreck.position.set(o.x + Math.cos(ang) * d, bt.y - 0.005 + Math.sin(this.t * 1.5) * 0.008, o.z + Math.sin(ang) * d);

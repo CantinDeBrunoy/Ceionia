@@ -329,8 +329,10 @@ export class Expeditions {
   }
 
   /**
-   * Chevaux qui partiraient avec l'équipe : ceux qu'exige la cavalerie ; une troupe armée à pied n'en prend aucun (ils restent
-   * à l'écurie) ; les autres équipes, un par membre tant que l'écurie en a
+   * Chevaux pris à l'écurie par l'équipe : ceux qu'exige la cavalerie ; une troupe armée à pied n'en prend aucun (ils restent
+   * à l'écurie) ; les autres équipes, un par membre tant que l'écurie en a. Dès qu'il y en a un, toute l'équipe part en selle
+   * (`rides`) : les chevaux qui manquent sont prêtés, sans en retirer de l'écurie (avant, les marcheurs traînaient derrière
+   * les cavaliers, qu'on croyait bloqués à les attendre)
    */
   mountsFor(c: Choice) { return c.mounts ?? (c.troop ? 0 : Math.min(c.party, this.horsesHome())); }
 
@@ -343,7 +345,7 @@ export class Expeditions {
 
   /** Ce qu'une équipe partant maintenant emporterait (équipement, chevaux, carburant), et son risque avec cet équipement */
   preview(c: Choice) {
-    const l = loadout(c, this.world.exp.gear), n = this.mountsFor(c);
+    const l = loadout(c, this.world.exp.gear), n = this.mountsFor(c) ? this.need(c) : 0;
     return { take: l.take, label: [packLabel(l.take), n ? `${n} ${plural(n, 'cheval', 'chevaux')}` : '', c.fuel ? tr('{n} carburant', { n: c.fuel }) : ''].filter(Boolean).join(' · '), risk: this.riskOf(c) * l.k };
   }
 
@@ -461,7 +463,7 @@ export class Expeditions {
       site: c.dest === 'cave' ? 'cave' : kind, age, sea: sea && kind === 'river',
       targets: [], entry: -1, front: -1, redo: this.done(m), mounts, ambush: [], routeLen: 0, might: 0, air,
     };
-    // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval s'il y en a assez ; on part en selle
+    // chacun reçoit sa part : l'arme, la torche, la corde, l'armure, et son cheval (tous en selle, ou tous à pied) ; on part en selle
     const kits = party.map((): Kit => ({}));
     for (const g of ['plasma', 'assault', 'rifle', 'crossbow', 'sword', 'bow', 'spear'] as const) { let n = take[g] ?? 0; for (const kt of kits) if (n > 0 && !kt.weapon) { kt.weapon = g; n--; } }
     kits.forEach((kt, i) => {
@@ -474,8 +476,8 @@ export class Expeditions {
       // la charge de cavalerie part en cavaliers de l'époque (en chars à l'époque moderne) ; les autres équipes à cheval
       // restent des habitants en selle
       if (motor && !air) { kt.car = true; if (age >= 5) kt.hover = true; }
-      else if (armored && i < 3) { kt.rider = true; kt.tank = true; }
-      else if (i < mounts) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
+      else if (armored) { kt.rider = true; kt.tank = true; }
+      else if (mounts > 0) { kt.horse = true; if (c.troop === 'cavalry') kt.rider = true; }
     });
     party.forEach((id, i) => this.agents.equip(id, kits[i]));
     // force au combat : chacun compte, davantage en armure, armé, à cheval (en char, plus encore) ou la torche au poing (les
