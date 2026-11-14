@@ -1193,9 +1193,9 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
    le titre, l'âge entre deux lauriers et la phrase dessous ; une grande carte par façon de partir (emblème peint, nom, ce qui
    la distingue, sa durée, son risque, ses récompenses ; la choisie en or) ; l'équipement sur une ligne fine ; deux rouleaux
    dorés de part et d'autre de la fenêtre. Images : `public/expeditions/depart/` ---------- */
-.overlay > .modal.sendModal { position: relative; max-width: 1040px; overflow: visible; }
+.overlay > .modal.sendModal { position: relative; max-width: 1040px; max-height: none; overflow: visible; margin: auto; }
 @media (min-width: 761px) {
-  .overlay > .modal.sendModal::before, .overlay > .modal.sendModal::after { content: ''; position: absolute; top: -16px; bottom: -16px; width: 44px; box-sizing: border-box; border-style: solid; border-width: 34px 0; border-image: url(./expeditions/depart/rouleau.webp) 72 0 72 0 fill / 34px 0 34px 0 stretch; pointer-events: none; z-index: 6; filter: drop-shadow(0 4px 6px rgba(60, 35, 10, 0.35)); }
+  .overlay > .modal.sendModal::before, .overlay > .modal.sendModal::after { content: ''; position: absolute; top: -16px; bottom: -16px; width: 44px; box-sizing: border-box; border-style: solid; border-color: transparent; border-width: 34px 0; border-image: url('/expeditions/depart/rouleau.webp') 72 0 72 0 fill / 34px 0 34px 0 stretch; pointer-events: none; z-index: 6; filter: drop-shadow(0 4px 6px rgba(60, 35, 10, 0.35)); }
   .overlay > .modal.sendModal::before { left: -24px; }
   .overlay > .modal.sendModal::after { right: -24px; }
 }
@@ -1225,17 +1225,21 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
 .sendModal .scName small { padding-left: 14px; font-family: var(--hSerif); font-size: 13px; color: var(--hInk2); }
 .sendModal .scText { font-size: 13.5px; line-height: 1.35; color: var(--hInk); }
 .sendModal .scText b { font-weight: 800; }
-.sendModal .scStats { display: grid; grid-template-columns: 1fr 1fr 1.35fr; gap: 8px; width: 100%; }
+.sendModal .scStats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
+.sendModal .scStats > .scGifts { grid-column: 1 / -1; flex-direction: row; justify-content: center; }
+.sendModal .scGifts > span { flex-direction: row !important; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .sendModal .scBox { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; padding: 7px 8px; border-radius: 12px; border: 1px solid rgba(225, 190, 130, 0.75); background: rgba(255, 253, 246, 0.9); text-align: left; }
 .sendModal .scBox svg { flex: none; color: #8A5A12; }
 .sendModal .scBox > span { display: flex; flex-direction: column; min-width: 0; }
 .sendModal .scBox small { font-size: 11.5px; color: var(--hInk2); white-space: nowrap; }
-.sendModal .scBox b { font-family: var(--hSerif); font-size: 16px; font-weight: 800; color: #3A2213; white-space: nowrap; }
+.sendModal .scBox b { font-family: var(--hSerif); font-size: 15px; font-weight: 800; color: #3A2213; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sendModal .scBox { padding: 6px 8px; }
 .sendModal .scRisk.mid svg { color: #D98A1C; } .sendModal .scRisk.high svg, .sendModal .scRisk.high b { color: #C8352A; }
 .sendModal .scGifts > span { align-items: center; }
-.sendModal .scG { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.sendModal .scG { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
 .sendModal .scG i { display: inline-flex; align-items: center; gap: 2px; font-style: normal; }
-.sendModal .scG em { font-style: normal; font-family: var(--hSerif); font-size: 14px; font-weight: 800; color: #3A2213; }
+.sendModal .scG em { font-style: normal; font-family: var(--hSerif); font-size: 13.5px; font-weight: 800; color: #3A2213; white-space: nowrap; }
+.sendModal .scG i { white-space: nowrap; flex: none; }
 .sendModal .sSlim.sGear, .sendModal .gearNeed.sGear.sSlim { display: flex; flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; width: 100%; min-height: 0; padding: 8px 16px; flex-wrap: wrap; overflow: visible; text-align: left; }
 .sendModal .sSlim .gslots { flex: none; display: flex; gap: 6px; }
 .sendModal .sSlim .gslot { width: 56px; height: 56px; }
@@ -1254,4 +1258,22 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   .sendModal .scStats { grid-template-columns: 1fr 1fr; }
   .sendModal .scGifts { grid-column: 1 / -1; }
   .sendModal .sSlim .sgT, .sendModal .sSlim .gnote, .sendModal .sSlim .sgP { border: 0; padding: 0; }
+}
+/* le parchemin tient dans un écran de 900 px de haut : îlot et titre un peu plus petits, « Récompenses » sur la même ligne que
+   les récompenses, cartes plus serrées */
+.sendModal .sTop, .sendModal .sTop.mart, .sendModal .sTop.mart.dio { height: 92px; }
+.sendModal .sTop > img.dioImg, .sendModal .sTop > img { width: 250px; bottom: -10px; }
+.sendModal .sCap h3 { font-size: 30px; }
+.sendModal .sCap p { font-size: 15px; }
+.sendModal .sScroll { gap: 8px; }
+.sendModal .sCard { gap: 6px; padding: 9px 12px 11px; }
+.sendModal .scEmb { width: 64px; height: 52px; }
+.sendModal .scName b { font-size: 20px; }
+.sendModal .scGifts small { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; }
+.sendModal .scGifts > span { flex-direction: row !important; }
+.sendModal .sFoot { margin-top: 10px; }
+@media (max-height: 820px) and (min-width: 761px) {
+  .sendModal .sTop, .sendModal .sTop.mart, .sendModal .sTop.mart.dio { height: 70px; }
+  .sendModal .sTop > img.dioImg, .sendModal .sTop > img { width: 200px; }
+  .sendModal .scText { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
 }
