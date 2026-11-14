@@ -95,7 +95,7 @@ import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
 import { troopPortrait } from './render/troopPortraits';
 import { PortalChoice } from './ui/portalChoice';
 import { WorldChoice } from './ui/worldChoice';
-import { canExpand, expandWorld } from './world/expand';
+import { canExpand, expandWorld, archipelagoOn } from './world/expand';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
@@ -1127,7 +1127,7 @@ class Game implements UIHost {
     this.isleRuins.update(dt, isle, this.isleLayer?.fx ?? null);
     this.isleRuins.group.visible = this.mode === 'surface';
     // les villes des peuples rivaux : créées dès que la carte a son archipel (aussi après un agrandissement en cours de partie)
-    if (this.world.isles && !this.rivalTowns) { this.rivalTowns = new RivalTowns(this.world); this.scene.add(this.rivalTowns.group); }
+    if (archipelagoOn(this.world) && !this.rivalTowns) { this.rivalTowns = new RivalTowns(this.world); this.scene.add(this.rivalTowns.group); }
     if (this.rivalTowns) { this.rivalTowns.update(dt, this.sim.age); this.rivalTowns.group.visible = this.mode === 'surface'; }
     if (this.mode !== 'hell') w.hellFx.length = 0;
     this.kingStage.update(dt);

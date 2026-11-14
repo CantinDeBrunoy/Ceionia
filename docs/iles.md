@@ -8,7 +8,7 @@
 Sur une carte de 384 cases (version 4 du générateur), deux îles rivales font face à l'île principale : celle du peuple oriental (sable, palmiers) et celle du peuple asiatique (tempérée, humide). Chacune porte une ville **de décor** : on n'y bâtit pas, rien n'y est simulé. La ville a un **squelette fixe** (édifice religieux au centre, palais sur le point haut, marché entre les deux, port sur la côte la plus proche, remparts) rempli de façon **procédurale** à partir de la graine (rues, maisons, jardins, champs). Elle suit l'âge du village du joueur : elle se densifie et ses modèles changent à chaque âge.
 
 ## Règles du jeu
-- **Pas de ville sans archipel** : les parties de 192 cases (`world.isles` null) n'ont rien de tout cela.
+- **Pas de ville sans archipel** : une partie qui n'a pas accepté d'explorer le monde (`archipelagoOn(world)` faux, `expand.ts`) reste sur 192 cases et n'a rien de tout cela.
 - **L'âge** : celui du village (`sim.age`). La Préhistoire montre le bourg de l'Antiquité (`lotsAt`, `RivalTowns.setAge` : âge ramené entre 1 et 5).
 - **La densité** : une maison a l'âge où elle apparaît (`Lot.from`). Part des maisons par âge : `HOUSE_SHARE` (`rivalTown.ts`) = 24 % à l'Antiquité, 45 % au Médiéval, 66 % à l'Industriel, 85 % au Moderne, toutes au Futuriste. Les premières sont près des rues et du centre ; la ville se remplit ensuite vers les remparts et dans les vides. Les monuments, les remparts, les portes et le port sont là dès l'Antiquité ; les bains (peuple oriental), le grand jardin (peuple asiatique), les ruelles et les petits jardins arrivent au Médiéval ou après.
 - **Les styles** (modèles neufs, pas les nôtres recolorés ; deux peuples inventés, sans caricature) :
@@ -42,7 +42,7 @@ Un lot (`Lot`) : sorte (`TownKind`), centre (cases du monde), emprise `w` × `d`
 - Budgets (test) : maisons 1 300 triangles au plus (≈ 200 à 550 en pratique), monuments 6 500, pan de rempart 600.
 
 ### La vue (`rivalTowns.ts`)
-- `RivalTowns` est créé par `Game` dès que `world.isles` existe (à la création ou après un agrandissement en cours de partie), mis à jour chaque image (`update(dt, sim.age)`), caché hors de la surface (Enfers, souterrain).
+- `RivalTowns` est créé par `Game` dès que `archipelagoOn(world)` (partie neuve de 384 cases, ou partie rechargée après l'agrandissement de `expandWorld`), mis à jour chaque image (`update(dt, sim.age)`), caché hors de la surface (Enfers, souterrain).
 - Un seul lot `GeoBatch` (`mats.lit`) pour les deux villes : un corps par lot, un socle quand le sol penche, les pans de remparts (posés par tronçons de 1,6 case à la hauteur la plus basse, en marches), et le sol des rues et des places (une géométrie drapée par ville, refaite à chaque âge, couleur `streetColor`).
 - Hauteur d'un lot (`footing`) : relief affiché (`hAt`) sur neuf points de son emprise ; au-dessus de la plupart de l'emprise, le socle comble le reste. Le port : quai à fleur d'eau, entrepôt sur la rive.
 - Changement d'âge (`setAge`) : chaque lot s'écrase puis regonfle dans son nouveau modèle (0,8 s), les départs étalés sur 5 s ; les maisons nouvelles sortent de terre. `setAge(âge, true)` : sans animation (captures, essais).
@@ -50,7 +50,7 @@ Un lot (`Lot`) : sorte (`TownKind`), centre (cases du monde), emprise `w` × `d`
 - Le sol : `markGround` met `world.town` (cases des villes, non sauvegardé) pour que `VegView.meadow` et `loneTreeAt` n'y fassent pousser ni herbe, ni buisson, ni caillou ; les forêts et rocailles de ces cases sont retirées de `veg`.
 
 ## Liens avec les autres systèmes
-- Le replat des villages (`flattenVillages`, rayon `village.r` = 9) vient du générateur de l'archipel ([monde-carte.md](monde-carte.md)), qui n'a pas été touché : la ville (rayon d'environ 13,5) déborde du replat, ses lots en pente prennent un socle. Les ruisseaux qui traversent parfois la ville passent sous les rues et les maisons (pas encore de ponts).
+- Le replat des villages (`flattenVillages`, `village.r` = 15) vient du générateur de l'archipel ([monde-carte.md](monde-carte.md)) : tout plat jusqu'à 0,6 fois le rayon, puis 30 % du relief gardé jusqu'au bord, ce qui donne au palais son point haut (il se pose vers 12 cases du centre). Les remparts (rayon moyen d'environ 14,5) tiennent dans le replat ; la côte est à 15-32 cases du centre. Un lot en pente prend un socle. Les ruisseaux qui traversent parfois la ville passent sous les rues et les maisons (pas encore de ponts).
 - Les âges ([ages.md](ages.md)) : `sim.age` mène la ville.
 - La future bataille lira `townPlans(world)[i].points` (plage, remparts, portes, port, palais).
 

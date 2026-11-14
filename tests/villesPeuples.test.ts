@@ -63,7 +63,9 @@ describe('villes des peuples rivaux (archipel)', () => {
         // le quai et la plage touchent l'eau ; la plage n'est pas le port
         expect(waterNear(w, p.points.port[0], p.points.port[1], 1.5)).toBe(true);
         expect(waterNear(w, p.points.plage[0], p.points.plage[1], 1.5)).toBe(true);
-        expect(waterNear(w, p.points.plage[0], p.points.plage[1], 0) && water(w, p.points.plage[0] - 2 * Math.cos(p.seaAng), p.points.plage[1] - 2 * Math.sin(p.seaAng))).toBe(false);
+        const landNear = (x: number, z: number, r: number) => { for (let dz = -r; dz <= r; dz += 0.5) for (let dx = -r; dx <= r; dx += 0.5) if (!water(w, x + dx, z + dz)) return true; return false; };
+        expect(landNear(p.points.plage[0], p.points.plage[1], 1.5)).toBe(true);
+        expect(Math.hypot(p.points.plage[0] - p.points.port[0], p.points.plage[1] - p.points.port[1])).toBeGreaterThan(4);
         // remparts fermés sur la terre, au moins deux portes, la première tournée vers la mer
         expect(p.points.remparts).toHaveLength(12);
         for (const [x, z] of p.wall) expect(water(w, x, z)).toBe(false);
