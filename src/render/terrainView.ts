@@ -522,10 +522,12 @@ ${BLIGHT_GLSL}
     }
   }
   // glace l'hiver : elle part des rives et des eaux dormantes, en plaques aux bords irréguliers ; l'eau reste libre là où le
-  // courant est fort, au large, et là où la neige ne tient pas (tropiques, désert)
+  // courant est fort, au large, et là où il ne fait pas assez froid (tropiques, désert et leurs abords : canal g de la carte,
+  // dont le bord est encore brouillé pour ne pas suivre la grille)
   if (uIce > 0.01) {
     float iz = texture2D(uDetail, vWater * 0.3).b, iz2 = texture2D(uDetail, vWater * 0.11 + 0.37).b;
-    float ice = uIce * smoothstep(0.3, 0.8, texture2D(uSnowMap, vWater / uSnowSize).r) * (1.0 - smoothstep(0.1, 0.45, fl.b) * 0.85);
+    float cold = smoothstep(0.35, 0.75, texture2D(uSnowMap, vWater / uSnowSize).g + (iz2 - 0.5) * 0.3);
+    float ice = uIce * cold * (1.0 - smoothstep(0.1, 0.45, fl.b) * 0.85);
     float reach = ice * (0.45 + calm * 1.6) * (0.6 + iz2 * 0.9);
     float iceK = ice > 0.02 ? 1.0 - smoothstep(reach * 0.8, reach * 1.05 + 0.02, depth + (iz - 0.5) * 0.35) : 0.0;
     if (iceK > 0.0) {
