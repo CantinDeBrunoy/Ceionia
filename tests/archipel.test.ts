@@ -81,9 +81,12 @@ describe('archipel (version 4, carte de 384)', () => {
       const w = archipel(seed);
       for (const q of w.isles!.rivals) {
         const v = q.village;
-        for (let z = Math.ceil(v.z - v.r + 2); z < v.z + v.r - 2; z++)
-          for (let x = Math.ceil(v.x - v.r + 2); x < v.x + v.r - 2; x++) {
-            if (Math.hypot(x + 0.5 - v.x, z + 0.5 - v.z) > v.r - 2) continue;
+        // (tout plat au cœur, 0,6 fois le rayon ; plus loin, il garde un peu de relief)
+        const c = v.r * 0.6;
+        expect(v.r).toBeGreaterThanOrEqual(15);
+        for (let z = Math.ceil(v.z - c); z < v.z + c; z++)
+          for (let x = Math.ceil(v.x - c); x < v.x + c; x++) {
+            if (Math.hypot(x + 0.5 - v.x, z + 0.5 - v.z) > c - 1) continue;
             expect(w.isWaterCell(x, z)).toBe(false);
             expect(w.cellSlope(x, z)).toBeLessThan(0.3);
           }

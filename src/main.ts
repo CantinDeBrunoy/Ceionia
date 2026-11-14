@@ -992,6 +992,8 @@ class Game implements UIHost {
     return { text: trx('🧭 D’autres îles, au-delà de l’horizon'), button: trx('Explorer le monde') };
   }
   openWorldChoice() { this.worldChoice.show(); }
+  /** Fin de la cinématique de découverte des îles (la vue revient au village) : pour enchaîner (expédition de premier contact…) */
+  onIslesRevealed?: () => void;
 
   /**
    * Le monde s'agrandit : la partie est sauvegardée telle qu'elle est, agrandie à l'archipel (`expandWorld`), puis rechargée
@@ -1005,6 +1007,7 @@ class Game implements UIHost {
     const save = this.buildSave();
     this.running = false;
     save.world = expandWorld(save.world, this.world.mapId, this.world.seed);
+    save.world.exploredAt = this.sim.age;
     if (!saveSlot(save)) { this.ui.toast(trx('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
     sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`);
     location.reload();
@@ -1022,7 +1025,7 @@ class Game implements UIHost {
       [0, () => cam.goTo(f.x + f.n * 0.8, f.z + f.n / 2, cam.maxDist * 0.55)],
       [3200, () => { cam.goTo(a.village.x, a.village.z, 150); this.ui.banner(trx('De nouvelles terres !'), a.people === 'orient' ? trx('Une île de sable et de palmiers, et son peuple') : trx('Une île verte aux pitons rocheux, et son peuple')); }],
       [8200, () => { cam.goTo(b.village.x, b.village.z, 150); this.ui.banner(trx('Et une autre encore'), b.people === 'orient' ? trx('Une île de sable et de palmiers, et son peuple') : trx('Une île verte aux pitons rocheux, et son peuple')); }],
-      [13200, () => cam.goTo(back.x, back.z, back.dist)],
+      [13200, () => { cam.goTo(back.x, back.z, back.dist); this.onIslesRevealed?.(); }],
     ];
     for (const [t, f2] of steps) setTimeout(f2, t);
     setTimeout(() => this.saveNow(), 14000);

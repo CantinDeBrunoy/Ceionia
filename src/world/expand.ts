@@ -11,6 +11,12 @@ import { smoothstep, lerp } from '../core/rng';
  * décalé d'autant ; autour, la mer, les îles rivales et les petites îles d'une partie neuve de l'archipel
  */
 
+/**
+ * L'archipel est-il ouvert dans cette partie ? (le joueur a accepté d'explorer le monde : la carte a ses îles). L'âge où il a
+ * accepté : `World.exploredAt`
+ */
+export const archipelagoOn = (w: { isles: unknown }) => !!w.isles;
+
 /** La partie peut-elle s'agrandir ? Seulement le continent de la version 3, sur la carte de 192 */
 export const canExpand = (world: { n?: number; gen?: number }) => world?.n === MAIN_N && world?.gen === GEN_VAR;
 
