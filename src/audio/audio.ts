@@ -62,7 +62,7 @@ export const MUSIC: Record<string, string[]> = {
   age3: ['industriel-gymnopedie', 'industriel-morialta'],
   age4: ['moderne-the', 'moderne-fleuriste'],
   age5: ['futuriste-synthwave', 'futuriste-aout'],
-  menu: ['menu'], hell: ['enfers'], end: ['fin'],
+  menu: ['menu'], hell: ['enfers-oppression', 'enfers-com-mecha'], end: ['fin'],
 };
 const RECORDED_MUSIC = true;
 /** durée du fondu enchaîné entre deux morceaux (s) */

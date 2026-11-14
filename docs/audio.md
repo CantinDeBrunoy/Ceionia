@@ -48,7 +48,7 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
   - Repli : un fichier illisible ou absent est noté (`missing`) et sauté ; une liste sans fichier rend la musique générative (en partie seulement : au menu, elle ne tourne pas). Pendant un morceau, la musique générative se tait (`update` ressort avant les notes et recale `nextNote`, `nextPad`).
   - Revenir à la musique générée, ou passer à celle composée pour le jeu : remplacer les fichiers et les noms de `MUSIC` (une liste vide = musique générée pour cette scène), ou `RECORDED_MUSIC = false` partout. Mettre à jour les crédits.
   - Vérifier sans écouter : `__game.audio.debugMusic()` (scène, âge, morceau, position, gain, fichiers manquants).
-  - Les morceaux (tous MP3 96 kbit/s stéréo, 44,1 kHz, ramenés à −20 LUFS intégrés et −2 dBTP au plus, 44 Mo en tout, 63 min) :
+  - Les morceaux (tous MP3 96 kbit/s stéréo, 44,1 kHz, ramenés à −20 LUFS intégrés et −2 dBTP au plus, 48 Mo en tout, 68 min) :
 
 | Liste | Fichier | Morceau | Auteur | Licence |
 |---|---|---|---|---|
@@ -69,7 +69,8 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 | `age5` | `futuriste-synthwave` | « Calm Ambient 1 (Synthwave 4k) » (2:38) | The Cynic Project, OpenGameArt | CC0 |
 | `age5` | `futuriste-aout` | « Another August » (3:27) | The Cynic Project, OpenGameArt | CC0 |
 | `menu` | `menu` | « Thaxted » de Gustav Holst (2:33) | Kevin MacLeod | CC BY 4.0 |
-| `hell` | `enfers` | « Oppressive Gloom » (3:19) | Kevin MacLeod | CC BY 4.0 |
+| `hell` | `enfers-oppression` | « Oppressive Gloom » (3:19) | Kevin MacLeod | CC BY 4.0 |
+| `hell` | `enfers-com-mecha` | « Theme of Com-Mecha » (4:59), écrit pour une planète volcanique et industrielle | Matthew Pablo, OpenGameArt | CC BY 3.0 |
 | `end` | `fin` | « Beyond The Clouds » (2:22) | Matthew Pablo, OpenGameArt | CC BY 3.0 |
 
   - Préparer un fichier (ffmpeg, deux passes : mesure, puis correction linéaire) : `ffmpeg -i in.mp3 -af loudnorm=I=-20:TP=-2:LRA=11:print_format=json -f null -`, puis `ffmpeg -i in.mp3 -af "loudnorm=I=-20:TP=-2:LRA=11:measured_I=…:measured_TP=…:measured_LRA=…:measured_thresh=…:offset=…:linear=true,aresample=44100" -map_metadata -1 -ac 2 -c:a libmp3lame -b:a 96k sortie.mp3`. Vérifier : `ffmpeg -i sortie.mp3 -af ebur128=peak=true -f null -` (I ≈ −20 LUFS).
