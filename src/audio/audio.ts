@@ -59,10 +59,10 @@ export const MUSIC: Record<string, string[]> = {
   age0: ['prehistoire-tribal', 'prehistoire-ancetres', 'prehistoire-oiseau-tonnerre'],
   age1: ['antiquite-temple', 'antiquite-harpe', 'antiquite-luth', 'antiquite-cuivres'],
   age2: ['medieval-exploration', 'medieval-auberge', 'medieval-conteur'],
-  age3: ['industriel-gymnopedie', 'industriel-morialta'],
-  age4: ['moderne-the', 'moderne-fleuriste'],
-  age5: ['futuriste-synthwave', 'futuriste-aout'],
-  menu: ['menu'], hell: ['enfers'], end: ['fin'],
+  age3: ['industriel-gymnopedie', 'industriel-morialta', 'industriel-gymnopedie-3', 'industriel-valse-givre', 'industriel-adieux'],
+  age4: ['moderne-the', 'moderne-fleuriste', 'moderne-barman', 'moderne-cafe-chats'],
+  age5: ['futuriste-synthwave', 'futuriste-aout', 'futuriste-lifewave'],
+  menu: ['menu'], hell: ['enfers-oppression', 'enfers-com-mecha', 'enfers-croisade', 'enfers-rituel'], end: ['fin'],
 };
 const RECORDED_MUSIC = true;
 /** durée du fondu enchaîné entre deux morceaux (s) */
