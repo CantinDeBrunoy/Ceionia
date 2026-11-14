@@ -75,6 +75,20 @@ const MUSIC_FADE = 4;
  */
 const TRACK_GAIN = 0.55;
 
+/** Réglages du son enregistrés (`Settings`), tels que les lit le moteur */
+export interface SoundSettings { musicVol?: number; sfxVol?: number; ambVol?: number; music?: boolean; sfx?: boolean; musicChosen?: boolean; sfxChosen?: boolean }
+/**
+ * Les réglages enregistrés, en valeurs du moteur. Musique et sons sont allumés sauf si le joueur les a lui-même coupés :
+ * `music` et `sfx` ne comptent qu'avec `musicChosen` / `sfxChosen` (les anciennes sauvegardes notaient `false` sans choix)
+ */
+export function soundSettings(s: SoundSettings) {
+  return {
+    musicVol: s.musicVol ?? 0.5, sfxVol: s.sfxVol ?? 0.7, ambVol: s.ambVol ?? 0.7,
+    muteMusic: s.musicChosen === true && s.music !== true, musicChosen: s.musicChosen === true,
+    muteSfx: s.sfxChosen === true && s.sfx !== true, sfxChosen: s.sfxChosen === true,
+  };
+}
+
 /** Un morceau en cours : l'élément audio (lu en flux, sans tout décoder), son nœud et son gain de fondu */
 interface Track { key: string; name: string; el: HTMLAudioElement; src: MediaElementAudioSourceNode; g: GainNode; next: boolean; dropped: boolean }
 
@@ -84,10 +98,11 @@ export class AudioEngine {
   sfxVol = 0.7;
   /** volume des ambiances : nature (eau, pluie, oiseaux…) et bruitages de proximité (forge, bêtes, foule…) */
   ambVol = 0.7;
-  muteMusic = true;
-  /** sons et ambiances allumés par défaut ; la musique reste coupée tant que le joueur ne l'allume pas */
+  /** musique, sons et ambiances allumés par défaut ; tout démarre au premier geste du joueur (`start`) */
+  muteMusic = false;
   muteSfx = false;
-  /** le joueur a lui-même allumé ou coupé les sons (sinon on suit le défaut) */
+  /** le joueur a lui-même allumé ou coupé la musique, les sons (sinon on suit le défaut) */
+  musicChosen = false;
   sfxChosen = false;
   private master!: GainNode;
   private musicG!: GainNode;
@@ -125,9 +140,28 @@ export class AudioEngine {
   /** dernier morceau joué par liste : le suivant en diffère */
   private lastTrack = new Map<string, string>();
 
+  /**
+   * Démarre le son au premier geste du joueur (le navigateur n'autorise rien avant) : écouté en capture, pour qu'une
+   * fenêtre qui arrête la propagation (bulle du tutoriel) ne l'empêche pas, et sur plusieurs gestes (au toucher, seul le
+   * lever du doigt compte). Les écouteurs se retirent quand le contexte tourne et que la musique, s'il y en a, joue
+   */
+  unlockOn(target: Window) {
+    const kinds = ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click'] as const;
+    const wake = () => {
+      this.start(); this.applyVolumes();
+      if (this.ctx?.state === 'running' && !this.track?.el.paused) for (const k of kinds) target.removeEventListener(k, wake, true);
+    };
+    for (const k of kinds) target.addEventListener(k, wake, true);
+  }
+
   /** À appeler depuis un geste utilisateur */
   start() {
-    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended' && !document.hidden) this.ctx.resume();
+      // une lecture refusée faute de geste reprend au suivant
+      if (this.track?.el.paused && !document.hidden) this.track.el.play().catch(() => { /* toujours refusée */ });
+      return;
+    }
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     if (!AC) return;
     const ctx = new AC();
