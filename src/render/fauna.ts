@@ -1551,9 +1551,9 @@ export class Fauna {
     if (hide) return;
     const f = Number(c.key.slice(5)) || 0;
     const side = c.slot === 0 ? 0 : (c.slot % 2 ? 1 : -1), rank = Math.ceil(c.slot / 2);
-    const t = this.t - rank * 0.3;
+    const t = this.t - rank * 0.42;
     const [x0, z0] = this.goosePath(c, f, t), [x1, z1] = this.goosePath(c, f, t + 0.1);
-    const tl = Math.hypot(x1 - x0, z1 - z0) || 1, off = side * rank * 0.36 + Math.sin(this.t * 0.9 + c.slot) * 0.04;
+    const tl = Math.hypot(x1 - x0, z1 - z0) || 1, off = side * rank * 0.55 + Math.sin(this.t * 0.9 + c.slot) * 0.04;
     const x = x0 + ((z1 - z0) / tl) * off, z = z0 - ((x1 - x0) / tl) * off;
     const y = this.flockAltitude(c, f) + rank * 0.05 + Math.sin(this.t * 0.5 + f + rank * 0.4) * 0.25;
     this.wingTo(c, x, y, z, dt, 0.5);
@@ -1731,7 +1731,7 @@ export class Fauna {
       // se pose : ailes encore ouvertes un instant, puis repliées ; le corps se redresse
       c.flap = Math.max(0, c.flap - dt * 3.5);
       c.beat = Math.max(0, (c.beat ?? 0) - dt * 3);
-      c.pitch *= 1 - Math.min(1, dt * 5);
+      c.pitch += (-0.32 - c.pitch) * Math.min(1, dt * 5);
       c.roll = (c.roll ?? 0) * (1 - Math.min(1, dt * 6));
       c.timer -= dt;
       // sautille et tourne la tête de temps en temps
