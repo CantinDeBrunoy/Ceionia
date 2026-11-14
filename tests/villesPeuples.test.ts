@@ -136,4 +136,26 @@ describe('villes des peuples rivaux (archipel)', () => {
       }
     for (const people of ['orient', 'asie'] as const) for (let age = 1; age <= 5; age++) expect(triCount(townWall(people, age, 1.6))).toBeLessThan(600);
   });
+
+  it('les états de bataille : en ruine (plus bas, sans lumières, gravats) et en reconstruction (échafaudage)', () => {
+    const box = new THREE.Box3(), top = (g: THREE.BufferGeometry) => { box.setFromBufferAttribute(g.attributes.position as THREE.BufferAttribute); return box.max.y; };
+    const lit = (g: THREE.BufferGeometry) => Array.from(g.attributes.aLight.array as Float32Array).some((x) => x !== 0);
+    for (const people of ['orient', 'asie'] as const)
+      for (const [kind, w, d] of [['palace', 6, 5], ['gate', 2.4, 1.4], ['tower', 1.3, 1.3], ['house', 1.2, 1.1], ['temple', 5, 5]] as [TownKind, number, number][])
+        for (const age of [2, 3, 5]) {
+          const ok = townModel(people, kind, age, 1, w, d), ruin = townModel(people, kind, age, 1, w, d, 'ruin'), rep = townModel(people, kind, age, 1, w, d, 'repair');
+          for (const g of [ruin, rep]) expect((g.attributes.position.array as Float32Array).every((x) => Number.isFinite(x))).toBe(true);
+          expect(top(ruin)).toBeLessThan(top(ok));
+          expect(lit(ruin)).toBe(false);
+          expect(triCount(rep)).toBeGreaterThan(30);
+          // le cache rend la même géométrie, et l'état intact ne change pas
+          expect(townModel(people, kind, age, 1, w, d, 'ruin')).toBe(ruin);
+          expect(townModel(people, kind, age, 1, w, d, 'intact')).toBe(ok);
+        }
+    for (const people of ['orient', 'asie'] as const) {
+      const ok = townWall(people, 3, 1.6), br = [0, 1, 2, 3].map((s) => townWall(people, 3, 1.6, 'ruin', s));
+      // des brèches : le haut du pan ne tient plus partout
+      for (const g of br) expect(top(g)).toBeLessThan(top(ok) - 0.05);
+    }
+  });
 });

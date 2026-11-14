@@ -5,6 +5,7 @@ import { mulberry32 } from '../core/rng';
 import type { People } from '../world/archipelago';
 import type { TownKind } from '../world/rivalTown';
 import * as asian from './models/asian';
+import { withState, type TownState } from './townRuins';
 
 /**
  * Les modèles des villes des deux peuples rivaux (décor de l'archipel, voir `rivalTowns.ts` et `docs/iles.md`) : un jeu
@@ -572,12 +573,15 @@ function gate(p: Parts, people: People, age: number, v: number) {
 
 const cache = new Map<string, THREE.BufferGeometry>();
 
-/** Géométrie (corps et lumières fondus, voir `mergeLit`) d'un lot de la ville, à l'âge `age` (1 à 5) */
-export function townModel(people: People, kind: TownKind, age: number, v: number, w: number, d: number): THREE.BufferGeometry {
+/**
+ * Géométrie (corps et lumières fondus, voir `mergeLit`) d'un lot de la ville, à l'âge `age` (1 à 5), intact, en ruine ou en
+ * reconstruction (`townRuins.ts`)
+ */
+export function townModel(people: People, kind: TownKind, age: number, v: number, w: number, d: number, state: TownState = 'intact'): THREE.BufferGeometry {
   const a = Math.max(1, Math.min(5, age));
   const qw = Math.round(w * 5) / 5, qd = Math.round(d * 5) / 5;
   const vv = kind === 'house' || kind === 'workshop' ? v % 12 : kind === 'garden' || kind === 'field' ? v % 4 : v % 3;
-  const key = `${people}|${kind}|${a}|${vv}|${qw}|${qd}`;
+  const key = `${people}|${kind}|${a}|${vv}|${qw}|${qd}|${state}`;
   let g = cache.get(key);
   if (g) return g;
   const p = new Parts(), o = people === 'orient';
@@ -597,21 +601,21 @@ export function townModel(people: People, kind: TownKind, age: number, v: number
     case 'tower': tower(p, people, a, vv); break;
     case 'gate': gate(p, people, a, vv); break;
   }
-  const { body, glow } = p.build();
+  const built = p.build(), { body, glow } = withState(built.body, built.glow, state, vv * 13 + kind.length);
   g = mergeLit(body, glow) ?? body;
   cache.set(key, g);
   return g;
 }
 
-/** Pan de rempart (longueur arrondie au quart de case) */
-export function townWall(people: People, age: number, len: number): THREE.BufferGeometry {
-  const a = Math.max(1, Math.min(5, age)), L = Math.max(0.25, Math.round(len * 4) / 4);
-  const key = `${people}|wall|${a}|${L}`;
+/** Pan de rempart (longueur arrondie au quart de case), intact, en ruine (brèches) ou en reconstruction ; `seed` varie les brèches */
+export function townWall(people: People, age: number, len: number, state: TownState = 'intact', seed = 0): THREE.BufferGeometry {
+  const a = Math.max(1, Math.min(5, age)), L = Math.max(0.25, Math.round(len * 4) / 4), sd = state === 'intact' ? 0 : seed % 4;
+  const key = `${people}|wall|${a}|${L}|${state}|${sd}`;
   let g = cache.get(key);
   if (g) return g;
   const p = new Parts();
   wallPiece(p, people, a, L, 1.5);
-  const { body, glow } = p.build(false);
+  const built = p.build(false), { body, glow } = withState(built.body, built.glow, state, 101 + sd * 17, true);
   g = mergeLit(body, glow) ?? body;
   cache.set(key, g);
   return g;
