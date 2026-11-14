@@ -149,6 +149,8 @@ const PROP_FLAME = new THREE.MeshBasicMaterial({ color: 0xffa040 });
 const SADDLE = 0.12 + 0.42 * (0.3 - HUMAN), RIDE_SPEED = 1.6;
 /** au volant d'une petite voiture d'expédition : hauteur du siège, allure */
 const CAR_SEAT = 0.035, CAR_SPEED = 2.1;
+/** Une place à bord plus loin que `GLIDE_MIN` cases se rejoint en glissant, à la vitesse `GLIDE_RATE` (part de l'écart par seconde, en exponentielle) */
+const GLIDE_MIN = 0.25, GLIDE_RATE = 5;
 
 /**
  * Petite voiture tout-terrain de l'âge industriel, pour les expéditions (avant = +z) : caisse ouverte, capot et calandre,
@@ -287,6 +289,8 @@ interface Agent {
   /** porté (assis dans une barque…) : position et cap imposés ; et l'endroit de la berge où il est monté */
   ride: Ride | null;
   shore: [number, number] | null;
+  /** il rejoint sa place à bord (ou la suivante, loin de lui) en glissant, au lieu d'y être posé d'un coup */
+  glide?: boolean;
   /** équipement d'expédition porté ; objets accrochés au modèle ; son cheval (monté en route, à brouter sur place) */
   kit: Kit | null;
   kitKey: string;
@@ -360,6 +364,8 @@ export class Heap {
 
 /** Habitants : agents instanciés qui marchent sur les routes et rentrent la nuit */
 export class Agents {
+  /** le pas de temps de la dernière image (les membres qui glissent jusqu'à leur place à bord, voir `ride`) */
+  private lastDt = 0.016;
   group = new THREE.Group();
   private body: THREE.InstancedMesh;
   private head: THREE.InstancedMesh;
@@ -1170,17 +1176,28 @@ export class Agents {
   /** Ce membre est arrivé (ou ne marche pas) */
   memberDone(id: number) { const a = this.byId(id); return !a || a.state !== 'walking'; }
 
-  /** Membre porté (assis dans une barque…) à la place donnée ; null le repose sur la berge, là où il est monté */
+  /**
+   * Membre porté (assis dans une barque…) à la place donnée ; null le repose sur la berge, là où il est monté. Plus personne
+   * n'y saute d'un coup (on croyait l'équipe téléportée) : une place à plus de `GLIDE_MIN` de lui (en montant à bord, en
+   * débarquant sur une plage), il la rejoint en glissant ; descendu, il repart à pied de là où il est, vers la berge
+   */
   ride(id: number, r: Ride | null) {
     const a = this.byId(id);
     if (!a) return;
     if (r) {
       if (!a.ride) a.shore = [a.x, a.z];
-      a.ride = r; a.x = r.x; a.z = r.z; a.heading = r.heading;
+      const d = Math.hypot(r.x - a.x, r.z - a.z);
+      if (d > GLIDE_MIN) a.glide = true;
+      if (a.glide && d > 0.02) {
+        const k = 1 - Math.exp(-this.lastDt * GLIDE_RATE);
+        a.x += (r.x - a.x) * k; a.z += (r.z - a.z) * k;
+      } else { a.glide = false; a.x = r.x; a.z = r.z; }
+      a.ride = r; a.heading = r.heading;
       a.state = 'doing'; a.path = []; a.act = r.act === undefined ? 'sit' : r.act;
     } else if (a.ride) {
-      a.ride = null;
-      if (a.shore) { a.x = a.shore[0]; a.z = a.shore[1]; a.shore = null; }
+      a.ride = null; a.glide = false;
+      // tout près de la berge : on l'y pose ; plus loin, il en part à pied (`startPath` part de la berge), sinon on l'y pose
+      if (a.shore && Math.hypot(a.shore[0] - a.x, a.shore[1] - a.z) <= GLIDE_MIN) { a.x = a.shore[0]; a.z = a.shore[1]; a.shore = null; }
       a.act = 'work';
     }
   }
@@ -1236,7 +1253,10 @@ export class Agents {
   private startPath(a: Agent, goal: number, hiddenAtEnd: boolean) {
     a.spot = null; a.face = null; a.deck = null; a.act = null;
     a.task = null; a.load = false; a.lane = null;
-    const start = Math.min(N - 1, Math.max(0, Math.floor(a.z))) * N + Math.min(N - 1, Math.max(0, Math.floor(a.x)));
+    // (descendu d'une barque : le chemin part de la berge où il était monté, il y marche depuis sa place à bord)
+    const [fx, fz] = a.shore ?? [a.x, a.z];
+    a.shore = null;
+    const start = Math.min(N - 1, Math.max(0, Math.floor(fz))) * N + Math.min(N - 1, Math.max(0, Math.floor(fx)));
     const p = this.findPath(start, goal);
     this.pathBudget--;
     if (!p) { a.state = 'doing'; a.timer = 2 + this.rnd() * 2; a.targetHidden = false; a.path = []; if (a.goingHome) { a.goingHome = false; a.state = 'inside'; a.hidden = true; } return; }
@@ -1252,6 +1272,7 @@ export class Agents {
   /** `season` : 0 printemps, 1 été, 2 automne, 3 hiver (les travaux des champs en dépendent) */
   update(dt: number, hour: number, age: number, sheltering: boolean, popTarget: number, glowNight: number, season = 0) {
     const w = this.world;
+    this.lastDt = dt;
     this.popTarget = popTarget;
     this.season = season; this.age = age;
     if (w.version !== this.lastVersion) { this.lastVersion = w.version; this.refreshTargets(); }
