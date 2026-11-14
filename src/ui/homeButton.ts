@@ -11,6 +11,14 @@ export function awayFromHome(d: number, camDist: number, ndc: { x: number; y: nu
   return !ndc || Math.abs(ndc.x) > edge || Math.abs(ndc.y) > edge || d > far;
 }
 
+/**
+ * L'œil de la carte d'une équipe : il la suit ; sur l'équipe déjà suivie, il la lâche et la vue revient au village (comme
+ * « Retourner au village »). Glisser la vue lâche aussi l'équipe, mais la vue reste où elle est
+ */
+export function eyeClick(following: number | null, id: number): 'follow' | 'home' {
+  return following === id ? 'home' : 'follow';
+}
+
 /** Le bouton « Retourner au village », discret mais bien visible, au-dessus de la barre de construction */
 export class HomeButton {
   el: HTMLButtonElement;
