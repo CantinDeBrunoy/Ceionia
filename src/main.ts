@@ -18,7 +18,8 @@ import type { HellMode } from './hellMode';
 let hellModule: Promise<typeof import('./hellMode')> | null = null;
 const loadHell = () => (hellModule ??= import('./hellMode'));
 import { newWorld, addDefaultDecor, mapDef, newSeed, playSize, CONTINENT } from './world/mapgen';
-import { GEN } from './world/continent';
+import { GEN, GEN_ARCH } from './world/continent';
+import { ARCH_N } from './world/archipelago';
 import { TerrainView, SNOWY } from './render/terrainView';
 import { BuildingView } from './render/buildings';
 import { RoadView, roadSnowStep } from './render/roads';
@@ -361,7 +362,8 @@ class Game implements UIHost {
         newWorld(w, mapId, mapDef(mapId)!.defaultSeed);
       }
     } else {
-      newWorld(w, mapId, seed ?? newSeed(), GEN);
+      // une carte de 384 : l'archipel (version 4) ; sinon le continent seul
+      newWorld(w, mapId, seed ?? newSeed(), N >= ARCH_N ? GEN_ARCH : GEN);
       w.difficulty = difficulty;
       w.wood = rulesOf(difficulty).startWood; w.stone = rulesOf(difficulty).startStone;
       // le bac à sable commence à l'âge choisi, tout ouvert
@@ -1976,6 +1978,7 @@ class Game implements UIHost {
       this.upBadges.update(dt, this.sim.age);
       this.windT += dt * (1 + this.env.weatherK * 0.6);
       this.veg.animate(this.windT, this.elapsed, 1 - this.env.weatherK * 0.3);
+      this.veg.fogFar = this.env.fog.far;
       this.veg.update(dt, this.cam.camera.position);
     }
     audio.update(dt, {

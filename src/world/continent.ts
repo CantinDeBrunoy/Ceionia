@@ -1,14 +1,16 @@
 import { Simplex } from './noise';
 import { mulberry32, smoothstep, clamp, lerp } from '../core/rng';
+import { archLayout, isleClimate, type Frame } from './archipelago';
 
 /**
  * Versions du générateur du continent, sauvegardées avec la partie. Le relief est sauvegardé tel quel, mais le climat (donc
  * les biomes, et les zones du monde souterrain qui les suivent) se recalcule au chargement depuis la graine : chaque partie
  * garde la version qui l'a créée. 1 : agencement fixe, seuls les détails changent avec la graine (parties d'avant le plan) ;
  * 2 : agencement tiré de la graine (plan du continent) ; 3 : plan plus libre (contrées, côte, rivière, relief), tourné ou
- * retourné (huit orientations), lacs, forêts et bosquets en nombre variable
+ * retourné (huit orientations), lacs, forêts et bosquets en nombre variable ; 4 : l'archipel (`archipelago.ts`), le
+ * continent de la version 3 à sa taille d'origine dans un cadre de la carte de 384, et les îles rivales
  */
-export const GEN_FIXED = 1, GEN_PLAN = 2, GEN_VAR = 3;
+export const GEN_FIXED = 1, GEN_PLAN = 2, GEN_VAR = 3, GEN_ARCH = 4;
 /** Version des nouvelles parties */
 export const GEN = GEN_VAR;
 
@@ -25,6 +27,14 @@ export function toPlan(o: number, x: number, z: number, n: number): [number, num
 export function fromPlan(o: number, a: number, b: number, n: number): [number, number] {
   if (o & 4) [a, b] = [b, a];
   return [o & 1 ? n - a : a, o & 2 ? n - b : b];
+}
+
+/**
+ * Cadre du continent (l'île principale) sur une carte de `n` cases : toute la carte jusqu'à la version 3 ; en version 4, le
+ * carré de `MAIN_N` cases que lui laisse l'archipel. Le plan, le climat, la rivière et le volcan se calculent dans ce cadre
+ */
+export function mainFrame(gen: number, seed: number, n: number): Frame {
+  return gen >= GEN_ARCH ? archLayout(seed, n).main : { x: 0, z: 0, n };
 }
 
 /** Relief de fond des versions 1 et 2 : finesse et amplitude du bruit, bombement vers le cœur du continent */
@@ -156,8 +166,8 @@ export function riverCourse(gen: number, seed: number, n: number): [number, numb
     }
     return out;
   }
-  const p = continentPlan(seed, gen), r = p.river;
-  for (let b = r.v * n; b <= n; b += 0.5) out.push(fromPlan(p.orient, n * riverU(r, b / n), b, n));
+  const p = continentPlan(seed, gen), r = p.river, f = mainFrame(gen, seed, n), m = f.n;
+  for (let b = r.v * m; b <= m; b += 0.5) { const [x, z] = fromPlan(p.orient, m * riverU(r, b / m), b, m); out.push([x + f.x, z + f.z]); }
   return out;
 }
 
@@ -178,14 +188,14 @@ export function rockyBed(p: ContinentPlan, t: number) {
 export function fillRiverBed(gen: number, seed: number, n: number, out: Uint8Array) {
   out.fill(0);
   if (gen < GEN_VAR) return;
-  const p = continentPlan(seed, gen), r = p.river;
+  const p = continentPlan(seed, gen), r = p.river, f = mainFrame(gen, seed, n), m = f.n;
   if (!p.bed) return;
-  for (let wz = 0; wz < n; wz++)
-    for (let wx = 0; wx < n; wx++) {
-      const [x, z] = toPlan(p.orient, wx + 0.5, wz + 0.5, n), v = z / n;
+  for (let wz = 0; wz < m; wz++)
+    for (let wx = 0; wx < m; wx++) {
+      const [x, z] = toPlan(p.orient, wx + 0.5, wz + 0.5, m), v = z / m;
       if (v <= r.v) continue;
-      const k = rockyBed(p, (v - r.v) / (1 - r.v)) * (1 - smoothstep(2.5, 4, Math.abs(x - n * riverU(r, v))));
-      out[wz * n + wx] = Math.round(k * 255);
+      const k = rockyBed(p, (v - r.v) / (1 - r.v)) * (1 - smoothstep(2.5, 4, Math.abs(x - m * riverU(r, v))));
+      out[(wz + f.z) * n + wx + f.x] = Math.round(k * 255);
     }
 }
 
@@ -383,12 +393,17 @@ export function plannedHeight(x: number, z: number, n: number, s: Simplex, s2: S
  */
 export function fillClimate(gen: number, seed: number, n: number, temp: Float32Array, wet: Float32Array) {
   const st = new Simplex(seed * 13 + 5), sm = new Simplex(seed * 17 + 9), p = gen >= GEN_PLAN ? continentPlan(seed, gen) : null;
-  for (let wz = 0; wz < n; wz++)
-    for (let wx = 0; wx < n; wx++) {
+  // version 4 : hors du cadre de l'île principale, le climat des îles de l'archipel
+  const f = mainFrame(gen, seed, n), lay = gen >= GEN_ARCH ? archLayout(seed, n) : null;
+  for (let gz = 0; gz < n; gz++)
+    for (let gx = 0; gx < n; gx++) {
+      const wx = gx - f.x, wz = gz - f.z;
+      if (lay && (wx < 0 || wz < 0 || wx >= f.n || wz >= f.n)) { [temp[gz * n + gx], wet[gz * n + gx]] = isleClimate(lay, gx, gz, st, sm, seed); continue; }
+      const N0 = f.n;
       // le climat suit le plan, tourné ou retourné avec lui (version 3)
       let cx = wx, cz = wz;
-      if (p?.orient) { const [a, b] = toPlan(p.orient, wx + 0.5, wz + 0.5, n); cx = a - 0.5; cz = b - 0.5; }
-      const u = (cx + 0.5) / n - 0.5, v = (cz + 0.5) / n - 0.5;
+      if (p?.orient) { const [a, b] = toPlan(p.orient, wx + 0.5, wz + 0.5, N0); cx = a - 0.5; cz = b - 0.5; }
+      const u = (cx + 0.5) / N0 - 0.5, v = (cz + 0.5) / N0 - 0.5;
       // froid au nord, chaud au sud et à l'est (mesas du désert, archipel tropical)
       const base = v * 1.5 + Math.max(0, u) * 1.1 - 0.05;
       let t = base + st.fbm(cx * 0.03, cz * 0.03, 3) * 0.45, m = sm.fbm(cx * 0.04 + 50, cz * 0.04, 3) * 0.8;
@@ -398,7 +413,7 @@ export function fillClimate(gen: number, seed: number, n: number, temp: Float32A
         const ld = zoneDist(p.lake, u + 0.5, v + 0.5), islet = smoothstep(1.8, 1, zoneDist(p.lake.islet, u + 0.5, v + 0.5));
         m += tropic * 0.5 - dry * 0.5 + smoothstep(0.55, 0.85, ld) * smoothstep(1.3, 0.95, ld) * 0.25 - islet * 0.4;
       }
-      temp[wz * n + wx] = t;
-      wet[wz * n + wx] = m;
+      temp[gz * n + gx] = t;
+      wet[gz * n + gx] = m;
     }
 }
