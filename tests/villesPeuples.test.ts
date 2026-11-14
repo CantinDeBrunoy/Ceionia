@@ -115,8 +115,7 @@ describe('villes des peuples rivaux (archipel)', () => {
     const kinds: [TownKind, number, number, number][] = [
       ['house', 1.2, 1.1, 1300], ['workshop', 1.2, 1.1, 1300], ['garden', 2.2, 2.2, 2000], ['field', 3, 2.5, 1000], ['tower', 1.3, 1.3, 1000], ['gate', 2.4, 1.4, 1500],
       // les monuments couvrent 25 à 30 cases : 11 000 triangles au plus pour le temple et le palais (une pièce de chaque par ville)
-      ['temple', 5, 5, 11000], ['palace', 6, 5, 11000], ['market', 4, 4, 6500], ['port', 4, 3.5, 6500], ['caravan', 4, 4, 6500], ['baths', 3, 2.6, 6500],
-      ['teahouse', 1.8, 1.6, 3000], ['paifang', 1.8, 0.5, 1400],
+      ['temple', 5, 5, 11000], ['palace', 6, 5, 11000], ['teahouse', 1.8, 1.6, 3000], ['paifang', 1.8, 0.5, 1400], ['market', 4, 4, 6500], ['port', 4, 3.5, 6500], ['caravan', 4, 4, 6500], ['baths', 3, 2.6, 6500],
     ];
     const box = new THREE.Box3();
     for (const people of ['orient', 'asie'] as const)
