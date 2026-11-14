@@ -92,6 +92,9 @@ export function soundSettings(s: SoundSettings) {
 /** Un morceau en cours : l'élément audio (lu en flux, sans tout décoder), son nœud et son gain de fondu */
 interface Track { key: string; name: string; el: HTMLAudioElement; src: MediaElementAudioSourceNode; g: GainNode; next: boolean; dropped: boolean }
 
+/** volume de toutes les voix d'animaux (cris, chants, grillons, grenouilles, bruitages des enclos), réduit de moitié à la demande de l'auteur */
+export const ANIMAL_VOL = 0.5;
+
 export class AudioEngine {
   ctx: AudioContext | null = null;
   musicVol = 0.5;
@@ -336,7 +339,7 @@ export class AudioEngine {
     if (this.cricketTimer <= 0) {
       this.cricketTimer = 1.2 + Math.random() * 3.5;
       if (crick > 0.3) {
-        const f = 3600 + Math.random() * 700, n = 2 + Math.floor(Math.random() * 3), vol = 0.004 * crick;
+        const f = 3600 + Math.random() * 700, n = 2 + Math.floor(Math.random() * 3), vol = 0.004 * crick * ANIMAL_VOL;
         for (let i = 0; i < n; i++) this.tone(f, T + 0.02 + i * 0.09, 0.05, 'sine', vol, this.ambG, 0, 0.012);
       }
     }
@@ -352,12 +355,12 @@ export class AudioEngine {
     this.gullTimer -= dt;
     if (this.gullTimer <= 0) {
       this.gullTimer = 8 + Math.random() * 12;
-      if ((s.coast ?? 0) > 0.3 && near > 0.2 && s.daylight > 0.4 && s.rain < 0.5 && out > 0.5) this.gull(T + 0.05, s.coast! * near);
+      if ((s.coast ?? 0) > 0.3 && near > 0.2 && s.daylight > 0.4 && s.rain < 0.5 && out > 0.5) this.gull(T + 0.05, s.coast! * near * ANIMAL_VOL);
     }
     this.eagleTimer -= dt;
     if (this.eagleTimer <= 0) {
       this.eagleTimer = 8 + Math.random() * 12;
-      if (high > 0.2 && near > 0.2 && s.daylight > 0.5 && s.rain < 0.4 && out > 0.5) this.eagle(T + 0.05, high * near);
+      if (high > 0.2 && near > 0.2 && s.daylight > 0.5 && s.rain < 0.4 && out > 0.5) this.eagle(T + 0.05, high * near * ANIMAL_VOL);
     }
     this.crackleTimer -= dt;
     if ((s.fire ?? 0) > 0.05 && this.crackleTimer <= 0 && out > 0.5) {
@@ -369,13 +372,13 @@ export class AudioEngine {
     if (this.frogTimer <= 0) {
       const k = (s.frogs ?? 0) * (0.25 + 0.75 * night) * (1 + s.rain) * out * near;
       this.frogTimer = k > 0.05 ? (0.4 + Math.random() * 1.8) / Math.min(1.5, k + 0.3) : 2;
-      if (k > 0.05 && s.season !== 3) this.croak(T + 0.02, Math.min(1, k));
+      if (k > 0.05 && s.season !== 3) this.croak(T + 0.02, Math.min(1, k) * ANIMAL_VOL);
     }
     // oiseaux
     this.birdTimer -= dt;
     if (this.birdTimer <= 0 && near > 0.3 && s.daylight > 0.5 && s.rain < 0.3 && s.season !== 3 && s.under < 0.5) {
       this.birdTimer = 4 + Math.random() * 7;
-      this.chirp(T + 0.05, near);
+      this.chirp(T + 0.05, near * ANIMAL_VOL);
     } else if (this.birdTimer <= 0) this.birdTimer = 2;
 
     // musique : l'enregistrement de l'âge (ou de la scène) s'il y en a un, sinon la musique générée
@@ -641,6 +644,7 @@ export class AudioEngine {
    */
   sfxCall(kind: string, k: number) {
     if (!this.ctx || k <= 0) return;
+    k *= ANIMAL_VOL;
     const ctx = this.ctx, t = ctx.currentTime + 0.02, def = SAMPLES[kind], smp = def && this.samples.get(def.file);
     const g = ctx.createGain(); g.connect(this.ambG);
     if (def && smp) {
@@ -694,6 +698,7 @@ export class AudioEngine {
    */
   sfxHowl(k: number) {
     if (!this.ctx) return;
+    k *= ANIMAL_VOL;
     const ctx = this.ctx, t0 = ctx.currentTime + 0.02;
     // écho de la vallée : le hurlement porte loin
     const echo = ctx.createDelay(1); echo.delayTime.value = 0.31;

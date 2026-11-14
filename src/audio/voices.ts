@@ -233,13 +233,14 @@ export const VOICES: Record<SpotKind, VoiceDef> = {
       return rnd(0.7, 1.4);
     },
   },
-  sheep: { gain: 2.4, tick(s, d, t) { bleat(s, d, t); if (Math.random() < 0.3) bleat(s, d, t + rnd(0.6, 1.2)); return rnd(2.5, 7); } },
-  hens: { gain: 4.5, tick(s, d, t) { cluck(s, d, t); return rnd(1.5, 4.5); } },
-  cows: { gain: 0.55, tick(s, d, t) { moo(s, d, t); return rnd(5, 11); } },
-  horses: { gain: 2.5, tick(s, d, t) { neigh(s, d, t); return rnd(4, 10); } },
+  // voix d'animaux des enclos : gains réduits de moitié (comme `ANIMAL_VOL` dans audio.ts)
+  sheep: { gain: 1.2, tick(s, d, t) { bleat(s, d, t); if (Math.random() < 0.3) bleat(s, d, t + rnd(0.6, 1.2)); return rnd(2.5, 7); } },
+  hens: { gain: 2.25, tick(s, d, t) { cluck(s, d, t); return rnd(1.5, 4.5); } },
+  cows: { gain: 0.275, tick(s, d, t) { moo(s, d, t); return rnd(5, 11); } },
+  horses: { gain: 1.25, tick(s, d, t) { neigh(s, d, t); return rnd(4, 10); } },
   // abeilles : bourdonnement qui ondule
   bees: {
-    gain: 0.8,
+    gain: 0.4,
     loop(s, d) {
       const parts = drone(s, d, [[218, 0.03, 'sawtooth'], [231, 0.025, 'sawtooth'], [440, 0.01, 'sawtooth']], 900);
       return parts;
