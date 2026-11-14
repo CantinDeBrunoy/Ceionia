@@ -1027,3 +1027,16 @@ button.active { background: var(--hGoldFill); border-color: var(--hGold); color:
   #troopBar .tcorner .tord, #troopBar .thell .tcorner .tord.gar { min-height: 38px; font-size: 13px; }
   #troopBar .tcorner .tord .tpt b { font-size: 13px; }
 }
+
+/* ---------- « Retourner au village » ne passe plus sur les rayons : au-dessus d'eux avec une marge (les rayons dépassent de
+   32 px au-dessus de la barre) ; au téléphone, calée à gauche, loin de la mini-carte ---------- */
+#dock > #homeBack { margin-bottom: 40px; }
+@media (max-width: 860px) {
+  #dock > #homeBack { align-self: flex-start; margin: 0 0 4px 2px; min-height: 40px; }
+}
+/* ---------- un rayon de peu de cartes ne laisse plus un grand panneau vide : la barre des bâtiments se resserre sur ses
+   cartes (fit-content), sans descendre sous la largeur des rayons ; le bloc reste centré ---------- */
+@media (min-width: 1400px) {
+  #dock > #dockRow { grid-template-columns: auto fit-content(1180px) 330px auto; }
+  #dock #dockMain { min-width: clamp(480px, calc(100vw - 880px), 640px); }
+}
