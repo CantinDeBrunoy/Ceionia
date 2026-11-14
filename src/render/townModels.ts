@@ -9,10 +9,31 @@ import { withState, type TownState } from './townRuins';
 
 /**
  * Les modèles des villes des deux peuples rivaux (décor de l'archipel, voir `rivalTowns.ts` et `docs/iles.md`) : un jeu
- * propre à chaque peuple, de l'Antiquité au Futuriste, sans reprendre nos modèles. Les dessins sont dans `models/oriental.ts`
- * (`orientModel`, `orientWall`) et `models/asian.ts` ; ici, l'aiguillage, l'état de bataille (`townRuins.ts`) et le cache.
- * Mêmes conventions que `models.ts` : coordonnées locales au lot, origine au centre, façade vers +z, 1 = une case
+ * propre à chaque peuple, de l'Antiquité au Futuriste, sans reprendre nos modèles. Le peuple oriental a les siens dans
+ * `models/oriental.ts` (`orientModel`, `orientWall`), le peuple asiatique dans `models/asian.ts`. Ici : l'aiguillage, les
+ * états de bataille (`townRuins.ts`) et le cache. Mêmes conventions que `models.ts` : coordonnées locales au lot, origine
+ * au centre, façade vers +z, 1 = une case
  */
+
+/** Dessine un lot du peuple asiatique ; faux pour une sorte qu'il n'a pas */
+function asianModel(p: Parts, kind: TownKind, a: number, vv: number, qw: number, qd: number) {
+  switch (kind) {
+    case 'house': asian.aHouse(p, a, vv, qw, qd); return true;
+    case 'workshop': asian.aWorkshop(p, a, vv, qw, qd); return true;
+    case 'temple': asian.aTemple(p, a, vv); return true;
+    case 'palace': asian.aPalace(p, a, vv); return true;
+    // (le peuple asiatique n'a ni caravansérail ni bains : son marché, si l'on en demandait un)
+    case 'market': case 'caravan': case 'baths': asian.aMarket(p, a, vv); return true;
+    case 'teahouse': asian.aTeahouse(p, a, vv, qw, qd); return true;
+    case 'paifang': asian.aPaifang(p, a, vv, qw); return true;
+    case 'port': asian.aPort(p, a, vv); return true;
+    case 'garden': asian.aGarden(p, a, vv, qw, qd); return true;
+    case 'field': asian.aField(p, a, vv, qw, qd); return true;
+    case 'tower': asian.aTower(p, a, vv); return true;
+    case 'gate': asian.aGate(p, a, vv); return true;
+  }
+  return false;
+}
 
 // ---------- Cache ----------
 
@@ -30,22 +51,9 @@ export function townModel(people: People, kind: TownKind, age: number, v: number
   let g = cache.get(key);
   if (g) return g;
   const p = new Parts();
-  if (people === 'orient') orientModel(p, kind, a, vv, qw, qd);
-  else switch (kind) {
-    case 'house': asian.aHouse(p, a, vv, qw, qd); break;
-    case 'workshop': asian.aWorkshop(p, a, vv, qw, qd); break;
-    case 'temple': asian.aTemple(p, a, vv); break;
-    case 'palace': asian.aPalace(p, a, vv); break;
-    // le peuple asiatique n'a ni caravansérail ni bains : son marché, si l'on en demandait un
-    case 'market': case 'caravan': case 'baths': asian.aMarket(p, a, vv); break;
-    case 'teahouse': asian.aTeahouse(p, a, vv, qw, qd); break;
-    case 'paifang': asian.aPaifang(p, a, vv, qw); break;
-    case 'port': asian.aPort(p, a, vv); break;
-    case 'garden': asian.aGarden(p, a, vv, qw, qd); break;
-    case 'field': asian.aField(p, a, vv, qw, qd); break;
-    case 'tower': asian.aTower(p, a, vv); break;
-    case 'gate': asian.aGate(p, a, vv); break;
-  }
+  // (une sorte que le peuple n'a pas : une dalle, pour garder une géométrie valable)
+  const drawn = people === 'orient' ? orientModel(p, kind, a, vv, qw, qd) : asianModel(p, kind, a, vv, qw, qd);
+  if (!drawn) p.box(Math.max(0.2, qw * 0.5), 0.02, Math.max(0.2, qd * 0.5), 0, 0, 0, 0x9a968c);
   const built = p.build(), { body, glow } = withState(built.body, built.glow, state, vv * 13 + kind.length, false, people);
   g = mergeLit(body, glow) ?? body;
   cache.set(key, g);
