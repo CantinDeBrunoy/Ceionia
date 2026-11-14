@@ -164,7 +164,8 @@ describe('continent tiré de la graine', () => {
           if (x > 0.62 * N && z > 0.7 * N && g.id[k] !== g.main && g.size[g.id[k]] > 4) isles.add(g.id[k]);
         }
       expect(snow).toBeGreaterThan(250);
-      expect(terraces).toBeGreaterThan(800);
+      // (750 : la marge de mer bruitée de la version 3 rogne un peu les plateaux, près du coin nord-ouest)
+      expect(terraces).toBeGreaterThan(750);
       expect(desert).toBeGreaterThan(1500);
       expect(tables).toBeGreaterThan(150);
       expect(isles.size).toBeGreaterThanOrEqual(3);
