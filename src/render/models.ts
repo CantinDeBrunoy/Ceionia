@@ -3539,6 +3539,77 @@ function mill(p: Parts, age: number) {
 }
 
 /**
+ * Le monument de la concorde (2 × 2, voir la diplomatie de l'archipel) : sur une place ronde, trois piliers, un par peuple,
+ * se tiennent sous un même anneau doré. Le nôtre est une colonne de pierre ; celui des Sablais, un fût blanc à bandeau
+ * turquoise coiffé d'un bulbe doré ; celui des Jadéens, un pilier laqué de rouge sous deux petits toits verts. Au centre,
+ * une vasque et la colombe ; autour, trois mâts aux couleurs des trois peuples, des massifs fleuris et quelques promeneurs.
+ * Les réverbères arrivent à l'époque moderne (l'âge futuriste ajoute ses rehauts habituels, `futureExtras`)
+ */
+function concord(p: Parts, age: number) {
+  const STONE = 0xe8e0cf, PALE = 0xf4efe4, TURQ = 0x2aa8a0, LACQ = 0xc0392e, JADE = 0x2f7a5a;
+  p.box(1.9, 0.012, 1.9, 0, 0, 0, C.green);
+  // la place ronde, sa bordure et l'allée vers l'avant
+  p.cyl(0.78, 0.8, 0.03, 24, 0, 0, 0, STONE);
+  p.add(new THREE.TorusGeometry(0.79, 0.014, 3, 24).rotateX(Math.PI / 2), 0, 0.03, 0, dark(STONE, 0.85));
+  p.box(0.3, 0.014, 0.2, 0, 0.012, 0.86, 0xe2d6bc);
+  // les trois piliers, à 120° les uns des autres (le nôtre face à l'allée)
+  const R = 0.36, H = 0.62, at = (k: number) => { const a = Math.PI / 2 + k * (Math.PI * 2) / 3; return [Math.cos(a) * R, Math.sin(a) * R] as [number, number]; };
+  {
+    const [x, z] = at(0);
+    p.box(0.14, 0.05, 0.14, x, 0.03, z, PALE);
+    column(p, x, z, H - 0.08, 0.08, 0.045);
+    p.box(0.13, 0.04, 0.13, x, H, z, PALE);
+  }
+  {
+    const [x, z] = at(1);
+    p.cyl(0.07, 0.075, 0.05, 8, x, 0.03, z, PALE);
+    p.cyl(0.05, 0.05, H - 0.1, 8, x, 0.08, z, 0xf8f6f0);
+    for (const y of [0.22, 0.44]) p.cyl(0.054, 0.054, 0.03, 8, x, y, z, TURQ);
+    p.cyl(0.06, 0.06, 0.03, 8, x, H - 0.02, z, TURQ);
+    p.sphere(0.05, x, H + 0.04, z, C.gold, 1, 1.15);
+    p.cone(0.014, 0.05, 6, x, H + 0.09, z, C.gold);
+  }
+  {
+    const [x, z] = at(2);
+    p.box(0.13, 0.05, 0.13, x, 0.03, z, 0x7a6a5a);
+    p.cyl(0.045, 0.045, H - 0.1, 8, x, 0.08, z, LACQ);
+    for (const [y, r] of [[0.36, 0.11], [H - 0.02, 0.09]] as [number, number][]) {
+      p.cone(r, 0.05, 4, x, y, z, JADE, false, Math.PI / 4);
+      p.box(0.012, 0.012, 0.012, x, y + 0.05, z, C.gold);
+    }
+    p.cone(0.012, 0.06, 6, x, H + 0.04, z, C.gold);
+  }
+  // l'anneau doré qui les unit
+  p.add(new THREE.TorusGeometry(R, 0.022, 4, 28).rotateX(Math.PI / 2), 0, H + 0.035, 0, C.gold);
+  // au centre : la vasque, son jet d'eau et la colombe sur sa stèle
+  p.cyl(0.13, 0.14, 0.05, 14, 0, 0.03, 0, PALE);
+  p.add(new THREE.TorusGeometry(0.13, 0.01, 3, 14).rotateX(Math.PI / 2), 0, 0.08, 0, PALE);
+  waterPool(p, 0, 0.078, 0, 0.12, 14);
+  p.cyl(0.025, 0.035, 0.32, 6, 0, 0.03, 0, PALE);
+  p.sphere(0.03, 0, 0.38, 0, C.white, 0, 0.8);
+  p.sphere(0.016, 0, 0.395, 0.03, C.white);
+  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.09, 0.006, 0.035), s * 0.045, 0.39, -0.005, C.white, 0, false, s * 0.45);
+  // les mâts aux couleurs des trois peuples, entre les piliers
+  [0x3a6ab8, TURQ, LACQ].forEach((col, k) => {
+    const a = Math.PI / 2 + Math.PI / 3 + k * (Math.PI * 2) / 3, x = Math.cos(a) * 0.68, z = Math.sin(a) * 0.68;
+    p.cyl(0.007, 0.009, 0.62, 5, x, 0.03, z, C.metal);
+    p.sphere(0.012, x, 0.65, z, C.gold);
+    const f = sway([x, 0.6, z], [0, 1, 0], 0.25, 0.7);
+    f.box(0.004, 0.1, 0.13, 0, -0.1, 0.065, col);
+  });
+  // massifs fleuris aux coins, bancs et promeneurs
+  for (const [x, z] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) {
+    p.cyl(0.1, 0.11, 0.03, 8, x, 0.012, z, 0x8fcf7e);
+    for (let k = 0; k < 5; k++) p.sphere(0.018, x + Math.cos(k * 1.3) * 0.06, 0.05, z + Math.sin(k * 1.3) * 0.06, [C.pink, 0xd84a3e, C.butter, C.lav, C.white][k], 0, 0.8);
+  }
+  for (const s of [-1, 1]) { p.box(0.16, 0.025, 0.05, s * 0.5, 0.05, 0.62, C.wood); p.box(0.16, 0.05, 0.012, s * 0.5, 0.075, 0.645, C.wood); }
+  figure(p, -0.2, 0.55, 0x3a5a9a, Math.PI);
+  figure(p, 0.24, 0.5, TURQ, -2.6);
+  figure(p, 0.08, -0.6, LACQ, 0.4);
+  if (age >= 4) for (const s of [-1, 1]) lampPost(p, s * 0.2, 0.84);
+}
+
+/**
  * Le château, gardé à travers les âges : le château médiéval, restauré à l'âge industriel (bannières, jardin à la française,
  * allée de gravier, réverbères), château-musée à l'époque moderne (guichet, panneau d'information, projecteurs qui
  * l'illuminent la nuit, car de touristes, bancs)
@@ -13323,6 +13394,7 @@ export function getModel(kind: KindId, age: number, o: ModelOpts): Model {
     case 'temple': temple(p, Math.max(1, age)); break;
     case 'mill': mill(p, Math.max(2, age)); break;
     case 'landmark': landmark(p, Math.max(2, age), o.v); break;
+    case 'concord': concord(p, Math.max(3, age)); break;
     case 'terminal': if (size >= 3) terminalBig(p, Math.max(3, age)); else terminal(p, Math.max(3, age)); break;
     case 'station': station(p, Math.max(3, age)); break;
     case 'lamp': lamp(p, age); break;

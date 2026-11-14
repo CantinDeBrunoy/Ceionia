@@ -5,6 +5,7 @@ import { Underground, FIGHT_HALT, UZ_STONE, UZ_CRYSTAL, UZ_ICE, UZ_LUSH, UZ_MAGM
 import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
+import { missionOffered, missionWhy } from './diplomacy';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
 import { recover } from './trade';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
@@ -347,13 +348,16 @@ export class Expeditions {
   }
 
   /** Risque d'une équipe en route : celui du choix, équipement et décisions compris */
-  chance(a: ActiveExpedition) { return this.riskOf(a.c) > 0 ? Math.min(0.95, Math.max(0.02, this.riskOf(a.c) * a.riskK)) : 0; }
+  chance(a: ActiveExpedition) { return !a.m.talks && this.riskOf(a.c) > 0 ? Math.min(0.95, Math.max(0.02, this.riskOf(a.c) * a.riskK)) : 0; }
 
   /** Le travail sur place est fini tout de suite (le grand voyage des colons a été vu, ou passé) */
   landNow(a: ActiveExpedition) { if (a.phase === 'work') a.t = Math.max(a.t, a.c.work + a.extra); }
 
-  /** Missions proposées : celles de l'âge et des âges passés ; celles déjà réussies peuvent se refaire */
-  list(age: number) { return MISSIONS.filter((m) => m.age <= age); }
+  /**
+   * Missions proposées : celles de l'âge et des âges passés ; celles déjà réussies peuvent se refaire. Celles de la diplomatie
+   * de l'archipel seulement quand la partie en est là (`missionOffered`)
+   */
+  list(age: number) { return MISSIONS.filter((m) => m.age <= age && missionOffered(this.world, m.id)); }
 
   /** Ce qui manque avant de pouvoir tenter la mission : missions à réussir, bâtiments à bâtir (vide : rien) */
   missing(m: Mission): string[] {
@@ -371,6 +375,9 @@ export class Expeditions {
     if (this.running(m)) return tr('Cette expédition est déjà en route.');
     // une partie commencée avant l'île du portail n'en a pas
     if (c.scene === 'portal' && !this.world.portal) return tr('Cette carte n’a pas d’île du portail : la partie a commencé avant elle. Une nouvelle partie en aura une.');
+    // la diplomatie de l'archipel : une étape à son heure, et une seule fois
+    const diplo = missionWhy(this.world, m.id);
+    if (diplo) return diplo;
     const miss = this.missing(m);
     if (miss.length) return tr('Il faut d’abord {list}.', { list: miss.join(', ') });
     if (c.mounts) { const n = this.horsesHome(); if (n < c.mounts) return tr('Il faut {m} chevaux {at} ({n} pour l’instant).', { m: c.mounts, at: this.at('stable'), n }); }
@@ -684,7 +691,7 @@ export class Expeditions {
   private raise(a: ActiveExpedition, arrive: boolean) {
     // pas un imprévu des dernières expéditions, ni celui qu'une autre équipe attend ou vient de vivre
     const avoid = [...this.world.exp.recent, ...this.active.filter((o) => o !== a).flatMap((o) => o.seen)];
-    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive, sea: a.sea, warm: this.warm(a.dest), at: arrive ? undefined : nextEventAt(a) }, a.seen, avoid, this.rnd);
+    const ev = pickEvent({ dest: a.site, mission: a.m.id, scene: a.c.scene, age: a.age, arrive, sea: a.sea, warm: this.warm(a.dest), at: arrive ? undefined : nextEventAt(a), own: a.m.talks }, a.seen, avoid, this.rnd);
     // rien à l'arrivée : l'imprévu viendra pendant le travail (avant, il était perdu, et le suivant avec lui)
     if (!ev) { if (arrive) a.arriveMiss = true; else a.events = a.seen.length; return; }
     a.seen.push(ev.id);
@@ -727,7 +734,8 @@ export class Expeditions {
     a.scout = waits && o.scout ? { t: 0, dur: a.hold } : null;
     if (a.phase === 'work') a.t *= Math.max(1, a.c.work + a.extra) / before;
     if (o.bonus) a.bonus.push(...o.bonus);
-    a.hurt += o.hurt ?? 0;
+    // (des pourparlers ne blessent personne)
+    if (!a.m.talks) a.hurt += o.hurt ?? 0;
     a.notes.push(o.text);
     // la scène joue la suite de l'option choisie (le grand feu, la corde, la décrue…)
     const j = a.seen.lastIndexOf(a.wait!.id);

@@ -36,6 +36,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - La raffinerie est débloquée par l'expédition `oil` ; la fin d'âge (`reqLate`, rail) ne vient qu'après les expéditions dans la liste, c'est l'ordre du conseil.
 - Un bâtiment **amélioré** compte pour son genre d'origine (`lineOf`, `UPGRADES` : une gare devenue gare centrale reste une gare ; une maison devenue manoir reste une maison).
 - L'île du portail, l'invasion et les Enfers sont **facultatifs** et ne conditionnent plus le passage (commit 66acbf4).
+- La diplomatie de l'archipel non plus (voir [diplomatie.md](diplomatie.md)). Mais vers le **Moderne**, tant que le conflit des deux îles est ouvert, le panneau dit « Les deux îles vont régler leur conflit sans vous. » sous les conditions, et le premier clic sur « Passer à » est retenu une fois (toast) ; au passage, le conflit se règle par un traité (bannière, `settleAtAge` dans `onAgeUp`).
 - Un bâtiment bâti avant d'être demandé compte déjà.
 
 ### Variante Normal (`newOnly`)
@@ -44,7 +45,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - Les bâtiments bâtis en avance, avant que le jeu ne les demande, comptent déjà.
 
 ### Ce qui se passe au passage (`Sim.advance` puis `Game.sim.onAgeUp`, `main.ts`)
-1. `advance()` : recalcul, vérifie `ageProgress` ; si tout est réuni, `age = next`, `world.ageBase = counts`, appelle `onAgeUp`, recalcule le conseil. Renvoie faux sinon.
+1. `advance()` : recalcul, vérifie `ageProgress` ; si tout est réuni, demande son dernier mot à `beforeAdvance(next)` (posé par `main.ts` : pas de passage pendant la bataille de l'archipel, et l'avertissement du traité des deux îles, dit une fois, voir [diplomatie.md](diplomatie.md)), puis `age = next`, `world.ageBase = counts`, appelle `onAgeUp`, recalcule le conseil. Renvoie faux sinon.
 2. `onAgeUp` : vide les piles Annuler / Rétablir (rejouer un passage d'âge ferait compter des bâtiments comme neufs) ; `war.ageUp(age)` (garnison) ; bannière « Nouvel âge : … » ; à l'âge 1, si le portail n'est pas ouvert et existe, une info mène à l'expédition du portail (après 6,5 s) ; après 3,6 s, la **fenêtre des nouveaux bâtiments** (`ui.showNewAge`) ; son de passage ; `terrain.gardenAge = age` et recoloration du sol (jardins) ; `propsDirty`.
 3. **Fenêtre des nouveaux bâtiments** (`showNewAge`) : tuiles des genres dont `minAge === age` et qui ne sont pas verrouillés (`lockOf`), un clic ouvre le bâtiment en main ; puis, grisés, ceux d'âge ≤ `age` qu'une expédition doit encore débloquer (`reqMission` non réussie, et pas déjà périmés par `maxAge`), un clic mène à l'expédition. Aucune fenêtre s'il n'y a rien à montrer.
 4. **Évolution des modèles** (`render/buildings.ts` › `update(dt, worldAge)`) : toutes les 0,06 s, un bâtiment dont `b.age < worldAge` démarre l'animation `evolve` (écrasement 0,3 s, échange de modèle, rebond jusqu'à 0,8 s) et reçoit `b.age = worldAge`. Les bâtiments ruinés sont sautés. Les capacités de besoins suivent `b.age` (voir [besoins-population.md](besoins-population.md)).

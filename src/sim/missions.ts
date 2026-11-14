@@ -2,6 +2,7 @@ import type { World } from '../world/world';
 import { Danger, GearId, Stock, emptyStock, GEAR_BY } from './gear';
 import type { KindId } from '../build/catalog';
 import { tr, plural } from '../i18n';
+import { applyDiplo, DiploAct } from './diplomacy';
 
 /**
  * Expéditions : à chaque âge, des missions à choix (au moins une obligatoire pour passer à l'âge suivant, deux à la
@@ -63,7 +64,9 @@ export type Effect =
   /** habitants blessés, qui se reposent chez eux quelques jours */
   | { t: 'injured'; n: number; days: number }
   /** bêtes perdues en route */
-  | { t: 'unherd'; kind: HerdKind; n: number };
+  | { t: 'unherd'; kind: HerdKind; n: number }
+  /** la diplomatie de l'archipel avance : peuples rencontrés, comptoir chez le rival, trêve, fête (voir `diplomacy.ts`) */
+  | { t: 'diplo'; act: DiploAct };
 
 /** Le choix tel qu'il se présente à cet âge : ses libellés et son récit de l'âge le plus proche, en dessous ou égal */
 export function choiceAt(c: Choice, age: number): Choice {
@@ -136,6 +139,11 @@ export interface Mission {
    * pas, et l'expédition ne peut pas échouer
    */
   farewell?: boolean;
+  /**
+   * des pourparlers (la paix de l'archipel) : seulement des choix, jamais d'échec ni de blessé ; seuls les imprévus propres à
+   * la mission surviennent. Une étape réussie ne se refait pas
+   */
+  talks?: boolean;
 }
 
 /**
@@ -593,7 +601,91 @@ export const MISSIONS: Mission[] = [
       },
     ],
   },
+  {
+    // l'archipel (seulement s'il est accepté, voir `diplomacy.ts`) : on rencontre les deux peuples, puis on choisit son allié
+    id: 'contact', age: 2, mandatory: false, icon: '🤝', title: 'Le premier contact',
+    intro: 'Par-delà la mer, deux îles et deux peuples, les Sablais et les Jadéens, qui se font la guerre. Un navire chargé de présents part les saluer, l’un après l’autre. À son retour, il faudra choisir un allié.',
+    choices: [
+      {
+        label: 'Hisser le pavillon blanc et attendre', text: 'Prudent : on mouille au large et on attend qu’on vienne à nous.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'fog', doing: 'mouille au large des deux îles, pavillon blanc hissé', danger: ['water'], party: 3, work: 40, risk: 0.08, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'meet' }, joy(1, 4)], lose: [],
+        winText: 'Des barques sont venues à notre navire, d’une île puis de l’autre. Présents échangés, mains serrées : les Sablais et les Jadéens connaissent notre village. Reste à choisir notre allié.',
+        loseText: 'La brume est tombée sur le bras de mer : le navire n’a trouvé personne et il est rentré. Il faudra retenter.',
+      },
+      {
+        label: 'Accoster tout de suite, présents en main', text: 'Audacieux : on débarque sur chaque île, au risque de surprendre.',
+        dest: 'river', sea: true, scene: 'voyage', fail: 'storm', doing: 'accoste chaque île, les bras chargés de présents', danger: ['water', 'weather'], party: 4, work: 28, risk: 0.22, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'meet' }, joy(3, 6), jobs(1, 6)], lose: [hurt(1, 2)],
+        winText: 'Nos marins ont été reçus au palais de chaque île, festin compris. Les Sablais et les Jadéens connaissent notre village ; ils attendent de savoir qui sera notre allié.',
+        loseText: 'Pris pour des pillards, nos marins ont dû rembarquer en hâte ; un blessé. Il faudra retenter.',
+      },
+    ],
+  },
   // ---------------- Âge industriel ----------------
+  // la paix de l'archipel (voie choisie à l'âge industriel) : des pourparlers, seulement des choix, sans échec possible
+  {
+    id: 'envoys', age: 3, mandatory: false, talks: true, icon: '🕊️', title: 'Les émissaires',
+    intro: 'Pour faire la paix, il faut d’abord parler. Nos émissaires vont porter des paroles de paix chez notre allié, puis chez son rival.',
+    choices: [
+      {
+        label: 'Passer d’abord chez notre allié', text: 'On rassure l’allié, puis on traverse chez le rival.',
+        dest: 'river', sea: true, scene: 'voyage', doing: 'porte des paroles de paix d’une île à l’autre', party: 3, work: 30, risk: 0, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'post' }, joy(1, 4)], lose: [],
+        winText: 'Notre allié a donné sa bénédiction, et son rival a écouté. En gage, il ouvre à nos marchands un comptoir sur son île.',
+        loseText: 'Les émissaires sont rentrés sans réponse.',
+      },
+      {
+        label: 'Aller droit chez le rival', text: 'Plus court : on parle tout de suite à celui qui se méfie.',
+        dest: 'river', sea: true, scene: 'voyage', doing: 'va droit chez le rival, paroles de paix en main', party: 3, work: 22, risk: 0, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'post' }, jobs(1, 4)], lose: [],
+        winText: 'Surpris de nous voir arriver seuls, les chefs du rival ont écouté jusqu’au bout. En gage, ils ouvrent à nos marchands un comptoir sur leur île.',
+        loseText: 'Les émissaires sont rentrés sans réponse.',
+      },
+    ],
+  },
+  {
+    id: 'truce', age: 3, mandatory: false, talks: true, icon: '📜', title: 'La trêve des deux îles', unlocks: 'concord',
+    requires: { missions: ['envoys'] },
+    intro: 'Les deux peuples veulent bien se parler, mais pas chez l’autre. Notre village propose de réunir leurs chefs et de signer une trêve.',
+    choices: [
+      {
+        label: 'Réunir les chefs sur une petite île', text: 'Terrain neutre : une tente, une table et trois chaises.',
+        dest: 'river', sea: true, scene: 'voyage', doing: 'réunit les chefs des deux îles sous une tente', party: 4, work: 34, risk: 0, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'truce' }, joy(2)], lose: [],
+        winText: 'Sous la tente, les deux chefs ont signé la trêve, et notre village en est le témoin. Les combats cessent en mer. Pour s’en souvenir : un monument de la concorde à bâtir.',
+        loseText: 'Les chefs ne sont pas venus.',
+      },
+      {
+        label: 'Signer à bord de notre navire', text: 'Au milieu du bras de mer, sous notre pavillon.',
+        dest: 'river', sea: true, scene: 'voyage', doing: 'accueille les chefs des deux îles à son bord', party: 4, work: 28, risk: 0, carry: 'sacks',
+        win: [{ t: 'diplo', act: 'truce' }, joy(2)], lose: [],
+        winText: 'À notre bord, au milieu du bras de mer, les deux chefs ont signé la trêve. Les combats cessent. Pour s’en souvenir : un monument de la concorde à bâtir.',
+        loseText: 'Les chefs ne sont pas venus.',
+      },
+    ],
+  },
+  {
+    id: 'feast', age: 3, mandatory: false, talks: true, icon: '🎉', title: 'La fête des trois peuples',
+    requires: { missions: ['truce'] },
+    intro: 'La paix est signée : il faut la fêter. Un navire va chercher les invités des deux îles pour une grande fête au village.',
+    choices: [
+      {
+        label: 'Un banquet sur la grand-place', text: 'Chaque peuple apporte ses plats, on mange ensemble.',
+        dest: 'river', sea: true, scene: 'voyage', doing: 'ramène les invités des deux îles pour le banquet', party: 3, work: 24, risk: 0, carry: 'guests',
+        win: [{ t: 'diplo', act: 'feast' }, joy(3), food(3, 6)], lose: [],
+        winText: 'Dattes des Sablais, brioches de chez nous, raviolis des Jadéens : la grand-place n’a jamais tant ri. Les trois peuples sont amis.',
+        loseText: 'Les invités n’ont pas pu venir.',
+      },
+      {
+        label: 'Des jeux et un feu d’artifice', text: 'Courses, musique, et des fusées de trois couleurs.',
+        dest: 'river', sea: true, scene: 'voyage', doing: 'ramène les invités des deux îles pour les jeux', party: 3, work: 24, risk: 0, carry: 'guests',
+        win: [{ t: 'diplo', act: 'feast' }, joy(4), jobs(1, 6)], lose: [],
+        winText: 'Courses de barques, musiques des trois peuples, et le soir des fusées bleues, turquoise et rouges : les trois peuples sont amis.',
+        loseText: 'Les invités n’ont pas pu venir.',
+      },
+    ],
+  },
   {
     id: 'railway', age: 3, mandatory: true, icon: '🚂', title: 'Le tracé du chemin de fer',
     intro: 'Le chemin de fer arrive dans la région. Des géomètres doivent repérer le meilleur tracé jusqu’au village.',
@@ -918,7 +1010,7 @@ export const REDO_DAYS = 4;
  * durables (travail, bien-être) ne durent plus que quelques jours, et son savoir-faire est déjà acquis
  */
 export function redoEffects(effects: Effect[]): Effect[] {
-  return effects.filter((e) => e.t !== 'perk').map((e) => (e.t === 'need' && !e.days ? { ...e, days: REDO_DAYS } : e));
+  return effects.filter((e) => e.t !== 'perk' && e.t !== 'diplo').map((e) => (e.t === 'need' && !e.days ? { ...e, days: REDO_DAYS } : e));
 }
 
 /** Bêtes par enclos, chevaux par écurie, au plus */
@@ -1034,6 +1126,7 @@ export function applyEffects(w: World, effects: Effect[], dayLen: number) {
     else if (e.t === 'need') { if (e.days) s.temp.push({ need: e.need, n: e.n, until: s.clock + e.days * dayLen }); else s.bonus[e.need] += e.n; }
     else if (e.t === 'injured') { injured += e.n; days = Math.max(days, e.days); }
     else if (e.t === 'unherd') for (let i = 0; i < e.n; i++) { const j = s.herd.lastIndexOf(e.kind); if (j >= 0) s.herd.splice(j, 1); }
+    else if (e.t === 'diplo') applyDiplo(w.diplo, e.act);
   }
   w.version++;
   return { injured, days };
@@ -1049,6 +1142,10 @@ PERK_NAME.galleon = 'le trésor du galion englouti est au village';
 PERK_NAME.portal = 'le portail de l’autre rive est ouvert : tours de garde et caserne sur son île';
 PERK_NAME.hellking = 'la couronne du roi des Enfers : un trophée sur la place du village';
 PERK_NAME.hellforge = 'la forge infernale : l’équipement se fabrique plus vite, les expéditions sont plus sûres';
+
+/** Ce que la diplomatie gagne, en clair et en pastille */
+const DIPLO_NAME: Record<DiploAct, string> = { meet: 'les deux peuples des îles rencontrés', post: 'un comptoir chez le rival de notre allié', truce: 'la trêve des deux îles : les combats cessent', feast: 'l’amitié des trois peuples' };
+const DIPLO_ICON: Record<DiploAct, string> = { meet: '🤝', post: '⚖️', truce: '📜', feast: '🎉' };
 
 /** La dernière expédition, réussie : la fin de la partie (on peut continuer à bâtir) */
 export const VICTORY = 'colony';
@@ -1066,6 +1163,7 @@ export function effectSummary(effects: Effect[]) {
     else if (e.t === 'perk') out.push(PERK_NAME[e.id] ? tr(PERK_NAME[e.id]) : e.id);
     else if (e.t === 'injured') out.push(`${e.n} ${plural(e.n, 'blessé', 'blessés')} (${tr('{n} j', { n: e.days })})`);
     else if (e.t === 'unherd') out.push(`−${e.n} ${plural(e.n, ...HERD_NAME[e.kind])}`);
+    else if (e.t === 'diplo') out.push(tr(DIPLO_NAME[e.act]));
   }
   return out.join(' · ') || tr('rien');
 }
@@ -1086,6 +1184,7 @@ export function effectChips(effects: Effect[]): { icon: string; n: string; title
     else if (e.t === 'perk') out.push({ icon: '⭐', n: '', title });
     else if (e.t === 'injured') out.push({ icon: '🤕', n: `${e.n}`, title });
     else if (e.t === 'unherd') out.push({ icon: HERD_ICON[e.kind], n: `−${e.n}`, title });
+    else if (e.t === 'diplo') out.push({ icon: DIPLO_ICON[e.act], n: '', title });
   }
   return out;
 }

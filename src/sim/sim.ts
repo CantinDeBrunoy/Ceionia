@@ -100,6 +100,11 @@ export class Sim {
   private lastVersion = -1;
   private recalcTimer = 0;
   onAgeUp: ((age: number) => void) | null = null;
+  /**
+   * Dernier mot avant un passage d'âge réussi (`advance`) : faux le retient (la bataille de l'archipel en cours, ou
+   * l'avertissement du traité des deux îles, dit une fois ; voir `diplomacy.ts › ageGate`)
+   */
+  beforeAdvance: ((next: number) => boolean) | null = null;
 
   constructor(private world: World) {}
 
@@ -487,6 +492,7 @@ export class Sim {
     this.recalc(); this.evaluate();
     const ap = this.ageProgress();
     if (!ap || !ap.items.every((i) => i.have >= i.need)) return false;
+    if (this.beforeAdvance && !this.beforeAdvance(ap.next)) return false;
     this.age = ap.next;
     this.world.ageBase = { ...this.counts };
     this.onAgeUp?.(this.age);

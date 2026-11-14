@@ -7,7 +7,9 @@ export type KindId = 'house' | 'farm' | 'pen' | 'pier' | 'well' | 'workshop' | '
   // les remparts du village : un pan de mur (tracé libre) et une porte
   | 'wall' | 'gate'
   // le volet maritime : chantier naval, phare, halle aux poissons, ferme marine
-  | 'shipyard' | 'lighthouse' | 'fishmarket' | 'offshore';
+  | 'shipyard' | 'lighthouse' | 'fishmarket' | 'offshore'
+  // la diplomatie de l'archipel : le monument de la concorde (la paix des trois peuples)
+  | 'concord';
 
 /** Rayons de la barre de construction */
 export type BuildCat = 'home' | 'prod' | 'service' | 'life' | 'war';
@@ -465,6 +467,14 @@ export const KINDS: Record<KindId, KindDef> = {
     perk: 'Une gare comme les autres pour le chemin de fer : choisissez-la puis « Nouvelle ligne » pour la relier aux autres gares.',
     jobs: [0, 0, 0, 0, 0, 8], joy: [0, 0, 0, 0, 0, 9],
   },
+  concord: {
+    id: 'concord', size: 2, minAge: 3, icon: '🕊️', cat: 'life',
+    names: ['', '', '', 'Monument de la concorde', 'Monument de la concorde', 'Monument de la concorde'],
+    desc: 'Trois piliers, un par peuple, sous un même anneau : la paix signée entre notre village et les deux îles.',
+    joy: [0, 0, 0, 10, 12, 14], jobs: [0, 0, 0, 2, 2, 2],
+    perk: 'Débloqué par l’expédition « La trêve des deux îles », sur la voie de la paix (archipel).',
+    reqMission: 'truce',
+  },
   // les bâtiments militaires : au village comme sur l'île du portail (où l'on ne bâtit qu'eux, voir `World.portalRule`)
   watchtower: {
     id: 'watchtower', size: 1, minAge: 1, icon: '🏹', cat: 'war',
@@ -503,7 +513,7 @@ export const GARRISONS: KindId[] = ['watchtower', 'barracks'];
 /** Les remparts : un pan de mur se trace en ligne, la porte se pose seule ; tous deux se raccordent à leurs voisins */
 export const isRampart = (k: KindId) => k === 'wall' || k === 'gate';
 
-export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'station', 'terminal', 'maglev'];
+export const KIND_ORDER: KindId[] = ['house', 'arcology', 'well', 'watertower', 'lamp', 'farm', 'vfarm', 'pen', 'stable', 'apiary', 'pier', 'lumber', 'quarry', 'workshop', 'carworks', 'mine', 'oilwell', 'refinery', 'brickworks', 'harbor', 'shipyard', 'fishmarket', 'offshore', 'mill', 'fusion', 'health', 'school', 'fire', 'police', 'lighthouse', 'watchtower', 'barracks', 'wall', 'gate', 'lab', 'research', 'observatory', 'airport', 'heliport', 'spaceport', 'aerodrome', 'senate', 'gather', 'forum', 'tavern', 'barber', 'baths', 'arena', 'theater', 'tennis', 'basket', 'football', 'stadium', 'waterpark', 'funfair', 'circus', 'zoo', 'alpine', 'temple', 'acropolis', 'landmark', 'concord', 'station', 'terminal', 'maglev'];
 
 export const BUILD_CATS: { id: BuildCat; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Habitat' },
@@ -535,7 +545,7 @@ export const KIND_SUB: Record<KindId, string> = {
   gather: 'parcs',
   tavern: 'detente', barber: 'detente', baths: 'detente', theater: 'detente', tennis: 'detente', basket: 'detente', football: 'detente', stadium: 'detente',
   waterpark: 'detente', funfair: 'detente', circus: 'detente', arena: 'detente', zoo: 'detente', alpine: 'detente', aerodrome: 'detente',
-  temple: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments',
+  temple: 'culte', acropolis: 'monuments', landmark: 'monuments', forum: 'monuments', concord: 'monuments',
 };
 
 export interface AgeDef {
@@ -588,6 +598,7 @@ export const KIND_LABEL: Record<KindId, string> = {
   arcology: 'arcologies', vfarm: 'fermes verticales', fusion: 'centrales à fusion', spaceport: 'cosmodromes', research: 'instituts de recherche', maglev: 'gares maglev',
   watchtower: 'tours de garde', barracks: 'casernes de la garnison', wall: 'remparts', gate: 'portes de la ville',
   shipyard: 'chantiers navals', lighthouse: 'phares', fishmarket: 'halles aux poissons', offshore: 'fermes marines',
+  concord: 'monuments de la concorde',
 };
 
 /**
