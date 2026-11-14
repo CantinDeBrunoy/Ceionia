@@ -93,6 +93,8 @@ import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
 import { troopPortrait } from './render/troopPortraits';
 import { PortalChoice } from './ui/portalChoice';
+import { WorldChoice } from './ui/worldChoice';
+import { canExpand, expandWorld } from './world/expand';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
@@ -211,6 +213,7 @@ class Game implements UIHost {
   warTips!: WarTips;
   /** la carte du choix du portail (affronter les démons ou refermer le portail) */
   portalChoice!: PortalChoice;
+  worldChoice!: WorldChoice;
   /** temps passé en jeu depuis la fin du dernier écran de chargement (s) : la carte du portail attend que le joueur soit arrivé */
   private portalCalm = 0;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
@@ -516,6 +519,7 @@ class Game implements UIHost {
     // (une défense de l'île en main : le clic droit la lâche, il ne donne pas d'ordre aux troupes)
     this.cam.rightClick = (e) => { if (this.islePlace) { this.tools.escape(); this.endIslePlace(); return; } if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
+    this.worldChoice = new WorldChoice(uiRoot, { click: () => audio.sfxClick(), explore: () => void this.exploreWorld(), stay: () => { this.world.explore = 'no'; this.ui.update(); this.saveNow(); } });
     this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
@@ -967,6 +971,66 @@ class Game implements UIHost {
   }
 
   /** La ligne du rayon Militaire : le PvE à choisir, ou le portail refermé à rouvrir (rien une fois qu'on affronte les démons) */
+  /** La partie peut-elle encore s'agrandir à l'archipel ? (continent de 192, version 3) */
+  canExplore() { return canExpand({ n: N, gen: this.world.gen }); }
+
+  /**
+   * « Explorer le monde » : passé l'Antiquité, la carte du choix s'ouvre une fois (hors bac à sable : on l'y trouve dans le
+   * rayon Production) ; le monde agrandi, la cinématique de découverte des îles se joue une fois en jeu
+   */
+  private stepExplore() {
+    const calm = this.portalCalm > 3 && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading && !this.portalChoice.visible && !this.worldChoice.visible;
+    if (!calm) return;
+    // (la cinématique suit tout de suite le choix ; la carte, elle, attend la fin du tutoriel)
+    if (this.world.reveal) { this.world.reveal = false; this.revealIsles(); return; }
+    if (!this.tutorial.active && this.world.explore === 'ask' && this.sim.age >= 2 && !this.world.sandbox && this.canExplore()) this.worldChoice.show();
+  }
+
+  /** Ligne en tête du rayon Production : « Explorer le monde » pour qui est resté sur son île (et au bac à sable) */
+  exploreLine() {
+    if (!this.canExplore() || (this.world.explore === 'ask' && !this.world.sandbox)) return null;
+    return { text: trx('🧭 D’autres îles, au-delà de l’horizon'), button: trx('Explorer le monde') };
+  }
+  openWorldChoice() { this.worldChoice.show(); }
+  /** Fin de la cinématique de découverte des îles (la vue revient au village) : pour enchaîner (expédition de premier contact…) */
+  onIslesRevealed?: () => void;
+
+  /**
+   * Le monde s'agrandit : la partie est sauvegardée telle qu'elle est, agrandie à l'archipel (`expandWorld`), puis rechargée
+   * derrière l'écran de chargement ; la cinématique des îles se joue à l'arrivée
+   */
+  async exploreWorld() {
+    if (!this.canExplore()) return;
+    const screen = new LoadingScreen(uiRoot.parentElement!);
+    screen.step('Le monde s’agrandit…', 0.2);
+    await painted();
+    const save = this.buildSave();
+    this.running = false;
+    save.world = expandWorld(save.world, this.world.mapId, this.world.seed);
+    save.world.exploredAt = this.sim.age;
+    if (!saveSlot(save)) { this.ui.toast(trx('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
+    sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`);
+    location.reload();
+  }
+
+  /**
+   * Cinématique de découverte : la vue quitte le village, s'élève au-dessus de la mer, passe sur chacune des deux îles
+   * rivales, puis revient au village
+   */
+  private revealIsles() {
+    const lay = this.world.isles;
+    if (!lay) return;
+    const cam = this.cam, back = cam.view(), [a, b] = lay.rivals, f = lay.main;
+    const steps: [number, () => void][] = [
+      [0, () => cam.goTo(f.x + f.n * 0.8, f.z + f.n / 2, cam.maxDist * 0.55)],
+      [3200, () => { cam.goTo(a.village.x, a.village.z, 150); this.ui.banner(trx('De nouvelles terres !'), a.people === 'orient' ? trx('Une île de sable et de palmiers, et son peuple') : trx('Une île verte aux pitons rocheux, et son peuple')); }],
+      [8200, () => { cam.goTo(b.village.x, b.village.z, 150); this.ui.banner(trx('Et une autre encore'), b.people === 'orient' ? trx('Une île de sable et de palmiers, et son peuple') : trx('Une île verte aux pitons rocheux, et son peuple')); }],
+      [13200, () => { cam.goTo(back.x, back.z, back.dist); this.onIslesRevealed?.(); }],
+    ];
+    for (const [t, f2] of steps) setTimeout(f2, t);
+    setTimeout(() => this.saveNow(), 14000);
+  }
+
   pveLine() {
     const w = this.war;
     if (!w.active) return null;
@@ -1001,6 +1065,7 @@ class Game implements UIHost {
     // et seulement une fois en jeu : écran de chargement parti depuis 3 s au moins (pas par-dessus la barre de chargement)
     this.portalCalm = document.getElementById('loadScreen') ? 0 : this.portalCalm + dt;
     if (w.active && w.pve === 'ask' && !w.choiceSeen && this.portalCalm > 3 && !this.portalChoice.visible && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading) this.portalChoice.show();
+    this.stepExplore();
     const said = new Set<string>();
     for (const n of w.news.splice(0)) {
       // (plusieurs soldats au même moment : une seule nouvelle)

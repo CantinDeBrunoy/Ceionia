@@ -58,6 +58,8 @@ export interface UIHost {
   commandIsle?(): void;
   /** la ligne « Portail refermé · Rouvrir » du rayon Militaire (null : rien à proposer) et l'ouverture de la carte du choix */
   pveLine?(): { text: string; button: string } | null;
+  exploreLine?(): { text: string; button: string } | null;
+  openWorldChoice?(): void;
   openPortalChoice?(): void;
   /** la vue va sur l'île du portail (pour y bâtir) */
   goIsle?(): void;
@@ -813,7 +815,7 @@ export class UI {
   /** Ce que montrent les vignettes du rayon ouvert (nombre de chaque bâtiment, cadenas) : elles se redessinent quand ça change */
   private tilesKey = '';
   private tilesNow() {
-    return this.tab === 'build' ? (this.cat === 'war' ? this.host.pveLine?.()?.button ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
+    return this.tab === 'build' ? (this.cat === 'war' ? this.host.pveLine?.()?.button ?? '' : this.cat === 'prod' ? this.host.exploreLine?.()?.button ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
   }
 
   /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
@@ -872,10 +874,14 @@ export class UI {
     // le portail à rouvrir (ou le PvE à choisir) : une ligne en tête du rayon Militaire
     const pve = build && this.cat === 'war' ? this.host.pveLine?.() : null;
     if (pve) html = `<div class="grp pvehead"><span>${pve.text}</span><button data-pve="1">${pve.button}</button></div>${html}`;
+    // « Explorer le monde », pour qui est resté sur son île : une ligne en tête du rayon Production (celui du port)
+    const exp = build && this.cat === 'prod' ? this.host.exploreLine?.() : null;
+    if (exp) html = `<div class="grp pvehead"><span>${exp.text}</span><button data-explore="1">${exp.button}</button></div>${html}`;
     const items = $('#items'), left = items.scrollLeft;
     items.innerHTML = html;
     items.scrollLeft = keep ? left : 0;
     items.querySelector<HTMLButtonElement>('[data-pve]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openPortalChoice?.(); });
+    items.querySelector<HTMLButtonElement>('[data-explore]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openWorldChoice?.(); });
     this.markFirst();
     this.bindTools(items);
     items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {

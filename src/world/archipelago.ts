@@ -59,7 +59,9 @@ function drawLayout(seed: number, n: number): ArchLayout {
       const a = a0 + i * R(1.2, 2.2), d = r * R(0.35, 0.6);
       lobes.push({ x: cx + Math.cos(a) * d, z: cz + Math.sin(a) * d, r: r * R(0.32, 0.55) });
     }
-    return { x: cx, z: cz, r, people, village: { x: cx, z: cz + toward * r * 0.3, r: 9 }, lobes };
+    // (rayon 15 : la ville d'un peuple, temple ou mosquée au centre, palais sur un point haut, marché, remparts, port sur la côte
+    // à 20 ou 25 cases)
+    return { x: cx, z: cz, r, people, village: { x: cx, z: cz + toward * r * 0.42, r: 15 }, lobes };
   };
   const first: People = rnd() < 0.5 ? 'orient' : 'asie', second: People = first === 'orient' ? 'asie' : 'orient';
   const rivals = [rival(R(278, 290), R(90, 106), first, 1), rival(R(278, 290), R(278, 294), second, -1)];
@@ -177,17 +179,20 @@ export function isleClimate(lay: ArchLayout, wx: number, wz: number, st: Simplex
 }
 
 /**
- * Le village de chaque peuple : un replat à 1,3 au rayon du village, raccordé en pente douce au relief alentour, sans arbres
+ * Le village de chaque peuple : un replat à 1,3, tout plat au cœur (0,6 fois le rayon), qui garde 30 % du relief vers son
+ * bord (un point haut pour le palais) et se raccorde en 8 cases au relief alentour, sans arbres
  * ni rochers. Fait après les dunes, les forêts et les étangs, qui le recouvriraient
  */
 export function flattenVillages(hts: Float32Array, veg: Uint8Array, n: number, lay: ArchLayout) {
   const S = n + 1;
   for (const q of lay.rivals) {
-    const v = q.village, R = v.r + 5;
+    const v = q.village, R = v.r + 8;
     for (let z = Math.max(0, Math.floor(v.z - R)); z <= Math.min(n, Math.ceil(v.z + R)); z++)
       for (let x = Math.max(0, Math.floor(v.x - R)); x <= Math.min(n, Math.ceil(v.x + R)); x++) {
         const d = Math.hypot(x - v.x, z - v.z), i = z * S + x;
-        hts[i] = lerp(hts[i], 1.3, smoothstep(R, v.r, d));
+        // tout plat au cœur ; vers le bord, le replat garde 30 % du relief (un point haut pour le palais), puis se raccorde
+        const w = d < v.r * 0.6 ? 1 : d < v.r ? lerp(1, 0.7, (d - v.r * 0.6) / (v.r * 0.4)) : 0.7 * smoothstep(R, v.r, d);
+        hts[i] = lerp(hts[i], 1.3, w);
         if (x < n && z < n && d < v.r + 1) veg[z * n + x] = 0;
       }
   }
