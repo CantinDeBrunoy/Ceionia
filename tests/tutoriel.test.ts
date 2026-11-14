@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TUTO_TEXT } from '../src/ui/tutorial';
+import { TUTO_TEXT, tutoGear } from '../src/ui/tutorial';
 import { isZoned } from '../src/build/zones';
 
 describe('tutoriel : une phrase simple par étape', () => {
@@ -27,5 +27,14 @@ describe('tutoriel : une phrase simple par étape', () => {
   it('le bûcheron et le pierrier ont une zone d’emplacements à montrer', () => {
     expect(isZoned('lumber')).toBe(true);
     expect(isZoned('quarry')).toBe(true);
+  });
+});
+
+describe('tutoriel : l’équipement avant les expéditions', () => {
+  it('fait fabriquer la pièce de « La grande cueillette » en forêt : la lance à la Préhistoire', () => {
+    expect(tutoGear(0, () => false)).toBe('spear');
+    expect(tutoGear(1, () => false)).toBe('bow');
+    const ids = Object.keys(TUTO_TEXT.steps);
+    expect(ids.indexOf('gear')).toBe(ids.indexOf('expeditions') - 1);
   });
 });

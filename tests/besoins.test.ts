@@ -64,3 +64,21 @@ describe('jauges des besoins', () => {
     }
   });
 });
+
+describe('croissance jusqu’à la dernière place', () => {
+  beforeAll(() => setMapSize(96));
+
+  it('une population entamée par une disette se complète, puis le conseil dit de bâtir des huttes', () => {
+    const w = village('normal', [['gather', 0, 1], ['house', 0, 2], ['farm', 0, 4], ['well', 0, 4], ['lumber', 0, 1], ['quarry', 0, 1]]);
+    const sim = new Sim(w);
+    sim.recalc();
+    const cap = sim.housing.cap;
+    // 0,1 habitant parti pendant une disette : avant, la population restait à cap − 0,1, le logement « libre »
+    sim.pop = cap - 0.1;
+    for (let i = 0; i < 40; i++) sim.update(0.5, 0.5);
+    expect(sim.pop).toBe(cap);
+    expect(sim.housing.ok).toBe(false);
+    expect(sim.message).toMatch(/^Bâtissez « .+ » \(.+\) : le village manque de place pour grandir \(\d+\/12 habitants pour l’âge suivant\)\.$/);
+    expect(sim.messageKind).toBe('house');
+  });
+});

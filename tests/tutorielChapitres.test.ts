@@ -6,7 +6,7 @@ import { i18nEntries, setLang } from '../src/i18n';
 import '../src/i18n/en';
 
 /** les étapes de la suite principale, dans l'ordre du jeu (voir `Tutorial`) */
-const IDS = ['welcome', 'camera', 'fire', 'habitat', 'food', 'wood', 'stone', 'resources', 'road', 'needs', 'time', 'ages', 'expeditions', 'gear', 'incidents'];
+const IDS = ['welcome', 'camera', 'fire', 'habitat', 'food', 'wood', 'stone', 'resources', 'road', 'needs', 'time', 'ages', 'gear', 'expeditions', 'incidents'];
 
 describe('tutoriel : l’état enregistré', () => {
   it('lit les anciens états (on, step) et les nouveaux, refuse le reste', () => {

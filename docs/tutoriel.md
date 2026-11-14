@@ -28,8 +28,15 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   10. `needs` : ouvrir la fiche d'un besoin
   11. `time` : pause et vitesse
   12. `ages` : ouvrir les conditions de l'âge suivant (à lire)
-  13. `expeditions` : ouvrir les expéditions et lancer une mission (pas de suivi à l'œil : l'étape passe dès le départ)
-  14. `gear`, 15. `incidents`
+  13. `gear` « L'équipement » (à lire) : ouvrir l'onglet Équipement des expéditions et fabriquer la pièce de la mission
+      que montre l'étape suivante (`tutoGear` : contre le premier danger de « La grande cueillette » en forêt, une lance à la
+      Préhistoire) ; l'équipe emporte le meilleur de la réserve. Sans pièce possible, n'importe quelle pièce compte.
+  14. `expeditions` : ouvrir les expéditions (la fenêtre restée sur l'onglet Équipement : l'onglet des missions) et lancer
+      une mission ; pas de suivi à l'œil, l'étape passe dès le départ. Pièce encore en fabrication, fenêtre de départ
+      ouverte : une ligne invite à l'attendre.
+  15. `incidents`
+- **Reprise** : une partie s'enregistre avec l'identifiant de l'étape (`id`). Arrêtée sur `gear`, elle reprend sur `gear`
+  puis `expeditions` ; arrêtée sur `expeditions` (avant que l'équipement passe devant), elle reprend sur `expeditions`.
 - **Verrous de construction** (`GATE`) : pendant les étapes 1 à 7, on ne bâtit que ce que le tutoriel a déjà fait poser
   (`welcome`, `camera`, `fire` : la place ; puis maison et puits ; puis séchoir ; bûcheron ; pierrier). Le reste dit « Le
   tutoriel vous le fera bâtir un peu plus tard. ». Le verrou saute dès que le village compte un bâtiment hors de `GUIDED`,
@@ -37,7 +44,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
 - **Clavier de la caméra** : le jeu lit les touches physiques (`camera.ts` : W A S D, Q E). La bulle affiche les lettres de
   la disposition du joueur (`navigator.keyboard.getLayoutMap`, Chrome et Edge) ; sans elle, celles de la langue : Z Q S D et
   A / E en français, W A S D et Q / E en anglais (`viewKeys`). Au doigt, la phrase tactile seule.
-- **Fin** : « Terminer » à la dernière étape. Le tutoriel reste dans les réglages (« Recommencer »).
+- **Fin** : « Terminer » à la dernière étape. Le temps encore en pause repart à vitesse ×1. Le tutoriel reste dans les réglages (« Recommencer »).
 - **Chapitre « Affronter les démons »** (`pve`, 4 étapes), lancé par le bouton « Affronter les démons » de la carte du
   portail. La vue va alors au commandement de l'île, menu ouvert sur « Bâtir » :
   1. `pveDefenses` : poser une tour de garde et une caserne **sur l'île**. Une défense posée au village pendant l'étape
