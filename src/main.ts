@@ -110,7 +110,8 @@ import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/dif
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
 import { LoadingScreen, painted } from './ui/loading';
-import { Letterbox } from './ui/voyage';
+import { VoyageStage } from './voyageStage';
+import { VOY_CONTACT } from './voyageCine';
 import { WarmUp } from './render/warmup';
 import { CompileJob, compilePaced, representatives, firstUseAll } from './render/precompile';
 
@@ -223,6 +224,7 @@ class Game implements UIHost {
   kingStage: KingdomStage;
   /** la petite cinématique d'un trophée qui rejoint la place (retour d'une expédition légendaire) */
   trophyStage: TrophyStage;
+  voyageStage!: VoyageStage;
   /** les aides du volet militaire */
   warTips!: WarTips;
   /** la carte du choix du portail (affronter les démons ou refermer le portail) */
@@ -562,6 +564,11 @@ class Game implements UIHost {
       path: (p) => this.choosePath(p),
     });
     this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
+    // la cinématique « Explorer le monde » (elle tient lieu d'écran de chargement de l'agrandissement)
+    this.voyageStage = new VoyageStage({
+      cam: this.cam, world: w, scene: this.scene, root: uiRoot,
+      village: () => this.villageCenter(), age: () => this.sim.age, loading: () => !!document.getElementById('loadScreen'),
+    });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
       war: this.war, cam: this.cam, world: w, scene: this.scene, ui: this.ui, audio,
@@ -607,7 +614,11 @@ class Game implements UIHost {
     };
     // la diplomatie de l'archipel : pas de passage d'âge pendant la bataille, et l'avertissement du traité, dit une fois
     // les îles découvertes (fin de la cinématique) : un navire peut aller saluer leurs peuples
-    this.onIslesRevealed = () => { if (!this.world.exp.done.includes('contact')) this.ui.toast(trx('🤝 Deux peuples vivent sur ces îles : l’expédition « Le premier contact » peut aller les saluer.'), () => this.ui.gotoMission('contact')); };
+    this.onIslesRevealed = () => {
+      if (this.world.exp.done.includes('contact')) return;
+      this.ui.banner(trx(VOY_CONTACT.title), trx(VOY_CONTACT.sub));
+      this.ui.toast(trx('🤝 Deux peuples vivent sur ces îles : l’expédition « Le premier contact » peut aller les saluer.'), () => this.ui.gotoMission('contact'));
+    };
     this.sim.beforeAdvance = () => {
       const g = ageGate(this.world, this.sim.age, this.allyBattle);
       if (!g) return true;
@@ -1092,6 +1103,7 @@ class Game implements UIHost {
   private stepCrossroads() {
     const w = this.world;
     if (w.reveal && this.revealReady()) { w.reveal = false; this.popups.taken(); this.revealIsles(); return; }
+    if (this.voyageStage.playing) return;
     if (w.crossroads) return;
     const { hell, world } = this.ways();
     if (crossroadsSettled(w, hell, world)) { w.crossroads = true; this.ui.update(); return; }
@@ -1109,8 +1121,11 @@ class Game implements UIHost {
     this.worldChoice.show();
   }
 
-  /** La cinématique des îles peut partir : juste après la traversée (pas d'attente), sinon au calme comme les autres fenêtres */
-  private revealReady() { return this.voyage ? !document.getElementById('loadScreen') && !this.revealing : this.portalCalm > 3 && this.popups.open; }
+  /**
+   * La cinématique des îles peut partir : au sortir de la traversée, tout de suite (elle tient la brume tant que l'écran de
+   * chargement est là) ; sinon (partie rechargée autrement avant qu'elle ait joué) au calme, comme les autres fenêtres
+   */
+  private revealReady() { return !this.revealing && (this.voyage || (this.portalCalm > 3 && this.popups.open)); }
 
   /** Prendre une voie depuis l'onglet « Voies » des expéditions : la carte de la voie s'ouvre pour confirmer */
   takeWay(way: Way) {
@@ -1150,71 +1165,40 @@ class Game implements UIHost {
   onIslesRevealed?: () => void;
 
   /**
-   * « Explorer le monde » : la cinématique remplace l'écran de chargement. Les bandes noires descendent, la vue quitte le
-   * village vers le large, puis la traversée (la mer, la caravelle) monte en fondu ; derrière elle, la partie est
-   * sauvegardée, agrandie (`expandWorld`) et rechargée, et la même traversée couvre le chargement (`LoadingScreen` en mode
-   * traversée, `AUTOSTART` « voyage »). Elle s'efface sur la mer de l'archipel, où le survol des îles prend la suite
+   * « Explorer le monde » : la cinématique tient lieu d'écran de chargement (partition dans `voyageCine.ts`, mise en scène dans
+   * `voyageStage.ts`). Acte I sur le monde d'avant : un navire quitte le village et prend le large, la brume se lève et couvre
+   * tout. Derrière la brume, la partie est sauvegardée, agrandie (`expandWorld`) et rechargée ; la même brume couvre le
+   * chargement (`LoadingScreen` en mode traversée, `AUTOSTART` « voyage »), puis l'acte II se joue sur le monde agrandi
    */
-  async exploreWorld() {
-    if (!this.canExplore() || this.revealing) return;
-    const w = this.world, cam = this.cam, app = uiRoot.parentElement!;
+  exploreWorld() {
+    if (!this.canExplore() || this.revealing || this.voyageStage.playing) return;
+    const w = this.world, app = uiRoot.parentElement!;
     w.crossroads = true;
     this.revealing = true;
-    document.body.classList.add('cinematic');
-    const bars = new Letterbox(app);
-    bars.caption('Vos navigateurs mettent le cap au large…');
-    // la vue file vers le bord de carte le plus proche du village (vers la mer), basse, tournée vers le large
-    const v = cam.view(), edges = [v.x, N - v.x, v.z, N - v.z], e = edges.indexOf(Math.min(...edges));
-    const dx = e === 0 ? -1 : e === 1 ? 1 : 0, dz = e === 2 ? -1 : e === 3 ? 1 : 0, far = Math.min(edges[e] - 4, N * 0.3);
-    const yaw = Math.atan2(-dx, -dz), turn = Math.atan2(Math.sin(yaw - v.yaw), Math.cos(yaw - v.yaw));
-    cam.aim({ x: v.x + dx * far, z: v.z + dz * far, yaw: v.yaw + turn, pitch: 0.32, dist: 46 });
-    await new Promise((r) => setTimeout(r, 2600));
-    const plate = new LoadingScreen(app, true);
-    plate.el.classList.add('rise');
-    await new Promise((r) => setTimeout(r, 900));
-    bars.el.remove();
-    await painted();
-    const save = this.buildSave();
-    this.running = false;
-    save.world = expandWorld(save.world, w.mapId, w.seed);
-    save.world.exploredAt = this.sim.age;
-    if (!saveSlot(save)) { this.ui.toast(trx('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
-    sessionStorage.setItem(AUTOSTART, `${w.mapId}|continue|voyage`);
-    location.reload();
+    this.voyageStage.playAct1(async () => {
+      // (la brume couvre l'écran : l'écran d'attente, à l'identique, prend le relais avant le long calcul)
+      new LoadingScreen(app, true);
+      await painted();
+      const save = this.buildSave();
+      this.running = false;
+      save.world = expandWorld(save.world, w.mapId, w.seed);
+      save.world.exploredAt = this.sim.age;
+      if (!saveSlot(save)) { this.ui.toast(trx('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
+      sessionStorage.setItem(AUTOSTART, `${w.mapId}|continue|voyage`);
+      location.reload();
+    });
   }
 
-  /** La partie vient d'une traversée (le monde agrandi) : le survol des îles part dès que la mer s'efface (posé par `boot`) */
+  /** La partie vient d'une traversée (le monde agrandi) : l'acte II part sur la brume, sans attendre (posé par `boot`) */
   voyage = false;
 
-  /**
-   * Le survol des îles, sous les bandes noires, la légende en bas : la vue s'élève au-dessus de la mer (au sortir de la
-   * traversée, elle y est déjà), passe sur chacune des deux îles rivales, puis revient au village
-   */
+  /** L'acte II de la cinématique « Explorer le monde » : les îles découvertes, puis le premier contact */
   private revealIsles() {
-    const lay = this.world.isles;
-    if (!lay) return;
-    const cam = this.cam, back = cam.view(), [a, b] = lay.rivals, f = lay.main;
-    const sea = { x: f.x + f.n * 0.8, z: f.z + f.n / 2, dist: cam.maxDist * 0.55 };
-    // (au sortir de la traversée : la mer est déjà là, la vue ne survole pas le village d'abord)
-    if (this.voyage) cam.jump({ ...sea, pitch: 0.55 });
-    this.voyage = false;
+    if (!this.world.isles) return;
     this.revealing = true;
-    document.body.classList.add('cinematic');
-    const bars = new Letterbox(uiRoot.parentElement!);
-    const tale = (p: string) => (p === 'orient' ? 'Une île de sable et de palmiers, et son peuple' : 'Une île verte aux pitons rocheux, et son peuple');
-    const steps: [number, () => void][] = [
-      [0, () => { cam.goTo(sea.x, sea.z, sea.dist); bars.caption('Au-delà de l’horizon…'); }],
-      [3200, () => { cam.goTo(a.village.x, a.village.z, 150); bars.caption('De nouvelles terres !', tale(a.people)); }],
-      [8200, () => { cam.goTo(b.village.x, b.village.z, 150); bars.caption('Et une autre encore', tale(b.people)); }],
-      [12400, () => bars.caption('')],
-      [13200, () => {
-        cam.goTo(back.x, back.z, back.dist); bars.close();
-        if (!this.kingStage.playing && !this.trophyStage?.playing) document.body.classList.remove('cinematic');
-        this.revealing = false; this.onIslesRevealed?.();
-      }],
-    ];
-    for (const [t, f2] of steps) setTimeout(f2, t);
-    setTimeout(() => this.saveNow(), 14000);
+    const fromMist = this.voyage;
+    this.voyage = false;
+    this.voyageStage.playAct2(fromMist, () => { this.revealing = false; this.onIslesRevealed?.(); this.saveNow(); });
   }
 
   /** Ce que regardent les aides du volet militaire */
@@ -1306,6 +1290,7 @@ class Game implements UIHost {
     if (this.rivalTowns) { this.rivalTowns.update(dt, this.sim.age); this.rivalTowns.group.visible = this.mode === 'surface'; }
     if (this.mode !== 'hell') w.hellFx.length = 0;
     this.kingStage.update(dt);
+    this.voyageStage.update(dt);
     this.trophyStage.update(dt);
     // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
     if (this.isleCmd && this.command.theater?.sim !== isle?.sim) { const t = this.isleTheater(); if (t) this.command.setTheater(t); else this.leaveIsle(); }
@@ -2281,7 +2266,7 @@ class Game implements UIHost {
     if (this.uiTimer === 0.25) {
       this.homeBtn.set(this.awayFromHome());
       // la musique de la fin (chute du roi des Enfers, voyage des colons, écrans de victoire), des Enfers, sinon de l'âge
-      audio.music(this.kingStage.playing || uiRoot.querySelector('.overlay.voyage, .overlay.victory') ? 'end' : this.mode === 'hell' ? 'hell' : null);
+      audio.music(this.kingStage.playing || uiRoot.querySelector('.overlay.voyage, .overlay.victory') ? 'end' : this.voyageStage.playing ? 'voyage' : this.mode === 'hell' ? 'hell' : null);
     }
     // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }

@@ -1,7 +1,7 @@
 # Le grand choix de la fin de l'Antiquité
 
-> Fichiers : `src/sim/crossroads.ts` (règles pures : état des deux voies, quand la carte s'ouvre, quand l'onglet se montre), `src/ui/worldChoice.ts` (la carte : trois réponses, ou une seule voie), `src/ui/ways.ts` (l'onglet « Voies » des expéditions), `src/ui/voyage.ts` (bandes noires et traversée de la cinématique), `src/ui/loading.ts` (`LoadingScreen` en mode traversée), `src/main.ts` (`stepCrossroads`, `ways`, `takeWay`, `openHell`, `exploreWorld`, `revealIsles`, `boot`), `src/ui/ui.ts` (`openExpeditions`, onglet `ways`), `src/sim/war.ts` (`War.wake`), `src/world/world.ts` (`crossroads`, `portalWoken`), `src/hudTheme.css` (styles « le grand choix »), `src/style.css` (styles « La traversée »)
-> Tests : `tests/grandChoix.test.ts`
+> Fichiers : `src/sim/crossroads.ts` (règles pures : état des deux voies, quand la carte s'ouvre, quand l'onglet se montre), `src/ui/worldChoice.ts` (la carte : trois réponses, ou une seule voie), `src/ui/ways.ts` (l'onglet « Voies » des expéditions), `src/voyageCine.ts` (la partition de la cinématique : plans, bandeaux, fondus), `src/voyageStage.ts` (sa mise en scène : navires, caméra, habillage), `src/ui/voyage.ts` (l'écran d'attente : brume et navire en ombre), `src/ui/loading.ts` (`LoadingScreen` en mode traversée), `src/main.ts` (`stepCrossroads`, `ways`, `takeWay`, `openHell`, `exploreWorld`, `revealIsles`, `boot`), `src/ui/ui.ts` (`openExpeditions`, onglet `ways`), `src/sim/war.ts` (`War.wake`), `src/world/world.ts` (`crossroads`, `portalWoken`), `src/hudTheme.css` (styles « le grand choix »), `src/style.css` (styles de la cinématique « Explorer le monde »)
+> Tests : `tests/grandChoix.test.ts`, `tests/cinematiqueVoyage.test.ts`
 > Voir aussi : [portail-ile.md](portail-ile.md), [monde-carte.md](monde-carte.md) (« Explorer le monde »), [diplomatie.md](diplomatie.md), [expeditions.md](expeditions.md), [ages.md](ages.md), [bac-a-sable.md](bac-a-sable.md), [sauvegarde.md](sauvegarde.md)
 
 ## En bref
@@ -23,19 +23,38 @@ Deux contenus de fin de partie arrivaient en même temps au début du Médiéval
 - Deux cartes comme celles des missions (diorama du portail, de la caravelle) : la voie à prendre a son bouton (« Ouvrir le portail », « Explorer le monde ») ; la voie prise le dit (« Facultatif · ✓ voie prise ») sans bouton ; une voie impossible n'a pas de carte.
 - Le bouton ferme la fenêtre et ouvre la carte de cette seule voie pour confirmer (`WorldChoice.show(way)` : la voie et « Pas maintenant »). Le portail déjà ouvert mais refermé, ou jamais affronté (ancienne partie, bac à sable : état `ask`), ouvre plutôt la carte du portail (« Affronter les démons » / « Garder le portail fermé »).
 
-### La cinématique « Explorer le monde » (à la place de l'écran de chargement)
-1. Les bandes noires descendent (`Letterbox`, `body.cinematic` cache l'interface), légende « Vos navigateurs mettent le cap au large… » ; la vue file, basse (pitch 0,32, 46 de recul), vers le bord de carte le plus proche du village, tournée vers le large (2,6 s).
-2. La traversée monte en fondu (0,9 s) : la mer peinte en CSS (ciel d'aube, soleil voilé, houle, brume) et le diorama de la caravelle qui tangue. Derrière elle, la partie est sauvegardée, agrandie et rechargée (`AUTOSTART` = `carte|continue|voyage`).
-3. Au rechargement, `boot` lit `voyage` et pose le même écran (`LoadingScreen(app, true)`, id `loadScreen`, classe `voyage`) : pas de logo ni de conseil, l'avancée en mince filet doré sous la légende. Le joueur ne voit pas d'écran de chargement, seulement la traversée qui continue.
-4. L'écran s'efface : la vue est déjà au-dessus de la mer de l'archipel (`cam.jump`), le survol part aussitôt (`Game.voyage`, sans les 3 s d'attente) : la mer, l'île rivale A, l'île B (légendes dans la bande du bas, à la place des bannières), puis le village (13,2 s). Les bandes remontent, l'interface revient, `onIslesRevealed` enchaîne (message du premier contact).
-Une partie rechargée autrement avec la cinématique en attente (`world.reveal`) la joue au calme, partant du village, sous les mêmes bandes.
+### La cinématique « Explorer le monde » : elle fait office de chargement
+Demande de l'auteur : « il faut une vraie cinématique comme celle de fin. Elle fera office de chargement ». L'habillage est celui de la cinématique de fin du volet militaire (`#kingCine`) : bandes noires, bandeaux dorés, fondus, « Passer ». La partition est dans `voyageCine.ts` (testée), la mise en scène dans `voyageStage.ts`. Deux actes, de part et d'autre du rechargement de la partie agrandie.
+
+1. **Acte I** (monde d'avant, `VOY_ACT1`, ≈ 9 s) :
+   - **le départ** (5,5 s) : une caravelle sort de la côte du village et file vers le large. La vue la suit de trois quarts arrière, basse. Bandeau « Un navire prend la mer · Cap sur l'inconnu ». Le départ est choisi par `seaRay` : parmi seize directions autour du village, la côte la plus proche d'où la mer reste libre jusqu'au bord de la carte (ni lac ni rivière) ;
+   - **la brume** (3,5 s) : un voile de brume monte et couvre tout (« La brume se lève… »).
+2. **L'attente** : la même brume, à l'identique, avec un navire en ombre chinoise qui tangue et des nappes qui passent (`VOYAGE_PLATE`). Le bandeau dit « Au-delà de la brume… · le monde s'agrandit ». Elle couvre deux étapes :
+   - la sauvegarde, l'agrandissement (`expandWorld`) et le rechargement (`AUTOSTART` = `carte|continue|voyage`) ;
+   - au rechargement, `boot` pose le même écran (`LoadingScreen(app, true)`, id `loadScreen`). Il reste pendant le chargement des modèles, la génération des îles et des villes, la préparation des shaders et les premières images.
+
+   Elle tient sans coupure aussi longtemps qu'il le faut ; l'avancée n'est qu'un mince filet doré.
+3. **Acte II** (monde agrandi, `VOY_ACT2`, ≈ 32 s). Il démarre dès la première image (`Game.voyage`), sous l'écran d'attente : tant que `#loadScreen` est là, son temps est arrêté et sa brume tenue. Une fois l'écran parti, la même brume se dissipe (`VOY_LIFT` = 2,6 s), puis un fondu au noir (`VOY_DIP`) sépare chaque plan :
+   - **l'horizon** (6,5 s) : une caravelle part du bord de l'île principale, cap sur les deux îles. La vue, au ras de l'eau derrière elle, recule et s'élève : les îles paraissent au loin (« La mer s'ouvre · et l'horizon recule ») ;
+   - **l'île d'Orient** (7 s) : la ville vue de la mer, en tournant de sa mosquée vers son port, d'où sortent deux navires (« Une île de sable et de palmiers · Sa mosquée, son port, tout un peuple ») ;
+   - **l'île d'Asie** (7 s) : de même, sa pagode et ses jonques ;
+   - **les flottes** (7 s) : au milieu du bras de mer (`navalSites().battle`), trois navires de chaque peuple s'avancent les uns vers les autres, vus de côté au ras de l'eau (« Deux peuples, deux flottes · Une vieille rivalité les oppose ») ;
+   - **le retour** (4,5 s) : la vue revient au village et s'y pose, sans bandeau.
+
+   À la fin, l'interface revient, la bannière « Le premier contact · Un navire peut aller saluer ces deux peuples » paraît (`VOY_CONTACT`), avec le message qui mène à l'expédition du premier contact (`onIslesRevealed`).
+
+- **Navires** : la caravelle est le navire de commerce (`vesselModel('caravel')`). Ceux des deux peuples sont leurs navires de guerre (`warshipModel(warshipKind(peuple, max(âge, 2)))`), donc des boutres et des jonques même à l'Antiquité. Tout est préparé au début de l'acte (chemins, modèles) : rien ne se calcule en plein plan.
+- **Musique** : le morceau de l'exploration (`medieval-exploration`, scène `voyage`, `SCENE_TRACKS` dans `audio.ts`), au volume de la musique, choisi par `main.ts` tant que `voyageStage.playing`. Après le rechargement, le navigateur ne laisse le son repartir qu'au premier geste du joueur (un clic qui passe la cinématique, par exemple).
+- **Passer** : un clic n'importe où, Échap ou Espace. Dans l'acte I, on file à la brume (le rechargement suit) ; dans l'acte II, on va tout de suite à la fin. Jamais pendant l'attente : le bouton est caché et le clic sans effet tant que le chargement n'est pas fini.
+- **Une seule fois** : `world.reveal` (sauvegardé) demande l'acte II. Il passe à faux quand l'acte commence, et la sauvegarde qui suit la fin ne le porte plus : une partie rechargée ensuite ne rejoue rien. Une partie rechargée autrement pendant l'acte II (onglet fermé) le rejoue une fois, au calme, ouvert par un fondu au noir au lieu de la brume.
+- **Les Enfers, ni l'un ni l'autre** : pas de plan de transition. « Les Enfers » mène déjà la vue sur l'île du portail (`commandIsle`), qui glisse jusqu'à elle ; « Ni l'un ni l'autre » ne change rien à l'écran.
 
 ## Fonctionnement dans le code
 - **États des voies** (`crossroads.ts`) : `hellWay(w, pve)` = `none` (pas d'île), `open` (portail fermé), `ask` (ouvert sans qu'on affronte : `pve` `ask` ou `off`), `taken` (`pve === 'on'`). `worldWay(w, canExplore)` = `taken` (`archipelagoOn`), `open` (`canExpand` : continent de 192, version 3), `none`. `Game.ways()` les calcule.
 - **`Game.stepCrossroads`** (chaque image, dans `stepWar`) : d'abord la cinématique en attente (`world.reveal`, `revealReady`), puis, tant que `crossroads` est faux, `crossroadsSettled` (une voie déjà prise ou en suspens, ou aucune possible) marque `crossroads` sans rien montrer ; sinon, au calme et si elle ne s'est pas déjà ouverte dans la session, `crossroadsDue` ouvre la carte (`othersDone` : toutes les lignes de `ageProgress` sauf `CHOICE_LABEL` remplies).
 - **La condition** (`Sim.ageProgress`, passage vers `CROSSROADS_AGE`) : `crossroadsMet(w, hellWay(w, 'ask'), worldWay(w, canExpand(…)))` (la simulation ne connaît pas `War.pve`, inutile ici : `ask` et `taken` remplissent pareil). Le panneau des âges la reconnaît à son libellé (`reqOf` → `choice`).
 - **`Game.openHell`** : `crossroads = true`, puis `portalWoken = true` et `War.wake()` si le portail était fermé (sinon `acceptPve`), `pveStart`, sauvegarde. `War.wake` efface `legacyInv` : une ancienne sauvegarde sans état d'invasion, au Médiéval, l'aurait crue faite (`readLegacyInvasion` : âge ≥ 2) ; `acceptPve` efface `legacyPve` (sans quoi `readLegacyPve` récrirait le choix).
-- **`Game.exploreWorld`** : bloque les autres fenêtres (`revealing`), bandes, mouvement, traversée, puis `buildSave` → `expandWorld` → `exploredAt` → `saveSlot` → rechargement. `Game.voyage` est posé par `boot` (`voyage && world.reveal`).
+- **`Game.exploreWorld`** : bloque les autres fenêtres (`revealing`), `voyageStage.playAct1`, puis, la brume tombée, l'écran d'attente, `buildSave` → `expandWorld` → `exploredAt` → `saveSlot` → rechargement. `Game.voyage` est posé par `boot` (`voyage && world.reveal`) ; `revealIsles` lance `playAct2` (brume si `voyage`), et sa fin rend la main (`revealing` faux, `onIslesRevealed`, sauvegarde). `VoyageStage.update` est appelé à chaque image avec le temps réel (plafonné à 0,1 s).
 - **Bac à sable** : le portail s'éveille seul à l'Antiquité et la carte du portail arrive comme avant (voir [bac-a-sable.md](bac-a-sable.md)) ; pas de grand choix ; l'onglet « Voies » est là dès le départ (« Explorer le monde », et « Affronter les démons » si le portail est refermé).
 
 ## Liens avec les autres systèmes
@@ -47,11 +66,11 @@ Une partie rechargée autrement avec la cinématique en attente (`world.reveal`)
 ## Pièges et invariants
 - **Anciennes sauvegardes** : sans `crossroads`, la partie n'a pas choisi. Une partie encore à l'Antiquité reçoit la condition (remplie d'office si son portail est déjà ouvert). Un portail déjà ouvert (même refermé) ou un archipel accepté marque le choix fait au premier pas (rien ne change). Une partie au Médiéval ou plus, sans l'un ni l'autre (même restée sur son île à l'ancienne carte « Explorer le monde », `explore: 'no'`), voit la carte une fois. `World.explore` n'est plus lu, mais toujours relu et réécrit.
 - Une ancienne partie qui a l'expédition du portail **en route** la garde visible (`Expeditions.list`) jusqu'au retour ; réussie, elle ouvre le portail (`exp.done`) et la carte du portail s'ouvre comme avant.
-- Le survol démarre dès que `#loadScreen` disparaît quand `voyage` est vrai : garder l'id `loadScreen` à l'écran de la traversée (toutes les gardes de fenêtres le lisent).
-- `body.cinematic` cache les bannières : les légendes de la cinématique passent par `Letterbox.caption`, pas par `ui.banner`. À la fin, la classe n'est retirée que si ni le royaume ni un trophée ne la tiennent.
+- L'acte II se tient sur la brume tant que `#loadScreen` existe (`VoyageHost.loading`) : garder l'id `loadScreen` à l'écran d'attente (toutes les gardes de fenêtres le lisent aussi). Son voile de brume (`#voyCine .vc-mist`, sous `#loadScreen`) a la même couleur que l'écran : l'écran s'efface sur lui sans coupure.
+- `body.cinematic` cache les bannières : les bandeaux de la cinématique sont les siens (`.kc-cap`), pas `ui.banner`. À la fin, la classe n'est retirée que si la cinématique du royaume ne la tient pas ; la bannière du premier contact passe après.
 - Le jeu ne guide pas vers l'onglet : ne pas ajouter de message, de bulle ou de ligne de rayon qui y mène (décision de l'auteur).
 
 ## Pour modifier
 - **Changer l'âge du choix** : `CROSSROADS_AGE` (la condition, `crossroadsDue`, `waysTabShown`).
 - **Ajouter une voie** : un état dans `crossroads.ts`, une tuile dans `WorldChoice.grand`, une carte dans `waysHtml`, une branche dans `takeWay` ; tests dans `grandChoix.test.ts`.
-- **Retoucher la cinématique** : durées dans `exploreWorld` et `revealIsles`, décor dans `VOYAGE_PLATE` et les styles « La traversée ».
+- **Retoucher la cinématique** : plans, durées, bandeaux et fondus dans `voyageCine.ts` (tests `cinematiqueVoyage.test.ts`) ; caméra et navires de chaque plan dans `VoyageStage.place` ; l'écran d'attente dans `VOYAGE_PLATE` et les styles de `style.css`.

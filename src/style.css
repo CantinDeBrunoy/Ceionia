@@ -742,43 +742,37 @@ ul.dpoints { margin: 4px 0; padding-left: 18px; }
 .ldTip { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 40px 0 0; min-height: 2.6em; font-size: clamp(13px, 1.05vw, 16px); font-weight: 600; color: #fdf6e8; text-shadow: 0 2px 8px rgba(40, 50, 110, 0.6); }
 .ldTip svg { flex: none; }
 @media (max-width: 600px) { .ldTip { margin-top: 28px; } #loadScreen::before { background: radial-gradient(ellipse 80% 45% at 50% 50%, rgba(40, 52, 96, 0.3) 0%, rgba(40, 52, 96, 0.18) 55%, rgba(40, 52, 96, 0) 100%); } }
-/* ---------- La traversée : la cinématique « Explorer le monde » (`ui/voyage.ts`) ----------
-   les bandes noires du cinéma (#cineBars, ou celles de l'écran en mode traversée) et leur légende ; la mer peinte en CSS,
-   la caravelle qui tangue, la houle et la brume qui passent ; l'avancée du chargement en mince filet doré sous la légende */
-#cineBars { position: absolute; inset: 0; z-index: 44; pointer-events: none; }
-#cineBars .cbTop, #cineBars .cbBot { height: 0; transition: height 0.8s ease; }
-#cineBars.on .cbTop, #cineBars.on .cbBot { height: 11vh; }
-.cbTop, .cbBot { position: absolute; left: 0; right: 0; z-index: 3; height: 11vh; background: #07080b; }
-.cbTop { top: 0; }
-.cbBot { bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; overflow: hidden; }
-.cbBot p { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; opacity: 0; transform: translateY(6px); transition: opacity 0.7s ease, transform 0.7s ease; }
-.cbBot p.in { opacity: 1; transform: none; }
-.cbBot b { font-family: 'Fraunces', Georgia, serif; font-size: clamp(17px, 2.2vh, 26px); font-weight: 600; font-style: italic; color: #f6ead2; letter-spacing: 0.01em; }
-.cbBot small { font-family: 'Fraunces', Georgia, serif; font-size: clamp(12px, 1.5vh, 16px); color: #c9b58f; }
-#loadScreen.voyage { padding: 0; background: #8fc0d6; }
+/* ---------- La cinématique « Explorer le monde » (`voyageStage.ts`, `ui/voyage.ts`) ----------
+   même habillage que la cinématique de fin (#kingCine) : bandes noires, bandeau doré, « Passer » ; en plus, le voile de brume
+   (la même couleur que l'écran d'attente, pour passer de l'un à l'autre sans coupure) et un clic n'importe où pour passer */
+#voyCine { position: absolute; inset: 0; z-index: 35; pointer-events: auto; cursor: pointer; }
+#voyCine .kc-veil, #loadScreen.voyage .vyPlate { position: absolute; inset: 0; opacity: 0; }
+#voyCine .vc-mist, #loadScreen.voyage .vyPlate { background: radial-gradient(ellipse 80% 60% at 50% 55%, #f4f6f5 0%, #dfe7e8 55%, #c4d2d6 100%); }
+#voyCine .vc-black { background: #000; }
+#voyCine .kc-bar, #loadScreen.voyage .kc-bar { position: absolute; left: 0; right: 0; height: 7vh; background: #000; z-index: 2; }
+#voyCine .kc-bar.t, #loadScreen.voyage .kc-bar.t { top: 0; }
+#voyCine .kc-bar.b, #loadScreen.voyage .kc-bar.b { bottom: 0; }
+#voyCine .kc-cap, #loadScreen.voyage .kc-cap { position: absolute; left: 0; right: 0; bottom: 14vh; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; color: #fff4d0; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8), 0 0 28px rgba(255, 190, 70, 0.55); opacity: 0; transition: none; }
+#voyCine .kc-cap b, #loadScreen.voyage .kc-cap b { font-size: clamp(22px, 4vw, 40px); font-weight: 800; letter-spacing: 0.04em; }
+#voyCine .kc-cap small, #loadScreen.voyage .kc-cap small { font-size: clamp(14px, 2vw, 20px); font-weight: 700; letter-spacing: 0.03em; color: #f2e6c6; }
+#voyCine .kc-skip { position: absolute; right: 16px; bottom: calc(7vh + 12px); z-index: 3; padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 10, 20, 0.55); color: #f4ecd8; font: inherit; font-weight: 700; cursor: pointer; opacity: 0.8; }
+#voyCine .kc-skip:hover { opacity: 1; background: rgba(40, 30, 20, 0.8); }
+/* l'écran d'attente : la brume pleine, le navire en ombre qui tangue, des nappes qui passent ; l'avancée en filet doré */
+#loadScreen.voyage { padding: 0; background: #dfe7e8; }
 #loadScreen.voyage::before { content: none; }
-#loadScreen.voyage .ldBar { position: absolute; left: 50%; bottom: 10px; width: min(260px, 50vw); height: 2px; transform: translateX(-50%); background: rgba(246, 234, 210, 0.15); box-shadow: none; }
-#loadScreen.voyage .ldBar i { background: #d9a955; }
-/* la mer : ciel d'aube, soleil voilé, houle en bandes qui glissent, la caravelle au milieu */
-.vyPlate { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(180deg, #f3d6a4 0%, #f2c995 22%, #b9d3d8 46%, #8fc0d6 52%); }
-.vySun { position: absolute; left: 50%; top: 30%; width: 34vh; height: 34vh; margin-left: -17vh; border-radius: 50%; background: radial-gradient(circle, rgba(255, 246, 214, 0.95) 0%, rgba(255, 232, 170, 0.5) 35%, rgba(255, 220, 150, 0) 70%); }
-.vySea { position: absolute; left: 0; right: 0; top: 52%; bottom: 0; background: linear-gradient(180deg, #6fa9c2 0%, #3f7f9e 35%, #24577a 100%); }
-.vyWave { position: absolute; left: 0; right: 0; height: 14vh; background: radial-gradient(ellipse 22px 2px at 50% 50%, rgba(240, 250, 255, 0.75), rgba(240, 250, 255, 0) 100%) 0 0 / 120px 16px; animation: vyWave 9s linear infinite; }
-.vyWave.w1 { top: 53%; height: 4vh; opacity: 0.4; background-size: 60px 9px; animation-duration: 18s; }
-.vyWave.w2 { top: 58%; height: 10vh; opacity: 0.5; background-size: 96px 13px; animation-duration: 12s; animation-direction: reverse; }
-.vyWave.w3 { top: 74%; height: 18vh; opacity: 0.6; background-size: 160px 24px; animation-duration: 8s; }
-@keyframes vyWave { to { background-position: 480px 0; } } /* (480 : un multiple de chaque largeur de motif, la boucle ne saute pas) */
-.vyShip { position: absolute; left: 50%; top: 56%; width: min(46vh, 70vw); transform: translate(-50%, -62%); filter: drop-shadow(0 18px 18px rgba(10, 40, 60, 0.35)); animation: vyBob 4.2s ease-in-out infinite, vySail 26s ease-in-out infinite alternate; }
-@keyframes vyBob { 0%, 100% { rotate: -2deg; translate: 0 0; } 50% { rotate: 2deg; translate: 0 -1.2vh; } }
-@keyframes vySail { from { left: 44%; } to { left: 56%; } }
-.vyMist { position: absolute; left: -40%; width: 180%; height: 40vh; background: radial-gradient(ellipse 30% 40% at 30% 50%, rgba(255, 255, 255, 0.55), transparent 70%), radial-gradient(ellipse 25% 35% at 72% 45%, rgba(255, 255, 255, 0.45), transparent 70%); animation: vyMist 30s linear infinite; }
-.vyMist.m1 { top: 26%; }
-.vyMist.m2 { top: 58%; opacity: 0.6; animation-duration: 22s; animation-direction: reverse; }
-@keyframes vyMist { from { transform: translateX(-10%); } to { transform: translateX(10%); } }
-/* le voile de la traversée posé sur la partie avant le rechargement : il monte en fondu */
-#loadScreen.voyage.rise { animation: vyRise 0.9s ease both; }
-@keyframes vyRise { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .vyWave, .vyShip, .vyMist { animation: none; } }
+#loadScreen.voyage .vyPlate { opacity: 1; overflow: hidden; }
+#loadScreen.voyage .kc-cap { opacity: 1; }
+#loadScreen.voyage .ldBar { position: absolute; left: 50%; bottom: calc(7vh + 10px); z-index: 2; width: min(220px, 46vw); height: 2px; transform: translateX(-50%); background: rgba(80, 100, 110, 0.18); box-shadow: none; }
+#loadScreen.voyage .ldBar i { background: #c99a45; }
+.vyShip { position: absolute; left: 50%; top: 50%; width: min(34vh, 60vw); transform: translate(-50%, -62%); opacity: 0.55; filter: blur(1.2px); animation: vyBob 4.2s ease-in-out infinite, vySail 30s ease-in-out infinite alternate; }
+@keyframes vyBob { 0%, 100% { rotate: -2.5deg; translate: 0 0; } 50% { rotate: 2.5deg; translate: 0 -1.4vh; } }
+@keyframes vySail { from { left: 42%; } to { left: 58%; } }
+.vyMist { position: absolute; left: -40%; width: 180%; height: 46vh; background: radial-gradient(ellipse 28% 40% at 30% 50%, rgba(255, 255, 255, 0.75), transparent 70%), radial-gradient(ellipse 24% 34% at 70% 46%, rgba(255, 255, 255, 0.6), transparent 70%); animation: vyMist 26s linear infinite alternate; }
+.vyMist.m0 { top: 8%; opacity: 0.7; animation-duration: 34s; }
+.vyMist.m1 { top: 40%; animation-direction: alternate-reverse; }
+.vyMist.m2 { top: 62%; opacity: 0.8; animation-duration: 20s; }
+@keyframes vyMist { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
+@media (prefers-reduced-motion: reduce) { .vyShip, .vyMist { animation: none; } }
 .hint { font-size: 12px; color: var(--ink2); max-width: 640px; line-height: 1.55; margin: 6px 0; }
 .hint svg.ic { display: inline-block; vertical-align: -3px; margin-right: 4px; }
 

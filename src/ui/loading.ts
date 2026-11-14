@@ -1,5 +1,6 @@
 import { tr } from '../i18n';
 import { VOYAGE_PLATE } from './voyage';
+import { VOY_WAIT } from '../voyageCine';
 
 /** les sommets au-dessus du titre (vectoriels, nets à toute taille) : une ombre décalée, puis le crème */
 const PEAK_SHAPES = [
@@ -48,7 +49,7 @@ const TIP_MS = 4500;
  * une barre et un conseil qui change. Il couvre la vue pendant le chargement des modèles et la préparation du monde
  * (construction, shaders du jour et de la nuit, premières images), puis s'efface en fondu : la partie tourne déjà dessous.
  * En mode traversée (`voyage`, le monde qui s'agrandit), il n'a ni emblème ni conseil : c'est un plan de la cinématique
- * « Explorer le monde » (la mer, la caravelle, les bandes noires, une légende ; l'avancée en mince filet doré)
+ * « Explorer le monde » (la brume et le navire de l'attente, les bandes noires, le bandeau ; l'avancée en mince filet doré)
  */
 export class LoadingScreen {
   readonly el: HTMLElement;
@@ -64,7 +65,7 @@ export class LoadingScreen {
     el.setAttribute('role', 'status');
     if (voyage) {
       el.className = 'voyage';
-      el.innerHTML = `${VOYAGE_PLATE}<i class="cbTop"></i><div class="cbBot"><p class="in"><b>${tr('Vos navigateurs mettent le cap au large…')}</b><small>${tr('Au-delà de l’horizon, d’autres terres')}</small></p><div class="ldBar"><i></i></div></div><p class="ldStep" hidden></p>`;
+      el.innerHTML = `${VOYAGE_PLATE}<div class="kc-bar t"></div><div class="kc-bar b"></div><div class="kc-cap"><b>${tr(VOY_WAIT.text)}</b><small>${tr(VOY_WAIT.sub)}</small></div><div class="ldBar"><i></i></div><p class="ldStep" hidden></p>`;
       this.label = el.querySelector('.ldStep')!;
       this.bar = el.querySelector('.ldBar i')!;
       root.appendChild(el);
