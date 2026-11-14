@@ -210,6 +210,8 @@ class Game implements UIHost {
   warTips!: WarTips;
   /** la carte du choix du portail (affronter les démons ou refermer le portail) */
   portalChoice!: PortalChoice;
+  /** temps passé en jeu depuis la fin du dernier écran de chargement (s) : la carte du portail attend que le joueur soit arrivé */
+  private portalCalm = 0;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
   spaceCast: SpaceCast;
   private feted = new Set<number>();
@@ -995,8 +997,10 @@ class Game implements UIHost {
     const w = this.war, healK = (this.sim.counts.health ?? 0) > 0 ? 1.5 : 1;
     const raid = w.update(gdt, this.sim.age, healK);
     if (raid) audio.sfxRumble(4);
-    // le portail vient de s'ouvrir (ou la partie chargée n'a jamais choisi) : la carte du choix s'ouvre une seule fois, hors fenêtre
-    if (w.active && w.pve === 'ask' && !w.choiceSeen && !this.portalChoice.visible && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading) this.portalChoice.show();
+    // le portail vient de s'ouvrir (ou la partie chargée n'a jamais choisi) : la carte du choix s'ouvre une seule fois, hors fenêtre,
+    // et seulement une fois en jeu : écran de chargement parti depuis 3 s au moins (pas par-dessus la barre de chargement)
+    this.portalCalm = document.getElementById('loadScreen') ? 0 : this.portalCalm + dt;
+    if (w.active && w.pve === 'ask' && !w.choiceSeen && this.portalCalm > 3 && !this.portalChoice.visible && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading) this.portalChoice.show();
     const said = new Set<string>();
     for (const n of w.news.splice(0)) {
       // (plusieurs soldats au même moment : une seule nouvelle)
