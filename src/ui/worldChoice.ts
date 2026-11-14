@@ -62,13 +62,14 @@ export class WorldChoice {
       const off = ways[a] === 'none';
       return `<button data-a="${a}" class="wcWay ${a}"${off ? ' disabled' : ''}><img src="${img}" alt="" draggable="false"><span class="wcT">${hudPic(icon, 26)}<b>${title}</b></span><small>${off ? none : text}</small></button>`;
     };
-    return `<h4>${tr('Le grand choix')}</h4>
+    return `<button class="x wcX" data-a="close" aria-label="${tr('Fermer')}" title="${tr('Fermer : la carte se rouvre depuis la condition de l’âge suivant')}">✕</button>
+      <h4>${tr('Le grand choix')}</h4>
       <p class="pcSub">${tr('L’Antiquité s’achève. Quelle voie pour votre peuple ?')}</p>
       <div class="wcWays">
         ${tile('hell', './ui/portail.webp', 'militaire', tr('Les Enfers'), tr('Le portail s’ouvre sur l’île au large : défendez-la contre les démons, puis passez de l’autre côté.'), tr('Cette carte n’a pas d’île du portail.'))}
         ${tile('world', './expeditions/dio-caravel.webp', 'boussole', tr('Explorer le monde'), tr('La carte s’agrandit : au-delà de l’horizon, deux grandes îles et leurs peuples.'), tr('Ce monde ne peut plus s’agrandir.'))}
       </div>
-      <small class="pcNote">${tr('Rien n’est définitif : l’autre voie restera ouverte.')}</small>
+      <small class="pcNote">${tr('Il faut choisir pour passer au Médiéval. Rien n’est définitif : l’autre voie restera ouverte.')}</small>
       <div class="pcBtns"><button data-a="neither" class="pcNo">${hudPic('village', 34)}<span><b>${tr('Ni l’un ni l’autre')}</b><small>${tr('rester sur mon île et bâtir en paix')}</small></span></button></div>`;
   }
 

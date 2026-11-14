@@ -101,7 +101,7 @@ import { PortalChoice } from './ui/portalChoice';
 import { WorldChoice } from './ui/worldChoice';
 import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
-import { crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
+import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
 import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, endgameOpen, peopleName, settleAtAge, startAllyBattle } from './sim/diplomacy';
 import { nextGoal } from './sim/objective';
@@ -1084,17 +1084,29 @@ class Game implements UIHost {
 
   /**
    * Le grand choix, à chaque image : la cinématique des îles d'un monde qui vient de s'agrandir (tout de suite, même pendant le
-   * tutoriel), puis, au calme, la carte du choix, une fois, passé l'Antiquité (hors bac à sable et tutoriel). Une partie dont
-   * une voie est déjà prise (portail ouvert, archipel accepté) ne la voit pas
+   * tutoriel), puis, au calme, la carte du choix : à l'Antiquité, quand toutes les autres conditions du passage au Médiéval
+   * sont remplies (le choix en est une) ; dans une ancienne partie déjà plus loin, tout de suite. Elle ne s'ouvre d'elle-même
+   * qu'une fois par session : fermée sans choix, elle se rouvre depuis la condition du panneau des âges ou le conseil. Une
+   * partie dont une voie est déjà prise (portail ouvert, archipel accepté) ne la voit pas
    */
   private stepCrossroads() {
     const w = this.world;
     if (w.reveal && this.revealReady()) { w.reveal = false; this.popups.taken(); this.revealIsles(); return; }
     if (w.crossroads) return;
     const { hell, world } = this.ways();
-    if (crossroadsSettled(w, hell, world)) { w.crossroads = true; return; }
-    if (this.portalCalm <= 3 || !this.popups.open || this.tutorial.active) return;
-    if (crossroadsDue(w, this.sim.age, hell, world)) { this.popups.taken(); this.worldChoice.show(); }
+    if (crossroadsSettled(w, hell, world)) { w.crossroads = true; this.ui.update(); return; }
+    if (this.crossroadsAsked || this.portalCalm <= 3 || !this.popups.open || this.tutorial.active) return;
+    const ap = this.sim.ageProgress(), others = !!ap && ap.items.every((i) => i.label === CHOICE_LABEL || i.have >= i.need);
+    if (crossroadsDue(w, this.sim.age, hell, world, others)) { this.crossroadsAsked = true; this.popups.taken(); this.worldChoice.show(); }
+  }
+  /** la carte du grand choix s'est déjà ouverte d'elle-même dans cette session (fermée sans choix, elle ne revient pas seule) */
+  private crossroadsAsked = false;
+
+  /** Rouvre la carte du grand choix (la condition du panneau des âges, le conseil) ; rien si le choix est déjà fait */
+  openCrossroads() {
+    const { hell, world } = this.ways();
+    if (crossroadsSettled(this.world, hell, world)) return;
+    this.worldChoice.show();
   }
 
   /** La cinématique des îles peut partir : juste après la traversée (pas d'attente), sinon au calme comme les autres fenêtres */

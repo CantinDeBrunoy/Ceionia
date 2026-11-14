@@ -2,9 +2,14 @@ import { archipelagoOn } from '../world/expand';
 
 /**
  * Le grand choix de la fin de l'Antiquité : une seule carte, trois réponses (les Enfers, explorer le monde, ni l'un ni
- * l'autre). Rien n'est exclusif : la voie non prise se lance plus tard depuis l'onglet « Voies » des expéditions, que le jeu
- * ne montre pas du doigt. Règles pures, sans interface (voir `main.ts › stepCrossroads`, `ui/worldChoice.ts`)
+ * l'autre). C'est une condition du passage au Médiéval (`CHOICE_LABEL` dans `Sim.ageProgress`) : la carte s'ouvre quand
+ * toutes les autres sont remplies, et « Ni l'un ni l'autre » compte comme un choix. Rien n'est exclusif : la voie non prise
+ * se lance plus tard depuis l'onglet « Voies » des expéditions, que le jeu ne montre pas du doigt. Règles pures, sans
+ * interface (voir `main.ts › stepCrossroads`, `ui/worldChoice.ts`)
  */
+
+/** Le libellé de la condition de passage au Médiéval (texte français, traduit à l'affichage) */
+export const CHOICE_LABEL = 'le grand choix';
 
 /** Les deux voies */
 export type Way = 'hell' | 'world';
@@ -39,7 +44,7 @@ export function worldWay(w: Pick<CrossWorld, 'isles'>, canExplore: boolean): Way
   return canExplore ? 'open' : 'none';
 }
 
-/** Âge où le grand choix s'ouvre : le passage au Médiéval */
+/** Âge que le grand choix ouvre : on le fait à l'Antiquité (âge 1), pour passer au Médiéval */
 export const CROSSROADS_AGE = 2;
 
 /**
@@ -54,12 +59,17 @@ export function crossroadsSettled(w: CrossWorld, hell: WayState, world: WayState
 }
 
 /**
- * La carte du grand choix est-elle à montrer ? Une fois, au Médiéval ou après (une partie chargée déjà plus loin la voit
- * aussi), hors bac à sable (on y trouve les voies dans l'onglet des expéditions), si aucune voie n'est déjà prise
+ * La carte du grand choix est-elle à montrer d'elle-même ? À l'Antiquité, quand toutes les autres conditions du passage au
+ * Médiéval sont remplies (`othersDone`) ; plus loin (une ancienne partie passée sans lui), tout de suite. Jamais au bac à
+ * sable (les voies sont dans l'onglet des expéditions), ni si le choix est fait ou une voie déjà prise
  */
-export function crossroadsDue(w: CrossWorld, age: number, hell: WayState, world: WayState): boolean {
-  return !w.sandbox && age >= CROSSROADS_AGE && !crossroadsSettled(w, hell, world);
+export function crossroadsDue(w: CrossWorld, age: number, hell: WayState, world: WayState, othersDone: boolean): boolean {
+  if (w.sandbox || crossroadsSettled(w, hell, world)) return false;
+  return age >= CROSSROADS_AGE || (age === CROSSROADS_AGE - 1 && othersDone);
 }
+
+/** La condition de passage est-elle remplie ? (le choix fait, une voie déjà prise, ou aucune possible sur cette carte) */
+export const crossroadsMet = crossroadsSettled;
 
 /** L'onglet « Voies » des expéditions : au Médiéval et après (au bac à sable, tout de suite), dès qu'une voie existe */
 export function waysTabShown(w: Pick<CrossWorld, 'sandbox'>, age: number, hell: WayState, world: WayState): boolean {

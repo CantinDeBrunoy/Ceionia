@@ -20,12 +20,12 @@ Six âges, de 0 à 5. Le village est à un âge (`Sim.age`) ; il passe au suivan
 | 5 | Futuriste | Arcologies, maglev et fusées | 180 |
 
 ### Conditions pour atteindre l'âge `n` (en Facile et Bac à sable)
-Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`, `ratio` = moyenne de `min(1, have/need)`. Dans l'ordre : habitants, bâtiments (`reqKinds`), minerai, briques, or (archipel accepté seulement), expéditions obligatoires de l'âge **actuel**, bâtiments de fin d'âge (`reqLate`), chemin de fer.
+Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`, `ratio` = moyenne de `min(1, have/need)`. Dans l'ordre : habitants, bâtiments (`reqKinds`), minerai, briques, or (archipel accepté seulement), expéditions obligatoires de l'âge **actuel**, le grand choix (vers le Médiéval), bâtiments de fin d'âge (`reqLate`), chemin de fer.
 
 | Pour atteindre | Bâtiments (`reqKinds`) | Minerai | Briques | Or (archipel) | Expéditions obligatoires (à réussir dans l'âge d'avant) | Fin d'âge |
 |---|---|---|---|---|---|---|
 | Antiquité | house 4, farm 1, well 1, workshop 1 | | | | herd, mammoth | |
-| Médiéval | house 8, temple 1, workshop 2, gather 1 | | | | seeds, kraken | |
+| Médiéval | house 8, temple 1, workshop 2, gather 1 | | | | seeds, kraken ; et le grand choix (voir plus bas) | |
 | Industriel | house 12, temple 1, mill 1, quarry 1, landmark 1, gather 2, health 1 | 12 | | 20 | mine, dragon, caravel | |
 | Moderne | house 18, mill 2, landmark 1, gather 3, farm 2, school 1 | 30 | 40 | 50 | railway, motorcar, oil | `reqLate` : refinery 1, oilwell 2 ; `reqRail` : une première ligne et deux gares reliées |
 | Futuriste | house 24, workshop 3, school 2, lab 1, health 1, gather 4 | 50 | 80 | 100 | summit | |
@@ -35,6 +35,7 @@ Tout est vérifié par `Sim.ageProgress()` : liste `items` avec `have` / `need`,
 - **L'or** (`reqGold`, `world.gold`, voir [economie-ressources.md](economie-ressources.md)) : en réserve lui aussi, réputé rempli en ressources illimitées. Il n'existe que si l'archipel est accepté (`archipelagoOn`), et seulement à partir de l'âge qui suit l'acceptation (`goldNeed`, `firstGoldAge`, `trade.ts`) : l'âge d'acceptation est `world.exploredAt` (`goldSince` ; absent alors que la carte a ses îles : 0). Accepté en entrant au Médiéval (le moment où on le propose) ou avant : l'or compte dès l'Industriel. Accepté plus tard, à l'âge `a` : rien pour le passage suivant, l'or compte à partir de l'âge `a + 2` (accepté à l'Industriel : rien pour le Moderne, 100 pour le Futuriste ; accepté au Moderne : jamais). Qui accepte tard n'est donc pas bloqué. Le libellé de la ligne est `GOLD_LABEL` (`sim.ts`) ; un clic ouvre le comptoir, et le conseil y mène (`messageGold`).
 - La raffinerie est débloquée par l'expédition `oil` ; la fin d'âge (`reqLate`, rail) ne vient qu'après les expéditions dans la liste, c'est l'ordre du conseil.
 - Un bâtiment **amélioré** compte pour son genre d'origine (`lineOf`, `UPGRADES` : une gare devenue gare centrale reste une gare ; une maison devenue manoir reste une maison).
+- **Le grand choix** (Médiéval seulement) : la ligne « le grand choix » (`CHOICE_LABEL`), remplie quand le joueur a répondu à la carte (les Enfers, le monde, ou ni l'un ni l'autre), quand une voie est déjà prise ou qu'aucune n'est possible. La carte s'ouvre quand toutes les autres lignes sont remplies ; un clic sur la ligne ou sur le conseil la rouvre. Voir [grand-choix.md](grand-choix.md).
 - L'île du portail, l'invasion et les Enfers sont **facultatifs** et ne conditionnent plus le passage (commit 66acbf4).
 - La diplomatie de l'archipel non plus (voir [diplomatie.md](diplomatie.md)). Mais vers le **Moderne**, tant que le conflit des deux îles est ouvert, le panneau dit « Les deux îles vont régler leur conflit sans vous. » sous les conditions, et le premier clic sur « Passer à » est retenu une fois (toast) ; au passage, le conflit se règle par un traité (bannière, `settleAtAge` dans `onAgeUp`).
 - Un bâtiment bâti avant d'être demandé compte déjà.

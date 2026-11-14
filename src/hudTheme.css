@@ -801,6 +801,9 @@ body.hell #resPanel { display: none !important; }
 #worldChoice.hellOne .pcDio { top: -96px; width: 360px; }
 #worldChoice.panel.grand { width: min(640px, calc(100vw - 24px)); padding-top: 24px; }
 #worldChoice .wcWays { display: flex; gap: 14px; margin: 92px 0 14px; }
+/* la croix du grand choix (fermée sans choix, la carte se rouvre depuis la condition de l'âge suivant) */
+#worldChoice .wcX { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--hEdge); background: #FFFCF4; color: #5A4030; font-size: 15px; line-height: 1; cursor: pointer; }
+#worldChoice .wcX:hover { background: #FFFFFF; }
 #worldChoice .wcWay { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 66px 14px 14px; border-radius: 18px; cursor: pointer; color: #3A2213;
   border: 2px solid #D29A35; background: linear-gradient(180deg, #FFF1C8, #F6CF78); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 -10px 16px rgba(215, 140, 30, 0.22), 0 0 0 2px rgba(255, 230, 170, 0.6), 0 4px 10px rgba(120, 75, 15, 0.3); transition: transform 0.12s; }
 #worldChoice .wcWay.hell { border-color: #9A5BC4; background: linear-gradient(180deg, #F6E9FF, #DDB8F2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 -10px 16px rgba(120, 50, 170, 0.18), 0 0 0 2px rgba(225, 195, 245, 0.6), 0 4px 10px rgba(70, 30, 100, 0.3); }

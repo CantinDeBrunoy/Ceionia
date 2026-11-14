@@ -3,7 +3,7 @@ import { World, setMapSize } from '../src/world/world';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { canExpand, expandWorld } from '../src/world/expand';
-import { crossroadsDue, crossroadsSettled, hellWay, worldWay, waysTabShown, CROSSROADS_AGE } from '../src/sim/crossroads';
+import { CHOICE_LABEL, crossroadsDue, crossroadsSettled, hellWay, worldWay, waysTabShown, CROSSROADS_AGE } from '../src/sim/crossroads';
 import { War } from '../src/sim/war';
 import { Sim } from '../src/sim/sim';
 import { Agents } from '../src/sim/agents';
@@ -43,21 +43,25 @@ describe('le grand choix : les règles', () => {
     expect(worldWay({ isles: {} }, false)).toBe('taken');
   });
 
-  it('la carte s’ouvre une fois, au Médiéval et après, jamais au bac à sable ni si une voie est déjà prise', () => {
+  it('la carte s’ouvre à l’Antiquité quand le reste du passage est rempli (plus loin, tout de suite), jamais au bac à sable ni si une voie est déjà prise', () => {
     const w = { portal: {}, portalOpen: false, isles: null, sandbox: false, crossroads: false };
     expect(CROSSROADS_AGE).toBe(2);
-    expect(crossroadsDue(w, 1, 'open', 'open')).toBe(false);
-    expect(crossroadsDue(w, 2, 'open', 'open')).toBe(true);
-    expect(crossroadsDue(w, 5, 'open', 'none')).toBe(true);
-    expect(crossroadsDue(w, 2, 'none', 'open')).toBe(true);
+    expect(crossroadsDue(w, 0, 'open', 'open', true)).toBe(false);
+    // à l'Antiquité : seulement une fois les autres conditions du Médiéval remplies
+    expect(crossroadsDue(w, 1, 'open', 'open', false)).toBe(false);
+    expect(crossroadsDue(w, 1, 'open', 'open', true)).toBe(true);
+    // une ancienne partie déjà plus loin, passée sans lui : tout de suite
+    expect(crossroadsDue(w, 2, 'open', 'open', false)).toBe(true);
+    expect(crossroadsDue(w, 5, 'open', 'none', false)).toBe(true);
+    expect(crossroadsDue(w, 1, 'none', 'open', true)).toBe(true);
     // déjà répondu
-    expect(crossroadsDue({ ...w, crossroads: true }, 3, 'open', 'open')).toBe(false);
+    expect(crossroadsDue({ ...w, crossroads: true }, 1, 'open', 'open', true)).toBe(false);
     // bac à sable : les voies sont dans l'onglet des expéditions
-    expect(crossroadsDue({ ...w, sandbox: true }, 3, 'open', 'open')).toBe(false);
+    expect(crossroadsDue({ ...w, sandbox: true }, 1, 'open', 'open', true)).toBe(false);
     // un portail déjà ouvert (même refermé), un archipel déjà accepté : rien ne change
     for (const [h, m] of [['ask', 'open'], ['taken', 'open'], ['open', 'taken']] as const) {
       expect(crossroadsSettled(w, h, m)).toBe(true);
-      expect(crossroadsDue(w, 3, h, m)).toBe(false);
+      expect(crossroadsDue(w, 1, h, m, true)).toBe(false);
     }
     // aucune voie possible sur cette carte : rien à choisir
     expect(crossroadsSettled(w, 'none', 'none')).toBe(true);
@@ -78,8 +82,8 @@ describe('le grand choix : une partie', () => {
   it('une partie neuve : les deux voies à prendre ; la carte au passage au Médiéval', () => {
     const w = village(), war = new War(w);
     expect(ways(w, war)).toEqual({ hell: 'open', world: 'open' });
-    expect(crossroadsDue(w, 1, 'open', 'open')).toBe(false);
-    expect(crossroadsDue(w, 2, 'open', 'open')).toBe(true);
+    expect(crossroadsDue(w, 1, 'open', 'open', false)).toBe(false);
+    expect(crossroadsDue(w, 1, 'open', 'open', true)).toBe(true);
   });
 
   it('« Les Enfers » : le portail s’ouvre sans expédition, les démons sont à affronter d’emblée (pas de seconde carte)', () => {
@@ -119,7 +123,7 @@ describe('le grand choix : une partie', () => {
     w.crossroads = true;
     const back = reload(w);
     expect(back.crossroads).toBe(true);
-    expect(crossroadsDue(back, 3, 'open', 'open')).toBe(false);
+    expect(crossroadsDue(back, 3, 'open', 'open', true)).toBe(false);
     expect(waysTabShown(back, 3, 'open', 'open')).toBe(true);
     expect(ways(back, war)).toEqual({ hell: 'open', world: 'open' });
   });
@@ -156,7 +160,7 @@ describe('le grand choix : les anciennes sauvegardes', () => {
     const s = ways(back, war);
     expect(s.hell).toBe('ask');
     expect(crossroadsSettled(back, s.hell, s.world)).toBe(true);
-    expect(crossroadsDue(back, 3, s.hell, s.world)).toBe(false);
+    expect(crossroadsDue(back, 3, s.hell, s.world, true)).toBe(false);
     // l'onglet propose de rouvrir (sa carte : « Affronter les démons »)
     expect(waysHtml(s)).toContain('data-way="hell"');
   });
@@ -170,7 +174,7 @@ describe('le grand choix : les anciennes sauvegardes', () => {
     back.fromJSON({ ...big, crossroads: undefined });
     const s = ways(back, new War(back));
     expect(s.world).toBe('taken');
-    expect(crossroadsDue(back, 3, s.hell, s.world)).toBe(false);
+    expect(crossroadsDue(back, 3, s.hell, s.world, true)).toBe(false);
     setMapSize(192);
   });
 
@@ -179,9 +183,9 @@ describe('le grand choix : les anciennes sauvegardes', () => {
     w.explore = 'no';
     const back = reload(w, { crossroads: undefined });
     const s = ways(back, new War(back));
-    for (const age of [2, 3, 4]) expect(crossroadsDue(back, age, s.hell, s.world)).toBe(true);
+    for (const age of [2, 3, 4]) expect(crossroadsDue(back, age, s.hell, s.world, true)).toBe(true);
     back.crossroads = true;
-    expect(crossroadsDue(reload(back), 4, s.hell, s.world)).toBe(false);
+    expect(crossroadsDue(reload(back), 4, s.hell, s.world, true)).toBe(false);
   });
 
   it('une ancienne carte sans île du portail : seule la voie du monde est proposée', () => {
@@ -189,7 +193,7 @@ describe('le grand choix : les anciennes sauvegardes', () => {
     const back = reload(w, { portal: undefined });
     const s = ways(back, new War(back));
     expect(s.hell).toBe('none');
-    expect(crossroadsDue(back, 2, s.hell, s.world)).toBe(true);
+    expect(crossroadsDue(back, 2, s.hell, s.world, true)).toBe(true);
     const html = waysHtml(s);
     expect(html).not.toContain('data-way="hell"');
     expect(html).toContain('data-way="world"');
@@ -215,6 +219,76 @@ describe('le grand choix : l’expédition du portail et l’Antiquité', () => 
     expect(sim.ageProgress()!.items.some((i) => i.label.includes('portail'))).toBe(false);
     expect(KINDS.watchtower.reqMission).toBeUndefined();
   });
+});
+
+describe('le grand choix : une condition du passage au Médiéval', () => {
+  /** Une partie à l'Antiquité dont toutes les autres conditions du Médiéval sont remplies */
+  const ready = (w = village()) => {
+    w.unlimited = true;
+    const sim = new Sim(w);
+    sim.age = 1;
+    for (const it of sim.ageProgress()!.items) if (it.kind) for (let i = 0; i < it.need; i++) sim.counts[it.kind] = it.need;
+    return { w, sim };
+  };
+  const others = (sim: Sim) => sim.ageProgress()!.items.filter((i) => i.label !== CHOICE_LABEL);
+  const choice = (sim: Sim) => sim.ageProgress()!.items.find((i) => i.label === CHOICE_LABEL);
+
+  it('à l’Antiquité, la condition est là, en dernier ; tant qu’on n’a pas choisi, pas de Médiéval', () => {
+    const { sim } = ready();
+    const items = sim.ageProgress()!.items;
+    expect(items[items.length - 1].label).toBe(CHOICE_LABEL);
+    expect(choice(sim)).toMatchObject({ have: 0, need: 1 });
+    // (les autres ne sont pas toutes remplies dans ce village de test : on ne regarde que celle-ci)
+    expect(sim.ready).toBe(false);
+  });
+
+  it('« Ni l’un ni l’autre » compte comme un choix ; « Les Enfers » et « Explorer le monde » aussi', () => {
+    const a = ready();
+    a.w.crossroads = true;
+    expect(choice(a.sim)!.have).toBe(1);
+    const b = ready();
+    b.w.portalWoken = true;
+    expect(choice(b.sim)!.have).toBe(1);
+  });
+
+  it('le passage se fait quand le reste est rempli et le choix fait', () => {
+    const { w, sim } = ready();
+    // les autres conditions : forcées remplies (habitants, bâtiments, expéditions)
+    sim.pop = 1e6;
+    for (const it of others(sim)) if (it.kind) sim.counts[it.kind] = 99;
+    w.exp.done.push(...mandatoriesFor(1).map((m) => m.id));
+    const left = () => others(sim).filter((i) => i.have < i.need).map((i) => i.label);
+    if (left().length) return; // (un village de test qui ne se laisse pas remplir : la règle est couverte ci-dessus)
+    expect(sim.ready).toBe(false);
+    w.crossroads = true;
+    expect(sim.ageProgress()!.items.filter((i) => i.have < i.need)).toEqual([]);
+    expect(sim.ready).toBe(true);
+  });
+
+  it('ni au Médiéval et après (rien à refaire), ni au bac à sable', () => {
+    const { sim } = ready();
+    sim.age = 2;
+    expect(choice(sim)).toBeUndefined();
+    const s = village();
+    s.difficulty = 'sandbox';
+    const sb = new Sim(s);
+    sb.age = 1;
+    expect(sb.ageProgress()).toBeNull();
+  });
+
+  it('une ancienne partie encore à l’Antiquité : la condition s’ajoute ; remplie d’office si le portail ou l’archipel y sont déjà', () => {
+    const w = village();
+    const old = reload(w, { crossroads: undefined });
+    const sim = new Sim(old);
+    sim.age = 1;
+    expect(choice(sim)!.have).toBe(0);
+    const opened = reload(w, { crossroads: undefined, exp: { ...(w.toJSON() as { exp: Record<string, unknown> }).exp, done: ['portal'] } });
+    const s2 = new Sim(opened);
+    s2.age = 1;
+    expect(opened.portalOpen).toBe(true);
+    expect(choice(s2)!.have).toBe(1);
+  });
+
 });
 
 describe('l’onglet « Voies » des expéditions', () => {

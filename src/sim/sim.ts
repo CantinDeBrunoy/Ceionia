@@ -1,12 +1,13 @@
 import { tr } from '../i18n';
 import { Coverage, computeCoverage } from './coverage';
-import { World } from '../world/world';
+import { World, N } from '../world/world';
 import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catalog';
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
 import { goldNeed, goldSince } from './trade';
-import { archipelagoOn } from '../world/expand';
+import { archipelagoOn, canExpand } from '../world/expand';
+import { CHOICE_LABEL, CROSSROADS_AGE, crossroadsMet, hellWay, worldWay } from './crossroads';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -76,6 +77,8 @@ export class Sim {
   messageIsle = false;
   /** le conseil mène au comptoir des voisins (un clic dessus ouvre la fiche de l'or) */
   messageGold = false;
+  /** le conseil mène au grand choix de la fin de l'Antiquité (un clic dessus rouvre sa carte) */
+  messageChoice = false;
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
   moisture = 0.7;
@@ -255,6 +258,12 @@ export class Sim {
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
     for (const m of mandatoriesFor(this.age)) items.push({ label: `expédition « ${m.title} »`, mission: m.title, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
     // (l'île du portail, l'invasion et les Enfers sont facultatifs : rien d'eux ne conditionne le passage d'âge)
+    // le grand choix (les Enfers, le monde, ou ni l'un ni l'autre) : obligatoire pour passer au Médiéval ; sa carte s'ouvre
+    // quand le reste est rempli (« Ni l'un ni l'autre » compte), voir `sim/crossroads.ts`
+    if (n === CROSSROADS_AGE) {
+      const met = crossroadsMet(w, hellWay(w, 'ask'), worldWay(w, canExpand({ n: N, gen: w.gen })));
+      items.push({ label: CHOICE_LABEL, have: met ? 1 : 0, need: 1 });
+    }
     // la fin de l'âge : la raffinerie (ouverte par l'expédition « L'or noir ») et ses puits, puis le chemin de fer
     kinds(true);
     if (req.reqRail) {
@@ -289,7 +298,7 @@ export class Sim {
       }
       return about(k, text);
     };
-    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false; this.messageGold = false;
+    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false; this.messageGold = false; this.messageChoice = false;
     // au bac à sable, aucun conseil : on bâtit comme on veut
     if (w.sandbox) return tr('Bac à sable : tout est ouvert et gratuit, bâtissez comme vous voulez.');
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
@@ -324,6 +333,7 @@ export class Sim {
       if (p < AGES[ap.next].reqPop) return full ? room(AGES[ap.next].reqPop) : this.railTip() ?? tr('Le village grandit… ({pop}/{need} habitants pour l’âge suivant)', { pop: Math.floor(p), need: AGES[ap.next].reqPop });
       const miss = ap.items.find((i) => i.have < i.need);
       if (!miss) return tr('Tout est prêt pour l’âge suivant ({age}) : passez-y quand vous voulez.', { age: AGES[ap.next].name });
+      if (miss.label === CHOICE_LABEL) { this.messageChoice = true; return tr('Pour l’âge suivant : faites le grand choix, les Enfers, le monde, ou ni l’un ni l’autre (cliquez ici).'); }
       if (miss?.mission) {
         // toutes celles qui restent à réussir (la Préhistoire en demande deux)
         const left = ap.items.filter((i) => i.mission && i.have < i.need).map((i) => tr('« {name} »', { name: tr(i.mission!) }));
