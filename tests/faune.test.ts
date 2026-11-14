@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as THREE from 'three';
 import { World, N, setMapSize, VEG_CAVE, VEG_FOREST, BIOME_DESERT, BIOME_MARSH, BIOME_TAIGA, BIOME_TROPICAL, BIOME_TEMPERATE } from '../src/world/world';
-import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA, COAST_REACH, nearbyAllowed, habitatOk, seaMask } from '../src/render/fauna';
+import { speciesIn, bearDens, ZONES, Fauna, villageCenter, NEARBY, VILLAGE_RING, SEEN_MIN, SEEN_R, VISITORS, wantsVisitors, openSea, OPEN_SEA, COAST_REACH, nearbyAllowed, habitatOk, seaMask, seaRoom } from '../src/render/fauna';
 import { newWorld } from '../src/world/mapgen';
 import { GEN } from '../src/world/continent';
 import { hash2 } from '../src/core/rng';
@@ -192,6 +192,50 @@ describe('faune : la mer', () => {
     expect(worst.d).toBeLessThan(0.1);
     expect(worst.h).toBeLessThan(0.2);
     expect(worst.y).toBeLessThan(0.06);
+    setMapSize(96);
+  });
+
+  it('la baleine nage lentement, en très larges virages, sans zigzag ni à-coup, sur tout un cycle de respiration', () => {
+    setMapSize(192);
+    const w = new World();
+    newWorld(w, 3, 2026, GEN);
+    w.updateVis();
+    const f = new Fauna(w, { perches: Array.from({ length: N * N }, () => []), flowers: Array.from({ length: N * N }, () => []) });
+    f.update(0.016, 0, 12, 1, 0, 0);
+    // (sans son modèle, les tests n'ont pas de baleine : on en pose une, comme le recensement, au plus large de la mer)
+    const room = seaRoom(w, 10);
+    let home = 0;
+    for (let k = 0; k < N * N; k++) if (room[k] > room[home]) home = k;
+    const d = (f as any).critters.find((c: any) => c.kind === 'dolphin');
+    const whale = { ...d, kind: 'whale', key: 'whaleT0', slot: 0, hx: (home % N) + 0.5, hz: Math.floor(home / N) + 0.5, radius: 7, seaT: undefined, glide: 0, rush: 0, actor: null, every: undefined, lag: 0 };
+    (f as any).critters.push(whale);
+    let p = { x: whale.x, z: whale.z, y: whale.y, h: whale.heading, pi: whale.pitch };
+    const worst = { turn: 0, vMin: 9, vMax: 0, vy: 0, pitch: 0 };
+    let yMin = 9, yMax = -9;
+    const dt = 1 / 30;
+    for (let i = 1; i < 1100; i++) {
+      f.update(dt, i * dt, 12, 1, 0, 0);
+      if (i > 60) {
+        let dh = whale.heading - p.h;
+        while (dh > Math.PI) dh -= Math.PI * 2;
+        while (dh < -Math.PI) dh += Math.PI * 2;
+        const v = Math.hypot(whale.x - p.x, whale.z - p.z) / dt;
+        worst.turn = Math.max(worst.turn, Math.abs(dh) / dt);
+        worst.vMin = Math.min(worst.vMin, v); worst.vMax = Math.max(worst.vMax, v);
+        worst.vy = Math.max(worst.vy, Math.abs(whale.y - p.y) / dt);
+        worst.pitch = Math.max(worst.pitch, Math.abs(whale.pitch - p.pi) / dt);
+        yMin = Math.min(yMin, whale.y); yMax = Math.max(yMax, whale.y);
+      }
+      p = { x: whale.x, z: whale.z, y: whale.y, h: whale.heading, pi: whale.pitch };
+    }
+    // un virage large et régulier (une ronde de rayon 7 : 0,04 rad/s), une allure presque constante (0,25 case/s)
+    expect(worst.turn).toBeLessThan(0.1);
+    expect(worst.vMin).toBeGreaterThan(0.18);
+    expect(worst.vMax).toBeLessThan(0.32);
+    // elle remonte respirer puis replonge, en douceur
+    expect(yMax - yMin).toBeGreaterThan(0.4);
+    expect(worst.vy).toBeLessThan(0.6);
+    expect(worst.pitch).toBeLessThan(0.6);
     setMapSize(96);
   });
 

@@ -899,7 +899,7 @@ export class Fauna {
     }
     yield;
     // la place en mer (bêtes marines, jamais dans un lac) et dans toute eau (poissons, aussi dans les lacs)
-    const room = this.room = seaRoom(w, 9), wet = this.wetRoom = seaRoom(w, 9, false);
+    const room = this.room = seaRoom(w, 10), wet = this.wetRoom = seaRoom(w, 9, false);
     for (let k = 0; k < N * N; k++) if (room[k] >= OPEN_SEA) deep.push(k);
     const roomy = (list: number[], r: number) => list.filter((k) => room[k] >= r);
     yield;
@@ -1062,10 +1062,14 @@ export class Fauna {
     group('fish', 'fish', fishSea, Math.min(22, Math.floor(shallows.length / 22)), (i) => 5 + (i % 3), 1.3, 200);
     // les grands animaux décrivent de larges boucles : domaine loin des bords de la carte
     const open = (r: number) => deep.filter((k) => { const x = k % N, z = Math.floor(k / N); return x > r && z > r && x < N - 1 - r && z < N - 1 - r; });
-    const deepD = open(4), deepW = roomy(open(6), 7);
+    // la baleine décrit une très large ronde (rayon 7) là où la mer est assez vaste, sinon une ronde de 5
+    const deepD = open(4), wideW = roomy(open(6), 9), deepW = roomy(open(6), 7);
+    const whaleSea = (l: number[]) => (l.filter((k) => room[k] >= 9).length > 12 ? l.filter((k) => room[k] >= 9) : l);
+    const whaleR = (l: number[]) => (l.length && room[l[0]] >= 9 ? 7 : 5);
     group('dolphins', 'dolphin', deepD, deepD.length > 40 ? Math.min(3, Math.floor(deepD.length / 300) + 1) : 0, () => 3, 3.2, 230);
     // baleine au large, raies sur les hauts-fonds : seulement avec leurs modèles
-    group('whale', 'whale', deepW, deepW.length > 60 && hasModel('whale') ? Math.min(2, Math.floor(deepW.length / 600) + 1) : 0, () => 1, 5, 240);
+    const openW = wideW.length > 60 ? wideW : deepW;
+    group('whale', 'whale', openW, openW.length > 60 && hasModel('whale') ? Math.min(2, Math.floor(openW.length / 600) + 1) : 0, () => 1, whaleR(openW), 240);
     group('mantas', 'manta', mantaSea.length ? mantaSea : deep, mantaSea.length + deep.length > 150 && hasModel('manta') ? 2 : 0, () => 2, 2.2, 250);
     // requins : un aileron qui fend la surface, au large
     group('sharks', 'shark', deepD, deepD.length > 80 ? Math.min(3, Math.floor(deepD.length / 900) + 1) : 0, () => 1, 4, 270);
@@ -1078,9 +1082,9 @@ export class Fauna {
       for (const k of list) m = Math.min(m, d(k));
       return m > reach ? [] : list.filter((k) => d(k) <= m + spread);
     };
-    const coastD = nearest(deepD, 10, COAST_REACH), coastW = nearest(deepW, 14, COAST_REACH), coastF = nearest(fishSea, 12, COAST_REACH), coastM = nearest(mantaSea, 12, COAST_REACH);
+    const coastD = nearest(deepD, 10, COAST_REACH), coastW = whaleSea(nearest(deepW, 14, COAST_REACH)), coastF = nearest(fishSea, 12, COAST_REACH), coastM = nearest(mantaSea, 12, COAST_REACH);
     group('coastD', 'dolphin', coastD, coastD.length > 8 ? 1 : 0, () => 3, 3.2, 280);
-    group('coastW', 'whale', coastW, coastW.length > 12 && hasModel('whale') ? 1 : 0, () => 1, 5, 281);
+    group('coastW', 'whale', coastW, coastW.length > 12 && hasModel('whale') ? 1 : 0, () => 1, whaleR(coastW), 281);
     group('coastS', 'shark', coastD, coastD.length > 8 ? 1 : 0, () => 1, 3.5, 282);
     group('coastM', 'manta', coastM, coastM.length > 8 && hasModel('manta') ? 1 : 0, () => 2, 2.2, 283);
     group('coastF', 'fish', coastF, Math.min(4, Math.floor(coastF.length / 10)), (i) => 6 + (i % 3), 1.3, 284);
@@ -1713,7 +1717,9 @@ export class Fauna {
     const th = c.ang;
     const h = Math.atan2(-Math.sin(th) * om, Math.cos(th) * om * 0.8);
     const lat = (c.slot % 2 ? 1 : -1) * Math.ceil(c.slot / 2) * (dolphin || big ? 0.4 : 0.12) * (1 + g), back = -Math.ceil(c.slot / 2) * (dolphin || big ? 0.35 : 0.1);
-    const wob = Math.sin(this.t * 2.3 + c.slot * 1.7) * (dolphin ? 0.05 : 0.04);
+    // petit balancement des poissons du banc seulement : le cap suit la trajectoire réelle, et chez les grands nageurs ce
+    // balancement faisait zigzaguer le corps (la baleine virait de ±0,4 rad/s en ne tournant que de 0,05)
+    const wob = c.kind === 'fish' ? Math.sin(this.t * 2.3 + c.slot * 1.7) * 0.04 : 0;
     const tx = c.hx + Math.cos(th) * R + (lat + wob) * Math.cos(h) + back * Math.sin(h);
     const tz = c.hz + Math.sin(th) * R * 0.8 - (lat + wob) * Math.sin(h) + back * Math.cos(h);
     // suit en douceur le point de sa ronde ; posée d'un coup seulement à son apparition ou de très loin
@@ -1888,8 +1894,10 @@ export class Fauna {
     else play(a, ['Idle', 'Idle_2']);
     const speedUp = c.run ? 1.3 : 1;
     // un peu loin, l'animation n'avance qu'une image sur deux
-    if (!far) a.mixer.update(dt * speedUp);
-    else if ((this.frame + c.slot) % 2 === 0) a.mixer.update(dt * 2 * speedUp);
+    // la baleine bat lentement de la queue : nage ample, au trois quarts de la cadence du modèle
+    const pace = c.kind === 'whale' ? 0.75 : 1;
+    if (!far) a.mixer.update(dt * speedUp * pace);
+    else if ((this.frame + c.slot) % 2 === 0) a.mixer.update(dt * 2 * speedUp * pace);
   }
 
   /**
@@ -1938,7 +1946,8 @@ export class Fauna {
             d = this.sphere.center.distanceTo(camera.position);
             // les grands nageurs, peu nombreux, gardent plus loin une animation à chaque image (une silhouette figée qui
             // glisse sur l'eau, ou une nage à une image sur deux, se voyaient)
-            const reach = BIG_SWIM.has(c.kind) ? 2.5 : 1;
+            // la baleine (3 au plus) : animée à chaque image et jamais figée en silhouette, jusqu'à ce qu'on la masque
+            const reach = c.kind === 'whale' ? 99 : BIG_SWIM.has(c.kind) ? 2.5 : 1;
             far = d > SLOW_D * this.detail * reach;
             silhouette = d > IMPOSTOR_D * this.detail * reach;
             // vue d'ensemble d'une grande carte : les bêtes ne seraient que des points (les petites, plus tôt)
