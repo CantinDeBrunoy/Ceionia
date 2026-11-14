@@ -105,7 +105,7 @@ export const TUTO_TEXT = {
       text: 'Le bouton {compass} envoie une équipe chercher des ressources et de nouveaux bâtiments.',
       choose: 'Choisissez une mission, puis « Partir ».',
       none: 'Personne n’est libre pour partir : passez à la suite.',
-      tasks: ['Ouvrir les expéditions', 'Lancer une expédition', 'Suivre l’équipe avec {eye}'],
+      tasks: ['Ouvrir les expéditions', 'Lancer une expédition'],
     },
     gear: {
       title: 'L’équipement',
@@ -340,7 +340,7 @@ export class Tutorial {
   private body: HTMLElement;
   private arrow: HTMLElement;
   private ring: HTMLElement;
-  /** clics repérés pendant l'étape : l'œil d'une équipe ('exp'), d'un incident ('inc'), un bouton à `data-a` (son action) */
+  /** clics repérés pendant l'étape : l'œil d'un incident ('inc'), un bouton à `data-a` (son action) */
   private clicks = new Set<string>();
   /** l'outil Route a été pris pendant cette étape */
   private roadTool = false;
@@ -426,7 +426,7 @@ export class Tutorial {
       },
       {
         id: 'expeditions',
-        // le bouton 🧭, puis un choix de mission dans la fenêtre, puis l'œil de la carte de l'équipe
+        // le bouton 🧭, puis un choix de mission dans la fenêtre
         anchor: () => {
           // la fenêtre de départ d'une mission, sinon la liste des missions (le bouton « Envoyer une équipe »)
           const m = q('.sendModal') ?? q('.expModal');
@@ -437,10 +437,9 @@ export class Tutorial {
             if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
             return b ?? m.querySelector('.mtitle');
           }
-          if (!this.ticks[1]) return q('#bExp');
-          return this.ticks[2] ? null : q('#expList .expCard:not(.incident) .cam');
+          return this.ticks[1] ? null : q('#bExp');
         },
-        check: () => [!!q('.expModal'), h.expeditions.active.length > 0, this.clicks.has('exp') || h.following !== null],
+        check: () => [!!q('.expModal'), h.expeditions.active.length > 0],
         note: () => {
           const m = q('.sendModal') ?? q('.expModal');
           if (!m || this.ticks[1]) return '';
@@ -489,10 +488,10 @@ export class Tutorial {
       else if (b.classList.contains('tSkip')) this.skip();
       else if (b.classList.contains('tAct')) { this.cur.act?.()?.run(); this.key = ''; }
     });
-    // l'œil d'une carte d'équipe ou d'incident, un bouton de la barre des troupes (capturés avant que la carte ne soit redessinée)
+    // l'œil d'une carte d'incident, un bouton de la barre des troupes (capturés avant que la carte ne soit redessinée)
     ui.root.addEventListener('click', (e) => {
-      const t = e.target as HTMLElement, cam = t.closest('.expCard .cam');
-      if (cam) this.clicks.add(cam.closest('.incident') ? 'inc' : 'exp');
+      const t = e.target as HTMLElement;
+      if (t.closest('.expCard.incident .cam')) this.clicks.add('inc');
       const a = t.closest<HTMLElement>('[data-a]')?.dataset.a;
       if (a) this.clicks.add(a);
     }, true);
