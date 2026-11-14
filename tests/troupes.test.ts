@@ -311,7 +311,8 @@ describe('la condition d’âge : l’île du portail ne conditionne plus rien (
     const sim = new Sim(w);
     sim.age = 1;
     const labels = sim.ageProgress()!.items.map((i) => i.label);
-    expect(labels).toContain('expédition « Le portail de l’autre rive »');
+    // (l'expédition du portail n'est plus demandée : le grand choix de la fin de l'Antiquité ouvre le portail)
+    expect(labels.some((l) => l.includes('portail'))).toBe(false);
     // (le PvE est une option : ni défenses, ni vagues repoussées, ni visite des Enfers ne conditionnent l'âge)
     const isle = (ap = sim.ageProgress()!) => ap.items.filter((i) => i.label.startsWith('île du portail'));
     expect(isle()).toHaveLength(0);

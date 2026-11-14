@@ -1,6 +1,6 @@
 /**
  * Les aides du volet militaire : de petites bulles facultatives qui n'apparaissent qu'au moment utile (jamais au démarrage) :
- * la mission du portail à l'Antiquité, les défenses de l'île, la garnison et ses ordres, la première visite des Enfers, la
+ * les défenses de l'île du portail, la garnison et ses ordres, la première visite des Enfers, la
  * base avancée, le royaume. Deux lignes au plus ; un clic mène où il faut (et ferme la bulle), la croix la ferme ; chacune ne
  * se montre qu'une fois. Elles se taisent pendant le tutoriel guidé, pendant une fenêtre ou une cinématique, et quand le
  * joueur a masqué les aides (le bouton des conseils, ou « Masquer les aides » dans la bulle)
@@ -9,15 +9,13 @@
 import { tr, localize } from '../i18n';
 import { pic, leadPic } from './pics';
 
-export type WarTipId = 'portal' | 'isle' | 'garrison' | 'orders' | 'hell' | 'ageLock' | 'base' | 'kingdom';
+export type WarTipId = 'isle' | 'garrison' | 'orders' | 'hell' | 'ageLock' | 'base' | 'kingdom';
 
 /** Ce que les aides regardent de la partie */
 export interface WarTipState {
   age: number;
-  /** la mission du portail est réussie (le portail est ouvert) */
+  /** le portail est ouvert */
   portalOpen: boolean;
-  /** une équipe est en route pour l'ouvrir */
-  portalUnderway: boolean;
   /** le joueur a choisi d'affronter les démons (faux : pas encore choisi, ou portail refermé : plus d'aide sur l'île) */
   pve?: boolean;
   towers: number;
@@ -37,7 +35,6 @@ export interface WarTipState {
 }
 
 export const WAR_TIP_TEXT: Record<WarTipId, string> = {
-  portal: '🌀 La faille violette mène aux Enfers ! Réussissez l’expédition « Le portail de l’autre rive ».',
   isle: '🗼 Portail ouvert ! Posez une tour de garde et une caserne sur son île. Cliquez pour y aller.',
   garrison: '⚔️ Vos soldats gardent l’île. Cliquez pour les commander.',
   orders: '🖱️ Clic ou cadre : choisir. Clic droit : aller, attaquer. 🎺 : vague suivante. « ? » : aide.',
@@ -52,11 +49,10 @@ localize(WAR_TIP_TEXT, Object.keys(WAR_TIP_TEXT) as never);
 export const WAR_TIP_MAX = 100;
 
 /** L'ordre où on les vérifie (la première qui convient s'affiche) */
-const ORDER: WarTipId[] = ['kingdom', 'base', 'hell', 'ageLock', 'orders', 'garrison', 'isle', 'portal'];
+const ORDER: WarTipId[] = ['kingdom', 'base', 'hell', 'ageLock', 'orders', 'garrison', 'isle'];
 
 /** Le moment de chaque aide */
 const WHEN: Record<WarTipId, (s: WarTipState) => boolean> = {
-  portal: (s) => s.age >= 1 && !s.portalOpen && !s.portalUnderway,
   isle: (s) => s.pve !== false && s.portalOpen && (s.towers === 0 || s.barracks === 0) && s.commanding === null,
   garrison: (s) => s.pve !== false && s.portalOpen && s.isleTroops > 0 && s.commanding === null,
   orders: (s) => s.commanding === 'isle',

@@ -480,8 +480,7 @@ export const KINDS: Record<KindId, KindDef> = {
     id: 'watchtower', size: 1, minAge: 1, icon: '🏹', cat: 'war',
     names: ['', 'Tour de garde', 'Tour de guet', 'Tour de garde', 'Poste de défense', 'Tour de défense'],
     desc: 'Une tour et ses guetteurs : au village, des soldats patrouillent dans les rues autour d’elle ; sur l’île du portail, elle voit venir les démons de loin.',
-    perk: 'Débloquée par l’expédition « Le portail de l’autre rive ». Au village, elle compte comme un poste de police pour la Sécurité et envoie une patrouille de deux soldats dans les rues voisines. Sur l’île, elle tient tête aux vagues de démons.',
-    reqMission: 'portal',
+    perk: 'Au village, elle compte comme un poste de police pour la Sécurité et envoie une patrouille de deux soldats dans les rues voisines. Sur l’île du portail, elle tient tête aux vagues de démons.',
   },
   barracks: {
     id: 'barracks', size: 2, minAge: 1, icon: '⚔️', cat: 'war',

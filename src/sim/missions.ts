@@ -414,8 +414,9 @@ export const MISSIONS: Mission[] = [
   },
   {
     // l'île du portail (voir `world/portal.ts`) : la galère traverse le bras de mer, l'équipe débarque, explore l'île et
-    // réveille le portail ; obligatoire (elle ouvre l'île), jamais la conquête des Enfers : le PvE est facultatif. Sans île (partie d'avant elle), elle n'est pas disponible (`Expeditions.why`) ni demandée
-    id: 'portal', age: 1, mandatory: true, icon: '🌀', title: 'Le portail de l’autre rive', unlocks: 'watchtower',
+    // réveille le portail. Plus proposée depuis le grand choix de la fin de l'Antiquité (`sim/crossroads.ts`), qui ouvre le
+    // portail sans elle : gardée pour une ancienne partie qui l'a en route (`Expeditions.list`), et pour `exp.done`
+    id: 'portal', age: 1, mandatory: false, icon: '🌀', title: 'Le portail de l’autre rive',
     intro: 'Au large, une petite île rougeoie certaines nuits. Les pêcheurs jurent qu’une arche de pierre noire s’y dresse… Une galère pourrait y mener quelques braves.',
     choices: [
       {

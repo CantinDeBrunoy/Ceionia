@@ -93,7 +93,7 @@ import { War, clockText } from './sim/war';
 import { INVASION_WAVES } from './sim/hell';
 import { KingdomStage } from './kingdomStage';
 import { TrophyStage } from './trophyStage';
-import { WarTips, WarTipState, WAR_TIP_TEXT, type WarTipId } from './ui/warTips';
+import { WarTips, WarTipState, type WarTipId } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
 import { troopPortrait } from './render/troopPortraits';
@@ -101,6 +101,7 @@ import { PortalChoice } from './ui/portalChoice';
 import { WorldChoice } from './ui/worldChoice';
 import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
+import { crossroadsDue, crossroadsSettled, hellWay, worldWay, type Way } from './sim/crossroads';
 import { DiploChoice } from './ui/diploChoice';
 import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, endgameOpen, peopleName, settleAtAge, startAllyBattle } from './sim/diplomacy';
 import { nextGoal } from './sim/objective';
@@ -109,6 +110,7 @@ import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/dif
 import { AdaptiveQuality, GfxParams, MAX_LEVEL, paramsAt } from './render/adaptive';
 import { weakGpu, probeRenderer } from './render/gpu';
 import { LoadingScreen, painted } from './ui/loading';
+import { Letterbox } from './ui/voyage';
 import { WarmUp } from './render/warmup';
 import { CompileJob, compilePaced, representatives, firstUseAll } from './render/precompile';
 
@@ -544,7 +546,12 @@ class Game implements UIHost {
     // (une défense de l'île en main : le clic droit la lâche, il ne donne pas d'ordre aux troupes)
     this.cam.rightClick = (e) => { if (this.islePlace) { this.tools.escape(); this.endIslePlace(); return; } if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
-    this.worldChoice = new WorldChoice(uiRoot, { click: () => audio.sfxClick(), explore: () => void this.exploreWorld(), stay: () => { this.world.explore = 'no'; this.ui.update(); this.saveNow(); } });
+    // le grand choix de la fin de l'Antiquité (les Enfers, explorer le monde, ni l'un ni l'autre), et chaque voie prise plus tard
+    this.worldChoice = new WorldChoice(uiRoot, {
+      click: () => audio.sfxClick(), ways: () => this.ways(),
+      hell: () => this.openHell(), world: () => void this.exploreWorld(),
+      neither: () => { this.world.crossroads = true; this.ui.update(); this.saveNow(); },
+    });
     this.diploChoice = new DiploChoice(uiRoot, {
       diplo: () => this.world.diplo, click: () => audio.sfxClick(),
       ally: (p) => {
@@ -616,11 +623,7 @@ class Game implements UIHost {
       // la garnison gagne en vie et en force avec l'âge
       this.war.ageUp(age);
       this.ui.banner(trx('Nouvel âge : {name}', { name: AGES[age].name }), AGES[age].tagline);
-      // l'Antiquité : la faille violette du rivage mène aux Enfers (dit une fois, en une phrase ; un clic mène à l'expédition)
-      if (age === 1 && !this.world.portalOpen && this.world.portal && !this.world.sandbox) {
-        this.warTips.markSeen('portal');
-        setTimeout(() => this.ui.toast(WAR_TIP_TEXT.portal, () => this.ui.gotoMission('portal')), 6500);
-      }
+      // (le portail et l'archipel attendent le grand choix, au passage au Médiéval : voir `stepCrossroads`)
       // la liste de ce que l'âge apporte, comme dans Cities: Skylines : de quoi bâtir sans chercher
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
       // (au bac à sable, tout est déjà ouvert : pas de liste)
@@ -669,7 +672,7 @@ class Game implements UIHost {
     this.warTips = new WarTips({
       root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
       busy: () => this.tutorial.active || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || this.trophyStage?.playing || document.body.classList.contains('photo') || !this.popups.open,
-      act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
+      act: (id) => { if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
     });
     this.ui.info(save ? trx('Bon retour dans votre village !') : w.buildings.size ? trx('Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.') : trx('Commencez par « {name} », la place au centre du village (Bâtir › Vie & culture).', { name: this.sim.nameOf('gather') }));
     // (la boucle d'images démarre à la fin de `prepare`, derrière l'écran de chargement)
@@ -1073,19 +1076,51 @@ class Game implements UIHost {
   }
   openDiploChoice() { this.diploChoice.showPath(); }
 
-  /** La ligne du rayon Militaire : le PvE à choisir, ou le portail refermé à rouvrir (rien une fois qu'on affronte les démons) */
   /** La partie peut-elle encore s'agrandir à l'archipel ? (continent de 192, version 3) */
   canExplore() { return canExpand({ n: N, gen: this.world.gen }); }
 
+  /** Où en sont les deux voies du grand choix (voir `sim/crossroads.ts`) */
+  ways() { return { hell: hellWay(this.world, this.war.pve), world: worldWay(this.world, this.canExplore()) }; }
+
   /**
-   * « Explorer le monde » : passé l'Antiquité, la carte du choix s'ouvre une fois (hors bac à sable : on l'y trouve dans le
-   * rayon Production) ; le monde agrandi, la cinématique de découverte des îles se joue une fois en jeu
+   * Le grand choix, à chaque image : la cinématique des îles d'un monde qui vient de s'agrandir (tout de suite, même pendant le
+   * tutoriel), puis, au calme, la carte du choix, une fois, passé l'Antiquité (hors bac à sable et tutoriel). Une partie dont
+   * une voie est déjà prise (portail ouvert, archipel accepté) ne la voit pas
    */
-  private stepExplore() {
-    if (this.portalCalm <= 3 || !this.popups.open) return;
-    // (la cinématique suit tout de suite le choix ; la carte, elle, attend la fin du tutoriel)
-    if (this.world.reveal) { this.world.reveal = false; this.popups.taken(); this.revealIsles(); return; }
-    if (!this.tutorial.active && this.world.explore === 'ask' && this.sim.age >= 2 && !this.world.sandbox && this.canExplore()) { this.popups.taken(); this.worldChoice.show(); }
+  private stepCrossroads() {
+    const w = this.world;
+    if (w.reveal && this.revealReady()) { w.reveal = false; this.popups.taken(); this.revealIsles(); return; }
+    if (w.crossroads) return;
+    const { hell, world } = this.ways();
+    if (crossroadsSettled(w, hell, world)) { w.crossroads = true; return; }
+    if (this.portalCalm <= 3 || !this.popups.open || this.tutorial.active) return;
+    if (crossroadsDue(w, this.sim.age, hell, world)) { this.popups.taken(); this.worldChoice.show(); }
+  }
+
+  /** La cinématique des îles peut partir : juste après la traversée (pas d'attente), sinon au calme comme les autres fenêtres */
+  private revealReady() { return this.voyage ? !document.getElementById('loadScreen') && !this.revealing : this.portalCalm > 3 && this.popups.open; }
+
+  /** Prendre une voie depuis l'onglet « Voies » des expéditions : la carte de la voie s'ouvre pour confirmer */
+  takeWay(way: Way) {
+    const st = this.ways()[way];
+    if (st === 'none' || st === 'taken') return;
+    // (le portail déjà ouvert sans qu'on affronte ses démons : sa propre carte, « Affronter » ou le garder fermé)
+    if (way === 'hell' && st === 'ask') { this.portalChoice.show(); return; }
+    this.worldChoice.show(way);
+  }
+
+  /**
+   * « Les Enfers » : le portail s'ouvre sans expédition (`portalWoken`), le joueur affronte les démons d'emblée (pas de
+   * seconde carte) et la vue va sur l'île, où l'on bâtit ses défenses. Un portail déjà ouvert : seulement « Affronter »
+   */
+  private openHell() {
+    const w = this.world;
+    if (!w.portal) return;
+    w.crossroads = true;
+    if (!w.portalOpen) { w.portalWoken = true; this.war.wake(); }
+    else this.war.acceptPve();
+    this.pveStart();
+    this.ui.update(); this.saveNow();
   }
 
   /**
@@ -1099,66 +1134,82 @@ class Game implements UIHost {
       || document.body.classList.contains('photo');
   }
 
-  /** Ligne en tête du rayon Production : « Explorer le monde » pour qui est resté sur son île (et au bac à sable) */
-  exploreLine() {
-    if (!this.canExplore() || (this.world.explore === 'ask' && !this.world.sandbox)) return null;
-    return { text: trx('🧭 D’autres îles, au-delà de l’horizon'), button: trx('Explorer le monde') };
-  }
-  openWorldChoice() { this.worldChoice.show(); }
   /** Fin de la cinématique de découverte des îles (la vue revient au village) : pour enchaîner (expédition de premier contact…) */
   onIslesRevealed?: () => void;
 
   /**
-   * Le monde s'agrandit : la partie est sauvegardée telle qu'elle est, agrandie à l'archipel (`expandWorld`), puis rechargée
-   * derrière l'écran de chargement ; la cinématique des îles se joue à l'arrivée
+   * « Explorer le monde » : la cinématique remplace l'écran de chargement. Les bandes noires descendent, la vue quitte le
+   * village vers le large, puis la traversée (la mer, la caravelle) monte en fondu ; derrière elle, la partie est
+   * sauvegardée, agrandie (`expandWorld`) et rechargée, et la même traversée couvre le chargement (`LoadingScreen` en mode
+   * traversée, `AUTOSTART` « voyage »). Elle s'efface sur la mer de l'archipel, où le survol des îles prend la suite
    */
   async exploreWorld() {
-    if (!this.canExplore()) return;
-    const screen = new LoadingScreen(uiRoot.parentElement!);
-    screen.step('Le monde s’agrandit…', 0.2);
+    if (!this.canExplore() || this.revealing) return;
+    const w = this.world, cam = this.cam, app = uiRoot.parentElement!;
+    w.crossroads = true;
+    this.revealing = true;
+    document.body.classList.add('cinematic');
+    const bars = new Letterbox(app);
+    bars.caption('Vos navigateurs mettent le cap au large…');
+    // la vue file vers le bord de carte le plus proche du village (vers la mer), basse, tournée vers le large
+    const v = cam.view(), edges = [v.x, N - v.x, v.z, N - v.z], e = edges.indexOf(Math.min(...edges));
+    const dx = e === 0 ? -1 : e === 1 ? 1 : 0, dz = e === 2 ? -1 : e === 3 ? 1 : 0, far = Math.min(edges[e] - 4, N * 0.3);
+    const yaw = Math.atan2(-dx, -dz), turn = Math.atan2(Math.sin(yaw - v.yaw), Math.cos(yaw - v.yaw));
+    cam.aim({ x: v.x + dx * far, z: v.z + dz * far, yaw: v.yaw + turn, pitch: 0.32, dist: 46 });
+    await new Promise((r) => setTimeout(r, 2600));
+    const plate = new LoadingScreen(app, true);
+    plate.el.classList.add('rise');
+    await new Promise((r) => setTimeout(r, 900));
+    bars.el.remove();
     await painted();
     const save = this.buildSave();
     this.running = false;
-    save.world = expandWorld(save.world, this.world.mapId, this.world.seed);
+    save.world = expandWorld(save.world, w.mapId, w.seed);
     save.world.exploredAt = this.sim.age;
     if (!saveSlot(save)) { this.ui.toast(trx('Sauvegarde impossible : le monde ne s’est pas agrandi.')); }
-    sessionStorage.setItem(AUTOSTART, `${this.world.mapId}|continue`);
+    sessionStorage.setItem(AUTOSTART, `${w.mapId}|continue|voyage`);
     location.reload();
   }
 
+  /** La partie vient d'une traversée (le monde agrandi) : le survol des îles part dès que la mer s'efface (posé par `boot`) */
+  voyage = false;
+
   /**
-   * Cinématique de découverte : la vue quitte le village, s'élève au-dessus de la mer, passe sur chacune des deux îles
-   * rivales, puis revient au village
+   * Le survol des îles, sous les bandes noires, la légende en bas : la vue s'élève au-dessus de la mer (au sortir de la
+   * traversée, elle y est déjà), passe sur chacune des deux îles rivales, puis revient au village
    */
   private revealIsles() {
     const lay = this.world.isles;
     if (!lay) return;
     const cam = this.cam, back = cam.view(), [a, b] = lay.rivals, f = lay.main;
+    const sea = { x: f.x + f.n * 0.8, z: f.z + f.n / 2, dist: cam.maxDist * 0.55 };
+    // (au sortir de la traversée : la mer est déjà là, la vue ne survole pas le village d'abord)
+    if (this.voyage) cam.jump({ ...sea, pitch: 0.55 });
+    this.voyage = false;
     this.revealing = true;
+    document.body.classList.add('cinematic');
+    const bars = new Letterbox(uiRoot.parentElement!);
+    const tale = (p: string) => (p === 'orient' ? 'Une île de sable et de palmiers, et son peuple' : 'Une île verte aux pitons rocheux, et son peuple');
     const steps: [number, () => void][] = [
-      [0, () => cam.goTo(f.x + f.n * 0.8, f.z + f.n / 2, cam.maxDist * 0.55)],
-      [3200, () => { cam.goTo(a.village.x, a.village.z, 150); this.ui.banner(trx('De nouvelles terres !'), a.people === 'orient' ? trx('Une île de sable et de palmiers, et son peuple') : trx('Une île verte aux pitons rocheux, et son peuple')); }],
-      [8200, () => { cam.goTo(b.village.x, b.village.z, 150); this.ui.banner(trx('Et une autre encore'), b.people === 'orient' ? trx('Une île de sable et de palmiers, et son peuple') : trx('Une île verte aux pitons rocheux, et son peuple')); }],
-      [13200, () => { cam.goTo(back.x, back.z, back.dist); this.revealing = false; this.onIslesRevealed?.(); }],
+      [0, () => { cam.goTo(sea.x, sea.z, sea.dist); bars.caption('Au-delà de l’horizon…'); }],
+      [3200, () => { cam.goTo(a.village.x, a.village.z, 150); bars.caption('De nouvelles terres !', tale(a.people)); }],
+      [8200, () => { cam.goTo(b.village.x, b.village.z, 150); bars.caption('Et une autre encore', tale(b.people)); }],
+      [12400, () => bars.caption('')],
+      [13200, () => {
+        cam.goTo(back.x, back.z, back.dist); bars.close();
+        if (!this.kingStage.playing && !this.trophyStage?.playing) document.body.classList.remove('cinematic');
+        this.revealing = false; this.onIslesRevealed?.();
+      }],
     ];
     for (const [t, f2] of steps) setTimeout(f2, t);
     setTimeout(() => this.saveNow(), 14000);
   }
 
-  pveLine() {
-    const w = this.war;
-    if (!w.active) return null;
-    if (w.pve === 'off') return { text: trx('🔒 Portail fermé'), button: trx('Rouvrir') };
-    if (w.pve === 'ask') return { text: trx('🌀 Les Enfers'), button: trx('Affronter…') };
-    return null;
-  }
-  openPortalChoice() { this.portalChoice.show(); }
-
   /** Ce que regardent les aides du volet militaire */
   private warTipState(): WarTipState {
     const w = this.world, war = this.war, d = w.portal ? isleDefenses(w) : { towers: 0, barracks: 0 };
     return {
-      age: this.sim.age, portalOpen: w.portalOpen, portalUnderway: this.expeditions.active.some((a) => a.m.id === 'portal'),
+      age: this.sim.age, portalOpen: w.portalOpen,
       pve: war.pve === 'on', towers: d.towers, barracks: d.barracks, isleTroops: war.army.troops.filter((t) => t.where === 'isle' && t.heal <= 0).length,
       commanding: this.command.theater?.kind ?? null, frontier: war.faction?.frontier ?? 1, ageLock: !!war.faction && war.faction.gate && war.faction.conquestFrontier > war.faction.frontier, camp: !!war.base?.countOf('camp'), victory: !!war.faction?.victory,
     };
@@ -1180,7 +1231,7 @@ class Game implements UIHost {
     this.portalCalm = document.getElementById('loadScreen') ? 0 : this.portalCalm + dt;
     this.popups.step(dt, this.popupBusy());
     if (w.active && w.pve === 'ask' && !w.choiceSeen && this.portalCalm > 3 && this.popups.open) { this.popups.taken(); this.portalChoice.show(); }
-    this.stepExplore();
+    this.stepCrossroads();
     const said = new Set<string>();
     for (const n of w.news.splice(0)) {
       // (plusieurs soldats au même moment : une seule nouvelle)
@@ -2234,7 +2285,9 @@ async function boot() {
   // modèles 3D chargés avant tout : la végétation et la faune les lisent à la construction
   // (l'écran de chargement à côté de #ui, non dedans : l'interface du jeu réécrit #ui en se construisant)
   const app = uiRoot.parentElement!;
-  let screen: LoadingScreen | null = new LoadingScreen(app);
+  // (le monde qui vient de s'agrandir : la traversée de la cinématique tient lieu d'écran de chargement)
+  const auto = sessionStorage.getItem(AUTOSTART), voyage = auto?.split('|')[2] === 'voyage';
+  let screen: LoadingScreen | null = new LoadingScreen(app, voyage);
   const models = screen;
   await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * 0.2, `${done}/${total}`));
 
@@ -2261,10 +2314,10 @@ async function boot() {
     const game = new Game(map, mode, seed, difficulty, age);
     game.loadStats.build = performance.now() - t0;
     (window as any).__game = game;
+    game.voyage = voyage && game.world.reveal;
     await game.prepare(ld);
     ld.done();
   };
-  const auto = sessionStorage.getItem(AUTOSTART);
   let menu: HTMLElement | null = null;
   if (devN) { void start(CONTINENT, 'new', Number(dev?.get('seed')) || undefined); return; }
   if (auto) {

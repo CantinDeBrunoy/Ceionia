@@ -357,9 +357,10 @@ export class Expeditions {
 
   /**
    * Missions proposées : celles de l'âge et des âges passés ; celles déjà réussies peuvent se refaire. Celles de la diplomatie
-   * de l'archipel seulement quand la partie en est là (`missionOffered`)
+   * de l'archipel seulement quand la partie en est là (`missionOffered`) ; celle du portail, plus proposée depuis le grand
+   * choix, seulement si une ancienne partie l'a en route
    */
-  list(age: number) { return MISSIONS.filter((m) => m.age <= age && missionOffered(this.world, m.id)); }
+  list(age: number) { return MISSIONS.filter((m) => m.age <= age && missionOffered(this.world, m.id) && (m.id !== 'portal' || this.running(m))); }
 
   /** Ce qui manque avant de pouvoir tenter la mission : missions à réussir, bâtiments à bâtir (vide : rien) */
   missing(m: Mission): string[] {

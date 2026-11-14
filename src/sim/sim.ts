@@ -253,8 +253,7 @@ export class Sim {
     const gold = goldNeed(n, archipelagoOn(w), goldSince(w));
     if (gold) items.push({ label: GOLD_LABEL, have: w.unlimited ? gold : Math.floor(w.gold), need: gold });
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
-    // (le portail : seulement sur une carte qui a son île)
-    for (const m of mandatoriesFor(this.age)) if (m.id !== 'portal' || w.portal) items.push({ label: `expédition « ${m.title} »`, mission: m.title, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
+    for (const m of mandatoriesFor(this.age)) items.push({ label: `expédition « ${m.title} »`, mission: m.title, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
     // (l'île du portail, l'invasion et les Enfers sont facultatifs : rien d'eux ne conditionne le passage d'âge)
     // la fin de l'âge : la raffinerie (ouverte par l'expédition « L'or noir ») et ses puits, puis le chemin de fer
     kinds(true);

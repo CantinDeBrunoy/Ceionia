@@ -90,7 +90,7 @@ dans les Enfers. Ils ne se montrent qu'une fois.
   pour vu. `next` au bout, ou « Passer ce chapitre » : `endChapter` (vu, `onChapterEnd`, la suite principale reprend ou la
   bulle se cache). `Chapter.live()` faux l'achève aussi (Enfers quittés, portail refermé) ; `Chapter.away()` vrai le cache
   sans l'achever (le chapitre de l'île hors de la surface).
-- **Déclencheurs** (`main.ts`) : `PortalChoice` « fight » → `acceptPve` → `Game.pveStart` (`tutorial.chapter('pve')`, puis
+- **Déclencheurs** (`main.ts`) : « Les Enfers » du grand choix (`Game.openHell`, voir [grand-choix.md](grand-choix.md)), ou `PortalChoice` « fight » → `acceptPve`, → `Game.pveStart` (`tutorial.chapter('pve')`, puis
   `commandIsle`) ; `Game.enterHell`, une fois la vue posée → `tutorial.chapter('hell')`.
 - **Après un chapitre fini** (`onChapterEnd`) : les aides militaires qui disaient la même chose sont marquées vues
   (`isle` et `orders` pour l'île, `hell` pour les Enfers).

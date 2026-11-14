@@ -60,7 +60,7 @@ export class PortalChoice {
       <h4>${closed ? tr('Portail fermé') : tr('Le portail est ouvert !')}</h4>
       <p class="pcSub">${closed ? tr('Rouvrir le portail pour affronter les démons ?') : tr('Des démons rôdent de l’autre côté.')}</p>
       <div class="pcHow"><p>${tr('Pour les affronter, bâtissez sur l’île du portail (pas au village) :')}</p><div class="pcB">${fig('watchtower')}${fig('barracks')}</div><p>${tr('puis recrutez une garnison.')}</p></div>
-      <small class="pcNote">${tr('Vous pourrez changer d’avis dans l’onglet Militaire.')}</small>
+      <small class="pcNote">${tr('Vous pourrez changer d’avis plus tard.')}</small>
       <div class="pcBtns">${choice('fight', 'pcGo', 'militaire', tr('Affronter les démons'), tr('invasions, Enfers, royaume'))}${closed ? choice('keep', 'pcNo', 'cadenas', tr('Garder le portail fermé'), tr('continuer sans combats')) : choice('close', 'pcNo', 'cadenas', tr('Fermer le portail'), tr('continuer sans combats'))}</div>`;
     if (missing && this.tries++ < 8) setTimeout(() => { if (this.visible) this.render(); }, 700);
     else if (!missing) this.tries = 0;
