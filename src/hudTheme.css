@@ -880,3 +880,47 @@ body.hell #resPanel { display: none !important; }
 #bossBar .btrack { height: 11px; border-radius: 6px; background: #3B2A22; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(217, 169, 85, 0.7); }
 #bossBar .bfill { background: linear-gradient(180deg, #FF8A4A, #C8352A 60%, #8E1E14); }
 #bossBar .bfocus { border-radius: 10px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F6E7C9); }
+
+/* ---------- encore hors thème, passés en parchemin et or (lot 3) ----------
+   l'accent n'est plus bleu mais or (boutons actifs, onglets, sous-onglets, liens, bouton d'amélioration), l'encre est brune ;
+   les fenêtres génériques (`.modal` sans habillage propre : confirmation, choix de la difficulté, décision, nouvel âge, compte
+   rendu, victoire) prennent le parchemin ; la bulle du tutoriel aussi, avec « Suivant » en or */
+:root {
+  --ink: #33251A; --ink2: #6E5843; --navy: #33251A;
+  --accent: #C98A2B; --accent-ink: #8A5A12; --accent-soft: rgba(242, 196, 100, 0.22);
+  --line: rgba(120, 80, 30, 0.14);
+}
+button.active { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+.tabs { border-bottom-color: rgba(200, 160, 95, 0.45); }
+.tabs button { color: var(--hInk2); }
+.tabs button.on { color: var(--hInk); background: rgba(255, 226, 150, 0.35); border-bottom-color: var(--hGold); }
+.subtabs button { background: linear-gradient(180deg, #FFFCF4, #F6E7C9); border: 1.5px solid var(--hEdge); color: var(--hInk2); }
+.subtabs button.on { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+#selCard .acts.ups button.primary { background: var(--hGoldFill); border: 1.5px solid var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+.overlay { background: rgba(45, 30, 12, 0.3); }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) { background: var(--hGlass); border: 2px solid var(--hEdge); border-radius: 20px; color: var(--hInk); box-shadow: var(--hShadow), 0 18px 50px rgba(40, 25, 10, 0.35); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) h3 { font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 48; font-size: 22px; font-weight: 800; color: #3A2213; }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) h4 { color: var(--hInk2); }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) button:not(.x):not(.active):not(.primary):not(.go) { border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F6E7C9); color: var(--hInk); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(120, 80, 25, 0.2); }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) button.primary, .overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) button.go { border: 1.5px solid var(--hGold); background: var(--hGoldFill); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) .x { border: 1.5px solid var(--hEdge); border-radius: 50%; background: radial-gradient(circle at 50% 35%, #FFFCF3, #F8EBCF 85%); color: var(--hInk); }
+/* la bulle du tutoriel */
+#tuto { background: var(--hGlass); color: var(--hInk); border: 2px solid var(--hEdge); box-shadow: var(--hShadow), 0 14px 36px rgba(40, 25, 10, 0.35), 0 0 0 4px rgba(255, 220, 140, 0.35); }
+#tuto.done { border-color: #7DBF5E; box-shadow: var(--hShadow), 0 14px 36px rgba(40, 25, 10, 0.35), 0 0 0 4px rgba(125, 191, 94, 0.3); }
+#tuto .tHead { color: #A8452A; }
+#tuto .tHead b { color: #3D8A33; }
+#tuto h4 { font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 48; font-size: 21px; color: #3A2213; }
+#tuto p, #tuto li { color: var(--hInk); }
+#tuto p.tNote { color: #A8452A; }
+#tuto p.tMore { color: var(--hInk2); }
+#tuto kbd { border-color: rgba(160, 120, 70, 0.55); background: #FFFBF0; color: var(--hInk); }
+#tuto li > i { border-color: rgba(160, 120, 70, 0.5); color: var(--hInk); }
+#tuto li.ok { color: #3D8A33; }
+#tuto .tAct { background: var(--hGoldFill); border: 1.5px solid var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+#tuto .tAct:hover { background: linear-gradient(180deg, #FFF3CC, #F9D886); }
+#tuto .tNext { background: linear-gradient(180deg, #FFFCF4, #F6E7C9); border: 1.5px solid var(--hEdge); color: var(--hInk); }
+#tuto .tNext.active { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+#tuto .tSkip { color: var(--hInk2); }
+#tuto .tSkip:hover { color: var(--hInk); }
+#tuto .tArrow { border-color: var(--hEdge); }
+#tuto.done .tArrow { border-color: #7DBF5E; }
