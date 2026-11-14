@@ -440,6 +440,7 @@ registerDict('catalog', {
   'Les habitants cherchent du travail : {k}.': 'The villagers are looking for work: {k}.',
   'Les habitants aimeraient un lieu de rencontre : {k}, une arène ou un lieu de culte.': 'The villagers would like a meeting place: {k}, an arena or a place of worship.',
   'Les habitants tombent malades : il faut {k}.': 'The villagers are falling ill: you need {k}.',
+  'Bâtissez {k} : le village manque de place pour grandir ({pop}/{need} habitants pour l’âge suivant).': 'Build {k}: the village has no room to grow ({pop}/{need} inhabitants for the next age).',
   'Village plein ({pop}/{cap} places) : {k} de plus, +{per} places, pour qu’il grandisse.': 'Village full ({pop}/{cap} spaces): one more {k}, +{per} spaces, so it can grow.',
   'Les voitures restent au garage, faute de carburant : {k} le tire du pétrole brut des puits.': 'The cars are staying in the garage for lack of fuel: {k} draws it from the wells’ crude oil.',
   'Les voitures restent au garage, faute de carburant : {k}, sur les taches sombres où le brut suinte, alimentera la raffinerie.': 'The cars are staying in the garage for lack of fuel: {k}, on the dark patches where crude seeps out, will feed the refinery.',

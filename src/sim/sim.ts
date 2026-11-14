@@ -310,7 +310,10 @@ export class Sim {
     if (this.recovering > 0 && this.housing.ok) return DIFF_TEXT.recovering;
     // le village plein ne grandit plus : il lui faut des places ; c'est une étape, pas un manque
     const full = !this.housing.ok, per = KINDS.house.housing?.[this.age] ?? 0;
-    const room = () => build('house', tr('Village plein ({pop}/{cap} places) : {k} de plus, +{per} places, pour qu’il grandisse.', { pop: Math.floor(p), cap: this.housing.cap, k: say('house'), per }));
+    const room = (need?: number) => build('house', need
+      // l'âge suivant attend des habitants : on dit que la place manque, et quoi bâtir
+      ? tr('Bâtissez {k} : le village manque de place pour grandir ({pop}/{need} habitants pour l’âge suivant).', { k: say('house'), pop: Math.floor(p), need })
+      : tr('Village plein ({pop}/{cap} places) : {k} de plus, +{per} places, pour qu’il grandisse.', { pop: Math.floor(p), cap: this.housing.cap, k: say('house'), per }));
     // les automobiles à l'arrêt, faute de carburant : on dit d'où il vient
     if (this.counts.carworks && !w.unlimited && w.fuel <= 0) {
       const lack = !this.counts.refinery ? 'refinery' : !this.counts.oilwell ? 'oilwell' : null;
@@ -319,7 +322,7 @@ export class Sim {
     }
     const ap = this.ageProgress();
     if (ap) {
-      if (p < AGES[ap.next].reqPop) return full ? room() : this.railTip() ?? tr('Le village grandit… ({pop}/{need} habitants pour l’âge suivant)', { pop: Math.floor(p), need: AGES[ap.next].reqPop });
+      if (p < AGES[ap.next].reqPop) return full ? room(AGES[ap.next].reqPop) : this.railTip() ?? tr('Le village grandit… ({pop}/{need} habitants pour l’âge suivant)', { pop: Math.floor(p), need: AGES[ap.next].reqPop });
       const miss = ap.items.find((i) => i.have < i.need);
       if (!miss) return tr('Tout est prêt pour l’âge suivant ({age}) : passez-y quand vous voulez.', { age: AGES[ap.next].name });
       if (miss?.mission) {
@@ -442,7 +445,9 @@ export class Sim {
       this.grow += dt * 0.55 * r.growK * (this.recovering > 0 ? r.recoverK : 1);
       while (this.grow >= 1) {
         this.grow -= 1;
-        if (this.pop + 1 <= this.housing.cap) this.pop++;
+        // jusqu'à la dernière place : une population entamée par une disette (6,9 pour 7 places) se complète, sinon elle
+        // restait bloquée sous le plafond, le logement à 100 % et le village censé « grandir »
+        this.pop = Math.min(this.pop + 1, this.housing.cap);
         this.evaluate();
         if (!this.canGrow) break;
       }

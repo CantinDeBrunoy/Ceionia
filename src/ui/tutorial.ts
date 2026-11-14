@@ -2,6 +2,8 @@ import { KINDS, KindId } from '../build/catalog';
 import { ic } from './icons';
 import { tr, localize, colon, getLang } from '../i18n';
 import type { UI, UIHost } from './ui';
+import { GEAR, GearId, dangersOf, gearCurrent } from '../sim/gear';
+import { MISSIONS } from '../sim/missions';
 
 /**
  * Tutoriel guidé : une bulle montre l'élément de l'interface dont il est question (un halo l'entoure) et passe d'elle-même à
@@ -100,17 +102,18 @@ export const TUTO_TEXT = {
       text: 'Cliquez sur le panneau en haut à gauche pour voir ce qu’il faut pour passer à l’âge suivant.',
       tasks: ['Ouvrir les conditions de l’âge suivant'],
     },
+    gear: {
+      title: 'L’équipement',
+      text: 'Avant de partir, fabriquez l’équipement de la mission : l’équipe emporte le meilleur de la réserve.',
+      tasks: ['Ouvrir l’onglet Équipement', 'Fabriquer l’équipement de la mission'],
+    },
     expeditions: {
       title: 'Les expéditions',
       text: 'Le bouton {compass} envoie une équipe chercher des ressources et de nouveaux bâtiments.',
       choose: 'Choisissez une mission, puis « Partir ».',
       none: 'Personne n’est libre pour partir : passez à la suite.',
+      wait: 'L’équipement sort bientôt de fabrication : attendez-le pour partir mieux protégé.',
       tasks: ['Ouvrir les expéditions', 'Lancer une expédition'],
-    },
-    gear: {
-      title: 'L’équipement',
-      text: 'Certaines expéditions demandent du matériel : fabriquez-le dans l’onglet « Équipement ».',
-      tasks: ['Ouvrir l’onglet Équipement', 'Fabriquer une pièce'],
     },
     incidents: {
       title: 'Les incidents',
@@ -252,6 +255,20 @@ export function stepIndex(s: TutoState, ids: readonly string[]): number {
   const id = s.id ?? LEGACY[s.step];
   const i = id ? ids.indexOf(id) : -1;
   return i >= 0 ? i : Math.min(s.step, ids.length - 1);
+}
+
+/**
+ * La pièce que l'étape de l'équipement fait fabriquer : la plus protectrice de l'âge contre le premier danger de « La grande
+ * cueillette » en forêt (la mission que désigne l'étape des expéditions : une lance contre les bêtes) ; null s'il n'y en a pas
+ */
+export function tutoGear(age: number, has: (k: string) => boolean): GearId | null {
+  const c = MISSIONS.find((m) => m.id === 'berries')?.choices[0];
+  if (!c) return null;
+  for (const d of dangersOf(c)) {
+    const g = GEAR.filter((x) => (x.guards === d || x.also === d) && gearCurrent(x, age) && (!x.needs || has(x.needs))).sort((a, b) => b.cut - a.cut)[0];
+    if (g) return g.id;
+  }
+  return null;
 }
 
 function readState(): TutoState | null {
@@ -425,9 +442,32 @@ export class Tutorial {
         check: () => [q('#agePanel')!.classList.contains('open')],
       },
       {
-        id: 'expeditions',
-        // le bouton 🧭, puis un choix de mission dans la fenêtre
+        // le bouton de la boussole, puis l'onglet Équipement de la fenêtre, puis la pièce qui protège l'équipe de « La grande
+        // cueillette » (la mission que désigne l'étape suivante) ; à défaut, n'importe quelle pièce à fabriquer
+        id: 'gear', read: true,
         anchor: () => {
+          const m = q('.expModal');
+          if (!m) return q('#bExp');
+          const tab = m.querySelector('[data-tab="gear"]');
+          if (!tab?.classList.contains('on')) return tab;
+          const g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
+          const mine = g ? m.querySelector(`button[data-craft="${g}"]:not([disabled])`) : null;
+          const b = mine && mine.getClientRects().length ? mine : [...m.querySelectorAll('button[data-craft]:not([disabled])')].find((x) => x.getClientRects().length);
+          if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+          return b ?? m.querySelector('.arsenal');
+        },
+        check: () => {
+          const st = h.expeditions.state, g = tutoGear(h.sim.age, (k) => h.expeditions.has(k));
+          const made = g ? st.craft.includes(g) || st.gear[g] > 0 : st.craft.length > 0 || Object.values(st.gear).some((n) => (n as number) > 0);
+          return [!!q('.expModal [data-tab="gear"].on'), made];
+        },
+      },
+      {
+        id: 'expeditions',
+        // le bouton 🧭, puis un choix de mission dans la fenêtre (restée ouverte sur l'onglet Équipement : l'onglet des missions)
+        anchor: () => {
+          const gt = q('.expModal [data-tab="gear"].on');
+          if (gt && !q('.sendModal') && !this.ticks[1]) return q('.expModal [data-tab="missions"]');
           // la fenêtre de départ d'une mission, sinon la liste des missions (le bouton « Envoyer une équipe »)
           const m = q('.sendModal') ?? q('.expModal');
           if (m && !this.ticks[1]) {
@@ -443,22 +483,9 @@ export class Tutorial {
         note: () => {
           const m = q('.sendModal') ?? q('.expModal');
           if (!m || this.ticks[1]) return '';
+          if (q('.sendModal') && h.expeditions.state.craft.length) return T.expeditions.wait;
           return m.querySelector('button.choice:not([disabled]), button[data-send]:not([disabled])') ? T.expeditions.choose : T.expeditions.none;
         },
-      },
-      {
-        // le bouton de la boussole, puis l'onglet Équipement de la fenêtre, puis une pièce à fabriquer
-        id: 'gear', read: true,
-        anchor: () => {
-          const m = q('.expModal');
-          if (!m) return q('#bExp');
-          const tab = m.querySelector('[data-tab="gear"]');
-          if (!tab?.classList.contains('on')) return tab;
-          const b = [...m.querySelectorAll('button[data-craft]:not([disabled])')].find((x) => x.getClientRects().length);
-          if (b && !this.shown.has(b)) { this.shown.add(b); b.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-          return b ?? m.querySelector('.arsenal');
-        },
-        check: () => { const st = h.expeditions.state; return [!!q('.expModal [data-tab="gear"].on'), st.craft.length > 0 || Object.values(st.gear).some((n) => (n as number) > 0)]; },
       },
       {
         id: 'incidents', anchor: () => q('#expList .expCard.incident .cam'),
@@ -639,6 +666,8 @@ export class Tutorial {
   }
 
   finish() {
+    // le tutoriel fini, le temps ne reste pas arrêté : il repart à vitesse normale
+    if (this.host.time.paused) { this.host.time.paused = false; this.host.time.speed = 1; }
     this.i = 0;
     this.end = 'done';
     this.guiding = false;

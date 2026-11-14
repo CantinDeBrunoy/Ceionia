@@ -32,8 +32,8 @@ La population (`Sim.pop`) grandit d'un habitant à la fois tant que les six beso
 - **Bonus d'expédition** : `needBonus(world.exp, need)` (`missions.ts`) pour `food`, `water`, `jobs`, `joy` seulement : bonus durable + effets passagers (`exp.temp`, qui s'éteignent à `exp.clock`). Pas de bonus de santé ni de logement.
 
 ### Croissance (`Sim.update`)
-- `canGrow` = les six `ok`. Quand c'est vrai : `grow += dt × 0,55 × growK × (recovering > 0 ? recoverK : 1)` ; à chaque unité de `grow`, `pop++` (si `pop + 1 <= cap` de logement). Soit environ 0,55 habitant par seconde de jeu en Facile, 0,41 en Normal (`growK = 0,75`).
-- Le village plein (`housing.ok` faux) arrête la croissance : ce n'est pas un manque, le conseil devient « Village plein ».
+- `canGrow` = les six `ok`. Quand c'est vrai : `grow += dt × 0,55 × growK × (recovering > 0 ? recoverK : 1)` ; à chaque unité de `grow`, `pop = min(pop + 1, cap)` : une population entamée par une disette (6,9 pour 7 places) se complète jusqu'à la dernière place (avec `pop + 1 <= cap`, elle restait bloquée sous le plafond, logement à 100 % et conseil « Le village grandit… »). Soit environ 0,55 habitant par seconde de jeu en Facile, 0,41 en Normal (`growK = 0,75`).
+- Le village plein (`housing.ok` faux) arrête la croissance : ce n'est pas un manque, le conseil devient « Village plein ». Si l'âge suivant attend des habitants : « Bâtissez « Hutte » (…) : le village manque de place pour grandir (6/12 habitants pour l'âge suivant). » ; un clic sur le conseil prend la maison en main (Bâtir › Habitat).
 - **Fondateurs** : un village sans maison à l'âge 0, avec une place du village, reçoit d'emblée `pop = 4`.
 - Si `pop > housing.cap` (maisons démolies), `pop` est ramenée **d'un coup** à `cap`, sans message.
 
@@ -86,7 +86,7 @@ Affichage (`ui.ts` › `renderMessage`) : ton `warn` (un besoin hors logement ma
 
 ## Pièges et invariants
 - Les jauges doivent dire la même chose que `ok` : d'où les parts entières (`down` / `up`, bug « 170 / 170, il manque 0.0 », commit 7728a53). Ne pas remettre de flottants dans `food`, `water`, `jobs`, `health`.
-- `pop` est fractionnaire en Normal après une disette ; l'affichage prend `floor`. `food.demand` utilise `floor(pop)`, `joy.demand` et `housing.demand` utilisent `pop` brute.
+- `pop` est fractionnaire en Normal après une disette (elle redevient entière en atteignant le plafond) ; l'affichage prend `floor`. `food.demand` utilise `floor(pop)`, `joy.demand` et `housing.demand` utilisent `pop` brute.
 - Les âges de bâtiment évoluent **dans le rendu** (`render/buildings.ts` › `update`, un bâtiment toutes les 0,06 s après un passage d'âge) en modifiant `b.age`, sans incrémenter `world.version`. Or `recalc` ne repart que si `version` change : les capacités du nouvel âge peuvent n'apparaître qu'à la prochaine pose ou démolition. **À vérifier** (bug probable).
 - `housing` sans `cap` plafonne `pop` sans prévenir le joueur quand on démolit des maisons.
 - Le conseil contient un bloc mort : `if (!this.counts.house) return …` apparaît deux fois de suite (le second ne s'exécute jamais) et la branche `miss.label.startsWith('île du portail')` ne correspond plus à aucune condition (l'île du portail n'est plus exigée), donc `messageIsle` reste toujours faux. À nettoyer, pas urgent.
