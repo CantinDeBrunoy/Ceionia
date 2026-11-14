@@ -148,6 +148,28 @@ describe('archipel (version 4, carte de 384)', () => {
     expect(w.canRoad(sx - 2, sz)).toBe(true);
   });
 
+  it('de toutes petites îles : rochers, îlots, bancs de sable et atolls, hors du cadre de l’île principale', () => {
+    for (const seed of SEEDS) {
+      const w = archipel(seed), lay = w.isles!, f = lay.main;
+      expect(lay.tiny.length).toBeGreaterThanOrEqual(30);
+      expect(new Set(lay.tiny.map((q) => q.kind)).size).toBeGreaterThanOrEqual(3);
+      let up = 0, solid = 0;
+      for (const q of lay.tiny) {
+        expect(q.x > f.x - 8 && q.z > f.z - 8 && q.x < f.x + f.n + 8 && q.z < f.z + f.n + 8).toBe(false);
+        if (q.kind === 'rock' || q.kind === 'islet') { solid++; if (!w.isWaterCell(Math.floor(q.x), Math.floor(q.z))) up++; }
+      }
+      // (les rochers et les îlots sortent de l'eau)
+      expect(up / solid).toBeGreaterThan(0.7);
+    }
+  });
+
+  it('une seule mer : le large est partout à la profondeur de la mer de décor (aucun carré plus clair ou plus sombre)', () => {
+    const w = archipel(11), S = ARCH_N + 1;
+    let deep = 0, n = 0;
+    for (let z = 0; z <= ARCH_N; z += 4) for (let x = 0; x <= ARCH_N; x += 4) { const h = w.heights[z * S + x]; if (h < -0.95) { n++; if (Math.abs(h + 1) < 0.05) deep++; } }
+    expect(deep / n).toBeGreaterThan(0.97);
+  });
+
   it('avant la version 4, le cadre est toute la carte (rien ne change aux anciennes parties)', () => {
     expect(mainFrame(GEN, 11, 192)).toEqual({ x: 0, z: 0, n: 192 });
   });

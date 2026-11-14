@@ -53,7 +53,8 @@ export function expandWorld(old: any, map: number, seed: number): any {
   for (let z = 0; z <= n0; z++)
     for (let x = 0; x <= n0; x++) {
       const i = (z + f.z) * S + x + f.x, hm = old.heights[z * S0 + x] / 100, deep = neu.heights[i] / 100;
-      const hs = hm > -0.7 ? hm : Math.min(hm, lerp(-0.7, deep, smoothstep(-0.7, -1, hm)));
+      // (la pleine mer seulement : rivières, lacs et hauts-fonds, au-dessus de -1, ne bougent pas)
+      const hs = hm > -0.98 ? hm : lerp(hm, deep, smoothstep(-0.98, -1.1, hm));
       heights[i] = Math.round(lerp(deep, hs, smoothstep(0, 12, Math.min(x, z, n0 - x, n0 - z))) * 100);
     }
   const move = (p: { x: number; z: number } | null | undefined) => (p ? { ...p, x: p.x + f.x, z: p.z + f.z } : p ?? null);

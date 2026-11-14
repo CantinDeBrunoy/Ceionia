@@ -28,11 +28,18 @@ export const RIVAL_LAND = 11900;
 /** Cadre : coin et côté d'un carré de la carte (cases) */
 export interface Frame { x: number; z: number; n: number }
 
+/**
+ * Toute petite île : rocher, îlot (1 à 6 cases), banc de sable allongé (`a` : son axe) ou atoll (anneau de récif et son
+ * lagon). Plus nombreuses près des côtes des îles, quelques-unes au large ; jamais dans le cadre de l'île principale
+ */
+export interface TinyIsle extends Isle { kind: 'rock' | 'islet' | 'sandbar' | 'atoll'; a: number }
+
 export interface ArchLayout {
   /** cadre de l'île principale */
   main: Frame;
   rivals: RivalIsle[];
   small: Isle[];
+  tiny: TinyIsle[];
 }
 
 /**
@@ -82,6 +89,7 @@ function drawLayout(seed: number, n: number): ArchLayout {
     main: { x: Math.min(ax, bx), z: Math.min(az, bz), n: m },
     rivals: rivals.map((q) => ({ ...isle(q), village: isle(q.village), lobes: q.lobes.map(isle) })),
     small: small.map(isle),
+    tiny: [],
   };
   // surface des îles rivales : les lobes grandissent ou rétrécissent (autour du centre) jusqu'à environ RIVAL_LAND cases
   const { s, s2 } = noises(seed);
@@ -96,7 +104,56 @@ function drawLayout(seed: number, n: number): ArchLayout {
       q.lobes = q.lobes.map((l) => ({ x: q.x + (l.x - q.x) * f, z: q.z + (l.z - q.z) * f, r: l.r * f }));
       q.r *= f;
     }
+  out.tiny = drawTiny(seed, n, out, s, s2);
   return out;
+}
+
+/**
+ * Toutes petites îles : des points tirés au hasard, gardés surtout près des côtes (entre 1,15 et 1,8 fois le bord d'une île),
+ * rarement au large, à l'écart les uns des autres, hors du cadre de l'île principale et loin du bord de la carte
+ */
+function drawTiny(seed: number, n: number, lay: ArchLayout, s: Simplex, s2: Simplex): TinyIsle[] {
+  const rnd = mulberry32(seed * 733 + 41), R = (a: number, b: number) => lerp(a, b, rnd()), out: TinyIsle[] = [], f = lay.main, k = n / ARCH_N;
+  const shore = (x: number, z: number) => {
+    let t = Infinity;
+    for (const q of lay.rivals) if (Math.hypot(x - q.x, z - q.z) < q.r * 2.4) t = Math.min(t, lobeT(q.lobes, x, z, s, s2));
+    for (const q of lay.small) t = Math.min(t, Math.hypot(x - q.x, z - q.z) / q.r);
+    return t;
+  };
+  for (let i = 0; i < 2500 && out.length < 70 * k * k; i++) {
+    const x = R(10, n - 10), z = R(10, n - 10);
+    if (x > f.x - 8 && z > f.z - 8 && x < f.x + f.n + 8 && z < f.z + f.n + 8) continue;
+    const t = shore(x, z);
+    if (t < 1.15 || rnd() > (t < 1.8 ? 0.5 : 0.035)) continue;
+    const roll = rnd();
+    const kind: TinyIsle['kind'] = t > 1.8 && roll < 0.22 ? 'atoll' : roll < 0.3 ? 'sandbar' : roll < 0.55 ? 'rock' : 'islet';
+    const r = kind === 'atoll' ? R(4, 7) : kind === 'sandbar' ? R(3, 5) : kind === 'rock' ? R(0.6, 1.1) : R(1, 2.6);
+    if (out.some((q) => Math.hypot(q.x - x, q.z - z) < q.r + r + 4)) continue;
+    out.push({ x, z, r, kind, a: R(0, Math.PI) });
+  }
+  return out;
+}
+
+/** Relief d'une toute petite île au sommet (x, z) : -Infinity loin d'elle */
+export function tinyHeight(q: TinyIsle, x: number, z: number, s: Simplex) {
+  const dx = x - q.x, dz = z - q.z, d = Math.hypot(dx, dz);
+  if (d > q.r * 2 + 3) return -Infinity;
+  const j = 1 + 0.25 * s.noise2(x * 0.5 + q.x, z * 0.5 + q.z);
+  switch (q.kind) {
+    case 'rock': return lerp(1 + q.r * 0.5, -1, smoothstep(q.r * 0.6, q.r * 1.8, d / j));
+    case 'islet': return lerp(0.45 + q.r * 0.3, -1, smoothstep(q.r * 0.5, q.r * 1.6, d / j));
+    case 'sandbar': {
+      // banc de sable : une longue bande basse, à peine sortie de l'eau, selon son axe
+      const c = Math.cos(q.a), sn = Math.sin(q.a), al = (dx * c + dz * sn) / q.r, ac = (dz * c - dx * sn) / 1.1;
+      return lerp(0.2, -1, smoothstep(0.7, 1.6, Math.hypot(al, ac) / j));
+    }
+    default: {
+      // atoll : un anneau de récif à fleur d'eau, un lagon peu profond au milieu, la mer autour
+      const ring = Math.abs(d / j - q.r);
+      if (d / j < q.r) return Math.max(-0.6, lerp(0.25, -0.6, smoothstep(0.4, 1.8, ring)));
+      return lerp(0.25, -1, smoothstep(0.4, 2.2, ring));
+    }
+  }
 }
 
 /** Bruits des îles d'une graine */
@@ -150,6 +207,14 @@ export function addIsles(hts: Float32Array, n: number, seed: number, lay: ArchLa
         if (h > hts[z * S + x]) hts[z * S + x] = h;
       }
   }
+  for (const q of lay.tiny) {
+    const R = Math.ceil(q.r * 2 + 3);
+    for (let z = Math.max(0, Math.floor(q.z - R)); z <= Math.min(n, Math.ceil(q.z + R)); z++)
+      for (let x = Math.max(0, Math.floor(q.x - R)); x <= Math.min(n, Math.ceil(q.x + R)); x++) {
+        const h = tinyHeight(q, x, z, s);
+        if (h > hts[z * S + x]) hts[z * S + x] = h;
+      }
+  }
 }
 
 /**
@@ -170,6 +235,11 @@ export function isleClimate(lay: ArchLayout, wx: number, wz: number, st: Simplex
     const [qt, qm] = q.people === 'orient' ? [0.5, -0.12] : [0.12, 0.38];
     t = lerp(t, qt + st.fbm(x * 0.03, z * 0.03, 3) * 0.25, w);
     m = lerp(m, qm + sm.fbm(x * 0.04 + 50, z * 0.04, 3) * 0.35, w);
+  }
+  for (const q of lay.tiny) {
+    if (q.kind !== 'atoll') continue;
+    const w = smoothstep(q.r + 5, q.r + 2, Math.hypot(x - q.x, z - q.z));
+    if (w > 0) { t = lerp(t, 0.45, w); m = lerp(m, 0.3, w); }
   }
   for (const q of lay.small) {
     const w = smoothstep(1.4, 1.0, Math.hypot(x - q.x, z - q.z) / q.r);

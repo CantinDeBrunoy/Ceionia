@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World, N, SEA, MIN_H, MAX_H, VR, VS, seaMargin, SEA_FLOOR, SEA_DEEP, SEA_SLOPE, marginFloor, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
+import { World, N, SEA, MIN_H, MAX_H, VR, VS, seaMargin, SEA_FLOOR, SEA_SLOPE, marginFloor, marginDeep, VEG_CAVE, VEG_FIELD, VEG_FISSURE, VEG_VOLCANO, BIOME_DESERT, BIOME_MARSH, BIOME_TROPICAL, CAVE_TUNNEL, SNOW_LINE, VolcanoFrame } from '../world/world';
 import { hash2, clamp, smoothstep } from '../core/rng';
 import { computeFlow } from '../world/flow';
 import { Simplex } from '../world/noise';
@@ -442,7 +442,7 @@ ${BLIGHT_GLSL}
   float off = max(max(-vWater.x, vWater.x - ${N.toFixed(1)}), max(-vWater.y, vWater.y - ${N.toFixed(1)}));
   // (l'eau dormante d'un marais du bord s'éteint en quelques cases, comme le courant)
   if (off > 0.0) hg = vec2(mix(hg.r, ${SEA_FLOOR.toFixed(2)}, smoothstep(0.0, ${SEA_SLOPE.toFixed(1)}, off))
-    + ${(SEA_DEEP - SEA_FLOOR).toFixed(2)} * smoothstep(${SEA_SLOPE.toFixed(1)}, ${this.M.toFixed(1)}, off), max(hg.g, 0.0) * (1.0 - smoothstep(0.0, 4.0, off)));
+    + ${(marginDeep() - SEA_FLOOR).toFixed(2)} * smoothstep(${SEA_SLOPE.toFixed(1)}, ${this.M.toFixed(1)}, off), max(hg.g, 0.0) * (1.0 - smoothstep(0.0, 4.0, off)));
   if (hg.g < -0.3) discard;
   float ground = hg.r, calm = clamp(hg.g, 0.0, 1.0);
   float depth = max(0.0, ${SEA.toFixed(1)} - ground);
@@ -998,7 +998,7 @@ ${BLIGHT_GLSL}
       for (let j = 0; j <= C; j++) {
         const vi = start + j * step;
         // le bord de la carte, agrandi depuis son centre jusqu'au bout de la marge
-        const ex = N / 2 + ((vi % VS) / VR - N / 2) * k, ez = N / 2 + (Math.floor(vi / VS) / VR - N / 2) * k, top = SEA_DEEP;
+        const ex = N / 2 + ((vi % VS) / VR - N / 2) * k, ez = N / 2 + (Math.floor(vi / VS) / VR - N / 2) * k, top = marginDeep();
         edge.copy(SEABED);
         for (let r = 0; r < rows; r++) {
           const t = STRATA_T[r];

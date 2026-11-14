@@ -65,16 +65,15 @@ function archHeights(hts: Float32Array, N: number, seed: number, gen: number, s:
   const f = mainFrame(gen, seed, N), deep = new Simplex(seed * 3 + 41), S = N + 1;
   for (let z = 0; z <= N; z++)
     for (let x = 0; x <= N; x++) {
-      // (la profondeur du large du continent de la version 3, vers -1,2 : assez profond pour que le sable du fond ne se voie pas
-      // par plaques à travers l'eau)
-      let h = -1.25 + 0.03 * deep.fbm(x * 0.02, z * 0.02, 2);
-      // vers le bord, le fond remonte doucement au départ de la mer de décor (`SEA_FLOOR`) : pas de marche au bord de la carte
-      h = lerp(SEA_FLOOR, h, smoothstep(0, 24, Math.min(x, z, N - x, N - z)));
+      // une seule mer, à la profondeur de la mer de décor (`SEA_FLOOR`, aussi au bout de la marge : `marginDeep`) : la teinte de
+      // l'eau ne change qu'aux abords des côtes, jamais en carrés
+      let h = SEA_FLOOR + 0.02 * deep.fbm(x * 0.02, z * 0.02, 2);
       const lx = x - f.x, lz = z - f.z;
       if (lx >= 0 && lz >= 0 && lx <= f.n && lz <= f.n) {
         const [px, pz] = toPlan(plan.orient, lx, lz, f.n), hm = plannedHeight(px, pz, f.n, s, s2, plan);
-        // la mer du continent (vers -1) rejoint le fond du large : pas de carré plus clair autour de l'île principale
-        const hs = hm > -0.7 ? hm : Math.min(hm, lerp(-0.7, h, smoothstep(-0.7, -1, hm)));
+        // la pleine mer du continent (-1 et plus bas) rejoint le fond du large : ni plus claire ni plus sombre autour de l'île
+        // principale ; ses hauts-fonds, ses rivières et ses lacs (au-dessus de -1) ne bougent pas
+        const hs = hm > -0.98 ? hm : lerp(hm, h, smoothstep(-0.98, -1.1, hm));
         h = lerp(h, hs, smoothstep(0, 12, Math.min(lx, lz, f.n - lx, f.n - lz)));
       }
       hts[z * S + x] = h;

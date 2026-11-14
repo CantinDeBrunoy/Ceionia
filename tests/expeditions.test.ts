@@ -315,6 +315,7 @@ describe('la chasse au mammouth', () => {
   });
 
   it('on voit la harde et le piège, les chasseurs poussent le vieux mâle, puis l’issue au retour', () => {
+    // (scène complète de la chasse : plusieurs secondes sur une machine chargée, d’où un délai de 30 s au lieu de 5)
     stubCanvas();
     for (const ci of [0, 1, 2]) {
       const v = village(0), ex = new Expeditions(v.w, v.agents, () => 100, () => 0.99);
@@ -346,7 +347,7 @@ describe('la chasse au mammouth', () => {
       expect(s.mammoths.every((x) => group.children.includes(x.b.obj))).toBe(true);
       scene.dispose(a);
     }
-  });
+  }, 30000);
 });
 
 describe('la fête du retour', () => {

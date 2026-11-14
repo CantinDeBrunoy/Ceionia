@@ -6,7 +6,7 @@ import { FRONT, doorSide, doorSpan } from '../build/placement';
 import { START_WOOD, START_STONE } from '../sim/economy';
 import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/difficulty';
 import { GEN, GEN_FIXED, GEN_VAR, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
-import { archLayout, type ArchLayout } from './archipelago';
+import { archLayout, ARCH_N, type ArchLayout } from './archipelago';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Crossing, crossingMap, nearestOnDeck } from './crossings';
@@ -42,18 +42,24 @@ export const SNOW_LINE: [number, number] = [7, 8.2];
 export const VR = 2;
 export let VS = N * VR + 1;
 /**
- * Mer de décor autour de la carte, en cases de chaque côté (32 sur la grande carte) : affichage seul, hors de la grille,
- * rien n'y est jouable ni sauvegardé. Le plateau (eau, fond, falaise, socle) déborde d'autant
+ * Mer de décor autour de la carte, en cases de chaque côté (32 sur la grande carte, et autant sur celle de l'archipel : la
+ * moitié d'un douzième de son côté, la mer y paraissait vide) : affichage seul, hors de la grille, rien n'y est jouable ni
+ * sauvegardé. Le plateau (eau, fond, falaise, socle) déborde d'autant
  */
-export const seaMargin = () => Math.round(N / 12) * 2;
+export const seaMargin = () => (N >= ARCH_N ? 32 : Math.round(N / 12) * 2);
 /**
  * Fond de la mer de décor : il part du relief du bord, rejoint en `SEA_SLOPE` cases le fond de la pleine mer de la carte
  * (`SEA_FLOOR`, celui du générateur), puis s'enfonce doucement jusqu'à `SEA_DEEP` au bout de la marge (une eau un peu plus
  * sombre au large, sans cadre). Le même calcul sert au fond (TerrainView), à l'eau (shader) et aux coraux du large
  */
 export const SEA_FLOOR = -1, SEA_DEEP = -1.3, SEA_SLOPE = 6;
+/**
+ * Fond du bout de la marge : `SEA_DEEP` ; sur la carte de l'archipel, `SEA_FLOOR` (le fond du large de la carte, une seule mer
+ * de la même teinte, sans carré plus sombre ni plus clair au bord)
+ */
+export const marginDeep = () => (N >= ARCH_N ? SEA_FLOOR : SEA_DEEP);
 export const marginFloor = (top: number, d: number, M: number) =>
-  top + (SEA_FLOOR - top) * smoothstep(0, SEA_SLOPE, d) + (SEA_DEEP - SEA_FLOOR) * smoothstep(SEA_SLOPE, M, d);
+  top + (SEA_FLOOR - top) * smoothstep(0, SEA_SLOPE, d) + (marginDeep() - SEA_FLOOR) * smoothstep(SEA_SLOPE, M, d);
 /** Distance d'un point au bord de la carte, en cases (0 dedans) : celle du fond et de l'eau de la marge */
 export const marginOff = (x: number, z: number) => Math.max(0, -x, x - N, -z, z - N);
 
