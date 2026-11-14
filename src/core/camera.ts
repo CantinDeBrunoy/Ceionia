@@ -228,6 +228,12 @@ export class CameraRig {
     this.yaw = this.goal.yaw; this.pitch = this.goal.pitch; this.dist = this.goal.dist;
     this.apply(1);
   }
+  /** Vise une vue (position, angle, distance) : la caméra y glisse d'elle-même, sans saut */
+  aim(v: { x: number; z: number; yaw: number; pitch: number; dist: number }) {
+    Object.assign(this.goal, { x: v.x, z: v.z, yaw: v.yaw, pitch: clamp(v.pitch, this.minPitch, 1.5), dist: clamp(v.dist, this.minDist, this.maxDist) });
+    this.tracking = 0;
+    this.clampGoal();
+  }
   rotate(d: number) { this.goal.yaw += d; }
   /** Incline la vue vers cet angle (on ne la relève jamais plus haut que ce qu'on a déjà : seulement si elle plonge davantage) */
   tiltTo(pitch: number) { if (this.goal.pitch > pitch) this.goal.pitch = clamp(pitch, this.minPitch, 1.5); }

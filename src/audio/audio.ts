@@ -818,6 +818,18 @@ export class AudioEngine {
     this.tone(55, t, 1.4, 'sine', 0.3, this.sfxG, 0, 0.02);
     [0, 4, 7, 11, 14, 19, 24].forEach((iv, i) => this.tone(mtof(67 + iv), t + 0.15 + i * 0.07, 2.4, 'triangle', 0.12, this.sfxG, 4000, 0.01));
   }
+  /** Un trophée monte de terre sur la place : un grondement sourd et bref, puis un petit carillon clair quand il arrive (delay : s) */
+  sfxTrophy(delay = 1.6) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this.noise; src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 110;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.22, t + delay * 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t + delay + 0.4);
+    src.connect(f); f.connect(g); g.connect(this.sfxG);
+    src.start(t); src.stop(t + delay + 0.5);
+    [0, 7, 12, 16, 19].forEach((iv, i) => this.tone(mtof(72 + iv), t + delay + i * 0.08, 1.4, 'triangle', 0.1, this.sfxG, 4000, 0.01));
+  }
   sfxAgeUp() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

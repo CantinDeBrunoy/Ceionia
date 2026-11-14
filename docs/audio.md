@@ -88,7 +88,7 @@ Le son est **synthétisé** par Web Audio, sauf quelques vrais cris d'animaux et
 ## Liens avec les autres systèmes
 - Réglages : `Settings.musicVol`, `sfxVol`, `ambVol`, `music`, `musicChosen`, `sfx`, `sfxChosen` ([sauvegarde.md](sauvegarde.md)), lus par `soundSettings` (`audio.ts`) : `music` et `sfx` ne comptent que si le joueur a lui-même choisi (bouton de la musique ou des sons) ; sinon tout est allumé ; curseurs dans `openSettings` ([interface.md](interface.md)).
 - Proximité de nature : `Streams.nearness`, `World.waterDist`, `Life.fireNear`, `Fires.nearness`, `Fauna.frogsNear`.
-- Effets branchés dans `main.ts` : éruption (`erupt`), tonnerre, fêtes, combats (`onClash`), plouf des poissons et hurlement des loups (volume selon la distance au point visé et le zoom). Vrais cris enregistrés (`SAMPLES` dans `audio.ts`, fichiers dans `public/sons/animaux/`, chargés au démarrage du son, rognés de leurs silences et ramenés à la crête `SAMPLE_PEAK`, joués à une hauteur un peu variée ; un fichier absent laisse le cri de synthèse) :
+- Effets branchés dans `main.ts` : éruption (`erupt`), tonnerre, fêtes, trophée qui rejoint la place (`sfxTrophy`, depuis `trophyStage.ts`), combats (`onClash`), plouf des poissons et hurlement des loups (volume selon la distance au point visé et le zoom). Vrais cris enregistrés (`SAMPLES` dans `audio.ts`, fichiers dans `public/sons/animaux/`, chargés au démarrage du son, rognés de leurs silences et ramenés à la crête `SAMPLE_PEAK`, joués à une hauteur un peu variée ; un fichier absent laisse le cri de synthèse) :
 
 | Fichier | Espèces | Source | Licence |
 |---|---|---|---|

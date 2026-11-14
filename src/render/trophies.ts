@@ -203,7 +203,25 @@ export function trophyParts(p: Parts, id: TrophyId, age: number) { DRAW[id](p, M
 export class Trophies {
   group = new THREE.Group();
   private key = '';
+  /** chaque trophée posé : son maillage, sa hauteur de repos et la sienne (la mise en scène de son arrivée le fait monter de terre) */
+  private placed = new Map<TrophyId, { m: THREE.Mesh; y: number; h: number; wx: number; wz: number }>();
+  /** décalage en hauteur de chaque trophée (négatif : encore sous terre), gardé si la place se refait */
+  private offs = new Map<TrophyId, number>();
   constructor(private world: World) {}
+
+  /** Décale ce trophée en hauteur (0 : à sa place) */
+  lift(id: TrophyId, dy: number) {
+    if (dy) this.offs.set(id, dy); else this.offs.delete(id);
+    const t = this.placed.get(id);
+    if (t) t.m.position.y = t.y + dy;
+  }
+
+  /** Où est ce trophée dans le monde (son pied) et sa hauteur ; null s'il n'est pas posé */
+  where(id: TrophyId): { x: number; y: number; z: number; h: number } | null {
+    const t = this.placed.get(id);
+    if (!t) return null;
+    return { x: t.wx, y: t.y, z: t.wz, h: t.h };
+  }
 
   sync(plaza: Building | null, ids: readonly TrophyId[]) {
     const w = this.world, s = plaza ? sizeOf(plaza) : 0;
@@ -229,7 +247,10 @@ export class Trophies {
       m.castShadow = m.receiveShadow = true;
       // (x, z) dans le repère de la place, tournée comme elle
       const wx = cx + x * Math.cos(ry) + z * Math.sin(ry), wz = cz - x * Math.sin(ry) + z * Math.cos(ry);
-      m.position.set(x, (draped ? w.surfaceAt(wx, wz) : base) + 0.01, z);
+      const y = (draped ? w.surfaceAt(wx, wz) : base) + 0.01;
+      body.computeBoundingBox();
+      this.placed.set(id, { m, y, h: body.boundingBox ? body.boundingBox.max.y : 1, wx, wz });
+      m.position.set(x, y + (this.offs.get(id) ?? 0), z);
       // tous tournés du même côté, vers la vue d'ensemble (la caméra regarde le village depuis ce côté-là) : on voit la dent
       // de face, et non sa tranche
       m.rotation.y = VIEW_YAW - ry;
@@ -239,6 +260,7 @@ export class Trophies {
   }
 
   private clear() {
+    this.placed.clear();
     for (const o of [...this.group.children]) {
       this.group.remove(o);
       o.traverse((x) => { if (x instanceof THREE.Mesh) x.geometry.dispose(); });
