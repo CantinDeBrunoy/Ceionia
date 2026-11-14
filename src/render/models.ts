@@ -1061,7 +1061,6 @@ function houseBack(p: Parts, o: ModelOpts, age: number, x0: number, x1: number, 
   }
 }
 
-/** Huttes de la Préhistoire, trois variantes : hutte ronde de clayonnage au chaume épais, maison longue, tipi de peaux peint */
 // ---------- Vie du campement préhistorique : petits objets posés autour des huttes et des abris ----------
 
 /** Séchoir : deux perches fourchues et leur traverse, lanières de viande ou poissons pendus */
@@ -1170,9 +1169,10 @@ function branchFence(p: Parts, x0: number, z0: number, x1: number, z1: number, s
  * chevauchent, sentier de traces de pas vers la porte (en `door`, ou aucun), ornière d'un traîneau, herbes folles et
  * touffes jaunies, cailloux, éclats de silex, brindilles, os rongés, lambeau de peau, cendres d'un vieux feu et ses
  * tisons. Rien ne pousse dans les cercles `busy` ([x, z, r] : la hutte, l'abri, les objets posés). Pièces très légères
- * (tétraèdres, cônes ouverts, disques), pour tenir sous le plafond de triangles
+ * (tétraèdres, cônes ouverts, disques), pour tenir sous le plafond de triangles ; `tufts` : touffes d'herbe au plus (les
+ * huttes, plus chargées, en sèment moins)
  */
-function campGround(p: Parts, seed: number, busy: number[][] = [], door: [number, number] | null = [0, 0.5], half = 0.47, y = 0) {
+function campGround(p: Parts, seed: number, busy: number[][] = [], door: [number, number] | null = [0, 0.5], half = 0.47, y = 0, tufts = 14) {
   const h = (i: number, k: number) => hash2(i, k, seed);
   const free = (x: number, z: number, m = 0) => Math.abs(x) < half && Math.abs(z) < half && busy.every(([bx, bz, r]) => Math.hypot(x - bx, z - bz) > r + m);
   const spot = (i: number, m = 0): [number, number] | null => {
@@ -1197,7 +1197,7 @@ function campGround(p: Parts, seed: number, busy: number[][] = [], door: [number
   const [tx, tz] = [(h(1, 8) * 2 - 1) * half * 0.5, (h(1, 9) * 2 - 1) * half * 0.5], ta = h(1, 10) * 3;
   for (const s of [-1, 1]) p.add(new THREE.PlaneGeometry(0.008, 0.34).rotateX(-Math.PI / 2), tx + Math.cos(ta) * 0.03 * s, y + 0.004, tz - Math.sin(ta) * 0.03 * s, dark(C.dirt, 0.6), ta);
   // herbes folles : touffes de trois brins penchés, vertes ou jaunies, surtout vers les bords
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < tufts; i++) {
     const at = spot(100 + i, 0.03);
     if (!at) continue;
     const [x, z] = at, c = [0x7f9e4a, 0x9aa852, 0xb8b060, 0x6f8e44][i % 4], tall = 0.05 + h(i, 11) * 0.05;
@@ -1374,96 +1374,282 @@ function caveSeated(p: Parts, x: number, z: number, ry: number, k: number, up = 
   figure(p, x, z, HIDES[k % HIDES.length], ry, true, k % 3 === 2 ? 0x8a4a2a : 0x2a2018, 'idle', up);
 }
 
+// ---------- Huttes : chaume ébouriffé, peaux posées sur les toits, mains peintes ----------
+
+/** Peaux et fourrures qui sèchent sur les toits, quand elles ne servent pas de couvertures */
+const PELTS = [0x8a6a4a, 0xa88660, 0x6e5038, 0xc9a77c];
+
+/**
+ * Cône de chaume ébouriffé, base en `y` : il est coupé en pans de teintes voisines (`cols` : des bottes de paille d'âges
+ * différents, ravaudées), ses points bougent un peu (le même écart pour un même point : pas de fente entre deux pans) et
+ * le bord de l'égout s'effiloche
+ */
+function shaggyCone(p: Parts, r: number, h: number, seg: number, x: number, y: number, z: number, cols: number[], seed: number, jit = 0.025) {
+  const n = cols.length, per = Math.max(2, Math.round(seg / n)), off = hash2(seed, 1, 77) * Math.PI * 2;
+  for (let k = 0; k < n; k++) {
+    const g = new THREE.ConeGeometry(r, h, per, 2, false, off + (k / n) * Math.PI * 2, (Math.PI * 2) / n).translate(0, h / 2, 0);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+      if (py > h - 1e-4 || (Math.abs(px) < 1e-4 && Math.abs(pz) < 1e-4)) continue;
+      const ix = Math.round(px * 1000), iz = Math.round(pz * 1000), iy = Math.round(py * 1000);
+      const f = 1 + ((hash2(ix, iz, seed + iy) - 0.5) * 2 * jit) / r;
+      pos.setXYZ(i, px * f, py + (hash2(iz, ix, seed + 7 + iy) - 0.5) * jit * (py < 1e-4 ? 1.6 : 0.8), pz * f);
+    }
+    p.add(g, x, y, z, cols[k]);
+  }
+}
+
+/** Frange de paille qui pend sous l'égout d'un toit rond : une jupe dentelée de `n` mèches, accrochée en `y` */
+function strawFringe(p: Parts, r: number, y: number, len: number, n: number, x: number, z: number, color: number, seed: number) {
+  const g = new THREE.CylinderGeometry(r * 0.98, r * 1.03, len, n * 2, 1, true).translate(0, -len / 2, 0);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) if (pos.getY(i) < -len / 2) {
+    const j = Math.round((Math.atan2(pos.getX(i), pos.getZ(i)) / (Math.PI * 2)) * n * 2);
+    pos.setY(i, j % 2 ? -len * (0.3 + hash2(j, 3, seed) * 0.25) : -len * (0.85 + hash2(j, 4, seed) * 0.3));
+  }
+  p.add(g, x, y, z, color);
+}
+
+/**
+ * Pose à plat sur la pente d'un toit (ou d'une paroi) une pièce dessinée couchée (face vers +y) : `a` l'azimut
+ * (0 = façade, vers +z), `slope` la pente (0 = à plat, π/2 = paroi verticale), centre en (x, y, z)
+ */
+function onSlope(p: Parts, g: THREE.BufferGeometry, a: number, slope: number, x: number, y: number, z: number, color: number) {
+  p.add(g.rotateX(slope).rotateY(a), x, y, z, color);
+}
+
+/** Main peinte à l'ocre ou au kaolin sur une paroi : la paume et quatre doigts, à plat (face vers +z), tournée de `ry` */
+function handprint(p: Parts, x: number, y: number, z: number, ry: number, color: number, tilt = 0) {
+  const g: THREE.BufferGeometry[] = [new THREE.CircleGeometry(0.011, 5).scale(1, 1.1, 1)];
+  for (let k = 0; k < 4; k++) g.push(new THREE.PlaneGeometry(0.0045, 0.014 - Math.abs(k - 1.5) * 0.002).translate(-0.0075 + k * 0.005, 0.017, 0));
+  g.push(new THREE.PlaneGeometry(0.004, 0.011).rotateZ(0.9).translate(-0.013, 0.004, 0));
+  for (const q of g) p.add(q.rotateX(-tilt).rotateY(ry), x, y, z, color);
+}
+
+/** Bois de cerf cloués au-dessus d'une porte (face vers +z, tournés de `ry`) : le massacre, deux merrains, leurs andouillers */
+function antlers(p: Parts, x: number, y: number, z: number, ry = 0) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  p.add(new THREE.BoxGeometry(0.035, 0.022, 0.02), x, y, z, 0xece2cc, ry);
+  for (const e of [-1, 1]) {
+    const bx = x + e * 0.02 * c, bz = z - e * 0.02 * s;
+    p.add(new THREE.CylinderGeometry(0.0035, 0.005, 0.1, 3).translate(0, 0.05, 0), bx, y + 0.005, bz, 0xc8b08a, ry, false, -e * 0.75);
+    for (const [t, l, k] of [[0.035, 0.035, 0.1], [0.065, 0.03, -0.25]]) {
+      const tx = bx + e * Math.sin(0.75) * t * c, tz = bz - e * Math.sin(0.75) * t * s;
+      p.add(new THREE.CylinderGeometry(0.0025, 0.003, l, 3).translate(0, l / 2, 0), tx, y + 0.005 + Math.cos(0.75) * t, tz, 0xd8c49e, ry, false, -e * k);
+    }
+  }
+}
+
+/**
+ * Toit de chaume à deux pans posé en rangs : sous la paille, un pan plein ; dessus, `rows` rangs de bottes de longueurs
+ * et de teintes inégales qui se chevauchent, le rang de l'égout effiloché ; le faîtage le long de x
+ */
+function thatchRoof(p: Parts, x: number, y: number, z: number, w: number, d: number, h: number, len: number, ov: number, straw: number, wall: number, seed: number, rows = 4) {
+  p.gable(w, h, d, x, y, z, wall);
+  const hd = d / 2, a = Math.atan2(h, hd), t = 0.03, sl = Math.hypot(hd, h) + ov, rl = sl / rows;
+  for (const sg of [1, -1]) {
+    const cy = h / 2 + (Math.cos(a) * t) / 2 - (Math.sin(a) * ov) / 2, cz = sg * (hd / 2 + (Math.sin(a) * t) / 2 + (Math.cos(a) * ov) / 2);
+    p.add(new THREE.BoxGeometry(len, t, sl).rotateX(sg * a).translate(0, cy, cz), x, y, z, dark(straw, 0.8));
+    for (let j = 0; j < rows; j++)
+      for (let u = -len / 2, i = 0; u < len / 2 - 0.01; i++) {
+        const hh = (k: number) => hash2(i, j * 7 + k + (sg > 0 ? 0 : 50), seed);
+        const pw = Math.min(0.08 + hh(1) * 0.08, len / 2 - u), dep = rl * (j === 0 ? 1.1 + hh(2) * 0.35 : 1.1 + hh(2) * 0.3);
+        const zl = sg * (sl / 2 - (j + 0.5) * rl - (j === 0 ? (dep - rl) / 2 : 0));
+        const g = slab(pw - 0.004, 0.02, dep, F_PY | (sg > 0 ? F_PZ : F_NZ)).rotateZ((hh(5) - 0.5) * 0.08).rotateX(sg * (hh(6) - 0.5) * 0.06).translate(u + pw / 2, t / 2 + 0.01 + j * 0.013 + hh(7) * 0.005, zl);
+        p.add(g.rotateX(sg * a).translate(0, cy, cz), x, y, z, dark(straw, 0.8 + hh(3) * 0.3 - (rows - 1 - j) * 0.03));
+        u += pw;
+      }
+    // des mèches qui débordent de l'égout, plus claires ou plus sombres
+    for (let i = 0; i < 7; i++) {
+      const hh = (k: number) => hash2(i, k + (sg > 0 ? 0 : 50), seed + 3), ml = 0.04 + hh(1) * 0.04;
+      const g = new THREE.CylinderGeometry(0, 0.007, ml, 3, 1, true).translate(0, ml / 2, 0).rotateX(sg * (Math.PI / 2 + (hh(2) - 0.5) * 0.5));
+      p.add(g.translate((i / 6 - 0.5) * len * 0.9 + (hh(3) - 0.5) * 0.06, t / 2 + 0.006, sg * (sl / 2 - 0.01)).rotateX(sg * a).translate(0, cy, cz), x, y, z, dark(straw, 0.8 + hh(4) * 0.35));
+    }
+  }
+}
+
+/**
+ * Hutte de la Préhistoire, six variantes (`v` de 0 à 5) : hutte ronde de clayonnage au chaume neuf (0) ou hutte ronde de
+ * torchis au vieux chaume grisé et moussu (3), maison longue au toit de chaume en rangs (1) ou de roseaux lestés de
+ * perches et de pierres (4), tipi de peaux cousues sur son armature de perches (2), hutte d'os de mammouth couverte de
+ * fourrures (5). Autour : foyer, séchoirs, peaux tendues, outils, bois, poteries et le sol piétiné du campement
+ */
 function prehistoricHut(p: Parts, v: number) {
-  const straw = [0xe2c472, 0xd9b964, 0xe8cf86][v % 3], strawDark = dark(straw, 0.78), wattle = 0xc59f72, stake = 0x7a5a3e;
+  const alt = v >= 3, shape = v % 3, wattle = 0xc59f72, stake = 0x7a5a3e, ochre = 0xb5553c, kaolin = 0xeee4d0;
   const ring = (n: number, r: number, y: number) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + 0.3; p.sphere(0.03 + (i % 3) * 0.006, Math.cos(a) * r, y, Math.sin(a) * r, i % 2 ? C.stone : C.darkstone, 0, 0.6); } };
-  if (v % 3 === 0) {
-    // hutte ronde : mur de clayonnage cerclé, pieux qui dépassent, chaume en trois couches, perches croisées au faîte
+  if (shape === 0) {
+    // hutte ronde : mur de clayonnage cerclé et ses pieux, ou de torchis ; chaume en deux couches ébouriffées et leurs
+    // franges, liens de corde, toupet au faîte et perches croisées
+    const straw = alt ? [0xb8a47c, 0xa9966e, 0xc2ae88] : [0xdcbc6c, 0xd0ae60, 0xe4c880], strawDark = dark(straw[0], 0.78);
+    const wallC = alt ? 0xb08660 : wattle;
     ring(12, 0.34, 0.01);
-    p.cyl(0.3, 0.32, 0.26, 10, 0, 0, -0.02, wattle);
-    for (const y of [0.07, 0.17]) p.add(new THREE.CylinderGeometry(0.316 - y * 0.06, 0.318 - y * 0.06, 0.03, 10, 1, true), 0, y, -0.02, dark(wattle, 0.75));
-    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.31; p.cyl(0.011, 0.013, 0.3, 4, Math.cos(a) * 0.318, 0, Math.sin(a) * 0.318 - 0.02, stake); }
-    p.cone(0.47, 0.14, 10, 0, 0.21, -0.02, strawDark);
-    p.cone(0.44, 0.3, 10, 0, 0.25, -0.02, straw);
-    p.cone(0.3, 0.26, 10, 0, 0.42, -0.02, dark(straw, 0.92));
-    p.cone(0.14, 0.16, 8, 0, 0.6, -0.02, strawDark);
+    p.cyl(0.3, 0.32, 0.26, 10, 0, 0, -0.02, wallC);
+    if (!alt) {
+      for (const y of [0.07, 0.17]) p.add(new THREE.CylinderGeometry(0.316 - y * 0.06, 0.318 - y * 0.06, 0.03, 10, 1, true), 0, y, -0.02, dark(wattle, 0.75));
+      for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.31; p.cyl(0.011, 0.013, 0.3, 4, Math.cos(a) * 0.318, 0, Math.sin(a) * 0.318 - 0.02, stake); }
+    } else {
+      // torchis : le pied plus sombre, éclaboussé de boue, une ceinture de perches liées à mi-hauteur
+      p.add(new THREE.CylinderGeometry(0.322, 0.326, 0.05, 10, 1, true), 0, 0.025, -0.02, dark(wallC, 0.8));
+      p.add(new THREE.CylinderGeometry(0.31, 0.312, 0.012, 10, 1, true), 0, 0.15, -0.02, C.darkwood);
+    }
+    // les mains peintes de la famille, de part et d'autre de la porte, et une ligne de points
+    for (const [a, y, c] of [[0.42, 0.13, ochre], [0.55, 0.08, alt ? kaolin : ochre], [-0.45, 0.12, alt ? ochre : kaolin], [-0.6, 0.16, ochre]] as number[][])
+      { const r = 0.323 - (y / 0.26) * 0.02; handprint(p, Math.sin(a) * r, y, Math.cos(a) * r - 0.02, a, c, 0.077); }
+    for (let k = 0; k < 5; k++) { const a = 0.75 + k * 0.12; p.add(new THREE.CircleGeometry(0.006, 4).rotateY(a), Math.sin(a) * 0.308, 0.2, Math.cos(a) * 0.308 - 0.02, ochre); }
+    shaggyCone(p, 0.48, 0.44, 12, 0, 0.2, -0.02, straw, 600 + v, 0.03);
+    strawFringe(p, 0.47, 0.205, 0.05, 12, 0, -0.02, strawDark, 640 + v);
+    shaggyCone(p, 0.31, 0.27, 9, 0, 0.42, -0.02, straw.map((c) => dark(c, 0.92)), 650 + v, 0.022);
+    strawFringe(p, 0.3, 0.425, 0.035, 9, 0, -0.02, dark(strawDark, 0.95), 660 + v);
+    for (const [r, y] of [[0.2, 0.52], [0.12, 0.6]]) p.add(new THREE.CylinderGeometry(r - 0.01, r, 0.014, 9, 1, true), 0, y, -0.02, 0x6a5038);
+    p.cone(0.13, 0.16, 7, 0, 0.6, -0.02, strawDark);
     for (const s of [-1, 1]) p.add(new THREE.CylinderGeometry(0.011, 0.011, 0.26, 4), s * 0.03, 0.78, -0.02, C.darkwood, 0, false, s * 0.38);
     smoke(0, 0.8, -0.02, 1);
-    // porte : linteau, ouverture sombre, peau relevée
-    p.box(0.16, 0.025, 0.05, 0, 0.21, 0.29, C.darkwood);
+    // sur le toit : une fourrure qui sèche, ou (vieux chaume) des plaques de mousse et une peau lestée de deux pierres
+    const lay = (a: number, rr: number, g: THREE.BufferGeometry, c: number) => onSlope(p, g, a, Math.atan2(0.44, 0.48), Math.sin(a) * rr, 0.2 + 0.44 * (1 - rr / 0.48) + 0.012, Math.cos(a) * rr - 0.02, c);
+    lay(-2.3, 0.38, new THREE.CylinderGeometry(0.09, 0.09, 0.008, 6).scale(1.3, 1, 1), PELTS[v % PELTS.length]);
+    if (alt) {
+      for (const [a, rr, s] of [[2.2, 0.36, 0.06], [-1.2, 0.42, 0.045], [1.0, 0.4, 0.04]]) lay(a, rr, new THREE.CylinderGeometry(s, s * 1.1, 0.01, 5).scale(1.4, 1, 1), [0x6f7e44, 0x7d8a4a, 0x8a9452][Math.round(a + 3) % 3]);
+      for (const e of [-1, 1]) p.sphere(0.022, Math.sin(-2.3 + e * 0.35) * 0.43, 0.22, Math.cos(-2.3 + e * 0.35) * 0.43 - 0.02, C.darkstone, 0, 0.8);
+    }
+    // porte : deux montants, linteau, ouverture sombre, peau roulée au-dessus ; crâne d'aurochs ou bois de cerf
+    for (const s of [-1, 1]) p.cyl(0.011, 0.013, 0.23, 4, s * 0.075, 0, 0.3, C.darkwood);
+    p.box(0.18, 0.025, 0.05, 0, 0.21, 0.29, C.darkwood);
     p.box(0.12, 0.2, 0.03, 0, 0, 0.3, 0x3d2c22);
-    p.box(0.07, 0.15, 0.012, 0.075, 0.05, 0.315, C.hide, 0.15);
-    // crâne d'aurochs au-dessus de la porte, herbes qui sèchent, séchoir à viande, foyer, panier de baies
-    skull(p, 0, 0.27, 0.31);
-    for (let k = 0; k < 3; k++) p.box(0.012, 0.05, 0.012, -0.12 + k * 0.03, 0.2, 0.3, [0x7fae5a, 0x9a8a4a, 0x6f9e4e][k]);
+    p.add(new THREE.CylinderGeometry(0.018, 0.018, 0.13, 6).rotateZ(Math.PI / 2), 0, 0.19, 0.32, C.hide);
+    if (alt) antlers(p, 0, 0.24, 0.32); else skull(p, 0, 0.27, 0.31);
+    // herbes qui sèchent, séchoir à viande, foyer, panier de baies (ou pots, chez les anciens)
+    for (let k = 0; k < 3; k++) p.box(0.012, 0.05, 0.012, -0.13 + k * 0.025, 0.2, 0.31, [0x7fae5a, 0x9a8a4a, 0x6f9e4e][k]);
     dryingRack(p, -0.34, -0.32, 0.7);
     hearth(p, 0.3, -0.36, 0.3);
-    wickerBasket(p, -0.4, 0.1, 0xb8323a);
-  } else if (v % 3 === 1) {
-    // maison longue : murs bas de clayonnage, grand toit de chaume qui descend presque au sol, cornes de perches aux pignons
+    if (alt) pots(p, -0.42, 0.08, 3); else wickerBasket(p, -0.4, 0.1, 0xb8323a);
+  } else if (shape === 1) {
+    // maison longue : murs bas de clayonnage tressé, toit qui descend presque au sol (chaume en rangs, ou roseaux sombres
+    // lestés de perches et de pierres), cornes de perches aux pignons
+    const straw = alt ? 0xae9462 : 0xd6b466, strawDark = dark(straw, 0.78);
     p.box(0.66, 0.035, 0.44, 0, 0, -0.04, C.darkstone);
     p.box(0.62, 0.17, 0.4, 0, 0.03, -0.04, wattle);
-    for (const z of [0.161, -0.241]) for (let x = -0.27; x <= 0.27; x += 0.09) p.box(0.016, 0.2, 0.016, x, 0.02, z, stake);
-    roof(p, 0, 0.2, -0.04, { w: 0.62, d: 0.4, h: 0.36, color: straw, wall: wattle, len: 0.78, ov: 0.12 });
-    p.box(0.8, 0.04, 0.06, 0, 0.555, -0.04, strawDark);
-    // rangs de chaume sur chaque pan
-    const ang = Math.atan2(0.36, 0.2);
-    for (const s of [-1, 1]) for (const f of [0.18, 0.46, 0.74]) p.add(new THREE.BoxGeometry(0.79, 0.02, 0.06).rotateX(s * ang), 0, 0.2 + f * 0.36 + 0.012, -0.04 + s * ((1 - f) * 0.2 + 0.016), strawDark);
-    for (const s of [-1, 1]) for (const k of [-1, 1]) p.add(new THREE.CylinderGeometry(0.01, 0.012, 0.22, 4), s * 0.37, 0.6, -0.04 + k * 0.03, C.darkwood, 0, false, 0, k * 0.5);
-    smoke(0.18, 0.6, -0.04, 1);
+    for (const z of [0.161, -0.241]) {
+      for (let x = -0.27; x <= 0.28; x += 0.135) p.box(0.016, 0.2, 0.016, x, 0.02, z, stake);
+      for (const y of [0.08, 0.15]) p.box(0.62, 0.012, 0.006, 0, y, z + (z > 0 ? 0.001 : -0.001), dark(wattle, 0.75));
+    }
+    thatchRoof(p, 0, 0.2, -0.04, 0.62, 0.4, 0.36, 0.78, 0.12, straw, wattle, 670 + v);
+    // (le dessus de la paille, à la hauteur `f` du pan : chaque rang monte d'un cran)
+    const ang = Math.atan2(0.36, 0.2), at = (f: number) => 0.2 + f * 0.36 + (0.09 + 0.013 * Math.min(3, Math.floor(f * 4))) / Math.cos(ang);
+    // le faîtage : un boudin de paille (ou de mottes) lié de cinq cordes, posé sur la jonction des pans
+    p.box(0.8, 0.06, 0.12, 0, 0.6, -0.04, alt ? 0x6f6a3e : strawDark);
+    for (let k = 0; k < 5; k++) p.box(0.012, 0.066, 0.13, -0.32 + k * 0.16, 0.597, -0.04, 0x5a4636);
+    for (const s of [-1, 1]) for (const k of [-1, 1]) p.add(new THREE.CylinderGeometry(0.01, 0.012, 0.22, 4), s * 0.37, 0.68, -0.04 + k * 0.03, C.darkwood, 0, false, 0, k * 0.5);
+    if (alt) {
+      // perches couchées en travers des pans, liées aux pignons, pierres pendues à leurs bouts
+      for (const s of [-1, 1]) for (const f of [0.35, 0.7]) {
+        const yy = at(f) + 0.008, zz = -0.04 + s * (1 - f) * 0.2;
+        p.add(new THREE.CylinderGeometry(0.009, 0.01, 0.84, 4).rotateZ(Math.PI / 2), 0, yy, zz, C.darkwood);
+        if (f < 0.5) for (const e of [-1, 1]) { p.box(0.004, 0.06, 0.004, e * 0.41, yy - 0.06, zz, 0x5a4636); p.sphere(0.022, e * 0.41, yy - 0.075, zz, C.darkstone, 0, 0.8); }
+      }
+    }
+    // une peau qui sèche sur le pan avant, une fourrure clouée au pignon
+    onSlope(p, new THREE.CylinderGeometry(0.08, 0.08, 0.008, 6).scale(1.4, 1, 1), 0, ang, 0.16, at(0.4) + 0.006, -0.04 + 0.6 * 0.2, PELTS[(v + 1) % PELTS.length]);
+    if (!alt) onSlope(p, new THREE.CylinderGeometry(0.06, 0.07, 0.025, 6).scale(1.3, 1, 1), Math.PI, ang, -0.15, at(0.55) + 0.01, -0.04 - 0.45 * 0.2, 0x6f7a44);
+    p.add(new THREE.CylinderGeometry(0.07, 0.07, 0.008, 6).scale(1, 1, 1.2).rotateZ(Math.PI / 2), 0.315, 0.31, -0.04, PELTS[(v + 2) % PELTS.length]);
+    smoke(0.18, 0.66, -0.04, 1);
     p.box(0.13, 0.17, 0.03, 0, 0.02, 0.165, 0x3d2c22);
-    p.box(0.17, 0.025, 0.04, 0, 0.19, 0.17, C.darkwood);
+    for (const s of [-1, 1]) p.box(0.02, 0.2, 0.025, s * 0.075, 0.02, 0.172, C.darkwood);
+    p.box(0.19, 0.025, 0.04, 0, 0.19, 0.17, C.darkwood);
+    // (la porte est sous l'égout) : les bois de cerf et les mains peintes vont sur le pignon ouest
+    antlers(p, -0.322, 0.34, -0.04, -Math.PI / 2);
+    handprint(p, -0.312, 0.12, 0.04, -Math.PI / 2, ochre); handprint(p, -0.312, 0.1, -0.1, -Math.PI / 2, alt ? kaolin : ochre); handprint(p, -0.312, 0.13, -0.17, -Math.PI / 2, ochre);
     // séchoir à poissons, peau tendue, foyer, meule, lances contre le mur
     dryingRack(p, 0.3, 0.34, 0, true);
     hideFrame(p, -0.38, -0.38, 0.4);
     hearth(p, 0.42, -0.08, 1.2);
     quern(p, -0.42, 0.06, 0.4);
     spears(p, -0.2, 0.19, 0, 3);
-  } else {
-    // tipi de peaux peint de bandes d'ocre, perches au sommet, rabat ouvert
+  } else if (!alt) {
+    // tipi : trois lés de peau cousus (la couture lacée sur le devant), bandes d'ocre, armature de perches qui dépassent en
+    // gerbe, oreilles à fumée ouvertes, rabat de la porte relevé
+    const R = 0.3, H = 0.62, beta = Math.atan2(R, H), cols = [C.hide, dark(C.hide, 0.9), 0xe4cbab];
     ring(10, 0.3, 0.01);
-    p.add(new THREE.ConeGeometry(0.3, 0.62, 9, 1, true), 0, 0.31, -0.02, C.hide);
-    for (const [y, r, c] of [[0.1, 0.26, 0xb5553c], [0.15, 0.24, 0x7a5a3e], [0.36, 0.13, 0xb5553c]] as [number, number, number][]) p.add(new THREE.CylinderGeometry(r - 0.012, r, 0.028, 9, 1, true), 0, y, -0.02, c);
-    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; p.add(new THREE.CylinderGeometry(0.008, 0.009, 0.26, 4).rotateZ(-0.35), Math.cos(a) * 0.03, 0.66, Math.sin(a) * 0.03 - 0.02, C.darkwood, -a); }
+    for (let k = 0; k < 3; k++) p.add(new THREE.ConeGeometry(R, H, 3, 1, true, (k / 3) * Math.PI * 2, (Math.PI * 2) / 3), 0, 0.31, -0.02, cols[k]);
+    for (const [y, r, c] of [[0.1, 0.26, ochre], [0.15, 0.24, 0x7a5a3e], [0.36, 0.13, ochre]] as [number, number, number][]) p.add(new THREE.CylinderGeometry(r - 0.012, r, 0.028, 9, 1, true), 0, y, -0.02, c);
+    // les perches : du sol, contre la toile, jusqu'à la gerbe au-dessus du sommet
+    for (let i = 0; i < 7; i++) {
+      const a = (Math.PI / 7) * (2 * i + 1), bx = Math.sin(a) * R * 1.05, bz = Math.cos(a) * R * 1.05, top = H + 0.16, L = Math.hypot(R * 1.05 * (top / H), top);
+      const g = new THREE.CylinderGeometry(0.006, 0.008, L, 4).translate(0, L / 2, 0);
+      p.add(g.rotateX(-Math.atan2(R * 1.05, H)).rotateY(a), bx, 0, bz - 0.02, i % 2 ? C.darkwood : 0x6a5040);
+    }
+    // la couture du devant et ses chevilles, les oreilles à fumée
+    for (let k = 0; k < 5; k++) { const y = 0.24 + k * 0.06, r = R * (1 - y / H); p.add(new THREE.BoxGeometry(0.004, 0.004, 0.02).rotateX(-beta), 0, y, r - 0.02 + 0.003, 0xd8c8a8); }
+    for (const e of [-1, 1]) p.add(new THREE.BoxGeometry(0.06, 0.12, 0.006).translate(0, 0.06, 0).rotateX(-beta + 0.3).rotateY(e * 0.32), e * 0.025, H - 0.13, R * 0.2 - 0.005, dark(C.hide, 0.85));
     smoke(0, 0.7, -0.02, 1);
     p.add(new THREE.BoxGeometry(0.11, 0.2, 0.01).translate(0, 0.1, 0), 0, 0, 0.255, 0x3d2c22, 0, false, 0, -0.45);
     p.add(new THREE.BoxGeometry(0.07, 0.18, 0.01).translate(0, 0.09, 0), 0.07, 0, 0.25, C.hide, -0.5, false, 0, -0.45);
-    // soleils peints à l'ocre, piquets qui tiennent la toile, lances contre les perches, peau tendue, séchoir, pots
-    for (const [a, y] of [[0.6, 0.24], [-0.6, 0.24], [2.4, 0.3], [-2.2, 0.2], [1.6, 0.42], [-1.4, 0.4]]) p.sphere(0.022, Math.sin(a) * (0.3 - y * 0.484), y, Math.cos(a) * (0.3 - y * 0.484) - 0.02, y > 0.35 ? 0x3a2a22 : 0xd8a03a, 0, 1);
+    // soleils peints à l'ocre, mains, piquets qui tiennent la toile
+    for (const [a, y, c] of [[0.6, 0.24, 0xd8a03a], [-0.6, 0.24, 0xd8a03a], [2.4, 0.3, 0xd8a03a], [-2.2, 0.2, 0xd8a03a], [1.6, 0.42, 0x3a2a22], [-1.4, 0.4, 0x3a2a22]]) {
+      const r = R * (1 - y / H) + 0.003;
+      p.add(new THREE.CircleGeometry(0.022, 6).rotateX(-beta).rotateY(a), Math.sin(a) * r, y, Math.cos(a) * r - 0.02, c);
+    }
+    for (const [a, y] of [[1.0, 0.27], [-1.05, 0.29]]) handprint(p, Math.sin(a) * (R * (1 - y / H) + 0.003), y, Math.cos(a) * (R * (1 - y / H) + 0.003) - 0.02, a, 0x7a2a22, beta);
     for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + 0.2; p.box(0.012, 0.03, 0.012, Math.cos(a) * 0.31, 0, Math.sin(a) * 0.31 - 0.02, C.darkwood); }
-    spears(p, -0.22, 0.12, 0.6, 2);
-    hideFrame(p, -0.38, -0.32, -0.5);
-    dryingRack(p, 0.36, -0.3, -0.8);
-    pots(p, 0.38, 0.06, 3);
+  } else {
+    // hutte d'os de mammouth : un dôme de fourrures cousues, tenu par des arceaux de perches, le pied cerclé de mâchoires
+    // et d'os longs empilés, deux défenses en arche devant la porte, le crâne au-dessus, le trou à fumée au sommet
+    const R = 0.32, cols = [0x8a6a4a, 0x9c7a56, 0x7a5a3e];
+    for (let k = 0; k < 3; k++) {
+      const g = new THREE.SphereGeometry(R, 3, 4, (k / 3) * Math.PI * 2, (Math.PI * 2) / 3, 0, Math.PI / 2).scale(1, 1.15, 1);
+      const pos = g.attributes.position;
+      for (let i = 0; i < pos.count; i++) { const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i); if (py > R * 1.1) continue; const f = 1 + (hash2(Math.round(px * 1000), Math.round(pz * 1000), 690 + Math.round(py * 1000)) - 0.5) * 0.12; pos.setXYZ(i, px * f, py, pz * f); }
+      p.add(g, 0, 0.03, -0.02, cols[k]);
+    }
+    p.add(new THREE.CylinderGeometry(0.05, 0.06, 0.03, 7, 1, true), 0, 0.385, -0.02, 0x3a2a22);
+    smoke(0, 0.42, -0.02, 1);
+    for (const a of [0.5, 1.6, 2.7]) p.add(new THREE.TorusGeometry(R + 0.01, 0.007, 3, 7, Math.PI).scale(1, 1.15, 1), 0, 0.03, -0.02, C.darkwood, a);
+    // le pied : mâchoires de mammouth tête-bêche, os longs couchés dessus
+    for (let i = 0; i < 13; i++) {
+      const a = (i / 13) * Math.PI * 2 + 0.24;
+      if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < 0.4) continue;
+      p.add(new THREE.OctahedronGeometry(0.045, 0).scale(1.3, 0.75, 0.7), Math.sin(a) * 0.335, 0.03, Math.cos(a) * 0.335 - 0.02, i % 3 ? BONE : 0xdcd0b4, a + (i % 2) * Math.PI);
+      if (i % 2) p.add(new THREE.CylinderGeometry(0.012, 0.014, 0.16, 3).rotateZ(Math.PI / 2), Math.sin(a) * 0.32, 0.075, Math.cos(a) * 0.32 - 0.02, 0xe2d6bc, a + Math.PI / 2);
+    }
+    // l'entrée : un petit porche de peau, les deux défenses en arche, le crâne
+    p.box(0.13, 0.17, 0.08, 0, 0, 0.29, cols[1]);
+    p.box(0.09, 0.14, 0.02, 0, 0, 0.33, 0x3d2c22);
+    for (const e of [-1, 1]) p.add(new THREE.TorusGeometry(0.13, 0.013, 4, 7, Math.PI * 0.62).rotateZ(e > 0 ? 0 : Math.PI - Math.PI * 0.62), e * -0.06, 0.02, 0.345, 0xf0e6cc);
+    p.add(new THREE.IcosahedronGeometry(0.04, 0).scale(1.2, 0.9, 0.8), 0, 0.22, 0.33, 0xece2cc);
+    for (const e of [-1, 1]) p.sphere(0.009, e * 0.018, 0.225, 0.36, 0x2a2018);
   }
   // la vie autour de la hutte : sol piétiné devant la porte, un habitant, os, outils, paillasse qu'on aère, coupe-vent de
   // branchages au fond
-  trampled(p, 0, 0.3, 0.24, 600 + (v % 3));
-  if (v % 3 === 0) {
+  trampled(p, 0, 0.3, 0.24, 600 + shape);
+  if (shape === 0) {
     caveFolk(p, 0.36, -0.2, -2.78, v);
     flintKit(p, 0.05, 0.42, 0.2); caveSeated(p, 0.2, 0.42, -1.57, v + 1);
     pallet(p, -0.42, -0.08, Math.PI / 2);
     bonePile(p, 0.42, 0.04, 0.6);
     branchFence(p, -0.16, -0.47, 0.18, -0.47, 610);
-  } else if (v % 3 === 1) {
+  } else if (shape === 1) {
     caveFolk(p, 0.05, 0.36, 0.4, v);
     pallet(p, -0.3, 0.38, 0, 0x8a6a4a);
     bonePile(p, 0.42, -0.36, 2.2);
     waterSkin(p, 0.14, 0.24, 0.8);
     branchFence(p, -0.15, -0.45, 0.3, -0.45, 611);
   } else {
-    caveFolk(p, 0.03, 0.33, 0.3, v);
+    caveFolk(p, 0.17, 0.4, 0.3, v);
     flintKit(p, -0.4, 0.04, Math.PI / 2);
     bonePile(p, 0.2, 0.44, 0.4, false);
     smokeRack(p, 0.04, -0.42, 0.3);
+    spears(p, -0.22, 0.14, 0.6, 2);
+    hideFrame(p, -0.38, -0.32, -0.5);
+    dryingRack(p, 0.36, -0.3, -0.8);
+    pots(p, 0.4, 0.12, 3);
   }
   // bois empilé, pot de terre, peau étendue devant
   log(p, 0.2, 0.026, 0.3, 0, 0.28, 0.5); log(p, 0.2, 0.026, 0.34, 0, 0.22, 0.5); log(p, 0.2, 0.026, 0.32, 0.046, 0.25, 0.5);
   p.cyl(0.035, 0.028, 0.06, 7, -0.28, 0, 0.3, 0xb5764f); p.cyl(0.03, 0.035, 0.015, 7, -0.28, 0.06, 0.3, 0x9c6445);
-  p.add(new THREE.CircleGeometry(0.1, 7).rotateX(-Math.PI / 2).scale(1.3, 1, 0.9), -0.12, 0.005, 0.38, C.hide);
+  p.add(new THREE.CircleGeometry(0.1, 7).rotateX(-Math.PI / 2).scale(1.3, 1, 0.9), -0.12, 0.005, 0.38, PELTS[v % PELTS.length]);
   // le sol du campement tout autour : terre battue, sentier vers la porte, herbes, cailloux, os, cendres
-  const body = v % 3 === 1 ? [[-0.2, -0.04, 0.27], [0.2, -0.04, 0.27]] : [[0, -0.02, 0.37]];
-  campGround(p, 620 + (v % 3), [...body, [0.32, 0.25, 0.1], [-0.28, 0.3, 0.06], [-0.12, 0.38, 0.1], [0.4, -0.3, 0.12], [-0.38, -0.34, 0.12]], [0, 0.3]);
+  const body = shape === 1 ? [[-0.2, -0.04, 0.27], [0.2, -0.04, 0.27]] : [[0, -0.02, 0.37]];
+  campGround(p, 620 + v, [...body, [0.32, 0.25, 0.1], [-0.28, 0.3, 0.06], [-0.12, 0.38, 0.1], [0.4, -0.3, 0.12], [-0.38, -0.34, 0.12]], [0, 0.3], 0.47, 0, 8);
 }
 
 /**
