@@ -530,7 +530,7 @@ class Game implements UIHost {
       paused: () => this.time.paused, togglePause: () => { this.time.paused = !this.time.paused; this.ui.update(); },
       toast: (m) => this.ui.toast(m), click: () => audio.sfxClick(),
       // (« Retourner au village », ou Échap : la vue retourne au village, l'interface de l'île se range d'elle-même)
-      leaveIsle: () => this.goHome(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(), openPortalChoice: () => this.portalChoice.show(),
+      leaveIsle: () => this.goHome(), leaveHell: () => this.exitHell(), goHell: () => void this.enterHell(), openPortalChoice: () => this.openPortalChoice(),
       defenseInfo: (k) => { const d = KINDS[k as KindId], a = Math.max(this.sim.age, d.minAge); return { name: d.names[a], icon: d.icon, desc: d.desc }; },
       defenseLock: (k) => this.ui.lockWhy(k as KindId),
       defenseCount: (k) => { const d = isleDefenses(this.world); return k === 'watchtower' ? d.towers : k === 'barracks' ? d.barracks : this.sim.counts[k as KindId] ?? 0; },
@@ -786,7 +786,7 @@ class Game implements UIHost {
     if (this.mode !== 'surface') return;
     // (fermés tant que l'invasion du portail n'est pas repoussée)
     const closed = this.war.hellWhy();
-    if (closed) { this.ui.toast(closed, this.war.pve === 'on' ? undefined : () => this.portalChoice.show()); return; }
+    if (closed) { this.ui.toast(closed, this.war.pve === 'on' ? undefined : () => this.openPortalChoice()); return; }
     this.surfaceGate.cancel();
     this.leaveIsle(true);
     this.tools.setTool('none');
@@ -1131,9 +1131,18 @@ class Game implements UIHost {
   takeWay(way: Way) {
     const st = this.ways()[way];
     if (st === 'none' || st === 'taken') return;
-    // (le portail déjà ouvert sans qu'on affronte ses démons : sa propre carte, « Affronter » ou le garder fermé)
+    // (le portail refermé : sa propre carte, « Affronter » ou le garder fermé)
     if (way === 'hell' && st === 'ask') { this.portalChoice.show(); return; }
     this.worldChoice.show(way);
+  }
+
+  /**
+   * « Affronter… » ou « Rouvrir » (bandeau de l'île, message des Enfers fermés) : le portail refermé rouvre sa carte ; pas
+   * encore choisi, c'est la voie des Enfers du grand choix
+   */
+  openPortalChoice() {
+    if (this.war.pve === 'off') this.portalChoice.show();
+    else if (this.war.pve === 'ask') this.worldChoice.show('hell');
   }
 
   /**
@@ -1222,11 +1231,11 @@ class Game implements UIHost {
     const w = this.war, healK = (this.sim.counts.health ?? 0) > 0 ? 1.5 : 1;
     const raid = w.update(gdt, this.sim.age, healK);
     if (raid) audio.sfxRumble(4);
-    // le portail vient de s'ouvrir (ou la partie chargée n'a jamais choisi) : la carte du choix s'ouvre une seule fois, hors fenêtre,
-    // et seulement une fois en jeu : écran de chargement parti depuis 3 s au moins (pas par-dessus la barre de chargement)
+    // (le calme : en jeu depuis 3 s au moins, l'écran de chargement parti ; les fenêtres automatiques l'attendent)
     this.portalCalm = document.getElementById('loadScreen') ? 0 : this.portalCalm + dt;
     this.popups.step(dt, this.popupBusy());
-    if (w.active && w.pve === 'ask' && !w.choiceSeen && this.portalCalm > 3 && this.popups.open) { this.popups.taken(); this.portalChoice.show(); }
+    // le portail ouvert sans choix (l'expédition d'une ancienne partie, le bac à sable) n'ouvre plus sa carte : affronter les
+    // démons se décide dans le grand choix de la fin de l'Antiquité (ou dans l'onglet « Voies »)
     this.stepCrossroads();
     const said = new Set<string>();
     for (const n of w.news.splice(0)) {

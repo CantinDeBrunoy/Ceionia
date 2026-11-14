@@ -16,8 +16,9 @@ export type Way = 'hell' | 'world';
 
 /**
  * Où en est une voie : `none` : impossible sur cette carte (pas d'île du portail ; carte qui ne peut plus s'agrandir) ;
- * `open` : à prendre ; `ask` : le portail est ouvert mais le joueur n'affronte pas les démons (refermé, ou pas encore
- * choisi : ancienne partie, bac à sable) ; `taken` : prise
+ * `open` : à prendre (le portail fermé, ou ouvert sans que le joueur ait choisi : l'expédition d'une ancienne partie, le bac à
+ * sable ; tant qu'il n'a pas choisi, aucune invasion) ; `ask` : le portail est ouvert et le joueur l'a refermé ; `taken` :
+ * prise (il affronte les démons)
  */
 export type WayState = 'none' | 'open' | 'ask' | 'taken';
 
@@ -34,7 +35,7 @@ export interface CrossWorld {
 /** La voie des Enfers, d'après le portail et le choix PvE (`War.pve`) */
 export function hellWay(w: Pick<CrossWorld, 'portal' | 'portalOpen'>, pve: 'ask' | 'on' | 'off'): WayState {
   if (!w.portal) return 'none';
-  if (!w.portalOpen) return 'open';
+  if (!w.portalOpen || pve === 'ask') return 'open';
   return pve === 'on' ? 'taken' : 'ask';
 }
 
@@ -48,8 +49,8 @@ export function worldWay(w: Pick<CrossWorld, 'isles'>, canExplore: boolean): Way
 export const CROSSROADS_AGE = 2;
 
 /**
- * Le grand choix est-il déjà joué sans avoir été posé ? Un portail déjà ouvert (même refermé) ou un archipel déjà accepté
- * reste tel quel : la carte ne s'ouvre pas. Une carte où aucune voie n'est possible non plus. Vrai : marquer
+ * Le grand choix est-il déjà joué sans avoir été posé ? Un portail dont on affronte les démons ou qu'on a refermé, ou un
+ * archipel déjà accepté, reste tel quel : la carte ne s'ouvre pas (un portail ouvert sans choix, lui, y tombe). Une carte où aucune voie n'est possible non plus. Vrai : marquer
  * `crossroads` et ne plus y revenir
  */
 export function crossroadsSettled(w: CrossWorld, hell: WayState, world: WayState): boolean {

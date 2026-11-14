@@ -36,7 +36,8 @@ describe('le grand choix : les règles', () => {
     expect(hellWay({ portal: null, portalOpen: false }, 'ask')).toBe('none');
     expect(hellWay({ portal: {}, portalOpen: false }, 'ask')).toBe('open');
     expect(hellWay({ portal: {}, portalOpen: true }, 'off')).toBe('ask');
-    expect(hellWay({ portal: {}, portalOpen: true }, 'ask')).toBe('ask');
+    // (ouvert sans choix : l'expédition d'une ancienne partie, le bac à sable ; il tombe dans le grand choix)
+    expect(hellWay({ portal: {}, portalOpen: true }, 'ask')).toBe('open');
     expect(hellWay({ portal: {}, portalOpen: true }, 'on')).toBe('taken');
     expect(worldWay({ isles: null }, true)).toBe('open');
     expect(worldWay({ isles: null }, false)).toBe('none');
@@ -151,7 +152,7 @@ describe('le grand choix : les anciennes sauvegardes', () => {
     expect(w.toJSON()).not.toHaveProperty('crossroads');
   });
 
-  it('un portail déjà ouvert par l’expédition (même refermé) reste tel quel : pas de carte', () => {
+  it('un portail déjà ouvert par l’expédition et refermé reste tel quel : pas de carte', () => {
     const w = village();
     w.exp.done.push('portal');
     const back = reload(w), war = new War(back);
@@ -163,6 +164,25 @@ describe('le grand choix : les anciennes sauvegardes', () => {
     expect(crossroadsDue(back, 3, s.hell, s.world, true)).toBe(false);
     // l'onglet propose de rouvrir (sa carte : « Affronter les démons »)
     expect(waysHtml(s)).toContain('data-way="hell"');
+  });
+
+  it('un portail ouvert en attente du choix (« ask ») tombe dans le grand choix ; affronté, il reste tel quel', () => {
+    const w = village();
+    w.exp.done.push('portal');
+    const back = reload(w), war = new War(back);
+    war.load({ army: { troops: [], queue: [] }, invasion: 'wait', pve: 'ask', choiceSeen: true });
+    let s = ways(back, war);
+    expect(s.hell).toBe('open');
+    expect(crossroadsDue(back, 3, s.hell, s.world, true)).toBe(true);
+    // pas d'invasion tant que le choix n'est pas fait
+    war.update(0.1, 3);
+    expect(war.pve).toBe('ask');
+    expect(war.nextWaveIn()).toBeNull();
+    // affronté dans une ancienne partie : rien ne change
+    war.load({ army: { troops: [], queue: [] }, invasion: 'wait', pve: 'on', choiceSeen: true });
+    s = ways(back, war);
+    expect(s.hell).toBe('taken');
+    expect(crossroadsDue(back, 3, s.hell, s.world, true)).toBe(false);
   });
 
   it('un archipel déjà accepté reste tel quel : pas de carte', () => {
@@ -246,8 +266,10 @@ describe('le grand choix : une condition du passage au Médiéval', () => {
     const a = ready();
     a.w.crossroads = true;
     expect(choice(a.sim)!.have).toBe(1);
+    // « Les Enfers » (`Game.openHell`) : le portail s'ouvre et le choix est marqué
     const b = ready();
     b.w.portalWoken = true;
+    b.w.crossroads = true;
     expect(choice(b.sim)!.have).toBe(1);
   });
 
@@ -276,7 +298,7 @@ describe('le grand choix : une condition du passage au Médiéval', () => {
     expect(sb.ageProgress()).toBeNull();
   });
 
-  it('une ancienne partie encore à l’Antiquité : la condition s’ajoute ; remplie d’office si le portail ou l’archipel y sont déjà', () => {
+  it('une ancienne partie encore à l’Antiquité : la condition s’ajoute ; un portail ouvert sans choix y tombe aussi', () => {
     const w = village();
     const old = reload(w, { crossroads: undefined });
     const sim = new Sim(old);
@@ -286,6 +308,13 @@ describe('le grand choix : une condition du passage au Médiéval', () => {
     const s2 = new Sim(opened);
     s2.age = 1;
     expect(opened.portalOpen).toBe(true);
+    // (sans choix PvE, l'expédition d'avant ne fait pas le choix : il reste à faire ; affronté ou refermé, `stepCrossroads`
+    // marque `crossroads`, et la condition est remplie)
+    expect(choice(s2)!.have).toBe(0);
+    expect(crossroadsDue(opened, 1, hellWay(opened, 'ask'), 'open', true)).toBe(true);
+    expect(crossroadsSettled(opened, hellWay(opened, 'on'), 'open')).toBe(true);
+    expect(crossroadsSettled(opened, hellWay(opened, 'off'), 'open')).toBe(true);
+    opened.crossroads = true;
     expect(choice(s2)!.have).toBe(1);
   });
 
