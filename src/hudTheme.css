@@ -788,3 +788,75 @@ body.hell #resPanel { display: none !important; }
   #portalChoice .pcBtns button { min-height: 52px; }
 }
 #portalChoice .pcBtns small { display: block; margin: 0; }
+
+/* ---------- barre de bataille au téléphone et sur petite tablette (≤ 900 px), réduite de moitié : une rangée de boutons de
+   40 px (Bâtir, Recruter et les outils à gauche ; Aide, passage et retour en pictos à droite), puis le menu en cartes de
+   78 × 66 ; la bulle d'aide sur une ligne au-dessus ---------- */
+@media (max-width: 900px) {
+  #troopBar .tfoot, #troopBar .tfoot.thell, #troopBar .tfoot.thell.tshut { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "tool corner" "menu menu"; align-items: end; gap: 5px; left: 4px; right: 4px; height: auto; flex-wrap: nowrap; }
+  #troopBar .tfoot > .ttool { grid-area: tool; display: flex; flex-direction: row; align-items: center; gap: 3px; padding: 3px; border-radius: 14px; order: 0; }
+  #troopBar .ttool .ttabs, #troopBar .ttool .ttools { display: flex; flex-direction: row; gap: 3px; padding: 0; border: none; }
+  #troopBar .ttool .ttools { padding-left: 3px; border-left: 1px solid rgba(200, 160, 95, 0.4); }
+  #troopBar .ttool .ttabs button, #troopBar .ttool .ttl { width: 40px; height: 40px; min-width: 0; min-height: 0; padding: 0; justify-content: center; border-radius: 11px; }
+  #troopBar .ttool .ttabs button > span { display: none; }
+  #troopBar .tfoot > .tcorner, #troopBar .thell .tcorner, #troopBar .thell.tshut .tcorner, #troopBar .thell:not(.tshut) .tcorner { grid-area: corner; justify-self: end; display: flex; flex-direction: row; align-items: center; gap: 3px; width: auto; padding: 3px; border-radius: 14px; order: 0; }
+  #troopBar .tcorner .tfl { display: flex; flex-direction: row; gap: 3px; width: auto; flex: none; }
+  #troopBar .tcorner button, #troopBar .tcorner button.go, #troopBar .tcorner .tord, #troopBar .tcorner .thb, #troopBar .thell .tcorner .thb, #troopBar .thell .tcorner .tord.gar { width: 40px; height: 40px; min-height: 0; padding: 0; justify-content: center; border-radius: 12px; flex: none; }
+  #troopBar .tcorner .tl, #troopBar .tcorner .tord .tpt { display: none; }
+  #troopBar .tcorner .tord.prt, #troopBar .tcorner .tfl:has(.tord.sm) .tord.prt { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; gap: 0; border-radius: 12px; overflow: hidden; }
+  #troopBar .tcorner .tord.prt .oi { width: 30px; height: 30px; }
+  #troopBar .tcorner .tord.prt .tpi { display: none; }
+  #troopBar .tcorner .tord.gar { width: auto; padding: 0 8px 0 4px; font-size: 12px; }
+  #troopBar .tcorner .oi, #troopBar .tcorner .tord .oi { width: 30px; height: 30px; }
+  #troopBar .tcorner .oi img { width: 20px; height: 20px; }
+  #troopBar .tfoot > .tmenu, #troopBar .thell .tmenu, #troopBar .thell:not(.tshut) .tmenu { grid-area: menu; padding: 4px 6px 5px; border-radius: 14px; order: 0; min-width: 0; }
+  #troopBar .tmh { min-height: 18px; gap: 6px; }
+  #troopBar .tmh h5 { font-size: 11px; gap: 5px; }
+  #troopBar .tmh h5 .pic { width: 16px; height: 16px; }
+  #troopBar .tmh h5 small { font-size: 10.5px; padding: 0 7px; }
+  #troopBar .tmenu .tmrow { overflow-x: auto; scrollbar-width: none; gap: 6px; }
+  #troopBar .tmenu .tbuilds { gap: 5px; }
+  #troopBar .tmenu .tfam + .tfam { padding-left: 6px; }
+  #troopBar .tmrow .trb.tbv { width: 78px; height: 66px; min-height: 0; padding: 2px 3px 3px; gap: 0; border-radius: 11px; }
+  #troopBar .tmrow .trb.tbv .tic { flex: none; width: 100%; height: 38px; background: none; box-shadow: none; overflow: hidden; }
+  #troopBar .tmrow .trb.tbv .tic img { width: 26px; height: 26px; }
+  #troopBar .tmrow .trb.tbv .tic.tpv img { width: 48px; height: 40px; transform: none; object-fit: contain; }
+  #troopBar .tmrow .trb.tbv b { font-size: 10.5px; line-height: 1.05; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .tmrow .trb.tbv small.co { font-size: 9.5px; line-height: 1.1; }
+  #troopBar .tmrow .trb.tbv small.co .pic { width: 11px; height: 11px; }
+  #troopBar .tmrow .trb.trc { width: 132px; height: 66px; min-height: 0; padding: 3px 5px; grid-template-columns: 38px minmax(0, 1fr); column-gap: 5px; border-radius: 11px; }
+  #troopBar .trc .ttx b { font-size: 11.5px; }
+  #troopBar .trc .trole { font-size: 9.5px; padding: 1px 5px 1px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .trc .tco { padding-top: 2px; gap: 5px; font-size: 10px; }
+  #troopBar .trc .tco .pic, #troopBar .trc .trole .pic { width: 11px; height: 11px; }
+  #troopBar .tfoot .tbub, #troopBar .thell .tbub { left: 0; right: 0; width: auto; max-width: none; bottom: calc(100% + 4px); padding: 4px 9px 4px 6px; border-radius: 12px; }
+  #troopBar .tfoot .thint { font-size: 11px; -webkit-line-clamp: 2; }
+  #troopBar .tfoot .tbot { bottom: calc(100% + 4px); }
+  #troopBar .tfoot:has(.tbot) .tbub { bottom: calc(100% + 58px); }
+}
+
+/* ---------- barre du village au téléphone (≤ 860 px), réduite de moitié : un seul panneau (`#dockRow`) ; Bâtir / Paysage et
+   les rayons sur une rangée, avec « ⋯ » au bout ; les vignettes dessous. « ⋯ » (`body.dockMore`) montre les outils, la vue et
+   la mini-carte ; les outils se montrent aussi d'eux-mêmes quand l'un est pris ou que le tutoriel en désigne un ---------- */
+#bMore { display: none; }
+@media (max-width: 860px) {
+  #dock > #dockRow { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "tools tools" "modes top" "items items" "bottom bottom"; align-items: center; gap: 3px 4px; padding: 4px; border-radius: 16px; background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); }
+  #dock #dockSide, #dock #dockMain { display: contents; }
+  #dock #modes { grid-area: modes; display: flex; flex-direction: row; gap: 3px; }
+  #dock #dockTop { grid-area: top; position: static; display: flex; align-items: center; gap: 3px; min-width: 0; padding: 0; }
+  #dock #subcats { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 3px; }
+  #dock #subcats button { flex: none; height: 40px; min-width: 40px; padding: 0 8px; border: 2px solid var(--hEdge); border-radius: 12px; }
+  #dock #subcats button .cl { display: none; }
+  #bMore { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-width: 0; min-height: 0; padding: 0; border-radius: 12px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F7E9CC); color: var(--hInk); font-size: 22px; font-weight: 800; line-height: 1; }
+  body.dockMore #bMore { background: var(--hGoldFill); border-color: var(--hGold); box-shadow: var(--hGoldShadow); }
+  #dock #itemsWrap { grid-area: items; min-width: 0; padding: 0; }
+  #dock #dockBottom { grid-area: bottom; min-width: 0; }
+  #dock #dockBottom:empty { display: none; }
+  #dock #quickL, #dock #quickR { grid-area: tools; display: none; gap: 3px; padding: 0; border: none; }
+  #dock #quickL { justify-self: start; }
+  #dock #quickR { justify-self: end; }
+  body.dockMore #dock #quickL, body.dockMore #dock #quickR, #dock #dockRow:has(#quickL .tHi) #quickL, #dock #dockRow:has(#quickL .tHi) #quickR,
+  #dock #dockRow:has(#quickL button.active:not([data-tool="none"])) #quickL, #dock #dockRow:has(#quickL button.active:not([data-tool="none"])) #quickR { display: flex; }
+  #dock #dockRight { display: none; position: absolute; right: 0; bottom: calc(100% + 6px); }
+  body.dockMore #dock #dockRight { display: flex; }
+}

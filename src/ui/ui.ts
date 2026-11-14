@@ -565,7 +565,7 @@ export class UI {
             </div>
           </div>
           <div id="dockMain" class="panel">
-            <div id="dockTop"><div id="subcats"></div></div>
+            <div id="dockTop"><div id="subcats"></div><button id="bMore" type="button" aria-expanded="false" title="${tr('Outils, vue et carte')}" aria-label="${tr('Outils, vue et carte')}">⋯</button></div>
             <div id="itemsWrap">
               <button class="scr" id="itPrev" type="button" title="${tr('Précédents')}" aria-label="${tr('Précédents')}">‹</button>
               <div id="items"></div>
@@ -697,6 +697,8 @@ export class UI {
     $('#bPhoto').onclick = () => host.setPhoto(true);
     $('#pExit').onclick = () => host.setPhoto(false);
     $('#pCap').onclick = () => host.capture();
+    // au téléphone, la barre du bas se replie sur les modes, les rayons et les vignettes : « ⋯ » montre les outils, la vue et la carte
+    $('#bMore').onclick = () => { const on = document.body.classList.toggle('dockMore'); $('#bMore').setAttribute('aria-expanded', String(on)); host.audio.sfxClick(); this.placeCards(); };
     $('#bUndo').onclick = () => host.tools.undo();
     $('#bRedo').onclick = () => host.tools.redo();
     $('#bRot').onclick = () => host.tools.rotate();
@@ -994,7 +996,9 @@ export class UI {
       if (t) placeCard(t, document.querySelector('#troopBar .tmenu'), document.querySelector('#troopBar .tcorner'), top);
       return;
     }
-    const menu = $('#dockMain'), corner = $('#dockRight');
+    // (au téléphone, la barre ne forme plus qu'un panneau, `#dockRow` : le menu et le coin se mesurent sur lui)
+    const row = $('#dockRow'), menu = $('#dockMain').getBoundingClientRect().width ? $('#dockMain') : row;
+    const corner = $('#dockRight').getBoundingClientRect().width ? $('#dockRight') : row;
     placeCard($('#info'), menu, corner, top);
     placeCard($('#selCard'), menu, corner, top);
   }
