@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Parts } from './parts';
 import { hash2, mulberry32 } from '../core/rng';
+import type { People } from '../world/archipelago';
 
 /**
  * États d'un lot des villes rivales, pour la bataille et l'après-guerre (voir `docs/iles.md`) : intact, en ruine (le haut
@@ -87,9 +88,11 @@ const SOOT = new THREE.Color(0x2a2622);
 
 /**
  * Le modèle (corps et lumières de `Parts.build`) dans l'état voulu. `wall` : un pan de rempart (des brèches plutôt qu'un
- * effondrement d'ensemble). Les attributs restent ceux de `Parts.build`, pour que `mergeLit` les fonde comme les autres
+ * effondrement d'ensemble). `people` : l'échafaudage et les matériaux de la reconstruction (bambou et pierre grise chez le
+ * peuple asiatique ; bois, nattes de palmes, briques crues et sable chez le peuple oriental). Les attributs restent ceux de
+ * `Parts.build`, pour que `mergeLit` les fonde comme les autres
  */
-export function withState(body: THREE.BufferGeometry, glow: THREE.BufferGeometry | null, state: TownState, seed: number, wall = false) {
+export function withState(body: THREE.BufferGeometry, glow: THREE.BufferGeometry | null, state: TownState, seed: number, wall = false, people: People = 'asie') {
   if (state === 'intact') return { body, glow };
   const ruin = state === 'ruin';
   body.computeBoundingBox();
@@ -123,20 +126,24 @@ export function withState(body: THREE.BufferGeometry, glow: THREE.BufferGeometry
     }
     for (let i = 0; i < Math.max(1, Math.round(n / 8)); i++) p.sphere(0.1 + r() * 0.1, x0 + r() * W, 0, z0 + r() * D, 0x7a7266, 0, 0.5);
   } else {
-    // échafaudage de bambou sur le pourtour, deux lisses, quelques planches
+    // échafaudage sur le pourtour (bambou, ou perches de bois et nattes de palmes), deux lisses, quelques planches
+    const o = people === 'orient', pole = o ? 0x7a5536 : 0x9a8a50, plank = o ? 0x9a7a52 : 0xb89a68;
     const ph = Math.min(top * 0.9, 1.6), poles: [number, number][] = [];
     for (const [xa, za, xb, zb] of [[x0, z1, x1, z1], [x1, z0, x1, z1], [x0, z0, x0, z1]] as const) {
       const len = Math.hypot(xb - xa, zb - za), k = Math.max(1, Math.round(len / 0.45));
       for (let i = 0; i <= k; i++) poles.push([xa + ((xb - xa) * i) / k, za + ((zb - za) * i) / k]);
       const ry = Math.atan2(-(zb - za), xb - xa);
-      for (const y of [ph * 0.45, ph * 0.9]) p.add(new THREE.BoxGeometry(len, 0.016, 0.016), (xa + xb) / 2, y, (za + zb) / 2, 0x9a8a50, ry);
-      p.add(new THREE.BoxGeometry(len * 0.9, 0.012, 0.09), (xa + xb) / 2, ph * 0.45 + 0.012, (za + zb) / 2, 0xb89a68, ry);
+      for (const y of [ph * 0.45, ph * 0.9]) p.add(new THREE.BoxGeometry(len, 0.016, 0.016), (xa + xb) / 2, y, (za + zb) / 2, pole, ry);
+      p.add(new THREE.BoxGeometry(len * 0.9, 0.012, 0.09), (xa + xb) / 2, ph * 0.45 + 0.012, (za + zb) / 2, plank, ry);
+      // chez le peuple oriental, une natte de palmes tendue en haut, contre le soleil
+      if (o) p.add(new THREE.BoxGeometry(len * 0.8, 0.01, 0.16), (xa + xb) / 2, ph * 0.9 + 0.012, (za + zb) / 2, 0xc8b07a, ry);
     }
-    for (const [x, z] of poles) p.add(new THREE.CylinderGeometry(0.012, 0.012, ph, 4, 1, true).translate(0, ph / 2, 0), x, 0, z, 0x9a8a50);
+    for (const [x, z] of poles) p.add(new THREE.CylinderGeometry(0.012, 0.012, ph, 4, 1, true).translate(0, ph / 2, 0), x, 0, z, pole);
     for (let i = 0; i < Math.min(6, n); i++) {
       const x = x0 + r() * W, z = z0 + r() * D;
-      if (i % 2) p.add(new THREE.BoxGeometry(0.22, 0.08, 0.12), x, 0.04, z, 0xb4aa98, r() * Math.PI);
-      else for (let k = 0; k < 3; k++) p.add(new THREE.BoxGeometry(0.34, 0.025, 0.06), x, 0.015 + k * 0.026, z + k * 0.01, 0xb08a5a, 0.2);
+      if (o && i % 3 === 2) p.add(new THREE.ConeGeometry(0.13, 0.1, 6), x, 0.05, z, 0xd9c08a);
+      else if (i % 2) for (let k = 0; k < (o ? 2 : 1); k++) p.add(new THREE.BoxGeometry(0.22, 0.08, 0.12), x, 0.04 + k * 0.08, z, o ? 0xc9a273 : 0xb4aa98, r() * Math.PI);
+      else for (let k = 0; k < 3; k++) p.add(new THREE.BoxGeometry(0.34, 0.025, 0.06), x, 0.015 + k * 0.026, z + k * 0.01, o ? 0x9a7a52 : 0xb08a5a, 0.2);
     }
   }
   const extra = p.build(false).body;

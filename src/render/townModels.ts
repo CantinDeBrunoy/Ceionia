@@ -46,7 +46,7 @@ export function townModel(people: People, kind: TownKind, age: number, v: number
     case 'tower': asian.aTower(p, a, vv); break;
     case 'gate': asian.aGate(p, a, vv); break;
   }
-  const built = p.build(), { body, glow } = withState(built.body, built.glow, state, vv * 13 + kind.length);
+  const built = p.build(), { body, glow } = withState(built.body, built.glow, state, vv * 13 + kind.length, false, people);
   g = mergeLit(body, glow) ?? body;
   cache.set(key, g);
   return g;
@@ -61,7 +61,7 @@ export function townWall(people: People, age: number, len: number, state: TownSt
   const p = new Parts();
   if (people === 'orient') orientWall(p, a, L, 1.5);
   else asian.aWallPiece(p, a, L, 1.5);
-  const built = p.build(false), { body, glow } = withState(built.body, built.glow, state, 101 + sd * 17, true);
+  const built = p.build(false), { body, glow } = withState(built.body, built.glow, state, 101 + sd * 17, true, people);
   g = mergeLit(body, glow) ?? body;
   cache.set(key, g);
   return g;
