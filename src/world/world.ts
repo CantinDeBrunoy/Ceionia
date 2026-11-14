@@ -8,6 +8,7 @@ import { Difficulty, DIFF_VERSION, readDifficulty, rulesOf } from '../sim/diffic
 import { GEN, GEN_FIXED, GEN_VAR, GEN_ARCH, fillClimate, fillRiverBed, mainFrame } from './continent';
 import { archLayout, type ArchLayout } from './archipelago';
 import { ExpState, newExpState, readExpState } from '../sim/missions';
+import { DiploState, newDiplo, readDiplo, saveDiplo, spaceportWhy, archipelagoOn } from '../sim/diplomacy';
 import { RoadCurve, rasterize, roundPts, sampleCurve } from './curves';
 import { Crossing, crossingMap, nearestOnDeck } from './crossings';
 
@@ -328,6 +329,8 @@ export class World {
   exploredAt: number | null = null;
   /** le monde vient de s'agrandir : la cinématique de découverte des îles est à jouer (sauvegardé jusqu'à ce qu'elle passe) */
   reveal = false;
+  /** la diplomatie de l'archipel : peuples rencontrés, allié, conflit des deux îles (sauvegardée, voir `sim/diplomacy.ts`) */
+  diplo: DiploState = newDiplo();
 
   /** Case dans le cadre de l'île principale (toujours vrai avant la version 4) */
   inMain(x: number, z: number) {
@@ -1198,8 +1201,11 @@ export class World {
         if (kind === 'harbor') { if (this.cellAvg(cx, cz) < -0.9) return tr('L’eau est trop profonde ici pour un quai : posez-le plus près de la rive'); continue; }
         if (this.cellMin(cx, cz) < 0.05 && (kind !== 'pier' || this.cellAvg(cx, cz) < 0.05)) return tr('Trop proche de l’eau : reculez sur la terre ferme');
       }
+    // le cosmodrome : sur l'île alliée quand l'archipel est accepté (seule pose permise hors de l'île principale)
+    const sp = kind === 'spaceport' ? spaceportWhy(this, x, z, s) : null;
+    if (sp) return sp;
     // version 4 : rien hors de l'île principale (les îles rivales et les petites îles sont aux autres peuples)
-    if (!this.inMain(x, z) || !this.inMain(x + s - 1, z + s - 1)) return tr('Hors de votre île : on ne bâtit pas sur les autres îles');
+    if (!(kind === 'spaceport' && archipelagoOn(this)) && (!this.inMain(x, z) || !this.inMain(x + s - 1, z + s - 1))) return tr('Hors de votre île : on ne bâtit pas sur les autres îles');
     // l'île du portail : des défenses seulement (et les défenses au village aussi)
     const isle = this.portalRule(kind, x, z, s);
     if (isle) return isle;
@@ -1696,6 +1702,7 @@ export class World {
       brick: this.brick,
       oil: [...this.oil.keys()].filter((k) => this.oil[k]),
       exp: this.exp,
+      ...(saveDiplo(this.diplo) ? { diplo: this.diplo } : {}),
       difficulty: this.difficulty,
       diffV: DIFF_VERSION,
       ageBase: this.ageBase,
@@ -1830,6 +1837,8 @@ export class World {
     // (`claimed`, `mined`, `dug`, `digs`) sont ignorés
     this.mined = new Set(); this.claimed = new Set(); this.dug = new Set(); this.digs = [];
     this.exp = readExpState(d.exp);
+    // (une partie d'avant la diplomatie : personne de rencontré)
+    this.diplo = readDiplo(d.diplo);
     this.difficulty = readDifficulty(d.difficulty, d.diffV);
     // une ancienne sauvegarde n'en a pas : tout le village compte pour l'âge suivant
     this.ageBase = {};

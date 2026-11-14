@@ -95,6 +95,8 @@ import { troopPortrait } from './render/troopPortraits';
 import { PortalChoice } from './ui/portalChoice';
 import { WorldChoice } from './ui/worldChoice';
 import { canExpand, expandWorld } from './world/expand';
+import { DiploChoice } from './ui/diploChoice';
+import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, endgameOpen, peopleName, settleAtAge, startAllyBattle } from './sim/diplomacy';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
@@ -214,6 +216,10 @@ class Game implements UIHost {
   /** la carte du choix du portail (affronter les démons ou refermer le portail) */
   portalChoice!: PortalChoice;
   worldChoice!: WorldChoice;
+  /** les cartes de la diplomatie de l'archipel : le choix de l'allié, le dénouement du conflit des deux îles */
+  diploChoice!: DiploChoice;
+  /** la bataille aux côtés de l'allié est en cours (à venir : toujours faux pour l'instant) ; on ne change pas d'âge pendant */
+  allyBattle = false;
   /** temps passé en jeu depuis la fin du dernier écran de chargement (s) : la carte du portail attend que le joueur soit arrivé */
   private portalCalm = 0;
   /** l'alunissage en direct, pendant l'expédition « Un homme sur la Lune » */
@@ -520,6 +526,15 @@ class Game implements UIHost {
     this.cam.rightClick = (e) => { if (this.islePlace) { this.tools.escape(); this.endIslePlace(); return; } if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
     this.worldChoice = new WorldChoice(uiRoot, { click: () => audio.sfxClick(), explore: () => void this.exploreWorld(), stay: () => { this.world.explore = 'no'; this.ui.update(); this.saveNow(); } });
+    this.diploChoice = new DiploChoice(uiRoot, {
+      diplo: () => this.world.diplo, click: () => audio.sfxClick(),
+      ally: (p) => {
+        if (!chooseAlly(this.world.diplo, p)) return;
+        this.ui.banner(trx('Une alliance !'), trx('{people} sont nos alliés', { people: peopleName(p).replace(/^./, (c) => c.toUpperCase()) }));
+        this.ui.update(); this.saveNow();
+      },
+      path: (p) => this.choosePath(p),
+    });
     this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart(), thumb: (k, age) => this.thumbs.get(k, Math.max(age, KINDS[k].minAge), true) });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
     this.kingStage = new KingdomStage({
@@ -545,6 +560,16 @@ class Game implements UIHost {
       else this.ui.showReport(r);
       this.ui.update();
     };
+    // la diplomatie de l'archipel : pas de passage d'âge pendant la bataille, et l'avertissement du traité, dit une fois
+    // les îles découvertes (fin de la cinématique) : un navire peut aller saluer leurs peuples
+    this.onIslesRevealed = () => { if (!this.world.exp.done.includes('contact')) this.ui.toast(trx('🤝 Deux peuples vivent sur ces îles : l’expédition « Le premier contact » peut aller les saluer.'), () => this.ui.gotoMission('contact')); };
+    this.sim.beforeAdvance = () => {
+      const g = ageGate(this.world, this.sim.age, this.allyBattle);
+      if (!g) return true;
+      if (g.warn) this.world.diplo.warned = true;
+      this.ui.toast(g.why);
+      return false;
+    };
     this.sim.onAgeUp = (age) => {
       // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
       this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
@@ -560,6 +585,8 @@ class Game implements UIHost {
       // d'abord le message de passage d'âge (la bannière reste ~4,2 s), puis la fenêtre des bâtiments
       // (au bac à sable, tout est déjà ouvert : pas de liste)
       if (!this.world.sandbox) setTimeout(() => this.ui.showNewAge(age), 3600);
+      // le Moderne : les deux îles règlent sans nous un conflit encore ouvert (après la bannière du nouvel âge)
+      if (settleAtAge(this.world.diplo, age, archipelagoOn(this.world))) setTimeout(() => this.treatyBanner(), 4600);
       audio.sfxAgeUp();
       this.propsDirty = true;
     };
@@ -969,6 +996,42 @@ class Game implements UIHost {
     this.isleLayer.fx.onClash = (k) => this.audio.sfxClash(k);
     this.scene.add(this.isleLayer.group);
   }
+
+  /**
+   * La diplomatie de l'archipel, à chaque image : le traité d'une partie chargée déjà au Moderne, puis, au calme (en jeu
+   * depuis 3 s, en surface, sans fenêtre ni fondu ni autre carte), la carte du choix de l'allié tant qu'il n'est pas choisi,
+   * et celle du dénouement une fois, à l'âge industriel
+   */
+  private stepDiplo() {
+    const w = this.world, d = w.diplo;
+    if (!archipelagoOn(w)) return;
+    if (settleAtAge(d, this.sim.age, true)) this.treatyBanner();
+    const calm = this.portalCalm > 3 && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading && !this.portalChoice.visible && !this.diploChoice.visible && !this.tutorial.active;
+    if (!calm) return;
+    if (allyPending(w)) this.diploChoice.showAlly();
+    else if (endgameOpen(w, this.sim.age) && !d.asked) { d.asked = true; this.diploChoice.showPath(); }
+  }
+
+  /** Le traité des deux îles : la bannière, une seule fois (au passage au Moderne) */
+  private treatyBanner() { this.ui.banner(trx('Le traité des deux îles'), trx('Les deux îles ont fait la paix entre elles, sans nous')); this.saveNow(); }
+
+  /** La voie du dénouement : la paix ouvre les pourparlers, la guerre attend sa bataille, la neutralité ne fait rien */
+  private choosePath(p: 'peace' | 'war' | 'neutral') {
+    if (!choosePath(this.world.diplo, p)) return;
+    if (p === 'peace') this.ui.toast(trx('🕊️ La voie de la paix : l’expédition « Les émissaires » vous attend.'), () => this.ui.gotoMission('envoys'));
+    else if (p === 'war') { if (!startAllyBattle(this.world)) this.ui.toast(trx('⚔️ La guerre est engagée aux côtés de notre allié. La grande bataille reste à venir.')); }
+    else this.ui.toast(trx('Notre village reste à l’écart : au Moderne, les deux îles régleront leur conflit sans nous.'));
+    this.ui.update(); this.saveNow();
+  }
+
+  /** La ligne en tête du rayon Vie, à l'âge industriel : le conflit des deux îles, à régler (ou la voie à changer) */
+  diploLine() {
+    if (!endgameOpen(this.world, this.sim.age)) return null;
+    const p = this.world.diplo.path;
+    const now = p === 'peace' ? trx('la paix') : p === 'war' ? trx('la guerre') : p === 'neutral' ? trx('à l’écart') : null;
+    return { text: now ? trx('⚖️ Le conflit des deux îles : {path}', { path: now }) : trx('⚖️ Le conflit des deux îles'), button: now ? trx('Changer…') : trx('Choisir…') };
+  }
+  openDiploChoice() { this.diploChoice.showPath(); }
 
   /** La ligne du rayon Militaire : le PvE à choisir, ou le portail refermé à rouvrir (rien une fois qu'on affronte les démons) */
   /** La partie peut-elle encore s'agrandir à l'archipel ? (continent de 192, version 3) */
@@ -1921,13 +1984,15 @@ class Game implements UIHost {
     holdIsle(w, gdt, this.time.dayLen);
     // la guerre : la faction des Enfers, ses incursions sur l'île, la garnison
     this.stepWar(dt, gdt);
+    this.stepDiplo();
     this.stepFarewell(dt);
     this.stepKingCrowd();
     this.railway.update(gdt);
     this.expView.update(gdt);
     this.spaceCast.update(this.expeditions.active);
     // une équipe rentre victorieuse : tout le village fait la fête au cœur du village, à la mode de son âge
-    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); }
+    // (la fête des trois peuples : deux fois plus de feux et de musique)
+    for (const a of this.expeditions.active) if (a.phase === 'home' && a.ok && !this.feted.has(a.id)) { this.feted.add(a.id); this.festAt(a.base[0], a.base[1]); if (a.m.id === 'feast') this.festAt(a.base[0], a.base[1]); }
     this.fest.update(dt);
     this.pens.update(gdt);
     // la caméra accompagne l'équipe

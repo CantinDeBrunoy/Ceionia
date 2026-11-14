@@ -68,6 +68,70 @@ const food = (n: number, days?: number): Effect => ({ t: 'need', need: 'food', n
 const joy = (n: number, days?: number): Effect => ({ t: 'need', need: 'joy', n, days });
 
 export const EVENTS: ExpEvent[] = [
+  // ---------------- La diplomatie de l'archipel : le premier contact, puis les pourparlers de la paix ----------------
+  // (les pourparlers ne peuvent pas échouer : leurs options changent le récit et les petits gains, jamais le risque)
+  {
+    id: 'warsails', where: ['river'], missions: ['contact'], water: 'sea', title: 'Des voiles de guerre',
+    text: 'Deux escadres des îles s’affrontent droit devant. Notre navire est encore loin.',
+    options: [
+      { wait: true, label: 'Attendre qu’elles s’éloignent', risk: 0.85, work: 8, text: 'On a attendu que les escadres rentrent au port avant d’avancer.' },
+      { label: 'Contourner largement', risk: 1, work: 4, text: 'On a fait un grand détour par le large.' },
+      { label: 'Passer entre elles, pavillon blanc hissé', risk: 1.3, work: -4, bonus: [joy(1, 4)], text: 'On est passé entre les deux escadres, pavillon blanc au mât : les deux camps ont salué notre audace.' },
+    ],
+  },
+  {
+    id: 'gifts', where: ['river'], missions: ['contact'], water: 'sea', title: 'Quels présents offrir ?',
+    text: 'Une barque vient à notre rencontre. Que lui offrir pour saluer son peuple ?',
+    options: [
+      { label: 'Nos plus belles poteries', risk: 0.9, text: 'Nos poteries ont fait sensation.' },
+      { label: 'Des semences de nos champs', risk: 0.9, bonus: [{ t: 'need', need: 'food', n: 2, days: 4 }], text: 'Nos semences ont été échangées contre des fruits inconnus.' },
+      { label: 'Un simple salut, sans rien donner', risk: 1.2, work: -3, text: 'Un salut sans présent : l’accueil a été plus froid.' },
+    ],
+  },
+  {
+    id: 'mistrust', where: ['river'], missions: ['envoys'], water: 'sea', title: 'Un accueil méfiant',
+    text: 'Sur le quai, des gardes en armes. Leur chef demande pourquoi nous venons.',
+    options: [
+      { label: 'Parler de la paix, simplement', risk: 1, text: 'Nos émissaires ont parlé de paix, simplement, et les gardes ont baissé leurs lances.' },
+      { label: 'Offrir un présent d’abord', risk: 1, bonus: [joy(1, 4)], text: 'Un présent d’abord : les gardes ont souri.' },
+      { wait: true, label: 'Attendre qu’on nous invite', risk: 1, work: 6, text: 'On a attendu sur le quai jusqu’à ce qu’on nous invite à entrer.' },
+    ],
+  },
+  {
+    id: 'grievance', where: ['river'], missions: ['envoys', 'truce'], water: 'sea', title: 'Une vieille querelle',
+    text: 'Un chef rappelle une vieille querelle : une barque coulée, il y a des années. Il veut des excuses.',
+    options: [
+      { label: 'Proposer que chacun s’excuse', risk: 1, text: 'Chacun a présenté ses excuses : la vieille querelle est oubliée.' },
+      { label: 'Offrir de payer la barque', risk: 1, bonus: [{ t: 'need', need: 'jobs', n: 1, days: 4 }], text: 'Nos charpentiers construiront une barque neuve : la querelle est réglée.' },
+      { label: 'Changer de sujet', risk: 1, work: 4, text: 'On a parlé d’autre chose, et la querelle s’est perdue en route.' },
+    ],
+  },
+  {
+    id: 'seat', where: ['river'], missions: ['truce'], water: 'sea', title: 'Qui s’assied où ?',
+    text: 'Les deux chefs refusent de s’asseoir l’un en face de l’autre.',
+    options: [
+      { label: 'Une table ronde', risk: 1, text: 'Une table ronde, et plus personne en face de personne.' },
+      { label: 'Côte à côte, face à la mer', risk: 1, bonus: [joy(1, 4)], text: 'Côte à côte face à la mer, les deux chefs ont fini par sourire.' },
+      { label: 'Notre chef au milieu', risk: 1, text: 'Notre chef s’est assis entre eux deux, et la discussion a commencé.' },
+    ],
+  },
+  {
+    id: 'menu', where: ['river'], missions: ['feast'], water: 'sea', title: 'Le menu de la fête',
+    text: 'Les invités montent à bord. Il faut encore décider du plat de la fête.',
+    options: [
+      { label: 'Un plat de chaque peuple', risk: 1, bonus: [{ t: 'need', need: 'food', n: 2, days: 4 }], text: 'Un plat de chaque peuple : tout le monde a goûté à tout.' },
+      { label: 'Notre spécialité', risk: 1, text: 'Notre spécialité a été servie, et redemandée.' },
+      { label: 'Un grand gâteau à trois étages', risk: 1, bonus: [joy(1, 4)], text: 'Un gâteau à trois étages, un par peuple : il n’en est pas resté une miette.' },
+    ],
+  },
+  {
+    id: 'music', where: ['river'], missions: ['feast'], water: 'sea', title: 'Trois musiques',
+    text: 'Chaque peuple a amené ses musiciens. Qui jouera ce soir ?',
+    options: [
+      { label: 'Tous ensemble', risk: 1, bonus: [joy(1, 4)], text: 'Les trois orchestres ont joué ensemble : un drôle de mélange, et tout le monde a dansé.' },
+      { label: 'Chacun à son tour', risk: 1, text: 'Chaque orchestre a joué à son tour, jusque tard dans la nuit.' },
+    ],
+  },
   // ---------------- Au cosmodrome : nuages noirs sur le pas de tir, voyant rouge au pied de la fusée ----------------
   {
     id: 'winds', where: ['spaceport'], arrive: true, title: 'Vents violents en altitude',
@@ -544,12 +608,12 @@ for (const e of EVENTS) { localize(e, ['title', 'text']); for (const o of e.opti
 export const EVENT_BY: Record<string, ExpEvent> = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 
 /** Où en est l'équipe quand l'imprévu survient : sa destination, sa mission, ce qu'elle y fait, l'âge, et si elle arrive */
-export interface EventCtx { dest: DestKind; mission: string; scene: Scene; age: number; arrive: boolean; /** au large (la mer) ; climat chaud */ sea?: boolean; warm?: boolean; /** part du travail où il tombe (pendant le travail) */ at?: number }
+export interface EventCtx { dest: DestKind; mission: string; scene: Scene; age: number; arrive: boolean; /** au large (la mer) ; climat chaud */ sea?: boolean; warm?: boolean; /** part du travail où il tombe (pendant le travail) */ at?: number; /** seulement les imprévus qui nomment la mission (des pourparlers : ni requin ni grain) */ own?: boolean }
 
 /** Imprévus qui peuvent survenir à cette équipe, à ce moment-là (sans tenir compte de ceux déjà vus) */
 export function eventsFor(ctx: EventCtx): ExpEvent[] {
   return EVENTS.filter((e) => e.where.includes(ctx.dest)
-    && (!e.missions || e.missions.includes(ctx.mission)) && (!e.scenes || e.scenes.includes(ctx.scene))
+    && (!e.missions || e.missions.includes(ctx.mission)) && (!ctx.own || !!e.missions) && (!e.scenes || e.scenes.includes(ctx.scene))
     && !e.not?.includes(ctx.mission) && !e.notScenes?.includes(ctx.scene)
     && (!e.ages || (ctx.age >= e.ages[0] && ctx.age <= e.ages[1])) && (!e.arrive || ctx.arrive)
     && (e.from === undefined || (!ctx.arrive && (ctx.at ?? 1) >= e.from))

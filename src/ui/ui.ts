@@ -16,6 +16,7 @@ import { Expeditions, Report, ActiveExpedition, partyLimit } from '../sim/expedi
 import type { ExpEvent } from '../sim/events';
 import { Railway, Train, isStation } from '../sim/railway';
 import type { RailEditState } from '../build/trackEdit';
+import { kindOffered, treatyAhead } from '../sim/diplomacy';
 import { effectSummary, effectChips, splitIntro, mandatoriesFor, isLegendary, isMilitary, Mission, MISSIONS, redoEffects, REDO_DAYS, penHerds, choiceAt } from '../sim/missions';
 import type { World } from '../world/world';
 import { isleBlight } from '../world/blight';
@@ -61,6 +62,9 @@ export interface UIHost {
   exploreLine?(): { text: string; button: string } | null;
   openWorldChoice?(): void;
   openPortalChoice?(): void;
+  /** la diplomatie de l'archipel : la ligne du conflit des deux îles (rayon Vie) et sa carte */
+  diploLine?(): { text: string; button: string } | null;
+  openDiploChoice?(): void;
   /** la vue va sur l'île du portail (pour y bâtir) */
   goIsle?(): void;
   /** brouillard visible (0 … 1), et le dissiper */
@@ -815,7 +819,7 @@ export class UI {
   /** Ce que montrent les vignettes du rayon ouvert (nombre de chaque bâtiment, cadenas) : elles se redessinent quand ça change */
   private tilesKey = '';
   private tilesNow() {
-    return this.tab === 'build' ? (this.cat === 'war' ? this.host.pveLine?.()?.button ?? '' : this.cat === 'prod' ? this.host.exploreLine?.()?.button ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
+    return this.tab === 'build' ? (this.cat === 'war' ? this.host.pveLine?.()?.button ?? '' : this.cat === 'prod' ? this.host.exploreLine?.()?.button ?? '' : '') + (this.cat === 'life' ? this.host.diploLine?.()?.text ?? '' : '') + +isStart(this.host.world) + KIND_ORDER.filter((k) => KINDS[k].cat === this.cat).map((k) => (this.lockOf(k) ? 'L' : this.host.sim.counts[k] ?? 0)).join() : this.tab + this.land;
   }
 
   /** keep : la rangée garde son défilement (les vignettes se mettent à jour sous les yeux du joueur) */
@@ -847,7 +851,7 @@ export class UI {
       // ce qu'on peut bâtir d'abord, les bâtiments encore verrouillés ensuite (chacun dans l'ordre du catalogue) ; ceux des âges
       // lointains ne se montrent pas encore : seulement ce qu'apportera l'âge suivant. Les vignettes se rangent par groupe de
       // lecture (Nourriture, Matériaux, Santé…), chacun sous son titre
-      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1 && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge)), shut = (k: KindId) => +!!this.lockOf(k);
+      const kinds = KIND_ORDER.filter((k) => KINDS[k].cat === this.cat && KINDS[k].minAge <= age + 1 && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge) && kindOffered(this.host.world, k)), shut = (k: KindId) => +!!this.lockOf(k);
       const tile = (k: KindId) => {
         const d = KINDS[k], locked = !!this.lockOf(k), a = Math.max(age, d.minAge), n = this.host.sim.counts[k] ?? 0, gv = givesOf(k, a);
         const badge = locked ? `<i class="badge lock">${pic('🔒', 14)}</i>` : n ? `<i class="badge">${n}</i>` : '';
@@ -877,11 +881,15 @@ export class UI {
     // « Explorer le monde », pour qui est resté sur son île : une ligne en tête du rayon Production (celui du port)
     const exp = build && this.cat === 'prod' ? this.host.exploreLine?.() : null;
     if (exp) html = `<div class="grp pvehead"><span>${exp.text}</span><button data-explore="1">${exp.button}</button></div>${html}`;
+    // le conflit des deux îles (archipel, âge industriel) : une ligne en tête du rayon Vie
+    const dip = build && this.cat === 'life' ? this.host.diploLine?.() : null;
+    if (dip) html = `<div class="grp pvehead diplohead"><span>${dip.text}</span><button data-diplo="1">${dip.button}</button></div>${html}`;
     const items = $('#items'), left = items.scrollLeft;
     items.innerHTML = html;
     items.scrollLeft = keep ? left : 0;
     items.querySelector<HTMLButtonElement>('[data-pve]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openPortalChoice?.(); });
     items.querySelector<HTMLButtonElement>('[data-explore]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openWorldChoice?.(); });
+    items.querySelector<HTMLButtonElement>('[data-diplo]')?.addEventListener('click', () => { this.host.audio.sfxClick(); this.host.openDiploChoice?.(); });
     this.markFirst();
     this.bindTools(items);
     items.querySelectorAll<HTMLButtonElement>('button[data-kind]').forEach((b) => {
@@ -1374,9 +1382,9 @@ export class UI {
 
   /** Fenêtre d'un nouvel âge : les bâtiments qui apparaissent, chacun à bâtir d'un clic (et ses améliorations) */
   showNewAge(age: number) {
-    const fresh = KIND_ORDER.filter((k) => KINDS[k].minAge === age && !this.lockOf(k));
+    const fresh = KIND_ORDER.filter((k) => KINDS[k].minAge === age && !this.lockOf(k) && kindOffered(this.host.world, k));
     // ceux qu'une expédition débloquerait : visibles mais grisés, avec le nom de l'expédition
-    const shut = KIND_ORDER.filter((k) => KINDS[k].minAge <= age && KINDS[k].reqMission && !this.host.world.missionDone(KINDS[k].reqMission!)
+    const shut = KIND_ORDER.filter((k) => KINDS[k].minAge <= age && KINDS[k].reqMission && !this.host.world.missionDone(KINDS[k].reqMission!) && kindOffered(this.host.world, k)
       && !(KINDS[k].maxAge !== undefined && age > KINDS[k].maxAge!));
     if (!fresh.length && !shut.length) return;
     const lockedTile = (k: KindId) => {
@@ -1433,7 +1441,9 @@ export class UI {
     const sbReq = sb ? `<b>${tr('Changer d’âge : sans condition')}</b>${AGES.map((a, i) => `<button type="button" class="ageSet${i === sim.age ? ' now' : ''}" data-setage="${i}">${a.name}<small>${a.tagline}</small></button>`).join('')}` : null;
     if (sbReq !== null) { if ($('#ageReq').dataset.v !== sbReq) { $('#ageReq').innerHTML = sbReq; $('#ageReq').dataset.v = sbReq; } } else { delete $('#ageReq').dataset.v; $('#ageReq').innerHTML = ap
       ? `<b>${tr('Vers : {age}', { age: AGES[ap.next].name })}</b>` + ap.items.map((i) => `<span class="${i.have >= i.need ? 'ok' : ''} kind"${i.kind ? ` data-kind="${i.kind}" title="${sim.whereOf(i.kind)} ${tr('— cliquer pour le bâtir')}"` : ` data-req="${reqOf(i.label)}" title="${tr('Cliquer pour savoir comment l’obtenir')}"`}>${i.have >= i.need ? '✓' : '•'} ${i.mission ? tr('expédition « {title} »', { title: tr(i.mission) }) : tr(i.label)}${i.kind ? ` <small>${sim.whereOf(i.kind).replace(/^[^›]*› /, '')}</small>` : ''} <em>${Math.min(i.have, 999)}/${i.need}</em></span>`).join('')
-      : tr('Dernier âge atteint : profitez de votre village !'); }
+      : tr('Dernier âge atteint : profitez de votre village !');
+      // l'archipel : avant le Moderne, un conflit encore ouvert entre les deux îles se réglera sans nous (dit ici tant qu'il dure)
+      if (ap && treatyAhead(this.host.world, sim.age)) $('#ageReq').insertAdjacentHTML('beforeend', `<span class="treatyNote">${pic('⚖️', 14)} ${tr('Les deux îles vont régler leur conflit sans vous.')}</span>`); }
     for (const n of NEEDS) {
       const el = $('#n-' + n.k), need = sim[n.k], housing = n.k === 'housing';
       const fill = housing ? (need.cap > 0 ? Math.min(1, sim.pop / need.cap) : 0) : need.demand <= 0 ? 1 : Math.min(1, need.cap / need.demand);

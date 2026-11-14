@@ -415,8 +415,8 @@ export class ToolController implements ToolInput {
       this.downAt = [e.x, e.y];
       return;
     }
-    // version 4 : les autres îles ne se bâtissent ni ne se transforment
-    if (!this.h.world.inMain(Math.floor(this.hit.x), Math.floor(this.hit.z))) { this.pressed = false; this.h.toast(tr('Hors de votre île : on ne bâtit pas sur les autres îles')); return; }
+    // version 4 : les autres îles ne se bâtissent ni ne se transforment (sauf le cosmodrome, chez l'allié : voir `World.canPlace`)
+    if (!(t === 'build' && this.kind === 'spaceport') && !this.h.world.inMain(Math.floor(this.hit.x), Math.floor(this.hit.z))) { this.pressed = false; this.h.toast(tr('Hors de votre île : on ne bâtit pas sur les autres îles')); return; }
     this.beginStroke();
     if (t === 'volcano') {
       // le volcan se pose d'un seul clic, à l'écart des bâtiments

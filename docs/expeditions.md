@@ -11,20 +11,21 @@ Une mission = plusieurs **choix** (en général deux, parfois trois, un seul pou
 ## Règles du jeu
 
 ### Les missions
-`MISSIONS` (`missions.ts`) : 35 missions, de l’âge 0 à l'âge 5. Une mission affichée est celle de l'âge du village ou d'un âge passé (`Expeditions.list`). Réussie, elle peut se refaire (`redoEffects`, voir plus bas).
+`MISSIONS` (`missions.ts`) : 39 missions, de l’âge 0 à l'âge 5. Une mission affichée est celle de l'âge du village ou d'un âge passé (`Expeditions.list`), et, pour les quatre de la diplomatie de l'archipel, seulement quand la partie en est là (`missionOffered`, voir [iles.md](iles.md)). Réussie, elle peut se refaire (`redoEffects`, voir plus bas).
 
 | Âge | Missions (★ obligatoire, → bâtiment débloqué) |
 |---|---|
 | 0 | `herd` ★ → enclos (`pen`), `berries`, `flint`, `honey` → rucher (`apiary`), `mammoth` ★ |
 | 1 | `seeds` ★, `horses` → écurie (`stable`), `fishing`, `springs` → bains (`baths`), `pugilat` → arène (`arena`), `kraken` ★, `portal` ★ → tour de garde (`watchtower`), `megalodon` |
-| 2 | `mine` ★ → mine, `wolf`, `fair` → cirque, `brewer` → taverne, `dragon` ★, `caravel` ★ → chantier naval, `spice` (exige le chantier naval) |
-| 3 | `railway` ★, `coal`, `motorcar` ★ → usine automobile, `flight` → aérodrome, `oil` ★ → raffinerie, `galleon` (chantier naval) |
+| 2 | `mine` ★ → mine, `wolf`, `fair` → cirque, `brewer` → taverne, `dragon` ★, `caravel` ★ → chantier naval, `spice` (exige le chantier naval), `contact` (archipel seulement) |
+| 3 | `envoys`, `truce` → monument de la concorde, `feast` (archipel, voie de la paix), `railway` ★, `coal`, `motorcar` ★ → usine automobile, `flight` → aérodrome, `oil` ★ → raffinerie, `galleon` (chantier naval) |
 | 4 | `summit` ★, `reef`, `stars` → observatoire, `games` (stade, football, basket, tennis, parc aquatique, ski), `trawl` (halle aux poissons) |
 | 5 | `seafarm` (ferme marine), `rocket` (cosmodrome), `moon` (fusée réussie), `colony` (lune réussie, cosmodrome, fusion) |
 
 - `Mission.requires` : `missions` (à réussir avant) et `kinds` (à avoir bâtis). Un bâtiment amélioré compte (`Expeditions.has` suit la lignée `lineOf` ; `hasFor` / `reqLine` pour les listes de plusieurs bâtiments). `Expeditions.missing` produit le texte de ce qui manque.
 - `portal` ne compte comme obligatoire que si la carte a une île (`world.portal`, voir [portail-ile.md](portail-ile.md)) : `sim.ts` et `ui.ts` filtrent `m.id !== 'portal' || w.portal`, et `why` refuse le départ sans île.
 - Obligatoires (`mandatoriesFor(age)`) : toutes celles de l'âge sont à réussir pour l'âge suivant (voir [ages.md](ages.md)). `isLegendary` (mammouth, ou gain d'un trophée de `LEGENDS`) et `isMilitary` (`wolf` ou un choix avec `troop`) servent aux étiquettes et aux sous-onglets de la fenêtre.
+- **Pourparlers** (`Mission.talks`, la paix de l'archipel : `envoys`, `truce`, `feast`) : `chance` vaut 0 (jamais d'échec), aucune option d'imprévu ne blesse, seuls les imprévus qui nomment la mission surviennent (`EventCtx.own`), et `why` refuse de refaire une étape réussie (`missionWhy`). Détails : [iles.md](iles.md).
 - `colony` a `farewell: true` : tout le village accompagne les colons, ils ne reviennent pas, l'issue est aussitôt un récit ; `VICTORY = 'colony'` ouvre l'écran de fin ([fin-de-partie.md](fin-de-partie.md)).
 
 ### Un choix (`Choice`)
@@ -32,7 +33,7 @@ Champs lus par le jeu : `dest` (lieu), `party` (habitants), `work` (secondes de 
 Les champs `troop`, `mounts`, `fuel` et `ages` existent dans le type mais **aucune mission ne les emploie plus** (voir pièges). `choiceAt(c, age)` applique `ages` (libellés selon l'âge).
 
 ### Effets (`Effect`) et gains
-`herd` (bêtes ramenées), `ore` (minerai du village), `need` (`food`, `water`, `jobs`, `joy` : durable, ou `days` jours), `perk` (savoir-faire durable : champs +30 % pour `seeds`, trophées, forge), `injured`, `unherd`. `applyEffects` les applique. Refaire une mission réussie : `redoEffects` retire les `perk` et limite les bonus durables à `REDO_DAYS = 4` jours.
+`herd` (bêtes ramenées), `ore` (minerai du village), `need` (`food`, `water`, `jobs`, `joy` : durable, ou `days` jours), `perk` (savoir-faire durable : champs +30 % pour `seeds`, trophées, forge), `injured`, `unherd`, `diplo` (la diplomatie de l'archipel avance : `meet`, `post`, `truce`, `feast`, voir [iles.md](iles.md)). `applyEffects` les applique. Refaire une mission réussie : `redoEffects` retire les `perk` et les `diplo` et limite les bonus durables à `REDO_DAYS = 4` jours.
 `effectSummary` / `effectChips` les affichent (résumé du récit, pastilles de la carte).
 
 ### Risque, équipe, durée
@@ -115,7 +116,7 @@ En bas : « Retour » (referme la fenêtre de départ), une ligne qui dit pourqu
 ## Pièges et invariants
 - **Une équipe en route n'est pas sauvegardée** : `ActiveExpedition` n'est pas dans `world.toJSON`. L'équipement qu'elle emporte a été retiré de `exp.gear` au départ : sauvegarder (ou recharger) pendant une expédition perd ces pièces. Bug probable, non corrigé.
 - Données mortes mais gardées : `Choice.troop`, `mounts`, `fuel`, `ages`, `Mission.repeat`, `EventOption.scout`, `ActiveExpedition.targets/entry/front/ambush/might`, `Expeditions.ambushStep`, `exp.wins` (voir [monde-souterrain.md](monde-souterrain.md)). Ne pas les supprimer sans le moteur des Enfers ; ne pas en dépendre pour une nouvelle mission.
-- Huit imprévus n'ont pas d'entrée dans `stageEvent` : `lunge`, `bones`, `flames`, `crossing`, `runes`, `rumble`, `flame`, `record`. La décision s'affiche, la scène ne joue rien de propre (à vérifier si c'est voulu : le commentaire de `events.ts` promet que le texte ne dit que ce qu'on voit).
+- Huit imprévus n'ont pas d'entrée dans `stageEvent` : `lunge`, `bones`, `flames`, `crossing`, `runes`, `rumble`, `flame`, `record` ; ceux de la diplomatie non plus (`warsails`, `gifts`, `mistrust`, `grievance`, `seat`, `menu`, `music`), leurs textes ne parlent que de ce qui se passe à bord. La décision s'affiche, la scène ne joue rien de propre (à vérifier si c'est voulu : le commentaire de `events.ts` promet que le texte ne dit que ce qu'on voit).
 - Une pièce d'équipement ou un bâtiment renommé selon l'âge : les textes passent par `nameOf` (`Expeditions`), pas par un nom figé (test « les conditions nomment les bâtiments comme à l'âge du village »).
 - L'imprévu « arrive » seulement à l'arrivée ; s'il n'y en a aucun, `arriveMiss` reporte le premier au travail (avant, il était perdu avec le suivant).
 - `decide` ne fait jamais reculer l'avancement : `a.t` est remis à l'échelle quand `extra` change.

@@ -44,6 +44,7 @@ Le `README.md` à la racine décrit le jeu côté joueur (contenu, bâtiments, c
 ### Expéditions
 - [expeditions.md](expeditions.md) : départ, déroulé, imprévus, retour, gains, suivi par la caméra, véhicules.
 - [equipement.md](equipement.md) : pièces, fabrication, exigences des missions.
+- [iles.md](iles.md) : les îles rivales (archipel accepté) : premier contact, choix de l'allié, paix, guerre, neutralité et traité du Moderne, cosmodrome chez l'allié.
 - [monde-souterrain.md](monde-souterrain.md) : retiré côté joueur ; ce qui en reste (moteur de rendu repris par les Enfers, données gardées pour les sauvegardes).
 
 ### La guerre

@@ -36,12 +36,17 @@ function village(age: number) {
   ex.pop = () => 60;
   // (les bâtiments et missions exigés ne comptent pas ici : on veut voir chaque mission se jouer)
   ex.missing = () => [];
+  // (la diplomatie de l'archipel : une partie qui a accepté l'archipel, sur la voie de la paix ; l'île principale couvre la carte)
+  w.isles = { main: { x: 0, z: 0, n: N }, rivals: [], small: [] };
+  w.diplo.met = ['orient', 'asie']; w.diplo.ally = 'orient'; w.diplo.path = 'peace';
   return { w, agents, ex, view: new ExpeditionView(w, agents, ex) };
 }
 
 /** Joue un choix jusqu'au bout ; rend le nombre d'images (null : pas parti) */
 function run(v: ReturnType<typeof village>, m: Mission, ci: number, pick: number) {
   for (const g of v.agents.agents) g.rest = 0;
+  // (une étape de la diplomatie ne se refait pas : chaque choix se joue comme la première fois)
+  v.w.exp.done = v.w.exp.done.filter((id) => id !== m.id);
   const a = v.ex.start(m, ci, m.age);
   if (!a) return null;
   let i = 0;

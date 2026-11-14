@@ -10,6 +10,7 @@
 ## Règles du jeu
 - **Âges** : index 0 à 5 (Préhistoire, Antiquité, Médiéval, Industriel, Moderne, Futuriste, `AGES`). Un bâtiment se pose à partir de `minAge`. Les bâtiments du village changent de modèle tout seuls quand l'âge monte (voir plus bas).
 - **Tailles** (`size`, en cases) : 1 (maison, puits, lampadaire, ferme), 2 (atelier, école, soins, temple, moulin…), 3 (place, raffinerie, port, stade, cirque, arène, zoo, arcologie…), 4 (aéroport, cosmodrome). Le champ `size` est la taille actuelle ; `Building.small` marque un ancien bâtiment resté à l'ancienne taille (`smallSize`, `sizeOf`).
+- **Monument de la concorde** (`concord`, 2 × 2, âge 3, rayon Vie, groupe Monuments) : débloqué par l'expédition `truce` de la paix de l'archipel, et masqué partout ailleurs (`kindOffered`, voir [iles.md](iles.md)). Modèle `concord` dans `models.ts`.
 - **Âge maximum** (`maxAge`) : seuls `acropolis`, `forum` et `senate` l'ont (1) : on ne les bâtit plus après l'Antiquité (le menu les masque, `lockOf` refuse avec « c'est trop tard »). Ceux déjà posés restent et évoluent.
 - **Déblocages** :
   - `reqMission` : expédition à réussir (`pen`, `stable`, `apiary`, `mine`, `refinery`, `baths`, `tavern`, `circus`, `arena`, `carworks`, `aerodrome`, `shipyard`, `observatory`, `watchtower`). `lockOf` renvoie « Débloqué par l'expédition … » ; pour `portal`, le texte parle de la faille violette.
