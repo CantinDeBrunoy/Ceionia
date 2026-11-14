@@ -3,7 +3,7 @@ import './hudTheme.css';
 import './i18n/en';
 import { onLangChange, tr as trx, nplural } from './i18n';
 import * as THREE from 'three';
-import { World, N, VEG_VOLCANO, setMapSize } from './world/world';
+import { World, N, VEG_VOLCANO, VEG_FOREST, setMapSize } from './world/world';
 import { buildingSpots, pickVoices } from './audio/spots';
 import { CALLS } from './audio/voices';
 import { Underground, UZ_NAMES } from './world/underground';
@@ -88,6 +88,7 @@ import { IsleRuins } from './render/isleRuins';
 import { setFxDensity } from './render/combatFx';
 import { War, clockText } from './sim/war';
 import { KingdomStage } from './kingdomStage';
+import { TrophyStage } from './trophyStage';
 import { WarTips, WarTipState, WAR_TIP_TEXT, type WarTipId } from './ui/warTips';
 import { BattleLayer } from './render/battleUnits';
 import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
@@ -209,6 +210,8 @@ class Game implements UIHost {
   private homeBtn: HomeButton;
   /** la mise en scène du royaume des Enfers (combat du roi, victoire) */
   kingStage: KingdomStage;
+  /** la petite cinématique d'un trophée qui rejoint la place (retour d'une expédition légendaire) */
+  trophyStage: TrophyStage;
   /** les aides du volet militaire */
   warTips!: WarTips;
   /** la carte du choix du portail (affronter les démons ou refermer le portail) */
@@ -530,6 +533,20 @@ class Game implements UIHost {
       age: () => this.sim.age,
       village: () => this.villageCenter(), fest: (x, z) => this.festAt(x, z), crowd: (on, x, z) => this.kingCrowd(on, x, z),
     });
+    this.trophyStage = new TrophyStage({
+      cam: this.cam, scene: this.scene, root: uiRoot, trophies: this.trophies, audio,
+      won: () => trophiesWon(this.world.exp), calm: () => this.trophyCalm(), surface: () => this.mode === 'surface' && !this.isleCmd,
+      ground: (x, z) => w.hAt(x, z),
+      top: (x, z) => {
+        const cx = Math.floor(x), cz = Math.floor(z);
+        if (cx < 0 || cz < 0 || cx >= N || cz >= N) return -Infinity;
+        const k = cz * N + cx, b = w.occ[k] ? w.buildings.get(w.occ[k]) : undefined;
+        return w.hAt(x, z) + (w.veg[k] === VEG_FOREST ? 1.8 : b && b.kind !== 'gather' ? 1.3 : 0);
+      },
+      syncTrophies: () => { this.trophyT = 0; this.syncTrophies(); },
+      release: () => { this.follow(null); this.trainCam = null; this.incidentCam = null; this.hellFollow = false; },
+      fest: (x, z) => this.festAt(x, z),
+    });
     this.expeditions.onNews = (m) => this.ui.toast(m, undefined, m.startsWith('⚔️') ? 'danger' : 'info');
     this.railway.onNews = (m) => this.ui.info(m);
     // bouger la vue (glisser ou touches) lâche tout ce que la caméra suivait : train, incident, équipe d'expédition
@@ -539,11 +556,16 @@ class Game implements UIHost {
     this.tools.overlay = this.trackEdit;
     this.expeditions.onEvent = (a) => { audio.sfxClick(); this.ui.expEvent(a); };
     this.expeditions.onReport = (r) => {
+      const show = () => {
+        // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
+        if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: trx('le village'), pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
+        else this.ui.showReport(r);
+        this.ui.update();
+      };
+      // un trophée rejoint la place : sa cinématique d'abord (avec son carillon), le récit ensuite
+      if (r.ok && this.trophyStage.report(show)) return;
       if (r.ok) audio.sfxAgeUp(); else audio.sfxClick();
-      // la colonie fondée sur une autre planète : la fin de la partie (on peut continuer à bâtir), à la place du récit
-      if (r.ok && r.m.id === VICTORY && !r.redo) showVictory(uiRoot, { name: trx('le village'), pop: this.sim.pop, buildings: this.world.buildings.size, missions: this.world.exp.done.length, days: this.time.days }, undefined, () => this.toMenu());
-      else this.ui.showReport(r);
-      this.ui.update();
+      show();
     };
     this.sim.onAgeUp = (age) => {
       // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
@@ -601,7 +623,7 @@ class Game implements UIHost {
     // les aides du volet militaire (bulles facultatives, au moment utile)
     this.warTips = new WarTips({
       root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
-      busy: () => this.tutorial.active || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
+      busy: () => this.tutorial.active || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || this.trophyStage?.playing || document.body.classList.contains('photo'),
       act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
     });
     this.ui.info(save ? trx('Bon retour dans votre village !') : w.buildings.size ? trx('Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.') : trx('Commencez par « {name} », la place au centre du village (Bâtir › Vie & culture).', { name: this.sim.nameOf('gather') }));
@@ -942,7 +964,7 @@ class Game implements UIHost {
     const p = this.world.portal, v = this.cam.view();
     this.isleNear = this.mode === 'surface' && !!p && this.world.portalOpen && nearIsle(this.isleNear, Math.hypot(v.x - p.x, v.z - p.z), p.r);
     if (!this.isleNear) { if (this.isleCmd) this.leaveIsle(); return; }
-    if (this.isleCmd || this.fading || this.tools.tool !== 'none' || this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.railEdit || this.kingStage.playing) return;
+    if (this.isleCmd || this.fading || this.tools.tool !== 'none' || this.following !== null || this.trainCam !== null || this.incidentCam !== null || this.railEdit || this.kingStage.playing || this.trophyStage.playing) return;
     this.enterIsle();
   }
 
@@ -1125,6 +1147,7 @@ class Game implements UIHost {
     this.isleRuins.group.visible = this.mode === 'surface';
     if (this.mode !== 'hell') w.hellFx.length = 0;
     this.kingStage.update(dt);
+    this.trophyStage.update(dt);
     // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
     if (this.isleCmd && this.command.theater?.sim !== isle?.sim) { const t = this.isleTheater(); if (t) this.command.setTheater(t); else this.leaveIsle(); }
     // la défense de l'île posée depuis sa barre : la pose finit quand l'outil est lâché (Échap, clic droit) ou change
@@ -1316,6 +1339,19 @@ class Game implements UIHost {
 
   private stepKingCrowd() {
     for (const id of this.endCrowd) if (this.agents.memberDone(id)) this.agents.partyAct([id], 'cheer');
+  }
+
+  /** Pose les trophées sur la grande place (sauf ceux qui attendent leur cinématique) */
+  private syncTrophies() {
+    const c = this.villageCenter();
+    this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp).filter((id) => !this.trophyStage.hidden(id)));
+  }
+
+  /** Le joueur est tranquille, une cinématique peut passer : partie chargée, en surface, ni pose, ni fenêtre, ni bandeau, ni autre cinématique */
+  private trophyCalm() {
+    return !this.warming && this.mode === 'surface' && !this.isleCmd && !this.fading && this.tools.tool === 'none' && !this.railEdit && !this.islePlace && !this.command.active
+      && !this.ui.popupShowing() && !document.querySelector('#warAlert.show') && !this.ui.root.querySelector('.overlay:not(#menu)')
+      && !this.kingStage.playing && !document.body.classList.contains('photo') && !document.hidden;
   }
 
   /** La grande place du village (le lieu de rencontre de 3 × 3, sans entrée) la plus proche de (x, z), s'il y en a une */
@@ -2063,7 +2099,7 @@ class Game implements UIHost {
     }
     // une vignette 3D par image, et la barre de construction (ou l'onglet Bâtir de l'île et des Enfers) la montre dès qu'elle est prête
     if (this.thumbs.pump()) { this.ui.thumbsReady(); this.command.thumbsReady(); }
-    if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; const c = this.villageCenter(); this.trophies.sync(c ? this.plazaNear(c[0], c[1]) : null, trophiesWon(this.world.exp)); }
+    if ((this.trophyT -= dt) <= 0) { this.trophyT = 0.5; this.syncTrophies(); }
     this.saveTimer -= dt;
     if (this.saveTimer <= 0) { this.saveTimer = 15; this.saveNow(); }
     return ms;
