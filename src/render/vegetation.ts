@@ -24,7 +24,12 @@ import { Blight, blightAt, purityAt } from '../world/blight';
 export let CH = 16;
 export let NC = Math.ceil(N / CH);
 /** Tuiles pour la carte choisie : à appeler avant de construire la végétation et la faune */
-export function syncChunks() { CH = N > 128 ? 32 : 16; NC = Math.ceil(N / CH); }
+/**
+ * Côté des tuiles selon la carte. Au-delà de 256 cases, des tuiles de 48 : deux fois moins d'appels de dessin qu'avec 32 (la
+ * vue de haut de la carte de 384 passe de 14 à 20 images par seconde en téléphone simulé), pour 50 % de triangles en plus de
+ * près ; avec 64, trois fois plus de triangles de près
+ */
+export function syncChunks() { CH = N > 256 ? 48 : N > 128 ? 32 : 16; NC = Math.ceil(N / CH); }
 /** Distance caméra → tuile au-delà de laquelle les arbres passent en version simplifiée, et les menus détails disparaissent */
 const LOD_DIST = 48, DETAIL_DIST = 70;
 /** Au-delà, une tuile ne projette plus d'ombre ; les petits décors (rochers) disparaissent */
