@@ -57,6 +57,8 @@ export async function loadModels(onProgress?: (done: number, total: number) => v
 }
 
 export const hasModel = (n: ModelName) => isDrawn(n) || loaded.has(n);
+/** Un modèle déjà lu (les tests le lisent depuis public/models, sans passer par le chargeur du navigateur) */
+export function provideModel(n: ModelName, gltf: GLTF) { loaded.set(n, gltf); }
 
 export interface StaticModel {
   /** partie teintable (couleurs relatives ≈ 1, teinte donnée par le matériau : feuillage de saison, roche…) */
