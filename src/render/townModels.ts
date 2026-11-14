@@ -4,6 +4,7 @@ import { mergeLit } from './materials';
 import { mulberry32 } from '../core/rng';
 import type { People } from '../world/archipelago';
 import type { TownKind } from '../world/rivalTown';
+import { orientModel } from './models/oriental';
 
 /**
  * Les modèles des villes des deux peuples rivaux (décor de l'archipel, voir `rivalTowns.ts` et `docs/iles.md`) : un jeu
@@ -948,7 +949,7 @@ export function townModel(people: People, kind: TownKind, age: number, v: number
   let g = cache.get(key);
   if (g) return g;
   const p = new Parts(), o = people === 'orient';
-  switch (kind) {
+  if (!(o && orientModel(p, kind, a, vv, qw, qd))) switch (kind) {
     case 'house': (o ? oHouse : aHouse)(p, a, vv, qw, qd); break;
     case 'workshop': (o ? oWorkshop : aWorkshop)(p, a, vv, qw, qd); break;
     case 'temple': o ? oTemple(p, a) : aTemple(p, a, vv); break;
