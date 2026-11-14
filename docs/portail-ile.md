@@ -14,7 +14,7 @@ Au large du continent, une île porte une arche : le portail des Enfers. L'expé
 - À l'arrivée en Antiquité, un toast mène à la mission (`sim.onAgeUp`, `main.ts`) ; la bulle d'aide `portal` fait de même (`warTips.ts`).
 
 ### Le choix : affronter ou refermer
-- Dès que le portail est ouvert, `War.pve` vaut `ask`. `stepWar` ouvre alors **une seule fois** la carte du choix (`PortalChoice.show`, `war.choiceSeen`) si on est en surface, sans fenêtre ouverte ni fondu.
+- Dès que le portail est ouvert, `War.pve` vaut `ask`. `stepWar` ouvre alors **une seule fois** la carte du choix (`PortalChoice.show`, `war.choiceSeen`) si on est en surface, sans fenêtre ouverte ni fondu, et une fois en jeu : 3 s après la fin de l'écran de chargement (`portalCalm`), jamais par-dessus la barre de chargement.
 - « Affronter les démons » : `acceptPve()` → `pve = 'on'`, toast qui dit de poser une tour et une caserne. « Fermer le portail » : `closePortal()` → `pve = 'off'`, éclat doré (`portalSealed`), tourbillon éteint (`War.closed`, lu par `portalView.update` dans `main.ts`).
 - `closePortal` refuse si une vague est en cours, annoncée (`coming`) ou si l'invasion est déjà repoussée (`inv === 'done'`) ; la carte ne le dit pas (elle se ferme sans message).
 - Portail fermé (`off`) : aucune vague, aucun passage (`hellWhy` : « Le portail est refermé »), les bulles d'aide de l'île se taisent (`WarTipState.pve`). La garnison, la caserne et les soins continuent. Rouvrir : bouton « Rouvrir » en tête du rayon Militaire (`pveLine`, `ui.ts`), bouton « Rouvrir » du bandeau de l'île (`waveStatus`), ou toast de `enterHell`. La carte rouverte propose « Affronter les démons » ou « Garder le portail fermé » (`data-a="keep"`, sans effet).
