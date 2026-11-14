@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { wrapAngle } from '../core/rng';
 import { World } from '../world/world';
 import { makeBeast, beastYaw, GESTURES, BeastKind } from './beasts';
 import { play, Actor } from './assets';
@@ -71,8 +72,7 @@ export class ZooView {
       s.x += (dx / d) * k; s.z += (dz / d) * k;
       // tourne vers sa route sans à-coup
       let dh = Math.atan2(dx, dz) - s.heading;
-      while (dh > Math.PI) dh -= Math.PI * 2;
-      while (dh < -Math.PI) dh += Math.PI * 2;
+      dh = wrapAngle(dh);
       s.heading += dh * Math.min(1, dt * 4);
       s.moving = true;
     } else {

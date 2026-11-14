@@ -1,7 +1,7 @@
 # Expéditions
 
 > Fichiers : `src/sim/missions.ts` (les missions `MISSIONS`, effets, `ExpState`), `src/sim/expeditions.ts` (classe `Expeditions` : départ, étapes, imprévus, retour), `src/sim/events.ts` (imprévus et leurs options), `src/sim/choiceStyle.ts` (Prudent / Audacieux), `src/sim/airlift.ts` (voyage en l'air), `src/render/expeditionView.ts` (fanion, suiveurs, caméra), `src/render/expeditionScenes.ts` (`ExpeditionScene` : ce que l'équipe fait sur place, 4 600 lignes), `src/render/airFleet.ts` (hélicoptère et montgolfière de transport), `src/render/festivities.ts` (fête du retour), `src/ui/ui.ts` (`openExpeditions`, `openSend`, `showDecision`, `showReport`, cartes à gauche), `src/main.ts` (`follow`, `onReport`, `festAt`).
-> Tests : `tests/expeditions.test.ts`, `attente.test.ts`, `chasses.test.ts`, `maritime.test.ts`, `mer.test.ts`, `suivi.test.ts`, `styleDesChoix.test.ts`, `retour.test.ts`, `securite.test.ts`, `vehicules.test.ts`, `trophees.test.ts`, `textesCourts.test.ts`, `i18nMissions.test.ts`.
+> Tests : `tests/expeditions.test.ts`, `expeditionsBornees.test.ts`, `attente.test.ts`, `chasses.test.ts`, `maritime.test.ts`, `mer.test.ts`, `suivi.test.ts`, `styleDesChoix.test.ts`, `retour.test.ts`, `securite.test.ts`, `vehicules.test.ts`, `trophees.test.ts`, `textesCourts.test.ts`, `i18nMissions.test.ts`.
 > Voir aussi : [equipement.md](equipement.md), [monde-souterrain.md](monde-souterrain.md), [ages.md](ages.md), [batiments-catalogue.md](batiments-catalogue.md), [trafic.md](trafic.md), [habitants.md](habitants.md), [fin-de-partie.md](fin-de-partie.md), [portail-ile.md](portail-ile.md), [interface.md](interface.md), [traduction.md](traduction.md), [sauvegarde.md](sauvegarde.md).
 
 ## En bref
@@ -122,6 +122,7 @@ En bas : « Retour » (referme la fenêtre de départ), une ligne qui dit pourqu
 - Une carte d'avant l'île du portail refuse la mission `portal` (`why`).
 - Anciennes sauvegardes : `readExpState` convertit `monster` en `kraken` (+ `megalodon` si les dents sont rapportées) et marque `caravel` faite pour qui a passé le Moyen Âge sans le volet maritime.
 - Fenêtre de départ : ne pas la redessiner pendant qu'un bouton est enfoncé (le clic était perdu) ; le refus s'affiche dans la fenêtre même (`failMsg`).
+- Jeu figé au lancement de « Le miel sauvage » (retour d'un joueur, nov. 2026) : **non reproduit**. Vérifié sans blocage : simulation, scène et vue sur 6 âges, cartes de 192 et 320 cases, villages placés au hasard, avec écurie, toutes les décisions ; en jeu, les deux choix de bout en bout, décision au centre comprise. Gardes posées depuis : `tests/expeditionsBornees.test.ts` joue chaque choix de chaque mission (le miel à plusieurs âges, chaque décision) et exige qu'il finisse ; les boucles qui pouvaient ne jamais finir (angles ramenés entre −π et π par `while`, heure et saison de `GameTime`) passent par `wrapAngle` (`core/rng.ts`) ou un calcul d'un coup. Piste restante : la décision d'un imprévu met le jeu en pause et ne s'écarte pas (ni croix, ni Échap) ; si elle était masquée, le joueur croirait le jeu figé.
 
 ## Pour modifier
 **Ajouter une mission de bout en bout**

@@ -19,11 +19,16 @@ export class GameTime {
   update(dt: number): number {
     if (this.paused || this.speed <= 0) return 0;
     const g = dt * this.speed;
+    // (un pas aberrant, infini ou non numérique, ne fait rien avancer : il aurait figé le jeu ou abîmé l'heure)
+    if (!Number.isFinite(g) || g < 0) return 0;
+    if (!Number.isFinite(this.hour)) this.hour = 9;
+    if (!Number.isFinite(this.seasonT)) this.seasonT = 0.15;
     // les heures de nuit filent plus vite que celles du jour (un tiers du cycle environ), la journée garde sa durée
     this.hour += (g * 24) / this.dayLen / (1 + NIGHT_SKIP * Math.sin(((this.hour - 6) / 24) * Math.PI * 2));
-    while (this.hour >= 24) { this.hour -= 24; this.days++; }
+    // d'un coup, sans boucle (une heure énorme ne finissait jamais de retomber sous 24)
+    if (this.hour >= 24) { const d = Math.floor(this.hour / 24); this.days += d; this.hour -= d * 24; if (!(this.hour >= 0 && this.hour < 24)) this.hour = 0; }
     this.seasonT += g / this.seasonLen;
-    while (this.seasonT >= 4) this.seasonT -= 4;
+    if (this.seasonT >= 4) { this.seasonT %= 4; if (!Number.isFinite(this.seasonT)) this.seasonT = 0; }
     return g;
   }
 

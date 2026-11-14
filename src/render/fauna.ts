@@ -3,7 +3,7 @@ import { claimArrival } from './pens';
 import * as THREE from 'three';
 import { World, N, SEA, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, VEG_VOLCANO, VEG_CAVE, VEG_FOREST } from '../world/world';
 import { KINDS, sizeOf } from '../build/catalog';
-import { hash2, mulberry32 } from '../core/rng';
+import { hash2, mulberry32, wrapAngle } from '../core/rng';
 import { Parts } from './parts';
 import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { CH, NC } from './vegetation';
@@ -1727,8 +1727,7 @@ export class Fauna {
       const h0 = c.heading, most = dt * (c.kind === 'whale' ? 0.8 : 2.5);
       turn(c, Math.atan2(c.x - px, c.z - pz), 1 - Math.exp(-dt * (c.kind === 'whale' ? 2.5 : 6)));
       let dh = c.heading - h0;
-      while (dh > Math.PI) dh -= Math.PI * 2;
-      while (dh < -Math.PI) dh += Math.PI * 2;
+      dh = wrapAngle(dh);
       c.heading = h0 + Math.max(-most, Math.min(most, dh));
     }
     // l'hiver, les mantas partent ; il ne reste qu'un groupe de dauphins et une baleine sur deux (les clés en 0)
@@ -1993,8 +1992,7 @@ const baseKind = (k: Kind): Kind => (k === 'duckling' ? 'duck' : k);
 
 function turn(c: Critter, target: number, k: number) {
   let dh = target - c.heading;
-  while (dh > Math.PI) dh -= Math.PI * 2;
-  while (dh < -Math.PI) dh += Math.PI * 2;
+  dh = wrapAngle(dh);
   c.heading += dh * Math.min(1, k);
 }
 

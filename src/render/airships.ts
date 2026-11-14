@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { wrapAngle } from '../core/rng';
 import { World, N } from '../world/world';
 import { Building } from '../build/catalog';
 import { Parts } from './parts';
@@ -123,8 +124,7 @@ export class Airships {
       const d = goal.clone().sub(s.pos), dist = d.length();
       const want = Math.atan2(d.x, d.z);
       let da = want - s.heading;
-      while (da > Math.PI) da -= Math.PI * 2;
-      while (da < -Math.PI) da += Math.PI * 2;
+      da = wrapAngle(da);
       s.heading += da * Math.min(1, dt * 0.6);
       const sp = s.phase === 'back' ? Math.min(SHIP_SPEED, 0.25 + dist * 0.4) : SHIP_SPEED;
       s.pos.x += Math.sin(s.heading) * sp * dt; s.pos.z += Math.cos(s.heading) * sp * dt;

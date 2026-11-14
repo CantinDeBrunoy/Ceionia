@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { wrapAngle } from '../core/rng';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { World, N, SEA } from '../world/world';
 import { Building } from '../build/catalog';
@@ -93,8 +94,7 @@ const FOLK_K = new THREE.Matrix4().makeScale(HUMAN_K * 0.9, HUMAN_K * 0.9, HUMAN
 /** Cap qui tourne vers `want` (par le plus court), d'au plus la fraction `k` de l'écart */
 function turn(heading: number, want: number, k: number, maxRad = Infinity) {
   let da = want - heading;
-  while (da > Math.PI) da -= Math.PI * 2;
-  while (da < -Math.PI) da += Math.PI * 2;
+  da = wrapAngle(da);
   return heading + Math.max(-maxRad, Math.min(maxRad, da * Math.min(1, k)));
 }
 
