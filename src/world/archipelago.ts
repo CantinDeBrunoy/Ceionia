@@ -94,20 +94,23 @@ export function addIsles(hts: Float32Array, n: number, seed: number, lay: ArchLa
 /**
  * Climat de fond (température, humidité) d'une case hors du cadre de l'île principale : l'île du peuple oriental est
  * chaude et sèche (sable, palmiers), celle du peuple asiatique tempérée et humide (bambous, rizières, un peu de tropiques au
- * sud), les petites îles tropicales
+ * sud), les petites îles tropicales (récifs de corail autour) ; le large tempéré
  */
 export function isleClimate(lay: ArchLayout, wx: number, wz: number, st: Simplex, sm: Simplex): [number, number] {
   const x = wx + 0.5, z = wz + 0.5;
-  let t = 0.15 + st.fbm(x * 0.03, z * 0.03, 3) * 0.3, m = 0.1 + sm.fbm(x * 0.04 + 50, z * 0.04, 3) * 0.5;
+  // le large : tempéré et peu humide (sous les seuils des tropiques, 0,3, et du marais, 0,32 avec le bonus du bord de l'eau) ;
+  // sinon l'eau y prendrait par plaques la teinte du marais, et des récifs de corail y pousseraient
+  let t = 0.02 + st.fbm(x * 0.03, z * 0.03, 3) * 0.2, m = -0.2 + sm.fbm(x * 0.04 + 50, z * 0.04, 3) * 0.2;
   for (const q of lay.rivals) {
-    const w = smoothstep(1.5, 1.0, Math.hypot(x - q.x, z - q.z) / q.r);
+    // (jusqu'à la côte et un peu au-delà : plus loin, l'eau garderait la teinte du marais de l'île humide)
+    const w = smoothstep(1.2, 0.95, Math.hypot(x - q.x, z - q.z) / q.r);
     if (w <= 0) continue;
     const [qt, qm] = q.people === 'orient' ? [0.5, -0.12] : [0.12, 0.38];
     t = lerp(t, qt + st.fbm(x * 0.03, z * 0.03, 3) * 0.25, w);
     m = lerp(m, qm + sm.fbm(x * 0.04 + 50, z * 0.04, 3) * 0.35, w);
   }
   for (const q of lay.small) {
-    const w = smoothstep(1.6, 1.0, Math.hypot(x - q.x, z - q.z) / q.r);
+    const w = smoothstep(1.4, 1.0, Math.hypot(x - q.x, z - q.z) / q.r);
     if (w > 0) { t = lerp(t, 0.42, w); m = lerp(m, 0.3, w); }
   }
   return [t, m];

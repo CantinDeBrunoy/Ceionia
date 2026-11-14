@@ -1,4 +1,4 @@
-import { World, N, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, ISLET_MIN } from './world';
+import { World, N, SEA_FLOOR, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, ISLET_MIN } from './world';
 import { raiseVolcano } from './terraform';
 import { addPortalIsland } from './portal';
 import { Simplex } from './noise';
@@ -65,7 +65,11 @@ function archHeights(hts: Float32Array, N: number, seed: number, gen: number, s:
   const f = mainFrame(gen, seed, N), deep = new Simplex(seed * 3 + 41), S = N + 1;
   for (let z = 0; z <= N; z++)
     for (let x = 0; x <= N; x++) {
-      let h = -1.45 + 0.25 * deep.fbm(x * 0.02, z * 0.02, 2);
+      // (la profondeur du large du continent de la version 3, vers -1,2 : assez profond pour que le sable du fond ne se voie pas
+      // par plaques à travers l'eau)
+      let h = -1.25 + 0.03 * deep.fbm(x * 0.02, z * 0.02, 2);
+      // vers le bord, le fond remonte doucement au départ de la mer de décor (`SEA_FLOOR`) : pas de marche au bord de la carte
+      h = lerp(SEA_FLOOR, h, smoothstep(0, 24, Math.min(x, z, N - x, N - z)));
       const lx = x - f.x, lz = z - f.z;
       if (lx >= 0 && lz >= 0 && lx <= f.n && lz <= f.n) {
         const [px, pz] = toPlan(plan.orient, lx, lz, f.n), hm = plannedHeight(px, pz, f.n, s, s2, plan);
