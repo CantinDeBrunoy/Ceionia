@@ -53,22 +53,22 @@ const SWIMMERS = new Set<Kind>(['fish', 'dolphin', 'whale', 'manta', 'shark']);
 type SwimKind = 'fish' | 'dolphin' | 'whale' | 'manta' | 'shark';
 /**
  * Nage de chaque espèce (voir `swim`) : allure (cases/s), virage le plus vif (rad/s), part de variation de l'allure, place
- * voulue devant soi (cases de mer ; sinon il vire), écart dans la formation, roulis par rad/s de virage
+ * voulue devant soi (cases de mer ; sinon il vire), écart dans la formation, roulis par rad/s de virage, terrain de nage
+ * minimal autour du domaine (cases)
  */
-const SWIM: Record<SwimKind, { v: number; turn: number; vary: number; clear: number; gap: number; bank: number }> = {
-  whale: { v: 0.25, turn: 0.08, vary: 0.15, clear: 4, gap: 1, bank: 2 },
-  dolphin: { v: 0.55, turn: 0.5, vary: 0.25, clear: 3, gap: 0.45, bank: 0.5 },
-  shark: { v: 0.36, turn: 0.22, vary: 0.3, clear: 3, gap: 0.5, bank: 0.8 },
-  manta: { v: 0.3, turn: 0.22, vary: 0.25, clear: 2, gap: 0.5, bank: 1.2 },
-  fish: { v: 0.42, turn: 0.9, vary: 0.35, clear: 1, gap: 0.12, bank: 0.2 },
+const SWIM: Record<SwimKind, { v: number; turn: number; vary: number; clear: number; gap: number; bank: number; roam: number }> = {
+  whale: { v: 0.25, turn: 0.08, vary: 0.15, clear: 4, gap: 1, bank: 2, roam: 5 },
+  dolphin: { v: 0.55, turn: 0.5, vary: 0.25, clear: 3, gap: 0.45, bank: 0.5, roam: 4 },
+  shark: { v: 0.36, turn: 0.22, vary: 0.3, clear: 3, gap: 0.5, bank: 0.8, roam: 4 },
+  manta: { v: 0.3, turn: 0.22, vary: 0.25, clear: 2, gap: 0.5, bank: 1.2, roam: 3 },
+  fish: { v: 0.42, turn: 0.9, vary: 0.35, clear: 1, gap: 0.12, bank: 0.2, roam: 3 },
 };
-/** Cycle des dauphins (s) : nage à fleur d'eau, deux sauts (arc, puis court passage sous l'eau), plongée */
-const DOLPHIN_CYCLE = (() => {
-  const c = { surface: 2.5, leap: 1, dip: 0.45, height: 0.6, dive: 3.5, depth: 0.75, leaps: 0, total: 0 };
-  c.leaps = 2 * (c.leap + c.dip);
-  c.total = c.surface + c.leaps + c.dive;
-  return c;
-})();
+/**
+ * Cycle des dauphins (s) : nage à fleur d'eau, un à trois sauts (arc d'une seconde, puis court passage sous l'eau), plongée ;
+ * `total` = la durée d'un cycle (2,5 s de surface avec deux sauts ; plus avec un seul, moins avec trois). Hauteur et
+ * profondeur moyennes : chaque saut et chaque plongée varient autour
+ */
+const DOLPHIN_CYCLE = { leap: 1, dip: 0.45, height: 0.6, dive: 3.5, depth: 0.75, total: 2.5 + 2 * 1.45 + 3.5 };
 const smooth01 = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
 /** Grands nageurs : animés plus loin que les autres bêtes (voir `render`) */
 const BIG_SWIM = new Set<Kind>(['dolphin', 'whale', 'manta']);
@@ -1749,8 +1749,12 @@ export class Fauna {
       c.spd = S.v; c.turnV = 0;
     } else if (L === c) {
       // ---- chef : cap qui vagabonde (deux houles lentes), rappel vers le domaine, rives évitées
-      const R = c.radius * (1 + g * 0.4);
-      const dx = c.hx - c.x, dz = c.hz - c.z, dist = Math.hypot(dx, dz);
+      // terrain de nage : au moins `roam` cases (un banc au domaine de 1,3 en sortait sans cesse et revenait toujours en
+      // virant du même côté) ; le point de retour fait lentement le tour du domaine, pour que les retours varient
+      const R = Math.max(c.radius, S.roam) * (1 + g * 0.4);
+      const dist = Math.hypot(c.hx - c.x, c.hz - c.z);
+      const aim = t * 0.06 + seed * 2;
+      const dx = c.hx + Math.cos(aim) * R * 0.6 - c.x, dz = c.hz + Math.sin(aim) * R * 0.6 - c.z;
       // (deux houles de 15 et 37 s : il ondoie d'un côté puis de l'autre, en longues courbes)
       let want = (Math.sin(t * 0.17 + seed * 7) * 0.5 + Math.sin(t * 0.42 + seed * 3) * 0.5) * S.turn * 0.75;
       // rappel doux (au plus 60 % du virage le plus vif) : un rappel plein faisait tourner en rond au bord du domaine
@@ -1845,21 +1849,25 @@ export class Fauna {
       tilt = 0.7;
       if (c.seaT <= 0 && sink < 0.3) { c.seaT = 0.3; fx('wake', c.x, c.z, 1); }
     } else if (dolphin) {
-      // cycle du groupe (le temps du chef, décalé pour chacun) : nage à fleur d'eau, deux sauts en arc hors de l'eau
+      // cycle du groupe (le temps du chef, décalé pour chacun) : nage à fleur d'eau, un à trois sauts en arc hors de l'eau
       // (sortie et entrée tête la première, avec gerbe), puis une plongée où ils disparaissent quelques secondes avant de
-      // ressortir plus loin. La course accélère le cycle sans le faire sauter (temps cumulé)
+      // ressortir plus loin. D'un cycle à l'autre, le nombre et la hauteur des sauts et la profondeur de la plongée varient
+      // (la durée du cycle reste la même : moins de sauts, plus de nage en surface). La course accélère le cycle sans le
+      // faire sauter (temps cumulé)
       if (c.slot === 0) c.phase += dt * (1 + g * 0.5);
-      const cyc = DOLPHIN_CYCLE, u = ((((L.phase - c.slot * 0.35) % cyc.total) + cyc.total) % cyc.total);
+      const cyc = DOLPHIN_CYCLE, time = L.phase - c.slot * 0.35, n = Math.floor(time / cyc.total);
+      const u = time - n * cyc.total, each = cyc.leap + cyc.dip;
+      const count = 1 + Math.floor(hash2(n, c.key.length, 31) * 3), surface = cyc.total - cyc.dive - count * each;
       const top = SEA - 0.06;
       let y = top + Math.sin(t * 1.3 + seed) * 0.015;
-      if (u >= cyc.surface && u < cyc.surface + cyc.leaps) {
-        // sauts : arc d'une seconde, séparés d'un court passage sous l'eau
-        const k = u - cyc.surface, each = cyc.leap + cyc.dip, j = k % each;
-        y = j < cyc.leap ? top + Math.sin((j / cyc.leap) * Math.PI) * cyc.height : top - Math.sin(((j - cyc.leap) / cyc.dip) * Math.PI) * 0.22;
-      } else if (u >= cyc.surface + cyc.leaps) {
+      if (u >= surface && u < surface + count * each) {
+        // sauts : arc d'une seconde, chacun à sa hauteur, séparés d'un court passage sous l'eau
+        const k = u - surface, j = k % each, h = cyc.height * (0.75 + 0.5 * hash2(n, Math.floor(k / each), 37));
+        y = j < cyc.leap ? top + Math.sin((j / cyc.leap) * Math.PI) * h : top - Math.sin(((j - cyc.leap) / cyc.dip) * Math.PI) * 0.22;
+      } else if (u >= surface + count * each) {
         // plongée : descente tête la première, longue nage au fond de l'eau, remontée
-        const k = (u - cyc.surface - cyc.leaps) / cyc.dive;
-        y = top - smooth01(k / 0.25) * smooth01((1 - k) / 0.25) * cyc.depth;
+        const k = (u - surface - count * each) / cyc.dive;
+        y = top - smooth01(k / 0.25) * smooth01((1 - k) / 0.25) * cyc.depth * (0.8 + 0.3 * hash2(n, c.key.length, 41));
         if (k > 0.97 && c.seaT <= 0) { c.seaT = 2; fx('ripple', c.x, c.z, 1); }
       }
       c.y = Math.max(floor, y);

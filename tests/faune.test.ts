@@ -251,7 +251,7 @@ describe('faune : la mer', () => {
     const shark = all().find((c) => c.kind === 'shark');
     const school = all().filter((c) => c.key === all().find((x) => x.kind === 'fish' && x.slot === 0).key);
     const dy = { min: 9, max: -9, deep: 0, entries: 0, headFirst: 0 };
-    const turns = { pos: 0, neg: 0, pinned: 0 }, sp: number[] = [], spread: number[] = [];
+    const turns = { pos: 0, neg: 0, pinned: 0 }, fishTurn = { pos: 0, neg: 0 }, sp: number[] = [], spread: number[] = [];
     let far = 0, wasAir = false, p = { x: shark.x, z: shark.z };
     const dt = 1 / 30;
     for (let i = 1; i < 1200; i++) {
@@ -266,6 +266,7 @@ describe('faune : la mer', () => {
       if (shark.turnV > 0.02) turns.pos++;
       if (shark.turnV < -0.02) turns.neg++;
       if (Math.abs(shark.turnV) > 0.2) turns.pinned++;
+      for (const c of all()) if (c.kind === 'fish' && c.slot === 0) { if (c.turnV > 0.02) fishTurn.pos++; if (c.turnV < -0.02) fishTurn.neg++; }
       sp.push(Math.hypot(shark.x - p.x, shark.z - p.z) / dt);
       p = { x: shark.x, z: shark.z };
       far = Math.max(far, Math.hypot(shark.x - shark.hx, shark.z - shark.hz) / shark.radius);
@@ -286,6 +287,8 @@ describe('faune : la mer', () => {
     expect(turns.pinned / 1170).toBeLessThan(0.3);
     expect(Math.max(...sp) - Math.min(...sp)).toBeGreaterThan(0.08);
     expect(far).toBeLessThan(2.5);
+    // les bancs virent des deux côtés (ils revenaient autrefois vers leur petit domaine toujours du même côté)
+    expect(Math.min(fishTurn.pos, fishTurn.neg) / Math.max(fishTurn.pos, fishTurn.neg)).toBeGreaterThan(0.3);
     // le banc respire : son étalement varie
     expect(Math.max(...spread) - Math.min(...spread)).toBeGreaterThan(0.05);
     setMapSize(96);
