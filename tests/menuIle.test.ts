@@ -38,7 +38,7 @@ const build = (kind: 'isle' | 'hell') => {
   const theater: Theater = { kind, sim, layer: { selected: new Set() } as never, pick: () => null, screen: () => null, focus() {} };
   ui.setTheater(theater);
   ui.render();
-  return { ui, html: () => (ui as any).bar.innerHTML as string };
+  return { ui, host, html: () => (ui as any).bar.innerHTML as string };
 };
 
 describe('le menu de l’île', () => {
@@ -58,6 +58,24 @@ describe('le menu de l’île', () => {
     expect(html()).toContain('Ma base');
     expect(html()).toContain('data-a="tab:build"');
     expect(html()).toContain('class="tmenu panel tbase tbarr"');
+  });
+
+  it('poser une défense depuis l’île garde la barre de l’île : la carte s’allume, la bulle dit comment poser', () => {
+    const isle = build('isle');
+    let asked = '';
+    isle.host.buildDefense = (k: string) => { asked = k; };
+    (isle.ui as any).isleTab = 'build';
+    // un clic sur la tour : la pose est demandée, le commandement de l'île reste ouvert
+    const tile = { dataset: { a: 'ibuild:watchtower' }, closest: () => tile };
+    (isle.ui as any).onBar({ target: { closest: () => tile } });
+    expect(asked).toBe('watchtower');
+    expect(isle.ui.active).toBe(true);
+    // la tour en main : sa carte est allumée et la bulle parle de la pose, pas des troupes qui manquent
+    isle.host.isleHeld = () => 'watchtower';
+    (isle.ui as any).barKey = '';
+    isle.ui.render();
+    expect(isle.html()).toMatch(/data-a="ibuild:watchtower" class="trb tb tbv on"/);
+    expect(isle.html()).toContain('Cliquez sur l’île pour poser');
   });
 
   it('chaque onglet Bâtir montre aussi, grisés, les bâtiments de l’autre théâtre', () => {

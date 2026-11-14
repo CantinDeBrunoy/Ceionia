@@ -66,6 +66,8 @@ export interface CommandHost {
   /** les défenses de l'île (onglet Bâtir) : nom, icône, texte ; pourquoi on ne peut pas encore la poser (null : on peut) ; combien sont bâties ; la poser */
   defenseInfo(kind: string): { name: string; icon: string; desc: string };
   defenseLock(kind: string): string | null;
+  /** la défense de l'île qu'on est en train de poser depuis l'onglet Bâtir (sa carte s'allume, la bulle dit comment poser) */
+  isleHeld?(): string | null;
   defenseCount(kind: string): number;
   buildDefense(kind: string): void;
   /** met une pièce d'équipement en fabrication à l'atelier du village : null, ou la raison du refus */
@@ -807,6 +809,8 @@ export class CommandUI implements ToolInput {
     if (this.placing === 'palisade') return this.wallInfo || tr('Mur : cliquez pour choisir le début (A), puis la fin (B).');
     if (this.placing === 'gate') return tr('Porte : survolez un pan de mur et cliquez : elle s’y insère. Échap ou clic droit pour arrêter.');
     if (this.placing) return tr('Cliquez au sol pour poser : {name}. Échap ou clic droit pour arrêter.', { name: BASE_DEFS[this.placing].name });
+    const held = this.theater?.kind === 'isle' ? this.host.isleHeld?.() : null;
+    if (held) return tr('Cliquez sur l’île pour poser : {name} · R : tourner · Échap ou clic droit : lâcher.', { name: this.host.defenseInfo(held).name });
     if (this.tool === 'move') return this.moving !== null ? tr('Cliquez la nouvelle place du bâtiment. Échap ou clic droit : le laisser où il est.') : tr('Déplacer : cliquez un bâtiment de la base (pas le camp). Échap pour arrêter.');
     if (this.tool === 'demolish') return tr('Démolir : cliquez un bâtiment, puis encore une fois pour confirmer. Rien n’est rendu.');
     if (this.overPortal) return tr('Clic droit : passer le portail');
@@ -855,7 +859,7 @@ export class CommandUI implements ToolInput {
     // dans les Enfers : une seule frise compacte (le front, l'alerte, l'armée) ; sur l'île, le ruban de pastilles
     this.bar.classList.toggle('inhell', !isle);
     // la bulle d'aide du moment (à droite de la carte de passage) ; sans troupe ici, ce qu'il faut faire pour en avoir
-    const tip = !us.length && !this.placing && this.tool === 'select' ? none : this.hint();
+    const tip = !us.length && !this.placing && !this.host.isleHeld?.() && this.tool === 'select' ? none : this.hint();
     // dans les Enfers, la bulle ne dit que l'utile : poser, déplacer, démolir, ou quoi faire sans troupe (le reste est dans l'Aide)
     const bubble = isle || !us.length || !!this.placing || this.tool !== 'select';
     // au-dessus de la rangée : les troupes sur le terrain (une carte par sorte, « Tous ») ; aux Enfers sans troupe, les renforts
@@ -955,7 +959,7 @@ export class CommandUI implements ToolInput {
       // (poser une défense : on quitte le commandement, l'outil de construction du village prend la main)
       const tile = (k: string) => {
         const d = this.host.defenseInfo(k), why = this.host.defenseLock(k), n = this.host.defenseCount(k);
-        return `<button data-a="ibuild:${k}" class="trb tb tbv${why ? ' off' : ''}" ${cardData(d.name, tr('Défense de l’île'), d.desc, '', why ?? '')}>${this.preview(`d:${k}:${age}`, () => this.host.defenseThumb?.(k, age), d.icon)}<b>${d.name}</b><small class="co">${why ? `${pic('🔒', 12)} ${tr('verrouillé')}` : n ? tr('{n} en place', { n }) : tr('à poser')}</small></button>`;
+        return `<button data-a="ibuild:${k}" class="trb tb tbv${why ? ' off' : ''}${this.host.isleHeld?.() === k ? ' on' : ''}" ${cardData(d.name, tr('Défense de l’île'), d.desc, '', why ?? '')}>${this.preview(`d:${k}:${age}`, () => this.host.defenseThumb?.(k, age), d.icon)}<b>${d.name}</b><small class="co">${why ? `${pic('🔒', 12)} ${tr('verrouillé')}` : n ? tr('{n} en place', { n }) : tr('à poser')}</small></button>`;
       };
       // (les familles se lisent au filet qui les sépare ; leur nom est dans l'infobulle)
       const fam = (cls: string, title: string, inner2: string) => `<div class="tfam ${cls}" title="${tr(title)}"><div class="tbuilds">${inner2}</div></div>`;

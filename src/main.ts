@@ -307,6 +307,11 @@ class Game implements UIHost {
   private isleRuins: IsleRuins | null = null;
   /** on commande la garnison de l'île (la vue reste en surface) : vrai tant que la vue est près de l'île (`syncIsleView`) */
   isleCmd = false;
+  /**
+   * la défense de l'île qu'on pose depuis « Ma garnison » (onglet Bâtir) : l'outil de construction du village est en main, mais
+   * la barre de bataille de l'île reste affichée (elle ne bascule plus sur la barre du village) ; null hors de cette pose
+   */
+  islePlace: string | null = null;
   /** la vue est près de l'île du portail (`nearIsle`, avec hystérésis) */
   private isleNear = false;
   /** les actions du village demandées depuis les Enfers ou le commandement de l'île : on remonte d'abord (`ensureSurface`) */
@@ -473,7 +478,8 @@ class Game implements UIHost {
     this.cam.handler = this.tools;
     // prendre un outil du village (barre du bas, vignette) depuis les Enfers ou le commandement de l'île : on remonte d'abord
     const setTool = this.tools.setTool.bind(this.tools);
-    this.tools.setTool = (t, kind) => { if (t === 'none' || this.mode === 'under') setTool(t, kind); else this.ensureSurface(() => setTool(t, kind)); };
+    // (la pose d'une défense depuis la barre de l'île prend l'outil sans quitter le commandement de l'île)
+    this.tools.setTool = (t, kind) => { if (t === 'none' || this.mode === 'under' || (this.islePlace && t === 'build' && kind === this.islePlace)) setTool(t, kind); else this.ensureSurface(() => setTool(t, kind)); };
     this.ui = new UI(uiRoot, host);
     this.spaceCast = new SpaceCast(uiRoot);
     // les vignettes des bâtiments de la base des Enfers : leurs modèles viennent avec le module des Enfers, chargé à part
@@ -490,7 +496,7 @@ class Game implements UIHost {
       defenseInfo: (k) => { const d = KINDS[k as KindId], a = Math.max(this.sim.age, d.minAge); return { name: d.names[a], icon: d.icon, desc: d.desc }; },
       defenseLock: (k) => this.ui.lockWhy(k as KindId),
       defenseCount: (k) => { const d = isleDefenses(this.world); return k === 'watchtower' ? d.towers : k === 'barracks' ? d.barracks : this.sim.counts[k as KindId] ?? 0; },
-      buildDefense: (k) => { this.leaveIsle(true); this.ui.pickBuild(k as KindId); },
+      buildDefense: (k) => this.buildDefense(k as KindId), isleHeld: () => this.islePlace,
       following: () => this.hellFollow, follow: (on) => { this.hellFollow = on; },
       craft: (id) => { const why = this.expeditions.whyCraft(GEAR_BY[id], this.sim.age); if (!why) this.expeditions.craft(id, this.sim.age); return why; },
       crafting: () => this.world.exp.craft, craftCheck: (ids) => this.expeditions.whyCraftAll(ids, this.sim.age),
@@ -501,7 +507,8 @@ class Game implements UIHost {
       baseThumb: (k, age) => this.thumbs.getFrom('hell', k, age),
     });
     this.command.onCard = () => this.ui.placeCards();
-    this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
+    // (une défense de l'île en main : le clic droit la lâche, il ne donne pas d'ordre aux troupes)
+    this.cam.rightClick = (e) => { if (this.islePlace) { this.tools.escape(); this.endIslePlace(); return; } if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
     this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart() });
     // le royaume des Enfers : bannière, barre de vie du roi, tambours, cinématique et écran de la victoire
@@ -872,9 +879,29 @@ class Game implements UIHost {
     return { towers, barracks: villageBarracks(this.world) };
   }
 
+  /**
+   * Pose une défense de l'île choisie dans « Ma garnison » : au commandement de l'île, on garde sa barre de bataille et l'on
+   * prend l'outil de construction du village (la souris passe à l'outil, la barre reste) ; ailleurs, comme une vignette du village
+   */
+  buildDefense(k: KindId) {
+    if (!this.isleCmd || this.mode !== 'surface') { this.leaveIsle(true); this.ui.pickBuild(k); return; }
+    this.islePlace = k;
+    this.cam.handler = this.tools;
+    this.ui.pickBuild(k);
+    if (this.tools.tool !== 'build' || this.tools.kind !== k) this.endIslePlace();
+  }
+
+  /** La pose d'une défense de l'île est finie (outil lâché ou changé) : la souris revient aux troupes */
+  private endIslePlace() {
+    if (!this.islePlace) return;
+    this.islePlace = null;
+    if (this.isleCmd && this.mode === 'surface') { this.cam.handler = this.command; canvas.style.cursor = ''; }
+  }
+
   /** Quitte le commandement de l'île (`quiet` : sans rien dire) */
   leaveIsle(quiet = false) {
     if (!this.isleCmd) return;
+    this.islePlace = null;
     this.isleCmd = false;
     this.command.setTheater(null);
     if (this.mode === 'surface') this.cam.handler = this.tools;
@@ -1029,6 +1056,8 @@ class Game implements UIHost {
     this.kingStage.update(dt);
     // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
     if (this.isleCmd && this.command.theater?.sim !== isle?.sim) { const t = this.isleTheater(); if (t) this.command.setTheater(t); else this.leaveIsle(); }
+    // la défense de l'île posée depuis sa barre : la pose finit quand l'outil est lâché (Échap, clic droit) ou change
+    if (this.islePlace && (this.tools.tool !== 'build' || this.tools.kind !== this.islePlace)) this.endIslePlace();
     // l'interface de l'île suit la vue : affichée près de l'île, rangée au loin
     this.syncIsleView();
   }
@@ -1578,6 +1607,11 @@ class Game implements UIHost {
       // en commandement (Enfers, île) : les touches des troupes passent d'abord (H, R, A, groupes, Espace, Échap)
       if (this.command.active) {
         if (k === 'escape' && this.ui.closeTop()) return;
+        // une défense de l'île en main : Échap la lâche (sans quitter l'île), R la tourne
+        if (this.islePlace && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          if (k === 'escape') { this.tools.escape(); this.endIslePlace(); return; }
+          if (k === 'r') { this.tools.rotate(); return; }
+        }
         if (this.command.key(e)) return;
       }
       if (this.mode === 'hell') {

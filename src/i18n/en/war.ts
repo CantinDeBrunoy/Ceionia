@@ -5,6 +5,7 @@ registerDict('war', {
   // ---- zones des Enfers (noms, noms courts de la frise) ----
   'Seuil du portail': 'Portal Threshold',
   'Défense de l’île': 'Island defense',
+  'Cliquez sur l’île pour poser : {name} · R : tourner · Échap ou clic droit : lâcher.': 'Click on the island to place: {name} · R: rotate · Esc or right-click: put down.',
   'Grottes de braise': 'Ember Caves',
   'Rivière de lave': 'Lava River',
   'Falaises cendrées': 'Ashen Cliffs',
