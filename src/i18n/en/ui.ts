@@ -135,7 +135,7 @@ registerDict('ui', {
   'Rien à bâtir dans ce rayon avant l’âge {age}.': 'Nothing to build in this category before the age {age}.',
   'Voir': 'View', 'Monter': 'Raise', 'Baisser': 'Lower', 'Aplanir': 'Flatten', 'Falaise': 'Cliff', 'Montagne': 'Mountain', 'Volcan': 'Volcano',
   'Forêt': 'Forest', 'Champ': 'Field', 'Biome': 'Biome', 'Rochers': 'Rocks', 'Grotte': 'Cave', 'Faille': 'Fissure', 'Gomme': 'Eraser',
-  'Route': 'Road', 'Démolir': 'Demolish', 'Déplacer': 'Move', 'Échap': 'Esc',
+  'Route': 'Road', 'Replier ou déplier': 'Fold or unfold', 'Démolir': 'Demolish', 'Déplacer': 'Move', 'Échap': 'Esc',
   'Regarder le village. Un clic sur un volcan le réveille.': 'Look at the village. Clicking a volcano wakes it up.',
   'Monter le terrain sous le pinceau.': 'Raise the terrain under the brush.',
   'Baisser le terrain sous le pinceau.': 'Lower the terrain under the brush.',

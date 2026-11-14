@@ -4,6 +4,7 @@ import { registerDict } from '../index';
 registerDict('war', {
   // ---- zones des Enfers (noms, noms courts de la frise) ----
   'Seuil du portail': 'Portal Threshold',
+  'Défense de l’île': 'Island defense',
   'Grottes de braise': 'Ember Caves',
   'Rivière de lave': 'Lava River',
   'Falaises cendrées': 'Ashen Cliffs',

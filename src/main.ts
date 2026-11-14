@@ -500,6 +500,7 @@ class Game implements UIHost {
       defenseThumb: (k, age) => this.thumbs.get(k as KindId, Math.max(age, KINDS[k as KindId].minAge), true),
       baseThumb: (k, age) => this.thumbs.getFrom('hell', k, age),
     });
+    this.command.onCard = () => this.ui.placeCards();
     this.cam.rightClick = (e) => { if (this.command.active) this.command.rightClick(e); };
     this.homeBtn = new HomeButton(uiRoot, () => { audio.sfxClick(); this.goHome(); });
     this.portalChoice = new PortalChoice(uiRoot, { war: this.war, age: () => this.sim.age, click: () => audio.sfxClick(), fought: () => this.pveStart() });
