@@ -9,10 +9,11 @@ import { makeActor, play, hasModel, Actor, ModelName } from './assets';
 import { CH, NC } from './vegetation';
 import { makeBeast, BEAST_KINDS, GESTURES, beastYaw, BeastKind, FOWL_FLOAT } from './beasts';
 import { Impostors } from './impostors';
+import { songbirdGeo, starlingGeo, gooseGeo, gullGeo, eagleGeo, wingMaterial, WingRig, BIRD_COATS, SONG_RIG, STARLING_RIG, GOOSE_RIG, GULL_RIG, EAGLE_RIG } from './birds';
 
 type Kind = 'sheep' | 'cow' | 'pig' | 'hen' | 'rabbit' | 'deer' | 'horse' | 'llama' | 'fox' | 'wolf' | 'frog'
   | 'duck' | 'duckling' | 'bird' | 'songbird' | 'bee' | 'butterfly' | 'bat' | 'fish' | 'dolphin' | 'whale' | 'manta' | 'shark'
-  | 'eagle' | 'gull' | 'ibex' | 'bear' | 'lizard' | 'crab' | 'turtle' | 'croc' | 'camel' | 'elephant' | 'giraffe' | 'moose' | 'dog' | 'goose';
+  | 'eagle' | 'gull' | 'starling' | 'ibex' | 'bear' | 'lizard' | 'crab' | 'turtle' | 'croc' | 'camel' | 'elephant' | 'giraffe' | 'moose' | 'dog' | 'goose';
 
 interface Spec {
   /** forme instanciée (absente pour les bêtes articulées de beasts.ts) */
@@ -31,6 +32,8 @@ interface Spec {
   peck?: boolean;
   /** battement d'ailes : fréquence, amplitude, demi-largeur du corps */
   flap?: [number, number, number];
+  /** oiseau : ailes articulées (voir birds.ts) */
+  wings?: WingRig;
   /** ondulation du corps à la nage (instancié) : fréquence, amplitude au bout de la queue */
   sway?: [number, number];
   scale?: number;
@@ -105,6 +108,10 @@ interface Critter {
   perched: boolean;
   /** battement d'ailes affiché (0 ailes repliées … 1) */
   flap: number;
+  /** oiseau : bat des ailes (1) ou plane (0), roulis dans les virages, seconde couleur du plumage */
+  beat?: number;
+  roll?: number;
+  col2?: number;
   /** créneau du dernier geste joué au repos (bête articulée) */
   gestK?: number;
   /** temps cumulé depuis la dernière réflexion (bête loin de la vue, voir `FAR_WALK`) */
@@ -320,34 +327,6 @@ function duckGeo() {
   return p.build(false).body;
 }
 
-function birdGeo() {
-  const p = new Parts();
-  p.add(ico(0.022, 0.75, 0.65, 1.7, 0), 0, 0, 0, 0xffffff);
-  p.add(ico(0.014, 1, 1, 1, 0), 0, 0.01, 0.04, 0xffffff);
-  p.add(new THREE.ConeGeometry(0.006, 0.018, 4).rotateX(Math.PI / 2), 0, 0.008, 0.058, 0xf0a030);
-  for (const s of [-1, 1]) {
-    const rf = [s * 0.01, 0, 0.02], tip = [s * 0.15, 0, -0.01], tr = [s * 0.12, 0, -0.035], rb = [s * 0.01, 0, -0.02];
-    p.add(tri([...rf, ...tip, ...tr, ...rf, ...tr, ...rb]), 0, 0, 0, 0xf2f2f2);
-  }
-  p.add(tri([0, 0, -0.03, -0.022, 0, -0.068, 0.022, 0, -0.068]), 0, 0, 0, 0xe6e6e6);
-  return p.build(false).body;
-}
-
-/** Oiseau chanteur : petit corps rond, ventre clair, ailes courtes (repliées quand il est posé) */
-function songbirdGeo() {
-  const p = new Parts();
-  p.add(ico(0.02, 0.85, 0.8, 1.25, 1), 0, 0.018, 0, 0xffffff);
-  p.add(ico(0.015, 0.8, 0.7, 1, 0), 0, 0.012, 0.006, 0xfff4e0);
-  p.add(ico(0.013, 1, 1, 1, 0), 0, 0.034, 0.02, 0xffffff);
-  p.add(new THREE.ConeGeometry(0.004, 0.012, 4).rotateX(Math.PI / 2), 0, 0.033, 0.036, 0x3a3030);
-  for (const s of [-1, 1]) {
-    const rf = [s * 0.012, 0.022, 0.012], tip = [s * 0.07, 0.022, -0.006], rb = [s * 0.012, 0.022, -0.018];
-    p.add(tri([...rf, ...tip, ...rb]), 0, 0, 0, 0xe8e8e8);
-  }
-  p.add(tri([0, 0.02, -0.02, -0.012, 0.024, -0.05, 0.012, 0.024, -0.05]), 0, 0, 0, 0xd8d8d8);
-  return p.build(false).body;
-}
-
 /** Abeille : corps rayé et deux ailes translucides */
 function beeGeo() {
   const p = new Parts();
@@ -511,8 +490,9 @@ const SPECS: Record<Kind, Spec> = {
   frog: { geo: duckGeo, max: 110, colors: [0x6aa84a, 0xa87a4e, 0x8a9a4e], speed: 0.35, run: 0.7, idle: [2, 7], ok: bank, hop: 0.03, flee: 1.2 },
   duck: { geo: duckGeo, max: 40, colors: [0x8a6a4a, 0xa8a49c, 0xffffff], speed: 0.25, idle: [2, 6], ok: water },
   duckling: { geo: duckGeo, max: 100, colors: [0xf8dc6a], speed: 0.25, idle: [1, 1], ok: water, scale: 0.55 },
-  bird: { geo: birdGeo, max: 70, colors: [0xffffff, 0xdfe4ea], speed: 0, idle: [1, 1], ok: any, flap: [9, 0.9, 0.012], scale: 2.3 },
-  songbird: { geo: songbirdGeo, max: 90, colors: [0xe8553c, 0x4a8ce0, 0xf2c94c, 0x9a7458, 0x5abf8a], speed: 0, idle: [4, 14], ok: any, flap: [22, 1.2, 0.012], scale: 1.3 },
+  bird: { geo: gooseGeo, max: 70, colors: BIRD_COATS.bird.map((c) => c[0]), speed: 0, idle: [1, 1], ok: any, wings: GOOSE_RIG },
+  starling: { geo: starlingGeo, max: 60, colors: BIRD_COATS.starling.map((c) => c[0]), speed: 0, idle: [1, 1], ok: any, wings: STARLING_RIG },
+  songbird: { geo: songbirdGeo, max: 90, colors: BIRD_COATS.songbird.map((c) => c[0]), speed: 0, idle: [4, 14], ok: any, wings: SONG_RIG },
   bee: { geo: beeGeo, max: 48, colors: [0xffffff], speed: 0, idle: [1, 3], ok: any, flap: [40, 1.5, 0.003], scale: 2.2 },
   bat: { geo: batGeo, max: 24, colors: [0x3a3238, 0x2e282e, 0x4a3e3e], speed: 0, idle: [1, 1], ok: any, flap: [17, 1.4, 0.008], scale: 1.7 },
   fish: { geo: fishGeo, max: 170, colors: [0xf28c38, 0xc8d4dc, 0x5fa8d8, 0xf2d04a], speed: 0, idle: [1, 1], ok: water },
@@ -520,8 +500,8 @@ const SPECS: Record<Kind, Spec> = {
   manta: { geo: dolphinGeo, max: 8, colors: [0x2c3d5c], speed: 0, idle: [1, 1], ok: water, scale: 1.2 },
   dolphin: { geo: dolphinGeo, max: 18, colors: [0x7f97ab, 0x8ea3b4], speed: 0, idle: [1, 1], ok: water, scale: 1.5 },
   shark: { geo: sharkGeo, max: 6, colors: [0xffffff, 0xe6ebf0], speed: 0, idle: [1, 1], ok: water, scale: 0.85, sway: [3.2, 0.05] },
-  eagle: { geo: birdGeo, max: 12, colors: [0x5a4232, 0x6b4e38, 0x4e3a2c], speed: 0, idle: [1, 1], ok: any, flap: [3, 0.45, 0.012], scale: 3.6 },
-  gull: { geo: birdGeo, max: 30, colors: [0xffffff, 0xf2f4f6], speed: 0, idle: [1, 1], ok: any, flap: [7, 0.9, 0.012], scale: 2 },
+  eagle: { geo: eagleGeo, max: 12, colors: BIRD_COATS.eagle.map((c) => c[0]), speed: 0, idle: [1, 1], ok: any, wings: EAGLE_RIG },
+  gull: { geo: gullGeo, max: 30, colors: BIRD_COATS.gull.map((c) => c[0]), speed: 0, idle: [1, 1], ok: any, wings: GULL_RIG },
   bear: { max: 10, colors: [0x6a4a34, 0x7a5438, 0x3a302c], speed: 0.28, run: 1.5, idle: [5, 14], ok: wild, graze: 0.1, flee: 3, scale: 1.25 },
   ibex: { geo: ibexGeo, max: 24, colors: [0x8a7a68, 0x9c8b76, 0x6e6052], speed: 0.35, run: 1.6, idle: [3, 9], ok: alpine, graze: 0.15, flee: 2.6, scale: 1.1 },
   lizard: { max: 44, colors: [0x8aa050, 0xc8a860, 0x9a9a60, 0xa88a58], speed: 0.4, run: 1.5, idle: [2, 7], ok: offRoad, flee: 1.2 },
@@ -561,7 +541,7 @@ for (const [k, h] of Object.entries(HABITAT) as [Kind, { biomes: number[]; open?
 /** La case convient-elle à l'espèce (sol, et milieu de vie pour les bêtes sauvages) ? */
 export const habitatOk = (w: World, k: Kind, cx: number, cz: number) => SPECS[k].ok(w, cx, cz);
 /** Rendu instancié de secours (modèle absent), ou espèces toujours procédurales */
-const PROCEDURAL = new Set<Kind>(['bird', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'shark']);
+const PROCEDURAL = new Set<Kind>(['bird', 'starling', 'songbird', 'bee', 'butterfly', 'bat', 'eagle', 'gull', 'shark']);
 
 /** Élément du décor ou zone auquel un groupe d'animaux est rattaché */
 export type Anchor = 'edge' | 'meadow' | 'rocks' | 'banks' | 'ponds' | 'coast';
@@ -710,6 +690,8 @@ export class Fauna {
   private meshes = {} as Record<Kind, THREE.InstancedMesh>;
   private phases = {} as Record<Kind, THREE.InstancedBufferAttribute | undefined>;
   private flaps = {} as Record<Kind, THREE.InstancedBufferAttribute | undefined>;
+  private beats = {} as Record<Kind, THREE.InstancedBufferAttribute | undefined>;
+  private col2s = {} as Record<Kind, THREE.InstancedBufferAttribute | undefined>;
   private critters: Critter[] = [];
 
   /** Grenouilles visibles autour d'un point (0 … 1) : leurs coassements */
@@ -766,7 +748,15 @@ export class Fauna {
       if (!sp.geo) continue;
       const g = sp.geo();
       let mat: THREE.MeshStandardMaterial;
-      if (sp.flap) {
+      if (sp.wings) {
+        const ph = new THREE.InstancedBufferAttribute(new Float32Array(sp.max), 1);
+        const fl = new THREE.InstancedBufferAttribute(new Float32Array(sp.max).fill(1), 1);
+        const bt = new THREE.InstancedBufferAttribute(new Float32Array(sp.max).fill(1), 1);
+        const c2 = new THREE.InstancedBufferAttribute(new Float32Array(sp.max * 3).fill(1), 3);
+        g.setAttribute('aPhase', ph); g.setAttribute('aFlap', fl); g.setAttribute('aBeat', bt); g.setAttribute('aCol2', c2);
+        this.phases[k] = ph; this.flaps[k] = fl; this.beats[k] = bt; this.col2s[k] = c2;
+        mat = wingMaterial(this.uTime, sp.wings);
+      } else if (sp.flap) {
         const ph = new THREE.InstancedBufferAttribute(new Float32Array(sp.max), 1);
         const fl = new THREE.InstancedBufferAttribute(new Float32Array(sp.max).fill(1), 1);
         g.setAttribute('aPhase', ph);
@@ -1086,9 +1076,13 @@ export class Fauna {
     group('coastF', 'fish', coastF, Math.min(4, Math.floor(coastF.length / 10)), (i) => 6 + (i % 3), 1.3, 284);
     // chauves-souris : trois par grotte, de sortie la nuit
     for (const k of caves.slice(0, 8)) { const [x, z] = at(k); src.push({ key: `bat${k}`, kind: 'bat', hx: x, hz: z, n: 3, radius: 0.8 }); }
-    for (let i = 0; i < 4; i++) src.push({ key: `birds${i}`, kind: 'bird', hx: N / 2, hz: N / 2, n: 5 + i, radius: (12 + i * 6) * (N / 48) * 0.8 });
-    // et deux vols plus petits qui tournent au-dessus du village
-    if (vc) for (let i = 0; i < 3; i++) src.push({ key: `vbirds${i}`, kind: 'bird', hx: vc[0], hz: vc[1], n: 4 + i, radius: 9 + i * 6 });
+    // vols de bernaches en V, chacun sur son quart de carte (ils ne se croisent pas)
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2 + 0.8;
+      src.push({ key: `birds${i}`, kind: 'bird', hx: N / 2 + Math.cos(a) * N * 0.17, hz: N / 2 + Math.sin(a) * N * 0.17, n: 5 + i, radius: N * (0.11 + i * 0.02) });
+    }
+    // et des nuées d'étourneaux qui tourbillonnent au-dessus du village
+    if (vc) for (let i = 0; i < 3; i++) src.push({ key: `vbirds${i}`, kind: 'starling', hx: vc[0], hz: vc[1], n: 10 + i * 3, radius: 4 + i * 2.5 });
     // montagnes : bouquetins sur les hauts pâturages, aigles qui tournoient autour des plus hauts sommets
     yield;
     const alp: number[] = [], tops: number[] = [], volcanoes: number[] = [];
@@ -1133,6 +1127,8 @@ export class Fauna {
           run: false, threat: null, fear: 0, prey: null, chase: 0, hunger: 20 + this.rnd() * 40, dead: 0, act: null, actT: 0, toDrink: false,
           thirst: 30 + this.rnd() * 90, ang: this.rnd() * 6.28, rush: 0, ax: s.hx, ay: 0, az: s.hz, by: 0, flight: 1, flightT: 1, perched: false, flap: 1,
         };
+        const coats = BIRD_COATS[kind as keyof typeof BIRD_COATS];
+        if (coats) c.col2 = coats[Math.max(0, sp.colors.indexOf(c.col))][1];
         // l'ourson suit sa mère
         if (kind === 'bear' && i > 0) c.size *= 0.55;
         const md = MODELS[kind];
@@ -1191,7 +1187,7 @@ export class Fauna {
     // bêtes à terre (ou dans l'eau) dans le champ, pas trop loin
     let seen = 0;
     for (const c of this.critters) {
-      if (c.hidden || c.dead > 0 || SPECS[c.kind].flap || Math.abs(c.x - fx) > SEEN_R * 2 || Math.abs(c.z - fz) > SEEN_R * 2) continue;
+      if (c.hidden || c.dead > 0 || SPECS[c.kind].flap || SPECS[c.kind].wings || Math.abs(c.x - fx) > SEEN_R * 2 || Math.abs(c.z - fz) > SEEN_R * 2) continue;
       this.sphere.center.set(c.x, SWIMMERS.has(c.kind) ? c.y : w.hAt(c.x, c.z), c.z);
       this.sphere.radius = 0.1;
       if (this.frustum.intersectsSphere(this.sphere) && Math.hypot(c.x - fx, c.z - fz) < SEEN_R) seen++;
@@ -1292,9 +1288,10 @@ export class Fauna {
         step = Math.min(0.25, c.lag);
         c.lag = 0;
       }
-      if (c.kind === 'bird') this.fly(c, night || rain > 0.6);
-      else if (c.kind === 'eagle') this.soar(c, night || rain > 0.7);
-      else if (c.kind === 'gull') this.glide(c, night || rain > 0.7);
+      if (c.kind === 'bird') this.fly(c, step, night || rain > 0.6);
+      else if (c.kind === 'starling') this.murmur(c, step, night || rain > 0.5 || season === 3);
+      else if (c.kind === 'eagle') this.soar(c, step, night || rain > 0.7);
+      else if (c.kind === 'gull') this.glide(c, step, night || rain > 0.7);
       else if (c.kind === 'songbird') this.songbird(c, step, night || rain > 0.6 || season === 3, people);
       else if (c.kind === 'bee') this.bee(c, step, night || rain > 0.3 || season === 3);
       else if (c.kind === 'butterfly') this.flutter(c, night || season > 1 || rain > 0.3);
@@ -1313,7 +1310,7 @@ export class Fauna {
    * calculés d'après l'heure, coûtent peu), une sur dix hors du champ de l'image précédente (avec une marge)
    */
   private pace(c: Critter, cam: THREE.Vector3) {
-    const fly = !!SPECS[c.kind].flap;
+    const fly = !!(SPECS[c.kind].flap || SPECS[c.kind].wings);
     this.sphere.center.set(c.x, fly || SWIMMERS.has(c.kind) ? c.y : this.world.hAt(c.x, c.z), c.z);
     this.sphere.radius = 3;
     if (!this.frustum.intersectsSphere(this.sphere)) return 10;
@@ -1518,58 +1515,167 @@ export class Fauna {
     c.phase += dt * 3;
   }
 
-  /** Nuée en V qui tourne au-dessus de la carte */
-  private fly(c: Critter, hide: boolean) {
-    c.hidden = hide;
-    const f = Number(c.key.slice(5)) || 0;
-    const om = (f % 2 ? -1 : 1) * 0.06, th = this.t * om + f * 2.1;
-    const R = c.radius;
-    const dx = -Math.sin(th) * R * om, dz = Math.cos(th) * R * 0.8 * om;
-    const h = Math.atan2(dx, dz);
-    const side = c.slot === 0 ? 0 : (c.slot % 2 ? 1 : -1), rank = Math.ceil(c.slot / 2);
-    const ox = side * rank * 0.55 + Math.sin(this.t * 1.1 + c.slot) * 0.08, oz = -rank * 0.45;
-    c.x = N / 2 + Math.cos(th) * R + ox * Math.cos(h) + oz * Math.sin(h);
-    c.z = N / 2 + Math.sin(th) * R * 0.8 - ox * Math.sin(h) + oz * Math.cos(h);
-    c.y = this.flockAltitude(c.key, R) + f * 1.2 + Math.sin(this.t * 0.8 + c.slot * 0.7) * 0.15;
-    c.heading = h;
-    c.pitch = 0;
+  /**
+   * Oiseau en vol : cap, tangage et roulis d'après son déplacement depuis la dernière réflexion. Il penche dans les virages
+   * (`lean` : roulis par rad/s de virage), pique en descendant, se cabre en montant ; tout est lissé
+   */
+  private wingTo(c: Critter, x: number, y: number, z: number, dt: number, lean: number) {
+    const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz);
+    if (d > 1e-5 && dt > 0) {
+      const h = Math.atan2(dx, dz), k = 1 - Math.exp(-dt * 3);
+      const roll = Math.max(-0.7, Math.min(0.7, (-wrapAngle(h - c.heading) / dt) * lean));
+      c.roll = (c.roll ?? 0) + (roll - (c.roll ?? 0)) * k;
+      c.pitch += (Math.max(-0.45, Math.min(0.45, -Math.atan2(y - c.y, d))) - c.pitch) * k;
+      c.heading = h;
+    }
+    c.x = x; c.y = y; c.z = z;
   }
 
-  /** Altitude d'un vol : au-dessus des plus hauts sommets survolés par sa boucle */
-  private flockAltitude(key: string, R: number) {
-    let alt = this.flockAlt.get(key);
+  /** Battement voulu (1 bat des ailes, 0 plane), atteint en douceur */
+  private beatTo(c: Critter, want: number, dt: number, rate = 5) {
+    c.beat = (c.beat ?? 1) + (want - (c.beat ?? 1)) * Math.min(1, dt * rate);
+  }
+
+  /** Boucle sinueuse d'un vol de bernaches autour de son domaine (≈ 1,5 case/s), à l'instant `t` */
+  private goosePath(c: Critter, f: number, t: number): [number, number] {
+    const R = c.radius, u = t * (f % 2 ? -1 : 1) * (1.5 / R) + f * 2.1;
+    return [c.hx + Math.cos(u) * R + Math.sin(2 * u + f) * R * 0.3, c.hz + Math.sin(u) * R * 0.8 + Math.cos(3 * u + f) * R * 0.18];
+  }
+
+  /**
+   * Bernaches en V : la tête suit sa boucle sinueuse, chaque équipière suit la même trace avec un temps de retard, décalée
+   * sur le côté ; le V se courbe ainsi dans les virages au lieu de pivoter d'un bloc
+   */
+  private fly(c: Critter, dt: number, hide: boolean) {
+    c.hidden = hide;
+    if (hide) return;
+    const f = Number(c.key.slice(5)) || 0;
+    const side = c.slot === 0 ? 0 : (c.slot % 2 ? 1 : -1), rank = Math.ceil(c.slot / 2);
+    const t = this.t - rank * 0.3;
+    const [x0, z0] = this.goosePath(c, f, t), [x1, z1] = this.goosePath(c, f, t + 0.1);
+    const tl = Math.hypot(x1 - x0, z1 - z0) || 1, off = side * rank * 0.36 + Math.sin(this.t * 0.9 + c.slot) * 0.04;
+    const x = x0 + ((z1 - z0) / tl) * off, z = z0 - ((x1 - x0) / tl) * off;
+    const y = this.flockAltitude(c, f) + rank * 0.05 + Math.sin(this.t * 0.5 + f + rank * 0.4) * 0.25;
+    this.wingTo(c, x, y, z, dt, 0.5);
+    c.flap = 1;
+    // battements réguliers, de courts planés de temps en temps (la tête de file d'abord, les autres à sa suite)
+    this.beatTo(c, Math.sin(t * 0.35 + f) > -0.75 ? 1 : 0, dt, 3);
+  }
+
+  /** Altitude d'un vol de bernaches : au-dessus des plus hauts sommets survolés par sa boucle */
+  private flockAltitude(c: Critter, f: number) {
+    let alt = this.flockAlt.get(c.key);
     if (alt === undefined) {
       let top = 0;
-      for (let a = 0; a < Math.PI * 2; a += 0.1)
-        for (const k of [0.8, 1, 1.2]) top = Math.max(top, this.world.hAt(N / 2 + Math.cos(a) * R * k, N / 2 + Math.sin(a) * R * 0.8 * k));
-      alt = Math.max(6.5, top + 2.5);
-      this.flockAlt.set(key, alt);
+      const period = (2 * Math.PI * c.radius) / 1.5;
+      for (let t = 0; t < period; t += period / 120) {
+        const [x, z] = this.goosePath(c, f, t);
+        for (const [ox, oz] of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) top = Math.max(top, this.world.hAt(x + ox, z + oz));
+      }
+      alt = Math.max(6.5, top + 2.5) + f * 0.8;
+      this.flockAlt.set(c.key, alt);
     }
     return alt;
   }
 
-  /** Aigle : grands cercles planés autour d'un sommet, quelques battements d'ailes de temps en temps */
-  private soar(c: Critter, hide: boolean) {
+  /**
+   * Nuée d'étourneaux au-dessus du village : le cœur de la nuée erre en boucle ; chaque oiseau garde sa place dans une boule
+   * que l'on étire, tasse et fait tourner, parcourue d'une vague ; tout se calcule d'après l'heure (aucun voisin à chercher)
+   */
+  private murmur(c: Critter, dt: number, hide: boolean) {
     c.hidden = hide;
-    const dir = c.slot % 2 ? -1 : 1, a = this.t * (0.16 + c.slot * 0.05) * dir + c.phase;
-    const R = c.radius * (1 + c.slot * 0.4) * (0.9 + 0.1 * Math.sin(this.t * 0.2 + c.phase));
-    c.x = c.hx + Math.cos(a) * R; c.z = c.hz + Math.sin(a) * R;
-    c.y = this.world.hAt(c.hx, c.hz) + 2.4 + c.slot * 0.8 + Math.sin(this.t * 0.3 + c.phase) * 0.4;
-    c.heading = Math.atan2(-Math.sin(a) * dir, Math.cos(a) * dir);
-    c.pitch = 0;
-    c.flap = Math.sin(this.t * 0.5 + c.phase) > 0.8 ? 1 : 0.15;
+    if (hide) return;
+    const f = Number(c.key.slice(6)) || 0, t = this.t, R = c.radius;
+    const a = t * (0.2 + f * 0.03) + f * 2;
+    const cx = c.hx + Math.cos(a) * R + Math.sin(a * 2.3) * R * 0.35, cz = c.hz + Math.sin(a * 1.3) * R * 0.8;
+    const cy = Math.max(Math.max(0, this.world.hAt(c.hx, c.hz)) + 4.2 + f * 0.9, this.world.hAt(cx, cz) + 2.6) + Math.sin(t * 0.31 + f) * 0.7;
+    const ux = hash2(c.slot, f, 31) * 2 - 1, uy = hash2(c.slot, f, 32) * 2 - 1, uz = hash2(c.slot, f, 33) * 2 - 1;
+    const sx = 1.3 + 0.8 * Math.sin(t * 0.37 + f), sy = 0.4 + 0.25 * Math.sin(t * 0.53 + f * 2), sz = 0.8 + 0.55 * Math.cos(t * 0.29 + f);
+    const psi = t * 0.35 + Math.sin(t * 0.21 + f) * 1.4, cs = Math.cos(psi), sn = Math.sin(psi);
+    const ox = ux * sx + Math.sin(t * 1.9 + c.slot) * 0.1, oz = uz * sz + Math.cos(t * 1.7 + c.slot * 1.3) * 0.1;
+    const x = cx + ox * cs - oz * sn, z = cz + ox * sn + oz * cs;
+    const y = cy + uy * sy + Math.sin(t * 1.2 + ux * 2.5) * 0.3;
+    this.wingTo(c, x, y, z, dt, 0.2);
+    c.flap = 1;
+    // salves de battements et courts planés
+    this.beatTo(c, Math.sin(t * 1.6 + c.slot * 0.9) < -0.35 ? 0 : 1, dt, 8);
   }
 
-  /** Mouette : vire au-dessus du rivage, monte et descend au gré du vent */
-  private glide(c: Critter, hide: boolean) {
-    c.hidden = hide;
-    const a = this.t * (0.35 + (c.slot % 3) * 0.08) + c.slot * 2.1 + c.phase;
-    const R = c.radius * (0.7 + 0.3 * Math.sin(this.t * 0.2 + c.slot));
-    c.x = c.hx + Math.cos(a) * R; c.z = c.hz + Math.sin(a) * R * 0.8;
-    c.y = Math.max(0, this.world.hAt(c.x, c.z)) + 1.5 + c.slot * 0.35 + Math.sin(this.t * 0.9 + c.slot) * 0.5;
-    c.heading = Math.atan2(-Math.sin(a), Math.cos(a) * 0.8);
-    c.pitch = 0;
-    c.flap = Math.sin(this.t * 0.8 + c.slot * 1.7) > 0.3 ? 1 : 0.2;
+  /**
+   * Vol avec des haltes (aigle, goéland) : en vol l'oiseau suit `at` ; de temps en temps (et la nuit, sous la pluie : `stay`)
+   * il descend en planant vers sa halte, se cabre et bat des ailes pour se poser, les replie ; puis il redécolle en battant fort
+   */
+  private flyRest(c: Critter, dt: number, at: [number, number, number], stay: boolean, flyT: number, restT: number, down: number, up: number) {
+    c.timer -= dt;
+    if (c.timer <= 0 && !(stay && c.perched)) {
+      c.perched = !c.perched;
+      c.timer = (c.perched ? restT : flyT) * (0.6 + this.rnd() * 0.8);
+      if (c.perched) this.restSpot(c);
+    }
+    if (stay && !c.perched) { c.perched = true; this.restSpot(c); c.timer = restT; }
+    c.flight = Math.max(0, Math.min(1, c.flight + (c.perched ? dt / down : -dt / up)));
+    const e = c.flight, k = e * e * (3 - 2 * e);
+    // halte sur l'eau : l'oiseau flotte sur la houle
+    const sy = c.by < -50 ? this.swell(c.tx, c.tz) + 0.018 : c.by;
+    if (e >= 1) {
+      c.flap = Math.max(0, c.flap - dt * 3);
+      this.beatTo(c, 0, dt);
+      c.x = c.tx; c.z = c.tz; c.y = sy;
+      c.roll = (c.roll ?? 0) * (1 - Math.min(1, dt * 4));
+      c.pitch += (-0.15 - c.pitch) * Math.min(1, dt * 3);
+      return;
+    }
+    c.flap = Math.min(1, c.flap + dt * 4);
+    // l'approche : une glissade qui ne descend vraiment qu'à la fin ; le départ : une montée franche
+    const ky = c.perched ? k * k : Math.sqrt(k);
+    this.wingTo(c, at[0] + (c.tx - at[0]) * k, at[1] + (sy - at[1]) * ky, at[2] + (c.tz - at[2]) * k, dt, 0.6);
+    // se cabre et bat des ailes pour se poser ; bat fort pour décoller
+    if (c.perched && e > 0.75) { this.beatTo(c, 1, dt, 6); c.pitch += (-0.5 - c.pitch) * Math.min(1, dt * 5); }
+    else if (!c.perched && e > 0.2) this.beatTo(c, 1, dt, 8);
+  }
+
+  /** Halte d'un aigle (son aire, au sommet) ou d'un goéland (l'eau la plus proche, sinon le rivage) : (tx, by, tz) ; by < −50 : sur l'eau */
+  private restSpot(c: Critter) {
+    const w = this.world;
+    if (c.kind === 'eagle') {
+      const a = c.slot * 2.4;
+      c.tx = c.hx + Math.cos(a) * 0.35 * c.slot; c.tz = c.hz + Math.sin(a) * 0.35 * c.slot;
+      c.by = w.hAt(c.tx, c.tz) + 0.085;
+      return;
+    }
+    const cx = Math.floor(c.x), cz = Math.floor(c.z);
+    let best: [number, number] | null = null, bd = 9;
+    for (let dz = -4; dz <= 4; dz++)
+      for (let dx = -4; dx <= 4; dx++) {
+        const d = Math.hypot(dx, dz) + this.rnd() * 1.5;
+        if (d < bd && water(w, cx + dx, cz + dz)) { bd = d; best = [cx + dx, cz + dz]; }
+      }
+    if (best) { c.tx = best[0] + 0.2 + this.rnd() * 0.6; c.tz = best[1] + 0.2 + this.rnd() * 0.6; c.by = -100; }
+    else { c.tx = c.hx + this.rnd() - 0.5; c.tz = c.hz + this.rnd() - 0.5; c.by = Math.max(SEA, w.hAt(c.tx, c.tz)) + 0.065; }
+  }
+
+  /** Aigle : grands cercles planés dans une ascendance qui dérive, rares battements ; se pose de temps en temps sur son aire */
+  private soar(c: Critter, dt: number, stay: boolean) {
+    c.hidden = false;
+    if (c.beat === undefined) { c.beat = 0; c.flight = 0; c.perched = false; c.timer = 20 + this.rnd() * 40; }
+    const dir = c.slot % 2 ? -1 : 1, R = c.radius * (1 + c.slot * 0.4), t = this.t;
+    const tcx = c.hx + Math.cos(t * 0.04 + c.phase) * R * 0.6, tcz = c.hz + Math.sin(t * 0.05 + c.phase) * R * 0.6;
+    const rr = R * (0.6 + 0.15 * Math.sin(t * 0.1 + c.phase)), a = t * (1.3 / R) * dir + c.phase;
+    const y = this.world.hAt(c.hx, c.hz) + 2.4 + c.slot * 0.8 + Math.sin(t * 0.12 + c.phase) * 0.5;
+    this.flyRest(c, dt, [tcx + Math.cos(a) * rr, y, tcz + Math.sin(a) * rr], stay, 70, 25, 7, 3);
+    if (c.flight <= 0) this.beatTo(c, Math.sin(t * 0.37 + c.phase) > 0.9 ? 1 : 0, dt, 4);
+  }
+
+  /** Goéland : vire au-dessus du rivage en huit, monte et descend au gré du vent ; se pose sur l'eau de temps en temps */
+  private glide(c: Critter, dt: number, stay: boolean) {
+    c.hidden = false;
+    if (c.beat === undefined) { c.beat = 0; c.flight = 0; c.perched = false; c.timer = 10 + this.rnd() * 40; }
+    const t = this.t, R = c.radius * (0.7 + 0.3 * Math.sin(t * 0.2 + c.slot));
+    const a = t * (1.3 / c.radius) + c.slot * 2.1 + c.phase;
+    const x = c.hx + Math.cos(a) * R, z = c.hz + Math.sin(a) * R * 0.8 + Math.sin(2 * a) * R * 0.25;
+    const y = Math.max(0, this.world.hAt(x, z)) + 1.4 + c.slot * 0.3 + Math.sin(t * 0.9 + c.slot) * 0.5;
+    this.flyRest(c, dt, [x, y, z], stay, 45, 18, 4, 2.5);
+    if (c.flight <= 0) this.beatTo(c, Math.sin(t * 0.7 + c.slot * 1.7) > 0.45 ? 1 : 0, dt, 5);
   }
 
   /** Perchoirs (cimes des arbres) autour d'un point */
@@ -1622,7 +1728,11 @@ export class Fauna {
     if (hide) return;
     c.phase += dt;
     if (c.perched) {
-      c.flap = Math.max(0, c.flap - dt * 4);
+      // se pose : ailes encore ouvertes un instant, puis repliées ; le corps se redresse
+      c.flap = Math.max(0, c.flap - dt * 3.5);
+      c.beat = Math.max(0, (c.beat ?? 0) - dt * 3);
+      c.pitch *= 1 - Math.min(1, dt * 5);
+      c.roll = (c.roll ?? 0) * (1 - Math.min(1, dt * 6));
       c.timer -= dt;
       // sautille et tourne la tête de temps en temps
       if (Math.sin(c.phase * 1.7 + c.slot) > 0.97) c.heading += (this.rnd() - 0.5) * 1.2;
@@ -1646,7 +1756,6 @@ export class Fauna {
       }
       return;
     }
-    c.flap = Math.min(1, c.flap + dt * 6);
     if (c.flight >= 1) {
       // premier vol : vers un perchoir au hasard, ou en rond s'il n'y a pas d'arbre
       const list = this.perchesNear(c.hx, c.hz, c.radius);
@@ -1654,9 +1763,21 @@ export class Fauna {
         const i = Math.floor(this.rnd() * (list.length / 3)) * 3;
         if (!c.y) { c.x = list[i]; c.y = list[i + 1]; c.z = list[i + 2]; c.perched = true; c.timer = this.rnd() * 6; return; }
         this.takeOff(c, list[i], list[i + 1], list[i + 2], 2);
-      } else { this.flutter(c, false, 1.2, 0.8); return; }
+      } else { this.flutter(c, false, 1.2, 0.8); c.beat = 1; c.roll = 0; c.pitch = 0; return; }
     }
-    if (this.airborne(c, dt, 0.5 + c.flightT * 0.3)) { c.perched = true; c.flap = 1; }
+    // vol bondissant en arc : il s'élance, bat des ailes par salves et les ferme entre deux (petites chutes), puis se
+    // cabre et bat fort pour se poser en douceur
+    c.flight = Math.min(1, c.flight + dt / c.flightT);
+    const u = c.flight, e = u * u * (3 - 2 * u), dx = c.tx - c.ax, dz = c.tz - c.az;
+    const bend = Math.sin(Math.PI * u) * (c.slot % 2 ? 0.2 : -0.2);
+    const bound = Math.sin(c.phase * 6 + c.slot) > -0.3;
+    const y = c.ay + (c.by - c.ay) * e + Math.sin(Math.PI * u) * (0.5 + c.flightT * 0.3) - (bound ? 0 : 0.03);
+    this.wingTo(c, c.ax + dx * e - dz * bend, y, c.az + dz * e + dx * bend, dt, 0.12);
+    const ends = u < 0.12 || u > 0.8;
+    c.flap = Math.min(1, ends || bound ? c.flap + dt * 8 : Math.max(0.3, c.flap - dt * 8));
+    c.beat = ends || bound ? 1 : 0;
+    if (u > 0.8) c.pitch += (-0.6 - c.pitch) * Math.min(1, dt * 8);
+    if (u >= 1) c.perched = true;
   }
 
   /** Abeille : de fleur en fleur autour de son essaim ; chaque visite fait fleurir un peu plus la prairie */
@@ -1955,13 +2076,13 @@ export class Fauna {
       if (n >= sp.max) continue;
       let y: number;
       if (c.kind === 'duck' || c.kind === 'duckling') y = this.swell(c.x, c.z);
-      else if (sp.flap || SWIMMERS.has(c.kind)) y = c.y;
+      else if (sp.flap || sp.wings || SWIMMERS.has(c.kind)) y = c.y;
       else {
         y = w.hAt(c.x, c.z);
         if (c.moving) y += sp.hop ? Math.abs(Math.sin(c.phase * 0.7)) * sp.hop * (c.run ? 1.6 : 1) : Math.abs(Math.sin(c.phase)) * 0.006;
       }
       d.position.set(c.x, y, c.z);
-      d.rotation.set(c.pitch, c.heading, c.moving && !sp.hop ? Math.sin(c.phase) * 0.05 : 0, 'YXZ');
+      d.rotation.set(c.pitch, c.heading, c.roll ?? (c.moving && !sp.hop ? Math.sin(c.phase) * 0.05 : 0), 'YXZ');
       // couché la nuit
       d.scale.set(c.size, c.size * (c.sleeping ? 0.78 : 1), c.size);
       d.updateMatrix();
@@ -1970,6 +2091,8 @@ export class Fauna {
       const ph = this.phases[c.kind];
       if (ph) ph.setX(n, c.phase + c.slot * 1.3);
       this.flaps[c.kind]?.setX(n, c.flap);
+      this.beats[c.kind]?.setX(n, c.beat ?? 1);
+      if (c.col2 !== undefined) this.col2s[c.kind]?.setXYZ(n, ...this.col.setHex(c.col2).toArray() as [number, number, number]);
       counts[c.kind] = n + 1;
     }
     this.impostors.end();
@@ -1983,6 +2106,7 @@ export class Fauna {
       if (ph) ph.needsUpdate = true;
       const fl = this.flaps[k];
       if (fl) fl.needsUpdate = true;
+      for (const a of [this.beats[k], this.col2s[k]]) if (a) a.needsUpdate = true;
     }
   }
 }
