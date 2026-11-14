@@ -85,6 +85,7 @@ import { ISLE_UP, ISLE_WAKE } from './render/expeditionScenes';
 import { holdIsle, isleDefenses, nearIsle, villageBarracks } from './world/portal';
 import { IsleFerry } from './render/isleFerry';
 import { IsleRuins } from './render/isleRuins';
+import { RivalTowns } from './render/rivalTowns';
 import { setFxDensity } from './render/combatFx';
 import { War, clockText } from './sim/war';
 import { KingdomStage } from './kingdomStage';
@@ -94,7 +95,7 @@ import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
 import { troopPortrait } from './render/troopPortraits';
 import { PortalChoice } from './ui/portalChoice';
 import { WorldChoice } from './ui/worldChoice';
-import { canExpand, expandWorld } from './world/expand';
+import { canExpand, expandWorld, archipelagoOn } from './world/expand';
 import { nextGoal } from './sim/objective';
 import { SaveData, Settings, Quality, saveSlot, loadSlot, deleteSlot, exportSave, readSaveFile, loadSettings, saveSettings } from './save/save';
 import { Difficulty, DEFAULT_DIFFICULTY, isDifficulty, rulesOf } from './sim/difficulty';
@@ -313,6 +314,8 @@ class Game implements UIHost {
   private ferry: IsleFerry | null = null;
   /** les ruines des défenses de l'île abattues pendant une incursion */
   private isleRuins: IsleRuins | null = null;
+  /** les villes des deux peuples rivaux de l'archipel (décor ; seulement sur une carte avec archipel) */
+  private rivalTowns: RivalTowns | null = null;
   /** on commande la garnison de l'île (la vue reste en surface) : vrai tant que la vue est près de l'île (`syncIsleView`) */
   isleCmd = false;
   /**
@@ -1123,6 +1126,9 @@ class Game implements UIHost {
     if (!this.isleRuins) { this.isleRuins = new IsleRuins(this.world, this.buildings); this.scene.add(this.isleRuins.group); }
     this.isleRuins.update(dt, isle, this.isleLayer?.fx ?? null);
     this.isleRuins.group.visible = this.mode === 'surface';
+    // les villes des peuples rivaux : créées dès que la carte a son archipel (aussi après un agrandissement en cours de partie)
+    if (archipelagoOn(this.world) && !this.rivalTowns) { this.rivalTowns = new RivalTowns(this.world); this.scene.add(this.rivalTowns.group); }
+    if (this.rivalTowns) { this.rivalTowns.update(dt, this.sim.age); this.rivalTowns.group.visible = this.mode === 'surface'; }
     if (this.mode !== 'hell') w.hellFx.length = 0;
     this.kingStage.update(dt);
     // le commandement de l'île se perd si l'île n'est plus là (partie rechargée)
@@ -2079,6 +2085,8 @@ async function boot() {
   const models = screen;
   await loadModels((done, total) => models.step('Chargement des modèles…', (done / total) * 0.2, `${done}/${total}`));
 
+  // en développement, `?n=384&seed=11` lance tout de suite une nouvelle partie de cette taille (essais, captures de l'archipel)
+  const dev = import.meta.env.DEV ? new URLSearchParams(location.search) : null, devN = Number(dev?.get('n')) || 0;
   let started = false;
   const start = async (map: number, mode: 'continue' | 'new', seed?: number, difficulty?: Difficulty, age?: number) => {
     if (started) return;
@@ -2094,7 +2102,7 @@ async function boot() {
     document.getElementById('menu')?.remove();
     menu?.remove();
     // tailles des tableaux du monde, des vues et de la caméra : une partie reprise garde la taille de sa sauvegarde
-    setMapSize(playSize(map, mode === 'continue' ? loadSlot(map)?.world.n : undefined));
+    setMapSize(devN && mode === 'new' && mapDef(map)?.sizes.includes(devN) ? devN : playSize(map, mode === 'continue' ? loadSlot(map)?.world.n : undefined));
     syncChunks();
     const t0 = performance.now();
     const game = new Game(map, mode, seed, difficulty, age);
@@ -2105,6 +2113,7 @@ async function boot() {
   };
   const auto = sessionStorage.getItem(AUTOSTART);
   let menu: HTMLElement | null = null;
+  if (devN) { void start(CONTINENT, 'new', Number(dev?.get('seed')) || undefined); return; }
   if (auto) {
     sessionStorage.removeItem(AUTOSTART);
     const [m, mode, diff, ageS] = auto.split('|');
