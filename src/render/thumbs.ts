@@ -142,7 +142,8 @@ export class Thumbs {
     const box = new THREE.Box3().setFromObject(group), sphere = box.getBoundingSphere(new THREE.Sphere());
     if (!isFinite(sphere.radius) || sphere.radius <= 0) return '';
     const dir = new THREE.Vector3(0.95, 0.85, 1.3).normalize();
-    const dist = sphere.radius / Math.sin(THREE.MathUtils.degToRad(this.cam.fov / 2)) * 0.92;
+    // (un peu de marge : rien n'est coupé ; l'image est ensuite recadrée sur ce qu'elle montre)
+    const dist = sphere.radius / Math.sin(THREE.MathUtils.degToRad(this.cam.fov / 2)) * 1.05;
     this.cam.position.copy(sphere.center).addScaledVector(dir, dist);
     this.cam.lookAt(sphere.center);
     this.cam.updateProjectionMatrix();
@@ -170,10 +171,18 @@ export class Thumbs {
     const ctx = this.canvas.getContext('2d')!, img = ctx.createImageData(RT, RT), row = RT * 4;
     for (let y = 0; y < RT; y++) img.data.set(this.px.subarray((RT - 1 - y) * row, (RT - y) * row), y * row);
     ctx.putImageData(img, 0, 0);
+    // recadrage : la boîte de ce qui est dessiné (alpha), mise à l'échelle pour tenir dans la vignette avec la même marge, centrée
+    // de côté et posée sur la même ligne en bas (tous les socles d'herbe au même niveau, un bâtiment haut n'est plus remonté)
+    let x0 = RT, y0 = RT, x1 = -1, y1 = -1;
+    const d = img.data;
+    for (let y = 0; y < RT; y++) for (let x = 0; x < RT; x++) if (d[(y * RT + x) * 4 + 3] > 12) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     const sm = this.small.getContext('2d')!;
     sm.clearRect(0, 0, OUT, OUT);
     sm.imageSmoothingQuality = 'high';
-    sm.drawImage(this.canvas, 0, 0, OUT, OUT);
+    if (x1 < 0) { sm.drawImage(this.canvas, 0, 0, OUT, OUT); return this.small.toDataURL('image/png'); }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1, pad = OUT * 0.04, k = Math.min((OUT - pad * 2) / w, (OUT - pad * 2) / h);
+    const dw = w * k, dh = h * k;
+    sm.drawImage(this.canvas, x0, y0, w, h, (OUT - dw) / 2, OUT - pad - dh, dw, dh);
     return this.small.toDataURL('image/png');
   }
 }

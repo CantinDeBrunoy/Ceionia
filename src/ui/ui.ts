@@ -431,6 +431,9 @@ function modal(root: HTMLElement, cls: string, title: string, body: string, onCl
   return { ov, close };
 }
 
+/** Les outils de la barre des bâtiments qui ont une vignette peinte (le champ de blé, `public/ui/champ.webp`) */
+const TOOL_THUMB: Record<string, string> = { field: './ui/champ.webp' };
+
 /** La boussole peinte de l'en-tête des expéditions (`public/icons/hud/boussole.webp`) */
 const EXP_EMBLEM = hudPic('boussole', 62, 'exEmblem');
 /** L'avion de papier du bouton « Envoyer une équipe » */
@@ -867,7 +870,9 @@ export class UI {
       };
       const toolTile = (id: string, sub: string) => {
         const i = this.toolInfo(id);
-        return `<button class="tile" data-tool="${id}" title="${i.label}${colon()}${sub}" aria-label="${i.label}${colon()}${sub}"><b>${ic(i.icon, 28, 1.6)}</b><span class="lbl">${i.label}</span><small class="gv">${sub}</small>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`;
+        // (le champ a sa vignette peinte, comme les bâtiments ; les autres outils gardent leur icône au trait)
+        const face = TOOL_THUMB[id] ? `<b class="th"><img src="${TOOL_THUMB[id]}" alt="" draggable="false"></b>` : `<b>${ic(i.icon, 28, 1.6)}</b>`;
+        return `<button class="tile${TOOL_THUMB[id] ? ' thumb' : ''}" data-tool="${id}" title="${i.label}${colon()}${sub}" aria-label="${i.label}${colon()}${sub}">${face}<span class="lbl">${i.label}</span><small class="gv">${sub}</small>${i.key ? `<i class="key">${i.key}</i>` : ''}</button>`;
       };
       html = BUILD_SUBS[this.cat].map((sub) => {
         const tiles = kinds.filter((k) => KIND_SUB[k] === sub.id).sort((p, q) => shut(p) - shut(q)).map(tile);
@@ -1742,9 +1747,10 @@ export class UI {
     list.style.top = `${Math.round(Math.max(hudB, req)) + 8}px`;
     // le bas du bandeau du haut (une ou deux lignes selon la largeur) : les fiches et les messages se posent dessous
     if (this.root.style.getPropertyValue('--hudB') !== `${hudB}px`) this.root.style.setProperty('--hudB', `${hudB}px`);
-    // en bataille, la frise du haut monte au niveau des ressources quand elle tient entre elles et les boutons de droite
+    // dans les Enfers, la frise du haut monte au niveau des boutons de droite quand elle tient (les ressources et les besoins y
+    // sont cachés) ; sur l'île, le bandeau des attaques reste sous la barre du haut, qui garde ses besoins
     const ts = document.querySelector<HTMLElement>('#troopBar .tstate');
-    if (ts && document.body.classList.contains('commanding')) {
+    if (ts && document.body.classList.contains('commanding') && document.body.classList.contains('hell')) {
       const w = ts.offsetWidth, res = $('#resPanel').getBoundingClientRect(), hr = $('#hudR').getBoundingClientRect();
       // centrée sur l'écran si possible, sinon au milieu de la place libre entre les deux
       const a = (res.width ? res.right : 0) + 12, b = hr.left - 12, fits = b - a >= w;
