@@ -4,7 +4,8 @@ import { N } from '../world/world';
 
 /** Distances de caméra (zoom maximal, vue d'ensemble) à l'échelle de la carte */
 const maxDistFor = () => 150 * (N / 48) * 0.8;
-const homeFor = () => 62 * (N / 48) * 0.8;
+/** Recul de départ : celui de la carte de 192, même sur une plus grande (la vue sur le village ne change pas avec la taille) */
+const homeFor = () => 62 * (Math.min(N, 192) / 48) * 0.8;
 
 /** Au village, la vue peut descendre jusqu'à l'horizontale (regarder le paysage à hauteur d'homme) */
 export const SURFACE_MIN_PITCH = 0;
