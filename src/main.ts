@@ -97,6 +97,7 @@ import { CommandUI, Theater, PORTAL_REACH } from './ui/command';
 import { troopPortrait } from './render/troopPortraits';
 import { PortalChoice } from './ui/portalChoice';
 import { WorldChoice } from './ui/worldChoice';
+import { PopupGate } from './ui/popupGate';
 import { canExpand, expandWorld } from './world/expand';
 import { DiploChoice } from './ui/diploChoice';
 import { ageGate, allyPending, archipelagoOn, chooseAlly, choosePath, endgameOpen, peopleName, settleAtAge, startAllyBattle } from './sim/diplomacy';
@@ -288,6 +289,10 @@ class Game implements UIHost {
   /** version des lanternes des voies déjà données aux halos */
   private railLightsV = -1;
   private elapsed = 0;
+  /** fenêtres automatiques (portail, « Explorer le monde », conseils de guerre) : une à la fois, jamais par-dessus une autre */
+  readonly popups = new PopupGate();
+  /** la cinématique de découverte des îles se joue */
+  private revealing = false;
   private windT = 0;
   private seasonKey = -1;
   /** créneau de saison des dernières teintes du sol */
@@ -581,6 +586,8 @@ class Game implements UIHost {
       return false;
     };
     this.sim.onAgeUp = (age) => {
+      // (la fenêtre du nouvel âge s'ouvre 3,6 s après la bannière : aucune fenêtre automatique ne passe avant elle)
+      this.popups.hold(5);
       // on ne revient pas en arrière par-dessus un passage d'âge (Ctrl+Z rendrait des bâtiments comptés comme neufs)
       this.tools.undoStack.length = 0; this.tools.redoStack.length = 0;
       // la garnison gagne en vie et en force avec l'âge
@@ -638,7 +645,7 @@ class Game implements UIHost {
     // les aides du volet militaire (bulles facultatives, au moment utile)
     this.warTips = new WarTips({
       root: this.ui.root, state: () => this.warTipState(), click: () => audio.sfxClick(), hideHelp: () => this.ui.setHelp(false),
-      busy: () => this.tutorial.active || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo'),
+      busy: () => this.tutorial.active || this.ui.popupShowing() || !!document.querySelector('#warAlert.show') || !!this.ui.root.querySelector('.overlay:not(#menu)') || this.kingStage.playing || document.body.classList.contains('photo') || !this.popups.open,
       act: (id) => { if (id === 'portal') this.ui.gotoMission('portal'); else if (id === 'isle') this.goIsle(); else if (id === 'garrison') this.commandIsle(); else if (id === 'kingdom') this.kingStage.focusFight(); },
     });
     this.ui.info(save ? trx('Bon retour dans votre village !') : w.buildings.size ? trx('Choisissez un bâtiment dans « Bâtir » ou sculptez le terrain.') : trx('Commencez par « {name} », la place au centre du village (Bâtir › Vie & culture).', { name: this.sim.nameOf('gather') }));
@@ -1052,11 +1059,21 @@ class Game implements UIHost {
    * rayon Production) ; le monde agrandi, la cinématique de découverte des îles se joue une fois en jeu
    */
   private stepExplore() {
-    const calm = this.portalCalm > 3 && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading && !this.portalChoice.visible && !this.worldChoice.visible;
-    if (!calm) return;
+    if (this.portalCalm <= 3 || !this.popups.open) return;
     // (la cinématique suit tout de suite le choix ; la carte, elle, attend la fin du tutoriel)
-    if (this.world.reveal) { this.world.reveal = false; this.revealIsles(); return; }
-    if (!this.tutorial.active && this.world.explore === 'ask' && this.sim.age >= 2 && !this.world.sandbox && this.canExplore()) this.worldChoice.show();
+    if (this.world.reveal) { this.world.reveal = false; this.popups.taken(); this.revealIsles(); return; }
+    if (!this.tutorial.active && this.world.explore === 'ask' && this.sim.age >= 2 && !this.world.sandbox && this.canExplore()) { this.popups.taken(); this.worldChoice.show(); }
+  }
+
+  /**
+   * Le jeu montre déjà quelque chose : une fenêtre (`.overlay`, hors accueil), l'une des cartes de choix, une alerte, une
+   * bannière ou une notification qui passe, un fondu, la cinématique des îles ou celle du roi, l'écran de chargement, une
+   * autre vue que la surface, le mode photo. Les fenêtres automatiques attendent (`popups`)
+   */
+  private popupBusy() {
+    return !!document.getElementById('loadScreen') || !!uiRoot.querySelector('.overlay:not(#menu)') || this.portalChoice.visible || this.worldChoice.visible
+      || !!document.querySelector('#warAlert.show') || this.ui.popupShowing() || this.fading || this.revealing || this.kingStage.playing || this.mode !== 'surface'
+      || document.body.classList.contains('photo');
   }
 
   /** Ligne en tête du rayon Production : « Explorer le monde » pour qui est resté sur son île (et au bac à sable) */
@@ -1094,11 +1111,12 @@ class Game implements UIHost {
     const lay = this.world.isles;
     if (!lay) return;
     const cam = this.cam, back = cam.view(), [a, b] = lay.rivals, f = lay.main;
+    this.revealing = true;
     const steps: [number, () => void][] = [
       [0, () => cam.goTo(f.x + f.n * 0.8, f.z + f.n / 2, cam.maxDist * 0.55)],
       [3200, () => { cam.goTo(a.village.x, a.village.z, 150); this.ui.banner(trx('De nouvelles terres !'), a.people === 'orient' ? trx('Une île de sable et de palmiers, et son peuple') : trx('Une île verte aux pitons rocheux, et son peuple')); }],
       [8200, () => { cam.goTo(b.village.x, b.village.z, 150); this.ui.banner(trx('Et une autre encore'), b.people === 'orient' ? trx('Une île de sable et de palmiers, et son peuple') : trx('Une île verte aux pitons rocheux, et son peuple')); }],
-      [13200, () => { cam.goTo(back.x, back.z, back.dist); this.onIslesRevealed?.(); }],
+      [13200, () => { cam.goTo(back.x, back.z, back.dist); this.revealing = false; this.onIslesRevealed?.(); }],
     ];
     for (const [t, f2] of steps) setTimeout(f2, t);
     setTimeout(() => this.saveNow(), 14000);
@@ -1137,7 +1155,8 @@ class Game implements UIHost {
     // le portail vient de s'ouvrir (ou la partie chargée n'a jamais choisi) : la carte du choix s'ouvre une seule fois, hors fenêtre,
     // et seulement une fois en jeu : écran de chargement parti depuis 3 s au moins (pas par-dessus la barre de chargement)
     this.portalCalm = document.getElementById('loadScreen') ? 0 : this.portalCalm + dt;
-    if (w.active && w.pve === 'ask' && !w.choiceSeen && this.portalCalm > 3 && !this.portalChoice.visible && this.mode === 'surface' && !uiRoot.querySelector('.overlay') && !this.fading) this.portalChoice.show();
+    this.popups.step(dt, this.popupBusy());
+    if (w.active && w.pve === 'ask' && !w.choiceSeen && this.portalCalm > 3 && this.popups.open) { this.popups.taken(); this.portalChoice.show(); }
     this.stepExplore();
     const said = new Set<string>();
     for (const n of w.news.splice(0)) {
