@@ -4,6 +4,7 @@ import { hash2, smoothstep } from '../core/rng';
 import { Puffs } from './particles';
 import { SeasonState } from './season';
 import { NOISE_GLSL } from './seasonShaders';
+import { SNOW_U } from './snow';
 
 /** Lac retenu dans un creux du relief : niveau de l'eau, sous-sommets noyés, sommet par où il déborde */
 interface Lake { level: number; cells: number[]; outlet: number }
@@ -54,14 +55,17 @@ export class Streams {
     lakeMat.onBeforeCompile = (sh) => {
       sh.uniforms.uIce = this.uIce;
       sh.uniforms.uLakeTint = this.uLakeTint;
+      Object.assign(sh.uniforms, SNOW_U);
       sh.vertexShader = 'varying vec2 vLakeW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLakeW = position.xz;');
-      sh.fragmentShader = 'uniform float uIce;\nuniform vec3 uLakeTint;\nvarying vec2 vLakeW;\n' + NOISE_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      sh.fragmentShader = 'uniform float uIce;\nuniform vec3 uLakeTint;\nuniform sampler2D uSnowMap;\nuniform float uSnowSize;\nvarying vec2 vLakeW;\n' + NOISE_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
   // profondeur relative (portée par l'opacité des sommets) ; teinte de l'eau de la saison
   float lkD = clamp((diffuseColor.a - 0.55) / 0.35, 0.0, 1.0);
   diffuseColor.rgb = mix(diffuseColor.rgb, uLakeTint, 0.3);
-  // l'hiver, la glace gagne depuis les rives, en plaques irrégulières : il reste des trous d'eau libre au plus profond
+  // l'hiver, la glace gagne depuis les rives, en plaques irrégulières : il reste des trous d'eau libre au plus profond ; rien
+  // ne gèle là où il ne fait pas assez froid (désert, tropiques et leurs abords : canal g de la carte de neige)
   float lkN = sznNoise(vLakeW * 0.55) * 0.65 + sznNoise(vLakeW * 1.6 + 7.0) * 0.35 - 0.5;
-  float lkIce = uIce > 0.01 ? 1.0 - smoothstep(uIce * 0.95 - 0.05, uIce * 0.95 + 0.03, lkD * 0.85 + lkN * 0.6) : 0.0;
+  float lkU = uIce * smoothstep(0.35, 0.75, texture2D(uSnowMap, vLakeW / uSnowSize).g + lkN * 0.3);
+  float lkIce = lkU > 0.01 ? 1.0 - smoothstep(lkU * 0.95 - 0.05, lkU * 0.95 + 0.03, lkD * 0.85 + lkN * 0.6) : 0.0;
   diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.72, 0.86, 0.91), vec3(0.9, 0.94, 0.97), clamp(lkN * 4.0 + 0.5, 0.0, 1.0)), lkIce * 0.9);
   diffuseColor.a = mix(diffuseColor.a, 0.96, lkIce);`);
     };
@@ -411,13 +415,15 @@ function mergeRibbons(list: THREE.BufferGeometry[]) {
 function torrentMaterial(uTime: { value: number }, uSlow: { value: number }, uFrozen: { value: number }) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.15, metalness: 0, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uTime, uSlow, uFrozen });
-    sh.vertexShader = 'attribute float aAlong;\nattribute float aSide;\nattribute float aSteep;\nvarying float vAlong;\nvarying float vSide;\nvarying float vSteep;\n'
-      + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vAlong = aAlong; vSide = aSide; vSteep = aSteep;');
-    sh.fragmentShader = 'uniform float uTime;\nuniform float uSlow;\nuniform float uFrozen;\nvarying float vAlong;\nvarying float vSide;\nvarying float vSteep;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    Object.assign(sh.uniforms, { uTime, uSlow, uFrozen }, SNOW_U);
+    sh.vertexShader = 'attribute float aAlong;\nattribute float aSide;\nattribute float aSteep;\nvarying float vAlong;\nvarying float vSide;\nvarying float vSteep;\nvarying vec2 vTorW;\n'
+      + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vAlong = aAlong; vSide = aSide; vSteep = aSteep; vTorW = position.xz;');
+    sh.fragmentShader = 'uniform float uTime;\nuniform float uSlow;\nuniform float uFrozen;\nuniform sampler2D uSnowMap;\nuniform float uSnowSize;\nvarying vec2 vTorW;\nvarying float vAlong;\nvarying float vSide;\nvarying float vSteep;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
   float live = smoothstep(0.55, 1.05, vSteep);
   float t = mix(uSlow, uTime, live);
-  float fr = uFrozen * (1.0 - live * 0.8) * (0.8 + 0.2 * sin(vAlong * 0.9));
+  // (pas de gel là où il ne fait pas assez froid : désert, tropiques et leurs abords)
+  float cold = smoothstep(0.35, 0.75, texture2D(uSnowMap, vTorW / uSnowSize).g + 0.08 * sin(vAlong * 1.3));
+  float fr = uFrozen * cold * (1.0 - live * 0.8) * (0.8 + 0.2 * sin(vAlong * 0.9));
   float streak = smoothstep(0.55, 0.95, sin(vAlong * 5.0 - t * (5.0 + vSteep * 9.0) + sin(vSide * 4.0 + vAlong * 1.7) * 1.3) * 0.5 + 0.5);
   float foam = clamp(vSteep * 0.85 + streak * (0.25 + vSteep * 0.5), 0.0, 1.0);
   vec3 water = mix(vec3(0.33, 0.62, 0.74), vec3(0.95, 0.98, 1.0), foam);
