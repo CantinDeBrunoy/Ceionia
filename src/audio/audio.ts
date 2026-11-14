@@ -335,7 +335,8 @@ export class AudioEngine {
     set(this.surfG, surf); this.surfLfo.gain.setTargetAtTime(surf * 0.8, T, 0.4);
     set(this.rainG, 0.045 * s.rain * out);
     this.waterG.gain.setTargetAtTime(0.012 * clamp(1.4 - s.camDist / 130, 0.2, 1) * out, T, 0.5);
-    set(this.villageG, Math.min(0.018, s.pop * 0.00025) * s.daylight * (1 - s.rain * 0.6) * out);
+    // plus de « murmure du village » : un bruit filtré autour de 700 Hz qui sonnait comme de la friture
+    set(this.villageG, 0);
     set(this.caveG, 0.04 * s.under);
     this.tickVoices(T);
     // grillons la nuit : une courte trille douce de temps en temps, d'un grillon puis d'un autre (hauteur et place variées)
@@ -370,9 +371,10 @@ export class AudioEngine {
       if (high > 0.2 && near > 0.2 && s.daylight > 0.5 && s.rain < 0.4 && out > 0.5) this.eagle(T + 0.05, high * near * ANIMAL_VOL);
     }
     this.crackleTimer -= dt;
+    // crépitement du feu : quelques claquements espacés et doux, de près seulement (serrés et forts, ils faisaient un grésillement continu)
     if ((s.fire ?? 0) > 0.05 && this.crackleTimer <= 0 && out > 0.5) {
-      this.crackleTimer = (0.04 + Math.random() * 0.25) / s.fire!;
-      this.burst(T + 0.01, 0.025 + Math.random() * 0.03, 2500 + Math.random() * 3000, 0.12 * s.fire! * (0.4 + Math.random()));
+      this.crackleTimer = (0.3 + Math.random() * 0.9) / Math.min(1.5, s.fire! + 0.3);
+      if (near > 0.2) this.burst(T + 0.01, 0.02 + Math.random() * 0.025, 1800 + Math.random() * 1800, 0.03 * s.fire! * near * (0.5 + Math.random() * 0.5));
     }
     // grenouilles : un concert au crépuscule et la nuit, plus fourni après la pluie
     this.frogTimer -= dt;
@@ -583,7 +585,8 @@ export class AudioEngine {
     const src = ctx.createBufferSource(); src.buffer = this.noise;
     const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    // attaque de 3 ms : un départ à pleine force d'un coup fait un clic sec
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f); f.connect(g); g.connect(this.sfxG);
     src.start(t, Math.random() * 2); src.stop(t + dur + 0.05);
   }
