@@ -525,3 +525,67 @@ body.hell #resPanel { display: none !important; }
   #troopBar .hellf .tfg { font-size: 12px; padding: 4px 10px 4px 6px; }
   #troopBar .hellf .tfg .pic { width: 20px; height: 20px; }
 }
+
+/* ---------- carte d'explication, à droite du menu Bâtir (maquette de l'auteur : la carte « Taverne ») ----------
+   au village : le bâtiment survolé ou en main (#info, qui absorbe l'aide de pose « R : tourner · Échap : lâcher »), sinon le
+   bâtiment choisi (#selCard, avec Déplacer, Tourner et la corbeille) ; en bataille : la tuile survolée (#tinfo).
+   Placée en `fixed` par `placeCard` (src/ui/xcard.ts) : à côté du menu s'il y a la place, sinon au-dessus du coin de droite */
+#info, #info.held, #selCard, #tinfo { position: fixed; top: auto; right: auto; z-index: 6; box-sizing: border-box; padding: 12px 15px 13px; border-radius: 18px; overflow-y: auto; overscroll-behavior: contain; font-size: 12.5px; line-height: 1.42; color: var(--hInk); }
+#info, #info.held { pointer-events: none; }
+#tinfo { display: none; pointer-events: none; background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); }
+#tinfo.show { display: block; animation: rise 0.16s ease-out; }
+#selCard.hid { display: none !important; }
+#info::before, #tinfo::before { content: ''; position: absolute; top: 10px; right: 12px; width: 13px; height: 13px; transform: rotate(45deg); border-radius: 2px; background: var(--hGoldFill); box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.5px rgba(220, 170, 80, 0.7), 0 1px 3px rgba(120, 80, 20, 0.3); }
+#info .ihead, #info.held .ihead, #selCard .ihead, #tinfo .ihead { display: flex; align-items: center; gap: 12px; padding: 0 0 2px; border-bottom: none; }
+#info .xth, #selCard .xth, #tinfo .xth { flex: none; width: 78px; height: 66px; display: grid; place-items: center; line-height: 0; }
+#info .xth img, #selCard .xth img, #tinfo .xth img { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 3px 3px rgba(80, 50, 15, 0.25)); }
+#tinfo .xth .pic { width: 46px; height: 46px; }
+#info .grow, #selCard .grow, #tinfo .grow { min-width: 0; flex: 1; }
+#info h4, #info.held h4, #selCard h4, #tinfo h4 { margin: 0; font-family: var(--hSerif); font-variation-settings: 'SOFT' 30, 'opsz' 48; font-size: 21px; font-weight: 800; line-height: 1.1; color: #2E1E14; white-space: normal; padding-right: 16px; }
+#info .xsub, #selCard .xsub, #tinfo .xsub { display: block; margin-top: 3px; font-style: italic; font-weight: 600; font-size: 12.5px; color: var(--hInk2); }
+#info .xcount { display: block; font-size: 11px; color: var(--hInk2); opacity: 0.85; }
+#info .xdesc, #selCard .desc, #tinfo .xdesc { margin: 7px 0 0; font-style: italic; color: #4A3826; }
+#info p, #tinfo p { margin: 7px 0 0; }
+#tinfo .cost { font-weight: 700; }
+#info .lock, #tinfo .lock { display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 10px; background: rgba(200, 72, 43, 0.08); color: #A53A1C; font-weight: 700; }
+#info .keys { padding-top: 6px; border-top: 1px dashed rgba(200, 160, 95, 0.5); font-size: 11.5px; color: var(--hInk2); }
+/* le bâtiment choisi : ses actions en pied, la corbeille rouge à part */
+#selCard .ihead .x, #selCard .ihead .xfold { flex: none; align-self: flex-start; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+#selCard .ihead .xfold { display: none; font-size: 15px; }
+#selCard .xacts { display: flex; gap: 8px; margin-top: 10px; }
+#selCard .xacts button { flex: 1; justify-content: center; gap: 7px; min-height: 38px; border-radius: 999px; font-weight: 700; }
+#selCard .xacts button .pic { width: 18px; height: 18px; }
+#selCard .xacts .xdel { flex: 0 0 44px; color: #C8352A; border-color: #E9A08E; background: linear-gradient(180deg, #FFF3EE, #FBDCD2); }
+#selCard .xacts .xdel:hover { background: linear-gradient(180deg, #FFE9E1, #F8C9BB); }
+/* au téléphone : sur toute la largeur, au-dessus de la barre du bas ; la fiche choisie se replie sur son en-tête et ses actions */
+@media (max-width: 600px) {
+  #info, #info.held, #selCard, #tinfo { padding: 9px 11px 10px; }
+  #info .xth, #selCard .xth, #tinfo .xth { width: 54px; height: 46px; }
+  #info h4, #info.held h4, #selCard h4, #tinfo h4 { font-size: 17px; }
+  #info.held .xdesc { display: none; }
+  #selCard .ihead .xfold { display: inline-flex; }
+  #selCard.fold > :not(.ihead):not(.xacts) { display: none; }
+  #selCard:not(.fold) .ihead .xfold { transform: rotate(180deg); }
+}
+/* sur un écran large, le menu se range contre le panneau de gauche (comme la maquette) : la carte d'explication tient à sa
+   droite, avant les boutons de vue et la mini-carte ; plus étroit, le menu reste centré et la carte monte au-dessus du coin */
+@media (min-width: 1580px) {
+  #dock > #dockRow { grid-template-columns: auto minmax(0, 800px) minmax(0, 1fr); }
+  #dockSide { justify-self: start; }
+}
+/* la carte en main n'est plus au milieu de l'écran : elle arrive en sautillant deux fois, puis se tient tranquille */
+#info.held.show { animation: popIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), hintBounce 1.6s ease-in-out 0.45s 2; }
+#selCard { transform: none !important; }
+/* tablette et téléphone : la fiche de survol reste cachée (pas de survol au doigt), mais la carte du bâtiment en main se
+   montre, réduite à son en-tête et à l'aide de pose */
+@media (max-width: 860px) {
+  #info.held.show { display: block !important; }
+  #info.held .xdesc, #info.held .xcount { display: none; }
+}
+/* la barre de bataille suit : sur un écran large, les modes et le menu à gauche, le coin à droite, la carte entre les deux */
+@media (min-width: 1580px) {
+  #troopBar .tfoot { grid-template-columns: auto minmax(0, 820px) minmax(0, 1fr); }
+  #troopBar .tfoot > .ttool { justify-self: start; }
+  #troopBar .tfoot > .tcorner { justify-self: end; }
+}
+@media (min-width: 1580px) { #troopBar .tfoot .tbub { left: 0; } }

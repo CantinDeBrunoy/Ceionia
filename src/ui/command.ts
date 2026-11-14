@@ -16,6 +16,7 @@ import { WallPlan, isWallKind, isLineKind } from './wallPlan';
 import { nextGoal, goalLine, HellGoal } from '../sim/objective';
 import { pic, withPic, hudPic } from './pics';
 import { ic } from './icons';
+import { cardData } from './xcard';
 
 /**
  * Le contrôle direct des troupes à l'écran, le même dans les Enfers et sur l'île du portail : sélection (clic, rectangle
@@ -200,17 +201,45 @@ export class CommandUI implements ToolInput {
     this.goalEl = document.createElement('div');
     this.goalEl.id = 'hellGoal';
     this.goalEl.innerHTML = `<i class="hgArrow"></i><span class="hgPin">${pic('🎯', 22)}<b></b></span>`;
-    root.append(this.bar, this.box, this.goalEl);
+    // la carte d'explication, à droite du menu : le bâtiment ou la recrue survolés (placée par `UI.placeCards`)
+    this.card = document.createElement('div');
+    this.card.id = 'tinfo';
+    this.card.className = 'panel xcard';
+    root.append(this.bar, this.box, this.goalEl, this.card);
     // l'alerte se range en tête de la colonne de gauche, au-dessus des cartes des équipes et des messages
     const side = root.querySelector('#expList');
     if (side) side.prepend(this.alertEl); else root.append(this.alertEl);
     this.bar.addEventListener('click', (e) => this.onBar(e));
+    this.bar.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') this.showCard((e.target as HTMLElement).closest<HTMLElement>('[data-xn]')); });
+    this.bar.addEventListener('pointerleave', () => this.showCard(null));
+  }
+
+  /** la carte d'explication de la barre de bataille, et la tuile qu'elle montre */
+  private card: HTMLElement;
+  private cardOf: HTMLElement | null = null;
+  /** de quoi la placer (posé par l'interface du village, qui connaît le haut de l'écran) */
+  onCard: (() => void) | null = null;
+
+  /**
+   * Montre la carte de la tuile survolée (null : la cache) : la vignette de la tuile, le nom, le sous-titre en italique,
+   * à quoi elle sert, le coût, et ce qui la bloque
+   */
+  private showCard(el: HTMLElement | null) {
+    if (el === this.cardOf) return;
+    this.cardOf = el;
+    if (!el || !this.theater) { this.card.classList.remove('show'); return; }
+    const d = el.dataset, img = el.querySelector('.tic img, .tpo img') as HTMLImageElement | null;
+    const th = img ? `<img src="${img.src}" alt="" draggable="false">` : (el.querySelector('.tic, .tpo')?.innerHTML ?? '');
+    this.card.innerHTML = `<div class="ihead"><b class="xth">${th}</b><div class="grow"><h4>${d.xn}</h4>${d.xs ? `<small class="xsub">${d.xs}</small>` : ''}</div></div>${d.xd ? `<p class="xdesc">${d.xd}</p>` : ''}${d.xc ? `<p class="cost">${d.xc}</p>` : ''}${d.xw ? `<p class="lock">${pic('🔒', 16)} ${d.xw}</p>` : ''}`;
+    this.card.classList.add('show');
+    this.onCard?.();
   }
 
   get active() { return !!this.theater; }
 
   /** Prend le commandement d'une bataille (null : on le quitte) */
   setTheater(t: Theater | null) {
+    this.showCard(null);
     if (this.theater?.layer && this.theater !== t) this.theater.layer.selected = new Set();
     this.placing = null;
     this.wall.reset();
@@ -926,7 +955,7 @@ export class CommandUI implements ToolInput {
       // (poser une défense : on quitte le commandement, l'outil de construction du village prend la main)
       const tile = (k: string) => {
         const d = this.host.defenseInfo(k), why = this.host.defenseLock(k), n = this.host.defenseCount(k);
-        return `<button data-a="ibuild:${k}" class="trb tb tbv${why ? ' off' : ''}" title="${esc(`${d.name}. ${why ?? d.desc}`)}">${this.preview(`d:${k}:${age}`, () => this.host.defenseThumb?.(k, age), d.icon)}<b>${d.name}</b><small class="co">${why ? `${pic('🔒', 12)} ${tr('verrouillé')}` : n ? tr('{n} en place', { n }) : tr('à poser')}</small></button>`;
+        return `<button data-a="ibuild:${k}" class="trb tb tbv${why ? ' off' : ''}" ${cardData(d.name, tr('Défense de l’île'), d.desc, '', why ?? '')}>${this.preview(`d:${k}:${age}`, () => this.host.defenseThumb?.(k, age), d.icon)}<b>${d.name}</b><small class="co">${why ? `${pic('🔒', 12)} ${tr('verrouillé')}` : n ? tr('{n} en place', { n }) : tr('à poser')}</small></button>`;
       };
       // (les familles se lisent au filet qui les sépare ; leur nom est dans l'infobulle)
       const fam = (cls: string, title: string, inner2: string) => `<div class="tfam ${cls}" title="${tr(title)}"><div class="tbuilds">${inner2}</div></div>`;
@@ -990,7 +1019,7 @@ export class CommandUI implements ToolInput {
     const fm = troopForm(k, age), r = troopRole(k, age), port = this.host.portrait?.(k, age);
     // refusée : un cadenas discret, la raison est dans l'infobulle ; à fabriquer : la pilule ambrée (un clic lance l'atelier)
     const foot = state === 'go' ? CommandUI.troopCost(k, age, time) : state === 'off' ? `<span class="tlock" aria-label="${note.replace(/"/g, '&quot;')}">${pic('🔒', 16)}</span>` : `<span class="tpill ${state}">${pic('🛠', 13)}<span>${note}</span></span>`;
-    return `<button data-a="${a}" class="trb tb rh trc ${state}" title="${tip.replace(/"/g, '&quot;')}"><span class="tpo${port ? '' : ' none'}">${port ? `<img class="tpimg" src="${port}" alt="" draggable="false" decoding="async">` : pic(fm.icon, 38)}</span><span class="ttx"><b>${fm.name}</b><span class="trole">${pic(r.icon, 14)}<span>${tr(r.text)}</span></span></span><span class="tco">${foot}</span></button>`;
+    return `<button data-a="${a}" class="trb tb rh trc ${state}" ${cardData(fm.name, tr(r.text), tip, '', state === 'off' ? note : '')}><span class="tpo${port ? '' : ' none'}">${port ? `<img class="tpimg" src="${port}" alt="" draggable="false" decoding="async">` : pic(fm.icon, 38)}</span><span class="ttx"><b>${fm.name}</b><span class="trole">${pic(r.icon, 14)}<span>${tr(r.text)}</span></span></span><span class="tco">${foot}</span></button>`;
   }
 
   /** Ce que prend une recrue, en pastilles : une place de la garnison, une de chaque pièce, le cheval, la durée */
@@ -1033,7 +1062,7 @@ export class CommandUI implements ToolInput {
    */
   private farTiles(where: 'hell' | 'isle', age: number) {
     const tile = (key: string, get: () => string | null | undefined, icon: string, name: string, why: string) =>
-      `<button class="trb tb tbv off far" disabled title="${`${name} : ${why}`.replace(/"/g, '&quot;')}">${this.preview(key, get, icon)}<b>${name}</b><small class="co">${pic('🔒', 13)}</small></button>`;
+      `<button class="trb tb tbv off far" aria-disabled="true" ${cardData(name, '', '', '', why)}>${this.preview(key, get, icon)}<b>${name}</b><small class="co">${pic('🔒', 13)}</small></button>`;
     if (where === 'hell') return (['camp', 'post', 'smithy', 'infirmary'] as BaseKind[]).map((k) => tile(`b:${k}:${age}`, () => this.host.baseThumb?.(k, age), BASE_DEFS[k].icon, tr(CommandUI.BSHORT[k]), tr('se bâtit dans les Enfers, dans la base avancée'))).join('');
     return ['watchtower', 'barracks', 'wall', 'gate'].map((k) => { const d = this.host.defenseInfo(k); return tile(`d:${k}:${age}`, () => this.host.defenseThumb?.(k, age), d.icon, d.name, tr('se bâtit sur l’île, dans l’onglet Bâtir')); }).join('');
   }
@@ -1060,7 +1089,7 @@ export class CommandUI implements ToolInput {
     const btn = (k: BaseKind, legend: string, extra = '') => {
       const d = BASE_DEFS[k], afford = canAfford(world, d.cost), locked = k !== 'camp' && !hasCamp;
       const why = locked ? tr('d’abord le Camp') : afford ? '' : tr('manque {x}', { x: miss(d.cost) });
-      return `<button data-a="build:${k}" class="trb tb tbv${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" title="${`${tr('{name} ({cost}) : {legend}', { name: d.name, cost: costText(d.cost), legend: tr(legend) })}. ${d.desc}${why ? ` — ${why}` : ''}`.replace(/"/g, '&quot;')}">${this.preview(`b:${k}:${age}`, () => this.host.baseThumb?.(k, age), d.icon)}<b>${tr(CommandUI.BSHORT[k])}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></button>`;
+      return `<button data-a="build:${k}" class="trb tb tbv${this.placing === k ? ' on' : ''}${why ? ' off' : ''}${extra}" ${cardData(d.name, tr(legend), d.desc, tr('Coût : {cost}', { cost: costText(d.cost) }), why)}>${this.preview(`b:${k}:${age}`, () => this.host.baseThumb?.(k, age), d.icon)}<b>${tr(CommandUI.BSHORT[k])}</b><small class="co">${CommandUI.costIcons(d.cost)}</small></button>`;
     };
     // (les familles — tenir, défendre, éclairer — se lisent au filet qui les sépare ; leur nom est dans l'infobulle)
     const fam = (cls: string, title: string, tip: string, inner: string) => `<div class="tfam ${cls}" title="${tr(title)} : ${tr(tip)}"><div class="tbuilds">${inner}</div></div>`;

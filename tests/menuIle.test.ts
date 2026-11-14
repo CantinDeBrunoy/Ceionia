@@ -65,8 +65,8 @@ describe('le menu de l’île', () => {
     (isle.ui as any).isleTab = 'build';
     (isle.ui as any).barKey = '';
     isle.ui.render();
-    expect(isle.html()).toMatch(/class="trb tb tbv off far" disabled/);
-    expect(build('hell').html()).toMatch(/class="trb tb tbv off far" disabled/);
+    expect(isle.html()).toMatch(/class="trb tb tbv off far" aria-disabled="true"/);
+    expect(build('hell').html()).toMatch(/class="trb tb tbv off far" aria-disabled="true"/);
   });
 
   it('les Enfers sans le superflu : ni carte de passage, ni « Suivre », ni bulle d’aide tant qu’on ne bâtit pas', () => {

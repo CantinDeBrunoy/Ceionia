@@ -31,6 +31,7 @@ import { brief, shortStop } from './brief';
 import { pic, hudPic, leadPic, withPic } from './pics';
 import { menuBg, LOGO_PEAKS } from './loading';
 import { MiniMap } from './minimap';
+import { placeCard } from './xcard';
 import { NotifQueue, Banners, type NotifLevel } from './notifs';
 
 export interface UIHost {
@@ -596,6 +597,8 @@ export class UI {
       if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
     });
     window.addEventListener('pointermove', (e) => { this.cursorXY = [e.clientX, e.clientY]; }, { passive: true });
+    // la carte d'explication suit la mise en page de la barre du bas (après le reflux)
+    window.addEventListener('resize', () => requestAnimationFrame(() => this.placeCards()));
     root.addEventListener('wheel', (e) => {
       if (e.ctrlKey) return;
       for (let el = e.target as HTMLElement | null; el && el !== root; el = el.parentElement) {
@@ -972,6 +975,25 @@ export class UI {
     return null;
   }
 
+  /** La vignette 3D d'un bâtiment pour la carte d'explication (son picto tant qu'elle n'est pas rendue) */
+  private cardThumb(k: KindId, a: number) {
+    const th = this.host.thumb?.(k, a);
+    return `<b class="xth">${th ? `<img src="${th}" alt="" draggable="false">` : ic(KIND_ICON[k], 34, 1.6)}</b>`;
+  }
+
+  /** Place les cartes d'explication à droite du menu du bas (au village, et sur la barre de bataille) */
+  placeCards() {
+    const top = parseFloat(this.root.style.getPropertyValue('--hudB')) || 82;
+    if (document.body.classList.contains('commanding')) {
+      const t = document.getElementById('tinfo');
+      if (t) placeCard(t, document.querySelector('#troopBar .tmenu'), document.querySelector('#troopBar .tcorner'), top);
+      return;
+    }
+    const menu = $('#dockMain'), corner = $('#dockRight');
+    placeCard($('#info'), menu, corner, top);
+    placeCard($('#selCard'), menu, corner, top);
+  }
+
   /** la raison du refus montrée par la fiche (elle se redessine quand le curseur passe sur un endroit refusé pour une autre raison) */
   private infoWhy: string | null = null;
 
@@ -982,6 +1004,9 @@ export class UI {
     const held = tl.tool === 'build' || (tl.tool === 'move' && tl.holding()) ? tl.kind : null;
     const k = this.hover ? this.hover.kind ?? null : held, tool = this.hover?.tool;
     box.classList.toggle('show', !!(k || tool));
+    // une seule carte à la fois : la fiche du bâtiment choisi s'efface tant qu'on survole ou qu'on tient un bâtiment
+    $('#selCard').classList.toggle('hid', !!(k || tool));
+    this.placeCards();
     // le bâtiment en main (pas survolé) : une fiche réduite, dans le coin, qui laisse voir et viser le milieu de l'écran
     const brief = !this.hover;
     box.classList.toggle('held', brief);
@@ -999,8 +1024,10 @@ export class UI {
     // (les défenses se comptent au village et sur l'île du portail)
     const isle = k === 'watchtower' || k === 'barracks' ? [...w.buildings.values()].filter((b) => b.kind === k && w.onPortalIsland(b.x, b.z)).length : 0;
     const count = !n ? tr('pas encore construit') : isle === n ? tr('{n} sur l’île du portail', { n }) : isle ? tr('{n} dans le village, {m} sur l’île du portail', { n: n - isle, m: isle }) : tr('{n} dans le village', { n });
-    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[k], 28, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small>${d.size > 1 ? tr('Grand bâtiment ({n} × {n}) · ', { n: d.size }) : ''}${count}</small></div></div>
-      ${brief ? '' : `<p>${d.desc}</p>${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
+    // la carte d'explication (à droite du menu) : la vignette 3D, le nom, « 2 × 2 · Médiéval », à quoi il sert ; le détail
+    // (effets, conseil) quand on le survole dans la barre, pas quand on l'a en main
+    box.innerHTML = `<div class="ihead">${this.cardThumb(k, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub">${d.size} × ${d.size} · ${AGES[a].name}</small><small class="xcount">${count}</small></div></div>
+      <p class="xdesc">${d.desc}</p>${brief ? '' : `${effs ? `<div class="effs">${effs}</div>` : ''}${d.perk ? `<p class="perk">✦ ${d.perk}</p>` : ''}${railTip(k)}`}
       ${k === 'wall' && tl.wallCost ? `<p class="cost">${ic('hammer', 14, 2)} ${tl.wallCost}</p>` : cost ? `<p class="cost ${rich ? '' : 'short'}">${ic('hammer', 14, 2)} ${tr(k === 'wall' ? 'Coût par pan : {cost}' : 'Coût : {cost}', { cost: costLabel(cost) })}${rich ? '' : tr(' — vous avez {have}', { have: haveLabel(w, cost) })}</p>` : gift ? `<p class="cost">${ic('hammer', 14, 2)} ${DIFF_TEXT.firstFree}</p>` : ''}
       ${lock ? `<p class="lock">${pic('🔒', 16)} ${lock}</p>` : brief && tl.placeWhy ? `<p class="lock">✗ ${tl.placeWhy}</p>` : tl.tool === 'build' && brief ? `<p class="keys">${k === 'wall' ? tr(tl.freeStage === 2 ? 'Cliquez le point B : le mur se pose d’un trait (il saute les routes)' : 'Cliquez le point A, puis le point B : le mur se pose d’un trait') : `${tr(hasDoor(k) ? 'La flèche jaune montre l’entrée' : 'Sans entrée : on y vient de tous côtés')} · ${tr('R : tourner')}`} · ${tr('Échap : lâcher')}</p>` : ''}`;
   }
@@ -1070,17 +1097,21 @@ export class UI {
     const [perkHead, perkRest] = d.perk ? brief(d.perk, 90) : ['', ''];
     const perk = d.perk ? `<details class="perk" data-k="perk"><summary>✦ <span>${perkHead}</span></summary>${perkRest}</details>` : '';
     const size = sizeOf(b) > 1 ? `${sizeOf(b)} × ${sizeOf(b)}` : '', facing = tr(b.auto ? 'façade tournée vers la route' : 'orientée à la main');
-    box.innerHTML = `<div class="ihead"><b>${ic(KIND_ICON[b.kind], 24, 1.6)}</b><div class="grow"><h4>${d.names[a]}</h4><small title="${attr(`${AGES[b.age].name}${size ? tr(' · {size} cases', { size }) : ''} · ${facing}`)}">${AGES[b.age].name}${size ? ` · ${size}` : ''}</small></div><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
+    box.innerHTML = `<div class="ihead">${this.cardThumb(b.kind, a)}<div class="grow"><h4>${d.names[a]}</h4><small class="xsub" title="${attr(`${AGES[b.age].name}${size ? tr(' · {size} cases', { size }) : ''} · ${facing}`)}">${sizeOf(b)} × ${sizeOf(b)} · ${AGES[b.age].name}</small></div><button class="xfold" data-act="fold" title="${tr('Replier ou déplier')}" aria-label="${tr('Replier ou déplier')}">▾</button><button class="x" data-act="close" title="${tr('Fermer (Échap)')}" aria-label="${tr('Fermer')}">${ic('close', 16, 2)}</button></div>
       ${folded(d.desc, 'desc')}${effs || railChip ? `<div class="effs">${effs}${railChip}</div>` : ''}${stats.map((s) => `<p class="stat">${s}</p>`).join('')}${perk}${rails}${upgrades}
       ${(b.kind === 'watchtower' || b.kind === 'barracks') && h.commandIsle ? `<div class="acts"><button data-act="command" class="primary" title="${tr('Choisir les troupes, leur donner des ordres, recruter à la caserne')}">⚔️ ${tr('Commander la garnison')}</button></div>` : ''}
-      <div class="acts"><button data-act="move">${ic('hand', 16, 2)} ${tr('Déplacer')}</button><button data-act="rot">${ic('rotate', 16, 2)} ${tr('Tourner')} <kbd>R</kbd></button><button data-act="del" class="danger">${ic('demolish', 16, 2)} ${tr('Démolir')}</button></div>`;
+      <div class="acts xacts"><button data-act="move">${hudPic('deplacer', 18)} ${tr('Déplacer')}</button><button data-act="rot">${ic('rotate', 16, 2)} ${tr('Tourner')} <kbd>R</kbd></button><button data-act="del" class="danger xdel" title="${tr('Démolir')}" aria-label="${tr('Démolir')}">${ic('demolish', 17, 2)}</button></div>`;
     box.querySelectorAll<HTMLDetailsElement>('details[data-k]').forEach((x) => { if (opened.includes(x.dataset.k)) x.open = true; });
     box.scrollTop = scroll;
     const rl = box.querySelector('.rlist');
     if (rl) rl.scrollTop = listScroll;
     box.classList.add('show');
+    // au téléphone, la carte se replie sur son en-tête et ses actions (un clic sur le chevron la déplie)
+    box.classList.toggle('fold', this.selFold);
+    this.placeCards();
     box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((el) => (el.onclick = async () => {
       const act = el.dataset.act;
+      if (act === 'fold') { this.selFold = !this.selFold; box.classList.toggle('fold', this.selFold); this.placeCards(); return; }
       if (act === 'close') tl.select(null);
       else if (act === 'move') { tl.moveSelected(); h.audio.sfxClick(); }
       else if (act === 'rot') tl.rotateSelected();
@@ -1099,6 +1130,9 @@ export class UI {
       this.renderSelection();
     }));
   }
+
+  /** La carte du bâtiment choisi, repliée (au téléphone seulement : ailleurs le chevron est caché) */
+  private selFold = true;
 
   /** Tracé d'une ligne : ses arrêts jusqu'ici, et de quoi la valider ou l'abandonner */
   private railKey = '';
@@ -1425,6 +1459,7 @@ export class UI {
       if ($('#underZone').dataset.v !== zh) { $('#underZone').innerHTML = zh; $('#underZone').dataset.v = zh; }
     }
     this.updateExpeditions();
+    this.placeCards();
     this.mini.update();
     this.renderSelection();
     this.renderResources();
