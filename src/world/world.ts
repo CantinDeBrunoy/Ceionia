@@ -66,6 +66,11 @@ export const marginOff = (x: number, z: number) => Math.max(0, -x, x - N, -z, z 
 /** Taille de la carte choisie ; à appeler avant de construire le monde, ses vues et la caméra (tailles des tableaux) */
 /** Taille (cases de terre) sous laquelle une tache de climat tropical ou désertique se fond dans ses voisines */
 export const ISLET_MIN = 60;
+/**
+ * Hauteurs des gradins du canyon du désert (version 3, `carveCanyon` dans `mapgen.ts`) : rivière, berge, fond, terrasse, pied
+ * de la grande paroi (éboulis), rebord du plateau. Le relief affiché redresse les deux marches en falaises (`terraceCanyon`)
+ */
+export const CANYON = { river: -0.45, bank: 0.25, floor: 0.5, bench: 1.8, foot: 2.05, rim: 3.35 };
 
 export function setMapSize(n: number) {
   N = n;
@@ -883,9 +888,50 @@ export class World {
         }
         vis[i] = A[i];
       }
+    this.terraceCanyon(ix0, iz0, ix1, iz1);
     this.carveRavines(ix0, iz0, ix1, iz1);
     this.raiseCaveKnolls(ix0, iz0, ix1, iz1);
     this.visVersion++;
+  }
+
+  /**
+   * Gradins du canyon (cartes de la version 3 et plus, cases peintes en désert par le générateur) : le relief y monte en
+   * rampes droites, dont les courbes de niveau suivent le tracé ; au sous-sommet, chaque marche devient une falaise, avec un
+   * talus d'éboulis à son pied et un replat en haut. Les bords suivent ainsi des courbes, pas les angles droits de la grille
+   */
+  private terraceCanyon(wx0: number, wz0: number, wx1: number, wz1: number) {
+    if (this.gen < GEN_VAR || !this.biomePaint.includes(BIOME_DESERT + 1)) return;
+    const vis = this.vis, up = this.visUp, C = CANYON, steps = [[C.floor, C.bench], [C.foot, C.rim]];
+    // part des cases peintes en désert autour d'un point (3 × 3 cases, interpolée) : pas de bord net le long des cases
+    const paint = (cx: number, cz: number) => {
+      let n = 0;
+      for (let dz = -1; dz <= 1; dz++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const x = Math.min(N - 1, Math.max(0, cx + dx)), z = Math.min(N - 1, Math.max(0, cz + dz));
+          if (this.biomePaint[z * N + x] === BIOME_DESERT + 1) n++;
+        }
+      return n / 9;
+    };
+    const mask = (px: number, pz: number) => {
+      const x = px - 0.5, z = pz - 0.5, cx = Math.floor(x), cz = Math.floor(z), u = x - cx, v = z - cz;
+      return (paint(cx, cz) * (1 - u) + paint(cx + 1, cz) * u) * (1 - v) + (paint(cx, cz + 1) * (1 - u) + paint(cx + 1, cz + 1) * u) * v;
+    };
+    for (let z = Math.max(1, wz0); z <= Math.min(VS - 2, wz1); z++)
+      for (let x = Math.max(1, wx0); x <= Math.min(VS - 2, wx1); x++) {
+        const i = z * VS + x, h = vis[i];
+        if (this.visPin[i] || h <= C.floor || h >= C.rim) continue;
+        // seulement sur les rampes des marches (pente d'au moins 0,5) : pas de cuvette sur les pentes douces
+        const gx = (up[i + 1] - up[i - 1]) * VR / 2, gz = (up[i + VS] - up[i - VS]) * VR / 2;
+        const s = smoothstep(0.35, 0.6, Math.hypot(gx, gz));
+        if (s <= 0) continue;
+        const m = mask(x / VR, z / VR) * s;
+        if (m <= 0) continue;
+        for (const [lo, hi] of steps) {
+          if (h <= lo || h >= hi) continue;
+          const t = (h - lo) / (hi - lo), g = 0.12 * smoothstep(0, 0.35, t) + 0.88 * smoothstep(0.3, 0.78, t);
+          vis[i] = h + (lo + (hi - lo) * g - h) * m;
+        }
+      }
   }
 
   /**

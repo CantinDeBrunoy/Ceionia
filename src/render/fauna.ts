@@ -1983,7 +1983,8 @@ export class Fauna {
       let y = top + Math.sin(t * 1.3 + seed) * 0.015;
       if (u >= surface && u < surface + count * each) {
         // sauts : arc d'une seconde, chacun à sa hauteur, séparés d'un court passage sous l'eau
-        const k = u - surface, j = k % each, h = cyc.height * (0.75 + 0.5 * hash2(n, Math.floor(k / each), 37));
+        // (hauteur bornée : en course, le cycle accélère et l'envol du plus haut saut serait trop brusque)
+        const k = u - surface, j = k % each, h = cyc.height * (0.7 + 0.4 * hash2(n, Math.floor(k / each), 37));
         y = j < cyc.leap ? top + Math.sin((j / cyc.leap) * Math.PI) * h : top - Math.sin(((j - cyc.leap) / cyc.dip) * Math.PI) * 0.22;
       } else if (u >= surface + count * each) {
         // plongée : descente tête la première, longue nage au fond de l'eau, remontée

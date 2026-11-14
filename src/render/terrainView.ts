@@ -252,6 +252,16 @@ float snN(vec2 p) {
   f = f * f * (3.0 - 2.0 * f);
   return mix(mix(snH(i), snH(i + vec2(1.0, 0.0)), f.x), mix(snH(i + vec2(0.0, 1.0)), snH(i + vec2(1.0, 1.0)), f.x), f.y);
 }
+// rides du sable : le motif les trace toujours dans le même sens ; trois sens (0°, 60°, 120°) se relaient selon un bruit
+// lent, comme un vent qui tourne d'une dune à l'autre (rotations fixes : pas d'étirement du motif)
+float sandRip(vec2 p, float s) {
+  float n = snN(p * 0.04 + 17.0) * 9.42;
+  vec3 w = pow(max(vec3(0.0), vec3(cos(n), cos(n - 2.094), cos(n - 4.189))), vec3(3.0));
+  w /= w.x + w.y + w.z + 1e-4;
+  vec2 a = p * s;
+  return w.x * texture2D(uDetail, a).g + w.y * texture2D(uDetail, mat2(0.5, 0.866, -0.866, 0.5) * a + 0.37).g
+    + w.z * texture2D(uDetail, mat2(-0.5, 0.866, -0.866, -0.5) * a + 0.71).g;
+}
 ${BLIGHT_GLSL}
 ` + sh.fragmentShader
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
@@ -309,6 +319,11 @@ ${BLIGHT_GLSL}
   }
   vec3 d1 = tri(vPos, bw, 0.6) - 0.5;
   vec3 d2 = tri(vPos + 0.31, bw, 0.11) - 0.5;
+  // (sur le sable vu d'en haut : rides dans un sens qui change d'un endroit à l'autre)
+  if (vSurf.y > 0.02 && bw.y > 0.05) {
+    d1.g += bw.y * (sandRip(vPos.xz, 0.6) - texture2D(uDetail, vPos.xz * 0.6).g);
+    d2.g += bw.y * (sandRip(vPos.xz + 0.31, 0.11) - texture2D(uDetail, (vPos.xz + 0.31) * 0.11).g);
+  }
   // sous la neige, les motifs du sol et les strates s'effacent : une neige propre, sans traînées grises
   float clean = 1.0 - sn * 0.9;
   diffuseColor.rgb *= 1.0 + dot(vSurf.xyz, d1 * vec3(0.55, 0.4, 0.6) + d2 * vec3(0.3, 0.2, 0.35)) * clean;
@@ -320,7 +335,8 @@ ${BLIGHT_GLSL}
   // des sommets (qui garde son ombre cuite)
   float gorge = clamp(-vSurf.w, 0.0, 1.0);
   if (gorge > 0.01) {
-    float gy = vPos.y + sin(vPos.x * 0.7 + vPos.z * 0.4) * 0.03;
+    // (les couches ondulent un peu d'un bout à l'autre du canyon : pas de bandes tirées au cordeau)
+    float gy = vPos.y + sin(vPos.x * 0.7 + vPos.z * 0.4) * 0.03 + (snN(vPos.xz * 0.06 + 5.0) - 0.5) * 0.14;
     vec3 band = vec3(0.33, 0.26, 0.25);
     band = mix(band, vec3(0.58, 0.38, 0.27), smoothstep(0.73, 0.77, gy));
     band = mix(band, vec3(0.66, 0.58, 0.45), smoothstep(1.03, 1.07, gy));

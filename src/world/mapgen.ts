@@ -1,4 +1,4 @@
-import { World, N, SEA_FLOOR, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, ISLET_MIN } from './world';
+import { World, N, SEA_FLOOR, VEG_FOREST, VEG_ROCKS, VEG_CAVE, VEG_WRECK, VEG_FISSURE, VEG_VOLCANO, MIN_H, MAX_H, TREE_LINE, MOUNTAIN_H, BIOME_TEMPERATE, BIOME_TAIGA, BIOME_DESERT, BIOME_TROPICAL, BIOME_MARSH, ISLET_MIN, CANYON } from './world';
 import { raiseVolcano } from './terraform';
 import { addPortalIsland } from './portal';
 import { Simplex } from './noise';
@@ -103,7 +103,7 @@ export function newWorld(world: World, mapId: number, seed: number, gen = GEN_PL
   world.biomePaint.fill(0);
   world.decorDone = false;
   world.computeBiomes();
-  shapeBiomes(world, seed, plan ? plan.wind : null);
+  shapeBiomes(world, seed, plan ? plan.wind : null, v3);
   const canyonFloor = v3 ? carveCanyon(world, seed, mulberry32(seed + 61)) : [];
   world.computeBiomes();
   // forêts plus ou moins denses selon le biome (cactus clairsemés au désert, forêt dense en taïga et sous les tropiques) ;
@@ -352,12 +352,6 @@ function carveTarns(world: World, seed: number, dry: boolean, want = 5, lo = 4, 
   if (picked.length) world.vegDirty = true;
 }
 
-/**
- * Hauteurs du canyon (version 3) : la rivière au fond, au niveau de la mer ; une étroite plaine verte de part et d'autre ; la
- * gorge intérieure jusqu'à la terrasse ; puis la grande paroi jusqu'au rebord du plateau. Les marches dépassent 1,3 : le
- * relief affiché les garde franches (pas de lissage au bord des à-pics). Plateau sous 3,8, où la roche virerait au gris
- */
-const CANYON = { river: -0.45, bank: 0.25, floor: 0.5, bench: 1.8, foot: 2.05, rim: 3.35 };
 
 /**
  * Canyon du désert (version 3), inspiré du Grand Canyon : une gorge à méandres taillée dans un large plateau, avec une rivière
@@ -417,6 +411,8 @@ function carveCanyon(world: World, seed: number, rnd: () => number): number[] {
   const nt = 2 + Math.floor(rnd() * 2);
   for (let t = 0; t < nt; t++) {
     const j = Math.floor(best.length * (0.2 + 0.6 * rnd())), [px, pz] = best[j], [qx, qz] = best[Math.min(best.length - 1, j + 2)];
+    // (loin de l'eau : près de la rive, le plateau s'abaisse et l'entaille deviendrait un trou)
+    if (dist(px, pz) < 8) continue;
     let a = Math.atan2(qz - pz, qx - px) + (rnd() < 0.5 ? 1 : -1) * (1.1 + rnd() * 0.5), x = px, z = pz;
     const path: [number, number][] = [];
     const len = 18 + Math.floor(rnd() * 10);
@@ -439,35 +435,46 @@ function carveCanyon(world: World, seed: number, rnd: () => number): number[] {
   // le bruit avance ou recule chaque gradin (éperons, criques), le plateau a un bord découpé
   const n1 = new Simplex(seed + 611), n2 = new Simplex(seed + 613), n3 = new Simplex(seed + 617);
   const ramp = (a: number, b: number, d: number, e0: number, e1: number) => lerp(a, b, smoothstep(e0, e1, d));
-  const R = 22;
+  // marches en rampes droites sur 1,5 case : leurs courbes de niveau suivent le tracé, sans escalier de la grille ; le relief
+  // affiché les redresse en falaises (`World.terraceCanyon`)
+  const R = 23, RISE = 1.5;
   const xs = best.map((p) => p[0]), zs = best.map((p) => p[1]);
   const x0 = Math.max(0, Math.floor(Math.min(...xs) - R)), x1 = Math.min(N, Math.ceil(Math.max(...xs) + R));
   const z0 = Math.max(0, Math.floor(Math.min(...zs) - R)), z1 = Math.min(N, Math.ceil(Math.max(...zs) + R));
   const W = x1 - x0 + 1, out = new Float32Array(W * (z1 - z0 + 1)).fill(NaN);
+  // distance à l'eau adoucie (moyenne des 4 × 4 cases autour du sommet) : la distance par case dessinerait des marches
+  const wd = (x: number, z: number) => {
+    let sum = 0;
+    for (let dz = -2; dz <= 1; dz++) for (let dx = -2; dx <= 1; dx++) sum += world.waterDist[world.ci(Math.min(N - 1, Math.max(0, x + dx)), Math.min(N - 1, Math.max(0, z + dz)))];
+    return sum / 16;
+  };
   for (let z = z0; z <= z1; z++)
     for (let x = x0; x <= x1; x++) {
       const [d] = near(best, x, z);
       if (d >= R) continue;
       const i = z * S + x, h = world.heights[i];
       const e1 = 2.3 + n1.noise2(x * 0.3, z * 0.3) * 0.45;
-      const e2 = e1 + 0.6 + Math.max(0.8, 3.2 + n2.noise2(x * 0.16, z * 0.16) * 2.2);
-      const e3 = e2 + 0.6 + 7 + n3.fbm(x * 0.09, z * 0.09, 2) * 4;
+      const e2 = e1 + RISE + Math.max(0.8, 3.2 + n2.noise2(x * 0.16, z * 0.16) * 2.2);
+      const e3 = e2 + RISE + 7 + n3.fbm(x * 0.09, z * 0.09, 2) * 4;
       let p: number;
       if (d < 1.1) p = C.river;
       else if (d < 1.5) p = C.bank;
       else if (d < e1) p = C.floor;
-      else if (d < e1 + 0.6) p = ramp(C.floor, C.bench, d, e1, e1 + 0.6);
+      else if (d < e1 + RISE) p = lerp(C.floor, C.bench, (d - e1) / RISE);
       else if (d < e2) p = ramp(C.bench, C.foot, d, e2 - 0.9, e2);
-      else if (d < e2 + 0.6) p = ramp(C.foot, C.rim, d, e2, e2 + 0.6);
+      else if (d < e2 + RISE) p = lerp(C.foot, C.rim, (d - e2) / RISE);
       else p = C.rim;
-      // affluents : la paroi haute entaillée jusqu'à la terrasse
+      // plateau : il s'efface près de l'eau et vers son bord découpé (talus droit de 4 cases, que le relief affiché taille
+      // en deux marches)
+      const coast = smoothstep(2, 7, wd(x, z)), k = coast * (1 - clamp((d - e3) / 4, 0, 1));
+      // affluents : la paroi haute entaillée jusqu'à la terrasse (pas là où le plateau s'efface)
+      let pt = p;
       for (const tp of tribs) {
         const [dt, at] = near(tp, x, z), w = 0.7 + 0.5 * (1 - at / tp.length);
-        if (dt < w) p = Math.min(p, C.foot);
-        else if (dt < w + 0.6) p = Math.min(p, ramp(C.foot, C.rim, dt, w, w + 0.6));
+        if (dt < w) pt = Math.min(pt, C.foot);
+        else if (dt < w + RISE) pt = Math.min(pt, lerp(C.foot, C.rim, (dt - w) / RISE));
       }
-      // plateau : il s'efface près de l'eau et vers son bord découpé (talus de 2,5 cases)
-      const k = smoothstep(2, 7, dist(Math.min(N - 1, x), Math.min(N - 1, z))) * (1 - smoothstep(e3, e3 + 2.5, d));
+      p = lerp(p, pt, smoothstep(0.6, 1, k));
       out[(z - z0) * W + x - x0] = p < h ? p : lerp(h, p, k);
     }
   // (en deux temps : la distance à l'eau ne doit pas changer pendant le calcul) ; `lift` : de combien chaque sommet a bougé
@@ -515,10 +522,15 @@ function carveCanyon(world: World, seed: number, rnd: () => number): number[] {
   return floor;
 }
 
-/** Relief propre aux biomes : mares dans les marais, dunes au désert, en travers du vent `wind` (null : celui de la version 1) */
-function shapeBiomes(world: World, seed: number, wind: number | null) {
-  const pond = new Simplex(seed + 313), dune = new Simplex(seed + 317);
+/**
+ * Relief propre aux biomes : mares dans les marais, dunes au désert, en travers du vent `wind` (null : celui de la version 1).
+ * Version 3 (`turn`) : le vent tourne d'une région à l'autre ; deux trains de dunes, à 30° de part et d'autre du vent, se
+ * relaient selon un bruit lent (plus de dunes toutes parallèles sur tout le désert)
+ */
+function shapeBiomes(world: World, seed: number, wind: number | null, turn = false) {
+  const pond = new Simplex(seed + 313), dune = new Simplex(seed + 317), veer = new Simplex(seed + 319);
   const wx = wind === null ? 0.55 : Math.cos(wind) * 0.6, wz = wind === null ? 0.25 : Math.sin(wind) * 0.6;
+  const w0 = wind ?? Math.atan2(0.25, 0.55), dirs = [w0 + 0.52, w0 - 0.52].map((a) => [Math.cos(a) * 0.6, Math.sin(a) * 0.6]);
   const biomeNear = (x: number, z: number, b: number) => {
     // un sommet appartient au biome si les quatre cases qui le touchent en font partie
     for (const [dx, dz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (!world.inCells(x + dx, z + dz) || world.biome[world.ci(x + dx, z + dz)] !== b) return false;
@@ -534,8 +546,15 @@ function shapeBiomes(world: World, seed: number, wind: number | null) {
         else if (!(h < 0 && world.bed[world.ci(Math.min(x, N - 1), Math.min(z, N - 1))])) world.heights[i] = lerp(h, 0.3, 0.5);
       } else if (biomeNear(x, z, BIOME_DESERT) && h > 0.4) {
         // longues ondulations de dunes, orientées par le vent
-        const ph = (x * wx + z * wz) + dune.fbm(x * 0.05, z * 0.05, 2) * 4;
-        world.heights[i] = Math.min(MAX_H, h + (Math.sin(ph) * 0.5 + 0.5) ** 2 * 0.45);
+        const warp = dune.fbm(x * 0.05, z * 0.05, 2) * 4;
+        let crest: number;
+        if (!turn) crest = (Math.sin(x * wx + z * wz + warp) * 0.5 + 0.5) ** 2;
+        else {
+          const k = smoothstep(-0.25, 0.25, veer.fbm(x * 0.03, z * 0.03, 2));
+          const a = (Math.sin(x * dirs[0][0] + z * dirs[0][1] + warp) * 0.5 + 0.5) ** 2, b = (Math.sin(x * dirs[1][0] + z * dirs[1][1] + warp * 1.3) * 0.5 + 0.5) ** 2;
+          crest = lerp(a, b, k);
+        }
+        world.heights[i] = Math.min(MAX_H, h + crest * 0.45);
       }
     }
   world.markTerrainAll();
