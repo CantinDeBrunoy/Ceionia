@@ -9,8 +9,10 @@ export interface Settings {
   sfxVol: number;
   /** volume des ambiances (nature et bruitages de proximité) ; absent des anciennes sauvegardes : 0,7 */
   ambVol?: number;
-  /** musique activée : coupée par défaut tant que le joueur ne l'a pas allumée dans les réglages */
+  /** musique activée ; lue seulement si `musicChosen` (les anciennes sauvegardes notaient `false` sans choix du joueur) */
   music?: boolean;
+  /** le joueur a lui-même allumé ou coupé la musique ; absent = musique allumée */
+  musicChosen?: boolean;
   /** sons et ambiances activés ; lu seulement si `sfxChosen` (les anciennes sauvegardes notaient `false` sans choix du joueur) */
   sfx?: boolean;
   /** le joueur a lui-même allumé ou coupé les sons ; absent = sons allumés */

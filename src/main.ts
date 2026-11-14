@@ -53,7 +53,7 @@ import { Glow } from './render/glow';
 import { loadModels } from './render/assets';
 import { Thumbs } from './render/thumbs';
 import { ToolController, ToolId } from './build/tools';
-import { AudioEngine } from './audio/audio';
+import { AudioEngine, soundSettings } from './audio/audio';
 import { UI, showMenu, UIHost } from './ui/ui';
 import { Tutorial } from './ui/tutorial';
 import { chapters } from './ui/tutorialChapters';
@@ -116,7 +116,7 @@ renderer.toneMappingExposure = 1.0;
 
 const audio = new AudioEngine();
 /** Les réglages du son enregistrés, appliqués au moteur (au menu principal comme en partie) */
-const audioSettings = (s: Partial<Settings>) => Object.assign(audio, { musicVol: s.musicVol ?? 0.5, sfxVol: s.sfxVol ?? 0.7, ambVol: s.ambVol ?? 0.7, muteMusic: s.music !== true, muteSfx: s.sfxChosen === true && s.sfx !== true, sfxChosen: s.sfxChosen === true });
+const audioSettings = (s: Partial<Settings>) => Object.assign(audio, soundSettings(s));
 /** distance de la caméra quand elle revient sur le village (assez près pour reconnaître ses maisons) */
 const VILLAGE_DIST = 30;
 /** la parade des colons, une fois la fusée lâchée par la caméra : secondes de jeu, et secondes réelles au moins, avant le voyage */
@@ -568,9 +568,7 @@ class Game implements UIHost {
     if (!w.buildings.size && this.cam.homeAt) this.cam.jump({ x: this.cam.homeAt[0], z: this.cam.homeAt[1], dist: 34 }, w.surfaceAt(this.cam.homeAt[0], this.cam.homeAt[1]));
     window.addEventListener('resize', () => this.onResize());
     this.bindKeys();
-    const unlock = () => { audio.start(); audio.applyVolumes(); };
-    window.addEventListener('pointerdown', unlock, { once: true });
-    window.addEventListener('keydown', unlock, { once: true });
+    audio.unlockOn(window);
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveNow(); audio.pause(document.hidden); });
     window.addEventListener('pagehide', () => this.saveNow());
     // changer de langue en jeu : on sauvegarde, la page recharge et reprend la partie dans la nouvelle langue
@@ -666,7 +664,7 @@ class Game implements UIHost {
     saveSettings(this.settings());
   }
   settings(): Settings {
-    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, music: !audio.muteMusic, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
+    return { dayLen: this.time.dayLen, seasonLen: this.time.seasonLen, speed: this.time.speed, musicVol: audio.musicVol, sfxVol: audio.sfxVol, ambVol: audio.ambVol, music: !audio.muteMusic, musicChosen: audio.musicChosen, sfx: !audio.muteSfx, sfxChosen: audio.sfxChosen, quality: this.quality, autoLevel: this.adaptive.level, disasters: this.world.disasters, autoRoads: this.autoRoads, unlimited: this.world.unlimitedSetting, hideUpBadges: this.hideUpBadges };
   }
   buildSave(): SaveData {
     this.world.war = this.war.save();
@@ -2044,12 +2042,10 @@ async function boot() {
   // l'accueil : l'écran des modèles s'efface ; un autre couvrira la vue au lancement de la partie
   models.done(true);
   screen = null;
-  // la musique du menu, si le joueur l'a allumée : le son démarre au premier clic ou à la première touche
+  // le thème du menu (sauf si le joueur a coupé la musique) : le son démarre au premier clic ou à la première touche
   audioSettings(loadSettings());
   audio.music('menu');
-  const wake = () => { audio.start(); audio.applyVolumes(); };
-  window.addEventListener('pointerdown', wake, { once: true });
-  window.addEventListener('keydown', wake, { once: true });
+  audio.unlockOn(window);
   menu = showMenu(uiRoot, {
     start: (map, mode, seed, difficulty, age) => start(map, mode, seed, difficulty, age),
     importFile: async (f) => {
