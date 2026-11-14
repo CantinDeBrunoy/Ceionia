@@ -17,16 +17,102 @@ interface Vehicle {
   path: number[]; i: number; x: number; z: number; heading: number; wait: number;
   /** attelage animé (charrette tirée par un cheval, de l'Antiquité à l'âge industriel) */
   rig?: CartRig | null;
+  /** le véhicule qui lui barre la route (il attend qu'il passe), et depuis combien de temps (s) */
+  blockedBy?: Vehicle | null; stall?: number;
 }
-interface CartRig { root: THREE.Group; horse: Rider; wheels: THREE.Object3D[]; driver: THREE.Object3D; phase: number }
+interface CartRig {
+  root: THREE.Group; wheels: THREE.Object3D[]; driver: THREE.Object3D; phase: number;
+  /** le cheval animé de la faune (robe baie ou blanche) ; à défaut de modèle, le cheval de trait dessiné (`draft`) */
+  actor: Actor | null; draft: Rider | null;
+  /** tangage et roulis lissés (pentes, rampes des ponts), écart du cheval dans les virages, cap de l'image d'avant */
+  pitch: number; roll: number; lean: number; lastHeading: number;
+}
+/** Charrette, avant = +z : essieu en z = AXLE, sabots avant du cheval en z = HOOF (points d'appui pour suivre la pente) */
+const AXLE = -0.16, HOOF = 0.3;
+/** Le cheval attelé : longueur du modèle (celle de la faune), centre en z = HORSE_Z, garrot à la hauteur des brancards */
+const HORSE_LEN = 0.34, HORSE_Z = 0.25;
+/** Écart d'un attelage (charrette et cheval) ou d'une voiture à celui qui le précède sur sa voie : de quoi lui laisser faire demi-tour */
+const CART_GAP = 0.82, CAR_GAP = 0.55;
+/** Vitesse des attelages (case/s) ; le pas du cheval au naturel couvre WALK_SPEED case/s, son allure suit celle de la charrette */
+const CART_SPEED = 0.6, WALK_SPEED = 0.118, WALK_PACE = 0.38;
 
 /** Teintes des charretiers (blouse, chapeau) */
 const DRIVERS: [number, number][] = [[0x5a7ab0, 0xd8c06a], [0x9a4a3a, 0x5a4636], [0x6a8a4a, 0xc8a870], [0x8a6a9a, 0x3c3c40], [0xc8b48a, 0x7a5a42]];
 
 /**
+ * Distance à laquelle `o` est devant `v`, sur sa voie (moins de 0,28 case de côté, jusqu'à 1,4 × `len`), sinon l'infini ; un
+ * véhicule qui vient en face n'est pas compté (sur l'autre voie, il passe ; sur la même, après un demi-tour, `clash` règle
+ * qui passe). Deux véhicules confondus : le premier créé est devant
+ */
+function gapTo(v: Vehicle, o: Vehicle, len: number) {
+  const fx = Math.sin(v.heading), fz = Math.cos(v.heading), rx = o.x - v.x, rz = o.z - v.z, ahead = rx * fx + rz * fz;
+  if (ahead < 0 || ahead > len * 1.4 || Math.abs(rx * fz - rz * fx) > 0.28) return Infinity;
+  if (Math.sin(o.heading) * fx + Math.cos(o.heading) * fz < -0.5) return Infinity;
+  return ahead;
+}
+
+/** Au-delà de ce temps bloqué (s), un véhicule passe quand même (blocage à plusieurs, sans priorité claire) */
+const STALL = 4;
+/** Emprises au sol (demi-largeur, arrière, avant ; avant = +z) d'un attelage, cheval compris, et d'une voiture */
+const CART_BOX: [number, number, number] = [0.11, -0.27, 0.42], CAR_BOX: [number, number, number] = [0.1, -0.22, 0.22];
+
+/** Les quatre coins d'une emprise posée en (x, z), cap `h` */
+function footprint(x: number, z: number, h: number, w: number, back: number, front: number): number[][] {
+  const fx = Math.sin(h), fz = Math.cos(h);
+  return [[-w, back], [w, back], [w, front], [-w, front]].map(([s, a]) => [x + fx * a + fz * s, z + fz * a - fx * s]);
+}
+
+/** Deux emprises (rectangles) se touchent-elles ? (axes séparateurs : les côtés de l'une et de l'autre) */
+function boxesMeet(a: number[][], b: number[][]) {
+  for (const poly of [a, b]) for (let i = 0; i < 2; i++) {
+    const ax = poly[i + 1][0] - poly[i][0], az = poly[i + 1][1] - poly[i][1];
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (const [x, z] of a) { const p = x * ax + z * az; a0 = Math.min(a0, p); a1 = Math.max(a1, p); }
+    for (const [x, z] of b) { const p = x * ax + z * az; b0 = Math.min(b0, p); b1 = Math.max(b1, p); }
+    if (a1 < b0 || b1 < a0) return false;
+  }
+  return true;
+}
+
+/** Courroie ou rêne droite de `a` à `b` */
+function strap(p: Parts, a: [number, number, number], b: [number, number, number], w: number, col: number) {
+  const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = d.length();
+  const g = new THREE.BoxGeometry(w, w, len).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.normalize()));
+  p.add(g, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2, col);
+}
+
+/**
+ * Harnais du cheval de la faune (repère du modèle, avant = +z) : collier au cou, sellette sur le dos et sous-ventrière ; chaque
+ * pièce suit l'os qui la porte (le cou qui balance au pas, le dos qui roule), pour ne pas rester figée dans la bête qui marche
+ */
+function harness(a: Actor) {
+  const bones = new Map<string, THREE.Object3D>();
+  a.root.traverse((o) => { if ((o as THREE.Bone).isBone) bones.set(o.name, o); });
+  const neck = bones.get('Neck1'), back = bones.get('Torso2');
+  if (!neck || !back) return;
+  a.root.updateMatrixWorld(true);
+  const leather = 0x4a3426, brass = 0xe8c66a;
+  const collar = new Parts();
+  collar.add(new THREE.TorusGeometry(0.03, 0.011, 5, 10), 0, 0.172, 0.07, leather, 0, false, 0, -0.45);
+  collar.add(new THREE.TorusGeometry(0.032, 0.005, 4, 10), 0, 0.176, 0.073, brass, 0, false, 0, -0.45);
+  const pad = new Parts();
+  pad.box(0.06, 0.016, 0.04, 0, 0.196, -0.03, leather);
+  pad.box(0.092, 0.012, 0.016, 0, 0.19, -0.03, leather);
+  for (const s of [-1, 1]) pad.box(0.008, 0.075, 0.016, s * 0.043, 0.12, -0.03, leather);
+  for (const [p, bone] of [[collar, neck], [pad, back]] as const) {
+    const m = new THREE.Mesh(p.build(false).body, mats.body);
+    m.castShadow = true;
+    a.root.add(m);
+    m.updateMatrixWorld(true);
+    bone.attach(m);
+  }
+}
+
+/**
  * Charrette attelée, avant = +z : plateau à ridelles et son chargement (amphores dans l'Antiquité, foin, sacs ou tonneaux
- * ensuite, bidons de lait à l'âge industriel), banc du charretier, brancards jusqu'au collier du cheval ; roues à rayons
- * et charretier à part, pour les animer
+ * ensuite, bidons de lait à l'âge industriel), banc du charretier, brancards jusqu'aux épaules du cheval, rênes ; roues à
+ * rayons, charretier et cheval à part, pour les animer. Le cheval est celui de la faune et des écuries (robe baie ou
+ * blanche, il marche au pas) ; sans son modèle, le cheval de trait dessiné
  */
 function cartRig(age: number, v: number): CartRig {
   const root = new THREE.Group(), p = new Parts(), wood = 0xa07850, dk = 0x6a4a34, load = v % 3;
@@ -44,7 +130,13 @@ function cartRig(age: number, v: number): CartRig {
   // banc, marchepied, brancards
   p.box(0.17, 0.018, 0.05, 0, 0.21, z0 + 0.12, dk);
   p.box(0.17, 0.01, 0.04, 0, 0.14, z0 + 0.165, wood);
-  for (const s of [-1, 1]) p.add(new THREE.BoxGeometry(0.012, 0.012, 0.36), s * 0.062, 0.17, z0 + 0.3, dk, 0, false, 0, -0.08);
+  // les brancards, de l'avant du plateau aux épaules du cheval, et leur traverse ; les rênes des mains du charretier au mors
+  for (const s of [-1, 1]) {
+    strap(p, [s * 0.075, 0.15, z0 + 0.1], [s * 0.056, 0.155, HORSE_Z + 0.065], 0.012, dk);
+    strap(p, [s * 0.056, 0.155, HORSE_Z + 0.03], [s * 0.044, 0.19, HORSE_Z - 0.03], 0.006, 0x3a2a20);
+    strap(p, [s * 0.04, 0.29, 0.03], [s * 0.014, 0.232, HORSE_Z + 0.14], 0.004, 0x3a2a20);
+  }
+  p.box(0.15, 0.012, 0.012, 0, 0.144, z0 + 0.16, dk);
   const cart = new THREE.Mesh(p.build(false).body, mats.body);
   cart.castShadow = true;
   root.add(cart);
@@ -71,15 +163,24 @@ function cartRig(age: number, v: number): CartRig {
   if (age <= 1) dp.box(0.05, 0.02, 0.05, 0, 0.385, -0.004, coat);
   else if (age === 2) { dp.cyl(0.05, 0.05, 0.006, 10, 0, 0.385, 0, hat); dp.cyl(0.024, 0.028, 0.026, 8, 0, 0.398, 0, hat); }
   else { dp.cyl(0.034, 0.034, 0.006, 10, 0, 0.383, 0, hat); dp.cyl(0.024, 0.024, 0.03, 8, 0, 0.4, 0, hat); }
-  dp.box(0.004, 0.004, 0.2, -0.03, 0.27, 0.16, 0x3a2a20); dp.box(0.004, 0.004, 0.2, 0.03, 0.27, 0.16, 0x3a2a20);
   const driver = new THREE.Mesh(dp.build(false).body, mats.body);
   driver.position.set(0, 0, z0 + 0.1);
   driver.castShadow = true;
   root.add(driver);
-  const horse = makeDraftHorse(v);
-  horse.root.position.set(0, 0, z0 + 0.5);
-  root.add(horse.root);
-  return { root, horse, wheels, driver, phase: Math.random() * 6 };
+  const actor = hasModel('horse') ? makeActor(v % 3 === 2 && hasModel('horse_white') ? 'horse_white' : 'horse', HORSE_LEN) : null;
+  let draft: Rider | null = null;
+  if (actor) {
+    harness(actor);
+    actor.mixer.setTime(v * 0.37);
+    actor.root.position.z = HORSE_Z;
+    root.add(actor.root);
+  } else {
+    draft = makeDraftHorse(v);
+    draft.root.position.z = HORSE_Z + 0.03;
+    root.add(draft.root);
+  }
+  root.rotation.order = 'YXZ';
+  return { root, wheels, driver, actor, draft, phase: Math.random() * 6, pitch: 0, roll: 0, lean: 0, lastHeading: NaN };
 }
 interface Boat {
   home: Building | null; x: number; z: number; tx: number; tz: number; heading: number; wait: number; mx: number; mz: number; seed: number;
@@ -409,7 +510,9 @@ export class Traffic {
         v.wait -= dt;
         if (v.wait > 0) { this.place(v, dt, 0); continue; }
         const start = Math.floor(v.z) * N + Math.floor(v.x), goal = this.roads[Math.floor(Math.random() * this.roads.length)];
-        v.path = this.roadPath(start, goal) ?? [];
+        // (un trajet d'une seule case n'en est pas un : sa cible, décalée selon la position du véhicule, le ferait tourner en rond)
+        const path = this.roadPath(start, goal) ?? [];
+        v.path = path.length > 1 ? path : [];
         v.i = 0; v.wait = 2 + Math.random() * 6;
       }
       const c = v.path[v.i];
@@ -418,16 +521,66 @@ export class Traffic {
       // tenir sa droite : décalage perpendiculaire au sens de la rue (du point d'avant à celui-ci), pour ne pas tourner en rond
       const [px, pz] = v.i > 0 ? this.world.passPoint(v.path, v.i - 1) : v.path.length > 1 ? (([nx, nz]) => [cx * 2 - nx, cz * 2 - nz])(this.world.passPoint(v.path, 1)) : [v.x, v.z];
       const sl = Math.hypot(cx - px, cz - pz) || 1, hx = (cx - px) / sl, hz = (cz - pz) / sl, tx = cx - hz * LANE, tz = cz + hx * LANE;
-      const dx = tx - v.x, dz = tz - v.z, dist = Math.hypot(dx, dz), step = dt * (this.horses ? 0.8 : this.builtAge >= 4 ? 1.6 : 1.2);
-      if (dist <= step) { v.x = tx; v.z = tz; v.i++; }
-      else {
-        v.x += (dx / dist) * step; v.z += (dz / dist) * step;
-        // pas de virage sur une cible quasi confondue (le cap s'affolerait) ; et un virage borné, pour ne jamais tourner sur place
-        if (dist > 0.04) v.heading = turn(v.heading, Math.atan2(dx, dz), dt * 6, dt * 3.5);
-      }
-      this.place(v, dt, Math.min(dist, step));
+      const dx = tx - v.x, dz = tz - v.z, dist = Math.hypot(dx, dz), step = dt * (this.horses ? CART_SPEED : this.builtAge >= 4 ? 1.6 : 1.2) * this.room(v);
+      // le véhicule avance selon son cap, jamais de côté ni à reculons : il tourne vers sa cible (virage borné) et ralentit
+      // d'autant plus qu'elle est loin de son axe ; un demi-tour se fait donc au pas, en tournant presque sur place
+      const h0 = v.heading, x0 = v.x, z0 = v.z;
+      if (dist > 0.04) v.heading = turn(v.heading, Math.atan2(dx, dz), dt * 6, dt * 3.5);
+      const off = Math.abs(wrapAngle(Math.atan2(dx, dz) - v.heading)), ahead = Math.cos(Math.min(off, 1.45));
+      const mv = Math.min(dist, step * (off < 0.25 ? 1 : Math.max(0.12, ahead)));
+      v.x += Math.sin(v.heading) * mv; v.z += Math.cos(v.heading) * mv;
+      // pas de pas (ni de virage sur place) qui mettrait le véhicule dans un autre : il attend
+      const by = this.clash(v, x0, z0, h0);
+      v.stall = by ? (v.stall ?? 0) + dt : 0; v.blockedBy = by;
+      if (by) { v.x = x0; v.z = z0; v.heading = h0; this.place(v, dt, 0); continue; }
+      // cible atteinte (ou dépassée de près) : la suivante prend le relais, sans saut de position
+      if (dist - mv * ahead < Math.max(0.05, step)) v.i++;
+      this.place(v, dt, mv);
     }
     this.fleets.forEach((f, k) => { for (const m of [f.body, f.glow]) if (m) { m.count = this.horses ? 0 : this.fleetN[k]; m.instanceMatrix.needsUpdate = true; } });
+  }
+
+  /**
+   * Le pas que vient de faire `v` (depuis x0, z0, h0) le met-il dans l'emprise d'un autre véhicule ? Un recouvrement déjà là
+   * n'empêche pas de s'en dégager (s'éloigner reste permis). Deux véhicules bloqués l'un par l'autre (face à face sur une voie
+   * après un demi-tour, carrefour) : le premier de la liste passe quand même, l'autre attend ; et qui attend depuis plus de
+   * STALL secondes derrière un véhicule lui-même en route passe aussi (blocage à plusieurs) : rien ne reste figé ; derrière
+   * un véhicule à l'arrêt (halte au bout de son trajet), on attend qu'il reparte. Renvoie le véhicule qui gêne, sinon null
+   */
+  private clash(v: Vehicle, x0: number, z0: number, h0: number): Vehicle | null {
+    const by = v.blockedBy;
+    if ((v.stall ?? 0) > STALL && by && by.i < by.path.length) return null;
+    const [w, b, f] = this.horses ? CART_BOX : CAR_BOX;
+    const mine = footprint(v.x, v.z, v.heading, w, b, f), before = footprint(x0, z0, h0, w, b, f), vi = this.vehicles.indexOf(v);
+    for (const o of this.vehicles) {
+      if (o === v) continue;
+      const theirs = footprint(o.x, o.z, o.heading, w, b, f);
+      if (!boxesMeet(mine, theirs)) continue;
+      if (boxesMeet(before, theirs) && Math.hypot(v.x - o.x, v.z - o.z) >= Math.hypot(x0 - o.x, z0 - o.z)) continue;
+      // l'autre attend-il lui-même que ce véhicule passe ?
+      if (o.blockedBy === v && this.vehicles.indexOf(o) > vi) continue;
+      return o;
+    }
+    return null;
+  }
+
+  /**
+   * Place devant soi (1 : la voie est libre, 0 : on attend) : un véhicule juste devant, sur sa voie ou qui s'y engage à un
+   * carrefour, fait ralentir puis s'arrêter derrière lui (sinon deux attelages se traversaient, charretiers confondus). Celui
+   * qui vient en face, sur l'autre voie, ne compte pas ; deux véhicules qui se barrent la route l'un à l'autre
+   * (carrefour) : le premier de la liste passe. Le contact lui-même est empêché par `clash`
+   */
+  private room(v: Vehicle) {
+    const len = this.horses ? CART_GAP : CAR_GAP;
+    let k = 1;
+    for (const o of this.vehicles) {
+      if (o === v) continue;
+      const d = gapTo(v, o, len);
+      if (d === Infinity) continue;
+      if (gapTo(o, v, len) !== Infinity && this.vehicles.indexOf(o) > this.vehicles.indexOf(v)) continue;
+      k = Math.min(k, Math.max(0, (d - len) / (len * 0.4)));
+    }
+    return k;
   }
 
   /** Des charrettes attelées tant que l'usine automobile n'est pas bâtie, quel que soit l'âge */
@@ -437,27 +590,59 @@ export class Traffic {
   private dropRig(v: Vehicle) {
     if (!v.rig) return;
     this.group.remove(v.rig.root);
+    // le cheval animé partage la géométrie de son modèle : on ne libère que ce qui lui est propre (son harnais) et la charrette
+    v.rig.actor?.root.traverse((o) => { if (o instanceof THREE.Mesh && !(o instanceof THREE.SkinnedMesh)) o.geometry.dispose(); });
+    v.rig.actor?.mixer.stopAllAction();
+    if (v.rig.actor) v.rig.root.remove(v.rig.actor.root);
     v.rig.root.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
     v.rig = null;
   }
 
   /**
-   * Pose la charrette (ou la voiture) : avant l'âge moderne, l'attelage animé — le cheval marche au pas, les roues tournent
-   * de la distance parcourue, le charretier se balance ; à l'arrêt, le cheval secoue la tête
+   * Pose la charrette (ou la voiture) : sans usine automobile, l'attelage animé — posé sur ses roues et les sabots du cheval,
+   * il suit la pente (côtes, rampes des ponts) ; le cheval marche au pas, à l'allure de la charrette, et devance un peu les
+   * virages ; les roues tournent de la distance parcourue ; le charretier, assis sur son banc, se balance à peine ; à
+   * l'arrêt, le cheval attend
    */
   private place(v: Vehicle, dt = 0, moved = 0) {
     if (this.horses) {
+      // un attelage dessiné faute de modèle à sa création prend le cheval animé dès que le modèle est là
+      if (v.rig?.draft && hasModel('horse')) this.dropRig(v);
       if (!v.rig) { v.rig = cartRig(this.builtAge, this.vehicles.indexOf(v)); this.group.add(v.rig.root); }
-      const r = v.rig, gait = moved > 0 ? 0.55 : 0;
+      const r = v.rig, w = this.world, s = Math.sin(v.heading), c = Math.cos(v.heading);
+      // appuis : l'essieu (et ses deux roues) derrière, les sabots avant du cheval devant
+      const hr = w.surfaceAt(v.x + s * AXLE, v.z + c * AXLE), hf = w.surfaceAt(v.x + s * HOOF, v.z + c * HOOF);
+      const hl = w.surfaceAt(v.x + s * AXLE - c * 0.115, v.z + c * AXLE + s * 0.115), hd = w.surfaceAt(v.x + s * AXLE + c * 0.115, v.z + c * AXLE - s * 0.115);
+      const pitch = Math.max(-0.5, Math.min(0.5, Math.atan2(hf - hr, HOOF - AXLE))), roll = Math.max(-0.3, Math.min(0.3, Math.atan2(hd - hl, 0.23)));
+      // tangage et roulis lissés (un pas de relief ne fait pas sauter la charrette) ; la hauteur suit l'essieu, sans retard
+      const k = Number.isNaN(r.lastHeading) ? 1 : 1 - Math.exp(-dt * 12);
+      r.pitch += (pitch - r.pitch) * k; r.roll += (roll - r.roll) * k;
       r.root.visible = true;
-      r.root.position.set(v.x, this.world.surfaceAt(v.x, v.z) + 0.01, v.z);
-      r.root.rotation.y = v.heading;
-      r.phase += dt * (gait ? 9 : 2);
-      rideStep(r.horse, r.phase, gait, 'rest');
-      if (!gait) r.horse.body.rotation.x = Math.sin(r.phase * 0.7) * 0.03;
+      r.root.position.set(v.x, Math.max(hr, hl, hd) - Math.tan(r.pitch) * AXLE + 0.005, v.z);
+      r.root.rotation.set(-r.pitch, v.heading, r.roll);
+      // vitesse de rotation (pour le pas du cheval quand il tourne presque sur place, et pour qu'il devance le virage)
+      const yaw = Number.isNaN(r.lastHeading) || dt <= 0 ? 0 : wrapAngle(v.heading - r.lastHeading) / dt;
+      r.lastHeading = v.heading;
+      const speed = dt > 0 ? moved / dt : 0, pace = Math.max(speed, Math.abs(yaw) * 0.1);
+      r.lean += (Math.max(-0.3, Math.min(0.3, yaw * 0.12)) - r.lean) * (1 - Math.exp(-dt * 6));
+      r.phase += dt * (pace > 0.01 ? 9 : 2);
+      if (r.actor) {
+        const a = r.actor;
+        a.root.rotation.y = r.lean;
+        if (pace > 0.01) { play(a, ['Walk', 'Idle'], 0.25); a.mixer.timeScale = Math.max(0.6, (pace / WALK_SPEED) * WALK_PACE); }
+        // attelé, il ne broute pas (les rênes resteraient en l'air) : il attend tête haute
+        else { play(a, ['Idle'], 0.5); a.mixer.timeScale = 1; }
+        a.mixer.update(dt);
+      } else if (r.draft) {
+        const gait = pace > 0.01 ? 0.55 : 0;
+        r.draft.root.rotation.y = r.lean;
+        rideStep(r.draft, r.phase, gait, 'rest');
+        if (!gait) r.draft.body.rotation.x = Math.sin(r.phase * 0.7) * 0.03;
+      }
       for (const wh of r.wheels) wh.rotation.x += moved / 0.062;
-      r.driver.position.y = Math.abs(Math.sin(r.phase)) * 0.006 * (gait ? 1 : 0);
-      r.driver.rotation.z = Math.sin(r.phase * 0.5) * 0.03 * (gait ? 1 : 0.3);
+      // le charretier reste assis sur son banc : un léger cahot au pas, il se penche un peu dans les virages
+      r.driver.position.y = Math.abs(Math.sin(r.phase)) * 0.004 * (speed > 0.01 ? 1 : 0);
+      r.driver.rotation.z = Math.sin(r.phase * 0.5) * 0.02 * (speed > 0.01 ? 1 : 0.3) - r.lean * 0.15;
       return;
     }
     const d = this.dummy;
