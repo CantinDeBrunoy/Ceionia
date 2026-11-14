@@ -189,6 +189,12 @@ function hoverGeo(v: number) {
 const dark = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 
 const MAX_AGENTS = 90;
+/** Les huit voisins d'une case : les quatre droits d'abord, puis les quatre en biais */
+const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+/** Chemin lissé : marge de part et d'autre de la ligne droite, marche permise d'une case à l'autre, sommets regardés au plus */
+const CLEAR = 0.22, STEP_UP = 0.6, LOOK = 24;
+/** à coût égal, la case la plus proche du but d'abord (un millième de plus sur l'estimation : le chemin reste le meilleur à un millième près) */
+const TIE = 1.001;
 /** Distance à la caméra au-delà de laquelle un habitant n'est plus qu'une petite figure instanciée */
 const FOLK_FAR = 30;
 /** Écart à l'axe de la rue où l'on marche : le trottoir (la chaussée fait 0,3 de demi-largeur), dès la rue pavée (âge 3) */
@@ -237,6 +243,8 @@ interface Agent {
   x: number; z: number;
   state: State;
   path: number[];
+  /** le point visé à chaque case du trajet (x, z), lissé en lignes droites hors des routes ; NaN : celui de la route */
+  pts?: Float32Array | null;
   /** direction du pas en cours (unitaire), qui tourne en douceur vers la suivante */
   vx?: number;
   /** il accourt (incendie) : il court, deux fois plus vite, jusqu'à sa place */
@@ -319,23 +327,32 @@ export interface Ride { x: number; z: number; y: number; heading: number; act?: 
 export class Heap {
   keys: number[] = []; vals: number[] = [];
   get size() { return this.keys.length; }
+  // échanges à la main (pas de tableau temporaire) : le tas sert à chaque pas de chaque recherche de chemin
   push(k: number, v: number) {
     const K = this.keys, V = this.vals;
     let i = K.length; K.push(k); V.push(v);
-    while (i > 0) { const p = (i - 1) >> 1; if (K[p] <= K[i]) break; [K[p], K[i]] = [K[i], K[p]]; [V[p], V[i]] = [V[i], V[p]]; i = p; }
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (K[p] <= k) break;
+      K[i] = K[p]; V[i] = V[p]; i = p;
+    }
+    K[i] = k; V[i] = v;
   }
   pop(): number {
     const K = this.keys, V = this.vals; const top = V[0];
     const lk = K.pop()!, lv = V.pop()!;
-    if (K.length) {
-      K[0] = lk; V[0] = lv; let i = 0;
+    const n = K.length;
+    if (n) {
+      let i = 0;
       for (;;) {
-        const l = i * 2 + 1, r = l + 1; let m = i;
-        if (l < K.length && K[l] < K[m]) m = l;
-        if (r < K.length && K[r] < K[m]) m = r;
-        if (m === i) break;
-        [K[m], K[i]] = [K[i], K[m]]; [V[m], V[i]] = [V[i], V[m]]; i = m;
+        const l = i * 2 + 1, r = l + 1;
+        let m = -1, mk = lk;
+        if (l < n && K[l] < mk) { m = l; mk = K[l]; }
+        if (r < n && K[r] < mk) { m = r; mk = K[r]; }
+        if (m < 0) break;
+        K[i] = K[m]; V[i] = V[m]; i = m;
       }
+      K[i] = lk; V[i] = lv;
     }
     return top;
   }
@@ -381,6 +398,11 @@ export class Agents {
   /** population du village (donnée à chaque image) */
   private popTarget = 0;
   private pathBudget = 0;
+  /** recherche de chemin : cases déjà jugées (numéro de la recherche), leur hauteur, praticables */
+  private pfSeen = new Uint32Array(0);
+  private pfH = new Float32Array(0);
+  private pfOk = new Uint8Array(0);
+  private pfGen = 0;
   /**
    * la caméra (donnée par le jeu) et la part de qualité : au-delà de `FOLK_FAR × detail` de la caméra, un habitant n'est
    * plus que la petite figure instanciée (cône, tête, outil) au lieu de ses cinq maillages articulés et de leurs ombres
@@ -719,6 +741,21 @@ export class Agents {
     const heap = new Heap();
     dist[start] = 0; heap.push(0, start);
     const gx = goal % N, gz = (goal / N) | 0;
+    // chaque case n'est jugée qu'une fois par recherche (praticable, hauteur) : les pas en biais regardent aussi les cases frôlées
+    if (this.pfSeen.length !== N * N) { this.pfSeen = new Uint32Array(N * N); this.pfH = new Float32Array(N * N); this.pfOk = new Uint8Array(N * N); }
+    const seen = this.pfSeen, hs = this.pfH, oks = this.pfOk, gen = ++this.pfGen;
+    const look = (c: number) => {
+      if (seen[c] !== gen) {
+        seen[c] = gen;
+        const x = c % N, z = (c / N) | 0;
+        oks[c] = this.walkable(c, start, goal) ? 1 : 0;
+        hs[c] = oks[c] ? w.bridgeY(x, z) ?? w.cellAvg(x, z) : 0;
+      }
+      return oks[c] === 1;
+    };
+    look(start);
+    // estimation : des cases de route au moins (le coût minimal), en ligne droite puis en biais, pour rester exact
+    const est = (x: number, z: number) => { const ax = Math.abs(x - gx), az = Math.abs(z - gz); return Math.max(ax, az) + (Math.SQRT2 - 1) * Math.min(ax, az); };
     let guard = 0;
     // garde-fou proportionnel à la carte : un trajet peut la traverser
     while (heap.size && guard++ < N * N) {
@@ -726,22 +763,30 @@ export class Agents {
       const c = heap.pop();
       const cx = c % N, cz = (c / N) | 0;
       // entrée périmée : la clé du tas inclut l'estimation restante, on la compare au coût connu plus cette estimation
-      if (k > dist[c] + Math.abs(cx - gx) + Math.abs(cz - gz) + 1e-4) continue;
+      if (k > dist[c] + est(cx, cz) * TIE + 1e-4) continue;
       if (c === goal) break;
-      const ha = w.bridgeY(cx, cz) ?? w.cellAvg(cx, cz);
-      for (let i = 0; i < 4; i++) {
-        const nx = cx + (i === 0 ? 1 : i === 1 ? -1 : 0), nz = cz + (i === 2 ? 1 : i === 3 ? -1 : 0);
+      const ha = hs[c];
+      // huit voisins : en biais seulement si les deux cases qu'on frôle sont praticables (on ne coupe pas l'angle d'une maison,
+      // d'une berge ni d'une marche) ; les cases atteintes restent celles d'un trajet en quatre directions
+      for (let i = 0; i < 8; i++) {
+        const [dx, dz] = DIRS8[i];
+        const nx = cx + dx, nz = cz + dz;
         if (!w.inCells(nx, nz)) continue;
         const n = nz * N + nx;
-        if (!this.walkable(n, start, goal)) continue;
-        const hn = w.bridgeY(nx, nz) ?? w.cellAvg(nx, nz);
+        if (!look(n)) continue;
+        const hn = hs[n];
         const dh = Math.abs(hn - ha);
         if (dh > 1.0) continue;
-        const nd = dist[c] + (w.road[n] ? 1 : 2.8) + dh * 3;
+        if (i >= 4) {
+          const s1 = cz * N + nx, s2 = nz * N + cx;
+          if (!look(s1) || !look(s2)) continue;
+          const h1 = hs[s1], h2 = hs[s2];
+          if (Math.abs(h1 - ha) > 1.0 || Math.abs(h2 - ha) > 1.0 || Math.abs(hn - h1) > 1.0 || Math.abs(hn - h2) > 1.0) continue;
+        }
+        const nd = dist[c] + (w.road[n] ? 1 : 2.8) * (i >= 4 ? Math.SQRT2 : 1) + dh * 3;
         if (nd < dist[n]) {
           dist[n] = nd; prev[n] = c;
-          // estimation : une case de route au moins par pas restant (le coût minimal), pour rester exact
-          heap.push(nd + Math.abs(nx - gx) + Math.abs(nz - gz), n);
+          heap.push(nd + est(nx, nz) * TIE, n);
         }
       }
     }
@@ -749,6 +794,89 @@ export class Agents {
     const out: number[] = [];
     for (let c = goal; c !== start && c >= 0; c = prev[c]) out.push(c);
     return out.reverse();
+  }
+
+  /**
+   * Le segment (ax, az) → (bx, bz) se marche-t-il tout droit ? Une bande de `CLEAR` de part et d'autre de la ligne : que des
+   * cases praticables (ni bâtiment, ni décor, ni eau, ni pont, qu'on ne prend qu'en suivant son tablier), et pas de marche de
+   * plus de `STEP_UP` d'une case à la suivante
+   */
+  private clearLine(ax: number, az: number, bx: number, bz: number, start: number, goal: number) {
+    const w = this.world;
+    const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+    if (len < 1e-6) return true;
+    const ox = (-dz / len) * CLEAR, oz = (dx / len) * CLEAR;
+    const steps = Math.ceil(len / 0.2);
+    let last = -1, lastH = 0;
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps, px = ax + dx * t, pz = az + dz * t;
+      for (let o = -1; o <= 1; o++) {
+        const x = Math.floor(px + ox * o), z = Math.floor(pz + oz * o);
+        if (!w.inCells(x, z)) return false;
+        const c = z * N + x;
+        if (c === last) continue;
+        if (!this.walkable(c, start, goal)) return false;
+        if (w.road[c] && (w.crossingAt(x, z) || w.cellAvg(x, z) < 0.08 || w.lake[c])) return false;
+        const h = w.cellAvg(x, z);
+        if (last >= 0 && Math.abs(h - lastH) > STEP_UP) return false;
+        if (o === 0) { last = c; lastH = h; }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Le chemin de cases lissé, une fois pour tout le trajet : hors des routes, on file en ligne droite d'un sommet à l'autre
+   * tant que le passage est libre (on tend la ficelle) ; sur les routes, case par case, au milieu ou sur le trottoir, en
+   * suivant les courbes (`passPoint`). Rend les cases traversées et, pour chacune, le point visé (NaN : celui de la route)
+   */
+  smoothPath(path: number[], x0: number, z0: number, start: number): { cells: number[]; pts: Float32Array } {
+    const w = this.world, n = path.length;
+    const goal = path[n - 1];
+    // sommets possibles : la position de départ, puis chaque case (son centre, ou le point de la route)
+    const px = new Float64Array(n + 1), pz = new Float64Array(n + 1), road = new Uint8Array(n + 1);
+    px[0] = x0; pz[0] = z0; road[0] = w.road[start] ? 1 : 0;
+    for (let i = 0; i < n; i++) {
+      const c = path[i];
+      road[i + 1] = w.road[c] && c !== goal ? 1 : 0;
+      [px[i + 1], pz[i + 1]] = road[i + 1] ? w.passPoint(path, i) : [(c % N) + 0.5, Math.floor(c / N) + 0.5];
+    }
+    const cells: number[] = [], pts: number[] = [];
+    let i = 0;
+    while (i < n) {
+      // sur la route : la case suivante, telle quelle
+      if (road[i] && road[i + 1]) { cells.push(path[i]); pts.push(NaN, NaN); i++; continue; }
+      // ailleurs : le sommet le plus loin qu'on voit d'ici, sans dépasser la prochaine case de route (on y entre, puis on la suit)
+      let j = i + 1, miss = 0;
+      for (let k = i + 2; k <= Math.min(n, i + LOOK); k++) {
+        if (this.clearLine(px[i], pz[i], px[k], pz[k], start, goal)) { j = k; miss = 0; } else if (++miss > 2) break;
+        if (road[k]) break;
+      }
+      if (j === i + 1) { cells.push(path[i]); pts.push(road[j] ? NaN : px[j], road[j] ? NaN : pz[j]); i = j; continue; }
+      // les cases que coupe le segment, chacune visée au milieu de sa traversée : des points alignés
+      const ax = px[i], az = pz[i], dx = px[j] - ax, dz = pz[j] - az, len = Math.hypot(dx, dz);
+      const steps = Math.ceil(len / 0.05);
+      const from = i === 0 ? start : path[i - 1], to = path[j - 1];
+      let cur = from, t0 = 0;
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps, c = Math.floor(az + dz * t) * N + Math.floor(ax + dx * t);
+        if (c === cur) continue;
+        if (cur !== from) { const tm = (t0 + t) / 2; cells.push(cur); pts.push(ax + dx * tm, az + dz * tm); }
+        cur = c; t0 = t;
+        if (c === to) break;
+      }
+      if (cur !== to && cur !== from) { cells.push(cur); pts.push(ax + dx * ((t0 + 1) / 2), az + dz * ((t0 + 1) / 2)); }
+      cells.push(to); pts.push(road[j] ? NaN : px[j], road[j] ? NaN : pz[j]);
+      i = j;
+    }
+    return { cells, pts: Float32Array.from(pts) };
+  }
+
+  /** Le point visé à la i-ième case du trajet : le chemin lissé, sinon celui de la route */
+  private pointAt(a: Agent, i: number): [number, number] {
+    const p = a.pts;
+    if (p && !Number.isNaN(p[i * 2])) return [p[i * 2], p[i * 2 + 1]];
+    return this.world.passPoint(a.path, i);
   }
 
   /** Un incendie : les pompiers et les habitants proches accourent avec des seaux */
@@ -1112,7 +1240,8 @@ export class Agents {
     const p = this.findPath(start, goal);
     this.pathBudget--;
     if (!p) { a.state = 'doing'; a.timer = 2 + this.rnd() * 2; a.targetHidden = false; a.path = []; if (a.goingHome) { a.goingHome = false; a.state = 'inside'; a.hidden = true; } return; }
-    a.path = p; a.pi = 0; a.state = 'walking'; a.hidden = false; a.targetHidden = hiddenAtEnd;
+    const sm = p.length ? this.smoothPath(p, a.x, a.z, start) : null;
+    a.path = sm ? sm.cells : p; a.pts = sm ? sm.pts : null; a.pi = 0; a.state = 'walking'; a.hidden = false; a.targetHidden = hiddenAtEnd;
   }
 
   /** l'usine automobile est bâtie : sans elle, pas de tracteur ni de drone, les bœufs et le chariot à foin à tout âge */
@@ -1185,14 +1314,16 @@ export class Agents {
         }
         const c = a.path[a.pi];
         const last = a.pi === a.path.length - 1;
-        const [px, pz] = w.passPoint(a.path, a.pi);
+        const [px, pz] = this.pointAt(a, a.pi);
+        // le chemin lissé coupe la rue en ligne droite : pas de trottoir
+        const cut = !!a.pts && !Number.isNaN(a.pts[a.pi * 2]);
         // sur une rue en ville (hors ponts), on longe le bord : le trottoir, d'un côté ou de l'autre ; l'écart se lisse d'une case à l'autre
-        const walk = !last && !a.mission && w.road[c] && w.bridgeY(c % N, Math.floor(c / N)) === null ? sidewalkAt(this.age) * (a.off < 0 ? -1 : 1) : 0;
+        const walk = !last && !cut && !a.mission && w.road[c] && w.bridgeY(c % N, Math.floor(c / N)) === null ? sidewalkAt(this.age) * (a.off < 0 ? -1 : 1) : 0;
         a.lat += (walk - a.lat) * Math.min(1, dt * 3);
         let tx = px, tz = pz;
         if (!last) {
           // sens de la rue : du point d'avant à celui-ci (au premier pas, de celui-ci au suivant)
-          const [qx, qz] = a.pi > 0 ? w.passPoint(a.path, a.pi - 1) : a.path.length > 1 ? w.passPoint(a.path, 1) : [px, pz];
+          const [qx, qz] = a.pi > 0 ? this.pointAt(a, a.pi - 1) : a.path.length > 1 ? this.pointAt(a, 1) : [px, pz];
           const k = 1 - Math.abs(a.lat) / SIDEWALK;
           [tx, tz] = sideStep(px + a.off * k, pz + a.off * 0.7 * k, a.pi > 0 ? px - qx : qx - px, a.pi > 0 ? pz - qz : qz - pz, a.lat);
         }
