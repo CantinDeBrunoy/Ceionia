@@ -2,7 +2,7 @@ import { tr, plural, nplural, getLang, setLang, colon, pct as pctText, LANGS, ty
 import { ToolController, ToolId, SCULPT_TOOLS, VEG_TOOLS, SINGLE_TOOLS, RoadMode } from '../build/tools';
 import { KINDS, KIND_ORDER, AGES, KindId, KindDef, SEASONS, BUILD_CATS, BUILD_SUBS, KIND_SUB, BuildCat, sizeOf, hasDoor, UPGRADES, Building, lineOf } from '../build/catalog';
 import { isStart, startMessage, START_KIND } from '../build/startLock';
-import { Sim, NeedId } from '../sim/sim';
+import { Sim, NeedId, GOLD_LABEL } from '../sim/sim';
 import { coverageTips, policeRange, FIRE_RANGE, COVER_JOY, COVER_JOY_MAX } from '../sim/coverage';
 import type { Agents } from '../sim/agents';
 import { GameTime } from '../core/time';
@@ -22,6 +22,8 @@ import { isleBlight } from '../world/blight';
 import { GEAR, GEAR_BY, GearId, Gear, DANGER_NAME, DANGER_VS, gearCost, gearCostLabel, gearGaps, gearCurrent } from '../sim/gear';
 import { choiceStyles, riskDots, cardPhrase, type ChoiceStyleKind, type ChoiceEffect } from '../sim/choiceStyle';
 import { priceIn, canPay, costLabel, haveLabel, Resource, PRODUCERS, YIELD, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from '../sim/economy';
+import { archipelagoOn } from '../world/expand';
+import { buy, buyQuote, sell, sellQuote, SAT_MAX, SAT_RECOVER, TRADE_RES, TradeRes } from '../sim/trade';
 import { gap, railBoost, railStation, railWant, FREIGHT_BONUS, RAIL_REACH } from '../sim/freight';
 import { Difficulty, DIFFICULTIES, DIFF_TEXT, DEFAULT_DIFFICULTY, readDifficulty, rulesOf } from '../sim/difficulty';
 import { TEAM_COLORS } from '../render/expeditionView';
@@ -257,7 +259,7 @@ const SECURITY_NEED = { k: 'security' as const, icon: 'shield', label: 'Sécurit
 /** Pictos 3D du HUD (voir `pics.ts`) : besoins, stocks, saisons, rayons et onglets de la barre de construction */
 // icônes peintes du HUD (`hudPic`) ; le carburant garde son picto
 const NEED_PIC: Record<NeedId | 'security', string> = { food: 'nourriture', water: 'eau', housing: 'logement', jobs: 'travail', joy: 'bienetre', health: 'sante', security: 'securite' };
-const RES_PIC: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', brick: 'briques', crude: 'carburant', fuel: '⛽' };
+const RES_PIC: Record<Resource, string> = { wood: 'bois', stone: 'pierre', ore: 'minerai', brick: 'briques', crude: 'carburant', fuel: '⛽', gold: '💰' };
 const resPic = (r: Resource, size: number) => RES_PIC[r].length > 2 ? hudPic(RES_PIC[r], size) : pic(RES_PIC[r], size);
 const SEASON_PIC = ['printemps', 'ete', 'automne', 'hiver'];
 const CAT_PIC: Record<BuildCat, string> = { home: 'habitat', prod: 'production', service: 'services', life: 'culture', war: 'militaire' };
@@ -269,7 +271,8 @@ const GIVES: { k: 'housing' | 'food' | 'water' | 'jobs' | 'joy' | 'health'; icon
   { k: 'jobs', icon: 'hammer', label: 'emplois', one: 'emploi' }, { k: 'joy', icon: 'smile', label: 'bien-être' }, { k: 'health', icon: 'heart', label: 'santé' },
 ];
 /** Fiche d'une ressource : son icône, à quoi elle sert, comment en avoir plus, et le bâtiment qui la produit */
-const RES_META: Record<Resource, { label: string; icon: string; use: string; more: string; kind: KindId }> = {
+/** (l'or n'a pas de bâtiment : sa fiche est le comptoir des voisins, `renderTrade`) */
+const RES_META: Record<Exclude<Resource, 'gold'>, { label: string; icon: string; use: string; more: string; kind: KindId }> = {
   wood: { label: 'Bois', icon: 'tree', kind: 'lumber', use: 'Sert à bâtir les grands bâtiments.', more: 'Un bûcheron, posé en lisière ou dans une forêt, en coupe chaque jour. Pas de forêt ? Plantez-en une (Nature › Forêt).' },
   stone: { label: 'Pierre', icon: 'rock', kind: 'quarry', use: 'Sert à bâtir les grands bâtiments.', more: 'Une carrière, posée près des rochers ou dans la montagne, en taille chaque jour. Pas de rochers ? Posez-en (Nature › Rochers). La mine en donne aussi.' },
   ore: { label: 'Minerai', icon: 'pickaxe', kind: 'mine', use: 'Sert à passer les âges et à fabriquer l’équipement des expéditions.', more: 'La mine, creusée dans la montagne, en donne chaque jour ; certaines expéditions en rapportent aussi.' },
@@ -279,7 +282,7 @@ const RES_META: Record<Resource, { label: string; icon: string; use: string; mor
 };
 
 /** Une condition d'âge sans bâtiment : le minerai, les briques, l'expédition obligatoire ou les habitants */
-const reqOf = (label: string) => (label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
+const reqOf = (label: string) => (label.startsWith('île du portail') ? 'isle' : label.startsWith('expédition') ? 'exp' : label.includes('minerai') ? 'ore' : label.startsWith('briques') ? 'brick' : label === GOLD_LABEL ? 'gold' : label.startsWith('chemin de fer') ? 'rail' : 'pop');
 
 /** « +1 emploi », « +3 emplois » */
 const give = (g: (typeof GIVES)[number], v: number) => `+${num(v)} ${tr(v < 2 && g.one ? g.one : g.label)}`;
@@ -298,7 +301,7 @@ const NEED_RULE: Record<NeedId, string> = {
 const givesOf = (k: KindId, a: number): string[] => {
   const out: string[] = [];
   const y = YIELD[k];
-  for (const r of Object.keys(y ?? {}) as Resource[]) if (y![r]![a]) out.push(tr(RES_META[r].label));
+  for (const r of Object.keys(y ?? {}) as Exclude<Resource, 'gold'>[]) if (y![r]![a]) out.push(tr(RES_META[r].label));
   for (const g of MAIN.map((m) => GIVES.find((x) => x.k === m)!)) if (KINDS[k][g.k]?.[a]) { const l = tr(g.label); out.push(l[0].toUpperCase() + l.slice(1)); }
   return out;
 };
@@ -641,6 +644,7 @@ export class UI {
       this.host.audio.sfxClick();
     };
     needInfo.onclick = (e) => {
+      if (this.resOpen === 'gold' && this.tradeClick(e.target as HTMLElement)) return;
       const k = (e.target as HTMLElement).closest<HTMLElement>('[data-kind]')?.dataset.kind as KindId | undefined;
       if (k) { this.closeNeed(); this.pick(k); return; }
       // Sécurité : surligner (ou non) sur la carte les zones couvertes et les habitations sans protection
@@ -668,6 +672,7 @@ export class UI {
       const req = (e.target as HTMLElement).closest<HTMLElement>('[data-req]')?.dataset.req;
       if (req === 'ore') { this.openRes('ore'); return; }
       if (req === 'brick') { this.openRes('brick'); return; }
+      if (req === 'gold') { this.openRes('gold'); return; }
       if (req === 'exp') {
         const t = /[«“]\s*(.+?)\s*[»”]/.exec((e.target as HTMLElement).closest<HTMLElement>('[data-req]')!.textContent ?? '')?.[1], m = MISSIONS.find((x) => x.title === t);
         if (m) this.gotoMission(m.id); else this.openExpeditions();
@@ -686,7 +691,7 @@ export class UI {
     window.addEventListener('pointerdown', (e) => { if (!$('#notifPanel').hidden && !(e.target as HTMLElement).closest('#notifPanel, #bBell')) this.toggleNotifPanel(false); }, true);
     // le conseil du moment parle d'un bâtiment : un clic le prend en main
     $('#helpBtn').onclick = () => { this.help = !this.help; try { localStorage.setItem('ceionia.aides', this.help ? '1' : '0'); } catch { /* sans stockage */ } this.host.audio.sfxClick(); this.renderMessage(); };
-    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
+    $('#msg').onclick = () => { const k = this.host.sim.messageKind; if (k === 'farm' && !this.host.sim.food.ok) { this.host.tools.setTool('field'); this.host.audio.sfxClick(); } else if (this.host.sim.messageExp) { this.openExpeditions(); this.host.audio.sfxClick(); } else if (this.host.sim.messageGold) { this.host.audio.sfxClick(); this.openRes('gold'); } else if (this.host.sim.messageIsle && this.host.commandIsle) { this.host.audio.sfxClick(); this.host.commandIsle(); } else if (this.host.sim.messageRail !== null) { this.host.audio.sfxClick(); this.host.startRailEdit({ stop: this.host.sim.messageRail }); } else if (k) this.pick(k); else if (this.host.sim.ready) this.host.sim.advance(); };
     $('#bPause').onclick = () => { host.time.paused = !host.time.paused; host.audio.sfxClick(); };
     $('#bFog').onclick = () => { host.dispelFog(); host.audio.sfxClick(); this.info(tr('Le brouillard se lève.')); };
     $('#bSpeed').onclick = () => {
@@ -1208,15 +1213,15 @@ export class UI {
     el.hidden = quiet || !!this.tutorial?.active || fighting || this.host.world.sandbox;
     // un village plein n'est pas en manque : il attend des places pour grandir (conseil bleu, pas orange)
     const tone = NEEDS.some((n) => n.k !== 'housing' && !sim[n.k].ok) || sim.drought ? 'warn' : sim.ageProgress() || !sim.housing.ok ? 'goal' : 'calm';
-    const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, key = `${tone}|${k}|${ready}|${exp}|${rail}|${sim.message}`;
+    const ready = !k && sim.ready, exp = !k && sim.messageExp, rail = !k && !exp && sim.messageRail !== null, gold = !k && sim.messageGold, key = `${tone}|${k}|${ready}|${exp}|${rail}|${gold}|${sim.message}`;
     if (el.dataset.v === key) return;
     el.dataset.v = key;
-    el.className = `tone-${tone}${k || ready || exp || rail ? ' link' : ''}`;
-    el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
+    el.className = `tone-${tone}${k || ready || exp || rail || gold ? ' link' : ''}`;
+    el.title = k === 'farm' && !sim.food.ok ? tr('Cliquer pour tracer un champ') : k ? tr('Cliquer pour bâtir « {name} »', { name: sim.nameOf(k) }) : exp ? tr('Cliquer pour ouvrir les expéditions') : rail ? tr('Cliquer pour tracer une ligne depuis cette gare') : gold ? tr('Cliquer pour ouvrir le comptoir des voisins') : ready ? tr('Cliquer pour passer à l’âge suivant') : '';
     const text = sim.message.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     // un picto selon le ton (manque, objectif, tout va bien) ; un conseil qui mène quelque part finit par son geste et un chevron
     const go = (w: string) => `<b class="go">${w}<i>›</i></b>`;
-    el.innerHTML = `<span class="mi">${pic(tone === 'warn' ? '⚠' : tone === 'goal' ? '⬆' : '✅', 24)}</span><span>${text}</span>${k ? go(tr('Bâtir')) : exp ? go(tr('Ouvrir')) : rail ? go(tr('Tracer')) : ready ? go(tr('Passer')) : ''}`;
+    el.innerHTML = `<span class="mi">${pic(tone === 'warn' ? '⚠' : tone === 'goal' ? '⬆' : '✅', 24)}</span><span>${text}</span>${k ? go(tr('Bâtir')) : exp ? go(tr('Ouvrir')) : rail ? go(tr('Tracer')) : gold ? go(tr('Échanger')) : ready ? go(tr('Passer')) : ''}`;
     void el.offsetWidth;
     el.classList.add('flash');
   }
@@ -1236,6 +1241,8 @@ export class UI {
     // les briques paraissent avec la briqueterie, dès l'âge industriel (ou dès qu'on en a : une partie plus ancienne)
     if (this.host.sim.age >= 3 || w.brick >= 1 || day.brick) items.push(['brick', 'brick', tr('Briques')]);
     if (this.host.sim.age >= 4 || w.crude >= 1 || w.fuel >= 1 || day.crude || day.fuel || this.host.expeditions.state.done.includes('oil')) items.push(['crude', 'crude', tr('Brut')], ['fuel', 'fuel', tr('Carburant')]);
+    // l'or des voisins, seulement dans une partie qui a accepté l'archipel ; un clic ouvre le comptoir
+    if (archipelagoOn(w)) items.push(['gold', 'coin', tr('Or')]);
     const key = `${w.unlimited}|${getLang()}|` + items.map(([r]) => `${Math.floor(w[r])}/${day[r]}`).join('|');
     if (key === this.resKey) return;
     this.resKey = key;
@@ -1244,13 +1251,13 @@ export class UI {
     // la production du jour s'affiche sous le stock (grisée quand rien n'en produit) ; le brut qu'on raffine plus vite qu'on ne
     // le tire baisse chaque jour
     const per = (n: number) => `${n < 0 ? '−' : '+'}${Number.isInteger(n) ? Math.abs(n) : Math.abs(n).toFixed(1)}${tr('/j')}`;
-    const use: Partial<Record<Resource, string>> = { wood: tr(' — pour bâtir les grands bâtiments'), stone: tr(' — pour bâtir les grands bâtiments'), ore: tr(' — pour passer les âges et s’équiper ; la mine en extrait chaque jour'), brick: tr(' — pour passer à l’époque moderne et bâtir gares, usines et raffineries'), crude: tr(' — la raffinerie en fait du carburant'), fuel: tr(' — pour les automobiles') };
+    const use: Partial<Record<Resource, string>> = { wood: tr(' — pour bâtir les grands bâtiments'), stone: tr(' — pour bâtir les grands bâtiments'), ore: tr(' — pour passer les âges et s’équiper ; la mine en extrait chaque jour'), brick: tr(' — pour passer à l’époque moderne et bâtir gares, usines et raffineries'), crude: tr(' — la raffinerie en fait du carburant'), fuel: tr(' — pour les automobiles'), gold: tr(' — pour passer les âges ; cliquez pour échanger au comptoir des voisins') };
     // le brut tiré des puits peut partir aussitôt à la raffinerie : on dit ce qu'en tirent les puits et ce qu'elle en prend
     const drawn = this.host.expeditions.yields().crude;
-    const flow = (r: Resource) => (r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
+    const flow = (r: Resource) => (r === 'gold' ? '' : r === 'crude' && drawn ? tr(', {drawn} tirés des puits par jour et {refined} raffinés', { drawn, refined: drawn - day.crude }) : day[r] ? tr(', {n} par jour', { n: per(day[r]).replace(tr('/j'), '') }) : tr(', rien n’en produit pour l’instant'));
     $('#res').innerHTML = items.map(([r, icon, label]) => w.unlimited
       ? `<div class="res" data-r="${r}" title="${tr('{label} : illimité ({why})', { label, why: DIFF_TEXT.resInfinite[w.difficulty] })}">${resPic(r, 28)}<span class="rv"><b>∞</b><small>${label}</small></span></div>`
-      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b><em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em></span></div>`).join('');
+      : `<div class="res" data-r="${r}" title="${tr('{label} : {n} en réserve', { label, n: Math.floor(w[r]) })}${flow(r)}${use[r] ?? ''}">${resPic(r, 28)}<span class="rv"><b>${Math.floor(w[r])}</b>${r === 'gold' ? `<em class="rate">${tr('échange')}</em>` : `<em class="rate${day[r] || (r === 'crude' && drawn) ? '' : ' none'}">${per(day[r])}</em>`}</span></div>`).join('');
   }
 
   /** Surligne l'outil actif, affiche/masque le réglage de pinceau */
@@ -1520,6 +1527,7 @@ export class UI {
     this.needOpen = k;
     const box = $('#needInfo'), r = $('#n-' + k).getBoundingClientRect();
     box.hidden = false;
+    box.classList.remove('trade');
     box.dataset.v = '';
     this.renderNeed();
     // sous l'icône du besoin, sans sortir de l'écran
@@ -1545,6 +1553,8 @@ export class UI {
     this.resOpen = r;
     const box = $('#needInfo'), el = $(`#res .res[data-r="${r}"]`);
     box.hidden = false;
+    // le comptoir, plus large que les autres fiches
+    box.classList.toggle('trade', r === 'gold');
     box.dataset.v = '';
     this.renderRes();
     const b = el.getBoundingClientRect();
@@ -1555,6 +1565,7 @@ export class UI {
 
   /** Fiche d'une ressource : stock, production du jour et ses sources, à quoi elle sert, et le bâtiment qui en donnerait plus */
   private renderRes() {
+    if (this.resOpen === 'gold') { this.renderTrade(); return; }
     const h = this.host, w = h.world, r = this.resOpen!, meta = RES_META[r], day = h.expeditions.daily()[r], age = h.sim.age;
     const rows: string[] = [];
     for (const k of Object.keys(YIELD) as KindId[]) {
@@ -1575,6 +1586,49 @@ export class UI {
       ${lock ? `<p class="hint warn">${pic('🔒', 16)} ${lock}</p>` : `<button class="primary" data-kind="${k}" title="${h.sim.whereOf(k)}">${ic('hammer', 15, 2.2)} ${tr('Bâtir « {name} »', { name })}</button>`}`;
     const box = $('#needInfo');
     if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
+  }
+
+  /** lot du comptoir : on échange 1 or à la fois, ou 10 */
+  private tradeLot = 1;
+  /**
+   * Comptoir des voisins (la fiche de l'or) : pour chaque ressource, son cours du moment (la saturation des ventes le fait
+   * baisser, il remonte chaque jour), un bouton pour en vendre contre de l'or, un autre pour en acheter
+   */
+  private renderTrade() {
+    const h = this.host, w = h.world, lot = this.tradeLot, inf = w.unlimited, age = h.sim.age;
+    const label: Record<TradeRes, string> = { wood: tr('Bois'), stone: tr('Pierre'), ore: tr('Minerai'), brick: tr('Briques'), fuel: tr('Carburant') };
+    // les ressources que le village connaît déjà (comme la barre des stocks : briques à l'âge industriel, carburant au moderne)
+    const shown = TRADE_RES.filter((r) => (r !== 'brick' || age >= 3 || w.brick >= 1) && (r !== 'fuel' || age >= 4 || w.fuel >= 1));
+    const rows = shown.map((r) => {
+      const sat = w.trade.sat[r] ?? 0, q = sellQuote(r, sat, lot), get = buyQuote(r, lot);
+      const canSell = inf || w[r] + 1e-9 >= q.cost, canBuy = inf || w.gold + 1e-9 >= lot;
+      const drop = Math.round(sat * 100);
+      return `<div class="trow"><span class="tn">${resPic(r, 22)}<span>${label[r]}<small>${inf ? '∞' : Math.floor(w[r])}${drop ? ` · <b class="warn">${tr('cours −{n} %', { n: drop })}</b>` : ''}</small></span></span>`
+        + `<button data-sell="${r}" ${canSell ? '' : 'disabled'} title="${tr('Vendre {n} {res} contre {g} or', { n: num(q.cost), res: label[r].toLowerCase(), g: lot })}">${tr('Vendre')}<small>${num(q.cost)} → ${lot} ${pic('💰', 14)}</small></button>`
+        + `<button data-buy="${r}" ${canBuy ? '' : 'disabled'} title="${tr('Acheter {n} {res} pour {g} or', { n: get, res: label[r].toLowerCase(), g: lot })}">${tr('Acheter')}<small>${lot} ${pic('💰', 14)} → ${get}</small></button></div>`;
+    }).join('');
+    const html = `
+      <h4>${pic('💰', 20)} ${tr('Les voisins')}<em class="ok">${inf ? '∞' : Math.floor(w.gold)}</em></h4>
+      <div class="sub">${tr('comptoir d’échange · or en réserve')}</div>
+      <p class="hint">${tr('L’or ne vient que de l’échange avec le peuple allié ; il sert à passer les âges. Chaque vente fait baisser le cours de la ressource (jusqu’à −{max} %) ; il remonte de {up} % par jour.', { max: Math.round(SAT_MAX * 100), up: Math.round(SAT_RECOVER * 100) })}</p>
+      <div class="tlot">${tr('Par lot de')} <button data-lot="1" class="${lot === 1 ? 'on' : ''}">1 ${pic('💰', 14)}</button><button data-lot="10" class="${lot === 10 ? 'on' : ''}">10 ${pic('💰', 14)}</button></div>
+      <div class="tradeRows">${rows}</div>`;
+    const box = $('#needInfo');
+    if (box.dataset.v !== html) { box.innerHTML = html; box.dataset.v = html; }
+  }
+
+  /** Un clic au comptoir : changer de lot, vendre ou acheter ; true s'il s'agissait du comptoir */
+  private tradeClick(t: HTMLElement) {
+    const b = t.closest<HTMLButtonElement>('button[data-lot], button[data-sell], button[data-buy]');
+    if (!b || b.disabled) return !!b;
+    const w = this.host.world, d = b.dataset;
+    if (d.lot) { this.tradeLot = +d.lot; this.host.audio.sfxClick(); }
+    else {
+      const r = (d.sell ?? d.buy) as TradeRes, done = d.sell ? sell(w, r, this.tradeLot) : buy(w, r, this.tradeLot);
+      if (done) { this.host.audio.sfxClick(); this.resKey = ''; this.renderResources(); }
+    }
+    this.renderTrade();
+    return true;
   }
 
   /**

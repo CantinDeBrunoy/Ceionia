@@ -5,6 +5,8 @@ import { AGES, BUILD_CATS, KINDS, KindId, lineOf, reqLine } from '../build/catal
 import { mandatoriesFor, needBonus, MISSIONS, VICTORY } from './missions';
 import { DIFF_TEXT, Difficulty, rulesOf } from './difficulty';
 import { priceIn, YIELD } from './economy';
+import { goldNeed, goldSince } from './trade';
+import { archipelagoOn } from '../world/expand';
 import { allServed, isStation, railNet, railStation, railWant, spaceRail, FREIGHT_BONUS, RAIL_REACH } from './freight';
 
 export interface Need { cap: number; demand: number; ok: boolean }
@@ -29,6 +31,8 @@ export interface AgeProgress {
 
 /** Les deux conditions du chemin de fer, en fin d'âge industriel (leur libellé commence par « chemin de fer ») */
 export const RAIL_FIRST = 'chemin de fer : une première ligne', RAIL_LINKED = 'chemin de fer : deux gares reliées';
+/** La condition d'or (archipel accepté) : son libellé dans la liste des conditions d'âge */
+export const GOLD_LABEL = 'or (comptoir des voisins)';
 
 /**
  * Bâtiments que demande l'âge `n`, par genre : en Facile, autant qu'il en faut au village ; en Normal, ce qu'il en faut
@@ -70,6 +74,8 @@ export class Sim {
   messageRail: number | null = null;
   /** le conseil mène à l'île du portail (un clic dessus y prend le commandement de la garnison) */
   messageIsle = false;
+  /** le conseil mène au comptoir des voisins (un clic dessus ouvre la fiche de l'or) */
+  messageGold = false;
   counts: Record<string, number> = {};
   /** Humidité des sols (0 sécheresse … 1 bien arrosés) : la pluie l'entretient, l'été la fait chuter ; elle règle la récolte des champs */
   moisture = 0.7;
@@ -238,6 +244,9 @@ export class Sim {
     if (req.reqOre) items.push({ label: 'minerai', have: this.world.unlimited ? req.reqOre : Math.floor(this.world.ore), need: req.reqOre });
     // les briques de la briqueterie (en réserve : on peut en dépenser pour bâtir, il faudra alors en recuire)
     if (req.reqBrick) items.push({ label: 'briques (briqueterie)', have: w.unlimited ? req.reqBrick : Math.floor(w.brick), need: req.reqBrick });
+    // l'or des voisins, seulement si l'archipel est accepté (et pas pour le passage qui suit de près une acceptation tardive)
+    const gold = goldNeed(n, archipelagoOn(w), goldSince(w));
+    if (gold) items.push({ label: GOLD_LABEL, have: w.unlimited ? gold : Math.floor(w.gold), need: gold });
     // les expéditions obligatoires de l'âge en cours (deux à la Préhistoire ; une partie déjà plus loin n'en demande plus)
     // (le portail : seulement sur une carte qui a son île)
     for (const m of mandatoriesFor(this.age)) if (m.id !== 'portal' || w.portal) items.push({ label: `expédition « ${m.title} »`, mission: m.title, have: this.world.exp.done.includes(m.id) ? 1 : 0, need: 1 });
@@ -276,7 +285,7 @@ export class Sim {
       }
       return about(k, text);
     };
-    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false;
+    this.messageKind = null; this.messageExp = false; this.messageRail = null; this.messageIsle = false; this.messageGold = false;
     // au bac à sable, aucun conseil : on bâtit comme on veut
     if (w.sandbox) return tr('Bac à sable : tout est ouvert et gratuit, bâtissez comme vous voulez.');
     // le premier bâtiment est la place du village (feu de camp, agora, marché, parc… selon l'âge) : le cœur où l'on fête les retours
@@ -327,6 +336,7 @@ export class Sim {
         return build(miss.kind, n > 1 ? tr('Pour l’âge suivant : il manque {n} × {k}{why}.', { n, k: say(miss.kind), why }) : tr('Pour l’âge suivant : il manque {k}{why}.', { k: say(miss.kind), why }));
       }
       if (miss.label.startsWith('chemin de fer')) return this.railAgeTip(say, build, miss.label === RAIL_FIRST);
+      if (miss.label === GOLD_LABEL) { this.messageGold = true; return tr('Pour l’âge suivant : il faut encore {n} or : vendez du bois, de la pierre ou du minerai au comptoir des voisins (cliquez ici).', { n: miss.need - miss.have }); }
       if (miss.label.startsWith('briques')) return this.counts.brickworks ? tr('Pour l’âge suivant : il faut encore {n} briques (la briqueterie en cuit chaque jour).', { n: miss.need - miss.have }) : about('brickworks', tr('Pour l’âge suivant : il faut {n} briques : {k}.', { n: miss.need, k: say('brickworks') }));
       if (miss) {
         // le minerai vient des mines, creusées dans la montagne (la mine se débloque par une expédition)

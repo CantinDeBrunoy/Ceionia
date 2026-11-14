@@ -548,6 +548,8 @@ export interface AgeDef {
   reqOre?: number;
   /** briques en réserve au village (la briqueterie en cuit) */
   reqBrick?: number;
+  /** or en réserve, seulement dans une partie qui a accepté l'archipel (voir `goldNeed`, trade.ts) */
+  reqGold?: number;
   /** bâtiments demandés en fin d'âge, après ses expéditions obligatoires (la raffinerie qu'ouvre « L'or noir », ses puits) */
   reqLate?: Partial<Record<KindId, number>>;
   /** tout à la fin : un premier chemin de fer posé, puis deux gares reliées par le rail */
@@ -558,9 +560,9 @@ export const AGES: AgeDef[] = [
   { name: 'Préhistoire', tagline: 'Feux de camp et huttes', reqPop: 0, reqKinds: {} },
   { name: 'Antiquité', tagline: 'Maisons de tuiles, temples et agoras', reqPop: 12, reqKinds: { house: 4, farm: 1, well: 1, workshop: 1 } },
   { name: 'Médiéval', tagline: 'Colombages, églises et châteaux', reqPop: 30, reqKinds: { house: 8, temple: 1, workshop: 2, gather: 1 } },
-  { name: 'Industriel', tagline: 'Briques, cheminées et gares', reqPop: 60, reqKinds: { house: 12, temple: 1, mill: 1, quarry: 1, landmark: 1, gather: 2, health: 1 }, reqOre: 12 },
-  { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2, school: 1 }, reqOre: 30, reqBrick: 40, reqLate: { refinery: 1, oilwell: 2 }, reqRail: true },
-  { name: 'Futuriste', tagline: 'Arcologies, maglev et fusées', reqPop: 180, reqKinds: { house: 24, workshop: 3, school: 2, lab: 1, health: 1, gather: 4 }, reqOre: 50, reqBrick: 80 },
+  { name: 'Industriel', tagline: 'Briques, cheminées et gares', reqPop: 60, reqKinds: { house: 12, temple: 1, mill: 1, quarry: 1, landmark: 1, gather: 2, health: 1 }, reqOre: 12, reqGold: 20 },
+  { name: 'Moderne', tagline: 'Tours, éoliennes et parcs', reqPop: 110, reqKinds: { house: 18, mill: 2, landmark: 1, gather: 3, farm: 2, school: 1 }, reqOre: 30, reqBrick: 40, reqGold: 50, reqLate: { refinery: 1, oilwell: 2 }, reqRail: true },
+  { name: 'Futuriste', tagline: 'Arcologies, maglev et fusées', reqPop: 180, reqKinds: { house: 24, workshop: 3, school: 2, lab: 1, health: 1, gather: 4 }, reqOre: 50, reqBrick: 80, reqGold: 100 },
 ];
 
 /**

@@ -6,6 +6,7 @@ import { AGES, KINDS, KindId, sizeOf, lineOf, reqLine } from '../build/catalog';
 import { GEAR_BY, Gear, GearId, Pack, loadout, packLabel, gearShort, gearCost, gearCostLabel, payGear, dangersOf, huntWeapon } from './gear';
 import { ExpEvent, pickEvent, waitTime } from './events';
 import { YIELD, Resource, REFINE_CRUDE, FUEL_PER_CRUDE, CAR_FUEL } from './economy';
+import { recover } from './trade';
 import { allServed, railBoost, spaceRail, SPACE_RAIL_RISK, SPACE_RAIL_WORK } from './freight';
 import { rulesOf } from './difficulty';
 import { securityK } from './security';
@@ -812,11 +813,11 @@ export class Expeditions {
   craftProgress() { const s = this.world.exp; return s.craft.length ? Math.min(1, s.craftT / GEAR_BY[s.craft[0]].time) : 0; }
 
   /** production de chaque ressource en cours (fractions d'unité), et avancement du baril en cours à la raffinerie (0 … 1) */
-  private prodT: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0, brick: 0 };
+  private prodT: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0, brick: 0, gold: 0 };
   private refineT = 0;
   /** Ce que le village tire chaque jour de ses bâtiments : bois, pierre, minerai, briques, pétrole brut des puits (avant raffinage) */
   yields(): Record<Resource, number> {
-    const rate: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0, brick: 0 };
+    const rate: Record<Resource, number> = { wood: 0, stone: 0, ore: 0, crude: 0, fuel: 0, brick: 0, gold: 0 };
     // une gare de marchandises à côté : le bâtiment produit davantage
     const st = allServed(this.world);
     for (const b of this.world.buildings.values()) {
@@ -859,6 +860,8 @@ export class Expeditions {
   }
   private mineStep(dt: number) {
     const rate = this.yields(), w = this.world, day = dt / this.dayLen();
+    // les cours du comptoir remontent au fil des jours
+    recover(w.trade, day);
     for (const r of ['wood', 'stone', 'ore', 'brick', 'crude'] as Resource[]) {
       if (!rate[r]) continue;
       // bois, pierre, minerai et briques arrivent au fil des heures, en petites parts (l'affichage arrondit), et non d'un coup chaque

@@ -1,11 +1,11 @@
 # Économie et ressources
 
-> Fichiers : `src/sim/economy.ts` (coûts, `YIELD`, raffinage, carburant), `src/sim/expeditions.ts` (`yields`, `daily`, `mineStep` : versement au fil du temps), `src/sim/freight.ts` (`railBoost`), `src/sim/difficulty.ts` (barèmes), `src/sim/gear.ts` (prix de l'équipement), `src/build/catalog.ts` (taille, âge minimal, `reqKind`), `src/build/tools.ts` (paiement à la pose et à l'amélioration), `src/build/rampart.ts` (prix des murs), `src/world/world.ts` (stocks, sauvegarde), `src/ui/ui.ts` (`#res`, `RES_META`, `renderRes`).
-> Tests : `tests/difficulty.test.ts`, `tests/briques.test.ts`, `tests/rail.test.ts`.
+> Fichiers : `src/sim/economy.ts` (coûts, `YIELD`, raffinage, carburant), `src/sim/expeditions.ts` (`yields`, `daily`, `mineStep` : versement au fil du temps), `src/sim/freight.ts` (`railBoost`), `src/sim/difficulty.ts` (barèmes), `src/sim/gear.ts` (prix de l'équipement), `src/build/catalog.ts` (taille, âge minimal, `reqKind`), `src/build/tools.ts` (paiement à la pose et à l'amélioration), `src/build/rampart.ts` (prix des murs), `src/sim/trade.ts` (or et comptoir des voisins), `src/world/world.ts` (stocks, sauvegarde), `src/ui/ui.ts` (`#res`, `RES_META`, `renderRes`, `renderTrade`).
+> Tests : `tests/difficulty.test.ts`, `tests/briques.test.ts`, `tests/rail.test.ts`, `tests/or.test.ts`.
 > Voir aussi : [difficulte.md](difficulte.md), [ages.md](ages.md), [chemin-de-fer.md](chemin-de-fer.md), [equipement.md](equipement.md), [placement-construction.md](placement-construction.md), [besoins-population.md](besoins-population.md).
 
 ## En bref
-Six ressources en stock dans `World` : `wood`, `stone`, `ore`, `brick`, `crude`, `fuel` (type `Resource`). Le bois et la pierre servent à **bâtir** ; le minerai à **fabriquer l'équipement** et à **passer certains âges** ; les briques à bâtir quelques grands bâtiments industriels et à passer à l'époque moderne ; le brut devient du carburant à la raffinerie ; le carburant fait rouler les automobiles. Rien ne se consomme « par habitant » : la nourriture et l'eau sont des besoins (voir [besoins-population.md](besoins-population.md)), pas des stocks.
+Sept ressources en stock dans `World` : `wood`, `stone`, `ore`, `brick`, `crude`, `fuel`, et `gold` dans une partie qui a accepté l'archipel (type `Resource`). Le bois et la pierre servent à **bâtir** ; le minerai à **fabriquer l'équipement** et à **passer certains âges** ; les briques à bâtir quelques grands bâtiments industriels et à passer à l'époque moderne ; le brut devient du carburant à la raffinerie ; le carburant fait rouler les automobiles ; l'or, qui ne vient que du comptoir des voisins, sert à passer les âges. Rien ne se consomme « par habitant » : la nourriture et l'eau sont des besoins (voir [besoins-population.md](besoins-population.md)), pas des stocks.
 
 ## Règles du jeu
 
@@ -42,6 +42,24 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 - **Remparts** (`rampart.ts` › `rampartCost`) : prix d'un `wall` × nombre de pans neufs ; la pose s'arrête quand l'argent manque.
 - **Équipement** (`gear.ts` › `gearCost`) : toujours du minerai (et du carburant pour certaines pièces) ; bois et pierre seulement en Normal (`gearPrice`). Détail dans [equipement.md](equipement.md).
 
+### L'or et le comptoir des voisins (`trade.ts`)
+- L'or n'existe que si l'**archipel est accepté** : `archipelagoOn(world)` (`world/expand.ts` : `world.isles` non nul, le monde agrandi à l'archipel). Sans archipel, ni stock affiché, ni condition d'âge.
+- **Pas de mine d'or** : on n'en obtient qu'en vendant au peuple allié. Aucun `YIELD` n'en donne (`daily().gold` vaut toujours 0).
+- **Comptoir** (fiche « Les voisins ») : un clic sur l'or de la barre des stocks (`#res`) l'ouvre ; le conseil et la ligne « or » du panneau d'âge y mènent aussi. Le bâtiment-comptoir chez les voisins viendra avec leur ville.
+- Cours de départ (l'auteur équilibrera) :
+
+  | Ressource | Vendre : pour 1 or (`SELL`) | Acheter : 1 or donne (`BUY`) |
+  |---|---|---|
+  | bois | 10 | 6 |
+  | pierre | 10 | 6 |
+  | minerai | 3 | 2 |
+  | briques | 4 | 2 |
+  | carburant | 2 | 1 |
+
+- **Saturation** : chaque or vendu d'une ressource baisse son cours de 1 % (`SAT_STEP`), jusqu'à −40 % (`SAT_MAX`) : il faut alors `SELL / (1 − saturation)` unités pour 1 or (10 bois, puis 10,1, … jusqu'à 16,7). Le cours remonte de 5 % par jour de jeu (`SAT_RECOVER`, `recover`, appelé par `Expeditions.mineStep`). L'achat ne touche pas les cours.
+- On échange par lot de 1 ou de 10 or ; un lot de 10 se vend or après or, chacun saturant le suivant (`sellQuote`). Les briques n'apparaissent au comptoir qu'à l'âge industriel (ou si l'on en a), le carburant à l'époque moderne.
+- Condition d'âge `reqGold`, en réserve : voir [ages.md](ages.md).
+
 ### Usages du minerai et des briques
 - Minerai : équipement des expéditions, condition d'âge (réserve `reqOre` : 12, 30, 50) ; la base avancée des Enfers puise aussi dans une bourse (`hellBase.ts`, `Purse`).
 - Briques : bâtir (voir ci-dessus) et condition d'âge (`reqBrick` : 40, 80).
@@ -53,7 +71,8 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 - `Expeditions.mineStep(dt)` (appelée par `Expeditions.update` avec le temps de jeu) : `day = dt / dayLen`. Bois, pierre, minerai, briques : `stock += day × taux` en continu (petites parts, l'affichage arrondit). Brut : on cumule dans `prodT.crude` et on ne verse que des barils entiers. Carburant : `fuel = max(0, fuel − day × burn)`. Raffinerie : `refineT += day × capacité` ; à chaque unité et tant que `crude >= 1`, un baril part et `prodT.fuel += 0,75` ; seuls les entiers atteignent `world.fuel`.
 - `canPay(w, cost)` / `pay(w, cost)` : comparent et retranchent bois, pierre, briques. `tools.ts` paie **après** la pose réussie (`place`, `upgradeSelected`) ; `rampart.ts` pan par pan.
 - UI : `renderResources` (`#res`) affiche stock et taux du jour ; briques dès l'âge 3 (ou dès qu'on en a) ; brut et carburant dès l'âge 4 ou dès qu'il y en a (ou après l'expédition `oil`). `renderRes` donne la fiche d'une ressource (`RES_META`, sources par bâtiment). Le conseil `Sim.computeMessage` / `build()` s'appuie sur `Sim.producing`.
-- Sauvegarde : `World.toJSON` / `fromJSON` (`wood`, `stone`, `ore`, `crude`, `fuel`, `brick`) ; un champ absent vaut 0, sauf bois et pierre qui valent `START_*` (anciennes parties).
+- Sauvegarde : `World.toJSON` / `fromJSON` (`wood`, `stone`, `ore`, `crude`, `fuel`, `brick`, `gold`, `trade`) ; un champ absent vaut 0, sauf bois et pierre qui valent `START_*` (anciennes parties). `trade` (`TradeState`) : saturation de chaque ressource, relue par `readTradeState`.
+- Comptoir : `renderTrade` (fiche, classe `#needInfo.trade`) et `tradeClick` (`ui.ts`) appellent `sell` / `buy` de `trade.ts`, qui vérifient la réserve avant de rien prélever. En ressources illimitées, l'or s'affiche ∞ et les boutons restent ouverts.
 
 ## Liens avec les autres systèmes
 - Rail : bonus de production, raffinerie et fret ([chemin-de-fer.md](chemin-de-fer.md)).
@@ -73,6 +92,8 @@ Tableaux par âge (0 à 5) et par bâtiment, en unités **par jour de jeu** (un 
 
 ## Pour modifier
 - **Changer un rendement** : `YIELD` dans `economy.ts` ; adapter `tests/briques.test.ts` si c'est la briqueterie ; vérifier `RES_META` (`ui.ts`) et les conseils.
-- **Ajouter une ressource** : `Resource`, `World` (champ + sauvegarde), `RES_NAME`, `Expeditions.yields` / `mineStep` / `prodT`, `RES_META` et `renderResources` dans `ui.ts`, traduction.
+- **Ajouter une ressource** : `Resource`, `World` (champ + sauvegarde), `RES_NAME`, `Expeditions.yields` / `mineStep` / `prodT`, `RES_PIC`, `RES_META` et `renderResources` dans `ui.ts`, traduction. (L'or n'a pas de `RES_META` : sa fiche est le comptoir.)
+- **Changer un cours** : `SELL`, `BUY`, `SAT_*` dans `trade.ts` ; mettre à jour `tests/or.test.ts` et le tableau ci-dessus.
+- **« Archipel accepté »** : `archipelagoOn` (`world/expand.ts`, vrai si la carte a ses îles) et `goldSince` (`trade.ts`, lit `world.exploredAt`). `trade.ts` n'importe pas `expand.ts` (qui importe `world.ts` : cycle).
 - **Changer un prix** : barème `price` dans `difficulty.ts` (Normal) ou formule de Facile dans `costOf` ; `BRICK_PRICE` pour les briques ; mettre à jour `tests/difficulty.test.ts`.
 - **Faire payer un bâtiment en briques** : l'ajouter à `BRICK_PRICE` ; `canPay`, `shortLabel` et la fiche suivent.
