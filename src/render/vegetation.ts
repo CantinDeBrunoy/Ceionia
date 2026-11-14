@@ -29,6 +29,13 @@ export function syncChunks() { CH = N > 128 ? 32 : 16; NC = Math.ceil(N / CH); }
 const LOD_DIST = 48, DETAIL_DIST = 70;
 /** Au-delà, une tuile ne projette plus d'ombre ; les petits décors (rochers) disparaissent */
 const SHADOW_DIST = 70, SMALL_DIST = 110;
+/**
+ * Forêts lointaines éclaircies : au-delà de `THIN_DIST`, une tuile d'arbres ne dessine qu'une part de ses arbres (au moins
+ * `THIN_MIN`), d'autant plus petite qu'elle est loin. Ses arbres sont rangés dans un ordre tiré au hasard (`Layer.end`) : la
+ * part dessinée reste semée sur toute la tuile. Seulement en vue de très haut : sur la carte de 384, environ deux fois
+ * moins d'arbres lointains
+ */
+const THIN_DIST = 420, THIN_MIN = 0.5;
 /** Temps de reconstruction des tuiles en attente, par image (ms) */
 const BUDGET_MS = 5;
 
@@ -177,8 +184,15 @@ class Layer {
     }
     if (!near.length) return;
     const im = near[0].instanceMatrix, ic = near[0].instanceColor!;
-    (im.array as Float32Array).set(this.m[ch].subarray(0, n * 16));
-    (ic.array as Float32Array).set(this.c[ch].subarray(0, n * 3));
+    if (this.o.lod) {
+      // ordre tiré au hasard (le même à chaque reconstruction) : les premiers arbres sont semés sur toute la tuile
+      const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => hash2(a, ch, 811) - hash2(b, ch, 811));
+      const ma = im.array as Float32Array, ca = ic.array as Float32Array, m = this.m[ch], c = this.c[ch];
+      for (let i = 0; i < n; i++) { const j = order[i]; ma.set(m.subarray(j * 16, j * 16 + 16), i * 16); ca.set(c.subarray(j * 3, j * 3 + 3), i * 3); }
+    } else {
+      (im.array as Float32Array).set(this.m[ch].subarray(0, n * 16));
+      (ic.array as Float32Array).set(this.c[ch].subarray(0, n * 3));
+    }
     im.needsUpdate = ic.needsUpdate = true;
     for (const mesh of near.concat(this.far[ch])) {
       mesh.count = n;
@@ -224,7 +238,9 @@ class Layer {
     // de près, l'ombre portée vient de la version simplifiée, rangée sur le calque des seules ombres : trois fois moins
     // de triangles à dessiner dans la carte des ombres, pour une silhouette au sol presque identique
     for (const m of this.near[ch]) { m.visible = has && !hide && !far; m.castShadow = shadow && !lod; }
-    for (const m of this.far[ch]) { m.visible = has && !hide && (far || shadow); m.castShadow = shadow; m.layers.mask = far ? 1 | (1 << SHADOW_LAYER) : 1 << SHADOW_LAYER; }
+    // très loin : une part des arbres seulement (voir THIN_DIST)
+    const keep = far && dist > THIN_DIST ? Math.max(THIN_MIN, THIN_DIST / dist) : 1, count = Math.ceil(this.n[ch] * keep);
+    for (const m of this.far[ch]) { m.visible = has && !hide && (far || shadow); m.castShadow = shadow; m.layers.mask = far ? 1 | (1 << SHADOW_LAYER) : 1 << SHADOW_LAYER; m.count = count; }
   }
 }
 
