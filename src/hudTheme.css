@@ -548,7 +548,7 @@ body.hell #resPanel { display: none !important; }
 #info p, #tinfo p { margin: 7px 0 0; }
 #tinfo .cost { font-weight: 700; }
 #info .lock, #tinfo .lock { display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 10px; background: rgba(200, 72, 43, 0.08); color: #A53A1C; font-weight: 700; }
-#info .keys { padding-top: 6px; border-top: 1px dashed rgba(200, 160, 95, 0.5); font-size: 11.5px; color: var(--hInk2); }
+#info .keys, #tinfo .keys { padding-top: 6px; border-top: 1px dashed rgba(200, 160, 95, 0.5); font-size: 11.5px; color: var(--hInk2); }
 /* le bâtiment choisi : ses actions en pied, la corbeille rouge à part */
 #selCard .ihead .x, #selCard .ihead .xfold { flex: none; align-self: flex-start; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
 #selCard .ihead .xfold { display: none; font-size: 15px; }
@@ -592,3 +592,335 @@ body.hell #resPanel { display: none !important; }
   #troopBar .tfoot > .tcorner { grid-column: 4; justify-self: end; }
   #troopBar .tfoot .tbub { left: var(--tbL, 0px); }
 }
+
+/* ---------- la barre du bas réduite de moitié (demande de l'auteur, 14 nov. 2026 : « réduire la taille du HUD du bas de 50 % »)
+   ordinateur : environ 105 px de haut au lieu de 214 ; les modes côte à côte et les outils sur une ligne, des onglets fins, des
+   cartes de bâtiment de 72 × 64 sans titres de groupe (le filet sépare les groupes), une mini-carte de 104 px ---------- */
+@media (min-width: 861px) {
+  #dock > #dockRow { gap: 8px; }
+  #dock #dockSide { display: grid; grid-template-columns: repeat(7, 30px); gap: 4px; padding: 6px; align-content: end; }
+  #dock #dockSide #modes { grid-column: 1 / -1; flex-direction: row; gap: 4px; }
+  #dock #modes button { flex: 1; width: auto; height: 32px; padding: 0 8px 0 6px; gap: 6px; border-radius: 10px; font-size: 13px; }
+  #dock #modes button b, #dock #modes button b .pic, #dock #modes button b svg { width: 20px; height: 20px; }
+  #dock #dockSide .quick { display: contents; }
+  #dock .quick button { width: 30px; height: 30px; border-radius: 9px; }
+  #dock .quick button svg { width: 15px; height: 15px; }
+  #dock #dockMain { padding: 5px 6px 6px; }
+  #dock #dockTop { padding: 0 2px 3px; }
+  #dock #subcats button { height: 26px; padding: 0 10px 2px 8px; gap: 5px; border-radius: 10px 10px 0 0; font-size: 12.5px; }
+  #dock #subcats button.on { border-radius: 10px; }
+  #dock #subcats button b .pic, #dock #subcats button b img { width: 16px; height: 16px; }
+  #dock #itemsWrap { padding: 3px 2px; border-radius: 14px; }
+  #dock #itemsWrap .scr { width: 20px; height: 44px; font-size: 22px; }
+  #dock #items { gap: 6px; min-height: 0; padding: 1px; }
+  #dock #items .grp { gap: 0; padding-left: 6px; }
+  #dock #items .gh { display: none; }
+  #dock #items .gt { gap: 5px; }
+  #dock #items button.tile { width: 72px; height: 64px; padding: 2px 3px 4px; gap: 0; border-radius: 11px; }
+  #dock #items button.tile b.th { width: 54px; height: 42px; }
+  #dock #items button.tile b.th img { width: 56px; height: 48px; }
+  #dock #items button.tile:not(.kind) b svg { width: 26px; height: 26px; margin: 6px 0 4px; }
+  #dock #items button.tile .lbl { max-width: 68px; font-size: 11px; line-height: 1.05; -webkit-line-clamp: 1; }
+  #dock #items button.tile .gv { display: none; }
+  #dock #items button.tile.big::before, #dock #items .key { left: 5px; top: 3px; font-size: 8px; }
+  #dock #items .badge { right: 4px; top: 3px; font-size: 9px; padding: 0 4px; }
+  #dock #biomes button { min-height: 24px; padding: 1px 8px 1px 6px; font-size: 11px; }
+  #dock #brush { min-height: 28px; }
+  #dock #viewBtns { gap: 5px; padding: 4px; }
+  #dock #viewBtns button.round { width: 38px; height: 38px; }
+  #dock #viewBtns button.round svg { width: 17px; height: 17px; }
+  #dock #miniMap, #dock #dockRight #miniMap { width: 104px; height: 104px; padding: 4px; border-radius: 18px; }
+  #miniMap canvas { border-radius: 14px; }
+  #miniMap .mmN { top: 7px; right: 7px; width: 18px; height: 18px; font-size: 9px; }
+  /* la carte d'explication, plus ramassée */
+  #info, #info.held, #selCard, #tinfo { padding: 8px 11px 9px; font-size: 11.5px; line-height: 1.35; border-radius: 14px; }
+  #info .xth, #selCard .xth, #tinfo .xth { width: 54px; height: 44px; }
+  #info h4, #info.held h4, #selCard h4, #tinfo h4 { font-size: 16px; }
+  #info .xsub, #selCard .xsub, #tinfo .xsub { font-size: 11px; margin-top: 1px; }
+  #info .ihead, #selCard .ihead, #tinfo .ihead { gap: 9px; }
+  #info .xdesc, #tinfo .xdesc { margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #info p, #tinfo p { margin-top: 4px; }
+  #info .effs { margin-top: 4px; gap: 4px; }
+  #info .perk { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  #info .xcount { display: none; }
+  #dock #items button.tile { width: 78px; }
+  #dock #items button.tile .lbl { max-width: 74px; }
+  #info::before, #tinfo::before { width: 10px; height: 10px; top: 8px; right: 10px; }
+  #selCard .xacts { margin-top: 7px; gap: 6px; }
+  #selCard .xacts button { min-height: 30px; font-size: 12px; }
+  #selCard .xacts .xdel { flex-basis: 36px; }
+  #selCard .ihead .x, #selCard .ihead .xfold { width: 26px; height: 26px; }
+}
+/* la place de la carte suit sa largeur réduite */
+@media (min-width: 1400px) {
+  #dock > #dockRow { grid-template-columns: auto minmax(0, 1180px) 300px auto; }
+}
+/* la barre de bataille réduite de moitié comme celle du village : modes côte à côte et outils dessous, cartes de 78 × 64,
+   recrues de 132 × 64, coin sur deux rangées (Aide en pastille et « Retourner au village », puis le passage) */
+@media (min-width: 901px) {
+  #troopBar .tfoot { gap: 8px; }
+  #troopBar .tfoot > .ttool { padding: 6px; gap: 4px; }
+  #troopBar .ttool .ttabs { flex-direction: row; gap: 4px; }
+  #troopBar .ttool .ttabs button { width: 104px; height: 32px; padding: 0 8px 0 6px; gap: 6px; border-radius: 10px; font-size: 13px; }
+  #troopBar .ttool .ttabs button .pic, #troopBar .ttool .ttabs button svg { width: 18px; height: 18px; }
+  #troopBar .ttool .ttools { padding-top: 4px; gap: 4px; }
+  #troopBar .ttool .ttl { width: 32px; height: 30px; border-radius: 9px; }
+  #troopBar .ttool .ttl svg { width: 17px; height: 17px; }
+  #troopBar .tfoot > .tmenu { padding: 5px 8px 6px; }
+  #troopBar .tmh { min-height: 18px; gap: 8px; }
+  #troopBar .tmh h5 { font-size: 11px; gap: 5px; }
+  #troopBar .tmh h5 .pic { width: 16px; height: 16px; }
+  #troopBar .tmh h5 small { font-size: 10.5px; padding: 0 7px; }
+  #troopBar .tmh .q { font-size: 10.5px; }
+  #troopBar .tmenu .tmrow { gap: 6px; }
+  #troopBar .tmenu .tbuilds { gap: 5px; }
+  #troopBar .tmenu .tfam + .tfam { padding-left: 6px; }
+  #troopBar .tmenu .trb.tbv, #troopBar .tmrow .trb.tbv { width: 78px; height: 66px; min-height: 0; padding: 2px 3px 3px; gap: 0; border-radius: 11px; }
+  #troopBar .tmrow .trb.tbv .tic { flex: none; height: 38px; border-radius: 9px; background: none; box-shadow: none; overflow: hidden; }
+  #troopBar .tmrow .trb.tbv .tic img { width: 26px; height: 26px; }
+  #troopBar .tmrow .trb.tbv .tic.tpv img { width: 48px; height: 40px; transform: none; object-fit: contain; }
+  #troopBar .tmrow .trb.tbv b { font-size: 11px; line-height: 1.05; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .tmrow .trb.tbv small.co { font-size: 9.5px; gap: 3px; line-height: 1.1; }
+  #troopBar .tmrow .trb.tbv small.co .pic { width: 11px; height: 11px; }
+  #troopBar .tmrow .trb.trc { width: 132px; height: 66px; min-height: 0; padding: 3px 5px; grid-template-columns: 38px minmax(0, 1fr); column-gap: 5px; border-radius: 11px; }
+  #troopBar .trc .tpo { border-radius: 8px; }
+  #troopBar .trc .ttx { gap: 2px; }
+  #troopBar .trc .ttx b { font-size: 11.5px; line-height: 1.05; }
+  #troopBar .trc .trole { font-size: 9.5px; padding: 1px 5px 1px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .trc .trole > span { overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .trc .trole .pic { width: 11px; height: 11px; }
+  #troopBar .trc .tco { padding-top: 2px; gap: 5px; font-size: 10px; }
+  #troopBar .trc .tco .pic { width: 11px; height: 11px; }
+  #troopBar .tfoot > .tcorner, #troopBar .thell .tcorner, #troopBar .thell.tshut .tcorner { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 5px; width: 180px; padding: 6px; align-items: stretch; }
+  #troopBar .tcorner .thb, #troopBar .thell .tcorner .thb { grid-column: 1; grid-row: 1; width: 32px; min-height: 0; height: 32px; padding: 0; justify-content: center; }
+  #troopBar .tcorner .thb .tl { display: none; }
+  #troopBar .tcorner .thb .tq { width: 22px; height: 22px; font-size: 13px; }
+  #troopBar .tcorner button.go, #troopBar .tcorner .tx { grid-column: 2; grid-row: 1; min-height: 32px; padding: 0 10px 0 3px; gap: 6px; font-size: 12px; }
+  #troopBar .tcorner .oi { width: 26px; height: 26px; }
+  #troopBar .tcorner .oi img { width: 18px; height: 18px; }
+  #troopBar .tcorner .tfl, #troopBar .tcorner > .tord { grid-column: 1 / -1; grid-row: 2; gap: 5px; }
+  #troopBar .tcorner .tord, #troopBar .thell .tcorner .tord.gar { min-height: 32px; padding: 0 10px 0 3px; gap: 6px; font-size: 12px; }
+  #troopBar .tcorner .tord .oi { width: 26px; height: 26px; }
+  #troopBar .tcorner .tord .tpt b { font-size: 12px; }
+  #troopBar .tcorner .tord .tpt small { display: none; }
+  #troopBar .tbot { padding: 4px 6px; }
+  #troopBar .tfoot .tbub { bottom: calc(100% + 4px); }
+}
+@media (min-width: 1400px) {
+  #troopBar .tfoot { grid-template-columns: auto minmax(0, 1180px) 300px auto; }
+}
+/* tablette et téléphone : la même cure, avec des cibles d'au moins 40 px au doigt ; plus de titres de groupe, des cartes de
+   66 × 58, la mini-carte de 72 px et les boutons de vue à sa gauche (une rangée au lieu d'une pile) */
+@media (max-width: 860px) {
+  #dock #dockSide { gap: 3px; padding: 3px; }
+  #dock #modes button { width: 40px; height: 40px; }
+  #dock .quick button { width: 40px; height: 40px; }
+  #dock #dockRight { gap: 5px; align-items: flex-end; }
+  #dock #viewBtns { flex-direction: row; padding: 3px; gap: 4px; }
+  #dock #viewBtns button.round { width: 40px; height: 40px; }
+  #dock #miniMap, #dock #dockRight #miniMap { width: 72px; height: 72px; padding: 3px; border-radius: 14px; }
+  #miniMap canvas { border-radius: 11px; }
+  #miniMap .mmN { display: none; }
+  #dock #dockMain { padding: 4px 4px 5px; }
+  /* (les rayons ne passent plus sur la rangée des modes : ils entrent dans la barre, en haut) */
+  #dock #dockTop { position: static; padding: 0 0 3px; }
+  #dock #subcats button { height: 40px; min-width: 44px; border-bottom: 2px solid var(--hEdge); border-radius: 12px; }
+  #dock #itemsWrap { padding: 2px; }
+  #dock #items { min-height: 0; gap: 5px; }
+  #dock #items .gh { display: none; }
+  #dock #items .grp { gap: 0; padding-left: 5px; }
+  #dock #items .gt { gap: 5px; }
+  #dock #items button.tile { width: 66px; height: 58px; padding: 2px 2px 3px; gap: 0; border-radius: 11px; }
+  #dock #items button.tile b.th { width: 48px; height: 38px; }
+  #dock #items button.tile b.th img { width: 50px; height: 44px; }
+  #dock #items button.tile .lbl { max-width: 62px; font-size: 10px; line-height: 1.05; -webkit-line-clamp: 1; }
+  #dock #items button.tile.big::before, #dock #items .key { left: 4px; top: 2px; font-size: 8px; }
+  #dock #items .badge { right: 3px; top: 2px; font-size: 9px; padding: 0 4px; }
+}
+/* écran moyen (861 à 1 399 px) : modes, menu et coin côte à côte, le menu prend la place qui reste (plus de panneau qui
+   déborde à gauche) ; la carte d'explication monte au-dessus du coin */
+@media (min-width: 861px) and (max-width: 1399px) {
+  #dock > #dockRow { grid-template-columns: auto minmax(0, 800px) auto; justify-content: center; }
+  #dock #dockSide { justify-self: start; }
+}
+@media (min-width: 901px) and (max-width: 1399px) {
+  #troopBar .tfoot { grid-template-columns: auto minmax(0, 820px) auto; justify-content: center; }
+  #troopBar .tfoot > .ttool { justify-self: start; }
+  #troopBar .tfoot > .tcorner { justify-self: end; }
+  #troopBar .tfoot .tbub { left: var(--tbL, 0px); }
+}
+
+/* ---------- la carte du choix du portail (maquette `.claude/maquettes-hud/gpt-exp/portail-gpt.png`) ----------
+   parchemin bordé d'or ; le diorama du portail déborde en haut ; titre en Fraunces souligné d'un filet doré à losange ;
+   la consigne en encart avec les vignettes de la tour de garde et de la caserne ; deux choix côte à côte, l'or et la crème */
+#portalChoice.panel { top: calc(50% + 34px); width: min(540px, calc(100vw - 24px)); padding: 120px 26px 22px; border-radius: 22px; text-align: center; color: var(--hInk);
+  background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow), 0 18px 50px rgba(40, 25, 10, 0.35); backdrop-filter: none; -webkit-backdrop-filter: none; overflow: visible; }
+#portalChoice .pcDio { position: absolute; left: 50%; top: -96px; width: 360px; max-width: 76%; transform: translateX(-50%); pointer-events: none; filter: drop-shadow(0 8px 10px rgba(60, 20, 70, 0.35)); }
+#portalChoice h4 { margin: 0; font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 72; font-size: 32px; font-weight: 800; line-height: 1.05; color: #3A2213; }
+#portalChoice h4::after { content: ''; display: block; width: 62%; height: 9px; margin: 8px auto 0; background: linear-gradient(90deg, transparent, #D9A955 30%, #D9A955 70%, transparent) center / 100% 1px no-repeat, linear-gradient(45deg, transparent 40%, #E2B45E 40% 60%, transparent 60%) center / 9px 9px no-repeat, linear-gradient(-45deg, transparent 40%, #E2B45E 40% 60%, transparent 60%) center / 9px 9px no-repeat; }
+#portalChoice .pcSub { margin: 8px 0 12px; font-family: var(--hSerif); font-size: 17px; font-weight: 600; color: #4A3020; }
+#portalChoice .pcHow { margin: 0 0 12px; padding: 12px 14px 12px; border-radius: 16px; border: 1.5px solid rgba(217, 169, 85, 0.6); background: linear-gradient(180deg, rgba(255, 250, 236, 0.9), rgba(247, 233, 205, 0.75)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6); }
+#portalChoice .pcHow p { margin: 0; padding: 0; background: none; font-family: var(--hSerif); font-size: 15.5px; font-weight: 700; line-height: 1.3; color: #3A2213; }
+#portalChoice .pcB { display: flex; justify-content: center; gap: 40px; margin: 8px 0 8px; }
+#portalChoice .pcB figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#portalChoice .pcB img, #portalChoice .pcPh { display: block; width: 120px; height: 100px; object-fit: contain; transform: scale(1.3); transform-origin: 50% 60%; filter: drop-shadow(0 4px 4px rgba(80, 50, 15, 0.25)); }
+#portalChoice .pcPh { transform: none; }
+#portalChoice .pcPh { border-radius: 14px; background: rgba(217, 169, 85, 0.12); }
+#portalChoice .pcB figcaption { margin-top: 6px; position: relative; font-family: var(--hSerif); font-size: 15px; font-weight: 800; color: #3A2213; }
+#portalChoice .pcNote { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-family: var(--hSerif); font-style: italic; font-size: 13px; color: var(--hInk2); }
+#portalChoice .pcNote::before, #portalChoice .pcNote::after { content: ''; flex: 1; height: 1px; background: rgba(200, 160, 95, 0.5); }
+#portalChoice .pcBtns { display: flex; gap: 12px; }
+#portalChoice .pcBtns button { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px 14px 8px 12px; border-radius: 16px; text-align: left; white-space: normal; cursor: pointer; color: #3A2213; }
+#portalChoice .pcBtns button span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#portalChoice .pcBtns b { font-family: var(--hSerif); font-size: 17px; font-weight: 800; line-height: 1.1; }
+#portalChoice .pcBtns small { font-family: var(--hSerif); font-style: italic; font-size: 12.5px; font-weight: 500; color: #5A4030; }
+#portalChoice .pcBtns .pic { flex: none; width: 34px; height: 34px; }
+#portalChoice .pcGo { border: 2px solid #D29A35; background: linear-gradient(180deg, #FFE7A6, #F3BE58); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 -8px 14px rgba(215, 140, 30, 0.25), 0 0 0 2px rgba(255, 230, 170, 0.6), 0 4px 10px rgba(120, 75, 15, 0.3); }
+#portalChoice .pcGo:hover { background: linear-gradient(180deg, #FFEDB8, #F7CA6A); }
+#portalChoice .pcNo { border: 2px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F5E6C8); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 2px 6px rgba(120, 80, 25, 0.2); }
+#portalChoice .pcNo:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); }
+@media (max-width: 520px) {
+  #portalChoice.panel { padding: 92px 14px 14px; }
+  #portalChoice .pcDio { top: -64px; width: 250px; }
+  #portalChoice h4 { font-size: 25px; }
+  #portalChoice .pcB img, #portalChoice .pcPh { width: 80px; height: 70px; }
+  #portalChoice .pcBtns { flex-direction: column; gap: 8px; }
+  #portalChoice .pcBtns button { min-height: 52px; }
+}
+#portalChoice .pcBtns small { display: block; margin: 0; }
+
+/* ---------- barre de bataille au téléphone et sur petite tablette (≤ 900 px), réduite de moitié : une rangée de boutons de
+   40 px (Bâtir, Recruter et les outils à gauche ; Aide, passage et retour en pictos à droite), puis le menu en cartes de
+   78 × 66 ; la bulle d'aide sur une ligne au-dessus ---------- */
+@media (max-width: 900px) {
+  #troopBar .tfoot, #troopBar .tfoot.thell, #troopBar .tfoot.thell.tshut { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "tool corner" "menu menu"; align-items: end; gap: 5px; left: 4px; right: 4px; height: auto; flex-wrap: nowrap; }
+  #troopBar .tfoot > .ttool { grid-area: tool; display: flex; flex-direction: row; align-items: center; gap: 3px; padding: 3px; border-radius: 14px; order: 0; }
+  #troopBar .ttool .ttabs, #troopBar .ttool .ttools { display: flex; flex-direction: row; gap: 3px; padding: 0; border: none; }
+  #troopBar .ttool .ttools { padding-left: 3px; border-left: 1px solid rgba(200, 160, 95, 0.4); }
+  #troopBar .ttool .ttabs button, #troopBar .ttool .ttl { width: 40px; height: 40px; min-width: 0; min-height: 0; padding: 0; justify-content: center; border-radius: 11px; }
+  #troopBar .ttool .ttabs button > span { display: none; }
+  #troopBar .tfoot > .tcorner, #troopBar .thell .tcorner, #troopBar .thell.tshut .tcorner, #troopBar .thell:not(.tshut) .tcorner { grid-area: corner; justify-self: end; display: flex; flex-direction: row; align-items: center; gap: 3px; width: auto; padding: 3px; border-radius: 14px; order: 0; }
+  #troopBar .tcorner .tfl { display: flex; flex-direction: row; gap: 3px; width: auto; flex: none; }
+  #troopBar .tcorner button, #troopBar .tcorner button.go, #troopBar .tcorner .tord, #troopBar .tcorner .thb, #troopBar .thell .tcorner .thb, #troopBar .thell .tcorner .tord.gar { width: 40px; height: 40px; min-height: 0; padding: 0; justify-content: center; border-radius: 12px; flex: none; }
+  #troopBar .tcorner .tl, #troopBar .tcorner .tord .tpt { display: none; }
+  #troopBar .tcorner .tord.prt, #troopBar .tcorner .tfl:has(.tord.sm) .tord.prt { display: flex; flex-direction: row; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; gap: 0; border-radius: 12px; overflow: hidden; }
+  #troopBar .tcorner .tord.prt .oi { width: 30px; height: 30px; }
+  #troopBar .tcorner .tord.prt .tpi { display: none; }
+  #troopBar .tcorner .tord.gar { width: auto; padding: 0 8px 0 4px; font-size: 12px; }
+  #troopBar .tcorner .oi, #troopBar .tcorner .tord .oi { width: 30px; height: 30px; }
+  #troopBar .tcorner .oi img { width: 20px; height: 20px; }
+  #troopBar .tfoot > .tmenu, #troopBar .thell .tmenu, #troopBar .thell:not(.tshut) .tmenu { grid-area: menu; padding: 4px 6px 5px; border-radius: 14px; order: 0; min-width: 0; }
+  #troopBar .tmh { min-height: 18px; gap: 6px; }
+  #troopBar .tmh h5 { font-size: 11px; gap: 5px; }
+  #troopBar .tmh h5 .pic { width: 16px; height: 16px; }
+  #troopBar .tmh h5 small { font-size: 10.5px; padding: 0 7px; }
+  #troopBar .tmenu .tmrow { overflow-x: auto; scrollbar-width: none; gap: 6px; }
+  #troopBar .tmenu .tbuilds { gap: 5px; }
+  #troopBar .tmenu .tfam + .tfam { padding-left: 6px; }
+  #troopBar .tmrow .trb.tbv { width: 78px; height: 66px; min-height: 0; padding: 2px 3px 3px; gap: 0; border-radius: 11px; }
+  #troopBar .tmrow .trb.tbv .tic { flex: none; width: 100%; height: 38px; background: none; box-shadow: none; overflow: hidden; }
+  #troopBar .tmrow .trb.tbv .tic img { width: 26px; height: 26px; }
+  #troopBar .tmrow .trb.tbv .tic.tpv img { width: 48px; height: 40px; transform: none; object-fit: contain; }
+  #troopBar .tmrow .trb.tbv b { font-size: 10.5px; line-height: 1.05; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .tmrow .trb.tbv small.co { font-size: 9.5px; line-height: 1.1; }
+  #troopBar .tmrow .trb.tbv small.co .pic { width: 11px; height: 11px; }
+  #troopBar .tmrow .trb.trc { width: 132px; height: 66px; min-height: 0; padding: 3px 5px; grid-template-columns: 38px minmax(0, 1fr); column-gap: 5px; border-radius: 11px; }
+  #troopBar .trc .ttx b { font-size: 11.5px; }
+  #troopBar .trc .trole { font-size: 9.5px; padding: 1px 5px 1px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #troopBar .trc .tco { padding-top: 2px; gap: 5px; font-size: 10px; }
+  #troopBar .trc .tco .pic, #troopBar .trc .trole .pic { width: 11px; height: 11px; }
+  #troopBar .tfoot .tbub, #troopBar .thell .tbub { left: 0; right: 0; width: auto; max-width: none; bottom: calc(100% + 4px); padding: 4px 9px 4px 6px; border-radius: 12px; }
+  #troopBar .tfoot .thint { font-size: 11px; -webkit-line-clamp: 2; }
+  #troopBar .tfoot .tbot { bottom: calc(100% + 4px); }
+  #troopBar .tfoot:has(.tbot) .tbub { bottom: calc(100% + 58px); }
+}
+
+/* ---------- barre du village au téléphone (≤ 860 px), réduite de moitié : un seul panneau (`#dockRow`) ; Bâtir / Paysage et
+   les rayons sur une rangée, avec « ⋯ » au bout ; les vignettes dessous. « ⋯ » (`body.dockMore`) montre les outils, la vue et
+   la mini-carte ; les outils se montrent aussi d'eux-mêmes quand l'un est pris ou que le tutoriel en désigne un ---------- */
+#bMore { display: none; }
+@media (max-width: 860px) {
+  #dock > #dockRow { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "tools tools" "modes top" "items items" "bottom bottom"; align-items: center; gap: 3px 4px; padding: 4px; border-radius: 16px; background: var(--hGlass); border: 2px solid var(--hEdge); box-shadow: var(--hShadow); }
+  #dock #dockSide, #dock #dockMain { display: contents; }
+  #dock #modes { grid-area: modes; display: flex; flex-direction: row; gap: 3px; }
+  #dock #dockTop { grid-area: top; position: static; display: flex; align-items: center; gap: 3px; min-width: 0; padding: 0; }
+  #dock #subcats { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 3px; }
+  #dock #subcats button { flex: none; height: 40px; min-width: 40px; padding: 0 8px; border: 2px solid var(--hEdge); border-radius: 12px; }
+  #dock #subcats button .cl { display: none; }
+  #bMore { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-width: 0; min-height: 0; padding: 0; border-radius: 12px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F7E9CC); color: var(--hInk); font-size: 22px; font-weight: 800; line-height: 1; }
+  body.dockMore #bMore { background: var(--hGoldFill); border-color: var(--hGold); box-shadow: var(--hGoldShadow); }
+  #dock #itemsWrap { grid-area: items; min-width: 0; padding: 0; }
+  #dock #dockBottom { grid-area: bottom; min-width: 0; }
+  #dock #dockBottom:empty { display: none; }
+  #dock #quickL, #dock #quickR { grid-area: tools; display: none; gap: 3px; padding: 0; border: none; }
+  #dock #quickL { justify-self: start; }
+  #dock #quickR { justify-self: end; }
+  body.dockMore #dock #quickL, body.dockMore #dock #quickR, #dock #dockRow:has(#quickL .tHi) #quickL, #dock #dockRow:has(#quickL .tHi) #quickR,
+  #dock #dockRow:has(#quickL button.active:not([data-tool="none"])) #quickL, #dock #dockRow:has(#quickL button.active:not([data-tool="none"])) #quickR { display: flex; }
+  #dock #dockRight { display: none; position: absolute; right: 0; bottom: calc(100% + 6px); }
+  body.dockMore #dock #dockRight { display: flex; }
+}
+
+/* ---------- encore hors thème, passés en parchemin et or (lot 2) : la bulle des conseils de guerre (#warTip), les passages du
+   coin de bataille (« Envoyer aux Enfers » n'est plus une grosse carte violette : une pastille crème, le portail en médaillon),
+   la barre de vie du roi des Enfers (#bossBar) ---------- */
+#warTip { border: 2px solid var(--hEdge); background: var(--hGlass); box-shadow: var(--hShadow), 0 10px 24px rgba(40, 25, 10, 0.22); }
+#warTip .wtText { color: var(--hInk); }
+#warTip .wtX, #warTip .wtOff { color: var(--hInk2); }
+#troopBar .tcorner .tord, #troopBar .tcorner .tord.prt, #troopBar .tcorner .tord.gar, #troopBar .tcorner .tord.gth, #troopBar .tcorner .tfl:has(.tord.sm) .tord.prt { border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F6E7C9); color: var(--hInk); text-shadow: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 1px 3px rgba(120, 80, 25, 0.2); filter: none; }
+#troopBar .tcorner .tord:hover, #troopBar .tcorner .tord.prt:hover { background: linear-gradient(180deg, #FFFFFF, #FBF0D9); border-color: var(--hGold); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 0 0 1.5px rgba(255, 220, 140, 0.6), 0 2px 5px rgba(120, 80, 25, 0.25); }
+#troopBar .tcorner .tord .tpt b, #troopBar .tcorner .tord.prt b { color: var(--hInk); text-shadow: none; }
+#troopBar .tcorner .tord .tpt small, #troopBar .tcorner .tord.prt small { color: var(--hInk2); }
+#troopBar .tcorner .tord .oi, #troopBar .tcorner .tord.prt .oi { border: 2px solid #FFF3D6; background: radial-gradient(circle at 50% 40%, #B884F0, #6A35B8 80%); box-shadow: 0 0 0 1.5px rgba(217, 169, 85, 0.8), 0 2px 5px rgba(80, 40, 140, 0.35); }
+#troopBar .tcorner .tord.prt.idle { opacity: 0.85; }
+#troopBar .tcorner .tord.closed { opacity: 0.55; filter: grayscale(0.5); }
+#bossBar { border: 2px solid #3B2A22; background: var(--hGlass); box-shadow: inset 0 0 0 1.5px #D9A955, 0 0 0 1px rgba(255, 120, 40, 0.4), 0 0 14px rgba(255, 90, 20, 0.3), 0 6px 16px rgba(20, 5, 0, 0.45); backdrop-filter: none; -webkit-backdrop-filter: none; border-radius: 16px; color: var(--hInk); }
+#bossBar .bname { font-family: var(--hSerif); font-size: 15px; color: #7A1E10; }
+#bossBar .bnote { color: var(--hInk2); }
+#bossBar .btrack { height: 11px; border-radius: 6px; background: #3B2A22; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(217, 169, 85, 0.7); }
+#bossBar .bfill { background: linear-gradient(180deg, #FF8A4A, #C8352A 60%, #8E1E14); }
+#bossBar .bfocus { border-radius: 10px; border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F6E7C9); }
+
+/* ---------- encore hors thème, passés en parchemin et or (lot 3) ----------
+   l'accent n'est plus bleu mais or (boutons actifs, onglets, sous-onglets, liens, bouton d'amélioration), l'encre est brune ;
+   les fenêtres génériques (`.modal` sans habillage propre : confirmation, choix de la difficulté, décision, nouvel âge, compte
+   rendu, victoire) prennent le parchemin ; la bulle du tutoriel aussi, avec « Suivant » en or */
+:root {
+  --ink: #33251A; --ink2: #6E5843; --navy: #33251A;
+  --accent: #C98A2B; --accent-ink: #8A5A12; --accent-soft: rgba(242, 196, 100, 0.22);
+  --line: rgba(120, 80, 30, 0.14);
+}
+button.active { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+.tabs { border-bottom-color: rgba(200, 160, 95, 0.45); }
+.tabs button { color: var(--hInk2); }
+.tabs button.on { color: var(--hInk); background: rgba(255, 226, 150, 0.35); border-bottom-color: var(--hGold); }
+.subtabs button { background: linear-gradient(180deg, #FFFCF4, #F6E7C9); border: 1.5px solid var(--hEdge); color: var(--hInk2); }
+.subtabs button.on { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+#selCard .acts.ups button.primary { background: var(--hGoldFill); border: 1.5px solid var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+.overlay { background: rgba(45, 30, 12, 0.3); }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) { background: var(--hGlass); border: 2px solid var(--hEdge); border-radius: 20px; color: var(--hInk); box-shadow: var(--hShadow), 0 18px 50px rgba(40, 25, 10, 0.35); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) h3 { font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 48; font-size: 22px; font-weight: 800; color: #3A2213; }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) h4 { color: var(--hInk2); }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) button:not(.x):not(.active):not(.primary):not(.go) { border: 1.5px solid var(--hEdge); background: linear-gradient(180deg, #FFFCF4, #F6E7C9); color: var(--hInk); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(120, 80, 25, 0.2); }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) button.primary, .overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) button.go { border: 1.5px solid var(--hGold); background: var(--hGoldFill); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+.overlay > .modal.panel:not(.cePop):not(.expModal):not(.sendModal) .x { border: 1.5px solid var(--hEdge); border-radius: 50%; background: radial-gradient(circle at 50% 35%, #FFFCF3, #F8EBCF 85%); color: var(--hInk); }
+/* la bulle du tutoriel */
+#tuto { background: var(--hGlass); color: var(--hInk); border: 2px solid var(--hEdge); box-shadow: var(--hShadow), 0 14px 36px rgba(40, 25, 10, 0.35), 0 0 0 4px rgba(255, 220, 140, 0.35); }
+#tuto.done { border-color: #7DBF5E; box-shadow: var(--hShadow), 0 14px 36px rgba(40, 25, 10, 0.35), 0 0 0 4px rgba(125, 191, 94, 0.3); }
+#tuto .tHead { color: #A8452A; }
+#tuto .tHead b { color: #3D8A33; }
+#tuto h4 { font-family: var(--hSerif); font-variation-settings: 'SOFT' 40, 'opsz' 48; font-size: 21px; color: #3A2213; }
+#tuto p, #tuto li { color: var(--hInk); }
+#tuto p.tNote { color: #A8452A; }
+#tuto p.tMore { color: var(--hInk2); }
+#tuto kbd { border-color: rgba(160, 120, 70, 0.55); background: #FFFBF0; color: var(--hInk); }
+#tuto li > i { border-color: rgba(160, 120, 70, 0.5); color: var(--hInk); }
+#tuto li.ok { color: #3D8A33; }
+#tuto .tAct { background: var(--hGoldFill); border: 1.5px solid var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+#tuto .tAct:hover { background: linear-gradient(180deg, #FFF3CC, #F9D886); }
+#tuto .tNext { background: linear-gradient(180deg, #FFFCF4, #F6E7C9); border: 1.5px solid var(--hEdge); color: var(--hInk); }
+#tuto .tNext.active { background: var(--hGoldFill); border-color: var(--hGold); color: var(--hInk); box-shadow: var(--hGoldShadow); }
+#tuto .tSkip { color: var(--hInk2); }
+#tuto .tSkip:hover { color: var(--hInk); }
+#tuto .tArrow { border-color: var(--hEdge); }
+#tuto.done .tArrow { border-color: #7DBF5E; }

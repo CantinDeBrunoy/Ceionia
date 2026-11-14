@@ -60,7 +60,7 @@ describe('le menu de l’île', () => {
     expect(html()).toContain('class="tmenu panel tbase tbarr"');
   });
 
-  it('poser une défense depuis l’île garde la barre de l’île : la carte s’allume, la bulle dit comment poser', () => {
+  it('poser une défense depuis l’île garde la barre de l’île : la carte s’allume, sans bulle par-dessus', () => {
     const isle = build('isle');
     let asked = '';
     isle.host.buildDefense = (k: string) => { asked = k; };
@@ -75,7 +75,9 @@ describe('le menu de l’île', () => {
     (isle.ui as any).barKey = '';
     isle.ui.render();
     expect(isle.html()).toMatch(/data-a="ibuild:watchtower" class="trb tb tbv on"/);
-    expect(isle.html()).toContain('Cliquez sur l’île pour poser');
+    // (plus de bulle : l'aide de pose est dans la carte d'explication)
+    expect(isle.html()).not.toContain('class="tbub"');
+    expect((isle.ui as any).hint()).toContain('Cliquez sur l’île pour poser');
   });
 
   it('chaque onglet Bâtir montre aussi, grisés, les bâtiments de l’autre théâtre', () => {
@@ -97,10 +99,10 @@ describe('le menu de l’île', () => {
     expect(h).not.toContain('data-a="follow"');
     expect(h).not.toContain('class="tbub"');
     expect(h).toContain('class="tcard');
-    // un bâtiment à poser : la bulle dit comment faire
+    // un bâtiment à poser : plus de bulle, la carte d'explication du camp dit comment faire
     ui.startPlacing('camp');
     expect(html()).toContain('class="tmenu panel tbase tbarr"');
-    expect(html()).toContain('class="tbub"');
+    expect(html()).not.toContain('class="tbub"');
   });
 
   it('l’onglet Bâtir propose les défenses de l’île ; plus d’ancien bloc « Caserne » sans onglets', () => {
